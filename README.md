@@ -104,13 +104,87 @@ cd .devcontainer
 cat docker-compose.yml
 ```
 
+## Dev Container Usage
+
+The Stellarbeat project includes a development container configuration to simplify the development environment setup. This allows you to work in a consistent environment, whether locally or in GitHub Codespaces.
+
+### What is a Dev Container?
+
+A dev container is a Docker-based development environment that includes all the necessary tools, libraries, and dependencies pre-installed. It ensures consistency across development environments and eliminates the need for manual setup.
+
+### Features of the Dev Container
+
+- Pre-installed Node.js, npm, and pnpm for JavaScript/TypeScript development.
+- Pre-installed Git for version control.
+- PostgreSQL databases for development and integration testing.
+- Persistent volume for workspace data.
+- Non-root user `node` for security.
+- Rust support for specific packages.
+
+### Steps to Use the Dev Container
+
+1. **Install Prerequisites**:
+   - Install [Docker](https://www.docker.com/) on your machine.
+   - Install [Visual Studio Code](https://code.visualstudio.com/).
+   - Install the [Dev Containers extension](https://marketplace.visualstudio.com/items?itemName=ms-vscode-remote.remote-containers) in VS Code.
+
+2. **Open the Project in the Dev Container**:
+   - Open the Stellarbeat project folder in VS Code.
+   - Press `Ctrl+Shift+P` (or `Cmd+Shift+P` on macOS) to open the Command Palette.
+   - Select `Dev Containers: Reopen in Container`.
+
+3. **Wait for the Container to Build**:
+   - The first time you open the project in the dev container, it will build the container image. This may take a few minutes.
+   - Once the container is built, VS Code will automatically connect to it.
+
+4. **Verify the Environment**:
+   - Open a terminal in VS Code and run the following commands to verify the setup:
+
+     ```sh
+     node --version
+     pnpm --version
+     psql --version
+     ```
+
+5. **Run the Project**:
+   - Install dependencies:
+
+     ```bash
+     pnpm install
+     ```
+
+   - Build the project:
+
+    ```bash
+  
+     pnpm build
+     ```
+
+   - Start the development environment:
+
+     ```bash
+     pnpm dev
+     ```
+
+6. **Access the Services**:
+   - Backend API: `http://localhost:3000`
+   - Frontend: `http://localhost:5173`
+
+### Notes
+
+- The dev container uses a `.devcontainer` folder for its configuration. You can inspect or modify the configuration files if needed.
+- PostgreSQL credentials and other environment variables are defined in the `.env` files. Ensure these files are correctly set up before running the project.
+- The dev container also works with Podman as an alternative to Docker.
+
+By using the dev container, you can ensure a consistent and hassle-free development experience. Let me know if you need further assistance!
+
 ## install
 
 ### Node.js and pnpm version requirements
 
 This monorepo requires specific versions of Node.js and pnpm, as defined in the `engines` key in the root `package.json`:
 
-```sh
+```js
   "engines": {
     "node": "20.x",
     "pnpm": "9.15.0"
@@ -154,13 +228,15 @@ If you encounter errors related to Node.js or pnpm versions, follow these steps:
    npm install -g pnpm@9.15.0
    ```
 
-After installing the correct versions, proceed with:
+4. After installing the correct versions, proceed with:
 
 ```bash
 pnpm install
 ```
 
 Afterwards, implement the necessary .env files (based on .env.dist) in the applications.
+
+---
 
 ## list available commands
 
