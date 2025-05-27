@@ -49,7 +49,7 @@
                     <li class="sb-nav-item">
                       <nav-link
                         v-b-modal.networkProps
-                        :title="'Stellarbeat configuration'"
+                        :title="'Stellarobserver configuration'"
                         :show-icon="true"
                         icon="info-circle"
                       ></nav-link>
@@ -57,7 +57,7 @@
                         id="networkProps"
                         lazy
                         size="lg"
-                        title="Stellarbeat configuration"
+                        title="Stellarobserver configuration"
                         ok-only
                         ok-title="Close"
                       >
@@ -67,7 +67,7 @@
                               <td class="px-0 info-title">
                                 <b-icon-info-circle
                                   v-tooltip="
-                                    'Overlay version stellarbeat uses to connect to other nodes'
+                                    'Overlay version stellarobserver uses to connect to other nodes'
                                   "
                                 ></b-icon-info-circle>
                                 Overlay version

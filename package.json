@@ -1,8 +1,8 @@
 {
-	"name": "stellarbeat",
+	"name": "stellarobserver",
 	"private": true,
 	"version": "0.1.0",
-	"description": "stellarbeat project monorepo",
+	"description": "stellarobserver project monorepo",
 	"scripts": {
 		"build:ts": "tsc --build",
 		"build:ts:force": "tsc --build --force",

@@ -106,7 +106,7 @@ cat docker-compose.yml
 
 ## Dev Container Usage
 
-The Stellarbeat project includes a development container configuration to simplify the development environment setup. This allows you to work in a consistent environment, whether locally or in GitHub Codespaces.
+The Stellarobserver project includes a development container configuration to simplify the development environment setup. This allows you to work in a consistent environment, whether locally or in GitHub Codespaces.
 
 ### What is a Dev Container?
 
@@ -129,7 +129,7 @@ A dev container is a Docker-based development environment that includes all the 
    - Install the [Dev Containers extension](https://marketplace.visualstudio.com/items?itemName=ms-vscode-remote.remote-containers) in VS Code.
 
 2. **Open the Project in the Dev Container**:
-   - Open the Stellarbeat project folder in VS Code.
+   - Open the Stellarobserver project folder in VS Code.
    - Press `Ctrl+Shift+P` (or `Cmd+Shift+P` on macOS) to open the Command Palette.
    - Select `Dev Containers: Reopen in Container`.
 

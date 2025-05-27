@@ -19,7 +19,7 @@ import { reactive, type UnwrapNestedRefs } from "vue";
 import { QuorumSetOrganizationsAdd } from "@/services/change-queue/changes/quorum-set-organizations-add";
 import { AggregateChange } from "@/services/change-queue/changes/aggregate-change";
 import NetworkAnalyzer from "@/services/NetworkAnalyzer";
-import { MergeBy } from "@stellarbeat/stellar_analysis_web";
+import { MergeBy } from "@stellarobserver/stellar_analysis_web";
 import { isString } from "shared";
 import Config, { type NetworkContext, type NetworkId } from "@/config/Config";
 

@@ -89,7 +89,7 @@ import {
 import { BIconInfoCircle } from "bootstrap-vue";
 import { AutomaticNetworkAnalysis } from "@/services/NetworkAnalyzer";
 import useStore from "@/store/useStore";
-import { MergeBy } from "@stellarbeat/stellar_analysis_web";
+import { MergeBy } from "@stellarobserver/stellar_analysis_web";
 import useScrollTo from "@/composables/useScrollTo";
 
 const chart = ref<Chart>();

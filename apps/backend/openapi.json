@@ -1,21 +1,21 @@
 {
   "openapi": "3.0.3",
   "info": {
-    "description": "Api's used and provided by [https://stellarbeat.io](https://stellarbeat.io).",
-    "title": "Stellarbeat.io API",
+    "description": "Api's used and provided by [https://stellarobserver.io](https://stellarobserver.io).",
+    "title": "Stellarobserver.io API",
     "contact": {
-      "name": "Stellarbeat",
-      "email": "info@stellarbeat.io"
+      "name": "Stellarobserver",
+      "email": "info@stellarobserver.io"
     },
     "version": "v1"
   },
   "servers": [
     {
-      "url": "https://api.stellarbeat.io",
+      "url": "https://api.stellarobserver.io",
       "description": "Api for Stellar public network"
     },
     {
-      "url": "https://api-testnet.stellarbeat.io",
+      "url": "https://api-testnet.stellarobserver.io",
       "description": "Api for Stellar testnet"
     }
   ],
@@ -60,7 +60,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "https://stellarbeat.io/schemas/network.json"
+                  "$ref": "https://stellarobserver.io/schemas/network.json"
                 }
               }
             }
@@ -96,7 +96,7 @@
                 "schema": {
                   "type": "array",
                   "items": {
-                    "$ref": "https://stellarbeat.io/schemas/node-snapshot.json"
+                    "$ref": "https://stellarobserver.io/schemas/node-snapshot.json"
                   }
                 }
               }
@@ -133,7 +133,7 @@
                 "schema": {
                   "type": "array",
                   "items": {
-                    "$ref": "https://stellarbeat.io/schemas/organization-snapshot.json"
+                    "$ref": "https://stellarobserver.io/schemas/organization-snapshot.json"
                   }
                 }
               }
@@ -170,7 +170,7 @@
                 "schema": {
                   "type": "array",
                   "items": {
-                    "$ref": "https://stellarbeat.io/schemas/node.json"
+                    "$ref": "https://stellarobserver.io/schemas/node.json"
                   }
                 }
               }
@@ -214,7 +214,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "https://stellarbeat.io/schemas/node.json"
+                  "$ref": "https://stellarobserver.io/schemas/node.json"
                 }
               }
             }
@@ -262,7 +262,7 @@
                 "schema": {
                   "type": "array",
                   "items": {
-                    "$ref": "https://stellarbeat.io/schemas/node-snapshot.json"
+                    "$ref": "https://stellarobserver.io/schemas/node-snapshot.json"
                   }
                 }
               }
@@ -287,7 +287,7 @@
                 "schema": {
                   "type": "array",
                   "items": {
-                    "$ref": "https://stellarbeat.io/schemas/organization.json"
+                    "$ref": "https://stellarobserver.io/schemas/organization.json"
                   }
                 }
               }
@@ -331,7 +331,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "https://stellarbeat.io/schemas/organization.json"
+                  "$ref": "https://stellarobserver.io/schemas/organization.json"
                 }
               }
             }
@@ -379,7 +379,7 @@
                 "schema": {
                   "type": "array",
                   "items": {
-                    "$ref": "https://stellarbeat.io/schemas/organization-snapshot.json"
+                    "$ref": "https://stellarobserver.io/schemas/organization-snapshot.json"
                   }
                 }
               }
@@ -413,7 +413,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "https://stellarbeat.io/schemas/history-archive-scan.json"
+                  "$ref": "https://stellarobserver.io/schemas/history-archive-scan.json"
                 }
               }
             }

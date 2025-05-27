@@ -1,5 +1,5 @@
 import { injectable } from 'inversify';
-import * as stellar_analysis from '@stellarbeat/stellar_analysis_nodejs/stellar_analysis';
+import * as stellar_analysis from '@stellarobserver/stellar_analysis_nodejs/stellar_analysis';
 import { err, ok, Result } from 'neverthrow';
 import 'reflect-metadata';
 import { mapUnknownToError } from '../../../../../core/utilities/mapUnknownToError';

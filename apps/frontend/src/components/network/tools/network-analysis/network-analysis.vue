@@ -332,7 +332,7 @@ import QuorumIntersectionInfo from "@/components/network/tools/network-analysis/
 import SafetyInfo from "@/components/network/tools/network-analysis/info/safety-info.vue";
 import LivenessInfo from "@/components/network/tools/network-analysis/info/liveness-info.vue";
 import TopTierInfo from "@/components/network/tools/network-analysis/info/top-tier-info.vue";
-import { MergeBy } from "@stellarbeat/stellar_analysis_web";
+import { MergeBy } from "@stellarobserver/stellar_analysis_web";
 import { type FbasAnalysisWorkerResult } from "@/workers/fbas-analysis-v3.worker";
 import Vue, { onMounted, type Ref, ref } from "vue";
 import { useIsLoading } from "@/composables/useIsLoading";

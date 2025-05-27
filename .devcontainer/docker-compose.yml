@@ -4,7 +4,7 @@ x-podman:
   in_pod: false
 
 services:
-  stellarbeat:
+  stellarobserver:
     user: "node"
     userns_mode: "keep-id"
     security_opt:

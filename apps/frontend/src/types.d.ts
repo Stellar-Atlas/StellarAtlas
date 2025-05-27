@@ -1,4 +1,4 @@
-declare module "@stellarbeat/js-stellarbeat-shared/lib/network-schema";
+declare module "@stellarobserver/js-stellarobserver-shared/lib/network-schema";
 /// <reference types="vite/client" />
 
 interface ImportMetaEnv {

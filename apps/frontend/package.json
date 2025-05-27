@@ -9,8 +9,8 @@
   },
   "dependencies": {
     "@sentry/vue": "^8.34.0",
-    "@stellarbeat/stellar-halting-analysis": "1.2.0",
-    "@stellarbeat/stellar_analysis_web": "^0.7.0",
+    "@stellarobserver/stellar-halting-analysis": "1.2.0",
+    "@stellarobserver/stellar_analysis_web": "^0.7.0",
     "bootstrap": "4.6.1",
     "bootstrap-icons": "^1.11.3",
     "bootstrap-vue": "2.23.1",
