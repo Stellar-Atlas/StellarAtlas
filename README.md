@@ -1,11 +1,11 @@
-[![Known Vulnerabilities](https://snyk.io/test/github/stellarbeat/stellarbeat/badge.svg)](https://snyk.io/test/github/stellarbeat/stellarbeat)
-[![code style: prettier](https://img.shields.io/badge/code_style-prettier-ff69b4.svg?style=flat-square)](https://github.com/prettier/prettier)
+# Monorepo for Stellarobserver project
 
-# Monorepo for Stellarbeat project
+[![Known Vulnerabilities](https://snyk.io/test/github/stellarobserver/stellarobserver/badge.svg)](https://snyk.io/test/github/stellarobserver/stellarobserver)
+[![code style: prettier](https://img.shields.io/badge/code_style-prettier-ff69b4.svg?style=flat-square)](https://github.com/prettier/prettier)
 
 ## About
 
-Stellarbeat is a monitoring and analytics platform for the Stellar network and
+Stellarobserver is a monitoring and analytics platform for the Stellar network and
 its validators and organizations. It collects and visualizes network data with
 the ability to time-travel, has simulation options, provides REST APIs for
 integration, implements email notifications, scans validator history archives
@@ -86,7 +86,7 @@ choosing a provider.
 ## Devcontainer development
 
 For easy development a devcontainer configuration is provided in the
-.devcontainer folder: https://containers.dev/
+.devcontainer folder: <https://containers.dev/>
 
 You can develop on github codespaces or localy using vscode and devcontainers
 extension.
@@ -99,7 +99,7 @@ Also works with podman.
 
 Container config and postgresql credentials:
 
-```
+```sh
 cd .devcontainer
 cat docker-compose.yml
 ```
@@ -110,7 +110,7 @@ cat docker-compose.yml
 
 This monorepo requires specific versions of Node.js and pnpm, as defined in the `engines` key in the root `package.json`:
 
-```
+```sh
   "engines": {
     "node": "20.x",
     "pnpm": "9.15.0"
@@ -133,18 +133,23 @@ This monorepo requires specific versions of Node.js and pnpm, as defined in the 
 If you encounter errors related to Node.js or pnpm versions, follow these steps:
 
 1. **Check your current versions:**
+
    ```bash
    node --version
    pnpm --version
    ```
+
 2. **Install Node.js 20.x:**
    - Use [nvm](https://github.com/nvm-sh/nvm):
+
      ```bash
      nvm install 20
      nvm use 20
      ```
+
    - Or download from [nodejs.org](https://nodejs.org/en/download/).
 3. **Install pnpm 9.15.0:**
+
    ```bash
    npm install -g pnpm@9.15.0
    ```
@@ -159,7 +164,7 @@ Afterwards, implement the necessary .env files (based on .env.dist) in the appli
 
 ## list available commands
 
-```
+```sh
 pnpm run
 ```
 
@@ -167,13 +172,13 @@ pnpm run
 
 ### backend and packages
 
-```
+```sh
 pnpm build:ts
 ```
 
 ### frontend and API
 
-```
+```sh
 pnpm dev
 ```
 
@@ -183,7 +188,7 @@ restart pnpm serve.
 
 ## build
 
-```
+```bash
 pnpm build
 ```
 
@@ -197,7 +202,7 @@ Start REST API that exposes all data. Used by frontend.
 
 Source: apps/backend/core/infrastructure/http
 
-```
+```bash
 pnpm start:api
 ```
 
@@ -207,7 +212,7 @@ Host the web dashboard.
 
 source: apps/frontend
 
-```
+```bash
 pnpm start:frontend
 ```
 
@@ -218,7 +223,7 @@ performs network analysis,...
 
 Source: apps/backend/network-scan
 
-```
+```bash
 pnpm start:scan-network 1 0
 ```
 
@@ -230,7 +235,7 @@ supply a loop time interval), second argument controls if it's a dry run.
 Fetches all known history archives from db and scans and verifies their content.
 Source: apps/backend/history-scan
 
-```
+```sh
 pnpm start:scan-history 1 1
 ```
 
@@ -250,7 +255,7 @@ apps/packages and does this in the correct order.
 
 To compile:
 
-```
+```sh
 pnpm build:ts
 
 ```
@@ -258,7 +263,7 @@ pnpm build:ts
 The frontend is separate because it uses vite to build. To build frontend and
 all other apps and packages:
 
-```
+```sh
 
 pnpm build
 
@@ -271,7 +276,7 @@ project needs to be defined here to enable linting.
 
 run linting:
 
-```
+```sh
 pnpm lint
 ```
 
@@ -281,7 +286,7 @@ Using Jest
 
 ### unit
 
-```
+```sh
 pnpm test:unit
 ```
 
@@ -289,12 +294,12 @@ pnpm test:unit
 
 Using jest, needs postgres instance
 
-```
+```sh
 pnpm test:integration
 ```
 
 ### run all tests (ci)
 
-```
+```sh
 pnpm test:all
 ```
