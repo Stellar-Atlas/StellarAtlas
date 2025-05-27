@@ -1,7 +1,7 @@
 {
-	"name": "stellarbeat",
+	"name": "stellarobserver",
 	"dockerComposeFile": "docker-compose.yml",
-	"service": "stellarbeat",
+	"service": "stellarobserver",
 	"remoteUser": "node",
 	"containerUser": "node",
 	"workspaceFolder": "/workspace"
