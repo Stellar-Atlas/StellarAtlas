@@ -106,12 +106,56 @@ cat docker-compose.yml
 
 ## install
 
+### Node.js and pnpm version requirements
+
+This monorepo requires specific versions of Node.js and pnpm, as defined in the `engines` key in the root `package.json`:
+
 ```
+  "engines": {
+    "node": "20.x",
+    "pnpm": "9.15.0"
+  }
+```
+
+#### Why is the `engines` key necessary?
+
+- **Consistency:** Ensures all developers and CI environments use the same versions, preventing subtle bugs and incompatibilities.
+- **Compatibility:** Some dependencies and scripts may only work with Node.js 20.x and pnpm 9.15.0. Using other versions can cause build or runtime errors.
+- **Monorepo tooling:** pnpm 9.x is required for correct workspace and dependency management in this monorepo setup.
+
+#### Why these versions?
+
+- **Node.js 20.x** is a stable LTS release, widely supported and tested with this codebase.
+- **pnpm 9.15.0** is the latest tested version that works reliably with the monorepo and its dependencies.
+
+#### How to install the correct versions
+
+If you encounter errors related to Node.js or pnpm versions, follow these steps:
+
+1. **Check your current versions:**
+   ```bash
+   node --version
+   pnpm --version
+   ```
+2. **Install Node.js 20.x:**
+   - Use [nvm](https://github.com/nvm-sh/nvm):
+     ```bash
+     nvm install 20
+     nvm use 20
+     ```
+   - Or download from [nodejs.org](https://nodejs.org/en/download/).
+3. **Install pnpm 9.15.0:**
+   ```bash
+   npm install -g pnpm@9.15.0
+   ```
+
+After installing the correct versions, proceed with:
+
+```bash
 pnpm install
 ```
 
-Afterwards implement the necessary .env files (based on .env.dist) in the
-applications
+Afterwards, implement the necessary .env files (based on .env.dist) in the applications.
 
 ## list available commands
 
