@@ -19,7 +19,7 @@
       <div class="alert alert-info" role="alert">
         Learn about Federated Voting and the different scenarios in
         <a
-          href="https://medium.com/stellarbeatio/federated-voting-part-1-theory-learn-about-a-stellar-consensus-protocol-scp-building-block-e050a8d0e16e"
+          href="https://medium.com/stellarobserverio/federated-voting-part-1-theory-learn-about-a-stellar-consensus-protocol-scp-building-block-e050a8d0e16e"
           target="_blank"
           rel="noopener"
           class="font-weight-bold"

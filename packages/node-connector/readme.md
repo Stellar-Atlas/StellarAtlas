@@ -128,7 +128,7 @@ You can connect to any node with the example script:
 pnpm examples:connect ip port
 ```
 
-You can find ip/port of nodes on https://stellarbeat.io
+You can find ip/port of nodes on https://stellarobserver.io
 
 The script connects to the node and logs the xdr stellar messages it receives to
 standard output. Using
@@ -138,4 +138,4 @@ you can inspect the content of the messages without coding.
 ## history
 
 You can find the history off this package on
-https://github.com/stellarbeat/js-stellar-node-connector.
+https://github.com/stellarobserver/js-stellar-node-connector.

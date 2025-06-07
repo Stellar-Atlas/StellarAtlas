@@ -2,8 +2,8 @@ import { Network } from "shared";
 import { err, ok, Result } from "neverthrow";
 import { type NetworkRepository } from "@/repositories/NetworkRepository";
 
-//repository to connect to stellarbeat api to fetch networks
-export class StellarBeatNetworkV1Repository implements NetworkRepository {
+//repository to connect to stellarobserver api to fetch networks
+export class StellarobserverNetworkV1Repository implements NetworkRepository {
   constructor(protected apiBaseUrl: string) {}
 
   async find(at?: Date): Promise<Result<Network, Error>> {

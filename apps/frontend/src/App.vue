@@ -28,7 +28,7 @@
           >
             Learn more about the demo networks
             <a
-              href="https://medium.com/stellarbeatio/stellar-fbas-intuition-5b8018f58f3e"
+              href="https://medium.com/stellarobserverio/stellar-fbas-intuition-5b8018f58f3e"
               target="_blank"
               rel="noopener"
             >
@@ -73,7 +73,7 @@
           <div class="nav-item d-lg-flex pr-0">
             <div class="d-flex">
               <a
-                href="https://github.com/stellarbeat"
+                href="https://github.com/stellarobserver"
                 class="btn btn-sm bt btn-secondary gray"
                 target="_blank"
                 rel="noopener"

@@ -59,6 +59,6 @@ export class ConfigMock implements Config {
 	userServiceBaseUrl = 'https://url.com';
 	userServicePassword = 'pass';
 	userServiceUsername = 'user';
-	frontendBaseUrl = 'https://stellarbeat.io';
+	frontendBaseUrl = 'https://stellarobserver.io';
 	networkScanLoopIntervalMs = 1000;
 }

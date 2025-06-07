@@ -67,7 +67,7 @@ export class DefaultConfig implements Config {
 	enableS3Backup = false;
 	environment: string | undefined;
 	apiPort = 3000;
-	userAgent = 'https://github.com/stellarbeat/js-stellarbeat-backend';
+	userAgent = 'https://github.com/stellarobserver/js-stellarobserver-backend';
 	enableNotifications = false;
 	userServiceBaseUrl?: string;
 	userServiceUsername?: string;

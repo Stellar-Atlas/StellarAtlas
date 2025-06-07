@@ -13,7 +13,7 @@ build code:
 `pnpm build`
 
 ## history
-The history of this package can be found at https://github.com/stellarbeat/js-stellarbeat-shared
+The history of this package can be found at https://github.com/stellarobserver/js-stellarobserver-shared
 
 ## todo:
 extract API data models
