@@ -1,7 +1,6 @@
 import { config } from 'dotenv';
 import { isArray, isString } from '../utilities/TypeGuards';
 import { err, ok, Result } from 'neverthrow';
-import yn from 'yn';
 import { Url } from '../domain/Url';
 import { CrawlerConfiguration } from 'crawler';
 import path from 'path';
@@ -9,6 +8,15 @@ import path from 'path';
 config({
 	path: path.resolve(__dirname + '../../../../.env')
 });
+
+// Simple boolean parser to replace 'yn'
+function parseBoolean(val: any): boolean | undefined {
+  if (typeof val !== 'string') return undefined;
+  const normalized = val.trim().toLowerCase();
+  if (["y", "yes", "true", "1", "on"].includes(normalized)) return true;
+  if (["n", "no", "false", "0", "off"].includes(normalized)) return false;
+  return undefined;
+}
 
 type PublicKey = string;
 type ip = string;
@@ -191,11 +199,11 @@ export function getConfigFromEnv(): Result<Config, Error> {
 	if (!isNaN(networkScanLoopIntervalMs))
 		config.networkScanLoopIntervalMs = networkScanLoopIntervalMs;
 
-	const enableSentry = yn(process.env.ENABLE_SENTRY);
+	const enableSentry = parseBoolean(process.env.ENABLE_SENTRY);
 	config.enableSentry = enableSentry === undefined ? false : enableSentry;
 	config.sentryDSN = process.env.SENTRY_DSN;
 
-	let enableDeadManSwitch = yn(process.env.ENABLE_HEART_BEAT);
+	let enableDeadManSwitch = parseBoolean(process.env.ENABLE_HEART_BEAT);
 	if (enableDeadManSwitch === undefined) {
 		enableDeadManSwitch = false;
 	}
@@ -211,7 +219,7 @@ export function getConfigFromEnv(): Result<Config, Error> {
 		config.deadManSwitchUrl = deadManSwitchUrlResult.value;
 	}
 
-	let enableS3Backup = yn(process.env.ENABLE_S3_BACKUP);
+	let enableS3Backup = parseBoolean(process.env.ENABLE_S3_BACKUP);
 	if (enableS3Backup === undefined) enableS3Backup = false;
 	config.enableS3Backup = enableS3Backup;
 
@@ -245,7 +253,7 @@ export function getConfigFromEnv(): Result<Config, Error> {
 	const logLevel = process.env.LOG_LEVEL;
 	if (isString(logLevel)) config.logLevel = logLevel;
 
-	let notificationsEnabled = yn(process.env.NOTIFICATIONS_ENABLED);
+	let notificationsEnabled = parseBoolean(process.env.NOTIFICATIONS_ENABLED);
 	if (notificationsEnabled === undefined) {
 		notificationsEnabled = false;
 	}

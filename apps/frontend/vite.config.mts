@@ -72,8 +72,12 @@ export default defineConfig({
     devSourcemap: true,
     preprocessorOptions: {
       scss: {
+        api: 'legacy',
         includePaths: ["src"],
       },
     },
+  },
+  server: {
+    allowedHosts: ["stellar.observer", "www.stellar.observer", "localhost", "stellarbeat-host"],
   },
 });
