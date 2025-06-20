@@ -1,8 +1,8 @@
 {
-	"name": "stellarobserver",
+	"name": "stellaratlas",
 	"private": true,
 	"version": "0.1.0",
-	"description": "stellarobserver project monorepo",
+	"description": "stellaratlas project monorepo",
 	"scripts": {
 		"build:ts": "tsc --build",
 		"build:ts:force": "tsc --build --force",

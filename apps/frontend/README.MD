@@ -1,6 +1,6 @@
-# Stellarobserver frontend
+# Stellaratlas frontend
 
-The Stellarobserver frontend provides an intuitive web dashboard for monitoring and analyzing the Stellar network. Built with Vue.js (currently on v2.7, with Vue 3 migration in progress)
+The Stellaratlas frontend provides an intuitive web dashboard for monitoring and analyzing the Stellar network. Built with Vue.js (currently on v2.7, with Vue 3 migration in progress)
 
 ## Features
 - Network visualizations and analytics
@@ -43,4 +43,4 @@ production build: `pnpm build`
 ## history
 
 You can find the package original history on
-https://github.com/stellarobserver/js-stellarobserver-frontend
+https://github.com/stellaratlas/js-stellaratlas-frontend

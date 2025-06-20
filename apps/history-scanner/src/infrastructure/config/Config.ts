@@ -32,7 +32,7 @@ function parseBoolean(val: any): boolean | undefined {
 const defaultConfig = {
 	nodeEnv: 'development',
 	enableSentry: false,
-	userAgent: 'stellarobserver-history-scanner',
+	userAgent: 'stellaratlas-history-scanner',
 	logLevel: 'info',
 	historyMaxFileMs: 60000,
 	historySlowArchiveMaxLedgers: 1000
