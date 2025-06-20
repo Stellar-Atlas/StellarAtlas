@@ -30,7 +30,7 @@ import { EventSource } from '../../../domain/event/EventSource';
 
 it('should create confirm subscription message', async function () {
 	const messageCreator = new EJSMessageCreator(
-		'https://stellarobserver.io',
+		'https://stellaratlas.io',
 		{} as EventSourceService
 	);
 	const rawId = '76f18672-2fca-486e-a508-f0c2119c0798';
@@ -40,7 +40,7 @@ it('should create confirm subscription message', async function () {
 	console.log(message.body);
 	expect(message.title).toEqual('Confirm your subscription');
 	expect(message.body).toContain(
-		'https://stellarobserver.io/notify/76f18672-2fca-486e-a508-f0c2119c0798/confirm'
+		'https://stellaratlas.io/notify/76f18672-2fca-486e-a508-f0c2119c0798/confirm'
 	);
 });
 
@@ -73,7 +73,7 @@ it('should create notification message', async function () {
 		}
 	} as EventSourceService;
 	const messageCreator = new EJSMessageCreator(
-		'https://stellarobserver.io',
+		'https://stellaratlas.io',
 		eventSourceService
 	);
 	const notification: Notification = {
@@ -131,7 +131,7 @@ it('should create notification message', async function () {
 
 it('should create unsubscribe message', async function () {
 	const messageCreator = new EJSMessageCreator(
-		'https://stellarobserver.io',
+		'https://stellaratlas.io',
 		{} as EventSourceService
 	);
 	const time = new Date();
@@ -143,7 +143,7 @@ it('should create unsubscribe message', async function () {
 	console.log(message.body);
 	expect(message.title).toEqual('Unsubscribe');
 	expect(message.body).toContain(
-		'https://stellarobserver.io/notify/' +
+		'https://stellaratlas.io/notify/' +
 			subscriber.subscriberReference.value +
 			'/unsubscribe?at=' +
 			time.toISOString()

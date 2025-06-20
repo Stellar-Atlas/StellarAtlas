@@ -1,7 +1,7 @@
 {
-	"name": "stellarobserver",
+	"name": "stellaratlas",
 	"dockerComposeFile": "docker-compose.yml",
-	"service": "stellarobserver",
+	"service": "stellaratlas",
 	"remoteUser": "node",
 	"containerUser": "node",
 	"workspaceFolder": "/workspace"

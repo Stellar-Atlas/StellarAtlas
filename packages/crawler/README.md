@@ -29,7 +29,7 @@ let myCrawler = createCrawler({
 ```
 
 The crawler is itself a
-[node](https://github.com/stellarobserver/js-stellar-node-connector) and needs to be
+[node](https://github.com/stellaratlas/js-stellar-node-connector) and needs to be
 configured accordingly. You can limit the number of simultaneous open
 connections to not overwhelm your server and set the maxCrawlTime as a safety if
 the crawler should be stuck.
@@ -47,10 +47,10 @@ let result = await myCrawler.crawl(
 ### example script
 
 Check out `examples/crawl.js` for an example on how to crawl the network. You
-can try it out using the bundled seed file with the following command:  
+can try it out using the bundled seed file with the following command:
 `pnpm examples:crawl seed/nodes.json`
 
 ### history
 
 History of this package can be found at
-https://github.com/stellarobserver/js-stellar-node-crawler
+https://github.com/stellaratlas/js-stellar-node-crawler
