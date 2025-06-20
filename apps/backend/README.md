@@ -1,6 +1,6 @@
-# Stellarobserver Backend
+# Stellaratlas Backend
 
-Backend for the Stellarobserver platform that monitors and analyzes the Stellar
+Backend for the Stellaratlas platform that monitors and analyzes the Stellar
 network validators and organizations. It uses a database (pgsql recomended) for
 storage. And it exposes a REST API for all the necessary functions.
 
@@ -133,5 +133,5 @@ running in development
 
 ## history
 
-Code from https://github.com/stellarobserver/js-stellarobserver-backend was moved to
+Code from https://github.com/stellaratlas/js-stellaratlas-backend was moved to
 this monorepo. For history consult this archive.

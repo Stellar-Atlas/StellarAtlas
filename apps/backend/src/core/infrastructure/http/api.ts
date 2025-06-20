@@ -82,7 +82,7 @@ const listen = async () => {
 	const swaggerOptions = {
 		customCss: '.swagger-ui .topbar { display: none }',
 		explorer: true,
-		customSiteTitle: 'Stellarobserver API doc'
+		customSiteTitle: 'Stellaratlas API doc'
 	};
 
 	api.get(

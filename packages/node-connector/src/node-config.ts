@@ -1,7 +1,6 @@
 import { Networks } from '@stellar/stellar-base';
 
 require('dotenv').config();
-import yn from 'yn';
 import { NodeInfo } from './node';
 
 export interface NodeConfig {
@@ -17,6 +16,15 @@ export interface NodeConfig {
 	flowControlSendMoreBatchSizeBytes: number;
 }
 
+// Simple boolean parser to replace 'yn'
+function parseBoolean(val: any): boolean | undefined {
+	if (typeof val !== 'string') return undefined;
+	const normalized = val.trim().toLowerCase();
+	if (["y", "yes", "true", "1", "on"].includes(normalized)) return true;
+	if (["n", "no", "false", "0", "off"].includes(normalized)) return false;
+	return undefined;
+}
+
 export function getConfigFromEnv(): NodeConfig {
 	const ledgerVersion = getNumberFromEnv('LEDGER_VERSION', 17);
 	const overlayVersion = getNumberFromEnv('OVERLAY_VERSION', 17);
@@ -28,8 +36,8 @@ export function getConfigFromEnv(): NodeConfig {
 	const privateKey = process.env['PRIVATE_KEY']
 		? process.env['PRIVATE_KEY']
 		: undefined;
-	const receiveTransactionMessages = yn(process.env['RECEIVE_TRANSACTION_MSG']);
-	const receiveSCPMessages = yn(process.env['RECEIVE_SCP_MSG']);
+	const receiveTransactionMessages = parseBoolean(process.env['RECEIVE_TRANSACTION_MSG']);
+	const receiveSCPMessages = parseBoolean(process.env['RECEIVE_SCP_MSG']);
 	const networkString = process.env['NETWORK']
 		? process.env['NETWORK']
 		: Networks.PUBLIC;

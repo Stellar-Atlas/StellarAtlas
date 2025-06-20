@@ -6,3 +6,4 @@ dist/
 tsconfig.tsbuildinfo
 .pnpm-store/
 *.session.sql
+.env.dist

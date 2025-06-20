@@ -1,6 +1,5 @@
 import { config } from 'dotenv';
 import { err, ok, Result } from 'neverthrow';
-import yn from 'yn';
 import path from 'path';
 
 config({
@@ -20,11 +19,20 @@ export interface Config {
 	historySlowArchiveMaxLedgers: number;
 }
 
+// Simple boolean parser to replace 'yn'
+function parseBoolean(val: any): boolean | undefined {
+  if (typeof val !== 'string') return undefined;
+  const normalized = val.trim().toLowerCase();
+  if (["y", "yes", "true", "1", "on"].includes(normalized)) return true;
+  if (["n", "no", "false", "0", "off"].includes(normalized)) return false;
+  return undefined;
+}
+
 // Default values
 const defaultConfig = {
 	nodeEnv: 'development',
 	enableSentry: false,
-	userAgent: 'stellarobserver-history-scanner',
+	userAgent: 'stellaratlas-history-scanner',
 	logLevel: 'info',
 	historyMaxFileMs: 60000,
 	historySlowArchiveMaxLedgers: 1000
@@ -45,7 +53,7 @@ export function getConfigFromEnv(): Result<Config, Error> {
 
 	// Optional vars with validation
 	const enableSentry =
-		yn(process.env.ENABLE_SENTRY) ?? defaultConfig.enableSentry;
+		parseBoolean(process.env.ENABLE_SENTRY) ?? defaultConfig.enableSentry;
 	if (enableSentry && !process.env.SENTRY_DSN) {
 		return err(new Error('SENTRY_DSN required when ENABLE_SENTRY is true'));
 	}

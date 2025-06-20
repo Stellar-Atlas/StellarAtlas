@@ -5,7 +5,7 @@ export class ConfigMock implements Config {
 	enableSentry = false;
 	sentryDSN = 'test-dsn';
 	environment = 'test';
-	userAgent = 'stellarobserver-history-scanner-test';
+	userAgent = 'stellaratlas-history-scanner-test';
 	logLevel = 'debug';
 	historyMaxFileMs = 60000;
 	historySlowArchiveMaxLedgers = 1000;
