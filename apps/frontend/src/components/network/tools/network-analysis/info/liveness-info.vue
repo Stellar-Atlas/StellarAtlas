@@ -21,7 +21,7 @@
     </p>
     <h3>Limitations of the analysis</h3>
     <p class="my-4">
-      Stellaratlas indicates a node as 'not validating' if it was not validating
+      StellarAtlas indicates a node as 'not validating' if it was not validating
       in the latest crawl, a specific time window. However a node could be very
       slow or catching up. If other (fast) nodes of a network blocking set are
       down, the slow node could catch up and the network would continue to

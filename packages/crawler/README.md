@@ -29,7 +29,7 @@ let myCrawler = createCrawler({
 ```
 
 The crawler is itself a
-[node](https://github.com/stellaratlas/js-stellar-node-connector) and needs to be
+[node](https://github.com/Stellar-Atlas/js-stellar-node-connector) and needs to be
 configured accordingly. You can limit the number of simultaneous open
 connections to not overwhelm your server and set the maxCrawlTime as a safety if
 the crawler should be stuck.
@@ -53,4 +53,4 @@ can try it out using the bundled seed file with the following command:
 ### history
 
 History of this package can be found at
-https://github.com/stellaratlas/js-stellar-node-crawler
+https://github.com/Stellar-Atlas/js-stellar-node-crawler

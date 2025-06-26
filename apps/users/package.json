@@ -5,7 +5,10 @@
 		"build": "tsc --declaration",
 		"build-and-start": "pnpm build; node lib/index.js",
 		"start": "node lib/index.js",
-		"test": "pnpm build; node lib/__tests__/all.test.js"
+		"test": "pnpm build; node lib/__tests__/all.test.js",
+		"typeorm:migration:show": "node ./node_modules/typeorm/cli.js migration:show -d ./lib/data-source.js",
+		"typeorm:migration:run": "node ./node_modules/typeorm/cli.js migration:run -d ./lib/data-source.js",
+		"typeorm:migration:revert": "node ./node_modules/typeorm/cli.js migration:revert -d ./lib/data-source.js"
 	},
 	"types": "lib/index.d.ts",
 	"main": "index.js",

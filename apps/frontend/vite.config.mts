@@ -78,6 +78,6 @@ export default defineConfig({
     },
   },
   server: {
-    allowedHosts: ["stellar.observer", "www.stellar.observer", "localhost", "stellarbeat-host"],
+    allowedHosts: ["stellaratlas.io", "www.stellaratlas.io", "localhost", "stellarbeat-host"],
   },
 });

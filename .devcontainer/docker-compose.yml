@@ -33,7 +33,6 @@ services:
       POSTGRES_DB: mydb
     ports:
       - 5433:5432
-
   pgsql-dev:
     image: docker.io/library/postgres:latest
     restart: always

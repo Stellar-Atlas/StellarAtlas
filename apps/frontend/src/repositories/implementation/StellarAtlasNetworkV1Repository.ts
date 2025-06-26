@@ -3,7 +3,7 @@ import { err, ok, Result } from "neverthrow";
 import { type NetworkRepository } from "@/repositories/NetworkRepository";
 
 //repository to connect to stellaratlas api to fetch networks
-export class StellaratlasNetworkV1Repository implements NetworkRepository {
+export class StellarAtlasNetworkV1Repository implements NetworkRepository {
   constructor(protected apiBaseUrl: string) {}
 
   async find(at?: Date): Promise<Result<Network, Error>> {

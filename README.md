@@ -1,11 +1,11 @@
-# Monorepo for Stellaratlas project
+# Monorepo for StellarAtlas project
 
-[![Known Vulnerabilities](https://snyk.io/test/github/stellaratlas/stellaratlas/badge.svg)](https://snyk.io/test/github/stellaratlas/stellaratlas)
+[![Known Vulnerabilities](https://snyk.io/test/github/Stellar-Atlas/StellarAtlas/badge.svg)](https://snyk.io/test/github/Stellar-Atlas/StellarAtlas)
 [![code style: prettier](https://img.shields.io/badge/code_style-prettier-ff69b4.svg?style=flat-square)](https://github.com/prettier/prettier)
 
 ## About
 
-Stellaratlas is a monitoring and analytics platform for the Stellar network and
+StellarAtlas is a monitoring and analytics platform for the Stellar network and
 its validators and organizations. It collects and visualizes network data with
 the ability to time-travel, has simulation options, provides REST APIs for
 integration, implements email notifications, scans validator history archives
@@ -32,7 +32,7 @@ This monorepo is organized into several main components:
   dashboard
 - **Users** ([apps/users](apps/users/README.md)) - User email microservice
 
-- \*\*History-scanner\*\*
+- **History-scanner**
   ([apps/history-scanner](apps/history-scanner/README.md)) - History Scanner
   microservice/worker
 
@@ -46,7 +46,7 @@ This monorepo is organized into several main components:
   Educational implementation of the Stellar Consensus Protocol
 - **Node Connector** ([packages/node-connector](packages/node-connector/)) -
   Nodejs package to connect to Stellar nodes
-- - Various utility packages
+- Various utility packages
 
 ### Apps communication
 
@@ -106,7 +106,7 @@ cat docker-compose.yml
 
 ## Dev Container Usage
 
-The Stellaratlas project includes a development container configuration to simplify the development environment setup. This allows you to work in a consistent environment, whether locally or in GitHub Codespaces.
+The StellarAtlas project includes a development container configuration to simplify the development environment setup. This allows you to work in a consistent environment, whether locally or in GitHub Codespaces.
 
 ### What is a Dev Container?
 
@@ -129,7 +129,7 @@ A dev container is a Docker-based development environment that includes all the 
    - Install the [Dev Containers extension](https://marketplace.visualstudio.com/items?itemName=ms-vscode-remote.remote-containers) in VS Code.
 
 2. **Open the Project in the Dev Container**:
-   - Open the Stellaratlas project folder in VS Code.
+   - Open the StellarAtlas project folder in VS Code.
    - Press `Ctrl+Shift+P` (or `Cmd+Shift+P` on macOS) to open the Command Palette.
    - Select `Dev Containers: Reopen in Container`.
 
@@ -156,7 +156,6 @@ A dev container is a Docker-based development environment that includes all the 
    - Build the project:
 
     ```bash
-
      pnpm build
      ```
 
