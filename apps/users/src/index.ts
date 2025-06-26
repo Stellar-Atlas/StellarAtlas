@@ -3,13 +3,13 @@ import { User } from './User';
 import { config } from 'dotenv';
 import { Encryption } from './Encryption';
 import { Hasher } from './Hasher';
-import { createConnection, Server } from 'net';
+import { Server } from 'net';
 import basicAuth from 'express-basic-auth';
 import { HttpError, MailgunService } from './MailgunService';
 import * as Sentry from '@sentry/node';
 import express from 'express';
 import helmet from 'helmet';
-import { createConnections, getConnection, getRepository } from 'typeorm';
+import { dataSource } from './data-source';
 
 config();
 
@@ -37,10 +37,10 @@ const users = {} as { [username: string]: string };
 users[consumerName] = consumerSecret;
 const secretString = process.env.ENCRYPTION_SECRET;
 if (!secretString) throw new Error('No encryption secret');
-const secret = Buffer.from(secretString, 'base64');
+const secret = Buffer.from(secretString);
 const hashSecretString = process.env.HASH_SECRET;
 if (!hashSecretString) throw new Error('No hash secret');
-const hashSecret = Buffer.from(hashSecretString, 'base64');
+const hashSecret = Buffer.from(hashSecretString);
 const encryption = new Encryption(secret);
 const hasher = new Hasher(hashSecret);
 let port = process.env.PORT;
@@ -70,7 +70,7 @@ api.post(
 		}
 		try {
 			const hash = hasher.hash(Buffer.from(req.body.emailAddress));
-			let user = await getRepository(User).findOne({
+			let user = await dataSource.getRepository(User).findOne({
 				where: {
 					hash: hash.toString('base64')
 				}
@@ -116,7 +116,7 @@ api.post(
 		}
 		try {
 			const hash = hasher.hash(Buffer.from(req.body.emailAddress));
-			const user = await getRepository(User).findOne({
+			const user = await dataSource.getRepository(User).findOne({
 				where: {
 					hash: hash.toString('base64')
 				}
@@ -145,7 +145,7 @@ api.delete(
 		try {
 			const userId: string = req.params.userId;
 			if (!userId) return res.status(400).json({ msg: 'userId is required' });
-			const user = await getRepository(User).findOne({ where: { id: userId } });
+			const user = await dataSource.getRepository(User).findOne({ where: { id: userId } });
 			if (!user) return res.status(404).json({ msg: 'User not found' });
 			await user.remove();
 			return res.status(200).json({ msg: 'User removed' });
@@ -177,7 +177,7 @@ api.post(
 			return res.status(400).json({ errors: errors.array() });
 		}
 		try {
-			const user = await getRepository(User).findOne({
+			const user = await dataSource.getRepository(User).findOne({
 				where: { id: req.params.userId }
 			});
 			if (!user) return res.status(404).json({ msg: 'User not found' });
@@ -230,13 +230,23 @@ api.post(
 );
 
 async function listen() {
-	await createConnections();
+	await dataSource.initialize();
 	server = api.listen(port, () =>
 		console.log('api listening on port: ' + port)
 	);
 }
 
-listen();
+listen().catch((err) => {
+  console.error('Fatal error during startup:', err);
+  Sentry.captureException(err);
+  process.exit(1);
+});
+
+process.on('unhandledRejection', (reason) => {
+  console.error('Unhandled Rejection:', reason);
+  Sentry.captureException(reason);
+  process.exit(1);
+});
 
 process.on('SIGTERM', async () => {
 	console.log('SIGTERM signal received: closing HTTP server');
@@ -248,9 +258,14 @@ process.on('SIGINT', async () => {
 });
 
 async function stop() {
-	server.close(async () => {
-		console.log('HTTP server closed');
-		await getConnection().close();
-		console.log('connection to db closed');
-	});
+  if (server) {
+    server.close(async () => {
+      console.log('HTTP server closed');
+      await dataSource.destroy();
+      console.log('connection to db closed');
+    });
+  } else {
+    await dataSource.destroy();
+    console.log('connection to db closed (no server)');
+  }
 }

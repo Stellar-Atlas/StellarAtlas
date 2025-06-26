@@ -1,5 +1,5 @@
 import { type NetworkRepository } from "@/repositories/NetworkRepository";
-import { StellarobserverNetworkV1Repository } from "@/repositories/implementation/StellarBeatNetworkV1Repository";
+import { StellarAtlasNetworkV1Repository } from "@/repositories/implementation/StellarAtlasNetworkV1Repository";
 import { isString } from "shared";
 import { FBASRepository } from "@/repositories/implementation/FBASRepository";
 import { FBASQIRepository } from "@/repositories/implementation/FBASQIRepository";
@@ -26,13 +26,13 @@ export default class Config {
   networkContexts: Map<NetworkId, NetworkContext> = new Map();
   apiDocUrl?: string;
   blogUrl?: string;
-  brandName = "Stellarobserver";
+  brandName = "StellarAtlas";
   brandTagline = "Stellar network explorer";
   brandDescription =
-    "Stellarobserver is a network explorer for the Stellar network. It provides a list of all nodes and organizations. It tracks various metrics and provides a history of changes. And it allows you to simulate different network conditions and topologies";
+    "StellarAtlas is a network explorer for the Stellar network. It provides a list of all nodes and organizations. It tracks various metrics and provides a history of changes. And it allows you to simulate different network conditions and topologies";
   brandLogoSrc = "logo.svg"; //assets folder
-  brandLogoAlt = "https://stellarobserver.io";
-  brandEmail = "info@stellarbeat.io";
+  brandLogoAlt = "https://stellaratlas.io";
+  brandEmail = "info@StellarAtlas.io";
 
   constructor() {
     this.blogUrl = import.meta.env["VUE_APP_BLOG_URL"];
@@ -58,7 +58,7 @@ export default class Config {
     this.networkContexts.set("public", {
       networkId: "public",
       name: "Public network",
-      repository: new StellarobserverNetworkV1Repository(
+      repository: new StellarAtlasNetworkV1Repository(
         import.meta.env["VUE_APP_PUBLIC_API_URL"],
       ),
       enableNotify: import.meta.env["VUE_APP_PUBLIC_ENABLE_NOTIFY"] === "1",
@@ -88,7 +88,7 @@ export default class Config {
       this.networkContexts.set("test", {
         networkId: "test",
         name: "Testnet",
-        repository: new StellarobserverNetworkV1Repository(
+        repository: new StellarAtlasNetworkV1Repository(
           import.meta.env["VUE_APP_TEST_API_URL"],
         ),
         enableNotify: import.meta.env["VUE_APP_TEST_ENABLE_NOTIFY"] === "1",

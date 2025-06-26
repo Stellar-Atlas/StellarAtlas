@@ -25,7 +25,7 @@ async function connect() {
 		port = parseInt(portArg);
 	}
 
-	const nodes = await fetchData('https://api.stellarobserver.io/v1/nodes');
+	const nodes = await fetchData('https://api.stellaratlas.io/v1/nodes');
 	const nodeNames = new Map(
 		nodes.map((node) => {
 			return [node.publicKey, node.name ?? node.publicKey];

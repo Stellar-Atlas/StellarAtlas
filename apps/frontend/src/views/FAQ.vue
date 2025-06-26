@@ -5,7 +5,7 @@
     </div>
     <div class="card">
       <div class="card-body">
-        <h3>How does Stellarobserver work?</h3>
+        <h3>How does StellarAtlas work?</h3>
         <p>
           Every 3 minutes we crawl the Stellar public network to gather all
           available nodes and pickup scp messages to determine if a node is
@@ -128,7 +128,7 @@ Age = Time since discovery
         <p>
           All code is open-source and available on
           <a
-            href="https://github.com/stellarobserver"
+            href="https://github.com/stellaratlas"
             class="btn btn-sm bt btn-outline-primary"
             rel="noopener"
             target="_blank"
