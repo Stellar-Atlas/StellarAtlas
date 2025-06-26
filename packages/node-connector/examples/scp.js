@@ -1,4 +1,3 @@
- 
 const { createNode } = require('../lib');
 const getConfigFromEnv = require('../lib').getConfigFromEnv;
 const http = require('http');

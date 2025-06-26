@@ -43,4 +43,4 @@ production build: `pnpm build`
 ## history
 
 You can find the package original history on
-https://github.com/stellaratlas/js-stellaratlas-frontend
+https://github.com/Stellar-Atlas/js-stellaratlas-frontend

@@ -13,7 +13,7 @@ build code:
 `pnpm build`
 
 ## history
-The history of this package can be found at https://github.com/stellaratlas/js-stellaratlas-shared
+The history of this package can be found at https://github.com/Stellar-Atlas/js-stellaratlas-shared
 
 ## todo:
 extract API data models

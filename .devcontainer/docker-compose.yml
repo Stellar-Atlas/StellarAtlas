@@ -20,7 +20,7 @@ services:
       - pgsql-dev
     command: /bin/sh -c "while sleep 1000; do :; done"
     ports:
-      - 8080:8080 
+      - 8080:8080
     volumes:
       - ..:/workspace
 
@@ -32,8 +32,7 @@ services:
       POSTGRES_PASSWORD: password
       POSTGRES_DB: mydb
     ports:
-      - 5433:5432 
-    
+      - 5433:5432
   pgsql-dev:
     image: docker.io/library/postgres:latest
     restart: always

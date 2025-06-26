@@ -133,5 +133,5 @@ running in development
 
 ## history
 
-Code from https://github.com/stellaratlas/js-stellaratlas-backend was moved to
+Code from https://github.com/Stellar-Atlas/js-stellaratlas-backend was moved to
 this monorepo. For history consult this archive.

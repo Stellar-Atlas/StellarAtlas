@@ -138,4 +138,4 @@ you can inspect the content of the messages without coding.
 ## history
 
 You can find the history off this package on
-https://github.com/stellaratlas/js-stellar-node-connector.
+https://github.com/Stellar-Atlas/js-stellar-node-connector.

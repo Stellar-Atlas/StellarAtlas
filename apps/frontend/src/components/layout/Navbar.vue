@@ -25,7 +25,7 @@
                 <div class="nav-item pr-0" style="cursor: default">
                   <nav-network-selector />
                   <a
-                    href="https://github.com/stellaratlas"
+                    href="https://github.com/Stellar-Atlas"
                     class="btn btn-sm btn-outline-primary"
                     target="_blank"
                     rel="noopener"

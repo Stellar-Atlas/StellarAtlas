@@ -80,7 +80,7 @@
             file to include your validator info.
           </p>
           <h4>
-            What if your node is validating, but stellaratlas labels it as not
+            What if your node is validating, but StellarAtlas labels it as not
             validating?
           </h4>
           <ul>
@@ -90,8 +90,8 @@
               catching up.
             </li>
             <li>
-              If stellaratlas cannot connect to the node because it is at max
-              capacity and the node is not trusted by other nodes, stellaratlas
+              If StellarAtlas cannot connect to the node because it is at max
+              capacity and the node is not trusted by other nodes, StellarAtlas
               cannot detect the validating status and the node is marked as not
               validating.
             </li>
@@ -284,7 +284,7 @@
             Because quorum intersection is calculated for the entire network, it
             could be that badly configured nodes on the edge of the network can
             cause quorum intersection to fail.<br />
-            To mitigate this, stellaratlas filters out 'badly configured' nodes.
+            To mitigate this, StellarAtlas filters out 'badly configured' nodes.
             At the moment these are nodes that have only themselves in their
             quorumset.
           </p>

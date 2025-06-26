@@ -1,7 +1,7 @@
 {
   "openapi": "3.0.3",
   "info": {
-    "description": "Api's used and provided by [https://stellaratlas.io](https://stellaratlas.io).",
+    "description": "API's used and provided by [https://StellarAtlas.io](https://StellarAtlas.io).",
     "title": "StellarAtlas.io API",
     "contact": {
       "name": "StellarAtlas",
@@ -11,12 +11,12 @@
   },
   "servers": [
     {
-      "url": "https://api.stellaratlas.io",
-      "description": "Api for Stellar public network"
+      "url": "https://api.StellarAtlas.io",
+      "description": "API for Stellar public network"
     },
     {
-      "url": "https://api-testnet.stellaratlas.io",
-      "description": "Api for Stellar testnet"
+      "url": "https://api-testnet.StellarAtlas.io",
+      "description": "API for Stellar testnet"
     }
   ],
   "tags": [
@@ -60,7 +60,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "https://stellaratlas.io/schemas/network.json"
+                  "$ref": "https://StellarAtlas.io/schemas/network.json"
                 }
               }
             }
@@ -96,7 +96,7 @@
                 "schema": {
                   "type": "array",
                   "items": {
-                    "$ref": "https://stellaratlas.io/schemas/node-snapshot.json"
+                    "$ref": "https://StellarAtlas.io/schemas/node-snapshot.json"
                   }
                 }
               }
@@ -133,7 +133,7 @@
                 "schema": {
                   "type": "array",
                   "items": {
-                    "$ref": "https://stellaratlas.io/schemas/organization-snapshot.json"
+                    "$ref": "https://StellarAtlas.io/schemas/organization-snapshot.json"
                   }
                 }
               }
@@ -170,7 +170,7 @@
                 "schema": {
                   "type": "array",
                   "items": {
-                    "$ref": "https://stellaratlas.io/schemas/node.json"
+                    "$ref": "https://StellarAtlas.io/schemas/node.json"
                   }
                 }
               }
@@ -214,7 +214,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "https://stellaratlas.io/schemas/node.json"
+                  "$ref": "https://StellarAtlas.io/schemas/node.json"
                 }
               }
             }
@@ -262,7 +262,7 @@
                 "schema": {
                   "type": "array",
                   "items": {
-                    "$ref": "https://stellaratlas.io/schemas/node-snapshot.json"
+                    "$ref": "https://StellarAtlas.io/schemas/node-snapshot.json"
                   }
                 }
               }
@@ -287,7 +287,7 @@
                 "schema": {
                   "type": "array",
                   "items": {
-                    "$ref": "https://stellaratlas.io/schemas/organization.json"
+                    "$ref": "https://StellarAtlas.io/schemas/organization.json"
                   }
                 }
               }
@@ -331,7 +331,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "https://stellaratlas.io/schemas/organization.json"
+                  "$ref": "https://StellarAtlas.io/schemas/organization.json"
                 }
               }
             }
@@ -379,7 +379,7 @@
                 "schema": {
                   "type": "array",
                   "items": {
-                    "$ref": "https://stellaratlas.io/schemas/organization-snapshot.json"
+                    "$ref": "https://StellarAtlas.io/schemas/organization-snapshot.json"
                   }
                 }
               }
@@ -413,7 +413,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "https://stellaratlas.io/schemas/history-archive-scan.json"
+                  "$ref": "https://StellarAtlas.io/schemas/history-archive-scan.json"
                 }
               }
             }

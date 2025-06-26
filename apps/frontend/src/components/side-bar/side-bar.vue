@@ -67,7 +67,7 @@
                               <td class="px-0 info-title">
                                 <b-icon-info-circle
                                   v-tooltip="
-                                    'Overlay version stellaratlas uses to connect to other nodes'
+                                    'Overlay version StellarAtlas uses to connect to other nodes'
                                   "
                                 ></b-icon-info-circle>
                                 Overlay version
