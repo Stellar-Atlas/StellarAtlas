@@ -53,7 +53,7 @@ export function load(container: Container, config: Config) {
 				container.get<Logger>('Logger')
 			);
 		else return new ConsoleExceptionLogger();
-	});
+	}).inSingletonScope();
 
 	container.bind(LoopTimer).toSelf();
 }

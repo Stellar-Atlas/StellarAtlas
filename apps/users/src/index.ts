@@ -242,11 +242,13 @@ listen().catch((err) => {
   process.exit(1);
 });
 
-process.on('unhandledRejection', (reason) => {
-  console.error('Unhandled Rejection:', reason);
-  Sentry.captureException(reason);
-  process.exit(1);
-});
+if (process.listenerCount('unhandledRejection') === 0) {
+  process.on('unhandledRejection', (reason) => {
+    console.error('Unhandled Rejection:', reason);
+    Sentry.captureException(reason);
+    process.exit(1);
+  });
+}
 
 process.on('SIGTERM', async () => {
 	console.log('SIGTERM signal received: closing HTTP server');
