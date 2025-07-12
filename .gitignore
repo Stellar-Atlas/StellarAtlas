@@ -9,3 +9,5 @@ tsconfig.tsbuildinfo
 .env.dist
 apps/frontend-v3
 .envbackup
+api.log
+*.log
