@@ -23,7 +23,7 @@ export default defineConfig({
   ],
   envPrefix: "VUE_",
   worker: {
-    plugins: () => [topLevelAwait()],
+    plugins: () => [],
   },
   resolve: {
     alias: {
@@ -32,7 +32,11 @@ export default defineConfig({
     extensions: [".mjs", ".js", ".ts", ".jsx", ".tsx", ".json"],
   },
   define: {
-    "process.env": process.env,
+    "process.env": Object.fromEntries(
+      Object.entries(process.env).filter(([key]) =>
+        key.startsWith("VUE_")
+      )
+    ),
   },
   build: {
     commonjsOptions: {

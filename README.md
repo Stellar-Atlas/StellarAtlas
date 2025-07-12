@@ -185,8 +185,8 @@ This monorepo requires specific versions of Node.js and pnpm, as defined in the 
 
 ```js
   "engines": {
-    "node": "20.x",
-    "pnpm": "9.15.0"
+    "node": "22.x",
+    "pnpm": "10.12.1"
   }
 ```
 
