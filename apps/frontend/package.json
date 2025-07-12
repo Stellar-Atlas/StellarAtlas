@@ -56,12 +56,13 @@
     "jest-localstorage-mock": "^2.4.26",
     "sass": "1.64.2",
     "tslib": "^2.7.0",
-    "vite": "^6.2.1",
+    "vite": "^6.3.5",
     "vite-bundle-visualizer": "^1.2.1",
     "vite-plugin-eslint": "^1.8.1",
-    "vite-plugin-static-copy": "^2.2.0",
-    "vite-plugin-top-level-await": "^1.4.4",
-    "vite-tsconfig-paths": "^5.1.3",
+    "vite-plugin-static-copy": "^2.3.1",
+    "vite-plugin-top-level-await": "^1.5.0",
+    "vite-tsconfig-paths": "^4.3.2",
+    "vue-eslint-parser": "^9.3.1",
     "vue-tsc": "2.2.0",
     "typescript": "^5.8.2"
   }
