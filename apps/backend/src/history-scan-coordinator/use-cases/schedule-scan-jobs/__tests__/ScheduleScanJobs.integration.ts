@@ -10,7 +10,9 @@ beforeAll(async () => {
 });
 
 afterAll(async () => {
-	await kernel.close();
+	if (kernel) {
+		await kernel.close();
+	}
 });
 
 test('ScheduleScanJobs integration test', async () => {
