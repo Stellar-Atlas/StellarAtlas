@@ -14,6 +14,9 @@ import "leaflet.markercluster/dist/MarkerCluster.Default.css";
 import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { Node } from "shared";
 import useStore from "@/store/useStore";
+import { TrustRankColorService } from "@/services/TrustRankColorService";
+import { NodeTrustIndexService } from "@/services/NodeTrustIndexService";
+import { globalTrustVisualizationSettings } from "@/composables/useTrustVisualizationSettings";
 import { useRoute, useRouter } from "vue-router/composables";
 
 interface CustomMarkerOptions extends L.CircleMarkerOptions {
@@ -47,6 +50,10 @@ const mapRef = ref();
 const map = ref<L.Map | null>(null);
 const clusterGroup = ref<L.MarkerClusterGroup | null>(null);
 const fullScreen = ref(props.fullScreen);
+
+// Trust visualization settings
+const { shouldShowInComponent } = globalTrustVisualizationSettings;
+const showTrustColoring = computed(() => shouldShowInComponent.value('networkMap'));
 
 watch(fullScreen, () => {
   if (!map.value) {
@@ -127,6 +134,25 @@ function getColor(node?: Node) {
 
   if (node && selectedOrganization.value?.validators.includes(node.publicKey))
     return "yellow";
+
+  // Apply trust-based coloring if trust visualization is enabled
+  if (node && showTrustColoring.value) {
+    const trustIndex = NodeTrustIndexService.getTrustIndex(node);
+    const trustLevel = TrustRankColorService.getTrustLevel(trustIndex);
+    
+    // Use trust colors with some opacity to maintain visibility
+    switch (trustLevel.level) {
+      case 'high':
+        return '#28a745'; // Green
+      case 'medium':
+        return '#ffc107'; // Yellow
+      case 'low':
+        return '#fd7e14'; // Orange
+      case 'unknown':
+      default:
+        return '#6c757d'; // Gray
+    }
+  }
 
   return "white";
 }

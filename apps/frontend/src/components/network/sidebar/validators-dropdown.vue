@@ -29,6 +29,22 @@
           <template #action-dropdown>
             <node-actions :node="node" />
           </template>
+          <template #trust-indicator>
+            <div v-if="shouldShowTrustInValidatorLists" class="trust-info d-flex align-items-center">
+              <span 
+                class="trust-badge badge badge-pill mr-1"
+                :class="`badge-${getTrustBadgeVariant(node)}`"
+                :title="`Trust Level: ${getTrustPercentage(node)}`"
+              >
+                {{ getTrustLabel(node) }}
+              </span>
+              <div 
+                class="trust-dot"
+                :style="{ backgroundColor: getTrustColor(node) }"
+                :title="`Trust: ${getTrustPercentage(node)}`"
+              ></div>
+            </div>
+          </template>
         </nav-link>
         <nav-pagination
           v-model="currentPage"
@@ -50,6 +66,9 @@ import useStore from "@/store/useStore";
 import { useDropdown } from "@/composables/useDropdown";
 import { useRoute, useRouter } from "vue-router/composables";
 import { NodeWarningDetector } from "@/services/NodeWarningDetector";
+import { TrustRankColorService } from "@/services/TrustRankColorService";
+import { NodeTrustIndexService } from "@/services/NodeTrustIndexService";
+import { globalTrustVisualizationSettings } from "@/composables/useTrustVisualizationSettings";
 
 const props = defineProps<{
   nodes: Node[];
@@ -60,6 +79,8 @@ const router = useRouter();
 const route = useRoute();
 const network = store.network;
 const emit = defineEmits(["toggleExpand"]);
+const { shouldShowInComponent } = globalTrustVisualizationSettings;
+const shouldShowTrustInValidatorLists = computed(() => shouldShowInComponent.value('validatorLists'));
 const { showing, toggleShow, currentPage, paginate } = useDropdown(
   props.expand,
   emit,
@@ -132,6 +153,44 @@ function selectNode(node: Node) {
 function getDisplayName(node: Node) {
   return node.displayName;
 }
+
+// Trust-related functions
+function getTrustColor(node: Node): string {
+  const trustIndex = NodeTrustIndexService.getTrustIndex(node);
+  return TrustRankColorService.getTrustColor(trustIndex);
+}
+
+function getTrustBadgeVariant(node: Node): string {
+  const trustIndex = NodeTrustIndexService.getTrustIndex(node);
+  return TrustRankColorService.getTrustBadgeVariant(trustIndex);
+}
+
+function getTrustPercentage(node: Node): string {
+  const trustIndex = NodeTrustIndexService.getTrustIndex(node);
+  return TrustRankColorService.formatTrustPercentage(trustIndex);
+}
+
+function getTrustLabel(node: Node): string {
+  const trustIndex = NodeTrustIndexService.getTrustIndex(node);
+  const trustLevel = TrustRankColorService.getTrustLevel(trustIndex);
+  return trustLevel.level.charAt(0).toUpperCase() + trustLevel.level.slice(1);
+}
 </script>
 
-<style scoped></style>
+<style scoped>
+.trust-info {
+  font-size: 0.75rem;
+}
+
+.trust-badge {
+  font-size: 0.6rem;
+  padding: 2px 6px;
+}
+
+.trust-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  border: 1px solid rgba(0, 0, 0, 0.1);
+}
+</style>
