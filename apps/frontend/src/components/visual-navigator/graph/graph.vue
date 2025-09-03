@@ -194,6 +194,10 @@ import {
   watch,
 } from "vue";
 import { useTruncate } from "@/composables/useTruncate";
+import { useTrustVisualizationSettings } from "@/composables/useTrustVisualizationSettings";
+import { TrustRankColorService } from "@/services/TrustRankColorService";
+import { NodeTrustIndexService } from "@/services/NodeTrustIndexService";
+import useStore from "@/store/useStore";
 
 const props = defineProps({
   centerVertex: {
@@ -264,6 +268,25 @@ let computeGraphWorker: Worker;
 const isLoading = ref(true);
 const emit = defineEmits(["vertex-selected"]);
 const truncate = useTruncate();
+const { settings } = useTrustVisualizationSettings();
+
+// Function to get trust level for a public key
+function getTrustLevelForNode(publicKey: string) {
+  try {
+    // Get the trust index for this node using existing network data
+    const store = useStore();
+    const node = store.network.getNodeByPublicKey(publicKey);
+    if (!node) {
+      return TrustRankColorService.getTrustLevel(null);
+    }
+    
+    const trustIndex = NodeTrustIndexService.getTrustIndex(node);
+    return TrustRankColorService.getTrustLevel(trustIndex);
+  } catch (error) {
+    console.error('Error getting trust level for node:', publicKey, error);
+    return TrustRankColorService.getTrustLevel(null);
+  }
+}
 
 let d3svg: Selection<Element, null, null, undefined>;
 let d3Grid: Selection<Element, null, null, undefined>;
@@ -333,7 +356,7 @@ function getVertexTextClass(vertex: ViewVertex) {
 }
 
 function getVertexClassObject(vertex: ViewVertex) {
-  return {
+  const baseClasses = {
     active: !vertex.isFailing,
     selected: vertex.selected,
     failing: vertex.isFailing,
@@ -344,6 +367,26 @@ function getVertexClassObject(vertex: ViewVertex) {
       !highlightVertexAsIncoming(vertex),
     transitive: vertex.isPartOfTransitiveQuorumSet,
   };
+
+  // Add trust-based styling if enabled
+  if (settings.value.enabled && vertex.key) {
+    try {
+      const trustLevel = getTrustLevelForNode(vertex.key);
+      return {
+        ...baseClasses,
+        'trust-high': trustLevel.level === 'high',
+        'trust-medium': trustLevel.level === 'medium',
+        'trust-low': trustLevel.level === 'low',
+        'trust-unknown': trustLevel.level === 'unknown'
+      };
+    } catch (error) {
+      console.error('Error applying trust styling to vertex:', vertex.key, error);
+      // Fall back to base classes if trust calculation fails
+      return baseClasses;
+    }
+  }
+
+  return baseClasses;
 }
 
 function highlightVertexAsOutgoing(vertex: ViewVertex) {
@@ -594,6 +637,27 @@ circle.target {
 circle.source {
   stroke: #73bfb8;
   stroke-opacity: 1;
+}
+
+// Trust-based node styling
+circle.trust-high {
+  fill: #28a745; // Green for high trust
+  r: 6; // Slightly larger radius for high trust
+}
+
+circle.trust-medium {
+  fill: #ffc107; // Yellow for medium trust
+  r: 5; // Default radius
+}
+
+circle.trust-low {
+  fill: #fd7e14; // Orange for low trust
+  r: 4; // Slightly smaller radius for low trust
+}
+
+circle.trust-unknown {
+  fill: #6c757d; // Gray for unknown trust
+  r: 4; // Slightly smaller radius for unknown trust
 }
 
 circle {

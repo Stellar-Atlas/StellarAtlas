@@ -37,6 +37,10 @@
             : ""
         }}
       </text>
+
+      <text v-if="showTrustRank" class="node-label trust-rank" dy="2.8em" :fill="trustColor">
+        {{ trustPercentage }}
+      </text>
     </g>
 
     <FbasGraphNodeDialog
@@ -69,6 +73,8 @@ import {
 } from "scp-simulation";
 import FbasGraphNodeDialog from "./trust-graph-node-dialog.vue";
 import { federatedVotingStore } from "@/store/useFederatedVotingStore";
+import { TrustRankColorService } from "@/services/TrustRankColorService";
+import { globalTrustVisualizationSettings } from "@/composables/useTrustVisualizationSettings";
 
 export interface Node extends SimulationNodeDatum {
   id: string;
@@ -254,6 +260,25 @@ const isSelected = computed(() => {
 const strokeWidth = computed(() => {
   return isHovered.value || isSelected.value ? 5 : 4;
 });
+
+// Trust rank related computations
+const { shouldShowInComponent, showPercentages } = globalTrustVisualizationSettings;
+const showTrustRank = computed(() => shouldShowInComponent.value('trustGraph'));
+const mockTrustIndex = computed(() => {
+  // For simulation nodes, we'll mock trust index based on node ID
+  // In a real implementation, this would come from trust graph calculation
+  const nodeNum = parseInt(props.node.id.replace(/\D/g, '')) || 0;
+  return Math.min(0.9, nodeNum * 0.1);
+});
+
+const trustLevel = computed(() => {
+  return TrustRankColorService.getTrustLevel(mockTrustIndex.value);
+});
+
+const trustColor = computed(() => trustLevel.value.color);
+const trustPercentage = computed(() => {
+  return TrustRankColorService.formatTrustPercentage(mockTrustIndex.value);
+});
 </script>
 
 <style scoped>
@@ -263,6 +288,11 @@ const strokeWidth = computed(() => {
   font-weight: bold;
   pointer-events: none;
   fill: #ffff;
+}
+
+.node-label.trust-rank {
+  font-size: 9px;
+  font-weight: normal;
 }
 
 /* Pulse Animation applied to the circle */
