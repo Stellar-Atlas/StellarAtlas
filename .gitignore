@@ -7,7 +7,15 @@ tsconfig.tsbuildinfo
 .pnpm-store/
 *.session.sql
 .env.dist
-apps/frontend-v3
 .envbackup
 api.log
 *.log
+
+# Claude Code related files
+.claude/
+CLAUDE.md
+SDF_GRANT_MILESTONES.md
+Report.md
+mcp-config-update.json
+pnpm-lock.yaml
+
