@@ -1,0 +1,128 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: network-scanner
+  namespace: stellaratlas
+  labels:
+    app.kubernetes.io/name: network-scanner
+    app.kubernetes.io/component: scanner
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: network-scanner
+      app.kubernetes.io/component: scanner
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: network-scanner
+        app.kubernetes.io/component: scanner
+    spec:
+      containers:
+      - name: network-scanner
+        image: stellaratlas/backend:latest
+        imagePullPolicy: IfNotPresent
+        command: ["pnpm", "start:scan-network"]
+        env:
+        - name: NODE_ENV
+          valueFrom:
+            configMapKeyRef:
+              name: stellaratlas-config
+              key: NODE_ENV
+        - name: LOG_LEVEL
+          valueFrom:
+            configMapKeyRef:
+              name: stellaratlas-config
+              key: LOG_LEVEL
+        - name: DATABASE_URL
+          valueFrom:
+            secretKeyRef:
+              name: stellaratlas-secrets
+              key: DATABASE_URL
+        resources:
+          requests:
+            cpu: 200m
+            memory: 512Mi
+          limits:
+            cpu: 1000m
+            memory: 2Gi
+        # Network scanner doesn't expose HTTP endpoints, so no probes
+      initContainers:
+      - name: wait-for-postgres
+        image: postgres:16-alpine
+        command:
+        - sh
+        - -c
+        - |
+          until pg_isready -h postgres-service -p 5432 -U stellaratlas_user; do
+            echo "Waiting for postgres..."
+            sleep 2
+          done
+        env:
+        - name: PGPASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: postgres-secret
+              key: POSTGRES_PASSWORD
+---
+# CronJob for periodic network scanning (alternative approach)
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: network-scan-job
+  namespace: stellaratlas
+  labels:
+    app.kubernetes.io/name: network-scan-job
+    app.kubernetes.io/component: scanner
+spec:
+  schedule: "*/5 * * * *" # Every 5 minutes
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          containers:
+          - name: network-scanner
+            image: stellaratlas/backend:latest
+            imagePullPolicy: IfNotPresent
+            command: ["pnpm", "start:scan-network", "--", "dry-run"]
+            env:
+            - name: NODE_ENV
+              valueFrom:
+                configMapKeyRef:
+                  name: stellaratlas-config
+                  key: NODE_ENV
+            - name: LOG_LEVEL
+              valueFrom:
+                configMapKeyRef:
+                  name: stellaratlas-config
+                  key: LOG_LEVEL
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: stellaratlas-secrets
+                  key: DATABASE_URL
+            resources:
+              requests:
+                cpu: 200m
+                memory: 512Mi
+              limits:
+                cpu: 1000m
+                memory: 2Gi
+          restartPolicy: OnFailure
+          initContainers:
+          - name: wait-for-postgres
+            image: postgres:16-alpine
+            command:
+            - sh
+            - -c
+            - |
+              until pg_isready -h postgres-service -p 5432 -U stellaratlas_user; do
+                echo "Waiting for postgres..."
+                sleep 2
+              done
+            env:
+            - name: PGPASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-secret
+                  key: POSTGRES_PASSWORD

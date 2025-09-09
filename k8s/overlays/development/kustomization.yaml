@@ -1,0 +1,110 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+metadata:
+  name: stellaratlas-development
+
+resources:
+  - ../../base
+
+namePrefix: dev-
+
+commonLabels:
+  environment: development
+
+images:
+  - name: stellaratlas/backend
+    newTag: dev
+  - name: stellaratlas/frontend
+    newTag: dev
+  - name: stellaratlas/history-scanner
+    newTag: dev
+  - name: stellaratlas/users-service
+    newTag: dev
+
+patches:
+  # Reduce resource requirements for development
+  - target:
+      kind: Deployment
+      name: backend
+    patch: |-
+      - op: replace
+        path: /spec/replicas
+        value: 1
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/requests/cpu
+        value: "100m"
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/requests/memory
+        value: "256Mi"
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/limits/cpu
+        value: "500m"
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/limits/memory
+        value: "1Gi"
+
+  - target:
+      kind: Deployment
+      name: frontend
+    patch: |-
+      - op: replace
+        path: /spec/replicas
+        value: 1
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/requests/cpu
+        value: "50m"
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/requests/memory
+        value: "128Mi"
+
+  - target:
+      kind: StatefulSet
+      name: postgres
+    patch: |-
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/requests/cpu
+        value: "100m"
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/requests/memory
+        value: "256Mi"
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/limits/cpu
+        value: "500m"
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/limits/memory
+        value: "1Gi"
+
+  # Use smaller storage for development
+  - target:
+      kind: PersistentVolumeClaim
+      name: postgres-pvc
+    patch: |-
+      - op: replace
+        path: /spec/resources/requests/storage
+        value: "5Gi"
+
+  # Disable HPA in development (too small for meaningful autoscaling)
+  - target:
+      kind: HorizontalPodAutoscaler
+    patch: |-
+      - op: replace
+        path: /spec/minReplicas
+        value: 1
+      - op: replace
+        path: /spec/maxReplicas
+        value: 2
+
+configMapGenerator:
+  - name: stellaratlas-config
+    behavior: merge
+    literals:
+      - NODE_ENV=development
+      - LOG_LEVEL=debug
+      - FRONTEND_BASE_URL=http://dev.stellaratlas.local
+
+secretGenerator:
+  - name: stellaratlas-secrets
+    behavior: merge
+    literals:
+      - DATABASE_URL=postgresql://dev_user:dev_password@postgres-service:5432/stellaratlas_dev

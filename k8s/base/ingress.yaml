@@ -1,0 +1,111 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: stellaratlas-ingress
+  namespace: stellaratlas
+  labels:
+    app.kubernetes.io/name: stellaratlas
+    app.kubernetes.io/component: ingress
+  annotations:
+    # NGINX Ingress Controller annotations
+    nginx.ingress.kubernetes.io/rewrite-target: /
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/proxy-body-size: "10m"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "300"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "300"
+    
+    # Rate limiting
+    nginx.ingress.kubernetes.io/rate-limit: "100"
+    nginx.ingress.kubernetes.io/rate-limit-window: "1m"
+    
+    # CORS headers
+    nginx.ingress.kubernetes.io/enable-cors: "true"
+    nginx.ingress.kubernetes.io/cors-allow-origin: "*"
+    nginx.ingress.kubernetes.io/cors-allow-methods: "GET, POST, PUT, DELETE, OPTIONS"
+    nginx.ingress.kubernetes.io/cors-allow-headers: "DNT,User-Agent,X-Requested-With,If-Modified-Since,Cache-Control,Content-Type,Range,Authorization"
+    
+    # Certificate management (if using cert-manager)
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+spec:
+  ingressClassName: nginx
+  tls:
+  - hosts:
+    - stellaratlas.io
+    - api.stellaratlas.io
+    secretName: stellaratlas-tls
+  rules:
+  - host: stellaratlas.io
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: frontend-service
+            port:
+              number: 8080
+  - host: api.stellaratlas.io
+    http:
+      paths:
+      - path: /v1
+        pathType: Prefix
+        backend:
+          service:
+            name: backend-service
+            port:
+              number: 3000
+      - path: /v1/history-scan
+        pathType: Prefix
+        backend:
+          service:
+            name: history-scanner-service
+            port:
+              number: 3001
+      - path: /v1/users
+        pathType: Prefix
+        backend:
+          service:
+            name: users-service
+            port:
+              number: 3002
+---
+# Alternative ingress for internal API access (if needed)
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: stellaratlas-internal-ingress
+  namespace: stellaratlas
+  labels:
+    app.kubernetes.io/name: stellaratlas
+    app.kubernetes.io/component: ingress-internal
+  annotations:
+    nginx.ingress.kubernetes.io/rewrite-target: /
+    nginx.ingress.kubernetes.io/whitelist-source-range: "10.0.0.0/8,172.16.0.0/12,192.168.0.0/16"
+spec:
+  ingressClassName: nginx
+  rules:
+  - host: internal.stellaratlas.io
+    http:
+      paths:
+      - path: /api
+        pathType: Prefix
+        backend:
+          service:
+            name: backend-service
+            port:
+              number: 3000
+      - path: /history
+        pathType: Prefix
+        backend:
+          service:
+            name: history-scanner-service
+            port:
+              number: 3001
+      - path: /users
+        pathType: Prefix
+        backend:
+          service:
+            name: users-service
+            port:
+              number: 3002
