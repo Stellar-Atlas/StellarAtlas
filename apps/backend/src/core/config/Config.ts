@@ -60,6 +60,13 @@ export interface Config {
 	networkScanLoopIntervalMs?: number;
 	historyScanAPIPassword?: string;
 	historyScanAPIUsername?: string;
+	enableLocalSMTP: boolean;
+	smtpHost?: string;
+	smtpPort?: number;
+	smtpSecure?: boolean;
+	smtpUsername?: string;
+	smtpPassword?: string;
+	smtpFromAddress?: string;
 }
 
 export class DefaultConfig implements Config {
@@ -87,6 +94,13 @@ export class DefaultConfig implements Config {
 	networkScanLoopIntervalMs?: number;
 	historyScanAPIUsername?: string;
 	historyScanAPIPassword?: string;
+	enableLocalSMTP = false;
+	smtpHost?: string;
+	smtpPort = 587;
+	smtpSecure = false;
+	smtpUsername?: string;
+	smtpPassword?: string;
+	smtpFromAddress?: string;
 
 	constructor(
 		public networkConfig: NetworkConfig,
@@ -306,6 +320,62 @@ export function getConfigFromEnv(): Result<Config, Error> {
 	const historyScanAPIUsername = process.env.HISTORY_SCAN_API_USERNAME;
 	if (isString(historyScanAPIUsername))
 		config.historyScanAPIUsername = historyScanAPIUsername;
+
+	// SMTP configuration
+	let enableLocalSMTP = parseBoolean(process.env.ENABLE_LOCAL_SMTP);
+	if (enableLocalSMTP === undefined) {
+		enableLocalSMTP = false;
+	}
+
+	config.enableLocalSMTP = enableLocalSMTP;
+
+	if (enableLocalSMTP) {
+		const smtpHost = process.env.SMTP_HOST;
+		if (!isString(smtpHost)) {
+			return err(new Error('SMTP_HOST must be defined when local SMTP is enabled'));
+		}
+		config.smtpHost = smtpHost;
+
+		const smtpUsername = process.env.SMTP_USERNAME;
+		if (!isString(smtpUsername)) {
+			return err(new Error('SMTP_USERNAME must be defined when local SMTP is enabled'));
+		}
+		config.smtpUsername = smtpUsername;
+
+		const smtpPassword = process.env.SMTP_PASSWORD;
+		if (!isString(smtpPassword)) {
+			return err(new Error('SMTP_PASSWORD must be defined when local SMTP is enabled'));
+		}
+		config.smtpPassword = smtpPassword;
+
+		const smtpFromAddress = process.env.SMTP_FROM_ADDRESS;
+		if (!isString(smtpFromAddress)) {
+			return err(new Error('SMTP_FROM_ADDRESS must be defined when local SMTP is enabled'));
+		}
+		// Validate email format
+		if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(smtpFromAddress)) {
+			return err(new Error('SMTP_FROM_ADDRESS must be a valid email address'));
+		}
+		config.smtpFromAddress = smtpFromAddress;
+
+		// Optional SMTP settings with defaults
+		const smtpPortString = process.env.SMTP_PORT;
+		if (isString(smtpPortString)) {
+			const smtpPort = Number(smtpPortString);
+			if (isNaN(smtpPort)) {
+				return err(new Error('SMTP_PORT must be a valid number'));
+			}
+			if (smtpPort < 1 || smtpPort > 65535) {
+				return err(new Error('SMTP_PORT must be between 1 and 65535'));
+			}
+			config.smtpPort = smtpPort;
+		}
+
+		const smtpSecure = parseBoolean(process.env.SMTP_SECURE);
+		if (smtpSecure !== undefined) {
+			config.smtpSecure = smtpSecure;
+		}
+	}
 
 	return ok(config);
 }

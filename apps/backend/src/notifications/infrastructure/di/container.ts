@@ -29,6 +29,8 @@ import { SubscriberRepository } from '../../domain/subscription/SubscriberReposi
 import { TypeOrmSubscriberRepository } from '../database/repositories/TypeOrmSubscriberRepository';
 import { Subscriber } from '../../domain/subscription/Subscriber';
 import { RequestUnsubscribeLink } from '../../use-cases/request-unsubscribe-link/RequestUnsubscribeLink';
+import { setupLocalSMTPContainer } from '../../../core/infrastructure/di/LocalSMTPContainer';
+import { SMTPConfig } from '../../../core/services/LocalSMTPUserService';
 
 export function load(container: Container, config: Config) {
 	const dataSource = container.get(DataSource);
@@ -52,23 +54,41 @@ export function load(container: Container, config: Config) {
 			);
 		});
 	container.bind(EventSourceIdFactory).toSelf();
-	container.bind<IUserService>('UserService').toDynamicValue(() => {
-		if (!config.userServiceBaseUrl) {
-			throw new Error('USER_SERVICE_BASE_URL not defined');
-		}
-		if (!config.userServiceUsername) {
-			throw new Error('USER_SERVICE_USERNAME not defined');
-		}
-		if (!config.userServicePassword) {
-			throw new Error('USER_SERVICE_PASSWORD not defined');
-		}
-		return new UserService(
-			config.userServiceBaseUrl,
-			config.userServiceUsername,
-			config.userServicePassword,
-			container.get('HttpService')
-		);
-	});
+	
+	// Setup user service - use LocalSMTPUserService if enabled, otherwise use external UserService
+	if (config.enableLocalSMTP) {
+		// Setup LocalSMTPUserService via the container helper
+		const smtpConfig: SMTPConfig = {
+			host: config.smtpHost!,
+			port: config.smtpPort || 587,
+			secure: config.smtpSecure || false,
+			auth: {
+				user: config.smtpUsername!,
+				pass: config.smtpPassword!
+			}
+		};
+		
+		setupLocalSMTPContainer(container, smtpConfig, config.smtpFromAddress!, true);
+	} else {
+		// Fallback to external user service
+		container.bind<IUserService>('UserService').toDynamicValue(() => {
+			if (!config.userServiceBaseUrl) {
+				throw new Error('USER_SERVICE_BASE_URL not defined');
+			}
+			if (!config.userServiceUsername) {
+				throw new Error('USER_SERVICE_USERNAME not defined');
+			}
+			if (!config.userServicePassword) {
+				throw new Error('USER_SERVICE_PASSWORD not defined');
+			}
+			return new UserService(
+				config.userServiceBaseUrl,
+				config.userServiceUsername,
+				config.userServicePassword,
+				container.get('HttpService')
+			);
+		});
+	}
 	container.bind(Notify).toSelf();
 	container.bind(UnmuteNotification).toSelf();
 	container.bind(Subscribe).toSelf();
