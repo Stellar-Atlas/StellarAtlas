@@ -1,0 +1,65 @@
+# Multi-stage build for history scanner microservice
+FROM node:22-alpine AS builder
+
+# Set working directory
+WORKDIR /app
+
+# Install pnpm
+RUN npm install -g pnpm@10.12.1
+
+# Copy package files
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+COPY apps/history-scanner/package.json ./apps/history-scanner/
+COPY packages/*/package.json ./packages/*/
+
+# Install dependencies
+RUN pnpm install --frozen-lockfile
+
+# Copy source code
+COPY . .
+
+# Build the application
+RUN pnpm build:ts
+
+# Production stage
+FROM node:22-alpine AS runtime
+
+# Create app user
+RUN addgroup -g 1001 -S nodejs && \
+    adduser -S stellaratlas -u 1001
+
+# Set working directory
+WORKDIR /app
+
+# Install pnpm
+RUN npm install -g pnpm@10.12.1
+
+# Copy package files
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+COPY apps/history-scanner/package.json ./apps/history-scanner/
+COPY packages/*/package.json ./packages/*/
+
+# Install production dependencies only
+RUN pnpm install --frozen-lockfile --prod
+
+# Copy built application from builder stage
+COPY --from=builder --chown=stellaratlas:nodejs /app/apps/history-scanner/lib ./apps/history-scanner/lib
+COPY --from=builder --chown=stellaratlas:nodejs /app/packages/*/lib ./packages/*/lib
+COPY --from=builder --chown=stellaratlas:nodejs /app/apps/history-scanner/src ./apps/history-scanner/src
+COPY --from=builder --chown=stellaratlas:nodejs /app/packages/*/src ./packages/*/src
+
+# Create logs directory
+RUN mkdir -p /app/logs && chown stellaratlas:nodejs /app/logs
+
+# Switch to non-root user
+USER stellaratlas
+
+# Expose port
+EXPOSE 3001
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
+  CMD node -e "http.get('http://localhost:3001/health', (res) => { process.exit(res.statusCode === 200 ? 0 : 1) })"
+
+# Start the application
+CMD ["pnpm", "--filter", "history-scanner", "run", "scan-history"]

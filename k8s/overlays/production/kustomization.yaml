@@ -1,0 +1,130 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+metadata:
+  name: stellaratlas-production
+
+resources:
+  - ../../base
+
+namePrefix: prod-
+
+commonLabels:
+  environment: production
+
+images:
+  - name: stellaratlas/backend
+    newTag: v1.0.0
+  - name: stellaratlas/frontend
+    newTag: v1.0.0
+  - name: stellaratlas/history-scanner
+    newTag: v1.0.0
+  - name: stellaratlas/users-service
+    newTag: v1.0.0
+
+patches:
+  # Increase replicas for production
+  - target:
+      kind: Deployment
+      name: backend
+    patch: |-
+      - op: replace
+        path: /spec/replicas
+        value: 3
+      - op: add
+        path: /spec/template/spec/containers/0/env/-
+        value:
+          name: RATE_LIMIT_ENABLED
+          value: "true"
+      - op: add
+        path: /spec/template/spec/containers/0/env/-
+        value:
+          name: RATE_LIMIT_MAX
+          value: "1000"
+
+  - target:
+      kind: Deployment
+      name: frontend
+    patch: |-
+      - op: replace
+        path: /spec/replicas
+        value: 3
+
+  - target:
+      kind: Deployment
+      name: history-scanner
+    patch: |-
+      - op: replace
+        path: /spec/replicas
+        value: 2
+
+  # Increase storage for production
+  - target:
+      kind: PersistentVolumeClaim
+      name: postgres-pvc
+    patch: |-
+      - op: replace
+        path: /spec/resources/requests/storage
+        value: "100Gi"
+
+  # Production resource limits
+  - target:
+      kind: StatefulSet
+      name: postgres
+    patch: |-
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/requests/cpu
+        value: "1"
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/requests/memory
+        value: "2Gi"
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/limits/cpu
+        value: "4"
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/limits/memory
+        value: "8Gi"
+
+  # Production HPA settings
+  - target:
+      kind: HorizontalPodAutoscaler
+      name: backend-hpa
+    patch: |-
+      - op: replace
+        path: /spec/minReplicas
+        value: 3
+      - op: replace
+        path: /spec/maxReplicas
+        value: 20
+
+  - target:
+      kind: HorizontalPodAutoscaler
+      name: frontend-hpa
+    patch: |-
+      - op: replace
+        path: /spec/minReplicas
+        value: 3
+      - op: replace
+        path: /spec/maxReplicas
+        value: 10
+
+configMapGenerator:
+  - name: stellaratlas-config
+    behavior: merge
+    literals:
+      - NODE_ENV=production
+      - LOG_LEVEL=info
+      - FRONTEND_BASE_URL=https://stellaratlas.io
+      - RATE_LIMIT_ENABLED=true
+      - METRICS_ENABLED=true
+
+# Production secrets should be managed externally
+# This is just a placeholder structure
+secretGenerator:
+  - name: stellaratlas-secrets
+    behavior: merge
+    files:
+      - DATABASE_URL=database-url.txt
+      - SMTP_USERNAME=smtp-username.txt
+      - SMTP_PASSWORD=smtp-password.txt
+      - JWT_SECRET=jwt-secret.txt
