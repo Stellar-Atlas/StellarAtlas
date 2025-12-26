@@ -1,0 +1,159 @@
+name: Continuous Integration
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+
+jobs:
+  lint:
+    name: Lint Code
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.12.1
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Run ESLint
+        run: pnpm lint
+
+  build:
+    name: Build TypeScript
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.12.1
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build TypeScript
+        run: pnpm build:ts
+
+      - name: Build Frontend
+        run: pnpm --filter frontend run build
+
+  test-unit:
+    name: Unit Tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.12.1
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build TypeScript
+        run: pnpm build:ts
+
+      - name: Run unit tests
+        run: pnpm test:unit
+
+  test-integration:
+    name: Integration Tests
+    runs-on: ubuntu-latest
+    services:
+      postgres-dev:
+        image: postgres:15
+        env:
+          POSTGRES_USER: stellaratlas
+          POSTGRES_PASSWORD: stellaratlas
+          POSTGRES_DB: stellaratlas
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+
+      postgres-test:
+        image: postgres:15
+        env:
+          POSTGRES_USER: stellaratlas
+          POSTGRES_PASSWORD: stellaratlas
+          POSTGRES_DB: stellaratlas_test
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5433:5432
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.12.1
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build TypeScript
+        run: pnpm build:ts
+
+      - name: Setup test environment
+        run: |
+          cp apps/backend/.env.dist apps/backend/.env
+          cp apps/frontend/.env.dist apps/frontend/.env
+          cp apps/history-scanner/.env.dist apps/history-scanner/.env
+          cp apps/users/.env.dist apps/users/.env
+          cp packages/crawler/.env.dist packages/crawler/.env
+          cp packages/node-connector/.env.dist packages/node-connector/.env
+
+      - name: Configure database URLs
+        run: |
+          sed -i 's|ACTIVE_DATABASE_URL=.*|ACTIVE_DATABASE_URL=postgresql://stellaratlas:stellaratlas@localhost:5432/stellaratlas|' apps/backend/.env
+          sed -i 's|DATABASE_TEST_URL=.*|DATABASE_TEST_URL=postgresql://stellaratlas:stellaratlas@localhost:5433/stellaratlas_test|' apps/backend/.env
+
+      - name: Run integration tests
+        run: pnpm test:integration
+        env:
+          ACTIVE_DATABASE_URL: postgresql://stellaratlas:stellaratlas@localhost:5432/stellaratlas
+          DATABASE_TEST_URL: postgresql://stellaratlas:stellaratlas@localhost:5433/stellaratlas_test
