@@ -373,7 +373,7 @@ Add convenience scripts for common tasks.
 ```json
 {
   "scripts": {
-    "clean": "find . -name 'lib' -type d -exec rm -rf {} + 2>/dev/null || true",
+    "clean": "pnpm -r exec rm -rf lib",
     "clean:install": "pnpm clean && rm -rf node_modules && pnpm install",
     "db:reset": "pnpm --filter backend run db:drop && pnpm --filter backend run db:create",
     "db:migrate": "pnpm --filter backend run typeorm migration:run",
