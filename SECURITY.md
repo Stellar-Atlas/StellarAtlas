@@ -19,7 +19,7 @@ The StellarAtlas team takes security bugs seriously. We appreciate your efforts 
 
 Instead, please report them via one of the following methods:
 
-1. **Email**: Send an email to security@stellaratlas.io (if available) or to the repository maintainers
+1. **Email**: Send an email to security@stellaratlas.io. If you cannot reach this address (for example, if the message bounces), please use the GitHub Security Advisory process described below.
 2. **GitHub Security Advisory**: Use GitHub's [private vulnerability reporting](https://github.com/Stellar-Atlas/StellarAtlas/security/advisories/new)
 
 Include the following information in your report:
