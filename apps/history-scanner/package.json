@@ -21,7 +21,7 @@
 		"exception-logger": "workspace:*",
 		"job-monitor": "workspace:*",
 		"logger": "workspace:*",
-		"ajv": "^8.17.1",
+		"ajv": "^8.18.0",
 		"yn": "^3.1.1",
 		"custom-error": "workspace:*",
 		"http-helper": "workspace:*",
