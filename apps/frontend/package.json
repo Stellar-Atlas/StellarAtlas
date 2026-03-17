@@ -29,7 +29,7 @@
     "express": "^4.21.2",
     "jquery": "^3.7.1",
     "js-cookie": "^3.0.5",
-    "jsondiffpatch": "^0.6.0",
+    "jsondiffpatch": "^0.7.2",
     "leaflet": "1.9.4",
     "leaflet.markercluster": "^1.5.3",
     "popper.js": "1.16.1",
