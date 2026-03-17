@@ -57,18 +57,32 @@ export function load(container: Container, config: Config) {
 	
 	// Setup user service - use LocalSMTPUserService if enabled, otherwise use external UserService
 	if (config.enableLocalSMTP) {
+		// Ensure required SMTP configuration is present
+		if (!config.smtpHost) {
+			throw new Error('SMTP_HOST not defined');
+		}
+		if (!config.smtpUsername) {
+			throw new Error('SMTP_USERNAME not defined');
+		}
+		if (!config.smtpPassword) {
+			throw new Error('SMTP_PASSWORD not defined');
+		}
+		if (!config.smtpFromAddress) {
+			throw new Error('SMTP_FROM_ADDRESS not defined');
+		}
+
 		// Setup LocalSMTPUserService via the container helper
 		const smtpConfig: SMTPConfig = {
-			host: config.smtpHost!,
+			host: config.smtpHost,
 			port: config.smtpPort || 587,
 			secure: config.smtpSecure || false,
 			auth: {
-				user: config.smtpUsername!,
-				pass: config.smtpPassword!
+				user: config.smtpUsername,
+				pass: config.smtpPassword
 			}
 		};
-		
-		setupLocalSMTPContainer(container, smtpConfig, config.smtpFromAddress!, true);
+
+		setupLocalSMTPContainer(container, smtpConfig, config.smtpFromAddress, true);
 	} else {
 		// Fallback to external user service
 		container.bind<IUserService>('UserService').toDynamicValue(() => {
