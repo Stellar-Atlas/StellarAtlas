@@ -1,7 +1,7 @@
 import { interfaces } from 'inversify';
 import Container = interfaces.Container;
 import { TYPES } from './di-types';
-import { NETWORK_TYPES as NETWORK_TYPES } from '../../../network-scan/infrastructure/di/di-types';
+import { NETWORK_TYPES } from '../../../network-scan/infrastructure/di/di-types';
 import { MessageCreator } from '../../domain/notifier/MessageCreator';
 import { EJSMessageCreator } from '../services/EJSMessageCreator';
 import { EventDetector } from '../../domain/event/EventDetector';
