@@ -14,7 +14,7 @@
 	"private": true,
 	"dependencies": {
 		"dotenv": "^10.0.0",
-		"validator": "^13.12.0",
+		"validator": "^13.15.22",
 		"inversify": "^6.0.2",
 		"shared": "workspace:*",
 		"neverthrow": "^6.2.2",
