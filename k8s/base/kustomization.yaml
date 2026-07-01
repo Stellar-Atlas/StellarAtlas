@@ -1,0 +1,49 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+metadata:
+  name: stellaratlas-base
+  annotations:
+    config.kubernetes.io/local-config: "true"
+
+resources:
+  - namespace.yaml
+  - configmap.yaml
+  - secrets.yaml
+  - postgres.yaml
+  - backend.yaml
+  - frontend.yaml
+  - history-scanner.yaml
+  - users-service.yaml
+  - network-scanner.yaml
+  - ingress.yaml
+  - hpa.yaml
+
+commonLabels:
+  app.kubernetes.io/part-of: stellaratlas
+  app.kubernetes.io/managed-by: kustomize
+
+images:
+  - name: stellaratlas/backend
+    newTag: latest
+  - name: stellaratlas/frontend
+    newTag: latest
+  - name: stellaratlas/history-scanner
+    newTag: latest
+  - name: stellaratlas/users-service
+    newTag: latest
+
+# Global patches can be applied here
+patches:
+  - target:
+      kind: Deployment
+    patch: |-
+      - op: add
+        path: /spec/template/metadata/annotations
+        value:
+          prometheus.io/scrape: "true"
+          prometheus.io/port: "8080"
+          prometheus.io/path: "/metrics"
+
+# Namespace for all resources
+namespace: stellaratlas

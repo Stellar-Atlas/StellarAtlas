@@ -24,9 +24,7 @@
               :d="getEdgePath(edge)"
               :class="getEdgeClassObject(edge)"
               :style="getEdgeStyle(edge)"
-            >
-              <!-- Define the dot -->
-            </path>
+            />
             <g v-if="propagationEnabled">
               <circle
                 v-for="edge in viewGraph.regularEdges.filter(
@@ -41,7 +39,6 @@
                 r="5"
                 class="propagation-circle"
               >
-                <!-- Animate the dot along the path -->
                 <animateMotion
                   begin="indefinite"
                   dur="1s"
@@ -60,7 +57,6 @@
                 />
               </circle>
             </g>
-            <!-- Define the dot -->
 
             <path
               v-for="edge in viewGraph.stronglyConnectedEdges.filter(
@@ -196,7 +192,7 @@ import {
   getEdgeStyle,
   getVertexClassObject as buildVertexClassObject,
   getVertexRadius,
-  getVertexStyle,
+  getVertexStyle as buildVertexStyle,
   getVertexTextClass,
   getVertexTextRectWidthPx as buildVertexTextRectWidthPx,
   getVertexTextRectX as buildVertexTextRectX,
@@ -205,6 +201,13 @@ import {
 } from "@/components/visual-navigator/graph/graph-display";
 import { startPropagationAnimation } from "@/components/visual-navigator/graph/graph-propagation";
 import { useGraphController } from "@/components/visual-navigator/graph/use-graph-controller";
+import { useTrustVisualizationSettings } from "@/composables/useTrustVisualizationSettings";
+import {
+  TrustRankColorService,
+  type TrustLevel,
+} from "@/services/TrustRankColorService";
+import { NodeTrustIndexService } from "@/services/NodeTrustIndexService";
+import useStore from "@/store/useStore";
 
 const props = defineProps({
   centerVertex: {
@@ -273,6 +276,7 @@ const {
 } = toRefs(props);
 const emit = defineEmits(["vertex-selected"]);
 const truncate = useTruncate();
+const { settings } = useTrustVisualizationSettings();
 
 const { dimmerClass, graphSvg, grid, isLoading } = useGraphController({
   centerVertex,
@@ -282,10 +286,6 @@ const { dimmerClass, graphSvg, grid, isLoading } = useGraphController({
   viewGraph,
 });
 
-function vertexSelected(vertex: ViewVertex) {
-  emit("vertex-selected", vertex);
-}
-
 const graphDisplayContext: GraphDisplayContext = {
   selectedVertices,
   viewGraph,
@@ -294,8 +294,45 @@ const graphDisplayContext: GraphDisplayContext = {
   optionShowFailingEdges,
 };
 
+function vertexSelected(vertex: ViewVertex) {
+  emit("vertex-selected", vertex);
+}
+
+function getTrustLevelForNode(publicKey: string): TrustLevel {
+  try {
+    const node = useStore().network.getNodeByPublicKey(publicKey);
+    if (!node) return TrustRankColorService.getTrustLevel(null);
+
+    return TrustRankColorService.getTrustLevel(
+      NodeTrustIndexService.getTrustIndex(node),
+    );
+  } catch {
+    return TrustRankColorService.getTrustLevel(null);
+  }
+}
+
 function getVertexClassObject(vertex: ViewVertex): Record<string, boolean> {
-  return buildVertexClassObject(vertex, graphDisplayContext);
+  const baseClasses = buildVertexClassObject(vertex, graphDisplayContext);
+  if (!settings.value.enabled || !vertex.key) return baseClasses;
+
+  const trustLevel = getTrustLevelForNode(vertex.key);
+  return {
+    ...baseClasses,
+    "trust-high": trustLevel.level === "high",
+    "trust-medium": trustLevel.level === "medium",
+    "trust-low": trustLevel.level === "low",
+    "trust-unknown": trustLevel.level === "unknown",
+  };
+}
+
+function getVertexStyle(vertex: ViewVertex): Record<string, string> {
+  if (!settings.value.enabled || !vertex.key || vertex.isFailing)
+    return buildVertexStyle(vertex);
+
+  return {
+    ...buildVertexStyle(vertex),
+    fill: getTrustLevelForNode(vertex.key).color,
+  };
 }
 
 function getVertexTextRectWidthPx(vertex: ViewVertex): string {

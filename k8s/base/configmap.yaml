@@ -1,0 +1,55 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: stellaratlas-config
+  namespace: stellaratlas
+  labels:
+    app.kubernetes.io/name: stellaratlas
+    app.kubernetes.io/component: config
+data:
+  # Database configuration
+  POSTGRES_DB: "stellaratlas"
+  POSTGRES_HOST: "postgres-service"
+  POSTGRES_PORT: "5432"
+  
+  # Application configuration
+  NODE_ENV: "production"
+  LOG_LEVEL: "info"
+  
+  # Frontend configuration
+  FRONTEND_PORT: "8080"
+  API_BASE_URL: "http://backend-service:3000"
+  
+  # Backend configuration
+  BACKEND_PORT: "3000"
+  CORS_ORIGINS: "*"
+  
+  # History Scanner configuration
+  HISTORY_SCANNER_PORT: "3001"
+  SCAN_INTERVAL: "300"
+  
+  # Users service configuration
+  USERS_SERVICE_PORT: "3002"
+  
+  # SMTP configuration (when using local SMTP)
+  ENABLE_LOCAL_SMTP: "true"
+  SMTP_HOST: "smtp.gmail.com"
+  SMTP_PORT: "587"
+  SMTP_SECURE: "true"
+  SMTP_FROM_ADDRESS: "noreply@stellaratlas.io"
+  
+  # Notifications configuration
+  NOTIFICATIONS_ENABLED: "true"
+  FRONTEND_BASE_URL: "https://stellaratlas.io"
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: postgres-config
+  namespace: stellaratlas
+  labels:
+    app.kubernetes.io/name: postgres
+    app.kubernetes.io/component: database
+data:
+  POSTGRES_DB: "stellaratlas"
+  POSTGRES_USER: "stellaratlas_user"

@@ -68,6 +68,22 @@ circle.source {
   stroke-width: 2px;
 }
 
+circle.trust-high {
+  stroke: #28a745;
+}
+
+circle.trust-medium {
+  stroke: #ffc107;
+}
+
+circle.trust-low {
+  stroke: #fd7e14;
+}
+
+circle.trust-unknown {
+  stroke: #6c757d;
+}
+
 circle {
   stroke: $white;
   fill: $gray-100;

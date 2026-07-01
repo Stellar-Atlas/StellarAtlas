@@ -1,0 +1,327 @@
+import { jest } from '@jest/globals';
+import { UserId } from '../../../notifications/domain/subscription/UserId.js';
+import { Message } from '../../domain/Message.js';
+import { User } from '../../infrastructure/database/entities/User.js';
+import { randomUUID } from 'crypto';
+import { mock } from 'jest-mock-extended';
+import type { Repository } from 'typeorm';
+
+type SendMailResult = {
+	messageId: string;
+	response: string;
+};
+
+const mockTransporter = {
+	sendMail: jest.fn<() => Promise<SendMailResult>>(),
+	verify: jest.fn<() => Promise<boolean>>()
+};
+
+const createTransport = jest.fn(() => mockTransporter);
+
+jest.unstable_mockModule('nodemailer', () => ({
+	createTransport
+}));
+
+const { LocalSMTPUserService } = await import('../LocalSMTPUserService.js');
+
+const mockUserRepository = mock<Repository<User>>();
+
+const smtpConfig = {
+	host: 'smtp.test.com',
+	port: 587,
+	secure: false,
+	auth: {
+		user: 'test@test.com',
+		pass: 'password'
+	}
+};
+
+const fromAddress = 'noreply@stellaratlas.io';
+
+describe('LocalSMTPUserService', () => {
+	let userService: InstanceType<typeof LocalSMTPUserService>;
+
+	beforeEach(() => {
+		jest.clearAllMocks();
+		userService = new LocalSMTPUserService(
+			mockUserRepository,
+			smtpConfig,
+			fromAddress
+		);
+	});
+
+	describe('constructor', () => {
+		it('should create transporter with correct SMTP config', () => {
+			expect(createTransport).toHaveBeenCalledWith(smtpConfig);
+		});
+
+		it('should throw error when from address is invalid', () => {
+			expect(() => new LocalSMTPUserService(
+				mockUserRepository,
+				smtpConfig,
+				'invalid-email'
+			)).toThrow('Invalid from email address');
+		});
+
+		it('should throw error when SMTP host is missing', () => {
+			expect(() => new LocalSMTPUserService(
+				mockUserRepository,
+				{ ...smtpConfig, host: '' },
+				fromAddress
+			)).toThrow('SMTP host is required');
+		});
+	});
+
+	describe('send', () => {
+		const userId = UserId.create(randomUUID());
+		const message = new Message('Test body', 'Test subject');
+
+		beforeEach(() => {
+			if (userId.isErr()) throw userId.error;
+		});
+
+		it('should send email successfully', async () => {
+			const mockUser = new User();
+			mockUser.id = userId._unsafeUnwrap().value;
+			mockUser.email = 'test@example.com';
+			mockUser.createdAt = new Date();
+			mockUser.updatedAt = new Date();
+
+			mockUserRepository.findOne.mockResolvedValue(mockUser);
+			mockTransporter.sendMail.mockResolvedValue({
+				messageId: 'test-message-id',
+				response: '250 Message accepted'
+			});
+
+			const result = await userService.send(userId._unsafeUnwrap(), message);
+
+			expect(result.isOk()).toBeTruthy();
+			expect(mockUserRepository.findOne).toHaveBeenCalledWith({
+				where: { id: userId._unsafeUnwrap().value }
+			});
+			expect(mockTransporter.sendMail).toHaveBeenCalledWith({
+				from: fromAddress,
+				to: mockUser.email,
+				subject: message.title,
+				html: message.body
+			});
+		});
+
+		it('should return error when user not found', async () => {
+			mockUserRepository.findOne.mockResolvedValue(null);
+
+			const result = await userService.send(userId._unsafeUnwrap(), message);
+
+			expect(result.isErr()).toBeTruthy();
+			expect(result._unsafeUnwrapErr().message).toContain('User not found');
+		});
+
+		it('should return error when email sending fails', async () => {
+			const mockUser = new User();
+			mockUser.id = userId._unsafeUnwrap().value;
+			mockUser.email = 'test@example.com';
+			mockUser.createdAt = new Date();
+			mockUser.updatedAt = new Date();
+
+			mockUserRepository.findOne.mockResolvedValue(mockUser);
+			mockTransporter.sendMail.mockRejectedValue(new Error('SMTP error'));
+
+			const result = await userService.send(userId._unsafeUnwrap(), message);
+
+			expect(result.isErr()).toBeTruthy();
+			expect(result._unsafeUnwrapErr().message).toContain('Failed to send email');
+		});
+
+		it('should return error when database query fails', async () => {
+			mockUserRepository.findOne.mockRejectedValue(new Error('Database error'));
+
+			const result = await userService.send(userId._unsafeUnwrap(), message);
+
+			expect(result.isErr()).toBeTruthy();
+			expect(result._unsafeUnwrapErr().message).toContain('Database error');
+		});
+	});
+
+	describe('findOrCreateUser', () => {
+		const email = 'test@example.com';
+
+		it('should return existing user if found', async () => {
+			const existingUserId = randomUUID();
+			const mockUser = new User();
+			mockUser.id = existingUserId;
+			mockUser.email = email;
+			mockUser.createdAt = new Date();
+			mockUser.updatedAt = new Date();
+
+			mockUserRepository.findOne.mockResolvedValue(mockUser);
+
+			const result = await userService.findOrCreateUser(email);
+
+			expect(result.isOk()).toBeTruthy();
+			expect(result._unsafeUnwrap().value).toBe(existingUserId);
+			expect(mockUserRepository.findOne).toHaveBeenCalledWith({
+				where: { email }
+			});
+			expect(mockUserRepository.save).not.toHaveBeenCalled();
+		});
+
+		it('should create new user if not found', async () => {
+			const newUser = new User();
+			newUser.email = email;
+
+			mockUserRepository.findOne.mockResolvedValue(null);
+			mockUserRepository.create.mockReturnValue(newUser);
+			mockUserRepository.save.mockResolvedValue(newUser);
+
+			const result = await userService.findOrCreateUser(email);
+
+			expect(result.isOk()).toBeTruthy();
+			// Should return a valid UUID (generated by the service)
+			expect(result._unsafeUnwrap().value).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i);
+			expect(mockUserRepository.save).toHaveBeenCalled();
+		});
+
+		it('should return error for invalid email format', async () => {
+			const result = await userService.findOrCreateUser('invalid-email');
+
+			expect(result.isErr()).toBeTruthy();
+			expect(result._unsafeUnwrapErr().message).toContain('Invalid email address');
+		});
+
+		it('should return error when database save fails', async () => {
+			mockUserRepository.findOne.mockResolvedValue(null);
+			mockUserRepository.save.mockRejectedValue(new Error('Database error'));
+
+			const result = await userService.findOrCreateUser(email);
+
+			expect(result.isErr()).toBeTruthy();
+			expect(result._unsafeUnwrapErr().message).toContain('Failed to create user');
+		});
+
+		it('should return error when database find fails', async () => {
+			mockUserRepository.findOne.mockRejectedValue(new Error('Database error'));
+
+			const result = await userService.findOrCreateUser(email);
+
+			expect(result.isErr()).toBeTruthy();
+			expect(result._unsafeUnwrapErr().message).toContain('Database error');
+		});
+	});
+
+	describe('findUser', () => {
+		const email = 'test@example.com';
+
+		it('should return user id when user exists', async () => {
+			const existingUserId = randomUUID();
+			const mockUser = new User();
+			mockUser.id = existingUserId;
+			mockUser.email = email;
+			mockUser.createdAt = new Date();
+			mockUser.updatedAt = new Date();
+
+			mockUserRepository.findOne.mockResolvedValue(mockUser);
+
+			const result = await userService.findUser(email);
+
+			expect(result.isOk()).toBeTruthy();
+			expect(result._unsafeUnwrap()?.value).toBe(existingUserId);
+		});
+
+		it('should return null when user does not exist', async () => {
+			mockUserRepository.findOne.mockResolvedValue(null);
+
+			const result = await userService.findUser(email);
+
+			expect(result.isOk()).toBeTruthy();
+			expect(result._unsafeUnwrap()).toBeNull();
+		});
+
+		it('should return error for invalid email format', async () => {
+			const result = await userService.findUser('invalid-email');
+
+			expect(result.isErr()).toBeTruthy();
+			expect(result._unsafeUnwrapErr().message).toContain('Invalid email address');
+		});
+
+		it('should return error when database query fails', async () => {
+			mockUserRepository.findOne.mockRejectedValue(new Error('Database error'));
+
+			const result = await userService.findUser(email);
+
+			expect(result.isErr()).toBeTruthy();
+			expect(result._unsafeUnwrapErr().message).toContain('Database error');
+		});
+	});
+
+	describe('deleteUser', () => {
+		const userId = UserId.create(randomUUID());
+
+		beforeEach(() => {
+			if (userId.isErr()) throw userId.error;
+		});
+
+		it('should delete user successfully', async () => {
+			const mockUser = new User();
+			mockUser.id = userId._unsafeUnwrap().value;
+			mockUser.email = 'test@example.com';
+			mockUser.createdAt = new Date();
+			mockUser.updatedAt = new Date();
+
+			mockUserRepository.findOne.mockResolvedValue(mockUser);
+			mockUserRepository.remove.mockResolvedValue(mockUser);
+
+			const result = await userService.deleteUser(userId._unsafeUnwrap());
+
+			expect(result.isOk()).toBeTruthy();
+			expect(mockUserRepository.findOne).toHaveBeenCalledWith({
+				where: { id: userId._unsafeUnwrap().value }
+			});
+			expect(mockUserRepository.remove).toHaveBeenCalledWith(mockUser);
+		});
+
+		it('should return error when user not found', async () => {
+			mockUserRepository.findOne.mockResolvedValue(null);
+
+			const result = await userService.deleteUser(userId._unsafeUnwrap());
+
+			expect(result.isErr()).toBeTruthy();
+			expect(result._unsafeUnwrapErr().message).toContain('User not found');
+		});
+
+		it('should return error when database delete fails', async () => {
+			const mockUser = new User();
+			mockUser.id = userId._unsafeUnwrap().value;
+			mockUser.email = 'test@example.com';
+			mockUser.createdAt = new Date();
+			mockUser.updatedAt = new Date();
+
+			mockUserRepository.findOne.mockResolvedValue(mockUser);
+			mockUserRepository.remove.mockRejectedValue(new Error('Database error'));
+
+			const result = await userService.deleteUser(userId._unsafeUnwrap());
+
+			expect(result.isErr()).toBeTruthy();
+			expect(result._unsafeUnwrapErr().message).toContain('Failed to delete user');
+		});
+	});
+
+	describe('verifyConnection', () => {
+		it('should return success when SMTP connection is valid', async () => {
+			mockTransporter.verify.mockResolvedValue(true);
+
+			const result = await userService.verifyConnection();
+
+			expect(result.isOk()).toBeTruthy();
+			expect(mockTransporter.verify).toHaveBeenCalled();
+		});
+
+		it('should return error when SMTP connection fails', async () => {
+			mockTransporter.verify.mockRejectedValue(new Error('Connection failed'));
+
+			const result = await userService.verifyConnection();
+
+			expect(result.isErr()).toBeTruthy();
+			expect(result._unsafeUnwrapErr().message).toContain('SMTP connection failed');
+		});
+	});
+});
