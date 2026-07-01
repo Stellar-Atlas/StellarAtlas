@@ -4,6 +4,9 @@ import { TypeOrmScanJobRepository } from '../TypeOrmScanJobRepository.js';
 import { ScanJob } from '../../../../domain/ScanJob.js';
 import { TYPES } from '../../../di/di-types.js';
 import { randomUUID } from 'crypto';
+import { DataSource } from 'typeorm';
+
+jest.setTimeout(30000);
 
 describe('TypeOrmScanJobRepository.integration', () => {
 	let kernel: Kernel;
@@ -17,7 +20,7 @@ describe('TypeOrmScanJobRepository.integration', () => {
 	});
 
 	afterEach(async () => {
-		await kernel.close();
+		if (kernel !== undefined) await kernel.close();
 	});
 
 	it('should load the repository without errors', async () => {
@@ -110,6 +113,38 @@ describe('TypeOrmScanJobRepository.integration', () => {
 				new Date()
 			);
 			expect(noJobs).toHaveLength(0);
+		});
+	});
+
+	describe('releaseStaleTakenJobs', () => {
+		it('should release taken jobs older than the cutoff', async () => {
+			const staleJob = new ScanJob('stale-url');
+			staleJob.status = 'TAKEN';
+			const recentJob = new ScanJob('recent-url');
+			recentJob.status = 'TAKEN';
+			await typeOrmScanJobRepository.save([staleJob, recentJob]);
+
+			const staleDate = new Date('2026-01-01T00:00:00.000Z');
+			await kernel.container
+				.get(DataSource)
+				.query(
+					'update history_archive_scan_job_queue set "updatedAt" = $1 where url = $2',
+					[staleDate, staleJob.url]
+				);
+
+			const released = await typeOrmScanJobRepository.releaseStaleTakenJobs(
+				new Date('2026-01-02T00:00:00.000Z')
+			);
+
+			expect(released).toBe(1);
+			const releasedJob = await typeOrmScanJobRepository.findByRemoteId(
+				staleJob.remoteId
+			);
+			const stillTakenJob = await typeOrmScanJobRepository.findByRemoteId(
+				recentJob.remoteId
+			);
+			expect(releasedJob?.status).toBe('PENDING');
+			expect(stillTakenJob?.status).toBe('TAKEN');
 		});
 	});
 });

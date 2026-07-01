@@ -28,6 +28,7 @@ describe('ScheduleScanJobs', () => {
 	});
 
 	it('should do nothing if queue is not empty', async () => {
+		scanJobRepositoryMock.releaseStaleTakenJobs.mockResolvedValue(0);
 		scanJobRepositoryMock.hasPendingJobs.mockResolvedValue(true);
 		scanJobRepositoryMock.findUnfinishedJobs.mockResolvedValue([]);
 		scanRepositoryMock.findLatest.mockResolvedValue([]);
@@ -47,6 +48,7 @@ describe('ScheduleScanJobs', () => {
 	});
 
 	it('should schedule jobs if queue is empty', async () => {
+		scanJobRepositoryMock.releaseStaleTakenJobs.mockResolvedValue(0);
 		scanJobRepositoryMock.hasPendingJobs.mockResolvedValue(false);
 		scanJobRepositoryMock.findUnfinishedJobs.mockResolvedValue([]);
 		scanRepositoryMock.findLatest.mockResolvedValue([]);
@@ -70,6 +72,7 @@ describe('ScheduleScanJobs', () => {
 	});
 
 	it('should save prioritized jobs even when regular jobs are pending', async () => {
+		scanJobRepositoryMock.releaseStaleTakenJobs.mockResolvedValue(0);
 		scanJobRepositoryMock.hasPendingJobs.mockResolvedValue(true);
 		scanJobRepositoryMock.findUnfinishedJobs.mockResolvedValue([]);
 		scanRepositoryMock.findLatest.mockResolvedValue([]);
@@ -83,5 +86,27 @@ describe('ScheduleScanJobs', () => {
 
 		expect(result.isOk()).toBe(true);
 		expect(scanJobRepositoryMock.save).toHaveBeenCalledTimes(1);
+	});
+
+	it('should release stale taken jobs before checking queue state', async () => {
+		scanJobRepositoryMock.releaseStaleTakenJobs.mockResolvedValue(3);
+		scanJobRepositoryMock.hasPendingJobs.mockResolvedValue(false);
+		scanJobRepositoryMock.findUnfinishedJobs.mockResolvedValue([]);
+		scanRepositoryMock.findLatest.mockResolvedValue([]);
+		scanSchedulerMock.schedule.mockReturnValue([]);
+
+		const result = await scheduleScanJobs.execute({
+			historyArchiveUrls: ['https://example.com']
+		});
+
+		expect(result.isOk()).toBe(true);
+		expect(scanJobRepositoryMock.releaseStaleTakenJobs).toHaveBeenCalledTimes(
+			1
+		);
+		expect(loggerMock.info).toHaveBeenCalledWith('Released stale scan jobs', {
+			app: 'history-scan-coordinator',
+			released: 3
+		});
+		expect(scanJobRepositoryMock.hasPendingJobs).toHaveBeenCalledTimes(1);
 	});
 });

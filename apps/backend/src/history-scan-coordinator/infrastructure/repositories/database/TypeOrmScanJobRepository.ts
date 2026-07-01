@@ -38,4 +38,16 @@ export class TypeOrmScanJobRepository implements ScanJobRepository {
 			]
 		});
 	}
+
+	async releaseStaleTakenJobs(before: Date): Promise<number> {
+		const result = await this.baseRepository
+			.createQueryBuilder()
+			.update(ScanJob)
+			.set({ status: 'PENDING' })
+			.where('status = :status', { status: 'TAKEN' })
+			.andWhere('"updatedAt" < :before', { before })
+			.execute();
+
+		return result.affected ?? 0;
+	}
 }

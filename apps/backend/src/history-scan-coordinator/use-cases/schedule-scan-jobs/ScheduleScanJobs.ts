@@ -7,6 +7,7 @@ import type { ScanRepository } from '../../domain/scan/ScanRepository.js';
 import type { ScanScheduler } from '../../domain/ScanScheduler.js';
 import type { Logger } from 'logger';
 import type { ScanJobRepository } from '../../domain/ScanJobRepository.js';
+import { getStaleScanJobCutoff } from '../../domain/ScanJobStaleness.js';
 
 /**
  * Schedule scansJobs and adds them to the queue. If the scan queue is empty, new ScanJobs will be created.
@@ -31,9 +32,23 @@ export class ScheduleScanJobs {
 	) {}
 
 	public async execute(dto: ScheduleScanJobsDTO): Promise<Result<void, Error>> {
+		await this.releaseStaleJobs();
 		await this.scheduleScanJobs(dto, await this.isQueueEmpty());
 
 		return ok(undefined);
+	}
+
+	private async releaseStaleJobs(): Promise<void> {
+		const released = await this.scanJobRepository.releaseStaleTakenJobs(
+			getStaleScanJobCutoff()
+		);
+
+		if (released > 0) {
+			this.logger.info('Released stale scan jobs', {
+				app: 'history-scan-coordinator',
+				released
+			});
+		}
 	}
 
 	private async isQueueEmpty(): Promise<boolean> {
@@ -47,7 +62,7 @@ export class ScheduleScanJobs {
 		const previousScans = await this.scanRepository.findLatest();
 		//jobs that are running for over 4 days are considered failed
 		const unfinishedScanJobs = await this.scanJobRepository.findUnfinishedJobs(
-			new Date(Date.now() - 4 * 24 * 60 * 60 * 1000)
+			getStaleScanJobCutoff()
 		); //todo: this should be configurable
 
 		const scanJobs = this.scanScheduler.schedule(

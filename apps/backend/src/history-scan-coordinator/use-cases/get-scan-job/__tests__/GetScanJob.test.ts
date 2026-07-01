@@ -25,6 +25,7 @@ describe('GetScanJob', () => {
 	});
 
 	it('should return ok(null) when no scan job is available', async () => {
+		scanJobRepositoryMock.releaseStaleTakenJobs.mockResolvedValue(0);
 		scanJobRepositoryMock.fetchNextJob.mockResolvedValue(null);
 		const result = await getScanJob.execute();
 
@@ -33,10 +34,14 @@ describe('GetScanJob', () => {
 		expect(loggerMock.info).toHaveBeenCalledWith('No scan jobs available', {
 			app: 'history-scan-coordinator'
 		});
+		expect(scanJobRepositoryMock.releaseStaleTakenJobs).toHaveBeenCalledTimes(
+			1
+		);
 	});
 
 	it('should return ok(job) when a scan job is available and update its status to TAKEN', async () => {
 		const mockJob = new ScanJob('http://test.com');
+		scanJobRepositoryMock.releaseStaleTakenJobs.mockResolvedValue(0);
 		scanJobRepositoryMock.fetchNextJob.mockResolvedValue(mockJob);
 
 		const result = await getScanJob.execute();
@@ -69,6 +74,7 @@ describe('GetScanJob', () => {
 
 	it('should return err(error) when fetchNextJob fails', async () => {
 		const error = new Error('Database error');
+		scanJobRepositoryMock.releaseStaleTakenJobs.mockResolvedValue(0);
 		scanJobRepositoryMock.fetchNextJob.mockRejectedValueOnce(error);
 
 		const result = await getScanJob.execute();
@@ -76,5 +82,21 @@ describe('GetScanJob', () => {
 		expect(result.isErr()).toBe(true);
 		expect(result._unsafeUnwrapErr()).toEqual(error);
 		expect(exceptionLoggerMock.captureException).toHaveBeenCalledWith(error);
+	});
+
+	it('should release stale taken jobs before fetching the next job', async () => {
+		scanJobRepositoryMock.releaseStaleTakenJobs.mockResolvedValue(2);
+		scanJobRepositoryMock.fetchNextJob.mockResolvedValue(null);
+
+		const result = await getScanJob.execute();
+
+		expect(result.isOk()).toBe(true);
+		expect(scanJobRepositoryMock.releaseStaleTakenJobs).toHaveBeenCalledTimes(
+			1
+		);
+		expect(loggerMock.info).toHaveBeenCalledWith('Released stale scan jobs', {
+			app: 'history-scan-coordinator',
+			released: 2
+		});
 	});
 });
