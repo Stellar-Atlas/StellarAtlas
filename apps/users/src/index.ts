@@ -9,9 +9,13 @@ import { HttpError, MailgunService } from './MailgunService.js';
 import * as Sentry from '@sentry/node';
 import express from 'express';
 import helmet from 'helmet';
+import { resolveAppEnvPath } from 'shared';
 import { dataSource } from './data-source.js';
 
-config();
+config({
+	path: resolveAppEnvPath(import.meta.url, 'users'),
+	quiet: true
+});
 
 if (process.env.SENTRY_DSN) {
 	Sentry.init({

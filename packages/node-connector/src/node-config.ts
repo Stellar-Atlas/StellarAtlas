@@ -2,7 +2,7 @@ import { Networks } from '@stellar/stellar-sdk';
 import { config } from 'dotenv';
 import type { NodeInfo } from './node.js';
 
-config();
+config({ quiet: true });
 
 export interface NodeConfig {
 	network: string;

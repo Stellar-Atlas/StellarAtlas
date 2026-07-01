@@ -1,12 +1,10 @@
 import { config } from 'dotenv';
 import { err, ok, Result } from 'neverthrow';
-import path from 'path';
-import { fileURLToPath } from 'node:url';
-
-const currentDir = path.dirname(fileURLToPath(import.meta.url));
+import { resolveAppEnvPath } from 'shared';
 
 config({
-	path: path.resolve(currentDir, '../../../../.env')
+	path: resolveAppEnvPath(import.meta.url, 'history-scanner'),
+	quiet: true
 });
 
 export interface Config {

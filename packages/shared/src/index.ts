@@ -63,3 +63,4 @@ export { default as NetworkStatistics } from './network-statistics.js';
 export { default as StellarCoreConfigurationGenerator } from './stellar-core-configuration-generator.js';
 export { mapUnknownToError } from './utilities/mapUnknownToError.js';
 export { asyncSleep } from './utilities/asyncSleep.js';
+export { resolveAppEnvPath } from './env/resolve-app-env-path.js';

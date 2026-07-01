@@ -685,6 +685,9 @@ importers:
       pg:
         specifier: ^8.22.0
         version: 8.22.0
+      shared:
+        specifier: workspace:*
+        version: link:../../packages/shared
       sodium-native:
         specifier: ^4.3.1
         version: 4.3.3

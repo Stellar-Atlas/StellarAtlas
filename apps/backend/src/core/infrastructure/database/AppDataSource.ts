@@ -1,7 +1,11 @@
 import { config } from 'dotenv';
 import { DataSource } from 'typeorm';
+import { resolveAppEnvPath } from 'shared';
 
-config();
+config({
+	path: resolveAppEnvPath(import.meta.url, 'backend'),
+	quiet: true
+});
 
 const AppDataSource = new DataSource({
 	type: 'postgres',
