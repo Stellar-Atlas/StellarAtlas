@@ -27,7 +27,7 @@
 		"start:scan-network": "pnpm --filter backend run scan-network",
 		"start:scan-history": "pnpm --filter history-scanner run scan-history",
 		"start:users": "pnpm --filter users run start",
-		"start:all": "node ./start-all.cjs"
+		"start:all": "node apps/backend/lib/core/infrastructure/cli/start-all.js"
 	},
 	"keywords": [],
 	"authors": [
