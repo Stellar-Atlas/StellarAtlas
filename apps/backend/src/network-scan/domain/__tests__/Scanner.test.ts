@@ -41,9 +41,9 @@ describe('Scanner', function () {
 			[createDummyNodeAddress()]
 		);
 		expect(scanOrError.isOk()).toBe(true);
-		expect(nodeScanner.execute).toBeCalledTimes(1);
-		expect(organizationScanner.execute).toBeCalledTimes(1);
-		expect(networkScanner.execute).toBeCalledTimes(1);
+		expect(nodeScanner.execute).toHaveBeenCalledTimes(1);
+		expect(organizationScanner.execute).toHaveBeenCalledTimes(1);
+		expect(networkScanner.execute).toHaveBeenCalledTimes(1);
 	});
 
 	it('should return error if no previous scan and no known node addresses', async function () {
@@ -66,9 +66,9 @@ describe('Scanner', function () {
 
 		const scanOrError = await scanner.scan(new Date(), network, null, [], []);
 		expect(scanOrError.isOk()).toBe(false);
-		expect(nodeScanner.execute).toBeCalledTimes(0);
-		expect(organizationScanner.execute).toBeCalledTimes(0);
-		expect(networkScanner.execute).toBeCalledTimes(0);
+		expect(nodeScanner.execute).toHaveBeenCalledTimes(0);
+		expect(organizationScanner.execute).toHaveBeenCalledTimes(0);
+		expect(networkScanner.execute).toHaveBeenCalledTimes(0);
 	});
 
 	it('should return error if node-scan fails', async function () {

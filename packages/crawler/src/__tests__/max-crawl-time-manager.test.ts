@@ -10,7 +10,7 @@ describe('MaxCrawlTimeManager', () => {
 			// Act
 			maxCrawlTimeManager.setTimer(maxCrawlTime, onMaxCrawlTime);
 			setTimeout(() => {
-				expect(onMaxCrawlTime).toBeCalled();
+				expect(onMaxCrawlTime).toHaveBeenCalled();
 				resolve();
 			}, 300);
 			// Assert
@@ -25,7 +25,7 @@ describe('MaxCrawlTimeManager', () => {
 			maxCrawlTimeManager.setTimer(maxCrawlTime, onMaxCrawlTime);
 			maxCrawlTimeManager.clearTimer();
 			setTimeout(() => {
-				expect(onMaxCrawlTime).not.toBeCalled();
+				expect(onMaxCrawlTime).not.toHaveBeenCalled();
 				resolve();
 			}, 300);
 		});

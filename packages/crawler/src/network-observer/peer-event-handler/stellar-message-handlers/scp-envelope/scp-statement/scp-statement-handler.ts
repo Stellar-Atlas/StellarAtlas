@@ -1,5 +1,5 @@
-import * as P from 'pino';
-import { xdr } from '@stellar/stellar-base';
+import pino = require('pino');
+import { xdr } from '@stellar/stellar-sdk';
 import { getPublicKeyStringFromBuffer } from 'node-connector';
 import { QuorumSetManager } from '../../../../quorum-set-manager';
 import { err, ok, Result } from 'neverthrow';
@@ -12,7 +12,7 @@ export class ScpStatementHandler {
 	constructor(
 		private quorumSetManager: QuorumSetManager,
 		private externalizeStatementHandler: ExternalizeStatementHandler,
-		private logger: P.Logger
+		private logger: pino.Logger
 	) {}
 
 	public handle(

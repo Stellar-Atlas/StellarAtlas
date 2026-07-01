@@ -1,4 +1,4 @@
-import { xdr } from '@stellar/stellar-base';
+import { xdr } from '@stellar/stellar-sdk';
 import AuthenticatedMessage = xdr.AuthenticatedMessage;
 import { err, ok, Result } from 'neverthrow';
 import StellarMessage = xdr.StellarMessage;

@@ -2,7 +2,7 @@ import * as workerpool from 'workerpool';
 import { gunzip } from 'zlib';
 import { createHash } from 'crypto';
 import { isMainThread } from 'worker_threads';
-import { xdr } from '@stellar/stellar-base';
+import { xdr } from '@stellar/stellar-sdk';
 import * as hasher from '@stellarbeat/stellar-history-archive-hasher';
 
 async function unzipAndHash(zip: ArrayBuffer): Promise<string> {

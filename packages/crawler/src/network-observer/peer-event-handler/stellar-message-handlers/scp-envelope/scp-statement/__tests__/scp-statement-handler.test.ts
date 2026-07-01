@@ -1,13 +1,13 @@
 import { mock } from 'jest-mock-extended';
 import { ScpStatementHandler } from '../scp-statement-handler';
 import { QuorumSetManager } from '../../../../../quorum-set-manager';
-import { P } from 'pino';
+import pino = require('pino');
 import { ExternalizeStatementHandler } from '../externalize/externalize-statement-handler';
 import {
 	createDummyExternalizeStatement,
 	createDummyNominationMessage
 } from '../../../../../../__fixtures__/createDummyExternalizeMessage';
-import { Keypair } from '@stellar/stellar-base';
+import { Keypair } from '@stellar/stellar-sdk';
 import { PeerNodeCollection } from '../../../../../../peer-node-collection';
 import { Slots } from '../externalize/slots';
 import { QuorumSet } from 'shared';
@@ -28,7 +28,7 @@ describe('scp-statement-handler', () => {
 		const handler = new ScpStatementHandler(
 			quorumSetManager,
 			externalizeStatementHandler,
-			mock<P.Logger>()
+			mock<pino.Logger>()
 		);
 
 		const keyPair = Keypair.random();
@@ -37,7 +37,7 @@ describe('scp-statement-handler', () => {
 		observation.peerNodes = new PeerNodeCollection();
 		observation.slots = new Slots(
 			new QuorumSet(1, ['A'], []),
-			mock<P.Logger>()
+			mock<pino.Logger>()
 		);
 		observation.latestConfirmedClosedLedger = {
 			sequence: BigInt(1),
@@ -67,7 +67,7 @@ describe('scp-statement-handler', () => {
 		const handler = new ScpStatementHandler(
 			quorumSetManager,
 			externalizeStatementHandler,
-			mock<P.Logger>()
+			mock<pino.Logger>()
 		);
 
 		const keyPair = Keypair.random();
@@ -76,7 +76,7 @@ describe('scp-statement-handler', () => {
 		observation.peerNodes = new PeerNodeCollection();
 		observation.slots = new Slots(
 			new QuorumSet(1, ['A'], []),
-			mock<P.Logger>()
+			mock<pino.Logger>()
 		);
 		observation.latestConfirmedClosedLedger = {
 			sequence: BigInt(2),
@@ -104,7 +104,7 @@ describe('scp-statement-handler', () => {
 		const handler = new ScpStatementHandler(
 			quorumSetManager,
 			externalizeStatementHandler,
-			mock<P.Logger>()
+			mock<pino.Logger>()
 		);
 
 		const observation = mock<Observation>();

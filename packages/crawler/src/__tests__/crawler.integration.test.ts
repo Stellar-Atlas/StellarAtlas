@@ -5,7 +5,7 @@ import {
 	createNode,
 	getConfigFromEnv
 } from 'node-connector';
-import { xdr, Keypair, hash, Networks } from '@stellar/stellar-base';
+import { xdr, Keypair, hash, Networks } from '@stellar/stellar-sdk';
 import { QuorumSet } from 'shared';
 import { NodeConfig } from 'node-connector';
 import { ok, Result, err } from 'neverthrow';
@@ -244,7 +244,7 @@ it('should hit the max crawl limit', async function () {
 	);
 
 	try {
-		expect(await crawler.startCrawl(crawl)).toThrowError();
+		expect(await crawler.startCrawl(crawl)).toThrow();
 	} catch (e) {
 		expect(e).toBeInstanceOf(Error);
 	}

@@ -33,9 +33,9 @@ describe('NetworkScanner', () => {
 		);
 		expect(result.isOk()).toBeTruthy();
 
-		expect(analyzer.performAnalysis).toBeCalled();
-		expect(nodesInTransitiveNetworkQuorumSetFinder.find).toBeCalledTimes(1);
-		expect(networkScan.addMeasurement).toBeCalled();
+		expect(analyzer.performAnalysis).toHaveBeenCalled();
+		expect(nodesInTransitiveNetworkQuorumSetFinder.find).toHaveBeenCalledTimes(1);
+		expect(networkScan.addMeasurement).toHaveBeenCalled();
 		expect(networkScan.completed).toBeTruthy();
 	});
 
@@ -60,7 +60,7 @@ describe('NetworkScanner', () => {
 		);
 		expect(result.isOk()).toBeFalsy();
 
-		expect(analyzer.performAnalysis).toBeCalled();
+		expect(analyzer.performAnalysis).toHaveBeenCalled();
 	});
 
 	function setupSUT() {

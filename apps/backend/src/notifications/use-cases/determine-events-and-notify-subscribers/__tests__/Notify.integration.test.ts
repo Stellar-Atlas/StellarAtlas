@@ -122,7 +122,7 @@ it('should notify when a subscribed event occurs', async function () {
 
 	const result = await container.get(Notify).execute(notifyDTO);
 	expect(result.isOk()).toBeTruthy();
-	expect(userService.send).toBeCalled();
+	expect(userService.send).toHaveBeenCalled();
 
 	const eventStateRepo = container
 		.get(DataSource)

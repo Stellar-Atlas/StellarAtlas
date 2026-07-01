@@ -72,6 +72,9 @@ describe('OrganizationDTOService', () => {
 			organizationB24HourAvg,
 			organizationB30DayAvg
 		);
+		expect(
+			organizationMeasurementDayRepository.findXDaysAverageAt
+		).toHaveBeenCalledWith(time, 30);
 	});
 
 	it('should return an error if the 24 hour average fails', async () => {

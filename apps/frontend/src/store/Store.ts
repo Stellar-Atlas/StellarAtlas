@@ -74,7 +74,7 @@ export default class Store {
     isTimeTravel: false,
     networkAnalysisMergeBy: MergeBy.DoNotMerge,
     timeTravelDate: undefined,
-    includeAllConnectableNodes: false,
+    includeAllConnectableNodes: true,
     selectedOrganization: undefined,
     latestTermsChangeTimestamp: new Date("2023-01-01").getTime(), //todo: better location
   });

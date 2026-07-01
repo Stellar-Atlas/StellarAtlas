@@ -1,9 +1,9 @@
 import { NodeConfig } from './node-config';
 export { NodeConfig } from './node-config';
 import { Node } from './node';
-import { FastSigning, hash, Keypair } from '@stellar/stellar-base';
+import { hash, Keypair } from '@stellar/stellar-sdk';
 import { ConnectionAuthentication } from './connection/connection-authentication';
-import { pino } from 'pino';
+import pino = require('pino');
 
 export { Node } from './node';
 export { Connection } from './connection/connection';
@@ -45,9 +45,6 @@ export function createNode(config: NodeConfig, logger?: pino.Logger): Node {
 	}
 
 	logger = logger.child({ app: 'Connector' });
-	if (!FastSigning) {
-		logger.debug('warning', 'FastSigning not enabled');
-	}
 
 	let keyPair: Keypair;
 	if (config.privateKey) {

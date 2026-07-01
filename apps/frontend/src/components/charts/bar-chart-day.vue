@@ -43,6 +43,15 @@ const emit = defineEmits(["click-date"]);
 let barChart: Chart | null = null;
 const chartElement: Ref<HTMLCanvasElement | null> = ref(null);
 
+const getPointY = (point: ScatterDataPoint): number => point.y ?? 0;
+
+const createRemainderPoint = (point: ScatterDataPoint): ScatterDataPoint => {
+  return {
+    x: point.x,
+    y: 100 - getPointY(point),
+  };
+};
+
 const setChartElementRef = (
   el: Element | ComponentPublicInstance | null,
 ): void => {
@@ -65,12 +74,7 @@ watch(data, () => {
   barChart.data.datasets[0].backgroundColor = data.value.map((data) =>
     data.y === 100 ? "#5eba00" : "rgba(94, 186, 0, 0.5)",
   );
-  barChart.data.datasets[1].data = data.value.map((data) => {
-    return {
-      x: data.x,
-      y: 100 - data.y,
-    };
-  });
+  barChart.data.datasets[1].data = data.value.map(createRemainderPoint);
   barChart.update();
 });
 
@@ -104,12 +108,7 @@ onMounted(() => {
           label: "Not Validating",
           backgroundColor: "#cd201f",
           borderColor: "#1997c6",
-          data: data.value.map((data) => {
-            return {
-              x: data.x,
-              y: 100 - data.y,
-            };
-          }),
+          data: data.value.map(createRemainderPoint),
         },
       ],
     },
@@ -127,7 +126,9 @@ onMounted(() => {
       },
       onClick: (event: ChartEvent, activeElements: ActiveElement[]): void => {
         if (activeElements[0] && activeElements[0].index >= 0) {
-          emit("click-date", new Date(data.value[activeElements[0].index].x));
+          const point = data.value[activeElements[0].index];
+          if (point.x === null) return;
+          emit("click-date", new Date(point.x));
         }
       },
       plugins: {

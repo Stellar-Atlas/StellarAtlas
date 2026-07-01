@@ -79,7 +79,7 @@ describe('test queries', () => {
 			}
 		}
 		measurement3.topTierSize = 2;
-		await scanRepo.save([scan1, scan2, scan3]);
+		await scanRepo.save([scan1, scan2]);
 
 		await networkMeasurementDayRepository.rollup(1, 2);
 		let measurements = await networkMeasurementDayRepository.findBetween(
@@ -92,6 +92,7 @@ describe('test queries', () => {
 		expect(measurements[0].nrOfActiveWatchersSum).toEqual(2);
 		expect(measurements[0].minBlockingSetFilteredMax).toEqual(1);
 
+		await scanRepo.save([scan3]);
 		await networkMeasurementDayRepository.rollup(3, 3);
 		measurements = await networkMeasurementDayRepository.findBetween(
 			new NetworkId('public'),
@@ -104,5 +105,14 @@ describe('test queries', () => {
 		expect(measurements[0].minBlockingSetFilteredMax).toEqual(1);
 		expect(measurements[0].topTierMin).toEqual(1);
 		expect(measurements[0].topTierMax).toEqual(2);
+
+		await networkMeasurementDayRepository.rollup(3, 3);
+		measurements = await networkMeasurementDayRepository.findBetween(
+			new NetworkId('public'),
+			new Date(Date.UTC(2020, 0, 3)),
+			new Date(Date.UTC(2020, 0, 3))
+		);
+		expect(measurements[0].crawlCount).toEqual(3);
+		expect(measurements[0].nrOfActiveWatchersSum).toEqual(3);
 	});
 });

@@ -254,6 +254,33 @@ describe('NodeScan', () => {
 		expect(modifiedIPs).toContain(activeNode.ip);
 	});
 
+	test('getIPsRequiringGeoDataRefresh includes modified and missing geo nodes', () => {
+		const scanTime = new Date('2020-01-03T00:00:00.000Z');
+		activeNode.updateIpPort('new ip', 1234, scanTime);
+		missingNode.updateIsp('known isp', scanTime);
+
+		const nodeScan = new NodeScan(scanTime, [activeNode, missingNode]);
+		const ips = nodeScan.getIPsRequiringGeoDataRefresh();
+		expect(ips).toEqual([activeNode.ip, missingNode.ip]);
+	});
+
+	test('getIPsRequiringGeoDataRefresh skips nodes with complete geo data and isp', () => {
+		const scanTime = new Date('2020-01-03T00:00:00.000Z');
+		activeNode.updateGeoData(
+			NodeGeoDataLocation.create({
+				longitude: 1,
+				latitude: 2,
+				countryName: 'countryName',
+				countryCode: 'countryCode'
+			}),
+			scanTime
+		);
+		activeNode.updateIsp('isp', scanTime);
+
+		const nodeScan = new NodeScan(scanTime, [activeNode]);
+		expect(nodeScan.getIPsRequiringGeoDataRefresh()).toEqual([]);
+	});
+
 	test('updateIndexes', () => {
 		const scanTime = new Date('2020-01-03T00:00:00.000Z');
 		activeNode.addMeasurement(new NodeMeasurement(scanTime, activeNode));

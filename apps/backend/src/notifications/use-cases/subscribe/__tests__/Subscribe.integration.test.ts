@@ -140,8 +140,8 @@ describe('execute', () => {
 
 		expect(result.value.failed).toHaveLength(0);
 		expect(result.value.subscribed).toEqual([eventSourceIdDTO]);
-		expect(findOrCreateUserFn).toBeCalledTimes(1);
-		expect(sendFn).toBeCalledTimes(1);
+		expect(findOrCreateUserFn).toHaveBeenCalledTimes(1);
+		expect(sendFn).toHaveBeenCalledTimes(1);
 
 		const subscriber = await subscriberRepository.findOneByUserId(userId);
 		expect(subscriber).toBeInstanceOf(Subscriber);

@@ -39,6 +39,18 @@
           </tr>
           <tr class="text-gray">
             <td class="px-0" style="font-weight: 600; font-size: 0.875rem">
+              Network role
+            </td>
+            <td class="px-0 text-right">{{ nodeRole }}</td>
+          </tr>
+          <tr class="text-gray">
+            <td class="px-0" style="font-weight: 600; font-size: 0.875rem">
+              Consensus tier
+            </td>
+            <td class="px-0 text-right">{{ consensusTier }}</td>
+          </tr>
+          <tr class="text-gray">
+            <td class="px-0" style="font-weight: 600; font-size: 0.875rem">
               host
             </td>
             <td class="px-0 text-right">{{ node.host }}</td>
@@ -97,6 +109,7 @@ import { BBadge, BIconClipboard } from "bootstrap-vue";
 import FullValidatorTitle from "@/components/node/full-validator-title.vue";
 import useStore from "@/store/useStore";
 import { useTruncate } from "@/composables/useTruncate";
+import { computed } from "vue";
 
 const store = useStore();
 const network = store.network;
@@ -105,6 +118,26 @@ const props = defineProps<{
 }>();
 
 const truncate = useTruncate();
+
+const nodeRole = computed(() => {
+  if (!props.node.isValidator) return "Listener node";
+  if (!props.node.isValidating) return "Configured validator";
+  if (props.node.isFullValidator) return "Full validator";
+  return "Validator";
+});
+
+const consensusTier = computed(() => {
+  if (!props.node.isValidator) {
+    return props.node.active ? "Connectable listener" : "Inactive listener";
+  }
+
+  if (network.nodesTrustGraph.networkTransitiveQuorumSet.has(props.node.publicKey))
+    return "Transitive quorum";
+
+  if (props.node.activeInScp) return "SCP participant";
+
+  return "Outside transitive quorum";
+});
 
 function copyPublicKey() {
   navigator.clipboard.writeText(props.node.publicKey);

@@ -1,6 +1,6 @@
 import { getIpFromPeerAddress, getQuorumSetFromMessage } from 'node-connector';
-import { hash, xdr } from '@stellar/stellar-base';
-import { P } from 'pino';
+import { hash, xdr } from '@stellar/stellar-sdk';
+import pino = require('pino');
 import { ScpEnvelopeHandler } from './scp-envelope/scp-envelope-handler';
 import { truncate } from '../../../utilities/truncate';
 import { QuorumSet } from 'shared';
@@ -17,7 +17,7 @@ export class StellarMessageHandler {
 	constructor(
 		private scpEnvelopeHandler: ScpEnvelopeHandler,
 		private quorumSetManager: QuorumSetManager,
-		private logger: P.Logger
+		private logger: pino.Logger
 	) {}
 
 	handleStellarMessage(

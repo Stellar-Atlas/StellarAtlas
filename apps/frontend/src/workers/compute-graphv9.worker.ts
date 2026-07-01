@@ -11,66 +11,88 @@ import {
 import ViewVertex from "@/components/visual-navigator/graph/view-vertex";
 import ViewEdge from "@/components/visual-navigator/graph/view-edge";
 
-//@ts-ignore
-const ctx: Worker = self;
+type GraphNodeDatum = ViewVertex & SimulationNodeDatum;
+type GraphLinkDatum = ViewEdge & SimulationLinkDatum<GraphNodeDatum>;
 
-function isViewEdge(edge: unknown): edge is ViewEdge {
-  if (isObject(edge))
-    return (
-      typeof edge.isPartOfTransitiveQuorumSet === "boolean" &&
-      typeof edge.isPartOfStronglyConnectedComponent === "boolean"
-    );
-  return false;
-}
+type GraphWorkerPayload = {
+  width: number;
+  height: number;
+  vertices: ViewVertex[];
+  edges: ViewEdge[];
+};
 
-function isViewVertex(vertex: unknown): vertex is ViewVertex {
-  if (isObject(vertex)) return typeof vertex.key === "string";
-  return false;
-}
+type GraphWorkerResponse = {
+  type: "end";
+  vertices: GraphNodeDatum[];
+  edges: GraphLinkDatum[];
+};
 
-ctx.addEventListener("message", (event) => {
-  const vertices = event.data.vertices;
-  const edges = event.data.edges;
+type GraphWorkerScope = {
+  addEventListener: (
+    type: "message",
+    listener: (event: MessageEvent<GraphWorkerPayload>) => void,
+  ) => void;
+  postMessage: (message: GraphWorkerResponse) => void;
+};
+
+const ctx = self as GraphWorkerScope;
+
+ctx.addEventListener("message", (event: MessageEvent<GraphWorkerPayload>) => {
+  const vertices = event.data.vertices as GraphNodeDatum[];
+  const edges = event.data.edges as GraphLinkDatum[];
   const width = event.data.width;
   const height = event.data.height;
 
-  //@ts-ignore
-  const nrOfTransitiveVertices = event.data.vertices.filter(
-    (vertex: ViewVertex) => vertex.isPartOfTransitiveQuorumSet,
-  ).length;
+  const nrOfTransitiveVertices = Math.max(
+    vertices.filter((vertex) => vertex.isPartOfTransitiveQuorumSet).length,
+    1,
+  );
+  const nrOfGroups = Math.max(
+    new Set(vertices.map((vertex) => vertex.groupIndex)).size,
+    1,
+  );
+  const groupCenterRadius = Math.min(width, height) * 0.34;
 
-  const simulation = forceSimulation(vertices)
+  const simulation = forceSimulation<GraphNodeDatum>(vertices)
     .force(
       "charge",
-      forceManyBody().strength(() => {
-        return -250;
+      forceManyBody<GraphNodeDatum>().strength((vertex) => {
+        return vertex.isPartOfTransitiveQuorumSet ? -520 : -310;
       }),
     )
     .force(
       "link",
-      forceLink(edges)
-        .strength((edge: SimulationLinkDatum<SimulationNodeDatum>) => {
-          if (!isViewEdge(edge)) throw new Error("Not a view edge");
-          if (edge.isPartOfTransitiveQuorumSet) {
+      forceLink<GraphNodeDatum, GraphLinkDatum>(edges)
+        .distance((edge) => {
+          return edge.isPartOfTransitiveQuorumSet ? 82 : 140;
+        })
+        .strength((edge: SimulationLinkDatum<GraphNodeDatum>) => {
+          const viewEdge = edge as GraphLinkDatum;
+          if (viewEdge.isPartOfTransitiveQuorumSet) {
             return (1 / nrOfTransitiveVertices) * 0.17;
-          } else if (edge.isPartOfStronglyConnectedComponent) {
+          } else if (viewEdge.isPartOfStronglyConnectedComponent) {
             return 0.1;
           } else {
-            return 0.001113;
+            return 0.004;
           }
         })
-        .id((d) => {
-          if (!isViewVertex(d)) throw new Error("Not a ViewVertex");
-          return d.key;
-        }),
+        .id((vertex) => vertex.key),
     )
-    .force("x", forceX(0))
-    .force("y", forceY(0))
+    .force(
+      "x",
+      forceX<GraphNodeDatum>(
+        (vertex) =>
+          groupCenter(vertex, nrOfGroups, width, height, groupCenterRadius).x,
+      ).strength(0.08),
+    )
+    .force(
+      "y",
+      forceY<GraphNodeDatum>((vertex) =>
+        groupCenter(vertex, nrOfGroups, width, height, groupCenterRadius).y,
+      ).strength(0.08),
+    )
     .force("center", forceCenter(width / 2, height / 2))
-
-    // .alphaDecay(0.1)
-    // .alphaMin(0.15)
-    // .velocityDecay(0.35);
+    .velocityDecay(0.38)
     .stop();
 
   for (
@@ -87,8 +109,22 @@ ctx.addEventListener("message", (event) => {
   ctx.postMessage({ type: "end", vertices: vertices, edges: edges });
 });
 
-function isObject(obj: unknown): obj is Record<string, unknown> {
-  return typeof obj === "object";
+function groupCenter(
+  vertex: GraphNodeDatum,
+  nrOfGroups: number,
+  width: number,
+  height = width,
+  radius = Math.min(width, height) * 0.34,
+): { x: number; y: number } {
+  if (nrOfGroups <= 1) {
+    return { x: width / 2, y: height / 2 };
+  }
+
+  const angle = (vertex.groupIndex / nrOfGroups) * Math.PI * 2;
+  return {
+    x: width / 2 + Math.cos(angle) * radius,
+    y: height / 2 + Math.sin(angle) * radius,
+  };
 }
 
 export default ctx;

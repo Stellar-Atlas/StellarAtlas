@@ -1,4 +1,4 @@
-import { hash, xdr } from '@stellar/stellar-base';
+import { hash, xdr } from '@stellar/stellar-sdk';
 import { verifySCPEnvelopeSignature } from 'node-connector';
 import { err, ok, Result } from 'neverthrow';
 import { isLedgerSequenceValid } from './ledger-validator';

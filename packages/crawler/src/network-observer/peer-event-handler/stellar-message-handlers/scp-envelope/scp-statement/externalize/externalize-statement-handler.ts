@@ -1,4 +1,4 @@
-import * as P from 'pino';
+import pino = require('pino');
 import { Ledger } from '../../../../../../crawler';
 import { PeerNodeCollection } from '../../../../../../peer-node-collection';
 import { ExternalizeData } from './map-externalize-statement';
@@ -7,7 +7,7 @@ import * as assert from 'assert';
 
 //attempts slot close confirmation and updates peer statuses accordingly
 export class ExternalizeStatementHandler {
-	constructor(private logger: P.Logger) {}
+	constructor(private logger: pino.Logger) {}
 
 	//returns ledger if slot is closed
 	public handle(

@@ -1,5 +1,5 @@
 import { ConnectionManager } from './connection-manager';
-import { P } from 'pino';
+import pino = require('pino');
 import { Timers } from '../utilities/timers';
 
 export class StragglerTimer {
@@ -7,7 +7,7 @@ export class StragglerTimer {
 		private connectionManager: ConnectionManager,
 		private timers: Timers,
 		private straggleTimeoutMS: number,
-		private logger: P.Logger
+		private logger: pino.Logger
 	) {}
 
 	public startStragglerTimeoutForActivePeers(

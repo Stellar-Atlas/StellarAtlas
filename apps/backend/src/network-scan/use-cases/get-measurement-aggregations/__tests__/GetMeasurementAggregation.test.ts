@@ -24,26 +24,26 @@ it('should call the right repo', function () {
 		to: new Date()
 	};
 	useCase.execute(dto);
-	expect(factory.createFor).toBeCalledTimes(1);
-	expect(factory.createFor).toBeCalledWith(NodeMeasurementDay);
+	expect(factory.createFor).toHaveBeenCalledTimes(1);
+	expect(factory.createFor).toHaveBeenCalledWith(NodeMeasurementDay);
 
 	factory.createFor.mockClear();
 	dto.aggregationTarget = AggregationTarget.NetworkDay;
 	useCase.execute(dto);
-	expect(factory.createFor).toBeCalledTimes(1);
-	expect(factory.createFor).toBeCalledWith(NetworkMeasurementDay);
+	expect(factory.createFor).toHaveBeenCalledTimes(1);
+	expect(factory.createFor).toHaveBeenCalledWith(NetworkMeasurementDay);
 
 	factory.createFor.mockClear();
 	dto.aggregationTarget = AggregationTarget.OrganizationDay;
 	useCase.execute(dto);
-	expect(factory.createFor).toBeCalledTimes(1);
-	expect(factory.createFor).toBeCalledWith(OrganizationMeasurementDay);
+	expect(factory.createFor).toHaveBeenCalledTimes(1);
+	expect(factory.createFor).toHaveBeenCalledWith(OrganizationMeasurementDay);
 
 	factory.createFor.mockClear();
 	dto.aggregationTarget = AggregationTarget.NetworkMonth;
 	useCase.execute(dto);
-	expect(factory.createFor).toBeCalledTimes(1);
-	expect(factory.createFor).toBeCalledWith(NetworkMeasurementMonth);
+	expect(factory.createFor).toHaveBeenCalledTimes(1);
+	expect(factory.createFor).toHaveBeenCalledWith(NetworkMeasurementMonth);
 });
 
 it('should capture and return errors', async function () {
@@ -60,7 +60,7 @@ it('should capture and return errors', async function () {
 		to: new Date()
 	});
 	expect(result.isErr()).toBe(true);
-	expect(exceptionLogger.captureException).toBeCalledTimes(1);
+	expect(exceptionLogger.captureException).toHaveBeenCalledTimes(1);
 });
 
 it('should return measurement aggregations', async function () {

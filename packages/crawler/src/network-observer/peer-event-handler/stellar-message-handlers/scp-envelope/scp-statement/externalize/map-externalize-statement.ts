@@ -1,4 +1,4 @@
-import { xdr } from '@stellar/stellar-base';
+import { xdr } from '@stellar/stellar-sdk';
 import { err, ok, Result } from 'neverthrow';
 import { getPublicKeyStringFromBuffer } from 'node-connector';
 import { extractCloseTimeFromValue } from './extract-close-time-from-value';

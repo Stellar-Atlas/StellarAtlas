@@ -185,6 +185,28 @@ export class NodeScan {
 			.map((node) => node.ip);
 	}
 
+	public getIPsRequiringGeoDataRefresh(): string[] {
+		return Array.from(
+			new Set(
+				this.nodes
+					.filter((node) => {
+						const geoData = node.geoData;
+						return (
+							(node.lastIpChange !== null &&
+								node.lastIpChange.getTime() === this.time.getTime()) ||
+							geoData === null ||
+							geoData.countryName === null ||
+							geoData.countryCode === null ||
+							geoData.latitude === null ||
+							geoData.longitude === null ||
+							node.isp === null
+						);
+					})
+					.map((node) => node.ip)
+			)
+		);
+	}
+
 	public updateIndexes(indexes: Map<string, number>) {
 		this.nodes.forEach((node) => {
 			const measurement = node.latestMeasurement();

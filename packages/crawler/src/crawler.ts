@@ -1,4 +1,4 @@
-import * as P from 'pino';
+import pino = require('pino');
 import { CrawlProcessState, Crawl } from './crawl';
 import { CrawlResult } from './crawl-result';
 import { CrawlerConfiguration } from './crawler-configuration';
@@ -31,7 +31,7 @@ export class Crawler {
 		private maxCrawlTimeManager: MaxCrawlTimeManager,
 		private networkObserver: NetworkObserver,
 		private crawlLogger: CrawlLogger,
-		public readonly logger: P.Logger
+		public readonly logger: pino.Logger
 	) {
 		this.logger = logger.child({ mod: 'Crawler' });
 		this.setupPeerListenerEvents();

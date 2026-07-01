@@ -84,7 +84,7 @@ it('should delete subscriber in user service and in local database', async funct
 		subscriber.userId
 	);
 	expect(fetchedSubscriber).toBeNull();
-	expect(remoteDeleteFunction).toBeCalledWith(subscriber.userId);
+	expect(remoteDeleteFunction).toHaveBeenCalledWith(subscriber.userId);
 });
 
 it('should delete subscriber, even if user is not found in user service', async function () {
@@ -110,5 +110,5 @@ it('should delete subscriber, even if user is not found in user service', async 
 		subscriber.userId
 	);
 	expect(fetchedSubscriber).toBeNull();
-	expect(remoteDeleteFunction).toBeCalledWith(subscriber.userId);
+	expect(remoteDeleteFunction).toHaveBeenCalledWith(subscriber.userId);
 });

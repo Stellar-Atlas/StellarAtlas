@@ -66,7 +66,7 @@ describe('NodeScannerCrawlStep', () => {
 			nodeScan,
 			mock<NetworkQuorumSetConfiguration>()
 		);
-		expect(nodeRepository.findByPublicKey).toBeCalledWith([
+		expect(nodeRepository.findByPublicKey).toHaveBeenCalledWith([
 			newlyFoundPublicKey
 		]);
 		expect(result.isOk()).toBe(true);
@@ -90,7 +90,7 @@ describe('NodeScannerCrawlStep', () => {
 			})
 		);
 		await crawlStep.execute(nodeScan, mock<NetworkQuorumSetConfiguration>());
-		expect(nodeRepository.findByPublicKey).not.toBeCalled();
+		expect(nodeRepository.findByPublicKey).not.toHaveBeenCalled();
 	});
 
 	it('should ignore invalid public-keys', async function () {
@@ -111,7 +111,7 @@ describe('NodeScannerCrawlStep', () => {
 			mock<NetworkQuorumSetConfiguration>()
 		);
 		expect(result.isOk()).toBe(true);
-		expect(nodeRepository.findByPublicKey).not.toBeCalled();
+		expect(nodeRepository.findByPublicKey).not.toHaveBeenCalled();
 	});
 
 	it('should return error if crawl fails', async function () {

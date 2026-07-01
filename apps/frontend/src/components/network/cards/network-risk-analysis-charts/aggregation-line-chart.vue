@@ -112,6 +112,7 @@ function initializeBarChart() {
         if (!dataSet || !dataSet.data) return;
         const dataAtIndex = dataSet.data[index] as Point;
         const x = dataAtIndex.x;
+        if (x === null) return;
         emit("click-date", new Date(x));
       },
 

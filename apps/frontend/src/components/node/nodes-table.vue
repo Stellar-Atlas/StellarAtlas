@@ -172,6 +172,7 @@ export type TableNode = {
   organization?: string;
   organizationId?: string;
   type?: string;
+  tier?: string;
   version?: string;
   lag?: string;
   action?: string;
@@ -184,6 +185,8 @@ export type TableNode = {
   country?: string;
   overLoaded24Hour?: string;
   ip?: string;
+  active?: boolean;
+  activeInScp?: boolean;
   isValidator?: boolean;
   index?: number;
   validating: boolean;

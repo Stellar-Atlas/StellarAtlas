@@ -1,4 +1,4 @@
-import { xdr } from '@stellar/stellar-base';
+import { xdr } from '@stellar/stellar-sdk';
 
 export function createDummyErrLoadMessage() {
 	return xdr.StellarMessage.errorMsg(

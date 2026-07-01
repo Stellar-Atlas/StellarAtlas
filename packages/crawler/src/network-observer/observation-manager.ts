@@ -1,7 +1,7 @@
 import { NodeAddress } from '../node-address';
 import { StragglerTimer } from './straggler-timer';
 import { ConnectionManager } from './connection-manager';
-import { P } from 'pino';
+import pino = require('pino');
 import { Ledger } from '../crawler';
 import { Observation } from './observation';
 import { ConsensusTimer } from './consensus-timer';
@@ -12,7 +12,7 @@ export class ObservationManager {
 		private consensusTimer: ConsensusTimer,
 		private stragglerTimer: StragglerTimer,
 		private syncingTimeoutMS: number,
-		private logger: P.Logger
+		private logger: pino.Logger
 	) {}
 
 	public async startSync(observation: Observation) {

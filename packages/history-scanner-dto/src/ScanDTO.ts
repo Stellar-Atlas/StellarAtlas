@@ -1,5 +1,5 @@
 import { Result, ok, err } from 'neverthrow';
-import { ScanErrorDTO } from 'src';
+import { ScanErrorDTO } from './ScanErrorDTO';
 
 /**
  * Represents a finished scan.

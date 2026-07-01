@@ -1,6 +1,6 @@
 import { ConnectedPayload, ConnectionManager } from '../connection-manager';
 import { StragglerTimer } from '../straggler-timer';
-import { P } from 'pino';
+import pino = require('pino');
 import { truncate } from '../../utilities/truncate';
 import { PeerNodeCollection } from '../../peer-node-collection';
 import { Observation } from '../observation';
@@ -10,7 +10,7 @@ export class OnPeerConnected {
 	constructor(
 		private stragglerHandler: StragglerTimer,
 		private connectionManager: ConnectionManager,
-		private logger: P.Logger
+		private logger: pino.Logger
 	) {}
 	public handle(data: ConnectedPayload, observation: Observation) {
 		this.logIfTopTierConnected(data, observation);

@@ -1,4 +1,4 @@
-import { Keypair } from '@stellar/stellar-base';
+import { Keypair } from '@stellar/stellar-sdk';
 
 import * as net from 'net';
 import { Connection } from './connection/connection';
@@ -7,7 +7,7 @@ import { ConnectionAuthentication } from './connection/connection-authentication
 import { NodeConfig } from './node-config';
 import { EventEmitter } from 'events';
 import { Server, Socket } from 'net';
-import { pino } from 'pino';
+import pino = require('pino');
 import { FlowController } from './connection/flow-controller';
 
 export interface NodeInfo {

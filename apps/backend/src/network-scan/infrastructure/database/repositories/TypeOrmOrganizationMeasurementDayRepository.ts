@@ -69,16 +69,26 @@ export class TypeOrmOrganizationMeasurementDayRepository
 		await this.baseRepository.query(
 			`INSERT INTO organization_measurement_day (time, "organizationId", "isSubQuorumAvailableCount",
                                                        "indexSum", "crawlCount")
-             with updates as (
-                 select date_trunc('day', NetworkScan."time") "crawlDay",
-                        count(distinct NetworkScan2.id)       "crawlCount"
+             with affected_days as (
+                 select distinct date_trunc('day', NetworkScan."time") "crawlDay"
                  from network_scan NetworkScan
-                          join network_scan NetworkScan2
-                               on date_trunc('day', NetworkScan."time") = date_trunc('day', NetworkScan2."time") AND
-								  NetworkScan2.completed = true
                  WHERE NetworkScan.id BETWEEN $1 and $2
                    and NetworkScan.completed = true
-                 group by "crawlDay"
+             ),
+             bounds as (
+                 select min("crawlDay") "fromTime", max("crawlDay") + interval '1 day' "toTime"
+                 from affected_days
+             ),
+             updates as (
+                 select date_trunc('day', NetworkScan."time") "crawlDay",
+                        count(distinct NetworkScan.id)       "crawlCount"
+                 from network_scan NetworkScan
+                          join bounds
+                               on NetworkScan."time" >= bounds."fromTime" and NetworkScan."time" < bounds."toTime"
+                          join affected_days
+                               on affected_days."crawlDay" = date_trunc('day', NetworkScan."time")
+                 WHERE NetworkScan.completed = true
+                 group by date_trunc('day', NetworkScan."time")
              )
              select date_trunc('day', "NetworkScan"."time") "day",
                     "organizationId",
@@ -86,15 +96,15 @@ export class TypeOrmOrganizationMeasurementDayRepository
                     sum("index"::int)                         "indexSum",
                     updates."crawlCount"                      as "crawlCount"
              FROM "network_scan" "NetworkScan"
+                      join bounds
+                           on "NetworkScan"."time" >= bounds."fromTime" and "NetworkScan"."time" < bounds."toTime"
                       join updates on updates."crawlDay" = date_trunc('day', "NetworkScan"."time")
                       join organization_measurement on organization_measurement."time" = "NetworkScan".time
-             WHERE "NetworkScan".id BETWEEN $1 AND $2
-               AND "NetworkScan".completed = true
-             group by day, "organizationId", "crawlCount"
+             WHERE "NetworkScan".completed = true
+             group by date_trunc('day', "NetworkScan"."time"), "organizationId", updates."crawlCount"
              ON CONFLICT (time, "organizationId") DO UPDATE
-                 SET "isSubQuorumAvailableCount" = organization_measurement_day."isSubQuorumAvailableCount" +
-                                                   EXCLUDED."isSubQuorumAvailableCount",
-                     "indexSum"                  = organization_measurement_day."indexSum" + EXCLUDED."indexSum",
+                 SET "isSubQuorumAvailableCount" = EXCLUDED."isSubQuorumAvailableCount",
+                     "indexSum"                  = EXCLUDED."indexSum",
                      "crawlCount"                = EXCLUDED."crawlCount"`,
 			[fromCrawlId, toCrawlId]
 		);

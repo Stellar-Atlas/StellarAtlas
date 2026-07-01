@@ -55,14 +55,14 @@ it('should perform a network scan', async function () {
 		[]
 	);
 
-	expect(crawlerStep.execute).toBeCalledTimes(1);
-	expect(homeDomainStep.execute).toBeCalledTimes(1);
-	expect(tomlStep.execute).toBeCalledTimes(1);
-	expect(historyArchiveStep.execute).toBeCalledTimes(1);
-	expect(geoStep.execute).toBeCalledTimes(1);
-	expect(indexerStep.execute).toBeCalledTimes(1);
-	expect(archivalStep.execute).toBeCalledTimes(1);
-	expect(nodeScan.updateStellarCoreVersionBehindStatus).toBeCalledTimes(1);
+	expect(crawlerStep.execute).toHaveBeenCalledTimes(1);
+	expect(homeDomainStep.execute).toHaveBeenCalledTimes(1);
+	expect(tomlStep.execute).toHaveBeenCalledTimes(1);
+	expect(historyArchiveStep.execute).toHaveBeenCalledTimes(1);
+	expect(geoStep.execute).toHaveBeenCalledTimes(1);
+	expect(indexerStep.execute).toHaveBeenCalledTimes(1);
+	expect(archivalStep.execute).toHaveBeenCalledTimes(1);
+	expect(nodeScan.updateStellarCoreVersionBehindStatus).toHaveBeenCalledTimes(1);
 
 	expect(result.isOk()).toBe(true);
 });
@@ -108,7 +108,7 @@ it('should return an error if the crawling fails', async function () {
 		[]
 	);
 
-	expect(crawlerStep.execute).toBeCalledTimes(1);
+	expect(crawlerStep.execute).toHaveBeenCalledTimes(1);
 
 	expect(result.isOk()).toBe(false);
 });

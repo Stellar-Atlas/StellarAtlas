@@ -11,7 +11,7 @@
 	"main": "lib/index.js",
 	"types": "lib/index.d.ts",
 	"dependencies": {
-		"neverthrow": "^6.2.2",
+		"neverthrow": "^8.2.0",
 		"@sentry/node": "^7.119.1",
 		"shared": "workspace:*",
 		"logger": "workspace:*"

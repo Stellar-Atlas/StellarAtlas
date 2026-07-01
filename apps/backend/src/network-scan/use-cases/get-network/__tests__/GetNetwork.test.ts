@@ -12,5 +12,5 @@ it('should capture and return network errors', async function () {
 	const getNetwork = new GetNetwork(networkDTOService, exceptionLogger);
 	const result = await getNetwork.execute({ at: new Date() });
 	expect(result.isErr()).toBe(true);
-	expect(exceptionLogger.captureException).toBeCalledTimes(1);
+	expect(exceptionLogger.captureException).toHaveBeenCalledTimes(1);
 });

@@ -22,10 +22,10 @@ describe('ScanNetworkLooped', () => {
 				executeCount++;
 				if (executeCount === expectedExecuteCount)
 					useCase.shutDown(() => {
-						expect(scanNetwork.execute).toBeCalledTimes(expectedExecuteCount);
-						expect(loopTimer.start).toBeCalledTimes(expectedExecuteCount);
-						expect(loopTimer.stop).toBeCalledTimes(expectedExecuteCount);
-						expect(scanNetwork.execute).toBeCalledWith({
+						expect(scanNetwork.execute).toHaveBeenCalledTimes(expectedExecuteCount);
+						expect(loopTimer.start).toHaveBeenCalledTimes(expectedExecuteCount);
+						expect(loopTimer.stop).toHaveBeenCalledTimes(expectedExecuteCount);
+						expect(scanNetwork.execute).toHaveBeenCalledWith({
 							updateNetwork: true,
 							dryRun: true
 						});
@@ -49,7 +49,7 @@ describe('ScanNetworkLooped', () => {
 			},
 			() => {
 				SUT.useCase.shutDown(() => {
-					expect(SUT.exceptionLogger.captureException).toBeCalledWith(
+					expect(SUT.exceptionLogger.captureException).toHaveBeenCalledWith(
 						new Error('Network update exceeding expected run time')
 					);
 				});
@@ -83,7 +83,7 @@ describe('ScanNetworkLooped', () => {
 			},
 			() => {
 				SUT.useCase.shutDown(() => {
-					expect(spy).toBeCalledWith(100);
+					expect(spy).toHaveBeenCalledWith(100);
 				});
 			}
 		);

@@ -1,5 +1,5 @@
 import BigNumber from 'bignumber.js';
-import { hash, Keypair, StrKey, xdr } from '@stellar/stellar-base';
+import { hash, Keypair, StrKey, xdr } from '@stellar/stellar-sdk';
 import { err, ok, Result } from 'neverthrow';
 import { Socket } from 'net';
 import { ConnectionAuthentication } from './connection-authentication';
@@ -12,7 +12,7 @@ import {
 	AuthenticatedMessageV0,
 	parseAuthenticatedMessageXDR
 } from './xdr-message-handler';
-import * as P from 'pino';
+import pino = require('pino');
 import { NodeInfo } from '../node';
 import { FlowController } from './flow-controller';
 import StellarMessage = xdr.StellarMessage;
@@ -90,7 +90,7 @@ export class Connection extends Duplex {
 		private socket: Socket,
 		private readonly connectionAuthentication: ConnectionAuthentication,
 		private flowController: FlowController,
-		private logger: P.Logger
+		private logger: pino.Logger
 	) {
 		super({ objectMode: true });
 		this.remoteIp = connectionOptions.ip;

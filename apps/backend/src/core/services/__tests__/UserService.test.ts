@@ -20,7 +20,7 @@ describe('constructor', function () {
 		expect(
 			() =>
 				new UserService('https://user-servicecom', 'user', 'pass', httpService)
-		).toThrowError();
+		).toThrow();
 		new UserService('https://users.com/', 'user', 'pass', httpService);
 		new UserService('https://valid.com', 'user', 'pass', httpService);
 	});

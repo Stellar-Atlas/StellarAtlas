@@ -1,4 +1,4 @@
-import { xdr } from '@stellar/stellar-base';
+import { xdr } from '@stellar/stellar-sdk';
 import { isFloodMessage } from '../src/connection/is-flood-message';
 import MessageType = xdr.MessageType;
 

@@ -51,7 +51,7 @@ describe('RESTScanCoordinatorService Integration Tests', () => {
 			const result = await service.registerScan(scan);
 			expect(result.isOk()).toBe(true);
 
-			expect(httpService.post).toBeCalledTimes(1);
+			expect(httpService.post).toHaveBeenCalledTimes(1);
 		});
 	});
 

@@ -1,6 +1,6 @@
 import { PeerNodeCollection } from '../../../peer-node-collection';
 import { mock, MockProxy } from 'jest-mock-extended';
-import { P } from 'pino';
+import pino = require('pino');
 import { ConnectedPayload, ConnectionManager } from '../../connection-manager';
 import { StragglerTimer } from '../../straggler-timer';
 import { OnPeerConnected } from '../on-peer-connected';
@@ -22,7 +22,7 @@ describe('OnPeerConnectedHandler', () => {
 		return new OnPeerConnected(
 			stragglerHandler,
 			connectionManager,
-			mock<P.Logger>()
+			mock<pino.Logger>()
 		);
 	};
 	const createObservation = (): Observation => {
@@ -32,7 +32,7 @@ describe('OnPeerConnectedHandler', () => {
 			mock<PeerNodeCollection>(),
 			mock<Ledger>(),
 			new Map<string, QuorumSet>(),
-			new Slots(new QuorumSet(1, ['A'], []), mock<P.Logger>())
+			new Slots(new QuorumSet(1, ['A'], []), mock<pino.Logger>())
 		);
 	};
 
@@ -62,7 +62,7 @@ describe('OnPeerConnectedHandler', () => {
 			data.nodeInfo
 		);
 
-		expect(connectionManager.disconnectByAddress).not.toBeCalled();
+		expect(connectionManager.disconnectByAddress).not.toHaveBeenCalled();
 	}
 
 	it('should handle a successful connection in SYNCING state', () => {
@@ -90,12 +90,12 @@ describe('OnPeerConnectedHandler', () => {
 		observation: Observation,
 		error?: Error
 	) {
-		expect(observation.peerNodes.addSuccessfullyConnected).toBeCalled();
-		expect(connectionManager.disconnectByAddress).toBeCalledWith(
+		expect(observation.peerNodes.addSuccessfullyConnected).toHaveBeenCalled();
+		expect(connectionManager.disconnectByAddress).toHaveBeenCalledWith(
 			data.ip + ':' + data.port,
 			error
 		);
-		expect(stragglerHandler.startStragglerTimeout).not.toBeCalled();
+		expect(stragglerHandler.startStragglerTimeout).not.toHaveBeenCalled();
 	}
 
 	it('should refuse connection in IDLE state', () => {

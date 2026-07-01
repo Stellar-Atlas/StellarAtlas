@@ -145,7 +145,7 @@ describe('ValidatorDemoter', () => {
 
 		expect(
 			nodeMeasurementDayRepository.findXDaysActiveButNotValidating
-		).toBeCalledWith(nodeScan.time, 7);
+		).toHaveBeenCalledWith(nodeScan.time, 7);
 
 		expect(inactiveValidator.quorumSet).toBeNull();
 		expect(connectedValidator1.quorumSet).not.toBeNull();

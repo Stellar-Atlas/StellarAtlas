@@ -6,7 +6,7 @@ import { Config, getConfigFromEnv } from '../../config/Config';
 import { ExceptionLogger } from 'exception-logger';
 import { subscriptionRouter } from '../../../notifications/infrastructure/http/SubscriptionRouter';
 import bodyParser from 'body-parser';
-import { Server } from 'net';
+import { Server } from 'http';
 import { ConfirmSubscription } from '../../../notifications/use-cases/confirm-subscription/ConfirmSubscription';
 import { Subscribe } from '../../../notifications/use-cases/subscribe/Subscribe';
 import { UnmuteNotification } from '../../../notifications/use-cases/unmute-notification/UnmuteNotification';

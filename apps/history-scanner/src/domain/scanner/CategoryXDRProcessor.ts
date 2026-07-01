@@ -106,15 +106,6 @@ export class CategoryXDRProcessor extends Writable {
 			| 'processTransactionHistoryEntryXDR'
 			| 'processLedgerHeaderHistoryEntryXDR'
 	): Promise<Return> {
-		return new Promise((resolve, reject) => {
-			this.pool.workerpool
-				.exec(method, [data])
-				.then(function (map) {
-					resolve(map);
-				})
-				.catch(function (err) {
-					reject(err);
-				});
-		});
+		return (await this.pool.workerpool.exec(method, [data])) as Return;
 	}
 }

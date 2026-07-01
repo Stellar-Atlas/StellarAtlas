@@ -2,7 +2,7 @@ import { ConnectionManager, DataPayload } from '../connection-manager';
 import { Ledger } from '../../crawler';
 import { NodeAddress } from '../../node-address';
 import { StellarMessageHandler } from './stellar-message-handlers/stellar-message-handler';
-import { P } from 'pino';
+import pino = require('pino');
 import { Observation } from '../observation';
 import { ObservationState } from '../observation-state';
 
@@ -14,7 +14,7 @@ export interface OnPeerDataResult {
 export class OnPeerData {
 	constructor(
 		private stellarMessageHandler: StellarMessageHandler,
-		private logger: P.Logger,
+		private logger: pino.Logger,
 		private connectionManager: ConnectionManager
 	) {}
 

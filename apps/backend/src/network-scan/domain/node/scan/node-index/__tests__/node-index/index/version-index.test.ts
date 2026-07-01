@@ -21,7 +21,7 @@ test('get', () => {
 	expect(VersionIndex.get(versionStr2, '10.9.0')).toEqual(0.6);
 	expect(VersionIndex.get(versionStr4, '10.9.0')).toEqual(0.6);
 	expect(VersionIndex.get(versionStr5, '10.9.0')).toEqual(1); //todo what about release candidates?
-	expect(VersionIndex.get(versionStr6, '10.9.0')).toEqual(0.6); //todo what about release candidates?
+	expect(VersionIndex.get(versionStr6, '10.9.0')).toEqual(0.3);
 	expect(VersionIndex.get(versionStr7, '10.9.0')).toEqual(0);
 	expect(VersionIndex.get(versionStr8, '10.9.0')).toEqual(0);
 	expect(VersionIndex.get(versionStr9, '10.9.0')).toEqual(1);

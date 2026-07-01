@@ -3,9 +3,9 @@ import { CustomError } from 'custom-error';
 import { HttpService, Url } from 'http-helper';
 import { injectable } from 'inversify';
 import { err, ok, Result } from 'neverthrow';
-import { Scan } from 'src/domain/scan/Scan';
+import { Scan } from '../../domain/scan/Scan';
 import { ScanDTO, ScanJobDTO } from 'history-scanner-dto';
-import { ScanCoordinatorService } from 'src/domain/scan/ScanCoordinatorService';
+import { ScanCoordinatorService } from '../../domain/scan/ScanCoordinatorService';
 import { isObject } from 'shared';
 import { ScanErrorType } from '../../domain/scan/ScanError';
 

@@ -2,7 +2,7 @@ import { mock } from 'jest-mock-extended';
 import { ScpStatementHandler } from '../scp-statement/scp-statement-handler';
 import { ScpEnvelopeHandler } from '../scp-envelope-handler';
 import { createDummyExternalizeScpEnvelope } from '../../../../../__fixtures__/createDummyExternalizeMessage';
-import { Keypair, Networks } from '@stellar/stellar-base';
+import { Keypair, Networks } from '@stellar/stellar-sdk';
 import { ok } from 'neverthrow';
 import { Observation } from '../../../../observation';
 import { LRUCache } from 'lru-cache';

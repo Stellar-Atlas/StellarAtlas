@@ -1,5 +1,5 @@
 import { Crawl } from './crawl';
-import { P } from 'pino';
+import pino = require('pino');
 import { CrawlQueueManager } from './crawl-queue-manager';
 import { ConnectionManager } from './network-observer/connection-manager';
 import { truncate } from './utilities/truncate';
@@ -11,7 +11,7 @@ export class CrawlLogger {
 	constructor(
 		private connectionManager: ConnectionManager,
 		private crawlQueueManager: CrawlQueueManager,
-		private logger: P.Logger
+		private logger: pino.Logger
 	) {}
 
 	get crawl(): Crawl {

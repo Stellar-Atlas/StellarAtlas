@@ -14,7 +14,7 @@ it('should capture and return errors', async function () {
 		to: new Date()
 	});
 	expect(result.isErr()).toBe(true);
-	expect(exceptionLogger.captureException).toBeCalledTimes(1);
+	expect(exceptionLogger.captureException).toHaveBeenCalledTimes(1);
 });
 
 it('should return measurements', async function () {

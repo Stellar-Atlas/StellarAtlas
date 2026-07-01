@@ -1,6 +1,6 @@
 import { PublicKey, QuorumSet } from 'shared';
-import * as P from 'pino';
-import { xdr } from '@stellar/stellar-base';
+import pino = require('pino');
+import { xdr } from '@stellar/stellar-sdk';
 import { PeerNode } from '../peer-node';
 import { err, ok, Result } from 'neverthrow';
 import { truncate } from '../utilities/truncate';
@@ -17,7 +17,7 @@ export class QuorumSetManager {
 	constructor(
 		private connectionManager: ConnectionManager,
 		private quorumRequestTimeoutMS: number,
-		private logger: P.Logger
+		private logger: pino.Logger
 	) {}
 
 	public onNodeDisconnected(

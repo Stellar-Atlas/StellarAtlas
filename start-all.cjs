@@ -40,7 +40,7 @@ function waitForApi() {
     '-c',
     'blue,green,magenta,cyan',
     'pnpm start:frontend',
-    'pnpm start:scan-network',
+    'pnpm start:scan-network 1',
     'pnpm start:scan-history',
     'pnpm start:users',
   ], { stdio: 'inherit' });

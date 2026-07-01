@@ -1,4 +1,4 @@
-import {NodeStatisticsV1} from "./dto/node-v1";
+import { NodeStatisticsV1 } from './dto/node-v1';
 
 export class NodeStatistics {
 	public active30DaysPercentage = 0;
@@ -10,7 +10,7 @@ export class NodeStatistics {
 	public has30DayStats = false;
 	public has24HourStats = false;
 
-	toJSON(): Record<string, unknown> {
+	toJSON(): NodeStatisticsV1 {
 		return {
 			active30DaysPercentage: this.active30DaysPercentage,
 			overLoaded30DaysPercentage: this.overLoaded30DaysPercentage,
@@ -28,20 +28,20 @@ export class NodeStatistics {
 	): NodeStatistics {
 		const newNodeStatistics = new NodeStatistics();
 
-			newNodeStatistics.active30DaysPercentage =
-				nodeStatisticsV1.active30DaysPercentage;
-			newNodeStatistics.overLoaded30DaysPercentage =
-				nodeStatisticsV1.overLoaded30DaysPercentage;
-			newNodeStatistics.validating30DaysPercentage =
-				nodeStatisticsV1.validating30DaysPercentage;
-			newNodeStatistics.active24HoursPercentage =
-				nodeStatisticsV1.active24HoursPercentage;
-			newNodeStatistics.overLoaded24HoursPercentage =
-				nodeStatisticsV1.overLoaded24HoursPercentage;
-			newNodeStatistics.validating24HoursPercentage =
-				nodeStatisticsV1.validating24HoursPercentage;
-			newNodeStatistics.has30DayStats = nodeStatisticsV1.has30DayStats;
-			newNodeStatistics.has24HourStats = nodeStatisticsV1.has24HourStats;
+		newNodeStatistics.active30DaysPercentage =
+			nodeStatisticsV1.active30DaysPercentage;
+		newNodeStatistics.overLoaded30DaysPercentage =
+			nodeStatisticsV1.overLoaded30DaysPercentage;
+		newNodeStatistics.validating30DaysPercentage =
+			nodeStatisticsV1.validating30DaysPercentage;
+		newNodeStatistics.active24HoursPercentage =
+			nodeStatisticsV1.active24HoursPercentage;
+		newNodeStatistics.overLoaded24HoursPercentage =
+			nodeStatisticsV1.overLoaded24HoursPercentage;
+		newNodeStatistics.validating24HoursPercentage =
+			nodeStatisticsV1.validating24HoursPercentage;
+		newNodeStatistics.has30DayStats = nodeStatisticsV1.has30DayStats;
+		newNodeStatistics.has24HourStats = nodeStatisticsV1.has24HourStats;
 
 		return newNodeStatistics;
 	}

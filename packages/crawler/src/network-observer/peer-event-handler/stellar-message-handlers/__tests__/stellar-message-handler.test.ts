@@ -1,8 +1,8 @@
 import { StellarMessageHandler } from '../stellar-message-handler';
 import { ScpEnvelopeHandler } from '../scp-envelope/scp-envelope-handler';
 import { QuorumSetManager } from '../../../quorum-set-manager';
-import { P } from 'pino';
-import { Keypair } from '@stellar/stellar-base';
+import pino = require('pino');
+import { Keypair } from '@stellar/stellar-sdk';
 import { mock, MockProxy } from 'jest-mock-extended';
 import { createDummyExternalizeMessage } from '../../../../__fixtures__/createDummyExternalizeMessage';
 import { ok } from 'neverthrow';
@@ -16,14 +16,14 @@ import { Observation } from '../../../observation';
 describe('StellarMessageHandler', () => {
 	let scpManager: MockProxy<ScpEnvelopeHandler>;
 	let quorumSetManager: MockProxy<QuorumSetManager>;
-	let logger: MockProxy<P.Logger>;
+	let logger: MockProxy<pino.Logger>;
 	let handler: StellarMessageHandler;
 	let senderPublicKey: string;
 
 	beforeEach(() => {
 		scpManager = mock<ScpEnvelopeHandler>();
 		quorumSetManager = mock<QuorumSetManager>();
-		logger = mock<P.Logger>();
+		logger = mock<pino.Logger>();
 		handler = new StellarMessageHandler(scpManager, quorumSetManager, logger);
 		senderPublicKey = 'A';
 	});

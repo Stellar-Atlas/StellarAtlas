@@ -36,8 +36,9 @@
 <script setup lang="ts">
 import { computed, ref } from "vue";
 import NodesTable, { type TableNode } from "@/components/node/nodes-table.vue";
-import { BBadge, BIconSearch } from "bootstrap-vue";
+import { BBadge, BIconSearch, type BvTableFieldArray } from "bootstrap-vue";
 import useStore from "@/store/useStore";
+import { Node } from "shared";
 
 const store = useStore();
 const network = store.network;
@@ -45,7 +46,13 @@ const network = store.network;
 const filter = ref("");
 
 const fields = computed(() => {
-  const fields = [{ key: "name", label: "Node", sortable: true }];
+  const fields: BvTableFieldArray = [
+    { key: "name", label: "Node", sortable: true },
+  ];
+
+  if (store.includeAllNodes) {
+    fields.push({ key: "type", label: "Role", sortable: true });
+  }
 
   if (store.networkContext.enableIndex && !store.isSimulation) {
     fields.push({ key: "index", label: "Index", sortable: true });
@@ -55,7 +62,6 @@ const fields = computed(() => {
     key: "action",
     label: "",
     sortable: false,
-    //@ts-ignore
     tdClass: "action",
   });
 
@@ -63,20 +69,29 @@ const fields = computed(() => {
 });
 
 const numberOfActiveNodes = computed(() => {
-  if (store.includeAllNodes)
-    return network.nodes.filter((node) => !network.isNodeFailing(node)).length;
-  else
-    return network.nodes.filter(
-      (node) => node.isValidator && !network.isNodeFailing(node),
-    ).length;
+  return activeNodes.value.length;
 });
 
+const activeNodes = computed(() => {
+  return network.nodes.filter((node) => {
+    if (store.includeAllNodes) return node.active;
+    return node.isValidator && !network.isNodeFailing(node);
+  });
+});
+
+const getNodeType = (node: Node): string => {
+  if (!node.isValidator) return "Listener";
+  if (!node.isValidating) return "Configured validator";
+  if (node.isFullValidator) return "Full validator";
+  return "Validator";
+};
+
 const validators = computed(() => {
-  return network.nodes
-    .filter((node) => node.isValidator || store.includeAllNodes)
+  return activeNodes.value
     .map((node) => {
       const mappedNode: TableNode = {
         name: node.displayName,
+        type: getNodeType(node),
         index: node.index,
         isFullValidator: node.isFullValidator,
         publicKey: node.publicKey,

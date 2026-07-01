@@ -1,5 +1,5 @@
 import { Crawler } from './crawler';
-import { pino } from 'pino';
+import pino = require('pino');
 import { createNode } from 'node-connector';
 import { CrawlerConfiguration } from './crawler-configuration';
 import { ConnectionManager } from './network-observer/connection-manager';

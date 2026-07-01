@@ -52,6 +52,8 @@ import { Archiver } from '../../domain/network/scan/archiver/Archiver';
 import { Logger } from '../../../core/services/Logger';
 import { HistoryService } from '../../domain/node/scan/history/HistoryService';
 import { IpStackGeoDataService } from '../services/IpStackGeoDataService';
+import { IpWhoIsGeoDataService } from '../services/IpWhoIsGeoDataService';
+import { FallbackGeoDataService } from '../services/FallbackGeoDataService';
 import { HttpService } from 'http-helper';
 import { NetworkScanner } from '../../domain/network/scan/NetworkScanner';
 import { CrawlerService } from '../../domain/node/scan/node-crawl/CrawlerService';
@@ -317,10 +319,12 @@ function loadDomain(container: Container, config: Config) {
 	container.bind<TomlService>(TomlService).toSelf().inSingletonScope();
 	container.bind<HistoryService>(HistoryService).toSelf();
 	container.bind<GeoDataService>('GeoDataService').toDynamicValue(() => {
-		return new IpStackGeoDataService(
-			container.get<Logger>('Logger'),
-			container.get<HttpService>('HttpService'),
-			config.ipStackAccessKey
+		const httpService = container.get<HttpService>('HttpService');
+		const logger = container.get<Logger>('Logger');
+		return new FallbackGeoDataService(
+			new IpStackGeoDataService(logger, httpService, config.ipStackAccessKey),
+			new IpWhoIsGeoDataService(httpService),
+			logger
 		);
 	});
 	container

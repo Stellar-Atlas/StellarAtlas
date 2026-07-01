@@ -106,8 +106,12 @@ const organizations: ComputedRef<TableOrganization[]> = computed(() => {
         store.network,
       ).join(" | "),
       blocked: store.network.isOrganizationBlocked(organization),
-      subQuorum24HAvailability: organization.subQuorum24HoursAvailability + "%",
-      subQuorum30DAvailability: organization.subQuorum30DaysAvailability + "%",
+      subQuorum24HAvailability: organization.has24HourStats
+        ? organization.subQuorum24HoursAvailability + "%"
+        : "NA",
+      subQuorum30DAvailability: organization.has30DayStats
+        ? organization.subQuorum30DaysAvailability + "%"
+        : "NA",
       hasReliableUptime: organization.hasReliableUptime,
     };
     return mappedOrganization;

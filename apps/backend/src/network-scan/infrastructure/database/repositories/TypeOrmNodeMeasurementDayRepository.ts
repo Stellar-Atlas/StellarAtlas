@@ -172,15 +172,25 @@ export class TypeOrmNodeMeasurementDayRepository
 			`INSERT INTO node_measurement_day_v2 (time, "nodeId", "isActiveCount", "isValidatingCount",
 												  "isFullValidatorCount", "isOverloadedCount", "indexSum",
 												  "historyArchiveErrorCount", "crawlCount")
-			 with crawls as (select date_trunc('day', NetworkScan."time") "crawlDay",
-									count(distinct NetworkScan2.id)       "crawlCount"
+				 with affected_days as (
+					 select distinct date_trunc('day', NetworkScan."time") "crawlDay"
+					 from network_scan NetworkScan
+					 WHERE NetworkScan.id BETWEEN $1 AND $2
+					   and NetworkScan.completed = true
+				 ),
+				 bounds as (
+					 select min("crawlDay") "fromTime", max("crawlDay") + interval '1 day' "toTime"
+					 from affected_days
+				 ),
+				 crawls as (select date_trunc('day', NetworkScan."time") "crawlDay",
+									count(distinct NetworkScan.id)       "crawlCount"
 							 from network_scan NetworkScan
-									  join network_scan NetworkScan2
-										   on date_trunc('day', NetworkScan."time") = date_trunc('day', NetworkScan2."time") AND
-											  NetworkScan2.completed = true
-							 WHERE NetworkScan.id BETWEEN $1 AND $2
-							   and NetworkScan.completed = true
-							 group by "crawlDay")
+									  join bounds
+										   on NetworkScan."time" >= bounds."fromTime" and NetworkScan."time" < bounds."toTime"
+									  join affected_days
+										   on affected_days."crawlDay" = date_trunc('day', NetworkScan."time")
+							 WHERE NetworkScan.completed = true
+							 group by date_trunc('day', NetworkScan."time"))
 			 select date_trunc('day', NetworkScan."time") "day",
 					"nodeId",
 					sum("isActive"::int)                      "isActiveCount",
@@ -191,23 +201,20 @@ export class TypeOrmNodeMeasurementDayRepository
 					sum("historyArchiveHasError"::int)        "historyArchiveErrorCount",
 					"crawls"."crawlCount"                    as "crawlCount"
 			 FROM "network_scan" NetworkScan
+					  join bounds
+						   on NetworkScan."time" >= bounds."fromTime" and NetworkScan."time" < bounds."toTime"
 					  join crawls on crawls."crawlDay" = date_trunc('day', NetworkScan."time")
 					  join node_measurement_v2 on node_measurement_v2."time" = NetworkScan."time"
-			 WHERE NetworkScan.id BETWEEN $1 AND $2
-			   AND NetworkScan.completed = true
-			 group by day, "nodeId", "crawlCount"
-			 ON CONFLICT (time, "nodeId") DO UPDATE
-				 SET "isActiveCount"            = node_measurement_day_v2."isActiveCount" + EXCLUDED."isActiveCount",
-					 "isValidatingCount"        = node_measurement_day_v2."isValidatingCount" +
-												  EXCLUDED."isValidatingCount",
-					 "isFullValidatorCount"     = node_measurement_day_v2."isFullValidatorCount" +
-												  EXCLUDED."isFullValidatorCount",
-					 "isOverloadedCount"        = node_measurement_day_v2."isOverloadedCount" +
-												  EXCLUDED."isOverloadedCount",
-					 "indexSum"                 = node_measurement_day_v2."indexSum" + EXCLUDED."indexSum",
-					 "historyArchiveErrorCount" = node_measurement_day_v2."historyArchiveErrorCount" +
-												  EXCLUDED."historyArchiveErrorCount",
-					 "crawlCount"               = EXCLUDED."crawlCount"`,
+				 WHERE NetworkScan.completed = true
+				 group by date_trunc('day', NetworkScan."time"), "nodeId", crawls."crawlCount"
+				 ON CONFLICT (time, "nodeId") DO UPDATE
+					 SET "isActiveCount"            = EXCLUDED."isActiveCount",
+						 "isValidatingCount"        = EXCLUDED."isValidatingCount",
+						 "isFullValidatorCount"     = EXCLUDED."isFullValidatorCount",
+						 "isOverloadedCount"        = EXCLUDED."isOverloadedCount",
+						 "indexSum"                 = EXCLUDED."indexSum",
+						 "historyArchiveErrorCount" = EXCLUDED."historyArchiveErrorCount",
+						 "crawlCount"               = EXCLUDED."crawlCount"`,
 			[fromCrawlId, toCrawlId]
 		);
 	}

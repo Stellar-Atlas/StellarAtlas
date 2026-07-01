@@ -20,7 +20,7 @@ describe('NodeScannerHistoryArchiveStep', () => {
 	it('should archive', async () => {
 		const nodeScan = mock<NodeScan>();
 		await nodeScannerArchivalStep.execute(nodeScan);
-		expect(validatorDemoter.demote).toBeCalledTimes(1);
-		expect(inactiveNodesArchiver.archive).toBeCalledTimes(1);
+		expect(validatorDemoter.demote).toHaveBeenCalledTimes(1);
+		expect(inactiveNodesArchiver.archive).toHaveBeenCalledTimes(1);
 	});
 });

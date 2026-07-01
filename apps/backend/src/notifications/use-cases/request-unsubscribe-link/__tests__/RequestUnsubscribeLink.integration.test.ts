@@ -51,5 +51,5 @@ it('should send message', async function () {
 	);
 	const result = await command.execute(dto);
 	expect(result.isOk()).toBeTruthy();
-	expect(sendFn).toBeCalledTimes(1);
+	expect(sendFn).toHaveBeenCalledTimes(1);
 });

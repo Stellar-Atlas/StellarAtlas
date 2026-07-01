@@ -15,7 +15,7 @@ it('should capture and return errors', async function () {
 		publicKey: createDummyPublicKeyString()
 	});
 	expect(result.isErr()).toBe(true);
-	expect(exceptionLogger.captureException).toBeCalledTimes(1);
+	expect(exceptionLogger.captureException).toHaveBeenCalledTimes(1);
 });
 
 it('should fetch latest node snapshots', async () => {

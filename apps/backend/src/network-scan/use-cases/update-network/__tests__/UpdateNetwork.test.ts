@@ -22,7 +22,7 @@ describe('UpdateNetwork', function () {
 		const dto = getDTO();
 		const result = await useCase.execute(dto);
 		expect(result.isOk()).toBeTruthy();
-		expect(repo.save).toBeCalledTimes(1);
+		expect(repo.save).toHaveBeenCalledTimes(1);
 	});
 
 	it('should update configuration when a change is found', async function () {
@@ -37,11 +37,11 @@ describe('UpdateNetwork', function () {
 		const dto = getDTO();
 		const result = await useCase.execute(dto);
 		expect(result.isOk()).toBeTruthy();
-		expect(network.updateMaxLedgerVersion).toBeCalledTimes(1);
-		expect(network.updateName).toBeCalledTimes(1);
-		expect(network.updateOverlayVersionRange).toBeCalledTimes(1);
-		expect(network.updateQuorumSetConfiguration).toBeCalledTimes(1);
-		expect(network.updateStellarCoreVersion).toBeCalledTimes(1);
+		expect(network.updateMaxLedgerVersion).toHaveBeenCalledTimes(1);
+		expect(network.updateName).toHaveBeenCalledTimes(1);
+		expect(network.updateOverlayVersionRange).toHaveBeenCalledTimes(1);
+		expect(network.updateQuorumSetConfiguration).toHaveBeenCalledTimes(1);
+		expect(network.updateStellarCoreVersion).toHaveBeenCalledTimes(1);
 	});
 
 	it('should return error if QuorumSet is invalid', async function () {

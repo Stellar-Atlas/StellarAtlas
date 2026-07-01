@@ -14,9 +14,10 @@ export class NodeScannerGeoStep {
 	) {}
 
 	public async execute(nodeScan: NodeScan): Promise<void> {
-		if (nodeScan.getModifiedIPs().length > 0) {
+		const ips = nodeScan.getIPsRequiringGeoDataRefresh();
+		if (ips.length > 0) {
 			this.logger.info('Updating geoData info for', {
-				nodes: nodeScan.getModifiedIPs()
+				nodes: ips
 			});
 
 			const ipMap = new Map<
@@ -27,7 +28,7 @@ export class NodeScannerGeoStep {
 				}
 			>();
 			await Promise.all(
-				nodeScan.getModifiedIPs().map(async (ip: string) => {
+				ips.map(async (ip: string) => {
 					const result = await this.geoDataService.fetchGeoData(ip);
 					if (result.isErr()) this.logger.info(result.error.message);
 					else {

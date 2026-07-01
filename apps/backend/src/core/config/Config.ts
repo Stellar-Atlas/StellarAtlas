@@ -117,9 +117,9 @@ export function getConfigFromEnv(): Result<Config, Error> {
 	}
 
 	const crawlerMaxConnectionsRaw = process.env.CRAWLER_MAX_CONNECTIONS;
-	let crawlerMaxConnections = 25;
+	let crawlerMaxConnections = 75;
 	if (!isNaN(Number(crawlerMaxConnectionsRaw)))
-		crawlerMaxConnections = Number(crawlerMaxConnectionsRaw);
+		crawlerMaxConnections = Math.max(75, Number(crawlerMaxConnectionsRaw));
 
 	const crawlerNodePrivateKey = process.env.CRAWLER_NODE_PRIVATE_KEY;
 
@@ -157,8 +157,8 @@ export function getConfigFromEnv(): Result<Config, Error> {
 		blackList: crawlerBlacklist,
 		maxOpenConnections: crawlerMaxConnections,
 		maxCrawlTime: Number.isNaN(crawlerMaxCrawlTime)
-			? 900000
-			: crawlerMaxCrawlTime,
+			? 1800000
+			: Math.max(1800000, crawlerMaxCrawlTime),
 		nodeConfig: {
 			network: networkConfig.networkPassphrase,
 			listeningPort: 11625,

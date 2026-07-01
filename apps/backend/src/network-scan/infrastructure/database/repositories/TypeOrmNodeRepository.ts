@@ -45,7 +45,7 @@ export class TypeOrmNodeRepository implements NodeRepository {
 				}
 			});
 			if (count === 0) {
-				await baseRepo.insert(Node, node);
+				await baseRepo.save(Node, node);
 			}
 			const snapshotsToSave = node.snapshots.filter((snapshot) => {
 				return (

@@ -30,14 +30,14 @@ describe('NodeScannerHistoryArchiveStep', () => {
 		await historyArchiveStep.execute(nodeScan);
 		expect(
 			historyArchiveStatusFinder.getNodesWithUpToDateHistoryArchives
-		).toBeCalled();
+		).toHaveBeenCalled();
 		expect(
 			historyArchiveStatusFinder.getNodesWithHistoryArchiveVerificationErrors
-		).toBeCalled();
-		expect(nodeScan.updateHistoryArchiveUpToDateStatus).toBeCalledWith(
+		).toHaveBeenCalled();
+		expect(nodeScan.updateHistoryArchiveUpToDateStatus).toHaveBeenCalledWith(
 			upToDateArchives
 		);
-		expect(nodeScan.updateHistoryArchiveVerificationStatus).toBeCalledWith(
+		expect(nodeScan.updateHistoryArchiveVerificationStatus).toHaveBeenCalledWith(
 			verificationErrors
 		);
 	});
@@ -47,7 +47,7 @@ describe('NodeScannerHistoryArchiveStep', () => {
 		const urls = new Map<string, string>([['a', 'url']]);
 		nodeScan.getHistoryArchiveUrls.mockReturnValue(urls);
 		await historyArchiveStep.execute(nodeScan);
-		expect(historyArchiveScanService.scheduleScans).toBeCalledWith(
+		expect(historyArchiveScanService.scheduleScans).toHaveBeenCalledWith(
 			Array.from(urls.values())
 		);
 	});

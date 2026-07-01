@@ -1,4 +1,4 @@
-import { Networks } from '@stellar/stellar-base';
+import { Networks } from '@stellar/stellar-sdk';
 
 require('dotenv').config();
 import { NodeInfo } from './node';

@@ -72,12 +72,23 @@ export class TypeOrmNetworkMeasurementMonthRepository
                                                     "minSplittingSetCountryMax", "minSplittingSetCountrySum",
                                                     "minSplittingSetISPMin", "minSplittingSetISPMax",
                                                     "minSplittingSetISPSum")
-             with scans as (select date_trunc('month', NetworkScan."time") "crawlMonth",
-                                     count(distinct NetworkScan.id) "crawlCount"
-                              from network_scan NetworkScan
-                              WHERE NetworkScan.id BETWEEN $1 AND $2
-                                and NetworkScan.completed = true
-                              group by "crawlMonth")
+             with affected_months as (
+                 select distinct date_trunc('month', NetworkScan."time") "crawlMonth"
+                 from network_scan NetworkScan
+                 WHERE NetworkScan.id BETWEEN $1 AND $2
+                   and NetworkScan.completed = true
+             ),
+             bounds as (
+                 select min("crawlMonth") "fromTime", max("crawlMonth") + interval '1 month' "toTime"
+                 from affected_months
+             ),
+             scans as (select date_trunc('month', NetworkScan."time") "crawlMonth",
+                               count(distinct NetworkScan.id) "crawlCount"
+                        from network_scan NetworkScan
+                        JOIN bounds on NetworkScan."time" >= bounds."fromTime" and NetworkScan."time" < bounds."toTime"
+                        JOIN affected_months on affected_months."crawlMonth" = date_trunc('month', NetworkScan."time")
+                        WHERE NetworkScan.completed = true
+                        group by date_trunc('month', NetworkScan."time"))
              select date_trunc('month', NetworkScan."time")   "month",
                     sum("nrOfActiveWatchers"::int)                "nrOfActiveWatchersSum",
                     sum("nrOfConnectableNodes"::int)                "nrOfConnectableNodesSum",
@@ -132,120 +143,64 @@ export class TypeOrmNetworkMeasurementMonthRepository
                     max("minSplittingSetISPSize"::int)            "minSplittingSetISPMax",
                     sum("minSplittingSetISPSize"::int)            "minSplittingSetISPSum"
              FROM "network_scan" NetworkScan
+                      JOIN bounds on NetworkScan."time" >= bounds."fromTime" and NetworkScan."time" < bounds."toTime"
                       JOIN scans on scans."crawlMonth" = date_trunc('month', NetworkScan."time")
                       JOIN network_measurement on network_measurement."time" = NetworkScan."time"
-             WHERE NetworkScan.id BETWEEN $1 AND $2
-               AND NetworkScan.completed = true
-             group by month, "crawlCount"
+             WHERE NetworkScan.completed = true
+             group by date_trunc('month', NetworkScan."time"), scans."crawlCount"
              ON CONFLICT (time) DO UPDATE
-                 SET "nrOfActiveWatchersSum"            = network_measurement_month."nrOfActiveWatchersSum" +
-                                                          EXCLUDED."nrOfActiveWatchersSum",
-                        "nrOfConnectableNodesSum"            = network_measurement_month."nrOfConnectableNodesSum" +
-                                                          EXCLUDED."nrOfConnectableNodesSum",
-                     "nrOfActiveValidatorsSum"          = network_measurement_month."nrOfActiveValidatorsSum" +
-                                                          EXCLUDED."nrOfActiveValidatorsSum",
-                     "nrOfActiveFullValidatorsSum"      = network_measurement_month."nrOfActiveFullValidatorsSum" +
-                                                          EXCLUDED."nrOfActiveFullValidatorsSum",
-                     "nrOfActiveOrganizationsSum"       = network_measurement_month."nrOfActiveOrganizationsSum" +
-                                                          EXCLUDED."nrOfActiveOrganizationsSum",
-                     "transitiveQuorumSetSizeSum"       = network_measurement_month."transitiveQuorumSetSizeSum" +
-                                                          EXCLUDED."transitiveQuorumSetSizeSum",
-                     "hasQuorumIntersectionCount"       = network_measurement_month."hasQuorumIntersectionCount" +
-                                                          EXCLUDED."hasQuorumIntersectionCount",
-                     "hasSymmetricTopTierCount"         = network_measurement_month."hasSymmetricTopTierCount" +
-                                                          EXCLUDED."hasSymmetricTopTierCount",
-                     "hasTransitiveQuorumSetCount"      = network_measurement_month."hasTransitiveQuorumSetCount" +
-                                                          EXCLUDED."hasTransitiveQuorumSetCount",
-                     "topTierMin"                       = LEAST(network_measurement_month."topTierMin", EXCLUDED."topTierMin"),
-                     "topTierMax"                       = GREATEST(network_measurement_month."topTierMax",
-                                                                   EXCLUDED."topTierMax"),
-                     "topTierOrgsMin"                   = LEAST(network_measurement_month."topTierOrgsMin",
-                                                                EXCLUDED."topTierOrgsMin"),
-                     "topTierOrgsMax"                   = GREATEST(network_measurement_month."topTierOrgsMax",
-                                                                   EXCLUDED."topTierOrgsMax"),
-                     "minBlockingSetMin"                = LEAST(network_measurement_month."minBlockingSetMin",
-                                                                EXCLUDED."minBlockingSetMin"),
-                     "minBlockingSetMax"                = GREATEST(network_measurement_month."minBlockingSetMax",
-                                                                   EXCLUDED."minBlockingSetMax"),
-                     "minBlockingSetFilteredMin"        = LEAST(network_measurement_month."minBlockingSetFilteredMin",
-                                                                EXCLUDED."minBlockingSetFilteredMin"),
-                     "minBlockingSetFilteredMax"        = GREATEST(
-                             network_measurement_month."minBlockingSetFilteredMax",
-                             EXCLUDED."minBlockingSetFilteredMax"),
-                     "minBlockingSetOrgsMin"            = LEAST(network_measurement_month."minBlockingSetOrgsMin",
-                                                                EXCLUDED."minBlockingSetOrgsMin"),
-                     "minBlockingSetOrgsMax"            = GREATEST(network_measurement_month."minBlockingSetOrgsMax",
-                                                                   EXCLUDED."minBlockingSetOrgsMax"),
-                     "minBlockingSetOrgsFilteredMin"    = LEAST(
-                             network_measurement_month."minBlockingSetOrgsFilteredMin",
-                             EXCLUDED."minBlockingSetOrgsFilteredMin"),
-                     "minBlockingSetOrgsFilteredMax"    = GREATEST(
-                             network_measurement_month."minBlockingSetOrgsFilteredMax",
-                             EXCLUDED."minBlockingSetOrgsFilteredMax"),
-                     "minSplittingSetMin"               = LEAST(network_measurement_month."minSplittingSetMin",
-                                                                EXCLUDED."minSplittingSetMin"),
-                     "minSplittingSetMax"               = GREATEST(network_measurement_month."minSplittingSetMax",
-                                                                   EXCLUDED."minSplittingSetMax"),
-                     "minSplittingSetOrgsMin"           = LEAST(network_measurement_month."minSplittingSetOrgsMin",
-                                                                EXCLUDED."minSplittingSetOrgsMin"),
-                     "minSplittingSetOrgsMax"           = GREATEST(network_measurement_month."minSplittingSetOrgsMax",
-                                                                   EXCLUDED."minSplittingSetOrgsMax"),
-                     "topTierSum"                       = network_measurement_month."topTierSum" + EXCLUDED."topTierSum",
-                     "topTierOrgsSum"                   = network_measurement_month."topTierOrgsSum" + EXCLUDED."topTierOrgsSum",
-                     "minBlockingSetSum"                = network_measurement_month."minBlockingSetSum" +
-                                                          EXCLUDED."minBlockingSetSum",
-                     "minBlockingSetOrgsSum"            = network_measurement_month."minBlockingSetOrgsSum" +
-                                                          EXCLUDED."minBlockingSetOrgsSum",
-                     "minBlockingSetFilteredSum"        = network_measurement_month."minBlockingSetFilteredSum" +
-                                                          EXCLUDED."minBlockingSetFilteredSum",
-                     "minBlockingSetOrgsFilteredSum"    = network_measurement_month."minBlockingSetOrgsFilteredSum" +
-                                                          EXCLUDED."minBlockingSetOrgsFilteredSum",
-                     "minSplittingSetSum"               = network_measurement_month."minSplittingSetSum" +
-                                                          EXCLUDED."minSplittingSetSum",
-                     "minSplittingSetOrgsSum"           = network_measurement_month."minSplittingSetOrgsSum" +
-                                                          EXCLUDED."minSplittingSetOrgsSum",
-                     "minBlockingSetCountryMin"         = LEAST(network_measurement_month."minBlockingSetCountryMin",
-                                                                EXCLUDED."minBlockingSetCountryMin"),
-                     "minBlockingSetCountryMax"         = GREATEST(network_measurement_month."minBlockingSetCountryMax",
-                                                                   EXCLUDED."minBlockingSetCountryMax"),
-                     "minBlockingSetCountryFilteredMin" = LEAST(
-                             network_measurement_month."minBlockingSetCountryFilteredMin",
-                             EXCLUDED."minBlockingSetCountryFilteredMin"),
-                     "minBlockingSetCountryFilteredMax" = GREATEST(
-                             network_measurement_month."minBlockingSetCountryFilteredMax",
-                             EXCLUDED."minBlockingSetCountryFilteredMax"),
-                     "minBlockingSetCountrySum"         = network_measurement_month."minBlockingSetCountrySum" +
-                                                          EXCLUDED."minBlockingSetCountrySum",
-                     "minBlockingSetCountryFilteredSum" = network_measurement_month."minBlockingSetCountryFilteredSum" +
-                                                          EXCLUDED."minBlockingSetCountryFilteredSum",
-                     "minBlockingSetISPMin"             = LEAST(network_measurement_month."minBlockingSetISPMin",
-                                                                EXCLUDED."minBlockingSetISPMin"),
-                     "minBlockingSetISPMax"             = GREATEST(network_measurement_month."minBlockingSetISPMax",
-                                                                   EXCLUDED."minBlockingSetISPMax"),
-                     "minBlockingSetISPFilteredMin"     = LEAST(
-                             network_measurement_month."minBlockingSetISPFilteredMin",
-                             EXCLUDED."minBlockingSetISPFilteredMin"),
-                     "minBlockingSetISPFilteredMax"     = GREATEST(
-                             network_measurement_month."minBlockingSetISPFilteredMax",
-                             EXCLUDED."minBlockingSetISPFilteredMax"),
-                     "minBlockingSetISPSum"             = network_measurement_month."minBlockingSetISPSum" +
-                                                          EXCLUDED."minBlockingSetISPSum",
-                     "minBlockingSetISPFilteredSum"     = network_measurement_month."minBlockingSetISPFilteredSum" +
-                                                          EXCLUDED."minBlockingSetISPFilteredSum",
-                     "minSplittingSetCountryMin"        = LEAST(network_measurement_month."minSplittingSetCountryMin",
-                                                                EXCLUDED."minSplittingSetCountryMin"),
-                     "minSplittingSetCountryMax"        = GREATEST(
-                             network_measurement_month."minSplittingSetCountryMax",
-                             EXCLUDED."minSplittingSetCountryMax"),
-                     "minSplittingSetCountrySum"        = network_measurement_month."minSplittingSetCountrySum" +
-                                                          EXCLUDED."minSplittingSetCountrySum",
-                     "minSplittingSetISPMin"            = LEAST(network_measurement_month."minSplittingSetISPMin",
-                                                                EXCLUDED."minSplittingSetISPMin"),
-                     "minSplittingSetISPMax"            = GREATEST(network_measurement_month."minSplittingSetISPMax",
-                                                                   EXCLUDED."minSplittingSetISPMax"),
-                     "minSplittingSetISPSum"            = network_measurement_month."minSplittingSetISPSum" +
-                                                          EXCLUDED."minSplittingSetISPSum",
-                     "crawlCount"                       = network_measurement_month."crawlCount" + EXCLUDED."crawlCount"`,
+                 SET "nrOfActiveWatchersSum"            = EXCLUDED."nrOfActiveWatchersSum",
+                        "nrOfConnectableNodesSum"            = EXCLUDED."nrOfConnectableNodesSum",
+                     "nrOfActiveValidatorsSum"          = EXCLUDED."nrOfActiveValidatorsSum",
+                     "nrOfActiveFullValidatorsSum"      = EXCLUDED."nrOfActiveFullValidatorsSum",
+                     "nrOfActiveOrganizationsSum"       = EXCLUDED."nrOfActiveOrganizationsSum",
+                     "transitiveQuorumSetSizeSum"       = EXCLUDED."transitiveQuorumSetSizeSum",
+                     "hasQuorumIntersectionCount"       = EXCLUDED."hasQuorumIntersectionCount",
+                     "hasSymmetricTopTierCount"         = EXCLUDED."hasSymmetricTopTierCount",
+                     "hasTransitiveQuorumSetCount"      = EXCLUDED."hasTransitiveQuorumSetCount",
+                     "topTierMin"                       = EXCLUDED."topTierMin",
+                     "topTierMax"                       = EXCLUDED."topTierMax",
+                     "topTierOrgsMin"                   = EXCLUDED."topTierOrgsMin",
+                     "topTierOrgsMax"                   = EXCLUDED."topTierOrgsMax",
+                     "minBlockingSetMin"                = EXCLUDED."minBlockingSetMin",
+                     "minBlockingSetMax"                = EXCLUDED."minBlockingSetMax",
+                     "minBlockingSetFilteredMin"        = EXCLUDED."minBlockingSetFilteredMin",
+                     "minBlockingSetFilteredMax"        = EXCLUDED."minBlockingSetFilteredMax",
+                     "minBlockingSetOrgsMin"            = EXCLUDED."minBlockingSetOrgsMin",
+                     "minBlockingSetOrgsMax"            = EXCLUDED."minBlockingSetOrgsMax",
+                     "minBlockingSetOrgsFilteredMin"    = EXCLUDED."minBlockingSetOrgsFilteredMin",
+                     "minBlockingSetOrgsFilteredMax"    = EXCLUDED."minBlockingSetOrgsFilteredMax",
+                     "minSplittingSetMin"               = EXCLUDED."minSplittingSetMin",
+                     "minSplittingSetMax"               = EXCLUDED."minSplittingSetMax",
+                     "minSplittingSetOrgsMin"           = EXCLUDED."minSplittingSetOrgsMin",
+                     "minSplittingSetOrgsMax"           = EXCLUDED."minSplittingSetOrgsMax",
+                     "topTierSum"                       = EXCLUDED."topTierSum",
+                     "topTierOrgsSum"                   = EXCLUDED."topTierOrgsSum",
+                     "minBlockingSetSum"                = EXCLUDED."minBlockingSetSum",
+                     "minBlockingSetOrgsSum"            = EXCLUDED."minBlockingSetOrgsSum",
+                     "minBlockingSetFilteredSum"        = EXCLUDED."minBlockingSetFilteredSum",
+                     "minBlockingSetOrgsFilteredSum"    = EXCLUDED."minBlockingSetOrgsFilteredSum",
+                     "minSplittingSetSum"               = EXCLUDED."minSplittingSetSum",
+                     "minSplittingSetOrgsSum"           = EXCLUDED."minSplittingSetOrgsSum",
+                     "minBlockingSetCountryMin"         = EXCLUDED."minBlockingSetCountryMin",
+                     "minBlockingSetCountryMax"         = EXCLUDED."minBlockingSetCountryMax",
+                     "minBlockingSetCountryFilteredMin" = EXCLUDED."minBlockingSetCountryFilteredMin",
+                     "minBlockingSetCountryFilteredMax" = EXCLUDED."minBlockingSetCountryFilteredMax",
+                     "minBlockingSetCountrySum"         = EXCLUDED."minBlockingSetCountrySum",
+                     "minBlockingSetCountryFilteredSum" = EXCLUDED."minBlockingSetCountryFilteredSum",
+                     "minBlockingSetISPMin"             = EXCLUDED."minBlockingSetISPMin",
+                     "minBlockingSetISPMax"             = EXCLUDED."minBlockingSetISPMax",
+                     "minBlockingSetISPFilteredMin"     = EXCLUDED."minBlockingSetISPFilteredMin",
+                     "minBlockingSetISPFilteredMax"     = EXCLUDED."minBlockingSetISPFilteredMax",
+                     "minBlockingSetISPSum"             = EXCLUDED."minBlockingSetISPSum",
+                     "minBlockingSetISPFilteredSum"     = EXCLUDED."minBlockingSetISPFilteredSum",
+                     "minSplittingSetCountryMin"        = EXCLUDED."minSplittingSetCountryMin",
+                     "minSplittingSetCountryMax"        = EXCLUDED."minSplittingSetCountryMax",
+                     "minSplittingSetCountrySum"        = EXCLUDED."minSplittingSetCountrySum",
+                     "minSplittingSetISPMin"            = EXCLUDED."minSplittingSetISPMin",
+                     "minSplittingSetISPMax"            = EXCLUDED."minSplittingSetISPMax",
+                     "minSplittingSetISPSum"            = EXCLUDED."minSplittingSetISPSum",
+                     "crawlCount"                       = EXCLUDED."crawlCount"`,
 			[fromCrawlId, toCrawlId]
 		);
 	}

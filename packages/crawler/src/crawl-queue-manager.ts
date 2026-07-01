@@ -1,9 +1,9 @@
-import * as P from 'pino';
+import pino = require('pino');
 import { AsyncResultCallback, CrawlQueue } from './crawl-queue';
 import { CrawlTask } from './crawl-task';
 
 export class CrawlQueueManager {
-	constructor(private crawlQueue: CrawlQueue, private logger: P.Logger) {
+	constructor(private crawlQueue: CrawlQueue, private logger: pino.Logger) {
 		this.crawlQueue.initialize(this.performCrawlQueueTask.bind(this));
 	}
 

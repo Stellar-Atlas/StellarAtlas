@@ -17,7 +17,7 @@ describe('NodeScannerTomlStep', () => {
 		const tomlInfo = new Set<NodeTomlInfo>();
 		nodeTomlFetcher.fetchNodeTomlInfoCollection.mockResolvedValue(tomlInfo);
 		await step.execute(nodeScan);
-		expect(nodeTomlFetcher.fetchNodeTomlInfoCollection).toBeCalled();
-		expect(nodeScan.updateWithTomlInfo).toBeCalledWith(tomlInfo);
+		expect(nodeTomlFetcher.fetchNodeTomlInfoCollection).toHaveBeenCalled();
+		expect(nodeScan.updateWithTomlInfo).toHaveBeenCalledWith(tomlInfo);
 	});
 });

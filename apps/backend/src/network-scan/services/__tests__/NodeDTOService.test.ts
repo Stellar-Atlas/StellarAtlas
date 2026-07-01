@@ -73,20 +73,24 @@ describe('NodeDTOService', () => {
 			[organization]
 		);
 		expect(nodeDTOsOrError.isOk()).toBe(true);
-		expect(nodeMapper.toNodeV1DTO).toBeCalledTimes(2);
-		expect(nodeMapper.toNodeV1DTO).toBeCalledWith(
+		expect(nodeMapper.toNodeV1DTO).toHaveBeenCalledTimes(2);
+		expect(nodeMapper.toNodeV1DTO).toHaveBeenCalledWith(
 			time,
 			nodeA,
 			nodeA24HourAvg,
 			nodeA30DayAvg,
 			organization.organizationId.value
 		);
-		expect(nodeMapper.toNodeV1DTO).toBeCalledWith(
+		expect(nodeMapper.toNodeV1DTO).toHaveBeenCalledWith(
 			time,
 			nodeB,
 			nodeB24HourAvg,
 			nodeB30DayAvg,
 			undefined
+		);
+		expect(nodeMeasurementDayRepository.findXDaysAverageAt).toHaveBeenCalledWith(
+			time,
+			30
 		);
 	});
 

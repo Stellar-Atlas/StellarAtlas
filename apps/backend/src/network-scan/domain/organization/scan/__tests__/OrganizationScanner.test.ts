@@ -29,8 +29,8 @@ describe('OrganizationScanner', function () {
 
 		expect(
 			setup.organizationTomlFetcher.fetchOrganizationTomlInfoCollection
-		).toBeCalledWith(['domain']);
-		expect(setup.organizationRepository.findByHomeDomains).toBeCalledTimes(0);
+		).toHaveBeenCalledWith(['domain']);
+		expect(setup.organizationRepository.findByHomeDomains).toHaveBeenCalledTimes(0);
 
 		expect(result.value.organizations).toHaveLength(1);
 		expect(result.value.organizations[0].name).toBe('toml');
@@ -120,8 +120,8 @@ describe('OrganizationScanner', function () {
 
 		expect(
 			setup.organizationTomlFetcher.fetchOrganizationTomlInfoCollection
-		).toBeCalledWith(['domain', 'other-domain.com']);
-		expect(setup.organizationRepository.findByHomeDomains).toBeCalledWith([
+		).toHaveBeenCalledWith(['domain', 'other-domain.com']);
+		expect(setup.organizationRepository.findByHomeDomains).toHaveBeenCalledWith([
 			'other-domain.com'
 		]);
 		expect(result.isOk()).toBeTruthy();

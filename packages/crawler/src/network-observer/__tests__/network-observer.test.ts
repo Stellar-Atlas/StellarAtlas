@@ -1,6 +1,6 @@
 import { NetworkObserver } from '../network-observer';
 import { mock } from 'jest-mock-extended';
-import { P } from 'pino';
+import pino = require('pino');
 import {
 	ClosePayload,
 	ConnectionManager,
@@ -47,7 +47,7 @@ describe('network-observer', () => {
 			mock<PeerNodeCollection>(),
 			mock<Ledger>(),
 			new Map<string, QuorumSet>(),
-			new Slots(new QuorumSet(1, ['A'], []), mock<P.Logger>())
+			new Slots(new QuorumSet(1, ['A'], []), mock<pino.Logger>())
 		);
 	};
 

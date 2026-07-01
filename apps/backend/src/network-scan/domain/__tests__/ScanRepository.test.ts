@@ -46,16 +46,16 @@ describe('ScanRepository', () => {
 		);
 
 		expect(result.isOk()).toBe(true);
-		expect(repo.nodeRepository.save).toBeCalledWith(
+		expect(repo.nodeRepository.save).toHaveBeenCalledWith(
 			nodeScan.nodes,
 			networkScan.time
 		);
-		expect(repo.organizationRepository.save).toBeCalledWith(
+		expect(repo.organizationRepository.save).toHaveBeenCalledWith(
 			organizationScan.organizations,
 			networkScan.time
 		);
-		expect(repo.networkScanRepository.saveOne).toBeCalledWith(networkScan);
-		expect(repo.measurementRollupService.rollupMeasurements).toBeCalledWith(
+		expect(repo.networkScanRepository.saveOne).toHaveBeenCalledWith(networkScan);
+		expect(repo.measurementRollupService.rollupMeasurements).toHaveBeenCalledWith(
 			networkScan
 		);
 	});
@@ -69,10 +69,10 @@ describe('ScanRepository', () => {
 
 		const result = await repo.scanRepository.findLatest();
 		expect(result.isOk()).toBeTruthy();
-		expect(repo.nodeRepository.findActiveAtTimePoint).toBeCalledWith(
+		expect(repo.nodeRepository.findActiveAtTimePoint).toHaveBeenCalledWith(
 			latestNetworkScan.time
 		);
-		expect(repo.organizationRepository.findActiveAtTimePoint).toBeCalledWith(
+		expect(repo.organizationRepository.findActiveAtTimePoint).toHaveBeenCalledWith(
 			latestNetworkScan.time
 		);
 	});
@@ -134,10 +134,10 @@ describe('ScanRepository', () => {
 
 		const result = await repo.scanRepository.findPrevious(networkScan.time);
 		expect(result.isOk()).toBeTruthy();
-		expect(repo.nodeRepository.findActiveAtTimePoint).toBeCalledWith(
+		expect(repo.nodeRepository.findActiveAtTimePoint).toHaveBeenCalledWith(
 			networkScan.time
 		);
-		expect(repo.organizationRepository.findActiveAtTimePoint).toBeCalledWith(
+		expect(repo.organizationRepository.findActiveAtTimePoint).toHaveBeenCalledWith(
 			networkScan.time
 		);
 	});
@@ -159,10 +159,10 @@ describe('ScanRepository', () => {
 
 		const result = await repo.scanRepository.findAt(networkScan.time);
 		expect(result.isOk()).toBeTruthy();
-		expect(repo.nodeRepository.findActiveAtTimePoint).toBeCalledWith(
+		expect(repo.nodeRepository.findActiveAtTimePoint).toHaveBeenCalledWith(
 			networkScan.time
 		);
-		expect(repo.organizationRepository.findActiveAtTimePoint).toBeCalledWith(
+		expect(repo.organizationRepository.findActiveAtTimePoint).toHaveBeenCalledWith(
 			networkScan.time
 		);
 	});
@@ -187,7 +187,7 @@ describe('ScanRepository', () => {
 		const result = await repo.scanRepository.findScanDataForUpdate();
 		expect(result.isOk()).toBeTruthy();
 		if (!result.isOk()) return;
-		expect(repo.nodeRepository.findActive).toBeCalled();
-		expect(repo.organizationRepository.findActive).toBeCalled();
+		expect(repo.nodeRepository.findActive).toHaveBeenCalled();
+		expect(repo.organizationRepository.findActive).toHaveBeenCalled();
 	});
 });

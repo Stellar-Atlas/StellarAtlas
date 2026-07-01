@@ -1,11 +1,11 @@
 import { mock } from 'jest-mock-extended';
-import { P } from 'pino';
+import pino = require('pino');
 import { ConnectionManager } from '../connection-manager';
 import { StragglerTimer } from '../straggler-timer';
 import { Timers } from '../../utilities/timers';
 
 describe('StragglerTimer', () => {
-	const logger = mock<P.Logger>();
+	const logger = mock<pino.Logger>();
 	const connectionManager = mock<ConnectionManager>();
 	const timers = mock<Timers>();
 	const stragglerHandler = new StragglerTimer(

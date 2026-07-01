@@ -4,14 +4,14 @@ import { Slots } from './network-observer/peer-event-handler/stellar-message-han
 import { NodeAddress } from './node-address';
 import { QuorumSet } from 'shared';
 import { Ledger } from './crawler';
-import { P } from 'pino';
+import pino = require('pino');
 import { PeerNodeCollection } from './peer-node-collection';
 
 export class CrawlFactory {
 	constructor(
 		private observationFactory: ObservationFactory,
 		private network: string,
-		private logger: P.Logger
+		private logger: pino.Logger
 	) {}
 	public createCrawl(
 		nodesToCrawl: NodeAddress[],

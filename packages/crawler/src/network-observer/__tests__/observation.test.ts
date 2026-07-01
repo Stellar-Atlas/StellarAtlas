@@ -3,7 +3,7 @@ import { PeerNodeCollection } from '../../peer-node-collection';
 import { mock } from 'jest-mock-extended';
 import { NodeAddress } from '../../node-address';
 import { QuorumSet } from 'shared';
-import { P } from 'pino';
+import pino = require('pino');
 import { ObservationState } from '../observation-state';
 import { Slots } from '../peer-event-handler/stellar-message-handlers/scp-envelope/scp-statement/externalize/slots';
 
@@ -20,7 +20,7 @@ describe('Observation', () => {
 				localCloseTime: new Date()
 			},
 			new Map<string, QuorumSet>(),
-			new Slots(new QuorumSet(1, ['A'], []), mock<P.Logger>())
+			new Slots(new QuorumSet(1, ['A'], []), mock<pino.Logger>())
 		);
 	};
 	it('should move to syncing state', () => {

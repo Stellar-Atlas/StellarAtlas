@@ -3,7 +3,7 @@ import { mock } from 'jest-mock-extended';
 import { ConnectionManager } from '../connection-manager';
 import { ConsensusTimer } from '../consensus-timer';
 import { StragglerTimer } from '../straggler-timer';
-import { P } from 'pino';
+import pino = require('pino');
 import { Observation } from '../observation';
 import { PeerNodeCollection } from '../../peer-node-collection';
 import { ObservationState } from '../observation-state';
@@ -16,7 +16,7 @@ describe('ObservationManager', () => {
 	const connectionManager = mock<ConnectionManager>();
 	const consensusTimer = mock<ConsensusTimer>();
 	const stragglerTimer = mock<StragglerTimer>();
-	const logger = mock<P.Logger>();
+	const logger = mock<pino.Logger>();
 
 	const observationManager = new ObservationManager(
 		connectionManager,
@@ -33,7 +33,7 @@ describe('ObservationManager', () => {
 			mock<PeerNodeCollection>(),
 			mock<Ledger>(),
 			new Map<string, QuorumSet>(),
-			new Slots(new QuorumSet(1, ['A'], []), mock<P.Logger>())
+			new Slots(new QuorumSet(1, ['A'], []), mock<pino.Logger>())
 		);
 	};
 
@@ -88,7 +88,7 @@ describe('ObservationManager', () => {
 		expect(
 			stragglerTimer.startStragglerTimeoutForActivePeers
 		).toHaveBeenCalled();
-		expect(stragglerTimer.startStragglerTimeoutForActivePeers).toBeCalledWith(
+		expect(stragglerTimer.startStragglerTimeoutForActivePeers).toHaveBeenCalledWith(
 			true,
 			observation.topTierAddressesSet,
 			expect.any(Function)
@@ -118,7 +118,7 @@ describe('ObservationManager', () => {
 			peerNodes,
 			mock<Ledger>(),
 			new Map<string, QuorumSet>(),
-			new Slots(new QuorumSet(1, ['A'], []), mock<P.Logger>())
+			new Slots(new QuorumSet(1, ['A'], []), mock<pino.Logger>())
 		);
 		await observationManager.startSync(observation);
 		expect(observation.isNetworkHalted()).toBe(false);

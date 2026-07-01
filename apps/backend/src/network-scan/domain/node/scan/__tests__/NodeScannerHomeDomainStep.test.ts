@@ -16,7 +16,7 @@ describe('NodeScannerHomeDomainStep', () => {
 		const homeDomains = new Map<string, string>();
 		fetcher.fetchHomeDomains.mockResolvedValue(homeDomains);
 		await homeDomainStep.execute(nodeScan);
-		expect(fetcher.fetchHomeDomains).toBeCalled();
-		expect(nodeScan.updateHomeDomains).toBeCalledWith(homeDomains);
+		expect(fetcher.fetchHomeDomains).toHaveBeenCalled();
+		expect(nodeScan.updateHomeDomains).toHaveBeenCalledWith(homeDomains);
 	});
 });

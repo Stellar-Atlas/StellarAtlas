@@ -1,12 +1,12 @@
 import { mock } from 'jest-mock-extended';
-import * as P from 'pino';
+import pino = require('pino');
 import { PeerNodeCollection } from '../../../../../../../peer-node-collection';
 import { ExternalizeStatementHandler } from '../externalize-statement-handler';
 import { ExternalizeData } from '../map-externalize-statement';
 import { Ledger } from '../../../../../../../crawler';
 import { Slot } from '../slot';
 
-const mockLogger = mock<P.Logger>();
+const mockLogger = mock<pino.Logger>();
 
 describe('ExternalizeStatementHandler', () => {
 	let latestConfirmedClosedLedger: Ledger;

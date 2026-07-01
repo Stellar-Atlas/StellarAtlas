@@ -101,5 +101,14 @@ describe('test queries', () => {
 		expect(measurements[0].minBlockingSetFilteredMax).toEqual(1);
 		expect(measurements[0].topTierMin).toEqual(1);
 		expect(measurements[0].topTierMax).toEqual(1);
+
+		await networkMeasurementMonthRepository.rollup(1, 2);
+		measurements = await networkMeasurementMonthRepository.findBetween(
+			new NetworkId('public'),
+			new Date(Date.UTC(2020, 0, 3)),
+			new Date(Date.UTC(2020, 1, 3))
+		);
+		expect(measurements[0].crawlCount).toEqual(2);
+		expect(measurements[0].nrOfActiveWatchersSum).toEqual(2);
 	});
 });

@@ -1,6 +1,6 @@
-import { Logger } from 'pino';
+import pino = require('pino');
 import { Node } from './node';
-import { StrKey, xdr } from '@stellar/stellar-base';
+import { StrKey, xdr } from '@stellar/stellar-sdk';
 
 type PublicKey = string;
 type Ledger = string;
@@ -10,7 +10,7 @@ export class ScpReader {
 	private nominateVotes = new Map<Ledger, Map<PublicKey, Value[]>>();
 	private nominateAccepted = new Map<Ledger, Map<PublicKey, Value[]>>();
 
-	constructor(private logger: Logger) {}
+	constructor(private logger: pino.Logger) {}
 
 	private isNewNominateVote(
 		ledger: Ledger,

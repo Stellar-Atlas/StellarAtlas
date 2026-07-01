@@ -1,7 +1,7 @@
 import 'reflect-metadata';
 import { IHashCalculationPolicy } from './IHashCalculationPolicy';
 import { createHash } from 'crypto';
-import { xdr } from '@stellar/stellar-base';
+import { xdr } from '@stellar/stellar-sdk';
 
 export class GeneralizedTransactionSetHashPolicy
 	implements IHashCalculationPolicy

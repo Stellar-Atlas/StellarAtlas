@@ -1,7 +1,7 @@
 import { Transform, TransformCallback } from 'stream';
 
 export class XdrStreamReader extends Transform {
-	private remainingBuffer: Buffer = Buffer.from([]);
+	private remainingBuffer: Buffer<ArrayBufferLike> = Buffer.from([]);
 
 	constructor() {
 		super();
@@ -13,12 +13,15 @@ export class XdrStreamReader extends Transform {
 				xdrChunk = Buffer.from(xdrChunk);
 			} else return next(new Error('xdrChunk is not a buffer or uint8array'));
 		}
-		let buffer = Buffer.concat([this.remainingBuffer, xdrChunk]);
+		let buffer: Buffer<ArrayBufferLike> = Buffer.concat([
+			this.remainingBuffer,
+			xdrChunk
+		]);
 
 		let nextMessageLength = this.getMessageLengthFromXDRBuffer(buffer);
 
 		while (nextMessageLength !== 0 && buffer.length - 4 >= nextMessageLength) {
-			let xdrBuffer: Buffer;
+			let xdrBuffer: Buffer<ArrayBufferLike>;
 			[xdrBuffer, buffer] = this.getXDRBuffer(buffer, nextMessageLength);
 			this.push(xdrBuffer);
 			nextMessageLength = this.getMessageLengthFromXDRBuffer(buffer);
@@ -28,7 +31,7 @@ export class XdrStreamReader extends Transform {
 		return next();
 	}
 
-	getMessageLengthFromXDRBuffer(buffer: Buffer): number {
+	getMessageLengthFromXDRBuffer(buffer: Buffer<ArrayBufferLike>): number {
 		if (buffer.length < 4) return 0;
 
 		const length = buffer.slice(0, 4);
@@ -36,7 +39,10 @@ export class XdrStreamReader extends Transform {
 		return length.readUInt32BE(0);
 	}
 
-	getXDRBuffer(buffer: Buffer, messageLength: number): [Buffer, Buffer] {
+	getXDRBuffer(
+		buffer: Buffer<ArrayBufferLike>,
+		messageLength: number
+	): [Buffer<ArrayBufferLike>, Buffer<ArrayBufferLike>] {
 		return [
 			buffer.slice(4, messageLength + 4),
 			buffer.slice(4 + messageLength)

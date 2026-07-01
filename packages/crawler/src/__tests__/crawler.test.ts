@@ -2,7 +2,7 @@ import { Crawler } from '../index';
 import { createDummyCrawlerConfiguration } from '../__fixtures__/createDummyCrawlerConfiguration';
 import { CrawlQueueManager } from '../crawl-queue-manager';
 import { MaxCrawlTimeManager } from '../max-crawl-time-manager';
-import { P } from 'pino';
+import pino = require('pino');
 import { mock, MockProxy } from 'jest-mock-extended';
 import { QuorumSet } from 'shared';
 import { CrawlLogger } from '../crawl-logger';
@@ -19,7 +19,7 @@ describe('Crawler', () => {
 	const crawlFactory = new CrawlFactory(
 		new ObservationFactory(),
 		'test',
-		mock<P.Logger>()
+		mock<pino.Logger>()
 	);
 	beforeEach(() => {
 		jest.clearAllMocks();
@@ -28,12 +28,12 @@ describe('Crawler', () => {
 	function setupSUT() {
 		const crawlQueueManager = new CrawlQueueManager(
 			new AsyncCrawlQueue(1),
-			mock<P.Logger>()
+			mock<pino.Logger>()
 		);
 		const maxCrawlTimeManager = mock<MaxCrawlTimeManager>();
 		const networkObserver = mock<NetworkObserver>();
 		const crawlLogger = mock<CrawlLogger>();
-		const logger = mock<P.Logger>();
+		const logger = mock<pino.Logger>();
 		logger.child.mockReturnValue(logger as any);
 		const networkObserverEventEmitter = new EventEmitter();
 

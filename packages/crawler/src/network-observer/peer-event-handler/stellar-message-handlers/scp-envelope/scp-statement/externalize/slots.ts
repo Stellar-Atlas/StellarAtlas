@@ -1,12 +1,12 @@
 import { QuorumSet } from 'shared';
-import * as P from 'pino';
+import pino = require('pino');
 import { Slot, SlotIndex } from './slot';
 
 export class Slots {
 	protected slots: Map<SlotIndex, Slot> = new Map<SlotIndex, Slot>();
 	protected trustedQuorumSet: QuorumSet;
 
-	constructor(trustedQuorumSet: QuorumSet, protected logger: P.Logger) {
+	constructor(trustedQuorumSet: QuorumSet, protected logger: pino.Logger) {
 		this.trustedQuorumSet = trustedQuorumSet;
 	}
 

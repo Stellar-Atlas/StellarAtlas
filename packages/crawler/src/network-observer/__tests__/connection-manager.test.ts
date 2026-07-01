@@ -3,12 +3,12 @@
 import { mock, mockDeep, MockProxy } from 'jest-mock-extended';
 import { Node as NetworkNode, Connection } from 'node-connector';
 import { ConnectionManager } from '../connection-manager';
-import { P } from 'pino';
+import pino = require('pino');
 import { EventEmitter } from 'events';
 
 describe('ConnectionManager', () => {
 	let mockNode: MockProxy<NetworkNode>;
-	let mockLogger: MockProxy<P.Logger>;
+	let mockLogger: MockProxy<pino.Logger>;
 	let connectionManager: ConnectionManager;
 	const mockConnection = mockDeep<Connection>();
 	const ip = '127.0.0.1';
@@ -20,7 +20,7 @@ describe('ConnectionManager', () => {
 	beforeEach(() => {
 		jest.clearAllMocks();
 		mockNode = mock<NetworkNode>();
-		mockLogger = mock<P.Logger>();
+		mockLogger = mock<pino.Logger>();
 		connectionManager = new ConnectionManager(mockNode, new Set(), mockLogger);
 		// Manual implementation to handle event listeners and emitting
 		const realEmitter = new EventEmitter();

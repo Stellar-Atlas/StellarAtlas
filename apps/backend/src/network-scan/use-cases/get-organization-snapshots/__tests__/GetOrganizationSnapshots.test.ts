@@ -15,7 +15,7 @@ it('should capture and return errors', async function () {
 		organizationId: createDummyOrganizationIdString()
 	});
 	expect(result.isErr()).toBe(true);
-	expect(exceptionLogger.captureException).toBeCalledTimes(1);
+	expect(exceptionLogger.captureException).toHaveBeenCalledTimes(1);
 });
 
 it('should fetch latest snapshots', async () => {

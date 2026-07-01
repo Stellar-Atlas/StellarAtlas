@@ -1,4 +1,4 @@
-import { pino } from 'pino';
+import pino = require('pino');
 import { logFn, Logger } from './Logger';
 
 export class PinoLogger implements Logger {

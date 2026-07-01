@@ -1,6 +1,6 @@
 import { ConnectionManager, DataPayload } from '../../connection-manager';
 import { mock } from 'jest-mock-extended';
-import { P } from 'pino';
+import pino = require('pino');
 import { OnPeerData } from '../on-peer-data';
 import { StellarMessageHandler } from '../stellar-message-handlers/stellar-message-handler';
 import { createDummyExternalizeMessage } from '../../../__fixtures__/createDummyExternalizeMessage';
@@ -16,7 +16,7 @@ import { Slots } from '../stellar-message-handlers/scp-envelope/scp-statement/ex
 describe('OnDataHandler', () => {
 	const connectionManager = mock<ConnectionManager>();
 	const stellarMessageHandler = mock<StellarMessageHandler>();
-	const logger = mock<P.Logger>();
+	const logger = mock<pino.Logger>();
 
 	beforeEach(() => {
 		jest.clearAllMocks();
