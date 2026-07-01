@@ -1,27 +1,10 @@
-import type {
-	PublicNetwork,
-	PublicNode,
-	PublicOrganization
-} from '../api/types';
-import {
-	formatBoolean,
-	formatDateTime,
-	formatInteger,
-	formatPercent
-} from '../format/formatters';
-
-interface StatCard {
-	label: string;
-	value: string;
-	detail: string;
-	tone?: 'good' | 'warning';
-}
-
-const getNodeLabel = (node: PublicNode): string =>
-	node.alias ?? node.name ?? node.host ?? node.publicKey.slice(0, 10);
-
-const getOrganizationLabel = (organization: PublicOrganization): string =>
-	organization.name ?? organization.dba ?? organization.homeDomain;
+import Link from 'next/link';
+import type { PublicNetwork, PublicNode } from '../api/types';
+import { getRiskNodes, getTopOrganizations } from '../domain/network';
+import { formatBoolean, formatInteger, formatPercent } from '../format/formatters';
+import { NetworkGraph } from './graph/network-graph';
+import { PageHeading } from './layout/page-heading';
+import { StatCard } from './stat-card';
 
 const countByVersion = (nodes: PublicNode[]): Map<string, number> => {
 	const counts = new Map<string, number>();
@@ -39,94 +22,58 @@ const getTopVersions = (nodes: PublicNode[]): [string, number][] =>
 		.sort((left, right) => right[1] - left[1])
 		.slice(0, 5);
 
-const getValidatorRiskNodes = (nodes: PublicNode[]): PublicNode[] =>
-	nodes
-		.filter((node) =>
-			node.isValidator &&
-			(node.connectivityError ||
-				node.historyArchiveHasError ||
-				node.stellarCoreVersionBehind ||
-				!node.isValidating)
-		)
-		.sort((left, right) => right.index - left.index)
-		.slice(0, 8);
-
-const getTopOrganizations = (
-	organizations: PublicOrganization[]
-): PublicOrganization[] =>
-	organizations
-		.toSorted(
-			(left, right) =>
-				right.validators.length - left.validators.length ||
-				getOrganizationLabel(left).localeCompare(getOrganizationLabel(right))
-		)
-		.slice(0, 8);
-
-const buildStats = (network: PublicNetwork): StatCard[] => [
-	{
-		label: 'Connectable nodes',
-		value: formatInteger(network.statistics.nrOfConnectableNodes),
-		detail: `${formatInteger(network.nodes.length)} observed nodes`
-	},
-	{
-		label: 'Validator nodes',
-		value: formatInteger(network.statistics.nrOfActiveValidators),
-		detail: `${formatInteger(network.statistics.transitiveQuorumSetSize)} in transitive quorum set`
-	},
-	{
-		label: 'Full validators',
-		value: formatInteger(network.statistics.nrOfActiveFullValidators),
-		detail: `${formatInteger(network.statistics.topTierSize)} top tier validators`
-	},
-	{
-		label: 'Organizations',
-		value: formatInteger(network.statistics.nrOfActiveOrganizations),
-		detail: `${formatInteger(network.organizations.length)} discovered organizations`
-	},
-	{
-		label: 'Quorum intersection',
-		value: formatBoolean(network.statistics.hasQuorumIntersection),
-		detail: `${formatInteger(network.statistics.minBlockingSetSize)} node minimum blocking set`,
-		tone: network.statistics.hasQuorumIntersection ? 'good' : 'warning'
-	},
-	{
-		label: 'Protocol',
-		value: network.maxLedgerVersion?.toString() ?? 'Unknown',
-		detail: network.stellarCoreVersion ?? 'No dominant core version'
-	}
-];
-
 interface NetworkOverviewProps {
 	network: PublicNetwork;
 }
 
 export function NetworkOverview({ network }: NetworkOverviewProps): React.JSX.Element {
 	const topVersions = getTopVersions(network.nodes);
-	const riskNodes = getValidatorRiskNodes(network.nodes);
-	const topOrganizations = getTopOrganizations(network.organizations);
+	const riskNodes = getRiskNodes(network.nodes).slice(0, 8);
+	const topOrganizations = getTopOrganizations(network.organizations).slice(0, 8);
 
 	return (
 		<main className="shell">
-			<header className="topbar">
-				<div>
-					<p className="eyebrow">{network.name}</p>
-					<h1>Network operations</h1>
-				</div>
-				<div className="timestamp">
-					<span>Ledger {network.latestLedger}</span>
-					<strong>{formatDateTime(network.time)}</strong>
-				</div>
-			</header>
+			<PageHeading
+				description="Live network topology, validator health, organization coverage, and observed Stellar Core versions."
+				eyebrow={network.name}
+				title="Network operations"
+			/>
 
 			<section className="stats-grid" aria-label="Network statistics">
-				{buildStats(network).map((stat) => (
-					<article className={`stat-card ${stat.tone ?? ''}`} key={stat.label}>
-						<span>{stat.label}</span>
-						<strong>{stat.value}</strong>
-						<small>{stat.detail}</small>
-					</article>
-				))}
+				<StatCard
+					detail={`${formatInteger(network.nodes.length)} observed nodes`}
+					label="Connectable nodes"
+					value={formatInteger(network.statistics.nrOfConnectableNodes)}
+				/>
+				<StatCard
+					detail={`${formatInteger(network.statistics.transitiveQuorumSetSize)} in transitive quorum set`}
+					label="Validator nodes"
+					value={formatInteger(network.statistics.nrOfActiveValidators)}
+				/>
+				<StatCard
+					detail={`${formatInteger(network.statistics.topTierSize)} top tier validators`}
+					label="Full validators"
+					value={formatInteger(network.statistics.nrOfActiveFullValidators)}
+				/>
+				<StatCard
+					detail={`${formatInteger(network.organizations.length)} discovered organizations`}
+					label="Organizations"
+					value={formatInteger(network.statistics.nrOfActiveOrganizations)}
+				/>
+				<StatCard
+					detail={`${formatInteger(network.statistics.minBlockingSetSize)} node blocking set`}
+					label="Quorum intersection"
+					tone={network.statistics.hasQuorumIntersection ? 'good' : 'danger'}
+					value={formatBoolean(network.statistics.hasQuorumIntersection)}
+				/>
+				<StatCard
+					detail={network.stellarCoreVersion ?? 'No dominant core version'}
+					label="Protocol"
+					value={network.maxLedgerVersion?.toString() ?? 'Unknown'}
+				/>
 			</section>
+
+			<NetworkGraph network={network} />
 
 			<section className="content-grid">
 				<article className="panel">
@@ -138,14 +85,16 @@ export function NetworkOverview({ network }: NetworkOverviewProps): React.JSX.El
 						{riskNodes.map((node) => (
 							<div className="row" key={node.publicKey}>
 								<div>
-									<strong>{getNodeLabel(node)}</strong>
+									<Link href={`/nodes/${encodeURIComponent(node.publicKey)}`}>
+										<strong>{node.alias ?? node.name ?? node.publicKey.slice(0, 12)}</strong>
+									</Link>
 									<small>{node.homeDomain ?? node.publicKey}</small>
 								</div>
 								<div className="tags">
-									{!node.isValidating && <span>not validating</span>}
-									{node.historyArchiveHasError && <span>archive</span>}
-									{node.connectivityError && <span>connectivity</span>}
-									{node.stellarCoreVersionBehind && <span>version</span>}
+									{!node.isValidating && <span className="tag danger">not validating</span>}
+									{node.historyArchiveHasError && <span className="tag warning">archive</span>}
+									{node.connectivityError && <span className="tag danger">connectivity</span>}
+									{node.stellarCoreVersionBehind && <span className="tag warning">version</span>}
 								</div>
 							</div>
 						))}
@@ -161,7 +110,9 @@ export function NetworkOverview({ network }: NetworkOverviewProps): React.JSX.El
 						{topOrganizations.map((organization) => (
 							<div className="row compact" key={organization.id}>
 								<div>
-									<strong>{getOrganizationLabel(organization)}</strong>
+									<Link href={`/organizations/${encodeURIComponent(organization.id)}`}>
+										<strong>{organization.name ?? organization.dba ?? organization.homeDomain}</strong>
+									</Link>
 									<small>{organization.homeDomain}</small>
 								</div>
 								<div className="metric">

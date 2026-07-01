@@ -1,0 +1,165 @@
+.site-header,
+.network-strip {
+	background: rgba(255, 255, 255, 0.94);
+	border-block-end: 1px solid var(--border);
+	position: sticky;
+	top: 0;
+	z-index: 20;
+}
+
+.network-strip {
+	color: var(--muted);
+	font-size: 0.82rem;
+	position: static;
+}
+
+.site-header-inner,
+.shell {
+	inline-size: min(1440px, calc(100vw - 48px));
+	margin: 0 auto;
+}
+
+.site-header-inner {
+	align-items: center;
+	display: grid;
+	gap: 18px;
+	grid-template-columns: auto 1fr minmax(280px, 420px);
+	min-block-size: 68px;
+}
+
+.strip-inner {
+	display: flex;
+	gap: 20px;
+	justify-content: flex-end;
+	min-block-size: 34px;
+}
+
+.brand,
+.nav,
+.heading-metrics,
+.segmented,
+.tags {
+	align-items: center;
+	display: flex;
+}
+
+.brand {
+	color: var(--ink);
+	font-size: 1.25rem;
+	font-weight: 800;
+	gap: 10px;
+}
+
+.brand-mark {
+	background: var(--blue);
+	border-radius: 6px;
+	color: #fff;
+	display: inline-grid;
+	font-size: 0.8rem;
+	inline-size: 30px;
+	place-items: center;
+	block-size: 30px;
+}
+
+.nav {
+	gap: 8px;
+}
+
+.nav-link {
+	border-radius: 6px;
+	color: var(--muted);
+	font-weight: 700;
+	padding: 8px 10px;
+}
+
+.nav-link.active,
+.nav-link:hover {
+	background: #e9f2fa;
+	color: var(--blue);
+}
+
+.search {
+	position: relative;
+}
+
+.search input,
+.table-controls input,
+.controls-heading input {
+	border: 1px solid var(--border);
+	border-radius: 6px;
+	inline-size: 100%;
+	padding: 10px 12px;
+}
+
+.search-menu {
+	background: var(--panel);
+	border: 1px solid var(--border);
+	border-radius: 8px;
+	box-shadow: var(--shadow);
+	display: grid;
+	inset-block-start: calc(100% + 6px);
+	inset-inline: 0;
+	overflow: hidden;
+	position: absolute;
+}
+
+.search-menu button {
+	background: transparent;
+	border: 0;
+	display: grid;
+	gap: 2px;
+	padding: 10px 12px;
+	text-align: left;
+}
+
+.search-menu button:hover {
+	background: #f0f5fa;
+}
+
+.shell {
+	padding: 28px 0 52px;
+}
+
+.page-heading {
+	align-items: flex-end;
+	display: flex;
+	gap: 24px;
+	justify-content: space-between;
+	margin-block-end: 22px;
+}
+
+.eyebrow,
+.lede,
+small,
+.muted,
+.panel-heading span {
+	color: var(--muted);
+}
+
+.eyebrow {
+	color: var(--blue);
+	font-size: 0.78rem;
+	font-weight: 800;
+	letter-spacing: 0;
+	margin: 0 0 6px;
+	text-transform: uppercase;
+}
+
+.lede {
+	margin-block-start: 8px;
+	max-inline-size: 760px;
+}
+
+.heading-metrics {
+	background: var(--panel);
+	border: 1px solid var(--border);
+	border-radius: 8px;
+	box-shadow: var(--shadow);
+	gap: 8px;
+	padding: 12px 14px;
+}
+
+.heading-metrics strong {
+	color: var(--blue);
+	font-size: 1.15rem;
+}

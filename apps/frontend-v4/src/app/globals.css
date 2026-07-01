@@ -1,14 +1,14 @@
 :root {
-	--background: #f5f7fb;
-	--border: #d9e0ea;
-	--ink: #202a37;
-	--muted: #687586;
+	--background: #f4f7fa;
+	--border: #d8e1ea;
+	--ink: #172231;
+	--muted: #637184;
 	--panel: #ffffff;
-	--blue: #2b78b8;
-	--green: #4f9d61;
-	--yellow: #c78a00;
-	--red: #c95156;
-	--shadow: 0 14px 32px rgba(32, 42, 55, 0.08);
+	--blue: #2878b8;
+	--green: #4d985d;
+	--yellow: #b98400;
+	--red: #c64f56;
+	--shadow: 0 14px 32px rgba(23, 34, 49, 0.08);
 }
 
 * {
@@ -27,27 +27,18 @@ body {
 	margin: 0;
 }
 
-.shell {
-	inline-size: min(1440px, calc(100vw - 48px));
-	margin: 0 auto;
-	padding: 32px 0 48px;
-}
-
-.topbar {
-	align-items: end;
-	display: flex;
-	gap: 24px;
-	justify-content: space-between;
-	margin-block-end: 24px;
-}
-
-.eyebrow {
+a {
 	color: var(--blue);
-	font-size: 0.8rem;
-	font-weight: 700;
-	letter-spacing: 0;
-	margin: 0 0 6px;
-	text-transform: uppercase;
+	text-decoration: none;
+}
+
+button,
+input {
+	font: inherit;
+}
+
+button {
+	cursor: pointer;
 }
 
 h1,
@@ -58,212 +49,9 @@ p {
 
 h1 {
 	font-size: 2rem;
-	font-weight: 750;
+	line-height: 1.1;
 }
 
 h2 {
 	font-size: 1rem;
-	font-weight: 750;
-}
-
-.timestamp {
-	align-items: flex-end;
-	color: var(--muted);
-	display: flex;
-	flex-direction: column;
-	font-size: 0.9rem;
-	gap: 4px;
-}
-
-.timestamp strong {
-	color: var(--ink);
-}
-
-.stats-grid {
-	display: grid;
-	gap: 16px;
-	grid-template-columns: repeat(6, minmax(0, 1fr));
-	margin-block-end: 16px;
-}
-
-.stat-card,
-.panel,
-.error-panel {
-	background: var(--panel);
-	border: 1px solid var(--border);
-	border-radius: 8px;
-	box-shadow: var(--shadow);
-}
-
-.stat-card {
-	display: grid;
-	gap: 8px;
-	min-block-size: 130px;
-	padding: 18px;
-}
-
-.stat-card span,
-.panel-heading span,
-small {
-	color: var(--muted);
-}
-
-.stat-card strong {
-	color: var(--blue);
-	font-size: 2rem;
-	line-height: 1;
-}
-
-.stat-card.good strong {
-	color: var(--green);
-}
-
-.stat-card.warning strong {
-	color: var(--red);
-}
-
-.content-grid {
-	display: grid;
-	gap: 16px;
-	grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr) minmax(0, 1fr);
-}
-
-.panel {
-	min-block-size: 430px;
-	overflow: hidden;
-}
-
-.panel-heading {
-	align-items: center;
-	border-block-end: 1px solid var(--border);
-	display: flex;
-	justify-content: space-between;
-	padding: 18px 20px;
-}
-
-.table {
-	display: grid;
-}
-
-.row {
-	align-items: center;
-	border-block-end: 1px solid var(--border);
-	display: grid;
-	gap: 16px;
-	grid-template-columns: minmax(0, 1fr) auto;
-	min-block-size: 66px;
-	padding: 12px 20px;
-}
-
-.row:last-child {
-	border-block-end: 0;
-}
-
-.row strong,
-.row small {
-	display: block;
-	overflow: hidden;
-	text-overflow: ellipsis;
-	white-space: nowrap;
-}
-
-.compact {
-	min-block-size: 58px;
-}
-
-.tags {
-	display: flex;
-	flex-wrap: wrap;
-	gap: 6px;
-	justify-content: flex-end;
-}
-
-.tags span {
-	background: #fff5d8;
-	border: 1px solid #ead185;
-	border-radius: 999px;
-	color: #7b5700;
-	font-size: 0.75rem;
-	font-weight: 700;
-	padding: 4px 8px;
-}
-
-.metric {
-	text-align: right;
-}
-
-.version-list {
-	display: grid;
-	gap: 16px;
-	padding: 20px;
-}
-
-.version-row {
-	align-items: center;
-	display: grid;
-	gap: 12px;
-	grid-template-columns: minmax(0, 1.2fr) minmax(120px, 1fr) auto;
-}
-
-.version-row span {
-	overflow: hidden;
-	text-overflow: ellipsis;
-	white-space: nowrap;
-}
-
-meter {
-	block-size: 12px;
-	inline-size: 100%;
-}
-
-.error-panel {
-	display: grid;
-	gap: 12px;
-	margin-block-start: 20vh;
-	max-inline-size: 640px;
-	padding: 28px;
-}
-
-code {
-	background: #eef3f8;
-	border: 1px solid var(--border);
-	border-radius: 6px;
-	padding: 4px 7px;
-}
-
-@media (max-width: 1120px) {
-	.stats-grid,
-	.content-grid {
-		grid-template-columns: repeat(2, minmax(0, 1fr));
-	}
-}
-
-@media (max-width: 720px) {
-	.shell {
-		inline-size: min(100vw - 24px, 720px);
-		padding-block-start: 20px;
-	}
-
-	.topbar,
-	.timestamp {
-		align-items: flex-start;
-	}
-
-	.topbar {
-		flex-direction: column;
-	}
-
-	.stats-grid,
-	.content-grid {
-		grid-template-columns: 1fr;
-	}
-
-	.row {
-		align-items: start;
-		grid-template-columns: 1fr;
-	}
-
-	.tags {
-		justify-content: flex-start;
-	}
 }
