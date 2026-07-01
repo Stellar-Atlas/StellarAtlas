@@ -12,7 +12,9 @@ export class ScanNetworkLooped {
 	private aborted = false;
 
 	constructor(
+		@inject(ScanNetwork)
 		private scanNetworkUseCase: ScanNetwork,
+		@inject(LoopTimer)
 		private loopTimer: LoopTimer,
 		@inject('ExceptionLogger') protected exceptionLogger: ExceptionLogger,
 		@inject('Logger') protected logger: Logger

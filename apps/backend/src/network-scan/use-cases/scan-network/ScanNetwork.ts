@@ -14,7 +14,7 @@ import type { NetworkRepository } from '../../domain/network/NetworkRepository.j
 import { NetworkId } from '../../domain/network/NetworkId.js';
 import type { NodeMeasurementDayRepository } from '../../domain/node/NodeMeasurementDayRepository.js';
 import { Scanner, ScanResult } from '../../domain/Scanner.js';
-import type { ScanRepository } from '../../domain/ScanRepository.js';
+import { ScanRepository } from '../../domain/ScanRepository.js';
 import type { NodeAddress } from '../../domain/node/NodeAddress.js';
 import { InvalidKnownPeersError } from './InvalidKnownPeersError.js';
 import { Network } from '../../domain/network/Network.js';
@@ -35,15 +35,19 @@ export class ScanNetwork {
 	constructor(
 		@inject(NETWORK_TYPES.NetworkConfig)
 		private networkConfig: NetworkConfig,
+		@inject(UpdateNetwork)
 		private updateNetworkUseCase: UpdateNetwork,
 		@inject(NETWORK_TYPES.NetworkRepository)
 		private networkRepository: NetworkRepository,
 		@inject(NETWORK_TYPES.NodeMeasurementDayRepository)
 		protected nodeMeasurementDayRepository: NodeMeasurementDayRepository,
+		@inject(ScanRepository)
 		private scanRepository: ScanRepository,
+		@inject(Scanner)
 		protected scanner: Scanner,
 		@inject('JSONArchiver') protected jsonArchiver: Archiver,
 		@inject('HeartBeater') protected heartBeater: HeartBeater,
+		@inject(Notify)
 		protected notify: Notify,
 		@inject('ExceptionLogger') protected exceptionLogger: ExceptionLogger,
 		@inject('Logger') protected logger: Logger,
