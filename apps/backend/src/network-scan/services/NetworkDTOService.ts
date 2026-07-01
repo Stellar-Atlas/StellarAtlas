@@ -1,6 +1,6 @@
 import { inject, injectable } from 'inversify';
 import { err, ok, Result } from 'neverthrow';
-import type { ScanRepository } from '../domain/ScanRepository.js';
+import { ScanRepository } from '../domain/ScanRepository.js';
 import { ScanResult } from '../domain/Scanner.js';
 import { OrganizationDTOService } from './OrganizationDTOService.js';
 import { NodeDTOService } from './NodeDTOService.js';
@@ -15,8 +15,11 @@ import { mapUnknownToError } from '../../core/utilities/mapUnknownToError.js';
 @injectable()
 export class NetworkDTOService {
 	constructor(
+		@inject(ScanRepository)
 		private scanRepository: ScanRepository,
+		@inject(NodeDTOService)
 		private nodeDTOService: NodeDTOService,
+		@inject(OrganizationDTOService)
 		private organizationDTOService: OrganizationDTOService,
 		@inject(NETWORK_TYPES.NetworkRepository)
 		private networkRepository: NetworkRepository,
