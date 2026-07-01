@@ -135,6 +135,11 @@
               :key="vertex.key"
               :transform="getVertexTransform(vertex)"
               class="vertex"
+              :class="{
+                'perimeter-vertex': vertex.isPerimeter,
+                'secondary-vertex':
+                  !vertex.isPartOfTransitiveQuorumSet && !vertex.selected,
+              }"
               style="cursor: pointer"
               @click="
                 vertexSelected(vertex);
@@ -148,14 +153,14 @@
               >
                 <title>{{ vertex.label }}</title>
               </circle>
-              <g>
+              <g class="vertex-label">
                 <rect
-                  style="fill: white; opacity: 0.84; text-transform: lowercase"
+                  class="vertex-label-background"
                   :width="getVertexTextRectWidthPx(vertex)"
-                  height="12px"
-                  y="13"
+                  height="15px"
+                  y="14"
                   :x="getVertexTextRectX(vertex)"
-                  rx="2"
+                  rx="3"
                   :class="{
                     'rect-selected': vertex.selected,
                     rect: !vertex.selected,
@@ -164,11 +169,11 @@
                 <text
                   y="5"
                   :class="getVertexTextClass(vertex)"
-                  dy="1.7em"
+                  dy="1.9em"
                   text-anchor="middle"
-                  font-size="9px"
+                  font-size="10.5px"
                 >
-                  {{ truncate(vertex.label, 12) }}
+                  {{ truncate(vertex.label, 14) }}
                   <title>{{ vertex.label }}</title>
                 </text>
               </g>

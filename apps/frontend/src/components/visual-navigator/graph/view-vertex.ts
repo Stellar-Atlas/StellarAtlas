@@ -11,6 +11,7 @@ export default class ViewVertex {
   isTrustedBySelectedVertex = false;
   selected = false;
   isFailing = false;
+  isPerimeter = false;
   groupKey: string | null = null;
   groupIndex = 0;
   color = getGraphGroupColor(null);

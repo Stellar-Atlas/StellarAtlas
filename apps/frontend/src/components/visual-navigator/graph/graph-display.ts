@@ -16,9 +16,10 @@ export function getVertexTransform(vertex: ViewVertex): string {
 }
 
 export function getVertexRadius(vertex: ViewVertex): number {
-  if (vertex.selected) return 13;
-  if (vertex.isPartOfTransitiveQuorumSet) return 10;
-  return 8.5;
+  if (vertex.selected) return 14.5;
+  if (vertex.isPartOfTransitiveQuorumSet) return 11.5;
+  if (vertex.isPerimeter) return 8;
+  return 9.5;
 }
 
 export function getVertexStyle(vertex: ViewVertex): Record<string, string> {
@@ -92,7 +93,7 @@ function getVertexTextRectWidth(
   vertex: ViewVertex,
   truncate: (value: string, length: number) => string,
 ): number {
-  return Math.max(36, truncate(vertex.label, 12).length * 5.5 + 8);
+  return Math.max(44, truncate(vertex.label, 14).length * 6.2 + 10);
 }
 
 function highlightVertexAsOutgoing(
