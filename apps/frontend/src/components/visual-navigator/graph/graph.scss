@@ -5,7 +5,12 @@ svg.graph {
   cursor: grab;
   touch-action: none;
   overscroll-behavior: contain;
+  overflow: hidden;
   background: #fbfdff;
+}
+
+.svg-wrapper {
+  overflow: hidden;
 }
 
 .dimmer.active .dimmer-content {

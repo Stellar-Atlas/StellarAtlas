@@ -152,7 +152,7 @@ ctx.addEventListener("message", (event: MessageEvent<GraphWorkerPayload>) => {
     simulatedVertices,
     getSimulatedVertexBounds(layoutBounds, perimeterVertices.length),
   );
-  placePerimeterVertices(perimeterVertices, layoutBounds);
+  placePerimeterVertices(perimeterVertices, layoutBounds, width, height);
   hydrateEdgeEndpoints(edges, vertexByKey);
   ctx.postMessage({ type: "end", vertices: vertices, edges: edges });
 });
@@ -246,19 +246,58 @@ function getPerimeterVertices(
 function placePerimeterVertices(
   vertices: GraphNodeDatum[],
   bounds: LayoutBounds,
+  viewportWidth: number,
+  viewportHeight: number,
 ): void {
   if (vertices.length === 0) return;
 
-  const columns = Math.max(8, Math.ceil(Math.sqrt(vertices.length)));
-  const startX = bounds.right + 180;
-  const startY = bounds.top + 48;
-  const columnGap = 48;
-  const rowGap = 38;
+  const center = centerOf(bounds);
+  const baseRadius = farthestViewportCornerDistance(
+    center,
+    viewportWidth,
+    viewportHeight,
+  );
+  const ringGap = 78;
+  const minimumCircleSpacing = 42;
+  let vertexIndex = 0;
+  let ringIndex = 0;
 
-  vertices.forEach((vertex, index) => {
-    vertex.x = startX + (index % columns) * columnGap;
-    vertex.y = startY + Math.floor(index / columns) * rowGap;
-  });
+  while (vertexIndex < vertices.length) {
+    const radius = baseRadius + 96 + ringIndex * ringGap;
+    const ringCapacity = Math.max(
+      16,
+      Math.floor((Math.PI * 2 * radius) / minimumCircleSpacing),
+    );
+    const verticesOnRing = Math.min(
+      vertices.length - vertexIndex,
+      ringCapacity,
+    );
+    const angleOffset =
+      -Math.PI / 2 + (ringIndex % 2) * (Math.PI / verticesOnRing);
+
+    for (let step = 0; step < verticesOnRing; step += 1) {
+      const vertex = vertices[vertexIndex];
+      const angle = angleOffset + (step / verticesOnRing) * Math.PI * 2;
+      vertex.x = center.x + Math.cos(angle) * radius;
+      vertex.y = center.y + Math.sin(angle) * radius;
+      vertexIndex += 1;
+    }
+
+    ringIndex += 1;
+  }
+}
+
+function farthestViewportCornerDistance(
+  center: Point,
+  viewportWidth: number,
+  viewportHeight: number,
+): number {
+  return Math.max(
+    Math.hypot(center.x, center.y),
+    Math.hypot(viewportWidth - center.x, center.y),
+    Math.hypot(center.x, viewportHeight - center.y),
+    Math.hypot(viewportWidth - center.x, viewportHeight - center.y),
+  );
 }
 
 function fitVerticesToBounds(
