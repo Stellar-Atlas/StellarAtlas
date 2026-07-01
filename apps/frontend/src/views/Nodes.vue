@@ -147,7 +147,7 @@ if (!store.isSimulation) {
     });
     fieldsBase.push({
       key: "overLoaded24Hour",
-      label: "24H crawler connection rejected",
+      label: "24H peer load refused",
       sortable: true,
     });
     fieldsBase.push({
@@ -179,9 +179,12 @@ const getNodeType = (node: Node): string => {
 };
 
 const getNodeTier = (node: Node): string => {
-  if (!node.isValidator) return node.active ? "Connectable listener" : "Inactive listener";
+  if (!node.isValidator)
+    return node.active ? "Connectable listener" : "Inactive listener";
 
-  if (store.network.nodesTrustGraph.networkTransitiveQuorumSet.has(node.publicKey))
+  if (
+    store.network.nodesTrustGraph.networkTransitiveQuorumSet.has(node.publicKey)
+  )
     return "Transitive quorum";
 
   if (node.activeInScp) return "SCP participant";

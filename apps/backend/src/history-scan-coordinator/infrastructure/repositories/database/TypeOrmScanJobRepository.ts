@@ -12,14 +12,12 @@ export class TypeOrmScanJobRepository implements ScanJobRepository {
 	}
 
 	async fetchNextJob(): Promise<ScanJob | null> {
-		return await this.baseRepository.findOne({
-			where: {
-				status: 'PENDING'
-			},
-			order: {
-				id: 'ASC' //fifo queue
-			}
-		});
+		return await this.baseRepository
+			.createQueryBuilder('job')
+			.where('job.status = :status', { status: 'PENDING' })
+			.orderBy('CASE WHEN job."fromLedger" IS NULL THEN 1 ELSE 0 END', 'ASC')
+			.addOrderBy('job.id', 'ASC')
+			.getOne();
 	}
 
 	async hasPendingJobs(): Promise<boolean> {

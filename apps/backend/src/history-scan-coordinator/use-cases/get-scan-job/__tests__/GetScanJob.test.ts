@@ -47,7 +47,10 @@ describe('GetScanJob', () => {
 				url: mockJob.url,
 				latestScannedLedger: mockJob.latestScannedLedger,
 				latestScannedLedgerHeaderHash: mockJob.latestScannedLedgerHeaderHash,
-				remoteId: mockJob.remoteId
+				remoteId: mockJob.remoteId,
+				fromLedger: mockJob.fromLedger,
+				toLedger: mockJob.toLedger,
+				concurrency: mockJob.concurrency
 			})
 		);
 		expect(loggerMock.info).toHaveBeenCalledWith('Returning next scan job', {

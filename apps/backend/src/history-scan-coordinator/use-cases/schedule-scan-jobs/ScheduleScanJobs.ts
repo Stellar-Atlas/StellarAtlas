@@ -31,9 +31,7 @@ export class ScheduleScanJobs {
 	) {}
 
 	public async execute(dto: ScheduleScanJobsDTO): Promise<Result<void, Error>> {
-		if (await this.isQueueEmpty()) {
-			await this.scheduleScanJobs(dto);
-		}
+		await this.scheduleScanJobs(dto, await this.isQueueEmpty());
 
 		return ok(undefined);
 	}
@@ -42,7 +40,10 @@ export class ScheduleScanJobs {
 		return !(await this.scanJobRepository.hasPendingJobs());
 	}
 
-	private async scheduleScanJobs(dto: ScheduleScanJobsDTO): Promise<void> {
+	private async scheduleScanJobs(
+		dto: ScheduleScanJobsDTO,
+		queueIsEmpty: boolean
+	): Promise<void> {
 		const previousScans = await this.scanRepository.findLatest();
 		//jobs that are running for over 4 days are considered failed
 		const unfinishedScanJobs = await this.scanJobRepository.findUnfinishedJobs(
@@ -52,7 +53,8 @@ export class ScheduleScanJobs {
 		const scanJobs = this.scanScheduler.schedule(
 			dto.historyArchiveUrls,
 			previousScans,
-			unfinishedScanJobs
+			unfinishedScanJobs,
+			{ includeRegularJobs: queueIsEmpty }
 		);
 
 		this.logger.info('Scheduling new scan jobs', {
@@ -63,6 +65,6 @@ export class ScheduleScanJobs {
 				.map((job) => job.url)
 		});
 
-		await this.scanJobRepository.save(scanJobs);
+		if (scanJobs.length > 0) await this.scanJobRepository.save(scanJobs);
 	}
 }

@@ -29,12 +29,20 @@ describe('ScheduleScanJobs', () => {
 
 	it('should do nothing if queue is not empty', async () => {
 		scanJobRepositoryMock.hasPendingJobs.mockResolvedValue(true);
+		scanJobRepositoryMock.findUnfinishedJobs.mockResolvedValue([]);
+		scanRepositoryMock.findLatest.mockResolvedValue([]);
+		scanSchedulerMock.schedule.mockReturnValue([]);
 		const result = await scheduleScanJobs.execute({
 			historyArchiveUrls: ['https://example.com']
 		});
 		expect(result.isOk()).toBe(true);
-		expect(scanRepositoryMock.findLatest).not.toHaveBeenCalled();
-		expect(scanSchedulerMock.schedule).not.toHaveBeenCalled();
+		expect(scanRepositoryMock.findLatest).toHaveBeenCalledTimes(1);
+		expect(scanSchedulerMock.schedule).toHaveBeenCalledWith(
+			['https://example.com'],
+			[],
+			[],
+			{ includeRegularJobs: false }
+		);
 		expect(scanJobRepositoryMock.save).not.toHaveBeenCalled();
 	});
 
@@ -55,8 +63,25 @@ describe('ScheduleScanJobs', () => {
 		expect(scanSchedulerMock.schedule).toHaveBeenCalledWith(
 			['https://example.com'],
 			[],
-			[]
+			[],
+			{ includeRegularJobs: true }
 		);
+		expect(scanJobRepositoryMock.save).toHaveBeenCalledTimes(1);
+	});
+
+	it('should save prioritized jobs even when regular jobs are pending', async () => {
+		scanJobRepositoryMock.hasPendingJobs.mockResolvedValue(true);
+		scanJobRepositoryMock.findUnfinishedJobs.mockResolvedValue([]);
+		scanRepositoryMock.findLatest.mockResolvedValue([]);
+		scanSchedulerMock.schedule.mockReturnValue([
+			new ScanJob('https://example.com', 0, null, null, 0, 127, 4)
+		]);
+
+		const result = await scheduleScanJobs.execute({
+			historyArchiveUrls: ['https://example.com']
+		});
+
+		expect(result.isOk()).toBe(true);
 		expect(scanJobRepositoryMock.save).toHaveBeenCalledTimes(1);
 	});
 });

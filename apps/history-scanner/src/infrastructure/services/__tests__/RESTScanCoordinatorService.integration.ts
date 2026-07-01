@@ -83,7 +83,10 @@ describe('RESTScanCoordinatorService Integration Tests', () => {
 					latestScannedLedger: 100,
 					latestScannedLedgerHeaderHash: 'hash123',
 					chainInitDate: initDate,
-					remoteId: 'remote-id'
+					remoteId: 'remote-id',
+					fromLedger: null,
+					toLedger: null,
+					concurrency: null
 				});
 			}
 		});

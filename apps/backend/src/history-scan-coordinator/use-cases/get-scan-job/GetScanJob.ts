@@ -47,7 +47,10 @@ export class GetScanJob {
 				latestScannedLedger: nextScanJob.latestScannedLedger,
 				latestScannedLedgerHeaderHash:
 					nextScanJob.latestScannedLedgerHeaderHash,
-				remoteId: nextScanJob.remoteId
+				remoteId: nextScanJob.remoteId,
+				fromLedger: nextScanJob.fromLedger,
+				toLedger: nextScanJob.toLedger,
+				concurrency: nextScanJob.concurrency
 			});
 		} catch (e) {
 			const error = mapUnknownToError(e);

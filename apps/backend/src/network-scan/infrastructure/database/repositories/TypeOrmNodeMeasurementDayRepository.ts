@@ -55,9 +55,7 @@ export class NodeMeasurementV2Statistics {
 }
 
 @injectable()
-export class TypeOrmNodeMeasurementDayRepository
-	implements NodeMeasurementDayRepository
-{
+export class TypeOrmNodeMeasurementDayRepository implements NodeMeasurementDayRepository {
 	constructor(private baseRepository: Repository<NodeMeasurementDay>) {}
 
 	async save(nodeMeasurementDays: NodeMeasurementDay[]): Promise<void> {
@@ -73,20 +71,21 @@ export class TypeOrmNodeMeasurementDayRepository
 
 		const result = await this.baseRepository.query(
 			`select "publicKeyValue"                                                                  as "publicKey",
-					ROUND(100.0 * (sum("isActiveCount"::decimal) / sum("crawlCount")), 2)     as "activeAvg",
-					ROUND(100.0 * (sum("isValidatingCount"::decimal) / sum("crawlCount")), 2) as "validatingAvg",
-					ROUND(100.0 * (sum("isFullValidatorCount"::decimal) / sum("crawlCount")),
+					ROUND(avg(100.0 * ("isActiveCount"::decimal / nullif("crawlCount", 0))), 2)     as "activeAvg",
+					ROUND(avg(100.0 * ("isValidatingCount"::decimal / nullif("crawlCount", 0))), 2) as "validatingAvg",
+					ROUND(avg(100.0 * ("isFullValidatorCount"::decimal / nullif("crawlCount", 0))),
 						  2)                                                                  as "fullValidatorAvg",
-					ROUND(100.0 * (sum("isOverloadedCount"::decimal) / sum("crawlCount")), 2) as "overLoadedAvg",
-					ROUND(100.0 * (sum("historyArchiveErrorCount"::decimal) / sum("crawlCount")),
+					ROUND(avg(100.0 * ("isOverloadedCount"::decimal / nullif("crawlCount", 0))), 2) as "overLoadedAvg",
+					ROUND(avg(100.0 * ("historyArchiveErrorCount"::decimal / nullif("crawlCount", 0))),
 						  2)                                                                  as "historyArchiveErrorAvg",
-					ROUND((sum("indexSum"::decimal) / sum("crawlCount")), 2)                  as "indexAvg"
+					ROUND(avg("indexSum"::decimal / nullif("crawlCount", 0)), 2)                  as "indexAvg"
 			 FROM "node_measurement_day_v2" "NodeMeasurementDay"
 			 JOIN node n on "NodeMeasurementDay"."nodeId" = n.id
 			 WHERE time >= date_trunc('day', $1::TIMESTAMP)
 			   and time <= date_trunc('day', $2::TIMESTAMP)
 			 GROUP BY "publicKeyValue"
-			 having count("nodeId") >= $3`, //needs at least a record every day in the range, or the average is NA
+			 having count("nodeId") >= $3
+			    and bool_and("crawlCount" > 0)`, //needs at least a record every day in the range, or the average is NA
 			[from, at, xDays]
 		);
 

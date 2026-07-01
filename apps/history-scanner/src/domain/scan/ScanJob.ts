@@ -31,9 +31,10 @@ export class ScanJob {
 				dto.latestScannedLedger,
 				dto.latestScannedLedgerHeaderHash,
 				dto.chainInitDate,
-				dto.latestScannedLedger > 0 ? dto.latestScannedLedger + 1 : 0,
-				null,
-				0,
+				dto.fromLedger ??
+					(dto.latestScannedLedger > 0 ? dto.latestScannedLedger + 1 : 0),
+				dto.toLedger,
+				dto.concurrency ?? 0,
 				dto.remoteId
 			)
 		);

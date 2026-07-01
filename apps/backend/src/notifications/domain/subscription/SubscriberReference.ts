@@ -1,6 +1,7 @@
 import { Column, Index } from 'typeorm';
-import { v4 as uuidv4, validate } from 'uuid';
+import { randomUUID } from 'crypto';
 import { err, ok, Result } from 'neverthrow';
+import validator from 'validator';
 
 export class SubscriberReference {
 	@Index()
@@ -12,11 +13,11 @@ export class SubscriberReference {
 	}
 
 	static create(): SubscriberReference {
-		return new SubscriberReference(uuidv4());
+		return new SubscriberReference(randomUUID());
 	}
 
 	static createFromValue(value: string): Result<SubscriberReference, Error> {
-		if (!validate(value))
+		if (!validator.isUUID(value))
 			return err(new Error('Not a valid SubscriberReference'));
 		else return ok(new SubscriberReference(value));
 	}

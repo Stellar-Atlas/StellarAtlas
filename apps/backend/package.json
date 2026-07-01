@@ -55,7 +55,6 @@
 		"to-semver": "^3.0.0",
 		"toml": "^3.0.0",
 		"typeorm": "^0.3.25",
-		"uuid": "^9.0.1",
 		"validator": "^13.15.35",
 		"winston": "^3.19.0"
 	},
@@ -73,8 +72,7 @@
 		"reflect-metadata": "^0.2.2",
 		"swagger-ui-express": "^5.0.0",
 		"to-semver": "^3.0.0",
-		"typeorm": "^0.3.25",
-		"uuid": "^9.0.1"
+		"typeorm": "^0.3.25"
 	},
 	"packageManager": "pnpm@10.12.1"
 }

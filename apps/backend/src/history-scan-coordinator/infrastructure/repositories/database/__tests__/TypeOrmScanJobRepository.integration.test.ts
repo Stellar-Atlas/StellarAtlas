@@ -3,7 +3,7 @@ import { ConfigMock } from '../../../../../core/config/__mocks__/configMock';
 import { TypeOrmScanJobRepository } from '../TypeOrmScanJobRepository';
 import { ScanJob } from '../../../../domain/ScanJob';
 import { TYPES } from '../../../di/di-types';
-import { v4 } from 'uuid';
+import { randomUUID } from 'crypto';
 
 describe('TypeOrmScanJobRepository.integration', () => {
 	let kernel: Kernel;
@@ -64,7 +64,7 @@ describe('TypeOrmScanJobRepository.integration', () => {
 
 	describe('findByRemoteId', () => {
 		it('should return null if no job with matching remoteId exists', async () => {
-			const uuid = v4();
+			const uuid = randomUUID();
 			const job = await typeOrmScanJobRepository.findByRemoteId(uuid);
 			expect(job).toBeNull();
 		});

@@ -1,4 +1,4 @@
-import { v4 as uuidv4 } from 'uuid';
+import { randomUUID } from 'crypto';
 import {
 	Entity,
 	PrimaryGeneratedColumn,
@@ -17,7 +17,7 @@ export class ScanJob {
 	public id!: number;
 
 	@Column({ type: 'uuid', nullable: false })
-	public readonly remoteId: string = uuidv4();
+	public readonly remoteId: string = randomUUID();
 
 	@Column()
 	public url: string;
@@ -30,6 +30,15 @@ export class ScanJob {
 
 	@Column({ type: 'timestamp', nullable: true })
 	public chainInitDate: Date | null;
+
+	@Column({ type: 'integer', nullable: true })
+	public fromLedger: number | null;
+
+	@Column({ type: 'integer', nullable: true })
+	public toLedger: number | null;
+
+	@Column({ type: 'integer', nullable: true })
+	public concurrency: number | null;
 
 	@Column({ type: 'varchar', default: 'PENDING' })
 	public status: 'PENDING' | 'TAKEN' | 'DONE';
@@ -44,12 +53,18 @@ export class ScanJob {
 		url: string,
 		latestScannedLedger = 0,
 		latestScannedLedgerHeaderHash: string | null = null,
-		chainInitDate: Date | null = null
+		chainInitDate: Date | null = null,
+		fromLedger: number | null = null,
+		toLedger: number | null = null,
+		concurrency: number | null = null
 	) {
 		this.url = url;
 		this.latestScannedLedger = latestScannedLedger;
 		this.latestScannedLedgerHeaderHash = latestScannedLedgerHeaderHash;
 		this.chainInitDate = chainInitDate;
+		this.fromLedger = fromLedger;
+		this.toLedger = toLedger;
+		this.concurrency = concurrency;
 		this.status = 'PENDING';
 	}
 

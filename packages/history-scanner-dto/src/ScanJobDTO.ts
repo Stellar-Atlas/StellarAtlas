@@ -1,5 +1,9 @@
 import { Result, ok, err } from 'neverthrow';
 
+export type ScanJobJSONInput = Readonly<Record<string, ScanJobJSONField>>;
+
+type ScanJobJSONField = string | number | boolean | null | undefined;
+
 /**
  * Represents a scan job.
  * A request to scan a specific URL starting from a specific ledger.
@@ -10,10 +14,13 @@ export class ScanJobDTO {
 		public readonly latestScannedLedger: number,
 		public readonly latestScannedLedgerHeaderHash: string | null,
 		public readonly chainInitDate: Date | null,
-		public readonly remoteId: string
+		public readonly remoteId: string,
+		public readonly fromLedger: number | null = null,
+		public readonly toLedger: number | null = null,
+		public readonly concurrency: number | null = null
 	) {}
 
-	static fromJSON(json: Record<string, unknown>): Result<ScanJobDTO, Error> {
+	static fromJSON(json: ScanJobJSONInput): Result<ScanJobDTO, Error> {
 		if (!this.isValidScanJobJSON(json)) {
 			return err(new Error('Invalid ScanJobDTO JSON format'));
 		}
@@ -24,13 +31,16 @@ export class ScanJobDTO {
 				json.latestScannedLedger,
 				json.latestScannedLedgerHeaderHash,
 				json.chainInitDate ? new Date(json.chainInitDate) : null,
-				json.remoteId
+				json.remoteId,
+				this.getOptionalInteger(json.fromLedger),
+				this.getOptionalInteger(json.toLedger),
+				this.getOptionalInteger(json.concurrency)
 			)
 		);
 	}
 
 	private static isValidScanJobJSON(
-		json: Record<string, unknown>
+		json: ScanJobJSONInput
 	): json is ScanJobJSON {
 		return (
 			typeof json === 'object' &&
@@ -43,15 +53,35 @@ export class ScanJobDTO {
 			(json.chainInitDate === null ||
 				(typeof json.chainInitDate === 'string' &&
 					!isNaN(new Date(json.chainInitDate).getTime()))) &&
-			typeof json.remoteId === 'string'
+			typeof json.remoteId === 'string' &&
+			this.isOptionalInteger(json.fromLedger) &&
+			this.isOptionalInteger(json.toLedger) &&
+			this.isOptionalInteger(json.concurrency)
 		);
+	}
+
+	private static isOptionalInteger(value: ScanJobJSONField): boolean {
+		return (
+			value === undefined ||
+			value === null ||
+			(typeof value === 'number' && Number.isInteger(value))
+		);
+	}
+
+	private static getOptionalInteger(value: ScanJobJSONField): number | null {
+		if (typeof value === 'number' && Number.isInteger(value)) return value;
+
+		return null;
 	}
 }
 
-interface ScanJobJSON extends Record<string, unknown> {
+interface ScanJobJSON extends ScanJobJSONInput {
 	url: string;
 	latestScannedLedger: number;
 	latestScannedLedgerHeaderHash: string | null;
 	chainInitDate: string | null;
 	remoteId: string;
+	fromLedger?: number | null;
+	toLedger?: number | null;
+	concurrency?: number | null;
 }

@@ -15,7 +15,7 @@
           {{ +node.statistics.overLoaded30DaysPercentage.toFixed(2) }}%
         </div>
         <div v-else class="strong">N/A</div>
-        <div class="text-muted">30D crawler connection rejected</div>
+        <div class="text-muted">30D peer load refused</div>
       </div>
     </div>
   </div>

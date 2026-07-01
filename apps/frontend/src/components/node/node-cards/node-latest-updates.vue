@@ -167,36 +167,20 @@ import { isArray } from "shared";
 import useStore from "@/store/useStore";
 import { useRoute, useRouter } from "vue-router/composables";
 import useNodeSnapshotRepository from "@/repositories/useNodeSnapshotRepository";
+import { snapshotDiffPayload } from "@/components/history-diff/snapshot-diff";
+import {
+  getNodeUpdateValue,
+  hasNodeUpdate,
+  type NodeSnapshotForDelta,
+  nodeUpdateKeys,
+} from "./node-latest-updates-diff";
 
 interface Update {
   key: string;
   value: string;
 }
 
-interface SnapshotForDelta {
-  startDate: Date;
-  endDate: Date;
-  publicKey: string;
-  ip: string | null;
-  port: number | null;
-  host: string | null;
-  name: string | null;
-  homeDomain: string | null;
-  historyUrl: string | null;
-  alias: string | null;
-  isp: string | null;
-  ledgerVersion: number | null;
-  overlayVersion: number | null;
-  overlayMinVersion: number | null;
-  versionStr: string | null;
-  countryCode: string | null;
-  countryName: string | null;
-  longitude: number | null;
-  latitude: number | null;
-  organizationId: string | null;
-  quorumSet: QuorumSet;
-  quorumSetHashKey: string | null;
-}
+type SnapshotForDelta = NodeSnapshotForDelta;
 
 Vue.directive("b-modal", VBModal);
 
@@ -240,7 +224,7 @@ function showDiff(snapShot: SnapshotForDelta) {
   htmlFormatter.showUnchanged(true);
   diffModalHtml.value = htmlFormatter.format(
     deltas.get(snapShot.startDate.toISOString()) as jsondiffpatch.Delta,
-    snapShot,
+    snapshotDiffPayload(snapShot),
   ) as string;
   modalDiff.value.show();
 }
@@ -315,38 +299,12 @@ async function getSnapshots() {
 
     for (let i = snapshots.length - 2; i >= 0; i--) {
       const updates: Update[] = [];
-      [
-        "latitude",
-        "longitude",
-        "quorumSet",
-        "ip",
-        "port",
-        "countryName",
-        "countryCode",
-        "host",
-        "name",
-        "homeDomain",
-        "historyUrl",
-        "alias",
-        "isp",
-        "ledgerVersion",
-        "overlayVersion",
-        "overlayMinVersion",
-        "versionStr",
-        "organizationId",
-      ]
-        .filter((key) =>
-          key !== "quorumSet"
-            ? //@ts-ignore
-              snapshots[i][key] !== snapshots[i + 1][key]
-            : snapshots[i].quorumSetHashKey !==
-              snapshots[i + 1].quorumSetHashKey,
-        )
+      nodeUpdateKeys
+        .filter((key) => hasNodeUpdate(snapshots[i], snapshots[i + 1], key))
         .forEach((changedKey) =>
           updates.push({
             key: changedKey,
-            //@ts-ignore
-            value: snapshots[i][changedKey],
+            value: getNodeUpdateValue(snapshots[i], changedKey),
           }),
         );
 
@@ -364,7 +322,10 @@ async function getSnapshots() {
       });
       deltas.set(
         snapshots[i].startDate.toISOString(),
-        differ.diff(snapshots[i + 1], snapshots[i]),
+        differ.diff(
+          snapshotDiffPayload(snapshots[i + 1]),
+          snapshotDiffPayload(snapshots[i]),
+        ),
       );
     }
     updatesPerDate.value.reverse();

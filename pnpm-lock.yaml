@@ -216,9 +216,6 @@ importers:
       typeorm:
         specifier: ^0.3.25
         version: 0.3.25(pg-query-stream@4.16.0(pg@8.22.0))(pg@8.22.0)(reflect-metadata@0.2.2)(ts-node@10.9.2(@swc/core@1.15.43)(@swc/wasm@1.15.43)(@types/node@26.0.1)(typescript@6.0.3))
-      uuid:
-        specifier: ^9.0.1
-        version: 9.0.1
       validator:
         specifier: ^13.15.35
         version: 13.15.35

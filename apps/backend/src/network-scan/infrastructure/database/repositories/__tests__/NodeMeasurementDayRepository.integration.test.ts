@@ -73,6 +73,28 @@ describe('test queries', () => {
 		expect(averages[0].publicKey).toEqual(idA.publicKey.value);
 	});
 
+	test('findXDaysAverageAt normalizes mixed crawl density by day', async () => {
+		const node = createDummyNode();
+		await nodeRepository.save([node], new Date('12/12/2020'));
+		const sparseDay = new NodeMeasurementDay(node, '12/12/2020');
+		sparseDay.crawlCount = 1;
+		sparseDay.isOverloadedCount = 1;
+		const denseDay = new NodeMeasurementDay(node, '12/13/2020');
+		denseDay.crawlCount = 100;
+		denseDay.isOverloadedCount = 0;
+		await nodeMeasurementDayRepository.save([sparseDay, denseDay]);
+
+		const averages = await nodeMeasurementDayRepository.findXDaysAverageAt(
+			new Date('12/13/2020'),
+			2
+		);
+		const average = averages.find(
+			(candidate) => candidate.publicKey === node.publicKey.value
+		);
+
+		expect(average?.overLoadedAvg).toEqual(50);
+	});
+
 	test('findXDaysActiveButNotValidating', async () => {
 		const nodeToDemote = createDummyNode(
 			'localhost',

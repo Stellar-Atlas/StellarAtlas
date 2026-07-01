@@ -1,9 +1,9 @@
 import { PendingSubscriptionId } from '../PendingSubscription';
-import { v4 as uuidv4 } from 'uuid';
+import { randomUUID } from 'crypto';
 
 export function createDummyPendingSubscriptionId(rawId?: string) {
 	const pendingSubscriptionIdResult = PendingSubscriptionId.create(
-		rawId ? rawId : uuidv4()
+		rawId ? rawId : randomUUID()
 	);
 	if (pendingSubscriptionIdResult.isErr())
 		throw pendingSubscriptionIdResult.error;
