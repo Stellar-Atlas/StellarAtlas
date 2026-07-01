@@ -33,10 +33,12 @@ import { RequestUnsubscribeLink } from '../../../notifications/use-cases/request
 import { RegisterScan } from '../../../history-scan-coordinator/use-cases/register-scan/RegisterScan.js';
 import { historyScanRouter } from '../../../history-scan-coordinator/infrastructure/http/HistoryScanRouter.js';
 import { GetScanJob } from '../../../history-scan-coordinator/use-cases/get-scan-job/GetScanJob.js';
+import { frontendV4ProxyMiddleware } from './FrontendV4Proxy.js';
 
 let server: Server;
 const api = express();
 api.use(bodyParser.json());
+api.use(frontendV4ProxyMiddleware);
 api.use(helmet());
 api.set('trust proxy', true); //todo: env var
 
