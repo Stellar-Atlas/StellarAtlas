@@ -1,10 +1,10 @@
 {
 	"compilerOptions": {
-		"lib": ["ES2023"],
+		"lib": ["ESNext"],
 		"incremental": true,
-		"target": "ES2022",
-		"module": "NodeNext",
-		"moduleResolution": "NodeNext",
+		"target": "ESNext",
+		"module": "ESNext",
+		"moduleResolution": "bundler",
 		"types": ["node", "jest", "reflect-metadata"],
 		"noUnusedParameters": false,
 		"emitDecoratorMetadata": true,
