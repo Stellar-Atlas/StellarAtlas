@@ -10,6 +10,7 @@ import {
 	type Graph3DNode,
 	type Graph3DOrganization
 } from './model-3d';
+import { ScpAnalysisPanel } from './scp-analysis-panel';
 import { getNodeLabel, getNodeTags } from '../../domain/network';
 import { formatInteger, formatPercent } from '../../format/formatters';
 import { StatusTags } from '../status-tags';
@@ -154,6 +155,7 @@ export function GraphExplorer({ network }: GraphExplorerProps): React.JSX.Elemen
 				>
 					{showAllConnectable ? 'Validator topology' : 'All connectable nodes'}
 				</button>
+				<ScpAnalysisPanel network={network} />
 			</section>
 			<section className="graph-overlay organization-orbit">
 				<h2>Organizations</h2>
