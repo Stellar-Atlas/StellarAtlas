@@ -157,8 +157,8 @@
                 <rect
                   class="vertex-label-background"
                   :width="getVertexTextRectWidthPx(vertex)"
-                  height="15px"
-                  y="14"
+                  height="12px"
+                  y="11"
                   :x="getVertexTextRectX(vertex)"
                   rx="3"
                   :class="{
@@ -167,13 +167,13 @@
                   }"
                 ></rect>
                 <text
-                  y="5"
+                  y="3"
                   :class="getVertexTextClass(vertex)"
-                  dy="1.9em"
+                  dy="1.75em"
                   text-anchor="middle"
-                  font-size="10.5px"
+                  font-size="7.8px"
                 >
-                  {{ truncate(vertex.label, 14) }}
+                  {{ getVertexLabel(vertex) }}
                   <title>{{ vertex.label }}</title>
                 </text>
               </g>
@@ -196,6 +196,7 @@ import {
   getEdgePath,
   getEdgeStyle,
   getVertexClassObject as buildVertexClassObject,
+  getVertexLabel as buildVertexLabel,
   getVertexRadius,
   getVertexStyle as buildVertexStyle,
   getVertexTextClass,
@@ -346,6 +347,10 @@ function getVertexTextRectWidthPx(vertex: ViewVertex): string {
 
 function getVertexTextRectX(vertex: ViewVertex): string {
   return buildVertexTextRectX(vertex, truncate);
+}
+
+function getVertexLabel(vertex: ViewVertex): string {
+  return buildVertexLabel(vertex, truncate);
 }
 </script>
 

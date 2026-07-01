@@ -85,7 +85,7 @@ ctx.addEventListener("message", (event: MessageEvent<GraphWorkerPayload>) => {
     1,
   );
   const groupCenterRadius =
-    Math.min(widthOf(layoutBounds), heightOf(layoutBounds)) * 0.43;
+    Math.min(widthOf(layoutBounds), heightOf(layoutBounds)) * 0.3;
 
   const simulation = forceSimulation<GraphNodeDatum>(simulatedVertices)
     .force(
@@ -98,7 +98,7 @@ ctx.addEventListener("message", (event: MessageEvent<GraphWorkerPayload>) => {
       "link",
       forceLink<GraphNodeDatum, GraphLinkDatum>(simulatedEdges)
         .distance((edge) => {
-          return edge.isPartOfTransitiveQuorumSet ? 112 : 170;
+          return edge.isPartOfTransitiveQuorumSet ? 96 : 118;
         })
         .strength((edge: SimulationLinkDatum<GraphNodeDatum>) => {
           const viewEdge = edge as GraphLinkDatum;
@@ -115,8 +115,8 @@ ctx.addEventListener("message", (event: MessageEvent<GraphWorkerPayload>) => {
     .force(
       "collision",
       forceCollide<GraphNodeDatum>()
-        .radius((vertex) => (vertex.isPartOfTransitiveQuorumSet ? 34 : 22))
-        .strength(0.72)
+        .radius(getCollisionRadius)
+        .strength(0.9)
         .iterations(2),
     )
     .force(
@@ -172,6 +172,14 @@ function groupCenter(
     x: center.x + Math.cos(angle) * radius,
     y: center.y + Math.sin(angle) * radius,
   };
+}
+
+function getCollisionRadius(vertex: GraphNodeDatum): number {
+  if (vertex.isPartOfTransitiveQuorumSet) {
+    return Math.max(40, vertex.label.length * 2.3);
+  }
+
+  return Math.max(28, Math.min(36, vertex.label.length * 2));
 }
 
 function getLayoutBounds(width: number, height: number): LayoutBounds {

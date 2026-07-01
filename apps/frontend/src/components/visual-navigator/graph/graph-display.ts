@@ -3,6 +3,8 @@ import ViewEdge from "@/components/visual-navigator/graph/view-edge";
 import ViewGraph from "@/components/visual-navigator/graph/view-graph";
 import ViewVertex from "@/components/visual-navigator/graph/view-vertex";
 
+const maxVertexLabelLength = 11;
+
 export interface GraphDisplayContext {
   selectedVertices: Ref<ViewVertex[]>;
   viewGraph: Ref<ViewGraph>;
@@ -20,6 +22,13 @@ export function getVertexRadius(vertex: ViewVertex): number {
   if (vertex.isPartOfTransitiveQuorumSet) return 11.5;
   if (vertex.isPerimeter) return 8;
   return 9.5;
+}
+
+export function getVertexLabel(
+  vertex: ViewVertex,
+  truncate: (value: string, length: number) => string,
+): string {
+  return truncate(vertex.label, maxVertexLabelLength);
 }
 
 export function getVertexStyle(vertex: ViewVertex): Record<string, string> {
@@ -93,7 +102,7 @@ function getVertexTextRectWidth(
   vertex: ViewVertex,
   truncate: (value: string, length: number) => string,
 ): number {
-  return Math.max(44, truncate(vertex.label, 14).length * 6.2 + 10);
+  return Math.max(32, getVertexLabel(vertex, truncate).length * 4.7 + 8);
 }
 
 function highlightVertexAsOutgoing(
