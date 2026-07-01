@@ -107,13 +107,7 @@ export class RestartAtLeastOneScan implements ScanScheduler {
 			previousScan.latestScannedLedger > 0
 				? previousScan.latestScannedLedger + 1
 				: previousScan.fromLedger;
-		const errorLedger = previousScan.error
-			? extractLedgerFromHistoryArchiveUrl(previousScan.error.url)
-			: null;
-		const toLedger =
-			errorLedger !== null && errorLedger >= fromLedger
-				? errorLedger
-				: previousScan.toLedger;
+		const toLedger = this.getErrorRecheckToLedger(previousScan, fromLedger);
 		const concurrency =
 			previousScan.concurrency > 0 ? previousScan.concurrency : null;
 
@@ -126,5 +120,26 @@ export class RestartAtLeastOneScan implements ScanScheduler {
 			toLedger,
 			concurrency
 		);
+	}
+
+	private getErrorRecheckToLedger(
+		previousScan: Scan,
+		fromLedger: number
+	): number | null {
+		const scanErrors = previousScan.scanErrors;
+		if (scanErrors.length === 0) return previousScan.toLedger;
+
+		const errorLedgers = scanErrors.map((error) =>
+			extractLedgerFromHistoryArchiveUrl(error.url)
+		);
+		if (errorLedgers.some((ledger) => ledger === null))
+			return previousScan.toLedger;
+
+		const latestErrorLedger = Math.max(
+			...errorLedgers.filter((ledger): ledger is number => ledger !== null)
+		);
+		return latestErrorLedger >= fromLedger
+			? latestErrorLedger
+			: previousScan.toLedger;
 	}
 }

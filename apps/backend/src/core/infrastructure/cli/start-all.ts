@@ -28,6 +28,11 @@ function parseWorkerCount(value: string | undefined): number {
 	return Math.min(parsed, maxHistoryScanWorkers);
 }
 
+function frontendV4PreviewEnabled(): boolean {
+	if (process.env.DISABLE_FRONTEND_V4_PREVIEW === '1') return false;
+	return process.env.ENABLE_FRONTEND_V4_PREVIEW !== '0';
+}
+
 function createProcess(name: string, args: string[]): ManagedProcess {
 	const childProcess = spawn('pnpm', args, {
 		stdio: ['ignore', 'pipe', 'pipe'],
@@ -122,7 +127,7 @@ async function main(): Promise<void> {
 		createProcess('users', ['start:users'])
 	];
 
-	if (process.env.ENABLE_FRONTEND_V4_PREVIEW === '1') {
+	if (frontendV4PreviewEnabled()) {
 		console.log('Frontend v4 preview enabled at /new-ui.');
 		serviceProcesses.push(createProcess('frontend-v4', ['start:frontend-v4']));
 	}
