@@ -1,15 +1,15 @@
-import { Url } from '../../../core/domain/Url';
-import { mapUnknownToError } from '../../../core/utilities/mapUnknownToError';
-import { GetLatestScanDTO } from './GetLatestScanDTO';
+import { Url } from '../../../core/domain/Url.js';
+import { mapUnknownToError } from '../../../core/utilities/mapUnknownToError.js';
+import { GetLatestScanDTO } from './GetLatestScanDTO.js';
 import { HistoryArchiveScan } from 'shared';
-import { InvalidUrlError } from './InvalidUrlError';
+import { InvalidUrlError } from './InvalidUrlError.js';
 import { Result, err, ok } from 'neverthrow';
-import { ScanRepository } from '../../domain/scan/ScanRepository';
+import type { ScanRepository } from '../../domain/scan/ScanRepository.js';
 import { inject, injectable } from 'inversify';
-import { TYPES } from '../../infrastructure/di/di-types';
-import { ExceptionLogger } from '../../../core/services/ExceptionLogger';
+import { TYPES } from '../../infrastructure/di/di-types.js';
+import type { ExceptionLogger } from '../../../core/services/ExceptionLogger.js';
 import 'reflect-metadata';
-import { ScanErrorType } from '../../domain/scan/ScanError';
+import { mapScanToHistoryArchiveScan } from '../../infrastructure/mappers/mapScanToHistoryArchiveScan.js';
 
 @injectable()
 export class GetLatestScan {
@@ -31,22 +31,7 @@ export class GetLatestScan {
 
 			if (scan === null) return ok(null);
 
-			return ok(
-				new HistoryArchiveScan(
-					scan.baseUrl.value,
-					scan.startDate,
-					scan.endDate,
-					scan.latestVerifiedLedger,
-					scan.error?.type === ScanErrorType.TYPE_VERIFICATION,
-					scan.error?.type === ScanErrorType.TYPE_VERIFICATION
-						? scan.error.url
-						: null,
-					scan.error?.type === ScanErrorType.TYPE_VERIFICATION
-						? scan.error.message
-						: null,
-					scan.isSlowArchive ?? false
-				)
-			);
+			return ok(mapScanToHistoryArchiveScan(scan));
 		} catch (e) {
 			this.exceptionLogger.captureException(mapUnknownToError(e));
 			return err(mapUnknownToError(e));

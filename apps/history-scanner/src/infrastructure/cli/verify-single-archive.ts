@@ -1,5 +1,5 @@
-import { VerifySingleArchive } from '../../use-cases/verify-single-archive/VerifySingleArchive';
-import Kernel from '../Kernel';
+import { VerifySingleArchive } from '../../use-cases/verify-single-archive/VerifySingleArchive.js';
+import Kernel from '../Kernel.js';
 
 // noinspection JSIgnoredPromiseFromCall
 main();

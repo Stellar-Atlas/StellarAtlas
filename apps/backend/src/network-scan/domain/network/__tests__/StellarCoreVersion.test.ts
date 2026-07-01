@@ -1,4 +1,4 @@
-import { StellarCoreVersion } from '../StellarCoreVersion';
+import { StellarCoreVersion } from '../StellarCoreVersion.js';
 it('should only create valid version strings', function () {
 	const versionStringOrError = StellarCoreVersion.create('1.2.3');
 	expect(versionStringOrError.isErr()).toBe(false);

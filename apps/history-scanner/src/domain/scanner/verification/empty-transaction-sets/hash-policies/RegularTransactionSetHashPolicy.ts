@@ -1,4 +1,4 @@
-import { IHashCalculationPolicy } from './IHashCalculationPolicy';
+import { IHashCalculationPolicy } from './IHashCalculationPolicy.js';
 import { createHash } from 'crypto';
 
 export class RegularTransactionSetHashPolicy implements IHashCalculationPolicy {

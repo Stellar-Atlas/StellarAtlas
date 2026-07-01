@@ -1,5 +1,5 @@
-import { SendScannerHeartbeat } from '../SendScannerHeartbeat';
-import { CommunityScanner, ScannerStatus } from '../../infrastructure/database/entities/CommunityScanner';
+import { SendScannerHeartbeat } from '../SendScannerHeartbeat.js';
+import { CommunityScanner, ScannerStatus } from '../../infrastructure/database/entities/CommunityScanner.js';
 import { Repository } from 'typeorm';
 
 describe('SendScannerHeartbeat', () => {

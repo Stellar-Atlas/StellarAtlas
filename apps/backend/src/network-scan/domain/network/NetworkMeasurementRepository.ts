@@ -1,7 +1,6 @@
-import { MeasurementRepository } from '../measurement/MeasurementRepository';
-import NetworkMeasurement from './NetworkMeasurement';
+import type { MeasurementRepository } from '../measurement/MeasurementRepository.js';
+import NetworkMeasurement from './NetworkMeasurement.js';
 
-export interface NetworkMeasurementRepository
-	extends MeasurementRepository<NetworkMeasurement> {
+export interface NetworkMeasurementRepository extends MeasurementRepository<NetworkMeasurement> {
 	save(networkMeasurements: NetworkMeasurement[]): Promise<void>;
 }

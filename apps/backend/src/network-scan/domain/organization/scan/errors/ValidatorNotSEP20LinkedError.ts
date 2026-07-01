@@ -1,6 +1,6 @@
-import { CustomError } from '../../../../../core/errors/CustomError';
-import PublicKey from '../../../node/PublicKey';
-import { OrganizationScanError } from './OrganizationScanError';
+import { CustomError } from '../../../../../core/errors/CustomError.js';
+import PublicKey from '../../../node/PublicKey.js';
+import { OrganizationScanError } from './OrganizationScanError.js';
 
 export class ValidatorNotSEP20LinkedError extends OrganizationScanError {
 	constructor(

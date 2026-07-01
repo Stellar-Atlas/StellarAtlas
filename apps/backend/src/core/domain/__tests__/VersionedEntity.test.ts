@@ -1,5 +1,5 @@
-import { VersionedEntity } from '../VersionedEntity';
-import { Snapshot } from '../Snapshot';
+import { VersionedEntity } from '../VersionedEntity.js';
+import { Snapshot } from '../Snapshot.js';
 
 class MySnapshot extends Snapshot {
 	constructor(

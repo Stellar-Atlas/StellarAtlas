@@ -1,11 +1,11 @@
 import 'reflect-metadata';
-import { ScanError, ScanErrorType } from './ScanError';
+import { ScanError, ScanErrorType } from './ScanError.js';
 import { injectable } from 'inversify';
-import { ScanJob } from './ScanJob';
+import { ScanJob } from './ScanJob.js';
 import { err, ok, Result } from 'neverthrow';
-import { CategoryScanner } from '../scanner/CategoryScanner';
-import { ArchivePerformanceTester } from '../scanner/ArchivePerformanceTester';
-import { ScanSettings } from './ScanSettings';
+import { CategoryScanner } from '../scanner/CategoryScanner.js';
+import { ArchivePerformanceTester } from '../scanner/ArchivePerformanceTester.js';
+import { ScanSettings } from './ScanSettings.js';
 
 @injectable()
 export class ScanSettingsFactory {

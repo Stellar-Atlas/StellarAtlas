@@ -1,7 +1,7 @@
-import { TimerFactory } from '../timer-factory';
-import { Timers } from '../timers';
+import { TimerFactory } from '../timer-factory.js';
+import { Timers } from '../timers.js';
 import { mock } from 'jest-mock-extended';
-import { Timer } from '../timer';
+import { Timer } from '../timer.js';
 
 describe('timers', () => {
 	const timerFactory = mock<TimerFactory>();

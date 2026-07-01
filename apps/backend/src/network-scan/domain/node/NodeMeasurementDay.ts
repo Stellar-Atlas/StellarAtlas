@@ -1,6 +1,6 @@
 import { Entity, Column, ManyToOne, PrimaryColumn } from 'typeorm';
-import Node from './Node';
-import { MeasurementAggregation } from '../measurement-aggregation/MeasurementAggregation';
+import Node from './Node.js';
+import { MeasurementAggregation } from '../measurement-aggregation/MeasurementAggregation.js';
 
 @Entity('node_measurement_day_v2')
 export default class NodeMeasurementDay implements MeasurementAggregation {

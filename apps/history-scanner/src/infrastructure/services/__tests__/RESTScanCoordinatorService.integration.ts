@@ -1,8 +1,8 @@
-import { RESTScanCoordinatorService } from '../RESTScanCoordinatorService';
-import { HttpService, Url } from 'http-helper';
+import { RESTScanCoordinatorService } from '../RESTScanCoordinatorService.js';
+import { Url, type HttpService } from 'http-helper';
 import { mock } from 'jest-mock-extended';
 import { ok } from 'neverthrow';
-import { Scan } from '../../../domain/scan/Scan';
+import { Scan } from '../../../domain/scan/Scan.js';
 
 describe('RESTScanCoordinatorService Integration Tests', () => {
 	let httpService: jest.Mocked<HttpService>;
@@ -51,7 +51,7 @@ describe('RESTScanCoordinatorService Integration Tests', () => {
 			const result = await service.registerScan(scan);
 			expect(result.isOk()).toBe(true);
 
-			expect(httpService.post).toBeCalledTimes(1);
+			expect(httpService.post).toHaveBeenCalledTimes(1);
 		});
 	});
 
@@ -83,7 +83,10 @@ describe('RESTScanCoordinatorService Integration Tests', () => {
 					latestScannedLedger: 100,
 					latestScannedLedgerHeaderHash: 'hash123',
 					chainInitDate: initDate,
-					remoteId: 'remote-id'
+					remoteId: 'remote-id',
+					fromLedger: null,
+					toLedger: null,
+					concurrency: null
 				});
 			}
 		});

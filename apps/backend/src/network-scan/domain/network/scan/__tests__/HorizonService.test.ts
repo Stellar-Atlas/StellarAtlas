@@ -1,6 +1,6 @@
-import { HorizonService } from '../HorizonService';
+import { HorizonService } from '../HorizonService.js';
 import { mock } from 'jest-mock-extended';
-import { Url, HttpError, HttpService } from 'http-helper';
+import { Url, HttpError, type HttpService } from 'http-helper';
 import { err, ok } from 'neverthrow';
 
 let horizonService: HorizonService;

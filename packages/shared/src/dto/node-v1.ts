@@ -1,6 +1,6 @@
-import { BaseQuorumSet } from '../quorum-set';
+import { BaseQuorumSet } from '../quorum-set.js';
 import { JSONSchemaType } from 'ajv';
-import { nullable } from './helper/nullable';
+import { nullable } from './helper/nullable.js';
 
 export interface NodeGeoDataV1 {
 	countryCode: string | null;

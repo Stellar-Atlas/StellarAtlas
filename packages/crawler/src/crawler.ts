@@ -1,14 +1,15 @@
-import * as P from 'pino';
-import { CrawlProcessState, Crawl } from './crawl';
-import { CrawlResult } from './crawl-result';
-import { CrawlerConfiguration } from './crawler-configuration';
-import { CrawlLogger } from './crawl-logger';
-import { CrawlQueueManager } from './crawl-queue-manager';
-import { NodeAddress, nodeAddressToPeerKey } from './node-address';
-import { CrawlTask } from './crawl-task';
-import { MaxCrawlTimeManager } from './max-crawl-time-manager';
-import { ClosePayload } from './network-observer/connection-manager';
-import { NetworkObserver } from './network-observer/network-observer';
+import pino from 'pino';
+import { CrawlProcessState, Crawl } from './crawl.js';
+import type { CrawlResult } from './crawl-result.js';
+import { CrawlerConfiguration } from './crawler-configuration.js';
+import { CrawlLogger } from './crawl-logger.js';
+import { CrawlQueueManager } from './crawl-queue-manager.js';
+import { nodeAddressToPeerKey } from './node-address.js';
+import type { NodeAddress } from './node-address.js';
+import { CrawlTask } from './crawl-task.js';
+import { MaxCrawlTimeManager } from './max-crawl-time-manager.js';
+import { ClosePayload } from './network-observer/connection-manager.js';
+import { NetworkObserver } from './network-observer/network-observer.js';
 
 export interface Ledger {
 	sequence: bigint;
@@ -31,7 +32,7 @@ export class Crawler {
 		private maxCrawlTimeManager: MaxCrawlTimeManager,
 		private networkObserver: NetworkObserver,
 		private crawlLogger: CrawlLogger,
-		public readonly logger: P.Logger
+		public readonly logger: pino.Logger
 	) {
 		this.logger = logger.child({ mod: 'Crawler' });
 		this.setupPeerListenerEvents();
@@ -79,7 +80,7 @@ export class Crawler {
 
 	private async syncTopTierAndCrawl(
 		resolve: (value: PromiseLike<CrawlResult> | CrawlResult) => void,
-		reject: (reason?: any) => void
+		reject: (reason?: Error) => void
 	) {
 		const nrOfActiveTopTierConnections = await this.startTopTierSync();
 		this.startCrawlProcess(resolve, reject, nrOfActiveTopTierConnections);
@@ -87,7 +88,7 @@ export class Crawler {
 
 	private startCrawlProcess(
 		resolve: (value: PromiseLike<CrawlResult> | CrawlResult) => void,
-		reject: (reason?: any) => void,
+		reject: (reason?: Error) => void,
 		nrOfActiveTopTierConnections: number
 	) {
 		const nodesToCrawl = this.crawl.nodesToCrawl.concat(
@@ -127,7 +128,7 @@ export class Crawler {
 
 	private setupCrawlCompletionHandlers(
 		resolve: (value: PromiseLike<CrawlResult> | CrawlResult) => void,
-		reject: (reason?: any) => void
+		reject: (reason?: Error) => void
 	) {
 		this.startMaxCrawlTimeout(resolve, reject);
 		this.crawlQueueManager.onDrain(() => {

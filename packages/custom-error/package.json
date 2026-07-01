@@ -1,6 +1,7 @@
 {
 	"name": "custom-error",
 	"description": "custom Error class",
+	"type": "module",
 	"scripts": {
 		"preversion": "pnpm run build",
 		"build": "../../node_modules/typescript/bin/tsc  --declaration",

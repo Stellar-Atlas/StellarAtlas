@@ -1,7 +1,7 @@
 import { Result } from 'neverthrow';
-import { UserId } from '../../notifications/domain/subscription/UserId';
-import { CustomError } from '../errors/CustomError';
-import { Message } from './Message';
+import { UserId } from '../../notifications/domain/subscription/UserId.js';
+import { CustomError } from '../errors/CustomError.js';
+import { Message } from './Message.js';
 
 export class CreateUserError extends CustomError {
 	constructor(cause?: Error) {

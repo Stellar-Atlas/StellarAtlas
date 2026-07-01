@@ -1,7 +1,7 @@
 import { inject, injectable } from 'inversify';
 import { Result, err, ok } from 'neverthrow';
-import { NotifyDTO } from './NotifyDTO';
-import { EventDetector } from '../../domain/event/EventDetector';
+import { NotifyDTO } from './NotifyDTO.js';
+import { EventDetector } from '../../domain/event/EventDetector.js';
 import {
 	InCompleteNetworkError,
 	InCompletePreviousNetworkError,
@@ -10,15 +10,15 @@ import {
 	NoPreviousNetworkError,
 	NotifyError,
 	PersistenceError
-} from './NotifyError';
+} from './NotifyError.js';
 import { NetworkV1 } from 'shared';
-import { ExceptionLogger } from '../../../core/services/ExceptionLogger';
-import { Logger } from '../../../core/services/Logger';
-import { Notifier } from '../../domain/notifier/Notifier';
-import { SubscriberRepository } from '../../domain/subscription/SubscriberRepository';
-import { Notification } from '../../domain/subscription/Notification';
-import { mapUnknownToError } from '../../../core/utilities/mapUnknownToError';
-import { NetworkDTOService } from '../../../network-scan/services/NetworkDTOService';
+import type { ExceptionLogger } from '../../../core/services/ExceptionLogger.js';
+import type { Logger } from '../../../core/services/Logger.js';
+import { Notifier } from '../../domain/notifier/Notifier.js';
+import type { SubscriberRepository } from '../../domain/subscription/SubscriberRepository.js';
+import { Notification } from '../../domain/subscription/Notification.js';
+import { mapUnknownToError } from '../../../core/utilities/mapUnknownToError.js';
+import { NetworkDTOService } from '../../../network-scan/services/NetworkDTOService.js';
 
 @injectable()
 export class Notify {

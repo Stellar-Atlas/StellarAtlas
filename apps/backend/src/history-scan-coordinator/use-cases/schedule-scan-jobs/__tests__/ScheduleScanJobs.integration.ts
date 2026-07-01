@@ -1,6 +1,6 @@
-import Kernel from '../../../../core/infrastructure/Kernel';
-import { ConfigMock } from '../../../../core/config/__mocks__/configMock';
-import { ScheduleScanJobs } from '../ScheduleScanJobs';
+import Kernel from '../../../../core/infrastructure/Kernel.js';
+import { ConfigMock } from '../../../../core/config/__mocks__/configMock.js';
+import { ScheduleScanJobs } from '../ScheduleScanJobs.js';
 
 let kernel: Kernel;
 jest.setTimeout(60000); // adjust if needed

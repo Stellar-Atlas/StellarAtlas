@@ -1,5 +1,5 @@
 import { Column, Index } from 'typeorm';
-import { CoreEntity } from './CoreEntity';
+import { CoreEntity } from './CoreEntity.js';
 
 export abstract class Snapshot extends CoreEntity {
 	static readonly MAX_DATE = new Date(Date.UTC(9999, 11, 31, 23, 59, 59));

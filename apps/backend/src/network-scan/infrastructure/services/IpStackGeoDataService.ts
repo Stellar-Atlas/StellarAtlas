@@ -1,13 +1,13 @@
 import { inject, injectable } from 'inversify';
-import { Logger } from '../../../core/services/Logger';
-import { Url, HttpService } from 'http-helper';
+import type { Logger } from '../../../core/services/Logger.js';
+import { Url, type HttpService } from 'http-helper';
 import { err, ok, Result } from 'neverthrow';
 import { isNumber, isObject, isString } from 'shared';
 import {
 	GeoData,
-	GeoDataService,
 	GeoDataUpdateError
-} from '../../domain/node/scan/GeoDataService';
+} from '../../domain/node/scan/GeoDataService.js';
+import type { GeoDataService } from '../../domain/node/scan/GeoDataService.js';
 
 @injectable()
 export class IpStackGeoDataService implements GeoDataService {

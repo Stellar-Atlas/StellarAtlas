@@ -1,10 +1,10 @@
-import { UserService } from '../UserService';
-import { HttpError, HttpService } from 'http-helper';
-import { UserId } from '../../../notifications/domain/subscription/UserId';
+import { UserService } from '../UserService.js';
+import { HttpError, type HttpService } from 'http-helper';
+import { UserId } from '../../../notifications/domain/subscription/UserId.js';
 import { err, ok } from 'neverthrow';
 import { randomUUID } from 'crypto';
-import { createDummySubscriber } from '../../../notifications/domain/subscription/__fixtures__/Subscriber.fixtures';
-import { Message } from '../../domain/Message';
+import { createDummySubscriber } from '../../../notifications/domain/subscription/__fixtures__/Subscriber.fixtures.js';
+import { Message } from '../../domain/Message.js';
 import { mock } from 'jest-mock-extended';
 
 const httpService = mock<HttpService>();
@@ -20,7 +20,7 @@ describe('constructor', function () {
 		expect(
 			() =>
 				new UserService('https://user-servicecom', 'user', 'pass', httpService)
-		).toThrowError();
+		).toThrow();
 		new UserService('https://users.com/', 'user', 'pass', httpService);
 		new UserService('https://valid.com', 'user', 'pass', httpService);
 	});

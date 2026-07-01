@@ -1,5 +1,5 @@
-import { Repository } from 'typeorm';
-import { CommunityScanner } from '../infrastructure/database/entities/CommunityScanner';
+import type { Repository } from 'typeorm';
+import { CommunityScanner } from '../infrastructure/database/entities/CommunityScanner.js';
 import { randomBytes } from 'crypto';
 
 export interface RegisterCommunityRequest {

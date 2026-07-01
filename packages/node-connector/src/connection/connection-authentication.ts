@@ -1,10 +1,10 @@
-import { hash, Keypair, xdr } from '@stellar/stellar-base';
-import * as sodium from 'sodium-native';
+import { hash, Keypair, xdr } from '@stellar/stellar-sdk';
+import sodium from 'sodium-native';
 import EnvelopeType = xdr.EnvelopeType;
 import Uint64 = xdr.Uint64;
 import UnsignedHyper = xdr.UnsignedHyper;
 import BigNumber from 'bignumber.js';
-import { createSHA256Hmac, verifySignature } from '../crypto-helper';
+import { createSHA256Hmac, verifySignature } from '../crypto-helper.js';
 
 type Curve25519SecretBuffer = Buffer;
 type Curve25519PublicBuffer = Buffer;
@@ -113,7 +113,7 @@ export class ConnectionAuthentication {
 
 		const rawSigData = Buffer.concat([
 			this.networkId,
-			 
+
 			//@ts-ignore
 			EnvelopeType.envelopeTypeAuth().toXDR(),
 			authCert.expiration().toXDR(),

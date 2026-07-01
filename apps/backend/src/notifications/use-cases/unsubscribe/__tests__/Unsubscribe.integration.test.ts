@@ -1,18 +1,18 @@
 import { Container, decorate, injectable } from 'inversify';
-import Kernel from '../../../../core/infrastructure/Kernel';
-import { SubscriberRepository } from '../../../domain/subscription/SubscriberRepository';
-import { ConfigMock } from '../../../../core/config/__mocks__/configMock';
-import { Unsubscribe } from '../Unsubscribe';
+import Kernel from '../../../../core/infrastructure/Kernel.js';
+import type { SubscriberRepository } from '../../../domain/subscription/SubscriberRepository.js';
+import { ConfigMock } from '../../../../core/config/__mocks__/configMock.js';
+import { Unsubscribe } from '../Unsubscribe.js';
 import { err, ok } from 'neverthrow';
-import { createDummySubscriber } from '../../../domain/subscription/__fixtures__/Subscriber.fixtures';
+import { createDummySubscriber } from '../../../domain/subscription/__fixtures__/Subscriber.fixtures.js';
 import { randomUUID } from 'crypto';
 import {
 	UserNotFoundError,
 	UserService
-} from '../../../../core/services/UserService';
-import { createDummyPendingSubscriptionId } from '../../../domain/subscription/__fixtures__/PendingSubscriptionId.fixtures';
-import { OrganizationId } from '../../../domain/event/EventSourceId';
-import { OrganizationXUpdatesUnavailableEvent } from '../../../domain/event/Event';
+} from '../../../../core/services/UserService.js';
+import { createDummyPendingSubscriptionId } from '../../../domain/subscription/__fixtures__/PendingSubscriptionId.fixtures.js';
+import { OrganizationId } from '../../../domain/event/EventSourceId.js';
+import { OrganizationXUpdatesUnavailableEvent } from '../../../domain/event/Event.js';
 import Mock = jest.Mock;
 
 decorate(injectable(), UserService);
@@ -84,7 +84,7 @@ it('should delete subscriber in user service and in local database', async funct
 		subscriber.userId
 	);
 	expect(fetchedSubscriber).toBeNull();
-	expect(remoteDeleteFunction).toBeCalledWith(subscriber.userId);
+	expect(remoteDeleteFunction).toHaveBeenCalledWith(subscriber.userId);
 });
 
 it('should delete subscriber, even if user is not found in user service', async function () {
@@ -110,5 +110,5 @@ it('should delete subscriber, even if user is not found in user service', async 
 		subscriber.userId
 	);
 	expect(fetchedSubscriber).toBeNull();
-	expect(remoteDeleteFunction).toBeCalledWith(subscriber.userId);
+	expect(remoteDeleteFunction).toHaveBeenCalledWith(subscriber.userId);
 });

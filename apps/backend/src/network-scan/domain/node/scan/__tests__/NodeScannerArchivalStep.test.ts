@@ -1,9 +1,9 @@
-import { NodeScannerHistoryArchiveStep } from '../NodeScannerHistoryArchiveStep';
+import { NodeScannerHistoryArchiveStep } from '../NodeScannerHistoryArchiveStep.js';
 import { mock } from 'jest-mock-extended';
-import { NodeScan } from '../NodeScan';
-import { NodeScannerArchivalStep } from '../NodeScannerArchivalStep';
-import { InactiveNodesArchiver } from '../../archival/InactiveNodesArchiver';
-import { ValidatorDemoter } from '../../archival/ValidatorDemoter';
+import { NodeScan } from '../NodeScan.js';
+import { NodeScannerArchivalStep } from '../NodeScannerArchivalStep.js';
+import { InactiveNodesArchiver } from '../../archival/InactiveNodesArchiver.js';
+import { ValidatorDemoter } from '../../archival/ValidatorDemoter.js';
 
 describe('NodeScannerHistoryArchiveStep', () => {
 	const inactiveNodesArchiver = mock<InactiveNodesArchiver>();
@@ -20,7 +20,7 @@ describe('NodeScannerHistoryArchiveStep', () => {
 	it('should archive', async () => {
 		const nodeScan = mock<NodeScan>();
 		await nodeScannerArchivalStep.execute(nodeScan);
-		expect(validatorDemoter.demote).toBeCalledTimes(1);
-		expect(inactiveNodesArchiver.archive).toBeCalledTimes(1);
+		expect(validatorDemoter.demote).toHaveBeenCalledTimes(1);
+		expect(inactiveNodesArchiver.archive).toHaveBeenCalledTimes(1);
 	});
 });

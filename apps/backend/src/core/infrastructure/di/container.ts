@@ -1,21 +1,22 @@
-import { Config } from '../../config/Config';
+import type { Config } from '../../config/Config.js';
 import { interfaces } from 'inversify';
 import Container = interfaces.Container;
-import { Logger, PinoLogger } from 'logger';
-import { HttpService } from 'http-helper';
+import { PinoLogger } from 'logger';
+import type { Logger } from 'logger';
+import type { HttpService } from 'http-helper';
 import { AxiosHttpService } from 'http-helper';
-import { HeartBeater } from '../../services/HeartBeater';
-import { DeadManSnitchHeartBeater } from '../../../network-scan/infrastructure/services/DeadManSnitchHeartBeater';
-import { DummyHeartBeater } from '../../../network-scan/infrastructure/services/DummyHeartBeater';
-import { LoopTimer } from '../../services/LoopTimer';
-import { JobMonitor } from 'job-monitor';
-import { CORE_TYPES } from './di-types';
+import type { HeartBeater } from '../../services/HeartBeater.js';
+import { DeadManSnitchHeartBeater } from '../../../network-scan/infrastructure/services/DeadManSnitchHeartBeater.js';
+import { DummyHeartBeater } from '../../../network-scan/infrastructure/services/DummyHeartBeater.js';
+import { LoopTimer } from '../../services/LoopTimer.js';
+import type { JobMonitor } from 'job-monitor';
+import { CORE_TYPES } from './di-types.js';
 import { SentryJobMonitor, LoggerJobMonitor } from 'job-monitor';
 import {
-	ExceptionLogger,
 	SentryExceptionLogger,
 	ConsoleExceptionLogger
 } from 'exception-logger';
+import type { ExceptionLogger } from 'exception-logger';
 
 export function load(container: Container, config: Config) {
 	container
@@ -46,14 +47,17 @@ export function load(container: Container, config: Config) {
 		return new LoggerJobMonitor(container.get<Logger>('Logger'));
 	});
 
-	container.bind<ExceptionLogger>('ExceptionLogger').toDynamicValue(() => {
-		if (config.enableSentry && config.sentryDSN)
-			return new SentryExceptionLogger(
-				config.sentryDSN,
-				container.get<Logger>('Logger')
-			);
-		else return new ConsoleExceptionLogger();
-	}).inSingletonScope();
+	container
+		.bind<ExceptionLogger>('ExceptionLogger')
+		.toDynamicValue(() => {
+			if (config.enableSentry && config.sentryDSN)
+				return new SentryExceptionLogger(
+					config.sentryDSN,
+					container.get<Logger>('Logger')
+				);
+			else return new ConsoleExceptionLogger();
+		})
+		.inSingletonScope();
 
 	container.bind(LoopTimer).toSelf();
 }

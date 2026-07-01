@@ -1,5 +1,5 @@
-import { CheckPointGenerator } from '../CheckPointGenerator';
-import { StandardCheckPointFrequency } from '../StandardCheckPointFrequency';
+import { CheckPointGenerator } from '../CheckPointGenerator.js';
+import { StandardCheckPointFrequency } from '../StandardCheckPointFrequency.js';
 
 it('should generate correct checkpoints in the supplied range', function () {
 	const generatorClass = new CheckPointGenerator(

@@ -1,4 +1,4 @@
-import { computed, ref, ComputedRef } from 'vue';
+import { computed, isRef, ref, type ComputedRef } from 'vue';
 import { Node } from 'shared';
 import { TrustRankColorService, TrustLevel } from '@/services/TrustRankColorService';
 import { NodeTrustIndexService } from '@/services/NodeTrustIndexService';
@@ -8,7 +8,18 @@ export interface UseTrustRankOptions {
   autoRefresh?: boolean;
 }
 
-export function useTrustRank(node: ComputedRef<Node> | Node, options: UseTrustRankOptions = {}) {
+type NodeSource = ComputedRef<Node | null> | Node | null;
+type NodeListSource = ComputedRef<Node[]> | Node[];
+
+function resolveNode(node: NodeSource): Node | null {
+  return isRef(node) ? node.value : node;
+}
+
+function resolveNodes(nodes: NodeListSource): Node[] {
+  return isRef(nodes) ? nodes.value : nodes;
+}
+
+export function useTrustRank(node: NodeSource, options: UseTrustRankOptions = {}) {
   const { enableCaching = true, autoRefresh = false } = options;
   
   // Internal cache for trust index
@@ -16,7 +27,7 @@ export function useTrustRank(node: ComputedRef<Node> | Node, options: UseTrustRa
   
   // Computed trust index for the node
   const trustIndex = computed<number | null>(() => {
-    const currentNode = typeof node === 'function' ? node.value : node;
+    const currentNode = resolveNode(node);
     
     if (!currentNode) {
       return null;
@@ -56,7 +67,7 @@ export function useTrustRank(node: ComputedRef<Node> | Node, options: UseTrustRa
 
   // Helper methods
   const refreshTrustIndex = () => {
-    const currentNode = typeof node === 'function' ? node.value : node;
+    const currentNode = resolveNode(node);
     if (currentNode) {
       trustIndexCache.value.delete(currentNode.publicKey);
       // Force recomputation by accessing the computed property
@@ -97,11 +108,11 @@ export function useTrustRank(node: ComputedRef<Node> | Node, options: UseTrustRa
 }
 
 // Utility function for batch trust index calculation
-export function useTrustRankBatch(nodes: ComputedRef<Node[]> | Node[]) {
+export function useTrustRankBatch(nodes: NodeListSource) {
   const trustIndices = ref<Map<string, number | null>>(new Map());
 
   const updateTrustIndices = () => {
-    const currentNodes = typeof nodes === 'function' ? nodes.value : nodes;
+    const currentNodes = resolveNodes(nodes);
     trustIndices.value = NodeTrustIndexService.getTrustIndices(currentNodes);
   };
 

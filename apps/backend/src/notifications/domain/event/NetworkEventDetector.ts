@@ -12,9 +12,9 @@ import {
 	NetworkOrganizationLivenessRiskEvent,
 	NetworkOrganizationSafetyRiskEvent,
 	NetworkTransitiveQuorumSetChangedEvent
-} from './Event';
+} from './Event.js';
 import { injectable } from 'inversify';
-import { EventSourceId, NetworkId } from './EventSourceId';
+import { EventSourceId, NetworkId } from './EventSourceId.js';
 
 @injectable()
 export class NetworkEventDetector {

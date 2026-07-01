@@ -1,4 +1,4 @@
-import { Event } from './Event';
+import { Event } from './Event.js';
 
 /**
  * Simple event collector that can be used to collect events from multiple domain sources

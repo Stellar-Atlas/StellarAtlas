@@ -1,5 +1,5 @@
 import { Url } from 'http-helper';
-import { ScanError } from './ScanError';
+import { ScanError } from './ScanError.js';
 
 /**
  * Used to represent a chain of scans for a history url.
@@ -19,6 +19,7 @@ export class Scan {
 	public readonly concurrency: number = 0;
 	public readonly isSlowArchive: boolean | null = null;
 	public readonly error: ScanError | null = null;
+	public readonly errors: readonly ScanError[] = [];
 	public readonly scanJobRemoteId: string | null = null;
 
 	constructor(
@@ -33,6 +34,7 @@ export class Scan {
 		concurrency = 0,
 		archiveIsSlow: boolean | null = null,
 		error: ScanError | null = null,
+		errors: readonly ScanError[] = [],
 		scanJobRemoteId: string | null = null
 	) {
 		this.baseUrl = url;
@@ -43,7 +45,8 @@ export class Scan {
 		this.isSlowArchive = archiveIsSlow;
 		this.fromLedger = fromLedger;
 		this.toLedger = toLedger;
-		this.error = error;
+		this.errors = errors.length > 0 ? errors : error ? [error] : [];
+		this.error = error ?? this.errors[0] ?? null;
 		this.latestScannedLedger = latestScannedLedger;
 		this.latestScannedLedgerHeaderHash = latestScannedLedgerHeaderHash;
 		this.scanJobRemoteId = scanJobRemoteId;

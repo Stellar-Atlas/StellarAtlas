@@ -1,5 +1,5 @@
-import { OrganizationValidators } from '../OrganizationValidators';
-import { createDummyPublicKey } from '../../node/__fixtures__/createDummyPublicKey';
+import { OrganizationValidators } from '../OrganizationValidators.js';
+import { createDummyPublicKey } from '../../node/__fixtures__/createDummyPublicKey.js';
 
 describe('OrganizationValidators', () => {
 	test('equals', () => {

@@ -1,8 +1,8 @@
 import { Url } from 'http-helper';
-import { Scan } from './Scan';
-import { ScanSettings } from './ScanSettings';
-import { ScanError } from './ScanError';
-import { ScanResult } from './ScanResult';
+import { Scan } from './Scan.js';
+import { ScanSettings } from './ScanSettings.js';
+import { ScanError } from './ScanError.js';
+import { ScanResult } from './ScanResult.js';
 import { err, ok, Result } from 'neverthrow';
 import { ScanJobDTO } from 'history-scanner-dto';
 
@@ -31,9 +31,10 @@ export class ScanJob {
 				dto.latestScannedLedger,
 				dto.latestScannedLedgerHeaderHash,
 				dto.chainInitDate,
-				dto.latestScannedLedger > 0 ? dto.latestScannedLedger + 1 : 0,
-				null,
-				0,
+				dto.fromLedger ??
+					(dto.latestScannedLedger > 0 ? dto.latestScannedLedger + 1 : 0),
+				dto.toLedger,
+				dto.concurrency ?? 0,
 				dto.remoteId
 			)
 		);
@@ -85,6 +86,7 @@ export class ScanJob {
 			this.concurrency,
 			null,
 			error,
+			[error],
 			this.remoteId
 		);
 	}
@@ -107,6 +109,7 @@ export class ScanJob {
 			settings.concurrency,
 			settings.isSlowArchive,
 			scanResult.error,
+			scanResult.errors ?? [],
 			this.remoteId
 		);
 	}

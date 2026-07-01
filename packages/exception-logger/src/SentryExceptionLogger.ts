@@ -1,6 +1,6 @@
 import * as Sentry from '@sentry/node';
-import { ExceptionLogger } from './ExceptionLogger';
-import { Logger } from 'logger';
+import type { ExceptionLogger } from './ExceptionLogger.js';
+import type { Logger } from 'logger';
 
 export class SentryExceptionLogger implements ExceptionLogger {
 	constructor(

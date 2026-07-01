@@ -1,31 +1,24 @@
-import Mock = jest.Mock;
-import { ActiveIndex } from '../../index/active-index';
-import { ValidatingIndex } from '../../index/validating-index';
-import { AgeIndex } from '../../index/age-index';
-import { TypeIndex } from '../../index/type-index';
-import { TrustIndex } from '../../index/trust-index';
-import { VersionIndex } from '../../index/version-index';
-import { NodeIndex, IndexNode } from '../../node-index';
+import { jest } from '@jest/globals';
+import { ActiveIndex } from '../../index/active-index.js';
+import { ValidatingIndex } from '../../index/validating-index.js';
+import { AgeIndex } from '../../index/age-index.js';
+import { TypeIndex } from '../../index/type-index.js';
+import { TrustIndex } from '../../index/trust-index.js';
+import { VersionIndex } from '../../index/version-index.js';
+import { NodeIndex, IndexNode } from '../../node-index.js';
 import { mock } from 'jest-mock-extended';
 import { TrustGraph } from 'shared';
 
-jest.mock('./../../index/active-index');
-jest.mock('./../../index/validating-index');
-jest.mock('./../../index/type-index');
-jest.mock('./../../index/version-index');
-jest.mock('./../../index/trust-index');
-jest.mock('./../../index/age-index');
-
 describe('NodeIndex', () => {
 	test('calculateNodeIndex', () => {
-		(ActiveIndex.get as Mock).mockImplementation(() => 1);
-		(ValidatingIndex.get as Mock).mockImplementation(() => 0);
+		jest.spyOn(ActiveIndex, 'get').mockImplementation(() => 1);
+		jest.spyOn(ValidatingIndex, 'get').mockImplementation(() => 0);
 
-		(AgeIndex.get as Mock).mockImplementation(() => 1);
+		jest.spyOn(AgeIndex, 'get').mockImplementation(() => 1);
 
-		(TypeIndex.get as Mock).mockImplementation(() => 0.101);
-		(TrustIndex.get as Mock).mockImplementation(() => 0.5);
-		(VersionIndex.get as Mock).mockImplementation(() => 1);
+		jest.spyOn(TypeIndex, 'get').mockImplementation(() => 0.101);
+		jest.spyOn(TrustIndex, 'get').mockImplementation(() => 0.5);
+		jest.spyOn(VersionIndex, 'get').mockImplementation(() => 1);
 
 		const indexNode: IndexNode = {
 			publicKey: 'publicKey',
@@ -42,5 +35,6 @@ describe('NodeIndex', () => {
 		expect(
 			NodeIndex.calculateIndexes([indexNode], trustGraph, 'v1.0.0')
 		).toEqual(new Map([['publicKey', 60]]));
+		jest.restoreAllMocks();
 	});
 });

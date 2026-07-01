@@ -1,17 +1,17 @@
 import * as express from 'express';
 import { Router } from 'express';
-import { getDateFromParam } from '../../../core/utilities/getDateFromParam';
-import { GetNode } from '../../use-cases/get-node/GetNode';
-import { GetNodes } from '../../use-cases/get-nodes/GetNodes';
-import { isString } from '../../../core/utilities/TypeGuards';
-import { GetNodeSnapshots } from '../../use-cases/get-node-snapshots/GetNodeSnapshots';
-import { isDateString } from '../../../core/utilities/isDateString';
-import { GetMeasurementsFactory } from '../../use-cases/get-measurements/GetMeasurementsFactory';
-import NodeMeasurement from '../../domain/node/NodeMeasurement';
-import { GetMeasurementAggregations } from '../../use-cases/get-measurement-aggregations/GetMeasurementAggregations';
+import { getDateFromParam } from '../../../core/utilities/getDateFromParam.js';
+import { GetNode } from '../../use-cases/get-node/GetNode.js';
+import { GetNodes } from '../../use-cases/get-nodes/GetNodes.js';
+import { isString } from '../../../core/utilities/TypeGuards.js';
+import { GetNodeSnapshots } from '../../use-cases/get-node-snapshots/GetNodeSnapshots.js';
+import { isDateString } from '../../../core/utilities/isDateString.js';
+import { GetMeasurementsFactory } from '../../use-cases/get-measurements/GetMeasurementsFactory.js';
+import NodeMeasurement from '../../domain/node/NodeMeasurement.js';
+import { GetMeasurementAggregations } from '../../use-cases/get-measurement-aggregations/GetMeasurementAggregations.js';
 import { param, query } from 'express-validator';
-import { AggregationTarget } from '../../use-cases/get-measurement-aggregations/GetMeasurementAggregationsDTO';
-import { handleMeasurementsAggregationRequest } from './handleMeasurementsAggregationRequest';
+import { AggregationTarget } from '../../use-cases/get-measurement-aggregations/GetMeasurementAggregationsDTO.js';
+import { handleMeasurementsAggregationRequest } from './handleMeasurementsAggregationRequest.js';
 
 export interface NodeRouterConfig {
 	getNode: GetNode;

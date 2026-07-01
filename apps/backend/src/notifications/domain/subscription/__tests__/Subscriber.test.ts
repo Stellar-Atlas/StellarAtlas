@@ -1,13 +1,13 @@
-import { Subscriber } from '../Subscriber';
-import { ValidatorXUpdatesNotValidatingEvent } from '../../event/Event';
-import { Subscription } from '../Subscription';
+import { Subscriber } from '../Subscriber.js';
+import { ValidatorXUpdatesNotValidatingEvent } from '../../event/Event.js';
+import { Subscription } from '../Subscription.js';
 import {
 	NetworkId,
 	OrganizationId,
 	PublicKey
-} from '../../event/EventSourceId';
-import { createDummySubscriber } from '../__fixtures__/Subscriber.fixtures';
-import { createDummyPendingSubscriptionId } from '../__fixtures__/PendingSubscriptionId.fixtures';
+} from '../../event/EventSourceId.js';
+import { createDummySubscriber } from '../__fixtures__/Subscriber.fixtures.js';
+import { createDummyPendingSubscriptionId } from '../__fixtures__/PendingSubscriptionId.fixtures.js';
 
 function getPublicKey(): PublicKey {
 	const publicKeyResult = PublicKey.create(

@@ -1,4 +1,4 @@
-import { RegularTransactionSetHashPolicy } from '../RegularTransactionSetHashPolicy';
+import { RegularTransactionSetHashPolicy } from '../RegularTransactionSetHashPolicy.js';
 
 describe('RegularTransactionSetHashPolicy', () => {
 	let policy: RegularTransactionSetHashPolicy;

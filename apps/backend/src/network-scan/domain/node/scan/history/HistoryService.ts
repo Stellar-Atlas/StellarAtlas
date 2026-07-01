@@ -1,12 +1,15 @@
 import 'reflect-metadata';
 import { err, ok, Result } from 'neverthrow';
-import { isNumber, isObject } from '../../../../../core/utilities/TypeGuards';
+import {
+	isNumber,
+	isObject
+} from '../../../../../core/utilities/TypeGuards.js';
 import { inject, injectable } from 'inversify';
-import { Url, HttpService } from 'http-helper';
-import { CustomError } from '../../../../../core/errors/CustomError';
-import { Logger } from '../../../../../core/services/Logger';
-import { HistoryArchiveScanService } from './HistoryArchiveScanService';
-import { NETWORK_TYPES } from '../../../../infrastructure/di/di-types';
+import { Url, type HttpService } from 'http-helper';
+import { CustomError } from '../../../../../core/errors/CustomError.js';
+import type { Logger } from '../../../../../core/services/Logger.js';
+import type { HistoryArchiveScanService } from './HistoryArchiveScanService.js';
+import { NETWORK_TYPES } from '../../../../infrastructure/di/di-types.js';
 
 export class FetchHistoryError extends CustomError {
 	constructor(url: string, cause?: Error) {

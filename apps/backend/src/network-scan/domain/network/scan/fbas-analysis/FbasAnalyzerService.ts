@@ -5,13 +5,13 @@ import FbasAnalyzerFacade, {
 	FbasAnalysisNode,
 	FbasAnalysisOrganization,
 	MergeBy
-} from './FbasAnalyzerFacade';
-import { Logger } from '../../../../../core/services/Logger';
-import Organization from '../../../organization/Organization';
-import Node from '../../../node/Node';
-import { FbasMapper } from './FbasMapper';
-import { AnalysisResult } from './AnalysisResult';
-import { FbasMergedByAnalyzer } from './FbasMergedByAnalyzer';
+} from './FbasAnalyzerFacade.js';
+import type { Logger } from '../../../../../core/services/Logger.js';
+import Organization from '../../../organization/Organization.js';
+import Node from '../../../node/Node.js';
+import { FbasMapper } from './FbasMapper.js';
+import { AnalysisResult } from './AnalysisResult.js';
+import { FbasMergedByAnalyzer } from './FbasMergedByAnalyzer.js';
 
 @injectable()
 export default class FbasAnalyzerService {

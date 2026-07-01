@@ -1,10 +1,12 @@
-import {
+import sodium from 'sodium-native';
+
+const {
 	randombytes_buf,
 	crypto_secretbox_NONCEBYTES,
 	crypto_secretbox_MACBYTES,
 	crypto_secretbox_easy,
 	crypto_secretbox_open_easy
-} from 'sodium-native';
+} = sodium;
 
 export class Encryption {
 	constructor(protected secret: Buffer) {}

@@ -1,12 +1,12 @@
-import Node from '../domain/node/Node';
-import Organization from '../domain/organization/Organization';
+import Node from '../domain/node/Node.js';
+import Organization from '../domain/organization/Organization.js';
 import { err, ok, Result } from 'neverthrow';
-import { mapUnknownToError } from '../../core/utilities/mapUnknownToError';
-import { NodeMeasurementRepository } from '../domain/node/NodeMeasurementRepository';
-import { NodeMeasurementDayRepository } from '../domain/node/NodeMeasurementDayRepository';
-import { NETWORK_TYPES } from '../infrastructure/di/di-types';
+import { mapUnknownToError } from '../../core/utilities/mapUnknownToError.js';
+import type { NodeMeasurementRepository } from '../domain/node/NodeMeasurementRepository.js';
+import type { NodeMeasurementDayRepository } from '../domain/node/NodeMeasurementDayRepository.js';
+import { NETWORK_TYPES } from '../infrastructure/di/di-types.js';
 import { inject, injectable } from 'inversify';
-import { NodeV1DTOMapper } from '../mappers/NodeV1DTOMapper';
+import { NodeV1DTOMapper } from '../mappers/NodeV1DTOMapper.js';
 import { NodeV1 } from 'shared';
 
 @injectable()

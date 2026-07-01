@@ -1,0 +1,127 @@
+@import "@/assets/variables";
+
+svg.graph {
+  width: 100%;
+  cursor: grab;
+  touch-action: none;
+  overscroll-behavior: contain;
+  background: #fbfdff;
+}
+
+.dimmer.active .dimmer-content {
+  opacity: 0.4;
+}
+
+path.edge {
+  stroke: var(--edge-color, $graph-primary);
+  stroke-width: 0.7px;
+  stroke-opacity: 0.16;
+  fill-opacity: 0;
+}
+
+path.strongly-connected {
+  stroke: var(--edge-color, $graph-primary);
+  stroke-width: 1.1px;
+  stroke-opacity: 0.44;
+}
+
+path.failing {
+  stroke: $red;
+}
+
+path.outgoing {
+  stroke: #fec601;
+  stroke-opacity: 0.9;
+  stroke-width: 1.3px;
+}
+
+path.incoming {
+  stroke: #73bfb8;
+  stroke-opacity: 0.9;
+  stroke-width: 1.3px;
+}
+
+circle.active,
+circle.transitive {
+  fill: $graph-primary;
+}
+
+circle.selected {
+  stroke: $yellow;
+  opacity: 1;
+  stroke-width: 3px;
+}
+
+circle.failing {
+  fill: $red;
+}
+
+circle.target {
+  stroke: #fec601;
+  stroke-opacity: 1;
+  stroke-width: 2px;
+}
+
+circle.source {
+  stroke: #73bfb8;
+  stroke-opacity: 1;
+  stroke-width: 2px;
+}
+
+circle.trust-high {
+  stroke: #28a745;
+}
+
+circle.trust-medium {
+  stroke: #ffc107;
+}
+
+circle.trust-low {
+  stroke: #fd7e14;
+}
+
+circle.trust-unknown {
+  stroke: #6c757d;
+}
+
+circle {
+  stroke: $white;
+  fill: $gray-100;
+  cursor: pointer;
+  stroke-width: 1.75px;
+}
+
+text {
+  fill: #2f5f7c;
+  font-weight: 400;
+  paint-order: stroke;
+  stroke: white;
+  stroke-linejoin: round;
+  stroke-width: 1.6px;
+}
+
+.failing {
+  fill: $red;
+  opacity: 0.7;
+}
+
+.selected {
+  font-weight: bold;
+}
+
+.rect {
+  opacity: 0.8;
+}
+
+.rect-selected {
+  stroke: yellow;
+  stroke-width: 1.5;
+}
+
+.propagation-circle {
+  fill: $graph-primary;
+  opacity: 0.5;
+  stroke: $graph-primary;
+  stroke-width: 0.5px;
+  stroke-opacity: 0.5;
+}

@@ -1,4 +1,4 @@
-import PublicKey from '../PublicKey';
+import PublicKey from '../PublicKey.js';
 
 export function createDummyPublicKey() {
 	const publicKeyOrError = PublicKey.create(createDummyPublicKeyString());

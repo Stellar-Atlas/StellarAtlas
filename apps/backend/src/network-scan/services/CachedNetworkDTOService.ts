@@ -1,11 +1,11 @@
-import { NetworkDTOService } from './NetworkDTOService';
+import { NetworkDTOService } from './NetworkDTOService.js';
 import { inject, injectable } from 'inversify';
 import { err, ok, Result } from 'neverthrow';
-import LRUCache from 'lru-cache';
+import { LRUCache } from 'lru-cache';
 import { NetworkV1 } from 'shared';
-import { mapUnknownToError } from '../../core/utilities/mapUnknownToError';
-import { NETWORK_TYPES } from '../infrastructure/di/di-types';
-import { NetworkScanRepository } from '../domain/network/scan/NetworkScanRepository';
+import { mapUnknownToError } from '../../core/utilities/mapUnknownToError.js';
+import { NETWORK_TYPES } from '../infrastructure/di/di-types.js';
+import type { NetworkScanRepository } from '../domain/network/scan/NetworkScanRepository.js';
 
 @injectable()
 export class CachedNetworkDTOService {

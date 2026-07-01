@@ -1,5 +1,5 @@
 import { Result } from 'neverthrow';
-import { Scan } from './Scan';
+import { Scan } from './Scan.js';
 import { ScanJobDTO } from 'history-scanner-dto';
 
 export interface ScanCoordinatorService {

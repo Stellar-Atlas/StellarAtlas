@@ -1,13 +1,15 @@
-import Kernel from '../../../../core/infrastructure/Kernel';
-import { ConfigMock } from '../../../../core/config/__mocks__/configMock';
-import { TYPES } from '../../../infrastructure/di/di-types';
-import { RegisterScan } from '../../../use-cases/register-scan/RegisterScan';
-import { ScanRepository } from '../../../domain/scan/ScanRepository';
+import Kernel from '../../../../core/infrastructure/Kernel.js';
+import { ConfigMock } from '../../../../core/config/__mocks__/configMock.js';
+import { TYPES } from '../../../infrastructure/di/di-types.js';
+import { RegisterScan } from '../../../use-cases/register-scan/RegisterScan.js';
+import type { ScanRepository } from '../../../domain/scan/ScanRepository.js';
 import { Url } from 'http-helper';
 import { ScanDTO } from 'history-scanner-dto';
-import { ScanJobRepository } from '../../../domain/ScanJobRepository';
-import { ScanJob } from '../../../domain/ScanJob';
+import type { ScanJobRepository } from '../../../domain/ScanJobRepository.js';
+import { ScanJob } from '../../../domain/ScanJob.js';
 import { url } from 'inspector';
+
+jest.setTimeout(60000);
 
 describe('RegisterScan.integration', () => {
 	let kernel: Kernel;
@@ -27,7 +29,7 @@ describe('RegisterScan.integration', () => {
 	});
 
 	afterAll(async () => {
-		await kernel.close();
+		await kernel?.close();
 	});
 
 	it('should register a new scan successfully', async () => {
@@ -47,6 +49,13 @@ describe('RegisterScan.integration', () => {
 				message: 'Invalid URL',
 				url: 'http://example.com/error'
 			},
+			errors: [
+				{
+					type: 'TYPE_VERIFICATION',
+					message: 'Invalid URL',
+					url: 'http://example.com/error'
+				}
+			],
 			baseUrl: urlResult.value.value,
 			scanChainInitDate: new Date(),
 			latestVerifiedLedger: 100,

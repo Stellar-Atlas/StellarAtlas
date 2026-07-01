@@ -111,11 +111,7 @@
 </template>
 <script setup lang="ts">
 import Vue, { type Ref, ref, toRefs, watch } from "vue";
-import {
-  Organization,
-  OrganizationSnapShot,
-  type PublicKey,
-} from "shared";
+import { Organization, OrganizationSnapShot, type PublicKey } from "shared";
 import * as jsondiffpatch from "jsondiffpatch";
 import * as htmlFormatter from "jsondiffpatch/formatters/html";
 
@@ -136,6 +132,7 @@ import {
 import useStore from "@/store/useStore";
 import { useRoute, useRouter } from "vue-router/composables";
 import useOrganizationSnapshotRepository from "@/repositories/useOrganizationSnapshotRepository";
+import { snapshotDiffPayload } from "@/components/history-diff/snapshot-diff";
 
 interface Update {
   key: string;
@@ -157,7 +154,37 @@ interface SnapshotForDelta {
   github: string | null;
   description: string | null;
   keybase: string | null;
+  horizon: string | null;
 }
+
+type OrganizationUpdateKey =
+  | "validators"
+  | "name"
+  | "dba"
+  | "url"
+  | "officialEmail"
+  | "phoneNumber"
+  | "physicalAddress"
+  | "twitter"
+  | "github"
+  | "description"
+  | "keybase"
+  | "horizon";
+
+const organizationUpdateKeys: readonly OrganizationUpdateKey[] = [
+  "validators",
+  "name",
+  "dba",
+  "url",
+  "officialEmail",
+  "phoneNumber",
+  "physicalAddress",
+  "twitter",
+  "github",
+  "description",
+  "keybase",
+  "horizon",
+];
 
 Vue.directive("b-modal", VBModal);
 
@@ -201,9 +228,38 @@ function showDiff(snapShot: SnapshotForDelta) {
   htmlFormatter.showUnchanged(true);
   diffModalHtml.value = htmlFormatter.format(
     deltas.get(snapShot.startDate.toISOString()) as jsondiffpatch.Delta,
-    snapShot,
+    snapshotDiffPayload(snapShot),
   ) as string;
   modalDiff.value.show();
+}
+
+function hasOrganizationUpdate(
+  current: SnapshotForDelta,
+  previous: SnapshotForDelta,
+  key: OrganizationUpdateKey,
+): boolean {
+  if (key === "validators") {
+    const validatorSort = (a: string, b: string) => a.localeCompare(b);
+
+    return (
+      JSON.stringify([...current.validators].sort(validatorSort)) !==
+      JSON.stringify([...previous.validators].sort(validatorSort))
+    );
+  }
+
+  return current[key] !== previous[key];
+}
+
+function getOrganizationUpdateValue(
+  snapshot: SnapshotForDelta,
+  key: OrganizationUpdateKey,
+): string {
+  if (key === "validators") return "updated";
+
+  const value = snapshot[key];
+  if (value === null) return "";
+
+  return String(value);
 }
 
 async function getSnapshots() {
@@ -250,35 +306,16 @@ async function getSnapshots() {
         };
       },
     );
-    const validatorSort = (a: PublicKey, b: PublicKey) => a.localeCompare(b);
     for (let i = snapshots.length - 2; i >= 0; i--) {
       const updates: Update[] = [];
-      [
-        "validators",
-        "name",
-        "dba",
-        "url",
-        "officialEmail",
-        "phoneNumber",
-        "physicalAddress",
-        "twitter",
-        "github",
-        "description",
-        "keybase",
-        "horizon",
-      ]
+      organizationUpdateKeys
         .filter((key) =>
-          key === "validators"
-            ? JSON.stringify(snapshots[i][key].sort(validatorSort)) !==
-              JSON.stringify(snapshots[i + 1][key].sort(validatorSort))
-            : //@ts-ignore
-              snapshots[i][key] !== snapshots[i + 1][key],
+          hasOrganizationUpdate(snapshots[i], snapshots[i + 1], key),
         )
         .forEach((changedKey) =>
           updates.push({
             key: changedKey,
-            //@ts-ignore
-            value: snapshots[i][changedKey],
+            value: getOrganizationUpdateValue(snapshots[i], changedKey),
           }),
         );
 
@@ -297,7 +334,10 @@ async function getSnapshots() {
 
       deltas.set(
         snapshots[i].startDate.toISOString(),
-        differ.diff(snapshots[i + 1], snapshots[i]),
+        differ.diff(
+          snapshotDiffPayload(snapshots[i + 1]),
+          snapshotDiffPayload(snapshots[i]),
+        ),
       );
     }
     updatesPerDate.value.reverse();

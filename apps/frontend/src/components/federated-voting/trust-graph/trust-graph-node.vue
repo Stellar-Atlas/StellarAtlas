@@ -107,7 +107,7 @@ const currentEvents = ref<
 const isPulseActive = ref(false);
 const isHovered = ref(false);
 const initialDialogShow = ref(false);
-let hideDialogTimeout: NodeJS.Timeout | null = null;
+let hideDialogTimeout: ReturnType<typeof setTimeout> | null = null;
 
 const showDialog = computed(() => {
   return (

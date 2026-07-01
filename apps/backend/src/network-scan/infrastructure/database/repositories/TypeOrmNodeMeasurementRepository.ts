@@ -1,10 +1,10 @@
 import { Between, Repository } from 'typeorm';
 import { injectable } from 'inversify';
-import NodeMeasurement from '../../../domain/node/NodeMeasurement';
-import { NodeMeasurementRepository } from '../../../domain/node/NodeMeasurementRepository';
-import { NodeMeasurementAverage } from '../../../domain/node/NodeMeasurementAverage';
-import { NodeMeasurementEvent } from '../../../domain/node/NodeMeasurementEvent';
-import PublicKey from '../../../domain/node/PublicKey';
+import NodeMeasurement from '../../../domain/node/NodeMeasurement.js';
+import type { NodeMeasurementRepository } from '../../../domain/node/NodeMeasurementRepository.js';
+import { NodeMeasurementAverage } from '../../../domain/node/NodeMeasurementAverage.js';
+import { NodeMeasurementEvent } from '../../../domain/node/NodeMeasurementEvent.js';
+import PublicKey from '../../../domain/node/PublicKey.js';
 
 export interface NodeMeasurementAverageRecord {
 	publicKey: string;
@@ -31,9 +31,7 @@ export function nodeMeasurementAverageFromDatabaseRecord(
 }
 
 @injectable()
-export class TypeOrmNodeMeasurementRepository
-	implements NodeMeasurementRepository
-{
+export class TypeOrmNodeMeasurementRepository implements NodeMeasurementRepository {
 	constructor(private baseRepository: Repository<NodeMeasurement>) {}
 
 	async findAllAt(at: Date): Promise<NodeMeasurement[]> {

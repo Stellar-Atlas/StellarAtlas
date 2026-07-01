@@ -1,11 +1,9 @@
 import 'reflect-metadata';
-import { IHashCalculationPolicy } from './IHashCalculationPolicy';
+import { IHashCalculationPolicy } from './IHashCalculationPolicy.js';
 import { createHash } from 'crypto';
-import { xdr } from '@stellar/stellar-base';
+import { xdr } from '@stellar/stellar-sdk';
 
-export class GeneralizedTransactionSetHashPolicy
-	implements IHashCalculationPolicy
-{
+export class GeneralizedTransactionSetHashPolicy implements IHashCalculationPolicy {
 	calculateHash(previousLedgerHeaderHash: string): string {
 		// @ts-ignore
 		const emptyPhase = new xdr.TransactionPhase(0, []);

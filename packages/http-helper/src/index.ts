@@ -1,19 +1,14 @@
-export { asyncSleep } from './asyncSleep';
+export { asyncSleep } from './asyncSleep.js';
 export {
 	HttpQueue,
 	FileNotFoundError,
-	HttpQueueOptions,
 	QueueError,
-	Request,
 	RequestMethod,
 	RetryableQueueError
-} from './HttpQueue';
-export {
-	isHttpError,
-	HttpService,
-	HttpError,
-	HttpResponse
-} from './HttpService';
-export { AxiosHttpService } from './AxiosHttpService';
-export { Url } from './Url';
-export { retryHttpRequestIfNeeded } from './HttpRequestRetry';
+} from './HttpQueue.js';
+export type { HttpQueueOptions, Request } from './HttpQueue.js';
+export { isHttpError, HttpError } from './HttpService.js';
+export type { HttpService, HttpResponse } from './HttpService.js';
+export { AxiosHttpService } from './AxiosHttpService.js';
+export { Url } from './Url.js';
+export { retryHttpRequestIfNeeded } from './HttpRequestRetry.js';

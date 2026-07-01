@@ -1,21 +1,22 @@
 import { config } from 'dotenv';
-import { isArray, isString } from '../utilities/TypeGuards';
+import { isArray, isString } from '../utilities/TypeGuards.js';
 import { err, ok, Result } from 'neverthrow';
-import { Url } from '../domain/Url';
+import { Url } from '../domain/Url.js';
 import { CrawlerConfiguration } from 'crawler';
-import path from 'path';
+import { resolveAppEnvPath } from 'shared/lib/env/resolve-app-env-path.js';
 
 config({
-	path: path.resolve(__dirname + '../../../../.env')
+	path: resolveAppEnvPath(import.meta.url, 'backend'),
+	quiet: true
 });
 
 // Simple boolean parser to replace 'yn'
-function parseBoolean(val: any): boolean | undefined {
-  if (typeof val !== 'string') return undefined;
-  const normalized = val.trim().toLowerCase();
-  if (["y", "yes", "true", "1", "on"].includes(normalized)) return true;
-  if (["n", "no", "false", "0", "off"].includes(normalized)) return false;
-  return undefined;
+function parseBoolean(val: string | undefined): boolean | undefined {
+	if (typeof val !== 'string') return undefined;
+	const normalized = val.trim().toLowerCase();
+	if (['y', 'yes', 'true', '1', 'on'].includes(normalized)) return true;
+	if (['n', 'no', 'false', '0', 'off'].includes(normalized)) return false;
+	return undefined;
 }
 
 type PublicKey = string;
@@ -131,9 +132,9 @@ export function getConfigFromEnv(): Result<Config, Error> {
 	}
 
 	const crawlerMaxConnectionsRaw = process.env.CRAWLER_MAX_CONNECTIONS;
-	let crawlerMaxConnections = 25;
+	let crawlerMaxConnections = 75;
 	if (!isNaN(Number(crawlerMaxConnectionsRaw)))
-		crawlerMaxConnections = Number(crawlerMaxConnectionsRaw);
+		crawlerMaxConnections = Math.max(75, Number(crawlerMaxConnectionsRaw));
 
 	const crawlerNodePrivateKey = process.env.CRAWLER_NODE_PRIVATE_KEY;
 
@@ -171,8 +172,8 @@ export function getConfigFromEnv(): Result<Config, Error> {
 		blackList: crawlerBlacklist,
 		maxOpenConnections: crawlerMaxConnections,
 		maxCrawlTime: Number.isNaN(crawlerMaxCrawlTime)
-			? 900000
-			: crawlerMaxCrawlTime,
+			? 1800000
+			: Math.max(1800000, crawlerMaxCrawlTime),
 		nodeConfig: {
 			network: networkConfig.networkPassphrase,
 			listeningPort: 11625,

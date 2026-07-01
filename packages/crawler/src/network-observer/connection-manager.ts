@@ -1,7 +1,7 @@
 import { EventEmitter } from 'events';
 import { Connection, Node as NetworkNode } from 'node-connector';
-import { P } from 'pino';
-import { truncate } from '../utilities/truncate';
+import pino from 'pino';
+import { truncate } from '../utilities/truncate.js';
 import { StellarMessageWork } from 'node-connector';
 import { NodeInfo } from 'node-connector';
 
@@ -32,7 +32,7 @@ export class ConnectionManager extends EventEmitter {
 	constructor(
 		private node: NetworkNode,
 		private blackList: Set<PublicKey>,
-		private logger: P.Logger
+		private logger: pino.Logger
 	) {
 		super();
 		this.activeConnections = new Map(); // Active connections keyed by node public key or address
@@ -168,8 +168,9 @@ export class ConnectionManager extends EventEmitter {
 		this.activeConnections.forEach((connection) => {
 			this.disconnect(connection);
 		}); //what about the in progress connections
-		this.logger.info('ConnectionManager shutdown: All connections closed.', {
-			activeConnections: this.activeConnections.size
-		});
+		this.logger.info(
+			{ activeConnections: this.activeConnections.size },
+			'ConnectionManager shutdown: All connections closed.'
+		);
 	}
 }

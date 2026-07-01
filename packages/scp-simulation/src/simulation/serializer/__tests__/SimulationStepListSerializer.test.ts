@@ -1,7 +1,7 @@
-import { SimulationStepListSerializer } from '../SimulationStepListSerializer';
-import { SimulationStepSerializer } from '../SimulationStepSerializer';
-import { SimulationStep } from '../../Simulation';
-import { AddConnection } from '../../../overlay';
+import { SimulationStepListSerializer } from '../SimulationStepListSerializer.js';
+import { SimulationStepSerializer } from '../SimulationStepSerializer.js';
+import { SimulationStep } from '../../Simulation.js';
+import { AddConnection } from '../../../overlay/index.js';
 
 describe('SimulationStepListSerializer', () => {
 	let serializer: SimulationStepListSerializer;

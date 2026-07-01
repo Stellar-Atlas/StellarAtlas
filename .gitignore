@@ -3,6 +3,7 @@ node_modules
 .env
 lib/
 dist/
+server-lib/
 tsconfig.tsbuildinfo
 .pnpm-store/
 *.session.sql
@@ -17,5 +18,3 @@ CLAUDE.md
 SDF_GRANT_MILESTONES.md
 Report.md
 mcp-config-update.json
-pnpm-lock.yaml
-

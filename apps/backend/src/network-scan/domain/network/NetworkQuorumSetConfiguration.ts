@@ -1,5 +1,5 @@
-import { ValueObject } from '../../../core/domain/ValueObject';
-import PublicKey from '../node/PublicKey';
+import { ValueObject } from '../../../core/domain/ValueObject.js';
+import PublicKey from '../node/PublicKey.js';
 import { createHash } from 'crypto';
 import { Type } from 'class-transformer';
 

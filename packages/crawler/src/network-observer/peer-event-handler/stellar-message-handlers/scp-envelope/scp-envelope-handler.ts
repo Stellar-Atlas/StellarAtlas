@@ -1,10 +1,10 @@
-import { hash, xdr } from '@stellar/stellar-base';
+import { hash, xdr } from '@stellar/stellar-sdk';
 import { verifySCPEnvelopeSignature } from 'node-connector';
 import { err, ok, Result } from 'neverthrow';
-import { isLedgerSequenceValid } from './ledger-validator';
-import { ScpStatementHandler } from './scp-statement/scp-statement-handler';
-import { Ledger } from '../../../../crawler';
-import { Observation } from '../../../observation';
+import { isLedgerSequenceValid } from './ledger-validator.js';
+import { ScpStatementHandler } from './scp-statement/scp-statement-handler.js';
+import type { Ledger } from '../../../../crawler.js';
+import { Observation } from '../../../observation.js';
 
 /*
  * ScpEnvelopeHandler makes sure that no duplicate SCP envelopes are processed, that the signature is valid and

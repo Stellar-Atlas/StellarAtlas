@@ -1,15 +1,18 @@
-import { HomeDomainFetcher } from '../../domain/node/scan/HomeDomainFetcher';
-import { HorizonService } from '../../domain/network/scan/HorizonService';
+import { HomeDomainFetcher } from '../../domain/node/scan/HomeDomainFetcher.js';
+import { HorizonService } from '../../domain/network/scan/HorizonService.js';
 // noinspection JSIgnoredPromiseFromCall
-import { getConfigFromEnv } from '../../../core/config/Config';
+import { getConfigFromEnv } from '../../../core/config/Config.js';
 import { PinoLogger } from 'logger';
 import { AxiosHttpService } from 'http-helper';
+import { fileURLToPath } from 'node:url';
+
+const currentFile = fileURLToPath(import.meta.url);
 
 main();
 
 async function main() {
 	if (process.argv.length <= 2) {
-		console.log('Usage: ' + __filename + ' PUBLIC KEY');
+		console.log('Usage: ' + currentFile + ' PUBLIC KEY');
 
 		process.exit(-1);
 	}

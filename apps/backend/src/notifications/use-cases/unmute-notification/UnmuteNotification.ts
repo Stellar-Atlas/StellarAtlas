@@ -1,13 +1,13 @@
-import { UnmuteNotificationDTO } from './UnmuteNotificationDTO';
-import { EventSourceIdFactory } from '../../domain/event/EventSourceIdFactory';
+import { UnmuteNotificationDTO } from './UnmuteNotificationDTO.js';
+import { EventSourceIdFactory } from '../../domain/event/EventSourceIdFactory.js';
 import { inject, injectable } from 'inversify';
-import { SubscriberRepository } from '../../domain/subscription/SubscriberRepository';
+import type { SubscriberRepository } from '../../domain/subscription/SubscriberRepository.js';
 import { err, ok, Result } from 'neverthrow';
-import { SubscriberReference } from '../../domain/subscription/SubscriberReference';
-import { EventType } from '../../domain/event/Event';
-import isPartOfStringEnum from '../../../core/utilities/TypeGuards';
-import { PersistenceError } from './UnmuteNotificationError';
-import { mapUnknownToError } from '../../../core/utilities/mapUnknownToError';
+import { SubscriberReference } from '../../domain/subscription/SubscriberReference.js';
+import { EventType } from '../../domain/event/Event.js';
+import isPartOfStringEnum from '../../../core/utilities/TypeGuards.js';
+import { PersistenceError } from './UnmuteNotificationError.js';
+import { mapUnknownToError } from '../../../core/utilities/mapUnknownToError.js';
 
 @injectable()
 export class UnmuteNotification {

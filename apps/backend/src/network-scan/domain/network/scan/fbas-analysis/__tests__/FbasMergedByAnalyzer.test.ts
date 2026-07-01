@@ -2,10 +2,10 @@ import FbasAnalyzerFacade, {
 	FbasAnalysisNode,
 	FbasAnalysisOrganization,
 	MergeBy
-} from '../FbasAnalyzerFacade';
-import { FbasMergedByAnalyzer } from '../FbasMergedByAnalyzer';
+} from '../FbasAnalyzerFacade.js';
+import { FbasMergedByAnalyzer } from '../FbasMergedByAnalyzer.js';
 import { mock } from 'jest-mock-extended';
-import { Logger } from 'logger';
+import type { Logger } from 'logger';
 import { ok } from 'neverthrow';
 
 describe('FbasMergedByAnalyzer', () => {
@@ -73,27 +73,27 @@ describe('FbasMergedByAnalyzer', () => {
 			});
 		}
 
-		expect(analyzerFacade.analyzeBlockingSets).toBeCalledTimes(2);
-		expect(analyzerFacade.analyzeBlockingSets).toBeCalledWith(
+		expect(analyzerFacade.analyzeBlockingSets).toHaveBeenCalledTimes(2);
+		expect(analyzerFacade.analyzeBlockingSets).toHaveBeenCalledWith(
 			[fbasAnalysisNode],
 			faultyNodes,
 			[fbasAnalysisOrganization],
 			MergeBy.ORGANIZATION
 		);
-		expect(analyzerFacade.analyzeBlockingSets).toBeCalledWith(
+		expect(analyzerFacade.analyzeBlockingSets).toHaveBeenCalledWith(
 			[fbasAnalysisNode],
 			[],
 			[fbasAnalysisOrganization],
 			MergeBy.ORGANIZATION
 		);
-		expect(analyzerFacade.analyzeSplittingSets).toBeCalledTimes(1);
-		expect(analyzerFacade.analyzeSplittingSets).toBeCalledWith(
+		expect(analyzerFacade.analyzeSplittingSets).toHaveBeenCalledTimes(1);
+		expect(analyzerFacade.analyzeSplittingSets).toHaveBeenCalledWith(
 			[fbasAnalysisNode],
 			[fbasAnalysisOrganization],
 			MergeBy.ORGANIZATION
 		);
-		expect(analyzerFacade.analyzeTopTier).toBeCalledTimes(1);
-		expect(analyzerFacade.analyzeTopTier).toBeCalledWith(
+		expect(analyzerFacade.analyzeTopTier).toHaveBeenCalledTimes(1);
+		expect(analyzerFacade.analyzeTopTier).toHaveBeenCalledWith(
 			[fbasAnalysisNode],
 			[fbasAnalysisOrganization],
 			MergeBy.ORGANIZATION

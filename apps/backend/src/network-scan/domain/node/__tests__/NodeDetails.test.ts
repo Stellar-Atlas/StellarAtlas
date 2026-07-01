@@ -1,4 +1,4 @@
-import NodeDetails, { NodeDetailsProps } from '../NodeDetails';
+import NodeDetails, { NodeDetailsProps } from '../NodeDetails.js';
 
 describe('NodeDetailsStorage', () => {
 	test('equal', async () => {

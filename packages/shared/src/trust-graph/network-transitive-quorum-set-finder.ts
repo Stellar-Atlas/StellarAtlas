@@ -1,5 +1,5 @@
-import { isVertex, TrustGraph, VertexKey } from './trust-graph';
-import { StronglyConnectedComponent } from './strongly-connected-components-finder';
+import { isVertex, TrustGraph, VertexKey } from './trust-graph.js';
+import { StronglyConnectedComponent } from './strongly-connected-components-finder.js';
 
 export class NetworkTransitiveQuorumSetFinder {
 	public getTransitiveQuorumSet(

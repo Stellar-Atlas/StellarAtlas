@@ -1,7 +1,7 @@
 import { mock } from 'jest-mock-extended';
-import { ExceptionLogger } from '../../../../core/services/ExceptionLogger';
-import { GetMeasurements } from '../GetMeasurements';
-import { NodeMeasurementRepository } from '../../../domain/node/NodeMeasurementRepository';
+import type { ExceptionLogger } from '../../../../core/services/ExceptionLogger.js';
+import { GetMeasurements } from '../GetMeasurements.js';
+import type { NodeMeasurementRepository } from '../../../domain/node/NodeMeasurementRepository.js';
 
 it('should capture and return errors', async function () {
 	const service = mock<NodeMeasurementRepository>();
@@ -14,7 +14,7 @@ it('should capture and return errors', async function () {
 		to: new Date()
 	});
 	expect(result.isErr()).toBe(true);
-	expect(exceptionLogger.captureException).toBeCalledTimes(1);
+	expect(exceptionLogger.captureException).toHaveBeenCalledTimes(1);
 });
 
 it('should return measurements', async function () {

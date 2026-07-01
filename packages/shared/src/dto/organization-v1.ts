@@ -1,5 +1,5 @@
 import { JSONSchemaType } from 'ajv';
-import { nullable } from './helper/nullable';
+import { nullable } from './helper/nullable.js';
 
 export interface OrganizationV1 {
 	id: string;

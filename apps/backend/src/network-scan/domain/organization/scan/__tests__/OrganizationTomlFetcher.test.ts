@@ -1,13 +1,13 @@
 import * as toml from 'toml';
-import { OrganizationTomlFetcher } from '../OrganizationTomlFetcher';
+import { OrganizationTomlFetcher } from '../OrganizationTomlFetcher.js';
 import { mock } from 'jest-mock-extended';
 import {
 	TomlFetchError,
 	TomlParseError,
 	TomlService
-} from '../../../network/scan/TomlService';
-import { Logger } from 'logger';
-import { TomlState } from '../TomlState';
+} from '../../../network/scan/TomlService.js';
+import type { Logger } from 'logger';
+import { TomlState } from '../TomlState.js';
 
 describe('OrganizationTomlFetcher', () => {
 	const tomlV2String =

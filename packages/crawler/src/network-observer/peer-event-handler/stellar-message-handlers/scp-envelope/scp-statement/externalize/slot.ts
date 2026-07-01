@@ -1,8 +1,8 @@
-import { Ledger } from '../../../../../../crawler';
+import type { Ledger } from '../../../../../../crawler.js';
 import { QuorumSet } from 'shared';
-import * as P from 'pino';
-import {containsSlice} from 'shared';
-import { extractCloseTimeFromValue } from './extract-close-time-from-value';
+import pino from 'pino';
+import { containsSlice } from 'shared';
+import { extractCloseTimeFromValue } from './extract-close-time-from-value.js';
 
 export type SlotIndex = bigint;
 type NodeId = string;
@@ -21,7 +21,7 @@ export class Slot {
 	constructor(
 		index: SlotIndex,
 		trustedQuorumSet: QuorumSet,
-		private logger: P.Logger
+		private logger: pino.Logger
 	) {
 		this.index = index;
 		this.trustedQuorumSet = trustedQuorumSet;
@@ -77,9 +77,10 @@ export class Slot {
 			return;
 		}
 
-		this.logger.debug('Node part of trusted quorumSet, attempting slot close', {
-			node: nodeId
-		});
+		this.logger.debug(
+			{ node: nodeId },
+			'Node part of trusted quorumSet, attempting slot close'
+		);
 
 		if (containsSlice(this.trustedQuorumSet, nodesThatExternalizedValue)) {
 			//try to close slot

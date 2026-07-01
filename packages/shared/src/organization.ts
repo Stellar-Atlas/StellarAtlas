@@ -1,6 +1,6 @@
-import { OrganizationId, PublicKey } from './network';
-import PropertyMapper from './PropertyMapper';
-import { OrganizationV1 } from './dto/organization-v1';
+import { OrganizationId, PublicKey } from './network.js';
+import PropertyMapper from './PropertyMapper.js';
+import { OrganizationV1 } from './dto/organization-v1.js';
 
 export function isOrganization(
 	organization: Organization | undefined

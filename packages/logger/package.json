@@ -1,6 +1,7 @@
 {
 	"name": "logger",
 	"description": "Abstract logger",
+	"type": "module",
 	"scripts": {
 		"preversion": "pnpm run build",
 		"build": "../../node_modules/typescript/bin/tsc  --declaration",
@@ -11,7 +12,6 @@
 	"main": "lib/index.js",
 	"types": "lib/index.d.ts",
 	"dependencies": {
-		"pino": "9.4.0"
-	},
-	"devDependencies": {}
+		"pino": "10.3.1"
+	}
 }

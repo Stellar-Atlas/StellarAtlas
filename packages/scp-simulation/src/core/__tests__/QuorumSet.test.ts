@@ -1,4 +1,4 @@
-import { QuorumSet } from '../QuorumSet';
+import { QuorumSet } from '../QuorumSet.js';
 
 describe('QuorumSet', () => {
 	describe('toJSON', () => {

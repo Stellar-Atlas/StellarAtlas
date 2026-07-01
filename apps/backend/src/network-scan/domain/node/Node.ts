@@ -1,12 +1,12 @@
 import { Entity, Column, OneToMany } from 'typeorm';
-import PublicKey from './PublicKey';
-import NodeSnapShot from './NodeSnapShot';
-import { VersionedEntity } from '../../../core/domain/VersionedEntity';
-import NodeDetails from './NodeDetails';
-import NodeQuorumSet from './NodeQuorumSet';
-import NodeGeoDataLocation from './NodeGeoDataLocation';
-import NodeMeasurement from './NodeMeasurement';
-import moreThanOneDayApart from './scan/MoreThanOneDayApart';
+import PublicKey from './PublicKey.js';
+import NodeSnapShot from './NodeSnapShot.js';
+import { VersionedEntity } from '../../../core/domain/VersionedEntity.js';
+import NodeDetails from './NodeDetails.js';
+import NodeQuorumSet from './NodeQuorumSet.js';
+import NodeGeoDataLocation from './NodeGeoDataLocation.js';
+import NodeMeasurement from './NodeMeasurement.js';
+import moreThanOneDayApart from './scan/MoreThanOneDayApart.js';
 
 export interface NodeProps {
 	ip: string;
@@ -25,7 +25,7 @@ export default class Node extends VersionedEntity<NodeSnapShot> {
 		cascade: false,
 		nullable: false
 	})
-	protected declare _snapshots?: NodeSnapShot[];
+	declare protected _snapshots?: NodeSnapShot[];
 
 	@OneToMany(() => NodeMeasurement, (measurement) => measurement.node, {
 		cascade: false

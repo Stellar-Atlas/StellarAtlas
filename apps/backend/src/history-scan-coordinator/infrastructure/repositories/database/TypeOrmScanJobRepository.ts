@@ -1,6 +1,6 @@
 import { injectable } from 'inversify';
-import { ScanJobRepository } from '../../../domain/ScanJobRepository';
-import { ScanJob } from '../../../domain/ScanJob';
+import type { ScanJobRepository } from '../../../domain/ScanJobRepository.js';
+import { ScanJob } from '../../../domain/ScanJob.js';
 import { MoreThan, Repository } from 'typeorm';
 
 @injectable()
@@ -12,14 +12,12 @@ export class TypeOrmScanJobRepository implements ScanJobRepository {
 	}
 
 	async fetchNextJob(): Promise<ScanJob | null> {
-		return await this.baseRepository.findOne({
-			where: {
-				status: 'PENDING'
-			},
-			order: {
-				id: 'ASC' //fifo queue
-			}
-		});
+		return await this.baseRepository
+			.createQueryBuilder('job')
+			.where('job.status = :status', { status: 'PENDING' })
+			.orderBy('CASE WHEN job."fromLedger" IS NULL THEN 1 ELSE 0 END', 'ASC')
+			.addOrderBy('job.id', 'ASC')
+			.getOne();
 	}
 
 	async hasPendingJobs(): Promise<boolean> {
@@ -39,5 +37,17 @@ export class TypeOrmScanJobRepository implements ScanJobRepository {
 				{ status: 'PENDING', updatedAt: MoreThan(afterUpdatedAt) }
 			]
 		});
+	}
+
+	async releaseStaleTakenJobs(before: Date): Promise<number> {
+		const result = await this.baseRepository
+			.createQueryBuilder()
+			.update(ScanJob)
+			.set({ status: 'PENDING' })
+			.where('status = :status', { status: 'TAKEN' })
+			.andWhere('"updatedAt" < :before', { before })
+			.execute();
+
+		return result.affected ?? 0;
 	}
 }

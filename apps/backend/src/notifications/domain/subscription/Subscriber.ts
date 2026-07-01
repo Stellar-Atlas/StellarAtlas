@@ -1,16 +1,16 @@
-import { Event, EventData, EventType } from '../event/Event';
-import { Subscription } from './Subscription';
+import { Event, EventData, EventType } from '../event/Event.js';
+import { Subscription } from './Subscription.js';
 import {
 	PendingSubscription,
 	PendingSubscriptionId
-} from './PendingSubscription';
+} from './PendingSubscription.js';
 import { Column, Entity, OneToMany, OneToOne, JoinColumn } from 'typeorm';
-import { UserId } from './UserId';
-import { EventSourceId } from '../event/EventSourceId';
-import { SubscriberReference } from './SubscriberReference';
+import { UserId } from './UserId.js';
+import { EventSourceId } from '../event/EventSourceId.js';
+import { SubscriberReference } from './SubscriberReference.js';
 import { err, ok, Result } from 'neverthrow';
-import { Notification } from './Notification';
-import { CoreEntity } from '../../../core/domain/CoreEntity';
+import { Notification } from './Notification.js';
+import { CoreEntity } from '../../../core/domain/CoreEntity.js';
 
 export interface SubscriberProperties {
 	userId: UserId;

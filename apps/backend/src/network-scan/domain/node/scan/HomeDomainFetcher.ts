@@ -1,11 +1,11 @@
 import { err, ok, Result } from 'neverthrow';
-import { Account, HorizonService } from '../../network/scan/HorizonService';
+import { Account, HorizonService } from '../../network/scan/HorizonService.js';
 import validator from 'validator';
 import { inject, injectable } from 'inversify';
 import 'reflect-metadata';
 import { queue } from 'async';
-import { CustomError } from '../../../../core/errors/CustomError';
-import { Logger } from '../../../../core/services/Logger';
+import { CustomError } from '../../../../core/errors/CustomError.js';
+import type { Logger } from '../../../../core/services/Logger.js';
 
 interface CacheResult {
 	domain: string | null;

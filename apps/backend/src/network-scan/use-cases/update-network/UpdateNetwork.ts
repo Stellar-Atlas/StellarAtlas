@@ -1,20 +1,20 @@
 import { err, ok, Result } from 'neverthrow';
 import { inject, injectable } from 'inversify';
-import { NETWORK_TYPES } from '../../infrastructure/di/di-types';
-import { ExceptionLogger } from '../../../core/services/ExceptionLogger';
-import { NetworkId } from '../../domain/network/NetworkId';
-import { mapUnknownToError } from '../../../core/utilities/mapUnknownToError';
-import { NetworkQuorumSetMapper } from './NetworkQuorumSetMapper';
-import { InvalidQuorumSetConfigError } from './InvalidQuorumSetConfigError';
-import { NetworkRepository } from '../../domain/network/NetworkRepository';
-import { Network, NetworkProps } from '../../domain/network/Network';
-import { OverlayVersionRange } from '../../domain/network/OverlayVersionRange';
-import { UpdateNetworkDTO } from './UpdateNetworkDTO';
-import { InvalidOverlayRangeError } from './InvalidOverlayRangeError';
-import { StellarCoreVersion } from '../../domain/network/StellarCoreVersion';
-import { InvalidStellarCoreVersionError } from './InvalidStellarCoreVersionError';
-import { RepositoryError } from './RepositoryError';
-import { Logger } from '../../../core/services/Logger';
+import { NETWORK_TYPES } from '../../infrastructure/di/di-types.js';
+import type { ExceptionLogger } from '../../../core/services/ExceptionLogger.js';
+import { NetworkId } from '../../domain/network/NetworkId.js';
+import { mapUnknownToError } from '../../../core/utilities/mapUnknownToError.js';
+import { NetworkQuorumSetMapper } from './NetworkQuorumSetMapper.js';
+import { InvalidQuorumSetConfigError } from './InvalidQuorumSetConfigError.js';
+import type { NetworkRepository } from '../../domain/network/NetworkRepository.js';
+import { Network, NetworkProps } from '../../domain/network/Network.js';
+import { OverlayVersionRange } from '../../domain/network/OverlayVersionRange.js';
+import { UpdateNetworkDTO } from './UpdateNetworkDTO.js';
+import { InvalidOverlayRangeError } from './InvalidOverlayRangeError.js';
+import { StellarCoreVersion } from '../../domain/network/StellarCoreVersion.js';
+import { InvalidStellarCoreVersionError } from './InvalidStellarCoreVersionError.js';
+import { RepositoryError } from './RepositoryError.js';
+import type { Logger } from '../../../core/services/Logger.js';
 
 @injectable()
 export class UpdateNetwork {

@@ -21,13 +21,12 @@
     "noImplicitAny": false,
     "noImplicitThis": true,
     "isolatedModules": false,
-    "baseUrl": ".",
     "forceConsistentCasingInFileNames": true,
     // See <https://github.com/vuejs/vue-cli/pull/5688>
     "skipLibCheck": true,
     "types": ["jest", "jquery", "bootstrap"],
     "paths": {
-      "@/*": ["src/*"]
+      "@/*": ["./src/*"]
     },
     "lib": ["esnext", "dom", "dom.iterable", "scripthost"]
   },

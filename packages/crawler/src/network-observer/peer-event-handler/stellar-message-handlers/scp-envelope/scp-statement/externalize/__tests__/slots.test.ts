@@ -1,12 +1,12 @@
 import { QuorumSet } from 'shared';
 import { mock } from 'jest-mock-extended';
-import { P } from 'pino';
-import { Slots } from '../slots';
+import pino from 'pino';
+import { Slots } from '../slots.js';
 
 describe('slots', () => {
 	it('should create new slot', () => {
 		const trustedQuorumSet = new QuorumSet(2, ['A', 'B', 'C'], []);
-		const logger = mock<P.Logger>();
+		const logger = mock<pino.Logger>();
 		const slots = new Slots(trustedQuorumSet, logger);
 		const slot = slots.getSlot(BigInt(1));
 		expect(slot).toBeDefined();
@@ -15,7 +15,7 @@ describe('slots', () => {
 
 	it('should return same slot if already created', () => {
 		const trustedQuorumSet = new QuorumSet(2, ['A', 'B', 'C'], []);
-		const logger = mock<P.Logger>();
+		const logger = mock<pino.Logger>();
 		const slots = new Slots(trustedQuorumSet, logger);
 		const slot = slots.getSlot(BigInt(1));
 		const slot2 = slots.getSlot(BigInt(1));
@@ -24,7 +24,7 @@ describe('slots', () => {
 
 	it('should return empty set if no confirmed closed ledger', () => {
 		const trustedQuorumSet = new QuorumSet(2, ['A', 'B', 'C'], []);
-		const logger = mock<P.Logger>();
+		const logger = mock<pino.Logger>();
 		const slots = new Slots(trustedQuorumSet, logger);
 		slots.getSlot(BigInt(1));
 		expect(slots.getConfirmedClosedSlotIndexes()).toEqual([]);
@@ -32,7 +32,7 @@ describe('slots', () => {
 
 	it('should return confirmed closed slot indexes', () => {
 		const trustedQuorumSet = new QuorumSet(1, ['A'], []);
-		const logger = mock<P.Logger>();
+		const logger = mock<pino.Logger>();
 		const slots = new Slots(trustedQuorumSet, logger);
 		const slot = slots.getSlot(BigInt(1));
 		slot.addExternalizeValue('A', 'test value', new Date());

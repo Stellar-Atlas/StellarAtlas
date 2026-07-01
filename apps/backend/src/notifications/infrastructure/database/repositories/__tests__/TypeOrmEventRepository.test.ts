@@ -6,17 +6,17 @@ import {
 	OrganizationXUpdatesTomlErrorEvent,
 	OrganizationXUpdatesUnavailableEvent,
 	ValidatorXUpdatesNotValidatingEvent
-} from '../../../../domain/event/Event';
+} from '../../../../domain/event/Event.js';
 import {
 	OrganizationId as EventOrganizationId,
 	PublicKey as EventPublicKey
-} from '../../../../domain/event/EventSourceId';
-import { NodeMeasurementRepository } from '../../../../../network-scan/domain/node/NodeMeasurementRepository';
-import { OrganizationMeasurementRepository } from '../../../../../network-scan/domain/organization/OrganizationMeasurementRepository';
-import { createDummyOrganizationId } from '../../../../../network-scan/domain/organization/__fixtures__/createDummyOrganizationId';
+} from '../../../../domain/event/EventSourceId.js';
+import type { NodeMeasurementRepository } from '../../../../../network-scan/domain/node/NodeMeasurementRepository.js';
+import type { OrganizationMeasurementRepository } from '../../../../../network-scan/domain/organization/OrganizationMeasurementRepository.js';
+import { createDummyOrganizationId } from '../../../../../network-scan/domain/organization/__fixtures__/createDummyOrganizationId.js';
 import { mock } from 'jest-mock-extended';
-import { createDummyPublicKey } from '../../../../../network-scan/domain/node/__fixtures__/createDummyPublicKey';
-import { TypeOrmEventRepository } from '../TypeOrmEventRepository';
+import { createDummyPublicKey } from '../../../../../network-scan/domain/node/__fixtures__/createDummyPublicKey.js';
+import { TypeOrmEventRepository } from '../TypeOrmEventRepository.js';
 
 it('should fetch node measurement events', async function () {
 	const publicKeyA = createDummyPublicKey();

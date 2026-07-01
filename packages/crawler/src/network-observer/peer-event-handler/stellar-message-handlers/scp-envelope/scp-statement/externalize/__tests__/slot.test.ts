@@ -1,10 +1,10 @@
-import { Slot } from '../slot';
+import { Slot } from '../slot.js';
 import { mock } from 'jest-mock-extended';
 import { QuorumSet } from 'shared';
-import { P } from 'pino';
-import { createDummyValue } from '../../../../../../../__fixtures__/createDummyExternalizeMessage';
+import pino from 'pino';
+import { createDummyValue } from '../../../../../../../__fixtures__/createDummyExternalizeMessage.js';
 
-const mockLogger = mock<P.Logger>();
+const mockLogger = mock<pino.Logger>();
 let quorumSet: QuorumSet;
 
 describe('slot', () => {

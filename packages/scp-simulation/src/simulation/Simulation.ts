@@ -1,7 +1,13 @@
 import murmurhash from 'murmurhash';
-import { Event, Context, UserAction, ProtocolAction, Node } from '../core';
-import { ForgeMessage } from '../federated-voting';
-import { AddConnection, RemoveConnection } from '../overlay';
+import {
+	Event,
+	Context,
+	UserAction,
+	ProtocolAction,
+	Node
+} from '../core/index.js';
+import { ForgeMessage } from '../federated-voting/index.js';
+import { AddConnection, RemoveConnection } from '../overlay/index.js';
 
 //A step in the simulation. Contains all user and protocol actions to be executed next
 //and stores the state and events that got us here.

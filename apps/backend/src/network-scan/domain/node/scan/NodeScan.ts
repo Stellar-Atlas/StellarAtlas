@@ -1,15 +1,15 @@
-import Node from '../Node';
+import Node from '../Node.js';
 import { PeerNode } from 'crawler';
 import {
 	InvalidPeerNode,
 	PeerNodeToNodeMapper
-} from './node-crawl/PeerNodeToNodeMapper';
-import NodeMeasurement from '../NodeMeasurement';
-import NodeDetails from '../NodeDetails';
-import NodeGeoDataLocation from '../NodeGeoDataLocation';
-import { NodeTomlInfo } from './NodeTomlInfo';
+} from './node-crawl/PeerNodeToNodeMapper.js';
+import NodeMeasurement from '../NodeMeasurement.js';
+import NodeDetails from '../NodeDetails.js';
+import NodeGeoDataLocation from '../NodeGeoDataLocation.js';
+import { NodeTomlInfo } from './NodeTomlInfo.js';
 import { SemanticVersionComparer } from 'shared';
-import { StellarCoreVersion } from '../../network/StellarCoreVersion';
+import { StellarCoreVersion } from '../../network/StellarCoreVersion.js';
 
 export class NodeScan {
 	public processedLedgers: number[] = [];
@@ -183,6 +183,28 @@ export class NodeScan {
 					node.lastIpChange.getTime() === this.time.getTime()
 			)
 			.map((node) => node.ip);
+	}
+
+	public getIPsRequiringGeoDataRefresh(): string[] {
+		return Array.from(
+			new Set(
+				this.nodes
+					.filter((node) => {
+						const geoData = node.geoData;
+						return (
+							(node.lastIpChange !== null &&
+								node.lastIpChange.getTime() === this.time.getTime()) ||
+							geoData === null ||
+							geoData.countryName === null ||
+							geoData.countryCode === null ||
+							geoData.latitude === null ||
+							geoData.longitude === null ||
+							node.isp === null
+						);
+					})
+					.map((node) => node.ip)
+			)
+		);
 	}
 
 	public updateIndexes(indexes: Map<string, number>) {

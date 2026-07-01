@@ -1,4 +1,4 @@
-import { MigrationInterface, QueryRunner } from 'typeorm';
+import type { MigrationInterface, QueryRunner } from 'typeorm';
 
 export class LocalSMTPUserMigration1742387934546 implements MigrationInterface {
 	name = 'LocalSMTPUserMigration1742387934546';

@@ -1,7 +1,7 @@
-import { UrlBuilder } from '../UrlBuilder';
+import { UrlBuilder } from '../UrlBuilder.js';
 import { Url } from 'http-helper';
-import { createDummyHistoryBaseUrl } from '../__fixtures__/HistoryBaseUrl';
-import { Category } from '../Category';
+import { createDummyHistoryBaseUrl } from '../__fixtures__/HistoryBaseUrl.js';
+import { Category } from '../Category.js';
 
 it('should return ledger url', function () {
 	const historyBaseUrl = Url.create('https://history.stellar.org');

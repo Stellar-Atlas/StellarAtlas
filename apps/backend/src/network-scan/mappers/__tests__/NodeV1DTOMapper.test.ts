@@ -1,14 +1,14 @@
-import Node from '../../domain/node/Node';
-import { createDummyPublicKey } from '../../domain/node/__fixtures__/createDummyPublicKey';
-import NodeGeoDataLocation from '../../domain/node/NodeGeoDataLocation';
-import NodeQuorumSet from '../../domain/node/NodeQuorumSet';
+import Node from '../../domain/node/Node.js';
+import { createDummyPublicKey } from '../../domain/node/__fixtures__/createDummyPublicKey.js';
+import NodeGeoDataLocation from '../../domain/node/NodeGeoDataLocation.js';
+import NodeQuorumSet from '../../domain/node/NodeQuorumSet.js';
 import { NodeV1, QuorumSet } from 'shared';
-import NodeDetails from '../../domain/node/NodeDetails';
-import { createDummyOrganizationId } from '../../domain/organization/__fixtures__/createDummyOrganizationId';
-import NodeMeasurement from '../../domain/node/NodeMeasurement';
-import { NodeMeasurementAverage } from '../../domain/node/NodeMeasurementAverage';
-import { OrganizationId } from '../../domain/organization/OrganizationId';
-import { NodeV1DTOMapper } from '../NodeV1DTOMapper';
+import NodeDetails from '../../domain/node/NodeDetails.js';
+import { createDummyOrganizationId } from '../../domain/organization/__fixtures__/createDummyOrganizationId.js';
+import NodeMeasurement from '../../domain/node/NodeMeasurement.js';
+import { NodeMeasurementAverage } from '../../domain/node/NodeMeasurementAverage.js';
+import { OrganizationId } from '../../domain/organization/OrganizationId.js';
+import { NodeV1DTOMapper } from '../NodeV1DTOMapper.js';
 
 describe('NodeV1DTOMapper', () => {
 	let nodeV1DTO: NodeV1;

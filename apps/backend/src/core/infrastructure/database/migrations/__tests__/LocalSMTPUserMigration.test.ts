@@ -1,34 +1,31 @@
-import { DataSource, QueryRunner } from 'typeorm';
-import { LocalSMTPUserMigration } from '../LocalSMTPUserMigration';
+import { mock, type MockProxy } from 'jest-mock-extended';
+import type { QueryRunner } from 'typeorm';
+import { LocalSMTPUserMigration1742387934546 } from '../1742387934546-LocalSMTPUserMigration.js';
 
 describe('LocalSMTPUserMigration', () => {
-	let dataSource: DataSource;
-	let queryRunner: QueryRunner;
-	let migration: LocalSMTPUserMigration;
+	let queryRunner: MockProxy<QueryRunner>;
+	let migration: LocalSMTPUserMigration1742387934546;
 
-	beforeAll(async () => {
-		// This would typically use a test database connection
-		// For now, we'll mock the QueryRunner
-		dataSource = {
-			createQueryRunner: jest.fn()
-		} as any;
-
-		queryRunner = {
-			query: jest.fn(),
-			hasTable: jest.fn(),
-			hasColumn: jest.fn(),
-			hasIndex: jest.fn(),
-			manager: {
-				query: jest.fn()
-			}
-		} as any;
-
-		migration = new LocalSMTPUserMigration();
+	beforeEach(() => {
+		queryRunner = mock<QueryRunner>();
+		queryRunner.hasTable.mockResolvedValue(false);
+		queryRunner.manager.query = jest.fn().mockResolvedValue([]);
+		migration = new LocalSMTPUserMigration1742387934546();
 	});
 
 	afterEach(() => {
 		jest.clearAllMocks();
 	});
+
+	function queryCalls(): string[] {
+		return queryRunner.query.mock.calls.map(([query]) => String(query));
+	}
+
+	function expectQueryContaining(...parts: string[]): void {
+		expect(
+			queryCalls().some((query) => parts.every((part) => query.includes(part)))
+		).toBe(true);
+	}
 
 	describe('up migration', () => {
 		it('should create users table with correct structure', async () => {
@@ -51,39 +48,36 @@ describe('LocalSMTPUserMigration', () => {
 		it('should create table with UUID primary key', async () => {
 			await migration.up(queryRunner);
 
-			expect(queryRunner.query).toHaveBeenCalledWith(
-				expect.stringMatching(/"id" uuid.*PRIMARY KEY.*DEFAULT gen_random_uuid\(\)/)
+			expectQueryContaining(
+				'"id" uuid NOT NULL DEFAULT gen_random_uuid()',
+				'CONSTRAINT "PK_users_id" PRIMARY KEY ("id")'
 			);
 		});
 
 		it('should create email column with constraints', async () => {
 			await migration.up(queryRunner);
 
-			expect(queryRunner.query).toHaveBeenCalledWith(
-				expect.stringMatching(/"email" varchar\(255\).*NOT NULL/)
-			);
+			expectQueryContaining('"email" varchar(255) NOT NULL');
 		});
 
 		it('should create timestamp columns with defaults', async () => {
 			await migration.up(queryRunner);
 
-			expect(queryRunner.query).toHaveBeenCalledWith(
-				expect.stringMatching(/"createdAt" TIMESTAMP WITH TIME ZONE.*DEFAULT now\(\)/)
-			);
-			expect(queryRunner.query).toHaveBeenCalledWith(
-				expect.stringMatching(/"updatedAt" TIMESTAMP WITH TIME ZONE.*DEFAULT now\(\)/)
-			);
+			expectQueryContaining('"createdAt" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now()');
+			expectQueryContaining('"updatedAt" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now()');
 		});
 	});
 
 	describe('down migration', () => {
 		it('should drop users table and all related objects', async () => {
+			queryRunner.hasTable.mockResolvedValue(true);
+
 			await migration.down(queryRunner);
 
 			const expectedQueries = [
 				// Drop indexes first
-				expect.stringMatching(/DROP INDEX.*"users".*"email"/),
-				expect.stringMatching(/DROP INDEX.*"users".*"id"/),
+				'DROP INDEX IF EXISTS "IDX_users_email"',
+				'DROP INDEX IF EXISTS "IDX_users_id"',
 				// Drop table
 				'DROP TABLE "users"'
 			];
@@ -117,7 +111,7 @@ describe('LocalSMTPUserMigration', () => {
 
 			// Verify that it queries for existing user IDs from subscriptions
 			expect(queryRunner.manager.query).toHaveBeenCalledWith(
-				expect.stringMatching(/SELECT DISTINCT "userIdValue" FROM "subscription_subscriber"/)
+				expect.stringMatching(/SELECT DISTINCT "userIdValue"\s+FROM "subscription_subscriber"/)
 			);
 
 			// Verify that it creates placeholder user records
@@ -159,6 +153,7 @@ describe('LocalSMTPUserMigration', () => {
 			const upQueries = (queryRunner.query as jest.Mock).mock.calls;
 
 			jest.clearAllMocks();
+			queryRunner.hasTable.mockResolvedValue(true);
 
 			// Run down migration
 			await migration.down(queryRunner);

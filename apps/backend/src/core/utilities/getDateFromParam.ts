@@ -1,5 +1,5 @@
-import { isDateString } from './isDateString';
-import { isString } from './TypeGuards';
+import { isDateString } from './isDateString.js';
+import { isString } from './TypeGuards.js';
 
 export function getDateFromParam(param: unknown): Date {
 	let time: Date;

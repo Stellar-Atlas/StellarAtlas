@@ -1,5 +1,5 @@
-import { GetScannerMetrics } from '../GetScannerMetrics';
-import { CommunityScanner, ScannerStatus } from '../../infrastructure/database/entities/CommunityScanner';
+import { GetScannerMetrics } from '../GetScannerMetrics.js';
+import { CommunityScanner, ScannerStatus } from '../../infrastructure/database/entities/CommunityScanner.js';
 import { Repository } from 'typeorm';
 
 describe('GetScannerMetrics', () => {

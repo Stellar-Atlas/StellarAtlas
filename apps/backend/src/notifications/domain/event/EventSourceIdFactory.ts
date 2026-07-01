@@ -3,12 +3,12 @@ import {
 	NetworkId,
 	OrganizationId,
 	PublicKey
-} from './EventSourceId';
+} from './EventSourceId.js';
 import { err, ok, Result } from 'neverthrow';
 import { inject, injectable } from 'inversify';
-import { EventSourceService } from './EventSourceService';
+import type { EventSourceService } from './EventSourceService.js';
 import 'reflect-metadata';
-import { TYPES } from '../../infrastructure/di/di-types';
+import { TYPES } from '../../infrastructure/di/di-types.js';
 
 @injectable()
 export class EventSourceIdFactory {

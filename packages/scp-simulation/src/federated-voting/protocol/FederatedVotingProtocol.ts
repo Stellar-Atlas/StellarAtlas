@@ -1,11 +1,11 @@
-import { Statement } from './Statement';
-import { Vote } from './Vote';
-import { BroadcastVoteRequested } from './event/BroadcastVoteRequested';
-import { Voted } from './event/Voted';
-import { ConsensusReached } from './event/ConsensusReached';
-import { FederatedVotingProtocolState } from './FederatedVotingProtocolState';
-import { PhaseTransitioner } from './phase-transitioner/PhaseTransitioner';
-import { InMemoryEventCollector } from '../../core';
+import { Statement } from './Statement.js';
+import { Vote } from './Vote.js';
+import { BroadcastVoteRequested } from './event/BroadcastVoteRequested.js';
+import { Voted } from './event/Voted.js';
+import { ConsensusReached } from './event/ConsensusReached.js';
+import { FederatedVotingProtocolState } from './FederatedVotingProtocolState.js';
+import { PhaseTransitioner } from './phase-transitioner/PhaseTransitioner.js';
+import { InMemoryEventCollector } from '../../core/index.js';
 
 export class FederatedVotingProtocol extends InMemoryEventCollector {
 	constructor(private phaseTransitioner: PhaseTransitioner) {

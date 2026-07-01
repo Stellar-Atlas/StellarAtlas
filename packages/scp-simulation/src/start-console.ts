@@ -1,8 +1,8 @@
 import {
 	ConsoleInterfacer,
 	ConsoleAdjacencyMatrixVisualization
-} from './console-interface';
-import { ScenarioLoader } from './simulation';
+} from './console-interface/index.js';
+import { ScenarioLoader } from './simulation/index.js';
 
 new ConsoleInterfacer(
 	new ConsoleAdjacencyMatrixVisualization(),

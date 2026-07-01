@@ -1,11 +1,11 @@
-import { VerifyArchives } from '../VerifyArchives';
-import Kernel from '../../../infrastructure/Kernel';
-import { ConfigMock } from '../../../infrastructure/config/__mocks__/configMock';
+import { VerifyArchives } from '../VerifyArchives.js';
+import Kernel from '../../../infrastructure/Kernel.js';
+import { ConfigMock } from '../../../infrastructure/config/__mocks__/configMock.js';
 import { mock } from 'jest-mock-extended';
-import { ScanCoordinatorService } from '../../../domain/scan/ScanCoordinatorService';
+import { ScanCoordinatorService } from '../../../domain/scan/ScanCoordinatorService.js';
 import { ok } from 'neverthrow';
-import { TYPES } from '../../../infrastructure/di/di-types';
-import { MockHistoryArchive } from '../../../infrastructure/http/MockHistoryArchive';
+import { TYPES } from '../../../infrastructure/di/di-types.js';
+import { MockHistoryArchive } from '../../../infrastructure/http/MockHistoryArchive.js';
 
 describe('VerifyArchives Integration Tests', () => {
 	let kernel: Kernel;

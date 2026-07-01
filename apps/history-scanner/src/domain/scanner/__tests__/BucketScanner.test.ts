@@ -3,15 +3,18 @@ import * as path from 'path';
 import { mock } from 'jest-mock-extended';
 import { HttpQueue, QueueError, RequestMethod } from 'http-helper';
 import { Result } from 'neverthrow';
-import { createDummyHistoryBaseUrl } from '../../history-archive/__fixtures__/HistoryBaseUrl';
-import { BucketScanner } from '../BucketScanner';
-import { BucketScanState } from '../ScanState';
+import { createDummyHistoryBaseUrl } from '../../history-archive/__fixtures__/HistoryBaseUrl.js';
+import { BucketScanner } from '../BucketScanner.js';
+import { BucketScanState } from '../ScanState.js';
 import * as http from 'http';
 import * as https from 'https';
-import { ScanError, ScanErrorType } from '../../scan/ScanError';
+import { ScanError, ScanErrorType } from '../../scan/ScanError.js';
+import { fileURLToPath } from 'node:url';
+
+const currentDir = path.dirname(fileURLToPath(import.meta.url));
 
 it('should verify the bucket hash', async function () {
-	const bucketPath = path.join(__dirname, '../__fixtures__/bucket.xdr.gz');
+	const bucketPath = path.join(currentDir, '../__fixtures__/bucket.xdr.gz');
 
 	const stream = await fs.createReadStream(bucketPath);
 	const httpQueue = mock<HttpQueue>();
@@ -48,7 +51,7 @@ it('should verify the bucket hash', async function () {
 
 it('should return verification error when zip archive is corrupt', async function () {
 	const bucketPath = path.join(
-		__dirname,
+		currentDir,
 		'../__fixtures__/bucket_empty.xdr.gz'
 	);
 

@@ -1,13 +1,13 @@
 import { Column, Entity, ManyToOne, TableInheritance } from 'typeorm';
-import { CoreEntity } from '../../../../core/domain/CoreEntity';
-import { Change } from '../../Change';
-import { NetworkId } from '../NetworkId';
-import { Network } from '../Network';
+import { CoreEntity } from '../../../../core/domain/CoreEntity.js';
+import { Change } from '../../Change.js';
+import { NetworkId } from '../NetworkId.js';
+import type { Network } from '../Network.js';
 
 @Entity()
 @TableInheritance({ column: { type: 'varchar', name: 'type' } })
 export abstract class NetworkChange extends CoreEntity implements Change {
-	@ManyToOne(() => Network, {
+	@ManyToOne('Network', {
 		nullable: false
 	})
 	public network?: Network;

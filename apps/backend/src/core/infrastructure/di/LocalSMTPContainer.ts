@@ -1,11 +1,14 @@
 import { interfaces } from 'inversify';
-import { DataSource, Repository } from 'typeorm';
+import { DataSource, type Repository } from 'typeorm';
 import Container = interfaces.Container;
 
-import { User } from '../database/entities/User';
-import { LocalSMTPUserService, SMTPConfig } from '../../services/LocalSMTPUserService';
-import { IUserService } from '../../domain/IUserService';
-import { CORE_TYPES } from './di-types';
+import { User } from '../database/entities/User.js';
+import {
+	LocalSMTPUserService,
+	type SMTPConfig
+} from '../../services/LocalSMTPUserService.js';
+import type { IUserService } from '../../domain/IUserService.js';
+import { CORE_TYPES } from './di-types.js';
 import validator from 'validator';
 
 export function setupLocalSMTPContainer(

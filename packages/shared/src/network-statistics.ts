@@ -1,5 +1,5 @@
-import { NetworkStatisticsV1 } from './dto/network-v1';
-import PropertyMapper from './PropertyMapper';
+import { NetworkStatisticsV1 } from './dto/network-v1.js';
+import PropertyMapper from './PropertyMapper.js';
 
 export default class NetworkStatistics {
 	time: Date = new Date();

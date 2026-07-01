@@ -1,19 +1,19 @@
-import { InMemoryEventCollector } from '../core';
+import { InMemoryEventCollector } from '../core/index.js';
 import {
 	ForgedMessageSent,
 	Message,
 	MessageReceived,
 	MessageSent,
 	Vote
-} from '../federated-voting';
-import { ReceiveMessage } from '../federated-voting/action/protocol/ReceiveMessage';
-import { Gossip } from './action/Gossip';
-import { BroadcastDisrupted } from './event/BroadcastDisrupted';
-import { BroadcastFailed } from './event/BroadcastFailed';
-import { ConnectionAdded } from './event/ConnectionAdded';
-import { ConnectionRemoved } from './event/ConnectionRemoved';
-import { GossipDisrupted } from './event/GossipDisrupted';
-import { ReceiveMessageDisrupted } from './event/ReceiveMessageDisrupted';
+} from '../federated-voting/index.js';
+import { ReceiveMessage } from '../federated-voting/action/protocol/ReceiveMessage.js';
+import { Gossip } from './action/Gossip.js';
+import { BroadcastDisrupted } from './event/BroadcastDisrupted.js';
+import { BroadcastFailed } from './event/BroadcastFailed.js';
+import { ConnectionAdded } from './event/ConnectionAdded.js';
+import { ConnectionRemoved } from './event/ConnectionRemoved.js';
+import { GossipDisrupted } from './event/GossipDisrupted.js';
+import { ReceiveMessageDisrupted } from './event/ReceiveMessageDisrupted.js';
 
 export type PublicKey = string;
 export type OverlayAction = ReceiveMessage | Gossip;

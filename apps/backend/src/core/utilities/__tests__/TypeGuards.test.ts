@@ -1,5 +1,5 @@
-import isPartOfStringEnum, { isNumber } from '../TypeGuards';
-import { EventType } from '../../../notifications/domain/event/Event';
+import isPartOfStringEnum, { isNumber } from '../TypeGuards.js';
+import { EventType } from '../../../notifications/domain/event/Event.js';
 
 enum Type {
 	myType = 'myType'

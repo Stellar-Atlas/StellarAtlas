@@ -1,4 +1,4 @@
-import { ValueObject } from '../../../core/domain/ValueObject';
+import { ValueObject } from '../../../core/domain/ValueObject.js';
 import { Column } from 'typeorm';
 
 export interface OrganizationContactInformationProps {

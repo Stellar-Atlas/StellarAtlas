@@ -3,15 +3,15 @@ import {
 	ConnectedPayload,
 	ConnectionManager,
 	DataPayload
-} from './connection-manager';
-import { QuorumSetManager } from './quorum-set-manager';
+} from './connection-manager.js';
+import { QuorumSetManager } from './quorum-set-manager.js';
 import { EventEmitter } from 'events';
-import { ObservationManager } from './observation-manager';
-import { PeerEventHandler } from './peer-event-handler/peer-event-handler';
-import { Observation } from './observation';
+import { ObservationManager } from './observation-manager.js';
+import { PeerEventHandler } from './peer-event-handler/peer-event-handler.js';
+import { Observation } from './observation.js';
 import assert from 'assert';
-import { ObservationState } from './observation-state';
-import { ObservationFactory } from './observation-factory';
+import { ObservationState } from './observation-state.js';
+import { ObservationFactory } from './observation-factory.js';
 
 export class NetworkObserver extends EventEmitter {
 	private _observation: Observation | null = null;

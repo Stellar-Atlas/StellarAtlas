@@ -1,7 +1,7 @@
 import { Url } from 'http-helper';
 import * as http from 'http';
 import * as https from 'https';
-import { LedgerHeader } from './Scanner';
+import { LedgerHeader } from './Scanner.js';
 
 export abstract class ScanState {
 	protected constructor(

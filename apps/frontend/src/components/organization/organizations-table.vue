@@ -89,6 +89,28 @@
           />
         </span>
       </template>
+      <template #head(subQuorum60DAvailability)="data">
+        <span class=""
+          >{{ data.label }}
+          <b-icon-info-circle
+            v-tooltip="
+              'Availability: more than or equal to 50% of the organization validators are validating.'
+            "
+            class="text-gray"
+          />
+        </span>
+      </template>
+      <template #head(subQuorum90DAvailability)="data">
+        <span class=""
+          >{{ data.label }}
+          <b-icon-info-circle
+            v-tooltip="
+              'Availability: more than or equal to 50% of the organization validators are validating.'
+            "
+            class="text-gray"
+          />
+        </span>
+      </template>
       <template #cell(name)="row">
         <div class="d-flex flex-row justify-content-start align-items-center">
           <span
@@ -235,6 +257,8 @@ export type TableOrganization = {
   blocked?: boolean;
   subQuorum24HAvailability?: string;
   subQuorum30DAvailability?: string;
+  subQuorum60DAvailability?: string;
+  subQuorum90DAvailability?: string;
   email?: string;
   keybase?: string;
   validators?: Node[];

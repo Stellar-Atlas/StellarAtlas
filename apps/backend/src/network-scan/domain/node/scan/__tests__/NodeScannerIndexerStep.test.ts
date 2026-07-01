@@ -1,9 +1,9 @@
-import { NodeScannerIndexerStep } from '../NodeScannerIndexerStep';
-import { NodeScan } from '../NodeScan';
-import { createDummyNode } from '../../__fixtures__/createDummyNode';
-import { StellarCoreVersion } from '../../../network/StellarCoreVersion';
+import { NodeScannerIndexerStep } from '../NodeScannerIndexerStep.js';
+import { NodeScan } from '../NodeScan.js';
+import { createDummyNode } from '../../__fixtures__/createDummyNode.js';
+import { StellarCoreVersion } from '../../../network/StellarCoreVersion.js';
 import 'reflect-metadata';
-import NodeMeasurement from '../../NodeMeasurement';
+import NodeMeasurement from '../../NodeMeasurement.js';
 
 describe('NodeScannerIndexerStep', () => {
 	const step = new NodeScannerIndexerStep();

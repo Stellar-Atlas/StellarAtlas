@@ -1,12 +1,12 @@
 import {
 	HistoryArchiveErrorDetectedEvent,
 	ValidatorXUpdatesNotValidatingEvent
-} from '../Event';
-import { NodeEventDetector } from '../NodeEventDetector';
-import { EventRepository } from '../EventRepository';
+} from '../Event.js';
+import { NodeEventDetector } from '../NodeEventDetector.js';
+import type { EventRepository } from '../EventRepository.js';
 import { mock } from 'jest-mock-extended';
-import { PublicKey } from '../EventSourceId';
-import { createDummyNodeV1 } from '../../../../network-scan/services/__fixtures__/createDummyNodeV1';
+import { PublicKey } from '../EventSourceId.js';
+import { createDummyNodeV1 } from '../../../../network-scan/services/__fixtures__/createDummyNodeV1.js';
 
 it('should detect history error events', async function () {
 	const nodeA = createDummyNodeV1(

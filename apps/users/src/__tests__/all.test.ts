@@ -1,10 +1,13 @@
-import {
+import sodium from 'sodium-native';
+import { Encryption } from '../Encryption.js';
+import { Hasher } from '../Hasher.js';
+
+const {
 	crypto_generichash_KEYBYTES,
-	crypto_secretbox_KEYBYTES, randombytes_buf,
+	crypto_secretbox_KEYBYTES,
+	randombytes_buf,
 	sodium_malloc
-} from 'sodium-native';
-import { Encryption } from '../Encryption';
-import { Hasher } from '../Hasher';
+} = sodium;
 
 const key = sodium_malloc(crypto_secretbox_KEYBYTES); // secure buffer
 randombytes_buf(key);
@@ -28,4 +31,3 @@ if (hash.toString('base64') !== 'pqu+ZaVfVvhYDvdv6moTJKH2K63dIm999zrprpEnV8w=')
 	throw new Error('Hashing failed');
 
 console.log('Hashing succeeded');
-

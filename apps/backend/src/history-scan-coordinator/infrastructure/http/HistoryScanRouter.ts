@@ -1,11 +1,11 @@
 import express, { Router } from 'express';
 import { body, param, validationResult } from 'express-validator';
 import basicAuth from 'express-basic-auth';
-import { GetLatestScan } from '../../use-cases/get-latest-scan/GetLatestScan';
-import { InvalidUrlError } from '../../use-cases/get-latest-scan/InvalidUrlError';
-import { RegisterScan } from '../../use-cases/register-scan/RegisterScan';
+import { GetLatestScan } from '../../use-cases/get-latest-scan/GetLatestScan.js';
+import { InvalidUrlError } from '../../use-cases/get-latest-scan/InvalidUrlError.js';
+import { RegisterScan } from '../../use-cases/register-scan/RegisterScan.js';
 import { ScanDTO } from 'history-scanner-dto';
-import { GetScanJob } from '../../use-cases/get-scan-job/GetScanJob';
+import { GetScanJob } from '../../use-cases/get-scan-job/GetScanJob.js';
 
 export interface HistoryScanRouterConfig {
 	getLatestScan: GetLatestScan;
@@ -88,6 +88,19 @@ export const HistoryScanRouterWrapper = (
 				body('error').custom((value) => {
 					if (value === null) return true;
 					return typeof value === 'object';
+				}),
+				body('errors')
+					.optional()
+					.isArray()
+					.withMessage('errors must be an array'),
+				body('errors.*').custom((value) => {
+					return (
+						typeof value === 'object' &&
+						value !== null &&
+						typeof value.type === 'string' &&
+						typeof value.url === 'string' &&
+						typeof value.message === 'string'
+					);
 				})
 			],
 			async (req: express.Request, res: express.Response) => {

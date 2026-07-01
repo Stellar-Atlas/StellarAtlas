@@ -1,13 +1,13 @@
-import * as P from 'pino';
-import { Ledger } from '../../../../../../crawler';
-import { PeerNodeCollection } from '../../../../../../peer-node-collection';
-import { ExternalizeData } from './map-externalize-statement';
-import { Slot } from './slot';
+import pino from 'pino';
+import type { Ledger } from '../../../../../../crawler.js';
+import { PeerNodeCollection } from '../../../../../../peer-node-collection.js';
+import { ExternalizeData } from './map-externalize-statement.js';
+import { Slot } from './slot.js';
 import * as assert from 'assert';
 
 //attempts slot close confirmation and updates peer statuses accordingly
 export class ExternalizeStatementHandler {
-	constructor(private logger: P.Logger) {}
+	constructor(private logger: pino.Logger) {}
 
 	//returns ledger if slot is closed
 	public handle(

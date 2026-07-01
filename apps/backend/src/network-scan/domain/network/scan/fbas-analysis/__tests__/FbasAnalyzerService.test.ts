@@ -1,16 +1,16 @@
 import 'reflect-metadata';
-import FbasAnalyzerService from '../FbasAnalyzerService';
-import FbasAnalyzerFacade, { MergeBy } from '../FbasAnalyzerFacade';
-import { LoggerMock } from '../../../../../../core/services/__mocks__/LoggerMock';
-import { AnalysisResult } from '../AnalysisResult';
+import FbasAnalyzerService from '../FbasAnalyzerService.js';
+import FbasAnalyzerFacade, { MergeBy } from '../FbasAnalyzerFacade.js';
+import { LoggerMock } from '../../../../../../core/services/__mocks__/LoggerMock.js';
+import { AnalysisResult } from '../AnalysisResult.js';
 import { mock } from 'jest-mock-extended';
-import { FbasMergedByAnalyzer } from '../FbasMergedByAnalyzer';
+import { FbasMergedByAnalyzer } from '../FbasMergedByAnalyzer.js';
 import { ok } from 'neverthrow';
-import { createDummyNode } from '../../../../node/__fixtures__/createDummyNode';
-import NodeMeasurement from '../../../../node/NodeMeasurement';
-import Organization from '../../../../organization/Organization';
-import { createDummyOrganizationId } from '../../../../organization/__fixtures__/createDummyOrganizationId';
-import { FbasMapper } from '../FbasMapper';
+import { createDummyNode } from '../../../../node/__fixtures__/createDummyNode.js';
+import NodeMeasurement from '../../../../node/NodeMeasurement.js';
+import Organization from '../../../../organization/Organization.js';
+import { createDummyOrganizationId } from '../../../../organization/__fixtures__/createDummyOrganizationId.js';
+import { FbasMapper } from '../FbasMapper.js';
 
 describe('analyze fbas', () => {
 	it('should analyze correctly', () => {

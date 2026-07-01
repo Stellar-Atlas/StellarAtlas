@@ -6,17 +6,17 @@ import {
 	PublicKey,
 	QuorumSet,
 	UserAction
-} from '../core';
+} from '../core/index.js';
 
-import { Message } from './Message';
-import { ProtocolAction } from '../core/ProtocolAction';
-import { FederatedVotingProtocolState } from './protocol/FederatedVotingProtocolState';
-import { FederatedVotingProtocol } from './protocol/FederatedVotingProtocol';
-import { Statement } from './protocol';
-import { BroadcastVoteRequested } from './protocol/event/BroadcastVoteRequested';
-import { NodeUpdatedQuorumSet } from './protocol/event/NodeUpdatedQuorumSet';
-import { Overlay, Payload } from '../overlay/Overlay';
-import { Broadcast } from './action/protocol/Broadcast';
+import { Message } from './Message.js';
+import { ProtocolAction } from '../core/ProtocolAction.js';
+import { FederatedVotingProtocolState } from './protocol/FederatedVotingProtocolState.js';
+import { FederatedVotingProtocol } from './protocol/FederatedVotingProtocol.js';
+import { Statement } from './protocol/index.js';
+import { BroadcastVoteRequested } from './protocol/event/BroadcastVoteRequested.js';
+import { NodeUpdatedQuorumSet } from './protocol/event/NodeUpdatedQuorumSet.js';
+import { Overlay, Payload } from '../overlay/Overlay.js';
+import { Broadcast } from './action/protocol/Broadcast.js';
 
 export interface FederatedVotingContextState {
 	protocolStates: FederatedVotingProtocolState[];

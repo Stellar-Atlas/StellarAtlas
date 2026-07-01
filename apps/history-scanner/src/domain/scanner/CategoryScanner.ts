@@ -1,6 +1,6 @@
 import * as stream from 'stream';
 import { err, ok, Result } from 'neverthrow';
-import { CategoryRequestMeta, RequestGenerator } from './RequestGenerator';
+import { CategoryRequestMeta, RequestGenerator } from './RequestGenerator.js';
 import {
 	FileNotFoundError,
 	HttpQueue,
@@ -11,28 +11,29 @@ import {
 	Url,
 	asyncSleep
 } from 'http-helper';
-import { HASValidator } from '../history-archive/HASValidator';
+import { HASValidator } from '../history-archive/HASValidator.js';
 import { inject, injectable } from 'inversify';
-import { HASBucketHashExtractor } from '../history-archive/HASBucketHashExtractor';
-import { mapHttpQueueErrorToScanError } from './mapHttpQueueErrorToScanError';
+import { HASBucketHashExtractor } from '../history-archive/HASBucketHashExtractor.js';
+import { mapHttpQueueErrorToScanError } from './mapHttpQueueErrorToScanError.js';
 import { isObject, mapUnknownToError } from 'shared';
-import { Category } from '../history-archive/Category';
 import { createGunzip } from 'zlib';
-import { XdrStreamReader } from './XdrStreamReader';
+import { XdrStreamReader } from './XdrStreamReader.js';
 import { pipeline } from 'stream/promises';
-import { CategoryXDRProcessor } from './CategoryXDRProcessor';
-import { ScanError, ScanErrorType } from '../scan/ScanError';
-import { UrlBuilder } from '../history-archive/UrlBuilder';
-import { CheckPointGenerator } from '../check-point/CheckPointGenerator';
-import { CategoryScanState } from './ScanState';
-import { LedgerHeader } from './Scanner';
-import { hashBucketList } from '../history-archive/hashBucketList';
-import { WorkerPoolLoadTracker } from './WorkerPoolLoadTracker';
-import { CategoryVerificationService } from './CategoryVerificationService';
-import { HasherPool } from './HasherPool';
-import { isZLibError } from './isZLibError';
-import { getMaximumNumber } from './getMaximumNumber';
-import { TYPES } from './../../infrastructure/di/di-types';
+import { CategoryXDRProcessor } from './CategoryXDRProcessor.js';
+import { ScanError, ScanErrorType } from '../scan/ScanError.js';
+import { UrlBuilder } from '../history-archive/UrlBuilder.js';
+import { CheckPointGenerator } from '../check-point/CheckPointGenerator.js';
+import { CategoryScanState } from './ScanState.js';
+import { LedgerHeader } from './Scanner.js';
+import { hashBucketList } from '../history-archive/hashBucketList.js';
+import { WorkerPoolLoadTracker } from './WorkerPoolLoadTracker.js';
+import { CategoryVerificationService } from './CategoryVerificationService.js';
+import { HasherPool } from './HasherPool.js';
+import { isZLibError } from './isZLibError.js';
+import { getMaximumNumber } from './getMaximumNumber.js';
+import { TYPES } from './../../infrastructure/di/di-types.js';
+import { createCategoryVerificationScanErrors } from './createCategoryVerificationScanErrors.js';
+import { terminateHasherPool } from './terminateHasherPool.js';
 
 type Ledger = number;
 type Hash = string;
@@ -304,28 +305,35 @@ export class CategoryScanner {
 			processRequestResult
 		);
 
-		await CategoryScanner.terminatePool(poolLoadTracker, pool);
+		await terminateHasherPool(poolLoadTracker, pool);
 
 		if (verifyResult.isErr()) {
 			return err(mapHttpQueueErrorToScanError(verifyResult.error));
 		}
 
-		const verificationResult = this.categoryVerificationService.verify(
+		const verificationErrors = this.categoryVerificationService.verifyAll(
 			categoryVerificationData,
 			scanState.bucketListHashes,
 			this.checkPointGenerator.checkPointFrequency,
 			scanState.previousLedgerHeader
 		);
 
-		if (verificationResult.isErr())
+		if (verificationErrors.length > 0) {
+			const scanErrors = createCategoryVerificationScanErrors(
+				scanState.baseUrl,
+				this.checkPointGenerator,
+				verificationErrors
+			);
+			const firstError = scanErrors[0];
 			return err(
-				this.createVerificationError(
-					scanState.baseUrl,
-					verificationResult.error.ledger,
-					verificationResult.error.category,
-					verificationResult.error.message
+				new ScanError(
+					firstError.type,
+					firstError.url,
+					firstError.message,
+					scanErrors
 				)
 			);
+		}
 
 		const maxLedger = getMaximumNumber([
 			...categoryVerificationData.calculatedLedgerHeaderHashes.keys()
@@ -344,30 +352,6 @@ export class CategoryScanner {
 				maxLedger
 			) as string
 		});
-	}
-
-	private static async terminatePool(
-		poolLoadTracker: WorkerPoolLoadTracker,
-		pool: HasherPool
-	) {
-		try {
-			poolLoadTracker.stop();
-			console.log(
-				'Waiting until pool is finished',
-				pool.workerpool.stats().activeTasks,
-				pool.workerpool.stats().pendingTasks
-			);
-			while (
-				pool.workerpool.stats().pendingTasks > 0 ||
-				pool.workerpool.stats().activeTasks > 0
-			) {
-				await asyncSleep(500);
-			}
-			await pool.workerpool.terminate(true);
-			pool.terminated = true;
-		} catch (e) {
-			//
-		}
 	}
 
 	private async otherCategoriesExist(
@@ -400,22 +384,5 @@ export class CategoryScanner {
 		}
 
 		return ok(undefined);
-	}
-
-	private createVerificationError(
-		baseUrl: Url,
-		ledger: number,
-		category: Category,
-		message: string
-	): ScanError {
-		return new ScanError(
-			ScanErrorType.TYPE_VERIFICATION,
-			UrlBuilder.getCategoryUrl(
-				baseUrl,
-				this.checkPointGenerator.getClosestHigherCheckPoint(ledger),
-				category
-			).value,
-			message
-		);
 	}
 }

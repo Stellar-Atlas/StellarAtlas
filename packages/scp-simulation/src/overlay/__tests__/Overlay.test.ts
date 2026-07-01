@@ -4,10 +4,10 @@ import {
 	Message,
 	MessageReceived,
 	MessageSent
-} from '../..';
-import { ReceiveMessage } from '../../federated-voting/action/protocol/ReceiveMessage';
-import { Payload } from '../Overlay';
-import { Overlay } from './../';
+} from '../../index.js';
+import { ReceiveMessage } from '../../federated-voting/action/protocol/ReceiveMessage.js';
+import { Payload } from '../Overlay.js';
+import { Overlay } from './../index.js';
 
 describe('Overlay', () => {
 	let overlay: Overlay;

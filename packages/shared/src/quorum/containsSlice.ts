@@ -1,10 +1,7 @@
-import { QuorumSet } from '../quorum-set';
-import { PublicKey } from '../network';
+import { QuorumSet } from '../quorum-set.js';
+import { PublicKey } from '../network.js';
 
-export function containsSlice(
-	quorumSet: QuorumSet,
-	nodes: Set<PublicKey>
-) {
+export function containsSlice(quorumSet: QuorumSet, nodes: Set<PublicKey>) {
 	//the number of nodes that need to be present in the quorumSet.
 	let matchesNeeded = quorumSet.threshold;
 

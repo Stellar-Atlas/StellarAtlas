@@ -1,4 +1,4 @@
-import { SimulationStep } from '../Simulation';
+import { SimulationStep } from '../Simulation.js';
 
 export class Scenario {
 	readonly id: string;

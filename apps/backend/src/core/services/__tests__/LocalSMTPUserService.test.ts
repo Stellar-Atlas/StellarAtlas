@@ -1,24 +1,30 @@
-import { LocalSMTPUserService } from '../LocalSMTPUserService';
-import { UserId } from '../../../notifications/domain/subscription/UserId';
-import { Message } from '../../domain/Message';
-import { User } from '../../infrastructure/database/entities/User';
+import { jest } from '@jest/globals';
+import { UserId } from '../../../notifications/domain/subscription/UserId.js';
+import { Message } from '../../domain/Message.js';
+import { User } from '../../infrastructure/database/entities/User.js';
 import { randomUUID } from 'crypto';
 import { mock } from 'jest-mock-extended';
-import { Repository } from 'typeorm';
-import * as nodemailer from 'nodemailer';
-import { ok, err } from 'neverthrow';
+import type { Repository } from 'typeorm';
 
-// Mock nodemailer
-jest.mock('nodemailer');
-const mockNodemailer = nodemailer as jest.Mocked<typeof nodemailer>;
-
-const mockUserRepository = mock<Repository<User>>();
-const mockTransporter = {
-	sendMail: jest.fn(),
-	verify: jest.fn()
+type SendMailResult = {
+	messageId: string;
+	response: string;
 };
 
-mockNodemailer.createTransport.mockReturnValue(mockTransporter as any);
+const mockTransporter = {
+	sendMail: jest.fn<() => Promise<SendMailResult>>(),
+	verify: jest.fn<() => Promise<boolean>>()
+};
+
+const createTransport = jest.fn(() => mockTransporter);
+
+jest.unstable_mockModule('nodemailer', () => ({
+	createTransport
+}));
+
+const { LocalSMTPUserService } = await import('../LocalSMTPUserService.js');
+
+const mockUserRepository = mock<Repository<User>>();
 
 const smtpConfig = {
 	host: 'smtp.test.com',
@@ -33,7 +39,7 @@ const smtpConfig = {
 const fromAddress = 'noreply@stellaratlas.io';
 
 describe('LocalSMTPUserService', () => {
-	let userService: LocalSMTPUserService;
+	let userService: InstanceType<typeof LocalSMTPUserService>;
 
 	beforeEach(() => {
 		jest.clearAllMocks();
@@ -46,7 +52,7 @@ describe('LocalSMTPUserService', () => {
 
 	describe('constructor', () => {
 		it('should create transporter with correct SMTP config', () => {
-			expect(mockNodemailer.createTransport).toHaveBeenCalledWith(smtpConfig);
+			expect(createTransport).toHaveBeenCalledWith(smtpConfig);
 		});
 
 		it('should throw error when from address is invalid', () => {
@@ -54,7 +60,7 @@ describe('LocalSMTPUserService', () => {
 				mockUserRepository,
 				smtpConfig,
 				'invalid-email'
-			)).toThrowError('Invalid from email address');
+			)).toThrow('Invalid from email address');
 		});
 
 		it('should throw error when SMTP host is missing', () => {
@@ -62,7 +68,7 @@ describe('LocalSMTPUserService', () => {
 				mockUserRepository,
 				{ ...smtpConfig, host: '' },
 				fromAddress
-			)).toThrowError('SMTP host is required');
+			)).toThrow('SMTP host is required');
 		});
 	});
 

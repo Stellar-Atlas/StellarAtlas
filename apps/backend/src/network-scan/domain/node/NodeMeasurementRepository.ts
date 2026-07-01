@@ -1,10 +1,9 @@
-import { MeasurementRepository } from '../measurement/MeasurementRepository';
-import NodeMeasurement from './NodeMeasurement';
-import { NodeMeasurementAverage } from './NodeMeasurementAverage';
-import { NodeMeasurementEvent } from './NodeMeasurementEvent';
+import type { MeasurementRepository } from '../measurement/MeasurementRepository.js';
+import NodeMeasurement from './NodeMeasurement.js';
+import { NodeMeasurementAverage } from './NodeMeasurementAverage.js';
+import { NodeMeasurementEvent } from './NodeMeasurementEvent.js';
 
-export interface NodeMeasurementRepository
-	extends MeasurementRepository<NodeMeasurement> {
+export interface NodeMeasurementRepository extends MeasurementRepository<NodeMeasurement> {
 	findXDaysAverageAt(
 		at: Date,
 		xDays: number

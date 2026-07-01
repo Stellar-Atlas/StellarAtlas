@@ -1,26 +1,30 @@
 import { inject, injectable } from 'inversify';
-import { PendingSubscriptionId } from '../../domain/subscription/PendingSubscription';
+import { PendingSubscriptionId } from '../../domain/subscription/PendingSubscription.js';
 import * as ejs from 'ejs';
-import { Message } from '../../../core/domain/Message';
+import { Message } from '../../../core/domain/Message.js';
 import 'reflect-metadata';
-import { Notification } from '../../domain/subscription/Notification';
+import { Notification } from '../../domain/subscription/Notification.js';
 import {
 	EventSourceId,
 	NetworkId,
 	OrganizationId,
 	PublicKey
-} from '../../domain/event/EventSourceId';
+} from '../../domain/event/EventSourceId.js';
 import {
 	Event,
 	EventData,
 	EventType,
 	NetworkTransitiveQuorumSetChangedEvent
-} from '../../domain/event/Event';
-import { NetworkEventDetector } from '../../domain/event/NetworkEventDetector';
-import { SubscriberReference } from '../../domain/subscription/SubscriberReference';
-import { EventSourceService } from '../../domain/event/EventSourceService';
-import { EventSource } from '../../domain/event/EventSource';
-import { MessageCreator } from '../../domain/notifier/MessageCreator';
+} from '../../domain/event/Event.js';
+import { NetworkEventDetector } from '../../domain/event/NetworkEventDetector.js';
+import { SubscriberReference } from '../../domain/subscription/SubscriberReference.js';
+import type { EventSourceService } from '../../domain/event/EventSourceService.js';
+import { EventSource } from '../../domain/event/EventSource.js';
+import type { MessageCreator } from '../../domain/notifier/MessageCreator.js';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const currentDir = path.dirname(fileURLToPath(import.meta.url));
 
 @injectable()
 export class EJSMessageCreator implements MessageCreator {
@@ -79,7 +83,10 @@ export class EJSMessageCreator implements MessageCreator {
 		pendingSubscriptionId: PendingSubscriptionId
 	) {
 		const body = await ejs.renderFile(
-			__dirname + '/../templates/confirm-subscription-notification.ejs',
+			path.join(
+				currentDir,
+				'../templates/confirm-subscription-notification.ejs'
+			),
 			{
 				confirmUrl: `${this.frontendBaseUrl}/notify/${pendingSubscriptionId.value}/confirm`
 			}
@@ -93,7 +100,7 @@ export class EJSMessageCreator implements MessageCreator {
 		time: Date
 	) {
 		const body = await ejs.renderFile(
-			__dirname + '/../templates/unsubscribe-notification.ejs',
+			path.join(currentDir, '../templates/unsubscribe-notification.ejs'),
 			{
 				unsubscribeUrl:
 					this.frontendBaseUrl +
@@ -127,7 +134,7 @@ export class EJSMessageCreator implements MessageCreator {
 			})
 		);
 		const body = await ejs.renderFile(
-			__dirname + '/../templates/notification.ejs',
+			path.join(currentDir, '../templates/notification.ejs'),
 			{
 				networkEvents: notification.events
 					.filter((event) => event.sourceId instanceof NetworkId)

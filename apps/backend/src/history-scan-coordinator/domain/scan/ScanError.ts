@@ -1,4 +1,4 @@
-import { IdentifiedValueObject } from '../../../core/domain/IdentifiedValueObject';
+import { IdentifiedValueObject } from '../../../core/domain/IdentifiedValueObject.js';
 import { Column, Entity } from 'typeorm';
 
 export enum ScanErrorType {

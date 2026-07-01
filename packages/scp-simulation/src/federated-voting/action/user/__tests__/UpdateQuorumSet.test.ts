@@ -1,5 +1,5 @@
-import { UpdateQuorumSet } from '../UpdateQuorumSet';
-import { QuorumSet } from '../../../../core';
+import { UpdateQuorumSet } from '../UpdateQuorumSet.js';
+import { QuorumSet } from '../../../../core/index.js';
 
 describe('UpdateQuorumSet', () => {
 	const nodeKey = 'node1';

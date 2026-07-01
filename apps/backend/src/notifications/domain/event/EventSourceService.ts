@@ -1,6 +1,6 @@
 import { Result } from 'neverthrow';
-import { EventSourceId } from './EventSourceId';
-import { EventSource } from './EventSource';
+import { EventSourceId } from './EventSourceId.js';
+import { EventSource } from './EventSource.js';
 
 export interface EventSourceService {
 	isEventSourceIdKnown(

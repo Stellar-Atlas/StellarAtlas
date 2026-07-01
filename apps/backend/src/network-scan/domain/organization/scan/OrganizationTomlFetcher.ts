@@ -1,12 +1,12 @@
 import { inject, injectable } from 'inversify';
-import { TomlFetchError, TomlService } from '../../network/scan/TomlService';
+import { TomlFetchError, TomlService } from '../../network/scan/TomlService.js';
 import { isArray, isObject, isString } from 'shared';
 import valueValidator from 'validator';
-import { OrganizationTomlInfo } from './OrganizationTomlInfo';
-import { TomlState } from './TomlState';
-import { ErrorToTomlStateMapper } from './ErrorToTomlStateMapper';
-import { TomlVersionChecker } from '../../network/scan/TomlVersionChecker';
-import { Logger } from 'logger';
+import { OrganizationTomlInfo } from './OrganizationTomlInfo.js';
+import { TomlState } from './TomlState.js';
+import { ErrorToTomlStateMapper } from './ErrorToTomlStateMapper.js';
+import { TomlVersionChecker } from '../../network/scan/TomlVersionChecker.js';
+import type { Logger } from 'logger';
 import { HttpError } from 'http-helper';
 
 type homeDomain = string;

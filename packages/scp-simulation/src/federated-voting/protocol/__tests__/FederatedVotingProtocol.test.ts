@@ -1,20 +1,20 @@
-import { Vote } from '../Vote';
-import { Voted } from '../event/Voted';
-import { FederatedVotingProtocol } from '../FederatedVotingProtocol';
+import { Vote } from '../Vote.js';
+import { Voted } from '../event/Voted.js';
+import { FederatedVotingProtocol } from '../FederatedVotingProtocol.js';
 import {
 	FederatedVotingPhase,
 	FederatedVotingProtocolState
-} from '../FederatedVotingProtocolState';
-import { PhaseTransitioner } from '../phase-transitioner/PhaseTransitioner';
+} from '../FederatedVotingProtocolState.js';
+import { PhaseTransitioner } from '../phase-transitioner/PhaseTransitioner.js';
 import {
 	AcceptVoteRatified,
 	ConsensusReached,
 	TransitionedToConfirmPhase,
 	VoteRatified
 } from '../';
-import { TransitionedToAcceptPhase } from '../phase-transitioner/event/TransitionedToAcceptPhase';
-import { Node, QuorumSet } from '../../../core';
-import { BroadcastVoteRequested } from '../event/BroadcastVoteRequested';
+import { TransitionedToAcceptPhase } from '../phase-transitioner/event/TransitionedToAcceptPhase.js';
+import { Node, QuorumSet } from '../../../core/index.js';
+import { BroadcastVoteRequested } from '../event/BroadcastVoteRequested.js';
 
 describe('FederatedVotingProtocol', () => {
 	describe('voteForStatement', () => {

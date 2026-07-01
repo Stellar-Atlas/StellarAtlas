@@ -1,8 +1,8 @@
 import { mock } from 'jest-mock-extended';
-import { NodeScannerTomlStep } from '../NodeScannerTomlStep';
-import { NodeScan } from '../NodeScan';
-import { NodeTomlInfo } from '../NodeTomlInfo';
-import { NodeTomlFetcher } from '../NodeTomlFetcher';
+import { NodeScannerTomlStep } from '../NodeScannerTomlStep.js';
+import { NodeScan } from '../NodeScan.js';
+import { NodeTomlInfo } from '../NodeTomlInfo.js';
+import { NodeTomlFetcher } from '../NodeTomlFetcher.js';
 
 describe('NodeScannerTomlStep', () => {
 	const nodeTomlFetcher = mock<NodeTomlFetcher>();
@@ -17,7 +17,7 @@ describe('NodeScannerTomlStep', () => {
 		const tomlInfo = new Set<NodeTomlInfo>();
 		nodeTomlFetcher.fetchNodeTomlInfoCollection.mockResolvedValue(tomlInfo);
 		await step.execute(nodeScan);
-		expect(nodeTomlFetcher.fetchNodeTomlInfoCollection).toBeCalled();
-		expect(nodeScan.updateWithTomlInfo).toBeCalledWith(tomlInfo);
+		expect(nodeTomlFetcher.fetchNodeTomlInfoCollection).toHaveBeenCalled();
+		expect(nodeScan.updateWithTomlInfo).toHaveBeenCalledWith(tomlInfo);
 	});
 });

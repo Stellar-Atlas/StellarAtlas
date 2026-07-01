@@ -1,5 +1,5 @@
-import { NodeAddress } from './node-address';
-import { Crawl } from './crawl';
+import type { NodeAddress } from './node-address.js';
+import { Crawl } from './crawl.js';
 
 export interface CrawlTask {
 	nodeAddress: NodeAddress;

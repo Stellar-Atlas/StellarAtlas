@@ -1,14 +1,14 @@
-import { CrawlerService } from '../CrawlerService';
+import { CrawlerService } from '../CrawlerService.js';
 import { Crawler, PeerNode } from 'crawler';
 import { mock } from 'jest-mock-extended';
-import { NetworkQuorumSetConfiguration } from '../../../../network/NetworkQuorumSetConfiguration';
+import { NetworkQuorumSetConfiguration } from '../../../../network/NetworkQuorumSetConfiguration.js';
 import {
 	createDummyPublicKey,
 	createDummyPublicKeyString
-} from '../../../__fixtures__/createDummyPublicKey';
-import { CrawlResult } from 'crawler';
-import { createDummyNode } from '../../../__fixtures__/createDummyNode';
-import { createDummyNodeAddress } from '../../../__fixtures__/createDummyNodeAddress';
+} from '../../../__fixtures__/createDummyPublicKey.js';
+import type { CrawlResult } from 'crawler';
+import { createDummyNode } from '../../../__fixtures__/createDummyNode.js';
+import { createDummyNodeAddress } from '../../../__fixtures__/createDummyNodeAddress.js';
 import { CrawlFactory } from 'crawler';
 
 describe('CrawlerService', function () {

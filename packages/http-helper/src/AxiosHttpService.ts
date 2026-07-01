@@ -3,11 +3,11 @@ import axios, { AxiosRequestConfig, AxiosResponse } from 'axios';
 import { isObject, isString } from 'shared';
 import {
 	HttpError,
-	HttpOptions,
-	HttpResponse,
-	HttpService
-} from './HttpService';
-import { Url } from './Url';
+	type HttpOptions,
+	type HttpResponse,
+	type HttpService
+} from './HttpService.js';
+import { Url } from './Url.js';
 
 export class AxiosHttpService implements HttpService {
 	constructor(protected userAgent: string) {

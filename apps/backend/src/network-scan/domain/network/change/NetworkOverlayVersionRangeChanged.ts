@@ -1,7 +1,7 @@
 import { ChildEntity } from 'typeorm';
-import { NetworkChange } from './NetworkChange';
-import { NetworkId } from '../NetworkId';
-import { OverlayVersionRange } from '../OverlayVersionRange';
+import { NetworkChange } from './NetworkChange.js';
+import { NetworkId } from '../NetworkId.js';
+import { OverlayVersionRange } from '../OverlayVersionRange.js';
 
 @ChildEntity()
 export class NetworkOverlayVersionRangeChanged extends NetworkChange {

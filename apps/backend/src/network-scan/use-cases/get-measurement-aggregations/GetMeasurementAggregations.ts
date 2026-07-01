@@ -1,23 +1,23 @@
 import { err, ok, Result } from 'neverthrow';
-import { mapUnknownToError } from '../../../core/utilities/mapUnknownToError';
+import { mapUnknownToError } from '../../../core/utilities/mapUnknownToError.js';
 import { inject, injectable } from 'inversify';
-import { ExceptionLogger } from '../../../core/services/ExceptionLogger';
+import type { ExceptionLogger } from '../../../core/services/ExceptionLogger.js';
 import 'reflect-metadata';
-import { NetworkId } from '../../domain/network/NetworkId';
-import { MeasurementAggregation } from '../../domain/measurement-aggregation/MeasurementAggregation';
+import { NetworkId } from '../../domain/network/NetworkId.js';
+import { MeasurementAggregation } from '../../domain/measurement-aggregation/MeasurementAggregation.js';
 import {
 	AggregationTarget,
 	GetMeasurementAggregationsDTO
-} from './GetMeasurementAggregationsDTO';
-import NetworkMeasurementDay from '../../domain/network/NetworkMeasurementDay';
-import { MeasurementAggregationRepository } from '../../domain/measurement-aggregation/MeasurementAggregationRepository';
-import NetworkMeasurementMonth from '../../domain/network/NetworkMeasurementMonth';
-import NodeMeasurementDay from '../../domain/node/NodeMeasurementDay';
-import OrganizationMeasurementDay from '../../domain/organization/OrganizationMeasurementDay';
-import { MeasurementAggregationRepositoryFactory } from '../../domain/measurement-aggregation/MeasurementAggregationRepositoryFactory';
-import { MeasurementAggregationSourceId } from '../../domain/measurement-aggregation/MeasurementAggregationSourceId';
-import PublicKey from '../../domain/node/PublicKey';
-import { OrganizationId } from '../../domain/organization/OrganizationId';
+} from './GetMeasurementAggregationsDTO.js';
+import NetworkMeasurementDay from '../../domain/network/NetworkMeasurementDay.js';
+import type { MeasurementAggregationRepository } from '../../domain/measurement-aggregation/MeasurementAggregationRepository.js';
+import NetworkMeasurementMonth from '../../domain/network/NetworkMeasurementMonth.js';
+import NodeMeasurementDay from '../../domain/node/NodeMeasurementDay.js';
+import OrganizationMeasurementDay from '../../domain/organization/OrganizationMeasurementDay.js';
+import { MeasurementAggregationRepositoryFactory } from '../../domain/measurement-aggregation/MeasurementAggregationRepositoryFactory.js';
+import { MeasurementAggregationSourceId } from '../../domain/measurement-aggregation/MeasurementAggregationSourceId.js';
+import PublicKey from '../../domain/node/PublicKey.js';
+import { OrganizationId } from '../../domain/organization/OrganizationId.js';
 
 @injectable()
 export class GetMeasurementAggregations {
@@ -30,8 +30,7 @@ export class GetMeasurementAggregations {
 	): Promise<Result<MeasurementAggregation[], Error>> {
 		try {
 			let repo:
-				| MeasurementAggregationRepository<MeasurementAggregation>
-				| undefined;
+				MeasurementAggregationRepository<MeasurementAggregation> | undefined;
 			let idOrError: Result<MeasurementAggregationSourceId, Error> | undefined;
 
 			switch (dto.aggregationTarget) {

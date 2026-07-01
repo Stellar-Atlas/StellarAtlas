@@ -1,18 +1,18 @@
-import { NetworkDTOService } from '../NetworkDTOService';
+import { NetworkDTOService } from '../NetworkDTOService.js';
 import { mock } from 'jest-mock-extended';
-import { ScanRepository } from '../../domain/ScanRepository';
-import { NodeDTOService } from '../NodeDTOService';
-import { OrganizationDTOService } from '../OrganizationDTOService';
+import type { ScanRepository } from '../../domain/ScanRepository.js';
+import { NodeDTOService } from '../NodeDTOService.js';
+import { OrganizationDTOService } from '../OrganizationDTOService.js';
 import { err, ok } from 'neverthrow';
-import NetworkScan from '../../domain/network/scan/NetworkScan';
-import NetworkMeasurement from '../../domain/network/NetworkMeasurement';
-import { ScanResult } from '../../domain/Scanner';
-import { NodeScan } from '../../domain/node/scan/NodeScan';
-import { OrganizationScan } from '../../domain/organization/scan/OrganizationScan';
-import { NetworkRepository } from '../../domain/network/NetworkRepository';
-import { Network } from '../../domain/network/Network';
-import { NetworkId } from '../../domain/network/NetworkId';
-import { createDummyNetworkProps } from '../../domain/network/__fixtures__/createDummyNetworkProps';
+import NetworkScan from '../../domain/network/scan/NetworkScan.js';
+import NetworkMeasurement from '../../domain/network/NetworkMeasurement.js';
+import { ScanResult } from '../../domain/Scanner.js';
+import { NodeScan } from '../../domain/node/scan/NodeScan.js';
+import { OrganizationScan } from '../../domain/organization/scan/OrganizationScan.js';
+import type { NetworkRepository } from '../../domain/network/NetworkRepository.js';
+import { Network } from '../../domain/network/Network.js';
+import { NetworkId } from '../../domain/network/NetworkId.js';
+import { createDummyNetworkProps } from '../../domain/network/__fixtures__/createDummyNetworkProps.js';
 
 describe('NetworkDTOService', () => {
 	it('should get NetworkDTO at', async function () {

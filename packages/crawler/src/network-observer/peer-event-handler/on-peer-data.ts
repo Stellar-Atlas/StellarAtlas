@@ -1,10 +1,10 @@
-import { ConnectionManager, DataPayload } from '../connection-manager';
-import { Ledger } from '../../crawler';
-import { NodeAddress } from '../../node-address';
-import { StellarMessageHandler } from './stellar-message-handlers/stellar-message-handler';
-import { P } from 'pino';
-import { Observation } from '../observation';
-import { ObservationState } from '../observation-state';
+import { ConnectionManager, DataPayload } from '../connection-manager.js';
+import type { Ledger } from '../../crawler.js';
+import type { NodeAddress } from '../../node-address.js';
+import { StellarMessageHandler } from './stellar-message-handlers/stellar-message-handler.js';
+import pino from 'pino';
+import { Observation } from '../observation.js';
+import { ObservationState } from '../observation-state.js';
 
 export interface OnPeerDataResult {
 	closedLedger: Ledger | null;
@@ -14,7 +14,7 @@ export interface OnPeerDataResult {
 export class OnPeerData {
 	constructor(
 		private stellarMessageHandler: StellarMessageHandler,
-		private logger: P.Logger,
+		private logger: pino.Logger,
 		private connectionManager: ConnectionManager
 	) {}
 

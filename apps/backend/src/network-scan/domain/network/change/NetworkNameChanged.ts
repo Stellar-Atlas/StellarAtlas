@@ -1,6 +1,6 @@
 import { ChildEntity } from 'typeorm';
-import { NetworkId } from '../NetworkId';
-import { NetworkChange } from './NetworkChange';
+import { NetworkId } from '../NetworkId.js';
+import { NetworkChange } from './NetworkChange.js';
 
 @ChildEntity()
 export class NetworkNameChanged extends NetworkChange {

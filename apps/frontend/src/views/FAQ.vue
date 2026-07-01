@@ -91,7 +91,7 @@ Version = How far away from the latest stable Stellar core version
 Trust = How many active validators trust this node
 Age = Time since discovery
                         </code></pre>
-        <h3>Why does my validator reject the crawler?</h3>
+        <h3>Why does my validator refuse crawler load?</h3>
         <p>
           When your validator disconnects from the crawler with an
           <a
@@ -100,9 +100,9 @@ Age = Time since discovery
             href="https://github.com/stellar/stellar-core/blob/cc6208b268d3102381c4e2502fcbb6e3afd4249a/src/xdr/Stellar-overlay.x#L16"
             >err_load</a
           >
-          message, it is marked as 'rejected by crawler'. The crawler is
-          rejected when it can successfully connect with your node, but it is
-          then rejected because your node is out of sync, or your node is at
+          message, it is marked as a peer load refusal. This happens after the
+          crawler can successfully connect with your node, but the node then
+          refuses the request because it is out of sync, or because it is at
           maximum connection capacity. A possible solution is to increase
           MAX_ADDITIONAL_PEER_CONNECTIONS (inbound connections).
         </p>

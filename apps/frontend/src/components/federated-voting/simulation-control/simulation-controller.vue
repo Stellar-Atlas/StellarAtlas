@@ -50,7 +50,7 @@ import {
 import { federatedVotingStore } from "@/store/useFederatedVotingStore";
 
 const playing = ref(false);
-let playInterval: NodeJS.Timeout | null = null;
+let playInterval: ReturnType<typeof setInterval> | null = null;
 
 const tickTime = computed(
   () => federatedVotingStore.simulationStepDurationInSeconds * 1000,

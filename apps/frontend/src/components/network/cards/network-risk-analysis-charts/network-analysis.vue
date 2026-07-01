@@ -699,7 +699,10 @@ function getAggregatedLabels(tooltipItem: TooltipItem<"line">): string {
 function getLabels(tooltipItem: TooltipItem<"line">): string {
   if (hour24ChartDataSets.value.length === 0) return "0";
   const dataSet = hour24ChartDataSets.value[tooltipItem.datasetIndex];
-  return (dataSet.data[tooltipItem.dataIndex] as ScatterDataPoint).y.toString();
+  const point = dataSet.data?.[tooltipItem.dataIndex] as
+    | ScatterDataPoint
+    | undefined;
+  return point?.y?.toString() ?? "0";
 }
 
 async function select30DayViewDefault() {

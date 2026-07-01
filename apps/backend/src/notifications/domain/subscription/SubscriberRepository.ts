@@ -1,7 +1,7 @@
-import { UserId } from './UserId';
-import { Subscriber } from './Subscriber';
-import { PendingSubscriptionId } from './PendingSubscription';
-import { SubscriberReference } from './SubscriberReference';
+import { UserId } from './UserId.js';
+import { Subscriber } from './Subscriber.js';
+import { PendingSubscriptionId } from './PendingSubscription.js';
+import { SubscriberReference } from './SubscriberReference.js';
 
 export interface SubscriberRepository {
 	find(): Promise<Subscriber[]>;

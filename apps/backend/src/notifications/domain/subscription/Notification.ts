@@ -1,6 +1,6 @@
-import { Event, EventData } from '../event/Event';
-import { EventSourceId } from '../event/EventSourceId';
-import { Subscriber } from './Subscriber';
+import { Event, EventData } from '../event/Event.js';
+import { EventSourceId } from '../event/EventSourceId.js';
+import { Subscriber } from './Subscriber.js';
 
 export interface Notification {
 	subscriber: Subscriber;

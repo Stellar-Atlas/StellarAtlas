@@ -1,14 +1,14 @@
 import { err, ok, Result } from 'neverthrow';
-import NetworkScan from './NetworkScan';
+import NetworkScan from './NetworkScan.js';
 import { inject, injectable } from 'inversify';
-import { Logger } from '../../../../core/services/Logger';
-import { NodeScan } from '../../node/scan/NodeScan';
-import { OrganizationScan } from '../../organization/scan/OrganizationScan';
-import { TrustGraphFactory } from '../../node/scan/TrustGraphFactory';
-import FbasAnalyzerService from './fbas-analysis/FbasAnalyzerService';
-import { NodesInTransitiveNetworkQuorumSetFinder } from './NodesInTransitiveNetworkQuorumSetFinder';
-import { NetworkQuorumSetConfiguration } from '../NetworkQuorumSetConfiguration';
-import { Snapshot } from '../../../../core/domain/Snapshot';
+import type { Logger } from '../../../../core/services/Logger.js';
+import { NodeScan } from '../../node/scan/NodeScan.js';
+import { OrganizationScan } from '../../organization/scan/OrganizationScan.js';
+import { TrustGraphFactory } from '../../node/scan/TrustGraphFactory.js';
+import FbasAnalyzerService from './fbas-analysis/FbasAnalyzerService.js';
+import { NodesInTransitiveNetworkQuorumSetFinder } from './NodesInTransitiveNetworkQuorumSetFinder.js';
+import { NetworkQuorumSetConfiguration } from '../NetworkQuorumSetConfiguration.js';
+import { Snapshot } from '../../../../core/domain/Snapshot.js';
 
 @injectable()
 export class NetworkScanner {

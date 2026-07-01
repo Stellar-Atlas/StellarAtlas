@@ -1,20 +1,20 @@
-import { Node, QuorumSet } from '../../core';
-import { AddNode, VoteOnStatement } from '../../federated-voting';
-import { Scenario } from './Scenario';
-import { ScenarioSerializer } from './ScenarioSerializer';
-import acceptingSafetyScenario from './data/accepting-not-enough-safety.json';
-import acceptingLivenessScenario from './data/accepting-not-enough-liveness.json';
-import acceptingLivenessGossipScenario from './data/accepting-not-enough-liveness-gossip-fix.json';
-import networkSplitIllBehavedNode from './data/network-split-ill-behaved-node.json';
-import networkSplitPartial from './data/network-split-partial.json';
-import networkSafeIllBehavedNode from './data/network-safe-ill-behaved-node.json';
-import votingStuckBecauseVotes from './data/voting-stuck-because-votes.json';
-import votingStuckBecauseNodeCrashes from './data/voting-stuck-because-node-crashes.json';
-import votingStuckForBefouledNode from './data/voting-stuck-for-befouled-node.json';
-import votingSucceededDespiteNodeCrash from './data/voting-succeeded-despite-node-crash.json';
-import overlayRing from './data/overlay-ring.json';
-import votingStuckOverlayPartition from './data/voting-stuck-overlay-partition.json';
-import confirmingIsEnoughLiveness from './data/confirming-is-enough-liveness.json';
+import { Node, QuorumSet } from '../../core/index.js';
+import { AddNode, VoteOnStatement } from '../../federated-voting/index.js';
+import { Scenario } from './Scenario.js';
+import { ScenarioSerializer } from './ScenarioSerializer.js';
+import acceptingSafetyScenario from './data/accepting-not-enough-safety.json' with { type: 'json' };
+import acceptingLivenessScenario from './data/accepting-not-enough-liveness.json' with { type: 'json' };
+import acceptingLivenessGossipScenario from './data/accepting-not-enough-liveness-gossip-fix.json' with { type: 'json' };
+import networkSplitIllBehavedNode from './data/network-split-ill-behaved-node.json' with { type: 'json' };
+import networkSplitPartial from './data/network-split-partial.json' with { type: 'json' };
+import networkSafeIllBehavedNode from './data/network-safe-ill-behaved-node.json' with { type: 'json' };
+import votingStuckBecauseVotes from './data/voting-stuck-because-votes.json' with { type: 'json' };
+import votingStuckBecauseNodeCrashes from './data/voting-stuck-because-node-crashes.json' with { type: 'json' };
+import votingStuckForBefouledNode from './data/voting-stuck-for-befouled-node.json' with { type: 'json' };
+import votingSucceededDespiteNodeCrash from './data/voting-succeeded-despite-node-crash.json' with { type: 'json' };
+import overlayRing from './data/overlay-ring.json' with { type: 'json' };
+import votingStuckOverlayPartition from './data/voting-stuck-overlay-partition.json' with { type: 'json' };
+import confirmingIsEnoughLiveness from './data/confirming-is-enough-liveness.json' with { type: 'json' };
 
 export class FederatedVotingScenarioFactory {
 	constructor(private scenarioSerializer: ScenarioSerializer) {}

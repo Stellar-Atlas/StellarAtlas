@@ -1,5 +1,5 @@
 import * as Sentry from '@sentry/node';
-import { JobMonitor, MonitoringJob } from './JobMonitor';
+import { JobMonitor, MonitoringJob } from './JobMonitor.js';
 import 'reflect-metadata';
 import { err, ok, Result } from 'neverthrow';
 import { mapUnknownToError } from 'shared';

@@ -1,13 +1,13 @@
-import { ConnectionManager } from './connection-manager';
-import { P } from 'pino';
-import { Timers } from '../utilities/timers';
+import { ConnectionManager } from './connection-manager.js';
+import pino from 'pino';
+import { Timers } from '../utilities/timers.js';
 
 export class StragglerTimer {
 	constructor(
 		private connectionManager: ConnectionManager,
 		private timers: Timers,
 		private straggleTimeoutMS: number,
-		private logger: P.Logger
+		private logger: pino.Logger
 	) {}
 
 	public startStragglerTimeoutForActivePeers(

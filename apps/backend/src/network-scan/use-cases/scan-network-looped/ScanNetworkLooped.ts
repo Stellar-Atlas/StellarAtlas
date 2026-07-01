@@ -1,9 +1,9 @@
 import { inject, injectable } from 'inversify';
-import { Logger } from '../../../core/services/Logger';
-import { ScanNetworkLoopedDTO } from './ScanNetworkLoopedDTO';
-import { ScanNetwork } from '../scan-network/ScanNetwork';
-import { ExceptionLogger } from '../../../core/services/ExceptionLogger';
-import { LoopTimer } from '../../../core/services/LoopTimer';
+import type { Logger } from '../../../core/services/Logger.js';
+import { ScanNetworkLoopedDTO } from './ScanNetworkLoopedDTO.js';
+import { ScanNetwork } from '../scan-network/ScanNetwork.js';
+import type { ExceptionLogger } from '../../../core/services/ExceptionLogger.js';
+import { LoopTimer } from '../../../core/services/LoopTimer.js';
 import { asyncSleep } from 'http-helper';
 import { err, ok, Result } from 'neverthrow';
 
@@ -12,7 +12,9 @@ export class ScanNetworkLooped {
 	private aborted = false;
 
 	constructor(
+		@inject(ScanNetwork)
 		private scanNetworkUseCase: ScanNetwork,
+		@inject(LoopTimer)
 		private loopTimer: LoopTimer,
 		@inject('ExceptionLogger') protected exceptionLogger: ExceptionLogger,
 		@inject('Logger') protected logger: Logger
@@ -65,10 +67,14 @@ export class ScanNetworkLooped {
 		}
 
 		if (this.loopTimer.getRemainingTime() > 0) {
-			await asyncSleep(this.loopTimer.getRemainingTime());
+			await this.waitForNextRun(this.loopTimer.getRemainingTime());
 		}
 
 		return ok(undefined);
+	}
+
+	protected async waitForNextRun(waitTimeMs: number): Promise<void> {
+		await asyncSleep(waitTimeMs);
 	}
 
 	public shutDown(callback: () => void) {

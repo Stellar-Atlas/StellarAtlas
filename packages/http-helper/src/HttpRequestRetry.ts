@@ -1,6 +1,6 @@
-import { HttpError, HttpResponse } from './HttpService';
+import { HttpError, type HttpResponse } from './HttpService.js';
 import { Result } from 'neverthrow';
-import { asyncSleep } from './asyncSleep';
+import { asyncSleep } from './asyncSleep.js';
 
 export async function retryHttpRequestIfNeeded<Args extends unknown[]>(
 	amount: number,

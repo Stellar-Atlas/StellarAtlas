@@ -1,4 +1,4 @@
-import { isObject, isString } from './TypeGuards';
+import { isObject, isString } from './TypeGuards.js';
 
 interface ZLibError {
 	errno: number;

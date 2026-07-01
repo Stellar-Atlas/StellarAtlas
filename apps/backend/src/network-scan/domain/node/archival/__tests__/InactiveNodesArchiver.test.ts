@@ -1,14 +1,14 @@
 import { mock } from 'jest-mock-extended';
-import { NodeMeasurementDayRepository } from '../../NodeMeasurementDayRepository';
-import { InactiveNodesArchiver } from '../InactiveNodesArchiver';
-import { createDummyNode } from '../../__fixtures__/createDummyNode';
-import { NodeScan } from '../../scan/NodeScan';
+import type { NodeMeasurementDayRepository } from '../../NodeMeasurementDayRepository.js';
+import { InactiveNodesArchiver } from '../InactiveNodesArchiver.js';
+import { createDummyNode } from '../../__fixtures__/createDummyNode.js';
+import { NodeScan } from '../../scan/NodeScan.js';
 import { Edge, TrustGraph, Vertex } from 'shared';
 import { StronglyConnectedComponentsFinder } from 'shared';
 import { NetworkTransitiveQuorumSetFinder } from 'shared';
-import { Snapshot } from '../../../../../core/domain/Snapshot';
-import { Logger } from 'logger';
-import NodeMeasurement from '../../NodeMeasurement';
+import { Snapshot } from '../../../../../core/domain/Snapshot.js';
+import type { Logger } from 'logger';
+import NodeMeasurement from '../../NodeMeasurement.js';
 
 describe('InactiveNodesArchiver', () => {
 	function setupSUT() {

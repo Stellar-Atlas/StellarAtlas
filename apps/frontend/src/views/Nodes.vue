@@ -101,7 +101,12 @@ defineProps({
 const store = useStore();
 
 const optionShowInactive = ref(false);
-const optionShowAllConnectableNodes = ref(false);
+const optionShowAllConnectableNodes = computed({
+  get: () => store.includeAllNodes,
+  set: (value: boolean) => {
+    store.includeAllNodes = value;
+  },
+});
 const filter = ref("");
 
 const fieldsBase = [
@@ -109,10 +114,13 @@ const fieldsBase = [
   { key: "organization", sortable: true },
   { key: "country", sortable: true },
   { key: "isp", sortable: true },
-  { key: "type", label: "type", sortable: true },
+  { key: "type", label: "role", sortable: true },
+  { key: "tier", label: "tier", sortable: true },
   { key: "ip", sortable: true },
   { key: "version", sortable: true },
+  { key: "active", label: "connectable", sortable: true },
   { key: "validating", sortable: true },
+  { key: "activeInScp", label: "scp", sortable: true },
 ];
 
 if (!store.isSimulation) {
@@ -139,7 +147,7 @@ if (!store.isSimulation) {
     });
     fieldsBase.push({
       key: "overLoaded24Hour",
-      label: "24H Crawler rejected",
+      label: "24H peer load refused",
       sortable: true,
     });
     fieldsBase.push({
@@ -159,12 +167,29 @@ const fields = computed(() => {
 });
 
 const getNodeType = (node: Node): string => {
+  if (!node.isValidator) return "Listener node";
+
+  if (!node.isValidating) return "Configured validator";
+
   if (node.isFullValidator) {
     return "Full validator";
   }
-  if (node.isValidator) return "Validator";
 
-  return "Connectable Node";
+  return "Validator";
+};
+
+const getNodeTier = (node: Node): string => {
+  if (!node.isValidator)
+    return node.active ? "Connectable listener" : "Inactive listener";
+
+  if (
+    store.network.nodesTrustGraph.networkTransitiveQuorumSet.has(node.publicKey)
+  )
+    return "Transitive quorum";
+
+  if (node.activeInScp) return "SCP participant";
+
+  return "Outside transitive quorum";
 };
 
 const nodes: ComputedRef<TableNode[]> = computed(() => {
@@ -175,6 +200,7 @@ const nodes: ComputedRef<TableNode[]> = computed(() => {
       const mappedNode: TableNode = {
         name: node.displayName,
         type: getNodeType(node),
+        tier: getNodeTier(node),
         active24Hour: node.statistics.has24HourStats
           ? node.statistics.active24HoursPercentage + "%"
           : "NA",
@@ -196,6 +222,8 @@ const nodes: ComputedRef<TableNode[]> = computed(() => {
         isp: node.isp || undefined,
         version: node.versionStr || undefined,
         lag: node.lag !== null ? node.lag + " ms" : "Not detected",
+        active: node.active,
+        activeInScp: node.activeInScp,
         isFullValidator: node.isFullValidator,
         isValidator: node.isValidator,
         index: node.index,

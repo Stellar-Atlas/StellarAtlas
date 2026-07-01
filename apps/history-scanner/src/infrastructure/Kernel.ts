@@ -1,7 +1,7 @@
 import 'reflect-metadata';
 import { Container, decorate, injectable } from 'inversify';
-import { Config, getConfigFromEnv } from './config/Config';
-import { load } from './di/container';
+import { Config, getConfigFromEnv } from './config/Config.js';
+import { load } from './di/container.js';
 
 export default class Kernel {
 	private static instance?: Kernel;

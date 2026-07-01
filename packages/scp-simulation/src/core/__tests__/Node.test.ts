@@ -1,5 +1,5 @@
-import { Node } from '../Node';
-import { QuorumSet } from '../QuorumSet';
+import { Node } from '../Node.js';
+import { QuorumSet } from '../QuorumSet.js';
 
 describe('Node', () => {
 	describe('toJSON', () => {

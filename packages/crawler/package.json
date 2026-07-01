@@ -1,6 +1,7 @@
 {
 	"name": "crawler",
 	"private": true,
+	"type": "module",
 	"description": "Crawl the stellar network",
 	"scripts": {
 		"build": "tsc --declaration",
@@ -11,11 +12,11 @@
 	"author": "pieterjan84@github",
 	"license": "MIT",
 	"dependencies": {
+		"async": "^3.2.6",
 		"node-connector": "workspace:*",
-		"shared": "workspace:*",
-		"async": "^3.2.6"
+		"shared": "workspace:*"
 	},
 	"devDependencies": {
-		"@types/async": "^3.2.7"
+		"@types/async": "^3.2.25"
 	}
 }

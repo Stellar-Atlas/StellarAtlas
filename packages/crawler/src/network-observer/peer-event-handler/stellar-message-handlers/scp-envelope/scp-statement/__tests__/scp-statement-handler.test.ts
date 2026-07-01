@@ -1,18 +1,18 @@
 import { mock } from 'jest-mock-extended';
-import { ScpStatementHandler } from '../scp-statement-handler';
-import { QuorumSetManager } from '../../../../../quorum-set-manager';
-import { P } from 'pino';
-import { ExternalizeStatementHandler } from '../externalize/externalize-statement-handler';
+import { ScpStatementHandler } from '../scp-statement-handler.js';
+import { QuorumSetManager } from '../../../../../quorum-set-manager.js';
+import pino from 'pino';
+import { ExternalizeStatementHandler } from '../externalize/externalize-statement-handler.js';
 import {
 	createDummyExternalizeStatement,
 	createDummyNominationMessage
-} from '../../../../../../__fixtures__/createDummyExternalizeMessage';
-import { Keypair } from '@stellar/stellar-base';
-import { PeerNodeCollection } from '../../../../../../peer-node-collection';
-import { Slots } from '../externalize/slots';
+} from '../../../../../../__fixtures__/createDummyExternalizeMessage.js';
+import { Keypair } from '@stellar/stellar-sdk';
+import { PeerNodeCollection } from '../../../../../../peer-node-collection.js';
+import { Slots } from '../externalize/slots.js';
 import { QuorumSet } from 'shared';
-import { Ledger } from '../../../../../../crawler';
-import { Observation } from '../../../../../observation';
+import type { Ledger } from '../../../../../../crawler.js';
+import { Observation } from '../../../../../observation.js';
 
 describe('scp-statement-handler', () => {
 	it('should process new scp statement and newly closed ledger', () => {
@@ -28,7 +28,7 @@ describe('scp-statement-handler', () => {
 		const handler = new ScpStatementHandler(
 			quorumSetManager,
 			externalizeStatementHandler,
-			mock<P.Logger>()
+			mock<pino.Logger>()
 		);
 
 		const keyPair = Keypair.random();
@@ -37,7 +37,7 @@ describe('scp-statement-handler', () => {
 		observation.peerNodes = new PeerNodeCollection();
 		observation.slots = new Slots(
 			new QuorumSet(1, ['A'], []),
-			mock<P.Logger>()
+			mock<pino.Logger>()
 		);
 		observation.latestConfirmedClosedLedger = {
 			sequence: BigInt(1),
@@ -67,7 +67,7 @@ describe('scp-statement-handler', () => {
 		const handler = new ScpStatementHandler(
 			quorumSetManager,
 			externalizeStatementHandler,
-			mock<P.Logger>()
+			mock<pino.Logger>()
 		);
 
 		const keyPair = Keypair.random();
@@ -76,7 +76,7 @@ describe('scp-statement-handler', () => {
 		observation.peerNodes = new PeerNodeCollection();
 		observation.slots = new Slots(
 			new QuorumSet(1, ['A'], []),
-			mock<P.Logger>()
+			mock<pino.Logger>()
 		);
 		observation.latestConfirmedClosedLedger = {
 			sequence: BigInt(2),
@@ -104,7 +104,7 @@ describe('scp-statement-handler', () => {
 		const handler = new ScpStatementHandler(
 			quorumSetManager,
 			externalizeStatementHandler,
-			mock<P.Logger>()
+			mock<pino.Logger>()
 		);
 
 		const observation = mock<Observation>();

@@ -1,4 +1,4 @@
-import olderThanOneDay from '../MoreThanOneDayApart';
+import olderThanOneDay from '../MoreThanOneDayApart.js';
 
 test('older', () => {
 	const myDate = new Date(1999, 1, 1);

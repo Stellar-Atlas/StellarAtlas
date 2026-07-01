@@ -1,5 +1,5 @@
 import { Result, ok, err } from 'neverthrow';
-import { ScanErrorDTO } from 'src';
+import { ScanErrorDTO } from './ScanErrorDTO.js';
 
 /**
  * Represents a finished scan.
@@ -18,7 +18,8 @@ export class ScanDTO {
 		public readonly concurrency: number,
 		public readonly isSlowArchive: boolean | null,
 		public readonly error: ScanErrorDTO | null,
-		public readonly scanJobRemoteId: string
+		public readonly scanJobRemoteId: string,
+		public readonly errors: readonly ScanErrorDTO[] = []
 	) {}
 
 	static fromJSON(json: Record<string, unknown>): Result<ScanDTO, Error> {
@@ -40,7 +41,8 @@ export class ScanDTO {
 				json.concurrency as number,
 				json.isSlowArchive as boolean | null,
 				json.error as ScanErrorDTO | null,
-				json.scanJobRemoteId as string
+				json.scanJobRemoteId as string,
+				this.mapErrors(json)
 			)
 		);
 	}
@@ -70,8 +72,17 @@ export class ScanDTO {
 			(json.isSlowArchive === null ||
 				typeof json.isSlowArchive === 'boolean') &&
 			(json.error === null || this.isValidScanErrorDTO(json.error)) &&
+			(json.errors === undefined ||
+				(Array.isArray(json.errors) &&
+					json.errors.every((error) => this.isValidScanErrorDTO(error)))) &&
 			typeof json.scanJobRemoteId === 'string'
 		);
+	}
+
+	private static mapErrors(json: Record<string, unknown>): ScanErrorDTO[] {
+		if (Array.isArray(json.errors)) return json.errors as ScanErrorDTO[];
+
+		return json.error === null ? [] : [json.error as ScanErrorDTO];
 	}
 
 	private static isValidScanErrorDTO(error: unknown): error is ScanErrorDTO {

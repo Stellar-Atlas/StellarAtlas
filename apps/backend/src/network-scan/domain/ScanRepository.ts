@@ -1,16 +1,16 @@
-import { NodeScan } from './node/scan/NodeScan';
-import { OrganizationScan } from './organization/scan/OrganizationScan';
-import NetworkScan from './network/scan/NetworkScan';
+import { NodeScan } from './node/scan/NodeScan.js';
+import { OrganizationScan } from './organization/scan/OrganizationScan.js';
+import NetworkScan from './network/scan/NetworkScan.js';
 import { inject, injectable } from 'inversify';
-import { NETWORK_TYPES } from '../infrastructure/di/di-types';
-import { NodeRepository } from './node/NodeRepository';
-import { OrganizationRepository } from './organization/OrganizationRepository';
-import { NetworkScanRepository } from './network/scan/NetworkScanRepository';
-import { MeasurementsRollupService } from './measurement-aggregation/MeasurementsRollupService';
-import { ScanResult } from './Scanner';
+import { NETWORK_TYPES } from '../infrastructure/di/di-types.js';
+import type { NodeRepository } from './node/NodeRepository.js';
+import type { OrganizationRepository } from './organization/OrganizationRepository.js';
+import type { NetworkScanRepository } from './network/scan/NetworkScanRepository.js';
+import type { MeasurementsRollupService } from './measurement-aggregation/MeasurementsRollupService.js';
+import { ScanResult } from './Scanner.js';
 import { Result, err, ok } from 'neverthrow';
-import { mapUnknownToError } from '../../core/utilities/mapUnknownToError';
-import { CustomError } from '../../core/errors/CustomError';
+import { mapUnknownToError } from '../../core/utilities/mapUnknownToError.js';
+import { CustomError } from '../../core/errors/CustomError.js';
 
 export class NodesPersistenceError extends CustomError {
 	constructor(cause: Error) {

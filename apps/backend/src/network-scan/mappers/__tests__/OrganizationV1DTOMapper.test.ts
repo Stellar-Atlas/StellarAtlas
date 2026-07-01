@@ -1,12 +1,12 @@
-import Organization from '../../domain/organization/Organization';
-import { createDummyOrganizationId } from '../../domain/organization/__fixtures__/createDummyOrganizationId';
-import { OrganizationValidators } from '../../domain/organization/OrganizationValidators';
-import { createDummyPublicKey } from '../../domain/node/__fixtures__/createDummyPublicKey';
-import { OrganizationContactInformation } from '../../domain/organization/OrganizationContactInformation';
-import OrganizationMeasurement from '../../domain/organization/OrganizationMeasurement';
-import { OrganizationMeasurementAverage } from '../../domain/organization/OrganizationMeasurementAverage';
-import { OrganizationV1DTOMapper } from '../OrganizationV1DTOMapper';
-import { TomlState } from '../../domain/organization/scan/TomlState';
+import Organization from '../../domain/organization/Organization.js';
+import { createDummyOrganizationId } from '../../domain/organization/__fixtures__/createDummyOrganizationId.js';
+import { OrganizationValidators } from '../../domain/organization/OrganizationValidators.js';
+import { createDummyPublicKey } from '../../domain/node/__fixtures__/createDummyPublicKey.js';
+import { OrganizationContactInformation } from '../../domain/organization/OrganizationContactInformation.js';
+import OrganizationMeasurement from '../../domain/organization/OrganizationMeasurement.js';
+import { OrganizationMeasurementAverage } from '../../domain/organization/OrganizationMeasurementAverage.js';
+import { OrganizationV1DTOMapper } from '../OrganizationV1DTOMapper.js';
+import { TomlState } from '../../domain/organization/scan/TomlState.js';
 
 describe('OrganizationV1DTOMapper', () => {
 	test('toOrganizationDTO', () => {

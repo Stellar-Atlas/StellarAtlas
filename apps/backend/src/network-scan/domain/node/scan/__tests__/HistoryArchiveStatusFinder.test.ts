@@ -1,5 +1,5 @@
-import { HistoryService } from '../history/HistoryService';
-import { HistoryArchiveStatusFinder } from '../HistoryArchiveStatusFinder';
+import { HistoryService } from '../history/HistoryService.js';
+import { HistoryArchiveStatusFinder } from '../HistoryArchiveStatusFinder.js';
 import { mock } from 'jest-mock-extended';
 import { ok } from 'neverthrow';
 

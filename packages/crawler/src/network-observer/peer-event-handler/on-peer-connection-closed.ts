@@ -1,13 +1,13 @@
-import { ClosePayload } from '../connection-manager';
-import { truncate } from '../../utilities/truncate';
-import { QuorumSetManager } from '../quorum-set-manager';
-import { P } from 'pino';
-import { Observation } from '../observation';
+import { ClosePayload } from '../connection-manager.js';
+import { truncate } from '../../utilities/truncate.js';
+import { QuorumSetManager } from '../quorum-set-manager.js';
+import pino from 'pino';
+import { Observation } from '../observation.js';
 
 export class OnPeerConnectionClosed {
 	constructor(
 		private quorumSetManager: QuorumSetManager,
-		private logger: P.Logger
+		private logger: pino.Logger
 	) {}
 
 	public handle(data: ClosePayload, observation: Observation) {

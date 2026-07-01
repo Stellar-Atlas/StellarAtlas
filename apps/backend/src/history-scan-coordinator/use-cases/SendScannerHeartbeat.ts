@@ -1,5 +1,5 @@
-import { Repository } from 'typeorm';
-import { CommunityScanner, ScannerStatus } from '../infrastructure/database/entities/CommunityScanner';
+import type { Repository } from 'typeorm';
+import { CommunityScanner, ScannerStatus } from '../infrastructure/database/entities/CommunityScanner.js';
 
 export interface SendHeartbeatRequest {
   scannerId: string;

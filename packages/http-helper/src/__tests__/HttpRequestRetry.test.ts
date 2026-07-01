@@ -1,6 +1,6 @@
 import { err } from 'neverthrow';
-import { HttpError } from '../HttpService';
-import { retryHttpRequestIfNeeded } from '../HttpRequestRetry';
+import { HttpError } from '../HttpService.js';
+import { retryHttpRequestIfNeeded } from '../HttpRequestRetry.js';
 
 it('should retry the correct amount of times', async function () {
 	const actionWrap = createErrorAction('500', 500);

@@ -1,5 +1,5 @@
-import { PublicKey, QuorumSet } from '../../core';
-import { Statement } from './Statement';
+import { PublicKey, QuorumSet } from '../../core/index.js';
+import { Statement } from './Statement.js';
 
 //contains the statement a node voted from and if it accepted a vote.
 export class Vote {

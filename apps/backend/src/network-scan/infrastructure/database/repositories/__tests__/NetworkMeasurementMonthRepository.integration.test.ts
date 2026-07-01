@@ -1,13 +1,13 @@
 import { Container } from 'inversify';
-import Kernel from '../../../../../core/infrastructure/Kernel';
-import NetworkMeasurement from '../../../../domain/network/NetworkMeasurement';
-import NetworkScan from '../../../../domain/network/scan/NetworkScan';
-import { TypeOrmNetworkScanRepository } from '../TypeOrmNetworkScanRepository';
-import { TypeOrmNetworkMeasurementMonthRepository } from '../TypeOrmNetworkMeasurementMonthRepository';
-import NetworkMeasurementMonth from '../../../../domain/network/NetworkMeasurementMonth';
-import { ConfigMock } from '../../../../../core/config/__mocks__/configMock';
-import { NETWORK_TYPES } from '../../../di/di-types';
-import { NetworkId } from '../../../../domain/network/NetworkId';
+import Kernel from '../../../../../core/infrastructure/Kernel.js';
+import NetworkMeasurement from '../../../../domain/network/NetworkMeasurement.js';
+import NetworkScan from '../../../../domain/network/scan/NetworkScan.js';
+import { TypeOrmNetworkScanRepository } from '../TypeOrmNetworkScanRepository.js';
+import { TypeOrmNetworkMeasurementMonthRepository } from '../TypeOrmNetworkMeasurementMonthRepository.js';
+import NetworkMeasurementMonth from '../../../../domain/network/NetworkMeasurementMonth.js';
+import { ConfigMock } from '../../../../../core/config/__mocks__/configMock.js';
+import { NETWORK_TYPES } from '../../../di/di-types.js';
+import { NetworkId } from '../../../../domain/network/NetworkId.js';
 
 describe('test queries', () => {
 	let container: Container;
@@ -101,5 +101,14 @@ describe('test queries', () => {
 		expect(measurements[0].minBlockingSetFilteredMax).toEqual(1);
 		expect(measurements[0].topTierMin).toEqual(1);
 		expect(measurements[0].topTierMax).toEqual(1);
+
+		await networkMeasurementMonthRepository.rollup(1, 2);
+		measurements = await networkMeasurementMonthRepository.findBetween(
+			new NetworkId('public'),
+			new Date(Date.UTC(2020, 0, 3)),
+			new Date(Date.UTC(2020, 1, 3))
+		);
+		expect(measurements[0].crawlCount).toEqual(2);
+		expect(measurements[0].nrOfActiveWatchersSum).toEqual(2);
 	});
 });

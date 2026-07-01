@@ -1,6 +1,6 @@
 import assert from 'node:assert';
-import { QuorumSet } from '../../../core';
-import { QuorumSetService } from '../QuorumSetService';
+import { QuorumSet } from '../../../core/index.js';
+import { QuorumSetService } from '../QuorumSetService.js';
 
 describe('QuorumSetService', () => {
 	describe('isSetVBlocking for validators arrays', () => {

@@ -1,3 +1,3 @@
-export { ScanErrorDTO } from './ScanErrorDTO';
-export { ScanDTO } from './ScanDTO';
-export { ScanJobDTO } from './ScanJobDTO';
+export type { ScanErrorDTO } from './ScanErrorDTO.js';
+export { ScanDTO } from './ScanDTO.js';
+export { ScanJobDTO, type ScanJobJSONInput } from './ScanJobDTO.js';

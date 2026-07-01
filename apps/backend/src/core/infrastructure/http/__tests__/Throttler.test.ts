@@ -1,4 +1,4 @@
-import { Throttler } from '../Throttler';
+import { Throttler } from '../Throttler.js';
 
 it('should throttle when too many requests in time window', function () {
 	const throttler = new Throttler(2, 1000 * 60);

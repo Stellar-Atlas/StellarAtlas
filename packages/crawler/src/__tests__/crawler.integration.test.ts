@@ -5,7 +5,7 @@ import {
 	createNode,
 	getConfigFromEnv
 } from 'node-connector';
-import { xdr, Keypair, hash, Networks } from '@stellar/stellar-base';
+import { xdr, Keypair, hash, Networks } from '@stellar/stellar-sdk';
 import { QuorumSet } from 'shared';
 import { NodeConfig } from 'node-connector';
 import { ok, Result, err } from 'neverthrow';
@@ -13,9 +13,9 @@ import {
 	CrawlerConfiguration,
 	createCrawler,
 	createCrawlFactory
-} from '../index';
+} from '../index.js';
 import { StellarMessageWork } from 'node-connector';
-import { NodeAddress } from '../node-address';
+import type { NodeAddress } from '../node-address.js';
 
 jest.setTimeout(60000);
 
@@ -244,7 +244,7 @@ it('should hit the max crawl limit', async function () {
 	);
 
 	try {
-		expect(await crawler.startCrawl(crawl)).toThrowError();
+		expect(await crawler.startCrawl(crawl)).toThrow();
 	} catch (e) {
 		expect(e).toBeInstanceOf(Error);
 	}

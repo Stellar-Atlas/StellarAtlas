@@ -1,5 +1,5 @@
-import { Broadcast } from '../Broadcast';
-import { QuorumSet, Vote } from '../../../..';
+import { Broadcast } from '../Broadcast.js';
+import { QuorumSet, Vote } from '../../../../index.js';
 
 describe('Broadcast', () => {
 	const broadcaster = 'node';

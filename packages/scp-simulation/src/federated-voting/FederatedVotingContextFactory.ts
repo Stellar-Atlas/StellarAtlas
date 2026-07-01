@@ -1,7 +1,7 @@
-import { Overlay } from '../overlay';
-import { FederatedVotingContext } from './FederatedVotingContext';
-import { FederatedVotingProtocol } from './protocol/FederatedVotingProtocol';
-import { PhaseTransitioner } from './protocol/phase-transitioner/PhaseTransitioner';
+import { Overlay } from '../overlay/index.js';
+import { FederatedVotingContext } from './FederatedVotingContext.js';
+import { FederatedVotingProtocol } from './protocol/FederatedVotingProtocol.js';
+import { PhaseTransitioner } from './protocol/phase-transitioner/PhaseTransitioner.js';
 
 export class FederatedVotingContextFactory {
 	static create(

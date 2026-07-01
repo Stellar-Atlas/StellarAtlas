@@ -1,8 +1,6 @@
-import PublicKey from '../node/PublicKey';
-import { NetworkId } from '../network/NetworkId';
-import { OrganizationId } from '../organization/OrganizationId';
+import PublicKey from '../node/PublicKey.js';
+import { NetworkId } from '../network/NetworkId.js';
+import { OrganizationId } from '../organization/OrganizationId.js';
 
 export type MeasurementAggregationSourceId =
-	| PublicKey
-	| NetworkId
-	| OrganizationId;
+	PublicKey | NetworkId | OrganizationId;

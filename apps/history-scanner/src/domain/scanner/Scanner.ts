@@ -1,15 +1,15 @@
 import { inject, injectable } from 'inversify';
-import { Logger } from 'logger';
-import { Scan } from '../scan/Scan';
-import { ExceptionLogger } from 'exception-logger';
-import { RangeScanner } from './RangeScanner';
-import { ScanJob } from '../scan/ScanJob';
-import { ScanError } from '../scan/ScanError';
-import { ScanSettingsFactory } from '../scan/ScanSettingsFactory';
-import { ScanSettings } from '../scan/ScanSettings';
-import { ScanResult } from '../scan/ScanResult';
+import type { Logger } from 'logger';
+import { Scan } from '../scan/Scan.js';
+import type { ExceptionLogger } from 'exception-logger';
+import { RangeScanner } from './RangeScanner.js';
+import { ScanJob } from '../scan/ScanJob.js';
+import { ScanError } from '../scan/ScanError.js';
+import { ScanSettingsFactory } from '../scan/ScanSettingsFactory.js';
+import { ScanSettings } from '../scan/ScanSettings.js';
+import { ScanResult } from '../scan/ScanResult.js';
 import { Url } from 'http-helper';
-import { TYPES } from '../../infrastructure/di/di-types';
+import { TYPES } from '../../infrastructure/di/di-types.js';
 
 export interface LedgerHeader {
 	ledger: number;
@@ -86,6 +86,7 @@ export class Scanner {
 
 		let alreadyScannedBucketHashes = new Set<string>();
 		let error: ScanError | undefined;
+		const errors: ScanError[] = [];
 
 		while (rangeFromLedger < scanSettings.toLedger && !error) {
 			console.time('range_scan');
@@ -102,7 +103,9 @@ export class Scanner {
 
 			if (rangeResult.isErr()) {
 				error = rangeResult.error;
+				errors.push(...this.expandScanError(rangeResult.error));
 			} else {
+				errors.push(...(rangeResult.value.errors ?? []));
 				latestLedgerHeader.ledger = rangeResult.value.latestLedgerHeader
 					? rangeResult.value.latestLedgerHeader.ledger
 					: rangeToLedger;
@@ -120,7 +123,12 @@ export class Scanner {
 
 		return {
 			latestLedgerHeader,
-			error
+			error,
+			errors
 		};
+	}
+
+	private expandScanError(error: ScanError): readonly ScanError[] {
+		return error.relatedErrors.length > 0 ? error.relatedErrors : [error];
 	}
 }

@@ -1,7 +1,7 @@
-import { ReceiveMessage } from '../ReceiveMessage';
-import { Message } from '../../../Message';
-import { Vote } from '../../../protocol/Vote';
-import { QuorumSet } from '../../../../core';
+import { ReceiveMessage } from '../ReceiveMessage.js';
+import { Message } from '../../../Message.js';
+import { Vote } from '../../../protocol/Vote.js';
+import { QuorumSet } from '../../../../core/index.js';
 
 describe('ReceiveMessage', () => {
 	const sender = 'node1';

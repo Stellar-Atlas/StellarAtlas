@@ -1,14 +1,20 @@
-import { FederatedVotingContext } from './../FederatedVotingContext';
+import { FederatedVotingContext } from './../FederatedVotingContext.js';
 import { mock, MockProxy } from 'jest-mock-extended';
-import { FederatedVotingProtocol } from './../protocol/FederatedVotingProtocol';
-import { Statement, Node, QuorumSet, Overlay, ForgedMessageSent } from '../../';
-import { ProtocolAction, UserAction } from '../../core';
-import { Message } from '../Message';
-import { BroadcastVoteRequested } from './../protocol/event/BroadcastVoteRequested';
-import { Vote, Voted } from '../protocol';
-import { ReceiveMessage } from '../action/protocol/ReceiveMessage';
-import { UpdateQuorumSet } from '../action/user/UpdateQuorumSet';
-import { Broadcast } from '../action/protocol/Broadcast';
+import { FederatedVotingProtocol } from './../protocol/FederatedVotingProtocol.js';
+import {
+	Statement,
+	Node,
+	QuorumSet,
+	Overlay,
+	ForgedMessageSent
+} from '../../index.js';
+import { ProtocolAction, UserAction } from '../../core/index.js';
+import { Message } from '../Message.js';
+import { BroadcastVoteRequested } from './../protocol/event/BroadcastVoteRequested.js';
+import { Vote, Voted } from '../protocol/index.js';
+import { ReceiveMessage } from '../action/protocol/ReceiveMessage.js';
+import { UpdateQuorumSet } from '../action/user/UpdateQuorumSet.js';
+import { Broadcast } from '../action/protocol/Broadcast.js';
 
 describe('FederatedVotingContext', () => {
 	let mockFederatedVotingProtocol: MockProxy<FederatedVotingProtocol>;

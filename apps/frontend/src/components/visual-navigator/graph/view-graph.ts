@@ -1,6 +1,7 @@
 import { TrustGraph } from "shared";
 import ViewVertex from "@/components/visual-navigator/graph/view-vertex";
 import ViewEdge from "@/components/visual-navigator/graph/view-edge";
+import { getGraphGroupColor } from "@/components/visual-navigator/graph/graph-colors";
 
 export default class ViewGraph {
   public viewVertices: Map<string, ViewVertex> = new Map<string, ViewVertex>();
@@ -30,11 +31,22 @@ export default class ViewGraph {
     mergeWithGraph?: ViewGraph,
     selectedKeys: string[] = [],
     failingNodes: Set<string> = new Set<string>(),
+    nodeGroups: Map<string, string> = new Map<string, string>(),
   ) {
     const viewGraph = new ViewGraph();
+    const groupIndexes = this.createGroupIndexes(
+      Array.from(trustGraph.vertices.values()).map(
+        (vertex) => nodeGroups.get(vertex.key) ?? null,
+      ),
+    );
 
     Array.from(trustGraph.edges).forEach((edge) => {
-      const viewEdge = ViewEdge.fromNodeEdge(edge, trustGraph, failingNodes);
+      const viewEdge = ViewEdge.fromNodeEdge(
+        edge,
+        trustGraph,
+        failingNodes,
+        getGraphGroupColor(nodeGroups.get(edge.parent.key) ?? null),
+      );
       viewGraph.viewEdges.set(viewEdge.key, viewEdge);
       viewGraph.classifyEdge(viewEdge, selectedKeys);
     });
@@ -44,6 +56,8 @@ export default class ViewGraph {
         vertex,
         trustGraph,
         failingNodes,
+        nodeGroups.get(vertex.key) ?? null,
+        this.getGroupIndex(groupIndexes, nodeGroups.get(vertex.key) ?? null),
       );
       if (mergeWithGraph && mergeWithGraph.viewVertices.has(viewVertex.key)) {
         viewVertex.x = (
@@ -69,12 +83,16 @@ export default class ViewGraph {
     failingOrganizations: Set<string> = new Set(),
   ) {
     const viewGraph = new ViewGraph();
+    const groupIndexes = this.createGroupIndexes(
+      Array.from(trustGraph.vertices.values()).map((vertex) => vertex.key),
+    );
 
     Array.from(trustGraph.edges).forEach((edge) => {
       const viewEdge = ViewEdge.fromOrganizationEdge(
         edge,
         trustGraph,
         failingOrganizations,
+        getGraphGroupColor(edge.parent.key),
       );
       viewGraph.viewEdges.set(viewEdge.key, viewEdge);
       viewGraph.classifyEdge(viewEdge, selectedKeys);
@@ -85,6 +103,7 @@ export default class ViewGraph {
         vertex,
         trustGraph,
         failingOrganizations,
+        this.getGroupIndex(groupIndexes, vertex.key),
       );
       if (mergeWithGraph && mergeWithGraph.viewVertices.has(viewVertex.key)) {
         const mergeVertex = mergeWithGraph.viewVertices.get(viewVertex.key);
@@ -99,6 +118,28 @@ export default class ViewGraph {
     this.mapStronglyConnectedComponents(trustGraph, viewGraph);
 
     return viewGraph;
+  }
+
+  private static createGroupIndexes(
+    groupKeys: Array<string | null>,
+  ): Map<string, number> {
+    const groupIndexes = new Map<string, number>();
+    Array.from(new Set(groupKeys.map((groupKey) => this.groupIdentity(groupKey))))
+      .sort()
+      .forEach((groupKey, index) => groupIndexes.set(groupKey, index));
+
+    return groupIndexes;
+  }
+
+  private static getGroupIndex(
+    groupIndexes: Map<string, number>,
+    groupKey: string | null,
+  ): number {
+    return groupIndexes.get(this.groupIdentity(groupKey)) ?? 0;
+  }
+
+  private static groupIdentity(groupKey: string | null): string {
+    return groupKey ?? "unassigned";
   }
 
   private static mapStronglyConnectedComponents(

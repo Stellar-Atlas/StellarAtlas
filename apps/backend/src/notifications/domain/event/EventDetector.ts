@@ -1,11 +1,11 @@
-import { Event, EventData } from './Event';
+import { Event, EventData } from './Event.js';
 import { Network, NetworkV1 } from 'shared';
 import { inject, injectable } from 'inversify';
-import { NetworkEventDetector } from './NetworkEventDetector';
+import { NetworkEventDetector } from './NetworkEventDetector.js';
 import { Result, ok, err } from 'neverthrow';
-import { EventRepository } from './EventRepository';
-import { EventSourceId } from './EventSourceId';
-import { NodeEventDetector } from './NodeEventDetector';
+import type { EventRepository } from './EventRepository.js';
+import { EventSourceId } from './EventSourceId.js';
+import { NodeEventDetector } from './NodeEventDetector.js';
 
 @injectable()
 export class EventDetector {

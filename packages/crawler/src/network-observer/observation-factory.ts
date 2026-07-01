@@ -1,9 +1,9 @@
-import { Observation } from './observation';
-import { NodeAddress } from '../node-address';
-import { PeerNodeCollection } from '../peer-node-collection';
-import { Slots } from './peer-event-handler/stellar-message-handlers/scp-envelope/scp-statement/externalize/slots';
+import { Observation } from './observation.js';
+import type { NodeAddress } from '../node-address.js';
+import { PeerNodeCollection } from '../peer-node-collection.js';
+import { Slots } from './peer-event-handler/stellar-message-handlers/scp-envelope/scp-statement/externalize/slots.js';
 import { QuorumSet } from 'shared';
-import { Ledger } from '../crawler';
+import type { Ledger } from '../crawler.js';
 
 export class ObservationFactory {
 	public createObservation(

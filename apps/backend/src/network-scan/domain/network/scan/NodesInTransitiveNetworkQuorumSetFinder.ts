@@ -1,9 +1,9 @@
 import { injectable } from 'inversify';
-import Node from '../../node/Node';
-import { NetworkQuorumSetConfigurationMapper } from '../NetworkQuorumSetConfigurationMapper';
+import Node from '../../node/Node.js';
+import { NetworkQuorumSetConfigurationMapper } from '../NetworkQuorumSetConfigurationMapper.js';
 import { QuorumSet as BaseQuorumSet } from 'shared';
-import NodeQuorumSet from '../../node/NodeQuorumSet';
-import { NetworkQuorumSetConfiguration } from '../NetworkQuorumSetConfiguration';
+import NodeQuorumSet from '../../node/NodeQuorumSet.js';
+import { NetworkQuorumSetConfiguration } from '../NetworkQuorumSetConfiguration.js';
 import { TransitiveQuorumSetFinder } from 'shared';
 
 @injectable()

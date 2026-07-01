@@ -1,5 +1,5 @@
-import { PublicKey, QuorumSet } from '../../../core';
-import { ProtocolEvent } from './ProtocolEvent';
+import { PublicKey, QuorumSet } from '../../../core/index.js';
+import { ProtocolEvent } from './ProtocolEvent.js';
 
 //todo: is this a ProtocolEvent??
 export class NodeUpdatedQuorumSet extends ProtocolEvent {

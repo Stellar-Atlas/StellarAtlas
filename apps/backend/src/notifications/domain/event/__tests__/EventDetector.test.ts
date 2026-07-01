@@ -1,12 +1,12 @@
 import { mock } from 'jest-mock-extended';
-import { EventDetector } from '../EventDetector';
-import { EventRepository } from '../EventRepository';
-import { NetworkEventDetector } from '../NetworkEventDetector';
-import { NodeEventDetector } from '../NodeEventDetector';
-import { Event, EventData, MultipleUpdatesEventData } from '../Event';
-import { NetworkId, OrganizationId, PublicKey } from '../EventSourceId';
+import { EventDetector } from '../EventDetector.js';
+import type { EventRepository } from '../EventRepository.js';
+import { NetworkEventDetector } from '../NetworkEventDetector.js';
+import { NodeEventDetector } from '../NodeEventDetector.js';
+import { Event, EventData, MultipleUpdatesEventData } from '../Event.js';
+import { NetworkId, OrganizationId, PublicKey } from '../EventSourceId.js';
 import { ok } from 'neverthrow';
-import { createDummyNetworkV1 } from '../../../../network-scan/services/__fixtures__/createDummyNetworkV1';
+import { createDummyNetworkV1 } from '../../../../network-scan/services/__fixtures__/createDummyNetworkV1.js';
 
 it('should return all events', async function () {
 	const eventRepository = mock<EventRepository>();

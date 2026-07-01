@@ -1,4 +1,4 @@
-import { NetworkQuorumSetConfiguration } from '../domain/network/NetworkQuorumSetConfiguration';
+import { NetworkQuorumSetConfiguration } from '../domain/network/NetworkQuorumSetConfiguration.js';
 import { BaseQuorumSet } from 'shared';
 
 export class BaseQuorumSetDTOMapper {

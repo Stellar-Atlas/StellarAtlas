@@ -1,15 +1,15 @@
-import { createDummyNode } from '../../__fixtures__/createDummyNode';
-import Node from '../../Node';
-import { NodeScan } from '../NodeScan';
+import { createDummyNode } from '../../__fixtures__/createDummyNode.js';
+import Node from '../../Node.js';
+import { NodeScan } from '../NodeScan.js';
 import { PeerNode } from 'crawler';
-import { createDummyPublicKeyString } from '../../__fixtures__/createDummyPublicKey';
-import NodeDetails from '../../NodeDetails';
-import NodeMeasurement from '../../NodeMeasurement';
-import NodeGeoDataLocation from '../../NodeGeoDataLocation';
-import { NodeTomlInfo } from '../NodeTomlInfo';
+import { createDummyPublicKeyString } from '../../__fixtures__/createDummyPublicKey.js';
+import NodeDetails from '../../NodeDetails.js';
+import NodeMeasurement from '../../NodeMeasurement.js';
+import NodeGeoDataLocation from '../../NodeGeoDataLocation.js';
+import { NodeTomlInfo } from '../NodeTomlInfo.js';
 import { QuorumSet } from 'shared';
-import NodeQuorumSet from '../../NodeQuorumSet';
-import { StellarCoreVersion } from '../../../network/StellarCoreVersion';
+import NodeQuorumSet from '../../NodeQuorumSet.js';
+import { StellarCoreVersion } from '../../../network/StellarCoreVersion.js';
 
 describe('NodeScan', () => {
 	let activeNode: Node;
@@ -252,6 +252,33 @@ describe('NodeScan', () => {
 		const modifiedIPs = nodeScan.getModifiedIPs();
 		expect(modifiedIPs).toHaveLength(1);
 		expect(modifiedIPs).toContain(activeNode.ip);
+	});
+
+	test('getIPsRequiringGeoDataRefresh includes modified and missing geo nodes', () => {
+		const scanTime = new Date('2020-01-03T00:00:00.000Z');
+		activeNode.updateIpPort('new ip', 1234, scanTime);
+		missingNode.updateIsp('known isp', scanTime);
+
+		const nodeScan = new NodeScan(scanTime, [activeNode, missingNode]);
+		const ips = nodeScan.getIPsRequiringGeoDataRefresh();
+		expect(ips).toEqual([activeNode.ip, missingNode.ip]);
+	});
+
+	test('getIPsRequiringGeoDataRefresh skips nodes with complete geo data and isp', () => {
+		const scanTime = new Date('2020-01-03T00:00:00.000Z');
+		activeNode.updateGeoData(
+			NodeGeoDataLocation.create({
+				longitude: 1,
+				latitude: 2,
+				countryName: 'countryName',
+				countryCode: 'countryCode'
+			}),
+			scanTime
+		);
+		activeNode.updateIsp('isp', scanTime);
+
+		const nodeScan = new NodeScan(scanTime, [activeNode]);
+		expect(nodeScan.getIPsRequiringGeoDataRefresh()).toEqual([]);
 	});
 
 	test('updateIndexes', () => {

@@ -1,9 +1,9 @@
 import { mock } from 'jest-mock-extended';
-import { ExceptionLogger } from '../../../../core/services/ExceptionLogger';
-import { GetNodeSnapshots } from '../GetNodeSnapshots';
-import { ExceptionLoggerMock } from '../../../../core/services/__mocks__/ExceptionLoggerMock';
-import { createDummyPublicKeyString } from '../../../domain/node/__fixtures__/createDummyPublicKey';
-import { NodeSnapShotRepository } from '../../../domain/node/NodeSnapShotRepository';
+import type { ExceptionLogger } from '../../../../core/services/ExceptionLogger.js';
+import { GetNodeSnapshots } from '../GetNodeSnapshots.js';
+import { ExceptionLoggerMock } from '../../../../core/services/__mocks__/ExceptionLoggerMock.js';
+import { createDummyPublicKeyString } from '../../../domain/node/__fixtures__/createDummyPublicKey.js';
+import type { NodeSnapShotRepository } from '../../../domain/node/NodeSnapShotRepository.js';
 
 it('should capture and return errors', async function () {
 	const repo = mock<NodeSnapShotRepository>();
@@ -15,7 +15,7 @@ it('should capture and return errors', async function () {
 		publicKey: createDummyPublicKeyString()
 	});
 	expect(result.isErr()).toBe(true);
-	expect(exceptionLogger.captureException).toBeCalledTimes(1);
+	expect(exceptionLogger.captureException).toHaveBeenCalledTimes(1);
 });
 
 it('should fetch latest node snapshots', async () => {

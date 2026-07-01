@@ -1,6 +1,6 @@
 import { ChildEntity } from 'typeorm';
-import { NetworkChange } from './NetworkChange';
-import { NetworkId } from '../NetworkId';
+import { NetworkChange } from './NetworkChange.js';
+import { NetworkId } from '../NetworkId.js';
 
 @ChildEntity()
 export class NetworkMaxLedgerVersionChanged extends NetworkChange {

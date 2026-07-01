@@ -1,4 +1,4 @@
-import { CheckPointFrequency } from './CheckPointFrequency';
+import type { CheckPointFrequency } from './CheckPointFrequency.js';
 import { injectable } from 'inversify';
 import 'reflect-metadata';
 

@@ -1,14 +1,15 @@
-import { MonitoringJob } from '../JobMonitor';
-import { SentryJobMonitor } from '../SentryJobMonitor';
+import { jest } from '@jest/globals';
+import type { MonitoringJob } from '../JobMonitor.js';
 
-jest.mock('@sentry/node', () => ({
-	init: jest.fn(),
-	captureCheckIn: jest.fn(async () => {
-		return 'id';
-	})
+const init = jest.fn();
+const captureCheckIn = jest.fn(() => 'id');
+
+jest.unstable_mockModule('@sentry/node', () => ({
+	init,
+	captureCheckIn
 }));
 
-import * as Sentry from '@sentry/node';
+const { SentryJobMonitor } = await import('../SentryJobMonitor.js');
 
 describe('SentryJobMonitor', () => {
 	beforeEach(() => {
@@ -25,7 +26,7 @@ describe('SentryJobMonitor', () => {
 		};
 
 		await sentryJobMonitor.checkIn(startJob);
-		expect(Sentry.captureCheckIn).toHaveBeenCalledTimes(1);
+		expect(captureCheckIn).toHaveBeenCalledTimes(1);
 
 		const result = await sentryJobMonitor.checkIn({
 			context: 'context',
@@ -33,7 +34,7 @@ describe('SentryJobMonitor', () => {
 		});
 
 		expect(result.isOk()).toBe(true);
-		expect(Sentry.captureCheckIn).toHaveBeenCalledTimes(2);
+		expect(captureCheckIn).toHaveBeenCalledTimes(2);
 	});
 
 	test('should return error if job is not started and marked as OK', async () => {
@@ -52,7 +53,7 @@ describe('SentryJobMonitor', () => {
 		const sentryDSN = 'sentryDSN';
 		const sentryJobMonitor = new SentryJobMonitor(sentryDSN);
 
-		(Sentry.captureCheckIn as jest.Mock).mockImplementationOnce(() => {
+		captureCheckIn.mockImplementationOnce(() => {
 			throw new Error('error');
 		});
 

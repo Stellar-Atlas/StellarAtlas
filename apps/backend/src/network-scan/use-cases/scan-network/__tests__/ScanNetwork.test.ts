@@ -1,26 +1,26 @@
-import { ScanNetwork } from '../ScanNetwork';
-import { ConfigMock } from '../../../../core/config/__mocks__/configMock';
-import { UpdateNetwork } from '../../update-network/UpdateNetwork';
-import { NetworkRepository } from '../../../domain/network/NetworkRepository';
-import { NodeMeasurementDayRepository } from '../../../domain/node/NodeMeasurementDayRepository';
-import { ScanRepository } from '../../../domain/ScanRepository';
-import { Scanner } from '../../../domain/Scanner';
-import { Archiver } from '../../../domain/network/scan/archiver/Archiver';
-import { HeartBeater } from '../../../../core/services/HeartBeater';
-import { Notify } from '../../../../notifications/use-cases/determine-events-and-notify-subscribers/Notify';
-import { ExceptionLogger } from 'exception-logger';
-import { Logger } from 'logger';
+import { ScanNetwork } from '../ScanNetwork.js';
+import { ConfigMock } from '../../../../core/config/__mocks__/configMock.js';
+import { UpdateNetwork } from '../../update-network/UpdateNetwork.js';
+import type { NetworkRepository } from '../../../domain/network/NetworkRepository.js';
+import type { NodeMeasurementDayRepository } from '../../../domain/node/NodeMeasurementDayRepository.js';
+import type { ScanRepository } from '../../../domain/ScanRepository.js';
+import { Scanner } from '../../../domain/Scanner.js';
+import type { Archiver } from '../../../domain/network/scan/archiver/Archiver.js';
+import type { HeartBeater } from '../../../../core/services/HeartBeater.js';
+import { Notify } from '../../../../notifications/use-cases/determine-events-and-notify-subscribers/Notify.js';
+import type { ExceptionLogger } from 'exception-logger';
+import type { Logger } from 'logger';
 import { mock } from 'jest-mock-extended';
 import { err, ok } from 'neverthrow';
-import { Network } from '../../../domain/network/Network';
-import { createDummyNetworkProps } from '../../../domain/network/__fixtures__/createDummyNetworkProps';
-import { NetworkId } from '../../../domain/network/NetworkId';
-import { OrganizationScan } from '../../../domain/organization/scan/OrganizationScan';
-import { NodeScan } from '../../../domain/node/scan/NodeScan';
-import NetworkScan from '../../../domain/network/scan/NetworkScan';
-import { NotifyError } from '../../../../notifications/use-cases/determine-events-and-notify-subscribers/NotifyError';
+import { Network } from '../../../domain/network/Network.js';
+import { createDummyNetworkProps } from '../../../domain/network/__fixtures__/createDummyNetworkProps.js';
+import { NetworkId } from '../../../domain/network/NetworkId.js';
+import { OrganizationScan } from '../../../domain/organization/scan/OrganizationScan.js';
+import { NodeScan } from '../../../domain/node/scan/NodeScan.js';
+import NetworkScan from '../../../domain/network/scan/NetworkScan.js';
+import { NotifyError } from '../../../../notifications/use-cases/determine-events-and-notify-subscribers/NotifyError.js';
 import { asyncSleep } from 'http-helper';
-import { JobMonitor } from 'job-monitor';
+import type { JobMonitor } from 'job-monitor';
 
 describe('ScanNetwork', () => {
 	it('should scan the network', async function () {

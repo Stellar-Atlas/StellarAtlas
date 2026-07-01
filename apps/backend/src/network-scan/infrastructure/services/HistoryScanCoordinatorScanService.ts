@@ -1,18 +1,16 @@
-import { HistoryArchiveScanService } from '../../domain/node/scan/history/HistoryArchiveScanService';
-import { ScanRepository } from '../../../history-scan-coordinator/domain/scan/ScanRepository';
+import type { HistoryArchiveScanService } from '../../domain/node/scan/history/HistoryArchiveScanService.js';
+import type { ScanRepository } from '../../../history-scan-coordinator/domain/scan/ScanRepository.js';
 import { err, ok, Result } from 'neverthrow';
-import { mapUnknownToError } from '../../../core/utilities/mapUnknownToError';
+import { mapUnknownToError } from '../../../core/utilities/mapUnknownToError.js';
 import { inject, injectable } from 'inversify';
 import { HistoryArchiveScan } from 'shared';
-import { TYPES } from '../../../history-scan-coordinator/infrastructure/di/di-types';
-import { ScanErrorType } from '../../../history-scan-coordinator/domain/scan/ScanError';
-import { ScheduleScanJobs } from '../../../history-scan-coordinator/use-cases/schedule-scan-jobs/ScheduleScanJobs';
+import { TYPES } from '../../../history-scan-coordinator/infrastructure/di/di-types.js';
+import { ScheduleScanJobs } from '../../../history-scan-coordinator/use-cases/schedule-scan-jobs/ScheduleScanJobs.js';
+import { mapScanToHistoryArchiveScan } from '../../../history-scan-coordinator/infrastructure/mappers/mapScanToHistoryArchiveScan.js';
 
 //Connects with the HistoryScanCoordinator module
 @injectable()
-export class HistoryScanCoordinatorScanService
-	implements HistoryArchiveScanService
-{
+export class HistoryScanCoordinatorScanService implements HistoryArchiveScanService {
 	//TODO: should not call repository directly, should call use case
 	constructor(
 		@inject(TYPES.HistoryArchiveScanRepository)
@@ -32,25 +30,7 @@ export class HistoryScanCoordinatorScanService
 		try {
 			const scans = await this.historyArchiveScanRepository.findLatest();
 			const finishedScans = scans.filter((scan) => scan.endDate !== undefined);
-			return ok(
-				finishedScans.map(
-					(scan) =>
-						new HistoryArchiveScan(
-							scan.baseUrl.value,
-							scan.startDate as Date,
-							scan.endDate as Date,
-							scan.latestVerifiedLedger,
-							scan.error?.type === ScanErrorType.TYPE_VERIFICATION,
-							scan.error?.type === ScanErrorType.TYPE_VERIFICATION
-								? scan.error.url
-								: null,
-							scan.error?.type === ScanErrorType.TYPE_VERIFICATION
-								? scan.error.message
-								: null,
-							scan.isSlowArchive === true ? scan.isSlowArchive : false
-						)
-				)
-			);
+			return ok(finishedScans.map(mapScanToHistoryArchiveScan));
 		} catch (e) {
 			return err(mapUnknownToError(e));
 		}

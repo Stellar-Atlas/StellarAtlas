@@ -1,12 +1,13 @@
 import 'reflect-metadata';
 import { ok, Result } from 'neverthrow';
-import { ScheduleScansDTO as ScheduleScanJobsDTO } from './ScheduleScanJobsDTO';
+import { ScheduleScansDTO as ScheduleScanJobsDTO } from './ScheduleScanJobsDTO.js';
 import { inject, injectable } from 'inversify';
-import { TYPES } from '../../infrastructure/di/di-types';
-import { ScanRepository } from '../../domain/scan/ScanRepository';
-import { ScanScheduler } from '../../domain/ScanScheduler';
-import { Logger } from 'logger';
-import { ScanJobRepository } from '../../domain/ScanJobRepository';
+import { TYPES } from '../../infrastructure/di/di-types.js';
+import type { ScanRepository } from '../../domain/scan/ScanRepository.js';
+import type { ScanScheduler } from '../../domain/ScanScheduler.js';
+import type { Logger } from 'logger';
+import type { ScanJobRepository } from '../../domain/ScanJobRepository.js';
+import { getStaleScanJobCutoff } from '../../domain/ScanJobStaleness.js';
 
 /**
  * Schedule scansJobs and adds them to the queue. If the scan queue is empty, new ScanJobs will be created.
@@ -31,28 +32,44 @@ export class ScheduleScanJobs {
 	) {}
 
 	public async execute(dto: ScheduleScanJobsDTO): Promise<Result<void, Error>> {
-		if (await this.isQueueEmpty()) {
-			await this.scheduleScanJobs(dto);
-		}
+		await this.releaseStaleJobs();
+		await this.scheduleScanJobs(dto, await this.isQueueEmpty());
 
 		return ok(undefined);
+	}
+
+	private async releaseStaleJobs(): Promise<void> {
+		const released = await this.scanJobRepository.releaseStaleTakenJobs(
+			getStaleScanJobCutoff()
+		);
+
+		if (released > 0) {
+			this.logger.info('Released stale scan jobs', {
+				app: 'history-scan-coordinator',
+				released
+			});
+		}
 	}
 
 	private async isQueueEmpty(): Promise<boolean> {
 		return !(await this.scanJobRepository.hasPendingJobs());
 	}
 
-	private async scheduleScanJobs(dto: ScheduleScanJobsDTO): Promise<void> {
+	private async scheduleScanJobs(
+		dto: ScheduleScanJobsDTO,
+		queueIsEmpty: boolean
+	): Promise<void> {
 		const previousScans = await this.scanRepository.findLatest();
 		//jobs that are running for over 4 days are considered failed
 		const unfinishedScanJobs = await this.scanJobRepository.findUnfinishedJobs(
-			new Date(Date.now() - 4 * 24 * 60 * 60 * 1000)
+			getStaleScanJobCutoff()
 		); //todo: this should be configurable
 
 		const scanJobs = this.scanScheduler.schedule(
 			dto.historyArchiveUrls,
 			previousScans,
-			unfinishedScanJobs
+			unfinishedScanJobs,
+			{ includeRegularJobs: queueIsEmpty }
 		);
 
 		this.logger.info('Scheduling new scan jobs', {
@@ -63,6 +80,6 @@ export class ScheduleScanJobs {
 				.map((job) => job.url)
 		});
 
-		await this.scanJobRepository.save(scanJobs);
+		if (scanJobs.length > 0) await this.scanJobRepository.save(scanJobs);
 	}
 }

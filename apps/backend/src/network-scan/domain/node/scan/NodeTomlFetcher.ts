@@ -1,12 +1,12 @@
-import { TomlFetchError, TomlService } from '../../network/scan/TomlService';
+import { TomlFetchError, TomlService } from '../../network/scan/TomlService.js';
 import {
 	isArray,
 	isObject,
 	isString
-} from '../../../../core/utilities/TypeGuards';
+} from '../../../../core/utilities/TypeGuards.js';
 import valueValidator from 'validator';
 import { injectable } from 'inversify';
-import { NodeTomlInfo } from './NodeTomlInfo';
+import { NodeTomlInfo } from './NodeTomlInfo.js';
 
 @injectable()
 export class NodeTomlFetcher {

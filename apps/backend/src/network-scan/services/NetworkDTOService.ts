@@ -1,22 +1,25 @@
 import { inject, injectable } from 'inversify';
 import { err, ok, Result } from 'neverthrow';
-import { ScanRepository } from '../domain/ScanRepository';
-import { ScanResult } from '../domain/Scanner';
-import { OrganizationDTOService } from './OrganizationDTOService';
-import { NodeDTOService } from './NodeDTOService';
-import { NETWORK_TYPES } from '../infrastructure/di/di-types';
+import { ScanRepository } from '../domain/ScanRepository.js';
+import { ScanResult } from '../domain/Scanner.js';
+import { OrganizationDTOService } from './OrganizationDTOService.js';
+import { NodeDTOService } from './NodeDTOService.js';
+import { NETWORK_TYPES } from '../infrastructure/di/di-types.js';
 import { NetworkV1 } from 'shared';
-import { NetworkV1DTOMapper } from '../mappers/NetworkV1DTOMapper';
-import { TrustGraphFactory } from '../domain/node/scan/TrustGraphFactory';
-import { NetworkRepository } from '../domain/network/NetworkRepository';
-import { NetworkId } from '../domain/network/NetworkId';
-import { mapUnknownToError } from '../../core/utilities/mapUnknownToError';
+import { NetworkV1DTOMapper } from '../mappers/NetworkV1DTOMapper.js';
+import { TrustGraphFactory } from '../domain/node/scan/TrustGraphFactory.js';
+import type { NetworkRepository } from '../domain/network/NetworkRepository.js';
+import { NetworkId } from '../domain/network/NetworkId.js';
+import { mapUnknownToError } from '../../core/utilities/mapUnknownToError.js';
 
 @injectable()
 export class NetworkDTOService {
 	constructor(
+		@inject(ScanRepository)
 		private scanRepository: ScanRepository,
+		@inject(NodeDTOService)
 		private nodeDTOService: NodeDTOService,
+		@inject(OrganizationDTOService)
 		private organizationDTOService: OrganizationDTOService,
 		@inject(NETWORK_TYPES.NetworkRepository)
 		private networkRepository: NetworkRepository,
@@ -45,9 +48,8 @@ export class NetworkDTOService {
 	async getPreviousNetworkDTO(
 		currentNetworkTime: Date
 	): Promise<Result<NetworkV1 | null, Error>> {
-		const scanResultOrError = await this.scanRepository.findPrevious(
-			currentNetworkTime
-		);
+		const scanResultOrError =
+			await this.scanRepository.findPrevious(currentNetworkTime);
 		if (scanResultOrError.isErr()) return err(scanResultOrError.error);
 		if (scanResultOrError.value === null) return ok(null);
 
@@ -90,9 +92,8 @@ export class NetworkDTOService {
 			//If a network has no snapshots, we fetch the passphrase (the only required property next to networkId) and return undefined for all other fields.
 			let passphrase: string | undefined;
 			if (!network) {
-				passphrase = await this.networkRepository.findPassphraseByNetworkId(
-					networkId
-				);
+				passphrase =
+					await this.networkRepository.findPassphraseByNetworkId(networkId);
 			} else {
 				passphrase = network.passphrase;
 			}

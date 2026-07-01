@@ -1,12 +1,12 @@
 import { mock } from 'jest-mock-extended';
-import { QuorumSetManager } from '../../quorum-set-manager';
-import { P } from 'pino';
-import { OnPeerConnectionClosed } from '../on-peer-connection-closed';
-import { Observation } from '../../observation';
+import { QuorumSetManager } from '../../quorum-set-manager.js';
+import pino from 'pino';
+import { OnPeerConnectionClosed } from '../on-peer-connection-closed.js';
+import { Observation } from '../../observation.js';
 
 describe('OnConnectionCloseHandler', () => {
 	const quorumSetManager = mock<QuorumSetManager>();
-	const logger = mock<P.Logger>();
+	const logger = mock<pino.Logger>();
 
 	beforeEach(() => {
 		jest.clearAllMocks();

@@ -1,4 +1,4 @@
-import { xdr } from '@stellar/stellar-base';
+import { xdr } from '@stellar/stellar-sdk';
 import MessageType = xdr.MessageType;
 
 export function isFloodMessage(messageType: MessageType): boolean {

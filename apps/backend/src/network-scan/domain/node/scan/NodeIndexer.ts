@@ -1,8 +1,8 @@
-import { NodeMeasurementAverage } from '../NodeMeasurementAverage';
-import { StellarCoreVersion } from '../../network/StellarCoreVersion';
-import { NodeIndex } from './node-index/node-index';
-import { TrustGraphFactory } from './TrustGraphFactory';
-import Node from '../Node';
+import { NodeMeasurementAverage } from '../NodeMeasurementAverage.js';
+import { StellarCoreVersion } from '../../network/StellarCoreVersion.js';
+import { NodeIndex } from './node-index/node-index.js';
+import { TrustGraphFactory } from './TrustGraphFactory.js';
+import Node from '../Node.js';
 
 export class NodeIndexer {
 	public static calculateIndexes(

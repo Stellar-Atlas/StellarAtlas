@@ -1,4 +1,4 @@
-import { TypeIndex } from '../../../index/type-index';
+import { TypeIndex } from '../../../index/type-index.js';
 
 test('get', () => {
 	expect(TypeIndex.get(false, false)).toEqual(0.3);

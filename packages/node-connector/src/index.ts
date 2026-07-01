@@ -1,40 +1,38 @@
-import { NodeConfig } from './node-config';
-export { NodeConfig } from './node-config';
-import { Node } from './node';
-import { FastSigning, hash, Keypair } from '@stellar/stellar-base';
-import { ConnectionAuthentication } from './connection/connection-authentication';
-import { pino } from 'pino';
+import type { NodeConfig } from './node-config.js';
+export type { NodeConfig } from './node-config.js';
+import { Node } from './node.js';
+import { hash, Keypair } from '@stellar/stellar-sdk';
+import { ConnectionAuthentication } from './connection/connection-authentication.js';
+import pino from 'pino';
 
-export { Node } from './node';
-export { Connection } from './connection/connection';
-export { UniqueSCPStatementTransform } from './unique-scp-statement-transform';
-export {
-	StellarMessageRouter,
-	MessageTypeName
-} from './stellar-message-router';
-export {
+export { Node } from './node.js';
+export { Connection } from './connection/connection.js';
+export { UniqueSCPStatementTransform } from './unique-scp-statement-transform.js';
+export { StellarMessageRouter } from './stellar-message-router.js';
+export type { MessageTypeName } from './stellar-message-router.js';
+export { SCPStatement } from './scp-statement-dto.js';
+export type {
 	ScpBallot,
-	SCPStatement,
 	SCPStatementType,
 	ScpStatementPledges,
 	ScpStatementPrepare,
 	ScpStatementConfirm,
 	ScpStatementExternalize,
 	ScpNomination
-} from './scp-statement-dto';
-export { getConfigFromEnv } from './node-config';
-export { ScpReader } from './scp-reader';
-export { StellarMessageWork } from './connection/connection';
-export { NodeInfo } from './node';
+} from './scp-statement-dto.js';
+export { getConfigFromEnv } from './node-config.js';
+export { ScpReader } from './scp-reader.js';
+export type { StellarMessageWork } from './connection/connection.js';
+export type { NodeInfo } from './node.js';
 export {
 	getPublicKeyStringFromBuffer,
 	createSCPEnvelopeSignature,
 	createStatementXDRSignature,
 	getIpFromPeerAddress,
 	verifySCPEnvelopeSignature,
-	getQuorumSetFromMessage,
-	QuorumSetDTO
-} from './stellar-message-service'; //todo: separate package?
+	getQuorumSetFromMessage
+} from './stellar-message-service.js'; //todo: separate package?
+export type { QuorumSetDTO } from './stellar-message-service.js';
 
 export function createNode(config: NodeConfig, logger?: pino.Logger): Node {
 	if (!logger) {
@@ -45,9 +43,6 @@ export function createNode(config: NodeConfig, logger?: pino.Logger): Node {
 	}
 
 	logger = logger.child({ app: 'Connector' });
-	if (!FastSigning) {
-		logger.debug('warning', 'FastSigning not enabled');
-	}
 
 	let keyPair: Keypair;
 	if (config.privateKey) {

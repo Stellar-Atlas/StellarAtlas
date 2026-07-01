@@ -1,7 +1,7 @@
-import { PublicKey } from '../../../../core';
-import { FederatedVotingPhase } from '../../FederatedVotingProtocolState';
-import { ProtocolEvent } from '../../event/ProtocolEvent';
-import { Statement } from '../../Statement';
+import { PublicKey } from '../../../../core/index.js';
+import { FederatedVotingPhase } from '../../FederatedVotingProtocolState.js';
+import { ProtocolEvent } from '../../event/ProtocolEvent.js';
+import { Statement } from '../../Statement.js';
 
 export class TransitionedToConfirmPhase extends ProtocolEvent {
 	readonly subType = 'TransitionedToConfirmPhase';

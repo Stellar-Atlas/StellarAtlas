@@ -1,6 +1,6 @@
-import { Node } from '../../core';
-import { Statement } from './Statement';
-import { Vote } from './Vote';
+import { Node } from '../../core/index.js';
+import { Statement } from './Statement.js';
+import { Vote } from './Vote.js';
 
 export enum FederatedVotingPhase {
 	unknown = 'unknown',

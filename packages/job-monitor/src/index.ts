@@ -1,3 +1,3 @@
-export { MonitoringJob, JobMonitor } from './JobMonitor';
-export { LoggerJobMonitor } from './LoggerJobMonitor';
-export { SentryJobMonitor } from './SentryJobMonitor';
+export type { MonitoringJob, JobMonitor } from './JobMonitor.js';
+export { LoggerJobMonitor } from './LoggerJobMonitor.js';
+export { SentryJobMonitor } from './SentryJobMonitor.js';

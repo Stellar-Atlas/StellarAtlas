@@ -47,7 +47,7 @@
           </template>
         </nav-link>
         <nav-pagination
-          v-model="currentPage"
+          :value="currentPage"
           :total-rows="nodes.length"
           @input="currentPage = $event"
         />

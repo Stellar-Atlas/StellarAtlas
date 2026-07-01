@@ -1,8 +1,8 @@
-import { hasNoActiveTrustingNodes } from '../hasNoActiveTrustingNodes';
+import { hasNoActiveTrustingNodes } from '../hasNoActiveTrustingNodes.js';
 import { Edge, TrustGraph, Vertex } from 'shared';
 import { StronglyConnectedComponentsFinder } from 'shared';
 import { NetworkTransitiveQuorumSetFinder } from 'shared';
-import { createDummyNode } from '../../__fixtures__/createDummyNode';
+import { createDummyNode } from '../../__fixtures__/createDummyNode.js';
 
 describe('hasNoActiveTrustingNodes', () => {
 	const nodesTrustGraph = new TrustGraph(

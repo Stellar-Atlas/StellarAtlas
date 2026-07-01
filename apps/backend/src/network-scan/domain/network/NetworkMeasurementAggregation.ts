@@ -1,9 +1,7 @@
 import { Column } from 'typeorm';
-import { MeasurementAggregation } from '../measurement-aggregation/MeasurementAggregation';
+import { MeasurementAggregation } from '../measurement-aggregation/MeasurementAggregation.js';
 
-export abstract class NetworkMeasurementAggregation
-	implements MeasurementAggregation
-{
+export abstract class NetworkMeasurementAggregation implements MeasurementAggregation {
 	@Column('date', { primary: true, name: 'time' })
 	time: Date = new Date();
 

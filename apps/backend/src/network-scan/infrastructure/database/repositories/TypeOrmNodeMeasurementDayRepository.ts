@@ -1,13 +1,13 @@
 import { Between, EntityRepository, Repository } from 'typeorm';
-import NodeMeasurementDay from '../../../domain/node/NodeMeasurementDay';
+import NodeMeasurementDay from '../../../domain/node/NodeMeasurementDay.js';
 import { injectable } from 'inversify';
 import {
 	nodeMeasurementAverageFromDatabaseRecord,
 	NodeMeasurementAverageRecord
-} from './TypeOrmNodeMeasurementRepository';
-import { NodeMeasurementAverage } from '../../../domain/node/NodeMeasurementAverage';
-import { NodeMeasurementDayRepository } from '../../../domain/node/NodeMeasurementDayRepository';
-import PublicKey from '../../../domain/node/PublicKey';
+} from './TypeOrmNodeMeasurementRepository.js';
+import { NodeMeasurementAverage } from '../../../domain/node/NodeMeasurementAverage.js';
+import type { NodeMeasurementDayRepository } from '../../../domain/node/NodeMeasurementDayRepository.js';
+import PublicKey from '../../../domain/node/PublicKey.js';
 
 export interface NodeMeasurementV2StatisticsRecord {
 	time: string;
@@ -55,9 +55,7 @@ export class NodeMeasurementV2Statistics {
 }
 
 @injectable()
-export class TypeOrmNodeMeasurementDayRepository
-	implements NodeMeasurementDayRepository
-{
+export class TypeOrmNodeMeasurementDayRepository implements NodeMeasurementDayRepository {
 	constructor(private baseRepository: Repository<NodeMeasurementDay>) {}
 
 	async save(nodeMeasurementDays: NodeMeasurementDay[]): Promise<void> {
@@ -73,20 +71,21 @@ export class TypeOrmNodeMeasurementDayRepository
 
 		const result = await this.baseRepository.query(
 			`select "publicKeyValue"                                                                  as "publicKey",
-					ROUND(100.0 * (sum("isActiveCount"::decimal) / sum("crawlCount")), 2)     as "activeAvg",
-					ROUND(100.0 * (sum("isValidatingCount"::decimal) / sum("crawlCount")), 2) as "validatingAvg",
-					ROUND(100.0 * (sum("isFullValidatorCount"::decimal) / sum("crawlCount")),
+					ROUND(avg(100.0 * ("isActiveCount"::decimal / nullif("crawlCount", 0))), 2)     as "activeAvg",
+					ROUND(avg(100.0 * ("isValidatingCount"::decimal / nullif("crawlCount", 0))), 2) as "validatingAvg",
+					ROUND(avg(100.0 * ("isFullValidatorCount"::decimal / nullif("crawlCount", 0))),
 						  2)                                                                  as "fullValidatorAvg",
-					ROUND(100.0 * (sum("isOverloadedCount"::decimal) / sum("crawlCount")), 2) as "overLoadedAvg",
-					ROUND(100.0 * (sum("historyArchiveErrorCount"::decimal) / sum("crawlCount")),
+					ROUND(avg(100.0 * ("isOverloadedCount"::decimal / nullif("crawlCount", 0))), 2) as "overLoadedAvg",
+					ROUND(avg(100.0 * ("historyArchiveErrorCount"::decimal / nullif("crawlCount", 0))),
 						  2)                                                                  as "historyArchiveErrorAvg",
-					ROUND((sum("indexSum"::decimal) / sum("crawlCount")), 2)                  as "indexAvg"
+					ROUND(avg("indexSum"::decimal / nullif("crawlCount", 0)), 2)                  as "indexAvg"
 			 FROM "node_measurement_day_v2" "NodeMeasurementDay"
 			 JOIN node n on "NodeMeasurementDay"."nodeId" = n.id
 			 WHERE time >= date_trunc('day', $1::TIMESTAMP)
 			   and time <= date_trunc('day', $2::TIMESTAMP)
 			 GROUP BY "publicKeyValue"
-			 having count("nodeId") >= $3`, //needs at least a record every day in the range, or the average is NA
+			 having count("nodeId") >= $3
+			    and bool_and("crawlCount" > 0)`, //needs at least a record every day in the range, or the average is NA
 			[from, at, xDays]
 		);
 
@@ -172,15 +171,25 @@ export class TypeOrmNodeMeasurementDayRepository
 			`INSERT INTO node_measurement_day_v2 (time, "nodeId", "isActiveCount", "isValidatingCount",
 												  "isFullValidatorCount", "isOverloadedCount", "indexSum",
 												  "historyArchiveErrorCount", "crawlCount")
-			 with crawls as (select date_trunc('day', NetworkScan."time") "crawlDay",
-									count(distinct NetworkScan2.id)       "crawlCount"
+				 with affected_days as (
+					 select distinct date_trunc('day', NetworkScan."time") "crawlDay"
+					 from network_scan NetworkScan
+					 WHERE NetworkScan.id BETWEEN $1 AND $2
+					   and NetworkScan.completed = true
+				 ),
+				 bounds as (
+					 select min("crawlDay") "fromTime", max("crawlDay") + interval '1 day' "toTime"
+					 from affected_days
+				 ),
+				 crawls as (select date_trunc('day', NetworkScan."time") "crawlDay",
+									count(distinct NetworkScan.id)       "crawlCount"
 							 from network_scan NetworkScan
-									  join network_scan NetworkScan2
-										   on date_trunc('day', NetworkScan."time") = date_trunc('day', NetworkScan2."time") AND
-											  NetworkScan2.completed = true
-							 WHERE NetworkScan.id BETWEEN $1 AND $2
-							   and NetworkScan.completed = true
-							 group by "crawlDay")
+									  join bounds
+										   on NetworkScan."time" >= bounds."fromTime" and NetworkScan."time" < bounds."toTime"
+									  join affected_days
+										   on affected_days."crawlDay" = date_trunc('day', NetworkScan."time")
+							 WHERE NetworkScan.completed = true
+							 group by date_trunc('day', NetworkScan."time"))
 			 select date_trunc('day', NetworkScan."time") "day",
 					"nodeId",
 					sum("isActive"::int)                      "isActiveCount",
@@ -191,23 +200,20 @@ export class TypeOrmNodeMeasurementDayRepository
 					sum("historyArchiveHasError"::int)        "historyArchiveErrorCount",
 					"crawls"."crawlCount"                    as "crawlCount"
 			 FROM "network_scan" NetworkScan
+					  join bounds
+						   on NetworkScan."time" >= bounds."fromTime" and NetworkScan."time" < bounds."toTime"
 					  join crawls on crawls."crawlDay" = date_trunc('day', NetworkScan."time")
 					  join node_measurement_v2 on node_measurement_v2."time" = NetworkScan."time"
-			 WHERE NetworkScan.id BETWEEN $1 AND $2
-			   AND NetworkScan.completed = true
-			 group by day, "nodeId", "crawlCount"
-			 ON CONFLICT (time, "nodeId") DO UPDATE
-				 SET "isActiveCount"            = node_measurement_day_v2."isActiveCount" + EXCLUDED."isActiveCount",
-					 "isValidatingCount"        = node_measurement_day_v2."isValidatingCount" +
-												  EXCLUDED."isValidatingCount",
-					 "isFullValidatorCount"     = node_measurement_day_v2."isFullValidatorCount" +
-												  EXCLUDED."isFullValidatorCount",
-					 "isOverloadedCount"        = node_measurement_day_v2."isOverloadedCount" +
-												  EXCLUDED."isOverloadedCount",
-					 "indexSum"                 = node_measurement_day_v2."indexSum" + EXCLUDED."indexSum",
-					 "historyArchiveErrorCount" = node_measurement_day_v2."historyArchiveErrorCount" +
-												  EXCLUDED."historyArchiveErrorCount",
-					 "crawlCount"               = EXCLUDED."crawlCount"`,
+				 WHERE NetworkScan.completed = true
+				 group by date_trunc('day', NetworkScan."time"), "nodeId", crawls."crawlCount"
+				 ON CONFLICT (time, "nodeId") DO UPDATE
+					 SET "isActiveCount"            = EXCLUDED."isActiveCount",
+						 "isValidatingCount"        = EXCLUDED."isValidatingCount",
+						 "isFullValidatorCount"     = EXCLUDED."isFullValidatorCount",
+						 "isOverloadedCount"        = EXCLUDED."isOverloadedCount",
+						 "indexSum"                 = EXCLUDED."indexSum",
+						 "historyArchiveErrorCount" = EXCLUDED."historyArchiveErrorCount",
+						 "crawlCount"               = EXCLUDED."crawlCount"`,
 			[fromCrawlId, toCrawlId]
 		);
 	}

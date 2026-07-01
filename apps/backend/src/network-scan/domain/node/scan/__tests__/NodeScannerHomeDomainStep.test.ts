@@ -1,7 +1,7 @@
-import { NodeScannerHomeDomainStep } from '../NodeScannerHomeDomainStep';
-import { HomeDomainFetcher } from '../HomeDomainFetcher';
+import { NodeScannerHomeDomainStep } from '../NodeScannerHomeDomainStep.js';
+import { HomeDomainFetcher } from '../HomeDomainFetcher.js';
 import { mock } from 'jest-mock-extended';
-import { NodeScan } from '../NodeScan';
+import { NodeScan } from '../NodeScan.js';
 
 describe('NodeScannerHomeDomainStep', () => {
 	const fetcher = mock<HomeDomainFetcher>();
@@ -16,7 +16,7 @@ describe('NodeScannerHomeDomainStep', () => {
 		const homeDomains = new Map<string, string>();
 		fetcher.fetchHomeDomains.mockResolvedValue(homeDomains);
 		await homeDomainStep.execute(nodeScan);
-		expect(fetcher.fetchHomeDomains).toBeCalled();
-		expect(nodeScan.updateHomeDomains).toBeCalledWith(homeDomains);
+		expect(fetcher.fetchHomeDomains).toHaveBeenCalled();
+		expect(nodeScan.updateHomeDomains).toHaveBeenCalledWith(homeDomains);
 	});
 });

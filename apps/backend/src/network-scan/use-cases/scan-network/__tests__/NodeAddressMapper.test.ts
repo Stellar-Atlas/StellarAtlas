@@ -1,4 +1,4 @@
-import { NodeAddressMapper } from '../NodeAddressMapper';
+import { NodeAddressMapper } from '../NodeAddressMapper.js';
 
 describe('NodeAddressMapper', () => {
 	test('should map to node addresses', () => {

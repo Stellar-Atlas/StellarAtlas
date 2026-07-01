@@ -1,5 +1,5 @@
-import { MeasurementAggregation } from './MeasurementAggregation';
-import { MeasurementAggregationSourceId } from './MeasurementAggregationSourceId';
+import { MeasurementAggregation } from './MeasurementAggregation.js';
+import { MeasurementAggregationSourceId } from './MeasurementAggregationSourceId.js';
 
 export interface MeasurementAggregationRepository<
 	T extends MeasurementAggregation

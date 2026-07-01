@@ -1,4 +1,4 @@
-import { OrganizationId } from '../OrganizationId';
+import { OrganizationId } from '../OrganizationId.js';
 
 export function createDummyOrganizationId(
 	domain = createDummyOrganizationIdString()

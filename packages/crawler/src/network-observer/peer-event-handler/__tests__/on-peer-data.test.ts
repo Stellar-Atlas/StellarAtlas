@@ -1,22 +1,22 @@
-import { ConnectionManager, DataPayload } from '../../connection-manager';
+import { ConnectionManager, DataPayload } from '../../connection-manager.js';
 import { mock } from 'jest-mock-extended';
-import { P } from 'pino';
-import { OnPeerData } from '../on-peer-data';
-import { StellarMessageHandler } from '../stellar-message-handlers/stellar-message-handler';
-import { createDummyExternalizeMessage } from '../../../__fixtures__/createDummyExternalizeMessage';
+import pino from 'pino';
+import { OnPeerData } from '../on-peer-data.js';
+import { StellarMessageHandler } from '../stellar-message-handlers/stellar-message-handler.js';
+import { createDummyExternalizeMessage } from '../../../__fixtures__/createDummyExternalizeMessage.js';
 import { err, ok } from 'neverthrow';
-import { PeerNodeCollection } from '../../../peer-node-collection';
-import { Ledger } from '../../../crawler';
-import { NodeAddress } from '../../../node-address';
-import { Observation } from '../../observation';
-import { ObservationState } from '../../observation-state';
+import { PeerNodeCollection } from '../../../peer-node-collection.js';
+import type { Ledger } from '../../../crawler.js';
+import type { NodeAddress } from '../../../node-address.js';
+import { Observation } from '../../observation.js';
+import { ObservationState } from '../../observation-state.js';
 import { QuorumSet } from 'shared';
-import { Slots } from '../stellar-message-handlers/scp-envelope/scp-statement/externalize/slots';
+import { Slots } from '../stellar-message-handlers/scp-envelope/scp-statement/externalize/slots.js';
 
 describe('OnDataHandler', () => {
 	const connectionManager = mock<ConnectionManager>();
 	const stellarMessageHandler = mock<StellarMessageHandler>();
-	const logger = mock<P.Logger>();
+	const logger = mock<pino.Logger>();
 
 	beforeEach(() => {
 		jest.clearAllMocks();

@@ -1,5 +1,5 @@
 import { queue, QueueObject } from 'async';
-import { CrawlTask } from './crawl-task';
+import { CrawlTask } from './crawl-task.js';
 
 export interface CrawlQueue {
 	push(crawlTask: CrawlTask, error: () => void): void;
@@ -11,7 +11,10 @@ export interface CrawlQueue {
 	): void;
 }
 
-export type AsyncResultCallback<T, E = Error> = (err?: E | null, result?: T) => void;
+export type AsyncResultCallback<T, E = Error> = (
+	err?: E | null,
+	result?: T
+) => void;
 
 export class AsyncCrawlQueue implements CrawlQueue {
 	private _crawlQueue?: QueueObject<CrawlTask>;

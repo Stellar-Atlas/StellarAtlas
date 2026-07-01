@@ -1,8 +1,8 @@
 import { MockProxy, mock } from 'jest-mock-extended';
-import { SimulationStepListSerializer } from '../../serializer/SimulationStepListSerializer';
-import { Scenario } from '../Scenario';
-import { ScenarioSerializer } from '../ScenarioSerializer';
-import { SimulationStep } from '../../Simulation';
+import { SimulationStepListSerializer } from '../../serializer/SimulationStepListSerializer.js';
+import { Scenario } from '../Scenario.js';
+import { ScenarioSerializer } from '../ScenarioSerializer.js';
+import { SimulationStep } from '../../Simulation.js';
 
 describe('ScenarioSerializer', () => {
 	let mockStepListSerializer: MockProxy<SimulationStepListSerializer>;

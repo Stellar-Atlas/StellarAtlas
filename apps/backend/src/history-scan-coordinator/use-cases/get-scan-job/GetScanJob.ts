@@ -1,12 +1,13 @@
 import 'reflect-metadata';
 import { inject, injectable } from 'inversify';
-import { ExceptionLogger } from '../../../core/services/ExceptionLogger';
-import { TYPES } from '../../infrastructure/di/di-types';
+import type { ExceptionLogger } from '../../../core/services/ExceptionLogger.js';
+import { TYPES } from '../../infrastructure/di/di-types.js';
 import { err, ok, Result } from 'neverthrow';
 import { ScanJobDTO } from 'history-scanner-dto';
-import { Logger } from 'logger';
-import { ScanJobRepository } from '../../domain/ScanJobRepository';
-import { mapUnknownToError } from '../../../core/utilities/mapUnknownToError';
+import type { Logger } from 'logger';
+import type { ScanJobRepository } from '../../domain/ScanJobRepository.js';
+import { mapUnknownToError } from '../../../core/utilities/mapUnknownToError.js';
+import { getStaleScanJobCutoff } from '../../domain/ScanJobStaleness.js';
 
 /**
  * Schedules new scan jobs for history archives based on a configured scheduling strategy.
@@ -22,6 +23,7 @@ export class GetScanJob {
 
 	public async execute(): Promise<Result<ScanJobDTO | null, Error>> {
 		try {
+			await this.releaseStaleJobs();
 			const nextScanJob = await this.scanJobRepository.fetchNextJob();
 
 			if (nextScanJob === null) {
@@ -47,12 +49,28 @@ export class GetScanJob {
 				latestScannedLedger: nextScanJob.latestScannedLedger,
 				latestScannedLedgerHeaderHash:
 					nextScanJob.latestScannedLedgerHeaderHash,
-				remoteId: nextScanJob.remoteId
+				remoteId: nextScanJob.remoteId,
+				fromLedger: nextScanJob.fromLedger,
+				toLedger: nextScanJob.toLedger,
+				concurrency: nextScanJob.concurrency
 			});
 		} catch (e) {
 			const error = mapUnknownToError(e);
 			this.exceptionLogger.captureException(error);
 			return err(error);
+		}
+	}
+
+	private async releaseStaleJobs(): Promise<void> {
+		const released = await this.scanJobRepository.releaseStaleTakenJobs(
+			getStaleScanJobCutoff()
+		);
+
+		if (released > 0) {
+			this.logger.info('Released stale scan jobs', {
+				app: 'history-scan-coordinator',
+				released
+			});
 		}
 	}
 }

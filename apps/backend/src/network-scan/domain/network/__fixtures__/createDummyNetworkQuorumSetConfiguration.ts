@@ -1,5 +1,5 @@
-import { NetworkQuorumSetConfiguration } from '../NetworkQuorumSetConfiguration';
-import { createDummyPublicKey } from '../../node/__fixtures__/createDummyPublicKey';
+import { NetworkQuorumSetConfiguration } from '../NetworkQuorumSetConfiguration.js';
+import { createDummyPublicKey } from '../../node/__fixtures__/createDummyPublicKey.js';
 
 export function createDummyNetworkQuorumSetConfiguration() {
 	const publicKey1 = createDummyPublicKey();

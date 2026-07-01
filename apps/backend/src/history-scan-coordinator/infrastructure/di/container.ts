@@ -1,23 +1,21 @@
 import { interfaces } from 'inversify';
 import Container = interfaces.Container;
 import { DataSource } from 'typeorm';
-import { ScanRepository } from '../../domain/scan/ScanRepository';
-import { TypeOrmHistoryArchiveScanResultRepository } from '../repositories/database/TypeOrmHistoryArchiveScanResultRepository';
-import { TYPES } from './di-types';
-import { Config } from '../../../core/config/Config';
-import { GetLatestScan } from '../../use-cases/get-latest-scan/GetLatestScan';
-import { Scan } from '../../domain/scan/Scan';
-import { RegisterScan } from '../../use-cases/register-scan/RegisterScan';
-import { ScanMapper } from '../mappers/ScanMapper';
-import { GetScanJob } from '../../use-cases/get-scan-job/GetScanJob';
-import {
-	RestartAtLeastOneScan,
-	ScanScheduler
-} from '../../domain/ScanScheduler';
-import { ScheduleScanJobs } from '../../use-cases/schedule-scan-jobs/ScheduleScanJobs';
-import { ScanJobRepository } from '../../domain/ScanJobRepository';
-import { TypeOrmScanJobRepository } from '../repositories/database/TypeOrmScanJobRepository';
-import { ScanJob } from '../../domain/ScanJob';
+import type { ScanRepository } from '../../domain/scan/ScanRepository.js';
+import { TypeOrmHistoryArchiveScanResultRepository } from '../repositories/database/TypeOrmHistoryArchiveScanResultRepository.js';
+import { TYPES } from './di-types.js';
+import { Config } from '../../../core/config/Config.js';
+import { GetLatestScan } from '../../use-cases/get-latest-scan/GetLatestScan.js';
+import { Scan } from '../../domain/scan/Scan.js';
+import { RegisterScan } from '../../use-cases/register-scan/RegisterScan.js';
+import { ScanMapper } from '../mappers/ScanMapper.js';
+import { GetScanJob } from '../../use-cases/get-scan-job/GetScanJob.js';
+import { RestartAtLeastOneScan } from '../../domain/ScanScheduler.js';
+import type { ScanScheduler } from '../../domain/ScanScheduler.js';
+import { ScheduleScanJobs } from '../../use-cases/schedule-scan-jobs/ScheduleScanJobs.js';
+import type { ScanJobRepository } from '../../domain/ScanJobRepository.js';
+import { TypeOrmScanJobRepository } from '../repositories/database/TypeOrmScanJobRepository.js';
+import { ScanJob } from '../../domain/ScanJob.js';
 
 export function load(container: Container, config: Config) {
 	const dataSource = container.get(DataSource);

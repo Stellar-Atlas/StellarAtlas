@@ -1,6 +1,6 @@
-import { ProtocolAction, UserAction } from '../../../core';
-import { FederatedVotingContext } from '../../FederatedVotingContext';
-import { Message } from '../../Message';
+import { ProtocolAction, UserAction } from '../../../core/index.js';
+import { FederatedVotingContext } from '../../FederatedVotingContext.js';
+import { Message } from '../../Message.js';
 
 export class ForgeMessage extends UserAction {
 	subType = 'ForgeMessage';

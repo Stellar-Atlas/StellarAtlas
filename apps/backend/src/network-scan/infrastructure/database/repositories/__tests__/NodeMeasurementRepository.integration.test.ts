@@ -1,15 +1,15 @@
 import { Container } from 'inversify';
-import Kernel from '../../../../../core/infrastructure/Kernel';
-import NodeMeasurement from '../../../../domain/node/NodeMeasurement';
-import { ConfigMock } from '../../../../../core/config/__mocks__/configMock';
-import { NodeMeasurementRepository } from '../../../../domain/node/NodeMeasurementRepository';
-import { NETWORK_TYPES } from '../../../di/di-types';
-import { createDummyNode } from '../../../../domain/node/__fixtures__/createDummyNode';
-import { NodeRepository } from '../../../../domain/node/NodeRepository';
-import Node from '../../../../domain/node/Node';
-import NetworkScan from '../../../../domain/network/scan/NetworkScan';
-import { NetworkScanRepository } from '../../../../domain/network/scan/NetworkScanRepository';
-import NetworkMeasurement from '../../../../domain/network/NetworkMeasurement';
+import Kernel from '../../../../../core/infrastructure/Kernel.js';
+import NodeMeasurement from '../../../../domain/node/NodeMeasurement.js';
+import { ConfigMock } from '../../../../../core/config/__mocks__/configMock.js';
+import type { NodeMeasurementRepository } from '../../../../domain/node/NodeMeasurementRepository.js';
+import { NETWORK_TYPES } from '../../../di/di-types.js';
+import { createDummyNode } from '../../../../domain/node/__fixtures__/createDummyNode.js';
+import type { NodeRepository } from '../../../../domain/node/NodeRepository.js';
+import Node from '../../../../domain/node/Node.js';
+import NetworkScan from '../../../../domain/network/scan/NetworkScan.js';
+import type { NetworkScanRepository } from '../../../../domain/network/scan/NetworkScanRepository.js';
+import NetworkMeasurement from '../../../../domain/network/NetworkMeasurement.js';
 
 describe('test queries', () => {
 	let container: Container;

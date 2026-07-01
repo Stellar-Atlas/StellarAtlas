@@ -1,5 +1,5 @@
-import { ValueObject } from '../../../core/domain/ValueObject';
-import PublicKey from '../node/PublicKey';
+import { ValueObject } from '../../../core/domain/ValueObject.js';
+import PublicKey from '../node/PublicKey.js';
 import { Column } from 'typeorm';
 import { plainToInstance } from 'class-transformer';
 

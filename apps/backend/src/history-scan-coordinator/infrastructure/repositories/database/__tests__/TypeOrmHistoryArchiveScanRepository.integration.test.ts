@@ -1,9 +1,9 @@
-import Kernel from '../../../../../core/infrastructure/Kernel';
-import { ConfigMock } from '../../../../../core/config/__mocks__/configMock';
-import { TYPES } from '../../../di/di-types';
-import { ScanRepository } from '../../../../domain/scan/ScanRepository';
-import { Scan } from '../../../../domain/scan/Scan';
-import { ScanError, ScanErrorType } from '../../../../domain/scan/ScanError';
+import Kernel from '../../../../../core/infrastructure/Kernel.js';
+import { ConfigMock } from '../../../../../core/config/__mocks__/configMock.js';
+import { TYPES } from '../../../di/di-types.js';
+import type { ScanRepository } from '../../../../domain/scan/ScanRepository.js';
+import { Scan } from '../../../../domain/scan/Scan.js';
+import { ScanError, ScanErrorType } from '../../../../domain/scan/ScanError.js';
 import { Url } from 'http-helper';
 
 let kernel: Kernel;
@@ -80,8 +80,11 @@ it('should find the latest scans', async function () {
 	expect(foundErrorScan?.error).toBeInstanceOf(ScanError);
 	expect(foundErrorScan?.error?.url).toEqual(scanWithErrorUrl.value);
 	expect(foundErrorScan?.error?.message).toEqual('info');
+	expect(foundErrorScan?.scanErrors).toHaveLength(1);
+	expect(foundErrorScan?.scanErrors[0]?.message).toEqual('info');
 
 	const latestByUrl = await repo.findLatestByUrl(scanWithErrorUrl.value);
 	expect(latestByUrl).toBeDefined();
 	expect(latestByUrl?.error).toBeInstanceOf(ScanError);
+	expect(latestByUrl?.scanErrors).toHaveLength(1);
 });

@@ -1,13 +1,13 @@
 import { mock } from 'jest-mock-extended';
 import { NodeV1, OrganizationV1 } from 'shared';
-import NetworkMeasurement from '../../domain/network/NetworkMeasurement';
-import { NetworkV1DTOMapper } from '../NetworkV1DTOMapper';
-import { Network } from '../../domain/network/Network';
-import { NetworkId } from '../../domain/network/NetworkId';
-import { OverlayVersionRange } from '../../domain/network/OverlayVersionRange';
-import { createDummyNetworkQuorumSetConfiguration } from '../../domain/network/__fixtures__/createDummyNetworkQuorumSetConfiguration';
-import { StellarCoreVersion } from '../../domain/network/StellarCoreVersion';
-import { BaseQuorumSetDTOMapper } from '../BaseQuorumSetDTOMapper';
+import NetworkMeasurement from '../../domain/network/NetworkMeasurement.js';
+import { NetworkV1DTOMapper } from '../NetworkV1DTOMapper.js';
+import { Network } from '../../domain/network/Network.js';
+import { NetworkId } from '../../domain/network/NetworkId.js';
+import { OverlayVersionRange } from '../../domain/network/OverlayVersionRange.js';
+import { createDummyNetworkQuorumSetConfiguration } from '../../domain/network/__fixtures__/createDummyNetworkQuorumSetConfiguration.js';
+import { StellarCoreVersion } from '../../domain/network/StellarCoreVersion.js';
+import { BaseQuorumSetDTOMapper } from '../BaseQuorumSetDTOMapper.js';
 
 describe('NetworkV1DTOMapper', () => {
 	test('toNetworkV1DTO', () => {

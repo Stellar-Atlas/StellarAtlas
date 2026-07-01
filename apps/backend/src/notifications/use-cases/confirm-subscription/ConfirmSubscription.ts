@@ -1,13 +1,13 @@
 import { inject, injectable } from 'inversify';
-import { ConfirmSubscriptionDTO } from './ConfirmSubscriptionDTO';
+import { ConfirmSubscriptionDTO } from './ConfirmSubscriptionDTO.js';
 import { err, ok, Result } from 'neverthrow';
-import { SubscriberRepository } from '../../domain/subscription/SubscriberRepository';
-import { PendingSubscriptionId } from '../../domain/subscription/PendingSubscription';
+import type { SubscriberRepository } from '../../domain/subscription/SubscriberRepository.js';
+import { PendingSubscriptionId } from '../../domain/subscription/PendingSubscription.js';
 import {
 	NoPendingSubscriptionFound,
 	PersistenceError
-} from './ConfirmSubscriptionError';
-import { mapUnknownToError } from '../../../core/utilities/mapUnknownToError';
+} from './ConfirmSubscriptionError.js';
+import { mapUnknownToError } from '../../../core/utilities/mapUnknownToError.js';
 
 @injectable()
 export class ConfirmSubscription {

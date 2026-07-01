@@ -1,4 +1,4 @@
-import { NodeAddress } from '../../domain/node/NodeAddress';
+import { NodeAddress } from '../../domain/node/NodeAddress.js';
 import { Result } from 'neverthrow';
 
 export class NodeAddressMapper {

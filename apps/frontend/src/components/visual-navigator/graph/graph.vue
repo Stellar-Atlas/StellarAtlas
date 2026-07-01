@@ -23,9 +23,8 @@
               class="edge"
               :d="getEdgePath(edge)"
               :class="getEdgeClassObject(edge)"
-            >
-              <!-- Define the dot -->
-            </path>
+              :style="getEdgeStyle(edge)"
+            />
             <g v-if="propagationEnabled">
               <circle
                 v-for="edge in viewGraph.regularEdges.filter(
@@ -40,7 +39,6 @@
                 r="5"
                 class="propagation-circle"
               >
-                <!-- Animate the dot along the path -->
                 <animateMotion
                   begin="indefinite"
                   dur="1s"
@@ -59,7 +57,6 @@
                 />
               </circle>
             </g>
-            <!-- Define the dot -->
 
             <path
               v-for="edge in viewGraph.stronglyConnectedEdges.filter(
@@ -72,6 +69,7 @@
               class="edge"
               :d="getEdgePath(edge)"
               :class="getEdgeClassObject(edge)"
+              :style="getEdgeStyle(edge)"
             />
             <g
               v-if="
@@ -90,6 +88,7 @@
                 :key="edge.key + edge.key"
                 class="edge incoming"
                 :d="getEdgePath(edge)"
+                :style="getEdgeStyle(edge)"
               />
             </g>
             <g
@@ -109,6 +108,7 @@
                 :key="edge.key + edge.key"
                 class="edge outgoing"
                 :d="getEdgePath(edge)"
+                :style="getEdgeStyle(edge)"
               />
             </g>
             <graph-strongly-connected-component
@@ -141,15 +141,19 @@
                 startPropagationAnimation(vertex.key);
               "
             >
-              <circle :r="5" :class="getVertexClassObject(vertex)">
+              <circle
+                :r="getVertexRadius(vertex)"
+                :class="getVertexClassObject(vertex)"
+                :style="getVertexStyle(vertex)"
+              >
                 <title>{{ vertex.label }}</title>
               </circle>
               <g>
                 <rect
-                  style="fill: white; opacity: 0.7; text-transform: lowercase"
+                  style="fill: white; opacity: 0.84; text-transform: lowercase"
                   :width="getVertexTextRectWidthPx(vertex)"
-                  height="13px"
-                  y="10"
+                  height="12px"
+                  y="13"
                   :x="getVertexTextRectX(vertex)"
                   rx="2"
                   :class="{
@@ -160,11 +164,11 @@
                 <text
                   y="5"
                   :class="getVertexTextClass(vertex)"
-                  dy="1.3em"
+                  dy="1.7em"
                   text-anchor="middle"
-                  font-size="12px"
+                  font-size="9px"
                 >
-                  {{ truncate(vertex.label, 10) }}
+                  {{ truncate(vertex.label, 12) }}
                   <title>{{ vertex.label }}</title>
                 </text>
               </g>
@@ -177,25 +181,31 @@
 </template>
 
 <script setup lang="ts">
-import { zoom, zoomIdentity } from "d3-zoom";
-import { select, selectAll, type Selection } from "d3-selection";
 import GraphStronglyConnectedComponent from "@/components/visual-navigator/graph/graph-strongly-connected-component.vue";
 import ViewVertex from "@/components/visual-navigator/graph/view-vertex";
 import ViewGraph from "@/components/visual-navigator/graph/view-graph";
-import ViewEdge from "@/components/visual-navigator/graph/view-edge";
-import { isObject } from "shared";
-import {
-  computed,
-  onBeforeUnmount,
-  onMounted,
-  type PropType,
-  ref,
-  toRefs,
-  watch,
-} from "vue";
+import { type PropType, toRefs } from "vue";
 import { useTruncate } from "@/composables/useTruncate";
+import {
+  getEdgeClassObject,
+  getEdgePath,
+  getEdgeStyle,
+  getVertexClassObject as buildVertexClassObject,
+  getVertexRadius,
+  getVertexStyle as buildVertexStyle,
+  getVertexTextClass,
+  getVertexTextRectWidthPx as buildVertexTextRectWidthPx,
+  getVertexTextRectX as buildVertexTextRectX,
+  getVertexTransform,
+  type GraphDisplayContext,
+} from "@/components/visual-navigator/graph/graph-display";
+import { startPropagationAnimation } from "@/components/visual-navigator/graph/graph-propagation";
+import { useGraphController } from "@/components/visual-navigator/graph/use-graph-controller";
 import { useTrustVisualizationSettings } from "@/composables/useTrustVisualizationSettings";
-import { TrustRankColorService } from "@/services/TrustRankColorService";
+import {
+  TrustRankColorService,
+  type TrustLevel,
+} from "@/services/TrustRankColorService";
 import { NodeTrustIndexService } from "@/services/NodeTrustIndexService";
 import useStore from "@/store/useStore";
 
@@ -264,436 +274,74 @@ const {
   optionHighlightTrustedNodes,
   optionShowFailingEdges,
 } = toRefs(props);
-let computeGraphWorker: Worker;
-const isLoading = ref(true);
 const emit = defineEmits(["vertex-selected"]);
 const truncate = useTruncate();
 const { settings } = useTrustVisualizationSettings();
 
-// Function to get trust level for a public key
-function getTrustLevelForNode(publicKey: string) {
-  try {
-    // Get the trust index for this node using existing network data
-    const store = useStore();
-    const node = store.network.getNodeByPublicKey(publicKey);
-    if (!node) {
-      return TrustRankColorService.getTrustLevel(null);
-    }
-    
-    const trustIndex = NodeTrustIndexService.getTrustIndex(node);
-    return TrustRankColorService.getTrustLevel(trustIndex);
-  } catch (error) {
-    console.error('Error getting trust level for node:', publicKey, error);
-    return TrustRankColorService.getTrustLevel(null);
-  }
-}
-
-let d3svg: Selection<Element, null, null, undefined>;
-let d3Grid: Selection<Element, null, null, undefined>;
-
-let graphZoom: any;
-
-watch(
-  () => props.centerVertex,
-  () => {
-    centerCorrectVertex();
-  },
-);
-
-watch(selectedVertices, () => {
-  viewGraph?.value?.reClassifyEdges(
-    selectedVertices.value.map((vertex) => vertex.key),
-  );
-  viewGraph?.value?.reClassifyVertices(
-    selectedVertices.value.map((vertex) => vertex.key),
-  );
-});
-watch(viewGraph, () => {
-  isLoading.value = true;
-  computeGraphWorker.postMessage({
-    width: width(),
-    height: height(),
-    vertices: Array.from(viewGraph.value.viewVertices.values()),
-    edges: Array.from(viewGraph.value.viewEdges.values()),
-  });
+const { dimmerClass, graphSvg, grid, isLoading } = useGraphController({
+  centerVertex,
+  fullScreen,
+  zoomEnabled,
+  selectedVertices,
+  viewGraph,
 });
 
-watch(fullScreen, () => {
-  centerCorrectVertex();
-  transformAndZoom();
-});
-
-watch(isLoading, () => {
-  centerCorrectVertex();
-});
+const graphDisplayContext: GraphDisplayContext = {
+  selectedVertices,
+  viewGraph,
+  optionHighlightTrustingNodes,
+  optionHighlightTrustedNodes,
+  optionShowFailingEdges,
+};
 
 function vertexSelected(vertex: ViewVertex) {
   emit("vertex-selected", vertex);
 }
 
-function getVertexTransform(vertex: ViewVertex): string {
-  return `translate(${vertex.x},${vertex.y})`;
-}
+function getTrustLevelForNode(publicKey: string): TrustLevel {
+  try {
+    const node = useStore().network.getNodeByPublicKey(publicKey);
+    if (!node) return TrustRankColorService.getTrustLevel(null);
 
-function getVertexTextRectWidth(vertex: ViewVertex) {
-  return (truncate(vertex.label, 10).length / 10) * 60;
-}
-
-function getVertexTextRectWidthPx(vertex: ViewVertex) {
-  return getVertexTextRectWidth(vertex) + "px";
-}
-
-function getVertexTextRectX(vertex: ViewVertex) {
-  return "-" + getVertexTextRectWidth(vertex) / 2 + "px";
-}
-
-function getVertexTextClass(vertex: ViewVertex) {
-  return {
-    active: !vertex.isFailing,
-    failing: vertex.isFailing,
-    selected: vertex.selected,
-  };
-}
-
-function getVertexClassObject(vertex: ViewVertex) {
-  const baseClasses = {
-    active: !vertex.isFailing,
-    selected: vertex.selected,
-    failing: vertex.isFailing,
-    target: highlightVertexAsIncoming(vertex) && !vertex.selected,
-    source:
-      highlightVertexAsOutgoing(vertex) &&
-      !vertex.selected &&
-      !highlightVertexAsIncoming(vertex),
-    transitive: vertex.isPartOfTransitiveQuorumSet,
-  };
-
-  // Add trust-based styling if enabled
-  if (settings.value.enabled && vertex.key) {
-    try {
-      const trustLevel = getTrustLevelForNode(vertex.key);
-      return {
-        ...baseClasses,
-        'trust-high': trustLevel.level === 'high',
-        'trust-medium': trustLevel.level === 'medium',
-        'trust-low': trustLevel.level === 'low',
-        'trust-unknown': trustLevel.level === 'unknown'
-      };
-    } catch (error) {
-      console.error('Error applying trust styling to vertex:', vertex.key, error);
-      // Fall back to base classes if trust calculation fails
-      return baseClasses;
-    }
-  }
-
-  return baseClasses;
-}
-
-function highlightVertexAsOutgoing(vertex: ViewVertex) {
-  if (selectedVertices?.value.length <= 0) return false;
-  const edges = selectedVertices?.value
-    .map((selectedVertex) =>
-      viewGraph?.value.viewEdges.get(vertex.key + ":" + selectedVertex.key),
-    )
-    .filter((edge) => edge !== undefined);
-  const allEdgesAreFailing = edges.every(
-    (edge) => (edge as ViewEdge).isFailing,
-  );
-
-  if (edges.length <= 0) return false;
-
-  return (
-    vertex.isTrustingSelectedVertex &&
-    optionHighlightTrustingNodes?.value &&
-    (!allEdgesAreFailing || optionShowFailingEdges?.value)
-  );
-}
-
-function highlightVertexAsIncoming(vertex: ViewVertex) {
-  if (selectedVertices?.value.length <= 0) return false;
-
-  const edges = selectedVertices?.value
-    .map((selectedVertex) =>
-      viewGraph?.value.viewEdges.get(selectedVertex.key + ":" + vertex.key),
-    )
-    .filter((edge) => edge !== undefined);
-  const allEdgesAreFailing = edges.every(
-    (edge) => (edge as ViewEdge).isFailing,
-  );
-
-  if (edges.length <= 0) return false;
-
-  return (
-    vertex.isTrustedBySelectedVertex &&
-    optionHighlightTrustedNodes?.value &&
-    (!allEdgesAreFailing || optionShowFailingEdges?.value)
-  );
-}
-
-const graphSvg = ref<SVGElement | null>(null);
-
-function width() {
-  return (graphSvg.value as SVGElement).clientWidth;
-}
-
-function height() {
-  return (graphSvg.value as SVGElement).clientHeight;
-}
-
-const dimmerClass = computed(() => {
-  return {
-    dimmer: true,
-    active: isLoading?.value,
-  };
-});
-
-function centerCorrectVertex() {
-  if (centerVertex?.value instanceof ViewVertex) {
-    const realVertexX = -centerVertex.value.x + width() / 2;
-    const realVertexY = -centerVertex.value.y + height() / 2;
-
-    const transform = zoomIdentity.translate(realVertexX, realVertexY).scale(1);
-    d3svg.call(graphZoom.transform, transform);
+    return TrustRankColorService.getTrustLevel(
+      NodeTrustIndexService.getTrustIndex(node),
+    );
+  } catch {
+    return TrustRankColorService.getTrustLevel(null);
   }
 }
-function mapViewGraph(vertices: ViewVertex[], edges: ViewEdge[]) {
-  vertices.forEach((updatedVertex: ViewVertex) => {
-    const vertex = viewGraph.value.viewVertices.get(updatedVertex.key);
-    if (!vertex) return;
-    vertex.x = updatedVertex.x;
-    vertex.y = updatedVertex.y;
-  });
 
-  edges.forEach((updatedEdge: ViewEdge) => {
-    const edge = viewGraph.value.viewEdges.get(updatedEdge.key);
-    if (!edge) return;
-    edge.source = updatedEdge.source;
-    edge.target = updatedEdge.target;
-  });
-}
+function getVertexClassObject(vertex: ViewVertex): Record<string, boolean> {
+  const baseClasses = buildVertexClassObject(vertex, graphDisplayContext);
+  if (!settings.value.enabled || !vertex.key) return baseClasses;
 
-const grid = ref<Element | null>(null);
-
-onMounted(() => {
-  const workerType = import.meta.env.DEV ? "module" : "classic";
-  computeGraphWorker = new Worker(
-    new URL("./../../../workers/compute-graphv9.worker.ts", import.meta.url),
-    {
-      type: workerType,
-      /* @vite-ignore */
-    },
-  );
-  computeGraphWorker.onmessage = (event: {
-    data: { type: string; vertices: ViewVertex[]; edges: ViewEdge[] };
-  }) => {
-    if (event.data.type === "end") {
-      {
-        mapViewGraph(event.data.vertices, event.data.edges);
-        isLoading.value = false;
-      }
-    }
-  };
-
-  d3Grid = select(grid.value as Element);
-  d3svg = select(graphSvg.value as Element);
-  graphZoom = zoom()
-    .filter((event) => {
-      //mouse scrolling interferes with zoom,
-      //that is why it has to be explicitly enabled
-      if (!zoomEnabled.value && event.type === "wheel") {
-        return false;
-      }
-      return true;
-    })
-    .on("zoom", (event) => {
-      d3Grid.attr("transform", event.transform);
-    })
-    .scaleExtent([1, 3]);
-  transformAndZoom();
-});
-
-function transformAndZoom() {
-  d3svg.call(graphZoom);
-}
-
-function getEdgeClassObject(edge: ViewEdge) {
+  const trustLevel = getTrustLevelForNode(vertex.key);
   return {
-    "strongly-connected": edge.isPartOfStronglyConnectedComponent,
-    failing: edge.isFailing,
+    ...baseClasses,
+    "trust-high": trustLevel.level === "high",
+    "trust-medium": trustLevel.level === "medium",
+    "trust-low": trustLevel.level === "low",
+    "trust-unknown": trustLevel.level === "unknown",
   };
 }
 
-function getEdgePath(edge: ViewEdge) {
-  if (!isObject(edge.source))
-    throw new Error("Edge source not transformed into object by D3");
-  if (!isObject(edge.target))
-    throw new Error("Edge target not transformed into object by D3");
-  return (
-    "M" +
-    edge.source.x +
-    " " +
-    edge.source.y +
-    " L" +
-    edge.target.x +
-    " " +
-    edge.target.y
-  );
+function getVertexStyle(vertex: ViewVertex): Record<string, string> {
+  if (!settings.value.enabled || !vertex.key || vertex.isFailing)
+    return buildVertexStyle(vertex);
+
+  return {
+    ...buildVertexStyle(vertex),
+    fill: getTrustLevelForNode(vertex.key).color,
+  };
 }
 
-function startPropagationAnimation(key: string) {
-  const circles = selectAll(`.propagation-circle[id^='propagation:${key}:']`);
-  circles.each(function () {
-    const circle = select(this);
-    //@ts-ignore
-    const motionAnimation = this.querySelector("animateMotion");
-    //@ts-ignore
-    const radiusAnimation = this.querySelector("#radiusAnimation");
-    if (motionAnimation) {
-      // Set the circle to visible when the animation starts
-      circle.style("visibility", "visible");
-      motionAnimation.beginElement();
-
-      // Start the radius animation when the motion animation ends
-      motionAnimation.addEventListener("endEvent", function () {
-        if (radiusAnimation) {
-          radiusAnimation.beginElement();
-          radiusAnimation.addEventListener("endEvent", function () {
-            circle.style("visibility", "hidden");
-          });
-        }
-      });
-    }
-  });
+function getVertexTextRectWidthPx(vertex: ViewVertex): string {
+  return buildVertexTextRectWidthPx(vertex, truncate);
 }
 
-onBeforeUnmount(() => {
-  computeGraphWorker.terminate();
-});
+function getVertexTextRectX(vertex: ViewVertex): string {
+  return buildVertexTextRectX(vertex, truncate);
+}
 </script>
 
-<style lang="scss" scoped>
-@import "@/assets/variables";
-
-svg.graph {
-  width: 100%;
-  cursor: grab;
-}
-
-.dimmer.active .dimmer-content {
-  opacity: 0.4;
-}
-
-path.edge {
-  stroke: $graph-primary;
-  stroke-width: 0.5px;
-  stroke-opacity: 0.07;
-  fill-opacity: 0;
-}
-
-path.strongly-connected {
-  stroke: $graph-primary;
-  stroke-width: 0.7px;
-  stroke-opacity: 0.25;
-}
-
-path.failing {
-  stroke: $red;
-}
-
-path.outgoing {
-  stroke: #fec601;
-  stroke-opacity: 0.9;
-  stroke-width: 1.3px;
-}
-
-path.incoming {
-  stroke: #73bfb8;
-  stroke-opacity: 0.9;
-  stroke-width: 1.3px;
-}
-
-circle.active {
-  fill: $graph-primary;
-}
-
-circle.transitive {
-  fill: $graph-primary;
-}
-
-circle.selected {
-  stroke: $yellow;
-  opacity: 0.6;
-}
-
-circle.failing {
-  fill: $red;
-}
-
-circle.target {
-  stroke: #fec601;
-  stroke-opacity: 1;
-}
-
-circle.source {
-  stroke: #73bfb8;
-  stroke-opacity: 1;
-}
-
-// Trust-based node styling
-circle.trust-high {
-  fill: #28a745; // Green for high trust
-  r: 6; // Slightly larger radius for high trust
-}
-
-circle.trust-medium {
-  fill: #ffc107; // Yellow for medium trust
-  r: 5; // Default radius
-}
-
-circle.trust-low {
-  fill: #fd7e14; // Orange for low trust
-  r: 4; // Slightly smaller radius for low trust
-}
-
-circle.trust-unknown {
-  fill: #6c757d; // Gray for unknown trust
-  r: 4; // Slightly smaller radius for unknown trust
-}
-
-circle {
-  stroke: $white;
-  fill: $gray-100;
-  cursor: pointer;
-  stroke-width: 1.5px;
-}
-
-text {
-  fill: $graph-primary;
-  font-weight: 400;
-}
-
-.failing {
-  fill: $red;
-  opacity: 0.7;
-}
-
-.selected {
-  font-weight: bold;
-}
-
-.rect {
-  opacity: 0.8;
-}
-
-.rect-selected {
-  stroke: yellow;
-  stroke-width: 1.5;
-}
-.propagation-circle {
-  fill: $graph-primary;
-  opacity: 0.5;
-  stroke: $graph-primary;
-  stroke-width: 0.5px;
-  stroke-opacity: 0.5;
-}
-</style>
+<style lang="scss" scoped src="./graph.scss"></style>

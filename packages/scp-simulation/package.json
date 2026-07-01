@@ -1,6 +1,7 @@
 {
 	"name": "scp-simulation",
 	"private": true,
+	"type": "module",
 	"description": "Simulate the SCP protocol for educational purposes. Currently focussing on federated voting",
 	"scripts": {
 		"build": "tsc --declaration",

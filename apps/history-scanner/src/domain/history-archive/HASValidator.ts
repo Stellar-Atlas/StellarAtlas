@@ -1,11 +1,11 @@
 import { err, ok, Result } from 'neverthrow';
 import { inject, injectable } from 'inversify';
-import { Logger } from 'logger';
-import Ajv, { ValidateFunction } from 'ajv';
+import type { Logger } from 'logger';
+import { Ajv, type ValidateFunction } from 'ajv';
 import {
 	HistoryArchiveState,
 	HistoryArchiveStateSchema
-} from './HistoryArchiveState';
+} from './HistoryArchiveState.js';
 import { CustomError } from 'custom-error';
 
 export class InvalidHASError extends CustomError {

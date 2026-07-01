@@ -1,9 +1,10 @@
 import { config } from 'dotenv';
 import { err, ok, Result } from 'neverthrow';
-import path from 'path';
+import { resolveAppEnvPath } from 'shared/lib/env/resolve-app-env-path.js';
 
 config({
-	path: path.resolve(__dirname + '../../../../.env')
+	path: resolveAppEnvPath(import.meta.url, 'history-scanner'),
+	quiet: true
 });
 
 export interface Config {
@@ -20,12 +21,12 @@ export interface Config {
 }
 
 // Simple boolean parser to replace 'yn'
-function parseBoolean(val: any): boolean | undefined {
-  if (typeof val !== 'string') return undefined;
-  const normalized = val.trim().toLowerCase();
-  if (["y", "yes", "true", "1", "on"].includes(normalized)) return true;
-  if (["n", "no", "false", "0", "off"].includes(normalized)) return false;
-  return undefined;
+function parseBoolean(val: string | undefined): boolean | undefined {
+	if (typeof val !== 'string') return undefined;
+	const normalized = val.trim().toLowerCase();
+	if (['y', 'yes', 'true', '1', 'on'].includes(normalized)) return true;
+	if (['n', 'no', 'false', '0', 'off'].includes(normalized)) return false;
+	return undefined;
 }
 
 // Default values

@@ -1,4 +1,15 @@
-import { AsyncCrawlQueue } from '../crawl-queue';
+import { AsyncCrawlQueue } from '../crawl-queue.js';
+import { Crawl } from '../crawl.js';
+import { CrawlTask } from '../crawl-task.js';
+import { mock } from 'jest-mock-extended';
+
+function createCrawlTask(): CrawlTask {
+	return {
+		connectCallback: jest.fn(),
+		crawl: mock<Crawl>(),
+		nodeAddress: ['localhost', 11625]
+	};
+}
 
 describe('CrawlQueue', () => {
 	it('should initialize the crawl queue', () => {
@@ -10,15 +21,15 @@ describe('CrawlQueue', () => {
 	it('should push a crawl task', () => {
 		const crawlQueue = new AsyncCrawlQueue(10);
 		crawlQueue.initialize(() => {});
-		crawlQueue.push({} as any, () => {});
+		crawlQueue.push(createCrawlTask(), () => {});
 		expect(crawlQueue.length()).toEqual(1);
 	});
 
 	it('should return the length of the queue', () => {
 		const crawlQueue = new AsyncCrawlQueue(10);
 		crawlQueue.initialize(() => {});
-		crawlQueue.push({} as any, () => {});
-		crawlQueue.push({} as any, () => {});
+		crawlQueue.push(createCrawlTask(), () => {});
+		crawlQueue.push(createCrawlTask(), () => {});
 		expect(crawlQueue.length()).toEqual(2);
 	});
 
@@ -31,13 +42,13 @@ describe('CrawlQueue', () => {
 		const crawlQueue = new AsyncCrawlQueue(10);
 		let counter = 0;
 
-		crawlQueue.initialize((task: any, done: () => void) => {
+		crawlQueue.initialize((_task, done) => {
 			//process task
 			counter++;
 			done();
 		});
 
-		crawlQueue.push({ task: 'task' } as any, () => {
+		crawlQueue.push(createCrawlTask(), () => {
 			//task done callback
 		});
 
@@ -51,12 +62,25 @@ describe('CrawlQueue', () => {
 
 	it('should return the active workers', async () => {
 		const crawlQueue = new AsyncCrawlQueue(10);
-		crawlQueue.initialize(async () => {});
-
-		crawlQueue.push({} as any, () => {
-			setTimeout(() => {
-				expect(crawlQueue.activeTasks().length).toEqual(1);
-			}, 1000);
+		let releaseTask = () => {};
+		const taskCanFinish = new Promise<void>((resolve) => {
+			releaseTask = resolve;
 		});
+		const taskStarted = new Promise<void>((resolve) => {
+			crawlQueue.initialize((_task, done) => {
+				resolve();
+				taskCanFinish.then(() => done()).catch(done);
+			});
+		});
+		const drained = new Promise<void>((resolve) => crawlQueue.onDrain(resolve));
+
+		crawlQueue.push(createCrawlTask(), () => {});
+
+		await taskStarted;
+		expect(crawlQueue.activeTasks().length).toEqual(1);
+
+		releaseTask();
+		await drained;
+		expect(crawlQueue.activeTasks()).toEqual([]);
 	});
 });

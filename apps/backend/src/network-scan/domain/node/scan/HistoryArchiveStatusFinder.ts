@@ -1,5 +1,5 @@
 import { injectable } from 'inversify';
-import { HistoryService } from './history/HistoryService';
+import { HistoryService } from './history/HistoryService.js';
 import { queue } from 'async';
 
 @injectable()

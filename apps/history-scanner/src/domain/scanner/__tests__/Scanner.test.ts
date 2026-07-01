@@ -1,15 +1,15 @@
-import { Scanner } from '../Scanner';
+import { Scanner } from '../Scanner.js';
 import { mock } from 'jest-mock-extended';
-import { createDummyHistoryBaseUrl } from '../../history-archive/__fixtures__/HistoryBaseUrl';
+import { createDummyHistoryBaseUrl } from '../../history-archive/__fixtures__/HistoryBaseUrl.js';
 import { err, ok } from 'neverthrow';
-import { RangeScanner } from '../RangeScanner';
-import { ScanError, ScanErrorType } from '../../scan/ScanError';
-import { ScanJob } from '../../scan/ScanJob';
-import { ScanSettingsFactory } from '../../scan/ScanSettingsFactory';
-import { CategoryScanner } from '../CategoryScanner';
-import { ArchivePerformanceTester } from '../ArchivePerformanceTester';
-import { Logger } from 'logger';
-import { ExceptionLogger } from 'exception-logger';
+import { RangeScanner } from '../RangeScanner.js';
+import { ScanError, ScanErrorType } from '../../scan/ScanError.js';
+import { ScanJob } from '../../scan/ScanJob.js';
+import { ScanSettingsFactory } from '../../scan/ScanSettingsFactory.js';
+import { CategoryScanner } from '../CategoryScanner.js';
+import { ArchivePerformanceTester } from '../ArchivePerformanceTester.js';
+import type { Logger } from 'logger';
+import type { ExceptionLogger } from 'exception-logger';
 
 it('should scan', async function () {
 	const rangeScanner = mock<RangeScanner>();

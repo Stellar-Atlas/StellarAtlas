@@ -1,5 +1,5 @@
 import { validate } from 'class-validator';
-import { CommunityScanner, ScannerStatus } from '../CommunityScanner';
+import { CommunityScanner, ScannerStatus } from '../CommunityScanner.js';
 
 describe('CommunityScanner Entity', () => {
   let scanner: CommunityScanner;

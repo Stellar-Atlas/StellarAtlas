@@ -1,17 +1,17 @@
 import { Container } from 'inversify';
-import Kernel from '../../../../../core/infrastructure/Kernel';
-import { ConfigMock } from '../../../../../core/config/__mocks__/configMock';
-import Organization from '../../../../domain/organization/Organization';
-import OrganizationMeasurement from '../../../../domain/organization/OrganizationMeasurement';
-import { OrganizationMeasurementRepository } from '../../../../domain/organization/OrganizationMeasurementRepository';
-import { NETWORK_TYPES } from '../../../di/di-types';
-import { createDummyOrganizationId } from '../../../../domain/organization/__fixtures__/createDummyOrganizationId';
-import { OrganizationRepository } from '../../../../domain/organization/OrganizationRepository';
-import { TomlState } from '../../../../domain/organization/scan/TomlState';
-import { createDummyOrganizationV1 } from '../../../../services/__fixtures__/createDummyOrganizationV1';
-import NetworkScan from '../../../../domain/network/scan/NetworkScan';
-import NetworkMeasurement from '../../../../domain/network/NetworkMeasurement';
-import { NetworkScanRepository } from '../../../../domain/network/scan/NetworkScanRepository';
+import Kernel from '../../../../../core/infrastructure/Kernel.js';
+import { ConfigMock } from '../../../../../core/config/__mocks__/configMock.js';
+import Organization from '../../../../domain/organization/Organization.js';
+import OrganizationMeasurement from '../../../../domain/organization/OrganizationMeasurement.js';
+import type { OrganizationMeasurementRepository } from '../../../../domain/organization/OrganizationMeasurementRepository.js';
+import { NETWORK_TYPES } from '../../../di/di-types.js';
+import { createDummyOrganizationId } from '../../../../domain/organization/__fixtures__/createDummyOrganizationId.js';
+import type { OrganizationRepository } from '../../../../domain/organization/OrganizationRepository.js';
+import { TomlState } from '../../../../domain/organization/scan/TomlState.js';
+import { createDummyOrganizationV1 } from '../../../../services/__fixtures__/createDummyOrganizationV1.js';
+import NetworkScan from '../../../../domain/network/scan/NetworkScan.js';
+import NetworkMeasurement from '../../../../domain/network/NetworkMeasurement.js';
+import type { NetworkScanRepository } from '../../../../domain/network/scan/NetworkScanRepository.js';
 
 describe('test queries', () => {
 	let container: Container;
@@ -173,8 +173,7 @@ describe('test queries', () => {
 			);
 		organizationIssuesJustStartedButNoEventsMeasurement1.tomlState =
 			TomlState.Ok;
-		organizationIssuesJustStartedButNoEventsMeasurement1.isSubQuorumAvailable =
-			true;
+		organizationIssuesJustStartedButNoEventsMeasurement1.isSubQuorumAvailable = true;
 
 		const organizationIssuesJustStartedButNoEventsMeasurement2 =
 			new OrganizationMeasurement(
@@ -191,8 +190,7 @@ describe('test queries', () => {
 			);
 		organizationIssuesJustStartedButNoEventsMeasurement3.tomlState =
 			TomlState.Ok;
-		organizationIssuesJustStartedButNoEventsMeasurement3.isSubQuorumAvailable =
-			true;
+		organizationIssuesJustStartedButNoEventsMeasurement3.isSubQuorumAvailable = true;
 
 		const organizationIssuesJustStartedButNoEventsMeasurement4 =
 			new OrganizationMeasurement(
@@ -201,8 +199,7 @@ describe('test queries', () => {
 			);
 		organizationIssuesJustStartedButNoEventsMeasurement4.tomlState =
 			TomlState.UnspecifiedError;
-		organizationIssuesJustStartedButNoEventsMeasurement4.isSubQuorumAvailable =
-			false;
+		organizationIssuesJustStartedButNoEventsMeasurement4.isSubQuorumAvailable = false;
 
 		await repo.save([
 			organizationNoEventsMeasurement1,

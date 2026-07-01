@@ -1,11 +1,11 @@
-import Kernel from '../../../../core/infrastructure/Kernel';
-import { ConfigMock } from '../../../../core/config/__mocks__/configMock';
-import { TYPES } from '../../../infrastructure/di/di-types';
-import { ScanRepository } from '../../../domain/scan/ScanRepository';
-import { Scan } from '../../../domain/scan/Scan';
-import { GetLatestScan } from '../GetLatestScan';
+import Kernel from '../../../../core/infrastructure/Kernel.js';
+import { ConfigMock } from '../../../../core/config/__mocks__/configMock.js';
+import { TYPES } from '../../../infrastructure/di/di-types.js';
+import type { ScanRepository } from '../../../domain/scan/ScanRepository.js';
+import { Scan } from '../../../domain/scan/Scan.js';
+import { GetLatestScan } from '../GetLatestScan.js';
 import { HistoryArchiveScan } from 'shared';
-import { InvalidUrlError } from '../InvalidUrlError';
+import { InvalidUrlError } from '../InvalidUrlError.js';
 import { Url } from 'http-helper';
 
 let kernel: Kernel;

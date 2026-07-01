@@ -1,5 +1,5 @@
-import { OrganizationMeasurementAverage } from './OrganizationMeasurementAverage';
-import Organization from './Organization';
+import { OrganizationMeasurementAverage } from './OrganizationMeasurementAverage.js';
+import Organization from './Organization.js';
 
 export class ReliableUptimePolicy {
 	static hasReliableUptime(

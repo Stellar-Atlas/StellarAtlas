@@ -2,13 +2,13 @@ import {
 	ClosePayload,
 	ConnectedPayload,
 	DataPayload
-} from '../connection-manager';
-import { Ledger } from '../../crawler';
-import { NodeAddress } from '../../node-address';
-import { OnPeerConnected } from './on-peer-connected';
-import { OnPeerConnectionClosed } from './on-peer-connection-closed';
-import { OnPeerData } from './on-peer-data';
-import { Observation } from '../observation';
+} from '../connection-manager.js';
+import type { Ledger } from '../../crawler.js';
+import type { NodeAddress } from '../../node-address.js';
+import { OnPeerConnected } from './on-peer-connected.js';
+import { OnPeerConnectionClosed } from './on-peer-connection-closed.js';
+import { OnPeerData } from './on-peer-data.js';
+import { Observation } from '../observation.js';
 
 export class PeerEventHandler {
 	constructor(

@@ -1,6 +1,6 @@
-import { QuorumSet } from './quorum-set';
-import { TrustGraph } from './trust-graph/trust-graph';
-import { Network, PublicKey } from './network';
+import { QuorumSet } from './quorum-set.js';
+import { TrustGraph } from './trust-graph/trust-graph.js';
+import { Network, PublicKey } from './network.js';
 
 export class QuorumSetService {
 	/*

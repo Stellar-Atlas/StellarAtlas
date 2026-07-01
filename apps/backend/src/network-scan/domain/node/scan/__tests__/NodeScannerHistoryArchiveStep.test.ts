@@ -1,8 +1,8 @@
-import { NodeScannerHistoryArchiveStep } from '../NodeScannerHistoryArchiveStep';
+import { NodeScannerHistoryArchiveStep } from '../NodeScannerHistoryArchiveStep.js';
 import { mock } from 'jest-mock-extended';
-import { HistoryArchiveStatusFinder } from '../HistoryArchiveStatusFinder';
-import { NodeScan } from '../NodeScan';
-import { HistoryArchiveScanService } from '../history/HistoryArchiveScanService';
+import { HistoryArchiveStatusFinder } from '../HistoryArchiveStatusFinder.js';
+import { NodeScan } from '../NodeScan.js';
+import type { HistoryArchiveScanService } from '../history/HistoryArchiveScanService.js';
 
 describe('NodeScannerHistoryArchiveStep', () => {
 	const historyArchiveStatusFinder = mock<HistoryArchiveStatusFinder>();
@@ -30,16 +30,16 @@ describe('NodeScannerHistoryArchiveStep', () => {
 		await historyArchiveStep.execute(nodeScan);
 		expect(
 			historyArchiveStatusFinder.getNodesWithUpToDateHistoryArchives
-		).toBeCalled();
+		).toHaveBeenCalled();
 		expect(
 			historyArchiveStatusFinder.getNodesWithHistoryArchiveVerificationErrors
-		).toBeCalled();
-		expect(nodeScan.updateHistoryArchiveUpToDateStatus).toBeCalledWith(
+		).toHaveBeenCalled();
+		expect(nodeScan.updateHistoryArchiveUpToDateStatus).toHaveBeenCalledWith(
 			upToDateArchives
 		);
-		expect(nodeScan.updateHistoryArchiveVerificationStatus).toBeCalledWith(
-			verificationErrors
-		);
+		expect(
+			nodeScan.updateHistoryArchiveVerificationStatus
+		).toHaveBeenCalledWith(verificationErrors);
 	});
 
 	it('should schedule new archive scans', async () => {
@@ -47,7 +47,7 @@ describe('NodeScannerHistoryArchiveStep', () => {
 		const urls = new Map<string, string>([['a', 'url']]);
 		nodeScan.getHistoryArchiveUrls.mockReturnValue(urls);
 		await historyArchiveStep.execute(nodeScan);
-		expect(historyArchiveScanService.scheduleScans).toBeCalledWith(
+		expect(historyArchiveScanService.scheduleScans).toHaveBeenCalledWith(
 			Array.from(urls.values())
 		);
 	});

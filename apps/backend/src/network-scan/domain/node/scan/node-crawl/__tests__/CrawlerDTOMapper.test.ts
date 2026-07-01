@@ -1,8 +1,8 @@
-import { CrawlerDTOMapper } from '../CrawlerDTOMapper';
+import { CrawlerDTOMapper } from '../CrawlerDTOMapper.js';
 import { QuorumSet as QuorumSetDTO } from 'shared';
-import { createDummyNode } from '../../../__fixtures__/createDummyNode';
-import { createDummyNodeAddress } from '../../../__fixtures__/createDummyNodeAddress';
-import NodeQuorumSet from '../../../NodeQuorumSet';
+import { createDummyNode } from '../../../__fixtures__/createDummyNode.js';
+import { createDummyNodeAddress } from '../../../__fixtures__/createDummyNodeAddress.js';
+import NodeQuorumSet from '../../../NodeQuorumSet.js';
 
 describe('CrawlerMapper', () => {
 	test('mapNodeAddressesToNodeAddressDTOs', () => {

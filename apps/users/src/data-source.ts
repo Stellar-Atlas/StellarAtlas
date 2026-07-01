@@ -1,18 +1,25 @@
 import { config } from 'dotenv';
-config();
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { resolveAppEnvPath } from 'shared/lib/env/resolve-app-env-path.js';
+
+config({
+	path: resolveAppEnvPath(import.meta.url, 'users'),
+	quiet: true
+});
 
 import { DataSource } from 'typeorm';
-import { User } from './User';
+import { User } from './User.js';
 
-console.log('DATABASE_URL:', process.env.DATABASE_URL);
+const currentDir = path.dirname(fileURLToPath(import.meta.url));
 
 export const dataSource = new DataSource({
-  type: 'postgres',
-  url: process.env.DATABASE_URL,
-  entities: [User],
-  migrations: [__dirname + '/migrations/*.{ts,js}'],
-  migrationsRun: true,
-  synchronize: false,
-  logging: process.env.NODE_ENV === 'development',
-  ssl: false
+	type: 'postgres',
+	url: process.env.DATABASE_URL,
+	entities: [User],
+	migrations: [path.join(currentDir, 'migrations/*.{ts,js}')],
+	migrationsRun: true,
+	synchronize: false,
+	logging: process.env.NODE_ENV === 'development',
+	ssl: false
 });

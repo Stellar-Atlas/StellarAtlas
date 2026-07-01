@@ -1,17 +1,17 @@
 import { mock } from 'jest-mock-extended';
-import { ExceptionLogger } from '../../../../core/services/ExceptionLogger';
-import { MeasurementAggregationRepositoryFactory } from '../../../domain/measurement-aggregation/MeasurementAggregationRepositoryFactory';
-import { GetMeasurementAggregations } from '../GetMeasurementAggregations';
+import type { ExceptionLogger } from '../../../../core/services/ExceptionLogger.js';
+import { MeasurementAggregationRepositoryFactory } from '../../../domain/measurement-aggregation/MeasurementAggregationRepositoryFactory.js';
+import { GetMeasurementAggregations } from '../GetMeasurementAggregations.js';
 import {
 	AggregationTarget,
 	GetMeasurementAggregationsDTO
-} from '../GetMeasurementAggregationsDTO';
-import NodeMeasurementDay from '../../../domain/node/NodeMeasurementDay';
-import NetworkMeasurementDay from '../../../domain/network/NetworkMeasurementDay';
-import OrganizationMeasurementDay from '../../../domain/organization/OrganizationMeasurementDay';
-import NetworkMeasurementMonth from '../../../domain/network/NetworkMeasurementMonth';
-import { MeasurementAggregationRepository } from '../../../domain/measurement-aggregation/MeasurementAggregationRepository';
-import { MeasurementAggregation } from '../../../domain/measurement-aggregation/MeasurementAggregation';
+} from '../GetMeasurementAggregationsDTO.js';
+import NodeMeasurementDay from '../../../domain/node/NodeMeasurementDay.js';
+import NetworkMeasurementDay from '../../../domain/network/NetworkMeasurementDay.js';
+import OrganizationMeasurementDay from '../../../domain/organization/OrganizationMeasurementDay.js';
+import NetworkMeasurementMonth from '../../../domain/network/NetworkMeasurementMonth.js';
+import type { MeasurementAggregationRepository } from '../../../domain/measurement-aggregation/MeasurementAggregationRepository.js';
+import { MeasurementAggregation } from '../../../domain/measurement-aggregation/MeasurementAggregation.js';
 
 it('should call the right repo', function () {
 	const factory = mock<MeasurementAggregationRepositoryFactory>();
@@ -24,26 +24,26 @@ it('should call the right repo', function () {
 		to: new Date()
 	};
 	useCase.execute(dto);
-	expect(factory.createFor).toBeCalledTimes(1);
-	expect(factory.createFor).toBeCalledWith(NodeMeasurementDay);
+	expect(factory.createFor).toHaveBeenCalledTimes(1);
+	expect(factory.createFor).toHaveBeenCalledWith(NodeMeasurementDay);
 
 	factory.createFor.mockClear();
 	dto.aggregationTarget = AggregationTarget.NetworkDay;
 	useCase.execute(dto);
-	expect(factory.createFor).toBeCalledTimes(1);
-	expect(factory.createFor).toBeCalledWith(NetworkMeasurementDay);
+	expect(factory.createFor).toHaveBeenCalledTimes(1);
+	expect(factory.createFor).toHaveBeenCalledWith(NetworkMeasurementDay);
 
 	factory.createFor.mockClear();
 	dto.aggregationTarget = AggregationTarget.OrganizationDay;
 	useCase.execute(dto);
-	expect(factory.createFor).toBeCalledTimes(1);
-	expect(factory.createFor).toBeCalledWith(OrganizationMeasurementDay);
+	expect(factory.createFor).toHaveBeenCalledTimes(1);
+	expect(factory.createFor).toHaveBeenCalledWith(OrganizationMeasurementDay);
 
 	factory.createFor.mockClear();
 	dto.aggregationTarget = AggregationTarget.NetworkMonth;
 	useCase.execute(dto);
-	expect(factory.createFor).toBeCalledTimes(1);
-	expect(factory.createFor).toBeCalledWith(NetworkMeasurementMonth);
+	expect(factory.createFor).toHaveBeenCalledTimes(1);
+	expect(factory.createFor).toHaveBeenCalledWith(NetworkMeasurementMonth);
 });
 
 it('should capture and return errors', async function () {
@@ -60,7 +60,7 @@ it('should capture and return errors', async function () {
 		to: new Date()
 	});
 	expect(result.isErr()).toBe(true);
-	expect(exceptionLogger.captureException).toBeCalledTimes(1);
+	expect(exceptionLogger.captureException).toHaveBeenCalledTimes(1);
 });
 
 it('should return measurement aggregations', async function () {

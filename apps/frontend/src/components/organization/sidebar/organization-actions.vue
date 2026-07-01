@@ -33,14 +33,8 @@
         </b-dropdown-text>
       </div>
       <b-dropdown-item
-        v-if="supportsDelete && store.selectedOrganization"
-        @click="
-          store.removeOrganizationFromOrganization(
-            organization,
-            store.selectedOrganization,
-          )
-        "
-        @click.prevent.stop
+        v-if="supportsDelete && selectedOrganization"
+        @click.prevent.stop="removeFromSelectedOrganization"
       >
         <b-icon-x-circle scale="0.9" />
         Remove
@@ -113,6 +107,7 @@ const store = useStore();
 
 const organizationsToAdd: Ref<Organization[]> = ref([]);
 const id: Ref<number> = ref(store.getUniqueId());
+const selectedOrganization = computed(() => store.selectedOrganization);
 
 const trustedOrganizationIds = computed(() => {
   const trustedOrganizationIds = new Set<string>();
@@ -141,6 +136,14 @@ function organizationsToAddModalOk() {
       organization.value,
     );
   }
+}
+
+function removeFromSelectedOrganization() {
+  if (!selectedOrganization.value) return;
+  store.removeOrganizationFromOrganization(
+    organization.value,
+    selectedOrganization.value,
+  );
 }
 
 function onOrganizationsSelected(organizations: Organization[]) {

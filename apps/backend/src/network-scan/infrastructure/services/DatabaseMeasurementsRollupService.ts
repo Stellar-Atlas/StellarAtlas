@@ -1,20 +1,18 @@
 import { Repository } from 'typeorm';
-import MeasurementRollup from '../database/entities/MeasurementRollup';
-import NetworkScan from '../../domain/network/scan/NetworkScan';
+import MeasurementRollup from '../database/entities/MeasurementRollup.js';
+import NetworkScan from '../../domain/network/scan/NetworkScan.js';
 import { inject, injectable } from 'inversify';
-import { MeasurementsRollupService } from '../../domain/measurement-aggregation/MeasurementsRollupService';
-import { NETWORK_TYPES } from '../di/di-types';
-import { NodeMeasurementDayRepository } from '../../domain/node/NodeMeasurementDayRepository';
-import { MeasurementAggregationRepository } from '../../domain/measurement-aggregation/MeasurementAggregationRepository';
-import { OrganizationMeasurementDayRepository } from '../../domain/organization/OrganizationMeasurementDayRepository';
-import { NetworkMeasurementDayRepository } from '../../domain/network/NetworkMeasurementDayRepository';
-import { NetworkMeasurementMonthRepository } from '../../domain/network/NetworkMeasurementMonthRepository';
-import { MeasurementAggregation } from '../../domain/measurement-aggregation/MeasurementAggregation';
+import type { MeasurementsRollupService } from '../../domain/measurement-aggregation/MeasurementsRollupService.js';
+import { NETWORK_TYPES } from '../di/di-types.js';
+import type { NodeMeasurementDayRepository } from '../../domain/node/NodeMeasurementDayRepository.js';
+import type { MeasurementAggregationRepository } from '../../domain/measurement-aggregation/MeasurementAggregationRepository.js';
+import type { OrganizationMeasurementDayRepository } from '../../domain/organization/OrganizationMeasurementDayRepository.js';
+import type { NetworkMeasurementDayRepository } from '../../domain/network/NetworkMeasurementDayRepository.js';
+import type { NetworkMeasurementMonthRepository } from '../../domain/network/NetworkMeasurementMonthRepository.js';
+import { MeasurementAggregation } from '../../domain/measurement-aggregation/MeasurementAggregation.js';
 
 @injectable()
-export default class DatabaseMeasurementsRollupService
-	implements MeasurementsRollupService
-{
+export default class DatabaseMeasurementsRollupService implements MeasurementsRollupService {
 	constructor(
 		@inject('Repository<MeasurementRollup>')
 		private measurementRollupRepository: Repository<MeasurementRollup>,

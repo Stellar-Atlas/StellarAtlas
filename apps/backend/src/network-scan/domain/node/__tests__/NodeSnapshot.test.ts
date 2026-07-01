@@ -1,8 +1,8 @@
-import NodeSnapShot from '../NodeSnapShot';
-import NodeDetails from '../NodeDetails';
-import NodeQuorumSet from '../NodeQuorumSet';
+import NodeSnapShot from '../NodeSnapShot.js';
+import NodeDetails from '../NodeDetails.js';
+import NodeQuorumSet from '../NodeQuorumSet.js';
 import { QuorumSet } from 'shared';
-import NodeGeoDataLocation from '../NodeGeoDataLocation';
+import NodeGeoDataLocation from '../NodeGeoDataLocation.js';
 
 describe('NodeSnapshot', () => {
 	test('copy', () => {

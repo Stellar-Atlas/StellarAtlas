@@ -1,15 +1,15 @@
-import { Network } from '../Network';
-import { NetworkId } from '../NetworkId';
-import { Snapshot } from '../../../../core/domain/Snapshot';
-import { createDummyNetworkProps } from '../__fixtures__/createDummyNetworkProps';
-import { NetworkNameChanged } from '../change/NetworkNameChanged';
-import { NetworkMaxLedgerVersionChanged } from '../change/NetworkMaxLedgerVersionChanged';
-import { OverlayVersionRange } from '../OverlayVersionRange';
-import { NetworkOverlayVersionRangeChanged } from '../change/NetworkOverlayVersionRangeChanged';
-import { StellarCoreVersion } from '../StellarCoreVersion';
-import { NetworkStellarCoreVersionChanged } from '../change/NetworkStellarCoreVersionChanged';
-import { NetworkQuorumSetConfiguration } from '../NetworkQuorumSetConfiguration';
-import { NetworkQuorumSetConfigurationChanged } from '../change/NetworkQuorumSetConfigurationChanged';
+import { Network } from '../Network.js';
+import { NetworkId } from '../NetworkId.js';
+import { Snapshot } from '../../../../core/domain/Snapshot.js';
+import { createDummyNetworkProps } from '../__fixtures__/createDummyNetworkProps.js';
+import { NetworkNameChanged } from '../change/NetworkNameChanged.js';
+import { NetworkMaxLedgerVersionChanged } from '../change/NetworkMaxLedgerVersionChanged.js';
+import { OverlayVersionRange } from '../OverlayVersionRange.js';
+import { NetworkOverlayVersionRangeChanged } from '../change/NetworkOverlayVersionRangeChanged.js';
+import { StellarCoreVersion } from '../StellarCoreVersion.js';
+import { NetworkStellarCoreVersionChanged } from '../change/NetworkStellarCoreVersionChanged.js';
+import { NetworkQuorumSetConfiguration } from '../NetworkQuorumSetConfiguration.js';
+import { NetworkQuorumSetConfigurationChanged } from '../change/NetworkQuorumSetConfigurationChanged.js';
 
 it('should create a first snapshot', function () {
 	const time = new Date();

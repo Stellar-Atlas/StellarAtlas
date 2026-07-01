@@ -1,6 +1,6 @@
-import { FederatedVotingProtocolState } from '../federated-voting/protocol/FederatedVotingProtocolState';
-import { FederatedVoteDTO } from './FederatedVoteDTO';
-import { StatementDTOMapper } from './StatementDTOMapper';
+import { FederatedVotingProtocolState } from '../federated-voting/protocol/FederatedVotingProtocolState.js';
+import { FederatedVoteDTO } from './FederatedVoteDTO.js';
+import { StatementDTOMapper } from './StatementDTOMapper.js';
 
 export class FederatedVoteDTOMapper {
 	static toDTO(

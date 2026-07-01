@@ -3,7 +3,7 @@ import {
 	NetworkId,
 	OrganizationId,
 	PublicKey
-} from './EventSourceId';
+} from './EventSourceId.js';
 
 export type EventData = Record<string, unknown>;
 
@@ -36,7 +36,11 @@ export enum EventType {
 }
 
 export abstract class Event<T extends EventData, U extends EventSourceId> {
-	constructor(readonly time: Date, readonly sourceId: U, readonly data: T) {}
+	constructor(
+		readonly time: Date,
+		readonly sourceId: U,
+		readonly data: T
+	) {}
 
 	abstract get type(): EventType;
 }

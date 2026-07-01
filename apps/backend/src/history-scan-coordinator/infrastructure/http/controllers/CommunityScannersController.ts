@@ -1,7 +1,7 @@
-import { Request, Response } from 'express';
-import { RegisterCommunityScanner } from '../../../use-cases/RegisterCommunityScanner';
-import { SendScannerHeartbeat } from '../../../use-cases/SendScannerHeartbeat';
-import { GetScannerMetrics } from '../../../use-cases/GetScannerMetrics';
+import type { Request, Response } from 'express';
+import { RegisterCommunityScanner } from '../../../use-cases/RegisterCommunityScanner.js';
+import { SendScannerHeartbeat } from '../../../use-cases/SendScannerHeartbeat.js';
+import { GetScannerMetrics } from '../../../use-cases/GetScannerMetrics.js';
 
 export class CommunityScannersController {
   constructor(

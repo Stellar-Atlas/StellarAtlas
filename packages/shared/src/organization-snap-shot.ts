@@ -1,5 +1,5 @@
-import { Organization } from './organization';
-import {OrganizationSnapshotV1} from "./dto/organization-snapshot-v1";
+import { Organization } from './organization.js';
+import { OrganizationSnapshotV1 } from './dto/organization-snapshot-v1.js';
 
 export class OrganizationSnapShot {
 	public startDate: Date;
@@ -24,9 +24,9 @@ export class OrganizationSnapShot {
 		snapShotObject: OrganizationSnapshotV1
 	): OrganizationSnapShot {
 		return new OrganizationSnapShot(
-				new Date(snapShotObject.startDate),
-				new Date(snapShotObject.endDate),
-				Organization.fromOrganizationV1DTO(snapShotObject.organization)
-			);
+			new Date(snapShotObject.startDate),
+			new Date(snapShotObject.endDate),
+			Organization.fromOrganizationV1DTO(snapShotObject.organization)
+		);
 	}
 }

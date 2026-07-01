@@ -1,4 +1,4 @@
-import { EventSourceId } from './EventSourceId';
+import { EventSourceId } from './EventSourceId.js';
 
 export class EventSource {
 	constructor(

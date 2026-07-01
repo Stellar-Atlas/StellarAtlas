@@ -1,5 +1,5 @@
-import { CoreEntity } from './CoreEntity';
-import { Snapshot } from './Snapshot';
+import { CoreEntity } from './CoreEntity.js';
+import { Snapshot } from './Snapshot.js';
 import { ok } from 'neverthrow';
 
 //https://martinfowler.com/eaaDev/TemporalObject.html

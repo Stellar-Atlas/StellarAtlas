@@ -1,8 +1,8 @@
-import { Crawl } from './crawl';
-import { P } from 'pino';
-import { CrawlQueueManager } from './crawl-queue-manager';
-import { ConnectionManager } from './network-observer/connection-manager';
-import { truncate } from './utilities/truncate';
+import { Crawl } from './crawl.js';
+import pino from 'pino';
+import { CrawlQueueManager } from './crawl-queue-manager.js';
+import { ConnectionManager } from './network-observer/connection-manager.js';
+import { truncate } from './utilities/truncate.js';
 
 export class CrawlLogger {
 	private loggingTimer?: NodeJS.Timeout;
@@ -11,7 +11,7 @@ export class CrawlLogger {
 	constructor(
 		private connectionManager: ConnectionManager,
 		private crawlQueueManager: CrawlQueueManager,
-		private logger: P.Logger
+		private logger: pino.Logger
 	) {}
 
 	get crawl(): Crawl {

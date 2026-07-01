@@ -1,8 +1,8 @@
-import { Network } from '../network';
-import { QuorumSet } from '../quorum-set';
-import { StronglyConnectedComponentsFinder } from './strongly-connected-components-finder';
-import { NetworkTransitiveQuorumSetFinder } from './network-transitive-quorum-set-finder';
-import { Edge, isVertex, TrustGraph, Vertex } from './trust-graph';
+import { Network } from '../network.js';
+import { QuorumSet } from '../quorum-set.js';
+import { StronglyConnectedComponentsFinder } from './strongly-connected-components-finder.js';
+import { NetworkTransitiveQuorumSetFinder } from './network-transitive-quorum-set-finder.js';
+import { Edge, isVertex, TrustGraph, Vertex } from './trust-graph.js';
 
 export class TrustGraphBuilder {
 	/*

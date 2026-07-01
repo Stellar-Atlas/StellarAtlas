@@ -1,5 +1,5 @@
-import { Event, MultipleUpdatesEventData } from './Event';
-import { OrganizationId, PublicKey } from './EventSourceId';
+import { Event, MultipleUpdatesEventData } from './Event.js';
+import { OrganizationId, PublicKey } from './EventSourceId.js';
 
 export interface EventRepository {
 	findNodeEventsForXNetworkScans(

@@ -1,30 +1,35 @@
-import { Scanner } from '../../domain/scanner/Scanner';
+import { Scanner } from '../../domain/scanner/Scanner.js';
 import { interfaces } from 'inversify';
 import Container = interfaces.Container;
-import { HASValidator } from '../../domain/history-archive/HASValidator';
-import { CheckPointGenerator } from '../../domain/check-point/CheckPointGenerator';
-import { CheckPointFrequency } from '../../domain/check-point/CheckPointFrequency';
-import { TYPES } from './di-types';
-import { StandardCheckPointFrequency } from '../../domain/check-point/StandardCheckPointFrequency';
-import { CategoryScanner } from '../../domain/scanner/CategoryScanner';
-import { BucketScanner } from '../../domain/scanner/BucketScanner';
-import { RangeScanner } from '../../domain/scanner/RangeScanner';
-import { VerifyArchives } from '../../use-cases/verify-archives/VerifyArchives';
-import { ArchivePerformanceTester } from '../../domain/scanner/ArchivePerformanceTester';
-import { ScanSettingsFactory } from '../../domain/scan/ScanSettingsFactory';
-import { CategoryVerificationService } from '../../domain/scanner/CategoryVerificationService';
-import { Config } from '../config/Config';
-import { AxiosHttpService, HttpQueue, HttpService } from 'http-helper';
-import { ScanCoordinatorService } from '../../domain/scan/ScanCoordinatorService';
-import { RESTScanCoordinatorService } from '../services/RESTScanCoordinatorService';
-import { JobMonitor, LoggerJobMonitor, SentryJobMonitor } from 'job-monitor';
+import { HASValidator } from '../../domain/history-archive/HASValidator.js';
+import { CheckPointGenerator } from '../../domain/check-point/CheckPointGenerator.js';
+import type { CheckPointFrequency } from '../../domain/check-point/CheckPointFrequency.js';
+import { TYPES } from './di-types.js';
+import { StandardCheckPointFrequency } from '../../domain/check-point/StandardCheckPointFrequency.js';
+import { CategoryScanner } from '../../domain/scanner/CategoryScanner.js';
+import { BucketScanner } from '../../domain/scanner/BucketScanner.js';
+import { RangeScanner } from '../../domain/scanner/RangeScanner.js';
+import { VerifyArchives } from '../../use-cases/verify-archives/VerifyArchives.js';
+import { ArchivePerformanceTester } from '../../domain/scanner/ArchivePerformanceTester.js';
+import { ScanSettingsFactory } from '../../domain/scan/ScanSettingsFactory.js';
+import { CategoryVerificationService } from '../../domain/scanner/CategoryVerificationService.js';
+import { Config } from '../config/Config.js';
+import { AxiosHttpService, HttpQueue, type HttpService } from 'http-helper';
+import type { ScanCoordinatorService } from '../../domain/scan/ScanCoordinatorService.js';
+import { RESTScanCoordinatorService } from '../services/RESTScanCoordinatorService.js';
+import {
+	type JobMonitor,
+	LoggerJobMonitor,
+	SentryJobMonitor
+} from 'job-monitor';
 import {
 	ConsoleExceptionLogger,
-	ExceptionLogger,
 	SentryExceptionLogger
 } from 'exception-logger';
-import { Logger, PinoLogger } from 'logger';
-import { VerifySingleArchive } from '../../use-cases/verify-single-archive/VerifySingleArchive';
+import type { ExceptionLogger } from 'exception-logger';
+import { PinoLogger } from 'logger';
+import type { Logger } from 'logger';
+import { VerifySingleArchive } from '../../use-cases/verify-single-archive/VerifySingleArchive.js';
 
 export function load(container: Container, config: Config) {
 	container.bind(CategoryScanner).toSelf();

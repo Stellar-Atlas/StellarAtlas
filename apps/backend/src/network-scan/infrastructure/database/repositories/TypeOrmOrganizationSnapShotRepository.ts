@@ -1,13 +1,11 @@
 import { Equal, LessThanOrEqual, Repository } from 'typeorm';
-import OrganizationSnapShot from '../../../domain/organization/OrganizationSnapShot';
+import OrganizationSnapShot from '../../../domain/organization/OrganizationSnapShot.js';
 import { injectable } from 'inversify';
-import { OrganizationSnapShotRepository } from '../../../domain/organization/OrganizationSnapShotRepository';
-import { OrganizationId } from '../../../domain/organization/OrganizationId';
+import type { OrganizationSnapShotRepository } from '../../../domain/organization/OrganizationSnapShotRepository.js';
+import { OrganizationId } from '../../../domain/organization/OrganizationId.js';
 
 @injectable()
-export default class TypeOrmOrganizationSnapShotRepository
-	implements OrganizationSnapShotRepository
-{
+export default class TypeOrmOrganizationSnapShotRepository implements OrganizationSnapShotRepository {
 	constructor(private baseRepository: Repository<OrganizationSnapShot>) {}
 
 	async findLatestByOrganizationId(

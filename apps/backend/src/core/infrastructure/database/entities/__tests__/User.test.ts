@@ -1,4 +1,4 @@
-import { User } from '../User';
+import { User } from '../User.js';
 import { randomUUID } from 'crypto';
 import { validate } from 'class-validator';
 

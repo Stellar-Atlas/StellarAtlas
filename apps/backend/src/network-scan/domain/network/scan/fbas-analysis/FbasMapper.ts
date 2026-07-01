@@ -1,9 +1,9 @@
-import Node from '../../../node/Node';
-import Organization from '../../../organization/Organization';
+import Node from '../../../node/Node.js';
+import Organization from '../../../organization/Organization.js';
 import {
 	FbasAnalysisNode,
 	FbasAnalysisOrganization
-} from './FbasAnalyzerFacade';
+} from './FbasAnalyzerFacade.js';
 
 export class FbasMapper {
 	static mapToFbasAnalysisNode(node: Node): FbasAnalysisNode {

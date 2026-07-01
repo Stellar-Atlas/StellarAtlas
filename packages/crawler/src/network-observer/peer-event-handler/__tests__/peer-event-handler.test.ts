@@ -3,12 +3,12 @@ import {
 	ClosePayload,
 	ConnectedPayload,
 	DataPayload
-} from '../../connection-manager';
-import { OnPeerConnected } from '../on-peer-connected';
-import { OnPeerConnectionClosed } from '../on-peer-connection-closed';
-import { OnPeerData } from '../on-peer-data';
-import { PeerEventHandler } from '../peer-event-handler';
-import { Observation } from '../../observation';
+} from '../../connection-manager.js';
+import { OnPeerConnected } from '../on-peer-connected.js';
+import { OnPeerConnectionClosed } from '../on-peer-connection-closed.js';
+import { OnPeerData } from '../on-peer-data.js';
+import { PeerEventHandler } from '../peer-event-handler.js';
+import { Observation } from '../../observation.js';
 
 describe('PeerConnectionEventHandler', () => {
 	const onConnectedHandler = mock<OnPeerConnected>();

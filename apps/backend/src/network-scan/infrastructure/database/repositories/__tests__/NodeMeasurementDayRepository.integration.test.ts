@@ -1,13 +1,18 @@
 import { Container } from 'inversify';
-import Kernel from '../../../../../core/infrastructure/Kernel';
-import { ConfigMock } from '../../../../../core/config/__mocks__/configMock';
-import { NETWORK_TYPES } from '../../../di/di-types';
-import { NodeMeasurementDayRepository } from '../../../../domain/node/NodeMeasurementDayRepository';
-import NodeMeasurementDay from '../../../../domain/node/NodeMeasurementDay';
-import { createDummyNode } from '../../../../domain/node/__fixtures__/createDummyNode';
-import { NodeRepository } from '../../../../domain/node/NodeRepository';
-import NodeQuorumSet from '../../../../domain/node/NodeQuorumSet';
+import Kernel from '../../../../../core/infrastructure/Kernel.js';
+import { ConfigMock } from '../../../../../core/config/__mocks__/configMock.js';
+import { NETWORK_TYPES } from '../../../di/di-types.js';
+import type { NodeMeasurementDayRepository } from '../../../../domain/node/NodeMeasurementDayRepository.js';
+import NodeMeasurementDay from '../../../../domain/node/NodeMeasurementDay.js';
+import { createDummyNode } from '../../../../domain/node/__fixtures__/createDummyNode.js';
+import type { NodeRepository } from '../../../../domain/node/NodeRepository.js';
+import NodeQuorumSet from '../../../../domain/node/NodeQuorumSet.js';
 import { QuorumSet } from 'shared';
+import NetworkScan from '../../../../domain/network/scan/NetworkScan.js';
+import NetworkMeasurement from '../../../../domain/network/NetworkMeasurement.js';
+import type { NetworkScanRepository } from '../../../../domain/network/scan/NetworkScanRepository.js';
+import type { NodeMeasurementRepository } from '../../../../domain/node/NodeMeasurementRepository.js';
+import NodeMeasurement from '../../../../domain/node/NodeMeasurement.js';
 
 describe('test queries', () => {
 	let container: Container;
@@ -66,6 +71,28 @@ describe('test queries', () => {
 		expect(averages.length).toEqual(1);
 		expect(averages[0].validatingAvg).toEqual(100);
 		expect(averages[0].publicKey).toEqual(idA.publicKey.value);
+	});
+
+	test('findXDaysAverageAt normalizes mixed crawl density by day', async () => {
+		const node = createDummyNode();
+		await nodeRepository.save([node], new Date('12/12/2020'));
+		const sparseDay = new NodeMeasurementDay(node, '12/12/2020');
+		sparseDay.crawlCount = 1;
+		sparseDay.isOverloadedCount = 1;
+		const denseDay = new NodeMeasurementDay(node, '12/13/2020');
+		denseDay.crawlCount = 100;
+		denseDay.isOverloadedCount = 0;
+		await nodeMeasurementDayRepository.save([sparseDay, denseDay]);
+
+		const averages = await nodeMeasurementDayRepository.findXDaysAverageAt(
+			new Date('12/13/2020'),
+			2
+		);
+		const average = averages.find(
+			(candidate) => candidate.publicKey === node.publicKey.value
+		);
+
+		expect(average?.overLoadedAvg).toEqual(50);
 	});
 
 	test('findXDaysActiveButNotValidating', async () => {
@@ -148,5 +175,62 @@ describe('test queries', () => {
 
 		expect(publicKeys.length).toEqual(1);
 		expect(publicKeys[0].publicKey).toEqual(inActiveNode.publicKey.value);
+	});
+
+	test('rollup is idempotent for affected days', async () => {
+		const scanRepository = container.get<NetworkScanRepository>(
+			NETWORK_TYPES.NetworkScanRepository
+		);
+		const nodeMeasurementRepository = container.get<NodeMeasurementRepository>(
+			NETWORK_TYPES.NodeMeasurementRepository
+		);
+		const node = createDummyNode();
+		const scanTime1 = new Date(Date.UTC(2020, 0, 3, 0));
+		const scanTime2 = new Date(Date.UTC(2020, 0, 3, 1));
+		await nodeRepository.save([node], scanTime1);
+
+		const scan1 = new NetworkScan(scanTime1);
+		scan1.id = 1;
+		scan1.completed = true;
+		scan1.measurement = new NetworkMeasurement(scanTime1);
+		const measurement1 = new NodeMeasurement(scanTime1, node);
+		measurement1.isActive = true;
+		measurement1.isValidating = true;
+		measurement1.isFullValidator = true;
+		measurement1.index = 1;
+		await scanRepository.save([scan1]);
+		await nodeMeasurementRepository.save([measurement1]);
+
+		await nodeMeasurementDayRepository.rollup(1, 1);
+		let measurements = await nodeMeasurementDayRepository.findBetween(
+			node.publicKey,
+			scanTime1,
+			scanTime1
+		);
+		expect(measurements[0].crawlCount).toEqual(1);
+		expect(measurements[0].isActiveCount).toEqual(1);
+
+		const scan2 = new NetworkScan(scanTime2);
+		scan2.id = 2;
+		scan2.completed = true;
+		scan2.measurement = new NetworkMeasurement(scanTime2);
+		const measurement2 = new NodeMeasurement(scanTime2, node);
+		measurement2.isActive = false;
+		measurement2.isValidating = false;
+		measurement2.index = 2;
+		await scanRepository.save([scan2]);
+		await nodeMeasurementRepository.save([measurement2]);
+
+		await nodeMeasurementDayRepository.rollup(2, 2);
+		await nodeMeasurementDayRepository.rollup(2, 2);
+		measurements = await nodeMeasurementDayRepository.findBetween(
+			node.publicKey,
+			scanTime1,
+			scanTime1
+		);
+		expect(measurements[0].crawlCount).toEqual(2);
+		expect(measurements[0].isActiveCount).toEqual(1);
+		expect(measurements[0].isValidatingCount).toEqual(1);
+		expect(measurements[0].indexSum).toEqual(3);
 	});
 });

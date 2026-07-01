@@ -1,11 +1,11 @@
 import { err, ok, Result } from 'neverthrow';
-import { IUserService } from '../../../core/domain/IUserService';
+import type { IUserService } from '../../../core/domain/IUserService.js';
 import { queue } from 'async';
 import { inject, injectable } from 'inversify';
-import { CustomError } from '../../../core/errors/CustomError';
-import { Notification } from '../subscription/Notification';
-import { MessageCreator } from './MessageCreator';
-import { TYPES } from '../../infrastructure/di/di-types';
+import { CustomError } from '../../../core/errors/CustomError.js';
+import { Notification } from '../subscription/Notification.js';
+import type { MessageCreator } from './MessageCreator.js';
+import { TYPES } from '../../infrastructure/di/di-types.js';
 
 export interface NotificationFailure {
 	notification: Notification;
@@ -54,9 +54,8 @@ export class Notifier {
 	protected async sendSingleNotification(
 		notification: Notification
 	): Promise<Result<void, Error>> {
-		const message = await this.messageCreator.createNotificationMessage(
-			notification
-		);
+		const message =
+			await this.messageCreator.createNotificationMessage(notification);
 		const result = await this.userService.send(
 			notification.subscriber.userId,
 			message

@@ -1,5 +1,5 @@
-import Node from '../Node';
-import NodeMeasurement from '../NodeMeasurement';
+import Node from '../Node.js';
+import NodeMeasurement from '../NodeMeasurement.js';
 import { mock } from 'jest-mock-extended';
 
 describe('NodeMeasurement', () => {

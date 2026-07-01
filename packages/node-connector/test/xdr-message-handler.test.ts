@@ -1,4 +1,4 @@
-import { xdr } from '@stellar/stellar-base';
+import { xdr } from '@stellar/stellar-sdk';
 import { parseAuthenticatedMessageXDR } from '../src/connection/xdr-message-handler';
 
 test('parseAuthenticatedMessageXDR', () => {

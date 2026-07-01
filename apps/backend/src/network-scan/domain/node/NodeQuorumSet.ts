@@ -1,6 +1,6 @@
 import { Entity, Column, Index, ValueTransformer } from 'typeorm';
 import { QuorumSet as QuorumSetDTO } from 'shared';
-import { IdentifiedValueObject } from '../../../core/domain/IdentifiedValueObject';
+import { IdentifiedValueObject } from '../../../core/domain/IdentifiedValueObject.js';
 
 export const quorumSetTransformer: ValueTransformer = {
 	from: (dbValue) => {

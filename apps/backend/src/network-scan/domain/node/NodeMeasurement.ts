@@ -1,6 +1,6 @@
 import { Entity, Column, ManyToOne, PrimaryColumn } from 'typeorm';
-import { Measurement } from '../measurement/Measurement';
-import Node from './Node';
+import { Measurement } from '../measurement/Measurement.js';
+import type Node from './Node.js';
 
 @Entity({ name: 'node_measurement_v2' })
 export default class NodeMeasurement implements Measurement {
@@ -10,7 +10,7 @@ export default class NodeMeasurement implements Measurement {
 	@PrimaryColumn()
 	private nodeId?: string;
 
-	@ManyToOne(() => Node, {
+	@ManyToOne('Node', {
 		nullable: false,
 		eager: true
 	})

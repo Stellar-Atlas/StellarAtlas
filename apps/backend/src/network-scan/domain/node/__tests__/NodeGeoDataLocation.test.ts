@@ -1,6 +1,6 @@
 import NodeGeoDataLocation, {
 	NodeGeoDataLocationProps
-} from '../NodeGeoDataLocation';
+} from '../NodeGeoDataLocation.js';
 
 describe('NodeGeoDataLocation', () => {
 	it('should equal', function () {

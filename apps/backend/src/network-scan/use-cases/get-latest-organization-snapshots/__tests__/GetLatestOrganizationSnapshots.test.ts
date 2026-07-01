@@ -1,7 +1,7 @@
 import { mock } from 'jest-mock-extended';
-import { ExceptionLogger } from '../../../../core/services/ExceptionLogger';
-import { GetLatestOrganizationSnapshots } from '../GetLatestOrganizationSnapshots';
-import { OrganizationSnapShotRepository } from '../../../domain/organization/OrganizationSnapShotRepository';
+import type { ExceptionLogger } from '../../../../core/services/ExceptionLogger.js';
+import { GetLatestOrganizationSnapshots } from '../GetLatestOrganizationSnapshots.js';
+import type { OrganizationSnapShotRepository } from '../../../domain/organization/OrganizationSnapShotRepository.js';
 
 it('should capture and return errors', async function () {
 	const repo = mock<OrganizationSnapShotRepository>();
@@ -12,5 +12,5 @@ it('should capture and return errors', async function () {
 		at: new Date()
 	});
 	expect(result.isErr()).toBe(true);
-	expect(exceptionLogger.captureException).toBeCalledTimes(1);
+	expect(exceptionLogger.captureException).toHaveBeenCalledTimes(1);
 });

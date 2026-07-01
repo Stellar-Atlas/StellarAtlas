@@ -1,4 +1,4 @@
-import { OrganizationId } from '../OrganizationId';
+import { OrganizationId } from '../OrganizationId.js';
 
 it('should create organization id', function () {
 	const organizationIdOrError = OrganizationId.create('test');

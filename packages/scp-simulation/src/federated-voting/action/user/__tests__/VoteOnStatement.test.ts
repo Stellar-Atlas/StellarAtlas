@@ -1,4 +1,4 @@
-import { VoteOnStatement } from '../VoteOnStatement';
+import { VoteOnStatement } from '../VoteOnStatement.js';
 
 describe('VoteOnStatement', () => {
 	const nodeKey = 'node1';

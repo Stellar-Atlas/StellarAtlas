@@ -1,5 +1,5 @@
-import { Node } from '../node';
-import {containsSlice} from './containsSlice';
+import { Node } from '../node.js';
+import { containsSlice } from './containsSlice.js';
 
 /**
  * A quorum contains a quorum slice for every node in the quorum

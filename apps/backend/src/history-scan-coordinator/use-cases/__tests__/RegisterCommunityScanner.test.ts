@@ -1,5 +1,5 @@
-import { RegisterCommunityScanner } from '../RegisterCommunityScanner';
-import { CommunityScanner, ScannerStatus } from '../../infrastructure/database/entities/CommunityScanner';
+import { RegisterCommunityScanner } from '../RegisterCommunityScanner.js';
+import { CommunityScanner, ScannerStatus } from '../../infrastructure/database/entities/CommunityScanner.js';
 import { Repository } from 'typeorm';
 
 describe('RegisterCommunityScanner', () => {

@@ -1,4 +1,4 @@
-import { ScanJob } from './ScanJob';
+import { ScanJob } from './ScanJob.js';
 
 export interface ScanJobRepository {
 	hasPendingJobs: () => Promise<boolean>;
@@ -6,4 +6,5 @@ export interface ScanJobRepository {
 	fetchNextJob: () => Promise<ScanJob | null>;
 	findByRemoteId: (remoteId: string) => Promise<ScanJob | null>;
 	findUnfinishedJobs: (after: Date) => Promise<ScanJob[]>;
+	releaseStaleTakenJobs: (before: Date) => Promise<number>;
 }

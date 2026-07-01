@@ -1,9 +1,9 @@
 import { Writable } from 'stream';
-import { Category } from '../history-archive/Category';
-import { LedgerHeaderHistoryEntryResult } from './hash-worker';
+import { Category } from '../history-archive/Category.js';
+import { LedgerHeaderHistoryEntryResult } from './hash-worker.js';
 import { Url } from 'http-helper';
-import { CategoryVerificationData } from './CategoryScanner';
-import { HasherPool } from './HasherPool';
+import { CategoryVerificationData } from './CategoryScanner.js';
+import { HasherPool } from './HasherPool.js';
 
 export class CategoryXDRProcessor extends Writable {
 	constructor(
@@ -106,15 +106,6 @@ export class CategoryXDRProcessor extends Writable {
 			| 'processTransactionHistoryEntryXDR'
 			| 'processLedgerHeaderHistoryEntryXDR'
 	): Promise<Return> {
-		return new Promise((resolve, reject) => {
-			this.pool.workerpool
-				.exec(method, [data])
-				.then(function (map) {
-					resolve(map);
-				})
-				.catch(function (err) {
-					reject(err);
-				});
-		});
+		return (await this.pool.workerpool.exec(method, [data])) as Return;
 	}
 }

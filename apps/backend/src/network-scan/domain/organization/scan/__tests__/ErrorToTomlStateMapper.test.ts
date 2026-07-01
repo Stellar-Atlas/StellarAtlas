@@ -1,6 +1,6 @@
-import { ErrorToTomlStateMapper } from '../ErrorToTomlStateMapper';
-import { TomlParseError } from '../../../network/scan/TomlService';
-import { TomlState } from '../TomlState';
+import { ErrorToTomlStateMapper } from '../ErrorToTomlStateMapper.js';
+import { TomlParseError } from '../../../network/scan/TomlService.js';
+import { TomlState } from '../TomlState.js';
 import { HttpError, HttpResponse } from 'http-helper';
 
 describe('ErrorToTomlStateMapper', () => {

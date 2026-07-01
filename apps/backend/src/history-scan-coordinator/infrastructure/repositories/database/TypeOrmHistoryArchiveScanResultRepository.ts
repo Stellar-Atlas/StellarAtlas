@@ -1,12 +1,10 @@
-import { ScanRepository } from '../../../domain/scan/ScanRepository';
+import type { ScanRepository } from '../../../domain/scan/ScanRepository.js';
 import { Repository } from 'typeorm';
-import { Scan } from '../../../domain/scan/Scan';
+import { Scan } from '../../../domain/scan/Scan.js';
 import { injectable } from 'inversify';
 
 @injectable()
-export class TypeOrmHistoryArchiveScanResultRepository
-	implements ScanRepository
-{
+export class TypeOrmHistoryArchiveScanResultRepository implements ScanRepository {
 	constructor(private baseRepository: Repository<Scan>) {}
 
 	async save(scans: Scan[]): Promise<Scan[]> {

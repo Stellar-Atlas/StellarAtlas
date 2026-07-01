@@ -1,6 +1,6 @@
-import { PeerNode } from './peer-node';
+import { PeerNode } from './peer-node.js';
 import { NodeInfo } from 'node-connector';
-import { Ledger } from './crawler';
+import type { Ledger } from './crawler.js';
 
 type PublicKey = string;
 

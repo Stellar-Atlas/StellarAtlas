@@ -1,12 +1,12 @@
 import { TrustGraph } from 'shared';
 import { inject, injectable } from 'inversify';
-import { NETWORK_TYPES } from '../../../infrastructure/di/di-types';
-import { NodeMeasurementDayRepository } from '../NodeMeasurementDayRepository';
-import Node from '../Node';
-import { NodeScan } from '../scan/NodeScan';
-import { hasNoActiveTrustingNodes } from './hasNoActiveTrustingNodes';
+import { NETWORK_TYPES } from '../../../infrastructure/di/di-types.js';
+import type { NodeMeasurementDayRepository } from '../NodeMeasurementDayRepository.js';
+import Node from '../Node.js';
+import { NodeScan } from '../scan/NodeScan.js';
+import { hasNoActiveTrustingNodes } from './hasNoActiveTrustingNodes.js';
 import 'reflect-metadata';
-import { Logger } from '../../../../core/services/Logger';
+import type { Logger } from '../../../../core/services/Logger.js';
 
 @injectable()
 export class InactiveNodesArchiver {

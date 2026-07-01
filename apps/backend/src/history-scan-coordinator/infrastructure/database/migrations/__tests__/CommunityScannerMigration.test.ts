@@ -1,5 +1,5 @@
 import { DataSource } from 'typeorm';
-import { CommunityScannerMigration1742387934547 } from '../1742387934547-CommunityScannerMigration';
+import { CommunityScannerMigration1742387934547 } from '../1742387934547-CommunityScannerMigration.js';
 
 describe('CommunityScannerMigration1742387934547', () => {
   let dataSource: DataSource;

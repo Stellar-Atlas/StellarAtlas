@@ -1,4 +1,4 @@
-import { Keypair, xdr } from '@stellar/stellar-base';
+import { Keypair, xdr } from '@stellar/stellar-sdk';
 
 export function createDummyQuorumSetMessage(): xdr.StellarMessage {
 	const keypair1 = Keypair.random();

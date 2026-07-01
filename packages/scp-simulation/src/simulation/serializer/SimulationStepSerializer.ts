@@ -1,15 +1,19 @@
-import { Event, ProtocolAction, UserAction } from '../../core';
+import { Event, ProtocolAction, UserAction } from '../../core/index.js';
 import {
 	AddNode,
 	Broadcast,
 	RemoveNode,
 	UpdateQuorumSet,
 	VoteOnStatement
-} from '../../federated-voting';
-import { ForgeMessage } from '../../federated-voting';
-import { ReceiveMessage } from '../../federated-voting/action/protocol/ReceiveMessage';
-import { AddConnection, Gossip, RemoveConnection } from '../../overlay';
-import { SimulationStep } from '../Simulation';
+} from '../../federated-voting/index.js';
+import { ForgeMessage } from '../../federated-voting/index.js';
+import { ReceiveMessage } from '../../federated-voting/action/protocol/ReceiveMessage.js';
+import {
+	AddConnection,
+	Gossip,
+	RemoveConnection
+} from '../../overlay/index.js';
+import { SimulationStep } from '../Simulation.js';
 
 export interface SerializedSimulationStep {
 	userActions: any[];

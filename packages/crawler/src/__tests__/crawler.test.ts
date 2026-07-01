@@ -1,25 +1,25 @@
-import { Crawler } from '../index';
-import { createDummyCrawlerConfiguration } from '../__fixtures__/createDummyCrawlerConfiguration';
-import { CrawlQueueManager } from '../crawl-queue-manager';
-import { MaxCrawlTimeManager } from '../max-crawl-time-manager';
-import { P } from 'pino';
+import { Crawler } from '../index.js';
+import { createDummyCrawlerConfiguration } from '../__fixtures__/createDummyCrawlerConfiguration.js';
+import { CrawlQueueManager } from '../crawl-queue-manager.js';
+import { MaxCrawlTimeManager } from '../max-crawl-time-manager.js';
+import pino from 'pino';
 import { mock, MockProxy } from 'jest-mock-extended';
 import { QuorumSet } from 'shared';
-import { CrawlLogger } from '../crawl-logger';
-import { CrawlProcessState } from '../crawl';
+import { CrawlLogger } from '../crawl-logger.js';
+import { CrawlProcessState } from '../crawl.js';
 import { EventEmitter } from 'events';
-import { AsyncCrawlQueue } from '../crawl-queue';
-import { NetworkObserver } from '../network-observer/network-observer';
-import { ClosePayload } from '../network-observer/connection-manager';
-import { ObservationFactory } from '../network-observer/observation-factory';
-import { CrawlFactory } from '../crawl-factory';
-import { Observation } from '../network-observer/observation';
+import { AsyncCrawlQueue } from '../crawl-queue.js';
+import { NetworkObserver } from '../network-observer/network-observer.js';
+import { ClosePayload } from '../network-observer/connection-manager.js';
+import { ObservationFactory } from '../network-observer/observation-factory.js';
+import { CrawlFactory } from '../crawl-factory.js';
+import { Observation } from '../network-observer/observation.js';
 
 describe('Crawler', () => {
 	const crawlFactory = new CrawlFactory(
 		new ObservationFactory(),
 		'test',
-		mock<P.Logger>()
+		mock<pino.Logger>()
 	);
 	beforeEach(() => {
 		jest.clearAllMocks();
@@ -28,12 +28,12 @@ describe('Crawler', () => {
 	function setupSUT() {
 		const crawlQueueManager = new CrawlQueueManager(
 			new AsyncCrawlQueue(1),
-			mock<P.Logger>()
+			mock<pino.Logger>()
 		);
 		const maxCrawlTimeManager = mock<MaxCrawlTimeManager>();
 		const networkObserver = mock<NetworkObserver>();
 		const crawlLogger = mock<CrawlLogger>();
-		const logger = mock<P.Logger>();
+		const logger = mock<pino.Logger>();
 		logger.child.mockReturnValue(logger as any);
 		const networkObserverEventEmitter = new EventEmitter();
 

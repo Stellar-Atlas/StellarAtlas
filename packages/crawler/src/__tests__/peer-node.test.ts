@@ -1,4 +1,4 @@
-import { PeerNode } from '../peer-node';
+import { PeerNode } from '../peer-node.js';
 
 describe('PeerNode', () => {
 	it('should have a key', () => {

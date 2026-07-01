@@ -1,5 +1,5 @@
-import { Context } from './Context';
-import { ProtocolAction } from './ProtocolAction';
+import { Context } from './Context.js';
+import { ProtocolAction } from './ProtocolAction.js';
 
 //An action initiated by the user. For example 'vote' in the context of federated voting.
 export abstract class UserAction {

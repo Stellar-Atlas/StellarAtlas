@@ -2,15 +2,15 @@ import 'reflect-metadata';
 import { err, ok, Result } from 'neverthrow';
 import { Crawler } from 'crawler';
 import { PeerNode } from 'crawler';
-import { CrawlResult as CrawlResultDTO } from 'crawler';
-import { Ledger } from 'crawler';
-import { NetworkQuorumSetConfiguration } from '../../../network/NetworkQuorumSetConfiguration';
-import { CrawlerDTOMapper } from './CrawlerDTOMapper';
-import Node from '../../Node';
-import { NodeAddress } from '../../NodeAddress';
-import { NodeAddressDTOComposer } from './NodeAddressDTOComposer';
-import { mapUnknownToError } from '../../../../../core/utilities/mapUnknownToError';
-import { NetworkQuorumSetConfigurationMapper } from '../../../network/NetworkQuorumSetConfigurationMapper';
+import type { CrawlResult as CrawlResultDTO } from 'crawler';
+import type { Ledger } from 'crawler';
+import { NetworkQuorumSetConfiguration } from '../../../network/NetworkQuorumSetConfiguration.js';
+import { CrawlerDTOMapper } from './CrawlerDTOMapper.js';
+import Node from '../../Node.js';
+import type { NodeAddress } from '../../NodeAddress.js';
+import { NodeAddressDTOComposer } from './NodeAddressDTOComposer.js';
+import { mapUnknownToError } from '../../../../../core/utilities/mapUnknownToError.js';
+import { NetworkQuorumSetConfigurationMapper } from '../../../network/NetworkQuorumSetConfigurationMapper.js';
 import { QuorumSet } from 'shared';
 import { CrawlFactory } from 'crawler';
 import { injectable } from 'inversify';
@@ -23,7 +23,10 @@ export interface CrawlResult {
 
 @injectable()
 export class CrawlerService {
-	constructor(private crawler: Crawler, private crawlFactory: CrawlFactory) {}
+	constructor(
+		private crawler: Crawler,
+		private crawlFactory: CrawlFactory
+	) {}
 
 	async crawl(
 		networkQuorumSet: NetworkQuorumSetConfiguration,

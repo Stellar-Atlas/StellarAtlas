@@ -1,7 +1,7 @@
-module.exports = {
+export default {
   arrowParens: "always",
+  bracketSameLine: false,
   bracketSpacing: true,
-  jsxBracketSameLine: false,
   printWidth: 80,
   proseWrap: "always",
   semi: true,

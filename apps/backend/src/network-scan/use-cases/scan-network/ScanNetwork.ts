@@ -1,28 +1,28 @@
 import { err, ok, Result } from 'neverthrow';
 import { inject, injectable } from 'inversify';
-import { HeartBeater } from '../../../core/services/HeartBeater';
-import { ExceptionLogger } from '../../../core/services/ExceptionLogger';
-import { Logger } from '../../../core/services/Logger';
-import { Archiver } from '../../domain/network/scan/archiver/Archiver';
-import { Notify } from '../../../notifications/use-cases/determine-events-and-notify-subscribers/Notify';
-import { NETWORK_TYPES } from '../../infrastructure/di/di-types';
-import { NetworkConfig } from '../../../core/config/Config';
-import { ScanNetworkDTO } from './ScanNetworkDTO';
-import { UpdateNetwork } from '../update-network/UpdateNetwork';
-import { UpdateNetworkDTO } from '../update-network/UpdateNetworkDTO';
-import { NetworkRepository } from '../../domain/network/NetworkRepository';
-import { NetworkId } from '../../domain/network/NetworkId';
-import { NodeMeasurementDayRepository } from '../../domain/node/NodeMeasurementDayRepository';
-import { Scanner, ScanResult } from '../../domain/Scanner';
-import { ScanRepository } from '../../domain/ScanRepository';
-import { NodeAddress } from '../../domain/node/NodeAddress';
-import { InvalidKnownPeersError } from './InvalidKnownPeersError';
-import { Network } from '../../domain/network/Network';
-import { NodeMeasurementAverage } from '../../domain/node/NodeMeasurementAverage';
-import { mapUnknownToError } from '../../../core/utilities/mapUnknownToError';
-import { NodeAddressMapper } from './NodeAddressMapper';
-import { CORE_TYPES } from '../../../core/infrastructure/di/di-types';
-import { JobMonitor } from 'job-monitor';
+import type { HeartBeater } from '../../../core/services/HeartBeater.js';
+import type { ExceptionLogger } from '../../../core/services/ExceptionLogger.js';
+import type { Logger } from '../../../core/services/Logger.js';
+import type { Archiver } from '../../domain/network/scan/archiver/Archiver.js';
+import { Notify } from '../../../notifications/use-cases/determine-events-and-notify-subscribers/Notify.js';
+import { NETWORK_TYPES } from '../../infrastructure/di/di-types.js';
+import type { NetworkConfig } from '../../../core/config/Config.js';
+import { ScanNetworkDTO } from './ScanNetworkDTO.js';
+import { UpdateNetwork } from '../update-network/UpdateNetwork.js';
+import { UpdateNetworkDTO } from '../update-network/UpdateNetworkDTO.js';
+import type { NetworkRepository } from '../../domain/network/NetworkRepository.js';
+import { NetworkId } from '../../domain/network/NetworkId.js';
+import type { NodeMeasurementDayRepository } from '../../domain/node/NodeMeasurementDayRepository.js';
+import { Scanner, ScanResult } from '../../domain/Scanner.js';
+import { ScanRepository } from '../../domain/ScanRepository.js';
+import type { NodeAddress } from '../../domain/node/NodeAddress.js';
+import { InvalidKnownPeersError } from './InvalidKnownPeersError.js';
+import { Network } from '../../domain/network/Network.js';
+import { NodeMeasurementAverage } from '../../domain/node/NodeMeasurementAverage.js';
+import { mapUnknownToError } from '../../../core/utilities/mapUnknownToError.js';
+import { NodeAddressMapper } from './NodeAddressMapper.js';
+import { CORE_TYPES } from '../../../core/infrastructure/di/di-types.js';
+import type { JobMonitor } from 'job-monitor';
 
 interface ShutDownRequest {
 	callback: () => void;
@@ -35,15 +35,19 @@ export class ScanNetwork {
 	constructor(
 		@inject(NETWORK_TYPES.NetworkConfig)
 		private networkConfig: NetworkConfig,
+		@inject(UpdateNetwork)
 		private updateNetworkUseCase: UpdateNetwork,
 		@inject(NETWORK_TYPES.NetworkRepository)
 		private networkRepository: NetworkRepository,
 		@inject(NETWORK_TYPES.NodeMeasurementDayRepository)
 		protected nodeMeasurementDayRepository: NodeMeasurementDayRepository,
+		@inject(ScanRepository)
 		private scanRepository: ScanRepository,
+		@inject(Scanner)
 		protected scanner: Scanner,
 		@inject('JSONArchiver') protected jsonArchiver: Archiver,
 		@inject('HeartBeater') protected heartBeater: HeartBeater,
+		@inject(Notify)
 		protected notify: Notify,
 		@inject('ExceptionLogger') protected exceptionLogger: ExceptionLogger,
 		@inject('Logger') protected logger: Logger,

@@ -191,18 +191,24 @@ function updateGraph(merge = false) {
 }
 
 function buildNodeViewGraph(allNodes: Node[], merge: boolean) {
-  let nodes: Node[] = [];
-  if (store.selectedNode && optionFilterTrustCluster.value) {
-    nodes = Array.from(
-      TrustClusterFinder.find(
-        [store.selectedNode],
-        new Map(allNodes.map((node) => [node.publicKey, node.quorumSet])),
-      ),
-    ).map((node) => store.network.getNodeByPublicKey(node));
-  } else {
-    nodes = allNodes;
-  }
+  const nodes =
+    store.selectedNode && optionFilterTrustCluster.value
+      ? Array.from(
+          TrustClusterFinder.find(
+            [store.selectedNode],
+            new Map(allNodes.map((node) => [node.publicKey, node.quorumSet])),
+          ),
+        ).map((node) => store.network.getNodeByPublicKey(node))
+      : allNodes;
+
   const trustGraph = NodeTrustGraphBuilder.build(nodes);
+  const nodeGroups = new Map<string, string>();
+  store.network.organizations.forEach((organization) => {
+    organization.validators.forEach((publicKey) => {
+      nodeGroups.set(publicKey, organization.id);
+    });
+  });
+
   viewGraph.value = ViewGraph.fromNodes(
     trustGraph,
     merge ? viewGraph.value : undefined,
@@ -212,32 +218,32 @@ function buildNodeViewGraph(allNodes: Node[], merge: boolean) {
         .filter((node) => store.network.isNodeFailing(node))
         .map((node) => node.publicKey),
     ),
+    nodeGroups,
   );
 }
 
 function buildOrganizationViewGraph(allNodes: Node[], merge: boolean) {
-  let organizations: Organization[] = [];
-  if (store.selectedOrganization && optionFilterTrustCluster.value) {
-    organizations = Array.from(
-      new Set(
-        Array.from(
-          TrustClusterFinder.find(
-            store.selectedOrganization.validators.map((publicKey) =>
-              store.network.getNodeByPublicKey(publicKey),
-            ),
-            new Map(allNodes.map((node) => [node.publicKey, node.quorumSet])),
+  const organizations =
+    store.selectedOrganization && optionFilterTrustCluster.value
+      ? Array.from(
+          new Set(
+            Array.from(
+              TrustClusterFinder.find(
+                store.selectedOrganization.validators.map((publicKey) =>
+                  store.network.getNodeByPublicKey(publicKey),
+                ),
+                new Map(allNodes.map((node) => [node.publicKey, node.quorumSet])),
+              ),
+            )
+              .map((node) => store.network.getNodeByPublicKey(node).organizationId)
+              .filter((organizationId): organizationId is string => organizationId !== null)
+              .map((organizationId) =>
+                store.network.getOrganizationById(organizationId),
+              ),
           ),
         )
-          .map((node) => store.network.getNodeByPublicKey(node).organizationId)
-          .filter((organizationId) => organizationId !== null)
-          .map((organizationId) =>
-            store.network.getOrganizationById(organizationId!),
-          ),
-      ),
-    );
-  } else {
-    organizations = store.network.organizations;
-  }
+      : store.network.organizations;
+
   const trustGraph = OrganizationTrustGraphBuilder.build(
     organizations,
     store.network.organizations,

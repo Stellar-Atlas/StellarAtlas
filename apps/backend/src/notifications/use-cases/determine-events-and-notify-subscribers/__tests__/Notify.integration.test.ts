@@ -1,26 +1,26 @@
 import { Container } from 'inversify';
-import Kernel from '../../../../core/infrastructure/Kernel';
-import { ConfigMock } from '../../../../core/config/__mocks__/configMock';
-import { Notify } from '../Notify';
-import { NotifyDTO } from '../NotifyDTO';
-import { NoNetworkError, NoPreviousNetworkError } from '../NotifyError';
+import Kernel from '../../../../core/infrastructure/Kernel.js';
+import { ConfigMock } from '../../../../core/config/__mocks__/configMock.js';
+import { Notify } from '../Notify.js';
+import { NotifyDTO } from '../NotifyDTO.js';
+import { NoNetworkError, NoPreviousNetworkError } from '../NotifyError.js';
 import { NetworkV1, NodeV1 } from 'shared';
-import { SubscriberRepository } from '../../../domain/subscription/SubscriberRepository';
-import { NetworkId } from '../../../domain/event/EventSourceId';
-import { EventNotificationState } from '../../../domain/subscription/EventNotificationState';
+import type { SubscriberRepository } from '../../../domain/subscription/SubscriberRepository.js';
+import { NetworkId } from '../../../domain/event/EventSourceId.js';
+import { EventNotificationState } from '../../../domain/subscription/EventNotificationState.js';
 import {
 	EventType,
 	NetworkLossOfLivenessEvent
-} from '../../../domain/event/Event';
-import { createDummySubscriber } from '../../../domain/subscription/__fixtures__/Subscriber.fixtures';
-import { createDummyPendingSubscriptionId } from '../../../domain/subscription/__fixtures__/PendingSubscriptionId.fixtures';
-import { UserService } from '../../../../core/services/UserService';
+} from '../../../domain/event/Event.js';
+import { createDummySubscriber } from '../../../domain/subscription/__fixtures__/Subscriber.fixtures.js';
+import { createDummyPendingSubscriptionId } from '../../../domain/subscription/__fixtures__/PendingSubscriptionId.fixtures.js';
+import { UserService } from '../../../../core/services/UserService.js';
 import { ok } from 'neverthrow';
-import { NetworkDTOService } from '../../../../network-scan/services/NetworkDTOService';
+import { NetworkDTOService } from '../../../../network-scan/services/NetworkDTOService.js';
 import { mock } from 'jest-mock-extended';
-import { EventDetector } from '../../../domain/event/EventDetector';
-import { createDummyNodeV1 } from '../../../../network-scan/services/__fixtures__/createDummyNodeV1';
-import { createDummyNetworkV1 } from '../../../../network-scan/services/__fixtures__/createDummyNetworkV1';
+import { EventDetector } from '../../../domain/event/EventDetector.js';
+import { createDummyNodeV1 } from '../../../../network-scan/services/__fixtures__/createDummyNodeV1.js';
+import { createDummyNetworkV1 } from '../../../../network-scan/services/__fixtures__/createDummyNetworkV1.js';
 import { DataSource } from 'typeorm';
 
 let container: Container;
@@ -122,7 +122,7 @@ it('should notify when a subscribed event occurs', async function () {
 
 	const result = await container.get(Notify).execute(notifyDTO);
 	expect(result.isOk()).toBeTruthy();
-	expect(userService.send).toBeCalled();
+	expect(userService.send).toHaveBeenCalled();
 
 	const eventStateRepo = container
 		.get(DataSource)

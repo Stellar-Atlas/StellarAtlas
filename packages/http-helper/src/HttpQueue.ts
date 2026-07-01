@@ -1,17 +1,17 @@
-import { Url } from './Url';
+import { Url } from './Url.js';
 import { eachLimit } from 'async';
-import { Logger } from 'logger';
+import type { Logger } from 'logger';
 import { err, ok, Result } from 'neverthrow';
 import { CustomError } from 'custom-error';
-import { asyncSleep } from './asyncSleep';
+import { asyncSleep } from './asyncSleep.js';
 import { setMaxListeners } from 'events';
 
 import {
 	HttpError,
-	HttpOptions,
-	HttpResponse,
-	HttpService
-} from './HttpService';
+	type HttpOptions,
+	type HttpResponse,
+	type HttpService
+} from './HttpService.js';
 import { instanceOfError } from 'shared';
 
 export interface HttpQueueOptions {

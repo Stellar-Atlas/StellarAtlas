@@ -1,14 +1,14 @@
-import { Snapshot } from '../../../core/domain/Snapshot';
+import { Snapshot } from '../../../core/domain/Snapshot.js';
 import { Column, Entity, ManyToOne } from 'typeorm';
-import { Network } from './Network';
-import { OverlayVersionRange } from './OverlayVersionRange';
-import { StellarCoreVersion } from './StellarCoreVersion';
-import { NetworkQuorumSetConfiguration } from './NetworkQuorumSetConfiguration';
+import type { Network } from './Network.js';
+import { OverlayVersionRange } from './OverlayVersionRange.js';
+import { StellarCoreVersion } from './StellarCoreVersion.js';
+import { NetworkQuorumSetConfiguration } from './NetworkQuorumSetConfiguration.js';
 import { plainToInstance } from 'class-transformer';
 
 @Entity()
 export class NetworkSnapshot extends Snapshot {
-	@ManyToOne(() => Network, {
+	@ManyToOne('Network', {
 		nullable: false,
 		cascade: false
 	})

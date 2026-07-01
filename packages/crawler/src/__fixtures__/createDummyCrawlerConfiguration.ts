@@ -1,4 +1,4 @@
-import { CrawlerConfiguration } from '../crawler-configuration';
+import { CrawlerConfiguration } from '../crawler-configuration.js';
 import { NodeConfig } from 'node-connector';
 
 export function createDummyCrawlerConfiguration(): CrawlerConfiguration {

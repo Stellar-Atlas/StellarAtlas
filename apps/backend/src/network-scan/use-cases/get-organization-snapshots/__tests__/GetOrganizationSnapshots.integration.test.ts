@@ -1,6 +1,6 @@
-import Kernel from '../../../../core/infrastructure/Kernel';
-import { ConfigMock } from '../../../../core/config/__mocks__/configMock';
-import { GetOrganizationSnapshots } from '../GetOrganizationSnapshots';
+import Kernel from '../../../../core/infrastructure/Kernel.js';
+import { ConfigMock } from '../../../../core/config/__mocks__/configMock.js';
+import { GetOrganizationSnapshots } from '../GetOrganizationSnapshots.js';
 
 let kernel: Kernel;
 jest.setTimeout(60000); //slow integration tests

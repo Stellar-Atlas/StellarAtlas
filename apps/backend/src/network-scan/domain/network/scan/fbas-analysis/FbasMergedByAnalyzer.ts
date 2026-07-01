@@ -2,11 +2,11 @@ import FbasAnalyzerFacade, {
 	FbasAnalysisNode,
 	FbasAnalysisOrganization,
 	MergeBy
-} from './FbasAnalyzerFacade';
+} from './FbasAnalyzerFacade.js';
 import { err, ok, Result } from 'neverthrow';
-import { AnalysisMergedResult } from './AnalysisMergedResult';
+import { AnalysisMergedResult } from './AnalysisMergedResult.js';
 import { inject, injectable } from 'inversify';
-import { Logger } from '../../../../../core/services/Logger';
+import type { Logger } from '../../../../../core/services/Logger.js';
 
 //Perform all analysis on the FBAS merged by country, organization or...
 @injectable()

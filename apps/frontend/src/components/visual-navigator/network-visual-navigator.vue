@@ -1,11 +1,10 @@
 <template>
   <div
-    class="card"
+    class="card network-visual-navigator"
     :class="{
       'card-fullscreen': fullScreen,
       'sb-card-fullscreen': fullScreen,
     }"
-    style="height: 600px"
   >
     <div v-show="menuVisible" class="menu border-right p-3">
       <div
@@ -292,7 +291,7 @@ const optionFilterTrustCluster = ref(false);
 
 const menuVisible = ref(false);
 const fullScreen = ref(false);
-const zoomEnabled = ref(false);
+const zoomEnabled = ref(true);
 
 const breadCrumbs = computed(() => {
   const crumbs: {
@@ -380,6 +379,18 @@ function navigateToView() {
 .sb-card-fullscreen {
   z-index: 4;
   height: 100% !important;
+}
+
+.network-visual-navigator {
+  height: min(88vh, 1040px);
+  min-height: 760px;
+}
+
+@media (max-width: 768px) {
+  .network-visual-navigator {
+    height: 78vh;
+    min-height: 600px;
+  }
 }
 
 .collapse-icon {

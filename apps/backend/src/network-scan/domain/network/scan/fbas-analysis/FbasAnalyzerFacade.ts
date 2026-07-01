@@ -1,8 +1,8 @@
 import { injectable } from 'inversify';
-import * as stellar_analysis from '@stellarbeat/stellar_analysis_nodejs/stellar_analysis';
+import * as stellar_analysis from '@stellarbeat/stellar_analysis_nodejs/stellar_analysis.js';
 import { err, ok, Result } from 'neverthrow';
 import 'reflect-metadata';
-import { mapUnknownToError } from '../../../../../core/utilities/mapUnknownToError';
+import { mapUnknownToError } from '../../../../../core/utilities/mapUnknownToError.js';
 
 interface TopTierAnalysis {
 	top_tier: string[];

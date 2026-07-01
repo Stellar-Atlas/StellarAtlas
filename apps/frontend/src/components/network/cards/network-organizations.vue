@@ -32,7 +32,7 @@
 </template>
 <script setup lang="ts">
 import { Organization } from "shared";
-import { BBadge, BIconSearch } from "bootstrap-vue";
+import { BBadge, BIconSearch, type BvTableFieldArray } from "bootstrap-vue";
 import OrganizationsTable from "@/components/organization/organizations-table.vue";
 import useStore from "@/store/useStore";
 import { computed, ref } from "vue";
@@ -41,7 +41,9 @@ const network = store.network;
 const filter = ref("");
 
 const fields = computed(() => {
-  const fields = [{ key: "name", label: "Organization", sortable: true }];
+  const fields: BvTableFieldArray = [
+    { key: "name", label: "Organization", sortable: true },
+  ];
 
   if (!store.isSimulation && store.networkContext.enableHistory) {
     fields.push({
@@ -55,7 +57,6 @@ const fields = computed(() => {
     key: "action",
     label: "",
     sortable: false,
-    //@ts-ignore
     tdClass: "action",
   });
 
@@ -84,7 +85,9 @@ const organizations = computed(() => {
       failAt: getFailAt(organization),
       dangers: store.getOrganizationFailingReason(organization),
       blocked: network.isOrganizationBlocked(organization),
-      subQuorum30DAvailability: organization.subQuorum30DaysAvailability + "%",
+      subQuorum30DAvailability: organization.has30DayStats
+        ? organization.subQuorum30DaysAvailability + "%"
+        : "NA",
       hasReliableUptime: organization.hasReliableUptime,
     };
   });

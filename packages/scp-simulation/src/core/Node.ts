@@ -1,4 +1,4 @@
-import { QuorumSet } from './QuorumSet';
+import { QuorumSet } from './QuorumSet.js';
 
 export class Node {
 	private _quorumSet: QuorumSet;

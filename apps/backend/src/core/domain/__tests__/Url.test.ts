@@ -1,4 +1,4 @@
-import { Url } from '../Url';
+import { Url } from '../Url.js';
 
 it('should create a valid url object', function () {
 	const urlString = 'https://my-url.com/455';

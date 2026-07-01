@@ -1,6 +1,6 @@
-import { CheckPointGenerator } from '../../check-point/CheckPointGenerator';
-import { StandardCheckPointFrequency } from '../../check-point/StandardCheckPointFrequency';
-import { HASValidator } from '../../history-archive/HASValidator';
+import { CheckPointGenerator } from '../../check-point/CheckPointGenerator.js';
+import { StandardCheckPointFrequency } from '../../check-point/StandardCheckPointFrequency.js';
+import { HASValidator } from '../../history-archive/HASValidator.js';
 import { mock } from 'jest-mock-extended';
 import {
 	FileNotFoundError,
@@ -12,19 +12,21 @@ import {
 import { err, ok, Result } from 'neverthrow';
 import * as http from 'http';
 import * as https from 'https';
-import { createDummyHistoryBaseUrl } from '../../history-archive/__fixtures__/HistoryBaseUrl';
-import { CategoryScanner } from '../CategoryScanner';
+import { createDummyHistoryBaseUrl } from '../../history-archive/__fixtures__/HistoryBaseUrl.js';
+import { CategoryScanner } from '../CategoryScanner.js';
 import * as path from 'path';
 import * as fs from 'fs';
-import { Category } from '../../history-archive/Category';
-import { LedgerHeader } from '../Scanner';
-import { ScanError } from '../../scan/ScanError';
-import { CategoryVerificationService } from '../CategoryVerificationService';
-import { Logger } from 'logger';
+import { Category } from '../../history-archive/Category.js';
+import { LedgerHeader } from '../Scanner.js';
+import { ScanError } from '../../scan/ScanError.js';
+import { CategoryVerificationService } from '../CategoryVerificationService.js';
+import type { Logger } from 'logger';
+import { fileURLToPath } from 'node:url';
 
 jest.setTimeout(30000);
 
 const loggerMock = mock<Logger>();
+const currentDir = path.dirname(fileURLToPath(import.meta.url));
 
 describe('scan HAS files', () => {
 	it('should extract bucket hashes', async function () {
@@ -150,7 +152,7 @@ it('should find latest ledger', async function () {
 		): Promise<Result<void, QueueError>> => {
 			if (!resultHandler) throw new Error('No result handler');
 			const file = path.join(
-				__dirname,
+				currentDir,
 				'../__fixtures__/',
 				'stellar-history.json'
 			);
@@ -207,7 +209,7 @@ function getMockedCategoryScanner(testEmptyFile: boolean) {
 
 				if (testEmptyFile) fileName += '_empty';
 				fileName += '.xdr.gz';
-				return path.join(__dirname, '../__fixtures__/', fileName);
+				return path.join(currentDir, '../__fixtures__/', fileName);
 			};
 
 			for await (const request of requests) {

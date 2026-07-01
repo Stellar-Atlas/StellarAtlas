@@ -1,9 +1,10 @@
-export { Node } from './Node';
-export { QuorumSet } from './QuorumSet';
-export { Event } from './Event';
-export { UserAction } from './UserAction';
-export { ProtocolAction } from './ProtocolAction';
-export { Context } from './Context';
-export { InMemoryEventCollector, EventCollector } from './EventCollector';
+export { Node } from './Node.js';
+export { QuorumSet } from './QuorumSet.js';
+export type { Event } from './Event.js';
+export { UserAction } from './UserAction.js';
+export { ProtocolAction } from './ProtocolAction.js';
+export type { Context } from './Context.js';
+export { InMemoryEventCollector } from './EventCollector.js';
+export type { EventCollector } from './EventCollector.js';
 
 export type PublicKey = string;

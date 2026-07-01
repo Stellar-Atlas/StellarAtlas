@@ -1,5 +1,4 @@
-import { getConfigFromEnv } from '../Config';
-import { err } from 'neverthrow';
+import { getConfigFromEnv } from '../Config.js';
 
 describe('SMTP Configuration', () => {
 	const originalEnv = process.env;

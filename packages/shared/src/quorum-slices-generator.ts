@@ -1,4 +1,4 @@
-import { QuorumSet } from './index';
+import { QuorumSet } from './index.js';
 
 export class QuorumSlicesGenerator {
 	getSlices(quorumSet: QuorumSet): string[][] {
@@ -15,14 +15,13 @@ export class QuorumSlicesGenerator {
 
 		return this.getCombinationsOfSizeK(
 			quorumSet.threshold,
-			([] as (string|QuorumSet)[]).concat(quorumSet.validators).concat(quorumSet.innerQuorumSets)
+			([] as (string | QuorumSet)[])
+				.concat(quorumSet.validators)
+				.concat(quorumSet.innerQuorumSets)
 		);
 	}
 
-	getCombinationsOfSizeK(
-		k: number,
-		nodesOrQSets: (string|QuorumSet)[]
-	) {
+	getCombinationsOfSizeK(k: number, nodesOrQSets: (string | QuorumSet)[]) {
 		const combinations: string[][] = [];
 		for (let i = 0; i < nodesOrQSets.length; i++) {
 			let prefixes: string[][] = [];

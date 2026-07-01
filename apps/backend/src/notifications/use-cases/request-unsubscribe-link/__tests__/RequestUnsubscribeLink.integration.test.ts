@@ -1,13 +1,13 @@
 import { decorate, injectable } from 'inversify';
-import Kernel from '../../../../core/infrastructure/Kernel';
-import { ConfigMock } from '../../../../core/config/__mocks__/configMock';
+import Kernel from '../../../../core/infrastructure/Kernel.js';
+import { ConfigMock } from '../../../../core/config/__mocks__/configMock.js';
 import { NodeV1 } from 'shared';
-import { SubscriberRepository } from '../../../domain/subscription/SubscriberRepository';
-import { RequestUnsubscribeLinkDTO } from '../RequestUnsubscribeLinkDTO';
-import { RequestUnsubscribeLink } from '../RequestUnsubscribeLink';
+import type { SubscriberRepository } from '../../../domain/subscription/SubscriberRepository.js';
+import { RequestUnsubscribeLinkDTO } from '../RequestUnsubscribeLinkDTO.js';
+import { RequestUnsubscribeLink } from '../RequestUnsubscribeLink.js';
 import { ok } from 'neverthrow';
-import { createDummySubscriber } from '../../../domain/subscription/__fixtures__/Subscriber.fixtures';
-import { UserService } from '../../../../core/services/UserService';
+import { createDummySubscriber } from '../../../domain/subscription/__fixtures__/Subscriber.fixtures.js';
+import { UserService } from '../../../../core/services/UserService.js';
 import Mock = jest.Mock;
 decorate(injectable(), UserService);
 jest.mock('../../../../core/services/UserService');
@@ -51,5 +51,5 @@ it('should send message', async function () {
 	);
 	const result = await command.execute(dto);
 	expect(result.isOk()).toBeTruthy();
-	expect(sendFn).toBeCalledTimes(1);
+	expect(sendFn).toHaveBeenCalledTimes(1);
 });

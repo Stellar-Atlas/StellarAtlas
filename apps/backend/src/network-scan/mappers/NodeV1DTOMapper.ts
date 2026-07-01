@@ -1,6 +1,6 @@
 import { NodeV1, NodeSnapshotV1 } from 'shared';
-import { NodeMeasurementAverage } from '../domain/node/NodeMeasurementAverage';
-import Node from '../domain/node/Node';
+import { NodeMeasurementAverage } from '../domain/node/NodeMeasurementAverage.js';
+import Node from '../domain/node/Node.js';
 import { injectable } from 'inversify';
 import 'reflect-metadata';
 
@@ -30,7 +30,7 @@ export class NodeV1DTOMapper {
 						longitude: node.geoData.longitude,
 						countryCode: node.geoData.countryCode,
 						countryName: node.geoData.countryName
-				  }
+					}
 				: null,
 			name: node.details?.name ?? null,
 			host: node.details?.host ?? null,

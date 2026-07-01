@@ -1,6 +1,7 @@
 {
 	"name": "shared",
 	"description": "Shared code between StellarAtlas frontend and backend",
+	"type": "module",
 	"scripts": {
 		"preversion": "pnpm run build",
 		"build": "../../node_modules/typescript/bin/tsc  --declaration",
@@ -13,14 +14,14 @@
 	"main": "lib/index.js",
 	"types": "lib/index.d.ts",
 	"dependencies": {
-		"ajv": "^8.17.1"
+		"ajv": "^8.20.0"
 	},
 	"devDependencies": {
-		"@types/lodash": "^4.14.191",
+		"@types/lodash": "^4.17.24",
 		"ajv-cli": "^5.0.0",
 		"ajv-formats": "^3.0.1",
 		"await-fs": "^1.0.0",
-		"lodash": "^4.17.21",
-		"typescript-json-schema": "^0.65.1"
+		"lodash": "^4.18.1",
+		"typescript-json-schema": "^0.67.4"
 	}
 }

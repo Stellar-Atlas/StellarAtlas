@@ -1,11 +1,11 @@
-import { Message } from '../domain/Message';
-import { UserId } from '../../notifications/domain/subscription/UserId';
+import { Message } from '../domain/Message.js';
+import { UserId } from '../../notifications/domain/subscription/UserId.js';
 import { err, ok, Result } from 'neverthrow';
 import { inject, injectable } from 'inversify';
-import { IUserService } from '../domain/IUserService';
-import { HttpService, Url } from 'http-helper';
-import { CustomError } from '../errors/CustomError';
-import { isObject, isString } from '../utilities/TypeGuards';
+import type { IUserService } from '../domain/IUserService.js';
+import { Url, type HttpService } from 'http-helper';
+import { CustomError } from '../errors/CustomError.js';
+import { isObject, isString } from '../utilities/TypeGuards.js';
 
 export class UserServiceError extends CustomError {
 	constructor(message: string, name: string, cause?: Error) {

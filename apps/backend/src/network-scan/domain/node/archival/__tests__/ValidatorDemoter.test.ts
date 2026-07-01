@@ -1,14 +1,14 @@
-import { ValidatorDemoter } from '../ValidatorDemoter';
+import { ValidatorDemoter } from '../ValidatorDemoter.js';
 import { mock } from 'jest-mock-extended';
-import { Logger } from 'logger';
-import { NodeMeasurementDayRepository } from '../../NodeMeasurementDayRepository';
-import { createDummyNode } from '../../__fixtures__/createDummyNode';
-import NodeQuorumSet from '../../NodeQuorumSet';
+import type { Logger } from 'logger';
+import type { NodeMeasurementDayRepository } from '../../NodeMeasurementDayRepository.js';
+import { createDummyNode } from '../../__fixtures__/createDummyNode.js';
+import NodeQuorumSet from '../../NodeQuorumSet.js';
 import { Edge, QuorumSet, TrustGraph, Vertex } from 'shared';
 import { StronglyConnectedComponentsFinder } from 'shared';
 import { NetworkTransitiveQuorumSetFinder } from 'shared';
-import { NodeScan } from '../../scan/NodeScan';
-import NodeMeasurement from '../../NodeMeasurement';
+import { NodeScan } from '../../scan/NodeScan.js';
+import NodeMeasurement from '../../NodeMeasurement.js';
 
 describe('ValidatorDemoter', () => {
 	function setupSUT() {
@@ -145,7 +145,7 @@ describe('ValidatorDemoter', () => {
 
 		expect(
 			nodeMeasurementDayRepository.findXDaysActiveButNotValidating
-		).toBeCalledWith(nodeScan.time, 7);
+		).toHaveBeenCalledWith(nodeScan.time, 7);
 
 		expect(inactiveValidator.quorumSet).toBeNull();
 		expect(connectedValidator1.quorumSet).not.toBeNull();

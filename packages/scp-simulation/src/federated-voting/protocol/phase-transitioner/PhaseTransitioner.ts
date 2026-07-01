@@ -1,17 +1,17 @@
-import { Statement } from '../Statement';
-import { TransitionedToAcceptPhase } from './event/TransitionedToAcceptPhase';
-import { VoteRatified } from './event/VoteRatified';
-import { AcceptVoteRatified } from './event/AcceptVoteRatified';
-import { AcceptVoteVBlocked } from './event/AcceptVoteVBlocked';
-import { TransitionedToConfirmPhase } from './event/TransitionedToConfirmPhase';
+import { Statement } from '../Statement.js';
+import { TransitionedToAcceptPhase } from './event/TransitionedToAcceptPhase.js';
+import { VoteRatified } from './event/VoteRatified.js';
+import { AcceptVoteRatified } from './event/AcceptVoteRatified.js';
+import { AcceptVoteVBlocked } from './event/AcceptVoteVBlocked.js';
+import { TransitionedToConfirmPhase } from './event/TransitionedToConfirmPhase.js';
 import {
 	FederatedVotingPhase,
 	FederatedVotingProtocolState
-} from '../FederatedVotingProtocolState';
-import { Vote } from '../Vote';
-import { QuorumSetService } from '../QuorumSetService';
-import { QuorumService } from '../QuorumService';
-import { InMemoryEventCollector, QuorumSet } from '../../../core';
+} from '../FederatedVotingProtocolState.js';
+import { Vote } from '../Vote.js';
+import { QuorumSetService } from '../QuorumSetService.js';
+import { QuorumService } from '../QuorumService.js';
+import { InMemoryEventCollector, QuorumSet } from '../../../core/index.js';
 
 export class PhaseTransitioner extends InMemoryEventCollector {
 	tryMoveToAcceptPhase(

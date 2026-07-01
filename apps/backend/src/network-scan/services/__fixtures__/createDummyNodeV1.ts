@@ -1,5 +1,5 @@
 import { NodeV1 } from 'shared';
-import { createDummyPublicKeyString } from '../../domain/node/__fixtures__/createDummyPublicKey';
+import { createDummyPublicKeyString } from '../../domain/node/__fixtures__/createDummyPublicKey.js';
 
 export function createDummyNodeV1(
 	publicKey = createDummyPublicKeyString()

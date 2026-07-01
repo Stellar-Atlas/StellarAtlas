@@ -1,18 +1,18 @@
 import { mock } from 'jest-mock-extended';
-import { Logger } from 'logger';
-import { createDummyPublicKey } from '../../__fixtures__/createDummyPublicKey';
-import { NodeScanner } from '../NodeScanner';
-import { StellarCoreVersion } from '../../../network/StellarCoreVersion';
-import { NetworkQuorumSetConfiguration } from '../../../network/NetworkQuorumSetConfiguration';
-import { NodeScannerCrawlStep } from '../NodeScannerCrawlStep';
-import { NodeScannerHomeDomainStep } from '../NodeScannerHomeDomainStep';
-import { NodeScannerTomlStep } from '../NodeScannerTomlStep';
-import { NodeScannerHistoryArchiveStep } from '../NodeScannerHistoryArchiveStep';
-import { NodeScannerGeoStep } from '../NodeScannerGeoStep';
-import { NodeScannerIndexerStep } from '../NodeScannerIndexerStep';
-import { NodeScan } from '../NodeScan';
+import type { Logger } from 'logger';
+import { createDummyPublicKey } from '../../__fixtures__/createDummyPublicKey.js';
+import { NodeScanner } from '../NodeScanner.js';
+import { StellarCoreVersion } from '../../../network/StellarCoreVersion.js';
+import { NetworkQuorumSetConfiguration } from '../../../network/NetworkQuorumSetConfiguration.js';
+import { NodeScannerCrawlStep } from '../NodeScannerCrawlStep.js';
+import { NodeScannerHomeDomainStep } from '../NodeScannerHomeDomainStep.js';
+import { NodeScannerTomlStep } from '../NodeScannerTomlStep.js';
+import { NodeScannerHistoryArchiveStep } from '../NodeScannerHistoryArchiveStep.js';
+import { NodeScannerGeoStep } from '../NodeScannerGeoStep.js';
+import { NodeScannerIndexerStep } from '../NodeScannerIndexerStep.js';
+import { NodeScan } from '../NodeScan.js';
 import { err, ok } from 'neverthrow';
-import { NodeScannerArchivalStep } from '../NodeScannerArchivalStep';
+import { NodeScannerArchivalStep } from '../NodeScannerArchivalStep.js';
 
 it('should perform a network scan', async function () {
 	const crawlerStep = mock<NodeScannerCrawlStep>();
@@ -55,14 +55,16 @@ it('should perform a network scan', async function () {
 		[]
 	);
 
-	expect(crawlerStep.execute).toBeCalledTimes(1);
-	expect(homeDomainStep.execute).toBeCalledTimes(1);
-	expect(tomlStep.execute).toBeCalledTimes(1);
-	expect(historyArchiveStep.execute).toBeCalledTimes(1);
-	expect(geoStep.execute).toBeCalledTimes(1);
-	expect(indexerStep.execute).toBeCalledTimes(1);
-	expect(archivalStep.execute).toBeCalledTimes(1);
-	expect(nodeScan.updateStellarCoreVersionBehindStatus).toBeCalledTimes(1);
+	expect(crawlerStep.execute).toHaveBeenCalledTimes(1);
+	expect(homeDomainStep.execute).toHaveBeenCalledTimes(1);
+	expect(tomlStep.execute).toHaveBeenCalledTimes(1);
+	expect(historyArchiveStep.execute).toHaveBeenCalledTimes(1);
+	expect(geoStep.execute).toHaveBeenCalledTimes(1);
+	expect(indexerStep.execute).toHaveBeenCalledTimes(1);
+	expect(archivalStep.execute).toHaveBeenCalledTimes(1);
+	expect(nodeScan.updateStellarCoreVersionBehindStatus).toHaveBeenCalledTimes(
+		1
+	);
 
 	expect(result.isOk()).toBe(true);
 });
@@ -108,7 +110,7 @@ it('should return an error if the crawling fails', async function () {
 		[]
 	);
 
-	expect(crawlerStep.execute).toBeCalledTimes(1);
+	expect(crawlerStep.execute).toHaveBeenCalledTimes(1);
 
 	expect(result.isOk()).toBe(false);
 });

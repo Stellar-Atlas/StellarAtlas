@@ -1,8 +1,8 @@
-import { NodeGeoData } from './node-geo-data';
-import { NodeStatistics } from './node-statistics';
-import { QuorumSet } from './quorum-set';
-import { NodeV1 } from './dto/node-v1';
-import PropertyMapper from './PropertyMapper';
+import { NodeGeoData } from './node-geo-data.js';
+import { NodeStatistics } from './node-statistics.js';
+import { QuorumSet } from './quorum-set.js';
+import { NodeV1 } from './dto/node-v1.js';
+import PropertyMapper from './PropertyMapper.js';
 
 export class Node {
 	public ip: string;

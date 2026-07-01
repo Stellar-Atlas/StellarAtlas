@@ -1,7 +1,8 @@
-import { Networks } from '@stellar/stellar-base';
+import { Networks } from '@stellar/stellar-sdk';
+import { config } from 'dotenv';
+import type { NodeInfo } from './node.js';
 
-require('dotenv').config();
-import { NodeInfo } from './node';
+config({ quiet: true });
 
 export interface NodeConfig {
 	network: string;
@@ -17,11 +18,11 @@ export interface NodeConfig {
 }
 
 // Simple boolean parser to replace 'yn'
-function parseBoolean(val: any): boolean | undefined {
+function parseBoolean(val: string | undefined): boolean | undefined {
 	if (typeof val !== 'string') return undefined;
 	const normalized = val.trim().toLowerCase();
-	if (["y", "yes", "true", "1", "on"].includes(normalized)) return true;
-	if (["n", "no", "false", "0", "off"].includes(normalized)) return false;
+	if (['y', 'yes', 'true', '1', 'on'].includes(normalized)) return true;
+	if (['n', 'no', 'false', '0', 'off'].includes(normalized)) return false;
 	return undefined;
 }
 
@@ -36,7 +37,9 @@ export function getConfigFromEnv(): NodeConfig {
 	const privateKey = process.env['PRIVATE_KEY']
 		? process.env['PRIVATE_KEY']
 		: undefined;
-	const receiveTransactionMessages = parseBoolean(process.env['RECEIVE_TRANSACTION_MSG']);
+	const receiveTransactionMessages = parseBoolean(
+		process.env['RECEIVE_TRANSACTION_MSG']
+	);
 	const receiveSCPMessages = parseBoolean(process.env['RECEIVE_SCP_MSG']);
 	const networkString = process.env['NETWORK']
 		? process.env['NETWORK']

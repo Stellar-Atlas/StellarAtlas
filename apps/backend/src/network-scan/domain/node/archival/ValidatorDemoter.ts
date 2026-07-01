@@ -1,12 +1,12 @@
-import Node from '../Node';
+import Node from '../Node.js';
 import { inject, injectable } from 'inversify';
-import { NodeMeasurementDayRepository } from '../NodeMeasurementDayRepository';
-import { Logger } from '../../../../core/services/Logger';
+import type { NodeMeasurementDayRepository } from '../NodeMeasurementDayRepository.js';
+import type { Logger } from '../../../../core/services/Logger.js';
 import { TrustGraph } from 'shared';
 import 'reflect-metadata';
-import { NETWORK_TYPES } from '../../../infrastructure/di/di-types';
-import { hasNoActiveTrustingNodes } from './hasNoActiveTrustingNodes';
-import { NodeScan } from '../scan/NodeScan';
+import { NETWORK_TYPES } from '../../../infrastructure/di/di-types.js';
+import { hasNoActiveTrustingNodes } from './hasNoActiveTrustingNodes.js';
+import { NodeScan } from '../scan/NodeScan.js';
 
 @injectable()
 export class ValidatorDemoter {

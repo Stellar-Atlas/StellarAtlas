@@ -1,15 +1,15 @@
 import { injectable } from 'inversify';
-import { Repository } from 'typeorm';
-import { Result, ok, err } from 'neverthrow';
+import type { Repository } from 'typeorm';
+import { type Result, ok, err } from 'neverthrow';
 import * as nodemailer from 'nodemailer';
 import validator from 'validator';
 import { randomUUID } from 'crypto';
 
-import { IUserService } from '../domain/IUserService';
-import { UserId } from '../../notifications/domain/subscription/UserId';
-import { Message } from '../domain/Message';
-import { User } from '../infrastructure/database/entities/User';
-import { CustomError } from '../errors/CustomError';
+import type { IUserService } from '../domain/IUserService.js';
+import { UserId } from '../../notifications/domain/subscription/UserId.js';
+import { Message } from '../domain/Message.js';
+import { User } from '../infrastructure/database/entities/User.js';
+import { CustomError } from '../errors/CustomError.js';
 
 export interface SMTPConfig {
 	host: string;

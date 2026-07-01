@@ -1,12 +1,17 @@
 import { Container } from 'inversify';
-import Kernel from '../../../../../core/infrastructure/Kernel';
-import { ConfigMock } from '../../../../../core/config/__mocks__/configMock';
-import { NETWORK_TYPES } from '../../../di/di-types';
-import { TypeOrmOrganizationMeasurementDayRepository } from '../TypeOrmOrganizationMeasurementDayRepository';
-import { OrganizationRepository } from '../../../../domain/organization/OrganizationRepository';
-import Organization from '../../../../domain/organization/Organization';
-import { createDummyOrganizationId } from '../../../../domain/organization/__fixtures__/createDummyOrganizationId';
-import OrganizationMeasurementDay from '../../../../domain/organization/OrganizationMeasurementDay';
+import Kernel from '../../../../../core/infrastructure/Kernel.js';
+import { ConfigMock } from '../../../../../core/config/__mocks__/configMock.js';
+import { NETWORK_TYPES } from '../../../di/di-types.js';
+import { TypeOrmOrganizationMeasurementDayRepository } from '../TypeOrmOrganizationMeasurementDayRepository.js';
+import type { OrganizationRepository } from '../../../../domain/organization/OrganizationRepository.js';
+import Organization from '../../../../domain/organization/Organization.js';
+import { createDummyOrganizationId } from '../../../../domain/organization/__fixtures__/createDummyOrganizationId.js';
+import OrganizationMeasurementDay from '../../../../domain/organization/OrganizationMeasurementDay.js';
+import NetworkScan from '../../../../domain/network/scan/NetworkScan.js';
+import NetworkMeasurement from '../../../../domain/network/NetworkMeasurement.js';
+import type { NetworkScanRepository } from '../../../../domain/network/scan/NetworkScanRepository.js';
+import type { OrganizationMeasurementRepository } from '../../../../domain/organization/OrganizationMeasurementRepository.js';
+import OrganizationMeasurement from '../../../../domain/organization/OrganizationMeasurement.js';
 
 describe('test queries', () => {
 	let container: Container;
@@ -76,5 +81,63 @@ describe('test queries', () => {
 		expect(averages.length).toEqual(1);
 		expect(averages[0].isSubQuorumAvailableAvg).toEqual(100);
 		expect(averages[0].organizationId).toEqual(idA.organizationId.value);
+	});
+
+	test('rollup is idempotent for affected days', async () => {
+		const scanRepository = container.get<NetworkScanRepository>(
+			NETWORK_TYPES.NetworkScanRepository
+		);
+		const measurementRepository =
+			container.get<OrganizationMeasurementRepository>(
+				NETWORK_TYPES.OrganizationMeasurementRepository
+			);
+		const scanTime1 = new Date(Date.UTC(2020, 0, 3, 0));
+		const scanTime2 = new Date(Date.UTC(2020, 0, 3, 1));
+		const organization = Organization.create(
+			createDummyOrganizationId(),
+			'domain',
+			scanTime1
+		);
+		await versionedOrganizationRepository.save([organization], scanTime1);
+
+		const scan1 = new NetworkScan(scanTime1);
+		scan1.id = 1;
+		scan1.completed = true;
+		scan1.measurement = new NetworkMeasurement(scanTime1);
+		const measurement1 = new OrganizationMeasurement(scanTime1, organization);
+		measurement1.isSubQuorumAvailable = true;
+		measurement1.index = 1;
+		await scanRepository.save([scan1]);
+		await measurementRepository.save([measurement1]);
+
+		await repo.rollup(1, 1);
+		let measurements = await repo.findBetween(
+			organization.organizationId,
+			scanTime1,
+			scanTime1
+		);
+		expect(measurements[0].crawlCount).toEqual(1);
+		expect(measurements[0].isSubQuorumAvailableCount).toEqual(1);
+
+		const scan2 = new NetworkScan(scanTime2);
+		scan2.id = 2;
+		scan2.completed = true;
+		scan2.measurement = new NetworkMeasurement(scanTime2);
+		const measurement2 = new OrganizationMeasurement(scanTime2, organization);
+		measurement2.isSubQuorumAvailable = false;
+		measurement2.index = 2;
+		await scanRepository.save([scan2]);
+		await measurementRepository.save([measurement2]);
+
+		await repo.rollup(2, 2);
+		await repo.rollup(2, 2);
+		measurements = await repo.findBetween(
+			organization.organizationId,
+			scanTime1,
+			scanTime1
+		);
+		expect(measurements[0].crawlCount).toEqual(2);
+		expect(measurements[0].isSubQuorumAvailableCount).toEqual(1);
+		expect(measurements[0].indexSum).toEqual(3);
 	});
 });

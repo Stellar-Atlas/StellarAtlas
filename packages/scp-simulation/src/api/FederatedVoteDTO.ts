@@ -1,7 +1,7 @@
-import { PublicKey } from '..';
-import { QuorumSet } from '../core/QuorumSet';
-import { FederatedVotingPhase } from '../federated-voting/protocol/FederatedVotingProtocolState';
-import { StatementDTO } from './StatementDTO';
+import { PublicKey } from '../index.js';
+import { QuorumSet } from '../core/QuorumSet.js';
+import { FederatedVotingPhase } from '../federated-voting/protocol/FederatedVotingProtocolState.js';
+import { StatementDTO } from './StatementDTO.js';
 
 export interface FederatedVoteDTO {
 	publicKey: PublicKey;

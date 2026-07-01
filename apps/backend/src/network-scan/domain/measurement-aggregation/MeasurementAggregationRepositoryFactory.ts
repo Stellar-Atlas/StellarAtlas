@@ -1,15 +1,15 @@
 import { inject, injectable } from 'inversify';
-import { NETWORK_TYPES } from '../../infrastructure/di/di-types';
-import { NodeMeasurementDayRepository } from '../node/NodeMeasurementDayRepository';
-import { OrganizationMeasurementDayRepository } from '../organization/OrganizationMeasurementDayRepository';
-import { NetworkMeasurementDayRepository } from '../network/NetworkMeasurementDayRepository';
-import { NetworkMeasurementMonthRepository } from '../network/NetworkMeasurementMonthRepository';
-import { MeasurementAggregation } from './MeasurementAggregation';
-import NodeMeasurementDay from '../node/NodeMeasurementDay';
-import OrganizationMeasurementDay from '../organization/OrganizationMeasurementDay';
-import NetworkMeasurementDay from '../network/NetworkMeasurementDay';
-import NetworkMeasurementMonth from '../network/NetworkMeasurementMonth';
-import { MeasurementAggregationRepository } from './MeasurementAggregationRepository';
+import { NETWORK_TYPES } from '../../infrastructure/di/di-types.js';
+import type { NodeMeasurementDayRepository } from '../node/NodeMeasurementDayRepository.js';
+import type { OrganizationMeasurementDayRepository } from '../organization/OrganizationMeasurementDayRepository.js';
+import type { NetworkMeasurementDayRepository } from '../network/NetworkMeasurementDayRepository.js';
+import type { NetworkMeasurementMonthRepository } from '../network/NetworkMeasurementMonthRepository.js';
+import { MeasurementAggregation } from './MeasurementAggregation.js';
+import NodeMeasurementDay from '../node/NodeMeasurementDay.js';
+import OrganizationMeasurementDay from '../organization/OrganizationMeasurementDay.js';
+import NetworkMeasurementDay from '../network/NetworkMeasurementDay.js';
+import NetworkMeasurementMonth from '../network/NetworkMeasurementMonth.js';
+import type { MeasurementAggregationRepository } from './MeasurementAggregationRepository.js';
 
 @injectable()
 export class MeasurementAggregationRepositoryFactory {
@@ -24,7 +24,9 @@ export class MeasurementAggregationRepositoryFactory {
 		private networkMeasurementMonthRepository: NetworkMeasurementMonthRepository
 	) {}
 
-	createFor(aggregation: new (...params: never) => MeasurementAggregation): MeasurementAggregationRepository<MeasurementAggregation> {
+	createFor(
+		aggregation: new (...params: never) => MeasurementAggregation
+	): MeasurementAggregationRepository<MeasurementAggregation> {
 		switch (aggregation) {
 			case NodeMeasurementDay:
 				return this.nodeMeasurementDayRepository;

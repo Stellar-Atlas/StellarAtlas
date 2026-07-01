@@ -1,4 +1,4 @@
-import { hash, Keypair, Networks, xdr } from '@stellar/stellar-base';
+import { hash, Keypair, Networks, xdr } from '@stellar/stellar-sdk';
 import { createSCPEnvelopeSignature } from '../src';
 
 export function createDummyExternalizeMessage(keyPair: Keypair) {

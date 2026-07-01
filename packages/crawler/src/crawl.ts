@@ -1,6 +1,6 @@
 import { AsyncResultCallback } from 'async';
-import { NodeAddress } from './node-address';
-import { Observation } from './network-observer/observation';
+import type { NodeAddress } from './node-address.js';
+import { Observation } from './network-observer/observation.js';
 
 type PeerKey = string; //ip:port
 
@@ -14,8 +14,7 @@ export enum CrawlProcessState {
 export class Crawl {
 	state: CrawlProcessState = CrawlProcessState.IDLE;
 	maxCrawlTimeHit = false;
-	crawlQueueTaskDoneCallbacks =
-		new Map<string, AsyncResultCallback<void>>();
+	crawlQueueTaskDoneCallbacks = new Map<string, AsyncResultCallback<void>>();
 	crawledNodeAddresses = new Set<PeerKey>();
 
 	failedConnections: string[] = [];
