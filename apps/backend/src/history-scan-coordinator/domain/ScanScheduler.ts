@@ -29,15 +29,23 @@ export class RestartAtLeastOneScan implements ScanScheduler {
 		const validArchiveUrls = this.mapToValidUrls(archives);
 		const uniqueArchives = this.removeDuplicates(validArchiveUrls);
 		const unfinishedUrls = new Set(unfinishedScanJobs.map((job) => job.url));
+		const unfinishedErrorRecheckUrls = new Set(
+			unfinishedScanJobs
+				.filter((job) => job.fromLedger !== null || job.toLedger !== null)
+				.map((job) => job.url)
+		);
 		const previousScansMap = new Map(
 			previousScans.map((scan) => {
 				return [scan.baseUrl.value, scan];
 			})
 		);
-		const archivesReadyToScan = uniqueArchives.filter(
+		const archivesReadyForErrorRecheck = uniqueArchives.filter(
+			(archive) => !unfinishedErrorRecheckUrls.has(archive)
+		);
+		const archivesReadyForRegularScan = uniqueArchives.filter(
 			(archive) => !unfinishedUrls.has(archive)
 		);
-		const errorRecheckJobs = archivesReadyToScan
+		const errorRecheckJobs = archivesReadyForErrorRecheck
 			.map((archive) => previousScansMap.get(archive))
 			.filter((scan): scan is Scan => scan !== undefined && scan.hasError())
 			.map((scan) => this.createErrorRecheckJob(scan));
@@ -46,7 +54,7 @@ export class RestartAtLeastOneScan implements ScanScheduler {
 		if (!options.includeRegularJobs) return [];
 
 		const archivesSortedByInitDate = sortHistoryUrls(
-			archivesReadyToScan,
+			archivesReadyForRegularScan,
 			new Map(
 				previousScans
 					.filter((scan) => scan.scanChainInitDate !== null)

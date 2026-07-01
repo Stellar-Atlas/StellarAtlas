@@ -165,6 +165,81 @@ it('should prioritize errored archive rechecks before normal scans', () => {
 	expect(jobs[0].isNewScanChainJob()).toBeFalsy();
 });
 
+it('should schedule an errored archive recheck when a regular scan is already pending', () => {
+	const scheduler = new RestartAtLeastOneScan();
+	const archive = createDummyHistoryBaseUrl();
+	const previousErroredScan = new Scan(
+		new Date('01-01-2020'),
+		new Date('01-03-2020'),
+		new Date('01-03-2020'),
+		archive,
+		128,
+		255,
+		127,
+		'hash',
+		4,
+		false,
+		new ScanError(
+			ScanErrorType.TYPE_VERIFICATION,
+			`${archive.value}/transactions/00/00/00/transactions-000000bf.xdr.gz`,
+			'Wrong transaction hash'
+		)
+	);
+
+	const regularPendingJob = new ScanJob(archive.value);
+
+	const jobs = scheduler.schedule(
+		[archive.value],
+		[previousErroredScan],
+		[regularPendingJob]
+	);
+
+	expect(jobs).toHaveLength(1);
+	expect(jobs[0].url).toEqual(archive.value);
+	expect(jobs[0].fromLedger).toEqual(128);
+	expect(jobs[0].toLedger).toEqual(191);
+});
+
+it('should not duplicate an errored archive recheck when a range scan is already pending', () => {
+	const scheduler = new RestartAtLeastOneScan();
+	const archive = createDummyHistoryBaseUrl();
+	const previousErroredScan = new Scan(
+		new Date('01-01-2020'),
+		new Date('01-03-2020'),
+		new Date('01-03-2020'),
+		archive,
+		128,
+		255,
+		127,
+		'hash',
+		4,
+		false,
+		new ScanError(
+			ScanErrorType.TYPE_VERIFICATION,
+			`${archive.value}/transactions/00/00/00/transactions-000000bf.xdr.gz`,
+			'Wrong transaction hash'
+		)
+	);
+
+	const pendingRecheckJob = new ScanJob(
+		archive.value,
+		127,
+		'hash',
+		previousErroredScan.scanChainInitDate,
+		128,
+		191,
+		4
+	);
+
+	const jobs = scheduler.schedule(
+		[archive.value],
+		[previousErroredScan],
+		[pendingRecheckJob]
+	);
+
+	expect(jobs).toHaveLength(0);
+});
+
 it('should use the failed scan range when the error url has no ledger', () => {
 	const scheduler = new RestartAtLeastOneScan();
 	const archive = createDummyHistoryBaseUrl();
