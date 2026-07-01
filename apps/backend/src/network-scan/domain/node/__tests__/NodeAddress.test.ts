@@ -1,4 +1,4 @@
-import { NodeAddress } from '../NodeAddress';
+import { NodeAddress } from '../NodeAddress.js';
 
 describe('NodeAddress', () => {
 	it('should create NodeAddress from valid ip and port', function () {

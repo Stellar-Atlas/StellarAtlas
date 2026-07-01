@@ -1,4 +1,4 @@
-import { extractLedgerFromHistoryArchiveUrl } from '../extractLedgerFromHistoryArchiveUrl';
+import { extractLedgerFromHistoryArchiveUrl } from '../extractLedgerFromHistoryArchiveUrl.js';
 
 it('extracts category ledger numbers from archive urls', () => {
 	expect(

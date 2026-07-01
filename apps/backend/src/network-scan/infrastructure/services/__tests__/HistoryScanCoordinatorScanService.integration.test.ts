@@ -1,7 +1,7 @@
-import Kernel from '../../../../core/infrastructure/Kernel';
-import { ConfigMock } from '../../../../core/config/__mocks__/configMock';
-import { NETWORK_TYPES } from '../../di/di-types';
-import { HistoryArchiveScanService } from '../../../domain/node/scan/history/HistoryArchiveScanService';
+import Kernel from '../../../../core/infrastructure/Kernel.js';
+import { ConfigMock } from '../../../../core/config/__mocks__/configMock.js';
+import { NETWORK_TYPES } from '../../di/di-types.js';
+import type { HistoryArchiveScanService } from '../../../domain/node/scan/history/HistoryArchiveScanService.js';
 
 let kernel: Kernel;
 jest.setTimeout(60000); //slow integration tests

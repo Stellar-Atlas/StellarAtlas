@@ -1,7 +1,7 @@
 import { ChildEntity } from 'typeorm';
-import { NetworkChange } from './NetworkChange';
-import { NetworkId } from '../NetworkId';
-import { StellarCoreVersion } from '../StellarCoreVersion';
+import { NetworkChange } from './NetworkChange.js';
+import { NetworkId } from '../NetworkId.js';
+import { StellarCoreVersion } from '../StellarCoreVersion.js';
 
 @ChildEntity()
 export class NetworkStellarCoreVersionChanged extends NetworkChange {

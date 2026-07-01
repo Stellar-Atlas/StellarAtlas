@@ -2,15 +2,15 @@ import {
 	CategoryScanner,
 	CategoryVerificationData,
 	ExpectedHashes
-} from './CategoryScanner';
+} from './CategoryScanner.js';
 import { createHash } from 'crypto';
-import { Category } from '../history-archive/Category';
+import { Category } from '../history-archive/Category.js';
 import { err, ok, Result } from 'neverthrow';
-import { CheckPointFrequency } from '../check-point/CheckPointFrequency';
+import type { CheckPointFrequency } from '../check-point/CheckPointFrequency.js';
 import { injectable } from 'inversify';
-import { LedgerHeader } from './Scanner';
-import { EmptyTransactionSetsHashVerifier } from './verification/empty-transaction-sets/EmptyTransactionSetsHashVerifier';
-import { getLowestNumber } from './getLowestNumber';
+import { LedgerHeader } from './Scanner.js';
+import { EmptyTransactionSetsHashVerifier } from './verification/empty-transaction-sets/EmptyTransactionSetsHashVerifier.js';
+import { getLowestNumber } from './getLowestNumber.js';
 
 interface VerificationError {
 	ledger: number;

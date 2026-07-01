@@ -1,16 +1,16 @@
 import * as express from 'express';
 import { Router } from 'express';
-import { isDateString } from '../../../core/utilities/isDateString';
-import { getDateFromParam } from '../../../core/utilities/getDateFromParam';
-import { GetNetwork } from '../../use-cases/get-network/GetNetwork';
-import { GetLatestNodeSnapshots } from '../../use-cases/get-latest-node-snapshots/GetLatestNodeSnapshots';
-import { GetLatestOrganizationSnapshots } from '../../use-cases/get-latest-organization-snapshots/GetLatestOrganizationSnapshots';
-import { GetMeasurementsFactory } from '../../use-cases/get-measurements/GetMeasurementsFactory';
-import NetworkMeasurement from '../../domain/network/NetworkMeasurement';
-import { GetMeasurementAggregations } from '../../use-cases/get-measurement-aggregations/GetMeasurementAggregations';
-import { AggregationTarget } from '../../use-cases/get-measurement-aggregations/GetMeasurementAggregationsDTO';
+import { isDateString } from '../../../core/utilities/isDateString.js';
+import { getDateFromParam } from '../../../core/utilities/getDateFromParam.js';
+import { GetNetwork } from '../../use-cases/get-network/GetNetwork.js';
+import { GetLatestNodeSnapshots } from '../../use-cases/get-latest-node-snapshots/GetLatestNodeSnapshots.js';
+import { GetLatestOrganizationSnapshots } from '../../use-cases/get-latest-organization-snapshots/GetLatestOrganizationSnapshots.js';
+import { GetMeasurementsFactory } from '../../use-cases/get-measurements/GetMeasurementsFactory.js';
+import NetworkMeasurement from '../../domain/network/NetworkMeasurement.js';
+import { GetMeasurementAggregations } from '../../use-cases/get-measurement-aggregations/GetMeasurementAggregations.js';
+import { AggregationTarget } from '../../use-cases/get-measurement-aggregations/GetMeasurementAggregationsDTO.js';
 import { query } from 'express-validator';
-import { handleMeasurementsAggregationRequest } from './handleMeasurementsAggregationRequest';
+import { handleMeasurementsAggregationRequest } from './handleMeasurementsAggregationRequest.js';
 
 export interface NetworkRouterConfig {
 	getNetwork: GetNetwork;

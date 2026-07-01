@@ -1,6 +1,6 @@
-import { Node, QuorumSet } from '../core';
-import { UpdateQuorumSet } from '../federated-voting/action/user/UpdateQuorumSet';
-import { Simulation } from '../simulation/Simulation';
+import { Node, QuorumSet } from '../core/index.js';
+import { UpdateQuorumSet } from '../federated-voting/action/user/UpdateQuorumSet.js';
+import { Simulation } from '../simulation/Simulation.js';
 
 /**
  * Manages trust relationships between nodes. Takes into account pending updates.

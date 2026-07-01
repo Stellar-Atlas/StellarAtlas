@@ -1,10 +1,10 @@
 import valueValidator from 'validator';
 
-import { TomlFetchError, TomlService } from '../TomlService';
+import { TomlFetchError, TomlService } from '../TomlService.js';
 import * as toml from 'toml';
-import { HttpError, HttpService } from 'http-helper';
+import { HttpError, type HttpService } from 'http-helper';
 import { err, ok } from 'neverthrow';
-import { LoggerMock } from '../../../../../core/services/__mocks__/LoggerMock';
+import { LoggerMock } from '../../../../../core/services/__mocks__/LoggerMock.js';
 import { mock } from 'jest-mock-extended';
 
 const httpService = mock<HttpService>();

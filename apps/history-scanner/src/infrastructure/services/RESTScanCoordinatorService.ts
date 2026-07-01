@@ -1,13 +1,17 @@
 import 'reflect-metadata';
 import { CustomError } from 'custom-error';
-import { HttpService, Url } from 'http-helper';
+import { Url, type HttpService } from 'http-helper';
 import { injectable } from 'inversify';
 import { err, ok, Result } from 'neverthrow';
-import { Scan } from '../../domain/scan/Scan';
-import { ScanDTO, ScanJobDTO } from 'history-scanner-dto';
-import { ScanCoordinatorService } from '../../domain/scan/ScanCoordinatorService';
+import { Scan } from '../../domain/scan/Scan.js';
+import {
+	ScanDTO,
+	ScanJobDTO,
+	type ScanJobJSONInput
+} from 'history-scanner-dto';
+import { ScanCoordinatorService } from '../../domain/scan/ScanCoordinatorService.js';
 import { isObject } from 'shared';
-import { ScanErrorType } from '../../domain/scan/ScanError';
+import { ScanErrorType } from '../../domain/scan/ScanError.js';
 
 export class CoordinatorServiceError extends CustomError {
 	constructor(message: string, cause?: Error) {
@@ -137,7 +141,7 @@ export class RESTScanCoordinatorService implements ScanCoordinatorService {
 	private convertResponseToScanJobDTO(
 		response: Record<string, unknown>
 	): Result<ScanJobDTO, Error> {
-		const scanJobDTO = ScanJobDTO.fromJSON(response);
+		const scanJobDTO = ScanJobDTO.fromJSON(response as ScanJobJSONInput);
 		if (scanJobDTO.isErr()) {
 			return err(new CoordinatorServiceError('Invalid response format'));
 		}

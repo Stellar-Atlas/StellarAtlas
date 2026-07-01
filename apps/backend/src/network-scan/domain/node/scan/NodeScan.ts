@@ -1,15 +1,15 @@
-import Node from '../Node';
+import Node from '../Node.js';
 import { PeerNode } from 'crawler';
 import {
 	InvalidPeerNode,
 	PeerNodeToNodeMapper
-} from './node-crawl/PeerNodeToNodeMapper';
-import NodeMeasurement from '../NodeMeasurement';
-import NodeDetails from '../NodeDetails';
-import NodeGeoDataLocation from '../NodeGeoDataLocation';
-import { NodeTomlInfo } from './NodeTomlInfo';
+} from './node-crawl/PeerNodeToNodeMapper.js';
+import NodeMeasurement from '../NodeMeasurement.js';
+import NodeDetails from '../NodeDetails.js';
+import NodeGeoDataLocation from '../NodeGeoDataLocation.js';
+import { NodeTomlInfo } from './NodeTomlInfo.js';
 import { SemanticVersionComparer } from 'shared';
-import { StellarCoreVersion } from '../../network/StellarCoreVersion';
+import { StellarCoreVersion } from '../../network/StellarCoreVersion.js';
 
 export class NodeScan {
 	public processedLedgers: number[] = [];

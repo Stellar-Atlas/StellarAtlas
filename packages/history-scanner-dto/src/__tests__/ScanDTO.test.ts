@@ -1,4 +1,4 @@
-import { ScanDTO } from '../ScanDTO';
+import { ScanDTO } from '../ScanDTO.js';
 
 describe('ScanDTO', () => {
 	describe('fromJSON', () => {

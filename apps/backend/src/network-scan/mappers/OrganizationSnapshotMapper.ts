@@ -1,8 +1,8 @@
 import { Organization as OrganizationDTO } from 'shared';
-import OrganizationMeasurement from '../domain/organization/OrganizationMeasurement';
-import { OrganizationMeasurementAverage } from '../domain/organization/OrganizationMeasurementAverage';
+import OrganizationMeasurement from '../domain/organization/OrganizationMeasurement.js';
+import { OrganizationMeasurementAverage } from '../domain/organization/OrganizationMeasurementAverage.js';
 import { OrganizationSnapShot as DomainOrganizationSnapShot } from 'shared';
-import OrganizationSnapShot from '../domain/organization/OrganizationSnapShot';
+import OrganizationSnapShot from '../domain/organization/OrganizationSnapShot.js';
 
 //@deprecated
 export class OrganizationSnapshotMapper {

@@ -1,5 +1,5 @@
 import { Entity, Column } from 'typeorm';
-import { Measurement } from '../measurement/Measurement';
+import { Measurement } from '../measurement/Measurement.js';
 
 /**
  * See https://arxiv.org/pdf/2002.08101.pdf for more explanation of top tier, splitting & blocking sets

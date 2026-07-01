@@ -2,7 +2,7 @@ import { xdr } from '@stellar/stellar-sdk';
 import { err, ok, Result } from 'neverthrow';
 import AuthCert = xdr.AuthCert;
 import Hello = xdr.Hello;
-import { ConnectionAuthentication } from './connection-authentication';
+import { ConnectionAuthentication } from './connection-authentication.js';
 
 export default {
 	createAuthMessage: function (

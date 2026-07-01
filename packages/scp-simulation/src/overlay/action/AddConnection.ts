@@ -1,5 +1,5 @@
-import { Context, ProtocolAction, UserAction } from '../../core';
-import { PublicKey } from '../Overlay';
+import { Context, ProtocolAction, UserAction } from '../../core/index.js';
+import { PublicKey } from '../Overlay.js';
 
 export class AddConnection extends UserAction {
 	readonly subType = 'AddConnection';

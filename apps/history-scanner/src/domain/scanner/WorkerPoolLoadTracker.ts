@@ -1,11 +1,14 @@
-import { HasherPool } from './HasherPool';
+import { HasherPool } from './HasherPool.js';
 
 export class WorkerPoolLoadTracker {
 	private readonly loadTrackTimer: NodeJS.Timeout;
 	private poolFullCount = 0;
 	private poolCheckIfFullCount = 0;
 
-	constructor(workerPool: HasherPool, private maxPendingTasks: number) {
+	constructor(
+		workerPool: HasherPool,
+		private maxPendingTasks: number
+	) {
 		this.loadTrackTimer = setInterval(() => {
 			this.poolCheckIfFullCount++;
 			if (this.workerPoolIsFull(workerPool))

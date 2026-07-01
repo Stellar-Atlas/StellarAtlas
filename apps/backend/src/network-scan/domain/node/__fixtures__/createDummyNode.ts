@@ -1,5 +1,5 @@
-import { createDummyPublicKey } from './createDummyPublicKey';
-import Node from '../Node';
+import { createDummyPublicKey } from './createDummyPublicKey.js';
+import Node from '../Node.js';
 
 export function createDummyNode(
 	ip?: string,

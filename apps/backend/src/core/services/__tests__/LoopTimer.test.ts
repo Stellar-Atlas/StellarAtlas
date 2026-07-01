@@ -1,5 +1,5 @@
 import { asyncSleep } from 'http-helper';
-import { LoopTimer } from '../LoopTimer';
+import { LoopTimer } from '../LoopTimer.js';
 
 describe('LoopTimer', () => {
 	it('should time a loop', async function () {

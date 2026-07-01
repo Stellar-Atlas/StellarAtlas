@@ -1,6 +1,6 @@
-import { Network } from './network';
-import { Node } from './node';
-import { QuorumSet } from './quorum-set';
+import { Network } from './network.js';
+import { Node } from './node.js';
+import { QuorumSet } from './quorum-set.js';
 
 enum Quality {
 	HIGH = 'HIGH',

@@ -1,6 +1,6 @@
-import { ScanMapper } from '../ScanMapper';
+import { ScanMapper } from '../ScanMapper.js';
 import { ScanDTO, ScanErrorDTO } from 'history-scanner-dto';
-import { ScanError, ScanErrorType } from '../../../domain/scan/ScanError';
+import { ScanError, ScanErrorType } from '../../../domain/scan/ScanError.js';
 
 describe('ScanMapper', () => {
 	let mapper: ScanMapper;

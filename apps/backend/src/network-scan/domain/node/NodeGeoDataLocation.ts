@@ -1,5 +1,5 @@
 import { Entity, Column, Index } from 'typeorm';
-import { IdentifiedValueObject } from '../../../core/domain/IdentifiedValueObject';
+import { IdentifiedValueObject } from '../../../core/domain/IdentifiedValueObject.js';
 
 export interface NodeGeoDataLocationProps {
 	countryCode: string | null;

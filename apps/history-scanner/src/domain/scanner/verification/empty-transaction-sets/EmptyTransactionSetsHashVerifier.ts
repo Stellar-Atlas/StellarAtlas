@@ -1,9 +1,9 @@
 import 'reflect-metadata';
 import { err, ok, Result } from 'neverthrow';
-import { IHashCalculationPolicy } from './hash-policies/IHashCalculationPolicy';
-import { FirstLedgerHashPolicy } from './hash-policies/FirstLedgerHashPolicy';
-import { RegularTransactionSetHashPolicy } from './hash-policies/RegularTransactionSetHashPolicy';
-import { GeneralizedTransactionSetHashPolicy } from './hash-policies/GeneralizedTransactionSetHashPolicy';
+import { IHashCalculationPolicy } from './hash-policies/IHashCalculationPolicy.js';
+import { FirstLedgerHashPolicy } from './hash-policies/FirstLedgerHashPolicy.js';
+import { RegularTransactionSetHashPolicy } from './hash-policies/RegularTransactionSetHashPolicy.js';
+import { GeneralizedTransactionSetHashPolicy } from './hash-policies/GeneralizedTransactionSetHashPolicy.js';
 import { mapUnknownToError } from 'shared';
 
 export class EmptyTransactionSetsHashVerifier {

@@ -1,4 +1,4 @@
-import { TomlState } from './TomlState';
+import { TomlState } from './TomlState.js';
 
 export interface OrganizationTomlInfo {
 	state: TomlState;

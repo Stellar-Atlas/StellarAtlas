@@ -1,9 +1,9 @@
 import { inject, injectable } from 'inversify';
 import { err, ok, Result } from 'neverthrow';
-import { ExceptionLogger } from '../../../core/services/ExceptionLogger';
+import type { ExceptionLogger } from '../../../core/services/ExceptionLogger.js';
 import 'reflect-metadata';
-import { GetOrganizationsDTO } from './GetOrganizationsDTO';
-import { GetNetwork } from '../get-network/GetNetwork';
+import { GetOrganizationsDTO } from './GetOrganizationsDTO.js';
+import { GetNetwork } from '../get-network/GetNetwork.js';
 import { OrganizationV1 } from 'shared';
 
 @injectable()

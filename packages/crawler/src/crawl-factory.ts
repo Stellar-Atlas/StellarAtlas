@@ -1,11 +1,11 @@
-import { Crawl } from './crawl';
-import { ObservationFactory } from './network-observer/observation-factory';
-import { Slots } from './network-observer/peer-event-handler/stellar-message-handlers/scp-envelope/scp-statement/externalize/slots';
-import { NodeAddress } from './node-address';
+import { Crawl } from './crawl.js';
+import { ObservationFactory } from './network-observer/observation-factory.js';
+import { Slots } from './network-observer/peer-event-handler/stellar-message-handlers/scp-envelope/scp-statement/externalize/slots.js';
+import type { NodeAddress } from './node-address.js';
 import { QuorumSet } from 'shared';
-import { Ledger } from './crawler';
-import pino = require('pino');
-import { PeerNodeCollection } from './peer-node-collection';
+import type { Ledger } from './crawler.js';
+import pino from 'pino';
+import { PeerNodeCollection } from './peer-node-collection.js';
 
 export class CrawlFactory {
 	constructor(

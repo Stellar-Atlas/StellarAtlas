@@ -1,11 +1,11 @@
 import { injectable } from 'inversify';
 import { EntityManager, Repository, SelectQueryBuilder } from 'typeorm';
-import Organization from '../../../domain/organization/Organization';
-import { OrganizationRepository } from '../../../domain/organization/OrganizationRepository';
-import { OrganizationId } from '../../../domain/organization/OrganizationId';
-import OrganizationMeasurement from '../../../domain/organization/OrganizationMeasurement';
-import { Snapshot } from '../../../../core/domain/Snapshot';
-import OrganizationSnapShot from '../../../domain/organization/OrganizationSnapShot';
+import Organization from '../../../domain/organization/Organization.js';
+import type { OrganizationRepository } from '../../../domain/organization/OrganizationRepository.js';
+import { OrganizationId } from '../../../domain/organization/OrganizationId.js';
+import OrganizationMeasurement from '../../../domain/organization/OrganizationMeasurement.js';
+import { Snapshot } from '../../../../core/domain/Snapshot.js';
+import OrganizationSnapShot from '../../../domain/organization/OrganizationSnapShot.js';
 
 @injectable()
 export class TypeOrmOrganizationRepository implements OrganizationRepository {

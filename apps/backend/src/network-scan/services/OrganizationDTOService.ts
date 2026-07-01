@@ -1,12 +1,12 @@
-import Organization from '../domain/organization/Organization';
+import Organization from '../domain/organization/Organization.js';
 import { err, ok, Result } from 'neverthrow';
-import { mapUnknownToError } from '../../core/utilities/mapUnknownToError';
-import { OrganizationMeasurementRepository } from '../domain/organization/OrganizationMeasurementRepository';
-import { OrganizationMeasurementDayRepository } from '../domain/organization/OrganizationMeasurementDayRepository';
+import { mapUnknownToError } from '../../core/utilities/mapUnknownToError.js';
+import type { OrganizationMeasurementRepository } from '../domain/organization/OrganizationMeasurementRepository.js';
+import type { OrganizationMeasurementDayRepository } from '../domain/organization/OrganizationMeasurementDayRepository.js';
 import { inject, injectable } from 'inversify';
-import { NETWORK_TYPES } from '../infrastructure/di/di-types';
+import { NETWORK_TYPES } from '../infrastructure/di/di-types.js';
 import { OrganizationV1 } from 'shared';
-import { OrganizationV1DTOMapper } from '../mappers/OrganizationV1DTOMapper';
+import { OrganizationV1DTOMapper } from '../mappers/OrganizationV1DTOMapper.js';
 
 @injectable()
 export class OrganizationDTOService {

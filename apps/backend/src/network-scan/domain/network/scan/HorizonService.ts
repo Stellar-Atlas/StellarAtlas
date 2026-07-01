@@ -1,10 +1,10 @@
 import 'reflect-metadata';
 import { err, ok, Result } from 'neverthrow';
 import { inject, injectable } from 'inversify';
-import { Url } from '../../../../core/domain/Url';
-import { HttpService, isHttpError } from 'http-helper';
-import { isObject } from '../../../../core/utilities/TypeGuards';
-import { CustomError } from '../../../../core/errors/CustomError';
+import { Url } from '../../../../core/domain/Url.js';
+import { isHttpError, type HttpService } from 'http-helper';
+import { isObject } from '../../../../core/utilities/TypeGuards.js';
+import { CustomError } from '../../../../core/errors/CustomError.js';
 
 export interface Account {
 	home_domain: string | undefined;

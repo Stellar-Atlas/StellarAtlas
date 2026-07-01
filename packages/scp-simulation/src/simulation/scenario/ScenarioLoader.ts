@@ -1,9 +1,9 @@
 import {
 	FederatedVotingContext,
 	FederatedVotingContextFactory
-} from '../../federated-voting';
-import { Scenario } from './Scenario';
-import { Simulation } from '../Simulation';
+} from '../../federated-voting/index.js';
+import { Scenario } from './Scenario.js';
+import { Simulation } from '../Simulation.js';
 
 export class ScenarioLoader {
 	loadScenario(scenario: Scenario): {

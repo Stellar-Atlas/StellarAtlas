@@ -1,4 +1,4 @@
-import { RemoveConnection } from '../RemoveConnection';
+import { RemoveConnection } from '../RemoveConnection.js';
 
 describe('RemoveConnection', () => {
 	const nodeA = 'nodeA';

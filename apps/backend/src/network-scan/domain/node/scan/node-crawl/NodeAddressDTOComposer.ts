@@ -1,9 +1,9 @@
-import Node from '../../Node';
-import { NodeAddress } from '../../NodeAddress';
-import { NodeAddress as NodeAddressDTO } from 'crawler';
-import { NetworkQuorumSetConfiguration } from '../../../network/NetworkQuorumSetConfiguration';
-import { NodeSorter } from './NodeSorter';
-import { CrawlerDTOMapper } from './CrawlerDTOMapper';
+import Node from '../../Node.js';
+import type { NodeAddress } from '../../NodeAddress.js';
+import type { NodeAddress as NodeAddressDTO } from 'crawler';
+import { NetworkQuorumSetConfiguration } from '../../../network/NetworkQuorumSetConfiguration.js';
+import { NodeSorter } from './NodeSorter.js';
+import { CrawlerDTOMapper } from './CrawlerDTOMapper.js';
 
 export class NodeAddressDTOComposer {
 	/*

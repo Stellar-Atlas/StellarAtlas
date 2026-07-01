@@ -1,5 +1,5 @@
-import { CustomError } from '../../../core/errors/CustomError';
-import { UnmuteNotificationError } from '../unmute-notification/UnmuteNotificationError';
+import { CustomError } from '../../../core/errors/CustomError.js';
+import { UnmuteNotificationError } from '../unmute-notification/UnmuteNotificationError.js';
 
 export class UnsubscribeError extends CustomError {
 	errorType = 'UnsubscribeError';

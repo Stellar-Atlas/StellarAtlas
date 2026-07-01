@@ -1,14 +1,14 @@
-import { NodeScannerCrawlStep } from '../NodeScannerCrawlStep';
-import { CrawlerService } from '../node-crawl/CrawlerService';
+import { NodeScannerCrawlStep } from '../NodeScannerCrawlStep.js';
+import { CrawlerService } from '../node-crawl/CrawlerService.js';
 import { mock } from 'jest-mock-extended';
-import { NodeRepository } from '../../NodeRepository';
-import { Logger } from 'logger';
-import { NodeScan } from '../NodeScan';
-import { createDummyNode } from '../../__fixtures__/createDummyNode';
-import { NetworkQuorumSetConfiguration } from '../../../network/NetworkQuorumSetConfiguration';
+import type { NodeRepository } from '../../NodeRepository.js';
+import type { Logger } from 'logger';
+import { NodeScan } from '../NodeScan.js';
+import { createDummyNode } from '../../__fixtures__/createDummyNode.js';
+import { NetworkQuorumSetConfiguration } from '../../../network/NetworkQuorumSetConfiguration.js';
 import { err, ok } from 'neverthrow';
-import { createDummyPublicKey } from '../../__fixtures__/createDummyPublicKey';
-import Node from '../../Node';
+import { createDummyPublicKey } from '../../__fixtures__/createDummyPublicKey.js';
+import Node from '../../Node.js';
 import { PeerNode } from 'crawler';
 
 describe('NodeScannerCrawlStep', () => {

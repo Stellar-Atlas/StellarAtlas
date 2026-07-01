@@ -1,8 +1,8 @@
-import { calculateStepHash, SimulationStep } from '../Simulation';
+import { calculateStepHash, SimulationStep } from '../Simulation.js';
 import {
 	SerializedSimulationStep,
 	SimulationStepSerializer
-} from './SimulationStepSerializer';
+} from './SimulationStepSerializer.js';
 
 export class SimulationStepListSerializer {
 	constructor(private stepSerializer: SimulationStepSerializer) {}

@@ -1,5 +1,5 @@
-import { SimulationStepListSerializer } from '../serializer/SimulationStepListSerializer';
-import { Scenario } from './Scenario';
+import { SimulationStepListSerializer } from '../serializer/SimulationStepListSerializer.js';
+import { Scenario } from './Scenario.js';
 
 export class ScenarioSerializer {
 	constructor(

@@ -1,10 +1,10 @@
-import Organization from '../Organization';
-import { createDummyOrganizationId } from '../__fixtures__/createDummyOrganizationId';
-import { OrganizationContactInformation } from '../OrganizationContactInformation';
-import { OrganizationValidators } from '../OrganizationValidators';
-import { createDummyPublicKey } from '../../node/__fixtures__/createDummyPublicKey';
-import { createDummyNode } from '../../node/__fixtures__/createDummyNode';
-import NodeMeasurement from '../../node/NodeMeasurement';
+import Organization from '../Organization.js';
+import { createDummyOrganizationId } from '../__fixtures__/createDummyOrganizationId.js';
+import { OrganizationContactInformation } from '../OrganizationContactInformation.js';
+import { OrganizationValidators } from '../OrganizationValidators.js';
+import { createDummyPublicKey } from '../../node/__fixtures__/createDummyPublicKey.js';
+import { createDummyNode } from '../../node/__fixtures__/createDummyNode.js';
+import NodeMeasurement from '../../node/NodeMeasurement.js';
 
 describe('Organization', () => {
 	describe('name changes', () => {

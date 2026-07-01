@@ -1,8 +1,8 @@
-import { sortHistoryUrls } from './sortHistoryUrls';
-import { Scan } from './scan/Scan';
-import { ScanJob } from './ScanJob';
+import { sortHistoryUrls } from './sortHistoryUrls.js';
+import { Scan } from './scan/Scan.js';
+import { ScanJob } from './ScanJob.js';
 import { Url } from 'http-helper';
-import { extractLedgerFromHistoryArchiveUrl } from './scan/extractLedgerFromHistoryArchiveUrl';
+import { extractLedgerFromHistoryArchiveUrl } from './scan/extractLedgerFromHistoryArchiveUrl.js';
 
 export interface ScanScheduler {
 	schedule(

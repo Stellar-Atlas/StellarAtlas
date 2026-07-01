@@ -1,13 +1,13 @@
 import { err, ok, Result } from 'neverthrow';
-import { mapUnknownToError } from '../../../core/utilities/mapUnknownToError';
+import { mapUnknownToError } from '../../../core/utilities/mapUnknownToError.js';
 import { inject, injectable } from 'inversify';
-import { ExceptionLogger } from '../../../core/services/ExceptionLogger';
-import { GetNodeSnapshotsDTO } from './GetNodeSnapshotsDTO';
+import type { ExceptionLogger } from '../../../core/services/ExceptionLogger.js';
+import { GetNodeSnapshotsDTO } from './GetNodeSnapshotsDTO.js';
 import { NodeSnapShot } from 'shared';
-import PublicKey from '../../domain/node/PublicKey';
-import { NodeSnapshotMapper } from '../../mappers/NodeSnapshotMapper';
-import { NodeSnapShotRepository } from '../../domain/node/NodeSnapShotRepository';
-import { NETWORK_TYPES } from '../../infrastructure/di/di-types';
+import PublicKey from '../../domain/node/PublicKey.js';
+import { NodeSnapshotMapper } from '../../mappers/NodeSnapshotMapper.js';
+import type { NodeSnapShotRepository } from '../../domain/node/NodeSnapShotRepository.js';
+import { NETWORK_TYPES } from '../../infrastructure/di/di-types.js';
 
 @injectable()
 export class GetNodeSnapshots {

@@ -1,9 +1,9 @@
-import { GetNetwork } from '../GetNetwork';
+import { GetNetwork } from '../GetNetwork.js';
 import { mock } from 'jest-mock-extended';
 import { err } from 'neverthrow';
-import { ExceptionLogger } from '../../../../core/services/ExceptionLogger';
-import { NetworkDTOService } from '../../../services/NetworkDTOService';
-import { CachedNetworkDTOService } from '../../../services/CachedNetworkDTOService';
+import type { ExceptionLogger } from '../../../../core/services/ExceptionLogger.js';
+import { NetworkDTOService } from '../../../services/NetworkDTOService.js';
+import { CachedNetworkDTOService } from '../../../services/CachedNetworkDTOService.js';
 
 it('should capture and return network errors', async function () {
 	const networkDTOService = mock<CachedNetworkDTOService>();

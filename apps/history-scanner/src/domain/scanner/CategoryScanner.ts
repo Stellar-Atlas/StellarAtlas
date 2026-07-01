@@ -1,6 +1,6 @@
 import * as stream from 'stream';
 import { err, ok, Result } from 'neverthrow';
-import { CategoryRequestMeta, RequestGenerator } from './RequestGenerator';
+import { CategoryRequestMeta, RequestGenerator } from './RequestGenerator.js';
 import {
 	FileNotFoundError,
 	HttpQueue,
@@ -11,28 +11,28 @@ import {
 	Url,
 	asyncSleep
 } from 'http-helper';
-import { HASValidator } from '../history-archive/HASValidator';
+import { HASValidator } from '../history-archive/HASValidator.js';
 import { inject, injectable } from 'inversify';
-import { HASBucketHashExtractor } from '../history-archive/HASBucketHashExtractor';
-import { mapHttpQueueErrorToScanError } from './mapHttpQueueErrorToScanError';
+import { HASBucketHashExtractor } from '../history-archive/HASBucketHashExtractor.js';
+import { mapHttpQueueErrorToScanError } from './mapHttpQueueErrorToScanError.js';
 import { isObject, mapUnknownToError } from 'shared';
-import { Category } from '../history-archive/Category';
+import { Category } from '../history-archive/Category.js';
 import { createGunzip } from 'zlib';
-import { XdrStreamReader } from './XdrStreamReader';
+import { XdrStreamReader } from './XdrStreamReader.js';
 import { pipeline } from 'stream/promises';
-import { CategoryXDRProcessor } from './CategoryXDRProcessor';
-import { ScanError, ScanErrorType } from '../scan/ScanError';
-import { UrlBuilder } from '../history-archive/UrlBuilder';
-import { CheckPointGenerator } from '../check-point/CheckPointGenerator';
-import { CategoryScanState } from './ScanState';
-import { LedgerHeader } from './Scanner';
-import { hashBucketList } from '../history-archive/hashBucketList';
-import { WorkerPoolLoadTracker } from './WorkerPoolLoadTracker';
-import { CategoryVerificationService } from './CategoryVerificationService';
-import { HasherPool } from './HasherPool';
-import { isZLibError } from './isZLibError';
-import { getMaximumNumber } from './getMaximumNumber';
-import { TYPES } from './../../infrastructure/di/di-types';
+import { CategoryXDRProcessor } from './CategoryXDRProcessor.js';
+import { ScanError, ScanErrorType } from '../scan/ScanError.js';
+import { UrlBuilder } from '../history-archive/UrlBuilder.js';
+import { CheckPointGenerator } from '../check-point/CheckPointGenerator.js';
+import { CategoryScanState } from './ScanState.js';
+import { LedgerHeader } from './Scanner.js';
+import { hashBucketList } from '../history-archive/hashBucketList.js';
+import { WorkerPoolLoadTracker } from './WorkerPoolLoadTracker.js';
+import { CategoryVerificationService } from './CategoryVerificationService.js';
+import { HasherPool } from './HasherPool.js';
+import { isZLibError } from './isZLibError.js';
+import { getMaximumNumber } from './getMaximumNumber.js';
+import { TYPES } from './../../infrastructure/di/di-types.js';
 
 type Ledger = number;
 type Hash = string;

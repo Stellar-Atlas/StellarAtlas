@@ -1,15 +1,15 @@
-import Node from '../../domain/node/Node';
-import { createDummyPublicKey } from '../../domain/node/__fixtures__/createDummyPublicKey';
-import NodeGeoDataLocation from '../../domain/node/NodeGeoDataLocation';
-import NodeQuorumSet from '../../domain/node/NodeQuorumSet';
+import Node from '../../domain/node/Node.js';
+import { createDummyPublicKey } from '../../domain/node/__fixtures__/createDummyPublicKey.js';
+import NodeGeoDataLocation from '../../domain/node/NodeGeoDataLocation.js';
+import NodeQuorumSet from '../../domain/node/NodeQuorumSet.js';
 import { QuorumSet } from 'shared';
-import NodeDetails from '../../domain/node/NodeDetails';
-import { createDummyOrganizationId } from '../../domain/organization/__fixtures__/createDummyOrganizationId';
+import NodeDetails from '../../domain/node/NodeDetails.js';
+import { createDummyOrganizationId } from '../../domain/organization/__fixtures__/createDummyOrganizationId.js';
 import { Node as NodeDTO } from 'shared';
-import NodeMeasurement from '../../domain/node/NodeMeasurement';
-import { NodeMeasurementAverage } from '../../domain/node/NodeMeasurementAverage';
-import { NodeSnapshotMapper } from '../NodeSnapshotMapper';
-import { OrganizationId } from '../../domain/organization/OrganizationId';
+import NodeMeasurement from '../../domain/node/NodeMeasurement.js';
+import { NodeMeasurementAverage } from '../../domain/node/NodeMeasurementAverage.js';
+import { NodeSnapshotMapper } from '../NodeSnapshotMapper.js';
+import { OrganizationId } from '../../domain/organization/OrganizationId.js';
 
 describe('NodeSnapshotMapper', () => {
 	let nodeDTO: NodeDTO;

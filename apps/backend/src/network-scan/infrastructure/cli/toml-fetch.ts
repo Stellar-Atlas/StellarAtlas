@@ -1,6 +1,6 @@
-import Kernel from '../../../core/infrastructure/Kernel';
-import { OrganizationTomlFetcher } from '../../domain/organization/scan/OrganizationTomlFetcher';
-import { NodeTomlFetcher } from '../../domain/node/scan/NodeTomlFetcher';
+import Kernel from '../../../core/infrastructure/Kernel.js';
+import { OrganizationTomlFetcher } from '../../domain/organization/scan/OrganizationTomlFetcher.js';
+import { NodeTomlFetcher } from '../../domain/node/scan/NodeTomlFetcher.js';
 
 main();
 

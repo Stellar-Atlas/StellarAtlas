@@ -1,5 +1,5 @@
 import { PrimaryGeneratedColumn } from 'typeorm';
-import { ValueObject } from './ValueObject';
+import { ValueObject } from './ValueObject.js';
 
 //If you want to store a value object in database in a separate column, but not expose its internal db id, use this class.
 export abstract class IdentifiedValueObject extends ValueObject {

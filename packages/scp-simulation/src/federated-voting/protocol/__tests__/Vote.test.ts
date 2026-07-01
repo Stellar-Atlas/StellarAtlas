@@ -1,5 +1,5 @@
-import { Vote } from '../Vote';
-import { QuorumSet } from '../../../core';
+import { Vote } from '../Vote.js';
+import { QuorumSet } from '../../../core/index.js';
 
 describe('Vote', () => {
 	describe('toJSON', () => {

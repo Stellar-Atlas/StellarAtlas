@@ -1,9 +1,9 @@
 import { mock } from 'jest-mock-extended';
-import { NetworkDTOService } from '../NetworkDTOService';
-import { CachedNetworkDTOService } from '../CachedNetworkDTOService';
+import { NetworkDTOService } from '../NetworkDTOService.js';
+import { CachedNetworkDTOService } from '../CachedNetworkDTOService.js';
 import { ok } from 'neverthrow';
-import { createDummyNetworkV1 } from '../__fixtures__/createDummyNetworkV1';
-import { NetworkScanRepository } from '../../domain/network/scan/NetworkScanRepository';
+import { createDummyNetworkV1 } from '../__fixtures__/createDummyNetworkV1.js';
+import type { NetworkScanRepository } from '../../domain/network/scan/NetworkScanRepository.js';
 
 describe('CachedNetworkDTOService', () => {
 	it('should return cached network dto', async () => {

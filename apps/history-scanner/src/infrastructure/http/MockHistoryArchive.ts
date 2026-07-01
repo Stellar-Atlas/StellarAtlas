@@ -2,6 +2,9 @@ import { Server } from 'net';
 import express from 'express';
 import path from 'path';
 import fs from 'fs';
+import { fileURLToPath } from 'node:url';
+
+const currentDir = path.dirname(fileURLToPath(import.meta.url));
 
 export class MockHistoryArchive {
 	private server?: Server;
@@ -13,7 +16,7 @@ export class MockHistoryArchive {
 				'*.json',
 				async (req: express.Request, res: express.Response) => {
 					const file = path.join(
-						__dirname,
+						currentDir,
 						'/__fixtures__/',
 						path.basename(req.path)
 					);
@@ -25,7 +28,7 @@ export class MockHistoryArchive {
 				'*.xdr.gz',
 				async (req: express.Request, res: express.Response) => {
 					const file = path.join(
-						__dirname,
+						currentDir,
 						'/__fixtures__/',
 						path.basename(req.path)
 					);

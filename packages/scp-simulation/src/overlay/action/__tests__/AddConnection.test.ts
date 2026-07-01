@@ -1,4 +1,4 @@
-import { AddConnection } from '../AddConnection';
+import { AddConnection } from '../AddConnection.js';
 
 describe('AddConnection', () => {
 	const nodeA = 'nodeA';

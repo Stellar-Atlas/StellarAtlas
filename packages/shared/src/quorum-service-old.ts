@@ -1,8 +1,8 @@
-/*import {QuorumSet} from "./quorum-set";
+/*import {QuorumSet} from "./quorum-set.js";
 import {intersection, isEqual} from "lodash";
-import {Node} from "./node";
-import {Network, PublicKey} from "./network";
-import {QuorumSlicesGenerator} from "./quorum-slices-generator";*/
+import {Node} from "./node.js";
+import {Network, PublicKey} from "./network.js";
+import {QuorumSlicesGenerator} from "./quorum-slices-generator.js";*/
 
 /**
  * Based on:

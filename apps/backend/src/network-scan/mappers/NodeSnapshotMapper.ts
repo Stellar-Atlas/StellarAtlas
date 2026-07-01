@@ -3,9 +3,9 @@ import {
 	NodeGeoData,
 	NodeSnapShot as NodeSnapshotDTO
 } from 'shared';
-import NodeMeasurement from '../domain/node/NodeMeasurement';
-import { NodeMeasurementAverage } from '../domain/node/NodeMeasurementAverage';
-import NodeSnapShot from '../domain/node/NodeSnapShot';
+import NodeMeasurement from '../domain/node/NodeMeasurement.js';
+import { NodeMeasurementAverage } from '../domain/node/NodeMeasurementAverage.js';
+import NodeSnapShot from '../domain/node/NodeSnapShot.js';
 import { NodeSnapShot as NodeSnapShotDTO } from 'shared';
 
 export class NodeSnapshotMapper {

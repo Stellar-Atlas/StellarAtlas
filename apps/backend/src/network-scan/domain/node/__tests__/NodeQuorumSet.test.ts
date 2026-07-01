@@ -1,4 +1,4 @@
-import NodeQuorumSet from '../NodeQuorumSet';
+import NodeQuorumSet from '../NodeQuorumSet.js';
 import { QuorumSet } from 'shared';
 
 describe('NodeQuorumSet', () => {

@@ -2,8 +2,8 @@
 
 import { mock, mockDeep, MockProxy } from 'jest-mock-extended';
 import { Node as NetworkNode, Connection } from 'node-connector';
-import { ConnectionManager } from '../connection-manager';
-import pino = require('pino');
+import { ConnectionManager } from '../connection-manager.js';
+import pino from 'pino';
 import { EventEmitter } from 'events';
 
 describe('ConnectionManager', () => {

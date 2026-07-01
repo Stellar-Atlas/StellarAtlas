@@ -1,5 +1,5 @@
-import { Timer } from './timer';
-import { TimerFactory } from './timer-factory';
+import { Timer } from './timer.js';
+import { TimerFactory } from './timer-factory.js';
 
 export class Timers {
 	private timers = new Set<Timer>();

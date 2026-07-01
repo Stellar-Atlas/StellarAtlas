@@ -1,9 +1,9 @@
-import { HttpQueue, RequestMethod, QueueError } from '../HttpQueue';
+import { HttpQueue, RequestMethod, QueueError } from '../HttpQueue.js';
 import { mock } from 'jest-mock-extended';
-import { LoggerMock } from '../__mocks__/LoggerMock';
-import { HttpService, HttpError } from '../HttpService';
+import { LoggerMock } from '../__mocks__/LoggerMock.js';
+import { HttpService, HttpError } from '../HttpService.js';
 import { err, ok } from 'neverthrow';
-import { Url } from '../Url';
+import { Url } from '../Url.js';
 
 const dummyUrlResult = Url.create('http://test.com');
 if (!dummyUrlResult.isOk()) throw dummyUrlResult.error;

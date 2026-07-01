@@ -2,22 +2,22 @@ import BigNumber from 'bignumber.js';
 import { hash, Keypair, StrKey, xdr } from '@stellar/stellar-sdk';
 import { err, ok, Result } from 'neverthrow';
 import { Socket } from 'net';
-import { ConnectionAuthentication } from './connection-authentication';
-import { createSHA256Hmac, verifyHmac } from '../crypto-helper';
+import { ConnectionAuthentication } from './connection-authentication.js';
+import { createSHA256Hmac, verifyHmac } from '../crypto-helper.js';
 import { Duplex } from 'stream';
-import xdrMessageCreator from './handshake-message-creator';
-import xdrBufferConverter from './xdr-buffer-converter';
+import xdrMessageCreator from './handshake-message-creator.js';
+import xdrBufferConverter from './xdr-buffer-converter.js';
 import * as async from 'async';
 import {
 	AuthenticatedMessageV0,
 	parseAuthenticatedMessageXDR
-} from './xdr-message-handler';
-import pino = require('pino');
-import { NodeInfo } from '../node';
-import { FlowController } from './flow-controller';
+} from './xdr-message-handler.js';
+import pino from 'pino';
+import { NodeInfo } from '../node.js';
+import { FlowController } from './flow-controller.js';
 import StellarMessage = xdr.StellarMessage;
 import MessageType = xdr.MessageType;
-import { mapUnknownToError } from '../map-unknown-to-error';
+import { mapUnknownToError } from '../map-unknown-to-error.js';
 
 type PublicKey = string;
 

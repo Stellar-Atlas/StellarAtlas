@@ -1,9 +1,9 @@
 import { err, ok, Result } from 'neverthrow';
-import { Scanner } from '../../domain/scanner/Scanner';
-import { ExceptionLogger } from 'exception-logger';
+import { Scanner } from '../../domain/scanner/Scanner.js';
+import type { ExceptionLogger } from 'exception-logger';
 import { mapUnknownToError } from 'shared';
-import { VerifySingleArchiveDTO } from './VerifySingleArchiveDTO';
-import { ScanJob } from '../../domain/scan/ScanJob';
+import { VerifySingleArchiveDTO } from './VerifySingleArchiveDTO.js';
+import { ScanJob } from '../../domain/scan/ScanJob.js';
 import { Url } from 'http-helper';
 
 export class VerifySingleArchive {

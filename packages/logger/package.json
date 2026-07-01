@@ -1,6 +1,7 @@
 {
 	"name": "logger",
 	"description": "Abstract logger",
+	"type": "module",
 	"scripts": {
 		"preversion": "pnpm run build",
 		"build": "../../node_modules/typescript/bin/tsc  --declaration",

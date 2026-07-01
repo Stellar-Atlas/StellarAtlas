@@ -1,9 +1,9 @@
-import { ValidatingIndex } from './index/validating-index';
-import { TypeIndex } from './index/type-index';
-import { ActiveIndex } from './index/active-index';
-import { VersionIndex } from './index/version-index';
-import { AgeIndex } from './index/age-index';
-import { TrustIndex } from './index/trust-index';
+import { ValidatingIndex } from './index/validating-index.js';
+import { TypeIndex } from './index/type-index.js';
+import { ActiveIndex } from './index/active-index.js';
+import { VersionIndex } from './index/version-index.js';
+import { AgeIndex } from './index/age-index.js';
+import { TrustIndex } from './index/trust-index.js';
 import { TrustGraph } from 'shared';
 
 export interface IndexNode {

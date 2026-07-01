@@ -1,8 +1,9 @@
-import { NodeScannerGeoStep } from '../NodeScannerGeoStep';
-import { GeoDataService, GeoDataUpdateError } from '../GeoDataService';
+import { NodeScannerGeoStep } from '../NodeScannerGeoStep.js';
+import { GeoDataUpdateError } from '../GeoDataService.js';
+import type { GeoDataService } from '../GeoDataService.js';
 import { mock } from 'jest-mock-extended';
-import { Logger } from 'logger';
-import { NodeScan } from '../NodeScan';
+import type { Logger } from 'logger';
+import { NodeScan } from '../NodeScan.js';
 import { err, ok } from 'neverthrow';
 
 describe('NodeScannerGeoStep', () => {

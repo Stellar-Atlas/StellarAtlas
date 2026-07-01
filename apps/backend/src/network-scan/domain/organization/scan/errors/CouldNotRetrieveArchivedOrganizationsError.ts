@@ -1,4 +1,4 @@
-import { OrganizationScanError } from './OrganizationScanError';
+import { OrganizationScanError } from './OrganizationScanError.js';
 
 export class CouldNotRetrieveArchivedOrganizationsError extends OrganizationScanError {
 	constructor(cause: Error) {

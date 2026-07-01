@@ -1,13 +1,13 @@
 import { injectable, inject } from 'inversify';
-import { TYPES } from '../../infrastructure/di/di-types';
-import { ExceptionLogger } from 'exception-logger';
+import { TYPES } from '../../infrastructure/di/di-types.js';
+import type { ExceptionLogger } from 'exception-logger';
 import { err, ok, Result } from 'neverthrow';
-import { ScanMapper } from '../../infrastructure/mappers/ScanMapper';
-import { ScanRepository } from '../../domain/scan/ScanRepository';
-import { mapUnknownToError } from '../../../core/utilities/mapUnknownToError';
+import { ScanMapper } from '../../infrastructure/mappers/ScanMapper.js';
+import type { ScanRepository } from '../../domain/scan/ScanRepository.js';
+import { mapUnknownToError } from '../../../core/utilities/mapUnknownToError.js';
 import { ScanDTO } from 'history-scanner-dto';
-import { Logger } from 'logger';
-import { ScanJobRepository } from '../../domain/ScanJobRepository';
+import type { Logger } from 'logger';
+import type { ScanJobRepository } from '../../domain/ScanJobRepository.js';
 
 @injectable()
 export class RegisterScan {

@@ -1,6 +1,7 @@
 {
 	"name": "users",
 	"description": "Users email service",
+	"type": "module",
 	"scripts": {
 		"build": "tsc --declaration",
 		"build-and-start": "pnpm build; node lib/index.js",

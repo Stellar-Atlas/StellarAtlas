@@ -1,6 +1,6 @@
 //import 'reflect-metadata';
-import { VerifyArchives } from '../../use-cases/verify-archives/VerifyArchives';
-import Kernel from '../Kernel';
+import { VerifyArchives } from '../../use-cases/verify-archives/VerifyArchives.js';
+import Kernel from '../Kernel.js';
 
 // noinspection JSIgnoredPromiseFromCall
 main();

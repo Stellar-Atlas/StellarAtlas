@@ -5,12 +5,12 @@ import {
 	ValueTransformer,
 	PrimaryGeneratedColumn
 } from 'typeorm';
-import { CoreEntity } from '../../../../core/domain/CoreEntity';
-import NetworkMeasurement from '../NetworkMeasurement';
-import { NodeScan } from '../../node/scan/NodeScan';
-import { OrganizationScan } from '../../organization/scan/OrganizationScan';
+import { CoreEntity } from '../../../../core/domain/CoreEntity.js';
+import NetworkMeasurement from '../NetworkMeasurement.js';
+import { NodeScan } from '../../node/scan/NodeScan.js';
+import { OrganizationScan } from '../../organization/scan/OrganizationScan.js';
 import { TrustGraph } from 'shared';
-import { AnalysisResult } from './fbas-analysis/AnalysisResult';
+import { AnalysisResult } from './fbas-analysis/AnalysisResult.js';
 
 export const bigIntTransformer: ValueTransformer = {
 	to: (entityValue: bigint) => entityValue,

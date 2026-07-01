@@ -1,3 +1,3 @@
-export { ExceptionLogger } from './ExceptionLogger';
-export { SentryExceptionLogger } from './SentryExceptionLogger';
-export { ConsoleExceptionLogger } from './ConsoleExceptionLogger';
+export type { ExceptionLogger } from './ExceptionLogger.js';
+export { SentryExceptionLogger } from './SentryExceptionLogger.js';
+export { ConsoleExceptionLogger } from './ConsoleExceptionLogger.js';

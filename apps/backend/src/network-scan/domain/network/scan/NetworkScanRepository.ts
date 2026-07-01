@@ -1,4 +1,4 @@
-import NetworkScan from './NetworkScan';
+import NetworkScan from './NetworkScan.js';
 
 export interface NetworkScanRepository {
 	findLatestSuccessfulScanTime(): Promise<Date | undefined>;

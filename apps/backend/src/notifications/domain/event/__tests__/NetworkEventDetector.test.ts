@@ -1,4 +1,4 @@
-import { NetworkEventDetector } from '../NetworkEventDetector';
+import { NetworkEventDetector } from '../NetworkEventDetector.js';
 import {
 	NetworkLossOfLivenessEvent,
 	NetworkLossOfSafetyEvent,
@@ -7,9 +7,9 @@ import {
 	NetworkOrganizationLivenessRiskEvent,
 	NetworkOrganizationSafetyRiskEvent,
 	NetworkTransitiveQuorumSetChangedEvent
-} from '../Event';
-import { createDummyNodeV1 } from '../../../../network-scan/services/__fixtures__/createDummyNodeV1';
-import { createDummyNetworkV1 } from '../../../../network-scan/services/__fixtures__/createDummyNetworkV1';
+} from '../Event.js';
+import { createDummyNodeV1 } from '../../../../network-scan/services/__fixtures__/createDummyNodeV1.js';
+import { createDummyNetworkV1 } from '../../../../network-scan/services/__fixtures__/createDummyNetworkV1.js';
 
 describe('NetworkEventDetector', function () {
 	it('should return an event when the network transitive quorum set has changed', async function () {

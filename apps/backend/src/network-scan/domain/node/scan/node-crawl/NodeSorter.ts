@@ -1,6 +1,6 @@
-import Node from '../../Node';
-import { NetworkQuorumSetConfiguration } from '../../../network/NetworkQuorumSetConfiguration';
-import PublicKey from '../../PublicKey';
+import Node from '../../Node.js';
+import { NetworkQuorumSetConfiguration } from '../../../network/NetworkQuorumSetConfiguration.js';
+import PublicKey from '../../PublicKey.js';
 
 export class NodeSorter {
 	static sortByNetworkQuorumSetInclusion(

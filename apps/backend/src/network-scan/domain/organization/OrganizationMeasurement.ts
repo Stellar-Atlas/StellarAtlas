@@ -1,7 +1,7 @@
 import { Entity, Column, ManyToOne, PrimaryColumn } from 'typeorm';
-import Organization from './Organization';
-import { Measurement } from '../measurement/Measurement';
-import { TomlState } from './scan/TomlState';
+import type Organization from './Organization.js';
+import { Measurement } from '../measurement/Measurement.js';
+import { TomlState } from './scan/TomlState.js';
 
 @Entity()
 export default class OrganizationMeasurement implements Measurement {
@@ -11,7 +11,7 @@ export default class OrganizationMeasurement implements Measurement {
 	@PrimaryColumn()
 	private organizationId?: string;
 
-	@ManyToOne(() => Organization, {
+	@ManyToOne('Organization', {
 		nullable: false,
 		eager: true
 	})

@@ -1,17 +1,17 @@
-import { CheckPointGenerator } from '../check-point/CheckPointGenerator';
+import { CheckPointGenerator } from '../check-point/CheckPointGenerator.js';
 import { inject, injectable } from 'inversify';
-import { Logger } from 'logger';
+import type { Logger } from 'logger';
 import { err, ok, Result } from 'neverthrow';
-import { ExceptionLogger } from 'exception-logger';
-import { BucketScanState, CategoryScanState } from './ScanState';
+import type { ExceptionLogger } from 'exception-logger';
+import { BucketScanState, CategoryScanState } from './ScanState.js';
 import { HttpQueue, Url } from 'http-helper';
 import * as http from 'http';
 import * as https from 'https';
-import { CategoryScanner } from './CategoryScanner';
-import { BucketScanner } from './BucketScanner';
-import { ScanError } from '../scan/ScanError';
-import { LedgerHeader } from './Scanner';
-import { TYPES } from '../../infrastructure/di/di-types';
+import { CategoryScanner } from './CategoryScanner.js';
+import { BucketScanner } from './BucketScanner.js';
+import { ScanError } from '../scan/ScanError.js';
+import { LedgerHeader } from './Scanner.js';
+import { TYPES } from '../../infrastructure/di/di-types.js';
 
 export interface RangeScanResult {
 	latestLedgerHeader?: LedgerHeader;

@@ -1,15 +1,15 @@
-import { NodeScanner } from './node/scan/NodeScanner';
-import { OrganizationScanner } from './organization/scan/OrganizationScanner';
+import { NodeScanner } from './node/scan/NodeScanner.js';
+import { OrganizationScanner } from './organization/scan/OrganizationScanner.js';
 import { inject, injectable } from 'inversify';
-import { Logger } from '../../core/services/Logger';
-import { Network } from './network/Network';
-import { NodeMeasurementAverage } from './node/NodeMeasurementAverage';
+import type { Logger } from '../../core/services/Logger.js';
+import { Network } from './network/Network.js';
+import { NodeMeasurementAverage } from './node/NodeMeasurementAverage.js';
 import { err, ok, Result } from 'neverthrow';
-import NetworkScan from './network/scan/NetworkScan';
-import { NodeScan } from './node/scan/NodeScan';
-import { OrganizationScan } from './organization/scan/OrganizationScan';
-import { NetworkScanner } from './network/scan/NetworkScanner';
-import { NodeAddress } from './node/NodeAddress';
+import NetworkScan from './network/scan/NetworkScan.js';
+import { NodeScan } from './node/scan/NodeScan.js';
+import { OrganizationScan } from './organization/scan/OrganizationScan.js';
+import { NetworkScanner } from './network/scan/NetworkScanner.js';
+import type { NodeAddress } from './node/NodeAddress.js';
 
 export interface ScanResult {
 	networkScan: NetworkScan;

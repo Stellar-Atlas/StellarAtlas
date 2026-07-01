@@ -1,15 +1,16 @@
-import { CrawlerService, CrawlResult } from './node-crawl/CrawlerService';
+import { CrawlerService } from './node-crawl/CrawlerService.js';
+import type { CrawlResult } from './node-crawl/CrawlerService.js';
 import { inject, injectable } from 'inversify';
-import { Logger } from '../../../../core/services/Logger';
+import type { Logger } from '../../../../core/services/Logger.js';
 import { err, Ok, ok, Result } from 'neverthrow';
-import { NetworkQuorumSetConfiguration } from '../../network/NetworkQuorumSetConfiguration';
-import Node from '../Node';
-import { NodeScan } from './NodeScan';
-import { NodeRepository } from '../NodeRepository';
-import { NETWORK_TYPES } from '../../../infrastructure/di/di-types';
-import PublicKey from '../PublicKey';
-import { mapUnknownToError } from '../../../../core/utilities/mapUnknownToError';
-import { NodeAddress } from '../NodeAddress';
+import { NetworkQuorumSetConfiguration } from '../../network/NetworkQuorumSetConfiguration.js';
+import Node from '../Node.js';
+import { NodeScan } from './NodeScan.js';
+import type { NodeRepository } from '../NodeRepository.js';
+import { NETWORK_TYPES } from '../../../infrastructure/di/di-types.js';
+import PublicKey from '../PublicKey.js';
+import { mapUnknownToError } from '../../../../core/utilities/mapUnknownToError.js';
+import type { NodeAddress } from '../NodeAddress.js';
 
 @injectable()
 export class NodeScannerCrawlStep {

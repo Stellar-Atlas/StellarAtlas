@@ -1,2 +1,2 @@
-export { ConsoleInterfacer } from './ConsoleInterfacer';
-export { ConsoleAdjacencyMatrixVisualization } from './ConsoleAdjacencyMatrixVisualizer';
+export { ConsoleInterfacer } from './ConsoleInterfacer.js';
+export { ConsoleAdjacencyMatrixVisualization } from './ConsoleAdjacencyMatrixVisualizer.js';

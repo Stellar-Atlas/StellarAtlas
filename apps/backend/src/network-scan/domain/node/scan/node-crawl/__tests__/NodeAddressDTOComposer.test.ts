@@ -1,7 +1,7 @@
-import { createDummyNode } from '../../../__fixtures__/createDummyNode';
-import { createDummyNodeAddress } from '../../../__fixtures__/createDummyNodeAddress';
-import { NetworkQuorumSetConfiguration } from '../../../../network/NetworkQuorumSetConfiguration';
-import { NodeAddressDTOComposer } from '../NodeAddressDTOComposer';
+import { createDummyNode } from '../../../__fixtures__/createDummyNode.js';
+import { createDummyNodeAddress } from '../../../__fixtures__/createDummyNodeAddress.js';
+import { NetworkQuorumSetConfiguration } from '../../../../network/NetworkQuorumSetConfiguration.js';
+import { NodeAddressDTOComposer } from '../NodeAddressDTOComposer.js';
 
 describe('NodeAddressDTOComposer', () => {
 	test('compose', () => {

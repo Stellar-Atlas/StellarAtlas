@@ -1,15 +1,15 @@
 import { getIpFromPeerAddress, getQuorumSetFromMessage } from 'node-connector';
 import { hash, xdr } from '@stellar/stellar-sdk';
-import pino = require('pino');
-import { ScpEnvelopeHandler } from './scp-envelope/scp-envelope-handler';
-import { truncate } from '../../../utilities/truncate';
+import pino from 'pino';
+import { ScpEnvelopeHandler } from './scp-envelope/scp-envelope-handler.js';
+import { truncate } from '../../../utilities/truncate.js';
 import { QuorumSet } from 'shared';
-import { QuorumSetManager } from '../../quorum-set-manager';
+import { QuorumSetManager } from '../../quorum-set-manager.js';
 import { err, ok, Result } from 'neverthrow';
-import { PeerNodeCollection } from '../../../peer-node-collection';
-import { NodeAddress } from '../../../node-address';
-import { Ledger } from '../../../crawler';
-import { Observation } from '../../observation';
+import { PeerNodeCollection } from '../../../peer-node-collection.js';
+import type { NodeAddress } from '../../../node-address.js';
+import type { Ledger } from '../../../crawler.js';
+import { Observation } from '../../observation.js';
 
 type PublicKey = string;
 

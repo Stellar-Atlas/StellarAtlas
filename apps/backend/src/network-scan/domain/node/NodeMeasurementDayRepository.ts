@@ -1,10 +1,9 @@
-import { NodeMeasurementAverage } from './NodeMeasurementAverage';
-import { MeasurementAggregationRepository } from '../measurement-aggregation/MeasurementAggregationRepository';
-import NodeMeasurementDay from './NodeMeasurementDay';
-import PublicKey from './PublicKey';
+import { NodeMeasurementAverage } from './NodeMeasurementAverage.js';
+import type { MeasurementAggregationRepository } from '../measurement-aggregation/MeasurementAggregationRepository.js';
+import NodeMeasurementDay from './NodeMeasurementDay.js';
+import PublicKey from './PublicKey.js';
 
-export interface NodeMeasurementDayRepository
-	extends MeasurementAggregationRepository<NodeMeasurementDay> {
+export interface NodeMeasurementDayRepository extends MeasurementAggregationRepository<NodeMeasurementDay> {
 	findXDaysAverageAt(
 		at: Date,
 		xDays: number

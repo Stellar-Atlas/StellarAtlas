@@ -1,18 +1,18 @@
-import { Scanner } from '../Scanner';
-import { NodeScanner } from '../node/scan/NodeScanner';
+import { Scanner } from '../Scanner.js';
+import { NodeScanner } from '../node/scan/NodeScanner.js';
 import { mock } from 'jest-mock-extended';
-import { OrganizationScanner } from '../organization/scan/OrganizationScanner';
-import { NetworkScanner } from '../network/scan/NetworkScanner';
-import { Logger } from 'logger';
-import { Network } from '../network/Network';
-import { createDummyNetworkProps } from '../network/__fixtures__/createDummyNetworkProps';
-import { NetworkId } from '../network/NetworkId';
+import { OrganizationScanner } from '../organization/scan/OrganizationScanner.js';
+import { NetworkScanner } from '../network/scan/NetworkScanner.js';
+import type { Logger } from 'logger';
+import { Network } from '../network/Network.js';
+import { createDummyNetworkProps } from '../network/__fixtures__/createDummyNetworkProps.js';
+import { NetworkId } from '../network/NetworkId.js';
 import { err, ok } from 'neverthrow';
-import { NodeScan } from '../node/scan/NodeScan';
-import { OrganizationScan } from '../organization/scan/OrganizationScan';
-import NetworkScan from '../network/scan/NetworkScan';
-import { OrganizationScanError } from '../organization/scan/errors/OrganizationScanError';
-import { createDummyNodeAddress } from '../node/__fixtures__/createDummyNodeAddress';
+import { NodeScan } from '../node/scan/NodeScan.js';
+import { OrganizationScan } from '../organization/scan/OrganizationScan.js';
+import NetworkScan from '../network/scan/NetworkScan.js';
+import { OrganizationScanError } from '../organization/scan/errors/OrganizationScanError.js';
+import { createDummyNodeAddress } from '../node/__fixtures__/createDummyNodeAddress.js';
 
 describe('Scanner', function () {
 	it('should scan', async function () {

@@ -2,9 +2,9 @@ import { inject, injectable } from 'inversify';
 import * as AWS from '@aws-sdk/client-s3';
 import { err, ok, Result } from 'neverthrow';
 import { CustomError } from 'custom-error';
-import { Logger } from 'logger';
-import { Archiver } from '../../domain/network/scan/archiver/Archiver';
-import { NetworkDTOService } from '../../services/NetworkDTOService';
+import type { Logger } from 'logger';
+import type { Archiver } from '../../domain/network/scan/archiver/Archiver.js';
+import { NetworkDTOService } from '../../services/NetworkDTOService.js';
 import { PutObjectCommand } from '@aws-sdk/client-s3';
 
 @injectable()

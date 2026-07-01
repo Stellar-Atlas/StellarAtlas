@@ -1,4 +1,4 @@
-import { FirstLedgerHashPolicy } from '../FirstLedgerHashPolicy';
+import { FirstLedgerHashPolicy } from '../FirstLedgerHashPolicy.js';
 
 describe('FirstLedgerHashPolicy', () => {
 	let policy: FirstLedgerHashPolicy;

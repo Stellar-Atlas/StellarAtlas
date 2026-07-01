@@ -1,4 +1,4 @@
-import { ValueObject } from '../../../core/domain/ValueObject';
+import { ValueObject } from '../../../core/domain/ValueObject.js';
 import { err, ok, Result } from 'neverthrow';
 import valueValidator from 'validator';
 import { Column } from 'typeorm';

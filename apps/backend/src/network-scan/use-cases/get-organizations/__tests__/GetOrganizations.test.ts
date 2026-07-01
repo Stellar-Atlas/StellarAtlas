@@ -1,10 +1,10 @@
 import { mock } from 'jest-mock-extended';
 import { err, ok } from 'neverthrow';
-import { ExceptionLogger } from '../../../../core/services/ExceptionLogger';
-import { GetNetwork } from '../../get-network/GetNetwork';
-import { GetOrganizations } from '../GetOrganizations';
-import { createDummyNetworkV1 } from '../../../services/__fixtures__/createDummyNetworkV1';
-import { createDummyOrganizationV1 } from '../../../services/__fixtures__/createDummyOrganizationV1';
+import type { ExceptionLogger } from '../../../../core/services/ExceptionLogger.js';
+import { GetNetwork } from '../../get-network/GetNetwork.js';
+import { GetOrganizations } from '../GetOrganizations.js';
+import { createDummyNetworkV1 } from '../../../services/__fixtures__/createDummyNetworkV1.js';
+import { createDummyOrganizationV1 } from '../../../services/__fixtures__/createDummyOrganizationV1.js';
 
 it('should return orgs', async function () {
 	const getNetwork = mock<GetNetwork>();

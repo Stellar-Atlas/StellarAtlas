@@ -1,13 +1,16 @@
 import { inject, injectable } from 'inversify';
-import { SubscriberRepository } from '../../domain/subscription/SubscriberRepository';
-import { UnsubscribeDTO } from './UnsubscribeDTO';
-import { SubscriberReference } from '../../domain/subscription/SubscriberReference';
+import type { SubscriberRepository } from '../../domain/subscription/SubscriberRepository.js';
+import { UnsubscribeDTO } from './UnsubscribeDTO.js';
+import { SubscriberReference } from '../../domain/subscription/SubscriberReference.js';
 import { err, ok, Result } from 'neverthrow';
-import { IUserService } from '../../../core/domain/IUserService';
-import { ExceptionLogger } from '../../../core/services/ExceptionLogger';
-import { PersistenceError, SubscriberNotFoundError } from './UnsubscribeError';
-import { UserNotFoundError } from '../../../core/services/UserService';
-import { mapUnknownToError } from '../../../core/utilities/mapUnknownToError';
+import type { IUserService } from '../../../core/domain/IUserService.js';
+import type { ExceptionLogger } from '../../../core/services/ExceptionLogger.js';
+import {
+	PersistenceError,
+	SubscriberNotFoundError
+} from './UnsubscribeError.js';
+import { UserNotFoundError } from '../../../core/services/UserService.js';
+import { mapUnknownToError } from '../../../core/utilities/mapUnknownToError.js';
 
 @injectable()
 export class Unsubscribe {

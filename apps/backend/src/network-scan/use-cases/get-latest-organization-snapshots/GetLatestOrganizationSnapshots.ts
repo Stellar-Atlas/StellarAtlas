@@ -1,12 +1,12 @@
 import { err, ok, Result } from 'neverthrow';
-import { mapUnknownToError } from '../../../core/utilities/mapUnknownToError';
+import { mapUnknownToError } from '../../../core/utilities/mapUnknownToError.js';
 import { inject, injectable } from 'inversify';
-import { ExceptionLogger } from '../../../core/services/ExceptionLogger';
+import type { ExceptionLogger } from '../../../core/services/ExceptionLogger.js';
 import { OrganizationSnapShot } from 'shared';
-import { GetLatestOrganizationSnapshotsDTO } from './GetLatestOrganizationSnapshotsDTO';
-import { OrganizationSnapshotMapper } from '../../mappers/OrganizationSnapshotMapper';
-import { OrganizationSnapShotRepository } from '../../domain/organization/OrganizationSnapShotRepository';
-import { NETWORK_TYPES } from '../../infrastructure/di/di-types';
+import { GetLatestOrganizationSnapshotsDTO } from './GetLatestOrganizationSnapshotsDTO.js';
+import { OrganizationSnapshotMapper } from '../../mappers/OrganizationSnapshotMapper.js';
+import type { OrganizationSnapShotRepository } from '../../domain/organization/OrganizationSnapShotRepository.js';
+import { NETWORK_TYPES } from '../../infrastructure/di/di-types.js';
 import 'reflect-metadata';
 
 @injectable()

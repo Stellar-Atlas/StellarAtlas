@@ -1,6 +1,6 @@
 import { err, ok, Result } from 'neverthrow';
-import { BucketScanState } from './ScanState';
-import { BucketRequestMeta, RequestGenerator } from './RequestGenerator';
+import { BucketScanState } from './ScanState.js';
+import { BucketRequestMeta, RequestGenerator } from './RequestGenerator.js';
 import {
 	FileNotFoundError,
 	HttpQueue,
@@ -10,15 +10,15 @@ import {
 	RetryableQueueError
 } from 'http-helper';
 import { inject, injectable } from 'inversify';
-import { mapHttpQueueErrorToScanError } from './mapHttpQueueErrorToScanError';
+import { mapHttpQueueErrorToScanError } from './mapHttpQueueErrorToScanError.js';
 import { createGunzip } from 'zlib';
 import { createHash } from 'crypto';
 import * as stream from 'stream';
 import { pipeline } from 'stream/promises';
 import { mapUnknownToError } from 'shared';
-import { ScanError, ScanErrorType } from '../scan/ScanError';
-import { isZLibError } from './isZLibError';
-import { TYPES } from '../../infrastructure/di/di-types';
+import { ScanError, ScanErrorType } from '../scan/ScanError.js';
+import { isZLibError } from './isZLibError.js';
+import { TYPES } from '../../infrastructure/di/di-types.js';
 
 @injectable()
 export class BucketScanner {

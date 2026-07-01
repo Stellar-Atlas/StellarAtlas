@@ -1,5 +1,5 @@
 import { Column } from 'typeorm';
-import { ValueObject } from '../../../core/domain/ValueObject';
+import { ValueObject } from '../../../core/domain/ValueObject.js';
 
 export class NetworkId extends ValueObject {
 	@Column({ type: 'varchar', nullable: false })

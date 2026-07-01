@@ -1,11 +1,11 @@
 import { mock } from 'jest-mock-extended';
-import { OrganizationMeasurementRepository } from '../../domain/organization/OrganizationMeasurementRepository';
-import { OrganizationMeasurementDayRepository } from '../../domain/organization/OrganizationMeasurementDayRepository';
-import { OrganizationDTOService } from '../OrganizationDTOService';
-import Organization from '../../domain/organization/Organization';
-import { createDummyOrganizationId } from '../../domain/organization/__fixtures__/createDummyOrganizationId';
-import { OrganizationMeasurementAverage } from '../../domain/organization/OrganizationMeasurementAverage';
-import { OrganizationV1DTOMapper } from '../../mappers/OrganizationV1DTOMapper';
+import type { OrganizationMeasurementRepository } from '../../domain/organization/OrganizationMeasurementRepository.js';
+import type { OrganizationMeasurementDayRepository } from '../../domain/organization/OrganizationMeasurementDayRepository.js';
+import { OrganizationDTOService } from '../OrganizationDTOService.js';
+import Organization from '../../domain/organization/Organization.js';
+import { createDummyOrganizationId } from '../../domain/organization/__fixtures__/createDummyOrganizationId.js';
+import { OrganizationMeasurementAverage } from '../../domain/organization/OrganizationMeasurementAverage.js';
+import { OrganizationV1DTOMapper } from '../../mappers/OrganizationV1DTOMapper.js';
 
 describe('OrganizationDTOService', () => {
 	it('should return a list of OrganizationDTOs', async () => {

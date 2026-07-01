@@ -1,8 +1,8 @@
 import { mock } from 'jest-mock-extended';
-import { NodeScannerTomlStep } from '../NodeScannerTomlStep';
-import { NodeScan } from '../NodeScan';
-import { NodeTomlInfo } from '../NodeTomlInfo';
-import { NodeTomlFetcher } from '../NodeTomlFetcher';
+import { NodeScannerTomlStep } from '../NodeScannerTomlStep.js';
+import { NodeScan } from '../NodeScan.js';
+import { NodeTomlInfo } from '../NodeTomlInfo.js';
+import { NodeTomlFetcher } from '../NodeTomlFetcher.js';
 
 describe('NodeScannerTomlStep', () => {
 	const nodeTomlFetcher = mock<NodeTomlFetcher>();

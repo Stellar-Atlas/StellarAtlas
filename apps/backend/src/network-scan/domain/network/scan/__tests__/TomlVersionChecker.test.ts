@@ -1,4 +1,4 @@
-import { TomlVersionChecker } from '../TomlVersionChecker';
+import { TomlVersionChecker } from '../TomlVersionChecker.js';
 
 describe('TomlVersionChecker', function () {
 	describe('isSupportedVersion', function () {

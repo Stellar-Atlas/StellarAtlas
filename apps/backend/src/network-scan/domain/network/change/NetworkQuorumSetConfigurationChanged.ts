@@ -1,7 +1,7 @@
 import { ChildEntity } from 'typeorm';
-import { NetworkChange } from './NetworkChange';
-import { NetworkId } from '../NetworkId';
-import { NetworkQuorumSetConfiguration } from '../NetworkQuorumSetConfiguration';
+import { NetworkChange } from './NetworkChange.js';
+import { NetworkId } from '../NetworkId.js';
+import { NetworkQuorumSetConfiguration } from '../NetworkQuorumSetConfiguration.js';
 
 @ChildEntity()
 export class NetworkQuorumSetConfigurationChanged extends NetworkChange {

@@ -1,5 +1,5 @@
-import NodeSnapShot from './NodeSnapShot';
-import PublicKey from './PublicKey';
+import NodeSnapShot from './NodeSnapShot.js';
+import PublicKey from './PublicKey.js';
 
 //todo: this repo should be removed when we start storing changes
 export interface NodeSnapShotRepository {

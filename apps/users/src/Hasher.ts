@@ -1,4 +1,6 @@
-import { crypto_generichash, crypto_generichash_BYTES } from 'sodium-native';
+import sodium from 'sodium-native';
+
+const { crypto_generichash, crypto_generichash_BYTES } = sodium;
 
 export class Hasher {
 	constructor(protected secret: Buffer) {}

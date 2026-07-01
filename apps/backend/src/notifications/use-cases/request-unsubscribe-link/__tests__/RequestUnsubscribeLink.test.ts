@@ -1,13 +1,13 @@
-import { RequestUnsubscribeLink } from '../RequestUnsubscribeLink';
+import { RequestUnsubscribeLink } from '../RequestUnsubscribeLink.js';
 import { mock } from 'jest-mock-extended';
-import { MessageCreator } from '../../../domain/notifier/MessageCreator';
-import { SubscriberRepository } from '../../../domain/subscription/SubscriberRepository';
-import { IUserService } from '../../../../core/domain/IUserService';
-import { ExceptionLogger } from '../../../../core/services/ExceptionLogger';
-import { Logger } from 'logger';
+import type { MessageCreator } from '../../../domain/notifier/MessageCreator.js';
+import type { SubscriberRepository } from '../../../domain/subscription/SubscriberRepository.js';
+import type { IUserService } from '../../../../core/domain/IUserService.js';
+import type { ExceptionLogger } from '../../../../core/services/ExceptionLogger.js';
+import type { Logger } from 'logger';
 import { err, ok } from 'neverthrow';
-import { createDummySubscriber } from '../../../domain/subscription/__fixtures__/Subscriber.fixtures';
-import { Message } from '../../../../core/domain/Message';
+import { createDummySubscriber } from '../../../domain/subscription/__fixtures__/Subscriber.fixtures.js';
+import { Message } from '../../../../core/domain/Message.js';
 
 describe('RequestUnsubscribeLink', () => {
 	function setupSUT() {

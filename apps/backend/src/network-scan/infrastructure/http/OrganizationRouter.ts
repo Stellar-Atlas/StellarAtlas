@@ -1,17 +1,17 @@
 import * as express from 'express';
 import { Router } from 'express';
-import { getDateFromParam } from '../../../core/utilities/getDateFromParam';
-import { isString } from '../../../core/utilities/TypeGuards';
-import { isDateString } from '../../../core/utilities/isDateString';
-import { GetOrganization } from '../../use-cases/get-organization/GetOrganization';
-import { GetOrganizations } from '../../use-cases/get-organizations/GetOrganizations';
-import { GetOrganizationSnapshots } from '../../use-cases/get-organization-snapshots/GetOrganizationSnapshots';
-import { GetMeasurementsFactory } from '../../use-cases/get-measurements/GetMeasurementsFactory';
-import OrganizationMeasurement from '../../domain/organization/OrganizationMeasurement';
-import { GetMeasurementAggregations } from '../../use-cases/get-measurement-aggregations/GetMeasurementAggregations';
+import { getDateFromParam } from '../../../core/utilities/getDateFromParam.js';
+import { isString } from '../../../core/utilities/TypeGuards.js';
+import { isDateString } from '../../../core/utilities/isDateString.js';
+import { GetOrganization } from '../../use-cases/get-organization/GetOrganization.js';
+import { GetOrganizations } from '../../use-cases/get-organizations/GetOrganizations.js';
+import { GetOrganizationSnapshots } from '../../use-cases/get-organization-snapshots/GetOrganizationSnapshots.js';
+import { GetMeasurementsFactory } from '../../use-cases/get-measurements/GetMeasurementsFactory.js';
+import OrganizationMeasurement from '../../domain/organization/OrganizationMeasurement.js';
+import { GetMeasurementAggregations } from '../../use-cases/get-measurement-aggregations/GetMeasurementAggregations.js';
 import { param, query } from 'express-validator';
-import { AggregationTarget } from '../../use-cases/get-measurement-aggregations/GetMeasurementAggregationsDTO';
-import { handleMeasurementsAggregationRequest } from './handleMeasurementsAggregationRequest';
+import { AggregationTarget } from '../../use-cases/get-measurement-aggregations/GetMeasurementAggregationsDTO.js';
+import { handleMeasurementsAggregationRequest } from './handleMeasurementsAggregationRequest.js';
 
 export interface OrganizationRouterConfig {
 	getOrganization: GetOrganization;

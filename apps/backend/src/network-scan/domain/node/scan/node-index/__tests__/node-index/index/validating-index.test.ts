@@ -1,4 +1,4 @@
-import { ValidatingIndex } from '../../../index/validating-index';
+import { ValidatingIndex } from '../../../index/validating-index.js';
 
 test('get', () => {
 	expect(ValidatingIndex.get(100)).toEqual(1);

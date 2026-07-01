@@ -1,8 +1,8 @@
 import { injectable } from 'inversify';
-import { NodeScan } from './NodeScan';
-import { ValidatorDemoter } from '../archival/ValidatorDemoter';
-import { InactiveNodesArchiver } from '../archival/InactiveNodesArchiver';
-import { TrustGraphFactory } from './TrustGraphFactory';
+import { NodeScan } from './NodeScan.js';
+import { ValidatorDemoter } from '../archival/ValidatorDemoter.js';
+import { InactiveNodesArchiver } from '../archival/InactiveNodesArchiver.js';
+import { TrustGraphFactory } from './TrustGraphFactory.js';
 
 @injectable()
 export class NodeScannerArchivalStep {

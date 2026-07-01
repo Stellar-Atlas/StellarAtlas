@@ -1,7 +1,7 @@
 import { JSONSchemaType } from 'ajv';
-import { NodeV1 } from './node-v1';
-import { OrganizationV1 } from './organization-v1';
-import { BaseQuorumSet } from '../quorum-set';
+import { NodeV1 } from './node-v1.js';
+import { OrganizationV1 } from './organization-v1.js';
+import { BaseQuorumSet } from '../quorum-set.js';
 
 export interface NetworkStatisticsV1 {
 	time: string;

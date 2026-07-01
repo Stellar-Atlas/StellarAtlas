@@ -1,16 +1,16 @@
-import { NetworkId } from './NetworkId';
+import { NetworkId } from './NetworkId.js';
 import { Column, Entity, OneToMany, Unique } from 'typeorm';
-import { VersionedEntity } from '../../../core/domain/VersionedEntity';
-import { OverlayVersionRange } from './OverlayVersionRange';
-import { NetworkSnapshot } from './NetworkSnapshot';
-import { StellarCoreVersion } from './StellarCoreVersion';
-import { NetworkQuorumSetConfiguration } from './NetworkQuorumSetConfiguration';
-import { NetworkChange } from './change/NetworkChange';
-import { NetworkMaxLedgerVersionChanged } from './change/NetworkMaxLedgerVersionChanged';
-import { NetworkNameChanged } from './change/NetworkNameChanged';
-import { NetworkOverlayVersionRangeChanged } from './change/NetworkOverlayVersionRangeChanged';
-import { NetworkStellarCoreVersionChanged } from './change/NetworkStellarCoreVersionChanged';
-import { NetworkQuorumSetConfigurationChanged } from './change/NetworkQuorumSetConfigurationChanged';
+import { VersionedEntity } from '../../../core/domain/VersionedEntity.js';
+import { OverlayVersionRange } from './OverlayVersionRange.js';
+import { NetworkSnapshot } from './NetworkSnapshot.js';
+import { StellarCoreVersion } from './StellarCoreVersion.js';
+import { NetworkQuorumSetConfiguration } from './NetworkQuorumSetConfiguration.js';
+import { NetworkChange } from './change/NetworkChange.js';
+import { NetworkMaxLedgerVersionChanged } from './change/NetworkMaxLedgerVersionChanged.js';
+import { NetworkNameChanged } from './change/NetworkNameChanged.js';
+import { NetworkOverlayVersionRangeChanged } from './change/NetworkOverlayVersionRangeChanged.js';
+import { NetworkStellarCoreVersionChanged } from './change/NetworkStellarCoreVersionChanged.js';
+import { NetworkQuorumSetConfigurationChanged } from './change/NetworkQuorumSetConfigurationChanged.js';
 
 export interface NetworkProps {
 	name: string;
@@ -39,7 +39,7 @@ export class Network extends VersionedEntity<NetworkSnapshot> {
 		cascade: false,
 		nullable: false
 	})
-	protected declare _snapshots?: NetworkSnapshot[];
+	declare protected _snapshots?: NetworkSnapshot[];
 
 	public get changes(): NetworkChange[] {
 		if (!this._changes) {

@@ -1,15 +1,15 @@
 import { err, ok, Result } from 'neverthrow';
 import { inject, injectable } from 'inversify';
-import { OrganizationTomlFetcher } from './OrganizationTomlFetcher';
-import { OrganizationScan } from './OrganizationScan';
-import { NodeScan } from '../../node/scan/NodeScan';
-import { NETWORK_TYPES } from '../../../infrastructure/di/di-types';
-import { OrganizationRepository } from '../OrganizationRepository';
-import Organization from '../Organization';
-import { mapUnknownToError } from '../../../../core/utilities/mapUnknownToError';
-import { CouldNotRetrieveArchivedOrganizationsError } from './errors/CouldNotRetrieveArchivedOrganizationsError';
-import { OrganizationScanError } from './errors/OrganizationScanError';
-import { Logger } from '../../../../core/services/Logger';
+import { OrganizationTomlFetcher } from './OrganizationTomlFetcher.js';
+import { OrganizationScan } from './OrganizationScan.js';
+import { NodeScan } from '../../node/scan/NodeScan.js';
+import { NETWORK_TYPES } from '../../../infrastructure/di/di-types.js';
+import type { OrganizationRepository } from '../OrganizationRepository.js';
+import Organization from '../Organization.js';
+import { mapUnknownToError } from '../../../../core/utilities/mapUnknownToError.js';
+import { CouldNotRetrieveArchivedOrganizationsError } from './errors/CouldNotRetrieveArchivedOrganizationsError.js';
+import { OrganizationScanError } from './errors/OrganizationScanError.js';
+import type { Logger } from '../../../../core/services/Logger.js';
 
 @injectable()
 export class OrganizationScanner {

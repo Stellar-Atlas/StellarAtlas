@@ -1,16 +1,16 @@
-import { ObservationManager } from '../observation-manager';
+import { ObservationManager } from '../observation-manager.js';
 import { mock } from 'jest-mock-extended';
-import { ConnectionManager } from '../connection-manager';
-import { ConsensusTimer } from '../consensus-timer';
-import { StragglerTimer } from '../straggler-timer';
-import pino = require('pino');
-import { Observation } from '../observation';
-import { PeerNodeCollection } from '../../peer-node-collection';
-import { ObservationState } from '../observation-state';
+import { ConnectionManager } from '../connection-manager.js';
+import { ConsensusTimer } from '../consensus-timer.js';
+import { StragglerTimer } from '../straggler-timer.js';
+import pino from 'pino';
+import { Observation } from '../observation.js';
+import { PeerNodeCollection } from '../../peer-node-collection.js';
+import { ObservationState } from '../observation-state.js';
 import { QuorumSet } from 'shared';
-import { Ledger } from '../../crawler';
-import { Slots } from '../peer-event-handler/stellar-message-handlers/scp-envelope/scp-statement/externalize/slots';
-import { NodeAddress } from '../../node-address';
+import type { Ledger } from '../../crawler.js';
+import { Slots } from '../peer-event-handler/stellar-message-handlers/scp-envelope/scp-statement/externalize/slots.js';
+import type { NodeAddress } from '../../node-address.js';
 
 describe('ObservationManager', () => {
 	const connectionManager = mock<ConnectionManager>();
@@ -61,7 +61,7 @@ describe('ObservationManager', () => {
 		const observation = createObservation();
 		observation.moveToSyncingState();
 		observation.moveToSyncedState();
-		 
+
 		observationManager.stopObservation(observation, () => {});
 
 		expect(observation.state).toBe(ObservationState.Stopped);
@@ -88,7 +88,9 @@ describe('ObservationManager', () => {
 		expect(
 			stragglerTimer.startStragglerTimeoutForActivePeers
 		).toHaveBeenCalled();
-		expect(stragglerTimer.startStragglerTimeoutForActivePeers).toHaveBeenCalledWith(
+		expect(
+			stragglerTimer.startStragglerTimeoutForActivePeers
+		).toHaveBeenCalledWith(
 			true,
 			observation.topTierAddressesSet,
 			expect.any(Function)

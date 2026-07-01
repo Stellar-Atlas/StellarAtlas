@@ -1,20 +1,20 @@
-import { OrganizationScan } from '../OrganizationScan';
-import { NodeScan } from '../../../node/scan/NodeScan';
-import { createDummyNode } from '../../../node/__fixtures__/createDummyNode';
-import Organization from '../../Organization';
-import { OrganizationId } from '../../OrganizationId';
-import { OrganizationTomlInfo } from '../OrganizationTomlInfo';
-import { OrganizationValidators } from '../../OrganizationValidators';
-import { OrganizationContactInformation } from '../../OrganizationContactInformation';
-import Node from '../../../node/Node';
-import NodeMeasurement from '../../../node/NodeMeasurement';
-import { ValidatorNotSEP20LinkedError } from '../errors/ValidatorNotSEP20LinkedError';
-import { WrongNodeScanForOrganizationScan } from '../errors/WrongNodeScanForOrganizationScan';
-import { createDummyPublicKey } from '../../../node/__fixtures__/createDummyPublicKey';
-import { Snapshot } from '../../../../../core/domain/Snapshot';
-import { TomlWithoutValidatorsError } from '../errors/TomlWithoutValidatorsError';
-import { TomlState } from '../TomlState';
-import { InvalidTomlStateError } from '../errors/InvalidTomlStateError';
+import { OrganizationScan } from '../OrganizationScan.js';
+import { NodeScan } from '../../../node/scan/NodeScan.js';
+import { createDummyNode } from '../../../node/__fixtures__/createDummyNode.js';
+import Organization from '../../Organization.js';
+import { OrganizationId } from '../../OrganizationId.js';
+import { OrganizationTomlInfo } from '../OrganizationTomlInfo.js';
+import { OrganizationValidators } from '../../OrganizationValidators.js';
+import { OrganizationContactInformation } from '../../OrganizationContactInformation.js';
+import Node from '../../../node/Node.js';
+import NodeMeasurement from '../../../node/NodeMeasurement.js';
+import { ValidatorNotSEP20LinkedError } from '../errors/ValidatorNotSEP20LinkedError.js';
+import { WrongNodeScanForOrganizationScan } from '../errors/WrongNodeScanForOrganizationScan.js';
+import { createDummyPublicKey } from '../../../node/__fixtures__/createDummyPublicKey.js';
+import { Snapshot } from '../../../../../core/domain/Snapshot.js';
+import { TomlWithoutValidatorsError } from '../errors/TomlWithoutValidatorsError.js';
+import { TomlState } from '../TomlState.js';
+import { InvalidTomlStateError } from '../errors/InvalidTomlStateError.js';
 
 describe('OrganizationScan', () => {
 	describe('updateWithTomlInfo', () => {

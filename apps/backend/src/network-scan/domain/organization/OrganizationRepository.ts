@@ -1,4 +1,4 @@
-import Organization from './Organization';
+import Organization from './Organization.js';
 
 //active means that the organization is not archived. i.e. snapshot endDate = SNAPSHOT_MAX_END_DATE
 export interface OrganizationRepository {

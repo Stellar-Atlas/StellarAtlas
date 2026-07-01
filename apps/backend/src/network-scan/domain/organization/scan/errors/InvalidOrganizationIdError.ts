@@ -1,5 +1,5 @@
-import { CustomError } from '../../../../../core/errors/CustomError';
-import { OrganizationScanError } from './OrganizationScanError';
+import { CustomError } from '../../../../../core/errors/CustomError.js';
+import { OrganizationScanError } from './OrganizationScanError.js';
 
 export class InvalidOrganizationIdError extends OrganizationScanError {
 	constructor(homeDomain: string, cause: Error) {

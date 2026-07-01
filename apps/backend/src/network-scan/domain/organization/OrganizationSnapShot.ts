@@ -1,13 +1,13 @@
 import { Entity, Column, ManyToOne, Index, Unique } from 'typeorm';
-import Organization from './Organization';
-import { Snapshot } from '../../../core/domain/Snapshot';
-import { OrganizationContactInformation } from './OrganizationContactInformation';
-import { OrganizationValidators } from './OrganizationValidators';
+import type Organization from './Organization.js';
+import { Snapshot } from '../../../core/domain/Snapshot.js';
+import { OrganizationContactInformation } from './OrganizationContactInformation.js';
+import { OrganizationValidators } from './OrganizationValidators.js';
 
 @Entity()
 export default class OrganizationSnapShot extends Snapshot {
 	@Index()
-	@ManyToOne(() => Organization, {
+	@ManyToOne('Organization', {
 		nullable: false,
 		cascade: false,
 		eager: true //todo: Move to false after Snapshot is no longer used as aggregate

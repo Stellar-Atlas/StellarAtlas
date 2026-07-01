@@ -1,6 +1,6 @@
-import { PublicKey } from '../../../core';
-import { ProtocolEvent } from './ProtocolEvent';
-import { Statement } from '../Statement';
+import { PublicKey } from '../../../core/index.js';
+import { ProtocolEvent } from './ProtocolEvent.js';
+import { Statement } from '../Statement.js';
 
 export class ConsensusReached extends ProtocolEvent {
 	readonly subType = 'ConsensusReached';

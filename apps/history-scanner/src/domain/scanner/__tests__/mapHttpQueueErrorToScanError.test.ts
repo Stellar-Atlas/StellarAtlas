@@ -1,11 +1,7 @@
-import {
-	FileNotFoundError,
-	QueueError,
-	RequestMethod
-} from 'http-helper';
-import { createDummyHistoryBaseUrl } from '../../history-archive/__fixtures__/HistoryBaseUrl';
-import { mapHttpQueueErrorToScanError } from '../mapHttpQueueErrorToScanError';
-import { ScanError, ScanErrorType } from '../../scan/ScanError';
+import { FileNotFoundError, QueueError, RequestMethod } from 'http-helper';
+import { createDummyHistoryBaseUrl } from '../../history-archive/__fixtures__/HistoryBaseUrl.js';
+import { mapHttpQueueErrorToScanError } from '../mapHttpQueueErrorToScanError.js';
+import { ScanError, ScanErrorType } from '../../scan/ScanError.js';
 
 it('should map to scan error', function () {
 	const error = new QueueError({

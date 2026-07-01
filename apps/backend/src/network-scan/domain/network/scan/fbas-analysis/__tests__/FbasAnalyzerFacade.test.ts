@@ -3,7 +3,7 @@ import FbasAnalyzerFacade, {
 	FbasAnalysisNode,
 	FbasAnalysisOrganization,
 	MergeBy
-} from '../FbasAnalyzerFacade';
+} from '../FbasAnalyzerFacade.js';
 
 describe('FbasAnalyzerFacade', () => {
 	function getFBASNodes() {

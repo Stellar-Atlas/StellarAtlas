@@ -1,4 +1,4 @@
-import { RemoveNode } from '../RemoveNode';
+import { RemoveNode } from '../RemoveNode.js';
 
 describe('RemoveNode', () => {
 	const nodeKey = 'node1';

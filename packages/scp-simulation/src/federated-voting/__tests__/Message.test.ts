@@ -1,5 +1,5 @@
-import { Message } from '../Message';
-import { Vote } from '../protocol/Vote';
+import { Message } from '../Message.js';
+import { Vote } from '../protocol/Vote.js';
 import { mock, MockProxy } from 'jest-mock-extended';
 
 describe('Message', () => {

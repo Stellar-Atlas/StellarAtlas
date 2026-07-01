@@ -1,20 +1,20 @@
 import { inject, injectable } from 'inversify';
-import { Logger } from '../../../../core/services/Logger';
+import type { Logger } from '../../../../core/services/Logger.js';
 import { err, ok, Result } from 'neverthrow';
-import { NetworkQuorumSetConfiguration } from '../../network/NetworkQuorumSetConfiguration';
-import { StellarCoreVersion } from '../../network/StellarCoreVersion';
-import { NodeMeasurementAverage } from '../NodeMeasurementAverage';
-import { NodeScan } from './NodeScan';
-import { NodeScannerCrawlStep } from './NodeScannerCrawlStep';
-import { NodeScannerHomeDomainStep } from './NodeScannerHomeDomainStep';
-import { NodeScannerTomlStep } from './NodeScannerTomlStep';
-import { NodeScannerHistoryArchiveStep } from './NodeScannerHistoryArchiveStep';
-import { NodeScannerGeoStep } from './NodeScannerGeoStep';
-import { NodeScannerIndexerStep } from './NodeScannerIndexerStep';
-import { NodeAddress } from '../NodeAddress';
-import { InactiveNodesArchiver } from '../archival/InactiveNodesArchiver';
-import { TrustGraphFactory } from './TrustGraphFactory';
-import { NodeScannerArchivalStep } from './NodeScannerArchivalStep';
+import { NetworkQuorumSetConfiguration } from '../../network/NetworkQuorumSetConfiguration.js';
+import { StellarCoreVersion } from '../../network/StellarCoreVersion.js';
+import { NodeMeasurementAverage } from '../NodeMeasurementAverage.js';
+import { NodeScan } from './NodeScan.js';
+import { NodeScannerCrawlStep } from './NodeScannerCrawlStep.js';
+import { NodeScannerHomeDomainStep } from './NodeScannerHomeDomainStep.js';
+import { NodeScannerTomlStep } from './NodeScannerTomlStep.js';
+import { NodeScannerHistoryArchiveStep } from './NodeScannerHistoryArchiveStep.js';
+import { NodeScannerGeoStep } from './NodeScannerGeoStep.js';
+import { NodeScannerIndexerStep } from './NodeScannerIndexerStep.js';
+import type { NodeAddress } from '../NodeAddress.js';
+import { InactiveNodesArchiver } from '../archival/InactiveNodesArchiver.js';
+import { TrustGraphFactory } from './TrustGraphFactory.js';
+import { NodeScannerArchivalStep } from './NodeScannerArchivalStep.js';
 import { SemanticVersionComparer } from 'shared';
 
 @injectable()

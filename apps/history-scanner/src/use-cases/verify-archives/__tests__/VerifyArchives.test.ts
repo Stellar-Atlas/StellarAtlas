@@ -1,22 +1,24 @@
-import { mock, MockProxy } from 'jest-mock-extended';
-import { VerifyArchives } from '../VerifyArchives';
-import { Scanner } from '../../../domain/scanner/Scanner';
-import { ScanCoordinatorService } from '../../../domain/scan/ScanCoordinatorService';
-import { ExceptionLogger } from 'exception-logger';
-import { JobMonitor } from 'job-monitor';
+import { mock, type MockProxy } from 'jest-mock-extended';
+import { VerifyArchives } from '../VerifyArchives.js';
+import { Scanner } from '../../../domain/scanner/Scanner.js';
+import type { ScanCoordinatorService } from '../../../domain/scan/ScanCoordinatorService.js';
+import type { ExceptionLogger } from 'exception-logger';
+import type { JobMonitor } from 'job-monitor';
 import { ok, err } from 'neverthrow';
 import { ScanJobDTO } from 'history-scanner-dto';
-import { Scan } from '../../../domain/scan/Scan';
+import { Scan } from '../../../domain/scan/Scan.js';
 import { Url } from 'http-helper';
 
-// Mock the asyncSleep utility to speed up tests
-jest.mock('shared', () => ({
-	...jest.requireActual('shared'),
-	asyncSleep: jest.fn().mockResolvedValue(undefined)
-}));
+class TestVerifyArchives extends VerifyArchives {
+	public readonly retryWaits: number[] = [];
+
+	protected override async waitBeforeRetry(): Promise<void> {
+		this.retryWaits.push(60 * 1000);
+	}
+}
 
 describe('VerifyArchives', () => {
-	let verifyArchives: VerifyArchives;
+	let verifyArchives: TestVerifyArchives;
 	let scannerMock: MockProxy<Scanner>;
 	let scanCoordinatorMock: MockProxy<ScanCoordinatorService>;
 	let exceptionLoggerMock: MockProxy<ExceptionLogger>;
@@ -36,7 +38,7 @@ describe('VerifyArchives', () => {
 		exceptionLoggerMock = mock<ExceptionLogger>();
 		jobMonitorMock = mock<JobMonitor>();
 
-		verifyArchives = new VerifyArchives(
+		verifyArchives = new TestVerifyArchives(
 			scannerMock,
 			scanCoordinatorMock,
 			exceptionLoggerMock,
@@ -73,6 +75,7 @@ describe('VerifyArchives', () => {
 		await verifyArchives.execute({ persist: false, loop: false });
 
 		expect(exceptionLoggerMock.captureException).toHaveBeenCalledWith(error);
+		expect(verifyArchives.retryWaits).toEqual([60 * 1000]);
 		expect(jobMonitorMock.checkIn).not.toHaveBeenCalled();
 		expect(scannerMock.perform).not.toHaveBeenCalled();
 	});
@@ -84,11 +87,23 @@ describe('VerifyArchives', () => {
 		await verifyArchives.execute({ persist: false, loop: false });
 
 		expect(exceptionLoggerMock.captureException).toHaveBeenCalled();
+		expect(verifyArchives.retryWaits).toEqual([60 * 1000]);
 	});
 
 	it('should respect persist flag', async () => {
 		scanCoordinatorMock.getScanJob.mockResolvedValue(ok(mockScanJobDTO));
+		scanCoordinatorMock.registerScan.mockResolvedValue(ok(undefined));
 		jobMonitorMock.checkIn.mockResolvedValue(ok(undefined));
+		scannerMock.perform.mockResolvedValue(
+			new Scan(
+				new Date(),
+				new Date(),
+				new Date(),
+				Url.create('https://example.com')._unsafeUnwrap(),
+				0,
+				100
+			)
+		);
 
 		await verifyArchives.execute({ persist: true, loop: false });
 
@@ -101,9 +116,20 @@ describe('VerifyArchives', () => {
 		jobMonitorMock.checkIn.mockResolvedValue(ok(undefined));
 		scanCoordinatorMock.getScanJob.mockResolvedValue(ok(mockScanJobDTO));
 		scanCoordinatorMock.registerScan.mockRejectedValue(error);
+		scannerMock.perform.mockResolvedValue(
+			new Scan(
+				new Date(),
+				new Date(),
+				new Date(),
+				Url.create('https://example.com')._unsafeUnwrap(),
+				0,
+				100
+			)
+		);
 
 		await verifyArchives.execute({ persist: true, loop: false });
 
 		expect(exceptionLoggerMock.captureException).toHaveBeenCalledWith(error);
+		expect(verifyArchives.retryWaits).toEqual([60 * 1000]);
 	});
 });

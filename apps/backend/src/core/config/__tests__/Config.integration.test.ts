@@ -1,4 +1,4 @@
-import { getConfigFromEnv, parseNetworkConfig } from '../Config';
+import { getConfigFromEnv, parseNetworkConfig } from '../Config.js';
 
 describe('Config', function () {
 	describe('S3Region', function () {

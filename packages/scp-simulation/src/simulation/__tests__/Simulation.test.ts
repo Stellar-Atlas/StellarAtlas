@@ -1,8 +1,8 @@
-import { Simulation, SimulationStep } from '../Simulation';
-import { Context } from '../../core/Context';
-import { UserAction } from '../../core/UserAction';
-import { ProtocolAction } from '../../core/ProtocolAction';
-import { Event } from '../../core/Event';
+import { Simulation, SimulationStep } from '../Simulation.js';
+import { Context } from '../../core/Context.js';
+import { UserAction } from '../../core/UserAction.js';
+import { ProtocolAction } from '../../core/ProtocolAction.js';
+import { Event } from '../../core/Event.js';
 import { mock, MockProxy } from 'jest-mock-extended';
 
 describe('Simulation Class', () => {

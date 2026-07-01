@@ -2,14 +2,14 @@ import express from 'express';
 import request from 'supertest';
 import { mock } from 'jest-mock-extended';
 import { ok, err } from 'neverthrow';
-import { HistoryScanRouterWrapper } from '../HistoryScanRouter';
+import { HistoryScanRouterWrapper } from '../HistoryScanRouter.js';
 import { Url } from 'http-helper';
-import { GetLatestScan } from '../../../use-cases/get-latest-scan/GetLatestScan';
-import { RegisterScan } from '../../../use-cases/register-scan/RegisterScan';
-import { InvalidUrlError } from '../../../use-cases/get-latest-scan/InvalidUrlError';
+import { GetLatestScan } from '../../../use-cases/get-latest-scan/GetLatestScan.js';
+import { RegisterScan } from '../../../use-cases/register-scan/RegisterScan.js';
+import { InvalidUrlError } from '../../../use-cases/get-latest-scan/InvalidUrlError.js';
 import { ScanDTO } from 'history-scanner-dto';
-import { ScanJob } from '../../../domain/ScanJob';
-import { GetScanJob } from '../../../use-cases/get-scan-job/GetScanJob';
+import { ScanJob } from '../../../domain/ScanJob.js';
+import { GetScanJob } from '../../../use-cases/get-scan-job/GetScanJob.js';
 
 describe('HistoryScanRouter.integration', () => {
 	let app: express.Application;

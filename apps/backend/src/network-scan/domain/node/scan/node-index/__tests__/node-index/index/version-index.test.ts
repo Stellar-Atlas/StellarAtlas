@@ -1,4 +1,4 @@
-import { VersionIndex } from '../../../index/version-index';
+import { VersionIndex } from '../../../index/version-index.js';
 
 const versionStr1 =
 	'stellar-core 10.9.0 (236f831521b6724c0ae63906416faa997ef27e19)';

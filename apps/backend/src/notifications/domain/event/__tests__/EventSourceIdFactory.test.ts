@@ -1,14 +1,9 @@
-import { EventSourceIdFactory } from '../EventSourceIdFactory';
-import { EventSourceService } from '../EventSourceService';
+import { EventSourceIdFactory } from '../EventSourceIdFactory.js';
+import type { EventSourceService } from '../EventSourceService.js';
 import { Result, ok } from 'neverthrow';
-import { EventSourceId, PublicKey } from '../EventSourceId';
+import { EventSourceId, PublicKey } from '../EventSourceId.js';
 
 it('should create PublicKey', async function () {
-	jest.mock('../EventSourceService', () => {
-		return jest.fn().mockImplementation(() => {
-			return { isEventSourceIdKnown: jest.fn().mockResolvedValue(true) };
-		});
-	});
 	const eventSourceService: EventSourceService = {
 		isEventSourceIdKnown(
 			eventSourceId: EventSourceId,

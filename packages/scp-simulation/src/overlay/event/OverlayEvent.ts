@@ -1,4 +1,4 @@
-import { Event } from '../../core';
+import { Event } from '../../core/index.js';
 
 export abstract class OverlayEvent implements Event {
 	type = 'OverlayEvent';

@@ -1,8 +1,8 @@
 import { inject, injectable } from 'inversify';
-import { GeoDataService } from './GeoDataService';
-import { Logger } from '../../../../core/services/Logger';
-import NodeGeoDataLocation from '../NodeGeoDataLocation';
-import { NodeScan } from './NodeScan';
+import type { GeoDataService } from './GeoDataService.js';
+import type { Logger } from '../../../../core/services/Logger.js';
+import NodeGeoDataLocation from '../NodeGeoDataLocation.js';
+import { NodeScan } from './NodeScan.js';
 
 @injectable()
 export class NodeScannerGeoStep {

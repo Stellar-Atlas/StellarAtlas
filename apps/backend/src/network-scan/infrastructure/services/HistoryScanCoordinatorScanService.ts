@@ -1,18 +1,16 @@
-import { HistoryArchiveScanService } from '../../domain/node/scan/history/HistoryArchiveScanService';
-import { ScanRepository } from '../../../history-scan-coordinator/domain/scan/ScanRepository';
+import type { HistoryArchiveScanService } from '../../domain/node/scan/history/HistoryArchiveScanService.js';
+import type { ScanRepository } from '../../../history-scan-coordinator/domain/scan/ScanRepository.js';
 import { err, ok, Result } from 'neverthrow';
-import { mapUnknownToError } from '../../../core/utilities/mapUnknownToError';
+import { mapUnknownToError } from '../../../core/utilities/mapUnknownToError.js';
 import { inject, injectable } from 'inversify';
 import { HistoryArchiveScan } from 'shared';
-import { TYPES } from '../../../history-scan-coordinator/infrastructure/di/di-types';
-import { ScanErrorType } from '../../../history-scan-coordinator/domain/scan/ScanError';
-import { ScheduleScanJobs } from '../../../history-scan-coordinator/use-cases/schedule-scan-jobs/ScheduleScanJobs';
+import { TYPES } from '../../../history-scan-coordinator/infrastructure/di/di-types.js';
+import { ScanErrorType } from '../../../history-scan-coordinator/domain/scan/ScanError.js';
+import { ScheduleScanJobs } from '../../../history-scan-coordinator/use-cases/schedule-scan-jobs/ScheduleScanJobs.js';
 
 //Connects with the HistoryScanCoordinator module
 @injectable()
-export class HistoryScanCoordinatorScanService
-	implements HistoryArchiveScanService
-{
+export class HistoryScanCoordinatorScanService implements HistoryArchiveScanService {
 	//TODO: should not call repository directly, should call use case
 	constructor(
 		@inject(TYPES.HistoryArchiveScanRepository)

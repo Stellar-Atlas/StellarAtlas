@@ -1,7 +1,7 @@
 import { QuorumSet } from 'shared';
 import { mock } from 'jest-mock-extended';
-import pino = require('pino');
-import { Slots } from '../slots';
+import pino from 'pino';
+import { Slots } from '../slots.js';
 
 describe('slots', () => {
 	it('should create new slot', () => {

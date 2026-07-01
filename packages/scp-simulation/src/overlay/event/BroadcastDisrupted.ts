@@ -1,5 +1,5 @@
-import { Payload, PublicKey } from '../Overlay';
-import { OverlayEvent } from './OverlayEvent';
+import { Payload, PublicKey } from '../Overlay.js';
+import { OverlayEvent } from './OverlayEvent.js';
 
 export class BroadcastDisrupted extends OverlayEvent {
 	subType = 'BroadcastDisrupted';

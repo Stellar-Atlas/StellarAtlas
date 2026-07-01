@@ -1,10 +1,10 @@
-import OrganizationSnapShot from '../OrganizationSnapShot';
-import { createDummyPublicKey } from '../../node/__fixtures__/createDummyPublicKey';
-import { OrganizationValidators } from '../OrganizationValidators';
-import { OrganizationContactInformation } from '../OrganizationContactInformation';
-import { Snapshot } from '../../../../core/domain/Snapshot';
+import OrganizationSnapShot from '../OrganizationSnapShot.js';
+import { createDummyPublicKey } from '../../node/__fixtures__/createDummyPublicKey.js';
+import { OrganizationValidators } from '../OrganizationValidators.js';
+import { OrganizationContactInformation } from '../OrganizationContactInformation.js';
+import { Snapshot } from '../../../../core/domain/Snapshot.js';
 import { mock } from 'jest-mock-extended';
-import Organization from '../Organization';
+import Organization from '../Organization.js';
 
 describe('OrganizationSnapShot', () => {
 	test('copy', () => {

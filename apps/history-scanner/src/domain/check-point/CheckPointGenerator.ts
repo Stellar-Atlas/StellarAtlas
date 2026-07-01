@@ -1,6 +1,6 @@
-import { CheckPointFrequency } from './CheckPointFrequency';
+import type { CheckPointFrequency } from './CheckPointFrequency.js';
 import { inject, injectable } from 'inversify';
-import { TYPES } from '../../infrastructure/di/di-types';
+import { TYPES } from '../../infrastructure/di/di-types.js';
 import 'reflect-metadata';
 
 export type CheckPoint = number;

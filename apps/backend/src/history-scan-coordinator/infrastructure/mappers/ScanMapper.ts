@@ -2,8 +2,8 @@ import { Result, ok, err } from 'neverthrow';
 import { injectable } from 'inversify';
 import { Url } from 'http-helper';
 import 'reflect-metadata';
-import { Scan } from '../../domain/scan/Scan';
-import { ScanError, ScanErrorType } from '../../domain/scan/ScanError';
+import { Scan } from '../../domain/scan/Scan.js';
+import { ScanError, ScanErrorType } from '../../domain/scan/ScanError.js';
 import { ScanDTO, ScanErrorDTO } from 'history-scanner-dto';
 
 @injectable()

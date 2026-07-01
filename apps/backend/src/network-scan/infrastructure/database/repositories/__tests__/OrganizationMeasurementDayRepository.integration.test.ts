@@ -1,17 +1,17 @@
 import { Container } from 'inversify';
-import Kernel from '../../../../../core/infrastructure/Kernel';
-import { ConfigMock } from '../../../../../core/config/__mocks__/configMock';
-import { NETWORK_TYPES } from '../../../di/di-types';
-import { TypeOrmOrganizationMeasurementDayRepository } from '../TypeOrmOrganizationMeasurementDayRepository';
-import { OrganizationRepository } from '../../../../domain/organization/OrganizationRepository';
-import Organization from '../../../../domain/organization/Organization';
-import { createDummyOrganizationId } from '../../../../domain/organization/__fixtures__/createDummyOrganizationId';
-import OrganizationMeasurementDay from '../../../../domain/organization/OrganizationMeasurementDay';
-import NetworkScan from '../../../../domain/network/scan/NetworkScan';
-import NetworkMeasurement from '../../../../domain/network/NetworkMeasurement';
-import { NetworkScanRepository } from '../../../../domain/network/scan/NetworkScanRepository';
-import { OrganizationMeasurementRepository } from '../../../../domain/organization/OrganizationMeasurementRepository';
-import OrganizationMeasurement from '../../../../domain/organization/OrganizationMeasurement';
+import Kernel from '../../../../../core/infrastructure/Kernel.js';
+import { ConfigMock } from '../../../../../core/config/__mocks__/configMock.js';
+import { NETWORK_TYPES } from '../../../di/di-types.js';
+import { TypeOrmOrganizationMeasurementDayRepository } from '../TypeOrmOrganizationMeasurementDayRepository.js';
+import type { OrganizationRepository } from '../../../../domain/organization/OrganizationRepository.js';
+import Organization from '../../../../domain/organization/Organization.js';
+import { createDummyOrganizationId } from '../../../../domain/organization/__fixtures__/createDummyOrganizationId.js';
+import OrganizationMeasurementDay from '../../../../domain/organization/OrganizationMeasurementDay.js';
+import NetworkScan from '../../../../domain/network/scan/NetworkScan.js';
+import NetworkMeasurement from '../../../../domain/network/NetworkMeasurement.js';
+import type { NetworkScanRepository } from '../../../../domain/network/scan/NetworkScanRepository.js';
+import type { OrganizationMeasurementRepository } from '../../../../domain/organization/OrganizationMeasurementRepository.js';
+import OrganizationMeasurement from '../../../../domain/organization/OrganizationMeasurement.js';
 
 describe('test queries', () => {
 	let container: Container;
@@ -87,9 +87,10 @@ describe('test queries', () => {
 		const scanRepository = container.get<NetworkScanRepository>(
 			NETWORK_TYPES.NetworkScanRepository
 		);
-		const measurementRepository = container.get<OrganizationMeasurementRepository>(
-			NETWORK_TYPES.OrganizationMeasurementRepository
-		);
+		const measurementRepository =
+			container.get<OrganizationMeasurementRepository>(
+				NETWORK_TYPES.OrganizationMeasurementRepository
+			);
 		const scanTime1 = new Date(Date.UTC(2020, 0, 3, 0));
 		const scanTime2 = new Date(Date.UTC(2020, 0, 3, 1));
 		const organization = Organization.create(

@@ -1,12 +1,7 @@
-import {
-	Edge,
-	QuorumSet,
-	TrustGraph,
-	Vertex
-} from 'shared';
+import { Edge, QuorumSet, TrustGraph, Vertex } from 'shared';
 import { StronglyConnectedComponentsFinder } from 'shared';
 import { NetworkTransitiveQuorumSetFinder } from 'shared';
-import Node from '../Node';
+import Node from '../Node.js';
 
 export class TrustGraphFactory {
 	static create(nodes: Node[]): TrustGraph {

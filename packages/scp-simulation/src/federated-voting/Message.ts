@@ -1,5 +1,5 @@
-import { PublicKey } from '..';
-import { Vote } from './protocol/Vote';
+import { PublicKey } from '../index.js';
+import { Vote } from './protocol/Vote.js';
 
 export class Message {
 	constructor(

@@ -1,8 +1,8 @@
 import { Url } from 'http-helper';
-import { Scan } from '../scan/Scan';
-import { RestartAtLeastOneScan } from '../ScanScheduler';
-import { ScanJob } from '../ScanJob';
-import { ScanError, ScanErrorType } from '../scan/ScanError';
+import { Scan } from '../scan/Scan.js';
+import { RestartAtLeastOneScan } from '../ScanScheduler.js';
+import { ScanJob } from '../ScanJob.js';
+import { ScanError, ScanErrorType } from '../scan/ScanError.js';
 
 let counter = 0;
 const createDummyHistoryBaseUrl = () => {

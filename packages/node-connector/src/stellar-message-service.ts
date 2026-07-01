@@ -1,6 +1,6 @@
 import { StrKey, xdr } from '@stellar/stellar-sdk';
 import { ok, err, Result } from 'neverthrow';
-import { createSignature, verifySignature } from './crypto-helper';
+import { createSignature, verifySignature } from './crypto-helper.js';
 import ScpEnvelope = xdr.ScpEnvelope;
 import ScpStatement = xdr.ScpStatement;
 

@@ -1,86 +1,61 @@
-import { EmptyTransactionSetsHashVerifier } from '../EmptyTransactionSetsHashVerifier';
-import { FirstLedgerHashPolicy } from '../hash-policies/FirstLedgerHashPolicy';
-import { RegularTransactionSetHashPolicy } from '../hash-policies/RegularTransactionSetHashPolicy';
-import { GeneralizedTransactionSetHashPolicy } from '../hash-policies/GeneralizedTransactionSetHashPolicy';
-import Mock = jest.Mock;
-
-jest.mock('../hash-policies/FirstLedgerHashPolicy');
-jest.mock('../hash-policies/RegularTransactionSetHashPolicy');
-jest.mock('../hash-policies/GeneralizedTransactionSetHashPolicy');
+import { EmptyTransactionSetsHashVerifier } from '../EmptyTransactionSetsHashVerifier.js';
+import { RegularTransactionSetHashPolicy } from '../hash-policies/RegularTransactionSetHashPolicy.js';
+import { GeneralizedTransactionSetHashPolicy } from '../hash-policies/GeneralizedTransactionSetHashPolicy.js';
 
 describe('EmptyTransactionSetsHashVerifier', () => {
-	beforeEach(() => {
-		// Clear all instances and calls to constructor and all methods:
-		(FirstLedgerHashPolicy as Mock).mockClear();
-		(RegularTransactionSetHashPolicy as Mock).mockClear();
-		(GeneralizedTransactionSetHashPolicy as Mock).mockClear();
-	});
+	const previousLedgerHeaderHash =
+		'ev0m5kh9gybsCHkLBXJKex/KXL072Zl1NV4XTP92mtE=';
 
-	it('should use FirstLedgerHashPolicy for the first ledger', () => {
-		EmptyTransactionSetsHashVerifier.verify(
+	it('should verify the first ledger zero hash', () => {
+		const result = EmptyTransactionSetsHashVerifier.verify(
 			1,
 			20,
-			'test-hash',
-			'expected-hash'
+			previousLedgerHeaderHash,
+			'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA='
 		);
-		expect(FirstLedgerHashPolicy).toHaveBeenCalledTimes(1);
-		expect(RegularTransactionSetHashPolicy).toHaveBeenCalledTimes(0);
-		expect(GeneralizedTransactionSetHashPolicy).toHaveBeenCalledTimes(0);
+		expect(result._unsafeUnwrap()).toBe(true);
 	});
 
-	it('should use RegularTransactionSetHashPolicy for protocol version less than 20', () => {
-		EmptyTransactionSetsHashVerifier.verify(
+	it('should verify protocol versions before 20 with the regular policy', () => {
+		const expectedHash = new RegularTransactionSetHashPolicy().calculateHash(
+			previousLedgerHeaderHash
+		);
+
+		const result = EmptyTransactionSetsHashVerifier.verify(
 			2,
 			19,
-			'test-hash',
-			'expected-hash'
+			previousLedgerHeaderHash,
+			expectedHash
 		);
-		expect(FirstLedgerHashPolicy).toHaveBeenCalledTimes(0);
-		expect(RegularTransactionSetHashPolicy).toHaveBeenCalledTimes(1);
-		expect(GeneralizedTransactionSetHashPolicy).toHaveBeenCalledTimes(0);
+		expect(result._unsafeUnwrap()).toBe(true);
 	});
 
-	it('should only use GeneralizedTransactionSetHashPolicy for protocol version 20 and beyond when verification succeeds', () => {
-		// Mock the GeneralizedTransactionSetHashPolicy to return the expected hash
-		(GeneralizedTransactionSetHashPolicy as jest.Mock).mockImplementation(
-			() => {
-				return {
-					calculateHash: () => 'expected-hash'
-				};
-			}
-		);
+	it('should verify protocol version 20 and beyond with the generalized policy', () => {
+		const expectedHash =
+			new GeneralizedTransactionSetHashPolicy().calculateHash(
+				previousLedgerHeaderHash
+			);
 
-		EmptyTransactionSetsHashVerifier.verify(
+		const result = EmptyTransactionSetsHashVerifier.verify(
 			2,
 			20,
-			'test-hash',
-			'expected-hash'
+			previousLedgerHeaderHash,
+			expectedHash
 		);
-
-		expect(FirstLedgerHashPolicy).toHaveBeenCalledTimes(0);
-		expect(RegularTransactionSetHashPolicy).toHaveBeenCalledTimes(0);
-		expect(GeneralizedTransactionSetHashPolicy).toHaveBeenCalledTimes(1);
+		expect(result._unsafeUnwrap()).toBe(true);
 	});
 
-	it('should use RegularTransactionSetHashPolicy for protocol version 20 and beyond when verification fails', () => {
-		// Mock the GeneralizedTransactionSetHashPolicy to return the wrong hash
-		(GeneralizedTransactionSetHashPolicy as jest.Mock).mockImplementation(
-			() => {
-				return {
-					calculateHash: () => 'wrong-hash'
-				};
-			}
+	it('should fall back to the regular policy for protocol transition ledgers', () => {
+		const expectedHash = new RegularTransactionSetHashPolicy().calculateHash(
+			previousLedgerHeaderHash
 		);
 
-		EmptyTransactionSetsHashVerifier.verify(
+		const result = EmptyTransactionSetsHashVerifier.verify(
 			2,
 			20,
-			'test-hash',
-			'expected-hash'
+			previousLedgerHeaderHash,
+			expectedHash
 		);
-
-		expect(FirstLedgerHashPolicy).toHaveBeenCalledTimes(0);
-		expect(RegularTransactionSetHashPolicy).toHaveBeenCalledTimes(1);
-		expect(GeneralizedTransactionSetHashPolicy).toHaveBeenCalledTimes(1);
+		expect(result._unsafeUnwrap()).toBe(true);
 	});
 });

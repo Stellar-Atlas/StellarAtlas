@@ -1,6 +1,7 @@
 {
 	"name": "history-scanner",
 	"description": "Scan history archives",
+	"type": "module",
 	"scripts": {
 		"build": "tsc --declaration",
 		"build-and-start": "pnpm build; node lib/index.js",

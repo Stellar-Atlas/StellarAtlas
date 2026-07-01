@@ -1,4 +1,4 @@
-import { sortHistoryUrls } from '../sortHistoryUrls';
+import { sortHistoryUrls } from '../sortHistoryUrls.js';
 
 let counter = 0;
 const createDummyHistoryBaseUrl = () => {

@@ -1,6 +1,6 @@
 import { injectable } from 'inversify';
-import { ScanJobRepository } from '../../../domain/ScanJobRepository';
-import { ScanJob } from '../../../domain/ScanJob';
+import type { ScanJobRepository } from '../../../domain/ScanJobRepository.js';
+import { ScanJob } from '../../../domain/ScanJob.js';
 import { MoreThan, Repository } from 'typeorm';
 
 @injectable()

@@ -2,12 +2,12 @@ import {
 	EventSourceId,
 	OrganizationId,
 	PublicKey
-} from '../../domain/event/EventSourceId';
+} from '../../domain/event/EventSourceId.js';
 import { err, ok, Result } from 'neverthrow';
-import { EventSourceService } from '../../domain/event/EventSourceService';
+import type { EventSourceService } from '../../domain/event/EventSourceService.js';
 import { injectable } from 'inversify';
-import { EventSource } from '../../domain/event/EventSource';
-import { NetworkDTOService } from '../../../network-scan/services/NetworkDTOService';
+import { EventSource } from '../../domain/event/EventSource.js';
+import { NetworkDTOService } from '../../../network-scan/services/NetworkDTOService.js';
 import { NodeV1, OrganizationV1 } from 'shared';
 
 @injectable()

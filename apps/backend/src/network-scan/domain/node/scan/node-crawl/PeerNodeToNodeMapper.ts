@@ -1,11 +1,14 @@
-import Node from '../../Node';
+import Node from '../../Node.js';
 import { PeerNode } from 'crawler';
-import NodeQuorumSet from '../../NodeQuorumSet';
-import PublicKey from '../../PublicKey';
-import NodeMeasurement from '../../NodeMeasurement';
+import NodeQuorumSet from '../../NodeQuorumSet.js';
+import PublicKey from '../../PublicKey.js';
+import NodeMeasurement from '../../NodeMeasurement.js';
 import { err, ok, Result } from 'neverthrow';
 export class InvalidPeerNode {
-	constructor(public publicKey: string, public reason: string) {}
+	constructor(
+		public publicKey: string,
+		public reason: string
+	) {}
 }
 
 export class PeerNodeToNodeMapper {

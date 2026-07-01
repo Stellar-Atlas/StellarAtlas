@@ -1,8 +1,8 @@
 import { injectable } from 'inversify';
-import { StellarCoreVersion } from '../../network/StellarCoreVersion';
-import { NodeMeasurementAverage } from '../NodeMeasurementAverage';
-import { NodeScan } from './NodeScan';
-import { NodeIndexer } from './NodeIndexer';
+import { StellarCoreVersion } from '../../network/StellarCoreVersion.js';
+import { NodeMeasurementAverage } from '../NodeMeasurementAverage.js';
+import { NodeScan } from './NodeScan.js';
+import { NodeIndexer } from './NodeIndexer.js';
 import 'reflect-metadata';
 
 @injectable()

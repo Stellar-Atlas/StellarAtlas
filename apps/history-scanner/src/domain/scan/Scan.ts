@@ -1,5 +1,5 @@
 import { Url } from 'http-helper';
-import { ScanError } from './ScanError';
+import { ScanError } from './ScanError.js';
 
 /**
  * Used to represent a chain of scans for a history url.

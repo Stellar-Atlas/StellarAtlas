@@ -1,6 +1,7 @@
 {
 	"name": "http-helper",
 	"description": "Http service abstraction and http queue",
+	"type": "module",
 	"scripts": {
 		"preversion": "pnpm run build",
 		"build": "../../node_modules/typescript/bin/tsc  --declaration",

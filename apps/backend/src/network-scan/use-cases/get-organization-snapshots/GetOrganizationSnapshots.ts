@@ -1,13 +1,13 @@
 import { err, ok, Result } from 'neverthrow';
-import { mapUnknownToError } from '../../../core/utilities/mapUnknownToError';
+import { mapUnknownToError } from '../../../core/utilities/mapUnknownToError.js';
 import { inject, injectable } from 'inversify';
-import { ExceptionLogger } from '../../../core/services/ExceptionLogger';
-import { GetOrganizationSnapshotsDTO } from './GetOrganizationSnapshotsDTO';
+import type { ExceptionLogger } from '../../../core/services/ExceptionLogger.js';
+import { GetOrganizationSnapshotsDTO } from './GetOrganizationSnapshotsDTO.js';
 import { OrganizationSnapShot } from 'shared';
-import { OrganizationId } from '../../domain/organization/OrganizationId';
-import { OrganizationSnapshotMapper } from '../../mappers/OrganizationSnapshotMapper';
-import { NETWORK_TYPES } from '../../infrastructure/di/di-types';
-import { OrganizationSnapShotRepository } from '../../domain/organization/OrganizationSnapShotRepository';
+import { OrganizationId } from '../../domain/organization/OrganizationId.js';
+import { OrganizationSnapshotMapper } from '../../mappers/OrganizationSnapshotMapper.js';
+import { NETWORK_TYPES } from '../../infrastructure/di/di-types.js';
+import type { OrganizationSnapShotRepository } from '../../domain/organization/OrganizationSnapShotRepository.js';
 
 @injectable()
 export class GetOrganizationSnapshots {

@@ -1,7 +1,7 @@
-import NodeQuorumSet from '../../NodeQuorumSet';
+import NodeQuorumSet from '../../NodeQuorumSet.js';
 import { QuorumSet } from 'shared';
-import { TrustGraphFactory } from '../TrustGraphFactory';
-import { createDummyNode } from '../../__fixtures__/createDummyNode';
+import { TrustGraphFactory } from '../TrustGraphFactory.js';
+import { createDummyNode } from '../../__fixtures__/createDummyNode.js';
 
 it('should create TrustGraph', function () {
 	const node1 = createDummyNode();

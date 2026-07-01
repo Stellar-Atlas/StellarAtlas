@@ -7,17 +7,15 @@ import {
 	Not,
 	Repository
 } from 'typeorm';
-import NodeSnapShot from '../../../domain/node/NodeSnapShot';
+import NodeSnapShot from '../../../domain/node/NodeSnapShot.js';
 import { injectable } from 'inversify';
-import NodeMeasurement from '../../../domain/node/NodeMeasurement';
-import Node from '../../../domain/node/Node';
-import { NodeSnapShotRepository } from '../../../domain/node/NodeSnapShotRepository';
-import PublicKey from '../../../domain/node/PublicKey';
+import NodeMeasurement from '../../../domain/node/NodeMeasurement.js';
+import Node from '../../../domain/node/Node.js';
+import type { NodeSnapShotRepository } from '../../../domain/node/NodeSnapShotRepository.js';
+import PublicKey from '../../../domain/node/PublicKey.js';
 
 @injectable()
-export default class TypeOrmNodeSnapShotRepository
-	implements NodeSnapShotRepository
-{
+export default class TypeOrmNodeSnapShotRepository implements NodeSnapShotRepository {
 	constructor(private nodeSnapShotRepository: Repository<NodeSnapShot>) {}
 
 	async save(nodeSnapShots: NodeSnapShot[]): Promise<NodeSnapShot[]> {

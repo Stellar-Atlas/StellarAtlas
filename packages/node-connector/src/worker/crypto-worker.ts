@@ -1,6 +1,6 @@
 import { worker } from 'workerpool';
 import { Result } from 'neverthrow';
-import { verifyStatementXDRSignature } from '../stellar-message-service';
+import { verifyStatementXDRSignature } from '../stellar-message-service.js';
 
 function verifyStatementXDRSignatureWorker(
 	statementXDR: Buffer,

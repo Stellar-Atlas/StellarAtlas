@@ -1,10 +1,10 @@
-import { AsyncCrawlQueue } from '../crawl-queue';
-import { CrawlQueueManager } from '../crawl-queue-manager';
+import { AsyncCrawlQueue } from '../crawl-queue.js';
+import { CrawlQueueManager } from '../crawl-queue-manager.js';
 import { mock } from 'jest-mock-extended';
-import pino = require('pino');
-import { Crawl } from '../crawl';
-import { CrawlTask } from '../crawl-task';
-import { nodeAddressToPeerKey } from '../node-address';
+import pino from 'pino';
+import { Crawl } from '../crawl.js';
+import { CrawlTask } from '../crawl-task.js';
+import { nodeAddressToPeerKey } from '../node-address.js';
 
 describe('CrawlQueueManager', () => {
 	const crawlQueue = mock<AsyncCrawlQueue>();

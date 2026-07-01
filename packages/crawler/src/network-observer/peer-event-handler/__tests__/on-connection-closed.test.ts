@@ -1,8 +1,8 @@
 import { mock } from 'jest-mock-extended';
-import { QuorumSetManager } from '../../quorum-set-manager';
-import pino = require('pino');
-import { OnPeerConnectionClosed } from '../on-peer-connection-closed';
-import { Observation } from '../../observation';
+import { QuorumSetManager } from '../../quorum-set-manager.js';
+import pino from 'pino';
+import { OnPeerConnectionClosed } from '../on-peer-connection-closed.js';
+import { Observation } from '../../observation.js';
 
 describe('OnConnectionCloseHandler', () => {
 	const quorumSetManager = mock<QuorumSetManager>();

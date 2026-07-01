@@ -1,4 +1,4 @@
-import { CustomError } from '../CustomError';
+import { CustomError } from '../CustomError.js';
 
 it('should set the name and cause correctly', function () {
 	const cause = new Error('The cause');

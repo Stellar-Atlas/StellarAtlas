@@ -1,6 +1,6 @@
 import { Url, Request, RequestMethod } from 'http-helper';
-import { UrlBuilder } from '../history-archive/UrlBuilder';
-import { Category } from '../history-archive/Category';
+import { UrlBuilder } from '../history-archive/UrlBuilder.js';
+import { Category } from '../history-archive/Category.js';
 
 export interface CategoryRequestMeta {
 	category: Category;

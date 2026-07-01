@@ -1,18 +1,18 @@
-import { Event, Node, QuorumSet } from '../../../../core';
+import { Event, Node, QuorumSet } from '../../../../core/index.js';
 import {
 	FederatedVotingPhase,
 	FederatedVotingProtocolState
-} from '../../FederatedVotingProtocolState';
-import { QuorumService } from '../../QuorumService';
-import { QuorumSetService } from '../../QuorumSetService';
-import { Statement } from '../../Statement';
-import { Vote } from '../../Vote';
-import { AcceptVoteRatified } from '../event/AcceptVoteRatified';
-import { AcceptVoteVBlocked } from '../event/AcceptVoteVBlocked';
-import { TransitionedToAcceptPhase } from '../event/TransitionedToAcceptPhase';
-import { TransitionedToConfirmPhase } from '../event/TransitionedToConfirmPhase';
-import { VoteRatified } from '../event/VoteRatified';
-import { PhaseTransitioner } from '../PhaseTransitioner';
+} from '../../FederatedVotingProtocolState.js';
+import { QuorumService } from '../../QuorumService.js';
+import { QuorumSetService } from '../../QuorumSetService.js';
+import { Statement } from '../../Statement.js';
+import { Vote } from '../../Vote.js';
+import { AcceptVoteRatified } from '../event/AcceptVoteRatified.js';
+import { AcceptVoteVBlocked } from '../event/AcceptVoteVBlocked.js';
+import { TransitionedToAcceptPhase } from '../event/TransitionedToAcceptPhase.js';
+import { TransitionedToConfirmPhase } from '../event/TransitionedToConfirmPhase.js';
+import { VoteRatified } from '../event/VoteRatified.js';
+import { PhaseTransitioner } from '../PhaseTransitioner.js';
 
 describe('PhaseTransitioner', () => {
 	const phaseTransitioner = new PhaseTransitioner();

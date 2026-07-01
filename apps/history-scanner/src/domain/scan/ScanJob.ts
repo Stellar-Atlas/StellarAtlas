@@ -1,8 +1,8 @@
 import { Url } from 'http-helper';
-import { Scan } from './Scan';
-import { ScanSettings } from './ScanSettings';
-import { ScanError } from './ScanError';
-import { ScanResult } from './ScanResult';
+import { Scan } from './Scan.js';
+import { ScanSettings } from './ScanSettings.js';
+import { ScanError } from './ScanError.js';
+import { ScanResult } from './ScanResult.js';
 import { err, ok, Result } from 'neverthrow';
 import { ScanJobDTO } from 'history-scanner-dto';
 

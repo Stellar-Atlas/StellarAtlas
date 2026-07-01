@@ -1,7 +1,7 @@
 import { mock } from 'jest-mock-extended';
-import { Payload } from '../../Overlay';
-import { Gossip } from '../Gossip';
-import { QuorumSet, Vote } from '../../..';
+import { Payload } from '../../Overlay.js';
+import { Gossip } from '../Gossip.js';
+import { QuorumSet, Vote } from '../../../index.js';
 
 describe('Gossip', () => {
 	const sender = 'node1';

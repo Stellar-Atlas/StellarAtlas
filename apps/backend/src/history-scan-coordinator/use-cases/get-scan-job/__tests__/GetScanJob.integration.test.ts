@@ -1,6 +1,6 @@
-import { GetScanJob } from '../GetScanJob';
-import Kernel from '../../../../core/infrastructure/Kernel';
-import { ConfigMock } from '../../../../core/config/__mocks__/configMock';
+import { GetScanJob } from '../GetScanJob.js';
+import Kernel from '../../../../core/infrastructure/Kernel.js';
+import { ConfigMock } from '../../../../core/config/__mocks__/configMock.js';
 
 let kernel: Kernel;
 

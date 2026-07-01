@@ -1,6 +1,6 @@
-import { BaseQuorumSetDTOMapper } from '../BaseQuorumSetDTOMapper';
-import { createDummyPublicKey } from '../../domain/node/__fixtures__/createDummyPublicKey';
-import { NetworkQuorumSetConfiguration } from '../../domain/network/NetworkQuorumSetConfiguration';
+import { BaseQuorumSetDTOMapper } from '../BaseQuorumSetDTOMapper.js';
+import { createDummyPublicKey } from '../../domain/node/__fixtures__/createDummyPublicKey.js';
+import { NetworkQuorumSetConfiguration } from '../../domain/network/NetworkQuorumSetConfiguration.js';
 
 describe('BaseQuorumSetDTOMapper', () => {
 	test('fromNetworkQuorumSetConfiguration', () => {

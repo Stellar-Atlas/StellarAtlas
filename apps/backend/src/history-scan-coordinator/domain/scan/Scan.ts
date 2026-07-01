@@ -1,7 +1,7 @@
 import { Column, Entity, Index, JoinColumn, OneToOne } from 'typeorm';
-import { Url } from '../../../core/domain/Url';
-import { ScanError } from './ScanError';
-import { CoreEntity } from '../../../core/domain/CoreEntity';
+import { Url } from '../../../core/domain/Url.js';
+import { ScanError } from './ScanError.js';
+import { CoreEntity } from '../../../core/domain/CoreEntity.js';
 
 /**
  * Used to represent a chain of scans for a history url.

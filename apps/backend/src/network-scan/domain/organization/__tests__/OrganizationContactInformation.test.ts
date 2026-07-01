@@ -1,7 +1,7 @@
 import {
 	OrganizationContactInformation,
 	OrganizationContactInformationProps
-} from '../OrganizationContactInformation';
+} from '../OrganizationContactInformation.js';
 
 describe('OrganizationContactInformation', () => {
 	it('should equal', function () {

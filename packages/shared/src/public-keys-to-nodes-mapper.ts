@@ -1,4 +1,4 @@
-import { Node } from './node';
+import { Node } from './node.js';
 
 export function getPublicKeysToNodesMap(nodes: Node[]): Map<string, Node> {
 	const map = new Map<string, Node>();

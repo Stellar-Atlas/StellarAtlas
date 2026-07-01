@@ -1,8 +1,8 @@
-import { Ledger } from '../../../../../../crawler';
+import type { Ledger } from '../../../../../../crawler.js';
 import { QuorumSet } from 'shared';
-import pino = require('pino');
-import {containsSlice} from 'shared';
-import { extractCloseTimeFromValue } from './extract-close-time-from-value';
+import pino from 'pino';
+import { containsSlice } from 'shared';
+import { extractCloseTimeFromValue } from './extract-close-time-from-value.js';
 
 export type SlotIndex = bigint;
 type NodeId = string;

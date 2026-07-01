@@ -1,6 +1,8 @@
 import type { Pool } from 'workerpool';
 import * as workerpool from 'workerpool';
 import * as os from 'os';
+import { existsSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 
 // eslint-disable-next-line @typescript-eslint/no-unsafe-declaration-merging
 export class HasherPool {
@@ -8,16 +10,16 @@ export class HasherPool {
 
 	public terminated = false;
 	constructor() {
-		try {
-			require(__dirname + '/hash-worker.import.js');
-			this.workerpool = workerpool.pool(__dirname + '/hash-worker.import.js', {
-				minWorkers: Math.max((os.cpus().length || 4) - 1, 1)
-			});
-		} catch (e) {
-			this.workerpool = workerpool.pool(__dirname + '/hash-worker.js', {
-				minWorkers: Math.max((os.cpus().length || 4) - 1, 1)
-			});
-		}
+		const developmentWorkerPath = fileURLToPath(
+			new URL('./hash-worker.import.js', import.meta.url)
+		);
+		const workerPath = existsSync(developmentWorkerPath)
+			? developmentWorkerPath
+			: fileURLToPath(new URL('./hash-worker.js', import.meta.url));
+
+		this.workerpool = workerpool.pool(workerPath, {
+			minWorkers: Math.max((os.cpus().length || 4) - 1, 1)
+		});
 	}
 }
 

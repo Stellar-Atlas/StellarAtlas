@@ -1,5 +1,5 @@
-import { Node } from './node';
-import {NodeSnapshotV1} from "./dto/node-snapshot-v1";
+import { Node } from './node.js';
+import { NodeSnapshotV1 } from './dto/node-snapshot-v1.js';
 
 export class NodeSnapShot {
 	public startDate: Date;
@@ -20,9 +20,7 @@ export class NodeSnapShot {
 		};
 	}
 
-	static fromNodeSnapshotV1(
-		nodeSnapshotV1DTO: NodeSnapshotV1
-	): NodeSnapShot {
+	static fromNodeSnapshotV1(nodeSnapshotV1DTO: NodeSnapshotV1): NodeSnapShot {
 		return new NodeSnapShot(
 			new Date(nodeSnapshotV1DTO.startDate),
 			new Date(nodeSnapshotV1DTO.endDate),

@@ -1,4 +1,4 @@
-import { Url } from './Url';
+import { Url } from './Url.js';
 import { Result } from 'neverthrow';
 import * as http from 'http';
 import * as https from 'https';

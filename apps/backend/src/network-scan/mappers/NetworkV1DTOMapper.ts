@@ -1,7 +1,7 @@
 import { NetworkV1, NodeV1, OrganizationV1 } from 'shared';
-import NetworkMeasurement from '../domain/network/NetworkMeasurement';
-import { Network } from '../domain/network/Network';
-import { BaseQuorumSetDTOMapper } from './BaseQuorumSetDTOMapper';
+import NetworkMeasurement from '../domain/network/NetworkMeasurement.js';
+import { Network } from '../domain/network/Network.js';
+import { BaseQuorumSetDTOMapper } from './BaseQuorumSetDTOMapper.js';
 
 export class NetworkV1DTOMapper {
 	static toNetworkV1DTO(

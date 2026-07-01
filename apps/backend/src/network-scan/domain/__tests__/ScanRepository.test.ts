@@ -1,12 +1,12 @@
-import { ScanRepository } from '../ScanRepository';
+import { ScanRepository } from '../ScanRepository.js';
 import { mock } from 'jest-mock-extended';
-import { NodeRepository } from '../node/NodeRepository';
-import { OrganizationRepository } from '../organization/OrganizationRepository';
-import { NetworkScanRepository } from '../network/scan/NetworkScanRepository';
-import { MeasurementsRollupService } from '../measurement-aggregation/MeasurementsRollupService';
-import { NodeScan } from '../node/scan/NodeScan';
-import { OrganizationScan } from '../organization/scan/OrganizationScan';
-import NetworkScan from '../network/scan/NetworkScan';
+import type { NodeRepository } from '../node/NodeRepository.js';
+import type { OrganizationRepository } from '../organization/OrganizationRepository.js';
+import type { NetworkScanRepository } from '../network/scan/NetworkScanRepository.js';
+import type { MeasurementsRollupService } from '../measurement-aggregation/MeasurementsRollupService.js';
+import { NodeScan } from '../node/scan/NodeScan.js';
+import { OrganizationScan } from '../organization/scan/OrganizationScan.js';
+import NetworkScan from '../network/scan/NetworkScan.js';
 
 describe('ScanRepository', () => {
 	function setupRepo() {
@@ -54,10 +54,12 @@ describe('ScanRepository', () => {
 			organizationScan.organizations,
 			networkScan.time
 		);
-		expect(repo.networkScanRepository.saveOne).toHaveBeenCalledWith(networkScan);
-		expect(repo.measurementRollupService.rollupMeasurements).toHaveBeenCalledWith(
+		expect(repo.networkScanRepository.saveOne).toHaveBeenCalledWith(
 			networkScan
 		);
+		expect(
+			repo.measurementRollupService.rollupMeasurements
+		).toHaveBeenCalledWith(networkScan);
 	});
 
 	it('should find latest', async function () {
@@ -72,9 +74,9 @@ describe('ScanRepository', () => {
 		expect(repo.nodeRepository.findActiveAtTimePoint).toHaveBeenCalledWith(
 			latestNetworkScan.time
 		);
-		expect(repo.organizationRepository.findActiveAtTimePoint).toHaveBeenCalledWith(
-			latestNetworkScan.time
-		);
+		expect(
+			repo.organizationRepository.findActiveAtTimePoint
+		).toHaveBeenCalledWith(latestNetworkScan.time);
 	});
 
 	it('should return null if no latest scan', async function () {
@@ -137,9 +139,9 @@ describe('ScanRepository', () => {
 		expect(repo.nodeRepository.findActiveAtTimePoint).toHaveBeenCalledWith(
 			networkScan.time
 		);
-		expect(repo.organizationRepository.findActiveAtTimePoint).toHaveBeenCalledWith(
-			networkScan.time
-		);
+		expect(
+			repo.organizationRepository.findActiveAtTimePoint
+		).toHaveBeenCalledWith(networkScan.time);
 	});
 
 	it('should return null if no previous scan', async function () {
@@ -162,9 +164,9 @@ describe('ScanRepository', () => {
 		expect(repo.nodeRepository.findActiveAtTimePoint).toHaveBeenCalledWith(
 			networkScan.time
 		);
-		expect(repo.organizationRepository.findActiveAtTimePoint).toHaveBeenCalledWith(
-			networkScan.time
-		);
+		expect(
+			repo.organizationRepository.findActiveAtTimePoint
+		).toHaveBeenCalledWith(networkScan.time);
 	});
 
 	it('should return null if no scan at time', async function () {

@@ -1,6 +1,6 @@
-import { HomeDomainFetcher } from './HomeDomainFetcher';
+import { HomeDomainFetcher } from './HomeDomainFetcher.js';
 import { injectable } from 'inversify';
-import { NodeScan } from './NodeScan';
+import { NodeScan } from './NodeScan.js';
 
 @injectable()
 export class NodeScannerHomeDomainStep {

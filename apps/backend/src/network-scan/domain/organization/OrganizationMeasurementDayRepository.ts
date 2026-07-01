@@ -1,10 +1,9 @@
-import { MeasurementAggregationRepository } from '../measurement-aggregation/MeasurementAggregationRepository';
-import { OrganizationMeasurementAverage } from './OrganizationMeasurementAverage';
-import OrganizationMeasurementDay from './OrganizationMeasurementDay';
-import { OrganizationId } from './OrganizationId';
+import type { MeasurementAggregationRepository } from '../measurement-aggregation/MeasurementAggregationRepository.js';
+import { OrganizationMeasurementAverage } from './OrganizationMeasurementAverage.js';
+import OrganizationMeasurementDay from './OrganizationMeasurementDay.js';
+import { OrganizationId } from './OrganizationId.js';
 
-export interface OrganizationMeasurementDayRepository
-	extends MeasurementAggregationRepository<OrganizationMeasurementDay> {
+export interface OrganizationMeasurementDayRepository extends MeasurementAggregationRepository<OrganizationMeasurementDay> {
 	findXDaysAverageAt(
 		at: Date,
 		xDays: number

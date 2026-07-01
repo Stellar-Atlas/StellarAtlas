@@ -1,4 +1,4 @@
-import { NetworkQuorumSetConfiguration } from './NetworkQuorumSetConfiguration';
+import { NetworkQuorumSetConfiguration } from './NetworkQuorumSetConfiguration.js';
 import { QuorumSet as BasicQuorumSet } from 'shared';
 
 export class NetworkQuorumSetConfigurationMapper {

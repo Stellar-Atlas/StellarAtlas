@@ -1,10 +1,10 @@
-import { ConnectedPayload, ConnectionManager } from '../connection-manager';
-import { StragglerTimer } from '../straggler-timer';
-import pino = require('pino');
-import { truncate } from '../../utilities/truncate';
-import { PeerNodeCollection } from '../../peer-node-collection';
-import { Observation } from '../observation';
-import { ObservationState } from '../observation-state';
+import { ConnectedPayload, ConnectionManager } from '../connection-manager.js';
+import { StragglerTimer } from '../straggler-timer.js';
+import pino from 'pino';
+import { truncate } from '../../utilities/truncate.js';
+import { PeerNodeCollection } from '../../peer-node-collection.js';
+import { Observation } from '../observation.js';
+import { ObservationState } from '../observation-state.js';
 
 export class OnPeerConnected {
 	constructor(

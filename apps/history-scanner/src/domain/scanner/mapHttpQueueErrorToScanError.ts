@@ -1,6 +1,6 @@
 import { FileNotFoundError, QueueError } from 'http-helper';
 import 'reflect-metadata';
-import { ScanError, ScanErrorType } from '../scan/ScanError';
+import { ScanError, ScanErrorType } from '../scan/ScanError.js';
 
 export function mapHttpQueueErrorToScanError(error: QueueError): ScanError {
 	if (error instanceof FileNotFoundError) {

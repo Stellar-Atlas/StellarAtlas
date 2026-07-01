@@ -1,9 +1,9 @@
 import { OrganizationSnapshotV1, OrganizationV1 } from 'shared';
-import { OrganizationMeasurementAverage } from '../domain/organization/OrganizationMeasurementAverage';
-import Organization from '../domain/organization/Organization';
+import { OrganizationMeasurementAverage } from '../domain/organization/OrganizationMeasurementAverage.js';
+import Organization from '../domain/organization/Organization.js';
 import { injectable } from 'inversify';
 import 'reflect-metadata';
-import { ReliableUptimePolicy } from '../domain/organization/ReliableUptimePolicy';
+import { ReliableUptimePolicy } from '../domain/organization/ReliableUptimePolicy.js';
 
 @injectable()
 export class OrganizationV1DTOMapper {

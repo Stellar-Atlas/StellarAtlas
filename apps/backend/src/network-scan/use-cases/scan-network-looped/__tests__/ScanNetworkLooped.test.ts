@@ -1,11 +1,18 @@
-import { ScanNetworkLooped } from '../ScanNetworkLooped';
+import { ScanNetworkLooped } from '../ScanNetworkLooped.js';
 import { mock } from 'jest-mock-extended';
-import { ScanNetwork } from '../../scan-network/ScanNetwork';
-import { LoopTimer } from '../../../../core/services/LoopTimer';
-import { ExceptionLogger } from '../../../../core/services/ExceptionLogger';
-import { Logger } from 'logger';
+import { ScanNetwork } from '../../scan-network/ScanNetwork.js';
+import { LoopTimer } from '../../../../core/services/LoopTimer.js';
+import type { ExceptionLogger } from '../../../../core/services/ExceptionLogger.js';
+import type { Logger } from 'logger';
 import { err, ok } from 'neverthrow';
-import * as httpHelper from 'http-helper';
+
+class TestScanNetworkLooped extends ScanNetworkLooped {
+	public readonly waitTimes: number[] = [];
+
+	protected override async waitForNextRun(waitTimeMs: number): Promise<void> {
+		this.waitTimes.push(waitTimeMs);
+	}
+}
 
 describe('ScanNetworkLooped', () => {
 	it('should loop network scans and only request to update the network config the first time', function (done) {
@@ -22,7 +29,9 @@ describe('ScanNetworkLooped', () => {
 				executeCount++;
 				if (executeCount === expectedExecuteCount)
 					useCase.shutDown(() => {
-						expect(scanNetwork.execute).toHaveBeenCalledTimes(expectedExecuteCount);
+						expect(scanNetwork.execute).toHaveBeenCalledTimes(
+							expectedExecuteCount
+						);
 						expect(loopTimer.start).toHaveBeenCalledTimes(expectedExecuteCount);
 						expect(loopTimer.stop).toHaveBeenCalledTimes(expectedExecuteCount);
 						expect(scanNetwork.execute).toHaveBeenCalledWith({
@@ -69,24 +78,20 @@ describe('ScanNetworkLooped', () => {
 	});
 
 	it('should sleep when network update is less then expected run time', async function () {
-		const spy = jest
-			.spyOn(httpHelper, 'asyncSleep')
-			.mockResolvedValue(undefined);
 		const SUT = setupSUT();
 		SUT.loopTimer.loopExceededMaxTime.mockReturnValue(false);
 		SUT.loopTimer.getRemainingTime.mockReturnValue(100);
 
-		SUT.useCase.execute(
+		await SUT.useCase.execute(
 			{
 				loopIntervalMs: 10,
 				dryRun: true
 			},
 			() => {
-				SUT.useCase.shutDown(() => {
-					expect(spy).toHaveBeenCalledWith(100);
-				});
+				SUT.useCase.shutDown(() => undefined);
 			}
 		);
+		expect(SUT.useCase.waitTimes).toEqual([100]);
 	});
 
 	function setupSUT() {
@@ -95,7 +100,7 @@ describe('ScanNetworkLooped', () => {
 		scanNetwork.shutDown.mockImplementation((callback) => callback());
 		const loopTimer = mock<LoopTimer>();
 		const exceptionLogger = mock<ExceptionLogger>();
-		const useCase = new ScanNetworkLooped(
+		const useCase = new TestScanNetworkLooped(
 			scanNetwork,
 			loopTimer,
 			exceptionLogger,

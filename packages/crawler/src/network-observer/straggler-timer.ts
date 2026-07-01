@@ -1,6 +1,6 @@
-import { ConnectionManager } from './connection-manager';
-import pino = require('pino');
-import { Timers } from '../utilities/timers';
+import { ConnectionManager } from './connection-manager.js';
+import pino from 'pino';
+import { Timers } from '../utilities/timers.js';
 
 export class StragglerTimer {
 	constructor(

@@ -1,12 +1,12 @@
 import 'reflect-metadata';
 import { ok, Result } from 'neverthrow';
-import { ScheduleScansDTO as ScheduleScanJobsDTO } from './ScheduleScanJobsDTO';
+import { ScheduleScansDTO as ScheduleScanJobsDTO } from './ScheduleScanJobsDTO.js';
 import { inject, injectable } from 'inversify';
-import { TYPES } from '../../infrastructure/di/di-types';
-import { ScanRepository } from '../../domain/scan/ScanRepository';
-import { ScanScheduler } from '../../domain/ScanScheduler';
-import { Logger } from 'logger';
-import { ScanJobRepository } from '../../domain/ScanJobRepository';
+import { TYPES } from '../../infrastructure/di/di-types.js';
+import type { ScanRepository } from '../../domain/scan/ScanRepository.js';
+import type { ScanScheduler } from '../../domain/ScanScheduler.js';
+import type { Logger } from 'logger';
+import type { ScanJobRepository } from '../../domain/ScanJobRepository.js';
 
 /**
  * Schedule scansJobs and adds them to the queue. If the scan queue is empty, new ScanJobs will be created.

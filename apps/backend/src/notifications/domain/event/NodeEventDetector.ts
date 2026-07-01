@@ -1,9 +1,9 @@
 import 'reflect-metadata';
 import { NodeV1 } from 'shared';
-import { Event, EventData, HistoryArchiveErrorDetectedEvent } from './Event';
+import { Event, EventData, HistoryArchiveErrorDetectedEvent } from './Event.js';
 import { inject, injectable } from 'inversify';
-import { PublicKey } from './EventSourceId';
-import { EventRepository } from './EventRepository';
+import { PublicKey } from './EventSourceId.js';
+import type { EventRepository } from './EventRepository.js';
 
 @injectable()
 export class NodeEventDetector {

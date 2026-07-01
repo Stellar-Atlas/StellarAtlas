@@ -1,6 +1,6 @@
 import { Url } from 'http-helper';
-import { CheckPoint } from '../check-point/CheckPointGenerator';
-import { Category } from './Category';
+import { CheckPoint } from '../check-point/CheckPointGenerator.js';
+import { Category } from './Category.js';
 
 export class UrlBuilder {
 	static getBucketUrl(baseUrl: Url, hash: string) {

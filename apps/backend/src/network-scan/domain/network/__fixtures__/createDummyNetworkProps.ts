@@ -1,7 +1,7 @@
-import { NetworkProps } from '../Network';
-import { OverlayVersionRange } from '../OverlayVersionRange';
-import { StellarCoreVersion } from '../StellarCoreVersion';
-import { createDummyNetworkQuorumSetConfiguration } from './createDummyNetworkQuorumSetConfiguration';
+import { NetworkProps } from '../Network.js';
+import { OverlayVersionRange } from '../OverlayVersionRange.js';
+import { StellarCoreVersion } from '../StellarCoreVersion.js';
+import { createDummyNetworkQuorumSetConfiguration } from './createDummyNetworkQuorumSetConfiguration.js';
 
 export function createDummyNetworkProps(): NetworkProps {
 	const overlayVersionRangeOrError = OverlayVersionRange.create(1, 2);

@@ -1,12 +1,12 @@
 import { Column, Entity, Index, OneToMany } from 'typeorm';
-import { OrganizationId } from './OrganizationId';
-import { VersionedEntity } from '../../../core/domain/VersionedEntity';
-import OrganizationSnapShot from './OrganizationSnapShot';
-import { OrganizationContactInformation } from './OrganizationContactInformation';
-import { OrganizationValidators } from './OrganizationValidators';
-import Node from '../node/Node';
-import OrganizationMeasurement from './OrganizationMeasurement';
-import { TomlState } from './scan/TomlState';
+import { OrganizationId } from './OrganizationId.js';
+import { VersionedEntity } from '../../../core/domain/VersionedEntity.js';
+import OrganizationSnapShot from './OrganizationSnapShot.js';
+import { OrganizationContactInformation } from './OrganizationContactInformation.js';
+import { OrganizationValidators } from './OrganizationValidators.js';
+import Node from '../node/Node.js';
+import OrganizationMeasurement from './OrganizationMeasurement.js';
+import { TomlState } from './scan/TomlState.js';
 
 @Entity('organization')
 export default class Organization extends VersionedEntity<OrganizationSnapShot> {
@@ -22,7 +22,7 @@ export default class Organization extends VersionedEntity<OrganizationSnapShot> 
 		cascade: false,
 		nullable: false
 	})
-	protected declare _snapshots?: OrganizationSnapShot[];
+	declare protected _snapshots?: OrganizationSnapShot[];
 
 	@OneToMany(
 		() => OrganizationMeasurement,

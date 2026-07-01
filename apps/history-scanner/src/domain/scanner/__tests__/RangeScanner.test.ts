@@ -1,13 +1,13 @@
-import { CheckPointGenerator } from '../../check-point/CheckPointGenerator';
-import { StandardCheckPointFrequency } from '../../check-point/StandardCheckPointFrequency';
+import { CheckPointGenerator } from '../../check-point/CheckPointGenerator.js';
+import { StandardCheckPointFrequency } from '../../check-point/StandardCheckPointFrequency.js';
 import { HttpQueue } from 'http-helper';
 import { mock } from 'jest-mock-extended';
 import { ok } from 'neverthrow';
-import { CategoryScanner } from '../CategoryScanner';
-import { BucketScanner } from '../BucketScanner';
-import { RangeScanner } from '../RangeScanner';
-import { Logger } from 'logger';
-import { ExceptionLogger } from 'exception-logger';
+import { CategoryScanner } from '../CategoryScanner.js';
+import { BucketScanner } from '../BucketScanner.js';
+import { RangeScanner } from '../RangeScanner.js';
+import type { Logger } from 'logger';
+import type { ExceptionLogger } from 'exception-logger';
 
 it('should verify', async function () {
 	const checkPointGenerator = new CheckPointGenerator(

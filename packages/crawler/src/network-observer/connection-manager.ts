@@ -1,7 +1,7 @@
 import { EventEmitter } from 'events';
 import { Connection, Node as NetworkNode } from 'node-connector';
-import pino = require('pino');
-import { truncate } from '../utilities/truncate';
+import pino from 'pino';
+import { truncate } from '../utilities/truncate.js';
 import { StellarMessageWork } from 'node-connector';
 import { NodeInfo } from 'node-connector';
 

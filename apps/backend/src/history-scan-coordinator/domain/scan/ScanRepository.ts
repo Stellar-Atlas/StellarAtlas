@@ -1,4 +1,4 @@
-import { Scan } from './Scan';
+import { Scan } from './Scan.js';
 
 export interface ScanRepository {
 	save(scans: Scan[]): Promise<Scan[]>;

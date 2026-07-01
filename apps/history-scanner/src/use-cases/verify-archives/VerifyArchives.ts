@@ -1,14 +1,14 @@
-import { Scanner } from '../../domain/scanner/Scanner';
-import { ScanCoordinatorService } from '../../domain/scan/ScanCoordinatorService';
-import { ExceptionLogger } from 'exception-logger';
+import { Scanner } from '../../domain/scanner/Scanner.js';
+import type { ScanCoordinatorService } from '../../domain/scan/ScanCoordinatorService.js';
+import type { ExceptionLogger } from 'exception-logger';
 import { mapUnknownToError } from 'shared';
-import { Scan } from '../../domain/scan/Scan';
+import { Scan } from '../../domain/scan/Scan.js';
 import { asyncSleep } from 'shared';
-import { VerifyArchivesDTO } from './VerifyArchivesDTO';
-import { ScanJob } from '../../domain/scan/ScanJob';
-import { JobMonitor } from 'job-monitor';
+import { VerifyArchivesDTO } from './VerifyArchivesDTO.js';
+import { ScanJob } from '../../domain/scan/ScanJob.js';
+import type { JobMonitor } from 'job-monitor';
 import { inject, injectable } from 'inversify';
-import { TYPES } from '../../infrastructure/di/di-types';
+import { TYPES } from '../../infrastructure/di/di-types.js';
 import { ScanJobDTO } from 'history-scanner-dto';
 
 @injectable()
@@ -30,7 +30,7 @@ export class VerifyArchives {
 				const scanJobDTOResult = await this.scanCoordinator.getScanJob();
 				if (scanJobDTOResult.isErr()) {
 					this.exceptionLogger.captureException(scanJobDTOResult.error);
-					await asyncSleep(60 * 1000); //maybe temporary db connection error
+					await this.waitBeforeRetry();
 					continue;
 				}
 
@@ -41,7 +41,7 @@ export class VerifyArchives {
 			} catch (e) {
 				//general catch all in case we missed an edge case
 				this.exceptionLogger.captureException(mapUnknownToError(e));
-				await asyncSleep(60 * 1000);
+				await this.waitBeforeRetry();
 			}
 		} while (!shutDown && verifyArchivesDTO.loop);
 	}
@@ -60,8 +60,6 @@ export class VerifyArchives {
 
 	private async perform(scanJob: ScanJob, persist = false) {
 		const scan = await this.scanner.perform(new Date(), scanJob);
-		console.log(scan);
-		//todo: logger
 		if (persist) await this.persist(scan);
 	}
 
@@ -81,5 +79,9 @@ export class VerifyArchives {
 		if (result.isErr()) {
 			this.exceptionLogger.captureException(result.error);
 		}
+	}
+
+	protected async waitBeforeRetry(): Promise<void> {
+		await asyncSleep(60 * 1000);
 	}
 }

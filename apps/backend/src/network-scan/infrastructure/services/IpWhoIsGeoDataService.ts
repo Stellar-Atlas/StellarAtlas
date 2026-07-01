@@ -1,12 +1,12 @@
 import { inject, injectable } from 'inversify';
-import { Url, HttpService } from 'http-helper';
+import { Url, type HttpService } from 'http-helper';
 import { err, ok, Result } from 'neverthrow';
 import { isNumber, isObject, isString } from 'shared';
 import {
 	GeoData,
-	GeoDataService,
 	GeoDataUpdateError
-} from '../../domain/node/scan/GeoDataService';
+} from '../../domain/node/scan/GeoDataService.js';
+import type { GeoDataService } from '../../domain/node/scan/GeoDataService.js';
 
 @injectable()
 export class IpWhoIsGeoDataService implements GeoDataService {
@@ -38,9 +38,7 @@ export class IpWhoIsGeoDataService implements GeoDataService {
 			longitude: isNumber(geoData.longitude) ? geoData.longitude : null,
 			latitude: isNumber(geoData.latitude) ? geoData.latitude : null,
 			countryName: isString(geoData.country) ? geoData.country : null,
-			countryCode: isString(geoData.country_code)
-				? geoData.country_code
-				: null,
+			countryCode: isString(geoData.country_code) ? geoData.country_code : null,
 			isp:
 				isObject(geoData.connection) && isString(geoData.connection.isp)
 					? geoData.connection.isp

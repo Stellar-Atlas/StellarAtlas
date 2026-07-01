@@ -1,4 +1,4 @@
-import { AgeIndex } from '../../../index/age-index';
+import { AgeIndex } from '../../../index/age-index.js';
 
 test('get', () => {
 	expect(AgeIndex.get(new Date())).toEqual(0);

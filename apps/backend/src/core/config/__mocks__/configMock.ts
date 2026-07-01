@@ -1,5 +1,6 @@
-import { Url } from '../../domain/Url';
-import { Config, NetworkConfig } from '../Config';
+import { Url } from '../../domain/Url.js';
+import { Config } from '../Config.js';
+import type { NetworkConfig } from '../Config.js';
 import { CrawlerConfiguration } from 'crawler';
 
 export class ConfigMock implements Config {

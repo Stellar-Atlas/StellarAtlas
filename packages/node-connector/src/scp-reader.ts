@@ -1,5 +1,5 @@
-import pino = require('pino');
-import { Node } from './node';
+import pino from 'pino';
+import { Node } from './node.js';
 import { StrKey, xdr } from '@stellar/stellar-sdk';
 
 type PublicKey = string;

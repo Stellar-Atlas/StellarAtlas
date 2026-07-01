@@ -1,1 +1,1 @@
-export { ExceptionLogger } from 'exception-logger';
+export type { ExceptionLogger } from 'exception-logger';

@@ -1,14 +1,14 @@
-import { NodeDTOService } from '../NodeDTOService';
+import { NodeDTOService } from '../NodeDTOService.js';
 import { mock } from 'jest-mock-extended';
-import { NodeMeasurementRepository } from '../../domain/node/NodeMeasurementRepository';
-import { NodeMeasurementDayRepository } from '../../domain/node/NodeMeasurementDayRepository';
-import Node from '../../domain/node/Node';
-import { createDummyPublicKey } from '../../domain/node/__fixtures__/createDummyPublicKey';
-import { createDummyOrganizationId } from '../../domain/organization/__fixtures__/createDummyOrganizationId';
-import Organization from '../../domain/organization/Organization';
-import { OrganizationValidators } from '../../domain/organization/OrganizationValidators';
-import { NodeMeasurementAverage } from '../../domain/node/NodeMeasurementAverage';
-import { NodeV1DTOMapper } from '../../mappers/NodeV1DTOMapper';
+import type { NodeMeasurementRepository } from '../../domain/node/NodeMeasurementRepository.js';
+import type { NodeMeasurementDayRepository } from '../../domain/node/NodeMeasurementDayRepository.js';
+import Node from '../../domain/node/Node.js';
+import { createDummyPublicKey } from '../../domain/node/__fixtures__/createDummyPublicKey.js';
+import { createDummyOrganizationId } from '../../domain/organization/__fixtures__/createDummyOrganizationId.js';
+import Organization from '../../domain/organization/Organization.js';
+import { OrganizationValidators } from '../../domain/organization/OrganizationValidators.js';
+import { NodeMeasurementAverage } from '../../domain/node/NodeMeasurementAverage.js';
+import { NodeV1DTOMapper } from '../../mappers/NodeV1DTOMapper.js';
 
 describe('NodeDTOService', () => {
 	it('should return a list of NodeDTOs', async () => {
@@ -88,10 +88,9 @@ describe('NodeDTOService', () => {
 			nodeB30DayAvg,
 			undefined
 		);
-		expect(nodeMeasurementDayRepository.findXDaysAverageAt).toHaveBeenCalledWith(
-			time,
-			30
-		);
+		expect(
+			nodeMeasurementDayRepository.findXDaysAverageAt
+		).toHaveBeenCalledWith(time, 30);
 	});
 
 	it('should return error if fetching 24H averages throws error', async function () {

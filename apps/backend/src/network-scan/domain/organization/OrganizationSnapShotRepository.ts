@@ -1,5 +1,5 @@
-import OrganizationSnapShot from './OrganizationSnapShot';
-import { OrganizationId } from './OrganizationId';
+import OrganizationSnapShot from './OrganizationSnapShot.js';
+import { OrganizationId } from './OrganizationId.js';
 
 //We need this until we start storing the actual changes. The only reason we need this is to calculate changes on the fly
 //@deprecated

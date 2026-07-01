@@ -1,17 +1,17 @@
 import { mock } from 'jest-mock-extended';
-import { ExceptionLogger } from '../../../../core/services/ExceptionLogger';
-import { MeasurementAggregationRepositoryFactory } from '../../../domain/measurement-aggregation/MeasurementAggregationRepositoryFactory';
-import { GetMeasurementAggregations } from '../GetMeasurementAggregations';
+import type { ExceptionLogger } from '../../../../core/services/ExceptionLogger.js';
+import { MeasurementAggregationRepositoryFactory } from '../../../domain/measurement-aggregation/MeasurementAggregationRepositoryFactory.js';
+import { GetMeasurementAggregations } from '../GetMeasurementAggregations.js';
 import {
 	AggregationTarget,
 	GetMeasurementAggregationsDTO
-} from '../GetMeasurementAggregationsDTO';
-import NodeMeasurementDay from '../../../domain/node/NodeMeasurementDay';
-import NetworkMeasurementDay from '../../../domain/network/NetworkMeasurementDay';
-import OrganizationMeasurementDay from '../../../domain/organization/OrganizationMeasurementDay';
-import NetworkMeasurementMonth from '../../../domain/network/NetworkMeasurementMonth';
-import { MeasurementAggregationRepository } from '../../../domain/measurement-aggregation/MeasurementAggregationRepository';
-import { MeasurementAggregation } from '../../../domain/measurement-aggregation/MeasurementAggregation';
+} from '../GetMeasurementAggregationsDTO.js';
+import NodeMeasurementDay from '../../../domain/node/NodeMeasurementDay.js';
+import NetworkMeasurementDay from '../../../domain/network/NetworkMeasurementDay.js';
+import OrganizationMeasurementDay from '../../../domain/organization/OrganizationMeasurementDay.js';
+import NetworkMeasurementMonth from '../../../domain/network/NetworkMeasurementMonth.js';
+import type { MeasurementAggregationRepository } from '../../../domain/measurement-aggregation/MeasurementAggregationRepository.js';
+import { MeasurementAggregation } from '../../../domain/measurement-aggregation/MeasurementAggregation.js';
 
 it('should call the right repo', function () {
 	const factory = mock<MeasurementAggregationRepositoryFactory>();

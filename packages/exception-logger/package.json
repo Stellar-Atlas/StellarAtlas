@@ -1,6 +1,7 @@
 {
 	"name": "exception-logger",
 	"description": "Log exceptions (console, Sentry,...)",
+	"type": "module",
 	"scripts": {
 		"preversion": "pnpm run build",
 		"build": "../../node_modules/typescript/bin/tsc  --declaration",

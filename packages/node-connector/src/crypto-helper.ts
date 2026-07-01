@@ -1,9 +1,8 @@
 import * as crypto from 'crypto';
-import {
-	crypto_sign_BYTES,
-	crypto_sign_detached,
-	crypto_sign_verify_detached
-} from 'sodium-native';
+import sodium from 'sodium-native';
+
+const { crypto_sign_BYTES, crypto_sign_detached, crypto_sign_verify_detached } =
+	sodium;
 
 export function createSHA256Hmac(data: Buffer, macKey: Buffer): Buffer {
 	return crypto.createHmac('SHA256', macKey).update(data).digest();

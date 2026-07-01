@@ -1,6 +1,6 @@
-import { Context, ProtocolAction } from '../../core';
-import { Vote } from '../../federated-voting';
-import { Payload } from '../Overlay';
+import { Context, ProtocolAction } from '../../core/index.js';
+import { Vote } from '../../federated-voting/index.js';
+import { Payload } from '../Overlay.js';
 
 type PublicKey = string;
 

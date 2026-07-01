@@ -1,4 +1,4 @@
-import { HistoryArchiveState } from '../HistoryArchiveState';
+import { HistoryArchiveState } from '../HistoryArchiveState.js';
 
 export function getDummyHistoryArchiveState(): HistoryArchiveState {
 	return JSON.parse(

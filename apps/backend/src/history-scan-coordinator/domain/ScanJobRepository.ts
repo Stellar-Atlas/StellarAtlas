@@ -1,4 +1,4 @@
-import { ScanJob } from './ScanJob';
+import { ScanJob } from './ScanJob.js';
 
 export interface ScanJobRepository {
 	hasPendingJobs: () => Promise<boolean>;

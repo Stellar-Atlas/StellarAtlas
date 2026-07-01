@@ -1,11 +1,11 @@
-import { NodeAddress } from '../node-address';
-import { PeerNodeCollection } from '../peer-node-collection';
+import type { NodeAddress } from '../node-address.js';
+import { PeerNodeCollection } from '../peer-node-collection.js';
 import assert from 'assert';
-import { Ledger } from '../crawler';
-import { ObservationState } from './observation-state';
-import { Slots } from './peer-event-handler/stellar-message-handlers/scp-envelope/scp-statement/externalize/slots';
+import type { Ledger } from '../crawler.js';
+import { ObservationState } from './observation-state.js';
+import { Slots } from './peer-event-handler/stellar-message-handlers/scp-envelope/scp-statement/externalize/slots.js';
 import { QuorumSet } from 'shared';
-import { QuorumSetState } from './quorum-set-state';
+import { QuorumSetState } from './quorum-set-state.js';
 import { LRUCache } from 'lru-cache';
 
 export class Observation {

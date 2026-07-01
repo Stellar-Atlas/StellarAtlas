@@ -1,10 +1,9 @@
-import { MeasurementAggregationRepository } from '../measurement-aggregation/MeasurementAggregationRepository';
-import NetworkMeasurementDay from './NetworkMeasurementDay';
-import { NetworkMeasurementAggregation } from './NetworkMeasurementAggregation';
-import { NetworkId } from './NetworkId';
+import type { MeasurementAggregationRepository } from '../measurement-aggregation/MeasurementAggregationRepository.js';
+import NetworkMeasurementDay from './NetworkMeasurementDay.js';
+import { NetworkMeasurementAggregation } from './NetworkMeasurementAggregation.js';
+import { NetworkId } from './NetworkId.js';
 
-export interface NetworkMeasurementDayRepository
-	extends MeasurementAggregationRepository<NetworkMeasurementAggregation> {
+export interface NetworkMeasurementDayRepository extends MeasurementAggregationRepository<NetworkMeasurementAggregation> {
 	findBetween(
 		id: NetworkId,
 		from: Date,

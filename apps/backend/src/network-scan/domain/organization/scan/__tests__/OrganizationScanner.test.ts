@@ -1,19 +1,19 @@
 import { mock } from 'jest-mock-extended';
 
-import { OrganizationScanner } from '../OrganizationScanner';
-import { OrganizationTomlFetcher } from '../OrganizationTomlFetcher';
-import { OrganizationTomlInfo } from '../OrganizationTomlInfo';
-import { OrganizationScan } from '../OrganizationScan';
-import { createDummyNode } from '../../../node/__fixtures__/createDummyNode';
-import Organization from '../../Organization';
-import { createDummyOrganizationId } from '../../__fixtures__/createDummyOrganizationId';
-import { NodeScan } from '../../../node/scan/NodeScan';
-import { OrganizationRepository } from '../../OrganizationRepository';
-import OrganizationMeasurement from '../../OrganizationMeasurement';
-import { Logger } from 'logger';
-import { CouldNotRetrieveArchivedOrganizationsError } from '../errors/CouldNotRetrieveArchivedOrganizationsError';
-import { createDummyPublicKeyString } from '../../../node/__fixtures__/createDummyPublicKey';
-import { TomlState } from '../TomlState';
+import { OrganizationScanner } from '../OrganizationScanner.js';
+import { OrganizationTomlFetcher } from '../OrganizationTomlFetcher.js';
+import { OrganizationTomlInfo } from '../OrganizationTomlInfo.js';
+import { OrganizationScan } from '../OrganizationScan.js';
+import { createDummyNode } from '../../../node/__fixtures__/createDummyNode.js';
+import Organization from '../../Organization.js';
+import { createDummyOrganizationId } from '../../__fixtures__/createDummyOrganizationId.js';
+import { NodeScan } from '../../../node/scan/NodeScan.js';
+import type { OrganizationRepository } from '../../OrganizationRepository.js';
+import OrganizationMeasurement from '../../OrganizationMeasurement.js';
+import type { Logger } from 'logger';
+import { CouldNotRetrieveArchivedOrganizationsError } from '../errors/CouldNotRetrieveArchivedOrganizationsError.js';
+import { createDummyPublicKeyString } from '../../../node/__fixtures__/createDummyPublicKey.js';
+import { TomlState } from '../TomlState.js';
 
 describe('OrganizationScanner', function () {
 	it('should scan organizations', async function () {
@@ -30,7 +30,9 @@ describe('OrganizationScanner', function () {
 		expect(
 			setup.organizationTomlFetcher.fetchOrganizationTomlInfoCollection
 		).toHaveBeenCalledWith(['domain']);
-		expect(setup.organizationRepository.findByHomeDomains).toHaveBeenCalledTimes(0);
+		expect(
+			setup.organizationRepository.findByHomeDomains
+		).toHaveBeenCalledTimes(0);
 
 		expect(result.value.organizations).toHaveLength(1);
 		expect(result.value.organizations[0].name).toBe('toml');
@@ -121,9 +123,9 @@ describe('OrganizationScanner', function () {
 		expect(
 			setup.organizationTomlFetcher.fetchOrganizationTomlInfoCollection
 		).toHaveBeenCalledWith(['domain', 'other-domain.com']);
-		expect(setup.organizationRepository.findByHomeDomains).toHaveBeenCalledWith([
-			'other-domain.com'
-		]);
+		expect(setup.organizationRepository.findByHomeDomains).toHaveBeenCalledWith(
+			['other-domain.com']
+		);
 		expect(result.isOk()).toBeTruthy();
 		if (!result.isOk()) throw result.error;
 		expect(result.value.organizations).toHaveLength(2);

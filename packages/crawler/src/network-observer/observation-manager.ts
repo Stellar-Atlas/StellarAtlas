@@ -1,10 +1,10 @@
-import { NodeAddress } from '../node-address';
-import { StragglerTimer } from './straggler-timer';
-import { ConnectionManager } from './connection-manager';
-import pino = require('pino');
-import { Ledger } from '../crawler';
-import { Observation } from './observation';
-import { ConsensusTimer } from './consensus-timer';
+import type { NodeAddress } from '../node-address.js';
+import { StragglerTimer } from './straggler-timer.js';
+import { ConnectionManager } from './connection-manager.js';
+import pino from 'pino';
+import type { Ledger } from '../crawler.js';
+import { Observation } from './observation.js';
+import { ConsensusTimer } from './consensus-timer.js';
 
 export class ObservationManager {
 	constructor(

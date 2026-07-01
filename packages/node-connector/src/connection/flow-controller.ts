@@ -1,5 +1,5 @@
 import { xdr } from '@stellar/stellar-sdk';
-import { isFloodMessage } from './is-flood-message';
+import { isFloodMessage } from './is-flood-message.js';
 import MessageType = xdr.MessageType;
 import StellarMessage = xdr.StellarMessage;
 

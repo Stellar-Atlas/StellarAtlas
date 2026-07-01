@@ -1,10 +1,10 @@
 import 'reflect-metadata';
 
-import Kernel from '../../../core/infrastructure/Kernel';
-import { ExceptionLogger } from '../../../core/services/ExceptionLogger';
-import { Logger } from '../../../core/services/Logger';
-import { ScanNetwork } from '../../use-cases/scan-network/ScanNetwork';
-import { ScanNetworkLooped } from '../../use-cases/scan-network-looped/ScanNetworkLooped';
+import Kernel from '../../../core/infrastructure/Kernel.js';
+import type { ExceptionLogger } from '../../../core/services/ExceptionLogger.js';
+import type { Logger } from '../../../core/services/Logger.js';
+import { ScanNetwork } from '../../use-cases/scan-network/ScanNetwork.js';
+import { ScanNetworkLooped } from '../../use-cases/scan-network-looped/ScanNetworkLooped.js';
 
 // noinspection JSIgnoredPromiseFromCall
 run();

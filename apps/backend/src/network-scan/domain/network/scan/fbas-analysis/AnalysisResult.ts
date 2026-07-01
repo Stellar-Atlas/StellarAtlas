@@ -1,4 +1,4 @@
-import { AnalysisMergedResult } from './AnalysisMergedResult';
+import { AnalysisMergedResult } from './AnalysisMergedResult.js';
 
 export interface AnalysisResult {
 	hasQuorumIntersection: boolean;

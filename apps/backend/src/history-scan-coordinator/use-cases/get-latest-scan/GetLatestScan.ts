@@ -1,15 +1,15 @@
-import { Url } from '../../../core/domain/Url';
-import { mapUnknownToError } from '../../../core/utilities/mapUnknownToError';
-import { GetLatestScanDTO } from './GetLatestScanDTO';
+import { Url } from '../../../core/domain/Url.js';
+import { mapUnknownToError } from '../../../core/utilities/mapUnknownToError.js';
+import { GetLatestScanDTO } from './GetLatestScanDTO.js';
 import { HistoryArchiveScan } from 'shared';
-import { InvalidUrlError } from './InvalidUrlError';
+import { InvalidUrlError } from './InvalidUrlError.js';
 import { Result, err, ok } from 'neverthrow';
-import { ScanRepository } from '../../domain/scan/ScanRepository';
+import type { ScanRepository } from '../../domain/scan/ScanRepository.js';
 import { inject, injectable } from 'inversify';
-import { TYPES } from '../../infrastructure/di/di-types';
-import { ExceptionLogger } from '../../../core/services/ExceptionLogger';
+import { TYPES } from '../../infrastructure/di/di-types.js';
+import type { ExceptionLogger } from '../../../core/services/ExceptionLogger.js';
 import 'reflect-metadata';
-import { ScanErrorType } from '../../domain/scan/ScanError';
+import { ScanErrorType } from '../../domain/scan/ScanError.js';
 
 @injectable()
 export class GetLatestScan {

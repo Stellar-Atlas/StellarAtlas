@@ -1,4 +1,4 @@
-import { MaxCrawlTimeManager } from '../max-crawl-time-manager';
+import { MaxCrawlTimeManager } from '../max-crawl-time-manager.js';
 
 describe('MaxCrawlTimeManager', () => {
 	describe('setTimer', () => {

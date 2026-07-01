@@ -1,6 +1,6 @@
 //write tests
-import { PeerNodeCollection } from '../peer-node-collection';
-import { PeerNode } from '../index';
+import { PeerNodeCollection } from '../peer-node-collection.js';
+import { PeerNode } from '../index.js';
 import { NodeInfo } from 'node-connector';
 
 describe('PeerNodeCollection', () => {

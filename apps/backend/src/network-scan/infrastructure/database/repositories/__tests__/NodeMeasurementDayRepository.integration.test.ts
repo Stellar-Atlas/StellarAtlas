@@ -1,18 +1,18 @@
 import { Container } from 'inversify';
-import Kernel from '../../../../../core/infrastructure/Kernel';
-import { ConfigMock } from '../../../../../core/config/__mocks__/configMock';
-import { NETWORK_TYPES } from '../../../di/di-types';
-import { NodeMeasurementDayRepository } from '../../../../domain/node/NodeMeasurementDayRepository';
-import NodeMeasurementDay from '../../../../domain/node/NodeMeasurementDay';
-import { createDummyNode } from '../../../../domain/node/__fixtures__/createDummyNode';
-import { NodeRepository } from '../../../../domain/node/NodeRepository';
-import NodeQuorumSet from '../../../../domain/node/NodeQuorumSet';
+import Kernel from '../../../../../core/infrastructure/Kernel.js';
+import { ConfigMock } from '../../../../../core/config/__mocks__/configMock.js';
+import { NETWORK_TYPES } from '../../../di/di-types.js';
+import type { NodeMeasurementDayRepository } from '../../../../domain/node/NodeMeasurementDayRepository.js';
+import NodeMeasurementDay from '../../../../domain/node/NodeMeasurementDay.js';
+import { createDummyNode } from '../../../../domain/node/__fixtures__/createDummyNode.js';
+import type { NodeRepository } from '../../../../domain/node/NodeRepository.js';
+import NodeQuorumSet from '../../../../domain/node/NodeQuorumSet.js';
 import { QuorumSet } from 'shared';
-import NetworkScan from '../../../../domain/network/scan/NetworkScan';
-import NetworkMeasurement from '../../../../domain/network/NetworkMeasurement';
-import { NetworkScanRepository } from '../../../../domain/network/scan/NetworkScanRepository';
-import { NodeMeasurementRepository } from '../../../../domain/node/NodeMeasurementRepository';
-import NodeMeasurement from '../../../../domain/node/NodeMeasurement';
+import NetworkScan from '../../../../domain/network/scan/NetworkScan.js';
+import NetworkMeasurement from '../../../../domain/network/NetworkMeasurement.js';
+import type { NetworkScanRepository } from '../../../../domain/network/scan/NetworkScanRepository.js';
+import type { NodeMeasurementRepository } from '../../../../domain/node/NodeMeasurementRepository.js';
+import NodeMeasurement from '../../../../domain/node/NodeMeasurement.js';
 
 describe('test queries', () => {
 	let container: Container;

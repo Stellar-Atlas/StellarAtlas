@@ -1,19 +1,19 @@
-import Organization from '../Organization';
-import { OrganizationTomlInfo } from './OrganizationTomlInfo';
-import { NodeScan } from '../../node/scan/NodeScan';
+import Organization from '../Organization.js';
+import { OrganizationTomlInfo } from './OrganizationTomlInfo.js';
+import { NodeScan } from '../../node/scan/NodeScan.js';
 import { err, ok, Result } from 'neverthrow';
-import { OrganizationContactInformation } from '../OrganizationContactInformation';
-import PublicKey from '../../node/PublicKey';
-import Node from '../../node/Node';
-import { OrganizationId } from '../OrganizationId';
-import { OrganizationValidators } from '../OrganizationValidators';
-import { ValidatorNotSEP20LinkedError } from './errors/ValidatorNotSEP20LinkedError';
-import { TomlWithoutValidatorsError } from './errors/TomlWithoutValidatorsError';
-import { WrongNodeScanForOrganizationScan } from './errors/WrongNodeScanForOrganizationScan';
-import { InvalidOrganizationIdError } from './errors/InvalidOrganizationIdError';
-import { OrganizationScanError } from './errors/OrganizationScanError';
-import { TomlState } from './TomlState';
-import { InvalidTomlStateError } from './errors/InvalidTomlStateError';
+import { OrganizationContactInformation } from '../OrganizationContactInformation.js';
+import PublicKey from '../../node/PublicKey.js';
+import Node from '../../node/Node.js';
+import { OrganizationId } from '../OrganizationId.js';
+import { OrganizationValidators } from '../OrganizationValidators.js';
+import { ValidatorNotSEP20LinkedError } from './errors/ValidatorNotSEP20LinkedError.js';
+import { TomlWithoutValidatorsError } from './errors/TomlWithoutValidatorsError.js';
+import { WrongNodeScanForOrganizationScan } from './errors/WrongNodeScanForOrganizationScan.js';
+import { InvalidOrganizationIdError } from './errors/InvalidOrganizationIdError.js';
+import { OrganizationScanError } from './errors/OrganizationScanError.js';
+import { TomlState } from './TomlState.js';
+import { InvalidTomlStateError } from './errors/InvalidTomlStateError.js';
 
 type homeDomain = string;
 

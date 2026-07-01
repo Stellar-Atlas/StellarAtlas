@@ -1,7 +1,7 @@
-import { PendingSubscriptionId } from '../subscription/PendingSubscription';
-import { Message } from '../../../core/domain/Message';
-import { Notification } from '../subscription/Notification';
-import { SubscriberReference } from '../subscription/SubscriberReference';
+import { PendingSubscriptionId } from '../subscription/PendingSubscription.js';
+import { Message } from '../../../core/domain/Message.js';
+import { Notification } from '../subscription/Notification.js';
+import { SubscriberReference } from '../subscription/SubscriberReference.js';
 
 export interface MessageCreator {
 	createConfirmSubscriptionMessage(

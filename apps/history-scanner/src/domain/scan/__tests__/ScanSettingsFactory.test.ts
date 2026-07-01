@@ -1,12 +1,12 @@
 import { mock } from 'jest-mock-extended';
-import { ArchivePerformanceTester } from '../../scanner/ArchivePerformanceTester';
-import { CategoryScanner } from '../../scanner/CategoryScanner';
-import { ScanSettingsFactory } from '../ScanSettingsFactory';
-import { createDummyHistoryBaseUrl } from '../../history-archive/__fixtures__/HistoryBaseUrl';
-import { ScanJob } from '../ScanJob';
+import { ArchivePerformanceTester } from '../../scanner/ArchivePerformanceTester.js';
+import { CategoryScanner } from '../../scanner/CategoryScanner.js';
+import { ScanSettingsFactory } from '../ScanSettingsFactory.js';
+import { createDummyHistoryBaseUrl } from '../../history-archive/__fixtures__/HistoryBaseUrl.js';
+import { ScanJob } from '../ScanJob.js';
 import { err, ok } from 'neverthrow';
-import { ScanError, ScanErrorType } from '../ScanError';
-import { Scan } from '../Scan';
+import { ScanError, ScanErrorType } from '../ScanError.js';
+import { Scan } from '../Scan.js';
 
 it('should prioritize concurrency, fromLedger and toLedger parameters', async function () {
 	const performanceTester = mock<ArchivePerformanceTester>();

@@ -1,6 +1,6 @@
-import { NetworkQuorumSetConfiguration } from '../../domain/network/NetworkQuorumSetConfiguration';
+import { NetworkQuorumSetConfiguration } from '../../domain/network/NetworkQuorumSetConfiguration.js';
 import { err, ok, Result } from 'neverthrow';
-import PublicKey from '../../domain/node/PublicKey';
+import PublicKey from '../../domain/node/PublicKey.js';
 
 export class NetworkQuorumSetMapper {
 	static fromArray(

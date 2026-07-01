@@ -1,12 +1,12 @@
-import pino = require('pino');
+import pino from 'pino';
 import { xdr } from '@stellar/stellar-sdk';
 import { getPublicKeyStringFromBuffer } from 'node-connector';
-import { QuorumSetManager } from '../../../../quorum-set-manager';
+import { QuorumSetManager } from '../../../../quorum-set-manager.js';
 import { err, ok, Result } from 'neverthrow';
-import { ExternalizeStatementHandler } from './externalize/externalize-statement-handler';
-import { mapExternalizeStatement } from './externalize/map-externalize-statement';
-import { Ledger } from '../../../../../crawler';
-import { Observation } from '../../../../observation';
+import { ExternalizeStatementHandler } from './externalize/externalize-statement-handler.js';
+import { mapExternalizeStatement } from './externalize/map-externalize-statement.js';
+import type { Ledger } from '../../../../../crawler.js';
+import { Observation } from '../../../../observation.js';
 
 export class ScpStatementHandler {
 	constructor(

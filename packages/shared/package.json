@@ -1,6 +1,7 @@
 {
 	"name": "shared",
 	"description": "Shared code between StellarAtlas frontend and backend",
+	"type": "module",
 	"scripts": {
 		"preversion": "pnpm run build",
 		"build": "../../node_modules/typescript/bin/tsc  --declaration",

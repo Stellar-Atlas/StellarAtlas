@@ -1,8 +1,8 @@
-import { NodeScannerHistoryArchiveStep } from '../NodeScannerHistoryArchiveStep';
+import { NodeScannerHistoryArchiveStep } from '../NodeScannerHistoryArchiveStep.js';
 import { mock } from 'jest-mock-extended';
-import { HistoryArchiveStatusFinder } from '../HistoryArchiveStatusFinder';
-import { NodeScan } from '../NodeScan';
-import { HistoryArchiveScanService } from '../history/HistoryArchiveScanService';
+import { HistoryArchiveStatusFinder } from '../HistoryArchiveStatusFinder.js';
+import { NodeScan } from '../NodeScan.js';
+import type { HistoryArchiveScanService } from '../history/HistoryArchiveScanService.js';
 
 describe('NodeScannerHistoryArchiveStep', () => {
 	const historyArchiveStatusFinder = mock<HistoryArchiveStatusFinder>();
@@ -37,9 +37,9 @@ describe('NodeScannerHistoryArchiveStep', () => {
 		expect(nodeScan.updateHistoryArchiveUpToDateStatus).toHaveBeenCalledWith(
 			upToDateArchives
 		);
-		expect(nodeScan.updateHistoryArchiveVerificationStatus).toHaveBeenCalledWith(
-			verificationErrors
-		);
+		expect(
+			nodeScan.updateHistoryArchiveVerificationStatus
+		).toHaveBeenCalledWith(verificationErrors);
 	});
 
 	it('should schedule new archive scans', async () => {

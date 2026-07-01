@@ -1,4 +1,4 @@
-import { CategoryRequestMeta, RequestGenerator } from './RequestGenerator';
+import { CategoryRequestMeta, RequestGenerator } from './RequestGenerator.js';
 import {
 	HttpQueue,
 	Request,
@@ -8,10 +8,10 @@ import {
 } from 'http-helper';
 import * as http from 'http';
 import * as https from 'https';
-import { CheckPointGenerator } from '../check-point/CheckPointGenerator';
+import { CheckPointGenerator } from '../check-point/CheckPointGenerator.js';
 import { injectable } from 'inversify';
-import { Category } from '../history-archive/Category';
-import { sortDescending } from './sortDescending';
+import { Category } from '../history-archive/Category.js';
+import { sortDescending } from './sortDescending.js';
 import { err, ok, Result } from 'neverthrow';
 
 export interface PerformanceTestResult {

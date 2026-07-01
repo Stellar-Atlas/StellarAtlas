@@ -1,9 +1,9 @@
-import { Logger } from '../../../core/services/Logger';
+import type { Logger } from '../../../core/services/Logger.js';
 import {
 	GeoData,
-	GeoDataService,
 	GeoDataUpdateError
-} from '../../domain/node/scan/GeoDataService';
+} from '../../domain/node/scan/GeoDataService.js';
+import type { GeoDataService } from '../../domain/node/scan/GeoDataService.js';
 import { Result } from 'neverthrow';
 
 export class FallbackGeoDataService implements GeoDataService {

@@ -1,4 +1,4 @@
-import { NodeStatisticsV1 } from './dto/node-v1';
+import { NodeStatisticsV1 } from './dto/node-v1.js';
 
 export class NodeStatistics {
 	public active30DaysPercentage = 0;

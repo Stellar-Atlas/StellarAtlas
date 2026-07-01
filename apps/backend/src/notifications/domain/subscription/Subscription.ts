@@ -1,14 +1,14 @@
-import { Event, EventData, EventType } from '../event/Event';
-import { EventNotificationState } from './EventNotificationState';
+import { Event, EventData, EventType } from '../event/Event.js';
+import { EventNotificationState } from './EventNotificationState.js';
 import { Column, Entity, ManyToOne, OneToMany } from 'typeorm';
-import { Subscriber } from './Subscriber';
+import type { Subscriber } from './Subscriber.js';
 import {
 	EventSourceId,
 	NetworkId,
 	OrganizationId,
 	PublicKey
-} from '../event/EventSourceId';
-import { CoreEntity } from '../../../core/domain/CoreEntity';
+} from '../event/EventSourceId.js';
+import { CoreEntity } from '../../../core/domain/CoreEntity.js';
 
 //Subscribe to events of a specific source type and id. For example Node with ID 'xxxxx' or the Public network
 export interface SubscriptionProperties {
@@ -21,7 +21,7 @@ export class Subscription extends CoreEntity {
 	//don't send events of the same type again during the coolOffPeriod
 	static CoolOffPeriod = 1000 * 60 * 60 * 24;
 
-	@ManyToOne(() => Subscriber, {
+	@ManyToOne('Subscriber', {
 		nullable: false,
 		eager: false,
 		orphanedRowAction: 'delete',

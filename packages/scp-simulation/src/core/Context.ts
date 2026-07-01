@@ -1,11 +1,11 @@
-import { PublicKey } from '.';
-import { Message } from '../federated-voting';
-import { Payload } from '../overlay/Overlay';
-import { EventCollector } from './EventCollector';
-import { Node } from './Node';
-import { ProtocolAction } from './ProtocolAction';
-import { QuorumSet } from './QuorumSet';
-import { UserAction } from './UserAction';
+import { PublicKey } from './index.js';
+import { Message } from '../federated-voting/index.js';
+import { Payload } from '../overlay/Overlay.js';
+import { EventCollector } from './EventCollector.js';
+import { Node } from './Node.js';
+import { ProtocolAction } from './ProtocolAction.js';
+import { QuorumSet } from './QuorumSet.js';
+import { UserAction } from './UserAction.js';
 
 // The context runs the protocol, links with the overlay and provides a playground.
 // For example the federated voting protocol allows a user to vote on a single statement,

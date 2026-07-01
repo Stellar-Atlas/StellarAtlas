@@ -1,4 +1,4 @@
-import { PublicKey, QuorumSet } from '../../core';
+import { PublicKey, QuorumSet } from '../../core/index.js';
 
 export class QuorumSetService {
 	static isSetVBlocking(nodeSet: PublicKey[], quorumSet: QuorumSet): boolean {

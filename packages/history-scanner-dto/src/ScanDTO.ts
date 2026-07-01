@@ -1,5 +1,5 @@
 import { Result, ok, err } from 'neverthrow';
-import { ScanErrorDTO } from './ScanErrorDTO';
+import { ScanErrorDTO } from './ScanErrorDTO.js';
 
 /**
  * Represents a finished scan.

@@ -1,17 +1,17 @@
-import { StellarMessageHandler } from '../stellar-message-handler';
-import { ScpEnvelopeHandler } from '../scp-envelope/scp-envelope-handler';
-import { QuorumSetManager } from '../../../quorum-set-manager';
-import pino = require('pino');
+import { StellarMessageHandler } from '../stellar-message-handler.js';
+import { ScpEnvelopeHandler } from '../scp-envelope/scp-envelope-handler.js';
+import { QuorumSetManager } from '../../../quorum-set-manager.js';
+import pino from 'pino';
 import { Keypair } from '@stellar/stellar-sdk';
 import { mock, MockProxy } from 'jest-mock-extended';
-import { createDummyExternalizeMessage } from '../../../../__fixtures__/createDummyExternalizeMessage';
+import { createDummyExternalizeMessage } from '../../../../__fixtures__/createDummyExternalizeMessage.js';
 import { ok } from 'neverthrow';
-import { createDummyPeersMessage } from '../../../../__fixtures__/createDummyPeersMessage';
-import { createDummyQuorumSetMessage } from '../../../../__fixtures__/createDummyQuorumSetMessage';
-import { createDummyDontHaveMessage } from '../../../../__fixtures__/createDummyDontHaveMessage';
-import { createDummyErrLoadMessage } from '../../../../__fixtures__/createDummyErrLoadMessage';
-import { PeerNodeCollection } from '../../../../peer-node-collection';
-import { Observation } from '../../../observation';
+import { createDummyPeersMessage } from '../../../../__fixtures__/createDummyPeersMessage.js';
+import { createDummyQuorumSetMessage } from '../../../../__fixtures__/createDummyQuorumSetMessage.js';
+import { createDummyDontHaveMessage } from '../../../../__fixtures__/createDummyDontHaveMessage.js';
+import { createDummyErrLoadMessage } from '../../../../__fixtures__/createDummyErrLoadMessage.js';
+import { PeerNodeCollection } from '../../../../peer-node-collection.js';
+import { Observation } from '../../../observation.js';
 
 describe('StellarMessageHandler', () => {
 	let scpManager: MockProxy<ScpEnvelopeHandler>;

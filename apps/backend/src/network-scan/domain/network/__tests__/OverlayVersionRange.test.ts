@@ -1,4 +1,4 @@
-import { OverlayVersionRange } from '../OverlayVersionRange';
+import { OverlayVersionRange } from '../OverlayVersionRange.js';
 
 it('should equal other OverlayVersionRange', function () {
 	const overlayVersionRangeOrError = OverlayVersionRange.create(1, 2);

@@ -1,5 +1,5 @@
-import pino = require('pino');
-import { logFn, Logger } from './Logger';
+import pino from 'pino';
+import type { logFn, Logger } from './Logger.js';
 
 export class PinoLogger implements Logger {
 	pino: pino.Logger;

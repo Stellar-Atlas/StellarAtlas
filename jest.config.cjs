@@ -1,6 +1,13 @@
 const esModuleDependencyTransform = {
+	extensionsToTreatAsEsm: ['.ts', '.tsx'],
 	transform: {
-		'^.+\\.tsx?$': 'ts-jest',
+		'^.+\\.tsx?$': [
+			'ts-jest',
+			{
+				tsconfig: '<rootDir>/tsconfig.json',
+				useESM: true
+			}
+		],
 		'^.+\\.m?js$': [
 			'babel-jest',
 			{
@@ -15,7 +22,12 @@ const esModuleDependencyTransform = {
 
 const project = (config) => ({
 	...esModuleDependencyTransform,
+	setupFilesAfterEnv: ['<rootDir>/../../jest.setup.cjs'],
 	...config,
+	moduleNameMapper: {
+		'^(\\.{1,2}/.*)\\.js$': '$1',
+		...(config.moduleNameMapper ?? {})
+	},
 	transform: {
 		...esModuleDependencyTransform.transform,
 		...(config.transform ?? {})
@@ -26,11 +38,6 @@ module.exports = {
 	preset: 'ts-jest',
 	testEnvironment: 'node',
 	...esModuleDependencyTransform,
-	globals: {
-		'ts-jest': {
-			tsconfig: 'tsconfig.json'
-		}
-	},
 	projects: [
 		project({
 			testPathIgnorePatterns: ['<rootDir>/node_modules/', '<rootDir>/lib'],

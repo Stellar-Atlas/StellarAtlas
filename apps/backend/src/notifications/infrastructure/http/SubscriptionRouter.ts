@@ -1,15 +1,15 @@
 import * as express from 'express';
 import { body, param, validationResult } from 'express-validator';
-import { ConfirmSubscription } from '../../use-cases/confirm-subscription/ConfirmSubscription';
-import { Subscribe } from '../../use-cases/subscribe/Subscribe';
-import { UnmuteNotification } from '../../use-cases/unmute-notification/UnmuteNotification';
-import { ExceptionLogger } from '../../../core/services/ExceptionLogger';
-import { NoPendingSubscriptionFound } from '../../use-cases/confirm-subscription/ConfirmSubscriptionError';
-import { Unsubscribe } from '../../use-cases/unsubscribe/Unsubscribe';
-import { SubscriberNotFoundError } from '../../use-cases/unsubscribe/UnsubscribeError';
-import { Throttler } from '../../../core/infrastructure/http/Throttler';
+import { ConfirmSubscription } from '../../use-cases/confirm-subscription/ConfirmSubscription.js';
+import { Subscribe } from '../../use-cases/subscribe/Subscribe.js';
+import { UnmuteNotification } from '../../use-cases/unmute-notification/UnmuteNotification.js';
+import type { ExceptionLogger } from '../../../core/services/ExceptionLogger.js';
+import { NoPendingSubscriptionFound } from '../../use-cases/confirm-subscription/ConfirmSubscriptionError.js';
+import { Unsubscribe } from '../../use-cases/unsubscribe/Unsubscribe.js';
+import { SubscriberNotFoundError } from '../../use-cases/unsubscribe/UnsubscribeError.js';
+import { Throttler } from '../../../core/infrastructure/http/Throttler.js';
 import { Router } from 'express';
-import { RequestUnsubscribeLink } from '../../use-cases/request-unsubscribe-link/RequestUnsubscribeLink';
+import { RequestUnsubscribeLink } from '../../use-cases/request-unsubscribe-link/RequestUnsubscribeLink.js';
 
 const subscriptionThrottler = new Throttler(5, 1000 * 60);
 
@@ -139,9 +139,7 @@ const subscriptionRouterWrapper = (
 				eventType: req.body.eventType as string,
 				eventSourceId: req.body.eventSourceId as string,
 				eventSourceType: req.body.eventSourceType as
-					| 'node'
-					| 'organization'
-					| 'network'
+					'node' | 'organization' | 'network'
 			});
 
 			if (result.isOk()) {

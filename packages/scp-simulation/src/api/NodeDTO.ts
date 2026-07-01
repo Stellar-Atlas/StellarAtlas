@@ -1,6 +1,6 @@
-import { PublicKey } from '..';
-import { QuorumSet } from '../core/QuorumSet';
-import { FederatedVoteDTO } from './FederatedVoteDTO';
+import { PublicKey } from '../index.js';
+import { QuorumSet } from '../core/QuorumSet.js';
+import { FederatedVoteDTO } from './FederatedVoteDTO.js';
 
 export interface NodeDTO {
 	publicKey: string;

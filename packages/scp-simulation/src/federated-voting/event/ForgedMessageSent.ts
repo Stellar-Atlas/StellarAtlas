@@ -1,5 +1,5 @@
-import { Message } from '../Message';
-import { OverlayEvent } from '../../overlay/event/OverlayEvent';
+import { Message } from '../Message.js';
+import { OverlayEvent } from '../../overlay/event/OverlayEvent.js';
 
 export class ForgedMessageSent extends OverlayEvent {
 	subType = 'ForgedMessageSent';

@@ -1,9 +1,9 @@
-import Kernel from '../../../../core/infrastructure/Kernel';
-import { ConfigMock } from '../../../../core/config/__mocks__/configMock';
-import { GetMeasurementsFactory } from '../GetMeasurementsFactory';
-import NodeMeasurement from '../../../domain/node/NodeMeasurement';
-import OrganizationMeasurement from '../../../domain/organization/OrganizationMeasurement';
-import NetworkMeasurement from '../../../domain/network/NetworkMeasurement';
+import Kernel from '../../../../core/infrastructure/Kernel.js';
+import { ConfigMock } from '../../../../core/config/__mocks__/configMock.js';
+import { GetMeasurementsFactory } from '../GetMeasurementsFactory.js';
+import NodeMeasurement from '../../../domain/node/NodeMeasurement.js';
+import OrganizationMeasurement from '../../../domain/organization/OrganizationMeasurement.js';
+import NetworkMeasurement from '../../../domain/network/NetworkMeasurement.js';
 
 let kernel: Kernel;
 jest.setTimeout(60000); //slow integration tests

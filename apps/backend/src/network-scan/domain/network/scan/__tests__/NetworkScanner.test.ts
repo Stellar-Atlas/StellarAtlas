@@ -1,14 +1,14 @@
-import { NetworkScanner } from '../NetworkScanner';
+import { NetworkScanner } from '../NetworkScanner.js';
 import { mock } from 'jest-mock-extended';
-import { Logger } from 'logger';
-import { NodeScan } from '../../../node/scan/NodeScan';
-import FbasAnalyzerService from '../fbas-analysis/FbasAnalyzerService';
-import NetworkScan from '../NetworkScan';
-import { OrganizationScan } from '../../../organization/scan/OrganizationScan';
+import type { Logger } from 'logger';
+import { NodeScan } from '../../../node/scan/NodeScan.js';
+import FbasAnalyzerService from '../fbas-analysis/FbasAnalyzerService.js';
+import NetworkScan from '../NetworkScan.js';
+import { OrganizationScan } from '../../../organization/scan/OrganizationScan.js';
 import { err, ok } from 'neverthrow';
-import { AnalysisResult } from '../fbas-analysis/AnalysisResult';
-import { NodesInTransitiveNetworkQuorumSetFinder } from '../NodesInTransitiveNetworkQuorumSetFinder';
-import { createDummyNetworkQuorumSetConfiguration } from '../../__fixtures__/createDummyNetworkQuorumSetConfiguration';
+import { AnalysisResult } from '../fbas-analysis/AnalysisResult.js';
+import { NodesInTransitiveNetworkQuorumSetFinder } from '../NodesInTransitiveNetworkQuorumSetFinder.js';
+import { createDummyNetworkQuorumSetConfiguration } from '../../__fixtures__/createDummyNetworkQuorumSetConfiguration.js';
 
 describe('NetworkScanner', () => {
 	it('should perform a network scan', async function () {
@@ -34,7 +34,9 @@ describe('NetworkScanner', () => {
 		expect(result.isOk()).toBeTruthy();
 
 		expect(analyzer.performAnalysis).toHaveBeenCalled();
-		expect(nodesInTransitiveNetworkQuorumSetFinder.find).toHaveBeenCalledTimes(1);
+		expect(nodesInTransitiveNetworkQuorumSetFinder.find).toHaveBeenCalledTimes(
+			1
+		);
 		expect(networkScan.addMeasurement).toHaveBeenCalled();
 		expect(networkScan.completed).toBeTruthy();
 	});

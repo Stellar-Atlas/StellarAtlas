@@ -1,10 +1,10 @@
 import { Entity, Column, ManyToOne, Index } from 'typeorm';
 
-import NodeQuorumSet from './NodeQuorumSet';
-import NodeGeoDataLocation from './NodeGeoDataLocation';
-import NodeDetails from './NodeDetails';
-import Node from './Node';
-import { Snapshot } from '../../../core/domain/Snapshot';
+import NodeQuorumSet from './NodeQuorumSet.js';
+import NodeGeoDataLocation from './NodeGeoDataLocation.js';
+import NodeDetails from './NodeDetails.js';
+import type Node from './Node.js';
+import { Snapshot } from '../../../core/domain/Snapshot.js';
 
 /**
  * Type 2 Slowly Changing Dimensions
@@ -13,7 +13,7 @@ import { Snapshot } from '../../../core/domain/Snapshot';
 export default class NodeSnapShot extends Snapshot {
 	//@deprecated, typeorm requires this property, and it has to be public, hopefully this will be resolved in a later version
 	@Index()
-	@ManyToOne(() => Node, {
+	@ManyToOne('Node', {
 		nullable: false,
 		cascade: false,
 		eager: true //move to false after archiver refactoring

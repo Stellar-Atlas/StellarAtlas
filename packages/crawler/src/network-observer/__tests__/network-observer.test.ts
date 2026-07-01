@@ -1,24 +1,24 @@
-import { NetworkObserver } from '../network-observer';
+import { NetworkObserver } from '../network-observer.js';
 import { mock } from 'jest-mock-extended';
-import pino = require('pino');
+import pino from 'pino';
 import {
 	ClosePayload,
 	ConnectionManager,
 	DataPayload
-} from '../connection-manager';
-import { QuorumSetManager } from '../quorum-set-manager';
-import { PeerEventHandler } from '../peer-event-handler/peer-event-handler';
-import { ObservationManager } from '../observation-manager';
-import { NodeAddress } from '../../node-address';
-import { ObservationFactory } from '../observation-factory';
-import { Observation } from '../observation';
-import { ObservationState } from '../observation-state';
+} from '../connection-manager.js';
+import { QuorumSetManager } from '../quorum-set-manager.js';
+import { PeerEventHandler } from '../peer-event-handler/peer-event-handler.js';
+import { ObservationManager } from '../observation-manager.js';
+import type { NodeAddress } from '../../node-address.js';
+import { ObservationFactory } from '../observation-factory.js';
+import { Observation } from '../observation.js';
+import { ObservationState } from '../observation-state.js';
 import { EventEmitter } from 'events';
-import { Ledger } from '../../crawler';
+import type { Ledger } from '../../crawler.js';
 import { nextTick } from 'async';
 import { QuorumSet } from 'shared';
-import { PeerNodeCollection } from '../../peer-node-collection';
-import { Slots } from '../peer-event-handler/stellar-message-handlers/scp-envelope/scp-statement/externalize/slots';
+import { PeerNodeCollection } from '../../peer-node-collection.js';
+import { Slots } from '../peer-event-handler/stellar-message-handlers/scp-envelope/scp-statement/externalize/slots.js';
 
 describe('network-observer', () => {
 	const observationFactory = mock<ObservationFactory>();

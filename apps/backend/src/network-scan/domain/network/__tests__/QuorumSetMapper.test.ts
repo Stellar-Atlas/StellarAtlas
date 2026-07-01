@@ -1,6 +1,6 @@
-import { createDummyPublicKey } from '../../node/__fixtures__/createDummyPublicKey';
-import { NetworkQuorumSetConfiguration } from '../NetworkQuorumSetConfiguration';
-import { NetworkQuorumSetConfigurationMapper } from '../NetworkQuorumSetConfigurationMapper';
+import { createDummyPublicKey } from '../../node/__fixtures__/createDummyPublicKey.js';
+import { NetworkQuorumSetConfiguration } from '../NetworkQuorumSetConfiguration.js';
+import { NetworkQuorumSetConfigurationMapper } from '../NetworkQuorumSetConfigurationMapper.js';
 
 it('should map to Basic QuorumSet', function () {
 	const a = createDummyPublicKey();

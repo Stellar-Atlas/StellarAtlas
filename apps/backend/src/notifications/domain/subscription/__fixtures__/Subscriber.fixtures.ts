@@ -1,7 +1,7 @@
-import { Subscriber } from '../Subscriber';
-import { UserId } from '../UserId';
+import { Subscriber } from '../Subscriber.js';
+import { UserId } from '../UserId.js';
 import { randomUUID } from 'crypto';
-import { SubscriberReference } from '../SubscriberReference';
+import { SubscriberReference } from '../SubscriberReference.js';
 
 export function createDummySubscriber(
 	userId: UserId | null = null

@@ -1,11 +1,9 @@
 import { Entity, Column, ManyToOne, PrimaryColumn } from 'typeorm';
-import Organization from './Organization';
-import { MeasurementAggregation } from '../measurement-aggregation/MeasurementAggregation';
+import Organization from './Organization.js';
+import { MeasurementAggregation } from '../measurement-aggregation/MeasurementAggregation.js';
 
 @Entity()
-export default class OrganizationMeasurementDay
-	implements MeasurementAggregation
-{
+export default class OrganizationMeasurementDay implements MeasurementAggregation {
 	@Column('date', { primary: true, name: 'time' })
 	protected _time: string;
 

@@ -1,9 +1,9 @@
 import { QuorumSet as QuorumSetDTO } from 'shared';
-import { NodeAddress as NodeAddressDTO } from 'crawler';
-import Node from '../../Node';
-import { NodeAddress } from '../../NodeAddress';
-import NodeQuorumSet from '../../NodeQuorumSet';
-import { Ledger } from 'crawler';
+import type { NodeAddress as NodeAddressDTO } from 'crawler';
+import Node from '../../Node.js';
+import type { NodeAddress } from '../../NodeAddress.js';
+import NodeQuorumSet from '../../NodeQuorumSet.js';
+import type { Ledger } from 'crawler';
 
 export class CrawlerDTOMapper {
 	static mapNodeAddressesToNodeAddressDTOs(

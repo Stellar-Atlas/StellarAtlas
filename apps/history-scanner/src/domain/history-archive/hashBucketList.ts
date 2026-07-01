@@ -1,4 +1,4 @@
-import { HistoryArchiveState } from './HistoryArchiveState';
+import { HistoryArchiveState } from './HistoryArchiveState.js';
 import { createHash } from 'crypto';
 import { err, ok, Result } from 'neverthrow';
 import { mapUnknownToError } from 'shared';

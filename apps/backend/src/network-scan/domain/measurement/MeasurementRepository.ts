@@ -1,4 +1,4 @@
-import { Measurement } from './Measurement';
+import { Measurement } from './Measurement.js';
 
 export interface MeasurementRepository<T extends Measurement> {
 	findBetween(id: string, from: Date, to: Date): Promise<T[]>;

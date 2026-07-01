@@ -1,6 +1,7 @@
 {
 	"name": "backend",
 	"private": true,
+	"type": "module",
 	"description": "Backend & api",
 	"scripts": {
 		"build": "tsc --build tsconfig.json && pnpm post-build",

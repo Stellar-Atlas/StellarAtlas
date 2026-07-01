@@ -1,4 +1,4 @@
-import NetworkScan from '../network/scan/NetworkScan';
+import NetworkScan from '../network/scan/NetworkScan.js';
 
 export interface MeasurementsRollupService {
 	initializeRollups(): Promise<void>;

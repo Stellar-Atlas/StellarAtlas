@@ -1,11 +1,11 @@
-import { createDummyNode } from '../__fixtures__/createDummyNode';
-import NodeDetails, { NodeDetailsProps } from '../NodeDetails';
-import Node, { NodeProps } from '../Node';
-import { createDummyPublicKey } from '../__fixtures__/createDummyPublicKey';
-import NodeGeoDataLocation from '../NodeGeoDataLocation';
-import NodeQuorumSet from '../NodeQuorumSet';
+import { createDummyNode } from '../__fixtures__/createDummyNode.js';
+import NodeDetails, { NodeDetailsProps } from '../NodeDetails.js';
+import Node, { NodeProps } from '../Node.js';
+import { createDummyPublicKey } from '../__fixtures__/createDummyPublicKey.js';
+import NodeGeoDataLocation from '../NodeGeoDataLocation.js';
+import NodeQuorumSet from '../NodeQuorumSet.js';
 import { QuorumSet as QuorumSetDTO } from 'shared';
-import NodeMeasurement from '../NodeMeasurement';
+import NodeMeasurement from '../NodeMeasurement.js';
 
 describe('Node', () => {
 	describe('ip changes', () => {

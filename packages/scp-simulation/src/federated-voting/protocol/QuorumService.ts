@@ -1,4 +1,4 @@
-import { Node, PublicKey, QuorumSet } from '../../core';
+import { Node, PublicKey, QuorumSet } from '../../core/index.js';
 
 export class QuorumService {
 	/**

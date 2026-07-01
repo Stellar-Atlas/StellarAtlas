@@ -1,6 +1,6 @@
-import { PublicKey } from '../../../core';
-import { ProtocolEvent } from './ProtocolEvent';
-import { Vote } from '../Vote';
+import { PublicKey } from '../../../core/index.js';
+import { ProtocolEvent } from './ProtocolEvent.js';
+import { Vote } from '../Vote.js';
 
 export class BroadcastVoteRequested extends ProtocolEvent {
 	readonly subType = 'BroadCastVoteRequested';

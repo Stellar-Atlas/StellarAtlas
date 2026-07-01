@@ -1,8 +1,8 @@
-import { Event, EventData, EventType } from '../event/Event';
-import { Subscription } from './Subscription';
+import { Event, EventData, EventType } from '../event/Event.js';
+import type { Subscription } from './Subscription.js';
 import { Column, Entity, ManyToOne } from 'typeorm';
-import { EventSourceId } from '../event/EventSourceId';
-import { CoreEntity } from '../../../core/domain/CoreEntity';
+import { EventSourceId } from '../event/EventSourceId.js';
+import { CoreEntity } from '../../../core/domain/CoreEntity.js';
 
 @Entity('subscription_event_notification_state')
 export class EventNotificationState extends CoreEntity {
@@ -16,8 +16,9 @@ export class EventNotificationState extends CoreEntity {
 	public ignoreCoolOffPeriod = false;
 
 	@ManyToOne(
-		() => Subscription,
-		(eventSubscription) => eventSubscription.eventNotificationStates,
+		'Subscription',
+		(eventSubscription: Subscription) =>
+			eventSubscription.eventNotificationStates,
 		{
 			eager: false,
 			nullable: false,

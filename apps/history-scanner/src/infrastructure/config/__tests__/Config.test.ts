@@ -1,4 +1,5 @@
-import { getConfigFromEnv } from '../Config';
+import { jest } from '@jest/globals';
+import { getConfigFromEnv } from '../Config.js';
 
 describe('Config', () => {
 	beforeEach(() => {

@@ -2,10 +2,10 @@ import FbasAnalyzerFacade, {
 	FbasAnalysisNode,
 	FbasAnalysisOrganization,
 	MergeBy
-} from '../FbasAnalyzerFacade';
-import { FbasMergedByAnalyzer } from '../FbasMergedByAnalyzer';
+} from '../FbasAnalyzerFacade.js';
+import { FbasMergedByAnalyzer } from '../FbasMergedByAnalyzer.js';
 import { mock } from 'jest-mock-extended';
-import { Logger } from 'logger';
+import type { Logger } from 'logger';
 import { ok } from 'neverthrow';
 
 describe('FbasMergedByAnalyzer', () => {

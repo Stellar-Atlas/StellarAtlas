@@ -1,6 +1,6 @@
 import { injectable } from 'inversify';
-import { NodeScan } from './NodeScan';
-import { NodeTomlFetcher } from './NodeTomlFetcher';
+import { NodeScan } from './NodeScan.js';
+import { NodeTomlFetcher } from './NodeTomlFetcher.js';
 
 @injectable()
 export class NodeScannerTomlStep {

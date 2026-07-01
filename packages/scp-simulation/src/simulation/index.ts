@@ -1,9 +1,9 @@
-export { Simulation } from './Simulation';
-export { NodeTrustManager } from './NodeTrustManager';
-export { ScenarioLoader } from './scenario/ScenarioLoader';
-export { Scenario } from './scenario/Scenario';
-export { ScenarioSerializer } from './scenario/ScenarioSerializer';
-export { FederatedVotingScenarioFactory } from './scenario/FederatedVotingScenarioFactory';
-export { SimulationStep } from './Simulation';
-export { SimulationStepListSerializer } from './serializer/SimulationStepListSerializer';
-export { SimulationStepSerializer } from './serializer/SimulationStepSerializer';
+export { Simulation } from './Simulation.js';
+export { NodeTrustManager } from './NodeTrustManager.js';
+export { ScenarioLoader } from './scenario/ScenarioLoader.js';
+export { Scenario } from './scenario/Scenario.js';
+export { ScenarioSerializer } from './scenario/ScenarioSerializer.js';
+export { FederatedVotingScenarioFactory } from './scenario/FederatedVotingScenarioFactory.js';
+export type { SimulationStep } from './Simulation.js';
+export { SimulationStepListSerializer } from './serializer/SimulationStepListSerializer.js';
+export { SimulationStepSerializer } from './serializer/SimulationStepSerializer.js';

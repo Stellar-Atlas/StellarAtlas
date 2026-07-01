@@ -1,13 +1,13 @@
-import { MeasurementAggregationRepositoryFactory } from '../MeasurementAggregationRepositoryFactory';
-import NodeMeasurementDay from '../../node/NodeMeasurementDay';
+import { MeasurementAggregationRepositoryFactory } from '../MeasurementAggregationRepositoryFactory.js';
+import NodeMeasurementDay from '../../node/NodeMeasurementDay.js';
 import { mock } from 'jest-mock-extended';
-import { NodeMeasurementDayRepository } from '../../node/NodeMeasurementDayRepository';
-import { OrganizationMeasurementDayRepository } from '../../organization/OrganizationMeasurementDayRepository';
-import { NetworkMeasurementDayRepository } from '../../network/NetworkMeasurementDayRepository';
-import { NetworkMeasurementMonthRepository } from '../../network/NetworkMeasurementMonthRepository';
-import OrganizationMeasurementDay from '../../organization/OrganizationMeasurementDay';
-import NetworkMeasurementDay from '../../network/NetworkMeasurementDay';
-import NetworkMeasurementMonth from '../../network/NetworkMeasurementMonth';
+import type { NodeMeasurementDayRepository } from '../../node/NodeMeasurementDayRepository.js';
+import type { OrganizationMeasurementDayRepository } from '../../organization/OrganizationMeasurementDayRepository.js';
+import type { NetworkMeasurementDayRepository } from '../../network/NetworkMeasurementDayRepository.js';
+import type { NetworkMeasurementMonthRepository } from '../../network/NetworkMeasurementMonthRepository.js';
+import OrganizationMeasurementDay from '../../organization/OrganizationMeasurementDay.js';
+import NetworkMeasurementDay from '../../network/NetworkMeasurementDay.js';
+import NetworkMeasurementMonth from '../../network/NetworkMeasurementMonth.js';
 
 it('should create correct repo', function () {
 	const nodeMeasurementRepo = mock<NodeMeasurementDayRepository>();

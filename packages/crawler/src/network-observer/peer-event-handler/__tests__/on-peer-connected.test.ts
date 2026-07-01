@@ -1,14 +1,17 @@
-import { PeerNodeCollection } from '../../../peer-node-collection';
+import { PeerNodeCollection } from '../../../peer-node-collection.js';
 import { mock, MockProxy } from 'jest-mock-extended';
-import pino = require('pino');
-import { ConnectedPayload, ConnectionManager } from '../../connection-manager';
-import { StragglerTimer } from '../../straggler-timer';
-import { OnPeerConnected } from '../on-peer-connected';
-import { Observation } from '../../observation';
-import { ObservationState } from '../../observation-state';
+import pino from 'pino';
+import {
+	ConnectedPayload,
+	ConnectionManager
+} from '../../connection-manager.js';
+import { StragglerTimer } from '../../straggler-timer.js';
+import { OnPeerConnected } from '../on-peer-connected.js';
+import { Observation } from '../../observation.js';
+import { ObservationState } from '../../observation-state.js';
 import { QuorumSet } from 'shared';
-import { Ledger } from '../../../crawler';
-import { Slots } from '../stellar-message-handlers/scp-envelope/scp-statement/externalize/slots';
+import type { Ledger } from '../../../crawler.js';
+import { Slots } from '../stellar-message-handlers/scp-envelope/scp-statement/externalize/slots.js';
 
 describe('OnPeerConnectedHandler', () => {
 	const connectionManager = mock<ConnectionManager>();

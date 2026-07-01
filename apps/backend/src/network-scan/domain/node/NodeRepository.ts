@@ -1,5 +1,5 @@
-import PublicKey from './PublicKey';
-import Node from './Node';
+import PublicKey from './PublicKey.js';
+import Node from './Node.js';
 
 //active means that the node is not archived. i.e. snapshot endDate = SNAPSHOT_MAX_END_DATE
 export interface NodeRepository {

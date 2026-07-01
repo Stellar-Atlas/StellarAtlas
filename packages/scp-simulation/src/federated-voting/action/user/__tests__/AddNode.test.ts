@@ -1,5 +1,5 @@
-import { AddNode } from '../AddNode';
-import { QuorumSet } from '../../../../core';
+import { AddNode } from '../AddNode.js';
+import { QuorumSet } from '../../../../core/index.js';
 
 describe('AddNode', () => {
 	const nodeKey = 'node1';

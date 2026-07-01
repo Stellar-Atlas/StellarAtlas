@@ -1,4 +1,9 @@
-import { UserAction, ProtocolAction, QuorumSet, Context } from '../../../core';
+import {
+	UserAction,
+	ProtocolAction,
+	QuorumSet,
+	Context
+} from '../../../core/index.js';
 
 export class UpdateQuorumSet extends UserAction {
 	subType = 'UpdateQuorumSet';

@@ -1,15 +1,15 @@
 import { body, param, validationResult } from 'express-validator';
-import { User } from './User';
+import { User } from './User.js';
 import { config } from 'dotenv';
-import { Encryption } from './Encryption';
-import { Hasher } from './Hasher';
+import { Encryption } from './Encryption.js';
+import { Hasher } from './Hasher.js';
 import { Server } from 'net';
 import basicAuth from 'express-basic-auth';
-import { HttpError, MailgunService } from './MailgunService';
+import { HttpError, MailgunService } from './MailgunService.js';
 import * as Sentry from '@sentry/node';
 import express from 'express';
 import helmet from 'helmet';
-import { dataSource } from './data-source';
+import { dataSource } from './data-source.js';
 
 config();
 
@@ -145,7 +145,9 @@ api.delete(
 		try {
 			const userId: string = req.params.userId;
 			if (!userId) return res.status(400).json({ msg: 'userId is required' });
-			const user = await dataSource.getRepository(User).findOne({ where: { id: userId } });
+			const user = await dataSource
+				.getRepository(User)
+				.findOne({ where: { id: userId } });
 			if (!user) return res.status(404).json({ msg: 'User not found' });
 			await user.remove();
 			return res.status(200).json({ msg: 'User removed' });
@@ -237,17 +239,17 @@ async function listen() {
 }
 
 listen().catch((err) => {
-  console.error('Fatal error during startup:', err);
-  Sentry.captureException(err);
-  process.exit(1);
+	console.error('Fatal error during startup:', err);
+	Sentry.captureException(err);
+	process.exit(1);
 });
 
 if (process.listenerCount('unhandledRejection') === 0) {
-  process.on('unhandledRejection', (reason) => {
-    console.error('Unhandled Rejection:', reason);
-    Sentry.captureException(reason);
-    process.exit(1);
-  });
+	process.on('unhandledRejection', (reason) => {
+		console.error('Unhandled Rejection:', reason);
+		Sentry.captureException(reason);
+		process.exit(1);
+	});
 }
 
 process.on('SIGTERM', async () => {
@@ -260,14 +262,14 @@ process.on('SIGINT', async () => {
 });
 
 async function stop() {
-  if (server) {
-    server.close(async () => {
-      console.log('HTTP server closed');
-      await dataSource.destroy();
-      console.log('connection to db closed');
-    });
-  } else {
-    await dataSource.destroy();
-    console.log('connection to db closed (no server)');
-  }
+	if (server) {
+		server.close(async () => {
+			console.log('HTTP server closed');
+			await dataSource.destroy();
+			console.log('connection to db closed');
+		});
+	} else {
+		await dataSource.destroy();
+		console.log('connection to db closed (no server)');
+	}
 }

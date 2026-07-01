@@ -3,13 +3,13 @@ import {
 	Simulation,
 	FederatedVotingScenarioFactory,
 	ScenarioLoader
-} from '../simulation';
-import { ConsoleAdjacencyMatrixVisualization } from './ConsoleAdjacencyMatrixVisualizer';
-import { QuorumSet } from '../core';
+} from '../simulation/index.js';
+import { ConsoleAdjacencyMatrixVisualization } from './ConsoleAdjacencyMatrixVisualizer.js';
+import { QuorumSet } from '../core/index.js';
 import {
 	FederatedVotingContext,
 	FederatedVotingContextFactory
-} from '../federated-voting';
+} from '../federated-voting/index.js';
 
 export class ConsoleInterfacer {
 	private rl: readline.Interface;

@@ -1,4 +1,4 @@
-import { PendingSubscriptionId } from '../PendingSubscription';
+import { PendingSubscriptionId } from '../PendingSubscription.js';
 import { randomUUID } from 'crypto';
 
 export function createDummyPendingSubscriptionId(rawId?: string) {

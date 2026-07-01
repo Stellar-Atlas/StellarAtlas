@@ -1,15 +1,15 @@
-import { createDummyNode } from '../../__fixtures__/createDummyNode';
-import Node from '../../Node';
-import { NodeScan } from '../NodeScan';
+import { createDummyNode } from '../../__fixtures__/createDummyNode.js';
+import Node from '../../Node.js';
+import { NodeScan } from '../NodeScan.js';
 import { PeerNode } from 'crawler';
-import { createDummyPublicKeyString } from '../../__fixtures__/createDummyPublicKey';
-import NodeDetails from '../../NodeDetails';
-import NodeMeasurement from '../../NodeMeasurement';
-import NodeGeoDataLocation from '../../NodeGeoDataLocation';
-import { NodeTomlInfo } from '../NodeTomlInfo';
+import { createDummyPublicKeyString } from '../../__fixtures__/createDummyPublicKey.js';
+import NodeDetails from '../../NodeDetails.js';
+import NodeMeasurement from '../../NodeMeasurement.js';
+import NodeGeoDataLocation from '../../NodeGeoDataLocation.js';
+import { NodeTomlInfo } from '../NodeTomlInfo.js';
 import { QuorumSet } from 'shared';
-import NodeQuorumSet from '../../NodeQuorumSet';
-import { StellarCoreVersion } from '../../../network/StellarCoreVersion';
+import NodeQuorumSet from '../../NodeQuorumSet.js';
+import { StellarCoreVersion } from '../../../network/StellarCoreVersion.js';
 
 describe('NodeScan', () => {
 	let activeNode: Node;

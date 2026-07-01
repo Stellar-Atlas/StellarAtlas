@@ -1,6 +1,7 @@
 {
 	"name": "crawler",
 	"private": true,
+	"type": "module",
 	"description": "Crawl the stellar network",
 	"scripts": {
 		"build": "tsc --declaration",

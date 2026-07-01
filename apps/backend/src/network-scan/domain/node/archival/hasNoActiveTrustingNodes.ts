@@ -1,5 +1,5 @@
 import { TrustGraph } from 'shared';
-import Node from '../Node';
+import Node from '../Node.js';
 
 export function hasNoActiveTrustingNodes(
 	node: Node,

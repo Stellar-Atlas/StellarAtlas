@@ -4,9 +4,9 @@ import { queue } from 'async';
 import { isString } from 'shared';
 import { inject, injectable } from 'inversify';
 import 'reflect-metadata';
-import { HttpError, HttpService } from 'http-helper';
+import { HttpError, type HttpService } from 'http-helper';
 import { Url, retryHttpRequestIfNeeded } from 'http-helper';
-import { Logger } from 'logger';
+import type { Logger } from 'logger';
 import { mapUnknownToError } from 'shared';
 import { CustomError } from 'custom-error';
 

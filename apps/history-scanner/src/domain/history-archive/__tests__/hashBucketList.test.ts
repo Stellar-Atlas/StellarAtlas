@@ -1,5 +1,5 @@
-import { hashBucketList } from '../hashBucketList';
-import { getDummyHistoryArchiveState } from '../__fixtures__/getDummyHistoryArchiveState';
+import { hashBucketList } from '../hashBucketList.js';
+import { getDummyHistoryArchiveState } from '../__fixtures__/getDummyHistoryArchiveState.js';
 
 it('should hash correctly', function () {
 	const result = hashBucketList(getDummyHistoryArchiveState());

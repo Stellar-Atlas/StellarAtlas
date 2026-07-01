@@ -1,5 +1,5 @@
-import { HASBucketHashExtractor } from '../HASBucketHashExtractor';
-import { getDummyHistoryArchiveState } from '../__fixtures__/getDummyHistoryArchiveState';
+import { HASBucketHashExtractor } from '../HASBucketHashExtractor.js';
+import { getDummyHistoryArchiveState } from '../__fixtures__/getDummyHistoryArchiveState.js';
 
 it('should extract all non zero hashes from HAS', function () {
 	expect(

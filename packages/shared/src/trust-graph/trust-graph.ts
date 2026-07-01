@@ -1,9 +1,9 @@
-import { PublicKey } from '../network';
+import { PublicKey } from '../network.js';
 import {
 	StronglyConnectedComponent,
 	StronglyConnectedComponentsFinder
-} from './strongly-connected-components-finder';
-import { NetworkTransitiveQuorumSetFinder } from './network-transitive-quorum-set-finder';
+} from './strongly-connected-components-finder.js';
+import { NetworkTransitiveQuorumSetFinder } from './network-transitive-quorum-set-finder.js';
 
 export type VertexKey = string;
 
@@ -48,8 +48,7 @@ export class TrustGraph {
 	protected _vertices = new Map<PublicKey, Vertex>();
 	protected _edges = new Set<Edge>();
 
-	protected _stronglyConnectedComponents: StronglyConnectedComponent[] =
-		[];
+	protected _stronglyConnectedComponents: StronglyConnectedComponent[] = [];
 	protected _stronglyConnectedVertices: Map<PublicKey, number> = new Map<
 		PublicKey,
 		number

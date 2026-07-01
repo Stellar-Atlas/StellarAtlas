@@ -1,6 +1,6 @@
-import { AsyncCrawlQueue } from '../crawl-queue';
-import { Crawl } from '../crawl';
-import { CrawlTask } from '../crawl-task';
+import { AsyncCrawlQueue } from '../crawl-queue.js';
+import { Crawl } from '../crawl.js';
+import { CrawlTask } from '../crawl-task.js';
 import { mock } from 'jest-mock-extended';
 
 function createCrawlTask(): CrawlTask {

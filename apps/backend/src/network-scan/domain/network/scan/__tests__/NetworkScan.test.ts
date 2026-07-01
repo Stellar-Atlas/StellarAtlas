@@ -1,12 +1,12 @@
-import NetworkScan from '../NetworkScan';
-import { NodeScan } from '../../../node/scan/NodeScan';
+import NetworkScan from '../NetworkScan.js';
+import { NodeScan } from '../../../node/scan/NodeScan.js';
 import { mock } from 'jest-mock-extended';
-import { OrganizationScan } from '../../../organization/scan/OrganizationScan';
+import { OrganizationScan } from '../../../organization/scan/OrganizationScan.js';
 import { TrustGraph } from 'shared';
-import NetworkMeasurement from '../../NetworkMeasurement';
+import NetworkMeasurement from '../../NetworkMeasurement.js';
 import { NetworkTransitiveQuorumSetFinder } from 'shared';
 import { StronglyConnectedComponentsFinder } from 'shared';
-import { AnalysisResult } from '../fbas-analysis/AnalysisResult';
+import { AnalysisResult } from '../fbas-analysis/AnalysisResult.js';
 
 describe('NetworkScan', () => {
 	it('should update latest ledger info from node scan', () => {

@@ -1,9 +1,9 @@
 import { inject, injectable } from 'inversify';
 import { err, ok, Result } from 'neverthrow';
-import { ExceptionLogger } from '../../../core/services/ExceptionLogger';
+import type { ExceptionLogger } from '../../../core/services/ExceptionLogger.js';
 import 'reflect-metadata';
-import { GetNodeDTO } from './GetNodeDTO';
-import { GetNetwork } from '../get-network/GetNetwork';
+import { GetNodeDTO } from './GetNodeDTO.js';
+import { GetNetwork } from '../get-network/GetNetwork.js';
 import { NodeV1 } from 'shared';
 
 @injectable()

@@ -1,7 +1,7 @@
-import { NodeScannerHomeDomainStep } from '../NodeScannerHomeDomainStep';
-import { HomeDomainFetcher } from '../HomeDomainFetcher';
+import { NodeScannerHomeDomainStep } from '../NodeScannerHomeDomainStep.js';
+import { HomeDomainFetcher } from '../HomeDomainFetcher.js';
 import { mock } from 'jest-mock-extended';
-import { NodeScan } from '../NodeScan';
+import { NodeScan } from '../NodeScan.js';
 
 describe('NodeScannerHomeDomainStep', () => {
 	const fetcher = mock<HomeDomainFetcher>();

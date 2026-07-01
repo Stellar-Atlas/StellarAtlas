@@ -1,14 +1,14 @@
 import { Keypair } from '@stellar/stellar-sdk';
 
 import * as net from 'net';
-import { Connection } from './connection/connection';
+import { Connection } from './connection/connection.js';
 
-import { ConnectionAuthentication } from './connection/connection-authentication';
-import { NodeConfig } from './node-config';
+import { ConnectionAuthentication } from './connection/connection-authentication.js';
+import { NodeConfig } from './node-config.js';
 import { EventEmitter } from 'events';
 import { Server, Socket } from 'net';
-import pino = require('pino');
-import { FlowController } from './connection/flow-controller';
+import pino from 'pino';
+import { FlowController } from './connection/flow-controller.js';
 
 export interface NodeInfo {
 	ledgerVersion: number;

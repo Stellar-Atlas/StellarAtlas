@@ -1,18 +1,16 @@
 import { Between, Repository } from 'typeorm';
-import OrganizationMeasurementDay from '../../../domain/organization/OrganizationMeasurementDay';
+import OrganizationMeasurementDay from '../../../domain/organization/OrganizationMeasurementDay.js';
 import { injectable } from 'inversify';
-import { OrganizationMeasurementAverage } from '../../../domain/organization/OrganizationMeasurementAverage';
+import { OrganizationMeasurementAverage } from '../../../domain/organization/OrganizationMeasurementAverage.js';
 import {
 	organizationMeasurementAverageFromDatabaseRecord,
 	OrganizationMeasurementAverageRecord
-} from './TypeOrmOrganizationMeasurementRepository';
-import { OrganizationMeasurementDayRepository } from '../../../domain/organization/OrganizationMeasurementDayRepository';
-import { OrganizationId } from '../../../domain/organization/OrganizationId';
+} from './TypeOrmOrganizationMeasurementRepository.js';
+import type { OrganizationMeasurementDayRepository } from '../../../domain/organization/OrganizationMeasurementDayRepository.js';
+import { OrganizationId } from '../../../domain/organization/OrganizationId.js';
 
 @injectable()
-export class TypeOrmOrganizationMeasurementDayRepository
-	implements OrganizationMeasurementDayRepository
-{
+export class TypeOrmOrganizationMeasurementDayRepository implements OrganizationMeasurementDayRepository {
 	constructor(private baseRepository: Repository<OrganizationMeasurementDay>) {}
 
 	async save(

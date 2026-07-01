@@ -1,10 +1,10 @@
 import { mock, MockProxy } from 'jest-mock-extended';
-import { ScheduleScanJobs } from '../ScheduleScanJobs';
-import { ScanRepository } from '../../../domain/scan/ScanRepository';
-import { ScanJobRepository } from '../../../domain/ScanJobRepository';
-import { ScanScheduler } from '../../../domain/ScanScheduler';
-import { Logger } from 'logger';
-import { ScanJob } from '../../../domain/ScanJob';
+import { ScheduleScanJobs } from '../ScheduleScanJobs.js';
+import type { ScanRepository } from '../../../domain/scan/ScanRepository.js';
+import type { ScanJobRepository } from '../../../domain/ScanJobRepository.js';
+import type { ScanScheduler } from '../../../domain/ScanScheduler.js';
+import type { Logger } from 'logger';
+import { ScanJob } from '../../../domain/ScanJob.js';
 
 describe('ScheduleScanJobs', () => {
 	let scheduleScanJobs: ScheduleScanJobs;

@@ -1,5 +1,5 @@
-import { PublicKey } from '../Overlay';
-import { OverlayEvent } from './OverlayEvent';
+import { PublicKey } from '../Overlay.js';
+import { OverlayEvent } from './OverlayEvent.js';
 
 export class ConnectionAdded extends OverlayEvent {
 	subType = 'ConnectionAdded';

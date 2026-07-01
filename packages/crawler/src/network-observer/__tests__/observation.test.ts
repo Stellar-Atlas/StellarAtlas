@@ -1,11 +1,11 @@
-import { Observation } from '../observation';
-import { PeerNodeCollection } from '../../peer-node-collection';
+import { Observation } from '../observation.js';
+import { PeerNodeCollection } from '../../peer-node-collection.js';
 import { mock } from 'jest-mock-extended';
-import { NodeAddress } from '../../node-address';
+import type { NodeAddress } from '../../node-address.js';
 import { QuorumSet } from 'shared';
-import pino = require('pino');
-import { ObservationState } from '../observation-state';
-import { Slots } from '../peer-event-handler/stellar-message-handlers/scp-envelope/scp-statement/externalize/slots';
+import pino from 'pino';
+import { ObservationState } from '../observation-state.js';
+import { Slots } from '../peer-event-handler/stellar-message-handlers/scp-envelope/scp-statement/externalize/slots.js';
 
 describe('Observation', () => {
 	const createObservation = (topTierAddresses: NodeAddress[] = []) => {

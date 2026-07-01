@@ -1,7 +1,7 @@
 import { Organization as OrganizationDTO } from 'shared';
-import { OrganizationMeasurementAverage } from '../domain/organization/OrganizationMeasurementAverage';
+import { OrganizationMeasurementAverage } from '../domain/organization/OrganizationMeasurementAverage.js';
 import { OrganizationSnapShot as DomainOrganizationSnapShot } from 'shared';
-import Organization from '../domain/organization/Organization';
+import Organization from '../domain/organization/Organization.js';
 import { injectable } from 'inversify';
 import 'reflect-metadata';
 

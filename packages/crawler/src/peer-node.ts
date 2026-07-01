@@ -1,6 +1,6 @@
 import { QuorumSet } from 'shared';
 import { NodeInfo } from 'node-connector';
-import { Ledger } from './crawler';
+import type { Ledger } from './crawler.js';
 
 export class PeerNode {
 	public ip?: string;

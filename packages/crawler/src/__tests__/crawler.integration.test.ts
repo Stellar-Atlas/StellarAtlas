@@ -13,9 +13,9 @@ import {
 	CrawlerConfiguration,
 	createCrawler,
 	createCrawlFactory
-} from '../index';
+} from '../index.js';
 import { StellarMessageWork } from 'node-connector';
-import { NodeAddress } from '../node-address';
+import type { NodeAddress } from '../node-address.js';
 
 jest.setTimeout(60000);
 

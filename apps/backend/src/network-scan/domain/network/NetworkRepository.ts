@@ -1,5 +1,5 @@
-import { Network } from './Network';
-import { NetworkId } from './NetworkId';
+import { Network } from './Network.js';
+import { NetworkId } from './NetworkId.js';
 
 export interface NetworkRepository {
 	save(network: Network): Promise<Network>;

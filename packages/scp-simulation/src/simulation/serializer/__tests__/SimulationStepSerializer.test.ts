@@ -1,8 +1,17 @@
 import { mock } from 'jest-mock-extended';
-import { UserAction, ProtocolAction, Event, QuorumSet } from '../../../core';
-import { Broadcast, Vote, VoteOnStatement } from '../../../federated-voting';
-import { SimulationStep } from '../../Simulation';
-import { SimulationStepSerializer } from '../SimulationStepSerializer';
+import {
+	UserAction,
+	ProtocolAction,
+	Event,
+	QuorumSet
+} from '../../../core/index.js';
+import {
+	Broadcast,
+	Vote,
+	VoteOnStatement
+} from '../../../federated-voting/index.js';
+import { SimulationStep } from '../../Simulation.js';
+import { SimulationStepSerializer } from '../SimulationStepSerializer.js';
 
 describe('SimulationStepSerializer', () => {
 	let userAction: UserAction;
