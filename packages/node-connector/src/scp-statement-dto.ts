@@ -114,7 +114,7 @@ export class SCPStatement {
 				quorumSetHash: statement.quorumSetHash().toString('base64'),
 				votes: statement.votes().map((vote: Buffer) => vote.toString('base64')),
 				accepted: statement
-					.votes()
+					.accepted()
 					.map((vote: Buffer) => vote.toString('base64'))
 			};
 		} else if (xdrType === xdr.ScpStatementType.scpStPrepare()) {
