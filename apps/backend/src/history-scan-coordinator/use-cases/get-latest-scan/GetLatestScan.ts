@@ -9,7 +9,7 @@ import { inject, injectable } from 'inversify';
 import { TYPES } from '../../infrastructure/di/di-types.js';
 import type { ExceptionLogger } from '../../../core/services/ExceptionLogger.js';
 import 'reflect-metadata';
-import { ScanErrorType } from '../../domain/scan/ScanError.js';
+import { mapScanToHistoryArchiveScan } from '../../infrastructure/mappers/mapScanToHistoryArchiveScan.js';
 
 @injectable()
 export class GetLatestScan {
@@ -31,22 +31,7 @@ export class GetLatestScan {
 
 			if (scan === null) return ok(null);
 
-			return ok(
-				new HistoryArchiveScan(
-					scan.baseUrl.value,
-					scan.startDate,
-					scan.endDate,
-					scan.latestVerifiedLedger,
-					scan.error?.type === ScanErrorType.TYPE_VERIFICATION,
-					scan.error?.type === ScanErrorType.TYPE_VERIFICATION
-						? scan.error.url
-						: null,
-					scan.error?.type === ScanErrorType.TYPE_VERIFICATION
-						? scan.error.message
-						: null,
-					scan.isSlowArchive ?? false
-				)
-			);
+			return ok(mapScanToHistoryArchiveScan(scan));
 		} catch (e) {
 			this.exceptionLogger.captureException(mapUnknownToError(e));
 			return err(mapUnknownToError(e));

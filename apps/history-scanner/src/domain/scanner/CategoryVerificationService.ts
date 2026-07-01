@@ -12,7 +12,7 @@ import { LedgerHeader } from './Scanner.js';
 import { EmptyTransactionSetsHashVerifier } from './verification/empty-transaction-sets/EmptyTransactionSetsHashVerifier.js';
 import { getLowestNumber } from './getLowestNumber.js';
 
-interface VerificationError {
+export interface VerificationError {
 	ledger: number;
 	category: Category;
 	message: string;
@@ -26,9 +26,28 @@ export class CategoryVerificationService {
 		checkPointFrequency: CheckPointFrequency,
 		initialPreviousLedgerHeader?: LedgerHeader //bootstrapped from a previous run
 	): Result<void, VerificationError> {
+		const errors = this.verifyAll(
+			categoryVerificationData,
+			bucketListHashes,
+			checkPointFrequency,
+			initialPreviousLedgerHeader
+		);
+
+		if (errors.length > 0) return err(errors[0]);
+
+		return ok(undefined);
+	}
+
+	verifyAll(
+		categoryVerificationData: CategoryVerificationData,
+		bucketListHashes: Map<number, string>,
+		checkPointFrequency: CheckPointFrequency,
+		initialPreviousLedgerHeader?: LedgerHeader
+	): VerificationError[] {
 		const lowestLedger = CategoryVerificationService.getLowestLedger(
 			categoryVerificationData
 		);
+		const errors: VerificationError[] = [];
 
 		for (const [
 			ledger,
@@ -43,10 +62,10 @@ export class CategoryVerificationService {
 				checkPointFrequency,
 				initialPreviousLedgerHeader
 			);
-			if (result.isErr()) return result;
+			if (result.isErr()) errors.push(result.error);
 		}
 
-		return ok(undefined);
+		return errors;
 	}
 	private verifyLedgerData(
 		ledger: number,

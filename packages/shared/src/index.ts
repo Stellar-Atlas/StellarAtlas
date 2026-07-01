@@ -18,7 +18,10 @@ export {
 export { TrustGraphBuilder } from './trust-graph/trust-graph-builder.js';
 export { OrganizationSnapShot } from './organization-snap-shot.js';
 export { NodeSnapShot } from './node-snap-shot.js';
-export { HistoryArchiveScan } from './history-archive-scan.js';
+export {
+	HistoryArchiveScan,
+	type HistoryArchiveScanError
+} from './history-archive-scan.js';
 export { TransitiveQuorumSetFinder } from './transitive-quorum-set-finder.js';
 export { containsSlice } from './quorum/containsSlice.js';
 export * from './quorum/isQuorum.js';

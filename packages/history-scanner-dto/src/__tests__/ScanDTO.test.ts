@@ -16,6 +16,7 @@ describe('ScanDTO', () => {
 				concurrency: 5,
 				isSlowArchive: false,
 				error: null,
+				errors: [],
 				scanJobRemoteId: 'test'
 			};
 
@@ -55,6 +56,7 @@ describe('ScanDTO', () => {
 				concurrency: 5,
 				isSlowArchive: null,
 				error: null,
+				errors: [],
 				scanJobRemoteId: 'test'
 			};
 
@@ -86,6 +88,13 @@ describe('ScanDTO', () => {
 					url: 'https://history.stellar.org',
 					message: 'Invalid checksum'
 				},
+				errors: [
+					{
+						type: 'validation',
+						url: 'https://history.stellar.org',
+						message: 'Invalid checksum'
+					}
+				],
 				scanJobRemoteId: 'test'
 			};
 
@@ -99,6 +108,7 @@ describe('ScanDTO', () => {
 				url: 'https://history.stellar.org',
 				message: 'Invalid checksum'
 			});
+			expect(dto.errors).toHaveLength(1);
 		});
 
 		it('should return error for missing required fields', () => {

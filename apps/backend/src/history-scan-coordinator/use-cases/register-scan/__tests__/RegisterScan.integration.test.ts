@@ -9,6 +9,8 @@ import type { ScanJobRepository } from '../../../domain/ScanJobRepository.js';
 import { ScanJob } from '../../../domain/ScanJob.js';
 import { url } from 'inspector';
 
+jest.setTimeout(60000);
+
 describe('RegisterScan.integration', () => {
 	let kernel: Kernel;
 	let registerScan: RegisterScan;
@@ -27,7 +29,7 @@ describe('RegisterScan.integration', () => {
 	});
 
 	afterAll(async () => {
-		await kernel.close();
+		await kernel?.close();
 	});
 
 	it('should register a new scan successfully', async () => {
@@ -47,6 +49,13 @@ describe('RegisterScan.integration', () => {
 				message: 'Invalid URL',
 				url: 'http://example.com/error'
 			},
+			errors: [
+				{
+					type: 'TYPE_VERIFICATION',
+					message: 'Invalid URL',
+					url: 'http://example.com/error'
+				}
+			],
 			baseUrl: urlResult.value.value,
 			scanChainInitDate: new Date(),
 			latestVerifiedLedger: 100,

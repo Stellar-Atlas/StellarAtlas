@@ -2,6 +2,11 @@ import { Column, Entity, Index, JoinColumn, OneToOne } from 'typeorm';
 import { Url } from '../../../core/domain/Url.js';
 import { ScanError } from './ScanError.js';
 import { CoreEntity } from '../../../core/domain/CoreEntity.js';
+import {
+	mapDetailsToScanError,
+	mapScanErrorToDetails,
+	type ScanErrorDetails
+} from './ScanErrorDetails.js';
 
 /**
  * Used to represent a chain of scans for a history url.
@@ -45,6 +50,9 @@ export class Scan extends CoreEntity {
 	@JoinColumn()
 	public readonly error: ScanError | null = null;
 
+	@Column('jsonb', { nullable: false, default: () => "'[]'::jsonb" })
+	public readonly errors: readonly ScanErrorDetails[] = [];
+
 	constructor(
 		scanChainInitDate: Date,
 		startDate: Date,
@@ -56,9 +64,11 @@ export class Scan extends CoreEntity {
 		latestScannedLedgerHeaderHash: string | null = null,
 		concurrency = 0,
 		archiveIsSlow: boolean | null = null,
-		error: ScanError | null = null
+		error: ScanError | null = null,
+		errors: readonly ScanError[] = []
 	) {
 		super();
+		const scanErrors = errors.length > 0 ? errors : error ? [error] : [];
 		this.baseUrl = url;
 		this.scanChainInitDate = scanChainInitDate;
 		this.concurrency = concurrency;
@@ -67,7 +77,8 @@ export class Scan extends CoreEntity {
 		this.isSlowArchive = archiveIsSlow;
 		this.fromLedger = fromLedger;
 		this.toLedger = toLedger;
-		this.error = error;
+		this.error = error ?? scanErrors[0] ?? null;
+		this.errors = scanErrors.map(mapScanErrorToDetails);
 		this.latestScannedLedger = latestScannedLedger;
 		this.latestScannedLedgerHeaderHash = latestScannedLedgerHeaderHash;
 	}
@@ -86,7 +97,19 @@ export class Scan extends CoreEntity {
 	}
 
 	hasError(): boolean {
-		return this.error !== null;
+		return this.error !== null || this.errors.length > 0;
+	}
+
+	get scanErrors(): readonly ScanError[] {
+		const mappedErrors = this.errors
+			.map(mapDetailsToScanError)
+			.filter((error): error is ScanError => error !== null);
+
+		return mappedErrors.length > 0
+			? mappedErrors
+			: this.error
+				? [this.error]
+				: [];
 	}
 
 	public isStartOfScanChain() {

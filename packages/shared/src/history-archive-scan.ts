@@ -1,4 +1,9 @@
-import { HistoryArchiveScanV1 } from './dto/history-archive-scan-v1.js';
+import {
+	HistoryArchiveScanErrorV1,
+	HistoryArchiveScanV1
+} from './dto/history-archive-scan-v1.js';
+
+export type HistoryArchiveScanError = HistoryArchiveScanErrorV1;
 
 export class HistoryArchiveScan {
 	constructor(
@@ -9,7 +14,8 @@ export class HistoryArchiveScan {
 		public readonly hasError: boolean,
 		public readonly errorUrl: string | null,
 		public readonly errorMessage: string | null,
-		public readonly isSlow: boolean
+		public readonly isSlow: boolean,
+		public readonly errors: readonly HistoryArchiveScanError[] = []
 	) {}
 
 	static fromHistoryArchiveScanV1(
@@ -23,7 +29,8 @@ export class HistoryArchiveScan {
 			historyArchiveScanV1DTO.hasError,
 			historyArchiveScanV1DTO.errorUrl,
 			historyArchiveScanV1DTO.errorMessage,
-			historyArchiveScanV1DTO.isSlow
+			historyArchiveScanV1DTO.isSlow,
+			historyArchiveScanV1DTO.errors ?? []
 		);
 	}
 }

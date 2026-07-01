@@ -70,6 +70,12 @@ export class RESTScanCoordinatorService implements ScanCoordinatorService {
 	}
 
 	private convertScanToDTO(scan: Scan): ScanDTO {
+		const errors = scan.errors.map((error) => ({
+			message: error.message,
+			type: ScanErrorType[error.type],
+			url: error.url
+		}));
+
 		return {
 			baseUrl: scan.baseUrl.value,
 			startDate: scan.startDate,
@@ -89,7 +95,8 @@ export class RESTScanCoordinatorService implements ScanCoordinatorService {
 						url: scan.error.url
 					}
 				: null,
-			scanJobRemoteId: scan.scanJobRemoteId!
+			scanJobRemoteId: scan.scanJobRemoteId!,
+			errors
 		};
 	}
 

@@ -86,6 +86,7 @@ export class Scanner {
 
 		let alreadyScannedBucketHashes = new Set<string>();
 		let error: ScanError | undefined;
+		const errors: ScanError[] = [];
 
 		while (rangeFromLedger < scanSettings.toLedger && !error) {
 			console.time('range_scan');
@@ -102,7 +103,9 @@ export class Scanner {
 
 			if (rangeResult.isErr()) {
 				error = rangeResult.error;
+				errors.push(...this.expandScanError(rangeResult.error));
 			} else {
+				errors.push(...(rangeResult.value.errors ?? []));
 				latestLedgerHeader.ledger = rangeResult.value.latestLedgerHeader
 					? rangeResult.value.latestLedgerHeader.ledger
 					: rangeToLedger;
@@ -120,7 +123,12 @@ export class Scanner {
 
 		return {
 			latestLedgerHeader,
-			error
+			error,
+			errors
 		};
+	}
+
+	private expandScanError(error: ScanError): readonly ScanError[] {
+		return error.relatedErrors.length > 0 ? error.relatedErrors : [error];
 	}
 }

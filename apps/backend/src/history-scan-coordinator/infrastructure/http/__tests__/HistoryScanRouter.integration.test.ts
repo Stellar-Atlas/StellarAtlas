@@ -94,9 +94,9 @@ describe('HistoryScanRouter.integration', () => {
 				fromLedger: 0,
 				toLedger: null,
 				error: null,
+				errors: [],
 				scanJobRemoteId: 'test'
 			};
-			console.log(JSON.parse(JSON.stringify(validBody)));
 
 			registerScan.execute.mockResolvedValue(ok(undefined));
 

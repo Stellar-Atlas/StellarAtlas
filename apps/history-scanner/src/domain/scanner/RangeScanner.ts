@@ -16,6 +16,7 @@ import { TYPES } from '../../infrastructure/di/di-types.js';
 export interface RangeScanResult {
 	latestLedgerHeader?: LedgerHeader;
 	scannedBucketHashes: Set<string>;
+	errors: readonly ScanError[];
 }
 /**
  * Scan a specific range of a history archive
@@ -113,6 +114,7 @@ export class RangeScanner {
 
 		return ok({
 			latestLedgerHeader: categoryScanResult.value,
+			errors: [],
 			scannedBucketHashes: new Set([
 				...bucketScanState.bucketHashesToScan,
 				...alreadyScannedBucketHashes

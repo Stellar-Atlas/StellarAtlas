@@ -10,6 +10,13 @@ export interface HistoryArchiveScanV1 {
 	readonly errorUrl: string | null;
 	readonly errorMessage: string | null;
 	readonly isSlow: boolean;
+	readonly errors: readonly HistoryArchiveScanErrorV1[];
+}
+
+export interface HistoryArchiveScanErrorV1 {
+	readonly type: string;
+	readonly url: string;
+	readonly message: string;
 }
 
 export const HistoryArchiveScanV1Schema: JSONSchemaType<HistoryArchiveScanV1> =
@@ -42,6 +49,25 @@ export const HistoryArchiveScanV1Schema: JSONSchemaType<HistoryArchiveScanV1> =
 			}),
 			isSlow: {
 				type: 'boolean'
+			},
+			errors: {
+				type: 'array',
+				items: {
+					type: 'object',
+					properties: {
+						type: {
+							type: 'string'
+						},
+						url: {
+							type: 'string'
+						},
+						message: {
+							type: 'string'
+						}
+					},
+					required: ['type', 'url', 'message'],
+					additionalProperties: false
+				}
 			}
 		},
 		type: 'object',
@@ -53,6 +79,7 @@ export const HistoryArchiveScanV1Schema: JSONSchemaType<HistoryArchiveScanV1> =
 			'latestVerifiedLedger',
 			'isSlow',
 			'errorUrl',
-			'errorMessage'
+			'errorMessage',
+			'errors'
 		]
 	};

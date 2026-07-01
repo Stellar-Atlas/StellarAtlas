@@ -21,6 +21,7 @@ describe('ScanMapper', () => {
 			concurrency: 10,
 			isSlowArchive: false,
 			error: null,
+			errors: [],
 			scanJobRemoteId: 'remoteId'
 		};
 	});
@@ -75,6 +76,30 @@ describe('ScanMapper', () => {
 			expect(result.isOk()).toBe(true);
 			if (result.isOk()) {
 				expect(result.value.error).toBeInstanceOf(ScanError);
+			}
+		});
+
+		it('should handle multiple valid error DTOs', () => {
+			const firstErrorDTO: ScanErrorDTO = {
+				type: 'TYPE_VERIFICATION',
+				url: 'https://test.com/history',
+				message: 'Wrong transaction hash'
+			};
+			const secondErrorDTO: ScanErrorDTO = {
+				type: 'TYPE_VERIFICATION',
+				url: 'https://test.com/results',
+				message: 'Wrong results hash'
+			};
+			const dtoWithErrors = {
+				...validScanDTO,
+				error: firstErrorDTO,
+				errors: [firstErrorDTO, secondErrorDTO]
+			};
+			const result = mapper.toDomain(dtoWithErrors);
+			expect(result.isOk()).toBe(true);
+			if (result.isOk()) {
+				expect(result.value.scanErrors).toHaveLength(2);
+				expect(result.value.error?.message).toBe('Wrong transaction hash');
 			}
 		});
 

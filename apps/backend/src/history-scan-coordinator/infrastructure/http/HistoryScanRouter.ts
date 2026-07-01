@@ -88,6 +88,19 @@ export const HistoryScanRouterWrapper = (
 				body('error').custom((value) => {
 					if (value === null) return true;
 					return typeof value === 'object';
+				}),
+				body('errors')
+					.optional()
+					.isArray()
+					.withMessage('errors must be an array'),
+				body('errors.*').custom((value) => {
+					return (
+						typeof value === 'object' &&
+						value !== null &&
+						typeof value.type === 'string' &&
+						typeof value.url === 'string' &&
+						typeof value.message === 'string'
+					);
 				})
 			],
 			async (req: express.Request, res: express.Response) => {

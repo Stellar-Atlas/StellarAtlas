@@ -86,6 +86,7 @@ export class ScanJob {
 			this.concurrency,
 			null,
 			error,
+			[error],
 			this.remoteId
 		);
 	}
@@ -108,6 +109,7 @@ export class ScanJob {
 			settings.concurrency,
 			settings.isSlowArchive,
 			scanResult.error,
+			scanResult.errors ?? [],
 			this.remoteId
 		);
 	}

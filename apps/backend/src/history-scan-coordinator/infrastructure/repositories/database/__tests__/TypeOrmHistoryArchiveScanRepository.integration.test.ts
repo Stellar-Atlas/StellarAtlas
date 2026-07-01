@@ -80,8 +80,11 @@ it('should find the latest scans', async function () {
 	expect(foundErrorScan?.error).toBeInstanceOf(ScanError);
 	expect(foundErrorScan?.error?.url).toEqual(scanWithErrorUrl.value);
 	expect(foundErrorScan?.error?.message).toEqual('info');
+	expect(foundErrorScan?.scanErrors).toHaveLength(1);
+	expect(foundErrorScan?.scanErrors[0]?.message).toEqual('info');
 
 	const latestByUrl = await repo.findLatestByUrl(scanWithErrorUrl.value);
 	expect(latestByUrl).toBeDefined();
 	expect(latestByUrl?.error).toBeInstanceOf(ScanError);
+	expect(latestByUrl?.scanErrors).toHaveLength(1);
 });
