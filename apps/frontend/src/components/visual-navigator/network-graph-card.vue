@@ -1,5 +1,22 @@
 <template>
-  <Graph
+  <Graph3D
+    v-if="graphMode === '3d'"
+    :center-vertex="centerVertex"
+    :selected-vertices="selectedVertices"
+    style="height: 100%"
+    :full-screen="fullScreen"
+    :zoom-enabled="zoomEnabled"
+    :view-graph="viewGraph"
+    :is-loading="isLoading"
+    :option-show-failing-edges="optionShowFailingEdges"
+    :option-highlight-trusting-nodes="optionHighlightTrustingNodes"
+    :option-highlight-trusted-nodes="optionHighlightTrustedNodes"
+    :option-show-regular-edges="optionShowRegularEdges"
+    :option-transitive-quorum-set-only="optionTransitiveQuorumSetOnly"
+    @vertex-selected="vertexSelected"
+  />
+  <Graph2D
+    v-else
     ref="graph"
     :center-vertex="centerVertex"
     :selected-vertices="selectedVertices"
@@ -19,16 +36,18 @@
 </template>
 
 <script setup lang="ts">
-import Graph from "@/components/visual-navigator/graph/graph.vue";
+import Graph2D from "@/components/visual-navigator/graph/graph.vue";
 import ViewGraph from "@/components/visual-navigator/graph/view-graph";
 import ViewVertex from "@/components/visual-navigator/graph/view-vertex";
 import {
   computed,
+  defineAsyncComponent,
   type ComputedRef,
   onMounted,
   type Ref,
   ref,
   watch,
+  type PropType,
 } from "vue";
 import useStore from "@/store/useStore";
 import { useRoute, useRouter } from "vue-router/composables";
@@ -36,6 +55,11 @@ import { NodeTrustGraphBuilder } from "@/services/NodeTrustGraphBuilder";
 import { OrganizationTrustGraphBuilder } from "@/services/OrganizationTrustGraphBuilder";
 import { TrustClusterFinder } from "@/services/TrustClusterFinder";
 import { Node, Organization } from "shared";
+import type { GraphVisualizationMode } from "@/components/visual-navigator/graph/graph-mode";
+
+const Graph3D = defineAsyncComponent(
+  () => import("@/components/visual-navigator/graph/graph-3d.vue"),
+);
 
 const router = useRouter();
 const route = useRoute();
@@ -80,9 +104,14 @@ const props = defineProps({
     type: Boolean,
     default: false,
   },
+  graphMode: {
+    type: String as PropType<GraphVisualizationMode>,
+    default: "2d",
+  },
 });
 
 const type = computed(() => props.type);
+const graphMode = computed(() => props.graphMode);
 const includeAllNodes = computed(() => store.includeAllNodes);
 const selectedNode = computed(() => store.selectedNode);
 const selectedOrganization = computed(() => store.selectedOrganization);
@@ -232,11 +261,18 @@ function buildOrganizationViewGraph(allNodes: Node[], merge: boolean) {
                 store.selectedOrganization.validators.map((publicKey) =>
                   store.network.getNodeByPublicKey(publicKey),
                 ),
-                new Map(allNodes.map((node) => [node.publicKey, node.quorumSet])),
+                new Map(
+                  allNodes.map((node) => [node.publicKey, node.quorumSet]),
+                ),
               ),
             )
-              .map((node) => store.network.getNodeByPublicKey(node).organizationId)
-              .filter((organizationId): organizationId is string => organizationId !== null)
+              .map(
+                (node) => store.network.getNodeByPublicKey(node).organizationId,
+              )
+              .filter(
+                (organizationId): organizationId is string =>
+                  organizationId !== null,
+              )
               .map((organizationId) =>
                 store.network.getOrganizationById(organizationId),
               ),

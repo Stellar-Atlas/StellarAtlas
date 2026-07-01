@@ -135,6 +135,11 @@
               :key="vertex.key"
               :transform="getVertexTransform(vertex)"
               class="vertex"
+              :class="{
+                'perimeter-vertex': vertex.isPerimeter,
+                'secondary-vertex':
+                  !vertex.isPartOfTransitiveQuorumSet && !vertex.selected,
+              }"
               style="cursor: pointer"
               @click="
                 vertexSelected(vertex);
@@ -148,27 +153,27 @@
               >
                 <title>{{ vertex.label }}</title>
               </circle>
-              <g>
+              <g class="vertex-label">
                 <rect
-                  style="fill: white; opacity: 0.84; text-transform: lowercase"
+                  class="vertex-label-background"
                   :width="getVertexTextRectWidthPx(vertex)"
                   height="12px"
-                  y="13"
+                  y="11"
                   :x="getVertexTextRectX(vertex)"
-                  rx="2"
+                  rx="3"
                   :class="{
                     'rect-selected': vertex.selected,
                     rect: !vertex.selected,
                   }"
                 ></rect>
                 <text
-                  y="5"
+                  y="3"
                   :class="getVertexTextClass(vertex)"
-                  dy="1.7em"
+                  dy="1.75em"
                   text-anchor="middle"
-                  font-size="9px"
+                  font-size="7.8px"
                 >
-                  {{ truncate(vertex.label, 12) }}
+                  {{ getVertexLabel(vertex) }}
                   <title>{{ vertex.label }}</title>
                 </text>
               </g>
@@ -191,6 +196,7 @@ import {
   getEdgePath,
   getEdgeStyle,
   getVertexClassObject as buildVertexClassObject,
+  getVertexLabel as buildVertexLabel,
   getVertexRadius,
   getVertexStyle as buildVertexStyle,
   getVertexTextClass,
@@ -341,6 +347,10 @@ function getVertexTextRectWidthPx(vertex: ViewVertex): string {
 
 function getVertexTextRectX(vertex: ViewVertex): string {
   return buildVertexTextRectX(vertex, truncate);
+}
+
+function getVertexLabel(vertex: ViewVertex): string {
+  return buildVertexLabel(vertex, truncate);
 }
 </script>
 

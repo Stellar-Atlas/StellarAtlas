@@ -146,6 +146,7 @@ export function useGraphController(options: GraphControllerOptions) {
       if (!vertex) return;
       vertex.x = updatedVertex.x;
       vertex.y = updatedVertex.y;
+      vertex.isPerimeter = updatedVertex.isPerimeter;
     });
 
     edges.forEach((updatedEdge) => {

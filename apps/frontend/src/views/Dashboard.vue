@@ -49,16 +49,16 @@
         </HaltingAnalysis>
       </div>
     </div>
-    <div class="row h-100">
-      <aside class="col-xs-12 col-sm-5 col-lg-3 col-xl-auto mb-5">
+    <div class="dashboard-shell h-100">
+      <aside class="dashboard-sidebar mb-5">
         <div class="card pt-0 sidebar-card h-100">
           <transition name="fade" mode="out-in">
             <router-view name="sideBar" class="h-100 side-bar" />
           </transition>
         </div>
       </aside>
-      <div id="content" class="col-sm-7 col-lg-9 col-xl">
-        <div class="row">
+      <div id="content" class="dashboard-content">
+        <div class="row navigator-row">
           <div class="col">
             <network-visual-navigator :view="view" />
           </div>
@@ -166,7 +166,49 @@ watch(haltingAnalysisPublicKey, (publicKey) => {
 </script>
 
 <style scoped>
+.dashboard-shell {
+  display: block;
+  position: relative;
+}
+
+.dashboard-sidebar {
+  width: 100%;
+}
+
 @media (min-width: 1279px) {
+  .dashboard-sidebar {
+    left: 0;
+    margin-bottom: 0 !important;
+    position: absolute;
+    top: 0;
+    width: 292px;
+    z-index: 5;
+  }
+
+  .sidebar-card {
+    backdrop-filter: blur(8px);
+    background: rgba(255, 255, 255, 0.94);
+    box-shadow: 0 12px 35px rgba(44, 62, 80, 0.12);
+    height: min(88vh, 1040px) !important;
+    max-height: 1040px;
+    overflow: hidden;
+  }
+
+  .dashboard-content {
+    max-width: 100%;
+    width: 100%;
+  }
+
+  .navigator-row {
+    margin-left: 0;
+    margin-right: 0;
+  }
+
+  .navigator-row > .col {
+    padding-left: 0;
+    padding-right: 0;
+  }
+
   .side-bar {
     width: 272px;
   }

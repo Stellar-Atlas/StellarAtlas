@@ -152,6 +152,29 @@
         <b-breadcrumb class="sb-bread-crumbs" :items="breadCrumbs">
         </b-breadcrumb>
       </div>
+      <div
+        v-if="isGraphView"
+        class="btn-group btn-group-sm graph-mode-toggle ml-auto mr-2"
+        role="group"
+        aria-label="Graph display mode"
+      >
+        <button
+          type="button"
+          class="btn btn-outline-secondary"
+          :class="{ active: graphMode === '2d' }"
+          @click="graphMode = '2d'"
+        >
+          2D
+        </button>
+        <button
+          type="button"
+          class="btn btn-outline-secondary"
+          :class="{ active: graphMode === '3d' }"
+          @click="graphMode = '3d'"
+        >
+          3D
+        </button>
+      </div>
       <a
         v-if="!zoomEnabled"
         v-tooltip="'Toggle scroll to zoom'"
@@ -214,6 +237,7 @@
         :option-show-regular-edges="optionShowRegularEdges"
         :option-transitive-quorum-set-only="optionTransitiveQuorumSetOnly"
         :option-filter-trust-cluster="optionFilterTrustCluster"
+        :graph-mode="graphMode"
         :type="view === 'graph' ? 'node' : 'organization'"
       >
       </network-graph-card>
@@ -256,6 +280,7 @@ import GraphLegend from "@/components/visual-navigator/graph/graph-legend.vue";
 import useStore from "@/store/useStore";
 import { useRoute, useRouter } from "vue-router/composables";
 import { isString } from "shared";
+import type { GraphVisualizationMode } from "@/components/visual-navigator/graph/graph-mode";
 
 const WorldMap = defineAsyncComponent(
   () => import("@/components/visual-navigator/world-map.vue"),
@@ -268,6 +293,9 @@ const props = defineProps({
   },
 });
 const view = computed(() => props.view);
+const isGraphView = computed(
+  () => view.value === "graph" || view.value === "graph-org",
+);
 
 const store = useStore();
 const network = store.network;
@@ -292,6 +320,7 @@ const optionFilterTrustCluster = ref(false);
 const menuVisible = ref(false);
 const fullScreen = ref(false);
 const zoomEnabled = ref(true);
+const graphMode = ref<GraphVisualizationMode>("2d");
 
 const breadCrumbs = computed(() => {
   const crumbs: {
@@ -368,122 +397,4 @@ function navigateToView() {
   });
 }
 </script>
-<style scoped>
-.sb-bread-crumbs {
-  background: white !important;
-  margin: 0;
-  padding: 0;
-  align-self: center;
-}
-
-.sb-card-fullscreen {
-  z-index: 4;
-  height: 100% !important;
-}
-
-.network-visual-navigator {
-  height: min(88vh, 1040px);
-  min-height: 760px;
-}
-
-@media (max-width: 768px) {
-  .network-visual-navigator {
-    height: 78vh;
-    min-height: 600px;
-  }
-}
-
-.collapse-icon {
-  cursor: pointer;
-  position: absolute;
-  right: 8px;
-  top: 10px;
-}
-
-.menu {
-  z-index: 5000;
-  position: absolute;
-  background: white;
-  width: 250px;
-  height: 100%;
-}
-
-.menu-button {
-  cursor: pointer;
-}
-
-.view-link {
-  text-decoration: none;
-  padding-left: 7px;
-  color: #818181;
-  cursor: pointer;
-}
-
-.view-link a {
-  text-decoration: none;
-  color: rgba(0, 0, 0, 0.55);
-}
-
-.view-link:hover {
-  background-color: #f8f9fa;
-  text-decoration: none;
-}
-
-.router-link-exact-active {
-  color: #206bc4 !important;
-  text-decoration: none;
-  background-color: rgba(32, 107, 196, 0.06);
-}
-
-.preview-text {
-  position: absolute;
-  bottom: 0;
-  height: 25px;
-  color: white;
-  width: 100%;
-  text-align: center;
-  border-radius: 5px;
-  background: linear-gradient(
-    0deg,
-    rgba(67, 104, 113, 1) 0%,
-    rgba(170, 211, 223, 1) 100%
-  );
-}
-
-.preview-image {
-  border-radius: 5px;
-}
-
-.preview {
-  z-index: 1000;
-  position: absolute;
-  left: 10px;
-  bottom: 10px;
-  width: 60px;
-  height: 60px;
-  border-radius: 5px;
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3);
-  cursor: pointer;
-  background: white;
-}
-
-.sb-bread-crumbs {
-  background-color: white;
-  margin: 0;
-  padding: 0;
-  align-self: center;
-}
-
-.sb-bread-crumbs-container {
-  display: flex;
-  flex-grow: 1;
-  align-items: center;
-}
-
-.world-loader {
-  position: absolute;
-  left: 50%;
-  right: 50%;
-  top: 30%;
-}
-</style>
+<style lang="scss" scoped src="./network-visual-navigator.scss"></style>
