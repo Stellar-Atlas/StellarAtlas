@@ -1,5 +1,6 @@
 import type {
 	ApiFailure,
+	PublicHistoryArchiveScan,
 	PublicNetwork,
 	PublicNode,
 	PublicOrganization
@@ -62,6 +63,28 @@ const fetchJson = async <Payload>(
 	return response.json() as Promise<Payload>;
 };
 
+const fetchNullableJson = async <Payload>(
+	path: string,
+	options: FetchOptions = {}
+): Promise<Payload | null> => {
+	const response = await fetch(buildApiUrl(path, options), {
+		cache: 'no-store',
+		headers: {
+			Accept: 'application/json'
+		}
+	});
+
+	if (response.status === 204) return null;
+	if (!response.ok) {
+		throw new ApiClientError({
+			message: `API request returned HTTP ${response.status}`,
+			statusCode: response.status
+		});
+	}
+
+	return response.json() as Promise<Payload>;
+};
+
 export const fetchPublicNetwork = (
 	options?: FetchOptions
 ): Promise<PublicNetwork> => fetchJson<PublicNetwork>('/v1', options);
@@ -87,5 +110,14 @@ export const fetchPublicOrganization = (
 ): Promise<PublicOrganization> =>
 	fetchJson<PublicOrganization>(
 		`/v1/organizations/${encodeURIComponent(organizationId)}`,
+		options
+	);
+
+export const fetchHistoryArchiveScan = (
+	historyUrl: string,
+	options?: FetchOptions
+): Promise<PublicHistoryArchiveScan | null> =>
+	fetchNullableJson<PublicHistoryArchiveScan>(
+		`/v1/history-scan/${encodeURIComponent(historyUrl)}`,
 		options
 	);

@@ -1,5 +1,8 @@
 import { notFound } from 'next/navigation';
-import { fetchPublicNetwork } from '../../../api/client';
+import {
+	fetchHistoryArchiveScan,
+	fetchPublicNetwork
+} from '../../../api/client';
 import { AppShell } from '../../../components/layout/app-shell';
 import { PageHeading } from '../../../components/layout/page-heading';
 import { NodeDetail } from '../../../components/nodes/node-detail';
@@ -22,6 +25,9 @@ export default async function NodeDetailPage({
 	);
 
 	if (!node) notFound();
+	const historyArchiveScan = node.historyUrl
+		? await fetchHistoryArchiveScan(node.historyUrl)
+		: null;
 
 	return (
 		<AppShell network={network}>
@@ -31,7 +37,11 @@ export default async function NodeDetailPage({
 					eyebrow="Node"
 					title={getNodeLabel(node)}
 				/>
-				<NodeDetail network={network} node={node} />
+				<NodeDetail
+					historyArchiveScan={historyArchiveScan}
+					network={network}
+					node={node}
+				/>
 			</main>
 		</AppShell>
 	);

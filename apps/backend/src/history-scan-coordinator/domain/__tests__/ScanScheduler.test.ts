@@ -267,3 +267,75 @@ it('should use the failed scan range when the error url has no ledger', () => {
 	expect(jobs[0].fromLedger).toEqual(128);
 	expect(jobs[0].toLedger).toEqual(255);
 });
+
+it('should recheck through the latest known errored ledger', () => {
+	const scheduler = new RestartAtLeastOneScan();
+	const archive = createDummyHistoryBaseUrl();
+	const previousErroredScan = new Scan(
+		new Date('01-01-2020'),
+		new Date('01-03-2020'),
+		new Date('01-03-2020'),
+		archive,
+		128,
+		255,
+		127,
+		'hash',
+		4,
+		false,
+		null,
+		[
+			new ScanError(
+				ScanErrorType.TYPE_VERIFICATION,
+				`${archive.value}/ledger/00/00/00/ledger-000000bf.xdr.gz`,
+				'Missing ledger'
+			),
+			new ScanError(
+				ScanErrorType.TYPE_VERIFICATION,
+				`${archive.value}/transactions/00/00/00/transactions-000000df.xdr.gz`,
+				'Wrong transaction hash'
+			)
+		]
+	);
+
+	const jobs = scheduler.schedule([archive.value], [previousErroredScan]);
+
+	expect(jobs).toHaveLength(1);
+	expect(jobs[0].fromLedger).toEqual(128);
+	expect(jobs[0].toLedger).toEqual(223);
+});
+
+it('should recheck the failed scan range when a known error has no ledger', () => {
+	const scheduler = new RestartAtLeastOneScan();
+	const archive = createDummyHistoryBaseUrl();
+	const previousErroredScan = new Scan(
+		new Date('01-01-2020'),
+		new Date('01-03-2020'),
+		new Date('01-03-2020'),
+		archive,
+		128,
+		255,
+		127,
+		'hash',
+		4,
+		false,
+		null,
+		[
+			new ScanError(
+				ScanErrorType.TYPE_VERIFICATION,
+				`${archive.value}/ledger/00/00/00/ledger-000000bf.xdr.gz`,
+				'Missing ledger'
+			),
+			new ScanError(
+				ScanErrorType.TYPE_VERIFICATION,
+				`${archive.value}/bucket/aa/bb/cc/bucket-aabbcc.xdr.gz`,
+				'Wrong bucket hash'
+			)
+		]
+	);
+
+	const jobs = scheduler.schedule([archive.value], [previousErroredScan]);
+
+	expect(jobs).toHaveLength(1);
+	expect(jobs[0].fromLedger).toEqual(128);
+	expect(jobs[0].toLedger).toEqual(255);
+});

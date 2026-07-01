@@ -31,7 +31,8 @@ function shouldCacheRequest(path: string): boolean {
 }
 
 function frontendV4PreviewEnabled(): boolean {
-  return process.env.ENABLE_FRONTEND_V4_PREVIEW === "1";
+  if (process.env.DISABLE_FRONTEND_V4_PREVIEW === "1") return false;
+  return process.env.ENABLE_FRONTEND_V4_PREVIEW !== "0";
 }
 
 function getFrontendV4Origin(): string {
