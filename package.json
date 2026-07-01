@@ -6,7 +6,7 @@
 	"scripts": {
 		"build:ts": "tsc --build",
 		"build:ts:force": "tsc --build --force",
-		"build": "tsc --build --verbose && pnpm --parallel post-build && pnpm --filter frontend run build",
+		"build": "tsc --build --verbose && pnpm --parallel post-build && pnpm --filter frontend run build && pnpm --filter frontend-v4 run build",
 		"dev": "pnpm build:ts && concurrently -n backend,frontend -c yellow,blue \"pnpm --filter backend run start-api\" \"pnpm --filter frontend run dev --force --host\"",
 		"test:unit": "NODE_OPTIONS=--experimental-vm-modules jest --testPathIgnorePatterns '\\.integration(\\.test)?\\.[jt]sx?$' --maxWorkers=50% ",
 		"test:unit:scp-simulation": "NODE_OPTIONS=--experimental-vm-modules jest --testPathIgnorePatterns '\\.integration(\\.test)?\\.[jt]sx?$' --testPathPatterns 'scp-simulation' --maxWorkers=50% ",
@@ -23,6 +23,7 @@
 		"lint": "pnpm eslint .",
 		"test:all": "pnpm run test:unit && pnpm run test:integration",
 		"start:frontend": "pnpm --filter frontend run start",
+		"start:frontend-v4": "pnpm --filter frontend-v4 run start",
 		"start:api": "pnpm --filter backend run start-api",
 		"start:scan-network": "pnpm --filter backend run scan-network",
 		"start:scan-history": "pnpm --filter history-scanner run scan-history",
