@@ -51,20 +51,20 @@ ctx.addEventListener("message", (event: MessageEvent<GraphWorkerPayload>) => {
     new Set(vertices.map((vertex) => vertex.groupIndex)).size,
     1,
   );
-  const groupCenterRadius = Math.min(width, height) * 0.34;
+  const groupCenterRadius = Math.min(width, height) * 0.42;
 
   const simulation = forceSimulation<GraphNodeDatum>(vertices)
     .force(
       "charge",
       forceManyBody<GraphNodeDatum>().strength((vertex) => {
-        return vertex.isPartOfTransitiveQuorumSet ? -520 : -310;
+        return vertex.isPartOfTransitiveQuorumSet ? -760 : -430;
       }),
     )
     .force(
       "link",
       forceLink<GraphNodeDatum, GraphLinkDatum>(edges)
         .distance((edge) => {
-          return edge.isPartOfTransitiveQuorumSet ? 82 : 140;
+          return edge.isPartOfTransitiveQuorumSet ? 110 : 175;
         })
         .strength((edge: SimulationLinkDatum<GraphNodeDatum>) => {
           const viewEdge = edge as GraphLinkDatum;
@@ -83,13 +83,14 @@ ctx.addEventListener("message", (event: MessageEvent<GraphWorkerPayload>) => {
       forceX<GraphNodeDatum>(
         (vertex) =>
           groupCenter(vertex, nrOfGroups, width, height, groupCenterRadius).x,
-      ).strength(0.08),
+      ).strength(0.12),
     )
     .force(
       "y",
-      forceY<GraphNodeDatum>((vertex) =>
-        groupCenter(vertex, nrOfGroups, width, height, groupCenterRadius).y,
-      ).strength(0.08),
+      forceY<GraphNodeDatum>(
+        (vertex) =>
+          groupCenter(vertex, nrOfGroups, width, height, groupCenterRadius).y,
+      ).strength(0.12),
     )
     .force("center", forceCenter(width / 2, height / 2))
     .velocityDecay(0.38)

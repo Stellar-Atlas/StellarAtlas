@@ -40,6 +40,7 @@ export function useGraphController(options: GraphControllerOptions) {
   let d3svg: Selection<Element, null, null, undefined> | null = null;
   let d3Grid: Selection<Element, null, null, undefined> | null = null;
   let graphZoom: ZoomBehavior<Element, null> | null = null;
+  let resizeObserver: ResizeObserver | null = null;
 
   watch(options.centerVertex, () => {
     centerCorrectVertex();
@@ -59,8 +60,9 @@ export function useGraphController(options: GraphControllerOptions) {
   });
 
   watch(options.fullScreen, () => {
-    centerCorrectVertex();
+    postLayoutRequest();
     transformAndZoom();
+    centerCorrectVertex();
   });
 
   watch(isLoading, () => {
@@ -102,10 +104,12 @@ export function useGraphController(options: GraphControllerOptions) {
       .scaleExtent([0.35, 8]);
 
     transformAndZoom();
+    observeGraphSize();
     postLayoutRequest();
   });
 
   onBeforeUnmount(() => {
+    resizeObserver?.disconnect();
     computeGraphWorker?.terminate();
   });
 
@@ -136,7 +140,9 @@ export function useGraphController(options: GraphControllerOptions) {
 
   function mapViewGraph(vertices: ViewVertex[], edges: ViewEdge[]): void {
     vertices.forEach((updatedVertex) => {
-      const vertex = options.viewGraph.value.viewVertices.get(updatedVertex.key);
+      const vertex = options.viewGraph.value.viewVertices.get(
+        updatedVertex.key,
+      );
       if (!vertex) return;
       vertex.x = updatedVertex.x;
       vertex.y = updatedVertex.y;
@@ -153,6 +159,15 @@ export function useGraphController(options: GraphControllerOptions) {
   function transformAndZoom(): void {
     if (!d3svg || !graphZoom) return;
     d3svg.call(graphZoom);
+  }
+
+  function observeGraphSize(): void {
+    if (!graphSvg.value) return;
+
+    resizeObserver = new ResizeObserver(() => {
+      if (!isLoading.value) postLayoutRequest();
+    });
+    resizeObserver.observe(graphSvg.value);
   }
 
   function width(): number {

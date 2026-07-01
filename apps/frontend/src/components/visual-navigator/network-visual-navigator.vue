@@ -382,14 +382,14 @@ function navigateToView() {
 }
 
 .network-visual-navigator {
-  height: min(82vh, 860px);
-  min-height: 680px;
+  height: min(88vh, 1040px);
+  min-height: 760px;
 }
 
 @media (max-width: 768px) {
   .network-visual-navigator {
-    height: 72vh;
-    min-height: 520px;
+    height: 78vh;
+    min-height: 600px;
   }
 }
 

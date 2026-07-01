@@ -16,9 +16,9 @@ export function getVertexTransform(vertex: ViewVertex): string {
 }
 
 export function getVertexRadius(vertex: ViewVertex): number {
-  if (vertex.selected) return 10;
-  if (vertex.isPartOfTransitiveQuorumSet) return 8;
-  return 7;
+  if (vertex.selected) return 13;
+  if (vertex.isPartOfTransitiveQuorumSet) return 10;
+  return 8.5;
 }
 
 export function getVertexStyle(vertex: ViewVertex): Record<string, string> {
@@ -44,7 +44,9 @@ export function getVertexTextRectX(
   return "-" + getVertexTextRectWidth(vertex, truncate) / 2 + "px";
 }
 
-export function getVertexTextClass(vertex: ViewVertex): Record<string, boolean> {
+export function getVertexTextClass(
+  vertex: ViewVertex,
+): Record<string, boolean> {
   return {
     active: !vertex.isFailing,
     failing: vertex.isFailing,
@@ -90,7 +92,7 @@ function getVertexTextRectWidth(
   vertex: ViewVertex,
   truncate: (value: string, length: number) => string,
 ): number {
-  return Math.max(40, truncate(vertex.label, 12).length * 6 + 8);
+  return Math.max(36, truncate(vertex.label, 12).length * 5.5 + 8);
 }
 
 function highlightVertexAsOutgoing(
@@ -101,7 +103,9 @@ function highlightVertexAsOutgoing(
 
   const edges = context.selectedVertices.value
     .map((selectedVertex) =>
-      context.viewGraph.value.viewEdges.get(vertex.key + ":" + selectedVertex.key),
+      context.viewGraph.value.viewEdges.get(
+        vertex.key + ":" + selectedVertex.key,
+      ),
     )
     .filter((edge): edge is ViewEdge => edge !== undefined);
   if (edges.length <= 0) return false;
@@ -122,7 +126,9 @@ function highlightVertexAsIncoming(
 
   const edges = context.selectedVertices.value
     .map((selectedVertex) =>
-      context.viewGraph.value.viewEdges.get(selectedVertex.key + ":" + vertex.key),
+      context.viewGraph.value.viewEdges.get(
+        selectedVertex.key + ":" + vertex.key,
+      ),
     )
     .filter((edge): edge is ViewEdge => edge !== undefined);
   if (edges.length <= 0) return false;

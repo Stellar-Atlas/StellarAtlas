@@ -154,10 +154,10 @@
               </circle>
               <g>
                 <rect
-                  style="fill: white; opacity: 0.7; text-transform: lowercase"
+                  style="fill: white; opacity: 0.84; text-transform: lowercase"
                   :width="getVertexTextRectWidthPx(vertex)"
-                  height="13px"
-                  y="10"
+                  height="12px"
+                  y="13"
                   :x="getVertexTextRectX(vertex)"
                   rx="2"
                   :class="{
@@ -168,9 +168,9 @@
                 <text
                   y="5"
                   :class="getVertexTextClass(vertex)"
-                  dy="1.3em"
+                  dy="1.7em"
                   text-anchor="middle"
-                  font-size="10px"
+                  font-size="9px"
                 >
                   {{ truncate(vertex.label, 12) }}
                   <title>{{ vertex.label }}</title>
