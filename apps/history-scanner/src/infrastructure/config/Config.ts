@@ -1,6 +1,6 @@
 import { config } from 'dotenv';
 import { err, ok, Result } from 'neverthrow';
-import { resolveAppEnvPath } from 'shared';
+import { resolveAppEnvPath } from 'shared/lib/env/resolve-app-env-path.js';
 
 config({
 	path: resolveAppEnvPath(import.meta.url, 'history-scanner'),

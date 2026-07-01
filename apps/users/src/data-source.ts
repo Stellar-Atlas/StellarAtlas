@@ -1,7 +1,7 @@
 import { config } from 'dotenv';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { resolveAppEnvPath } from 'shared';
+import { resolveAppEnvPath } from 'shared/lib/env/resolve-app-env-path.js';
 
 config({
 	path: resolveAppEnvPath(import.meta.url, 'users'),

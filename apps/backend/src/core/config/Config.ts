@@ -3,7 +3,7 @@ import { isArray, isString } from '../utilities/TypeGuards.js';
 import { err, ok, Result } from 'neverthrow';
 import { Url } from '../domain/Url.js';
 import { CrawlerConfiguration } from 'crawler';
-import { resolveAppEnvPath } from 'shared';
+import { resolveAppEnvPath } from 'shared/lib/env/resolve-app-env-path.js';
 
 config({
 	path: resolveAppEnvPath(import.meta.url, 'backend'),

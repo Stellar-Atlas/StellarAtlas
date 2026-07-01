@@ -4,8 +4,8 @@
 	"type": "module",
 	"scripts": {
 		"build": "tsc --declaration",
-		"examples:connect": "pnpm run build; node examples/connect",
-		"examples:scp": "pnpm run build; node examples/scp"
+		"examples:connect": "pnpm run build; node lib/examples/connect.js",
+		"examples:scp": "pnpm run build; node lib/examples/scp.js"
 	},
 	"types": "lib/index.d.ts",
 	"main": "lib/index.js",

@@ -22,7 +22,7 @@ const esModuleDependencyTransform = {
 
 const project = (config) => ({
 	...esModuleDependencyTransform,
-	setupFilesAfterEnv: ['<rootDir>/../../jest.setup.cjs'],
+	setupFilesAfterEnv: ['<rootDir>/../../jest.setup.mjs'],
 	...config,
 	moduleNameMapper: {
 		'^(\\.{1,2}/.*)\\.js$': '$1',
@@ -34,7 +34,7 @@ const project = (config) => ({
 	}
 });
 
-module.exports = {
+export default {
 	preset: 'ts-jest',
 	testEnvironment: 'node',
 	...esModuleDependencyTransform,

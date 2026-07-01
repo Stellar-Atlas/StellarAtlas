@@ -9,7 +9,7 @@ import { HttpError, MailgunService } from './MailgunService.js';
 import * as Sentry from '@sentry/node';
 import express from 'express';
 import helmet from 'helmet';
-import { resolveAppEnvPath } from 'shared';
+import { resolveAppEnvPath } from 'shared/lib/env/resolve-app-env-path.js';
 import { dataSource } from './data-source.js';
 
 config({

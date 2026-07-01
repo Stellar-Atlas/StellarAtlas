@@ -3,6 +3,7 @@ node_modules
 .env
 lib/
 dist/
+server-lib/
 tsconfig.tsbuildinfo
 .pnpm-store/
 *.session.sql

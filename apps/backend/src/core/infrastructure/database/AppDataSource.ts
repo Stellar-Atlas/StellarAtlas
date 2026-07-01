@@ -1,6 +1,6 @@
 import { config } from 'dotenv';
 import { DataSource } from 'typeorm';
-import { resolveAppEnvPath } from 'shared';
+import { resolveAppEnvPath } from 'shared/lib/env/resolve-app-env-path.js';
 
 config({
 	path: resolveAppEnvPath(import.meta.url, 'backend'),
@@ -22,7 +22,7 @@ const AppDataSource = new DataSource({
 					ssl: {
 						rejectUnauthorized: false
 					}
-			  }
+				}
 			: undefined,
 	poolSize: process.env.DATABASE_POOL_SIZE
 		? parseInt(process.env.DATABASE_POOL_SIZE)
