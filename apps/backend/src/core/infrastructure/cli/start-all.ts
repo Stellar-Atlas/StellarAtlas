@@ -122,6 +122,11 @@ async function main(): Promise<void> {
 		createProcess('users', ['start:users'])
 	];
 
+	if (process.env.ENABLE_FRONTEND_V4_PREVIEW === '1') {
+		console.log('Frontend v4 preview enabled at /new-ui.');
+		serviceProcesses.push(createProcess('frontend-v4', ['start:frontend-v4']));
+	}
+
 	for (let index = 1; index <= historyScanWorkers; index += 1) {
 		serviceProcesses.push(
 			createProcess(`history-${index}`, ['start:scan-history'])

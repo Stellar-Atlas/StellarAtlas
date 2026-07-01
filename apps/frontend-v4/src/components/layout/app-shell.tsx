@@ -22,12 +22,11 @@ export function AppShell({
 						<span>StellarAtlas</span>
 					</Link>
 					<nav className="nav">
-						<NavLink href="/" label="Overview" />
+						<NavLink href="/" label="Graph" />
+						<NavLink href="/overview" label="Overview" />
 						<NavLink href="/nodes" label="Nodes" />
 						<NavLink href="/organizations" label="Organizations" />
-						<a className="nav-link" href="/docs">
-							API
-						</a>
+						<NavLink href="/docs" label="API" />
 					</nav>
 					<SearchBox network={network} />
 				</div>
