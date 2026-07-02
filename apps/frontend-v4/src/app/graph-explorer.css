@@ -11,6 +11,43 @@
 	inline-size: 100%;
 }
 
+.loading-graph {
+	background:
+		radial-gradient(
+			circle at 28% 42%,
+			rgba(88, 166, 255, 0.24),
+			transparent 18%
+		),
+		radial-gradient(
+			circle at 62% 56%,
+			rgba(116, 211, 173, 0.18),
+			transparent 20%
+		),
+		#07111d;
+}
+
+.loading-lines {
+	display: grid;
+	gap: 10px;
+	margin-block-start: 18px;
+}
+
+.loading-lines span {
+	animation: pulse 1.2s ease-in-out infinite;
+	background: rgba(255, 255, 255, 0.16);
+	border-radius: 999px;
+	block-size: 12px;
+	display: block;
+}
+
+.loading-lines span:nth-child(2) {
+	inline-size: 76%;
+}
+
+.loading-lines span:nth-child(3) {
+	inline-size: 58%;
+}
+
 .graph-overlay {
 	backdrop-filter: blur(14px);
 	background: rgba(12, 24, 38, 0.78);
@@ -373,6 +410,17 @@
 
 	100% {
 		box-shadow: 0 0 0 0 rgba(88, 166, 255, 0);
+		opacity: 1;
+	}
+}
+
+@keyframes pulse {
+	0%,
+	100% {
+		opacity: 0.46;
+	}
+
+	50% {
 		opacity: 1;
 	}
 }

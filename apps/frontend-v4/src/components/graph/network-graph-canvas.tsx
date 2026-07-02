@@ -1,6 +1,7 @@
 'use client';
 
 import { useMemo, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import type { GraphModel } from './model';
 
 interface ViewState {
@@ -22,6 +23,7 @@ const clamp = (value: number, min: number, max: number): number =>
 export function NetworkGraphCanvas({
 	model
 }: NetworkGraphCanvasProps): React.JSX.Element {
+	const router = useRouter();
 	const [view, setView] = useState<ViewState>({
 		x: 0,
 		y: 0,
@@ -41,17 +43,26 @@ export function NetworkGraphCanvas({
 			scale: clamp(current.scale + delta, 0.55, 2.4)
 		}));
 	};
+	const navigateToNode = (href: string): void => {
+		router.push(href);
+	};
 
 	return (
 		<article className="graph-panel">
 			<div className="graph-toolbar">
 				<div>
 					<h2>Trust graph</h2>
-					<span>{model.nodes.length} nodes, {model.edges.length} edges</span>
+					<span>
+						{model.nodes.length} nodes, {model.edges.length} edges
+					</span>
 				</div>
 				<div className="segmented">
-					<button onClick={() => zoom(0.18)} type="button">+</button>
-					<button onClick={() => zoom(-0.18)} type="button">-</button>
+					<button onClick={() => zoom(0.18)} type="button">
+						+
+					</button>
+					<button onClick={() => zoom(-0.18)} type="button">
+						-
+					</button>
 					<button
 						onClick={() =>
 							setView({
@@ -119,7 +130,22 @@ export function NetworkGraphCanvas({
 						);
 					})}
 					{model.nodes.map((node) => (
-						<a href={node.href} key={node.id}>
+						<g
+							aria-label={`${node.label} - ${node.detail}`}
+							key={node.id}
+							onClick={(event) => {
+								event.stopPropagation();
+								navigateToNode(node.href);
+							}}
+							onKeyDown={(event) => {
+								if (event.key === 'Enter' || event.key === ' ') {
+									event.preventDefault();
+									navigateToNode(node.href);
+								}
+							}}
+							role="link"
+							tabIndex={0}
+						>
 							<circle
 								cx={node.x}
 								cy={node.y}
@@ -139,7 +165,7 @@ export function NetworkGraphCanvas({
 								{node.label}
 							</text>
 							<title>{`${node.label} - ${node.detail}`}</title>
-						</a>
+						</g>
 					))}
 				</g>
 			</svg>

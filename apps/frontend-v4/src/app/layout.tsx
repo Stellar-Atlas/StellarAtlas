@@ -6,6 +6,7 @@ import './routes.css';
 import './graph-explorer.css';
 import './graph-interactions.css';
 import './responsive.css';
+import { AppShell } from '../components/layout/app-shell';
 
 export const metadata: Metadata = {
 	title: 'StellarAtlas',
@@ -21,7 +22,9 @@ export default function RootLayout({
 }: RootLayoutProps): React.JSX.Element {
 	return (
 		<html lang="en">
-			<body>{children}</body>
+			<body>
+				<AppShell>{children}</AppShell>
+			</body>
 		</html>
 	);
 }

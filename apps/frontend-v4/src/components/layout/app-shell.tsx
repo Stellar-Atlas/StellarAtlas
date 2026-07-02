@@ -1,18 +1,13 @@
 import Link from 'next/link';
-import type { PublicNetwork } from '../../api/types';
-import { formatDateTime } from '../../format/formatters';
+import { NetworkStrip } from './network-strip';
 import { NavLink } from './nav-link';
 import { SearchBox } from './search-box';
 
 interface AppShellProps {
 	children: React.ReactNode;
-	network: PublicNetwork;
 }
 
-export function AppShell({
-	children,
-	network
-}: AppShellProps): React.JSX.Element {
+export function AppShell({ children }: AppShellProps): React.JSX.Element {
 	return (
 		<>
 			<header className="site-header">
@@ -28,20 +23,10 @@ export function AppShell({
 						<NavLink href="/organizations" label="Organizations" />
 						<NavLink href="/docs" label="API" />
 					</nav>
-					<SearchBox network={network} />
+					<SearchBox />
 				</div>
 			</header>
-			<div className="network-strip">
-				<div className="site-header-inner strip-inner">
-					<div className="experience-switcher" aria-label="Site experience">
-						<span>Modern update</span>
-						<a href="/legacy/">Legacy version</a>
-					</div>
-					<span>{network.name}</span>
-					<span>Ledger {network.latestLedger}</span>
-					<strong>{formatDateTime(network.time)}</strong>
-				</div>
-			</div>
+			<NetworkStrip />
 			{children}
 		</>
 	);
