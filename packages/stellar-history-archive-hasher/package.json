@@ -1,0 +1,15 @@
+{
+	"name": "@stellaratlas/stellar-history-archive-hasher",
+	"version": "2.0.0",
+	"description": "StellarAtlas history archive hashing bindings",
+	"main": "stellar_history_archive_hasher.js",
+	"types": "stellar_history_archive_hasher.d.ts",
+	"files": [
+		"stellar_history_archive_hasher_bg.wasm",
+		"stellar_history_archive_hasher.js",
+		"stellar_history_archive_hasher.d.ts"
+	],
+	"engines": {
+		"node": "26.x"
+	}
+}

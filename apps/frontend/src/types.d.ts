@@ -1,4 +1,3 @@
-declare module "@stellarbeat/js-stellaratlas-shared/lib/network-schema";
 declare module "*.css";
 declare module "*.scss";
 declare module "*.sass";

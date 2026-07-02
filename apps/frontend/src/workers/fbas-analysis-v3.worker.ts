@@ -6,14 +6,14 @@ import init, {
   analyze_top_tier,
   init_panic_hook,
   MergeBy,
-} from "@stellarbeat/stellar_analysis_web";
+} from "@stellaratlas/stellar-analysis-web";
 import {
   Node,
   Organization,
   type PublicKey,
 } from "shared";
 //@ts-ignore
-import wasmUrl from "@stellarbeat/stellar_analysis_web/stellar_analysis_bg.wasm?url";
+import wasmUrl from "@stellaratlas/stellar-analysis-web/stellar_analysis_bg.wasm?url";
 //@ts-ignore
 const ctx: Worker = self;
 let initialized = false;

@@ -15,7 +15,7 @@
 	"license": "MIT",
 	"private": true,
 	"dependencies": {
-		"@stellarbeat/stellar-history-archive-hasher": "0.7.0",
+		"@stellaratlas/stellar-history-archive-hasher": "workspace:*",
 		"ajv": "^8.20.0",
 		"custom-error": "workspace:*",
 		"dotenv": "^17.4.2",

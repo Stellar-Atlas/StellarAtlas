@@ -15,6 +15,7 @@
 		{ "path": "./packages/http-helper" },
 		{ "path": "./packages/job-monitor" },
 		{ "path": "./packages/exception-logger" },
+		{ "path": "./packages/stellar-halting-analysis" },
 		{ "path": "./packages/node-connector" },
 		{ "path": "./packages/crawler" },
 		{ "path": "./packages/scp-simulation" },

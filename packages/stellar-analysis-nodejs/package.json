@@ -1,0 +1,15 @@
+{
+	"name": "@stellaratlas/stellar-analysis-nodejs",
+	"version": "2.0.0",
+	"description": "StellarAtlas Node.js FBAS analysis bindings",
+	"main": "stellar_analysis.js",
+	"types": "stellar_analysis.d.ts",
+	"files": [
+		"stellar_analysis_bg.wasm",
+		"stellar_analysis.js",
+		"stellar_analysis.d.ts"
+	],
+	"engines": {
+		"node": "26.x"
+	}
+}

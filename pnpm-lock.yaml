@@ -102,12 +102,12 @@ importers:
       '@sentry/node':
         specifier: ^7.119.1
         version: 7.120.3
-      '@stellarbeat/stellar-history-archive-hasher':
-        specifier: 0.7.0
-        version: 0.7.0
-      '@stellarbeat/stellar_analysis_nodejs':
-        specifier: ^0.6.2
-        version: 0.6.2
+      '@stellaratlas/stellar-analysis-nodejs':
+        specifier: workspace:*
+        version: link:../../packages/stellar-analysis-nodejs
+      '@stellaratlas/stellar-history-archive-hasher':
+        specifier: workspace:*
+        version: link:../../packages/stellar-history-archive-hasher
       ajv:
         specifier: ^8.20.0
         version: 8.20.0
@@ -280,12 +280,12 @@ importers:
       '@sentry/vue':
         specifier: ^8.34.0
         version: 8.55.0(vue@2.7.16)
-      '@stellarbeat/stellar-halting-analysis':
-        specifier: 1.2.0
-        version: 1.2.0
-      '@stellarbeat/stellar_analysis_web':
-        specifier: ^0.7.0
-        version: 0.7.0
+      '@stellaratlas/stellar-analysis-web':
+        specifier: workspace:*
+        version: link:../../packages/stellar-analysis-web
+      '@stellaratlas/stellar-halting-analysis':
+        specifier: workspace:*
+        version: link:../../packages/stellar-halting-analysis
       bootstrap:
         specifier: 4.6.1
         version: 4.6.1(jquery@3.7.1)(popper.js@1.16.1)
@@ -459,169 +459,6 @@ importers:
         specifier: 3.3.6
         version: 3.3.6(typescript@6.0.3)
 
-  apps/frontend-v3:
-    dependencies:
-      '@sentry/vue':
-        specifier: ^8.34.0
-        version: 8.55.0(vue@2.7.16)
-      '@stellarbeat/stellar-halting-analysis':
-        specifier: 1.2.0
-        version: 1.2.0
-      '@stellarbeat/stellar_analysis_web':
-        specifier: ^0.7.0
-        version: 0.7.0
-      bootstrap:
-        specifier: 4.6.1
-        version: 4.6.1(jquery@3.7.1)(popper.js@1.16.1)
-      bootstrap-icons:
-        specifier: ^1.11.3
-        version: 1.13.1
-      bootstrap-vue:
-        specifier: 2.23.1
-        version: 2.23.1(jquery@3.7.1)(vue@2.7.16)
-      chart.js:
-        specifier: ^4.5.1
-        version: 4.5.1
-      chartjs-adapter-date-fns:
-        specifier: ^3.0.0
-        version: 3.0.0(chart.js@4.5.1)(date-fns@3.6.0)
-      connect-history-api-fallback:
-        specifier: ^2.0.0
-        version: 2.0.0
-      d3-drag:
-        specifier: ^3.0.0
-        version: 3.0.0
-      d3-force:
-        specifier: ^3.0.0
-        version: 3.0.0
-      d3-polygon:
-        specifier: ^3.0.1
-        version: 3.0.1
-      d3-selection:
-        specifier: ^3.0.0
-        version: 3.0.0
-      d3-shape:
-        specifier: ^3.2.0
-        version: 3.2.0
-      d3-transition:
-        specifier: ^3.0.1
-        version: 3.0.1(d3-selection@3.0.0)
-      d3-zoom:
-        specifier: ^3.0.0
-        version: 3.0.0
-      date-fns:
-        specifier: ^3.6.0
-        version: 3.6.0
-      dotenv:
-        specifier: ^17.4.2
-        version: 17.4.2
-      express:
-        specifier: ^4.21.2
-        version: 4.21.2
-      jquery:
-        specifier: ^3.7.1
-        version: 3.7.1
-      js-cookie:
-        specifier: ^3.0.8
-        version: 3.0.8
-      jsondiffpatch:
-        specifier: ^0.6.0
-        version: 0.6.2
-      leaflet:
-        specifier: 1.9.4
-        version: 1.9.4
-      leaflet.markercluster:
-        specifier: ^1.5.3
-        version: 1.5.3(leaflet@1.9.4)
-      popper.js:
-        specifier: 1.16.1
-        version: 1.16.1
-      portal-vue:
-        specifier: ^2.1.7
-        version: 2.1.7(vue@2.7.16)
-      scp-simulation:
-        specifier: workspace:*
-        version: link:../../packages/scp-simulation
-      shared:
-        specifier: workspace:*
-        version: link:../../packages/shared
-      vue:
-        specifier: ^2.7.16
-        version: 2.7.16
-      vue-multiselect:
-        specifier: ^2.1.9
-        version: 2.1.9
-      vue-router:
-        specifier: ^3.6.5
-        version: 3.6.5(vue@2.7.16)
-    devDependencies:
-      '@types/bootstrap':
-        specifier: ^5.2.11
-        version: 5.2.11
-      '@types/d3-drag':
-        specifier: ^3.0.7
-        version: 3.0.7
-      '@types/d3-force':
-        specifier: ^3.0.10
-        version: 3.0.10
-      '@types/d3-polygon':
-        specifier: ^3.0.2
-        version: 3.0.2
-      '@types/d3-selection':
-        specifier: ^3.0.10
-        version: 3.0.11
-      '@types/d3-shape':
-        specifier: ^3.1.8
-        version: 3.1.8
-      '@types/d3-zoom':
-        specifier: ^3.0.8
-        version: 3.0.8
-      '@types/jquery':
-        specifier: ^3.5.30
-        version: 3.5.32
-      '@types/leaflet':
-        specifier: ^1.9.21
-        version: 1.9.21
-      '@types/leaflet.markercluster':
-        specifier: ^1.5.6
-        version: 1.5.6
-      '@vitejs/plugin-vue2':
-        specifier: ^2.3.4
-        version: 2.3.4(vite@6.3.5(@types/node@26.0.1)(sass@1.101.0))(vue@2.7.16)
-      ajv-formats:
-        specifier: ^2.1.1
-        version: 2.1.1(ajv@8.20.0)
-      jest-localstorage-mock:
-        specifier: ^2.4.26
-        version: 2.4.26
-      sass:
-        specifier: 1.101.0
-        version: 1.101.0
-      tslib:
-        specifier: ^2.7.0
-        version: 2.8.1
-      typescript:
-        specifier: ^6.0.3
-        version: 6.0.3
-      vite:
-        specifier: ^6.2.1
-        version: 6.3.5(@types/node@26.0.1)(sass@1.101.0)
-      vite-bundle-visualizer:
-        specifier: ^1.2.1
-        version: 1.2.1(rollup@4.44.1)
-      vite-plugin-eslint:
-        specifier: ^1.8.1
-        version: 1.8.1(eslint@10.6.0)(vite@6.3.5(@types/node@26.0.1)(sass@1.101.0))
-      vite-plugin-static-copy:
-        specifier: ^4.1.1
-        version: 4.1.1(vite@6.3.5(@types/node@26.0.1)(sass@1.101.0))
-      vite-plugin-top-level-await:
-        specifier: ^1.6.0
-        version: 1.6.0(rollup@4.44.1)(vite@6.3.5(@types/node@26.0.1)(sass@1.101.0))
-      vue-tsc:
-        specifier: 3.3.6
-        version: 3.3.6(typescript@6.0.3)
-
   apps/frontend-v4:
     dependencies:
       3d-force-graph:
@@ -661,9 +498,9 @@ importers:
 
   apps/history-scanner:
     dependencies:
-      '@stellarbeat/stellar-history-archive-hasher':
-        specifier: 0.7.0
-        version: 0.7.0
+      '@stellaratlas/stellar-history-archive-hasher':
+        specifier: workspace:*
+        version: link:../../packages/stellar-history-archive-hasher
       ajv:
         specifier: ^8.20.0
         version: 8.20.0
@@ -924,6 +761,14 @@ importers:
       typescript-json-schema:
         specifier: ^0.67.4
         version: 0.67.4(@swc/core@1.15.43)(@swc/wasm@1.15.43)
+
+  packages/stellar-analysis-nodejs: {}
+
+  packages/stellar-analysis-web: {}
+
+  packages/stellar-halting-analysis: {}
+
+  packages/stellar-history-archive-hasher: {}
 
 packages:
 
@@ -2494,18 +2339,6 @@ packages:
     resolution: {integrity: sha512-bxKohaiyKVqoudRhbOOHeHhHIaeYV5Zab4rCjxhP4Ty1h1ozTLBOv8lWFnZz9ilBzXG8Bb7usQI3rlEcfvUynA==}
     engines: {node: '>=22.0.0'}
     hasBin: true
-
-  '@stellarbeat/stellar-halting-analysis@1.2.0':
-    resolution: {integrity: sha512-W/OfQOgIcogIxpwyQ93RTr8Ke55z4/mvqG9UNUdB4AgJLwfgelYFn+RMdmWw4I77koQ3zdw19kuTm6pbg4yUkw==}
-
-  '@stellarbeat/stellar-history-archive-hasher@0.7.0':
-    resolution: {integrity: sha512-lpTmgPAPNwFF2EF7O7yhQ2chFaKK+L6KnSF82jk6PXw5BG/fuXU4awpcdzVvYBLtvWpzGj6tPKY21SgYdgCMkA==}
-
-  '@stellarbeat/stellar_analysis_nodejs@0.6.2':
-    resolution: {integrity: sha512-YHyZ2DvO3Ouyhs3fh3Iq5jHHg4Nc4hjKXmkE9DYp9RCebFYkus8cgDmLb17VH21bE/Z+G6S8eUrG4wVvGlQw3A==}
-
-  '@stellarbeat/stellar_analysis_web@0.7.0':
-    resolution: {integrity: sha512-0ygZnhYHtyQBKHMpwDYclFwT0cvnGg+589AZQC0VcysJG01uPX0Z9PgXFOuDmZO6mfxHrNUASCU/QsyPyINrsA==}
 
   '@swc/core-darwin-arm64@1.15.43':
     resolution: {integrity: sha512-v1aVuvXdo/BHxJzco9V2xpHrvwWmhfS8t6gziY5wJxd+Z2h8AeJRnAwPD8itCDaGXVBwJ/CaKfxEzTkG0Va0OA==}
@@ -7760,14 +7593,6 @@ snapshots:
     transitivePeerDependencies:
       - debug
       - supports-color
-
-  '@stellarbeat/stellar-halting-analysis@1.2.0': {}
-
-  '@stellarbeat/stellar-history-archive-hasher@0.7.0': {}
-
-  '@stellarbeat/stellar_analysis_nodejs@0.6.2': {}
-
-  '@stellarbeat/stellar_analysis_web@0.7.0': {}
 
   '@swc/core-darwin-arm64@1.15.43':
     optional: true

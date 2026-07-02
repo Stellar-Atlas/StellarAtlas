@@ -1,0 +1,23 @@
+{
+	"name": "@stellaratlas/stellar-halting-analysis",
+	"version": "2.0.0",
+	"description": "StellarAtlas halting analysis algorithms for Stellar quorum graphs",
+	"type": "module",
+	"scripts": {
+		"build": "tsc --build"
+	},
+	"main": "lib/index.js",
+	"types": "lib/index.d.ts",
+	"exports": {
+		".": {
+			"types": "./lib/index.d.ts",
+			"import": "./lib/index.js"
+		}
+	},
+	"files": [
+		"lib/**/*"
+	],
+	"engines": {
+		"node": "26.x"
+	}
+}
