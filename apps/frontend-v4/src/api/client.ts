@@ -1,6 +1,7 @@
 import type {
 	ApiFailure,
 	PublicHistoryArchiveScan,
+	PublicHistoryArchiveScanLogEntry,
 	PublicNetwork,
 	PublicNode,
 	PublicOrganization,
@@ -146,6 +147,15 @@ export const fetchHistoryArchiveScan = (
 ): Promise<PublicHistoryArchiveScan | null> =>
 	fetchNullableJson<PublicHistoryArchiveScan>(
 		`/v1/history-scan/${encodeURIComponent(historyUrl)}`,
+		options
+	);
+
+export const fetchHistoryArchiveScanLogs = (
+	historyUrl: string,
+	options?: FetchOptions
+): Promise<PublicHistoryArchiveScanLogEntry[]> =>
+	fetchJson<PublicHistoryArchiveScanLogEntry[]>(
+		`/v1/history-scan/logs/${encodeURIComponent(historyUrl)}`,
 		options
 	);
 

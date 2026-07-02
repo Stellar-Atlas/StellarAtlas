@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import type { PublicNetwork } from '../../api/types';
+import { fetchBrowserPublicNetwork } from '../../api/browser-client';
 import { getNodeLabel, getOrganizationLabel } from '../../domain/network';
 
 interface SearchOption {
@@ -32,17 +33,6 @@ const buildSearchOptions = (network: PublicNetwork): SearchOption[] => [
 	}))
 ];
 
-async function fetchSearchNetwork(signal: AbortSignal): Promise<PublicNetwork> {
-	const response = await fetch('/v1', {
-		headers: { Accept: 'application/json' },
-		signal
-	});
-
-	if (!response.ok)
-		throw new Error(`Search request returned ${response.status}`);
-	return response.json() as Promise<PublicNetwork>;
-}
-
 export function SearchBox(): React.JSX.Element {
 	const router = useRouter();
 	const [query, setQuery] = useState('');
@@ -66,7 +56,7 @@ export function SearchBox(): React.JSX.Element {
 
 	useEffect(() => {
 		const abortController = new AbortController();
-		void fetchSearchNetwork(abortController.signal)
+		void fetchBrowserPublicNetwork(abortController.signal)
 			.then(setNetwork)
 			.catch(() => undefined);
 

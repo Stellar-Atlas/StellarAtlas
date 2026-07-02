@@ -6,6 +6,10 @@
 	position: relative;
 }
 
+body:has(.graph-workspace:not(.graph-loading-workspace)) .graph-loading-workspace {
+	display: none;
+}
+
 .graph-canvas {
 	block-size: 100%;
 	inline-size: 100%;
@@ -202,6 +206,47 @@
 	text-transform: uppercase;
 }
 
+.scp-packet-legend {
+	display: grid;
+	gap: 6px;
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+	margin-block-start: 10px;
+}
+
+.scp-packet-legend span {
+	align-items: center;
+	color: #aebdcd;
+	display: flex;
+	font-size: 0.68rem;
+	font-weight: 800;
+	gap: 6px;
+	text-transform: uppercase;
+}
+
+.scp-packet-legend span::before {
+	border-radius: 999px;
+	block-size: 8px;
+	content: "";
+	display: inline-block;
+	inline-size: 8px;
+}
+
+.scp-packet-legend .nominate::before {
+	background: #f7cf4d;
+}
+
+.scp-packet-legend .prepare::before {
+	background: #58a6ff;
+}
+
+.scp-packet-legend .confirm::before {
+	background: #5dd39e;
+}
+
+.scp-packet-legend .externalize::before {
+	background: #7ee787;
+}
+
 .scp-flow-focus {
 	align-items: center;
 	background: rgba(88, 166, 255, 0.12);
@@ -242,17 +287,28 @@
 	margin-block-start: 10px;
 }
 
-.scp-flow-list div {
+.scp-flow-list button {
 	align-items: center;
+	background: transparent;
+	border: 0;
 	border-block-start: 1px solid rgba(160, 190, 220, 0.1);
+	color: #e7edf5;
+	cursor: pointer;
 	display: grid;
 	gap: 8px;
 	grid-template-columns: 34px minmax(0, 1fr) auto;
 	padding-block-start: 6px;
+	text-align: left;
 }
 
-.scp-flow-list div.active strong,
-.scp-flow-list div.active small {
+.scp-flow-list button:hover,
+.scp-flow-list button:focus-visible {
+	background: rgba(88, 166, 255, 0.12);
+	outline: 1px solid rgba(88, 166, 255, 0.34);
+}
+
+.scp-flow-list button.active strong,
+.scp-flow-list button.active small {
 	color: #58a6ff;
 }
 
@@ -279,8 +335,45 @@
 	display: grid;
 	gap: 8px;
 	margin-block-start: 12px;
-	max-block-size: calc(100vh - 190px);
+	max-block-size: calc(100vh - 286px);
 	overflow: auto;
+}
+
+.selected-organization-card {
+	align-items: center;
+	background: rgba(88, 166, 255, 0.14);
+	border: 1px solid rgba(88, 166, 255, 0.36);
+	border-radius: 8px;
+	display: grid;
+	gap: 10px;
+	grid-template-columns: 14px minmax(0, 1fr);
+	margin-block-start: 12px;
+	padding: 10px;
+}
+
+.selected-organization-card > span {
+	border-radius: 999px;
+	block-size: 14px;
+	inline-size: 14px;
+}
+
+.selected-organization-card strong,
+.selected-organization-card small,
+.selected-organization-card em {
+	display: block;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.selected-organization-card small {
+	color: #aebdcd;
+}
+
+.selected-organization-card em {
+	color: #7ee787;
+	font-style: normal;
+	margin-block-start: 3px;
 }
 
 .organization-list button {
@@ -367,6 +460,86 @@
 	gap: 6px;
 	margin-block-end: 14px;
 	padding: 10px;
+}
+
+.node-scan-log,
+.node-quorum-table {
+	background: rgba(255, 255, 255, 0.055);
+	border: 1px solid rgba(160, 190, 220, 0.16);
+	border-radius: 8px;
+	display: grid;
+	gap: 8px;
+	margin-block-end: 14px;
+	padding: 10px;
+}
+
+.node-panel-heading {
+	align-items: center;
+	display: flex;
+	justify-content: space-between;
+}
+
+.node-panel-heading span {
+	color: #aebdcd;
+	font-size: 0.72rem;
+	font-weight: 800;
+	text-transform: uppercase;
+}
+
+.scan-log-card {
+	border-radius: 7px;
+	display: grid;
+	gap: 3px;
+	padding: 9px;
+}
+
+.scan-log-card.good {
+	background: rgba(93, 211, 158, 0.13);
+	border: 1px solid rgba(93, 211, 158, 0.34);
+}
+
+.scan-log-card.warning {
+	background: rgba(247, 207, 77, 0.13);
+	border: 1px solid rgba(247, 207, 77, 0.34);
+}
+
+.scan-log-card span,
+.scan-log-card small {
+	color: #aebdcd;
+}
+
+.scan-log-card code {
+	color: #f7cf4d;
+	overflow-wrap: anywhere;
+}
+
+.quorum-row {
+	border-block-start: 1px solid rgba(160, 190, 220, 0.12);
+	display: grid;
+	gap: 8px;
+	grid-template-columns: 62px minmax(0, 1fr);
+	padding-block-start: 7px;
+}
+
+.quorum-row span {
+	color: #f7cf4d;
+	font-weight: 800;
+}
+
+.quorum-row div {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 5px;
+}
+
+.quorum-row em {
+	background: rgba(247, 207, 77, 0.12);
+	border: 1px solid rgba(247, 207, 77, 0.22);
+	border-radius: 999px;
+	color: #e7edf5;
+	font-size: 0.7rem;
+	font-style: normal;
+	padding: 2px 6px;
 }
 
 .node-scp-feed div {

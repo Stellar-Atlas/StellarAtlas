@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import type {
 	PublicHistoryArchiveScan,
+	PublicHistoryArchiveScanLogEntry,
 	PublicNetwork,
 	PublicNode
 } from '../../api/types';
@@ -22,15 +23,18 @@ import {
 	formatNode30DayValidating
 } from '../../domain/availability';
 import { StatusTags } from '../status-tags';
+import { HistoryArchiveScanLog } from './history-archive-scan-log';
 
 interface NodeDetailProps {
 	historyArchiveScan: PublicHistoryArchiveScan | null;
+	historyArchiveScanLogs: readonly PublicHistoryArchiveScanLogEntry[];
 	network: PublicNetwork;
 	node: PublicNode;
 }
 
 export function NodeDetail({
 	historyArchiveScan,
+	historyArchiveScanLogs,
 	network,
 	node
 }: NodeDetailProps): React.JSX.Element {
@@ -40,8 +44,13 @@ export function NodeDetail({
 	const active30Days = formatNode30DayActive(node);
 	const validating24Hours = formatNode24HourValidating(node);
 	const validating30Days = formatNode30DayValidating(node);
+	const hasHistoryArchive =
+		typeof node.historyUrl === 'string' && node.historyUrl.length > 0;
 	const showArchivePanel =
-		node.historyArchiveHasError || archiveErrors.length > 0 || historyArchiveScan !== null;
+		hasHistoryArchive ||
+		node.historyArchiveHasError ||
+		archiveErrors.length > 0 ||
+		historyArchiveScan !== null;
 
 	return (
 		<section className="detail-grid">
@@ -138,6 +147,12 @@ export function NodeDetail({
 							))}
 						</ul>
 					) : null}
+					<div className="archive-log-section">
+						<div className="panel-heading archive-log-heading">
+							<h3>Scan run log</h3>
+						</div>
+						<HistoryArchiveScanLog logs={historyArchiveScanLogs} />
+					</div>
 				</article>
 			)}
 		</section>

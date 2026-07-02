@@ -2,6 +2,7 @@ import { Suspense } from 'react';
 import { notFound } from 'next/navigation';
 import {
 	fetchHistoryArchiveScan,
+	fetchHistoryArchiveScanLogs,
 	fetchPublicNetwork
 } from '../../../api/client';
 import { PageHeading } from '../../../components/layout/page-heading';
@@ -27,9 +28,12 @@ async function NodeDetailRouteContent({
 	);
 
 	if (!node) notFound();
-	const historyArchiveScan = node.historyUrl
-		? await fetchHistoryArchiveScan(node.historyUrl)
-		: null;
+	const [historyArchiveScan, historyArchiveScanLogs] = node.historyUrl
+		? await Promise.all([
+				fetchHistoryArchiveScan(node.historyUrl),
+				fetchHistoryArchiveScanLogs(node.historyUrl)
+			])
+		: [null, []];
 
 	return (
 		<main className="shell">
@@ -40,6 +44,7 @@ async function NodeDetailRouteContent({
 			/>
 			<NodeDetail
 				historyArchiveScan={historyArchiveScan}
+				historyArchiveScanLogs={historyArchiveScanLogs}
 				network={network}
 				node={node}
 			/>

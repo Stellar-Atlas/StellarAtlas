@@ -12,7 +12,7 @@ export function RouteLoadingPanel(): React.JSX.Element {
 
 export function GraphLoadingPanel(): React.JSX.Element {
 	return (
-		<main className="graph-workspace">
+		<main className="graph-workspace graph-loading-workspace">
 			<div className="graph-canvas loading-graph" />
 			<section className="graph-overlay graph-summary">
 				<p className="eyebrow">Public Stellar Network</p>

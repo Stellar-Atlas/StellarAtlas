@@ -320,6 +320,107 @@ td {
 	font-weight: 700;
 }
 
+.archive-log-section {
+	border-block-start: 1px solid var(--border);
+}
+
+.archive-log-heading {
+	padding-block-start: 18px;
+}
+
+.archive-log-heading h3 {
+	font-size: 1rem;
+	margin: 0;
+}
+
+.archive-scan-log {
+	display: grid;
+	gap: 12px;
+	padding: 0 18px 18px;
+}
+
+.archive-scan-log-toolbar {
+	align-items: center;
+	display: flex;
+	gap: 12px;
+	justify-content: space-between;
+}
+
+.muted-inline {
+	color: var(--muted);
+}
+
+.archive-scan-log-list {
+	display: grid;
+	gap: 10px;
+	list-style: none;
+	margin: 0;
+	padding: 0;
+}
+
+.archive-scan-log-list > li {
+	background: #f8fbfe;
+	border: 1px solid var(--border);
+	border-radius: 8px;
+	display: grid;
+	gap: 12px;
+	padding: 14px;
+}
+
+.archive-scan-log-list > li.has-error {
+	background: #fffaf0;
+	border-color: #ead185;
+}
+
+.archive-scan-log-row,
+.archive-scan-log-row div {
+	align-items: center;
+	display: flex;
+	gap: 10px;
+	justify-content: space-between;
+}
+
+.archive-scan-log-row div {
+	justify-content: flex-start;
+}
+
+.archive-scan-log-row span:not(.tag) {
+	color: var(--muted);
+	font-size: 0.9rem;
+}
+
+.archive-scan-log-metrics {
+	display: grid;
+	gap: 10px;
+	grid-template-columns: repeat(5, minmax(0, 1fr));
+	margin: 0;
+}
+
+.archive-scan-log-metrics div {
+	border-block-end: 0;
+	display: grid;
+	gap: 4px;
+	grid-template-columns: none;
+	padding: 0;
+}
+
+.archive-scan-log-metrics dt {
+	color: var(--muted);
+	font-size: 0.72rem;
+	font-weight: 800;
+	text-transform: uppercase;
+}
+
+.archive-scan-log-metrics dd {
+	font-weight: 800;
+	margin: 0;
+	overflow-wrap: anywhere;
+}
+
+.archive-error-list.compact {
+	padding: 0;
+}
+
 .docs-panel,
 .error-panel {
 	display: grid;

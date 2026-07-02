@@ -13,6 +13,10 @@
 	.table-controls {
 		inline-size: 100%;
 	}
+
+	.archive-scan-log-metrics {
+		grid-template-columns: repeat(3, minmax(0, 1fr));
+	}
 }
 
 @media (max-width: 720px) {
@@ -42,6 +46,17 @@
 
 	.row,
 	.details div {
+		grid-template-columns: 1fr;
+	}
+
+	.archive-scan-log-toolbar,
+	.archive-scan-log-row,
+	.archive-scan-log-row div {
+		align-items: flex-start;
+		flex-direction: column;
+	}
+
+	.archive-scan-log-metrics {
 		grid-template-columns: 1fr;
 	}
 

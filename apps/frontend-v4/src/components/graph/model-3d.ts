@@ -21,7 +21,9 @@ export interface Graph3DNode extends NodeObject {
 
 export interface Graph3DLink extends LinkObject<Graph3DNode> {
 	color: string;
+	label: string;
 	opacity: number;
+	relationship: 'quorum-dependency';
 	source: string;
 	target: string;
 }
@@ -195,6 +197,7 @@ const buildOrganizations = (network: PublicNetwork): Graph3DOrganization[] => {
 
 const buildLinks = (nodes: PublicNode[]): Graph3DLink[] => {
 	const nodeIds = new Set(nodes.map((node) => node.publicKey));
+	const nodesById = new Map(nodes.map((node) => [node.publicKey, node]));
 	const linkIds = new Set<string>();
 	const links: Graph3DLink[] = [];
 
@@ -206,9 +209,14 @@ const buildLinks = (nodes: PublicNode[]): Graph3DLink[] => {
 			const id = `${node.publicKey}:${validator}`;
 			if (linkIds.has(id)) continue;
 			linkIds.add(id);
+			const targetNode = nodesById.get(validator);
 			links.push({
 				color: '#91d5ff',
+				label: `${getNodeLabel(node)} quorum set includes ${
+					targetNode ? getNodeLabel(targetNode) : validator.slice(0, 12)
+				}`,
 				opacity: 0.18,
+				relationship: 'quorum-dependency',
 				source: node.publicKey,
 				target: validator
 			});
@@ -231,5 +239,5 @@ export const getNodeOrganizationName = (
 	node: PublicNode
 ): string => {
 	const organization = getOrganizationForNode(network, node);
-	return organization ? getOrganizationLabel(organization) : 'Unassigned';
+	return organization ? getOrganizationLabel(organization) : 'Unaffiliated validators';
 };

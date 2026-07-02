@@ -1,7 +1,12 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import type { PublicNetwork, PublicScpStatementObservation } from '../../api/types';
+import type {
+	PublicLedgerTransaction,
+	PublicNetwork,
+	PublicScpStatementObservation
+} from '../../api/types';
+import { fetchBrowserLedgerTransactions } from '../../api/browser-client';
 import { getNodeLabel } from '../../domain/network';
 
 interface ScpLiveFeedProps {
@@ -19,35 +24,17 @@ interface StatementSummary {
 	txSetHash: string | null;
 }
 
-interface HorizonTransactionsResponse {
-	_embedded?: {
-		records?: HorizonTransactionRecord[];
-	};
-	_links?: {
-		next?: {
-			href?: string;
-		};
-	};
-}
-
-interface HorizonTransactionRecord {
-	created_at: string;
-	fee_charged: string;
-	hash: string;
-	operation_count: number;
-	source_account: string;
-	successful: boolean;
-}
-
 interface TransactionSetState {
 	message: string | null;
-	records: HorizonTransactionRecord[];
+	records: readonly PublicLedgerTransaction[];
 	slotIndex: string | null;
 	status: 'idle' | 'loading' | 'loaded' | 'error';
 }
 
-const horizonBaseUrl = 'https://horizon.stellar.org';
-const maxTransactionRecords = 600;
+interface SelectedTransactionSet {
+	slotIndex: string;
+	txSetHash: string | null;
+}
 
 const getStatementNodeLabel = (
 	network: PublicNetwork,
@@ -103,49 +90,18 @@ const summarizeStatements = (
 	return summary;
 };
 
-const buildLedgerTransactionsUrl = (slotIndex: string): string => {
-	const url = new URL(
-		`/ledgers/${encodeURIComponent(slotIndex)}/transactions`,
-		horizonBaseUrl
-	);
-	url.searchParams.set('order', 'asc');
-	url.searchParams.set('limit', '200');
-	return url.toString();
-};
-
-const fetchLedgerTransactions = async (
-	slotIndex: string,
-	signal: AbortSignal
-): Promise<HorizonTransactionRecord[]> => {
-	const records: HorizonTransactionRecord[] = [];
-	let nextUrl: string | null = buildLedgerTransactionsUrl(slotIndex);
-
-	while (nextUrl && records.length < maxTransactionRecords) {
-		const response = await fetch(nextUrl, {
-			cache: 'no-store',
-			headers: { Accept: 'application/json' },
-			signal
-		});
-		if (!response.ok)
-			throw new Error(`Horizon returned HTTP ${response.status}`);
-
-		const payload = (await response.json()) as HorizonTransactionsResponse;
-		const pageRecords = payload._embedded?.records ?? [];
-		records.push(...pageRecords);
-		nextUrl =
-			pageRecords.length > 0 && records.length < maxTransactionRecords
-				? (payload._links?.next?.href ?? null)
-				: null;
-	}
-
-	return records.slice(0, maxTransactionRecords);
-};
-
 const getStellarExpertTransactionUrl = (hash: string): string =>
 	`https://stellar.expert/explorer/public/tx/${encodeURIComponent(hash)}`;
 
 const shortenHash = (hash: string): string =>
 	hash.length > 18 ? `${hash.slice(0, 12)}...${hash.slice(-6)}` : hash;
+
+const getStatementTransactionSet = (
+	statement: PublicScpStatementObservation
+): SelectedTransactionSet => ({
+	slotIndex: statement.slotIndex,
+	txSetHash: statement.values[0]?.txSetHash ?? null
+});
 
 export function ScpLiveFeed({
 	activeStatement,
@@ -153,8 +109,8 @@ export function ScpLiveFeed({
 	statements
 }: ScpLiveFeedProps): React.JSX.Element {
 	const summary = summarizeStatements(statements);
-	const summarySlotIndex = summary?.slotIndex ?? null;
-	const [isTransactionSetOpen, setIsTransactionSetOpen] = useState(false);
+	const [selectedTransactionSet, setSelectedTransactionSet] =
+		useState<SelectedTransactionSet | null>(null);
 	const [transactionSetState, setTransactionSetState] =
 		useState<TransactionSetState>({
 			message: null,
@@ -163,31 +119,42 @@ export function ScpLiveFeed({
 			status: 'idle'
 		});
 	const transactionSetStatus = useMemo(() => {
-		if (!summary) return null;
-		if (!isTransactionSetOpen) return null;
-		if (transactionSetState.slotIndex !== summary.slotIndex) return null;
+		if (!selectedTransactionSet) return null;
+		if (transactionSetState.slotIndex !== selectedTransactionSet.slotIndex)
+			return null;
 		return transactionSetState;
-	}, [isTransactionSetOpen, summary, transactionSetState]);
+	}, [selectedTransactionSet, transactionSetState]);
+
+	const openTransactionSet = (transactionSet: SelectedTransactionSet): void => {
+		setSelectedTransactionSet(transactionSet);
+	};
+
+	const closeTransactionSet = (): void => {
+		setSelectedTransactionSet(null);
+	};
 
 	useEffect(() => {
-		if (!isTransactionSetOpen || !summarySlotIndex) return;
+		if (!selectedTransactionSet) return;
 		const abortController = new AbortController();
 		setTransactionSetState({
 			message: null,
 			records: [],
-			slotIndex: summarySlotIndex,
+			slotIndex: selectedTransactionSet.slotIndex,
 			status: 'loading'
 		});
 
-		void fetchLedgerTransactions(summarySlotIndex, abortController.signal)
-			.then((records) => {
+		void fetchBrowserLedgerTransactions(
+			selectedTransactionSet.slotIndex,
+			abortController.signal
+		)
+			.then((payload) => {
 				setTransactionSetState({
 					message:
-						records.length === maxTransactionRecords
-							? `Showing the first ${maxTransactionRecords} ledger transactions.`
+						payload.truncated
+							? `Showing the first ${payload.records.length} ledger transactions.`
 							: null,
-					records,
-					slotIndex: summarySlotIndex,
+					records: payload.records,
+					slotIndex: selectedTransactionSet.slotIndex,
 					status: 'loaded'
 				});
 			})
@@ -196,28 +163,34 @@ export function ScpLiveFeed({
 				setTransactionSetState({
 					message: error.message,
 					records: [],
-					slotIndex: summarySlotIndex,
+					slotIndex: selectedTransactionSet.slotIndex,
 					status: 'error'
 				});
 			});
 
 		return () => abortController.abort();
-	}, [isTransactionSetOpen, summarySlotIndex]);
+	}, [selectedTransactionSet]);
 
 	useEffect(() => {
-		if (!isTransactionSetOpen) return;
+		if (!selectedTransactionSet) return;
 		const closeOnEscape = (event: KeyboardEvent): void => {
-			if (event.key === 'Escape') setIsTransactionSetOpen(false);
+			if (event.key === 'Escape') closeTransactionSet();
 		};
 		window.addEventListener('keydown', closeOnEscape);
 		return () => window.removeEventListener('keydown', closeOnEscape);
-	}, [isTransactionSetOpen]);
+	}, [selectedTransactionSet]);
 
 	return (
 		<section className="scp-live-feed" aria-label="SCP live feed">
 			<div className="scp-live-heading">
 				<h2>SCP live feed</h2>
 				<span>{statements.length > 0 ? 'observed' : 'collecting'}</span>
+			</div>
+			<div className="scp-packet-legend" aria-label="SCP packet color legend">
+				<span className="nominate">Nominate</span>
+				<span className="prepare">Vote</span>
+				<span className="confirm">Confirm</span>
+				<span className="externalize">Externalize</span>
 			</div>
 			{activeStatement && (
 				<div className="scp-flow-focus">
@@ -240,7 +213,12 @@ export function ScpLiveFeed({
 					<button
 						className="tx-set-button"
 						disabled={!summary.txSetHash}
-						onClick={() => setIsTransactionSetOpen((current) => !current)}
+						onClick={() =>
+							openTransactionSet({
+								slotIndex: summary.slotIndex,
+								txSetHash: summary.txSetHash
+							})
+						}
 						type="button"
 					>
 						<span>Transaction set</span>
@@ -258,14 +236,14 @@ export function ScpLiveFeed({
 					</div>
 				</div>
 			)}
-			{summary && isTransactionSetOpen && (
+			{selectedTransactionSet && (
 				<div
 					className="tx-set-modal-backdrop"
-					onClick={() => setIsTransactionSetOpen(false)}
+					onClick={closeTransactionSet}
 					role="presentation"
 				>
 					<article
-						aria-label={`Transaction set for ledger ${summary.slotIndex}`}
+						aria-label={`Transaction set for ledger ${selectedTransactionSet.slotIndex}`}
 						aria-modal="true"
 						className="tx-set-modal"
 						onClick={(event) => event.stopPropagation()}
@@ -273,12 +251,14 @@ export function ScpLiveFeed({
 					>
 						<div className="tx-set-panel-heading">
 							<div>
-								<strong>Ledger {summary.slotIndex}</strong>
-								<code>{summary.txSetHash ?? 'pending transaction set'}</code>
+								<strong>Ledger {selectedTransactionSet.slotIndex}</strong>
+								<code>
+									{selectedTransactionSet.txSetHash ?? 'pending transaction set'}
+								</code>
 							</div>
 							<button
 								aria-label="Close transaction set"
-								onClick={() => setIsTransactionSetOpen(false)}
+								onClick={closeTransactionSet}
 								type="button"
 							>
 								&times;
@@ -306,7 +286,7 @@ export function ScpLiveFeed({
 										target="_blank"
 									>
 										<code>{shortenHash(record.hash)}</code>
-										<span>{record.operation_count} ops</span>
+										<span>{record.operationCount} ops</span>
 										<span>{record.successful ? 'success' : 'failed'}</span>
 									</a>
 								))}
@@ -317,20 +297,24 @@ export function ScpLiveFeed({
 			)}
 			<div className="scp-flow-list">
 				{statements.map((statement) => (
-					<div
+					<button
 						className={
 							statement.statementHash === activeStatement?.statementHash
 								? 'active'
 								: ''
 						}
 						key={statement.statementHash}
+						onClick={() => openTransactionSet(getStatementTransactionSet(statement))}
+						type="button"
 					>
-						<span>{formatStatementAge(statement)}</span>
+						<span suppressHydrationWarning>
+							{formatStatementAge(statement)}
+						</span>
 						<strong>{getStatementNodeLabel(network, statement)}</strong>
 						<small>
 							{statement.statementType} / slot {statement.slotIndex}
 						</small>
-					</div>
+					</button>
 				))}
 				{statements.length === 0 && (
 					<p>Waiting for new crawler observations after deployment.</p>

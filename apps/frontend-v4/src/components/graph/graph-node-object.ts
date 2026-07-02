@@ -19,6 +19,7 @@ function getNodeOpacity(
 	const focusedOrganizationId = visualState.focusedOrganizationId;
 	if (focusedOrganizationId === null) return 1;
 	if (node.groupId === focusedOrganizationId) return 1;
+	if (visualState.selectedQuorumNodeIds.has(node.id)) return 0.86;
 	if (node.isInTransitiveQuorumSet) return 0.52;
 	return 0.2;
 }
@@ -30,27 +31,34 @@ function isNodeEmphasized(
 	return (
 		node.id === visualState.hoveredNodeId ||
 		node.id === visualState.selectedNodeId ||
+		visualState.selectedQuorumNodeIds.has(node.id) ||
 		node.groupId === visualState.focusedOrganizationId
 	);
 }
 
-function createLabelTexture(label: string): THREE.CanvasTexture {
+function createLabelTexture(label: string, organization: string): THREE.CanvasTexture {
 	const canvas = document.createElement('canvas');
 	const context = canvas.getContext('2d');
 	if (!context) return new THREE.CanvasTexture(canvas);
 
-	const fontSize = 28;
-	context.font = `700 ${fontSize}px Inter, Arial, sans-serif`;
-	const metrics = context.measureText(label);
-	canvas.width = Math.ceil(metrics.width) + 28;
+	const titleSize = 19;
+	const subtitleSize = 12;
+	context.font = `800 ${titleSize}px Inter, Arial, sans-serif`;
+	const titleMetrics = context.measureText(label);
+	context.font = `700 ${subtitleSize}px Inter, Arial, sans-serif`;
+	const subtitleMetrics = context.measureText(organization);
+	canvas.width = Math.ceil(Math.max(titleMetrics.width, subtitleMetrics.width)) + 30;
 	canvas.height = 48;
 
-	context.font = `700 ${fontSize}px Inter, Arial, sans-serif`;
+	context.font = `800 ${titleSize}px Inter, Arial, sans-serif`;
 	context.fillStyle = 'rgba(7, 17, 29, 0.72)';
-	context.roundRect(0, 3, canvas.width, 36, 8);
+	context.roundRect(0, 2, canvas.width, 43, 8);
 	context.fill();
 	context.fillStyle = '#dce8f6';
-	context.fillText(label, 14, 30);
+	context.fillText(label, 15, 22);
+	context.font = `700 ${subtitleSize}px Inter, Arial, sans-serif`;
+	context.fillStyle = 'rgba(174, 189, 205, 0.92)';
+	context.fillText(organization, 15, 38);
 
 	const texture = new THREE.CanvasTexture(canvas);
 	texture.colorSpace = THREE.SRGBColorSpace;
@@ -59,7 +67,7 @@ function createLabelTexture(label: string): THREE.CanvasTexture {
 
 function createNodeLabel(node: Graph3DNode, radius: number): THREE.Sprite {
 	const label = getNodeLabel(node.node);
-	const texture = createLabelTexture(label);
+	const texture = createLabelTexture(label, node.groupName);
 	const material = new THREE.SpriteMaterial({
 		depthWrite: false,
 		map: texture,
@@ -67,9 +75,10 @@ function createNodeLabel(node: Graph3DNode, radius: number): THREE.Sprite {
 		transparent: true
 	});
 	const sprite = new THREE.Sprite(material);
-	const scale = node.kind === 'validator' ? 44 : 34;
-	sprite.position.set(0, radius + 10, 0);
-	sprite.scale.set(scale * Math.max(label.length / 8, 1), scale * 0.34, 1);
+	const scale = node.kind === 'validator' ? 25 : 20;
+	const widestTextLength = Math.max(label.length, node.groupName.length * 0.68);
+	sprite.position.set(0, radius + 12, 0);
+	sprite.scale.set(scale * Math.max(widestTextLength / 10, 1), scale * 0.42, 1);
 	return sprite;
 }
 
@@ -149,16 +158,30 @@ export function getGraphLinkColor(
 	const sourceGraphNode = sourceNode ? nodesById.get(sourceNode) : undefined;
 	const targetGraphNode = targetNode ? nodesById.get(targetNode) : undefined;
 	const focusedOrganizationId = visualState.focusedOrganizationId;
+	const selectedNodeId = visualState.selectedNodeId;
 
-	if (focusedOrganizationId === null) return 'rgba(145, 213, 255, 0.24)';
+	if (
+		selectedNodeId &&
+		sourceNode === selectedNodeId &&
+		targetNode &&
+		visualState.selectedQuorumNodeIds.has(targetNode)
+	) {
+		return 'rgba(247, 207, 77, 0.98)';
+	}
+
+	if (selectedNodeId && targetNode === selectedNodeId) {
+		return 'rgba(88, 166, 255, 0.78)';
+	}
+
+	if (focusedOrganizationId === null) return 'rgba(145, 213, 255, 0.42)';
 	if (
 		sourceGraphNode?.groupId === focusedOrganizationId ||
 		targetGraphNode?.groupId === focusedOrganizationId
 	) {
-		return 'rgba(126, 231, 135, 0.58)';
+		return 'rgba(126, 231, 135, 0.82)';
 	}
 
-	return 'rgba(145, 213, 255, 0.04)';
+	return 'rgba(145, 213, 255, 0.1)';
 }
 
 export function getGraphLinkWidth(
@@ -167,15 +190,27 @@ export function getGraphLinkWidth(
 	visualState: GraphVisualState
 ): number {
 	const focusedOrganizationId = visualState.focusedOrganizationId;
-	if (focusedOrganizationId === null) return 0.22;
-
 	const sourceId = getEndpointId(link.source);
 	const targetId = getEndpointId(link.target);
 	const sourceNode = sourceId ? nodesById.get(sourceId) : undefined;
 	const targetNode = targetId ? nodesById.get(targetId) : undefined;
+	const selectedNodeId = visualState.selectedNodeId;
+
+	if (
+		selectedNodeId &&
+		sourceId === selectedNodeId &&
+		targetId &&
+		visualState.selectedQuorumNodeIds.has(targetId)
+	) {
+		return 2.7;
+	}
+
+	if (selectedNodeId && targetId === selectedNodeId) return 1.45;
+
+	if (focusedOrganizationId === null) return 0.38;
 
 	return sourceNode?.groupId === focusedOrganizationId ||
 		targetNode?.groupId === focusedOrganizationId
-		? 0.85
-		: 0.08;
+		? 1.15
+		: 0.14;
 }
