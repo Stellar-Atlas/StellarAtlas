@@ -8,6 +8,7 @@ import {
 	fetchBrowserPublicNetwork,
 	fetchBrowserScpStatements
 } from '../../api/browser-client';
+import { publishLatestLedger } from '../../api/latest-ledger-events';
 import { formatDateTime } from '../../format/formatters';
 
 const fallbackRefreshIntervalMs = 10_000;
@@ -73,6 +74,7 @@ export function NetworkStrip(): React.JSX.Element {
 			void fetchBrowserLatestLedger(abortController.signal)
 				.then((ledger) => {
 					if (!isMounted) return;
+					publishLatestLedger(ledger.sequence);
 					setLatestLedger((current) => {
 						if (!current) return ledger.sequence;
 						return BigInt(ledger.sequence) > BigInt(current)
@@ -111,6 +113,7 @@ export function NetworkStrip(): React.JSX.Element {
 						statements.map((statement) => statement.slotIndex)
 					);
 					if (isMounted && highestLedger) {
+						publishLatestLedger(highestLedger);
 						setLiveLedger((current) => {
 							if (!current) return highestLedger;
 							return BigInt(highestLedger) > BigInt(current)

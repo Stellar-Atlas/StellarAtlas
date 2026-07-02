@@ -10,16 +10,18 @@ import { fetchBrowserLedgerTransactions } from '../../api/browser-client';
 import { getNodeLabel } from '../../domain/network';
 
 interface ScpLiveFeedProps {
-	activeStatement: PublicScpStatementObservation | null;
+	activeStatements: readonly PublicScpStatementObservation[];
 	network: PublicNetwork;
-	statements: PublicScpStatementObservation[];
+	statements: readonly PublicScpStatementObservation[];
 }
 
 interface StatementSummary {
 	confirm: number;
 	externalize: number;
 	nominate: number;
+	organizationCount: number;
 	prepare: number;
+	signerCount: number;
 	slotIndex: string;
 	txSetHash: string | null;
 }
@@ -53,6 +55,10 @@ export const getStatementValueHash = (
 	return statement.statementHash.slice(0, 12);
 };
 
+const getStatementValueLabel = (
+	statement: PublicScpStatementObservation
+): string => (statement.values[0] === undefined ? 'statement hash' : 'tx set');
+
 const formatStatementAge = (statement: PublicScpStatementObservation): string => {
 	const observedAt = new Date(statement.observedAt).getTime();
 	const ageSeconds = Math.max(0, Math.floor((Date.now() - observedAt) / 1000));
@@ -63,21 +69,40 @@ const formatStatementAge = (statement: PublicScpStatementObservation): string =>
 };
 
 const summarizeStatements = (
-	statements: PublicScpStatementObservation[]
+	network: PublicNetwork,
+	statements: readonly PublicScpStatementObservation[]
 ): StatementSummary | null => {
-	const firstStatement = statements[0];
-	if (!firstStatement) return null;
+	const latestSlotIndex = statements.reduce<string | null>((latest, statement) => {
+		if (latest === null) return statement.slotIndex;
+		return BigInt(statement.slotIndex) > BigInt(latest)
+			? statement.slotIndex
+			: latest;
+	}, null);
+	if (latestSlotIndex === null) return null;
 
 	const slotStatements = statements.filter(
-		(statement) => statement.slotIndex === firstStatement.slotIndex
+		(statement) => statement.slotIndex === latestSlotIndex
+	);
+	const slotSigners = new Set(slotStatements.map((statement) => statement.nodeId));
+	const slotOrganizations = new Set(
+		slotStatements.map((statement) => {
+			const node = network.nodes.find(
+				(candidate) => candidate.publicKey === statement.nodeId
+			);
+			return node?.organizationId ?? node?.homeDomain ?? statement.nodeId;
+		})
 	);
 	const summary: StatementSummary = {
 		confirm: 0,
 		externalize: 0,
 		nominate: 0,
+		organizationCount: slotOrganizations.size,
 		prepare: 0,
-		slotIndex: firstStatement.slotIndex,
-		txSetHash: firstStatement.values[0]?.txSetHash ?? null
+		signerCount: slotSigners.size,
+		slotIndex: latestSlotIndex,
+		txSetHash:
+			slotStatements.find((statement) => statement.values[0] !== undefined)
+				?.values[0]?.txSetHash ?? null
 	};
 
 	for (const statement of slotStatements) {
@@ -90,8 +115,23 @@ const summarizeStatements = (
 	return summary;
 };
 
+const compareStatementsForFeed = (
+	left: PublicScpStatementObservation,
+	right: PublicScpStatementObservation
+): number => {
+	const slotComparison = BigInt(right.slotIndex) - BigInt(left.slotIndex);
+	if (slotComparison !== 0n) return slotComparison > 0n ? 1 : -1;
+
+	const observedComparison =
+		new Date(right.observedAt).getTime() - new Date(left.observedAt).getTime();
+	if (observedComparison !== 0) return observedComparison;
+
+	return right.statementHash.localeCompare(left.statementHash);
+};
+
 const getStellarExpertTransactionUrl = (hash: string): string =>
 	`https://stellar.expert/explorer/public/tx/${encodeURIComponent(hash)}`;
+const visibleStatementCount = 12;
 
 const shortenHash = (hash: string): string =>
 	hash.length > 18 ? `${hash.slice(0, 12)}...${hash.slice(-6)}` : hash;
@@ -104,11 +144,23 @@ const getStatementTransactionSet = (
 });
 
 export function ScpLiveFeed({
-	activeStatement,
+	activeStatements,
 	network,
 	statements
 }: ScpLiveFeedProps): React.JSX.Element {
-	const summary = summarizeStatements(statements);
+	const summary = summarizeStatements(network, statements);
+	const currentLedgerTransactionSet: SelectedTransactionSet = {
+		slotIndex: network.latestLedger.toString(),
+		txSetHash:
+			summary?.slotIndex === network.latestLedger.toString()
+				? summary.txSetHash
+				: null
+	};
+	const recentStatements = useMemo(
+		() => statements.toSorted(compareStatementsForFeed).slice(0, 48),
+		[statements]
+	);
+	const [feedOffset, setFeedOffset] = useState(0);
 	const [selectedTransactionSet, setSelectedTransactionSet] =
 		useState<SelectedTransactionSet | null>(null);
 	const [transactionSetState, setTransactionSetState] =
@@ -172,6 +224,19 @@ export function ScpLiveFeed({
 	}, [selectedTransactionSet]);
 
 	useEffect(() => {
+		setFeedOffset(0);
+	}, [recentStatements[0]?.statementHash]);
+
+	useEffect(() => {
+		if (recentStatements.length <= visibleStatementCount) return;
+		const interval = window.setInterval(() => {
+			setFeedOffset((current) => (current + 1) % recentStatements.length);
+		}, 650);
+
+		return () => window.clearInterval(interval);
+	}, [recentStatements.length]);
+
+	useEffect(() => {
 		if (!selectedTransactionSet) return;
 		const closeOnEscape = (event: KeyboardEvent): void => {
 			if (event.key === 'Escape') closeTransactionSet();
@@ -179,6 +244,17 @@ export function ScpLiveFeed({
 		window.addEventListener('keydown', closeOnEscape);
 		return () => window.removeEventListener('keydown', closeOnEscape);
 	}, [selectedTransactionSet]);
+
+	const visibleStatements = useMemo(() => {
+		if (recentStatements.length <= visibleStatementCount) return recentStatements;
+		return Array.from({ length: visibleStatementCount }, (_, index) => {
+			const nextIndex = (feedOffset + index) % recentStatements.length;
+			return recentStatements[nextIndex];
+		}).filter(
+			(statement): statement is PublicScpStatementObservation =>
+				statement !== undefined
+		);
+	}, [feedOffset, recentStatements]);
 
 	return (
 		<section className="scp-live-feed" aria-label="SCP live feed">
@@ -188,34 +264,44 @@ export function ScpLiveFeed({
 			</div>
 			<div className="scp-packet-legend" aria-label="SCP packet color legend">
 				<span className="nominate">Nominate</span>
-				<span className="prepare">Vote</span>
+				<span className="prepare">Prepare</span>
 				<span className="confirm">Confirm</span>
 				<span className="externalize">Externalize</span>
 			</div>
-			{activeStatement && (
-				<div className="scp-flow-focus">
-					<span className="flow-pulse" />
-					<div>
-						<strong>{getStatementNodeLabel(network, activeStatement)}</strong>
-						<span>
-							{activeStatement.statementType} / slot {activeStatement.slotIndex}
-						</span>
-					</div>
-					<code>{getStatementValueHash(activeStatement)}</code>
+			{activeStatements.length > 0 && (
+				<div className="scp-flow-focus-grid">
+					{activeStatements.map((statement) => (
+						<div className="scp-flow-focus" key={statement.statementHash}>
+							<span className={`flow-pulse ${statement.statementType}`} />
+							<div>
+								<strong>{getStatementNodeLabel(network, statement)}</strong>
+								<span>
+									{statement.statementType} / slot {statement.slotIndex}
+								</span>
+							</div>
+							<code>
+								<span>{getStatementValueLabel(statement)}</span>
+								{getStatementValueHash(statement)}
+							</code>
+						</div>
+					))}
 				</div>
 			)}
 			{summary && (
 				<div className="scp-slot-summary">
-					<div>
+					<button
+						className="ledger-slot-button"
+						onClick={() => openTransactionSet(currentLedgerTransactionSet)}
+						type="button"
+					>
 						<span>Ledger slot</span>
-						<strong>{summary.slotIndex}</strong>
-					</div>
+						<strong>{network.latestLedger.toString()}</strong>
+					</button>
 					<button
 						className="tx-set-button"
-						disabled={!summary.txSetHash}
 						onClick={() =>
 							openTransactionSet({
-								slotIndex: summary.slotIndex,
+								slotIndex: network.latestLedger.toString(),
 								txSetHash: summary.txSetHash
 							})
 						}
@@ -233,6 +319,14 @@ export function ScpLiveFeed({
 						<strong>
 							{summary.prepare + summary.confirm + summary.externalize}
 						</strong>
+					</div>
+					<div>
+						<span>Observed signers</span>
+						<strong>{summary.signerCount}</strong>
+					</div>
+					<div>
+						<span>Observed orgs</span>
+						<strong>{summary.organizationCount}</strong>
 					</div>
 				</div>
 			)}
@@ -296,10 +390,13 @@ export function ScpLiveFeed({
 				</div>
 			)}
 			<div className="scp-flow-list">
-				{statements.map((statement) => (
+				{visibleStatements.map((statement) => (
 					<button
 						className={
-							statement.statementHash === activeStatement?.statementHash
+							activeStatements.some(
+								(activeStatement) =>
+									activeStatement.statementHash === statement.statementHash
+							)
 								? 'active'
 								: ''
 						}
@@ -311,12 +408,10 @@ export function ScpLiveFeed({
 							{formatStatementAge(statement)}
 						</span>
 						<strong>{getStatementNodeLabel(network, statement)}</strong>
-						<small>
-							{statement.statementType} / slot {statement.slotIndex}
-						</small>
+						<small>{statement.statementType}</small>
 					</button>
 				))}
-				{statements.length === 0 && (
+				{recentStatements.length === 0 && (
 					<p>Waiting for new crawler observations after deployment.</p>
 				)}
 			</div>

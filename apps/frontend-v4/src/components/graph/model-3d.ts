@@ -23,7 +23,7 @@ export interface Graph3DLink extends LinkObject<Graph3DNode> {
 	color: string;
 	label: string;
 	opacity: number;
-	relationship: 'quorum-dependency';
+	relationship: 'quorum-dependency' | 'scp-observation';
 	source: string;
 	target: string;
 }
@@ -96,10 +96,22 @@ const getMemberOffset = (index: number, count: number): { x: number; y: number; 
 const groupNodes = (network: PublicNetwork): Map<string, PublicNode[]> => {
 	const groups = new Map<string, PublicNode[]>();
 	for (const node of network.nodes.filter((candidate) => candidate.isValidator)) {
-		const key = node.organizationId ?? 'unaffiliated';
+		const key = getNodeGroupId(node);
 		groups.set(key, [...(groups.get(key) ?? []), node]);
 	}
 	return groups;
+};
+
+const getNodeGroupId = (node: PublicNode): string => {
+	if (node.organizationId) return node.organizationId;
+	if (node.homeDomain) return `home:${node.homeDomain}`;
+	return 'unaffiliated';
+};
+
+const getFallbackGroupName = (nodes: readonly PublicNode[]): string => {
+	const firstHomeDomain = nodes.find((node) => node.homeDomain)?.homeDomain;
+	if (firstHomeDomain) return firstHomeDomain;
+	return 'Unaffiliated validators';
 };
 
 const buildValidatorNodes = (
@@ -112,6 +124,7 @@ const buildValidatorNodes = (
 		const organization = organizations.find((candidate) => candidate.id === groupId);
 		const color = organization?.color ?? getColor(groupId, groupIndex);
 		const center = organization ?? getClusterCenter(groupIndex, organizations.length, false);
+		const groupName = organization?.name ?? getFallbackGroupName(nodes);
 
 		return nodes.map((node, nodeIndex) => {
 			const offset = getMemberOffset(nodeIndex, nodes.length);
@@ -120,7 +133,7 @@ const buildValidatorNodes = (
 				color,
 				detail: node.homeDomain ?? node.host ?? node.publicKey.slice(0, 12),
 				groupId,
-				groupName: organization?.name ?? 'Unaffiliated validators',
+				groupName,
 				isInTransitiveQuorumSet: transitiveValidators.has(node.publicKey),
 				kind: 'validator',
 				node,
@@ -188,7 +201,7 @@ const buildOrganizations = (network: PublicNetwork): Graph3DOrganization[] => {
 			color: getColor(id, index),
 			id,
 			inTransitiveQuorumSet,
-			name: organization ? getOrganizationLabel(organization) : 'Unaffiliated validators',
+			name: organization ? getOrganizationLabel(organization) : getFallbackGroupName(nodes),
 			nodeCount: nodes.length,
 			validatorCount: nodes.filter((node) => node.isValidator).length
 		};

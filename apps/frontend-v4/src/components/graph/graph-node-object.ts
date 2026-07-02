@@ -29,6 +29,7 @@ function isNodeEmphasized(
 	visualState: GraphVisualState
 ): boolean {
 	return (
+		(visualState.activeNodeWeights.get(node.id) ?? 0) > 0 ||
 		node.id === visualState.hoveredNodeId ||
 		node.id === visualState.selectedNodeId ||
 		visualState.selectedQuorumNodeIds.has(node.id) ||
@@ -69,6 +70,7 @@ function createNodeLabel(node: Graph3DNode, radius: number): THREE.Sprite {
 	const label = getNodeLabel(node.node);
 	const texture = createLabelTexture(label, node.groupName);
 	const material = new THREE.SpriteMaterial({
+		depthTest: false,
 		depthWrite: false,
 		map: texture,
 		opacity: node.kind === 'validator' ? 0.92 : 0.72,
@@ -78,6 +80,7 @@ function createNodeLabel(node: Graph3DNode, radius: number): THREE.Sprite {
 	const scale = node.kind === 'validator' ? 25 : 20;
 	const widestTextLength = Math.max(label.length, node.groupName.length * 0.68);
 	sprite.position.set(0, radius + 12, 0);
+	sprite.renderOrder = 10_000;
 	sprite.scale.set(scale * Math.max(widestTextLength / 10, 1), scale * 0.42, 1);
 	return sprite;
 }
@@ -88,14 +91,17 @@ export function createGraphNodeObject(
 ): THREE.Object3D {
 	const group = new THREE.Group();
 	const emphasized = isNodeEmphasized(node, visualState);
-	const radius = getNodeRadius(node) * (emphasized ? 1.22 : 1);
+	const activityWeight = visualState.activeNodeWeights.get(node.id) ?? 0;
+	const radius = getNodeRadius(node) * (emphasized ? 1.22 + activityWeight * 0.18 : 1);
 	const opacity = getNodeOpacity(node, visualState);
 	const baseColor = new THREE.Color(node.color);
 	const material = new THREE.MeshPhysicalMaterial({
 		clearcoat: node.kind === 'validator' ? 0.42 : 0.18,
 		clearcoatRoughness: 0.36,
 		color: baseColor,
-		emissive: emphasized ? baseColor.clone().multiplyScalar(0.32) : '#000000',
+		emissive: emphasized
+			? baseColor.clone().multiplyScalar(0.32 + activityWeight * 0.5)
+			: '#000000',
 		metalness: node.kind === 'validator' ? 0.18 : 0.04,
 		opacity,
 		roughness: 0.33,
@@ -113,11 +119,11 @@ export function createGraphNodeObject(
 			haloGeometry,
 			new THREE.MeshBasicMaterial({
 				color: baseColor,
-				opacity: 0.16,
+				opacity: 0.16 + activityWeight * 0.2,
 				transparent: true
 			})
 		);
-		halo.scale.setScalar(radius * 1.85);
+		halo.scale.setScalar(radius * (1.85 + activityWeight * 0.45));
 		group.add(halo);
 	}
 
@@ -136,6 +142,9 @@ type GraphLinkEndpoint =
 	| undefined;
 
 interface GraphLinkLike {
+	color?: string;
+	opacity?: number;
+	relationship?: string;
 	source?: GraphLinkEndpoint;
 	target?: GraphLinkEndpoint;
 }
@@ -159,6 +168,10 @@ export function getGraphLinkColor(
 	const targetGraphNode = targetNode ? nodesById.get(targetNode) : undefined;
 	const focusedOrganizationId = visualState.focusedOrganizationId;
 	const selectedNodeId = visualState.selectedNodeId;
+
+	if (link.relationship === 'scp-observation') {
+		return link.color ?? 'rgba(126, 231, 135, 0.88)';
+	}
 
 	if (
 		selectedNodeId &&
@@ -195,6 +208,8 @@ export function getGraphLinkWidth(
 	const sourceNode = sourceId ? nodesById.get(sourceId) : undefined;
 	const targetNode = targetId ? nodesById.get(targetId) : undefined;
 	const selectedNodeId = visualState.selectedNodeId;
+
+	if (link.relationship === 'scp-observation') return 1.65;
 
 	if (
 		selectedNodeId &&

@@ -43,6 +43,7 @@ const isSearchEntityType = (
 const networkRouterWrapper = (config: NetworkRouterConfig): Router => {
 	const networkRouter = express.Router();
 	const liveNetworkIntervalMs = 5_000;
+	const liveScpStatementIntervalMs = 1_200;
 	const networkSearch = new NetworkSearchService(config.searchConfig);
 
 	const getTime = (at?: unknown): Date => {
@@ -91,6 +92,26 @@ const networkRouterWrapper = (config: NetworkRouterConfig): Router => {
 		}
 
 		res.write(`event: network\ndata: ${JSON.stringify(networkOrError.value)}\n\n`);
+	};
+
+	const writeScpStatementEvent = async (
+		res: express.Response
+	): Promise<void> => {
+		const statementsOrError = await config.getScpStatements.execute({
+			limit: 160
+		});
+		if (res.writableEnded) return;
+
+		if (statementsOrError.isErr()) {
+			res.write(
+				`event: error\ndata: ${JSON.stringify({
+					message: 'SCP statements unavailable'
+				})}\n\n`
+			);
+			return;
+		}
+
+		res.write(`event: scp\ndata: ${JSON.stringify(statementsOrError.value)}\n\n`);
 	};
 
 	networkRouter.get(
@@ -238,6 +259,35 @@ const networkRouterWrapper = (config: NetworkRouterConfig): Router => {
 				return res.status(500).send('Internal Server Error');
 
 			return res.status(200).send(statementsOrError.value);
+		}
+	);
+
+	networkRouter.get(
+		['/scp-statements/live'],
+		async (req: express.Request, res: express.Response) => {
+			res.setHeader('Cache-Control', 'no-cache, no-transform');
+			res.setHeader('Connection', 'keep-alive');
+			res.setHeader('Content-Type', 'text/event-stream');
+			res.setHeader('X-Accel-Buffering', 'no');
+			res.flushHeaders();
+			res.write(': connected\n\n');
+
+			let isWriting = false;
+			const writeSnapshot = (): void => {
+				if (isWriting || res.writableEnded) return;
+				isWriting = true;
+				void writeScpStatementEvent(res).finally(() => {
+					isWriting = false;
+				});
+			};
+
+			writeSnapshot();
+			const interval = setInterval(writeSnapshot, liveScpStatementIntervalMs);
+
+			req.on('close', () => {
+				clearInterval(interval);
+				if (!res.writableEnded) res.end();
+			});
 		}
 	);
 

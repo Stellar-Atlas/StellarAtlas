@@ -3,10 +3,14 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ForceGraph3DInstance } from '3d-force-graph';
 import type {
+	Color,
+	CanvasTexture,
 	Group as ThreeGroup,
-	Mesh as ThreeMesh,
-	MeshStandardMaterial,
-	SphereGeometry
+	InstancedMesh,
+	MeshBasicMaterial,
+	Object3D,
+	PlaneGeometry,
+	Vector3
 } from 'three';
 import Link from 'next/link';
 import type {
@@ -15,14 +19,18 @@ import type {
 	PublicScpStatementObservation
 } from '../../api/types';
 import {
+	buildBrowserApiUrl,
 	fetchBrowserHistoryArchiveScanLogs,
 	fetchBrowserLatestLedger,
 	fetchBrowserPublicNetwork,
 	fetchBrowserScpStatements
 } from '../../api/browser-client';
 import {
+	publishLatestLedger,
+	subscribeToLatestLedger
+} from '../../api/latest-ledger-events';
+import {
 	buildGraph3DModel,
-	getNodeOrganizationName,
 	type Graph3DNode,
 	type Graph3DLink,
 	type Graph3DOrganization
@@ -46,6 +54,11 @@ import {
 	type GraphVisualState
 } from './graph-visual-state';
 import { getStatementValueHash, ScpLiveFeed } from './scp-live-feed';
+import {
+	getArchiveVerificationErrors,
+	getWorkerIssues,
+	scanLogHasArchiveVerificationError
+} from '../../domain/history-archive';
 
 interface GraphExplorerProps {
 	network: PublicNetwork;
@@ -63,6 +76,12 @@ const initialCameraTarget = { x: 0, y: 0, z: 0 };
 const networkRefreshIntervalMs = 10_000;
 const scpRefreshIntervalMs = 1_200;
 const latestLedgerRefreshIntervalMs = 2_000;
+const liveNetworkPath = '/v1/live';
+const liveScpStatementPath = '/v1/scp-statements/live';
+const maxAnimatedStatementsPerLedger = 48;
+const maxWaveInstances = maxAnimatedStatementsPerLedger;
+const maxActiveFeedStatements = 8;
+const ledgerCloseAnimationBudgetMs = 4_500;
 
 const formatAvailability = (hasStats: boolean, value: number): string =>
 	hasStats ? formatPercent(value) : 'Collecting';
@@ -71,7 +90,7 @@ const formatNullableInteger = (value: number | null): string =>
 	value === null ? 'Unknown' : formatInteger(value);
 
 const formatLag = (value: number | null): string =>
-	value === null ? 'Unknown' : value <= 0 ? '<1 ms observed' : `${formatInteger(value)} ms`;
+	value === null ? 'Unknown' : value === 0 ? '0 ms reported' : `${formatInteger(value)} ms`;
 
 const formatShortDateTime = (value: string): string =>
 	new Intl.DateTimeFormat('en-US', {
@@ -101,9 +120,231 @@ interface GraphLinkLike {
 
 interface StatementFlowPath {
 	label: string;
+	statement: PublicScpStatementObservation;
 	source: Graph3DNode;
 	target: Graph3DNode;
 }
+
+interface WaveMeshPool {
+	back: InstancedMesh<PlaneGeometry, MeshBasicMaterial>;
+	color: Color;
+	dummy: Object3D;
+	forwardAxis: Vector3;
+	front: InstancedMesh<PlaneGeometry, MeshBasicMaterial>;
+	tangent: Vector3;
+	texture: CanvasTexture;
+}
+
+interface ActiveWave {
+	durationMs: number;
+	index: number;
+	midpoint: Vector3;
+	source: Vector3;
+	startedAt: number;
+	target: Vector3;
+}
+
+const hideWaveSlot = (pool: WaveMeshPool, index: number): void => {
+	pool.dummy.position.set(0, 0, 0);
+	pool.dummy.quaternion.identity();
+	pool.dummy.scale.setScalar(0);
+	pool.dummy.updateMatrix();
+	pool.front.setMatrixAt(index, pool.dummy.matrix);
+	pool.back.setMatrixAt(index, pool.dummy.matrix);
+};
+
+const setWaveSlotColor = (
+	pool: WaveMeshPool,
+	index: number,
+	color: string
+): void => {
+	pool.color.set(color);
+	pool.front.setColorAt(index, pool.color);
+	pool.back.setColorAt(index, pool.color);
+	if (pool.front.instanceColor) pool.front.instanceColor.needsUpdate = true;
+	if (pool.back.instanceColor) pool.back.instanceColor.needsUpdate = true;
+};
+
+const createWaveTexture = (THREE: typeof import('three')): CanvasTexture => {
+	const canvas = document.createElement('canvas');
+	canvas.width = 256;
+	canvas.height = 64;
+	const context = canvas.getContext('2d');
+	if (!context) return new THREE.CanvasTexture(canvas);
+
+	context.clearRect(0, 0, canvas.width, canvas.height);
+	const gradient = context.createLinearGradient(0, 0, canvas.width, 0);
+	gradient.addColorStop(0, 'rgba(255,255,255,0)');
+	gradient.addColorStop(0.18, 'rgba(255,255,255,0.16)');
+	gradient.addColorStop(0.52, 'rgba(255,255,255,1)');
+	gradient.addColorStop(0.82, 'rgba(255,255,255,0.24)');
+	gradient.addColorStop(1, 'rgba(255,255,255,0)');
+	context.strokeStyle = gradient;
+	context.lineCap = 'round';
+	context.lineJoin = 'round';
+
+	for (const [offsetY, width, amplitude] of [
+		[28, 6, 8],
+		[34, 3.5, 5],
+		[22, 2.2, 4]
+	] as const) {
+		context.beginPath();
+		context.lineWidth = width;
+		for (let x = 0; x <= canvas.width; x += 8) {
+			const y =
+				offsetY +
+				Math.sin((x / canvas.width) * Math.PI * 5) * amplitude;
+			if (x === 0) context.moveTo(x, y);
+			else context.lineTo(x, y);
+		}
+		context.stroke();
+	}
+
+	const texture = new THREE.CanvasTexture(canvas);
+	texture.colorSpace = THREE.SRGBColorSpace;
+	texture.needsUpdate = true;
+	return texture;
+};
+
+const createWaveMeshPool = (
+	THREE: typeof import('three'),
+	packetGroup: ThreeGroup
+): WaveMeshPool => {
+	const texture = createWaveTexture(THREE);
+	const frontGeometry = new THREE.PlaneGeometry(54, 16, 1, 1);
+	const backGeometry = new THREE.PlaneGeometry(82, 26, 1, 1);
+	const frontMaterial = new THREE.MeshBasicMaterial({
+		alphaMap: texture,
+		blending: THREE.AdditiveBlending,
+		color: 0xffffff,
+		depthWrite: false,
+		map: texture,
+		opacity: 0.9,
+		transparent: true,
+		vertexColors: true
+	});
+	const backMaterial = new THREE.MeshBasicMaterial({
+		alphaMap: texture,
+		blending: THREE.AdditiveBlending,
+		color: 0xffffff,
+		depthWrite: false,
+		map: texture,
+		opacity: 0.52,
+		transparent: true,
+		vertexColors: true
+	});
+	const front = new THREE.InstancedMesh(
+		frontGeometry,
+		frontMaterial,
+		maxWaveInstances
+	);
+	const back = new THREE.InstancedMesh(
+		backGeometry,
+		backMaterial,
+		maxWaveInstances
+	);
+	front.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+	back.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+	front.frustumCulled = false;
+	back.frustumCulled = false;
+
+	const pool: WaveMeshPool = {
+		back,
+		color: new THREE.Color('#58a6ff'),
+		dummy: new THREE.Object3D(),
+		forwardAxis: new THREE.Vector3(1, 0, 0),
+		front,
+		tangent: new THREE.Vector3(1, 0, 0),
+		texture
+	};
+
+	for (let index = 0; index < maxWaveInstances; index += 1) {
+		hideWaveSlot(pool, index);
+		setWaveSlotColor(pool, index, '#58a6ff');
+	}
+	front.instanceMatrix.needsUpdate = true;
+	back.instanceMatrix.needsUpdate = true;
+
+	packetGroup.add(back);
+	packetGroup.add(front);
+	return pool;
+};
+
+const disposeWaveMeshPool = (pool: WaveMeshPool): void => {
+	pool.front.geometry.dispose();
+	pool.front.material.dispose();
+	pool.back.geometry.dispose();
+	pool.back.material.dispose();
+	pool.texture.dispose();
+};
+
+const hideAllWaveSlots = (pool: WaveMeshPool): void => {
+	for (let index = 0; index < maxWaveInstances; index += 1) {
+		hideWaveSlot(pool, index);
+	}
+	pool.front.instanceMatrix.needsUpdate = true;
+	pool.back.instanceMatrix.needsUpdate = true;
+};
+
+const updateWaveMeshPool = (
+	pool: WaveMeshPool,
+	activeWaves: Map<number, ActiveWave>,
+	now: number
+): void => {
+	for (const [index, wave] of activeWaves) {
+		const linearProgress = Math.min(1, (now - wave.startedAt) / wave.durationMs);
+		if (linearProgress >= 1) {
+			hideWaveSlot(pool, index);
+			activeWaves.delete(index);
+			continue;
+		}
+
+		const progress = 1 - Math.pow(1 - linearProgress, 3);
+		const inverse = 1 - progress;
+		const x =
+			inverse * inverse * wave.source.x +
+			2 * inverse * progress * wave.midpoint.x +
+			progress * progress * wave.target.x;
+		const y =
+			inverse * inverse * wave.source.y +
+			2 * inverse * progress * wave.midpoint.y +
+			progress * progress * wave.target.y;
+		const z =
+			inverse * inverse * wave.source.z +
+			2 * inverse * progress * wave.midpoint.z +
+			progress * progress * wave.target.z;
+		const fade =
+			linearProgress > 0.78
+				? Math.max(0, (1 - linearProgress) / 0.22)
+				: 1;
+		const pulseScale = (0.75 + Math.sin(progress * Math.PI) * 0.68) * fade;
+
+		pool.tangent
+			.set(
+				2 * inverse * (wave.midpoint.x - wave.source.x) +
+					2 * progress * (wave.target.x - wave.midpoint.x),
+				2 * inverse * (wave.midpoint.y - wave.source.y) +
+					2 * progress * (wave.target.y - wave.midpoint.y),
+				2 * inverse * (wave.midpoint.z - wave.source.z) +
+					2 * progress * (wave.target.z - wave.midpoint.z)
+			)
+			.normalize();
+		pool.dummy.position.set(x, y, z);
+		pool.dummy.quaternion.setFromUnitVectors(
+			pool.forwardAxis,
+			pool.tangent
+		);
+		pool.dummy.scale.setScalar(pulseScale);
+		pool.dummy.updateMatrix();
+		pool.front.setMatrixAt(index, pool.dummy.matrix);
+		pool.dummy.scale.setScalar(pulseScale * 1.62);
+		pool.dummy.updateMatrix();
+		pool.back.setMatrixAt(index, pool.dummy.matrix);
+	}
+
+	pool.front.instanceMatrix.needsUpdate = true;
+	pool.back.instanceMatrix.needsUpdate = true;
+};
 
 const getEndpointId = (endpoint: GraphLinkEndpoint): string | null => {
 	if (endpoint === undefined) return null;
@@ -125,7 +366,95 @@ const getStatementColor = (
 	if (statementType === 'nominate') return '#f7cf4d';
 	if (statementType === 'prepare') return '#58a6ff';
 	if (statementType === 'confirm') return '#5dd39e';
-	return '#7ee787';
+	return '#c084fc';
+};
+
+const compareStatementsByObservation = (
+	left: PublicScpStatementObservation,
+	right: PublicScpStatementObservation
+): number =>
+	new Date(left.observedAt).getTime() - new Date(right.observedAt).getTime() ||
+	left.statementHash.localeCompare(right.statementHash);
+
+const addStatementIfNew = (
+	selectedStatements: PublicScpStatementObservation[],
+	selectedHashes: Set<string>,
+	statement: PublicScpStatementObservation | undefined
+): void => {
+	if (!statement || selectedHashes.has(statement.statementHash)) return;
+	if (selectedStatements.length >= maxAnimatedStatementsPerLedger) return;
+	selectedHashes.add(statement.statementHash);
+	selectedStatements.push(statement);
+};
+
+const selectLedgerAnimationStatements = (
+	statements: readonly PublicScpStatementObservation[],
+	nodesById: ReadonlyMap<string, Graph3DNode>
+): readonly PublicScpStatementObservation[] => {
+	const chronologicalStatements = statements.toSorted(compareStatementsByObservation);
+	if (chronologicalStatements.length <= maxAnimatedStatementsPerLedger)
+		return chronologicalStatements;
+
+	const statementsByOrganization = new Map<string, PublicScpStatementObservation[]>();
+	for (const statement of chronologicalStatements) {
+		const organizationId = nodesById.get(statement.nodeId)?.groupId ?? statement.nodeId;
+		statementsByOrganization.set(organizationId, [
+			...(statementsByOrganization.get(organizationId) ?? []),
+			statement
+		]);
+	}
+
+	const selectedStatements: PublicScpStatementObservation[] = [];
+	const selectedHashes = new Set<string>();
+
+	const earliestByOrganization = Array.from(statementsByOrganization.values())
+		.map((organizationStatements) => organizationStatements[0])
+		.filter(
+			(
+				statement
+			): statement is PublicScpStatementObservation =>
+				statement !== undefined
+		)
+		.toSorted(compareStatementsByObservation);
+
+	for (const statement of earliestByOrganization)
+		addStatementIfNew(selectedStatements, selectedHashes, statement);
+
+	for (let index = 0; index < maxAnimatedStatementsPerLedger; index += 1) {
+		const sourceIndex = Math.round(
+			(index * (chronologicalStatements.length - 1)) /
+				(maxAnimatedStatementsPerLedger - 1)
+		);
+		addStatementIfNew(
+			selectedStatements,
+			selectedHashes,
+			chronologicalStatements[sourceIndex]
+		);
+	}
+
+	let queueOffset = 0;
+	const organizationQueues = Array.from(statementsByOrganization.values());
+	while (
+		selectedStatements.length < maxAnimatedStatementsPerLedger &&
+		queueOffset < chronologicalStatements.length
+	) {
+		const nextStatements = organizationQueues
+			.map((organizationStatements) => organizationStatements[queueOffset])
+			.filter(
+				(
+					statement
+				): statement is PublicScpStatementObservation =>
+					statement !== undefined
+			)
+			.toSorted(compareStatementsByObservation);
+
+		for (const statement of nextStatements)
+			addStatementIfNew(selectedStatements, selectedHashes, statement);
+
+		queueOffset += 1;
+	}
+
+	return selectedStatements.toSorted(compareStatementsByObservation);
 };
 
 const getLatestSlotIndex = (
@@ -185,6 +514,7 @@ const getStatementFlowPath = (
 	if (signer && observedPeer && signer.id !== observedPeer.id) {
 		return {
 			label: `${statement.statementType} observed through ${getNodeLabel(observedPeer.node)}`,
+			statement,
 			source: signer,
 			target: observedPeer
 		};
@@ -202,6 +532,7 @@ const getStatementFlowPath = (
 
 	return {
 		label: fallbackLink.label,
+		statement,
 		source,
 		target
 	};
@@ -231,7 +562,14 @@ export function GraphExplorer({
 	const packetGroupRef = useRef<ThreeGroup | null>(null);
 	const threeRef = useRef<typeof import('three') | null>(null);
 	const visualStateRef = useRef<GraphVisualState>({ ...defaultGraphVisualState });
-	const activeStatementHashRef = useRef<string | null>(null);
+	const animatedStatementHashesRef = useRef<Set<string>>(new Set());
+	const animationTimeoutsRef = useRef<number[]>([]);
+	const activityTimeoutsRef = useRef<number[]>([]);
+	const activeWavesRef = useRef<Map<number, ActiveWave>>(new Map());
+	const nextWaveIndexRef = useRef(0);
+	const waveAnimationFrameRef = useRef<number | null>(null);
+	const wavePoolRef = useRef<WaveMeshPool | null>(null);
+	const nodeActivityRef = useRef<Map<string, number>>(new Map());
 	const flowLinkColorsRef = useRef<Map<string, string>>(new Map());
 	const [network, setNetwork] = useState(initialNetwork);
 	const [scpStatements, setScpStatements] = useState(initialScpStatements);
@@ -246,14 +584,19 @@ export function GraphExplorer({
 	const model = useMemo(() => buildGraph3DModel(network), [network]);
 	const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
 	const [showAllConnectable, setShowAllConnectable] = useState(false);
+	const [animationsEnabled, setAnimationsEnabled] = useState(true);
+	const animationsEnabledRef = useRef(true);
 	const [focusedOrganization, setFocusedOrganization] = useState<Graph3DOrganization | null>(null);
 	const [hoveredOrganization, setHoveredOrganization] = useState<Graph3DOrganization | null>(null);
 	const [contextMenu, setContextMenu] = useState<GraphContextMenuState | null>(null);
-	const [activeStatementIndex, setActiveStatementIndex] = useState(0);
+	const [activeStatementHashes, setActiveStatementHashes] = useState<ReadonlySet<string>>(
+		() => new Set<string>()
+	);
 	const [selectedHistoryLogs, setSelectedHistoryLogs] =
 		useState<readonly PublicHistoryArchiveScanLogEntry[]>([]);
 	const [selectedHistoryLogStatus, setSelectedHistoryLogStatus] =
 		useState<'idle' | 'loading' | 'loaded' | 'error'>('idle');
+	const [showHistoryErrorsOnly, setShowHistoryErrorsOnly] = useState(false);
 	const selectedNode = model.nodes.find((node) => node.id === selectedNodeId) ?? null;
 	const modelNodesById = useMemo(
 		() => new Map(model.nodes.map((node) => [node.id, node])),
@@ -276,20 +619,26 @@ export function GraphExplorer({
 	);
 	const currentSlotStatements = useMemo(
 		() =>
-			latestSlotIndex
+			(latestSlotIndex
 				? scpStatements.filter(
 						(statement) => statement.slotIndex === latestSlotIndex
 					)
-				: scpStatements,
+				: scpStatements
+			).toSorted(compareStatementsByObservation),
 		[latestSlotIndex, scpStatements]
 	);
+	const animatedSlotStatements = useMemo(
+		() => selectLedgerAnimationStatements(currentSlotStatements, modelNodesById),
+		[currentSlotStatements, modelNodesById]
+	);
 	const activeOrganization = hoveredOrganization ?? focusedOrganization ?? selectedNodeOrganization;
-	const activeStatement =
-		currentSlotStatements.length > 0
-			? (currentSlotStatements[
-					activeStatementIndex % currentSlotStatements.length
-				] ?? null)
-			: null;
+	const activeStatements = useMemo(() => {
+		if (activeStatementHashes.size === 0) return [];
+		return animatedSlotStatements
+			.filter((statement) => activeStatementHashes.has(statement.statementHash))
+			.toSorted(compareStatementsByObservation)
+			.slice(-maxActiveFeedStatements);
+	}, [activeStatementHashes, animatedSlotStatements]);
 	const selectedNodeStatements = useMemo(
 		() =>
 			selectedNode
@@ -304,11 +653,12 @@ export function GraphExplorer({
 			? model.nodes
 			: model.nodes.filter((node) => node.kind === 'validator');
 		const nodeIds = new Set(nodes.map((node) => node.id));
+		const quorumLinks = model.links.filter(
+			(link) => nodeIds.has(link.source) && nodeIds.has(link.target)
+		);
 		return {
 			nodes: nodes.map((node) => ({ ...node })),
-			links: model.links
-				.filter((link) => nodeIds.has(link.source) && nodeIds.has(link.target))
-				.map((link) => ({ ...link }))
+			links: quorumLinks.map((link) => ({ ...link }))
 		};
 	}, [model, showAllConnectable]);
 	const nodesById = useMemo(
@@ -318,13 +668,87 @@ export function GraphExplorer({
 	const graphDataRef = useRef(graphData);
 	const nodesByIdRef = useRef(nodesById);
 	const organizationsRef = useRef(model.organizations);
+	const refreshGraphVisuals = useCallback((): void => {
+		visualStateRef.current = {
+			...visualStateRef.current,
+			activeNodeWeights: new Map(nodeActivityRef.current)
+		};
+		graphRef.current?.refresh();
+	}, []);
+
+	const activateFlowPath = useCallback((path: StatementFlowPath): void => {
+		const graph = graphRef.current;
+		if (!graph) return;
+		const color = getStatementColor(path.statement.statementType);
+
+		for (const key of getExistingFlowLinkKeys(path, graphDataRef.current.links)) {
+			flowLinkColorsRef.current.set(key, color);
+			const timeout = window.setTimeout(() => {
+				if (flowLinkColorsRef.current.get(key) === color) {
+					flowLinkColorsRef.current.delete(key);
+					graph.refresh();
+				}
+			}, 1_250);
+			activityTimeoutsRef.current.push(timeout);
+		}
+
+		for (const nodeId of [path.source.id, path.target.id]) {
+			nodeActivityRef.current.set(
+				nodeId,
+				Math.min(1, (nodeActivityRef.current.get(nodeId) ?? 0) + 0.38)
+			);
+			const timeout = window.setTimeout(() => {
+				const nextWeight = Math.max(
+					0,
+					(nodeActivityRef.current.get(nodeId) ?? 0) - 0.38
+				);
+				if (nextWeight === 0) {
+					nodeActivityRef.current.delete(nodeId);
+				} else {
+					nodeActivityRef.current.set(nodeId, nextWeight);
+				}
+				refreshGraphVisuals();
+			}, 1_650);
+			activityTimeoutsRef.current.push(timeout);
+		}
+
+		refreshGraphVisuals();
+	}, [refreshGraphVisuals]);
+
+	const updateWaveAnimations = useCallback((now: number): void => {
+		const pool = wavePoolRef.current;
+		if (!pool) {
+			activeWavesRef.current.clear();
+			waveAnimationFrameRef.current = null;
+			return;
+		}
+
+		updateWaveMeshPool(pool, activeWavesRef.current, now);
+		if (animationsEnabledRef.current) {
+			graphRef.current?.resumeAnimation();
+			waveAnimationFrameRef.current =
+				window.requestAnimationFrame(updateWaveAnimations);
+			return;
+		}
+
+		waveAnimationFrameRef.current = null;
+	}, []);
+
+	const scheduleWaveAnimation = useCallback((): void => {
+		if (!animationsEnabledRef.current) return;
+		if (waveAnimationFrameRef.current !== null) return;
+		graphRef.current?.resumeAnimation();
+		waveAnimationFrameRef.current =
+			window.requestAnimationFrame(updateWaveAnimations);
+	}, [updateWaveAnimations]);
+
 	const animateStatementPacket = useCallback((
 		statement: PublicScpStatementObservation,
 		path: StatementFlowPath
 	): void => {
 		const THREE = threeRef.current;
-		const packetGroup = packetGroupRef.current;
-		if (!THREE || !packetGroup) return;
+		const wavePool = wavePoolRef.current;
+		if (!THREE || !wavePool) return;
 
 		const color = getStatementColor(statement.statementType);
 		const source = new THREE.Vector3(
@@ -342,73 +766,50 @@ export function GraphExplorer({
 		const lift = Math.min(90, Math.max(22, distance * 0.08));
 		midpoint.y += lift;
 
-		const packet: ThreeMesh<SphereGeometry, MeshStandardMaterial> =
-			new THREE.Mesh(
-				new THREE.SphereGeometry(6.8, 24, 24),
-				new THREE.MeshStandardMaterial({
-					color,
-					emissive: color,
-					emissiveIntensity: 3.1,
-					opacity: 0.98,
-					roughness: 0.12,
-					transparent: true
-				})
-			);
-		packet.add(new THREE.PointLight(color, 3.4, 120));
-		packet.name = `scp-${statement.statementType}-packet`;
-		packetGroup.add(packet);
-
 		const durationMs =
 			statement.statementType === 'nominate'
-				? 900
+				? 1_020
 				: statement.statementType === 'prepare'
-					? 780
-					: 680;
-		const startedAt = performance.now();
+					? 880
+					: 760;
+		const index = nextWaveIndexRef.current % maxWaveInstances;
+		nextWaveIndexRef.current += 1;
+		setWaveSlotColor(wavePool, index, color);
+		activeWavesRef.current.set(index, {
+			durationMs,
+			index,
+			midpoint,
+			source,
+			startedAt: performance.now(),
+			target
+		});
+		scheduleWaveAnimation();
+	}, [scheduleWaveAnimation]);
 
-		const setBezierPosition = (progress: number): void => {
-			const inverse = 1 - progress;
-			packet.position.set(
-				inverse * inverse * source.x +
-					2 * inverse * progress * midpoint.x +
-					progress * progress * target.x,
-				inverse * inverse * source.y +
-					2 * inverse * progress * midpoint.y +
-					progress * progress * target.y,
-				inverse * inverse * source.z +
-					2 * inverse * progress * midpoint.z +
-					progress * progress * target.z
-			);
-		};
+	const clearAnimationEffects = useCallback((): void => {
+		for (const timeout of animationTimeoutsRef.current) {
+			window.clearTimeout(timeout);
+		}
+		for (const timeout of activityTimeoutsRef.current) {
+			window.clearTimeout(timeout);
+		}
+		animationTimeoutsRef.current = [];
+		activityTimeoutsRef.current = [];
+		animatedStatementHashesRef.current = new Set();
+		setActiveStatementHashes(new Set<string>());
+		flowLinkColorsRef.current = new Map();
+		nodeActivityRef.current = new Map();
+		activeWavesRef.current.clear();
+		if (waveAnimationFrameRef.current !== null) {
+			window.cancelAnimationFrame(waveAnimationFrameRef.current);
+			waveAnimationFrameRef.current = null;
+		}
 
-		const finishPacket = (): void => {
-			packetGroup.remove(packet);
-			packet.geometry.dispose();
-			packet.material.dispose();
-		};
+		const wavePool = wavePoolRef.current;
+		if (wavePool) hideAllWaveSlots(wavePool);
 
-		const tick = (now: number): void => {
-			if (!packetGroupRef.current) {
-				finishPacket();
-				return;
-			}
-			const linearProgress = Math.min(1, (now - startedAt) / durationMs);
-			const easedProgress = 1 - Math.pow(1 - linearProgress, 3);
-			setBezierPosition(easedProgress);
-			packet.material.opacity =
-				linearProgress > 0.82 ? Math.max(0, 1 - (linearProgress - 0.82) * 5.6) : 0.96;
-
-			if (linearProgress < 1) {
-				window.requestAnimationFrame(tick);
-				return;
-			}
-
-			finishPacket();
-		};
-
-		setBezierPosition(0);
-		window.requestAnimationFrame(tick);
-	}, []);
+		refreshGraphVisuals();
+	}, [refreshGraphVisuals]);
 
 	useEffect(() => {
 		graphDataRef.current = graphData;
@@ -429,14 +830,45 @@ export function GraphExplorer({
 	}, [initialScpStatements]);
 
 	useEffect(() => {
-		setActiveStatementIndex(0);
-	}, [latestSlotIndex]);
+		clearAnimationEffects();
+	}, [clearAnimationEffects, latestSlotIndex]);
+
+	useEffect(
+		() => () => {
+			clearAnimationEffects();
+		},
+		[clearAnimationEffects]
+	);
+
+	useEffect(() => {
+		animationsEnabledRef.current = animationsEnabled;
+		if (animationsEnabled) {
+			graphRef.current?.resumeAnimation();
+			scheduleWaveAnimation();
+			return;
+		}
+
+		graphRef.current?.pauseAnimation();
+		clearAnimationEffects();
+	}, [animationsEnabled, clearAnimationEffects, scheduleWaveAnimation]);
+
+	useEffect(
+		() =>
+			subscribeToLatestLedger((sequence) => {
+				setLatestLedger((current) => {
+					if (!current) return sequence;
+					return BigInt(sequence) > BigInt(current) ? sequence : current;
+				});
+			}),
+		[]
+	);
 
 	useEffect(() => {
 		let isMounted = true;
 		const pendingRequests = new Set<AbortController>();
 
 		const loadNetwork = (): void => {
+			if (pendingRequests.size > 0) return;
 			const abortController = new AbortController();
 			pendingRequests.add(abortController);
 			void fetchBrowserPublicNetwork(abortController.signal)
@@ -447,9 +879,20 @@ export function GraphExplorer({
 				.finally(() => pendingRequests.delete(abortController));
 		};
 
+		loadNetwork();
 		const interval = window.setInterval(loadNetwork, networkRefreshIntervalMs);
+		const eventSource = new EventSource(buildBrowserApiUrl(liveNetworkPath, true));
+		eventSource.addEventListener('network', (event) => {
+			if (!isMounted) return;
+			setNetwork(JSON.parse(event.data) as PublicNetwork);
+		});
+		eventSource.onerror = () => {
+			loadNetwork();
+		};
+
 		return () => {
 			isMounted = false;
+			eventSource.close();
 			for (const request of pendingRequests) request.abort();
 			window.clearInterval(interval);
 		};
@@ -460,11 +903,13 @@ export function GraphExplorer({
 		const pendingRequests = new Set<AbortController>();
 
 		const loadLatestLedger = (): void => {
+			if (pendingRequests.size > 0) return;
 			const abortController = new AbortController();
 			pendingRequests.add(abortController);
 			void fetchBrowserLatestLedger(abortController.signal)
 				.then((ledger) => {
 					if (!isMounted) return;
+					publishLatestLedger(ledger.sequence);
 					setLatestLedger((current) => {
 						if (!current) return ledger.sequence;
 						return BigInt(ledger.sequence) > BigInt(current)
@@ -493,6 +938,7 @@ export function GraphExplorer({
 		const pendingRequests = new Set<AbortController>();
 
 		const loadStatements = (): void => {
+			if (pendingRequests.size > 0) return;
 			const abortController = new AbortController();
 			pendingRequests.add(abortController);
 			void fetchBrowserScpStatements({ limit: 160 }, abortController.signal)
@@ -507,23 +953,27 @@ export function GraphExplorer({
 
 		loadStatements();
 		const interval = window.setInterval(loadStatements, scpRefreshIntervalMs);
+		const eventSource = new EventSource(
+			buildBrowserApiUrl(liveScpStatementPath, true)
+		);
+		eventSource.addEventListener('scp', (event) => {
+			if (!isMounted) return;
+			const nextStatements = JSON.parse(
+				event.data
+			) as PublicScpStatementObservation[];
+			if (nextStatements.length > 0) setScpStatements(nextStatements);
+		});
+		eventSource.onerror = () => {
+			loadStatements();
+		};
+
 		return () => {
 			isMounted = false;
+			eventSource.close();
 			for (const request of pendingRequests) request.abort();
 			window.clearInterval(interval);
 		};
 	}, []);
-
-	useEffect(() => {
-		if (currentSlotStatements.length < 2) return;
-			const interval = window.setInterval(() => {
-				setActiveStatementIndex(
-					(current) => (current + 1) % currentSlotStatements.length
-				);
-		}, 950);
-
-		return () => window.clearInterval(interval);
-	}, [currentSlotStatements.length]);
 
 	useEffect(() => {
 		visualStateRef.current = {
@@ -559,6 +1009,18 @@ export function GraphExplorer({
 		return () => abortController.abort();
 	}, [selectedNode?.node.historyUrl]);
 
+	const visibleHistoryLogs = useMemo(
+		() =>
+			(showHistoryErrorsOnly
+				? selectedHistoryLogs.filter(scanLogHasArchiveVerificationError)
+				: selectedHistoryLogs
+			).slice(0, 6),
+		[selectedHistoryLogs, showHistoryErrorsOnly]
+	);
+	const selectedNodeHasArchiveErrors = selectedHistoryLogs.some(
+		scanLogHasArchiveVerificationError
+	);
+
 	useEffect(() => {
 		const closeContextMenu = (): void => setContextMenu(null);
 		const closeContextMenuOnEscape = (event: KeyboardEvent): void => {
@@ -573,35 +1035,72 @@ export function GraphExplorer({
 	}, []);
 
 	useEffect(() => {
-		const graph = graphRef.current;
-		if (!graph || !activeStatement) return;
+		if (
+			!animationsEnabled ||
+			!graphRef.current ||
+			animatedSlotStatements.length === 0
+		) {
+			return;
+		}
+		const unscheduledStatements = animatedSlotStatements
+			.filter(
+				(statement) =>
+					!animatedStatementHashesRef.current.has(statement.statementHash)
+			)
+			.toSorted(compareStatementsByObservation);
+		if (unscheduledStatements.length === 0) return;
 
-		const flowPath = getStatementFlowPath(
-			activeStatement,
-			graphData.links,
-			nodesById
+		const observedTimes = animatedSlotStatements.map((statement) =>
+			new Date(statement.observedAt).getTime()
 		);
-		if (!flowPath) return;
-		const color = getStatementColor(activeStatement.statementType);
-		flowLinkColorsRef.current = new Map(
-			getExistingFlowLinkKeys(flowPath, graphData.links).map((key) => [
-				key,
-				color
-			])
-		);
-		activeStatementHashRef.current = activeStatement.statementHash;
-		graph.refresh();
-		animateStatementPacket(activeStatement, flowPath);
+		const firstObservedAt = Math.min(...observedTimes);
+		const lastObservedAt = Math.max(...observedTimes);
+		const observedSpan = Math.max(1, lastObservedAt - firstObservedAt);
 
-		const activeHash = activeStatement.statementHash;
-		const timeout = window.setTimeout(() => {
-			if (activeStatementHashRef.current !== activeHash) return;
-			flowLinkColorsRef.current = new Map();
-			graph.refresh();
-		}, 950);
-
-		return () => window.clearTimeout(timeout);
-	}, [activeStatement, animateStatementPacket, graphData.links, nodesById]);
+		for (const statement of unscheduledStatements) {
+			animatedStatementHashesRef.current.add(statement.statementHash);
+			const flowPath = getStatementFlowPath(
+				statement,
+				graphDataRef.current.links,
+				nodesByIdRef.current
+			);
+			if (!flowPath) continue;
+			const observedAt = new Date(statement.observedAt).getTime();
+			const normalizedDelay =
+				(observedAt - firstObservedAt) / observedSpan;
+			const delayMs = Math.max(
+				0,
+				Math.min(
+					ledgerCloseAnimationBudgetMs - 120,
+					Math.floor(normalizedDelay * ledgerCloseAnimationBudgetMs)
+				)
+			);
+			const timeout = window.setTimeout(() => {
+				activateFlowPath(flowPath);
+				animateStatementPacket(statement, flowPath);
+				setActiveStatementHashes((current) => {
+					const next = new Set(current);
+					next.add(statement.statementHash);
+					return next;
+				});
+				const clearActiveStatement = window.setTimeout(() => {
+					setActiveStatementHashes((current) => {
+						if (!current.has(statement.statementHash)) return current;
+						const next = new Set(current);
+						next.delete(statement.statementHash);
+						return next;
+					});
+				}, 1_700);
+				activityTimeoutsRef.current.push(clearActiveStatement);
+			}, delayMs);
+			animationTimeoutsRef.current.push(timeout);
+		}
+	}, [
+		activateFlowPath,
+		animatedSlotStatements,
+		animateStatementPacket,
+		animationsEnabled
+	]);
 
 	useEffect(() => {
 		let active = true;
@@ -619,6 +1118,7 @@ export function GraphExplorer({
 			const keyLight = new THREE.DirectionalLight(0xffffff, 1.85);
 			const rimLight = new THREE.DirectionalLight(0x58a6ff, 0.82);
 			const packetGroup = new THREE.Group();
+			const wavePool = createWaveMeshPool(THREE, packetGroup);
 			keyLight.position.set(240, 320, 420);
 			rimLight.position.set(-360, -220, 280);
 			keyLight.castShadow = true;
@@ -627,7 +1127,10 @@ export function GraphExplorer({
 			graph.scene().add(packetGroup);
 			graphRef.current = graph;
 			packetGroupRef.current = packetGroup;
+			wavePoolRef.current = wavePool;
 			threeRef.current = THREE;
+			graph.resumeAnimation();
+			scheduleWaveAnimation();
 			graph
 				.backgroundColor('#07111d')
 				.graphData(graphDataRef.current)
@@ -649,12 +1152,12 @@ export function GraphExplorer({
 					) ?? getGraphLinkColor(link, nodesByIdRef.current, visualStateRef.current)
 				)
 				.linkLabel((link) => (link as GraphLinkLike).label ?? '')
-				.linkOpacity(0.34)
+				.linkOpacity(0.38)
 				.linkWidth((link) =>
 					flowLinkColorsRef.current.has(
 						getGraphLinkKey(link as GraphLinkLike)
 					)
-						? 3.2
+						? 3.7
 						: getGraphLinkWidth(link, nodesByIdRef.current, visualStateRef.current)
 				)
 				.linkDirectionalParticles(0)
@@ -742,6 +1245,15 @@ export function GraphExplorer({
 		return () => {
 			active = false;
 			observer?.disconnect();
+			if (waveAnimationFrameRef.current !== null) {
+				window.cancelAnimationFrame(waveAnimationFrameRef.current);
+				waveAnimationFrameRef.current = null;
+			}
+			activeWavesRef.current.clear();
+			if (wavePoolRef.current) {
+				disposeWaveMeshPool(wavePoolRef.current);
+				wavePoolRef.current = null;
+			}
 			if (packetGroupRef.current) {
 				graphRef.current?.scene().remove(packetGroupRef.current);
 				packetGroupRef.current = null;
@@ -778,8 +1290,6 @@ export function GraphExplorer({
 	const copyPublicKey = (node: Graph3DNode): void => {
 		void navigator.clipboard?.writeText(node.id);
 	};
-	const latestHistoryLog = selectedHistoryLogs[0] ?? null;
-
 	return (
 		<main className="graph-workspace">
 			<div className="graph-canvas" ref={containerRef} />
@@ -801,49 +1311,66 @@ export function GraphExplorer({
 				>
 					{showAllConnectable ? 'Validator topology' : 'All connectable nodes'}
 				</button>
+				<button
+					aria-pressed={animationsEnabled}
+					aria-label={
+						animationsEnabled
+							? 'Pause SCP animation'
+							: 'Resume SCP animation'
+					}
+					className={
+						animationsEnabled ? 'animation-toggle active' : 'animation-toggle'
+					}
+					onClick={() => setAnimationsEnabled((current) => !current)}
+					type="button"
+				>
+					{animationsEnabled ? 'Pause SCP animation' : 'Resume SCP animation'}
+				</button>
 				<ScpAnalysisPanel network={liveNetwork} />
-				<ScpLiveFeed
-					activeStatement={activeStatement}
-					network={liveNetwork}
-					statements={currentSlotStatements.slice(0, 8)}
-				/>
-			</section>
-			<section className="graph-overlay organization-orbit">
-				<h2>Organizations</h2>
-				{activeOrganization && (
-					<div className="selected-organization-card">
-						<span style={{ backgroundColor: activeOrganization.color }} />
-						<div>
-							<strong>{activeOrganization.name}</strong>
-							<small>
-								{activeOrganization.validatorCount} validators
-								{activeOrganization.inTransitiveQuorumSet ? ' / top tier' : ''}
-							</small>
-							{selectedNode && selectedNode.groupId === activeOrganization.id && (
-								<em>Selected: {getNodeLabel(selectedNode.node)}</em>
-							)}
+				<div className="organization-rail">
+					<h2>Organizations</h2>
+					{activeOrganization && (
+						<div className="selected-organization-card">
+							<span style={{ backgroundColor: activeOrganization.color }} />
+							<div>
+								<strong>{activeOrganization.name}</strong>
+								<small>
+									{activeOrganization.validatorCount} validators
+									{activeOrganization.inTransitiveQuorumSet ? ' / top tier' : ''}
+								</small>
+								{selectedNode && selectedNode.groupId === activeOrganization.id && (
+									<em>Selected: {getNodeLabel(selectedNode.node)}</em>
+								)}
+							</div>
 						</div>
+					)}
+					<div className="organization-list">
+						{model.organizations.slice(0, 14).map((organization) => (
+							<button
+								className={activeOrganization?.id === organization.id ? 'active' : ''}
+								key={organization.id}
+								onClick={() => focusOrganization(organization)}
+								onMouseEnter={() => setHoveredOrganization(organization)}
+								onMouseLeave={() => setHoveredOrganization(null)}
+								type="button"
+							>
+								<span style={{ backgroundColor: organization.color }} />
+								<strong>{organization.name}</strong>
+								<small>
+									{organization.validatorCount} validators
+									{organization.inTransitiveQuorumSet ? ' / top tier' : ''}
+								</small>
+							</button>
+						))}
 					</div>
-				)}
-				<div className="organization-list">
-					{model.organizations.slice(0, 18).map((organization) => (
-						<button
-							className={activeOrganization?.id === organization.id ? 'active' : ''}
-							key={organization.id}
-							onClick={() => focusOrganization(organization)}
-							onMouseEnter={() => setHoveredOrganization(organization)}
-							onMouseLeave={() => setHoveredOrganization(null)}
-							type="button"
-						>
-							<span style={{ backgroundColor: organization.color }} />
-							<strong>{organization.name}</strong>
-							<small>
-								{organization.validatorCount} validators
-								{organization.inTransitiveQuorumSet ? ' / top tier' : ''}
-							</small>
-						</button>
-					))}
 				</div>
+			</section>
+			<section className="graph-overlay scp-observation-orbit">
+				<ScpLiveFeed
+					activeStatements={activeStatements}
+					network={liveNetwork}
+					statements={scpStatements}
+				/>
 			</section>
 			{selectedNode && (
 				<section className="graph-overlay node-popover">
@@ -852,7 +1379,7 @@ export function GraphExplorer({
 					<h2>{getNodeLabel(selectedNode.node)}</h2>
 					<StatusTags tags={getNodeTags(selectedNode.node)} />
 					<dl className="compact-details">
-						<div><dt>Organization</dt><dd>{getNodeOrganizationName(liveNetwork, selectedNode.node)}</dd></div>
+						<div><dt>Organization</dt><dd>{selectedNode.groupName}</dd></div>
 						<div><dt>Public key</dt><dd>{selectedNode.id}</dd></div>
 						<div><dt>Host</dt><dd>{selectedNode.node.host ?? selectedNode.node.ip}</dd></div>
 						<div><dt>Version</dt><dd>{selectedNode.node.versionStr ?? 'Unknown'}</dd></div>
@@ -869,30 +1396,57 @@ export function GraphExplorer({
 							selectedNode.node.statistics.validating30DaysPercentage
 						)}</dd></div>
 						<div><dt>Archive</dt><dd>{selectedNode.node.historyUrl ?? 'Not reported'}</dd></div>
-						<div><dt>Archive status</dt><dd>{selectedNode.node.historyArchiveHasError ? 'Warning' : 'No warning'}</dd></div>
+						<div><dt>Archive status</dt><dd>{selectedNodeHasArchiveErrors ? 'Archive warning' : 'No archive warning'}</dd></div>
 						<div><dt>SCP evidence</dt><dd>{selectedNodeStatements.length} recent statements</dd></div>
 					</dl>
 					{selectedNode.node.historyUrl && (
 						<div className="node-scan-log">
 							<div className="node-panel-heading">
 								<strong>History scan runs</strong>
-								<span>{selectedHistoryLogStatus}</span>
+								<button
+									className={showHistoryErrorsOnly ? 'scan-log-toggle active' : 'scan-log-toggle'}
+									onClick={() => setShowHistoryErrorsOnly((current) => !current)}
+									type="button"
+								>
+									Errors only
+								</button>
 							</div>
-							{latestHistoryLog ? (
-								<div className={latestHistoryLog.hasError ? 'scan-log-card warning' : 'scan-log-card good'}>
-									<span>{latestHistoryLog.hasError ? 'Errors recorded' : 'No errors'}</span>
-									<strong>
-										{formatInteger(latestHistoryLog.latestVerifiedLedger)} latest verified
-									</strong>
-									<small>
-										{formatShortDateTime(latestHistoryLog.endDate)} / {formatDuration(latestHistoryLog.durationMs)} / {formatInteger(latestHistoryLog.concurrency)} requests
-									</small>
-									{latestHistoryLog.errors.length > 0 && (
-										<code>{latestHistoryLog.errors[0]?.message}</code>
-									)}
-								</div>
+							{visibleHistoryLogs.length > 0 ? (
+								visibleHistoryLogs.map((historyLog) => {
+									const archiveErrors = getArchiveVerificationErrors(historyLog.errors);
+									const workerIssues = getWorkerIssues(historyLog.errors);
+									const hasArchiveErrors = archiveErrors.length > 0;
+									const hasWorkerIssues = workerIssues.length > 0;
+									const visibleErrors = hasArchiveErrors
+										? archiveErrors
+										: workerIssues;
+
+									return (
+									<div
+										className={hasArchiveErrors || hasWorkerIssues ? 'scan-log-card warning' : 'scan-log-card good'}
+										key={`${historyLog.startDate}-${historyLog.latestScannedLedger}`}
+									>
+										<span>
+											{hasArchiveErrors
+												? 'Archive errors'
+												: hasWorkerIssues
+													? 'Worker issue'
+													: 'No archive errors'}
+										</span>
+										<strong>
+											{formatInteger(historyLog.latestVerifiedLedger)} latest verified
+										</strong>
+										<small>
+											{formatShortDateTime(historyLog.endDate)} / {formatDuration(historyLog.durationMs)} / {formatInteger(historyLog.concurrency)} requests
+										</small>
+										{visibleErrors.length > 0 && (
+											<code>{visibleErrors[0]?.message}</code>
+										)}
+									</div>
+									);
+								})
 							) : (
-								<p>{selectedHistoryLogStatus === 'loading' ? 'Loading scan log...' : 'No scan runs returned.'}</p>
+								<p>{selectedHistoryLogStatus === 'loading' ? 'Loading scan log...' : 'No matching scan runs returned.'}</p>
 							)}
 						</div>
 					)}

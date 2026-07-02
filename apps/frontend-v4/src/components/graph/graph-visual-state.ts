@@ -1,4 +1,5 @@
 export interface GraphVisualState {
+	activeNodeWeights: ReadonlyMap<string, number>;
 	focusedOrganizationId: string | null;
 	hoveredNodeId: string | null;
 	selectedQuorumNodeIds: ReadonlySet<string>;
@@ -6,6 +7,7 @@ export interface GraphVisualState {
 }
 
 export const defaultGraphVisualState: GraphVisualState = {
+	activeNodeWeights: new Map<string, number>(),
 	focusedOrganizationId: null,
 	hoveredNodeId: null,
 	selectedQuorumNodeIds: new Set<string>(),
