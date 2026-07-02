@@ -6,14 +6,17 @@ export interface SnapshotBounds {
 export type SnapshotDiffPayload<T extends SnapshotBounds> = Omit<
   T,
   keyof SnapshotBounds
->;
+> & {
+  startDate: string;
+  endDate: string;
+};
 
 export function snapshotDiffPayload<T extends SnapshotBounds>(
   snapshot: T,
 ): SnapshotDiffPayload<T> {
-  const { startDate, endDate, ...payload } = snapshot;
-  void startDate;
-  void endDate;
-
-  return payload;
+  return {
+    ...snapshot,
+    startDate: snapshot.startDate.toISOString(),
+    endDate: snapshot.endDate.toISOString(),
+  };
 }

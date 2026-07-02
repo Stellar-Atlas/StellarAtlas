@@ -222,10 +222,10 @@ const modalDiff: Ref<BModal | null> = ref(null);
 function showDiff(snapShot: SnapshotForDelta) {
   if (!modalDiff.value) return;
   htmlFormatter.showUnchanged(true);
-  diffModalHtml.value = htmlFormatter.format(
-    deltas.get(snapShot.startDate.toISOString()) as jsondiffpatch.Delta,
-    snapshotDiffPayload(snapShot),
-  ) as string;
+  const delta = deltas.get(snapShot.startDate.toISOString());
+  diffModalHtml.value = delta
+    ? (htmlFormatter.format(delta, snapshotDiffPayload(snapShot)) as string)
+    : "<p>No field changes found for this update.</p>";
   modalDiff.value.show();
 }
 
