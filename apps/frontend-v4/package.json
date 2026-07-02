@@ -1,5 +1,6 @@
 {
 	"name": "frontend-v4",
+	"version": "2.0.0",
 	"private": true,
 	"type": "module",
 	"scripts": {
@@ -22,5 +23,8 @@
 		"@types/react-dom": "19.2.3",
 		"@types/three": "0.185.0",
 		"typescript": "6.0.3"
+	},
+	"engines": {
+		"node": "26.x"
 	}
 }

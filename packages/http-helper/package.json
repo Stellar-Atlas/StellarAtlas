@@ -1,5 +1,6 @@
 {
 	"name": "http-helper",
+	"version": "2.0.0",
 	"description": "Http service abstraction and http queue",
 	"type": "module",
 	"scripts": {
@@ -23,5 +24,8 @@
 	"devDependencies": {
 		"@types/async": "^3.2.25",
 		"@types/validator": "^13.15.10"
+	},
+	"engines": {
+		"node": "26.x"
 	}
 }

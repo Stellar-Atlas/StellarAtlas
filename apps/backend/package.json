@@ -1,5 +1,6 @@
 {
 	"name": "backend",
+	"version": "2.0.0",
 	"private": true,
 	"type": "module",
 	"description": "Backend & api",
@@ -77,5 +78,8 @@
 		"@types/workerpool": "^6.4.7",
 		"reflect-metadata": "^0.2.2"
 	},
-	"packageManager": "pnpm@10.12.1"
+	"packageManager": "pnpm@10.12.1",
+	"engines": {
+		"node": "26.x"
+	}
 }

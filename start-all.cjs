@@ -5,7 +5,6 @@ const { existsSync } = require('node:fs');
 const { delimiter, join } = require('node:path');
 
 const preferredNode = '/home/observe/.nvm/versions/node/v26.4.0/bin/node';
-const fallbackPnpmPath = '/home/observe/.nvm/versions/node/v22.16.0/bin';
 const preferredNodePath = '/home/observe/.nvm/versions/node/v26.4.0/bin';
 const nodeBin = existsSync(preferredNode) ? preferredNode : process.execPath;
 const scriptPath = join(
@@ -15,7 +14,7 @@ const scriptPath = join(
 
 function buildPath() {
 	const existingPath = process.env.PATH ?? '';
-	return [preferredNodePath, fallbackPnpmPath, existingPath]
+	return [preferredNodePath, existingPath]
 		.filter((entry) => entry.length > 0)
 		.join(delimiter);
 }

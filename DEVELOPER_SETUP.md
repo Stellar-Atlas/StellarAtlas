@@ -5,22 +5,22 @@ This guide provides tested, step-by-step instructions for setting up a complete 
 ## Prerequisites
 
 ### Required Versions
-- **Node.js 22.x** (as specified in package.json engines)
+- **Node.js 26.x** (as specified in package.json engines)
 - **pnpm 10.12.1** (as specified in package.json engines)
 - **PostgreSQL** (local installation or via devcontainer)
 
 ### Version Setup
 ```bash
-# Install and use Node.js 22.x
-nvm install 22
-nvm use 22
+# Install and use Node.js 26.x
+nvm install 26
+nvm use 26
 
 # Install and activate pnpm 10.12.1
 corepack enable
 corepack prepare pnpm@10.12.1 --activate
 
 # Verify versions
-node --version  # Should show v22.x.x  
+node --version  # Should show v26.x.x
 pnpm --version  # Should show 10.12.1
 ```
 
@@ -258,7 +258,7 @@ pnpm start:scan-history
 
 #### Engine Version Mismatch
 **Cause**: Wrong Node.js or pnpm version
-**Solution**: Use exact versions - Node.js 22.x and pnpm 10.12.1
+**Solution**: Use exact versions - Node.js 26.x and pnpm 10.12.1
 
 #### "Could not connect to a single node in crawl"
 **Cause**: Outdated Stellar seed node IP addresses

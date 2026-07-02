@@ -1,5 +1,6 @@
 {
 	"name": "scp-simulation",
+	"version": "2.0.0",
 	"private": true,
 	"type": "module",
 	"description": "Simulate the SCP protocol for educational purposes. Currently focussing on federated voting",
@@ -15,5 +16,8 @@
 	"main": "lib/index.js",
 	"types": "lib/index.d.ts",
 	"author": "pieterjan84@github",
-	"license": "MIT"
+	"license": "MIT",
+	"engines": {
+		"node": "26.x"
+	}
 }

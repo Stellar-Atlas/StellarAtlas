@@ -1,5 +1,6 @@
 {
 	"name": "history-scanner-dto",
+	"version": "2.0.0",
 	"description": "Shared DTO between coordinator and history scan worker",
 	"type": "module",
 	"scripts": {
@@ -14,5 +15,8 @@
 	"dependencies": {
 		"neverthrow": "^8.2.0"
 	},
-	"devDependencies": {}
+	"devDependencies": {},
+	"engines": {
+		"node": "26.x"
+	}
 }

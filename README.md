@@ -185,7 +185,7 @@ This monorepo requires specific versions of Node.js and pnpm, as defined in the 
 
 ```js
   "engines": {
-    "node": "22.x",
+    "node": "26.x",
     "pnpm": "10.12.1"
   }
 ```
@@ -193,13 +193,13 @@ This monorepo requires specific versions of Node.js and pnpm, as defined in the 
 #### Why is the `engines` key necessary?
 
 - **Consistency:** Ensures all developers and CI environments use the same versions, preventing subtle bugs and incompatibilities.
-- **Compatibility:** Some dependencies and scripts may only work with Node.js 20.x and pnpm 9.15.0. Using other versions can cause build or runtime errors.
-- **Monorepo tooling:** pnpm 9.x is required for correct workspace and dependency management in this monorepo setup.
+- **Compatibility:** Some dependencies and scripts require Node.js 26.x and pnpm 10.12.1. Using other versions can cause build or runtime errors.
+- **Monorepo tooling:** pnpm 10.x is required for correct workspace and dependency management in this monorepo setup.
 
 #### Why these versions?
 
-- **Node.js 20.x** is a stable LTS release, widely supported and tested with this codebase.
-- **pnpm 9.15.0** is the latest tested version that works reliably with the monorepo and its dependencies.
+- **Node.js 26.x** is the production runtime target for this codebase.
+- **pnpm 10.12.1** is the tested package manager version for this monorepo.
 
 #### How to install the correct versions
 
@@ -212,19 +212,20 @@ If you encounter errors related to Node.js or pnpm versions, follow these steps:
    pnpm --version
    ```
 
-2. **Install Node.js 20.x:**
+2. **Install Node.js 26.x:**
    - Use [nvm](https://github.com/nvm-sh/nvm):
 
      ```bash
-     nvm install 20
-     nvm use 20
+     nvm install 26
+     nvm use 26
      ```
 
    - Or download from [nodejs.org](https://nodejs.org/en/download/).
-3. **Install pnpm 9.15.0:**
+3. **Install pnpm 10.12.1:**
 
    ```bash
-   npm install -g pnpm@9.15.0
+   corepack enable
+   corepack prepare pnpm@10.12.1 --activate
    ```
 
 4. After installing the correct versions, proceed with:
