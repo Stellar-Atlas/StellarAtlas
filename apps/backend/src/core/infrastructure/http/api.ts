@@ -173,7 +173,12 @@ const listen = async () => {
 				GetLatestOrganizationSnapshots
 			),
 			getScpStatements: kernel.container.get(GetScpStatements),
-			horizonUrl: config.horizonUrl.value
+			horizonUrl: config.horizonUrl.value,
+			searchConfig: {
+				apiKey: config.meilisearchApiKey,
+				host: config.meilisearchHost,
+				indexName: config.meilisearchNetworkIndex
+			}
 		})
 	);
 

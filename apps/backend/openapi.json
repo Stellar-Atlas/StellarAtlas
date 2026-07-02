@@ -102,6 +102,100 @@
 				}
 			}
 		},
+		"/v1/search": {
+			"get": {
+				"summary": "Search network entities",
+				"description": "Faceted search for current validators, nodes, organizations, and archive-related network metadata.",
+				"tags": ["Network", "Node", "Organization"],
+				"operationId": "searchNetworkEntities",
+				"parameters": [
+					{
+						"name": "q",
+						"in": "query",
+						"description": "Search text",
+						"required": false,
+						"schema": {
+							"type": "string"
+						}
+					},
+					{
+						"name": "type",
+						"in": "query",
+						"description": "Optional entity type filter",
+						"required": false,
+						"schema": {
+							"type": "string",
+							"enum": ["node", "organization"]
+						}
+					},
+					{
+						"name": "limit",
+						"in": "query",
+						"description": "Maximum results to return",
+						"required": false,
+						"schema": {
+							"type": "integer",
+							"minimum": 1,
+							"maximum": 50
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "Search results",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object",
+									"properties": {
+										"estimatedTotalHits": { "type": "integer" },
+										"hits": {
+											"type": "array",
+											"items": {
+												"type": "object",
+												"properties": {
+													"detail": { "type": "string" },
+													"entityId": { "type": "string" },
+													"entityType": {
+														"type": "string",
+														"enum": ["node", "organization"]
+													},
+													"href": { "type": "string" },
+													"id": { "type": "string" },
+													"label": { "type": "string" },
+													"organizationName": { "type": "string" }
+												},
+												"required": [
+													"detail",
+													"entityId",
+													"entityType",
+													"href",
+													"id",
+													"label"
+												]
+											}
+										},
+										"indexedNetworkTime": { "type": "string" },
+										"query": { "type": "string" },
+										"source": {
+											"type": "string",
+											"enum": ["memory", "meilisearch"]
+										}
+									},
+									"required": [
+										"estimatedTotalHits",
+										"hits",
+										"indexedNetworkTime",
+										"query",
+										"source"
+									]
+								}
+							}
+						}
+					}
+				}
+			}
+		},
 		"/v1/node-snapshots": {
 			"get": {
 				"summary": "Get the latest updated node snapshots in the network",

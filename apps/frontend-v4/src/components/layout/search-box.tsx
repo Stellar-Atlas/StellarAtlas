@@ -2,66 +2,54 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import type { PublicNetwork } from '../../api/types';
-import { fetchBrowserPublicNetwork } from '../../api/browser-client';
-import { getNodeLabel, getOrganizationLabel } from '../../domain/network';
+import type { PublicSearchHit } from '../../api/types';
+import { fetchBrowserSearch } from '../../api/browser-client';
 
 interface SearchOption {
 	id: string;
 	label: string;
 	detail: string;
 	href: string;
-	kind: 'node' | 'organization';
+	kind: PublicSearchHit['entityType'];
 }
 
 const normalize = (value: string): string => value.trim().toLowerCase();
 
-const buildSearchOptions = (network: PublicNetwork): SearchOption[] => [
-	...network.nodes.map((node) => ({
-		id: node.publicKey,
-		label: getNodeLabel(node),
-		detail: node.homeDomain ?? node.publicKey,
-		href: `/nodes/${encodeURIComponent(node.publicKey)}`,
-		kind: 'node' as const
-	})),
-	...network.organizations.map((organization) => ({
-		id: organization.id,
-		label: getOrganizationLabel(organization),
-		detail: organization.homeDomain,
-		href: `/organizations/${encodeURIComponent(organization.id)}`,
-		kind: 'organization' as const
-	}))
-];
+const searchHitToOption = (hit: PublicSearchHit): SearchOption => ({
+	detail: hit.detail,
+	href: hit.href,
+	id: hit.id,
+	kind: hit.entityType,
+	label: hit.label
+});
 
 export function SearchBox(): React.JSX.Element {
 	const router = useRouter();
 	const [query, setQuery] = useState('');
-	const [network, setNetwork] = useState<PublicNetwork | null>(null);
-	const options = useMemo(
-		() => (network ? buildSearchOptions(network) : []),
-		[network]
-	);
-	const matches = useMemo(() => {
+	const [matches, setMatches] = useState<SearchOption[]>([]);
+	const canSearch = useMemo(() => {
 		const normalizedQuery = normalize(query);
-		if (normalizedQuery.length < 2) return [];
-
-		return options
-			.filter((option) =>
-				normalize(`${option.label} ${option.detail} ${option.id}`).includes(
-					normalizedQuery
-				)
-			)
-			.slice(0, 8);
-	}, [options, query]);
+		return normalizedQuery.length >= 2;
+	}, [query]);
 
 	useEffect(() => {
-		const abortController = new AbortController();
-		void fetchBrowserPublicNetwork(abortController.signal)
-			.then(setNetwork)
-			.catch(() => undefined);
+		if (!canSearch) {
+			setMatches([]);
+			return;
+		}
 
-		return () => abortController.abort();
-	}, []);
+		const abortController = new AbortController();
+		const timeout = setTimeout(() => {
+			void fetchBrowserSearch(query, abortController.signal)
+				.then((response) => setMatches(response.hits.map(searchHitToOption)))
+				.catch(() => setMatches([]));
+		}, 120);
+
+		return () => {
+			clearTimeout(timeout);
+			abortController.abort();
+		};
+	}, [canSearch, query]);
 
 	const submitSearch = (event: React.FormEvent<HTMLFormElement>): void => {
 		event.preventDefault();
@@ -74,9 +62,7 @@ export function SearchBox(): React.JSX.Element {
 			<input
 				aria-label="Search nodes and organizations"
 				onChange={(event) => setQuery(event.currentTarget.value)}
-				placeholder={
-					network ? 'Search nodes or organizations' : 'Loading search'
-				}
+				placeholder="Search nodes or organizations"
 				value={query}
 			/>
 			{matches.length > 0 && (

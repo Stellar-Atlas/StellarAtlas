@@ -3,6 +3,7 @@ import type {
 	PublicLedgerTransactions,
 	PublicLatestLedger,
 	PublicNetwork,
+	PublicSearchResponse,
 	PublicScpStatementObservation
 } from './types';
 
@@ -78,6 +79,20 @@ export const fetchBrowserLatestLedger = (
 	signal: AbortSignal
 ): Promise<PublicLatestLedger> =>
 	fetchBrowserJson<PublicLatestLedger>('/v1/ledger/latest', signal);
+
+export const fetchBrowserSearch = (
+	query: string,
+	signal: AbortSignal
+): Promise<PublicSearchResponse> => {
+	const url = new URL('/v1/search', 'https://placeholder.invalid');
+	url.searchParams.set('q', query);
+	url.searchParams.set('limit', '8');
+
+	return fetchBrowserJson<PublicSearchResponse>(
+		`${url.pathname}${url.search}`,
+		signal
+	);
+};
 
 export const fetchBrowserHistoryArchiveScanLogs = (
 	historyUrl: string,

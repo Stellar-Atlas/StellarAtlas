@@ -58,6 +58,26 @@ export interface PublicLatestLedger {
 	readonly sequence: string;
 }
 
+export type PublicSearchEntityType = 'node' | 'organization';
+
+export interface PublicSearchHit {
+	readonly detail: string;
+	readonly entityId: string;
+	readonly entityType: PublicSearchEntityType;
+	readonly href: string;
+	readonly id: string;
+	readonly label: string;
+	readonly organizationName?: string;
+}
+
+export interface PublicSearchResponse {
+	readonly estimatedTotalHits: number;
+	readonly hits: readonly PublicSearchHit[];
+	readonly indexedNetworkTime: string;
+	readonly query: string;
+	readonly source: 'memory' | 'meilisearch';
+}
+
 export interface ApiFailure {
 	message: string;
 	statusCode?: number;

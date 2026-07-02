@@ -183,6 +183,9 @@ importers:
       mathjs:
         specifier: ^10.6.4
         version: 10.6.4
+      meilisearch:
+        specifier: 0.58.0
+        version: 0.58.0
       moment:
         specifier: ^2.30.1
         version: 2.30.1
@@ -4449,6 +4452,10 @@ packages:
   media-typer@0.3.0:
     resolution: {integrity: sha512-dq+qelQ9akHpcOl/gUVRTxVIOkAJ1wR3QAvb4RsVjS8oVoFjDGTc679wJYmUmknUF5HwMLOgb5O+a3KxfWapPQ==}
     engines: {node: '>= 0.6'}
+
+  meilisearch@0.58.0:
+    resolution: {integrity: sha512-MXFlU+JVG2I3tDI4brS3UHxEv2fjOROP24TPP16c8dGHTulb1kxMgXvKP0x4ImvUcsVVJFi4QXP0JNDS/TaWaw==}
+    engines: {node: ^20.19.0 || >=22.12.0}
 
   merge-descriptors@1.0.3:
     resolution: {integrity: sha512-gaNvAS7TZ897/rVaZ0nMtAyxNyi/pdbjbAwUpFQpN70GqnVfOiXpeUUMKRBmzXaSQ8DdTX4/0ms62r2K+hE6mQ==}
@@ -9948,6 +9955,8 @@ snapshots:
       typed-function: 2.1.0
 
   media-typer@0.3.0: {}
+
+  meilisearch@0.58.0: {}
 
   merge-descriptors@1.0.3: {}
 

@@ -16,6 +16,11 @@ import {
 	fetchLatestLedger,
 	fetchLedgerTransactions
 } from './HorizonLedgerClient.js';
+import { NetworkSearchService } from '../search/NetworkSearchService.js';
+import type {
+	NetworkSearchConfig,
+	NetworkSearchEntityType
+} from '../search/NetworkSearchTypes.js';
 
 export interface NetworkRouterConfig {
 	getNetwork: GetNetwork;
@@ -25,13 +30,20 @@ export interface NetworkRouterConfig {
 	getLatestOrganizationSnapshots: GetLatestOrganizationSnapshots;
 	getScpStatements: GetScpStatements;
 	horizonUrl: string;
+	searchConfig: NetworkSearchConfig;
 }
 
 const isLedgerSequence = (value: string): boolean => /^\d+$/.test(value);
 
+const isSearchEntityType = (
+	value: string | undefined
+): value is NetworkSearchEntityType =>
+	value === 'node' || value === 'organization';
+
 const networkRouterWrapper = (config: NetworkRouterConfig): Router => {
 	const networkRouter = express.Router();
 	const liveNetworkIntervalMs = 5_000;
+	const networkSearch = new NetworkSearchService(config.searchConfig);
 
 	const getTime = (at?: unknown): Date => {
 		return at && isDateString(at) ? getDateFromParam(at) : new Date();
@@ -47,6 +59,11 @@ const networkRouterWrapper = (config: NetworkRouterConfig): Router => {
 		if (typeof value !== 'string') return undefined;
 		const parsed = Number(value);
 		return Number.isFinite(parsed) ? parsed : undefined;
+	};
+
+	const getSearchLimit = (value: express.Request['query'][string]): number => {
+		const parsed = getOptionalLimit(value);
+		return parsed ?? 8;
 	};
 
 	const writeNetworkEvent = async (
@@ -174,6 +191,34 @@ const networkRouterWrapper = (config: NetworkRouterConfig): Router => {
 			if (statsOrError.isErr()) {
 				res.status(500).send('Internal Server Error');
 			} else res.send(statsOrError.value);
+		}
+	);
+
+	networkRouter.get(
+		['/search'],
+		async (req: express.Request, res: express.Response) => {
+			res.setHeader('Cache-Control', 'public, max-age=' + 5);
+			res.setHeader('Content-Type', 'application/json');
+
+			const networkOrError = await config.getNetwork.execute({});
+			if (networkOrError.isErr())
+				return res.status(500).send('Internal Server Error');
+			if (networkOrError.value === null)
+				return res.status(404).send('No network found');
+
+			const query = getOptionalString(req.query.q) ?? '';
+			const requestedType = getOptionalString(req.query.type);
+			const entityType = isSearchEntityType(requestedType)
+				? requestedType
+				: undefined;
+
+			const payload = await networkSearch.search(networkOrError.value, {
+				entityType,
+				limit: getSearchLimit(req.query.limit),
+				query
+			});
+
+			return res.status(200).send(payload);
 		}
 	);
 
