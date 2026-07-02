@@ -11,6 +11,7 @@ import { GetMeasurementAggregations } from '../../use-cases/get-measurement-aggr
 import { AggregationTarget } from '../../use-cases/get-measurement-aggregations/GetMeasurementAggregationsDTO.js';
 import { query } from 'express-validator';
 import { handleMeasurementsAggregationRequest } from './handleMeasurementsAggregationRequest.js';
+import { GetScpStatements } from '../../use-cases/get-scp-statements/GetScpStatements.js';
 
 export interface NetworkRouterConfig {
 	getNetwork: GetNetwork;
@@ -18,6 +19,7 @@ export interface NetworkRouterConfig {
 	getMeasurementAggregations: GetMeasurementAggregations;
 	getLatestNodeSnapshots: GetLatestNodeSnapshots;
 	getLatestOrganizationSnapshots: GetLatestOrganizationSnapshots;
+	getScpStatements: GetScpStatements;
 }
 
 const networkRouterWrapper = (config: NetworkRouterConfig): Router => {
@@ -25,6 +27,18 @@ const networkRouterWrapper = (config: NetworkRouterConfig): Router => {
 
 	const getTime = (at?: unknown): Date => {
 		return at && isDateString(at) ? getDateFromParam(at) : new Date();
+	};
+
+	const getOptionalString = (
+		value: express.Request['query'][string]
+	): string | undefined => (typeof value === 'string' ? value : undefined);
+
+	const getOptionalLimit = (
+		value: express.Request['query'][string]
+	): number | undefined => {
+		if (typeof value !== 'string') return undefined;
+		const parsed = Number(value);
+		return Number.isFinite(parsed) ? parsed : undefined;
 	};
 
 	networkRouter.get(
@@ -96,6 +110,25 @@ const networkRouterWrapper = (config: NetworkRouterConfig): Router => {
 			if (statsOrError.isErr()) {
 				res.status(500).send('Internal Server Error');
 			} else res.send(statsOrError.value);
+		}
+	);
+
+	networkRouter.get(
+		['/scp-statements'],
+		async (req: express.Request, res: express.Response) => {
+			res.setHeader('Cache-Control', 'public, max-age=' + 5);
+			res.setHeader('Content-Type', 'application/json');
+
+			const statementsOrError = await config.getScpStatements.execute({
+				limit: getOptionalLimit(req.query.limit),
+				nodeId: getOptionalString(req.query.nodeId),
+				slotIndex: getOptionalString(req.query.slotIndex)
+			});
+
+			if (statementsOrError.isErr())
+				return res.status(500).send('Internal Server Error');
+
+			return res.status(200).send(statementsOrError.value);
 		}
 	);
 

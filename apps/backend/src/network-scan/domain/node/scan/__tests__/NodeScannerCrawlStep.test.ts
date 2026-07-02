@@ -10,9 +10,12 @@ import { err, ok } from 'neverthrow';
 import { createDummyPublicKey } from '../../__fixtures__/createDummyPublicKey.js';
 import Node from '../../Node.js';
 import { PeerNode } from 'crawler';
+import type { ScpStatementObservationRepository } from '../../../scp/ScpStatementObservationRepository.js';
 
 describe('NodeScannerCrawlStep', () => {
 	const nodeRepository = mock<NodeRepository>();
+	const scpStatementObservationRepository =
+		mock<ScpStatementObservationRepository>();
 	const crawlerService = mock<CrawlerService>();
 
 	const time = new Date();
@@ -30,7 +33,8 @@ describe('NodeScannerCrawlStep', () => {
 				[activeNode.publicKey.value, new PeerNode(activeNode.publicKey.value)],
 				[newlyFoundPublicKey.value, new PeerNode(newlyFoundPublicKey.value)]
 			]),
-			processedLedgers: [1]
+			processedLedgers: [1],
+			scpStatementObservations: []
 		})
 	);
 
@@ -38,6 +42,7 @@ describe('NodeScannerCrawlStep', () => {
 
 	const crawlStep = new NodeScannerCrawlStep(
 		nodeRepository,
+		scpStatementObservationRepository,
 		crawlerService,
 		mock<Logger>()
 	);
@@ -86,7 +91,8 @@ describe('NodeScannerCrawlStep', () => {
 				peerNodes: new Map([
 					[activeNode.publicKey.value, new PeerNode(activeNode.publicKey.value)]
 				]),
-				processedLedgers: [1]
+				processedLedgers: [1],
+				scpStatementObservations: []
 			})
 		);
 		await crawlStep.execute(nodeScan, mock<NetworkQuorumSetConfiguration>());
@@ -103,7 +109,8 @@ describe('NodeScannerCrawlStep', () => {
 					localCloseTime: new Date()
 				},
 				peerNodes: new Map([['malformed', new PeerNode('malformed')]]),
-				processedLedgers: [1]
+				processedLedgers: [1],
+				scpStatementObservations: []
 			})
 		);
 		const result = await crawlStep.execute(

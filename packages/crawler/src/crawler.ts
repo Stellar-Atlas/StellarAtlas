@@ -177,7 +177,9 @@ export class Crawler {
 			peers: this.crawl.observation.peerNodes.getAll(),
 			closedLedgers:
 				this.crawl.observation.slots.getConfirmedClosedSlotIndexes(),
-			latestClosedLedger: this.crawl.observation.latestConfirmedClosedLedger
+			latestClosedLedger: this.crawl.observation.latestConfirmedClosedLedger,
+			scpStatementObservations:
+				this.crawl.observation.scpStatementObservations
 		};
 	}
 

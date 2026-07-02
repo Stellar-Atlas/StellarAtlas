@@ -11,12 +11,15 @@ import { NETWORK_TYPES } from '../../../infrastructure/di/di-types.js';
 import PublicKey from '../PublicKey.js';
 import { mapUnknownToError } from '../../../../core/utilities/mapUnknownToError.js';
 import type { NodeAddress } from '../NodeAddress.js';
+import type { ScpStatementObservationRepository } from '../../scp/ScpStatementObservationRepository.js';
 
 @injectable()
 export class NodeScannerCrawlStep {
 	constructor(
 		@inject(NETWORK_TYPES.NodeRepository)
 		private nodeRepository: NodeRepository,
+		@inject(NETWORK_TYPES.ScpStatementObservationRepository)
+		private scpStatementObservationRepository: ScpStatementObservationRepository,
 		private crawlerService: CrawlerService,
 		@inject('Logger')
 		private logger: Logger
@@ -61,6 +64,8 @@ export class NodeScannerCrawlStep {
 			crawlResult.value.latestClosedLedger.sequence,
 			crawlResult.value.latestClosedLedger.closeTime
 		);
+
+		await this.persistScpStatementObservations(crawlResult.value);
 
 		if (invalidPeerNodes.length > 0)
 			this.logger.info('Could not add the following peer-nodes', {
@@ -115,5 +120,20 @@ export class NodeScannerCrawlStep {
 		return Array.from(crawlResult.peerNodes.keys()).filter(
 			(publicKey) => !nodes.find((node) => node.publicKey.value === publicKey)
 		);
+	}
+
+	private async persistScpStatementObservations(
+		crawlResult: CrawlResult
+	): Promise<void> {
+		try {
+			await this.scpStatementObservationRepository.saveMany(
+				crawlResult.scpStatementObservations
+			);
+		} catch (error) {
+			const mappedError = mapUnknownToError(error);
+			this.logger.error('Error while saving SCP statement observations', {
+				errorMessage: mappedError.message
+			});
+		}
 	}
 }

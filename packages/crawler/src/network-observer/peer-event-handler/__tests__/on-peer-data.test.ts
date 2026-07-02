@@ -80,7 +80,8 @@ describe('OnDataHandler', () => {
 			data.publicKey,
 			data.stellarMessageWork.stellarMessage,
 			true,
-			observation
+			observation,
+			data.address
 		);
 		expect(data.stellarMessageWork.done).toHaveBeenCalled();
 		expect(receivedResult).toEqual(result);
@@ -100,7 +101,8 @@ describe('OnDataHandler', () => {
 			data.publicKey,
 			data.stellarMessageWork.stellarMessage,
 			false,
-			observation
+			observation,
+			data.address
 		);
 		expect(data.stellarMessageWork.done).toHaveBeenCalled();
 		expect(receivedResult).toEqual(result);

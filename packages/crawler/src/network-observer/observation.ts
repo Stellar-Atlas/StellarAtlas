@@ -7,6 +7,7 @@ import { Slots } from './peer-event-handler/stellar-message-handlers/scp-envelop
 import { QuorumSet } from 'shared';
 import { QuorumSetState } from './quorum-set-state.js';
 import { LRUCache } from 'lru-cache';
+import type { ScpStatementObservation } from './scp-statement-observation.js';
 
 export class Observation {
 	public state: ObservationState = ObservationState.Idle;
@@ -14,6 +15,7 @@ export class Observation {
 	public topTierAddressesSet: Set<string>;
 	public envelopeCache: LRUCache<string, number>;
 	public quorumSetState: QuorumSetState = new QuorumSetState();
+	public scpStatementObservations: ScpStatementObservation[] = [];
 
 	constructor(
 		public network: string,
@@ -68,5 +70,9 @@ export class Observation {
 
 	setNetworkHalted() {
 		this.networkHalted = true;
+	}
+
+	recordScpStatementObservation(observation: ScpStatementObservation): void {
+		this.scpStatementObservations.push(observation);
 	}
 }

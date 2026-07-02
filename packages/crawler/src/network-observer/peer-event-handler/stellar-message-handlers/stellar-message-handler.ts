@@ -24,7 +24,8 @@ export class StellarMessageHandler {
 		sender: PublicKey,
 		stellarMessage: xdr.StellarMessage,
 		attemptLedgerClose: boolean,
-		observation: Observation
+		observation: Observation,
+		observedFromAddress: string
 	): Result<
 		{
 			closedLedger: Ledger | null;
@@ -42,7 +43,9 @@ export class StellarMessageHandler {
 
 				const result = this.scpEnvelopeHandler.handle(
 					stellarMessage.envelope(),
-					observation
+					observation,
+					sender,
+					observedFromAddress
 				);
 
 				if (result.isErr()) {

@@ -133,7 +133,8 @@ describe('Crawler', () => {
 				sequence: BigInt(0),
 				value: ''
 			},
-			peers: new Map()
+			peers: new Map(),
+			scpStatementObservations: []
 		});
 		expectCorrectMaxTimer(maxCrawlTimeManager);
 		expectCorrectLogger(crawlLogger);
@@ -184,7 +185,8 @@ describe('Crawler', () => {
 						sequence: BigInt(0),
 						value: ''
 					},
-					peers: new Map()
+					peers: new Map(),
+					scpStatementObservations: []
 				});
 				expectCorrectMaxTimer(maxCrawlTimeManager);
 				expectCorrectLogger(crawlLogger);
@@ -236,7 +238,8 @@ describe('Crawler', () => {
 						sequence: BigInt(0),
 						value: ''
 					},
-					peers: new Map()
+					peers: new Map(),
+					scpStatementObservations: []
 				});
 				expectCorrectMaxTimer(maxCrawlTimeManager);
 				expectCorrectLogger(crawlLogger);

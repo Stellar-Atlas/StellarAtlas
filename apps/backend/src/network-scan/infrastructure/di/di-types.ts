@@ -16,6 +16,9 @@ export const NETWORK_TYPES = {
 	OrganizationRepository: Symbol('OrganizationRepository'),
 	OrganizationSnapshotRepository: Symbol('OrganizationSnapshotRepository'),
 	NetworkScanRepository: Symbol('NetworkScanRepository'),
+	ScpStatementObservationRepository: Symbol(
+		'ScpStatementObservationRepository'
+	),
 	NetworkMeasurementDayRepository: Symbol('NetworkMeasurementDayRepository'),
 	NetworkMeasurementMonthRepository: Symbol(
 		'NetworkMeasurementMonthRepository'
