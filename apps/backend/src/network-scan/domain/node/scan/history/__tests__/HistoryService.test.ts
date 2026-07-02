@@ -128,7 +128,31 @@ it('should return urls with historyErrors', async function () {
 						true,
 						null,
 						null,
-						false
+						false,
+						[
+							{
+								message: 'Wrong transaction hash',
+								type: 'TYPE_VERIFICATION',
+								url: 'https://gap.co/transactions/00/00/00.xdr.gz'
+							}
+						]
+					),
+					new HistoryArchiveScan(
+						'https://connection-issue.co',
+						new Date(),
+						new Date(),
+						10,
+						true,
+						null,
+						null,
+						false,
+						[
+							{
+								message: 'Could not fetch latest ledger',
+								type: 'TYPE_CONNECTION',
+								url: 'https://connection-issue.co'
+							}
+						]
 					),
 					new HistoryArchiveScan(
 						'https://nogap.co',
@@ -148,6 +172,7 @@ it('should return urls with historyErrors', async function () {
 	const result = await historyService.getHistoryUrlsWithScanErrors([
 		urlWithError,
 		urlWithoutError,
+		'https://connection-issue.co',
 		unknownUrl
 	]);
 	if (result.isErr()) throw result.error;

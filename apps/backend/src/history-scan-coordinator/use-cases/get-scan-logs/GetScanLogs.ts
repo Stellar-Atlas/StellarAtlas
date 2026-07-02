@@ -17,7 +17,9 @@ export interface HistoryArchiveScanLogEntryDTO {
 	readonly endDate: Date;
 	readonly errors: readonly HistoryArchiveScanLogErrorDTO[];
 	readonly fromLedger: number;
+	readonly hasArchiveVerificationError: boolean;
 	readonly hasError: boolean;
+	readonly hasWorkerIssue: boolean;
 	readonly isSlowArchive: boolean;
 	readonly latestScannedLedger: number;
 	readonly latestVerifiedLedger: number;
@@ -77,7 +79,9 @@ export class GetScanLogs {
 				url: error.url
 			})),
 			fromLedger: scan.fromLedger,
+			hasArchiveVerificationError: scan.hasArchiveVerificationError(),
 			hasError: scan.hasError(),
+			hasWorkerIssue: scan.hasWorkerIssue(),
 			isSlowArchive: scan.isSlowArchive ?? false,
 			latestScannedLedger: scan.latestScannedLedger,
 			latestVerifiedLedger: scan.latestVerifiedLedger,

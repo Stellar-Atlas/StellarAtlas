@@ -101,7 +101,6 @@ const NetworkAnalysis = defineAsyncComponent(
 defineProps({
   view: {
     type: String,
-    required: true,
     default: "graph",
   },
 });

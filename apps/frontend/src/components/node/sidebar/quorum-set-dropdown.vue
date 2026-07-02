@@ -92,7 +92,7 @@ export interface Props {
   quorumSet: QuorumSet;
   parentQuorumSet?: QuorumSet;
   level?: number;
-  expand: boolean;
+  expand?: boolean;
 }
 
 const props = withDefaults(defineProps<Props>(), {

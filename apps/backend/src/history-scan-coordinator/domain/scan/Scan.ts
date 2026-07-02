@@ -1,6 +1,6 @@
 import { Column, Entity, Index, JoinColumn, OneToOne } from 'typeorm';
 import { Url } from '@core/domain/Url.js';
-import { ScanError } from './ScanError.js';
+import { ScanError, ScanErrorType } from './ScanError.js';
 import { CoreEntity } from '@core/domain/CoreEntity.js';
 import {
 	mapDetailsToScanError,
@@ -98,6 +98,18 @@ export class Scan extends CoreEntity {
 
 	hasError(): boolean {
 		return this.error !== null || this.errors.length > 0;
+	}
+
+	hasArchiveVerificationError(): boolean {
+		return this.scanErrors.some(
+			(error) => error.type === ScanErrorType.TYPE_VERIFICATION
+		);
+	}
+
+	hasWorkerIssue(): boolean {
+		return this.scanErrors.some(
+			(error) => error.type === ScanErrorType.TYPE_CONNECTION
+		);
 	}
 
 	get scanErrors(): readonly ScanError[] {

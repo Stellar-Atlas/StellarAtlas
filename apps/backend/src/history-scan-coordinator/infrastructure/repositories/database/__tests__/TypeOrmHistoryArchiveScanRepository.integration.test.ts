@@ -88,3 +88,88 @@ it('should find the latest scans', async function () {
 	expect(latestByUrl?.error).toBeInstanceOf(ScanError);
 	expect(latestByUrl?.scanErrors).toHaveLength(1);
 });
+
+it('should prefer the latest verification scan over a newer worker setup failure', async function () {
+	const repo: ScanRepository = kernel.container.get(
+		TYPES.HistoryArchiveScanRepository
+	);
+
+	const url = createDummyHistoryBaseUrl();
+	const verificationError = new ScanError(
+		ScanErrorType.TYPE_VERIFICATION,
+		url.value + '/transactions/00/00/00.xdr.gz',
+		'Wrong transaction hash'
+	);
+	const verificationScan = new Scan(
+		new Date('2026-07-01T00:00:00.000Z'),
+		new Date('2026-07-01T00:00:00.000Z'),
+		new Date('2026-07-01T00:05:00.000Z'),
+		url,
+		100,
+		200,
+		150,
+		null,
+		12,
+		false,
+		verificationError
+	);
+	const workerFailure = new Scan(
+		new Date('2026-07-01T00:00:00.000Z'),
+		new Date('2026-07-01T00:10:00.000Z'),
+		new Date('2026-07-01T00:12:00.000Z'),
+		url,
+		151,
+		null,
+		150,
+		null,
+		0,
+		null,
+		new ScanError(
+			ScanErrorType.TYPE_CONNECTION,
+			url.value,
+			'Could not fetch latest ledger'
+		)
+	);
+
+	await repo.save([verificationScan, workerFailure]);
+
+	const latestByUrl = await repo.findLatestByUrl(url.value);
+	expect(latestByUrl?.startDate).toEqual(verificationScan.startDate);
+	expect(latestByUrl?.hasArchiveVerificationError()).toBe(true);
+
+	const latest = await repo.findLatest();
+	const foundScan = latest.find((scan) => scan.baseUrl.value === url.value);
+	expect(foundScan?.startDate).toEqual(verificationScan.startDate);
+	expect(foundScan?.hasArchiveVerificationError()).toBe(true);
+});
+
+it('should return worker setup failures when no verification scan exists', async function () {
+	const repo: ScanRepository = kernel.container.get(
+		TYPES.HistoryArchiveScanRepository
+	);
+
+	const url = createDummyHistoryBaseUrl();
+	const workerFailure = new Scan(
+		new Date('2026-07-01T00:00:00.000Z'),
+		new Date('2026-07-01T00:10:00.000Z'),
+		new Date('2026-07-01T00:12:00.000Z'),
+		url,
+		0,
+		null,
+		0,
+		null,
+		0,
+		null,
+		new ScanError(
+			ScanErrorType.TYPE_CONNECTION,
+			url.value,
+			'Could not fetch latest ledger'
+		)
+	);
+
+	await repo.save([workerFailure]);
+
+	const latestByUrl = await repo.findLatestByUrl(url.value);
+	expect(latestByUrl?.startDate).toEqual(workerFailure.startDate);
+	expect(latestByUrl?.hasWorkerIssue()).toBe(true);
+});

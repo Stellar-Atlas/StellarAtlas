@@ -4,16 +4,19 @@ import { ScanErrorType } from '../../domain/scan/ScanError.js';
 
 export function mapScanToHistoryArchiveScan(scan: Scan): HistoryArchiveScan {
 	const scanErrors = scan.scanErrors;
-	const firstError = scanErrors[0] ?? null;
+	const archiveVerificationErrors = scanErrors.filter(
+		(error) => error.type === ScanErrorType.TYPE_VERIFICATION
+	);
+	const firstArchiveVerificationError = archiveVerificationErrors[0] ?? null;
 
 	return new HistoryArchiveScan(
 		scan.baseUrl.value,
 		scan.startDate,
 		scan.endDate,
 		scan.latestVerifiedLedger,
-		scanErrors.length > 0,
-		firstError?.url ?? null,
-		firstError?.message ?? null,
+		archiveVerificationErrors.length > 0,
+		firstArchiveVerificationError?.url ?? null,
+		firstArchiveVerificationError?.message ?? null,
 		scan.isSlowArchive ?? false,
 		scanErrors.map((error) => ({
 			message: error.message,

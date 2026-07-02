@@ -104,8 +104,8 @@ import QuorumSetAddValidatorsModal from "@/components/node/sidebar/quorum-set-ad
 
 export interface Props {
   quorumSet: QuorumSet;
-  parentQuorumSet: QuorumSet | null | undefined;
-  level: number | undefined;
+  parentQuorumSet?: QuorumSet | null;
+  level?: number;
 }
 const props = withDefaults(defineProps<Props>(), {
   level: 0,

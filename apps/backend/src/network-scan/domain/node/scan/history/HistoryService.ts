@@ -10,6 +10,7 @@ import { CustomError } from '@core/errors/CustomError.js';
 import type { Logger } from '@core/services/Logger.js';
 import type { HistoryArchiveScanService } from './HistoryArchiveScanService.js';
 import { NETWORK_TYPES } from '@network-scan/infrastructure/di/di-types.js';
+import type { HistoryArchiveScan } from 'shared';
 
 export class FetchHistoryError extends CustomError {
 	constructor(url: string, cause?: Error) {
@@ -93,7 +94,9 @@ export class HistoryService {
 		const scanResult = await this.historyArchiveScanService.findLatestScans();
 		if (scanResult.isErr()) return err(scanResult.error);
 		const scansWithErrors = new Set(
-			scanResult.value.filter((scan) => scan.hasError).map((scan) => scan.url)
+			scanResult.value
+				.filter(hasArchiveVerificationError)
+				.map((scan) => scan.url)
 		);
 		this.logger.info('History archive errors', {
 			urls: Array.from(scansWithErrors)
@@ -119,3 +122,9 @@ export class HistoryService {
 		this.historyArchiveScanService.scheduleScans(historyUrls);
 	}
 }
+
+const hasArchiveVerificationError = (scan: HistoryArchiveScan): boolean => {
+	if (scan.errors.length === 0) return scan.hasError;
+
+	return scan.errors.some((error) => error.type === 'TYPE_VERIFICATION');
+};

@@ -251,7 +251,6 @@ const props = defineProps({
   },
   zoomEnabled: {
     type: Boolean,
-    required: true,
     default: false,
   },
   viewGraph: {

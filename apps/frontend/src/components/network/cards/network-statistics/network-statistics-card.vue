@@ -85,7 +85,7 @@ import useStore from "@/store/useStore";
 
 const store = useStore();
 export interface Props {
-  isLoading: boolean;
+  isLoading?: boolean;
   tooltip: string;
   title: string;
   value: number | boolean;

@@ -22,6 +22,10 @@ import {
 	formatNode30DayActive,
 	formatNode30DayValidating
 } from '../../domain/availability';
+import {
+	getArchiveVerificationErrors,
+	getWorkerIssues
+} from '../../domain/history-archive';
 import { StatusTags } from '../status-tags';
 import { HistoryArchiveScanLog } from './history-archive-scan-log';
 
@@ -40,6 +44,8 @@ export function NodeDetail({
 }: NodeDetailProps): React.JSX.Element {
 	const organization = getOrganizationForNode(network, node);
 	const archiveErrors = getArchiveErrors(historyArchiveScan);
+	const archiveVerificationErrors = getArchiveVerificationErrors(archiveErrors);
+	const workerIssues = getWorkerIssues(archiveErrors);
 	const active24Hours = formatNode24HourActive(node);
 	const active30Days = formatNode30DayActive(node);
 	const validating24Hours = formatNode24HourValidating(node);
@@ -49,7 +55,8 @@ export function NodeDetail({
 	const showArchivePanel =
 		hasHistoryArchive ||
 		node.historyArchiveHasError ||
-		archiveErrors.length > 0 ||
+		archiveVerificationErrors.length > 0 ||
+		workerIssues.length > 0 ||
 		historyArchiveScan !== null;
 
 	return (
@@ -129,15 +136,21 @@ export function NodeDetail({
 							</div>
 							<div>
 								<dt>Scan status</dt>
-								<dd>{historyArchiveScan.hasError ? 'Verification errors' : 'No verification errors'}</dd>
+								<dd>
+									{archiveVerificationErrors.length > 0
+										? 'Archive verification errors'
+										: workerIssues.length > 0
+											? 'Worker issue in latest run'
+											: 'No archive verification errors'}
+								</dd>
 							</div>
 						</dl>
 					) : (
 						<p className="muted-copy">No completed archive scan is available yet.</p>
 					)}
-					{archiveErrors.length > 0 ? (
+					{archiveVerificationErrors.length > 0 ? (
 						<ul className="archive-error-list">
-							{archiveErrors.map((error, index) => (
+							{archiveVerificationErrors.map((error, index) => (
 								<li key={`${error.type}:${error.url}:${error.message}:${index}`}>
 									<a href={error.url} rel="noopener noreferrer" target="_blank">
 										{error.url}
@@ -146,6 +159,12 @@ export function NodeDetail({
 								</li>
 							))}
 						</ul>
+					) : null}
+					{archiveVerificationErrors.length === 0 && workerIssues.length > 0 ? (
+						<p className="muted-copy">
+							The latest scanner run had a worker issue. Archive data errors are
+							shown separately in the scan run log.
+						</p>
 					) : null}
 					<div className="archive-log-section">
 						<div className="panel-heading archive-log-heading">

@@ -51,7 +51,6 @@ import { Node, Organization } from "shared";
 defineProps({
   isLoading: {
     type: Boolean,
-    required: true,
     default: false,
   },
 });

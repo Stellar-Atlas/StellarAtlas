@@ -6,22 +6,37 @@ import {
 	formatDateTime,
 	formatInteger
 } from '../../format/formatters';
+import {
+	getArchiveVerificationErrors,
+	getWorkerIssues,
+	scanLogHasArchiveVerificationError,
+	scanLogHasWorkerIssue
+} from '../../domain/history-archive';
 
 interface HistoryArchiveScanLogProps {
 	readonly logs: readonly PublicHistoryArchiveScanLogEntry[];
 }
 
-type ScanLogFilter = 'all' | 'errors';
+type ScanLogFilter = 'archive-errors' | 'worker-issues' | 'all';
 
 export function HistoryArchiveScanLog({
 	logs
 }: HistoryArchiveScanLogProps): React.JSX.Element {
-	const [filter, setFilter] = useState<ScanLogFilter>('all');
+	const [filter, setFilter] = useState<ScanLogFilter>('archive-errors');
 	const filteredLogs = useMemo(
-		() => logs.filter((entry) => filter === 'all' || entry.hasError),
+		() =>
+			logs.filter((entry) => {
+				if (filter === 'archive-errors') {
+					return scanLogHasArchiveVerificationError(entry);
+				}
+				if (filter === 'worker-issues') return scanLogHasWorkerIssue(entry);
+
+				return true;
+			}),
 		[filter, logs]
 	);
-	const errorCount = logs.filter((entry) => entry.hasError).length;
+	const archiveErrorCount = logs.filter(scanLogHasArchiveVerificationError).length;
+	const workerIssueCount = logs.filter(scanLogHasWorkerIssue).length;
 
 	if (logs.length === 0) {
 		return (
@@ -39,23 +54,32 @@ export function HistoryArchiveScanLog({
 					<span> recent scan runs</span>
 					<span className="muted-inline">
 						{' '}
-						/ {formatInteger(errorCount)} with errors
+						/ {formatInteger(archiveErrorCount)} archive errors
+						{' '}
+						/ {formatInteger(workerIssueCount)} worker issues
 					</span>
 				</div>
 				<div className="segmented" aria-label="Archive scan log filter">
+					<button
+						className={filter === 'archive-errors' ? 'active' : ''}
+						onClick={() => setFilter('archive-errors')}
+						type="button"
+					>
+						Archive errors
+					</button>
+					<button
+						className={filter === 'worker-issues' ? 'active' : ''}
+						onClick={() => setFilter('worker-issues')}
+						type="button"
+					>
+						Worker issues
+					</button>
 					<button
 						className={filter === 'all' ? 'active' : ''}
 						onClick={() => setFilter('all')}
 						type="button"
 					>
 						All
-					</button>
-					<button
-						className={filter === 'errors' ? 'active' : ''}
-						onClick={() => setFilter('errors')}
-						type="button"
-					>
-						Errors
 					</button>
 				</div>
 			</div>
@@ -65,20 +89,40 @@ export function HistoryArchiveScanLog({
 				</p>
 			) : (
 				<ul className="archive-scan-log-list">
-					{filteredLogs.map((entry) => (
+					{filteredLogs.map((entry) => {
+						const archiveErrors = getArchiveVerificationErrors(entry.errors);
+						const workerIssues = getWorkerIssues(entry.errors);
+						const hasArchiveErrors = archiveErrors.length > 0;
+						const hasWorkerIssues = workerIssues.length > 0;
+						const rowTone = hasArchiveErrors || hasWorkerIssues
+							? 'has-error'
+							: 'is-success';
+						const rowTitle = hasArchiveErrors
+							? 'Archive verification errors'
+							: hasWorkerIssues
+								? 'Worker issues'
+								: 'No archive errors';
+						const rowTag = hasArchiveErrors
+							? 'archive error'
+							: hasWorkerIssues
+								? 'worker issue'
+								: 'success';
+						const rowErrors = hasArchiveErrors
+							? archiveErrors
+							: workerIssues;
+
+						return (
 						<li
-							className={entry.hasError ? 'has-error' : 'is-success'}
+							className={rowTone}
 							key={`${entry.url}:${entry.startDate}:${entry.latestScannedLedger}`}
 						>
 							<div className="archive-scan-log-row">
 								<div>
-									<strong>
-										{entry.hasError ? 'Verification errors' : 'No errors'}
-									</strong>
+									<strong>{rowTitle}</strong>
 									<span>{formatDateTime(entry.endDate)}</span>
 								</div>
-								<span className={entry.hasError ? 'tag warning' : 'tag good'}>
-									{entry.hasError ? 'error' : 'success'}
+								<span className={rowTone === 'has-error' ? 'tag warning' : 'tag good'}>
+									{rowTag}
 								</span>
 							</div>
 							<dl className="archive-scan-log-metrics">
@@ -108,9 +152,9 @@ export function HistoryArchiveScanLog({
 									<dd>{formatDuration(entry.durationMs)}</dd>
 								</div>
 							</dl>
-							{entry.errors.length > 0 ? (
+							{rowErrors.length > 0 ? (
 								<ul className="archive-error-list compact">
-									{entry.errors.map((error, index) => (
+									{rowErrors.map((error, index) => (
 										<li key={`${error.type}:${error.url}:${index}`}>
 											<a
 												href={error.url}
@@ -125,7 +169,8 @@ export function HistoryArchiveScanLog({
 								</ul>
 							) : null}
 						</li>
-					))}
+						);
+					})}
 				</ul>
 			)}
 		</div>

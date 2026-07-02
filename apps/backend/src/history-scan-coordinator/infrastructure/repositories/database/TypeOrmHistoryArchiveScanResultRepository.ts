@@ -12,11 +12,12 @@ export class TypeOrmHistoryArchiveScanResultRepository implements ScanRepository
 	}
 
 	async findLatestByUrl(url: string): Promise<Scan | null> {
-		return await this.baseRepository
-			.createQueryBuilder('scan')
-			.where('scan.url=:url', { url: url })
-			//.andWhere('scan."hasError"=false')
-			.leftJoinAndSelect('scan.error', 'error')
+		const latestVerificationScan = await this.createFindByUrlQuery(url)
+			.andWhere('scan.concurrency > 0')
+			.orderBy('scan.startDate', 'DESC')
+			.getOne();
+
+		return latestVerificationScan ?? await this.createFindByUrlQuery(url)
 			.orderBy('scan.startDate', 'DESC')
 			.getOne();
 	}
@@ -32,14 +33,35 @@ export class TypeOrmHistoryArchiveScanResultRepository implements ScanRepository
 	}
 
 	async findLatest(): Promise<Scan[]> {
+		const latestScans = await this.findLatestScans(false);
+		const latestVerificationScans = await this.findLatestScans(true);
+		const latestVerificationScansByUrl = new Map(
+			latestVerificationScans.map((scan) => [scan.baseUrl.value, scan])
+		);
+
+		return latestScans.map((scan) =>
+			latestVerificationScansByUrl.get(scan.baseUrl.value) ?? scan
+		);
+	}
+
+	private createFindByUrlQuery(url: string) {
+		return this.baseRepository
+			.createQueryBuilder('scan')
+			.where('scan.url=:url', { url })
+			.leftJoinAndSelect('scan.error', 'error');
+	}
+
+	private async findLatestScans(verificationScansOnly: boolean): Promise<Scan[]> {
 		return await this.baseRepository
 			.createQueryBuilder('ha')
 			.innerJoin(
-				(qb) =>
-					qb
+				(qb) => {
+					const query = qb
 						.select('max(id) id')
-						.from('history_archive_scan_v2', 'haj')
-						.groupBy('url'),
+						.from('history_archive_scan_v2', 'haj');
+					if (verificationScansOnly) query.where('haj.concurrency > 0');
+					return query.groupBy('url');
+				},
 				'haj',
 				'ha.id = haj.id'
 			)

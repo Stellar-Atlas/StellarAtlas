@@ -51,4 +51,42 @@ describe('mapScanToHistoryArchiveScan', () => {
 			}
 		]);
 	});
+
+	it('keeps worker issues out of the legacy archive error fields', () => {
+		const baseUrl = Url.create('https://history.example.com');
+		if (baseUrl.isErr()) throw baseUrl.error;
+
+		const connectionError = new ScanError(
+			ScanErrorType.TYPE_CONNECTION,
+			'https://history.example.com/.well-known/stellar-history.json',
+			'Could not fetch latest ledger'
+		);
+		const scan = new Scan(
+			new Date('2026-07-01T00:00:00.000Z'),
+			new Date('2026-07-01T00:00:00.000Z'),
+			new Date('2026-07-01T00:01:00.000Z'),
+			baseUrl.value,
+			0,
+			null,
+			0,
+			null,
+			0,
+			false,
+			connectionError,
+			[connectionError]
+		);
+
+		const dto = mapScanToHistoryArchiveScan(scan);
+
+		expect(dto.hasError).toBe(false);
+		expect(dto.errorUrl).toBeNull();
+		expect(dto.errorMessage).toBeNull();
+		expect(dto.errors).toEqual([
+			{
+				message: connectionError.message,
+				type: 'TYPE_CONNECTION',
+				url: connectionError.url
+			}
+		]);
+	});
 });

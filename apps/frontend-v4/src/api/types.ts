@@ -28,7 +28,9 @@ export interface PublicHistoryArchiveScanLogEntry {
 	readonly endDate: string;
 	readonly errors: readonly PublicHistoryArchiveScanLogError[];
 	readonly fromLedger: number;
+	readonly hasArchiveVerificationError?: boolean;
 	readonly hasError: boolean;
+	readonly hasWorkerIssue?: boolean;
 	readonly isSlowArchive: boolean;
 	readonly latestScannedLedger: number;
 	readonly latestVerifiedLedger: number;
