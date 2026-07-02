@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import type { PublicNetwork } from '../../api/types';
 import { getNodeLabel, getOrganizationLabel } from '../../domain/network';
@@ -32,14 +32,25 @@ const buildSearchOptions = (network: PublicNetwork): SearchOption[] => [
 	}))
 ];
 
-interface SearchBoxProps {
-	network: PublicNetwork;
+async function fetchSearchNetwork(signal: AbortSignal): Promise<PublicNetwork> {
+	const response = await fetch('/v1', {
+		headers: { Accept: 'application/json' },
+		signal
+	});
+
+	if (!response.ok)
+		throw new Error(`Search request returned ${response.status}`);
+	return response.json() as Promise<PublicNetwork>;
 }
 
-export function SearchBox({ network }: SearchBoxProps): React.JSX.Element {
+export function SearchBox(): React.JSX.Element {
 	const router = useRouter();
 	const [query, setQuery] = useState('');
-	const options = useMemo(() => buildSearchOptions(network), [network]);
+	const [network, setNetwork] = useState<PublicNetwork | null>(null);
+	const options = useMemo(
+		() => (network ? buildSearchOptions(network) : []),
+		[network]
+	);
 	const matches = useMemo(() => {
 		const normalizedQuery = normalize(query);
 		if (normalizedQuery.length < 2) return [];
@@ -53,6 +64,15 @@ export function SearchBox({ network }: SearchBoxProps): React.JSX.Element {
 			.slice(0, 8);
 	}, [options, query]);
 
+	useEffect(() => {
+		const abortController = new AbortController();
+		void fetchSearchNetwork(abortController.signal)
+			.then(setNetwork)
+			.catch(() => undefined);
+
+		return () => abortController.abort();
+	}, []);
+
 	const submitSearch = (event: React.FormEvent<HTMLFormElement>): void => {
 		event.preventDefault();
 		const firstMatch = matches.at(0);
@@ -64,7 +84,9 @@ export function SearchBox({ network }: SearchBoxProps): React.JSX.Element {
 			<input
 				aria-label="Search nodes and organizations"
 				onChange={(event) => setQuery(event.currentTarget.value)}
-				placeholder="Search nodes or organizations"
+				placeholder={
+					network ? 'Search nodes or organizations' : 'Loading search'
+				}
 				value={query}
 			/>
 			{matches.length > 0 && (
