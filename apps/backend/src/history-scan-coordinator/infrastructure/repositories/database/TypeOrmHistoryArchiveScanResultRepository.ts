@@ -21,6 +21,16 @@ export class TypeOrmHistoryArchiveScanResultRepository implements ScanRepository
 			.getOne();
 	}
 
+	async findRecentByUrl(url: string, limit: number): Promise<Scan[]> {
+		return await this.baseRepository
+			.createQueryBuilder('scan')
+			.where('scan.url=:url', { url })
+			.leftJoinAndSelect('scan.error', 'error')
+			.orderBy('scan.startDate', 'DESC')
+			.take(limit)
+			.getMany();
+	}
+
 	async findLatest(): Promise<Scan[]> {
 		return await this.baseRepository
 			.createQueryBuilder('ha')

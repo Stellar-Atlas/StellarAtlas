@@ -2,6 +2,7 @@ import express, { Router } from 'express';
 import { body, param, validationResult } from 'express-validator';
 import basicAuth from 'express-basic-auth';
 import { GetLatestScan } from '../../use-cases/get-latest-scan/GetLatestScan.js';
+import { GetScanLogs } from '../../use-cases/get-scan-logs/GetScanLogs.js';
 import { InvalidUrlError } from '../../use-cases/get-latest-scan/InvalidUrlError.js';
 import { RegisterScan } from '../../use-cases/register-scan/RegisterScan.js';
 import { ScanDTO } from 'history-scanner-dto';
@@ -10,6 +11,7 @@ import { TouchScanJob } from '../../use-cases/touch-scan-job/TouchScanJob.js';
 
 export interface HistoryScanRouterConfig {
 	getLatestScan: GetLatestScan;
+	getScanLogs: GetScanLogs;
 	getScanJob: GetScanJob;
 	registerScan: RegisterScan;
 	touchScanJob: TouchScanJob;
@@ -173,6 +175,31 @@ export const HistoryScanRouterWrapper = (
 				return res.json(scanJobResult.value);
 			}
 		);
+
+	historyScanRouter.get(
+		'/logs/:url',
+		[param('url').isURL()],
+		async function (req: express.Request, res: express.Response) {
+			res.setHeader('Cache-Control', 'public, max-age=' + 30);
+			const errors = validationResult(req);
+			if (!errors.isEmpty()) {
+				return res.status(400).json({ errors: errors.array() });
+			}
+
+			const scanLogsOrError = await config.getScanLogs.execute(req.params.url);
+			if (
+				scanLogsOrError.isErr() &&
+				scanLogsOrError.error instanceof InvalidUrlError
+			) {
+				return res.status(400).json({ error: 'Invalid url' });
+			}
+			if (scanLogsOrError.isErr()) {
+				return res.status(500).json({ error: 'Internal server error' });
+			}
+
+			return res.status(200).json(scanLogsOrError.value);
+		}
+	);
 
 	historyScanRouter.get(
 		'/:url',

@@ -17,6 +17,7 @@ import { networkRouter } from '../../../network-scan/infrastructure/http/Network
 import helmet from 'helmet';
 import { GetNetwork } from '../../../network-scan/use-cases/get-network/GetNetwork.js';
 import { GetLatestScan } from '../../../history-scan-coordinator/use-cases/get-latest-scan/GetLatestScan.js';
+import { GetScanLogs } from '../../../history-scan-coordinator/use-cases/get-scan-logs/GetScanLogs.js';
 import { GetLatestNodeSnapshots } from '../../../network-scan/use-cases/get-latest-node-snapshots/GetLatestNodeSnapshots.js';
 import { GetLatestOrganizationSnapshots } from '../../../network-scan/use-cases/get-latest-organization-snapshots/GetLatestOrganizationSnapshots.js';
 import { nodeRouter } from '../../../network-scan/infrastructure/http/NodeRouter.js';
@@ -117,6 +118,7 @@ const listen = async () => {
 		'/v1/history-scan',
 		historyScanRouter({
 			getLatestScan: kernel.container.get(GetLatestScan),
+			getScanLogs: kernel.container.get(GetScanLogs),
 			registerScan: kernel.container.get(RegisterScan),
 			userName: config.historyScanAPIUsername,
 			password: config.historyScanAPIPassword,
@@ -170,7 +172,8 @@ const listen = async () => {
 			getLatestOrganizationSnapshots: kernel.container.get(
 				GetLatestOrganizationSnapshots
 			),
-			getScpStatements: kernel.container.get(GetScpStatements)
+			getScpStatements: kernel.container.get(GetScpStatements),
+			horizonUrl: config.horizonUrl.value
 		})
 	);
 
