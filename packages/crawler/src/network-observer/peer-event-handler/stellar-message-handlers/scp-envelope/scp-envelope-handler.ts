@@ -5,6 +5,7 @@ import { isLedgerSequenceValid } from './ledger-validator.js';
 import { ScpStatementHandler } from './scp-statement/scp-statement-handler.js';
 import type { Ledger } from '../../../../crawler.js';
 import { Observation } from '../../../observation.js';
+import { createScpStatementObservation } from '../../../scp-statement-observation.js';
 
 /*
  * ScpEnvelopeHandler makes sure that no duplicate SCP envelopes are processed, that the signature is valid and
@@ -15,7 +16,9 @@ export class ScpEnvelopeHandler {
 
 	public handle(
 		scpEnvelope: xdr.ScpEnvelope,
-		observation: Observation
+		observation: Observation,
+		observedFromPeer: string,
+		observedFromAddress: string
 	): Result<
 		{
 			closedLedger: Ledger | null;
@@ -34,6 +37,15 @@ export class ScpEnvelopeHandler {
 
 		const verifiedSignature = this.verifySignature(scpEnvelope, observation);
 		if (verifiedSignature.isErr()) return err(verifiedSignature.error);
+
+		const observedStatement = createScpStatementObservation(
+			scpEnvelope,
+			observedFromPeer,
+			observedFromAddress,
+			new Date()
+		);
+		if (observedStatement.isErr()) return err(observedStatement.error);
+		observation.recordScpStatementObservation(observedStatement.value);
 
 		return this.scpStatementHandler.handle(
 			scpEnvelope.statement(),

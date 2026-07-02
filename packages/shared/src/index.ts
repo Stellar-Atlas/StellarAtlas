@@ -40,6 +40,17 @@ export {
 	type HistoryArchiveScanV1,
 	HistoryArchiveScanV1Schema
 } from './dto/history-archive-scan-v1.js';
+export type {
+	ScpBallotV1,
+	ScpNominationV1,
+	ScpStatementConfirmV1,
+	ScpStatementExternalizeV1,
+	ScpStatementObservationV1,
+	ScpStatementPledgesV1,
+	ScpStatementPrepareV1,
+	ScpStatementTypeV1,
+	ScpStatementValueV1
+} from './dto/scp-statement-observation-v1.js';
 export {
 	NodeSnapshotV1Schema,
 	type NodeSnapshotV1

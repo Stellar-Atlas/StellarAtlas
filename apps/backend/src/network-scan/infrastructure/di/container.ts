@@ -108,6 +108,10 @@ import OrganizationMeasurementDay from '../../domain/organization/OrganizationMe
 import NodeMeasurementDay from '../../domain/node/NodeMeasurementDay.js';
 import NetworkMeasurementDay from '../../domain/network/NetworkMeasurementDay.js';
 import { CachedNetworkDTOService } from '../../services/CachedNetworkDTOService.js';
+import { ScpStatementObservation } from '../../domain/scp/ScpStatementObservation.js';
+import type { ScpStatementObservationRepository } from '../../domain/scp/ScpStatementObservationRepository.js';
+import { TypeOrmScpStatementObservationRepository } from '../database/repositories/TypeOrmScpStatementObservationRepository.js';
+import { GetScpStatements } from '../../use-cases/get-scp-statements/GetScpStatements.js';
 
 export function load(container: Container, config: Config) {
 	container
@@ -315,6 +319,16 @@ function loadDomain(container: Container, config: Config) {
 			);
 		})
 		.inRequestScope();
+	container
+		.bind<ScpStatementObservationRepository>(
+			NETWORK_TYPES.ScpStatementObservationRepository
+		)
+		.toDynamicValue(() => {
+			return new TypeOrmScpStatementObservationRepository(
+				dataSource.getRepository(ScpStatementObservation)
+			);
+		})
+		.inRequestScope();
 
 	container.bind<HomeDomainFetcher>(HomeDomainFetcher).toSelf();
 	container.bind<TomlService>(TomlService).toSelf().inSingletonScope();
@@ -349,6 +363,7 @@ function loadUseCases(container: Container) {
 	container.bind(GetMeasurements).toSelf();
 	container.bind(GetMeasurementsFactory).toSelf();
 	container.bind(GetMeasurementAggregations).toSelf();
+	container.bind(GetScpStatements).toSelf();
 	container.bind(UpdateNetwork).toSelf();
 	container.bind(ScanNetworkLooped).toSelf();
 	container.bind<ScanNetwork>(ScanNetwork).toSelf();

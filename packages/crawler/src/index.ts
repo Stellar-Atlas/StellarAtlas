@@ -134,4 +134,8 @@ export { CrawlerConfiguration } from './crawler-configuration.js';
 export { CrawlFactory } from './crawl-factory.js';
 export type { NodeAddress } from './node-address.js';
 export type { Ledger } from './crawler.js';
+export type {
+	ScpStatementObservation,
+	StellarValueSummary
+} from './network-observer/scp-statement-observation.js';
 export { Crawl } from './crawl.js';

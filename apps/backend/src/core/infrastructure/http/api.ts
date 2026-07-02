@@ -29,6 +29,7 @@ import { GetOrganization } from '../../../network-scan/use-cases/get-organizatio
 import { GetOrganizations } from '../../../network-scan/use-cases/get-organizations/GetOrganizations.js';
 import { GetMeasurementsFactory } from '../../../network-scan/use-cases/get-measurements/GetMeasurementsFactory.js';
 import { GetMeasurementAggregations } from '../../../network-scan/use-cases/get-measurement-aggregations/GetMeasurementAggregations.js';
+import { GetScpStatements } from '../../../network-scan/use-cases/get-scp-statements/GetScpStatements.js';
 import { RequestUnsubscribeLink } from '../../../notifications/use-cases/request-unsubscribe-link/RequestUnsubscribeLink.js';
 import { RegisterScan } from '../../../history-scan-coordinator/use-cases/register-scan/RegisterScan.js';
 import { historyScanRouter } from '../../../history-scan-coordinator/infrastructure/http/HistoryScanRouter.js';
@@ -166,7 +167,8 @@ const listen = async () => {
 			getLatestNodeSnapshots: kernel.container.get(GetLatestNodeSnapshots),
 			getLatestOrganizationSnapshots: kernel.container.get(
 				GetLatestOrganizationSnapshots
-			)
+			),
+			getScpStatements: kernel.container.get(GetScpStatements)
 		})
 	);
 

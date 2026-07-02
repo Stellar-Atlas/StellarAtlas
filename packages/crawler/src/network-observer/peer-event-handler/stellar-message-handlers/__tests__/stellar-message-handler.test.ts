@@ -19,6 +19,7 @@ describe('StellarMessageHandler', () => {
 	let logger: MockProxy<pino.Logger>;
 	let handler: StellarMessageHandler;
 	let senderPublicKey: string;
+	const observedFromAddress = '127.0.0.1:11625';
 
 	beforeEach(() => {
 		scpManager = mock<ScpEnvelopeHandler>();
@@ -48,9 +49,16 @@ describe('StellarMessageHandler', () => {
 				senderPublicKey,
 				stellarMessage,
 				true,
-				observation
+				observation,
+				observedFromAddress
 			);
 			expect(scpManager.handle).toHaveBeenCalledTimes(1);
+			expect(scpManager.handle).toHaveBeenCalledWith(
+				stellarMessage.envelope(),
+				observation,
+				senderPublicKey,
+				observedFromAddress
+			);
 			expect(result.isOk()).toBeTruthy();
 			if (!result.isOk()) return;
 			expect(result.value).toEqual({
@@ -66,7 +74,8 @@ describe('StellarMessageHandler', () => {
 				senderPublicKey,
 				stellarMessage,
 				false,
-				observation
+				observation,
+				observedFromAddress
 			);
 			expect(scpManager.handle).toHaveBeenCalledTimes(0);
 			expect(result.isOk()).toBeTruthy();
@@ -83,7 +92,8 @@ describe('StellarMessageHandler', () => {
 				senderPublicKey,
 				stellarMessage,
 				true,
-				observation
+				observation,
+				observedFromAddress
 			);
 			expect(result.isOk()).toBeTruthy();
 			if (!result.isOk()) return;
@@ -101,7 +111,8 @@ describe('StellarMessageHandler', () => {
 				senderPublicKey,
 				stellarMessage,
 				true,
-				observation
+				observation,
+				observedFromAddress
 			);
 			expect(quorumSetManager.processQuorumSet).toHaveBeenCalledTimes(1);
 			expect(result.isOk()).toBeTruthy();
@@ -119,7 +130,8 @@ describe('StellarMessageHandler', () => {
 				senderPublicKey,
 				stellarMessage,
 				true,
-				observation
+				observation,
+				observedFromAddress
 			);
 			expect(
 				quorumSetManager.peerNodeDoesNotHaveQuorumSet
@@ -142,7 +154,8 @@ describe('StellarMessageHandler', () => {
 				senderPublicKey,
 				stellarMessage,
 				true,
-				observation
+				observation,
+				observedFromAddress
 			);
 			expect(result.isOk()).toBeTruthy();
 			expect(

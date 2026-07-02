@@ -49,7 +49,8 @@ export class OnPeerData {
 			data.publicKey,
 			data.stellarMessageWork.stellarMessage,
 			attemptLedgerClose,
-			observation
+			observation,
+			data.address
 		);
 
 		data.stellarMessageWork.done();

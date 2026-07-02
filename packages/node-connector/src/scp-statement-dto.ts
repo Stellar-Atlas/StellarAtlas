@@ -140,8 +140,8 @@ export class SCPStatement {
 							value: preparedPrime.value().toString('base64')
 					  }
 					: null,
-				nC: statement.nH(),
-				nH: statement.nC()
+				nC: statement.nC(),
+				nH: statement.nH()
 			};
 		} else {
 			return err(new Error('unknown type: ' + xdrType));

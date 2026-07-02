@@ -4,6 +4,7 @@ import { Crawler } from 'crawler';
 import { PeerNode } from 'crawler';
 import type { CrawlResult as CrawlResultDTO } from 'crawler';
 import type { Ledger } from 'crawler';
+import type { ScpStatementObservation } from 'crawler';
 import { NetworkQuorumSetConfiguration } from '../../../network/NetworkQuorumSetConfiguration.js';
 import { CrawlerDTOMapper } from './CrawlerDTOMapper.js';
 import Node from '../../Node.js';
@@ -19,6 +20,7 @@ export interface CrawlResult {
 	latestClosedLedger: Ledger;
 	processedLedgers: number[];
 	peerNodes: Map<string, PeerNode>;
+	scpStatementObservations: ScpStatementObservation[];
 }
 
 @injectable()
@@ -62,7 +64,9 @@ export class CrawlerService {
 			processedLedgers: crawlResultOrError.value.closedLedgers.map((sequence) =>
 				Number(sequence)
 			),
-			peerNodes: crawlResultOrError.value.peers
+			peerNodes: crawlResultOrError.value.peers,
+			scpStatementObservations:
+				crawlResultOrError.value.scpStatementObservations
 		});
 	}
 
