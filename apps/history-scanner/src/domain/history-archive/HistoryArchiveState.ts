@@ -5,14 +5,17 @@ export interface HistoryArchiveState {
 	server: string;
 	currentLedger: number;
 	networkPassphrase?: string;
-	currentBuckets: {
-		curr: string;
-		snap: string;
-		next: {
-			state: number;
-			output?: string;
-		};
-	}[];
+	currentBuckets: HistoryStateBucket[];
+	hotArchiveBuckets?: HistoryStateBucket[];
+}
+
+export interface HistoryStateBucket {
+	curr: string;
+	snap: string;
+	next: {
+		state: number;
+		output?: string;
+	};
 }
 
 export const HistoryArchiveStateSchema: JSONSchemaType<HistoryArchiveState> = {
@@ -24,6 +27,27 @@ export const HistoryArchiveStateSchema: JSONSchemaType<HistoryArchiveState> = {
 		networkPassphrase: { type: 'string', nullable: true },
 		currentBuckets: {
 			type: 'array',
+			items: {
+				type: 'object',
+				properties: {
+					curr: { type: 'string' },
+					snap: { type: 'string' },
+					next: {
+						type: 'object',
+						properties: {
+							state: { type: 'number' },
+							output: { type: 'string', nullable: true }
+						},
+						required: ['state']
+					}
+				},
+				required: ['curr', 'snap', 'next']
+			},
+			minItems: 0
+		},
+		hotArchiveBuckets: {
+			type: 'array',
+			nullable: true,
 			items: {
 				type: 'object',
 				properties: {

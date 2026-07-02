@@ -12,7 +12,8 @@ export class ScanSettingsFactory {
 	constructor(
 		private categoryScanner: CategoryScanner,
 		private archivePerformanceTester: ArchivePerformanceTester,
-		private slowArchiveMaxNumberOfLedgersToScan = 120960 //by default only scan the latest week worth of ledgers for slow archives (5sec ledger close time)
+		private slowArchiveMaxNumberOfLedgersToScan = 120960, //by default only scan the latest week worth of ledgers for slow archives (5sec ledger close time)
+		private fallbackConcurrency = 10
 	) {}
 
 	async determineSettings(
@@ -102,13 +103,10 @@ export class ScanSettingsFactory {
 			await this.archivePerformanceTester.test(scanJob.url, toLedger);
 
 		if (performanceTestResultOrError.isErr())
-			return err(
-				new ScanError(
-					ScanErrorType.TYPE_CONNECTION,
-					scanJob.url.value,
-					'Could not connect to determine optimal concurrency'
-				)
-			);
+			return ok({
+				concurrency: this.fallbackConcurrency,
+				isSlowArchive: null
+			});
 
 		console.log(performanceTestResultOrError);
 		return ok({

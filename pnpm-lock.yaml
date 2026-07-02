@@ -105,9 +105,6 @@ importers:
       '@stellaratlas/stellar-analysis-nodejs':
         specifier: workspace:*
         version: link:../../packages/stellar-analysis-nodejs
-      '@stellaratlas/stellar-history-archive-hasher':
-        specifier: workspace:*
-        version: link:../../packages/stellar-history-archive-hasher
       ajv:
         specifier: ^8.20.0
         version: 8.20.0
@@ -498,9 +495,9 @@ importers:
 
   apps/history-scanner:
     dependencies:
-      '@stellaratlas/stellar-history-archive-hasher':
-        specifier: workspace:*
-        version: link:../../packages/stellar-history-archive-hasher
+      '@stellar/stellar-sdk':
+        specifier: 16.0.1
+        version: 16.0.1
       ajv:
         specifier: ^8.20.0
         version: 8.20.0
@@ -767,8 +764,6 @@ importers:
   packages/stellar-analysis-web: {}
 
   packages/stellar-halting-analysis: {}
-
-  packages/stellar-history-archive-hasher: {}
 
 packages:
 

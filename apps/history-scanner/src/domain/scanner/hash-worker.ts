@@ -2,8 +2,7 @@ import * as workerpool from 'workerpool';
 import { gunzip } from 'zlib';
 import { createHash } from 'crypto';
 import { isMainThread } from 'worker_threads';
-import { xdr } from '@stellar/stellar-sdk';
-import * as hasher from '@stellaratlas/stellar-history-archive-hasher';
+import { hash, xdr } from '@stellar/stellar-sdk';
 
 async function unzipAndHash(zip: ArrayBuffer): Promise<string> {
 	return new Promise((resolve, reject) => {
@@ -61,24 +60,33 @@ export function processLedgerHeaderHistoryEntryXDR(
 export function processTransactionHistoryResultEntryXDR(
 	transactionHistoryResultXDR: Buffer | Uint8Array
 ): { ledger: number; hash: string } {
-	const hash = hasher.hash_transaction_history_result_entry(
-		transactionHistoryResultXDR
+	const transactionHistoryResultEntry =
+		xdr.TransactionHistoryResultEntry.fromXDR(
+			Buffer.from(transactionHistoryResultXDR)
+		);
+	const resultSetHash = hash(
+		transactionHistoryResultEntry.txResultSet().toXDR()
 	);
 	return {
-		ledger: Buffer.from(transactionHistoryResultXDR).readInt32BE(),
-		hash: Buffer.from(hash).toString('base64')
+		ledger: transactionHistoryResultEntry.ledgerSeq(),
+		hash: resultSetHash.toString('base64')
 	};
 }
 
 export function processTransactionHistoryEntryXDR(
 	transactionHistoryEntryXDR: Uint8Array
 ): { ledger: number; hash: string } {
-	const hash = hasher.hash_transaction_history_entry(
-		transactionHistoryEntryXDR
+	const transactionHistoryEntry = xdr.TransactionHistoryEntry.fromXDR(
+		Buffer.from(transactionHistoryEntryXDR)
 	);
+	const transactionSet =
+		transactionHistoryEntry.ext().switch() === 1
+			? transactionHistoryEntry.ext().generalizedTxSet()
+			: transactionHistoryEntry.txSet();
+	const transactionSetHash = hash(transactionSet.toXDR());
 	return {
-		ledger: Buffer.from(transactionHistoryEntryXDR).readInt32BE(),
-		hash: Buffer.from(hash).toString('base64')
+		ledger: transactionHistoryEntry.ledgerSeq(),
+		hash: transactionSetHash.toString('base64')
 	};
 }
 

@@ -28,3 +28,30 @@ it('should extract all non zero hashes from HAS', function () {
 		'ed31280497ce5703b9fe8ab25ef9f50da56e359271a981da18d51b53d3b9853a'
 	]);
 });
+
+it('should extract non zero hot archive bucket hashes', function () {
+	expect(
+		HASBucketHashExtractor.getNonZeroHashes({
+			version: 2,
+			server: 'stellar-core 27.0.0',
+			currentLedger: 100,
+			currentBuckets: [
+				{
+					curr: '0'.repeat(64),
+					next: { state: 0 },
+					snap: '1'.repeat(64)
+				}
+			],
+			hotArchiveBuckets: [
+				{
+					curr: '2'.repeat(64),
+					next: {
+						output: '3'.repeat(64),
+						state: 1
+					},
+					snap: '0'.repeat(64)
+				}
+			]
+		})
+	).toEqual(['1'.repeat(64), '2'.repeat(64), '3'.repeat(64)]);
+});

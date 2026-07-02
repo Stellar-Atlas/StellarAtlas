@@ -30,7 +30,7 @@ it('should prioritize concurrency, fromLedger and toLedger parameters', async fu
 	expect(settingsOrError.value.toLedger).toEqual(200);
 });
 
-it('should return error if concurrency cannot be determined', async function () {
+it('should fall back if concurrency cannot be determined', async function () {
 	const performanceTester = mock<ArchivePerformanceTester>();
 	performanceTester.test.mockResolvedValue(err(new Error('test')));
 	const categoryScanner = mock<CategoryScanner>();
@@ -42,7 +42,9 @@ it('should return error if concurrency cannot be determined', async function () 
 	const scanJob = ScanJob.newScanChain(createDummyHistoryBaseUrl());
 	const settingsOrError = await settingsFactory.determineSettings(scanJob);
 
-	expect(settingsOrError.isErr()).toBeTruthy();
+	expect(settingsOrError.isOk()).toBeTruthy();
+	if (settingsOrError.isErr()) throw settingsOrError.error;
+	expect(settingsOrError.value.concurrency).toEqual(10);
 });
 
 it('should return error if latest ledger cannot be determined', async function () {

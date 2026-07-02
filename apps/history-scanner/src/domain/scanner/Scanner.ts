@@ -27,7 +27,8 @@ export class Scanner {
 	) {}
 
 	async perform(time: Date, scanJob: ScanJob): Promise<Scan> {
-		console.time('scan');
+		const scanTimer = Scanner.createTimerLabel('scan');
+		console.time(scanTimer);
 
 		this.logger.info('Starting scan', {
 			url: scanJob.url.value,
@@ -64,7 +65,7 @@ export class Scanner {
 			scanSettings,
 			scanResult
 		);
-		console.timeEnd('scan');
+		console.timeEnd(scanTimer);
 
 		return scan;
 	}
@@ -94,7 +95,10 @@ export class Scanner {
 		let hasUnverifiedGap = false;
 
 		while (rangeFromLedger < scanSettings.toLedger) {
-			console.time('range_scan');
+			const rangeTimer = Scanner.createTimerLabel(
+				`range_scan:${rangeFromLedger}-${rangeToLedger}`
+			);
+			console.time(rangeTimer);
 			const rangeResult = await this.rangeScanner.scan(
 				url,
 				scanSettings.concurrency,
@@ -104,7 +108,7 @@ export class Scanner {
 				previousRangeHeader.hash ?? null,
 				alreadyScannedBucketHashes
 			);
-			console.timeEnd('range_scan');
+			console.timeEnd(rangeTimer);
 
 			if (rangeResult.isErr()) {
 				const rangeErrors = this.expandScanError(rangeResult.error);
@@ -155,5 +159,11 @@ export class Scanner {
 
 	private expandScanError(error: ScanError): readonly ScanError[] {
 		return error.relatedErrors.length > 0 ? error.relatedErrors : [error];
+	}
+
+	private static createTimerLabel(name: string): string {
+		return `${name}:${process.pid}:${Date.now()}:${Math.random()
+			.toString(36)
+			.slice(2)}`;
 	}
 }

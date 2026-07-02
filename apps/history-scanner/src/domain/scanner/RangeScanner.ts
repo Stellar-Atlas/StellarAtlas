@@ -142,7 +142,8 @@ export class RangeScanner {
 		>
 	> {
 		this.logger.info('Scanning HAS files');
-		console.time('HAS');
+		const timerLabel = RangeScanner.createTimerLabel('HAS');
+		console.time(timerLabel);
 
 		const scanHASResult =
 			await this.categoryScanner.scanHASFilesAndReturnBucketHashes(scanState);
@@ -151,7 +152,7 @@ export class RangeScanner {
 			return err(scanHASResult.error);
 		}
 
-		console.timeEnd('HAS');
+		console.timeEnd(timerLabel);
 
 		return ok(scanHASResult.value);
 	}
@@ -159,11 +160,12 @@ export class RangeScanner {
 	private async scanBucketFiles(
 		scanState: BucketScanState
 	): Promise<Result<void, ScanError>> {
-		console.time('bucket');
+		const timerLabel = RangeScanner.createTimerLabel('bucket');
+		console.time(timerLabel);
 		this.logger.info(`Scanning ${scanState.bucketHashesToScan.size} buckets`);
 
 		const scanBucketsResult = await this.bucketScanner.scan(scanState, true);
-		console.timeEnd('bucket');
+		console.timeEnd(timerLabel);
 
 		return scanBucketsResult;
 	}
@@ -171,18 +173,25 @@ export class RangeScanner {
 	private async scanCategories(
 		scanState: CategoryScanState
 	): Promise<Result<LedgerHeader | undefined, ScanError>> {
-		console.time('category');
+		const timerLabel = RangeScanner.createTimerLabel('category');
+		console.time(timerLabel);
 		this.logger.info('Scanning other category files');
 
 		const scanOtherCategoriesResult =
 			await this.categoryScanner.scanOtherCategories(scanState, true);
 
-		console.timeEnd('category');
+		console.timeEnd(timerLabel);
 
 		return scanOtherCategoriesResult;
 	}
 
 	private expandScanError(error: ScanError): readonly ScanError[] {
 		return error.relatedErrors.length > 0 ? error.relatedErrors : [error];
+	}
+
+	private static createTimerLabel(name: string): string {
+		return `${name}:${process.pid}:${Date.now()}:${Math.random()
+			.toString(36)
+			.slice(2)}`;
 	}
 }
