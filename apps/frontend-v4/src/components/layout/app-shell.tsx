@@ -33,6 +33,10 @@ export function AppShell({
 			</header>
 			<div className="network-strip">
 				<div className="site-header-inner strip-inner">
+					<div className="experience-switcher" aria-label="Site experience">
+						<span>Modern update</span>
+						<a href="/legacy/">Legacy version</a>
+					</div>
 					<span>{network.name}</span>
 					<span>Ledger {network.latestLedger}</span>
 					<strong>{formatDateTime(network.time)}</strong>

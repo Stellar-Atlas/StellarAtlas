@@ -1,0 +1,100 @@
+.analysis-tooltip {
+	cursor: help;
+	position: relative;
+}
+
+.analysis-tooltip:focus-visible {
+	outline: 2px solid #58a6ff;
+	outline-offset: 3px;
+}
+
+.analysis-tooltip::after {
+	background: rgba(7, 17, 29, 0.96);
+	border: 1px solid rgba(160, 190, 220, 0.32);
+	border-radius: 6px;
+	box-shadow: 0 16px 40px rgba(0, 0, 0, 0.34);
+	color: #e7edf5;
+	content: attr(data-tooltip);
+	inline-size: min(260px, 74vw);
+	inset-block-end: calc(100% + 8px);
+	inset-inline-start: 0;
+	opacity: 0;
+	padding: 8px 10px;
+	pointer-events: none;
+	position: absolute;
+	text-transform: none;
+	transform: translateY(4px);
+	transition: opacity 140ms ease, transform 140ms ease;
+	z-index: 70;
+}
+
+.analysis-tooltip:hover::after,
+.analysis-tooltip:focus-visible::after {
+	opacity: 1;
+	transform: translateY(0);
+}
+
+.scp-slot-summary {
+	background: rgba(255, 255, 255, 0.055);
+	border: 1px solid rgba(160, 190, 220, 0.14);
+	border-radius: 6px;
+	display: grid;
+	gap: 8px;
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+	margin-block-start: 10px;
+	padding: 10px;
+}
+
+.scp-slot-summary span {
+	color: #aebdcd;
+	display: block;
+	font-size: 0.68rem;
+	font-weight: 800;
+	text-transform: uppercase;
+}
+
+.scp-slot-summary strong,
+.scp-slot-summary code {
+	color: #e7edf5;
+	display: block;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.graph-context-menu {
+	background: rgba(12, 24, 38, 0.96);
+	border: 1px solid rgba(160, 190, 220, 0.28);
+	border-radius: 8px;
+	box-shadow: 0 18px 48px rgba(0, 0, 0, 0.34);
+	color: #e7edf5;
+	display: grid;
+	gap: 4px;
+	min-inline-size: 220px;
+	padding: 8px;
+	position: fixed;
+	z-index: 80;
+}
+
+.graph-context-menu strong {
+	color: #aebdcd;
+	font-size: 0.75rem;
+	padding: 6px 8px;
+	text-transform: uppercase;
+}
+
+.graph-context-menu a,
+.graph-context-menu button {
+	background: transparent;
+	border: 0;
+	border-radius: 6px;
+	color: #e7edf5;
+	font-weight: 800;
+	padding: 8px;
+	text-align: left;
+}
+
+.graph-context-menu a:hover,
+.graph-context-menu button:hover {
+	background: rgba(88, 166, 255, 0.18);
+}

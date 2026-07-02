@@ -13,9 +13,14 @@ import {
 import {
 	formatBoolean,
 	formatDateTime,
-	formatInteger,
-	formatPercent
+	formatInteger
 } from '../../format/formatters';
+import {
+	formatNode24HourActive,
+	formatNode24HourValidating,
+	formatNode30DayActive,
+	formatNode30DayValidating
+} from '../../domain/availability';
 import { StatusTags } from '../status-tags';
 
 interface NodeDetailProps {
@@ -31,6 +36,10 @@ export function NodeDetail({
 }: NodeDetailProps): React.JSX.Element {
 	const organization = getOrganizationForNode(network, node);
 	const archiveErrors = getArchiveErrors(historyArchiveScan);
+	const active24Hours = formatNode24HourActive(node);
+	const active30Days = formatNode30DayActive(node);
+	const validating24Hours = formatNode24HourValidating(node);
+	const validating30Days = formatNode30DayValidating(node);
 	const showArchivePanel =
 		node.historyArchiveHasError || archiveErrors.length > 0 || historyArchiveScan !== null;
 
@@ -66,19 +75,25 @@ export function NodeDetail({
 				<dl className="details">
 					<div>
 						<dt>24H active</dt>
-						<dd>{formatPercent(node.statistics.active24HoursPercentage)}</dd>
+						<dd className={`metric-text ${active24Hours.tone}`}>{active24Hours.value}</dd>
 					</div>
 					<div>
 						<dt>24H validating</dt>
-						<dd>{formatPercent(node.statistics.validating24HoursPercentage)}</dd>
+						<dd className={`metric-text ${validating24Hours.tone}`}>{validating24Hours.value}</dd>
 					</div>
 					<div>
 						<dt>30D active</dt>
-						<dd>{formatPercent(node.statistics.active30DaysPercentage)}</dd>
+						<dd>
+							<span className={`metric-text ${active30Days.tone}`}>{active30Days.value}</span>
+							{active30Days.detail ? <small>{active30Days.detail}</small> : null}
+						</dd>
 					</div>
 					<div>
 						<dt>30D validating</dt>
-						<dd>{formatPercent(node.statistics.validating30DaysPercentage)}</dd>
+						<dd>
+							<span className={`metric-text ${validating30Days.tone}`}>{validating30Days.value}</span>
+							{validating30Days.detail ? <small>{validating30Days.detail}</small> : null}
+						</dd>
 					</div>
 					<div><dt>Country</dt><dd>{node.geoData?.countryName ?? 'Unknown'}</dd></div>
 					<div><dt>ISP</dt><dd>{node.isp ?? 'Unknown'}</dd></div>
@@ -113,8 +128,8 @@ export function NodeDetail({
 					)}
 					{archiveErrors.length > 0 ? (
 						<ul className="archive-error-list">
-							{archiveErrors.map((error) => (
-								<li key={`${error.url}:${error.message}`}>
+							{archiveErrors.map((error, index) => (
+								<li key={`${error.type}:${error.url}:${error.message}:${index}`}>
 									<a href={error.url} rel="noopener noreferrer" target="_blank">
 										{error.url}
 									</a>

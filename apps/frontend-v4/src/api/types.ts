@@ -4,7 +4,8 @@ import type {
 	NodeV1,
 	OrganizationSnapshotV1,
 	OrganizationV1,
-	HistoryArchiveScanV1
+	HistoryArchiveScanV1,
+	ScpStatementObservationV1
 } from 'shared';
 
 export type PublicNetwork = NetworkV1;
@@ -13,6 +14,7 @@ export type PublicNodeSnapshot = NodeSnapshotV1;
 export type PublicOrganization = OrganizationV1;
 export type PublicOrganizationSnapshot = OrganizationSnapshotV1;
 export type PublicHistoryArchiveScan = HistoryArchiveScanV1;
+export type PublicScpStatementObservation = ScpStatementObservationV1;
 
 export interface ApiFailure {
 	message: string;
