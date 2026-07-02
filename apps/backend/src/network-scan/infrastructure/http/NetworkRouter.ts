@@ -24,6 +24,7 @@ export interface NetworkRouterConfig {
 
 const networkRouterWrapper = (config: NetworkRouterConfig): Router => {
 	const networkRouter = express.Router();
+	const liveNetworkIntervalMs = 5_000;
 
 	const getTime = (at?: unknown): Date => {
 		return at && isDateString(at) ? getDateFromParam(at) : new Date();
@@ -40,6 +41,62 @@ const networkRouterWrapper = (config: NetworkRouterConfig): Router => {
 		const parsed = Number(value);
 		return Number.isFinite(parsed) ? parsed : undefined;
 	};
+
+	const writeNetworkEvent = async (
+		res: express.Response
+	): Promise<void> => {
+		const networkOrError = await config.getNetwork.execute({});
+		if (res.writableEnded) return;
+
+		if (networkOrError.isErr()) {
+			res.write(
+				`event: error\ndata: ${JSON.stringify({
+					message: 'Network snapshot unavailable'
+				})}\n\n`
+			);
+			return;
+		}
+
+		if (networkOrError.value === null) {
+			res.write(
+				`event: error\ndata: ${JSON.stringify({
+					message: 'No network found'
+				})}\n\n`
+			);
+			return;
+		}
+
+		res.write(`event: network\ndata: ${JSON.stringify(networkOrError.value)}\n\n`);
+	};
+
+	networkRouter.get(
+		['/live'],
+		async (req: express.Request, res: express.Response) => {
+			res.setHeader('Cache-Control', 'no-cache, no-transform');
+			res.setHeader('Connection', 'keep-alive');
+			res.setHeader('Content-Type', 'text/event-stream');
+			res.setHeader('X-Accel-Buffering', 'no');
+			res.flushHeaders();
+			res.write(': connected\n\n');
+
+			let isWriting = false;
+			const writeSnapshot = (): void => {
+				if (isWriting || res.writableEnded) return;
+				isWriting = true;
+				void writeNetworkEvent(res).finally(() => {
+					isWriting = false;
+				});
+			};
+
+			writeSnapshot();
+			const interval = setInterval(writeSnapshot, liveNetworkIntervalMs);
+
+			req.on('close', () => {
+				clearInterval(interval);
+				if (!res.writableEnded) res.end();
+			});
+		}
+	);
 
 	networkRouter.get(
 		['/'],

@@ -39,6 +39,15 @@ describe('TypeOrmScanJobRepository.integration', () => {
 			const nextJob = await typeOrmScanJobRepository.fetchNextJob();
 			expect(nextJob).toBeDefined();
 			expect(nextJob?.url).toBe('test');
+			expect(nextJob?.status).toBe('TAKEN');
+			if (nextJob === null) {
+				throw new Error('Expected a job to be claimed');
+			}
+
+			const persistedJob = await typeOrmScanJobRepository.findByRemoteId(
+				nextJob.remoteId
+			);
+			expect(persistedJob?.status).toBe('TAKEN');
 		});
 
 		it('should return the fifo job for fetchNextJob when multiple jobs exist', async () => {
@@ -48,6 +57,25 @@ describe('TypeOrmScanJobRepository.integration', () => {
 			const nextJob = await typeOrmScanJobRepository.fetchNextJob();
 			expect(nextJob).toBeDefined();
 			expect(nextJob?.url).toBe('test1');
+		});
+
+		it('should atomically claim distinct jobs for concurrent fetches', async () => {
+			const scanJobs = Array.from(
+				{ length: 8 },
+				(_, index) => new ScanJob(`test-${index}`)
+			);
+			await typeOrmScanJobRepository.save(scanJobs);
+
+			const nextJobs = await Promise.all(
+				Array.from({ length: 8 }, () =>
+					typeOrmScanJobRepository.fetchNextJob()
+				)
+			);
+
+			const urls = nextJobs.map((job) => job?.url);
+			expect(new Set(urls).size).toBe(8);
+			expect(nextJobs.every((job) => job?.status === 'TAKEN')).toBe(true);
+			expect(await typeOrmScanJobRepository.hasPendingJobs()).toBe(false);
 		});
 	});
 
@@ -113,6 +141,46 @@ describe('TypeOrmScanJobRepository.integration', () => {
 				new Date()
 			);
 			expect(noJobs).toHaveLength(0);
+		});
+	});
+
+	describe('markTakenJobActive', () => {
+		it('should refresh updatedAt only for a taken job', async () => {
+			const scanJob = new ScanJob('active-url');
+			scanJob.status = 'TAKEN';
+			const pendingJob = new ScanJob('pending-url');
+			await typeOrmScanJobRepository.save([scanJob, pendingJob]);
+
+			const oldDate = new Date('2026-01-01T00:00:00.000Z');
+			const dataSource = kernel.container.get(DataSource);
+			await dataSource.query(
+				'update history_archive_scan_job_queue set "updatedAt" = $1',
+				[oldDate]
+			);
+
+			const wasUpdated = await typeOrmScanJobRepository.markTakenJobActive(
+				scanJob.remoteId
+			);
+			const wasPendingUpdated =
+				await typeOrmScanJobRepository.markTakenJobActive(
+					pendingJob.remoteId
+				);
+
+			const refreshedJob = await typeOrmScanJobRepository.findByRemoteId(
+				scanJob.remoteId
+			);
+			const untouchedJob = await typeOrmScanJobRepository.findByRemoteId(
+				pendingJob.remoteId
+			);
+
+			expect(wasUpdated).toBe(true);
+			expect(wasPendingUpdated).toBe(false);
+			expect(refreshedJob?.updatedAt?.getTime()).toBeGreaterThan(
+				oldDate.getTime()
+			);
+			expect(untouchedJob?.updatedAt?.toISOString()).toBe(
+				oldDate.toISOString()
+			);
 		});
 	});
 

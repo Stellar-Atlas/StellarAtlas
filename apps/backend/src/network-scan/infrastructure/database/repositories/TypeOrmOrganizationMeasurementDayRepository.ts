@@ -76,30 +76,18 @@ export class TypeOrmOrganizationMeasurementDayRepository implements Organization
              bounds as (
                  select min("crawlDay") "fromTime", max("crawlDay") + interval '1 day' "toTime"
                  from affected_days
-             ),
-             updates as (
-                 select date_trunc('day', NetworkScan."time") "crawlDay",
-                        count(distinct NetworkScan.id)       "crawlCount"
-                 from network_scan NetworkScan
-                          join bounds
-                               on NetworkScan."time" >= bounds."fromTime" and NetworkScan."time" < bounds."toTime"
-                          join affected_days
-                               on affected_days."crawlDay" = date_trunc('day', NetworkScan."time")
-                 WHERE NetworkScan.completed = true
-                 group by date_trunc('day', NetworkScan."time")
              )
              select date_trunc('day', "NetworkScan"."time") "day",
                     "organizationId",
                     sum("isSubQuorumAvailable"::int)          "isSubQuorumAvailableCount",
                     sum("index"::int)                         "indexSum",
-                    updates."crawlCount"                      as "crawlCount"
+                    count(distinct "NetworkScan".id)          as "crawlCount"
              FROM "network_scan" "NetworkScan"
                       join bounds
                            on "NetworkScan"."time" >= bounds."fromTime" and "NetworkScan"."time" < bounds."toTime"
-                      join updates on updates."crawlDay" = date_trunc('day', "NetworkScan"."time")
                       join organization_measurement on organization_measurement."time" = "NetworkScan".time
              WHERE "NetworkScan".completed = true
-             group by date_trunc('day', "NetworkScan"."time"), "organizationId", updates."crawlCount"
+             group by date_trunc('day', "NetworkScan"."time"), "organizationId"
              ON CONFLICT (time, "organizationId") DO UPDATE
                  SET "isSubQuorumAvailableCount" = EXCLUDED."isSubQuorumAvailableCount",
                      "indexSum"                  = EXCLUDED."indexSum",

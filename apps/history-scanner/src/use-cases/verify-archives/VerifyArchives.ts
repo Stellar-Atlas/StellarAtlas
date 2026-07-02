@@ -54,7 +54,9 @@ export class VerifyArchives {
 		}
 
 		await this.checkIn('in_progress');
+		await this.touchScanJob(scanJobResult.value);
 		await this.perform(scanJobResult.value, persist);
+		await this.touchScanJob(scanJobResult.value);
 		await this.checkIn('ok');
 	}
 
@@ -65,6 +67,15 @@ export class VerifyArchives {
 
 	private async persist(scan: Scan) {
 		const result = await this.scanCoordinator.registerScan(scan);
+		if (result.isErr()) {
+			this.exceptionLogger.captureException(result.error);
+		}
+	}
+
+	private async touchScanJob(scanJob: ScanJob): Promise<void> {
+		if (scanJob.remoteId === null) return;
+
+		const result = await this.scanCoordinator.touchScanJob(scanJob.remoteId);
 		if (result.isErr()) {
 			this.exceptionLogger.captureException(result.error);
 		}

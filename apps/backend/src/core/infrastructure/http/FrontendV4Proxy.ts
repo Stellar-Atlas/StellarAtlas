@@ -1,6 +1,7 @@
 import type { NextFunction, Request, Response } from 'express';
 
 const previewPathPattern = /^\/new-ui(?:\/|$)/;
+const nextAssetPathPattern = /^\/_next(?:\/|$)/;
 const defaultFrontendV4Origin = 'http://127.0.0.1:3104';
 
 function frontendV4PreviewEnabled(): boolean {
@@ -13,6 +14,8 @@ function getFrontendV4Origin(): string {
 }
 
 function stripPreviewPath(path: string): string {
+	if (nextAssetPathPattern.test(path)) return path;
+
 	const stripped = path.slice('/new-ui'.length);
 	return stripped.length === 0 ? '/' : stripped;
 }
@@ -51,7 +54,11 @@ export function frontendV4ProxyMiddleware(
 	res: Response,
 	next: NextFunction
 ): void {
-	if (!previewPathPattern.test(req.originalUrl) || !frontendV4PreviewEnabled()) {
+	if (
+		(!previewPathPattern.test(req.originalUrl) &&
+			!nextAssetPathPattern.test(req.originalUrl)) ||
+		!frontendV4PreviewEnabled()
+	) {
 		next();
 		return;
 	}

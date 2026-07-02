@@ -6,11 +6,13 @@ import { InvalidUrlError } from '../../use-cases/get-latest-scan/InvalidUrlError
 import { RegisterScan } from '../../use-cases/register-scan/RegisterScan.js';
 import { ScanDTO } from 'history-scanner-dto';
 import { GetScanJob } from '../../use-cases/get-scan-job/GetScanJob.js';
+import { TouchScanJob } from '../../use-cases/touch-scan-job/TouchScanJob.js';
 
 export interface HistoryScanRouterConfig {
 	getLatestScan: GetLatestScan;
 	getScanJob: GetScanJob;
 	registerScan: RegisterScan;
+	touchScanJob: TouchScanJob;
 	userName?: string;
 	password?: string;
 }
@@ -120,6 +122,33 @@ export const HistoryScanRouterWrapper = (
 				}
 
 				return res.status(201).json({ message: 'Scan created successfully' });
+			}
+		);
+
+	if (config.userName && config.password)
+		historyScanRouter.post(
+			'/job/:remoteId/heartbeat',
+			basicAuth({
+				users: { [config.userName]: config.password },
+				challenge: true
+			}),
+			[param('remoteId').isUUID().withMessage('Invalid scan job remoteId')],
+			async (req: express.Request, res: express.Response) => {
+				const errors = validationResult(req);
+				if (!errors.isEmpty()) {
+					return res.status(400).json({ errors: errors.array() });
+				}
+
+				const result = await config.touchScanJob.execute(req.params.remoteId);
+				if (result.isErr()) {
+					return res.status(500).json({ error: result.error.message });
+				}
+
+				if (!result.value) {
+					return res.status(404).json({ error: 'Scan job not found' });
+				}
+
+				return res.status(204).send();
 			}
 		);
 

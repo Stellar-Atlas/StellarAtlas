@@ -6,5 +6,6 @@ export interface ScanJobRepository {
 	fetchNextJob: () => Promise<ScanJob | null>;
 	findByRemoteId: (remoteId: string) => Promise<ScanJob | null>;
 	findUnfinishedJobs: (after: Date) => Promise<ScanJob[]>;
+	markTakenJobActive: (remoteId: string) => Promise<boolean>;
 	releaseStaleTakenJobs: (before: Date) => Promise<number>;
 }

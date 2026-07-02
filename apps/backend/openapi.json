@@ -82,6 +82,26 @@
 				}
 			}
 		},
+		"/v1/live": {
+			"get": {
+				"summary": "Stream live network information",
+				"description": "Server-sent event stream that emits current network snapshots as network events for live dashboards.",
+				"tags": ["Network"],
+				"operationId": "streamNetwork",
+				"responses": {
+					"200": {
+						"description": "server-sent event stream",
+						"content": {
+							"text/event-stream": {
+								"schema": {
+									"type": "string"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
 		"/v1/node-snapshots": {
 			"get": {
 				"summary": "Get the latest updated node snapshots in the network",
@@ -420,6 +440,82 @@
 					"500": {
 						"description": "Server error"
 					}
+				}
+			}
+		},
+		"/v1/history-scan/job": {
+			"get": {
+				"summary": "Claim the next pending history scan job",
+				"description": "Internal authenticated worker endpoint. Atomically marks one pending history archive scan job as taken and returns it to a scanner.",
+				"tags": ["HistoryScan"],
+				"operationId": "getHistoryScanJob",
+				"security": [{ "basicAuth": [] }],
+				"responses": {
+					"200": {
+						"description": "scan job claimed",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object",
+									"required": ["url", "remoteId"],
+									"properties": {
+										"url": { "type": "string" },
+										"remoteId": { "type": "string", "format": "uuid" },
+										"latestScannedLedger": { "type": "integer" },
+										"latestScannedLedgerHeaderHash": {
+											"type": "string",
+											"nullable": true
+										},
+										"chainInitDate": {
+											"type": "string",
+											"format": "date-time",
+											"nullable": true
+										},
+										"fromLedger": {
+											"type": "integer",
+											"nullable": true
+										},
+										"toLedger": {
+											"type": "integer",
+											"nullable": true
+										},
+										"concurrency": {
+											"type": "integer",
+											"nullable": true
+										}
+									}
+								}
+							}
+						}
+					},
+					"204": { "description": "No scan job available" },
+					"401": { "description": "Authentication required" },
+					"500": { "description": "Server error" }
+				}
+			}
+		},
+		"/v1/history-scan/job/{remoteId}/heartbeat": {
+			"post": {
+				"summary": "Refresh a taken history scan job",
+				"description": "Internal authenticated worker endpoint. Updates the heartbeat timestamp for a taken scan job so long-running archive scans are not treated as stale.",
+				"tags": ["HistoryScan"],
+				"operationId": "touchHistoryScanJob",
+				"security": [{ "basicAuth": [] }],
+				"parameters": [
+					{
+						"name": "remoteId",
+						"in": "path",
+						"description": "Remote id of the claimed scan job",
+						"required": true,
+						"schema": { "type": "string", "format": "uuid" }
+					}
+				],
+				"responses": {
+					"204": { "description": "heartbeat accepted" },
+					"400": { "description": "Invalid remote id" },
+					"401": { "description": "Authentication required" },
+					"404": { "description": "Scan job is not currently taken" },
+					"500": { "description": "Server error" }
 				}
 			}
 		},

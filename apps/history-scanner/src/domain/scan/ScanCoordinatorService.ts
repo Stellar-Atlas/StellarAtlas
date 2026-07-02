@@ -5,4 +5,5 @@ import { ScanJobDTO } from 'history-scanner-dto';
 export interface ScanCoordinatorService {
 	registerScan(scan: Scan): Promise<Result<void, Error>>;
 	getScanJob(): Promise<Result<ScanJobDTO, Error>>;
+	touchScanJob(remoteId: string): Promise<Result<void, Error>>;
 }

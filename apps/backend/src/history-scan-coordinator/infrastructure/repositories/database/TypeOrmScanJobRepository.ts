@@ -1,7 +1,22 @@
 import { injectable } from 'inversify';
 import type { ScanJobRepository } from '../../../domain/ScanJobRepository.js';
 import { ScanJob } from '../../../domain/ScanJob.js';
-import { MoreThan, Repository } from 'typeorm';
+import { EntityManager, MoreThan, Repository } from 'typeorm';
+
+type ScanJobRow = {
+	id: number;
+	remoteId: string;
+	url: string;
+	latestScannedLedger: number;
+	latestScannedLedgerHeaderHash: string | null;
+	chainInitDate: Date | null;
+	fromLedger: number | null;
+	toLedger: number | null;
+	concurrency: number | null;
+	status: 'PENDING' | 'TAKEN' | 'DONE';
+	createdAt: Date;
+	updatedAt: Date;
+};
 
 @injectable()
 export class TypeOrmScanJobRepository implements ScanJobRepository {
@@ -12,12 +27,46 @@ export class TypeOrmScanJobRepository implements ScanJobRepository {
 	}
 
 	async fetchNextJob(): Promise<ScanJob | null> {
-		return await this.baseRepository
-			.createQueryBuilder('job')
-			.where('job.status = :status', { status: 'PENDING' })
-			.orderBy('CASE WHEN job."fromLedger" IS NULL THEN 1 ELSE 0 END', 'ASC')
-			.addOrderBy('job.id', 'ASC')
-			.getOne();
+		return await this.baseRepository.manager.transaction(async (manager) => {
+			const rows = await this.claimNextPendingJob(manager);
+			const row = rows[0];
+			if (row === undefined) return null;
+
+			return manager.getRepository(ScanJob).create(row);
+		});
+	}
+
+	private async claimNextPendingJob(
+		manager: EntityManager
+	): Promise<ScanJobRow[]> {
+		return (await manager.query(`
+			update history_archive_scan_job_queue
+			set status = 'TAKEN',
+				"updatedAt" = now()
+			where id = (
+				select id
+				from history_archive_scan_job_queue
+				where status = 'PENDING'
+				order by
+					case when "fromLedger" is null then 1 else 0 end asc,
+					id asc
+				for update skip locked
+				limit 1
+			)
+			returning
+				id,
+				"remoteId",
+				url,
+				"latestScannedLedger",
+				"latestScannedLedgerHeaderHash",
+				"chainInitDate",
+				"fromLedger",
+				"toLedger",
+				concurrency,
+				status,
+				"createdAt",
+				"updatedAt"
+		`)) as ScanJobRow[];
 	}
 
 	async hasPendingJobs(): Promise<boolean> {
@@ -37,6 +86,18 @@ export class TypeOrmScanJobRepository implements ScanJobRepository {
 				{ status: 'PENDING', updatedAt: MoreThan(afterUpdatedAt) }
 			]
 		});
+	}
+
+	async markTakenJobActive(remoteId: string): Promise<boolean> {
+		const result = await this.baseRepository
+			.createQueryBuilder()
+			.update(ScanJob)
+			.set({ updatedAt: () => 'now()' })
+			.where('"remoteId" = :remoteId', { remoteId })
+			.andWhere('status = :status', { status: 'TAKEN' })
+			.execute();
+
+		return (result.affected ?? 0) > 0;
 	}
 
 	async releaseStaleTakenJobs(before: Date): Promise<number> {

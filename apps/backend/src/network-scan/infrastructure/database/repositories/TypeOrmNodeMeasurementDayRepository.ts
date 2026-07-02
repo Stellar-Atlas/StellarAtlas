@@ -180,16 +180,7 @@ export class TypeOrmNodeMeasurementDayRepository implements NodeMeasurementDayRe
 				 bounds as (
 					 select min("crawlDay") "fromTime", max("crawlDay") + interval '1 day' "toTime"
 					 from affected_days
-				 ),
-				 crawls as (select date_trunc('day', NetworkScan."time") "crawlDay",
-									count(distinct NetworkScan.id)       "crawlCount"
-							 from network_scan NetworkScan
-									  join bounds
-										   on NetworkScan."time" >= bounds."fromTime" and NetworkScan."time" < bounds."toTime"
-									  join affected_days
-										   on affected_days."crawlDay" = date_trunc('day', NetworkScan."time")
-							 WHERE NetworkScan.completed = true
-							 group by date_trunc('day', NetworkScan."time"))
+				 )
 			 select date_trunc('day', NetworkScan."time") "day",
 					"nodeId",
 					sum("isActive"::int)                      "isActiveCount",
@@ -198,14 +189,13 @@ export class TypeOrmNodeMeasurementDayRepository implements NodeMeasurementDayRe
 					sum("isOverLoaded"::int)                  "isOverloadedCount",
 					sum("index"::int)                         "indexSum",
 					sum("historyArchiveHasError"::int)        "historyArchiveErrorCount",
-					"crawls"."crawlCount"                    as "crawlCount"
+					count(distinct NetworkScan.id)            as "crawlCount"
 			 FROM "network_scan" NetworkScan
 					  join bounds
 						   on NetworkScan."time" >= bounds."fromTime" and NetworkScan."time" < bounds."toTime"
-					  join crawls on crawls."crawlDay" = date_trunc('day', NetworkScan."time")
 					  join node_measurement_v2 on node_measurement_v2."time" = NetworkScan."time"
 				 WHERE NetworkScan.completed = true
-				 group by date_trunc('day', NetworkScan."time"), "nodeId", crawls."crawlCount"
+				 group by date_trunc('day', NetworkScan."time"), "nodeId"
 				 ON CONFLICT (time, "nodeId") DO UPDATE
 					 SET "isActiveCount"            = EXCLUDED."isActiveCount",
 						 "isValidatingCount"        = EXCLUDED."isValidatingCount",

@@ -34,6 +34,7 @@ import { RequestUnsubscribeLink } from '../../../notifications/use-cases/request
 import { RegisterScan } from '../../../history-scan-coordinator/use-cases/register-scan/RegisterScan.js';
 import { historyScanRouter } from '../../../history-scan-coordinator/infrastructure/http/HistoryScanRouter.js';
 import { GetScanJob } from '../../../history-scan-coordinator/use-cases/get-scan-job/GetScanJob.js';
+import { TouchScanJob } from '../../../history-scan-coordinator/use-cases/touch-scan-job/TouchScanJob.js';
 import { frontendV4ProxyMiddleware } from './FrontendV4Proxy.js';
 
 let server: Server;
@@ -119,7 +120,8 @@ const listen = async () => {
 			registerScan: kernel.container.get(RegisterScan),
 			userName: config.historyScanAPIUsername,
 			password: config.historyScanAPIPassword,
-			getScanJob: kernel.container.get(GetScanJob)
+			getScanJob: kernel.container.get(GetScanJob),
+			touchScanJob: kernel.container.get(TouchScanJob)
 		})
 	);
 

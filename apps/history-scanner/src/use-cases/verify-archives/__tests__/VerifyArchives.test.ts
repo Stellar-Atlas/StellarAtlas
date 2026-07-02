@@ -35,6 +35,7 @@ describe('VerifyArchives', () => {
 	beforeEach(() => {
 		scannerMock = mock<Scanner>();
 		scanCoordinatorMock = mock<ScanCoordinatorService>();
+		scanCoordinatorMock.touchScanJob.mockResolvedValue(ok(undefined));
 		exceptionLoggerMock = mock<ExceptionLogger>();
 		jobMonitorMock = mock<JobMonitor>();
 
@@ -64,6 +65,7 @@ describe('VerifyArchives', () => {
 
 		expect(scanCoordinatorMock.getScanJob).toHaveBeenCalledTimes(1);
 		expect(jobMonitorMock.checkIn).toHaveBeenCalled();
+		expect(scanCoordinatorMock.touchScanJob).toHaveBeenCalledTimes(2);
 		expect(exceptionLoggerMock.captureException).not.toHaveBeenCalled();
 		expect(scannerMock.perform).toHaveBeenCalled();
 	});

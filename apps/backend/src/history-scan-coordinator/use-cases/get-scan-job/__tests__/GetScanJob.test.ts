@@ -39,8 +39,9 @@ describe('GetScanJob', () => {
 		);
 	});
 
-	it('should return ok(job) when a scan job is available and update its status to TAKEN', async () => {
+	it('should return ok(job) when a scan job is available', async () => {
 		const mockJob = new ScanJob('http://test.com');
+		mockJob.status = 'TAKEN';
 		scanJobRepositoryMock.releaseStaleTakenJobs.mockResolvedValue(0);
 		scanJobRepositoryMock.fetchNextJob.mockResolvedValue(mockJob);
 
@@ -64,12 +65,7 @@ describe('GetScanJob', () => {
 			chainInitDate: mockJob.chainInitDate
 		});
 
-		expect(scanJobRepositoryMock.save).toHaveBeenCalledWith([
-			{
-				...mockJob,
-				status: 'TAKEN'
-			}
-		]);
+		expect(scanJobRepositoryMock.save).not.toHaveBeenCalled();
 	});
 
 	it('should return err(error) when fetchNextJob fails', async () => {

@@ -10,6 +10,7 @@ import { Scan } from '../../domain/scan/Scan.js';
 import { RegisterScan } from '../../use-cases/register-scan/RegisterScan.js';
 import { ScanMapper } from '../mappers/ScanMapper.js';
 import { GetScanJob } from '../../use-cases/get-scan-job/GetScanJob.js';
+import { TouchScanJob } from '../../use-cases/touch-scan-job/TouchScanJob.js';
 import { RestartAtLeastOneScan } from '../../domain/ScanScheduler.js';
 import type { ScanScheduler } from '../../domain/ScanScheduler.js';
 import { ScheduleScanJobs } from '../../use-cases/schedule-scan-jobs/ScheduleScanJobs.js';
@@ -21,6 +22,7 @@ export function load(container: Container, config: Config) {
 	const dataSource = container.get(DataSource);
 	container.bind(GetLatestScan).toSelf();
 	container.bind(GetScanJob).toSelf();
+	container.bind(TouchScanJob).toSelf();
 	container.bind(RegisterScan).toSelf();
 	container.bind(ScheduleScanJobs).toSelf();
 	container.bind<ScanScheduler>(TYPES.ScanScheduler).toDynamicValue(() => {

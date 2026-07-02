@@ -91,4 +91,35 @@ describe('RESTScanCoordinatorService Integration Tests', () => {
 			}
 		});
 	});
+
+	describe('touchScanJob', () => {
+		it('should send a scan job heartbeat', async () => {
+			httpService.post.mockResolvedValue(
+				ok({
+					status: 204,
+					data: null,
+					headers: {},
+					statusText: 'No Content'
+				})
+			);
+
+			const result = await service.touchScanJob(
+				'82a309de-a5df-457b-9412-f267ed5e7388'
+			);
+
+			expect(result.isOk()).toBe(true);
+			expect(httpService.post).toHaveBeenCalledWith(
+				Url.create(
+					`${baseUrl}/v1/history-scan/job/82a309de-a5df-457b-9412-f267ed5e7388/heartbeat`
+				)._unsafeUnwrap(),
+				{},
+				{
+					auth: {
+						username,
+						password: secret
+					}
+				}
+			);
+		});
+	});
 });

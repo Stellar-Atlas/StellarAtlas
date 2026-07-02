@@ -145,6 +145,37 @@ export class RESTScanCoordinatorService implements ScanCoordinatorService {
 		return ok(scanJobDTOsResult.value);
 	}
 
+	async touchScanJob(remoteId: string): Promise<Result<void, Error>> {
+		const urlResult = Url.create(
+			`${this.coordinatorAPIBaseUrl}/v1/history-scan/job/${remoteId}/heartbeat`
+		);
+		if (urlResult.isErr()) {
+			return err(new CoordinatorServiceError('Invalid URL', urlResult.error));
+		}
+
+		const response = await this.httpService.post(urlResult.value, {}, {
+			auth: {
+				username: this.coordinatorAPIUsername,
+				password: this.coordinatorAPIPassword
+			}
+		});
+
+		if (response.isErr()) {
+			return err(
+				new CoordinatorServiceError(
+					'Failed to touch scan job',
+					response.error
+				)
+			);
+		}
+
+		if (response.value.status !== 204) {
+			return err(new CoordinatorServiceError('Failed to touch scan job'));
+		}
+
+		return ok(undefined);
+	}
+
 	private convertResponseToScanJobDTO(
 		response: Record<string, unknown>
 	): Result<ScanJobDTO, Error> {

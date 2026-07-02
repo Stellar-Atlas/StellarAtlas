@@ -10,17 +10,21 @@ import { InvalidUrlError } from '../../../use-cases/get-latest-scan/InvalidUrlEr
 import { ScanDTO } from 'history-scanner-dto';
 import { ScanJob } from '../../../domain/ScanJob.js';
 import { GetScanJob } from '../../../use-cases/get-scan-job/GetScanJob.js';
+import { TouchScanJob } from '../../../use-cases/touch-scan-job/TouchScanJob.js';
+import { randomUUID } from 'crypto';
 
 describe('HistoryScanRouter.integration', () => {
 	let app: express.Application;
 	let getLatestScan: jest.Mocked<GetLatestScan>;
 	let registerScan: jest.Mocked<RegisterScan>;
 	let getScanJob: jest.Mocked<GetScanJob>;
+	let touchScanJob: jest.Mocked<TouchScanJob>;
 
 	beforeEach(() => {
 		getLatestScan = mock<GetLatestScan>();
 		registerScan = mock<RegisterScan>();
 		getScanJob = mock<GetScanJob>();
+		touchScanJob = mock<TouchScanJob>();
 
 		app = express();
 		app.use(express.json());
@@ -30,6 +34,7 @@ describe('HistoryScanRouter.integration', () => {
 				getLatestScan,
 				registerScan,
 				getScanJob,
+				touchScanJob,
 				userName: 'admin',
 				password: 'secret'
 			})
@@ -162,6 +167,36 @@ describe('HistoryScanRouter.integration', () => {
 				.get('/history-scan/job')
 				.auth('admin', 'secret')
 				.expect(204);
+		});
+	});
+
+	describe('POST /job/:remoteId/heartbeat', () => {
+		it('should return 401 without authentication', async () => {
+			await request(app)
+				.post(`/history-scan/job/${randomUUID()}/heartbeat`)
+				.expect(401);
+		});
+
+		it('should touch a taken scan job when authenticated', async () => {
+			const remoteId = randomUUID();
+			touchScanJob.execute.mockResolvedValue(ok(true));
+
+			await request(app)
+				.post(`/history-scan/job/${remoteId}/heartbeat`)
+				.auth('admin', 'secret')
+				.expect(204);
+
+			expect(touchScanJob.execute).toHaveBeenCalledWith(remoteId);
+		});
+
+		it('should return 404 when the scan job is not taken', async () => {
+			const remoteId = randomUUID();
+			touchScanJob.execute.mockResolvedValue(ok(false));
+
+			await request(app)
+				.post(`/history-scan/job/${remoteId}/heartbeat`)
+				.auth('admin', 'secret')
+				.expect(404);
 		});
 	});
 });

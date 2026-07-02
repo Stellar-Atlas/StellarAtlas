@@ -40,10 +40,7 @@ export class GetScanJob {
 				chainInitDate: nextScanJob.chainInitDate
 			});
 
-			nextScanJob.status = 'TAKEN';
-			await this.scanJobRepository.save([nextScanJob]);
-
-			return ok({
+				return ok({
 				chainInitDate: nextScanJob.chainInitDate,
 				url: nextScanJob.url,
 				latestScannedLedger: nextScanJob.latestScannedLedger,
