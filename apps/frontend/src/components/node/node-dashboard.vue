@@ -26,7 +26,7 @@
     </b-alert>
 
     <b-alert
-      :show="network.historyArchiveHasError(selectedNode)"
+      :show="showHistoryArchiveIssueDetails"
       variant="warning"
     >
       <strong>History archive issue details</strong>
@@ -34,8 +34,8 @@
       <template v-if="historyArchiveErrors.length > 0">
         <ul class="pl-3 ml-0 mb-2">
           <li
-            v-for="error in historyArchiveErrors"
-            :key="`${error.url}:${error.message}`"
+            v-for="(error, index) in historyArchiveErrors"
+            :key="`${error.type}:${error.url}:${error.message}:${index}`"
           >
             Archive verification error at
             <a :href="error.url" target="_blank" rel="noopener noreferrer">
@@ -253,6 +253,17 @@ const historyArchiveErrors = computed<readonly HistoryArchiveScanError[]>(
     ];
   },
 );
+
+const showHistoryArchiveIssueDetails = computed(() => {
+  const node = selectedNode.value;
+  return (
+    (node !== null &&
+      node !== undefined &&
+      network.historyArchiveHasError(node)) ||
+    historyArchiveErrors.value.length > 0 ||
+    historyArchiveScan.value?.hasError === true
+  );
+});
 
 watch(
   selectedNode,
