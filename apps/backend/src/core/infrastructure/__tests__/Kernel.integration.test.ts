@@ -1,10 +1,10 @@
 import { DataSource } from 'typeorm';
 import Kernel from '../Kernel.js';
 import { ConfigMock } from '../../config/__mocks__/configMock.js';
-import type { NodeMeasurementRepository } from '../../../network-scan/domain/node/NodeMeasurementRepository.js';
-import { NETWORK_TYPES } from '../../../network-scan/infrastructure/di/di-types.js';
-import { TypeOrmNodeMeasurementRepository } from '../../../network-scan/infrastructure/database/repositories/TypeOrmNodeMeasurementRepository.js';
-import { TypeOrmOrganizationRepository } from '../../../network-scan/infrastructure/database/repositories/TypeOrmOrganizationRepository.js';
+import type { NodeMeasurementRepository } from '@network-scan/domain/node/NodeMeasurementRepository.js';
+import { NETWORK_TYPES } from '@network-scan/infrastructure/di/di-types.js';
+import { TypeOrmNodeMeasurementRepository } from '@network-scan/infrastructure/database/repositories/TypeOrmNodeMeasurementRepository.js';
+import { TypeOrmOrganizationRepository } from '@network-scan/infrastructure/database/repositories/TypeOrmOrganizationRepository.js';
 
 jest.setTimeout(10000); //slow and long integration test
 

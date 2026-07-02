@@ -1,15 +1,15 @@
-import { createDummyNode } from '../../../../node/__fixtures__/createDummyNode.js';
-import NodeQuorumSet from '../../../../node/NodeQuorumSet.js';
+import { createDummyNode } from '@network-scan/domain/node/__fixtures__/createDummyNode.js';
+import NodeQuorumSet from '@network-scan/domain/node/NodeQuorumSet.js';
 import { QuorumSet } from 'shared';
-import NodeDetails from '../../../../node/NodeDetails.js';
-import NodeGeoDataLocation from '../../../../node/NodeGeoDataLocation.js';
+import NodeDetails from '@network-scan/domain/node/NodeDetails.js';
+import NodeGeoDataLocation from '@network-scan/domain/node/NodeGeoDataLocation.js';
 import { FbasMapper } from '../FbasMapper.js';
 import { FbasAnalysisNode } from '../FbasAnalyzerFacade.js';
-import Node from '../../../../node/Node.js';
-import Organization from '../../../../organization/Organization.js';
-import { createDummyOrganizationId } from '../../../../organization/__fixtures__/createDummyOrganizationId.js';
-import { OrganizationValidators } from '../../../../organization/OrganizationValidators.js';
-import { createDummyPublicKey } from '../../../../node/__fixtures__/createDummyPublicKey.js';
+import Node from '@network-scan/domain/node/Node.js';
+import Organization from '@network-scan/domain/organization/Organization.js';
+import { createDummyOrganizationId } from '@network-scan/domain/organization/__fixtures__/createDummyOrganizationId.js';
+import { OrganizationValidators } from '@network-scan/domain/organization/OrganizationValidators.js';
+import { createDummyPublicKey } from '@network-scan/domain/node/__fixtures__/createDummyPublicKey.js';
 
 describe('FbasMapper', () => {
 	describe('mapToFbasAnalysisNode', () => {

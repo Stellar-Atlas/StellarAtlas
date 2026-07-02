@@ -1,7 +1,7 @@
 import { Column, Index } from 'typeorm';
 
 import { err, ok, Result } from 'neverthrow';
-import { ValueObject } from '../../../core/domain/ValueObject.js';
+import { ValueObject } from '@core/domain/ValueObject.js';
 
 export default class PublicKey extends ValueObject {
 	@Column('varchar', { length: 56 })

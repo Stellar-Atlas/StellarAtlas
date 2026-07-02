@@ -1,15 +1,15 @@
 import 'reflect-metadata';
 import { inject, injectable } from 'inversify';
 import { err, ok, Result } from 'neverthrow';
-import type { ExceptionLogger } from '../../../core/services/ExceptionLogger.js';
-import { Url } from '../../../core/domain/Url.js';
+import type { ExceptionLogger } from '@core/services/ExceptionLogger.js';
+import { Url } from '@core/domain/Url.js';
 import type { Scan } from '../../domain/scan/Scan.js';
 import type { ScanRepository } from '../../domain/scan/ScanRepository.js';
 import type { ScanError } from '../../domain/scan/ScanError.js';
 import { ScanErrorType } from '../../domain/scan/ScanError.js';
 import { TYPES } from '../../infrastructure/di/di-types.js';
 import { InvalidUrlError } from '../get-latest-scan/InvalidUrlError.js';
-import { mapUnknownToError } from '../../../core/utilities/mapUnknownToError.js';
+import { mapUnknownToError } from '@core/utilities/mapUnknownToError.js';
 
 export interface HistoryArchiveScanLogEntryDTO {
 	readonly concurrency: number;

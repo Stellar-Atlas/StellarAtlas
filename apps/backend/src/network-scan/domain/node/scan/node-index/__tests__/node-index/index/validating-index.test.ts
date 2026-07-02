@@ -1,4 +1,4 @@
-import { ValidatingIndex } from '../../../index/validating-index.js';
+import { ValidatingIndex } from '@network-scan/domain/node/scan/node-index/index/validating-index.js';
 
 test('get', () => {
 	expect(ValidatingIndex.get(100)).toEqual(1);

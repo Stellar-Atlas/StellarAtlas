@@ -2,7 +2,7 @@ import { Event, EventData, EventType } from '../event/Event.js';
 import type { Subscription } from './Subscription.js';
 import { Column, Entity, ManyToOne } from 'typeorm';
 import { EventSourceId } from '../event/EventSourceId.js';
-import { CoreEntity } from '../../../core/domain/CoreEntity.js';
+import { CoreEntity } from '@core/domain/CoreEntity.js';
 
 @Entity('subscription_event_notification_state')
 export class EventNotificationState extends CoreEntity {

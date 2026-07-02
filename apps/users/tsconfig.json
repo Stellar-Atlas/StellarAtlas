@@ -3,8 +3,26 @@
 	"compilerOptions": {
 		"outDir": "lib",
 		"rootDir": "src",
-		"composite": true
+		"composite": true,
+		"paths": {
+			"@users/*.js": [
+				"./src/*.ts"
+			],
+			"@users/*": [
+				"./src/*"
+			],
+			"@migrations/*.js": [
+				"./src/migrations/*.ts"
+			],
+			"@migrations/*": [
+				"./src/migrations/*"
+			]
+		}
 	},
-	"include": ["src/**/*.ts"],
-	"exclude": ["node_modules/**/*"]
+	"include": [
+		"src/**/*.ts"
+	],
+	"exclude": [
+		"node_modules/**/*"
+	]
 }

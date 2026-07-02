@@ -1,14 +1,14 @@
 import { Container } from 'inversify';
-import Kernel from '../../../../../core/infrastructure/Kernel.js';
-import { ConfigMock } from '../../../../../core/config/__mocks__/configMock.js';
-import { NETWORK_TYPES } from '../../../di/di-types.js';
-import { Network } from '../../../../domain/network/Network.js';
-import { NetworkId } from '../../../../domain/network/NetworkId.js';
-import type { NetworkRepository } from '../../../../domain/network/NetworkRepository.js';
-import { NetworkQuorumSetConfiguration } from '../../../../domain/network/NetworkQuorumSetConfiguration.js';
-import PublicKey from '../../../../domain/node/PublicKey.js';
-import { createDummyNetworkProps } from '../../../../domain/network/__fixtures__/createDummyNetworkProps.js';
-import { NetworkChange } from '../../../../domain/network/change/NetworkChange.js';
+import Kernel from '@core/infrastructure/Kernel.js';
+import { ConfigMock } from '@core/config/__mocks__/configMock.js';
+import { NETWORK_TYPES } from '@network-scan/infrastructure/di/di-types.js';
+import { Network } from '@network-scan/domain/network/Network.js';
+import { NetworkId } from '@network-scan/domain/network/NetworkId.js';
+import type { NetworkRepository } from '@network-scan/domain/network/NetworkRepository.js';
+import { NetworkQuorumSetConfiguration } from '@network-scan/domain/network/NetworkQuorumSetConfiguration.js';
+import PublicKey from '@network-scan/domain/node/PublicKey.js';
+import { createDummyNetworkProps } from '@network-scan/domain/network/__fixtures__/createDummyNetworkProps.js';
+import { NetworkChange } from '@network-scan/domain/network/change/NetworkChange.js';
 
 describe('test queries', () => {
 	let container: Container;

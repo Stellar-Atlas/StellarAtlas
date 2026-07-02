@@ -2,7 +2,7 @@ import { inject, injectable } from 'inversify';
 import { Url, type HttpService } from 'http-helper';
 import { err, ok, Result } from 'neverthrow';
 import { CustomError } from 'custom-error';
-import type { HeartBeater } from '../../../core/services/HeartBeater.js';
+import type { HeartBeater } from '@core/services/HeartBeater.js';
 
 @injectable()
 export class DeadManSnitchHeartBeater implements HeartBeater {

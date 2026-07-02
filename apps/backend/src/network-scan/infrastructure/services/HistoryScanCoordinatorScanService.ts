@@ -1,12 +1,12 @@
 import type { HistoryArchiveScanService } from '../../domain/node/scan/history/HistoryArchiveScanService.js';
-import type { ScanRepository } from '../../../history-scan-coordinator/domain/scan/ScanRepository.js';
+import type { ScanRepository } from '@history-scan-coordinator/domain/scan/ScanRepository.js';
 import { err, ok, Result } from 'neverthrow';
-import { mapUnknownToError } from '../../../core/utilities/mapUnknownToError.js';
+import { mapUnknownToError } from '@core/utilities/mapUnknownToError.js';
 import { inject, injectable } from 'inversify';
 import { HistoryArchiveScan } from 'shared';
-import { TYPES } from '../../../history-scan-coordinator/infrastructure/di/di-types.js';
-import { ScheduleScanJobs } from '../../../history-scan-coordinator/use-cases/schedule-scan-jobs/ScheduleScanJobs.js';
-import { mapScanToHistoryArchiveScan } from '../../../history-scan-coordinator/infrastructure/mappers/mapScanToHistoryArchiveScan.js';
+import { TYPES } from '@history-scan-coordinator/infrastructure/di/di-types.js';
+import { ScheduleScanJobs } from '@history-scan-coordinator/use-cases/schedule-scan-jobs/ScheduleScanJobs.js';
+import { mapScanToHistoryArchiveScan } from '@history-scan-coordinator/infrastructure/mappers/mapScanToHistoryArchiveScan.js';
 
 //Connects with the HistoryScanCoordinator module
 @injectable()

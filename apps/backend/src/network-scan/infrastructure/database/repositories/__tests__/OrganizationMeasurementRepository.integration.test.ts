@@ -1,17 +1,17 @@
 import { Container } from 'inversify';
-import Kernel from '../../../../../core/infrastructure/Kernel.js';
-import { ConfigMock } from '../../../../../core/config/__mocks__/configMock.js';
-import Organization from '../../../../domain/organization/Organization.js';
-import OrganizationMeasurement from '../../../../domain/organization/OrganizationMeasurement.js';
-import type { OrganizationMeasurementRepository } from '../../../../domain/organization/OrganizationMeasurementRepository.js';
-import { NETWORK_TYPES } from '../../../di/di-types.js';
-import { createDummyOrganizationId } from '../../../../domain/organization/__fixtures__/createDummyOrganizationId.js';
-import type { OrganizationRepository } from '../../../../domain/organization/OrganizationRepository.js';
-import { TomlState } from '../../../../domain/organization/scan/TomlState.js';
-import { createDummyOrganizationV1 } from '../../../../services/__fixtures__/createDummyOrganizationV1.js';
-import NetworkScan from '../../../../domain/network/scan/NetworkScan.js';
-import NetworkMeasurement from '../../../../domain/network/NetworkMeasurement.js';
-import type { NetworkScanRepository } from '../../../../domain/network/scan/NetworkScanRepository.js';
+import Kernel from '@core/infrastructure/Kernel.js';
+import { ConfigMock } from '@core/config/__mocks__/configMock.js';
+import Organization from '@network-scan/domain/organization/Organization.js';
+import OrganizationMeasurement from '@network-scan/domain/organization/OrganizationMeasurement.js';
+import type { OrganizationMeasurementRepository } from '@network-scan/domain/organization/OrganizationMeasurementRepository.js';
+import { NETWORK_TYPES } from '@network-scan/infrastructure/di/di-types.js';
+import { createDummyOrganizationId } from '@network-scan/domain/organization/__fixtures__/createDummyOrganizationId.js';
+import type { OrganizationRepository } from '@network-scan/domain/organization/OrganizationRepository.js';
+import { TomlState } from '@network-scan/domain/organization/scan/TomlState.js';
+import { createDummyOrganizationV1 } from '@network-scan/services/__fixtures__/createDummyOrganizationV1.js';
+import NetworkScan from '@network-scan/domain/network/scan/NetworkScan.js';
+import NetworkMeasurement from '@network-scan/domain/network/NetworkMeasurement.js';
+import type { NetworkScanRepository } from '@network-scan/domain/network/scan/NetworkScanRepository.js';
 
 describe('test queries', () => {
 	let container: Container;

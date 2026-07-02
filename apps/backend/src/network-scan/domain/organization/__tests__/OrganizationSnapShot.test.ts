@@ -2,7 +2,7 @@ import OrganizationSnapShot from '../OrganizationSnapShot.js';
 import { createDummyPublicKey } from '../../node/__fixtures__/createDummyPublicKey.js';
 import { OrganizationValidators } from '../OrganizationValidators.js';
 import { OrganizationContactInformation } from '../OrganizationContactInformation.js';
-import { Snapshot } from '../../../../core/domain/Snapshot.js';
+import { Snapshot } from '@core/domain/Snapshot.js';
 import { mock } from 'jest-mock-extended';
 import Organization from '../Organization.js';
 

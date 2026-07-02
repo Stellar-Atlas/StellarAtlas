@@ -5,7 +5,7 @@ import {
 	TomlFetchError,
 	TomlParseError,
 	TomlService
-} from '../../../network/scan/TomlService.js';
+} from '@network-scan/domain/network/scan/TomlService.js';
 import type { Logger } from 'logger';
 import { TomlState } from '../TomlState.js';
 

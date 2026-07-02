@@ -1,9 +1,9 @@
-import Kernel from '../../../../core/infrastructure/Kernel.js';
-import { ConfigMock } from '../../../../core/config/__mocks__/configMock.js';
+import Kernel from '@core/infrastructure/Kernel.js';
+import { ConfigMock } from '@core/config/__mocks__/configMock.js';
 import { mock } from 'jest-mock-extended';
 import { GetLatestNodeSnapshots } from '../GetLatestNodeSnapshots.js';
-import type { NodeSnapShotRepository } from '../../../domain/node/NodeSnapShotRepository.js';
-import { NETWORK_TYPES } from '../../../infrastructure/di/di-types.js';
+import type { NodeSnapShotRepository } from '@network-scan/domain/node/NodeSnapShotRepository.js';
+import { NETWORK_TYPES } from '@network-scan/infrastructure/di/di-types.js';
 
 let kernel: Kernel;
 jest.setTimeout(60000); //slow integration tests

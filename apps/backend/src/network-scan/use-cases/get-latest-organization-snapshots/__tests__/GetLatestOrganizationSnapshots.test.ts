@@ -1,7 +1,7 @@
 import { mock } from 'jest-mock-extended';
-import type { ExceptionLogger } from '../../../../core/services/ExceptionLogger.js';
+import type { ExceptionLogger } from '@core/services/ExceptionLogger.js';
 import { GetLatestOrganizationSnapshots } from '../GetLatestOrganizationSnapshots.js';
-import type { OrganizationSnapShotRepository } from '../../../domain/organization/OrganizationSnapShotRepository.js';
+import type { OrganizationSnapShotRepository } from '@network-scan/domain/organization/OrganizationSnapShotRepository.js';
 
 it('should capture and return errors', async function () {
 	const repo = mock<OrganizationSnapShotRepository>();

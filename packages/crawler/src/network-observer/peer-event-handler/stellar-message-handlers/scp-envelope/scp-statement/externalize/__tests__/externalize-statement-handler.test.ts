@@ -1,9 +1,9 @@
 import { mock } from 'jest-mock-extended';
 import pino from 'pino';
-import { PeerNodeCollection } from '../../../../../../../peer-node-collection.js';
+import { PeerNodeCollection } from '@crawler/peer-node-collection.js';
 import { ExternalizeStatementHandler } from '../externalize-statement-handler.js';
 import { ExternalizeData } from '../map-externalize-statement.js';
-import type { Ledger } from '../../../../../../../crawler.js';
+import type { Ledger } from '@crawler/crawler.js';
 import { Slot } from '../slot.js';
 
 const mockLogger = mock<pino.Logger>();

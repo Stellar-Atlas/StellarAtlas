@@ -1,15 +1,15 @@
 import { Container } from 'inversify';
-import Kernel from '../../../../../core/infrastructure/Kernel.js';
+import Kernel from '@core/infrastructure/Kernel.js';
 import TypeOrmNodeSnapShotRepository from '../TypeOrmNodeSnapShotRepository.js';
-import NodeMeasurement from '../../../../domain/node/NodeMeasurement.js';
-import { ConfigMock } from '../../../../../core/config/__mocks__/configMock.js';
-import { NETWORK_TYPES } from '../../../di/di-types.js';
-import { createDummyPublicKey } from '../../../../domain/node/__fixtures__/createDummyPublicKey.js';
-import Node from '../../../../domain/node/Node.js';
-import type { NodeRepository } from '../../../../domain/node/NodeRepository.js';
-import NodeSnapShot from '../../../../domain/node/NodeSnapShot.js';
+import NodeMeasurement from '@network-scan/domain/node/NodeMeasurement.js';
+import { ConfigMock } from '@core/config/__mocks__/configMock.js';
+import { NETWORK_TYPES } from '@network-scan/infrastructure/di/di-types.js';
+import { createDummyPublicKey } from '@network-scan/domain/node/__fixtures__/createDummyPublicKey.js';
+import Node from '@network-scan/domain/node/Node.js';
+import type { NodeRepository } from '@network-scan/domain/node/NodeRepository.js';
+import NodeSnapShot from '@network-scan/domain/node/NodeSnapShot.js';
 import { QuorumSet } from 'shared';
-import NodeQuorumSet from '../../../../domain/node/NodeQuorumSet.js';
+import NodeQuorumSet from '@network-scan/domain/node/NodeQuorumSet.js';
 import { DataSource } from 'typeorm';
 
 describe('test queries', () => {

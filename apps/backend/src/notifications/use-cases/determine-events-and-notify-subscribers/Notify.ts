@@ -12,13 +12,13 @@ import {
 	PersistenceError
 } from './NotifyError.js';
 import { NetworkV1 } from 'shared';
-import type { ExceptionLogger } from '../../../core/services/ExceptionLogger.js';
-import type { Logger } from '../../../core/services/Logger.js';
+import type { ExceptionLogger } from '@core/services/ExceptionLogger.js';
+import type { Logger } from '@core/services/Logger.js';
 import { Notifier } from '../../domain/notifier/Notifier.js';
 import type { SubscriberRepository } from '../../domain/subscription/SubscriberRepository.js';
 import { Notification } from '../../domain/subscription/Notification.js';
-import { mapUnknownToError } from '../../../core/utilities/mapUnknownToError.js';
-import { NetworkDTOService } from '../../../network-scan/services/NetworkDTOService.js';
+import { mapUnknownToError } from '@core/utilities/mapUnknownToError.js';
+import { NetworkDTOService } from '@network-scan/services/NetworkDTOService.js';
 
 @injectable()
 export class Notify {

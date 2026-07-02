@@ -1,4 +1,4 @@
-import { VersionIndex } from '../../../index/version-index.js';
+import { VersionIndex } from '@network-scan/domain/node/scan/node-index/index/version-index.js';
 
 const versionStr1 =
 	'stellar-core 27.1.0 (236f831521b6724c0ae63906416faa997ef27e19)';

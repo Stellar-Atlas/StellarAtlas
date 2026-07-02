@@ -1,6 +1,6 @@
 import { injectable } from 'inversify';
-import type { ScanJobRepository } from '../../../domain/ScanJobRepository.js';
-import { ScanJob } from '../../../domain/ScanJob.js';
+import type { ScanJobRepository } from '@history-scan-coordinator/domain/ScanJobRepository.js';
+import { ScanJob } from '@history-scan-coordinator/domain/ScanJob.js';
 import { EntityManager, MoreThan, Repository } from 'typeorm';
 
 type ScanJobRow = {

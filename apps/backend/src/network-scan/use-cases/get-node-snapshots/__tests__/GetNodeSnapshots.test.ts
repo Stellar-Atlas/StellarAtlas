@@ -1,9 +1,9 @@
 import { mock } from 'jest-mock-extended';
-import type { ExceptionLogger } from '../../../../core/services/ExceptionLogger.js';
+import type { ExceptionLogger } from '@core/services/ExceptionLogger.js';
 import { GetNodeSnapshots } from '../GetNodeSnapshots.js';
-import { ExceptionLoggerMock } from '../../../../core/services/__mocks__/ExceptionLoggerMock.js';
-import { createDummyPublicKeyString } from '../../../domain/node/__fixtures__/createDummyPublicKey.js';
-import type { NodeSnapShotRepository } from '../../../domain/node/NodeSnapShotRepository.js';
+import { ExceptionLoggerMock } from '@core/services/__mocks__/ExceptionLoggerMock.js';
+import { createDummyPublicKeyString } from '@network-scan/domain/node/__fixtures__/createDummyPublicKey.js';
+import type { NodeSnapShotRepository } from '@network-scan/domain/node/NodeSnapShotRepository.js';
 
 it('should capture and return errors', async function () {
 	const repo = mock<NodeSnapShotRepository>();

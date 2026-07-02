@@ -6,7 +6,7 @@ import { NodeEventDetector } from '../NodeEventDetector.js';
 import { Event, EventData, MultipleUpdatesEventData } from '../Event.js';
 import { NetworkId, OrganizationId, PublicKey } from '../EventSourceId.js';
 import { ok } from 'neverthrow';
-import { createDummyNetworkV1 } from '../../../../network-scan/services/__fixtures__/createDummyNetworkV1.js';
+import { createDummyNetworkV1 } from '@network-scan/services/__fixtures__/createDummyNetworkV1.js';
 
 it('should return all events', async function () {
 	const eventRepository = mock<EventRepository>();

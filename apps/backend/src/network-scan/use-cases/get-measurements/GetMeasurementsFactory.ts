@@ -1,5 +1,5 @@
 import { inject, injectable } from 'inversify';
-import type { ExceptionLogger } from '../../../core/services/ExceptionLogger.js';
+import type { ExceptionLogger } from '@core/services/ExceptionLogger.js';
 import { GetMeasurements } from './GetMeasurements.js';
 import { Measurement } from '../../domain/measurement/Measurement.js';
 import NodeMeasurement from '../../domain/node/NodeMeasurement.js';

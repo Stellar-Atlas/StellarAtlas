@@ -1,9 +1,9 @@
 import { Between, EntityRepository, Repository } from 'typeorm';
-import OrganizationMeasurement from '../../../domain/organization/OrganizationMeasurement.js';
+import OrganizationMeasurement from '@network-scan/domain/organization/OrganizationMeasurement.js';
 import { injectable } from 'inversify';
-import type { OrganizationMeasurementRepository } from '../../../domain/organization/OrganizationMeasurementRepository.js';
-import { OrganizationMeasurementAverage } from '../../../domain/organization/OrganizationMeasurementAverage.js';
-import { OrganizationMeasurementEvent } from '../../../domain/organization/OrganizationMeasurementEvent.js';
+import type { OrganizationMeasurementRepository } from '@network-scan/domain/organization/OrganizationMeasurementRepository.js';
+import { OrganizationMeasurementAverage } from '@network-scan/domain/organization/OrganizationMeasurementAverage.js';
+import { OrganizationMeasurementEvent } from '@network-scan/domain/organization/OrganizationMeasurementEvent.js';
 
 export interface OrganizationMeasurementAverageRecord {
 	organizationId: string;

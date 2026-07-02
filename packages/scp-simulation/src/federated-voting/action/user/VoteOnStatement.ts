@@ -1,5 +1,5 @@
-import { UserAction, ProtocolAction } from '../../../core/index.js';
-import { Statement } from '../../../federated-voting/protocol/index.js';
+import { UserAction, ProtocolAction } from '@core/index.js';
+import { Statement } from '@federated-voting/protocol/index.js';
 import { FederatedVotingContext } from '../../FederatedVotingContext.js';
 
 export class VoteOnStatement extends UserAction {

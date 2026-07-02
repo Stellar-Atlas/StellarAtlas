@@ -1,4 +1,4 @@
-import { CustomError } from '../../../core/errors/CustomError.js';
+import { CustomError } from '@core/errors/CustomError.js';
 
 export class UnmuteNotificationError extends CustomError {
 	errorType = 'UnmuteNotificationError';

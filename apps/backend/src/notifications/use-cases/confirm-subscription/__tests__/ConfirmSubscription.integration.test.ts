@@ -1,11 +1,11 @@
 import { Container } from 'inversify';
-import Kernel from '../../../../core/infrastructure/Kernel.js';
-import type { SubscriberRepository } from '../../../domain/subscription/SubscriberRepository.js';
-import { ConfigMock } from '../../../../core/config/__mocks__/configMock.js';
+import Kernel from '@core/infrastructure/Kernel.js';
+import type { SubscriberRepository } from '@notifications/domain/subscription/SubscriberRepository.js';
+import { ConfigMock } from '@core/config/__mocks__/configMock.js';
 import { ConfirmSubscription } from '../ConfirmSubscription.js';
-import { createDummyPendingSubscriptionId } from '../../../domain/subscription/__fixtures__/PendingSubscriptionId.fixtures.js';
-import { createDummySubscriber } from '../../../domain/subscription/__fixtures__/Subscriber.fixtures.js';
-import { NetworkId } from '../../../domain/event/EventSourceId.js';
+import { createDummyPendingSubscriptionId } from '@notifications/domain/subscription/__fixtures__/PendingSubscriptionId.fixtures.js';
+import { createDummySubscriber } from '@notifications/domain/subscription/__fixtures__/Subscriber.fixtures.js';
+import { NetworkId } from '@notifications/domain/event/EventSourceId.js';
 import { NoPendingSubscriptionFound } from '../ConfirmSubscriptionError.js';
 
 let container: Container;

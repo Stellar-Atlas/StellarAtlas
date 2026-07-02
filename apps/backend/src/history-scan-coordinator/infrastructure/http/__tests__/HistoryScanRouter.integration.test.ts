@@ -4,13 +4,13 @@ import { mock } from 'jest-mock-extended';
 import { ok, err } from 'neverthrow';
 import { HistoryScanRouterWrapper } from '../HistoryScanRouter.js';
 import { Url } from 'http-helper';
-import { GetLatestScan } from '../../../use-cases/get-latest-scan/GetLatestScan.js';
-import { RegisterScan } from '../../../use-cases/register-scan/RegisterScan.js';
-import { InvalidUrlError } from '../../../use-cases/get-latest-scan/InvalidUrlError.js';
+import { GetLatestScan } from '@history-scan-coordinator/use-cases/get-latest-scan/GetLatestScan.js';
+import { RegisterScan } from '@history-scan-coordinator/use-cases/register-scan/RegisterScan.js';
+import { InvalidUrlError } from '@history-scan-coordinator/use-cases/get-latest-scan/InvalidUrlError.js';
 import { ScanDTO } from 'history-scanner-dto';
-import { ScanJob } from '../../../domain/ScanJob.js';
-import { GetScanJob } from '../../../use-cases/get-scan-job/GetScanJob.js';
-import { TouchScanJob } from '../../../use-cases/touch-scan-job/TouchScanJob.js';
+import { ScanJob } from '@history-scan-coordinator/domain/ScanJob.js';
+import { GetScanJob } from '@history-scan-coordinator/use-cases/get-scan-job/GetScanJob.js';
+import { TouchScanJob } from '@history-scan-coordinator/use-cases/touch-scan-job/TouchScanJob.js';
 import { randomUUID } from 'crypto';
 
 describe('HistoryScanRouter.integration', () => {

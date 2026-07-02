@@ -1,5 +1,5 @@
-import { Url } from '../../../core/domain/Url.js';
-import { mapUnknownToError } from '../../../core/utilities/mapUnknownToError.js';
+import { Url } from '@core/domain/Url.js';
+import { mapUnknownToError } from '@core/utilities/mapUnknownToError.js';
 import { GetLatestScanDTO } from './GetLatestScanDTO.js';
 import { HistoryArchiveScan } from 'shared';
 import { InvalidUrlError } from './InvalidUrlError.js';
@@ -7,7 +7,7 @@ import { Result, err, ok } from 'neverthrow';
 import type { ScanRepository } from '../../domain/scan/ScanRepository.js';
 import { inject, injectable } from 'inversify';
 import { TYPES } from '../../infrastructure/di/di-types.js';
-import type { ExceptionLogger } from '../../../core/services/ExceptionLogger.js';
+import type { ExceptionLogger } from '@core/services/ExceptionLogger.js';
 import 'reflect-metadata';
 import { mapScanToHistoryArchiveScan } from '../../infrastructure/mappers/mapScanToHistoryArchiveScan.js';
 

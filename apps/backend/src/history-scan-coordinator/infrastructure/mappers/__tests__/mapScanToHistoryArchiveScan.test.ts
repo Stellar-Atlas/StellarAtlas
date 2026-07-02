@@ -1,6 +1,6 @@
 import { Url } from 'http-helper';
-import { Scan } from '../../../domain/scan/Scan.js';
-import { ScanError, ScanErrorType } from '../../../domain/scan/ScanError.js';
+import { Scan } from '@history-scan-coordinator/domain/scan/Scan.js';
+import { ScanError, ScanErrorType } from '@history-scan-coordinator/domain/scan/ScanError.js';
 import { mapScanToHistoryArchiveScan } from '../mapScanToHistoryArchiveScan.js';
 
 describe('mapScanToHistoryArchiveScan', () => {

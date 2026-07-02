@@ -1,6 +1,6 @@
-import type { ScanRepository } from '../../../domain/scan/ScanRepository.js';
+import type { ScanRepository } from '@history-scan-coordinator/domain/scan/ScanRepository.js';
 import { Repository } from 'typeorm';
-import { Scan } from '../../../domain/scan/Scan.js';
+import { Scan } from '@history-scan-coordinator/domain/scan/Scan.js';
 import { injectable } from 'inversify';
 
 @injectable()

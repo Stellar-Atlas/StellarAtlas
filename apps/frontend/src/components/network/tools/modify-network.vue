@@ -174,7 +174,7 @@ const validate = () => {
   try {
     modifiedNetwork = JSON.parse(modifiedNetworkString.value);
     isValid.value = validateNetworkSchema(modifiedNetwork);
-    validationErrors.value = validateNetworkSchema.errors;
+    validationErrors.value = validateNetworkSchema.errors ?? [];
   } catch (error) {
     if (error instanceof Error)
       validationErrors.value = [

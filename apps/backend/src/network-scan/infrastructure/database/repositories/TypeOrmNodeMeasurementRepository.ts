@@ -1,10 +1,10 @@
 import { Between, Repository } from 'typeorm';
 import { injectable } from 'inversify';
-import NodeMeasurement from '../../../domain/node/NodeMeasurement.js';
-import type { NodeMeasurementRepository } from '../../../domain/node/NodeMeasurementRepository.js';
-import { NodeMeasurementAverage } from '../../../domain/node/NodeMeasurementAverage.js';
-import { NodeMeasurementEvent } from '../../../domain/node/NodeMeasurementEvent.js';
-import PublicKey from '../../../domain/node/PublicKey.js';
+import NodeMeasurement from '@network-scan/domain/node/NodeMeasurement.js';
+import type { NodeMeasurementRepository } from '@network-scan/domain/node/NodeMeasurementRepository.js';
+import { NodeMeasurementAverage } from '@network-scan/domain/node/NodeMeasurementAverage.js';
+import { NodeMeasurementEvent } from '@network-scan/domain/node/NodeMeasurementEvent.js';
+import PublicKey from '@network-scan/domain/node/PublicKey.js';
 
 export interface NodeMeasurementAverageRecord {
 	publicKey: string;

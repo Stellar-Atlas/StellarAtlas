@@ -1,8 +1,8 @@
 import { Repository } from 'typeorm';
-import NetworkMeasurementMonth from '../../../domain/network/NetworkMeasurementMonth.js';
+import NetworkMeasurementMonth from '@network-scan/domain/network/NetworkMeasurementMonth.js';
 import { injectable } from 'inversify';
-import type { NetworkMeasurementMonthRepository } from '../../../domain/network/NetworkMeasurementMonthRepository.js';
-import { NetworkId } from '../../../domain/network/NetworkId.js';
+import type { NetworkMeasurementMonthRepository } from '@network-scan/domain/network/NetworkMeasurementMonthRepository.js';
+import { NetworkId } from '@network-scan/domain/network/NetworkId.js';
 
 @injectable()
 export class TypeOrmNetworkMeasurementMonthRepository implements NetworkMeasurementMonthRepository {

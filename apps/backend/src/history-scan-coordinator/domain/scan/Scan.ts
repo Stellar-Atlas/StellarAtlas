@@ -1,7 +1,7 @@
 import { Column, Entity, Index, JoinColumn, OneToOne } from 'typeorm';
-import { Url } from '../../../core/domain/Url.js';
+import { Url } from '@core/domain/Url.js';
 import { ScanError } from './ScanError.js';
-import { CoreEntity } from '../../../core/domain/CoreEntity.js';
+import { CoreEntity } from '@core/domain/CoreEntity.js';
 import {
 	mapDetailsToScanError,
 	mapScanErrorToDetails,

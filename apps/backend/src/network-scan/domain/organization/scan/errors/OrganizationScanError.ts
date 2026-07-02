@@ -1,4 +1,4 @@
-import { CustomError } from '../../../../../core/errors/CustomError.js';
+import { CustomError } from '@core/errors/CustomError.js';
 
 export abstract class OrganizationScanError extends CustomError {
 	private organizationScanErrorType = 'OrganizationScanError'; //to break duck-typing

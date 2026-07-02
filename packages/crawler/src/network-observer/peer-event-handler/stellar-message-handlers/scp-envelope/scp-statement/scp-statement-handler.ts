@@ -1,12 +1,12 @@
 import pino from 'pino';
 import { xdr } from '@stellar/stellar-sdk';
 import { getPublicKeyStringFromBuffer } from 'node-connector';
-import { QuorumSetManager } from '../../../../quorum-set-manager.js';
+import { QuorumSetManager } from '@network-observer/quorum-set-manager.js';
 import { err, ok, Result } from 'neverthrow';
 import { ExternalizeStatementHandler } from './externalize/externalize-statement-handler.js';
 import { mapExternalizeStatement } from './externalize/map-externalize-statement.js';
-import type { Ledger } from '../../../../../crawler.js';
-import { Observation } from '../../../../observation.js';
+import type { Ledger } from '@crawler/crawler.js';
+import { Observation } from '@network-observer/observation.js';
 
 export class ScpStatementHandler {
 	constructor(

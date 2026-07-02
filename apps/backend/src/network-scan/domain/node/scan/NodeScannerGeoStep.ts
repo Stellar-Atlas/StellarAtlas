@@ -1,6 +1,6 @@
 import { inject, injectable } from 'inversify';
 import type { GeoDataService } from './GeoDataService.js';
-import type { Logger } from '../../../../core/services/Logger.js';
+import type { Logger } from '@core/services/Logger.js';
 import NodeGeoDataLocation from '../NodeGeoDataLocation.js';
 import { NodeScan } from './NodeScan.js';
 

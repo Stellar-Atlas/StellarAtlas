@@ -1,6 +1,6 @@
 import { validationResult } from 'express-validator';
 import { AggregationTarget } from '../../use-cases/get-measurement-aggregations/GetMeasurementAggregationsDTO.js';
-import { getDateFromParam } from '../../../core/utilities/getDateFromParam.js';
+import { getDateFromParam } from '@core/utilities/getDateFromParam.js';
 import * as express from 'express';
 import { GetMeasurementAggregations } from '../../use-cases/get-measurement-aggregations/GetMeasurementAggregations.js';
 

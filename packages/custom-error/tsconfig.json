@@ -3,9 +3,19 @@
 	"compilerOptions": {
 		"outDir": "lib",
 		"rootDir": "src",
-		"composite": true
+		"composite": true,
+		"paths": {
+			"@custom-error/*.js": [
+				"./src/*.ts"
+			],
+			"@custom-error/*": [
+				"./src/*"
+			]
+		}
 	},
-	"include": ["src/**/*.ts"],
+	"include": [
+		"src/**/*.ts"
+	],
 	"exclude": [
 		"node_modules/**/*",
 		"src/**/__tests__/*",

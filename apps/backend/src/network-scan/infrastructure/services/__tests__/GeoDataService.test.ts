@@ -1,12 +1,12 @@
 import { ok } from 'neverthrow';
-import { LoggerMock } from '../../../../core/services/__mocks__/LoggerMock.js';
+import { LoggerMock } from '@core/services/__mocks__/LoggerMock.js';
 import { mock } from 'jest-mock-extended';
 import type { HttpService } from 'http-helper';
 import { IpStackGeoDataService } from '../IpStackGeoDataService.js';
 import { IpWhoIsGeoDataService } from '../IpWhoIsGeoDataService.js';
 import { FallbackGeoDataService } from '../FallbackGeoDataService.js';
-import { GeoDataUpdateError } from '../../../domain/node/scan/GeoDataService.js';
-import type { GeoDataService } from '../../../domain/node/scan/GeoDataService.js';
+import { GeoDataUpdateError } from '@network-scan/domain/node/scan/GeoDataService.js';
+import type { GeoDataService } from '@network-scan/domain/node/scan/GeoDataService.js';
 import { err } from 'neverthrow';
 
 const httpService = mock<HttpService>();

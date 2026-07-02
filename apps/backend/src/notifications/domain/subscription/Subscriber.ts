@@ -10,7 +10,7 @@ import { EventSourceId } from '../event/EventSourceId.js';
 import { SubscriberReference } from './SubscriberReference.js';
 import { err, ok, Result } from 'neverthrow';
 import { Notification } from './Notification.js';
-import { CoreEntity } from '../../../core/domain/CoreEntity.js';
+import { CoreEntity } from '@core/domain/CoreEntity.js';
 
 export interface SubscriberProperties {
 	userId: UserId;

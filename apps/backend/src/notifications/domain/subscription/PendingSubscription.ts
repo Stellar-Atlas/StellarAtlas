@@ -7,7 +7,7 @@ import {
 } from '../event/EventSourceId.js';
 import { err, ok, Result } from 'neverthrow';
 import validator from 'validator';
-import { CoreEntity } from '../../../core/domain/CoreEntity.js';
+import { CoreEntity } from '@core/domain/CoreEntity.js';
 
 export class PendingSubscriptionId {
 	@Column({ type: 'uuid', nullable: false })

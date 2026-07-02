@@ -4,7 +4,7 @@ import { TomlFetchError, TomlService } from '../TomlService.js';
 import * as toml from 'toml';
 import { HttpError, type HttpService } from 'http-helper';
 import { err, ok } from 'neverthrow';
-import { LoggerMock } from '../../../../../core/services/__mocks__/LoggerMock.js';
+import { LoggerMock } from '@core/services/__mocks__/LoggerMock.js';
 import { mock } from 'jest-mock-extended';
 
 const httpService = mock<HttpService>();

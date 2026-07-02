@@ -4,7 +4,7 @@ import type { ExceptionLogger } from 'exception-logger';
 import { err, ok, Result } from 'neverthrow';
 import { ScanMapper } from '../../infrastructure/mappers/ScanMapper.js';
 import type { ScanRepository } from '../../domain/scan/ScanRepository.js';
-import { mapUnknownToError } from '../../../core/utilities/mapUnknownToError.js';
+import { mapUnknownToError } from '@core/utilities/mapUnknownToError.js';
 import { ScanDTO } from 'history-scanner-dto';
 import type { Logger } from 'logger';
 import type { ScanJobRepository } from '../../domain/ScanJobRepository.js';

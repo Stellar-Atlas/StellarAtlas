@@ -1,4 +1,4 @@
-import { ActiveIndex } from '../../../index/active-index.js';
+import { ActiveIndex } from '@network-scan/domain/node/scan/node-index/index/active-index.js';
 
 test('get', () => {
 	expect(ActiveIndex.get(100)).toEqual(1);

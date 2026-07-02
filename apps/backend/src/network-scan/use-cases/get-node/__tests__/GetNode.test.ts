@@ -1,10 +1,10 @@
 import { mock } from 'jest-mock-extended';
 import { err, ok } from 'neverthrow';
-import type { ExceptionLogger } from '../../../../core/services/ExceptionLogger.js';
+import type { ExceptionLogger } from '@core/services/ExceptionLogger.js';
 import { GetNetwork } from '../../get-network/GetNetwork.js';
 import { GetNode } from '../GetNode.js';
-import { createDummyNetworkV1 } from '../../../services/__fixtures__/createDummyNetworkV1.js';
-import { createDummyNodeV1 } from '../../../services/__fixtures__/createDummyNodeV1.js';
+import { createDummyNetworkV1 } from '@network-scan/services/__fixtures__/createDummyNetworkV1.js';
+import { createDummyNodeV1 } from '@network-scan/services/__fixtures__/createDummyNodeV1.js';
 
 it('should return node', async function () {
 	const getNetwork = mock<GetNetwork>();

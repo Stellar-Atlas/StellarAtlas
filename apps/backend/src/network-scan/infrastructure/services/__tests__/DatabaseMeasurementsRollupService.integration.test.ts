@@ -1,9 +1,9 @@
-import Kernel from '../../../../core/infrastructure/Kernel.js';
-import { ConfigMock } from '../../../../core/config/__mocks__/configMock.js';
-import type { MeasurementsRollupService } from '../../../domain/measurement-aggregation/MeasurementsRollupService.js';
+import Kernel from '@core/infrastructure/Kernel.js';
+import { ConfigMock } from '@core/config/__mocks__/configMock.js';
+import type { MeasurementsRollupService } from '@network-scan/domain/measurement-aggregation/MeasurementsRollupService.js';
 import { NETWORK_TYPES } from '../../di/di-types.js';
-import NetworkScan from '../../../domain/network/scan/NetworkScan.js';
-import { NodeScan } from '../../../domain/node/scan/NodeScan.js';
+import NetworkScan from '@network-scan/domain/network/scan/NetworkScan.js';
+import { NodeScan } from '@network-scan/domain/node/scan/NodeScan.js';
 
 describe('DatabaseMeasurementsRollupService.integration', () => {
 	let kernel: Kernel;

@@ -4,9 +4,10 @@
 	"version": "2.0.0",
 	"description": "stellaratlas project monorepo",
 	"scripts": {
-		"build:ts": "tsc --build",
-		"build:ts:force": "tsc --build --force",
-		"build": "tsc --build --verbose && pnpm --parallel post-build && pnpm --filter frontend run build && pnpm --filter frontend-v4 run build",
+		"build:ts": "tsc --build && pnpm rewrite:aliases",
+		"build:ts:force": "tsc --build --force && pnpm rewrite:aliases",
+		"rewrite:aliases": "node scripts/rewrite-ts-aliases.mjs",
+		"build": "tsc --build --verbose && pnpm rewrite:aliases && pnpm --parallel post-build && pnpm --filter frontend run build && pnpm --filter frontend-v4 run build",
 		"dev": "pnpm build:ts && concurrently -n backend,frontend -c yellow,blue \"pnpm --filter backend run start-api\" \"pnpm --filter frontend run dev --force --host\"",
 		"test:unit": "NODE_OPTIONS=--experimental-vm-modules jest --testPathIgnorePatterns '\\.integration(\\.test)?\\.[jt]sx?$' --maxWorkers=50% ",
 		"test:unit:scp-simulation": "NODE_OPTIONS=--experimental-vm-modules jest --testPathIgnorePatterns '\\.integration(\\.test)?\\.[jt]sx?$' --testPathPatterns 'scp-simulation' --maxWorkers=50% ",
@@ -70,6 +71,7 @@
 		"prettier": "3.9.4",
 		"ts-jest": "29.4.11",
 		"ts-node": "10.9.2",
+		"tsc-alias": "^1.8.17",
 		"typescript": "^6.0.3",
 		"typescript-eslint": "8.62.1"
 	},

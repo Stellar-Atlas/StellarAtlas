@@ -1,5 +1,5 @@
 import { mock } from 'jest-mock-extended';
-import { TomlService } from '../../../network/scan/TomlService.js';
+import { TomlService } from '@network-scan/domain/network/scan/TomlService.js';
 import { NodeTomlFetcher } from '../NodeTomlFetcher.js';
 import * as toml from 'toml';
 

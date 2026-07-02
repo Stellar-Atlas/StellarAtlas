@@ -1,6 +1,6 @@
 import { inject, injectable } from 'inversify';
 import { err, ok, Result } from 'neverthrow';
-import type { ExceptionLogger } from '../../../core/services/ExceptionLogger.js';
+import type { ExceptionLogger } from '@core/services/ExceptionLogger.js';
 import 'reflect-metadata';
 import { GetNodeDTO } from './GetNodeDTO.js';
 import { GetNetwork } from '../get-network/GetNetwork.js';

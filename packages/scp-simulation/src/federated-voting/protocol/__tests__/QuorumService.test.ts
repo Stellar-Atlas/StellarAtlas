@@ -1,4 +1,4 @@
-import { Node, QuorumSet } from '../../../core/index.js';
+import { Node, QuorumSet } from '@core/index.js';
 import { QuorumService } from '../QuorumService.js';
 
 describe('QuorumService', () => {

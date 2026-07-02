@@ -2,6 +2,25 @@ declare module "*.css";
 declare module "*.scss";
 declare module "*.sass";
 
+declare module "shared/lib/network-schema" {
+  type NetworkSchemaValidationError = {
+    dataPath?: string;
+    instancePath?: string;
+    schemaPath?: string;
+    keyword?: string;
+    params: unknown;
+    message?: string;
+  };
+
+  interface NetworkSchemaValidator {
+    (data: unknown): boolean;
+    errors?: NetworkSchemaValidationError[] | null;
+  }
+
+  const validateNetworkSchema: NetworkSchemaValidator;
+  export default validateNetworkSchema;
+}
+
 /// <reference types="vite/client" />
 
 interface ImportMetaEnv {

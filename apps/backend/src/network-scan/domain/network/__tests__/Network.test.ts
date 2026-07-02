@@ -1,6 +1,6 @@
 import { Network } from '../Network.js';
 import { NetworkId } from '../NetworkId.js';
-import { Snapshot } from '../../../../core/domain/Snapshot.js';
+import { Snapshot } from '@core/domain/Snapshot.js';
 import { createDummyNetworkProps } from '../__fixtures__/createDummyNetworkProps.js';
 import { NetworkNameChanged } from '../change/NetworkNameChanged.js';
 import { NetworkMaxLedgerVersionChanged } from '../change/NetworkMaxLedgerVersionChanged.js';

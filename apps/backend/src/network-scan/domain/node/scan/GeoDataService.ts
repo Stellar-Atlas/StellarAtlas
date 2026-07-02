@@ -1,6 +1,6 @@
 import 'reflect-metadata';
 import { Result } from 'neverthrow';
-import { CustomError } from '../../../../core/errors/CustomError.js';
+import { CustomError } from '@core/errors/CustomError.js';
 
 export interface GeoData {
 	longitude: number | null;

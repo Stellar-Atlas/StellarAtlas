@@ -3,7 +3,7 @@ import {
 	isArray,
 	isObject,
 	isString
-} from '../../../../core/utilities/TypeGuards.js';
+} from '@core/utilities/TypeGuards.js';
 import valueValidator from 'validator';
 import { injectable } from 'inversify';
 import { NodeTomlInfo } from './NodeTomlInfo.js';

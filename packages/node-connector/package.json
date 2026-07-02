@@ -4,7 +4,7 @@
 	"description": "Connect and interact with nodes in the Stellar Network over the tcp protocol",
 	"type": "module",
 	"scripts": {
-		"build": "tsc --declaration",
+		"build": "tsc --declaration && pnpm -w rewrite:aliases packages/node-connector",
 		"examples:connect": "pnpm run build; node lib/examples/connect.js",
 		"examples:scp": "pnpm run build; node lib/examples/scp.js"
 	},

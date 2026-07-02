@@ -1,4 +1,4 @@
-import { PublicKey, QuorumSet } from '../../../core/index.js';
+import { PublicKey, QuorumSet } from '@core/index.js';
 import { ProtocolEvent } from './ProtocolEvent.js';
 
 //todo: is this a ProtocolEvent??

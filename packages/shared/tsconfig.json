@@ -3,9 +3,50 @@
 	"compilerOptions": {
 		"outDir": "lib",
 		"rootDir": "src",
-		"composite": true
+		"composite": true,
+		"paths": {
+			"@shared/*.js": [
+				"./src/*.ts"
+			],
+			"@shared/*": [
+				"./src/*"
+			],
+			"@dto/*.js": [
+				"./src/dto/*.ts"
+			],
+			"@dto/*": [
+				"./src/dto/*"
+			],
+			"@env/*.js": [
+				"./src/env/*.ts"
+			],
+			"@env/*": [
+				"./src/env/*"
+			],
+			"@quorum/*.js": [
+				"./src/quorum/*.ts"
+			],
+			"@quorum/*": [
+				"./src/quorum/*"
+			],
+			"@trust-graph/*.js": [
+				"./src/trust-graph/*.ts"
+			],
+			"@trust-graph/*": [
+				"./src/trust-graph/*"
+			],
+			"@utilities/*.js": [
+				"./src/utilities/*.ts"
+			],
+			"@utilities/*": [
+				"./src/utilities/*"
+			]
+		}
 	},
-	"include": ["src/**/*.ts", "generate-dto-validate-functions.mjs"],
+	"include": [
+		"src/**/*.ts",
+		"generate-dto-validate-functions.mjs"
+	],
 	"exclude": [
 		"node_modules/**/*",
 		"src/**/__tests__/*",

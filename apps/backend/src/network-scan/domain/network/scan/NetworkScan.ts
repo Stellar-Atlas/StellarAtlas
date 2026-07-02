@@ -5,7 +5,7 @@ import {
 	ValueTransformer,
 	PrimaryGeneratedColumn
 } from 'typeorm';
-import { CoreEntity } from '../../../../core/domain/CoreEntity.js';
+import { CoreEntity } from '@core/domain/CoreEntity.js';
 import NetworkMeasurement from '../NetworkMeasurement.js';
 import { NodeScan } from '../../node/scan/NodeScan.js';
 import { OrganizationScan } from '../../organization/scan/OrganizationScan.js';

@@ -1,8 +1,8 @@
-import Kernel from '../../../../core/infrastructure/Kernel.js';
-import { ConfigMock } from '../../../../core/config/__mocks__/configMock.js';
-import { TYPES } from '../../../infrastructure/di/di-types.js';
-import type { ScanRepository } from '../../../domain/scan/ScanRepository.js';
-import { Scan } from '../../../domain/scan/Scan.js';
+import Kernel from '@core/infrastructure/Kernel.js';
+import { ConfigMock } from '@core/config/__mocks__/configMock.js';
+import { TYPES } from '@history-scan-coordinator/infrastructure/di/di-types.js';
+import type { ScanRepository } from '@history-scan-coordinator/domain/scan/ScanRepository.js';
+import { Scan } from '@history-scan-coordinator/domain/scan/Scan.js';
 import { GetLatestScan } from '../GetLatestScan.js';
 import { HistoryArchiveScan } from 'shared';
 import { InvalidUrlError } from '../InvalidUrlError.js';

@@ -7,12 +7,12 @@ import {
 	Not,
 	Repository
 } from 'typeorm';
-import NodeSnapShot from '../../../domain/node/NodeSnapShot.js';
+import NodeSnapShot from '@network-scan/domain/node/NodeSnapShot.js';
 import { injectable } from 'inversify';
-import NodeMeasurement from '../../../domain/node/NodeMeasurement.js';
-import Node from '../../../domain/node/Node.js';
-import type { NodeSnapShotRepository } from '../../../domain/node/NodeSnapShotRepository.js';
-import PublicKey from '../../../domain/node/PublicKey.js';
+import NodeMeasurement from '@network-scan/domain/node/NodeMeasurement.js';
+import Node from '@network-scan/domain/node/Node.js';
+import type { NodeSnapShotRepository } from '@network-scan/domain/node/NodeSnapShotRepository.js';
+import PublicKey from '@network-scan/domain/node/PublicKey.js';
 
 @injectable()
 export default class TypeOrmNodeSnapShotRepository implements NodeSnapShotRepository {

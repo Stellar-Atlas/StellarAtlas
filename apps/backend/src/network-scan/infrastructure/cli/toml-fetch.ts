@@ -1,4 +1,4 @@
-import Kernel from '../../../core/infrastructure/Kernel.js';
+import Kernel from '@core/infrastructure/Kernel.js';
 import { OrganizationTomlFetcher } from '../../domain/organization/scan/OrganizationTomlFetcher.js';
 import { NodeTomlFetcher } from '../../domain/node/scan/NodeTomlFetcher.js';
 

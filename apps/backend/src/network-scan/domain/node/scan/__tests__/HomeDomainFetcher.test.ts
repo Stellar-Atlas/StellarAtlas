@@ -1,7 +1,7 @@
 import { HomeDomainFetcher } from '../HomeDomainFetcher.js';
-import { HorizonService } from '../../../network/scan/HorizonService.js';
+import { HorizonService } from '@network-scan/domain/network/scan/HorizonService.js';
 import { ok } from 'neverthrow';
-import { LoggerMock } from '../../../../../core/services/__mocks__/LoggerMock.js';
+import { LoggerMock } from '@core/services/__mocks__/LoggerMock.js';
 import type { HttpService } from 'http-helper';
 
 it('should update homeDomains once in a cache period', async function () {

@@ -5,7 +5,7 @@
 	"type": "module",
 	"description": "Simulate the SCP protocol for educational purposes. Currently focussing on federated voting",
 	"scripts": {
-		"build": "tsc --declaration",
+		"build": "tsc --declaration && pnpm -w rewrite:aliases packages/scp-simulation",
 		"test:unit": "jest",
 		"build-and-start": "pnpm build && node ./lib/start-console.js",
 		"start": "node ./lib/start-console.js"

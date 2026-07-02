@@ -3,9 +3,37 @@
 	"compilerOptions": {
 		"outDir": "lib",
 		"rootDir": "src",
-		"composite": true
+		"composite": true,
+		"paths": {
+			"@crawler/*.js": [
+				"./src/*.ts"
+			],
+			"@crawler/*": [
+				"./src/*"
+			],
+			"@fixtures/*.js": [
+				"./src/__fixtures__/*.ts"
+			],
+			"@fixtures/*": [
+				"./src/__fixtures__/*"
+			],
+			"@network-observer/*.js": [
+				"./src/network-observer/*.ts"
+			],
+			"@network-observer/*": [
+				"./src/network-observer/*"
+			],
+			"@utilities/*.js": [
+				"./src/utilities/*.ts"
+			],
+			"@utilities/*": [
+				"./src/utilities/*"
+			]
+		}
 	},
-	"include": ["src/**/*.ts"],
+	"include": [
+		"src/**/*.ts"
+	],
 	"exclude": [
 		"node_modules/**/*",
 		"src/**/__tests__/*",

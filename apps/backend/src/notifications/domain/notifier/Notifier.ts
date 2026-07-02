@@ -1,8 +1,8 @@
 import { err, ok, Result } from 'neverthrow';
-import type { IUserService } from '../../../core/domain/IUserService.js';
+import type { IUserService } from '@core/domain/IUserService.js';
 import { queue } from 'async';
 import { inject, injectable } from 'inversify';
-import { CustomError } from '../../../core/errors/CustomError.js';
+import { CustomError } from '@core/errors/CustomError.js';
 import { Notification } from '../subscription/Notification.js';
 import type { MessageCreator } from './MessageCreator.js';
 import { TYPES } from '../../infrastructure/di/di-types.js';

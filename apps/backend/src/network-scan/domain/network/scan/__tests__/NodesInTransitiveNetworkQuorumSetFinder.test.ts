@@ -1,4 +1,4 @@
-import { createDummyNode } from '../../../node/__fixtures__/createDummyNode.js';
+import { createDummyNode } from '@network-scan/domain/node/__fixtures__/createDummyNode.js';
 import { NodesInTransitiveNetworkQuorumSetFinder } from '../NodesInTransitiveNetworkQuorumSetFinder.js';
 import { NetworkQuorumSetConfiguration } from '../../NetworkQuorumSetConfiguration.js';
 

@@ -1,15 +1,15 @@
 import { CrawlerService } from './node-crawl/CrawlerService.js';
 import type { CrawlResult } from './node-crawl/CrawlerService.js';
 import { inject, injectable } from 'inversify';
-import type { Logger } from '../../../../core/services/Logger.js';
+import type { Logger } from '@core/services/Logger.js';
 import { err, Ok, ok, Result } from 'neverthrow';
 import { NetworkQuorumSetConfiguration } from '../../network/NetworkQuorumSetConfiguration.js';
 import Node from '../Node.js';
 import { NodeScan } from './NodeScan.js';
 import type { NodeRepository } from '../NodeRepository.js';
-import { NETWORK_TYPES } from '../../../infrastructure/di/di-types.js';
+import { NETWORK_TYPES } from '@network-scan/infrastructure/di/di-types.js';
 import PublicKey from '../PublicKey.js';
-import { mapUnknownToError } from '../../../../core/utilities/mapUnknownToError.js';
+import { mapUnknownToError } from '@core/utilities/mapUnknownToError.js';
 import type { NodeAddress } from '../NodeAddress.js';
 import type { ScpStatementObservationRepository } from '../../scp/ScpStatementObservationRepository.js';
 

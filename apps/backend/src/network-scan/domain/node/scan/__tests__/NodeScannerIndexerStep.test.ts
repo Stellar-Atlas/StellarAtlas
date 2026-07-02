@@ -1,7 +1,7 @@
 import { NodeScannerIndexerStep } from '../NodeScannerIndexerStep.js';
 import { NodeScan } from '../NodeScan.js';
 import { createDummyNode } from '../../__fixtures__/createDummyNode.js';
-import { StellarCoreVersion } from '../../../network/StellarCoreVersion.js';
+import { StellarCoreVersion } from '@network-scan/domain/network/StellarCoreVersion.js';
 import 'reflect-metadata';
 import NodeMeasurement from '../../NodeMeasurement.js';
 

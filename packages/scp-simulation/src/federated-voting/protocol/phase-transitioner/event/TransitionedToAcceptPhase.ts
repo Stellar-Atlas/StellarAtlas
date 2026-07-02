@@ -1,4 +1,4 @@
-import { PublicKey } from '../../../../core/index.js';
+import { PublicKey } from '@core/index.js';
 import { FederatedVotingPhase } from '../../FederatedVotingProtocolState.js';
 import { ProtocolEvent } from '../../event/ProtocolEvent.js';
 import { Statement } from '../../Statement.js';

@@ -1,10 +1,10 @@
 import { Container } from 'inversify';
-import Kernel from '../../../../../core/infrastructure/Kernel.js';
+import Kernel from '@core/infrastructure/Kernel.js';
 import { TypeOrmNetworkScanRepository } from '../TypeOrmNetworkScanRepository.js';
-import NetworkScan from '../../../../domain/network/scan/NetworkScan.js';
-import { ConfigMock } from '../../../../../core/config/__mocks__/configMock.js';
-import { NETWORK_TYPES } from '../../../di/di-types.js';
-import NetworkMeasurement from '../../../../domain/network/NetworkMeasurement.js';
+import NetworkScan from '@network-scan/domain/network/scan/NetworkScan.js';
+import { ConfigMock } from '@core/config/__mocks__/configMock.js';
+import { NETWORK_TYPES } from '@network-scan/infrastructure/di/di-types.js';
+import NetworkMeasurement from '@network-scan/domain/network/NetworkMeasurement.js';
 
 describe('NetworkScanRepository', () => {
 	let container: Container;

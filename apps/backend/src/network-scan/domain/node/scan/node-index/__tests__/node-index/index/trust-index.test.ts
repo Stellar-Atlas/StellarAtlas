@@ -1,7 +1,7 @@
 import { Edge, TrustGraph, Vertex } from 'shared';
 import { StronglyConnectedComponentsFinder } from 'shared';
 import { NetworkTransitiveQuorumSetFinder } from 'shared';
-import { TrustIndex } from '../../../index/trust-index.js';
+import { TrustIndex } from '@network-scan/domain/node/scan/node-index/index/trust-index.js';
 
 const trustGraph = new TrustGraph(
 	new StronglyConnectedComponentsFinder(),

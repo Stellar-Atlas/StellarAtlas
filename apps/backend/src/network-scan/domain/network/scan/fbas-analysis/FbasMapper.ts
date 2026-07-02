@@ -1,5 +1,5 @@
-import Node from '../../../node/Node.js';
-import Organization from '../../../organization/Organization.js';
+import Node from '@network-scan/domain/node/Node.js';
+import Organization from '@network-scan/domain/organization/Organization.js';
 import {
 	FbasAnalysisNode,
 	FbasAnalysisOrganization

@@ -1,7 +1,7 @@
 import { err, ok, Result } from 'neverthrow';
-import { mapUnknownToError } from '../../../core/utilities/mapUnknownToError.js';
+import { mapUnknownToError } from '@core/utilities/mapUnknownToError.js';
 import { inject, injectable } from 'inversify';
-import type { ExceptionLogger } from '../../../core/services/ExceptionLogger.js';
+import type { ExceptionLogger } from '@core/services/ExceptionLogger.js';
 import { GetNodeSnapshotsDTO } from './GetNodeSnapshotsDTO.js';
 import { NodeSnapShot } from 'shared';
 import PublicKey from '../../domain/node/PublicKey.js';

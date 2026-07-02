@@ -1,4 +1,4 @@
-import { CustomError } from '../../../core/errors/CustomError.js';
+import { CustomError } from '@core/errors/CustomError.js';
 
 export class ConfirmSubscriptionError extends CustomError {
 	errorType = 'ConfirmSubscriptionError';

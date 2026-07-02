@@ -5,9 +5,9 @@ import type { SubscriberRepository } from '../../domain/subscription/SubscriberR
 import { err, ok, Result } from 'neverthrow';
 import { SubscriberReference } from '../../domain/subscription/SubscriberReference.js';
 import { EventType } from '../../domain/event/Event.js';
-import isPartOfStringEnum from '../../../core/utilities/TypeGuards.js';
+import isPartOfStringEnum from '@core/utilities/TypeGuards.js';
 import { PersistenceError } from './UnmuteNotificationError.js';
-import { mapUnknownToError } from '../../../core/utilities/mapUnknownToError.js';
+import { mapUnknownToError } from '@core/utilities/mapUnknownToError.js';
 
 @injectable()
 export class UnmuteNotification {

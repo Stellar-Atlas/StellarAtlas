@@ -1,5 +1,5 @@
 import { Message } from '../../Message.js';
-import { Context, ProtocolAction } from '../../../core/index.js';
+import { Context, ProtocolAction } from '@core/index.js';
 
 export class ReceiveMessage extends ProtocolAction {
 	subType = 'ReceiveMessage';

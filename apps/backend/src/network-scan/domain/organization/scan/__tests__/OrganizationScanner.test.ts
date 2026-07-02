@@ -4,15 +4,15 @@ import { OrganizationScanner } from '../OrganizationScanner.js';
 import { OrganizationTomlFetcher } from '../OrganizationTomlFetcher.js';
 import { OrganizationTomlInfo } from '../OrganizationTomlInfo.js';
 import { OrganizationScan } from '../OrganizationScan.js';
-import { createDummyNode } from '../../../node/__fixtures__/createDummyNode.js';
+import { createDummyNode } from '@network-scan/domain/node/__fixtures__/createDummyNode.js';
 import Organization from '../../Organization.js';
 import { createDummyOrganizationId } from '../../__fixtures__/createDummyOrganizationId.js';
-import { NodeScan } from '../../../node/scan/NodeScan.js';
+import { NodeScan } from '@network-scan/domain/node/scan/NodeScan.js';
 import type { OrganizationRepository } from '../../OrganizationRepository.js';
 import OrganizationMeasurement from '../../OrganizationMeasurement.js';
 import type { Logger } from 'logger';
 import { CouldNotRetrieveArchivedOrganizationsError } from '../errors/CouldNotRetrieveArchivedOrganizationsError.js';
-import { createDummyPublicKeyString } from '../../../node/__fixtures__/createDummyPublicKey.js';
+import { createDummyPublicKeyString } from '@network-scan/domain/node/__fixtures__/createDummyPublicKey.js';
 import { TomlState } from '../TomlState.js';
 
 describe('OrganizationScanner', function () {

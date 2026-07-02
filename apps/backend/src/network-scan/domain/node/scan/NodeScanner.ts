@@ -1,5 +1,5 @@
 import { inject, injectable } from 'inversify';
-import type { Logger } from '../../../../core/services/Logger.js';
+import type { Logger } from '@core/services/Logger.js';
 import { err, ok, Result } from 'neverthrow';
 import { NetworkQuorumSetConfiguration } from '../../network/NetworkQuorumSetConfiguration.js';
 import { StellarCoreVersion } from '../../network/StellarCoreVersion.js';

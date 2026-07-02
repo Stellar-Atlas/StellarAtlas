@@ -1,4 +1,4 @@
-import type { Logger } from '../../../core/services/Logger.js';
+import type { Logger } from '@core/services/Logger.js';
 import {
 	GeoData,
 	GeoDataUpdateError

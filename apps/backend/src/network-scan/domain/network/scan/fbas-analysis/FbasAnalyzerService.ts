@@ -6,9 +6,9 @@ import FbasAnalyzerFacade, {
 	FbasAnalysisOrganization,
 	MergeBy
 } from './FbasAnalyzerFacade.js';
-import type { Logger } from '../../../../../core/services/Logger.js';
-import Organization from '../../../organization/Organization.js';
-import Node from '../../../node/Node.js';
+import type { Logger } from '@core/services/Logger.js';
+import Organization from '@network-scan/domain/organization/Organization.js';
+import Node from '@network-scan/domain/node/Node.js';
 import { FbasMapper } from './FbasMapper.js';
 import { AnalysisResult } from './AnalysisResult.js';
 import { FbasMergedByAnalyzer } from './FbasMergedByAnalyzer.js';

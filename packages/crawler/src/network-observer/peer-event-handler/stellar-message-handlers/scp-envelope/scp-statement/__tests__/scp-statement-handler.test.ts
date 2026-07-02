@@ -1,18 +1,18 @@
 import { mock } from 'jest-mock-extended';
 import { ScpStatementHandler } from '../scp-statement-handler.js';
-import { QuorumSetManager } from '../../../../../quorum-set-manager.js';
+import { QuorumSetManager } from '@network-observer/quorum-set-manager.js';
 import pino from 'pino';
 import { ExternalizeStatementHandler } from '../externalize/externalize-statement-handler.js';
 import {
 	createDummyExternalizeStatement,
 	createDummyNominationMessage
-} from '../../../../../../__fixtures__/createDummyExternalizeMessage.js';
+} from '@fixtures/createDummyExternalizeMessage.js';
 import { Keypair } from '@stellar/stellar-sdk';
-import { PeerNodeCollection } from '../../../../../../peer-node-collection.js';
+import { PeerNodeCollection } from '@crawler/peer-node-collection.js';
 import { Slots } from '../externalize/slots.js';
 import { QuorumSet } from 'shared';
-import type { Ledger } from '../../../../../../crawler.js';
-import { Observation } from '../../../../../observation.js';
+import type { Ledger } from '@crawler/crawler.js';
+import { Observation } from '@network-observer/observation.js';
 
 describe('scp-statement-handler', () => {
 	it('should process new scp statement and newly closed ledger', () => {

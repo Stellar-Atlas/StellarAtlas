@@ -4,8 +4,8 @@ import validator from 'validator';
 import { inject, injectable } from 'inversify';
 import 'reflect-metadata';
 import { queue } from 'async';
-import { CustomError } from '../../../../core/errors/CustomError.js';
-import type { Logger } from '../../../../core/services/Logger.js';
+import { CustomError } from '@core/errors/CustomError.js';
+import type { Logger } from '@core/services/Logger.js';
 
 interface CacheResult {
 	domain: string | null;

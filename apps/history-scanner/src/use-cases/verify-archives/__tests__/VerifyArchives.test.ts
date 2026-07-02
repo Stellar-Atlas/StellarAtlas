@@ -1,12 +1,12 @@
 import { mock, type MockProxy } from 'jest-mock-extended';
 import { VerifyArchives } from '../VerifyArchives.js';
-import { Scanner } from '../../../domain/scanner/Scanner.js';
-import type { ScanCoordinatorService } from '../../../domain/scan/ScanCoordinatorService.js';
+import { Scanner } from '@domain/scanner/Scanner.js';
+import type { ScanCoordinatorService } from '@domain/scan/ScanCoordinatorService.js';
 import type { ExceptionLogger } from 'exception-logger';
 import type { JobMonitor } from 'job-monitor';
 import { ok, err } from 'neverthrow';
 import { ScanJobDTO } from 'history-scanner-dto';
-import { Scan } from '../../../domain/scan/Scan.js';
+import { Scan } from '@domain/scan/Scan.js';
 import { Url } from 'http-helper';
 
 class TestVerifyArchives extends VerifyArchives {

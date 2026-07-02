@@ -1,6 +1,6 @@
 import { EJSMessageCreator } from '../EJSMessageCreator.js';
-import { createDummyPendingSubscriptionId } from '../../../domain/subscription/__fixtures__/PendingSubscriptionId.fixtures.js';
-import { Notification } from '../../../domain/subscription/Notification.js';
+import { createDummyPendingSubscriptionId } from '@notifications/domain/subscription/__fixtures__/PendingSubscriptionId.fixtures.js';
+import { Notification } from '@notifications/domain/subscription/Notification.js';
 import {
 	FullValidatorXUpdatesHistoryArchiveOutOfDateEvent,
 	HistoryArchiveErrorDetectedEvent,
@@ -16,17 +16,17 @@ import {
 	OrganizationXUpdatesTomlErrorEvent,
 	OrganizationXUpdatesUnavailableEvent,
 	ValidatorXUpdatesNotValidatingEvent
-} from '../../../domain/event/Event.js';
+} from '@notifications/domain/event/Event.js';
 import {
 	EventSourceId,
 	NetworkId,
 	OrganizationId,
 	PublicKey
-} from '../../../domain/event/EventSourceId.js';
-import { createDummySubscriber } from '../../../domain/subscription/__fixtures__/Subscriber.fixtures.js';
+} from '@notifications/domain/event/EventSourceId.js';
+import { createDummySubscriber } from '@notifications/domain/subscription/__fixtures__/Subscriber.fixtures.js';
 import { ok, Result } from 'neverthrow';
-import type { EventSourceService } from '../../../domain/event/EventSourceService.js';
-import { EventSource } from '../../../domain/event/EventSource.js';
+import type { EventSourceService } from '@notifications/domain/event/EventSourceService.js';
+import { EventSource } from '@notifications/domain/event/EventSource.js';
 
 it('should create confirm subscription message', async function () {
 	const messageCreator = new EJSMessageCreator(

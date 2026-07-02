@@ -1,5 +1,5 @@
-import { Context, ProtocolAction, PublicKey } from '../../../core/index.js';
-import { Payload } from '../../../overlay/Overlay.js';
+import { Context, ProtocolAction, PublicKey } from '@core/index.js';
+import { Payload } from '@overlay/Overlay.js';
 import { Vote } from '../../protocol/index.js';
 
 export class Broadcast extends ProtocolAction {

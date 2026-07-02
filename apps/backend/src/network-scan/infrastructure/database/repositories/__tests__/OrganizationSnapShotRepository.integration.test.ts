@@ -1,10 +1,10 @@
 import { Container } from 'inversify';
-import Kernel from '../../../../../core/infrastructure/Kernel.js';
+import Kernel from '@core/infrastructure/Kernel.js';
 import TypeOrmOrganizationSnapShotRepository from '../TypeOrmOrganizationSnapShotRepository.js';
-import Organization from '../../../../domain/organization/Organization.js';
-import { ConfigMock } from '../../../../../core/config/__mocks__/configMock.js';
-import { NETWORK_TYPES } from '../../../di/di-types.js';
-import { createDummyOrganizationId } from '../../../../domain/organization/__fixtures__/createDummyOrganizationId.js';
+import Organization from '@network-scan/domain/organization/Organization.js';
+import { ConfigMock } from '@core/config/__mocks__/configMock.js';
+import { NETWORK_TYPES } from '@network-scan/infrastructure/di/di-types.js';
+import { createDummyOrganizationId } from '@network-scan/domain/organization/__fixtures__/createDummyOrganizationId.js';
 import { TypeOrmOrganizationRepository } from '../TypeOrmOrganizationRepository.js';
 
 describe('test queries', () => {

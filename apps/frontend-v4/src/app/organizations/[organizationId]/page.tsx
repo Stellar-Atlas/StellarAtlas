@@ -1,13 +1,13 @@
 import { Suspense } from 'react';
 import { notFound } from 'next/navigation';
 import Link from 'next/link';
-import { fetchPublicNetwork } from '../../../api/client';
-import { PageHeading } from '../../../components/layout/page-heading';
-import { RouteLoadingPanel } from '../../../components/layout/route-fallbacks';
-import { OrganizationDetail } from '../../../components/organizations/organization-detail';
-import { OrganizationTable } from '../../../components/organizations/organization-table';
-import { getTopOrganizations } from '../../../domain/network';
-import { formatInteger } from '../../../format/formatters';
+import { fetchPublicNetwork } from '@api/client';
+import { PageHeading } from '@components/layout/page-heading';
+import { RouteLoadingPanel } from '@components/layout/route-fallbacks';
+import { OrganizationDetail } from '@components/organizations/organization-detail';
+import { OrganizationTable } from '@components/organizations/organization-table';
+import { getTopOrganizations } from '@domain/network';
+import { formatInteger } from '@format/formatters';
 
 interface OrganizationDetailPageProps {
 	params: Promise<{ organizationId: string }>;

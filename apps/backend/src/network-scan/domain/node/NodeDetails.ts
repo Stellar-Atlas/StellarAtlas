@@ -1,5 +1,5 @@
 import { Entity, Column } from 'typeorm';
-import { IdentifiedValueObject } from '../../../core/domain/IdentifiedValueObject.js';
+import { IdentifiedValueObject } from '@core/domain/IdentifiedValueObject.js';
 
 export interface NodeDetailsProps {
 	host: string | null;

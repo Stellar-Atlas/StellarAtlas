@@ -11,6 +11,8 @@
 		"experimentalDecorators": true,
 		"isolatedModules": true,
 		"strict": true,
+		"noImplicitAny": true,
+		"noImplicitThis": true,
 		"skipLibCheck": true,
 		"resolveJsonModule": true,
 		"esModuleInterop": true,

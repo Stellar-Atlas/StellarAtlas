@@ -4,12 +4,12 @@ import {
 	ProtocolAction,
 	Event,
 	QuorumSet
-} from '../../../core/index.js';
+} from '@core/index.js';
 import {
 	Broadcast,
 	Vote,
 	VoteOnStatement
-} from '../../../federated-voting/index.js';
+} from '@federated-voting/index.js';
 import { SimulationStep } from '../../Simulation.js';
 import { SimulationStepSerializer } from '../SimulationStepSerializer.js';
 

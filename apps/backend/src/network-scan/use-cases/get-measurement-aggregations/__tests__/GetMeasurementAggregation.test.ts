@@ -1,17 +1,17 @@
 import { mock } from 'jest-mock-extended';
-import type { ExceptionLogger } from '../../../../core/services/ExceptionLogger.js';
-import { MeasurementAggregationRepositoryFactory } from '../../../domain/measurement-aggregation/MeasurementAggregationRepositoryFactory.js';
+import type { ExceptionLogger } from '@core/services/ExceptionLogger.js';
+import { MeasurementAggregationRepositoryFactory } from '@network-scan/domain/measurement-aggregation/MeasurementAggregationRepositoryFactory.js';
 import { GetMeasurementAggregations } from '../GetMeasurementAggregations.js';
 import {
 	AggregationTarget,
 	GetMeasurementAggregationsDTO
 } from '../GetMeasurementAggregationsDTO.js';
-import NodeMeasurementDay from '../../../domain/node/NodeMeasurementDay.js';
-import NetworkMeasurementDay from '../../../domain/network/NetworkMeasurementDay.js';
-import OrganizationMeasurementDay from '../../../domain/organization/OrganizationMeasurementDay.js';
-import NetworkMeasurementMonth from '../../../domain/network/NetworkMeasurementMonth.js';
-import type { MeasurementAggregationRepository } from '../../../domain/measurement-aggregation/MeasurementAggregationRepository.js';
-import { MeasurementAggregation } from '../../../domain/measurement-aggregation/MeasurementAggregation.js';
+import NodeMeasurementDay from '@network-scan/domain/node/NodeMeasurementDay.js';
+import NetworkMeasurementDay from '@network-scan/domain/network/NetworkMeasurementDay.js';
+import OrganizationMeasurementDay from '@network-scan/domain/organization/OrganizationMeasurementDay.js';
+import NetworkMeasurementMonth from '@network-scan/domain/network/NetworkMeasurementMonth.js';
+import type { MeasurementAggregationRepository } from '@network-scan/domain/measurement-aggregation/MeasurementAggregationRepository.js';
+import { MeasurementAggregation } from '@network-scan/domain/measurement-aggregation/MeasurementAggregation.js';
 
 it('should call the right repo', function () {
 	const factory = mock<MeasurementAggregationRepositoryFactory>();

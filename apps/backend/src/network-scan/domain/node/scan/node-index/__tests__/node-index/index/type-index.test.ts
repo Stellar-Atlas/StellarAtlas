@@ -1,4 +1,4 @@
-import { TypeIndex } from '../../../index/type-index.js';
+import { TypeIndex } from '@network-scan/domain/node/scan/node-index/index/type-index.js';
 
 test('get', () => {
 	expect(TypeIndex.get(false, false)).toEqual(0.3);

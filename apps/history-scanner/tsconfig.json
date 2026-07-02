@@ -4,9 +4,41 @@
 		"outDir": "lib",
 		"rootDir": "src",
 		"composite": true,
-		"types": ["jest", "node", "reflect-metadata"]
+		"types": [
+			"jest",
+			"node",
+			"reflect-metadata"
+		],
+		"paths": {
+			"@history-scanner/*.js": [
+				"./src/*.ts"
+			],
+			"@history-scanner/*": [
+				"./src/*"
+			],
+			"@domain/*.js": [
+				"./src/domain/*.ts"
+			],
+			"@domain/*": [
+				"./src/domain/*"
+			],
+			"@infrastructure/*.js": [
+				"./src/infrastructure/*.ts"
+			],
+			"@infrastructure/*": [
+				"./src/infrastructure/*"
+			],
+			"@use-cases/*.js": [
+				"./src/use-cases/*.ts"
+			],
+			"@use-cases/*": [
+				"./src/use-cases/*"
+			]
+		}
 	},
-	"include": ["src/**/*.ts"],
+	"include": [
+		"src/**/*.ts"
+	],
 	"exclude": [
 		"node_modules/**/*",
 		"src/**/__tests__/*",

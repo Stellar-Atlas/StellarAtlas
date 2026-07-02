@@ -42,15 +42,15 @@ import type { OrganizationRepository } from '../../domain/organization/Organizat
 import { TypeOrmOrganizationRepository } from '../database/repositories/TypeOrmOrganizationRepository.js';
 import { GetMeasurementAggregations } from '../../use-cases/get-measurement-aggregations/GetMeasurementAggregations.js';
 import { MeasurementAggregationRepositoryFactory } from '../../domain/measurement-aggregation/MeasurementAggregationRepositoryFactory.js';
-import { Config } from '../../../core/config/Config.js';
-import type { NetworkConfig } from '../../../core/config/Config.js';
+import { Config } from '@core/config/Config.js';
+import type { NetworkConfig } from '@core/config/Config.js';
 import { NetworkDTOService } from '../../services/NetworkDTOService.js';
 import { HomeDomainFetcher } from '../../domain/node/scan/HomeDomainFetcher.js';
 import { TomlService } from '../../domain/network/scan/TomlService.js';
 import type { GeoDataService } from '../../domain/node/scan/GeoDataService.js';
 import { HistoryArchiveStatusFinder } from '../../domain/node/scan/HistoryArchiveStatusFinder.js';
 import type { Archiver } from '../../domain/network/scan/archiver/Archiver.js';
-import type { Logger } from '../../../core/services/Logger.js';
+import type { Logger } from '@core/services/Logger.js';
 import { HistoryService } from '../../domain/node/scan/history/HistoryService.js';
 import { IpStackGeoDataService } from '../services/IpStackGeoDataService.js';
 import { IpWhoIsGeoDataService } from '../services/IpWhoIsGeoDataService.js';

@@ -1,5 +1,5 @@
-import { PublicKey } from '../../../../core/index.js';
-import { QuorumSet } from '../../../../core/QuorumSet.js';
+import { PublicKey } from '@core/index.js';
+import { QuorumSet } from '@core/QuorumSet.js';
 import { ProtocolEvent } from '../../event/ProtocolEvent.js';
 import { Statement } from '../../Statement.js';
 

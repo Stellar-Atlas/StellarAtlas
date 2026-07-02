@@ -1,7 +1,7 @@
 import { inject, injectable } from 'inversify';
 import { PendingSubscriptionId } from '../../domain/subscription/PendingSubscription.js';
 import * as ejs from 'ejs';
-import { Message } from '../../../core/domain/Message.js';
+import { Message } from '@core/domain/Message.js';
 import 'reflect-metadata';
 import { Notification } from '../../domain/subscription/Notification.js';
 import {

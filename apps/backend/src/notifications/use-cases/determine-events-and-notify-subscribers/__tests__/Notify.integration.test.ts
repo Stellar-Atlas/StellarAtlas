@@ -1,26 +1,26 @@
 import { Container } from 'inversify';
-import Kernel from '../../../../core/infrastructure/Kernel.js';
-import { ConfigMock } from '../../../../core/config/__mocks__/configMock.js';
+import Kernel from '@core/infrastructure/Kernel.js';
+import { ConfigMock } from '@core/config/__mocks__/configMock.js';
 import { Notify } from '../Notify.js';
 import { NotifyDTO } from '../NotifyDTO.js';
 import { NoNetworkError, NoPreviousNetworkError } from '../NotifyError.js';
 import { NetworkV1, NodeV1 } from 'shared';
-import type { SubscriberRepository } from '../../../domain/subscription/SubscriberRepository.js';
-import { NetworkId } from '../../../domain/event/EventSourceId.js';
-import { EventNotificationState } from '../../../domain/subscription/EventNotificationState.js';
+import type { SubscriberRepository } from '@notifications/domain/subscription/SubscriberRepository.js';
+import { NetworkId } from '@notifications/domain/event/EventSourceId.js';
+import { EventNotificationState } from '@notifications/domain/subscription/EventNotificationState.js';
 import {
 	EventType,
 	NetworkLossOfLivenessEvent
-} from '../../../domain/event/Event.js';
-import { createDummySubscriber } from '../../../domain/subscription/__fixtures__/Subscriber.fixtures.js';
-import { createDummyPendingSubscriptionId } from '../../../domain/subscription/__fixtures__/PendingSubscriptionId.fixtures.js';
-import { UserService } from '../../../../core/services/UserService.js';
+} from '@notifications/domain/event/Event.js';
+import { createDummySubscriber } from '@notifications/domain/subscription/__fixtures__/Subscriber.fixtures.js';
+import { createDummyPendingSubscriptionId } from '@notifications/domain/subscription/__fixtures__/PendingSubscriptionId.fixtures.js';
+import { UserService } from '@core/services/UserService.js';
 import { ok } from 'neverthrow';
-import { NetworkDTOService } from '../../../../network-scan/services/NetworkDTOService.js';
+import { NetworkDTOService } from '@network-scan/services/NetworkDTOService.js';
 import { mock } from 'jest-mock-extended';
-import { EventDetector } from '../../../domain/event/EventDetector.js';
-import { createDummyNodeV1 } from '../../../../network-scan/services/__fixtures__/createDummyNodeV1.js';
-import { createDummyNetworkV1 } from '../../../../network-scan/services/__fixtures__/createDummyNetworkV1.js';
+import { EventDetector } from '@notifications/domain/event/EventDetector.js';
+import { createDummyNodeV1 } from '@network-scan/services/__fixtures__/createDummyNodeV1.js';
+import { createDummyNetworkV1 } from '@network-scan/services/__fixtures__/createDummyNetworkV1.js';
 import { DataSource } from 'typeorm';
 
 let container: Container;

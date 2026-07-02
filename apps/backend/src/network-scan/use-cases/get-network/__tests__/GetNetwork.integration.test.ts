@@ -1,12 +1,12 @@
 import { Network } from 'shared';
-import Kernel from '../../../../core/infrastructure/Kernel.js';
-import { ConfigMock } from '../../../../core/config/__mocks__/configMock.js';
+import Kernel from '@core/infrastructure/Kernel.js';
+import { ConfigMock } from '@core/config/__mocks__/configMock.js';
 import { mock } from 'jest-mock-extended';
 import { ok } from 'neverthrow';
 import { GetNetwork } from '../GetNetwork.js';
-import { NetworkDTOService } from '../../../services/NetworkDTOService.js';
-import { createDummyNetworkV1 } from '../../../services/__fixtures__/createDummyNetworkV1.js';
-import { CachedNetworkDTOService } from '../../../services/CachedNetworkDTOService.js';
+import { NetworkDTOService } from '@network-scan/services/NetworkDTOService.js';
+import { createDummyNetworkV1 } from '@network-scan/services/__fixtures__/createDummyNetworkV1.js';
+import { CachedNetworkDTOService } from '@network-scan/services/CachedNetworkDTOService.js';
 
 let kernel: Kernel;
 jest.setTimeout(60000); //slow integration tests

@@ -1,12 +1,12 @@
-import Kernel from '../../../../core/infrastructure/Kernel.js';
-import { ConfigMock } from '../../../../core/config/__mocks__/configMock.js';
-import { TYPES } from '../../../infrastructure/di/di-types.js';
-import { RegisterScan } from '../../../use-cases/register-scan/RegisterScan.js';
-import type { ScanRepository } from '../../../domain/scan/ScanRepository.js';
+import Kernel from '@core/infrastructure/Kernel.js';
+import { ConfigMock } from '@core/config/__mocks__/configMock.js';
+import { TYPES } from '@history-scan-coordinator/infrastructure/di/di-types.js';
+import { RegisterScan } from '@history-scan-coordinator/use-cases/register-scan/RegisterScan.js';
+import type { ScanRepository } from '@history-scan-coordinator/domain/scan/ScanRepository.js';
 import { Url } from 'http-helper';
 import { ScanDTO } from 'history-scanner-dto';
-import type { ScanJobRepository } from '../../../domain/ScanJobRepository.js';
-import { ScanJob } from '../../../domain/ScanJob.js';
+import type { ScanJobRepository } from '@history-scan-coordinator/domain/ScanJobRepository.js';
+import { ScanJob } from '@history-scan-coordinator/domain/ScanJob.js';
 import { url } from 'inspector';
 
 jest.setTimeout(60000);

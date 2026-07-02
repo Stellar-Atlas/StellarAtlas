@@ -1,6 +1,6 @@
 import { Column, Entity, Index, OneToMany } from 'typeorm';
 import { OrganizationId } from './OrganizationId.js';
-import { VersionedEntity } from '../../../core/domain/VersionedEntity.js';
+import { VersionedEntity } from '@core/domain/VersionedEntity.js';
 import OrganizationSnapShot from './OrganizationSnapShot.js';
 import { OrganizationContactInformation } from './OrganizationContactInformation.js';
 import { OrganizationValidators } from './OrganizationValidators.js';

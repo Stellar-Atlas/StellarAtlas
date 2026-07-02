@@ -5,12 +5,12 @@ import {
 import { err, ok, Result } from 'neverthrow';
 import type { SubscriberRepository } from '../../domain/subscription/SubscriberRepository.js';
 import { inject, injectable } from 'inversify';
-import type { IUserService } from '../../../core/domain/IUserService.js';
-import { mapUnknownToError } from '../../../core/utilities/mapUnknownToError.js';
+import type { IUserService } from '@core/domain/IUserService.js';
+import { mapUnknownToError } from '@core/utilities/mapUnknownToError.js';
 import { TYPES } from '../../infrastructure/di/di-types.js';
 import type { MessageCreator } from '../../domain/notifier/MessageCreator.js';
-import type { ExceptionLogger } from '../../../core/services/ExceptionLogger.js';
-import type { Logger } from '../../../core/services/Logger.js';
+import type { ExceptionLogger } from '@core/services/ExceptionLogger.js';
+import type { Logger } from '@core/services/Logger.js';
 import 'reflect-metadata';
 
 export interface FailedSubscription {

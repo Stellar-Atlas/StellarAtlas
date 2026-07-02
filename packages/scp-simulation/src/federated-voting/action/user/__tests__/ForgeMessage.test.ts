@@ -1,6 +1,6 @@
 import { ForgeMessage } from '../ForgeMessage.js';
-import { Message } from '../../../Message.js';
-import { Vote } from '../../../protocol/Vote.js';
+import { Message } from '@federated-voting/Message.js';
+import { Vote } from '@federated-voting/protocol/Vote.js';
 import { mock, MockProxy } from 'jest-mock-extended';
 
 describe('ForgeMessage', () => {

@@ -20,12 +20,73 @@ const esModuleDependencyTransform = {
 	]
 };
 
+const escapeRegExp = (value) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+const aliasPattern = (aliases) => aliases.map(escapeRegExp).join('|');
+
+const rootSourceAliases = aliasPattern([
+	'backend',
+	'crawler',
+	'custom-error',
+	'exception-logger',
+	'history-scanner',
+	'history-scanner-dto',
+	'http-helper',
+	'job-monitor',
+	'logger',
+	'node-connector',
+	'scp-simulation',
+	'shared',
+	'stellar-halting-analysis',
+	'users'
+]);
+
+const directorySourceAliases = aliasPattern([
+	'api',
+	'app',
+	'components',
+	'connection',
+	'console-interface',
+	'core',
+	'domain',
+	'dto',
+	'env',
+	'examples',
+	'federated-voting',
+	'format',
+	'history-scan-coordinator',
+	'infrastructure',
+	'migrations',
+	'network-observer',
+	'network-scan',
+	'notifications',
+	'overlay',
+	'quorum',
+	'simulation',
+	'trust-graph',
+	'use-cases',
+	'utilities',
+	'worker'
+]);
+
+const sourceAliasModuleNameMapper = {
+	[`^@(${rootSourceAliases})/(.*)\\.js$`]: '<rootDir>/src/$2',
+	[`^@(${rootSourceAliases})/(.*)$`]: '<rootDir>/src/$2',
+	'^@fixtures/(.*)\\.js$': '<rootDir>/src/__fixtures__/$1',
+	'^@fixtures/(.*)$': '<rootDir>/src/__fixtures__/$1',
+	'^@mocks/(.*)\\.js$': '<rootDir>/src/__mocks__/$1',
+	'^@mocks/(.*)$': '<rootDir>/src/__mocks__/$1',
+	[`^@(${directorySourceAliases})/(.*)\\.js$`]:
+		'<rootDir>/src/$1/$2',
+	[`^@(${directorySourceAliases})/(.*)$`]: '<rootDir>/src/$1/$2'
+};
+
 const project = (config) => ({
 	...esModuleDependencyTransform,
 	setupFilesAfterEnv: ['<rootDir>/../../jest.setup.mjs'],
 	...config,
 	moduleNameMapper: {
 		'^(\\.{1,2}/.*)\\.js$': '$1',
+		...sourceAliasModuleNameMapper,
 		...(config.moduleNameMapper ?? {})
 	},
 	transform: {

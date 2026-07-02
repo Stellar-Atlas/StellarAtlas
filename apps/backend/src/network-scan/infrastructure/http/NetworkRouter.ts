@@ -1,7 +1,7 @@
 import * as express from 'express';
 import { Router } from 'express';
-import { isDateString } from '../../../core/utilities/isDateString.js';
-import { getDateFromParam } from '../../../core/utilities/getDateFromParam.js';
+import { isDateString } from '@core/utilities/isDateString.js';
+import { getDateFromParam } from '@core/utilities/getDateFromParam.js';
 import { GetNetwork } from '../../use-cases/get-network/GetNetwork.js';
 import { GetLatestNodeSnapshots } from '../../use-cases/get-latest-node-snapshots/GetLatestNodeSnapshots.js';
 import { GetLatestOrganizationSnapshots } from '../../use-cases/get-latest-organization-snapshots/GetLatestOrganizationSnapshots.js';

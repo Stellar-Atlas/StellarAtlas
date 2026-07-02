@@ -1,9 +1,9 @@
 import { Request, Response } from 'express';
 import { CommunityScannersController } from '../CommunityScannersController.js';
-import { RegisterCommunityScanner } from '../../../../use-cases/RegisterCommunityScanner.js';
-import { SendScannerHeartbeat } from '../../../../use-cases/SendScannerHeartbeat.js';
-import { GetScannerMetrics } from '../../../../use-cases/GetScannerMetrics.js';
-import { CommunityScanner, ScannerStatus } from '../../../database/entities/CommunityScanner.js';
+import { RegisterCommunityScanner } from '@history-scan-coordinator/use-cases/RegisterCommunityScanner.js';
+import { SendScannerHeartbeat } from '@history-scan-coordinator/use-cases/SendScannerHeartbeat.js';
+import { GetScannerMetrics } from '@history-scan-coordinator/use-cases/GetScannerMetrics.js';
+import { CommunityScanner, ScannerStatus } from '@history-scan-coordinator/infrastructure/database/entities/CommunityScanner.js';
 
 describe('CommunityScannersController', () => {
   let controller: CommunityScannersController;

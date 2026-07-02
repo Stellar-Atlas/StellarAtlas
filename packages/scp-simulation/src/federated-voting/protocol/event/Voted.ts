@@ -1,4 +1,4 @@
-import { PublicKey } from '../../../core/index.js';
+import { PublicKey } from '@core/index.js';
 import { ProtocolEvent } from './ProtocolEvent.js';
 import { Vote } from '../Vote.js';
 

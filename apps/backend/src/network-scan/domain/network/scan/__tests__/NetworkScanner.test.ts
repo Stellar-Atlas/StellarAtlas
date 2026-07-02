@@ -1,10 +1,10 @@
 import { NetworkScanner } from '../NetworkScanner.js';
 import { mock } from 'jest-mock-extended';
 import type { Logger } from 'logger';
-import { NodeScan } from '../../../node/scan/NodeScan.js';
+import { NodeScan } from '@network-scan/domain/node/scan/NodeScan.js';
 import FbasAnalyzerService from '../fbas-analysis/FbasAnalyzerService.js';
 import NetworkScan from '../NetworkScan.js';
-import { OrganizationScan } from '../../../organization/scan/OrganizationScan.js';
+import { OrganizationScan } from '@network-scan/domain/organization/scan/OrganizationScan.js';
 import { err, ok } from 'neverthrow';
 import { AnalysisResult } from '../fbas-analysis/AnalysisResult.js';
 import { NodesInTransitiveNetworkQuorumSetFinder } from '../NodesInTransitiveNetworkQuorumSetFinder.js';

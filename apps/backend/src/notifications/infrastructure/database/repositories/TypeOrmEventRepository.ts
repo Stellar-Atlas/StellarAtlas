@@ -9,17 +9,17 @@ import {
 	OrganizationXUpdatesTomlErrorEvent,
 	OrganizationXUpdatesUnavailableEvent,
 	ValidatorXUpdatesNotValidatingEvent
-} from '../../../domain/event/Event.js';
-import type { EventRepository } from '../../../domain/event/EventRepository.js';
+} from '@notifications/domain/event/Event.js';
+import type { EventRepository } from '@notifications/domain/event/EventRepository.js';
 import {
 	OrganizationId,
 	PublicKey
-} from '../../../domain/event/EventSourceId.js';
-import type { NodeMeasurementRepository } from '../../../../network-scan/domain/node/NodeMeasurementRepository.js';
-import type { OrganizationMeasurementRepository } from '../../../../network-scan/domain/organization/OrganizationMeasurementRepository.js';
-import { NETWORK_TYPES } from '../../../../network-scan/infrastructure/di/di-types.js';
-import { NodeMeasurementEvent } from '../../../../network-scan/domain/node/NodeMeasurementEvent.js';
-import { OrganizationMeasurementEvent } from '../../../../network-scan/domain/organization/OrganizationMeasurementEvent.js';
+} from '@notifications/domain/event/EventSourceId.js';
+import type { NodeMeasurementRepository } from '@network-scan/domain/node/NodeMeasurementRepository.js';
+import type { OrganizationMeasurementRepository } from '@network-scan/domain/organization/OrganizationMeasurementRepository.js';
+import { NETWORK_TYPES } from '@network-scan/infrastructure/di/di-types.js';
+import { NodeMeasurementEvent } from '@network-scan/domain/node/NodeMeasurementEvent.js';
+import { OrganizationMeasurementEvent } from '@network-scan/domain/organization/OrganizationMeasurementEvent.js';
 
 //repository that returns events that are detected by queries on node and organization measurements.
 //events are (not yet?) stored thus not linked to a db entity

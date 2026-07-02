@@ -1,8 +1,8 @@
 import { Equal, LessThanOrEqual, Repository } from 'typeorm';
-import OrganizationSnapShot from '../../../domain/organization/OrganizationSnapShot.js';
+import OrganizationSnapShot from '@network-scan/domain/organization/OrganizationSnapShot.js';
 import { injectable } from 'inversify';
-import type { OrganizationSnapShotRepository } from '../../../domain/organization/OrganizationSnapShotRepository.js';
-import { OrganizationId } from '../../../domain/organization/OrganizationId.js';
+import type { OrganizationSnapShotRepository } from '@network-scan/domain/organization/OrganizationSnapShotRepository.js';
+import { OrganizationId } from '@network-scan/domain/organization/OrganizationId.js';
 
 @injectable()
 export default class TypeOrmOrganizationSnapShotRepository implements OrganizationSnapShotRepository {

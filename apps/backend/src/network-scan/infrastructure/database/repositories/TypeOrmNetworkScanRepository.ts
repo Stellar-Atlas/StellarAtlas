@@ -1,9 +1,9 @@
 import { LessThan, LessThanOrEqual, Repository } from 'typeorm';
-import NetworkScan from '../../../domain/network/scan/NetworkScan.js';
+import NetworkScan from '@network-scan/domain/network/scan/NetworkScan.js';
 import { injectable } from 'inversify';
-import type { NetworkScanRepository } from '../../../domain/network/scan/NetworkScanRepository.js';
-import NetworkMeasurement from '../../../domain/network/NetworkMeasurement.js';
-import { Measurement } from '../../../domain/measurement/Measurement.js';
+import type { NetworkScanRepository } from '@network-scan/domain/network/scan/NetworkScanRepository.js';
+import NetworkMeasurement from '@network-scan/domain/network/NetworkMeasurement.js';
+import { Measurement } from '@network-scan/domain/measurement/Measurement.js';
 
 @injectable()
 export class TypeOrmNetworkScanRepository implements NetworkScanRepository {

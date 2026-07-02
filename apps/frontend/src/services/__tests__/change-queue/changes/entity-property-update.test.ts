@@ -1,5 +1,5 @@
 import { Node, QuorumSet } from "shared";
-import { EntityPropertyUpdate } from "../../../change-queue/changes/entity-property-update";
+import { EntityPropertyUpdate } from "@/services/change-queue/changes/entity-property-update";
 
 describe("entity property update", () => {
   test("Node property", () => {

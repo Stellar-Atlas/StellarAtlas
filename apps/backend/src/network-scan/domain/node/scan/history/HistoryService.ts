@@ -3,13 +3,13 @@ import { err, ok, Result } from 'neverthrow';
 import {
 	isNumber,
 	isObject
-} from '../../../../../core/utilities/TypeGuards.js';
+} from '@core/utilities/TypeGuards.js';
 import { inject, injectable } from 'inversify';
 import { Url, type HttpService } from 'http-helper';
-import { CustomError } from '../../../../../core/errors/CustomError.js';
-import type { Logger } from '../../../../../core/services/Logger.js';
+import { CustomError } from '@core/errors/CustomError.js';
+import type { Logger } from '@core/services/Logger.js';
 import type { HistoryArchiveScanService } from './HistoryArchiveScanService.js';
-import { NETWORK_TYPES } from '../../../../infrastructure/di/di-types.js';
+import { NETWORK_TYPES } from '@network-scan/infrastructure/di/di-types.js';
 
 export class FetchHistoryError extends CustomError {
 	constructor(url: string, cause?: Error) {

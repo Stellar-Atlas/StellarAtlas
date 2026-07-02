@@ -1,7 +1,7 @@
 import type { Request, Response } from 'express';
-import { RegisterCommunityScanner } from '../../../use-cases/RegisterCommunityScanner.js';
-import { SendScannerHeartbeat } from '../../../use-cases/SendScannerHeartbeat.js';
-import { GetScannerMetrics } from '../../../use-cases/GetScannerMetrics.js';
+import { RegisterCommunityScanner } from '@history-scan-coordinator/use-cases/RegisterCommunityScanner.js';
+import { SendScannerHeartbeat } from '@history-scan-coordinator/use-cases/SendScannerHeartbeat.js';
+import { GetScannerMetrics } from '@history-scan-coordinator/use-cases/GetScannerMetrics.js';
 
 export class CommunityScannersController {
   constructor(

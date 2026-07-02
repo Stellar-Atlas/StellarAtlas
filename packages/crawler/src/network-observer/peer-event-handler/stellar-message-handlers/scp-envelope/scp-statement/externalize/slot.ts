@@ -1,4 +1,4 @@
-import type { Ledger } from '../../../../../../crawler.js';
+import type { Ledger } from '@crawler/crawler.js';
 import { QuorumSet } from 'shared';
 import pino from 'pino';
 import { containsSlice } from 'shared';

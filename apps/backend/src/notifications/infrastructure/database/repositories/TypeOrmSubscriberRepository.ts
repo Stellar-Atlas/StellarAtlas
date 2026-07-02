@@ -1,11 +1,11 @@
 import { injectable } from 'inversify';
 import { Repository } from 'typeorm';
-import { Subscriber } from '../../../domain/subscription/Subscriber.js';
-import type { SubscriberRepository } from '../../../domain/subscription/SubscriberRepository.js';
-import { UserId } from '../../../domain/subscription/UserId.js';
+import { Subscriber } from '@notifications/domain/subscription/Subscriber.js';
+import type { SubscriberRepository } from '@notifications/domain/subscription/SubscriberRepository.js';
+import { UserId } from '@notifications/domain/subscription/UserId.js';
 import { randomUUID } from 'crypto';
-import { PendingSubscriptionId } from '../../../domain/subscription/PendingSubscription.js';
-import { SubscriberReference } from '../../../domain/subscription/SubscriberReference.js';
+import { PendingSubscriptionId } from '@notifications/domain/subscription/PendingSubscription.js';
+import { SubscriberReference } from '@notifications/domain/subscription/SubscriberReference.js';
 
 @injectable()
 export class TypeOrmSubscriberRepository implements SubscriberRepository {

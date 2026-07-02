@@ -1,4 +1,4 @@
-import { Context, ProtocolAction, UserAction } from '../../../core/index.js';
+import { Context, ProtocolAction, UserAction } from '@core/index.js';
 
 export class RemoveNode extends UserAction {
 	subType = 'RemoveNode';

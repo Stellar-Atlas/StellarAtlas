@@ -2,7 +2,7 @@ import { Network, NetworkV1 } from 'shared';
 import { inject, injectable } from 'inversify';
 import { Result } from 'neverthrow';
 import { GetNetworkDTO } from './GetNetworkDTO.js';
-import type { ExceptionLogger } from '../../../core/services/ExceptionLogger.js';
+import type { ExceptionLogger } from '@core/services/ExceptionLogger.js';
 import 'reflect-metadata';
 import { NetworkDTOService } from '../../services/NetworkDTOService.js';
 import { CachedNetworkDTOService } from '../../services/CachedNetworkDTOService.js';

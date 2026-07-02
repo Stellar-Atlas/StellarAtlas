@@ -6,7 +6,7 @@ import { NodeScan } from '../../scan/NodeScan.js';
 import { Edge, TrustGraph, Vertex } from 'shared';
 import { StronglyConnectedComponentsFinder } from 'shared';
 import { NetworkTransitiveQuorumSetFinder } from 'shared';
-import { Snapshot } from '../../../../../core/domain/Snapshot.js';
+import { Snapshot } from '@core/domain/Snapshot.js';
 import type { Logger } from 'logger';
 import NodeMeasurement from '../../NodeMeasurement.js';
 

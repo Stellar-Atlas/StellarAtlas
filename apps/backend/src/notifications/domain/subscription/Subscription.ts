@@ -8,7 +8,7 @@ import {
 	OrganizationId,
 	PublicKey
 } from '../event/EventSourceId.js';
-import { CoreEntity } from '../../../core/domain/CoreEntity.js';
+import { CoreEntity } from '@core/domain/CoreEntity.js';
 
 //Subscribe to events of a specific source type and id. For example Node with ID 'xxxxx' or the Public network
 export interface SubscriptionProperties {

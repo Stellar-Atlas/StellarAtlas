@@ -1,12 +1,12 @@
 import { err, ok, Result } from 'neverthrow';
 import { inject, injectable } from 'inversify';
-import type { HeartBeater } from '../../../core/services/HeartBeater.js';
-import type { ExceptionLogger } from '../../../core/services/ExceptionLogger.js';
-import type { Logger } from '../../../core/services/Logger.js';
+import type { HeartBeater } from '@core/services/HeartBeater.js';
+import type { ExceptionLogger } from '@core/services/ExceptionLogger.js';
+import type { Logger } from '@core/services/Logger.js';
 import type { Archiver } from '../../domain/network/scan/archiver/Archiver.js';
-import { Notify } from '../../../notifications/use-cases/determine-events-and-notify-subscribers/Notify.js';
+import { Notify } from '@notifications/use-cases/determine-events-and-notify-subscribers/Notify.js';
 import { NETWORK_TYPES } from '../../infrastructure/di/di-types.js';
-import type { NetworkConfig } from '../../../core/config/Config.js';
+import type { NetworkConfig } from '@core/config/Config.js';
 import { ScanNetworkDTO } from './ScanNetworkDTO.js';
 import { UpdateNetwork } from '../update-network/UpdateNetwork.js';
 import { UpdateNetworkDTO } from '../update-network/UpdateNetworkDTO.js';
@@ -19,9 +19,9 @@ import type { NodeAddress } from '../../domain/node/NodeAddress.js';
 import { InvalidKnownPeersError } from './InvalidKnownPeersError.js';
 import { Network } from '../../domain/network/Network.js';
 import { NodeMeasurementAverage } from '../../domain/node/NodeMeasurementAverage.js';
-import { mapUnknownToError } from '../../../core/utilities/mapUnknownToError.js';
+import { mapUnknownToError } from '@core/utilities/mapUnknownToError.js';
 import { NodeAddressMapper } from './NodeAddressMapper.js';
-import { CORE_TYPES } from '../../../core/infrastructure/di/di-types.js';
+import { CORE_TYPES } from '@core/infrastructure/di/di-types.js';
 import type { JobMonitor } from 'job-monitor';
 
 interface ShutDownRequest {

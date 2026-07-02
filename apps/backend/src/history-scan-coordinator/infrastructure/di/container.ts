@@ -4,7 +4,7 @@ import { DataSource } from 'typeorm';
 import type { ScanRepository } from '../../domain/scan/ScanRepository.js';
 import { TypeOrmHistoryArchiveScanResultRepository } from '../repositories/database/TypeOrmHistoryArchiveScanResultRepository.js';
 import { TYPES } from './di-types.js';
-import { Config } from '../../../core/config/Config.js';
+import { Config } from '@core/config/Config.js';
 import { GetLatestScan } from '../../use-cases/get-latest-scan/GetLatestScan.js';
 import { GetScanLogs } from '../../use-cases/get-scan-logs/GetScanLogs.js';
 import { Scan } from '../../domain/scan/Scan.js';

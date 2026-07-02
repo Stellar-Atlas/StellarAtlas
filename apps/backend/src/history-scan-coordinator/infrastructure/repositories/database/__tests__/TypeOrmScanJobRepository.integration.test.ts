@@ -1,8 +1,8 @@
-import Kernel from '../../../../../core/infrastructure/Kernel.js';
-import { ConfigMock } from '../../../../../core/config/__mocks__/configMock.js';
+import Kernel from '@core/infrastructure/Kernel.js';
+import { ConfigMock } from '@core/config/__mocks__/configMock.js';
 import { TypeOrmScanJobRepository } from '../TypeOrmScanJobRepository.js';
-import { ScanJob } from '../../../../domain/ScanJob.js';
-import { TYPES } from '../../../di/di-types.js';
+import { ScanJob } from '@history-scan-coordinator/domain/ScanJob.js';
+import { TYPES } from '@history-scan-coordinator/infrastructure/di/di-types.js';
 import { randomUUID } from 'crypto';
 import { DataSource } from 'typeorm';
 

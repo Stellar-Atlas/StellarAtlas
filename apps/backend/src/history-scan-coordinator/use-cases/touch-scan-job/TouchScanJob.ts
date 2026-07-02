@@ -1,8 +1,8 @@
 import 'reflect-metadata';
 import { inject, injectable } from 'inversify';
 import { err, ok, Result } from 'neverthrow';
-import type { ExceptionLogger } from '../../../core/services/ExceptionLogger.js';
-import { mapUnknownToError } from '../../../core/utilities/mapUnknownToError.js';
+import type { ExceptionLogger } from '@core/services/ExceptionLogger.js';
+import { mapUnknownToError } from '@core/utilities/mapUnknownToError.js';
 import type { ScanJobRepository } from '../../domain/ScanJobRepository.js';
 import { TYPES } from '../../infrastructure/di/di-types.js';
 

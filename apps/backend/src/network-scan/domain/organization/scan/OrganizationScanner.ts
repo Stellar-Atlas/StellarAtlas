@@ -3,13 +3,13 @@ import { inject, injectable } from 'inversify';
 import { OrganizationTomlFetcher } from './OrganizationTomlFetcher.js';
 import { OrganizationScan } from './OrganizationScan.js';
 import { NodeScan } from '../../node/scan/NodeScan.js';
-import { NETWORK_TYPES } from '../../../infrastructure/di/di-types.js';
+import { NETWORK_TYPES } from '@network-scan/infrastructure/di/di-types.js';
 import type { OrganizationRepository } from '../OrganizationRepository.js';
 import Organization from '../Organization.js';
-import { mapUnknownToError } from '../../../../core/utilities/mapUnknownToError.js';
+import { mapUnknownToError } from '@core/utilities/mapUnknownToError.js';
 import { CouldNotRetrieveArchivedOrganizationsError } from './errors/CouldNotRetrieveArchivedOrganizationsError.js';
 import { OrganizationScanError } from './errors/OrganizationScanError.js';
-import type { Logger } from '../../../../core/services/Logger.js';
+import type { Logger } from '@core/services/Logger.js';
 
 @injectable()
 export class OrganizationScanner {

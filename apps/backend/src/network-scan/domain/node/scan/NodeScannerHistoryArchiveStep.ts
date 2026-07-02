@@ -2,7 +2,7 @@ import { HistoryArchiveStatusFinder } from './HistoryArchiveStatusFinder.js';
 import { inject, injectable } from 'inversify';
 import { NodeScan } from './NodeScan.js';
 import type { HistoryArchiveScanService } from './history/HistoryArchiveScanService.js';
-import { NETWORK_TYPES } from '../../../infrastructure/di/di-types.js';
+import { NETWORK_TYPES } from '@network-scan/infrastructure/di/di-types.js';
 
 @injectable()
 export class NodeScannerHistoryArchiveStep {

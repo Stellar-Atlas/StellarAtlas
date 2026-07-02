@@ -1,8 +1,8 @@
-import { ValueObject } from '../../../core/domain/ValueObject.js';
+import { ValueObject } from '@core/domain/ValueObject.js';
 import { Column, Index } from 'typeorm';
 import { err, ok, Result } from 'neverthrow';
 import { createHash } from 'crypto';
-import { mapUnknownToError } from '../../../core/utilities/mapUnknownToError.js';
+import { mapUnknownToError } from '@core/utilities/mapUnknownToError.js';
 
 export class OrganizationId extends ValueObject {
 	@Column('varchar', { length: 100 })

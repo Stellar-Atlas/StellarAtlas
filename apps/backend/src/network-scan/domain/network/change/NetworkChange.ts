@@ -1,5 +1,5 @@
 import { Column, Entity, ManyToOne, TableInheritance } from 'typeorm';
-import { CoreEntity } from '../../../../core/domain/CoreEntity.js';
+import { CoreEntity } from '@core/domain/CoreEntity.js';
 import { Change } from '../../Change.js';
 import { NetworkId } from '../NetworkId.js';
 import type { Network } from '../Network.js';

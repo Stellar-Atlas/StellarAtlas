@@ -1,15 +1,15 @@
 import 'reflect-metadata';
 import FbasAnalyzerService from '../FbasAnalyzerService.js';
 import FbasAnalyzerFacade, { MergeBy } from '../FbasAnalyzerFacade.js';
-import { LoggerMock } from '../../../../../../core/services/__mocks__/LoggerMock.js';
+import { LoggerMock } from '@core/services/__mocks__/LoggerMock.js';
 import { AnalysisResult } from '../AnalysisResult.js';
 import { mock } from 'jest-mock-extended';
 import { FbasMergedByAnalyzer } from '../FbasMergedByAnalyzer.js';
 import { ok } from 'neverthrow';
-import { createDummyNode } from '../../../../node/__fixtures__/createDummyNode.js';
-import NodeMeasurement from '../../../../node/NodeMeasurement.js';
-import Organization from '../../../../organization/Organization.js';
-import { createDummyOrganizationId } from '../../../../organization/__fixtures__/createDummyOrganizationId.js';
+import { createDummyNode } from '@network-scan/domain/node/__fixtures__/createDummyNode.js';
+import NodeMeasurement from '@network-scan/domain/node/NodeMeasurement.js';
+import Organization from '@network-scan/domain/organization/Organization.js';
+import { createDummyOrganizationId } from '@network-scan/domain/organization/__fixtures__/createDummyOrganizationId.js';
 import { FbasMapper } from '../FbasMapper.js';
 
 describe('analyze fbas', () => {

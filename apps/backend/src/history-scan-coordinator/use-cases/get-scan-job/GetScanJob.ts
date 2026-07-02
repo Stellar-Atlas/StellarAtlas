@@ -1,12 +1,12 @@
 import 'reflect-metadata';
 import { inject, injectable } from 'inversify';
-import type { ExceptionLogger } from '../../../core/services/ExceptionLogger.js';
+import type { ExceptionLogger } from '@core/services/ExceptionLogger.js';
 import { TYPES } from '../../infrastructure/di/di-types.js';
 import { err, ok, Result } from 'neverthrow';
 import { ScanJobDTO } from 'history-scanner-dto';
 import type { Logger } from 'logger';
 import type { ScanJobRepository } from '../../domain/ScanJobRepository.js';
-import { mapUnknownToError } from '../../../core/utilities/mapUnknownToError.js';
+import { mapUnknownToError } from '@core/utilities/mapUnknownToError.js';
 import { getStaleScanJobCutoff } from '../../domain/ScanJobStaleness.js';
 
 /**

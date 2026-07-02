@@ -1,13 +1,13 @@
 import { injectable } from 'inversify';
 import { EntityManager, Equal, Repository, SelectQueryBuilder } from 'typeorm';
-import Node from '../../../domain/node/Node.js';
-import type { NodeRepository } from '../../../domain/node/NodeRepository.js';
-import PublicKey from '../../../domain/node/PublicKey.js';
-import NodeMeasurement from '../../../domain/node/NodeMeasurement.js';
-import { Snapshot } from '../../../../core/domain/Snapshot.js';
-import { CustomError } from '../../../../core/errors/CustomError.js';
-import { mapUnknownToError } from '../../../../core/utilities/mapUnknownToError.js';
-import NodeSnapShot from '../../../domain/node/NodeSnapShot.js';
+import Node from '@network-scan/domain/node/Node.js';
+import type { NodeRepository } from '@network-scan/domain/node/NodeRepository.js';
+import PublicKey from '@network-scan/domain/node/PublicKey.js';
+import NodeMeasurement from '@network-scan/domain/node/NodeMeasurement.js';
+import { Snapshot } from '@core/domain/Snapshot.js';
+import { CustomError } from '@core/errors/CustomError.js';
+import { mapUnknownToError } from '@core/utilities/mapUnknownToError.js';
+import NodeSnapShot from '@network-scan/domain/node/NodeSnapShot.js';
 
 export class NodePersistenceError extends CustomError {
 	constructor(publicKey: string, cause: Error) {

@@ -1,10 +1,10 @@
 import type { ScpStatementObservation as CrawlerScpStatementObservation } from 'crawler';
 import type { Repository } from 'typeorm';
-import { ScpStatementObservation } from '../../../domain/scp/ScpStatementObservation.js';
+import { ScpStatementObservation } from '@network-scan/domain/scp/ScpStatementObservation.js';
 import type {
 	ScpStatementObservationFilter,
 	ScpStatementObservationRepository
-} from '../../../domain/scp/ScpStatementObservationRepository.js';
+} from '@network-scan/domain/scp/ScpStatementObservationRepository.js';
 
 const MAX_SAVED_PER_CRAWL = 5000;
 

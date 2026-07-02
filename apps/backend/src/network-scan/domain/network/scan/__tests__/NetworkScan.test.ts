@@ -1,7 +1,7 @@
 import NetworkScan from '../NetworkScan.js';
-import { NodeScan } from '../../../node/scan/NodeScan.js';
+import { NodeScan } from '@network-scan/domain/node/scan/NodeScan.js';
 import { mock } from 'jest-mock-extended';
-import { OrganizationScan } from '../../../organization/scan/OrganizationScan.js';
+import { OrganizationScan } from '@network-scan/domain/organization/scan/OrganizationScan.js';
 import { TrustGraph } from 'shared';
 import NetworkMeasurement from '../../NetworkMeasurement.js';
 import { NetworkTransitiveQuorumSetFinder } from 'shared';

@@ -1,8 +1,8 @@
 import 'reflect-metadata';
 
-import Kernel from '../../../core/infrastructure/Kernel.js';
-import type { ExceptionLogger } from '../../../core/services/ExceptionLogger.js';
-import type { Logger } from '../../../core/services/Logger.js';
+import Kernel from '@core/infrastructure/Kernel.js';
+import type { ExceptionLogger } from '@core/services/ExceptionLogger.js';
+import type { Logger } from '@core/services/Logger.js';
 import { ScanNetwork } from '../../use-cases/scan-network/ScanNetwork.js';
 import { ScanNetworkLooped } from '../../use-cases/scan-network-looped/ScanNetworkLooped.js';
 

@@ -1,10 +1,10 @@
 import { mock } from 'jest-mock-extended';
 import { ScpStatementHandler } from '../scp-statement/scp-statement-handler.js';
 import { ScpEnvelopeHandler } from '../scp-envelope-handler.js';
-import { createDummyExternalizeScpEnvelope } from '../../../../../__fixtures__/createDummyExternalizeMessage.js';
+import { createDummyExternalizeScpEnvelope } from '@fixtures/createDummyExternalizeMessage.js';
 import { Keypair, Networks } from '@stellar/stellar-sdk';
 import { ok } from 'neverthrow';
-import { Observation } from '../../../../observation.js';
+import { Observation } from '@network-observer/observation.js';
 import { LRUCache } from 'lru-cache';
 
 describe('scp-envelope-handler', () => {

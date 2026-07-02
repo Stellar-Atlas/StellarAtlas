@@ -1,16 +1,16 @@
 import { decorate, injectable } from 'inversify';
-import Kernel from '../../../../core/infrastructure/Kernel.js';
-import { ConfigMock } from '../../../../core/config/__mocks__/configMock.js';
+import Kernel from '@core/infrastructure/Kernel.js';
+import { ConfigMock } from '@core/config/__mocks__/configMock.js';
 import { NodeV1 } from 'shared';
-import type { SubscriberRepository } from '../../../domain/subscription/SubscriberRepository.js';
+import type { SubscriberRepository } from '@notifications/domain/subscription/SubscriberRepository.js';
 import { RequestUnsubscribeLinkDTO } from '../RequestUnsubscribeLinkDTO.js';
 import { RequestUnsubscribeLink } from '../RequestUnsubscribeLink.js';
 import { ok } from 'neverthrow';
-import { createDummySubscriber } from '../../../domain/subscription/__fixtures__/Subscriber.fixtures.js';
-import { UserService } from '../../../../core/services/UserService.js';
+import { createDummySubscriber } from '@notifications/domain/subscription/__fixtures__/Subscriber.fixtures.js';
+import { UserService } from '@core/services/UserService.js';
 import Mock = jest.Mock;
 decorate(injectable(), UserService);
-jest.mock('../../../../core/services/UserService');
+jest.mock('@core/services/UserService');
 
 let kernel: Kernel;
 jest.setTimeout(60000); //slow integration tests

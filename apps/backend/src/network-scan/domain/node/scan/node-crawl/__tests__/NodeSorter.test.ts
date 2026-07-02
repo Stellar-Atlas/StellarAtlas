@@ -1,6 +1,6 @@
-import { createDummyNode } from '../../../__fixtures__/createDummyNode.js';
+import { createDummyNode } from '@network-scan/domain/node/__fixtures__/createDummyNode.js';
 import { NodeSorter } from '../NodeSorter.js';
-import { NetworkQuorumSetConfiguration } from '../../../../network/NetworkQuorumSetConfiguration.js';
+import { NetworkQuorumSetConfiguration } from '@network-scan/domain/network/NetworkQuorumSetConfiguration.js';
 
 describe('NodeSorter', () => {
 	test('sortByNetworkQuorumSetInclusion', () => {

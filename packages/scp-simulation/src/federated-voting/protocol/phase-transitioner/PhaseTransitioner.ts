@@ -11,7 +11,7 @@ import {
 import { Vote } from '../Vote.js';
 import { QuorumSetService } from '../QuorumSetService.js';
 import { QuorumService } from '../QuorumService.js';
-import { InMemoryEventCollector, QuorumSet } from '../../../core/index.js';
+import { InMemoryEventCollector, QuorumSet } from '@core/index.js';
 
 export class PhaseTransitioner extends InMemoryEventCollector {
 	tryMoveToAcceptPhase(

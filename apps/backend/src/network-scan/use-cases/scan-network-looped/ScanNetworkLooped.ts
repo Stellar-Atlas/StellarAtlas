@@ -1,9 +1,9 @@
 import { inject, injectable } from 'inversify';
-import type { Logger } from '../../../core/services/Logger.js';
+import type { Logger } from '@core/services/Logger.js';
 import { ScanNetworkLoopedDTO } from './ScanNetworkLoopedDTO.js';
 import { ScanNetwork } from '../scan-network/ScanNetwork.js';
-import type { ExceptionLogger } from '../../../core/services/ExceptionLogger.js';
-import { LoopTimer } from '../../../core/services/LoopTimer.js';
+import type { ExceptionLogger } from '@core/services/ExceptionLogger.js';
+import { LoopTimer } from '@core/services/LoopTimer.js';
 import { asyncSleep } from 'http-helper';
 import { err, ok, Result } from 'neverthrow';
 

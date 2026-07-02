@@ -5,12 +5,12 @@ import type { NodeRepository } from '../../NodeRepository.js';
 import type { Logger } from 'logger';
 import { NodeScan } from '../NodeScan.js';
 import { createDummyNode } from '../../__fixtures__/createDummyNode.js';
-import { NetworkQuorumSetConfiguration } from '../../../network/NetworkQuorumSetConfiguration.js';
+import { NetworkQuorumSetConfiguration } from '@network-scan/domain/network/NetworkQuorumSetConfiguration.js';
 import { err, ok } from 'neverthrow';
 import { createDummyPublicKey } from '../../__fixtures__/createDummyPublicKey.js';
 import Node from '../../Node.js';
 import { PeerNode } from 'crawler';
-import type { ScpStatementObservationRepository } from '../../../scp/ScpStatementObservationRepository.js';
+import type { ScpStatementObservationRepository } from '@network-scan/domain/scp/ScpStatementObservationRepository.js';
 
 describe('NodeScannerCrawlStep', () => {
 	const nodeRepository = mock<NodeRepository>();

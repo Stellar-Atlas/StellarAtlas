@@ -3,8 +3,39 @@
 	"compilerOptions": {
 		"outDir": "lib",
 		"rootDir": "src",
-		"composite": true
+		"composite": true,
+		"paths": {
+			"@node-connector/*.js": [
+				"./src/*.ts"
+			],
+			"@node-connector/*": [
+				"./src/*"
+			],
+			"@connection/*.js": [
+				"./src/connection/*.ts"
+			],
+			"@connection/*": [
+				"./src/connection/*"
+			],
+			"@examples/*.js": [
+				"./src/examples/*.ts"
+			],
+			"@examples/*": [
+				"./src/examples/*"
+			],
+			"@worker/*.js": [
+				"./src/worker/*.ts"
+			],
+			"@worker/*": [
+				"./src/worker/*"
+			]
+		}
 	},
-	"include": ["src/**/*.ts", "decs.d.ts"],
-	"exclude": ["node_modules"]
+	"include": [
+		"src/**/*.ts",
+		"decs.d.ts"
+	],
+	"exclude": [
+		"node_modules"
+	]
 }

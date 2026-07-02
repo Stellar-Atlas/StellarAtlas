@@ -1,5 +1,5 @@
 import { jest } from '@jest/globals';
-import { UserId } from '../../../notifications/domain/subscription/UserId.js';
+import { UserId } from '@notifications/domain/subscription/UserId.js';
 import { Message } from '../../domain/Message.js';
 import { User } from '../../infrastructure/database/entities/User.js';
 import { randomUUID } from 'crypto';

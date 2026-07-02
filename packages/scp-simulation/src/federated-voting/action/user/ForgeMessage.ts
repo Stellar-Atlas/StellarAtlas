@@ -1,4 +1,4 @@
-import { ProtocolAction, UserAction } from '../../../core/index.js';
+import { ProtocolAction, UserAction } from '@core/index.js';
 import { FederatedVotingContext } from '../../FederatedVotingContext.js';
 import { Message } from '../../Message.js';
 

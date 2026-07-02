@@ -4,7 +4,7 @@
 	"description": "Users email service",
 	"type": "module",
 	"scripts": {
-		"build": "tsc --declaration",
+		"build": "tsc --declaration && pnpm -w rewrite:aliases apps/users",
 		"build-and-start": "pnpm build; node lib/index.js",
 		"start": "node lib/index.js",
 		"test": "pnpm build; node lib/__tests__/all.test.js",

@@ -1,12 +1,52 @@
 {
 	"extends": "../../tsconfig.base.json",
 	"compilerOptions": {
+		"baseUrl": ".",
+		"ignoreDeprecations": "6.0",
 		"outDir": "lib",
 		"rootDir": "src",
 		"composite": true,
-		"types": ["jest", "node", "reflect-metadata"]
+		"types": [
+			"jest",
+			"node",
+			"reflect-metadata"
+		],
+		"paths": {
+			"@backend/*.js": [
+				"./src/*.ts"
+			],
+			"@backend/*": [
+				"./src/*"
+			],
+			"@core/*.js": [
+				"./src/core/*.ts"
+			],
+			"@core/*": [
+				"./src/core/*"
+			],
+			"@history-scan-coordinator/*.js": [
+				"./src/history-scan-coordinator/*.ts"
+			],
+			"@history-scan-coordinator/*": [
+				"./src/history-scan-coordinator/*"
+			],
+			"@network-scan/*.js": [
+				"./src/network-scan/*.ts"
+			],
+			"@network-scan/*": [
+				"./src/network-scan/*"
+			],
+			"@notifications/*.js": [
+				"./src/notifications/*.ts"
+			],
+			"@notifications/*": [
+				"./src/notifications/*"
+			]
+		}
 	},
-	"include": ["src/**/*.ts"],
+	"include": [
+		"src/**/*.ts"
+	],
 	"exclude": [
 		"node_modules/**/*",
 		"src/**/__tests__/*",

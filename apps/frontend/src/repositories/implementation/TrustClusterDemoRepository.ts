@@ -1,10 +1,10 @@
 import { type NetworkRepository } from "@/repositories/NetworkRepository";
-import { Network, Node, QuorumSet } from "shared";
+import { Network, Node, Organization, QuorumSet } from "shared";
 import { ok, Result } from "neverthrow";
 
 export class TrustClusterDemoRepository implements NetworkRepository {
   find(): Promise<Result<Network, Error>> {
-    const organizations = [];
+    const organizations: Organization[] = [];
     const nodes = [
       {
         ip: "localhost",

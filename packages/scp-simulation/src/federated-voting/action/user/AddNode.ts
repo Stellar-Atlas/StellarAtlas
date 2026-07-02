@@ -4,7 +4,7 @@ import {
 	ProtocolAction,
 	QuorumSet,
 	UserAction
-} from '../../../core/index.js';
+} from '@core/index.js';
 
 export class AddNode extends UserAction {
 	subType = 'AddNode';

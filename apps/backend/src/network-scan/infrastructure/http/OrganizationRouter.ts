@@ -1,8 +1,8 @@
 import * as express from 'express';
 import { Router } from 'express';
-import { getDateFromParam } from '../../../core/utilities/getDateFromParam.js';
-import { isString } from '../../../core/utilities/TypeGuards.js';
-import { isDateString } from '../../../core/utilities/isDateString.js';
+import { getDateFromParam } from '@core/utilities/getDateFromParam.js';
+import { isString } from '@core/utilities/TypeGuards.js';
+import { isDateString } from '@core/utilities/isDateString.js';
 import { GetOrganization } from '../../use-cases/get-organization/GetOrganization.js';
 import { GetOrganizations } from '../../use-cases/get-organizations/GetOrganizations.js';
 import { GetOrganizationSnapshots } from '../../use-cases/get-organization-snapshots/GetOrganizationSnapshots.js';

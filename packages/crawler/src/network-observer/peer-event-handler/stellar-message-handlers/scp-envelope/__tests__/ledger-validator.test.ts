@@ -1,5 +1,5 @@
 import { isLedgerSequenceValid } from '../ledger-validator.js';
-import type { Ledger } from '../../../../../crawler.js';
+import type { Ledger } from '@crawler/crawler.js';
 
 it('should let valid ledger sequences pass', function () {
 	const latestClosedLedger: Ledger = {

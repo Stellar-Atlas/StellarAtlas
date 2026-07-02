@@ -2,13 +2,13 @@ import { EventSourceIdDTO, SubscribeDTO } from './SubscribeDTO.js';
 import { err, ok, Result } from 'neverthrow';
 import type { SubscriberRepository } from '../../domain/subscription/SubscriberRepository.js';
 import { inject, injectable } from 'inversify';
-import type { IUserService } from '../../../core/domain/IUserService.js';
+import type { IUserService } from '@core/domain/IUserService.js';
 import { Subscriber } from '../../domain/subscription/Subscriber.js';
 import { EventSourceId } from '../../domain/event/EventSourceId.js';
 import { EventSourceIdFactory } from '../../domain/event/EventSourceIdFactory.js';
 import { SubscriberReference } from '../../domain/subscription/SubscriberReference.js';
 import { PersistenceError } from './SubscribeError.js';
-import { mapUnknownToError } from '../../../core/utilities/mapUnknownToError.js';
+import { mapUnknownToError } from '@core/utilities/mapUnknownToError.js';
 import { TYPES } from '../../infrastructure/di/di-types.js';
 import type { MessageCreator } from '../../domain/notifier/MessageCreator.js';
 

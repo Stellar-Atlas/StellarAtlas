@@ -1,4 +1,4 @@
-import { Event } from '../../../core/index.js';
+import { Event } from '@core/index.js';
 
 export abstract class ProtocolEvent implements Event {
 	type = 'ProtocolEvent';

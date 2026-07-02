@@ -1,10 +1,10 @@
-import type { NetworkRepository } from '../../../domain/network/NetworkRepository.js';
-import { Network } from '../../../domain/network/Network.js';
+import type { NetworkRepository } from '@network-scan/domain/network/NetworkRepository.js';
+import { Network } from '@network-scan/domain/network/Network.js';
 import { injectable } from 'inversify';
 import { Equal, Repository } from 'typeorm';
-import { NetworkId } from '../../../domain/network/NetworkId.js';
-import { Snapshot } from '../../../../core/domain/Snapshot.js';
-import { NetworkSnapshot } from '../../../domain/network/NetworkSnapshot.js';
+import { NetworkId } from '@network-scan/domain/network/NetworkId.js';
+import { Snapshot } from '@core/domain/Snapshot.js';
+import { NetworkSnapshot } from '@network-scan/domain/network/NetworkSnapshot.js';
 
 @injectable()
 export class TypeOrmNetworkRepository implements NetworkRepository {

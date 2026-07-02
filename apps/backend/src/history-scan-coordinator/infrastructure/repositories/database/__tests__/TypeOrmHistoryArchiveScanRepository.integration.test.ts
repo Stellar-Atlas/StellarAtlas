@@ -1,9 +1,9 @@
-import Kernel from '../../../../../core/infrastructure/Kernel.js';
-import { ConfigMock } from '../../../../../core/config/__mocks__/configMock.js';
-import { TYPES } from '../../../di/di-types.js';
-import type { ScanRepository } from '../../../../domain/scan/ScanRepository.js';
-import { Scan } from '../../../../domain/scan/Scan.js';
-import { ScanError, ScanErrorType } from '../../../../domain/scan/ScanError.js';
+import Kernel from '@core/infrastructure/Kernel.js';
+import { ConfigMock } from '@core/config/__mocks__/configMock.js';
+import { TYPES } from '@history-scan-coordinator/infrastructure/di/di-types.js';
+import type { ScanRepository } from '@history-scan-coordinator/domain/scan/ScanRepository.js';
+import { Scan } from '@history-scan-coordinator/domain/scan/Scan.js';
+import { ScanError, ScanErrorType } from '@history-scan-coordinator/domain/scan/ScanError.js';
 import { Url } from 'http-helper';
 
 let kernel: Kernel;

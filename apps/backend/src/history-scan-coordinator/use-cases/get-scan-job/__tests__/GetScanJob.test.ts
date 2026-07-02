@@ -1,10 +1,10 @@
 import { mock, MockProxy } from 'jest-mock-extended';
 import { GetScanJob } from '../GetScanJob.js';
-import type { ScanJobRepository } from '../../../domain/ScanJobRepository.js';
-import type { ExceptionLogger } from '../../../../core/services/ExceptionLogger.js';
+import type { ScanJobRepository } from '@history-scan-coordinator/domain/ScanJobRepository.js';
+import type { ExceptionLogger } from '@core/services/ExceptionLogger.js';
 import type { Logger } from 'logger';
 import { ok } from 'neverthrow';
-import { ScanJob } from '../../../domain/ScanJob.js';
+import { ScanJob } from '@history-scan-coordinator/domain/ScanJob.js';
 
 describe('GetScanJob', () => {
 	let getScanJob: GetScanJob;

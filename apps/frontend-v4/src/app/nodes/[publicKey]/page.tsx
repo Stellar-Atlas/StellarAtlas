@@ -4,11 +4,11 @@ import {
 	fetchHistoryArchiveScan,
 	fetchHistoryArchiveScanLogs,
 	fetchPublicNetwork
-} from '../../../api/client';
-import { PageHeading } from '../../../components/layout/page-heading';
-import { RouteLoadingPanel } from '../../../components/layout/route-fallbacks';
-import { NodeDetail } from '../../../components/nodes/node-detail';
-import { getNodeLabel } from '../../../domain/network';
+} from '@api/client';
+import { PageHeading } from '@components/layout/page-heading';
+import { RouteLoadingPanel } from '@components/layout/route-fallbacks';
+import { NodeDetail } from '@components/nodes/node-detail';
+import { getNodeLabel } from '@domain/network';
 
 interface NodeDetailPageProps {
 	params: Promise<{ publicKey: string }>;

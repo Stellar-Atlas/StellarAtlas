@@ -1,5 +1,5 @@
 import { Broadcast } from '../Broadcast.js';
-import { QuorumSet, Vote } from '../../../../index.js';
+import { QuorumSet, Vote } from '@scp-simulation/index.js';
 
 describe('Broadcast', () => {
 	const broadcaster = 'node';

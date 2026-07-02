@@ -3,7 +3,7 @@ import {
 	ProtocolAction,
 	QuorumSet,
 	Context
-} from '../../../core/index.js';
+} from '@core/index.js';
 
 export class UpdateQuorumSet extends UserAction {
 	subType = 'UpdateQuorumSet';

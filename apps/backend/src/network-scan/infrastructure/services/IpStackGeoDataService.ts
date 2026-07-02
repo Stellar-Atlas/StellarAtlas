@@ -1,5 +1,5 @@
 import { inject, injectable } from 'inversify';
-import type { Logger } from '../../../core/services/Logger.js';
+import type { Logger } from '@core/services/Logger.js';
 import { Url, type HttpService } from 'http-helper';
 import { err, ok, Result } from 'neverthrow';
 import { isNumber, isObject, isString } from 'shared';

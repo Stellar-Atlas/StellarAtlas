@@ -1,4 +1,4 @@
-import { PeerNodeCollection } from '../../../peer-node-collection.js';
+import { PeerNodeCollection } from '@crawler/peer-node-collection.js';
 import { mock, MockProxy } from 'jest-mock-extended';
 import pino from 'pino';
 import {
@@ -10,7 +10,7 @@ import { OnPeerConnected } from '../on-peer-connected.js';
 import { Observation } from '../../observation.js';
 import { ObservationState } from '../../observation-state.js';
 import { QuorumSet } from 'shared';
-import type { Ledger } from '../../../crawler.js';
+import type { Ledger } from '@crawler/crawler.js';
 import { Slots } from '../stellar-message-handlers/scp-envelope/scp-statement/externalize/slots.js';
 
 describe('OnPeerConnectedHandler', () => {

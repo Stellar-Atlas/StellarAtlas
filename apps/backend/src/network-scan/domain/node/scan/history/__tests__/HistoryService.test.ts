@@ -1,6 +1,6 @@
 import { ok } from 'neverthrow';
 import { HistoryService } from '../HistoryService.js';
-import { LoggerMock } from '../../../../../../core/services/__mocks__/LoggerMock.js';
+import { LoggerMock } from '@core/services/__mocks__/LoggerMock.js';
 import { mock } from 'jest-mock-extended';
 import type { HttpService } from 'http-helper';
 import type { HistoryArchiveScanService } from '../HistoryArchiveScanService.js';

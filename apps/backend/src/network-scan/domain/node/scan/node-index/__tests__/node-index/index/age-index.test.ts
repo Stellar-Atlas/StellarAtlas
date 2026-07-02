@@ -1,4 +1,4 @@
-import { AgeIndex } from '../../../index/age-index.js';
+import { AgeIndex } from '@network-scan/domain/node/scan/node-index/index/age-index.js';
 
 test('get', () => {
 	expect(AgeIndex.get(new Date())).toEqual(0);

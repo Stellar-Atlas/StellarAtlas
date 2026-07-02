@@ -2,7 +2,7 @@ import { RESTScanCoordinatorService } from '../RESTScanCoordinatorService.js';
 import { Url, type HttpService } from 'http-helper';
 import { mock } from 'jest-mock-extended';
 import { ok } from 'neverthrow';
-import { Scan } from '../../../domain/scan/Scan.js';
+import { Scan } from '@domain/scan/Scan.js';
 
 describe('RESTScanCoordinatorService Integration Tests', () => {
 	let httpService: jest.Mocked<HttpService>;

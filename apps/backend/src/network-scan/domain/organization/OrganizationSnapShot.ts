@@ -1,6 +1,6 @@
 import { Entity, Column, ManyToOne, Index, Unique } from 'typeorm';
 import type Organization from './Organization.js';
-import { Snapshot } from '../../../core/domain/Snapshot.js';
+import { Snapshot } from '@core/domain/Snapshot.js';
 import { OrganizationContactInformation } from './OrganizationContactInformation.js';
 import { OrganizationValidators } from './OrganizationValidators.js';
 

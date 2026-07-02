@@ -1,7 +1,7 @@
 import { GetMeasurementsDTO } from './GetMeasurementsDTO.js';
 import { err, ok, Result } from 'neverthrow';
-import { mapUnknownToError } from '../../../core/utilities/mapUnknownToError.js';
-import type { ExceptionLogger } from '../../../core/services/ExceptionLogger.js';
+import { mapUnknownToError } from '@core/utilities/mapUnknownToError.js';
+import type { ExceptionLogger } from '@core/services/ExceptionLogger.js';
 import type { MeasurementRepository } from '../../domain/measurement/MeasurementRepository.js';
 import { Measurement } from '../../domain/measurement/Measurement.js';
 

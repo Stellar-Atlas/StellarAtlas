@@ -1,5 +1,5 @@
 import { GeneralizedTransactionSetHashPolicy } from '../GeneralizedTransactionSetHashPolicy.js';
-import { CategoryScanner } from '../../../../CategoryScanner.js';
+import { CategoryScanner } from '@domain/scanner/CategoryScanner.js';
 
 describe('GeneralizedTransactionSetPolicy', () => {
 	let policy: GeneralizedTransactionSetHashPolicy;

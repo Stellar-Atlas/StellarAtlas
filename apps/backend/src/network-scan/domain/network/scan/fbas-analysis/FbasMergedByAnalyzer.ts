@@ -6,7 +6,7 @@ import FbasAnalyzerFacade, {
 import { err, ok, Result } from 'neverthrow';
 import { AnalysisMergedResult } from './AnalysisMergedResult.js';
 import { inject, injectable } from 'inversify';
-import type { Logger } from '../../../../../core/services/Logger.js';
+import type { Logger } from '@core/services/Logger.js';
 
 //Perform all analysis on the FBAS merged by country, organization or...
 @injectable()

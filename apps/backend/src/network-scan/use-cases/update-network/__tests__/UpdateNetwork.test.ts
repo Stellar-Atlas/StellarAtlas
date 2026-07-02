@@ -1,15 +1,15 @@
 import { mock } from 'jest-mock-extended';
-import { createDummyPublicKeyString } from '../../../domain/node/__fixtures__/createDummyPublicKey.js';
-import type { ExceptionLogger } from '../../../../core/services/ExceptionLogger.js';
+import { createDummyPublicKeyString } from '@network-scan/domain/node/__fixtures__/createDummyPublicKey.js';
+import type { ExceptionLogger } from '@core/services/ExceptionLogger.js';
 import { InvalidQuorumSetConfigError } from '../InvalidQuorumSetConfigError.js';
 import { RepositoryError } from '../RepositoryError.js';
-import type { NetworkRepository } from '../../../domain/network/NetworkRepository.js';
+import type { NetworkRepository } from '@network-scan/domain/network/NetworkRepository.js';
 import { UpdateNetwork } from '../UpdateNetwork.js';
-import { Network } from '../../../domain/network/Network.js';
+import { Network } from '@network-scan/domain/network/Network.js';
 import { UpdateNetworkDTO } from '../UpdateNetworkDTO.js';
 import { InvalidOverlayRangeError } from '../InvalidOverlayRangeError.js';
 import { InvalidStellarCoreVersionError } from '../InvalidStellarCoreVersionError.js';
-import { LoggerMock } from '../../../../core/services/__mocks__/LoggerMock.js';
+import { LoggerMock } from '@core/services/__mocks__/LoggerMock.js';
 
 describe('UpdateNetwork', function () {
 	it('should create new configuration when none is present', async function () {

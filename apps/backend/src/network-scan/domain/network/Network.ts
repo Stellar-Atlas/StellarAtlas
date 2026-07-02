@@ -1,6 +1,6 @@
 import { NetworkId } from './NetworkId.js';
 import { Column, Entity, OneToMany, Unique } from 'typeorm';
-import { VersionedEntity } from '../../../core/domain/VersionedEntity.js';
+import { VersionedEntity } from '@core/domain/VersionedEntity.js';
 import { OverlayVersionRange } from './OverlayVersionRange.js';
 import { NetworkSnapshot } from './NetworkSnapshot.js';
 import { StellarCoreVersion } from './StellarCoreVersion.js';

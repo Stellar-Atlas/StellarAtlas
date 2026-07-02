@@ -1,4 +1,4 @@
-import type { Ledger } from '../../../../crawler.js';
+import type { Ledger } from '@crawler/crawler.js';
 
 const MAX_LEDGER_DRIFT = 5; //how many ledgers can a node fall behind
 const MAX_CLOSED_LEDGER_PROCESSING_TIME = 90000; //how long in ms we still process messages of closed ledgers.

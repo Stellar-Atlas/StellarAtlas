@@ -2,8 +2,8 @@ import { Container } from 'inversify';
 import { DataSource, type Repository } from 'typeorm';
 import { mock, type MockProxy } from 'jest-mock-extended';
 import { User } from '../../database/entities/User.js';
-import { LocalSMTPUserService, type SMTPConfig } from '../../../services/LocalSMTPUserService.js';
-import type { IUserService } from '../../../domain/IUserService.js';
+import { LocalSMTPUserService, type SMTPConfig } from '@core/services/LocalSMTPUserService.js';
+import type { IUserService } from '@core/domain/IUserService.js';
 import { setupLocalSMTPContainer } from '../LocalSMTPContainer.js';
 import { CORE_TYPES } from '../di-types.js';
 

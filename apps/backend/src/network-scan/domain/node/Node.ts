@@ -1,7 +1,7 @@
 import { Entity, Column, OneToMany } from 'typeorm';
 import PublicKey from './PublicKey.js';
 import NodeSnapShot from './NodeSnapShot.js';
-import { VersionedEntity } from '../../../core/domain/VersionedEntity.js';
+import { VersionedEntity } from '@core/domain/VersionedEntity.js';
 import NodeDetails from './NodeDetails.js';
 import NodeQuorumSet from './NodeQuorumSet.js';
 import NodeGeoDataLocation from './NodeGeoDataLocation.js';

@@ -1,7 +1,7 @@
 import { Between, Repository } from 'typeorm';
 import { injectable } from 'inversify';
-import NetworkMeasurement from '../../../domain/network/NetworkMeasurement.js';
-import type { NetworkMeasurementRepository } from '../../../domain/network/NetworkMeasurementRepository.js';
+import NetworkMeasurement from '@network-scan/domain/network/NetworkMeasurement.js';
+import type { NetworkMeasurementRepository } from '@network-scan/domain/network/NetworkMeasurementRepository.js';
 
 @injectable()
 export class TypeOrmNetworkMeasurementRepository implements NetworkMeasurementRepository {

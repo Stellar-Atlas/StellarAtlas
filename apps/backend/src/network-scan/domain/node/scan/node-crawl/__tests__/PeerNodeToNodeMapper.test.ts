@@ -1,13 +1,13 @@
 import {
 	createDummyPublicKey,
 	createDummyPublicKeyString
-} from '../../../__fixtures__/createDummyPublicKey.js';
+} from '@network-scan/domain/node/__fixtures__/createDummyPublicKey.js';
 import { QuorumSet as QuorumSetDTO } from 'shared';
 import { PeerNode } from 'crawler';
 import { PeerNodeToNodeMapper } from '../PeerNodeToNodeMapper.js';
-import NodeMeasurement from '../../../NodeMeasurement.js';
-import Node from '../../../Node.js';
-import PublicKey from '../../../PublicKey.js';
+import NodeMeasurement from '@network-scan/domain/node/NodeMeasurement.js';
+import Node from '@network-scan/domain/node/Node.js';
+import PublicKey from '@network-scan/domain/node/PublicKey.js';
 import { mock } from 'jest-mock-extended';
 
 describe('PeerNodeToNodeMapper', () => {

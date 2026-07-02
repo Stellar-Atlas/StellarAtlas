@@ -3,10 +3,57 @@
 	"compilerOptions": {
 		"outDir": "lib",
 		"rootDir": "src",
-		"composite": true
+		"composite": true,
+		"paths": {
+			"@scp-simulation/*.js": [
+				"./src/*.ts"
+			],
+			"@scp-simulation/*": [
+				"./src/*"
+			],
+			"@api/*.js": [
+				"./src/api/*.ts"
+			],
+			"@api/*": [
+				"./src/api/*"
+			],
+			"@console-interface/*.js": [
+				"./src/console-interface/*.ts"
+			],
+			"@console-interface/*": [
+				"./src/console-interface/*"
+			],
+			"@core/*.js": [
+				"./src/core/*.ts"
+			],
+			"@core/*": [
+				"./src/core/*"
+			],
+			"@federated-voting/*.js": [
+				"./src/federated-voting/*.ts"
+			],
+			"@federated-voting/*": [
+				"./src/federated-voting/*"
+			],
+			"@overlay/*.js": [
+				"./src/overlay/*.ts"
+			],
+			"@overlay/*": [
+				"./src/overlay/*"
+			],
+			"@simulation/*.js": [
+				"./src/simulation/*.ts"
+			],
+			"@simulation/*": [
+				"./src/simulation/*"
+			]
+		}
 	},
-
-	"include": ["src/**/*.ts", "decs.d.ts", "src/**/*.json"],
+	"include": [
+		"src/**/*.ts",
+		"decs.d.ts",
+		"src/**/*.json"
+	],
 	"exclude": [
 		"node_modules/**/*",
 		"src/**/__tests__/*",

@@ -1,11 +1,11 @@
 import * as express from 'express';
 import { Router } from 'express';
-import { getDateFromParam } from '../../../core/utilities/getDateFromParam.js';
+import { getDateFromParam } from '@core/utilities/getDateFromParam.js';
 import { GetNode } from '../../use-cases/get-node/GetNode.js';
 import { GetNodes } from '../../use-cases/get-nodes/GetNodes.js';
-import { isString } from '../../../core/utilities/TypeGuards.js';
+import { isString } from '@core/utilities/TypeGuards.js';
 import { GetNodeSnapshots } from '../../use-cases/get-node-snapshots/GetNodeSnapshots.js';
-import { isDateString } from '../../../core/utilities/isDateString.js';
+import { isDateString } from '@core/utilities/isDateString.js';
 import { GetMeasurementsFactory } from '../../use-cases/get-measurements/GetMeasurementsFactory.js';
 import NodeMeasurement from '../../domain/node/NodeMeasurement.js';
 import { GetMeasurementAggregations } from '../../use-cases/get-measurement-aggregations/GetMeasurementAggregations.js';

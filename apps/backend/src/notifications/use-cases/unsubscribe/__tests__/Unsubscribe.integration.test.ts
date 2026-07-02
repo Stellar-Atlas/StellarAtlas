@@ -1,22 +1,22 @@
 import { Container, decorate, injectable } from 'inversify';
-import Kernel from '../../../../core/infrastructure/Kernel.js';
-import type { SubscriberRepository } from '../../../domain/subscription/SubscriberRepository.js';
-import { ConfigMock } from '../../../../core/config/__mocks__/configMock.js';
+import Kernel from '@core/infrastructure/Kernel.js';
+import type { SubscriberRepository } from '@notifications/domain/subscription/SubscriberRepository.js';
+import { ConfigMock } from '@core/config/__mocks__/configMock.js';
 import { Unsubscribe } from '../Unsubscribe.js';
 import { err, ok } from 'neverthrow';
-import { createDummySubscriber } from '../../../domain/subscription/__fixtures__/Subscriber.fixtures.js';
+import { createDummySubscriber } from '@notifications/domain/subscription/__fixtures__/Subscriber.fixtures.js';
 import { randomUUID } from 'crypto';
 import {
 	UserNotFoundError,
 	UserService
-} from '../../../../core/services/UserService.js';
-import { createDummyPendingSubscriptionId } from '../../../domain/subscription/__fixtures__/PendingSubscriptionId.fixtures.js';
-import { OrganizationId } from '../../../domain/event/EventSourceId.js';
-import { OrganizationXUpdatesUnavailableEvent } from '../../../domain/event/Event.js';
+} from '@core/services/UserService.js';
+import { createDummyPendingSubscriptionId } from '@notifications/domain/subscription/__fixtures__/PendingSubscriptionId.fixtures.js';
+import { OrganizationId } from '@notifications/domain/event/EventSourceId.js';
+import { OrganizationXUpdatesUnavailableEvent } from '@notifications/domain/event/Event.js';
 import Mock = jest.Mock;
 
 decorate(injectable(), UserService);
-jest.mock('../../../../core/services/UserService');
+jest.mock('@core/services/UserService');
 
 let container: Container;
 let kernel: Kernel;

@@ -4,14 +4,14 @@ import { ok } from 'neverthrow';
 import {
 	NetworkId,
 	OrganizationId
-} from '../../../domain/event/EventSourceId.js';
-import { EventSource } from '../../../domain/event/EventSource.js';
-import { NetworkDTOService } from '../../../../network-scan/services/NetworkDTOService.js';
-import { createDummyNodeV1 } from '../../../../network-scan/services/__fixtures__/createDummyNodeV1.js';
-import { createDummyNetworkV1 } from '../../../../network-scan/services/__fixtures__/createDummyNetworkV1.js';
+} from '@notifications/domain/event/EventSourceId.js';
+import { EventSource } from '@notifications/domain/event/EventSource.js';
+import { NetworkDTOService } from '@network-scan/services/NetworkDTOService.js';
+import { createDummyNodeV1 } from '@network-scan/services/__fixtures__/createDummyNodeV1.js';
+import { createDummyNetworkV1 } from '@network-scan/services/__fixtures__/createDummyNetworkV1.js';
 import { mock } from 'jest-mock-extended';
-import { createDummyOrganizationV1 } from '../../../../network-scan/services/__fixtures__/createDummyOrganizationV1.js';
-import { createDummyPublicKey } from '../../../../network-scan/domain/node/__fixtures__/createDummyPublicKey.js';
+import { createDummyOrganizationV1 } from '@network-scan/services/__fixtures__/createDummyOrganizationV1.js';
+import { createDummyPublicKey } from '@network-scan/domain/node/__fixtures__/createDummyPublicKey.js';
 
 it('should determine if the given EventSourceId is known in the network', async function () {
 	const publicKeyA = createDummyPublicKey();

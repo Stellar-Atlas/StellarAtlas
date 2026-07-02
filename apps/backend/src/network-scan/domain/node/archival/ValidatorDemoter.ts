@@ -1,10 +1,10 @@
 import Node from '../Node.js';
 import { inject, injectable } from 'inversify';
 import type { NodeMeasurementDayRepository } from '../NodeMeasurementDayRepository.js';
-import type { Logger } from '../../../../core/services/Logger.js';
+import type { Logger } from '@core/services/Logger.js';
 import { TrustGraph } from 'shared';
 import 'reflect-metadata';
-import { NETWORK_TYPES } from '../../../infrastructure/di/di-types.js';
+import { NETWORK_TYPES } from '@network-scan/infrastructure/di/di-types.js';
 import { hasNoActiveTrustingNodes } from './hasNoActiveTrustingNodes.js';
 import { NodeScan } from '../scan/NodeScan.js';
 

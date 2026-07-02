@@ -9,7 +9,7 @@ import NodeGeoDataLocation from '../../NodeGeoDataLocation.js';
 import { NodeTomlInfo } from '../NodeTomlInfo.js';
 import { QuorumSet } from 'shared';
 import NodeQuorumSet from '../../NodeQuorumSet.js';
-import { StellarCoreVersion } from '../../../network/StellarCoreVersion.js';
+import { StellarCoreVersion } from '@network-scan/domain/network/StellarCoreVersion.js';
 
 describe('NodeScan', () => {
 	let activeNode: Node;

@@ -3,9 +3,19 @@
 	"compilerOptions": {
 		"outDir": "lib",
 		"rootDir": "src",
-		"composite": true
+		"composite": true,
+		"paths": {
+			"@history-scanner-dto/*.js": [
+				"./src/*.ts"
+			],
+			"@history-scanner-dto/*": [
+				"./src/*"
+			]
+		}
 	},
-	"include": ["src/**/*.ts"],
+	"include": [
+		"src/**/*.ts"
+	],
 	"exclude": [
 		"node_modules/**/*",
 		"src/**/__tests__/*",

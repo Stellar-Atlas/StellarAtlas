@@ -1,5 +1,5 @@
-import Kernel from '../../../../core/infrastructure/Kernel.js';
-import { ConfigMock } from '../../../../core/config/__mocks__/configMock.js';
+import Kernel from '@core/infrastructure/Kernel.js';
+import { ConfigMock } from '@core/config/__mocks__/configMock.js';
 import { GetOrganizationSnapshots } from '../GetOrganizationSnapshots.js';
 
 let kernel: Kernel;

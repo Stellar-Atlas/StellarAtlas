@@ -4,7 +4,7 @@ import type { ScpStatementObservationV1 } from 'shared';
 import { NETWORK_TYPES } from '../../infrastructure/di/di-types.js';
 import type { ScpStatementObservationRepository } from '../../domain/scp/ScpStatementObservationRepository.js';
 import type { GetScpStatementsDTO } from './GetScpStatementsDTO.js';
-import { mapUnknownToError } from '../../../core/utilities/mapUnknownToError.js';
+import { mapUnknownToError } from '@core/utilities/mapUnknownToError.js';
 
 const DEFAULT_LIMIT = 200;
 const MAX_LIMIT = 1000;

@@ -5,7 +5,7 @@
 	"type": "module",
 	"description": "Backend & api",
 	"scripts": {
-		"build": "tsc --build tsconfig.json && pnpm post-build",
+		"build": "tsc --build tsconfig.json && pnpm -w rewrite:aliases apps/backend && pnpm post-build",
 		"post-build": "cp -R src/notifications/infrastructure/templates lib/notifications/infrastructure/templates",
 		"heroku-postbuild": "pnpm run build",
 		"build-and-scan-network": "pnpm run build; node lib/network-scan/infrastructure/cli/scan-network.js",

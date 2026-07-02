@@ -1,19 +1,19 @@
 import { Container } from 'inversify';
-import Kernel from '../../../../../core/infrastructure/Kernel.js';
-import { ConfigMock } from '../../../../../core/config/__mocks__/configMock.js';
+import Kernel from '@core/infrastructure/Kernel.js';
+import { ConfigMock } from '@core/config/__mocks__/configMock.js';
 import { DataSource } from 'typeorm';
 import {
 	HistoryArchiveErrorDetectedEvent,
 	ValidatorXUpdatesNotValidatingEvent
-} from '../../../../domain/event/Event.js';
-import { Subscriber } from '../../../../domain/subscription/Subscriber.js';
-import type { SubscriberRepository } from '../../../../domain/subscription/SubscriberRepository.js';
+} from '@notifications/domain/event/Event.js';
+import { Subscriber } from '@notifications/domain/subscription/Subscriber.js';
+import type { SubscriberRepository } from '@notifications/domain/subscription/SubscriberRepository.js';
 import {
 	NetworkId,
 	PublicKey
-} from '../../../../domain/event/EventSourceId.js';
-import { createDummySubscriber } from '../../../../domain/subscription/__fixtures__/Subscriber.fixtures.js';
-import { createDummyPendingSubscriptionId } from '../../../../domain/subscription/__fixtures__/PendingSubscriptionId.fixtures.js';
+} from '@notifications/domain/event/EventSourceId.js';
+import { createDummySubscriber } from '@notifications/domain/subscription/__fixtures__/Subscriber.fixtures.js';
+import { createDummyPendingSubscriptionId } from '@notifications/domain/subscription/__fixtures__/PendingSubscriptionId.fixtures.js';
 
 describe('Subscriber persistence', () => {
 	let container: Container;

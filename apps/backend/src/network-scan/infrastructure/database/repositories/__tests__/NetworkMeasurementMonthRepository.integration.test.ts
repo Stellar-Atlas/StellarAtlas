@@ -1,13 +1,13 @@
 import { Container } from 'inversify';
-import Kernel from '../../../../../core/infrastructure/Kernel.js';
-import NetworkMeasurement from '../../../../domain/network/NetworkMeasurement.js';
-import NetworkScan from '../../../../domain/network/scan/NetworkScan.js';
+import Kernel from '@core/infrastructure/Kernel.js';
+import NetworkMeasurement from '@network-scan/domain/network/NetworkMeasurement.js';
+import NetworkScan from '@network-scan/domain/network/scan/NetworkScan.js';
 import { TypeOrmNetworkScanRepository } from '../TypeOrmNetworkScanRepository.js';
 import { TypeOrmNetworkMeasurementMonthRepository } from '../TypeOrmNetworkMeasurementMonthRepository.js';
-import NetworkMeasurementMonth from '../../../../domain/network/NetworkMeasurementMonth.js';
-import { ConfigMock } from '../../../../../core/config/__mocks__/configMock.js';
-import { NETWORK_TYPES } from '../../../di/di-types.js';
-import { NetworkId } from '../../../../domain/network/NetworkId.js';
+import NetworkMeasurementMonth from '@network-scan/domain/network/NetworkMeasurementMonth.js';
+import { ConfigMock } from '@core/config/__mocks__/configMock.js';
+import { NETWORK_TYPES } from '@network-scan/infrastructure/di/di-types.js';
+import { NetworkId } from '@network-scan/domain/network/NetworkId.js';
 
 describe('test queries', () => {
 	let container: Container;

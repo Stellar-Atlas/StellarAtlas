@@ -1,5 +1,5 @@
 import Node from '../../Node.js';
-import { NetworkQuorumSetConfiguration } from '../../../network/NetworkQuorumSetConfiguration.js';
+import { NetworkQuorumSetConfiguration } from '@network-scan/domain/network/NetworkQuorumSetConfiguration.js';
 import PublicKey from '../../PublicKey.js';
 
 export class NodeSorter {

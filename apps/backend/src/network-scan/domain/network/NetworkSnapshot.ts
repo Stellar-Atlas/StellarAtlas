@@ -1,4 +1,4 @@
-import { Snapshot } from '../../../core/domain/Snapshot.js';
+import { Snapshot } from '@core/domain/Snapshot.js';
 import { Column, Entity, ManyToOne } from 'typeorm';
 import type { Network } from './Network.js';
 import { OverlayVersionRange } from './OverlayVersionRange.js';

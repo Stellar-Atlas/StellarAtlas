@@ -1,7 +1,7 @@
 import { err, ok, Result } from 'neverthrow';
-import { mapUnknownToError } from '../../../core/utilities/mapUnknownToError.js';
+import { mapUnknownToError } from '@core/utilities/mapUnknownToError.js';
 import { inject, injectable } from 'inversify';
-import type { ExceptionLogger } from '../../../core/services/ExceptionLogger.js';
+import type { ExceptionLogger } from '@core/services/ExceptionLogger.js';
 import 'reflect-metadata';
 import { NetworkId } from '../../domain/network/NetworkId.js';
 import { MeasurementAggregation } from '../../domain/measurement-aggregation/MeasurementAggregation.js';

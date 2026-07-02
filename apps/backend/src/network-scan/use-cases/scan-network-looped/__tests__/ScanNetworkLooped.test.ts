@@ -1,8 +1,8 @@
 import { ScanNetworkLooped } from '../ScanNetworkLooped.js';
 import { mock } from 'jest-mock-extended';
 import { ScanNetwork } from '../../scan-network/ScanNetwork.js';
-import { LoopTimer } from '../../../../core/services/LoopTimer.js';
-import type { ExceptionLogger } from '../../../../core/services/ExceptionLogger.js';
+import { LoopTimer } from '@core/services/LoopTimer.js';
+import type { ExceptionLogger } from '@core/services/ExceptionLogger.js';
 import type { Logger } from 'logger';
 import { err, ok } from 'neverthrow';
 

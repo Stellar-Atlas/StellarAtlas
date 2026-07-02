@@ -1,15 +1,15 @@
 import { Container } from 'inversify';
-import Kernel from '../../../../../core/infrastructure/Kernel.js';
-import { ConfigMock } from '../../../../../core/config/__mocks__/configMock.js';
-import { NETWORK_TYPES } from '../../../di/di-types.js';
-import type { OrganizationRepository } from '../../../../domain/organization/OrganizationRepository.js';
-import { createDummyOrganizationId } from '../../../../domain/organization/__fixtures__/createDummyOrganizationId.js';
-import Organization from '../../../../domain/organization/Organization.js';
-import { OrganizationContactInformation } from '../../../../domain/organization/OrganizationContactInformation.js';
-import { OrganizationValidators } from '../../../../domain/organization/OrganizationValidators.js';
-import { createDummyPublicKey } from '../../../../domain/node/__fixtures__/createDummyPublicKey.js';
-import { TestUtils } from '../../../../../core/utilities/TestUtils.js';
-import OrganizationMeasurement from '../../../../domain/organization/OrganizationMeasurement.js';
+import Kernel from '@core/infrastructure/Kernel.js';
+import { ConfigMock } from '@core/config/__mocks__/configMock.js';
+import { NETWORK_TYPES } from '@network-scan/infrastructure/di/di-types.js';
+import type { OrganizationRepository } from '@network-scan/domain/organization/OrganizationRepository.js';
+import { createDummyOrganizationId } from '@network-scan/domain/organization/__fixtures__/createDummyOrganizationId.js';
+import Organization from '@network-scan/domain/organization/Organization.js';
+import { OrganizationContactInformation } from '@network-scan/domain/organization/OrganizationContactInformation.js';
+import { OrganizationValidators } from '@network-scan/domain/organization/OrganizationValidators.js';
+import { createDummyPublicKey } from '@network-scan/domain/node/__fixtures__/createDummyPublicKey.js';
+import { TestUtils } from '@core/utilities/TestUtils.js';
+import OrganizationMeasurement from '@network-scan/domain/organization/OrganizationMeasurement.js';
 import { DataSource } from 'typeorm';
 
 describe('TypeOrmOrganizationRepository', () => {

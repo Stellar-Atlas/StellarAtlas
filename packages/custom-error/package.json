@@ -5,7 +5,7 @@
 	"type": "module",
 	"scripts": {
 		"preversion": "pnpm run build",
-		"build": "../../node_modules/typescript/bin/tsc  --declaration",
+		"build": "../../node_modules/typescript/bin/tsc  --declaration && pnpm -w rewrite:aliases packages/custom-error",
 		"test:unit": "jest"
 	},
 	"author": "pieterjan84@github",

@@ -4,7 +4,7 @@ import NodeQuorumSet from './NodeQuorumSet.js';
 import NodeGeoDataLocation from './NodeGeoDataLocation.js';
 import NodeDetails from './NodeDetails.js';
 import type Node from './Node.js';
-import { Snapshot } from '../../../core/domain/Snapshot.js';
+import { Snapshot } from '@core/domain/Snapshot.js';
 
 /**
  * Type 2 Slowly Changing Dimensions

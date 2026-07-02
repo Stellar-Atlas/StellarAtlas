@@ -3,9 +3,25 @@
 	"compilerOptions": {
 		"outDir": "lib",
 		"rootDir": "src",
-		"composite": true
+		"composite": true,
+		"paths": {
+			"@http-helper/*.js": [
+				"./src/*.ts"
+			],
+			"@http-helper/*": [
+				"./src/*"
+			],
+			"@mocks/*.js": [
+				"./src/__mocks__/*.ts"
+			],
+			"@mocks/*": [
+				"./src/__mocks__/*"
+			]
+		}
 	},
-	"include": ["src/**/*.ts"],
+	"include": [
+		"src/**/*.ts"
+	],
 	"exclude": [
 		"node_modules/**/*",
 		"src/**/__tests__/*",

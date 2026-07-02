@@ -1,4 +1,4 @@
-import { CustomError } from '../../../../../core/errors/CustomError.js';
+import { CustomError } from '@core/errors/CustomError.js';
 import { OrganizationScanError } from './OrganizationScanError.js';
 
 export class TomlWithoutValidatorsError extends OrganizationScanError {

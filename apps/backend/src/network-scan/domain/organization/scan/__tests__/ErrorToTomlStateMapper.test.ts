@@ -1,5 +1,5 @@
 import { ErrorToTomlStateMapper } from '../ErrorToTomlStateMapper.js';
-import { TomlParseError } from '../../../network/scan/TomlService.js';
+import { TomlParseError } from '@network-scan/domain/network/scan/TomlService.js';
 import { TomlState } from '../TomlState.js';
 import { HttpError, HttpResponse } from 'http-helper';
 

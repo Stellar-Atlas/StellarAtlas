@@ -4,7 +4,7 @@
 	"description": "StellarAtlas halting analysis algorithms for Stellar quorum graphs",
 	"type": "module",
 	"scripts": {
-		"build": "tsc --build"
+		"build": "tsc --build && pnpm -w rewrite:aliases packages/stellar-halting-analysis"
 	},
 	"main": "lib/index.js",
 	"types": "lib/index.d.ts",

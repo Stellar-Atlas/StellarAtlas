@@ -1,9 +1,9 @@
 import { err, ok, Result } from 'neverthrow';
 import { inject, injectable } from 'inversify';
 import { NETWORK_TYPES } from '../../infrastructure/di/di-types.js';
-import type { ExceptionLogger } from '../../../core/services/ExceptionLogger.js';
+import type { ExceptionLogger } from '@core/services/ExceptionLogger.js';
 import { NetworkId } from '../../domain/network/NetworkId.js';
-import { mapUnknownToError } from '../../../core/utilities/mapUnknownToError.js';
+import { mapUnknownToError } from '@core/utilities/mapUnknownToError.js';
 import { NetworkQuorumSetMapper } from './NetworkQuorumSetMapper.js';
 import { InvalidQuorumSetConfigError } from './InvalidQuorumSetConfigError.js';
 import type { NetworkRepository } from '../../domain/network/NetworkRepository.js';
@@ -14,7 +14,7 @@ import { InvalidOverlayRangeError } from './InvalidOverlayRangeError.js';
 import { StellarCoreVersion } from '../../domain/network/StellarCoreVersion.js';
 import { InvalidStellarCoreVersionError } from './InvalidStellarCoreVersionError.js';
 import { RepositoryError } from './RepositoryError.js';
-import type { Logger } from '../../../core/services/Logger.js';
+import type { Logger } from '@core/services/Logger.js';
 
 @injectable()
 export class UpdateNetwork {

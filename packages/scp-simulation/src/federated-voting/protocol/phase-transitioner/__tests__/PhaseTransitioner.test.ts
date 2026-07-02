@@ -1,4 +1,4 @@
-import { Event, Node, QuorumSet } from '../../../../core/index.js';
+import { Event, Node, QuorumSet } from '@core/index.js';
 import {
 	FederatedVotingPhase,
 	FederatedVotingProtocolState
