@@ -142,13 +142,23 @@ function shouldProxyFrontendV4(path: string): boolean {
   if (assetPathPattern.test(path) || workerPathPattern.test(path)) return false;
   if (path === "/favicon.ico" || path.endsWith(".png")) return false;
 
-  return path === "/" || modernStaticPathPattern.test(path) || !path.includes(".");
+  return (
+    path === "/" || modernStaticPathPattern.test(path) || !path.includes(".")
+  );
 }
 
 function shouldServeLegacyIndex(req: Request): boolean {
   return (
     (req.method === "GET" || req.method === "HEAD") &&
     legacyPathPattern.test(req.path) &&
+    req.accepts("html") === "html" &&
+    !req.path.includes(".")
+  );
+}
+
+function shouldServeModernFallback(req: Request): boolean {
+  return (
+    (req.method === "GET" || req.method === "HEAD") &&
     req.accepts("html") === "html" &&
     !req.path.includes(".")
   );
@@ -189,10 +199,18 @@ app.use((req: Request, res: Response, next: NextFunction) => {
     return;
   }
 
-  proxyRequest(req, res, getFrontendV4Origin(), req.originalUrl).catch((error) => {
-    const message = error instanceof Error ? error.message : "Proxy failed";
-    res.status(502).send(`Modern frontend unavailable: ${message}`);
-  });
+  proxyRequest(req, res, getFrontendV4Origin(), req.originalUrl).catch(
+    (error) => {
+      if (shouldServeModernFallback(req)) {
+        req.url = "/legacy/index.html";
+        next();
+        return;
+      }
+
+      const message = error instanceof Error ? error.message : "Proxy failed";
+      res.status(502).send(`Modern frontend unavailable: ${message}`);
+    },
+  );
 });
 
 app.disable("x-powered-by");

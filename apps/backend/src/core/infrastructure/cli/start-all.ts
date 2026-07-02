@@ -14,6 +14,7 @@ const historyScanWorkersEnv = 'HISTORY_SCAN_WORKERS';
 const minDefaultHistoryScanWorkers = 24;
 const maxHistoryScanWorkers = 48;
 const apiStartTimeoutMs = 120_000;
+const frontendV4StartTimeoutMs = 120_000;
 
 type ManagedProcess = {
 	name: string;
@@ -42,6 +43,10 @@ function parseWorkerCount(value: string | undefined): number {
 function frontendV4PreviewEnabled(): boolean {
 	if (process.env.DISABLE_FRONTEND_V4_PREVIEW === '1') return false;
 	return process.env.ENABLE_FRONTEND_V4_PREVIEW !== '0';
+}
+
+function getFrontendV4Origin(): string {
+	return process.env.FRONTEND_V4_ORIGIN ?? 'http://127.0.0.1:3104';
 }
 
 function createProcess(
@@ -101,6 +106,29 @@ function waitForApi(processes: ManagedProcess[]): Promise<void> {
 	});
 }
 
+async function waitForHttpService(
+	processes: ManagedProcess[],
+	url: string,
+	timeoutMs: number,
+	serviceName: string
+): Promise<void> {
+	const startedAt = Date.now();
+
+	while (Date.now() - startedAt <= timeoutMs) {
+		try {
+			const response = await fetch(url, { method: 'HEAD' });
+			if (response.status < 500) return;
+		} catch {
+			// Retry until the managed service opens its listener.
+		}
+
+		await new Promise((resolve) => setTimeout(resolve, 1000));
+	}
+
+	stopProcesses(processes);
+	throw new Error(`${serviceName} did not become ready before timeout`);
+}
+
 function stopProcesses(processes: ManagedProcess[]): void {
 	for (const managedProcess of processes) {
 		if (!managedProcess.process.killed) managedProcess.process.kill('SIGTERM');
@@ -136,19 +164,32 @@ async function main(): Promise<void> {
 	console.log('Waiting for API to be ready...');
 	await waitForApi(processes);
 
-	const historyScanWorkers = parseWorkerCount(process.env[historyScanWorkersEnv]);
+	const historyScanWorkers = parseWorkerCount(
+		process.env[historyScanWorkersEnv]
+	);
 	console.log(`API is up. Starting ${historyScanWorkers} history scanner(s).`);
 
-	const serviceProcesses = [
-		createProcess('frontend', ['start:frontend']),
-		createProcess('network', ['start:scan-network', '1']),
-		createProcess('users', ['start:users'])
-	];
+	const serviceProcesses: ManagedProcess[] = [];
 
 	if (frontendV4PreviewEnabled()) {
 		console.log('Frontend v4 service enabled.');
-		serviceProcesses.push(createProcess('frontend-v4', ['start:frontend-v4']));
+		const frontendV4 = createProcess('frontend-v4', ['start:frontend-v4']);
+		processes.push(frontendV4);
+		console.log('Waiting for frontend v4 to be ready...');
+		await waitForHttpService(
+			processes,
+			getFrontendV4Origin(),
+			frontendV4StartTimeoutMs,
+			'Frontend v4'
+		);
+		console.log('Frontend v4 is up.');
 	}
+
+	serviceProcesses.push(
+		createProcess('frontend', ['start:frontend']),
+		createProcess('network', ['start:scan-network', '1']),
+		createProcess('users', ['start:users'])
+	);
 
 	for (let index = 1; index <= historyScanWorkers; index += 1) {
 		serviceProcesses.push(

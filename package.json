@@ -28,7 +28,7 @@
 		"start:scan-network": "pnpm --filter backend run scan-network",
 		"start:scan-history": "pnpm --filter history-scanner run scan-history",
 		"start:users": "pnpm --filter users run start",
-		"start:all": "node apps/backend/lib/core/infrastructure/cli/start-all.js"
+		"start:all": "node start-all.cjs"
 	},
 	"keywords": [],
 	"authors": [
@@ -38,7 +38,7 @@
 	],
 	"license": "MIT",
 	"engines": {
-		"node": "22.x",
+		"node": "26.x",
 		"pnpm": "10.12.1"
 	},
 	"type": "module",
