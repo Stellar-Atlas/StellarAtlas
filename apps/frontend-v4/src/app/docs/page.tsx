@@ -14,12 +14,14 @@ const endpointGroups: EndpointGroup[] = [
 			'Current network snapshot, aggregate history, and SCP observations.',
 		endpoints: [
 			'/v1',
+			'/v1/ledger/latest',
 			'/v1/statistics?from=:iso&to=:iso',
 			'/v1/day-statistics?from=:iso&to=:iso',
 			'/v1/month-statistics?from=:iso&to=:iso',
 			'/v1/scp-statements?limit=:limit',
 			'/v1/scp-statements?nodeId=:publicKey',
-			'/v1/scp-statements?slotIndex=:slot'
+			'/v1/scp-statements?slotIndex=:slot',
+			'/v1/scp/slots/:slotIndex/transactions'
 		],
 		title: 'Network'
 	},
@@ -62,8 +64,11 @@ const endpointGroups: EndpointGroup[] = [
 	},
 	{
 		description:
-			'Latest public archive verification evidence for a normalized archive URL.',
-		endpoints: ['/v1/history-scan/:encodedHistoryUrl'],
+			'Latest public archive verification evidence and recent scan run logs for a normalized archive URL.',
+		endpoints: [
+			'/v1/history-scan/:encodedHistoryUrl',
+			'/v1/history-scan/logs/:encodedHistoryUrl'
+		],
 		title: 'History archive'
 	},
 	{

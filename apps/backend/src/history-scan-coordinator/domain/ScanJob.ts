@@ -1,4 +1,4 @@
-import { randomUUID } from 'crypto';
+import { randomUUID } from 'node:crypto';
 import {
 	Entity,
 	PrimaryGeneratedColumn,
@@ -17,7 +17,7 @@ export class ScanJob {
 	public id!: number;
 
 	@Column({ type: 'uuid', nullable: false })
-	public readonly remoteId: string = randomUUID();
+	public readonly remoteId: string;
 
 	@Column()
 	public url: string;
@@ -56,8 +56,10 @@ export class ScanJob {
 		chainInitDate: Date | null = null,
 		fromLedger: number | null = null,
 		toLedger: number | null = null,
-		concurrency: number | null = null
+		concurrency: number | null = null,
+		remoteId: string = randomUUID()
 	) {
+		this.remoteId = remoteId;
 		this.url = url;
 		this.latestScannedLedger = latestScannedLedger;
 		this.latestScannedLedgerHeaderHash = latestScannedLedgerHeaderHash;

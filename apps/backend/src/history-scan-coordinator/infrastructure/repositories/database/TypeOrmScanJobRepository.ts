@@ -32,8 +32,26 @@ export class TypeOrmScanJobRepository implements ScanJobRepository {
 			const row = rows[0];
 			if (row === undefined) return null;
 
-			return manager.getRepository(ScanJob).create(row);
+			return this.createScanJobFromRow(row);
 		});
+	}
+
+	private createScanJobFromRow(row: ScanJobRow): ScanJob {
+		const scanJob = new ScanJob(
+			row.url,
+			row.latestScannedLedger,
+			row.latestScannedLedgerHeaderHash,
+			row.chainInitDate,
+			row.fromLedger,
+			row.toLedger,
+			row.concurrency,
+			row.remoteId
+		);
+		scanJob.id = row.id;
+		scanJob.status = row.status;
+		scanJob.createdAt = row.createdAt;
+		scanJob.updatedAt = row.updatedAt;
+		return scanJob;
 	}
 
 	private async claimNextPendingJob(
