@@ -44,7 +44,31 @@ it('should fall back if concurrency cannot be determined', async function () {
 
 	expect(settingsOrError.isOk()).toBeTruthy();
 	if (settingsOrError.isErr()) throw settingsOrError.error;
-	expect(settingsOrError.value.concurrency).toEqual(10);
+	expect(settingsOrError.value.concurrency).toEqual(24);
+});
+
+it('should clamp stored concurrency to the configured maximum', async function () {
+	const performanceTester = mock<ArchivePerformanceTester>();
+	const categoryScanner = mock<CategoryScanner>();
+	const settingsFactory = new ScanSettingsFactory(
+		categoryScanner,
+		performanceTester,
+		120960,
+		24,
+		24
+	);
+
+	const scanJob = ScanJob.newScanChain(
+		createDummyHistoryBaseUrl(),
+		100,
+		200,
+		50
+	);
+	const settingsOrError = await settingsFactory.determineSettings(scanJob);
+
+	expect(settingsOrError.isOk()).toBeTruthy();
+	if (settingsOrError.isErr()) throw settingsOrError.error;
+	expect(settingsOrError.value.concurrency).toEqual(24);
 });
 
 it('should return error if latest ledger cannot be determined', async function () {

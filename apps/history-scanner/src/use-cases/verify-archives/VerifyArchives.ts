@@ -13,6 +13,8 @@ import { ScanJobDTO } from 'history-scanner-dto';
 
 @injectable()
 export class VerifyArchives {
+	private static readonly scanJobHeartbeatIntervalMs = 60 * 1000;
+
 	constructor(
 		private scanner: Scanner,
 		@inject(TYPES.ScanCoordinatorService)
@@ -55,9 +57,14 @@ export class VerifyArchives {
 
 		await this.checkIn('in_progress');
 		await this.touchScanJob(scanJobResult.value);
-		await this.perform(scanJobResult.value, persist);
-		await this.touchScanJob(scanJobResult.value);
-		await this.checkIn('ok');
+		const stopHeartbeat = this.startScanJobHeartbeat(scanJobResult.value);
+		try {
+			await this.perform(scanJobResult.value, persist);
+			await this.checkIn('ok');
+		} finally {
+			stopHeartbeat();
+			await this.touchScanJob(scanJobResult.value);
+		}
 	}
 
 	private async perform(scanJob: ScanJob, persist = false) {
@@ -79,6 +86,16 @@ export class VerifyArchives {
 		if (result.isErr()) {
 			this.exceptionLogger.captureException(result.error);
 		}
+	}
+
+	private startScanJobHeartbeat(scanJob: ScanJob): () => void {
+		const heartbeat = setInterval(() => {
+			void this.touchScanJob(scanJob);
+		}, VerifyArchives.scanJobHeartbeatIntervalMs);
+
+		return () => {
+			clearInterval(heartbeat);
+		};
 	}
 
 	private async checkIn(status: 'in_progress' | 'error' | 'ok') {

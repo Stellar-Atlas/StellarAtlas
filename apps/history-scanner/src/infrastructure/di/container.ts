@@ -48,7 +48,9 @@ export function load(container: Container, config: Config) {
 		return new ScanSettingsFactory(
 			container.get(CategoryScanner),
 			container.get(ArchivePerformanceTester),
-			config.historySlowArchiveMaxLedgers
+			config.historySlowArchiveMaxLedgers,
+			config.historyMaxRequests,
+			config.historyMaxRequests
 		);
 	});
 	container

@@ -50,10 +50,14 @@ export class RangeScanner {
 
 		const httpAgent = new http.Agent({
 			keepAlive: true,
+			maxSockets: concurrency,
+			maxFreeSockets: concurrency,
 			scheduling: 'fifo'
 		});
 		const httpsAgent = new https.Agent({
 			keepAlive: true,
+			maxSockets: concurrency,
+			maxFreeSockets: concurrency,
 			scheduling: 'fifo'
 		});
 

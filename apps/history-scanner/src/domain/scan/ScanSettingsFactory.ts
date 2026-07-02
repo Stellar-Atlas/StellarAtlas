@@ -13,7 +13,8 @@ export class ScanSettingsFactory {
 		private categoryScanner: CategoryScanner,
 		private archivePerformanceTester: ArchivePerformanceTester,
 		private slowArchiveMaxNumberOfLedgersToScan = 120960, //by default only scan the latest week worth of ledgers for slow archives (5sec ledger close time)
-		private fallbackConcurrency = 10
+		private fallbackConcurrency = 24,
+		private maxConcurrency = 24
 	) {}
 
 	async determineSettings(
@@ -93,26 +94,43 @@ export class ScanSettingsFactory {
 	> {
 		if (scanJob.concurrency !== 0) {
 			return ok({
-				concurrency: scanJob.concurrency,
+				concurrency: this.clampConcurrency(scanJob.concurrency),
 				isSlowArchive: null
 			});
 		}
 
 		console.log('determining optimal concurrency');
 		const performanceTestResultOrError =
-			await this.archivePerformanceTester.test(scanJob.url, toLedger);
+			await this.archivePerformanceTester.test(
+				scanJob.url,
+				toLedger,
+				false,
+				this.createPerformanceConcurrencyRange()
+			);
 
 		if (performanceTestResultOrError.isErr())
 			return ok({
-				concurrency: this.fallbackConcurrency,
+				concurrency: this.clampConcurrency(this.fallbackConcurrency),
 				isSlowArchive: null
 			});
 
 		console.log(performanceTestResultOrError);
 		return ok({
-			concurrency: performanceTestResultOrError.value.optimalConcurrency,
+			concurrency: this.clampConcurrency(
+				performanceTestResultOrError.value.optimalConcurrency
+			),
 			isSlowArchive: performanceTestResultOrError.value.isSlowArchive
 		});
+	}
+
+	private createPerformanceConcurrencyRange(): number[] {
+		return [24, 16, 12, 8, 4, 1].filter(
+			(concurrency) => concurrency <= this.maxConcurrency
+		);
+	}
+
+	private clampConcurrency(concurrency: number): number {
+		return Math.min(Math.max(concurrency, 1), this.maxConcurrency);
 	}
 
 	private determineLatestLedgerHeader(

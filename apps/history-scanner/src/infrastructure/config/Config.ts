@@ -20,6 +20,7 @@ export interface Config {
 	historyMaxFileMs: number;
 	historySlowArchiveMaxLedgers: number;
 	historyHasherWorkers: number;
+	historyMaxRequests: number;
 }
 
 // Simple boolean parser to replace 'yn'
@@ -38,10 +39,12 @@ const defaultConfig = {
 	userAgent: 'stellaratlas-history-scanner',
 	logLevel: 'info',
 	historyMaxFileMs: 60000,
-	historySlowArchiveMaxLedgers: 1000
+	historySlowArchiveMaxLedgers: 1000,
+	historyMaxRequests: 24
 };
 
-const maxHistoryHasherWorkers = 8;
+const maxHistoryHasherWorkers = 24;
+const maxHistoryParallelRequests = 24;
 
 export function calculateDefaultHistoryHasherWorkers(
 	historyScanWorkers: number,
@@ -120,7 +123,16 @@ export function getConfigFromEnv(): Result<Config, Error> {
 	if (historyHasherWorkersResult.isErr())
 		return err(historyHasherWorkersResult.error);
 
+	const historyMaxRequestsResult = parseOptionalPositiveInteger(
+		'HISTORY_MAX_REQUESTS',
+		maxHistoryParallelRequests
+	);
+	if (historyMaxRequestsResult.isErr())
+		return err(historyMaxRequestsResult.error);
+
 	const historyScanWorkers = historyScanWorkersResult.value ?? 1;
+	const historyMaxRequests =
+		historyMaxRequestsResult.value ?? defaultConfig.historyMaxRequests;
 	const historyHasherWorkers =
 		historyHasherWorkersResult.value ??
 		calculateDefaultHistoryHasherWorkers(
@@ -139,6 +151,7 @@ export function getConfigFromEnv(): Result<Config, Error> {
 		logLevel: process.env.LOG_LEVEL ?? defaultConfig.logLevel,
 		historyMaxFileMs,
 		historySlowArchiveMaxLedgers,
-		historyHasherWorkers
+		historyHasherWorkers,
+		historyMaxRequests
 	});
 }

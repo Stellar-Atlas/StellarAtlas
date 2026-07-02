@@ -49,10 +49,11 @@ describe('Config', () => {
 				logLevel: 'info',
 				historyMaxFileMs: 60000,
 				historySlowArchiveMaxLedgers: 1000,
-				historyHasherWorkers: expect.any(Number)
+				historyHasherWorkers: expect.any(Number),
+				historyMaxRequests: 24
 			});
 			expect(result.value.historyHasherWorkers).toBeGreaterThanOrEqual(1);
-			expect(result.value.historyHasherWorkers).toBeLessThanOrEqual(8);
+			expect(result.value.historyHasherWorkers).toBeLessThanOrEqual(24);
 		});
 
 		test('should require SENTRY_DSN when ENABLE_SENTRY is true', () => {
@@ -98,13 +99,24 @@ describe('Config', () => {
 		});
 
 		test('should validate HISTORY_HASHER_WORKERS maximum', () => {
-			process.env.HISTORY_HASHER_WORKERS = '9';
+			process.env.HISTORY_HASHER_WORKERS = '25';
 
 			const result = getConfigFromEnv();
 			expect(result.isErr()).toBe(true);
 			if (!result.isErr()) throw new Error('Expected error');
 			expect(result.error.message).toContain(
-				'HISTORY_HASHER_WORKERS must be between 1 and 8'
+				'HISTORY_HASHER_WORKERS must be between 1 and 24'
+			);
+		});
+
+		test('should validate HISTORY_MAX_REQUESTS maximum', () => {
+			process.env.HISTORY_MAX_REQUESTS = '25';
+
+			const result = getConfigFromEnv();
+			expect(result.isErr()).toBe(true);
+			if (!result.isErr()) throw new Error('Expected error');
+			expect(result.error.message).toContain(
+				'HISTORY_MAX_REQUESTS must be between 1 and 24'
 			);
 		});
 
@@ -112,6 +124,7 @@ describe('Config', () => {
 			process.env.HISTORY_MAX_FILE_MS = '120000';
 			process.env.HISTORY_SLOW_ARCHIVE_MAX_LEDGERS = '2000';
 			process.env.HISTORY_HASHER_WORKERS = '3';
+			process.env.HISTORY_MAX_REQUESTS = '12';
 
 			const result = getConfigFromEnv();
 			expect(result.isOk()).toBe(true);
@@ -120,11 +133,12 @@ describe('Config', () => {
 			expect(result.value.historyMaxFileMs).toBe(120000);
 			expect(result.value.historySlowArchiveMaxLedgers).toBe(2000);
 			expect(result.value.historyHasherWorkers).toBe(3);
+			expect(result.value.historyMaxRequests).toBe(12);
 		});
 
 		test('should derive default hasher workers from scanner workers and CPU count', () => {
 			expect(calculateDefaultHistoryHasherWorkers(24, 64)).toBe(2);
-			expect(calculateDefaultHistoryHasherWorkers(1, 64)).toBe(8);
+			expect(calculateDefaultHistoryHasherWorkers(1, 64)).toBe(24);
 			expect(calculateDefaultHistoryHasherWorkers(64, 64)).toBe(1);
 		});
 

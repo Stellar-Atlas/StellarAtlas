@@ -40,8 +40,8 @@ export class ArchivePerformanceTester {
 		baseUrl: Url,
 		highestLedger: number,
 		largeFiles = false,
-		concurrencyRange = [50, 35, 25, 20, 15, 10],
-		nrOfCheckPoints = 5000
+		concurrencyRange = [24, 16, 12, 8, 4],
+		nrOfCheckPoints = 512
 	): Promise<Result<PerformanceTestResult, Error>> {
 		const concurrencyRangeSorted = sortDescending(concurrencyRange);
 		let concurrencyRangeIndex = 0;

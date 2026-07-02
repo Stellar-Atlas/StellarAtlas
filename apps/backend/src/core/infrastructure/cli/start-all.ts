@@ -10,9 +10,10 @@ import type { Readable } from 'node:stream';
 
 const apiReadyMessage = 'api listening on port:';
 const apiLogFile = 'api.log';
+const historyScanEnabledEnv = 'ENABLE_HISTORY_SCANNER';
 const historyScanWorkersEnv = 'HISTORY_SCAN_WORKERS';
-const minDefaultHistoryScanWorkers = 24;
-const maxHistoryScanWorkers = 48;
+const defaultHistoryScanWorkers = 1;
+const maxHistoryScanWorkers = 1;
 const apiStartTimeoutMs = 120_000;
 const frontendV4StartTimeoutMs = 120_000;
 
@@ -22,14 +23,13 @@ type ManagedProcess = {
 };
 
 function calculateDefaultHistoryScanWorkers(cpuCount: number): number {
-	const cpuWeightedWorkers = Math.ceil(cpuCount * 0.375);
-	return Math.min(
-		Math.max(cpuWeightedWorkers, minDefaultHistoryScanWorkers),
-		maxHistoryScanWorkers
-	);
+	if (cpuCount < defaultHistoryScanWorkers) return Math.max(cpuCount, 1);
+	return defaultHistoryScanWorkers;
 }
 
 function parseWorkerCount(value: string | undefined): number {
+	if (!historyScanEnabled()) return 0;
+
 	if (value === undefined || value.trim() === '')
 		return calculateDefaultHistoryScanWorkers(availableParallelism());
 
@@ -38,6 +38,10 @@ function parseWorkerCount(value: string | undefined): number {
 		return calculateDefaultHistoryScanWorkers(availableParallelism());
 
 	return Math.min(parsed, maxHistoryScanWorkers);
+}
+
+function historyScanEnabled(): boolean {
+	return process.env[historyScanEnabledEnv] !== '0';
 }
 
 function frontendV4PreviewEnabled(): boolean {
@@ -167,7 +171,11 @@ async function main(): Promise<void> {
 	const historyScanWorkers = parseWorkerCount(
 		process.env[historyScanWorkersEnv]
 	);
-	console.log(`API is up. Starting ${historyScanWorkers} history scanner(s).`);
+	console.log(
+		historyScanWorkers === 0
+			? `API is up. History scanner startup is disabled. Set ${historyScanEnabledEnv}=1 to enable it.`
+			: `API is up. Starting ${historyScanWorkers} history scanner(s).`
+	);
 
 	const serviceProcesses: ManagedProcess[] = [];
 
@@ -191,12 +199,14 @@ async function main(): Promise<void> {
 		createProcess('users', ['start:users'])
 	);
 
-	for (let index = 1; index <= historyScanWorkers; index += 1) {
-		serviceProcesses.push(
-			createProcess(`history-${index}`, ['start:scan-history'], {
-				[historyScanWorkersEnv]: historyScanWorkers.toString()
-			})
-		);
+	if (historyScanWorkers > 0) {
+		for (let index = 1; index <= historyScanWorkers; index += 1) {
+			serviceProcesses.push(
+				createProcess(`history-${index}`, ['start:scan-history'], {
+					[historyScanWorkersEnv]: historyScanWorkers.toString()
+				})
+			);
+		}
 	}
 
 	processes.push(...serviceProcesses);
