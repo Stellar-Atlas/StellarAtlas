@@ -12,7 +12,8 @@ interface EndpointGroup {
 
 const endpointGroups: EndpointGroup[] = [
 	{
-		description: 'Current network snapshot, aggregate history, and SCP observations.',
+		description:
+			'Current network snapshot, aggregate history, and SCP observations.',
 		endpoints: [
 			'/v1',
 			'/v1/statistics?from=:iso&to=:iso',
@@ -25,7 +26,8 @@ const endpointGroups: EndpointGroup[] = [
 		title: 'Network'
 	},
 	{
-		description: 'Node inventory, current detail, snapshots, and time-window metrics.',
+		description:
+			'Node inventory, current detail, snapshots, and time-window metrics.',
 		endpoints: [
 			'/v1/nodes',
 			'/v1/nodes/:publicKey',
@@ -37,7 +39,8 @@ const endpointGroups: EndpointGroup[] = [
 		title: 'Nodes'
 	},
 	{
-		description: 'Organization metadata, validator membership, and subquorum history.',
+		description:
+			'Organization metadata, validator membership, and subquorum history.',
 		endpoints: [
 			'/v1/organizations',
 			'/v1/organizations/:organizationId',
@@ -49,12 +52,25 @@ const endpointGroups: EndpointGroup[] = [
 		title: 'Organizations'
 	},
 	{
-		description: 'Latest public archive verification evidence for a normalized archive URL.',
+		description:
+			'Organization-operated Horizon API URLs discovered from Stellar TOML metadata.',
+		endpoints: [
+			'/v1',
+			'/v1/organizations',
+			'/v1/organizations/:organizationId',
+			'organization.horizonUrl'
+		],
+		title: 'Horizon discovery'
+	},
+	{
+		description:
+			'Latest public archive verification evidence for a normalized archive URL.',
 		endpoints: ['/v1/history-scan/:encodedHistoryUrl'],
 		title: 'History archive'
 	},
 	{
-		description: 'Notification subscription management for network, node, and organization events.',
+		description:
+			'Notification subscription management for network, node, and organization events.',
 		endpoints: [
 			'POST /v1/subscription',
 			'POST /v1/subscription/request-unsubscribe',
