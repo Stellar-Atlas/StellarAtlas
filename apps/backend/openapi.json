@@ -1,429 +1,1518 @@
 {
-  "openapi": "3.0.3",
-  "info": {
-    "description": "API's used and provided by [https://StellarAtlas.io](https://StellarAtlas.io).",
-    "title": "StellarAtlas.io API",
-    "contact": {
-      "name": "StellarAtlas",
-      "email": "info@StellarAtlas.io"
-    },
-    "version": "v1"
-  },
-  "servers": [
-    {
-      "url": "https://api.StellarAtlas.io",
-      "description": "API for Stellar public network"
-    },
-    {
-      "url": "https://api-testnet.StellarAtlas.io",
-      "description": "API for Stellar testnet"
-    }
-  ],
-  "tags": [
-    {
-      "name": "Network",
-      "description": "Information about the network"
-    },
-    {
-      "name": "Node",
-      "description": "Information about the nodes in the network"
-    },
-    {
-      "name": "Organization",
-      "description": "Information about the organizations in the network"
-    }
-  ],
-  "paths": {
-    "/v1": {
-      "get": {
-        "summary": "Get network information",
-        "description": "Get network information, statistics, nodes and organizations",
-        "tags": [
-          "Network"
-        ],
-        "operationId": "getNetwork",
-        "parameters": [
-          {
-            "name": "at",
-            "in": "query",
-            "description": "Fetch at specific point in time",
-            "required": false,
-            "schema": {
-              "type": "string",
-              "format": "date-time"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "successful operation",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "https://StellarAtlas.io/schemas/network.json"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/v1/node-snapshots": {
-      "get": {
-        "summary": "Get the latest updated node snapshots in the network",
-        "description": "Get the latest updated node snapshots in the network",
-        "tags": [
-          "Network"
-        ],
-        "operationId": "getNetworkNodeSnapshots",
-        "parameters": [
-          {
-            "name": "at",
-            "in": "query",
-            "description": "Latest snapshots at specific point in time",
-            "required": false,
-            "schema": {
-              "type": "string",
-              "format": "date-time"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "successful operation",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "array",
-                  "items": {
-                    "$ref": "https://StellarAtlas.io/schemas/node-snapshot.json"
-                  }
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/v1/organization-snapshots": {
-      "get": {
-        "summary": "Get the latest updated organization snapshots in the network",
-        "description": "Get the latest updated organization snapshots in the network",
-        "tags": [
-          "Network"
-        ],
-        "operationId": "getNetworkOrganizationSnapshots",
-        "parameters": [
-          {
-            "name": "at",
-            "in": "query",
-            "description": "Latest snapshots at specific point in time",
-            "required": false,
-            "schema": {
-              "type": "string",
-              "format": "date-time"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "successful operation",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "array",
-                  "items": {
-                    "$ref": "https://StellarAtlas.io/schemas/organization-snapshot.json"
-                  }
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/v1/node": {
-      "get": {
-        "summary": "Get all nodes",
-        "description": "Returns all the crawled nodes with statistics and geo data",
-        "tags": [
-          "Node"
-        ],
-        "operationId": "getNodes",
-        "parameters": [
-          {
-            "name": "at",
-            "in": "query",
-            "description": "Fetch at specific point in time",
-            "required": false,
-            "schema": {
-              "type": "string",
-              "format": "date-time"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "successful operation",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "array",
-                  "items": {
-                    "$ref": "https://StellarAtlas.io/schemas/node.json"
-                  }
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/v1/node/{publicKey}": {
-      "get": {
-        "summary": "Get a node by public key",
-        "description": "Returns the requested node with statistics and geo data",
-        "tags": [
-          "Node"
-        ],
-        "operationId": "getNodeByPublicKey",
-        "parameters": [
-          {
-            "name": "publicKey",
-            "in": "path",
-            "description": "Public Key of the node to return",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "at",
-            "in": "query",
-            "description": "Fetch at specific point in time",
-            "required": false,
-            "schema": {
-              "type": "string",
-              "format": "date-time"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "successful operation",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "https://StellarAtlas.io/schemas/node.json"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Node not found"
-          }
-        }
-      }
-    },
-    "/v1/node/{publicKey}/snapshots": {
-      "get": {
-        "summary": "Get the latest snapshots of a node",
-        "description": "Get the latest snapshots of a node",
-        "tags": [
-          "Node"
-        ],
-        "operationId": "getNodeSnapshots",
-        "parameters": [
-          {
-            "name": "publicKey",
-            "in": "path",
-            "description": "Public Key of the node to return",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "at",
-            "in": "query",
-            "description": "Latest snapshots at specific point in time",
-            "required": false,
-            "schema": {
-              "type": "string",
-              "format": "date-time"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "successful operation",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "array",
-                  "items": {
-                    "$ref": "https://StellarAtlas.io/schemas/node-snapshot.json"
-                  }
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/v1/organization": {
-      "get": {
-        "summary": "Get all organizations",
-        "description": "Returns all the crawled organisations",
-        "tags": [
-          "Organization"
-        ],
-        "operationId": "getOrganizations",
-        "responses": {
-          "200": {
-            "description": "successful operation",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "array",
-                  "items": {
-                    "$ref": "https://StellarAtlas.io/schemas/organization.json"
-                  }
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/v1/organization/{id}": {
-      "get": {
-        "summary": "Get an organization by id",
-        "description": "Returns the requested organization",
-        "tags": [
-          "Organization"
-        ],
-        "operationId": "getOrganizationById",
-        "parameters": [
-          {
-            "name": "id",
-            "in": "path",
-            "description": "Id of the organization",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "at",
-            "in": "query",
-            "description": "Fetch at specific point in time",
-            "required": false,
-            "schema": {
-              "type": "string",
-              "format": "date-time"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "successful operation",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "https://StellarAtlas.io/schemas/organization.json"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Organization not found"
-          }
-        }
-      }
-    },
-    "/v1/organization/{id}/snapshots": {
-      "get": {
-        "summary": "Get the latest snapshots of an organization",
-        "description": "Get the latest snapshots of an organization",
-        "tags": [
-          "Organization"
-        ],
-        "operationId": "getOrganizationSnapshots",
-        "parameters": [
-          {
-            "name": "id",
-            "in": "path",
-            "description": "Id of the organization",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "at",
-            "in": "query",
-            "description": "Latest snapshots at specific point in time",
-            "required": false,
-            "schema": {
-              "type": "string",
-              "format": "date-time"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "successful operation",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "array",
-                  "items": {
-                    "$ref": "https://StellarAtlas.io/schemas/organization-snapshot.json"
-                  }
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/v1/history-scan/{url}": {
-      "get": {
-        "summary": "Get the latest history scan by url",
-        "description": "Returns the latest history scan by url",
-        "tags": [
-          "HistoryScan"
-        ],
-        "operationId": "getHistoryScanByUrl",
-        "parameters": [
-          {
-            "name": "url",
-            "in": "path",
-            "description": "url of the history archive (url encoded)",
-            "required": true,
-            "schema": {
-              "type": "url"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "successful operation",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "https://StellarAtlas.io/schemas/history-archive-scan.json"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "No scan found for url"
-          },
-          "500": {"description":  "Server error"}
-        }
-      }
-    }
-  }
+	"openapi": "3.0.3",
+	"info": {
+		"description": "API's used and provided by [https://StellarAtlas.io](https://StellarAtlas.io).",
+		"title": "StellarAtlas.io API",
+		"contact": {
+			"name": "StellarAtlas",
+			"email": "info@StellarAtlas.io"
+		},
+		"version": "v1"
+	},
+	"servers": [
+		{
+			"url": "https://api.StellarAtlas.io",
+			"description": "API for Stellar public network"
+		},
+		{
+			"url": "https://api-testnet.StellarAtlas.io",
+			"description": "API for Stellar testnet"
+		}
+	],
+	"tags": [
+		{
+			"name": "Network",
+			"description": "Information about the network"
+		},
+		{
+			"name": "Node",
+			"description": "Information about the nodes in the network"
+		},
+		{
+			"name": "Organization",
+			"description": "Information about the organizations in the network"
+		},
+		{
+			"name": "HistoryScan",
+			"description": "History archive verification evidence"
+		},
+		{
+			"name": "SCP",
+			"description": "Observed Stellar Consensus Protocol statements"
+		},
+		{
+			"name": "Horizon",
+			"description": "Discovered organization-operated Horizon API URLs"
+		},
+		{
+			"name": "Subscription",
+			"description": "Notification subscription management"
+		}
+	],
+	"paths": {
+		"/v1": {
+			"get": {
+				"summary": "Get network information",
+				"description": "Get current network information, statistics, nodes, organizations, SCP analysis fields, and organization horizonUrl values when reported.",
+				"tags": ["Network", "Horizon"],
+				"operationId": "getNetwork",
+				"parameters": [
+					{
+						"name": "at",
+						"in": "query",
+						"description": "Fetch at specific point in time",
+						"required": false,
+						"schema": {
+							"type": "string",
+							"format": "date-time"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "successful operation",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "https://StellarAtlas.io/schemas/network.json"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/v1/node-snapshots": {
+			"get": {
+				"summary": "Get the latest updated node snapshots in the network",
+				"description": "Get the latest updated node snapshots in the network",
+				"tags": ["Network"],
+				"operationId": "getNetworkNodeSnapshots",
+				"parameters": [
+					{
+						"name": "at",
+						"in": "query",
+						"description": "Latest snapshots at specific point in time",
+						"required": false,
+						"schema": {
+							"type": "string",
+							"format": "date-time"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "successful operation",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "array",
+									"items": {
+										"$ref": "https://StellarAtlas.io/schemas/node-snapshot.json"
+									}
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/v1/organization-snapshots": {
+			"get": {
+				"summary": "Get the latest updated organization snapshots in the network",
+				"description": "Get the latest updated organization snapshots in the network",
+				"tags": ["Network"],
+				"operationId": "getNetworkOrganizationSnapshots",
+				"parameters": [
+					{
+						"name": "at",
+						"in": "query",
+						"description": "Latest snapshots at specific point in time",
+						"required": false,
+						"schema": {
+							"type": "string",
+							"format": "date-time"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "successful operation",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "array",
+									"items": {
+										"$ref": "https://StellarAtlas.io/schemas/organization-snapshot.json"
+									}
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/v1/node": {
+			"get": {
+				"summary": "Get all nodes",
+				"description": "Returns all the crawled nodes with statistics and geo data",
+				"tags": ["Node"],
+				"operationId": "getNodes",
+				"parameters": [
+					{
+						"name": "at",
+						"in": "query",
+						"description": "Fetch at specific point in time",
+						"required": false,
+						"schema": {
+							"type": "string",
+							"format": "date-time"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "successful operation",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "array",
+									"items": {
+										"$ref": "https://StellarAtlas.io/schemas/node.json"
+									}
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/v1/node/{publicKey}": {
+			"get": {
+				"summary": "Get a node by public key",
+				"description": "Returns the requested node with statistics and geo data",
+				"tags": ["Node"],
+				"operationId": "getNodeByPublicKey",
+				"parameters": [
+					{
+						"name": "publicKey",
+						"in": "path",
+						"description": "Public Key of the node to return",
+						"required": true,
+						"schema": {
+							"type": "string"
+						}
+					},
+					{
+						"name": "at",
+						"in": "query",
+						"description": "Fetch at specific point in time",
+						"required": false,
+						"schema": {
+							"type": "string",
+							"format": "date-time"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "successful operation",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "https://StellarAtlas.io/schemas/node.json"
+								}
+							}
+						}
+					},
+					"404": {
+						"description": "Node not found"
+					}
+				}
+			}
+		},
+		"/v1/node/{publicKey}/snapshots": {
+			"get": {
+				"summary": "Get the latest snapshots of a node",
+				"description": "Get the latest snapshots of a node",
+				"tags": ["Node"],
+				"operationId": "getNodeSnapshots",
+				"parameters": [
+					{
+						"name": "publicKey",
+						"in": "path",
+						"description": "Public Key of the node to return",
+						"required": true,
+						"schema": {
+							"type": "string"
+						}
+					},
+					{
+						"name": "at",
+						"in": "query",
+						"description": "Latest snapshots at specific point in time",
+						"required": false,
+						"schema": {
+							"type": "string",
+							"format": "date-time"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "successful operation",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "array",
+									"items": {
+										"$ref": "https://StellarAtlas.io/schemas/node-snapshot.json"
+									}
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/v1/organization": {
+			"get": {
+				"summary": "Get all organizations",
+				"description": "Returns all crawled organizations, including horizonUrl when reported by Stellar TOML metadata.",
+				"tags": ["Organization", "Horizon"],
+				"operationId": "getOrganizations",
+				"responses": {
+					"200": {
+						"description": "successful operation",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "array",
+									"items": {
+										"$ref": "https://StellarAtlas.io/schemas/organization.json"
+									}
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/v1/organization/{id}": {
+			"get": {
+				"summary": "Get an organization by id",
+				"description": "Returns the requested organization, including horizonUrl when reported by Stellar TOML metadata.",
+				"tags": ["Organization", "Horizon"],
+				"operationId": "getOrganizationById",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"description": "Id of the organization",
+						"required": true,
+						"schema": {
+							"type": "string"
+						}
+					},
+					{
+						"name": "at",
+						"in": "query",
+						"description": "Fetch at specific point in time",
+						"required": false,
+						"schema": {
+							"type": "string",
+							"format": "date-time"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "successful operation",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "https://StellarAtlas.io/schemas/organization.json"
+								}
+							}
+						}
+					},
+					"404": {
+						"description": "Organization not found"
+					}
+				}
+			}
+		},
+		"/v1/organization/{id}/snapshots": {
+			"get": {
+				"summary": "Get the latest snapshots of an organization",
+				"description": "Get the latest snapshots of an organization",
+				"tags": ["Organization"],
+				"operationId": "getOrganizationSnapshots",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"description": "Id of the organization",
+						"required": true,
+						"schema": {
+							"type": "string"
+						}
+					},
+					{
+						"name": "at",
+						"in": "query",
+						"description": "Latest snapshots at specific point in time",
+						"required": false,
+						"schema": {
+							"type": "string",
+							"format": "date-time"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "successful operation",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "array",
+									"items": {
+										"$ref": "https://StellarAtlas.io/schemas/organization-snapshot.json"
+									}
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/v1/history-scan/{url}": {
+			"get": {
+				"summary": "Get the latest history scan by url",
+				"description": "Returns the latest history scan by url",
+				"tags": ["HistoryScan"],
+				"operationId": "getHistoryScanByUrl",
+				"parameters": [
+					{
+						"name": "url",
+						"in": "path",
+						"description": "url of the history archive (url encoded)",
+						"required": true,
+						"schema": {
+							"type": "url"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "successful operation",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "https://StellarAtlas.io/schemas/history-archive-scan.json"
+								}
+							}
+						}
+					},
+					"404": {
+						"description": "No scan found for url"
+					},
+					"500": {
+						"description": "Server error"
+					}
+				}
+			}
+		},
+		"/v1/statistics": {
+			"get": {
+				"summary": "Get network measurements",
+				"description": "Returns network measurements for the requested time window.",
+				"tags": ["Network"],
+				"operationId": "getNetworkStatistics",
+				"parameters": [
+					{
+						"name": "from",
+						"in": "query",
+						"description": "Start of the measurement window",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "date-time"
+						}
+					},
+					{
+						"name": "to",
+						"in": "query",
+						"description": "End of the measurement window",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "date-time"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "successful operation",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "array",
+									"items": {
+										"type": "object",
+										"additionalProperties": true
+									}
+								}
+							}
+						}
+					},
+					"400": {
+						"description": "Bad request"
+					},
+					"500": {
+						"description": "Server error"
+					}
+				}
+			}
+		},
+		"/v1/day-statistics": {
+			"get": {
+				"summary": "Get daily network measurement aggregates",
+				"description": "Returns daily aggregate network measurements for the requested time window.",
+				"tags": ["Network"],
+				"operationId": "getNetworkDayStatistics",
+				"parameters": [
+					{
+						"name": "from",
+						"in": "query",
+						"description": "Start of the measurement window",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "date-time"
+						}
+					},
+					{
+						"name": "to",
+						"in": "query",
+						"description": "End of the measurement window",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "date-time"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "successful operation",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "array",
+									"items": {
+										"type": "object",
+										"additionalProperties": true
+									}
+								}
+							}
+						}
+					},
+					"400": {
+						"description": "Bad request"
+					},
+					"500": {
+						"description": "Server error"
+					}
+				}
+			}
+		},
+		"/v1/month-statistics": {
+			"get": {
+				"summary": "Get monthly network measurement aggregates",
+				"description": "Returns monthly aggregate network measurements for the requested time window.",
+				"tags": ["Network"],
+				"operationId": "getNetworkMonthStatistics",
+				"parameters": [
+					{
+						"name": "from",
+						"in": "query",
+						"description": "Start of the measurement window",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "date-time"
+						}
+					},
+					{
+						"name": "to",
+						"in": "query",
+						"description": "End of the measurement window",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "date-time"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "successful operation",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "array",
+									"items": {
+										"type": "object",
+										"additionalProperties": true
+									}
+								}
+							}
+						}
+					},
+					"400": {
+						"description": "Bad request"
+					},
+					"500": {
+						"description": "Server error"
+					}
+				}
+			}
+		},
+		"/v1/scp-statements": {
+			"get": {
+				"summary": "Get observed SCP statements",
+				"description": "Returns recently observed SCP statement evidence with optional node and slot filters.",
+				"tags": ["SCP"],
+				"operationId": "getScpStatements",
+				"parameters": [
+					{
+						"name": "limit",
+						"in": "query",
+						"description": "Maximum number of statements to return",
+						"required": false,
+						"schema": {
+							"type": "integer",
+							"minimum": 1
+						}
+					},
+					{
+						"name": "nodeId",
+						"in": "query",
+						"description": "Filter by node public key",
+						"required": false,
+						"schema": {
+							"type": "string"
+						}
+					},
+					{
+						"name": "slotIndex",
+						"in": "query",
+						"description": "Filter by SCP slot index",
+						"required": false,
+						"schema": {
+							"type": "string"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "successful operation",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "array",
+									"items": {
+										"type": "object",
+										"properties": {
+											"observedAt": {
+												"type": "string",
+												"format": "date-time"
+											},
+											"nodeId": {
+												"type": "string"
+											},
+											"slotIndex": {
+												"type": "string"
+											},
+											"pledge": {
+												"type": "string"
+											},
+											"transactionSetHash": {
+												"type": "string"
+											},
+											"signature": {
+												"type": "string"
+											}
+										},
+										"additionalProperties": true
+									}
+								}
+							}
+						}
+					},
+					"500": {
+						"description": "Server error"
+					}
+				}
+			}
+		},
+		"/v1/nodes": {
+			"get": {
+				"summary": "Get all nodes",
+				"description": "Returns all the crawled nodes with statistics and geo data",
+				"tags": ["Node"],
+				"operationId": "getNodes",
+				"parameters": [
+					{
+						"name": "at",
+						"in": "query",
+						"description": "Fetch at specific point in time",
+						"required": false,
+						"schema": {
+							"type": "string",
+							"format": "date-time"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "successful operation",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "array",
+									"items": {
+										"$ref": "https://StellarAtlas.io/schemas/node.json"
+									}
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/v1/nodes/{publicKey}": {
+			"get": {
+				"summary": "Get a node by public key",
+				"description": "Returns the requested node with statistics and geo data",
+				"tags": ["Node"],
+				"operationId": "getNodeByPublicKey",
+				"parameters": [
+					{
+						"name": "publicKey",
+						"in": "path",
+						"description": "Public Key of the node to return",
+						"required": true,
+						"schema": {
+							"type": "string"
+						}
+					},
+					{
+						"name": "at",
+						"in": "query",
+						"description": "Fetch at specific point in time",
+						"required": false,
+						"schema": {
+							"type": "string",
+							"format": "date-time"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "successful operation",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "https://StellarAtlas.io/schemas/node.json"
+								}
+							}
+						}
+					},
+					"404": {
+						"description": "Node not found"
+					}
+				}
+			}
+		},
+		"/v1/nodes/{publicKey}/snapshots": {
+			"get": {
+				"summary": "Get the latest snapshots of a node",
+				"description": "Get the latest snapshots of a node",
+				"tags": ["Node"],
+				"operationId": "getNodeSnapshots",
+				"parameters": [
+					{
+						"name": "publicKey",
+						"in": "path",
+						"description": "Public Key of the node to return",
+						"required": true,
+						"schema": {
+							"type": "string"
+						}
+					},
+					{
+						"name": "at",
+						"in": "query",
+						"description": "Latest snapshots at specific point in time",
+						"required": false,
+						"schema": {
+							"type": "string",
+							"format": "date-time"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "successful operation",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "array",
+									"items": {
+										"$ref": "https://StellarAtlas.io/schemas/node-snapshot.json"
+									}
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/v1/node/{publicKey}/statistics": {
+			"get": {
+				"summary": "Get node measurements",
+				"description": "Returns node measurements for the requested time window.",
+				"tags": ["Node"],
+				"operationId": "getNodeStatistics",
+				"parameters": [
+					{
+						"name": "publicKey",
+						"in": "path",
+						"description": "Public key of the node",
+						"required": true,
+						"schema": {
+							"type": "string"
+						}
+					},
+					{
+						"name": "from",
+						"in": "query",
+						"description": "Start of the measurement window",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "date-time"
+						}
+					},
+					{
+						"name": "to",
+						"in": "query",
+						"description": "End of the measurement window",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "date-time"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "successful operation",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "array",
+									"items": {
+										"type": "object",
+										"additionalProperties": true
+									}
+								}
+							}
+						}
+					},
+					"400": {
+						"description": "Bad request"
+					},
+					"500": {
+						"description": "Server error"
+					}
+				}
+			}
+		},
+		"/v1/nodes/{publicKey}/statistics": {
+			"get": {
+				"summary": "Get node measurements",
+				"description": "Returns node measurements for the requested time window.",
+				"tags": ["Node"],
+				"operationId": "getNodeStatistics",
+				"parameters": [
+					{
+						"name": "publicKey",
+						"in": "path",
+						"description": "Public key of the node",
+						"required": true,
+						"schema": {
+							"type": "string"
+						}
+					},
+					{
+						"name": "from",
+						"in": "query",
+						"description": "Start of the measurement window",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "date-time"
+						}
+					},
+					{
+						"name": "to",
+						"in": "query",
+						"description": "End of the measurement window",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "date-time"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "successful operation",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "array",
+									"items": {
+										"type": "object",
+										"additionalProperties": true
+									}
+								}
+							}
+						}
+					},
+					"400": {
+						"description": "Bad request"
+					},
+					"500": {
+						"description": "Server error"
+					}
+				}
+			}
+		},
+		"/v1/node/{publicKey}/day-statistics": {
+			"get": {
+				"summary": "Get daily node measurement aggregates",
+				"description": "Returns daily aggregate node measurements for the requested time window.",
+				"tags": ["Node"],
+				"operationId": "getNodeDayStatistics",
+				"parameters": [
+					{
+						"name": "publicKey",
+						"in": "path",
+						"description": "Public key of the node",
+						"required": true,
+						"schema": {
+							"type": "string"
+						}
+					},
+					{
+						"name": "from",
+						"in": "query",
+						"description": "Start of the measurement window",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "date-time"
+						}
+					},
+					{
+						"name": "to",
+						"in": "query",
+						"description": "End of the measurement window",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "date-time"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "successful operation",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "array",
+									"items": {
+										"type": "object",
+										"additionalProperties": true
+									}
+								}
+							}
+						}
+					},
+					"400": {
+						"description": "Bad request"
+					},
+					"500": {
+						"description": "Server error"
+					}
+				}
+			}
+		},
+		"/v1/nodes/{publicKey}/day-statistics": {
+			"get": {
+				"summary": "Get daily node measurement aggregates",
+				"description": "Returns daily aggregate node measurements for the requested time window.",
+				"tags": ["Node"],
+				"operationId": "getNodeDayStatistics",
+				"parameters": [
+					{
+						"name": "publicKey",
+						"in": "path",
+						"description": "Public key of the node",
+						"required": true,
+						"schema": {
+							"type": "string"
+						}
+					},
+					{
+						"name": "from",
+						"in": "query",
+						"description": "Start of the measurement window",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "date-time"
+						}
+					},
+					{
+						"name": "to",
+						"in": "query",
+						"description": "End of the measurement window",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "date-time"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "successful operation",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "array",
+									"items": {
+										"type": "object",
+										"additionalProperties": true
+									}
+								}
+							}
+						}
+					},
+					"400": {
+						"description": "Bad request"
+					},
+					"500": {
+						"description": "Server error"
+					}
+				}
+			}
+		},
+		"/v1/organizations": {
+			"get": {
+				"summary": "Get all organizations",
+				"description": "Returns all crawled organizations, including horizonUrl when reported by Stellar TOML metadata.",
+				"tags": ["Organization", "Horizon"],
+				"operationId": "getOrganizations",
+				"responses": {
+					"200": {
+						"description": "successful operation",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "array",
+									"items": {
+										"$ref": "https://StellarAtlas.io/schemas/organization.json"
+									}
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/v1/organizations/{id}": {
+			"get": {
+				"summary": "Get an organization by id",
+				"description": "Returns the requested organization, including horizonUrl when reported by Stellar TOML metadata.",
+				"tags": ["Organization", "Horizon"],
+				"operationId": "getOrganizationById",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"description": "Id of the organization",
+						"required": true,
+						"schema": {
+							"type": "string"
+						}
+					},
+					{
+						"name": "at",
+						"in": "query",
+						"description": "Fetch at specific point in time",
+						"required": false,
+						"schema": {
+							"type": "string",
+							"format": "date-time"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "successful operation",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "https://StellarAtlas.io/schemas/organization.json"
+								}
+							}
+						}
+					},
+					"404": {
+						"description": "Organization not found"
+					}
+				}
+			}
+		},
+		"/v1/organizations/{id}/snapshots": {
+			"get": {
+				"summary": "Get the latest snapshots of an organization",
+				"description": "Get the latest snapshots of an organization",
+				"tags": ["Organization"],
+				"operationId": "getOrganizationSnapshots",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"description": "Id of the organization",
+						"required": true,
+						"schema": {
+							"type": "string"
+						}
+					},
+					{
+						"name": "at",
+						"in": "query",
+						"description": "Latest snapshots at specific point in time",
+						"required": false,
+						"schema": {
+							"type": "string",
+							"format": "date-time"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "successful operation",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "array",
+									"items": {
+										"$ref": "https://StellarAtlas.io/schemas/organization-snapshot.json"
+									}
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/v1/organization/{id}/statistics": {
+			"get": {
+				"summary": "Get organization measurements",
+				"description": "Returns organization measurements for the requested time window.",
+				"tags": ["Organization"],
+				"operationId": "getOrganizationStatistics",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"description": "Organization id",
+						"required": true,
+						"schema": {
+							"type": "string"
+						}
+					},
+					{
+						"name": "from",
+						"in": "query",
+						"description": "Start of the measurement window",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "date-time"
+						}
+					},
+					{
+						"name": "to",
+						"in": "query",
+						"description": "End of the measurement window",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "date-time"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "successful operation",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "array",
+									"items": {
+										"type": "object",
+										"additionalProperties": true
+									}
+								}
+							}
+						}
+					},
+					"400": {
+						"description": "Bad request"
+					},
+					"500": {
+						"description": "Server error"
+					}
+				}
+			}
+		},
+		"/v1/organizations/{id}/statistics": {
+			"get": {
+				"summary": "Get organization measurements",
+				"description": "Returns organization measurements for the requested time window.",
+				"tags": ["Organization"],
+				"operationId": "getOrganizationStatistics",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"description": "Organization id",
+						"required": true,
+						"schema": {
+							"type": "string"
+						}
+					},
+					{
+						"name": "from",
+						"in": "query",
+						"description": "Start of the measurement window",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "date-time"
+						}
+					},
+					{
+						"name": "to",
+						"in": "query",
+						"description": "End of the measurement window",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "date-time"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "successful operation",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "array",
+									"items": {
+										"type": "object",
+										"additionalProperties": true
+									}
+								}
+							}
+						}
+					},
+					"400": {
+						"description": "Bad request"
+					},
+					"500": {
+						"description": "Server error"
+					}
+				}
+			}
+		},
+		"/v1/organization/{id}/day-statistics": {
+			"get": {
+				"summary": "Get daily organization measurement aggregates",
+				"description": "Returns daily aggregate organization measurements for the requested time window.",
+				"tags": ["Organization"],
+				"operationId": "getOrganizationDayStatistics",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"description": "Organization id",
+						"required": true,
+						"schema": {
+							"type": "string"
+						}
+					},
+					{
+						"name": "from",
+						"in": "query",
+						"description": "Start of the measurement window",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "date-time"
+						}
+					},
+					{
+						"name": "to",
+						"in": "query",
+						"description": "End of the measurement window",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "date-time"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "successful operation",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "array",
+									"items": {
+										"type": "object",
+										"additionalProperties": true
+									}
+								}
+							}
+						}
+					},
+					"400": {
+						"description": "Bad request"
+					},
+					"500": {
+						"description": "Server error"
+					}
+				}
+			}
+		},
+		"/v1/organizations/{id}/day-statistics": {
+			"get": {
+				"summary": "Get daily organization measurement aggregates",
+				"description": "Returns daily aggregate organization measurements for the requested time window.",
+				"tags": ["Organization"],
+				"operationId": "getOrganizationDayStatistics",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"description": "Organization id",
+						"required": true,
+						"schema": {
+							"type": "string"
+						}
+					},
+					{
+						"name": "from",
+						"in": "query",
+						"description": "Start of the measurement window",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "date-time"
+						}
+					},
+					{
+						"name": "to",
+						"in": "query",
+						"description": "End of the measurement window",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"format": "date-time"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "successful operation",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "array",
+									"items": {
+										"type": "object",
+										"additionalProperties": true
+									}
+								}
+							}
+						}
+					},
+					"400": {
+						"description": "Bad request"
+					},
+					"500": {
+						"description": "Server error"
+					}
+				}
+			}
+		},
+		"/v1/subscription": {
+			"post": {
+				"summary": "Create a notification subscription",
+				"description": "Creates a pending notification subscription.",
+				"tags": ["Subscription"],
+				"operationId": "createSubscription",
+				"responses": {
+					"200": {
+						"description": "successful operation",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object"
+								}
+							}
+						}
+					},
+					"400": {
+						"description": "Bad request"
+					},
+					"500": {
+						"description": "Server error"
+					}
+				}
+			}
+		},
+		"/v1/subscription/request-unsubscribe": {
+			"post": {
+				"summary": "Request an unsubscribe link",
+				"description": "Requests an unsubscribe link for a subscriber reference.",
+				"tags": ["Subscription"],
+				"operationId": "requestUnsubscribeLink",
+				"responses": {
+					"200": {
+						"description": "successful operation"
+					},
+					"400": {
+						"description": "Bad request"
+					},
+					"500": {
+						"description": "Server error"
+					}
+				}
+			}
+		},
+		"/v1/subscription/{pendingSubscriptionId}/confirm": {
+			"post": {
+				"summary": "Confirm a pending subscription",
+				"description": "Confirms a pending notification subscription.",
+				"tags": ["Subscription"],
+				"operationId": "confirmSubscription",
+				"parameters": [
+					{
+						"name": "pendingSubscriptionId",
+						"in": "path",
+						"description": "Pending subscription id",
+						"required": true,
+						"schema": {
+							"type": "string"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "successful operation"
+					},
+					"400": {
+						"description": "Bad request"
+					},
+					"500": {
+						"description": "Server error"
+					}
+				}
+			}
+		},
+		"/v1/subscription/{subscriberRef}/unmute": {
+			"post": {
+				"summary": "Unmute a subscription",
+				"description": "Removes notification muting for a subscriber reference.",
+				"tags": ["Subscription"],
+				"operationId": "unmuteSubscription",
+				"parameters": [
+					{
+						"name": "subscriberRef",
+						"in": "path",
+						"description": "Subscriber reference",
+						"required": true,
+						"schema": {
+							"type": "string"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "successful operation"
+					},
+					"400": {
+						"description": "Bad request"
+					},
+					"500": {
+						"description": "Server error"
+					}
+				}
+			}
+		},
+		"/v1/subscription/{subscriberRef}": {
+			"delete": {
+				"summary": "Unsubscribe",
+				"description": "Deletes a notification subscription for a subscriber reference.",
+				"tags": ["Subscription"],
+				"operationId": "unsubscribe",
+				"parameters": [
+					{
+						"name": "subscriberRef",
+						"in": "path",
+						"description": "Subscriber reference",
+						"required": true,
+						"schema": {
+							"type": "string"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "successful operation"
+					},
+					"400": {
+						"description": "Bad request"
+					},
+					"500": {
+						"description": "Server error"
+					}
+				}
+			}
+		}
+	}
 }
