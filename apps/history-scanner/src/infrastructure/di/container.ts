@@ -8,6 +8,7 @@ import { TYPES } from './di-types.js';
 import { StandardCheckPointFrequency } from '../../domain/check-point/StandardCheckPointFrequency.js';
 import { CategoryScanner } from '../../domain/scanner/CategoryScanner.js';
 import { BucketScanner } from '../../domain/scanner/BucketScanner.js';
+import { BucketCache } from '../../domain/scanner/BucketCache.js';
 import { RangeScanner } from '../../domain/scanner/RangeScanner.js';
 import { VerifyArchives } from '../../use-cases/verify-archives/VerifyArchives.js';
 import { ArchivePerformanceTester } from '../../domain/scanner/ArchivePerformanceTester.js';
@@ -36,7 +37,19 @@ export function load(container: Container, config: Config) {
 	container
 		.bind<number>(TYPES.HasherWorkerCount)
 		.toConstantValue(config.historyHasherWorkers);
-	container.bind(BucketScanner).toSelf();
+	container.bind(BucketCache).toDynamicValue(() => {
+		return new BucketCache(
+			config.historyBucketCacheDir,
+			config.historyBucketCacheMaxBytes,
+			container.get<Logger>('Logger')
+		);
+	});
+	container.bind(BucketScanner).toDynamicValue(() => {
+		return new BucketScanner(
+			container.get<HttpQueue>(TYPES.HttpQueue),
+			container.get(BucketCache)
+		);
+	});
 	container.bind(HASValidator).toSelf();
 	container.bind(Scanner).toSelf();
 	container.bind(RangeScanner).toSelf();

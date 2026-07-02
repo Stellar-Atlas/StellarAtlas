@@ -1,10 +1,13 @@
 import { config } from 'dotenv';
 import { err, ok, Result } from 'neverthrow';
 import { availableParallelism } from 'node:os';
+import { dirname, resolve } from 'node:path';
 import { resolveAppEnvPath } from 'shared/lib/env/resolve-app-env-path.js';
 
+const envPath = resolveAppEnvPath(import.meta.url, 'history-scanner');
+
 config({
-	path: resolveAppEnvPath(import.meta.url, 'history-scanner'),
+	path: envPath,
 	quiet: true
 });
 
@@ -21,6 +24,8 @@ export interface Config {
 	historySlowArchiveMaxLedgers: number;
 	historyHasherWorkers: number;
 	historyMaxRequests: number;
+	historyBucketCacheDir: string;
+	historyBucketCacheMaxBytes: number;
 }
 
 // Simple boolean parser to replace 'yn'
@@ -40,7 +45,9 @@ const defaultConfig = {
 	logLevel: 'info',
 	historyMaxFileMs: 60000,
 	historySlowArchiveMaxLedgers: 1000,
-	historyMaxRequests: 24
+	historyMaxRequests: 24,
+	historyBucketCacheDir: resolve(dirname(envPath), '..', '..', 'history-bucket-cache'),
+	historyBucketCacheMaxBytes: 10 * 1024 * 1024 * 1024 * 1024
 };
 
 const maxHistoryHasherWorkers = 24;
@@ -70,6 +77,18 @@ function parseOptionalPositiveInteger(
 
 	if (maximum !== undefined && parsed > maximum) {
 		return err(new Error(`${name} must be between 1 and ${maximum}`));
+	}
+
+	return ok(parsed);
+}
+
+function parseOptionalPositiveNumber(name: string): Result<number | undefined, Error> {
+	const value = process.env[name];
+	if (value === undefined || value.trim() === '') return ok(undefined);
+
+	const parsed = Number(value);
+	if (!Number.isFinite(parsed) || parsed < 1) {
+		return err(new Error(`${name} must be a positive number`));
 	}
 
 	return ok(parsed);
@@ -130,6 +149,12 @@ export function getConfigFromEnv(): Result<Config, Error> {
 	if (historyMaxRequestsResult.isErr())
 		return err(historyMaxRequestsResult.error);
 
+	const historyBucketCacheMaxBytesResult = parseOptionalPositiveNumber(
+		'HISTORY_BUCKET_CACHE_MAX_BYTES'
+	);
+	if (historyBucketCacheMaxBytesResult.isErr())
+		return err(historyBucketCacheMaxBytesResult.error);
+
 	const historyScanWorkers = historyScanWorkersResult.value ?? 1;
 	const historyMaxRequests =
 		historyMaxRequestsResult.value ?? defaultConfig.historyMaxRequests;
@@ -152,6 +177,12 @@ export function getConfigFromEnv(): Result<Config, Error> {
 		historyMaxFileMs,
 		historySlowArchiveMaxLedgers,
 		historyHasherWorkers,
-		historyMaxRequests
+		historyMaxRequests,
+		historyBucketCacheDir:
+			process.env.HISTORY_BUCKET_CACHE_DIR ??
+			defaultConfig.historyBucketCacheDir,
+		historyBucketCacheMaxBytes:
+			historyBucketCacheMaxBytesResult.value ??
+			defaultConfig.historyBucketCacheMaxBytes
 	});
 }

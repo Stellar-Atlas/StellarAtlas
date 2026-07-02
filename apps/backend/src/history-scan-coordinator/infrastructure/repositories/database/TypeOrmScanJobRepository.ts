@@ -3,6 +3,8 @@ import type { ScanJobRepository } from '@history-scan-coordinator/domain/ScanJob
 import { ScanJob } from '@history-scan-coordinator/domain/ScanJob.js';
 import { EntityManager, MoreThan, Repository } from 'typeorm';
 
+type NumericValue = number | string;
+
 type ScanJobRow = {
 	id: number;
 	remoteId: string;
@@ -17,6 +19,30 @@ type ScanJobRow = {
 	createdAt: Date;
 	updatedAt: Date;
 };
+
+type RawScanJobRow = Partial<ScanJobRow> & {
+	id?: NumericValue;
+	remoteid?: string;
+	latestScannedLedger?: NumericValue;
+	latestscannedledger?: NumericValue;
+	latestscannedledgerheaderhash?: string | null;
+	chaininitdate?: Date | string | null;
+	fromLedger?: NumericValue | null;
+	fromledger?: NumericValue | null;
+	toLedger?: NumericValue | null;
+	toledger?: NumericValue | null;
+	concurrency?: NumericValue | null;
+	createdat?: Date | string;
+	updatedat?: Date | string;
+};
+
+type RawQueryResult =
+	| RawScanJobRow[]
+	| [RawScanJobRow[], number]
+	| { raw: RawScanJobRow[] }
+	| { records: RawScanJobRow[] };
+
+type RawQueryArray = RawScanJobRow[] | [RawScanJobRow[], number];
 
 @injectable()
 export class TypeOrmScanJobRepository implements ScanJobRepository {
@@ -36,28 +62,138 @@ export class TypeOrmScanJobRepository implements ScanJobRepository {
 		});
 	}
 
-	private createScanJobFromRow(row: ScanJobRow): ScanJob {
+	private createScanJobFromRow(row: RawScanJobRow): ScanJob {
+		const scanJobRow = this.normalizeScanJobRow(row);
 		const scanJob = new ScanJob(
-			row.url,
-			row.latestScannedLedger,
-			row.latestScannedLedgerHeaderHash,
-			row.chainInitDate,
-			row.fromLedger,
-			row.toLedger,
-			row.concurrency,
-			row.remoteId
+			scanJobRow.url,
+			scanJobRow.latestScannedLedger,
+			scanJobRow.latestScannedLedgerHeaderHash,
+			scanJobRow.chainInitDate,
+			scanJobRow.fromLedger,
+			scanJobRow.toLedger,
+			scanJobRow.concurrency,
+			scanJobRow.remoteId
 		);
-		scanJob.id = row.id;
-		scanJob.status = row.status;
-		scanJob.createdAt = row.createdAt;
-		scanJob.updatedAt = row.updatedAt;
+		scanJob.id = scanJobRow.id;
+		scanJob.status = scanJobRow.status;
+		scanJob.createdAt = scanJobRow.createdAt;
+		scanJob.updatedAt = scanJobRow.updatedAt;
 		return scanJob;
+	}
+
+	private normalizeScanJobRow(row: RawScanJobRow): ScanJobRow {
+		return {
+			id: this.requireNumber(row.id, 'id'),
+			remoteId: this.requireString(row.remoteId ?? row.remoteid, 'remoteId'),
+			url: this.requireString(row.url, 'url'),
+			latestScannedLedger: this.requireNumber(
+				row.latestScannedLedger ?? row.latestscannedledger,
+				'latestScannedLedger'
+			),
+			latestScannedLedgerHeaderHash:
+				row.latestScannedLedgerHeaderHash ??
+				row.latestscannedledgerheaderhash ??
+				null,
+			chainInitDate: this.toNullableDate(
+				row.chainInitDate === undefined ? row.chaininitdate : row.chainInitDate
+			),
+			fromLedger: this.toNullableNumber(
+				row.fromLedger === undefined ? row.fromledger : row.fromLedger
+			),
+			toLedger: this.toNullableNumber(
+				row.toLedger === undefined ? row.toledger : row.toLedger
+			),
+			concurrency: this.toNullableNumber(row.concurrency),
+			status: this.requireStatus(row.status),
+			createdAt: this.requireDate(row.createdAt ?? row.createdat, 'createdAt'),
+			updatedAt: this.requireDate(row.updatedAt ?? row.updatedat, 'updatedAt')
+		};
+	}
+
+	private requireNumber(value: NumericValue | undefined, field: string): number {
+		const numberValue = this.parseNumber(value);
+		if (numberValue === null) {
+			throw new Error(`Scan job row is missing numeric field ${field}`);
+		}
+
+		return numberValue;
+	}
+
+	private requireString(value: string | undefined, field: string): string {
+		if (typeof value !== 'string' || value.length === 0) {
+			throw new Error(`Scan job row is missing string field ${field}`);
+		}
+
+		return value;
+	}
+
+	private requireStatus(value: string | undefined): 'PENDING' | 'TAKEN' | 'DONE' {
+		if (value === 'PENDING' || value === 'TAKEN' || value === 'DONE') {
+			return value;
+		}
+
+		throw new Error('Scan job row is missing status');
+	}
+
+	private requireDate(value: Date | string | undefined, field: string): Date {
+		const date = this.toNullableDate(value);
+		if (date === null || Number.isNaN(date.getTime())) {
+			throw new Error(`Scan job row is missing date field ${field}`);
+		}
+
+		return date;
+	}
+
+	private toNullableDate(value: Date | string | null | undefined): Date | null {
+		if (value === null || value === undefined) return null;
+		if (value instanceof Date) return value;
+
+		return new Date(value);
+	}
+
+	private toNullableNumber(value: NumericValue | null | undefined): number | null {
+		if (value === null || value === undefined) return null;
+
+		return this.parseNumber(value);
+	}
+
+	private parseNumber(value: NumericValue | undefined): number | null {
+		if (typeof value === 'number') {
+			return Number.isSafeInteger(value) ? value : null;
+		}
+
+		if (typeof value === 'string' && /^\d+$/.test(value)) {
+			const parsed = Number(value);
+			return Number.isSafeInteger(parsed) ? parsed : null;
+		}
+
+		return null;
+	}
+
+	private extractQueryRows(result: RawQueryResult): RawScanJobRow[] {
+		if (Array.isArray(result)) {
+			if (this.isStructuredQueryArray(result)) {
+				return result[0];
+			}
+
+			return result;
+		}
+
+		if ('records' in result) return result.records;
+
+		return result.raw;
+	}
+
+	private isStructuredQueryArray(
+		result: RawQueryArray
+	): result is [RawScanJobRow[], number] {
+		return Array.isArray(result[0]) && typeof result[1] === 'number';
 	}
 
 	private async claimNextPendingJob(
 		manager: EntityManager
-	): Promise<ScanJobRow[]> {
-		return (await manager.query(`
+	): Promise<RawScanJobRow[]> {
+		const result = (await manager.query(`
 			update history_archive_scan_job_queue
 			set status = 'TAKEN',
 				"updatedAt" = now()
@@ -72,19 +208,21 @@ export class TypeOrmScanJobRepository implements ScanJobRepository {
 				limit 1
 			)
 			returning
-				id,
-				"remoteId",
-				url,
-				"latestScannedLedger",
-				"latestScannedLedgerHeaderHash",
-				"chainInitDate",
-				"fromLedger",
-				"toLedger",
-				concurrency,
-				status,
-				"createdAt",
-				"updatedAt"
-		`)) as ScanJobRow[];
+				id as "id",
+				"remoteId" as "remoteId",
+				url as "url",
+				"latestScannedLedger" as "latestScannedLedger",
+				"latestScannedLedgerHeaderHash" as "latestScannedLedgerHeaderHash",
+				"chainInitDate" as "chainInitDate",
+				"fromLedger" as "fromLedger",
+				"toLedger" as "toLedger",
+				concurrency as "concurrency",
+				status as "status",
+				"createdAt" as "createdAt",
+				"updatedAt" as "updatedAt"
+		`)) as RawQueryResult;
+
+		return this.extractQueryRows(result);
 	}
 
 	async hasPendingJobs(): Promise<boolean> {

@@ -1,3 +1,6 @@
+build_log.log
+
+deploy
 node_modules
 .vscode/
 .env
@@ -11,6 +14,8 @@ tsconfig.tsbuildinfo
 .envbackup
 api.log
 *.log
+history-bucket-cache/
+**/history-bucket-cache/
 
 # Claude Code related files
 .claude/
