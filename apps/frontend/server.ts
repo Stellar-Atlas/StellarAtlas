@@ -1,4 +1,3 @@
-import historyApiFallback from "connect-history-api-fallback";
 import dotenv from "dotenv";
 import express, {
   type NextFunction,
@@ -8,9 +7,25 @@ import express, {
 
 const defaultPort = 3000;
 const assetCacheTimeMs = 86_400_000 * 7;
-const assetPathPattern = /^\/(css|js|img|fonts)\/.+/;
+const apiDocsPathPattern = /^\/api-docs(?:\/|$)/;
+const apiPathPattern = /^\/v1(?:\/|$)/;
+const assetPathPattern = /^\/(assets|css|js|img|fonts)\/.+/;
+const legacyPathPattern = /^\/legacy(?:\/|$)/;
+const modernCompatibilityPathPattern = /^\/new-ui(?:\/|$)/;
+const modernStaticPathPattern = /^\/_next(?:\/|$)/;
 const workerPathPattern = /^\/.*\.worker\.js$/;
-const previewPathPattern = /^\/new-ui(?:\/|$)/;
+const hopByHopHeaders = new Set([
+  "connection",
+  "content-length",
+  "host",
+  "keep-alive",
+  "proxy-authenticate",
+  "proxy-authorization",
+  "te",
+  "trailer",
+  "transfer-encoding",
+  "upgrade",
+]);
 
 function resolvePort(value: string | undefined): number {
   if (value === undefined || value.trim() === "") return defaultPort;
@@ -30,33 +45,82 @@ function shouldCacheRequest(path: string): boolean {
   );
 }
 
-function frontendV4PreviewEnabled(): boolean {
+function frontendV4Enabled(): boolean {
   if (process.env.DISABLE_FRONTEND_V4_PREVIEW === "1") return false;
   return process.env.ENABLE_FRONTEND_V4_PREVIEW !== "0";
+}
+
+function getApiOrigin(): string {
+  return process.env.STELLAR_ATLAS_API_ORIGIN ?? "http://127.0.0.1:3000";
 }
 
 function getFrontendV4Origin(): string {
   return process.env.FRONTEND_V4_ORIGIN ?? "http://127.0.0.1:3104";
 }
 
-async function proxyFrontendV4(req: Request, res: Response): Promise<void> {
-  if (req.method !== "GET" && req.method !== "HEAD") {
-    res.status(405).send("Method Not Allowed");
-    return;
+function stripPathPrefix(path: string, prefix: string): string {
+  const stripped = path.slice(prefix.length);
+  return stripped.length === 0 ? "/" : stripped;
+}
+
+function getModernCompatibilityRedirect(path: string): string {
+  return stripPathPrefix(path, "/new-ui");
+}
+
+function getApiDocsPath(path: string): string {
+  return `/docs${stripPathPrefix(path, "/api-docs")}`;
+}
+
+function getForwardHeaders(req: Request): Record<string, string> {
+  const headers: Record<string, string> = {};
+
+  for (const [headerName, value] of Object.entries(req.headers)) {
+    const normalizedName = headerName.toLowerCase();
+    if (hopByHopHeaders.has(normalizedName)) continue;
+    if (typeof value === "string") headers[normalizedName] = value;
+    else if (Array.isArray(value)) headers[normalizedName] = value.join(", ");
   }
 
-  const targetUrl = new URL(req.originalUrl, getFrontendV4Origin());
+  headers["user-agent"] =
+    headers["user-agent"] ?? "stellaratlas-frontend-proxy";
+
+  return headers;
+}
+
+function readRequestBody(req: Request): Promise<Buffer> {
+  return new Promise((resolve, reject) => {
+    const chunks: Buffer[] = [];
+    req.on("data", (chunk: Buffer) => chunks.push(chunk));
+    req.on("end", () => resolve(Buffer.concat(chunks)));
+    req.on("error", reject);
+  });
+}
+
+async function proxyRequest(
+  req: Request,
+  res: Response,
+  origin: string,
+  path: string,
+): Promise<void> {
+  const targetUrl = new URL(path, origin);
+  const hasBody = req.method !== "GET" && req.method !== "HEAD";
+  const requestBody = hasBody ? await readRequestBody(req) : undefined;
+
   const response = await fetch(targetUrl, {
-    headers: {
-      accept: req.get("accept") ?? "*/*",
-      "user-agent": req.get("user-agent") ?? "stellaratlas-preview-proxy",
-    },
+    body: requestBody,
+    headers: getForwardHeaders(req),
     method: req.method,
   });
 
   res.status(response.status);
 
-  for (const headerName of ["content-type", "cache-control"]) {
+  for (const headerName of [
+    "access-control-allow-origin",
+    "cache-control",
+    "content-type",
+    "etag",
+    "location",
+  ]) {
     const headerValue = response.headers.get(headerName);
     if (headerValue) res.setHeader(headerName, headerValue);
   }
@@ -66,8 +130,28 @@ async function proxyFrontendV4(req: Request, res: Response): Promise<void> {
     return;
   }
 
-  const body = Buffer.from(await response.arrayBuffer());
-  res.send(body);
+  const responseBody = Buffer.from(await response.arrayBuffer());
+  res.send(responseBody);
+}
+
+function shouldProxyFrontendV4(path: string): boolean {
+  if (!frontendV4Enabled()) return false;
+  if (apiPathPattern.test(path) || apiDocsPathPattern.test(path)) return false;
+  if (legacyPathPattern.test(path)) return false;
+  if (path === "/robots.txt" || path.startsWith("/schemas/")) return false;
+  if (assetPathPattern.test(path) || workerPathPattern.test(path)) return false;
+  if (path === "/favicon.ico" || path.endsWith(".png")) return false;
+
+  return path === "/" || modernStaticPathPattern.test(path) || !path.includes(".");
+}
+
+function shouldServeLegacyIndex(req: Request): boolean {
+  return (
+    (req.method === "GET" || req.method === "HEAD") &&
+    legacyPathPattern.test(req.path) &&
+    req.accepts("html") === "html" &&
+    !req.path.includes(".")
+  );
 }
 
 dotenv.config({ quiet: true });
@@ -76,18 +160,41 @@ const app = express();
 const port = resolvePort(process.env.PORT);
 
 app.use((req: Request, res: Response, next: NextFunction) => {
-  if (!previewPathPattern.test(req.originalUrl) || !frontendV4PreviewEnabled()) {
+  if (!modernCompatibilityPathPattern.test(req.path)) {
     next();
     return;
   }
 
-  proxyFrontendV4(req, res).catch((error) => {
+  res.redirect(308, getModernCompatibilityRedirect(req.originalUrl));
+});
+
+app.use((req: Request, res: Response, next: NextFunction) => {
+  if (!apiPathPattern.test(req.path) && !apiDocsPathPattern.test(req.path)) {
+    next();
+    return;
+  }
+
+  const targetPath = apiDocsPathPattern.test(req.path)
+    ? getApiDocsPath(req.originalUrl)
+    : req.originalUrl;
+  proxyRequest(req, res, getApiOrigin(), targetPath).catch((error) => {
     const message = error instanceof Error ? error.message : "Proxy failed";
-    res.status(502).send(`Frontend v4 preview unavailable: ${message}`);
+    res.status(502).send(`API unavailable: ${message}`);
   });
 });
 
-app.use(historyApiFallback());
+app.use((req: Request, res: Response, next: NextFunction) => {
+  if (!shouldProxyFrontendV4(req.path)) {
+    next();
+    return;
+  }
+
+  proxyRequest(req, res, getFrontendV4Origin(), req.originalUrl).catch((error) => {
+    const message = error instanceof Error ? error.message : "Proxy failed";
+    res.status(502).send(`Modern frontend unavailable: ${message}`);
+  });
+});
+
 app.disable("x-powered-by");
 
 app.use((req: Request, res: Response, next: NextFunction) => {
@@ -101,6 +208,11 @@ app.use((req: Request, res: Response, next: NextFunction) => {
   next();
 });
 
+app.use((req: Request, _res: Response, next: NextFunction) => {
+  if (shouldServeLegacyIndex(req)) req.url = "/legacy/index.html";
+  next();
+});
+
 app.get(
   "/schemas/*.json",
   (_req: Request, res: Response, next: NextFunction) => {
@@ -109,7 +221,8 @@ app.get(
   },
 );
 
-app.use(express.static("dist"));
+app.use("/legacy", express.static("dist"));
+app.use(express.static("dist", { index: false }));
 
 app.listen(port, () => {
   console.log(`app listening on port: ${port}`);

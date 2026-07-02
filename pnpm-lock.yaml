@@ -652,6 +652,9 @@ importers:
       '@types/react-dom':
         specifier: 19.2.3
         version: 19.2.3(@types/react@19.2.17)
+      '@types/three':
+        specifier: 0.185.0
+        version: 0.185.0
       typescript:
         specifier: 6.0.3
         version: 6.0.3

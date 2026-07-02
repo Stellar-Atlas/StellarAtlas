@@ -4,8 +4,11 @@ import topLevelAwait from "vite-plugin-top-level-await";
 import { viteStaticCopy } from "vite-plugin-static-copy";
 import eslint from "vite-plugin-eslint";
 
+const legacyBasePath = process.env.LEGACY_FRONTEND_BASE_PATH ?? "/legacy/";
+
 /** @type {import('vite').UserConfig} */
 export default defineConfig({
+  base: legacyBasePath,
   plugins: [
     vue(),
     eslint(),

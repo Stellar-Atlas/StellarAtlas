@@ -4,20 +4,25 @@ import Link from 'next/link';
 import { useMemo, useState } from 'react';
 import type { PublicOrganization } from '../../api/types';
 import {
+	formatOrganization24HourAvailability,
+	formatOrganization30DayAvailability
+} from '../../domain/availability';
+import {
 	getOrganizationLabel,
 	getOrganizationTags
 } from '../../domain/network';
-import { formatPercent } from '../../format/formatters';
 import { StatusTags } from '../status-tags';
 
 interface OrganizationTableProps {
 	organizations: PublicOrganization[];
+	selectedOrganizationId?: string;
 }
 
 const normalize = (value: string): string => value.toLowerCase();
 
 export function OrganizationTable({
-	organizations
+	organizations,
+	selectedOrganizationId
 }: OrganizationTableProps): React.JSX.Element {
 	const [query, setQuery] = useState('');
 	const visibleOrganizations = useMemo(() => {
@@ -68,20 +73,39 @@ export function OrganizationTable({
 						</tr>
 					</thead>
 					<tbody>
-						{visibleOrganizations.map((organization) => (
-							<tr key={organization.id}>
-								<td>
-									<Link href={`/organizations/${encodeURIComponent(organization.id)}`}>
-										<strong>{getOrganizationLabel(organization)}</strong>
-									</Link>
-									<small>{organization.homeDomain}</small>
-								</td>
-								<td>{organization.validators.length}</td>
-								<td>{formatPercent(organization.subQuorum24HoursAvailability)}</td>
-								<td>{formatPercent(organization.subQuorum30DaysAvailability)}</td>
-								<td><StatusTags tags={getOrganizationTags(organization)} /></td>
-							</tr>
-						))}
+						{visibleOrganizations.map((organization) => {
+							const availability24Hours =
+								formatOrganization24HourAvailability(organization);
+							const availability30Days =
+								formatOrganization30DayAvailability(organization);
+							return (
+								<tr
+									className={selectedOrganizationId === organization.id ? 'active-row' : ''}
+									key={organization.id}
+								>
+									<td>
+										<Link href={`/organizations/${encodeURIComponent(organization.id)}`}>
+											<strong>{getOrganizationLabel(organization)}</strong>
+										</Link>
+										<small>{organization.homeDomain}</small>
+									</td>
+									<td>{organization.validators.length}</td>
+									<td>
+										<span className={`metric-text ${availability24Hours.tone}`}>
+											{availability24Hours.value}
+										</span>
+										{availability24Hours.detail ? <small>{availability24Hours.detail}</small> : null}
+									</td>
+									<td>
+										<span className={`metric-text ${availability30Days.tone}`}>
+											{availability30Days.value}
+										</span>
+										{availability30Days.detail ? <small>{availability30Days.detail}</small> : null}
+									</td>
+									<td><StatusTags tags={getOrganizationTags(organization)} /></td>
+								</tr>
+							);
+						})}
 					</tbody>
 				</table>
 			</div>

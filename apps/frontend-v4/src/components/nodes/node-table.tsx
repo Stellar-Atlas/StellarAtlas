@@ -9,7 +9,7 @@ import {
 	getOrganizationForNode,
 	getOrganizationLabel
 } from '../../domain/network';
-import { formatPercent } from '../../format/formatters';
+import { formatNode24HourValidating, formatNode30DayValidating } from '../../domain/availability';
 import { StatusTags } from '../status-tags';
 
 type NodeFilter = 'all' | 'validators' | 'listeners' | 'warnings';
@@ -108,13 +108,16 @@ export function NodeTable({
 							<th>Organization</th>
 							<th>Version</th>
 							<th>Country</th>
-							<th>30D validating</th>
+							<th>24H validating</th>
+							<th>30D signal</th>
 							<th>Status</th>
 						</tr>
 					</thead>
 					<tbody>
 						{visibleNodes.map((node) => {
 							const organization = getOrganizationForNode(network, node);
+							const validating24Hours = formatNode24HourValidating(node);
+							const validating30Days = formatNode30DayValidating(node);
 							return (
 								<tr key={node.publicKey}>
 									<td>
@@ -134,7 +137,17 @@ export function NodeTable({
 									</td>
 									<td>{node.versionStr ?? 'Unknown'}</td>
 									<td>{node.geoData?.countryName ?? 'Unknown'}</td>
-									<td>{formatPercent(node.statistics.validating30DaysPercentage)}</td>
+									<td>
+										<span className={`metric-text ${validating24Hours.tone}`}>
+											{validating24Hours.value}
+										</span>
+									</td>
+									<td>
+										<span className={`metric-text ${validating30Days.tone}`}>
+											{validating30Days.value}
+										</span>
+										{validating30Days.detail ? <small>{validating30Days.detail}</small> : null}
+									</td>
 									<td><StatusTags tags={getNodeTags(node)} /></td>
 								</tr>
 							);

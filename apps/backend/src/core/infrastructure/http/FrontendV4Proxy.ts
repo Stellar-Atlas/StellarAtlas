@@ -12,13 +12,18 @@ function getFrontendV4Origin(): string {
 	return process.env.FRONTEND_V4_ORIGIN ?? defaultFrontendV4Origin;
 }
 
+function stripPreviewPath(path: string): string {
+	const stripped = path.slice('/new-ui'.length);
+	return stripped.length === 0 ? '/' : stripped;
+}
+
 async function proxyFrontendV4(req: Request, res: Response): Promise<void> {
 	if (req.method !== 'GET' && req.method !== 'HEAD') {
 		res.status(405).send('Method Not Allowed');
 		return;
 	}
 
-	const targetUrl = new URL(req.originalUrl, getFrontendV4Origin());
+	const targetUrl = new URL(stripPreviewPath(req.originalUrl), getFrontendV4Origin());
 	const response = await fetch(targetUrl, {
 		headers: {
 			accept: req.get('accept') ?? '*/*',

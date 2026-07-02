@@ -9,7 +9,12 @@ import {
 	getOrganizationLabel,
 	getOrganizationTags
 } from '../../domain/network';
-import { formatBoolean, formatPercent } from '../../format/formatters';
+import {
+	formatNode30DayValidating,
+	formatOrganization24HourAvailability,
+	formatOrganization30DayAvailability
+} from '../../domain/availability';
+import { formatBoolean } from '../../format/formatters';
 import { StatusTags } from '../status-tags';
 
 interface OrganizationDetailProps {
@@ -26,6 +31,8 @@ export function OrganizationDetail({
 			network.nodes.find((node) => node.publicKey === publicKey) ?? null
 		)
 		.filter((node): node is PublicNode => node !== null);
+	const availability24Hours = formatOrganization24HourAvailability(organization);
+	const availability30Days = formatOrganization30DayAvailability(organization);
 
 	return (
 		<section className="detail-grid">
@@ -40,8 +47,24 @@ export function OrganizationDetail({
 					<div><dt>Horizon</dt><dd>{organization.horizonUrl ?? 'Not reported'}</dd></div>
 					<div><dt>Validators</dt><dd>{organization.validators.length}</dd></div>
 					<div><dt>Subquorum available</dt><dd>{formatBoolean(organization.subQuorumAvailable)}</dd></div>
-					<div><dt>24H availability</dt><dd>{formatPercent(organization.subQuorum24HoursAvailability)}</dd></div>
-					<div><dt>30D availability</dt><dd>{formatPercent(organization.subQuorum30DaysAvailability)}</dd></div>
+					<div>
+						<dt>24H availability</dt>
+						<dd>
+							<span className={`metric-text ${availability24Hours.tone}`}>
+								{availability24Hours.value}
+							</span>
+							{availability24Hours.detail ? <small>{availability24Hours.detail}</small> : null}
+						</dd>
+					</div>
+					<div>
+						<dt>30D availability</dt>
+						<dd>
+							<span className={`metric-text ${availability30Days.tone}`}>
+								{availability30Days.value}
+							</span>
+							{availability30Days.detail ? <small>{availability30Days.detail}</small> : null}
+						</dd>
+					</div>
 				</dl>
 			</article>
 			<article className="panel detail-panel">
@@ -57,7 +80,7 @@ export function OrganizationDetail({
 							</div>
 							<div className="metric">
 								<strong>{node.isValidating ? 'Validating' : 'Watch'}</strong>
-								<small>{formatPercent(node.statistics.validating30DaysPercentage)}</small>
+								<small>{formatNode30DayValidating(node).value}</small>
 							</div>
 						</div>
 					))}

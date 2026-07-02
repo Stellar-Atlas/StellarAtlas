@@ -1,8 +1,8 @@
 import Link from 'next/link';
 import type { PublicNetwork, PublicNode } from '../api/types';
+import { formatOrganization30DayAvailability } from '../domain/availability';
 import { getRiskNodes, getTopOrganizations } from '../domain/network';
-import { formatBoolean, formatInteger, formatPercent } from '../format/formatters';
-import { NetworkGraph } from './graph/network-graph';
+import { formatBoolean, formatInteger } from '../format/formatters';
 import { PageHeading } from './layout/page-heading';
 import { StatCard } from './stat-card';
 
@@ -73,7 +73,20 @@ export function NetworkOverview({ network }: NetworkOverviewProps): React.JSX.El
 				/>
 			</section>
 
-			<NetworkGraph network={network} />
+			<section className="panel overview-topology">
+				<div>
+					<p className="eyebrow">Trust graph</p>
+					<h2>Interactive topology moved to the primary graph view</h2>
+					<p>
+						The live 3D view shows organization clusters, listener nodes, quorum
+						edges, archive warnings, and observed SCP statements without compressing
+						the network into a small dashboard chart.
+					</p>
+				</div>
+				<Link className="primary-button" href="/">
+					Open graph
+				</Link>
+			</section>
 
 			<section className="content-grid">
 				<article className="panel">
@@ -115,11 +128,11 @@ export function NetworkOverview({ network }: NetworkOverviewProps): React.JSX.El
 									</Link>
 									<small>{organization.homeDomain}</small>
 								</div>
-								<div className="metric">
-									<strong>{formatInteger(organization.validators.length)}</strong>
-									<small>{formatPercent(organization.subQuorum30DaysAvailability)}</small>
-								</div>
+							<div className="metric">
+								<strong>{formatInteger(organization.validators.length)}</strong>
+								<small>{formatOrganization30DayAvailability(organization).value}</small>
 							</div>
+						</div>
 						))}
 					</div>
 				</article>

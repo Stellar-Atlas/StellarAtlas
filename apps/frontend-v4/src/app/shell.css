@@ -28,10 +28,44 @@
 }
 
 .strip-inner {
+	align-items: center;
 	display: flex;
 	gap: 20px;
 	justify-content: flex-end;
 	min-block-size: 34px;
+}
+
+.experience-switcher {
+	align-items: center;
+	background: #eef5fb;
+	border: 1px solid var(--border);
+	border-radius: 999px;
+	display: flex;
+	font-size: 0.76rem;
+	font-weight: 800;
+	gap: 4px;
+	margin-inline-end: auto;
+	padding: 3px;
+}
+
+.experience-switcher span,
+.experience-switcher a {
+	border-radius: 999px;
+	padding: 5px 9px;
+}
+
+.experience-switcher span {
+	background: var(--blue);
+	color: #fff;
+}
+
+.experience-switcher a {
+	color: var(--muted);
+}
+
+.experience-switcher a:hover {
+	background: #fff;
+	color: var(--blue);
 }
 
 .brand,

@@ -13,6 +13,7 @@ export interface Graph3DNode extends NodeObject {
 	detail: string;
 	groupId: string;
 	groupName: string;
+	isInTransitiveQuorumSet: boolean;
 	kind: 'validator' | 'listener' | 'offline';
 	node: PublicNode;
 	size: number;
@@ -102,7 +103,9 @@ const groupNodes = (network: PublicNetwork): Map<string, PublicNode[]> => {
 const buildValidatorNodes = (
 	network: PublicNetwork,
 	organizations: Graph3DOrganization[]
-): Graph3DNode[] =>
+): Graph3DNode[] => {
+	const transitiveValidators = new Set(network.transitiveQuorumSet);
+	return (
 	Array.from(groupNodes(network).entries()).flatMap(([groupId, nodes], groupIndex) => {
 		const organization = organizations.find((candidate) => candidate.id === groupId);
 		const color = organization?.color ?? getColor(groupId, groupIndex);
@@ -116,6 +119,7 @@ const buildValidatorNodes = (
 				detail: node.homeDomain ?? node.host ?? node.publicKey.slice(0, 12),
 				groupId,
 				groupName: organization?.name ?? 'Unaffiliated validators',
+				isInTransitiveQuorumSet: transitiveValidators.has(node.publicKey),
 				kind: 'validator',
 				node,
 				size: node.isValidating ? 8 : 6,
@@ -127,7 +131,9 @@ const buildValidatorNodes = (
 				fz: center.z + offset.z
 			};
 		});
-	});
+	})
+	);
+};
 
 const buildOuterNodes = (network: PublicNetwork): Graph3DNode[] => {
 	const outerNodes = network.nodes.filter((node) => !node.isValidator);
@@ -146,6 +152,7 @@ const buildOuterNodes = (network: PublicNetwork): Graph3DNode[] => {
 			detail: node.homeDomain ?? node.host ?? node.publicKey.slice(0, 12),
 			groupId: 'listeners',
 			groupName: node.active ? 'Listener nodes' : 'Unavailable nodes',
+			isInTransitiveQuorumSet: false,
 			kind: node.active ? 'listener' : 'offline',
 			node,
 			size: node.active ? 3.2 : 2.8,

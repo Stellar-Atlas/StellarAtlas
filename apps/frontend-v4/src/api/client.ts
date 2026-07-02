@@ -3,7 +3,8 @@ import type {
 	PublicHistoryArchiveScan,
 	PublicNetwork,
 	PublicNode,
-	PublicOrganization
+	PublicOrganization,
+	PublicScpStatementObservation
 } from './types';
 
 const DEFAULT_API_BASE_URL = 'http://localhost:3000';
@@ -32,11 +33,37 @@ interface FetchOptions {
 	at?: Date;
 }
 
+interface ScpStatementFetchOptions {
+	limit?: number;
+	nodeId?: string;
+	slotIndex?: string;
+}
+
 const buildApiUrl = (path: string, options: FetchOptions = {}): string => {
 	const url = new URL(`${getApiBaseUrl()}${path}`);
 
 	if (options.at) {
 		url.searchParams.set('at', options.at.toISOString());
+	}
+
+	return url.toString();
+};
+
+const buildScpStatementUrl = (
+	options: ScpStatementFetchOptions = {}
+): string => {
+	const url = new URL(`${getApiBaseUrl()}/v1/scp-statements`);
+
+	if (options.limit !== undefined) {
+		url.searchParams.set('limit', options.limit.toString());
+	}
+
+	if (options.nodeId !== undefined) {
+		url.searchParams.set('nodeId', options.nodeId);
+	}
+
+	if (options.slotIndex !== undefined) {
+		url.searchParams.set('slotIndex', options.slotIndex);
 	}
 
 	return url.toString();
@@ -121,3 +148,23 @@ export const fetchHistoryArchiveScan = (
 		`/v1/history-scan/${encodeURIComponent(historyUrl)}`,
 		options
 	);
+
+export const fetchScpStatements = async (
+	options?: ScpStatementFetchOptions
+): Promise<PublicScpStatementObservation[]> => {
+	const response = await fetch(buildScpStatementUrl(options), {
+		cache: 'no-store',
+		headers: {
+			Accept: 'application/json'
+		}
+	});
+
+	if (!response.ok) {
+		throw new ApiClientError({
+			message: `API request returned HTTP ${response.status}`,
+			statusCode: response.status
+		});
+	}
+
+	return response.json() as Promise<PublicScpStatementObservation[]>;
+};
