@@ -9,6 +9,7 @@ export class ConfigMock implements Config {
 	logLevel = 'debug';
 	historyMaxFileMs = 60000;
 	historySlowArchiveMaxLedgers = 1000;
+	historyHasherWorkers = 1;
 	coordinatorAPIBaseUrl = 'http://127.0.0.1:3000';
 	coordinatorAPIPassword = 'test-password';
 	coordinatorAPIUsername = 'test-user';

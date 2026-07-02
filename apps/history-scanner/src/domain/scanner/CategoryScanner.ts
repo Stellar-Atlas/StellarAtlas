@@ -67,7 +67,8 @@ export class CategoryScanner {
 		private hasValidator: HASValidator,
 		@inject(TYPES.HttpQueue) private httpQueue: HttpQueue,
 		private checkPointGenerator: CheckPointGenerator,
-		private categoryVerificationService: CategoryVerificationService
+		private categoryVerificationService: CategoryVerificationService,
+		@inject(TYPES.HasherWorkerCount) private readonly hasherWorkerCount: number
 	) {}
 
 	public async findLatestLedger(
@@ -209,7 +210,7 @@ export class CategoryScanner {
 	private async verifyOtherCategories(
 		scanState: CategoryScanState
 	): Promise<Result<undefined | LedgerHeader, ScanError>> {
-		const pool = new HasherPool();
+		const pool = new HasherPool(this.hasherWorkerCount);
 		const poolLoadTracker = new WorkerPoolLoadTracker(
 			pool,
 			CategoryScanner.POOL_MAX_PENDING_TASKS

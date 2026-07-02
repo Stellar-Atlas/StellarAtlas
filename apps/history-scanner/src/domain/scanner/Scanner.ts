@@ -87,38 +87,63 @@ export class Scanner {
 		let alreadyScannedBucketHashes = new Set<string>();
 		let error: ScanError | undefined;
 		const errors: ScanError[] = [];
+		let previousRangeHeader: LedgerHeader = {
+			ledger: latestLedgerHeader.ledger,
+			hash: latestLedgerHeader.hash
+		};
+		let hasUnverifiedGap = false;
 
-		while (rangeFromLedger < scanSettings.toLedger && !error) {
+		while (rangeFromLedger < scanSettings.toLedger) {
 			console.time('range_scan');
 			const rangeResult = await this.rangeScanner.scan(
 				url,
 				scanSettings.concurrency,
 				rangeToLedger,
 				rangeFromLedger,
-				latestLedgerHeader.ledger,
-				latestLedgerHeader.hash,
+				previousRangeHeader.ledger,
+				previousRangeHeader.hash ?? null,
 				alreadyScannedBucketHashes
 			);
 			console.timeEnd('range_scan');
 
 			if (rangeResult.isErr()) {
-				error = rangeResult.error;
-				errors.push(...this.expandScanError(rangeResult.error));
+				const rangeErrors = this.expandScanError(rangeResult.error);
+				error = error ?? rangeErrors[0] ?? rangeResult.error;
+				errors.push(...rangeErrors);
+				hasUnverifiedGap = true;
+				previousRangeHeader = {
+					ledger: rangeToLedger,
+					hash: undefined
+				};
 			} else {
-				errors.push(...(rangeResult.value.errors ?? []));
-				latestLedgerHeader.ledger = rangeResult.value.latestLedgerHeader
-					? rangeResult.value.latestLedgerHeader.ledger
-					: rangeToLedger;
-				latestLedgerHeader.hash = rangeResult.value.latestLedgerHeader?.hash;
+				if (rangeResult.value.errors.length > 0) {
+					error = error ?? rangeResult.value.errors[0];
+					errors.push(...rangeResult.value.errors);
+					hasUnverifiedGap = true;
+				} else if (!hasUnverifiedGap) {
+					latestLedgerHeader.ledger = rangeResult.value.latestLedgerHeader
+						? rangeResult.value.latestLedgerHeader.ledger
+						: rangeToLedger;
+					latestLedgerHeader.hash = rangeResult.value.latestLedgerHeader?.hash;
+				}
 
 				alreadyScannedBucketHashes = rangeResult.value.scannedBucketHashes;
-
-				rangeFromLedger += this.rangeSize;
-				rangeToLedger =
-					rangeFromLedger + this.rangeSize < scanSettings.toLedger
-						? rangeFromLedger + this.rangeSize
-						: scanSettings.toLedger;
+				previousRangeHeader = rangeResult.value.latestLedgerHeader
+					? {
+							ledger: rangeResult.value.latestLedgerHeader.ledger,
+							hash: rangeResult.value.latestLedgerHeader.hash
+						}
+					: {
+							ledger: rangeToLedger,
+							hash: undefined
+						};
 			}
+
+			rangeFromLedger += this.rangeSize;
+			rangeToLedger =
+				rangeFromLedger + this.rangeSize < scanSettings.toLedger
+					? rangeFromLedger + this.rangeSize
+					: scanSettings.toLedger;
 		}
 
 		return {

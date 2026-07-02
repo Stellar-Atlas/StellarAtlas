@@ -1,5 +1,6 @@
 import { config } from 'dotenv';
 import { err, ok, Result } from 'neverthrow';
+import { availableParallelism } from 'node:os';
 import { resolveAppEnvPath } from 'shared/lib/env/resolve-app-env-path.js';
 
 config({
@@ -18,6 +19,7 @@ export interface Config {
 	logLevel: string;
 	historyMaxFileMs: number;
 	historySlowArchiveMaxLedgers: number;
+	historyHasherWorkers: number;
 }
 
 // Simple boolean parser to replace 'yn'
@@ -38,6 +40,37 @@ const defaultConfig = {
 	historyMaxFileMs: 60000,
 	historySlowArchiveMaxLedgers: 1000
 };
+
+const maxHistoryHasherWorkers = 8;
+
+export function calculateDefaultHistoryHasherWorkers(
+	historyScanWorkers: number,
+	cpuCount: number
+): number {
+	const scanWorkerCount = Math.max(Math.floor(historyScanWorkers), 1);
+	const availableCpuCount = Math.max(cpuCount - 1, 1);
+	const workerCount = Math.floor(availableCpuCount / scanWorkerCount);
+	return Math.min(Math.max(workerCount, 1), maxHistoryHasherWorkers);
+}
+
+function parseOptionalPositiveInteger(
+	name: string,
+	maximum?: number
+): Result<number | undefined, Error> {
+	const value = process.env[name];
+	if (value === undefined || value.trim() === '') return ok(undefined);
+
+	const parsed = Number(value);
+	if (!Number.isInteger(parsed) || parsed < 1) {
+		return err(new Error(`${name} must be a positive integer`));
+	}
+
+	if (maximum !== undefined && parsed > maximum) {
+		return err(new Error(`${name} must be between 1 and ${maximum}`));
+	}
+
+	return ok(parsed);
+}
 
 export function getConfigFromEnv(): Result<Config, Error> {
 	// Required env vars validation
@@ -76,6 +109,25 @@ export function getConfigFromEnv(): Result<Config, Error> {
 		return err(new Error('HISTORY_SLOW_ARCHIVE_MAX_LEDGERS must be a number'));
 	}
 
+	const historyScanWorkersResult =
+		parseOptionalPositiveInteger('HISTORY_SCAN_WORKERS');
+	if (historyScanWorkersResult.isErr()) return err(historyScanWorkersResult.error);
+
+	const historyHasherWorkersResult = parseOptionalPositiveInteger(
+		'HISTORY_HASHER_WORKERS',
+		maxHistoryHasherWorkers
+	);
+	if (historyHasherWorkersResult.isErr())
+		return err(historyHasherWorkersResult.error);
+
+	const historyScanWorkers = historyScanWorkersResult.value ?? 1;
+	const historyHasherWorkers =
+		historyHasherWorkersResult.value ??
+		calculateDefaultHistoryHasherWorkers(
+			historyScanWorkers,
+			availableParallelism()
+		);
+
 	return ok({
 		nodeEnv: process.env.NODE_ENV ?? defaultConfig.nodeEnv,
 		enableSentry,
@@ -86,6 +138,7 @@ export function getConfigFromEnv(): Result<Config, Error> {
 		coordinatorAPIUsername: process.env.COORDINATOR_API_USERNAME!,
 		logLevel: process.env.LOG_LEVEL ?? defaultConfig.logLevel,
 		historyMaxFileMs,
-		historySlowArchiveMaxLedgers
+		historySlowArchiveMaxLedgers,
+		historyHasherWorkers
 	});
 }

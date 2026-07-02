@@ -3,21 +3,19 @@ import type { Scan } from '../../domain/scan/Scan.js';
 import { ScanErrorType } from '../../domain/scan/ScanError.js';
 
 export function mapScanToHistoryArchiveScan(scan: Scan): HistoryArchiveScan {
-	const verificationErrors = scan.scanErrors.filter(
-		(error) => error.type === ScanErrorType.TYPE_VERIFICATION
-	);
-	const firstVerificationError = verificationErrors[0] ?? null;
+	const scanErrors = scan.scanErrors;
+	const firstError = scanErrors[0] ?? null;
 
 	return new HistoryArchiveScan(
 		scan.baseUrl.value,
 		scan.startDate,
 		scan.endDate,
 		scan.latestVerifiedLedger,
-		verificationErrors.length > 0,
-		firstVerificationError?.url ?? null,
-		firstVerificationError?.message ?? null,
+		scanErrors.length > 0,
+		firstError?.url ?? null,
+		firstError?.message ?? null,
 		scan.isSlowArchive ?? false,
-		verificationErrors.map((error) => ({
+		scanErrors.map((error) => ({
 			message: error.message,
 			type: ScanErrorType[error.type],
 			url: error.url

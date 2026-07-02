@@ -1,5 +1,8 @@
 import { jest } from '@jest/globals';
-import { getConfigFromEnv } from '../Config.js';
+import {
+	calculateDefaultHistoryHasherWorkers,
+	getConfigFromEnv
+} from '../Config.js';
 
 describe('Config', () => {
 	beforeEach(() => {
@@ -45,8 +48,11 @@ describe('Config', () => {
 				userAgent: 'stellaratlas-history-scanner',
 				logLevel: 'info',
 				historyMaxFileMs: 60000,
-				historySlowArchiveMaxLedgers: 1000
+				historySlowArchiveMaxLedgers: 1000,
+				historyHasherWorkers: expect.any(Number)
 			});
+			expect(result.value.historyHasherWorkers).toBeGreaterThanOrEqual(1);
+			expect(result.value.historyHasherWorkers).toBeLessThanOrEqual(8);
 		});
 
 		test('should require SENTRY_DSN when ENABLE_SENTRY is true', () => {
@@ -80,9 +86,32 @@ describe('Config', () => {
 			);
 		});
 
+		test('should validate HISTORY_HASHER_WORKERS is a positive integer', () => {
+			process.env.HISTORY_HASHER_WORKERS = '0';
+
+			const result = getConfigFromEnv();
+			expect(result.isErr()).toBe(true);
+			if (!result.isErr()) throw new Error('Expected error');
+			expect(result.error.message).toContain(
+				'HISTORY_HASHER_WORKERS must be a positive integer'
+			);
+		});
+
+		test('should validate HISTORY_HASHER_WORKERS maximum', () => {
+			process.env.HISTORY_HASHER_WORKERS = '9';
+
+			const result = getConfigFromEnv();
+			expect(result.isErr()).toBe(true);
+			if (!result.isErr()) throw new Error('Expected error');
+			expect(result.error.message).toContain(
+				'HISTORY_HASHER_WORKERS must be between 1 and 8'
+			);
+		});
+
 		test('should accept valid numeric values', () => {
 			process.env.HISTORY_MAX_FILE_MS = '120000';
 			process.env.HISTORY_SLOW_ARCHIVE_MAX_LEDGERS = '2000';
+			process.env.HISTORY_HASHER_WORKERS = '3';
 
 			const result = getConfigFromEnv();
 			expect(result.isOk()).toBe(true);
@@ -90,6 +119,13 @@ describe('Config', () => {
 
 			expect(result.value.historyMaxFileMs).toBe(120000);
 			expect(result.value.historySlowArchiveMaxLedgers).toBe(2000);
+			expect(result.value.historyHasherWorkers).toBe(3);
+		});
+
+		test('should derive default hasher workers from scanner workers and CPU count', () => {
+			expect(calculateDefaultHistoryHasherWorkers(24, 64)).toBe(2);
+			expect(calculateDefaultHistoryHasherWorkers(1, 64)).toBe(8);
+			expect(calculateDefaultHistoryHasherWorkers(64, 64)).toBe(1);
 		});
 
 		test('should properly configure Sentry when enabled', () => {
