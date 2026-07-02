@@ -177,7 +177,8 @@ it('should find latest ledger', async function () {
 		hasValidator,
 		httpQueue,
 		checkPointGenerator,
-		new CategoryVerificationService()
+		new CategoryVerificationService(),
+		1
 	);
 
 	const result = await categoryScanner.findLatestLedger(
@@ -239,7 +240,8 @@ function getMockedCategoryScanner(testEmptyFile: boolean) {
 		hasValidator,
 		httpQueue,
 		checkPointGenerator,
-		new CategoryVerificationService()
+		new CategoryVerificationService(),
+		1
 	);
 }
 async function getOtherCategoriesVerifyResult(
@@ -282,7 +284,8 @@ async function scanHASFilesAndReturnBucketHashes(httpQueue: HttpQueue) {
 		hasValidator,
 		httpQueue,
 		checkPointGenerator,
-		new CategoryVerificationService()
+		new CategoryVerificationService(),
+		1
 	);
 
 	return await categoryScanner.scanHASFilesAndReturnBucketHashes({

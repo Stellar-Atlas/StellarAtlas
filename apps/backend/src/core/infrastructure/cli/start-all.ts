@@ -5,12 +5,14 @@ import {
 	readFileSync,
 	unlinkSync
 } from 'node:fs';
+import { availableParallelism } from 'node:os';
 import type { Readable } from 'node:stream';
 
 const apiReadyMessage = 'api listening on port:';
 const apiLogFile = 'api.log';
-const defaultHistoryScanWorkers = 4;
-const maxHistoryScanWorkers = 16;
+const historyScanWorkersEnv = 'HISTORY_SCAN_WORKERS';
+const minDefaultHistoryScanWorkers = 24;
+const maxHistoryScanWorkers = 48;
 const apiStartTimeoutMs = 120_000;
 
 type ManagedProcess = {
@@ -18,12 +20,21 @@ type ManagedProcess = {
 	process: ChildProcessByStdio<null, Readable, Readable>;
 };
 
+function calculateDefaultHistoryScanWorkers(cpuCount: number): number {
+	const cpuWeightedWorkers = Math.ceil(cpuCount * 0.375);
+	return Math.min(
+		Math.max(cpuWeightedWorkers, minDefaultHistoryScanWorkers),
+		maxHistoryScanWorkers
+	);
+}
+
 function parseWorkerCount(value: string | undefined): number {
 	if (value === undefined || value.trim() === '')
-		return defaultHistoryScanWorkers;
+		return calculateDefaultHistoryScanWorkers(availableParallelism());
 
 	const parsed = Number(value);
-	if (!Number.isInteger(parsed) || parsed < 1) return defaultHistoryScanWorkers;
+	if (!Number.isInteger(parsed) || parsed < 1)
+		return calculateDefaultHistoryScanWorkers(availableParallelism());
 
 	return Math.min(parsed, maxHistoryScanWorkers);
 }
@@ -33,10 +44,17 @@ function frontendV4PreviewEnabled(): boolean {
 	return process.env.ENABLE_FRONTEND_V4_PREVIEW !== '0';
 }
 
-function createProcess(name: string, args: string[]): ManagedProcess {
+function createProcess(
+	name: string,
+	args: string[],
+	envOverrides: NodeJS.ProcessEnv = {}
+): ManagedProcess {
 	const childProcess = spawn('pnpm', args, {
 		stdio: ['ignore', 'pipe', 'pipe'],
-		env: process.env
+		env: {
+			...process.env,
+			...envOverrides
+		}
 	});
 
 	childProcess.stdout.on('data', (data: Buffer) => {
@@ -118,7 +136,7 @@ async function main(): Promise<void> {
 	console.log('Waiting for API to be ready...');
 	await waitForApi(processes);
 
-	const historyScanWorkers = parseWorkerCount(process.env.HISTORY_SCAN_WORKERS);
+	const historyScanWorkers = parseWorkerCount(process.env[historyScanWorkersEnv]);
 	console.log(`API is up. Starting ${historyScanWorkers} history scanner(s).`);
 
 	const serviceProcesses = [
@@ -128,13 +146,15 @@ async function main(): Promise<void> {
 	];
 
 	if (frontendV4PreviewEnabled()) {
-		console.log('Frontend v4 preview enabled at /new-ui.');
+		console.log('Frontend v4 service enabled.');
 		serviceProcesses.push(createProcess('frontend-v4', ['start:frontend-v4']));
 	}
 
 	for (let index = 1; index <= historyScanWorkers; index += 1) {
 		serviceProcesses.push(
-			createProcess(`history-${index}`, ['start:scan-history'])
+			createProcess(`history-${index}`, ['start:scan-history'], {
+				[historyScanWorkersEnv]: historyScanWorkers.toString()
+			})
 		);
 	}
 

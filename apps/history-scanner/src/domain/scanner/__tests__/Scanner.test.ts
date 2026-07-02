@@ -16,7 +16,8 @@ it('should scan', async function () {
 	rangeScanner.scan.mockResolvedValue(
 		ok({
 			latestLedgerHeader: { ledger: 200, hash: 'ledger_hash' },
-			scannedBucketHashes: new Set(['a'])
+			scannedBucketHashes: new Set(['a']),
+			errors: []
 		})
 	);
 
@@ -51,6 +52,71 @@ it('should not update latestScannedLedger in case of error', async () => {
 	console.log(scan);
 	expect(scan.error?.type).toEqual(ScanErrorType.TYPE_VERIFICATION);
 	expect(scan.error?.url).toEqual('url');
+	expect(scan.latestScannedLedger).toEqual(0);
+	expect(scan.latestScannedLedgerHeaderHash).toEqual(null);
+});
+
+it('should preserve all related range scan errors', async () => {
+	const rangeScanner = mock<RangeScanner>();
+	const firstError = new ScanError(
+		ScanErrorType.TYPE_VERIFICATION,
+		'first-url',
+		'first-message'
+	);
+	const secondError = new ScanError(
+		ScanErrorType.TYPE_VERIFICATION,
+		'second-url',
+		'second-message'
+	);
+	rangeScanner.scan.mockResolvedValue(
+		err(
+			new ScanError(
+				firstError.type,
+				firstError.url,
+				firstError.message,
+				[firstError, secondError]
+			)
+		)
+	);
+	const scanner = getScanner(rangeScanner);
+
+	const scanJob = ScanJob.newScanChain(createDummyHistoryBaseUrl(), 0, 50, 1);
+	const scan = await scanner.perform(new Date(), scanJob);
+
+	expect(scan.error?.url).toEqual('first-url');
+	expect(scan.errors).toEqual([firstError, secondError]);
+});
+
+it('should continue scanning after range errors without advancing verified ledger past the gap', async () => {
+	const rangeScanner = mock<RangeScanner>();
+	const firstError = new ScanError(
+		ScanErrorType.TYPE_VERIFICATION,
+		'first-url',
+		'first-message'
+	);
+	rangeScanner.scan
+		.mockResolvedValueOnce(
+			ok({
+				latestLedgerHeader: { ledger: 100, hash: 'ledger_hash_100' },
+				scannedBucketHashes: new Set(['a']),
+				errors: [firstError]
+			})
+		)
+		.mockResolvedValueOnce(
+			ok({
+				latestLedgerHeader: { ledger: 200, hash: 'ledger_hash_200' },
+				scannedBucketHashes: new Set(['a', 'b']),
+				errors: []
+			})
+		);
+	const scanner = getScanner(rangeScanner);
+
+	const scanJob = ScanJob.newScanChain(createDummyHistoryBaseUrl(), 0, 200, 1);
+	const scan = await scanner.perform(new Date(), scanJob);
+
+	expect(rangeScanner.scan).toHaveBeenCalledTimes(2);
+	expect(scan.error).toEqual(firstError);
+	expect(scan.errors).toEqual([firstError]);
 	expect(scan.latestScannedLedger).toEqual(0);
 	expect(scan.latestScannedLedgerHeaderHash).toEqual(null);
 });

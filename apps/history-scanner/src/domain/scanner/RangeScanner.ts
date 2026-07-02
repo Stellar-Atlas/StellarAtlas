@@ -72,54 +72,62 @@ export class RangeScanner {
 				: undefined
 		);
 
-		const bucketHashesOrError =
-			await this.scanHASFilesAndReturnBucketHashes(hasScanState);
-		if (bucketHashesOrError.isErr()) return err(bucketHashesOrError.error);
-		const bucketHashesToScan = bucketHashesOrError.value.bucketHashes;
+		try {
+			const bucketHashesOrError =
+				await this.scanHASFilesAndReturnBucketHashes(hasScanState);
+			if (bucketHashesOrError.isErr()) return err(bucketHashesOrError.error);
+			const bucketHashesToScan = bucketHashesOrError.value.bucketHashes;
 
-		const categoryScanState = new CategoryScanState(
-			baseUrl,
-			concurrency,
-			httpAgent,
-			httpsAgent,
-			this.checkPointGenerator.generate(fromLedger, toLedger),
-			bucketHashesOrError.value.bucketListHashes,
-			latestScannedLedgerHeaderHash
-				? {
-						ledger: latestScannedLedger,
-						hash: latestScannedLedgerHeaderHash
-					}
-				: undefined
-		);
-		const categoryScanResult = await this.scanCategories(categoryScanState);
-		if (categoryScanResult.isErr()) return err(categoryScanResult.error);
+			const categoryScanState = new CategoryScanState(
+				baseUrl,
+				concurrency,
+				httpAgent,
+				httpsAgent,
+				this.checkPointGenerator.generate(fromLedger, toLedger),
+				bucketHashesOrError.value.bucketListHashes,
+				latestScannedLedgerHeaderHash
+					? {
+							ledger: latestScannedLedger,
+							hash: latestScannedLedgerHeaderHash
+						}
+					: undefined
+			);
 
-		const bucketScanState = new BucketScanState(
-			baseUrl,
-			concurrency,
-			httpAgent,
-			httpsAgent,
-			new Set(
-				Array.from(bucketHashesToScan).filter(
-					(hashToScan) => !alreadyScannedBucketHashes.has(hashToScan)
+			const errors: ScanError[] = [];
+			let latestLedgerHeader: LedgerHeader | undefined;
+			const categoryScanResult = await this.scanCategories(categoryScanState);
+			if (categoryScanResult.isErr())
+				errors.push(...this.expandScanError(categoryScanResult.error));
+			else latestLedgerHeader = categoryScanResult.value;
+
+			const bucketScanState = new BucketScanState(
+				baseUrl,
+				concurrency,
+				httpAgent,
+				httpsAgent,
+				new Set(
+					Array.from(bucketHashesToScan).filter(
+						(hashToScan) => !alreadyScannedBucketHashes.has(hashToScan)
+					)
 				)
-			)
-		);
+			);
 
-		const bucketScanResult = await this.scanBucketFiles(bucketScanState);
-		if (bucketScanResult.isErr()) return err(bucketScanResult.error);
+			const bucketScanResult = await this.scanBucketFiles(bucketScanState);
+			if (bucketScanResult.isErr())
+				errors.push(...this.expandScanError(bucketScanResult.error));
 
-		httpAgent.destroy();
-		httpsAgent.destroy();
-
-		return ok({
-			latestLedgerHeader: categoryScanResult.value,
-			errors: [],
-			scannedBucketHashes: new Set([
-				...bucketScanState.bucketHashesToScan,
-				...alreadyScannedBucketHashes
-			])
-		});
+			return ok({
+				latestLedgerHeader,
+				errors,
+				scannedBucketHashes: new Set([
+					...bucketScanState.bucketHashesToScan,
+					...alreadyScannedBucketHashes
+				])
+			});
+		} finally {
+			httpAgent.destroy();
+			httpsAgent.destroy();
+		}
 	}
 
 	private async scanHASFilesAndReturnBucketHashes(
@@ -172,5 +180,9 @@ export class RangeScanner {
 		console.timeEnd('category');
 
 		return scanOtherCategoriesResult;
+	}
+
+	private expandScanError(error: ScanError): readonly ScanError[] {
+		return error.relatedErrors.length > 0 ? error.relatedErrors : [error];
 	}
 }
