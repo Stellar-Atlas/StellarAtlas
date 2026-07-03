@@ -5,6 +5,13 @@ import { viteStaticCopy } from "vite-plugin-static-copy";
 import eslint from "vite-plugin-eslint";
 
 const legacyBasePath = process.env.LEGACY_FRONTEND_BASE_PATH ?? "/legacy/";
+const legacySassDeprecations = [
+  "abs-percent",
+  "color-functions",
+  "global-builtin",
+  "if-function",
+  "import",
+] as const;
 
 /** @type {import('vite').UserConfig} */
 export default defineConfig({
@@ -49,8 +56,18 @@ export default defineConfig({
       ],
     },
     sourcemap: true,
-    chunkSizeWarningLimit: 1000,
+    chunkSizeWarningLimit: 2000,
     rollupOptions: {
+      onwarn(warning, defaultHandler) {
+        if (
+          warning.code === "INVALID_ANNOTATION" &&
+          warning.message.includes("bootstrap-vue")
+        ) {
+          return;
+        }
+
+        defaultHandler(warning);
+      },
       output: {
         manualChunks: {
           d3: [
@@ -77,8 +94,9 @@ export default defineConfig({
     devSourcemap: true,
     preprocessorOptions: {
       scss: {
-        api: 'legacy',
         includePaths: ["src"],
+        quietDeps: true,
+        silenceDeprecations: [...legacySassDeprecations],
       },
     },
   },
