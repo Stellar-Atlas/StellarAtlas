@@ -1591,6 +1591,30 @@
 				}
 			}
 		},
+		"/v1/cross-check/api-docs/latest": {
+			"get": {
+				"summary": "Get latest API documentation cross-check snapshot",
+				"description": "Returns the latest persisted RADAR versus StellarAtlas API documentation comparison snapshot. This endpoint does not fetch RADAR or run live probes.",
+				"tags": ["CrossCheck"],
+				"operationId": "getCrossCheckApiDocsLatest",
+				"responses": {
+					"200": {
+						"description": "latest persisted API docs comparison snapshot",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/CrossCheckApiDocsComparisonSnapshot"
+								}
+							}
+						}
+					},
+					"204": {
+						"description": "No API docs comparison snapshot has been stored"
+					},
+					"500": { "description": "Server error" }
+				}
+			}
+		},
 		"/v1/cross-check/organizations": {
 			"get": {
 				"summary": "List organization cross-check review rows",
@@ -4338,6 +4362,277 @@
 	},
 	"components": {
 		"schemas": {
+			"CrossCheckApiDocsComparisonSnapshot": {
+				"type": "object",
+				"required": [
+					"id",
+					"status",
+					"generatedAt",
+					"storedAt",
+					"comparison",
+					"failure"
+				],
+				"properties": {
+					"id": { "type": "string" },
+					"status": {
+						"type": "string",
+						"enum": ["compared", "failed"]
+					},
+					"generatedAt": {
+						"type": "string",
+						"format": "date-time"
+					},
+					"storedAt": {
+						"type": "string",
+						"format": "date-time"
+					},
+					"comparison": {
+						"nullable": true,
+						"allOf": [
+							{
+								"$ref": "#/components/schemas/CrossCheckApiDocsComparison"
+							}
+						]
+					},
+					"failure": {
+						"nullable": true,
+						"allOf": [
+							{
+								"$ref": "#/components/schemas/CrossCheckApiDocsSnapshotFailure"
+							}
+						]
+					}
+				}
+			},
+			"CrossCheckApiDocsComparison": {
+				"type": "object",
+				"required": [
+					"comparisonStatus",
+					"generatedAt",
+					"operations",
+					"source",
+					"stellarAtlas",
+					"summary"
+				],
+				"properties": {
+					"comparisonStatus": {
+						"type": "string",
+						"enum": ["compared"]
+					},
+					"generatedAt": {
+						"type": "string",
+						"format": "date-time"
+					},
+					"operations": {
+						"type": "array",
+						"items": {
+							"$ref": "#/components/schemas/CrossCheckApiDocsOperationComparison"
+						}
+					},
+					"source": {
+						"$ref": "#/components/schemas/CrossCheckApiDocsSnapshotMetadata"
+					},
+					"stellarAtlas": {
+						"$ref": "#/components/schemas/CrossCheckApiDocsSnapshotMetadata"
+					},
+					"summary": {
+						"$ref": "#/components/schemas/CrossCheckApiDocsComparisonSummary"
+					}
+				}
+			},
+			"CrossCheckApiDocsComparisonSummary": {
+				"type": "object",
+				"required": [
+					"fieldMismatchCount",
+					"matchedCount",
+					"sourceMissingCount",
+					"stellarAtlasMissingCount",
+					"totalCount"
+				],
+				"properties": {
+					"fieldMismatchCount": { "type": "integer", "minimum": 0 },
+					"matchedCount": { "type": "integer", "minimum": 0 },
+					"sourceMissingCount": { "type": "integer", "minimum": 0 },
+					"stellarAtlasMissingCount": { "type": "integer", "minimum": 0 },
+					"totalCount": { "type": "integer", "minimum": 0 }
+				}
+			},
+			"CrossCheckApiDocsFieldMismatch": {
+				"type": "object",
+				"required": ["field", "sourceValue", "stellarAtlasValue"],
+				"properties": {
+					"field": {
+						"type": "string",
+						"enum": ["operationId", "schemaRefs", "summary", "tags"]
+					},
+					"sourceValue": {
+						"$ref": "#/components/schemas/CrossCheckApiDocsFieldValue"
+					},
+					"stellarAtlasValue": {
+						"$ref": "#/components/schemas/CrossCheckApiDocsFieldValue"
+					}
+				}
+			},
+			"CrossCheckApiDocsFieldValue": {
+				"nullable": true,
+				"oneOf": [
+					{ "type": "string" },
+					{
+						"type": "array",
+						"items": { "type": "string" }
+					}
+				]
+			},
+			"CrossCheckApiDocsOperation": {
+				"type": "object",
+				"required": [
+					"method",
+					"path",
+					"operationId",
+					"summary",
+					"tags",
+					"schemaRefs"
+				],
+				"properties": {
+					"method": {
+						"type": "string",
+						"enum": [
+							"delete",
+							"get",
+							"head",
+							"options",
+							"patch",
+							"post",
+							"put",
+							"trace"
+						]
+					},
+					"path": { "type": "string" },
+					"operationId": { "type": "string", "nullable": true },
+					"summary": { "type": "string", "nullable": true },
+					"tags": {
+						"type": "array",
+						"items": { "type": "string" }
+					},
+					"schemaRefs": {
+						"type": "array",
+						"items": { "type": "string" }
+					}
+				}
+			},
+			"CrossCheckApiDocsOperationComparison": {
+				"type": "object",
+				"required": [
+					"comparisonStatus",
+					"fieldMismatches",
+					"key",
+					"source",
+					"stellarAtlas"
+				],
+				"properties": {
+					"comparisonStatus": {
+						"type": "string",
+						"enum": [
+							"field_mismatch",
+							"matched",
+							"source_missing",
+							"stellaratlas_missing"
+						]
+					},
+					"fieldMismatches": {
+						"type": "array",
+						"items": {
+							"$ref": "#/components/schemas/CrossCheckApiDocsFieldMismatch"
+						}
+					},
+					"key": {
+						"$ref": "#/components/schemas/CrossCheckApiDocsOperationKey"
+					},
+					"source": {
+						"nullable": true,
+						"allOf": [
+							{ "$ref": "#/components/schemas/CrossCheckApiDocsOperation" }
+						]
+					},
+					"stellarAtlas": {
+						"nullable": true,
+						"allOf": [
+							{ "$ref": "#/components/schemas/CrossCheckApiDocsOperation" }
+						]
+					}
+				}
+			},
+			"CrossCheckApiDocsOperationKey": {
+				"type": "object",
+				"required": ["method", "path"],
+				"properties": {
+					"method": {
+						"type": "string",
+						"enum": [
+							"delete",
+							"get",
+							"head",
+							"options",
+							"patch",
+							"post",
+							"put",
+							"trace"
+						]
+					},
+					"path": { "type": "string" }
+				}
+			},
+			"CrossCheckApiDocsSnapshotFailure": {
+				"type": "object",
+				"required": ["kind", "message", "occurredAt", "phase", "sourceId"],
+				"properties": {
+					"kind": { "type": "string" },
+					"message": { "type": "string" },
+					"occurredAt": {
+						"type": "string",
+						"format": "date-time"
+					},
+					"phase": {
+						"type": "string",
+						"enum": ["comparison", "radar_fetch", "stellaratlas_read"]
+					},
+					"sourceId": {
+						"type": "string",
+						"nullable": true,
+						"enum": ["stellaratlas-api", "withobsrvr-radar"]
+					},
+					"status": { "type": "integer" },
+					"limitBytes": { "type": "integer", "minimum": 0 }
+				}
+			},
+			"CrossCheckApiDocsSnapshotMetadata": {
+				"type": "object",
+				"required": [
+					"documentationUrl",
+					"observedAt",
+					"operationCount",
+					"sourceId",
+					"title",
+					"version"
+				],
+				"properties": {
+					"documentationUrl": {
+						"type": "string",
+						"nullable": true
+					},
+					"observedAt": {
+						"type": "string",
+						"format": "date-time"
+					},
+					"operationCount": { "type": "integer", "minimum": 0 },
+					"sourceId": {
+						"type": "string",
+						"enum": ["stellaratlas-api", "withobsrvr-radar"]
+					},
+					"title": { "type": "string" },
+					"version": { "type": "string" }
+				}
+			},
 			"SearchFacetValue": {
 				"type": "object",
 				"required": ["count", "value"],

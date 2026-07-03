@@ -60,6 +60,7 @@ import {
 import { GetStatus } from '@status/use-cases/get-status/GetStatus.js';
 import { GetWorkerStatus } from '@status/use-cases/get-worker-status/GetWorkerStatus.js';
 import { crossCheckRouter } from '@cross-check/infrastructure/http/CrossCheckRouter.js';
+import { GetApiDocsComparisonSnapshot } from '@cross-check/use-cases/get-api-docs-comparison-snapshot/GetApiDocsComparisonSnapshot.js';
 import { GetCrossCheckArchives } from '@cross-check/use-cases/get-cross-check-archives/GetCrossCheckArchives.js';
 import { GetCrossCheckOrganizations } from '@cross-check/use-cases/get-cross-check-organizations/GetCrossCheckOrganizations.js';
 import { GetCrossCheckSources } from '@cross-check/use-cases/get-cross-check-sources/GetCrossCheckSources.js';
@@ -190,6 +191,9 @@ const listen = async () => {
 	api.use(
 		'/v1/cross-check',
 		crossCheckRouter({
+			getApiDocsComparisonSnapshot: kernel.container.get(
+				GetApiDocsComparisonSnapshot
+			),
 			getCrossCheckArchives: kernel.container.get(GetCrossCheckArchives),
 			getCrossCheckOrganizations: kernel.container.get(
 				GetCrossCheckOrganizations

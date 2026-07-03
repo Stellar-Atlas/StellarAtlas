@@ -5,6 +5,7 @@ import type { NodeMeasurementRepository } from '@network-scan/domain/node/NodeMe
 import { NETWORK_TYPES } from '@network-scan/infrastructure/di/di-types.js';
 import { TypeOrmNodeMeasurementRepository } from '@network-scan/infrastructure/database/repositories/TypeOrmNodeMeasurementRepository.js';
 import { TypeOrmOrganizationRepository } from '@network-scan/infrastructure/database/repositories/TypeOrmOrganizationRepository.js';
+import { GetApiDocsComparisonSnapshot } from '@cross-check/use-cases/get-api-docs-comparison-snapshot/GetApiDocsComparisonSnapshot.js';
 import { GetCrossCheckArchives } from '@cross-check/use-cases/get-cross-check-archives/GetCrossCheckArchives.js';
 import { GetCrossCheckOrganizations } from '@cross-check/use-cases/get-cross-check-organizations/GetCrossCheckOrganizations.js';
 import { GetCrossCheckSources } from '@cross-check/use-cases/get-cross-check-sources/GetCrossCheckSources.js';
@@ -27,6 +28,9 @@ test('kernel', async () => {
 	);
 	expect(container.get(GetCrossCheckSources)).toBeInstanceOf(
 		GetCrossCheckSources
+	);
+	expect(container.get(GetApiDocsComparisonSnapshot)).toBeInstanceOf(
+		GetApiDocsComparisonSnapshot
 	);
 	expect(container.get(GetCrossCheckArchives)).toBeInstanceOf(
 		GetCrossCheckArchives

@@ -1,12 +1,14 @@
 import express, { Router } from 'express';
 import { query, validationResult } from 'express-validator';
 import type { Result } from 'neverthrow';
+import { GetApiDocsComparisonSnapshot } from '../../use-cases/get-api-docs-comparison-snapshot/GetApiDocsComparisonSnapshot.js';
 import { GetCrossCheckArchives } from '../../use-cases/get-cross-check-archives/GetCrossCheckArchives.js';
 import { GetCrossCheckOrganizations } from '../../use-cases/get-cross-check-organizations/GetCrossCheckOrganizations.js';
 import { GetCrossCheckSources } from '../../use-cases/get-cross-check-sources/GetCrossCheckSources.js';
 import { GetCrossCheckValidators } from '../../use-cases/get-cross-check-validators/GetCrossCheckValidators.js';
 
 export interface CrossCheckRouterConfig {
+	readonly getApiDocsComparisonSnapshot: GetApiDocsComparisonSnapshot;
 	readonly getCrossCheckArchives: GetCrossCheckArchives;
 	readonly getCrossCheckOrganizations: GetCrossCheckOrganizations;
 	readonly getCrossCheckSources: GetCrossCheckSources;
@@ -14,6 +16,7 @@ export interface CrossCheckRouterConfig {
 }
 
 const archiveCrossCheckCacheMaxAgeSeconds = 10;
+const apiDocsComparisonCacheMaxAgeSeconds = 60;
 const organizationCrossCheckCacheMaxAgeSeconds = 30;
 const sourceCrossCheckCacheMaxAgeSeconds = 300;
 const validatorCrossCheckCacheMaxAgeSeconds = 30;
@@ -22,6 +25,14 @@ export const CrossCheckRouterWrapper = (
 	config: CrossCheckRouterConfig
 ): Router => {
 	const crossCheckRouter = express.Router();
+
+	crossCheckRouter.get('/api-docs/latest', async function (_req, res) {
+		return sendNullableCrossCheckResult(
+			res,
+			await config.getApiDocsComparisonSnapshot.execute(),
+			apiDocsComparisonCacheMaxAgeSeconds
+		);
+	});
 
 	crossCheckRouter.get(
 		'/organizations',
@@ -121,6 +132,24 @@ function sendCrossCheckResult<T>(
 
 	if (result.isErr()) {
 		return res.status(500).json({ error: 'Internal server error' });
+	}
+
+	return res.status(200).json(result.value);
+}
+
+function sendNullableCrossCheckResult<T>(
+	res: express.Response,
+	result: Result<T | null, Error>,
+	cacheMaxAgeSeconds: number
+): express.Response {
+	res.setHeader('Cache-Control', 'public, max-age=' + cacheMaxAgeSeconds);
+
+	if (result.isErr()) {
+		return res.status(500).json({ error: 'Internal server error' });
+	}
+
+	if (result.value === null) {
+		return res.status(204).send();
 	}
 
 	return res.status(200).json(result.value);
