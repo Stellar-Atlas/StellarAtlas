@@ -52,6 +52,7 @@ const directorySourceAliases = aliasPattern([
 	'dto',
 	'env',
 	'examples',
+	'fbas',
 	'federated-voting',
 	'format',
 	'history-scan-coordinator',

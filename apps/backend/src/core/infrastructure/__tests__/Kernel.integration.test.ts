@@ -9,6 +9,7 @@ import { GetCrossCheckArchives } from '@cross-check/use-cases/get-cross-check-ar
 import { GetCrossCheckOrganizations } from '@cross-check/use-cases/get-cross-check-organizations/GetCrossCheckOrganizations.js';
 import { GetCrossCheckSources } from '@cross-check/use-cases/get-cross-check-sources/GetCrossCheckSources.js';
 import { GetCrossCheckValidators } from '@cross-check/use-cases/get-cross-check-validators/GetCrossCheckValidators.js';
+import { GetLatestFbas } from '@fbas/use-cases/get-latest-fbas/GetLatestFbas.js';
 
 jest.setTimeout(10000); //slow and long integration test
 
@@ -36,6 +37,7 @@ test('kernel', async () => {
 	expect(container.get(GetCrossCheckValidators)).toBeInstanceOf(
 		GetCrossCheckValidators
 	);
+	expect(container.get(GetLatestFbas)).toBeInstanceOf(GetLatestFbas);
 
 	await kernel.close();
 });

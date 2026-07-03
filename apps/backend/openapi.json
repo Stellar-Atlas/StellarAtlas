@@ -53,6 +53,10 @@
 			"description": "External source catalog and cross-reference review endpoints"
 		},
 		{
+			"name": "FBAS",
+			"description": "Federated Byzantine Agreement System aggregate quorum evidence"
+		},
+		{
 			"name": "SCP",
 			"description": "Observed Stellar Consensus Protocol statements"
 		},
@@ -425,6 +429,133 @@
 							}
 						}
 					}
+				}
+			}
+		},
+		"/v1/fbas/latest": {
+			"get": {
+				"summary": "Get latest FBAS aggregate evidence",
+				"description": "Returns aggregate FBAS quorum metrics from the latest completed network scan measurement. The endpoint does not run live analysis and does not include persisted proof sets.",
+				"tags": ["FBAS"],
+				"operationId": "getLatestFbas",
+				"responses": {
+					"200": {
+						"description": "latest aggregate FBAS evidence",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object",
+									"required": [
+										"generatedAt",
+										"evidenceSelection",
+										"proofSetPersistence",
+										"scanId",
+										"scanTime",
+										"latestLedger",
+										"latestLedgerCloseTime",
+										"processedLedgers",
+										"summary"
+									],
+									"properties": {
+										"generatedAt": {
+											"type": "string",
+											"format": "date-time"
+										},
+										"evidenceSelection": {
+											"type": "string",
+											"enum": ["latest_completed_network_scan_measurement"]
+										},
+										"proofSetPersistence": {
+											"type": "string",
+											"enum": ["not_persisted"]
+										},
+										"scanId": {
+											"type": "integer"
+										},
+										"scanTime": {
+											"type": "string",
+											"format": "date-time"
+										},
+										"latestLedger": { "type": "string" },
+										"latestLedgerCloseTime": {
+											"type": "string",
+											"format": "date-time",
+											"nullable": true
+										},
+										"processedLedgers": {
+											"type": "array",
+											"items": { "type": "integer" }
+										},
+										"summary": {
+											"type": "object",
+											"required": [
+												"nrOfActiveWatchers",
+												"nrOfConnectableNodes",
+												"nrOfActiveValidators",
+												"nrOfActiveFullValidators",
+												"nrOfActiveOrganizations",
+												"transitiveQuorumSetSize",
+												"hasTransitiveQuorumSet",
+												"topTierSize",
+												"topTierOrgsSize",
+												"hasSymmetricTopTier",
+												"hasQuorumIntersection",
+												"minBlockingSetSize",
+												"minBlockingSetFilteredSize",
+												"minBlockingSetOrgsSize",
+												"minBlockingSetOrgsFilteredSize",
+												"minBlockingSetCountrySize",
+												"minBlockingSetCountryFilteredSize",
+												"minBlockingSetISPSize",
+												"minBlockingSetISPFilteredSize",
+												"minSplittingSetSize",
+												"minSplittingSetOrgsSize",
+												"minSplittingSetCountrySize",
+												"minSplittingSetISPSize"
+											],
+											"properties": {
+												"nrOfActiveWatchers": { "type": "integer" },
+												"nrOfConnectableNodes": { "type": "integer" },
+												"nrOfActiveValidators": { "type": "integer" },
+												"nrOfActiveFullValidators": { "type": "integer" },
+												"nrOfActiveOrganizations": { "type": "integer" },
+												"transitiveQuorumSetSize": { "type": "integer" },
+												"hasTransitiveQuorumSet": { "type": "boolean" },
+												"topTierSize": { "type": "integer" },
+												"topTierOrgsSize": { "type": "integer" },
+												"hasSymmetricTopTier": { "type": "boolean" },
+												"hasQuorumIntersection": { "type": "boolean" },
+												"minBlockingSetSize": { "type": "integer" },
+												"minBlockingSetFilteredSize": { "type": "integer" },
+												"minBlockingSetOrgsSize": { "type": "integer" },
+												"minBlockingSetOrgsFilteredSize": {
+													"type": "integer"
+												},
+												"minBlockingSetCountrySize": { "type": "integer" },
+												"minBlockingSetCountryFilteredSize": {
+													"type": "integer"
+												},
+												"minBlockingSetISPSize": { "type": "integer" },
+												"minBlockingSetISPFilteredSize": {
+													"type": "integer"
+												},
+												"minSplittingSetSize": { "type": "integer" },
+												"minSplittingSetOrgsSize": { "type": "integer" },
+												"minSplittingSetCountrySize": {
+													"type": "integer"
+												},
+												"minSplittingSetISPSize": { "type": "integer" }
+											}
+										}
+									}
+								}
+							}
+						}
+					},
+					"404": {
+						"description": "No latest completed network scan was found"
+					},
+					"500": { "description": "Server error" }
 				}
 			}
 		},

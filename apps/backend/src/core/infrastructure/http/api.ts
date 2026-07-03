@@ -64,6 +64,8 @@ import { GetCrossCheckArchives } from '@cross-check/use-cases/get-cross-check-ar
 import { GetCrossCheckOrganizations } from '@cross-check/use-cases/get-cross-check-organizations/GetCrossCheckOrganizations.js';
 import { GetCrossCheckSources } from '@cross-check/use-cases/get-cross-check-sources/GetCrossCheckSources.js';
 import { GetCrossCheckValidators } from '@cross-check/use-cases/get-cross-check-validators/GetCrossCheckValidators.js';
+import { fbasRouter } from '@fbas/infrastructure/http/FbasRouter.js';
+import { GetLatestFbas } from '@fbas/use-cases/get-latest-fbas/GetLatestFbas.js';
 import { frontendV4ProxyMiddleware } from './FrontendV4Proxy.js';
 
 let server: Server;
@@ -194,6 +196,13 @@ const listen = async () => {
 			),
 			getCrossCheckSources: kernel.container.get(GetCrossCheckSources),
 			getCrossCheckValidators: kernel.container.get(GetCrossCheckValidators)
+		})
+	);
+
+	api.use(
+		'/v1/fbas',
+		fbasRouter({
+			getLatestFbas: kernel.container.get(GetLatestFbas)
 		})
 	);
 

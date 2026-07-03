@@ -30,6 +30,12 @@
 			"@cross-check/*": [
 				"./src/cross-check/*"
 			],
+			"@fbas/*.js": [
+				"./src/fbas/*.ts"
+			],
+			"@fbas/*": [
+				"./src/fbas/*"
+			],
 			"@history-scan-coordinator/*.js": [
 				"./src/history-scan-coordinator/*.ts"
 			],
