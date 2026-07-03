@@ -1,0 +1,141 @@
+.blockchain-explorer {
+	display: grid;
+	gap: 16px;
+}
+
+.blockchain-stats {
+	grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.blockchain-graph-shell {
+	display: grid;
+	gap: 16px;
+	grid-template-columns: minmax(0, 1fr) minmax(280px, 360px);
+}
+
+.blockchain-graph-stage,
+.blockchain-inspector {
+	background: var(--panel);
+	border: 1px solid var(--border);
+	border-radius: 8px;
+	box-shadow: var(--shadow);
+	overflow: hidden;
+}
+
+.blockchain-graph-stage {
+	background:
+		linear-gradient(rgba(40, 120, 184, 0.09) 1px, transparent 1px),
+		linear-gradient(90deg, rgba(40, 120, 184, 0.09) 1px, transparent 1px),
+		#08131f;
+	background-size: 28px 28px;
+	min-block-size: 560px;
+	position: relative;
+}
+
+.blockchain-inspector .panel-heading > div {
+	display: grid;
+	gap: 3px;
+}
+
+.blockchain-graph-stage::before {
+	background: linear-gradient(
+		90deg,
+		transparent,
+		rgba(88, 166, 255, 0.22),
+		transparent
+	);
+	block-size: 100%;
+	content: '';
+	inline-size: 24%;
+	inset-block-start: 0;
+	inset-inline-start: -24%;
+	position: absolute;
+}
+
+.blockchain-graph-svg {
+	block-size: 100%;
+	display: block;
+	inline-size: 100%;
+	min-block-size: 560px;
+	position: relative;
+}
+
+.blockchain-edge path {
+	fill: none;
+	marker-end: url('#blockchain-edge-arrow');
+	stroke: currentColor;
+	stroke-linecap: round;
+	stroke-width: 0.62;
+}
+
+.blockchain-edge text {
+	display: none;
+	fill: #c9d8e8;
+	font-size: 2.1px;
+	font-weight: 800;
+	paint-order: stroke;
+	stroke: #08131f;
+	stroke-width: 0.8px;
+	text-anchor: middle;
+}
+
+.blockchain-edge.blue,
+.blockchain-node.blue {
+	color: #58a6ff;
+}
+
+.blockchain-edge.green,
+.blockchain-node.green {
+	color: #5dd39e;
+}
+
+.blockchain-edge.yellow,
+.blockchain-node.yellow {
+	color: #f7cf4d;
+}
+
+.blockchain-edge.red,
+.blockchain-node.red {
+	color: #ff6874;
+}
+
+.blockchain-node circle {
+	fill: currentColor;
+	opacity: 0.18;
+}
+
+.blockchain-node .node-core {
+	fill: currentColor;
+	opacity: 0.95;
+}
+
+.blockchain-node text {
+	fill: #eff6ff;
+	font-weight: 900;
+	letter-spacing: 0;
+	text-anchor: middle;
+}
+
+.blockchain-node .node-label {
+	dominant-baseline: middle;
+	font-size: 2.1px;
+}
+
+.blockchain-node .node-detail {
+	fill: #a9bed4;
+	font-size: 2px;
+}
+
+@media (max-width: 1120px) {
+	.blockchain-stats,
+	.blockchain-graph-shell {
+		grid-template-columns: 1fr;
+	}
+}
+
+@media (max-width: 720px) {
+	.blockchain-graph-stage,
+	.blockchain-graph-svg {
+		min-block-size: 430px;
+	}
+}

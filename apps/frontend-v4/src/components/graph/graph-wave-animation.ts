@@ -1,25 +1,27 @@
 import type {
-	CanvasTexture,
 	Color,
 	Group as ThreeGroup,
 	InstancedMesh,
-	MeshBasicMaterial,
 	Object3D,
 	PlaneGeometry,
 	Vector3
 } from 'three';
 import { maxAnimatedStatementsPerLedger } from './scp-flow-paths';
+import {
+	createWaveShaderMaterial,
+	updateWaveShaderTime,
+	type WaveShaderMaterial
+} from './graph-wave-shader';
 
 export const maxWaveInstances = maxAnimatedStatementsPerLedger;
 
 export interface WaveMeshPool {
-	back: InstancedMesh<PlaneGeometry, MeshBasicMaterial>;
+	back: InstancedMesh<PlaneGeometry, WaveShaderMaterial>;
 	color: Color;
 	dummy: Object3D;
 	forwardAxis: Vector3;
-	front: InstancedMesh<PlaneGeometry, MeshBasicMaterial>;
+	front: InstancedMesh<PlaneGeometry, WaveShaderMaterial>;
 	tangent: Vector3;
-	texture: CanvasTexture;
 }
 
 export interface ActiveWave {
@@ -52,73 +54,14 @@ export const setWaveSlotColor = (
 	if (pool.back.instanceColor) pool.back.instanceColor.needsUpdate = true;
 };
 
-const createWaveTexture = (THREE: typeof import('three')): CanvasTexture => {
-	const canvas = document.createElement('canvas');
-	canvas.width = 256;
-	canvas.height = 64;
-	const context = canvas.getContext('2d');
-	if (!context) return new THREE.CanvasTexture(canvas);
-
-	context.clearRect(0, 0, canvas.width, canvas.height);
-	const gradient = context.createLinearGradient(0, 0, canvas.width, 0);
-	gradient.addColorStop(0, 'rgba(255,255,255,0)');
-	gradient.addColorStop(0.18, 'rgba(255,255,255,0.16)');
-	gradient.addColorStop(0.52, 'rgba(255,255,255,1)');
-	gradient.addColorStop(0.82, 'rgba(255,255,255,0.24)');
-	gradient.addColorStop(1, 'rgba(255,255,255,0)');
-	context.strokeStyle = gradient;
-	context.lineCap = 'round';
-	context.lineJoin = 'round';
-
-	for (const [offsetY, width, amplitude] of [
-		[28, 6, 8],
-		[34, 3.5, 5],
-		[22, 2.2, 4]
-	] as const) {
-		context.beginPath();
-		context.lineWidth = width;
-		for (let x = 0; x <= canvas.width; x += 8) {
-			const y =
-				offsetY + Math.sin((x / canvas.width) * Math.PI * 5) * amplitude;
-			if (x === 0) context.moveTo(x, y);
-			else context.lineTo(x, y);
-		}
-		context.stroke();
-	}
-
-	const texture = new THREE.CanvasTexture(canvas);
-	texture.colorSpace = THREE.SRGBColorSpace;
-	texture.needsUpdate = true;
-	return texture;
-};
-
 export const createWaveMeshPool = (
 	THREE: typeof import('three'),
 	packetGroup: ThreeGroup
 ): WaveMeshPool => {
-	const texture = createWaveTexture(THREE);
 	const frontGeometry = new THREE.PlaneGeometry(54, 16, 1, 1);
 	const backGeometry = new THREE.PlaneGeometry(82, 26, 1, 1);
-	const frontMaterial = new THREE.MeshBasicMaterial({
-		alphaMap: texture,
-		blending: THREE.AdditiveBlending,
-		color: 0xffffff,
-		depthWrite: false,
-		map: texture,
-		opacity: 0.9,
-		transparent: true,
-		vertexColors: true
-	});
-	const backMaterial = new THREE.MeshBasicMaterial({
-		alphaMap: texture,
-		blending: THREE.AdditiveBlending,
-		color: 0xffffff,
-		depthWrite: false,
-		map: texture,
-		opacity: 0.52,
-		transparent: true,
-		vertexColors: true
-	});
+	const frontMaterial = createWaveShaderMaterial(THREE, 0.9, 2.6);
+	const backMaterial = createWaveShaderMaterial(THREE, 0.46, 1.8);
 	const front = new THREE.InstancedMesh(
 		frontGeometry,
 		frontMaterial,
@@ -140,8 +83,7 @@ export const createWaveMeshPool = (
 		dummy: new THREE.Object3D(),
 		forwardAxis: new THREE.Vector3(1, 0, 0),
 		front,
-		tangent: new THREE.Vector3(1, 0, 0),
-		texture
+		tangent: new THREE.Vector3(1, 0, 0)
 	};
 
 	for (let index = 0; index < maxWaveInstances; index += 1) {
@@ -161,7 +103,6 @@ export const disposeWaveMeshPool = (pool: WaveMeshPool): void => {
 	pool.front.material.dispose();
 	pool.back.geometry.dispose();
 	pool.back.material.dispose();
-	pool.texture.dispose();
 };
 
 export const hideAllWaveSlots = (pool: WaveMeshPool): void => {
@@ -177,6 +118,9 @@ export const updateWaveMeshPool = (
 	activeWaves: Map<number, ActiveWave>,
 	now: number
 ): void => {
+	updateWaveShaderTime(pool.front.material, now);
+	updateWaveShaderTime(pool.back.material, now);
+
 	for (const [index, wave] of activeWaves) {
 		const linearProgress = Math.min(
 			1,

@@ -18,6 +18,7 @@ export function AppShell({ children }: AppShellProps): React.JSX.Element {
 					</Link>
 					<nav className="nav">
 						<NavLink href="/" label="Graph" />
+						<NavLink href="/explorer" label="Explorer" />
 						<NavLink href="/overview" label="Overview" />
 						<NavLink href="/nodes" label="Nodes" />
 						<NavLink href="/organizations" label="Organizations" />
