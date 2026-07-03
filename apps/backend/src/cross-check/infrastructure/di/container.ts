@@ -14,6 +14,7 @@ import type { CrossCheckRadarNetworkComparisonSnapshotRepository } from '../../d
 import { CrossCheckRadarNetworkComparisonSnapshot } from '../database/entities/CrossCheckRadarNetworkComparisonSnapshot.js';
 import { TypeOrmCrossCheckRadarNetworkComparisonSnapshotRepository } from '../database/repositories/TypeOrmCrossCheckRadarNetworkComparisonSnapshotRepository.js';
 import { GetRadarNetworkComparisonSnapshot } from '../../use-cases/get-radar-network-comparison-snapshot/GetRadarNetworkComparisonSnapshot.js';
+import { ListRadarNetworkComparisonSnapshots } from '../../use-cases/list-radar-network-comparison-snapshots/ListRadarNetworkComparisonSnapshots.js';
 import Container = interfaces.Container;
 
 export function load(container: Container) {
@@ -41,6 +42,7 @@ export function load(container: Container) {
 	container.bind(GetApiDocsComparisonSnapshot).toSelf();
 	container.bind(GetRadarNetworkComparisonSnapshot).toSelf();
 	container.bind(ListApiDocsComparisonSnapshots).toSelf();
+	container.bind(ListRadarNetworkComparisonSnapshots).toSelf();
 	container.bind(GetCrossCheckArchives).toSelf();
 	container.bind(GetCrossCheckOrganizations).toSelf();
 	container.bind(GetCrossCheckSources).toSelf();

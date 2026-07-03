@@ -8,6 +8,7 @@ import { GetCrossCheckSources } from '../../use-cases/get-cross-check-sources/Ge
 import { GetCrossCheckValidators } from '../../use-cases/get-cross-check-validators/GetCrossCheckValidators.js';
 import { GetRadarNetworkComparisonSnapshot } from '../../use-cases/get-radar-network-comparison-snapshot/GetRadarNetworkComparisonSnapshot.js';
 import { ListApiDocsComparisonSnapshots } from '../../use-cases/list-api-docs-comparison-snapshots/ListApiDocsComparisonSnapshots.js';
+import { ListRadarNetworkComparisonSnapshots } from '../../use-cases/list-radar-network-comparison-snapshots/ListRadarNetworkComparisonSnapshots.js';
 
 export interface CrossCheckRouterConfig {
 	readonly getApiDocsComparisonSnapshot: GetApiDocsComparisonSnapshot;
@@ -17,6 +18,7 @@ export interface CrossCheckRouterConfig {
 	readonly getCrossCheckValidators: GetCrossCheckValidators;
 	readonly getRadarNetworkComparisonSnapshot: GetRadarNetworkComparisonSnapshot;
 	readonly listApiDocsComparisonSnapshots: ListApiDocsComparisonSnapshots;
+	readonly listRadarNetworkComparisonSnapshots: ListRadarNetworkComparisonSnapshots;
 }
 
 const archiveCrossCheckCacheMaxAgeSeconds = 10;
@@ -72,6 +74,32 @@ export const CrossCheckRouterWrapper = (
 			radarNetworkComparisonCacheMaxAgeSeconds
 		);
 	});
+
+	crossCheckRouter.get(
+		'/radar-network/snapshots',
+		[
+			query('limit')
+				.optional()
+				.isInt({ min: 1, max: ListRadarNetworkComparisonSnapshots.maxLimit })
+		],
+		async function (req: express.Request, res: express.Response) {
+			const errors = validationResult(req);
+			if (!errors.isEmpty()) {
+				return res.status(400).json({ errors: errors.array() });
+			}
+
+			const limit =
+				typeof req.query.limit === 'string'
+					? Number(req.query.limit)
+					: undefined;
+
+			return sendCrossCheckResult(
+				res,
+				await config.listRadarNetworkComparisonSnapshots.execute({ limit }),
+				radarNetworkComparisonCacheMaxAgeSeconds
+			);
+		}
+	);
 
 	crossCheckRouter.get(
 		'/organizations',

@@ -1825,6 +1825,42 @@
 				}
 			}
 		},
+		"/v1/cross-check/radar-network/snapshots": {
+			"get": {
+				"summary": "List RADAR network cross-check snapshots",
+				"description": "Returns recent persisted RADAR versus StellarAtlas network comparison snapshot summaries. This endpoint does not fetch RADAR, run live probes, recompute comparisons, run network scans, or include validator/organization diff payloads.",
+				"tags": ["CrossCheck"],
+				"operationId": "listCrossCheckRadarNetworkSnapshots",
+				"parameters": [
+					{
+						"name": "limit",
+						"in": "query",
+						"description": "Maximum number of snapshot summaries to return.",
+						"required": false,
+						"schema": {
+							"type": "integer",
+							"minimum": 1,
+							"maximum": 25,
+							"default": 10
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "recent RADAR network comparison snapshot summaries",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/CrossCheckRadarNetworkComparisonSnapshotList"
+								}
+							}
+						}
+					},
+					"400": { "description": "Bad request" },
+					"500": { "description": "Server error" }
+				}
+			}
+		},
 		"/v1/cross-check/radar-network/latest": {
 			"get": {
 				"summary": "Get latest RADAR network cross-check snapshot",
@@ -5536,6 +5572,73 @@
 						"allOf": [
 							{
 								"$ref": "#/components/schemas/CrossCheckRadarNetworkComparison"
+							}
+						]
+					},
+					"failure": {
+						"nullable": true,
+						"allOf": [
+							{
+								"$ref": "#/components/schemas/CrossCheckRadarNetworkSnapshotFailure"
+							}
+						]
+					}
+				}
+			},
+			"CrossCheckRadarNetworkComparisonSnapshotList": {
+				"type": "object",
+				"required": ["generatedAt", "limit", "count", "snapshots"],
+				"properties": {
+					"generatedAt": {
+						"type": "string",
+						"format": "date-time"
+					},
+					"limit": {
+						"type": "integer",
+						"minimum": 1,
+						"maximum": 25
+					},
+					"count": {
+						"type": "integer",
+						"minimum": 0
+					},
+					"snapshots": {
+						"type": "array",
+						"items": {
+							"$ref": "#/components/schemas/CrossCheckRadarNetworkComparisonSnapshotListItem"
+						}
+					}
+				}
+			},
+			"CrossCheckRadarNetworkComparisonSnapshotListItem": {
+				"type": "object",
+				"required": [
+					"id",
+					"status",
+					"generatedAt",
+					"storedAt",
+					"comparisonSummary",
+					"failure"
+				],
+				"properties": {
+					"id": { "type": "string" },
+					"status": {
+						"type": "string",
+						"enum": ["compared", "failed"]
+					},
+					"generatedAt": {
+						"type": "string",
+						"format": "date-time"
+					},
+					"storedAt": {
+						"type": "string",
+						"format": "date-time"
+					},
+					"comparisonSummary": {
+						"nullable": true,
+						"allOf": [
+							{
+								"$ref": "#/components/schemas/CrossCheckRadarNetworkComparisonSummary"
 							}
 						]
 					},

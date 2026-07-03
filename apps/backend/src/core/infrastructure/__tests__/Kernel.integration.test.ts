@@ -13,6 +13,7 @@ import { GetCrossCheckOrganizations } from '@cross-check/use-cases/get-cross-che
 import { GetCrossCheckSources } from '@cross-check/use-cases/get-cross-check-sources/GetCrossCheckSources.js';
 import { GetCrossCheckValidators } from '@cross-check/use-cases/get-cross-check-validators/GetCrossCheckValidators.js';
 import { GetRadarNetworkComparisonSnapshot } from '@cross-check/use-cases/get-radar-network-comparison-snapshot/GetRadarNetworkComparisonSnapshot.js';
+import { ListRadarNetworkComparisonSnapshots } from '@cross-check/use-cases/list-radar-network-comparison-snapshots/ListRadarNetworkComparisonSnapshots.js';
 import { GetFbasAnalysisProof } from '@fbas/use-cases/get-fbas-analysis-proof/GetFbasAnalysisProof.js';
 import { GetFbasAnalysis } from '@fbas/use-cases/get-fbas-analysis/GetFbasAnalysis.js';
 import { GetLatestFbasProofSets } from '@fbas/use-cases/get-latest-fbas-proof-sets/GetLatestFbasProofSets.js';
@@ -44,6 +45,9 @@ test('kernel', async () => {
 	).toBeInstanceOf(TypeOrmCrossCheckRadarNetworkComparisonSnapshotRepository);
 	expect(container.get(GetRadarNetworkComparisonSnapshot)).toBeInstanceOf(
 		GetRadarNetworkComparisonSnapshot
+	);
+	expect(container.get(ListRadarNetworkComparisonSnapshots)).toBeInstanceOf(
+		ListRadarNetworkComparisonSnapshots
 	);
 	expect(container.get(GetCrossCheckArchives)).toBeInstanceOf(
 		GetCrossCheckArchives

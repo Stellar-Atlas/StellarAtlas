@@ -9,6 +9,7 @@ import { GetCrossCheckSources } from '@cross-check/use-cases/get-cross-check-sou
 import { GetCrossCheckValidators } from '@cross-check/use-cases/get-cross-check-validators/GetCrossCheckValidators.js';
 import { GetRadarNetworkComparisonSnapshot } from '@cross-check/use-cases/get-radar-network-comparison-snapshot/GetRadarNetworkComparisonSnapshot.js';
 import { ListApiDocsComparisonSnapshots } from '@cross-check/use-cases/list-api-docs-comparison-snapshots/ListApiDocsComparisonSnapshots.js';
+import { ListRadarNetworkComparisonSnapshots } from '@cross-check/use-cases/list-radar-network-comparison-snapshots/ListRadarNetworkComparisonSnapshots.js';
 import { CrossCheckRouterWrapper } from '../CrossCheckRouter.js';
 
 describe('CrossCheckRouter.integration', () => {
@@ -20,6 +21,7 @@ describe('CrossCheckRouter.integration', () => {
 	let getCrossCheckValidators: jest.Mocked<GetCrossCheckValidators>;
 	let getRadarNetworkComparisonSnapshot: jest.Mocked<GetRadarNetworkComparisonSnapshot>;
 	let listApiDocsComparisonSnapshots: jest.Mocked<ListApiDocsComparisonSnapshots>;
+	let listRadarNetworkComparisonSnapshots: jest.Mocked<ListRadarNetworkComparisonSnapshots>;
 
 	beforeEach(() => {
 		getApiDocsComparisonSnapshot = mock<GetApiDocsComparisonSnapshot>();
@@ -30,6 +32,8 @@ describe('CrossCheckRouter.integration', () => {
 		getRadarNetworkComparisonSnapshot =
 			mock<GetRadarNetworkComparisonSnapshot>();
 		listApiDocsComparisonSnapshots = mock<ListApiDocsComparisonSnapshots>();
+		listRadarNetworkComparisonSnapshots =
+			mock<ListRadarNetworkComparisonSnapshots>();
 		app = express();
 		app.use(
 			'/cross-check',
@@ -40,7 +44,8 @@ describe('CrossCheckRouter.integration', () => {
 				getCrossCheckSources,
 				getCrossCheckValidators,
 				getRadarNetworkComparisonSnapshot,
-				listApiDocsComparisonSnapshots
+				listApiDocsComparisonSnapshots,
+				listRadarNetworkComparisonSnapshots
 			})
 		);
 	});

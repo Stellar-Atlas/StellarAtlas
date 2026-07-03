@@ -57,6 +57,13 @@ export interface CrossCheckRadarNetworkComparisonSnapshotListItemDTO {
 	readonly storedAt: string;
 }
 
+export interface CrossCheckRadarNetworkComparisonSnapshotListDTO {
+	readonly count: number;
+	readonly generatedAt: string;
+	readonly limit: number;
+	readonly snapshots: readonly CrossCheckRadarNetworkComparisonSnapshotListItemDTO[];
+}
+
 export interface CrossCheckRadarNetworkComparisonSnapshotRepository {
 	findLatest(): Promise<CrossCheckRadarNetworkComparisonSnapshotRecordDTO | null>;
 	findRecent(
