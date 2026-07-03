@@ -1,45 +1,140 @@
 import type {
 	Color,
 	Group as ThreeGroup,
+	InstancedBufferAttribute,
 	InstancedMesh,
-	Object3D,
+	Matrix4,
 	PlaneGeometry,
 	Vector3
 } from 'three';
-import { maxAnimatedStatementsPerLedger } from './scp-flow-paths';
 import {
 	createWaveShaderMaterial,
 	updateWaveShaderTime,
 	type WaveShaderMaterial
 } from './graph-wave-shader';
 
-export const maxWaveInstances = maxAnimatedStatementsPerLedger;
+export const maxWaveInstances = 1_024;
+
+interface WaveInstanceAttributes {
+	duration: InstancedBufferAttribute;
+	midpoint: InstancedBufferAttribute;
+	source: InstancedBufferAttribute;
+	start: InstancedBufferAttribute;
+	target: InstancedBufferAttribute;
+}
+
+interface WaveInstanceData {
+	duration: Float32Array;
+	midpoint: Float32Array;
+	source: Float32Array;
+	start: Float32Array;
+	target: Float32Array;
+	attributes: WaveInstanceAttributes;
+}
 
 export interface WaveMeshPool {
 	back: InstancedMesh<PlaneGeometry, WaveShaderMaterial>;
+	backData: WaveInstanceData;
 	color: Color;
-	dummy: Object3D;
-	forwardAxis: Vector3;
 	front: InstancedMesh<PlaneGeometry, WaveShaderMaterial>;
-	tangent: Vector3;
+	frontData: WaveInstanceData;
+	identity: Matrix4;
 }
 
 export interface ActiveWave {
 	durationMs: number;
 	index: number;
+	startedAt: number;
+}
+
+interface LaunchWaveSlotOptions {
+	color: string;
+	durationMs: number;
 	midpoint: Vector3;
 	source: Vector3;
 	startedAt: number;
 	target: Vector3;
 }
 
+const markAttributesUpdated = (data: WaveInstanceData): void => {
+	data.attributes.duration.needsUpdate = true;
+	data.attributes.midpoint.needsUpdate = true;
+	data.attributes.source.needsUpdate = true;
+	data.attributes.start.needsUpdate = true;
+	data.attributes.target.needsUpdate = true;
+};
+
+const setTriplet = (
+	target: Float32Array,
+	index: number,
+	value: Vector3
+): void => {
+	const offset = index * 3;
+	target[offset] = value.x;
+	target[offset + 1] = value.y;
+	target[offset + 2] = value.z;
+};
+
+const setWaveSlotData = (
+	data: WaveInstanceData,
+	index: number,
+	options: LaunchWaveSlotOptions
+): void => {
+	setTriplet(data.source, index, options.source);
+	setTriplet(data.target, index, options.target);
+	setTriplet(data.midpoint, index, options.midpoint);
+	data.start[index] = options.startedAt / 1_000;
+	data.duration[index] = options.durationMs / 1_000;
+	markAttributesUpdated(data);
+};
+
+const hideWaveSlotData = (data: WaveInstanceData, index: number): void => {
+	data.start[index] = -1_000_000;
+	data.duration[index] = 0;
+	data.attributes.start.needsUpdate = true;
+	data.attributes.duration.needsUpdate = true;
+};
+
+const createInstanceAttribute = (
+	THREE: typeof import('three'),
+	array: Float32Array,
+	itemSize: number
+): InstancedBufferAttribute => {
+	const attribute = new THREE.InstancedBufferAttribute(array, itemSize);
+	attribute.setUsage(THREE.DynamicDrawUsage);
+	return attribute;
+};
+
+const createWaveInstanceData = (
+	THREE: typeof import('three'),
+	geometry: PlaneGeometry
+): WaveInstanceData => {
+	const data: WaveInstanceData = {
+		duration: new Float32Array(maxWaveInstances),
+		midpoint: new Float32Array(maxWaveInstances * 3),
+		source: new Float32Array(maxWaveInstances * 3),
+		start: new Float32Array(maxWaveInstances),
+		target: new Float32Array(maxWaveInstances * 3),
+		attributes: {} as WaveInstanceAttributes
+	};
+	data.attributes = {
+		duration: createInstanceAttribute(THREE, data.duration, 1),
+		midpoint: createInstanceAttribute(THREE, data.midpoint, 3),
+		source: createInstanceAttribute(THREE, data.source, 3),
+		start: createInstanceAttribute(THREE, data.start, 1),
+		target: createInstanceAttribute(THREE, data.target, 3)
+	};
+	geometry.setAttribute('instanceDuration', data.attributes.duration);
+	geometry.setAttribute('instanceMidpoint', data.attributes.midpoint);
+	geometry.setAttribute('instanceSource', data.attributes.source);
+	geometry.setAttribute('instanceStart', data.attributes.start);
+	geometry.setAttribute('instanceTarget', data.attributes.target);
+	return data;
+};
+
 const hideWaveSlot = (pool: WaveMeshPool, index: number): void => {
-	pool.dummy.position.set(0, 0, 0);
-	pool.dummy.quaternion.identity();
-	pool.dummy.scale.setScalar(0);
-	pool.dummy.updateMatrix();
-	pool.front.setMatrixAt(index, pool.dummy.matrix);
-	pool.back.setMatrixAt(index, pool.dummy.matrix);
+	hideWaveSlotData(pool.frontData, index);
+	hideWaveSlotData(pool.backData, index);
 };
 
 export const setWaveSlotColor = (
@@ -54,12 +149,24 @@ export const setWaveSlotColor = (
 	if (pool.back.instanceColor) pool.back.instanceColor.needsUpdate = true;
 };
 
+export const launchWaveSlot = (
+	pool: WaveMeshPool,
+	index: number,
+	options: LaunchWaveSlotOptions
+): void => {
+	setWaveSlotData(pool.frontData, index, options);
+	setWaveSlotData(pool.backData, index, options);
+	setWaveSlotColor(pool, index, options.color);
+};
+
 export const createWaveMeshPool = (
 	THREE: typeof import('three'),
 	packetGroup: ThreeGroup
 ): WaveMeshPool => {
 	const frontGeometry = new THREE.PlaneGeometry(54, 16, 1, 1);
 	const backGeometry = new THREE.PlaneGeometry(82, 26, 1, 1);
+	const frontData = createWaveInstanceData(THREE, frontGeometry);
+	const backData = createWaveInstanceData(THREE, backGeometry);
 	const frontMaterial = createWaveShaderMaterial(THREE, 0.9, 2.6);
 	const backMaterial = createWaveShaderMaterial(THREE, 0.46, 1.8);
 	const front = new THREE.InstancedMesh(
@@ -72,21 +179,21 @@ export const createWaveMeshPool = (
 		backMaterial,
 		maxWaveInstances
 	);
-	front.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
-	back.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
 	front.frustumCulled = false;
 	back.frustumCulled = false;
 
 	const pool: WaveMeshPool = {
 		back,
+		backData,
 		color: new THREE.Color('#58a6ff'),
-		dummy: new THREE.Object3D(),
-		forwardAxis: new THREE.Vector3(1, 0, 0),
 		front,
-		tangent: new THREE.Vector3(1, 0, 0)
+		frontData,
+		identity: new THREE.Matrix4()
 	};
 
 	for (let index = 0; index < maxWaveInstances; index += 1) {
+		front.setMatrixAt(index, pool.identity);
+		back.setMatrixAt(index, pool.identity);
 		hideWaveSlot(pool, index);
 		setWaveSlotColor(pool, index, '#58a6ff');
 	}
@@ -109,8 +216,6 @@ export const hideAllWaveSlots = (pool: WaveMeshPool): void => {
 	for (let index = 0; index < maxWaveInstances; index += 1) {
 		hideWaveSlot(pool, index);
 	}
-	pool.front.instanceMatrix.needsUpdate = true;
-	pool.back.instanceMatrix.needsUpdate = true;
 };
 
 export const updateWaveMeshPool = (
@@ -122,54 +227,8 @@ export const updateWaveMeshPool = (
 	updateWaveShaderTime(pool.back.material, now);
 
 	for (const [index, wave] of activeWaves) {
-		const linearProgress = Math.min(
-			1,
-			(now - wave.startedAt) / wave.durationMs
-		);
-		if (linearProgress >= 1) {
-			hideWaveSlot(pool, index);
-			activeWaves.delete(index);
-			continue;
-		}
-
-		const progress = 1 - Math.pow(1 - linearProgress, 3);
-		const inverse = 1 - progress;
-		const x =
-			inverse * inverse * wave.source.x +
-			2 * inverse * progress * wave.midpoint.x +
-			progress * progress * wave.target.x;
-		const y =
-			inverse * inverse * wave.source.y +
-			2 * inverse * progress * wave.midpoint.y +
-			progress * progress * wave.target.y;
-		const z =
-			inverse * inverse * wave.source.z +
-			2 * inverse * progress * wave.midpoint.z +
-			progress * progress * wave.target.z;
-		const fade =
-			linearProgress > 0.78 ? Math.max(0, (1 - linearProgress) / 0.22) : 1;
-		const pulseScale = (0.75 + Math.sin(progress * Math.PI) * 0.68) * fade;
-
-		pool.tangent
-			.set(
-				2 * inverse * (wave.midpoint.x - wave.source.x) +
-					2 * progress * (wave.target.x - wave.midpoint.x),
-				2 * inverse * (wave.midpoint.y - wave.source.y) +
-					2 * progress * (wave.target.y - wave.midpoint.y),
-				2 * inverse * (wave.midpoint.z - wave.source.z) +
-					2 * progress * (wave.target.z - wave.midpoint.z)
-			)
-			.normalize();
-		pool.dummy.position.set(x, y, z);
-		pool.dummy.quaternion.setFromUnitVectors(pool.forwardAxis, pool.tangent);
-		pool.dummy.scale.setScalar(pulseScale);
-		pool.dummy.updateMatrix();
-		pool.front.setMatrixAt(index, pool.dummy.matrix);
-		pool.dummy.scale.setScalar(pulseScale * 1.62);
-		pool.dummy.updateMatrix();
-		pool.back.setMatrixAt(index, pool.dummy.matrix);
+		if (now - wave.startedAt < wave.durationMs) continue;
+		hideWaveSlot(pool, index);
+		activeWaves.delete(index);
 	}
-
-	pool.front.instanceMatrix.needsUpdate = true;
-	pool.back.instanceMatrix.needsUpdate = true;
 };

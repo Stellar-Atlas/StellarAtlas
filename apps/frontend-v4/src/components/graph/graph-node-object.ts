@@ -127,7 +127,7 @@ export function createGraphNodeObject(
 		group.add(halo);
 	}
 
-	if (node.kind === 'validator' || emphasized) {
+	if (emphasized || (node.kind === 'validator' && node.isInTransitiveQuorumSet)) {
 		group.add(createNodeLabel(node, radius));
 	}
 

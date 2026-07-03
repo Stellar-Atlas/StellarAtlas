@@ -7,7 +7,6 @@ import { getNodeLabel } from '../../domain/network';
 import type { Graph3DLink, Graph3DNode } from './model-3d';
 import { getEndpointId, getGraphLinkKey } from './graph-link-utils';
 
-export const maxAnimatedStatementsPerLedger = 96;
 export const maxActiveFeedStatements = 8;
 export const ledgerPlaybackDurationMs = 5_000;
 export const ledgerCloseAnimationBudgetMs = 3_300;
@@ -42,87 +41,10 @@ export const compareStatementsByObservation = (
 	new Date(left.observedAt).getTime() - new Date(right.observedAt).getTime() ||
 	left.statementHash.localeCompare(right.statementHash);
 
-const addStatementIfNew = (
-	selectedStatements: PublicScpStatementObservation[],
-	selectedHashes: Set<string>,
-	statement: PublicScpStatementObservation | undefined
-): void => {
-	if (!statement || selectedHashes.has(statement.statementHash)) return;
-	if (selectedStatements.length >= maxAnimatedStatementsPerLedger) return;
-	selectedHashes.add(statement.statementHash);
-	selectedStatements.push(statement);
-};
-
 export const selectLedgerAnimationStatements = (
-	statements: readonly PublicScpStatementObservation[],
-	nodesById: ReadonlyMap<string, Graph3DNode>
-): readonly PublicScpStatementObservation[] => {
-	const chronologicalStatements = statements.toSorted(
-		compareStatementsByObservation
-	);
-	if (chronologicalStatements.length <= maxAnimatedStatementsPerLedger)
-		return chronologicalStatements;
-
-	const statementsByOrganization = new Map<
-		string,
-		PublicScpStatementObservation[]
-	>();
-	for (const statement of chronologicalStatements) {
-		const organizationId =
-			nodesById.get(statement.nodeId)?.groupId ?? statement.nodeId;
-		statementsByOrganization.set(organizationId, [
-			...(statementsByOrganization.get(organizationId) ?? []),
-			statement
-		]);
-	}
-
-	const selectedStatements: PublicScpStatementObservation[] = [];
-	const selectedHashes = new Set<string>();
-	const earliestByOrganization = Array.from(statementsByOrganization.values())
-		.map((organizationStatements) => organizationStatements[0])
-		.filter(
-			(statement): statement is PublicScpStatementObservation =>
-				statement !== undefined
-		)
-		.toSorted(compareStatementsByObservation);
-
-	for (const statement of earliestByOrganization)
-		addStatementIfNew(selectedStatements, selectedHashes, statement);
-
-	for (let index = 0; index < maxAnimatedStatementsPerLedger; index += 1) {
-		const sourceIndex = Math.round(
-			(index * (chronologicalStatements.length - 1)) /
-				(maxAnimatedStatementsPerLedger - 1)
-		);
-		addStatementIfNew(
-			selectedStatements,
-			selectedHashes,
-			chronologicalStatements[sourceIndex]
-		);
-	}
-
-	let queueOffset = 0;
-	const organizationQueues = Array.from(statementsByOrganization.values());
-	while (
-		selectedStatements.length < maxAnimatedStatementsPerLedger &&
-		queueOffset < chronologicalStatements.length
-	) {
-		const nextStatements = organizationQueues
-			.map((organizationStatements) => organizationStatements[queueOffset])
-			.filter(
-				(statement): statement is PublicScpStatementObservation =>
-					statement !== undefined
-			)
-			.toSorted(compareStatementsByObservation);
-
-		for (const statement of nextStatements)
-			addStatementIfNew(selectedStatements, selectedHashes, statement);
-
-		queueOffset += 1;
-	}
-
-	return selectedStatements.toSorted(compareStatementsByObservation);
-};
+	statements: readonly PublicScpStatementObservation[]
+): readonly PublicScpStatementObservation[] =>
+	statements.toSorted(compareStatementsByObservation);
 
 export const getLatestSlotIndex = (
 	statements: readonly PublicScpStatementObservation[]
@@ -179,7 +101,15 @@ export const getStatementFlowPath = (
 	}
 
 	const fallbackLink = findStatementFallbackLink(statement, links, nodesById);
-	if (!fallbackLink) return null;
+	if (!fallbackLink) {
+		if (!signer) return null;
+		return {
+			label: `${statement.statementType} observed`,
+			statement,
+			source: signer,
+			target: signer
+		};
+	}
 
 	const sourceId = getEndpointId(fallbackLink.source);
 	const targetId = getEndpointId(fallbackLink.target);

@@ -12,15 +12,18 @@ import {
 } from './scp-flow-paths';
 import { buildStatementWaveSchedule } from './graph-wave-schedule';
 import {
+	getLedgerStatementSignature,
+	mergePlaybackQueue
+} from './graph-playback-queue';
+import {
 	hideAllWaveSlots,
+	launchWaveSlot,
 	maxWaveInstances,
-	setWaveSlotColor,
 	updateWaveMeshPool,
 	type ActiveWave,
 	type WaveMeshPool
 } from './graph-wave-animation';
 import type { PublicScpStatementObservation } from '../../api/types';
-import { compareLedgerSequences } from '../../domain/ledger-sequence';
 
 interface UseGraphAnimationOptions {
 	activeWavesRef: RefObject<Map<number, ActiveWave>>;
@@ -35,6 +38,7 @@ interface UseGraphAnimationOptions {
 	nextWaveIndexRef: RefObject<number>;
 	nodeActivityRef: RefObject<Map<string, number>>;
 	nodesByIdRef: RefObject<Map<string, Graph3DNode>>;
+	playbackBoundarySlotIndex: string | null;
 	playbackLedgers: readonly LedgerPlaybackFrame[];
 	refreshGraphVisuals: () => void;
 	setActivePlaybackSlotIndex: Dispatch<SetStateAction<string | null>>;
@@ -58,6 +62,7 @@ export const useGraphAnimation = ({
 	nextWaveIndexRef,
 	nodeActivityRef,
 	nodesByIdRef,
+	playbackBoundarySlotIndex,
 	playbackLedgers,
 	refreshGraphVisuals,
 	setActivePlaybackSlotIndex,
@@ -70,9 +75,10 @@ export const useGraphAnimation = ({
 	const playbackQueueRef = useRef<LedgerPlaybackFrame[]>([]);
 	const playbackStartedAtRef = useRef(0);
 	const playbackFinishTimeoutRef = useRef<number | null>(null);
-	const completedSlotIndexesRef = useRef<Set<string>>(new Set());
+	const completedSlotSignaturesRef = useRef<Map<string, string>>(new Map());
 	const completedSlotOrderRef = useRef<string[]>([]);
 	const advancePlaybackRef = useRef<() => void>(() => undefined);
+	const previousPlaybackBoundaryRef = useRef<string | null>(null);
 
 	const activateFlowPath = useCallback(
 		(path: StatementFlowPath): void => {
@@ -200,14 +206,19 @@ export const useGraphAnimation = ({
 						: 760;
 			const index = nextWaveIndexRef.current % maxWaveInstances;
 			nextWaveIndexRef.current += 1;
-			setWaveSlotColor(wavePool, index, color);
+			const startedAt = performance.now();
+			launchWaveSlot(wavePool, index, {
+				color,
+				durationMs,
+				midpoint,
+				source,
+				startedAt,
+				target
+			});
 			activeWavesRef.current.set(index, {
 				durationMs,
 				index,
-				midpoint,
-				source,
-				startedAt: performance.now(),
-				target
+				startedAt
 			});
 			scheduleWaveAnimation();
 		},
@@ -260,15 +271,19 @@ export const useGraphAnimation = ({
 		playbackFinishTimeoutRef.current = null;
 	}, []);
 
-	const markSlotCompleted = useCallback((slotIndex: string): void => {
-		if (completedSlotIndexesRef.current.has(slotIndex)) return;
-		completedSlotIndexesRef.current.add(slotIndex);
-		completedSlotOrderRef.current.push(slotIndex);
+	const markSlotCompleted = useCallback((ledger: LedgerPlaybackFrame): void => {
+		if (!completedSlotSignaturesRef.current.has(ledger.slotIndex)) {
+			completedSlotOrderRef.current.push(ledger.slotIndex);
+		}
+		completedSlotSignaturesRef.current.set(
+			ledger.slotIndex,
+			getLedgerStatementSignature(ledger)
+		);
 
 		while (completedSlotOrderRef.current.length > 32) {
 			const expiredSlotIndex = completedSlotOrderRef.current.shift();
 			if (expiredSlotIndex)
-				completedSlotIndexesRef.current.delete(expiredSlotIndex);
+				completedSlotSignaturesRef.current.delete(expiredSlotIndex);
 		}
 	}, []);
 
@@ -344,7 +359,7 @@ export const useGraphAnimation = ({
 			scheduleLedgerStatements(ledger);
 			playbackFinishTimeoutRef.current = window.setTimeout(() => {
 				const activeLedger = activeLedgerRef.current;
-				if (activeLedger) markSlotCompleted(activeLedger.slotIndex);
+				if (activeLedger) markSlotCompleted(activeLedger);
 				activeLedgerRef.current = null;
 				setActivePlaybackSlotIndex(null);
 				clearAnimationEffects();
@@ -415,12 +430,7 @@ export const useGraphAnimation = ({
 	]);
 
 	useEffect(() => {
-		const orderedLedgers = playbackLedgers
-			.toSorted((left, right) =>
-				compareLedgerSequences(left.slotIndex, right.slotIndex)
-			);
-		const latestLedger = orderedLedgers.at(-1);
-		const playableLedgers = orderedLedgers.filter(
+		const playableLedgers = playbackLedgers.filter(
 			(ledger) => ledger.statements.length > 0
 		);
 		const activeLedger = activeLedgerRef.current;
@@ -435,25 +445,27 @@ export const useGraphAnimation = ({
 			}
 		}
 
-		if (!animationsEnabled || !latestLedger) {
+		if (!animationsEnabled || !playbackBoundarySlotIndex) {
 			playbackQueueRef.current = [];
 			return;
 		}
 
-		const eligibleLedgers = playableLedgers
-			.filter(
-				(ledger) =>
-					compareLedgerSequences(ledger.slotIndex, latestLedger.slotIndex) < 0 &&
-					!completedSlotIndexesRef.current.has(ledger.slotIndex) &&
-					activeLedgerRef.current?.slotIndex !== ledger.slotIndex
-			)
-			.slice(-2);
-
-		playbackQueueRef.current = eligibleLedgers;
+		const queueResult = mergePlaybackQueue({
+			activeSlotIndex: activeLedgerRef.current?.slotIndex ?? null,
+			boundarySlotIndex: playbackBoundarySlotIndex,
+			completedSignatures: completedSlotSignaturesRef.current,
+			currentQueue: playbackQueueRef.current,
+			ledgers: playbackLedgers,
+			previousBoundarySlotIndex: previousPlaybackBoundaryRef.current
+		});
+		previousPlaybackBoundaryRef.current =
+			queueResult.acceptedBoundarySlotIndex;
+		playbackQueueRef.current = queueResult.queue;
 		advancePlayback();
 	}, [
 		advancePlayback,
 		animationsEnabled,
+		playbackBoundarySlotIndex,
 		playbackLedgers,
 		scheduleLedgerStatements
 	]);

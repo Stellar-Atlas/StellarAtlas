@@ -3,6 +3,7 @@
 	inset-inline-start: 24px;
 	max-block-size: calc(100% - 48px);
 	overflow: auto;
+	overflow-x: hidden;
 	padding: 18px;
 	inline-size: min(430px, calc(100vw - 48px));
 }

@@ -7,8 +7,8 @@ interface ScpStatementLiveStoreBufferOptions {
 	flushDelayMs?: number;
 }
 
-const defaultBatchSize = 250;
-const defaultFlushDelayMs = 500;
+const defaultBatchSize = 1_000;
+const defaultFlushDelayMs = 1_500;
 
 export class ScpStatementLiveStoreBuffer {
 	private buffer: CrawlerScpStatementObservation[] = [];

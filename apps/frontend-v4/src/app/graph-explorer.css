@@ -61,6 +61,24 @@ body:has(.graph-workspace:not(.graph-loading-workspace))
 	border-radius: 8px;
 	box-shadow: 0 24px 60px rgba(0, 0, 0, 0.28);
 	position: absolute;
+	scrollbar-color: rgba(88, 166, 255, 0.32) transparent;
+	scrollbar-width: thin;
+}
+
+.graph-overlay::-webkit-scrollbar,
+.graph-overlay *::-webkit-scrollbar {
+	inline-size: 7px;
+}
+
+.graph-overlay::-webkit-scrollbar-thumb,
+.graph-overlay *::-webkit-scrollbar-thumb {
+	background: rgba(88, 166, 255, 0.28);
+	border-radius: 999px;
+}
+
+.graph-overlay::-webkit-scrollbar-track,
+.graph-overlay *::-webkit-scrollbar-track {
+	background: transparent;
 }
 
 .graph-summary {
@@ -68,6 +86,7 @@ body:has(.graph-workspace:not(.graph-loading-workspace))
 	inset-inline-start: 24px;
 	max-block-size: calc(100% - 48px);
 	overflow: auto;
+	overflow-x: hidden;
 	padding: 18px;
 	inline-size: min(360px, calc(100vw - 48px));
 }
@@ -76,21 +95,29 @@ body:has(.graph-workspace:not(.graph-loading-workspace))
 	font-size: 1.55rem;
 }
 
+.graph-summary * {
+	min-inline-size: 0;
+}
+
 .summary-grid {
 	display: grid;
 	gap: 4px 12px;
-	grid-template-columns: repeat(3, auto);
+	grid-template-columns: repeat(3, minmax(0, 1fr));
 	margin-block-start: 16px;
 }
 
 .summary-grid strong {
 	color: #58a6ff;
 	font-size: 1.45rem;
+	overflow: hidden;
+	text-overflow: ellipsis;
 }
 
 .summary-grid span {
 	color: #aebdcd;
 	font-size: 0.78rem;
+	overflow: hidden;
+	text-overflow: ellipsis;
 }
 
 .graph-toggle {
@@ -177,7 +204,14 @@ body:has(.graph-workspace:not(.graph-loading-workspace))
 	color: #aebdcd;
 	font-size: 0.72rem;
 	font-weight: 800;
+	overflow-wrap: anywhere;
 	text-transform: uppercase;
+}
+
+.graph-summary .analysis-tooltip::after {
+	inline-size: min(210px, 100%);
+	max-inline-size: 100%;
+	overflow-wrap: anywhere;
 }
 
 .scp-status-row {
@@ -221,6 +255,7 @@ body:has(.graph-workspace:not(.graph-loading-workspace))
 	inset-block: 24px;
 	inset-inline-end: 24px;
 	overflow: auto;
+	overflow-x: hidden;
 	padding: 16px;
 	inline-size: min(430px, calc(100vw - 48px));
 }
@@ -244,6 +279,7 @@ body:has(.graph-workspace:not(.graph-loading-workspace))
 	margin-block-start: 12px;
 	max-block-size: min(330px, calc(100vh - 510px));
 	overflow: auto;
+	overflow-x: hidden;
 }
 
 .selected-organization-card {

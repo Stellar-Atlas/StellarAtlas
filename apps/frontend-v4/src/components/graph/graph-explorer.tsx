@@ -28,6 +28,7 @@ import { scanLogHasArchiveVerificationError } from '../../domain/history-archive
 import {
 	compareStatementsByObservation,
 	getDisplayLedger,
+	getLatestSlotIndex,
 	ledgerCloseAnimationBudgetMs,
 	ledgerPlaybackDurationMs,
 	maxActiveFeedStatements,
@@ -191,8 +192,7 @@ export function GraphExplorer({
 				closeTimeMs: getLedgerCloseTimeMs(statements),
 				slotIndex,
 				statements: selectLedgerAnimationStatements(
-					statements.toSorted(compareStatementsByObservation),
-					modelNodesById
+					statements.toSorted(compareStatementsByObservation)
 				)
 			}))
 			.filter((ledger) => ledger.statements.length > 0);
@@ -230,10 +230,11 @@ export function GraphExplorer({
 	}, [
 		latestLedger,
 		latestLedgerClosedAt,
-		modelNodesById,
 		network.latestLedger,
 		scpStatements
 	]);
+	const playbackBoundarySlotIndex =
+		getLatestSlotIndex(scpStatements) ?? latestLedger ?? network.latestLedger.toString();
 	const activeOrganization =
 		hoveredOrganization ?? focusedOrganization ?? selectedNodeOrganization;
 	const activeStatements = useMemo(() => {
@@ -298,6 +299,7 @@ export function GraphExplorer({
 		nodeActivityRef,
 		nodesByIdRef,
 		playbackLedgers,
+		playbackBoundarySlotIndex,
 		refreshGraphVisuals,
 		setActivePlaybackSlotIndex,
 		setActiveStatementHashes,

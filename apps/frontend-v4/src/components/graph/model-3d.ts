@@ -72,24 +72,28 @@ const getClusterCenter = (
 	count: number,
 	inTransitiveQuorumSet: boolean
 ): { x: number; y: number; z: number } => {
-	const y = 1 - (index / Math.max(count - 1, 1)) * 2;
+	const y = 1 - (((index + 0.5) / Math.max(count, 1)) * 2);
 	const radiusAtY = Math.sqrt(1 - y * y);
 	const theta = goldenAngle * index;
-	const radius = inTransitiveQuorumSet ? 220 : 430;
+	const radius = inTransitiveQuorumSet ? 390 : 640;
 	return {
 		x: Math.cos(theta) * radiusAtY * radius,
-		y: y * radius * 0.72,
+		y: y * radius * (inTransitiveQuorumSet ? 0.58 : 0.72),
 		z: Math.sin(theta) * radiusAtY * radius
 	};
 };
 
 const getMemberOffset = (index: number, count: number): { x: number; y: number; z: number } => {
-	const angle = (Math.PI * 2 * index) / Math.max(count, 1);
-	const radius = 32 + Math.min(count, 18) * 2.4;
+	const ringSize = Math.min(count, 10);
+	const ringIndex = index % Math.max(ringSize, 1);
+	const ring = Math.floor(index / Math.max(ringSize, 1));
+	const ringCount = Math.ceil(count / Math.max(ringSize, 1));
+	const angle = (Math.PI * 2 * ringIndex) / Math.max(ringSize, 1);
+	const radius = 44 + Math.min(count, 24) * 3.2 + ring * 24;
 	return {
 		x: Math.cos(angle) * radius,
 		y: Math.sin(angle) * radius,
-		z: ((index % 5) - 2) * 16
+		z: (ring - (ringCount - 1) / 2) * 34
 	};
 };
 

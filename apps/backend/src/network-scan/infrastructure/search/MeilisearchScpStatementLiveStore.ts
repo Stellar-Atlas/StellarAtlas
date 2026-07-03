@@ -26,6 +26,9 @@ const filterableAttributes = [
 ] as const;
 const sortableAttributes = ['observedAtMs', 'slotIndex'] as const;
 const maxTrackedDocumentIds = 20_000;
+const taskPollIntervalMs = 100;
+const documentTaskTimeoutMs = 30_000;
+const settingsTaskTimeoutMs = 30_000;
 
 const mapStellarValueSummary = (
 	value: StellarValueSummary
@@ -100,7 +103,10 @@ export class MeilisearchScpStatementLiveStore
 		if (!this.index || observations.length === 0) return;
 		await this.ensureIndexReady();
 		if (this.resetOnFirstWrite) {
-			await this.index.deleteAllDocuments().waitTask({ interval: 50 });
+			await this.index.deleteAllDocuments().waitTask({
+				interval: taskPollIntervalMs,
+				timeout: documentTaskTimeoutMs
+			});
 			this.trackedDocumentIds.length = 0;
 			this.resetOnFirstWrite = false;
 		}
@@ -108,7 +114,10 @@ export class MeilisearchScpStatementLiveStore
 		const documents = observations.map(toDocument);
 		await this.index
 			.addDocuments(documents, { primaryKey: 'id' })
-			.waitTask({ interval: 50 });
+			.waitTask({
+				interval: taskPollIntervalMs,
+				timeout: documentTaskTimeoutMs
+			});
 		this.trackDocumentIds(documents.map((document) => document.id));
 	}
 
@@ -136,10 +145,16 @@ export class MeilisearchScpStatementLiveStore
 		if (!this.index || this.indexReady) return;
 		await this.index
 			.updateFilterableAttributes([...filterableAttributes])
-			.waitTask({ interval: 50 });
+			.waitTask({
+				interval: taskPollIntervalMs,
+				timeout: settingsTaskTimeoutMs
+			});
 		await this.index
 			.updateSortableAttributes([...sortableAttributes])
-			.waitTask({ interval: 50 });
+			.waitTask({
+				interval: taskPollIntervalMs,
+				timeout: settingsTaskTimeoutMs
+			});
 		this.indexReady = true;
 	}
 
@@ -168,6 +183,12 @@ export class MeilisearchScpStatementLiveStore
 			0,
 			this.trackedDocumentIds.length - maxTrackedDocumentIds
 		);
-		void this.index.deleteDocuments(expiredIds).waitTask({ interval: 50 });
+		void this.index
+			.deleteDocuments(expiredIds)
+			.waitTask({
+				interval: taskPollIntervalMs,
+				timeout: documentTaskTimeoutMs
+			})
+			.catch(() => undefined);
 	}
 }
