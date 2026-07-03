@@ -17,6 +17,7 @@ import { getHighestLedgerSequence } from '../../domain/ledger-sequence';
 
 const networkRefreshIntervalMs = 10_000;
 const scpRefreshIntervalMs = 1_200;
+const scpStatementFetchLimit = 1_000;
 const latestLedgerRefreshIntervalMs = 2_000;
 const liveNetworkPath = '/v1/live';
 const liveScpStatementPath = '/v1/scp-statements/live';
@@ -135,7 +136,10 @@ export const useGraphLiveData = (
 			if (pendingRequests.size > 0) return;
 			const abortController = new AbortController();
 			pendingRequests.add(abortController);
-			void fetchBrowserScpStatements({ limit: 160 }, abortController.signal)
+			void fetchBrowserScpStatements(
+				{ limit: scpStatementFetchLimit },
+				abortController.signal
+			)
 				.then((nextStatements) => {
 					if (isMounted && nextStatements.length > 0) {
 						setScpStatements(nextStatements);

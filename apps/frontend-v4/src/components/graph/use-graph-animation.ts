@@ -1,10 +1,4 @@
-import {
-	useCallback,
-	useEffect,
-	type Dispatch,
-	type RefObject,
-	type SetStateAction
-} from 'react';
+import { useCallback, useEffect, useRef, type Dispatch, type RefObject, type SetStateAction } from 'react';
 import type { ForceGraph3DInstance } from '3d-force-graph';
 import type { GraphVisualState } from './graph-visual-state';
 import type { Graph3DNode } from './model-3d';
@@ -14,7 +8,9 @@ import {
 	getStatementColor,
 	getStatementFlowPath,
 	ledgerCloseAnimationBudgetMs,
+	ledgerPlaybackDurationMs,
 	compareStatementsByObservation,
+	type LedgerPlaybackFrame,
 	type StatementFlowPath
 } from './scp-flow-paths';
 import {
@@ -26,11 +22,11 @@ import {
 	type WaveMeshPool
 } from './graph-wave-animation';
 import type { PublicScpStatementObservation } from '../../api/types';
+import { compareLedgerSequences } from '../../domain/ledger-sequence';
 
 interface UseGraphAnimationOptions {
 	activeWavesRef: RefObject<Map<number, ActiveWave>>;
 	activityTimeoutsRef: RefObject<number[]>;
-	animatedSlotStatements: readonly PublicScpStatementObservation[];
 	animatedStatementHashesRef: RefObject<Set<string>>;
 	animationTimeoutsRef: RefObject<number[]>;
 	animationsEnabled: boolean;
@@ -38,10 +34,10 @@ interface UseGraphAnimationOptions {
 	flowLinkColorsRef: RefObject<Map<string, string>>;
 	graphDataRef: RefObject<GraphRenderData>;
 	graphRef: RefObject<ForceGraph3DInstance | null>;
-	latestSlotIndex: string | null;
 	nextWaveIndexRef: RefObject<number>;
 	nodeActivityRef: RefObject<Map<string, number>>;
 	nodesByIdRef: RefObject<Map<string, Graph3DNode>>;
+	playbackLedgers: readonly LedgerPlaybackFrame[];
 	refreshGraphVisuals: () => void;
 	setActiveStatementHashes: Dispatch<SetStateAction<ReadonlySet<string>>>;
 	threeRef: RefObject<typeof import('three') | null>;
@@ -50,15 +46,14 @@ interface UseGraphAnimationOptions {
 	wavePoolRef: RefObject<WaveMeshPool | null>;
 }
 
-interface UseGraphAnimationResult {
+type UseGraphAnimationResult = {
 	clearAnimationEffects: () => void;
 	scheduleWaveAnimation: () => void;
-}
+};
 
 export const useGraphAnimation = ({
 	activeWavesRef,
 	activityTimeoutsRef,
-	animatedSlotStatements,
 	animatedStatementHashesRef,
 	animationTimeoutsRef,
 	animationsEnabled,
@@ -66,16 +61,24 @@ export const useGraphAnimation = ({
 	flowLinkColorsRef,
 	graphDataRef,
 	graphRef,
-	latestSlotIndex,
 	nextWaveIndexRef,
 	nodeActivityRef,
 	nodesByIdRef,
+	playbackLedgers,
 	refreshGraphVisuals,
 	setActiveStatementHashes,
 	threeRef,
 	waveAnimationFrameRef,
 	wavePoolRef
 }: UseGraphAnimationOptions): UseGraphAnimationResult => {
+	const activeLedgerRef = useRef<LedgerPlaybackFrame | null>(null);
+	const playbackQueueRef = useRef<LedgerPlaybackFrame[]>([]);
+	const playbackStartedAtRef = useRef(0);
+	const playbackFinishTimeoutRef = useRef<number | null>(null);
+	const completedSlotIndexesRef = useRef<Set<string>>(new Set());
+	const completedSlotOrderRef = useRef<string[]>([]);
+	const advancePlaybackRef = useRef<() => void>(() => undefined);
+
 	const activateFlowPath = useCallback(
 		(path: StatementFlowPath): void => {
 			const graph = graphRef.current;
@@ -155,6 +158,7 @@ export const useGraphAnimation = ({
 
 	const scheduleWaveAnimation = useCallback((): void => {
 		if (!animationsEnabledRef.current) return;
+		advancePlaybackRef.current();
 		if (waveAnimationFrameRef.current !== null) return;
 		graphRef.current?.resumeAnimation();
 		waveAnimationFrameRef.current =
@@ -255,15 +259,165 @@ export const useGraphAnimation = ({
 		wavePoolRef
 	]);
 
+	const clearPlaybackFinishTimeout = useCallback((): void => {
+		if (playbackFinishTimeoutRef.current === null) return;
+		window.clearTimeout(playbackFinishTimeoutRef.current);
+		playbackFinishTimeoutRef.current = null;
+	}, []);
+
+	const markSlotCompleted = useCallback((slotIndex: string): void => {
+		if (completedSlotIndexesRef.current.has(slotIndex)) return;
+		completedSlotIndexesRef.current.add(slotIndex);
+		completedSlotOrderRef.current.push(slotIndex);
+
+		while (completedSlotOrderRef.current.length > 32) {
+			const expiredSlotIndex = completedSlotOrderRef.current.shift();
+			if (expiredSlotIndex)
+				completedSlotIndexesRef.current.delete(expiredSlotIndex);
+		}
+	}, []);
+
+	const scheduleLedgerStatements = useCallback(
+		(ledger: LedgerPlaybackFrame): void => {
+			if (
+				!animationsEnabledRef.current ||
+				!graphRef.current ||
+				ledger.statements.length === 0
+			) {
+				return;
+			}
+
+			const elapsedMs = performance.now() - playbackStartedAtRef.current;
+			const latestLaunchMs = ledgerPlaybackDurationMs - 1_700;
+			if (elapsedMs > latestLaunchMs) return;
+
+			const unscheduledStatements = ledger.statements
+				.filter(
+					(statement) =>
+						!animatedStatementHashesRef.current.has(statement.statementHash)
+				)
+				.toSorted(compareStatementsByObservation);
+			if (unscheduledStatements.length === 0) return;
+
+			const observedTimes = ledger.statements
+				.map((statement) => new Date(statement.observedAt).getTime())
+				.filter(Number.isFinite);
+			const firstObservedAt =
+				observedTimes.length > 0 ? Math.min(...observedTimes) : 0;
+			const lastObservedAt =
+				observedTimes.length > 0 ? Math.max(...observedTimes) : 1;
+			const observedSpan = Math.max(1, lastObservedAt - firstObservedAt);
+
+			for (const statement of unscheduledStatements) {
+				const flowPath = getStatementFlowPath(
+					statement,
+					graphDataRef.current.links,
+					nodesByIdRef.current
+				);
+				if (!flowPath) continue;
+
+				animatedStatementHashesRef.current.add(statement.statementHash);
+				const observedAt = new Date(statement.observedAt).getTime();
+				const normalizedDelay = Number.isFinite(observedAt)
+					? (observedAt - firstObservedAt) / observedSpan
+					: 0;
+				const targetDelayMs = Math.max(
+					0,
+					Math.min(
+						ledgerCloseAnimationBudgetMs,
+						Math.floor(normalizedDelay * ledgerCloseAnimationBudgetMs)
+					)
+				);
+				const delayMs = Math.max(
+					0,
+					Math.min(targetDelayMs - elapsedMs, latestLaunchMs - elapsedMs)
+				);
+				const timeout = window.setTimeout(() => {
+					activateFlowPath(flowPath);
+					animateStatementPacket(statement, flowPath);
+					setActiveStatementHashes((current) => {
+						const next = new Set(current);
+						next.add(statement.statementHash);
+						return next;
+					});
+					const clearActiveStatement = window.setTimeout(() => {
+						setActiveStatementHashes((current) => {
+							if (!current.has(statement.statementHash)) return current;
+							const next = new Set(current);
+							next.delete(statement.statementHash);
+							return next;
+						});
+					}, 1_700);
+					activityTimeoutsRef.current.push(clearActiveStatement);
+				}, delayMs);
+				animationTimeoutsRef.current.push(timeout);
+			}
+		},
+		[
+			activateFlowPath,
+			activityTimeoutsRef,
+			animatedStatementHashesRef,
+			animateStatementPacket,
+			animationTimeoutsRef,
+			animationsEnabledRef,
+			graphDataRef,
+			graphRef,
+			nodesByIdRef,
+			setActiveStatementHashes
+		]
+	);
+
+	const startLedgerPlayback = useCallback(
+		(ledger: LedgerPlaybackFrame): void => {
+			clearPlaybackFinishTimeout();
+			clearAnimationEffects();
+			activeLedgerRef.current = ledger;
+			playbackStartedAtRef.current = performance.now();
+			graphRef.current?.resumeAnimation();
+			scheduleWaveAnimation();
+			scheduleLedgerStatements(ledger);
+			playbackFinishTimeoutRef.current = window.setTimeout(() => {
+				const activeLedger = activeLedgerRef.current;
+				if (activeLedger) markSlotCompleted(activeLedger.slotIndex);
+				activeLedgerRef.current = null;
+				clearAnimationEffects();
+				scheduleWaveAnimation();
+				advancePlaybackRef.current();
+			}, ledgerPlaybackDurationMs);
+		},
+		[
+			clearAnimationEffects,
+			clearPlaybackFinishTimeout,
+			graphRef,
+			markSlotCompleted,
+			scheduleLedgerStatements,
+			scheduleWaveAnimation
+		]
+	);
+
+	const advancePlayback = useCallback((): void => {
+		if (
+			!animationsEnabledRef.current ||
+			!graphRef.current ||
+			activeLedgerRef.current
+		) {
+			return;
+		}
+
+		const nextLedger = playbackQueueRef.current.shift();
+		if (nextLedger) startLedgerPlayback(nextLedger);
+	}, [animationsEnabledRef, graphRef, startLedgerPlayback]);
+
 	useEffect(() => {
-		clearAnimationEffects();
-	}, [clearAnimationEffects, latestSlotIndex]);
+		advancePlaybackRef.current = advancePlayback;
+	}, [advancePlayback]);
 
 	useEffect(
 		() => () => {
+			clearPlaybackFinishTimeout();
 			clearAnimationEffects();
 		},
-		[clearAnimationEffects]
+		[clearAnimationEffects, clearPlaybackFinishTimeout]
 	);
 
 	useEffect(() => {
@@ -271,91 +425,73 @@ export const useGraphAnimation = ({
 		if (animationsEnabled) {
 			graphRef.current?.resumeAnimation();
 			scheduleWaveAnimation();
+			advancePlayback();
 			return;
 		}
 
 		graphRef.current?.pauseAnimation();
+		clearPlaybackFinishTimeout();
+		activeLedgerRef.current = null;
+		playbackQueueRef.current = [];
 		clearAnimationEffects();
 	}, [
+		advancePlayback,
 		animationsEnabled,
 		animationsEnabledRef,
 		clearAnimationEffects,
+		clearPlaybackFinishTimeout,
 		graphRef,
 		scheduleWaveAnimation
 	]);
 
 	useEffect(() => {
-		if (
-			!animationsEnabled ||
-			!graphRef.current ||
-			animatedSlotStatements.length === 0
-		) {
+		const orderedLedgers = playbackLedgers
+			.toSorted((left, right) =>
+				compareLedgerSequences(left.slotIndex, right.slotIndex)
+			);
+		const latestLedger = orderedLedgers.at(-1);
+		const playableLedgers = orderedLedgers.filter(
+			(ledger) => ledger.statements.length > 0
+		);
+		const activeLedger = activeLedgerRef.current;
+
+		if (activeLedger) {
+			const updatedActiveLedger = playableLedgers.find(
+				(ledger) => ledger.slotIndex === activeLedger.slotIndex
+			);
+			if (updatedActiveLedger) {
+				activeLedgerRef.current = updatedActiveLedger;
+				scheduleLedgerStatements(updatedActiveLedger);
+			}
+		}
+
+		if (!animationsEnabled || !latestLedger) {
+			playbackQueueRef.current = [];
 			return;
 		}
-		const unscheduledStatements = animatedSlotStatements
+
+		const newestPlayableLedger = playableLedgers
 			.filter(
-				(statement) =>
-					!animatedStatementHashesRef.current.has(statement.statementHash)
+				(ledger) =>
+					compareLedgerSequences(ledger.slotIndex, latestLedger.slotIndex) < 0
 			)
-			.toSorted(compareStatementsByObservation);
-		if (unscheduledStatements.length === 0) return;
+			.at(-1);
+		const newestEligibleLedger =
+			newestPlayableLedger &&
+			!completedSlotIndexesRef.current.has(newestPlayableLedger.slotIndex) &&
+			activeLedgerRef.current?.slotIndex !== newestPlayableLedger.slotIndex
+				? newestPlayableLedger
+				: undefined;
 
-		const observedTimes = animatedSlotStatements.map((statement) =>
-			new Date(statement.observedAt).getTime()
-		);
-		const firstObservedAt = Math.min(...observedTimes);
-		const lastObservedAt = Math.max(...observedTimes);
-		const observedSpan = Math.max(1, lastObservedAt - firstObservedAt);
-
-		for (const statement of unscheduledStatements) {
-			animatedStatementHashesRef.current.add(statement.statementHash);
-			const flowPath = getStatementFlowPath(
-				statement,
-				graphDataRef.current.links,
-				nodesByIdRef.current
-			);
-			if (!flowPath) continue;
-			const observedAt = new Date(statement.observedAt).getTime();
-			const normalizedDelay = (observedAt - firstObservedAt) / observedSpan;
-			const delayMs = Math.max(
-				0,
-				Math.min(
-					ledgerCloseAnimationBudgetMs - 120,
-					Math.floor(normalizedDelay * ledgerCloseAnimationBudgetMs)
-				)
-			);
-			const timeout = window.setTimeout(() => {
-				activateFlowPath(flowPath);
-				animateStatementPacket(statement, flowPath);
-				setActiveStatementHashes((current) => {
-					const next = new Set(current);
-					next.add(statement.statementHash);
-					return next;
-				});
-				const clearActiveStatement = window.setTimeout(() => {
-					setActiveStatementHashes((current) => {
-						if (!current.has(statement.statementHash)) return current;
-						const next = new Set(current);
-						next.delete(statement.statementHash);
-						return next;
-					});
-				}, 1_700);
-				activityTimeoutsRef.current.push(clearActiveStatement);
-			}, delayMs);
-			animationTimeoutsRef.current.push(timeout);
-		}
+		playbackQueueRef.current = newestEligibleLedger
+			? [newestEligibleLedger]
+			: [];
+		advancePlayback();
 	}, [
-		activateFlowPath,
-		activityTimeoutsRef,
-		animatedSlotStatements,
-		animatedStatementHashesRef,
-		animateStatementPacket,
-		animationTimeoutsRef,
+		advancePlayback,
 		animationsEnabled,
-		graphDataRef,
-		graphRef,
-		nodesByIdRef,
-		setActiveStatementHashes
+		playbackLedgers,
+		scheduleLedgerStatements
 	]);
 
 	return { clearAnimationEffects, scheduleWaveAnimation };

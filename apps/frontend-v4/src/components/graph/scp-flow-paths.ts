@@ -7,9 +7,15 @@ import { getNodeLabel } from '../../domain/network';
 import type { Graph3DLink, Graph3DNode } from './model-3d';
 import { getEndpointId, getGraphLinkKey } from './graph-link-utils';
 
-export const maxAnimatedStatementsPerLedger = 48;
+export const maxAnimatedStatementsPerLedger = 160;
 export const maxActiveFeedStatements = 8;
-export const ledgerCloseAnimationBudgetMs = 4_500;
+export const ledgerPlaybackDurationMs = 5_000;
+export const ledgerCloseAnimationBudgetMs = 3_300;
+
+export interface LedgerPlaybackFrame {
+	slotIndex: string;
+	statements: readonly PublicScpStatementObservation[];
+}
 
 export interface StatementFlowPath {
 	label: string;

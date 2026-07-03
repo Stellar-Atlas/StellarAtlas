@@ -28,9 +28,9 @@ import { scanLogHasArchiveVerificationError } from '../../domain/history-archive
 import {
 	compareStatementsByObservation,
 	getDisplayLedger,
-	getLatestSlotIndex,
 	maxActiveFeedStatements,
-	selectLedgerAnimationStatements
+	selectLedgerAnimationStatements,
+	type LedgerPlaybackFrame
 } from './scp-flow-paths';
 import { type ActiveWave, type WaveMeshPool } from './graph-wave-animation';
 import { initialCameraPosition, initialCameraTarget } from './graph-camera';
@@ -43,6 +43,7 @@ import {
 	type GraphRenderData,
 	type GraphRendererStatus
 } from './use-graph-renderer';
+import { compareLedgerSequences } from '../../domain/ledger-sequence';
 
 interface GraphExplorerProps {
 	network: PublicNetwork;
@@ -123,34 +124,47 @@ export function GraphExplorer({
 		() => buildQuorumRows(selectedNode?.node.quorumSet ?? null, modelNodesById),
 		[modelNodesById, selectedNode]
 	);
-	const latestSlotIndex = useMemo(
-		() => getLatestSlotIndex(scpStatements),
-		[scpStatements]
-	);
-	const currentSlotStatements = useMemo(
-		() =>
-			(latestSlotIndex
-				? scpStatements.filter(
-						(statement) => statement.slotIndex === latestSlotIndex
-					)
-				: scpStatements
-			).toSorted(compareStatementsByObservation),
-		[latestSlotIndex, scpStatements]
-	);
-	const animatedSlotStatements = useMemo(
-		() =>
-			selectLedgerAnimationStatements(currentSlotStatements, modelNodesById),
-		[currentSlotStatements, modelNodesById]
-	);
+	const playbackLedgers = useMemo<LedgerPlaybackFrame[]>(() => {
+		const statementsBySlot = new Map<string, PublicScpStatementObservation[]>();
+		for (const statement of scpStatements) {
+			statementsBySlot.set(statement.slotIndex, [
+				...(statementsBySlot.get(statement.slotIndex) ?? []),
+				statement
+			]);
+		}
+
+		const ledgers = Array.from(statementsBySlot.entries())
+			.toSorted(([leftSlot], [rightSlot]) =>
+				compareLedgerSequences(leftSlot, rightSlot)
+			)
+			.map(([slotIndex, statements]) => ({
+				slotIndex,
+				statements: selectLedgerAnimationStatements(
+					statements.toSorted(compareStatementsByObservation),
+					modelNodesById
+				)
+			}))
+			.filter((ledger) => ledger.statements.length > 0);
+		const boundarySlotIndex = latestLedger ?? network.latestLedger.toString();
+		const lastLedgerSlotIndex = ledgers.at(-1)?.slotIndex;
+		if (
+			lastLedgerSlotIndex &&
+			compareLedgerSequences(lastLedgerSlotIndex, boundarySlotIndex) < 0
+		) {
+			return [...ledgers, { slotIndex: boundarySlotIndex, statements: [] }];
+		}
+
+		return ledgers;
+	}, [latestLedger, modelNodesById, network.latestLedger, scpStatements]);
 	const activeOrganization =
 		hoveredOrganization ?? focusedOrganization ?? selectedNodeOrganization;
 	const activeStatements = useMemo(() => {
 		if (activeStatementHashes.size === 0) return [];
-		return animatedSlotStatements
+		return scpStatements
 			.filter((statement) => activeStatementHashes.has(statement.statementHash))
 			.toSorted(compareStatementsByObservation)
 			.slice(-maxActiveFeedStatements);
-	}, [activeStatementHashes, animatedSlotStatements]);
+	}, [activeStatementHashes, scpStatements]);
 	const selectedNodeStatements = useMemo(
 		() =>
 			selectedNode
@@ -195,7 +209,6 @@ export function GraphExplorer({
 	const { scheduleWaveAnimation } = useGraphAnimation({
 		activeWavesRef,
 		activityTimeoutsRef,
-		animatedSlotStatements,
 		animatedStatementHashesRef,
 		animationTimeoutsRef,
 		animationsEnabled,
@@ -203,10 +216,10 @@ export function GraphExplorer({
 		flowLinkColorsRef,
 		graphDataRef,
 		graphRef,
-		latestSlotIndex,
 		nextWaveIndexRef,
 		nodeActivityRef,
 		nodesByIdRef,
+		playbackLedgers,
 		refreshGraphVisuals,
 		setActiveStatementHashes,
 		threeRef,

@@ -85,6 +85,10 @@
 	padding: 8px 9px;
 }
 
+.scp-flow-focus.active {
+	border-color: rgba(126, 231, 135, 0.48);
+}
+
 .scp-flow-focus strong,
 .scp-flow-focus span {
 	display: block;
@@ -157,9 +161,20 @@
 	cursor: pointer;
 	display: grid;
 	gap: 8px;
-	grid-template-columns: 34px minmax(0, 1fr) auto;
+	grid-template-columns: 82px minmax(0, 1fr) minmax(74px, auto);
+	min-inline-size: 0;
 	padding-block-start: 6px;
 	text-align: left;
+}
+
+.scp-flow-list .scp-flow-slot {
+	display: block;
+	font-variant-numeric: tabular-nums;
+	line-height: 1;
+	min-inline-size: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
 }
 
 .scp-flow-list button:hover,
@@ -175,9 +190,16 @@
 
 .scp-flow-list strong,
 .scp-flow-list small {
+	min-inline-size: 0;
 	overflow: hidden;
 	text-overflow: ellipsis;
 	white-space: nowrap;
+}
+
+.scp-flow-list small {
+	justify-self: end;
+	max-inline-size: 86px;
+	text-align: end;
 }
 
 .scp-flow-list p {

@@ -66,17 +66,6 @@ const getStatementValueLabel = (
 	statement: PublicScpStatementObservation
 ): string => (statement.values[0] === undefined ? 'statement hash' : 'tx set');
 
-const formatStatementAge = (
-	statement: PublicScpStatementObservation
-): string => {
-	const observedAt = new Date(statement.observedAt).getTime();
-	const ageSeconds = Math.max(0, Math.floor((Date.now() - observedAt) / 1000));
-	if (ageSeconds < 90) return `${ageSeconds}s`;
-	const ageMinutes = Math.floor(ageSeconds / 60);
-	if (ageMinutes < 90) return `${ageMinutes}m`;
-	return `${Math.floor(ageMinutes / 60)}h`;
-};
-
 const summarizeStatements = (
 	network: PublicNetwork,
 	statements: readonly PublicScpStatementObservation[]
@@ -140,9 +129,17 @@ const compareStatementsForFeed = (
 	return right.statementHash.localeCompare(left.statementHash);
 };
 
+const compareStatementsByStepTime = (
+	left: PublicScpStatementObservation,
+	right: PublicScpStatementObservation
+): number =>
+	new Date(left.observedAt).getTime() - new Date(right.observedAt).getTime() ||
+	left.statementHash.localeCompare(right.statementHash);
+
 const getStellarExpertTransactionUrl = (hash: string): string =>
 	`https://stellar.expert/explorer/public/tx/${encodeURIComponent(hash)}`;
 const visibleStatementCount = 12;
+const visibleStepStatementCount = 8;
 
 const shortenHash = (hash: string): string =>
 	hash.length > 18 ? `${hash.slice(0, 12)}...${hash.slice(-6)}` : hash;
@@ -159,7 +156,10 @@ export function ScpLiveFeed({
 	network,
 	statements
 }: ScpLiveFeedProps): React.JSX.Element {
-	const summary = summarizeStatements(network, statements);
+	const summary = useMemo(
+		() => summarizeStatements(network, statements),
+		[network, statements]
+	);
 	const currentLedgerSlot =
 		toLedgerSequenceText(network.latestLedger) ??
 		network.latestLedger.toString();
@@ -172,6 +172,21 @@ export function ScpLiveFeed({
 		() => statements.toSorted(compareStatementsForFeed).slice(0, 48),
 		[statements]
 	);
+	const activeStatementHashSet = useMemo(
+		() =>
+			new Set(
+				activeStatements.map((statement) => statement.statementHash)
+			),
+		[activeStatements]
+	);
+	const stepStatements = useMemo(() => {
+		if (activeStatements.length > 0) return activeStatements;
+		if (!summary) return [];
+		return statements
+			.filter((statement) => statement.slotIndex === summary.slotIndex)
+			.toSorted(compareStatementsByStepTime)
+			.slice(0, visibleStepStatementCount);
+	}, [activeStatements, statements, summary]);
 	const [feedOffset, setFeedOffset] = useState(0);
 	const [selectedTransactionSet, setSelectedTransactionSet] =
 		useState<SelectedTransactionSet | null>(null);
@@ -280,10 +295,17 @@ export function ScpLiveFeed({
 				<span className="confirm">Confirm</span>
 				<span className="externalize">Externalize</span>
 			</div>
-			{activeStatements.length > 0 && (
+			{stepStatements.length > 0 && (
 				<div className="scp-flow-focus-grid">
-					{activeStatements.map((statement) => (
-						<div className="scp-flow-focus" key={statement.statementHash}>
+					{stepStatements.map((statement) => (
+						<div
+							className={
+								activeStatementHashSet.has(statement.statementHash)
+									? 'scp-flow-focus active'
+									: 'scp-flow-focus'
+							}
+							key={statement.statementHash}
+						>
 							<span className={`flow-pulse ${statement.statementType}`} />
 							<div>
 								<strong>{getStatementNodeLabel(network, statement)}</strong>
@@ -408,10 +430,7 @@ export function ScpLiveFeed({
 				{visibleStatements.map((statement) => (
 					<button
 						className={
-							activeStatements.some(
-								(activeStatement) =>
-									activeStatement.statementHash === statement.statementHash
-							)
+							activeStatementHashSet.has(statement.statementHash)
 								? 'active'
 								: ''
 						}
@@ -421,9 +440,7 @@ export function ScpLiveFeed({
 						}
 						type="button"
 					>
-						<span suppressHydrationWarning>
-							{formatStatementAge(statement)}
-						</span>
+						<span className="scp-flow-slot">{statement.slotIndex}</span>
 						<strong>{getStatementNodeLabel(network, statement)}</strong>
 						<small>{statement.statementType}</small>
 					</button>
