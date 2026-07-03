@@ -6,6 +6,8 @@ import { NETWORK_TYPES } from '@network-scan/infrastructure/di/di-types.js';
 import { TypeOrmNodeMeasurementRepository } from '@network-scan/infrastructure/database/repositories/TypeOrmNodeMeasurementRepository.js';
 import { TypeOrmOrganizationRepository } from '@network-scan/infrastructure/database/repositories/TypeOrmOrganizationRepository.js';
 import { GetApiDocsComparisonSnapshot } from '@cross-check/use-cases/get-api-docs-comparison-snapshot/GetApiDocsComparisonSnapshot.js';
+import { CROSS_CHECK_TYPES } from '@cross-check/domain/CrossCheckTypes.js';
+import { TypeOrmCrossCheckRadarNetworkComparisonSnapshotRepository } from '@cross-check/infrastructure/database/repositories/TypeOrmCrossCheckRadarNetworkComparisonSnapshotRepository.js';
 import { GetCrossCheckArchives } from '@cross-check/use-cases/get-cross-check-archives/GetCrossCheckArchives.js';
 import { GetCrossCheckOrganizations } from '@cross-check/use-cases/get-cross-check-organizations/GetCrossCheckOrganizations.js';
 import { GetCrossCheckSources } from '@cross-check/use-cases/get-cross-check-sources/GetCrossCheckSources.js';
@@ -36,6 +38,9 @@ test('kernel', async () => {
 	expect(container.get(GetApiDocsComparisonSnapshot)).toBeInstanceOf(
 		GetApiDocsComparisonSnapshot
 	);
+	expect(
+		container.get(CROSS_CHECK_TYPES.RadarNetworkComparisonSnapshotRepository)
+	).toBeInstanceOf(TypeOrmCrossCheckRadarNetworkComparisonSnapshotRepository);
 	expect(container.get(GetCrossCheckArchives)).toBeInstanceOf(
 		GetCrossCheckArchives
 	);

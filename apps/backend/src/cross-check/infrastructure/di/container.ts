@@ -10,6 +10,9 @@ import { CrossCheckApiDocsComparisonSnapshot } from '../database/entities/CrossC
 import { TypeOrmCrossCheckApiDocsComparisonSnapshotRepository } from '../database/repositories/TypeOrmCrossCheckApiDocsComparisonSnapshotRepository.js';
 import { GetApiDocsComparisonSnapshot } from '../../use-cases/get-api-docs-comparison-snapshot/GetApiDocsComparisonSnapshot.js';
 import { ListApiDocsComparisonSnapshots } from '../../use-cases/list-api-docs-comparison-snapshots/ListApiDocsComparisonSnapshots.js';
+import type { CrossCheckRadarNetworkComparisonSnapshotRepository } from '../../domain/CrossCheckRadarNetworkSnapshot.js';
+import { CrossCheckRadarNetworkComparisonSnapshot } from '../database/entities/CrossCheckRadarNetworkComparisonSnapshot.js';
+import { TypeOrmCrossCheckRadarNetworkComparisonSnapshotRepository } from '../database/repositories/TypeOrmCrossCheckRadarNetworkComparisonSnapshotRepository.js';
 import Container = interfaces.Container;
 
 export function load(container: Container) {
@@ -22,6 +25,15 @@ export function load(container: Container) {
 		.toDynamicValue(() => {
 			return new TypeOrmCrossCheckApiDocsComparisonSnapshotRepository(
 				dataSource.getRepository(CrossCheckApiDocsComparisonSnapshot)
+			);
+		});
+	container
+		.bind<CrossCheckRadarNetworkComparisonSnapshotRepository>(
+			CROSS_CHECK_TYPES.RadarNetworkComparisonSnapshotRepository
+		)
+		.toDynamicValue(() => {
+			return new TypeOrmCrossCheckRadarNetworkComparisonSnapshotRepository(
+				dataSource.getRepository(CrossCheckRadarNetworkComparisonSnapshot)
 			);
 		});
 
