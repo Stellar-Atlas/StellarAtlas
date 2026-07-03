@@ -6,6 +6,8 @@ import type {
 	PublicFailoverStatus,
 	PublicHistoryArchiveScan,
 	PublicHistoryArchiveScanLogEntry,
+	PublicLatestLedger,
+	PublicLedgerTransactions,
 	PublicNetwork,
 	PublicNode,
 	PublicOrganization,
@@ -227,6 +229,20 @@ export const fetchHistoryArchiveScanLogs = (
 	fetchJson<PublicHistoryArchiveScanLogEntry[]>(
 		`/v1/history-scan/logs/${encodeURIComponent(historyUrl)}`,
 		withTags(options, [frontendCacheTags.historyScan])
+	);
+
+export const fetchLatestLedger = (
+	options?: FetchOptions
+): Promise<PublicLatestLedger> =>
+	fetchJson<PublicLatestLedger>('/v1/ledger/latest', options);
+
+export const fetchLedgerTransactions = (
+	slotIndex: string,
+	options?: FetchOptions
+): Promise<PublicLedgerTransactions> =>
+	fetchJson<PublicLedgerTransactions>(
+		`/v1/scp/slots/${encodeURIComponent(slotIndex)}/transactions`,
+		options
 	);
 
 export const fetchScpStatements = async (

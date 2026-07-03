@@ -5,7 +5,10 @@ import { Url } from '../domain/Url.js';
 import { CrawlerConfiguration } from 'crawler';
 import { resolveAppEnvPath } from 'shared/lib/env/resolve-app-env-path.js';
 import { parseOptionalUrl } from './parseOptionalUrl.js';
-import { defaultMeilisearchNetworkIndex } from './SearchConfigDefaults.js';
+import {
+	defaultMeilisearchNetworkIndex,
+	defaultMeilisearchScpStatementIndex
+} from './SearchConfigDefaults.js';
 
 config({
 	path: resolveAppEnvPath(import.meta.url, 'backend'),
@@ -67,6 +70,7 @@ export interface Config {
 	meilisearchApiKey?: string;
 	meilisearchHost?: string;
 	meilisearchNetworkIndex: string;
+	meilisearchScpStatementIndex: string;
 	networkScanLoopIntervalMs?: number;
 	historyScanAPIPassword?: string;
 	historyScanAPIUsername?: string;
@@ -108,6 +112,7 @@ export class DefaultConfig implements Config {
 	meilisearchApiKey?: string;
 	meilisearchHost?: string;
 	meilisearchNetworkIndex = defaultMeilisearchNetworkIndex;
+	meilisearchScpStatementIndex = defaultMeilisearchScpStatementIndex;
 	networkScanLoopIntervalMs?: number;
 	historyScanAPIUsername?: string;
 	historyScanAPIPassword?: string;
@@ -298,6 +303,16 @@ export function getConfigFromEnv(): Result<Config, Error> {
 		meilisearchNetworkIndex.trim().length > 0
 	)
 		config.meilisearchNetworkIndex = meilisearchNetworkIndex.trim();
+
+	const meilisearchScpStatementIndex =
+		process.env.MEILISEARCH_SCP_STATEMENT_INDEX;
+	if (
+		isString(meilisearchScpStatementIndex) &&
+		meilisearchScpStatementIndex.trim().length > 0
+	) {
+		config.meilisearchScpStatementIndex =
+			meilisearchScpStatementIndex.trim();
+	}
 
 	let notificationsEnabled = parseBoolean(process.env.NOTIFICATIONS_ENABLED);
 	if (notificationsEnabled === undefined) {

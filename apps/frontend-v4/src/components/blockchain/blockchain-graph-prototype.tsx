@@ -2,9 +2,9 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import {
-	fetchBrowserLatestLedger,
-	fetchBrowserLedgerTransactions
-} from '@api/browser-client';
+	getLatestLedger,
+	getLedgerTransactions
+} from '../../app/actions/network-data';
 import type { PublicLedgerTransactions, PublicLatestLedger } from '@api/types';
 import { StatCard } from '@components/stat-card';
 import {
@@ -29,19 +29,18 @@ export function BlockchainGraphPrototype(): React.JSX.Element {
 		status: 'loading',
 		transactions: null
 	});
-	const loadGraph = useCallback((signal: AbortSignal): void => {
+	const loadGraph = useCallback((): (() => void) => {
+		let cancelled = false;
 		setState({
 			latestLedger: null,
 			message: null,
 			status: 'loading',
 			transactions: null
 		});
-		void fetchBrowserLatestLedger(signal)
+		void getLatestLedger()
 			.then(async (latestLedger) => {
-				const transactions = await fetchBrowserLedgerTransactions(
-					latestLedger.sequence,
-					signal
-				);
+				const transactions = await getLedgerTransactions(latestLedger.sequence);
+				if (cancelled) return;
 				setState({
 					latestLedger,
 					message: transactions.truncated
@@ -52,7 +51,7 @@ export function BlockchainGraphPrototype(): React.JSX.Element {
 				});
 			})
 			.catch((error: Error) => {
-				if (signal.aborted) return;
+				if (cancelled) return;
 				setState({
 					latestLedger: null,
 					message: error.message,
@@ -60,12 +59,13 @@ export function BlockchainGraphPrototype(): React.JSX.Element {
 					transactions: null
 				});
 			});
+		return () => {
+			cancelled = true;
+		};
 	}, []);
 
 	useEffect(() => {
-		const abortController = new AbortController();
-		loadGraph(abortController.signal);
-		return () => abortController.abort();
+		return loadGraph();
 	}, [loadGraph]);
 
 	const model =
@@ -104,8 +104,7 @@ export function BlockchainGraphPrototype(): React.JSX.Element {
 							<span>{state.message ?? 'Explorer graph unavailable'}</span>
 							<button
 								onClick={() => {
-									const abortController = new AbortController();
-									loadGraph(abortController.signal);
+									loadGraph();
 								}}
 								type="button"
 							>

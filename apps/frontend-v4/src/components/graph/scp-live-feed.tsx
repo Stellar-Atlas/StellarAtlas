@@ -6,15 +6,17 @@ import type {
 	PublicNetwork,
 	PublicScpStatementObservation
 } from '../../api/types';
-import { fetchBrowserLedgerTransactions } from '../../api/browser-client';
+import { getLedgerTransactions } from '../../app/actions/network-data';
 import {
 	compareLedgerSequences,
 	getHighestLedgerSequence,
 	toLedgerSequenceText
 } from '../../domain/ledger-sequence';
 import { getNodeLabel } from '../../domain/network';
+import { ScpPhaseTimeline } from './scp-phase-timeline';
 
 interface ScpLiveFeedProps {
+	activeSlotIndex: string | null;
 	activeStatements: readonly PublicScpStatementObservation[];
 	network: PublicNetwork;
 	statements: readonly PublicScpStatementObservation[];
@@ -61,10 +63,6 @@ export const getStatementValueHash = (
 
 	return statement.statementHash.slice(0, 12);
 };
-
-const getStatementValueLabel = (
-	statement: PublicScpStatementObservation
-): string => (statement.values[0] === undefined ? 'statement hash' : 'tx set');
 
 const summarizeStatements = (
 	network: PublicNetwork,
@@ -129,17 +127,9 @@ const compareStatementsForFeed = (
 	return right.statementHash.localeCompare(left.statementHash);
 };
 
-const compareStatementsByStepTime = (
-	left: PublicScpStatementObservation,
-	right: PublicScpStatementObservation
-): number =>
-	new Date(left.observedAt).getTime() - new Date(right.observedAt).getTime() ||
-	left.statementHash.localeCompare(right.statementHash);
-
 const getStellarExpertTransactionUrl = (hash: string): string =>
 	`https://stellar.expert/explorer/public/tx/${encodeURIComponent(hash)}`;
 const visibleStatementCount = 12;
-const visibleStepStatementCount = 8;
 
 const shortenHash = (hash: string): string =>
 	hash.length > 18 ? `${hash.slice(0, 12)}...${hash.slice(-6)}` : hash;
@@ -152,6 +142,7 @@ const getStatementTransactionSet = (
 });
 
 export function ScpLiveFeed({
+	activeSlotIndex,
 	activeStatements,
 	network,
 	statements
@@ -179,14 +170,6 @@ export function ScpLiveFeed({
 			),
 		[activeStatements]
 	);
-	const stepStatements = useMemo(() => {
-		if (activeStatements.length > 0) return activeStatements;
-		if (!summary) return [];
-		return statements
-			.filter((statement) => statement.slotIndex === summary.slotIndex)
-			.toSorted(compareStatementsByStepTime)
-			.slice(0, visibleStepStatementCount);
-	}, [activeStatements, statements, summary]);
 	const [feedOffset, setFeedOffset] = useState(0);
 	const [selectedTransactionSet, setSelectedTransactionSet] =
 		useState<SelectedTransactionSet | null>(null);
@@ -214,7 +197,7 @@ export function ScpLiveFeed({
 
 	useEffect(() => {
 		if (!selectedTransactionSet) return;
-		const abortController = new AbortController();
+		let cancelled = false;
 		setTransactionSetState({
 			message: null,
 			records: [],
@@ -222,11 +205,9 @@ export function ScpLiveFeed({
 			status: 'loading'
 		});
 
-		void fetchBrowserLedgerTransactions(
-			selectedTransactionSet.slotIndex,
-			abortController.signal
-		)
+		void getLedgerTransactions(selectedTransactionSet.slotIndex)
 			.then((payload) => {
+				if (cancelled) return;
 				setTransactionSetState({
 					message: payload.truncated
 						? `Showing the first ${payload.records.length} ledger transactions.`
@@ -237,7 +218,7 @@ export function ScpLiveFeed({
 				});
 			})
 			.catch((error: Error) => {
-				if (abortController.signal.aborted) return;
+				if (cancelled) return;
 				setTransactionSetState({
 					message: error.message,
 					records: [],
@@ -246,7 +227,9 @@ export function ScpLiveFeed({
 				});
 			});
 
-		return () => abortController.abort();
+		return () => {
+			cancelled = true;
+		};
 	}, [selectedTransactionSet]);
 
 	useEffect(() => {
@@ -295,32 +278,14 @@ export function ScpLiveFeed({
 				<span className="confirm">Confirm</span>
 				<span className="externalize">Externalize</span>
 			</div>
-			{stepStatements.length > 0 && (
-				<div className="scp-flow-focus-grid">
-					{stepStatements.map((statement) => (
-						<div
-							className={
-								activeStatementHashSet.has(statement.statementHash)
-									? 'scp-flow-focus active'
-									: 'scp-flow-focus'
-							}
-							key={statement.statementHash}
-						>
-							<span className={`flow-pulse ${statement.statementType}`} />
-							<div>
-								<strong>{getStatementNodeLabel(network, statement)}</strong>
-								<span>
-									{statement.statementType} / slot {statement.slotIndex}
-								</span>
-							</div>
-							<code>
-								<span>{getStatementValueLabel(statement)}</span>
-								{getStatementValueHash(statement)}
-							</code>
-						</div>
-					))}
-				</div>
-			)}
+			<ScpPhaseTimeline
+				activeSlotIndex={activeSlotIndex}
+				activeStatements={activeStatements}
+				fallbackSlotIndex={summary?.slotIndex ?? null}
+				focusedStatement={visibleStatements[0] ?? null}
+				network={network}
+				statements={statements}
+			/>
 			{summary && (
 				<div className="scp-slot-summary">
 					<button

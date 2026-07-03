@@ -8,6 +8,19 @@ const normalizedApiBaseUrl = apiBaseUrl.endsWith('/')
 
 const nextConfig: NextConfig = {
 	distDir: process.env.NEXT_DIST_DIR ?? '.next-production',
+	experimental: {
+		serverActions: {
+			allowedOrigins: [
+				'stellaratlas.io',
+				'www.stellaratlas.io',
+				'127.0.0.1:3104',
+				'127.0.0.1:3114',
+				'localhost:3104',
+				'localhost:3114'
+			]
+		}
+	},
+	productionBrowserSourceMaps: true,
 	reactStrictMode: true,
 	rewrites: async () => [
 		{

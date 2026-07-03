@@ -39,17 +39,13 @@ interface UseGraphAnimationOptions {
 	nodesByIdRef: RefObject<Map<string, Graph3DNode>>;
 	playbackLedgers: readonly LedgerPlaybackFrame[];
 	refreshGraphVisuals: () => void;
+	setActivePlaybackSlotIndex: Dispatch<SetStateAction<string | null>>;
 	setActiveStatementHashes: Dispatch<SetStateAction<ReadonlySet<string>>>;
 	threeRef: RefObject<typeof import('three') | null>;
 	visualStateRef: RefObject<GraphVisualState>;
 	waveAnimationFrameRef: RefObject<number | null>;
 	wavePoolRef: RefObject<WaveMeshPool | null>;
 }
-
-type UseGraphAnimationResult = {
-	clearAnimationEffects: () => void;
-	scheduleWaveAnimation: () => void;
-};
 
 export const useGraphAnimation = ({
 	activeWavesRef,
@@ -66,11 +62,12 @@ export const useGraphAnimation = ({
 	nodesByIdRef,
 	playbackLedgers,
 	refreshGraphVisuals,
+	setActivePlaybackSlotIndex,
 	setActiveStatementHashes,
 	threeRef,
 	waveAnimationFrameRef,
 	wavePoolRef
-}: UseGraphAnimationOptions): UseGraphAnimationResult => {
+}: UseGraphAnimationOptions): { clearAnimationEffects: () => void; scheduleWaveAnimation: () => void } => {
 	const activeLedgerRef = useRef<LedgerPlaybackFrame | null>(null);
 	const playbackQueueRef = useRef<LedgerPlaybackFrame[]>([]);
 	const playbackStartedAtRef = useRef(0);
@@ -288,7 +285,11 @@ export const useGraphAnimation = ({
 			}
 
 			const elapsedMs = performance.now() - playbackStartedAtRef.current;
-			const latestLaunchMs = ledgerPlaybackDurationMs - 1_700;
+			const animationBudgetMs =
+				ledger.animationBudgetMs ?? ledgerCloseAnimationBudgetMs;
+			const playbackDurationMs =
+				ledger.playbackDurationMs ?? ledgerPlaybackDurationMs;
+			const latestLaunchMs = playbackDurationMs - 1_700;
 			if (elapsedMs > latestLaunchMs) return;
 
 			const unscheduledStatements = ledger.statements
@@ -323,9 +324,9 @@ export const useGraphAnimation = ({
 					: 0;
 				const targetDelayMs = Math.max(
 					0,
-					Math.min(
-						ledgerCloseAnimationBudgetMs,
-						Math.floor(normalizedDelay * ledgerCloseAnimationBudgetMs)
+						Math.min(
+						animationBudgetMs,
+						Math.floor(normalizedDelay * animationBudgetMs)
 					)
 				);
 				const delayMs = Math.max(
@@ -372,6 +373,7 @@ export const useGraphAnimation = ({
 			clearPlaybackFinishTimeout();
 			clearAnimationEffects();
 			activeLedgerRef.current = ledger;
+			setActivePlaybackSlotIndex(ledger.slotIndex);
 			playbackStartedAtRef.current = performance.now();
 			graphRef.current?.resumeAnimation();
 			scheduleWaveAnimation();
@@ -380,10 +382,11 @@ export const useGraphAnimation = ({
 				const activeLedger = activeLedgerRef.current;
 				if (activeLedger) markSlotCompleted(activeLedger.slotIndex);
 				activeLedgerRef.current = null;
+				setActivePlaybackSlotIndex(null);
 				clearAnimationEffects();
 				scheduleWaveAnimation();
 				advancePlaybackRef.current();
-			}, ledgerPlaybackDurationMs);
+			}, ledger.playbackDurationMs ?? ledgerPlaybackDurationMs);
 		},
 		[
 			clearAnimationEffects,
@@ -391,7 +394,8 @@ export const useGraphAnimation = ({
 			graphRef,
 			markSlotCompleted,
 			scheduleLedgerStatements,
-			scheduleWaveAnimation
+			scheduleWaveAnimation,
+			setActivePlaybackSlotIndex
 		]
 	);
 
@@ -432,6 +436,7 @@ export const useGraphAnimation = ({
 		graphRef.current?.pauseAnimation();
 		clearPlaybackFinishTimeout();
 		activeLedgerRef.current = null;
+		setActivePlaybackSlotIndex(null);
 		playbackQueueRef.current = [];
 		clearAnimationEffects();
 	}, [
@@ -441,7 +446,8 @@ export const useGraphAnimation = ({
 		clearAnimationEffects,
 		clearPlaybackFinishTimeout,
 		graphRef,
-		scheduleWaveAnimation
+		scheduleWaveAnimation,
+		setActivePlaybackSlotIndex
 	]);
 
 	useEffect(() => {
@@ -470,22 +476,16 @@ export const useGraphAnimation = ({
 			return;
 		}
 
-		const newestPlayableLedger = playableLedgers
+		const eligibleLedgers = playableLedgers
 			.filter(
 				(ledger) =>
-					compareLedgerSequences(ledger.slotIndex, latestLedger.slotIndex) < 0
+					compareLedgerSequences(ledger.slotIndex, latestLedger.slotIndex) < 0 &&
+					!completedSlotIndexesRef.current.has(ledger.slotIndex) &&
+					activeLedgerRef.current?.slotIndex !== ledger.slotIndex
 			)
-			.at(-1);
-		const newestEligibleLedger =
-			newestPlayableLedger &&
-			!completedSlotIndexesRef.current.has(newestPlayableLedger.slotIndex) &&
-			activeLedgerRef.current?.slotIndex !== newestPlayableLedger.slotIndex
-				? newestPlayableLedger
-				: undefined;
+			.slice(-2);
 
-		playbackQueueRef.current = newestEligibleLedger
-			? [newestEligibleLedger]
-			: [];
+		playbackQueueRef.current = eligibleLedgers;
 		advancePlayback();
 	}, [
 		advancePlayback,

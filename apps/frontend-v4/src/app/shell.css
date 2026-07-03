@@ -135,6 +135,7 @@
 	inset-inline: 0;
 	overflow: hidden;
 	position: absolute;
+	z-index: 30;
 }
 
 .search-menu button {

@@ -8,7 +8,7 @@ import type {
 	PublicNetwork,
 	PublicScpStatementObservation
 } from '../../api/types';
-import { fetchBrowserHistoryArchiveScanLogs } from '../../api/browser-client';
+import { getHistoryArchiveScanLogs } from '../../app/actions/network-data';
 import {
 	buildGraph3DModel,
 	type Graph3DNode,
@@ -28,6 +28,8 @@ import { scanLogHasArchiveVerificationError } from '../../domain/history-archive
 import {
 	compareStatementsByObservation,
 	getDisplayLedger,
+	ledgerCloseAnimationBudgetMs,
+	ledgerPlaybackDurationMs,
 	maxActiveFeedStatements,
 	selectLedgerAnimationStatements,
 	type LedgerPlaybackFrame
@@ -50,6 +52,53 @@ interface GraphExplorerProps {
 	scpStatements: PublicScpStatementObservation[];
 }
 
+const playbackSlackMs = 300;
+const minimumPlaybackDurationMs = 3_000;
+
+const parseTimeMs = (value: string | undefined): number | null => {
+	if (value === undefined) return null;
+	if (/^\d+$/.test(value)) {
+		const parsed = Number(value);
+		if (Number.isFinite(parsed)) return parsed < 10_000_000_000
+			? parsed * 1_000
+			: parsed;
+	}
+	const time = Date.parse(value);
+	return Number.isFinite(time) ? time : null;
+};
+
+const getLedgerCloseTimeMs = (
+	statements: readonly PublicScpStatementObservation[]
+): number | null => {
+	const closeTimes = statements
+		.map((statement) => parseTimeMs(statement.values[0]?.closeTime))
+		.filter((time): time is number => time !== null);
+	if (closeTimes.length > 0) return Math.max(...closeTimes);
+
+	const observedTimes = statements
+		.map((statement) => parseTimeMs(statement.observedAt))
+		.filter((time): time is number => time !== null);
+	return observedTimes.length > 0 ? Math.max(...observedTimes) : null;
+};
+
+const boundedPlaybackDuration = (
+	closeTimeMs: number | null,
+	nextCloseTimeMs: number | null
+): number => {
+	if (closeTimeMs === null || nextCloseTimeMs === null) {
+		return ledgerPlaybackDurationMs;
+	}
+
+	const closeGapMs = nextCloseTimeMs - closeTimeMs;
+	if (!Number.isFinite(closeGapMs) || closeGapMs <= 0)
+		return ledgerPlaybackDurationMs;
+
+	return Math.min(
+		ledgerPlaybackDurationMs,
+		Math.max(minimumPlaybackDurationMs, closeGapMs - playbackSlackMs)
+	);
+};
+
 export function GraphExplorer({
 	network: initialNetwork,
 	scpStatements: initialScpStatements
@@ -70,16 +119,17 @@ export function GraphExplorer({
 	const wavePoolRef = useRef<WaveMeshPool | null>(null);
 	const nodeActivityRef = useRef<Map<string, number>>(new Map());
 	const flowLinkColorsRef = useRef<Map<string, string>>(new Map());
-	const { latestLedger, network, scpStatements } = useGraphLiveData(
-		initialNetwork,
-		initialScpStatements
-	);
+	const { latestLedger, latestLedgerClosedAt, network, scpStatements } =
+		useGraphLiveData(initialNetwork, initialScpStatements);
 	const [graphStatus, setGraphStatus] =
 		useState<GraphRendererStatus>('loading');
 	const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
 	const [showAllConnectable, setShowAllConnectable] = useState(false);
 	const [animationsEnabled, setAnimationsEnabled] = useState(true);
 	const animationsEnabledRef = useRef(true);
+	const [activePlaybackSlotIndex, setActivePlaybackSlotIndex] = useState<
+		string | null
+	>(null);
 	const [focusedOrganization, setFocusedOrganization] =
 		useState<Graph3DOrganization | null>(null);
 	const [hoveredOrganization, setHoveredOrganization] =
@@ -133,11 +183,12 @@ export function GraphExplorer({
 			]);
 		}
 
-		const ledgers = Array.from(statementsBySlot.entries())
+		const ledgerRows = Array.from(statementsBySlot.entries())
 			.toSorted(([leftSlot], [rightSlot]) =>
 				compareLedgerSequences(leftSlot, rightSlot)
 			)
 			.map(([slotIndex, statements]) => ({
+				closeTimeMs: getLedgerCloseTimeMs(statements),
 				slotIndex,
 				statements: selectLedgerAnimationStatements(
 					statements.toSorted(compareStatementsByObservation),
@@ -146,6 +197,27 @@ export function GraphExplorer({
 			}))
 			.filter((ledger) => ledger.statements.length > 0);
 		const boundarySlotIndex = latestLedger ?? network.latestLedger.toString();
+		const latestLedgerClosedAtMs = parseTimeMs(latestLedgerClosedAt ?? undefined);
+		const ledgers = ledgerRows.map((ledger, index) => {
+			const nextCloseTimeMs =
+				ledgerRows[index + 1]?.closeTimeMs ??
+				(compareLedgerSequences(ledger.slotIndex, boundarySlotIndex) < 0
+					? latestLedgerClosedAtMs
+					: null);
+			const playbackDurationMs = boundedPlaybackDuration(
+				ledger.closeTimeMs,
+				nextCloseTimeMs
+			);
+			return {
+				animationBudgetMs: Math.min(
+					ledgerCloseAnimationBudgetMs,
+					Math.max(1_600, playbackDurationMs - 1_700)
+				),
+				playbackDurationMs,
+				slotIndex: ledger.slotIndex,
+				statements: ledger.statements
+			};
+		});
 		const lastLedgerSlotIndex = ledgers.at(-1)?.slotIndex;
 		if (
 			lastLedgerSlotIndex &&
@@ -155,7 +227,13 @@ export function GraphExplorer({
 		}
 
 		return ledgers;
-	}, [latestLedger, modelNodesById, network.latestLedger, scpStatements]);
+	}, [
+		latestLedger,
+		latestLedgerClosedAt,
+		modelNodesById,
+		network.latestLedger,
+		scpStatements
+	]);
 	const activeOrganization =
 		hoveredOrganization ?? focusedOrganization ?? selectedNodeOrganization;
 	const activeStatements = useMemo(() => {
@@ -221,6 +299,7 @@ export function GraphExplorer({
 		nodesByIdRef,
 		playbackLedgers,
 		refreshGraphVisuals,
+		setActivePlaybackSlotIndex,
 		setActiveStatementHashes,
 		threeRef,
 		visualStateRef,
@@ -256,20 +335,23 @@ export function GraphExplorer({
 			return;
 		}
 
-		const abortController = new AbortController();
+		let cancelled = false;
 		setSelectedHistoryLogStatus('loading');
-		void fetchBrowserHistoryArchiveScanLogs(historyUrl, abortController.signal)
+		void getHistoryArchiveScanLogs(historyUrl)
 			.then((logs) => {
+				if (cancelled) return;
 				setSelectedHistoryLogs(logs);
 				setSelectedHistoryLogStatus('loaded');
 			})
 			.catch(() => {
-				if (abortController.signal.aborted) return;
+				if (cancelled) return;
 				setSelectedHistoryLogs([]);
 				setSelectedHistoryLogStatus('error');
 			});
 
-		return () => abortController.abort();
+		return () => {
+			cancelled = true;
+		};
 	}, [selectedNode?.node.historyUrl]);
 
 	useEffect(() => {
@@ -375,6 +457,7 @@ export function GraphExplorer({
 			/>
 			<section className="graph-overlay scp-observation-orbit">
 				<ScpLiveFeed
+					activeSlotIndex={activePlaybackSlotIndex}
 					activeStatements={activeStatements}
 					network={liveNetwork}
 					statements={scpStatements}

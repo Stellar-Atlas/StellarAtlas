@@ -115,6 +115,8 @@ import { ScpStatementObservation } from '../../domain/scp/ScpStatementObservatio
 import type { ScpStatementObservationRepository } from '../../domain/scp/ScpStatementObservationRepository.js';
 import { TypeOrmScpStatementObservationRepository } from '../database/repositories/TypeOrmScpStatementObservationRepository.js';
 import { GetScpStatements } from '../../use-cases/get-scp-statements/GetScpStatements.js';
+import type { ScpStatementLiveStore } from '../../domain/scp/ScpStatementLiveStore.js';
+import { MeilisearchScpStatementLiveStore } from '../search/MeilisearchScpStatementLiveStore.js';
 
 export function load(container: Container, config: Config) {
 	container
@@ -342,6 +344,16 @@ function loadDomain(container: Container, config: Config) {
 			);
 		})
 		.inRequestScope();
+	container
+		.bind<ScpStatementLiveStore>(NETWORK_TYPES.ScpStatementLiveStore)
+		.toDynamicValue(() => {
+			return new MeilisearchScpStatementLiveStore({
+				apiKey: config.meilisearchApiKey,
+				host: config.meilisearchHost,
+				indexName: config.meilisearchScpStatementIndex
+			});
+		})
+		.inSingletonScope();
 
 	container.bind<HomeDomainFetcher>(HomeDomainFetcher).toSelf();
 	container.bind<TomlService>(TomlService).toSelf().inSingletonScope();

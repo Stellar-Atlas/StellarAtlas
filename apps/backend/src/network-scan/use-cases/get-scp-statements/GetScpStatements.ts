@@ -5,6 +5,7 @@ import { NETWORK_TYPES } from '../../infrastructure/di/di-types.js';
 import type { ScpStatementObservationRepository } from '../../domain/scp/ScpStatementObservationRepository.js';
 import type { GetScpStatementsDTO } from './GetScpStatementsDTO.js';
 import { mapUnknownToError } from '@core/utilities/mapUnknownToError.js';
+import type { ScpStatementLiveStore } from '../../domain/scp/ScpStatementLiveStore.js';
 
 const DEFAULT_LIMIT = 200;
 const MAX_LIMIT = 1000;
@@ -13,19 +14,26 @@ const MAX_LIMIT = 1000;
 export class GetScpStatements {
 	constructor(
 		@inject(NETWORK_TYPES.ScpStatementObservationRepository)
-		private repository: ScpStatementObservationRepository
+		private repository: ScpStatementObservationRepository,
+		@inject(NETWORK_TYPES.ScpStatementLiveStore)
+		private liveStore: ScpStatementLiveStore
 	) {}
 
 	async execute(
 		dto: GetScpStatementsDTO
 	): Promise<Result<ScpStatementObservationV1[], Error>> {
 		try {
-			const observations = await this.repository.findLatest({
+			const filter = {
 				limit: normalizeLimit(dto.limit),
 				nodeId: dto.nodeId,
 				slotIndex: dto.slotIndex
-			});
+			};
+			const liveObservations = await this.liveStore.findLatest(filter);
+			if (liveObservations !== null && liveObservations.length > 0) {
+				return ok(liveObservations);
+			}
 
+			const observations = await this.repository.findLatest(filter);
 			return ok(observations.map((observation) => observation.toDTO()));
 		} catch (error) {
 			return err(mapUnknownToError(error));

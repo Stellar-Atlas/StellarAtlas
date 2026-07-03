@@ -22,6 +22,7 @@ import type {
 	NetworkSearchConfig,
 	NetworkSearchEntityType
 } from '../search/NetworkSearchTypes.js';
+import type { Logger } from '@core/services/Logger.js';
 
 export interface NetworkRouterConfig {
 	getNetwork: GetNetwork;
@@ -31,6 +32,7 @@ export interface NetworkRouterConfig {
 	getLatestOrganizationSnapshots: GetLatestOrganizationSnapshots;
 	getScpStatements: GetScpStatements;
 	horizonUrl: string;
+	logger?: Logger;
 	searchConfig: NetworkSearchConfig;
 }
 
@@ -50,8 +52,12 @@ const networkRouterWrapper = (config: NetworkRouterConfig): Router => {
 	const networkRouter = express.Router();
 	const liveNetworkIntervalMs = 5_000;
 	const liveScpStatementIntervalMs = 1_200;
+	const liveScpStatementLimit = 1_000;
 	const currentNetworkCacheMaxAgeSeconds = 10;
-	const networkSearch = new NetworkSearchService(config.searchConfig);
+	const networkSearch = new NetworkSearchService(
+		config.searchConfig,
+		config.logger
+	);
 
 	const getTime = (at?: unknown): Date => {
 		return at && isDateString(at) ? getDateFromParam(at) : new Date();
@@ -196,7 +202,7 @@ const networkRouterWrapper = (config: NetworkRouterConfig): Router => {
 		res: express.Response
 	): Promise<void> => {
 		const statementsOrError = await config.getScpStatements.execute({
-			limit: 160
+			limit: liveScpStatementLimit
 		});
 		if (res.writableEnded) return;
 

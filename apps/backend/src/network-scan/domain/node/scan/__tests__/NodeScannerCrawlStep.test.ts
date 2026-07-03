@@ -11,11 +11,13 @@ import { createDummyPublicKey } from '../../__fixtures__/createDummyPublicKey.js
 import Node from '../../Node.js';
 import { PeerNode } from 'crawler';
 import type { ScpStatementObservationRepository } from '@network-scan/domain/scp/ScpStatementObservationRepository.js';
+import type { ScpStatementLiveStore } from '@network-scan/domain/scp/ScpStatementLiveStore.js';
 
 describe('NodeScannerCrawlStep', () => {
 	const nodeRepository = mock<NodeRepository>();
 	const scpStatementObservationRepository =
 		mock<ScpStatementObservationRepository>();
+	const scpStatementLiveStore = mock<ScpStatementLiveStore>();
 	const crawlerService = mock<CrawlerService>();
 
 	const time = new Date();
@@ -43,6 +45,7 @@ describe('NodeScannerCrawlStep', () => {
 	const crawlStep = new NodeScannerCrawlStep(
 		nodeRepository,
 		scpStatementObservationRepository,
+		scpStatementLiveStore,
 		crawlerService,
 		mock<Logger>()
 	);

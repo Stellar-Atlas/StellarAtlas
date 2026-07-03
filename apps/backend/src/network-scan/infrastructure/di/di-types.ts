@@ -20,6 +20,7 @@ export const NETWORK_TYPES = {
 	ScpStatementObservationRepository: Symbol(
 		'ScpStatementObservationRepository'
 	),
+	ScpStatementLiveStore: Symbol('ScpStatementLiveStore'),
 	NetworkMeasurementDayRepository: Symbol('NetworkMeasurementDayRepository'),
 	NetworkMeasurementMonthRepository: Symbol(
 		'NetworkMeasurementMonthRepository'

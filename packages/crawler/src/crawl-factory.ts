@@ -6,6 +6,7 @@ import { QuorumSet } from 'shared';
 import type { Ledger } from './crawler.js';
 import pino from 'pino';
 import { PeerNodeCollection } from './peer-node-collection.js';
+import type { ScpStatementObservationListener } from './network-observer/observation.js';
 
 export class CrawlFactory {
 	constructor(
@@ -18,7 +19,8 @@ export class CrawlFactory {
 		topTierAddresses: NodeAddress[],
 		topTierQuorumSet: QuorumSet,
 		latestConfirmedClosedLedger: Ledger,
-		quorumSets: Map<string, QuorumSet>
+		quorumSets: Map<string, QuorumSet>,
+		onScpStatementObservation?: ScpStatementObservationListener
 	): Crawl {
 		const observation = this.observationFactory.createObservation(
 			this.network,
@@ -26,7 +28,8 @@ export class CrawlFactory {
 			topTierAddresses,
 			new PeerNodeCollection(),
 			latestConfirmedClosedLedger,
-			quorumSets
+			quorumSets,
+			onScpStatementObservation
 		);
 		return new Crawl(nodesToCrawl, observation);
 	}

@@ -4,15 +4,18 @@ import Kernel from '../Kernel.js';
 import { DataSource } from 'typeorm';
 import { Config, getConfigFromEnv } from '../../config/Config.js';
 import type { ExceptionLogger } from 'exception-logger';
+import type { Logger } from 'logger';
 import { subscriptionRouter } from '@notifications/infrastructure/http/SubscriptionRouter.js';
 import bodyParser from 'body-parser';
 import { Server } from 'http';
+import type { Socket } from 'net';
 import swaggerDocument from '../../../../openapi.json' with { type: 'json' };
 import { ConfirmSubscription } from '@notifications/use-cases/confirm-subscription/ConfirmSubscription.js';
 import { Subscribe } from '@notifications/use-cases/subscribe/Subscribe.js';
 import { UnmuteNotification } from '@notifications/use-cases/unmute-notification/UnmuteNotification.js';
 import { Unsubscribe } from '@notifications/use-cases/unsubscribe/Unsubscribe.js';
 import { networkRouter } from '@network-scan/infrastructure/http/NetworkRouter.js';
+import { attachNetworkLiveWebSocket } from '@network-scan/infrastructure/http/NetworkLiveWebSocket.js';
 
 import helmet from 'helmet';
 import { GetNetwork } from '@network-scan/use-cases/get-network/GetNetwork.js';
@@ -77,6 +80,8 @@ import { GetTopTierHistory } from '@fbas/use-cases/get-top-tier-history/GetTopTi
 import { frontendV4ProxyMiddleware } from './FrontendV4Proxy.js';
 
 let server: Server;
+const serverSockets = new Set<Socket>();
+let shutdownStarted = false;
 const api = express();
 api.use(bodyParser.json());
 api.use(frontendV4ProxyMiddleware);
@@ -292,6 +297,7 @@ const listen = async () => {
 			),
 			getScpStatements: kernel.container.get(GetScpStatements),
 			horizonUrl: config.horizonUrl.value,
+			logger: kernel.container.get<Logger>('Logger'),
 			searchConfig: {
 				apiKey: config.meilisearchApiKey,
 				host: config.meilisearchHost,
@@ -303,24 +309,57 @@ const listen = async () => {
 	server = api.listen(config.apiPort, () => {
 		console.log('api listening on port: ' + config.apiPort);
 	});
-
-	process.on('SIGTERM', async () => {
-		console.log('SIGTERM signal received: closing HTTP server');
-		await stop(kernel.container.get(DataSource));
+	trackServerSockets(server);
+	attachNetworkLiveWebSocket(server, {
+		getNetwork: kernel.container.get(GetNetwork),
+		getScpStatements: kernel.container.get(GetScpStatements),
+		horizonUrl: config.horizonUrl.value,
+		logger: kernel.container.get<Logger>('Logger')
 	});
 
-	process.on('SIGINT', async () => {
-		console.log('SIGTERM signal received: closing HTTP server');
-		await stop(kernel.container.get(DataSource));
-	});
+	const shutdown = (signal: NodeJS.Signals): void => {
+		if (shutdownStarted) return;
+		shutdownStarted = true;
+		console.log(`${signal} signal received: closing HTTP server`);
+		void stop(kernel.container.get(DataSource)).catch((error: unknown) => {
+			console.error('API shutdown failed', error);
+			process.exit(1);
+		});
+	};
+
+	process.once('SIGTERM', shutdown);
+	process.once('SIGINT', shutdown);
 };
 
 listen();
 
-async function stop(dataSource: DataSource) {
-	server.close(async () => {
-		console.log('HTTP server closed');
-		await dataSource.destroy();
-		console.log('connection to db closed');
+function trackServerSockets(httpServer: Server): void {
+	httpServer.on('connection', (socket) => {
+		serverSockets.add(socket);
+		socket.on('close', () => serverSockets.delete(socket));
 	});
+}
+
+async function stop(dataSource: DataSource): Promise<void> {
+	const forceCloseTimeout = setTimeout(() => {
+		for (const socket of serverSockets) socket.destroy();
+	}, 2_000);
+	forceCloseTimeout.unref();
+
+	await new Promise<void>((resolve, reject) => {
+		server.close((error?: Error) => {
+			if (error) {
+				reject(error);
+				return;
+			}
+			resolve();
+		});
+		server.closeIdleConnections();
+	});
+
+	clearTimeout(forceCloseTimeout);
+	console.log('HTTP server closed');
+	if (dataSource.isInitialized) await dataSource.destroy();
+	console.log('connection to db closed');
+	process.exit(0);
 }

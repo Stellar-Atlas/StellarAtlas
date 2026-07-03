@@ -1,5 +1,8 @@
 import { getConfigFromEnv, parseNetworkConfig } from '../Config.js';
-import { defaultMeilisearchNetworkIndex } from '../SearchConfigDefaults.js';
+import {
+	defaultMeilisearchNetworkIndex,
+	defaultMeilisearchScpStatementIndex
+} from '../SearchConfigDefaults.js';
 
 describe('Config', function () {
 	describe('S3Region', function () {
@@ -65,6 +68,42 @@ describe('Config', function () {
 			if (!config.isOk()) throw config.error;
 
 			expect(config.value.meilisearchNetworkIndex).toBe('custom_network_index');
+		});
+	});
+
+	describe('meilisearchScpStatementIndex', function () {
+		const originalIndex = process.env.MEILISEARCH_SCP_STATEMENT_INDEX;
+
+		afterEach(() => {
+			if (originalIndex === undefined) {
+				delete process.env.MEILISEARCH_SCP_STATEMENT_INDEX;
+			} else {
+				process.env.MEILISEARCH_SCP_STATEMENT_INDEX = originalIndex;
+			}
+		});
+
+		test('defaults to the versioned SCP statement search index', function () {
+			delete process.env.MEILISEARCH_SCP_STATEMENT_INDEX;
+
+			const config = getConfigFromEnv();
+			expect(config.isOk()).toBe(true);
+			if (!config.isOk()) throw config.error;
+
+			expect(config.value.meilisearchScpStatementIndex).toBe(
+				defaultMeilisearchScpStatementIndex
+			);
+		});
+
+		test('allows an explicit SCP statement search index override', function () {
+			process.env.MEILISEARCH_SCP_STATEMENT_INDEX = 'custom_scp_index';
+
+			const config = getConfigFromEnv();
+			expect(config.isOk()).toBe(true);
+			if (!config.isOk()) throw config.error;
+
+			expect(config.value.meilisearchScpStatementIndex).toBe(
+				'custom_scp_index'
+			);
 		});
 	});
 

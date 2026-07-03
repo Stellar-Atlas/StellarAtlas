@@ -9,6 +9,10 @@ import { QuorumSetState } from './quorum-set-state.js';
 import { LRUCache } from 'lru-cache';
 import type { ScpStatementObservation } from './scp-statement-observation.js';
 
+export type ScpStatementObservationListener = (
+	observation: ScpStatementObservation
+) => void;
+
 export class Observation {
 	public state: ObservationState = ObservationState.Idle;
 	private networkHalted = false;
@@ -23,7 +27,8 @@ export class Observation {
 		public peerNodes: PeerNodeCollection,
 		public latestConfirmedClosedLedger: Ledger,
 		public quorumSets: Map<string, QuorumSet>,
-		public slots: Slots
+		public slots: Slots,
+		private onScpStatementObservation?: ScpStatementObservationListener
 	) {
 		this.topTierAddressesSet = this.mapTopTierAddresses(topTierAddresses);
 		this.envelopeCache = new LRUCache<string, number>({ max: 5000 });
@@ -74,5 +79,6 @@ export class Observation {
 
 	recordScpStatementObservation(observation: ScpStatementObservation): void {
 		this.scpStatementObservations.push(observation);
+		this.onScpStatementObservation?.(observation);
 	}
 }

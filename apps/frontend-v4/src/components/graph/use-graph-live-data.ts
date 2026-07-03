@@ -4,29 +4,40 @@ import type {
 	PublicScpStatementObservation
 } from '../../api/types';
 import {
-	buildBrowserApiUrl,
-	fetchBrowserLatestLedger,
-	fetchBrowserPublicNetwork,
-	fetchBrowserScpStatements
-} from '../../api/browser-client';
-import {
 	publishLatestLedger,
 	subscribeToLatestLedger
 } from '../../api/latest-ledger-events';
 import { getHighestLedgerSequence } from '../../domain/ledger-sequence';
+import { subscribeToLiveNetworkStream } from '../../api/live-network-stream';
 
-const networkRefreshIntervalMs = 10_000;
-const scpRefreshIntervalMs = 1_200;
 const scpStatementFetchLimit = 1_000;
-const latestLedgerRefreshIntervalMs = 2_000;
-const liveNetworkPath = '/v1/live';
-const liveScpStatementPath = '/v1/scp-statements/live';
 
 const getNewerLedger = (current: string | null, next: unknown): string | null =>
 	getHighestLedgerSequence([current, next]) ?? current;
 
+const compareStatementsNewestFirst = (
+	left: PublicScpStatementObservation,
+	right: PublicScpStatementObservation
+): number =>
+	new Date(right.observedAt).getTime() - new Date(left.observedAt).getTime() ||
+	right.statementHash.localeCompare(left.statementHash);
+
+const mergeScpStatements = (
+	current: readonly PublicScpStatementObservation[],
+	next: readonly PublicScpStatementObservation[]
+): PublicScpStatementObservation[] => {
+	const byHash = new Map(
+		current.map((statement) => [statement.statementHash, statement])
+	);
+	for (const statement of next) byHash.set(statement.statementHash, statement);
+	return Array.from(byHash.values())
+		.toSorted(compareStatementsNewestFirst)
+		.slice(0, scpStatementFetchLimit);
+};
+
 interface UseGraphLiveDataResult {
 	latestLedger: string | null;
+	latestLedgerClosedAt: string | null;
 	network: PublicNetwork;
 	scpStatements: PublicScpStatementObservation[];
 }
@@ -38,6 +49,9 @@ export const useGraphLiveData = (
 	const [network, setNetwork] = useState(initialNetwork);
 	const [scpStatements, setScpStatements] = useState(initialScpStatements);
 	const [latestLedger, setLatestLedger] = useState<string | null>(null);
+	const [latestLedgerClosedAt, setLatestLedgerClosedAt] = useState<
+		string | null
+	>(null);
 
 	useEffect(() => {
 		setNetwork(initialNetwork);
@@ -55,127 +69,31 @@ export const useGraphLiveData = (
 		[]
 	);
 
-	useEffect(() => {
-		let isMounted = true;
-		const pendingRequests = new Set<AbortController>();
-
-		const loadNetwork = (): void => {
-			if (pendingRequests.size > 0) return;
-			const abortController = new AbortController();
-			pendingRequests.add(abortController);
-			void fetchBrowserPublicNetwork(abortController.signal)
-				.then((nextNetwork) => {
-					if (isMounted) setNetwork(nextNetwork);
-				})
-				.catch(() => undefined)
-				.finally(() => pendingRequests.delete(abortController));
-		};
-
-		loadNetwork();
-		const interval = window.setInterval(loadNetwork, networkRefreshIntervalMs);
-		const eventSource = new EventSource(
-			buildBrowserApiUrl(liveNetworkPath, true)
-		);
-		eventSource.addEventListener('network', (event) => {
-			if (!isMounted) return;
-			try {
-				setNetwork(JSON.parse(event.data) as PublicNetwork);
-			} catch {
-				loadNetwork();
-			}
-		});
-		eventSource.onerror = () => {
-			loadNetwork();
-		};
-
-		return () => {
-			isMounted = false;
-			eventSource.close();
-			for (const request of pendingRequests) request.abort();
-			window.clearInterval(interval);
-		};
-	}, []);
-
-	useEffect(() => {
-		let isMounted = true;
-		const pendingRequests = new Set<AbortController>();
-
-		const loadLatestLedger = (): void => {
-			if (pendingRequests.size > 0) return;
-			const abortController = new AbortController();
-			pendingRequests.add(abortController);
-			void fetchBrowserLatestLedger(abortController.signal)
-				.then((ledger) => {
-					if (!isMounted) return;
-					publishLatestLedger(ledger.sequence);
+	useEffect(
+		() =>
+			subscribeToLiveNetworkStream((message) => {
+				if (message.type === 'network') {
+					setNetwork(message.payload);
+					publishLatestLedger(message.payload.latestLedger);
 					setLatestLedger((current) =>
-						getNewerLedger(current, ledger.sequence)
+						getNewerLedger(current, message.payload.latestLedger)
 					);
-				})
-				.catch(() => undefined)
-				.finally(() => pendingRequests.delete(abortController));
-		};
+				}
+				if (message.type === 'latestLedger') {
+					publishLatestLedger(message.payload.sequence);
+					setLatestLedgerClosedAt(message.payload.closedAt);
+					setLatestLedger((current) =>
+						getNewerLedger(current, message.payload.sequence)
+					);
+				}
+				if (message.type === 'scp' && message.payload.length > 0) {
+					setScpStatements((current) =>
+						mergeScpStatements(current, message.payload)
+					);
+				}
+			}),
+		[]
+	);
 
-		loadLatestLedger();
-		const interval = window.setInterval(
-			loadLatestLedger,
-			latestLedgerRefreshIntervalMs
-		);
-		return () => {
-			isMounted = false;
-			for (const request of pendingRequests) request.abort();
-			window.clearInterval(interval);
-		};
-	}, []);
-
-	useEffect(() => {
-		let isMounted = true;
-		const pendingRequests = new Set<AbortController>();
-
-		const loadStatements = (): void => {
-			if (pendingRequests.size > 0) return;
-			const abortController = new AbortController();
-			pendingRequests.add(abortController);
-			void fetchBrowserScpStatements(
-				{ limit: scpStatementFetchLimit },
-				abortController.signal
-			)
-				.then((nextStatements) => {
-					if (isMounted && nextStatements.length > 0) {
-						setScpStatements(nextStatements);
-					}
-				})
-				.catch(() => undefined)
-				.finally(() => pendingRequests.delete(abortController));
-		};
-
-		loadStatements();
-		const interval = window.setInterval(loadStatements, scpRefreshIntervalMs);
-		const eventSource = new EventSource(
-			buildBrowserApiUrl(liveScpStatementPath, true)
-		);
-		eventSource.addEventListener('scp', (event) => {
-			if (!isMounted) return;
-			try {
-				const nextStatements = JSON.parse(
-					event.data
-				) as PublicScpStatementObservation[];
-				if (nextStatements.length > 0) setScpStatements(nextStatements);
-			} catch {
-				loadStatements();
-			}
-		});
-		eventSource.onerror = () => {
-			loadStatements();
-		};
-
-		return () => {
-			isMounted = false;
-			eventSource.close();
-			for (const request of pendingRequests) request.abort();
-			window.clearInterval(interval);
-		};
-	}, []);
-
-	return { latestLedger, network, scpStatements };
+	return { latestLedger, latestLedgerClosedAt, network, scpStatements };
 };

@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import type { PublicSearchHit } from '../../api/types';
-import { fetchBrowserSearch } from '../../api/browser-client';
+import { searchNetwork } from '../../app/actions/search';
 
 interface SearchOption {
 	id: string;
@@ -38,16 +38,20 @@ export function SearchBox(): React.JSX.Element {
 			return;
 		}
 
-		const abortController = new AbortController();
+		let cancelled = false;
 		const timeout = setTimeout(() => {
-			void fetchBrowserSearch(query, abortController.signal)
-				.then((response) => setMatches(response.hits.map(searchHitToOption)))
-				.catch(() => setMatches([]));
+			void searchNetwork(query)
+				.then((response) => {
+					if (!cancelled) setMatches(response.hits.map(searchHitToOption));
+				})
+				.catch(() => {
+					if (!cancelled) setMatches([]);
+				});
 		}, 120);
 
 		return () => {
+			cancelled = true;
 			clearTimeout(timeout);
-			abortController.abort();
 		};
 	}, [canSearch, query]);
 

@@ -1,5 +1,6 @@
 import { Meilisearch, type Index } from 'meilisearch';
 import { networkSearchIndexSchemaVersion } from '@core/config/SearchConfigDefaults.js';
+import type { Logger } from '@core/services/Logger.js';
 import type { NetworkV1 } from 'shared';
 import { buildNetworkSearchDocuments } from './NetworkSearchDocumentBuilder.js';
 import type {
@@ -67,6 +68,8 @@ const HIT_ATTRIBUTES = [
 ] as const;
 
 const SORTABLE_ATTRIBUTES = ['label', 'networkTime', 'latestLedger'] as const;
+const settingsTaskTimeoutMs = 15_000;
+const documentTaskTimeoutMs = 30_000;
 
 const sanitizeLimit = (limit: number): number => {
 	if (!Number.isInteger(limit)) return 8;
@@ -259,6 +262,9 @@ const assertTaskSucceeded = (status: string, taskName: string): void => {
 		throw new Error(`Meilisearch ${taskName} task ended with ${status}`);
 };
 
+const errorMessage = (error: unknown): string =>
+	error instanceof Error ? error.message : String(error);
+
 const readModel = (
 	fallbackReason: NetworkSearchFallbackReason | null
 ): NetworkSearchReadModel => ({
@@ -271,9 +277,11 @@ export class NetworkSearchService {
 	private indexedNetworkTime: string | undefined;
 	private indexReady = false;
 	private readonly index: Index<NetworkSearchDocument> | undefined;
+	private readonly indexName: string;
 	private syncPromise: Promise<void> | undefined;
 
-	constructor(config: NetworkSearchConfig) {
+	constructor(config: NetworkSearchConfig, private logger?: Logger) {
+		this.indexName = config.indexName;
 		if (config.host && config.host.length > 0) {
 			const client = new Meilisearch({
 				apiKey: config.apiKey,
@@ -320,7 +328,14 @@ export class NetworkSearchService {
 				readModel: readModel(null),
 				source: 'meilisearch'
 			};
-		} catch {
+		} catch (error) {
+			this.logger?.error('Network search Meilisearch unavailable', {
+				error: errorMessage(error),
+				indexName: this.indexName,
+				limit: sanitizeLimit(request.limit),
+				networkTime: network.time,
+				queryLength: request.query.length
+			});
 			return memorySearch(
 				this.documents,
 				request,
@@ -351,24 +366,29 @@ export class NetworkSearchService {
 
 		const searchableTask = await this.index
 			.updateSearchableAttributes([...SEARCHABLE_ATTRIBUTES])
-			.waitTask({ interval: 50, timeout: 1_500 });
+			.waitTask({ interval: 50, timeout: settingsTaskTimeoutMs });
 		assertTaskSucceeded(searchableTask.status, 'searchable attributes');
 
 		const filterableTask = await this.index
 			.updateFilterableAttributes([...FILTERABLE_ATTRIBUTES])
-			.waitTask({ interval: 50, timeout: 1_500 });
+			.waitTask({ interval: 50, timeout: settingsTaskTimeoutMs });
 		assertTaskSucceeded(filterableTask.status, 'filterable attributes');
 
 		const sortableTask = await this.index
 			.updateSortableAttributes([...SORTABLE_ATTRIBUTES])
-			.waitTask({ interval: 50, timeout: 1_500 });
+			.waitTask({ interval: 50, timeout: settingsTaskTimeoutMs });
 		assertTaskSucceeded(sortableTask.status, 'sortable attributes');
 
 		const documentTask = await this.index
 			.addDocuments([...this.documents], { primaryKey: 'id' })
-			.waitTask({ interval: 50, timeout: 2_500 });
+			.waitTask({ interval: 50, timeout: documentTaskTimeoutMs });
 		assertTaskSucceeded(documentTask.status, 'document update');
 
+		this.logger?.info('Network search Meilisearch index synced', {
+			documentCount: this.documents.length,
+			indexName: this.indexName,
+			networkTime: this.indexedNetworkTime
+		});
 		this.indexReady = true;
 	}
 }

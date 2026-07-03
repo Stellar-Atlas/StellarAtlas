@@ -12,6 +12,8 @@ import PublicKey from '../PublicKey.js';
 import { mapUnknownToError } from '@core/utilities/mapUnknownToError.js';
 import type { NodeAddress } from '../NodeAddress.js';
 import type { ScpStatementObservationRepository } from '../../scp/ScpStatementObservationRepository.js';
+import type { ScpStatementLiveStore } from '../../scp/ScpStatementLiveStore.js';
+import { ScpStatementLiveStoreBuffer } from '../../scp/ScpStatementLiveStoreBuffer.js';
 
 @injectable()
 export class NodeScannerCrawlStep {
@@ -20,6 +22,8 @@ export class NodeScannerCrawlStep {
 		private nodeRepository: NodeRepository,
 		@inject(NETWORK_TYPES.ScpStatementObservationRepository)
 		private scpStatementObservationRepository: ScpStatementObservationRepository,
+		@inject(NETWORK_TYPES.ScpStatementLiveStore)
+		private scpStatementLiveStore: ScpStatementLiveStore,
 		private crawlerService: CrawlerService,
 		@inject('Logger')
 		private logger: Logger
@@ -37,13 +41,16 @@ export class NodeScannerCrawlStep {
 			previousLatestLedgerCloseTime:
 				previousLatestLedgerCloseTime?.toISOString()
 		});
+		const liveScpStatements = this.createLiveScpStatementBuffer();
 		const crawlResult = await this.crawlerService.crawl(
 			networkQuorumSetConfiguration,
 			nodeScan.nodes,
 			bootstrapNodeAddresses,
 			previousLatestLedger,
-			previousLatestLedgerCloseTime
+			previousLatestLedgerCloseTime,
+			(observation) => liveScpStatements.add(observation)
 		);
+		await liveScpStatements.flush();
 		if (crawlResult.isErr()) {
 			return err(crawlResult.error);
 		}
@@ -135,5 +142,12 @@ export class NodeScannerCrawlStep {
 				errorMessage: mappedError.message
 			});
 		}
+	}
+
+	private createLiveScpStatementBuffer(): ScpStatementLiveStoreBuffer {
+		return new ScpStatementLiveStoreBuffer(
+			this.scpStatementLiveStore,
+			this.logger
+		);
 	}
 }

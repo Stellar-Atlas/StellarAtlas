@@ -13,6 +13,8 @@ export const ledgerPlaybackDurationMs = 5_000;
 export const ledgerCloseAnimationBudgetMs = 3_300;
 
 export interface LedgerPlaybackFrame {
+	animationBudgetMs?: number;
+	playbackDurationMs?: number;
 	slotIndex: string;
 	statements: readonly PublicScpStatementObservation[];
 }

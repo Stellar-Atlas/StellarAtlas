@@ -20,7 +20,7 @@
 .scp-live-heading span,
 .scp-flow-list span,
 .scp-flow-list small,
-.scp-flow-focus span {
+.scp-phase-card span {
 	color: #aebdcd;
 	font-size: 0.72rem;
 	font-weight: 800;
@@ -68,50 +68,81 @@
 	background: #c084fc;
 }
 
-.scp-flow-focus-grid {
+.scp-phase-timeline {
 	display: grid;
 	gap: 7px;
+	grid-template-columns: repeat(2, minmax(0, 1fr));
 	margin-block-start: 10px;
 }
 
-.scp-flow-focus {
-	align-items: center;
-	background: rgba(88, 166, 255, 0.12);
-	border: 1px solid rgba(88, 166, 255, 0.35);
+.scp-phase-card {
+	background: rgba(2, 8, 14, 0.5);
+	border: 1px solid rgba(160, 190, 220, 0.16);
 	border-radius: 6px;
 	display: grid;
-	gap: 10px;
-	grid-template-columns: 14px minmax(0, 1fr) auto;
-	padding: 8px 9px;
+	gap: 7px;
+	min-block-size: 94px;
+	min-inline-size: 0;
+	padding: 8px;
 }
 
-.scp-flow-focus.active {
-	border-color: rgba(126, 231, 135, 0.48);
+.scp-phase-card.nominate.active {
+	border-color: rgba(247, 207, 77, 0.58);
 }
 
-.scp-flow-focus strong,
-.scp-flow-focus span {
+.scp-phase-card.prepare.active {
+	border-color: rgba(88, 166, 255, 0.58);
+}
+
+.scp-phase-card.confirm.active {
+	border-color: rgba(93, 211, 158, 0.58);
+}
+
+.scp-phase-card.externalize.active {
+	border-color: rgba(192, 132, 252, 0.58);
+}
+
+.scp-phase-card-heading {
+	align-items: center;
+	display: grid;
+	gap: 7px;
+	grid-template-columns: 12px minmax(0, 1fr) minmax(30px, auto);
+}
+
+.scp-phase-card strong,
+.scp-phase-card span,
+.scp-phase-card code {
 	display: block;
+	min-inline-size: 0;
 	overflow: hidden;
 	text-overflow: ellipsis;
 	white-space: nowrap;
 }
 
-.scp-flow-focus code {
+.scp-phase-card code {
 	background: rgba(2, 8, 14, 0.72);
-	border: 1px solid rgba(126, 231, 135, 0.24);
+	border: 1px solid rgba(160, 190, 220, 0.14);
 	border-radius: 6px;
-	color: #b9ffb2;
-	display: grid;
+	color: #e7edf5;
 	font-size: 0.74rem;
-	gap: 2px;
-	padding: 6px 7px;
+	font-variant-numeric: tabular-nums;
+	padding: 5px 7px;
+	text-align: end;
 }
 
-.scp-flow-focus code span {
-	color: rgba(214, 230, 255, 0.62);
-	font-size: 0.55rem;
-	text-transform: uppercase;
+.scp-phase-card-nodes {
+	display: grid;
+	gap: 4px;
+}
+
+.scp-phase-card-nodes span {
+	background: rgba(255, 255, 255, 0.045);
+	border-radius: 5px;
+	padding: 4px 6px;
+}
+
+.scp-phase-card .scp-phase-empty {
+	color: rgba(174, 189, 205, 0.62);
 }
 
 .flow-pulse {
@@ -141,6 +172,11 @@
 .flow-pulse.externalize {
 	background: #c084fc;
 	box-shadow: 0 0 0 0 rgba(192, 132, 252, 0.48);
+}
+
+.scp-phase-card:not(.active) .flow-pulse {
+	animation: none;
+	opacity: 0.52;
 }
 
 .scp-flow-list {
@@ -241,6 +277,10 @@
 }
 
 @media (max-width: 760px) {
+	.scp-phase-timeline {
+		grid-template-columns: minmax(0, 1fr);
+	}
+
 	.scp-flow-list {
 		min-block-size: auto;
 	}

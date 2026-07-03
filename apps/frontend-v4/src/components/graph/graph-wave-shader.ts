@@ -10,7 +10,6 @@ export type WaveShaderMaterial = ShaderMaterial & {
 };
 
 const vertexShader = `
-	attribute vec3 instanceColor;
 	varying vec3 vInstanceColor;
 	varying vec2 vWaveUv;
 
