@@ -1290,6 +1290,243 @@
 				}
 			}
 		},
+		"/v1/cross-check/organizations": {
+			"get": {
+				"summary": "List organization cross-check review rows",
+				"description": "Returns persisted StellarAtlas organization evidence from the latest network snapshot for external cross-reference review. External RADAR comparison is explicitly not probed by this endpoint.",
+				"tags": ["CrossCheck"],
+				"operationId": "getCrossCheckOrganizations",
+				"parameters": [
+					{
+						"name": "limit",
+						"in": "query",
+						"description": "Maximum number of organization rows to return.",
+						"required": false,
+						"schema": {
+							"type": "integer",
+							"minimum": 1,
+							"maximum": 100,
+							"default": 50
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "organization cross-check review rows",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object",
+									"required": [
+										"generatedAt",
+										"limit",
+										"count",
+										"totalEligibleCount",
+										"probe",
+										"comparisonStatus",
+										"evidenceSelection",
+										"organizations"
+									],
+									"properties": {
+										"generatedAt": {
+											"type": "string",
+											"format": "date-time"
+										},
+										"limit": {
+											"type": "integer",
+											"minimum": 1,
+											"maximum": 100
+										},
+										"count": {
+											"type": "integer",
+											"minimum": 0
+										},
+										"totalEligibleCount": {
+											"type": "integer",
+											"minimum": 0
+										},
+										"probe": {
+											"type": "string",
+											"enum": ["not_run"]
+										},
+										"comparisonStatus": {
+											"type": "string",
+											"enum": ["not_compared"]
+										},
+										"evidenceSelection": {
+											"type": "string",
+											"enum": ["latest_network_snapshot_active_organizations"]
+										},
+										"organizations": {
+											"type": "array",
+											"items": {
+												"type": "object",
+												"required": [
+													"organizationId",
+													"comparisonStatus",
+													"stellarAtlas",
+													"radarComparison"
+												],
+												"properties": {
+													"organizationId": { "type": "string" },
+													"comparisonStatus": {
+														"type": "string",
+														"enum": ["not_compared"]
+													},
+													"stellarAtlas": {
+														"type": "object",
+														"required": [
+															"id",
+															"organizationId",
+															"name",
+															"dba",
+															"url",
+															"horizonUrl",
+															"description",
+															"physicalAddress",
+															"phoneNumber",
+															"keybase",
+															"twitter",
+															"github",
+															"officialEmail",
+															"validatorPublicKeys",
+															"validatorPublicKeyCount",
+															"subQuorumAvailable",
+															"has30DayStats",
+															"has24HourStats",
+															"subQuorum24HoursAvailability",
+															"subQuorum30DaysAvailability",
+															"homeDomain",
+															"dateDiscovered",
+															"hasReliableUptime",
+															"tomlState",
+															"tomlEvidenceStatus",
+															"organizationEvidenceStatus"
+														],
+														"properties": {
+															"id": { "type": "string" },
+															"organizationId": { "type": "string" },
+															"name": {
+																"type": "string",
+																"nullable": true
+															},
+															"dba": {
+																"type": "string",
+																"nullable": true
+															},
+															"url": {
+																"type": "string",
+																"nullable": true
+															},
+															"horizonUrl": {
+																"type": "string",
+																"nullable": true
+															},
+															"description": {
+																"type": "string",
+																"nullable": true
+															},
+															"physicalAddress": {
+																"type": "string",
+																"nullable": true
+															},
+															"phoneNumber": {
+																"type": "string",
+																"nullable": true
+															},
+															"keybase": {
+																"type": "string",
+																"nullable": true
+															},
+															"twitter": {
+																"type": "string",
+																"nullable": true
+															},
+															"github": {
+																"type": "string",
+																"nullable": true
+															},
+															"officialEmail": {
+																"type": "string",
+																"nullable": true
+															},
+															"validatorPublicKeys": {
+																"type": "array",
+																"items": { "type": "string" }
+															},
+															"validatorPublicKeyCount": {
+																"type": "integer",
+																"minimum": 0
+															},
+															"subQuorumAvailable": {
+																"type": "boolean"
+															},
+															"has30DayStats": { "type": "boolean" },
+															"has24HourStats": { "type": "boolean" },
+															"subQuorum24HoursAvailability": {
+																"type": "number"
+															},
+															"subQuorum30DaysAvailability": {
+																"type": "number"
+															},
+															"homeDomain": { "type": "string" },
+															"dateDiscovered": {
+																"type": "string",
+																"format": "date-time"
+															},
+															"hasReliableUptime": {
+																"type": "boolean"
+															},
+															"tomlState": { "type": "string" },
+															"tomlEvidenceStatus": {
+																"type": "string",
+																"enum": [
+																	"toml_ok",
+																	"toml_unknown",
+																	"toml_issue_observed"
+																]
+															},
+															"organizationEvidenceStatus": {
+																"type": "string",
+																"enum": ["organization_snapshot_observed"]
+															}
+														}
+													},
+													"radarComparison": {
+														"type": "object",
+														"required": [
+															"sourceId",
+															"comparisonStatus",
+															"probe"
+														],
+														"properties": {
+															"sourceId": {
+																"type": "string",
+																"enum": ["withobsrvr-radar"]
+															},
+															"comparisonStatus": {
+																"type": "string",
+																"enum": ["not_compared"]
+															},
+															"probe": {
+																"type": "string",
+																"enum": ["not_run"]
+															}
+														}
+													}
+												}
+											}
+										}
+									}
+								}
+							}
+						}
+					},
+					"400": { "description": "Bad request" },
+					"500": { "description": "Server error" }
+				}
+			}
+		},
 		"/v1/cross-check/validators": {
 			"get": {
 				"summary": "List validator cross-check review rows",

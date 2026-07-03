@@ -6,6 +6,7 @@ import { NETWORK_TYPES } from '@network-scan/infrastructure/di/di-types.js';
 import { TypeOrmNodeMeasurementRepository } from '@network-scan/infrastructure/database/repositories/TypeOrmNodeMeasurementRepository.js';
 import { TypeOrmOrganizationRepository } from '@network-scan/infrastructure/database/repositories/TypeOrmOrganizationRepository.js';
 import { GetCrossCheckArchives } from '@cross-check/use-cases/get-cross-check-archives/GetCrossCheckArchives.js';
+import { GetCrossCheckOrganizations } from '@cross-check/use-cases/get-cross-check-organizations/GetCrossCheckOrganizations.js';
 import { GetCrossCheckSources } from '@cross-check/use-cases/get-cross-check-sources/GetCrossCheckSources.js';
 import { GetCrossCheckValidators } from '@cross-check/use-cases/get-cross-check-validators/GetCrossCheckValidators.js';
 
@@ -28,6 +29,9 @@ test('kernel', async () => {
 	);
 	expect(container.get(GetCrossCheckArchives)).toBeInstanceOf(
 		GetCrossCheckArchives
+	);
+	expect(container.get(GetCrossCheckOrganizations)).toBeInstanceOf(
+		GetCrossCheckOrganizations
 	);
 	expect(container.get(GetCrossCheckValidators)).toBeInstanceOf(
 		GetCrossCheckValidators

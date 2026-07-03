@@ -3,6 +3,7 @@ import request from 'supertest';
 import { mock } from 'jest-mock-extended';
 import { err, ok } from 'neverthrow';
 import { GetCrossCheckArchives } from '@cross-check/use-cases/get-cross-check-archives/GetCrossCheckArchives.js';
+import { GetCrossCheckOrganizations } from '@cross-check/use-cases/get-cross-check-organizations/GetCrossCheckOrganizations.js';
 import { GetCrossCheckSources } from '@cross-check/use-cases/get-cross-check-sources/GetCrossCheckSources.js';
 import { GetCrossCheckValidators } from '@cross-check/use-cases/get-cross-check-validators/GetCrossCheckValidators.js';
 import { CrossCheckRouterWrapper } from '../CrossCheckRouter.js';
@@ -10,11 +11,13 @@ import { CrossCheckRouterWrapper } from '../CrossCheckRouter.js';
 describe('CrossCheckRouter.integration', () => {
 	let app: express.Application;
 	let getCrossCheckArchives: jest.Mocked<GetCrossCheckArchives>;
+	let getCrossCheckOrganizations: jest.Mocked<GetCrossCheckOrganizations>;
 	let getCrossCheckSources: jest.Mocked<GetCrossCheckSources>;
 	let getCrossCheckValidators: jest.Mocked<GetCrossCheckValidators>;
 
 	beforeEach(() => {
 		getCrossCheckArchives = mock<GetCrossCheckArchives>();
+		getCrossCheckOrganizations = mock<GetCrossCheckOrganizations>();
 		getCrossCheckSources = mock<GetCrossCheckSources>();
 		getCrossCheckValidators = mock<GetCrossCheckValidators>();
 		app = express();
@@ -22,11 +25,92 @@ describe('CrossCheckRouter.integration', () => {
 			'/cross-check',
 			CrossCheckRouterWrapper({
 				getCrossCheckArchives,
+				getCrossCheckOrganizations,
 				getCrossCheckSources,
 				getCrossCheckValidators
 			})
 		);
 	});
+
+	it('should expose organization cross-check review rows', async () => {
+		getCrossCheckOrganizations.execute.mockResolvedValue(
+			ok({
+				generatedAt: '2026-07-03T12:00:00.000Z',
+				limit: 10,
+				count: 1,
+				totalEligibleCount: 1,
+				probe: 'not_run',
+				comparisonStatus: 'not_compared',
+				evidenceSelection: 'latest_network_snapshot_active_organizations',
+				organizations: [
+					{
+						organizationId: 'org-1',
+						comparisonStatus: 'not_compared',
+						stellarAtlas: {
+							dateDiscovered: '2026-07-03T00:00:00.000Z',
+							dba: null,
+							description: 'Example operator',
+							github: null,
+							has24HourStats: true,
+							has30DayStats: true,
+							hasReliableUptime: true,
+							homeDomain: 'example.com',
+							horizonUrl: 'https://horizon.example.com',
+							id: 'org-1',
+							keybase: null,
+							name: 'Example Org',
+							officialEmail: 'ops@example.com',
+							organizationEvidenceStatus: 'organization_snapshot_observed',
+							organizationId: 'org-1',
+							phoneNumber: null,
+							physicalAddress: null,
+							subQuorum24HoursAvailability: 1,
+							subQuorum30DaysAvailability: 1,
+							subQuorumAvailable: true,
+							tomlEvidenceStatus: 'toml_ok',
+							tomlState: 'Ok',
+							twitter: null,
+							url: 'https://example.com',
+							validatorPublicKeyCount: 2,
+							validatorPublicKeys: ['GA', 'GB']
+						},
+						radarComparison: {
+							comparisonStatus: 'not_compared',
+							probe: 'not_run',
+							sourceId: 'withobsrvr-radar'
+						}
+					}
+				]
+			})
+		);
+
+		await request(app)
+			.get('/cross-check/organizations?limit=10')
+			.expect(200)
+			.expect('Cache-Control', 'public, max-age=30')
+			.expect((response) => {
+				expect(response.body.probe).toBe('not_run');
+				expect(response.body.comparisonStatus).toBe('not_compared');
+				expect(response.body.organizations[0].comparisonStatus).toBe(
+					'not_compared'
+				);
+			});
+		expect(getCrossCheckOrganizations.execute).toHaveBeenCalledWith({
+			limit: 10
+		});
+	});
+
+	it.each(['0', '101', '1.5'])(
+		'should reject invalid organization cross-check limit %s',
+		async (limit) => {
+			await request(app)
+				.get('/cross-check/organizations?limit=' + limit)
+				.expect(400)
+				.expect((response) => {
+					expect(response.body.errors).toHaveLength(1);
+				});
+		}
+	);
 
 	it('should expose validator cross-check review rows', async () => {
 		getCrossCheckValidators.execute.mockResolvedValue(
@@ -222,6 +306,19 @@ describe('CrossCheckRouter.integration', () => {
 
 		await request(app)
 			.get('/cross-check/validators')
+			.expect(500)
+			.expect((response) => {
+				expect(response.body).toEqual({ error: 'Internal server error' });
+			});
+	});
+
+	it('should hide organization cross-check internal errors', async () => {
+		getCrossCheckOrganizations.execute.mockResolvedValue(
+			err(new Error('boom'))
+		);
+
+		await request(app)
+			.get('/cross-check/organizations')
 			.expect(500)
 			.expect((response) => {
 				expect(response.body).toEqual({ error: 'Internal server error' });
