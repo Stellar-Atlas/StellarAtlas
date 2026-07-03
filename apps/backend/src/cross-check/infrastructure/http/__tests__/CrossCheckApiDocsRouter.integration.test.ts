@@ -11,6 +11,7 @@ import { GetCrossCheckArchives } from '@cross-check/use-cases/get-cross-check-ar
 import { GetCrossCheckOrganizations } from '@cross-check/use-cases/get-cross-check-organizations/GetCrossCheckOrganizations.js';
 import { GetCrossCheckSources } from '@cross-check/use-cases/get-cross-check-sources/GetCrossCheckSources.js';
 import { GetCrossCheckValidators } from '@cross-check/use-cases/get-cross-check-validators/GetCrossCheckValidators.js';
+import { GetRadarNetworkComparisonSnapshot } from '@cross-check/use-cases/get-radar-network-comparison-snapshot/GetRadarNetworkComparisonSnapshot.js';
 import { ListApiDocsComparisonSnapshots } from '@cross-check/use-cases/list-api-docs-comparison-snapshots/ListApiDocsComparisonSnapshots.js';
 import { CrossCheckRouterWrapper } from '../CrossCheckRouter.js';
 
@@ -31,6 +32,8 @@ describe('CrossCheckApiDocsRouter.integration', () => {
 				getCrossCheckOrganizations: mock<GetCrossCheckOrganizations>(),
 				getCrossCheckSources: mock<GetCrossCheckSources>(),
 				getCrossCheckValidators: mock<GetCrossCheckValidators>(),
+				getRadarNetworkComparisonSnapshot:
+					mock<GetRadarNetworkComparisonSnapshot>(),
 				listApiDocsComparisonSnapshots
 			})
 		);

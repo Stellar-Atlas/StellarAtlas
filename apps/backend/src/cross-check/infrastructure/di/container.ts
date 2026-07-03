@@ -13,6 +13,7 @@ import { ListApiDocsComparisonSnapshots } from '../../use-cases/list-api-docs-co
 import type { CrossCheckRadarNetworkComparisonSnapshotRepository } from '../../domain/CrossCheckRadarNetworkSnapshot.js';
 import { CrossCheckRadarNetworkComparisonSnapshot } from '../database/entities/CrossCheckRadarNetworkComparisonSnapshot.js';
 import { TypeOrmCrossCheckRadarNetworkComparisonSnapshotRepository } from '../database/repositories/TypeOrmCrossCheckRadarNetworkComparisonSnapshotRepository.js';
+import { GetRadarNetworkComparisonSnapshot } from '../../use-cases/get-radar-network-comparison-snapshot/GetRadarNetworkComparisonSnapshot.js';
 import Container = interfaces.Container;
 
 export function load(container: Container) {
@@ -38,6 +39,7 @@ export function load(container: Container) {
 		});
 
 	container.bind(GetApiDocsComparisonSnapshot).toSelf();
+	container.bind(GetRadarNetworkComparisonSnapshot).toSelf();
 	container.bind(ListApiDocsComparisonSnapshots).toSelf();
 	container.bind(GetCrossCheckArchives).toSelf();
 	container.bind(GetCrossCheckOrganizations).toSelf();

@@ -1825,6 +1825,30 @@
 				}
 			}
 		},
+		"/v1/cross-check/radar-network/latest": {
+			"get": {
+				"summary": "Get latest RADAR network cross-check snapshot",
+				"description": "Returns the latest persisted RADAR versus StellarAtlas network comparison snapshot. This endpoint does not fetch RADAR, run live probes, recompute comparisons, or run network scans.",
+				"tags": ["CrossCheck"],
+				"operationId": "getCrossCheckRadarNetworkLatest",
+				"responses": {
+					"200": {
+						"description": "latest persisted RADAR network comparison snapshot",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/CrossCheckRadarNetworkComparisonSnapshot"
+								}
+							}
+						}
+					},
+					"204": {
+						"description": "No RADAR network comparison snapshot has been stored"
+					},
+					"500": { "description": "Server error" }
+				}
+			}
+		},
 		"/v1/cross-check/organizations": {
 			"get": {
 				"summary": "List organization cross-check review rows",
@@ -5481,6 +5505,303 @@
 					},
 					"title": { "type": "string" },
 					"version": { "type": "string" }
+				}
+			},
+			"CrossCheckRadarNetworkComparisonSnapshot": {
+				"type": "object",
+				"required": [
+					"id",
+					"status",
+					"generatedAt",
+					"storedAt",
+					"comparison",
+					"failure"
+				],
+				"properties": {
+					"id": { "type": "string" },
+					"status": {
+						"type": "string",
+						"enum": ["compared", "failed"]
+					},
+					"generatedAt": {
+						"type": "string",
+						"format": "date-time"
+					},
+					"storedAt": {
+						"type": "string",
+						"format": "date-time"
+					},
+					"comparison": {
+						"nullable": true,
+						"allOf": [
+							{
+								"$ref": "#/components/schemas/CrossCheckRadarNetworkComparison"
+							}
+						]
+					},
+					"failure": {
+						"nullable": true,
+						"allOf": [
+							{
+								"$ref": "#/components/schemas/CrossCheckRadarNetworkSnapshotFailure"
+							}
+						]
+					}
+				}
+			},
+			"CrossCheckRadarNetworkComparison": {
+				"type": "object",
+				"required": [
+					"comparisonStatus",
+					"generatedAt",
+					"organizations",
+					"source",
+					"stellarAtlas",
+					"summary",
+					"validators",
+					"warnings"
+				],
+				"properties": {
+					"comparisonStatus": {
+						"type": "string",
+						"enum": ["compared"]
+					},
+					"generatedAt": {
+						"type": "string",
+						"format": "date-time"
+					},
+					"organizations": {
+						"type": "array",
+						"items": {
+							"$ref": "#/components/schemas/CrossCheckRadarNetworkRecordComparison"
+						}
+					},
+					"source": {
+						"$ref": "#/components/schemas/CrossCheckRadarNetworkSourceMetadata"
+					},
+					"stellarAtlas": {
+						"$ref": "#/components/schemas/CrossCheckRadarNetworkSnapshotMetadata"
+					},
+					"summary": {
+						"$ref": "#/components/schemas/CrossCheckRadarNetworkComparisonSummary"
+					},
+					"validators": {
+						"type": "array",
+						"items": {
+							"$ref": "#/components/schemas/CrossCheckRadarNetworkRecordComparison"
+						}
+					},
+					"warnings": {
+						"type": "array",
+						"items": { "type": "string" }
+					}
+				}
+			},
+			"CrossCheckRadarNetworkComparisonSummary": {
+				"type": "object",
+				"required": [
+					"fieldMismatchCount",
+					"matchedCount",
+					"organizationCount",
+					"sourceMissingCount",
+					"stellarAtlasMissingCount",
+					"totalCount",
+					"validatorCount"
+				],
+				"properties": {
+					"fieldMismatchCount": { "type": "integer", "minimum": 0 },
+					"matchedCount": { "type": "integer", "minimum": 0 },
+					"organizationCount": { "type": "integer", "minimum": 0 },
+					"sourceMissingCount": { "type": "integer", "minimum": 0 },
+					"stellarAtlasMissingCount": { "type": "integer", "minimum": 0 },
+					"totalCount": { "type": "integer", "minimum": 0 },
+					"validatorCount": { "type": "integer", "minimum": 0 }
+				}
+			},
+			"CrossCheckRadarNetworkRecordComparison": {
+				"type": "object",
+				"required": [
+					"comparisonStatus",
+					"entityType",
+					"fieldMismatches",
+					"key",
+					"source",
+					"stellarAtlas"
+				],
+				"properties": {
+					"comparisonStatus": {
+						"type": "string",
+						"enum": [
+							"field_mismatch",
+							"matched",
+							"source_missing",
+							"stellaratlas_missing"
+						]
+					},
+					"entityType": {
+						"type": "string",
+						"enum": ["organization", "validator"]
+					},
+					"fieldMismatches": {
+						"type": "array",
+						"items": {
+							"$ref": "#/components/schemas/CrossCheckRadarNetworkFieldMismatch"
+						}
+					},
+					"key": { "type": "string" },
+					"source": {
+						"type": "object",
+						"nullable": true,
+						"additionalProperties": true
+					},
+					"stellarAtlas": {
+						"type": "object",
+						"nullable": true,
+						"additionalProperties": true
+					}
+				}
+			},
+			"CrossCheckRadarNetworkFieldMismatch": {
+				"type": "object",
+				"required": ["field", "sourceValue", "stellarAtlasValue"],
+				"properties": {
+					"field": {
+						"type": "string",
+						"enum": [
+							"active",
+							"activeInScp",
+							"alias",
+							"connectivityError",
+							"historyArchiveHasError",
+							"historyUrl",
+							"homeDomain",
+							"host",
+							"horizonUrl",
+							"isFullValidator",
+							"isValidating",
+							"isValidator",
+							"lag",
+							"name",
+							"organizationId",
+							"quorumSetHashKey",
+							"stellarCoreVersionBehind",
+							"tomlState",
+							"url",
+							"validators",
+							"versionStr"
+						]
+					},
+					"sourceValue": {
+						"$ref": "#/components/schemas/CrossCheckRadarNetworkFieldValue"
+					},
+					"stellarAtlasValue": {
+						"$ref": "#/components/schemas/CrossCheckRadarNetworkFieldValue"
+					}
+				}
+			},
+			"CrossCheckRadarNetworkFieldValue": {
+				"nullable": true,
+				"oneOf": [
+					{ "type": "string" },
+					{ "type": "number" },
+					{ "type": "boolean" },
+					{
+						"type": "array",
+						"items": { "type": "string" }
+					}
+				]
+			},
+			"CrossCheckRadarNetworkSnapshotFailure": {
+				"type": "object",
+				"required": ["kind", "message", "occurredAt", "phase", "sourceId"],
+				"properties": {
+					"kind": { "type": "string" },
+					"message": { "type": "string" },
+					"occurredAt": {
+						"type": "string",
+						"format": "date-time"
+					},
+					"phase": {
+						"type": "string",
+						"enum": ["comparison", "radar_fetch", "stellaratlas_read"]
+					},
+					"sourceId": {
+						"type": "string",
+						"nullable": true,
+						"enum": ["stellaratlas-api", "withobsrvr-radar"]
+					},
+					"status": { "type": "integer" },
+					"limitBytes": { "type": "integer", "minimum": 0 }
+				}
+			},
+			"CrossCheckRadarNetworkSnapshotMetadata": {
+				"type": "object",
+				"required": [
+					"observedAt",
+					"organizationCount",
+					"sourceId",
+					"validatorCount"
+				],
+				"properties": {
+					"observedAt": {
+						"type": "string",
+						"format": "date-time"
+					},
+					"organizationCount": { "type": "integer", "minimum": 0 },
+					"sourceId": {
+						"type": "string",
+						"enum": ["stellaratlas-api", "withobsrvr-radar"]
+					},
+					"validatorCount": { "type": "integer", "minimum": 0 }
+				}
+			},
+			"CrossCheckRadarNetworkSourceMetadata": {
+				"type": "object",
+				"required": [
+					"endpointUrl",
+					"latestLedger",
+					"networkId",
+					"networkName",
+					"networkTime",
+					"observedAt",
+					"organizationCount",
+					"sourceId",
+					"validatorCount",
+					"warnings"
+				],
+				"properties": {
+					"endpointUrl": { "type": "string" },
+					"latestLedger": {
+						"type": "string",
+						"nullable": true
+					},
+					"networkId": {
+						"type": "string",
+						"nullable": true
+					},
+					"networkName": {
+						"type": "string",
+						"nullable": true
+					},
+					"networkTime": {
+						"type": "string",
+						"format": "date-time",
+						"nullable": true
+					},
+					"observedAt": {
+						"type": "string",
+						"format": "date-time"
+					},
+					"organizationCount": { "type": "integer", "minimum": 0 },
+					"sourceId": {
+						"type": "string",
+						"enum": ["withobsrvr-radar"]
+					},
+					"validatorCount": { "type": "integer", "minimum": 0 },
+					"warnings": {
+						"type": "array",
+						"items": { "type": "string" }
+					}
 				}
 			},
 			"SearchFacetValue": {

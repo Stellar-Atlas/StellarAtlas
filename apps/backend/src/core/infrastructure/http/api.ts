@@ -65,6 +65,7 @@ import { GetCrossCheckArchives } from '@cross-check/use-cases/get-cross-check-ar
 import { GetCrossCheckOrganizations } from '@cross-check/use-cases/get-cross-check-organizations/GetCrossCheckOrganizations.js';
 import { GetCrossCheckSources } from '@cross-check/use-cases/get-cross-check-sources/GetCrossCheckSources.js';
 import { GetCrossCheckValidators } from '@cross-check/use-cases/get-cross-check-validators/GetCrossCheckValidators.js';
+import { GetRadarNetworkComparisonSnapshot } from '@cross-check/use-cases/get-radar-network-comparison-snapshot/GetRadarNetworkComparisonSnapshot.js';
 import { ListApiDocsComparisonSnapshots } from '@cross-check/use-cases/list-api-docs-comparison-snapshots/ListApiDocsComparisonSnapshots.js';
 import { fbasRouter } from '@fbas/infrastructure/http/FbasRouter.js';
 import { GetFbasAnalysisProof } from '@fbas/use-cases/get-fbas-analysis-proof/GetFbasAnalysisProof.js';
@@ -205,6 +206,9 @@ const listen = async () => {
 			),
 			getCrossCheckSources: kernel.container.get(GetCrossCheckSources),
 			getCrossCheckValidators: kernel.container.get(GetCrossCheckValidators),
+			getRadarNetworkComparisonSnapshot: kernel.container.get(
+				GetRadarNetworkComparisonSnapshot
+			),
 			listApiDocsComparisonSnapshots: kernel.container.get(
 				ListApiDocsComparisonSnapshots
 			)

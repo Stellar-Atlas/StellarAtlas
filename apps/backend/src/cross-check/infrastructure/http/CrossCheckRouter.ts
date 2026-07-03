@@ -6,6 +6,7 @@ import { GetCrossCheckArchives } from '../../use-cases/get-cross-check-archives/
 import { GetCrossCheckOrganizations } from '../../use-cases/get-cross-check-organizations/GetCrossCheckOrganizations.js';
 import { GetCrossCheckSources } from '../../use-cases/get-cross-check-sources/GetCrossCheckSources.js';
 import { GetCrossCheckValidators } from '../../use-cases/get-cross-check-validators/GetCrossCheckValidators.js';
+import { GetRadarNetworkComparisonSnapshot } from '../../use-cases/get-radar-network-comparison-snapshot/GetRadarNetworkComparisonSnapshot.js';
 import { ListApiDocsComparisonSnapshots } from '../../use-cases/list-api-docs-comparison-snapshots/ListApiDocsComparisonSnapshots.js';
 
 export interface CrossCheckRouterConfig {
@@ -14,12 +15,14 @@ export interface CrossCheckRouterConfig {
 	readonly getCrossCheckOrganizations: GetCrossCheckOrganizations;
 	readonly getCrossCheckSources: GetCrossCheckSources;
 	readonly getCrossCheckValidators: GetCrossCheckValidators;
+	readonly getRadarNetworkComparisonSnapshot: GetRadarNetworkComparisonSnapshot;
 	readonly listApiDocsComparisonSnapshots: ListApiDocsComparisonSnapshots;
 }
 
 const archiveCrossCheckCacheMaxAgeSeconds = 10;
 const apiDocsComparisonCacheMaxAgeSeconds = 60;
 const organizationCrossCheckCacheMaxAgeSeconds = 30;
+const radarNetworkComparisonCacheMaxAgeSeconds = 60;
 const sourceCrossCheckCacheMaxAgeSeconds = 300;
 const validatorCrossCheckCacheMaxAgeSeconds = 30;
 
@@ -59,6 +62,14 @@ export const CrossCheckRouterWrapper = (
 			res,
 			await config.getApiDocsComparisonSnapshot.execute(),
 			apiDocsComparisonCacheMaxAgeSeconds
+		);
+	});
+
+	crossCheckRouter.get('/radar-network/latest', async function (_req, res) {
+		return sendNullableCrossCheckResult(
+			res,
+			await config.getRadarNetworkComparisonSnapshot.execute(),
+			radarNetworkComparisonCacheMaxAgeSeconds
 		);
 	});
 
