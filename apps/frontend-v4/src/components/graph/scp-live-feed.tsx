@@ -7,6 +7,11 @@ import type {
 	PublicScpStatementObservation
 } from '../../api/types';
 import { fetchBrowserLedgerTransactions } from '../../api/browser-client';
+import {
+	compareLedgerSequences,
+	getHighestLedgerSequence,
+	toLedgerSequenceText
+} from '../../domain/ledger-sequence';
 import { getNodeLabel } from '../../domain/network';
 
 interface ScpLiveFeedProps {
@@ -42,7 +47,9 @@ const getStatementNodeLabel = (
 	network: PublicNetwork,
 	statement: PublicScpStatementObservation
 ): string => {
-	const node = network.nodes.find((candidate) => candidate.publicKey === statement.nodeId);
+	const node = network.nodes.find(
+		(candidate) => candidate.publicKey === statement.nodeId
+	);
 	return node ? getNodeLabel(node) : statement.nodeId.slice(0, 12);
 };
 
@@ -59,7 +66,9 @@ const getStatementValueLabel = (
 	statement: PublicScpStatementObservation
 ): string => (statement.values[0] === undefined ? 'statement hash' : 'tx set');
 
-const formatStatementAge = (statement: PublicScpStatementObservation): string => {
+const formatStatementAge = (
+	statement: PublicScpStatementObservation
+): string => {
 	const observedAt = new Date(statement.observedAt).getTime();
 	const ageSeconds = Math.max(0, Math.floor((Date.now() - observedAt) / 1000));
 	if (ageSeconds < 90) return `${ageSeconds}s`;
@@ -72,18 +81,17 @@ const summarizeStatements = (
 	network: PublicNetwork,
 	statements: readonly PublicScpStatementObservation[]
 ): StatementSummary | null => {
-	const latestSlotIndex = statements.reduce<string | null>((latest, statement) => {
-		if (latest === null) return statement.slotIndex;
-		return BigInt(statement.slotIndex) > BigInt(latest)
-			? statement.slotIndex
-			: latest;
-	}, null);
+	const latestSlotIndex = getHighestLedgerSequence(
+		statements.map((statement) => statement.slotIndex)
+	);
 	if (latestSlotIndex === null) return null;
 
 	const slotStatements = statements.filter(
 		(statement) => statement.slotIndex === latestSlotIndex
 	);
-	const slotSigners = new Set(slotStatements.map((statement) => statement.nodeId));
+	const slotSigners = new Set(
+		slotStatements.map((statement) => statement.nodeId)
+	);
 	const slotOrganizations = new Set(
 		slotStatements.map((statement) => {
 			const node = network.nodes.find(
@@ -119,8 +127,11 @@ const compareStatementsForFeed = (
 	left: PublicScpStatementObservation,
 	right: PublicScpStatementObservation
 ): number => {
-	const slotComparison = BigInt(right.slotIndex) - BigInt(left.slotIndex);
-	if (slotComparison !== 0n) return slotComparison > 0n ? 1 : -1;
+	const slotComparison = compareLedgerSequences(
+		right.slotIndex,
+		left.slotIndex
+	);
+	if (slotComparison !== 0) return slotComparison;
 
 	const observedComparison =
 		new Date(right.observedAt).getTime() - new Date(left.observedAt).getTime();
@@ -149,12 +160,13 @@ export function ScpLiveFeed({
 	statements
 }: ScpLiveFeedProps): React.JSX.Element {
 	const summary = summarizeStatements(network, statements);
+	const currentLedgerSlot =
+		toLedgerSequenceText(network.latestLedger) ??
+		network.latestLedger.toString();
 	const currentLedgerTransactionSet: SelectedTransactionSet = {
-		slotIndex: network.latestLedger.toString(),
+		slotIndex: currentLedgerSlot,
 		txSetHash:
-			summary?.slotIndex === network.latestLedger.toString()
-				? summary.txSetHash
-				: null
+			summary?.slotIndex === currentLedgerSlot ? summary.txSetHash : null
 	};
 	const recentStatements = useMemo(
 		() => statements.toSorted(compareStatementsForFeed).slice(0, 48),
@@ -201,10 +213,9 @@ export function ScpLiveFeed({
 		)
 			.then((payload) => {
 				setTransactionSetState({
-					message:
-						payload.truncated
-							? `Showing the first ${payload.records.length} ledger transactions.`
-							: null,
+					message: payload.truncated
+						? `Showing the first ${payload.records.length} ledger transactions.`
+						: null,
 					records: payload.records,
 					slotIndex: selectedTransactionSet.slotIndex,
 					status: 'loaded'
@@ -246,7 +257,8 @@ export function ScpLiveFeed({
 	}, [selectedTransactionSet]);
 
 	const visibleStatements = useMemo(() => {
-		if (recentStatements.length <= visibleStatementCount) return recentStatements;
+		if (recentStatements.length <= visibleStatementCount)
+			return recentStatements;
 		return Array.from({ length: visibleStatementCount }, (_, index) => {
 			const nextIndex = (feedOffset + index) % recentStatements.length;
 			return recentStatements[nextIndex];
@@ -295,13 +307,13 @@ export function ScpLiveFeed({
 						type="button"
 					>
 						<span>Ledger slot</span>
-						<strong>{network.latestLedger.toString()}</strong>
+						<strong>{currentLedgerSlot}</strong>
 					</button>
 					<button
 						className="tx-set-button"
 						onClick={() =>
 							openTransactionSet({
-								slotIndex: network.latestLedger.toString(),
+								slotIndex: currentLedgerSlot,
 								txSetHash: summary.txSetHash
 							})
 						}
@@ -347,7 +359,8 @@ export function ScpLiveFeed({
 							<div>
 								<strong>Ledger {selectedTransactionSet.slotIndex}</strong>
 								<code>
-									{selectedTransactionSet.txSetHash ?? 'pending transaction set'}
+									{selectedTransactionSet.txSetHash ??
+										'pending transaction set'}
 								</code>
 							</div>
 							<button
@@ -362,7 +375,9 @@ export function ScpLiveFeed({
 							<p>Loading ledger transactions...</p>
 						)}
 						{transactionSetStatus?.status === 'error' && (
-							<p>{transactionSetStatus.message ?? 'Transaction set unavailable.'}</p>
+							<p>
+								{transactionSetStatus.message ?? 'Transaction set unavailable.'}
+							</p>
 						)}
 						{transactionSetStatus?.status === 'loaded' && (
 							<div className="tx-set-records">
@@ -401,7 +416,9 @@ export function ScpLiveFeed({
 								: ''
 						}
 						key={statement.statementHash}
-						onClick={() => openTransactionSet(getStatementTransactionSet(statement))}
+						onClick={() =>
+							openTransactionSet(getStatementTransactionSet(statement))
+						}
 						type="button"
 					>
 						<span suppressHydrationWarning>

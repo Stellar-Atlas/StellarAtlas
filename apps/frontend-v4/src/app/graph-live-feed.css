@@ -1,0 +1,225 @@
+.scp-live-feed {
+	background: rgba(255, 255, 255, 0.055);
+	border: 1px solid rgba(160, 190, 220, 0.16);
+	border-radius: 8px;
+	margin-block-start: 14px;
+	padding: 12px;
+}
+
+.scp-live-heading {
+	align-items: center;
+	display: flex;
+	justify-content: space-between;
+}
+
+.scp-live-heading h2 {
+	font-size: 0.9rem;
+	margin: 0;
+}
+
+.scp-live-heading span,
+.scp-flow-list span,
+.scp-flow-list small,
+.scp-flow-focus span {
+	color: #aebdcd;
+	font-size: 0.72rem;
+	font-weight: 800;
+	text-transform: uppercase;
+}
+
+.scp-packet-legend {
+	display: grid;
+	gap: 6px;
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+	margin-block-start: 10px;
+}
+
+.scp-packet-legend span {
+	align-items: center;
+	color: #aebdcd;
+	display: flex;
+	font-size: 0.68rem;
+	font-weight: 800;
+	gap: 6px;
+	text-transform: uppercase;
+}
+
+.scp-packet-legend span::before {
+	border-radius: 999px;
+	block-size: 8px;
+	content: '';
+	display: inline-block;
+	inline-size: 8px;
+}
+
+.scp-packet-legend .nominate::before {
+	background: #f7cf4d;
+}
+
+.scp-packet-legend .prepare::before {
+	background: #58a6ff;
+}
+
+.scp-packet-legend .confirm::before {
+	background: #5dd39e;
+}
+
+.scp-packet-legend .externalize::before {
+	background: #c084fc;
+}
+
+.scp-flow-focus-grid {
+	display: grid;
+	gap: 7px;
+	margin-block-start: 10px;
+}
+
+.scp-flow-focus {
+	align-items: center;
+	background: rgba(88, 166, 255, 0.12);
+	border: 1px solid rgba(88, 166, 255, 0.35);
+	border-radius: 6px;
+	display: grid;
+	gap: 10px;
+	grid-template-columns: 14px minmax(0, 1fr) auto;
+	padding: 8px 9px;
+}
+
+.scp-flow-focus strong,
+.scp-flow-focus span {
+	display: block;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.scp-flow-focus code {
+	background: rgba(2, 8, 14, 0.72);
+	border: 1px solid rgba(126, 231, 135, 0.24);
+	border-radius: 6px;
+	color: #b9ffb2;
+	display: grid;
+	font-size: 0.74rem;
+	gap: 2px;
+	padding: 6px 7px;
+}
+
+.scp-flow-focus code span {
+	color: rgba(214, 230, 255, 0.62);
+	font-size: 0.55rem;
+	text-transform: uppercase;
+}
+
+.flow-pulse {
+	animation: scp-pulse 1.2s ease-in-out infinite;
+	background: #58a6ff;
+	border-radius: 999px;
+	block-size: 10px;
+	box-shadow: 0 0 0 0 rgba(88, 166, 255, 0.5);
+	inline-size: 10px;
+}
+
+.flow-pulse.nominate {
+	background: #f7cf4d;
+	box-shadow: 0 0 0 0 rgba(247, 207, 77, 0.48);
+}
+
+.flow-pulse.prepare {
+	background: #58a6ff;
+	box-shadow: 0 0 0 0 rgba(88, 166, 255, 0.48);
+}
+
+.flow-pulse.confirm {
+	background: #5dd39e;
+	box-shadow: 0 0 0 0 rgba(93, 211, 158, 0.48);
+}
+
+.flow-pulse.externalize {
+	background: #c084fc;
+	box-shadow: 0 0 0 0 rgba(192, 132, 252, 0.48);
+}
+
+.scp-flow-list {
+	display: grid;
+	gap: 6px;
+	margin-block-start: 10px;
+	min-block-size: 392px;
+	overflow: hidden;
+}
+
+.scp-flow-list button {
+	align-items: center;
+	animation: scp-feed-enter 650ms ease both;
+	background: transparent;
+	border: 0;
+	border-block-start: 1px solid rgba(160, 190, 220, 0.1);
+	color: #e7edf5;
+	cursor: pointer;
+	display: grid;
+	gap: 8px;
+	grid-template-columns: 34px minmax(0, 1fr) auto;
+	padding-block-start: 6px;
+	text-align: left;
+}
+
+.scp-flow-list button:hover,
+.scp-flow-list button:focus-visible {
+	background: rgba(88, 166, 255, 0.12);
+	outline: 1px solid rgba(88, 166, 255, 0.34);
+}
+
+.scp-flow-list button.active strong,
+.scp-flow-list button.active small {
+	color: #58a6ff;
+}
+
+.scp-flow-list strong,
+.scp-flow-list small {
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.scp-flow-list p {
+	color: #aebdcd;
+	margin: 0;
+}
+
+.scp-observation-orbit .scp-live-feed {
+	margin-block-start: 0;
+}
+
+@keyframes scp-pulse {
+	0% {
+		box-shadow: 0 0 0 0 rgba(88, 166, 255, 0.45);
+		opacity: 1;
+	}
+
+	70% {
+		box-shadow: 0 0 0 10px rgba(88, 166, 255, 0);
+		opacity: 0.7;
+	}
+
+	100% {
+		box-shadow: 0 0 0 0 rgba(88, 166, 255, 0);
+		opacity: 1;
+	}
+}
+
+@keyframes scp-feed-enter {
+	0% {
+		opacity: 0;
+		transform: translateY(8px);
+	}
+
+	100% {
+		opacity: 1;
+		transform: translateY(0);
+	}
+}
+
+@media (max-width: 760px) {
+	.scp-flow-list {
+		min-block-size: auto;
+	}
+}

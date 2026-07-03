@@ -4,6 +4,8 @@ import './shell.css';
 import './components.css';
 import './routes.css';
 import './graph-explorer.css';
+import './graph-live-feed.css';
+import './graph-detail-panels.css';
 import './graph-interactions.css';
 import './responsive.css';
 import { AppShell } from '../components/layout/app-shell';

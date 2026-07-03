@@ -9,18 +9,13 @@ import {
 	fetchBrowserScpStatements
 } from '../../api/browser-client';
 import { publishLatestLedger } from '../../api/latest-ledger-events';
+import { getHighestLedgerSequence } from '../../domain/ledger-sequence';
 import { formatDateTime } from '../../format/formatters';
 
 const fallbackRefreshIntervalMs = 10_000;
 const scpRefreshIntervalMs = 1_000;
 const latestLedgerRefreshIntervalMs = 2_000;
 const liveNetworkPath = '/v1/live';
-
-const getHighestLedgerSlot = (slotIndexes: readonly string[]): string | null =>
-	slotIndexes.reduce<string | null>((highest, slotIndex) => {
-		if (highest === null) return slotIndex;
-		return BigInt(slotIndex) > BigInt(highest) ? slotIndex : highest;
-	}, null);
 
 export function NetworkStrip(): React.JSX.Element {
 	const [network, setNetwork] = useState<PublicNetwork | null>(null);
@@ -47,7 +42,9 @@ export function NetworkStrip(): React.JSX.Element {
 		loadNetwork();
 		const interval = window.setInterval(loadNetwork, fallbackRefreshIntervalMs);
 
-		const eventSource = new EventSource(buildBrowserApiUrl(liveNetworkPath, true));
+		const eventSource = new EventSource(
+			buildBrowserApiUrl(liveNetworkPath, true)
+		);
 		eventSource.addEventListener('network', (event) => {
 			if (!isMounted) return;
 			setNetwork(JSON.parse(event.data) as PublicNetwork);
@@ -76,10 +73,9 @@ export function NetworkStrip(): React.JSX.Element {
 					if (!isMounted) return;
 					publishLatestLedger(ledger.sequence);
 					setLatestLedger((current) => {
-						if (!current) return ledger.sequence;
-						return BigInt(ledger.sequence) > BigInt(current)
-							? ledger.sequence
-							: current;
+						return (
+							getHighestLedgerSequence([current, ledger.sequence]) ?? current
+						);
 					});
 				})
 				.catch(() => undefined)
@@ -109,16 +105,15 @@ export function NetworkStrip(): React.JSX.Element {
 			pendingRequests.add(abortController);
 			void fetchBrowserScpStatements({ limit: 16 }, abortController.signal)
 				.then((statements) => {
-					const highestLedger = getHighestLedgerSlot(
+					const highestLedger = getHighestLedgerSequence(
 						statements.map((statement) => statement.slotIndex)
 					);
 					if (isMounted && highestLedger) {
 						publishLatestLedger(highestLedger);
 						setLiveLedger((current) => {
-							if (!current) return highestLedger;
-							return BigInt(highestLedger) > BigInt(current)
-								? highestLedger
-								: current;
+							return (
+								getHighestLedgerSequence([current, highestLedger]) ?? current
+							);
 						});
 					}
 				})
@@ -137,11 +132,11 @@ export function NetworkStrip(): React.JSX.Element {
 		};
 	}, []);
 
-	const displayedLedger = getHighestLedgerSlot(
-		[liveLedger, latestLedger, network?.latestLedger.toString()].filter(
-			(value): value is string => typeof value === 'string'
-		)
-	);
+	const displayedLedger = getHighestLedgerSequence([
+		liveLedger,
+		latestLedger,
+		network?.latestLedger
+	]);
 
 	return (
 		<div className="network-strip">
@@ -151,9 +146,7 @@ export function NetworkStrip(): React.JSX.Element {
 					<a href="/legacy/">Legacy version</a>
 				</div>
 				<span>{network?.name ?? 'Public Stellar Network'}</span>
-				<span>
-					Ledger {displayedLedger ?? 'syncing'}
-				</span>
+				<span>Ledger {displayedLedger ?? 'syncing'}</span>
 				<strong>{network ? formatDateTime(network.time) : 'Loading'}</strong>
 			</div>
 		</div>
