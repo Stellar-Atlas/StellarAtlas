@@ -15,15 +15,17 @@ import {
 	requireObjectBody,
 	scanDtoValidators
 } from './ScanRequestValidation.js';
+import {
+	type FrontendRevalidationConfig,
+	triggerFrontendRevalidation
+} from './FrontendRevalidation.js';
 
-export interface HistoryScanRouterConfig {
+export interface HistoryScanRouterConfig extends FrontendRevalidationConfig {
 	getLatestScan: GetLatestScan;
 	getScanLogs: GetScanLogs;
 	getScanJob: GetScanJob;
 	registerScan: RegisterScan;
 	touchScanJob: TouchScanJob;
-	frontendBaseUrl?: string;
-	frontendRevalidateToken?: string;
 	userName?: string;
 	password?: string;
 }
@@ -128,30 +130,6 @@ export const HistoryScanRouterWrapper = (
 	);
 
 	return historyScanRouter;
-};
-
-const triggerFrontendRevalidation = (
-	config: HistoryScanRouterConfig,
-	tags: readonly string[]
-): void => {
-	if (!config.frontendBaseUrl || !config.frontendRevalidateToken) return;
-
-	let revalidateUrl: URL;
-	try {
-		revalidateUrl = new URL('/api/revalidate', config.frontendBaseUrl);
-	} catch {
-		return;
-	}
-
-	void fetch(revalidateUrl, {
-		method: 'POST',
-		headers: {
-			authorization: `Bearer ${config.frontendRevalidateToken}`,
-			'content-type': 'application/json'
-		},
-		body: JSON.stringify({ tags }),
-		signal: AbortSignal.timeout(1500)
-	}).catch(() => undefined);
 };
 
 export { HistoryScanRouterWrapper as historyScanRouter };

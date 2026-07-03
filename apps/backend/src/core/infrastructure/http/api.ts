@@ -147,7 +147,9 @@ const listen = async () => {
 			getScannerMetrics: kernel.container.get(GetScannerMetrics),
 			getScanJob: kernel.container.get(GetScanJob),
 			touchScanJob: kernel.container.get(TouchScanJob),
-			registerScan: kernel.container.get(RegisterScan)
+			registerScan: kernel.container.get(RegisterScan),
+			frontendBaseUrl: config.frontendBaseUrl,
+			frontendRevalidateToken: config.frontendRevalidateToken
 		})
 	);
 

@@ -26,8 +26,12 @@ import {
 	requireObjectBody,
 	scanDtoValidators
 } from './ScanRequestValidation.js';
+import {
+	type FrontendRevalidationConfig,
+	triggerFrontendRevalidation
+} from './FrontendRevalidation.js';
 
-export interface CommunityScannerRouterConfig {
+export interface CommunityScannerRouterConfig extends FrontendRevalidationConfig {
 	readonly registerCommunityScanner: RegisterCommunityScanner;
 	readonly sendScannerHeartbeat: SendScannerHeartbeat;
 	readonly getScannerMetrics: GetScannerMetrics;
@@ -221,6 +225,8 @@ export const CommunityScannerRouterWrapper = (
 			if (result.isErr()) {
 				return mapRegisterScanError(result.error, res);
 			}
+
+			triggerFrontendRevalidation(config, ['history-scan', 'network']);
 
 			return res.status(201).json({ message: 'Scan created successfully' });
 		}

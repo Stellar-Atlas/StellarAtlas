@@ -3,7 +3,10 @@ import request from 'supertest';
 import { mock } from 'jest-mock-extended';
 import { err, ok } from 'neverthrow';
 import { randomUUID } from 'crypto';
-import { CommunityScannerRouterWrapper } from '../CommunityScannerRouter.js';
+import {
+	CommunityScannerRouterWrapper,
+	type CommunityScannerRouterConfig
+} from '../CommunityScannerRouter.js';
 import {
 	DuplicateCommunityScannerError,
 	RegisterCommunityScanner
@@ -41,19 +44,7 @@ describe('CommunityScannerRouter.integration', () => {
 		getScanJob = mock<GetScanJob>();
 		touchScanJob = mock<TouchScanJob>();
 		registerScan = mock<RegisterScan>();
-		app = express();
-		app.use(express.json());
-		app.use(
-			'/community-scanners',
-			CommunityScannerRouterWrapper({
-				registerCommunityScanner,
-				sendScannerHeartbeat,
-				getScannerMetrics,
-				getScanJob,
-				touchScanJob,
-				registerScan
-			})
-		);
+		mountRouter();
 	});
 
 	describe('POST /register', () => {
@@ -318,6 +309,43 @@ describe('CommunityScannerRouter.integration', () => {
 			);
 		});
 
+		it('should revalidate frontend cache tags after scan results', async () => {
+			const originalFetch = global.fetch;
+			const fetchMock = jest.fn().mockResolvedValue({}) as jest.Mock;
+			global.fetch = fetchMock as unknown as typeof fetch;
+			mountRouter({
+				frontendBaseUrl: 'https://frontend.example.com',
+				frontendRevalidateToken: 'revalidate-secret'
+			});
+
+			try {
+				registerScan.execute.mockResolvedValue(ok(undefined));
+
+				await request(app)
+					.post(`/community-scanners/${scannerId}/scans`)
+					.set('Authorization', 'Bearer satlas_scanner_secret')
+					.send(createValidScanBody(randomUUID()))
+					.expect(201);
+
+				expect(fetchMock).toHaveBeenCalledTimes(1);
+				const [url, init] = fetchMock.mock.calls[0] as [URL, RequestInit];
+				expect(url.toString()).toBe(
+					'https://frontend.example.com/api/revalidate'
+				);
+				expect(init.method).toBe('POST');
+				expect(init.headers).toEqual({
+					authorization: 'Bearer revalidate-secret',
+					'content-type': 'application/json'
+				});
+				expect(init.body).toBe(
+					JSON.stringify({ tags: ['history-scan', 'network'] })
+				);
+				expect(init.signal).toBeDefined();
+			} finally {
+				global.fetch = originalFetch;
+			}
+		});
+
 		it('should reject non-UUID scan job ids for scanner submissions', async () => {
 			await request(app)
 				.post(`/community-scanners/${scannerId}/scans`)
@@ -387,6 +415,23 @@ describe('CommunityScannerRouter.integration', () => {
 				});
 		});
 	});
+
+	function mountRouter(overrides: Partial<CommunityScannerRouterConfig> = {}) {
+		app = express();
+		app.use(express.json());
+		app.use(
+			'/community-scanners',
+			CommunityScannerRouterWrapper({
+				registerCommunityScanner,
+				sendScannerHeartbeat,
+				getScannerMetrics,
+				getScanJob,
+				touchScanJob,
+				registerScan,
+				...overrides
+			})
+		);
+	}
 });
 
 function createValidScanBody(scanJobRemoteId: string) {
