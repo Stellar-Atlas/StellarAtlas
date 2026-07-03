@@ -9,6 +9,7 @@ import {
 	maxFbasScanId
 } from '../../use-cases/get-fbas-analysis/GetFbasAnalysis.js';
 import { GetFbasAnalysisProof } from '../../use-cases/get-fbas-analysis-proof/GetFbasAnalysisProof.js';
+import { GetLatestFbasProofSets } from '../../use-cases/get-latest-fbas-proof-sets/GetLatestFbasProofSets.js';
 import { GetLatestFbas } from '../../use-cases/get-latest-fbas/GetLatestFbas.js';
 import {
 	FbasTopTierHistoryValidationError,
@@ -18,6 +19,7 @@ import {
 export interface FbasRouterConfig {
 	readonly getFbasAnalysis: GetFbasAnalysis;
 	readonly getFbasAnalysisProof: GetFbasAnalysisProof;
+	readonly getLatestFbasProofSets: GetLatestFbasProofSets;
 	readonly getLatestFbas: GetLatestFbas;
 	readonly getTopTierHistory: GetTopTierHistory;
 }
@@ -29,6 +31,26 @@ export const FbasRouterWrapper = (config: FbasRouterConfig): Router => {
 
 	fbasRouter.get('/latest', async function (_req, res) {
 		return sendFbasResult(res, await config.getLatestFbas.execute());
+	});
+
+	fbasRouter.get('/blocking-sets/latest', async function (_req, res) {
+		return sendFbasResult(
+			res,
+			await config.getLatestFbasProofSets.execute({
+				kind: 'blocking_sets'
+			}),
+			'Latest FBAS blocking sets not found'
+		);
+	});
+
+	fbasRouter.get('/splitting-sets/latest', async function (_req, res) {
+		return sendFbasResult(
+			res,
+			await config.getLatestFbasProofSets.execute({
+				kind: 'splitting_sets'
+			}),
+			'Latest FBAS splitting sets not found'
+		);
 	});
 
 	fbasRouter.get(

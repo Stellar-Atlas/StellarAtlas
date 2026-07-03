@@ -729,6 +729,54 @@
 				}
 			}
 		},
+		"/v1/fbas/blocking-sets/latest": {
+			"get": {
+				"summary": "Get latest persisted FBAS blocking sets",
+				"description": "Returns persisted blocking-set proof families from the latest completed network scan proof artifact. The endpoint does not run live analysis or recompute FBAS data. Families can be capped; inspect complete flags and capture limits before treating a response as exhaustive.",
+				"tags": ["FBAS"],
+				"operationId": "getLatestFbasBlockingSets",
+				"responses": {
+					"200": {
+						"description": "latest persisted FBAS blocking-set evidence",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/FbasBlockingSets"
+								}
+							}
+						}
+					},
+					"404": {
+						"description": "No latest persisted FBAS blocking-set evidence was found"
+					},
+					"500": { "description": "Server error" }
+				}
+			}
+		},
+		"/v1/fbas/splitting-sets/latest": {
+			"get": {
+				"summary": "Get latest persisted FBAS splitting sets",
+				"description": "Returns persisted splitting-set proof families from the latest completed network scan proof artifact. The endpoint does not run live analysis or recompute FBAS data. Families can be capped; inspect complete flags and capture limits before treating a response as exhaustive.",
+				"tags": ["FBAS"],
+				"operationId": "getLatestFbasSplittingSets",
+				"responses": {
+					"200": {
+						"description": "latest persisted FBAS splitting-set evidence",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/FbasSplittingSets"
+								}
+							}
+						}
+					},
+					"404": {
+						"description": "No latest persisted FBAS splitting-set evidence was found"
+					},
+					"500": { "description": "Server error" }
+				}
+			}
+		},
 		"/v1/fbas/analyses/{scanId}": {
 			"get": {
 				"summary": "Get FBAS aggregate evidence for a scan",
@@ -4615,10 +4663,140 @@
 					"payloadBytes": {
 						"type": "integer",
 						"minimum": 0,
-						"maximum": 1000000
+						"maximum": 1000000,
+						"description": "Serialized byte size of the full persisted FBAS proof artifact."
 					},
 					"proof": {
 						"$ref": "#/components/schemas/FbasProofPayload"
+					}
+				}
+			},
+			"FbasLatestProofSetBase": {
+				"type": "object",
+				"required": [
+					"generatedAt",
+					"evidenceSelection",
+					"proofSetPersistence",
+					"scanId",
+					"scanTime",
+					"schemaVersion",
+					"payloadBytes",
+					"limits",
+					"complete"
+				],
+				"properties": {
+					"generatedAt": {
+						"type": "string",
+						"format": "date-time"
+					},
+					"evidenceSelection": {
+						"type": "string",
+						"enum": ["latest_network_scan_fbas_proof"]
+					},
+					"proofSetPersistence": {
+						"type": "string",
+						"enum": ["persisted"]
+					},
+					"scanId": {
+						"type": "integer",
+						"minimum": 1,
+						"maximum": 2147483647
+					},
+					"scanTime": {
+						"type": "string",
+						"format": "date-time"
+					},
+					"schemaVersion": {
+						"type": "integer",
+						"minimum": 1
+					},
+					"payloadBytes": {
+						"type": "integer",
+						"minimum": 0,
+						"maximum": 1000000,
+						"description": "Serialized byte size of the full persisted FBAS proof artifact, not just this filtered response."
+					},
+					"limits": {
+						"$ref": "#/components/schemas/FbasProofCaptureLimits"
+					},
+					"complete": {
+						"type": "boolean",
+						"description": "True when every returned proof family is exhaustive under the recorded limits."
+					}
+				}
+			},
+			"FbasBlockingSets": {
+				"allOf": [
+					{ "$ref": "#/components/schemas/FbasLatestProofSetBase" },
+					{
+						"type": "object",
+						"required": ["setType", "node", "organization", "country", "isp"],
+						"properties": {
+							"setType": {
+								"type": "string",
+								"enum": ["blocking_sets"]
+							},
+							"node": {
+								"$ref": "#/components/schemas/FbasBlockingSetDimension"
+							},
+							"organization": {
+								"$ref": "#/components/schemas/FbasBlockingSetDimension"
+							},
+							"country": {
+								"$ref": "#/components/schemas/FbasBlockingSetDimension"
+							},
+							"isp": {
+								"$ref": "#/components/schemas/FbasBlockingSetDimension"
+							}
+						}
+					}
+				]
+			},
+			"FbasSplittingSets": {
+				"allOf": [
+					{ "$ref": "#/components/schemas/FbasLatestProofSetBase" },
+					{
+						"type": "object",
+						"required": ["setType", "node", "organization", "country", "isp"],
+						"properties": {
+							"setType": {
+								"type": "string",
+								"enum": ["splitting_sets"]
+							},
+							"node": {
+								"$ref": "#/components/schemas/FbasSplittingSetDimension"
+							},
+							"organization": {
+								"$ref": "#/components/schemas/FbasSplittingSetDimension"
+							},
+							"country": {
+								"$ref": "#/components/schemas/FbasSplittingSetDimension"
+							},
+							"isp": {
+								"$ref": "#/components/schemas/FbasSplittingSetDimension"
+							}
+						}
+					}
+				]
+			},
+			"FbasBlockingSetDimension": {
+				"type": "object",
+				"required": ["blockingSets", "blockingSetsFiltered"],
+				"properties": {
+					"blockingSets": {
+						"$ref": "#/components/schemas/FbasProofSetFamily"
+					},
+					"blockingSetsFiltered": {
+						"$ref": "#/components/schemas/FbasProofSetFamily"
+					}
+				}
+			},
+			"FbasSplittingSetDimension": {
+				"type": "object",
+				"required": ["splittingSets"],
+				"properties": {
+					"splittingSets": {
+						"$ref": "#/components/schemas/FbasProofSetFamily"
 					}
 				}
 			},

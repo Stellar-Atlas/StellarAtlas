@@ -8,6 +8,7 @@ import {
 	FbasAnalysisValidationError,
 	GetFbasAnalysis
 } from '@fbas/use-cases/get-fbas-analysis/GetFbasAnalysis.js';
+import { GetLatestFbasProofSets } from '@fbas/use-cases/get-latest-fbas-proof-sets/GetLatestFbasProofSets.js';
 import { GetLatestFbas } from '@fbas/use-cases/get-latest-fbas/GetLatestFbas.js';
 import {
 	FbasTopTierHistoryValidationError,
@@ -19,12 +20,14 @@ describe('FbasRouter.integration', () => {
 	let app: express.Application;
 	let getFbasAnalysis: jest.Mocked<GetFbasAnalysis>;
 	let getFbasAnalysisProof: jest.Mocked<GetFbasAnalysisProof>;
+	let getLatestFbasProofSets: jest.Mocked<GetLatestFbasProofSets>;
 	let getLatestFbas: jest.Mocked<GetLatestFbas>;
 	let getTopTierHistory: jest.Mocked<GetTopTierHistory>;
 
 	beforeEach(() => {
 		getFbasAnalysis = mock<GetFbasAnalysis>();
 		getFbasAnalysisProof = mock<GetFbasAnalysisProof>();
+		getLatestFbasProofSets = mock<GetLatestFbasProofSets>();
 		getLatestFbas = mock<GetLatestFbas>();
 		getTopTierHistory = mock<GetTopTierHistory>();
 		app = express();
@@ -33,6 +36,7 @@ describe('FbasRouter.integration', () => {
 			FbasRouterWrapper({
 				getFbasAnalysis,
 				getFbasAnalysisProof,
+				getLatestFbasProofSets,
 				getLatestFbas,
 				getTopTierHistory
 			})

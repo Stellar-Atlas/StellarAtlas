@@ -69,6 +69,7 @@ import { ListApiDocsComparisonSnapshots } from '@cross-check/use-cases/list-api-
 import { fbasRouter } from '@fbas/infrastructure/http/FbasRouter.js';
 import { GetFbasAnalysisProof } from '@fbas/use-cases/get-fbas-analysis-proof/GetFbasAnalysisProof.js';
 import { GetFbasAnalysis } from '@fbas/use-cases/get-fbas-analysis/GetFbasAnalysis.js';
+import { GetLatestFbasProofSets } from '@fbas/use-cases/get-latest-fbas-proof-sets/GetLatestFbasProofSets.js';
 import { GetLatestFbas } from '@fbas/use-cases/get-latest-fbas/GetLatestFbas.js';
 import { GetTopTierHistory } from '@fbas/use-cases/get-top-tier-history/GetTopTierHistory.js';
 import { frontendV4ProxyMiddleware } from './FrontendV4Proxy.js';
@@ -215,6 +216,7 @@ const listen = async () => {
 		fbasRouter({
 			getFbasAnalysis: kernel.container.get(GetFbasAnalysis),
 			getFbasAnalysisProof: kernel.container.get(GetFbasAnalysisProof),
+			getLatestFbasProofSets: kernel.container.get(GetLatestFbasProofSets),
 			getLatestFbas: kernel.container.get(GetLatestFbas),
 			getTopTierHistory: kernel.container.get(GetTopTierHistory)
 		})
