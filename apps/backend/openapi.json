@@ -1290,6 +1290,199 @@
 				}
 			}
 		},
+		"/v1/cross-check/archives": {
+			"get": {
+				"summary": "List archive cross-check review rows",
+				"description": "Returns persisted StellarAtlas archive verification evidence prepared for external cross-reference review. External RADAR comparison is explicitly not probed by this endpoint.",
+				"tags": ["CrossCheck"],
+				"operationId": "getCrossCheckArchives",
+				"parameters": [
+					{
+						"name": "limit",
+						"in": "query",
+						"description": "Maximum number of archive rows to return.",
+						"required": false,
+						"schema": {
+							"type": "integer",
+							"minimum": 1,
+							"maximum": 100,
+							"default": 50
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "archive cross-check review rows",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object",
+									"required": [
+										"generatedAt",
+										"limit",
+										"count",
+										"probe",
+										"comparisonStatus",
+										"evidenceSelection",
+										"archives"
+									],
+									"properties": {
+										"generatedAt": {
+											"type": "string",
+											"format": "date-time"
+										},
+										"limit": {
+											"type": "integer",
+											"minimum": 1,
+											"maximum": 100
+										},
+										"count": {
+											"type": "integer",
+											"minimum": 0
+										},
+										"probe": {
+											"type": "string",
+											"enum": ["not_run"]
+										},
+										"comparisonStatus": {
+											"type": "string",
+											"enum": ["not_compared"]
+										},
+										"evidenceSelection": {
+											"type": "string",
+											"enum": ["latest_verification_scan_preferred"]
+										},
+										"archives": {
+											"type": "array",
+											"items": {
+												"type": "object",
+												"required": [
+													"archiveUrl",
+													"comparisonStatus",
+													"stellarAtlas",
+													"radarComparison"
+												],
+												"properties": {
+													"archiveUrl": { "type": "string" },
+													"comparisonStatus": {
+														"type": "string",
+														"enum": ["not_compared"]
+													},
+													"stellarAtlas": {
+														"type": "object",
+														"required": [
+															"scanStartedAt",
+															"scanCompletedAt",
+															"latestVerifiedLedger",
+															"isSlowArchive",
+															"archiveEvidenceStatus",
+															"hasArchiveVerificationError",
+															"archiveVerificationErrorCount",
+															"archiveVerificationErrors",
+															"workerEvidenceStatus",
+															"hasWorkerIssue",
+															"workerIssueCount",
+															"workerIssues"
+														],
+														"properties": {
+															"scanStartedAt": {
+																"type": "string",
+																"format": "date-time"
+															},
+															"scanCompletedAt": {
+																"type": "string",
+																"format": "date-time"
+															},
+															"latestVerifiedLedger": {
+																"type": "integer",
+																"minimum": 0
+															},
+															"hasArchiveVerificationError": {
+																"type": "boolean"
+															},
+															"isSlowArchive": { "type": "boolean" },
+															"archiveEvidenceStatus": {
+																"type": "string",
+																"enum": [
+																	"archive_verification_error",
+																	"no_archive_error_observed"
+																]
+															},
+															"archiveVerificationErrorCount": {
+																"type": "integer",
+																"minimum": 0
+															},
+															"archiveVerificationErrors": {
+																"type": "array",
+																"items": {
+																	"type": "object",
+																	"required": ["url", "message"],
+																	"properties": {
+																		"url": { "type": "string" },
+																		"message": { "type": "string" }
+																	}
+																}
+															},
+															"workerEvidenceStatus": {
+																"type": "string",
+																"enum": [
+																	"worker_issue",
+																	"no_worker_issue_observed"
+																]
+															},
+															"hasWorkerIssue": { "type": "boolean" },
+															"workerIssueCount": {
+																"type": "integer",
+																"minimum": 0
+															},
+															"workerIssues": {
+																"type": "array",
+																"items": {
+																	"type": "object",
+																	"required": ["url", "message"],
+																	"properties": {
+																		"url": { "type": "string" },
+																		"message": { "type": "string" }
+																	}
+																}
+															}
+														}
+													},
+													"radarComparison": {
+														"type": "object",
+														"required": [
+															"sourceId",
+															"comparisonStatus",
+															"probe"
+														],
+														"properties": {
+															"sourceId": {
+																"type": "string",
+																"enum": ["withobsrvr-radar"]
+															},
+															"comparisonStatus": {
+																"type": "string",
+																"enum": ["not_compared"]
+															},
+															"probe": {
+																"type": "string",
+																"enum": ["not_run"]
+															}
+														}
+													}
+												}
+											}
+										}
+									}
+								}
+							}
+						}
+					},
+					"400": { "description": "Bad request" },
+					"500": { "description": "Server error" }
+				}
+			}
+		},
 		"/v1/organization/{id}": {
 			"get": {
 				"summary": "Get an organization by id",

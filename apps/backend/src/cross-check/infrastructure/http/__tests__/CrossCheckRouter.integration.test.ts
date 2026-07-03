@@ -2,22 +2,89 @@ import express from 'express';
 import request from 'supertest';
 import { mock } from 'jest-mock-extended';
 import { err, ok } from 'neverthrow';
+import { GetCrossCheckArchives } from '@cross-check/use-cases/get-cross-check-archives/GetCrossCheckArchives.js';
 import { GetCrossCheckSources } from '@cross-check/use-cases/get-cross-check-sources/GetCrossCheckSources.js';
 import { CrossCheckRouterWrapper } from '../CrossCheckRouter.js';
 
 describe('CrossCheckRouter.integration', () => {
 	let app: express.Application;
+	let getCrossCheckArchives: jest.Mocked<GetCrossCheckArchives>;
 	let getCrossCheckSources: jest.Mocked<GetCrossCheckSources>;
 
 	beforeEach(() => {
+		getCrossCheckArchives = mock<GetCrossCheckArchives>();
 		getCrossCheckSources = mock<GetCrossCheckSources>();
 		app = express();
 		app.use(
 			'/cross-check',
 			CrossCheckRouterWrapper({
+				getCrossCheckArchives,
 				getCrossCheckSources
 			})
 		);
+	});
+
+	it('should expose archive cross-check review rows', async () => {
+		getCrossCheckArchives.execute.mockResolvedValue(
+			ok({
+				generatedAt: '2026-07-03T12:00:00.000Z',
+				limit: 10,
+				count: 1,
+				probe: 'not_run',
+				comparisonStatus: 'not_compared',
+				evidenceSelection: 'latest_verification_scan_preferred',
+				archives: [
+					{
+						archiveUrl: 'https://history.example.com',
+						comparisonStatus: 'not_compared',
+						stellarAtlas: {
+							archiveEvidenceStatus: 'archive_verification_error',
+							archiveVerificationErrorCount: 1,
+							archiveVerificationErrors: [
+								{
+									message: 'Wrong ledger hash',
+									url: 'https://history.example.com/ledger.xdr.gz'
+								}
+							],
+							hasArchiveVerificationError: true,
+							hasWorkerIssue: false,
+							isSlowArchive: false,
+							latestVerifiedLedger: 127,
+							scanCompletedAt: '2026-07-03T10:05:00.000Z',
+							scanStartedAt: '2026-07-03T10:00:00.000Z',
+							workerEvidenceStatus: 'no_worker_issue_observed',
+							workerIssueCount: 0,
+							workerIssues: []
+						},
+						radarComparison: {
+							comparisonStatus: 'not_compared',
+							probe: 'not_run',
+							sourceId: 'withobsrvr-radar'
+						}
+					}
+				]
+			})
+		);
+
+		await request(app)
+			.get('/cross-check/archives?limit=10')
+			.expect(200)
+			.expect('Cache-Control', 'public, max-age=10')
+			.expect((response) => {
+				expect(response.body.probe).toBe('not_run');
+				expect(response.body.comparisonStatus).toBe('not_compared');
+				expect(response.body.archives[0].comparisonStatus).toBe('not_compared');
+			});
+		expect(getCrossCheckArchives.execute).toHaveBeenCalledWith({ limit: 10 });
+	});
+
+	it('should reject invalid archive cross-check limits', async () => {
+		await request(app)
+			.get('/cross-check/archives?limit=0')
+			.expect(400)
+			.expect((response) => {
+				expect(response.body.errors).toHaveLength(1);
+			});
 	});
 
 	it('should expose configured cross-check sources', async () => {
@@ -55,6 +122,17 @@ describe('CrossCheckRouter.integration', () => {
 
 		await request(app)
 			.get('/cross-check/sources')
+			.expect(500)
+			.expect((response) => {
+				expect(response.body).toEqual({ error: 'Internal server error' });
+			});
+	});
+
+	it('should hide archive cross-check internal errors', async () => {
+		getCrossCheckArchives.execute.mockResolvedValue(err(new Error('boom')));
+
+		await request(app)
+			.get('/cross-check/archives')
 			.expect(500)
 			.expect((response) => {
 				expect(response.body).toEqual({ error: 'Internal server error' });

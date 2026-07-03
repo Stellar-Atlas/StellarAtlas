@@ -5,6 +5,7 @@ import type { NodeMeasurementRepository } from '@network-scan/domain/node/NodeMe
 import { NETWORK_TYPES } from '@network-scan/infrastructure/di/di-types.js';
 import { TypeOrmNodeMeasurementRepository } from '@network-scan/infrastructure/database/repositories/TypeOrmNodeMeasurementRepository.js';
 import { TypeOrmOrganizationRepository } from '@network-scan/infrastructure/database/repositories/TypeOrmOrganizationRepository.js';
+import { GetCrossCheckArchives } from '@cross-check/use-cases/get-cross-check-archives/GetCrossCheckArchives.js';
 import { GetCrossCheckSources } from '@cross-check/use-cases/get-cross-check-sources/GetCrossCheckSources.js';
 
 jest.setTimeout(10000); //slow and long integration test
@@ -23,6 +24,9 @@ test('kernel', async () => {
 	);
 	expect(container.get(GetCrossCheckSources)).toBeInstanceOf(
 		GetCrossCheckSources
+	);
+	expect(container.get(GetCrossCheckArchives)).toBeInstanceOf(
+		GetCrossCheckArchives
 	);
 
 	await kernel.close();
