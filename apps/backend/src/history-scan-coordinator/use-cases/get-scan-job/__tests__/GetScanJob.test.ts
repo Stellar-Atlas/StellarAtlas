@@ -85,8 +85,32 @@ describe('GetScanJob', () => {
 		expect(result.isOk()).toBe(true);
 		expect(
 			scanJobRepositoryMock.fetchNextJobForCommunityScanner
-		).toHaveBeenCalledWith('164f7788-9edb-4bb5-81c1-b928d85a21a5');
+		).toHaveBeenCalledWith(
+			'164f7788-9edb-4bb5-81c1-b928d85a21a5',
+			GetScanJob.maxActiveCommunityScannerJobs,
+			expect.any(Date)
+		);
 		expect(scanJobRepositoryMock.fetchNextJob).not.toHaveBeenCalled();
+	});
+
+	it('should pass the community scanner active job cap when claiming scanner jobs', async () => {
+		const mockJob = new ScanJob('http://test.com');
+		scanJobRepositoryMock.releaseStaleTakenJobs.mockResolvedValue(0);
+		scanJobRepositoryMock.fetchNextJobForCommunityScanner.mockResolvedValue(
+			mockJob
+		);
+
+		await getScanJob.execute({
+			communityScannerId: '164f7788-9edb-4bb5-81c1-b928d85a21a5'
+		});
+
+		expect(
+			scanJobRepositoryMock.fetchNextJobForCommunityScanner
+		).toHaveBeenCalledWith(
+			'164f7788-9edb-4bb5-81c1-b928d85a21a5',
+			GetScanJob.maxActiveCommunityScannerJobs,
+			expect.any(Date)
+		);
 	});
 
 	it('should return err(error) when fetchNextJob fails', async () => {

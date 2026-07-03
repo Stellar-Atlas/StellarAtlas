@@ -19,7 +19,9 @@ export interface ScanJobRepository {
 	save: (scanJobs: ScanJob[]) => Promise<void>;
 	fetchNextJob: () => Promise<ScanJob | null>;
 	fetchNextJobForCommunityScanner: (
-		communityScannerId: string
+		communityScannerId: string,
+		activeJobLimit: number,
+		staleTakenBefore: Date
 	) => Promise<ScanJob | null>;
 	findActiveByUrl: (url: string, limit: number) => Promise<ScanJob[]>;
 	findByRemoteId: (remoteId: string) => Promise<ScanJob | null>;

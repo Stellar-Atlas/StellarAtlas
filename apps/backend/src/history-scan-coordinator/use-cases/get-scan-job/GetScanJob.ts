@@ -9,12 +9,16 @@ import type { ScanJobRepository } from '../../domain/ScanJobRepository.js';
 import { mapUnknownToError } from '@core/utilities/mapUnknownToError.js';
 import { getStaleScanJobCutoff } from '../../domain/ScanJobStaleness.js';
 import type { CommunityScannerJobContext } from '../../domain/CommunityScannerJobContext.js';
+import { communityScannerClaimPolicy } from '../../domain/CommunityScannerClaimPolicy.js';
 
 /**
  * Schedules new scan jobs for history archives based on a configured scheduling strategy.
  * */
 @injectable()
 export class GetScanJob {
+	static readonly maxActiveCommunityScannerJobs =
+		communityScannerClaimPolicy.maxActiveJobsPerScanner;
+
 	constructor(
 		@inject(TYPES.ScanJobRepository)
 		private scanJobRepository: ScanJobRepository,
@@ -26,12 +30,15 @@ export class GetScanJob {
 		context?: CommunityScannerJobContext
 	): Promise<Result<ScanJobDTO | null, Error>> {
 		try {
-			await this.releaseStaleJobs();
+			const staleTakenBefore = getStaleScanJobCutoff();
+			await this.releaseStaleJobs(staleTakenBefore);
 			const nextScanJob =
 				context === undefined
 					? await this.scanJobRepository.fetchNextJob()
 					: await this.scanJobRepository.fetchNextJobForCommunityScanner(
-							context.communityScannerId
+							context.communityScannerId,
+							GetScanJob.maxActiveCommunityScannerJobs,
+							staleTakenBefore
 						);
 
 			if (nextScanJob === null) {
@@ -66,10 +73,9 @@ export class GetScanJob {
 		}
 	}
 
-	private async releaseStaleJobs(): Promise<void> {
-		const released = await this.scanJobRepository.releaseStaleTakenJobs(
-			getStaleScanJobCutoff()
-		);
+	private async releaseStaleJobs(staleTakenBefore: Date): Promise<void> {
+		const released =
+			await this.scanJobRepository.releaseStaleTakenJobs(staleTakenBefore);
 
 		if (released > 0) {
 			this.logger.info('Released stale scan jobs', {

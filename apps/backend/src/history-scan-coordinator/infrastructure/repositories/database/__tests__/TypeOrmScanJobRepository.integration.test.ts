@@ -5,6 +5,10 @@ import { ScanJob } from '@history-scan-coordinator/domain/ScanJob.js';
 import { TYPES } from '@history-scan-coordinator/infrastructure/di/di-types.js';
 import { randomUUID } from 'crypto';
 import { DataSource } from 'typeorm';
+import {
+	CommunityScanner,
+	ScannerStatus
+} from '@history-scan-coordinator/infrastructure/database/entities/CommunityScanner.js';
 
 jest.setTimeout(30000);
 
@@ -22,6 +26,25 @@ describe('TypeOrmScanJobRepository.integration', () => {
 	afterEach(async () => {
 		if (kernel !== undefined) await kernel.close();
 	});
+
+	async function saveCommunityScanner(
+		overrides: Partial<CommunityScanner> = {}
+	): Promise<string> {
+		const scannerRepository = kernel.container
+			.get(DataSource)
+			.getRepository(CommunityScanner);
+		const scanner = await scannerRepository.save(
+			scannerRepository.create({
+				name: 'Archive Desk',
+				contactEmail: `archive-${randomUUID()}@example.com`,
+				apiKeyHash: `api-key-hash-${randomUUID()}`,
+				status: ScannerStatus.ONLINE,
+				...overrides
+			})
+		);
+
+		return scanner.id;
+	}
 
 	it('should load the repository without errors', async () => {
 		expect(typeOrmScanJobRepository).toBeDefined();
@@ -79,12 +102,14 @@ describe('TypeOrmScanJobRepository.integration', () => {
 		});
 
 		it('should claim a pending job for a community scanner', async () => {
-			const scannerId = randomUUID();
+			const scannerId = await saveCommunityScanner();
 			await typeOrmScanJobRepository.save([new ScanJob('scanner-url')]);
 
 			const nextJob =
 				await typeOrmScanJobRepository.fetchNextJobForCommunityScanner(
-					scannerId
+					scannerId,
+					1,
+					new Date('2026-01-01T00:00:00.000Z')
 				);
 
 			expect(nextJob?.status).toBe('TAKEN');
@@ -99,6 +124,73 @@ describe('TypeOrmScanJobRepository.integration', () => {
 			);
 			expect(persistedJob?.claimedByCommunityScannerId).toBe(scannerId);
 			expect(persistedJob?.claimedAt).toBeInstanceOf(Date);
+		});
+
+		it('should not claim another job when a community scanner has an active job', async () => {
+			const scannerId = await saveCommunityScanner();
+			const activeJob = new ScanJob('active-scanner-url');
+			activeJob.status = 'TAKEN';
+			activeJob.claimedByCommunityScannerId = scannerId;
+			await typeOrmScanJobRepository.save([
+				activeJob,
+				new ScanJob('pending-scanner-url')
+			]);
+
+			const nextJob =
+				await typeOrmScanJobRepository.fetchNextJobForCommunityScanner(
+					scannerId,
+					1,
+					new Date('2026-01-01T00:00:00.000Z')
+				);
+
+			expect(nextJob).toBeNull();
+			expect(await typeOrmScanJobRepository.hasPendingJobs()).toBe(true);
+		});
+
+		it('should ignore stale community scanner jobs when applying the active cap', async () => {
+			const scannerId = await saveCommunityScanner();
+			const staleJob = new ScanJob('stale-scanner-url');
+			staleJob.status = 'TAKEN';
+			staleJob.claimedByCommunityScannerId = scannerId;
+			await typeOrmScanJobRepository.save([
+				staleJob,
+				new ScanJob('pending-after-stale-url')
+			]);
+
+			await kernel.container
+				.get(DataSource)
+				.query(
+					'update history_archive_scan_job_queue set "updatedAt" = $1 where url = $2',
+					[new Date('2026-01-01T00:00:00.000Z'), staleJob.url]
+				);
+
+			const nextJob =
+				await typeOrmScanJobRepository.fetchNextJobForCommunityScanner(
+					scannerId,
+					1,
+					new Date('2026-01-02T00:00:00.000Z')
+				);
+
+			expect(nextJob?.url).toBe('pending-after-stale-url');
+		});
+
+		it('should not claim a job when scanner production score is below threshold after probation', async () => {
+			const scannerId = await saveCommunityScanner({
+				successRate: 40,
+				totalJobsCompleted: 2,
+				totalJobsFailed: 3
+			});
+			await typeOrmScanJobRepository.save([new ScanJob('low-score-url')]);
+
+			const nextJob =
+				await typeOrmScanJobRepository.fetchNextJobForCommunityScanner(
+					scannerId,
+					1,
+					new Date('2026-01-01T00:00:00.000Z')
+				);
+
+			expect(nextJob).toBeNull();
+			expect(await typeOrmScanJobRepository.hasPendingJobs()).toBe(true);
 		});
 	});
 

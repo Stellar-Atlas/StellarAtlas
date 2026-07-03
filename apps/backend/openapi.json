@@ -2500,7 +2500,7 @@
 		"/v1/community-scanners/{id}/job": {
 			"get": {
 				"summary": "Claim the next community scanner job",
-				"description": "Authenticates a community scanner, refreshes its heartbeat, atomically marks one pending history archive scan job as taken, and attributes the claim to that scanner.",
+				"description": "Authenticates a community scanner, refreshes its heartbeat, enforces scanner claim admission controls, atomically marks one pending history archive scan job as taken, and attributes the claim to that scanner.",
 				"tags": ["CommunityScanners"],
 				"operationId": "getCommunityScannerJob",
 				"parameters": [
@@ -2557,7 +2557,9 @@
 							}
 						}
 					},
-					"204": { "description": "No scan job available" },
+					"204": {
+						"description": "No eligible scan job available"
+					},
 					"400": { "description": "Invalid scanner id" },
 					"401": { "description": "Missing or invalid bearer API key" },
 					"403": { "description": "Scanner is blacklisted" },

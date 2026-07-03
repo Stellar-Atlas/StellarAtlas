@@ -5,16 +5,37 @@ import type {
 	ScanJobRepository
 } from '@history-scan-coordinator/domain/ScanJobRepository.js';
 import { ScanJob } from '@history-scan-coordinator/domain/ScanJob.js';
+import {
+	decideCommunityScannerClaim,
+	type CommunityScannerClaimState
+} from '@history-scan-coordinator/domain/CommunityScannerClaimPolicy.js';
 import { EntityManager, MoreThan, Repository } from 'typeorm';
 import {
 	createScanJobFromRow,
 	extractQueryRows,
 	requireNumber,
+	type NumericValue,
 	type RawQueryResult,
 	type RawQueueStatsRow,
 	type RawScanJobRow,
 	type RawTakenJobStatsRow
 } from './ScanJobRowMapper.js';
+
+type RawActiveCommunityScannerJobsRow = {
+	readonly activeJobs?: NumericValue;
+	readonly activejobs?: NumericValue;
+};
+
+type RawCommunityScannerClaimStateRow = {
+	readonly isBlacklisted?: boolean;
+	readonly isblacklisted?: boolean;
+	readonly successRate?: NumericValue;
+	readonly successrate?: NumericValue;
+	readonly totalJobsCompleted?: NumericValue;
+	readonly totaljobscompleted?: NumericValue;
+	readonly totalJobsFailed?: NumericValue;
+	readonly totaljobsfailed?: NumericValue;
+};
 
 @injectable()
 export class TypeOrmScanJobRepository implements ScanJobRepository {
@@ -35,15 +56,102 @@ export class TypeOrmScanJobRepository implements ScanJobRepository {
 	}
 
 	async fetchNextJobForCommunityScanner(
-		communityScannerId: string
+		communityScannerId: string,
+		activeJobLimit: number,
+		staleTakenBefore: Date
 	): Promise<ScanJob | null> {
 		return await this.baseRepository.manager.transaction(async (manager) => {
+			const scannerState = await this.readLockedCommunityScannerClaimState(
+				manager,
+				communityScannerId
+			);
+			if (scannerState === null) return null;
+
+			const activeJobs = await this.countActiveCommunityScannerJobs(
+				manager,
+				communityScannerId,
+				staleTakenBefore
+			);
+			const decision = decideCommunityScannerClaim({
+				...scannerState,
+				activeJobs,
+				maxActiveJobs: activeJobLimit
+			});
+			if (!decision.allowed) return null;
+
 			const rows = await this.claimNextPendingJob(manager, communityScannerId);
 			const row = rows[0];
 			if (row === undefined) return null;
 
 			return createScanJobFromRow(row);
 		});
+	}
+
+	private async readLockedCommunityScannerClaimState(
+		manager: EntityManager,
+		communityScannerId: string
+	): Promise<Omit<
+		CommunityScannerClaimState,
+		'activeJobs' | 'maxActiveJobs'
+	> | null> {
+		const rows = extractQueryRows(
+			(await manager.query(
+				`
+				select
+					is_blacklisted as "isBlacklisted",
+					success_rate as "successRate",
+					total_jobs_completed as "totalJobsCompleted",
+					total_jobs_failed as "totalJobsFailed"
+				from community_scanners
+				where id = $1
+				for update
+				`,
+				[communityScannerId]
+			)) as RawQueryResult
+		) as RawCommunityScannerClaimStateRow[];
+		const row = rows[0];
+		if (row === undefined) return null;
+
+		return {
+			isBlacklisted: readBoolean(
+				row.isBlacklisted ?? row.isblacklisted,
+				'isBlacklisted'
+			),
+			successRate: readFiniteNumber(
+				row.successRate ?? row.successrate,
+				'successRate'
+			),
+			totalJobsCompleted: requireNumber(
+				row.totalJobsCompleted ?? row.totaljobscompleted,
+				'totalJobsCompleted'
+			),
+			totalJobsFailed: requireNumber(
+				row.totalJobsFailed ?? row.totaljobsfailed,
+				'totalJobsFailed'
+			)
+		};
+	}
+
+	private async countActiveCommunityScannerJobs(
+		manager: EntityManager,
+		communityScannerId: string,
+		staleTakenBefore: Date
+	): Promise<number> {
+		const rows = extractQueryRows(
+			(await manager.query(
+				`
+				select count(*) as "activeJobs"
+				from history_archive_scan_job_queue
+				where status = 'TAKEN'
+					and "claimedByCommunityScannerId" = $1
+					and "updatedAt" >= $2
+				`,
+				[communityScannerId, staleTakenBefore]
+			)) as RawQueryResult
+		) as RawActiveCommunityScannerJobsRow[];
+		const row = rows[0];
+
+		return requireNumber(row?.activeJobs ?? row?.activejobs, 'activeJobs');
 	}
 
 	async findActiveByUrl(url: string, limit: number): Promise<ScanJob[]> {
@@ -262,4 +370,28 @@ export class TypeOrmScanJobRepository implements ScanJobRepository {
 
 		return result.affected ?? 0;
 	}
+}
+
+function readBoolean(value: unknown, field: string): boolean {
+	if (typeof value === 'boolean') return value;
+	if (value === 'true') return true;
+	if (value === 'false') return false;
+
+	throw new Error(`Community scanner row is missing boolean field ${field}`);
+}
+
+function readFiniteNumber(
+	value: NumericValue | undefined,
+	field: string
+): number {
+	if (value === undefined) {
+		throw new Error(`Community scanner row is missing numeric field ${field}`);
+	}
+
+	const parsed = Number(value);
+	if (!Number.isFinite(parsed)) {
+		throw new Error(`Community scanner row is missing numeric field ${field}`);
+	}
+
+	return parsed;
 }
