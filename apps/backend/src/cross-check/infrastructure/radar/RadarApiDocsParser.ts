@@ -1,10 +1,10 @@
 import { err, ok, Result } from 'neverthrow';
 import {
 	radarApiDocsFailure,
+	apiDocsOperationMethods,
 	type RadarApiDocsFailureDTO,
 	type RadarApiDocsSnapshotDTO,
 	type RadarApiOperationDTO,
-	type RadarApiOperationMethod,
 	type RadarApiServerDTO
 } from '../../domain/RadarApiDocs.js';
 
@@ -15,17 +15,6 @@ export interface ParseRadarSwaggerInitializerDTO {
 	readonly fetchedAt: string;
 	readonly initializer: string;
 }
-
-const httpMethods: readonly RadarApiOperationMethod[] = [
-	'delete',
-	'get',
-	'head',
-	'options',
-	'patch',
-	'post',
-	'put',
-	'trace'
-] as const;
 
 export function parseRadarSwaggerInitializer(
 	dto: ParseRadarSwaggerInitializerDTO
@@ -234,7 +223,7 @@ function readOperations(
 	return Object.entries(paths)
 		.flatMap(([path, pathItem]) => {
 			if (!path.startsWith('/') || !isRecord(pathItem)) return [];
-			return httpMethods.flatMap((method) => {
+			return apiDocsOperationMethods.flatMap((method) => {
 				const operation = pathItem[method];
 				if (!isRecord(operation)) return [];
 				return [
@@ -263,7 +252,10 @@ function compareOperations(
 	const pathCompare = left.path.localeCompare(right.path);
 	if (pathCompare !== 0) return pathCompare;
 
-	return httpMethods.indexOf(left.method) - httpMethods.indexOf(right.method);
+	return (
+		apiDocsOperationMethods.indexOf(left.method) -
+		apiDocsOperationMethods.indexOf(right.method)
+	);
 }
 
 function readWarnings(document: Record<string, unknown>): string[] {

@@ -16,6 +16,7 @@ import type {
 	RadarApiOperationDTO,
 	RadarApiOperationMethod
 } from '../../domain/RadarApiDocs.js';
+import { apiDocsOperationMethods } from '../../domain/RadarApiDocs.js';
 
 export interface CompareRadarApiDocsOperationsDTO {
 	readonly radar: RadarApiDocsSnapshotDTO;
@@ -241,7 +242,7 @@ function compareOperationKeys(
 }
 
 function methodSortIndex(method: RadarApiOperationMethod): number {
-	return httpMethodSortOrder.indexOf(method);
+	return apiDocsOperationMethods.indexOf(method);
 }
 
 function normalizeStrings(values: readonly string[]): readonly string[] {
@@ -257,14 +258,3 @@ function arraysEqual(
 		left.every((value, index) => value === right[index])
 	);
 }
-
-const httpMethodSortOrder: readonly RadarApiOperationMethod[] = [
-	'delete',
-	'get',
-	'head',
-	'options',
-	'patch',
-	'post',
-	'put',
-	'trace'
-];

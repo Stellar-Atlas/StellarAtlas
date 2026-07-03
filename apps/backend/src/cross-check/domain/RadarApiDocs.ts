@@ -17,6 +17,17 @@ export interface RadarApiDocsFailureDTO {
 export type RadarApiOperationMethod =
 	'delete' | 'get' | 'head' | 'options' | 'patch' | 'post' | 'put' | 'trace';
 
+export const apiDocsOperationMethods = [
+	'delete',
+	'get',
+	'head',
+	'options',
+	'patch',
+	'post',
+	'put',
+	'trace'
+] as const satisfies readonly RadarApiOperationMethod[];
+
 export interface RadarApiServerDTO {
 	readonly description: string | null;
 	readonly url: string;

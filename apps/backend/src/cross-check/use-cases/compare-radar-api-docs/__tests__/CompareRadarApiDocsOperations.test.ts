@@ -1,3 +1,5 @@
+import openApiDocument from '../../../../../openapi.json' with { type: 'json' };
+import { StellarAtlasApiDocsSourceAdapter } from '../../../infrastructure/stellar-atlas/StellarAtlasApiDocsSourceAdapter.js';
 import { CompareRadarApiDocsOperations } from '../CompareRadarApiDocsOperations.js';
 import type {
 	CrossCheckApiDocsOperationDTO,
@@ -172,6 +174,42 @@ describe('CompareRadarApiDocsOperations', () => {
 		if (result.isErr()) throw result.error;
 		expect(result.value.operations[0].comparisonStatus).toBe('matched');
 		expect(result.value.operations[0].fieldMismatches).toEqual([]);
+	});
+
+	it('should compare a RADAR fixture against the checked-in StellarAtlas OpenAPI snapshot', () => {
+		const adapter = new StellarAtlasApiDocsSourceAdapter(
+			openApiDocument,
+			() => new Date('2026-07-03T12:05:00.000Z')
+		);
+		const stellarAtlas = adapter.readDocs();
+		if (stellarAtlas.isErr()) throw stellarAtlas.error;
+
+		const useCase = new CompareRadarApiDocsOperations(
+			() => new Date('2026-07-03T12:30:00.000Z')
+		);
+		const result = useCase.execute({
+			radar: createRadarSnapshot([
+				createOperation({
+					operationId: 'getCrossCheckSources',
+					path: '/v1/cross-check/sources',
+					summary: 'List configured cross-check sources',
+					tags: ['CrossCheck']
+				})
+			]),
+			stellarAtlas: stellarAtlas.value
+		});
+
+		expect(result.isOk()).toBe(true);
+		if (result.isErr()) throw result.error;
+		expect(result.value.summary.matchedCount).toBe(1);
+		expect(result.value.summary.sourceMissingCount).toBeGreaterThan(10);
+		expect(result.value.summary.stellarAtlasMissingCount).toBe(0);
+		expect(result.value.operations).toContainEqual(
+			expect.objectContaining({
+				comparisonStatus: 'matched',
+				key: { method: 'get', path: '/v1/cross-check/sources' }
+			})
+		);
 	});
 });
 
