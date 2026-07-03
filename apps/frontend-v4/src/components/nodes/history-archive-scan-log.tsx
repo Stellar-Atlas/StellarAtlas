@@ -10,7 +10,8 @@ import {
 	getArchiveVerificationErrors,
 	getWorkerIssues,
 	scanLogHasArchiveVerificationError,
-	scanLogHasWorkerIssue
+	scanLogHasWorkerIssueOnly,
+	scanLogIsActive
 } from '../../domain/history-archive';
 
 interface HistoryArchiveScanLogProps {
@@ -26,22 +27,25 @@ export function HistoryArchiveScanLog({
 	const filteredLogs = useMemo(
 		() =>
 			logs.filter((entry) => {
+				if (scanLogIsActive(entry)) return true;
 				if (filter === 'archive-errors') {
 					return scanLogHasArchiveVerificationError(entry);
 				}
-				if (filter === 'worker-issues') return scanLogHasWorkerIssue(entry);
+				if (filter === 'worker-issues')
+					return scanLogHasWorkerIssueOnly(entry);
 
 				return true;
 			}),
 		[filter, logs]
 	);
 	const archiveErrorCount = logs.filter(scanLogHasArchiveVerificationError).length;
-	const workerIssueCount = logs.filter(scanLogHasWorkerIssue).length;
+	const workerIssueCount = logs.filter(scanLogHasWorkerIssueOnly).length;
+	const activeCount = logs.filter(scanLogIsActive).length;
 
 	if (logs.length === 0) {
 		return (
 			<p className="muted-copy">
-				No completed archive scan runs are available yet.
+				No archive scan jobs are available yet.
 			</p>
 		);
 	}
@@ -51,8 +55,10 @@ export function HistoryArchiveScanLog({
 			<div className="archive-scan-log-toolbar">
 				<div>
 					<strong>{formatInteger(logs.length)}</strong>
-					<span> recent scan runs</span>
+					<span> recent scan jobs</span>
 					<span className="muted-inline">
+						{' '}
+						/ {formatInteger(activeCount)} active
 						{' '}
 						/ {formatInteger(archiveErrorCount)} archive errors
 						{' '}
@@ -72,7 +78,7 @@ export function HistoryArchiveScanLog({
 						onClick={() => setFilter('worker-issues')}
 						type="button"
 					>
-						Worker issues
+						Worker-only issues
 					</button>
 					<button
 						className={filter === 'all' ? 'active' : ''}
@@ -90,85 +96,92 @@ export function HistoryArchiveScanLog({
 			) : (
 				<ul className="archive-scan-log-list">
 					{filteredLogs.map((entry) => {
+						const isActive = scanLogIsActive(entry);
 						const archiveErrors = getArchiveVerificationErrors(entry.errors);
 						const workerIssues = getWorkerIssues(entry.errors);
 						const hasArchiveErrors = archiveErrors.length > 0;
 						const hasWorkerIssues = workerIssues.length > 0;
-						const rowTone = hasArchiveErrors || hasWorkerIssues
-							? 'has-error'
-							: 'is-success';
-						const rowTitle = hasArchiveErrors
-							? 'Archive verification errors'
-							: hasWorkerIssues
-								? 'Worker issues'
-								: 'No archive errors';
-						const rowTag = hasArchiveErrors
-							? 'archive error'
-							: hasWorkerIssues
-								? 'worker issue'
-								: 'success';
+						let rowTone = 'is-success';
+						let rowTitle = 'No archive errors';
+						let rowTag = 'success';
+
+						if (isActive) {
+							rowTone = 'is-active';
+							rowTitle =
+								entry.status === 'scanning' ? 'Scanning now' : 'Queued scan';
+							rowTag = entry.status;
+						} else if (hasArchiveErrors) {
+							rowTone = 'has-error';
+							rowTitle = 'Archive verification errors';
+							rowTag = 'archive error';
+						} else if (hasWorkerIssues) {
+							rowTone = 'has-error';
+							rowTitle = 'Worker issues';
+							rowTag = 'worker issue';
+						}
+
 						const rowErrors = hasArchiveErrors
 							? archiveErrors
 							: workerIssues;
 
 						return (
-						<li
-							className={rowTone}
-							key={`${entry.url}:${entry.startDate}:${entry.latestScannedLedger}`}
-						>
-							<div className="archive-scan-log-row">
-								<div>
-									<strong>{rowTitle}</strong>
-									<span>{formatDateTime(entry.endDate)}</span>
+							<li
+								className={rowTone}
+								key={`${entry.url}:${entry.startDate}:${entry.latestScannedLedger}`}
+							>
+								<div className="archive-scan-log-row">
+									<div>
+										<strong>{rowTitle}</strong>
+										<span>{formatDateTime(entry.endDate)}</span>
+									</div>
+									<span className={getRowTagClassName(rowTone)}>
+										{rowTag}
+									</span>
 								</div>
-								<span className={rowTone === 'has-error' ? 'tag warning' : 'tag good'}>
-									{rowTag}
-								</span>
-							</div>
-							<dl className="archive-scan-log-metrics">
-								<div>
-									<dt>Verified</dt>
-									<dd>{formatInteger(entry.latestVerifiedLedger)}</dd>
-								</div>
-								<div>
-									<dt>Scanned</dt>
-									<dd>{formatInteger(entry.latestScannedLedger)}</dd>
-								</div>
-								<div>
-									<dt>Range</dt>
-									<dd>
-										{formatInteger(entry.fromLedger)} -{' '}
-										{entry.toLedger === null
-											? 'latest'
-											: formatInteger(entry.toLedger)}
-									</dd>
-								</div>
-								<div>
-									<dt>Concurrency</dt>
-									<dd>{formatInteger(entry.concurrency)}</dd>
-								</div>
-								<div>
-									<dt>Duration</dt>
-									<dd>{formatDuration(entry.durationMs)}</dd>
-								</div>
-							</dl>
-							{rowErrors.length > 0 ? (
-								<ul className="archive-error-list compact">
-									{rowErrors.map((error, index) => (
-										<li key={`${error.type}:${error.url}:${index}`}>
-											<a
-												href={error.url}
-												rel="noopener noreferrer"
-												target="_blank"
-											>
-												{error.url}
-											</a>
-											<span>{error.message}</span>
-										</li>
-									))}
-								</ul>
-							) : null}
-						</li>
+								<dl className="archive-scan-log-metrics">
+									<div>
+										<dt>Verified</dt>
+										<dd>{formatInteger(entry.latestVerifiedLedger)}</dd>
+									</div>
+									<div>
+										<dt>Scanned</dt>
+										<dd>{formatInteger(entry.latestScannedLedger)}</dd>
+									</div>
+									<div>
+										<dt>Range</dt>
+										<dd>
+											{formatInteger(entry.fromLedger)} -{' '}
+											{entry.toLedger === null
+												? 'latest'
+												: formatInteger(entry.toLedger)}
+										</dd>
+									</div>
+									<div>
+										<dt>Concurrency</dt>
+										<dd>{formatInteger(entry.concurrency)}</dd>
+									</div>
+									<div>
+										<dt>Duration</dt>
+										<dd>{formatDuration(entry.durationMs)}</dd>
+									</div>
+								</dl>
+								{rowErrors.length > 0 ? (
+									<ul className="archive-error-list compact">
+										{rowErrors.map((error, index) => (
+											<li key={`${error.type}:${error.url}:${index}`}>
+												<a
+													href={error.url}
+													rel="noopener noreferrer"
+													target="_blank"
+												>
+													{error.url}
+												</a>
+												<span>{error.message}</span>
+											</li>
+										))}
+									</ul>
+								) : null}
+							</li>
 						);
 					})}
 				</ul>
@@ -187,4 +200,11 @@ const formatDuration = (durationMs: number): string => {
 	const minutes = Math.floor(durationSeconds / 60);
 	const seconds = durationSeconds % 60;
 	return seconds === 0 ? `${minutes}m` : `${minutes}m ${seconds}s`;
+};
+
+const getRowTagClassName = (rowTone: string): string => {
+	if (rowTone === 'has-error') return 'tag warning';
+	if (rowTone === 'is-active') return 'tag active';
+
+	return 'tag good';
 };

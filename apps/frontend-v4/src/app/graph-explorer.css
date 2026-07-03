@@ -595,6 +595,11 @@ body:has(.graph-workspace:not(.graph-loading-workspace)) .graph-loading-workspac
 	border: 1px solid rgba(247, 207, 77, 0.34);
 }
 
+.scan-log-card.active {
+	background: rgba(88, 166, 255, 0.14);
+	border: 1px solid rgba(88, 166, 255, 0.4);
+}
+
 .scan-log-card span,
 .scan-log-card small {
 	color: #aebdcd;

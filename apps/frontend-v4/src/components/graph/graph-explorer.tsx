@@ -57,7 +57,9 @@ import { getStatementValueHash, ScpLiveFeed } from './scp-live-feed';
 import {
 	getArchiveVerificationErrors,
 	getWorkerIssues,
-	scanLogHasArchiveVerificationError
+	scanLogHasArchiveVerificationError,
+	scanLogHasWorkerIssueOnly,
+	scanLogIsActive
 } from '../../domain/history-archive';
 
 interface GraphExplorerProps {
@@ -1012,7 +1014,12 @@ export function GraphExplorer({
 	const visibleHistoryLogs = useMemo(
 		() =>
 			(showHistoryErrorsOnly
-				? selectedHistoryLogs.filter(scanLogHasArchiveVerificationError)
+				? selectedHistoryLogs.filter(
+						(log) =>
+							scanLogIsActive(log) ||
+							scanLogHasArchiveVerificationError(log) ||
+							scanLogHasWorkerIssueOnly(log)
+					)
 				: selectedHistoryLogs
 			).slice(0, 6),
 		[selectedHistoryLogs, showHistoryErrorsOnly]
@@ -1413,6 +1420,7 @@ export function GraphExplorer({
 							</div>
 							{visibleHistoryLogs.length > 0 ? (
 								visibleHistoryLogs.map((historyLog) => {
+									const isActive = scanLogIsActive(historyLog);
 									const archiveErrors = getArchiveVerificationErrors(historyLog.errors);
 									const workerIssues = getWorkerIssues(historyLog.errors);
 									const hasArchiveErrors = archiveErrors.length > 0;
@@ -1420,29 +1428,41 @@ export function GraphExplorer({
 									const visibleErrors = hasArchiveErrors
 										? archiveErrors
 										: workerIssues;
+									let scanLogCardClassName = 'scan-log-card good';
+									let scanLogLabel = 'No archive errors';
+
+									if (isActive) {
+										scanLogCardClassName = 'scan-log-card active';
+										scanLogLabel =
+											historyLog.status === 'scanning'
+												? 'Scanning now'
+												: 'Queued scan';
+									} else if (hasArchiveErrors) {
+										scanLogCardClassName = 'scan-log-card warning';
+										scanLogLabel = 'Archive errors';
+									} else if (hasWorkerIssues) {
+										scanLogCardClassName = 'scan-log-card warning';
+										scanLogLabel = scanLogHasWorkerIssueOnly(historyLog)
+											? 'Worker issue'
+											: 'Archive + worker issue';
+									}
 
 									return (
-									<div
-										className={hasArchiveErrors || hasWorkerIssues ? 'scan-log-card warning' : 'scan-log-card good'}
-										key={`${historyLog.startDate}-${historyLog.latestScannedLedger}`}
-									>
-										<span>
-											{hasArchiveErrors
-												? 'Archive errors'
-												: hasWorkerIssues
-													? 'Worker issue'
-													: 'No archive errors'}
-										</span>
-										<strong>
-											{formatInteger(historyLog.latestVerifiedLedger)} latest verified
-										</strong>
-										<small>
-											{formatShortDateTime(historyLog.endDate)} / {formatDuration(historyLog.durationMs)} / {formatInteger(historyLog.concurrency)} requests
-										</small>
-										{visibleErrors.length > 0 && (
-											<code>{visibleErrors[0]?.message}</code>
-										)}
-									</div>
+										<div
+											className={scanLogCardClassName}
+											key={`${historyLog.startDate}-${historyLog.latestScannedLedger}`}
+										>
+											<span>{scanLogLabel}</span>
+											<strong>
+												{formatInteger(historyLog.latestVerifiedLedger)} latest verified
+											</strong>
+											<small>
+												{formatShortDateTime(historyLog.endDate)} / {formatDuration(historyLog.durationMs)} / {formatInteger(historyLog.concurrency)} requests
+											</small>
+											{visibleErrors.length > 0 && (
+												<code>{visibleErrors[0]?.message}</code>
+											)}
+										</div>
 									);
 								})
 							) : (

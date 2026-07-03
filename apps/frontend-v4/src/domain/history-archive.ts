@@ -43,3 +43,12 @@ export const scanLogHasWorkerIssue = (
 ): boolean =>
 	entry.hasWorkerIssue ??
 	entry.errors.some((error) => !isArchiveVerificationError(error));
+
+export const scanLogHasWorkerIssueOnly = (
+	entry: PublicHistoryArchiveScanLogEntry
+): boolean =>
+	!scanLogHasArchiveVerificationError(entry) && scanLogHasWorkerIssue(entry);
+
+export const scanLogIsActive = (
+	entry: PublicHistoryArchiveScanLogEntry
+): boolean => entry.status === 'queued' || entry.status === 'scanning';

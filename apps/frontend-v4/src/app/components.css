@@ -127,6 +127,12 @@ td small {
 	color: #7b5700;
 }
 
+.tag.active {
+	background: #e9f2ff;
+	border-color: #a9c9f6;
+	color: #245fa6;
+}
+
 .tag.danger {
 	background: #fde9ea;
 	border-color: #efbdc0;
@@ -370,6 +376,11 @@ td {
 .archive-scan-log-list > li.has-error {
 	background: #fffaf0;
 	border-color: #ead185;
+}
+
+.archive-scan-log-list > li.is-active {
+	background: #f2f7ff;
+	border-color: #a9c9f6;
 }
 
 .archive-scan-log-row,

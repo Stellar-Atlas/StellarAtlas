@@ -62,6 +62,20 @@ export class TypeOrmScanJobRepository implements ScanJobRepository {
 		});
 	}
 
+	async findActiveByUrl(url: string, limit: number): Promise<ScanJob[]> {
+		return this.baseRepository
+			.createQueryBuilder('job')
+			.where('job.url = :url', { url })
+			.andWhere('job.status in (:...statuses)', {
+				statuses: ['TAKEN', 'PENDING']
+			})
+			.orderBy("case when job.status = 'TAKEN' then 0 else 1 end", 'ASC')
+			.addOrderBy('job.updatedAt', 'DESC')
+			.addOrderBy('job.createdAt', 'DESC')
+			.limit(limit)
+			.getMany();
+	}
+
 	private createScanJobFromRow(row: RawScanJobRow): ScanJob {
 		const scanJobRow = this.normalizeScanJobRow(row);
 		const scanJob = new ScanJob(
