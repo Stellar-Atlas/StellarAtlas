@@ -592,6 +592,110 @@
 				}
 			}
 		},
+		"/v1/archive-scans/{encodedUrl}/errors": {
+			"get": {
+				"summary": "Get archive scan log entries",
+				"description": "Returns recent completed scan entries and active queue entries for a history archive URL.",
+				"tags": ["ArchiveScans"],
+				"operationId": "getArchiveScanErrors",
+				"parameters": [
+					{
+						"name": "encodedUrl",
+						"in": "path",
+						"description": "URL of the history archive, URL encoded",
+						"required": true,
+						"schema": { "type": "string", "format": "uri" }
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "archive scan log entries",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "array",
+									"items": {
+										"type": "object",
+										"required": [
+											"url",
+											"status",
+											"errors",
+											"hasArchiveVerificationError",
+											"hasWorkerIssue",
+											"latestVerifiedLedger",
+											"latestScannedLedger",
+											"fromLedger",
+											"toLedger",
+											"updatedAt"
+										],
+										"properties": {
+											"url": { "type": "string", "format": "uri" },
+											"status": {
+												"type": "string",
+												"enum": ["completed", "queued", "scanning", "stale"]
+											},
+											"errors": {
+												"type": "array",
+												"items": {
+													"type": "object",
+													"required": ["url", "message", "type"],
+													"properties": {
+														"url": { "type": "string" },
+														"message": { "type": "string" },
+														"type": { "type": "string" }
+													}
+												}
+											},
+											"hasArchiveVerificationError": { "type": "boolean" },
+											"hasWorkerIssue": { "type": "boolean" },
+											"latestVerifiedLedger": { "type": "integer" },
+											"latestScannedLedger": { "type": "integer" },
+											"fromLedger": { "type": "integer" },
+											"toLedger": { "type": "integer", "nullable": true },
+											"updatedAt": { "type": "string", "format": "date-time" }
+										}
+									}
+								}
+							}
+						}
+					},
+					"400": { "description": "Invalid archive URL" },
+					"500": { "description": "Server error" }
+				}
+			}
+		},
+		"/v1/archive-scans/{encodedUrl}": {
+			"get": {
+				"summary": "Get the latest archive scan by URL",
+				"description": "Returns the latest history archive scan for a URL.",
+				"tags": ["ArchiveScans"],
+				"operationId": "getArchiveScanByUrl",
+				"parameters": [
+					{
+						"name": "encodedUrl",
+						"in": "path",
+						"description": "URL of the history archive, URL encoded",
+						"required": true,
+						"schema": { "type": "string", "format": "uri" }
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "archive scan found",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "https://StellarAtlas.io/schemas/history-archive-scan.json"
+								}
+							}
+						}
+					},
+					"204": { "description": "No scan found for URL" },
+					"400": { "description": "Invalid archive URL" },
+					"500": { "description": "Server error" }
+				}
+			}
+		},
 		"/v1/history-scan/job": {
 			"get": {
 				"summary": "Claim the next pending history scan job",

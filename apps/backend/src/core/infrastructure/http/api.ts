@@ -119,7 +119,9 @@ const listen = async () => {
 	api.use(
 		'/v1/archive-scans',
 		archiveScanRouter({
-			getArchiveScanQueue: kernel.container.get(GetArchiveScanQueue)
+			getArchiveScanQueue: kernel.container.get(GetArchiveScanQueue),
+			getLatestScan: kernel.container.get(GetLatestScan),
+			getScanLogs: kernel.container.get(GetScanLogs)
 		})
 	);
 

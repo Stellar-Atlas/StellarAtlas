@@ -3,11 +3,14 @@ import { body, param, validationResult } from 'express-validator';
 import basicAuth from 'express-basic-auth';
 import { GetLatestScan } from '../../use-cases/get-latest-scan/GetLatestScan.js';
 import { GetScanLogs } from '../../use-cases/get-scan-logs/GetScanLogs.js';
-import { InvalidUrlError } from '../../use-cases/get-latest-scan/InvalidUrlError.js';
 import { RegisterScan } from '../../use-cases/register-scan/RegisterScan.js';
 import { isScanErrorTypeDTO, ScanDTO } from 'history-scanner-dto';
 import { GetScanJob } from '../../use-cases/get-scan-job/GetScanJob.js';
 import { TouchScanJob } from '../../use-cases/touch-scan-job/TouchScanJob.js';
+import {
+	handleGetArchiveScanLogs,
+	handleGetLatestArchiveScan
+} from './HistoryArchiveScanReadHandlers.js';
 
 export interface HistoryScanRouterConfig {
 	getLatestScan: GetLatestScan;
@@ -20,8 +23,6 @@ export interface HistoryScanRouterConfig {
 	userName?: string;
 	password?: string;
 }
-
-const historyScanCacheMaxAgeSeconds = 10;
 
 export const HistoryScanRouterWrapper = (
 	config: HistoryScanRouterConfig
@@ -184,27 +185,7 @@ export const HistoryScanRouterWrapper = (
 		'/logs/:url',
 		[param('url').isURL()],
 		async function (req: express.Request, res: express.Response) {
-			res.setHeader(
-				'Cache-Control',
-				'public, max-age=' + historyScanCacheMaxAgeSeconds
-			);
-			const errors = validationResult(req);
-			if (!errors.isEmpty()) {
-				return res.status(400).json({ errors: errors.array() });
-			}
-
-			const scanLogsOrError = await config.getScanLogs.execute(req.params.url);
-			if (
-				scanLogsOrError.isErr() &&
-				scanLogsOrError.error instanceof InvalidUrlError
-			) {
-				return res.status(400).json({ error: 'Invalid url' });
-			}
-			if (scanLogsOrError.isErr()) {
-				return res.status(500).json({ error: 'Internal server error' });
-			}
-
-			return res.status(200).json(scanLogsOrError.value);
+			return handleGetArchiveScanLogs(req, res, config, 'url');
 		}
 	);
 
@@ -212,28 +193,7 @@ export const HistoryScanRouterWrapper = (
 		'/:url',
 		[param('url').isURL()],
 		async function (req: express.Request, res: express.Response) {
-			res.setHeader(
-				'Cache-Control',
-				'public, max-age=' + historyScanCacheMaxAgeSeconds
-			);
-			const errors = validationResult(req);
-			if (!errors.isEmpty()) {
-				return res.status(400).json({ errors: errors.array() });
-			}
-
-			const scanOrError = await config.getLatestScan.execute({
-				url: req.params.url
-			});
-
-			if (scanOrError.isErr() && scanOrError.error instanceof InvalidUrlError)
-				return res.status(400).json({ error: 'Invalid url' });
-			if (scanOrError.isErr())
-				return res.status(500).json({ error: 'Internal server error' });
-
-			if (scanOrError.value === null)
-				return res.status(204).json({ message: 'No scan found for url' });
-
-			return res.status(200).json(scanOrError.value);
+			return handleGetLatestArchiveScan(req, res, config, 'url');
 		}
 	);
 
