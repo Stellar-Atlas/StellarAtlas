@@ -7,6 +7,7 @@ import type {
 	PublicOrganization,
 	PublicScpStatementObservation
 } from './types';
+import { frontendCacheTags } from './cache-policy';
 
 const DEFAULT_API_BASE_URL = 'http://localhost:3000';
 
@@ -122,7 +123,10 @@ const fetchJson = async <Payload>(
 	path: string,
 	options: FetchOptions = {}
 ): Promise<Payload> => {
-	const response = await fetch(buildApiUrl(path, options), buildFetchInit(options));
+	const response = await fetch(
+		buildApiUrl(path, options),
+		buildFetchInit(options)
+	);
 
 	if (!response.ok) {
 		throw new ApiClientError({
@@ -138,7 +142,10 @@ const fetchNullableJson = async <Payload>(
 	path: string,
 	options: FetchOptions = {}
 ): Promise<Payload | null> => {
-	const response = await fetch(buildApiUrl(path, options), buildFetchInit(options));
+	const response = await fetch(
+		buildApiUrl(path, options),
+		buildFetchInit(options)
+	);
 
 	if (response.status === 204) return null;
 	if (!response.ok) {
@@ -154,12 +161,18 @@ const fetchNullableJson = async <Payload>(
 export const fetchPublicNetwork = (
 	options?: FetchOptions
 ): Promise<PublicNetwork> =>
-	fetchJson<PublicNetwork>('/v1', withTags(options, ['network']));
+	fetchJson<PublicNetwork>(
+		'/v1',
+		withTags(options, [frontendCacheTags.network])
+	);
 
 export const fetchPublicNodes = (
 	options?: FetchOptions
 ): Promise<PublicNode[]> =>
-	fetchJson<PublicNode[]>('/v1/nodes', withTags(options, ['network']));
+	fetchJson<PublicNode[]>(
+		'/v1/nodes',
+		withTags(options, [frontendCacheTags.network])
+	);
 
 export const fetchPublicNode = (
 	publicKey: string,
@@ -167,7 +180,7 @@ export const fetchPublicNode = (
 ): Promise<PublicNode> =>
 	fetchJson<PublicNode>(
 		`/v1/nodes/${encodeURIComponent(publicKey)}`,
-		withTags(options, ['network', `node:${publicKey}`])
+		withTags(options, [frontendCacheTags.network, `node:${publicKey}`])
 	);
 
 export const fetchPublicOrganizations = (
@@ -175,7 +188,10 @@ export const fetchPublicOrganizations = (
 ): Promise<PublicOrganization[]> =>
 	fetchJson<PublicOrganization[]>(
 		'/v1/organizations',
-		withTags(options, ['network', 'organizations'])
+		withTags(options, [
+			frontendCacheTags.network,
+			frontendCacheTags.organizations
+		])
 	);
 
 export const fetchPublicOrganization = (
@@ -184,7 +200,10 @@ export const fetchPublicOrganization = (
 ): Promise<PublicOrganization> =>
 	fetchJson<PublicOrganization>(
 		`/v1/organizations/${encodeURIComponent(organizationId)}`,
-		withTags(options, ['network', `organization:${organizationId}`])
+		withTags(options, [
+			frontendCacheTags.network,
+			`organization:${organizationId}`
+		])
 	);
 
 export const fetchHistoryArchiveScan = (
@@ -193,7 +212,7 @@ export const fetchHistoryArchiveScan = (
 ): Promise<PublicHistoryArchiveScan | null> =>
 	fetchNullableJson<PublicHistoryArchiveScan>(
 		`/v1/history-scan/${encodeURIComponent(historyUrl)}`,
-		withTags(options, ['history-scan'])
+		withTags(options, [frontendCacheTags.historyScan])
 	);
 
 export const fetchHistoryArchiveScanLogs = (
@@ -202,7 +221,7 @@ export const fetchHistoryArchiveScanLogs = (
 ): Promise<PublicHistoryArchiveScanLogEntry[]> =>
 	fetchJson<PublicHistoryArchiveScanLogEntry[]>(
 		`/v1/history-scan/logs/${encodeURIComponent(historyUrl)}`,
-		withTags(options, ['history-scan'])
+		withTags(options, [frontendCacheTags.historyScan])
 	);
 
 export const fetchScpStatements = async (
@@ -210,7 +229,7 @@ export const fetchScpStatements = async (
 ): Promise<PublicScpStatementObservation[]> => {
 	const response = await fetch(
 		buildScpStatementUrl(options),
-		buildFetchInit(withTags(options, ['scp-statements']))
+		buildFetchInit(withTags(options, [frontendCacheTags.scpStatements]))
 	);
 
 	if (!response.ok) {

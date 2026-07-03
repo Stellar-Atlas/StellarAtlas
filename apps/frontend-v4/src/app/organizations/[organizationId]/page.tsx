@@ -14,7 +14,7 @@ interface OrganizationDetailPageProps {
 }
 
 export const dynamicParams = true;
-export const revalidate = 15;
+export const revalidate = 10;
 
 export async function generateStaticParams(): Promise<
 	Array<{ organizationId: string }>

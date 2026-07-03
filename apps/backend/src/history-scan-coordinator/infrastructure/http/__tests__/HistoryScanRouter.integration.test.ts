@@ -11,6 +11,7 @@ import { ScanDTO } from 'history-scanner-dto';
 import { ScanJob } from '@history-scan-coordinator/domain/ScanJob.js';
 import { GetScanJob } from '@history-scan-coordinator/use-cases/get-scan-job/GetScanJob.js';
 import { TouchScanJob } from '@history-scan-coordinator/use-cases/touch-scan-job/TouchScanJob.js';
+import { GetScanLogs } from '@history-scan-coordinator/use-cases/get-scan-logs/GetScanLogs.js';
 import { randomUUID } from 'crypto';
 
 describe('HistoryScanRouter.integration', () => {
@@ -19,12 +20,14 @@ describe('HistoryScanRouter.integration', () => {
 	let registerScan: jest.Mocked<RegisterScan>;
 	let getScanJob: jest.Mocked<GetScanJob>;
 	let touchScanJob: jest.Mocked<TouchScanJob>;
+	let getScanLogs: jest.Mocked<GetScanLogs>;
 
 	beforeEach(() => {
 		getLatestScan = mock<GetLatestScan>();
 		registerScan = mock<RegisterScan>();
 		getScanJob = mock<GetScanJob>();
 		touchScanJob = mock<TouchScanJob>();
+		getScanLogs = mock<GetScanLogs>();
 
 		app = express();
 		app.use(express.json());
@@ -32,6 +35,7 @@ describe('HistoryScanRouter.integration', () => {
 			'/history-scan',
 			HistoryScanRouterWrapper({
 				getLatestScan,
+				getScanLogs,
 				registerScan,
 				getScanJob,
 				touchScanJob,
@@ -62,6 +66,29 @@ describe('HistoryScanRouter.integration', () => {
 				.expect(400)
 				.expect((response) => {
 					expect(response.body.error).toBe('Invalid url');
+				});
+		});
+
+		it('should expose latest archive scans with frontend-aligned cache age', async () => {
+			getLatestScan.execute.mockResolvedValue(ok(null));
+
+			await request(app)
+				.get('/history-scan/https%3A%2F%2Ftest.com')
+				.expect(204)
+				.expect('Cache-Control', 'public, max-age=10');
+		});
+	});
+
+	describe('GET /logs/:url', () => {
+		it('should expose archive scan logs with frontend-aligned cache age', async () => {
+			getScanLogs.execute.mockResolvedValue(ok([]));
+
+			await request(app)
+				.get('/history-scan/logs/https%3A%2F%2Ftest.com')
+				.expect(200)
+				.expect('Cache-Control', 'public, max-age=10')
+				.expect((response) => {
+					expect(response.body).toEqual([]);
 				});
 		});
 	});

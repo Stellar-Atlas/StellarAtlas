@@ -44,6 +44,7 @@ const networkRouterWrapper = (config: NetworkRouterConfig): Router => {
 	const networkRouter = express.Router();
 	const liveNetworkIntervalMs = 5_000;
 	const liveScpStatementIntervalMs = 1_200;
+	const currentNetworkCacheMaxAgeSeconds = 10;
 	const networkSearch = new NetworkSearchService(config.searchConfig);
 
 	const getTime = (at?: unknown): Date => {
@@ -67,9 +68,7 @@ const networkRouterWrapper = (config: NetworkRouterConfig): Router => {
 		return parsed ?? 8;
 	};
 
-	const writeNetworkEvent = async (
-		res: express.Response
-	): Promise<void> => {
+	const writeNetworkEvent = async (res: express.Response): Promise<void> => {
 		const networkOrError = await config.getNetwork.execute({});
 		if (res.writableEnded) return;
 
@@ -91,7 +90,9 @@ const networkRouterWrapper = (config: NetworkRouterConfig): Router => {
 			return;
 		}
 
-		res.write(`event: network\ndata: ${JSON.stringify(networkOrError.value)}\n\n`);
+		res.write(
+			`event: network\ndata: ${JSON.stringify(networkOrError.value)}\n\n`
+		);
 	};
 
 	const writeScpStatementEvent = async (
@@ -111,7 +112,9 @@ const networkRouterWrapper = (config: NetworkRouterConfig): Router => {
 			return;
 		}
 
-		res.write(`event: scp\ndata: ${JSON.stringify(statementsOrError.value)}\n\n`);
+		res.write(
+			`event: scp\ndata: ${JSON.stringify(statementsOrError.value)}\n\n`
+		);
 	};
 
 	networkRouter.get(
@@ -146,7 +149,10 @@ const networkRouterWrapper = (config: NetworkRouterConfig): Router => {
 	networkRouter.get(
 		['/'],
 		async (req: express.Request, res: express.Response) => {
-			res.setHeader('Cache-Control', 'public, max-age=' + 60); // cache for 60 seconds
+			res.setHeader(
+				'Cache-Control',
+				'public, max-age=' + currentNetworkCacheMaxAgeSeconds
+			);
 			res.setHeader('Content-Type', 'application/json');
 			const networkOrError = await config.getNetwork.execute({
 				at: req.query.at ? getTime(req.query.at) : undefined

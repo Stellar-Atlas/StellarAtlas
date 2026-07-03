@@ -21,6 +21,8 @@ export interface HistoryScanRouterConfig {
 	password?: string;
 }
 
+const historyScanCacheMaxAgeSeconds = 10;
+
 export const HistoryScanRouterWrapper = (
 	config: HistoryScanRouterConfig
 ): Router => {
@@ -182,7 +184,10 @@ export const HistoryScanRouterWrapper = (
 		'/logs/:url',
 		[param('url').isURL()],
 		async function (req: express.Request, res: express.Response) {
-			res.setHeader('Cache-Control', 'public, max-age=' + 30);
+			res.setHeader(
+				'Cache-Control',
+				'public, max-age=' + historyScanCacheMaxAgeSeconds
+			);
 			const errors = validationResult(req);
 			if (!errors.isEmpty()) {
 				return res.status(400).json({ errors: errors.array() });
@@ -207,7 +212,10 @@ export const HistoryScanRouterWrapper = (
 		'/:url',
 		[param('url').isURL()],
 		async function (req: express.Request, res: express.Response) {
-			res.setHeader('Cache-Control', 'public, max-age=' + 60);
+			res.setHeader(
+				'Cache-Control',
+				'public, max-age=' + historyScanCacheMaxAgeSeconds
+			);
 			const errors = validationResult(req);
 			if (!errors.isEmpty()) {
 				return res.status(400).json({ errors: errors.array() });

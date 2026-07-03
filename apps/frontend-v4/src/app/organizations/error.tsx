@@ -2,21 +2,21 @@
 
 import { RouteErrorPanel } from '@components/layout/route-fallbacks';
 
-interface ErrorPageProps {
+interface OrganizationsErrorPageProps {
 	error: Error & { digest?: string };
 	reset: () => void;
 }
 
-export default function ErrorPage({
+export default function OrganizationsErrorPage({
 	error,
 	reset
-}: ErrorPageProps): React.JSX.Element {
+}: OrganizationsErrorPageProps): React.JSX.Element {
 	return (
 		<RouteErrorPanel
-			eyebrow="StellarAtlas"
+			eyebrow="Organizations"
 			message={error.message}
 			onRetry={reset}
-			title="Network API unavailable"
+			title="Organization data unavailable"
 		/>
 	);
 }
