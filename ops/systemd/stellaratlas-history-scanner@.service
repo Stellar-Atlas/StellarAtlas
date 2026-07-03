@@ -1,0 +1,26 @@
+[Unit]
+Description=StellarAtlas history scanner %i
+Documentation=https://github.com/Stellar-Atlas/StellarAtlas
+Wants=stellaratlas-api.service
+After=stellaratlas-api.service
+Conflicts=stellaratlas.service
+
+[Service]
+Type=simple
+User=observe
+Group=observe
+WorkingDirectory=/home/observe/stellarbeat-data/Observer
+Environment=NODE_ENV=production
+Environment=HOME=/home/observe
+Environment=PATH=/home/observe/.nvm/versions/node/v26.4.0/bin:/usr/local/sbin:/usr/local/bin:/sbin:/bin
+Environment=HISTORY_SCAN_WORKERS=1
+EnvironmentFile=-/etc/stellaratlas/stellaratlas.env
+ExecStart=/usr/bin/env pnpm start:scan-history
+Restart=always
+RestartSec=15
+TimeoutStopSec=90
+KillSignal=SIGTERM
+NoNewPrivileges=true
+
+[Install]
+WantedBy=stellaratlas.target

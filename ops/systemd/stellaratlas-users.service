@@ -1,0 +1,24 @@
+[Unit]
+Description=StellarAtlas users service
+Documentation=https://github.com/Stellar-Atlas/StellarAtlas
+After=network-online.target
+Conflicts=stellaratlas.service
+
+[Service]
+Type=simple
+User=observe
+Group=observe
+WorkingDirectory=/home/observe/stellarbeat-data/Observer
+Environment=NODE_ENV=production
+Environment=HOME=/home/observe
+Environment=PATH=/home/observe/.nvm/versions/node/v26.4.0/bin:/usr/local/sbin:/usr/local/bin:/sbin:/bin
+EnvironmentFile=-/etc/stellaratlas/stellaratlas.env
+ExecStart=/usr/bin/env pnpm start:users
+Restart=always
+RestartSec=5
+TimeoutStopSec=45
+KillSignal=SIGTERM
+NoNewPrivileges=true
+
+[Install]
+WantedBy=stellaratlas.target

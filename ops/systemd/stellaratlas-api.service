@@ -1,0 +1,26 @@
+[Unit]
+Description=StellarAtlas API
+Documentation=https://github.com/Stellar-Atlas/StellarAtlas
+Wants=network-online.target
+After=network-online.target
+Conflicts=stellaratlas.service
+
+[Service]
+Type=simple
+User=observe
+Group=observe
+WorkingDirectory=/home/observe/stellarbeat-data/Observer
+Environment=NODE_ENV=production
+Environment=DATABASE_SSL=false
+Environment=HOME=/home/observe
+Environment=PATH=/home/observe/.nvm/versions/node/v26.4.0/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+EnvironmentFile=-/etc/stellaratlas/stellaratlas.env
+ExecStart=/usr/bin/env pnpm start:api
+Restart=always
+RestartSec=5
+TimeoutStopSec=45
+KillSignal=SIGTERM
+NoNewPrivileges=true
+
+[Install]
+WantedBy=stellaratlas.target

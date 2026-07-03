@@ -1,0 +1,30 @@
+[Unit]
+Description=StellarAtlas frontend v4
+Documentation=https://github.com/Stellar-Atlas/StellarAtlas
+Wants=stellaratlas-api.service
+After=stellaratlas-api.service
+Conflicts=stellaratlas.service
+
+[Service]
+Type=simple
+User=observe
+Group=observe
+WorkingDirectory=/home/observe/stellarbeat-data/Observer
+Environment=NODE_ENV=production
+Environment=HOME=/home/observe
+Environment=PATH=/home/observe/.nvm/versions/node/v26.4.0/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+Environment=NEXT_DIST_DIR=.next-production
+Environment=FRONTEND_V4_HOST=127.0.0.1
+Environment=FRONTEND_V4_PORT=3104
+Environment=STELLAR_ATLAS_PUBLIC_API_URL=http://127.0.0.1:3000
+EnvironmentFile=-/etc/stellaratlas/stellaratlas.env
+ExecStartPre=/usr/bin/test -f /home/observe/stellarbeat-data/Observer/apps/frontend-v4/.next-production/BUILD_ID
+ExecStart=/usr/bin/env pnpm start:frontend-v4:production
+Restart=always
+RestartSec=5
+TimeoutStopSec=30
+KillSignal=SIGTERM
+NoNewPrivileges=true
+
+[Install]
+WantedBy=stellaratlas.target

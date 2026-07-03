@@ -1,0 +1,36 @@
+polkit.addRule(function(action, subject) {
+  if (action.id !== "org.freedesktop.systemd1.manage-units") {
+    return;
+  }
+
+  var unit = action.lookup("unit");
+  var verb = action.lookup("verb");
+  var units = [
+    "stellaratlas.service",
+    "stellaratlas.target",
+    "stellaratlas-api.service",
+    "stellaratlas-frontend-v4.service",
+    "stellaratlas-frontend-v4-staging.service",
+    "stellaratlas-frontend-legacy.service",
+    "stellaratlas-network-scanner.service",
+    "stellaratlas-users.service",
+    "stellaratlas-history-scanner@1.service"
+  ];
+  var verbs = [
+    "start",
+    "stop",
+    "restart",
+    "reload",
+    "reload-or-restart",
+    "try-restart",
+    "reset-failed"
+  ];
+
+  if (
+    subject.user === "observe" &&
+    units.indexOf(unit) >= 0 &&
+    verbs.indexOf(verb) >= 0
+  ) {
+    return polkit.Result.YES;
+  }
+});

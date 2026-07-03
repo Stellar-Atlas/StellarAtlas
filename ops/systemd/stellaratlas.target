@@ -1,0 +1,9 @@
+[Unit]
+Description=StellarAtlas production services
+Documentation=https://github.com/Stellar-Atlas/StellarAtlas
+Wants=network-online.target stellaratlas-api.service stellaratlas-frontend-v4.service stellaratlas-frontend-legacy.service stellaratlas-network-scanner.service stellaratlas-users.service stellaratlas-history-scanner@1.service
+After=network-online.target
+Conflicts=stellaratlas.service
+
+[Install]
+WantedBy=multi-user.target
