@@ -3,43 +3,38 @@ import * as stellar_analysis from '@stellaratlas/stellar-analysis-nodejs/stellar
 import { err, ok, Result } from 'neverthrow';
 import 'reflect-metadata';
 import { mapUnknownToError } from '@core/utilities/mapUnknownToError.js';
+import type {
+	FbasMinimalQuorumsProof,
+	FbasSymmetricTopTierProof
+} from './FbasProofPayload.js';
 
-interface TopTierAnalysis {
+export interface TopTierAnalysis {
 	top_tier: string[];
 	top_tier_size: number;
 	cache_hit: boolean;
 }
 
-interface SymmetricTopTierAnalysis {
-	symmetric_top_tier: {
-		threshold: number;
-		validators: string[];
-		innerQuorumSets:
-			| {
-					threshold: number;
-					validators: string[];
-			  }[]
-			| null;
-	};
+export interface SymmetricTopTierAnalysis {
+	symmetric_top_tier: FbasSymmetricTopTierProof | null;
 }
 
-interface BlockingSetsAnalysis {
+export interface BlockingSetsAnalysis {
 	result: string[][];
 	min: number;
 	size: number;
 }
 
-interface SplittingSetsAnalysis {
+export interface SplittingSetsAnalysis {
 	result: string[][];
 	min: number;
 	size: number;
 }
 
-interface MinimalQuorumsAnalysis {
-	result: string[][];
-	size: number;
-	min: number;
-	quorum_intersection: boolean;
+export interface MinimalQuorumsAnalysis {
+	result: FbasMinimalQuorumsProof['result'];
+	size: FbasMinimalQuorumsProof['size'];
+	min: FbasMinimalQuorumsProof['min'];
+	quorum_intersection: FbasMinimalQuorumsProof['quorumIntersection'];
 }
 
 export interface FBASAnalysisQuorumSet {

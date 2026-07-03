@@ -12,6 +12,17 @@ import Node from '@network-scan/domain/node/Node.js';
 import { FbasMapper } from './FbasMapper.js';
 import { AnalysisResult } from './AnalysisResult.js';
 import { FbasMergedByAnalyzer } from './FbasMergedByAnalyzer.js';
+import type {
+	FbasMinimalQuorumsProof,
+	FbasSymmetricTopTierProof
+} from './FbasProofPayload.js';
+
+interface QuorumIntersectionAndSymmetryAnalysis {
+	hasQuorumIntersection: boolean;
+	hasSymmetricTopTier: boolean;
+	minimalQuorums: FbasMinimalQuorumsProof;
+	symmetricTopTier: FbasSymmetricTopTierProof | null;
+}
 
 @injectable()
 export default class FbasAnalyzerService {
@@ -62,23 +73,19 @@ export default class FbasAnalyzerService {
 		return ok({
 			hasSymmetricTopTier: combined.value[0].hasSymmetricTopTier,
 			hasQuorumIntersection: combined.value[0].hasQuorumIntersection,
+			minimalQuorums: combined.value[0].minimalQuorums,
 			node: combined.value[1],
 			organization: combined.value[2],
 			country: combined.value[3],
-			isp: combined.value[4]
+			isp: combined.value[4],
+			symmetricTopTier: combined.value[0].symmetricTopTier
 		});
 	}
 
 	private analyseQuorumIntersectionAndSymmetry(
 		fbasNodes: FbasAnalysisNode[],
 		fbasOrganizations: FbasAnalysisOrganization[]
-	): Result<
-		{
-			hasQuorumIntersection: boolean;
-			hasSymmetricTopTier: boolean;
-		},
-		Error
-	> {
+	): Result<QuorumIntersectionAndSymmetryAnalysis, Error> {
 		const result = Result.combine([
 			this.analysisFacade.analyzeSymmetricTopTier(
 				fbasNodes,
@@ -96,7 +103,14 @@ export default class FbasAnalyzerService {
 
 		return ok({
 			hasQuorumIntersection: result.value[1].quorum_intersection,
-			hasSymmetricTopTier: result.value[0].symmetric_top_tier !== null
+			hasSymmetricTopTier: result.value[0].symmetric_top_tier !== null,
+			minimalQuorums: {
+				min: result.value[1].min,
+				quorumIntersection: result.value[1].quorum_intersection,
+				result: result.value[1].result,
+				size: result.value[1].size
+			},
+			symmetricTopTier: result.value[0].symmetric_top_tier
 		});
 	}
 

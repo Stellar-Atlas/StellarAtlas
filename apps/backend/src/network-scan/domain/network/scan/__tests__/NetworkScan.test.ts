@@ -7,6 +7,14 @@ import NetworkMeasurement from '../../NetworkMeasurement.js';
 import { NetworkTransitiveQuorumSetFinder } from 'shared';
 import { StronglyConnectedComponentsFinder } from 'shared';
 import { AnalysisResult } from '../fbas-analysis/AnalysisResult.js';
+import {
+	maxFbasProofSetMembers,
+	maxFbasProofSetsPerFamily,
+	maxFbasSymmetricTopTierDepth,
+	maxFbasSymmetricTopTierInnerSets,
+	maxFbasTopTierMembers,
+	type FbasMergedAnalysisProof
+} from '../fbas-analysis/FbasProofPayload.js';
 
 describe('NetworkScan', () => {
 	it('should update latest ledger info from node scan', () => {
@@ -38,31 +46,42 @@ describe('NetworkScan', () => {
 			new NetworkTransitiveQuorumSetFinder()
 		);
 		const analysisResult: AnalysisResult = {
-			country: {
+			country: makeMergedProof('country', {
 				blockingSetsMinSize: 1,
 				topTierSize: 2,
 				blockingSetsFilteredMinSize: 3,
 				splittingSetsMinSize: 4
-			},
+			}),
 			hasQuorumIntersection: true,
 			hasSymmetricTopTier: true,
-			isp: {
+			isp: makeMergedProof('isp', {
 				blockingSetsMinSize: 5,
 				topTierSize: 6,
 				blockingSetsFilteredMinSize: 7,
 				splittingSetsMinSize: 8
+			}),
+			minimalQuorums: {
+				min: 2,
+				quorumIntersection: true,
+				result: [['A', 'B']],
+				size: 1
 			},
-			node: {
+			node: makeMergedProof('node', {
 				topTierSize: 9,
 				splittingSetsMinSize: 10,
 				blockingSetsMinSize: 11,
 				blockingSetsFilteredMinSize: 12
-			},
-			organization: {
+			}),
+			organization: makeMergedProof('organization', {
 				splittingSetsMinSize: 13,
 				blockingSetsMinSize: 14,
 				blockingSetsFilteredMinSize: 15,
 				topTierSize: 16
+			}),
+			symmetricTopTier: {
+				threshold: 2,
+				validators: ['A', 'B'],
+				innerQuorumSets: null
 			}
 		};
 
@@ -141,5 +160,84 @@ describe('NetworkScan', () => {
 		expect(networkScan.measurement.nrOfActiveOrganizations).toEqual(
 			organizationScan.getAvailableOrganizationsCount()
 		);
+		expect(networkScan.fbasProof?.scanTime).toEqual(time);
+		expect(networkScan.fbasProof?.payloadBytes).toBeGreaterThan(0);
+		expect(networkScan.fbasProof?.payload).toMatchObject({
+			complete: true,
+			hasQuorumIntersection: true,
+			hasSymmetricTopTier: true,
+			limits: {
+				proofSetMembers: maxFbasProofSetMembers,
+				proofSetsPerFamily: maxFbasProofSetsPerFamily,
+				symmetricTopTierDepth: maxFbasSymmetricTopTierDepth,
+				symmetricTopTierInnerSets: maxFbasSymmetricTopTierInnerSets,
+				topTierMembers: maxFbasTopTierMembers
+			},
+			minimalQuorums: {
+				quorumIntersection: true,
+				quorums: {
+					capturedCount: 1,
+					complete: true,
+					minSize: 2,
+					sets: [['A', 'B']],
+					totalCount: 1
+				}
+			},
+			node: {
+				blockingSets: {
+					capturedCount: 1,
+					complete: true,
+					minSize: 11,
+					sets: [['node-blocking']],
+					totalCount: 1
+				},
+				topTier: {
+					capturedCount: 9,
+					complete: true,
+					members: makeMembers('node-top-tier', 9),
+					totalCount: 9
+				}
+			},
+			symmetricTopTier: {
+				complete: true,
+				threshold: 2,
+				validators: {
+					capturedCount: 2,
+					complete: true,
+					members: ['A', 'B'],
+					totalCount: 2
+				}
+			},
+			version: 1
+		});
 	});
 });
+
+function makeMergedProof(
+	label: string,
+	overrides: Pick<
+		FbasMergedAnalysisProof,
+		| 'blockingSetsFilteredMinSize'
+		| 'blockingSetsMinSize'
+		| 'splittingSetsMinSize'
+		| 'topTierSize'
+	>
+): FbasMergedAnalysisProof {
+	return {
+		blockingSets: [[`${label}-blocking`]],
+		blockingSetsCount: 1,
+		blockingSetsFiltered: [[`${label}-blocking-filtered`]],
+		blockingSetsFilteredCount: 1,
+		blockingSetsFilteredMinSize: overrides.blockingSetsFilteredMinSize,
+		blockingSetsMinSize: overrides.blockingSetsMinSize,
+		splittingSets: [[`${label}-splitting`]],
+		splittingSetsCount: 1,
+		splittingSetsMinSize: overrides.splittingSetsMinSize,
+		topTier: makeMembers(`${label}-top-tier`, overrides.topTierSize),
+		topTierSize: overrides.topTierSize
+	};
+}
+
+function makeMembers(label: string, count: number): string[] {
+	return Array.from({ length: count }, (_, index) => `${label}-${index + 1}`);
+}

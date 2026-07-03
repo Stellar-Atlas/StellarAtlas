@@ -66,9 +66,16 @@ describe('FbasMergedByAnalyzer', () => {
 		expect(result.isOk()).toBeTruthy();
 		if (result.isOk()) {
 			expect(result.value).toEqual({
+				blockingSets: [['A', 'B', 'C']],
+				blockingSetsCount: 3,
+				blockingSetsFiltered: [['A', 'B', 'C']],
+				blockingSetsFilteredCount: 3,
 				blockingSetsFilteredMinSize: 3,
 				blockingSetsMinSize: 2,
+				splittingSets: [['A', 'B', 'C']],
+				splittingSetsCount: 5,
 				splittingSetsMinSize: 4,
+				topTier: ['A', 'B', 'C'],
 				topTierSize: 6
 			});
 		}

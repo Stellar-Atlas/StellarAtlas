@@ -1,6 +1,3 @@
-export interface AnalysisMergedResult {
-	blockingSetsMinSize: number;
-	blockingSetsFilteredMinSize: number;
-	splittingSetsMinSize: number;
-	topTierSize: number;
-}
+import type { FbasMergedAnalysisProof } from './FbasProofPayload.js';
+
+export interface AnalysisMergedResult extends FbasMergedAnalysisProof {}

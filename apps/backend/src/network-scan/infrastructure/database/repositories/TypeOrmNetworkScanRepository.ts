@@ -1,5 +1,6 @@
 import { LessThan, LessThanOrEqual, Repository } from 'typeorm';
 import NetworkScan from '@network-scan/domain/network/scan/NetworkScan.js';
+import { NetworkScanFbasProof } from '@network-scan/domain/network/scan/fbas-analysis/NetworkScanFbasProof.js';
 import { injectable } from 'inversify';
 import type {
 	NetworkScanRepository,
@@ -127,7 +128,9 @@ export class TypeOrmNetworkScanRepository implements NetworkScanRepository {
 	async saveOne(scan: NetworkScan): Promise<NetworkScan> {
 		if (!scan.measurement) throw new Error('Measurement is not set');
 		await this.repository.manager.save(NetworkMeasurement, scan.measurement);
-		return this.repository.save(scan);
+		const savedScan = await this.repository.save(scan);
+		await this.saveFbasProof(savedScan, scan.fbasProof);
+		return savedScan;
 	}
 
 	async save(scans: NetworkScan[]): Promise<NetworkScan[]> {
@@ -137,7 +140,21 @@ export class TypeOrmNetworkScanRepository implements NetworkScanRepository {
 			measurements.push(scan.measurement);
 		}
 		await this.repository.manager.save(NetworkMeasurement, measurements);
-		return this.repository.save(scans);
+		const savedScans = await this.repository.save(scans);
+		for (const [index, savedScan] of savedScans.entries()) {
+			await this.saveFbasProof(savedScan, scans[index]?.fbasProof ?? null);
+		}
+		return savedScans;
+	}
+
+	private async saveFbasProof(
+		scan: NetworkScan,
+		fbasProof: NetworkScanFbasProof | null
+	): Promise<void> {
+		if (!fbasProof) return;
+		fbasProof.scanId = scan.id;
+		fbasProof.scanTime = scan.time;
+		await this.repository.manager.save(NetworkScanFbasProof, fbasProof);
 	}
 
 	private async hydrateMeasurement(scan: NetworkScan): Promise<void> {

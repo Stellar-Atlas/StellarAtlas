@@ -11,6 +11,7 @@ import { NodeScan } from '../../node/scan/NodeScan.js';
 import { OrganizationScan } from '../../organization/scan/OrganizationScan.js';
 import { TrustGraph } from 'shared';
 import { AnalysisResult } from './fbas-analysis/AnalysisResult.js';
+import { NetworkScanFbasProof } from './fbas-analysis/NetworkScanFbasProof.js';
 
 export const bigIntTransformer: ValueTransformer = {
 	to: (entityValue: bigint) => entityValue,
@@ -44,6 +45,8 @@ export default class NetworkScan extends CoreEntity {
 	completed = false;
 
 	measurement: NetworkMeasurement | null = null;
+
+	fbasProof: NetworkScanFbasProof | null = null;
 
 	constructor(time: Date) {
 		super();
@@ -110,5 +113,9 @@ export default class NetworkScan extends CoreEntity {
 			nodeTrustGraph.hasNetworkTransitiveQuorumSet();
 
 		this.measurement = networkMeasurement;
+		this.fbasProof = NetworkScanFbasProof.fromAnalysisResult(
+			this.time,
+			analysisResult
+		);
 	}
 }

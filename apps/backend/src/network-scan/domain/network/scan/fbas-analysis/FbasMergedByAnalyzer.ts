@@ -42,11 +42,21 @@ export class FbasMergedByAnalyzer {
 
 		this.logCacheMiss(combined.value[0].cache_hit);
 
+		const [topTier, blockingSets, blockingSetsFiltered, splittingSets] =
+			combined.value;
+
 		return ok({
-			topTierSize: combined.value[0].top_tier_size,
-			blockingSetsMinSize: combined.value[1].min,
-			blockingSetsFilteredMinSize: combined.value[2].min,
-			splittingSetsMinSize: combined.value[3].min
+			blockingSets: blockingSets.result,
+			blockingSetsCount: blockingSets.size,
+			blockingSetsFiltered: blockingSetsFiltered.result,
+			blockingSetsFilteredCount: blockingSetsFiltered.size,
+			blockingSetsFilteredMinSize: blockingSetsFiltered.min,
+			blockingSetsMinSize: blockingSets.min,
+			splittingSets: splittingSets.result,
+			splittingSetsCount: splittingSets.size,
+			splittingSetsMinSize: splittingSets.min,
+			topTier: topTier.top_tier,
+			topTierSize: topTier.top_tier_size
 		});
 	}
 

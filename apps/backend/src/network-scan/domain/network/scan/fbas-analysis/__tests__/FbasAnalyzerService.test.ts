@@ -36,7 +36,7 @@ describe('analyze fbas', () => {
 		facade.analyzeMinimalQuorums.mockReturnValueOnce(
 			ok({
 				quorum_intersection: true,
-				result: [],
+				result: [['A']],
 				size: 1,
 				min: 1
 			})
@@ -44,36 +44,64 @@ describe('analyze fbas', () => {
 
 		fbasMergedByAnalyzer.execute.mockReturnValueOnce(
 			ok({
+				blockingSets: [['A']],
+				blockingSetsCount: 1,
+				blockingSetsFiltered: [['A', 'B']],
+				blockingSetsFilteredCount: 1,
 				blockingSetsMinSize: 1,
 				blockingSetsFilteredMinSize: 2,
+				splittingSets: [['A', 'B', 'C']],
+				splittingSetsCount: 1,
 				splittingSetsMinSize: 3,
+				topTier: ['A'],
 				topTierSize: 4
 			})
 		);
 
 		fbasMergedByAnalyzer.execute.mockReturnValueOnce(
 			ok({
+				blockingSets: [['org-a']],
+				blockingSetsCount: 1,
+				blockingSetsFiltered: [['org-a', 'org-b']],
+				blockingSetsFilteredCount: 1,
 				blockingSetsMinSize: 5,
 				blockingSetsFilteredMinSize: 6,
+				splittingSets: [['org-c']],
+				splittingSetsCount: 1,
 				splittingSetsMinSize: 7,
+				topTier: ['org-a'],
 				topTierSize: 8
 			})
 		);
 
 		fbasMergedByAnalyzer.execute.mockReturnValueOnce(
 			ok({
+				blockingSets: [['country-a']],
+				blockingSetsCount: 1,
+				blockingSetsFiltered: [['country-a', 'country-b']],
+				blockingSetsFilteredCount: 1,
 				blockingSetsMinSize: 9,
 				blockingSetsFilteredMinSize: 10,
+				splittingSets: [['country-c']],
+				splittingSetsCount: 1,
 				splittingSetsMinSize: 11,
+				topTier: ['country-a'],
 				topTierSize: 12
 			})
 		);
 
 		fbasMergedByAnalyzer.execute.mockReturnValueOnce(
 			ok({
+				blockingSets: [['isp-a']],
+				blockingSetsCount: 1,
+				blockingSetsFiltered: [['isp-a', 'isp-b']],
+				blockingSetsFilteredCount: 1,
 				blockingSetsMinSize: 13,
 				blockingSetsFilteredMinSize: 14,
+				splittingSets: [['isp-c']],
+				splittingSetsCount: 1,
 				splittingSetsMinSize: 15,
+				topTier: ['isp-a'],
 				topTierSize: 16
 			})
 		);
@@ -100,6 +128,21 @@ describe('analyze fbas', () => {
 			const analysisResult: AnalysisResult = result.value;
 			expect(analysisResult.hasSymmetricTopTier).toBeTruthy();
 			expect(analysisResult.hasQuorumIntersection).toBeTruthy();
+			expect(analysisResult.symmetricTopTier).toEqual({
+				threshold: 1,
+				validators: ['A'],
+				innerQuorumSets: null
+			});
+			expect(analysisResult.minimalQuorums).toEqual({
+				min: 1,
+				quorumIntersection: true,
+				result: [['A']],
+				size: 1
+			});
+			expect(analysisResult.node.blockingSets).toEqual([['A']]);
+			expect(analysisResult.node.blockingSetsFiltered).toEqual([['A', 'B']]);
+			expect(analysisResult.node.splittingSets).toEqual([['A', 'B', 'C']]);
+			expect(analysisResult.node.topTier).toEqual(['A']);
 			expect(analysisResult.node.blockingSetsMinSize).toBe(1);
 			expect(analysisResult.node.blockingSetsFilteredMinSize).toBe(2);
 			expect(analysisResult.node.splittingSetsMinSize).toBe(3);
