@@ -35,6 +35,10 @@ export class VerifyArchives {
 					await this.waitBeforeRetry();
 					continue;
 				}
+				if (scanJobDTOResult.value === null) {
+					await this.waitBeforeRetry();
+					continue;
+				}
 
 				await this.performScanJob(
 					scanJobDTOResult.value,

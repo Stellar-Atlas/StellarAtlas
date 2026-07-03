@@ -87,8 +87,7 @@ export function load(container: Container, config: Config) {
 			return new RESTScanCoordinatorService(
 				container.get<HttpService>(TYPES.HttpService),
 				config.coordinatorAPIBaseUrl,
-				config.coordinatorAPIUsername,
-				config.coordinatorAPIPassword
+				config.coordinatorAuth
 			);
 		});
 	container.bind<ExceptionLogger>(TYPES.ExceptionLogger).toDynamicValue(() => {

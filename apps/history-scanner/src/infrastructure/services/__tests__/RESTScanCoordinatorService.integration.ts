@@ -14,12 +14,11 @@ describe('RESTScanCoordinatorService Integration Tests', () => {
 
 	beforeEach(() => {
 		httpService = mock<HttpService>();
-		service = new RESTScanCoordinatorService(
-			httpService,
-			baseUrl,
+		service = new RESTScanCoordinatorService(httpService, baseUrl, {
+			type: 'internal',
 			username,
-			secret
-		);
+			password: secret
+		});
 	});
 
 	describe('registerScan', () => {
@@ -75,6 +74,61 @@ describe('RESTScanCoordinatorService Integration Tests', () => {
 				scanJobRemoteId: 'remote-id'
 			});
 		});
+
+		it('should register scan results as a community scanner', async () => {
+			const scannerId = '164f7788-9edb-4bb5-81c1-b928d85a21a5';
+			const apiKey = 'satlas_scanner_secret';
+			const communityService = new RESTScanCoordinatorService(
+				httpService,
+				baseUrl,
+				{
+					type: 'community',
+					scannerId,
+					apiKey
+				}
+			);
+			const scan = new Scan(
+				new Date(),
+				new Date(),
+				new Date(),
+				url._unsafeUnwrap(),
+				1,
+				100,
+				90,
+				'hash123',
+				5,
+				false,
+				null,
+				[],
+				'82a309de-a5df-457b-9412-f267ed5e7388'
+			);
+
+			httpService.post.mockResolvedValue(
+				ok({
+					status: 201,
+					statusText: 'Created',
+					headers: {},
+					data: { message: 'Scan created successfully' }
+				})
+			);
+
+			const result = await communityService.registerScan(scan);
+
+			expect(result.isOk()).toBe(true);
+			expect(httpService.post).toHaveBeenCalledWith(
+				Url.create(
+					`${baseUrl}/v1/community-scanners/${scannerId}/scans`
+				)._unsafeUnwrap(),
+				expect.objectContaining({
+					scanJobRemoteId: '82a309de-a5df-457b-9412-f267ed5e7388'
+				}),
+				{
+					headers: {
+						Authorization: `Bearer ${apiKey}`
+					}
+				}
+			);
+		});
 	});
 
 	describe('getScanJobs', () => {
@@ -112,6 +166,90 @@ describe('RESTScanCoordinatorService Integration Tests', () => {
 				});
 			}
 		});
+
+		it('should return null when no internal scan jobs are available', async () => {
+			httpService.get.mockResolvedValue(
+				ok({
+					status: 204,
+					data: null,
+					headers: {},
+					statusText: 'No Content'
+				})
+			);
+
+			const result = await service.getScanJob();
+
+			expect(result.isOk()).toBe(true);
+			expect(result._unsafeUnwrap()).toBeNull();
+		});
+
+		it('should get pending scan jobs as a community scanner', async () => {
+			const scannerId = '164f7788-9edb-4bb5-81c1-b928d85a21a5';
+			const apiKey = 'satlas_scanner_secret';
+			const communityService = new RESTScanCoordinatorService(
+				httpService,
+				baseUrl,
+				{
+					type: 'community',
+					scannerId,
+					apiKey
+				}
+			);
+			httpService.get.mockResolvedValue(
+				ok({
+					status: 200,
+					data: {
+						url: 'https://history.stellar.org',
+						latestScannedLedger: 100,
+						latestScannedLedgerHeaderHash: 'hash123',
+						chainInitDate: new Date().toISOString(),
+						remoteId: '82a309de-a5df-457b-9412-f267ed5e7388'
+					},
+					headers: {},
+					statusText: 'OK'
+				})
+			);
+
+			const result = await communityService.getScanJob();
+
+			expect(result.isOk()).toBe(true);
+			expect(httpService.get).toHaveBeenCalledWith(
+				Url.create(
+					`${baseUrl}/v1/community-scanners/${scannerId}/job`
+				)._unsafeUnwrap(),
+				{
+					responseType: 'json',
+					headers: {
+						Authorization: `Bearer ${apiKey}`
+					}
+				}
+			);
+		});
+
+		it('should return null when no community scan jobs are available', async () => {
+			const communityService = new RESTScanCoordinatorService(
+				httpService,
+				baseUrl,
+				{
+					type: 'community',
+					scannerId: '164f7788-9edb-4bb5-81c1-b928d85a21a5',
+					apiKey: 'satlas_scanner_secret'
+				}
+			);
+			httpService.get.mockResolvedValue(
+				ok({
+					status: 204,
+					data: null,
+					headers: {},
+					statusText: 'No Content'
+				})
+			);
+
+			const result = await communityService.getScanJob();
+
+			expect(result.isOk()).toBe(true);
+			expect(result._unsafeUnwrap()).toBeNull();
+		});
 	});
 
 	describe('touchScanJob', () => {
@@ -139,6 +277,44 @@ describe('RESTScanCoordinatorService Integration Tests', () => {
 					auth: {
 						username,
 						password: secret
+					}
+				}
+			);
+		});
+
+		it('should touch a scan job as a community scanner', async () => {
+			const scannerId = '164f7788-9edb-4bb5-81c1-b928d85a21a5';
+			const apiKey = 'satlas_scanner_secret';
+			const remoteId = '82a309de-a5df-457b-9412-f267ed5e7388';
+			const communityService = new RESTScanCoordinatorService(
+				httpService,
+				baseUrl,
+				{
+					type: 'community',
+					scannerId,
+					apiKey
+				}
+			);
+			httpService.post.mockResolvedValue(
+				ok({
+					status: 204,
+					data: null,
+					headers: {},
+					statusText: 'No Content'
+				})
+			);
+
+			const result = await communityService.touchScanJob(remoteId);
+
+			expect(result.isOk()).toBe(true);
+			expect(httpService.post).toHaveBeenCalledWith(
+				Url.create(
+					`${baseUrl}/v1/community-scanners/${scannerId}/job/${remoteId}/heartbeat`
+				)._unsafeUnwrap(),
+				{},
+				{
+					headers: {
+						Authorization: `Bearer ${apiKey}`
 					}
 				}
 			);

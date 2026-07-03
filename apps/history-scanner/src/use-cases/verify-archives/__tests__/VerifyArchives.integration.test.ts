@@ -6,6 +6,7 @@ import { ScanCoordinatorService } from '@domain/scan/ScanCoordinatorService.js';
 import { ok } from 'neverthrow';
 import { TYPES } from '@infrastructure/di/di-types.js';
 import { MockHistoryArchive } from '@infrastructure/http/MockHistoryArchive.js';
+import { ScanErrorType } from '@domain/scan/ScanError.js';
 
 describe('VerifyArchives Integration Tests', () => {
 	let kernel: Kernel;
@@ -42,6 +43,7 @@ describe('VerifyArchives Integration Tests', () => {
 
 		coordinatorServiceMock.getScanJob.mockResolvedValue(ok(mockScanJob));
 		coordinatorServiceMock.registerScan.mockResolvedValue(ok(undefined));
+		coordinatorServiceMock.touchScanJob.mockResolvedValue(ok(undefined));
 
 		await verifyArchives.execute({
 			persist: true,
@@ -53,10 +55,14 @@ describe('VerifyArchives Integration Tests', () => {
 
 		const registeredScan = coordinatorServiceMock.registerScan.mock.calls[0][0];
 		expect(registeredScan).toBeDefined();
-		expect(registeredScan.hasError()).toBe(false);
-		expect(registeredScan.latestScannedLedger).toEqual(127);
-		expect(registeredScan.latestScannedLedgerHeaderHash).toEqual(
-			'7XqhM1busGfKYJi/v/lHL/IDp/h/6TMLTDxYwKu88QA='
-		);
+		expect(registeredScan.hasError()).toBe(true);
+		expect(registeredScan.errors).toHaveLength(1);
+		expect(registeredScan.errors[0]).toMatchObject({
+			type: ScanErrorType.TYPE_VERIFICATION,
+			url: 'http://127.0.0.1:3333/transactions/00/00/00/transactions-0000003f.xdr.gz',
+			message: 'Wrong transaction hash'
+		});
+		expect(registeredScan.latestScannedLedger).toEqual(0);
+		expect(registeredScan.latestScannedLedgerHeaderHash).toBeNull();
 	});
 });

@@ -96,11 +96,25 @@ This command starts the scanning process. It will:
 
 ### Required
 
+| Variable                   | Description                                      | Default    |
+| -------------------------- | ------------------------------------------------ | ---------- |
+| `COORDINATOR_API_BASE_URL` | URL of the coordinator service                   | -          |
+| `COORDINATOR_AUTH_MODE`    | Coordinator auth mode: `internal` or `community` | `internal` |
+
+Internal scanner mode uses the private `/v1/history-scan` worker endpoints:
+
 | Variable                   | Description                       | Default |
 | -------------------------- | --------------------------------- | ------- |
-| `COORDINATOR_API_BASE_URL` | URL of the coordinator service    | -       |
 | `COORDINATOR_API_USERNAME` | Username for coordinator API auth | -       |
 | `COORDINATOR_API_PASSWORD` | Password for coordinator API auth | -       |
+
+Community scanner mode uses the public `/v1/community-scanners/:id/*` endpoints
+and attributes claimed jobs/results to a registered scanner:
+
+| Variable                    | Description                                | Default |
+| --------------------------- | ------------------------------------------ | ------- |
+| `COMMUNITY_SCANNER_ID`      | Scanner id returned by registration        | -       |
+| `COMMUNITY_SCANNER_API_KEY` | One-time scanner API key from registration | -       |
 
 ### Performance Settings
 
@@ -118,10 +132,10 @@ This command starts the scanning process. It will:
 
 ### General Settings
 
-| Variable     | Description                    | Default                       |
-| ------------ | ------------------------------ | ----------------------------- |
-| `NODE_ENV`   | Environment name               | `development`                 |
+| Variable     | Description                    | Default                        |
+| ------------ | ------------------------------ | ------------------------------ |
+| `NODE_ENV`   | Environment name               | `development`                  |
 | `USER_AGENT` | User agent string for requests | `stellaratlas-history-scanner` |
-| `LOG_LEVEL`  | Logging verbosity              | `info`                        |
+| `LOG_LEVEL`  | Logging verbosity              | `info`                         |
 
 Copy `.env.dist` to `.env` and configure these variables for your environment.

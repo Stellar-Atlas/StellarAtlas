@@ -27,6 +27,17 @@ describe('Config', () => {
 			if (!result.isErr()) throw new Error('Expected error');
 			expect(result.error.message).toContain('COORDINATOR_API_BASE_URL');
 		});
+
+		test('should require internal coordinator credentials by default', () => {
+			process.env.COORDINATOR_API_BASE_URL = 'http://api';
+
+			const result = getConfigFromEnv();
+
+			expect(result.isErr()).toBe(true);
+			if (!result.isErr()) throw new Error('Expected error');
+			expect(result.error.message).toContain('COORDINATOR_API_USERNAME');
+			expect(result.error.message).toContain('COORDINATOR_API_PASSWORD');
+		});
 	});
 
 	describe('Optional Variables', () => {
@@ -46,6 +57,11 @@ describe('Config', () => {
 				nodeEnv: 'development',
 				enableSentry: false,
 				userAgent: 'stellaratlas-history-scanner',
+				coordinatorAuth: {
+					type: 'internal',
+					username: 'user',
+					password: 'pass'
+				},
 				logLevel: 'info',
 				historyMaxFileMs: 60000,
 				historySlowArchiveMaxLedgers: 1000,
@@ -152,6 +168,47 @@ describe('Config', () => {
 
 			expect(result.value.enableSentry).toBe(true);
 			expect(result.value.sentryDSN).toBe('https://sentry.example.com');
+		});
+
+		test('should configure community scanner coordinator auth', () => {
+			delete process.env.COORDINATOR_API_USERNAME;
+			delete process.env.COORDINATOR_API_PASSWORD;
+			process.env.COORDINATOR_AUTH_MODE = 'community';
+			process.env.COMMUNITY_SCANNER_ID = '164f7788-9edb-4bb5-81c1-b928d85a21a5';
+			process.env.COMMUNITY_SCANNER_API_KEY = 'satlas_scanner_secret';
+
+			const result = getConfigFromEnv();
+
+			expect(result.isOk()).toBe(true);
+			if (!result.isOk()) throw result.error;
+			expect(result.value.coordinatorAuth).toEqual({
+				type: 'community',
+				scannerId: '164f7788-9edb-4bb5-81c1-b928d85a21a5',
+				apiKey: 'satlas_scanner_secret'
+			});
+		});
+
+		test('should require community scanner credentials in community mode', () => {
+			process.env.COORDINATOR_AUTH_MODE = 'community';
+
+			const result = getConfigFromEnv();
+
+			expect(result.isErr()).toBe(true);
+			if (!result.isErr()) throw new Error('Expected error');
+			expect(result.error.message).toContain('COMMUNITY_SCANNER_ID');
+			expect(result.error.message).toContain('COMMUNITY_SCANNER_API_KEY');
+		});
+
+		test('should reject unknown coordinator auth modes', () => {
+			process.env.COORDINATOR_AUTH_MODE = 'oauth';
+
+			const result = getConfigFromEnv();
+
+			expect(result.isErr()).toBe(true);
+			if (!result.isErr()) throw new Error('Expected error');
+			expect(result.error.message).toContain(
+				'COORDINATOR_AUTH_MODE must be internal or community'
+			);
 		});
 	});
 });

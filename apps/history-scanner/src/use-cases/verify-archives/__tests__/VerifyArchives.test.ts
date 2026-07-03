@@ -82,6 +82,17 @@ describe('VerifyArchives', () => {
 		expect(scannerMock.perform).not.toHaveBeenCalled();
 	});
 
+	it('should idle without reporting an error when no scan job is available', async () => {
+		scanCoordinatorMock.getScanJob.mockResolvedValue(ok(null));
+
+		await verifyArchives.execute({ persist: false, loop: false });
+
+		expect(exceptionLoggerMock.captureException).not.toHaveBeenCalled();
+		expect(verifyArchives.retryWaits).toEqual([60 * 1000]);
+		expect(jobMonitorMock.checkIn).not.toHaveBeenCalled();
+		expect(scannerMock.perform).not.toHaveBeenCalled();
+	});
+
 	it('should capture unexpected errors', async () => {
 		const unexpectedError = new Error('Unexpected');
 		scanCoordinatorMock.getScanJob.mockRejectedValue(unexpectedError);

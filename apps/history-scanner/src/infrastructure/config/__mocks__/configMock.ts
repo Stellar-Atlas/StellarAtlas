@@ -1,4 +1,5 @@
 import { Config } from '../Config.js';
+import type { CoordinatorAuthConfig } from '../CoordinatorAuthConfig.js';
 
 export class ConfigMock implements Config {
 	nodeEnv = 'test';
@@ -10,7 +11,13 @@ export class ConfigMock implements Config {
 	historyMaxFileMs = 60000;
 	historySlowArchiveMaxLedgers = 1000;
 	historyHasherWorkers = 1;
+	historyMaxRequests = 1;
+	historyBucketCacheDir = '/tmp/stellaratlas-history-scanner-test-cache';
+	historyBucketCacheMaxBytes = 1024 * 1024 * 1024;
 	coordinatorAPIBaseUrl = 'http://127.0.0.1:3000';
-	coordinatorAPIPassword = 'test-password';
-	coordinatorAPIUsername = 'test-user';
+	coordinatorAuth: CoordinatorAuthConfig = {
+		type: 'internal',
+		username: 'test-user',
+		password: 'test-password'
+	};
 }

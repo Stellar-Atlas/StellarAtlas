@@ -51,7 +51,10 @@ export class AxiosHttpService implements HttpService {
 		const timeoutMs = httpOptions.socketTimeoutMs
 			? httpOptions.socketTimeoutMs
 			: 2000;
-		const headers = { 'User-Agent': this.userAgent }; //could be expanded
+		const headers = {
+			'User-Agent': this.userAgent,
+			...httpOptions.headers
+		};
 		const auth = httpOptions.auth;
 		const responseType = httpOptions.responseType
 			? httpOptions.responseType

@@ -1,6 +1,6 @@
 import 'reflect-metadata';
 import { CustomError } from 'custom-error';
-import { Url, type HttpService } from 'http-helper';
+import { Url, type HttpOptions, type HttpService } from 'http-helper';
 import { injectable } from 'inversify';
 import { err, ok, Result } from 'neverthrow';
 import { Scan } from '../../domain/scan/Scan.js';
@@ -13,6 +13,7 @@ import {
 import { ScanCoordinatorService } from '../../domain/scan/ScanCoordinatorService.js';
 import { isObject } from 'shared';
 import { type ScanError, ScanErrorType } from '../../domain/scan/ScanError.js';
+import type { CoordinatorAuthConfig } from '../config/CoordinatorAuthConfig.js';
 
 export class CoordinatorServiceError extends CustomError {
 	constructor(message: string, cause?: Error) {
@@ -25,14 +26,11 @@ export class RESTScanCoordinatorService implements ScanCoordinatorService {
 	constructor(
 		private readonly httpService: HttpService,
 		private readonly coordinatorAPIBaseUrl: string,
-		private readonly coordinatorAPIUsername: string,
-		private readonly coordinatorAPIPassword: string
+		private readonly coordinatorAuth: CoordinatorAuthConfig
 	) {}
 
 	async registerScan(scan: Scan): Promise<Result<void, Error>> {
-		const urlResult = Url.create(
-			`${this.coordinatorAPIBaseUrl}/v1/history-scan`
-		);
+		const urlResult = this.createUrl(this.getRegisterScanPath());
 		if (urlResult.isErr()) {
 			return err(new CoordinatorServiceError('Invalid URL', urlResult.error));
 		}
@@ -46,12 +44,7 @@ export class RESTScanCoordinatorService implements ScanCoordinatorService {
 		const response = await this.httpService.post(
 			urlResult.value,
 			scanDTO as unknown as Record<string, unknown>,
-			{
-				auth: {
-					username: this.coordinatorAPIUsername,
-					password: this.coordinatorAPIPassword
-				}
-			}
+			this.getHttpOptions()
 		);
 
 		if (response.isErr()) {
@@ -108,21 +101,16 @@ export class RESTScanCoordinatorService implements ScanCoordinatorService {
 		}
 	}
 
-	async getScanJob(): Promise<Result<ScanJobDTO, Error>> {
-		const urlResult = Url.create(
-			`${this.coordinatorAPIBaseUrl}/v1/history-scan/job`
-		);
+	async getScanJob(): Promise<Result<ScanJobDTO | null, Error>> {
+		const urlResult = this.createUrl(this.getScanJobPath());
 		if (urlResult.isErr()) {
 			return err(new CoordinatorServiceError('Invalid URL', urlResult.error));
 		}
 
-		const response = await this.httpService.get(urlResult.value, {
-			auth: {
-				username: this.coordinatorAPIUsername,
-				password: this.coordinatorAPIPassword
-			},
-			responseType: 'json'
-		});
+		const response = await this.httpService.get(
+			urlResult.value,
+			this.getHttpOptions({ responseType: 'json' })
+		);
 
 		if (response.isErr()) {
 			return err(
@@ -131,6 +119,10 @@ export class RESTScanCoordinatorService implements ScanCoordinatorService {
 					response.error
 				)
 			);
+		}
+
+		if (response.value.status === 204) {
+			return ok(null);
 		}
 
 		if (response.value.status !== 200) {
@@ -154,9 +146,7 @@ export class RESTScanCoordinatorService implements ScanCoordinatorService {
 	}
 
 	async touchScanJob(remoteId: string): Promise<Result<void, Error>> {
-		const urlResult = Url.create(
-			`${this.coordinatorAPIBaseUrl}/v1/history-scan/job/${remoteId}/heartbeat`
-		);
+		const urlResult = this.createUrl(this.getTouchScanJobPath(remoteId));
 		if (urlResult.isErr()) {
 			return err(new CoordinatorServiceError('Invalid URL', urlResult.error));
 		}
@@ -164,12 +154,7 @@ export class RESTScanCoordinatorService implements ScanCoordinatorService {
 		const response = await this.httpService.post(
 			urlResult.value,
 			{},
-			{
-				auth: {
-					username: this.coordinatorAPIUsername,
-					password: this.coordinatorAPIPassword
-				}
-			}
+			this.getHttpOptions()
 		);
 
 		if (response.isErr()) {
@@ -183,6 +168,54 @@ export class RESTScanCoordinatorService implements ScanCoordinatorService {
 		}
 
 		return ok(undefined);
+	}
+
+	private createUrl(path: string): Result<Url, Error> {
+		return Url.create(`${this.coordinatorAPIBaseUrl}${path}`);
+	}
+
+	private getRegisterScanPath(): string {
+		if (this.coordinatorAuth.type === 'community') {
+			return `/v1/community-scanners/${this.coordinatorAuth.scannerId}/scans`;
+		}
+
+		return '/v1/history-scan';
+	}
+
+	private getScanJobPath(): string {
+		if (this.coordinatorAuth.type === 'community') {
+			return `/v1/community-scanners/${this.coordinatorAuth.scannerId}/job`;
+		}
+
+		return '/v1/history-scan/job';
+	}
+
+	private getTouchScanJobPath(remoteId: string): string {
+		if (this.coordinatorAuth.type === 'community') {
+			return `/v1/community-scanners/${this.coordinatorAuth.scannerId}/job/${remoteId}/heartbeat`;
+		}
+
+		return `/v1/history-scan/job/${remoteId}/heartbeat`;
+	}
+
+	private getHttpOptions(options: HttpOptions = {}): HttpOptions {
+		if (this.coordinatorAuth.type === 'community') {
+			return {
+				...options,
+				headers: {
+					...options.headers,
+					Authorization: `Bearer ${this.coordinatorAuth.apiKey}`
+				}
+			};
+		}
+
+		return {
+			...options,
+			auth: {
+				username: this.coordinatorAuth.username,
+				password: this.coordinatorAuth.password
+			}
+		};
 	}
 
 	private convertResponseToScanJobDTO(

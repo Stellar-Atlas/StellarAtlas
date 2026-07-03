@@ -3,6 +3,10 @@ import { err, ok, Result } from 'neverthrow';
 import { availableParallelism } from 'node:os';
 import { dirname, resolve } from 'node:path';
 import { resolveAppEnvPath } from 'shared/lib/env/resolve-app-env-path.js';
+import {
+	type CoordinatorAuthConfig,
+	isCoordinatorAuthMode
+} from './CoordinatorAuthConfig.js';
 
 const envPath = resolveAppEnvPath(import.meta.url, 'history-scanner');
 
@@ -17,8 +21,7 @@ export interface Config {
 	sentryDSN?: string;
 	userAgent: string;
 	coordinatorAPIBaseUrl: string;
-	coordinatorAPIPassword: string;
-	coordinatorAPIUsername: string;
+	coordinatorAuth: CoordinatorAuthConfig;
 	logLevel: string;
 	historyMaxFileMs: number;
 	historySlowArchiveMaxLedgers: number;
@@ -46,7 +49,12 @@ const defaultConfig = {
 	historyMaxFileMs: 60000,
 	historySlowArchiveMaxLedgers: 1000,
 	historyMaxRequests: 24,
-	historyBucketCacheDir: resolve(dirname(envPath), '..', '..', 'history-bucket-cache'),
+	historyBucketCacheDir: resolve(
+		dirname(envPath),
+		'..',
+		'..',
+		'history-bucket-cache'
+	),
 	historyBucketCacheMaxBytes: 10 * 1024 * 1024 * 1024 * 1024
 };
 
@@ -82,7 +90,9 @@ function parseOptionalPositiveInteger(
 	return ok(parsed);
 }
 
-function parseOptionalPositiveNumber(name: string): Result<number | undefined, Error> {
+function parseOptionalPositiveNumber(
+	name: string
+): Result<number | undefined, Error> {
 	const value = process.env[name];
 	if (value === undefined || value.trim() === '') return ok(undefined);
 
@@ -96,16 +106,15 @@ function parseOptionalPositiveNumber(name: string): Result<number | undefined, E
 
 export function getConfigFromEnv(): Result<Config, Error> {
 	// Required env vars validation
-	const required = [
-		'COORDINATOR_API_BASE_URL',
-		'COORDINATOR_API_USERNAME',
-		'COORDINATOR_API_PASSWORD'
-	];
+	const required = ['COORDINATOR_API_BASE_URL'];
 
 	const missing = required.filter((key) => !process.env[key]);
 	if (missing.length) {
 		return err(new Error(`Missing required env vars: ${missing.join(', ')}`));
 	}
+
+	const coordinatorAuthResult = getCoordinatorAuthFromEnv();
+	if (coordinatorAuthResult.isErr()) return err(coordinatorAuthResult.error);
 
 	// Optional vars with validation
 	const enableSentry =
@@ -131,9 +140,11 @@ export function getConfigFromEnv(): Result<Config, Error> {
 		return err(new Error('HISTORY_SLOW_ARCHIVE_MAX_LEDGERS must be a number'));
 	}
 
-	const historyScanWorkersResult =
-		parseOptionalPositiveInteger('HISTORY_SCAN_WORKERS');
-	if (historyScanWorkersResult.isErr()) return err(historyScanWorkersResult.error);
+	const historyScanWorkersResult = parseOptionalPositiveInteger(
+		'HISTORY_SCAN_WORKERS'
+	);
+	if (historyScanWorkersResult.isErr())
+		return err(historyScanWorkersResult.error);
 
 	const historyHasherWorkersResult = parseOptionalPositiveInteger(
 		'HISTORY_HASHER_WORKERS',
@@ -171,8 +182,7 @@ export function getConfigFromEnv(): Result<Config, Error> {
 		sentryDSN: enableSentry ? process.env.SENTRY_DSN : undefined,
 		userAgent: process.env.USER_AGENT ?? defaultConfig.userAgent,
 		coordinatorAPIBaseUrl: process.env.COORDINATOR_API_BASE_URL!,
-		coordinatorAPIPassword: process.env.COORDINATOR_API_PASSWORD!,
-		coordinatorAPIUsername: process.env.COORDINATOR_API_USERNAME!,
+		coordinatorAuth: coordinatorAuthResult.value,
 		logLevel: process.env.LOG_LEVEL ?? defaultConfig.logLevel,
 		historyMaxFileMs,
 		historySlowArchiveMaxLedgers,
@@ -184,5 +194,52 @@ export function getConfigFromEnv(): Result<Config, Error> {
 		historyBucketCacheMaxBytes:
 			historyBucketCacheMaxBytesResult.value ??
 			defaultConfig.historyBucketCacheMaxBytes
+	});
+}
+
+function getCoordinatorAuthFromEnv(): Result<CoordinatorAuthConfig, Error> {
+	const mode = process.env.COORDINATOR_AUTH_MODE ?? 'internal';
+	if (!isCoordinatorAuthMode(mode)) {
+		return err(
+			new Error('COORDINATOR_AUTH_MODE must be internal or community')
+		);
+	}
+
+	if (mode === 'community') return getCommunityCoordinatorAuthFromEnv();
+
+	return getInternalCoordinatorAuthFromEnv();
+}
+
+function getInternalCoordinatorAuthFromEnv(): Result<
+	CoordinatorAuthConfig,
+	Error
+> {
+	const required = ['COORDINATOR_API_USERNAME', 'COORDINATOR_API_PASSWORD'];
+	const missing = required.filter((key) => !process.env[key]);
+	if (missing.length) {
+		return err(new Error(`Missing required env vars: ${missing.join(', ')}`));
+	}
+
+	return ok({
+		type: 'internal',
+		username: process.env.COORDINATOR_API_USERNAME!,
+		password: process.env.COORDINATOR_API_PASSWORD!
+	});
+}
+
+function getCommunityCoordinatorAuthFromEnv(): Result<
+	CoordinatorAuthConfig,
+	Error
+> {
+	const required = ['COMMUNITY_SCANNER_ID', 'COMMUNITY_SCANNER_API_KEY'];
+	const missing = required.filter((key) => !process.env[key]);
+	if (missing.length) {
+		return err(new Error(`Missing required env vars: ${missing.join(', ')}`));
+	}
+
+	return ok({
+		type: 'community',
+		scannerId: process.env.COMMUNITY_SCANNER_ID!,
+		apiKey: process.env.COMMUNITY_SCANNER_API_KEY!
 	});
 }
