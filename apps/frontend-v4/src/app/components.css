@@ -492,12 +492,4 @@ code {
 	padding: 8px 10px;
 }
 
-@keyframes loading-sheen {
-	from {
-		opacity: 0.52;
-	}
-
-	to {
-		opacity: 1;
-	}
-}
+@keyframes loading-sheen { from { opacity: 0.52; } to { opacity: 1; } }

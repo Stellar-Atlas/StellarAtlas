@@ -1,11 +1,16 @@
 import type {
 	ApiFailure,
+	PublicApiStatus,
+	PublicConfiguredServiceStatus,
+	PublicDataQualityStatus,
+	PublicFailoverStatus,
 	PublicHistoryArchiveScan,
 	PublicHistoryArchiveScanLogEntry,
 	PublicNetwork,
 	PublicNode,
 	PublicOrganization,
-	PublicScpStatementObservation
+	PublicScpStatementObservation,
+	PublicWorkerStatus
 } from './types';
 import { frontendCacheTags } from './cache-policy';
 
@@ -241,3 +246,59 @@ export const fetchScpStatements = async (
 
 	return response.json() as Promise<PublicScpStatementObservation[]>;
 };
+
+export const fetchApiStatus = (
+	options?: FetchOptions
+): Promise<PublicApiStatus> =>
+	fetchJson<PublicApiStatus>(
+		'/v1/status/api',
+		withTags(options, [frontendCacheTags.status])
+	);
+
+export const fetchDataQualityStatus = (
+	options?: FetchOptions
+): Promise<PublicDataQualityStatus> =>
+	fetchJson<PublicDataQualityStatus>(
+		'/v1/status/data-quality',
+		withTags(options, [frontendCacheTags.status])
+	);
+
+export const fetchWorkerStatus = (
+	options?: FetchOptions
+): Promise<PublicWorkerStatus> =>
+	fetchJson<PublicWorkerStatus>(
+		'/v1/status/workers',
+		withTags(options, [frontendCacheTags.status])
+	);
+
+export const fetchFrontendStatus = (
+	options?: FetchOptions
+): Promise<PublicConfiguredServiceStatus> =>
+	fetchJson<PublicConfiguredServiceStatus>(
+		'/v1/status/frontend',
+		withTags(options, [frontendCacheTags.status])
+	);
+
+export const fetchHorizonStatus = (
+	options?: FetchOptions
+): Promise<PublicConfiguredServiceStatus> =>
+	fetchJson<PublicConfiguredServiceStatus>(
+		'/v1/status/horizon',
+		withTags(options, [frontendCacheTags.status])
+	);
+
+export const fetchRpcStatus = (
+	options?: FetchOptions
+): Promise<PublicConfiguredServiceStatus> =>
+	fetchJson<PublicConfiguredServiceStatus>(
+		'/v1/status/rpc',
+		withTags(options, [frontendCacheTags.status])
+	);
+
+export const fetchFailoverStatus = (
+	options?: FetchOptions
+): Promise<PublicFailoverStatus> =>
+	fetchJson<PublicFailoverStatus>(
+		'/v1/status/failover',
+		withTags(options, [frontendCacheTags.status])
+	);

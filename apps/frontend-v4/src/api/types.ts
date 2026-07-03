@@ -82,6 +82,127 @@ export interface PublicSearchResponse {
 	readonly source: 'memory' | 'meilisearch';
 }
 
+export type PublicStatusLevel = 'ok' | 'degraded' | 'unavailable';
+
+export interface PublicFreshnessProbe {
+	readonly ageMs: number | null;
+	readonly latestAt: string | null;
+	readonly staleAfterMs: number | null;
+	readonly status: PublicStatusLevel;
+}
+
+export interface PublicDataFreshnessStatus {
+	readonly archiveScan: PublicFreshnessProbe;
+	readonly generatedAt: string;
+	readonly networkScan: PublicFreshnessProbe;
+	readonly status: PublicStatusLevel;
+}
+
+export interface PublicScanContinuityStatus {
+	readonly generatedAt: string;
+	readonly networkScan: {
+		readonly completedScans: number;
+		readonly completionRate: number | null;
+		readonly expectedCompletionRate: number | null;
+		readonly expectedScans: number;
+		readonly incompleteScans: number;
+		readonly latestCompletedScanAt: string | null;
+		readonly latestScanAt: string | null;
+		readonly scanIntervalMs: number;
+		readonly status: PublicStatusLevel;
+		readonly totalScans: number;
+		readonly windowEnd: string;
+		readonly windowMs: number;
+		readonly windowStart: string;
+	};
+	readonly status: PublicStatusLevel;
+}
+
+export interface PublicRollupStatus {
+	readonly generatedAt: string;
+	readonly networkRollups: {
+		readonly daysWithCompletedScans: number;
+		readonly daysWithRollups: number;
+		readonly latestRollupDay: string | null;
+		readonly matchingDays: number;
+		readonly mismatchedRollupDays: number;
+		readonly missingRollupDays: number;
+		readonly rawCompletedScans: number;
+		readonly rollupCrawlCount: number;
+		readonly status: PublicStatusLevel;
+		readonly windowDays: number;
+		readonly windowEnd: string;
+		readonly windowStart: string;
+	};
+	readonly status: PublicStatusLevel;
+}
+
+export interface PublicArchiveQueueStatus {
+	readonly activeJobs: number;
+	readonly generatedAt: string;
+	readonly pendingJobs: number;
+	readonly staleJobAgeMs: number;
+	readonly staleJobs: number;
+	readonly status: PublicStatusLevel;
+	readonly totalUnfinishedJobs: number;
+}
+
+export interface PublicDataQualityStatus {
+	readonly archiveQueue: PublicArchiveQueueStatus;
+	readonly dataFreshness: PublicDataFreshnessStatus;
+	readonly generatedAt: string;
+	readonly rollups: PublicRollupStatus;
+	readonly scans: PublicScanContinuityStatus;
+	readonly status: PublicStatusLevel;
+}
+
+export interface PublicApiStatus {
+	readonly generatedAt: string;
+	readonly service: 'api';
+	readonly status: PublicStatusLevel;
+}
+
+export interface PublicWorkerStatus {
+	readonly archiveWorkers: {
+		readonly activeWorkers: number;
+		readonly staleJobAgeMs: number;
+		readonly staleWorkers: number;
+		readonly status: PublicStatusLevel;
+		readonly totalTakenJobs: number;
+	};
+	readonly communityScanners: {
+		readonly activeScanners: number;
+		readonly blacklistedScanners: number;
+		readonly degradedScanners: number;
+		readonly heartbeatFreshnessMs: number;
+		readonly offlineScanners: number;
+		readonly status: PublicStatusLevel;
+		readonly totalScanners: number;
+	};
+	readonly generatedAt: string;
+	readonly status: PublicStatusLevel;
+}
+
+export interface PublicConfiguredServiceStatus {
+	readonly configured: boolean;
+	readonly generatedAt: string;
+	readonly probe: 'not_run';
+	readonly service: 'frontend' | 'horizon' | 'rpc';
+	readonly status: PublicStatusLevel;
+	readonly url: string | null;
+}
+
+export interface PublicFailoverStatus {
+	readonly apiUrl: string | null;
+	readonly complete: boolean;
+	readonly configured: boolean;
+	readonly frontendUrl: string | null;
+	readonly generatedAt: string;
+	readonly probe: 'not_run';
+	readonly service: 'failover';
+	readonly status: PublicStatusLevel;
+}
+
 export interface ApiFailure {
 	message: string;
 	statusCode?: number;

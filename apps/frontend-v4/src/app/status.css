@@ -1,0 +1,91 @@
+.status-dashboard {
+	display: grid;
+	gap: 16px;
+}
+
+.status-panel-grid {
+	display: grid;
+	gap: 16px;
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.status-services-panel {
+	grid-column: 1 / -1;
+}
+
+.status-dashboard .panel-heading > div {
+	display: grid;
+	gap: 3px;
+}
+
+.status-list {
+	display: grid;
+}
+
+.status-row {
+	align-items: center;
+	border-block-end: 1px solid var(--border);
+	display: grid;
+	gap: 16px;
+	grid-template-columns: minmax(0, 1fr) auto;
+	min-block-size: 72px;
+	padding: 14px 18px;
+}
+
+.status-row:last-child {
+	border-block-end: 0;
+}
+
+.status-row strong,
+.status-row small,
+.status-row-value span {
+	display: block;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.status-row small {
+	color: var(--muted);
+	margin-block-start: 4px;
+}
+
+.status-row-value {
+	align-items: flex-end;
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+	text-align: right;
+}
+
+.status-row-value span {
+	font-weight: 800;
+	max-inline-size: 280px;
+}
+
+.status-pill {
+	border: 1px solid var(--border);
+	border-radius: 999px;
+	font-size: 0.72rem;
+	font-weight: 900;
+	padding: 4px 8px;
+	text-transform: uppercase;
+}
+
+.status-pill.good {
+	background: #e7f4ea;
+	border-color: #badfc2;
+	color: #24733a;
+}
+
+.status-pill.warning {
+	background: #fff5d8;
+	border-color: #ead185;
+	color: #7b5700;
+}
+
+.status-pill.danger {
+	background: #fde9ea;
+	border-color: #efbdc0;
+	color: #9e3037;
+}

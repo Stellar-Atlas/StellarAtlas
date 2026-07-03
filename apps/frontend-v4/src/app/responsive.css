@@ -17,6 +17,10 @@
 	.archive-scan-log-metrics {
 		grid-template-columns: repeat(3, minmax(0, 1fr));
 	}
+
+	.status-panel-grid {
+		grid-template-columns: 1fr;
+	}
 }
 
 @media (max-width: 720px) {
@@ -51,9 +55,19 @@
 
 	.archive-scan-log-toolbar,
 	.archive-scan-log-row,
-	.archive-scan-log-row div {
+	.archive-scan-log-row div,
+	.status-row,
+	.status-row-value {
 		align-items: flex-start;
 		flex-direction: column;
+	}
+
+	.status-row {
+		display: flex;
+	}
+
+	.status-row-value {
+		text-align: left;
 	}
 
 	.archive-scan-log-metrics {
