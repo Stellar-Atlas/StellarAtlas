@@ -27,3 +27,4 @@ mcp-config-update.json
 apps/frontend-v3/
 docs/issue-tracking/
 docs/*.md
+!docs/radar-parity-cross-reference.md
