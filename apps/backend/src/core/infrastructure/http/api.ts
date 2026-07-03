@@ -44,6 +44,12 @@ import { GetArchiveScanWorkers } from '@history-scan-coordinator/use-cases/get-a
 import { GetScannerMetrics } from '@history-scan-coordinator/use-cases/GetScannerMetrics.js';
 import { RegisterCommunityScanner } from '@history-scan-coordinator/use-cases/RegisterCommunityScanner.js';
 import { SendScannerHeartbeat } from '@history-scan-coordinator/use-cases/SendScannerHeartbeat.js';
+import { statusRouter } from '@status/infrastructure/http/StatusRouter.js';
+import { GetArchiveQueueStatus } from '@status/use-cases/get-archive-queue-status/GetArchiveQueueStatus.js';
+import { GetApiStatus } from '@status/use-cases/get-api-status/GetApiStatus.js';
+import { GetDataFreshnessStatus } from '@status/use-cases/get-data-freshness-status/GetDataFreshnessStatus.js';
+import { GetStatus } from '@status/use-cases/get-status/GetStatus.js';
+import { GetWorkerStatus } from '@status/use-cases/get-worker-status/GetWorkerStatus.js';
 import { frontendV4ProxyMiddleware } from './FrontendV4Proxy.js';
 
 let server: Server;
@@ -139,6 +145,17 @@ const listen = async () => {
 			registerCommunityScanner: kernel.container.get(RegisterCommunityScanner),
 			sendScannerHeartbeat: kernel.container.get(SendScannerHeartbeat),
 			getScannerMetrics: kernel.container.get(GetScannerMetrics)
+		})
+	);
+
+	api.use(
+		'/v1/status',
+		statusRouter({
+			getStatus: kernel.container.get(GetStatus),
+			getApiStatus: kernel.container.get(GetApiStatus),
+			getDataFreshnessStatus: kernel.container.get(GetDataFreshnessStatus),
+			getArchiveQueueStatus: kernel.container.get(GetArchiveQueueStatus),
+			getWorkerStatus: kernel.container.get(GetWorkerStatus)
 		})
 	);
 

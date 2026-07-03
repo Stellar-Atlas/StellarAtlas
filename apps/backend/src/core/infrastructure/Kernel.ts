@@ -5,6 +5,7 @@ import { Config, getConfigFromEnv } from '../config/Config.js';
 import { load as loadHistory } from '../../history-scan-coordinator/infrastructure/di/container.js';
 import { load as loadNetworkScan } from '../../network-scan/infrastructure/di/container.js';
 import { load as loadNetworkEventNotifications } from '../../notifications/infrastructure/di/container.js';
+import { load as loadStatus } from '../../status/infrastructure/di/container.js';
 import { load as loadCore } from '../infrastructure/di/container.js';
 import { AppDataSource } from './database/AppDataSource.js';
 import { TestingAppDataSource } from './database/TestingAppDataSource.js';
@@ -56,6 +57,7 @@ export default class Kernel {
 		loadNetworkScan(this.container, config);
 		loadNetworkEventNotifications(this.container, config);
 		loadHistory(this.container, config);
+		loadStatus(this.container, config);
 	}
 
 	get container(): Container {

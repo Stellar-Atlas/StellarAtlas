@@ -41,6 +41,12 @@
 			],
 			"@notifications/*": [
 				"./src/notifications/*"
+			],
+			"@status/*.js": [
+				"./src/status/*.ts"
+			],
+			"@status/*": [
+				"./src/status/*"
 			]
 		}
 	},

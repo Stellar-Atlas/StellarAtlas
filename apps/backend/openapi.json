@@ -45,6 +45,10 @@
 			"description": "Community archive scanner registration, heartbeat, and aggregate metrics"
 		},
 		{
+			"name": "Status",
+			"description": "Public service, worker, queue, and data-freshness status"
+		},
+		{
 			"name": "SCP",
 			"description": "Observed Stellar Consensus Protocol statements"
 		},
@@ -417,6 +421,287 @@
 							}
 						}
 					}
+				}
+			}
+		},
+		"/v1/status": {
+			"get": {
+				"summary": "Get overall StellarAtlas status",
+				"description": "Returns a read-only aggregate of API health, persisted data freshness, archive queue health, and worker health.",
+				"tags": ["Status"],
+				"operationId": "getStatus",
+				"responses": {
+					"200": {
+						"description": "overall status",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object",
+									"required": [
+										"generatedAt",
+										"status",
+										"api",
+										"dataFreshness",
+										"archiveQueue",
+										"workers"
+									],
+									"properties": {
+										"generatedAt": {
+											"type": "string",
+											"format": "date-time"
+										},
+										"status": {
+											"type": "string",
+											"enum": ["ok", "degraded", "unavailable"]
+										},
+										"api": {
+											"type": "object",
+											"additionalProperties": true
+										},
+										"dataFreshness": {
+											"type": "object",
+											"additionalProperties": true
+										},
+										"archiveQueue": {
+											"type": "object",
+											"additionalProperties": true
+										},
+										"workers": {
+											"type": "object",
+											"additionalProperties": true
+										}
+									}
+								}
+							}
+						}
+					},
+					"500": { "description": "Server error" }
+				}
+			}
+		},
+		"/v1/status/api": {
+			"get": {
+				"summary": "Get API origin status",
+				"description": "Returns the API process status from the responding origin.",
+				"tags": ["Status"],
+				"operationId": "getApiStatus",
+				"responses": {
+					"200": {
+						"description": "API status",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object",
+									"required": ["generatedAt", "status", "service"],
+									"properties": {
+										"generatedAt": {
+											"type": "string",
+											"format": "date-time"
+										},
+										"status": {
+											"type": "string",
+											"enum": ["ok", "degraded", "unavailable"]
+										},
+										"service": { "type": "string", "enum": ["api"] }
+									}
+								}
+							}
+						}
+					},
+					"500": { "description": "Server error" }
+				}
+			}
+		},
+		"/v1/status/data-freshness": {
+			"get": {
+				"summary": "Get persisted data freshness status",
+				"description": "Returns latest persisted network scan and archive scan timestamps with age and freshness status. It does not run live scans.",
+				"tags": ["Status"],
+				"operationId": "getDataFreshnessStatus",
+				"responses": {
+					"200": {
+						"description": "data freshness status",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object",
+									"required": [
+										"generatedAt",
+										"status",
+										"networkScan",
+										"archiveScan"
+									],
+									"properties": {
+										"generatedAt": {
+											"type": "string",
+											"format": "date-time"
+										},
+										"status": {
+											"type": "string",
+											"enum": ["ok", "degraded", "unavailable"]
+										},
+										"networkScan": {
+											"type": "object",
+											"required": [
+												"status",
+												"latestAt",
+												"ageMs",
+												"staleAfterMs"
+											],
+											"properties": {
+												"status": {
+													"type": "string",
+													"enum": ["ok", "degraded", "unavailable"]
+												},
+												"latestAt": {
+													"type": "string",
+													"format": "date-time",
+													"nullable": true
+												},
+												"ageMs": {
+													"type": "integer",
+													"minimum": 0,
+													"nullable": true
+												},
+												"staleAfterMs": {
+													"type": "integer",
+													"minimum": 0,
+													"nullable": true
+												}
+											}
+										},
+										"archiveScan": {
+											"type": "object",
+											"required": [
+												"status",
+												"latestAt",
+												"ageMs",
+												"staleAfterMs"
+											],
+											"properties": {
+												"status": {
+													"type": "string",
+													"enum": ["ok", "degraded", "unavailable"]
+												},
+												"latestAt": {
+													"type": "string",
+													"format": "date-time",
+													"nullable": true
+												},
+												"ageMs": {
+													"type": "integer",
+													"minimum": 0,
+													"nullable": true
+												},
+												"staleAfterMs": {
+													"type": "integer",
+													"minimum": 0,
+													"nullable": true
+												}
+											}
+										}
+									}
+								}
+							}
+						}
+					},
+					"500": { "description": "Server error" }
+				}
+			}
+		},
+		"/v1/status/archive-queue": {
+			"get": {
+				"summary": "Get archive queue status",
+				"description": "Returns queue health derived from persisted archive scan jobs.",
+				"tags": ["Status"],
+				"operationId": "getArchiveQueueStatus",
+				"responses": {
+					"200": {
+						"description": "archive queue status",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object",
+									"required": [
+										"generatedAt",
+										"status",
+										"pendingJobs",
+										"activeJobs",
+										"staleJobs",
+										"totalUnfinishedJobs",
+										"staleJobAgeMs"
+									],
+									"properties": {
+										"generatedAt": {
+											"type": "string",
+											"format": "date-time"
+										},
+										"status": {
+											"type": "string",
+											"enum": ["ok", "degraded", "unavailable"]
+										},
+										"pendingJobs": { "type": "integer", "minimum": 0 },
+										"activeJobs": { "type": "integer", "minimum": 0 },
+										"staleJobs": { "type": "integer", "minimum": 0 },
+										"totalUnfinishedJobs": {
+											"type": "integer",
+											"minimum": 0
+										},
+										"staleJobAgeMs": {
+											"type": "integer",
+											"minimum": 0
+										}
+									}
+								}
+							}
+						}
+					},
+					"500": { "description": "Server error" }
+				}
+			}
+		},
+		"/v1/status/workers": {
+			"get": {
+				"summary": "Get worker status",
+				"description": "Returns archive worker and community scanner aggregate status without exposing worker secrets or contact emails.",
+				"tags": ["Status"],
+				"operationId": "getWorkerStatus",
+				"responses": {
+					"200": {
+						"description": "worker status",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object",
+									"required": [
+										"generatedAt",
+										"status",
+										"archiveWorkers",
+										"communityScanners"
+									],
+									"properties": {
+										"generatedAt": {
+											"type": "string",
+											"format": "date-time"
+										},
+										"status": {
+											"type": "string",
+											"enum": ["ok", "degraded", "unavailable"]
+										},
+										"archiveWorkers": {
+											"type": "object",
+											"additionalProperties": true
+										},
+										"communityScanners": {
+											"type": "object",
+											"additionalProperties": true
+										}
+									}
+								}
+							}
+						}
+					},
+					"500": { "description": "Server error" }
 				}
 			}
 		},
