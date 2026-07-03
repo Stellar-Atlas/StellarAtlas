@@ -165,6 +165,37 @@ it('should prioritize errored archive rechecks before normal scans', () => {
 	expect(jobs[0].isNewScanChainJob()).toBeFalsy();
 });
 
+it('should schedule errored archive rechecks when regular scans are disabled', () => {
+	const scheduler = new RestartAtLeastOneScan();
+	const archive = createDummyHistoryBaseUrl();
+	const previousErroredScan = new Scan(
+		new Date('01-01-2020'),
+		new Date('01-03-2020'),
+		new Date('01-03-2020'),
+		archive,
+		128,
+		255,
+		127,
+		'hash',
+		4,
+		false,
+		new ScanError(
+			ScanErrorType.TYPE_VERIFICATION,
+			`${archive.value}/transactions/00/00/00/transactions-000000bf.xdr.gz`,
+			'Wrong transaction hash'
+		)
+	);
+
+	const jobs = scheduler.schedule([archive.value], [previousErroredScan], [], {
+		includeRegularJobs: false
+	});
+
+	expect(jobs).toHaveLength(1);
+	expect(jobs[0].url).toEqual(archive.value);
+	expect(jobs[0].fromLedger).toEqual(128);
+	expect(jobs[0].toLedger).toEqual(191);
+});
+
 it('should not prioritize worker-only setup failures as archive rechecks', () => {
 	const scheduler = new RestartAtLeastOneScan();
 	const archive = createDummyHistoryBaseUrl();

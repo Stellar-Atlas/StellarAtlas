@@ -1,48 +1,39 @@
 import { VerifySingleArchive } from '../../use-cases/verify-single-archive/VerifySingleArchive.js';
 import Kernel from '../Kernel.js';
+import {
+	parseScanSingleArchiveArguments,
+	scanSingleArchiveUsage
+} from './verifySingleArchiveArguments.js';
 
 // noinspection JSIgnoredPromiseFromCall
 main();
 
 async function main() {
-	const kernel = await Kernel.getInstance();
-	const verifySingleArchive = kernel.container.get(VerifySingleArchive);
-	//handle shutdown
-	process
-		.on('SIGTERM', async () => {
-			await kernel.shutdown();
-			process.exit(0);
-		})
-		.on('SIGINT', async () => {
-			await kernel.shutdown();
-			process.exit(0);
-		});
+	let kernel: Kernel | undefined;
+	try {
+		const dto = parseScanSingleArchiveArguments(process.argv.slice(2));
+		kernel = await Kernel.getInstance();
+		registerShutdownHandlers(kernel);
+		const verifySingleArchive = kernel.container.get(VerifySingleArchive);
+		const result = await verifySingleArchive.execute(dto);
 
-	const historyUrl = process.argv[2];
-
-	let fromLedger: number | undefined = undefined;
-	if (!isNaN(Number(process.argv[3]))) {
-		fromLedger = Number(process.argv[3]);
+		if (result.isErr()) {
+			console.error(result.error.message);
+			process.exitCode = 1;
+		}
+	} catch (error) {
+		console.error(error instanceof Error ? error.message : error);
+		console.error(scanSingleArchiveUsage);
+		process.exitCode = 1;
+	} finally {
+		await kernel?.shutdown();
 	}
+}
 
-	let toLedger: number | undefined = undefined;
-	if (!isNaN(Number(process.argv[4]))) {
-		toLedger = Number(process.argv[4]);
-	}
-
-	let concurrency: number | undefined = undefined;
-	if (!isNaN(Number(process.argv[5]))) {
-		concurrency = Number(process.argv[5]);
-	}
-
-	const result = await verifySingleArchive.execute({
-		toLedger: toLedger,
-		fromLedger: fromLedger,
-		maxConcurrency: concurrency,
-		historyUrl: historyUrl
-	});
-
-	if (result.isErr()) {
-		console.log(result.error);
-	}
+function registerShutdownHandlers(kernel: Kernel): void {
+	const shutdown = async () => {
+		await kernel.shutdown();
+		process.exit(0);
+	};
+	process.on('SIGTERM', shutdown).on('SIGINT', shutdown);
 }
