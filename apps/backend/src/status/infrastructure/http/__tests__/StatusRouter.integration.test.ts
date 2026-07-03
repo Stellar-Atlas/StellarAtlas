@@ -5,6 +5,7 @@ import { err, ok } from 'neverthrow';
 import { StatusRouterWrapper } from '../StatusRouter.js';
 import { GetArchiveQueueStatus } from '@status/use-cases/get-archive-queue-status/GetArchiveQueueStatus.js';
 import { GetApiStatus } from '@status/use-cases/get-api-status/GetApiStatus.js';
+import { GetDataQualityStatus } from '@status/use-cases/get-data-quality-status/GetDataQualityStatus.js';
 import { GetDataFreshnessStatus } from '@status/use-cases/get-data-freshness-status/GetDataFreshnessStatus.js';
 import { GetRollupStatus } from '@status/use-cases/get-rollup-status/GetRollupStatus.js';
 import { GetScanStatus } from '@status/use-cases/get-scan-status/GetScanStatus.js';
@@ -15,6 +16,7 @@ describe('StatusRouter.integration', () => {
 	let app: express.Application;
 	let getStatus: jest.Mocked<GetStatus>;
 	let getApiStatus: jest.Mocked<GetApiStatus>;
+	let getDataQualityStatus: jest.Mocked<GetDataQualityStatus>;
 	let getDataFreshnessStatus: jest.Mocked<GetDataFreshnessStatus>;
 	let getScanStatus: jest.Mocked<GetScanStatus>;
 	let getRollupStatus: jest.Mocked<GetRollupStatus>;
@@ -24,6 +26,7 @@ describe('StatusRouter.integration', () => {
 	beforeEach(() => {
 		getStatus = mock<GetStatus>();
 		getApiStatus = mock<GetApiStatus>();
+		getDataQualityStatus = mock<GetDataQualityStatus>();
 		getDataFreshnessStatus = mock<GetDataFreshnessStatus>();
 		getScanStatus = mock<GetScanStatus>();
 		getRollupStatus = mock<GetRollupStatus>();
@@ -35,6 +38,7 @@ describe('StatusRouter.integration', () => {
 			StatusRouterWrapper({
 				getStatus,
 				getApiStatus,
+				getDataQualityStatus,
 				getDataFreshnessStatus,
 				getScanStatus,
 				getRollupStatus,
@@ -158,6 +162,75 @@ describe('StatusRouter.integration', () => {
 				service: 'api'
 			})
 		);
+		getDataQualityStatus.execute.mockResolvedValue(
+			ok({
+				generatedAt: '2026-07-03T12:00:00.000Z',
+				status: 'ok',
+				dataFreshness: {
+					generatedAt: '2026-07-03T12:00:00.000Z',
+					status: 'ok',
+					networkScan: {
+						status: 'ok',
+						latestAt: '2026-07-03T11:55:00.000Z',
+						ageMs: 300000,
+						staleAfterMs: 3600000
+					},
+					archiveScan: {
+						status: 'ok',
+						latestAt: '2026-07-03T11:50:00.000Z',
+						ageMs: 600000,
+						staleAfterMs: null
+					}
+				},
+				scans: {
+					generatedAt: '2026-07-03T12:00:00.000Z',
+					status: 'ok',
+					networkScan: {
+						status: 'ok',
+						windowStart: '2026-07-02T12:00:00.000Z',
+						windowEnd: '2026-07-03T12:00:00.000Z',
+						windowMs: 86400000,
+						scanIntervalMs: 180000,
+						expectedScans: 480,
+						totalScans: 480,
+						completedScans: 479,
+						incompleteScans: 1,
+						completionRate: 99.79,
+						expectedCompletionRate: 99.79,
+						latestScanAt: '2026-07-03T11:59:00.000Z',
+						latestCompletedScanAt: '2026-07-03T11:56:00.000Z'
+					}
+				},
+				rollups: {
+					generatedAt: '2026-07-03T12:00:00.000Z',
+					status: 'ok',
+					networkRollups: {
+						status: 'ok',
+						windowStart: '2026-06-26T00:00:00.000Z',
+						windowEnd: '2026-07-03T00:00:00.000Z',
+						windowDays: 7,
+						rawCompletedScans: 70,
+						rollupCrawlCount: 70,
+						daysWithCompletedScans: 7,
+						daysWithRollups: 7,
+						matchingDays: 7,
+						missingRollupDays: 0,
+						mismatchedRollupDays: 0,
+						latestRollupDay: '2026-07-02T00:00:00.000Z',
+						days: []
+					}
+				},
+				archiveQueue: {
+					generatedAt: '2026-07-03T12:00:00.000Z',
+					status: 'ok',
+					pendingJobs: 0,
+					activeJobs: 0,
+					staleJobs: 0,
+					totalUnfinishedJobs: 0,
+					staleJobAgeMs: 1800000
+				}
+			})
+		);
 		getDataFreshnessStatus.execute.mockResolvedValue(
 			ok({
 				generatedAt: '2026-07-03T12:00:00.000Z',
@@ -253,6 +326,13 @@ describe('StatusRouter.integration', () => {
 		);
 
 		await request(app).get('/status/api').expect(200);
+		await request(app)
+			.get('/status/data-quality')
+			.expect(200)
+			.expect((response) => {
+				expect(response.body.status).toBe('ok');
+				expect(response.body.rollups.networkRollups.matchingDays).toBe(7);
+			});
 		await request(app).get('/status/data-freshness').expect(200);
 		await request(app)
 			.get('/status/scans')

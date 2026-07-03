@@ -2,6 +2,7 @@ import express, { Router } from 'express';
 import type { Result } from 'neverthrow';
 import { GetArchiveQueueStatus } from '../../use-cases/get-archive-queue-status/GetArchiveQueueStatus.js';
 import { GetApiStatus } from '../../use-cases/get-api-status/GetApiStatus.js';
+import { GetDataQualityStatus } from '../../use-cases/get-data-quality-status/GetDataQualityStatus.js';
 import { GetDataFreshnessStatus } from '../../use-cases/get-data-freshness-status/GetDataFreshnessStatus.js';
 import { GetRollupStatus } from '../../use-cases/get-rollup-status/GetRollupStatus.js';
 import { GetScanStatus } from '../../use-cases/get-scan-status/GetScanStatus.js';
@@ -11,6 +12,7 @@ import { GetWorkerStatus } from '../../use-cases/get-worker-status/GetWorkerStat
 export interface StatusRouterConfig {
 	readonly getStatus: GetStatus;
 	readonly getApiStatus: GetApiStatus;
+	readonly getDataQualityStatus: GetDataQualityStatus;
 	readonly getDataFreshnessStatus: GetDataFreshnessStatus;
 	readonly getScanStatus: GetScanStatus;
 	readonly getRollupStatus: GetRollupStatus;
@@ -33,6 +35,10 @@ export const StatusRouterWrapper = (config: StatusRouterConfig): Router => {
 
 	statusRouter.get('/data-freshness', async function (_req, res) {
 		return sendStatusResult(res, await config.getDataFreshnessStatus.execute());
+	});
+
+	statusRouter.get('/data-quality', async function (_req, res) {
+		return sendStatusResult(res, await config.getDataQualityStatus.execute());
 	});
 
 	statusRouter.get('/scans', async function (_req, res) {

@@ -3,6 +3,7 @@ import { interfaces } from 'inversify';
 import Container = interfaces.Container;
 import { GetArchiveQueueStatus } from '../../use-cases/get-archive-queue-status/GetArchiveQueueStatus.js';
 import { GetApiStatus } from '../../use-cases/get-api-status/GetApiStatus.js';
+import { GetDataQualityStatus } from '../../use-cases/get-data-quality-status/GetDataQualityStatus.js';
 import { GetDataFreshnessStatus } from '../../use-cases/get-data-freshness-status/GetDataFreshnessStatus.js';
 import { GetRollupStatus } from '../../use-cases/get-rollup-status/GetRollupStatus.js';
 import { GetScanStatus } from '../../use-cases/get-scan-status/GetScanStatus.js';
@@ -15,6 +16,7 @@ export function load(container: Container, config: Config) {
 	}
 
 	container.bind(GetApiStatus).toSelf();
+	container.bind(GetDataQualityStatus).toSelf();
 	container.bind(GetDataFreshnessStatus).toSelf();
 	container.bind(GetScanStatus).toSelf();
 	container.bind(GetRollupStatus).toSelf();

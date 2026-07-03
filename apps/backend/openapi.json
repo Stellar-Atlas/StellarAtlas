@@ -619,6 +619,61 @@
 				}
 			}
 		},
+		"/v1/status/data-quality": {
+			"get": {
+				"summary": "Get persisted data-quality proof status",
+				"description": "Returns a read-only aggregate of persisted data freshness, raw scan continuity, daily rollup continuity, and archive queue health.",
+				"tags": ["Status"],
+				"operationId": "getDataQualityStatus",
+				"responses": {
+					"200": {
+						"description": "data-quality proof status",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object",
+									"required": [
+										"generatedAt",
+										"status",
+										"dataFreshness",
+										"scans",
+										"rollups",
+										"archiveQueue"
+									],
+									"properties": {
+										"generatedAt": {
+											"type": "string",
+											"format": "date-time"
+										},
+										"status": {
+											"type": "string",
+											"enum": ["ok", "degraded", "unavailable"]
+										},
+										"dataFreshness": {
+											"type": "object",
+											"additionalProperties": true
+										},
+										"scans": {
+											"type": "object",
+											"additionalProperties": true
+										},
+										"rollups": {
+											"type": "object",
+											"additionalProperties": true
+										},
+										"archiveQueue": {
+											"type": "object",
+											"additionalProperties": true
+										}
+									}
+								}
+							}
+						}
+					},
+					"500": { "description": "Server error" }
+				}
+			}
+		},
 		"/v1/status/scans": {
 			"get": {
 				"summary": "Get raw scan continuity status",
