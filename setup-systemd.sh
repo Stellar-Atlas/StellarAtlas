@@ -1,33 +1,40 @@
-#!/bin/bash
-set -e
+#!/usr/bin/env bash
+set -euo pipefail
 
-SERVICE_FILE="/etc/systemd/system/stellaratlas.service"
-WORKDIR="$(pwd)"
-USER="$(whoami)"
-NODE_BIN="$(dirname $(which node))"
-PNPM_BIN="$(which pnpm)"
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+SYSTEMD_DIR="$REPO_ROOT/ops/systemd"
 
-sudo tee "$SERVICE_FILE" > /dev/null <<EOF
-[Unit]
-Description=Stellarbeat All Services
-After=network.target
+install_unit() {
+	local file_name="$1"
+	sudo install -m 0644 "$SYSTEMD_DIR/$file_name" "/etc/systemd/system/$file_name"
+}
 
-[Service]
-Type=simple
-WorkingDirectory=$WORKDIR
-ExecStart=$PNPM_BIN start:all
-Restart=always
-RestartSec=5
-User=$USER
-Environment=NODE_ENV=production
-Environment=PATH=$NODE_BIN:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+install_unit stellaratlas.target
+install_unit stellaratlas-api.service
+install_unit stellaratlas-frontend-v4.service
+install_unit stellaratlas-frontend-v4-staging.service
+install_unit stellaratlas-frontend-legacy.service
+install_unit stellaratlas-network-scanner.service
+install_unit stellaratlas-users.service
+install_unit stellaratlas-history-scanner@.service
 
-[Install]
-WantedBy=multi-user.target
-EOF
+sudo install -m 0644 \
+	"$SYSTEMD_DIR/10-stellaratlas-observe.rules" \
+	/etc/polkit-1/rules.d/10-stellaratlas-observe.rules
 
 sudo systemctl daemon-reload
-sudo systemctl enable stellaratlas
-sudo systemctl restart stellaratlas
+sudo systemctl disable --now stellaratlas.service 2>/dev/null || true
+sudo systemctl enable --now stellaratlas.target
 
-echo "Systemd service 'stellaratlas' created and started."
+cat <<'EOF'
+Installed split StellarAtlas services.
+
+Production:
+  systemctl status stellaratlas.target
+  systemctl restart stellaratlas-frontend-v4.service
+
+Staging frontend:
+  pnpm build:frontend-v4:staging
+  systemctl start stellaratlas-frontend-v4-staging.service
+  systemctl status stellaratlas-frontend-v4-staging.service
+EOF

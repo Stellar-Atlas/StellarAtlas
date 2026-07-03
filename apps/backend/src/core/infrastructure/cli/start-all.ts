@@ -17,10 +17,17 @@ const maxHistoryScanWorkers = 1;
 const apiStartTimeoutMs = 120_000;
 const frontendV4StartTimeoutMs = 120_000;
 
+type ProcessExitListener = (
+	code: number | null,
+	signal: NodeJS.Signals | null
+) => void;
+
 type ManagedProcess = {
 	name: string;
 	process: ChildProcessByStdio<null, Readable, Readable>;
 };
+
+class StartupExitError extends Error {}
 
 function calculateDefaultHistoryScanWorkers(cpuCount: number): number {
 	if (cpuCount < defaultHistoryScanWorkers) return Math.max(cpuCount, 1);
@@ -88,14 +95,82 @@ function writePrefixedOutput(
 	}
 }
 
-function waitForApi(processes: ManagedProcess[]): Promise<void> {
+function getProcessExitText(
+	code: number | null,
+	signal: NodeJS.Signals | null
+): string {
+	if (code !== null) return ` with code ${code}`;
+	if (signal !== null) return ` from signal ${signal}`;
+	return '';
+}
+
+function createStartupExitWaiter(managedProcess: ManagedProcess): {
+	dispose: () => void;
+	promise: Promise<never>;
+} {
+	let listener: ProcessExitListener | undefined;
+	const promise = new Promise<never>((_, reject) => {
+		listener = (code, signal) => {
+			reject(
+				new StartupExitError(
+					`${managedProcess.name} exited before becoming ready${getProcessExitText(
+						code,
+						signal
+					)}`
+				)
+			);
+		};
+		managedProcess.process.once('exit', listener);
+	});
+
+	return {
+		dispose: () => {
+			if (listener !== undefined)
+				managedProcess.process.off('exit', listener);
+		},
+		promise
+	};
+}
+
+function delay(milliseconds: number): Promise<void> {
+	return new Promise((resolve) => setTimeout(resolve, milliseconds));
+}
+
+function waitForApi(
+	processes: ManagedProcess[],
+	api: ManagedProcess
+): Promise<void> {
 	return new Promise((resolve, reject) => {
 		const startedAt = Date.now();
-		const interval = setInterval(() => {
+		const exitWaiter = createStartupExitWaiter(api);
+		let interval: ReturnType<typeof setInterval> | undefined;
+		let settled = false;
+
+		const cleanup = () => {
+			if (interval !== undefined) clearInterval(interval);
+			exitWaiter.dispose();
+		};
+
+		const fail = (error: Error) => {
+			if (settled) return;
+			settled = true;
+			cleanup();
+			stopProcesses(processes);
+			reject(error);
+		};
+
+		const succeed = () => {
+			if (settled) return;
+			settled = true;
+			cleanup();
+			resolve();
+		};
+
+		exitWaiter.promise.catch(fail);
+
+		const checkReady = () => {
 			if (Date.now() - startedAt > apiStartTimeoutMs) {
-				clearInterval(interval);
-				stopProcesses(processes);
-				reject(new Error('API did not become ready before timeout'));
+				fail(new Error('API did not become ready before timeout'));
 				return;
 			}
 
@@ -103,34 +178,48 @@ function waitForApi(processes: ManagedProcess[]): Promise<void> {
 				existsSync(apiLogFile) &&
 				readFileSync(apiLogFile, 'utf8').includes(apiReadyMessage)
 			) {
-				clearInterval(interval);
-				resolve();
+				succeed();
 			}
-		}, 1000);
+		};
+
+		interval = setInterval(checkReady, 1000);
+		checkReady();
 	});
 }
 
 async function waitForHttpService(
 	processes: ManagedProcess[],
+	managedProcess: ManagedProcess,
 	url: string,
 	timeoutMs: number,
 	serviceName: string
 ): Promise<void> {
 	const startedAt = Date.now();
+	const exitWaiter = createStartupExitWaiter(managedProcess);
 
-	while (Date.now() - startedAt <= timeoutMs) {
-		try {
-			const response = await fetch(url, { method: 'HEAD' });
-			if (response.status < 500) return;
-		} catch {
-			// Retry until the managed service opens its listener.
+	try {
+		while (Date.now() - startedAt <= timeoutMs) {
+			try {
+				const response = await Promise.race([
+					fetch(url, { method: 'HEAD' }),
+					exitWaiter.promise
+				]);
+				if (response.status < 500) return;
+			} catch (error) {
+				if (error instanceof StartupExitError) throw error;
+				// Retry until the managed service opens its listener.
+			}
+
+			await Promise.race([delay(1000), exitWaiter.promise]);
 		}
 
-		await new Promise((resolve) => setTimeout(resolve, 1000));
+		throw new Error(`${serviceName} did not become ready before timeout`);
+	} catch (error) {
+		stopProcesses(processes);
+		throw error;
+	} finally {
+		exitWaiter.dispose();
 	}
-
-	stopProcesses(processes);
-	throw new Error(`${serviceName} did not become ready before timeout`);
 }
 
 function stopProcesses(processes: ManagedProcess[]): void {
@@ -166,7 +255,7 @@ async function main(): Promise<void> {
 	});
 
 	console.log('Waiting for API to be ready...');
-	await waitForApi(processes);
+	await waitForApi(processes, api);
 
 	const historyScanWorkers = parseWorkerCount(
 		process.env[historyScanWorkersEnv]
@@ -186,6 +275,7 @@ async function main(): Promise<void> {
 		console.log('Waiting for frontend v4 to be ready...');
 		await waitForHttpService(
 			processes,
+			frontendV4,
 			getFrontendV4Origin(),
 			frontendV4StartTimeoutMs,
 			'Frontend v4'
