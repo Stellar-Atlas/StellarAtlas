@@ -3,10 +3,10 @@ import { fetchPublicNetwork } from '../../api/client';
 import { RouteLoadingPanel } from '../../components/layout/route-fallbacks';
 import { NetworkOverview } from '../../components/network-overview';
 
-export const dynamic = 'force-dynamic';
+export const revalidate = 10;
 
 async function OverviewRouteContent(): Promise<React.JSX.Element> {
-	const network = await fetchPublicNetwork();
+	const network = await fetchPublicNetwork({ revalidate });
 
 	return <NetworkOverview network={network} />;
 }

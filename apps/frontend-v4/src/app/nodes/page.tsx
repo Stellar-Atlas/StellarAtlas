@@ -10,10 +10,10 @@ import {
 } from '../../domain/network';
 import { formatInteger } from '../../format/formatters';
 
-export const dynamic = 'force-dynamic';
+export const revalidate = 10;
 
 async function NodesRouteContent(): Promise<React.JSX.Element> {
-	const network = await fetchPublicNetwork();
+	const network = await fetchPublicNetwork({ revalidate });
 
 	return (
 		<main className="shell">

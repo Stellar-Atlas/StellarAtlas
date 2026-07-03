@@ -13,7 +13,22 @@ interface OrganizationDetailPageProps {
 	params: Promise<{ organizationId: string }>;
 }
 
-export const dynamic = 'force-dynamic';
+export const dynamicParams = true;
+export const revalidate = 15;
+
+export async function generateStaticParams(): Promise<
+	Array<{ organizationId: string }>
+> {
+	try {
+		const network = await fetchPublicNetwork({ revalidate: 60 });
+
+		return network.organizations
+			.filter((organization) => organization.id.length > 0)
+			.map((organization) => ({ organizationId: organization.id }));
+	} catch {
+		return [];
+	}
+}
 
 async function OrganizationDetailRouteContent({
 	organizationId
@@ -21,7 +36,7 @@ async function OrganizationDetailRouteContent({
 	organizationId: string;
 }): Promise<React.JSX.Element> {
 	const decodedOrganizationId = decodeURIComponent(organizationId);
-	const network = await fetchPublicNetwork();
+	const network = await fetchPublicNetwork({ revalidate });
 	const organization = network.organizations.find(
 		(candidate) => candidate.id === decodedOrganizationId
 	);

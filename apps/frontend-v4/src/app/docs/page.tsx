@@ -1,7 +1,5 @@
 import { PageHeading } from '../../components/layout/page-heading';
 
-export const dynamic = 'force-dynamic';
-
 interface EndpointGroup {
 	description: string;
 	endpoints: string[];

@@ -32,13 +32,25 @@ export const getApiBaseUrl = (): string => {
 
 interface FetchOptions {
 	at?: Date;
+	cache?: 'no-store';
+	revalidate?: number;
 }
 
 interface ScpStatementFetchOptions {
+	cache?: 'no-store';
 	limit?: number;
 	nodeId?: string;
+	revalidate?: number;
 	slotIndex?: string;
 }
+
+interface NextFetchInit extends RequestInit {
+	next?: {
+		revalidate?: number;
+	};
+}
+
+const DEFAULT_REVALIDATE_SECONDS = 10;
 
 const buildApiUrl = (path: string, options: FetchOptions = {}): string => {
 	const url = new URL(`${getApiBaseUrl()}${path}`);
@@ -70,16 +82,33 @@ const buildScpStatementUrl = (
 	return url.toString();
 };
 
+const buildFetchInit = (options: FetchOptions = {}): NextFetchInit => {
+	const init: NextFetchInit = {
+		headers: {
+			Accept: 'application/json'
+		}
+	};
+
+	if (options.cache === 'no-store') {
+		return {
+			...init,
+			cache: 'no-store'
+		};
+	}
+
+	return {
+		...init,
+		next: {
+			revalidate: options.revalidate ?? DEFAULT_REVALIDATE_SECONDS
+		}
+	};
+};
+
 const fetchJson = async <Payload>(
 	path: string,
 	options: FetchOptions = {}
 ): Promise<Payload> => {
-	const response = await fetch(buildApiUrl(path, options), {
-		cache: 'no-store',
-		headers: {
-			Accept: 'application/json'
-		}
-	});
+	const response = await fetch(buildApiUrl(path, options), buildFetchInit(options));
 
 	if (!response.ok) {
 		throw new ApiClientError({
@@ -95,12 +124,7 @@ const fetchNullableJson = async <Payload>(
 	path: string,
 	options: FetchOptions = {}
 ): Promise<Payload | null> => {
-	const response = await fetch(buildApiUrl(path, options), {
-		cache: 'no-store',
-		headers: {
-			Accept: 'application/json'
-		}
-	});
+	const response = await fetch(buildApiUrl(path, options), buildFetchInit(options));
 
 	if (response.status === 204) return null;
 	if (!response.ok) {
@@ -162,12 +186,10 @@ export const fetchHistoryArchiveScanLogs = (
 export const fetchScpStatements = async (
 	options?: ScpStatementFetchOptions
 ): Promise<PublicScpStatementObservation[]> => {
-	const response = await fetch(buildScpStatementUrl(options), {
-		cache: 'no-store',
-		headers: {
-			Accept: 'application/json'
-		}
-	});
+	const response = await fetch(
+		buildScpStatementUrl(options),
+		buildFetchInit(options)
+	);
 
 	if (!response.ok) {
 		throw new ApiClientError({

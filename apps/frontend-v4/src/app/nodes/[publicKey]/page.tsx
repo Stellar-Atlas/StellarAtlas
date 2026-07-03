@@ -14,7 +14,22 @@ interface NodeDetailPageProps {
 	params: Promise<{ publicKey: string }>;
 }
 
-export const dynamic = 'force-dynamic';
+export const dynamicParams = true;
+export const revalidate = 15;
+
+export async function generateStaticParams(): Promise<
+	Array<{ publicKey: string }>
+> {
+	try {
+		const network = await fetchPublicNetwork({ revalidate: 60 });
+
+		return network.nodes
+			.filter((node) => node.publicKey.length > 0)
+			.map((node) => ({ publicKey: node.publicKey }));
+	} catch {
+		return [];
+	}
+}
 
 async function NodeDetailRouteContent({
 	publicKey
@@ -22,7 +37,7 @@ async function NodeDetailRouteContent({
 	publicKey: string;
 }): Promise<React.JSX.Element> {
 	const decodedPublicKey = decodeURIComponent(publicKey);
-	const network = await fetchPublicNetwork();
+	const network = await fetchPublicNetwork({ revalidate });
 	const node = network.nodes.find(
 		(candidate) => candidate.publicKey === decodedPublicKey
 	);
@@ -30,8 +45,8 @@ async function NodeDetailRouteContent({
 	if (!node) notFound();
 	const [historyArchiveScan, historyArchiveScanLogs] = node.historyUrl
 		? await Promise.all([
-				fetchHistoryArchiveScan(node.historyUrl),
-				fetchHistoryArchiveScanLogs(node.historyUrl)
+				fetchHistoryArchiveScan(node.historyUrl, { revalidate }),
+				fetchHistoryArchiveScanLogs(node.historyUrl, { revalidate })
 			])
 		: [null, []];
 

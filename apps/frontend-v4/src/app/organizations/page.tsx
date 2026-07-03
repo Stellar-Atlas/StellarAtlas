@@ -6,10 +6,10 @@ import { OrganizationTable } from '../../components/organizations/organization-t
 import { getTopOrganizations } from '../../domain/network';
 import { formatInteger } from '../../format/formatters';
 
-export const dynamic = 'force-dynamic';
+export const revalidate = 10;
 
 async function OrganizationsRouteContent(): Promise<React.JSX.Element> {
-	const network = await fetchPublicNetwork();
+	const network = await fetchPublicNetwork({ revalidate });
 	const topOrganizations = getTopOrganizations(network.organizations);
 
 	return (
