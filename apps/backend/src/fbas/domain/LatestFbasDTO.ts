@@ -1,3 +1,5 @@
+import type { FbasScanMeasurementDTO } from './FbasScanMeasurementDTO.js';
+
 export type FbasEvidenceSelection = 'latest_completed_network_scan_measurement';
 export type FbasProofSetPersistence = 'not_persisted';
 
@@ -27,14 +29,8 @@ export interface FbasLatestSummaryDTO {
 	readonly minSplittingSetISPSize: number;
 }
 
-export interface LatestFbasDTO {
+export interface LatestFbasDTO extends FbasScanMeasurementDTO {
 	readonly generatedAt: string;
 	readonly evidenceSelection: FbasEvidenceSelection;
 	readonly proofSetPersistence: FbasProofSetPersistence;
-	readonly scanId: number;
-	readonly scanTime: string;
-	readonly latestLedger: string;
-	readonly latestLedgerCloseTime: string | null;
-	readonly processedLedgers: number[];
-	readonly summary: FbasLatestSummaryDTO;
 }

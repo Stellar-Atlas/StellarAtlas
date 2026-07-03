@@ -79,14 +79,21 @@ export class TypeOrmNetworkScanRepository implements NetworkScanRepository {
 		});
 		if (!scan) return undefined;
 
-		const measurement = await this.repository.manager.findOne(
-			NetworkMeasurement,
-			{
-				where: { time: scan?.time }
-			}
-		);
+		await this.hydrateMeasurement(scan);
 
-		scan.measurement = measurement ?? null;
+		return scan;
+	}
+
+	async findCompletedById(id: number): Promise<NetworkScan | undefined> {
+		const scan = await this.repository.findOne({
+			where: {
+				completed: true,
+				id
+			}
+		});
+		if (!scan) return undefined;
+
+		await this.hydrateMeasurement(scan);
 
 		return scan;
 	}
@@ -99,14 +106,7 @@ export class TypeOrmNetworkScanRepository implements NetworkScanRepository {
 
 		if (!scan) return undefined;
 
-		const measurement = await this.repository.manager.findOne(
-			NetworkMeasurement,
-			{
-				where: { time: scan?.time }
-			}
-		);
-
-		scan.measurement = measurement ?? null;
+		await this.hydrateMeasurement(scan);
 
 		return scan;
 	}
@@ -119,14 +119,7 @@ export class TypeOrmNetworkScanRepository implements NetworkScanRepository {
 
 		if (!scan) return undefined;
 
-		const measurement = await this.repository.manager.findOne(
-			NetworkMeasurement,
-			{
-				where: { time: scan?.time }
-			}
-		);
-
-		scan.measurement = measurement ?? null;
+		await this.hydrateMeasurement(scan);
 
 		return scan;
 	}
@@ -145,6 +138,17 @@ export class TypeOrmNetworkScanRepository implements NetworkScanRepository {
 		}
 		await this.repository.manager.save(NetworkMeasurement, measurements);
 		return this.repository.save(scans);
+	}
+
+	private async hydrateMeasurement(scan: NetworkScan): Promise<void> {
+		const measurement = await this.repository.manager.findOne(
+			NetworkMeasurement,
+			{
+				where: { time: scan.time }
+			}
+		);
+
+		scan.measurement = measurement ?? null;
 	}
 }
 

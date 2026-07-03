@@ -729,6 +729,46 @@
 				}
 			}
 		},
+		"/v1/fbas/analyses/{scanId}": {
+			"get": {
+				"summary": "Get FBAS aggregate evidence for a scan",
+				"description": "Returns aggregate FBAS quorum metrics from a completed network scan measurement. The endpoint does not run live analysis, recompute FBAS data, or include persisted proof sets.",
+				"tags": ["FBAS"],
+				"operationId": "getFbasAnalysis",
+				"parameters": [
+					{
+						"name": "scanId",
+						"in": "path",
+						"required": true,
+						"description": "Completed network scan id.",
+						"schema": {
+							"type": "integer",
+							"minimum": 1,
+							"maximum": 2147483647
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "aggregate FBAS evidence for the completed scan",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/FbasAnalysis"
+								}
+							}
+						}
+					},
+					"400": {
+						"description": "Bad request"
+					},
+					"404": {
+						"description": "No completed FBAS analysis was found for the scan id"
+					},
+					"500": { "description": "Server error" }
+				}
+			}
+		},
 		"/v1/fbas/top-tier/history": {
 			"get": {
 				"summary": "Get FBAS top-tier aggregate history",
@@ -4444,6 +4484,109 @@
 	},
 	"components": {
 		"schemas": {
+			"FbasAnalysis": {
+				"type": "object",
+				"required": [
+					"generatedAt",
+					"evidenceSelection",
+					"proofSetPersistence",
+					"scanId",
+					"scanTime",
+					"latestLedger",
+					"latestLedgerCloseTime",
+					"processedLedgers",
+					"summary"
+				],
+				"properties": {
+					"generatedAt": {
+						"type": "string",
+						"format": "date-time"
+					},
+					"evidenceSelection": {
+						"type": "string",
+						"enum": ["completed_network_scan_measurement"]
+					},
+					"proofSetPersistence": {
+						"type": "string",
+						"enum": ["not_persisted"]
+					},
+					"scanId": {
+						"type": "integer",
+						"minimum": 1,
+						"maximum": 2147483647
+					},
+					"scanTime": {
+						"type": "string",
+						"format": "date-time"
+					},
+					"latestLedger": { "type": "string" },
+					"latestLedgerCloseTime": {
+						"type": "string",
+						"format": "date-time",
+						"nullable": true
+					},
+					"processedLedgers": {
+						"type": "array",
+						"items": { "type": "integer" }
+					},
+					"summary": {
+						"$ref": "#/components/schemas/FbasAnalysisSummary"
+					}
+				}
+			},
+			"FbasAnalysisSummary": {
+				"type": "object",
+				"required": [
+					"nrOfActiveWatchers",
+					"nrOfConnectableNodes",
+					"nrOfActiveValidators",
+					"nrOfActiveFullValidators",
+					"nrOfActiveOrganizations",
+					"transitiveQuorumSetSize",
+					"hasTransitiveQuorumSet",
+					"topTierSize",
+					"topTierOrgsSize",
+					"hasSymmetricTopTier",
+					"hasQuorumIntersection",
+					"minBlockingSetSize",
+					"minBlockingSetFilteredSize",
+					"minBlockingSetOrgsSize",
+					"minBlockingSetOrgsFilteredSize",
+					"minBlockingSetCountrySize",
+					"minBlockingSetCountryFilteredSize",
+					"minBlockingSetISPSize",
+					"minBlockingSetISPFilteredSize",
+					"minSplittingSetSize",
+					"minSplittingSetOrgsSize",
+					"minSplittingSetCountrySize",
+					"minSplittingSetISPSize"
+				],
+				"properties": {
+					"nrOfActiveWatchers": { "type": "integer" },
+					"nrOfConnectableNodes": { "type": "integer" },
+					"nrOfActiveValidators": { "type": "integer" },
+					"nrOfActiveFullValidators": { "type": "integer" },
+					"nrOfActiveOrganizations": { "type": "integer" },
+					"transitiveQuorumSetSize": { "type": "integer" },
+					"hasTransitiveQuorumSet": { "type": "boolean" },
+					"topTierSize": { "type": "integer" },
+					"topTierOrgsSize": { "type": "integer" },
+					"hasSymmetricTopTier": { "type": "boolean" },
+					"hasQuorumIntersection": { "type": "boolean" },
+					"minBlockingSetSize": { "type": "integer" },
+					"minBlockingSetFilteredSize": { "type": "integer" },
+					"minBlockingSetOrgsSize": { "type": "integer" },
+					"minBlockingSetOrgsFilteredSize": { "type": "integer" },
+					"minBlockingSetCountrySize": { "type": "integer" },
+					"minBlockingSetCountryFilteredSize": { "type": "integer" },
+					"minBlockingSetISPSize": { "type": "integer" },
+					"minBlockingSetISPFilteredSize": { "type": "integer" },
+					"minSplittingSetSize": { "type": "integer" },
+					"minSplittingSetOrgsSize": { "type": "integer" },
+					"minSplittingSetCountrySize": { "type": "integer" },
+					"minSplittingSetISPSize": { "type": "integer" }
+				}
+			},
 			"FbasTopTierHistory": {
 				"type": "object",
 				"required": [
