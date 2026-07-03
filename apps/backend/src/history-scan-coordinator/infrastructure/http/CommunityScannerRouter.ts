@@ -1,6 +1,7 @@
 import express, { Router } from 'express';
 import { body, param, validationResult } from 'express-validator';
 import {
+	CommunityScannerRegistrationRateLimitError,
 	DuplicateCommunityScannerError,
 	RegisterCommunityScanner
 } from '../../use-cases/RegisterCommunityScanner.js';
@@ -77,8 +78,20 @@ export const CommunityScannerRouterWrapper = (
 			const registerResult = await config.registerCommunityScanner.execute({
 				name: req.body.name,
 				description: req.body.description,
-				contactEmail: req.body.contactEmail
+				contactEmail: req.body.contactEmail,
+				registrationSource: getRegistrationSource(req)
 			});
+			if (
+				registerResult.isErr() &&
+				registerResult.error instanceof
+					CommunityScannerRegistrationRateLimitError
+			) {
+				res.setHeader(
+					'Retry-After',
+					String(registerResult.error.retryAfterSeconds)
+				);
+				return res.status(429).json({ error: registerResult.error.message });
+			}
 			if (
 				registerResult.isErr() &&
 				registerResult.error instanceof DuplicateCommunityScannerError
@@ -324,6 +337,10 @@ function mapRegisterScanError(
 	}
 
 	return res.status(500).json({ error: 'Internal server error' });
+}
+
+function getRegistrationSource(req: express.Request): string {
+	return req.ip ?? req.socket.remoteAddress ?? 'unknown';
 }
 
 export { CommunityScannerRouterWrapper as communityScannerRouter };

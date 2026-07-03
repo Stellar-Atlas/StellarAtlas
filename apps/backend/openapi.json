@@ -2439,6 +2439,9 @@
 						}
 					},
 					"400": { "description": "Invalid registration body" },
+					"429": {
+						"description": "Too many scanner registration attempts from this source"
+					},
 					"409": { "description": "Scanner contact email already exists" },
 					"500": { "description": "Server error" }
 				}

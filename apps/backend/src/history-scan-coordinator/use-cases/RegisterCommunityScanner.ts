@@ -12,12 +12,20 @@ import {
 	generateCommunityScannerApiKey,
 	hashCommunityScannerApiKey
 } from '../domain/CommunityScannerApiKey.js';
+import {
+	communityScannerRegistrationThrottlePolicy,
+	getCommunityScannerRegistrationRetryAfterSeconds,
+	hashCommunityScannerRegistrationSource,
+	isCommunityScannerRegistrationThrottled,
+	type CommunityScannerRegistrationThrottleRepository
+} from '../domain/CommunityScannerRegistrationThrottle.js';
 import { TYPES } from '../infrastructure/di/di-types.js';
 
 export interface RegisterCommunityRequest {
 	readonly name: string;
 	readonly description?: string;
 	readonly contactEmail: string;
+	readonly registrationSource?: string;
 }
 
 export interface RegisteredCommunityScannerDTO {
@@ -36,11 +44,20 @@ export class DuplicateCommunityScannerError extends Error {
 	}
 }
 
+export class CommunityScannerRegistrationRateLimitError extends Error {
+	constructor(readonly retryAfterSeconds: number) {
+		super('Too many scanner registration attempts');
+		this.name = 'CommunityScannerRegistrationRateLimitError';
+	}
+}
+
 @injectable()
 export class RegisterCommunityScanner {
 	constructor(
 		@inject(TYPES.CommunityScannerRepository)
 		private readonly scannerRepository: Repository<CommunityScanner>,
+		@inject(TYPES.CommunityScannerRegistrationThrottleRepository)
+		private readonly registrationThrottleRepository: CommunityScannerRegistrationThrottleRepository,
 		@inject('ExceptionLogger') private readonly exceptionLogger: ExceptionLogger
 	) {}
 
@@ -49,14 +66,36 @@ export class RegisterCommunityScanner {
 	): Promise<
 		Result<
 			RegisteredCommunityScannerDTO,
-			DuplicateCommunityScannerError | Error
+			| DuplicateCommunityScannerError
+			| CommunityScannerRegistrationRateLimitError
+			| Error
 		>
 	> {
 		const normalizedEmail = request.contactEmail.toLowerCase().trim();
 		const trimmedName = request.name.trim();
 		const trimmedDescription = request.description?.trim();
+		const now = new Date();
 
 		try {
+			if (request.registrationSource !== undefined) {
+				const throttleSnapshot =
+					await this.registrationThrottleRepository.recordAttempt(
+						hashCommunityScannerRegistrationSource(request.registrationSource),
+						now,
+						communityScannerRegistrationThrottlePolicy.windowMs
+					);
+				if (isCommunityScannerRegistrationThrottled(throttleSnapshot)) {
+					return err(
+						new CommunityScannerRegistrationRateLimitError(
+							getCommunityScannerRegistrationRetryAfterSeconds(
+								throttleSnapshot,
+								now
+							)
+						)
+					);
+				}
+			}
+
 			const existingScanner = await this.scannerRepository.findOne({
 				where: { contactEmail: normalizedEmail }
 			});
@@ -84,7 +123,7 @@ export class RegisterCommunityScanner {
 				description: savedScanner.description ?? null,
 				status: savedScanner.status,
 				apiKey,
-				createdAt: (savedScanner.createdAt ?? new Date()).toISOString()
+				createdAt: (savedScanner.createdAt ?? now).toISOString()
 			});
 		} catch (e) {
 			if (isContactEmailUniqueViolation(e)) {

@@ -1,6 +1,7 @@
 import { mock, MockProxy } from 'jest-mock-extended';
 import type { ExceptionLogger } from '@core/services/ExceptionLogger.js';
 import {
+	CommunityScannerRegistrationRateLimitError,
 	DuplicateCommunityScannerError,
 	RegisterCommunityScanner
 } from '../RegisterCommunityScanner.js';
@@ -10,18 +11,27 @@ import {
 } from '../../infrastructure/database/entities/CommunityScanner.js';
 import { Repository } from 'typeorm';
 import { hashCommunityScannerApiKey } from '../../domain/CommunityScannerApiKey.js';
+import type { CommunityScannerRegistrationThrottleRepository } from '../../domain/CommunityScannerRegistrationThrottle.js';
 
 describe('RegisterCommunityScanner', () => {
 	let useCase: RegisterCommunityScanner;
 	let scannerRepositoryMock: MockProxy<Repository<CommunityScanner>>;
+	let throttleRepositoryMock: MockProxy<CommunityScannerRegistrationThrottleRepository>;
 	let exceptionLoggerMock: MockProxy<ExceptionLogger>;
 
 	beforeEach(() => {
 		jest.useFakeTimers().setSystemTime(new Date('2026-07-03T12:00:00.000Z'));
 		scannerRepositoryMock = mock<Repository<CommunityScanner>>();
+		throttleRepositoryMock =
+			mock<CommunityScannerRegistrationThrottleRepository>();
+		throttleRepositoryMock.recordAttempt.mockResolvedValue({
+			attemptCount: 1,
+			windowStartedAt: new Date('2026-07-03T12:00:00.000Z')
+		});
 		exceptionLoggerMock = mock<ExceptionLogger>();
 		useCase = new RegisterCommunityScanner(
 			scannerRepositoryMock,
+			throttleRepositoryMock,
 			exceptionLoggerMock
 		);
 	});
@@ -33,7 +43,8 @@ describe('RegisterCommunityScanner', () => {
 	const validRequest = {
 		name: ' Test Scanner ',
 		description: ' A test community scanner ',
-		contactEmail: ' TEST@EXAMPLE.COM '
+		contactEmail: ' TEST@EXAMPLE.COM ',
+		registrationSource: '203.0.113.44'
 	};
 
 	it('should register a scanner with a hashed API key and one-time token', async () => {
@@ -62,6 +73,14 @@ describe('RegisterCommunityScanner', () => {
 		expect(scannerRepositoryMock.findOne).toHaveBeenCalledWith({
 			where: { contactEmail: 'test@example.com' }
 		});
+		expect(throttleRepositoryMock.recordAttempt).toHaveBeenCalledWith(
+			expect.stringMatching(/^[0-9a-f]{64}$/),
+			new Date('2026-07-03T12:00:00.000Z'),
+			60 * 60 * 1000
+		);
+		expect(throttleRepositoryMock.recordAttempt.mock.calls[0]?.[0]).not.toContain(
+			'203.0.113.44'
+		);
 		expect(scannerRepositoryMock.create).toHaveBeenCalledWith(
 			expect.objectContaining({
 				name: 'Test Scanner',
@@ -83,6 +102,39 @@ describe('RegisterCommunityScanner', () => {
 		expect(result._unsafeUnwrapErr()).toBeInstanceOf(
 			DuplicateCommunityScannerError
 		);
+		expect(scannerRepositoryMock.create).not.toHaveBeenCalled();
+		expect(scannerRepositoryMock.save).not.toHaveBeenCalled();
+	});
+
+	it('should rate-limit scanner registrations before lookup work', async () => {
+		throttleRepositoryMock.recordAttempt.mockResolvedValue({
+			attemptCount: 6,
+			windowStartedAt: new Date('2026-07-03T11:30:00.000Z')
+		});
+
+		const result = await useCase.execute(validRequest);
+
+		expect(result.isErr()).toBe(true);
+		const error = result._unsafeUnwrapErr();
+		expect(error).toBeInstanceOf(CommunityScannerRegistrationRateLimitError);
+		expect(
+			(error as CommunityScannerRegistrationRateLimitError).retryAfterSeconds
+		).toBe(1800);
+		expect(scannerRepositoryMock.findOne).not.toHaveBeenCalled();
+		expect(scannerRepositoryMock.create).not.toHaveBeenCalled();
+		expect(scannerRepositoryMock.save).not.toHaveBeenCalled();
+	});
+
+	it('should log throttle persistence errors without registering', async () => {
+		const error = new Error('throttle store unavailable');
+		throttleRepositoryMock.recordAttempt.mockRejectedValue(error);
+
+		const result = await useCase.execute(validRequest);
+
+		expect(result.isErr()).toBe(true);
+		expect(result._unsafeUnwrapErr()).toBe(error);
+		expect(exceptionLoggerMock.captureException).toHaveBeenCalledWith(error);
+		expect(scannerRepositoryMock.findOne).not.toHaveBeenCalled();
 		expect(scannerRepositoryMock.create).not.toHaveBeenCalled();
 		expect(scannerRepositoryMock.save).not.toHaveBeenCalled();
 	});
