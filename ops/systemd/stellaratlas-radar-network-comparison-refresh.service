@@ -1,0 +1,19 @@
+[Unit]
+Description=StellarAtlas RADAR network comparison refresh
+Documentation=https://github.com/Stellar-Atlas/StellarAtlas
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+User=observe
+WorkingDirectory=/home/observe/stellarbeat-data/Observer
+Environment=NODE_ENV=production
+Environment=HOME=/home/observe
+Environment=PATH=/home/observe/.nvm/versions/node/v26.4.0/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+EnvironmentFile=-/etc/stellaratlas/stellaratlas.env
+ExecStart=/usr/bin/env pnpm --filter backend run refresh-radar-network-comparison -- --freshness-ms=21600000 --radar-timeout-ms=10000 --radar-max-bytes=2000000
+TimeoutStartSec=240
+Nice=5
+NoNewPrivileges=true
+PrivateTmp=true

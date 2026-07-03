@@ -1,0 +1,14 @@
+[Unit]
+Description=Run StellarAtlas RADAR network comparison refresh every six hours
+Documentation=https://github.com/Stellar-Atlas/StellarAtlas
+
+[Timer]
+OnBootSec=5min
+OnUnitActiveSec=6h
+AccuracySec=5min
+RandomizedDelaySec=10min
+Persistent=true
+Unit=stellaratlas-radar-network-comparison-refresh.service
+
+[Install]
+WantedBy=timers.target
