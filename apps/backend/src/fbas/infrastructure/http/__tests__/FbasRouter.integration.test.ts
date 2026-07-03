@@ -2,6 +2,8 @@ import express from 'express';
 import request from 'supertest';
 import { mock } from 'jest-mock-extended';
 import { err, ok } from 'neverthrow';
+import type { FbasProofPayload } from '@network-scan/domain/network/scan/fbas-analysis/FbasProofPayload.js';
+import { GetFbasAnalysisProof } from '@fbas/use-cases/get-fbas-analysis-proof/GetFbasAnalysisProof.js';
 import {
 	FbasAnalysisValidationError,
 	GetFbasAnalysis
@@ -16,11 +18,13 @@ import { FbasRouterWrapper } from '../FbasRouter.js';
 describe('FbasRouter.integration', () => {
 	let app: express.Application;
 	let getFbasAnalysis: jest.Mocked<GetFbasAnalysis>;
+	let getFbasAnalysisProof: jest.Mocked<GetFbasAnalysisProof>;
 	let getLatestFbas: jest.Mocked<GetLatestFbas>;
 	let getTopTierHistory: jest.Mocked<GetTopTierHistory>;
 
 	beforeEach(() => {
 		getFbasAnalysis = mock<GetFbasAnalysis>();
+		getFbasAnalysisProof = mock<GetFbasAnalysisProof>();
 		getLatestFbas = mock<GetLatestFbas>();
 		getTopTierHistory = mock<GetTopTierHistory>();
 		app = express();
@@ -28,6 +32,7 @@ describe('FbasRouter.integration', () => {
 			'/fbas',
 			FbasRouterWrapper({
 				getFbasAnalysis,
+				getFbasAnalysisProof,
 				getLatestFbas,
 				getTopTierHistory
 			})
@@ -138,6 +143,38 @@ describe('FbasRouter.integration', () => {
 		expect(getFbasAnalysis.execute).toHaveBeenCalledWith({ scanId: 42 });
 	});
 
+	it('should expose persisted FBAS proof evidence for a completed scan', async () => {
+		getFbasAnalysisProof.execute.mockResolvedValue(
+			ok({
+				generatedAt: '2026-07-03T12:00:00.000Z',
+				evidenceSelection: 'network_scan_fbas_proof',
+				proofSetPersistence: 'persisted',
+				scanId: 42,
+				scanTime: '2026-07-03T11:56:00.000Z',
+				schemaVersion: 1,
+				payloadBytes: 1234,
+				proof: makeProofPayload()
+			})
+		);
+
+		await request(app)
+			.get('/fbas/analyses/42/proof')
+			.expect(200)
+			.expect('Cache-Control', 'public, max-age=10')
+			.expect((response) => {
+				expect(response.body.scanId).toBe(42);
+				expect(response.body.evidenceSelection).toBe('network_scan_fbas_proof');
+				expect(response.body.proofSetPersistence).toBe('persisted');
+				expect(response.body.proof.complete).toBe(true);
+				expect(response.body.proof.node.topTier.members).toEqual([
+					'node-top-tier'
+				]);
+			});
+		expect(getFbasAnalysisProof.execute).toHaveBeenCalledWith({
+			scanId: 42
+		});
+	});
+
 	it('should reject invalid analysis scan ids', async () => {
 		await request(app)
 			.get('/fbas/analyses/not-a-scan')
@@ -146,6 +183,16 @@ describe('FbasRouter.integration', () => {
 				expect(response.body.errors).toHaveLength(1);
 			});
 		expect(getFbasAnalysis.execute).not.toHaveBeenCalled();
+	});
+
+	it('should reject invalid proof scan ids', async () => {
+		await request(app)
+			.get('/fbas/analyses/not-a-scan/proof')
+			.expect(400)
+			.expect((response) => {
+				expect(response.body.errors).toHaveLength(1);
+			});
+		expect(getFbasAnalysisProof.execute).not.toHaveBeenCalled();
 	});
 
 	it('should expose aggregate top-tier history from persisted rollups', async () => {
@@ -239,6 +286,20 @@ describe('FbasRouter.integration', () => {
 			});
 	});
 
+	it('should return not found when a requested FBAS proof does not exist', async () => {
+		getFbasAnalysisProof.execute.mockResolvedValue(ok(null));
+
+		await request(app)
+			.get('/fbas/analyses/42/proof')
+			.expect(404)
+			.expect('Cache-Control', 'public, max-age=10')
+			.expect((response) => {
+				expect(response.body).toEqual({
+					error: 'FBAS analysis proof not found'
+				});
+			});
+	});
+
 	it('should map FBAS analysis validation failures to bad requests', async () => {
 		getFbasAnalysis.execute.mockResolvedValue(
 			err(
@@ -284,6 +345,18 @@ describe('FbasRouter.integration', () => {
 			});
 	});
 
+	it('should map FBAS proof use-case failures to server errors', async () => {
+		getFbasAnalysisProof.execute.mockResolvedValue(err(new Error('boom')));
+
+		await request(app)
+			.get('/fbas/analyses/42/proof')
+			.expect(500)
+			.expect('Cache-Control', 'public, max-age=10')
+			.expect((response) => {
+				expect(response.body).toEqual({ error: 'Internal server error' });
+			});
+	});
+
 	it('should map top-tier history use-case failures to server errors', async () => {
 		getTopTierHistory.execute.mockResolvedValue(err(new Error('boom')));
 
@@ -308,3 +381,65 @@ describe('FbasRouter.integration', () => {
 			});
 	});
 });
+
+function makeProofPayload(): FbasProofPayload {
+	return {
+		complete: true,
+		country: makeMergedProofArtifact('country'),
+		hasQuorumIntersection: true,
+		hasSymmetricTopTier: true,
+		isp: makeMergedProofArtifact('isp'),
+		limits: {
+			proofSetMembers: 32,
+			proofSetsPerFamily: 32,
+			symmetricTopTierDepth: 4,
+			symmetricTopTierInnerSets: 16,
+			topTierMembers: 512
+		},
+		minimalQuorums: {
+			quorumIntersection: true,
+			quorums: makeProofSetFamily('quorum')
+		},
+		node: makeMergedProofArtifact('node'),
+		organization: makeMergedProofArtifact('organization'),
+		symmetricTopTier: {
+			complete: true,
+			innerQuorumSets: null,
+			innerQuorumSetsCaptureLimit: 16,
+			threshold: 1,
+			validators: makeMembershipCapture('validator')
+		},
+		version: 1
+	};
+}
+
+function makeMergedProofArtifact(label: string) {
+	return {
+		blockingSets: makeProofSetFamily(`${label}-blocking`),
+		blockingSetsFiltered: makeProofSetFamily(`${label}-blocking-filtered`),
+		splittingSets: makeProofSetFamily(`${label}-splitting`),
+		topTier: makeMembershipCapture(`${label}-top-tier`)
+	};
+}
+
+function makeProofSetFamily(label: string) {
+	return {
+		captureLimit: 32,
+		capturedCount: 1,
+		complete: true,
+		memberLimit: 32,
+		minSize: 1,
+		sets: [[label]],
+		totalCount: 1
+	};
+}
+
+function makeMembershipCapture(label: string) {
+	return {
+		captureLimit: 32,
+		capturedCount: 1,
+		complete: true,
+		members: [label],
+		totalCount: 1
+	};
+}

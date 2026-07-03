@@ -7,5 +7,8 @@ export type FbasAnalysisEvidenceSelection =
 export interface FbasAnalysisDTO extends FbasScanMeasurementDTO {
 	readonly generatedAt: string;
 	readonly evidenceSelection: FbasAnalysisEvidenceSelection;
-	readonly proofSetPersistence: FbasProofSetPersistence;
+	readonly proofSetPersistence: Extract<
+		FbasProofSetPersistence,
+		'not_persisted'
+	>;
 }

@@ -8,6 +8,7 @@ import {
 	GetFbasAnalysis,
 	maxFbasScanId
 } from '../../use-cases/get-fbas-analysis/GetFbasAnalysis.js';
+import { GetFbasAnalysisProof } from '../../use-cases/get-fbas-analysis-proof/GetFbasAnalysisProof.js';
 import { GetLatestFbas } from '../../use-cases/get-latest-fbas/GetLatestFbas.js';
 import {
 	FbasTopTierHistoryValidationError,
@@ -16,6 +17,7 @@ import {
 
 export interface FbasRouterConfig {
 	readonly getFbasAnalysis: GetFbasAnalysis;
+	readonly getFbasAnalysisProof: GetFbasAnalysisProof;
 	readonly getLatestFbas: GetLatestFbas;
 	readonly getTopTierHistory: GetTopTierHistory;
 }
@@ -44,6 +46,25 @@ export const FbasRouterWrapper = (config: FbasRouterConfig): Router => {
 					scanId: Number(req.params.scanId)
 				}),
 				'FBAS analysis not found'
+			);
+		}
+	);
+
+	fbasRouter.get(
+		'/analyses/:scanId/proof',
+		[param('scanId').isInt({ min: 1, max: maxFbasScanId })],
+		async function (req: express.Request, res: express.Response) {
+			const errors = validationResult(req);
+			if (!errors.isEmpty()) {
+				return res.status(400).json({ errors: errors.array() });
+			}
+
+			return sendFbasResult(
+				res,
+				await config.getFbasAnalysisProof.execute({
+					scanId: Number(req.params.scanId)
+				}),
+				'FBAS analysis proof not found'
 			);
 		}
 	);

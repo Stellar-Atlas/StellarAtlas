@@ -34,6 +34,9 @@ import type { OrganizationMeasurementDayRepository } from '../../domain/organiza
 import { TypeOrmOrganizationMeasurementDayRepository } from '../database/repositories/TypeOrmOrganizationMeasurementDayRepository.js';
 import { TypeOrmNetworkScanRepository } from '../database/repositories/TypeOrmNetworkScanRepository.js';
 import type { NetworkScanRepository } from '../../domain/network/scan/NetworkScanRepository.js';
+import { NetworkScanFbasProof } from '../../domain/network/scan/fbas-analysis/NetworkScanFbasProof.js';
+import type { NetworkScanFbasProofRepository } from '../../domain/network/scan/fbas-analysis/NetworkScanFbasProofRepository.js';
+import { TypeOrmNetworkScanFbasProofRepository } from '../database/repositories/TypeOrmNetworkScanFbasProofRepository.js';
 import type { NetworkMeasurementDayRepository } from '../../domain/network/NetworkMeasurementDayRepository.js';
 import { TypeOrmNetworkMeasurementDayRepository } from '../database/repositories/TypeOrmNetworkMeasurementDayRepository.js';
 import type { NetworkMeasurementMonthRepository } from '../../domain/network/NetworkMeasurementMonthRepository.js';
@@ -316,6 +319,16 @@ function loadDomain(container: Container, config: Config) {
 		.toDynamicValue(() => {
 			return new TypeOrmNetworkScanRepository(
 				dataSource.getRepository(NetworkScan)
+			);
+		})
+		.inRequestScope();
+	container
+		.bind<NetworkScanFbasProofRepository>(
+			NETWORK_TYPES.NetworkScanFbasProofRepository
+		)
+		.toDynamicValue(() => {
+			return new TypeOrmNetworkScanFbasProofRepository(
+				dataSource.getRepository(NetworkScanFbasProof)
 			);
 		})
 		.inRequestScope();

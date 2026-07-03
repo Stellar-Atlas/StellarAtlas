@@ -10,6 +10,7 @@ import { GetCrossCheckArchives } from '@cross-check/use-cases/get-cross-check-ar
 import { GetCrossCheckOrganizations } from '@cross-check/use-cases/get-cross-check-organizations/GetCrossCheckOrganizations.js';
 import { GetCrossCheckSources } from '@cross-check/use-cases/get-cross-check-sources/GetCrossCheckSources.js';
 import { GetCrossCheckValidators } from '@cross-check/use-cases/get-cross-check-validators/GetCrossCheckValidators.js';
+import { GetFbasAnalysisProof } from '@fbas/use-cases/get-fbas-analysis-proof/GetFbasAnalysisProof.js';
 import { GetFbasAnalysis } from '@fbas/use-cases/get-fbas-analysis/GetFbasAnalysis.js';
 import { GetLatestFbas } from '@fbas/use-cases/get-latest-fbas/GetLatestFbas.js';
 import { GetTopTierHistory } from '@fbas/use-cases/get-top-tier-history/GetTopTierHistory.js';
@@ -44,6 +45,9 @@ test('kernel', async () => {
 		GetCrossCheckValidators
 	);
 	expect(container.get(GetFbasAnalysis)).toBeInstanceOf(GetFbasAnalysis);
+	expect(container.get(GetFbasAnalysisProof)).toBeInstanceOf(
+		GetFbasAnalysisProof
+	);
 	expect(container.get(GetLatestFbas)).toBeInstanceOf(GetLatestFbas);
 	expect(container.get(GetTopTierHistory)).toBeInstanceOf(GetTopTierHistory);
 

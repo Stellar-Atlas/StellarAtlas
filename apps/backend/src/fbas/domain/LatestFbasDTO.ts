@@ -1,7 +1,7 @@
 import type { FbasScanMeasurementDTO } from './FbasScanMeasurementDTO.js';
 
 export type FbasEvidenceSelection = 'latest_completed_network_scan_measurement';
-export type FbasProofSetPersistence = 'not_persisted';
+export type FbasProofSetPersistence = 'not_persisted' | 'persisted';
 
 export interface FbasLatestSummaryDTO {
 	readonly nrOfActiveWatchers: number;
@@ -32,5 +32,8 @@ export interface FbasLatestSummaryDTO {
 export interface LatestFbasDTO extends FbasScanMeasurementDTO {
 	readonly generatedAt: string;
 	readonly evidenceSelection: FbasEvidenceSelection;
-	readonly proofSetPersistence: FbasProofSetPersistence;
+	readonly proofSetPersistence: Extract<
+		FbasProofSetPersistence,
+		'not_persisted'
+	>;
 }

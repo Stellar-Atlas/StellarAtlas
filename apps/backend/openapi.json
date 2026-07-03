@@ -769,6 +769,46 @@
 				}
 			}
 		},
+		"/v1/fbas/analyses/{scanId}/proof": {
+			"get": {
+				"summary": "Get persisted FBAS proof evidence for a scan",
+				"description": "Returns the persisted scan-time FBAS proof artifact for a completed network scan. The endpoint does not run live analysis or recompute historical proof sets. Proof families can be capped; inspect complete flags and capture limits before treating a response as exhaustive.",
+				"tags": ["FBAS"],
+				"operationId": "getFbasAnalysisProof",
+				"parameters": [
+					{
+						"name": "scanId",
+						"in": "path",
+						"required": true,
+						"description": "Completed network scan id.",
+						"schema": {
+							"type": "integer",
+							"minimum": 1,
+							"maximum": 2147483647
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "persisted FBAS proof evidence for the completed scan",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/FbasAnalysisProof"
+								}
+							}
+						}
+					},
+					"400": {
+						"description": "Bad request"
+					},
+					"404": {
+						"description": "No persisted FBAS proof was found for the scan id"
+					},
+					"500": { "description": "Server error" }
+				}
+			}
+		},
 		"/v1/fbas/top-tier/history": {
 			"get": {
 				"summary": "Get FBAS top-tier aggregate history",
@@ -4531,6 +4571,236 @@
 					},
 					"summary": {
 						"$ref": "#/components/schemas/FbasAnalysisSummary"
+					}
+				}
+			},
+			"FbasAnalysisProof": {
+				"type": "object",
+				"required": [
+					"generatedAt",
+					"evidenceSelection",
+					"proofSetPersistence",
+					"scanId",
+					"scanTime",
+					"schemaVersion",
+					"payloadBytes",
+					"proof"
+				],
+				"properties": {
+					"generatedAt": {
+						"type": "string",
+						"format": "date-time"
+					},
+					"evidenceSelection": {
+						"type": "string",
+						"enum": ["network_scan_fbas_proof"]
+					},
+					"proofSetPersistence": {
+						"type": "string",
+						"enum": ["persisted"]
+					},
+					"scanId": {
+						"type": "integer",
+						"minimum": 1,
+						"maximum": 2147483647
+					},
+					"scanTime": {
+						"type": "string",
+						"format": "date-time"
+					},
+					"schemaVersion": {
+						"type": "integer",
+						"minimum": 1
+					},
+					"payloadBytes": {
+						"type": "integer",
+						"minimum": 0,
+						"maximum": 1000000
+					},
+					"proof": {
+						"$ref": "#/components/schemas/FbasProofPayload"
+					}
+				}
+			},
+			"FbasProofPayload": {
+				"type": "object",
+				"required": [
+					"version",
+					"complete",
+					"limits",
+					"hasQuorumIntersection",
+					"hasSymmetricTopTier",
+					"minimalQuorums",
+					"node",
+					"organization",
+					"country",
+					"isp",
+					"symmetricTopTier"
+				],
+				"properties": {
+					"version": {
+						"type": "integer",
+						"enum": [1]
+					},
+					"complete": {
+						"type": "boolean",
+						"description": "True only when every captured proof family is exhaustive under the recorded limits."
+					},
+					"limits": {
+						"$ref": "#/components/schemas/FbasProofCaptureLimits"
+					},
+					"hasQuorumIntersection": { "type": "boolean" },
+					"hasSymmetricTopTier": { "type": "boolean" },
+					"minimalQuorums": {
+						"$ref": "#/components/schemas/FbasMinimalQuorumsProof"
+					},
+					"node": {
+						"$ref": "#/components/schemas/FbasMergedProofArtifact"
+					},
+					"organization": {
+						"$ref": "#/components/schemas/FbasMergedProofArtifact"
+					},
+					"country": {
+						"$ref": "#/components/schemas/FbasMergedProofArtifact"
+					},
+					"isp": {
+						"$ref": "#/components/schemas/FbasMergedProofArtifact"
+					},
+					"symmetricTopTier": {
+						"nullable": true,
+						"allOf": [
+							{
+								"$ref": "#/components/schemas/FbasSymmetricTopTierProof"
+							}
+						]
+					}
+				}
+			},
+			"FbasProofCaptureLimits": {
+				"type": "object",
+				"required": [
+					"proofSetMembers",
+					"proofSetsPerFamily",
+					"symmetricTopTierDepth",
+					"symmetricTopTierInnerSets",
+					"topTierMembers"
+				],
+				"properties": {
+					"proofSetMembers": { "type": "integer", "minimum": 0 },
+					"proofSetsPerFamily": { "type": "integer", "minimum": 0 },
+					"symmetricTopTierDepth": { "type": "integer", "minimum": 0 },
+					"symmetricTopTierInnerSets": {
+						"type": "integer",
+						"minimum": 0
+					},
+					"topTierMembers": { "type": "integer", "minimum": 0 }
+				}
+			},
+			"FbasMinimalQuorumsProof": {
+				"type": "object",
+				"required": ["quorumIntersection", "quorums"],
+				"properties": {
+					"quorumIntersection": { "type": "boolean" },
+					"quorums": {
+						"$ref": "#/components/schemas/FbasProofSetFamily"
+					}
+				}
+			},
+			"FbasMergedProofArtifact": {
+				"type": "object",
+				"required": [
+					"blockingSets",
+					"blockingSetsFiltered",
+					"splittingSets",
+					"topTier"
+				],
+				"properties": {
+					"blockingSets": {
+						"$ref": "#/components/schemas/FbasProofSetFamily"
+					},
+					"blockingSetsFiltered": {
+						"$ref": "#/components/schemas/FbasProofSetFamily"
+					},
+					"splittingSets": {
+						"$ref": "#/components/schemas/FbasProofSetFamily"
+					},
+					"topTier": {
+						"$ref": "#/components/schemas/FbasMembershipCapture"
+					}
+				}
+			},
+			"FbasProofSetFamily": {
+				"type": "object",
+				"required": [
+					"captureLimit",
+					"capturedCount",
+					"complete",
+					"memberLimit",
+					"minSize",
+					"sets",
+					"totalCount"
+				],
+				"properties": {
+					"captureLimit": { "type": "integer", "minimum": 0 },
+					"capturedCount": { "type": "integer", "minimum": 0 },
+					"complete": { "type": "boolean" },
+					"memberLimit": { "type": "integer", "minimum": 0 },
+					"minSize": { "type": "integer", "minimum": 0 },
+					"sets": {
+						"type": "array",
+						"items": {
+							"type": "array",
+							"items": { "type": "string" }
+						}
+					},
+					"totalCount": { "type": "integer", "minimum": 0 }
+				}
+			},
+			"FbasMembershipCapture": {
+				"type": "object",
+				"required": [
+					"captureLimit",
+					"capturedCount",
+					"complete",
+					"members",
+					"totalCount"
+				],
+				"properties": {
+					"captureLimit": { "type": "integer", "minimum": 0 },
+					"capturedCount": { "type": "integer", "minimum": 0 },
+					"complete": { "type": "boolean" },
+					"members": {
+						"type": "array",
+						"items": { "type": "string" }
+					},
+					"totalCount": { "type": "integer", "minimum": 0 }
+				}
+			},
+			"FbasSymmetricTopTierProof": {
+				"type": "object",
+				"required": [
+					"complete",
+					"innerQuorumSets",
+					"innerQuorumSetsCaptureLimit",
+					"threshold",
+					"validators"
+				],
+				"properties": {
+					"complete": { "type": "boolean" },
+					"innerQuorumSets": {
+						"nullable": true,
+						"type": "array",
+						"items": {
+							"$ref": "#/components/schemas/FbasSymmetricTopTierProof"
+						}
+					},
+					"innerQuorumSetsCaptureLimit": {
+						"type": "integer",
+						"minimum": 0
+					},
+					"threshold": { "type": "integer", "minimum": 0 },
+					"validators": {
+						"$ref": "#/components/schemas/FbasMembershipCapture"
 					}
 				}
 			},
