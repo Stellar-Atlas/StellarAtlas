@@ -27,8 +27,8 @@ type RawActiveCommunityScannerJobsRow = {
 };
 
 type RawCommunityScannerClaimStateRow = {
-	readonly isBlacklisted?: boolean;
-	readonly isblacklisted?: boolean;
+	readonly isBlocked?: boolean;
+	readonly isblocked?: boolean;
 	readonly successRate?: NumericValue;
 	readonly successrate?: NumericValue;
 	readonly totalJobsCompleted?: NumericValue;
@@ -98,7 +98,10 @@ export class TypeOrmScanJobRepository implements ScanJobRepository {
 			(await manager.query(
 				`
 				select
-					is_blacklisted as "isBlacklisted",
+					(
+						is_blacklisted = true
+						or (blacklisted_until is not null and blacklisted_until > now())
+					) as "isBlocked",
 					success_rate as "successRate",
 					total_jobs_completed as "totalJobsCompleted",
 					total_jobs_failed as "totalJobsFailed"
@@ -113,9 +116,9 @@ export class TypeOrmScanJobRepository implements ScanJobRepository {
 		if (row === undefined) return null;
 
 		return {
-			isBlacklisted: readBoolean(
-				row.isBlacklisted ?? row.isblacklisted,
-				'isBlacklisted'
+			isBlocked: readBoolean(
+				row.isBlocked ?? row.isblocked,
+				'isBlocked'
 			),
 			successRate: readFiniteNumber(
 				row.successRate ?? row.successrate,

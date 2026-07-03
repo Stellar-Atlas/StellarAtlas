@@ -8,7 +8,7 @@ describe('decideCommunityScannerClaim', () => {
 		expect(
 			decideCommunityScannerClaim({
 				activeJobs: 0,
-				isBlacklisted: false,
+				isBlocked: false,
 				maxActiveJobs: communityScannerClaimPolicy.maxActiveJobsPerScanner,
 				successRate: 0,
 				totalJobsCompleted: 0,
@@ -21,7 +21,7 @@ describe('decideCommunityScannerClaim', () => {
 		expect(
 			decideCommunityScannerClaim({
 				activeJobs: communityScannerClaimPolicy.maxActiveJobsPerScanner,
-				isBlacklisted: false,
+				isBlocked: false,
 				maxActiveJobs: communityScannerClaimPolicy.maxActiveJobsPerScanner,
 				successRate: 100,
 				totalJobsCompleted: 10,
@@ -34,7 +34,7 @@ describe('decideCommunityScannerClaim', () => {
 		expect(
 			decideCommunityScannerClaim({
 				activeJobs: 0,
-				isBlacklisted: false,
+				isBlocked: false,
 				maxActiveJobs: communityScannerClaimPolicy.maxActiveJobsPerScanner,
 				successRate: 25,
 				totalJobsCompleted: 1,
@@ -47,7 +47,7 @@ describe('decideCommunityScannerClaim', () => {
 		expect(
 			decideCommunityScannerClaim({
 				activeJobs: 0,
-				isBlacklisted: false,
+				isBlocked: false,
 				maxActiveJobs: communityScannerClaimPolicy.maxActiveJobsPerScanner,
 				successRate: communityScannerClaimPolicy.minSuccessRate - 1,
 				totalJobsCompleted: 2,
@@ -56,11 +56,11 @@ describe('decideCommunityScannerClaim', () => {
 		).toEqual({ allowed: false, denialReason: 'production_score' });
 	});
 
-	it('should deny blacklisted scanners', () => {
+	it('should deny blocked scanners', () => {
 		expect(
 			decideCommunityScannerClaim({
 				activeJobs: 0,
-				isBlacklisted: true,
+				isBlocked: true,
 				maxActiveJobs: communityScannerClaimPolicy.maxActiveJobsPerScanner,
 				successRate: 100,
 				totalJobsCompleted: 10,

@@ -192,6 +192,43 @@ describe('TypeOrmScanJobRepository.integration', () => {
 			expect(nextJob).toBeNull();
 			expect(await typeOrmScanJobRepository.hasPendingJobs()).toBe(true);
 		});
+
+		it.each<[string, Partial<CommunityScanner>]>([
+			['permanently blacklisted', { isBlacklisted: true }],
+			[
+				'temporarily blocked',
+				{ blacklistedUntil: new Date('2099-01-01T00:00:00.000Z') }
+			]
+		])('should not claim a job when a scanner is %s', async (_label, block) => {
+			const scannerId = await saveCommunityScanner(block);
+			await typeOrmScanJobRepository.save([new ScanJob('blocked-url')]);
+
+			const nextJob =
+				await typeOrmScanJobRepository.fetchNextJobForCommunityScanner(
+					scannerId,
+					1,
+					new Date('2026-01-01T00:00:00.000Z')
+				);
+
+			expect(nextJob).toBeNull();
+			expect(await typeOrmScanJobRepository.hasPendingJobs()).toBe(true);
+		});
+
+		it('should claim a job after a temporary scanner block expires', async () => {
+			const scannerId = await saveCommunityScanner({
+				blacklistedUntil: new Date('2000-01-01T00:00:00.000Z')
+			});
+			await typeOrmScanJobRepository.save([new ScanJob('expired-block-url')]);
+
+			const nextJob =
+				await typeOrmScanJobRepository.fetchNextJobForCommunityScanner(
+					scannerId,
+					1,
+					new Date('2026-01-01T00:00:00.000Z')
+				);
+
+			expect(nextJob?.url).toBe('expired-block-url');
+		});
 	});
 
 	describe('hasPendingJobs', () => {

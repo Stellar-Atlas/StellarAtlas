@@ -62,7 +62,14 @@ describe('GetScannerMetrics', () => {
 		expect(scannerRepositoryMock.createQueryBuilder).toHaveBeenCalledWith(
 			'scanner'
 		);
+		expect(queryBuilderMock.select.mock.calls[0]?.[0]).toEqual(
+			expect.arrayContaining([
+				expect.stringContaining('scanner.blacklistedUntil <= :generatedAt'),
+				expect.stringContaining('scanner.blacklistedUntil > :generatedAt')
+			])
+		);
 		expect(queryBuilderMock.setParameters).toHaveBeenCalledWith({
+			generatedAt: new Date('2026-07-03T12:00:00.000Z'),
 			heartbeatCutoff: new Date('2026-07-03T11:55:00.000Z'),
 			degradedStatus: ScannerStatus.DEGRADED,
 			pendingStatus: ScannerStatus.PENDING

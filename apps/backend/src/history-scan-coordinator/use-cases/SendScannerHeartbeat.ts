@@ -75,7 +75,7 @@ export class SendScannerHeartbeat {
 				return err(new InvalidCommunityScannerApiKeyError());
 			}
 
-			if (scanner.isBlacklisted) {
+			if (scanner.isBlocked()) {
 				return err(new CommunityScannerBlacklistedError());
 			}
 

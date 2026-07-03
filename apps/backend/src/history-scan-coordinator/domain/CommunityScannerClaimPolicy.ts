@@ -9,7 +9,7 @@ export type CommunityScannerClaimDenialReason =
 
 export interface CommunityScannerClaimState {
 	readonly activeJobs: number;
-	readonly isBlacklisted: boolean;
+	readonly isBlocked: boolean;
 	readonly maxActiveJobs: number;
 	readonly successRate: number;
 	readonly totalJobsCompleted: number;
@@ -28,7 +28,7 @@ export type CommunityScannerClaimDecision =
 export function decideCommunityScannerClaim(
 	state: CommunityScannerClaimState
 ): CommunityScannerClaimDecision {
-	if (state.isBlacklisted) {
+	if (state.isBlocked) {
 		return { allowed: false, denialReason: 'blacklisted' };
 	}
 

@@ -62,11 +62,16 @@ export class GetScannerMetrics {
 					`COUNT(*) FILTER (
 						WHERE scanner.lastHeartbeatAt > :heartbeatCutoff
 						AND scanner.isBlacklisted = false
+						AND (
+							scanner.blacklistedUntil IS NULL
+							OR scanner.blacklistedUntil <= :generatedAt
+						)
 					) as "activeScanners"`,
 					`COUNT(*) FILTER (
 						WHERE scanner.lastHeartbeatAt IS NULL
 						OR scanner.lastHeartbeatAt <= :heartbeatCutoff
 						OR scanner.isBlacklisted = true
+						OR scanner.blacklistedUntil > :generatedAt
 					) as "offlineScanners"`,
 					`COUNT(*) FILTER (
 						WHERE scanner.status = :degradedStatus
@@ -76,6 +81,7 @@ export class GetScannerMetrics {
 					) as "pendingScanners"`,
 					`COUNT(*) FILTER (
 						WHERE scanner.isBlacklisted = true
+						OR scanner.blacklistedUntil > :generatedAt
 					) as "blacklistedScanners"`,
 					'AVG(scanner.successRate) as "avgSuccessRate"',
 					'SUM(scanner.totalJobsCompleted) as "totalCompleted"',
@@ -83,6 +89,7 @@ export class GetScannerMetrics {
 					'AVG(scanner.averageCompletionTimeMs) as "avgCompletionTime"'
 				])
 				.setParameters({
+					generatedAt,
 					heartbeatCutoff,
 					degradedStatus: ScannerStatus.DEGRADED,
 					pendingStatus: ScannerStatus.PENDING

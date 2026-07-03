@@ -77,7 +77,7 @@ export class CommunityScanner {
 	isBlacklisted: boolean = false;
 
 	@Column({ name: 'blacklisted_until', type: 'timestamp', nullable: true })
-	blacklistedUntil?: Date;
+	blacklistedUntil?: Date | null;
 
 	@Column({ name: 'last_heartbeat_at', type: 'timestamp', nullable: true })
 	lastHeartbeatAt?: Date | null = null;
@@ -138,8 +138,20 @@ export class CommunityScanner {
 		);
 	}
 
+	isTemporarilyBlocked(now: Date = new Date()): boolean {
+		return (
+			this.blacklistedUntil !== undefined &&
+			this.blacklistedUntil !== null &&
+			this.blacklistedUntil > now
+		);
+	}
+
+	isBlocked(now: Date = new Date()): boolean {
+		return this.isBlacklisted || this.isTemporarilyBlocked(now);
+	}
+
 	calculateWeight(): number {
-		if (this.isBlacklisted || !this.isAlive()) {
+		if (this.isBlocked() || !this.isAlive()) {
 			return 0;
 		}
 

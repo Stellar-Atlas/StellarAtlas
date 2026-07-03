@@ -126,6 +126,40 @@ describe('SendScannerHeartbeat', () => {
 		expect(scannerRepositoryMock.save).not.toHaveBeenCalled();
 	});
 
+	it('should reject temporarily blocked scanners after authentication', async () => {
+		const scanner = new CommunityScanner();
+		scanner.id = validRequest.scannerId;
+		scanner.apiKeyHash = hashCommunityScannerApiKey(apiKey);
+		scanner.blacklistedUntil = new Date('2026-07-03T12:05:00.000Z');
+		scannerRepositoryMock.findOne.mockResolvedValue(scanner);
+
+		const result = await useCase.execute(validRequest);
+
+		expect(result.isErr()).toBe(true);
+		expect(result._unsafeUnwrapErr()).toBeInstanceOf(
+			CommunityScannerBlacklistedError
+		);
+		expect(scannerRepositoryMock.save).not.toHaveBeenCalled();
+	});
+
+	it('should accept scanners after a temporary block expires', async () => {
+		const scanner = new CommunityScanner();
+		scanner.id = validRequest.scannerId;
+		scanner.apiKeyHash = hashCommunityScannerApiKey(apiKey);
+		scanner.status = ScannerStatus.PENDING;
+		scanner.blacklistedUntil = new Date('2026-07-03T11:59:59.000Z');
+		scannerRepositoryMock.findOne.mockResolvedValue(scanner);
+		scannerRepositoryMock.save.mockImplementation(async (savedScanner) => {
+			return savedScanner as CommunityScanner;
+		});
+
+		const result = await useCase.execute(validRequest);
+
+		expect(result.isOk()).toBe(true);
+		expect(result._unsafeUnwrap().status).toBe(ScannerStatus.ONLINE);
+		expect(scannerRepositoryMock.save).toHaveBeenCalled();
+	});
+
 	it('should log and return persistence errors', async () => {
 		const error = new Error('database unavailable');
 		scannerRepositoryMock.findOne.mockRejectedValue(error);

@@ -233,6 +233,18 @@ describe('CommunityScannerRouter.integration', () => {
 
 			expect(getScanJob.execute).not.toHaveBeenCalled();
 		});
+
+		it('should not claim jobs for blocked scanners', async () => {
+			sendScannerHeartbeat.execute.mockResolvedValue(
+				err(new CommunityScannerBlacklistedError())
+			);
+
+			await request(app)
+				.get(`/community-scanners/${scannerId}/job`)
+				.set('Authorization', 'Bearer satlas_scanner_secret')
+				.expect(403);
+			expect(getScanJob.execute).not.toHaveBeenCalled();
+		});
 	});
 
 	describe('POST /:id/job/:remoteId/heartbeat', () => {
@@ -269,6 +281,18 @@ describe('CommunityScannerRouter.integration', () => {
 				.post(`/community-scanners/${scannerId}/job/${randomUUID()}/heartbeat`)
 				.set('Authorization', 'Bearer satlas_scanner_secret')
 				.expect(404);
+		});
+
+		it('should not touch jobs for blocked scanners', async () => {
+			sendScannerHeartbeat.execute.mockResolvedValue(
+				err(new CommunityScannerBlacklistedError())
+			);
+
+			await request(app)
+				.post(`/community-scanners/${scannerId}/job/${randomUUID()}/heartbeat`)
+				.set('Authorization', 'Bearer satlas_scanner_secret')
+				.expect(403);
+			expect(touchScanJob.execute).not.toHaveBeenCalled();
 		});
 	});
 
@@ -377,6 +401,19 @@ describe('CommunityScannerRouter.integration', () => {
 				.set('Authorization', 'Bearer satlas_scanner_secret')
 				.send(createValidScanBody(randomUUID()))
 				.expect(409);
+		});
+
+		it('should not submit results for blocked scanners', async () => {
+			sendScannerHeartbeat.execute.mockResolvedValue(
+				err(new CommunityScannerBlacklistedError())
+			);
+
+			await request(app)
+				.post(`/community-scanners/${scannerId}/scans`)
+				.set('Authorization', 'Bearer satlas_scanner_secret')
+				.send(createValidScanBody(randomUUID()))
+				.expect(403);
+			expect(registerScan.execute).not.toHaveBeenCalled();
 		});
 	});
 

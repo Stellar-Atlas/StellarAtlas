@@ -2491,7 +2491,9 @@
 					},
 					"400": { "description": "Invalid scanner id" },
 					"401": { "description": "Missing or invalid bearer API key" },
-					"403": { "description": "Scanner is blacklisted" },
+					"403": {
+						"description": "Scanner is blacklisted or temporarily blocked"
+					},
 					"404": { "description": "Scanner not found" },
 					"500": { "description": "Server error" }
 				}
@@ -2562,7 +2564,9 @@
 					},
 					"400": { "description": "Invalid scanner id" },
 					"401": { "description": "Missing or invalid bearer API key" },
-					"403": { "description": "Scanner is blacklisted" },
+					"403": {
+						"description": "Scanner is blacklisted or temporarily blocked"
+					},
 					"404": { "description": "Scanner not found" },
 					"500": { "description": "Server error" }
 				}
@@ -2601,7 +2605,9 @@
 					"204": { "description": "job heartbeat accepted" },
 					"400": { "description": "Invalid scanner id or scan job id" },
 					"401": { "description": "Missing or invalid bearer API key" },
-					"403": { "description": "Scanner is blacklisted" },
+					"403": {
+						"description": "Scanner is blacklisted or temporarily blocked"
+					},
 					"404": {
 						"description": "Scanner not found or scan job is not owned and active"
 					},
@@ -2714,7 +2720,7 @@
 					"400": { "description": "Invalid scanner id or scan body" },
 					"401": { "description": "Missing or invalid bearer API key" },
 					"403": {
-						"description": "Scanner is blacklisted or job is owned by another scanner"
+						"description": "Scanner is blacklisted, temporarily blocked, or job is owned by another scanner"
 					},
 					"404": { "description": "Scanner or scan job not found" },
 					"409": { "description": "Scan job is not active" },
@@ -2725,7 +2731,7 @@
 		"/v1/community-scanners/metrics": {
 			"get": {
 				"summary": "Get community scanner metrics",
-				"description": "Returns aggregate community scanner metrics. Active/offline counts are derived from heartbeat freshness, and no contact email or API key material is returned.",
+				"description": "Returns aggregate community scanner metrics. Active/offline counts are derived from heartbeat freshness and scanner blocking state, and no contact email or API key material is returned.",
 				"tags": ["CommunityScanners"],
 				"operationId": "getCommunityScannerMetrics",
 				"responses": {

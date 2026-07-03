@@ -155,6 +155,33 @@ describe('CommunityScanner Entity', () => {
 		});
 	});
 
+	describe('scanner blocking', () => {
+		it('should block permanently blacklisted scanners', () => {
+			scanner.isBlacklisted = true;
+			scanner.blacklistedUntil = null;
+
+			expect(scanner.isBlocked(new Date('2026-07-03T12:00:00.000Z'))).toBe(
+				true
+			);
+		});
+
+		it('should block scanners until a future blacklist expiry', () => {
+			scanner.blacklistedUntil = new Date('2026-07-03T12:05:00.000Z');
+
+			expect(scanner.isBlocked(new Date('2026-07-03T12:00:00.000Z'))).toBe(
+				true
+			);
+		});
+
+		it('should not block scanners after a temporary blacklist expires', () => {
+			scanner.blacklistedUntil = new Date('2026-07-03T11:59:59.000Z');
+
+			expect(scanner.isBlocked(new Date('2026-07-03T12:00:00.000Z'))).toBe(
+				false
+			);
+		});
+	});
+
 	describe('dynamic weight calculation', () => {
 		beforeEach(() => {
 			scanner.successRate = 90;
@@ -170,6 +197,12 @@ describe('CommunityScanner Entity', () => {
 
 		it('should penalize blacklisted scanners', () => {
 			scanner.isBlacklisted = true;
+			const weight = scanner.calculateWeight();
+			expect(weight).toBe(0);
+		});
+
+		it('should penalize temporarily blocked scanners', () => {
+			scanner.blacklistedUntil = new Date(Date.now() + 60 * 1000);
 			const weight = scanner.calculateWeight();
 			expect(weight).toBe(0);
 		});
