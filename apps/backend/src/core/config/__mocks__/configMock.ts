@@ -9,6 +9,9 @@ export class ConfigMock implements Config {
 	enableDeadManSwitch = false;
 	enableSentry = false;
 	horizonUrl: Url = { value: 'url' };
+	rpcUrl: Url | undefined;
+	failoverFrontendBaseUrl: Url | undefined;
+	failoverApiBaseUrl: Url | undefined;
 	ipStackAccessKey = 'key';
 	nodeEnv = 'test';
 	sentryDSN: string | undefined = 'dsn';

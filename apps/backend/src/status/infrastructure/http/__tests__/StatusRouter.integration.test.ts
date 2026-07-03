@@ -9,6 +9,12 @@ import { GetDataQualityStatus } from '@status/use-cases/get-data-quality-status/
 import { GetDataFreshnessStatus } from '@status/use-cases/get-data-freshness-status/GetDataFreshnessStatus.js';
 import { GetRollupStatus } from '@status/use-cases/get-rollup-status/GetRollupStatus.js';
 import { GetScanStatus } from '@status/use-cases/get-scan-status/GetScanStatus.js';
+import {
+	GetFailoverStatus,
+	GetFrontendStatus,
+	GetHorizonStatus,
+	GetRpcStatus
+} from '@status/use-cases/get-service-status/GetServiceStatus.js';
 import { GetStatus } from '@status/use-cases/get-status/GetStatus.js';
 import { GetWorkerStatus } from '@status/use-cases/get-worker-status/GetWorkerStatus.js';
 
@@ -20,6 +26,10 @@ describe('StatusRouter.integration', () => {
 	let getDataFreshnessStatus: jest.Mocked<GetDataFreshnessStatus>;
 	let getScanStatus: jest.Mocked<GetScanStatus>;
 	let getRollupStatus: jest.Mocked<GetRollupStatus>;
+	let getFrontendStatus: jest.Mocked<GetFrontendStatus>;
+	let getHorizonStatus: jest.Mocked<GetHorizonStatus>;
+	let getRpcStatus: jest.Mocked<GetRpcStatus>;
+	let getFailoverStatus: jest.Mocked<GetFailoverStatus>;
 	let getArchiveQueueStatus: jest.Mocked<GetArchiveQueueStatus>;
 	let getWorkerStatus: jest.Mocked<GetWorkerStatus>;
 
@@ -30,6 +40,10 @@ describe('StatusRouter.integration', () => {
 		getDataFreshnessStatus = mock<GetDataFreshnessStatus>();
 		getScanStatus = mock<GetScanStatus>();
 		getRollupStatus = mock<GetRollupStatus>();
+		getFrontendStatus = mock<GetFrontendStatus>();
+		getHorizonStatus = mock<GetHorizonStatus>();
+		getRpcStatus = mock<GetRpcStatus>();
+		getFailoverStatus = mock<GetFailoverStatus>();
 		getArchiveQueueStatus = mock<GetArchiveQueueStatus>();
 		getWorkerStatus = mock<GetWorkerStatus>();
 		app = express();
@@ -42,6 +56,10 @@ describe('StatusRouter.integration', () => {
 				getDataFreshnessStatus,
 				getScanStatus,
 				getRollupStatus,
+				getFrontendStatus,
+				getHorizonStatus,
+				getRpcStatus,
+				getFailoverStatus,
 				getArchiveQueueStatus,
 				getWorkerStatus
 			})
@@ -291,6 +309,48 @@ describe('StatusRouter.integration', () => {
 				}
 			})
 		);
+		getFrontendStatus.execute.mockReturnValue(
+			ok({
+				generatedAt: '2026-07-03T12:00:00.000Z',
+				status: 'ok',
+				service: 'frontend',
+				configured: true,
+				url: 'https://stellaratlas.io',
+				probe: 'not_run'
+			})
+		);
+		getHorizonStatus.execute.mockReturnValue(
+			ok({
+				generatedAt: '2026-07-03T12:00:00.000Z',
+				status: 'ok',
+				service: 'horizon',
+				configured: true,
+				url: 'https://horizon.example.com',
+				probe: 'not_run'
+			})
+		);
+		getRpcStatus.execute.mockReturnValue(
+			ok({
+				generatedAt: '2026-07-03T12:00:00.000Z',
+				status: 'unavailable',
+				service: 'rpc',
+				configured: false,
+				url: null,
+				probe: 'not_run'
+			})
+		);
+		getFailoverStatus.execute.mockReturnValue(
+			ok({
+				generatedAt: '2026-07-03T12:00:00.000Z',
+				status: 'unavailable',
+				service: 'failover',
+				configured: false,
+				complete: false,
+				frontendUrl: null,
+				apiUrl: null,
+				probe: 'not_run'
+			})
+		);
 		getArchiveQueueStatus.execute.mockResolvedValue(
 			ok({
 				generatedAt: '2026-07-03T12:00:00.000Z',
@@ -345,6 +405,20 @@ describe('StatusRouter.integration', () => {
 			.expect(200)
 			.expect((response) => {
 				expect(response.body.networkRollups.matchingDays).toBe(7);
+			});
+		await request(app).get('/status/frontend').expect(200);
+		await request(app).get('/status/horizon').expect(200);
+		await request(app)
+			.get('/status/rpc')
+			.expect(200)
+			.expect((response) => {
+				expect(response.body.probe).toBe('not_run');
+			});
+		await request(app)
+			.get('/status/failover')
+			.expect(200)
+			.expect((response) => {
+				expect(response.body.configured).toBe(false);
 			});
 		await request(app)
 			.get('/status/archive-queue')

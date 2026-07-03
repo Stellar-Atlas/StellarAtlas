@@ -4,6 +4,7 @@ import { err, ok, Result } from 'neverthrow';
 import { Url } from '../domain/Url.js';
 import { CrawlerConfiguration } from 'crawler';
 import { resolveAppEnvPath } from 'shared/lib/env/resolve-app-env-path.js';
+import { parseOptionalUrl } from './parseOptionalUrl.js';
 
 config({
 	path: resolveAppEnvPath(import.meta.url, 'backend'),
@@ -40,6 +41,9 @@ export interface Config {
 	sentryDSN: string | undefined;
 	ipStackAccessKey: string;
 	horizonUrl: Url;
+	rpcUrl?: Url;
+	failoverFrontendBaseUrl?: Url;
+	failoverApiBaseUrl?: Url;
 	deadManSwitchUrl: Url | undefined;
 	enableDeadManSwitch: boolean;
 	enableS3Backup: boolean;
@@ -94,6 +98,9 @@ export class DefaultConfig implements Config {
 	userServicePassword?: string;
 	frontendBaseUrl?: string;
 	frontendRevalidateToken?: string;
+	rpcUrl?: Url;
+	failoverFrontendBaseUrl?: Url;
+	failoverApiBaseUrl?: Url;
 	historyMaxFileMs?: number;
 	historySlowArchiveMaxLedgers?: number;
 	logLevel = 'info';
@@ -349,6 +356,23 @@ export function getConfigFromEnv(): Result<Config, Error> {
 	if (isString(frontendRevalidateToken))
 		config.frontendRevalidateToken = frontendRevalidateToken;
 
+	const rpcUrlResult = parseOptionalUrl(process.env.STELLAR_RPC_URL);
+	if (rpcUrlResult.isErr()) return err(rpcUrlResult.error);
+	config.rpcUrl = rpcUrlResult.value;
+
+	const failoverFrontendUrlResult = parseOptionalUrl(
+		process.env.FAILOVER_FRONTEND_BASE_URL
+	);
+	if (failoverFrontendUrlResult.isErr())
+		return err(failoverFrontendUrlResult.error);
+	config.failoverFrontendBaseUrl = failoverFrontendUrlResult.value;
+
+	const failoverApiUrlResult = parseOptionalUrl(
+		process.env.FAILOVER_API_BASE_URL
+	);
+	if (failoverApiUrlResult.isErr()) return err(failoverApiUrlResult.error);
+	config.failoverApiBaseUrl = failoverApiUrlResult.value;
+
 	// SMTP configuration
 	let enableLocalSMTP = parseBoolean(process.env.ENABLE_LOCAL_SMTP);
 	if (enableLocalSMTP === undefined) {
@@ -360,25 +384,35 @@ export function getConfigFromEnv(): Result<Config, Error> {
 	if (enableLocalSMTP) {
 		const smtpHost = process.env.SMTP_HOST;
 		if (!isString(smtpHost)) {
-			return err(new Error('SMTP_HOST must be defined when local SMTP is enabled'));
+			return err(
+				new Error('SMTP_HOST must be defined when local SMTP is enabled')
+			);
 		}
 		config.smtpHost = smtpHost;
 
 		const smtpUsername = process.env.SMTP_USERNAME;
 		if (!isString(smtpUsername)) {
-			return err(new Error('SMTP_USERNAME must be defined when local SMTP is enabled'));
+			return err(
+				new Error('SMTP_USERNAME must be defined when local SMTP is enabled')
+			);
 		}
 		config.smtpUsername = smtpUsername;
 
 		const smtpPassword = process.env.SMTP_PASSWORD;
 		if (!isString(smtpPassword)) {
-			return err(new Error('SMTP_PASSWORD must be defined when local SMTP is enabled'));
+			return err(
+				new Error('SMTP_PASSWORD must be defined when local SMTP is enabled')
+			);
 		}
 		config.smtpPassword = smtpPassword;
 
 		const smtpFromAddress = process.env.SMTP_FROM_ADDRESS;
 		if (!isString(smtpFromAddress)) {
-			return err(new Error('SMTP_FROM_ADDRESS must be defined when local SMTP is enabled'));
+			return err(
+				new Error(
+					'SMTP_FROM_ADDRESS must be defined when local SMTP is enabled'
+				)
+			);
 		}
 		// Validate email format
 		if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(smtpFromAddress)) {

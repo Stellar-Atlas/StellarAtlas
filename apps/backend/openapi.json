@@ -522,6 +522,202 @@
 				}
 			}
 		},
+		"/v1/status/frontend": {
+			"get": {
+				"summary": "Get frontend configuration status",
+				"description": "Returns configured frontend target status from local configuration. It does not probe the frontend.",
+				"tags": ["Status"],
+				"operationId": "getFrontendStatus",
+				"responses": {
+					"200": {
+						"description": "frontend status",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object",
+									"required": [
+										"generatedAt",
+										"status",
+										"service",
+										"configured",
+										"url",
+										"probe"
+									],
+									"properties": {
+										"generatedAt": {
+											"type": "string",
+											"format": "date-time"
+										},
+										"status": {
+											"type": "string",
+											"enum": ["ok", "degraded", "unavailable"]
+										},
+										"service": { "type": "string", "enum": ["frontend"] },
+										"configured": { "type": "boolean" },
+										"url": {
+											"type": "string",
+											"format": "uri",
+											"nullable": true
+										},
+										"probe": { "type": "string", "enum": ["not_run"] }
+									}
+								}
+							}
+						}
+					},
+					"500": { "description": "Server error" }
+				}
+			}
+		},
+		"/v1/status/horizon": {
+			"get": {
+				"summary": "Get Horizon configuration status",
+				"description": "Returns configured Horizon target status from local configuration. It does not probe Horizon.",
+				"tags": ["Status"],
+				"operationId": "getHorizonStatus",
+				"responses": {
+					"200": {
+						"description": "Horizon status",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object",
+									"required": [
+										"generatedAt",
+										"status",
+										"service",
+										"configured",
+										"url",
+										"probe"
+									],
+									"properties": {
+										"generatedAt": {
+											"type": "string",
+											"format": "date-time"
+										},
+										"status": {
+											"type": "string",
+											"enum": ["ok", "degraded", "unavailable"]
+										},
+										"service": { "type": "string", "enum": ["horizon"] },
+										"configured": { "type": "boolean" },
+										"url": {
+											"type": "string",
+											"format": "uri",
+											"nullable": true
+										},
+										"probe": { "type": "string", "enum": ["not_run"] }
+									}
+								}
+							}
+						}
+					},
+					"500": { "description": "Server error" }
+				}
+			}
+		},
+		"/v1/status/rpc": {
+			"get": {
+				"summary": "Get RPC configuration status",
+				"description": "Returns configured Stellar RPC target status from local configuration. It does not probe RPC.",
+				"tags": ["Status"],
+				"operationId": "getRpcStatus",
+				"responses": {
+					"200": {
+						"description": "RPC status",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object",
+									"required": [
+										"generatedAt",
+										"status",
+										"service",
+										"configured",
+										"url",
+										"probe"
+									],
+									"properties": {
+										"generatedAt": {
+											"type": "string",
+											"format": "date-time"
+										},
+										"status": {
+											"type": "string",
+											"enum": ["ok", "degraded", "unavailable"]
+										},
+										"service": { "type": "string", "enum": ["rpc"] },
+										"configured": { "type": "boolean" },
+										"url": {
+											"type": "string",
+											"format": "uri",
+											"nullable": true
+										},
+										"probe": { "type": "string", "enum": ["not_run"] }
+									}
+								}
+							}
+						}
+					},
+					"500": { "description": "Server error" }
+				}
+			}
+		},
+		"/v1/status/failover": {
+			"get": {
+				"summary": "Get failover configuration status",
+				"description": "Returns configured failover frontend/API targets from local configuration. It does not probe failover targets.",
+				"tags": ["Status"],
+				"operationId": "getFailoverStatus",
+				"responses": {
+					"200": {
+						"description": "failover status",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object",
+									"required": [
+										"generatedAt",
+										"status",
+										"service",
+										"configured",
+										"complete",
+										"frontendUrl",
+										"apiUrl",
+										"probe"
+									],
+									"properties": {
+										"generatedAt": {
+											"type": "string",
+											"format": "date-time"
+										},
+										"status": {
+											"type": "string",
+											"enum": ["ok", "degraded", "unavailable"]
+										},
+										"service": { "type": "string", "enum": ["failover"] },
+										"configured": { "type": "boolean" },
+										"complete": { "type": "boolean" },
+										"frontendUrl": {
+											"type": "string",
+											"format": "uri",
+											"nullable": true
+										},
+										"apiUrl": {
+											"type": "string",
+											"format": "uri",
+											"nullable": true
+										},
+										"probe": { "type": "string", "enum": ["not_run"] }
+									}
+								}
+							}
+						}
+					},
+					"500": { "description": "Server error" }
+				}
+			}
+		},
 		"/v1/status/data-freshness": {
 			"get": {
 				"summary": "Get persisted data freshness status",

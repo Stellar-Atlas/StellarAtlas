@@ -6,6 +6,12 @@ import { GetDataQualityStatus } from '../../use-cases/get-data-quality-status/Ge
 import { GetDataFreshnessStatus } from '../../use-cases/get-data-freshness-status/GetDataFreshnessStatus.js';
 import { GetRollupStatus } from '../../use-cases/get-rollup-status/GetRollupStatus.js';
 import { GetScanStatus } from '../../use-cases/get-scan-status/GetScanStatus.js';
+import {
+	GetFailoverStatus,
+	GetFrontendStatus,
+	GetHorizonStatus,
+	GetRpcStatus
+} from '../../use-cases/get-service-status/GetServiceStatus.js';
 import { GetStatus } from '../../use-cases/get-status/GetStatus.js';
 import { GetWorkerStatus } from '../../use-cases/get-worker-status/GetWorkerStatus.js';
 
@@ -16,6 +22,10 @@ export interface StatusRouterConfig {
 	readonly getDataFreshnessStatus: GetDataFreshnessStatus;
 	readonly getScanStatus: GetScanStatus;
 	readonly getRollupStatus: GetRollupStatus;
+	readonly getFrontendStatus: GetFrontendStatus;
+	readonly getHorizonStatus: GetHorizonStatus;
+	readonly getRpcStatus: GetRpcStatus;
+	readonly getFailoverStatus: GetFailoverStatus;
 	readonly getArchiveQueueStatus: GetArchiveQueueStatus;
 	readonly getWorkerStatus: GetWorkerStatus;
 }
@@ -47,6 +57,22 @@ export const StatusRouterWrapper = (config: StatusRouterConfig): Router => {
 
 	statusRouter.get('/rollups', async function (_req, res) {
 		return sendStatusResult(res, await config.getRollupStatus.execute());
+	});
+
+	statusRouter.get('/frontend', function (_req, res) {
+		return sendStatusResult(res, config.getFrontendStatus.execute());
+	});
+
+	statusRouter.get('/horizon', function (_req, res) {
+		return sendStatusResult(res, config.getHorizonStatus.execute());
+	});
+
+	statusRouter.get('/rpc', function (_req, res) {
+		return sendStatusResult(res, config.getRpcStatus.execute());
+	});
+
+	statusRouter.get('/failover', function (_req, res) {
+		return sendStatusResult(res, config.getFailoverStatus.execute());
 	});
 
 	statusRouter.get('/archive-queue', async function (_req, res) {

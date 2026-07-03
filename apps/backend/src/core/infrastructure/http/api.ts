@@ -51,6 +51,12 @@ import { GetDataQualityStatus } from '@status/use-cases/get-data-quality-status/
 import { GetDataFreshnessStatus } from '@status/use-cases/get-data-freshness-status/GetDataFreshnessStatus.js';
 import { GetRollupStatus } from '@status/use-cases/get-rollup-status/GetRollupStatus.js';
 import { GetScanStatus } from '@status/use-cases/get-scan-status/GetScanStatus.js';
+import {
+	GetFailoverStatus,
+	GetFrontendStatus,
+	GetHorizonStatus,
+	GetRpcStatus
+} from '@status/use-cases/get-service-status/GetServiceStatus.js';
 import { GetStatus } from '@status/use-cases/get-status/GetStatus.js';
 import { GetWorkerStatus } from '@status/use-cases/get-worker-status/GetWorkerStatus.js';
 import { frontendV4ProxyMiddleware } from './FrontendV4Proxy.js';
@@ -165,6 +171,10 @@ const listen = async () => {
 			getDataFreshnessStatus: kernel.container.get(GetDataFreshnessStatus),
 			getScanStatus: kernel.container.get(GetScanStatus),
 			getRollupStatus: kernel.container.get(GetRollupStatus),
+			getFrontendStatus: kernel.container.get(GetFrontendStatus),
+			getHorizonStatus: kernel.container.get(GetHorizonStatus),
+			getRpcStatus: kernel.container.get(GetRpcStatus),
+			getFailoverStatus: kernel.container.get(GetFailoverStatus),
 			getArchiveQueueStatus: kernel.container.get(GetArchiveQueueStatus),
 			getWorkerStatus: kernel.container.get(GetWorkerStatus)
 		})
