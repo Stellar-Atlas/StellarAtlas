@@ -1,5 +1,8 @@
 import { injectable } from 'inversify';
-import type { ScanJobRepository } from '@history-scan-coordinator/domain/ScanJobRepository.js';
+import type {
+	ArchiveScanQueueStats,
+	ScanJobRepository
+} from '@history-scan-coordinator/domain/ScanJobRepository.js';
 import { ScanJob } from '@history-scan-coordinator/domain/ScanJob.js';
 import { EntityManager, MoreThan, Repository } from 'typeorm';
 
@@ -34,6 +37,17 @@ type RawScanJobRow = Partial<ScanJobRow> & {
 	concurrency?: NumericValue | null;
 	createdat?: Date | string;
 	updatedat?: Date | string;
+};
+
+type RawQueueStatsRow = {
+	pendingJobs?: NumericValue;
+	pendingjobs?: NumericValue;
+	activeJobs?: NumericValue;
+	activejobs?: NumericValue;
+	staleJobs?: NumericValue;
+	stalejobs?: NumericValue;
+	totalUnfinishedJobs?: NumericValue;
+	totalunfinishedjobs?: NumericValue;
 };
 
 type RawQueryResult =
@@ -124,7 +138,10 @@ export class TypeOrmScanJobRepository implements ScanJobRepository {
 		};
 	}
 
-	private requireNumber(value: NumericValue | undefined, field: string): number {
+	private requireNumber(
+		value: NumericValue | undefined,
+		field: string
+	): number {
 		const numberValue = this.parseNumber(value);
 		if (numberValue === null) {
 			throw new Error(`Scan job row is missing numeric field ${field}`);
@@ -141,7 +158,9 @@ export class TypeOrmScanJobRepository implements ScanJobRepository {
 		return value;
 	}
 
-	private requireStatus(value: string | undefined): 'PENDING' | 'TAKEN' | 'DONE' {
+	private requireStatus(
+		value: string | undefined
+	): 'PENDING' | 'TAKEN' | 'DONE' {
 		if (value === 'PENDING' || value === 'TAKEN' || value === 'DONE') {
 			return value;
 		}
@@ -165,7 +184,9 @@ export class TypeOrmScanJobRepository implements ScanJobRepository {
 		return new Date(value);
 	}
 
-	private toNullableNumber(value: NumericValue | null | undefined): number | null {
+	private toNullableNumber(
+		value: NumericValue | null | undefined
+	): number | null {
 		if (value === null || value === undefined) return null;
 
 		return this.parseNumber(value);
@@ -256,6 +277,51 @@ export class TypeOrmScanJobRepository implements ScanJobRepository {
 				{ status: 'PENDING', updatedAt: MoreThan(afterUpdatedAt) }
 			]
 		});
+	}
+
+	async getQueueStats(staleTakenBefore: Date): Promise<ArchiveScanQueueStats> {
+		const row = await this.baseRepository
+			.createQueryBuilder('job')
+			.select("count(*) filter (where job.status = 'PENDING')", 'pendingJobs')
+			.addSelect(
+				`count(*) filter (
+					where job.status = 'TAKEN'
+					and job."updatedAt" >= :staleTakenBefore
+				)`,
+				'activeJobs'
+			)
+			.addSelect(
+				`count(*) filter (
+					where job.status = 'TAKEN'
+					and job."updatedAt" < :staleTakenBefore
+				)`,
+				'staleJobs'
+			)
+			.addSelect(
+				"count(*) filter (where job.status in ('PENDING', 'TAKEN'))",
+				'totalUnfinishedJobs'
+			)
+			.setParameter('staleTakenBefore', staleTakenBefore)
+			.getRawOne<RawQueueStatsRow>();
+
+		return {
+			pendingJobs: this.requireNumber(
+				row?.pendingJobs ?? row?.pendingjobs,
+				'pendingJobs'
+			),
+			activeJobs: this.requireNumber(
+				row?.activeJobs ?? row?.activejobs,
+				'activeJobs'
+			),
+			staleJobs: this.requireNumber(
+				row?.staleJobs ?? row?.stalejobs,
+				'staleJobs'
+			),
+			totalUnfinishedJobs: this.requireNumber(
+				row?.totalUnfinishedJobs ?? row?.totalunfinishedjobs,
+				'totalUnfinishedJobs'
+			)
+		};
 	}
 
 	async markTakenJobActive(remoteId: string): Promise<boolean> {

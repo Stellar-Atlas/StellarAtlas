@@ -34,8 +34,10 @@ import { GetScpStatements } from '@network-scan/use-cases/get-scp-statements/Get
 import { RequestUnsubscribeLink } from '@notifications/use-cases/request-unsubscribe-link/RequestUnsubscribeLink.js';
 import { RegisterScan } from '@history-scan-coordinator/use-cases/register-scan/RegisterScan.js';
 import { historyScanRouter } from '@history-scan-coordinator/infrastructure/http/HistoryScanRouter.js';
+import { archiveScanRouter } from '@history-scan-coordinator/infrastructure/http/ArchiveScanRouter.js';
 import { GetScanJob } from '@history-scan-coordinator/use-cases/get-scan-job/GetScanJob.js';
 import { TouchScanJob } from '@history-scan-coordinator/use-cases/touch-scan-job/TouchScanJob.js';
+import { GetArchiveScanQueue } from '@history-scan-coordinator/use-cases/get-archive-scan-queue/GetArchiveScanQueue.js';
 import { frontendV4ProxyMiddleware } from './FrontendV4Proxy.js';
 
 let server: Server;
@@ -111,6 +113,13 @@ const listen = async () => {
 			unmuteNotification: kernel.container.get(UnmuteNotification),
 			unsubscribe: kernel.container.get(Unsubscribe),
 			requestUnsubscribeLink: kernel.container.get(RequestUnsubscribeLink)
+		})
+	);
+
+	api.use(
+		'/v1/archive-scans',
+		archiveScanRouter({
+			getArchiveScanQueue: kernel.container.get(GetArchiveScanQueue)
 		})
 	);
 

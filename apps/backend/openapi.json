@@ -537,6 +537,61 @@
 				}
 			}
 		},
+		"/v1/archive-scans/queue": {
+			"get": {
+				"summary": "Get archive scan queue stats",
+				"description": "Returns a read-only queue snapshot for unfinished history archive scan jobs.",
+				"tags": ["ArchiveScans"],
+				"operationId": "getArchiveScanQueue",
+				"responses": {
+					"200": {
+						"description": "queue snapshot",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object",
+									"required": [
+										"pendingJobs",
+										"activeJobs",
+										"staleJobs",
+										"totalUnfinishedJobs",
+										"generatedAt",
+										"staleJobAgeMs"
+									],
+									"properties": {
+										"pendingJobs": {
+											"type": "integer",
+											"minimum": 0
+										},
+										"activeJobs": {
+											"type": "integer",
+											"minimum": 0
+										},
+										"staleJobs": {
+											"type": "integer",
+											"minimum": 0
+										},
+										"totalUnfinishedJobs": {
+											"type": "integer",
+											"minimum": 0
+										},
+										"generatedAt": {
+											"type": "string",
+											"format": "date-time"
+										},
+										"staleJobAgeMs": {
+											"type": "integer",
+											"minimum": 0
+										}
+									}
+								}
+							}
+						}
+					},
+					"500": { "description": "Server error" }
+				}
+			}
+		},
 		"/v1/history-scan/job": {
 			"get": {
 				"summary": "Claim the next pending history scan job",

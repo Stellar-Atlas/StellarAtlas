@@ -67,9 +67,7 @@ describe('TypeOrmScanJobRepository.integration', () => {
 			await typeOrmScanJobRepository.save(scanJobs);
 
 			const nextJobs = await Promise.all(
-				Array.from({ length: 8 }, () =>
-					typeOrmScanJobRepository.fetchNextJob()
-				)
+				Array.from({ length: 8 }, () => typeOrmScanJobRepository.fetchNextJob())
 			);
 
 			const urls = nextJobs.map((job) => job?.url);
@@ -144,6 +142,42 @@ describe('TypeOrmScanJobRepository.integration', () => {
 		});
 	});
 
+	describe('getQueueStats', () => {
+		it('should count pending, active, and stale unfinished jobs', async () => {
+			const pendingJob = new ScanJob('pending-url');
+			const activeJob = new ScanJob('active-url');
+			activeJob.status = 'TAKEN';
+			const staleJob = new ScanJob('stale-url');
+			staleJob.status = 'TAKEN';
+			const finishedJob = new ScanJob('done-url');
+			finishedJob.status = 'DONE';
+			await typeOrmScanJobRepository.save([
+				pendingJob,
+				activeJob,
+				staleJob,
+				finishedJob
+			]);
+
+			await kernel.container
+				.get(DataSource)
+				.query(
+					'update history_archive_scan_job_queue set "updatedAt" = $1 where url = $2',
+					[new Date('2026-01-01T00:00:00.000Z'), staleJob.url]
+				);
+
+			const stats = await typeOrmScanJobRepository.getQueueStats(
+				new Date('2026-01-02T00:00:00.000Z')
+			);
+
+			expect(stats).toEqual({
+				pendingJobs: 1,
+				activeJobs: 1,
+				staleJobs: 1,
+				totalUnfinishedJobs: 3
+			});
+		});
+	});
+
 	describe('markTakenJobActive', () => {
 		it('should refresh updatedAt only for a taken job', async () => {
 			const scanJob = new ScanJob('active-url');
@@ -162,9 +196,7 @@ describe('TypeOrmScanJobRepository.integration', () => {
 				scanJob.remoteId
 			);
 			const wasPendingUpdated =
-				await typeOrmScanJobRepository.markTakenJobActive(
-					pendingJob.remoteId
-				);
+				await typeOrmScanJobRepository.markTakenJobActive(pendingJob.remoteId);
 
 			const refreshedJob = await typeOrmScanJobRepository.findByRemoteId(
 				scanJob.remoteId
