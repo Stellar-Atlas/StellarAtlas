@@ -1,6 +1,4 @@
-import { createHash } from 'node:crypto';
-import { err, ok, Result } from 'neverthrow';
-import { mapUnknownToError } from '@core/utilities/mapUnknownToError.js';
+import { err, Result } from 'neverthrow';
 import {
 	radarApiDocsFailure,
 	type RadarApiDocsFailureDTO,
@@ -10,12 +8,15 @@ import type {
 	CrossCheckRadarApiDocsSource,
 	RadarApiDocsFetchOptions
 } from '../../domain/CrossCheckApiDocsSources.js';
+import {
+	hashSha256,
+	mapRadarFetchError,
+	type RadarFetch,
+	readBoundedRadarText
+} from './RadarHttp.js';
 import { parseRadarSwaggerInitializer } from './RadarApiDocsParser.js';
 
-export type RadarApiDocsFetch = (
-	input: string | URL,
-	init?: RequestInit
-) => Promise<Response>;
+export type RadarApiDocsFetch = RadarFetch;
 
 export type FetchRadarApiDocsOptions = RadarApiDocsFetchOptions;
 
@@ -58,8 +59,20 @@ export class RadarApiDocsSourceAdapter implements CrossCheckRadarApiDocsSource {
 				);
 			}
 
-			const bodyOrError = await readBoundedText(response, maxBytes);
-			if (bodyOrError.isErr()) return err(bodyOrError.error);
+			const bodyOrError = await readBoundedRadarText(
+				response,
+				maxBytes,
+				'RADAR API docs'
+			);
+			if (bodyOrError.isErr()) {
+				return err(
+					radarApiDocsFailure(
+						bodyOrError.error.kind,
+						bodyOrError.error.message,
+						{ limitBytes: bodyOrError.error.limitBytes }
+					)
+				);
+			}
 
 			return parseRadarSwaggerInitializer({
 				assetUrl: url,
@@ -69,80 +82,8 @@ export class RadarApiDocsSourceAdapter implements CrossCheckRadarApiDocsSource {
 				initializer: bodyOrError.value
 			});
 		} catch (error) {
-			const mappedError = mapUnknownToError(error);
-			return err(
-				radarApiDocsFailure(
-					isTimeoutError(error) ? 'timeout' : 'network_error',
-					mappedError.message
-				)
-			);
+			const mappedError = mapRadarFetchError(error);
+			return err(radarApiDocsFailure(mappedError.kind, mappedError.message));
 		}
 	}
-}
-
-async function readBoundedText(
-	response: Response,
-	maxBytes: number
-): Promise<Result<string, RadarApiDocsFailureDTO>> {
-	if (!Number.isSafeInteger(maxBytes) || maxBytes < 1) {
-		return err(
-			radarApiDocsFailure(
-				'max_bytes_exceeded',
-				'RADAR API docs maxBytes must be a positive integer',
-				{ limitBytes: maxBytes }
-			)
-		);
-	}
-
-	if (!response.body) {
-		const text = await response.text();
-		if (Buffer.byteLength(text, 'utf8') > maxBytes) {
-			return err(createMaxBytesExceededFailure(maxBytes));
-		}
-		return ok(text);
-	}
-
-	const reader = response.body.getReader();
-	const decoder = new TextDecoder();
-	let byteCount = 0;
-	let text = '';
-
-	try {
-		while (true) {
-			const result = await reader.read();
-			if (result.done) break;
-
-			byteCount += result.value.byteLength;
-			if (byteCount > maxBytes) {
-				await reader.cancel().catch(() => undefined);
-				return err(createMaxBytesExceededFailure(maxBytes));
-			}
-			text += decoder.decode(result.value, { stream: true });
-		}
-
-		text += decoder.decode();
-		return ok(text);
-	} finally {
-		reader.releaseLock();
-	}
-}
-
-function createMaxBytesExceededFailure(
-	maxBytes: number
-): RadarApiDocsFailureDTO {
-	return radarApiDocsFailure(
-		'max_bytes_exceeded',
-		`RADAR API docs response exceeded ${maxBytes} bytes`,
-		{ limitBytes: maxBytes }
-	);
-}
-
-function hashSha256(text: string): string {
-	return createHash('sha256').update(text, 'utf8').digest('hex');
-}
-
-function isTimeoutError(error: unknown): boolean {
-	if (typeof error !== 'object' || error === null) return false;
-	const name = 'name' in error ? error.name : undefined;
-	return name === 'TimeoutError' || name === 'AbortError';
 }
