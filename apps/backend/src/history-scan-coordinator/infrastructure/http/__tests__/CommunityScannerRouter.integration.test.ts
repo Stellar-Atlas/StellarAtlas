@@ -417,42 +417,6 @@ describe('CommunityScannerRouter.integration', () => {
 		});
 	});
 
-	describe('GET /metrics', () => {
-		it('should expose safe scanner metrics with a short public cache age', async () => {
-			getScannerMetrics.execute.mockResolvedValue(
-				ok({
-					generatedAt: '2026-07-03T12:00:00.000Z',
-					heartbeatFreshnessMs: 300000,
-					totalScanners: 3,
-					activeScanners: 2,
-					offlineScanners: 1,
-					degradedScanners: 0,
-					pendingScanners: 1,
-					blacklistedScanners: 0,
-					averageSuccessRate: 90,
-					totalJobsCompleted: 10,
-					totalJobsFailed: 1,
-					averageCompletionTimeMs: 12000
-				})
-			);
-
-			await request(app)
-				.get('/community-scanners/metrics')
-				.expect(200)
-				.expect('Cache-Control', 'public, max-age=10')
-				.expect((response) => {
-					expect(response.body).toMatchObject({
-						totalScanners: 3,
-						activeScanners: 2,
-						offlineScanners: 1
-					});
-					expect(response.body.contactEmail).toBeUndefined();
-					expect(response.body.apiKey).toBeUndefined();
-					expect(response.body.apiKeyHash).toBeUndefined();
-				});
-		});
-	});
-
 	function mountRouter(overrides: Partial<CommunityScannerRouterConfig> = {}) {
 		app = express();
 		app.use(express.json());

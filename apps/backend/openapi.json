@@ -2753,6 +2753,18 @@
 										"degradedScanners",
 										"pendingScanners",
 										"blacklistedScanners",
+										"permanentlyBlacklistedScanners",
+										"temporarilyBlockedScanners",
+										"claimDeniedByBlockedScanners",
+										"claimDeniedByActiveJobLimitScanners",
+										"claimDeniedByProductionScoreScanners",
+										"claimIneligibleScanners",
+										"probationaryScanners",
+										"claimEligibleScanners",
+										"claimPolicyMaxActiveJobsPerScanner",
+										"claimPolicyMinJobsForProductionScore",
+										"claimPolicyMinSuccessRate",
+										"staleScanJobAgeMs",
 										"averageSuccessRate",
 										"totalJobsCompleted",
 										"totalJobsFailed",
@@ -2775,6 +2787,66 @@
 										"blacklistedScanners": {
 											"type": "integer",
 											"minimum": 0
+										},
+										"permanentlyBlacklistedScanners": {
+											"type": "integer",
+											"minimum": 0,
+											"description": "Scanners blocked by the permanent blacklist flag."
+										},
+										"temporarilyBlockedScanners": {
+											"type": "integer",
+											"minimum": 0,
+											"description": "Scanners temporarily blocked by a future blacklist expiry."
+										},
+										"claimDeniedByBlockedScanners": {
+											"type": "integer",
+											"minimum": 0,
+											"description": "Scanners whose first claim-denial reason is blocked status."
+										},
+										"claimDeniedByActiveJobLimitScanners": {
+											"type": "integer",
+											"minimum": 0,
+											"description": "Scanners whose first claim-denial reason is the active job cap."
+										},
+										"claimDeniedByProductionScoreScanners": {
+											"type": "integer",
+											"minimum": 0,
+											"description": "Scanners whose first claim-denial reason is production success score."
+										},
+										"claimIneligibleScanners": {
+											"type": "integer",
+											"minimum": 0,
+											"description": "Scanners currently denied by any claim policy reason."
+										},
+										"probationaryScanners": {
+											"type": "integer",
+											"minimum": 0,
+											"description": "Scanners below the completed-job threshold for production scoring."
+										},
+										"claimEligibleScanners": {
+											"type": "integer",
+											"minimum": 0,
+											"description": "Scanners currently passing claim-admission policy; queue availability is reported separately."
+										},
+										"claimPolicyMaxActiveJobsPerScanner": {
+											"type": "integer",
+											"minimum": 0,
+											"description": "Active taken-job cap used by community scanner claim admission."
+										},
+										"claimPolicyMinJobsForProductionScore": {
+											"type": "integer",
+											"minimum": 0,
+											"description": "Completed plus failed job threshold before production score is enforced."
+										},
+										"claimPolicyMinSuccessRate": {
+											"type": "number",
+											"minimum": 0,
+											"description": "Minimum success rate required after the probation window."
+										},
+										"staleScanJobAgeMs": {
+											"type": "integer",
+											"minimum": 0,
+											"description": "Taken jobs older than this window are ignored for active-job denial counts."
 										},
 										"averageSuccessRate": { "type": "number" },
 										"totalJobsCompleted": {
