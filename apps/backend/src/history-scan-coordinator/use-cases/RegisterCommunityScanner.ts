@@ -87,9 +87,26 @@ export class RegisterCommunityScanner {
 				createdAt: (savedScanner.createdAt ?? new Date()).toISOString()
 			});
 		} catch (e) {
+			if (isContactEmailUniqueViolation(e)) {
+				return err(new DuplicateCommunityScannerError());
+			}
+
 			const error = mapUnknownToError(e);
 			this.exceptionLogger.captureException(error);
 			return err(error);
 		}
 	}
+}
+
+function isContactEmailUniqueViolation(error: unknown): boolean {
+	if (typeof error !== 'object' || error === null) return false;
+
+	const code = 'code' in error ? error.code : undefined;
+	if (code !== '23505') return false;
+
+	const constraint = 'constraint' in error ? error.constraint : undefined;
+	if (constraint === 'idx_community_scanners_contact_email_unique') return true;
+
+	const detail = 'detail' in error ? error.detail : undefined;
+	return typeof detail === 'string' && detail.includes('contact_email');
 }

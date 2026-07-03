@@ -87,6 +87,25 @@ describe('RegisterCommunityScanner', () => {
 		expect(scannerRepositoryMock.save).not.toHaveBeenCalled();
 	});
 
+	it('should map database unique races to duplicate scanner errors', async () => {
+		const scanner = new CommunityScanner();
+		const duplicateError = Object.assign(new Error('duplicate key value'), {
+			code: '23505',
+			constraint: 'idx_community_scanners_contact_email_unique'
+		});
+		scannerRepositoryMock.findOne.mockResolvedValue(null);
+		scannerRepositoryMock.create.mockReturnValue(scanner);
+		scannerRepositoryMock.save.mockRejectedValue(duplicateError);
+
+		const result = await useCase.execute(validRequest);
+
+		expect(result.isErr()).toBe(true);
+		expect(result._unsafeUnwrapErr()).toBeInstanceOf(
+			DuplicateCommunityScannerError
+		);
+		expect(exceptionLoggerMock.captureException).not.toHaveBeenCalled();
+	});
+
 	it('should log and return persistence errors', async () => {
 		const error = new Error('database unavailable');
 		scannerRepositoryMock.findOne.mockRejectedValue(error);

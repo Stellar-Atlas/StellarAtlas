@@ -5,7 +5,8 @@ import {
 	CreateDateColumn,
 	UpdateDateColumn,
 	BeforeInsert,
-	BeforeUpdate
+	BeforeUpdate,
+	Index
 } from 'typeorm';
 import { IsEmail, IsNotEmpty, IsOptional, MaxLength } from 'class-validator';
 import { getCommunityScannerHeartbeatCutoff } from '../../../domain/CommunityScannerHeartbeat.js';
@@ -18,6 +19,9 @@ export enum ScannerStatus {
 }
 
 @Entity('community_scanners')
+@Index('idx_community_scanners_contact_email_unique', ['contactEmail'], {
+	unique: true
+})
 export class CommunityScanner {
 	@PrimaryGeneratedColumn('uuid')
 	id!: string;
