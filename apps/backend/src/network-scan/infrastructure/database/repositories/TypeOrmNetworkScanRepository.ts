@@ -1,7 +1,10 @@
 import { LessThan, LessThanOrEqual, Repository } from 'typeorm';
 import NetworkScan from '@network-scan/domain/network/scan/NetworkScan.js';
 import { injectable } from 'inversify';
-import type { NetworkScanRepository } from '@network-scan/domain/network/scan/NetworkScanRepository.js';
+import type {
+	NetworkScanRepository,
+	NetworkScanSummary
+} from '@network-scan/domain/network/scan/NetworkScanRepository.js';
 import NetworkMeasurement from '@network-scan/domain/network/NetworkMeasurement.js';
 import { Measurement } from '@network-scan/domain/measurement/Measurement.js';
 
@@ -22,6 +25,47 @@ export class TypeOrmNetworkScanRepository implements NetworkScanRepository {
 		if (!scan) return undefined;
 
 		return scan.time;
+	}
+
+	async findScanSummary(from: Date, to: Date): Promise<NetworkScanSummary> {
+		const row = await this.repository
+			.createQueryBuilder('scan')
+			.select('COUNT(scan.id)', 'totalScans')
+			.addSelect(
+				'SUM(CASE WHEN scan.completed = true THEN 1 ELSE 0 END)',
+				'completedScans'
+			)
+			.addSelect('MAX(scan.time)', 'latestScanAt')
+			.addSelect(
+				'MAX(CASE WHEN scan.completed = true THEN scan.time ELSE NULL END)',
+				'latestCompletedScanAt'
+			)
+			.where('scan.time >= :from', { from })
+			.andWhere('scan.time <= :to', { to })
+			.getRawOne<{
+				totalScans?: string | number | null;
+				totalscans?: string | number | null;
+				completedScans?: string | number | null;
+				completedscans?: string | number | null;
+				latestScanAt?: string | Date | null;
+				latestscanat?: string | Date | null;
+				latestCompletedScanAt?: string | Date | null;
+				latestcompletedscanat?: string | Date | null;
+			}>();
+
+		const totalScans = Number(row?.totalScans ?? row?.totalscans ?? 0);
+		const completedScans = Number(
+			row?.completedScans ?? row?.completedscans ?? 0
+		);
+
+		return {
+			totalScans,
+			completedScans,
+			latestScanAt: toNullableDate(row?.latestScanAt ?? row?.latestscanat),
+			latestCompletedScanAt: toNullableDate(
+				row?.latestCompletedScanAt ?? row?.latestcompletedscanat
+			)
+		};
 	}
 
 	async findLatest(): Promise<NetworkScan | undefined> {
@@ -102,4 +146,9 @@ export class TypeOrmNetworkScanRepository implements NetworkScanRepository {
 		await this.repository.manager.save(NetworkMeasurement, measurements);
 		return this.repository.save(scans);
 	}
+}
+
+function toNullableDate(value: Date | string | null | undefined): Date | null {
+	if (!value) return null;
+	return value instanceof Date ? value : new Date(value);
 }

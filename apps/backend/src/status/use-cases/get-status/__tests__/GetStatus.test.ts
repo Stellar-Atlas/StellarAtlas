@@ -3,12 +3,14 @@ import { err, ok } from 'neverthrow';
 import { GetArchiveQueueStatus } from '../../get-archive-queue-status/GetArchiveQueueStatus.js';
 import { GetApiStatus } from '../../get-api-status/GetApiStatus.js';
 import { GetDataFreshnessStatus } from '../../get-data-freshness-status/GetDataFreshnessStatus.js';
+import { GetScanStatus } from '../../get-scan-status/GetScanStatus.js';
 import { GetWorkerStatus } from '../../get-worker-status/GetWorkerStatus.js';
 import { GetStatus } from '../GetStatus.js';
 
 describe('GetStatus', () => {
 	let getApiStatusMock: MockProxy<GetApiStatus>;
 	let getDataFreshnessStatusMock: MockProxy<GetDataFreshnessStatus>;
+	let getScanStatusMock: MockProxy<GetScanStatus>;
 	let getArchiveQueueStatusMock: MockProxy<GetArchiveQueueStatus>;
 	let getWorkerStatusMock: MockProxy<GetWorkerStatus>;
 	let getStatus: GetStatus;
@@ -17,11 +19,13 @@ describe('GetStatus', () => {
 		jest.useFakeTimers().setSystemTime(new Date('2026-07-03T12:00:00.000Z'));
 		getApiStatusMock = mock<GetApiStatus>();
 		getDataFreshnessStatusMock = mock<GetDataFreshnessStatus>();
+		getScanStatusMock = mock<GetScanStatus>();
 		getArchiveQueueStatusMock = mock<GetArchiveQueueStatus>();
 		getWorkerStatusMock = mock<GetWorkerStatus>();
 		getStatus = new GetStatus(
 			getApiStatusMock,
 			getDataFreshnessStatusMock,
+			getScanStatusMock,
 			getArchiveQueueStatusMock,
 			getWorkerStatusMock
 		);
@@ -47,6 +51,27 @@ describe('GetStatus', () => {
 					latestAt: '2026-07-03T11:50:00.000Z',
 					ageMs: 600000,
 					staleAfterMs: null
+				}
+			})
+		);
+		getScanStatusMock.execute.mockResolvedValue(
+			ok({
+				generatedAt: '2026-07-03T12:00:00.000Z',
+				status: 'ok',
+				networkScan: {
+					status: 'ok',
+					windowStart: '2026-07-02T12:00:00.000Z',
+					windowEnd: '2026-07-03T12:00:00.000Z',
+					windowMs: 86400000,
+					scanIntervalMs: 180000,
+					expectedScans: 480,
+					totalScans: 480,
+					completedScans: 479,
+					incompleteScans: 1,
+					completionRate: 99.79,
+					expectedCompletionRate: 99.79,
+					latestScanAt: '2026-07-03T11:59:00.000Z',
+					latestCompletedScanAt: '2026-07-03T11:56:00.000Z'
 				}
 			})
 		);
@@ -98,6 +123,7 @@ describe('GetStatus', () => {
 			status: 'ok',
 			api: { status: 'ok' },
 			dataFreshness: { status: 'ok' },
+			scans: { status: 'ok' },
 			archiveQueue: { status: 'ok' },
 			workers: { status: 'ok' }
 		});

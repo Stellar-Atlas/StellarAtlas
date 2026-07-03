@@ -442,6 +442,7 @@
 										"status",
 										"api",
 										"dataFreshness",
+										"scans",
 										"archiveQueue",
 										"workers"
 									],
@@ -459,6 +460,10 @@
 											"additionalProperties": true
 										},
 										"dataFreshness": {
+											"type": "object",
+											"additionalProperties": true
+										},
+										"scans": {
 											"type": "object",
 											"additionalProperties": true
 										},
@@ -596,6 +601,110 @@
 												"staleAfterMs": {
 													"type": "integer",
 													"minimum": 0,
+													"nullable": true
+												}
+											}
+										}
+									}
+								}
+							}
+						}
+					},
+					"500": { "description": "Server error" }
+				}
+			}
+		},
+		"/v1/status/scans": {
+			"get": {
+				"summary": "Get raw scan continuity status",
+				"description": "Returns persisted raw network scan counts and completion percentages for a bounded recent window. It does not run live scans.",
+				"tags": ["Status"],
+				"operationId": "getScanStatus",
+				"responses": {
+					"200": {
+						"description": "scan continuity status",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object",
+									"required": ["generatedAt", "status", "networkScan"],
+									"properties": {
+										"generatedAt": {
+											"type": "string",
+											"format": "date-time"
+										},
+										"status": {
+											"type": "string",
+											"enum": ["ok", "degraded", "unavailable"]
+										},
+										"networkScan": {
+											"type": "object",
+											"required": [
+												"status",
+												"windowStart",
+												"windowEnd",
+												"windowMs",
+												"scanIntervalMs",
+												"expectedScans",
+												"totalScans",
+												"completedScans",
+												"incompleteScans",
+												"completionRate",
+												"expectedCompletionRate",
+												"latestScanAt",
+												"latestCompletedScanAt"
+											],
+											"properties": {
+												"status": {
+													"type": "string",
+													"enum": ["ok", "degraded", "unavailable"]
+												},
+												"windowStart": {
+													"type": "string",
+													"format": "date-time"
+												},
+												"windowEnd": {
+													"type": "string",
+													"format": "date-time"
+												},
+												"windowMs": { "type": "integer", "minimum": 0 },
+												"scanIntervalMs": {
+													"type": "integer",
+													"minimum": 1
+												},
+												"expectedScans": {
+													"type": "integer",
+													"minimum": 0
+												},
+												"totalScans": { "type": "integer", "minimum": 0 },
+												"completedScans": {
+													"type": "integer",
+													"minimum": 0
+												},
+												"incompleteScans": {
+													"type": "integer",
+													"minimum": 0
+												},
+												"completionRate": {
+													"type": "number",
+													"minimum": 0,
+													"maximum": 100,
+													"nullable": true
+												},
+												"expectedCompletionRate": {
+													"type": "number",
+													"minimum": 0,
+													"maximum": 100,
+													"nullable": true
+												},
+												"latestScanAt": {
+													"type": "string",
+													"format": "date-time",
+													"nullable": true
+												},
+												"latestCompletedScanAt": {
+													"type": "string",
+													"format": "date-time",
 													"nullable": true
 												}
 											}

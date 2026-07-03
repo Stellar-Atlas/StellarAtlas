@@ -6,6 +6,7 @@ import { StatusRouterWrapper } from '../StatusRouter.js';
 import { GetArchiveQueueStatus } from '@status/use-cases/get-archive-queue-status/GetArchiveQueueStatus.js';
 import { GetApiStatus } from '@status/use-cases/get-api-status/GetApiStatus.js';
 import { GetDataFreshnessStatus } from '@status/use-cases/get-data-freshness-status/GetDataFreshnessStatus.js';
+import { GetScanStatus } from '@status/use-cases/get-scan-status/GetScanStatus.js';
 import { GetStatus } from '@status/use-cases/get-status/GetStatus.js';
 import { GetWorkerStatus } from '@status/use-cases/get-worker-status/GetWorkerStatus.js';
 
@@ -14,6 +15,7 @@ describe('StatusRouter.integration', () => {
 	let getStatus: jest.Mocked<GetStatus>;
 	let getApiStatus: jest.Mocked<GetApiStatus>;
 	let getDataFreshnessStatus: jest.Mocked<GetDataFreshnessStatus>;
+	let getScanStatus: jest.Mocked<GetScanStatus>;
 	let getArchiveQueueStatus: jest.Mocked<GetArchiveQueueStatus>;
 	let getWorkerStatus: jest.Mocked<GetWorkerStatus>;
 
@@ -21,6 +23,7 @@ describe('StatusRouter.integration', () => {
 		getStatus = mock<GetStatus>();
 		getApiStatus = mock<GetApiStatus>();
 		getDataFreshnessStatus = mock<GetDataFreshnessStatus>();
+		getScanStatus = mock<GetScanStatus>();
 		getArchiveQueueStatus = mock<GetArchiveQueueStatus>();
 		getWorkerStatus = mock<GetWorkerStatus>();
 		app = express();
@@ -30,6 +33,7 @@ describe('StatusRouter.integration', () => {
 				getStatus,
 				getApiStatus,
 				getDataFreshnessStatus,
+				getScanStatus,
 				getArchiveQueueStatus,
 				getWorkerStatus
 			})
@@ -60,6 +64,25 @@ describe('StatusRouter.integration', () => {
 						latestAt: '2026-07-03T11:50:00.000Z',
 						ageMs: 600000,
 						staleAfterMs: null
+					}
+				},
+				scans: {
+					generatedAt: '2026-07-03T12:00:00.000Z',
+					status: 'ok',
+					networkScan: {
+						status: 'ok',
+						windowStart: '2026-07-02T12:00:00.000Z',
+						windowEnd: '2026-07-03T12:00:00.000Z',
+						windowMs: 86400000,
+						scanIntervalMs: 180000,
+						expectedScans: 480,
+						totalScans: 480,
+						completedScans: 479,
+						incompleteScans: 1,
+						completionRate: 99.79,
+						expectedCompletionRate: 99.79,
+						latestScanAt: '2026-07-03T11:59:00.000Z',
+						latestCompletedScanAt: '2026-07-03T11:56:00.000Z'
 					}
 				},
 				archiveQueue: {
@@ -130,6 +153,27 @@ describe('StatusRouter.integration', () => {
 				}
 			})
 		);
+		getScanStatus.execute.mockResolvedValue(
+			ok({
+				generatedAt: '2026-07-03T12:00:00.000Z',
+				status: 'ok',
+				networkScan: {
+					status: 'ok',
+					windowStart: '2026-07-02T12:00:00.000Z',
+					windowEnd: '2026-07-03T12:00:00.000Z',
+					windowMs: 86400000,
+					scanIntervalMs: 180000,
+					expectedScans: 480,
+					totalScans: 480,
+					completedScans: 479,
+					incompleteScans: 1,
+					completionRate: 99.79,
+					expectedCompletionRate: 99.79,
+					latestScanAt: '2026-07-03T11:59:00.000Z',
+					latestCompletedScanAt: '2026-07-03T11:56:00.000Z'
+				}
+			})
+		);
 		getArchiveQueueStatus.execute.mockResolvedValue(
 			ok({
 				generatedAt: '2026-07-03T12:00:00.000Z',
@@ -166,6 +210,12 @@ describe('StatusRouter.integration', () => {
 
 		await request(app).get('/status/api').expect(200);
 		await request(app).get('/status/data-freshness').expect(200);
+		await request(app)
+			.get('/status/scans')
+			.expect(200)
+			.expect((response) => {
+				expect(response.body.networkScan.completedScans).toBe(479);
+			});
 		await request(app)
 			.get('/status/archive-queue')
 			.expect(200)

@@ -86,6 +86,41 @@ describe('NetworkScanRepository', () => {
 		expect(scanTime.getTime()).toEqual(setup.latestNetworkScan.time.getTime());
 	});
 
+	test('findScanSummary', async function () {
+		const completedScan = createNetworkScan(
+			new Date('2020-01-01T00:00:00.000Z'),
+			true,
+			1
+		);
+		const incompleteScan = createNetworkScan(
+			new Date('2020-01-01T00:03:00.000Z'),
+			false,
+			2
+		);
+		const outsideWindowScan = createNetworkScan(
+			new Date('2020-01-02T00:00:00.000Z'),
+			true,
+			3
+		);
+		await networkScanRepository.save([
+			completedScan,
+			incompleteScan,
+			outsideWindowScan
+		]);
+
+		const summary = await networkScanRepository.findScanSummary(
+			new Date('2020-01-01T00:00:00.000Z'),
+			new Date('2020-01-01T23:59:59.999Z')
+		);
+
+		expect(summary).toEqual({
+			totalScans: 2,
+			completedScans: 1,
+			latestScanAt: incompleteScan.time,
+			latestCompletedScanAt: completedScan.time
+		});
+	});
+
 	async function setupTwoScans() {
 		const previousNetworkScan = new NetworkScan(new Date('2020-01-01'));
 		previousNetworkScan.latestLedger = BigInt(100);
@@ -113,3 +148,19 @@ describe('NetworkScanRepository', () => {
 		};
 	}
 });
+
+function createNetworkScan(
+	time: Date,
+	completed: boolean,
+	activeWatchers: number
+): NetworkScan {
+	const scan = new NetworkScan(time);
+	scan.latestLedger = BigInt(activeWatchers);
+	scan.completed = completed;
+
+	const measurement = new NetworkMeasurement(scan.time);
+	measurement.nrOfActiveWatchers = activeWatchers;
+	scan.measurement = measurement;
+
+	return scan;
+}

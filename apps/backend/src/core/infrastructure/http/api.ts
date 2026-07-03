@@ -48,6 +48,7 @@ import { statusRouter } from '@status/infrastructure/http/StatusRouter.js';
 import { GetArchiveQueueStatus } from '@status/use-cases/get-archive-queue-status/GetArchiveQueueStatus.js';
 import { GetApiStatus } from '@status/use-cases/get-api-status/GetApiStatus.js';
 import { GetDataFreshnessStatus } from '@status/use-cases/get-data-freshness-status/GetDataFreshnessStatus.js';
+import { GetScanStatus } from '@status/use-cases/get-scan-status/GetScanStatus.js';
 import { GetStatus } from '@status/use-cases/get-status/GetStatus.js';
 import { GetWorkerStatus } from '@status/use-cases/get-worker-status/GetWorkerStatus.js';
 import { frontendV4ProxyMiddleware } from './FrontendV4Proxy.js';
@@ -159,6 +160,7 @@ const listen = async () => {
 			getStatus: kernel.container.get(GetStatus),
 			getApiStatus: kernel.container.get(GetApiStatus),
 			getDataFreshnessStatus: kernel.container.get(GetDataFreshnessStatus),
+			getScanStatus: kernel.container.get(GetScanStatus),
 			getArchiveQueueStatus: kernel.container.get(GetArchiveQueueStatus),
 			getWorkerStatus: kernel.container.get(GetWorkerStatus)
 		})

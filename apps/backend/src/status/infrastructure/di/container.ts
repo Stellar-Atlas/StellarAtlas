@@ -4,6 +4,7 @@ import Container = interfaces.Container;
 import { GetArchiveQueueStatus } from '../../use-cases/get-archive-queue-status/GetArchiveQueueStatus.js';
 import { GetApiStatus } from '../../use-cases/get-api-status/GetApiStatus.js';
 import { GetDataFreshnessStatus } from '../../use-cases/get-data-freshness-status/GetDataFreshnessStatus.js';
+import { GetScanStatus } from '../../use-cases/get-scan-status/GetScanStatus.js';
 import { GetStatus } from '../../use-cases/get-status/GetStatus.js';
 import { GetWorkerStatus } from '../../use-cases/get-worker-status/GetWorkerStatus.js';
 
@@ -14,6 +15,7 @@ export function load(container: Container, config: Config) {
 
 	container.bind(GetApiStatus).toSelf();
 	container.bind(GetDataFreshnessStatus).toSelf();
+	container.bind(GetScanStatus).toSelf();
 	container.bind(GetArchiveQueueStatus).toSelf();
 	container.bind(GetWorkerStatus).toSelf();
 	container.bind(GetStatus).toSelf();
