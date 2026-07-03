@@ -18,6 +18,7 @@ import {
 } from './HorizonLedgerClient.js';
 import { NetworkSearchService } from '../search/NetworkSearchService.js';
 import type {
+	NetworkSearchArchiveStatus,
 	NetworkSearchConfig,
 	NetworkSearchEntityType
 } from '../search/NetworkSearchTypes.js';
@@ -39,6 +40,11 @@ const isSearchEntityType = (
 	value: string | undefined
 ): value is NetworkSearchEntityType =>
 	value === 'node' || value === 'organization';
+
+const isSearchArchiveStatus = (
+	value: string | undefined
+): value is NetworkSearchArchiveStatus =>
+	value === 'error' || value === 'ok' || value === 'unknown';
 
 const networkRouterWrapper = (config: NetworkRouterConfig): Router => {
 	const networkRouter = express.Router();
@@ -63,9 +69,100 @@ const networkRouterWrapper = (config: NetworkRouterConfig): Router => {
 		return Number.isFinite(parsed) ? parsed : undefined;
 	};
 
-	const getSearchLimit = (value: express.Request['query'][string]): number => {
+	const getSearchString = (
+		req: express.Request,
+		name: string
+	): string | undefined => getOptionalString(req.query[name]);
+
+	const getBoundedSearchLimit = (
+		value: express.Request['query'][string]
+	): number | null => {
+		if (value === undefined) return 8;
 		const parsed = getOptionalLimit(value);
-		return parsed ?? 8;
+		if (parsed === undefined || !Number.isInteger(parsed)) return null;
+		return parsed >= 1 && parsed <= 25 ? parsed : null;
+	};
+
+	const getSearchBoolean = (
+		value: express.Request['query'][string]
+	): boolean | null | undefined => {
+		if (value === undefined) return undefined;
+		const textValue = getOptionalString(value);
+		if (textValue === 'true') return true;
+		if (textValue === 'false') return false;
+		return null;
+	};
+
+	const handleSearchRequest = async (
+		req: express.Request,
+		res: express.Response,
+		entityTypeOverride?: NetworkSearchEntityType
+	): Promise<express.Response> => {
+		res.setHeader('Cache-Control', 'public, max-age=' + 5);
+		res.setHeader('Content-Type', 'application/json');
+
+		const limit = getBoundedSearchLimit(req.query.limit);
+		if (limit === null) {
+			return res.status(400).json({ error: 'Invalid search limit' });
+		}
+
+		const requestedType = getSearchString(req, 'type');
+		if (requestedType && !isSearchEntityType(requestedType)) {
+			return res.status(400).json({ error: 'Invalid search entity type' });
+		}
+		const entityType = isSearchEntityType(requestedType)
+			? requestedType
+			: undefined;
+
+		const archiveStatus = getSearchString(req, 'archiveStatus');
+		if (archiveStatus && !isSearchArchiveStatus(archiveStatus)) {
+			return res.status(400).json({ error: 'Invalid archive status' });
+		}
+		const archiveStatusFilter = isSearchArchiveStatus(archiveStatus)
+			? archiveStatus
+			: undefined;
+
+		const validator = getSearchBoolean(req.query.validator);
+		const validating = getSearchBoolean(req.query.validating);
+		const fullValidator = getSearchBoolean(req.query.fullValidator);
+		const active = getSearchBoolean(req.query.active);
+		const topTier = getSearchBoolean(req.query.topTier);
+		if (
+			validator === null ||
+			validating === null ||
+			fullValidator === null ||
+			active === null ||
+			topTier === null
+		) {
+			return res.status(400).json({ error: 'Invalid boolean filter' });
+		}
+
+		const searchQuery = getSearchString(req, 'q')?.trim() ?? '';
+		if (searchQuery.length > 128) {
+			return res.status(400).json({ error: 'Search query is too long' });
+		}
+
+		const networkOrError = await config.getNetwork.execute({});
+		if (networkOrError.isErr())
+			return res.status(500).send('Internal Server Error');
+		if (networkOrError.value === null)
+			return res.status(404).send('No network found');
+
+		const payload = await networkSearch.search(networkOrError.value, {
+			active,
+			archiveStatus: archiveStatusFilter,
+			countryCode: getSearchString(req, 'countryCode'),
+			entityType: entityTypeOverride ?? entityType,
+			fullValidator,
+			limit,
+			organizationId: getSearchString(req, 'organizationId'),
+			query: searchQuery,
+			topTier,
+			validating,
+			validator
+		});
+
+		return res.status(200).send(payload);
 	};
 
 	const writeNetworkEvent = async (res: express.Response): Promise<void> => {
@@ -224,28 +321,21 @@ const networkRouterWrapper = (config: NetworkRouterConfig): Router => {
 	networkRouter.get(
 		['/search'],
 		async (req: express.Request, res: express.Response) => {
-			res.setHeader('Cache-Control', 'public, max-age=' + 5);
-			res.setHeader('Content-Type', 'application/json');
+			return handleSearchRequest(req, res);
+		}
+	);
 
-			const networkOrError = await config.getNetwork.execute({});
-			if (networkOrError.isErr())
-				return res.status(500).send('Internal Server Error');
-			if (networkOrError.value === null)
-				return res.status(404).send('No network found');
+	networkRouter.get(
+		['/search/nodes'],
+		async (req: express.Request, res: express.Response) => {
+			return handleSearchRequest(req, res, 'node');
+		}
+	);
 
-			const query = getOptionalString(req.query.q) ?? '';
-			const requestedType = getOptionalString(req.query.type);
-			const entityType = isSearchEntityType(requestedType)
-				? requestedType
-				: undefined;
-
-			const payload = await networkSearch.search(networkOrError.value, {
-				entityType,
-				limit: getSearchLimit(req.query.limit),
-				query
-			});
-
-			return res.status(200).send(payload);
+	networkRouter.get(
+		['/search/organizations'],
+		async (req: express.Request, res: express.Response) => {
+			return handleSearchRequest(req, res, 'organization');
 		}
 	);
 

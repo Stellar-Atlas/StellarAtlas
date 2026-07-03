@@ -1,4 +1,14 @@
 export type NetworkSearchEntityType = 'node' | 'organization';
+export type NetworkSearchArchiveStatus = 'error' | 'ok' | 'unknown';
+export type NetworkSearchFacetName =
+	| 'active'
+	| 'archiveStatus'
+	| 'countryCode'
+	| 'entityType'
+	| 'fullValidator'
+	| 'topTier'
+	| 'validating'
+	| 'validator';
 
 export interface NetworkSearchConfig {
 	readonly apiKey?: string;
@@ -8,7 +18,7 @@ export interface NetworkSearchConfig {
 
 export interface NetworkSearchDocument {
 	readonly active?: boolean;
-	readonly archiveStatus?: 'error' | 'ok' | 'unknown';
+	readonly archiveStatus?: NetworkSearchArchiveStatus;
 	readonly content: string;
 	readonly countryCode?: string;
 	readonly countryName?: string;
@@ -34,9 +44,17 @@ export interface NetworkSearchDocument {
 }
 
 export interface NetworkSearchRequest {
+	readonly active?: boolean;
+	readonly archiveStatus?: NetworkSearchArchiveStatus;
+	readonly countryCode?: string;
 	readonly entityType?: NetworkSearchEntityType;
+	readonly fullValidator?: boolean;
 	readonly limit: number;
+	readonly organizationId?: string;
 	readonly query: string;
+	readonly topTier?: boolean;
+	readonly validating?: boolean;
+	readonly validator?: boolean;
 }
 
 export interface NetworkSearchHit {
@@ -49,8 +67,19 @@ export interface NetworkSearchHit {
 	readonly organizationName?: string;
 }
 
+export interface NetworkSearchFacetValue {
+	readonly count: number;
+	readonly value: string;
+}
+
+export type NetworkSearchFacets = Record<
+	NetworkSearchFacetName,
+	readonly NetworkSearchFacetValue[]
+>;
+
 export interface NetworkSearchResponse {
 	readonly estimatedTotalHits: number;
+	readonly facets: NetworkSearchFacets;
 	readonly hits: readonly NetworkSearchHit[];
 	readonly indexedNetworkTime: string;
 	readonly query: string;

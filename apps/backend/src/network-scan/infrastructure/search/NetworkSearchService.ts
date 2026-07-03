@@ -4,6 +4,9 @@ import { buildNetworkSearchDocuments } from './NetworkSearchDocumentBuilder.js';
 import type {
 	NetworkSearchConfig,
 	NetworkSearchDocument,
+	NetworkSearchFacetName,
+	NetworkSearchFacets,
+	NetworkSearchFacetValue,
 	NetworkSearchHit,
 	NetworkSearchRequest,
 	NetworkSearchResponse
@@ -39,11 +42,32 @@ const FILTERABLE_ATTRIBUTES = [
 	'networkTime'
 ] as const;
 
+const FACET_ATTRIBUTES: readonly NetworkSearchFacetName[] = [
+	'entityType',
+	'archiveStatus',
+	'countryCode',
+	'validator',
+	'validating',
+	'fullValidator',
+	'active',
+	'topTier'
+];
+
+const HIT_ATTRIBUTES = [
+	'detail',
+	'entityId',
+	'entityType',
+	'href',
+	'id',
+	'label',
+	'organizationName'
+] as const;
+
 const SORTABLE_ATTRIBUTES = ['label', 'networkTime', 'latestLedger'] as const;
 
 const sanitizeLimit = (limit: number): number => {
 	if (!Number.isInteger(limit)) return 8;
-	return Math.min(Math.max(limit, 1), 50);
+	return Math.min(Math.max(limit, 1), 25);
 };
 
 const normalize = (value: string): string => value.trim().toLowerCase();
@@ -64,11 +88,93 @@ const matchesDocument = (
 ): boolean => {
 	if (request.entityType && document.entityType !== request.entityType)
 		return false;
+	if (
+		request.archiveStatus &&
+		document.archiveStatus !== request.archiveStatus
+	) {
+		return false;
+	}
+	if (request.countryCode && document.countryCode !== request.countryCode)
+		return false;
+	if (
+		request.organizationId &&
+		document.organizationId !== request.organizationId
+	) {
+		return false;
+	}
+	if (request.active !== undefined && document.active !== request.active)
+		return false;
+	if (
+		request.fullValidator !== undefined &&
+		document.fullValidator !== request.fullValidator
+	) {
+		return false;
+	}
+	if (
+		request.validator !== undefined &&
+		document.validator !== request.validator
+	)
+		return false;
+	if (
+		request.validating !== undefined &&
+		document.validating !== request.validating
+	) {
+		return false;
+	}
+	if (request.topTier !== undefined && document.topTier !== request.topTier)
+		return false;
 
 	const query = normalize(request.query);
 	if (query.length === 0) return true;
 
 	return normalize(document.content).includes(query);
+};
+
+const emptyFacets = (): NetworkSearchFacets => ({
+	active: [],
+	archiveStatus: [],
+	countryCode: [],
+	entityType: [],
+	fullValidator: [],
+	topTier: [],
+	validating: [],
+	validator: []
+});
+
+const facetValue = (
+	document: NetworkSearchDocument,
+	facet: NetworkSearchFacetName
+): string | undefined => {
+	const value = document[facet];
+	if (value === undefined) return undefined;
+	return String(value);
+};
+
+const sortFacetValues = (
+	values: NetworkSearchFacetValue[]
+): NetworkSearchFacetValue[] =>
+	values.toSorted(
+		(left, right) =>
+			right.count - left.count || left.value.localeCompare(right.value)
+	);
+
+const buildFacetsFromDocuments = (
+	documents: readonly NetworkSearchDocument[]
+): NetworkSearchFacets => {
+	const facets = emptyFacets();
+
+	for (const facet of FACET_ATTRIBUTES) {
+		const counts = new Map<string, number>();
+		for (const document of documents) {
+			const value = facetValue(document, facet);
+			if (value) counts.set(value, (counts.get(value) ?? 0) + 1);
+		}
+		facets[facet] = sortFacetValues(
+			Array.from(counts, ([value, count]) => ({ count, value }))
+		);
+	}
+
+	return facets;
 };
 
 const memorySearch = (
@@ -82,6 +188,7 @@ const memorySearch = (
 
 	return {
 		estimatedTotalHits: matching.length,
+		facets: buildFacetsFromDocuments(matching),
 		hits: matching.slice(0, sanitizeLimit(request.limit)).map(toHit),
 		indexedNetworkTime: networkTime,
 		query: request.query,
@@ -90,6 +197,57 @@ const memorySearch = (
 };
 
 const quoteFilterValue = (value: string): string => JSON.stringify(value);
+
+const filterCondition = (
+	field: string,
+	value: string | boolean | undefined
+): string | undefined => {
+	if (value === undefined) return undefined;
+	return typeof value === 'boolean'
+		? `${field} = ${value}`
+		: `${field} = ${quoteFilterValue(value)}`;
+};
+
+const buildMeilisearchFilter = (
+	request: NetworkSearchRequest,
+	networkTime: string
+): string | undefined => {
+	const filters = [
+		filterCondition('networkTime', networkTime),
+		filterCondition('entityType', request.entityType),
+		filterCondition('archiveStatus', request.archiveStatus),
+		filterCondition('countryCode', request.countryCode),
+		filterCondition('organizationId', request.organizationId),
+		filterCondition('active', request.active),
+		filterCondition('fullValidator', request.fullValidator),
+		filterCondition('validator', request.validator),
+		filterCondition('validating', request.validating),
+		filterCondition('topTier', request.topTier)
+	].filter((filter): filter is string => filter !== undefined);
+
+	return filters.join(' AND ');
+};
+
+const facetDistributionValue = (
+	distribution: Record<string, Record<string, number>> | undefined,
+	facet: NetworkSearchFacetName
+): readonly NetworkSearchFacetValue[] => {
+	const values = distribution?.[facet];
+	if (!values) return [];
+	return sortFacetValues(
+		Object.entries(values).map(([value, count]) => ({ count, value }))
+	);
+};
+
+const buildFacetsFromDistribution = (
+	distribution: Record<string, Record<string, number>> | undefined
+): NetworkSearchFacets => {
+	const facets = emptyFacets();
+	for (const facet of FACET_ATTRIBUTES) {
+		facets[facet] = facetDistributionValue(distribution, facet);
+	}
+	return facets;
+};
 
 const assertTaskSucceeded = (status: string, taskName: string): void => {
 	if (status !== 'succeeded')
@@ -125,19 +283,20 @@ export class NetworkSearchService {
 
 		try {
 			await this.syncIndex();
-			const filter = request.entityType
-				? `entityType = ${quoteFilterValue(request.entityType)}`
-				: undefined;
+			const filter = buildMeilisearchFilter(request, network.time);
 			const response = await this.index.search<NetworkSearchDocument>(
 				request.query,
 				{
+					attributesToRetrieve: [...HIT_ATTRIBUTES],
+					facets: [...FACET_ATTRIBUTES],
 					filter,
 					limit: sanitizeLimit(request.limit)
 				}
 			);
 
 			return {
-				estimatedTotalHits: response.estimatedTotalHits,
+				estimatedTotalHits: response.estimatedTotalHits ?? response.hits.length,
+				facets: buildFacetsFromDistribution(response.facetDistribution),
 				hits: response.hits.map(toHit),
 				indexedNetworkTime: network.time,
 				query: request.query,

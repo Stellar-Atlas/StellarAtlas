@@ -53,6 +53,10 @@
 			"description": "External source catalog and cross-reference review endpoints"
 		},
 		{
+			"name": "Search",
+			"description": "Faceted search over rebuildable StellarAtlas read models"
+		},
+		{
 			"name": "FBAS",
 			"description": "Federated Byzantine Agreement System aggregate quorum evidence"
 		},
@@ -126,7 +130,7 @@
 			"get": {
 				"summary": "Search network entities",
 				"description": "Faceted search for current validators, nodes, organizations, and archive-related network metadata.",
-				"tags": ["Network", "Node", "Organization"],
+				"tags": ["Search", "Network", "Node", "Organization"],
 				"operationId": "searchNetworkEntities",
 				"parameters": [
 					{
@@ -149,6 +153,65 @@
 						}
 					},
 					{
+						"name": "active",
+						"in": "query",
+						"description": "Optional active entity filter",
+						"required": false,
+						"schema": { "type": "boolean" }
+					},
+					{
+						"name": "archiveStatus",
+						"in": "query",
+						"description": "Optional node archive status filter",
+						"required": false,
+						"schema": {
+							"type": "string",
+							"enum": ["error", "ok", "unknown"]
+						}
+					},
+					{
+						"name": "countryCode",
+						"in": "query",
+						"description": "Optional node country-code filter",
+						"required": false,
+						"schema": { "type": "string" }
+					},
+					{
+						"name": "organizationId",
+						"in": "query",
+						"description": "Optional organization id filter",
+						"required": false,
+						"schema": { "type": "string" }
+					},
+					{
+						"name": "validator",
+						"in": "query",
+						"description": "Optional validator flag filter",
+						"required": false,
+						"schema": { "type": "boolean" }
+					},
+					{
+						"name": "fullValidator",
+						"in": "query",
+						"description": "Optional full-validator flag filter",
+						"required": false,
+						"schema": { "type": "boolean" }
+					},
+					{
+						"name": "validating",
+						"in": "query",
+						"description": "Optional currently-validating flag filter",
+						"required": false,
+						"schema": { "type": "boolean" }
+					},
+					{
+						"name": "topTier",
+						"in": "query",
+						"description": "Optional top-tier flag filter",
+						"required": false,
+						"schema": { "type": "boolean" }
+					},
+					{
 						"name": "limit",
 						"in": "query",
 						"description": "Maximum results to return",
@@ -156,7 +219,7 @@
 						"schema": {
 							"type": "integer",
 							"minimum": 1,
-							"maximum": 50
+							"maximum": 25
 						}
 					}
 				],
@@ -169,6 +232,59 @@
 									"type": "object",
 									"properties": {
 										"estimatedTotalHits": { "type": "integer" },
+										"facets": {
+											"type": "object",
+											"properties": {
+												"active": {
+													"type": "array",
+													"items": {
+														"$ref": "#/components/schemas/SearchFacetValue"
+													}
+												},
+												"archiveStatus": {
+													"type": "array",
+													"items": {
+														"$ref": "#/components/schemas/SearchFacetValue"
+													}
+												},
+												"countryCode": {
+													"type": "array",
+													"items": {
+														"$ref": "#/components/schemas/SearchFacetValue"
+													}
+												},
+												"entityType": {
+													"type": "array",
+													"items": {
+														"$ref": "#/components/schemas/SearchFacetValue"
+													}
+												},
+												"fullValidator": {
+													"type": "array",
+													"items": {
+														"$ref": "#/components/schemas/SearchFacetValue"
+													}
+												},
+												"topTier": {
+													"type": "array",
+													"items": {
+														"$ref": "#/components/schemas/SearchFacetValue"
+													}
+												},
+												"validating": {
+													"type": "array",
+													"items": {
+														"$ref": "#/components/schemas/SearchFacetValue"
+													}
+												},
+												"validator": {
+													"type": "array",
+													"items": {
+														"$ref": "#/components/schemas/SearchFacetValue"
+													}
+												}
+											}
+										},
 										"hits": {
 											"type": "array",
 											"items": {
@@ -204,6 +320,7 @@
 									},
 									"required": [
 										"estimatedTotalHits",
+										"facets",
 										"hits",
 										"indexedNetworkTime",
 										"query",
@@ -213,6 +330,157 @@
 							}
 						}
 					}
+				}
+			}
+		},
+		"/v1/search/nodes": {
+			"get": {
+				"summary": "Search current network nodes",
+				"description": "Fixed node-only alias for the current network search endpoint. Uses the same bounded filters and facet response as /v1/search with type=node.",
+				"tags": ["Search", "Node"],
+				"operationId": "searchNetworkNodes",
+				"parameters": [
+					{
+						"name": "q",
+						"in": "query",
+						"description": "Search text",
+						"required": false,
+						"schema": { "type": "string" }
+					},
+					{
+						"name": "active",
+						"in": "query",
+						"description": "Optional active node filter",
+						"required": false,
+						"schema": { "type": "boolean" }
+					},
+					{
+						"name": "archiveStatus",
+						"in": "query",
+						"description": "Optional node archive status filter",
+						"required": false,
+						"schema": {
+							"type": "string",
+							"enum": ["error", "ok", "unknown"]
+						}
+					},
+					{
+						"name": "countryCode",
+						"in": "query",
+						"description": "Optional node country-code filter",
+						"required": false,
+						"schema": { "type": "string" }
+					},
+					{
+						"name": "organizationId",
+						"in": "query",
+						"description": "Optional organization id filter",
+						"required": false,
+						"schema": { "type": "string" }
+					},
+					{
+						"name": "validator",
+						"in": "query",
+						"description": "Optional validator flag filter",
+						"required": false,
+						"schema": { "type": "boolean" }
+					},
+					{
+						"name": "fullValidator",
+						"in": "query",
+						"description": "Optional full-validator flag filter",
+						"required": false,
+						"schema": { "type": "boolean" }
+					},
+					{
+						"name": "validating",
+						"in": "query",
+						"description": "Optional currently-validating flag filter",
+						"required": false,
+						"schema": { "type": "boolean" }
+					},
+					{
+						"name": "topTier",
+						"in": "query",
+						"description": "Optional top-tier flag filter",
+						"required": false,
+						"schema": { "type": "boolean" }
+					},
+					{
+						"name": "limit",
+						"in": "query",
+						"description": "Maximum results to return",
+						"required": false,
+						"schema": { "type": "integer", "minimum": 1, "maximum": 25 }
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "Node search results",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object",
+									"additionalProperties": true
+								}
+							}
+						}
+					},
+					"400": { "description": "Invalid search query" },
+					"500": { "description": "Server error" }
+				}
+			}
+		},
+		"/v1/search/organizations": {
+			"get": {
+				"summary": "Search current network organizations",
+				"description": "Fixed organization-only alias for the current network search endpoint. Uses the same bounded facet response as /v1/search with type=organization.",
+				"tags": ["Search", "Organization"],
+				"operationId": "searchNetworkOrganizations",
+				"parameters": [
+					{
+						"name": "q",
+						"in": "query",
+						"description": "Search text",
+						"required": false,
+						"schema": { "type": "string" }
+					},
+					{
+						"name": "organizationId",
+						"in": "query",
+						"description": "Optional organization id filter",
+						"required": false,
+						"schema": { "type": "string" }
+					},
+					{
+						"name": "topTier",
+						"in": "query",
+						"description": "Optional top-tier flag filter",
+						"required": false,
+						"schema": { "type": "boolean" }
+					},
+					{
+						"name": "limit",
+						"in": "query",
+						"description": "Maximum results to return",
+						"required": false,
+						"schema": { "type": "integer", "minimum": 1, "maximum": 25 }
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "Organization search results",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object",
+									"additionalProperties": true
+								}
+							}
+						}
+					},
+					"400": { "description": "Invalid search query" },
+					"500": { "description": "Server error" }
 				}
 			}
 		},
@@ -4162,6 +4430,18 @@
 					"500": {
 						"description": "Server error"
 					}
+				}
+			}
+		}
+	},
+	"components": {
+		"schemas": {
+			"SearchFacetValue": {
+				"type": "object",
+				"required": ["count", "value"],
+				"properties": {
+					"count": { "type": "integer" },
+					"value": { "type": "string" }
 				}
 			}
 		}

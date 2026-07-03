@@ -56,4 +56,46 @@ describe('NetworkSearchService', () => {
 		expect(result.hits).toHaveLength(1);
 		expect(result.hits[0]?.entityType).toBe('organization');
 	});
+
+	it('returns facet counts for filtered results', async () => {
+		const organization = createDummyOrganizationV1();
+		organization.id = 'sdf';
+		organization.name = 'SDF';
+		organization.homeDomain = 'stellar.org';
+
+		const archiveErrorNode = createDummyNodeV1('GA_ARCHIVE_ERROR');
+		archiveErrorNode.name = 'SDF validator';
+		archiveErrorNode.homeDomain = 'stellar.org';
+		archiveErrorNode.organizationId = organization.id;
+		archiveErrorNode.historyArchiveHasError = true;
+
+		const archiveOkNode = createDummyNodeV1('GA_ARCHIVE_OK');
+		archiveOkNode.name = 'SDF observer';
+		archiveOkNode.homeDomain = 'stellar.org';
+		archiveOkNode.organizationId = organization.id;
+		archiveOkNode.historyArchiveHasError = false;
+
+		const network = createDummyNetworkV1(
+			[archiveErrorNode, archiveOkNode],
+			[organization]
+		);
+		const service = new NetworkSearchService({
+			indexName: 'test_network_entities'
+		});
+
+		const result = await service.search(network, {
+			archiveStatus: 'error',
+			entityType: 'node',
+			limit: 8,
+			query: 'stellar'
+		});
+
+		expect(result.hits.map((hit) => hit.entityId)).toEqual([
+			archiveErrorNode.publicKey
+		]);
+		expect(result.facets.archiveStatus).toEqual([{ count: 1, value: 'error' }]);
+		expect(result.facets.entityType).toEqual([{ count: 1, value: 'node' }]);
+		expect(result.facets.fullValidator).toEqual([{ count: 1, value: 'true' }]);
+		expect(result.facets.validator).toEqual([{ count: 1, value: 'true' }]);
+	});
 });
