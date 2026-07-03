@@ -27,8 +27,8 @@ Install or migrate deliberately:
 sudo ./setup-systemd.sh
 ```
 
-The script installs the split units, installs the polkit rule, disables the old
-all-in-one `stellaratlas.service`, reloads systemd, and starts
+The script installs the split units, installs the polkit rule, disables and masks
+the old root-run all-in-one `stellaratlas.service`, reloads systemd, and starts
 `stellaratlas.target`.
 
 Production frontend deploy:

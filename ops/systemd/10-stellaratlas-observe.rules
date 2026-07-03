@@ -6,7 +6,6 @@ polkit.addRule(function(action, subject) {
   var unit = action.lookup("unit");
   var verb = action.lookup("verb");
   var units = [
-    "stellaratlas.service",
     "stellaratlas.target",
     "stellaratlas-api.service",
     "stellaratlas-frontend-v4.service",

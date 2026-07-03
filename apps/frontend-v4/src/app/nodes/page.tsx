@@ -1,4 +1,5 @@
 import { Suspense } from 'react';
+import { connection } from 'next/server';
 import { fetchPublicNetwork } from '../../api/client';
 import { NodeTable } from '../../components/nodes/node-table';
 import { PageHeading } from '../../components/layout/page-heading';
@@ -13,6 +14,7 @@ import { formatInteger } from '../../format/formatters';
 export const revalidate = 10;
 
 async function NodesRouteContent(): Promise<React.JSX.Element> {
+	await connection();
 	const network = await fetchPublicNetwork({ revalidate });
 
 	return (

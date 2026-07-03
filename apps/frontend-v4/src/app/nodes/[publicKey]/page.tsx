@@ -1,5 +1,6 @@
 import { Suspense } from 'react';
 import { notFound } from 'next/navigation';
+import { connection } from 'next/server';
 import {
 	fetchHistoryArchiveScan,
 	fetchHistoryArchiveScanLogs,
@@ -17,25 +18,12 @@ interface NodeDetailPageProps {
 export const dynamicParams = true;
 export const revalidate = 10;
 
-export async function generateStaticParams(): Promise<
-	Array<{ publicKey: string }>
-> {
-	try {
-		const network = await fetchPublicNetwork({ revalidate: 60 });
-
-		return network.nodes
-			.filter((node) => node.publicKey.length > 0)
-			.map((node) => ({ publicKey: node.publicKey }));
-	} catch {
-		return [];
-	}
-}
-
 async function NodeDetailRouteContent({
 	publicKey
 }: {
 	publicKey: string;
 }): Promise<React.JSX.Element> {
+	await connection();
 	const decodedPublicKey = decodeURIComponent(publicKey);
 	const network = await fetchPublicNetwork({ revalidate });
 	const node = network.nodes.find(

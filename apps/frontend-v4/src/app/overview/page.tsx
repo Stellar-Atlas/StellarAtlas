@@ -1,4 +1,5 @@
 import { Suspense } from 'react';
+import { connection } from 'next/server';
 import { fetchPublicNetwork } from '../../api/client';
 import { RouteLoadingPanel } from '../../components/layout/route-fallbacks';
 import { NetworkOverview } from '../../components/network-overview';
@@ -6,6 +7,7 @@ import { NetworkOverview } from '../../components/network-overview';
 export const revalidate = 10;
 
 async function OverviewRouteContent(): Promise<React.JSX.Element> {
+	await connection();
 	const network = await fetchPublicNetwork({ revalidate });
 
 	return <NetworkOverview network={network} />;

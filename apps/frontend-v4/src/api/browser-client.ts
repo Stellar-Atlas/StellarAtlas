@@ -32,7 +32,7 @@ export const getBrowserApiBaseUrl = (): string => {
 		window.location.hostname === 'localhost' ||
 		window.location.hostname === '127.0.0.1'
 	) {
-		return 'http://127.0.0.1:3000';
+		return window.location.origin;
 	}
 
 	return window.location.origin;

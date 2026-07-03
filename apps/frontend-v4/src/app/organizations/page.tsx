@@ -1,4 +1,5 @@
 import { Suspense } from 'react';
+import { connection } from 'next/server';
 import { fetchPublicNetwork } from '../../api/client';
 import { PageHeading } from '../../components/layout/page-heading';
 import { RouteLoadingPanel } from '../../components/layout/route-fallbacks';
@@ -9,6 +10,7 @@ import { formatInteger } from '../../format/formatters';
 export const revalidate = 10;
 
 async function OrganizationsRouteContent(): Promise<React.JSX.Element> {
+	await connection();
 	const network = await fetchPublicNetwork({ revalidate });
 	const topOrganizations = getTopOrganizations(network.organizations);
 

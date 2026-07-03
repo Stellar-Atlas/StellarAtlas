@@ -24,6 +24,7 @@ sudo install -m 0644 \
 
 sudo systemctl daemon-reload
 sudo systemctl disable --now stellaratlas.service 2>/dev/null || true
+sudo systemctl mask stellaratlas.service 2>/dev/null || true
 sudo systemctl enable --now stellaratlas.target
 
 cat <<'EOF'

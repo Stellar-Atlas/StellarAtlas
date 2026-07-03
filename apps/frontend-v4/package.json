@@ -4,9 +4,12 @@
 	"private": true,
 	"type": "module",
 	"scripts": {
-		"dev": "next dev",
-		"build": "next build",
-		"start": "next start --hostname ${FRONTEND_V4_HOST:-127.0.0.1} --port ${FRONTEND_V4_PORT:-3104}",
+		"dev": "node ../../scripts/refuse-root.mjs frontend-v4 dev && next dev",
+		"build": "pnpm run build:production",
+		"build:production": "node ../../scripts/refuse-root.mjs frontend-v4 build:production && NEXT_DIST_DIR=${NEXT_DIST_DIR:-.next-production} next build",
+		"build:staging": "node ../../scripts/refuse-root.mjs frontend-v4 build:staging && NEXT_DIST_DIR=${NEXT_DIST_DIR:-.next-staging} next build",
+		"start": "node ../../scripts/refuse-root.mjs frontend-v4 start && NEXT_DIST_DIR=${NEXT_DIST_DIR:-.next-production} next start --hostname ${FRONTEND_V4_HOST:-127.0.0.1} --port ${FRONTEND_V4_PORT:-3104}",
+		"start:staging": "node ../../scripts/refuse-root.mjs frontend-v4 start:staging && NEXT_DIST_DIR=${NEXT_DIST_DIR:-.next-staging} next start --hostname ${FRONTEND_V4_HOST:-127.0.0.1} --port ${FRONTEND_V4_PORT:-3114}",
 		"typecheck": "next typegen && tsc --noEmit"
 	},
 	"dependencies": {

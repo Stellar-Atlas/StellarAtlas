@@ -1,6 +1,7 @@
 import { Suspense } from 'react';
 import { notFound } from 'next/navigation';
 import Link from 'next/link';
+import { connection } from 'next/server';
 import { fetchPublicNetwork } from '@api/client';
 import { PageHeading } from '@components/layout/page-heading';
 import { RouteLoadingPanel } from '@components/layout/route-fallbacks';
@@ -16,25 +17,12 @@ interface OrganizationDetailPageProps {
 export const dynamicParams = true;
 export const revalidate = 10;
 
-export async function generateStaticParams(): Promise<
-	Array<{ organizationId: string }>
-> {
-	try {
-		const network = await fetchPublicNetwork({ revalidate: 60 });
-
-		return network.organizations
-			.filter((organization) => organization.id.length > 0)
-			.map((organization) => ({ organizationId: organization.id }));
-	} catch {
-		return [];
-	}
-}
-
 async function OrganizationDetailRouteContent({
 	organizationId
 }: {
 	organizationId: string;
 }): Promise<React.JSX.Element> {
+	await connection();
 	const decodedOrganizationId = decodeURIComponent(organizationId);
 	const network = await fetchPublicNetwork({ revalidate });
 	const organization = network.organizations.find(
