@@ -166,14 +166,31 @@ describe('CommunityScanner Entity', () => {
 		});
 
 		it('should block scanners until a future blacklist expiry', () => {
+			scanner.isBlacklisted = false;
 			scanner.blacklistedUntil = new Date('2026-07-03T12:05:00.000Z');
 
+			expect(
+				scanner.isTemporarilyBlocked(new Date('2026-07-03T12:00:00.000Z'))
+			).toBe(true);
+			expect(scanner.isBlocked(new Date('2026-07-03T12:00:00.000Z'))).toBe(
+				true
+			);
+		});
+
+		it('should keep permanent blocks active after blacklist expiry', () => {
+			scanner.isBlacklisted = true;
+			scanner.blacklistedUntil = new Date('2026-07-03T11:59:59.000Z');
+
+			expect(
+				scanner.isTemporarilyBlocked(new Date('2026-07-03T12:00:00.000Z'))
+			).toBe(false);
 			expect(scanner.isBlocked(new Date('2026-07-03T12:00:00.000Z'))).toBe(
 				true
 			);
 		});
 
 		it('should not block scanners after a temporary blacklist expires', () => {
+			scanner.isBlacklisted = false;
 			scanner.blacklistedUntil = new Date('2026-07-03T11:59:59.000Z');
 
 			expect(scanner.isBlocked(new Date('2026-07-03T12:00:00.000Z'))).toBe(

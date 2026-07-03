@@ -43,6 +43,11 @@ describe('GetScannerMetrics.integration', () => {
 		await saveScanner({ name: 'Probationary' });
 		await saveScanner({ name: 'Permanent block', isBlacklisted: true });
 		await saveScanner({
+			name: 'Permanent block with expiry',
+			isBlacklisted: true,
+			blacklistedUntil: new Date(now.getTime() + 60 * 60 * 1000)
+		});
+		await saveScanner({
 			name: 'Temporary block',
 			blacklistedUntil: new Date(now.getTime() + 60 * 60 * 1000)
 		});
@@ -56,14 +61,14 @@ describe('GetScannerMetrics.integration', () => {
 
 		expect(result.isOk()).toBe(true);
 		expect(result._unsafeUnwrap()).toMatchObject({
-			totalScanners: 7,
-			blacklistedScanners: 2,
-			permanentlyBlacklistedScanners: 1,
+			totalScanners: 8,
+			blacklistedScanners: 3,
+			permanentlyBlacklistedScanners: 2,
 			temporarilyBlockedScanners: 1,
-			claimDeniedByBlockedScanners: 2,
+			claimDeniedByBlockedScanners: 3,
 			claimDeniedByActiveJobLimitScanners: 1,
 			claimDeniedByProductionScoreScanners: 1,
-			claimIneligibleScanners: 4,
+			claimIneligibleScanners: 5,
 			probationaryScanners: 1,
 			claimEligibleScanners: 3,
 			claimPolicyMaxActiveJobsPerScanner: 1,

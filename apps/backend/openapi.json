@@ -2796,7 +2796,7 @@
 										"temporarilyBlockedScanners": {
 											"type": "integer",
 											"minimum": 0,
-											"description": "Scanners temporarily blocked by a future blacklist expiry."
+											"description": "Scanners with is_blacklisted=false and a future blacklisted_until expiry."
 										},
 										"claimDeniedByBlockedScanners": {
 											"type": "integer",

@@ -30,6 +30,49 @@ A scan chain represents the full verification history of an archive over time:
 - Chains are continued by passing previous scan details to the workers
 - New chains are started periodically to re-verify from the beginning
 
+## Community Scanner Blocks
+
+Community scanner block state lives on `community_scanners`.
+
+- Temporary blocks must leave `is_blacklisted = false` and set
+  `blacklisted_until` to a future timestamp.
+- Permanent blocks must set `is_blacklisted = true` and should clear
+  `blacklisted_until`.
+- Clearing a block must set `is_blacklisted = false` and
+  `blacklisted_until = null`.
+
+The coordinator treats a future `blacklisted_until` as blocked for heartbeat and
+job-claim admission. Once that timestamp expires, the scanner is eligible again
+without another database write. If `is_blacklisted` is true, the scanner remains
+blocked even when `blacklisted_until` is null or in the past.
+
+Temporary block:
+
+```sql
+update community_scanners
+set is_blacklisted = false,
+    blacklisted_until = now() + interval '1 hour'
+where id = '<scanner-id>';
+```
+
+Permanent block:
+
+```sql
+update community_scanners
+set is_blacklisted = true,
+    blacklisted_until = null
+where id = '<scanner-id>';
+```
+
+Clear block:
+
+```sql
+update community_scanners
+set is_blacklisted = false,
+    blacklisted_until = null
+where id = '<scanner-id>';
+```
+
 ## API Usage
 
 ### Get Scan Job
