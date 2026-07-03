@@ -122,6 +122,8 @@ const listen = async () => {
 			registerScan: kernel.container.get(RegisterScan),
 			userName: config.historyScanAPIUsername,
 			password: config.historyScanAPIPassword,
+			frontendBaseUrl: config.frontendBaseUrl,
+			frontendRevalidateToken: config.frontendRevalidateToken,
 			getScanJob: kernel.container.get(GetScanJob),
 			touchScanJob: kernel.container.get(TouchScanJob)
 		})

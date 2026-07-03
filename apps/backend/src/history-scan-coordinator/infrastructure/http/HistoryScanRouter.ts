@@ -15,6 +15,8 @@ export interface HistoryScanRouterConfig {
 	getScanJob: GetScanJob;
 	registerScan: RegisterScan;
 	touchScanJob: TouchScanJob;
+	frontendBaseUrl?: string;
+	frontendRevalidateToken?: string;
 	userName?: string;
 	password?: string;
 }
@@ -123,6 +125,8 @@ export const HistoryScanRouterWrapper = (
 					return res.status(500).json({ error: result.error.message });
 				}
 
+				triggerFrontendRevalidation(config, ['history-scan', 'network']);
+
 				return res.status(201).json({ message: 'Scan created successfully' });
 			}
 		);
@@ -150,6 +154,8 @@ export const HistoryScanRouterWrapper = (
 					return res.status(404).json({ error: 'Scan job not found' });
 				}
 
+				triggerFrontendRevalidation(config, ['history-scan']);
+
 				return res.status(204).send();
 			}
 		);
@@ -171,6 +177,8 @@ export const HistoryScanRouterWrapper = (
 				if (scanJobResult.value === null) {
 					return res.status(204).json({ message: 'No scan job available' });
 				}
+
+				triggerFrontendRevalidation(config, ['history-scan']);
 
 				return res.json(scanJobResult.value);
 			}
@@ -228,6 +236,30 @@ export const HistoryScanRouterWrapper = (
 	);
 
 	return historyScanRouter;
+};
+
+const triggerFrontendRevalidation = (
+	config: HistoryScanRouterConfig,
+	tags: readonly string[]
+): void => {
+	if (!config.frontendBaseUrl || !config.frontendRevalidateToken) return;
+
+	let revalidateUrl: URL;
+	try {
+		revalidateUrl = new URL('/api/revalidate', config.frontendBaseUrl);
+	} catch {
+		return;
+	}
+
+	void fetch(revalidateUrl, {
+		method: 'POST',
+		headers: {
+			authorization: `Bearer ${config.frontendRevalidateToken}`,
+			'content-type': 'application/json'
+		},
+		body: JSON.stringify({ tags }),
+		signal: AbortSignal.timeout(1500)
+	}).catch(() => undefined);
 };
 
 export { HistoryScanRouterWrapper as historyScanRouter };

@@ -54,6 +54,7 @@ export interface Config {
 	networkConfig: NetworkConfig;
 	enableNotifications: boolean;
 	frontendBaseUrl?: string;
+	frontendRevalidateToken?: string;
 	userServiceBaseUrl?: string;
 	userServiceUsername?: string;
 	userServicePassword?: string;
@@ -92,6 +93,7 @@ export class DefaultConfig implements Config {
 	userServiceUsername?: string;
 	userServicePassword?: string;
 	frontendBaseUrl?: string;
+	frontendRevalidateToken?: string;
 	historyMaxFileMs?: number;
 	historySlowArchiveMaxLedgers?: number;
 	logLevel = 'info';
@@ -342,6 +344,10 @@ export function getConfigFromEnv(): Result<Config, Error> {
 	const historyScanAPIUsername = process.env.HISTORY_SCAN_API_USERNAME;
 	if (isString(historyScanAPIUsername))
 		config.historyScanAPIUsername = historyScanAPIUsername;
+
+	const frontendRevalidateToken = process.env.STELLAR_ATLAS_REVALIDATE_TOKEN;
+	if (isString(frontendRevalidateToken))
+		config.frontendRevalidateToken = frontendRevalidateToken;
 
 	// SMTP configuration
 	let enableLocalSMTP = parseBoolean(process.env.ENABLE_LOCAL_SMTP);
