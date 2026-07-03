@@ -26,6 +26,8 @@
 		"start:frontend": "pnpm --filter frontend run start",
 		"start:frontend-v4": "pnpm --filter frontend-v4 run start",
 		"start:api": "pnpm --filter backend run start-api",
+		"refresh:api-docs-comparison": "pnpm --filter backend run refresh-api-docs-comparison",
+		"start:api-docs-comparison-refresh": "pnpm --filter backend run refresh-api-docs-comparison -- --loop",
 		"start:scan-network": "pnpm --filter backend run scan-network",
 		"start:scan-history": "pnpm --filter history-scanner run scan-history",
 		"start:users": "pnpm --filter users run start",

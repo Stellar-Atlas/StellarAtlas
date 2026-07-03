@@ -12,6 +12,7 @@
 		"scan-network": "node lib/network-scan/infrastructure/cli/scan-network.js",
 		"build-and-start-api": "pnpm run build; node lib/core/infrastructure/http/api.js",
 		"start-api": "node lib/core/infrastructure/http/api.js",
+		"refresh-api-docs-comparison": "node lib/cross-check/infrastructure/cli/refresh-api-docs-comparison-snapshot.js",
 		"retrieve-home-domain": "node lib/network-scan/infrastructure/cli/retrieve-home-domain.js"
 	},
 	"author": "pieterjan84@github",
