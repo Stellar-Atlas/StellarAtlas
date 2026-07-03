@@ -6,6 +6,7 @@ import { StatusRouterWrapper } from '../StatusRouter.js';
 import { GetArchiveQueueStatus } from '@status/use-cases/get-archive-queue-status/GetArchiveQueueStatus.js';
 import { GetApiStatus } from '@status/use-cases/get-api-status/GetApiStatus.js';
 import { GetDataFreshnessStatus } from '@status/use-cases/get-data-freshness-status/GetDataFreshnessStatus.js';
+import { GetRollupStatus } from '@status/use-cases/get-rollup-status/GetRollupStatus.js';
 import { GetScanStatus } from '@status/use-cases/get-scan-status/GetScanStatus.js';
 import { GetStatus } from '@status/use-cases/get-status/GetStatus.js';
 import { GetWorkerStatus } from '@status/use-cases/get-worker-status/GetWorkerStatus.js';
@@ -16,6 +17,7 @@ describe('StatusRouter.integration', () => {
 	let getApiStatus: jest.Mocked<GetApiStatus>;
 	let getDataFreshnessStatus: jest.Mocked<GetDataFreshnessStatus>;
 	let getScanStatus: jest.Mocked<GetScanStatus>;
+	let getRollupStatus: jest.Mocked<GetRollupStatus>;
 	let getArchiveQueueStatus: jest.Mocked<GetArchiveQueueStatus>;
 	let getWorkerStatus: jest.Mocked<GetWorkerStatus>;
 
@@ -24,6 +26,7 @@ describe('StatusRouter.integration', () => {
 		getApiStatus = mock<GetApiStatus>();
 		getDataFreshnessStatus = mock<GetDataFreshnessStatus>();
 		getScanStatus = mock<GetScanStatus>();
+		getRollupStatus = mock<GetRollupStatus>();
 		getArchiveQueueStatus = mock<GetArchiveQueueStatus>();
 		getWorkerStatus = mock<GetWorkerStatus>();
 		app = express();
@@ -34,6 +37,7 @@ describe('StatusRouter.integration', () => {
 				getApiStatus,
 				getDataFreshnessStatus,
 				getScanStatus,
+				getRollupStatus,
 				getArchiveQueueStatus,
 				getWorkerStatus
 			})
@@ -83,6 +87,25 @@ describe('StatusRouter.integration', () => {
 						expectedCompletionRate: 99.79,
 						latestScanAt: '2026-07-03T11:59:00.000Z',
 						latestCompletedScanAt: '2026-07-03T11:56:00.000Z'
+					}
+				},
+				rollups: {
+					generatedAt: '2026-07-03T12:00:00.000Z',
+					status: 'ok',
+					networkRollups: {
+						status: 'ok',
+						windowStart: '2026-06-26T00:00:00.000Z',
+						windowEnd: '2026-07-03T00:00:00.000Z',
+						windowDays: 7,
+						rawCompletedScans: 70,
+						rollupCrawlCount: 70,
+						daysWithCompletedScans: 7,
+						daysWithRollups: 7,
+						matchingDays: 7,
+						missingRollupDays: 0,
+						mismatchedRollupDays: 0,
+						latestRollupDay: '2026-07-02T00:00:00.000Z',
+						days: []
 					}
 				},
 				archiveQueue: {
@@ -174,6 +197,27 @@ describe('StatusRouter.integration', () => {
 				}
 			})
 		);
+		getRollupStatus.execute.mockResolvedValue(
+			ok({
+				generatedAt: '2026-07-03T12:00:00.000Z',
+				status: 'ok',
+				networkRollups: {
+					status: 'ok',
+					windowStart: '2026-06-26T00:00:00.000Z',
+					windowEnd: '2026-07-03T00:00:00.000Z',
+					windowDays: 7,
+					rawCompletedScans: 70,
+					rollupCrawlCount: 70,
+					daysWithCompletedScans: 7,
+					daysWithRollups: 7,
+					matchingDays: 7,
+					missingRollupDays: 0,
+					mismatchedRollupDays: 0,
+					latestRollupDay: '2026-07-02T00:00:00.000Z',
+					days: []
+				}
+			})
+		);
 		getArchiveQueueStatus.execute.mockResolvedValue(
 			ok({
 				generatedAt: '2026-07-03T12:00:00.000Z',
@@ -215,6 +259,12 @@ describe('StatusRouter.integration', () => {
 			.expect(200)
 			.expect((response) => {
 				expect(response.body.networkScan.completedScans).toBe(479);
+			});
+		await request(app)
+			.get('/status/rollups')
+			.expect(200)
+			.expect((response) => {
+				expect(response.body.networkRollups.matchingDays).toBe(7);
 			});
 		await request(app)
 			.get('/status/archive-queue')

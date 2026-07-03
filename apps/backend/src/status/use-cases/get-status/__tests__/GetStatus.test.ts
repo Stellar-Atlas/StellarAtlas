@@ -3,6 +3,7 @@ import { err, ok } from 'neverthrow';
 import { GetArchiveQueueStatus } from '../../get-archive-queue-status/GetArchiveQueueStatus.js';
 import { GetApiStatus } from '../../get-api-status/GetApiStatus.js';
 import { GetDataFreshnessStatus } from '../../get-data-freshness-status/GetDataFreshnessStatus.js';
+import { GetRollupStatus } from '../../get-rollup-status/GetRollupStatus.js';
 import { GetScanStatus } from '../../get-scan-status/GetScanStatus.js';
 import { GetWorkerStatus } from '../../get-worker-status/GetWorkerStatus.js';
 import { GetStatus } from '../GetStatus.js';
@@ -11,6 +12,7 @@ describe('GetStatus', () => {
 	let getApiStatusMock: MockProxy<GetApiStatus>;
 	let getDataFreshnessStatusMock: MockProxy<GetDataFreshnessStatus>;
 	let getScanStatusMock: MockProxy<GetScanStatus>;
+	let getRollupStatusMock: MockProxy<GetRollupStatus>;
 	let getArchiveQueueStatusMock: MockProxy<GetArchiveQueueStatus>;
 	let getWorkerStatusMock: MockProxy<GetWorkerStatus>;
 	let getStatus: GetStatus;
@@ -20,12 +22,14 @@ describe('GetStatus', () => {
 		getApiStatusMock = mock<GetApiStatus>();
 		getDataFreshnessStatusMock = mock<GetDataFreshnessStatus>();
 		getScanStatusMock = mock<GetScanStatus>();
+		getRollupStatusMock = mock<GetRollupStatus>();
 		getArchiveQueueStatusMock = mock<GetArchiveQueueStatus>();
 		getWorkerStatusMock = mock<GetWorkerStatus>();
 		getStatus = new GetStatus(
 			getApiStatusMock,
 			getDataFreshnessStatusMock,
 			getScanStatusMock,
+			getRollupStatusMock,
 			getArchiveQueueStatusMock,
 			getWorkerStatusMock
 		);
@@ -72,6 +76,27 @@ describe('GetStatus', () => {
 					expectedCompletionRate: 99.79,
 					latestScanAt: '2026-07-03T11:59:00.000Z',
 					latestCompletedScanAt: '2026-07-03T11:56:00.000Z'
+				}
+			})
+		);
+		getRollupStatusMock.execute.mockResolvedValue(
+			ok({
+				generatedAt: '2026-07-03T12:00:00.000Z',
+				status: 'ok',
+				networkRollups: {
+					status: 'ok',
+					windowStart: '2026-06-26T00:00:00.000Z',
+					windowEnd: '2026-07-03T00:00:00.000Z',
+					windowDays: 7,
+					rawCompletedScans: 70,
+					rollupCrawlCount: 70,
+					daysWithCompletedScans: 7,
+					daysWithRollups: 7,
+					matchingDays: 7,
+					missingRollupDays: 0,
+					mismatchedRollupDays: 0,
+					latestRollupDay: '2026-07-02T00:00:00.000Z',
+					days: []
 				}
 			})
 		);
@@ -124,6 +149,7 @@ describe('GetStatus', () => {
 			api: { status: 'ok' },
 			dataFreshness: { status: 'ok' },
 			scans: { status: 'ok' },
+			rollups: { status: 'ok' },
 			archiveQueue: { status: 'ok' },
 			workers: { status: 'ok' }
 		});

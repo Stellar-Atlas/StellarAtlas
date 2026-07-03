@@ -115,4 +115,66 @@ describe('test queries', () => {
 		expect(measurements[0].crawlCount).toEqual(3);
 		expect(measurements[0].nrOfActiveWatchersSum).toEqual(3);
 	});
+
+	test('findScanRollupSummary', async () => {
+		const scanRepo = container.get<TypeOrmNetworkScanRepository>(
+			NETWORK_TYPES.NetworkScanRepository
+		);
+		await scanRepo.save([
+			createNetworkScan(new Date(Date.UTC(2020, 0, 1, 1)), true, 1),
+			createNetworkScan(new Date(Date.UTC(2020, 0, 2, 1)), true, 2),
+			createNetworkScan(new Date(Date.UTC(2020, 0, 2, 2)), true, 3),
+			createNetworkScan(new Date(Date.UTC(2020, 0, 3, 1)), false, 4)
+		]);
+
+		const matchingRollup = new NetworkMeasurementDay();
+		matchingRollup.time = new Date(Date.UTC(2020, 0, 1));
+		matchingRollup.crawlCount = 1;
+		const mismatchedRollup = new NetworkMeasurementDay();
+		mismatchedRollup.time = new Date(Date.UTC(2020, 0, 3));
+		mismatchedRollup.crawlCount = 2;
+		await networkMeasurementDayRepository.save([
+			matchingRollup,
+			mismatchedRollup
+		]);
+
+		const summary = await networkMeasurementDayRepository.findScanRollupSummary(
+			new Date(Date.UTC(2020, 0, 1)),
+			new Date(Date.UTC(2020, 0, 4))
+		);
+
+		expect(summary).toEqual([
+			{
+				day: new Date(Date.UTC(2020, 0, 1)),
+				rawCompletedScans: 1,
+				rollupCrawlCount: 1
+			},
+			{
+				day: new Date(Date.UTC(2020, 0, 2)),
+				rawCompletedScans: 2,
+				rollupCrawlCount: null
+			},
+			{
+				day: new Date(Date.UTC(2020, 0, 3)),
+				rawCompletedScans: 0,
+				rollupCrawlCount: 2
+			}
+		]);
+	});
 });
+
+function createNetworkScan(
+	time: Date,
+	completed: boolean,
+	activeWatchers: number
+): NetworkScan {
+	const scan = new NetworkScan(time);
+	scan.latestLedger = BigInt(activeWatchers);
+	scan.completed = completed;
+
+	const measurement = new NetworkMeasurement(scan.time);
+	measurement.nrOfActiveWatchers = activeWatchers;
+	scan.measurement = measurement;
+
+	return scan;
+}

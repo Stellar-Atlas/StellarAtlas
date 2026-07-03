@@ -443,6 +443,7 @@
 										"api",
 										"dataFreshness",
 										"scans",
+										"rollups",
 										"archiveQueue",
 										"workers"
 									],
@@ -464,6 +465,10 @@
 											"additionalProperties": true
 										},
 										"scans": {
+											"type": "object",
+											"additionalProperties": true
+										},
+										"rollups": {
 											"type": "object",
 											"additionalProperties": true
 										},
@@ -706,6 +711,141 @@
 													"type": "string",
 													"format": "date-time",
 													"nullable": true
+												}
+											}
+										}
+									}
+								}
+							}
+						}
+					},
+					"500": { "description": "Server error" }
+				}
+			}
+		},
+		"/v1/status/rollups": {
+			"get": {
+				"summary": "Get daily rollup continuity status",
+				"description": "Returns persisted raw-completed-scan counts compared with daily network rollup crawl counts for the last complete UTC days. It does not run rollup jobs.",
+				"tags": ["Status"],
+				"operationId": "getRollupStatus",
+				"responses": {
+					"200": {
+						"description": "rollup continuity status",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object",
+									"required": ["generatedAt", "status", "networkRollups"],
+									"properties": {
+										"generatedAt": {
+											"type": "string",
+											"format": "date-time"
+										},
+										"status": {
+											"type": "string",
+											"enum": ["ok", "degraded", "unavailable"]
+										},
+										"networkRollups": {
+											"type": "object",
+											"required": [
+												"status",
+												"windowStart",
+												"windowEnd",
+												"windowDays",
+												"rawCompletedScans",
+												"rollupCrawlCount",
+												"daysWithCompletedScans",
+												"daysWithRollups",
+												"matchingDays",
+												"missingRollupDays",
+												"mismatchedRollupDays",
+												"latestRollupDay",
+												"days"
+											],
+											"properties": {
+												"status": {
+													"type": "string",
+													"enum": ["ok", "degraded", "unavailable"]
+												},
+												"windowStart": {
+													"type": "string",
+													"format": "date-time"
+												},
+												"windowEnd": {
+													"type": "string",
+													"format": "date-time"
+												},
+												"windowDays": { "type": "integer", "minimum": 0 },
+												"rawCompletedScans": {
+													"type": "integer",
+													"minimum": 0
+												},
+												"rollupCrawlCount": {
+													"type": "integer",
+													"minimum": 0
+												},
+												"daysWithCompletedScans": {
+													"type": "integer",
+													"minimum": 0
+												},
+												"daysWithRollups": {
+													"type": "integer",
+													"minimum": 0
+												},
+												"matchingDays": {
+													"type": "integer",
+													"minimum": 0
+												},
+												"missingRollupDays": {
+													"type": "integer",
+													"minimum": 0
+												},
+												"mismatchedRollupDays": {
+													"type": "integer",
+													"minimum": 0
+												},
+												"latestRollupDay": {
+													"type": "string",
+													"format": "date-time",
+													"nullable": true
+												},
+												"days": {
+													"type": "array",
+													"items": {
+														"type": "object",
+														"required": [
+															"day",
+															"status",
+															"rawCompletedScans",
+															"rollupCrawlCount",
+															"hasRollup",
+															"matchesRawCompletedScans"
+														],
+														"properties": {
+															"day": {
+																"type": "string",
+																"format": "date-time"
+															},
+															"status": {
+																"type": "string",
+																"enum": ["ok", "degraded", "unavailable"]
+															},
+															"rawCompletedScans": {
+																"type": "integer",
+																"minimum": 0
+															},
+															"rollupCrawlCount": {
+																"type": "integer",
+																"minimum": 0,
+																"nullable": true
+															},
+															"hasRollup": { "type": "boolean" },
+															"matchesRawCompletedScans": {
+																"type": "boolean"
+															}
+														}
+													}
 												}
 											}
 										}

@@ -1,7 +1,10 @@
 import { Repository } from 'typeorm';
 import NetworkMeasurementDay from '@network-scan/domain/network/NetworkMeasurementDay.js';
 import { injectable } from 'inversify';
-import type { NetworkMeasurementDayRepository } from '@network-scan/domain/network/NetworkMeasurementDayRepository.js';
+import type {
+	NetworkMeasurementDayRepository,
+	NetworkScanRollupDaySummary
+} from '@network-scan/domain/network/NetworkMeasurementDayRepository.js';
 import { NetworkId } from '@network-scan/domain/network/NetworkId.js';
 
 @injectable()
@@ -10,6 +13,51 @@ export class TypeOrmNetworkMeasurementDayRepository implements NetworkMeasuremen
 
 	async save(networkMeasurementDays: NetworkMeasurementDay[]) {
 		return await this.baseRepository.save(networkMeasurementDays);
+	}
+
+	async findScanRollupSummary(
+		from: Date,
+		to: Date
+	): Promise<NetworkScanRollupDaySummary[]> {
+		const result = await this.baseRepository.query(
+			`with days as (
+				 select generate_series(
+					 date_trunc('day', $1::timestamptz),
+					 date_trunc('day', $2::timestamptz) - interval '1 day',
+					 interval '1 day'
+				 ) as "day"
+			 ),
+			 raw_scans as (
+				 select date_trunc('day', "time") as "day", count(*) as "rawCompletedScans"
+				 from "network_scan"
+				 where "time" >= date_trunc('day', $1::timestamptz)
+				   and "time" < date_trunc('day', $2::timestamptz)
+				   and completed = true
+				 group by date_trunc('day', "time")
+			 )
+			 select days."day" as "day",
+					coalesce(raw_scans."rawCompletedScans", 0) as "rawCompletedScans",
+					rollups."crawlCount" as "rollupCrawlCount"
+			 from days
+			 left join raw_scans on raw_scans."day" = days."day"
+			 left join "network_measurement_day" rollups on rollups."time" = days."day"::date
+			 order by days."day" asc`,
+			[from, to]
+		);
+
+		return result.map((record: Record<string, string | Date | null>) => ({
+			day: toDate(record.day),
+			rawCompletedScans: Number(
+				record.rawCompletedScans ?? record.rawcompletedscans ?? 0
+			),
+			rollupCrawlCount:
+				record.rollupCrawlCount === null ||
+				record.rollupcrawlcount === null ||
+				(record.rollupCrawlCount === undefined &&
+					record.rollupcrawlcount === undefined)
+					? null
+					: Number(record.rollupCrawlCount ?? record.rollupcrawlcount)
+		}));
 	}
 
 	async findBetween(
@@ -199,4 +247,9 @@ export class TypeOrmNetworkMeasurementDayRepository implements NetworkMeasuremen
 			[fromNetworkScanId, toNetworkScanId]
 		);
 	}
+}
+
+function toDate(value: string | Date | null): Date {
+	if (value instanceof Date) return value;
+	return new Date(value ?? 0);
 }

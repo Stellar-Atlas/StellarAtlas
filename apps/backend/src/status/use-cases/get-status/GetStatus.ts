@@ -11,6 +11,8 @@ import { GetArchiveQueueStatus } from '../get-archive-queue-status/GetArchiveQue
 import { GetApiStatus } from '../get-api-status/GetApiStatus.js';
 import type { DataFreshnessStatusDTO } from '../get-data-freshness-status/GetDataFreshnessStatus.js';
 import { GetDataFreshnessStatus } from '../get-data-freshness-status/GetDataFreshnessStatus.js';
+import type { RollupStatusDTO } from '../get-rollup-status/GetRollupStatus.js';
+import { GetRollupStatus } from '../get-rollup-status/GetRollupStatus.js';
 import type { ScanStatusDTO } from '../get-scan-status/GetScanStatus.js';
 import { GetScanStatus } from '../get-scan-status/GetScanStatus.js';
 import type { WorkerStatusDTO } from '../get-worker-status/GetWorkerStatus.js';
@@ -22,6 +24,7 @@ export interface StatusDTO {
 	readonly api: ApiStatusDTO;
 	readonly dataFreshness: DataFreshnessStatusDTO;
 	readonly scans: ScanStatusDTO;
+	readonly rollups: RollupStatusDTO;
 	readonly archiveQueue: ArchiveQueueStatusDTO;
 	readonly workers: WorkerStatusDTO;
 }
@@ -34,6 +37,8 @@ export class GetStatus {
 		private readonly getDataFreshnessStatus: GetDataFreshnessStatus,
 		@inject(GetScanStatus)
 		private readonly getScanStatus: GetScanStatus,
+		@inject(GetRollupStatus)
+		private readonly getRollupStatus: GetRollupStatus,
 		@inject(GetArchiveQueueStatus)
 		private readonly getArchiveQueueStatus: GetArchiveQueueStatus,
 		@inject(GetWorkerStatus) private readonly getWorkerStatus: GetWorkerStatus
@@ -41,23 +46,31 @@ export class GetStatus {
 
 	async execute(): Promise<Result<StatusDTO, Error>> {
 		const apiResult = this.getApiStatus.execute();
-		const [dataFreshnessResult, scanResult, archiveQueueResult, workerResult] =
-			await Promise.all([
-				this.getDataFreshnessStatus.execute(),
-				this.getScanStatus.execute(),
-				this.getArchiveQueueStatus.execute(),
-				this.getWorkerStatus.execute()
-			]);
+		const [
+			dataFreshnessResult,
+			scanResult,
+			rollupResult,
+			archiveQueueResult,
+			workerResult
+		] = await Promise.all([
+			this.getDataFreshnessStatus.execute(),
+			this.getScanStatus.execute(),
+			this.getRollupStatus.execute(),
+			this.getArchiveQueueStatus.execute(),
+			this.getWorkerStatus.execute()
+		]);
 
 		if (apiResult.isErr()) return err(apiResult.error);
 		if (dataFreshnessResult.isErr()) return err(dataFreshnessResult.error);
 		if (scanResult.isErr()) return err(scanResult.error);
+		if (rollupResult.isErr()) return err(rollupResult.error);
 		if (archiveQueueResult.isErr()) return err(archiveQueueResult.error);
 		if (workerResult.isErr()) return err(workerResult.error);
 
 		const api = apiResult.value;
 		const dataFreshness = dataFreshnessResult.value;
 		const scans = scanResult.value;
+		const rollups = rollupResult.value;
 		const archiveQueue = archiveQueueResult.value;
 		const workers = workerResult.value;
 
@@ -67,12 +80,14 @@ export class GetStatus {
 				api.status,
 				dataFreshness.status,
 				scans.status,
+				rollups.status,
 				archiveQueue.status,
 				workers.status
 			]),
 			api,
 			dataFreshness,
 			scans,
+			rollups,
 			archiveQueue,
 			workers
 		});
