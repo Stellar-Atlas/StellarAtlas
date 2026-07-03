@@ -20,9 +20,13 @@ export interface ScanSchedulerOptions {
 
 export class RestartAtLeastOneScan implements ScanScheduler {
 	private static readonly defaultMaxConcurrency = 24;
+	private static readonly defaultArchiveErrorRecheckIntervalMs =
+		24 * 60 * 60 * 1000;
 
 	constructor(
-		private readonly maxConcurrency = RestartAtLeastOneScan.defaultMaxConcurrency
+		private readonly maxConcurrency = RestartAtLeastOneScan.defaultMaxConcurrency,
+		private readonly archiveErrorRecheckIntervalMs = RestartAtLeastOneScan.defaultArchiveErrorRecheckIntervalMs,
+		private readonly now = () => new Date()
 	) {}
 
 	schedule(
@@ -56,7 +60,9 @@ export class RestartAtLeastOneScan implements ScanScheduler {
 			.map((archive) => previousScansMap.get(archive))
 			.filter(
 				(scan): scan is Scan =>
-					scan !== undefined && scan.hasArchiveVerificationError()
+					scan !== undefined &&
+					scan.hasArchiveVerificationError() &&
+					this.isArchiveErrorRecheckDue(scan)
 			)
 			.map((scan) => this.createErrorRecheckJob(scan));
 
@@ -159,5 +165,10 @@ export class RestartAtLeastOneScan implements ScanScheduler {
 
 	private clampConcurrency(concurrency: number): number {
 		return Math.min(Math.max(concurrency, 1), this.maxConcurrency);
+	}
+
+	private isArchiveErrorRecheckDue(scan: Scan): boolean {
+		const ageMs = this.now().getTime() - scan.endDate.getTime();
+		return ageMs >= this.archiveErrorRecheckIntervalMs;
 	}
 }
