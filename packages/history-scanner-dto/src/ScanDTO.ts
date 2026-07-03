@@ -1,5 +1,5 @@
 import { Result, ok, err } from 'neverthrow';
-import { ScanErrorDTO } from './ScanErrorDTO.js';
+import { isScanErrorTypeDTO, type ScanErrorDTO } from './ScanErrorDTO.js';
 
 /**
  * Represents a finished scan.
@@ -86,12 +86,13 @@ export class ScanDTO {
 	}
 
 	private static isValidScanErrorDTO(error: unknown): error is ScanErrorDTO {
+		if (typeof error !== 'object' || error === null) return false;
+
+		const candidate = error as Record<string, unknown>;
 		return (
-			typeof error === 'object' &&
-			error !== null &&
-			typeof (error as ScanErrorDTO).type === 'string' &&
-			typeof (error as ScanErrorDTO).url === 'string' &&
-			typeof (error as ScanErrorDTO).message === 'string'
+			isScanErrorTypeDTO(candidate.type) &&
+			typeof candidate.url === 'string' &&
+			typeof candidate.message === 'string'
 		);
 	}
 }

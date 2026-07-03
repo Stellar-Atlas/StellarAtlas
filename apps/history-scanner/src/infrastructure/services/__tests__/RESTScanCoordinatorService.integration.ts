@@ -3,6 +3,7 @@ import { Url, type HttpService } from 'http-helper';
 import { mock } from 'jest-mock-extended';
 import { ok } from 'neverthrow';
 import { Scan } from '@domain/scan/Scan.js';
+import { ScanError, ScanErrorType } from '@domain/scan/ScanError.js';
 
 describe('RESTScanCoordinatorService Integration Tests', () => {
 	let httpService: jest.Mocked<HttpService>;
@@ -24,6 +25,11 @@ describe('RESTScanCoordinatorService Integration Tests', () => {
 	describe('registerScan', () => {
 		const url = Url.create('https://history.stellar.org');
 		it('should successfully register scan result', async () => {
+			const scanError = new ScanError(
+				ScanErrorType.TYPE_VERIFICATION,
+				'https://history.stellar.org/transactions/00/00/00/transactions-0000003f.xdr.gz',
+				'Wrong transaction hash'
+			);
 			const scan = new Scan(
 				new Date(),
 				new Date(),
@@ -35,7 +41,8 @@ describe('RESTScanCoordinatorService Integration Tests', () => {
 				'hash123',
 				5,
 				false,
-				null,
+				scanError,
+				[scanError],
 				'remote-id'
 			);
 
@@ -52,6 +59,21 @@ describe('RESTScanCoordinatorService Integration Tests', () => {
 			expect(result.isOk()).toBe(true);
 
 			expect(httpService.post).toHaveBeenCalledTimes(1);
+			expect(httpService.post.mock.calls[0][1]).toMatchObject({
+				error: {
+					type: 'TYPE_VERIFICATION',
+					url: scanError.url,
+					message: scanError.message
+				},
+				errors: [
+					{
+						type: 'TYPE_VERIFICATION',
+						url: scanError.url,
+						message: scanError.message
+					}
+				],
+				scanJobRemoteId: 'remote-id'
+			});
 		});
 	});
 

@@ -84,13 +84,13 @@ describe('ScanDTO', () => {
 				concurrency: 5,
 				isSlowArchive: false,
 				error: {
-					type: 'validation',
+					type: 'TYPE_VERIFICATION',
 					url: 'https://history.stellar.org',
 					message: 'Invalid checksum'
 				},
 				errors: [
 					{
-						type: 'validation',
+						type: 'TYPE_VERIFICATION',
 						url: 'https://history.stellar.org',
 						message: 'Invalid checksum'
 					}
@@ -104,11 +104,58 @@ describe('ScanDTO', () => {
 
 			const dto = result.value;
 			expect(dto.error).toEqual({
-				type: 'validation',
+				type: 'TYPE_VERIFICATION',
 				url: 'https://history.stellar.org',
 				message: 'Invalid checksum'
 			});
 			expect(dto.errors).toHaveLength(1);
+		});
+
+		it('should reject JSON with unsupported error types', () => {
+			const json = {
+				startDate: '2024-01-01T00:00:00.000Z',
+				endDate: '2024-01-01T01:00:00.000Z',
+				baseUrl: 'https://history.stellar.org',
+				scanChainInitDate: '2024-01-01T00:00:00.000Z',
+				fromLedger: 1,
+				toLedger: 100,
+				latestVerifiedLedger: 90,
+				latestScannedLedger: 95,
+				latestScannedLedgerHeaderHash: 'hash123',
+				concurrency: 5,
+				isSlowArchive: false,
+				error: {
+					type: 'validation',
+					url: 'https://history.stellar.org',
+					message: 'Invalid checksum'
+				},
+				errors: [
+					{
+						type: 'TYPE_CONNECTION',
+						url: 'https://history.stellar.org',
+						message: 'Could not fetch latest ledger'
+					}
+				],
+				scanJobRemoteId: 'test'
+			};
+
+			const result = ScanDTO.fromJSON(json);
+			expect(result.isErr()).toBe(true);
+
+			const jsonWithInvalidErrorList = {
+				...json,
+				error: null,
+				errors: [
+					{
+						type: 'validation',
+						url: 'https://history.stellar.org',
+						message: 'Invalid checksum'
+					}
+				]
+			};
+
+			const listResult = ScanDTO.fromJSON(jsonWithInvalidErrorList);
+			expect(listResult.isErr()).toBe(true);
 		});
 
 		it('should return error for missing required fields', () => {

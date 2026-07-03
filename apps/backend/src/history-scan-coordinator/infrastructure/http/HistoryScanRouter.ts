@@ -5,7 +5,7 @@ import { GetLatestScan } from '../../use-cases/get-latest-scan/GetLatestScan.js'
 import { GetScanLogs } from '../../use-cases/get-scan-logs/GetScanLogs.js';
 import { InvalidUrlError } from '../../use-cases/get-latest-scan/InvalidUrlError.js';
 import { RegisterScan } from '../../use-cases/register-scan/RegisterScan.js';
-import { ScanDTO } from 'history-scanner-dto';
+import { isScanErrorTypeDTO, ScanDTO } from 'history-scanner-dto';
 import { GetScanJob } from '../../use-cases/get-scan-job/GetScanJob.js';
 import { TouchScanJob } from '../../use-cases/touch-scan-job/TouchScanJob.js';
 
@@ -263,13 +263,8 @@ const isValidScanErrorPayload = (value: unknown): boolean => {
 
 	const candidate = value as Record<string, unknown>;
 	return (
-		isAllowedScanErrorType(candidate.type) &&
+		isScanErrorTypeDTO(candidate.type) &&
 		typeof candidate.url === 'string' &&
 		typeof candidate.message === 'string'
 	);
 };
-
-const isAllowedScanErrorType = (
-	value: unknown
-): value is 'TYPE_VERIFICATION' | 'TYPE_CONNECTION' =>
-	value === 'TYPE_VERIFICATION' || value === 'TYPE_CONNECTION';

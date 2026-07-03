@@ -7,11 +7,12 @@ import { Scan } from '../../domain/scan/Scan.js';
 import {
 	ScanDTO,
 	ScanJobDTO,
+	type ScanErrorDTO,
 	type ScanJobJSONInput
 } from 'history-scanner-dto';
 import { ScanCoordinatorService } from '../../domain/scan/ScanCoordinatorService.js';
 import { isObject } from 'shared';
-import { ScanErrorType } from '../../domain/scan/ScanError.js';
+import { type ScanError, ScanErrorType } from '../../domain/scan/ScanError.js';
 
 export class CoordinatorServiceError extends CustomError {
 	constructor(message: string, cause?: Error) {
@@ -70,11 +71,7 @@ export class RESTScanCoordinatorService implements ScanCoordinatorService {
 	}
 
 	private convertScanToDTO(scan: Scan): ScanDTO {
-		const errors = scan.errors.map((error) => ({
-			message: error.message,
-			type: ScanErrorType[error.type],
-			url: error.url
-		}));
+		const errors = scan.errors.map((error) => this.mapScanErrorToDTO(error));
 
 		return {
 			baseUrl: scan.baseUrl.value,
@@ -88,16 +85,27 @@ export class RESTScanCoordinatorService implements ScanCoordinatorService {
 			latestScannedLedgerHeaderHash: scan.latestScannedLedgerHeaderHash,
 			concurrency: scan.concurrency,
 			isSlowArchive: scan.isSlowArchive,
-			error: scan.error
-				? {
-						message: scan.error.message,
-						type: ScanErrorType[scan.error.type],
-						url: scan.error.url
-					}
-				: null,
+			error: scan.error ? this.mapScanErrorToDTO(scan.error) : null,
 			scanJobRemoteId: scan.scanJobRemoteId!,
 			errors
 		};
+	}
+
+	private mapScanErrorToDTO(error: ScanError): ScanErrorDTO {
+		return {
+			message: error.message,
+			type: this.mapScanErrorTypeToDTO(error.type),
+			url: error.url
+		};
+	}
+
+	private mapScanErrorTypeToDTO(type: ScanErrorType): ScanErrorDTO['type'] {
+		switch (type) {
+			case ScanErrorType.TYPE_VERIFICATION:
+				return 'TYPE_VERIFICATION';
+			case ScanErrorType.TYPE_CONNECTION:
+				return 'TYPE_CONNECTION';
+		}
 	}
 
 	async getScanJob(): Promise<Result<ScanJobDTO, Error>> {
@@ -153,19 +161,20 @@ export class RESTScanCoordinatorService implements ScanCoordinatorService {
 			return err(new CoordinatorServiceError('Invalid URL', urlResult.error));
 		}
 
-		const response = await this.httpService.post(urlResult.value, {}, {
-			auth: {
-				username: this.coordinatorAPIUsername,
-				password: this.coordinatorAPIPassword
+		const response = await this.httpService.post(
+			urlResult.value,
+			{},
+			{
+				auth: {
+					username: this.coordinatorAPIUsername,
+					password: this.coordinatorAPIPassword
+				}
 			}
-		});
+		);
 
 		if (response.isErr()) {
 			return err(
-				new CoordinatorServiceError(
-					'Failed to touch scan job',
-					response.error
-				)
+				new CoordinatorServiceError('Failed to touch scan job', response.error)
 			);
 		}
 
