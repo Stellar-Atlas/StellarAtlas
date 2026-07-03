@@ -2,7 +2,9 @@ import { createHash } from 'node:crypto';
 
 export const communityScannerRegistrationThrottlePolicy = {
 	maxAttempts: 5,
-	windowMs: 60 * 60 * 1000
+	windowMs: 60 * 60 * 1000,
+	retentionMs: 7 * 24 * 60 * 60 * 1000,
+	cleanupBatchSize: 100
 } as const;
 
 export interface CommunityScannerRegistrationThrottleSnapshot {
@@ -16,6 +18,7 @@ export interface CommunityScannerRegistrationThrottleRepository {
 		now: Date,
 		windowMs: number
 	) => Promise<CommunityScannerRegistrationThrottleSnapshot>;
+	deleteStaleAttempts: (before: Date, limit: number) => Promise<number>;
 }
 
 export function hashCommunityScannerRegistrationSource(source: string): string {

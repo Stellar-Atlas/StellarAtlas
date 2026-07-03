@@ -17,6 +17,18 @@ type RawThrottleQueryResult =
 	| { raw: RawThrottleRow[] }
 	| { records: RawThrottleRow[] };
 type RawThrottleQueryArray = RawThrottleRow[] | [RawThrottleRow[], number];
+type RawDeletedThrottleRow = {
+	readonly sourceIpHash?: string;
+	readonly sourceiphash?: string;
+};
+type RawDeletedThrottleQueryResult =
+	| RawDeletedThrottleRow[]
+	| [RawDeletedThrottleRow[], number]
+	| { raw: RawDeletedThrottleRow[] }
+	| { records: RawDeletedThrottleRow[] };
+type RawDeletedThrottleQueryArray =
+	| RawDeletedThrottleRow[]
+	| [RawDeletedThrottleRow[], number];
 
 export class TypeOrmCommunityScannerRegistrationThrottleRepository
 	implements CommunityScannerRegistrationThrottleRepository
@@ -75,6 +87,33 @@ export class TypeOrmCommunityScannerRegistrationThrottleRepository
 			)
 		};
 	}
+
+	async deleteStaleAttempts(before: Date, limit: number): Promise<number> {
+		if (!Number.isFinite(limit) || limit <= 0) return 0;
+
+		const rows = extractDeletedThrottleRows(
+			(await this.dataSource.query(
+				`
+				with stale_attempts as (
+					select source_ip_hash
+					from community_scanner_registration_throttles
+					where updated_at < $1
+					order by updated_at asc
+					limit $2
+					for update skip locked
+				)
+				delete from community_scanner_registration_throttles
+				using stale_attempts
+				where community_scanner_registration_throttles.source_ip_hash =
+					stale_attempts.source_ip_hash
+				returning community_scanner_registration_throttles.source_ip_hash as "sourceIpHash"
+				`,
+				[before, Math.floor(limit)]
+			)) as RawDeletedThrottleQueryResult
+		);
+
+		return rows.length;
+	}
 }
 
 function extractThrottleRows(result: RawThrottleQueryResult): RawThrottleRow[] {
@@ -91,6 +130,25 @@ function extractThrottleRows(result: RawThrottleQueryResult): RawThrottleRow[] {
 function isStructuredThrottleQueryArray(
 	result: RawThrottleQueryArray
 ): result is [RawThrottleRow[], number] {
+	return Array.isArray(result[0]);
+}
+
+function extractDeletedThrottleRows(
+	result: RawDeletedThrottleQueryResult
+): RawDeletedThrottleRow[] {
+	if (Array.isArray(result)) {
+		if (isStructuredDeletedThrottleQueryArray(result)) return result[0];
+
+		return result;
+	}
+
+	if ('records' in result) return result.records;
+	return result.raw;
+}
+
+function isStructuredDeletedThrottleQueryArray(
+	result: RawDeletedThrottleQueryArray
+): result is [RawDeletedThrottleRow[], number] {
 	return Array.isArray(result[0]);
 }
 

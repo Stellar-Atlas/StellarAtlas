@@ -1,10 +1,20 @@
 import {
+	communityScannerRegistrationThrottlePolicy,
 	getCommunityScannerRegistrationRetryAfterSeconds,
 	hashCommunityScannerRegistrationSource,
 	isCommunityScannerRegistrationThrottled
 } from '../CommunityScannerRegistrationThrottle.js';
 
 describe('CommunityScannerRegistrationThrottle', () => {
+	it('should define bounded registration throttle retention policy', () => {
+		expect(communityScannerRegistrationThrottlePolicy).toEqual({
+			maxAttempts: 5,
+			windowMs: 60 * 60 * 1000,
+			retentionMs: 7 * 24 * 60 * 60 * 1000,
+			cleanupBatchSize: 100
+		});
+	});
+
 	it('should hash normalized registration sources without returning raw IPs', () => {
 		expect(hashCommunityScannerRegistrationSource(' 203.0.113.44 ')).toBe(
 			hashCommunityScannerRegistrationSource('203.0.113.44')

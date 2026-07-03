@@ -68,4 +68,69 @@ describe('TypeOrmCommunityScannerRegistrationThrottleRepository.integration', ()
 			windowStartedAt: new Date('2026-07-03T13:00:01.000Z')
 		});
 	});
+
+	it('should delete stale attempts up to the cleanup limit', async () => {
+		const staleOldestHash = 'c'.repeat(64);
+		const staleNewestHash = 'd'.repeat(64);
+		const freshHash = 'e'.repeat(64);
+		await dataSource.query(
+			`
+			delete from community_scanner_registration_throttles
+			where source_ip_hash in ($1, $2, $3)
+			`,
+			[staleOldestHash, staleNewestHash, freshHash]
+		);
+		await dataSource.query(
+			`
+			insert into community_scanner_registration_throttles (
+				source_ip_hash,
+				window_started_at,
+				attempt_count,
+				created_at,
+				updated_at
+			)
+			values
+				($1, $4, 1, $4, $4),
+				($2, $5, 1, $5, $5),
+				($3, $6, 1, $6, $6)
+			`,
+			[
+				staleOldestHash,
+				staleNewestHash,
+				freshHash,
+				new Date('2026-06-20T12:00:00.000Z'),
+				new Date('2026-06-21T12:00:00.000Z'),
+				new Date('2026-07-03T12:00:00.000Z')
+			]
+		);
+
+		const deleted = await repository.deleteStaleAttempts(
+			new Date('2026-06-26T12:00:00.000Z'),
+			1
+		);
+
+		expect(deleted).toBe(1);
+		const rows = (await dataSource.query(
+			`
+			select source_ip_hash
+			from community_scanner_registration_throttles
+			where source_ip_hash in ($1, $2, $3)
+			order by source_ip_hash asc
+			`,
+			[staleOldestHash, staleNewestHash, freshHash]
+		)) as Array<{ source_ip_hash: string }>;
+		expect(rows.map((row) => row.source_ip_hash)).toEqual([
+			staleNewestHash,
+			freshHash
+		]);
+	});
+
+	it('should ignore non-positive cleanup limits', async () => {
+		const deleted = await repository.deleteStaleAttempts(
+			new Date('2026-06-26T12:00:00.000Z'),
+			0
+		);
+
+		expect(deleted).toBe(0);
+	});
 });

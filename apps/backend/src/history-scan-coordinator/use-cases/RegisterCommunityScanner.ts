@@ -94,6 +94,7 @@ export class RegisterCommunityScanner {
 						)
 					);
 				}
+				await this.cleanupStaleRegistrationAttempts(now);
 			}
 
 			const existingScanner = await this.scannerRepository.findOne({
@@ -133,6 +134,20 @@ export class RegisterCommunityScanner {
 			const error = mapUnknownToError(e);
 			this.exceptionLogger.captureException(error);
 			return err(error);
+		}
+	}
+
+	private async cleanupStaleRegistrationAttempts(now: Date): Promise<void> {
+		try {
+			await this.registrationThrottleRepository.deleteStaleAttempts(
+				new Date(
+					now.getTime() -
+						communityScannerRegistrationThrottlePolicy.retentionMs
+				),
+				communityScannerRegistrationThrottlePolicy.cleanupBatchSize
+			);
+		} catch (e) {
+			this.exceptionLogger.captureException(mapUnknownToError(e));
 		}
 	}
 }

@@ -12,6 +12,7 @@ import {
 import { Repository } from 'typeorm';
 import { hashCommunityScannerApiKey } from '../../domain/CommunityScannerApiKey.js';
 import type { CommunityScannerRegistrationThrottleRepository } from '../../domain/CommunityScannerRegistrationThrottle.js';
+import { communityScannerRegistrationThrottlePolicy } from '../../domain/CommunityScannerRegistrationThrottle.js';
 
 describe('RegisterCommunityScanner', () => {
 	let useCase: RegisterCommunityScanner;
@@ -28,6 +29,7 @@ describe('RegisterCommunityScanner', () => {
 			attemptCount: 1,
 			windowStartedAt: new Date('2026-07-03T12:00:00.000Z')
 		});
+		throttleRepositoryMock.deleteStaleAttempts.mockResolvedValue(0);
 		exceptionLoggerMock = mock<ExceptionLogger>();
 		useCase = new RegisterCommunityScanner(
 			scannerRepositoryMock,
@@ -81,6 +83,10 @@ describe('RegisterCommunityScanner', () => {
 		expect(throttleRepositoryMock.recordAttempt.mock.calls[0]?.[0]).not.toContain(
 			'203.0.113.44'
 		);
+		expect(throttleRepositoryMock.deleteStaleAttempts).toHaveBeenCalledWith(
+			new Date('2026-06-26T12:00:00.000Z'),
+			communityScannerRegistrationThrottlePolicy.cleanupBatchSize
+		);
 		expect(scannerRepositoryMock.create).toHaveBeenCalledWith(
 			expect.objectContaining({
 				name: 'Test Scanner',
@@ -106,6 +112,28 @@ describe('RegisterCommunityScanner', () => {
 		expect(scannerRepositoryMock.save).not.toHaveBeenCalled();
 	});
 
+	it('should log stale throttle cleanup errors without rejecting registration', async () => {
+		const cleanupError = new Error('cleanup failed');
+		const scanner = new CommunityScanner();
+		scanner.id = 'scanner-uuid';
+		scanner.status = ScannerStatus.PENDING;
+		scanner.createdAt = new Date('2026-07-03T12:00:00.000Z');
+		throttleRepositoryMock.deleteStaleAttempts.mockRejectedValue(cleanupError);
+		scannerRepositoryMock.findOne.mockResolvedValue(null);
+		scannerRepositoryMock.create.mockImplementation((data) =>
+			Object.assign(scanner, data)
+		);
+		scannerRepositoryMock.save.mockResolvedValue(scanner);
+
+		const result = await useCase.execute(validRequest);
+
+		expect(result.isOk()).toBe(true);
+		expect(exceptionLoggerMock.captureException).toHaveBeenCalledWith(
+			cleanupError
+		);
+		expect(scannerRepositoryMock.save).toHaveBeenCalledWith(scanner);
+	});
+
 	it('should rate-limit scanner registrations before lookup work', async () => {
 		throttleRepositoryMock.recordAttempt.mockResolvedValue({
 			attemptCount: 6,
@@ -123,6 +151,7 @@ describe('RegisterCommunityScanner', () => {
 		expect(scannerRepositoryMock.findOne).not.toHaveBeenCalled();
 		expect(scannerRepositoryMock.create).not.toHaveBeenCalled();
 		expect(scannerRepositoryMock.save).not.toHaveBeenCalled();
+		expect(throttleRepositoryMock.deleteStaleAttempts).not.toHaveBeenCalled();
 	});
 
 	it('should log throttle persistence errors without registering', async () => {
