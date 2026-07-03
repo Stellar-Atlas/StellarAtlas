@@ -4,25 +4,103 @@ import { mock } from 'jest-mock-extended';
 import { err, ok } from 'neverthrow';
 import { GetCrossCheckArchives } from '@cross-check/use-cases/get-cross-check-archives/GetCrossCheckArchives.js';
 import { GetCrossCheckSources } from '@cross-check/use-cases/get-cross-check-sources/GetCrossCheckSources.js';
+import { GetCrossCheckValidators } from '@cross-check/use-cases/get-cross-check-validators/GetCrossCheckValidators.js';
 import { CrossCheckRouterWrapper } from '../CrossCheckRouter.js';
 
 describe('CrossCheckRouter.integration', () => {
 	let app: express.Application;
 	let getCrossCheckArchives: jest.Mocked<GetCrossCheckArchives>;
 	let getCrossCheckSources: jest.Mocked<GetCrossCheckSources>;
+	let getCrossCheckValidators: jest.Mocked<GetCrossCheckValidators>;
 
 	beforeEach(() => {
 		getCrossCheckArchives = mock<GetCrossCheckArchives>();
 		getCrossCheckSources = mock<GetCrossCheckSources>();
+		getCrossCheckValidators = mock<GetCrossCheckValidators>();
 		app = express();
 		app.use(
 			'/cross-check',
 			CrossCheckRouterWrapper({
 				getCrossCheckArchives,
-				getCrossCheckSources
+				getCrossCheckSources,
+				getCrossCheckValidators
 			})
 		);
 	});
+
+	it('should expose validator cross-check review rows', async () => {
+		getCrossCheckValidators.execute.mockResolvedValue(
+			ok({
+				generatedAt: '2026-07-03T12:00:00.000Z',
+				limit: 10,
+				count: 1,
+				totalEligibleCount: 1,
+				probe: 'not_run',
+				comparisonStatus: 'not_compared',
+				evidenceSelection:
+					'latest_network_snapshot_validator_or_validating_or_active_in_scp',
+				validators: [
+					{
+						publicKey: 'GA',
+						comparisonStatus: 'not_compared',
+						stellarAtlas: {
+							active: true,
+							activeInScp: true,
+							alias: null,
+							connectivityError: false,
+							historyArchiveHasError: false,
+							historyUrl: 'https://history.example.com',
+							homeDomain: 'example.com',
+							host: 'core-live.example.com',
+							inclusionReasons: ['is_validating', 'active_in_scp'],
+							index: 1,
+							isFullValidator: true,
+							isValidating: true,
+							isValidator: false,
+							lag: null,
+							name: 'Example Validator',
+							organizationId: 'org-1',
+							publicKey: 'GA',
+							quorumSetHashKey: 'hash',
+							stellarCoreVersionBehind: false,
+							validatorEvidenceStatus: 'validating_observed',
+							versionStr: 'stellar-core 23.0.0'
+						},
+						radarComparison: {
+							comparisonStatus: 'not_compared',
+							probe: 'not_run',
+							sourceId: 'withobsrvr-radar'
+						}
+					}
+				]
+			})
+		);
+
+		await request(app)
+			.get('/cross-check/validators?limit=10')
+			.expect(200)
+			.expect('Cache-Control', 'public, max-age=30')
+			.expect((response) => {
+				expect(response.body.probe).toBe('not_run');
+				expect(response.body.comparisonStatus).toBe('not_compared');
+				expect(response.body.validators[0].comparisonStatus).toBe(
+					'not_compared'
+				);
+			});
+		expect(getCrossCheckValidators.execute).toHaveBeenCalledWith({ limit: 10 });
+	});
+
+	it.each(['0', '101', '1.5'])(
+		'should reject invalid validator cross-check limit %s',
+		async (limit) => {
+			await request(app)
+				.get('/cross-check/validators?limit=' + limit)
+				.expect(400)
+				.expect((response) => {
+					expect(response.body.errors).toHaveLength(1);
+				});
+		}
+	);
 
 	it('should expose archive cross-check review rows', async () => {
 		getCrossCheckArchives.execute.mockResolvedValue(
@@ -133,6 +211,17 @@ describe('CrossCheckRouter.integration', () => {
 
 		await request(app)
 			.get('/cross-check/archives')
+			.expect(500)
+			.expect((response) => {
+				expect(response.body).toEqual({ error: 'Internal server error' });
+			});
+	});
+
+	it('should hide validator cross-check internal errors', async () => {
+		getCrossCheckValidators.execute.mockResolvedValue(err(new Error('boom')));
+
+		await request(app)
+			.get('/cross-check/validators')
 			.expect(500)
 			.expect((response) => {
 				expect(response.body).toEqual({ error: 'Internal server error' });

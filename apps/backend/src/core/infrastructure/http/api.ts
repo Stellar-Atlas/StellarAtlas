@@ -62,6 +62,7 @@ import { GetWorkerStatus } from '@status/use-cases/get-worker-status/GetWorkerSt
 import { crossCheckRouter } from '@cross-check/infrastructure/http/CrossCheckRouter.js';
 import { GetCrossCheckArchives } from '@cross-check/use-cases/get-cross-check-archives/GetCrossCheckArchives.js';
 import { GetCrossCheckSources } from '@cross-check/use-cases/get-cross-check-sources/GetCrossCheckSources.js';
+import { GetCrossCheckValidators } from '@cross-check/use-cases/get-cross-check-validators/GetCrossCheckValidators.js';
 import { frontendV4ProxyMiddleware } from './FrontendV4Proxy.js';
 
 let server: Server;
@@ -187,7 +188,8 @@ const listen = async () => {
 		'/v1/cross-check',
 		crossCheckRouter({
 			getCrossCheckArchives: kernel.container.get(GetCrossCheckArchives),
-			getCrossCheckSources: kernel.container.get(GetCrossCheckSources)
+			getCrossCheckSources: kernel.container.get(GetCrossCheckSources),
+			getCrossCheckValidators: kernel.container.get(GetCrossCheckValidators)
 		})
 	);
 

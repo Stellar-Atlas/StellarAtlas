@@ -7,6 +7,7 @@ import { TypeOrmNodeMeasurementRepository } from '@network-scan/infrastructure/d
 import { TypeOrmOrganizationRepository } from '@network-scan/infrastructure/database/repositories/TypeOrmOrganizationRepository.js';
 import { GetCrossCheckArchives } from '@cross-check/use-cases/get-cross-check-archives/GetCrossCheckArchives.js';
 import { GetCrossCheckSources } from '@cross-check/use-cases/get-cross-check-sources/GetCrossCheckSources.js';
+import { GetCrossCheckValidators } from '@cross-check/use-cases/get-cross-check-validators/GetCrossCheckValidators.js';
 
 jest.setTimeout(10000); //slow and long integration test
 
@@ -27,6 +28,9 @@ test('kernel', async () => {
 	);
 	expect(container.get(GetCrossCheckArchives)).toBeInstanceOf(
 		GetCrossCheckArchives
+	);
+	expect(container.get(GetCrossCheckValidators)).toBeInstanceOf(
+		GetCrossCheckValidators
 	);
 
 	await kernel.close();

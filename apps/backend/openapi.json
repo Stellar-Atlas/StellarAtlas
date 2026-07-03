@@ -1290,6 +1290,223 @@
 				}
 			}
 		},
+		"/v1/cross-check/validators": {
+			"get": {
+				"summary": "List validator cross-check review rows",
+				"description": "Returns persisted StellarAtlas validator evidence from the latest network snapshot for external cross-reference review. External RADAR comparison is explicitly not probed by this endpoint.",
+				"tags": ["CrossCheck"],
+				"operationId": "getCrossCheckValidators",
+				"parameters": [
+					{
+						"name": "limit",
+						"in": "query",
+						"description": "Maximum number of validator rows to return.",
+						"required": false,
+						"schema": {
+							"type": "integer",
+							"minimum": 1,
+							"maximum": 100,
+							"default": 50
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "validator cross-check review rows",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object",
+									"required": [
+										"generatedAt",
+										"limit",
+										"count",
+										"totalEligibleCount",
+										"probe",
+										"comparisonStatus",
+										"evidenceSelection",
+										"validators"
+									],
+									"properties": {
+										"generatedAt": {
+											"type": "string",
+											"format": "date-time"
+										},
+										"limit": {
+											"type": "integer",
+											"minimum": 1,
+											"maximum": 100
+										},
+										"count": {
+											"type": "integer",
+											"minimum": 0
+										},
+										"totalEligibleCount": {
+											"type": "integer",
+											"minimum": 0
+										},
+										"probe": {
+											"type": "string",
+											"enum": ["not_run"]
+										},
+										"comparisonStatus": {
+											"type": "string",
+											"enum": ["not_compared"]
+										},
+										"evidenceSelection": {
+											"type": "string",
+											"enum": [
+												"latest_network_snapshot_validator_or_validating_or_active_in_scp"
+											]
+										},
+										"validators": {
+											"type": "array",
+											"items": {
+												"type": "object",
+												"required": [
+													"publicKey",
+													"comparisonStatus",
+													"stellarAtlas",
+													"radarComparison"
+												],
+												"properties": {
+													"publicKey": { "type": "string" },
+													"comparisonStatus": {
+														"type": "string",
+														"enum": ["not_compared"]
+													},
+													"stellarAtlas": {
+														"type": "object",
+														"required": [
+															"publicKey",
+															"name",
+															"alias",
+															"host",
+															"homeDomain",
+															"organizationId",
+															"historyUrl",
+															"active",
+															"activeInScp",
+															"isValidator",
+															"isValidating",
+															"isFullValidator",
+															"quorumSetHashKey",
+															"versionStr",
+															"index",
+															"historyArchiveHasError",
+															"connectivityError",
+															"stellarCoreVersionBehind",
+															"lag",
+															"inclusionReasons",
+															"validatorEvidenceStatus"
+														],
+														"properties": {
+															"publicKey": { "type": "string" },
+															"name": {
+																"type": "string",
+																"nullable": true
+															},
+															"alias": {
+																"type": "string",
+																"nullable": true
+															},
+															"host": {
+																"type": "string",
+																"nullable": true
+															},
+															"homeDomain": {
+																"type": "string",
+																"nullable": true
+															},
+															"organizationId": {
+																"type": "string",
+																"nullable": true
+															},
+															"historyUrl": {
+																"type": "string",
+																"nullable": true
+															},
+															"active": { "type": "boolean" },
+															"activeInScp": { "type": "boolean" },
+															"isValidator": { "type": "boolean" },
+															"isValidating": { "type": "boolean" },
+															"isFullValidator": { "type": "boolean" },
+															"quorumSetHashKey": {
+																"type": "string",
+																"nullable": true
+															},
+															"versionStr": {
+																"type": "string",
+																"nullable": true
+															},
+															"index": { "type": "integer" },
+															"historyArchiveHasError": {
+																"type": "boolean"
+															},
+															"connectivityError": { "type": "boolean" },
+															"stellarCoreVersionBehind": {
+																"type": "boolean"
+															},
+															"lag": {
+																"type": "number",
+																"nullable": true
+															},
+															"inclusionReasons": {
+																"type": "array",
+																"items": {
+																	"type": "string",
+																	"enum": [
+																		"is_validator",
+																		"is_validating",
+																		"active_in_scp"
+																	]
+																}
+															},
+															"validatorEvidenceStatus": {
+																"type": "string",
+																"enum": [
+																	"validating_observed",
+																	"validator_identity_observed",
+																	"scp_activity_observed"
+																]
+															}
+														}
+													},
+													"radarComparison": {
+														"type": "object",
+														"required": [
+															"sourceId",
+															"comparisonStatus",
+															"probe"
+														],
+														"properties": {
+															"sourceId": {
+																"type": "string",
+																"enum": ["withobsrvr-radar"]
+															},
+															"comparisonStatus": {
+																"type": "string",
+																"enum": ["not_compared"]
+															},
+															"probe": {
+																"type": "string",
+																"enum": ["not_run"]
+															}
+														}
+													}
+												}
+											}
+										}
+									}
+								}
+							}
+						}
+					},
+					"400": { "description": "Bad request" },
+					"500": { "description": "Server error" }
+				}
+			}
+		},
 		"/v1/cross-check/archives": {
 			"get": {
 				"summary": "List archive cross-check review rows",
