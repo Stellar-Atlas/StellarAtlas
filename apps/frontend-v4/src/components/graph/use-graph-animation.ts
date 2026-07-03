@@ -6,13 +6,11 @@ import type { GraphRenderData } from './use-graph-renderer';
 import {
 	getExistingFlowLinkKeys,
 	getStatementColor,
-	getStatementFlowPath,
-	ledgerCloseAnimationBudgetMs,
 	ledgerPlaybackDurationMs,
-	compareStatementsByObservation,
 	type LedgerPlaybackFrame,
 	type StatementFlowPath
 } from './scp-flow-paths';
+import { buildStatementWaveSchedule } from './graph-wave-schedule';
 import {
 	hideAllWaveSlots,
 	maxWaveInstances,
@@ -285,54 +283,20 @@ export const useGraphAnimation = ({
 			}
 
 			const elapsedMs = performance.now() - playbackStartedAtRef.current;
-			const animationBudgetMs =
-				ledger.animationBudgetMs ?? ledgerCloseAnimationBudgetMs;
 			const playbackDurationMs =
 				ledger.playbackDurationMs ?? ledgerPlaybackDurationMs;
 			const latestLaunchMs = playbackDurationMs - 1_700;
 			if (elapsedMs > latestLaunchMs) return;
 
-			const unscheduledStatements = ledger.statements
-				.filter(
-					(statement) =>
-						!animatedStatementHashesRef.current.has(statement.statementHash)
-				)
-				.toSorted(compareStatementsByObservation);
-			if (unscheduledStatements.length === 0) return;
-
-			const observedTimes = ledger.statements
-				.map((statement) => new Date(statement.observedAt).getTime())
-				.filter(Number.isFinite);
-			const firstObservedAt =
-				observedTimes.length > 0 ? Math.min(...observedTimes) : 0;
-			const lastObservedAt =
-				observedTimes.length > 0 ? Math.max(...observedTimes) : 1;
-			const observedSpan = Math.max(1, lastObservedAt - firstObservedAt);
-
-			for (const statement of unscheduledStatements) {
-				const flowPath = getStatementFlowPath(
-					statement,
-					graphDataRef.current.links,
-					nodesByIdRef.current
-				);
-				if (!flowPath) continue;
-
+			const schedule = buildStatementWaveSchedule({
+				animatedStatementHashes: animatedStatementHashesRef.current,
+				elapsedMs,
+				graphData: graphDataRef.current,
+				ledger,
+				nodesById: nodesByIdRef.current
+			});
+			for (const { delayMs, flowPath, statement } of schedule) {
 				animatedStatementHashesRef.current.add(statement.statementHash);
-				const observedAt = new Date(statement.observedAt).getTime();
-				const normalizedDelay = Number.isFinite(observedAt)
-					? (observedAt - firstObservedAt) / observedSpan
-					: 0;
-				const targetDelayMs = Math.max(
-					0,
-						Math.min(
-						animationBudgetMs,
-						Math.floor(normalizedDelay * animationBudgetMs)
-					)
-				);
-				const delayMs = Math.max(
-					0,
-					Math.min(targetDelayMs - elapsedMs, latestLaunchMs - elapsedMs)
-				);
 				const timeout = window.setTimeout(() => {
 					activateFlowPath(flowPath);
 					animateStatementPacket(statement, flowPath);

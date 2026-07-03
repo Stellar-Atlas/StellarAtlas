@@ -7,7 +7,7 @@ import { getNodeLabel } from '../../domain/network';
 import type { Graph3DLink, Graph3DNode } from './model-3d';
 import { getEndpointId, getGraphLinkKey } from './graph-link-utils';
 
-export const maxAnimatedStatementsPerLedger = 160;
+export const maxAnimatedStatementsPerLedger = 96;
 export const maxActiveFeedStatements = 8;
 export const ledgerPlaybackDurationMs = 5_000;
 export const ledgerCloseAnimationBudgetMs = 3_300;

@@ -103,7 +103,7 @@ export const useGraphRenderer = ({
 				rimLight.position.set(-360, -220, 280);
 				keyLight.castShadow = true;
 				graph.renderer().shadowMap.enabled = true;
-				graph.renderer().shadowMap.type = THREE.PCFSoftShadowMap;
+				graph.renderer().shadowMap.type = THREE.PCFShadowMap;
 				graph.scene().add(packetGroup);
 				graphRef.current = graph;
 				packetGroupRef.current = packetGroup;
