@@ -6,6 +6,10 @@ import {
 	type RadarApiDocsFailureDTO,
 	type RadarApiDocsSnapshotDTO
 } from '../../domain/RadarApiDocs.js';
+import type {
+	CrossCheckRadarApiDocsSource,
+	RadarApiDocsFetchOptions
+} from '../../domain/CrossCheckApiDocsSources.js';
 import { parseRadarSwaggerInitializer } from './RadarApiDocsParser.js';
 
 export type RadarApiDocsFetch = (
@@ -13,12 +17,9 @@ export type RadarApiDocsFetch = (
 	init?: RequestInit
 ) => Promise<Response>;
 
-export interface FetchRadarApiDocsOptions {
-	readonly maxBytes?: number;
-	readonly timeoutMs?: number;
-}
+export type FetchRadarApiDocsOptions = RadarApiDocsFetchOptions;
 
-export class RadarApiDocsSourceAdapter {
+export class RadarApiDocsSourceAdapter implements CrossCheckRadarApiDocsSource {
 	static readonly defaultDocumentationUrl =
 		'https://radar.withobsrvr.com/api/docs/';
 	static readonly defaultMaxBytes = 1_000_000;

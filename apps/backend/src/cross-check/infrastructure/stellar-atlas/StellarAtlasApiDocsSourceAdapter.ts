@@ -3,20 +3,18 @@ import type {
 	CrossCheckApiDocsOperationDTO,
 	StellarAtlasApiDocsOperationSnapshotDTO
 } from '../../domain/CrossCheckApiDocsComparison.js';
+import type {
+	CrossCheckStellarAtlasApiDocsReadOptions,
+	CrossCheckStellarAtlasApiDocsSource,
+	StellarAtlasApiDocsFailureDTO,
+	StellarAtlasApiDocsFailureKind
+} from '../../domain/CrossCheckApiDocsSources.js';
 import { apiDocsOperationMethods } from '../../domain/RadarApiDocs.js';
 
-export type StellarAtlasApiDocsFailureKind = 'invalid_openapi';
+export type ReadStellarAtlasApiDocsOptions =
+	CrossCheckStellarAtlasApiDocsReadOptions;
 
-export interface StellarAtlasApiDocsFailureDTO {
-	readonly kind: StellarAtlasApiDocsFailureKind;
-	readonly message: string;
-}
-
-export interface ReadStellarAtlasApiDocsOptions {
-	readonly documentationUrl?: string | null;
-}
-
-export class StellarAtlasApiDocsSourceAdapter {
+export class StellarAtlasApiDocsSourceAdapter implements CrossCheckStellarAtlasApiDocsSource {
 	static readonly defaultDocumentationUrl = '/docs';
 
 	constructor(
