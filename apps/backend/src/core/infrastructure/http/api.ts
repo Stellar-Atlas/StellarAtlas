@@ -37,6 +37,7 @@ import { historyScanRouter } from '@history-scan-coordinator/infrastructure/http
 import { archiveScanRouter } from '@history-scan-coordinator/infrastructure/http/ArchiveScanRouter.js';
 import { GetScanJob } from '@history-scan-coordinator/use-cases/get-scan-job/GetScanJob.js';
 import { TouchScanJob } from '@history-scan-coordinator/use-cases/touch-scan-job/TouchScanJob.js';
+import { GetArchiveScans } from '@history-scan-coordinator/use-cases/get-archive-scans/GetArchiveScans.js';
 import { GetArchiveScanQueue } from '@history-scan-coordinator/use-cases/get-archive-scan-queue/GetArchiveScanQueue.js';
 import { GetArchiveScanWorkers } from '@history-scan-coordinator/use-cases/get-archive-scan-workers/GetArchiveScanWorkers.js';
 import { frontendV4ProxyMiddleware } from './FrontendV4Proxy.js';
@@ -120,6 +121,7 @@ const listen = async () => {
 	api.use(
 		'/v1/archive-scans',
 		archiveScanRouter({
+			getArchiveScans: kernel.container.get(GetArchiveScans),
 			getArchiveScanQueue: kernel.container.get(GetArchiveScanQueue),
 			getArchiveScanWorkers: kernel.container.get(GetArchiveScanWorkers),
 			getLatestScan: kernel.container.get(GetLatestScan),

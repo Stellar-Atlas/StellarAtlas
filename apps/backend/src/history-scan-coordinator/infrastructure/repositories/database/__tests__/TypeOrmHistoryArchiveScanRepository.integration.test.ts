@@ -3,7 +3,10 @@ import { ConfigMock } from '@core/config/__mocks__/configMock.js';
 import { TYPES } from '@history-scan-coordinator/infrastructure/di/di-types.js';
 import type { ScanRepository } from '@history-scan-coordinator/domain/scan/ScanRepository.js';
 import { Scan } from '@history-scan-coordinator/domain/scan/Scan.js';
-import { ScanError, ScanErrorType } from '@history-scan-coordinator/domain/scan/ScanError.js';
+import {
+	ScanError,
+	ScanErrorType
+} from '@history-scan-coordinator/domain/scan/ScanError.js';
 import { Url } from 'http-helper';
 
 let kernel: Kernel;
@@ -87,6 +90,107 @@ it('should find the latest scans', async function () {
 	expect(latestByUrl).toBeDefined();
 	expect(latestByUrl?.error).toBeInstanceOf(ScanError);
 	expect(latestByUrl?.scanErrors).toHaveLength(1);
+});
+
+it('should find a bounded latest scan list with verification preference', async function () {
+	const repo: ScanRepository = kernel.container.get(
+		TYPES.HistoryArchiveScanRepository
+	);
+
+	const workerOnlyUrl = createDummyHistoryBaseUrl();
+	const recentVerificationUrl = createDummyHistoryBaseUrl();
+	const olderVerificationUrl = createDummyHistoryBaseUrl();
+	const verificationPreferredUrl = createDummyHistoryBaseUrl();
+	const workerOnlyScan = new Scan(
+		new Date('2026-07-05T00:00:00.000Z'),
+		new Date('2026-07-05T00:00:00.000Z'),
+		new Date('2026-07-05T00:01:00.000Z'),
+		workerOnlyUrl,
+		0,
+		null,
+		0,
+		null,
+		0,
+		null,
+		new ScanError(
+			ScanErrorType.TYPE_CONNECTION,
+			workerOnlyUrl.value,
+			'Could not fetch latest ledger'
+		)
+	);
+	const recentVerificationScan = new Scan(
+		new Date('2026-07-03T00:00:00.000Z'),
+		new Date('2026-07-03T00:00:00.000Z'),
+		new Date('2026-07-03T00:05:00.000Z'),
+		recentVerificationUrl,
+		0,
+		100,
+		80,
+		null,
+		12
+	);
+	const olderVerificationScan = new Scan(
+		new Date('2026-07-02T00:00:00.000Z'),
+		new Date('2026-07-02T00:00:00.000Z'),
+		new Date('2026-07-02T00:05:00.000Z'),
+		olderVerificationUrl,
+		0,
+		100,
+		80,
+		null,
+		12
+	);
+	const verificationScan = new Scan(
+		new Date('2026-07-01T00:00:00.000Z'),
+		new Date('2026-07-01T00:00:00.000Z'),
+		new Date('2026-07-01T00:05:00.000Z'),
+		verificationPreferredUrl,
+		100,
+		200,
+		150,
+		null,
+		12
+	);
+	const newerWorkerFailure = new Scan(
+		new Date('2026-07-01T00:00:00.000Z'),
+		new Date('2026-07-04T00:00:00.000Z'),
+		new Date('2026-07-04T00:01:00.000Z'),
+		verificationPreferredUrl,
+		151,
+		null,
+		150,
+		null,
+		0,
+		null,
+		new ScanError(
+			ScanErrorType.TYPE_CONNECTION,
+			verificationPreferredUrl.value,
+			'Could not fetch latest ledger'
+		)
+	);
+
+	await repo.save([
+		workerOnlyScan,
+		recentVerificationScan,
+		olderVerificationScan,
+		verificationScan,
+		newerWorkerFailure
+	]);
+
+	const latest = await repo.findLatestLimited(4);
+	expect(latest.map((scan) => scan.baseUrl.value)).toEqual([
+		workerOnlyUrl.value,
+		recentVerificationUrl.value,
+		olderVerificationUrl.value,
+		verificationPreferredUrl.value
+	]);
+	expect(latest[3].startDate).toEqual(verificationScan.startDate);
+
+	const limited = await repo.findLatestLimited(2);
+	expect(limited.map((scan) => scan.baseUrl.value)).toEqual([
+		workerOnlyUrl.value,
+		recentVerificationUrl.value
+	]);
 });
 
 it('should prefer the latest verification scan over a newer worker setup failure', async function () {

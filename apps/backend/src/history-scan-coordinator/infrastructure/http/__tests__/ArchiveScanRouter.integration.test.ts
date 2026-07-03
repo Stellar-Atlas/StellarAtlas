@@ -3,6 +3,7 @@ import request from 'supertest';
 import { mock } from 'jest-mock-extended';
 import { err, ok } from 'neverthrow';
 import { ArchiveScanRouterWrapper } from '../ArchiveScanRouter.js';
+import { GetArchiveScans } from '@history-scan-coordinator/use-cases/get-archive-scans/GetArchiveScans.js';
 import { GetArchiveScanQueue } from '@history-scan-coordinator/use-cases/get-archive-scan-queue/GetArchiveScanQueue.js';
 import { GetArchiveScanWorkers } from '@history-scan-coordinator/use-cases/get-archive-scan-workers/GetArchiveScanWorkers.js';
 import { GetLatestScan } from '@history-scan-coordinator/use-cases/get-latest-scan/GetLatestScan.js';
@@ -13,12 +14,14 @@ import type { HistoryArchiveScanLogEntryDTO } from '@history-scan-coordinator/us
 
 describe('ArchiveScanRouter.integration', () => {
 	let app: express.Application;
+	let getArchiveScans: jest.Mocked<GetArchiveScans>;
 	let getArchiveScanQueue: jest.Mocked<GetArchiveScanQueue>;
 	let getArchiveScanWorkers: jest.Mocked<GetArchiveScanWorkers>;
 	let getLatestScan: jest.Mocked<GetLatestScan>;
 	let getScanLogs: jest.Mocked<GetScanLogs>;
 
 	beforeEach(() => {
+		getArchiveScans = mock<GetArchiveScans>();
 		getArchiveScanQueue = mock<GetArchiveScanQueue>();
 		getArchiveScanWorkers = mock<GetArchiveScanWorkers>();
 		getLatestScan = mock<GetLatestScan>();
@@ -28,12 +31,81 @@ describe('ArchiveScanRouter.integration', () => {
 		app.use(
 			'/archive-scans',
 			ArchiveScanRouterWrapper({
+				getArchiveScans,
 				getArchiveScanQueue,
 				getArchiveScanWorkers,
 				getLatestScan,
 				getScanLogs
 			})
 		);
+	});
+
+	describe('GET /', () => {
+		it('should expose a bounded archive scan list', async () => {
+			getArchiveScans.execute.mockResolvedValue(
+				ok({
+					generatedAt: '2026-07-03T12:00:00.000Z',
+					limit: 2,
+					count: 1,
+					scans: [
+						new HistoryArchiveScan(
+							'https://history.example.com',
+							new Date('2026-07-03T10:00:00.000Z'),
+							new Date('2026-07-03T10:05:00.000Z'),
+							100,
+							false,
+							null,
+							null,
+							false
+						)
+					]
+				})
+			);
+
+			await request(app)
+				.get('/archive-scans?limit=2')
+				.expect(200)
+				.expect('Cache-Control', 'public, max-age=10')
+				.expect((response) => {
+					expect(response.body).toMatchObject({
+						generatedAt: '2026-07-03T12:00:00.000Z',
+						limit: 2,
+						count: 1
+					});
+					expect(response.body.scans).toHaveLength(1);
+					expect(response.body.scans[0]).toMatchObject({
+						url: 'https://history.example.com',
+						latestVerifiedLedger: 100
+					});
+				});
+
+			expect(getArchiveScans.execute).toHaveBeenCalledWith({ limit: 2 });
+			expect(getLatestScan.execute).not.toHaveBeenCalled();
+			expect(getScanLogs.execute).not.toHaveBeenCalled();
+		});
+
+		it('should return 400 for invalid limits', async () => {
+			await request(app)
+				.get('/archive-scans?limit=500')
+				.expect(400)
+				.expect((response) => {
+					expect(response.body.errors).toBeDefined();
+				});
+			expect(getArchiveScans.execute).not.toHaveBeenCalled();
+		});
+
+		it('should return 500 when archive scan listing fails', async () => {
+			getArchiveScans.execute.mockResolvedValue(
+				err(new Error('database unavailable'))
+			);
+
+			await request(app)
+				.get('/archive-scans')
+				.expect(500)
+				.expect((response) => {
+					expect(response.body).toEqual({ error: 'Internal server error' });
+				});
+		});
 	});
 
 	describe('GET /queue', () => {

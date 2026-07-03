@@ -537,6 +537,64 @@
 				}
 			}
 		},
+		"/v1/archive-scans": {
+			"get": {
+				"summary": "List latest archive scans",
+				"description": "Returns a bounded list of the latest public history archive scan state per archive URL.",
+				"tags": ["ArchiveScans"],
+				"operationId": "getArchiveScans",
+				"parameters": [
+					{
+						"name": "limit",
+						"in": "query",
+						"description": "Maximum number of archive scan rows to return.",
+						"required": false,
+						"schema": {
+							"type": "integer",
+							"minimum": 1,
+							"maximum": 100,
+							"default": 50
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "latest archive scan list",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object",
+									"required": ["generatedAt", "limit", "count", "scans"],
+									"properties": {
+										"generatedAt": {
+											"type": "string",
+											"format": "date-time"
+										},
+										"limit": {
+											"type": "integer",
+											"minimum": 1,
+											"maximum": 100
+										},
+										"count": {
+											"type": "integer",
+											"minimum": 0
+										},
+										"scans": {
+											"type": "array",
+											"items": {
+												"$ref": "https://StellarAtlas.io/schemas/history-archive-scan.json"
+											}
+										}
+									}
+								}
+							}
+						}
+					},
+					"400": { "description": "Invalid limit" },
+					"500": { "description": "Server error" }
+				}
+			}
+		},
 		"/v1/archive-scans/queue": {
 			"get": {
 				"summary": "Get archive scan queue stats",
