@@ -83,6 +83,7 @@ let server: Server;
 const serverSockets = new Set<Socket>();
 let shutdownStarted = false;
 const api = express();
+api.use(corsMiddleware);
 api.use(bodyParser.json());
 api.use(frontendV4ProxyMiddleware);
 api.use(helmet());
@@ -108,23 +109,6 @@ const listen = async () => {
 	const { config, kernel } = await setup();
 	const exceptionLogger =
 		kernel.container.get<ExceptionLogger>('ExceptionLogger');
-
-	api.use(function (
-		req: express.Request,
-		res: express.Response,
-		next: express.NextFunction
-	) {
-		res.header('Access-Control-Allow-Origin', '*');
-		res.header(
-			'Access-Control-Allow-Headers',
-			'Origin, X-Requested-With, Content-Type, Accept'
-		);
-		res.header(
-			'Access-Control-Allow-Methods',
-			'GET, POST, PUT, DELETE, OPTIONS'
-		);
-		next();
-	});
 
 	const swaggerOptions = {
 		customCss: '.swagger-ui .topbar { display: none }',
@@ -332,6 +316,27 @@ const listen = async () => {
 };
 
 listen();
+
+function corsMiddleware(
+	req: express.Request,
+	res: express.Response,
+	next: express.NextFunction
+): void {
+	res.header('Access-Control-Allow-Origin', '*');
+	res.header(
+		'Access-Control-Allow-Headers',
+		'Origin, X-Requested-With, Content-Type, Accept, Authorization'
+	);
+	res.header(
+		'Access-Control-Allow-Methods',
+		'GET, POST, PUT, PATCH, DELETE, OPTIONS'
+	);
+	if (req.method === 'OPTIONS') {
+		res.sendStatus(204);
+		return;
+	}
+	next();
+}
 
 function trackServerSockets(httpServer: Server): void {
 	httpServer.on('connection', (socket) => {
