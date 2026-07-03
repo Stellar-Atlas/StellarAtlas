@@ -28,9 +28,10 @@ import {
 	scanDtoValidators
 } from './ScanRequestValidation.js';
 import {
+	frontendCacheTags,
 	type FrontendRevalidationConfig,
 	triggerFrontendRevalidation
-} from './FrontendRevalidation.js';
+} from '@core/services/FrontendRevalidation.js';
 
 export interface CommunityScannerRouterConfig extends FrontendRevalidationConfig {
 	readonly registerCommunityScanner: RegisterCommunityScanner;
@@ -239,7 +240,10 @@ export const CommunityScannerRouterWrapper = (
 				return mapRegisterScanError(result.error, res);
 			}
 
-			triggerFrontendRevalidation(config, ['history-scan', 'network']);
+			triggerFrontendRevalidation(config, [
+				frontendCacheTags.historyScan,
+				frontendCacheTags.network
+			]);
 
 			return res.status(201).json({ message: 'Scan created successfully' });
 		}

@@ -74,3 +74,7 @@ export { default as NetworkStatistics } from './network-statistics.js';
 export { default as StellarCoreConfigurationGenerator } from './stellar-core-configuration-generator.js';
 export { mapUnknownToError } from './utilities/mapUnknownToError.js';
 export { asyncSleep } from './utilities/asyncSleep.js';
+export {
+	frontendCacheTags,
+	type FrontendCacheTag
+} from './frontend-cache-tags.js';

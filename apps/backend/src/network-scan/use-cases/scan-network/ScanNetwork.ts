@@ -22,6 +22,11 @@ import { NodeMeasurementAverage } from '../../domain/node/NodeMeasurementAverage
 import { mapUnknownToError } from '@core/utilities/mapUnknownToError.js';
 import { NodeAddressMapper } from './NodeAddressMapper.js';
 import { CORE_TYPES } from '@core/infrastructure/di/di-types.js';
+import {
+	frontendCacheTags,
+	type FrontendRevalidationConfig,
+	triggerFrontendRevalidation
+} from '@core/services/FrontendRevalidation.js';
 import type { JobMonitor } from 'job-monitor';
 
 interface ShutDownRequest {
@@ -35,6 +40,8 @@ export class ScanNetwork {
 	constructor(
 		@inject(NETWORK_TYPES.NetworkConfig)
 		private networkConfig: NetworkConfig,
+		@inject(CORE_TYPES.FrontendRevalidationConfig)
+		private frontendRevalidationConfig: FrontendRevalidationConfig,
 		@inject(UpdateNetwork)
 		private updateNetworkUseCase: UpdateNetwork,
 		@inject(NETWORK_TYPES.NetworkRepository)
@@ -158,11 +165,21 @@ export class ScanNetwork {
 			return err(result.error);
 		}
 
+		this.triggerFrontendRevalidation();
 		await this.sendNotifications(scanResult);
 		await this.archive(scanResult);
 		await this.heartBeat();
 
 		return ok(undefined);
+	}
+
+	private triggerFrontendRevalidation(): void {
+		triggerFrontendRevalidation(this.frontendRevalidationConfig, [
+			frontendCacheTags.network,
+			frontendCacheTags.organizations,
+			frontendCacheTags.scpStatements,
+			frontendCacheTags.status
+		]);
 	}
 
 	private async sendNotifications(scanResult: ScanResult) {

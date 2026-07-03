@@ -21,6 +21,7 @@ import NetworkScan from '@network-scan/domain/network/scan/NetworkScan.js';
 import { NotifyError } from '@notifications/use-cases/determine-events-and-notify-subscribers/NotifyError.js';
 import { asyncSleep } from 'http-helper';
 import type { JobMonitor } from 'job-monitor';
+import type { FrontendRevalidationConfig } from '@core/services/FrontendRevalidation.js';
 
 describe('ScanNetwork', () => {
 	it('should scan the network', async function () {
@@ -210,6 +211,90 @@ describe('ScanNetwork', () => {
 		);
 	});
 
+	it('should revalidate frontend cache tags after a persisted network scan', async function () {
+		const originalFetch = global.fetch;
+		const fetchMock = jest.fn().mockResolvedValue({}) as jest.Mock;
+		global.fetch = fetchMock as unknown as typeof fetch;
+		const SUT = setupSUT({
+			frontendBaseUrl: 'https://frontend.example.com',
+			frontendRevalidateToken: 'revalidate-secret'
+		});
+
+		try {
+			const result = await SUT.scanNetwork.execute({
+				updateNetwork: true,
+				dryRun: false
+			});
+
+			expect(result.isOk()).toBe(true);
+			expect(fetchMock).toHaveBeenCalledTimes(1);
+			const [url, init] = fetchMock.mock.calls[0] as [URL, RequestInit];
+			expect(url.toString()).toBe(
+				'https://frontend.example.com/api/revalidate'
+			);
+			expect(init.method).toBe('POST');
+			expect(init.headers).toEqual({
+				authorization: 'Bearer revalidate-secret',
+				'content-type': 'application/json'
+			});
+			expect(init.body).toBe(
+				JSON.stringify({
+					tags: ['network', 'organizations', 'scp-statements', 'status']
+				})
+			);
+			expect(init.signal).toBeDefined();
+		} finally {
+			global.fetch = originalFetch;
+		}
+	});
+
+	it('should not revalidate frontend cache tags for dry runs', async function () {
+		const originalFetch = global.fetch;
+		const fetchMock = jest.fn().mockResolvedValue({}) as jest.Mock;
+		global.fetch = fetchMock as unknown as typeof fetch;
+		const SUT = setupSUT({
+			frontendBaseUrl: 'https://frontend.example.com',
+			frontendRevalidateToken: 'revalidate-secret'
+		});
+
+		try {
+			const result = await SUT.scanNetwork.execute({
+				updateNetwork: true,
+				dryRun: true
+			});
+
+			expect(result.isOk()).toBe(true);
+			expect(fetchMock).not.toHaveBeenCalled();
+		} finally {
+			global.fetch = originalFetch;
+		}
+	});
+
+	it('should not revalidate frontend cache tags when persistence fails', async function () {
+		const originalFetch = global.fetch;
+		const fetchMock = jest.fn().mockResolvedValue({}) as jest.Mock;
+		global.fetch = fetchMock as unknown as typeof fetch;
+		const SUT = setupSUT({
+			frontendBaseUrl: 'https://frontend.example.com',
+			frontendRevalidateToken: 'revalidate-secret'
+		});
+		SUT.scanRepository.saveAndRollupMeasurements.mockResolvedValue(
+			err(new Error('save failed'))
+		);
+
+		try {
+			const result = await SUT.scanNetwork.execute({
+				updateNetwork: true,
+				dryRun: false
+			});
+
+			expect(result.isOk()).toBe(true);
+			expect(fetchMock).not.toHaveBeenCalled();
+		} finally {
+			global.fetch = originalFetch;
+		}
+	});
+
 	it('should capture error if known-peers are invalid and abort scan', async function () {
 		const SUT = setupSUT();
 		SUT.networkConfig.knownPeers = [['invalid', -1]];
@@ -261,7 +346,9 @@ describe('ScanNetwork', () => {
 		};
 	}
 
-	function setupSUT() {
+	function setupSUT(
+		frontendRevalidationConfig: FrontendRevalidationConfig = {}
+	) {
 		//setup ScanNetwork with mock dependencies
 		const networkConfig = new ConfigMock().networkConfig;
 		const updateNetwork = mock<UpdateNetwork>();
@@ -288,6 +375,7 @@ describe('ScanNetwork', () => {
 
 		const scanNetwork = new ScanNetwork(
 			networkConfig,
+			frontendRevalidationConfig,
 			updateNetwork,
 			networkRepository,
 			nodeMeasurementDayRepository,

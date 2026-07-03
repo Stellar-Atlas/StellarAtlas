@@ -17,6 +17,7 @@ import {
 	ConsoleExceptionLogger
 } from 'exception-logger';
 import type { ExceptionLogger } from 'exception-logger';
+import type { FrontendRevalidationConfig } from '../../services/FrontendRevalidation.js';
 
 export function load(container: Container, config: Config) {
 	container
@@ -58,6 +59,13 @@ export function load(container: Container, config: Config) {
 			else return new ConsoleExceptionLogger();
 		})
 		.inSingletonScope();
+
+	container
+		.bind<FrontendRevalidationConfig>(CORE_TYPES.FrontendRevalidationConfig)
+		.toConstantValue({
+			frontendBaseUrl: config.frontendBaseUrl,
+			frontendRevalidateToken: config.frontendRevalidateToken
+		});
 
 	container.bind(LoopTimer).toSelf();
 }

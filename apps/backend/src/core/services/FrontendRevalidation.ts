@@ -1,3 +1,5 @@
+export { frontendCacheTags, type FrontendCacheTag } from 'shared';
+
 export interface FrontendRevalidationConfig {
 	readonly frontendBaseUrl?: string;
 	readonly frontendRevalidateToken?: string;

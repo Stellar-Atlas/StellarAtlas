@@ -16,9 +16,10 @@ import {
 	scanDtoValidators
 } from './ScanRequestValidation.js';
 import {
+	frontendCacheTags,
 	type FrontendRevalidationConfig,
 	triggerFrontendRevalidation
-} from './FrontendRevalidation.js';
+} from '@core/services/FrontendRevalidation.js';
 
 export interface HistoryScanRouterConfig extends FrontendRevalidationConfig {
 	getLatestScan: GetLatestScan;
@@ -54,7 +55,10 @@ export const HistoryScanRouterWrapper = (
 					return res.status(500).json({ error: result.error.message });
 				}
 
-				triggerFrontendRevalidation(config, ['history-scan', 'network']);
+				triggerFrontendRevalidation(config, [
+					frontendCacheTags.historyScan,
+					frontendCacheTags.network
+				]);
 
 				return res.status(201).json({ message: 'Scan created successfully' });
 			}
@@ -83,7 +87,7 @@ export const HistoryScanRouterWrapper = (
 					return res.status(404).json({ error: 'Scan job not found' });
 				}
 
-				triggerFrontendRevalidation(config, ['history-scan']);
+				triggerFrontendRevalidation(config, [frontendCacheTags.historyScan]);
 
 				return res.status(204).send();
 			}
@@ -107,7 +111,7 @@ export const HistoryScanRouterWrapper = (
 					return res.status(204).json({ message: 'No scan job available' });
 				}
 
-				triggerFrontendRevalidation(config, ['history-scan']);
+				triggerFrontendRevalidation(config, [frontendCacheTags.historyScan]);
 
 				return res.json(scanJobResult.value);
 			}
