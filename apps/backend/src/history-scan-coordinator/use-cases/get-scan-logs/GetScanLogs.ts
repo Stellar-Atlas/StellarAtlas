@@ -43,6 +43,7 @@ export interface HistoryArchiveScanLogErrorDTO {
 @injectable()
 export class GetScanLogs {
 	private static readonly maxEntries = 10;
+	private static readonly maxStoredScansToInspect = 50;
 	private static readonly maxActiveJobs = 3;
 	private static readonly maxVisibleConcurrency = 24;
 
@@ -74,13 +75,17 @@ export class GetScanLogs {
 				),
 				this.scanRepository.findRecentByUrl(
 					normalizedUrl,
-					GetScanLogs.maxEntries
+					GetScanLogs.maxStoredScansToInspect
 				)
 			]);
 
+			const publicCompletedScans = scans
+				.filter((scan) => this.shouldShowCompletedScan(scan))
+				.slice(0, GetScanLogs.maxEntries);
+
 			return ok([
 				...activeJobs.map((job) => this.mapActiveJob(job)),
-				...scans.map((scan) => this.mapScan(scan))
+				...publicCompletedScans.map((scan) => this.mapScan(scan))
 			]);
 		} catch (e) {
 			const error = mapUnknownToError(e);
@@ -121,6 +126,12 @@ export class GetScanLogs {
 		if (concurrency === null) return 0;
 
 		return Math.min(concurrency, GetScanLogs.maxVisibleConcurrency);
+	}
+
+	private shouldShowCompletedScan(scan: Scan): boolean {
+		if (scan.hasArchiveVerificationError()) return true;
+
+		return !scan.hasWorkerIssue();
 	}
 
 	private mapScan(scan: Scan): HistoryArchiveScanLogEntryDTO {
