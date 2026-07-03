@@ -1,155 +1,100 @@
-import { RegisterCommunityScanner } from '../RegisterCommunityScanner.js';
-import { CommunityScanner, ScannerStatus } from '../../infrastructure/database/entities/CommunityScanner.js';
+import { mock, MockProxy } from 'jest-mock-extended';
+import type { ExceptionLogger } from '@core/services/ExceptionLogger.js';
+import {
+	DuplicateCommunityScannerError,
+	RegisterCommunityScanner
+} from '../RegisterCommunityScanner.js';
+import {
+	CommunityScanner,
+	ScannerStatus
+} from '../../infrastructure/database/entities/CommunityScanner.js';
 import { Repository } from 'typeorm';
+import { hashCommunityScannerApiKey } from '../../domain/CommunityScannerApiKey.js';
 
 describe('RegisterCommunityScanner', () => {
-  let useCase: RegisterCommunityScanner;
-  let mockRepository: jest.Mocked<Repository<CommunityScanner>>;
+	let useCase: RegisterCommunityScanner;
+	let scannerRepositoryMock: MockProxy<Repository<CommunityScanner>>;
+	let exceptionLoggerMock: MockProxy<ExceptionLogger>;
 
-  beforeEach(() => {
-    mockRepository = {
-      findOne: jest.fn(),
-      save: jest.fn(),
-      create: jest.fn()
-    } as any;
+	beforeEach(() => {
+		jest.useFakeTimers().setSystemTime(new Date('2026-07-03T12:00:00.000Z'));
+		scannerRepositoryMock = mock<Repository<CommunityScanner>>();
+		exceptionLoggerMock = mock<ExceptionLogger>();
+		useCase = new RegisterCommunityScanner(
+			scannerRepositoryMock,
+			exceptionLoggerMock
+		);
+	});
 
-    useCase = new RegisterCommunityScanner(mockRepository);
-  });
+	afterEach(() => {
+		jest.useRealTimers();
+	});
 
-  const validRequest = {
-    name: 'Test Scanner',
-    description: 'A test community scanner',
-    contactEmail: 'test@example.com'
-  };
+	const validRequest = {
+		name: ' Test Scanner ',
+		description: ' A test community scanner ',
+		contactEmail: ' TEST@EXAMPLE.COM '
+	};
 
-  it('should register a new community scanner successfully', async () => {
-    const expectedScanner = new CommunityScanner();
-    expectedScanner.id = 'scanner-uuid';
-    expectedScanner.name = validRequest.name;
-    expectedScanner.description = validRequest.description;
-    expectedScanner.contactEmail = validRequest.contactEmail;
-    expectedScanner.apiKey = 'generated-api-key';
-    expectedScanner.status = ScannerStatus.PENDING;
-    expectedScanner.createdAt = new Date();
+	it('should register a scanner with a hashed API key and one-time token', async () => {
+		const scanner = new CommunityScanner();
+		scanner.id = 'scanner-uuid';
+		scanner.status = ScannerStatus.PENDING;
+		scanner.createdAt = new Date('2026-07-03T12:00:00.000Z');
+		scannerRepositoryMock.findOne.mockResolvedValue(null);
+		scannerRepositoryMock.create.mockImplementation((data) =>
+			Object.assign(scanner, data)
+		);
+		scannerRepositoryMock.save.mockResolvedValue(scanner);
 
-    mockRepository.findOne.mockResolvedValue(null); // No existing scanner
-    mockRepository.create.mockReturnValue(expectedScanner);
-    mockRepository.save.mockResolvedValue(expectedScanner);
+		const result = await useCase.execute(validRequest);
 
-    const result = await useCase.execute(validRequest);
+		expect(result.isOk()).toBe(true);
+		const dto = result._unsafeUnwrap();
+		expect(dto).toMatchObject({
+			id: 'scanner-uuid',
+			name: 'Test Scanner',
+			description: 'A test community scanner',
+			status: ScannerStatus.PENDING,
+			createdAt: '2026-07-03T12:00:00.000Z'
+		});
+		expect(dto.apiKey).toMatch(/^satlas_scanner_/);
+		expect(scannerRepositoryMock.findOne).toHaveBeenCalledWith({
+			where: { contactEmail: 'test@example.com' }
+		});
+		expect(scannerRepositoryMock.create).toHaveBeenCalledWith(
+			expect.objectContaining({
+				name: 'Test Scanner',
+				description: 'A test community scanner',
+				contactEmail: 'test@example.com',
+				status: ScannerStatus.PENDING
+			})
+		);
+		expect(scanner.apiKeyHash).toBe(hashCommunityScannerApiKey(dto.apiKey));
+		expect(scanner.apiKeyHash).not.toBe(dto.apiKey);
+	});
 
-    expect(mockRepository.findOne).toHaveBeenCalledWith({
-      where: { contactEmail: validRequest.contactEmail }
-    });
+	it('should reject duplicate contact emails without creating a scanner', async () => {
+		scannerRepositoryMock.findOne.mockResolvedValue(new CommunityScanner());
 
-    expect(mockRepository.create).toHaveBeenCalledWith({
-      name: validRequest.name,
-      description: validRequest.description,
-      contactEmail: validRequest.contactEmail,
-      apiKey: expect.stringMatching(/^[a-f0-9]{64}$/) // 64-character hex string
-    });
+		const result = await useCase.execute(validRequest);
 
-    expect(mockRepository.save).toHaveBeenCalledWith(expectedScanner);
-    expect(result).toBe(expectedScanner);
-  });
+		expect(result.isErr()).toBe(true);
+		expect(result._unsafeUnwrapErr()).toBeInstanceOf(
+			DuplicateCommunityScannerError
+		);
+		expect(scannerRepositoryMock.create).not.toHaveBeenCalled();
+		expect(scannerRepositoryMock.save).not.toHaveBeenCalled();
+	});
 
-  it('should throw error if scanner with email already exists', async () => {
-    const existingScanner = new CommunityScanner();
-    existingScanner.contactEmail = validRequest.contactEmail;
+	it('should log and return persistence errors', async () => {
+		const error = new Error('database unavailable');
+		scannerRepositoryMock.findOne.mockRejectedValue(error);
 
-    mockRepository.findOne.mockResolvedValue(existingScanner);
+		const result = await useCase.execute(validRequest);
 
-    await expect(useCase.execute(validRequest)).rejects.toThrow(
-      'Scanner with this email already exists'
-    );
-
-    expect(mockRepository.findOne).toHaveBeenCalledWith({
-      where: { contactEmail: validRequest.contactEmail }
-    });
-    expect(mockRepository.create).not.toHaveBeenCalled();
-    expect(mockRepository.save).not.toHaveBeenCalled();
-  });
-
-  it('should generate unique API keys', async () => {
-    mockRepository.findOne.mockResolvedValue(null);
-    mockRepository.create.mockImplementation((data) => {
-      const scanner = new CommunityScanner();
-      Object.assign(scanner, data);
-      return scanner;
-    });
-    mockRepository.save.mockImplementation((scanner) => Promise.resolve(scanner as CommunityScanner));
-
-    const result1 = await useCase.execute(validRequest);
-    const result2 = await useCase.execute({
-      ...validRequest,
-      contactEmail: 'test2@example.com'
-    });
-
-    expect(result1.apiKey).not.toBe(result2.apiKey);
-    expect(result1.apiKey).toMatch(/^[a-f0-9]{64}$/);
-    expect(result2.apiKey).toMatch(/^[a-f0-9]{64}$/);
-  });
-
-  it('should normalize email to lowercase', async () => {
-    const requestWithUppercaseEmail = {
-      ...validRequest,
-      contactEmail: 'TEST@EXAMPLE.COM'
-    };
-
-    mockRepository.findOne.mockResolvedValue(null);
-    mockRepository.create.mockImplementation((data) => {
-      const scanner = new CommunityScanner();
-      Object.assign(scanner, data);
-      return scanner;
-    });
-    mockRepository.save.mockImplementation((scanner) => Promise.resolve(scanner as CommunityScanner));
-
-    await useCase.execute(requestWithUppercaseEmail);
-
-    expect(mockRepository.findOne).toHaveBeenCalledWith({
-      where: { contactEmail: 'test@example.com' }
-    });
-
-    expect(mockRepository.create).toHaveBeenCalledWith({
-      name: requestWithUppercaseEmail.name,
-      description: requestWithUppercaseEmail.description,
-      contactEmail: 'test@example.com',
-      apiKey: expect.any(String)
-    });
-  });
-
-  it('should handle database save errors', async () => {
-    mockRepository.findOne.mockResolvedValue(null);
-    mockRepository.create.mockReturnValue(new CommunityScanner());
-    mockRepository.save.mockRejectedValue(new Error('Database connection failed'));
-
-    await expect(useCase.execute(validRequest)).rejects.toThrow(
-      'Database connection failed'
-    );
-  });
-
-  it('should trim whitespace from inputs', async () => {
-    const requestWithWhitespace = {
-      name: '  Test Scanner  ',
-      description: '  A test community scanner  ',
-      contactEmail: '  test@example.com  '
-    };
-
-    mockRepository.findOne.mockResolvedValue(null);
-    mockRepository.create.mockImplementation((data) => {
-      const scanner = new CommunityScanner();
-      Object.assign(scanner, data);
-      return scanner;
-    });
-    mockRepository.save.mockImplementation((scanner) => Promise.resolve(scanner as CommunityScanner));
-
-    await useCase.execute(requestWithWhitespace);
-
-    expect(mockRepository.create).toHaveBeenCalledWith({
-      name: 'Test Scanner',
-      description: 'A test community scanner',
-      contactEmail: 'test@example.com',
-      apiKey: expect.any(String)
-    });
-  });
+		expect(result.isErr()).toBe(true);
+		expect(result._unsafeUnwrapErr()).toBe(error);
+		expect(exceptionLoggerMock.captureException).toHaveBeenCalledWith(error);
+	});
 });

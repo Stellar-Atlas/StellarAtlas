@@ -1,48 +1,95 @@
+import 'reflect-metadata';
+import { inject, injectable } from 'inversify';
+import { err, ok, Result } from 'neverthrow';
 import type { Repository } from 'typeorm';
-import { CommunityScanner } from '../infrastructure/database/entities/CommunityScanner.js';
-import { randomBytes } from 'crypto';
+import type { ExceptionLogger } from '@core/services/ExceptionLogger.js';
+import { mapUnknownToError } from '@core/utilities/mapUnknownToError.js';
+import {
+	CommunityScanner,
+	ScannerStatus
+} from '../infrastructure/database/entities/CommunityScanner.js';
+import {
+	generateCommunityScannerApiKey,
+	hashCommunityScannerApiKey
+} from '../domain/CommunityScannerApiKey.js';
+import { TYPES } from '../infrastructure/di/di-types.js';
 
 export interface RegisterCommunityRequest {
-  name: string;
-  description?: string;
-  contactEmail: string;
+	readonly name: string;
+	readonly description?: string;
+	readonly contactEmail: string;
 }
 
+export interface RegisteredCommunityScannerDTO {
+	readonly id: string;
+	readonly name: string;
+	readonly description: string | null;
+	readonly status: ScannerStatus;
+	readonly apiKey: string;
+	readonly createdAt: string;
+}
+
+export class DuplicateCommunityScannerError extends Error {
+	constructor() {
+		super('Scanner with this email already exists');
+		this.name = 'DuplicateCommunityScannerError';
+	}
+}
+
+@injectable()
 export class RegisterCommunityScanner {
-  constructor(private readonly scannerRepository: Repository<CommunityScanner>) {}
+	constructor(
+		@inject(TYPES.CommunityScannerRepository)
+		private readonly scannerRepository: Repository<CommunityScanner>,
+		@inject('ExceptionLogger') private readonly exceptionLogger: ExceptionLogger
+	) {}
 
-  async execute(request: RegisterCommunityRequest): Promise<CommunityScanner> {
-    // Normalize and trim inputs
-    const normalizedEmail = request.contactEmail.toLowerCase().trim();
-    const trimmedName = request.name.trim();
-    const trimmedDescription = request.description?.trim() || '';
+	async execute(
+		request: RegisterCommunityRequest
+	): Promise<
+		Result<
+			RegisteredCommunityScannerDTO,
+			DuplicateCommunityScannerError | Error
+		>
+	> {
+		const normalizedEmail = request.contactEmail.toLowerCase().trim();
+		const trimmedName = request.name.trim();
+		const trimmedDescription = request.description?.trim();
 
-    // Check if scanner with this email already exists
-    const existingScanner = await this.scannerRepository.findOne({
-      where: { contactEmail: normalizedEmail }
-    });
+		try {
+			const existingScanner = await this.scannerRepository.findOne({
+				where: { contactEmail: normalizedEmail }
+			});
 
-    if (existingScanner) {
-      throw new Error('Scanner with this email already exists');
-    }
+			if (existingScanner) {
+				return err(new DuplicateCommunityScannerError());
+			}
 
-    // Generate secure API key
-    const apiKey = this.generateApiKey();
+			const apiKey = generateCommunityScannerApiKey();
+			const scanner = this.scannerRepository.create({
+				name: trimmedName,
+				description:
+					trimmedDescription && trimmedDescription.length > 0
+						? trimmedDescription
+						: undefined,
+				contactEmail: normalizedEmail,
+				apiKeyHash: hashCommunityScannerApiKey(apiKey),
+				status: ScannerStatus.PENDING
+			});
+			const savedScanner = await this.scannerRepository.save(scanner);
 
-    // Create new scanner
-    const scanner = this.scannerRepository.create({
-      name: trimmedName,
-      description: trimmedDescription,
-      contactEmail: normalizedEmail,
-      apiKey
-    });
-
-    // Save to database
-    return await this.scannerRepository.save(scanner);
-  }
-
-  private generateApiKey(): string {
-    // Generate 32 random bytes and convert to hex (64 characters)
-    return randomBytes(32).toString('hex');
-  }
+			return ok({
+				id: savedScanner.id,
+				name: savedScanner.name,
+				description: savedScanner.description ?? null,
+				status: savedScanner.status,
+				apiKey,
+				createdAt: (savedScanner.createdAt ?? new Date()).toISOString()
+			});
+		} catch (e) {
+			const error = mapUnknownToError(e);
+			this.exceptionLogger.captureException(error);
+			return err(error);
+		}
+	}
 }

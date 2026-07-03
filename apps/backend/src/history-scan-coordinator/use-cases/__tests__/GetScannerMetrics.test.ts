@@ -1,184 +1,109 @@
+import { mock, MockProxy } from 'jest-mock-extended';
+import type { ExceptionLogger } from '@core/services/ExceptionLogger.js';
 import { GetScannerMetrics } from '../GetScannerMetrics.js';
-import { CommunityScanner, ScannerStatus } from '../../infrastructure/database/entities/CommunityScanner.js';
-import { Repository } from 'typeorm';
+import {
+	CommunityScanner,
+	ScannerStatus
+} from '../../infrastructure/database/entities/CommunityScanner.js';
+import { Repository, SelectQueryBuilder } from 'typeorm';
 
 describe('GetScannerMetrics', () => {
-  let useCase: GetScannerMetrics;
-  let mockRepository: jest.Mocked<Repository<CommunityScanner>>;
+	let useCase: GetScannerMetrics;
+	let scannerRepositoryMock: MockProxy<Repository<CommunityScanner>>;
+	let exceptionLoggerMock: MockProxy<ExceptionLogger>;
+	let queryBuilderMock: MockProxy<SelectQueryBuilder<CommunityScanner>>;
 
-  beforeEach(() => {
-    mockRepository = {
-      count: jest.fn(),
-      createQueryBuilder: jest.fn()
-    } as any;
+	beforeEach(() => {
+		jest.useFakeTimers().setSystemTime(new Date('2026-07-03T12:00:00.000Z'));
+		scannerRepositoryMock = mock<Repository<CommunityScanner>>();
+		exceptionLoggerMock = mock<ExceptionLogger>();
+		queryBuilderMock = mock<SelectQueryBuilder<CommunityScanner>>();
+		queryBuilderMock.select.mockReturnThis();
+		queryBuilderMock.setParameters.mockReturnThis();
+		scannerRepositoryMock.createQueryBuilder.mockReturnValue(queryBuilderMock);
+		useCase = new GetScannerMetrics(scannerRepositoryMock, exceptionLoggerMock);
+	});
 
-    useCase = new GetScannerMetrics(mockRepository);
-  });
+	afterEach(() => {
+		jest.useRealTimers();
+	});
 
-  it('should return comprehensive scanner metrics', async () => {
-    const mockQueryBuilder = {
-      select: jest.fn().mockReturnThis(),
-      getRawOne: jest.fn()
-    };
+	it('should return heartbeat-derived scanner metrics', async () => {
+		queryBuilderMock.getRawOne.mockResolvedValue({
+			totalScanners: '10',
+			activeScanners: '6',
+			offlineScanners: '4',
+			degradedScanners: '1',
+			pendingScanners: '1',
+			blacklistedScanners: '2',
+			avgSuccessRate: '85.50',
+			totalCompleted: '1250',
+			totalFailed: '150',
+			avgCompletionTime: '15000'
+		});
 
-    // Mock total scanners count
-    mockRepository.count.mockResolvedValue(10);
+		const result = await useCase.execute();
 
-    // Mock status counts
-    mockRepository.count
-      .mockResolvedValueOnce(10) // total scanners
-      .mockResolvedValueOnce(6)  // online scanners
-      .mockResolvedValueOnce(2)  // offline scanners
-      .mockResolvedValueOnce(1)  // degraded scanners
-      .mockResolvedValueOnce(1); // pending scanners
+		expect(result.isOk()).toBe(true);
+		expect(result._unsafeUnwrap()).toEqual({
+			generatedAt: '2026-07-03T12:00:00.000Z',
+			heartbeatFreshnessMs: 300000,
+			totalScanners: 10,
+			activeScanners: 6,
+			offlineScanners: 4,
+			degradedScanners: 1,
+			pendingScanners: 1,
+			blacklistedScanners: 2,
+			averageSuccessRate: 85.5,
+			totalJobsCompleted: 1250,
+			totalJobsFailed: 150,
+			averageCompletionTimeMs: 15000
+		});
+		expect(scannerRepositoryMock.createQueryBuilder).toHaveBeenCalledWith(
+			'scanner'
+		);
+		expect(queryBuilderMock.setParameters).toHaveBeenCalledWith({
+			heartbeatCutoff: new Date('2026-07-03T11:55:00.000Z'),
+			degradedStatus: ScannerStatus.DEGRADED,
+			pendingStatus: ScannerStatus.PENDING
+		});
+	});
 
-    // Mock aggregate metrics query
-    mockRepository.createQueryBuilder.mockReturnValue(mockQueryBuilder as any);
-    mockQueryBuilder.getRawOne.mockResolvedValue({
-      avgSuccessRate: '85.50',
-      totalCompleted: '1250',
-      totalFailed: '150',
-      avgCompletionTime: '15000'
-    });
+	it('should handle null aggregate values as zeros', async () => {
+		queryBuilderMock.getRawOne.mockResolvedValue({
+			totalScanners: '0',
+			activeScanners: '0',
+			offlineScanners: '0',
+			degradedScanners: '0',
+			pendingScanners: '0',
+			blacklistedScanners: '0',
+			avgSuccessRate: null,
+			totalCompleted: null,
+			totalFailed: null,
+			avgCompletionTime: null
+		});
 
-    const result = await useCase.execute();
+		const result = await useCase.execute();
 
-    expect(result).toEqual({
-      totalScanners: 10,
-      activeScanners: 6,
-      offlineScanners: 2,
-      degradedScanners: 1,
-      pendingScanners: 1,
-      averageSuccessRate: 85.5,
-      totalJobsCompleted: 1250,
-      totalJobsFailed: 150,
-      averageCompletionTimeMs: 15000
-    });
+		expect(result.isOk()).toBe(true);
+		expect(result._unsafeUnwrap()).toMatchObject({
+			totalScanners: 0,
+			activeScanners: 0,
+			averageSuccessRate: 0,
+			totalJobsCompleted: 0,
+			totalJobsFailed: 0,
+			averageCompletionTimeMs: 0
+		});
+	});
 
-    // Verify repository calls
-    expect(mockRepository.count).toHaveBeenCalledTimes(5);
-    expect(mockRepository.count).toHaveBeenNthCalledWith(1, {});
-    expect(mockRepository.count).toHaveBeenNthCalledWith(2, { where: { status: ScannerStatus.ONLINE } });
-    expect(mockRepository.count).toHaveBeenNthCalledWith(3, { where: { status: ScannerStatus.OFFLINE } });
-    expect(mockRepository.count).toHaveBeenNthCalledWith(4, { where: { status: ScannerStatus.DEGRADED } });
-    expect(mockRepository.count).toHaveBeenNthCalledWith(5, { where: { status: ScannerStatus.PENDING } });
+	it('should log and return query errors', async () => {
+		const error = new Error('aggregate query failed');
+		queryBuilderMock.getRawOne.mockRejectedValue(error);
 
-    expect(mockRepository.createQueryBuilder).toHaveBeenCalledWith('scanner');
-    expect(mockQueryBuilder.select).toHaveBeenCalledWith([
-      'AVG(scanner.successRate) as avgSuccessRate',
-      'SUM(scanner.totalJobsCompleted) as totalCompleted',
-      'SUM(scanner.totalJobsFailed) as totalFailed',
-      'AVG(scanner.averageCompletionTimeMs) as avgCompletionTime'
-    ]);
-    expect(mockQueryBuilder.getRawOne).toHaveBeenCalled();
-  });
+		const result = await useCase.execute();
 
-  it('should handle empty database gracefully', async () => {
-    const mockQueryBuilder = {
-      select: jest.fn().mockReturnThis(),
-      getRawOne: jest.fn()
-    };
-
-    // Mock no scanners
-    mockRepository.count.mockResolvedValue(0);
-
-    mockRepository.createQueryBuilder.mockReturnValue(mockQueryBuilder as any);
-    mockQueryBuilder.getRawOne.mockResolvedValue({
-      avgSuccessRate: null,
-      totalCompleted: null,
-      totalFailed: null,
-      avgCompletionTime: null
-    });
-
-    const result = await useCase.execute();
-
-    expect(result).toEqual({
-      totalScanners: 0,
-      activeScanners: 0,
-      offlineScanners: 0,
-      degradedScanners: 0,
-      pendingScanners: 0,
-      averageSuccessRate: 0,
-      totalJobsCompleted: 0,
-      totalJobsFailed: 0,
-      averageCompletionTimeMs: 0
-    });
-  });
-
-  it('should handle null aggregate values', async () => {
-    const mockQueryBuilder = {
-      select: jest.fn().mockReturnThis(),
-      getRawOne: jest.fn()
-    };
-
-    mockRepository.count
-      .mockResolvedValueOnce(5)  // total scanners
-      .mockResolvedValueOnce(3)  // online scanners
-      .mockResolvedValueOnce(1)  // offline scanners
-      .mockResolvedValueOnce(0)  // degraded scanners
-      .mockResolvedValueOnce(1); // pending scanners
-
-    mockRepository.createQueryBuilder.mockReturnValue(mockQueryBuilder as any);
-    mockQueryBuilder.getRawOne.mockResolvedValue({
-      avgSuccessRate: null,
-      totalCompleted: '0',
-      totalFailed: '0',
-      avgCompletionTime: null
-    });
-
-    const result = await useCase.execute();
-
-    expect(result.averageSuccessRate).toBe(0);
-    expect(result.averageCompletionTimeMs).toBe(0);
-    expect(result.totalJobsCompleted).toBe(0);
-    expect(result.totalJobsFailed).toBe(0);
-  });
-
-  it('should handle database errors', async () => {
-    mockRepository.count.mockRejectedValue(new Error('Database connection failed'));
-
-    await expect(useCase.execute()).rejects.toThrow('Database connection failed');
-  });
-
-  it('should handle aggregate query errors', async () => {
-    const mockQueryBuilder = {
-      select: jest.fn().mockReturnThis(),
-      getRawOne: jest.fn()
-    };
-
-    mockRepository.count.mockResolvedValue(5);
-    mockRepository.createQueryBuilder.mockReturnValue(mockQueryBuilder as any);
-    mockQueryBuilder.getRawOne.mockRejectedValue(new Error('Aggregate query failed'));
-
-    await expect(useCase.execute()).rejects.toThrow('Aggregate query failed');
-  });
-
-  it('should correctly parse string numbers from database', async () => {
-    const mockQueryBuilder = {
-      select: jest.fn().mockReturnThis(),
-      getRawOne: jest.fn()
-    };
-
-    mockRepository.count
-      .mockResolvedValueOnce(1)
-      .mockResolvedValueOnce(1)
-      .mockResolvedValueOnce(0)
-      .mockResolvedValueOnce(0)
-      .mockResolvedValueOnce(0);
-
-    mockRepository.createQueryBuilder.mockReturnValue(mockQueryBuilder as any);
-    mockQueryBuilder.getRawOne.mockResolvedValue({
-      avgSuccessRate: '95.75',
-      totalCompleted: '500',
-      totalFailed: '25',
-      avgCompletionTime: '12500.50'
-    });
-
-    const result = await useCase.execute();
-
-    expect(result.averageSuccessRate).toBe(95.75);
-    expect(result.totalJobsCompleted).toBe(500);
-    expect(result.totalJobsFailed).toBe(25);
-    expect(result.averageCompletionTimeMs).toBe(12500.5);
-  });
+		expect(result.isErr()).toBe(true);
+		expect(result._unsafeUnwrapErr()).toBe(error);
+		expect(exceptionLoggerMock.captureException).toHaveBeenCalledWith(error);
+	});
 });

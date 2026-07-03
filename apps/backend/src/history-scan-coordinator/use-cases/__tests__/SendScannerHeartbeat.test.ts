@@ -1,178 +1,139 @@
-import { SendScannerHeartbeat } from '../SendScannerHeartbeat.js';
-import { CommunityScanner, ScannerStatus } from '../../infrastructure/database/entities/CommunityScanner.js';
+import { mock, MockProxy } from 'jest-mock-extended';
+import type { ExceptionLogger } from '@core/services/ExceptionLogger.js';
+import {
+	CommunityScannerBlacklistedError,
+	CommunityScannerNotFoundError,
+	InvalidCommunityScannerApiKeyError,
+	SendScannerHeartbeat
+} from '../SendScannerHeartbeat.js';
+import {
+	CommunityScanner,
+	ScannerStatus
+} from '../../infrastructure/database/entities/CommunityScanner.js';
 import { Repository } from 'typeorm';
+import { hashCommunityScannerApiKey } from '../../domain/CommunityScannerApiKey.js';
 
 describe('SendScannerHeartbeat', () => {
-  let useCase: SendScannerHeartbeat;
-  let mockRepository: jest.Mocked<Repository<CommunityScanner>>;
+	let useCase: SendScannerHeartbeat;
+	let scannerRepositoryMock: MockProxy<Repository<CommunityScanner>>;
+	let exceptionLoggerMock: MockProxy<ExceptionLogger>;
 
-  beforeEach(() => {
-    mockRepository = {
-      findOne: jest.fn(),
-      save: jest.fn()
-    } as any;
+	beforeEach(() => {
+		jest.useFakeTimers().setSystemTime(new Date('2026-07-03T12:00:00.000Z'));
+		scannerRepositoryMock = mock<Repository<CommunityScanner>>();
+		exceptionLoggerMock = mock<ExceptionLogger>();
+		useCase = new SendScannerHeartbeat(
+			scannerRepositoryMock,
+			exceptionLoggerMock
+		);
+	});
 
-    useCase = new SendScannerHeartbeat(mockRepository);
-  });
+	afterEach(() => {
+		jest.useRealTimers();
+	});
 
-  const validRequest = {
-    scannerId: 'scanner-uuid',
-    apiKey: 'valid-api-key'
-  };
+	const apiKey = 'satlas_scanner_valid-token';
+	const validRequest = {
+		scannerId: 'scanner-uuid',
+		apiKey
+	};
 
-  it('should update heartbeat for valid scanner', async () => {
-    const pastTime = new Date(Date.now() - 10 * 60 * 1000); // 10 minutes ago
-    const existingScanner = new CommunityScanner();
-    existingScanner.id = validRequest.scannerId;
-    existingScanner.apiKey = validRequest.apiKey;
-    existingScanner.status = ScannerStatus.ONLINE;
-    existingScanner.isBlacklisted = false;
-    existingScanner.lastHeartbeatAt = pastTime;
+	it('should update heartbeat for a valid scanner without exposing the key', async () => {
+		const scanner = new CommunityScanner();
+		scanner.id = validRequest.scannerId;
+		scanner.apiKeyHash = hashCommunityScannerApiKey(apiKey);
+		scanner.status = ScannerStatus.PENDING;
+		scanner.isBlacklisted = false;
+		scannerRepositoryMock.findOne.mockResolvedValue(scanner);
+		scannerRepositoryMock.save.mockImplementation(async (savedScanner) => {
+			return savedScanner as CommunityScanner;
+		});
 
-    mockRepository.findOne.mockResolvedValue(existingScanner);
-    mockRepository.save.mockImplementation((scanner) => Promise.resolve(scanner as CommunityScanner));
+		const result = await useCase.execute(validRequest);
 
-    const beforeCall = Date.now();
-    const result = await useCase.execute(validRequest);
-    const afterCall = Date.now();
+		expect(result.isOk()).toBe(true);
+		expect(result._unsafeUnwrap()).toEqual({
+			id: validRequest.scannerId,
+			lastHeartbeatAt: '2026-07-03T12:00:00.000Z',
+			status: ScannerStatus.ONLINE
+		});
+		expect(scannerRepositoryMock.save).toHaveBeenCalledWith(
+			expect.objectContaining({
+				id: validRequest.scannerId,
+				lastHeartbeatAt: new Date('2026-07-03T12:00:00.000Z'),
+				status: ScannerStatus.ONLINE
+			})
+		);
+	});
 
-    expect(mockRepository.findOne).toHaveBeenCalledWith({
-      where: { id: validRequest.scannerId }
-    });
+	it('should keep degraded status until a performance job changes it', async () => {
+		const scanner = new CommunityScanner();
+		scanner.id = validRequest.scannerId;
+		scanner.apiKeyHash = hashCommunityScannerApiKey(apiKey);
+		scanner.status = ScannerStatus.DEGRADED;
+		scanner.isBlacklisted = false;
+		scannerRepositoryMock.findOne.mockResolvedValue(scanner);
+		scannerRepositoryMock.save.mockImplementation(async (savedScanner) => {
+			return savedScanner as CommunityScanner;
+		});
 
-    expect(mockRepository.save).toHaveBeenCalledWith(
-      expect.objectContaining({
-        id: validRequest.scannerId,
-        lastHeartbeatAt: expect.any(Date)
-      })
-    );
+		const result = await useCase.execute(validRequest);
 
-    expect(result.lastHeartbeatAt).toBeInstanceOf(Date);
-    expect(result.lastHeartbeatAt!.getTime()).toBeGreaterThanOrEqual(beforeCall);
-    expect(result.lastHeartbeatAt!.getTime()).toBeLessThanOrEqual(afterCall);
-    expect(result.lastHeartbeatAt!.getTime()).toBeGreaterThan(pastTime.getTime());
-  });
+		expect(result.isOk()).toBe(true);
+		expect(result._unsafeUnwrap().status).toBe(ScannerStatus.DEGRADED);
+	});
 
-  it('should throw error for non-existent scanner', async () => {
-    mockRepository.findOne.mockResolvedValue(null);
+	it('should return not found for unknown scanners', async () => {
+		scannerRepositoryMock.findOne.mockResolvedValue(null);
 
-    await expect(useCase.execute(validRequest)).rejects.toThrow(
-      'Scanner not found'
-    );
+		const result = await useCase.execute(validRequest);
 
-    expect(mockRepository.findOne).toHaveBeenCalledWith({
-      where: { id: validRequest.scannerId }
-    });
-    expect(mockRepository.save).not.toHaveBeenCalled();
-  });
+		expect(result.isErr()).toBe(true);
+		expect(result._unsafeUnwrapErr()).toBeInstanceOf(
+			CommunityScannerNotFoundError
+		);
+		expect(scannerRepositoryMock.save).not.toHaveBeenCalled();
+	});
 
-  it('should throw error for invalid API key', async () => {
-    const existingScanner = new CommunityScanner();
-    existingScanner.id = validRequest.scannerId;
-    existingScanner.apiKey = 'different-api-key';
-    existingScanner.status = ScannerStatus.ONLINE;
+	it('should reject invalid API keys without saving', async () => {
+		const scanner = new CommunityScanner();
+		scanner.id = validRequest.scannerId;
+		scanner.apiKeyHash = hashCommunityScannerApiKey('different-key');
+		scannerRepositoryMock.findOne.mockResolvedValue(scanner);
 
-    mockRepository.findOne.mockResolvedValue(existingScanner);
+		const result = await useCase.execute(validRequest);
 
-    await expect(useCase.execute(validRequest)).rejects.toThrow(
-      'Invalid API key'
-    );
+		expect(result.isErr()).toBe(true);
+		expect(result._unsafeUnwrapErr()).toBeInstanceOf(
+			InvalidCommunityScannerApiKeyError
+		);
+		expect(scannerRepositoryMock.save).not.toHaveBeenCalled();
+	});
 
-    expect(mockRepository.findOne).toHaveBeenCalledWith({
-      where: { id: validRequest.scannerId }
-    });
-    expect(mockRepository.save).not.toHaveBeenCalled();
-  });
+	it('should reject blacklisted scanners after successful authentication', async () => {
+		const scanner = new CommunityScanner();
+		scanner.id = validRequest.scannerId;
+		scanner.apiKeyHash = hashCommunityScannerApiKey(apiKey);
+		scanner.isBlacklisted = true;
+		scannerRepositoryMock.findOne.mockResolvedValue(scanner);
 
-  it('should throw error for blacklisted scanner', async () => {
-    const existingScanner = new CommunityScanner();
-    existingScanner.id = validRequest.scannerId;
-    existingScanner.apiKey = validRequest.apiKey;
-    existingScanner.status = ScannerStatus.OFFLINE;
-    existingScanner.isBlacklisted = true;
+		const result = await useCase.execute(validRequest);
 
-    mockRepository.findOne.mockResolvedValue(existingScanner);
+		expect(result.isErr()).toBe(true);
+		expect(result._unsafeUnwrapErr()).toBeInstanceOf(
+			CommunityScannerBlacklistedError
+		);
+		expect(scannerRepositoryMock.save).not.toHaveBeenCalled();
+	});
 
-    await expect(useCase.execute(validRequest)).rejects.toThrow(
-      'Scanner is blacklisted'
-    );
+	it('should log and return persistence errors', async () => {
+		const error = new Error('database unavailable');
+		scannerRepositoryMock.findOne.mockRejectedValue(error);
 
-    expect(mockRepository.findOne).toHaveBeenCalledWith({
-      where: { id: validRequest.scannerId }
-    });
-    expect(mockRepository.save).not.toHaveBeenCalled();
-  });
+		const result = await useCase.execute(validRequest);
 
-  it('should update status from offline to online when sending heartbeat', async () => {
-    const existingScanner = new CommunityScanner();
-    existingScanner.id = validRequest.scannerId;
-    existingScanner.apiKey = validRequest.apiKey;
-    existingScanner.status = ScannerStatus.OFFLINE;
-    existingScanner.isBlacklisted = false;
-
-    mockRepository.findOne.mockResolvedValue(existingScanner);
-    mockRepository.save.mockImplementation((scanner) => Promise.resolve(scanner as CommunityScanner));
-
-    const result = await useCase.execute(validRequest);
-
-    expect(result.status).toBe(ScannerStatus.ONLINE);
-    expect(mockRepository.save).toHaveBeenCalledWith(
-      expect.objectContaining({
-        status: ScannerStatus.ONLINE
-      })
-    );
-  });
-
-  it('should update status from pending to online on first heartbeat', async () => {
-    const existingScanner = new CommunityScanner();
-    existingScanner.id = validRequest.scannerId;
-    existingScanner.apiKey = validRequest.apiKey;
-    existingScanner.status = ScannerStatus.PENDING;
-    existingScanner.isBlacklisted = false;
-    existingScanner.lastHeartbeatAt = null;
-
-    mockRepository.findOne.mockResolvedValue(existingScanner);
-    mockRepository.save.mockImplementation((scanner) => Promise.resolve(scanner as CommunityScanner));
-
-    const result = await useCase.execute(validRequest);
-
-    expect(result.status).toBe(ScannerStatus.ONLINE);
-    expect(mockRepository.save).toHaveBeenCalledWith(
-      expect.objectContaining({
-        status: ScannerStatus.ONLINE,
-        lastHeartbeatAt: expect.any(Date)
-      })
-    );
-  });
-
-  it('should handle database save errors', async () => {
-    const existingScanner = new CommunityScanner();
-    existingScanner.id = validRequest.scannerId;
-    existingScanner.apiKey = validRequest.apiKey;
-    existingScanner.status = ScannerStatus.ONLINE;
-    existingScanner.isBlacklisted = false;
-
-    mockRepository.findOne.mockResolvedValue(existingScanner);
-    mockRepository.save.mockRejectedValue(new Error('Database connection failed'));
-
-    await expect(useCase.execute(validRequest)).rejects.toThrow(
-      'Database connection failed'
-    );
-  });
-
-  it('should maintain degraded status if already degraded', async () => {
-    const existingScanner = new CommunityScanner();
-    existingScanner.id = validRequest.scannerId;
-    existingScanner.apiKey = validRequest.apiKey;
-    existingScanner.status = ScannerStatus.DEGRADED;
-    existingScanner.isBlacklisted = false;
-
-    mockRepository.findOne.mockResolvedValue(existingScanner);
-    mockRepository.save.mockImplementation((scanner) => Promise.resolve(scanner as CommunityScanner));
-
-    const result = await useCase.execute(validRequest);
-
-    // Degraded status should be maintained until performance improves
-    expect(result.status).toBe(ScannerStatus.DEGRADED);
-  });
+		expect(result.isErr()).toBe(true);
+		expect(result._unsafeUnwrapErr()).toBe(error);
+		expect(exceptionLoggerMock.captureException).toHaveBeenCalledWith(error);
+	});
 });

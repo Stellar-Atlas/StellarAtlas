@@ -37,6 +37,14 @@
 			"description": "History archive verification evidence"
 		},
 		{
+			"name": "ArchiveScans",
+			"description": "Public history archive scan views and queue health"
+		},
+		{
+			"name": "CommunityScanners",
+			"description": "Community archive scanner registration, heartbeat, and aggregate metrics"
+		},
+		{
 			"name": "SCP",
 			"description": "Observed Stellar Consensus Protocol statements"
 		},
@@ -836,6 +844,202 @@
 					},
 					"204": { "description": "No scan found for URL" },
 					"400": { "description": "Invalid archive URL" },
+					"500": { "description": "Server error" }
+				}
+			}
+		},
+		"/v1/community-scanners/register": {
+			"post": {
+				"summary": "Register a community archive scanner",
+				"description": "Creates a community scanner identity and returns a one-time API key. Contact email and the stored API key hash are never returned by this public response.",
+				"tags": ["CommunityScanners"],
+				"operationId": "registerCommunityScanner",
+				"requestBody": {
+					"required": true,
+					"content": {
+						"application/json": {
+							"schema": {
+								"type": "object",
+								"required": ["name", "contactEmail"],
+								"properties": {
+									"name": {
+										"type": "string",
+										"minLength": 1,
+										"maxLength": 100
+									},
+									"description": {
+										"type": "string",
+										"maxLength": 500,
+										"nullable": true
+									},
+									"contactEmail": {
+										"type": "string",
+										"format": "email",
+										"maxLength": 255
+									}
+								}
+							}
+						}
+					}
+				},
+				"responses": {
+					"201": {
+						"description": "scanner registered",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object",
+									"required": [
+										"id",
+										"name",
+										"description",
+										"status",
+										"apiKey",
+										"createdAt"
+									],
+									"properties": {
+										"id": { "type": "string", "format": "uuid" },
+										"name": { "type": "string" },
+										"description": {
+											"type": "string",
+											"nullable": true
+										},
+										"status": {
+											"type": "string",
+											"enum": ["pending", "online", "offline", "degraded"]
+										},
+										"apiKey": {
+											"type": "string",
+											"description": "One-time API key. It is hashed before persistence and cannot be read again."
+										},
+										"createdAt": {
+											"type": "string",
+											"format": "date-time"
+										}
+									}
+								}
+							}
+						}
+					},
+					"400": { "description": "Invalid registration body" },
+					"409": { "description": "Scanner contact email already exists" },
+					"500": { "description": "Server error" }
+				}
+			}
+		},
+		"/v1/community-scanners/{id}/heartbeat": {
+			"post": {
+				"summary": "Refresh a community scanner heartbeat",
+				"description": "Authenticates a community scanner with its one-time API key and updates its heartbeat timestamp.",
+				"tags": ["CommunityScanners"],
+				"operationId": "sendCommunityScannerHeartbeat",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"description": "Scanner id returned by registration",
+						"required": true,
+						"schema": { "type": "string", "format": "uuid" }
+					},
+					{
+						"name": "Authorization",
+						"in": "header",
+						"description": "Bearer API key returned by registration",
+						"required": true,
+						"schema": { "type": "string" }
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "heartbeat accepted",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object",
+									"required": ["id", "lastHeartbeatAt", "status"],
+									"properties": {
+										"id": { "type": "string", "format": "uuid" },
+										"lastHeartbeatAt": {
+											"type": "string",
+											"format": "date-time"
+										},
+										"status": {
+											"type": "string",
+											"enum": ["pending", "online", "offline", "degraded"]
+										}
+									}
+								}
+							}
+						}
+					},
+					"400": { "description": "Invalid scanner id" },
+					"401": { "description": "Missing or invalid bearer API key" },
+					"403": { "description": "Scanner is blacklisted" },
+					"404": { "description": "Scanner not found" },
+					"500": { "description": "Server error" }
+				}
+			}
+		},
+		"/v1/community-scanners/metrics": {
+			"get": {
+				"summary": "Get community scanner metrics",
+				"description": "Returns aggregate community scanner metrics. Active/offline counts are derived from heartbeat freshness, and no contact email or API key material is returned.",
+				"tags": ["CommunityScanners"],
+				"operationId": "getCommunityScannerMetrics",
+				"responses": {
+					"200": {
+						"description": "community scanner metrics",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object",
+									"required": [
+										"generatedAt",
+										"heartbeatFreshnessMs",
+										"totalScanners",
+										"activeScanners",
+										"offlineScanners",
+										"degradedScanners",
+										"pendingScanners",
+										"blacklistedScanners",
+										"averageSuccessRate",
+										"totalJobsCompleted",
+										"totalJobsFailed",
+										"averageCompletionTimeMs"
+									],
+									"properties": {
+										"generatedAt": {
+											"type": "string",
+											"format": "date-time"
+										},
+										"heartbeatFreshnessMs": {
+											"type": "integer",
+											"minimum": 0
+										},
+										"totalScanners": { "type": "integer", "minimum": 0 },
+										"activeScanners": { "type": "integer", "minimum": 0 },
+										"offlineScanners": { "type": "integer", "minimum": 0 },
+										"degradedScanners": { "type": "integer", "minimum": 0 },
+										"pendingScanners": { "type": "integer", "minimum": 0 },
+										"blacklistedScanners": {
+											"type": "integer",
+											"minimum": 0
+										},
+										"averageSuccessRate": { "type": "number" },
+										"totalJobsCompleted": {
+											"type": "integer",
+											"minimum": 0
+										},
+										"totalJobsFailed": { "type": "integer", "minimum": 0 },
+										"averageCompletionTimeMs": {
+											"type": "number",
+											"minimum": 0
+										}
+									}
+								}
+							}
+						}
+					},
 					"500": { "description": "Server error" }
 				}
 			}

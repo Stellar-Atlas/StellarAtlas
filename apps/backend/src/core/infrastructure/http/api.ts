@@ -35,11 +35,15 @@ import { RequestUnsubscribeLink } from '@notifications/use-cases/request-unsubsc
 import { RegisterScan } from '@history-scan-coordinator/use-cases/register-scan/RegisterScan.js';
 import { historyScanRouter } from '@history-scan-coordinator/infrastructure/http/HistoryScanRouter.js';
 import { archiveScanRouter } from '@history-scan-coordinator/infrastructure/http/ArchiveScanRouter.js';
+import { communityScannerRouter } from '@history-scan-coordinator/infrastructure/http/CommunityScannerRouter.js';
 import { GetScanJob } from '@history-scan-coordinator/use-cases/get-scan-job/GetScanJob.js';
 import { TouchScanJob } from '@history-scan-coordinator/use-cases/touch-scan-job/TouchScanJob.js';
 import { GetArchiveScans } from '@history-scan-coordinator/use-cases/get-archive-scans/GetArchiveScans.js';
 import { GetArchiveScanQueue } from '@history-scan-coordinator/use-cases/get-archive-scan-queue/GetArchiveScanQueue.js';
 import { GetArchiveScanWorkers } from '@history-scan-coordinator/use-cases/get-archive-scan-workers/GetArchiveScanWorkers.js';
+import { GetScannerMetrics } from '@history-scan-coordinator/use-cases/GetScannerMetrics.js';
+import { RegisterCommunityScanner } from '@history-scan-coordinator/use-cases/RegisterCommunityScanner.js';
+import { SendScannerHeartbeat } from '@history-scan-coordinator/use-cases/SendScannerHeartbeat.js';
 import { frontendV4ProxyMiddleware } from './FrontendV4Proxy.js';
 
 let server: Server;
@@ -126,6 +130,15 @@ const listen = async () => {
 			getArchiveScanWorkers: kernel.container.get(GetArchiveScanWorkers),
 			getLatestScan: kernel.container.get(GetLatestScan),
 			getScanLogs: kernel.container.get(GetScanLogs)
+		})
+	);
+
+	api.use(
+		'/v1/community-scanners',
+		communityScannerRouter({
+			registerCommunityScanner: kernel.container.get(RegisterCommunityScanner),
+			sendScannerHeartbeat: kernel.container.get(SendScannerHeartbeat),
+			getScannerMetrics: kernel.container.get(GetScannerMetrics)
 		})
 	);
 

@@ -21,6 +21,10 @@ import { ScanJob } from '../../domain/ScanJob.js';
 import { GetArchiveScans } from '../../use-cases/get-archive-scans/GetArchiveScans.js';
 import { GetArchiveScanQueue } from '../../use-cases/get-archive-scan-queue/GetArchiveScanQueue.js';
 import { GetArchiveScanWorkers } from '../../use-cases/get-archive-scan-workers/GetArchiveScanWorkers.js';
+import { CommunityScanner } from '../database/entities/CommunityScanner.js';
+import { GetScannerMetrics } from '../../use-cases/GetScannerMetrics.js';
+import { RegisterCommunityScanner } from '../../use-cases/RegisterCommunityScanner.js';
+import { SendScannerHeartbeat } from '../../use-cases/SendScannerHeartbeat.js';
 
 export function load(container: Container, config: Config) {
 	const dataSource = container.get(DataSource);
@@ -30,6 +34,9 @@ export function load(container: Container, config: Config) {
 	container.bind(GetArchiveScans).toSelf();
 	container.bind(GetArchiveScanQueue).toSelf();
 	container.bind(GetArchiveScanWorkers).toSelf();
+	container.bind(GetScannerMetrics).toSelf();
+	container.bind(RegisterCommunityScanner).toSelf();
+	container.bind(SendScannerHeartbeat).toSelf();
 	container.bind(TouchScanJob).toSelf();
 	container.bind(RegisterScan).toSelf();
 	container.bind(ScheduleScanJobs).toSelf();
@@ -41,6 +48,13 @@ export function load(container: Container, config: Config) {
 		.bind<ScanJobRepository>(TYPES.ScanJobRepository)
 		.toDynamicValue(() => {
 			return new TypeOrmScanJobRepository(dataSource.getRepository(ScanJob));
+		})
+		.inRequestScope();
+
+	container
+		.bind(TYPES.CommunityScannerRepository)
+		.toDynamicValue(() => {
+			return dataSource.getRepository(CommunityScanner);
 		})
 		.inRequestScope();
 
