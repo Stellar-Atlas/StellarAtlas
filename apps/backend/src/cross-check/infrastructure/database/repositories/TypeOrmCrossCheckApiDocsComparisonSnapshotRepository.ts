@@ -1,11 +1,23 @@
 import { injectable } from 'inversify';
 import type { Repository } from 'typeorm';
 import type {
+	CrossCheckApiDocsComparisonSnapshotListItemDTO,
 	CrossCheckApiDocsComparisonSnapshotRecordDTO,
 	CrossCheckApiDocsComparisonSnapshotRepository,
+	CrossCheckApiDocsSnapshotFailureDTO,
 	SaveCrossCheckApiDocsComparisonSnapshotDTO
 } from '@cross-check/domain/CrossCheckApiDocsSnapshot.js';
+import type { CrossCheckApiDocsComparisonSummaryDTO } from '@cross-check/domain/CrossCheckApiDocsComparison.js';
 import { CrossCheckApiDocsComparisonSnapshot } from '../entities/CrossCheckApiDocsComparisonSnapshot.js';
+
+interface RawApiDocsSnapshotListItem {
+	readonly comparisonSummary: unknown;
+	readonly failure: CrossCheckApiDocsSnapshotFailureDTO | null;
+	readonly generatedAt: Date;
+	readonly id: string;
+	readonly status: 'compared' | 'failed';
+	readonly storedAt: Date;
+}
 
 @injectable()
 export class TypeOrmCrossCheckApiDocsComparisonSnapshotRepository implements CrossCheckApiDocsComparisonSnapshotRepository {
@@ -37,6 +49,26 @@ export class TypeOrmCrossCheckApiDocsComparisonSnapshotRepository implements Cro
 			.getOne();
 
 		return entity === null ? null : mapEntity(entity);
+	}
+
+	async findRecent(
+		limit: number
+	): Promise<readonly CrossCheckApiDocsComparisonSnapshotListItemDTO[]> {
+		const rows = await this.repository
+			.createQueryBuilder('snapshot')
+			.select('snapshot.id', 'id')
+			.addSelect('snapshot.status', 'status')
+			.addSelect('snapshot.generatedAt', 'generatedAt')
+			.addSelect('snapshot.storedAt', 'storedAt')
+			.addSelect("snapshot.comparison -> 'summary'", 'comparisonSummary')
+			.addSelect('snapshot.failure', 'failure')
+			.orderBy('snapshot.generatedAt', 'DESC')
+			.addOrderBy('snapshot.storedAt', 'DESC')
+			.addOrderBy('snapshot.id', 'DESC')
+			.limit(limit)
+			.getRawMany<RawApiDocsSnapshotListItem>();
+
+		return rows.map(mapListItem);
 	}
 }
 
@@ -94,6 +126,55 @@ function mapEntity(
 		status: entity.status,
 		storedAt: entity.storedAt.toISOString()
 	};
+}
+
+function mapListItem(
+	row: RawApiDocsSnapshotListItem
+): CrossCheckApiDocsComparisonSnapshotListItemDTO {
+	if (row.status === 'compared') {
+		return {
+			comparisonSummary: requireComparisonSummary(row.comparisonSummary),
+			failure: null,
+			generatedAt: row.generatedAt.toISOString(),
+			id: row.id,
+			status: row.status,
+			storedAt: row.storedAt.toISOString()
+		};
+	}
+
+	return {
+		comparisonSummary: null,
+		failure: row.failure,
+		generatedAt: row.generatedAt.toISOString(),
+		id: row.id,
+		status: row.status,
+		storedAt: row.storedAt.toISOString()
+	};
+}
+
+function requireComparisonSummary(
+	value: unknown
+): CrossCheckApiDocsComparisonSummaryDTO {
+	if (!isComparisonSummary(value)) {
+		throw new Error('API docs snapshot row has invalid comparison summary');
+	}
+
+	return value;
+}
+
+function isComparisonSummary(
+	value: unknown
+): value is CrossCheckApiDocsComparisonSummaryDTO {
+	if (typeof value !== 'object' || value === null) return false;
+	const summary = value as Record<string, unknown>;
+
+	return (
+		Number.isInteger(summary.fieldMismatchCount) &&
+		Number.isInteger(summary.matchedCount) &&
+		Number.isInteger(summary.sourceMissingCount) &&
+		Number.isInteger(summary.stellarAtlasMissingCount) &&
+		Number.isInteger(summary.totalCount)
+	);
 }
 
 function requireDate(value: string, field: string): Date {

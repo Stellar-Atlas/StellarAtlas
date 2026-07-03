@@ -6,6 +6,7 @@ import { GetCrossCheckArchives } from '../../use-cases/get-cross-check-archives/
 import { GetCrossCheckOrganizations } from '../../use-cases/get-cross-check-organizations/GetCrossCheckOrganizations.js';
 import { GetCrossCheckSources } from '../../use-cases/get-cross-check-sources/GetCrossCheckSources.js';
 import { GetCrossCheckValidators } from '../../use-cases/get-cross-check-validators/GetCrossCheckValidators.js';
+import { ListApiDocsComparisonSnapshots } from '../../use-cases/list-api-docs-comparison-snapshots/ListApiDocsComparisonSnapshots.js';
 
 export interface CrossCheckRouterConfig {
 	readonly getApiDocsComparisonSnapshot: GetApiDocsComparisonSnapshot;
@@ -13,6 +14,7 @@ export interface CrossCheckRouterConfig {
 	readonly getCrossCheckOrganizations: GetCrossCheckOrganizations;
 	readonly getCrossCheckSources: GetCrossCheckSources;
 	readonly getCrossCheckValidators: GetCrossCheckValidators;
+	readonly listApiDocsComparisonSnapshots: ListApiDocsComparisonSnapshots;
 }
 
 const archiveCrossCheckCacheMaxAgeSeconds = 10;
@@ -25,6 +27,32 @@ export const CrossCheckRouterWrapper = (
 	config: CrossCheckRouterConfig
 ): Router => {
 	const crossCheckRouter = express.Router();
+
+	crossCheckRouter.get(
+		'/api-docs/snapshots',
+		[
+			query('limit')
+				.optional()
+				.isInt({ min: 1, max: ListApiDocsComparisonSnapshots.maxLimit })
+		],
+		async function (req: express.Request, res: express.Response) {
+			const errors = validationResult(req);
+			if (!errors.isEmpty()) {
+				return res.status(400).json({ errors: errors.array() });
+			}
+
+			const limit =
+				typeof req.query.limit === 'string'
+					? Number(req.query.limit)
+					: undefined;
+
+			return sendCrossCheckResult(
+				res,
+				await config.listApiDocsComparisonSnapshots.execute({ limit }),
+				apiDocsComparisonCacheMaxAgeSeconds
+			);
+		}
+	);
 
 	crossCheckRouter.get('/api-docs/latest', async function (_req, res) {
 		return sendNullableCrossCheckResult(

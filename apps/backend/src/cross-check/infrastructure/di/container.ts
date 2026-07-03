@@ -9,6 +9,7 @@ import type { CrossCheckApiDocsComparisonSnapshotRepository } from '../../domain
 import { CrossCheckApiDocsComparisonSnapshot } from '../database/entities/CrossCheckApiDocsComparisonSnapshot.js';
 import { TypeOrmCrossCheckApiDocsComparisonSnapshotRepository } from '../database/repositories/TypeOrmCrossCheckApiDocsComparisonSnapshotRepository.js';
 import { GetApiDocsComparisonSnapshot } from '../../use-cases/get-api-docs-comparison-snapshot/GetApiDocsComparisonSnapshot.js';
+import { ListApiDocsComparisonSnapshots } from '../../use-cases/list-api-docs-comparison-snapshots/ListApiDocsComparisonSnapshots.js';
 import Container = interfaces.Container;
 
 export function load(container: Container) {
@@ -25,6 +26,7 @@ export function load(container: Container) {
 		});
 
 	container.bind(GetApiDocsComparisonSnapshot).toSelf();
+	container.bind(ListApiDocsComparisonSnapshots).toSelf();
 	container.bind(GetCrossCheckArchives).toSelf();
 	container.bind(GetCrossCheckOrganizations).toSelf();
 	container.bind(GetCrossCheckSources).toSelf();

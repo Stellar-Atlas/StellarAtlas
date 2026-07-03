@@ -1,5 +1,6 @@
 import type {
 	CrossCheckApiDocsComparisonDTO,
+	CrossCheckApiDocsComparisonSummaryDTO,
 	CrossCheckApiDocsSourceId
 } from './CrossCheckApiDocsComparison.js';
 
@@ -42,8 +43,27 @@ export type CrossCheckApiDocsComparisonSnapshotRecordDTO =
 		readonly storedAt: string;
 	};
 
+export interface CrossCheckApiDocsComparisonSnapshotListItemDTO {
+	readonly comparisonSummary: CrossCheckApiDocsComparisonSummaryDTO | null;
+	readonly failure: CrossCheckApiDocsSnapshotFailureDTO | null;
+	readonly generatedAt: string;
+	readonly id: string;
+	readonly status: CrossCheckApiDocsSnapshotStatus;
+	readonly storedAt: string;
+}
+
+export interface CrossCheckApiDocsComparisonSnapshotListDTO {
+	readonly count: number;
+	readonly generatedAt: string;
+	readonly limit: number;
+	readonly snapshots: readonly CrossCheckApiDocsComparisonSnapshotListItemDTO[];
+}
+
 export interface CrossCheckApiDocsComparisonSnapshotRepository {
 	findLatest(): Promise<CrossCheckApiDocsComparisonSnapshotRecordDTO | null>;
+	findRecent(
+		limit: number
+	): Promise<readonly CrossCheckApiDocsComparisonSnapshotListItemDTO[]>;
 	save(
 		snapshot: SaveCrossCheckApiDocsComparisonSnapshotDTO
 	): Promise<CrossCheckApiDocsComparisonSnapshotRecordDTO>;

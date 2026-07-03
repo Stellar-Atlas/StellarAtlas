@@ -65,6 +65,7 @@ import { GetCrossCheckArchives } from '@cross-check/use-cases/get-cross-check-ar
 import { GetCrossCheckOrganizations } from '@cross-check/use-cases/get-cross-check-organizations/GetCrossCheckOrganizations.js';
 import { GetCrossCheckSources } from '@cross-check/use-cases/get-cross-check-sources/GetCrossCheckSources.js';
 import { GetCrossCheckValidators } from '@cross-check/use-cases/get-cross-check-validators/GetCrossCheckValidators.js';
+import { ListApiDocsComparisonSnapshots } from '@cross-check/use-cases/list-api-docs-comparison-snapshots/ListApiDocsComparisonSnapshots.js';
 import { fbasRouter } from '@fbas/infrastructure/http/FbasRouter.js';
 import { GetLatestFbas } from '@fbas/use-cases/get-latest-fbas/GetLatestFbas.js';
 import { frontendV4ProxyMiddleware } from './FrontendV4Proxy.js';
@@ -199,7 +200,10 @@ const listen = async () => {
 				GetCrossCheckOrganizations
 			),
 			getCrossCheckSources: kernel.container.get(GetCrossCheckSources),
-			getCrossCheckValidators: kernel.container.get(GetCrossCheckValidators)
+			getCrossCheckValidators: kernel.container.get(GetCrossCheckValidators),
+			listApiDocsComparisonSnapshots: kernel.container.get(
+				ListApiDocsComparisonSnapshots
+			)
 		})
 	);
 

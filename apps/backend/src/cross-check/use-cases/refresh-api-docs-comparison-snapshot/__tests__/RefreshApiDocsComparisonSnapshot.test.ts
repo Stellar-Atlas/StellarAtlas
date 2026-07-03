@@ -1,5 +1,6 @@
 import { err, ok, Result } from 'neverthrow';
 import type {
+	CrossCheckApiDocsComparisonSnapshotListItemDTO,
 	CrossCheckApiDocsComparisonSnapshotRecordDTO,
 	CrossCheckApiDocsComparisonSnapshotRepository,
 	SaveCrossCheckApiDocsComparisonSnapshotDTO
@@ -277,6 +278,12 @@ class InMemoryApiDocsSnapshotRepository implements CrossCheckApiDocsComparisonSn
 	async findLatest(): Promise<CrossCheckApiDocsComparisonSnapshotRecordDTO | null> {
 		return this.records[0] ?? null;
 	}
+
+	async findRecent(
+		limit: number
+	): Promise<readonly CrossCheckApiDocsComparisonSnapshotListItemDTO[]> {
+		return this.records.slice(0, limit).map(mapListItem);
+	}
 }
 
 class FailingApiDocsSnapshotRepository implements CrossCheckApiDocsComparisonSnapshotRepository {
@@ -287,6 +294,36 @@ class FailingApiDocsSnapshotRepository implements CrossCheckApiDocsComparisonSna
 	async findLatest(): Promise<CrossCheckApiDocsComparisonSnapshotRecordDTO | null> {
 		return null;
 	}
+
+	async findRecent(): Promise<
+		readonly CrossCheckApiDocsComparisonSnapshotListItemDTO[]
+	> {
+		return [];
+	}
+}
+
+function mapListItem(
+	record: CrossCheckApiDocsComparisonSnapshotRecordDTO
+): CrossCheckApiDocsComparisonSnapshotListItemDTO {
+	if (record.status === 'compared') {
+		return {
+			comparisonSummary: record.comparison.summary,
+			failure: null,
+			generatedAt: record.generatedAt,
+			id: record.id,
+			status: record.status,
+			storedAt: record.storedAt
+		};
+	}
+
+	return {
+		comparisonSummary: null,
+		failure: record.failure,
+		generatedAt: record.generatedAt,
+		id: record.id,
+		status: record.status,
+		storedAt: record.storedAt
+	};
 }
 
 function createRecord(

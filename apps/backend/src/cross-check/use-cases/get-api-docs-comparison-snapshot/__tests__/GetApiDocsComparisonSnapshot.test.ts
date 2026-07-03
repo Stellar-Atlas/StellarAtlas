@@ -1,4 +1,5 @@
 import type {
+	CrossCheckApiDocsComparisonSnapshotListItemDTO,
 	CrossCheckApiDocsComparisonSnapshotRecordDTO,
 	CrossCheckApiDocsComparisonSnapshotRepository,
 	SaveCrossCheckApiDocsComparisonSnapshotDTO
@@ -47,6 +48,12 @@ class FakeSnapshotRepository implements CrossCheckApiDocsComparisonSnapshotRepos
 		return this.latest;
 	}
 
+	async findRecent(): Promise<
+		readonly CrossCheckApiDocsComparisonSnapshotListItemDTO[]
+	> {
+		throw new Error('not used');
+	}
+
 	async save(
 		_snapshot: SaveCrossCheckApiDocsComparisonSnapshotDTO
 	): Promise<CrossCheckApiDocsComparisonSnapshotRecordDTO> {
@@ -57,6 +64,12 @@ class FakeSnapshotRepository implements CrossCheckApiDocsComparisonSnapshotRepos
 class FailingSnapshotRepository implements CrossCheckApiDocsComparisonSnapshotRepository {
 	async findLatest(): Promise<CrossCheckApiDocsComparisonSnapshotRecordDTO | null> {
 		throw new Error('read failed');
+	}
+
+	async findRecent(): Promise<
+		readonly CrossCheckApiDocsComparisonSnapshotListItemDTO[]
+	> {
+		throw new Error('not used');
 	}
 
 	async save(

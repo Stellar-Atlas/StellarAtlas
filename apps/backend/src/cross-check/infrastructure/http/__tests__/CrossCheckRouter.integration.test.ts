@@ -2,12 +2,12 @@ import express from 'express';
 import request from 'supertest';
 import { mock } from 'jest-mock-extended';
 import { err, ok } from 'neverthrow';
-import type { CrossCheckApiDocsComparisonSnapshotRecordDTO } from '@cross-check/domain/CrossCheckApiDocsSnapshot.js';
 import { GetApiDocsComparisonSnapshot } from '@cross-check/use-cases/get-api-docs-comparison-snapshot/GetApiDocsComparisonSnapshot.js';
 import { GetCrossCheckArchives } from '@cross-check/use-cases/get-cross-check-archives/GetCrossCheckArchives.js';
 import { GetCrossCheckOrganizations } from '@cross-check/use-cases/get-cross-check-organizations/GetCrossCheckOrganizations.js';
 import { GetCrossCheckSources } from '@cross-check/use-cases/get-cross-check-sources/GetCrossCheckSources.js';
 import { GetCrossCheckValidators } from '@cross-check/use-cases/get-cross-check-validators/GetCrossCheckValidators.js';
+import { ListApiDocsComparisonSnapshots } from '@cross-check/use-cases/list-api-docs-comparison-snapshots/ListApiDocsComparisonSnapshots.js';
 import { CrossCheckRouterWrapper } from '../CrossCheckRouter.js';
 
 describe('CrossCheckRouter.integration', () => {
@@ -17,6 +17,7 @@ describe('CrossCheckRouter.integration', () => {
 	let getCrossCheckOrganizations: jest.Mocked<GetCrossCheckOrganizations>;
 	let getCrossCheckSources: jest.Mocked<GetCrossCheckSources>;
 	let getCrossCheckValidators: jest.Mocked<GetCrossCheckValidators>;
+	let listApiDocsComparisonSnapshots: jest.Mocked<ListApiDocsComparisonSnapshots>;
 
 	beforeEach(() => {
 		getApiDocsComparisonSnapshot = mock<GetApiDocsComparisonSnapshot>();
@@ -24,6 +25,7 @@ describe('CrossCheckRouter.integration', () => {
 		getCrossCheckOrganizations = mock<GetCrossCheckOrganizations>();
 		getCrossCheckSources = mock<GetCrossCheckSources>();
 		getCrossCheckValidators = mock<GetCrossCheckValidators>();
+		listApiDocsComparisonSnapshots = mock<ListApiDocsComparisonSnapshots>();
 		app = express();
 		app.use(
 			'/cross-check',
@@ -32,68 +34,10 @@ describe('CrossCheckRouter.integration', () => {
 				getCrossCheckArchives,
 				getCrossCheckOrganizations,
 				getCrossCheckSources,
-				getCrossCheckValidators
+				getCrossCheckValidators,
+				listApiDocsComparisonSnapshots
 			})
 		);
-	});
-
-	it('should expose the latest persisted API docs comparison snapshot', async () => {
-		getApiDocsComparisonSnapshot.execute.mockResolvedValue(
-			ok(createApiDocsSnapshot())
-		);
-
-		await request(app)
-			.get('/cross-check/api-docs/latest')
-			.expect(200)
-			.expect('Cache-Control', 'public, max-age=60')
-			.expect((response) => {
-				expect(response.body.status).toBe('compared');
-				expect(response.body.comparison.summary.totalCount).toBe(1);
-				expect(response.body.comparison.operations[0].comparisonStatus).toBe(
-					'matched'
-				);
-			});
-	});
-
-	it('should return 204 when no API docs comparison snapshot exists', async () => {
-		getApiDocsComparisonSnapshot.execute.mockResolvedValue(ok(null));
-
-		await request(app)
-			.get('/cross-check/api-docs/latest')
-			.expect(204)
-			.expect('Cache-Control', 'public, max-age=60')
-			.expect((response) => {
-				expect(response.text).toBe('');
-			});
-	});
-
-	it('should expose persisted API docs comparison failure snapshots', async () => {
-		getApiDocsComparisonSnapshot.execute.mockResolvedValue(
-			ok({
-				comparison: null,
-				failure: {
-					kind: 'timeout',
-					message: 'RADAR API docs request timed out',
-					occurredAt: '2026-07-03T12:00:00.000Z',
-					phase: 'radar_fetch',
-					sourceId: 'withobsrvr-radar'
-				},
-				generatedAt: '2026-07-03T12:00:00.000Z',
-				id: 'snapshot-failed-1',
-				status: 'failed',
-				storedAt: '2026-07-03T12:00:01.000Z'
-			})
-		);
-
-		await request(app)
-			.get('/cross-check/api-docs/latest')
-			.expect(200)
-			.expect('Cache-Control', 'public, max-age=60')
-			.expect((response) => {
-				expect(response.body.status).toBe('failed');
-				expect(response.body.comparison).toBeNull();
-				expect(response.body.failure.phase).toBe('radar_fetch');
-			});
 	});
 
 	it('should expose organization cross-check review rows', async () => {
@@ -354,19 +298,6 @@ describe('CrossCheckRouter.integration', () => {
 			});
 	});
 
-	it('should hide API docs comparison snapshot internal errors', async () => {
-		getApiDocsComparisonSnapshot.execute.mockResolvedValue(
-			err(new Error('boom'))
-		);
-
-		await request(app)
-			.get('/cross-check/api-docs/latest')
-			.expect(500)
-			.expect((response) => {
-				expect(response.body).toEqual({ error: 'Internal server error' });
-			});
-	});
-
 	it('should hide archive cross-check internal errors', async () => {
 		getCrossCheckArchives.execute.mockResolvedValue(err(new Error('boom')));
 
@@ -402,63 +333,3 @@ describe('CrossCheckRouter.integration', () => {
 			});
 	});
 });
-
-function createApiDocsSnapshot(): CrossCheckApiDocsComparisonSnapshotRecordDTO {
-	return {
-		comparison: {
-			comparisonStatus: 'compared',
-			generatedAt: '2026-07-03T12:00:00.000Z',
-			operations: [
-				{
-					comparisonStatus: 'matched',
-					fieldMismatches: [],
-					key: { method: 'get', path: '/v1' },
-					source: {
-						method: 'get',
-						operationId: 'getNetwork',
-						path: '/v1',
-						schemaRefs: ['#/definitions/Network'],
-						summary: 'Get network information',
-						tags: ['Network']
-					},
-					stellarAtlas: {
-						method: 'get',
-						operationId: 'getNetwork',
-						path: '/v1',
-						schemaRefs: ['#/definitions/Network'],
-						summary: 'Get network information',
-						tags: ['Network']
-					}
-				}
-			],
-			source: {
-				documentationUrl: 'https://radar.withobsrvr.com/api/docs/',
-				observedAt: '2026-07-03T11:59:00.000Z',
-				operationCount: 1,
-				sourceId: 'withobsrvr-radar',
-				title: 'RADAR API',
-				version: '1.0.0'
-			},
-			stellarAtlas: {
-				documentationUrl: '/docs',
-				observedAt: '2026-07-03T12:00:00.000Z',
-				operationCount: 1,
-				sourceId: 'stellaratlas-api',
-				title: 'StellarAtlas.io API',
-				version: 'v1'
-			},
-			summary: {
-				fieldMismatchCount: 0,
-				matchedCount: 1,
-				sourceMissingCount: 0,
-				stellarAtlasMissingCount: 0,
-				totalCount: 1
-			}
-		},
-		failure: null,
-		generatedAt: '2026-07-03T12:00:00.000Z',
-		id: 'snapshot-1',
-		status: 'compared',
-		storedAt: '2026-07-03T12:00:01.000Z'
-	};
-}

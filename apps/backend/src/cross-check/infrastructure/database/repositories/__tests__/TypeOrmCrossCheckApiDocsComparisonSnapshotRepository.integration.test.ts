@@ -94,6 +94,30 @@ describe('TypeOrmCrossCheckApiDocsComparisonSnapshotRepository.integration', () 
 		expect(latest?.status).toBe('compared');
 	});
 
+	it('should return recent snapshots using latest ordering and limit', async () => {
+		const newest = await repository.save(
+			createSaveDTO('2026-07-03T12:10:00.000Z', 3)
+		);
+		await repository.save(createSaveDTO('2026-07-03T12:00:00.000Z', 1));
+		const middle = await repository.save({
+			comparison: null,
+			failure: createFailure({
+				occurredAt: '2026-07-03T12:05:00.000Z'
+			}),
+			generatedAt: '2026-07-03T12:05:00.000Z',
+			status: 'failed'
+		});
+
+		const recent = await repository.findRecent(2);
+
+		expect(recent.map((snapshot) => snapshot.id)).toEqual([
+			newest.id,
+			middle.id
+		]);
+		expect(recent[0]?.status).toBe('compared');
+		expect(recent[1]?.status).toBe('failed');
+	});
+
 	it('should use storedAt and id tie-breakers for matching generatedAt values', async () => {
 		const first = await repository.save(
 			createSaveDTO('2026-07-03T12:10:00.000Z', 1)

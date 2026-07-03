@@ -1591,6 +1591,42 @@
 				}
 			}
 		},
+		"/v1/cross-check/api-docs/snapshots": {
+			"get": {
+				"summary": "List API documentation cross-check snapshots",
+				"description": "Returns recent persisted RADAR versus StellarAtlas API documentation comparison snapshot summaries. This endpoint does not fetch RADAR, run live probes, recompute comparisons, or include operation-level diff payloads.",
+				"tags": ["CrossCheck"],
+				"operationId": "listCrossCheckApiDocsSnapshots",
+				"parameters": [
+					{
+						"name": "limit",
+						"in": "query",
+						"description": "Maximum number of snapshot summaries to return.",
+						"required": false,
+						"schema": {
+							"type": "integer",
+							"minimum": 1,
+							"maximum": 25,
+							"default": 10
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "recent API docs comparison snapshot summaries",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/CrossCheckApiDocsComparisonSnapshotList"
+								}
+							}
+						}
+					},
+					"400": { "description": "Bad request" },
+					"500": { "description": "Server error" }
+				}
+			}
+		},
 		"/v1/cross-check/api-docs/latest": {
 			"get": {
 				"summary": "Get latest API documentation cross-check snapshot",
@@ -4391,6 +4427,73 @@
 						"allOf": [
 							{
 								"$ref": "#/components/schemas/CrossCheckApiDocsComparison"
+							}
+						]
+					},
+					"failure": {
+						"nullable": true,
+						"allOf": [
+							{
+								"$ref": "#/components/schemas/CrossCheckApiDocsSnapshotFailure"
+							}
+						]
+					}
+				}
+			},
+			"CrossCheckApiDocsComparisonSnapshotList": {
+				"type": "object",
+				"required": ["generatedAt", "limit", "count", "snapshots"],
+				"properties": {
+					"generatedAt": {
+						"type": "string",
+						"format": "date-time"
+					},
+					"limit": {
+						"type": "integer",
+						"minimum": 1,
+						"maximum": 25
+					},
+					"count": {
+						"type": "integer",
+						"minimum": 0
+					},
+					"snapshots": {
+						"type": "array",
+						"items": {
+							"$ref": "#/components/schemas/CrossCheckApiDocsComparisonSnapshotListItem"
+						}
+					}
+				}
+			},
+			"CrossCheckApiDocsComparisonSnapshotListItem": {
+				"type": "object",
+				"required": [
+					"id",
+					"status",
+					"generatedAt",
+					"storedAt",
+					"comparisonSummary",
+					"failure"
+				],
+				"properties": {
+					"id": { "type": "string" },
+					"status": {
+						"type": "string",
+						"enum": ["compared", "failed"]
+					},
+					"generatedAt": {
+						"type": "string",
+						"format": "date-time"
+					},
+					"storedAt": {
+						"type": "string",
+						"format": "date-time"
+					},
+					"comparisonSummary": {
+						"nullable": true,
+						"allOf": [
+							{
+								"$ref": "#/components/schemas/CrossCheckApiDocsComparisonSummary"
 							}
 						]
 					},

@@ -1,5 +1,6 @@
 import { err, ok, Result } from 'neverthrow';
 import type {
+	CrossCheckApiDocsComparisonSnapshotListItemDTO,
 	CrossCheckApiDocsComparisonSnapshotRecordDTO,
 	CrossCheckApiDocsComparisonSnapshotRepository,
 	SaveCrossCheckApiDocsComparisonSnapshotDTO
@@ -151,6 +152,12 @@ class FakeSnapshotRepository implements CrossCheckApiDocsComparisonSnapshotRepos
 
 	async findLatest(): Promise<CrossCheckApiDocsComparisonSnapshotRecordDTO | null> {
 		return this.latest;
+	}
+
+	async findRecent(): Promise<
+		readonly CrossCheckApiDocsComparisonSnapshotListItemDTO[]
+	> {
+		throw new Error('Fake repository findRecent should not be called');
 	}
 
 	async save(
