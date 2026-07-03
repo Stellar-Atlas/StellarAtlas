@@ -8,6 +8,7 @@ import type { Logger } from 'logger';
 import type { ScanJobRepository } from '../../domain/ScanJobRepository.js';
 import { mapUnknownToError } from '@core/utilities/mapUnknownToError.js';
 import { getStaleScanJobCutoff } from '../../domain/ScanJobStaleness.js';
+import type { CommunityScannerJobContext } from '../../domain/CommunityScannerJobContext.js';
 
 /**
  * Schedules new scan jobs for history archives based on a configured scheduling strategy.
@@ -21,10 +22,17 @@ export class GetScanJob {
 		@inject('Logger') private logger: Logger
 	) {}
 
-	public async execute(): Promise<Result<ScanJobDTO | null, Error>> {
+	public async execute(
+		context?: CommunityScannerJobContext
+	): Promise<Result<ScanJobDTO | null, Error>> {
 		try {
 			await this.releaseStaleJobs();
-			const nextScanJob = await this.scanJobRepository.fetchNextJob();
+			const nextScanJob =
+				context === undefined
+					? await this.scanJobRepository.fetchNextJob()
+					: await this.scanJobRepository.fetchNextJobForCommunityScanner(
+							context.communityScannerId
+						);
 
 			if (nextScanJob === null) {
 				this.logger.info('No scan jobs available', {
@@ -40,7 +48,7 @@ export class GetScanJob {
 				chainInitDate: nextScanJob.chainInitDate
 			});
 
-				return ok({
+			return ok({
 				chainInitDate: nextScanJob.chainInitDate,
 				url: nextScanJob.url,
 				latestScannedLedger: nextScanJob.latestScannedLedger,

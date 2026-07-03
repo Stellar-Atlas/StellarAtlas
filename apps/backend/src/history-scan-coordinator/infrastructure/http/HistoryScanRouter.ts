@@ -1,16 +1,20 @@
 import express, { Router } from 'express';
-import { body, param, validationResult } from 'express-validator';
+import { param, validationResult } from 'express-validator';
 import basicAuth from 'express-basic-auth';
 import { GetLatestScan } from '../../use-cases/get-latest-scan/GetLatestScan.js';
 import { GetScanLogs } from '../../use-cases/get-scan-logs/GetScanLogs.js';
 import { RegisterScan } from '../../use-cases/register-scan/RegisterScan.js';
-import { isScanErrorTypeDTO, ScanDTO } from 'history-scanner-dto';
 import { GetScanJob } from '../../use-cases/get-scan-job/GetScanJob.js';
 import { TouchScanJob } from '../../use-cases/touch-scan-job/TouchScanJob.js';
 import {
 	handleGetArchiveScanLogs,
 	handleGetLatestArchiveScan
 } from './HistoryArchiveScanReadHandlers.js';
+import {
+	parseValidatedScanDto,
+	requireObjectBody,
+	scanDtoValidators
+} from './ScanRequestValidation.js';
 
 export interface HistoryScanRouterConfig {
 	getLatestScan: GetLatestScan;
@@ -29,12 +33,6 @@ export const HistoryScanRouterWrapper = (
 ): Router => {
 	const historyScanRouter = express.Router();
 
-	const isValidRequestBody = (
-		body: unknown
-	): body is Record<string, unknown> => {
-		return typeof body === 'object' && body !== null;
-	};
-
 	if (config.userName && config.password)
 		historyScanRouter.post(
 			'/',
@@ -42,81 +40,13 @@ export const HistoryScanRouterWrapper = (
 				users: { [config.userName]: config.password },
 				challenge: true
 			}),
-			(
-				req: express.Request,
-				res: express.Response,
-				next: express.NextFunction
-			) => {
-				if (!isValidRequestBody(req.body)) {
-					return res
-						.status(400)
-						.json({ error: 'Request body must be an object' });
-				}
-				next();
-			},
-			[
-				body('startDate').isISO8601().withMessage('Invalid startDate'),
-				body('endDate').isISO8601().withMessage('Invalid endDate'),
-				body('scanChainInitDate')
-					.isISO8601()
-					.withMessage('Invalid scanChainInitDate'),
-				body('baseUrl').isURL().withMessage('Invalid baseUrl'),
-				body('latestVerifiedLedger')
-					.isInt({ min: 0 })
-					.withMessage('latestVerifiedLedger must be a positive integer'),
-				body('latestScannedLedger')
-					.isInt({ min: 0 })
-					.withMessage('latestScannedLedger must be a positive integer'),
-				body('latestScannedLedgerHeaderHash').custom((value) => {
-					if (value === null) return true;
-					return typeof value === 'string';
-				}),
-				body('concurrency')
-					.isInt({ min: 0 })
-					.withMessage('concurrency must be a positive integer'),
-				body('isSlowArchive')
-					.optional()
-					.custom((value) => {
-						if (value === null) return true;
-						return typeof value === 'boolean';
-					})
-					.withMessage('isSlowArchive must be null or a boolean'),
-				body('fromLedger')
-					.isInt({ min: 0 })
-					.withMessage('fromLedger must be a positive integer'),
-				body('toLedger')
-					.custom((value) => {
-						if (value === null) return true;
-						if (Number.isInteger(value) && value >= 0) return true;
-						return false;
-					})
-					.withMessage('toLedger must be null or a positive integer'),
-				body('scanJobRemoteId')
-					.isString()
-					.withMessage('Invalid scan job remoteId'),
-				body('error').custom((value) => {
-					if (value === null) return true;
-					return isValidScanErrorPayload(value);
-				}),
-				body('errors')
-					.optional()
-					.isArray()
-					.withMessage('errors must be an array'),
-				body('errors.*').custom((value) => {
-					return isValidScanErrorPayload(value);
-				})
-			],
+			requireObjectBody,
+			scanDtoValidators,
 			async (req: express.Request, res: express.Response) => {
-				const errors = validationResult(req);
-				if (!errors.isEmpty()) {
-					return res.status(400).json({ errors: errors.array() });
-				}
+				const dto = parseValidatedScanDto(req, res);
+				if (dto === null) return;
 
-				const dto = ScanDTO.fromJSON(req.body);
-				if (dto.isErr()) {
-					return res.status(400).json({ error: 'Invalid request body' });
-				}
-				const result = await config.registerScan.execute(dto.value);
+				const result = await config.registerScan.execute(dto);
 
 				if (result.isErr()) {
 					return res.status(500).json({ error: result.error.message });
@@ -225,14 +155,3 @@ const triggerFrontendRevalidation = (
 };
 
 export { HistoryScanRouterWrapper as historyScanRouter };
-
-const isValidScanErrorPayload = (value: unknown): boolean => {
-	if (typeof value !== 'object' || value === null) return false;
-
-	const candidate = value as Record<string, unknown>;
-	return (
-		isScanErrorTypeDTO(candidate.type) &&
-		typeof candidate.url === 'string' &&
-		typeof candidate.message === 'string'
-	);
-};

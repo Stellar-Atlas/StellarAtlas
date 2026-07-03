@@ -1,6 +1,9 @@
 import { ScanMapper } from '../ScanMapper.js';
 import { ScanDTO, ScanErrorDTO } from 'history-scanner-dto';
-import { ScanError, ScanErrorType } from '@history-scan-coordinator/domain/scan/ScanError.js';
+import {
+	ScanError,
+	ScanErrorType
+} from '@history-scan-coordinator/domain/scan/ScanError.js';
 
 describe('ScanMapper', () => {
 	let mapper: ScanMapper;
@@ -30,6 +33,23 @@ describe('ScanMapper', () => {
 		it('should successfully map valid DTO to domain', () => {
 			const result = mapper.toDomain(validScanDTO);
 			expect(result.isOk()).toBe(true);
+			if (result.isOk()) {
+				expect(result.value.scanJobRemoteId).toBe('remoteId');
+				expect(result.value.communityScannerId).toBeNull();
+			}
+		});
+
+		it('should map community scanner attribution when provided', () => {
+			const result = mapper.toDomain(validScanDTO, {
+				communityScannerId: '164f7788-9edb-4bb5-81c1-b928d85a21a5'
+			});
+			expect(result.isOk()).toBe(true);
+			if (result.isOk()) {
+				expect(result.value.scanJobRemoteId).toBe('remoteId');
+				expect(result.value.communityScannerId).toBe(
+					'164f7788-9edb-4bb5-81c1-b928d85a21a5'
+				);
+			}
 		});
 
 		it('should fail with invalid startDate', () => {

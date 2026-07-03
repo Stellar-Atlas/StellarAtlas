@@ -6,9 +6,17 @@ import { Scan } from '../../domain/scan/Scan.js';
 import { ScanError, ScanErrorType } from '../../domain/scan/ScanError.js';
 import { ScanDTO, ScanErrorDTO } from 'history-scanner-dto';
 
+export interface ScanMapperAttribution {
+	readonly communityScannerId?: string | null;
+	readonly scanJobRemoteId?: string | null;
+}
+
 @injectable()
 export class ScanMapper {
-	public toDomain(dto: ScanDTO): Result<Scan, Error> {
+	public toDomain(
+		dto: ScanDTO,
+		attribution: ScanMapperAttribution = {}
+	): Result<Scan, Error> {
 		try {
 			if (!(dto.startDate instanceof Date) || isNaN(dto.startDate.getTime())) {
 				return err(new Error('Invalid startDate'));
@@ -84,7 +92,9 @@ export class ScanMapper {
 					dto.concurrency,
 					dto.isSlowArchive,
 					scanErrors[0] ?? null,
-					scanErrors
+					scanErrors,
+					attribution.communityScannerId ?? null,
+					attribution.scanJobRemoteId ?? dto.scanJobRemoteId
 				)
 			);
 		} catch (e) {

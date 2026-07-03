@@ -144,7 +144,10 @@ const listen = async () => {
 		communityScannerRouter({
 			registerCommunityScanner: kernel.container.get(RegisterCommunityScanner),
 			sendScannerHeartbeat: kernel.container.get(SendScannerHeartbeat),
-			getScannerMetrics: kernel.container.get(GetScannerMetrics)
+			getScannerMetrics: kernel.container.get(GetScannerMetrics),
+			getScanJob: kernel.container.get(GetScanJob),
+			touchScanJob: kernel.container.get(TouchScanJob),
+			registerScan: kernel.container.get(RegisterScan)
 		})
 	);
 

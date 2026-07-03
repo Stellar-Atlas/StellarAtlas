@@ -1265,6 +1265,229 @@
 				}
 			}
 		},
+		"/v1/community-scanners/{id}/job": {
+			"get": {
+				"summary": "Claim the next community scanner job",
+				"description": "Authenticates a community scanner, refreshes its heartbeat, atomically marks one pending history archive scan job as taken, and attributes the claim to that scanner.",
+				"tags": ["CommunityScanners"],
+				"operationId": "getCommunityScannerJob",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"description": "Scanner id returned by registration",
+						"required": true,
+						"schema": { "type": "string", "format": "uuid" }
+					},
+					{
+						"name": "Authorization",
+						"in": "header",
+						"description": "Bearer API key returned by registration",
+						"required": true,
+						"schema": { "type": "string" }
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "scan job claimed",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object",
+									"required": ["url", "remoteId"],
+									"properties": {
+										"url": { "type": "string" },
+										"remoteId": { "type": "string", "format": "uuid" },
+										"latestScannedLedger": { "type": "integer" },
+										"latestScannedLedgerHeaderHash": {
+											"type": "string",
+											"nullable": true
+										},
+										"chainInitDate": {
+											"type": "string",
+											"format": "date-time",
+											"nullable": true
+										},
+										"fromLedger": {
+											"type": "integer",
+											"nullable": true
+										},
+										"toLedger": {
+											"type": "integer",
+											"nullable": true
+										},
+										"concurrency": {
+											"type": "integer",
+											"nullable": true
+										}
+									}
+								}
+							}
+						}
+					},
+					"204": { "description": "No scan job available" },
+					"400": { "description": "Invalid scanner id" },
+					"401": { "description": "Missing or invalid bearer API key" },
+					"403": { "description": "Scanner is blacklisted" },
+					"404": { "description": "Scanner not found" },
+					"500": { "description": "Server error" }
+				}
+			}
+		},
+		"/v1/community-scanners/{id}/job/{remoteId}/heartbeat": {
+			"post": {
+				"summary": "Refresh a community scanner job heartbeat",
+				"description": "Authenticates a community scanner, refreshes its scanner heartbeat, and updates a taken scan job only when that scanner owns the claim.",
+				"tags": ["CommunityScanners"],
+				"operationId": "touchCommunityScannerJob",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"description": "Scanner id returned by registration",
+						"required": true,
+						"schema": { "type": "string", "format": "uuid" }
+					},
+					{
+						"name": "remoteId",
+						"in": "path",
+						"description": "Remote id of the claimed scan job",
+						"required": true,
+						"schema": { "type": "string", "format": "uuid" }
+					},
+					{
+						"name": "Authorization",
+						"in": "header",
+						"description": "Bearer API key returned by registration",
+						"required": true,
+						"schema": { "type": "string" }
+					}
+				],
+				"responses": {
+					"204": { "description": "job heartbeat accepted" },
+					"400": { "description": "Invalid scanner id or scan job id" },
+					"401": { "description": "Missing or invalid bearer API key" },
+					"403": { "description": "Scanner is blacklisted" },
+					"404": {
+						"description": "Scanner not found or scan job is not owned and active"
+					},
+					"500": { "description": "Server error" }
+				}
+			}
+		},
+		"/v1/community-scanners/{id}/scans": {
+			"post": {
+				"summary": "Submit a community scanner result",
+				"description": "Authenticates a community scanner, validates that the scan job is active and owned by that scanner, stores the scan result with attribution, marks the job done, and updates scanner completion metrics.",
+				"tags": ["CommunityScanners"],
+				"operationId": "registerCommunityScannerScan",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"description": "Scanner id returned by registration",
+						"required": true,
+						"schema": { "type": "string", "format": "uuid" }
+					},
+					{
+						"name": "Authorization",
+						"in": "header",
+						"description": "Bearer API key returned by registration",
+						"required": true,
+						"schema": { "type": "string" }
+					}
+				],
+				"requestBody": {
+					"required": true,
+					"content": {
+						"application/json": {
+							"schema": {
+								"type": "object",
+								"required": [
+									"startDate",
+									"endDate",
+									"scanChainInitDate",
+									"baseUrl",
+									"latestVerifiedLedger",
+									"latestScannedLedger",
+									"latestScannedLedgerHeaderHash",
+									"concurrency",
+									"fromLedger",
+									"toLedger",
+									"scanJobRemoteId",
+									"error"
+								],
+								"properties": {
+									"startDate": {
+										"type": "string",
+										"format": "date-time"
+									},
+									"endDate": {
+										"type": "string",
+										"format": "date-time"
+									},
+									"scanChainInitDate": {
+										"type": "string",
+										"format": "date-time"
+									},
+									"baseUrl": { "type": "string", "format": "uri" },
+									"latestVerifiedLedger": {
+										"type": "integer",
+										"minimum": 0
+									},
+									"latestScannedLedger": {
+										"type": "integer",
+										"minimum": 0
+									},
+									"latestScannedLedgerHeaderHash": {
+										"type": "string",
+										"nullable": true
+									},
+									"concurrency": { "type": "integer", "minimum": 0 },
+									"isSlowArchive": {
+										"type": "boolean",
+										"nullable": true
+									},
+									"fromLedger": { "type": "integer", "minimum": 0 },
+									"toLedger": {
+										"type": "integer",
+										"minimum": 0,
+										"nullable": true
+									},
+									"scanJobRemoteId": {
+										"type": "string",
+										"format": "uuid"
+									},
+									"error": {
+										"type": "object",
+										"nullable": true,
+										"additionalProperties": true
+									},
+									"errors": {
+										"type": "array",
+										"items": {
+											"type": "object",
+											"additionalProperties": true
+										}
+									}
+								}
+							}
+						}
+					}
+				},
+				"responses": {
+					"201": { "description": "scan result accepted" },
+					"400": { "description": "Invalid scanner id or scan body" },
+					"401": { "description": "Missing or invalid bearer API key" },
+					"403": {
+						"description": "Scanner is blacklisted or job is owned by another scanner"
+					},
+					"404": { "description": "Scanner or scan job not found" },
+					"409": { "description": "Scan job is not active" },
+					"500": { "description": "Server error" }
+				}
+			}
+		},
 		"/v1/community-scanners/metrics": {
 			"get": {
 				"summary": "Get community scanner metrics",

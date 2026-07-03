@@ -2,6 +2,7 @@ import express from 'express';
 import request from 'supertest';
 import { mock } from 'jest-mock-extended';
 import { err, ok } from 'neverthrow';
+import { randomUUID } from 'crypto';
 import { CommunityScannerRouterWrapper } from '../CommunityScannerRouter.js';
 import {
 	DuplicateCommunityScannerError,
@@ -15,17 +16,31 @@ import {
 } from '@history-scan-coordinator/use-cases/SendScannerHeartbeat.js';
 import { GetScannerMetrics } from '@history-scan-coordinator/use-cases/GetScannerMetrics.js';
 import { ScannerStatus } from '@history-scan-coordinator/infrastructure/database/entities/CommunityScanner.js';
+import { GetScanJob } from '@history-scan-coordinator/use-cases/get-scan-job/GetScanJob.js';
+import { TouchScanJob } from '@history-scan-coordinator/use-cases/touch-scan-job/TouchScanJob.js';
+import {
+	RegisterScan,
+	ScanJobNotActiveError,
+	ScanJobNotFoundError,
+	ScanJobOwnershipError
+} from '@history-scan-coordinator/use-cases/register-scan/RegisterScan.js';
 
 describe('CommunityScannerRouter.integration', () => {
 	let app: express.Application;
 	let registerCommunityScanner: jest.Mocked<RegisterCommunityScanner>;
 	let sendScannerHeartbeat: jest.Mocked<SendScannerHeartbeat>;
 	let getScannerMetrics: jest.Mocked<GetScannerMetrics>;
+	let getScanJob: jest.Mocked<GetScanJob>;
+	let touchScanJob: jest.Mocked<TouchScanJob>;
+	let registerScan: jest.Mocked<RegisterScan>;
 
 	beforeEach(() => {
 		registerCommunityScanner = mock<RegisterCommunityScanner>();
 		sendScannerHeartbeat = mock<SendScannerHeartbeat>();
 		getScannerMetrics = mock<GetScannerMetrics>();
+		getScanJob = mock<GetScanJob>();
+		touchScanJob = mock<TouchScanJob>();
+		registerScan = mock<RegisterScan>();
 		app = express();
 		app.use(express.json());
 		app.use(
@@ -33,7 +48,10 @@ describe('CommunityScannerRouter.integration', () => {
 			CommunityScannerRouterWrapper({
 				registerCommunityScanner,
 				sendScannerHeartbeat,
-				getScannerMetrics
+				getScannerMetrics,
+				getScanJob,
+				touchScanJob,
+				registerScan
 			})
 		);
 	});
@@ -163,6 +181,177 @@ describe('CommunityScannerRouter.integration', () => {
 		});
 	});
 
+	describe('GET /:id/job', () => {
+		const scannerId = '164f7788-9edb-4bb5-81c1-b928d85a21a5';
+
+		beforeEach(() => {
+			sendScannerHeartbeat.execute.mockResolvedValue(
+				ok({
+					id: scannerId,
+					lastHeartbeatAt: '2026-07-03T12:00:00.000Z',
+					status: ScannerStatus.ONLINE
+				})
+			);
+		});
+
+		it('should return the next job for an authenticated scanner', async () => {
+			const remoteId = randomUUID();
+			getScanJob.execute.mockResolvedValue(
+				ok({
+					chainInitDate: new Date('2026-07-03T12:00:00.000Z'),
+					url: 'https://archive.example.com',
+					latestScannedLedger: 100,
+					latestScannedLedgerHeaderHash: 'hash',
+					remoteId,
+					fromLedger: 1,
+					toLedger: 100,
+					concurrency: 12
+				})
+			);
+
+			await request(app)
+				.get(`/community-scanners/${scannerId}/job`)
+				.set('Authorization', 'Bearer satlas_scanner_secret')
+				.expect(200)
+				.expect((response) => {
+					expect(response.body).toMatchObject({
+						url: 'https://archive.example.com',
+						remoteId,
+						concurrency: 12
+					});
+				});
+
+			expect(getScanJob.execute).toHaveBeenCalledWith({
+				communityScannerId: scannerId
+			});
+		});
+
+		it('should return 204 when no scanner job is available', async () => {
+			getScanJob.execute.mockResolvedValue(ok(null));
+
+			await request(app)
+				.get(`/community-scanners/${scannerId}/job`)
+				.set('Authorization', 'Bearer satlas_scanner_secret')
+				.expect(204);
+		});
+
+		it('should require bearer authentication', async () => {
+			await request(app)
+				.get(`/community-scanners/${scannerId}/job`)
+				.expect(401);
+
+			expect(getScanJob.execute).not.toHaveBeenCalled();
+		});
+	});
+
+	describe('POST /:id/job/:remoteId/heartbeat', () => {
+		const scannerId = '164f7788-9edb-4bb5-81c1-b928d85a21a5';
+
+		beforeEach(() => {
+			sendScannerHeartbeat.execute.mockResolvedValue(
+				ok({
+					id: scannerId,
+					lastHeartbeatAt: '2026-07-03T12:00:00.000Z',
+					status: ScannerStatus.ONLINE
+				})
+			);
+		});
+
+		it('should refresh a scanner-owned taken job', async () => {
+			const remoteId = randomUUID();
+			touchScanJob.execute.mockResolvedValue(ok(true));
+
+			await request(app)
+				.post(`/community-scanners/${scannerId}/job/${remoteId}/heartbeat`)
+				.set('Authorization', 'Bearer satlas_scanner_secret')
+				.expect(204);
+
+			expect(touchScanJob.execute).toHaveBeenCalledWith(remoteId, {
+				communityScannerId: scannerId
+			});
+		});
+
+		it('should return 404 when the job is not owned and active', async () => {
+			touchScanJob.execute.mockResolvedValue(ok(false));
+
+			await request(app)
+				.post(`/community-scanners/${scannerId}/job/${randomUUID()}/heartbeat`)
+				.set('Authorization', 'Bearer satlas_scanner_secret')
+				.expect(404);
+		});
+	});
+
+	describe('POST /:id/scans', () => {
+		const scannerId = '164f7788-9edb-4bb5-81c1-b928d85a21a5';
+
+		beforeEach(() => {
+			sendScannerHeartbeat.execute.mockResolvedValue(
+				ok({
+					id: scannerId,
+					lastHeartbeatAt: '2026-07-03T12:00:00.000Z',
+					status: ScannerStatus.ONLINE
+				})
+			);
+		});
+
+		it('should register a scanner-attributed scan result', async () => {
+			const body = createValidScanBody(randomUUID());
+			registerScan.execute.mockResolvedValue(ok(undefined));
+
+			await request(app)
+				.post(`/community-scanners/${scannerId}/scans`)
+				.set('Authorization', 'Bearer satlas_scanner_secret')
+				.send(body)
+				.expect(201)
+				.expect((response) => {
+					expect(response.body).toEqual({
+						message: 'Scan created successfully'
+					});
+				});
+
+			expect(registerScan.execute).toHaveBeenCalledWith(
+				expect.objectContaining({
+					baseUrl: body.baseUrl,
+					scanJobRemoteId: body.scanJobRemoteId
+				}),
+				{ communityScannerId: scannerId }
+			);
+		});
+
+		it('should reject non-UUID scan job ids for scanner submissions', async () => {
+			await request(app)
+				.post(`/community-scanners/${scannerId}/scans`)
+				.set('Authorization', 'Bearer satlas_scanner_secret')
+				.send(createValidScanBody('not-a-uuid'))
+				.expect(400);
+
+			expect(registerScan.execute).not.toHaveBeenCalled();
+		});
+
+		it('should map scanner job registration policy errors', async () => {
+			registerScan.execute
+				.mockResolvedValueOnce(err(new ScanJobNotFoundError()))
+				.mockResolvedValueOnce(err(new ScanJobOwnershipError()))
+				.mockResolvedValueOnce(err(new ScanJobNotActiveError()));
+
+			await request(app)
+				.post(`/community-scanners/${scannerId}/scans`)
+				.set('Authorization', 'Bearer satlas_scanner_secret')
+				.send(createValidScanBody(randomUUID()))
+				.expect(404);
+			await request(app)
+				.post(`/community-scanners/${scannerId}/scans`)
+				.set('Authorization', 'Bearer satlas_scanner_secret')
+				.send(createValidScanBody(randomUUID()))
+				.expect(403);
+			await request(app)
+				.post(`/community-scanners/${scannerId}/scans`)
+				.set('Authorization', 'Bearer satlas_scanner_secret')
+				.send(createValidScanBody(randomUUID()))
+				.expect(409);
+		});
+	});
+
 	describe('GET /metrics', () => {
 		it('should expose safe scanner metrics with a short public cache age', async () => {
 			getScannerMetrics.execute.mockResolvedValue(
@@ -199,3 +388,22 @@ describe('CommunityScannerRouter.integration', () => {
 		});
 	});
 });
+
+function createValidScanBody(scanJobRemoteId: string) {
+	return {
+		startDate: '2026-07-03T12:00:00.000Z',
+		endDate: '2026-07-03T12:00:05.000Z',
+		baseUrl: 'https://archive.example.com',
+		scanChainInitDate: '2026-07-03T12:00:00.000Z',
+		latestVerifiedLedger: 100,
+		latestScannedLedger: 100,
+		latestScannedLedgerHeaderHash: null,
+		concurrency: 5,
+		isSlowArchive: false,
+		fromLedger: 0,
+		toLedger: null,
+		error: null,
+		errors: [],
+		scanJobRemoteId
+	};
+}

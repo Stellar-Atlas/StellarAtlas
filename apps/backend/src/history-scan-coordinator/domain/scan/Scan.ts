@@ -46,6 +46,14 @@ export class Scan extends CoreEntity {
 	@Column('boolean', { nullable: true })
 	public readonly isSlowArchive: boolean | null = null;
 
+	@Index()
+	@Column('uuid', { nullable: true })
+	public readonly communityScannerId: string | null = null;
+
+	@Index()
+	@Column('text', { nullable: true })
+	public readonly scanJobRemoteId: string | null = null;
+
 	@OneToOne(() => ScanError, { nullable: true, cascade: true, eager: true })
 	@JoinColumn()
 	public readonly error: ScanError | null = null;
@@ -65,7 +73,9 @@ export class Scan extends CoreEntity {
 		concurrency = 0,
 		archiveIsSlow: boolean | null = null,
 		error: ScanError | null = null,
-		errors: readonly ScanError[] = []
+		errors: readonly ScanError[] = [],
+		communityScannerId: string | null = null,
+		scanJobRemoteId: string | null = null
 	) {
 		super();
 		const scanErrors = errors.length > 0 ? errors : error ? [error] : [];
@@ -81,6 +91,8 @@ export class Scan extends CoreEntity {
 		this.errors = scanErrors.map(mapScanErrorToDetails);
 		this.latestScannedLedger = latestScannedLedger;
 		this.latestScannedLedgerHeaderHash = latestScannedLedgerHeaderHash;
+		this.communityScannerId = communityScannerId;
+		this.scanJobRemoteId = scanJobRemoteId;
 	}
 
 	@Index()

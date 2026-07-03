@@ -68,6 +68,27 @@ describe('GetScanJob', () => {
 		expect(scanJobRepositoryMock.save).not.toHaveBeenCalled();
 	});
 
+	it('should claim a job for a community scanner when scanner context is provided', async () => {
+		const mockJob = new ScanJob('http://test.com');
+		mockJob.status = 'TAKEN';
+		mockJob.claimedByCommunityScannerId =
+			'164f7788-9edb-4bb5-81c1-b928d85a21a5';
+		scanJobRepositoryMock.releaseStaleTakenJobs.mockResolvedValue(0);
+		scanJobRepositoryMock.fetchNextJobForCommunityScanner.mockResolvedValue(
+			mockJob
+		);
+
+		const result = await getScanJob.execute({
+			communityScannerId: '164f7788-9edb-4bb5-81c1-b928d85a21a5'
+		});
+
+		expect(result.isOk()).toBe(true);
+		expect(
+			scanJobRepositoryMock.fetchNextJobForCommunityScanner
+		).toHaveBeenCalledWith('164f7788-9edb-4bb5-81c1-b928d85a21a5');
+		expect(scanJobRepositoryMock.fetchNextJob).not.toHaveBeenCalled();
+	});
+
 	it('should return err(error) when fetchNextJob fails', async () => {
 		const error = new Error('Database error');
 		scanJobRepositoryMock.releaseStaleTakenJobs.mockResolvedValue(0);

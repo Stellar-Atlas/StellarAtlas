@@ -48,6 +48,8 @@ describe('TypeOrmScanJobRepository.integration', () => {
 				nextJob.remoteId
 			);
 			expect(persistedJob?.status).toBe('TAKEN');
+			expect(persistedJob?.claimedByCommunityScannerId).toBeNull();
+			expect(persistedJob?.claimedAt).toBeInstanceOf(Date);
 		});
 
 		it('should return the fifo job for fetchNextJob when multiple jobs exist', async () => {
@@ -74,6 +76,29 @@ describe('TypeOrmScanJobRepository.integration', () => {
 			expect(new Set(urls).size).toBe(8);
 			expect(nextJobs.every((job) => job?.status === 'TAKEN')).toBe(true);
 			expect(await typeOrmScanJobRepository.hasPendingJobs()).toBe(false);
+		});
+
+		it('should claim a pending job for a community scanner', async () => {
+			const scannerId = randomUUID();
+			await typeOrmScanJobRepository.save([new ScanJob('scanner-url')]);
+
+			const nextJob =
+				await typeOrmScanJobRepository.fetchNextJobForCommunityScanner(
+					scannerId
+				);
+
+			expect(nextJob?.status).toBe('TAKEN');
+			expect(nextJob?.claimedByCommunityScannerId).toBe(scannerId);
+			expect(nextJob?.claimedAt).toBeInstanceOf(Date);
+			if (nextJob === null) {
+				throw new Error('Expected scanner job to be claimed');
+			}
+
+			const persistedJob = await typeOrmScanJobRepository.findByRemoteId(
+				nextJob.remoteId
+			);
+			expect(persistedJob?.claimedByCommunityScannerId).toBe(scannerId);
+			expect(persistedJob?.claimedAt).toBeInstanceOf(Date);
 		});
 	});
 
@@ -252,12 +277,60 @@ describe('TypeOrmScanJobRepository.integration', () => {
 				oldDate.toISOString()
 			);
 		});
+
+		it('should refresh only scanner-owned taken jobs', async () => {
+			const scannerId = randomUUID();
+			const otherScannerId = randomUUID();
+			const scanJob = new ScanJob('scanner-owned-url');
+			scanJob.status = 'TAKEN';
+			scanJob.claimedByCommunityScannerId = scannerId;
+			const otherJob = new ScanJob('other-scanner-url');
+			otherJob.status = 'TAKEN';
+			otherJob.claimedByCommunityScannerId = otherScannerId;
+			await typeOrmScanJobRepository.save([scanJob, otherJob]);
+
+			const oldDate = new Date('2026-01-01T00:00:00.000Z');
+			const dataSource = kernel.container.get(DataSource);
+			await dataSource.query(
+				'update history_archive_scan_job_queue set "updatedAt" = $1',
+				[oldDate]
+			);
+
+			const wasUpdated =
+				await typeOrmScanJobRepository.markTakenJobActiveForCommunityScanner(
+					scanJob.remoteId,
+					scannerId
+				);
+			const wasOtherScannerUpdated =
+				await typeOrmScanJobRepository.markTakenJobActiveForCommunityScanner(
+					otherJob.remoteId,
+					scannerId
+				);
+
+			const refreshedJob = await typeOrmScanJobRepository.findByRemoteId(
+				scanJob.remoteId
+			);
+			const untouchedJob = await typeOrmScanJobRepository.findByRemoteId(
+				otherJob.remoteId
+			);
+
+			expect(wasUpdated).toBe(true);
+			expect(wasOtherScannerUpdated).toBe(false);
+			expect(refreshedJob?.updatedAt?.getTime()).toBeGreaterThan(
+				oldDate.getTime()
+			);
+			expect(untouchedJob?.updatedAt?.toISOString()).toBe(
+				oldDate.toISOString()
+			);
+		});
 	});
 
 	describe('releaseStaleTakenJobs', () => {
 		it('should release taken jobs older than the cutoff', async () => {
 			const staleJob = new ScanJob('stale-url');
 			staleJob.status = 'TAKEN';
+			staleJob.claimedByCommunityScannerId = randomUUID();
+			staleJob.claimedAt = new Date('2026-01-01T00:00:00.000Z');
 			const recentJob = new ScanJob('recent-url');
 			recentJob.status = 'TAKEN';
 			await typeOrmScanJobRepository.save([staleJob, recentJob]);
@@ -282,6 +355,8 @@ describe('TypeOrmScanJobRepository.integration', () => {
 				recentJob.remoteId
 			);
 			expect(releasedJob?.status).toBe('PENDING');
+			expect(releasedJob?.claimedByCommunityScannerId).toBeNull();
+			expect(releasedJob?.claimedAt).toBeNull();
 			expect(stillTakenJob?.status).toBe('TAKEN');
 		});
 	});
