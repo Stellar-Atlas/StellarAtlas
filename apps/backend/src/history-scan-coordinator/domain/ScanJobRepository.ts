@@ -7,6 +7,13 @@ export interface ArchiveScanQueueStats {
 	readonly totalUnfinishedJobs: number;
 }
 
+export interface ArchiveScanTakenJobsSnapshot {
+	readonly activeTakenJobs: number;
+	readonly staleTakenJobs: number;
+	readonly totalTakenJobs: number;
+	readonly jobs: readonly ScanJob[];
+}
+
 export interface ScanJobRepository {
 	hasPendingJobs: () => Promise<boolean>;
 	save: (scanJobs: ScanJob[]) => Promise<void>;
@@ -15,6 +22,10 @@ export interface ScanJobRepository {
 	findByRemoteId: (remoteId: string) => Promise<ScanJob | null>;
 	findUnfinishedJobs: (after: Date) => Promise<ScanJob[]>;
 	getQueueStats: (staleTakenBefore: Date) => Promise<ArchiveScanQueueStats>;
+	getTakenJobsSnapshot: (
+		staleTakenBefore: Date,
+		limit: number
+	) => Promise<ArchiveScanTakenJobsSnapshot>;
 	markTakenJobActive: (remoteId: string) => Promise<boolean>;
 	releaseStaleTakenJobs: (before: Date) => Promise<number>;
 }

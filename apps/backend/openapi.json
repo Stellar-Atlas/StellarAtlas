@@ -592,6 +592,92 @@
 				}
 			}
 		},
+		"/v1/archive-scans/workers": {
+			"get": {
+				"summary": "Get archive scan worker health",
+				"description": "Returns a read-only worker-slot snapshot derived from currently taken archive scan jobs.",
+				"tags": ["ArchiveScans"],
+				"operationId": "getArchiveScanWorkers",
+				"responses": {
+					"200": {
+						"description": "worker health snapshot",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object",
+									"required": [
+										"generatedAt",
+										"staleJobAgeMs",
+										"activeWorkers",
+										"staleWorkers",
+										"totalTakenJobs",
+										"workers"
+									],
+									"properties": {
+										"generatedAt": {
+											"type": "string",
+											"format": "date-time"
+										},
+										"staleJobAgeMs": { "type": "integer", "minimum": 0 },
+										"activeWorkers": { "type": "integer", "minimum": 0 },
+										"staleWorkers": { "type": "integer", "minimum": 0 },
+										"totalTakenJobs": { "type": "integer", "minimum": 0 },
+										"workers": {
+											"type": "array",
+											"items": {
+												"type": "object",
+												"required": [
+													"archiveUrl",
+													"status",
+													"claimedAt",
+													"lastHeartbeatAt",
+													"heartbeatAgeMs",
+													"fromLedger",
+													"toLedger",
+													"latestScannedLedger",
+													"concurrency"
+												],
+												"properties": {
+													"archiveUrl": { "type": "string", "format": "uri" },
+													"status": {
+														"type": "string",
+														"enum": ["scanning", "stale"]
+													},
+													"claimedAt": {
+														"type": "string",
+														"format": "date-time"
+													},
+													"lastHeartbeatAt": {
+														"type": "string",
+														"format": "date-time"
+													},
+													"heartbeatAgeMs": {
+														"type": "integer",
+														"minimum": 0
+													},
+													"fromLedger": { "type": "integer", "minimum": 0 },
+													"toLedger": {
+														"type": "integer",
+														"minimum": 0,
+														"nullable": true
+													},
+													"latestScannedLedger": {
+														"type": "integer",
+														"minimum": 0
+													},
+													"concurrency": { "type": "integer", "minimum": 0 }
+												}
+											}
+										}
+									}
+								}
+							}
+						}
+					},
+					"500": { "description": "Server error" }
+				}
+			}
+		},
 		"/v1/archive-scans/{encodedUrl}/errors": {
 			"get": {
 				"summary": "Get archive scan log entries",

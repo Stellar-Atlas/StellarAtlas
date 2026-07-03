@@ -4,6 +4,7 @@ import { mock } from 'jest-mock-extended';
 import { err, ok } from 'neverthrow';
 import { ArchiveScanRouterWrapper } from '../ArchiveScanRouter.js';
 import { GetArchiveScanQueue } from '@history-scan-coordinator/use-cases/get-archive-scan-queue/GetArchiveScanQueue.js';
+import { GetArchiveScanWorkers } from '@history-scan-coordinator/use-cases/get-archive-scan-workers/GetArchiveScanWorkers.js';
 import { GetLatestScan } from '@history-scan-coordinator/use-cases/get-latest-scan/GetLatestScan.js';
 import { GetScanLogs } from '@history-scan-coordinator/use-cases/get-scan-logs/GetScanLogs.js';
 import { InvalidUrlError } from '@history-scan-coordinator/use-cases/get-latest-scan/InvalidUrlError.js';
@@ -13,11 +14,13 @@ import type { HistoryArchiveScanLogEntryDTO } from '@history-scan-coordinator/us
 describe('ArchiveScanRouter.integration', () => {
 	let app: express.Application;
 	let getArchiveScanQueue: jest.Mocked<GetArchiveScanQueue>;
+	let getArchiveScanWorkers: jest.Mocked<GetArchiveScanWorkers>;
 	let getLatestScan: jest.Mocked<GetLatestScan>;
 	let getScanLogs: jest.Mocked<GetScanLogs>;
 
 	beforeEach(() => {
 		getArchiveScanQueue = mock<GetArchiveScanQueue>();
+		getArchiveScanWorkers = mock<GetArchiveScanWorkers>();
 		getLatestScan = mock<GetLatestScan>();
 		getScanLogs = mock<GetScanLogs>();
 		app = express();
@@ -26,6 +29,7 @@ describe('ArchiveScanRouter.integration', () => {
 			'/archive-scans',
 			ArchiveScanRouterWrapper({
 				getArchiveScanQueue,
+				getArchiveScanWorkers,
 				getLatestScan,
 				getScanLogs
 			})
@@ -70,6 +74,67 @@ describe('ArchiveScanRouter.integration', () => {
 
 			await request(app)
 				.get('/archive-scans/queue')
+				.expect(500)
+				.expect((response) => {
+					expect(response.body).toEqual({ error: 'Internal server error' });
+				});
+		});
+	});
+
+	describe('GET /workers', () => {
+		it('should expose active and stale worker slots without hitting URL routes', async () => {
+			getArchiveScanWorkers.execute.mockResolvedValue(
+				ok({
+					generatedAt: '2026-07-03T12:00:00.000Z',
+					staleJobAgeMs: 1800000,
+					activeWorkers: 1,
+					staleWorkers: 1,
+					totalTakenJobs: 2,
+					workers: [
+						{
+							archiveUrl: 'https://stale.example',
+							status: 'stale',
+							claimedAt: '2026-07-03T10:00:00.000Z',
+							lastHeartbeatAt: '2026-07-03T11:00:00.000Z',
+							heartbeatAgeMs: 3600000,
+							fromLedger: 0,
+							toLedger: null,
+							latestScannedLedger: 0,
+							concurrency: 2
+						}
+					]
+				})
+			);
+
+			await request(app)
+				.get('/archive-scans/workers')
+				.expect(200)
+				.expect('Cache-Control', 'public, max-age=10')
+				.expect((response) => {
+					expect(response.body).toMatchObject({
+						activeWorkers: 1,
+						staleWorkers: 1,
+						totalTakenJobs: 2
+					});
+					expect(response.body.workers).toHaveLength(1);
+					expect(response.body.workers[0]).toMatchObject({
+						archiveUrl: 'https://stale.example',
+						status: 'stale'
+					});
+				});
+
+			expect(getArchiveScanWorkers.execute).toHaveBeenCalledTimes(1);
+			expect(getLatestScan.execute).not.toHaveBeenCalled();
+			expect(getScanLogs.execute).not.toHaveBeenCalled();
+		});
+
+		it('should return 500 when worker metadata fails', async () => {
+			getArchiveScanWorkers.execute.mockResolvedValue(
+				err(new Error('database unavailable'))
+			);
+
+			await request(app)
+				.get('/archive-scans/workers')
 				.expect(500)
 				.expect((response) => {
 					expect(response.body).toEqual({ error: 'Internal server error' });

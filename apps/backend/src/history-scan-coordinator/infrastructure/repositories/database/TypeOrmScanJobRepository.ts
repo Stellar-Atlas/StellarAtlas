@@ -1,6 +1,7 @@
 import { injectable } from 'inversify';
 import type {
 	ArchiveScanQueueStats,
+	ArchiveScanTakenJobsSnapshot,
 	ScanJobRepository
 } from '@history-scan-coordinator/domain/ScanJobRepository.js';
 import { ScanJob } from '@history-scan-coordinator/domain/ScanJob.js';
@@ -48,6 +49,15 @@ type RawQueueStatsRow = {
 	stalejobs?: NumericValue;
 	totalUnfinishedJobs?: NumericValue;
 	totalunfinishedjobs?: NumericValue;
+};
+
+type RawTakenJobStatsRow = {
+	activeTakenJobs?: NumericValue;
+	activetakenjobs?: NumericValue;
+	staleTakenJobs?: NumericValue;
+	staletakenjobs?: NumericValue;
+	totalTakenJobs?: NumericValue;
+	totaltakenjobs?: NumericValue;
 };
 
 type RawQueryResult =
@@ -321,6 +331,59 @@ export class TypeOrmScanJobRepository implements ScanJobRepository {
 				row?.totalUnfinishedJobs ?? row?.totalunfinishedjobs,
 				'totalUnfinishedJobs'
 			)
+		};
+	}
+
+	async getTakenJobsSnapshot(
+		staleTakenBefore: Date,
+		limit: number
+	): Promise<ArchiveScanTakenJobsSnapshot> {
+		const [row, jobs] = await Promise.all([
+			this.baseRepository
+				.createQueryBuilder('job')
+				.select(
+					`count(*) filter (
+						where job.status = 'TAKEN'
+						and job."updatedAt" >= :staleTakenBefore
+					)`,
+					'activeTakenJobs'
+				)
+				.addSelect(
+					`count(*) filter (
+						where job.status = 'TAKEN'
+						and job."updatedAt" < :staleTakenBefore
+					)`,
+					'staleTakenJobs'
+				)
+				.addSelect(
+					"count(*) filter (where job.status = 'TAKEN')",
+					'totalTakenJobs'
+				)
+				.setParameter('staleTakenBefore', staleTakenBefore)
+				.getRawOne<RawTakenJobStatsRow>(),
+			this.baseRepository
+				.createQueryBuilder('job')
+				.where('job.status = :status', { status: 'TAKEN' })
+				.orderBy('job.updatedAt', 'ASC')
+				.addOrderBy('job.createdAt', 'ASC')
+				.limit(limit)
+				.getMany()
+		]);
+
+		return {
+			activeTakenJobs: this.requireNumber(
+				row?.activeTakenJobs ?? row?.activetakenjobs,
+				'activeTakenJobs'
+			),
+			staleTakenJobs: this.requireNumber(
+				row?.staleTakenJobs ?? row?.staletakenjobs,
+				'staleTakenJobs'
+			),
+			totalTakenJobs: this.requireNumber(
+				row?.totalTakenJobs ?? row?.totaltakenjobs,
+				'totalTakenJobs'
+			),
+			jobs
 		};
 	}
 

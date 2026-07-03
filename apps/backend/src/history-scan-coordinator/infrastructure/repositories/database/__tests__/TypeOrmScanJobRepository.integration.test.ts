@@ -178,6 +178,44 @@ describe('TypeOrmScanJobRepository.integration', () => {
 		});
 	});
 
+	describe('getTakenJobsSnapshot', () => {
+		it('should count and list taken jobs oldest heartbeat first', async () => {
+			const activeJob = new ScanJob('active-url');
+			activeJob.status = 'TAKEN';
+			const staleJob = new ScanJob('stale-url');
+			staleJob.status = 'TAKEN';
+			const pendingJob = new ScanJob('pending-url');
+			const finishedJob = new ScanJob('done-url');
+			finishedJob.status = 'DONE';
+			await typeOrmScanJobRepository.save([
+				activeJob,
+				staleJob,
+				pendingJob,
+				finishedJob
+			]);
+
+			await kernel.container
+				.get(DataSource)
+				.query(
+					'update history_archive_scan_job_queue set "updatedAt" = $1 where url = $2',
+					[new Date('2026-01-01T00:00:00.000Z'), staleJob.url]
+				);
+
+			const snapshot = await typeOrmScanJobRepository.getTakenJobsSnapshot(
+				new Date('2026-01-02T00:00:00.000Z'),
+				10
+			);
+
+			expect(snapshot.activeTakenJobs).toBe(1);
+			expect(snapshot.staleTakenJobs).toBe(1);
+			expect(snapshot.totalTakenJobs).toBe(2);
+			expect(snapshot.jobs.map((job) => job.url)).toEqual([
+				'stale-url',
+				'active-url'
+			]);
+		});
+	});
+
 	describe('markTakenJobActive', () => {
 		it('should refresh updatedAt only for a taken job', async () => {
 			const scanJob = new ScanJob('active-url');

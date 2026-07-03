@@ -5,11 +5,13 @@ import {
 	handleGetLatestArchiveScan
 } from './HistoryArchiveScanReadHandlers.js';
 import { GetArchiveScanQueue } from '../../use-cases/get-archive-scan-queue/GetArchiveScanQueue.js';
+import { GetArchiveScanWorkers } from '../../use-cases/get-archive-scan-workers/GetArchiveScanWorkers.js';
 import { GetLatestScan } from '../../use-cases/get-latest-scan/GetLatestScan.js';
 import { GetScanLogs } from '../../use-cases/get-scan-logs/GetScanLogs.js';
 
 export interface ArchiveScanRouterConfig {
 	getArchiveScanQueue: GetArchiveScanQueue;
+	getArchiveScanWorkers: GetArchiveScanWorkers;
 	getLatestScan: GetLatestScan;
 	getScanLogs: GetScanLogs;
 }
@@ -33,6 +35,20 @@ export const ArchiveScanRouterWrapper = (
 		}
 
 		return res.status(200).json(queueOrError.value);
+	});
+
+	archiveScanRouter.get('/workers', async function (_req, res) {
+		res.setHeader(
+			'Cache-Control',
+			'public, max-age=' + archiveScanCacheMaxAgeSeconds
+		);
+
+		const workersOrError = await config.getArchiveScanWorkers.execute();
+		if (workersOrError.isErr()) {
+			return res.status(500).json({ error: 'Internal server error' });
+		}
+
+		return res.status(200).json(workersOrError.value);
 	});
 
 	archiveScanRouter.get(

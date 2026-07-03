@@ -19,6 +19,7 @@ import type { ScanJobRepository } from '../../domain/ScanJobRepository.js';
 import { TypeOrmScanJobRepository } from '../repositories/database/TypeOrmScanJobRepository.js';
 import { ScanJob } from '../../domain/ScanJob.js';
 import { GetArchiveScanQueue } from '../../use-cases/get-archive-scan-queue/GetArchiveScanQueue.js';
+import { GetArchiveScanWorkers } from '../../use-cases/get-archive-scan-workers/GetArchiveScanWorkers.js';
 
 export function load(container: Container, config: Config) {
 	const dataSource = container.get(DataSource);
@@ -26,6 +27,7 @@ export function load(container: Container, config: Config) {
 	container.bind(GetScanLogs).toSelf();
 	container.bind(GetScanJob).toSelf();
 	container.bind(GetArchiveScanQueue).toSelf();
+	container.bind(GetArchiveScanWorkers).toSelf();
 	container.bind(TouchScanJob).toSelf();
 	container.bind(RegisterScan).toSelf();
 	container.bind(ScheduleScanJobs).toSelf();
