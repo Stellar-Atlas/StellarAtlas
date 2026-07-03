@@ -18,6 +18,12 @@ export interface ScanSchedulerOptions {
 }
 
 export class RestartAtLeastOneScan implements ScanScheduler {
+	private static readonly defaultMaxConcurrency = 24;
+
+	constructor(
+		private readonly maxConcurrency = RestartAtLeastOneScan.defaultMaxConcurrency
+	) {}
+
 	schedule(
 		archives: string[],
 		previousScans: Scan[],
@@ -109,7 +115,9 @@ export class RestartAtLeastOneScan implements ScanScheduler {
 				: previousScan.fromLedger;
 		const toLedger = this.getErrorRecheckToLedger(previousScan, fromLedger);
 		const concurrency =
-			previousScan.concurrency > 0 ? previousScan.concurrency : null;
+			previousScan.concurrency > 0
+				? this.clampConcurrency(previousScan.concurrency)
+				: null;
 
 		return new ScanJob(
 			previousScan.baseUrl.value,
@@ -141,5 +149,9 @@ export class RestartAtLeastOneScan implements ScanScheduler {
 		return latestErrorLedger >= fromLedger
 			? latestErrorLedger
 			: previousScan.toLedger;
+	}
+
+	private clampConcurrency(concurrency: number): number {
+		return Math.min(Math.max(concurrency, 1), this.maxConcurrency);
 	}
 }

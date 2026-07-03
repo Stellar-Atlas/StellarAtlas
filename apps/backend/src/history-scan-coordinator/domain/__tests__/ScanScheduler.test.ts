@@ -165,6 +165,33 @@ it('should prioritize errored archive rechecks before normal scans', () => {
 	expect(jobs[0].isNewScanChainJob()).toBeFalsy();
 });
 
+it('should cap errored archive recheck concurrency to the configured maximum', () => {
+	const scheduler = new RestartAtLeastOneScan(24);
+	const archive = createDummyHistoryBaseUrl();
+	const previousErroredScan = new Scan(
+		new Date('01-01-2020'),
+		new Date('01-03-2020'),
+		new Date('01-03-2020'),
+		archive,
+		128,
+		255,
+		127,
+		'hash',
+		50,
+		false,
+		new ScanError(
+			ScanErrorType.TYPE_VERIFICATION,
+			`${archive.value}/transactions/00/00/00/transactions-000000bf.xdr.gz`,
+			'Wrong transaction hash'
+		)
+	);
+
+	const jobs = scheduler.schedule([archive.value], [previousErroredScan]);
+
+	expect(jobs).toHaveLength(1);
+	expect(jobs[0].concurrency).toEqual(24);
+});
+
 it('should schedule an errored archive recheck when a regular scan is already pending', () => {
 	const scheduler = new RestartAtLeastOneScan();
 	const archive = createDummyHistoryBaseUrl();
