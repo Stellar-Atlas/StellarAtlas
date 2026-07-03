@@ -72,6 +72,14 @@ export interface NetworkSearchFacetValue {
 	readonly value: string;
 }
 
+export type NetworkSearchFallbackReason =
+	'meilisearch_unavailable' | 'meilisearch_unconfigured';
+
+export interface NetworkSearchReadModel {
+	readonly fallbackReason: NetworkSearchFallbackReason | null;
+	readonly schemaVersion: string;
+}
+
 export type NetworkSearchFacets = Record<
 	NetworkSearchFacetName,
 	readonly NetworkSearchFacetValue[]
@@ -83,5 +91,6 @@ export interface NetworkSearchResponse {
 	readonly hits: readonly NetworkSearchHit[];
 	readonly indexedNetworkTime: string;
 	readonly query: string;
+	readonly readModel: NetworkSearchReadModel;
 	readonly source: 'memory' | 'meilisearch';
 }

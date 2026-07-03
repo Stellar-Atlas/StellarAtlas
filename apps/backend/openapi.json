@@ -229,103 +229,7 @@
 						"content": {
 							"application/json": {
 								"schema": {
-									"type": "object",
-									"properties": {
-										"estimatedTotalHits": { "type": "integer" },
-										"facets": {
-											"type": "object",
-											"properties": {
-												"active": {
-													"type": "array",
-													"items": {
-														"$ref": "#/components/schemas/SearchFacetValue"
-													}
-												},
-												"archiveStatus": {
-													"type": "array",
-													"items": {
-														"$ref": "#/components/schemas/SearchFacetValue"
-													}
-												},
-												"countryCode": {
-													"type": "array",
-													"items": {
-														"$ref": "#/components/schemas/SearchFacetValue"
-													}
-												},
-												"entityType": {
-													"type": "array",
-													"items": {
-														"$ref": "#/components/schemas/SearchFacetValue"
-													}
-												},
-												"fullValidator": {
-													"type": "array",
-													"items": {
-														"$ref": "#/components/schemas/SearchFacetValue"
-													}
-												},
-												"topTier": {
-													"type": "array",
-													"items": {
-														"$ref": "#/components/schemas/SearchFacetValue"
-													}
-												},
-												"validating": {
-													"type": "array",
-													"items": {
-														"$ref": "#/components/schemas/SearchFacetValue"
-													}
-												},
-												"validator": {
-													"type": "array",
-													"items": {
-														"$ref": "#/components/schemas/SearchFacetValue"
-													}
-												}
-											}
-										},
-										"hits": {
-											"type": "array",
-											"items": {
-												"type": "object",
-												"properties": {
-													"detail": { "type": "string" },
-													"entityId": { "type": "string" },
-													"entityType": {
-														"type": "string",
-														"enum": ["node", "organization"]
-													},
-													"href": { "type": "string" },
-													"id": { "type": "string" },
-													"label": { "type": "string" },
-													"organizationName": { "type": "string" }
-												},
-												"required": [
-													"detail",
-													"entityId",
-													"entityType",
-													"href",
-													"id",
-													"label"
-												]
-											}
-										},
-										"indexedNetworkTime": { "type": "string" },
-										"query": { "type": "string" },
-										"source": {
-											"type": "string",
-											"enum": ["memory", "meilisearch"]
-										}
-									},
-									"required": [
-										"estimatedTotalHits",
-										"facets",
-										"hits",
-										"indexedNetworkTime",
-										"query",
-										"source"
-									]
+									"$ref": "#/components/schemas/SearchResponse"
 								}
 							}
 						}
@@ -420,8 +324,7 @@
 						"content": {
 							"application/json": {
 								"schema": {
-									"type": "object",
-									"additionalProperties": true
+									"$ref": "#/components/schemas/SearchResponse"
 								}
 							}
 						}
@@ -473,8 +376,7 @@
 						"content": {
 							"application/json": {
 								"schema": {
-									"type": "object",
-									"additionalProperties": true
+									"$ref": "#/components/schemas/SearchResponse"
 								}
 							}
 						}
@@ -4442,6 +4344,108 @@
 				"properties": {
 					"count": { "type": "integer" },
 					"value": { "type": "string" }
+				}
+			},
+			"SearchFacets": {
+				"type": "object",
+				"required": [
+					"active",
+					"archiveStatus",
+					"countryCode",
+					"entityType",
+					"fullValidator",
+					"topTier",
+					"validating",
+					"validator"
+				],
+				"properties": {
+					"active": {
+						"type": "array",
+						"items": { "$ref": "#/components/schemas/SearchFacetValue" }
+					},
+					"archiveStatus": {
+						"type": "array",
+						"items": { "$ref": "#/components/schemas/SearchFacetValue" }
+					},
+					"countryCode": {
+						"type": "array",
+						"items": { "$ref": "#/components/schemas/SearchFacetValue" }
+					},
+					"entityType": {
+						"type": "array",
+						"items": { "$ref": "#/components/schemas/SearchFacetValue" }
+					},
+					"fullValidator": {
+						"type": "array",
+						"items": { "$ref": "#/components/schemas/SearchFacetValue" }
+					},
+					"topTier": {
+						"type": "array",
+						"items": { "$ref": "#/components/schemas/SearchFacetValue" }
+					},
+					"validating": {
+						"type": "array",
+						"items": { "$ref": "#/components/schemas/SearchFacetValue" }
+					},
+					"validator": {
+						"type": "array",
+						"items": { "$ref": "#/components/schemas/SearchFacetValue" }
+					}
+				}
+			},
+			"SearchHit": {
+				"type": "object",
+				"required": ["detail", "entityId", "entityType", "href", "id", "label"],
+				"properties": {
+					"detail": { "type": "string" },
+					"entityId": { "type": "string" },
+					"entityType": {
+						"type": "string",
+						"enum": ["node", "organization"]
+					},
+					"href": { "type": "string" },
+					"id": { "type": "string" },
+					"label": { "type": "string" },
+					"organizationName": { "type": "string" }
+				}
+			},
+			"SearchReadModel": {
+				"type": "object",
+				"required": ["fallbackReason", "schemaVersion"],
+				"properties": {
+					"fallbackReason": {
+						"type": "string",
+						"nullable": true,
+						"enum": ["meilisearch_unavailable", "meilisearch_unconfigured"]
+					},
+					"schemaVersion": { "type": "string", "enum": ["v1"] }
+				}
+			},
+			"SearchResponse": {
+				"type": "object",
+				"required": [
+					"estimatedTotalHits",
+					"facets",
+					"hits",
+					"indexedNetworkTime",
+					"query",
+					"readModel",
+					"source"
+				],
+				"properties": {
+					"estimatedTotalHits": { "type": "integer" },
+					"facets": { "$ref": "#/components/schemas/SearchFacets" },
+					"hits": {
+						"type": "array",
+						"items": { "$ref": "#/components/schemas/SearchHit" }
+					},
+					"indexedNetworkTime": { "type": "string" },
+					"query": { "type": "string" },
+					"readModel": { "$ref": "#/components/schemas/SearchReadModel" },
+					"source": {
+						"type": "string",
+						"enum": ["memory", "meilisearch"]
+					}
 				}
 			}
 		}

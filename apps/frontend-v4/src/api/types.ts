@@ -79,6 +79,11 @@ export interface PublicSearchResponse {
 	readonly hits: readonly PublicSearchHit[];
 	readonly indexedNetworkTime: string;
 	readonly query: string;
+	readonly readModel: {
+		readonly fallbackReason:
+			'meilisearch_unavailable' | 'meilisearch_unconfigured' | null;
+		readonly schemaVersion: string;
+	};
 	readonly source: 'memory' | 'meilisearch';
 }
 

@@ -1,4 +1,5 @@
 import { Meilisearch, type Index } from 'meilisearch';
+import { networkSearchIndexSchemaVersion } from '@core/config/SearchConfigDefaults.js';
 import type { NetworkV1 } from 'shared';
 import { buildNetworkSearchDocuments } from './NetworkSearchDocumentBuilder.js';
 import type {
@@ -7,7 +8,9 @@ import type {
 	NetworkSearchFacetName,
 	NetworkSearchFacets,
 	NetworkSearchFacetValue,
+	NetworkSearchFallbackReason,
 	NetworkSearchHit,
+	NetworkSearchReadModel,
 	NetworkSearchRequest,
 	NetworkSearchResponse
 } from './NetworkSearchTypes.js';
@@ -180,7 +183,8 @@ const buildFacetsFromDocuments = (
 const memorySearch = (
 	documents: readonly NetworkSearchDocument[],
 	request: NetworkSearchRequest,
-	networkTime: string
+	networkTime: string,
+	readModel: NetworkSearchReadModel
 ): NetworkSearchResponse => {
 	const matching = documents.filter((document) =>
 		matchesDocument(document, request)
@@ -192,6 +196,7 @@ const memorySearch = (
 		hits: matching.slice(0, sanitizeLimit(request.limit)).map(toHit),
 		indexedNetworkTime: networkTime,
 		query: request.query,
+		readModel,
 		source: 'memory'
 	};
 };
@@ -254,6 +259,13 @@ const assertTaskSucceeded = (status: string, taskName: string): void => {
 		throw new Error(`Meilisearch ${taskName} task ended with ${status}`);
 };
 
+const readModel = (
+	fallbackReason: NetworkSearchFallbackReason | null
+): NetworkSearchReadModel => ({
+	fallbackReason,
+	schemaVersion: networkSearchIndexSchemaVersion
+});
+
 export class NetworkSearchService {
 	private documents: readonly NetworkSearchDocument[] = [];
 	private indexedNetworkTime: string | undefined;
@@ -278,7 +290,12 @@ export class NetworkSearchService {
 		this.refreshDocuments(network);
 
 		if (!this.index) {
-			return memorySearch(this.documents, request, network.time);
+			return memorySearch(
+				this.documents,
+				request,
+				network.time,
+				readModel('meilisearch_unconfigured')
+			);
 		}
 
 		try {
@@ -300,10 +317,16 @@ export class NetworkSearchService {
 				hits: response.hits.map(toHit),
 				indexedNetworkTime: network.time,
 				query: request.query,
+				readModel: readModel(null),
 				source: 'meilisearch'
 			};
 		} catch {
-			return memorySearch(this.documents, request, network.time);
+			return memorySearch(
+				this.documents,
+				request,
+				network.time,
+				readModel('meilisearch_unavailable')
+			);
 		}
 	}
 

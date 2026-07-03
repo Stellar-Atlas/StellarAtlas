@@ -5,6 +5,7 @@ import { Url } from '../domain/Url.js';
 import { CrawlerConfiguration } from 'crawler';
 import { resolveAppEnvPath } from 'shared/lib/env/resolve-app-env-path.js';
 import { parseOptionalUrl } from './parseOptionalUrl.js';
+import { defaultMeilisearchNetworkIndex } from './SearchConfigDefaults.js';
 
 config({
 	path: resolveAppEnvPath(import.meta.url, 'backend'),
@@ -106,7 +107,7 @@ export class DefaultConfig implements Config {
 	logLevel = 'info';
 	meilisearchApiKey?: string;
 	meilisearchHost?: string;
-	meilisearchNetworkIndex = 'stellaratlas_network_entities';
+	meilisearchNetworkIndex = defaultMeilisearchNetworkIndex;
 	networkScanLoopIntervalMs?: number;
 	historyScanAPIUsername?: string;
 	historyScanAPIPassword?: string;

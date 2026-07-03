@@ -27,6 +27,10 @@ describe('NetworkSearchService', () => {
 		});
 
 		expect(result.source).toBe('memory');
+		expect(result.readModel).toEqual({
+			fallbackReason: 'meilisearch_unconfigured',
+			schemaVersion: 'v1'
+		});
 		expect(result.hits.map((hit) => hit.label)).toContain(
 			'Stellar Development Foundation'
 		);
@@ -97,5 +101,27 @@ describe('NetworkSearchService', () => {
 		expect(result.facets.entityType).toEqual([{ count: 1, value: 'node' }]);
 		expect(result.facets.fullValidator).toEqual([{ count: 1, value: 'true' }]);
 		expect(result.facets.validator).toEqual([{ count: 1, value: 'true' }]);
+	});
+
+	it('falls back to memory with non-secret evidence when Meilisearch is unavailable', async () => {
+		const node = createDummyNodeV1('GA_UNAVAILABLE_MEILI');
+		node.name = 'Fallback validator';
+		const network = createDummyNetworkV1([node], []);
+		const service = new NetworkSearchService({
+			host: 'http://127.0.0.1:9',
+			indexName: 'test_network_entities_v1'
+		});
+
+		const result = await service.search(network, {
+			limit: 8,
+			query: 'fallback'
+		});
+
+		expect(result.source).toBe('memory');
+		expect(result.readModel).toEqual({
+			fallbackReason: 'meilisearch_unavailable',
+			schemaVersion: 'v1'
+		});
+		expect(result.hits.map((hit) => hit.entityId)).toEqual([node.publicKey]);
 	});
 });

@@ -1,4 +1,5 @@
 import { getConfigFromEnv, parseNetworkConfig } from '../Config.js';
+import { defaultMeilisearchNetworkIndex } from '../SearchConfigDefaults.js';
 
 describe('Config', function () {
 	describe('S3Region', function () {
@@ -30,6 +31,40 @@ describe('Config', function () {
 			if (!config.isOk()) throw config.error;
 
 			expect(config.value.networkScanLoopIntervalMs).toBeUndefined();
+		});
+	});
+
+	describe('meilisearchNetworkIndex', function () {
+		const originalIndex = process.env.MEILISEARCH_NETWORK_INDEX;
+
+		afterEach(() => {
+			if (originalIndex === undefined) {
+				delete process.env.MEILISEARCH_NETWORK_INDEX;
+			} else {
+				process.env.MEILISEARCH_NETWORK_INDEX = originalIndex;
+			}
+		});
+
+		test('defaults to the versioned network search index', function () {
+			delete process.env.MEILISEARCH_NETWORK_INDEX;
+
+			const config = getConfigFromEnv();
+			expect(config.isOk()).toBe(true);
+			if (!config.isOk()) throw config.error;
+
+			expect(config.value.meilisearchNetworkIndex).toBe(
+				defaultMeilisearchNetworkIndex
+			);
+		});
+
+		test('allows an explicit network search index override', function () {
+			process.env.MEILISEARCH_NETWORK_INDEX = 'custom_network_index';
+
+			const config = getConfigFromEnv();
+			expect(config.isOk()).toBe(true);
+			if (!config.isOk()) throw config.error;
+
+			expect(config.value.meilisearchNetworkIndex).toBe('custom_network_index');
 		});
 	});
 
