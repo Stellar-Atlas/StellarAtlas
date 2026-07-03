@@ -17,7 +17,9 @@ describe('GetScanLogs', () => {
 	let scanJobRepositoryMock: MockProxy<ScanJobRepository>;
 	let exceptionLoggerMock: MockProxy<ExceptionLogger>;
 
-	const historyUrlResult = Url.create('https://stellar-full-history2.bdnodes.net');
+	const historyUrlResult = Url.create(
+		'https://stellar-full-history2.bdnodes.net'
+	);
 	if (historyUrlResult.isErr()) throw historyUrlResult.error;
 	const historyUrl = historyUrlResult.value;
 
@@ -32,7 +34,8 @@ describe('GetScanLogs', () => {
 		);
 	});
 
-	it('hides completed worker-only setup failures from public scan logs', async () => {
+	it('returns active jobs, stale jobs, archive errors, worker issues, and successes as distinct log entries', async () => {
+		const now = Date.now();
 		const activeJob = new ScanJob(
 			historyUrl.value,
 			58_583_679,
@@ -44,8 +47,22 @@ describe('GetScanLogs', () => {
 			'6e2a0f88-6b73-44b0-8fd7-e061bc846ac2'
 		);
 		activeJob.status = 'TAKEN';
-		activeJob.createdAt = new Date('2026-07-03T01:00:00.000Z');
-		activeJob.updatedAt = new Date('2026-07-03T01:01:00.000Z');
+		activeJob.createdAt = new Date(now - 60_000);
+		activeJob.updatedAt = new Date(now - 30_000);
+
+		const staleJob = new ScanJob(
+			historyUrl.value,
+			58_583_600,
+			null,
+			new Date('2026-07-03T00:00:00.000Z'),
+			58_583_601,
+			58_584_000,
+			32,
+			'9a1c0e8d-41aa-41c4-8b21-779671b6f003'
+		);
+		staleJob.status = 'TAKEN';
+		staleJob.createdAt = new Date(now - 60 * 60_000);
+		staleJob.updatedAt = new Date(now - 31 * 60_000);
 
 		const workerOnlyFailure = createScan(
 			new Date('2026-07-01T13:23:00.000Z'),
@@ -71,7 +88,10 @@ describe('GetScanLogs', () => {
 			null
 		);
 
-		scanJobRepositoryMock.findActiveByUrl.mockResolvedValue([activeJob]);
+		scanJobRepositoryMock.findActiveByUrl.mockResolvedValue([
+			activeJob,
+			staleJob
+		]);
 		scanRepositoryMock.findRecentByUrl.mockResolvedValue([
 			workerOnlyFailure,
 			archiveVerificationFailure,
@@ -86,21 +106,27 @@ describe('GetScanLogs', () => {
 			historyUrl.value,
 			50
 		);
-		expect(logs).toHaveLength(3);
+		expect(logs).toHaveLength(5);
 		expect(logs.map((log) => log.status)).toEqual([
 			'scanning',
+			'stale',
+			'completed',
 			'completed',
 			'completed'
 		]);
-		expect(
-			logs.some((log) =>
-				log.errors.some(
-					(error) => error.message === 'Could not fetch latest ledger'
-				)
-			)
-		).toBe(false);
-		expect(logs[1].hasArchiveVerificationError).toBe(true);
-		expect(logs[1].errors[0]?.message).toBe('Wrong transaction hash');
+		expect(logs[0].hasWorkerIssue).toBe(false);
+		expect(logs[1].hasWorkerIssue).toBe(true);
+		expect(logs[1].hasArchiveVerificationError).toBe(false);
+		expect(logs[1].errors[0]).toEqual({
+			message: 'Scanner heartbeat is stale',
+			type: 'TYPE_CONNECTION',
+			url: historyUrl.value
+		});
+		expect(logs[2].hasWorkerIssue).toBe(true);
+		expect(logs[2].hasArchiveVerificationError).toBe(false);
+		expect(logs[2].errors[0]?.message).toBe('Could not fetch latest ledger');
+		expect(logs[3].hasArchiveVerificationError).toBe(true);
+		expect(logs[3].errors[0]?.message).toBe('Wrong transaction hash');
 	});
 
 	function createScan(

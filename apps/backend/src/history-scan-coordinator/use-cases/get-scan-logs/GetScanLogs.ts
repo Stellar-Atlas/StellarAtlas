@@ -12,8 +12,10 @@ import { InvalidUrlError } from '../get-latest-scan/InvalidUrlError.js';
 import { mapUnknownToError } from '@core/utilities/mapUnknownToError.js';
 import type { ScanJobRepository } from '../../domain/ScanJobRepository.js';
 import type { ScanJob } from '../../domain/ScanJob.js';
+import { getStaleScanJobCutoff } from '../../domain/ScanJobStaleness.js';
 
-export type HistoryArchiveScanLogStatus = 'completed' | 'queued' | 'scanning';
+export type HistoryArchiveScanLogStatus =
+	'completed' | 'queued' | 'scanning' | 'stale';
 
 export interface HistoryArchiveScanLogEntryDTO {
 	readonly concurrency: number;
@@ -46,6 +48,7 @@ export class GetScanLogs {
 	private static readonly maxStoredScansToInspect = 50;
 	private static readonly maxActiveJobs = 3;
 	private static readonly maxVisibleConcurrency = 24;
+	private static readonly staleJobMessage = 'Scanner heartbeat is stale';
 
 	constructor(
 		@inject(TYPES.HistoryArchiveScanRepository)
@@ -58,10 +61,7 @@ export class GetScanLogs {
 	async execute(
 		url: string
 	): Promise<
-		Result<
-			readonly HistoryArchiveScanLogEntryDTO[],
-			InvalidUrlError | Error
-		>
+		Result<readonly HistoryArchiveScanLogEntryDTO[], InvalidUrlError | Error>
 	> {
 		const urlOrError = Url.create(url);
 		if (urlOrError.isErr()) return err(new InvalidUrlError(url));
@@ -79,9 +79,7 @@ export class GetScanLogs {
 				)
 			]);
 
-			const publicCompletedScans = scans
-				.filter((scan) => this.shouldShowCompletedScan(scan))
-				.slice(0, GetScanLogs.maxEntries);
+			const publicCompletedScans = scans.slice(0, GetScanLogs.maxEntries);
 
 			return ok([
 				...activeJobs.map((job) => this.mapActiveJob(job)),
@@ -98,6 +96,17 @@ export class GetScanLogs {
 		const now = new Date();
 		const startDate = job.createdAt ?? now;
 		const updatedAt = job.updatedAt ?? now;
+		const status = this.mapJobStatus(job, updatedAt, now);
+		const errors =
+			status === 'stale'
+				? [
+						{
+							message: GetScanLogs.staleJobMessage,
+							type: ScanErrorType[ScanErrorType.TYPE_CONNECTION],
+							url: job.url
+						}
+					]
+				: [];
 		const fromLedger =
 			job.fromLedger ??
 			(job.latestScannedLedger > 0 ? job.latestScannedLedger + 1 : 0);
@@ -106,32 +115,41 @@ export class GetScanLogs {
 			concurrency: this.mapVisibleConcurrency(job.concurrency),
 			durationMs: now.getTime() - startDate.getTime(),
 			endDate: updatedAt,
-			errors: [],
+			errors,
 			fromLedger,
 			hasArchiveVerificationError: false,
 			hasError: false,
-			hasWorkerIssue: false,
+			hasWorkerIssue: status === 'stale',
 			isSlowArchive: false,
 			latestScannedLedger: job.latestScannedLedger,
 			latestVerifiedLedger: job.latestScannedLedger,
 			startDate,
-			status: job.status === 'TAKEN' ? 'scanning' : 'queued',
+			status,
 			toLedger: job.toLedger,
 			updatedAt,
 			url: job.url
 		};
 	}
 
+	private mapJobStatus(
+		job: ScanJob,
+		updatedAt: Date,
+		now: Date
+	): HistoryArchiveScanLogStatus {
+		if (
+			job.status === 'TAKEN' &&
+			updatedAt.getTime() < getStaleScanJobCutoff(now).getTime()
+		) {
+			return 'stale';
+		}
+
+		return job.status === 'TAKEN' ? 'scanning' : 'queued';
+	}
+
 	private mapVisibleConcurrency(concurrency: number | null): number {
 		if (concurrency === null) return 0;
 
 		return Math.min(concurrency, GetScanLogs.maxVisibleConcurrency);
-	}
-
-	private shouldShowCompletedScan(scan: Scan): boolean {
-		if (scan.hasArchiveVerificationError()) return true;
-
-		return !scan.hasWorkerIssue();
 	}
 
 	private mapScan(scan: Scan): HistoryArchiveScanLogEntryDTO {

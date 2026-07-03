@@ -35,7 +35,7 @@ export interface PublicHistoryArchiveScanLogEntry {
 	readonly latestScannedLedger: number;
 	readonly latestVerifiedLedger: number;
 	readonly startDate: string;
-	readonly status: 'completed' | 'queued' | 'scanning';
+	readonly status: 'completed' | 'queued' | 'scanning' | 'stale';
 	readonly toLedger: number | null;
 	readonly updatedAt: string;
 	readonly url: string;

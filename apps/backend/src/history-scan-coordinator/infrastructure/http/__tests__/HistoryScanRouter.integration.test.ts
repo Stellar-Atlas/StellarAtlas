@@ -82,6 +82,45 @@ describe('HistoryScanRouter.integration', () => {
 				});
 		});
 
+		it('should reject unsupported scan error types', async () => {
+			const urlResult = Url.create('https://test.com');
+			if (urlResult.isErr()) throw urlResult.error;
+
+			const body = {
+				startDate: new Date().toISOString(),
+				endDate: new Date().toISOString(),
+				baseUrl: urlResult.value.value,
+				scanChainInitDate: new Date().toISOString(),
+				latestVerifiedLedger: 100,
+				latestScannedLedger: 100,
+				latestScannedLedgerHeaderHash: null,
+				concurrency: 5,
+				isSlowArchive: false,
+				fromLedger: 0,
+				toLedger: null,
+				error: null,
+				errors: [
+					{
+						message: 'Unknown scanner failure',
+						type: 'TYPE_UNKNOWN',
+						url: urlResult.value.value
+					}
+				],
+				scanJobRemoteId: 'test'
+			};
+
+			await request(app)
+				.post('/history-scan')
+				.auth('admin', 'secret')
+				.send(body)
+				.expect(400)
+				.expect((response) => {
+					expect(response.body.errors).toBeDefined();
+				});
+
+			expect(registerScan.execute).not.toHaveBeenCalled();
+		});
+
 		it('should register a new scan', async () => {
 			const urlResult = Url.create('https://test.com');
 			if (urlResult.isErr()) throw urlResult.error;

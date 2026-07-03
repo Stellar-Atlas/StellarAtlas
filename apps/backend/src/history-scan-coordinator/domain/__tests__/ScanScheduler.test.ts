@@ -165,6 +165,37 @@ it('should prioritize errored archive rechecks before normal scans', () => {
 	expect(jobs[0].isNewScanChainJob()).toBeFalsy();
 });
 
+it('should not prioritize worker-only setup failures as archive rechecks', () => {
+	const scheduler = new RestartAtLeastOneScan();
+	const archive = createDummyHistoryBaseUrl();
+	const previousWorkerFailure = new Scan(
+		new Date('01-01-2020'),
+		new Date('01-03-2020'),
+		new Date('01-03-2020'),
+		archive,
+		0,
+		null,
+		0,
+		null,
+		0,
+		false,
+		new ScanError(
+			ScanErrorType.TYPE_CONNECTION,
+			archive.value,
+			'Could not fetch latest ledger'
+		)
+	);
+
+	const jobs = scheduler.schedule(
+		[archive.value],
+		[previousWorkerFailure],
+		[],
+		{ includeRegularJobs: false }
+	);
+
+	expect(jobs).toHaveLength(0);
+});
+
 it('should cap errored archive recheck concurrency to the configured maximum', () => {
 	const scheduler = new RestartAtLeastOneScan(24);
 	const archive = createDummyHistoryBaseUrl();
@@ -329,6 +360,42 @@ it('should recheck through the latest known errored ledger', () => {
 	expect(jobs).toHaveLength(1);
 	expect(jobs[0].fromLedger).toEqual(128);
 	expect(jobs[0].toLedger).toEqual(223);
+});
+
+it('should ignore worker issues when deriving archive recheck range', () => {
+	const scheduler = new RestartAtLeastOneScan();
+	const archive = createDummyHistoryBaseUrl();
+	const previousErroredScan = new Scan(
+		new Date('01-01-2020'),
+		new Date('01-03-2020'),
+		new Date('01-03-2020'),
+		archive,
+		128,
+		255,
+		127,
+		'hash',
+		4,
+		false,
+		null,
+		[
+			new ScanError(
+				ScanErrorType.TYPE_VERIFICATION,
+				`${archive.value}/ledger/00/00/00/ledger-000000bf.xdr.gz`,
+				'Missing ledger'
+			),
+			new ScanError(
+				ScanErrorType.TYPE_CONNECTION,
+				archive.value,
+				'Could not fetch latest ledger'
+			)
+		]
+	);
+
+	const jobs = scheduler.schedule([archive.value], [previousErroredScan]);
+
+	expect(jobs).toHaveLength(1);
+	expect(jobs[0].fromLedger).toEqual(128);
+	expect(jobs[0].toLedger).toEqual(191);
 });
 
 it('should recheck the failed scan range when a known error has no ledger', () => {

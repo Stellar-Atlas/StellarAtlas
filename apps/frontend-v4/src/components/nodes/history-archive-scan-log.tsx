@@ -2,15 +2,12 @@
 
 import { useMemo, useState } from 'react';
 import type { PublicHistoryArchiveScanLogEntry } from '../../api/types';
-import {
-	formatDateTime,
-	formatInteger
-} from '../../format/formatters';
+import { formatDateTime, formatInteger } from '../../format/formatters';
 import {
 	getArchiveVerificationErrors,
 	getWorkerIssues,
 	scanLogHasArchiveVerificationError,
-	scanLogHasWorkerIssueOnly,
+	scanLogHasWorkerIssue,
 	scanLogIsActive
 } from '../../domain/history-archive';
 
@@ -27,26 +24,24 @@ export function HistoryArchiveScanLog({
 	const filteredLogs = useMemo(
 		() =>
 			logs.filter((entry) => {
-				if (scanLogIsActive(entry)) return true;
 				if (filter === 'archive-errors') {
 					return scanLogHasArchiveVerificationError(entry);
 				}
-				if (filter === 'worker-issues')
-					return scanLogHasWorkerIssueOnly(entry);
+				if (filter === 'worker-issues') return scanLogHasWorkerIssue(entry);
 
 				return true;
 			}),
 		[filter, logs]
 	);
-	const archiveErrorCount = logs.filter(scanLogHasArchiveVerificationError).length;
-	const workerIssueCount = logs.filter(scanLogHasWorkerIssueOnly).length;
+	const archiveErrorCount = logs.filter(
+		scanLogHasArchiveVerificationError
+	).length;
+	const workerIssueCount = logs.filter(scanLogHasWorkerIssue).length;
 	const activeCount = logs.filter(scanLogIsActive).length;
 
 	if (logs.length === 0) {
 		return (
-			<p className="muted-copy">
-				No archive scan jobs are available yet.
-			</p>
+			<p className="muted-copy">No archive scan jobs are available yet.</p>
 		);
 	}
 
@@ -58,11 +53,9 @@ export function HistoryArchiveScanLog({
 					<span> recent scan jobs</span>
 					<span className="muted-inline">
 						{' '}
-						/ {formatInteger(activeCount)} active
-						{' '}
-						/ {formatInteger(archiveErrorCount)} archive errors
-						{' '}
-						/ {formatInteger(workerIssueCount)} worker issues
+						/ {formatInteger(activeCount)} active /{' '}
+						{formatInteger(archiveErrorCount)} archive errors /{' '}
+						{formatInteger(workerIssueCount)} worker issues
 					</span>
 				</div>
 				<div className="segmented" aria-label="Archive scan log filter">
@@ -78,7 +71,7 @@ export function HistoryArchiveScanLog({
 						onClick={() => setFilter('worker-issues')}
 						type="button"
 					>
-						Worker-only issues
+						Worker issues
 					</button>
 					<button
 						className={filter === 'all' ? 'active' : ''}
@@ -112,17 +105,26 @@ export function HistoryArchiveScanLog({
 							rowTag = entry.status;
 						} else if (hasArchiveErrors) {
 							rowTone = 'has-error';
-							rowTitle = 'Archive verification errors';
-							rowTag = 'archive error';
+							rowTitle = hasWorkerIssues
+								? 'Archive and worker issues'
+								: 'Archive verification errors';
+							rowTag = hasWorkerIssues ? 'archive + worker' : 'archive error';
+						} else if (entry.status === 'stale') {
+							rowTone = 'has-error';
+							rowTitle = 'Stale scanner job';
+							rowTag = 'worker issue';
 						} else if (hasWorkerIssues) {
 							rowTone = 'has-error';
 							rowTitle = 'Worker issues';
 							rowTag = 'worker issue';
 						}
 
-						const rowErrors = hasArchiveErrors
-							? archiveErrors
-							: workerIssues;
+						const rowErrors =
+							filter === 'worker-issues' && hasWorkerIssues
+								? workerIssues
+								: hasArchiveErrors
+									? archiveErrors
+									: workerIssues;
 
 						return (
 							<li
@@ -134,9 +136,7 @@ export function HistoryArchiveScanLog({
 										<strong>{rowTitle}</strong>
 										<span>{formatDateTime(entry.endDate)}</span>
 									</div>
-									<span className={getRowTagClassName(rowTone)}>
-										{rowTag}
-									</span>
+									<span className={getRowTagClassName(rowTone)}>{rowTag}</span>
 								</div>
 								<dl className="archive-scan-log-metrics">
 									<div>

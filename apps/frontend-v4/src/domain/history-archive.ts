@@ -7,12 +7,15 @@ import type {
 const verificationErrorType = 'TYPE_VERIFICATION';
 
 export const isArchiveVerificationError = (
-	error: PublicHistoryArchiveScanLogError | PublicHistoryArchiveScan['errors'][number]
+	error:
+		| PublicHistoryArchiveScanLogError
+		| PublicHistoryArchiveScan['errors'][number]
 ): boolean => error.type === verificationErrorType;
 
 export const getArchiveVerificationErrors = (
 	errors: readonly (
-		PublicHistoryArchiveScanLogError | PublicHistoryArchiveScan['errors'][number]
+		| PublicHistoryArchiveScanLogError
+		| PublicHistoryArchiveScan['errors'][number]
 	)[]
 ): PublicHistoryArchiveScanLogError[] =>
 	errors.filter(isArchiveVerificationError).map((error) => ({
@@ -23,26 +26,29 @@ export const getArchiveVerificationErrors = (
 
 export const getWorkerIssues = (
 	errors: readonly (
-		PublicHistoryArchiveScanLogError | PublicHistoryArchiveScan['errors'][number]
+		| PublicHistoryArchiveScanLogError
+		| PublicHistoryArchiveScan['errors'][number]
 	)[]
 ): PublicHistoryArchiveScanLogError[] =>
-	errors.filter((error) => !isArchiveVerificationError(error)).map((error) => ({
-		message: error.message,
-		type: error.type,
-		url: error.url
-	}));
+	errors
+		.filter((error) => !isArchiveVerificationError(error))
+		.map((error) => ({
+			message: error.message,
+			type: error.type,
+			url: error.url
+		}));
 
 export const scanLogHasArchiveVerificationError = (
 	entry: PublicHistoryArchiveScanLogEntry
 ): boolean =>
-	entry.hasArchiveVerificationError ??
-	entry.errors.some(isArchiveVerificationError);
+	entry.errors.some(isArchiveVerificationError) ||
+	(entry.errors.length === 0 && entry.hasArchiveVerificationError === true);
 
 export const scanLogHasWorkerIssue = (
 	entry: PublicHistoryArchiveScanLogEntry
 ): boolean =>
-	entry.hasWorkerIssue ??
-	entry.errors.some((error) => !isArchiveVerificationError(error));
+	entry.errors.some((error) => !isArchiveVerificationError(error)) ||
+	entry.hasWorkerIssue === true;
 
 export const scanLogHasWorkerIssueOnly = (
 	entry: PublicHistoryArchiveScanLogEntry

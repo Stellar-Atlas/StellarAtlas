@@ -3,6 +3,7 @@ import { Scan } from './scan/Scan.js';
 import { ScanJob } from './ScanJob.js';
 import { Url } from 'http-helper';
 import { extractLedgerFromHistoryArchiveUrl } from './scan/extractLedgerFromHistoryArchiveUrl.js';
+import { ScanErrorType } from './scan/ScanError.js';
 
 export interface ScanScheduler {
 	schedule(
@@ -53,7 +54,10 @@ export class RestartAtLeastOneScan implements ScanScheduler {
 		);
 		const errorRecheckJobs = archivesReadyForErrorRecheck
 			.map((archive) => previousScansMap.get(archive))
-			.filter((scan): scan is Scan => scan !== undefined && scan.hasError())
+			.filter(
+				(scan): scan is Scan =>
+					scan !== undefined && scan.hasArchiveVerificationError()
+			)
 			.map((scan) => this.createErrorRecheckJob(scan));
 
 		if (errorRecheckJobs.length > 0) return errorRecheckJobs;
@@ -134,10 +138,12 @@ export class RestartAtLeastOneScan implements ScanScheduler {
 		previousScan: Scan,
 		fromLedger: number
 	): number | null {
-		const scanErrors = previousScan.scanErrors;
-		if (scanErrors.length === 0) return previousScan.toLedger;
+		const archiveVerificationErrors = previousScan.scanErrors.filter(
+			(error) => error.type === ScanErrorType.TYPE_VERIFICATION
+		);
+		if (archiveVerificationErrors.length === 0) return previousScan.toLedger;
 
-		const errorLedgers = scanErrors.map((error) =>
+		const errorLedgers = archiveVerificationErrors.map((error) =>
 			extractLedgerFromHistoryArchiveUrl(error.url)
 		);
 		if (errorLedgers.some((ledger) => ledger === null))

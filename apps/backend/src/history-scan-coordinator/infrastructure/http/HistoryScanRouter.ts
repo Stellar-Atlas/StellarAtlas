@@ -93,20 +93,14 @@ export const HistoryScanRouterWrapper = (
 					.withMessage('Invalid scan job remoteId'),
 				body('error').custom((value) => {
 					if (value === null) return true;
-					return typeof value === 'object';
+					return isValidScanErrorPayload(value);
 				}),
 				body('errors')
 					.optional()
 					.isArray()
 					.withMessage('errors must be an array'),
 				body('errors.*').custom((value) => {
-					return (
-						typeof value === 'object' &&
-						value !== null &&
-						typeof value.type === 'string' &&
-						typeof value.url === 'string' &&
-						typeof value.message === 'string'
-					);
+					return isValidScanErrorPayload(value);
 				})
 			],
 			async (req: express.Request, res: express.Response) => {
@@ -263,3 +257,19 @@ const triggerFrontendRevalidation = (
 };
 
 export { HistoryScanRouterWrapper as historyScanRouter };
+
+const isValidScanErrorPayload = (value: unknown): boolean => {
+	if (typeof value !== 'object' || value === null) return false;
+
+	const candidate = value as Record<string, unknown>;
+	return (
+		isAllowedScanErrorType(candidate.type) &&
+		typeof candidate.url === 'string' &&
+		typeof candidate.message === 'string'
+	);
+};
+
+const isAllowedScanErrorType = (
+	value: unknown
+): value is 'TYPE_VERIFICATION' | 'TYPE_CONNECTION' =>
+	value === 'TYPE_VERIFICATION' || value === 'TYPE_CONNECTION';
