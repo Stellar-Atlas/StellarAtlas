@@ -47,6 +47,7 @@ const directorySourceAliases = aliasPattern([
 	'connection',
 	'console-interface',
 	'core',
+	'cross-check',
 	'domain',
 	'dto',
 	'env',

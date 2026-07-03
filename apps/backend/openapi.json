@@ -49,6 +49,10 @@
 			"description": "Public service, worker, queue, and data-freshness status"
 		},
 		{
+			"name": "CrossCheck",
+			"description": "External source catalog and cross-reference review endpoints"
+		},
+		{
 			"name": "SCP",
 			"description": "Observed Stellar Consensus Protocol statements"
 		},
@@ -1195,6 +1199,87 @@
 										"communityScanners": {
 											"type": "object",
 											"additionalProperties": true
+										}
+									}
+								}
+							}
+						}
+					},
+					"500": { "description": "Server error" }
+				}
+			}
+		},
+		"/v1/cross-check/sources": {
+			"get": {
+				"summary": "List configured cross-check sources",
+				"description": "Returns the internal and external sources StellarAtlas uses for non-adversarial parity and cross-reference review. This endpoint does not probe external systems.",
+				"tags": ["CrossCheck"],
+				"operationId": "getCrossCheckSources",
+				"responses": {
+					"200": {
+						"description": "configured cross-check sources",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object",
+									"required": ["generatedAt", "probe", "sources"],
+									"properties": {
+										"generatedAt": {
+											"type": "string",
+											"format": "date-time"
+										},
+										"probe": {
+											"type": "string",
+											"enum": ["not_run"]
+										},
+										"sources": {
+											"type": "array",
+											"items": {
+												"type": "object",
+												"required": [
+													"id",
+													"name",
+													"kind",
+													"url",
+													"documentationUrl",
+													"description",
+													"scopes",
+													"probe"
+												],
+												"properties": {
+													"id": { "type": "string" },
+													"name": { "type": "string" },
+													"kind": {
+														"type": "string",
+														"enum": ["internal", "external"]
+													},
+													"url": {
+														"type": "string"
+													},
+													"documentationUrl": {
+														"type": "string",
+														"nullable": true
+													},
+													"description": {
+														"type": "string"
+													},
+													"scopes": {
+														"type": "array",
+														"items": {
+															"type": "string",
+															"enum": [
+																"validators",
+																"organizations",
+																"archives"
+															]
+														}
+													},
+													"probe": {
+														"type": "string",
+														"enum": ["not_run"]
+													}
+												}
+											}
 										}
 									}
 								}

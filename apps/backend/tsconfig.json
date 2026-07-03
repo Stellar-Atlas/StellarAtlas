@@ -24,6 +24,12 @@
 			"@core/*": [
 				"./src/core/*"
 			],
+			"@cross-check/*.js": [
+				"./src/cross-check/*.ts"
+			],
+			"@cross-check/*": [
+				"./src/cross-check/*"
+			],
 			"@history-scan-coordinator/*.js": [
 				"./src/history-scan-coordinator/*.ts"
 			],
