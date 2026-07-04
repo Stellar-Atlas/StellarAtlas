@@ -14,6 +14,8 @@ that all run as `observe`, not root.
 - `stellaratlas-frontend-legacy.service` starts the existing legacy frontend
   build without rebuilding it.
 - `stellaratlas-network-scanner.service` runs the network scanner.
+- `stellaratlas-scp-live-scanner.service` continuously indexes live SCP
+  observations into the live search read model.
 - `stellaratlas-history-scanner@.service` runs bounded history scanner
   instances.
 - `stellaratlas-users.service` runs the user/mail service.
@@ -54,6 +56,14 @@ pnpm build:api
 systemctl restart stellaratlas-api.service
 ```
 
+Live SCP collector deploy:
+
+```bash
+pnpm build:scp-live-scanner
+systemctl restart stellaratlas-scp-live-scanner.service
+systemctl status stellaratlas-scp-live-scanner.service --no-pager
+```
+
 Legacy frontend rebuild is intentionally separate:
 
 ```bash
@@ -71,6 +81,7 @@ systemd-analyze verify \
   ops/systemd/stellaratlas-frontend-v4-staging.service \
   ops/systemd/stellaratlas-frontend-legacy.service \
   ops/systemd/stellaratlas-network-scanner.service \
+  ops/systemd/stellaratlas-scp-live-scanner.service \
   ops/systemd/stellaratlas-users.service \
   ops/systemd/stellaratlas-history-scanner@.service
 ```

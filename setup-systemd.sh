@@ -27,6 +27,7 @@ sudo systemctl daemon-reload
 sudo systemctl disable --now stellaratlas.service 2>/dev/null || true
 sudo systemctl mask stellaratlas.service 2>/dev/null || true
 sudo systemctl enable --now stellaratlas.target
+sudo systemctl enable --now stellaratlas-scp-live-scanner.service
 
 cat <<'EOF'
 Installed split StellarAtlas services.
@@ -34,6 +35,7 @@ Installed split StellarAtlas services.
 Production:
   systemctl status stellaratlas.target
   systemctl restart stellaratlas-frontend-v4.service
+  systemctl restart stellaratlas-scp-live-scanner.service
 
 Staging frontend:
   pnpm build:frontend-v4:staging

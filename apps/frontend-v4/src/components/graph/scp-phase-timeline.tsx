@@ -64,9 +64,9 @@ export function ScpPhaseTimeline({
 }: ScpPhaseTimelineProps): React.JSX.Element | null {
 	const activeStatement = activeStatements.at(0) ?? null;
 	const slotIndex =
+		activeSlotIndex ??
 		activeStatement?.slotIndex ??
 		focusedStatement?.slotIndex ??
-		activeSlotIndex ??
 		fallbackSlotIndex;
 	if (!slotIndex) return null;
 
