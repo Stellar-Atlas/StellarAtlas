@@ -12,6 +12,7 @@
 		"build:api": "pnpm --filter backend run build",
 		"build:backend": "pnpm --filter backend run build",
 		"build:network-scanner": "pnpm --filter backend run build",
+		"build:scp-live-scanner": "pnpm --filter backend run build",
 		"build:history-scanner": "pnpm --filter history-scanner run build",
 		"build:users": "pnpm --filter users run build",
 		"build:frontend-v4": "pnpm --filter frontend-v4 run build:production",
@@ -44,6 +45,7 @@
 		"start:api-docs-comparison-refresh": "pnpm --filter backend run refresh-api-docs-comparison -- --loop",
 		"start:radar-network-comparison-refresh": "pnpm --filter backend run refresh-radar-network-comparison -- --loop",
 		"start:scan-network": "pnpm --filter backend run scan-network",
+		"start:scan-scp-live": "pnpm --filter backend run scan-scp-live",
 		"start:scan-history": "pnpm --filter history-scanner run scan-history",
 		"start:users": "pnpm --filter users run start",
 		"start:all": "node start-all.cjs"

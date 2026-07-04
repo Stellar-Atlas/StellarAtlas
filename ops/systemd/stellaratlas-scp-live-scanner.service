@@ -1,0 +1,27 @@
+[Unit]
+Description=StellarAtlas live SCP collector
+Documentation=https://github.com/Stellar-Atlas/StellarAtlas
+Wants=stellaratlas-api.service
+After=stellaratlas-api.service
+Conflicts=stellaratlas.service
+
+[Service]
+Type=simple
+User=observe
+Group=observe
+WorkingDirectory=/home/observe/stellarbeat-data/Observer
+Environment=NODE_ENV=production
+Environment=DATABASE_SSL=false
+Environment=HOME=/home/observe
+Environment=PATH=/home/observe/.nvm/versions/node/v26.4.0/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+Environment=SCP_LIVE_COLLECTOR_INTERVAL_MS=1000
+EnvironmentFile=-/etc/stellaratlas/stellaratlas.env
+ExecStart=/usr/bin/env pnpm start:scan-scp-live
+Restart=always
+RestartSec=10
+TimeoutStopSec=90
+KillSignal=SIGTERM
+NoNewPrivileges=true
+
+[Install]
+WantedBy=stellaratlas.target

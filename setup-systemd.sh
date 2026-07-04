@@ -15,6 +15,7 @@ install_unit stellaratlas-frontend-v4.service
 install_unit stellaratlas-frontend-v4-staging.service
 install_unit stellaratlas-frontend-legacy.service
 install_unit stellaratlas-network-scanner.service
+install_unit stellaratlas-scp-live-scanner.service
 install_unit stellaratlas-users.service
 install_unit stellaratlas-history-scanner@.service
 

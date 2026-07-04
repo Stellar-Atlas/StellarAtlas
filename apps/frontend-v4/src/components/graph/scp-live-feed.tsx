@@ -152,12 +152,12 @@ export function ScpLiveFeed({
 		[network, statements]
 	);
 	const currentLedgerSlot =
+		summary?.slotIndex ??
 		toLedgerSequenceText(network.latestLedger) ??
 		network.latestLedger.toString();
 	const currentLedgerTransactionSet: SelectedTransactionSet = {
 		slotIndex: currentLedgerSlot,
-		txSetHash:
-			summary?.slotIndex === currentLedgerSlot ? summary.txSetHash : null
+		txSetHash: summary?.txSetHash ?? null
 	};
 	const recentStatements = useMemo(
 		() => statements.toSorted(compareStatementsForFeed).slice(0, 48),
@@ -293,14 +293,14 @@ export function ScpLiveFeed({
 						onClick={() => openTransactionSet(currentLedgerTransactionSet)}
 						type="button"
 					>
-						<span>Ledger slot</span>
+						<span>SCP slot</span>
 						<strong>{currentLedgerSlot}</strong>
 					</button>
 					<button
 						className="tx-set-button"
 						onClick={() =>
 							openTransactionSet({
-								slotIndex: currentLedgerSlot,
+								slotIndex: summary.slotIndex,
 								txSetHash: summary.txSetHash
 							})
 						}

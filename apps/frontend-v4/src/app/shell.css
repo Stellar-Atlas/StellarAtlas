@@ -4,7 +4,7 @@
 	border-block-end: 1px solid var(--border);
 	position: sticky;
 	top: 0;
-	z-index: 20;
+	z-index: 240;
 }
 
 .network-strip {
@@ -135,7 +135,7 @@
 	inset-inline: 0;
 	overflow: hidden;
 	position: absolute;
-	z-index: 30;
+	z-index: 260;
 }
 
 .search-menu button {

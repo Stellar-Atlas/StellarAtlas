@@ -69,6 +69,8 @@ import NetworkMeasurement from '../../domain/network/NetworkMeasurement.js';
 import NodeGeoDataLocation from '../../domain/node/NodeGeoDataLocation.js';
 import NodeQuorumSet from '../../domain/node/NodeQuorumSet.js';
 import { ScanNetwork } from '../../use-cases/scan-network/ScanNetwork.js';
+import { CollectScpLive } from '../../use-cases/collect-scp-live/CollectScpLive.js';
+import { CollectScpLiveLooped } from '../../use-cases/collect-scp-live/CollectScpLiveLooped.js';
 import { UpdateNetwork } from '../../use-cases/update-network/UpdateNetwork.js';
 import type { NodeRepository } from '../../domain/node/NodeRepository.js';
 import { TypeOrmNodeRepository } from '../database/repositories/TypeOrmNodeRepository.js';
@@ -389,6 +391,8 @@ function loadUseCases(container: Container) {
 	container.bind(GetMeasurementsFactory).toSelf();
 	container.bind(GetMeasurementAggregations).toSelf();
 	container.bind(GetScpStatements).toSelf();
+	container.bind(CollectScpLive).toSelf();
+	container.bind(CollectScpLiveLooped).toSelf();
 	container.bind(UpdateNetwork).toSelf();
 	container.bind(ScanNetworkLooped).toSelf();
 	container.bind<ScanNetwork>(ScanNetwork).toSelf();

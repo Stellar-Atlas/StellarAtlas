@@ -18,11 +18,18 @@ type LiveMessage =
 	| { payload: unknown; type: 'network' | 'scp' | 'latestLedger' }
 	| { payload: { message: string }; type: 'error' };
 
+interface LiveClient {
+	latestScpObservedAtMs: number;
+	seenScpStatementHashes: string[];
+	socket: WebSocket;
+}
+
 const defaultPath = '/v1/live/ws';
 const latestLedgerIntervalMs = 2_000;
 const networkIntervalMs = 5_000;
 const scpIntervalMs = 1_200;
 const scpStatementLimit = 1_000;
+const maxSeenStatementHashes = 2_000;
 
 const isWebSocketPath = (
 	request: IncomingMessage,
@@ -41,7 +48,7 @@ export function attachNetworkLiveWebSocket(
 	config: NetworkLiveWebSocketConfig
 ): void {
 	const path = config.path ?? defaultPath;
-	const clients = new Set<WebSocket>();
+	const clients = new Map<WebSocket, LiveClient>();
 	const webSocketServer = new WebSocketServer({ noServer: true });
 	let latestLedgerTimer: ReturnType<typeof setInterval> | undefined;
 	let networkTimer: ReturnType<typeof setInterval> | undefined;
@@ -52,9 +59,14 @@ export function attachNetworkLiveWebSocket(
 
 	const broadcast = (message: LiveMessage): void => {
 		const payload = JSON.stringify(message);
-		for (const client of clients) {
-			if (client.readyState === WebSocket.OPEN) client.send(payload);
+		for (const client of clients.values()) {
+			if (client.socket.readyState === WebSocket.OPEN) client.socket.send(payload);
 		}
+	};
+
+	const send = (client: LiveClient, message: LiveMessage): void => {
+		if (client.socket.readyState !== WebSocket.OPEN) return;
+		client.socket.send(JSON.stringify(message));
 	};
 
 	const writeLatestLedger = (): void => {
@@ -118,8 +130,35 @@ export function attachNetworkLiveWebSocket(
 					});
 					return;
 				}
-				broadcast({ payload: statementsOrError.value, type: 'scp' });
-			})
+					for (const client of clients.values()) {
+						const statements = statementsOrError.value.filter((statement) => {
+							if (client.seenScpStatementHashes.includes(statement.statementHash)) {
+								return false;
+							}
+							return (
+								new Date(statement.observedAt).getTime() >=
+								client.latestScpObservedAtMs
+							);
+						});
+						if (statements.length === 0) continue;
+						for (const statement of statements) {
+							client.seenScpStatementHashes.push(statement.statementHash);
+							client.latestScpObservedAtMs = Math.max(
+								client.latestScpObservedAtMs,
+								new Date(statement.observedAt).getTime()
+							);
+						}
+						if (
+							client.seenScpStatementHashes.length > maxSeenStatementHashes
+						) {
+							client.seenScpStatementHashes.splice(
+								0,
+								client.seenScpStatementHashes.length - maxSeenStatementHashes
+							);
+						}
+						send(client, { payload: statements, type: 'scp' });
+					}
+				})
 			.catch((error) => {
 				config.logger?.error('Live WebSocket SCP unavailable', {
 					error: errorMessage(error)
@@ -158,7 +197,11 @@ export function attachNetworkLiveWebSocket(
 	};
 
 	webSocketServer.on('connection', (client) => {
-		clients.add(client);
+		clients.set(client, {
+			latestScpObservedAtMs: 0,
+			seenScpStatementHashes: [],
+			socket: client
+		});
 		client.on('close', () => {
 			clients.delete(client);
 			stop();
