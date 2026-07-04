@@ -121,6 +121,26 @@ it('should continue scanning after range errors without advancing verified ledge
 	expect(scan.latestScannedLedgerHeaderHash).toEqual(null);
 });
 
+it('should stop scanning ranges after archive access is denied', async () => {
+	const rangeScanner = mock<RangeScanner>();
+	const accessDeniedError = new ScanError(
+		ScanErrorType.TYPE_VERIFICATION,
+		'https://history.example/history/00/00/00/history-0000003f.json',
+		'HTTP 403 Forbidden'
+	);
+	rangeScanner.scan.mockResolvedValue(err(accessDeniedError));
+	const scanner = getScanner(rangeScanner);
+
+	const scanJob = ScanJob.newScanChain(createDummyHistoryBaseUrl(), 0, 200, 1);
+	const scan = await scanner.perform(new Date(), scanJob);
+
+	expect(rangeScanner.scan).toHaveBeenCalledTimes(1);
+	expect(scan.error).toEqual(accessDeniedError);
+	expect(scan.errors).toEqual([accessDeniedError]);
+	expect(scan.latestScannedLedger).toEqual(0);
+	expect(scan.latestScannedLedgerHeaderHash).toEqual(null);
+});
+
 function getScanner(rangeScanner: RangeScanner) {
 	return new Scanner(
 		rangeScanner,

@@ -78,7 +78,7 @@ export class GetArchiveScanWorkers {
 		staleCutoff: Date
 	): ArchiveScanWorkerDTO {
 		const lastHeartbeatAt = job.updatedAt ?? generatedAt;
-		const claimedAt = job.createdAt ?? lastHeartbeatAt;
+		const claimedAt = job.claimedAt ?? job.createdAt ?? lastHeartbeatAt;
 
 		return {
 			archiveUrl: job.url,

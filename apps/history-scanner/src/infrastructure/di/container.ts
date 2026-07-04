@@ -51,7 +51,18 @@ export function load(container: Container, config: Config) {
 		);
 	});
 	container.bind(HASValidator).toSelf();
-	container.bind(Scanner).toSelf();
+	container
+		.bind(Scanner)
+		.toDynamicValue(() => {
+			return new Scanner(
+				container.get(RangeScanner),
+				container.get(ScanSettingsFactory),
+				container.get<Logger>('Logger'),
+				container.get<ExceptionLogger>(TYPES.ExceptionLogger),
+				config.historyScanRangeSize
+			);
+		})
+		.inSingletonScope();
 	container.bind(RangeScanner).toSelf();
 	container.bind(VerifyArchives).toSelf();
 	container.bind(VerifySingleArchive).toSelf();

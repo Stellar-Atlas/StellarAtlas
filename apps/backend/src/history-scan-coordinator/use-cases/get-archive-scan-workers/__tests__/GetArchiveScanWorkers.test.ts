@@ -35,6 +35,7 @@ describe('GetArchiveScanWorkers', () => {
 		);
 		activeJob.status = 'TAKEN';
 		activeJob.createdAt = new Date('2026-07-03T11:00:00.000Z');
+		activeJob.claimedAt = new Date('2026-07-03T11:30:00.000Z');
 		activeJob.updatedAt = new Date('2026-07-03T11:45:00.000Z');
 		const staleJob = new ScanJob(
 			'https://stale.example',
@@ -47,6 +48,7 @@ describe('GetArchiveScanWorkers', () => {
 		);
 		staleJob.status = 'TAKEN';
 		staleJob.createdAt = new Date('2026-07-03T10:00:00.000Z');
+		staleJob.claimedAt = new Date('2026-07-03T10:30:00.000Z');
 		staleJob.updatedAt = new Date('2026-07-03T11:00:00.000Z');
 		scanJobRepositoryMock.getTakenJobsSnapshot.mockResolvedValue({
 			activeTakenJobs: 1,
@@ -68,7 +70,7 @@ describe('GetArchiveScanWorkers', () => {
 				{
 					archiveUrl: 'https://stale.example',
 					status: 'stale',
-					claimedAt: '2026-07-03T10:00:00.000Z',
+					claimedAt: '2026-07-03T10:30:00.000Z',
 					lastHeartbeatAt: '2026-07-03T11:00:00.000Z',
 					heartbeatAgeMs: 3600000,
 					fromLedger: 0,
@@ -79,7 +81,7 @@ describe('GetArchiveScanWorkers', () => {
 				{
 					archiveUrl: 'https://active.example',
 					status: 'scanning',
-					claimedAt: '2026-07-03T11:00:00.000Z',
+					claimedAt: '2026-07-03T11:30:00.000Z',
 					lastHeartbeatAt: '2026-07-03T11:45:00.000Z',
 					heartbeatAgeMs: 900000,
 					fromLedger: 11,

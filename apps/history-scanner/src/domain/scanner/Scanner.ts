@@ -4,7 +4,7 @@ import { Scan } from '../scan/Scan.js';
 import type { ExceptionLogger } from 'exception-logger';
 import { RangeScanner } from './RangeScanner.js';
 import { ScanJob } from '../scan/ScanJob.js';
-import { ScanError } from '../scan/ScanError.js';
+import { ScanError, ScanErrorType } from '../scan/ScanError.js';
 import { ScanSettingsFactory } from '../scan/ScanSettingsFactory.js';
 import { ScanSettings } from '../scan/ScanSettings.js';
 import { ScanResult } from '../scan/ScanResult.js';
@@ -119,6 +119,7 @@ export class Scanner {
 					ledger: rangeToLedger,
 					hash: undefined
 				};
+				if (this.isArchiveAccessDeniedError(rangeResult.error)) break;
 			} else {
 				if (rangeResult.value.errors.length > 0) {
 					error = error ?? rangeResult.value.errors[0];
@@ -159,6 +160,15 @@ export class Scanner {
 
 	private expandScanError(error: ScanError): readonly ScanError[] {
 		return error.relatedErrors.length > 0 ? error.relatedErrors : [error];
+	}
+
+	private isArchiveAccessDeniedError(error: ScanError): boolean {
+		const errors = this.expandScanError(error);
+		return errors.some(
+			(scanError) =>
+				scanError.type === ScanErrorType.TYPE_VERIFICATION &&
+				/^HTTP 40[13](\s|$)/.test(scanError.message)
+		);
 	}
 
 	private static createTimerLabel(name: string): string {

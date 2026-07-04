@@ -66,7 +66,9 @@ describe('Config', () => {
 				historyMaxFileMs: 60000,
 				historySlowArchiveMaxLedgers: 1000,
 				historyHasherWorkers: expect.any(Number),
-				historyMaxRequests: 24
+				historyMaxRequests: 24,
+				historyScanRangeSize: 250000,
+				historyBucketCacheMaxBytes: 10 * 1024 * 1024 * 1024 * 1024
 			});
 			expect(result.value.historyHasherWorkers).toBeGreaterThanOrEqual(1);
 			expect(result.value.historyHasherWorkers).toBeLessThanOrEqual(24);
@@ -136,11 +138,26 @@ describe('Config', () => {
 			);
 		});
 
+		test('should validate HISTORY_SCAN_RANGE_SIZE is a positive integer', () => {
+			process.env.HISTORY_SCAN_RANGE_SIZE = '0';
+
+			const result = getConfigFromEnv();
+			expect(result.isErr()).toBe(true);
+			if (!result.isErr()) throw new Error('Expected error');
+			expect(result.error.message).toContain(
+				'HISTORY_SCAN_RANGE_SIZE must be a positive integer'
+			);
+		});
+
 		test('should accept valid numeric values', () => {
 			process.env.HISTORY_MAX_FILE_MS = '120000';
 			process.env.HISTORY_SLOW_ARCHIVE_MAX_LEDGERS = '2000';
 			process.env.HISTORY_HASHER_WORKERS = '3';
 			process.env.HISTORY_MAX_REQUESTS = '12';
+			process.env.HISTORY_SCAN_RANGE_SIZE = '100000';
+			process.env.HISTORY_BUCKET_CACHE_MAX_BYTES = String(
+				2 * 1024 * 1024 * 1024
+			);
 
 			const result = getConfigFromEnv();
 			expect(result.isOk()).toBe(true);
@@ -150,6 +167,10 @@ describe('Config', () => {
 			expect(result.value.historySlowArchiveMaxLedgers).toBe(2000);
 			expect(result.value.historyHasherWorkers).toBe(3);
 			expect(result.value.historyMaxRequests).toBe(12);
+			expect(result.value.historyScanRangeSize).toBe(100000);
+			expect(result.value.historyBucketCacheMaxBytes).toBe(
+				2 * 1024 * 1024 * 1024
+			);
 		});
 
 		test('should derive default hasher workers from scanner workers and CPU count', () => {

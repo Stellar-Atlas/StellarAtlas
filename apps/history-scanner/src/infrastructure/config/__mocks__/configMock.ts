@@ -12,6 +12,7 @@ export class ConfigMock implements Config {
 	historySlowArchiveMaxLedgers = 1000;
 	historyHasherWorkers = 1;
 	historyMaxRequests = 1;
+	historyScanRangeSize = 100000;
 	historyBucketCacheDir = '/tmp/stellaratlas-history-scanner-test-cache';
 	historyBucketCacheMaxBytes = 1024 * 1024 * 1024;
 	coordinatorAPIBaseUrl = 'http://127.0.0.1:3000';

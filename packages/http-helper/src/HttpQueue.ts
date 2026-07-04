@@ -267,27 +267,35 @@ export class HttpQueue {
 		error: HttpError,
 		request: Request<Meta>
 	): QueueError {
-		if (
-			error.code &&
-			[
-				'ETIMEDOUT',
-				'ECONNABORTED',
-				'TIMEOUT',
-				'ERR_REQUEST_ABORTED',
-				'SB_CONN_TIMEOUT'
-			].includes(error.code)
-		) {
-			return new RetryableQueueError(request, error);
-		}
-
-		if (error.response?.status === 429) {
-			return new RetryableQueueError(request, error);
-		}
-
 		if (error.response?.status === 404) {
 			return new FileNotFoundError(request);
 		}
 
-		return new RetryableQueueError(request, error);
+		if (HttpQueue.shouldRetry(error)) {
+			return new RetryableQueueError(request, error);
+		}
+
+		return new QueueError(request, error);
+	}
+
+	private static shouldRetry(error: HttpError): boolean {
+		const status = error.response?.status;
+		if (status !== undefined) {
+			return status === 408 || status === 425 || status === 429 || status >= 500;
+		}
+
+		if (!error.code) return true;
+
+		return [
+			'ETIMEDOUT',
+			'ECONNABORTED',
+			'ECONNRESET',
+			'EPIPE',
+			'EAI_AGAIN',
+			'ENOTFOUND',
+			'TIMEOUT',
+			'ERR_REQUEST_ABORTED',
+			'SB_CONN_TIMEOUT'
+		].includes(error.code);
 	}
 }

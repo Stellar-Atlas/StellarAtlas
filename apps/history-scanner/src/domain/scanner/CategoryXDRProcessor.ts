@@ -17,86 +17,82 @@ export class CategoryXDRProcessor extends Writable {
 
 	_write(
 		xdr: Buffer,
-		encoding: string,
+		_encoding: string,
 		callback: (error?: Error | null) => void
 	): void {
+		void this.processXdr(xdr).then(
+			() => callback(),
+			(error: unknown) => callback(toError(error))
+		);
+	}
+
+	private async processXdr(xdr: Buffer): Promise<void> {
 		if (this.pool.terminated) {
 			//previous stream could still be transmitting
-			callback(new Error('Workerpool terminated'));
-			return;
+			throw new Error('Workerpool terminated');
 		}
+
 		switch (this.category) {
-			case Category.results: {
-				this.performInPool<{
-					ledger: number;
-					hash: string;
-				}>(xdr, 'processTransactionHistoryResultEntryXDR')
-					.then((hashMap) => {
-						this.categoryVerificationData.calculatedTxSetResultHashes.set(
-							hashMap.ledger,
-							hashMap.hash
-						);
-					})
-					.catch((error) => {
-						console.log(this.url.value);
-						console.log(error);
-					});
-				break;
-			}
-			case Category.transactions: {
-				this.performInPool<{
-					ledger: number;
-					hash: string;
-				}>(xdr, 'processTransactionHistoryEntryXDR')
-					.then((hashMap) => {
-						this.categoryVerificationData.calculatedTxSetHashes.set(
-							hashMap.ledger,
-							hashMap.hash
-						);
-					})
-					.catch((error) => {
-						console.log(this.url.value);
-						console.log(error);
-					});
-				break;
-			}
-			case Category.ledger: {
-				this.performInPool<LedgerHeaderHistoryEntryResult>(
-					xdr,
-					'processLedgerHeaderHistoryEntryXDR'
-				)
-					.then((ledgerHeaderResult) => {
-						this.categoryVerificationData.expectedHashesPerLedger.set(
-							ledgerHeaderResult.ledger,
-							{
-								txSetResultHash: ledgerHeaderResult.transactionResultsHash,
-								txSetHash: ledgerHeaderResult.transactionsHash,
-								previousLedgerHeaderHash:
-									ledgerHeaderResult.previousLedgerHeaderHash,
-								bucketListHash: ledgerHeaderResult.bucketListHash
-							}
-						);
-						this.categoryVerificationData.calculatedLedgerHeaderHashes.set(
-							ledgerHeaderResult.ledger,
-							ledgerHeaderResult.ledgerHeaderHash
-						);
-
-						this.categoryVerificationData.protocolVersions.set(
-							ledgerHeaderResult.ledger,
-							ledgerHeaderResult.protocolVersion
-						);
-					})
-					.catch((error) => {
-						console.log(this.url.value);
-						console.log(error);
-					});
-				break;
-			}
+			case Category.results:
+				await this.processTransactionResult(xdr);
+				return;
+			case Category.transactions:
+				await this.processTransaction(xdr);
+				return;
+			case Category.ledger:
+				await this.processLedgerHeader(xdr);
+				return;
 			default:
-				break;
+				return;
 		}
+	}
 
-		callback();
+	private async processTransactionResult(xdr: Buffer): Promise<void> {
+		const hashMap = await this.performInPool<{
+			ledger: number;
+			hash: string;
+		}>(xdr, 'processTransactionHistoryResultEntryXDR');
+		this.categoryVerificationData.calculatedTxSetResultHashes.set(
+			hashMap.ledger,
+			hashMap.hash
+		);
+	}
+
+	private async processTransaction(xdr: Buffer): Promise<void> {
+		const hashMap = await this.performInPool<{
+			ledger: number;
+			hash: string;
+		}>(xdr, 'processTransactionHistoryEntryXDR');
+		this.categoryVerificationData.calculatedTxSetHashes.set(
+			hashMap.ledger,
+			hashMap.hash
+		);
+	}
+
+	private async processLedgerHeader(xdr: Buffer): Promise<void> {
+		const ledgerHeaderResult = await this.performInPool<LedgerHeaderHistoryEntryResult>(
+			xdr,
+			'processLedgerHeaderHistoryEntryXDR'
+		);
+		this.categoryVerificationData.expectedHashesPerLedger.set(
+			ledgerHeaderResult.ledger,
+			{
+				txSetResultHash: ledgerHeaderResult.transactionResultsHash,
+				txSetHash: ledgerHeaderResult.transactionsHash,
+				previousLedgerHeaderHash:
+					ledgerHeaderResult.previousLedgerHeaderHash,
+				bucketListHash: ledgerHeaderResult.bucketListHash
+			}
+		);
+		this.categoryVerificationData.calculatedLedgerHeaderHashes.set(
+			ledgerHeaderResult.ledger,
+			ledgerHeaderResult.ledgerHeaderHash
+		);
+
+		this.categoryVerificationData.protocolVersions.set(
+			ledgerHeaderResult.ledger,
+			ledgerHeaderResult.protocolVersion
+		);
 	}
 
 	private async performInPool<Return>(
@@ -108,4 +104,9 @@ export class CategoryXDRProcessor extends Writable {
 	): Promise<Return> {
 		return (await this.pool.workerpool.exec(method, [data])) as Return;
 	}
+}
+
+function toError(error: unknown): Error {
+	if (error instanceof Error) return error;
+	return new Error(String(error));
 }

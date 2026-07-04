@@ -27,6 +27,7 @@ export interface Config {
 	historySlowArchiveMaxLedgers: number;
 	historyHasherWorkers: number;
 	historyMaxRequests: number;
+	historyScanRangeSize: number;
 	historyBucketCacheDir: string;
 	historyBucketCacheMaxBytes: number;
 }
@@ -49,6 +50,7 @@ const defaultConfig = {
 	historyMaxFileMs: 60000,
 	historySlowArchiveMaxLedgers: 1000,
 	historyMaxRequests: 24,
+	historyScanRangeSize: 250000,
 	historyBucketCacheDir: resolve(
 		dirname(envPath),
 		'..',
@@ -160,6 +162,12 @@ export function getConfigFromEnv(): Result<Config, Error> {
 	if (historyMaxRequestsResult.isErr())
 		return err(historyMaxRequestsResult.error);
 
+	const historyScanRangeSizeResult = parseOptionalPositiveInteger(
+		'HISTORY_SCAN_RANGE_SIZE'
+	);
+	if (historyScanRangeSizeResult.isErr())
+		return err(historyScanRangeSizeResult.error);
+
 	const historyBucketCacheMaxBytesResult = parseOptionalPositiveNumber(
 		'HISTORY_BUCKET_CACHE_MAX_BYTES'
 	);
@@ -188,6 +196,8 @@ export function getConfigFromEnv(): Result<Config, Error> {
 		historySlowArchiveMaxLedgers,
 		historyHasherWorkers,
 		historyMaxRequests,
+		historyScanRangeSize:
+			historyScanRangeSizeResult.value ?? defaultConfig.historyScanRangeSize,
 		historyBucketCacheDir:
 			process.env.HISTORY_BUCKET_CACHE_DIR ??
 			defaultConfig.historyBucketCacheDir,
