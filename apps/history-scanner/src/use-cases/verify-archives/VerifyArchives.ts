@@ -62,25 +62,29 @@ export class VerifyArchives {
 		await this.checkIn('in_progress');
 		await this.touchScanJob(scanJobResult.value);
 		const stopHeartbeat = this.startScanJobHeartbeat(scanJobResult.value);
+		let scanCompleted = false;
 		try {
-			await this.perform(scanJobResult.value, persist);
+			scanCompleted = await this.perform(scanJobResult.value, persist);
 			await this.checkIn('ok');
 		} finally {
 			stopHeartbeat();
-			await this.touchScanJob(scanJobResult.value);
+			if (!scanCompleted) await this.touchScanJob(scanJobResult.value);
 		}
 	}
 
-	private async perform(scanJob: ScanJob, persist = false) {
+	private async perform(scanJob: ScanJob, persist = false): Promise<boolean> {
 		const scan = await this.scanner.perform(new Date(), scanJob);
-		if (persist) await this.persist(scan);
+		if (persist) return await this.persist(scan);
+		return false;
 	}
 
-	private async persist(scan: Scan) {
+	private async persist(scan: Scan): Promise<boolean> {
 		const result = await this.scanCoordinator.registerScan(scan);
 		if (result.isErr()) {
 			this.exceptionLogger.captureException(result.error);
+			return false;
 		}
+		return true;
 	}
 
 	private async touchScanJob(scanJob: ScanJob): Promise<void> {

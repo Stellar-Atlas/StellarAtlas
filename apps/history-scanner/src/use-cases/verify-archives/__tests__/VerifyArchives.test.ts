@@ -121,6 +121,27 @@ describe('VerifyArchives', () => {
 		await verifyArchives.execute({ persist: true, loop: false });
 
 		expect(scanCoordinatorMock.registerScan).toHaveBeenCalled();
+		expect(scanCoordinatorMock.touchScanJob).toHaveBeenCalledTimes(1);
+	});
+
+	it('should keep touching an unpersisted scan job after local execution', async () => {
+		scanCoordinatorMock.getScanJob.mockResolvedValue(ok(mockScanJobDTO));
+		jobMonitorMock.checkIn.mockResolvedValue(ok(undefined));
+		scannerMock.perform.mockResolvedValue(
+			new Scan(
+				new Date(),
+				new Date(),
+				new Date(),
+				Url.create('https://example.com')._unsafeUnwrap(),
+				0,
+				100
+			)
+		);
+
+		await verifyArchives.execute({ persist: false, loop: false });
+
+		expect(scanCoordinatorMock.registerScan).not.toHaveBeenCalled();
+		expect(scanCoordinatorMock.touchScanJob).toHaveBeenCalledTimes(2);
 	});
 
 	it('should handle persist errors', async () => {
