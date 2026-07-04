@@ -155,13 +155,14 @@ export function ScpLiveFeed({
 		summary?.slotIndex ??
 		toLedgerSequenceText(network.latestLedger) ??
 		network.latestLedger.toString();
-	const currentLedgerTransactionSet: SelectedTransactionSet = {
-		slotIndex: currentLedgerSlot,
-		txSetHash: summary?.txSetHash ?? null
-	};
+	const feedSlotIndex = activeSlotIndex ?? summary?.slotIndex ?? currentLedgerSlot;
 	const recentStatements = useMemo(
-		() => statements.toSorted(compareStatementsForFeed).slice(0, 48),
-		[statements]
+		() =>
+			statements
+				.filter((statement) => statement.slotIndex === feedSlotIndex)
+				.toSorted(compareStatementsForFeed)
+				.slice(0, 48),
+		[feedSlotIndex, statements]
 	);
 	const activeStatementHashSet = useMemo(
 		() =>
@@ -234,16 +235,17 @@ export function ScpLiveFeed({
 
 	useEffect(() => {
 		setFeedOffset(0);
-	}, [recentStatements[0]?.statementHash]);
+	}, [feedSlotIndex, recentStatements[0]?.statementHash]);
 
 	useEffect(() => {
+		if (activeSlotIndex === null) return;
 		if (recentStatements.length <= visibleStatementCount) return;
 		const interval = window.setInterval(() => {
 			setFeedOffset((current) => (current + 1) % recentStatements.length);
 		}, 650);
 
 		return () => window.clearInterval(interval);
-	}, [recentStatements.length]);
+	}, [activeSlotIndex, recentStatements.length]);
 
 	useEffect(() => {
 		if (!selectedTransactionSet) return;
@@ -288,14 +290,14 @@ export function ScpLiveFeed({
 			/>
 			{summary && (
 				<div className="scp-slot-summary">
-					<button
+					<div
+						aria-label={`Current SCP slot ${currentLedgerSlot}`}
 						className="ledger-slot-button"
-						onClick={() => openTransactionSet(currentLedgerTransactionSet)}
-						type="button"
+						role="status"
 					>
 						<span>SCP slot</span>
 						<strong>{currentLedgerSlot}</strong>
-					</button>
+					</div>
 					<button
 						className="tx-set-button"
 						onClick={() =>
@@ -411,7 +413,7 @@ export function ScpLiveFeed({
 					</button>
 				))}
 				{recentStatements.length === 0 && (
-					<p>Waiting for new crawler observations after deployment.</p>
+					<p>Waiting for SCP observations for this slot.</p>
 				)}
 			</div>
 		</section>

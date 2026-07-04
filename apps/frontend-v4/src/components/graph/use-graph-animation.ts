@@ -78,7 +78,6 @@ export const useGraphAnimation = ({
 	const completedSlotSignaturesRef = useRef<Map<string, string>>(new Map());
 	const completedSlotOrderRef = useRef<string[]>([]);
 	const advancePlaybackRef = useRef<() => void>(() => undefined);
-	const previousPlaybackBoundaryRef = useRef<string | null>(null);
 
 	const activateFlowPath = useCallback(
 		(path: StatementFlowPath): void => {
@@ -455,11 +454,8 @@ export const useGraphAnimation = ({
 			boundarySlotIndex: playbackBoundarySlotIndex,
 			completedSignatures: completedSlotSignaturesRef.current,
 			currentQueue: playbackQueueRef.current,
-			ledgers: playbackLedgers,
-			previousBoundarySlotIndex: previousPlaybackBoundaryRef.current
+			ledgers: playbackLedgers
 		});
-		previousPlaybackBoundaryRef.current =
-			queueResult.acceptedBoundarySlotIndex;
 		playbackQueueRef.current = queueResult.queue;
 		advancePlayback();
 	}, [

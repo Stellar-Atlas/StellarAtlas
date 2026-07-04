@@ -15,6 +15,8 @@ import type { ScpStatementObservationRepository } from '../../scp/ScpStatementOb
 import type { ScpStatementLiveStore } from '../../scp/ScpStatementLiveStore.js';
 import { ScpStatementLiveStoreBuffer } from '../../scp/ScpStatementLiveStoreBuffer.js';
 
+const liveScpFlushTimeoutMs = 5_000;
+
 @injectable()
 export class NodeScannerCrawlStep {
 	constructor(
@@ -50,10 +52,18 @@ export class NodeScannerCrawlStep {
 			previousLatestLedgerCloseTime,
 			(observation) => liveScpStatements.add(observation)
 		);
-		await liveScpStatements.flush();
 		if (crawlResult.isErr()) {
 			return err(crawlResult.error);
 		}
+		this.logger.info('Crawler returned crawl result', {
+			peerNodes: crawlResult.value.peerNodes.size,
+			processedLedgers: crawlResult.value.processedLedgers.length,
+			scpStatementObservations:
+				crawlResult.value.scpStatementObservations.length,
+			latestClosedLedger:
+				crawlResult.value.latestClosedLedger.sequence.toString()
+		});
+		const liveScpFlush = this.flushLiveScpStatements(liveScpStatements);
 
 		const archivedNodesOrError = await this.fetchRelevantArchivedNodes(
 			crawlResult,
@@ -73,6 +83,7 @@ export class NodeScannerCrawlStep {
 		);
 
 		await this.persistScpStatementObservations(crawlResult.value);
+		await liveScpFlush;
 
 		if (invalidPeerNodes.length > 0)
 			this.logger.info('Could not add the following peer-nodes', {
@@ -133,15 +144,53 @@ export class NodeScannerCrawlStep {
 		crawlResult: CrawlResult
 	): Promise<void> {
 		try {
+			this.logger.info('Saving SCP statement observations', {
+				observations: crawlResult.scpStatementObservations.length
+			});
 			await this.scpStatementObservationRepository.saveMany(
 				crawlResult.scpStatementObservations
 			);
+			this.logger.info('Saved SCP statement observations');
 		} catch (error) {
 			const mappedError = mapUnknownToError(error);
 			this.logger.error('Error while saving SCP statement observations', {
 				errorMessage: mappedError.message
 			});
 		}
+	}
+
+	private async flushLiveScpStatements(
+		liveScpStatements: ScpStatementLiveStoreBuffer
+	): Promise<void> {
+		const startTime = Date.now();
+		let timeout: ReturnType<typeof setTimeout> | undefined;
+		const flushPromise = liveScpStatements.flush().then(
+			() => 'flushed' as const,
+			(error: unknown) => {
+				this.logger.error('Error while flushing live SCP statements', {
+					errorMessage: mapUnknownToError(error).message
+				});
+				return 'failed' as const;
+			}
+		);
+		const timeoutPromise = new Promise<'timed_out'>((resolve) => {
+			timeout = setTimeout(() => resolve('timed_out'), liveScpFlushTimeoutMs);
+		});
+
+		const result = await Promise.race([flushPromise, timeoutPromise]);
+		if (timeout !== undefined) clearTimeout(timeout);
+
+		if (result === 'timed_out') {
+			this.logger.error('Live SCP statement flush timed out; continuing scan', {
+				timeoutMs: liveScpFlushTimeoutMs
+			});
+			return;
+		}
+
+		this.logger.info('Live SCP statement flush finished', {
+			status: result,
+			durationMs: Date.now() - startTime
+		});
 	}
 
 	private createLiveScpStatementBuffer(): ScpStatementLiveStoreBuffer {

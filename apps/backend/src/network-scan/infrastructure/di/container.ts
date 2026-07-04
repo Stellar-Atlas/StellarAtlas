@@ -349,11 +349,12 @@ function loadDomain(container: Container, config: Config) {
 	container
 		.bind<ScpStatementLiveStore>(NETWORK_TYPES.ScpStatementLiveStore)
 		.toDynamicValue(() => {
+			const logger = container.get<Logger>('Logger');
 			return new MeilisearchScpStatementLiveStore({
 				apiKey: config.meilisearchApiKey,
 				host: config.meilisearchHost,
 				indexName: config.meilisearchScpStatementIndex
-			});
+			}, logger);
 		})
 		.inSingletonScope();
 

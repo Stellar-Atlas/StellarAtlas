@@ -81,7 +81,10 @@ export interface PublicSearchResponse {
 	readonly query: string;
 	readonly readModel: {
 		readonly fallbackReason:
-			'meilisearch_unavailable' | 'meilisearch_unconfigured' | null;
+			| 'meilisearch_syncing'
+			| 'meilisearch_unavailable'
+			| 'meilisearch_unconfigured'
+			| null;
 		readonly schemaVersion: string;
 	};
 	readonly source: 'memory' | 'meilisearch';

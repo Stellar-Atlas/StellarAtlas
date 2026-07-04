@@ -23,6 +23,21 @@ export class NodePersistenceError extends CustomError {
 export class TypeOrmNodeRepository implements NodeRepository {
 	constructor(private baseNodeRepository: Repository<Node>) {}
 
+	private async assignPersistedId(
+		node: Node,
+		entityManager: EntityManager
+	): Promise<void> {
+		const rows = (await entityManager.query(
+			'select id from "node" where "publicKeyValue" = $1 limit 1',
+			[node.publicKey.value]
+		)) as Array<{ id: number }>;
+		const persistedId = rows[0]?.id;
+
+		if (persistedId !== undefined) {
+			Object.assign(node, { id: persistedId });
+		}
+	}
+
 	async saveOne(
 		node: Node,
 		from: Date,
@@ -46,6 +61,8 @@ export class TypeOrmNodeRepository implements NodeRepository {
 			});
 			if (count === 0) {
 				await baseRepo.save(Node, node);
+			} else {
+				await this.assignPersistedId(node, baseRepo);
 			}
 			const snapshotsToSave = node.snapshots.filter((snapshot) => {
 				return (

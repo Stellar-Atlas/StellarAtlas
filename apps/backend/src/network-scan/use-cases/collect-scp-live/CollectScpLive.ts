@@ -19,8 +19,8 @@ export interface CollectScpLiveResult {
 	processedLedgers: number;
 }
 
-const liveBufferBatchSize = 500;
-const liveBufferFlushDelayMs = 500;
+const liveBufferBatchSize = 10_000;
+const liveBufferFlushDelayMs = 4_500;
 
 @injectable()
 export class CollectScpLive {

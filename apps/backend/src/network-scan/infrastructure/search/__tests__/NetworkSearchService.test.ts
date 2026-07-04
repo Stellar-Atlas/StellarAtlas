@@ -103,7 +103,7 @@ describe('NetworkSearchService', () => {
 		expect(result.facets.validator).toEqual([{ count: 1, value: 'true' }]);
 	});
 
-	it('falls back to memory with non-secret evidence when Meilisearch is unavailable', async () => {
+	it('keeps memory results while Meilisearch syncs or is unavailable', async () => {
 		const node = createDummyNodeV1('GA_UNAVAILABLE_MEILI');
 		node.name = 'Fallback validator';
 		const network = createDummyNetworkV1([node], []);
@@ -119,9 +119,36 @@ describe('NetworkSearchService', () => {
 
 		expect(result.source).toBe('memory');
 		expect(result.readModel).toEqual({
-			fallbackReason: 'meilisearch_unavailable',
+			fallbackReason: 'meilisearch_syncing',
 			schemaVersion: 'v1'
 		});
 		expect(result.hits.map((hit) => hit.entityId)).toEqual([node.publicKey]);
+
+		const retry = await waitForSearchFallback(service, network, 'fallback');
+		expect(retry.source).toBe('memory');
+		expect(retry.readModel).toEqual({
+			fallbackReason: 'meilisearch_unavailable',
+			schemaVersion: 'v1'
+		});
+		expect(retry.hits.map((hit) => hit.entityId)).toEqual([node.publicKey]);
 	});
 });
+
+async function waitForSearchFallback(
+	service: NetworkSearchService,
+	network: ReturnType<typeof createDummyNetworkV1>,
+	query: string
+) {
+	for (let attempt = 0; attempt < 20; attempt += 1) {
+		await new Promise((resolve) => setTimeout(resolve, 25));
+		const result = await service.search(network, {
+			limit: 8,
+			query
+		});
+		if (result.readModel.fallbackReason === 'meilisearch_unavailable') {
+			return result;
+		}
+	}
+
+	throw new Error('Meilisearch fallback did not become unavailable');
+}

@@ -46,6 +46,8 @@ export class Scanner {
 			time,
 			previousScanResult?.nodeScan.nodes ?? []
 		);
+		const nodeScanStart = Date.now();
+		this.logger.info('Starting node scan');
 		const nodeScanResult = await this.nodeScanner.execute(
 			nodeScan,
 			network.quorumSetConfiguration,
@@ -58,11 +60,19 @@ export class Scanner {
 		if (nodeScanResult.isErr()) {
 			return err(nodeScanResult.error);
 		}
+		this.logger.info('Finished node scan', {
+			nodes: nodeScan.nodes.length,
+			durationMs: Date.now() - nodeScanStart
+		});
 
 		const organizationScan = new OrganizationScan(
 			time,
 			previousScanResult?.organizationScan.organizations ?? []
 		);
+		const organizationScanStart = Date.now();
+		this.logger.info('Starting organization scan', {
+			homeDomains: nodeScan.getHomeDomains().length
+		});
 		const organizationScanResult = await this.organizationScanner.execute(
 			organizationScan,
 			nodeScan
@@ -70,8 +80,14 @@ export class Scanner {
 		if (organizationScanResult.isErr()) {
 			return err(organizationScanResult.error);
 		}
+		this.logger.info('Finished organization scan', {
+			organizations: organizationScan.organizations.length,
+			durationMs: Date.now() - organizationScanStart
+		});
 
 		const networkScan = new NetworkScan(time);
+		const networkScanStart = Date.now();
+		this.logger.info('Starting network scan analysis');
 		const networkScanResult = await this.networkScanner.execute(
 			networkScan,
 			nodeScan,
@@ -81,6 +97,10 @@ export class Scanner {
 		if (networkScanResult.isErr()) {
 			return err(networkScanResult.error);
 		}
+		this.logger.info('Finished network scan analysis', {
+			completed: networkScan.completed,
+			durationMs: Date.now() - networkScanStart
+		});
 
 		return ok({
 			networkScan,

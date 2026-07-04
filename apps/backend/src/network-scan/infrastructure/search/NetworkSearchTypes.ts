@@ -73,7 +73,9 @@ export interface NetworkSearchFacetValue {
 }
 
 export type NetworkSearchFallbackReason =
-	'meilisearch_unavailable' | 'meilisearch_unconfigured';
+	| 'meilisearch_syncing'
+	| 'meilisearch_unavailable'
+	| 'meilisearch_unconfigured';
 
 export interface NetworkSearchReadModel {
 	readonly fallbackReason: NetworkSearchFallbackReason | null;

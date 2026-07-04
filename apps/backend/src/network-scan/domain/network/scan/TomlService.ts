@@ -11,6 +11,10 @@ import { mapUnknownToError } from 'shared';
 import { CustomError } from 'custom-error';
 
 export const STELLAR_TOML_MAX_SIZE = 100 * 1024;
+const TOML_FETCH_CONCURRENCY = 24;
+const TOML_FETCH_RETRIES = 2;
+const TOML_FETCH_RETRY_SLEEP_MS = 300;
+const TOML_FETCH_TIMEOUT_MS = 2500;
 
 export class TomlParseError extends CustomError {
 	constructor(public cause: Error) {
@@ -44,6 +48,15 @@ export class TomlService {
 		>();
 		if (domains.length === 0) return tomlObjects;
 
+		const startTime = Date.now();
+		const uniqueDomains = Array.from(new Set(domains));
+		this.logger.info('Fetching stellar.toml files', {
+			domains: uniqueDomains.length,
+			concurrency: TOML_FETCH_CONCURRENCY,
+			timeoutMs: TOML_FETCH_TIMEOUT_MS,
+			retries: TOML_FETCH_RETRIES
+		});
+
 		const q = queue(async (domain: string, callback) => {
 			const tomlObjectResult = await this.fetchToml(domain);
 			if (tomlObjectResult.isOk()) {
@@ -56,11 +69,21 @@ export class TomlService {
 				});
 			}
 			callback();
-		}, 10);
+		}, TOML_FETCH_CONCURRENCY);
 
-		const uniqueDomains = new Set(domains);
-		Array.from(uniqueDomains).forEach((domain) => q.push(domain));
+		uniqueDomains.forEach((domain) => q.push(domain));
 		await q.drain();
+
+		this.logger.info('Fetched stellar.toml files', {
+			domains: uniqueDomains.length,
+			successes: Array.from(tomlObjects.values()).filter(
+				(value) => !(value instanceof TomlFetchError)
+			).length,
+			failures: Array.from(tomlObjects.values()).filter(
+				(value) => value instanceof TomlFetchError
+			).length,
+			durationMs: Date.now() - startTime
+		});
 
 		return tomlObjects;
 	}
@@ -75,12 +98,14 @@ export class TomlService {
 			throw new Error('invalid home domain: ' + homeDomain);
 
 		const tomlFileResponse = await retryHttpRequestIfNeeded(
-			3,
-			400,
+			TOML_FETCH_RETRIES,
+			TOML_FETCH_RETRY_SLEEP_MS,
 			this.httpService.get.bind(this.httpService),
 			urlResult.value,
 			{
-				maxContentLength: STELLAR_TOML_MAX_SIZE
+				maxContentLength: STELLAR_TOML_MAX_SIZE,
+				socketTimeoutMs: TOML_FETCH_TIMEOUT_MS,
+				connectionTimeoutMs: TOML_FETCH_TIMEOUT_MS
 			}
 		);
 

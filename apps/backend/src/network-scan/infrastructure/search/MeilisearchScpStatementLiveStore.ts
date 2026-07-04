@@ -1,11 +1,13 @@
 import { createHash } from 'crypto';
 import { Meilisearch, type Index } from 'meilisearch';
+import type { Logger } from '@core/services/Logger.js';
 import type {
 	ScpStatementObservation as CrawlerScpStatementObservation,
 	StellarValueSummary
 } from 'crawler';
 import type {
 	ScpStatementObservationV1,
+	ScpStatementPledgesV1,
 	ScpStatementValueV1
 } from 'shared';
 import type { ScpStatementObservationFilter } from '../../domain/scp/ScpStatementObservationRepository.js';
@@ -20,15 +22,14 @@ interface ScpStatementSearchDocument extends ScpStatementObservationV1 {
 
 const filterableAttributes = [
 	'nodeId',
+	'observedAtMs',
 	'observedFromPeer',
 	'slotIndex',
 	'statementType'
 ] as const;
 const sortableAttributes = ['observedAtMs', 'slotIndex'] as const;
-const maxTrackedDocumentIds = 20_000;
-const taskPollIntervalMs = 100;
-const documentTaskTimeoutMs = 30_000;
-const settingsTaskTimeoutMs = 30_000;
+const liveRetentionMs = 3 * 60 * 1_000;
+const retentionCleanupIntervalMs = 30_000;
 
 const mapStellarValueSummary = (
 	value: StellarValueSummary
@@ -36,8 +37,45 @@ const mapStellarValueSummary = (
 	closeTime: value.closeTime,
 	txSetHash: value.txSetHash,
 	upgradeCount: value.upgradeCount,
-	value: value.value
+	value: ''
 });
+
+const toSlimPledges = (
+	statementType: CrawlerScpStatementObservation['statementType']
+): ScpStatementPledgesV1 => {
+	const ballot = { counter: 0, value: '' };
+	if (statementType === 'nominate') {
+		return {
+			accepted: [],
+			quorumSetHash: '',
+			votes: []
+		};
+	}
+	if (statementType === 'prepare') {
+		return {
+			ballot,
+			nC: 0,
+			nH: 0,
+			prepared: null,
+			preparedPrime: null,
+			quorumSetHash: ''
+		};
+	}
+	if (statementType === 'confirm') {
+		return {
+			ballot,
+			nCommit: 0,
+			nH: 0,
+			nPrepared: 0,
+			quorumSetHash: ''
+		};
+	}
+	return {
+		commit: ballot,
+		nH: 0,
+		quorumSetHash: ''
+	};
+};
 
 const documentId = (statementHash: string): string =>
 	createHash('sha256').update(statementHash).digest('hex');
@@ -52,12 +90,12 @@ const toDocument = (
 	observedAtMs: observation.observedAt.getTime(),
 	observedFromAddress: observation.observedFromAddress,
 	observedFromPeer: observation.observedFromPeer,
-	pledges: observation.pledges,
-	signature: observation.signature,
+	pledges: toSlimPledges(observation.statementType),
+	signature: '',
 	slotIndex: observation.slotIndex,
 	statementHash: observation.statementHash,
 	statementType: observation.statementType,
-	statementXdr: observation.statementXdr,
+	statementXdr: '',
 	values: observation.values.map(mapStellarValueSummary)
 });
 
@@ -83,11 +121,11 @@ export class MeilisearchScpStatementLiveStore
 	implements ScpStatementLiveStore
 {
 	private indexReady = false;
-	private resetOnFirstWrite = true;
 	private readonly index: Index<ScpStatementSearchDocument> | undefined;
-	private readonly trackedDocumentIds: string[] = [];
+	private indexSetupPromise: Promise<void> | undefined;
+	private lastRetentionCleanupAtMs = 0;
 
-	constructor(config: NetworkSearchConfig) {
+	constructor(config: NetworkSearchConfig, private logger?: Logger) {
 		if (config.host && config.host.length > 0) {
 			const client = new Meilisearch({
 				apiKey: config.apiKey,
@@ -102,23 +140,10 @@ export class MeilisearchScpStatementLiveStore
 	): Promise<void> {
 		if (!this.index || observations.length === 0) return;
 		await this.ensureIndexReady();
-		if (this.resetOnFirstWrite) {
-			await this.index.deleteAllDocuments().waitTask({
-				interval: taskPollIntervalMs,
-				timeout: documentTaskTimeoutMs
-			});
-			this.trackedDocumentIds.length = 0;
-			this.resetOnFirstWrite = false;
-		}
 
 		const documents = observations.map(toDocument);
-		await this.index
-			.addDocuments(documents, { primaryKey: 'id' })
-			.waitTask({
-				interval: taskPollIntervalMs,
-				timeout: documentTaskTimeoutMs
-			});
-		this.trackDocumentIds(documents.map((document) => document.id));
+		await this.index.addDocuments(documents, { primaryKey: 'id' });
+		await this.enqueueRetentionCleanup(Date.now());
 	}
 
 	async findLatest({
@@ -143,19 +168,25 @@ export class MeilisearchScpStatementLiveStore
 
 	private async ensureIndexReady(): Promise<void> {
 		if (!this.index || this.indexReady) return;
-		await this.index
-			.updateFilterableAttributes([...filterableAttributes])
-			.waitTask({
-				interval: taskPollIntervalMs,
-				timeout: settingsTaskTimeoutMs
+		this.indexSetupPromise ??= this.enqueueIndexSettings();
+		await this.indexSetupPromise;
+	}
+
+	private async enqueueIndexSettings(): Promise<void> {
+		if (!this.index) return;
+		try {
+			await this.index.updateSettings({
+				filterableAttributes: [...filterableAttributes],
+				sortableAttributes: [...sortableAttributes]
 			});
-		await this.index
-			.updateSortableAttributes([...sortableAttributes])
-			.waitTask({
-				interval: taskPollIntervalMs,
-				timeout: settingsTaskTimeoutMs
+			this.indexReady = true;
+		} catch (error) {
+			this.indexSetupPromise = undefined;
+			this.logger?.error('Could not queue live SCP Meilisearch settings', {
+				error
 			});
-		this.indexReady = true;
+			throw error;
+		}
 	}
 
 	private buildFilter({
@@ -170,25 +201,26 @@ export class MeilisearchScpStatementLiveStore
 		return filters.length > 0 ? filters.join(' AND ') : undefined;
 	}
 
-	private trackDocumentIds(ids: readonly string[]): void {
-		this.trackedDocumentIds.push(...ids);
+	private async enqueueRetentionCleanup(nowMs: number): Promise<void> {
+		if (!this.index) return;
 		if (
-			!this.index ||
-			this.trackedDocumentIds.length <= maxTrackedDocumentIds
+			nowMs - this.lastRetentionCleanupAtMs <
+			retentionCleanupIntervalMs
 		) {
 			return;
 		}
+		this.lastRetentionCleanupAtMs = nowMs;
+		const cutoffMs = nowMs - liveRetentionMs;
 
-		const expiredIds = this.trackedDocumentIds.splice(
-			0,
-			this.trackedDocumentIds.length - maxTrackedDocumentIds
-		);
-		void this.index
-			.deleteDocuments(expiredIds)
-			.waitTask({
-				interval: taskPollIntervalMs,
-				timeout: documentTaskTimeoutMs
-			})
-			.catch(() => undefined);
+		try {
+			await this.index.deleteDocuments({
+				filter: `observedAtMs < ${cutoffMs}`
+			});
+		} catch (error) {
+			this.logger?.error('Could not queue live SCP retention cleanup', {
+				cutoffMs,
+				error
+			});
+		}
 	}
 }

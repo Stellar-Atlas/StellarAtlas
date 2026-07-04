@@ -11,6 +11,26 @@ import OrganizationSnapShot from '@network-scan/domain/organization/Organization
 export class TypeOrmOrganizationRepository implements OrganizationRepository {
 	constructor(private baseRepository: Repository<Organization>) {}
 
+	private async assignPersistedId(
+		organization: Organization,
+		entityManager: EntityManager
+	): Promise<boolean> {
+		const rows = (await entityManager.query(
+			`select id
+			from "organization"
+			where "organizationIdValue" = $1 or "homeDomain" = $2
+			order by case when "organizationIdValue" = $1 then 0 else 1 end
+			limit 1`,
+			[organization.organizationId.value, organization.homeDomain]
+		)) as Array<{ id: number }>;
+		const persistedId = rows[0]?.id;
+
+		if (persistedId === undefined) return false;
+
+		organization.id = persistedId;
+		return true;
+	}
+
 	async findByOrganizationId(
 		organizationId: OrganizationId
 	): Promise<Organization | null> {
@@ -118,16 +138,10 @@ export class TypeOrmOrganizationRepository implements OrganizationRepository {
 			snapshot.organization = organization;
 		});
 
-		const count = await baseRepo.count(Organization, {
-			where: {
-				organizationId: {
-					value: organization.organizationId.value
-				}
-			}
-		});
-
-		if (count === 0) {
+		const isPersisted = await this.assignPersistedId(organization, baseRepo);
+		if (!isPersisted) {
 			await baseRepo.insert(Organization, organization);
+			await this.assignPersistedId(organization, baseRepo);
 		}
 
 		const snapshotsToSave = organization.snapshots.filter((snapshot) => {

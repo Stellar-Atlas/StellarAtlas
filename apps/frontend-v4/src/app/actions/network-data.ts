@@ -24,5 +24,13 @@ export async function getLatestLedger(): Promise<PublicLatestLedger> {
 export async function getLedgerTransactions(
 	slotIndex: string
 ): Promise<PublicLedgerTransactions> {
-	return fetchLedgerTransactions(slotIndex, { cache: 'no-store' });
+	try {
+		return await fetchLedgerTransactions(slotIndex, { cache: 'no-store' });
+	} catch {
+		return {
+			ledger: slotIndex,
+			records: [],
+			truncated: false
+		};
+	}
 }

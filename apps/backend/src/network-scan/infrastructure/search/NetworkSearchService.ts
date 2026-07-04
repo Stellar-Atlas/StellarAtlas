@@ -68,8 +68,9 @@ const HIT_ATTRIBUTES = [
 ] as const;
 
 const SORTABLE_ATTRIBUTES = ['label', 'networkTime', 'latestLedger'] as const;
-const settingsTaskTimeoutMs = 15_000;
-const documentTaskTimeoutMs = 30_000;
+const taskPollIntervalMs = 50;
+const settingsTaskTimeoutMs = 60_000;
+const documentTaskTimeoutMs = 60_000;
 
 const sanitizeLimit = (limit: number): number => {
 	if (!Number.isInteger(limit)) return 8;
@@ -276,6 +277,8 @@ export class NetworkSearchService {
 	private documents: readonly NetworkSearchDocument[] = [];
 	private indexedNetworkTime: string | undefined;
 	private indexReady = false;
+	private settingsReady = false;
+	private syncFailed = false;
 	private readonly index: Index<NetworkSearchDocument> | undefined;
 	private readonly indexName: string;
 	private syncPromise: Promise<void> | undefined;
@@ -306,8 +309,19 @@ export class NetworkSearchService {
 			);
 		}
 
+		if (!this.indexReady) {
+			this.startSyncIndex();
+			return memorySearch(
+				this.documents,
+				request,
+				network.time,
+				readModel(
+					this.syncFailed ? 'meilisearch_unavailable' : 'meilisearch_syncing'
+				)
+			);
+		}
+
 		try {
-			await this.syncIndex();
 			const filter = buildMeilisearchFilter(request, network.time);
 			const response = await this.index.search<NetworkSearchDocument>(
 				request.query,
@@ -329,6 +343,9 @@ export class NetworkSearchService {
 				source: 'meilisearch'
 			};
 		} catch (error) {
+			this.indexReady = false;
+			this.syncFailed = true;
+			this.startSyncIndex();
 			this.logger?.error('Network search Meilisearch unavailable', {
 				error: errorMessage(error),
 				indexName: this.indexName,
@@ -350,45 +367,81 @@ export class NetworkSearchService {
 		this.documents = buildNetworkSearchDocuments(network);
 		this.indexedNetworkTime = network.time;
 		this.indexReady = false;
+		this.syncFailed = false;
 		this.syncPromise = undefined;
 	}
 
-	private async syncIndex(): Promise<void> {
-		if (!this.index || this.indexReady) return;
+	private syncIndex(): Promise<void> {
+		if (!this.index || this.indexReady) return Promise.resolve();
 		if (this.syncPromise) return this.syncPromise;
 
-		this.syncPromise = this.writeIndex();
-		await this.syncPromise;
+		const networkTime = this.indexedNetworkTime;
+		const documents = [...this.documents];
+		const syncPromise = this.writeIndex(documents, networkTime)
+			.then(() => {
+				if (this.indexedNetworkTime !== networkTime) return;
+				this.indexReady = true;
+				this.syncFailed = false;
+				this.logger?.info('Network search Meilisearch index synced', {
+					documentCount: documents.length,
+					indexName: this.indexName,
+					networkTime
+				});
+			})
+			.catch((error: unknown) => {
+				this.syncFailed = true;
+				this.logger?.error('Network search Meilisearch sync failed', {
+					error: errorMessage(error),
+					indexName: this.indexName,
+					networkTime
+				});
+			})
+			.finally(() => {
+				if (this.syncPromise === syncPromise) {
+					this.syncPromise = undefined;
+				}
+			});
+		this.syncPromise = syncPromise;
+
+		return syncPromise;
 	}
 
-	private async writeIndex(): Promise<void> {
+	private startSyncIndex(): void {
+		void this.syncIndex();
+	}
+
+	private async writeIndex(
+		documents: readonly NetworkSearchDocument[],
+		networkTime: string | undefined
+	): Promise<void> {
 		if (!this.index) return;
-
-		const searchableTask = await this.index
-			.updateSearchableAttributes([...SEARCHABLE_ATTRIBUTES])
-			.waitTask({ interval: 50, timeout: settingsTaskTimeoutMs });
-		assertTaskSucceeded(searchableTask.status, 'searchable attributes');
-
-		const filterableTask = await this.index
-			.updateFilterableAttributes([...FILTERABLE_ATTRIBUTES])
-			.waitTask({ interval: 50, timeout: settingsTaskTimeoutMs });
-		assertTaskSucceeded(filterableTask.status, 'filterable attributes');
-
-		const sortableTask = await this.index
-			.updateSortableAttributes([...SORTABLE_ATTRIBUTES])
-			.waitTask({ interval: 50, timeout: settingsTaskTimeoutMs });
-		assertTaskSucceeded(sortableTask.status, 'sortable attributes');
+		if (!this.settingsReady) await this.syncSettings();
 
 		const documentTask = await this.index
-			.addDocuments([...this.documents], { primaryKey: 'id' })
-			.waitTask({ interval: 50, timeout: documentTaskTimeoutMs });
+			.addDocuments([...documents], { primaryKey: 'id' })
+			.waitTask({
+				interval: taskPollIntervalMs,
+				timeout: documentTaskTimeoutMs
+			});
 		assertTaskSucceeded(documentTask.status, 'document update');
+		if (this.indexedNetworkTime !== networkTime) return;
+	}
 
-		this.logger?.info('Network search Meilisearch index synced', {
-			documentCount: this.documents.length,
-			indexName: this.indexName,
-			networkTime: this.indexedNetworkTime
-		});
-		this.indexReady = true;
+	private async syncSettings(): Promise<void> {
+		if (!this.index || this.settingsReady) return;
+
+		const searchableTask = await this.index
+			.updateSettings({
+				filterableAttributes: [...FILTERABLE_ATTRIBUTES],
+				searchableAttributes: [...SEARCHABLE_ATTRIBUTES],
+				sortableAttributes: [...SORTABLE_ATTRIBUTES]
+			})
+			.waitTask({
+				interval: taskPollIntervalMs,
+				timeout: settingsTaskTimeoutMs
+			});
+		assertTaskSucceeded(searchableTask.status, 'settings');
+
+		this.settingsReady = true;
 	}
 }

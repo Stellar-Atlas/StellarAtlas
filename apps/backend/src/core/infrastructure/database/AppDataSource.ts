@@ -35,6 +35,7 @@ function databaseSslEnabled(): boolean {
 }
 
 const useDatabaseSsl = databaseSslEnabled();
+const runMigrations = parseBoolean(process.env.DATABASE_MIGRATIONS_RUN) ?? true;
 
 const AppDataSource = new DataSource({
 	type: 'postgres',
@@ -43,7 +44,7 @@ const AppDataSource = new DataSource({
 	url: process.env.ACTIVE_DATABASE_URL,
 	entities: ['lib/**/entities/*.js', 'lib/**/domain/**/!(*.test)*.js'],
 	migrations: ['lib/**/migrations/*.js'],
-	migrationsRun: true,
+	migrationsRun: runMigrations,
 	ssl: useDatabaseSsl,
 	extra: useDatabaseSsl
 		? {
