@@ -10,6 +10,8 @@ import { ScanSettings } from '../scan/ScanSettings.js';
 import { ScanResult } from '../scan/ScanResult.js';
 import { Url } from 'http-helper';
 import { TYPES } from '../../infrastructure/di/di-types.js';
+import { noopParsedHistorySink } from './parsed-history/ParsedHistorySink.js';
+import type { ParsedHistorySink } from './parsed-history/ParsedHistorySink.js';
 
 export interface LedgerHeader {
 	ledger: number;
@@ -26,7 +28,11 @@ export class Scanner {
 		private readonly rangeSize = 1000000
 	) {}
 
-	async perform(time: Date, scanJob: ScanJob): Promise<Scan> {
+	async perform(
+		time: Date,
+		scanJob: ScanJob,
+		parsedHistorySink: ParsedHistorySink = noopParsedHistorySink
+	): Promise<Scan> {
 		const scanTimer = Scanner.createTimerLabel('scan');
 		console.time(scanTimer);
 
@@ -58,7 +64,11 @@ export class Scanner {
 			isSlowArchive: scanSettings.isSlowArchive
 		});
 
-		const scanResult = await this.scanInRanges(scanJob.url, scanSettings);
+		const scanResult = await this.scanInRanges(
+			scanJob.url,
+			scanSettings,
+			parsedHistorySink
+		);
 		const scan = scanJob.createScanFromScanResult(
 			time,
 			new Date(),
@@ -72,7 +82,8 @@ export class Scanner {
 
 	private async scanInRanges(
 		url: Url,
-		scanSettings: ScanSettings
+		scanSettings: ScanSettings,
+		parsedHistorySink: ParsedHistorySink
 	): Promise<ScanResult> {
 		const latestLedgerHeader: LedgerHeader = {
 			ledger: scanSettings.latestScannedLedger,
@@ -106,7 +117,8 @@ export class Scanner {
 				rangeFromLedger,
 				previousRangeHeader.ledger,
 				previousRangeHeader.hash ?? null,
-				alreadyScannedBucketHashes
+				alreadyScannedBucketHashes,
+				parsedHistorySink
 			);
 			console.timeEnd(rangeTimer);
 

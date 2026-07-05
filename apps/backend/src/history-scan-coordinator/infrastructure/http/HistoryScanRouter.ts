@@ -15,6 +15,8 @@ import {
 	requireObjectBody,
 	scanDtoValidators
 } from './ScanRequestValidation.js';
+import { ParsedLedgerHeaderBatchDTO } from 'history-scanner-dto';
+import { RegisterParsedLedgerHeaders } from '../../use-cases/register-parsed-ledger-headers/RegisterParsedLedgerHeaders.js';
 import {
 	frontendCacheTags,
 	type FrontendRevalidationConfig,
@@ -25,6 +27,7 @@ export interface HistoryScanRouterConfig extends FrontendRevalidationConfig {
 	getLatestScan: GetLatestScan;
 	getScanLogs: GetScanLogs;
 	getScanJob: GetScanJob;
+	registerParsedLedgerHeaders: RegisterParsedLedgerHeaders;
 	registerScan: RegisterScan;
 	touchScanJob: TouchScanJob;
 	userName?: string;
@@ -61,6 +64,33 @@ export const HistoryScanRouterWrapper = (
 				]);
 
 				return res.status(201).json({ message: 'Scan created successfully' });
+			}
+		);
+
+	if (config.userName && config.password)
+		historyScanRouter.post(
+			'/parsed-ledger-headers',
+			basicAuth({
+				users: { [config.userName]: config.password },
+				challenge: true
+			}),
+			requireObjectBody,
+			async (req: express.Request, res: express.Response) => {
+				const dtoResult = ParsedLedgerHeaderBatchDTO.fromJSON(req.body);
+				if (dtoResult.isErr()) {
+					return res.status(400).json({ error: dtoResult.error.message });
+				}
+
+				const result = await config.registerParsedLedgerHeaders.execute(
+					dtoResult.value
+				);
+				if (result.isErr()) {
+					return res.status(500).json({ error: result.error.message });
+				}
+
+				return res
+					.status(201)
+					.json({ message: 'Parsed ledger headers registered' });
 			}
 		);
 

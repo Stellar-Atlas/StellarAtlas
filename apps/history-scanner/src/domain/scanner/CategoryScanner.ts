@@ -34,6 +34,8 @@ import { getMaximumNumber } from './getMaximumNumber.js';
 import { TYPES } from './../../infrastructure/di/di-types.js';
 import { createCategoryVerificationScanErrors } from './createCategoryVerificationScanErrors.js';
 import { terminateHasherPool } from './terminateHasherPool.js';
+import { noopParsedHistorySink } from './parsed-history/ParsedHistorySink.js';
+import type { ParsedHistorySink } from './parsed-history/ParsedHistorySink.js';
 
 type Ledger = number;
 type Hash = string;
@@ -200,15 +202,17 @@ export class CategoryScanner {
 
 	async scanOtherCategories(
 		scanState: CategoryScanState,
-		verify = false
+		verify = false,
+		parsedHistorySink: ParsedHistorySink = noopParsedHistorySink
 	): Promise<Result<LedgerHeader | undefined, ScanError>> {
 		if (!verify) return await this.otherCategoriesExist(scanState);
 
-		return await this.verifyOtherCategories(scanState);
+		return await this.verifyOtherCategories(scanState, parsedHistorySink);
 	}
 
 	private async verifyOtherCategories(
-		scanState: CategoryScanState
+		scanState: CategoryScanState,
+		parsedHistorySink: ParsedHistorySink
 	): Promise<Result<undefined | LedgerHeader, ScanError>> {
 		const pool = new HasherPool(this.hasherWorkerCount);
 		const poolLoadTracker = new WorkerPoolLoadTracker(
@@ -246,7 +250,8 @@ export class CategoryScanner {
 				pool,
 				request.url,
 				request.meta.category,
-				categoryVerificationData
+				categoryVerificationData,
+				parsedHistorySink
 			);
 			try {
 				await pipeline([

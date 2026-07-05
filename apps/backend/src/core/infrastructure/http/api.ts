@@ -39,6 +39,7 @@ import { GetMeasurementAggregations } from '@network-scan/use-cases/get-measurem
 import { GetScpStatements } from '@network-scan/use-cases/get-scp-statements/GetScpStatements.js';
 import { RequestUnsubscribeLink } from '@notifications/use-cases/request-unsubscribe-link/RequestUnsubscribeLink.js';
 import { RegisterScan } from '@history-scan-coordinator/use-cases/register-scan/RegisterScan.js';
+import { RegisterParsedLedgerHeaders } from '@history-scan-coordinator/use-cases/register-parsed-ledger-headers/RegisterParsedLedgerHeaders.js';
 import { historyScanRouter } from '@history-scan-coordinator/infrastructure/http/HistoryScanRouter.js';
 import { archiveScanRouter } from '@history-scan-coordinator/infrastructure/http/ArchiveScanRouter.js';
 import { communityScannerRouter } from '@history-scan-coordinator/infrastructure/http/CommunityScannerRouter.js';
@@ -227,6 +228,9 @@ const listen = async () => {
 		historyScanRouter({
 			getLatestScan: kernel.container.get(GetLatestScan),
 			getScanLogs: kernel.container.get(GetScanLogs),
+			registerParsedLedgerHeaders: kernel.container.get(
+				RegisterParsedLedgerHeaders
+			),
 			registerScan: kernel.container.get(RegisterScan),
 			userName: config.historyScanAPIUsername,
 			password: config.historyScanAPIPassword,

@@ -4,6 +4,7 @@ import { mock } from 'jest-mock-extended';
 import { ok } from 'neverthrow';
 import { Scan } from '@domain/scan/Scan.js';
 import { ScanError, ScanErrorType } from '@domain/scan/ScanError.js';
+import { ParsedLedgerHeaderBatchDTO } from 'history-scanner-dto';
 
 describe('RESTScanCoordinatorService Integration Tests', () => {
 	let httpService: jest.Mocked<HttpService>;
@@ -128,6 +129,74 @@ describe('RESTScanCoordinatorService Integration Tests', () => {
 					}
 				}
 			);
+		});
+	});
+
+	describe('registerParsedLedgerHeaders', () => {
+		it('should post parsed ledger headers for internal scanners', async () => {
+			const batch = new ParsedLedgerHeaderBatchDTO(
+				'https://history.stellar.org',
+				'remote-id',
+				new Date('2026-07-05T01:42:51.000Z'),
+				[
+					{
+						bucketListHash: 'bucket-list-hash',
+						ledgerHeaderHash: 'ledger-header-hash',
+						ledgerSequence: 63332922,
+						previousLedgerHeaderHash: 'previous-ledger-header-hash',
+						protocolVersion: 23,
+						transactionResultHash: 'transaction-result-hash',
+						transactionSetHash: 'transaction-set-hash'
+					}
+				]
+			);
+			httpService.post.mockResolvedValue(
+				ok({
+					status: 201,
+					statusText: 'Created',
+					headers: {},
+					data: { message: 'Parsed ledger headers registered' }
+				})
+			);
+
+			const result = await service.registerParsedLedgerHeaders(batch);
+
+			expect(result.isOk()).toBe(true);
+			expect(httpService.post).toHaveBeenCalledWith(
+				Url.create(
+					`${baseUrl}/v1/history-scan/parsed-ledger-headers`
+				)._unsafeUnwrap(),
+				batch as unknown as Record<string, unknown>,
+				{
+					auth: {
+						username,
+						password: secret
+					}
+				}
+			);
+		});
+
+		it('should not post parsed ledger headers for community scanners', async () => {
+			const communityService = new RESTScanCoordinatorService(
+				httpService,
+				baseUrl,
+				{
+					type: 'community',
+					scannerId: '164f7788-9edb-4bb5-81c1-b928d85a21a5',
+					apiKey: 'satlas_scanner_secret'
+				}
+			);
+			const result = await communityService.registerParsedLedgerHeaders(
+				new ParsedLedgerHeaderBatchDTO(
+					'https://history.stellar.org',
+					'remote-id',
+					new Date('2026-07-05T01:42:51.000Z'),
+					[]
+				)
+			);
+
+			expect(result.isOk()).toBe(true);
+			expect(httpService.post).not.toHaveBeenCalled();
 		});
 	});
 

@@ -27,6 +27,10 @@ import { RegisterCommunityScanner } from '../../use-cases/RegisterCommunityScann
 import { SendScannerHeartbeat } from '../../use-cases/SendScannerHeartbeat.js';
 import type { CommunityScannerRegistrationThrottleRepository } from '../../domain/CommunityScannerRegistrationThrottle.js';
 import { TypeOrmCommunityScannerRegistrationThrottleRepository } from '../repositories/database/TypeOrmCommunityScannerRegistrationThrottleRepository.js';
+import { RegisterParsedLedgerHeaders } from '../../use-cases/register-parsed-ledger-headers/RegisterParsedLedgerHeaders.js';
+import type { ParsedLedgerHeaderRepository } from '../../domain/parsed-history/ParsedLedgerHeaderRepository.js';
+import { TypeOrmParsedLedgerHeaderRepository } from '../repositories/database/TypeOrmParsedLedgerHeaderRepository.js';
+import { ParsedLedgerHeader } from '../database/entities/ParsedLedgerHeader.js';
 
 export function load(container: Container, config: Config) {
 	const dataSource = container.get(DataSource);
@@ -41,6 +45,7 @@ export function load(container: Container, config: Config) {
 	container.bind(SendScannerHeartbeat).toSelf();
 	container.bind(TouchScanJob).toSelf();
 	container.bind(RegisterScan).toSelf();
+	container.bind(RegisterParsedLedgerHeaders).toSelf();
 	container.bind(ScheduleScanJobs).toSelf();
 	container.bind<ScanScheduler>(TYPES.ScanScheduler).toDynamicValue(() => {
 		return new RestartAtLeastOneScan();
@@ -76,6 +81,15 @@ export function load(container: Container, config: Config) {
 		.toDynamicValue(() => {
 			return new TypeOrmHistoryArchiveScanResultRepository(
 				dataSource.getRepository(Scan)
+			);
+		})
+		.inRequestScope();
+
+	container
+		.bind<ParsedLedgerHeaderRepository>(TYPES.ParsedLedgerHeaderRepository)
+		.toDynamicValue(() => {
+			return new TypeOrmParsedLedgerHeaderRepository(
+				dataSource.getRepository(ParsedLedgerHeader)
 			);
 		})
 		.inRequestScope();

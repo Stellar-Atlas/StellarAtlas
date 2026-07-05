@@ -36,6 +36,9 @@ describe('VerifyArchives', () => {
 		scannerMock = mock<Scanner>();
 		scanCoordinatorMock = mock<ScanCoordinatorService>();
 		scanCoordinatorMock.touchScanJob.mockResolvedValue(ok(undefined));
+		scanCoordinatorMock.registerParsedLedgerHeaders.mockResolvedValue(
+			ok(undefined)
+		);
 		exceptionLoggerMock = mock<ExceptionLogger>();
 		jobMonitorMock = mock<JobMonitor>();
 
@@ -122,6 +125,11 @@ describe('VerifyArchives', () => {
 		await verifyArchives.execute({ persist: true, loop: false });
 
 		expect(scanCoordinatorMock.registerScan).toHaveBeenCalled();
+		expect(scannerMock.perform).toHaveBeenCalledWith(
+			expect.any(Date),
+			expect.anything(),
+			expect.any(Object)
+		);
 		expect(scanCoordinatorMock.touchScanJob).toHaveBeenCalledTimes(1);
 	});
 

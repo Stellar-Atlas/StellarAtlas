@@ -3,6 +3,10 @@ import { Category } from '../../history-archive/Category.js';
 import type { CategoryVerificationData } from '../CategoryScanner.js';
 import { CategoryXDRProcessor } from '../CategoryXDRProcessor.js';
 import type { HasherPool } from '../HasherPool.js';
+import type {
+	ParsedHistoryRecord,
+	ParsedHistorySink
+} from '../parsed-history/ParsedHistorySink.js';
 
 it('should apply workerpool results before acknowledging a write', async () => {
 	let resolveExec: ((value: unknown) => void) | undefined;
@@ -45,10 +49,71 @@ it('should propagate workerpool errors through the write callback', async () => 
 	await expect(writeXdr(processor)).rejects.toBe(error);
 });
 
+it('should emit parsed ledger header records while preserving verification data', async () => {
+	const ledgerHeaderResult = {
+		ledger: 127,
+		transactionsHash: 'transactions-hash',
+		transactionResultsHash: 'transaction-results-hash',
+		previousLedgerHeaderHash: 'previous-ledger-header-hash',
+		ledgerHeaderHash: 'ledger-header-hash',
+		bucketListHash: 'bucket-list-hash',
+		protocolVersion: 22
+	};
+	const emit = jest.fn<(record: ParsedHistoryRecord) => void>();
+	const exec = jest.fn(async () => ledgerHeaderResult);
+	const verificationData = createVerificationData();
+	const processor = newProcessor(
+		Category.ledger,
+		createPool(exec),
+		verificationData,
+		{ emit }
+	);
+
+	await writeXdr(processor);
+
+	expect(emit).toHaveBeenCalledWith({
+		recordType: 'ledger-header',
+		sourceUrl: 'https://history.example',
+		ledger: 127,
+		protocolVersion: 22,
+		ledgerHeaderHash: 'ledger-header-hash',
+		previousLedgerHeaderHash: 'previous-ledger-header-hash',
+		transactionSetHash: 'transactions-hash',
+		transactionResultSetHash: 'transaction-results-hash',
+		bucketListHash: 'bucket-list-hash'
+	});
+	expect(verificationData.expectedHashesPerLedger.get(127)).toEqual({
+		txSetResultHash: 'transaction-results-hash',
+		txSetHash: 'transactions-hash',
+		previousLedgerHeaderHash: 'previous-ledger-header-hash',
+		bucketListHash: 'bucket-list-hash'
+	});
+	expect(verificationData.calculatedLedgerHeaderHashes.get(127)).toBe(
+		'ledger-header-hash'
+	);
+	expect(verificationData.protocolVersions.get(127)).toBe(22);
+});
+
+it('should not emit parsed history records for transaction categories', async () => {
+	const emit = jest.fn<(record: ParsedHistoryRecord) => void>();
+	const exec = jest.fn(async () => ({ ledger: 7, hash: 'tx-set-hash' }));
+	const processor = newProcessor(
+		Category.transactions,
+		createPool(exec),
+		createVerificationData(),
+		{ emit }
+	);
+
+	await writeXdr(processor);
+
+	expect(emit).not.toHaveBeenCalled();
+});
+
 function newProcessor(
 	category: Category,
 	pool: HasherPool,
-	categoryVerificationData: CategoryVerificationData
+	categoryVerificationData: CategoryVerificationData,
+	parsedHistorySink?: ParsedHistorySink
 ): CategoryXDRProcessor {
 	const url = Url.create('https://history.example');
 	if (url.isErr()) throw url.error;
@@ -57,7 +122,8 @@ function newProcessor(
 		pool,
 		url.value,
 		category,
-		categoryVerificationData
+		categoryVerificationData,
+		parsedHistorySink
 	);
 }
 

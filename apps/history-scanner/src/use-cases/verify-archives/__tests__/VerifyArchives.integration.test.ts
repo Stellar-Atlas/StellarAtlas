@@ -43,6 +43,9 @@ describe('VerifyArchives Integration Tests', () => {
 
 		coordinatorServiceMock.getScanJob.mockResolvedValue(ok(mockScanJob));
 		coordinatorServiceMock.registerScan.mockResolvedValue(ok(undefined));
+		coordinatorServiceMock.registerParsedLedgerHeaders.mockResolvedValue(
+			ok(undefined)
+		);
 		coordinatorServiceMock.touchScanJob.mockResolvedValue(ok(undefined));
 
 		await verifyArchives.execute({
@@ -51,6 +54,9 @@ describe('VerifyArchives Integration Tests', () => {
 		});
 
 		expect(coordinatorServiceMock.getScanJob).toHaveBeenCalled();
+		expect(
+			coordinatorServiceMock.registerParsedLedgerHeaders
+		).toHaveBeenCalled();
 		expect(coordinatorServiceMock.registerScan).toHaveBeenCalled();
 
 		const registeredScan = coordinatorServiceMock.registerScan.mock.calls[0][0];

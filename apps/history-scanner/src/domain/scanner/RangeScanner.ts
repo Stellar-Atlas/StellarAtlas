@@ -12,6 +12,8 @@ import { BucketScanner } from './BucketScanner.js';
 import { ScanError } from '../scan/ScanError.js';
 import { LedgerHeader } from './Scanner.js';
 import { TYPES } from '../../infrastructure/di/di-types.js';
+import { noopParsedHistorySink } from './parsed-history/ParsedHistorySink.js';
+import type { ParsedHistorySink } from './parsed-history/ParsedHistorySink.js';
 
 export interface RangeScanResult {
 	latestLedgerHeader?: LedgerHeader;
@@ -39,7 +41,8 @@ export class RangeScanner {
 		fromLedger: number,
 		latestScannedLedger: number,
 		latestScannedLedgerHeaderHash: string | null = null,
-		alreadyScannedBucketHashes = new Set<string>()
+		alreadyScannedBucketHashes = new Set<string>(),
+		parsedHistorySink: ParsedHistorySink = noopParsedHistorySink
 	): Promise<Result<RangeScanResult, ScanError>> {
 		this.logger.info('Starting range scan', {
 			history: baseUrl.value,
@@ -99,7 +102,10 @@ export class RangeScanner {
 
 			const errors: ScanError[] = [];
 			let latestLedgerHeader: LedgerHeader | undefined;
-			const categoryScanResult = await this.scanCategories(categoryScanState);
+			const categoryScanResult = await this.scanCategories(
+				categoryScanState,
+				parsedHistorySink
+			);
 			if (categoryScanResult.isErr())
 				errors.push(...this.expandScanError(categoryScanResult.error));
 			else latestLedgerHeader = categoryScanResult.value;
@@ -175,14 +181,19 @@ export class RangeScanner {
 	}
 
 	private async scanCategories(
-		scanState: CategoryScanState
+		scanState: CategoryScanState,
+		parsedHistorySink: ParsedHistorySink
 	): Promise<Result<LedgerHeader | undefined, ScanError>> {
 		const timerLabel = RangeScanner.createTimerLabel('category');
 		console.time(timerLabel);
 		this.logger.info('Scanning other category files');
 
 		const scanOtherCategoriesResult =
-			await this.categoryScanner.scanOtherCategories(scanState, true);
+			await this.categoryScanner.scanOtherCategories(
+				scanState,
+				true,
+				parsedHistorySink
+			);
 
 		console.timeEnd(timerLabel);
 

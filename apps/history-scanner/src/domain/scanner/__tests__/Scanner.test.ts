@@ -35,7 +35,8 @@ it('should scan', async function () {
 		100,
 		200,
 		'ledger_hash',
-		new Set(['a'])
+		new Set(['a']),
+		expect.any(Object)
 	);
 });
 

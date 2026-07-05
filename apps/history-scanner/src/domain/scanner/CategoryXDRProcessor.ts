@@ -4,13 +4,16 @@ import { LedgerHeaderHistoryEntryResult } from './hash-worker.js';
 import { Url } from 'http-helper';
 import { CategoryVerificationData } from './CategoryScanner.js';
 import { HasherPool } from './HasherPool.js';
+import { noopParsedHistorySink } from './parsed-history/ParsedHistorySink.js';
+import type { ParsedHistorySink } from './parsed-history/ParsedHistorySink.js';
 
 export class CategoryXDRProcessor extends Writable {
 	constructor(
 		public pool: HasherPool,
 		public url: Url,
 		public category: Category,
-		public categoryVerificationData: CategoryVerificationData
+		public categoryVerificationData: CategoryVerificationData,
+		private readonly parsedHistorySink: ParsedHistorySink = noopParsedHistorySink
 	) {
 		super();
 	}
@@ -74,6 +77,19 @@ export class CategoryXDRProcessor extends Writable {
 			xdr,
 			'processLedgerHeaderHistoryEntryXDR'
 		);
+		await this.parsedHistorySink.emit({
+			recordType: 'ledger-header',
+			sourceUrl: this.url.value,
+			ledger: ledgerHeaderResult.ledger,
+			protocolVersion: ledgerHeaderResult.protocolVersion,
+			ledgerHeaderHash: ledgerHeaderResult.ledgerHeaderHash,
+			previousLedgerHeaderHash:
+				ledgerHeaderResult.previousLedgerHeaderHash,
+			transactionSetHash: ledgerHeaderResult.transactionsHash,
+			transactionResultSetHash: ledgerHeaderResult.transactionResultsHash,
+			bucketListHash: ledgerHeaderResult.bucketListHash
+		});
+
 		this.categoryVerificationData.expectedHashesPerLedger.set(
 			ledgerHeaderResult.ledger,
 			{

@@ -12,12 +12,14 @@ import { ScanJob } from '@history-scan-coordinator/domain/ScanJob.js';
 import { GetScanJob } from '@history-scan-coordinator/use-cases/get-scan-job/GetScanJob.js';
 import { TouchScanJob } from '@history-scan-coordinator/use-cases/touch-scan-job/TouchScanJob.js';
 import { GetScanLogs } from '@history-scan-coordinator/use-cases/get-scan-logs/GetScanLogs.js';
+import { RegisterParsedLedgerHeaders } from '@history-scan-coordinator/use-cases/register-parsed-ledger-headers/RegisterParsedLedgerHeaders.js';
 import { randomUUID } from 'crypto';
 
 describe('HistoryScanRouter.integration', () => {
 	let app: express.Application;
 	let getLatestScan: jest.Mocked<GetLatestScan>;
 	let registerScan: jest.Mocked<RegisterScan>;
+	let registerParsedLedgerHeaders: jest.Mocked<RegisterParsedLedgerHeaders>;
 	let getScanJob: jest.Mocked<GetScanJob>;
 	let touchScanJob: jest.Mocked<TouchScanJob>;
 	let getScanLogs: jest.Mocked<GetScanLogs>;
@@ -25,6 +27,7 @@ describe('HistoryScanRouter.integration', () => {
 	beforeEach(() => {
 		getLatestScan = mock<GetLatestScan>();
 		registerScan = mock<RegisterScan>();
+		registerParsedLedgerHeaders = mock<RegisterParsedLedgerHeaders>();
 		getScanJob = mock<GetScanJob>();
 		touchScanJob = mock<TouchScanJob>();
 		getScanLogs = mock<GetScanLogs>();
@@ -37,6 +40,7 @@ describe('HistoryScanRouter.integration', () => {
 				getLatestScan,
 				getScanLogs,
 				registerScan,
+				registerParsedLedgerHeaders,
 				getScanJob,
 				touchScanJob,
 				userName: 'admin',
@@ -181,6 +185,65 @@ describe('HistoryScanRouter.integration', () => {
 				});
 
 			expect(registerScan.execute).toHaveBeenCalledWith(validBody);
+		});
+	});
+
+	describe('POST /parsed-ledger-headers', () => {
+		it('should require authentication', async () => {
+			await request(app)
+				.post('/history-scan/parsed-ledger-headers')
+				.send({})
+				.expect(401);
+		});
+
+		it('should validate parsed ledger header batches', async () => {
+			await request(app)
+				.post('/history-scan/parsed-ledger-headers')
+				.auth('admin', 'secret')
+				.send({})
+				.expect(400);
+
+			expect(registerParsedLedgerHeaders.execute).not.toHaveBeenCalled();
+		});
+
+		it('should register parsed ledger header batches', async () => {
+			registerParsedLedgerHeaders.execute.mockResolvedValue(ok(undefined));
+
+			const body = {
+				headers: [
+					{
+						bucketListHash: 'bucket-list-hash',
+						ledgerHeaderHash: 'ledger-header-hash',
+						ledgerSequence: 63332922,
+						previousLedgerHeaderHash: 'previous-ledger-header-hash',
+						protocolVersion: 23,
+						transactionResultHash: 'transaction-result-hash',
+						transactionSetHash: 'transaction-set-hash'
+					}
+				],
+				observedAt: '2026-07-05T01:42:51.000Z',
+				scanJobRemoteId: 'scan-job-1',
+				sourceArchiveUrl: 'https://history.stellar.org'
+			};
+
+			await request(app)
+				.post('/history-scan/parsed-ledger-headers')
+				.auth('admin', 'secret')
+				.send(body)
+				.expect(201)
+				.expect((response) => {
+					expect(response.body.message).toBe(
+						'Parsed ledger headers registered'
+					);
+				});
+
+			expect(registerParsedLedgerHeaders.execute).toHaveBeenCalledWith(
+				expect.objectContaining({
+					headers: body.headers,
+					scanJobRemoteId: body.scanJobRemoteId,
+					sourceArchiveUrl: body.sourceArchiveUrl
+				})
+			);
 		});
 	});
 

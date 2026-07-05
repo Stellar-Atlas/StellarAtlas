@@ -5,6 +5,7 @@ import { injectable } from 'inversify';
 import { err, ok, Result } from 'neverthrow';
 import { Scan } from '../../domain/scan/Scan.js';
 import {
+	ParsedLedgerHeaderBatchDTO,
 	ScanDTO,
 	ScanJobDTO,
 	type ScanErrorDTO,
@@ -58,6 +59,40 @@ export class RESTScanCoordinatorService implements ScanCoordinatorService {
 
 		if (response.value.status !== 201) {
 			return err(new CoordinatorServiceError('Failed to save scan result'));
+		}
+
+		return ok(undefined);
+	}
+
+	async registerParsedLedgerHeaders(
+		batch: ParsedLedgerHeaderBatchDTO
+	): Promise<Result<void, Error>> {
+		if (this.coordinatorAuth.type === 'community') return ok(undefined);
+
+		const urlResult = this.createUrl('/v1/history-scan/parsed-ledger-headers');
+		if (urlResult.isErr()) {
+			return err(new CoordinatorServiceError('Invalid URL', urlResult.error));
+		}
+
+		const response = await this.httpService.post(
+			urlResult.value,
+			batch as unknown as Record<string, unknown>,
+			this.getHttpOptions()
+		);
+
+		if (response.isErr()) {
+			return err(
+				new CoordinatorServiceError(
+					'Failed to save parsed ledger headers',
+					response.error
+				)
+			);
+		}
+
+		if (response.value.status !== 201) {
+			return err(
+				new CoordinatorServiceError('Failed to save parsed ledger headers')
+			);
 		}
 
 		return ok(undefined);

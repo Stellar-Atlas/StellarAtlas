@@ -10,6 +10,7 @@ export class ConfigMock implements Config {
 	logLevel = 'debug';
 	historyMaxFileMs = 60000;
 	historySlowArchiveMaxLedgers = 1000;
+	historyScanWorkers = 1;
 	historyHasherWorkers = 1;
 	historyMaxRequests = 1;
 	historyScanRangeSize = 100000;

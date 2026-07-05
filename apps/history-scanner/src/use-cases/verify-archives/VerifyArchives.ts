@@ -10,6 +10,7 @@ import type { JobMonitor } from 'job-monitor';
 import { inject, injectable } from 'inversify';
 import { TYPES } from '../../infrastructure/di/di-types.js';
 import { ScanJobDTO } from 'history-scanner-dto';
+import { CoordinatorParsedHistorySink } from '../../infrastructure/services/CoordinatorParsedHistorySink.js';
 
 @injectable()
 export class VerifyArchives {
@@ -86,7 +87,21 @@ export class VerifyArchives {
 	}
 
 	private async perform(scanJob: ScanJob, persist = false): Promise<boolean> {
-		const scan = await this.scanner.perform(new Date(), scanJob);
+		const parsedHistorySink =
+			persist && scanJob.remoteId !== null
+				? new CoordinatorParsedHistorySink(
+						this.scanCoordinator,
+						scanJob.url.value,
+						scanJob.remoteId,
+						this.exceptionLogger
+					)
+				: undefined;
+		const scan = await this.scanner.perform(
+			new Date(),
+			scanJob,
+			parsedHistorySink
+		);
+		await parsedHistorySink?.flush();
 		if (persist) return await this.persist(scan);
 		return false;
 	}
