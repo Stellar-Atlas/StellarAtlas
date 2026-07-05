@@ -25,6 +25,7 @@ export interface OrganizationV1 {
 	dateDiscovered: string;
 	hasReliableUptime: boolean;
 	tomlState: string;
+	tomlWarnings: string[];
 }
 
 export const OrganizationV1Schema: JSONSchemaType<OrganizationV1> = {
@@ -98,6 +99,12 @@ export const OrganizationV1Schema: JSONSchemaType<OrganizationV1> = {
 		tomlState: {
 			type: 'string'
 		},
+		tomlWarnings: {
+			items: {
+				type: 'string'
+			},
+			type: 'array'
+		},
 		validators: {
 			items: {
 				type: 'string'
@@ -129,6 +136,7 @@ export const OrganizationV1Schema: JSONSchemaType<OrganizationV1> = {
 		'twitter',
 		'url',
 		'homeDomain',
-		'tomlState'
+		'tomlState',
+		'tomlWarnings'
 	]
 };

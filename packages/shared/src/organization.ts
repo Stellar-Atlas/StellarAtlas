@@ -31,6 +31,7 @@ export class Organization {
 	public unknown = false;
 	homeDomain: string | null = null; //todo: not nullable
 	tomlState = 'Unknown';
+	tomlWarnings: string[] = [];
 
 	dateDiscovered?: Date;
 
@@ -81,7 +82,8 @@ export class Organization {
 				this.dateDiscovered?.toISOString() ?? new Date().toISOString(),
 			hasReliableUptime: this.hasReliableUptime,
 			homeDomain: this.homeDomain ?? 'unknown',
-			tomlState: this.tomlState
+			tomlState: this.tomlState,
+			tomlWarnings: this.tomlWarnings
 		};
 	}
 

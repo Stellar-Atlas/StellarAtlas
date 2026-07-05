@@ -8,6 +8,7 @@ describe('json', () => {
 	const organization = new Organization('1', 'Organization Name');
 	organization.homeDomain = 'homeDomain.com';
 	organization.dba = 'Organization DBA';
+	organization.tomlWarnings = ['TlsCertificateVerificationDisabled'];
 	organization.url = 'https://www.domain.com';
 	organization.logo = 'https://www.domain.com/awesomelogo.jpg';
 	organization.description = 'Description of issuer';
@@ -51,6 +52,7 @@ describe('json', () => {
 	organizationObject.horizonUrl = null;
 	organizationObject.dateDiscovered = dateDiscovered.toISOString();
 	organizationObject.tomlState = 'Unknown';
+	organizationObject.tomlWarnings = ['TlsCertificateVerificationDisabled'];
 
 	test('OrgToJson', () => {
 		expect(JSON.parse(JSON.stringify(organization))).toEqual(

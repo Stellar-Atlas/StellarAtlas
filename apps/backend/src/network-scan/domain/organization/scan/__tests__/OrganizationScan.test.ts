@@ -213,6 +213,27 @@ describe('OrganizationScan', () => {
 				).toBe(TomlState.Ok);
 			});
 
+			it('should preserve TOML warning evidence when toml is valid', () => {
+				const organizationScan = createOrganizationScan(new Date('2020-01-01'));
+				const nodeScan = createNodeScan(new Date('2020-01-01'));
+				const tomlInfo = createTomlInfo(nodeScan);
+				tomlInfo.warnings = ['TlsCertificateVerificationDisabled'];
+
+				const result = organizationScan.updateWithTomlInfoCollection(
+					new Map([['domain.com', tomlInfo]]),
+					nodeScan
+				);
+
+				expect(result.isOk()).toBe(true);
+				if (result.isErr()) throw result.error;
+				const measurement =
+					organizationScan.organizations[0].latestMeasurement();
+				expect(measurement?.tomlState).toBe(TomlState.Ok);
+				expect(measurement?.tomlWarnings).toEqual([
+					'TlsCertificateVerificationDisabled'
+				]);
+			});
+
 			it('should update toml state to UnspecifiedError when toml is invalid', () => {
 				const organizationScan = createOrganizationScan(new Date('2020-01-01'));
 				const nodeScan = createNodeScan(new Date('2020-01-01'));
@@ -271,6 +292,7 @@ describe('OrganizationScan', () => {
 		function createOrganizationTomlInfoWithNullValues(): OrganizationTomlInfo {
 			return {
 				state: TomlState.Ok,
+				warnings: [],
 				horizonUrl: null,
 				url: null,
 				name: null,
@@ -289,6 +311,7 @@ describe('OrganizationScan', () => {
 		function createTomlInfo(nodeScan: NodeScan) {
 			const tomlInfo: OrganizationTomlInfo = {
 				state: TomlState.Ok,
+				warnings: [],
 				horizonUrl: 'https://horizon.stellar.org',
 				url: 'https://stellar.org',
 				name: 'Stellar',

@@ -168,6 +168,7 @@ describe('OrganizationScanner', function () {
 	): OrganizationTomlInfo {
 		return {
 			state: TomlState.Ok,
+			warnings: [],
 			name: 'toml',
 			dba: 'dba',
 			github: 'github',

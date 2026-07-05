@@ -1,7 +1,9 @@
 import { TomlState } from './TomlState.js';
+import type { TomlFetchWarning } from '../../network/scan/TomlService.js';
 
 export interface OrganizationTomlInfo {
 	state: TomlState;
+	warnings: TomlFetchWarning[];
 	name: string | null;
 	physicalAddress: string | null;
 	twitter: string | null;

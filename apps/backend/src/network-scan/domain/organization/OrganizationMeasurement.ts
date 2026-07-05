@@ -2,6 +2,7 @@ import { Entity, Column, ManyToOne, PrimaryColumn } from 'typeorm';
 import type Organization from './Organization.js';
 import { Measurement } from '../measurement/Measurement.js';
 import { TomlState } from './scan/TomlState.js';
+import type { TomlFetchWarning } from '../network/scan/TomlService.js';
 
 @Entity()
 export default class OrganizationMeasurement implements Measurement {
@@ -25,6 +26,9 @@ export default class OrganizationMeasurement implements Measurement {
 
 	@Column('enum', { default: TomlState.Unknown, enum: TomlState })
 	tomlState: TomlState = TomlState.Unknown;
+
+	@Column('jsonb', { default: () => "'[]'::jsonb" })
+	tomlWarnings: TomlFetchWarning[] = [];
 
 	constructor(time: Date, organization: Organization) {
 		this.time = time;

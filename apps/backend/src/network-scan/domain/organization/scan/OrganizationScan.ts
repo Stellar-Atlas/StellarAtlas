@@ -153,6 +153,7 @@ export class OrganizationScan {
 		}
 
 		organization.updateTomlState(organizationTomlInfo.state, this.time);
+		organization.updateTomlWarnings(organizationTomlInfo.warnings, this.time);
 		if (organizationTomlInfo.state !== TomlState.Ok) {
 			return {
 				homeDomain: homeDomain,

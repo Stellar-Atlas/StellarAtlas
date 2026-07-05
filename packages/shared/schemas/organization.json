@@ -68,6 +68,15 @@
 		"url": {
 			"type": "string"
 		},
+		"tomlState": {
+			"type": "string"
+		},
+		"tomlWarnings": {
+			"items": {
+				"type": "string"
+			},
+			"type": "array"
+		},
 		"validators": {
 			"default": [],
 			"items": {

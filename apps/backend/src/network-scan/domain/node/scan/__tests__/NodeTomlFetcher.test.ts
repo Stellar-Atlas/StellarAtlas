@@ -101,7 +101,15 @@ describe('NodeTomlFetcher', () => {
 	test('fetchNodeTomlInfoCollection', async () => {
 		const tomlService = mock<TomlService>();
 		tomlService.fetchTomlObjects.mockResolvedValue(
-			new Map([['my-domain.com', tomlV2Object]])
+			new Map([
+				[
+					'my-domain.com',
+					{
+						tomlObject: tomlV2Object,
+						warnings: []
+					}
+				]
+			])
 		);
 		const tomlFetcher = new NodeTomlFetcher(tomlService);
 

@@ -128,7 +128,10 @@ describe('tomlService', () => {
 			const tomlResult = await tomlService.fetchToml('my-domain.com');
 			expect(tomlResult.isOk()).toBeTruthy();
 			if (tomlResult.isErr()) return;
-			expect(tomlResult.value).toEqual(tomlV2Object);
+			expect(tomlResult.value).toEqual({
+				tomlObject: tomlV2Object,
+				warnings: []
+			});
 		});
 
 		it('should fetch multiple toml files', async () => {
@@ -138,7 +141,10 @@ describe('tomlService', () => {
 
 			const toml = await tomlService.fetchTomlObjects(['my-domain.com']);
 			expect(toml.size).toEqual(1);
-			expect(toml.get('my-domain.com')).toEqual(tomlV2Object);
+			expect(toml.get('my-domain.com')).toEqual({
+				tomlObject: tomlV2Object,
+				warnings: []
+			});
 		});
 
 		it('should retry certificate failures with TLS verification disabled', async () => {
@@ -155,7 +161,10 @@ describe('tomlService', () => {
 
 			expect(tomlResult.isOk()).toBeTruthy();
 			if (tomlResult.isErr()) return;
-			expect(tomlResult.value).toEqual(tomlV2Object);
+			expect(tomlResult.value).toEqual({
+				tomlObject: tomlV2Object,
+				warnings: ['TlsCertificateVerificationDisabled']
+			});
 			expect(httpService.get).toHaveBeenCalledTimes(3);
 			expect(httpService.get.mock.calls[0]?.[1]?.httpsAgent).toBeUndefined();
 			expect(httpService.get.mock.calls[1]?.[1]?.httpsAgent).toBeUndefined();

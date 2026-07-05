@@ -1,9 +1,5 @@
 import { TomlFetchError, TomlService } from '../../network/scan/TomlService.js';
-import {
-	isArray,
-	isObject,
-	isString
-} from '@core/utilities/TypeGuards.js';
+import { isArray, isObject, isString } from '@core/utilities/TypeGuards.js';
 import valueValidator from 'validator';
 import { injectable } from 'inversify';
 import { NodeTomlInfo } from './NodeTomlInfo.js';
@@ -20,7 +16,7 @@ export class NodeTomlFetcher {
 
 		tomlObjects.forEach((tomlOrError, domain) => {
 			if (tomlOrError instanceof TomlFetchError) return;
-			const tomlValidators = tomlOrError.VALIDATORS;
+			const tomlValidators = tomlOrError.tomlObject.VALIDATORS;
 			if (!isArray(tomlValidators)) return;
 			tomlValidators.forEach((tomlValidator: unknown) => {
 				if (!isObject(tomlValidator)) return;

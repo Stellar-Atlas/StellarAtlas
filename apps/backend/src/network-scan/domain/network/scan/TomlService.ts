@@ -17,6 +17,9 @@ const TOML_FETCH_CONCURRENCY = 24;
 const TOML_FETCH_RETRIES = 2;
 const TOML_FETCH_RETRY_SLEEP_MS = 300;
 const TOML_FETCH_TIMEOUT_MS = 2500;
+export const TOML_TLS_CERTIFICATE_WARNING =
+	'TlsCertificateVerificationDisabled';
+export type TomlFetchWarning = typeof TOML_TLS_CERTIFICATE_WARNING;
 const tlsCertificateErrorCodes = new Set([
 	'CERT_HAS_EXPIRED',
 	'DEPTH_ZERO_SELF_SIGNED_CERT',
@@ -31,6 +34,16 @@ export class TomlParseError extends CustomError {
 	constructor(public cause: Error) {
 		super('Failed to parse toml', TomlParseError.name, cause);
 	}
+}
+
+export interface TomlFetchSuccess {
+	tomlObject: Record<string, unknown>;
+	warnings: TomlFetchWarning[];
+}
+
+interface TomlFileFetchSuccess {
+	response: HttpResponse;
+	warnings: TomlFetchWarning[];
 }
 
 export class TomlFetchError {
@@ -52,11 +65,8 @@ export class TomlService {
 
 	async fetchTomlObjects(
 		domains: string[] = []
-	): Promise<Map<string, Record<string, unknown> | TomlFetchError>> {
-		const tomlObjects = new Map<
-			string,
-			Record<string, unknown> | TomlFetchError
-		>();
+	): Promise<Map<string, TomlFetchSuccess | TomlFetchError>> {
+		const tomlObjects = new Map<string, TomlFetchSuccess | TomlFetchError>();
 		if (domains.length === 0) return tomlObjects;
 
 		const startTime = Date.now();
@@ -101,7 +111,7 @@ export class TomlService {
 
 	async fetchToml(
 		homeDomain: string
-	): Promise<Result<Record<string, unknown>, TomlFetchError>> {
+	): Promise<Result<TomlFetchSuccess, TomlFetchError>> {
 		const urlResult = Url.create(
 			'https://' + homeDomain + '/.well-known/stellar.toml'
 		);
@@ -117,19 +127,27 @@ export class TomlService {
 			return err(new TomlFetchError(homeDomain, tomlFileResponse.error));
 		}
 
-		return this.parseTomlResponse(homeDomain, tomlFileResponse.value);
+		return this.parseTomlResponse(
+			homeDomain,
+			tomlFileResponse.value.response,
+			tomlFileResponse.value.warnings
+		);
 	}
 
 	private async fetchTomlFile(
 		homeDomain: string,
 		url: Url
-	): Promise<Result<HttpResponse, HttpError>> {
+	): Promise<Result<TomlFileFetchSuccess, HttpError>> {
 		const tomlFileResponse = await this.fetchTomlWithOptions(url);
-		if (
-			tomlFileResponse.isOk() ||
-			!TomlService.isTlsCertificateError(tomlFileResponse.error)
-		) {
-			return tomlFileResponse;
+		if (tomlFileResponse.isOk()) {
+			return ok({
+				response: tomlFileResponse.value,
+				warnings: []
+			});
+		}
+
+		if (!TomlService.isTlsCertificateError(tomlFileResponse.error)) {
+			return err(tomlFileResponse.error);
 		}
 
 		this.logger.info(
@@ -153,8 +171,12 @@ export class TomlService {
 					domain: homeDomain,
 					error: tomlFileResponse.error.message
 				});
+				return ok({
+					response: insecureTomlFileResponse.value,
+					warnings: [TOML_TLS_CERTIFICATE_WARNING]
+				});
 			}
-			return insecureTomlFileResponse;
+			return err(insecureTomlFileResponse.error);
 		} finally {
 			insecureHttpsAgent.destroy();
 		}
@@ -180,8 +202,9 @@ export class TomlService {
 
 	private parseTomlResponse(
 		homeDomain: string,
-		tomlFileResponse: HttpResponse
-	): Result<Record<string, unknown>, TomlFetchError> {
+		tomlFileResponse: HttpResponse,
+		warnings: TomlFetchWarning[]
+	): Result<TomlFetchSuccess, TomlFetchError> {
 		if (!isString(tomlFileResponse.data))
 			return err(
 				new TomlFetchError(
@@ -193,7 +216,10 @@ export class TomlService {
 			const tomlObject = toml.parse(tomlFileResponse.data);
 			tomlObject.domain = homeDomain; //todo: return map of domain to toml instead of creating this property
 
-			return ok(tomlObject);
+			return ok({
+				tomlObject,
+				warnings
+			});
 		} catch (e) {
 			const error = mapUnknownToError(e);
 			return err(new TomlFetchError(homeDomain, new TomlParseError(error)));

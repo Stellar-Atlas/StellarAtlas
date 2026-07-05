@@ -198,6 +198,7 @@ function createOrganization(
 		subQuorum30DaysAvailability: 0,
 		subQuorumAvailable: false,
 		tomlState: 'Unknown',
+		tomlWarnings: [],
 		twitter: null,
 		url: null,
 		validators: [],

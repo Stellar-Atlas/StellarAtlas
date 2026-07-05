@@ -7,6 +7,7 @@ import { OrganizationValidators } from './OrganizationValidators.js';
 import Node from '../node/Node.js';
 import OrganizationMeasurement from './OrganizationMeasurement.js';
 import { TomlState } from './scan/TomlState.js';
+import type { TomlFetchWarning } from '../network/scan/TomlService.js';
 
 @Entity('organization')
 export default class Organization extends VersionedEntity<OrganizationSnapShot> {
@@ -179,6 +180,15 @@ export default class Organization extends VersionedEntity<OrganizationSnapShot> 
 			this._measurements.push(measurement);
 		}
 		measurement.tomlState = tomlState;
+	}
+
+	updateTomlWarnings(warnings: TomlFetchWarning[], time: Date): void {
+		let measurement = this.latestMeasurement();
+		if (measurement === null || measurement.time.getTime() !== time.getTime()) {
+			measurement = new OrganizationMeasurement(time, this);
+			this._measurements.push(measurement);
+		}
+		measurement.tomlWarnings = warnings;
 	}
 
 	isAvailable(): boolean {

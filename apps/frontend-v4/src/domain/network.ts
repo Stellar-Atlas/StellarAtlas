@@ -1,4 +1,8 @@
-import type { PublicNetwork, PublicNode, PublicOrganization } from '../api/types';
+import type {
+	PublicNetwork,
+	PublicNode,
+	PublicOrganization
+} from '../api/types';
 
 export interface NodeTag {
 	label: string;
@@ -24,12 +28,16 @@ export const getNodeTags = (node: PublicNode): NodeTag[] => {
 	const tags: NodeTag[] = [];
 
 	if (node.isValidating) tags.push({ label: 'validating', tone: 'good' });
-	else if (node.isValidator) tags.push({ label: 'not validating', tone: 'danger' });
+	else if (node.isValidator)
+		tags.push({ label: 'not validating', tone: 'danger' });
 	else if (node.active) tags.push({ label: 'listener', tone: 'neutral' });
 
-	if (node.historyArchiveHasError) tags.push({ label: 'archive', tone: 'warning' });
-	if (node.connectivityError) tags.push({ label: 'connectivity', tone: 'danger' });
-	if (node.stellarCoreVersionBehind) tags.push({ label: 'version', tone: 'warning' });
+	if (node.historyArchiveHasError)
+		tags.push({ label: 'archive', tone: 'warning' });
+	if (node.connectivityError)
+		tags.push({ label: 'connectivity', tone: 'danger' });
+	if (node.stellarCoreVersionBehind)
+		tags.push({ label: 'version', tone: 'warning' });
 	if (node.overLoaded) tags.push({ label: 'overloaded', tone: 'warning' });
 
 	return tags.length > 0 ? tags : [{ label: 'observed', tone: 'neutral' }];
@@ -52,6 +60,14 @@ export const getOrganizationTags = (
 
 	if (organization.tomlState !== 'Ok') {
 		tags.push({ label: organization.tomlState, tone: 'neutral' });
+	}
+
+	if (
+		(organization.tomlWarnings ?? []).includes(
+			'TlsCertificateVerificationDisabled'
+		)
+	) {
+		tags.push({ label: 'TOML TLS certificate', tone: 'warning' });
 	}
 
 	return tags;

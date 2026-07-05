@@ -64,6 +64,9 @@ describe('OrganizationV1DTOMapper', () => {
 			organization.dateDiscovered.toISOString()
 		);
 		expect(organizationV1DTO.tomlState).toEqual(TomlState.Ok);
+		expect(organizationV1DTO.tomlWarnings).toEqual([
+			'TlsCertificateVerificationDisabled'
+		]);
 	});
 	test('toOrganizationSnapshotV1DTO', () => {
 		const { organization } = createOrganization();
@@ -118,6 +121,9 @@ describe('OrganizationV1DTOMapper', () => {
 		organizationMeasurement.isSubQuorumAvailable = true;
 		organizationMeasurement.index = 1;
 		organizationMeasurement.tomlState = TomlState.Ok;
+		organizationMeasurement.tomlWarnings = [
+			'TlsCertificateVerificationDisabled'
+		];
 		organization.addMeasurement(organizationMeasurement);
 
 		const organization24HourAverage: OrganizationMeasurementAverage = {

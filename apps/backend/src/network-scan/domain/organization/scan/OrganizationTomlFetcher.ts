@@ -1,5 +1,9 @@
 import { inject, injectable } from 'inversify';
-import { TomlFetchError, TomlService } from '../../network/scan/TomlService.js';
+import {
+	TomlFetchError,
+	type TomlFetchSuccess,
+	TomlService
+} from '../../network/scan/TomlService.js';
 import { isArray, isObject, isString } from 'shared';
 import valueValidator from 'validator';
 import { OrganizationTomlInfo } from './OrganizationTomlInfo.js';
@@ -35,10 +39,11 @@ export class OrganizationTomlFetcher {
 	}
 
 	private extractOrganizationTomlInfo(
-		tomlOrError: Record<string, unknown> | TomlFetchError
+		tomlOrError: TomlFetchSuccess | TomlFetchError
 	): OrganizationTomlInfo {
 		const tomlOrganizationInfo: OrganizationTomlInfo = {
 			state: TomlState.Unknown,
+			warnings: [],
 			horizonUrl: null,
 			dba: null,
 			url: null,
@@ -69,14 +74,17 @@ export class OrganizationTomlFetcher {
 			return tomlOrganizationInfo;
 		}
 
-		if (!TomlVersionChecker.isSupportedVersion(tomlOrError, '2.0.0'))
+		tomlOrganizationInfo.warnings = tomlOrError.warnings;
+		const tomlObject = tomlOrError.tomlObject;
+
+		if (!TomlVersionChecker.isSupportedVersion(tomlObject, '2.0.0'))
 			tomlOrganizationInfo.state = TomlState.UnsupportedVersion;
 		else tomlOrganizationInfo.state = TomlState.Ok;
 
-		OrganizationTomlFetcher.updateHorizonUrl(tomlOrError, tomlOrganizationInfo);
-		this.updateValidators(tomlOrError, tomlOrganizationInfo);
+		OrganizationTomlFetcher.updateHorizonUrl(tomlObject, tomlOrganizationInfo);
+		this.updateValidators(tomlObject, tomlOrganizationInfo);
 
-		const documentation = tomlOrError.DOCUMENTATION;
+		const documentation = tomlObject.DOCUMENTATION;
 		if (!isObject(documentation)) return tomlOrganizationInfo;
 
 		OrganizationTomlFetcher.updateDBA(documentation, tomlOrganizationInfo);
