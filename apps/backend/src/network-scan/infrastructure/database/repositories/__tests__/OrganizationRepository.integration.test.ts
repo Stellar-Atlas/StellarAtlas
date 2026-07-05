@@ -137,4 +137,26 @@ describe('TypeOrmOrganizationRepository', () => {
 		expect(retrieved).toHaveLength(1);
 		assertOrganization(organization, retrieved[0]);
 	});
+
+	test('findAllKnown includes archived organizations', async () => {
+		const time = new Date('2020-01-01');
+		const organization = createOrganization(time);
+		const organization2 = createOrganization(time, 'other-domain');
+		organization2.archive(new Date('2021-01-01'));
+
+		await repo.save([organization, organization2], time);
+
+		const retrieved = await repo.findAllKnown();
+		expect(retrieved).toHaveLength(2);
+		expect(
+			retrieved.find((item) =>
+				item.organizationId.equals(organization.organizationId)
+			)
+		).toBeInstanceOf(Organization);
+		expect(
+			retrieved.find((item) =>
+				item.organizationId.equals(organization2.organizationId)
+			)
+		).toBeInstanceOf(Organization);
+	});
 });

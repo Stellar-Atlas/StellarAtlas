@@ -3,6 +3,8 @@ import Kernel from '../Kernel.js';
 import { ConfigMock } from '../../config/__mocks__/configMock.js';
 import type { NodeMeasurementRepository } from '@network-scan/domain/node/NodeMeasurementRepository.js';
 import { NETWORK_TYPES } from '@network-scan/infrastructure/di/di-types.js';
+import { GetKnownNodes } from '@network-scan/use-cases/get-known-nodes/GetKnownNodes.js';
+import { GetKnownOrganizations } from '@network-scan/use-cases/get-known-organizations/GetKnownOrganizations.js';
 import { TypeOrmNodeMeasurementRepository } from '@network-scan/infrastructure/database/repositories/TypeOrmNodeMeasurementRepository.js';
 import { TypeOrmOrganizationRepository } from '@network-scan/infrastructure/database/repositories/TypeOrmOrganizationRepository.js';
 import { GetApiDocsComparisonSnapshot } from '@cross-check/use-cases/get-api-docs-comparison-snapshot/GetApiDocsComparisonSnapshot.js';
@@ -57,6 +59,10 @@ test('kernel', async () => {
 	);
 	expect(container.get(GetCrossCheckValidators)).toBeInstanceOf(
 		GetCrossCheckValidators
+	);
+	expect(container.get(GetKnownNodes)).toBeInstanceOf(GetKnownNodes);
+	expect(container.get(GetKnownOrganizations)).toBeInstanceOf(
+		GetKnownOrganizations
 	);
 	expect(container.get(GetFbasAnalysis)).toBeInstanceOf(GetFbasAnalysis);
 	expect(container.get(GetFbasAnalysisProof)).toBeInstanceOf(

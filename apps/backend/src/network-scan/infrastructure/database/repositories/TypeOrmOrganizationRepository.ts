@@ -86,6 +86,18 @@ export class TypeOrmOrganizationRepository implements OrganizationRepository {
 		return await this.getActiveOrganizationsBaseQuery().getMany();
 	}
 
+	async findAllKnown(): Promise<Organization[]> {
+		const organizations = await this.getOrganizationBaseQuery()
+			.orderBy('organization."organizationIdValue"', 'ASC')
+			.getMany();
+
+		organizations.forEach((organization) => {
+			organization.currentSnapshot().organization = organization;
+		});
+
+		return organizations;
+	}
+
 	private getActiveOrganizationsBaseQuery(): SelectQueryBuilder<Organization> {
 		return this.baseRepository
 			.createQueryBuilder('organization')

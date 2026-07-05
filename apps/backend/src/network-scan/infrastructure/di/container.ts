@@ -3,6 +3,8 @@ import Container = interfaces.Container;
 import { GetNetwork } from '../../use-cases/get-network/GetNetwork.js';
 import { GetLatestNodeSnapshots } from '../../use-cases/get-latest-node-snapshots/GetLatestNodeSnapshots.js';
 import { GetLatestOrganizationSnapshots } from '../../use-cases/get-latest-organization-snapshots/GetLatestOrganizationSnapshots.js';
+import { GetKnownNodes } from '../../use-cases/get-known-nodes/GetKnownNodes.js';
+import { GetKnownOrganizations } from '../../use-cases/get-known-organizations/GetKnownOrganizations.js';
 import { GetNodes } from '../../use-cases/get-nodes/GetNodes.js';
 import { GetNode } from '../../use-cases/get-node/GetNode.js';
 import { GetNodeSnapshots } from '../../use-cases/get-node-snapshots/GetNodeSnapshots.js';
@@ -350,11 +352,14 @@ function loadDomain(container: Container, config: Config) {
 		.bind<ScpStatementLiveStore>(NETWORK_TYPES.ScpStatementLiveStore)
 		.toDynamicValue(() => {
 			const logger = container.get<Logger>('Logger');
-			return new MeilisearchScpStatementLiveStore({
-				apiKey: config.meilisearchApiKey,
-				host: config.meilisearchHost,
-				indexName: config.meilisearchScpStatementIndex
-			}, logger);
+			return new MeilisearchScpStatementLiveStore(
+				{
+					apiKey: config.meilisearchApiKey,
+					host: config.meilisearchHost,
+					indexName: config.meilisearchScpStatementIndex
+				},
+				logger
+			);
 		})
 		.inSingletonScope();
 
@@ -382,6 +387,8 @@ function loadUseCases(container: Container) {
 	container.bind(GetNetwork).toSelf();
 	container.bind(GetLatestNodeSnapshots).toSelf();
 	container.bind(GetLatestOrganizationSnapshots).toSelf();
+	container.bind(GetKnownNodes).toSelf();
+	container.bind(GetKnownOrganizations).toSelf();
 	container.bind(GetNodes).toSelf();
 	container.bind(GetNode).toSelf();
 	container.bind(GetNodeSnapshots).toSelf();

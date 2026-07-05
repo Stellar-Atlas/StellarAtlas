@@ -7,6 +7,7 @@ export interface NodeRepository {
 	findActiveAtTimePoint(at: Date): Promise<Node[]>;
 	findActive(): Promise<Node[]>;
 	findActiveByPublicKey(publicKeys: string[]): Promise<Node[]>;
+	findAllKnown(): Promise<Node[]>;
 	findActiveByPublicKeyAtTimePoint(
 		publicKey: PublicKey,
 		at: Date

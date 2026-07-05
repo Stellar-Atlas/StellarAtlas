@@ -145,6 +145,12 @@ export class TypeOrmNodeRepository implements NodeRepository {
 		return await this.getActiveNodesBaseQuery().getMany();
 	}
 
+	async findAllKnown(): Promise<Node[]> {
+		return await this.getNodesBaseQuery()
+			.orderBy('node."publicKeyValue"', 'ASC')
+			.getMany();
+	}
+
 	async findActiveByPublicKey(publicKeys: string[]): Promise<Node[]> {
 		if (publicKeys.length === 0) return [];
 

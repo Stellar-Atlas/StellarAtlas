@@ -15,6 +15,7 @@ import { Subscribe } from '@notifications/use-cases/subscribe/Subscribe.js';
 import { UnmuteNotification } from '@notifications/use-cases/unmute-notification/UnmuteNotification.js';
 import { Unsubscribe } from '@notifications/use-cases/unsubscribe/Unsubscribe.js';
 import { networkRouter } from '@network-scan/infrastructure/http/NetworkRouter.js';
+import { knownNetworkRouter } from '@network-scan/infrastructure/http/KnownNetworkRouter.js';
 import { attachNetworkLiveWebSocket } from '@network-scan/infrastructure/http/NetworkLiveWebSocket.js';
 
 import helmet from 'helmet';
@@ -23,6 +24,8 @@ import { GetLatestScan } from '@history-scan-coordinator/use-cases/get-latest-sc
 import { GetScanLogs } from '@history-scan-coordinator/use-cases/get-scan-logs/GetScanLogs.js';
 import { GetLatestNodeSnapshots } from '@network-scan/use-cases/get-latest-node-snapshots/GetLatestNodeSnapshots.js';
 import { GetLatestOrganizationSnapshots } from '@network-scan/use-cases/get-latest-organization-snapshots/GetLatestOrganizationSnapshots.js';
+import { GetKnownNodes } from '@network-scan/use-cases/get-known-nodes/GetKnownNodes.js';
+import { GetKnownOrganizations } from '@network-scan/use-cases/get-known-organizations/GetKnownOrganizations.js';
 import { nodeRouter } from '@network-scan/infrastructure/http/NodeRouter.js';
 import { organizationRouter } from '@network-scan/infrastructure/http/OrganizationRouter.js';
 import { GetNode } from '@network-scan/use-cases/get-node/GetNode.js';
@@ -240,6 +243,14 @@ const listen = async () => {
 		}
 		next();
 	});
+
+	api.use(
+		'/v1/known',
+		knownNetworkRouter({
+			getKnownNodes: kernel.container.get(GetKnownNodes),
+			getKnownOrganizations: kernel.container.get(GetKnownOrganizations)
+		})
+	);
 
 	api.use(
 		['/v1/node', '/v1/nodes'],

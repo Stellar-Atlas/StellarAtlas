@@ -3772,6 +3772,52 @@
 				}
 			}
 		},
+		"/v1/known/nodes": {
+			"get": {
+				"summary": "Get all known nodes",
+				"description": "Returns the latest stored snapshot for every known node, including current, archived, and inactive rows, with snapshot and last-measurement evidence.",
+				"tags": ["Network", "Node"],
+				"operationId": "getKnownNodes",
+				"responses": {
+					"200": {
+						"description": "successful operation",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/KnownNodesResponse"
+								}
+							}
+						}
+					},
+					"500": {
+						"description": "Server error"
+					}
+				}
+			}
+		},
+		"/v1/known/organizations": {
+			"get": {
+				"summary": "Get all known organizations",
+				"description": "Returns the latest stored snapshot for every known organization, including current, archived, and inactive rows, with snapshot and last-measurement evidence.",
+				"tags": ["Network", "Organization", "Horizon"],
+				"operationId": "getKnownOrganizations",
+				"responses": {
+					"200": {
+						"description": "successful operation",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/KnownOrganizationsResponse"
+								}
+							}
+						}
+					},
+					"500": {
+						"description": "Server error"
+					}
+				}
+			}
+		},
 		"/v1/nodes": {
 			"get": {
 				"summary": "Get all nodes",
@@ -4632,6 +4678,104 @@
 	},
 	"components": {
 		"schemas": {
+			"KnownNode": {
+				"type": "object",
+				"required": [
+					"node",
+					"current",
+					"snapshotStartDate",
+					"snapshotEndDate",
+					"lastSeen",
+					"lastMeasurementAt"
+				],
+				"properties": {
+					"node": { "$ref": "https://StellarAtlas.io/schemas/node.json" },
+					"current": { "type": "boolean" },
+					"snapshotStartDate": {
+						"type": "string",
+						"format": "date-time"
+					},
+					"snapshotEndDate": {
+						"type": "string",
+						"format": "date-time"
+					},
+					"lastSeen": {
+						"type": "string",
+						"format": "date-time",
+						"nullable": true
+					},
+					"lastMeasurementAt": {
+						"type": "string",
+						"format": "date-time",
+						"nullable": true
+					}
+				}
+			},
+			"KnownNodesResponse": {
+				"type": "object",
+				"required": ["generatedAt", "count", "nodes"],
+				"properties": {
+					"generatedAt": {
+						"type": "string",
+						"format": "date-time"
+					},
+					"count": { "type": "integer", "minimum": 0 },
+					"nodes": {
+						"type": "array",
+						"items": { "$ref": "#/components/schemas/KnownNode" }
+					}
+				}
+			},
+			"KnownOrganization": {
+				"type": "object",
+				"required": [
+					"organization",
+					"current",
+					"snapshotStartDate",
+					"snapshotEndDate",
+					"lastSeen",
+					"lastMeasurementAt"
+				],
+				"properties": {
+					"organization": {
+						"$ref": "https://StellarAtlas.io/schemas/organization.json"
+					},
+					"current": { "type": "boolean" },
+					"snapshotStartDate": {
+						"type": "string",
+						"format": "date-time"
+					},
+					"snapshotEndDate": {
+						"type": "string",
+						"format": "date-time"
+					},
+					"lastSeen": {
+						"type": "string",
+						"format": "date-time",
+						"nullable": true
+					},
+					"lastMeasurementAt": {
+						"type": "string",
+						"format": "date-time",
+						"nullable": true
+					}
+				}
+			},
+			"KnownOrganizationsResponse": {
+				"type": "object",
+				"required": ["generatedAt", "count", "organizations"],
+				"properties": {
+					"generatedAt": {
+						"type": "string",
+						"format": "date-time"
+					},
+					"count": { "type": "integer", "minimum": 0 },
+					"organizations": {
+						"type": "array",
+						"items": { "$ref": "#/components/schemas/KnownOrganization" }
+					}
+				}
+			},
 			"FbasAnalysis": {
 				"type": "object",
 				"required": [

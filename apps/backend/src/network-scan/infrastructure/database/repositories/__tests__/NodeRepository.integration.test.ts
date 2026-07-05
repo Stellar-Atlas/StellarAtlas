@@ -105,6 +105,22 @@ describe('test queries', function () {
 		).toBeInstanceOf(Node);
 	});
 
+	test('findAllKnown includes archived nodes', async function () {
+		const { node, node2, archivedNode } = await setupFindLatestActive();
+
+		const fetchedNodes = await nodeRepository.findAllKnown();
+		expect(fetchedNodes).toHaveLength(3);
+		expect(
+			fetchedNodes.find((n) => n.publicKey.equals(node.publicKey))
+		).toBeInstanceOf(Node);
+		expect(
+			fetchedNodes.find((n) => n.publicKey.equals(node2.publicKey))
+		).toBeInstanceOf(Node);
+		expect(
+			fetchedNodes.find((n) => n.publicKey.equals(archivedNode.publicKey))
+		).toBeInstanceOf(Node);
+	});
+
 	test('findLatestActiveByPublicKey', async function () {
 		const { node, node2, archivedNode } = await setupFindLatestActive();
 
