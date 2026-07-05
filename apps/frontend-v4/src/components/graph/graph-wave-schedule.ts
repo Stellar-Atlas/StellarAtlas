@@ -39,7 +39,6 @@ export const buildStatementWaveSchedule = ({
 		0,
 		playbackDurationMs - activeStatementLifetimeMs
 	);
-	if (elapsedMs > latestLaunchMs) return [];
 
 	const animationBudgetMs =
 		ledger.animationBudgetMs ?? ledgerCloseAnimationBudgetMs;

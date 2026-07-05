@@ -5,7 +5,15 @@ import { WebSocket, WebSocketServer } from 'ws';
 import type { GetNetwork } from '../../use-cases/get-network/GetNetwork.js';
 import type { GetScpStatements } from '../../use-cases/get-scp-statements/GetScpStatements.js';
 import { fetchLatestLedger } from './HorizonLedgerClient.js';
-import type { ScpStatementObservationV1 } from 'shared';
+import {
+	compareScpStatement,
+	compareScpStatementCursor,
+	createScpStatementStreamState,
+	getScpStatementReadCursor,
+	getScpStatementReadOrder,
+	selectScpStatementDelta,
+	type ScpStatementStreamState
+} from './ScpStatementStreamState.js';
 
 interface NetworkLiveWebSocketConfig {
 	getNetwork: GetNetwork;
@@ -20,15 +28,8 @@ type LiveMessage =
 	| { payload: { message: string }; type: 'error' };
 
 interface LiveClient {
-	scpCursor: ScpCursor | null;
-	seenScpStatementHashes: Set<string>;
-	seenScpStatementHashQueue: string[];
+	scpState: ScpStatementStreamState;
 	socket: WebSocket;
-}
-
-interface ScpCursor {
-	observedAtMs: number;
-	statementHash: string;
 }
 
 const defaultPath = '/v1/live/ws';
@@ -36,7 +37,6 @@ const latestLedgerIntervalMs = 2_000;
 const networkIntervalMs = 5_000;
 const scpIntervalMs = 1_200;
 const scpStatementLimit = 1_000;
-const maxSeenStatementHashes = 2_000;
 
 const isWebSocketPath = (request: IncomingMessage, path: string): boolean => {
 	if (!request.url) return false;
@@ -46,30 +46,6 @@ const isWebSocketPath = (request: IncomingMessage, path: string): boolean => {
 
 const errorMessage = (error: unknown): string =>
 	error instanceof Error ? error.message : String(error);
-
-const toScpCursor = (
-	statement: ScpStatementObservationV1
-): ScpCursor | null => {
-	const observedAtMs = new Date(statement.observedAt).getTime();
-	if (!Number.isFinite(observedAtMs)) return null;
-	return { observedAtMs, statementHash: statement.statementHash };
-};
-
-const compareScpCursor = (left: ScpCursor, right: ScpCursor): number =>
-	left.observedAtMs - right.observedAtMs ||
-	left.statementHash.localeCompare(right.statementHash);
-
-const compareScpStatement = (
-	left: ScpStatementObservationV1,
-	right: ScpStatementObservationV1
-): number => {
-	const leftCursor = toScpCursor(left);
-	const rightCursor = toScpCursor(right);
-	if (leftCursor === null && rightCursor === null) return 0;
-	if (leftCursor === null) return 1;
-	if (rightCursor === null) return -1;
-	return compareScpCursor(leftCursor, rightCursor);
-};
 
 export function attachNetworkLiveWebSocket(
 	server: Server,
@@ -98,56 +74,20 @@ export function attachNetworkLiveWebSocket(
 		client.socket.send(JSON.stringify(message));
 	};
 
-	const rememberScpStatementHash = (
-		client: LiveClient,
-		statementHash: string
-	): void => {
-		client.seenScpStatementHashes.add(statementHash);
-		client.seenScpStatementHashQueue.push(statementHash);
-		while (client.seenScpStatementHashQueue.length > maxSeenStatementHashes) {
-			const evictedHash = client.seenScpStatementHashQueue.shift();
-			if (evictedHash !== undefined) {
-				client.seenScpStatementHashes.delete(evictedHash);
-			}
-		}
-	};
-
-	const selectScpDelta = (
-		client: LiveClient,
-		statements: readonly ScpStatementObservationV1[]
-	): ScpStatementObservationV1[] => {
-		const delta: ScpStatementObservationV1[] = [];
-		for (const statement of statements) {
-			const cursor = toScpCursor(statement);
-			if (cursor === null) continue;
-			if (client.seenScpStatementHashes.has(statement.statementHash)) {
-				continue;
-			}
-			delta.push(statement);
-			rememberScpStatementHash(client, statement.statementHash);
-			if (
-				client.scpCursor === null ||
-				compareScpCursor(client.scpCursor, cursor) < 0
-			) {
-				client.scpCursor = cursor;
-			}
-		}
-		return delta;
-	};
-
-	const getOldestScpCursor = (): ScpCursor | undefined => {
-		let oldestCursor: ScpCursor | null = null;
+	const getOldestScpState = (): ScpStatementStreamState | undefined => {
+		let oldestState: ScpStatementStreamState | null = null;
 		for (const client of clients.values()) {
-			if (client.scpCursor === null) return undefined;
+			if (client.scpState.cursor === null) return undefined;
 			if (
-				oldestCursor === null ||
-				compareScpCursor(client.scpCursor, oldestCursor) < 0
+				oldestState === null ||
+				compareScpStatementCursor(client.scpState.cursor, oldestState.cursor!) <
+					0
 			) {
-				oldestCursor = client.scpCursor;
+				oldestState = client.scpState;
 			}
 		}
 
-		return oldestCursor ?? undefined;
+		return oldestState ?? undefined;
 	};
 
 	const writeLatestLedger = (): void => {
@@ -201,12 +141,13 @@ export function attachNetworkLiveWebSocket(
 	const writeScp = (): void => {
 		if (scpWriting) return;
 		scpWriting = true;
+		const oldestState = getOldestScpState();
 		// Sweep the live freshness window so late-visible statements are still deduped and delivered.
 		void config.getScpStatements
 			.execute({
-				after: getOldestScpCursor(),
+				after: oldestState ? getScpStatementReadCursor(oldestState) : undefined,
 				limit: scpStatementLimit,
-				order: 'asc',
+				order: oldestState ? getScpStatementReadOrder(oldestState) : 'desc',
 				source: 'live'
 			})
 			.then((statementsOrError) => {
@@ -220,7 +161,7 @@ export function attachNetworkLiveWebSocket(
 				const statements =
 					statementsOrError.value.toSorted(compareScpStatement);
 				for (const client of clients.values()) {
-					const delta = selectScpDelta(client, statements);
+					const delta = selectScpStatementDelta(client.scpState, statements);
 					if (delta.length > 0) send(client, { payload: delta, type: 'scp' });
 				}
 			})
@@ -260,9 +201,7 @@ export function attachNetworkLiveWebSocket(
 
 	webSocketServer.on('connection', (client) => {
 		clients.set(client, {
-			scpCursor: null,
-			seenScpStatementHashes: new Set(),
-			seenScpStatementHashQueue: [],
+			scpState: createScpStatementStreamState(),
 			socket: client
 		});
 		client.on('close', () => {

@@ -18,6 +18,14 @@ import {
 	fetchLedgerTransactions
 } from './HorizonLedgerClient.js';
 import { NetworkSearchService } from '../search/NetworkSearchService.js';
+import {
+	compareScpStatement,
+	createScpStatementStreamState,
+	getScpStatementReadCursor,
+	getScpStatementReadOrder,
+	selectScpStatementDelta,
+	type ScpStatementStreamState
+} from './ScpStatementStreamState.js';
 import type {
 	NetworkSearchArchiveStatus,
 	NetworkSearchConfig,
@@ -200,10 +208,14 @@ const networkRouterWrapper = (config: NetworkRouterConfig): Router => {
 	};
 
 	const writeScpStatementEvent = async (
-		res: express.Response
+		res: express.Response,
+		scpState: ScpStatementStreamState
 	): Promise<void> => {
 		const statementsOrError = await config.getScpStatements.execute({
-			limit: liveScpStatementLimit
+			after: getScpStatementReadCursor(scpState),
+			limit: liveScpStatementLimit,
+			order: getScpStatementReadOrder(scpState),
+			source: 'live'
 		});
 		if (res.writableEnded) return;
 
@@ -216,9 +228,13 @@ const networkRouterWrapper = (config: NetworkRouterConfig): Router => {
 			return;
 		}
 
-		res.write(
-			`event: scp\ndata: ${JSON.stringify(statementsOrError.value)}\n\n`
+		const delta = selectScpStatementDelta(
+			scpState,
+			statementsOrError.value.toSorted(compareScpStatement)
 		);
+		if (delta.length === 0) return;
+
+		res.write(`event: scp\ndata: ${JSON.stringify(delta)}\n\n`);
 	};
 
 	networkRouter.get(
@@ -364,10 +380,11 @@ const networkRouterWrapper = (config: NetworkRouterConfig): Router => {
 			res.write(': connected\n\n');
 
 			let isWriting = false;
+			const scpState = createScpStatementStreamState();
 			const writeSnapshot = (): void => {
 				if (isWriting || res.writableEnded) return;
 				isWriting = true;
-				void writeScpStatementEvent(res).finally(() => {
+				void writeScpStatementEvent(res, scpState).finally(() => {
 					isWriting = false;
 				});
 			};

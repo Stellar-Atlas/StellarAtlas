@@ -6,13 +6,14 @@ interface MergePlaybackQueueOptions {
 	boundarySlotIndex: string;
 	completedSignatures: ReadonlyMap<string, string>;
 	ledgers: readonly LedgerPlaybackFrame[];
-	startedThroughSlotIndex: string | null;
 }
 
 interface MergePlaybackQueueResult {
 	acceptedBoundarySlotIndex: string;
 	queue: LedgerPlaybackFrame[];
 }
+
+const maxQueuedPlaybackLedgers = 4;
 
 export const getLedgerStatementSignature = (
 	ledger: LedgerPlaybackFrame
@@ -33,30 +34,20 @@ export const mergePlaybackQueue = ({
 	activeSlotIndex,
 	boundarySlotIndex,
 	completedSignatures,
-	ledgers,
-	startedThroughSlotIndex
+	ledgers
 }: MergePlaybackQueueOptions): MergePlaybackQueueResult => {
-	const latestPlayableLedger = ledgers
+	const playableLedgers = ledgers
 		.filter(
 			(ledger) =>
 				ledger.statements.length > 0 &&
 				compareLedgerSequences(ledger.slotIndex, boundarySlotIndex) < 0 &&
-				(startedThroughSlotIndex === null ||
-					compareLedgerSequences(
-						ledger.slotIndex,
-						startedThroughSlotIndex
-					) > 0) &&
-				ledger.slotIndex !== activeSlotIndex
+				ledger.slotIndex !== activeSlotIndex &&
+				!isCompleted(ledger, completedSignatures)
 		)
 		.toSorted((left, right) =>
 			compareLedgerSequences(left.slotIndex, right.slotIndex)
-		)
-		.at(-1);
-	const queue =
-		latestPlayableLedger &&
-		!isCompleted(latestPlayableLedger, completedSignatures)
-			? [latestPlayableLedger]
-			: [];
+		);
+	const queue = playableLedgers.slice(-maxQueuedPlaybackLedgers);
 
 	return {
 		acceptedBoundarySlotIndex: boundarySlotIndex,

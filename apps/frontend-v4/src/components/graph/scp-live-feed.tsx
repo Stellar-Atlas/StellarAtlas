@@ -161,7 +161,15 @@ export function ScpLiveFeed({
 		network.latestLedger.toString();
 	const observedSlotText = observedSlotIndex ?? summary?.slotIndex ?? null;
 	const feedSlotIndex =
-		activeSlotIndex ?? summary?.slotIndex ?? observedSlotText ?? latestLedgerText;
+		activeSlotIndex ??
+		summary?.slotIndex ??
+		observedSlotText ??
+		latestLedgerText;
+	const timelineSlotIndex =
+		activeSlotIndex ??
+		observedSlotText ??
+		summary?.slotIndex ??
+		latestLedgerText;
 	const recentStatements = useMemo(
 		() =>
 			statements
@@ -171,10 +179,7 @@ export function ScpLiveFeed({
 		[feedSlotIndex, statements]
 	);
 	const activeStatementHashSet = useMemo(
-		() =>
-			new Set(
-				activeStatements.map((statement) => statement.statementHash)
-			),
+		() => new Set(activeStatements.map((statement) => statement.statementHash)),
 		[activeStatements]
 	);
 	const [feedOffset, setFeedOffset] = useState(0);
@@ -253,14 +258,13 @@ export function ScpLiveFeed({
 	}, [maxFeedOffset]);
 
 	useEffect(() => {
-		if (activeSlotIndex === null) return;
 		if (feedOffset >= maxFeedOffset) return;
 		const interval = window.setInterval(() => {
 			setFeedOffset((current) => Math.min(current + 1, maxFeedOffset));
 		}, 650);
 
 		return () => window.clearInterval(interval);
-	}, [activeSlotIndex, feedOffset, maxFeedOffset]);
+	}, [feedOffset, maxFeedOffset]);
 
 	useEffect(() => {
 		if (!selectedTransactionSet) return;
@@ -295,8 +299,8 @@ export function ScpLiveFeed({
 			<ScpPhaseTimeline
 				activeSlotIndex={activeSlotIndex}
 				activeStatements={activeStatements}
-				fallbackSlotIndex={summary?.slotIndex ?? null}
-				focusedStatement={visibleStatements[0] ?? null}
+				fallbackSlotIndex={timelineSlotIndex}
+				focusedStatement={null}
 				network={network}
 				statements={statements}
 			/>

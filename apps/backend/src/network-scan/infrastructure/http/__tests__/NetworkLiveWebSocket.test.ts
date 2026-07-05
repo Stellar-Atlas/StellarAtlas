@@ -36,7 +36,7 @@ describe('NetworkLiveWebSocket', () => {
 			expect(getScpStatements.execute).toHaveBeenCalledWith({
 				after: undefined,
 				limit: 1000,
-				order: 'asc',
+				order: 'desc',
 				source: 'live'
 			});
 			expect(
@@ -57,12 +57,54 @@ describe('NetworkLiveWebSocket', () => {
 			await close(server);
 		}
 	});
+
+	it('does not resend older unique statements after a client cursor advances', async () => {
+		const server = createServer();
+		const getNetwork = {
+			execute: jest.fn().mockResolvedValue(ok({ latestLedger: '1' }))
+		} as unknown as GetNetwork;
+		const getScpStatements = {
+			execute: jest
+				.fn()
+				.mockResolvedValueOnce(
+					ok([createStatement('statement-current', '2026-07-05T00:00:01.000Z')])
+				)
+				.mockResolvedValueOnce(
+					ok([createStatement('statement-older', '2026-07-05T00:00:00.000Z')])
+				)
+				.mockResolvedValue(ok([]))
+		} as unknown as GetScpStatements;
+
+		attachNetworkLiveWebSocket(server, {
+			getNetwork,
+			getScpStatements,
+			horizonUrl: 'http://127.0.0.1:1',
+			path: '/ws'
+		});
+		await listen(server);
+
+		const socket = new WebSocket(`ws://127.0.0.1:${addressPort(server)}/ws`);
+		try {
+			const message = await waitForScpMessage(socket);
+			expect(
+				message.payload.map((statement) => statement.statementHash)
+			).toEqual(['statement-current']);
+			await waitForScpReadCount(getScpStatements, 2);
+			await expectNoScpMessage(socket);
+		} finally {
+			socket.close();
+			await close(server);
+		}
+	});
 });
 
-function createStatement(statementHash: string): ScpStatementObservationV1 {
+function createStatement(
+	statementHash: string,
+	observedAt = '2026-07-05T00:00:00.000Z'
+): ScpStatementObservationV1 {
 	return {
 		nodeId: 'GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF',
-		observedAt: '2026-07-05T00:00:00.000Z',
+		observedAt,
 		observedFromAddress: '127.0.0.1:11625',
 		observedFromPeer:
 			'GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF',
@@ -74,6 +116,29 @@ function createStatement(statementHash: string): ScpStatementObservationV1 {
 		statementXdr: '',
 		values: []
 	};
+}
+
+function expectNoScpMessage(socket: WebSocket): Promise<void> {
+	return new Promise((resolve, reject) => {
+		const onMessage = (data: { toString(): string }): void => {
+			const message = JSON.parse(data.toString()) as {
+				payload?: unknown;
+				type?: unknown;
+			};
+			if (message.type !== 'scp') return;
+			cleanup();
+			reject(new Error('Unexpected SCP websocket message'));
+		};
+		const timeout = setTimeout(() => {
+			cleanup();
+			resolve();
+		}, 500);
+		const cleanup = (): void => {
+			clearTimeout(timeout);
+			socket.off('message', onMessage);
+		};
+		socket.on('message', onMessage);
+	});
 }
 
 function listen(server: Server): Promise<void> {
@@ -92,7 +157,9 @@ function waitForScpReadCount(
 			reject(new Error('Timed out waiting for SCP websocket reads'));
 		}, 2_500);
 		const interval = setInterval(() => {
-			if (jest.mocked(getScpStatements.execute).mock.calls.length < expectedCalls)
+			if (
+				jest.mocked(getScpStatements.execute).mock.calls.length < expectedCalls
+			)
 				return;
 			clearTimeout(timeout);
 			clearInterval(interval);

@@ -1,4 +1,11 @@
-import { useCallback, useEffect, useRef, type Dispatch, type RefObject, type SetStateAction } from 'react';
+import {
+	useCallback,
+	useEffect,
+	useRef,
+	type Dispatch,
+	type RefObject,
+	type SetStateAction
+} from 'react';
 import type { ForceGraph3DInstance } from '3d-force-graph';
 import type { GraphVisualState } from './graph-visual-state';
 import type { Graph3DNode } from './model-3d';
@@ -24,7 +31,6 @@ import {
 	type WaveMeshPool
 } from './graph-wave-animation';
 import type { PublicScpStatementObservation } from '../../api/types';
-import { compareLedgerSequences } from '../../domain/ledger-sequence';
 
 interface UseGraphAnimationOptions {
 	activeWavesRef: RefObject<Map<number, ActiveWave>>;
@@ -71,14 +77,16 @@ export const useGraphAnimation = ({
 	threeRef,
 	waveAnimationFrameRef,
 	wavePoolRef
-}: UseGraphAnimationOptions): { clearAnimationEffects: () => void; scheduleWaveAnimation: () => void } => {
+}: UseGraphAnimationOptions): {
+	clearAnimationEffects: () => void;
+	scheduleWaveAnimation: () => void;
+} => {
 	const activeLedgerRef = useRef<LedgerPlaybackFrame | null>(null);
 	const playbackQueueRef = useRef<LedgerPlaybackFrame[]>([]);
 	const playbackStartedAtRef = useRef(0);
 	const playbackFinishTimeoutRef = useRef<number | null>(null);
 	const completedSlotSignaturesRef = useRef<Map<string, string>>(new Map());
 	const completedSlotOrderRef = useRef<string[]>([]);
-	const startedThroughSlotIndexRef = useRef<string | null>(null);
 	const advancePlaybackRef = useRef<() => void>(() => undefined);
 
 	const activateFlowPath = useCallback(
@@ -302,7 +310,6 @@ export const useGraphAnimation = ({
 			const playbackDurationMs =
 				ledger.playbackDurationMs ?? ledgerPlaybackDurationMs;
 			const latestLaunchMs = playbackDurationMs - 1_700;
-			if (elapsedMs > latestLaunchMs) return;
 
 			const schedule = buildStatementWaveSchedule({
 				animatedStatementHashes: animatedStatementHashesRef.current,
@@ -353,14 +360,6 @@ export const useGraphAnimation = ({
 			clearPlaybackFinishTimeout();
 			clearAnimationEffects();
 			activeLedgerRef.current = ledger;
-			startedThroughSlotIndexRef.current =
-				startedThroughSlotIndexRef.current === null ||
-				compareLedgerSequences(
-					ledger.slotIndex,
-					startedThroughSlotIndexRef.current
-				) > 0
-					? ledger.slotIndex
-					: startedThroughSlotIndexRef.current;
 			setActivePlaybackSlotIndex(ledger.slotIndex);
 			playbackStartedAtRef.current = performance.now();
 			graphRef.current?.resumeAnimation();
@@ -463,8 +462,7 @@ export const useGraphAnimation = ({
 			activeSlotIndex: activeLedgerRef.current?.slotIndex ?? null,
 			boundarySlotIndex: playbackBoundarySlotIndex,
 			completedSignatures: completedSlotSignaturesRef.current,
-			ledgers: playbackLedgers,
-			startedThroughSlotIndex: startedThroughSlotIndexRef.current
+			ledgers: playbackLedgers
 		});
 		playbackQueueRef.current = queueResult.queue;
 		advancePlayback();
