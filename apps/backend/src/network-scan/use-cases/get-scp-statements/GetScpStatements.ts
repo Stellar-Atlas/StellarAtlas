@@ -29,7 +29,7 @@ export class GetScpStatements {
 				slotIndex: dto.slotIndex
 			};
 			const liveObservations = await this.liveStore.findLatest(filter);
-			if (liveObservations !== null && liveObservations.length > 0) {
+			if (liveObservations !== null) {
 				return ok(liveObservations);
 			}
 

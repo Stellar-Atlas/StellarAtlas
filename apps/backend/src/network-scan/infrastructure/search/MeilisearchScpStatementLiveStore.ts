@@ -28,6 +28,7 @@ const filterableAttributes = [
 	'statementType'
 ] as const;
 const sortableAttributes = ['observedAtMs', 'slotIndex'] as const;
+const liveFreshnessMs = 30_000;
 const liveRetentionMs = 3 * 60 * 1_000;
 const retentionCleanupIntervalMs = 30_000;
 
@@ -156,7 +157,7 @@ export class MeilisearchScpStatementLiveStore
 		try {
 			await this.ensureIndexReady();
 			const response = await this.index.search<ScpStatementSearchDocument>('', {
-				filter: this.buildFilter({ limit, nodeId, slotIndex }),
+				filter: this.buildFilter({ limit, nodeId, slotIndex }, Date.now()),
 				limit,
 				sort: ['observedAtMs:desc']
 			});
@@ -192,13 +193,15 @@ export class MeilisearchScpStatementLiveStore
 	private buildFilter({
 		nodeId,
 		slotIndex
-	}: ScpStatementObservationFilter): string | undefined {
+	}: ScpStatementObservationFilter, nowMs: number): string | undefined {
+		const freshAfterMs = nowMs - liveFreshnessMs;
 		const filters = [
+			`observedAtMs >= ${freshAfterMs}`,
 			nodeId ? `nodeId = ${quoteFilterValue(nodeId)}` : undefined,
 			slotIndex ? `slotIndex = ${quoteFilterValue(slotIndex)}` : undefined
 		].filter((filter): filter is string => filter !== undefined);
 
-		return filters.length > 0 ? filters.join(' AND ') : undefined;
+		return filters.join(' AND ');
 	}
 
 	private async enqueueRetentionCleanup(nowMs: number): Promise<void> {
