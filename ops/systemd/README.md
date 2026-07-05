@@ -16,8 +16,11 @@ that all run as `observe`, not root.
 - `stellaratlas-network-scanner.service` runs the network scanner.
 - `stellaratlas-scp-live-scanner.service` continuously indexes live SCP
   observations into the live search read model.
-- `stellaratlas-history-scanner@.service` runs bounded history scanner
-  instances.
+- `stellaratlas-history-scanner@.service` runs a bounded history-scanner
+  process cluster. The production template sets `HISTORY_SCAN_PROCESSES=24`,
+  `HISTORY_MAX_REQUESTS=24`, and `HISTORY_HASHER_WORKERS=24`; the cluster wrapper
+  partitions those totals across child processes and forces each child to one
+  scanner loop.
 - `stellaratlas-users.service` runs the user/mail service.
 
 `10-stellaratlas-observe.rules` lets the `observe` user start, stop, restart,

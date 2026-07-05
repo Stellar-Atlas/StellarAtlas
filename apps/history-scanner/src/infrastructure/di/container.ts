@@ -35,6 +35,9 @@ import { VerifySingleArchive } from '../../use-cases/verify-single-archive/Verif
 export function load(container: Container, config: Config) {
 	container.bind(CategoryScanner).toSelf();
 	container
+		.bind<number>(TYPES.ScanWorkerCount)
+		.toConstantValue(config.historyScanWorkers);
+	container
 		.bind<number>(TYPES.HasherWorkerCount)
 		.toConstantValue(config.historyHasherWorkers);
 	container.bind(BucketCache).toDynamicValue(() => {

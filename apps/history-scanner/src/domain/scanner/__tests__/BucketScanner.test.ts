@@ -10,6 +10,7 @@ import * as http from 'http';
 import * as https from 'https';
 import { ScanError, ScanErrorType } from '../../scan/ScanError.js';
 import { fileURLToPath } from 'node:url';
+import { BucketCache } from '../BucketCache.js';
 
 const currentDir = path.dirname(fileURLToPath(import.meta.url));
 
@@ -32,7 +33,7 @@ it('should verify the bucket hash', async function () {
 		}
 	);
 
-	const scanner = new BucketScanner(httpQueue);
+	const scanner = new BucketScanner(httpQueue, createBucketCacheMock());
 
 	const result = await scan(
 		{
@@ -70,7 +71,7 @@ it('should return verification error when zip archive is corrupt', async functio
 			return new Promise((resolve) => resolve(result));
 		}
 	);
-	const scanner = new BucketScanner(httpQueue);
+	const scanner = new BucketScanner(httpQueue, createBucketCacheMock());
 
 	const result = await scan(
 		{
@@ -92,4 +93,13 @@ it('should return verification error when zip archive is corrupt', async functio
 
 const scan = async (scanState: BucketScanState, scanner: BucketScanner) => {
 	return await scanner.scan(scanState, true);
+};
+
+const createBucketCacheMock = () => {
+	const bucketCache = mock<BucketCache>();
+	bucketCache.getReadStream.mockResolvedValue(null);
+	bucketCache.verifyAndStore.mockImplementation(async (_hash, source, verify) =>
+		verify(source)
+	);
+	return bucketCache;
 };

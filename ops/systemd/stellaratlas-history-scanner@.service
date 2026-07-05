@@ -13,7 +13,10 @@ WorkingDirectory=/home/observe/stellarbeat-data/Observer
 Environment=NODE_ENV=production
 Environment=HOME=/home/observe
 Environment=PATH=/home/observe/.nvm/versions/node/v26.4.0/bin:/usr/local/sbin:/usr/local/bin:/sbin:/bin
+Environment=HISTORY_SCAN_PROCESSES=24
 Environment=HISTORY_SCAN_WORKERS=1
+Environment=HISTORY_MAX_REQUESTS=24
+Environment=HISTORY_HASHER_WORKERS=24
 EnvironmentFile=-/etc/stellaratlas/stellaratlas.env
 ExecStart=/usr/bin/env pnpm start:scan-history
 Restart=always

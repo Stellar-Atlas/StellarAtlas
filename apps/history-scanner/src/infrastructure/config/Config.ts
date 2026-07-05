@@ -25,6 +25,7 @@ export interface Config {
 	logLevel: string;
 	historyMaxFileMs: number;
 	historySlowArchiveMaxLedgers: number;
+	historyScanWorkers: number;
 	historyHasherWorkers: number;
 	historyMaxRequests: number;
 	historyScanRangeSize: number;
@@ -62,15 +63,35 @@ const defaultConfig = {
 
 const maxHistoryHasherWorkers = 24;
 const maxHistoryParallelRequests = 24;
+const maxHistoryScanWorkers = 24;
 
 export function calculateDefaultHistoryHasherWorkers(
 	historyScanWorkers: number,
 	cpuCount: number
 ): number {
-	const scanWorkerCount = Math.max(Math.floor(historyScanWorkers), 1);
 	const availableCpuCount = Math.max(cpuCount - 1, 1);
-	const workerCount = Math.floor(availableCpuCount / scanWorkerCount);
-	return Math.min(Math.max(workerCount, 1), maxHistoryHasherWorkers);
+	return calculatePerScannerWorkerConcurrency(
+		Math.min(availableCpuCount, maxHistoryHasherWorkers),
+		historyScanWorkers
+	);
+}
+
+export function calculatePerScannerWorkerConcurrency(
+	totalWorkers: number,
+	historyScanWorkers: number
+): number {
+	const scanWorkerCount = Math.max(Math.floor(historyScanWorkers), 1);
+	const workerCount = Math.max(Math.floor(totalWorkers), 1);
+	return Math.max(Math.floor(workerCount / scanWorkerCount), 1);
+}
+
+export function calculatePerScannerRequestConcurrency(
+	totalRequests: number,
+	historyScanWorkers: number
+): number {
+	const requestCount = Math.max(Math.floor(totalRequests), 1);
+	const scanWorkerCount = Math.max(Math.floor(historyScanWorkers), 1);
+	return Math.max(Math.floor(requestCount / scanWorkerCount), 1);
 }
 
 function parseOptionalPositiveInteger(
@@ -143,7 +164,8 @@ export function getConfigFromEnv(): Result<Config, Error> {
 	}
 
 	const historyScanWorkersResult = parseOptionalPositiveInteger(
-		'HISTORY_SCAN_WORKERS'
+		'HISTORY_SCAN_WORKERS',
+		maxHistoryScanWorkers
 	);
 	if (historyScanWorkersResult.isErr())
 		return err(historyScanWorkersResult.error);
@@ -177,12 +199,17 @@ export function getConfigFromEnv(): Result<Config, Error> {
 	const historyScanWorkers = historyScanWorkersResult.value ?? 1;
 	const historyMaxRequests =
 		historyMaxRequestsResult.value ?? defaultConfig.historyMaxRequests;
-	const historyHasherWorkers =
+	const historyPerScannerMaxRequests = calculatePerScannerRequestConcurrency(
+		historyMaxRequests,
+		historyScanWorkers
+	);
+	const historyTotalHasherWorkers =
 		historyHasherWorkersResult.value ??
-		calculateDefaultHistoryHasherWorkers(
-			historyScanWorkers,
-			availableParallelism()
-		);
+		Math.min(Math.max(availableParallelism() - 1, 1), maxHistoryHasherWorkers);
+	const historyHasherWorkers = calculatePerScannerWorkerConcurrency(
+		historyTotalHasherWorkers,
+		historyScanWorkers
+	);
 
 	return ok({
 		nodeEnv: process.env.NODE_ENV ?? defaultConfig.nodeEnv,
@@ -194,8 +221,9 @@ export function getConfigFromEnv(): Result<Config, Error> {
 		logLevel: process.env.LOG_LEVEL ?? defaultConfig.logLevel,
 		historyMaxFileMs,
 		historySlowArchiveMaxLedgers,
+		historyScanWorkers,
 		historyHasherWorkers,
-		historyMaxRequests,
+		historyMaxRequests: historyPerScannerMaxRequests,
 		historyScanRangeSize:
 			historyScanRangeSizeResult.value ?? defaultConfig.historyScanRangeSize,
 		historyBucketCacheDir:

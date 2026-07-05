@@ -22,34 +22,47 @@ export class VerifyArchives {
 		@inject(TYPES.ExceptionLogger)
 		private exceptionLogger: ExceptionLogger,
 		@inject(TYPES.JobMonitor)
-		private jobMonitor: JobMonitor
+		private jobMonitor: JobMonitor,
+		@inject(TYPES.ScanWorkerCount)
+		private readonly scanWorkerCount: number
 	) {}
 
 	public async execute(verifyArchivesDTO: VerifyArchivesDTO): Promise<void> {
-		const shutDown = false; //todo: implement graceful shutdown
+		const workerCount = Math.max(Math.floor(this.scanWorkerCount), 1);
+		await Promise.all(
+			Array.from({ length: workerCount }, () =>
+				this.runWorkerLoop(verifyArchivesDTO)
+			)
+		);
+	}
+
+	private async runWorkerLoop(
+		verifyArchivesDTO: VerifyArchivesDTO
+	): Promise<void> {
 		do {
 			try {
-				const scanJobDTOResult = await this.scanCoordinator.getScanJob();
-				if (scanJobDTOResult.isErr()) {
-					this.exceptionLogger.captureException(scanJobDTOResult.error);
-					await this.waitBeforeRetry();
-					continue;
-				}
-				if (scanJobDTOResult.value === null) {
-					await this.waitBeforeRetry();
-					continue;
-				}
-
-				await this.performScanJob(
-					scanJobDTOResult.value,
-					verifyArchivesDTO.persist
-				);
+				await this.claimAndPerformScanJob(verifyArchivesDTO.persist);
 			} catch (e) {
 				//general catch all in case we missed an edge case
 				this.exceptionLogger.captureException(mapUnknownToError(e));
 				await this.waitBeforeRetry();
 			}
-		} while (!shutDown && verifyArchivesDTO.loop);
+		} while (verifyArchivesDTO.loop);
+	}
+
+	private async claimAndPerformScanJob(persist: boolean): Promise<void> {
+		const scanJobDTOResult = await this.scanCoordinator.getScanJob();
+		if (scanJobDTOResult.isErr()) {
+			this.exceptionLogger.captureException(scanJobDTOResult.error);
+			await this.waitBeforeRetry();
+			return;
+		}
+		if (scanJobDTOResult.value === null) {
+			await this.waitBeforeRetry();
+			return;
+		}
+
+		await this.performScanJob(scanJobDTOResult.value, persist);
 	}
 
 	private async performScanJob(dto: ScanJobDTO, persist = false) {

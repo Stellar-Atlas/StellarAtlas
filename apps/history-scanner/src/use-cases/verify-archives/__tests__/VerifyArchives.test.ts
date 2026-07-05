@@ -43,7 +43,8 @@ describe('VerifyArchives', () => {
 			scannerMock,
 			scanCoordinatorMock,
 			exceptionLoggerMock,
-			jobMonitorMock
+			jobMonitorMock,
+			1
 		);
 	});
 
@@ -165,5 +166,41 @@ describe('VerifyArchives', () => {
 
 		expect(exceptionLoggerMock.captureException).toHaveBeenCalledWith(error);
 		expect(verifyArchives.retryWaits).toEqual([60 * 1000]);
+	});
+
+	it('should claim and run jobs in parallel up to the configured worker count', async () => {
+		const secondScanJobDTO = new ScanJobDTO(
+			'https://example.org',
+			0,
+			null,
+			null,
+			'test-2'
+		);
+		verifyArchives = new TestVerifyArchives(
+			scannerMock,
+			scanCoordinatorMock,
+			exceptionLoggerMock,
+			jobMonitorMock,
+			2
+		);
+		scanCoordinatorMock.getScanJob
+			.mockResolvedValueOnce(ok(mockScanJobDTO))
+			.mockResolvedValueOnce(ok(secondScanJobDTO));
+		jobMonitorMock.checkIn.mockResolvedValue(ok(undefined));
+		scannerMock.perform.mockResolvedValue(
+			new Scan(
+				new Date(),
+				new Date(),
+				new Date(),
+				Url.create('https://example.com')._unsafeUnwrap(),
+				0,
+				100
+			)
+		);
+
+		await verifyArchives.execute({ persist: false, loop: false });
+
+		expect(scanCoordinatorMock.getScanJob).toHaveBeenCalledTimes(2);
+		expect(scannerMock.perform).toHaveBeenCalledTimes(2);
 	});
 });

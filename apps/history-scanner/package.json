@@ -8,7 +8,8 @@
 		"build-and-start": "pnpm build; node lib/index.js",
 		"start": "node lib/index.js",
 		"build-and-scan-history": "pnpm run build; node lib/infrastructure/cli/verify-archives.js",
-		"scan-history": "node lib/infrastructure/cli/verify-archives.js 1 1",
+		"scan-history": "node lib/infrastructure/cli/verify-archives-cluster.js 1 1",
+		"scan-history:single": "node lib/infrastructure/cli/verify-archives.js 1 1",
 		"scan-single-archive": "node lib/infrastructure/cli/verify-single-archive.js"
 	},
 	"types": "lib/index.d.ts",

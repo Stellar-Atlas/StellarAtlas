@@ -122,6 +122,11 @@ and attributes claimed jobs/results to a registered scanner:
 | ---------------------------------- | --------------------------------------------------------------- | ------- |
 | `HISTORY_MAX_FILE_MS`              | Maximum time (ms) allowed for downloading a single history file | `60000` |
 | `HISTORY_SLOW_ARCHIVE_MAX_LEDGERS` | Maximum ledgers to scan for slow archives                       | `1000`  |
+| `HISTORY_SCAN_PROCESSES`           | Process workers forked by the production cluster runner         | derived |
+| `HISTORY_SCAN_WORKERS`             | Concurrent claim loops inside one scanner process               | `1`     |
+| `HISTORY_HASHER_WORKERS`           | Total hash/XDR worker-thread budget for the cluster or process  | derived |
+| `HISTORY_MAX_REQUESTS`             | Total HTTP request budget for the cluster or process            | `24`    |
+| `HISTORY_SCAN_RANGE_SIZE`          | Ledger range size persisted per scan job                        | `250000` |
 
 ### Error Tracking
 

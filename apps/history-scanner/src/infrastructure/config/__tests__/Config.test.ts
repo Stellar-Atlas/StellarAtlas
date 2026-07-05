@@ -1,5 +1,7 @@
 import { jest } from '@jest/globals';
 import {
+	calculatePerScannerRequestConcurrency,
+	calculatePerScannerWorkerConcurrency,
 	calculateDefaultHistoryHasherWorkers,
 	getConfigFromEnv
 } from '../Config.js';
@@ -65,6 +67,7 @@ describe('Config', () => {
 				logLevel: 'info',
 				historyMaxFileMs: 60000,
 				historySlowArchiveMaxLedgers: 1000,
+				historyScanWorkers: 1,
 				historyHasherWorkers: expect.any(Number),
 				historyMaxRequests: 24,
 				historyScanRangeSize: 250000,
@@ -127,6 +130,17 @@ describe('Config', () => {
 			);
 		});
 
+		test('should validate HISTORY_SCAN_WORKERS maximum', () => {
+			process.env.HISTORY_SCAN_WORKERS = '25';
+
+			const result = getConfigFromEnv();
+			expect(result.isErr()).toBe(true);
+			if (!result.isErr()) throw new Error('Expected error');
+			expect(result.error.message).toContain(
+				'HISTORY_SCAN_WORKERS must be between 1 and 24'
+			);
+		});
+
 		test('should validate HISTORY_MAX_REQUESTS maximum', () => {
 			process.env.HISTORY_MAX_REQUESTS = '25';
 
@@ -152,7 +166,8 @@ describe('Config', () => {
 		test('should accept valid numeric values', () => {
 			process.env.HISTORY_MAX_FILE_MS = '120000';
 			process.env.HISTORY_SLOW_ARCHIVE_MAX_LEDGERS = '2000';
-			process.env.HISTORY_HASHER_WORKERS = '3';
+			process.env.HISTORY_SCAN_WORKERS = '6';
+			process.env.HISTORY_HASHER_WORKERS = '12';
 			process.env.HISTORY_MAX_REQUESTS = '12';
 			process.env.HISTORY_SCAN_RANGE_SIZE = '100000';
 			process.env.HISTORY_BUCKET_CACHE_MAX_BYTES = String(
@@ -165,8 +180,9 @@ describe('Config', () => {
 
 			expect(result.value.historyMaxFileMs).toBe(120000);
 			expect(result.value.historySlowArchiveMaxLedgers).toBe(2000);
-			expect(result.value.historyHasherWorkers).toBe(3);
-			expect(result.value.historyMaxRequests).toBe(12);
+			expect(result.value.historyScanWorkers).toBe(6);
+			expect(result.value.historyHasherWorkers).toBe(2);
+			expect(result.value.historyMaxRequests).toBe(2);
 			expect(result.value.historyScanRangeSize).toBe(100000);
 			expect(result.value.historyBucketCacheMaxBytes).toBe(
 				2 * 1024 * 1024 * 1024
@@ -174,9 +190,21 @@ describe('Config', () => {
 		});
 
 		test('should derive default hasher workers from scanner workers and CPU count', () => {
-			expect(calculateDefaultHistoryHasherWorkers(24, 64)).toBe(2);
+			expect(calculateDefaultHistoryHasherWorkers(24, 64)).toBe(1);
 			expect(calculateDefaultHistoryHasherWorkers(1, 64)).toBe(24);
 			expect(calculateDefaultHistoryHasherWorkers(64, 64)).toBe(1);
+		});
+
+		test('should derive per-scanner worker concurrency from the total worker cap', () => {
+			expect(calculatePerScannerWorkerConcurrency(24, 24)).toBe(1);
+			expect(calculatePerScannerWorkerConcurrency(24, 6)).toBe(4);
+			expect(calculatePerScannerWorkerConcurrency(12, 24)).toBe(1);
+		});
+
+		test('should derive per-scanner request concurrency from the total request cap', () => {
+			expect(calculatePerScannerRequestConcurrency(24, 24)).toBe(1);
+			expect(calculatePerScannerRequestConcurrency(24, 6)).toBe(4);
+			expect(calculatePerScannerRequestConcurrency(12, 24)).toBe(1);
 		});
 
 		test('should properly configure Sentry when enabled', () => {
