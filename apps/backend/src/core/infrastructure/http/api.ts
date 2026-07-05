@@ -56,10 +56,12 @@ import { GetScannerMetrics } from '@history-scan-coordinator/use-cases/GetScanne
 import { RegisterCommunityScanner } from '@history-scan-coordinator/use-cases/RegisterCommunityScanner.js';
 import { SendScannerHeartbeat } from '@history-scan-coordinator/use-cases/SendScannerHeartbeat.js';
 import { statusRouter } from '@status/infrastructure/http/StatusRouter.js';
+import { fullHistoryRouter } from '@status/infrastructure/http/FullHistoryRouter.js';
 import { GetArchiveQueueStatus } from '@status/use-cases/get-archive-queue-status/GetArchiveQueueStatus.js';
 import { GetApiStatus } from '@status/use-cases/get-api-status/GetApiStatus.js';
 import { GetDataQualityStatus } from '@status/use-cases/get-data-quality-status/GetDataQualityStatus.js';
 import { GetDataFreshnessStatus } from '@status/use-cases/get-data-freshness-status/GetDataFreshnessStatus.js';
+import { GetFullHistoryStatus } from '@status/use-cases/get-full-history-status/GetFullHistoryStatus.js';
 import { GetRollupStatus } from '@status/use-cases/get-rollup-status/GetRollupStatus.js';
 import { GetScanLogStatus } from '@status/use-cases/get-scan-log-status/GetScanLogStatus.js';
 import { GetScanStatus } from '@status/use-cases/get-scan-status/GetScanStatus.js';
@@ -192,6 +194,13 @@ const listen = async () => {
 			getFailoverStatus: kernel.container.get(GetFailoverStatus),
 			getArchiveQueueStatus: kernel.container.get(GetArchiveQueueStatus),
 			getWorkerStatus: kernel.container.get(GetWorkerStatus)
+		})
+	);
+
+	api.use(
+		'/v1',
+		fullHistoryRouter({
+			getFullHistoryStatus: kernel.container.get(GetFullHistoryStatus)
 		})
 	);
 

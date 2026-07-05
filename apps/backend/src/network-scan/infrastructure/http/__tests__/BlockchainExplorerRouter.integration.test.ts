@@ -124,6 +124,76 @@ describe('BlockchainExplorerRouter.integration', () => {
 		expect(fetchSpy).not.toHaveBeenCalled();
 	});
 
+	it('returns transaction operation detail rows', async () => {
+		const transactionHash = 'b'.repeat(64);
+		jest.spyOn(global, 'fetch').mockResolvedValue(
+			new Response(
+				JSON.stringify({
+					_embedded: {
+						records: [
+							{
+								created_at: '2026-07-05T05:11:32Z',
+								id: '12345',
+								ledger: 63335066,
+								source_account: `G${'B'.repeat(55)}`,
+								transaction_hash: transactionHash,
+								transaction_successful: true,
+								type: 'payment',
+								type_i: 1
+							}
+						]
+					}
+				}),
+				{ status: 200 }
+			)
+		);
+
+		await request(createApp())
+			.get(`/v1/explorer/transactions/${transactionHash}/operations`)
+			.expect(200)
+			.expect((response) => {
+				expect(response.body).toMatchObject({
+					filters: { transactionHash },
+					source: 'horizon',
+					truncated: false,
+					records: [
+						{
+							id: '12345',
+							ledger: '63335066',
+							transactionHash,
+							type: 'payment'
+						}
+					]
+				});
+			});
+	});
+
+	it('rejects invalid transaction operation hashes before Horizon lookup', async () => {
+		const fetchSpy = jest.spyOn(global, 'fetch');
+
+		await request(createApp())
+			.get('/v1/explorer/transactions/not-a-hash/operations')
+			.expect(400)
+			.expect((response) => {
+				expect(response.body).toEqual({ error: 'Invalid transaction hash' });
+			});
+
+		expect(fetchSpy).not.toHaveBeenCalled();
+	});
+
+	it('returns not found when Horizon has no transaction operation page', async () => {
+		jest
+			.spyOn(global, 'fetch')
+			.mockResolvedValue(new Response('{}', { status: 404 }));
+
+		await request(createApp())
+			.get(`/v1/explorer/transactions/${'c'.repeat(64)}/operations`)
+			.expect(404)
+			.expect((response) => {
+				expect(response.body).toEqual({ error: 'Transaction not found' });
+			});
+	});
+
 	it('reports contract lookup as unconfigured until RPC is wired', async () => {
 		await request(createApp())
 			.get(`/v1/explorer/contracts/${contractId}`)

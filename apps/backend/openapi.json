@@ -390,6 +390,480 @@
 				}
 			}
 		},
+		"/v1/ledger/latest": {
+			"get": {
+				"summary": "Get the latest Horizon ledger",
+				"description": "Returns the latest ledger from the configured Horizon source for frontend graph and explorer views.",
+				"tags": ["Explorer", "Horizon"],
+				"operationId": "getLatestLedger",
+				"responses": {
+					"200": {
+						"description": "Latest ledger",
+						"content": {
+							"application/json": {
+								"schema": { "$ref": "#/components/schemas/LatestLedger" }
+							}
+						}
+					},
+					"502": { "description": "Latest ledger unavailable" }
+				}
+			}
+		},
+		"/v1/scp/slots/{slotIndex}/transactions": {
+			"get": {
+				"summary": "Get transactions for a ledger slot",
+				"description": "Returns a bounded transaction list for a ledger sequence from configured Horizon.",
+				"tags": ["Explorer", "Horizon", "SCP"],
+				"operationId": "getLedgerTransactions",
+				"parameters": [
+					{
+						"name": "slotIndex",
+						"in": "path",
+						"required": true,
+						"schema": { "type": "string", "pattern": "^\\d+$" }
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "Ledger transactions",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/LedgerTransactions"
+								}
+							}
+						}
+					},
+					"400": { "description": "Invalid ledger slot" },
+					"502": { "description": "Ledger transactions unavailable" }
+				}
+			}
+		},
+		"/v1/explorer/search": {
+			"get": {
+				"summary": "Search the Horizon-backed explorer helpers",
+				"description": "Searches transaction hashes, account IDs, ledger sequences, asset queries, and contract IDs using the currently configured Horizon/RPC helper paths.",
+				"tags": ["Explorer", "Horizon"],
+				"operationId": "searchExplorer",
+				"parameters": [
+					{
+						"name": "query",
+						"in": "query",
+						"required": true,
+						"schema": { "type": "string" }
+					},
+					{
+						"name": "type",
+						"in": "query",
+						"required": false,
+						"schema": {
+							"type": "string",
+							"enum": [
+								"account",
+								"asset",
+								"auto",
+								"contract",
+								"ledger",
+								"transaction"
+							]
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "Explorer search result",
+						"content": {
+							"application/json": {
+								"schema": { "$ref": "#/components/schemas/ExplorerSearch" }
+							}
+						}
+					},
+					"400": { "description": "Invalid search input" },
+					"502": { "description": "Explorer search unavailable" }
+				}
+			}
+		},
+		"/v1/explorer/transactions": {
+			"get": {
+				"summary": "Get recent transactions",
+				"description": "Returns a bounded recent transaction feed from configured Horizon.",
+				"tags": ["Explorer", "Horizon"],
+				"operationId": "getExplorerRecentTransactions",
+				"parameters": [
+					{
+						"name": "limit",
+						"in": "query",
+						"required": false,
+						"schema": { "type": "integer", "minimum": 1, "maximum": 50 }
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "Recent transactions",
+						"content": {
+							"application/json": {
+								"schema": { "$ref": "#/components/schemas/RecentTransactions" }
+							}
+						}
+					},
+					"400": { "description": "Invalid transaction limit" },
+					"502": { "description": "Transaction feed unavailable" }
+				}
+			}
+		},
+		"/v1/explorer/transactions/{hash}": {
+			"get": {
+				"summary": "Look up an explorer transaction",
+				"description": "Explorer namespace alias for Horizon-backed transaction lookup.",
+				"tags": ["Explorer", "Horizon"],
+				"operationId": "getExplorerTransactionByHash",
+				"parameters": [
+					{
+						"name": "hash",
+						"in": "path",
+						"required": true,
+						"schema": { "type": "string", "pattern": "^[0-9a-fA-F]{64}$" }
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "Transaction lookup result",
+						"content": {
+							"application/json": {
+								"schema": { "$ref": "#/components/schemas/TransactionLookup" }
+							}
+						}
+					},
+					"400": { "description": "Invalid transaction hash" },
+					"404": { "description": "Transaction not found" },
+					"502": { "description": "Transaction lookup unavailable" }
+				}
+			}
+		},
+		"/v1/explorer/transactions/{hash}/operations": {
+			"get": {
+				"summary": "Get operations for a transaction",
+				"description": "Returns bounded Horizon operation rows for one transaction hash.",
+				"tags": ["Explorer", "Horizon"],
+				"operationId": "getExplorerTransactionOperations",
+				"parameters": [
+					{
+						"name": "hash",
+						"in": "path",
+						"required": true,
+						"schema": { "type": "string", "pattern": "^[0-9a-fA-F]{64}$" }
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "Transaction operation rows",
+						"content": {
+							"application/json": {
+								"schema": { "$ref": "#/components/schemas/ExplorerOperations" }
+							}
+						}
+					},
+					"400": { "description": "Invalid transaction hash" },
+					"404": { "description": "Transaction not found" },
+					"502": { "description": "Transaction operations unavailable" }
+				}
+			}
+		},
+		"/v1/explorer/ledgers/{sequence}": {
+			"get": {
+				"summary": "Look up a ledger",
+				"description": "Returns ledger facts from configured Horizon.",
+				"tags": ["Explorer", "Horizon"],
+				"operationId": "getExplorerLedger",
+				"parameters": [
+					{
+						"name": "sequence",
+						"in": "path",
+						"required": true,
+						"schema": { "type": "string", "pattern": "^\\d+$" }
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "Ledger lookup result",
+						"content": {
+							"application/json": {
+								"schema": { "$ref": "#/components/schemas/ExplorerLedger" }
+							}
+						}
+					},
+					"400": { "description": "Invalid ledger sequence" },
+					"404": { "description": "Ledger not found" },
+					"502": { "description": "Ledger lookup unavailable" }
+				}
+			}
+		},
+		"/v1/explorer/accounts/{accountId}": {
+			"get": {
+				"summary": "Look up an account",
+				"description": "Returns account state from configured Horizon.",
+				"tags": ["Explorer", "Horizon"],
+				"operationId": "getExplorerAccount",
+				"parameters": [
+					{
+						"name": "accountId",
+						"in": "path",
+						"required": true,
+						"schema": { "type": "string" }
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "Account lookup result",
+						"content": {
+							"application/json": {
+								"schema": { "$ref": "#/components/schemas/ExplorerAccount" }
+							}
+						}
+					},
+					"400": { "description": "Invalid account address" },
+					"404": { "description": "Account not found" },
+					"502": { "description": "Account lookup unavailable" }
+				}
+			}
+		},
+		"/v1/explorer/assets": {
+			"get": {
+				"summary": "Search assets",
+				"description": "Returns a bounded Horizon asset search result by optional code and issuer.",
+				"tags": ["Explorer", "Horizon"],
+				"operationId": "getExplorerAssets",
+				"parameters": [
+					{
+						"name": "assetCode",
+						"in": "query",
+						"required": false,
+						"schema": { "type": "string" }
+					},
+					{
+						"name": "assetIssuer",
+						"in": "query",
+						"required": false,
+						"schema": { "type": "string" }
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "Asset search result",
+						"content": {
+							"application/json": {
+								"schema": { "$ref": "#/components/schemas/ExplorerAssets" }
+							}
+						}
+					},
+					"400": { "description": "Invalid asset issuer" },
+					"502": { "description": "Asset search unavailable" }
+				}
+			}
+		},
+		"/v1/explorer/operations": {
+			"get": {
+				"summary": "Search operations",
+				"description": "Returns bounded Horizon operation rows filtered by ledger, account, operation type, or date range.",
+				"tags": ["Explorer", "Horizon"],
+				"operationId": "getExplorerOperations",
+				"parameters": [
+					{
+						"name": "accountId",
+						"in": "query",
+						"required": false,
+						"schema": { "type": "string" }
+					},
+					{
+						"name": "ledger",
+						"in": "query",
+						"required": false,
+						"schema": { "type": "string", "pattern": "^\\d+$" }
+					},
+					{
+						"name": "operationType",
+						"in": "query",
+						"required": false,
+						"schema": { "type": "string" }
+					},
+					{
+						"name": "from",
+						"in": "query",
+						"required": false,
+						"schema": { "type": "string", "format": "date-time" }
+					},
+					{
+						"name": "to",
+						"in": "query",
+						"required": false,
+						"schema": { "type": "string", "format": "date-time" }
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "Operation search result",
+						"content": {
+							"application/json": {
+								"schema": { "$ref": "#/components/schemas/ExplorerOperations" }
+							}
+						}
+					},
+					"400": { "description": "Invalid operation filters" },
+					"502": { "description": "Operation search unavailable" }
+				}
+			}
+		},
+		"/v1/explorer/contracts/{contractId}": {
+			"get": {
+				"summary": "Look up contract readiness",
+				"description": "Reports RPC-backed contract lookup readiness for a contract ID.",
+				"tags": ["Explorer", "Horizon"],
+				"operationId": "getExplorerContract",
+				"parameters": [
+					{
+						"name": "contractId",
+						"in": "path",
+						"required": true,
+						"schema": { "type": "string", "pattern": "^C[A-Z2-7]{55}$" }
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "Contract lookup readiness",
+						"content": {
+							"application/json": {
+								"schema": { "$ref": "#/components/schemas/ExplorerContract" }
+							}
+						}
+					},
+					"400": { "description": "Invalid contract id" }
+				}
+			}
+		},
+		"/v1/status/full-history": {
+			"get": {
+				"summary": "Get full-history parser status",
+				"description": "Returns persisted full-history parser readiness from archive-derived parsed ledger headers.",
+				"tags": ["Status", "Explorer"],
+				"operationId": "getFullHistoryStatus",
+				"responses": {
+					"200": {
+						"description": "Full-history status",
+						"content": {
+							"application/json": {
+								"schema": { "$ref": "#/components/schemas/FullHistoryStatus" }
+							}
+						}
+					},
+					"500": { "description": "Internal server error" }
+				}
+			}
+		},
+		"/v1/status/ingestion": {
+			"get": {
+				"summary": "Get full-history ingestion status",
+				"description": "Returns parser status with archive indexing job queue summary.",
+				"tags": ["Status", "Explorer"],
+				"operationId": "getIngestionStatus",
+				"responses": {
+					"200": {
+						"description": "Ingestion status",
+						"content": {
+							"application/json": {
+								"schema": { "$ref": "#/components/schemas/IngestionStatus" }
+							}
+						}
+					},
+					"500": { "description": "Internal server error" }
+				}
+			}
+		},
+		"/v1/indexing/jobs": {
+			"get": {
+				"summary": "List recent indexing jobs",
+				"description": "Returns bounded recent archive indexing jobs from the persisted scanner queue.",
+				"tags": ["Explorer", "Status"],
+				"operationId": "getIndexingJobs",
+				"parameters": [
+					{
+						"name": "limit",
+						"in": "query",
+						"required": false,
+						"schema": { "type": "integer", "minimum": 1, "maximum": 100 }
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "Recent indexing jobs",
+						"content": {
+							"application/json": {
+								"schema": { "$ref": "#/components/schemas/IndexingJobs" }
+							}
+						}
+					},
+					"400": { "description": "Invalid limit" },
+					"500": { "description": "Internal server error" }
+				}
+			}
+		},
+		"/v1/indexing/ranges": {
+			"get": {
+				"summary": "List parsed archive ranges",
+				"description": "Returns per-archive parsed ledger header coverage from persisted parser evidence.",
+				"tags": ["Explorer", "Status"],
+				"operationId": "getIndexingRanges",
+				"parameters": [
+					{
+						"name": "limit",
+						"in": "query",
+						"required": false,
+						"schema": { "type": "integer", "minimum": 1, "maximum": 100 }
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "Parsed archive ranges",
+						"content": {
+							"application/json": {
+								"schema": { "$ref": "#/components/schemas/IndexingRanges" }
+							}
+						}
+					},
+					"400": { "description": "Invalid limit" },
+					"500": { "description": "Internal server error" }
+				}
+			}
+		},
+		"/v1/ledgers/{sequence}/ingestion-status": {
+			"get": {
+				"summary": "Get ledger ingestion status",
+				"description": "Reports whether an archive-derived parsed ledger header is available for a ledger sequence.",
+				"tags": ["Explorer", "Status"],
+				"operationId": "getLedgerIngestionStatus",
+				"parameters": [
+					{
+						"name": "sequence",
+						"in": "path",
+						"required": true,
+						"schema": { "type": "string", "pattern": "^\\d+$" }
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "Ledger ingestion status",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/LedgerIngestionStatus"
+								}
+							}
+						}
+					},
+					"400": { "description": "Invalid ledger sequence" },
+					"500": { "description": "Internal server error" }
+				}
+			}
+		},
 		"/v1/transactions/{hash}": {
 			"get": {
 				"summary": "Look up a transaction by hash",
@@ -6391,6 +6865,433 @@
 					},
 					"sourceAccount": { "type": "string" },
 					"successful": { "type": "boolean" }
+				}
+			},
+			"LatestLedger": {
+				"type": "object",
+				"required": ["closedAt", "protocolVersion", "sequence"],
+				"properties": {
+					"closedAt": { "type": "string", "format": "date-time" },
+					"protocolVersion": { "type": "integer" },
+					"sequence": { "type": "string" }
+				}
+			},
+			"LedgerTransaction": {
+				"type": "object",
+				"required": [
+					"createdAt",
+					"feeCharged",
+					"hash",
+					"operationCount",
+					"sourceAccount",
+					"successful"
+				],
+				"properties": {
+					"createdAt": { "type": "string", "format": "date-time" },
+					"feeCharged": { "type": "string" },
+					"hash": { "type": "string" },
+					"operationCount": { "type": "integer", "minimum": 0 },
+					"sourceAccount": { "type": "string" },
+					"successful": { "type": "boolean" }
+				}
+			},
+			"LedgerTransactions": {
+				"type": "object",
+				"required": ["ledger", "records", "truncated"],
+				"properties": {
+					"ledger": { "type": "string" },
+					"records": {
+						"type": "array",
+						"items": { "$ref": "#/components/schemas/LedgerTransaction" }
+					},
+					"truncated": { "type": "boolean" }
+				}
+			},
+			"RecentTransactions": {
+				"type": "object",
+				"required": ["generatedAt", "limit", "records", "source", "truncated"],
+				"properties": {
+					"generatedAt": { "type": "string", "format": "date-time" },
+					"limit": { "type": "integer", "minimum": 1, "maximum": 50 },
+					"records": {
+						"type": "array",
+						"items": { "$ref": "#/components/schemas/TransactionLookup" }
+					},
+					"source": { "type": "string", "enum": ["horizon"] },
+					"truncated": { "type": "boolean" }
+				}
+			},
+			"ExplorerLedger": {
+				"type": "object",
+				"required": [
+					"closedAt",
+					"hash",
+					"operationCount",
+					"protocolVersion",
+					"sequence",
+					"source",
+					"transactionCount"
+				],
+				"properties": {
+					"closedAt": { "type": "string", "format": "date-time" },
+					"hash": { "type": "string" },
+					"operationCount": { "type": "integer", "minimum": 0 },
+					"protocolVersion": { "type": "integer" },
+					"sequence": { "type": "string" },
+					"source": { "type": "string", "enum": ["horizon"] },
+					"transactionCount": {
+						"type": "integer",
+						"nullable": true,
+						"minimum": 0
+					}
+				}
+			},
+			"ExplorerAccountBalance": {
+				"type": "object",
+				"required": ["assetCode", "assetIssuer", "assetType", "balance"],
+				"properties": {
+					"assetCode": { "type": "string", "nullable": true },
+					"assetIssuer": { "type": "string", "nullable": true },
+					"assetType": { "type": "string" },
+					"balance": { "type": "string" }
+				}
+			},
+			"ExplorerAccount": {
+				"type": "object",
+				"required": [
+					"accountId",
+					"balances",
+					"lastModifiedLedger",
+					"sequence",
+					"source",
+					"subentryCount"
+				],
+				"properties": {
+					"accountId": { "type": "string" },
+					"balances": {
+						"type": "array",
+						"items": { "$ref": "#/components/schemas/ExplorerAccountBalance" }
+					},
+					"lastModifiedLedger": { "type": "string", "nullable": true },
+					"sequence": { "type": "string" },
+					"source": { "type": "string", "enum": ["horizon"] },
+					"subentryCount": { "type": "integer", "minimum": 0 }
+				}
+			},
+			"ExplorerAsset": {
+				"type": "object",
+				"required": [
+					"amount",
+					"assetCode",
+					"assetIssuer",
+					"assetType",
+					"numAccounts",
+					"source"
+				],
+				"properties": {
+					"amount": { "type": "string", "nullable": true },
+					"assetCode": { "type": "string", "nullable": true },
+					"assetIssuer": { "type": "string", "nullable": true },
+					"assetType": { "type": "string" },
+					"numAccounts": {
+						"type": "integer",
+						"nullable": true,
+						"minimum": 0
+					},
+					"source": { "type": "string", "enum": ["horizon"] }
+				}
+			},
+			"ExplorerAssets": {
+				"type": "object",
+				"required": ["assets", "source", "truncated"],
+				"properties": {
+					"assets": {
+						"type": "array",
+						"items": { "$ref": "#/components/schemas/ExplorerAsset" }
+					},
+					"source": { "type": "string", "enum": ["horizon"] },
+					"truncated": { "type": "boolean" }
+				}
+			},
+			"ExplorerOperationFilters": {
+				"type": "object",
+				"properties": {
+					"accountId": { "type": "string" },
+					"from": { "type": "string", "format": "date-time" },
+					"ledger": { "type": "string" },
+					"operationType": { "type": "string" },
+					"to": { "type": "string", "format": "date-time" },
+					"transactionHash": { "type": "string" }
+				}
+			},
+			"ExplorerOperation": {
+				"type": "object",
+				"required": [
+					"createdAt",
+					"id",
+					"ledger",
+					"source",
+					"sourceAccount",
+					"successful",
+					"transactionHash",
+					"type",
+					"typeNumber"
+				],
+				"properties": {
+					"createdAt": { "type": "string", "format": "date-time" },
+					"id": { "type": "string" },
+					"ledger": { "type": "string", "nullable": true },
+					"source": { "type": "string", "enum": ["horizon"] },
+					"sourceAccount": { "type": "string", "nullable": true },
+					"successful": { "type": "boolean", "nullable": true },
+					"transactionHash": { "type": "string", "nullable": true },
+					"type": { "type": "string" },
+					"typeNumber": { "type": "integer", "nullable": true }
+				}
+			},
+			"ExplorerOperations": {
+				"type": "object",
+				"required": ["filters", "records", "source", "truncated"],
+				"properties": {
+					"filters": {
+						"$ref": "#/components/schemas/ExplorerOperationFilters"
+					},
+					"records": {
+						"type": "array",
+						"items": { "$ref": "#/components/schemas/ExplorerOperation" }
+					},
+					"source": { "type": "string", "enum": ["horizon"] },
+					"truncated": { "type": "boolean" }
+				}
+			},
+			"ExplorerContract": {
+				"type": "object",
+				"required": ["contractId", "message", "source", "status"],
+				"properties": {
+					"contractId": { "type": "string" },
+					"message": { "type": "string" },
+					"source": { "type": "string", "enum": ["rpc"] },
+					"status": {
+						"type": "string",
+						"enum": ["loaded", "unavailable", "unconfigured"]
+					}
+				}
+			},
+			"ExplorerSearch": {
+				"type": "object",
+				"required": ["query", "result", "resultType", "source"],
+				"properties": {
+					"query": { "type": "string" },
+					"result": {
+						"nullable": true,
+						"oneOf": [
+							{ "$ref": "#/components/schemas/ExplorerAccount" },
+							{ "$ref": "#/components/schemas/ExplorerAssets" },
+							{ "$ref": "#/components/schemas/ExplorerContract" },
+							{ "$ref": "#/components/schemas/ExplorerLedger" },
+							{ "$ref": "#/components/schemas/ExplorerOperation" },
+							{ "$ref": "#/components/schemas/TransactionLookup" }
+						]
+					},
+					"resultType": {
+						"type": "string",
+						"enum": [
+							"account",
+							"asset",
+							"contract",
+							"ledger",
+							"not_found",
+							"transaction",
+							"unknown"
+						]
+					},
+					"source": { "type": "string", "enum": ["horizon", "rpc"] }
+				}
+			},
+			"FullHistoryStatus": {
+				"type": "object",
+				"required": [
+					"generatedAt",
+					"status",
+					"mode",
+					"parsedLedgerCount",
+					"earliestParsedLedger",
+					"latestParsedLedger",
+					"latestObservedAt",
+					"sourceArchiveCount",
+					"localTransactionIndexReady",
+					"localOperationIndexReady",
+					"localAssetIndexReady",
+					"localContractIndexReady"
+				],
+				"properties": {
+					"generatedAt": { "type": "string", "format": "date-time" },
+					"status": {
+						"type": "string",
+						"enum": ["ok", "degraded", "unavailable"]
+					},
+					"mode": {
+						"type": "string",
+						"enum": ["archive_header_parser"]
+					},
+					"parsedLedgerCount": { "type": "integer", "minimum": 0 },
+					"earliestParsedLedger": { "type": "string", "nullable": true },
+					"latestParsedLedger": { "type": "string", "nullable": true },
+					"latestObservedAt": {
+						"type": "string",
+						"format": "date-time",
+						"nullable": true
+					},
+					"sourceArchiveCount": { "type": "integer", "minimum": 0 },
+					"localTransactionIndexReady": { "type": "boolean" },
+					"localOperationIndexReady": { "type": "boolean" },
+					"localAssetIndexReady": { "type": "boolean" },
+					"localContractIndexReady": { "type": "boolean" }
+				}
+			},
+			"IngestionQueueSummary": {
+				"type": "object",
+				"required": [
+					"doneJobs",
+					"pendingJobs",
+					"takenJobs",
+					"latestJobUpdateAt"
+				],
+				"properties": {
+					"doneJobs": { "type": "integer", "minimum": 0 },
+					"pendingJobs": { "type": "integer", "minimum": 0 },
+					"takenJobs": { "type": "integer", "minimum": 0 },
+					"latestJobUpdateAt": {
+						"type": "string",
+						"format": "date-time",
+						"nullable": true
+					}
+				}
+			},
+			"IngestionStatus": {
+				"allOf": [
+					{ "$ref": "#/components/schemas/FullHistoryStatus" },
+					{
+						"type": "object",
+						"required": ["queue"],
+						"properties": {
+							"queue": {
+								"$ref": "#/components/schemas/IngestionQueueSummary"
+							}
+						}
+					}
+				]
+			},
+			"IndexingJob": {
+				"type": "object",
+				"required": [
+					"concurrency",
+					"fromLedger",
+					"latestScannedLedger",
+					"remoteId",
+					"status",
+					"toLedger",
+					"updatedAt",
+					"url"
+				],
+				"properties": {
+					"concurrency": { "type": "integer", "nullable": true },
+					"fromLedger": { "type": "string", "nullable": true },
+					"latestScannedLedger": { "type": "string" },
+					"remoteId": { "type": "string" },
+					"status": { "type": "string", "enum": ["DONE", "PENDING", "TAKEN"] },
+					"toLedger": { "type": "string", "nullable": true },
+					"updatedAt": {
+						"type": "string",
+						"format": "date-time",
+						"nullable": true
+					},
+					"url": { "type": "string" }
+				}
+			},
+			"IndexingJobs": {
+				"type": "object",
+				"required": ["generatedAt", "jobs", "limit", "summary"],
+				"properties": {
+					"generatedAt": { "type": "string", "format": "date-time" },
+					"jobs": {
+						"type": "array",
+						"items": { "$ref": "#/components/schemas/IndexingJob" }
+					},
+					"limit": { "type": "integer", "minimum": 1, "maximum": 100 },
+					"summary": {
+						"$ref": "#/components/schemas/IngestionQueueSummary"
+					}
+				}
+			},
+			"IndexingRange": {
+				"type": "object",
+				"required": [
+					"archiveUrl",
+					"earliestParsedLedger",
+					"latestObservedAt",
+					"latestParsedLedger",
+					"parsedLedgerCount"
+				],
+				"properties": {
+					"archiveUrl": { "type": "string" },
+					"earliestParsedLedger": { "type": "string" },
+					"latestObservedAt": { "type": "string", "format": "date-time" },
+					"latestParsedLedger": { "type": "string" },
+					"parsedLedgerCount": { "type": "integer", "minimum": 0 }
+				}
+			},
+			"IndexingRanges": {
+				"type": "object",
+				"required": ["generatedAt", "limit", "ranges"],
+				"properties": {
+					"generatedAt": { "type": "string", "format": "date-time" },
+					"limit": { "type": "integer", "minimum": 1, "maximum": 100 },
+					"ranges": {
+						"type": "array",
+						"items": { "$ref": "#/components/schemas/IndexingRange" }
+					}
+				}
+			},
+			"LedgerIngestionHeader": {
+				"type": "object",
+				"required": [
+					"bucketListHash",
+					"ledgerHeaderHash",
+					"protocolVersion",
+					"sourceArchiveUrl",
+					"transactionResultHash",
+					"transactionSetHash"
+				],
+				"properties": {
+					"bucketListHash": { "type": "string" },
+					"ledgerHeaderHash": { "type": "string" },
+					"protocolVersion": { "type": "integer" },
+					"sourceArchiveUrl": { "type": "string" },
+					"transactionResultHash": { "type": "string" },
+					"transactionSetHash": { "type": "string" }
+				}
+			},
+			"LedgerIngestionStatus": {
+				"type": "object",
+				"required": [
+					"generatedAt",
+					"header",
+					"ledger",
+					"parsedHeaderAvailable",
+					"status"
+				],
+				"properties": {
+					"generatedAt": { "type": "string", "format": "date-time" },
+					"header": {
+						"nullable": true,
+						"allOf": [
+							{ "$ref": "#/components/schemas/LedgerIngestionHeader" }
+						]
+					},
+					"ledger": { "type": "string" },
+					"parsedHeaderAvailable": { "type": "boolean" },
+					"status": { "type": "string", "enum": ["parsed", "unparsed"] }
 				}
 			},
 			"SearchFacetValue": {

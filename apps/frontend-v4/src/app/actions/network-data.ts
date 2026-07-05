@@ -7,6 +7,7 @@ import {
 	fetchExplorerOperations,
 	fetchExplorerRecentTransactions,
 	fetchExplorerSearch,
+	fetchExplorerTransactionOperations,
 	fetchLatestLedger,
 	fetchLedgerTransactions,
 	fetchTransactionByHash
@@ -149,6 +150,35 @@ export async function searchExplorer(
 		return {
 			message: 'Explorer search unavailable',
 			search: null,
+			status: 'unavailable'
+		};
+	}
+}
+
+export async function getExplorerTransactionOperations(
+	hash: string
+): Promise<ExplorerOperationsResult> {
+	const normalizedHash = normalizeTransactionHash(hash);
+	if (!normalizedHash) {
+		return {
+			message: 'Invalid transaction hash',
+			operations: null,
+			status: 'invalid'
+		};
+	}
+
+	try {
+		return {
+			message: null,
+			operations: await fetchExplorerTransactionOperations(normalizedHash, {
+				cache: 'no-store'
+			}),
+			status: 'loaded'
+		};
+	} catch {
+		return {
+			message: 'Transaction operations unavailable',
+			operations: null,
 			status: 'unavailable'
 		};
 	}

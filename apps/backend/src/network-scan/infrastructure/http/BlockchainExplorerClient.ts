@@ -66,6 +66,7 @@ export interface ExplorerOperationFilters {
 	readonly ledger?: string;
 	readonly operationType?: string;
 	readonly to?: string;
+	readonly transactionHash?: string;
 }
 
 export interface ExplorerAssetsDTO {

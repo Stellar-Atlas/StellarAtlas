@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import {
 	getExplorerRecentTransactions,
+	getExplorerTransactionOperations,
 	lookupExplorerContract,
 	searchExplorer,
 	searchExplorerAssets,
@@ -80,7 +81,11 @@ export function BlockchainExplorer(): React.JSX.Element {
 	const [contractId, setContractId] = useState('');
 	const [contractResult, setContractResult] = useState(initialContract);
 	const [transactionFeed, setTransactionFeed] = useState(initialTransactions);
+	const [transactionOperations, setTransactionOperations] =
+		useState(initialOperations);
 	const [loading, setLoading] = useState<string | null>(null);
+	const [transactionOperationsLoading, setTransactionOperationsLoading] =
+		useState(false);
 	const [transactionFeedLoading, setTransactionFeedLoading] = useState(false);
 
 	const runExplorerSearch = (
@@ -89,8 +94,19 @@ export function BlockchainExplorer(): React.JSX.Element {
 	): void => {
 		setLoading('search');
 		void searchExplorer(query, type)
-			.then(setSearchResult)
+			.then((result) => {
+				setSearchResult(result);
+				const transactionHash = getTransactionHashFromSearch(result);
+				if (transactionHash) loadTransactionOperations(transactionHash);
+			})
 			.finally(() => setLoading(null));
+	};
+
+	const loadTransactionOperations = (hash: string): void => {
+		setTransactionOperationsLoading(true);
+		void getExplorerTransactionOperations(hash)
+			.then(setTransactionOperations)
+			.finally(() => setTransactionOperationsLoading(false));
 	};
 
 	const loadRecentTransactions = (): void => {
@@ -175,6 +191,21 @@ export function BlockchainExplorer(): React.JSX.Element {
 					</button>
 				</form>
 				<SearchResultView result={searchResult} />
+				{transactionOperations.status !== 'invalid' ? (
+					<div className="explorer-linked-operations">
+						<div className="panel-heading compact">
+							<div>
+								<strong>Transaction Operations</strong>
+								<span>
+									{transactionOperationsLoading
+										? 'Loading Horizon operation rows'
+										: 'Selected transaction'}
+								</span>
+							</div>
+						</div>
+						<OperationsView result={transactionOperations} />
+					</div>
+				) : null}
 			</section>
 
 			<section className="explorer-panel explorer-feed-panel">
@@ -321,6 +352,23 @@ export function BlockchainExplorer(): React.JSX.Element {
 			</section>
 		</section>
 	);
+}
+
+function getTransactionHashFromSearch(
+	result: ExplorerSearchResult
+): string | null {
+	const value = result.search?.result;
+	if (
+		result.search?.resultType !== 'transaction' ||
+		typeof value !== 'object' ||
+		value === null ||
+		!('hash' in value) ||
+		typeof value.hash !== 'string'
+	) {
+		return null;
+	}
+
+	return value.hash;
 }
 
 function ExplorerInput({

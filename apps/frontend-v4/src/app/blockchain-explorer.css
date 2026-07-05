@@ -40,6 +40,10 @@
 	padding: 0 12px;
 }
 
+.explorer-linked-operations {
+	margin-top: 1rem;
+}
+
 .explorer-grid {
 	display: grid;
 	gap: 16px;

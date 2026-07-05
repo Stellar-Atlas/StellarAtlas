@@ -376,6 +376,15 @@ export const fetchExplorerOperations = (
 	);
 };
 
+export const fetchExplorerTransactionOperations = (
+	hash: string,
+	options?: FetchOptions
+): Promise<PublicExplorerOperations> =>
+	fetchJson<PublicExplorerOperations>(
+		`/v1/explorer/transactions/${encodeURIComponent(hash)}/operations`,
+		options
+	);
+
 export const fetchExplorerContract = (
 	contractId: string,
 	options?: FetchOptions

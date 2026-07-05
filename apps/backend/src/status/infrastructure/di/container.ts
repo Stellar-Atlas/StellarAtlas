@@ -14,6 +14,7 @@ import {
 	GetHorizonStatus,
 	GetRpcStatus
 } from '../../use-cases/get-service-status/GetServiceStatus.js';
+import { GetFullHistoryStatus } from '../../use-cases/get-full-history-status/GetFullHistoryStatus.js';
 import { GetStatus } from '../../use-cases/get-status/GetStatus.js';
 import { GetWorkerStatus } from '../../use-cases/get-worker-status/GetWorkerStatus.js';
 
@@ -32,6 +33,7 @@ export function load(container: Container, config: Config) {
 	container.bind(GetHorizonStatus).toSelf();
 	container.bind(GetRpcStatus).toSelf();
 	container.bind(GetFailoverStatus).toSelf();
+	container.bind(GetFullHistoryStatus).toSelf();
 	container.bind(GetArchiveQueueStatus).toSelf();
 	container.bind(GetWorkerStatus).toSelf();
 	container.bind(GetStatus).toSelf();
