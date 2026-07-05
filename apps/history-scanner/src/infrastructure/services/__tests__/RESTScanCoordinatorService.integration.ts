@@ -389,4 +389,54 @@ describe('RESTScanCoordinatorService Integration Tests', () => {
 			);
 		});
 	});
+
+	describe('releaseScanJob', () => {
+		it('should release an internal scan job', async () => {
+			httpService.post.mockResolvedValue(
+				ok({
+					status: 204,
+					data: null,
+					headers: {},
+					statusText: 'No Content'
+				})
+			);
+
+			const result = await service.releaseScanJob(
+				'82a309de-a5df-457b-9412-f267ed5e7388'
+			);
+
+			expect(result.isOk()).toBe(true);
+			expect(httpService.post).toHaveBeenCalledWith(
+				Url.create(
+					`${baseUrl}/v1/history-scan/job/82a309de-a5df-457b-9412-f267ed5e7388/release`
+				)._unsafeUnwrap(),
+				{},
+				{
+					auth: {
+						username,
+						password: secret
+					}
+				}
+			);
+		});
+
+		it('should ignore release for community scanners', async () => {
+			const communityService = new RESTScanCoordinatorService(
+				httpService,
+				baseUrl,
+				{
+					type: 'community',
+					scannerId: '164f7788-9edb-4bb5-81c1-b928d85a21a5',
+					apiKey: 'satlas_scanner_secret'
+				}
+			);
+
+			const result = await communityService.releaseScanJob(
+				'82a309de-a5df-457b-9412-f267ed5e7388'
+			);
+
+			expect(result.isOk()).toBe(true);
+			expect(httpService.post).not.toHaveBeenCalled();
+		});
+	});
 });

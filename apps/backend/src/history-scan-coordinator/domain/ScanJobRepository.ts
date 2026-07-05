@@ -36,5 +36,6 @@ export interface ScanJobRepository {
 		remoteId: string,
 		communityScannerId: string
 	) => Promise<boolean>;
+	releaseTakenJob: (remoteId: string) => Promise<boolean>;
 	releaseStaleTakenJobs: (before: Date) => Promise<number>;
 }

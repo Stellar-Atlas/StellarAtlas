@@ -7,7 +7,9 @@ import {
 	runVerifyArchives
 } from './verify-archives-runner.js';
 
-const defaultTotalRequests = 24;
+const defaultTotalRequests = 12;
+const defaultHistoryScanProcesses = 12;
+const defaultHistoryHasherWorkers = 12;
 const maxHistoryScanProcesses = 24;
 const maxHistoryHasherWorkers = 24;
 const maxHistoryRequests = 24;
@@ -34,13 +36,13 @@ export function createHistoryScanClusterPlan(
 	const totalHasherWorkers = readBoundedPositiveInteger(
 		env,
 		'HISTORY_HASHER_WORKERS',
-		Math.min(Math.max(cpuCount - 1, 1), maxHistoryHasherWorkers),
+		Math.min(defaultHistoryHasherWorkers, Math.max(cpuCount - 1, 1)),
 		maxHistoryHasherWorkers
 	);
 	const requestedProcesses = readBoundedPositiveInteger(
 		env,
 		'HISTORY_SCAN_PROCESSES',
-		Math.min(Math.max(cpuCount - 1, 1), maxHistoryScanProcesses),
+		Math.min(defaultHistoryScanProcesses, Math.max(cpuCount - 1, 1)),
 		maxHistoryScanProcesses
 	);
 	const processCount = Math.min(
@@ -99,7 +101,7 @@ export async function runHistoryScanCluster(
 		if (shuttingDown) return;
 		shuttingDown = true;
 		for (const worker of Object.values(cluster.workers ?? {})) {
-			worker?.disconnect();
+			worker?.process.kill('SIGTERM');
 		}
 		setTimeout(() => {
 			for (const worker of Object.values(cluster.workers ?? {})) {

@@ -205,6 +205,33 @@ export class RESTScanCoordinatorService implements ScanCoordinatorService {
 		return ok(undefined);
 	}
 
+	async releaseScanJob(remoteId: string): Promise<Result<void, Error>> {
+		if (this.coordinatorAuth.type === 'community') return ok(undefined);
+
+		const urlResult = this.createUrl(this.getReleaseScanJobPath(remoteId));
+		if (urlResult.isErr()) {
+			return err(new CoordinatorServiceError('Invalid URL', urlResult.error));
+		}
+
+		const response = await this.httpService.post(
+			urlResult.value,
+			{},
+			this.getHttpOptions()
+		);
+
+		if (response.isErr()) {
+			return err(
+				new CoordinatorServiceError('Failed to release scan job', response.error)
+			);
+		}
+
+		if (response.value.status !== 204 && response.value.status !== 404) {
+			return err(new CoordinatorServiceError('Failed to release scan job'));
+		}
+
+		return ok(undefined);
+	}
+
 	private createUrl(path: string): Result<Url, Error> {
 		return Url.create(`${this.coordinatorAPIBaseUrl}${path}`);
 	}
@@ -231,6 +258,10 @@ export class RESTScanCoordinatorService implements ScanCoordinatorService {
 		}
 
 		return `/v1/history-scan/job/${remoteId}/heartbeat`;
+	}
+
+	private getReleaseScanJobPath(remoteId: string): string {
+		return `/v1/history-scan/job/${remoteId}/release`;
 	}
 
 	private getHttpOptions(options: HttpOptions = {}): HttpOptions {

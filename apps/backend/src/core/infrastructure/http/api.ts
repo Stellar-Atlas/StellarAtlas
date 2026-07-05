@@ -44,6 +44,7 @@ import { historyScanRouter } from '@history-scan-coordinator/infrastructure/http
 import { archiveScanRouter } from '@history-scan-coordinator/infrastructure/http/ArchiveScanRouter.js';
 import { communityScannerRouter } from '@history-scan-coordinator/infrastructure/http/CommunityScannerRouter.js';
 import { GetScanJob } from '@history-scan-coordinator/use-cases/get-scan-job/GetScanJob.js';
+import { ReleaseScanJob } from '@history-scan-coordinator/use-cases/release-scan-job/ReleaseScanJob.js';
 import { TouchScanJob } from '@history-scan-coordinator/use-cases/touch-scan-job/TouchScanJob.js';
 import { GetArchiveScans } from '@history-scan-coordinator/use-cases/get-archive-scans/GetArchiveScans.js';
 import { GetArchiveScanQueue } from '@history-scan-coordinator/use-cases/get-archive-scan-queue/GetArchiveScanQueue.js';
@@ -237,6 +238,7 @@ const listen = async () => {
 			frontendBaseUrl: config.frontendBaseUrl,
 			frontendRevalidateToken: config.frontendRevalidateToken,
 			getScanJob: kernel.container.get(GetScanJob),
+			releaseScanJob: kernel.container.get(ReleaseScanJob),
 			touchScanJob: kernel.container.get(TouchScanJob)
 		})
 	);

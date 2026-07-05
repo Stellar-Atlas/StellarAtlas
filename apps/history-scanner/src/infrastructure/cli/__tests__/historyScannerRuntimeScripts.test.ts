@@ -48,12 +48,12 @@ describe('history scanner runtime scripts', () => {
 			'ops/systemd/stellaratlas-history-scanner@.service'
 		);
 
-		expect(service).toContain('Environment=HISTORY_SCAN_PROCESSES=24');
+		expect(service).toContain('Environment=HISTORY_SCAN_PROCESSES=12');
 		expect(service).toContain('Environment=HISTORY_SCAN_WORKERS=1');
-		expect(service).toContain('Environment=HISTORY_MAX_REQUESTS=24');
-		expect(service).toContain('Environment=HISTORY_HASHER_WORKERS=24');
+		expect(service).toContain('Environment=HISTORY_MAX_REQUESTS=12');
+		expect(service).toContain('Environment=HISTORY_HASHER_WORKERS=12');
 		expect(service).toContain(
-			'ExecStart=/usr/bin/env HISTORY_SCAN_PROCESSES=24 HISTORY_SCAN_WORKERS=1 HISTORY_MAX_REQUESTS=24 HISTORY_HASHER_WORKERS=24 pnpm start:scan-history'
+			'ExecStart=/usr/bin/env pnpm start:scan-history'
 		);
 		expect(service).not.toContain('verify-archives.js');
 		expect(service).not.toContain('scan-history:single');

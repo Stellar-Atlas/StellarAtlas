@@ -11,6 +11,7 @@ import { Scan } from '../../domain/scan/Scan.js';
 import { RegisterScan } from '../../use-cases/register-scan/RegisterScan.js';
 import { ScanMapper } from '../mappers/ScanMapper.js';
 import { GetScanJob } from '../../use-cases/get-scan-job/GetScanJob.js';
+import { ReleaseScanJob } from '../../use-cases/release-scan-job/ReleaseScanJob.js';
 import { TouchScanJob } from '../../use-cases/touch-scan-job/TouchScanJob.js';
 import { RestartAtLeastOneScan } from '../../domain/ScanScheduler.js';
 import type { ScanScheduler } from '../../domain/ScanScheduler.js';
@@ -44,6 +45,7 @@ export function load(container: Container, config: Config) {
 	container.bind(RegisterCommunityScanner).toSelf();
 	container.bind(SendScannerHeartbeat).toSelf();
 	container.bind(TouchScanJob).toSelf();
+	container.bind(ReleaseScanJob).toSelf();
 	container.bind(RegisterScan).toSelf();
 	container.bind(RegisterParsedLedgerHeaders).toSelf();
 	container.bind(ScheduleScanJobs).toSelf();

@@ -36,6 +36,7 @@ describe('VerifyArchives', () => {
 		scannerMock = mock<Scanner>();
 		scanCoordinatorMock = mock<ScanCoordinatorService>();
 		scanCoordinatorMock.touchScanJob.mockResolvedValue(ok(undefined));
+		scanCoordinatorMock.releaseScanJob.mockResolvedValue(ok(undefined));
 		scanCoordinatorMock.registerParsedLedgerHeaders.mockResolvedValue(
 			ok(undefined)
 		);
@@ -69,7 +70,8 @@ describe('VerifyArchives', () => {
 
 		expect(scanCoordinatorMock.getScanJob).toHaveBeenCalledTimes(1);
 		expect(jobMonitorMock.checkIn).toHaveBeenCalled();
-		expect(scanCoordinatorMock.touchScanJob).toHaveBeenCalledTimes(2);
+		expect(scanCoordinatorMock.touchScanJob).toHaveBeenCalledTimes(1);
+		expect(scanCoordinatorMock.releaseScanJob).toHaveBeenCalledWith('test');
 		expect(exceptionLoggerMock.captureException).not.toHaveBeenCalled();
 		expect(scannerMock.perform).toHaveBeenCalled();
 	});
@@ -133,7 +135,7 @@ describe('VerifyArchives', () => {
 		expect(scanCoordinatorMock.touchScanJob).toHaveBeenCalledTimes(1);
 	});
 
-	it('should keep touching an unpersisted scan job after local execution', async () => {
+	it('should release an unpersisted scan job after local execution', async () => {
 		scanCoordinatorMock.getScanJob.mockResolvedValue(ok(mockScanJobDTO));
 		jobMonitorMock.checkIn.mockResolvedValue(ok(undefined));
 		scannerMock.perform.mockResolvedValue(
@@ -150,7 +152,8 @@ describe('VerifyArchives', () => {
 		await verifyArchives.execute({ persist: false, loop: false });
 
 		expect(scanCoordinatorMock.registerScan).not.toHaveBeenCalled();
-		expect(scanCoordinatorMock.touchScanJob).toHaveBeenCalledTimes(2);
+		expect(scanCoordinatorMock.touchScanJob).toHaveBeenCalledTimes(1);
+		expect(scanCoordinatorMock.releaseScanJob).toHaveBeenCalledWith('test');
 	});
 
 	it('should handle persist errors', async () => {
@@ -173,6 +176,7 @@ describe('VerifyArchives', () => {
 		await verifyArchives.execute({ persist: true, loop: false });
 
 		expect(exceptionLoggerMock.captureException).toHaveBeenCalledWith(error);
+		expect(scanCoordinatorMock.releaseScanJob).toHaveBeenCalledWith('test');
 		expect(verifyArchives.retryWaits).toEqual([60 * 1000]);
 	});
 

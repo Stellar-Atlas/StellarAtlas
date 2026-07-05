@@ -37,6 +37,9 @@ type RawCommunityScannerClaimStateRow = {
 	readonly totaljobsfailed?: NumericValue;
 };
 
+const claimLockName = 'history_archive_scan_job_claim';
+const maxActiveTakenJobsPerArchiveHost = 1;
+
 @injectable()
 export class TypeOrmScanJobRepository implements ScanJobRepository {
 	constructor(private baseRepository: Repository<ScanJob>) {}
@@ -175,6 +178,10 @@ export class TypeOrmScanJobRepository implements ScanJobRepository {
 		manager: EntityManager,
 		communityScannerId: string | null
 	): Promise<RawScanJobRow[]> {
+		await manager.query('select pg_advisory_xact_lock(hashtext($1))', [
+			claimLockName
+		]);
+
 		const result = (await manager.query(
 			`
 			update history_archive_scan_job_queue
@@ -183,12 +190,32 @@ export class TypeOrmScanJobRepository implements ScanJobRepository {
 				"claimedAt" = now(),
 				"updatedAt" = now()
 			where id = (
-				select id
-				from history_archive_scan_job_queue
-				where status = 'PENDING'
+				select candidate.id
+				from history_archive_scan_job_queue candidate
+				where candidate.status = 'PENDING'
+					and (
+						select count(*)
+						from history_archive_scan_job_queue active
+						where active.status = 'TAKEN'
+							and lower(
+								coalesce(
+									substring(
+										active.url from '^[a-z][a-z0-9+.-]*://([^/?#:]+)'
+									),
+									active.url
+								)
+							) = lower(
+								coalesce(
+									substring(
+										candidate.url from '^[a-z][a-z0-9+.-]*://([^/?#:]+)'
+									),
+									candidate.url
+								)
+							)
+					) < $2
 				order by
-					case when "fromLedger" is null then 1 else 0 end asc,
-					id asc
+					case when candidate."fromLedger" is null then 1 else 0 end asc,
+					candidate.id asc
 				for update skip locked
 				limit 1
 			)
@@ -208,7 +235,7 @@ export class TypeOrmScanJobRepository implements ScanJobRepository {
 				"createdAt" as "createdAt",
 				"updatedAt" as "updatedAt"
 		`,
-			[communityScannerId]
+			[communityScannerId, maxActiveTakenJobsPerArchiveHost]
 		)) as RawQueryResult;
 
 		return extractQueryRows(result);
@@ -352,6 +379,23 @@ export class TypeOrmScanJobRepository implements ScanJobRepository {
 			.andWhere('"claimedByCommunityScannerId" = :communityScannerId', {
 				communityScannerId
 			})
+			.andWhere('status = :status', { status: 'TAKEN' })
+			.execute();
+
+		return (result.affected ?? 0) > 0;
+	}
+
+	async releaseTakenJob(remoteId: string): Promise<boolean> {
+		const result = await this.baseRepository
+			.createQueryBuilder()
+			.update(ScanJob)
+			.set({
+				status: 'PENDING',
+				claimedByCommunityScannerId: null,
+				claimedAt: null
+			})
+			.where('"remoteId" = :remoteId', { remoteId })
+			.andWhere('"claimedByCommunityScannerId" is null')
 			.andWhere('status = :status', { status: 'TAKEN' })
 			.execute();
 

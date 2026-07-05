@@ -15,6 +15,7 @@ import { CoordinatorParsedHistorySink } from '../../infrastructure/services/Coor
 @injectable()
 export class VerifyArchives {
 	private static readonly scanJobHeartbeatIntervalMs = 60 * 1000;
+	private readonly activeScanJobs = new Map<string, ScanJob>();
 
 	constructor(
 		private scanner: Scanner,
@@ -66,6 +67,14 @@ export class VerifyArchives {
 		await this.performScanJob(scanJobDTOResult.value, persist);
 	}
 
+	public async releaseActiveScanJobs(): Promise<void> {
+		await Promise.all(
+			Array.from(this.activeScanJobs.values(), (scanJob) =>
+				this.releaseScanJob(scanJob)
+			)
+		);
+	}
+
 	private async performScanJob(dto: ScanJobDTO, persist = false) {
 		const scanJobResult = ScanJob.fromScanJobCoordinatorDTO(dto);
 		if (scanJobResult.isErr()) {
@@ -73,6 +82,9 @@ export class VerifyArchives {
 			return;
 		}
 
+		if (scanJobResult.value.remoteId !== null) {
+			this.activeScanJobs.set(scanJobResult.value.remoteId, scanJobResult.value);
+		}
 		await this.checkIn('in_progress');
 		await this.touchScanJob(scanJobResult.value);
 		const stopHeartbeat = this.startScanJobHeartbeat(scanJobResult.value);
@@ -82,7 +94,10 @@ export class VerifyArchives {
 			await this.checkIn('ok');
 		} finally {
 			stopHeartbeat();
-			if (!scanCompleted) await this.touchScanJob(scanJobResult.value);
+			if (!scanCompleted) await this.releaseScanJob(scanJobResult.value);
+			if (scanJobResult.value.remoteId !== null) {
+				this.activeScanJobs.delete(scanJobResult.value.remoteId);
+			}
 		}
 	}
 
@@ -119,6 +134,15 @@ export class VerifyArchives {
 		if (scanJob.remoteId === null) return;
 
 		const result = await this.scanCoordinator.touchScanJob(scanJob.remoteId);
+		if (result.isErr()) {
+			this.exceptionLogger.captureException(result.error);
+		}
+	}
+
+	private async releaseScanJob(scanJob: ScanJob): Promise<void> {
+		if (scanJob.remoteId === null) return;
+
+		const result = await this.scanCoordinator.releaseScanJob(scanJob.remoteId);
 		if (result.isErr()) {
 			this.exceptionLogger.captureException(result.error);
 		}

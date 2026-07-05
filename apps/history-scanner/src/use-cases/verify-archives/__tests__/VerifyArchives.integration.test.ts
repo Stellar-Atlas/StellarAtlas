@@ -47,6 +47,7 @@ describe('VerifyArchives Integration Tests', () => {
 			ok(undefined)
 		);
 		coordinatorServiceMock.touchScanJob.mockResolvedValue(ok(undefined));
+		coordinatorServiceMock.releaseScanJob.mockResolvedValue(ok(undefined));
 
 		await verifyArchives.execute({
 			persist: true,

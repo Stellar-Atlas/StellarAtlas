@@ -5,6 +5,7 @@ import { GetLatestScan } from '../../use-cases/get-latest-scan/GetLatestScan.js'
 import { GetScanLogs } from '../../use-cases/get-scan-logs/GetScanLogs.js';
 import { RegisterScan } from '../../use-cases/register-scan/RegisterScan.js';
 import { GetScanJob } from '../../use-cases/get-scan-job/GetScanJob.js';
+import { ReleaseScanJob } from '../../use-cases/release-scan-job/ReleaseScanJob.js';
 import { TouchScanJob } from '../../use-cases/touch-scan-job/TouchScanJob.js';
 import {
 	handleGetArchiveScanLogs,
@@ -29,6 +30,7 @@ export interface HistoryScanRouterConfig extends FrontendRevalidationConfig {
 	getScanJob: GetScanJob;
 	registerParsedLedgerHeaders: RegisterParsedLedgerHeaders;
 	registerScan: RegisterScan;
+	releaseScanJob: ReleaseScanJob;
 	touchScanJob: TouchScanJob;
 	userName?: string;
 	password?: string;
@@ -109,6 +111,37 @@ export const HistoryScanRouterWrapper = (
 				}
 
 				const result = await config.touchScanJob.execute(req.params.remoteId);
+				if (result.isErr()) {
+					return res.status(500).json({ error: result.error.message });
+				}
+
+				if (!result.value) {
+					return res.status(404).json({ error: 'Scan job not found' });
+				}
+
+				triggerFrontendRevalidation(config, [frontendCacheTags.historyScan]);
+
+				return res.status(204).send();
+			}
+		);
+
+	if (config.userName && config.password)
+		historyScanRouter.post(
+			'/job/:remoteId/release',
+			basicAuth({
+				users: { [config.userName]: config.password },
+				challenge: true
+			}),
+			[param('remoteId').isUUID().withMessage('Invalid scan job remoteId')],
+			async (req: express.Request, res: express.Response) => {
+				const errors = validationResult(req);
+				if (!errors.isEmpty()) {
+					return res.status(400).json({ errors: errors.array() });
+				}
+
+				const result = await config.releaseScanJob.execute(
+					req.params.remoteId
+				);
 				if (result.isErr()) {
 					return res.status(500).json({ error: result.error.message });
 				}

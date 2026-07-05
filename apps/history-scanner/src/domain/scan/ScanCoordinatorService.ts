@@ -11,5 +11,6 @@ export interface ScanCoordinatorService {
 		batch: ParsedLedgerHeaderBatchDTO
 	): Promise<Result<void, Error>>;
 	getScanJob(): Promise<Result<ScanJobDTO | null, Error>>;
+	releaseScanJob(remoteId: string): Promise<Result<void, Error>>;
 	touchScanJob(remoteId: string): Promise<Result<void, Error>>;
 }

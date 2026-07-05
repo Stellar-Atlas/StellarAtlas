@@ -1,15 +1,15 @@
 import { createHistoryScanClusterPlan } from '../verify-archives-cluster.js';
 
 describe('verify-archives-cluster', () => {
-	it('defaults to 24 process workers on this class of host without multiplying caps', () => {
+	it('defaults to 12 process workers on this class of host without multiplying caps', () => {
 		const plan = createHistoryScanClusterPlan({}, 48);
 
 		expect(plan).toEqual({
 			perProcessHasherWorkers: 1,
 			perProcessRequests: 1,
-			processCount: 24,
-			totalHasherWorkers: 24,
-			totalRequests: 24
+			processCount: 12,
+			totalHasherWorkers: 12,
+			totalRequests: 12
 		});
 	});
 

@@ -10,6 +10,7 @@ import { InvalidUrlError } from '@history-scan-coordinator/use-cases/get-latest-
 import { ScanDTO } from 'history-scanner-dto';
 import { ScanJob } from '@history-scan-coordinator/domain/ScanJob.js';
 import { GetScanJob } from '@history-scan-coordinator/use-cases/get-scan-job/GetScanJob.js';
+import { ReleaseScanJob } from '@history-scan-coordinator/use-cases/release-scan-job/ReleaseScanJob.js';
 import { TouchScanJob } from '@history-scan-coordinator/use-cases/touch-scan-job/TouchScanJob.js';
 import { GetScanLogs } from '@history-scan-coordinator/use-cases/get-scan-logs/GetScanLogs.js';
 import { RegisterParsedLedgerHeaders } from '@history-scan-coordinator/use-cases/register-parsed-ledger-headers/RegisterParsedLedgerHeaders.js';
@@ -21,6 +22,7 @@ describe('HistoryScanRouter.integration', () => {
 	let registerScan: jest.Mocked<RegisterScan>;
 	let registerParsedLedgerHeaders: jest.Mocked<RegisterParsedLedgerHeaders>;
 	let getScanJob: jest.Mocked<GetScanJob>;
+	let releaseScanJob: jest.Mocked<ReleaseScanJob>;
 	let touchScanJob: jest.Mocked<TouchScanJob>;
 	let getScanLogs: jest.Mocked<GetScanLogs>;
 
@@ -29,6 +31,7 @@ describe('HistoryScanRouter.integration', () => {
 		registerScan = mock<RegisterScan>();
 		registerParsedLedgerHeaders = mock<RegisterParsedLedgerHeaders>();
 		getScanJob = mock<GetScanJob>();
+		releaseScanJob = mock<ReleaseScanJob>();
 		touchScanJob = mock<TouchScanJob>();
 		getScanLogs = mock<GetScanLogs>();
 
@@ -42,6 +45,7 @@ describe('HistoryScanRouter.integration', () => {
 				registerScan,
 				registerParsedLedgerHeaders,
 				getScanJob,
+				releaseScanJob,
 				touchScanJob,
 				userName: 'admin',
 				password: 'secret'
@@ -324,6 +328,36 @@ describe('HistoryScanRouter.integration', () => {
 
 			await request(app)
 				.post(`/history-scan/job/${remoteId}/heartbeat`)
+				.auth('admin', 'secret')
+				.expect(404);
+		});
+	});
+
+	describe('POST /job/:remoteId/release', () => {
+		it('should return 401 without authentication', async () => {
+			await request(app)
+				.post(`/history-scan/job/${randomUUID()}/release`)
+				.expect(401);
+		});
+
+		it('should release a taken scan job when authenticated', async () => {
+			const remoteId = randomUUID();
+			releaseScanJob.execute.mockResolvedValue(ok(true));
+
+			await request(app)
+				.post(`/history-scan/job/${remoteId}/release`)
+				.auth('admin', 'secret')
+				.expect(204);
+
+			expect(releaseScanJob.execute).toHaveBeenCalledWith(remoteId);
+		});
+
+		it('should return 404 when the scan job is not taken', async () => {
+			const remoteId = randomUUID();
+			releaseScanJob.execute.mockResolvedValue(ok(false));
+
+			await request(app)
+				.post(`/history-scan/job/${remoteId}/release`)
 				.auth('admin', 'secret')
 				.expect(404);
 		});

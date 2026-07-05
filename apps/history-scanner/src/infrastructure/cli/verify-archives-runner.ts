@@ -21,7 +21,11 @@ export async function runVerifyArchives(
 ): Promise<void> {
 	const kernel = await Kernel.getInstance();
 	const verifyArchives = kernel.container.get(VerifyArchives);
+	let shuttingDown = false;
 	const shutdown = async (): Promise<void> => {
+		if (shuttingDown) return;
+		shuttingDown = true;
+		await verifyArchives.releaseActiveScanJobs();
 		await kernel.shutdown();
 	};
 

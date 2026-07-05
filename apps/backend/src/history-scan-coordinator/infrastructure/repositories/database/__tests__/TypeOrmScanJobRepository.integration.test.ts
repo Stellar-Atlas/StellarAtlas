@@ -101,6 +101,32 @@ describe('TypeOrmScanJobRepository.integration', () => {
 			expect(await typeOrmScanJobRepository.hasPendingJobs()).toBe(false);
 		});
 
+		it('should not claim two active jobs for the same archive host', async () => {
+			const activeJob = new ScanJob(
+				'https://history.example.org/archive-a'
+			);
+			activeJob.status = 'TAKEN';
+			const sameHostJob = new ScanJob(
+				'https://history.example.org/archive-b'
+			);
+			const otherHostJob = new ScanJob(
+				'https://other-history.example.org/archive'
+			);
+			await typeOrmScanJobRepository.save([
+				activeJob,
+				sameHostJob,
+				otherHostJob
+			]);
+
+			const nextJob = await typeOrmScanJobRepository.fetchNextJob();
+
+			expect(nextJob?.url).toBe('https://other-history.example.org/archive');
+			const sameHostPersisted = await typeOrmScanJobRepository.findByRemoteId(
+				sameHostJob.remoteId
+			);
+			expect(sameHostPersisted?.status).toBe('PENDING');
+		});
+
 		it('should claim a pending job for a community scanner', async () => {
 			const scannerId = await saveCommunityScanner();
 			await typeOrmScanJobRepository.save([new ScanJob('scanner-url')]);
@@ -370,7 +396,7 @@ describe('TypeOrmScanJobRepository.integration', () => {
 		});
 	});
 
-	describe('markTakenJobActive', () => {
+		describe('markTakenJobActive', () => {
 		it('should refresh updatedAt only for a taken job', async () => {
 			const scanJob = new ScanJob('active-url');
 			scanJob.status = 'TAKEN';
@@ -451,10 +477,42 @@ describe('TypeOrmScanJobRepository.integration', () => {
 			expect(untouchedJob?.updatedAt?.toISOString()).toBe(
 				oldDate.toISOString()
 			);
+			});
 		});
-	});
 
-	describe('releaseStaleTakenJobs', () => {
+		describe('releaseTakenJob', () => {
+			it('should release only an internal taken job', async () => {
+				const internalJob = new ScanJob('internal-url');
+				internalJob.status = 'TAKEN';
+				internalJob.claimedAt = new Date('2026-01-01T00:00:00.000Z');
+				const communityJob = new ScanJob('community-url');
+				communityJob.status = 'TAKEN';
+				communityJob.claimedByCommunityScannerId = randomUUID();
+				await typeOrmScanJobRepository.save([internalJob, communityJob]);
+
+				const releasedInternal =
+					await typeOrmScanJobRepository.releaseTakenJob(
+						internalJob.remoteId
+					);
+				const releasedCommunity =
+					await typeOrmScanJobRepository.releaseTakenJob(
+						communityJob.remoteId
+					);
+
+				const refreshedInternalJob =
+					await typeOrmScanJobRepository.findByRemoteId(internalJob.remoteId);
+				const refreshedCommunityJob =
+					await typeOrmScanJobRepository.findByRemoteId(communityJob.remoteId);
+
+				expect(releasedInternal).toBe(true);
+				expect(releasedCommunity).toBe(false);
+				expect(refreshedInternalJob?.status).toBe('PENDING');
+				expect(refreshedInternalJob?.claimedAt).toBeNull();
+				expect(refreshedCommunityJob?.status).toBe('TAKEN');
+			});
+		});
+
+		describe('releaseStaleTakenJobs', () => {
 		it('should release taken jobs older than the cutoff', async () => {
 			const staleJob = new ScanJob('stale-url');
 			staleJob.status = 'TAKEN';
