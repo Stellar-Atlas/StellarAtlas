@@ -58,7 +58,7 @@ export interface PublicHistoryArchiveScanLogError {
 }
 
 export interface PublicHistoryArchiveScanLogEntry {
-	readonly concurrency: number;
+	readonly concurrency: number | null;
 	readonly durationMs: number;
 	readonly endDate: string;
 	readonly errors: readonly PublicHistoryArchiveScanLogError[];
@@ -70,7 +70,7 @@ export interface PublicHistoryArchiveScanLogEntry {
 	readonly latestScannedLedger: number;
 	readonly latestVerifiedLedger: number;
 	readonly startDate: string;
-	readonly status: 'completed' | 'queued' | 'scanning' | 'stale';
+	readonly status: 'completed' | 'queued' | 'scanning' | 'starting' | 'stale';
 	readonly toLedger: number | null;
 	readonly updatedAt: string;
 	readonly url: string;

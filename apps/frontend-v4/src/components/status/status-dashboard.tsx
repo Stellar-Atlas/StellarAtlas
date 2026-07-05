@@ -46,7 +46,10 @@ export function StatusDashboard({
 	const archiveQueue = dataQuality.archiveQueue;
 	const services = [frontend, horizon, rpc];
 	const serviceStatus = serviceGroupStatus(services, failover);
-	const configuredServiceCount = getConfiguredServiceCount(services, failover);
+	const configuredServiceCount = getConfiguredServiceCount(services);
+	const missingOwnedServiceCount = services.filter(
+		(service) => !service.configured
+	).length;
 
 	return (
 		<div className="status-dashboard">
@@ -65,7 +68,7 @@ export function StatusDashboard({
 				/>
 				<StatCard
 					detail={`${formatInteger(rollups.missingRollupDays)} missing, ${formatInteger(rollups.mismatchedRollupDays)} mismatched`}
-					label="Rollup proof"
+					label="Rollup continuity"
 					tone={statusTone(rollups.status)}
 					value={`${formatInteger(rollups.matchingDays)} matched`}
 				/>
@@ -82,8 +85,8 @@ export function StatusDashboard({
 					value={`${formatInteger(workers.archiveWorkers.totalTakenJobs)} claimed`}
 				/>
 				<StatCard
-					detail="Optional missing targets are not failures"
-					label="Service targets"
+					detail={`${formatInteger(missingOwnedServiceCount)} missing owned targets; failover is optional`}
+					label="Owned service targets"
 					tone={statusTone(serviceStatus)}
 					value={`${formatInteger(configuredServiceCount)} configured`}
 				/>
@@ -169,8 +172,8 @@ export function StatusDashboard({
 				<section className="panel status-services-panel">
 					<div className="panel-heading">
 						<div>
-							<strong>Service Targets</strong>
-							<span>Configuration status</span>
+							<strong>Owned Service Targets</strong>
+							<span>Local deployment configuration</span>
 						</div>
 						<StatusPill status={serviceStatus} />
 					</div>
@@ -295,21 +298,14 @@ function ServiceRow({
 }: {
 	readonly service: PublicConfiguredServiceStatus;
 }): React.JSX.Element {
-	const optional = isOptionalService(service.service);
-	const status = service.configured || !optional ? service.status : 'ok';
+	const usesExternalFallback = !service.configured && service.url !== null;
 
 	return (
 		<StatusRow
-			detail={
-				service.url ??
-				(optional ? 'No optional target configured' : 'No target configured')
-			}
+			detail={formatServiceDetail(service, usesExternalFallback)}
 			label={serviceLabel(service.service)}
-			pillText={!service.configured && optional ? 'Optional' : undefined}
-			status={status}
-			value={
-				service.configured ? 'Configured' : optional ? 'Optional' : 'Missing'
-			}
+			status={service.status}
+			value={service.configured ? 'Configured' : 'Missing'}
 		/>
 	);
 }
@@ -362,11 +358,7 @@ function serviceGroupStatus(
 	failover: PublicFailoverStatus
 ): PublicStatusLevel {
 	const statuses = [
-		...services
-			.filter(
-				(service) => service.configured || !isOptionalService(service.service)
-			)
-			.map((service) => service.status),
+		...services.map((service) => service.status),
 		...(failover.configured ? [failover.status] : [])
 	];
 	if (statuses.length === 0) return 'ok';
@@ -378,19 +370,20 @@ function serviceGroupStatus(
 }
 
 function getConfiguredServiceCount(
-	services: readonly PublicConfiguredServiceStatus[],
-	failover: PublicFailoverStatus
+	services: readonly PublicConfiguredServiceStatus[]
 ): number {
-	return (
-		services.filter((service) => service.configured).length +
-		(failover.configured ? 1 : 0)
-	);
+	return services.filter((service) => service.configured).length;
 }
 
-function isOptionalService(
-	service: PublicConfiguredServiceStatus['service']
-): boolean {
-	return service === 'horizon' || service === 'rpc';
+function formatServiceDetail(
+	service: PublicConfiguredServiceStatus,
+	usesExternalFallback: boolean
+): string {
+	if (service.configured) return service.url ?? 'Configured';
+	if (usesExternalFallback && service.url !== null) {
+		return `External fallback only: ${service.url}`;
+	}
+	return 'No StellarAtlas-owned target configured';
 }
 
 function archiveScanTone(scan: PublicArchiveScanLogEntry): PublicStatusLevel {

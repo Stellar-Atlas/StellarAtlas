@@ -46,7 +46,7 @@ describe('GetServiceStatus', () => {
 
 	it('should report configured Horizon status from required config', () => {
 		const result = new GetHorizonStatus({
-			horizonUrl: { value: 'https://horizon.example.com' }
+			horizonUrl: { value: 'http://127.0.0.1:8000' }
 		} as Config).execute();
 
 		expect(result.isOk()).toBe(true);
@@ -54,7 +54,22 @@ describe('GetServiceStatus', () => {
 			status: 'ok',
 			service: 'horizon',
 			configured: true,
-			url: 'https://horizon.example.com',
+			url: 'http://127.0.0.1:8000',
+			probe: 'not_run'
+		});
+	});
+
+	it('should not count public Horizon fallback as deployed StellarAtlas Horizon', () => {
+		const result = new GetHorizonStatus({
+			horizonUrl: { value: 'https://horizon.stellar.org' }
+		} as Config).execute();
+
+		expect(result.isOk()).toBe(true);
+		expect(result._unsafeUnwrap()).toMatchObject({
+			status: 'unavailable',
+			service: 'horizon',
+			configured: false,
+			url: 'https://horizon.stellar.org',
 			probe: 'not_run'
 		});
 	});

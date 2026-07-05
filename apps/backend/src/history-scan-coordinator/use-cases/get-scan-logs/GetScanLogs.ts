@@ -15,10 +15,10 @@ import { getStaleScanJobCutoff } from '../../domain/ScanJobStaleness.js';
 import { mapScanErrorToPublicDTO } from '../../infrastructure/mappers/PublicScanErrorMapper.js';
 
 export type HistoryArchiveScanLogStatus =
-	'completed' | 'queued' | 'scanning' | 'stale';
+	'completed' | 'queued' | 'scanning' | 'starting' | 'stale';
 
 export interface HistoryArchiveScanLogEntryDTO {
-	readonly concurrency: number;
+	readonly concurrency: number | null;
 	readonly durationMs: number;
 	readonly endDate: Date;
 	readonly errors: readonly HistoryArchiveScanLogErrorDTO[];
@@ -138,11 +138,13 @@ export class GetScanLogs {
 			return 'stale';
 		}
 
-		return job.status === 'TAKEN' ? 'scanning' : 'queued';
+		if (job.status !== 'TAKEN') return 'queued';
+		if (job.concurrency === null || job.concurrency <= 0) return 'starting';
+		return 'scanning';
 	}
 
-	private mapVisibleConcurrency(concurrency: number | null): number {
-		if (concurrency === null) return 0;
+	private mapVisibleConcurrency(concurrency: number | null): number | null {
+		if (concurrency === null) return null;
 
 		return Math.min(concurrency, GetScanLogs.maxVisibleConcurrency);
 	}

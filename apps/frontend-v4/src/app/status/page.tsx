@@ -43,7 +43,7 @@ async function StatusRouteContent(): Promise<React.JSX.Element> {
 	return (
 		<main className="shell">
 			<PageHeading
-				description="Current public API, scan continuity, rollup proof, archive queue, worker, and configured service target status."
+				description="Current public API, scan continuity, network rollups, archive queue, worker, and owned service target status."
 				eyebrow="Operations"
 				title="Status"
 			/>

@@ -25,9 +25,7 @@ import {
 	formatNode30DayActive,
 	formatNode30DayValidating
 } from '../../domain/availability';
-import {
-	getArchiveVerificationErrors
-} from '../../domain/history-archive';
+import { getArchiveVerificationErrors } from '../../domain/history-archive';
 import { StatusTags } from '../status-tags';
 import { HistoryArchiveScanLog } from './history-archive-scan-log';
 
@@ -87,7 +85,8 @@ export function NodeDetail({
 		);
 	}
 
-	const organization = routeOrganization ?? getOrganizationForNode(network, node);
+	const organization =
+		routeOrganization ?? getOrganizationForNode(network, node);
 	const archiveErrors = getArchiveErrors(historyArchiveScan);
 	const archiveVerificationErrors = getArchiveVerificationErrors(archiveErrors);
 	const latestArchiveRun =
@@ -288,9 +287,8 @@ function ArchiveMetadata({
 }): React.JSX.Element {
 	const archiveMetadata = historyArchiveScan?.archiveMetadata ?? null;
 	const homeDomain = organization?.homeDomain ?? node.homeDomain;
-	const stellarHistoryUrl = archiveMetadata?.stellarHistoryUrl ?? buildHistoryUrl(
-		node.historyUrl
-	);
+	const stellarHistoryUrl =
+		archiveMetadata?.stellarHistoryUrl ?? buildHistoryUrl(node.historyUrl);
 	const stellarTomlUrl =
 		organization?.stellarToml?.url ??
 		(homeDomain === null
@@ -314,8 +312,9 @@ function ArchiveMetadata({
 				<h3>Archive metadata</h3>
 			</div>
 			<MetadataDocument
+				capturedAt={archiveMetadata?.observedAt ?? null}
 				label="stellar-history.json"
-				missingCopy="No scanner-captured stellar-history.json is available yet."
+				missingCopy="The scanner source URL is known, but this scan row does not yet have a persisted stellar-history.json body. The scanner still requires the remote HAS file to determine archive state; this message is a persistence/backfill gap, not proof that the archive lacks the file."
 				text={
 					archiveMetadata === null
 						? null
@@ -324,6 +323,7 @@ function ArchiveMetadata({
 				url={stellarHistoryUrl}
 			/>
 			<MetadataDocument
+				capturedAt={null}
 				label="stellar.toml"
 				missingCopy={formatTomlMissingCopy(organization)}
 				text={getPersistedTomlText(organization)}
@@ -334,11 +334,13 @@ function ArchiveMetadata({
 }
 
 function MetadataDocument({
+	capturedAt,
 	label,
 	missingCopy,
 	text,
 	url
 }: {
+	readonly capturedAt: string | null;
 	readonly label: string;
 	readonly missingCopy: string;
 	readonly text: string | null;
@@ -356,6 +358,11 @@ function MetadataDocument({
 					<span className="muted-inline">No URL</span>
 				)}
 			</summary>
+			{capturedAt ? (
+				<p className="muted-copy">
+					Scanner-captured copy observed {formatDateTime(capturedAt)}.
+				</p>
+			) : null}
 			{text ? <pre>{text}</pre> : <p className="muted-copy">{missingCopy}</p>}
 		</details>
 	);
@@ -384,7 +391,7 @@ function formatTomlMissingCopy(
 		return 'No organization is assigned, so no persisted stellar.toml is available.';
 	}
 
-	return `No scanner-captured stellar.toml text is available yet. Current TOML state is ${organization.tomlState}.`;
+	return `No persisted scanner copy of stellar.toml is available yet. Current TOML state is ${organization.tomlState}. This is stored scanner evidence, not a browser-time fetch from the organization.`;
 }
 
 function ArchiveBucketEvidence({

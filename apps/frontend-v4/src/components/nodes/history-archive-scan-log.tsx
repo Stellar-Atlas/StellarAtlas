@@ -13,15 +13,22 @@ interface HistoryArchiveScanLogProps {
 	readonly logs: readonly PublicHistoryArchiveScanLogEntry[];
 }
 
-type ScanLogFilter = 'archive-errors' | 'successful' | 'all';
+type ScanLogFilter =
+	'attention' | 'active' | 'archive-errors' | 'successful' | 'all';
 
 export function HistoryArchiveScanLog({
 	logs
 }: HistoryArchiveScanLogProps): React.JSX.Element {
-	const [filter, setFilter] = useState<ScanLogFilter>('archive-errors');
+	const [filter, setFilter] = useState<ScanLogFilter>('attention');
 	const filteredLogs = useMemo(
 		() =>
 			logs.filter((entry) => {
+				if (filter === 'attention') {
+					return (
+						scanLogIsActive(entry) || scanLogHasArchiveVerificationError(entry)
+					);
+				}
+				if (filter === 'active') return scanLogIsActive(entry);
 				if (filter === 'archive-errors') {
 					return scanLogHasArchiveVerificationError(entry);
 				}
@@ -57,6 +64,20 @@ export function HistoryArchiveScanLog({
 					</span>
 				</div>
 				<div className="segmented" aria-label="Archive scan log filter">
+					<button
+						className={filter === 'attention' ? 'active' : ''}
+						onClick={() => setFilter('attention')}
+						type="button"
+					>
+						Active + errors
+					</button>
+					<button
+						className={filter === 'active' ? 'active' : ''}
+						onClick={() => setFilter('active')}
+						type="button"
+					>
+						Active
+					</button>
 					<button
 						className={filter === 'archive-errors' ? 'active' : ''}
 						onClick={() => setFilter('archive-errors')}
@@ -94,10 +115,7 @@ export function HistoryArchiveScanLog({
 
 						if (isActive) {
 							rowTone = 'is-active';
-							rowTitle =
-								entry.status === 'scanning'
-									? 'Scanning now'
-									: 'Pending scan';
+							rowTitle = getActiveRowTitle(entry.status);
 							rowTag = entry.status;
 						} else if (hasArchiveErrors) {
 							rowTone = 'has-error';
@@ -110,9 +128,7 @@ export function HistoryArchiveScanLog({
 						}
 
 						const rowErrors =
-							filter === 'archive-errors'
-								? archiveErrors
-								: archiveErrors;
+							filter === 'archive-errors' ? archiveErrors : archiveErrors;
 
 						return (
 							<li
@@ -181,6 +197,12 @@ const scanLogIsSuccessfulRun = (
 	!scanLogHasArchiveVerificationError(entry);
 
 const getEmptyFilterMessage = (filter: ScanLogFilter): string => {
+	if (filter === 'attention') {
+		return 'No active scan runs or archive verification errors are recorded for this archive.';
+	}
+	if (filter === 'active') {
+		return 'No active scan runs are recorded for this archive right now.';
+	}
 	if (filter === 'archive-errors') {
 		return 'No current archive verification errors match this filter.';
 	}
@@ -192,7 +214,11 @@ const getEmptyFilterMessage = (filter: ScanLogFilter): string => {
 };
 
 const formatRange = (entry: PublicHistoryArchiveScanLogEntry): string => {
-	if (entry.status === 'queued' && entry.fromLedger === 0 && entry.toLedger === null) {
+	if (
+		entry.status === 'queued' &&
+		entry.fromLedger === 0 &&
+		entry.toLedger === null
+	) {
 		return 'pending';
 	}
 
@@ -201,11 +227,9 @@ const formatRange = (entry: PublicHistoryArchiveScanLogEntry): string => {
 	}`;
 };
 
-const formatConcurrency = (
-	entry: PublicHistoryArchiveScanLogEntry
-): string => {
+const formatConcurrency = (entry: PublicHistoryArchiveScanLogEntry): string => {
 	if (entry.status === 'queued') return 'pending';
-	if (scanLogIsActive(entry) && entry.concurrency === 0) return 'starting';
+	if (entry.concurrency === null) return 'starting';
 
 	return formatInteger(entry.concurrency);
 };
@@ -229,6 +253,15 @@ const getRowTagClassName = (rowTone: string): string => {
 	if (rowTone === 'is-active') return 'tag active';
 
 	return 'tag good';
+};
+
+const getActiveRowTitle = (
+	status: PublicHistoryArchiveScanLogEntry['status']
+): string => {
+	if (status === 'scanning') return 'Scanning now';
+	if (status === 'starting') return 'Starting scan';
+	if (status === 'stale') return 'Scanner delayed';
+	return 'Pending scan';
 };
 
 const getErrorClassLabel = (_type: string): string => 'Archive';

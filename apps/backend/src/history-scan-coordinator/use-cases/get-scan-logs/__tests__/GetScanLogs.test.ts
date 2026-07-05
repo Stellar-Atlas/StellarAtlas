@@ -157,8 +157,40 @@ describe('GetScanLogs', () => {
 		expect(logs).toHaveLength(2);
 		expect(logs[0].hasArchiveVerificationError).toBe(true);
 		expect(logs[1].status).toBe('queued');
-		expect(logs.some((log) => log.hasWorkerIssue && log.status === 'completed'))
-			.toBe(false);
+		expect(
+			logs.some((log) => log.hasWorkerIssue && log.status === 'completed')
+		).toBe(false);
+	});
+
+	it('reports claimed jobs without scanner settings as starting with unknown concurrency', async () => {
+		const startingJob = new ScanJob(
+			historyUrl.value,
+			58_583_679,
+			null,
+			new Date('2026-07-03T00:00:00.000Z'),
+			58_583_680,
+			null,
+			null,
+			'6e2a0f88-6b73-44b0-8fd7-e061bc846ac2'
+		);
+		startingJob.status = 'TAKEN';
+		startingJob.createdAt = new Date(Date.now() - 60_000);
+		startingJob.updatedAt = new Date(Date.now() - 30_000);
+
+		scanJobRepositoryMock.findActiveByUrl.mockResolvedValue([startingJob]);
+		scanRepositoryMock.findRecentByUrl.mockResolvedValue([]);
+
+		const result = await getScanLogs.execute(historyUrl.value);
+
+		expect(result.isOk()).toBe(true);
+		const logs = result._unsafeUnwrap();
+		expect(logs).toHaveLength(1);
+		expect(logs[0]).toMatchObject({
+			status: 'starting',
+			concurrency: null,
+			hasArchiveVerificationError: false,
+			hasWorkerIssue: false
+		});
 	});
 
 	it('strips worker issues from mixed completed scans', async () => {

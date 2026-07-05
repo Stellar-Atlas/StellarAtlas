@@ -58,6 +58,9 @@ const formatDuration = (durationMs: number): string => {
 	return `${formatInteger(Math.round(seconds / 60))}m`;
 };
 
+const formatScanConcurrency = (concurrency: number | null): string =>
+	concurrency === null ? 'starting' : `${formatInteger(concurrency)} requests`;
+
 const getVisibleHistoryLogs = (
 	selectedHistoryLogs: readonly PublicHistoryArchiveScanLogEntry[],
 	showHistoryErrorsOnly: boolean
@@ -201,7 +204,11 @@ export function GraphNodePopover({
 								scanLogLabel =
 									historyLog.status === 'scanning'
 										? 'Scanning now'
-										: 'Queued scan';
+										: historyLog.status === 'starting'
+											? 'Starting scan'
+											: historyLog.status === 'stale'
+												? 'Scanner delayed'
+												: 'Queued scan';
 							} else if (hasArchiveErrors) {
 								scanLogCardClassName = 'scan-log-card warning';
 								scanLogLabel = 'Archive errors';
@@ -225,7 +232,7 @@ export function GraphNodePopover({
 									<small>
 										{formatShortDateTime(historyLog.endDate)} /{' '}
 										{formatDuration(historyLog.durationMs)} /{' '}
-										{formatInteger(historyLog.concurrency)} requests
+										{formatScanConcurrency(historyLog.concurrency)}
 									</small>
 									{visibleErrors.length > 0 && (
 										<code>{visibleErrors[0]?.message}</code>

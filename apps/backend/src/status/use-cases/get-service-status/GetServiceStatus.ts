@@ -42,9 +42,12 @@ export class GetHorizonStatus {
 	constructor(@inject('Config') private readonly config: Config) {}
 
 	execute(): Result<ConfiguredServiceStatusDTO, Error> {
-		return ok(
-			mapConfiguredServiceStatus('horizon', this.config.horizonUrl.value)
-		);
+		const horizonUrl = this.config.horizonUrl.value;
+		if (isPublicHorizonFallback(horizonUrl)) {
+			return ok(mapExternalFallbackStatus('horizon', horizonUrl));
+		}
+
+		return ok(mapConfiguredServiceStatus('horizon', horizonUrl));
 	}
 }
 
@@ -93,4 +96,30 @@ function mapConfiguredServiceStatus(
 		url: configured ? url : null,
 		probe: 'not_run'
 	};
+}
+
+function mapExternalFallbackStatus(
+	service: ConfiguredServiceStatusDTO['service'],
+	url: string
+): ConfiguredServiceStatusDTO {
+	return {
+		generatedAt: new Date().toISOString(),
+		status: 'unavailable',
+		service,
+		configured: false,
+		url,
+		probe: 'not_run'
+	};
+}
+
+function isPublicHorizonFallback(url: string): boolean {
+	try {
+		const hostname = new URL(url).hostname.toLowerCase();
+		return (
+			hostname === 'horizon.stellar.org' ||
+			hostname === 'horizon-testnet.stellar.org'
+		);
+	} catch {
+		return false;
+	}
 }

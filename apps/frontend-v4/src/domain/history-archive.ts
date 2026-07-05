@@ -57,4 +57,8 @@ export const scanLogHasWorkerIssueOnly = (
 
 export const scanLogIsActive = (
 	entry: PublicHistoryArchiveScanLogEntry
-): boolean => entry.status === 'queued' || entry.status === 'scanning';
+): boolean =>
+	entry.status === 'queued' ||
+	entry.status === 'scanning' ||
+	entry.status === 'starting' ||
+	entry.status === 'stale';
