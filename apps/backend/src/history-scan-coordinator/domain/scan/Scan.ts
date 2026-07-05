@@ -7,6 +7,7 @@ import {
 	mapScanErrorToDetails,
 	type ScanErrorDetails
 } from './ScanErrorDetails.js';
+import type { ScanEvidenceDTO } from 'history-scanner-dto';
 
 /**
  * Used to represent a chain of scans for a history url.
@@ -61,6 +62,8 @@ export class Scan extends CoreEntity {
 	@Column('jsonb', { nullable: false, default: () => "'[]'::jsonb" })
 	public readonly errors: readonly ScanErrorDetails[] = [];
 
+	public readonly evidence: readonly ScanEvidenceDTO[] = [];
+
 	constructor(
 		scanChainInitDate: Date,
 		startDate: Date,
@@ -75,7 +78,8 @@ export class Scan extends CoreEntity {
 		error: ScanError | null = null,
 		errors: readonly ScanError[] = [],
 		communityScannerId: string | null = null,
-		scanJobRemoteId: string | null = null
+		scanJobRemoteId: string | null = null,
+		evidence: readonly ScanEvidenceDTO[] = []
 	) {
 		super();
 		const scanErrors = errors.length > 0 ? errors : error ? [error] : [];
@@ -89,6 +93,7 @@ export class Scan extends CoreEntity {
 		this.toLedger = toLedger;
 		this.error = error ?? scanErrors[0] ?? null;
 		this.errors = scanErrors.map(mapScanErrorToDetails);
+		this.evidence = evidence;
 		this.latestScannedLedger = latestScannedLedger;
 		this.latestScannedLedgerHeaderHash = latestScannedLedgerHeaderHash;
 		this.communityScannerId = communityScannerId;

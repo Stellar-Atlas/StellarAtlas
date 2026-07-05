@@ -39,6 +39,30 @@ describe('ScanMapper', () => {
 			}
 		});
 
+		it('should map bucket evidence to domain', () => {
+			const dtoWithEvidence = {
+				...validScanDTO,
+				evidence: [
+					{
+						bucketHash:
+							'32900289ef7cd0eb0f5982cc58fc489abb1efb53a99de8142d2b68bcc1ec36b8',
+						kind: 'bucket' as const,
+						status: 'verified' as const,
+						url: 'https://test.com/bucket/32/90/02/bucket-32900289ef7cd0eb0f5982cc58fc489abb1efb53a99de8142d2b68bcc1ec36b8.xdr.gz'
+					}
+				]
+			};
+
+			const result = mapper.toDomain(dtoWithEvidence);
+			expect(result.isOk()).toBe(true);
+			if (result.isOk()) {
+				expect(result.value.evidence).toHaveLength(1);
+				expect(result.value.evidence[0]?.bucketHash).toBe(
+					'32900289ef7cd0eb0f5982cc58fc489abb1efb53a99de8142d2b68bcc1ec36b8'
+				);
+			}
+		});
+
 		it('should map community scanner attribution when provided', () => {
 			const result = mapper.toDomain(validScanDTO, {
 				communityScannerId: '164f7788-9edb-4bb5-81c1-b928d85a21a5'

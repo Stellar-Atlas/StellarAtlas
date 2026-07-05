@@ -18,6 +18,7 @@ import type { ParsedHistorySink } from './parsed-history/ParsedHistorySink.js';
 export interface RangeScanResult {
 	latestLedgerHeader?: LedgerHeader;
 	scannedBucketHashes: Set<string>;
+	verifiedBucketHashes: Set<string>;
 	errors: readonly ScanError[];
 }
 /**
@@ -132,7 +133,10 @@ export class RangeScanner {
 				scannedBucketHashes: new Set([
 					...bucketScanState.bucketHashesToScan,
 					...alreadyScannedBucketHashes
-				])
+				]),
+				verifiedBucketHashes: bucketScanResult.isOk()
+					? bucketScanResult.value
+					: new Set<string>()
 			});
 		} finally {
 			httpAgent.destroy();
@@ -169,7 +173,7 @@ export class RangeScanner {
 
 	private async scanBucketFiles(
 		scanState: BucketScanState
-	): Promise<Result<void, ScanError>> {
+	): Promise<Result<Set<string>, ScanError>> {
 		const timerLabel = RangeScanner.createTimerLabel('bucket');
 		console.time(timerLabel);
 		this.logger.info(`Scanning ${scanState.bucketHashesToScan.size} buckets`);

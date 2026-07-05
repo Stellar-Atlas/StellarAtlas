@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import type {
 	PublicHistoryArchiveScan,
+	PublicHistoryArchiveScanEvidence,
 	PublicHistoryArchiveScanLogEntry,
 	PublicKnownNode,
 	PublicNetwork,
@@ -32,6 +33,7 @@ import { StatusTags } from '../status-tags';
 import { HistoryArchiveScanLog } from './history-archive-scan-log';
 
 interface NodeDetailProps {
+	historyArchiveEvidence: PublicHistoryArchiveScanEvidence | null;
 	historyArchiveScan: PublicHistoryArchiveScan | null;
 	historyArchiveScanLogs: readonly PublicHistoryArchiveScanLogEntry[];
 	knownNode: PublicKnownNode;
@@ -40,6 +42,7 @@ interface NodeDetailProps {
 }
 
 export function NodeDetail({
+	historyArchiveEvidence,
 	historyArchiveScan,
 	historyArchiveScanLogs,
 	knownNode,
@@ -281,6 +284,7 @@ export function NodeDetail({
 							tracked separately from scanner setup and transport failures.
 						</p>
 					) : null}
+					<ArchiveBucketEvidence evidence={historyArchiveEvidence} />
 					<div className="archive-log-section">
 						<div className="panel-heading archive-log-heading">
 							<h3>Scan run log</h3>
@@ -290,6 +294,60 @@ export function NodeDetail({
 				</article>
 			)}
 		</section>
+	);
+}
+
+function ArchiveBucketEvidence({
+	evidence
+}: {
+	readonly evidence: PublicHistoryArchiveScanEvidence | null;
+}): React.JSX.Element {
+	if (evidence === null) {
+		return (
+			<div className="archive-log-section">
+				<div className="panel-heading archive-log-heading">
+					<h3>Verified bucket evidence</h3>
+				</div>
+				<p className="muted-copy">
+					No verified bucket evidence has been recorded yet.
+				</p>
+			</div>
+		);
+	}
+
+	const visibleCount = evidence.evidence.length;
+	const countLabel =
+		evidence.count > visibleCount
+			? `${formatInteger(visibleCount)} / ${formatInteger(evidence.count)} verified buckets`
+			: `${formatInteger(evidence.count)} verified buckets`;
+
+	return (
+		<div className="archive-log-section">
+			<div className="panel-heading archive-log-heading">
+				<h3>Verified bucket evidence</h3>
+				<span className="muted-inline">{countLabel}</span>
+			</div>
+			{evidence.evidence.length === 0 ? (
+				<p className="muted-copy">
+					No verified bucket evidence has been recorded yet.
+				</p>
+			) : (
+				<ul className="archive-bucket-evidence-list">
+					{evidence.evidence.map((entry) => (
+						<li key={`${entry.bucketHash}:${entry.observedAt}`}>
+							<a
+								href={entry.bucketUrl}
+								rel="noopener noreferrer"
+								target="_blank"
+							>
+								{entry.bucketHash}
+							</a>
+							<span>{formatDateTime(entry.observedAt)}</span>
+						</li>
+					))}
+				</ul>
+			)}
+		</div>
 	);
 }
 

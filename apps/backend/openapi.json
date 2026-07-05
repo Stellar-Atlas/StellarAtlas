@@ -3152,6 +3152,88 @@
 				}
 			}
 		},
+		"/v1/archive-scans/{encodedUrl}/evidence": {
+			"get": {
+				"summary": "Get verified archive bucket evidence",
+				"description": "Returns verified bucket evidence persisted by history scanner runs for a history archive URL. Evidence rows are successful bucket-hash verification records and are separate from archive error logs and worker/setup failures.",
+				"tags": ["ArchiveScans"],
+				"operationId": "getArchiveScanEvidence",
+				"parameters": [
+					{
+						"name": "encodedUrl",
+						"in": "path",
+						"description": "URL of the history archive, URL encoded",
+						"required": true,
+						"schema": { "type": "string", "format": "uri" }
+					},
+					{
+						"name": "limit",
+						"in": "query",
+						"description": "Maximum number of evidence rows to return.",
+						"required": false,
+						"schema": {
+							"type": "integer",
+							"minimum": 1,
+							"maximum": 5000,
+							"default": 250
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "archive scan evidence rows",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object",
+									"required": ["count", "evidence", "limit", "url"],
+									"properties": {
+										"count": { "type": "integer", "minimum": 0 },
+										"evidence": {
+											"type": "array",
+											"items": {
+												"type": "object",
+												"required": [
+													"bucketHash",
+													"bucketUrl",
+													"kind",
+													"observedAt",
+													"status"
+												],
+												"properties": {
+													"bucketHash": {
+														"type": "string",
+														"pattern": "^[a-fA-F0-9]{64}$"
+													},
+													"bucketUrl": { "type": "string", "format": "uri" },
+													"kind": { "type": "string", "enum": ["bucket"] },
+													"observedAt": {
+														"type": "string",
+														"format": "date-time"
+													},
+													"status": {
+														"type": "string",
+														"enum": ["verified"]
+													}
+												}
+											}
+										},
+										"limit": {
+											"type": "integer",
+											"minimum": 1,
+											"maximum": 5000
+										},
+										"url": { "type": "string", "format": "uri" }
+									}
+								}
+							}
+						}
+					},
+					"400": { "description": "Invalid archive URL or limit" },
+					"500": { "description": "Server error" }
+				}
+			}
+		},
 		"/v1/archive-scans/{encodedUrl}": {
 			"get": {
 				"summary": "Get the latest archive scan by URL",

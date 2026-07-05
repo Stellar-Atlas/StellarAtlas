@@ -8,5 +8,13 @@ export {
 	ParsedLedgerHeaderBatchDTO,
 	type ParsedLedgerHeaderDTO
 } from './ParsedLedgerHeaderDTO.js';
+export {
+	isScanEvidenceDTO,
+	scanEvidenceKinds,
+	scanEvidenceStatuses,
+	type ScanEvidenceDTO,
+	type ScanEvidenceKindDTO,
+	type ScanEvidenceStatusDTO
+} from './ScanEvidenceDTO.js';
 export { ScanDTO } from './ScanDTO.js';
 export { ScanJobDTO, type ScanJobJSONInput } from './ScanJobDTO.js';

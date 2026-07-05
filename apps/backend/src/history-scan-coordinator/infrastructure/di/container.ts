@@ -7,6 +7,7 @@ import { TYPES } from './di-types.js';
 import { Config } from '@core/config/Config.js';
 import { GetLatestScan } from '../../use-cases/get-latest-scan/GetLatestScan.js';
 import { GetScanLogs } from '../../use-cases/get-scan-logs/GetScanLogs.js';
+import { GetScanEvidence } from '../../use-cases/get-scan-evidence/GetScanEvidence.js';
 import { Scan } from '../../domain/scan/Scan.js';
 import { RegisterScan } from '../../use-cases/register-scan/RegisterScan.js';
 import { ScanMapper } from '../mappers/ScanMapper.js';
@@ -37,6 +38,7 @@ export function load(container: Container, config: Config) {
 	const dataSource = container.get(DataSource);
 	container.bind(GetLatestScan).toSelf();
 	container.bind(GetScanLogs).toSelf();
+	container.bind(GetScanEvidence).toSelf();
 	container.bind(GetScanJob).toSelf();
 	container.bind(GetArchiveScans).toSelf();
 	container.bind(GetArchiveScanQueue).toSelf();

@@ -448,6 +448,40 @@ td {
 	margin: 0;
 }
 
+.archive-bucket-evidence-list {
+	display: grid;
+	gap: 8px;
+	list-style: none;
+	margin: 0;
+	max-block-size: 360px;
+	overflow-y: auto;
+	padding: 0 18px 18px;
+}
+
+.archive-bucket-evidence-list li {
+	align-items: center;
+	border: 1px solid var(--border);
+	border-radius: 8px;
+	display: grid;
+	gap: 12px;
+	grid-template-columns: minmax(0, 1fr) auto;
+	padding: 10px 12px;
+}
+
+.archive-bucket-evidence-list a,
+.archive-bucket-evidence-list span {
+	display: block;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.archive-bucket-evidence-list span {
+	color: var(--muted);
+	font-size: 0.84rem;
+	font-weight: 800;
+}
+
 .docs-panel,
 .error-panel {
 	display: grid;

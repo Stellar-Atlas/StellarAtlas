@@ -51,6 +51,7 @@ import { TouchScanJob } from '@history-scan-coordinator/use-cases/touch-scan-job
 import { GetArchiveScans } from '@history-scan-coordinator/use-cases/get-archive-scans/GetArchiveScans.js';
 import { GetArchiveScanQueue } from '@history-scan-coordinator/use-cases/get-archive-scan-queue/GetArchiveScanQueue.js';
 import { GetArchiveScanWorkers } from '@history-scan-coordinator/use-cases/get-archive-scan-workers/GetArchiveScanWorkers.js';
+import { GetScanEvidence } from '@history-scan-coordinator/use-cases/get-scan-evidence/GetScanEvidence.js';
 import { GetScannerMetrics } from '@history-scan-coordinator/use-cases/GetScannerMetrics.js';
 import { RegisterCommunityScanner } from '@history-scan-coordinator/use-cases/RegisterCommunityScanner.js';
 import { SendScannerHeartbeat } from '@history-scan-coordinator/use-cases/SendScannerHeartbeat.js';
@@ -156,6 +157,7 @@ const listen = async () => {
 			getArchiveScanQueue: kernel.container.get(GetArchiveScanQueue),
 			getArchiveScanWorkers: kernel.container.get(GetArchiveScanWorkers),
 			getLatestScan: kernel.container.get(GetLatestScan),
+			getScanEvidence: kernel.container.get(GetScanEvidence),
 			getScanLogs: kernel.container.get(GetScanLogs)
 		})
 	);

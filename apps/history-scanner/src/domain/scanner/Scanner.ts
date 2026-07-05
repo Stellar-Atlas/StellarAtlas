@@ -12,6 +12,8 @@ import { Url } from 'http-helper';
 import { TYPES } from '../../infrastructure/di/di-types.js';
 import { noopParsedHistorySink } from './parsed-history/ParsedHistorySink.js';
 import type { ParsedHistorySink } from './parsed-history/ParsedHistorySink.js';
+import { UrlBuilder } from '../history-archive/UrlBuilder.js';
+import type { ScanEvidenceDTO } from 'history-scanner-dto';
 
 export interface LedgerHeader {
 	ledger: number;
@@ -97,6 +99,7 @@ export class Scanner {
 				: scanSettings.toLedger;
 
 		let alreadyScannedBucketHashes = new Set<string>();
+		const verifiedBucketHashes = new Set<string>();
 		let error: ScanError | undefined;
 		const errors: ScanError[] = [];
 		let previousRangeHeader: LedgerHeader = {
@@ -145,6 +148,9 @@ export class Scanner {
 				}
 
 				alreadyScannedBucketHashes = rangeResult.value.scannedBucketHashes;
+				for (const bucketHash of rangeResult.value.verifiedBucketHashes) {
+					verifiedBucketHashes.add(bucketHash);
+				}
 				previousRangeHeader = rangeResult.value.latestLedgerHeader
 					? {
 							ledger: rangeResult.value.latestLedgerHeader.ledger,
@@ -166,8 +172,23 @@ export class Scanner {
 		return {
 			latestLedgerHeader,
 			error,
-			errors
+			errors,
+			evidence: this.createBucketEvidence(url, verifiedBucketHashes)
 		};
+	}
+
+	private createBucketEvidence(
+		baseUrl: Url,
+		bucketHashes: ReadonlySet<string>
+	): readonly ScanEvidenceDTO[] {
+		return Array.from(bucketHashes)
+			.sort()
+			.map((bucketHash) => ({
+				bucketHash,
+				kind: 'bucket',
+				status: 'verified',
+				url: UrlBuilder.getBucketUrl(baseUrl, bucketHash).value
+			}));
 	}
 
 	private expandScanError(error: ScanError): readonly ScanError[] {

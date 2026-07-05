@@ -5,6 +5,7 @@ import {
 	fetchKnownNodes,
 	fetchKnownOrganizations,
 	fetchHistoryArchiveScan,
+	fetchHistoryArchiveScanEvidence,
 	fetchHistoryArchiveScanLogs,
 	fetchPublicNetwork
 } from '@api/client';
@@ -47,12 +48,16 @@ async function NodeDetailRouteContent({
 			(candidate) => candidate.organization
 		)
 	};
-	const [historyArchiveScan, historyArchiveScanLogs] = node?.historyUrl
-		? await Promise.all([
-				fetchHistoryArchiveScan(node.historyUrl, { revalidate }),
-				fetchHistoryArchiveScanLogs(node.historyUrl, { revalidate })
-			])
-		: [null, []];
+	const [historyArchiveScan, historyArchiveScanLogs, historyArchiveEvidence] =
+		node?.historyUrl
+			? await Promise.all([
+					fetchHistoryArchiveScan(node.historyUrl, { revalidate }),
+					fetchHistoryArchiveScanLogs(node.historyUrl, { revalidate }),
+					fetchHistoryArchiveScanEvidence(node.historyUrl, 500, {
+						revalidate
+					})
+				])
+			: [null, [], null];
 
 	return (
 		<main className="shell">
@@ -62,6 +67,7 @@ async function NodeDetailRouteContent({
 				title={node ? getNodeLabel(node) : knownNode.publicKey.slice(0, 12)}
 			/>
 			<NodeDetail
+				historyArchiveEvidence={historyArchiveEvidence}
 				historyArchiveScan={historyArchiveScan}
 				historyArchiveScanLogs={historyArchiveScanLogs}
 				knownNode={knownNode}

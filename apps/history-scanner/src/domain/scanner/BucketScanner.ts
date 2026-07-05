@@ -31,7 +31,7 @@ export class BucketScanner {
 	async scan(
 		scanState: BucketScanState,
 		verify = false
-	): Promise<Result<void, ScanError>> {
+	): Promise<Result<Set<string>, ScanError>> {
 		if (verify) {
 			return await this.verify(scanState);
 		} else {
@@ -90,14 +90,20 @@ export class BucketScanner {
 				RequestMethod.GET
 			)
 		);
-		const missingBucketRequestsResult =
-			await this.verifyCachedBuckets(bucketRequests, scanState.concurrency);
+		const verifiedBucketHashes = new Set<string>();
+		const missingBucketRequestsResult = await this.verifyCachedBuckets(
+			bucketRequests,
+			scanState.concurrency,
+			verifiedBucketHashes
+		);
 		if (missingBucketRequestsResult.isErr()) {
-			return err(mapHttpQueueErrorToScanError(missingBucketRequestsResult.error));
+			return err(
+				mapHttpQueueErrorToScanError(missingBucketRequestsResult.error)
+			);
 		}
 
 		const missingBucketRequests = missingBucketRequestsResult.value;
-		if (missingBucketRequests.length === 0) return ok(undefined);
+		if (missingBucketRequests.length === 0) return ok(verifiedBucketHashes);
 
 		const verifyBucketsResult =
 			await this.httpQueue.sendRequests<BucketRequestMeta>(
@@ -131,6 +137,7 @@ export class BucketScanner {
 						return err(new RetryableQueueError(request, error));
 					}
 
+					verifiedBucketHashes.add(request.meta.hash);
 					return ok(undefined);
 				}
 			);
@@ -139,7 +146,7 @@ export class BucketScanner {
 			return err(mapHttpQueueErrorToScanError(verifyBucketsResult.error));
 		}
 
-		return ok(undefined);
+		return ok(verifiedBucketHashes);
 	}
 
 	private async exists(scanState: BucketScanState) {
@@ -155,11 +162,13 @@ export class BucketScanner {
 			scanState.concurrency
 		);
 		if (missingBucketRequestsResult.isErr()) {
-			return err(mapHttpQueueErrorToScanError(missingBucketRequestsResult.error));
+			return err(
+				mapHttpQueueErrorToScanError(missingBucketRequestsResult.error)
+			);
 		}
 
 		const missingBucketRequests = missingBucketRequestsResult.value;
-		if (missingBucketRequests.length === 0) return ok(undefined);
+		if (missingBucketRequests.length === 0) return ok(new Set<string>());
 
 		const bucketsExistResult =
 			await this.httpQueue.sendRequests<BucketRequestMeta>(
@@ -183,12 +192,13 @@ export class BucketScanner {
 			return err(mapHttpQueueErrorToScanError(bucketsExistResult.error));
 		}
 
-		return ok(undefined);
+		return ok(new Set<string>());
 	}
 
 	private async verifyCachedBuckets(
 		requests: readonly Request<BucketRequestMeta>[],
-		concurrency: number
+		concurrency: number,
+		verifiedBucketHashes: Set<string>
 	): Promise<Result<readonly Request<BucketRequestMeta>[], QueueError>> {
 		const missingRequests: Request<BucketRequestMeta>[] = [];
 		let cursor = 0;
@@ -217,7 +227,9 @@ export class BucketScanner {
 					if (verifyResult.isErr()) {
 						await this.bucketCache.remove(request.meta.hash);
 						firstError = verifyResult.error;
+						continue;
 					}
+					verifiedBucketHashes.add(request.meta.hash);
 				}
 			})
 		);

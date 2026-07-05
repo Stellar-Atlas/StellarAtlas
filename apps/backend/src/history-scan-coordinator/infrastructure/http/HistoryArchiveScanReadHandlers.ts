@@ -2,10 +2,12 @@ import type { Request, Response } from 'express';
 import { validationResult } from 'express-validator';
 import { InvalidUrlError } from '../../use-cases/get-latest-scan/InvalidUrlError.js';
 import { GetLatestScan } from '../../use-cases/get-latest-scan/GetLatestScan.js';
+import { GetScanEvidence } from '../../use-cases/get-scan-evidence/GetScanEvidence.js';
 import { GetScanLogs } from '../../use-cases/get-scan-logs/GetScanLogs.js';
 
 export interface HistoryArchiveScanReadConfig {
 	getLatestScan: GetLatestScan;
+	getScanEvidence?: GetScanEvidence;
 	getScanLogs: GetScanLogs;
 }
 
@@ -37,6 +39,40 @@ export async function handleGetArchiveScanLogs(
 	}
 
 	return res.status(200).json(scanLogsOrError.value);
+}
+
+export async function handleGetArchiveScanEvidence(
+	req: Request,
+	res: Response,
+	config: HistoryArchiveScanReadConfig,
+	urlParamName: string
+): Promise<Response> {
+	setHistoryArchiveScanCacheHeader(res);
+	const errors = validationResult(req);
+	if (!errors.isEmpty()) {
+		return res.status(400).json({ errors: errors.array() });
+	}
+	if (config.getScanEvidence === undefined) {
+		return res.status(404).json({ error: 'Not found' });
+	}
+
+	const limit =
+		typeof req.query.limit === 'string' ? Number(req.query.limit) : undefined;
+	const evidenceOrError = await config.getScanEvidence.execute(
+		req.params[urlParamName],
+		limit
+	);
+	if (
+		evidenceOrError.isErr() &&
+		evidenceOrError.error instanceof InvalidUrlError
+	) {
+		return res.status(400).json({ error: 'Invalid url' });
+	}
+	if (evidenceOrError.isErr()) {
+		return res.status(500).json({ error: 'Internal server error' });
+	}
+
+	return res.status(200).json(evidenceOrError.value);
 }
 
 export async function handleGetLatestArchiveScan(

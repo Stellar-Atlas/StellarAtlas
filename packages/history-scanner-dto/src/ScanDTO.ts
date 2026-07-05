@@ -1,5 +1,6 @@
 import { Result, ok, err } from 'neverthrow';
 import { isScanErrorTypeDTO, type ScanErrorDTO } from './ScanErrorDTO.js';
+import { isScanEvidenceDTO, type ScanEvidenceDTO } from './ScanEvidenceDTO.js';
 
 /**
  * Represents a finished scan.
@@ -19,7 +20,8 @@ export class ScanDTO {
 		public readonly isSlowArchive: boolean | null,
 		public readonly error: ScanErrorDTO | null,
 		public readonly scanJobRemoteId: string,
-		public readonly errors: readonly ScanErrorDTO[] = []
+		public readonly errors: readonly ScanErrorDTO[] = [],
+		public readonly evidence?: readonly ScanEvidenceDTO[]
 	) {}
 
 	static fromJSON(json: Record<string, unknown>): Result<ScanDTO, Error> {
@@ -42,7 +44,8 @@ export class ScanDTO {
 				json.isSlowArchive as boolean | null,
 				json.error as ScanErrorDTO | null,
 				json.scanJobRemoteId as string,
-				this.mapErrors(json)
+				this.mapErrors(json),
+				this.mapEvidence(json)
 			)
 		);
 	}
@@ -75,6 +78,9 @@ export class ScanDTO {
 			(json.errors === undefined ||
 				(Array.isArray(json.errors) &&
 					json.errors.every((error) => this.isValidScanErrorDTO(error)))) &&
+			(json.evidence === undefined ||
+				(Array.isArray(json.evidence) &&
+					json.evidence.every((evidence) => isScanEvidenceDTO(evidence)))) &&
 			typeof json.scanJobRemoteId === 'string'
 		);
 	}
@@ -83,6 +89,14 @@ export class ScanDTO {
 		if (Array.isArray(json.errors)) return json.errors as ScanErrorDTO[];
 
 		return json.error === null ? [] : [json.error as ScanErrorDTO];
+	}
+
+	private static mapEvidence(
+		json: Record<string, unknown>
+	): ScanEvidenceDTO[] | undefined {
+		if (!Array.isArray(json.evidence)) return undefined;
+
+		return json.evidence as ScanEvidenceDTO[];
 	}
 
 	private static isValidScanErrorDTO(error: unknown): error is ScanErrorDTO {

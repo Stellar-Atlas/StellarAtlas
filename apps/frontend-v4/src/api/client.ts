@@ -15,6 +15,7 @@ import type {
 	PublicExplorerSearchType,
 	PublicFailoverStatus,
 	PublicHistoryArchiveScan,
+	PublicHistoryArchiveScanEvidence,
 	PublicHistoryArchiveScanLogEntry,
 	PublicLatestLedger,
 	PublicLedgerTransactions,
@@ -270,6 +271,16 @@ export const fetchHistoryArchiveScanLogs = (
 ): Promise<PublicHistoryArchiveScanLogEntry[]> =>
 	fetchJson<PublicHistoryArchiveScanLogEntry[]>(
 		`/v1/history-scan/logs/${encodeURIComponent(historyUrl)}`,
+		withTags(options, [frontendCacheTags.historyScan])
+	);
+
+export const fetchHistoryArchiveScanEvidence = (
+	historyUrl: string,
+	limit: number,
+	options?: FetchOptions
+): Promise<PublicHistoryArchiveScanEvidence> =>
+	fetchJson<PublicHistoryArchiveScanEvidence>(
+		`/v1/archive-scans/${encodeURIComponent(historyUrl)}/evidence?limit=${encodeURIComponent(limit.toString())}`,
 		withTags(options, [frontendCacheTags.historyScan])
 	);
 

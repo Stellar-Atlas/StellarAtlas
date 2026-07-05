@@ -115,7 +115,8 @@ export class RESTScanCoordinatorService implements ScanCoordinatorService {
 			isSlowArchive: scan.isSlowArchive,
 			error: scan.error ? this.mapScanErrorToDTO(scan.error) : null,
 			scanJobRemoteId: scan.scanJobRemoteId!,
-			errors
+			errors,
+			evidence: scan.evidence
 		};
 	}
 
@@ -221,7 +222,10 @@ export class RESTScanCoordinatorService implements ScanCoordinatorService {
 
 		if (response.isErr()) {
 			return err(
-				new CoordinatorServiceError('Failed to release scan job', response.error)
+				new CoordinatorServiceError(
+					'Failed to release scan job',
+					response.error
+				)
 			);
 		}
 

@@ -87,6 +87,7 @@ export class ScanJob {
 			null,
 			error,
 			[error],
+			[],
 			this.remoteId
 		);
 	}
@@ -110,6 +111,7 @@ export class ScanJob {
 			settings.isSlowArchive,
 			scanResult.error,
 			scanResult.errors ?? [],
+			scanResult.evidence ?? [],
 			this.remoteId
 		);
 	}

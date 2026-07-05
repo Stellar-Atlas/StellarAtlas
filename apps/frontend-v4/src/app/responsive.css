@@ -60,6 +60,7 @@
 	.archive-scan-log-toolbar,
 	.archive-scan-log-row,
 	.archive-scan-log-row div,
+	.archive-bucket-evidence-list li,
 	.status-row,
 	.status-row-value {
 		align-items: flex-start;

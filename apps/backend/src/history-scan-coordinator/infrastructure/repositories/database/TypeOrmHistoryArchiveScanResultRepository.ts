@@ -2,6 +2,7 @@ import type { ScanRepository } from '@history-scan-coordinator/domain/scan/ScanR
 import { Repository } from 'typeorm';
 import { Scan } from '@history-scan-coordinator/domain/scan/Scan.js';
 import { injectable } from 'inversify';
+import { ScanEvidence } from '@history-scan-coordinator/domain/scan/ScanEvidence.js';
 
 type NumericValue = number | string;
 type RawLatestScanIdRow = { id?: NumericValue };
@@ -16,7 +17,9 @@ export class TypeOrmHistoryArchiveScanResultRepository implements ScanRepository
 	constructor(private baseRepository: Repository<Scan>) {}
 
 	async save(scans: Scan[]): Promise<Scan[]> {
-		return await this.baseRepository.save(scans);
+		const savedScans = await this.baseRepository.save(scans);
+		await this.saveEvidence(savedScans, scans);
+		return savedScans;
 	}
 
 	async findLatestByUrl(url: string): Promise<Scan | null> {
@@ -34,6 +37,22 @@ export class TypeOrmHistoryArchiveScanResultRepository implements ScanRepository
 			.orderBy('scan.startDate', 'DESC')
 			.take(limit)
 			.getMany();
+	}
+
+	async findEvidenceByUrl(url: string, limit: number) {
+		if (!Number.isSafeInteger(limit) || limit < 1) {
+			return { count: 0, evidence: [] };
+		}
+
+		const evidenceRepository =
+			this.baseRepository.manager.getRepository(ScanEvidence);
+		const [evidence, count] = await evidenceRepository.findAndCount({
+			where: { archiveUrl: url },
+			order: { observedAt: 'DESC', bucketHash: 'ASC' },
+			take: limit
+		});
+
+		return { count, evidence };
 	}
 
 	async findLatestLimited(limit: number): Promise<Scan[]> {
@@ -75,6 +94,39 @@ export class TypeOrmHistoryArchiveScanResultRepository implements ScanRepository
 		}
 
 		return scan;
+	}
+
+	private async saveEvidence(
+		savedScans: readonly Scan[],
+		inputScans: readonly Scan[]
+	): Promise<void> {
+		const evidenceRows = savedScans.flatMap((savedScan, index) => {
+			const inputScan = inputScans[index];
+			if (inputScan === undefined || inputScan.evidence.length === 0) {
+				return [];
+			}
+
+			return Array.from(dedupeEvidence(inputScan.evidence).values()).map(
+				(evidence) =>
+					new ScanEvidence(
+						(savedScan as ScanWithId).id,
+						inputScan.baseUrl.value,
+						inputScan.scanJobRemoteId ?? '',
+						inputScan.endDate,
+						evidence
+					)
+			);
+		});
+
+		if (evidenceRows.length === 0) return;
+
+		await this.baseRepository.manager
+			.createQueryBuilder()
+			.insert()
+			.into(ScanEvidence)
+			.values(evidenceRows)
+			.orIgnore()
+			.execute();
 	}
 
 	private async findByIds(scanIds: readonly number[]): Promise<Scan[]> {
@@ -196,4 +248,10 @@ export class TypeOrmHistoryArchiveScanResultRepository implements ScanRepository
 			`History archive scan row is missing numeric field ${field}`
 		);
 	}
+}
+
+function dedupeEvidence<T extends { readonly bucketHash: string }>(
+	evidence: readonly T[]
+): Map<string, T> {
+	return new Map(evidence.map((entry) => [entry.bucketHash, entry]));
 }

@@ -17,6 +17,15 @@ describe('ScanDTO', () => {
 				isSlowArchive: false,
 				error: null,
 				errors: [],
+				evidence: [
+					{
+						bucketHash:
+							'32900289ef7cd0eb0f5982cc58fc489abb1efb53a99de8142d2b68bcc1ec36b8',
+						kind: 'bucket',
+						status: 'verified',
+						url: 'https://history.stellar.org/bucket/32/90/02/bucket-32900289ef7cd0eb0f5982cc58fc489abb1efb53a99de8142d2b68bcc1ec36b8.xdr.gz'
+					}
+				],
 				scanJobRemoteId: 'test'
 			};
 
@@ -39,6 +48,7 @@ describe('ScanDTO', () => {
 			expect(dto.concurrency).toBe(5);
 			expect(dto.isSlowArchive).toBe(false);
 			expect(dto.error).toBeNull();
+			expect(dto.evidence).toHaveLength(1);
 			expect(dto.scanJobRemoteId).toBe('test');
 		});
 
@@ -156,6 +166,36 @@ describe('ScanDTO', () => {
 
 			const listResult = ScanDTO.fromJSON(jsonWithInvalidErrorList);
 			expect(listResult.isErr()).toBe(true);
+		});
+
+		it('should reject JSON with invalid evidence', () => {
+			const json = {
+				startDate: '2024-01-01T00:00:00.000Z',
+				endDate: '2024-01-01T01:00:00.000Z',
+				baseUrl: 'https://history.stellar.org',
+				scanChainInitDate: '2024-01-01T00:00:00.000Z',
+				fromLedger: 1,
+				toLedger: 100,
+				latestVerifiedLedger: 90,
+				latestScannedLedger: 95,
+				latestScannedLedgerHeaderHash: 'hash123',
+				concurrency: 5,
+				isSlowArchive: false,
+				error: null,
+				errors: [],
+				evidence: [
+					{
+						bucketHash: 'not-a-bucket-hash',
+						kind: 'bucket',
+						status: 'verified',
+						url: 'https://history.stellar.org/bucket/not-a-bucket-hash.xdr.gz'
+					}
+				],
+				scanJobRemoteId: 'test'
+			};
+
+			const result = ScanDTO.fromJSON(json);
+			expect(result.isErr()).toBe(true);
 		});
 
 		it('should return error for missing required fields', () => {

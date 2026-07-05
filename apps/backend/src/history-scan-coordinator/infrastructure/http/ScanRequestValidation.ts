@@ -1,6 +1,10 @@
 import express from 'express';
 import { body, validationResult } from 'express-validator';
-import { isScanErrorTypeDTO, ScanDTO } from 'history-scanner-dto';
+import {
+	isScanErrorTypeDTO,
+	isScanEvidenceDTO,
+	ScanDTO
+} from 'history-scanner-dto';
 
 export function requireObjectBody(
 	req: express.Request,
@@ -63,6 +67,13 @@ export const scanDtoValidators = [
 	body('errors').optional().isArray().withMessage('errors must be an array'),
 	body('errors.*').custom((value) => {
 		return isValidScanErrorPayload(value);
+	}),
+	body('evidence')
+		.optional()
+		.isArray()
+		.withMessage('evidence must be an array'),
+	body('evidence.*').custom((value) => {
+		return isScanEvidenceDTO(value);
 	})
 ];
 

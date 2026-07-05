@@ -76,6 +76,21 @@ export interface PublicHistoryArchiveScanLogEntry {
 	readonly url: string;
 }
 
+export interface PublicHistoryArchiveScanEvidenceEntry {
+	readonly bucketHash: string;
+	readonly bucketUrl: string;
+	readonly kind: 'bucket';
+	readonly observedAt: string;
+	readonly status: 'verified';
+}
+
+export interface PublicHistoryArchiveScanEvidence {
+	readonly count: number;
+	readonly evidence: readonly PublicHistoryArchiveScanEvidenceEntry[];
+	readonly limit: number;
+	readonly url: string;
+}
+
 export interface PublicLedgerTransaction {
 	readonly createdAt: string;
 	readonly feeCharged: string;
