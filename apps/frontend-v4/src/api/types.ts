@@ -439,6 +439,21 @@ export interface PublicConfiguredServiceStatus {
 	readonly url: string | null;
 }
 
+export interface PublicFullHistoryStatus {
+	readonly earliestParsedLedger: string | null;
+	readonly generatedAt: string;
+	readonly latestObservedAt: string | null;
+	readonly latestParsedLedger: string | null;
+	readonly localAssetIndexReady: boolean;
+	readonly localContractIndexReady: boolean;
+	readonly localOperationIndexReady: boolean;
+	readonly localTransactionIndexReady: boolean;
+	readonly mode: 'archive_header_parser';
+	readonly parsedLedgerCount: number;
+	readonly sourceArchiveCount: number;
+	readonly status: PublicStatusLevel;
+}
+
 export interface PublicFailoverStatus {
 	readonly apiUrl: string | null;
 	readonly complete: boolean;

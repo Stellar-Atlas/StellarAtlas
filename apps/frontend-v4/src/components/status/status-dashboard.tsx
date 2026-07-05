@@ -5,6 +5,7 @@ import type {
 	PublicConfiguredServiceStatus,
 	PublicDataQualityStatus,
 	PublicFailoverStatus,
+	PublicFullHistoryStatus,
 	PublicNetworkScanLogEntry,
 	PublicScanLogStatus,
 	PublicStatusLevel,
@@ -17,6 +18,7 @@ import {
 } from '@format/formatters';
 import { StatCard } from '../stat-card';
 import { ArchiveWorkerJobs } from './archive-worker-jobs';
+import { FullHistoryStatusPanel } from './full-history-status-panel';
 
 interface StatusDashboardProps {
 	readonly api: PublicApiStatus;
@@ -24,6 +26,7 @@ interface StatusDashboardProps {
 	readonly dataQuality: PublicDataQualityStatus;
 	readonly failover: PublicFailoverStatus;
 	readonly frontend: PublicConfiguredServiceStatus;
+	readonly fullHistory: PublicFullHistoryStatus;
 	readonly horizon: PublicConfiguredServiceStatus;
 	readonly rpc: PublicConfiguredServiceStatus;
 	readonly scanLogs: PublicScanLogStatus;
@@ -36,6 +39,7 @@ export function StatusDashboard({
 	dataQuality,
 	failover,
 	frontend,
+	fullHistory,
 	horizon,
 	rpc,
 	scanLogs,
@@ -184,6 +188,8 @@ export function StatusDashboard({
 						<FailoverRow failover={failover} />
 					</div>
 				</section>
+
+				<FullHistoryStatusPanel fullHistory={fullHistory} />
 
 				<ArchiveWorkerJobs archiveWorkers={archiveWorkers} />
 

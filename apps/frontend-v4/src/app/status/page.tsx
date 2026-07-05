@@ -5,6 +5,7 @@ import {
 	fetchDataQualityStatus,
 	fetchFailoverStatus,
 	fetchFrontendStatus,
+	fetchFullHistoryStatus,
 	fetchHorizonStatus,
 	fetchRpcStatus,
 	fetchScanLogStatus,
@@ -25,6 +26,7 @@ async function StatusRouteContent(): Promise<React.JSX.Element> {
 		workers,
 		archiveWorkers,
 		frontend,
+		fullHistory,
 		horizon,
 		rpc,
 		failover
@@ -35,6 +37,7 @@ async function StatusRouteContent(): Promise<React.JSX.Element> {
 		fetchWorkerStatus({ revalidate }),
 		fetchArchiveScanWorkers({ revalidate }),
 		fetchFrontendStatus({ revalidate }),
+		fetchFullHistoryStatus({ revalidate }),
 		fetchHorizonStatus({ revalidate }),
 		fetchRpcStatus({ revalidate }),
 		fetchFailoverStatus({ revalidate })
@@ -43,7 +46,7 @@ async function StatusRouteContent(): Promise<React.JSX.Element> {
 	return (
 		<main className="shell">
 			<PageHeading
-				description="Current public API, scan continuity, network rollups, archive queue, worker, and owned service target status."
+				description="Current public API, scan continuity, network rollups, archive queue, worker, full-history parser, and owned service target status."
 				eyebrow="Operations"
 				title="Status"
 			/>
@@ -53,6 +56,7 @@ async function StatusRouteContent(): Promise<React.JSX.Element> {
 				dataQuality={dataQuality}
 				failover={failover}
 				frontend={frontend}
+				fullHistory={fullHistory}
 				horizon={horizon}
 				rpc={rpc}
 				scanLogs={scanLogs}

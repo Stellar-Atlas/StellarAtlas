@@ -14,6 +14,7 @@ import type {
 	PublicExplorerSearch,
 	PublicExplorerSearchType,
 	PublicFailoverStatus,
+	PublicFullHistoryStatus,
 	PublicHistoryArchiveScan,
 	PublicHistoryArchiveScanEvidence,
 	PublicHistoryArchiveScanLogEntry,
@@ -474,6 +475,14 @@ export const fetchRpcStatus = (
 ): Promise<PublicConfiguredServiceStatus> =>
 	fetchJson<PublicConfiguredServiceStatus>(
 		'/v1/status/rpc',
+		withTags(options, [frontendCacheTags.status])
+	);
+
+export const fetchFullHistoryStatus = (
+	options?: FetchOptions
+): Promise<PublicFullHistoryStatus> =>
+	fetchJson<PublicFullHistoryStatus>(
+		'/v1/status/full-history',
 		withTags(options, [frontendCacheTags.status])
 	);
 
