@@ -5,6 +5,14 @@ import type {
 	PublicApiStatus,
 	PublicConfiguredServiceStatus,
 	PublicDataQualityStatus,
+	PublicExplorerAccount,
+	PublicExplorerAssets,
+	PublicExplorerContract,
+	PublicExplorerLedger,
+	PublicExplorerOperations,
+	PublicExplorerOperationFilters,
+	PublicExplorerSearch,
+	PublicExplorerSearchType,
 	PublicFailoverStatus,
 	PublicHistoryArchiveScan,
 	PublicHistoryArchiveScanLogEntry,
@@ -283,6 +291,75 @@ export const fetchTransactionByHash = (
 ): Promise<PublicTransactionLookup> =>
 	fetchJson<PublicTransactionLookup>(
 		`/v1/transactions/${encodeURIComponent(hash)}`,
+		options
+	);
+
+export const fetchExplorerSearch = (
+	query: string,
+	type: PublicExplorerSearchType,
+	options?: FetchOptions
+): Promise<PublicExplorerSearch> => {
+	const path = `/v1/explorer/search?query=${encodeURIComponent(query)}&type=${encodeURIComponent(type)}`;
+	return fetchJson<PublicExplorerSearch>(path, options);
+};
+
+export const fetchExplorerLedger = (
+	sequence: string,
+	options?: FetchOptions
+): Promise<PublicExplorerLedger> =>
+	fetchJson<PublicExplorerLedger>(
+		`/v1/explorer/ledgers/${encodeURIComponent(sequence)}`,
+		options
+	);
+
+export const fetchExplorerAccount = (
+	accountId: string,
+	options?: FetchOptions
+): Promise<PublicExplorerAccount> =>
+	fetchJson<PublicExplorerAccount>(
+		`/v1/explorer/accounts/${encodeURIComponent(accountId)}`,
+		options
+	);
+
+export const fetchExplorerAssets = (
+	assetCode: string,
+	assetIssuer: string,
+	options?: FetchOptions
+): Promise<PublicExplorerAssets> => {
+	const params = new URLSearchParams();
+	if (assetCode.trim().length > 0) params.set('assetCode', assetCode.trim());
+	if (assetIssuer.trim().length > 0)
+		params.set('assetIssuer', assetIssuer.trim());
+	const query = params.toString();
+	return fetchJson<PublicExplorerAssets>(
+		`/v1/explorer/assets${query.length > 0 ? `?${query}` : ''}`,
+		options
+	);
+};
+
+export const fetchExplorerOperations = (
+	filters: PublicExplorerOperationFilters,
+	options?: FetchOptions
+): Promise<PublicExplorerOperations> => {
+	const params = new URLSearchParams();
+	if (filters.accountId) params.set('accountId', filters.accountId);
+	if (filters.from) params.set('from', filters.from);
+	if (filters.ledger) params.set('ledger', filters.ledger);
+	if (filters.operationType) params.set('operationType', filters.operationType);
+	if (filters.to) params.set('to', filters.to);
+	const query = params.toString();
+	return fetchJson<PublicExplorerOperations>(
+		`/v1/explorer/operations${query.length > 0 ? `?${query}` : ''}`,
+		options
+	);
+};
+
+export const fetchExplorerContract = (
+	contractId: string,
+	options?: FetchOptions
+): Promise<PublicExplorerContract> =>
+	fetchJson<PublicExplorerContract>(
+		`/v1/explorer/contracts/${encodeURIComponent(contractId)}`,
 		options
 	);
 

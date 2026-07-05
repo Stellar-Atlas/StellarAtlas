@@ -21,6 +21,8 @@ link_unit stellaratlas-network-scanner.service
 link_unit stellaratlas-scp-live-scanner.service
 link_unit stellaratlas-users.service
 link_unit stellaratlas-history-scanner@.service
+link_unit stellaratlas-horizon.service
+link_unit stellaratlas-stellar-rpc.service
 
 sudo install -m 0644 \
 	"$SYSTEMD_DIR/10-stellaratlas-observe.rules" \
@@ -41,6 +43,10 @@ Production:
   systemctl restart stellaratlas-frontend-v4.service
   systemctl restart stellaratlas-scp-live-scanner.service
   systemctl restart stellaratlas-history-scanner@1.service
+
+Local full-history services, after binaries/config/DB exist:
+  systemctl start stellaratlas-horizon.service
+  systemctl start stellaratlas-stellar-rpc.service
 
 Staging frontend:
   pnpm build:frontend-v4:staging

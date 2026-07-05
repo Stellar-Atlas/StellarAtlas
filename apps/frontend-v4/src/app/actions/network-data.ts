@@ -2,11 +2,21 @@
 
 import {
 	fetchHistoryArchiveScanLogs,
+	fetchExplorerAssets,
+	fetchExplorerContract,
+	fetchExplorerOperations,
+	fetchExplorerSearch,
 	fetchLatestLedger,
 	fetchLedgerTransactions,
 	fetchTransactionByHash
 } from '../../api/client';
 import type {
+	PublicExplorerAssets,
+	PublicExplorerContract,
+	PublicExplorerOperationFilters,
+	PublicExplorerOperations,
+	PublicExplorerSearch,
+	PublicExplorerSearchType,
 	PublicHistoryArchiveScanLogEntry,
 	PublicLatestLedger,
 	PublicLedgerTransactions,
@@ -21,6 +31,32 @@ export interface TransactionLookupResult {
 	readonly message: string | null;
 	readonly status: TransactionLookupStatus;
 	readonly transaction: PublicTransactionLookup | null;
+}
+
+export type ExplorerActionStatus = 'invalid' | 'loaded' | 'unavailable';
+
+export interface ExplorerSearchResult {
+	readonly message: string | null;
+	readonly search: PublicExplorerSearch | null;
+	readonly status: ExplorerActionStatus;
+}
+
+export interface ExplorerOperationsResult {
+	readonly message: string | null;
+	readonly operations: PublicExplorerOperations | null;
+	readonly status: ExplorerActionStatus;
+}
+
+export interface ExplorerAssetsResult {
+	readonly assets: PublicExplorerAssets | null;
+	readonly message: string | null;
+	readonly status: ExplorerActionStatus;
+}
+
+export interface ExplorerContractResult {
+	readonly contract: PublicExplorerContract | null;
+	readonly message: string | null;
+	readonly status: ExplorerActionStatus;
 }
 
 export async function getHistoryArchiveScanLogs(
@@ -80,6 +116,100 @@ export async function lookupTransactionByHash(
 					: 'Transaction lookup unavailable',
 			status: statusCode === 404 ? 'not_found' : 'unavailable',
 			transaction: null
+		};
+	}
+}
+
+export async function searchExplorer(
+	query: string,
+	type: PublicExplorerSearchType
+): Promise<ExplorerSearchResult> {
+	const normalizedQuery = query.trim();
+	if (normalizedQuery.length === 0) {
+		return { message: 'Enter a search value', search: null, status: 'invalid' };
+	}
+
+	try {
+		return {
+			message: null,
+			search: await fetchExplorerSearch(normalizedQuery, type, {
+				cache: 'no-store'
+			}),
+			status: 'loaded'
+		};
+	} catch {
+		return {
+			message: 'Explorer search unavailable',
+			search: null,
+			status: 'unavailable'
+		};
+	}
+}
+
+export async function searchExplorerOperations(
+	filters: PublicExplorerOperationFilters
+): Promise<ExplorerOperationsResult> {
+	try {
+		return {
+			message: null,
+			operations: await fetchExplorerOperations(filters, { cache: 'no-store' }),
+			status: 'loaded'
+		};
+	} catch {
+		return {
+			message: 'Operation search unavailable',
+			operations: null,
+			status: 'unavailable'
+		};
+	}
+}
+
+export async function searchExplorerAssets(
+	assetCode: string,
+	assetIssuer: string
+): Promise<ExplorerAssetsResult> {
+	try {
+		return {
+			assets: await fetchExplorerAssets(assetCode, assetIssuer, {
+				cache: 'no-store'
+			}),
+			message: null,
+			status: 'loaded'
+		};
+	} catch {
+		return {
+			assets: null,
+			message: 'Asset search unavailable',
+			status: 'unavailable'
+		};
+	}
+}
+
+export async function lookupExplorerContract(
+	contractId: string
+): Promise<ExplorerContractResult> {
+	const normalizedContractId = contractId.trim();
+	if (normalizedContractId.length === 0) {
+		return {
+			contract: null,
+			message: 'Enter a contract id',
+			status: 'invalid'
+		};
+	}
+
+	try {
+		return {
+			contract: await fetchExplorerContract(normalizedContractId, {
+				cache: 'no-store'
+			}),
+			message: null,
+			status: 'loaded'
+		};
+	} catch {
+		return {
+			contract: null,
+			message: 'Contract lookup unavailable',
+			status: 'unavailable'
 		};
 	}
 }

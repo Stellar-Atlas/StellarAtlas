@@ -17,6 +17,7 @@ import { Unsubscribe } from '@notifications/use-cases/unsubscribe/Unsubscribe.js
 import { networkRouter } from '@network-scan/infrastructure/http/NetworkRouter.js';
 import { knownNetworkRouter } from '@network-scan/infrastructure/http/KnownNetworkRouter.js';
 import { horizonExplorerRouter } from '@network-scan/infrastructure/http/HorizonExplorerRouter.js';
+import { blockchainExplorerRouter } from '@network-scan/infrastructure/http/BlockchainExplorerRouter.js';
 import { attachNetworkLiveWebSocket } from '@network-scan/infrastructure/http/NetworkLiveWebSocket.js';
 
 import helmet from 'helmet';
@@ -263,6 +264,14 @@ const listen = async () => {
 		'/v1',
 		horizonExplorerRouter({
 			horizonUrl: config.horizonUrl.value
+		})
+	);
+
+	api.use(
+		'/v1/explorer',
+		blockchainExplorerRouter({
+			horizonUrl: config.horizonUrl.value,
+			rpcUrl: config.rpcUrl?.value
 		})
 	);
 

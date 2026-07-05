@@ -1,0 +1,27 @@
+[Unit]
+Description=StellarAtlas local Stellar RPC
+Documentation=https://developers.stellar.org/docs/data/apis/rpc/admin-guide
+Wants=network-online.target
+After=network-online.target
+Conflicts=stellaratlas.service
+ConditionFileIsExecutable=/home/observe/stellarbeat-data/stellar-rpc/bin/stellar-rpc
+ConditionPathExists=/home/observe/stellarbeat-data/stellar-rpc/pubnet/config/rpc.toml
+
+[Service]
+Type=simple
+User=observe
+Group=observe
+WorkingDirectory=/home/observe/stellarbeat-data/stellar-rpc/pubnet
+Environment=HOME=/home/observe
+Environment=PATH=/home/observe/stellarbeat-data/stellar-rpc/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+EnvironmentFile=-/etc/stellaratlas/full-history.env
+ExecStart=/usr/bin/env stellar-rpc --config /home/observe/stellarbeat-data/stellar-rpc/pubnet/config/rpc.toml
+Restart=always
+RestartSec=10
+TimeoutStopSec=90
+KillSignal=SIGTERM
+NoNewPrivileges=true
+ReadWritePaths=/home/observe/stellarbeat-data/stellar-rpc
+
+[Install]
+WantedBy=multi-user.target

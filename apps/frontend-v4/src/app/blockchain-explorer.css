@@ -3,6 +3,168 @@
 	gap: 16px;
 }
 
+.blockchain-explorer-workspace,
+.explorer-panel,
+.explorer-result-stack {
+	display: grid;
+	gap: 16px;
+}
+
+.explorer-panel {
+	background: var(--panel);
+	border: 1px solid var(--border);
+	border-radius: 8px;
+	box-shadow: var(--shadow);
+	padding: 16px;
+}
+
+.explorer-panel .panel-heading > div {
+	display: grid;
+	gap: 3px;
+}
+
+.explorer-grid {
+	display: grid;
+	gap: 16px;
+	grid-template-columns: minmax(0, 1.2fr) minmax(280px, 0.8fr);
+}
+
+.explorer-grid .explorer-panel:first-child {
+	grid-row: span 2;
+}
+
+.explorer-search-form,
+.explorer-filter-form {
+	display: grid;
+	gap: 10px;
+}
+
+.explorer-search-form {
+	grid-template-columns: minmax(0, 1fr) minmax(120px, 160px) auto;
+}
+
+.explorer-filter-form {
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.explorer-filter-form button {
+	align-self: end;
+}
+
+.explorer-search-form input,
+.explorer-search-form select,
+.explorer-filter-form input,
+.explorer-filter-form select {
+	border: 1px solid var(--border);
+	border-radius: 6px;
+	inline-size: 100%;
+	min-inline-size: 0;
+	padding: 10px 11px;
+}
+
+.explorer-filter-form label {
+	display: grid;
+	gap: 5px;
+}
+
+.explorer-filter-form span {
+	color: var(--muted);
+	font-size: 0.74rem;
+	font-weight: 800;
+	text-transform: uppercase;
+}
+
+.explorer-search-form button,
+.explorer-filter-form button {
+	background: var(--blue);
+	border: 0;
+	border-radius: 6px;
+	color: #ffffff;
+	font-weight: 800;
+	min-block-size: 40px;
+	padding: 0 14px;
+}
+
+.explorer-result-grid {
+	background: #f7fafc;
+	border: 1px solid var(--border);
+	border-radius: 8px;
+	display: grid;
+	gap: 10px;
+	grid-template-columns: repeat(3, minmax(0, 1fr));
+	margin: 0;
+	padding: 12px;
+}
+
+.explorer-result-grid dt {
+	color: var(--muted);
+	font-size: 0.72rem;
+	font-weight: 800;
+	text-transform: uppercase;
+}
+
+.explorer-result-grid dd {
+	font-family: var(--font-mono);
+	margin: 2px 0 0;
+	overflow-wrap: anywhere;
+}
+
+.explorer-state {
+	border-radius: 6px;
+	font-weight: 700;
+	margin: 0;
+	padding: 10px 12px;
+}
+
+.explorer-state.neutral {
+	background: #f7fafc;
+	border: 1px solid var(--border);
+	color: var(--muted);
+}
+
+.explorer-state.warning {
+	background: #fff7ed;
+	border: 1px solid #fed7aa;
+	color: #9a3412;
+}
+
+.explorer-table {
+	border: 1px solid var(--border);
+	border-radius: 8px;
+	display: grid;
+	overflow: hidden;
+}
+
+.explorer-table-row {
+	align-items: center;
+	display: grid;
+	gap: 10px;
+	grid-template-columns:
+		minmax(120px, 0.8fr) minmax(150px, 0.8fr) minmax(80px, 0.4fr)
+		minmax(180px, 1fr) minmax(180px, 1fr);
+	padding: 10px 12px;
+}
+
+.explorer-table.assets .explorer-table-row {
+	grid-template-columns:
+		minmax(90px, 0.5fr) minmax(180px, 1fr) minmax(120px, 0.5fr)
+		minmax(120px, 0.5fr);
+}
+
+.explorer-table-row + .explorer-table-row {
+	border-block-start: 1px solid var(--border);
+}
+
+.explorer-table-row strong,
+.explorer-table-row span {
+	min-inline-size: 0;
+	overflow-wrap: anywhere;
+}
+
+.explorer-table-row strong {
+	color: var(--blue);
+}
+
 .transaction-lookup {
 	display: grid;
 	gap: 14px;
@@ -229,17 +391,33 @@
 
 @media (max-width: 1120px) {
 	.blockchain-stats,
-	.blockchain-graph-shell {
+	.blockchain-graph-shell,
+	.explorer-grid {
 		grid-template-columns: 1fr;
+	}
+
+	.explorer-grid .explorer-panel:first-child {
+		grid-row: auto;
 	}
 }
 
 @media (max-width: 720px) {
+	.explorer-filter-form,
+	.explorer-result-grid,
+	.explorer-search-form,
 	.transaction-lookup-form,
 	.transaction-result dl {
 		grid-template-columns: 1fr;
 	}
 
+	.explorer-table-row,
+	.explorer-table.assets .explorer-table-row {
+		align-items: start;
+		grid-template-columns: 1fr;
+	}
+
+	.explorer-search-form button,
+	.explorer-filter-form button,
 	.transaction-lookup-form button {
 		block-size: 42px;
 	}

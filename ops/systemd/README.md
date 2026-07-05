@@ -25,6 +25,51 @@ that all run as `observe`, not root.
   turn the production template back into a single-process scanner.
 - `stellaratlas-users.service` runs the user/mail service.
 
+## Optional full-history services
+
+These units are linked by `setup-systemd.sh` but are intentionally not part of
+`stellaratlas.target` yet:
+
+- `stellaratlas-horizon.service` runs the local Horizon binary from
+  `/home/observe/stellarbeat-data/horizon/bin/horizon`.
+- `stellaratlas-stellar-rpc.service` runs the local Stellar RPC binary from
+  `/home/observe/stellarbeat-data/stellar-rpc/bin/stellar-rpc`.
+
+They use `ConditionPath...` guards and will not start unless the required
+binary/config files exist. Do not add them to `stellaratlas.target` until the
+local Horizon and RPC endpoints are proven healthy on loopback.
+
+Current prerequisites:
+
+- install `stellar-core` at
+  `/home/observe/stellarbeat-data/stellar-core/bin/stellar-core`;
+- create a separate Horizon Postgres database and put `DATABASE_URL=...` in
+  `/etc/stellaratlas/full-history.env`;
+- keep Horizon storage under
+  `/home/observe/stellarbeat-data/horizon/captive-core/pubnet`;
+- install `stellar-rpc` at
+  `/home/observe/stellarbeat-data/stellar-rpc/bin/stellar-rpc`;
+- create `/home/observe/stellarbeat-data/stellar-rpc/pubnet/config/rpc.toml`.
+
+Safe activation order:
+
+```bash
+systemctl daemon-reload
+systemctl start stellaratlas-horizon.service
+systemctl status stellaratlas-horizon.service --no-pager --lines=80
+curl -fsS http://127.0.0.1:8000 | jq .
+systemctl start stellaratlas-stellar-rpc.service
+systemctl status stellaratlas-stellar-rpc.service --no-pager --lines=80
+```
+
+Only after local services catch up and pass API checks should
+`/etc/stellaratlas/stellaratlas.env` move Atlas from public Horizon to loopback:
+
+```bash
+HORIZON_URL=http://127.0.0.1:8000
+STELLAR_RPC_URL=http://127.0.0.1:8002
+```
+
 `10-stellaratlas-observe.rules` lets the `observe` user start, stop, restart,
 reload, try-restart, and reset only the listed StellarAtlas units without an
 interactive password. It also permits `systemctl daemon-reload` for `observe` so
@@ -37,8 +82,8 @@ sudo ./setup-systemd.sh
 ```
 
 The script links each active StellarAtlas unit in `/etc/systemd/system` back to
-the matching file under `ops/systemd`. `/etc` is not the source of truth; it only
-contains symlinks that systemd requires for system units. The script also
+the matching file under `ops/systemd`. `/etc` is not the source of truth; it
+only contains symlinks that systemd requires for system units. The script also
 installs the polkit rule, disables and masks the old root-run all-in-one
 `stellaratlas.service`, reloads systemd, and starts `stellaratlas.target`.
 

@@ -102,6 +102,106 @@ export interface PublicLatestLedger {
 	readonly sequence: string;
 }
 
+export type PublicExplorerSource = 'horizon' | 'rpc';
+export type PublicExplorerSearchType =
+	'account' | 'asset' | 'auto' | 'contract' | 'ledger' | 'transaction';
+
+export interface PublicExplorerLedger {
+	readonly closedAt: string;
+	readonly hash: string;
+	readonly operationCount: number;
+	readonly protocolVersion: number;
+	readonly sequence: string;
+	readonly source: 'horizon';
+	readonly transactionCount: number | null;
+}
+
+export interface PublicExplorerAccountBalance {
+	readonly assetCode: string | null;
+	readonly assetIssuer: string | null;
+	readonly assetType: string;
+	readonly balance: string;
+}
+
+export interface PublicExplorerAccount {
+	readonly accountId: string;
+	readonly balances: readonly PublicExplorerAccountBalance[];
+	readonly lastModifiedLedger: string | null;
+	readonly sequence: string;
+	readonly source: 'horizon';
+	readonly subentryCount: number;
+}
+
+export interface PublicExplorerAsset {
+	readonly amount: string | null;
+	readonly assetCode: string | null;
+	readonly assetIssuer: string | null;
+	readonly assetType: string;
+	readonly numAccounts: number | null;
+	readonly source: 'horizon';
+}
+
+export interface PublicExplorerAssets {
+	readonly assets: readonly PublicExplorerAsset[];
+	readonly source: 'horizon';
+	readonly truncated: boolean;
+}
+
+export interface PublicExplorerOperation {
+	readonly createdAt: string;
+	readonly id: string;
+	readonly ledger: string | null;
+	readonly source: 'horizon';
+	readonly sourceAccount: string | null;
+	readonly successful: boolean | null;
+	readonly transactionHash: string | null;
+	readonly type: string;
+	readonly typeNumber: number | null;
+}
+
+export interface PublicExplorerOperationFilters {
+	readonly accountId?: string;
+	readonly from?: string;
+	readonly ledger?: string;
+	readonly operationType?: string;
+	readonly to?: string;
+}
+
+export interface PublicExplorerOperations {
+	readonly filters: PublicExplorerOperationFilters;
+	readonly records: readonly PublicExplorerOperation[];
+	readonly source: 'horizon';
+	readonly truncated: boolean;
+}
+
+export interface PublicExplorerContract {
+	readonly contractId: string;
+	readonly message: string;
+	readonly source: 'rpc';
+	readonly status: 'loaded' | 'unavailable' | 'unconfigured';
+}
+
+export interface PublicExplorerSearch {
+	readonly query: string;
+	readonly result:
+		| PublicExplorerAccount
+		| PublicExplorerAssets
+		| PublicExplorerContract
+		| PublicExplorerLedger
+		| PublicExplorerOperation
+		| PublicTransactionLookup
+		| null;
+	readonly resultType:
+		| 'account'
+		| 'asset'
+		| 'contract'
+		| 'ledger'
+		| 'not_found'
+		| 'transaction'
+		| 'unknown';
+	readonly source: PublicExplorerSource;
+}
+
 export type PublicSearchEntityType = 'node' | 'organization';
 export type PublicSearchArchiveStatus = 'error' | 'ok' | 'unknown';
 export type PublicSearchFacetName =

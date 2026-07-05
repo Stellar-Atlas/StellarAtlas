@@ -1,0 +1,37 @@
+[Unit]
+Description=StellarAtlas local Horizon API
+Documentation=https://developers.stellar.org/docs/data/apis/horizon/admin-guide
+Wants=network-online.target postgresql.service
+After=network-online.target postgresql.service
+Conflicts=stellaratlas.service
+ConditionFileIsExecutable=/home/observe/stellarbeat-data/horizon/bin/horizon
+ConditionFileIsExecutable=/home/observe/stellarbeat-data/stellar-core/bin/stellar-core
+ConditionPathExists=/etc/stellaratlas/full-history.env
+
+[Service]
+Type=simple
+User=observe
+Group=observe
+WorkingDirectory=/home/observe/stellarbeat-data/horizon
+Environment=HOME=/home/observe
+Environment=PATH=/home/observe/stellarbeat-data/horizon/bin:/home/observe/stellarbeat-data/stellar-core/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+Environment=NETWORK=pubnet
+Environment=PORT=8000
+Environment=ADMIN_PORT=8001
+Environment=INGEST=true
+Environment=DISABLE_TX_SUB=true
+Environment=HISTORY_RETENTION_COUNT=0
+Environment=CAPTIVE_CORE_STORAGE_PATH=/home/observe/stellarbeat-data/horizon/captive-core/pubnet
+Environment=CAPTIVE_CORE_LOG_PATH=/home/observe/stellarbeat-data/horizon/logs/captive-core.log
+Environment=STELLAR_CORE_BINARY_PATH=/home/observe/stellarbeat-data/stellar-core/bin/stellar-core
+EnvironmentFile=/etc/stellaratlas/full-history.env
+ExecStart=/home/observe/stellarbeat-data/horizon/bin/horizon serve
+Restart=always
+RestartSec=10
+TimeoutStopSec=90
+KillSignal=SIGTERM
+NoNewPrivileges=true
+ReadWritePaths=/home/observe/stellarbeat-data/horizon
+
+[Install]
+WantedBy=multi-user.target
