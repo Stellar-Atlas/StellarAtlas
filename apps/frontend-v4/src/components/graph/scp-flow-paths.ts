@@ -43,8 +43,9 @@ export const compareStatementsByObservation = (
 
 export const selectLedgerAnimationStatements = (
 	statements: readonly PublicScpStatementObservation[]
-): readonly PublicScpStatementObservation[] =>
-	statements.toSorted(compareStatementsByObservation);
+): readonly PublicScpStatementObservation[] => {
+	return statements.toSorted(compareStatementsByObservation);
+};
 
 export const getLatestSlotIndex = (
 	statements: readonly PublicScpStatementObservation[]

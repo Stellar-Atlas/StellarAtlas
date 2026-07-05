@@ -5,7 +5,6 @@ interface MergePlaybackQueueOptions {
 	activeSlotIndex: string | null;
 	boundarySlotIndex: string;
 	completedSignatures: ReadonlyMap<string, string>;
-	currentQueue: readonly LedgerPlaybackFrame[];
 	ledgers: readonly LedgerPlaybackFrame[];
 }
 
@@ -13,8 +12,6 @@ interface MergePlaybackQueueResult {
 	acceptedBoundarySlotIndex: string;
 	queue: LedgerPlaybackFrame[];
 }
-
-const maxQueuedPlaybackLedgers = 12;
 
 export const getLedgerStatementSignature = (
 	ledger: LedgerPlaybackFrame
@@ -31,45 +28,31 @@ const isCompleted = (
 	completedSignatures.get(ledger.slotIndex) ===
 	getLedgerStatementSignature(ledger);
 
-const isQueued = (
-	queue: readonly LedgerPlaybackFrame[],
-	slotIndex: string
-): boolean => queue.some((ledger) => ledger.slotIndex === slotIndex);
-
 export const mergePlaybackQueue = ({
 	activeSlotIndex,
 	boundarySlotIndex,
 	completedSignatures,
-	currentQueue,
 	ledgers
 }: MergePlaybackQueueOptions): MergePlaybackQueueResult => {
-	const playableLedgers = ledgers
+	const latestPlayableLedger = ledgers
 		.filter(
 			(ledger) =>
 				ledger.statements.length > 0 &&
 				compareLedgerSequences(ledger.slotIndex, boundarySlotIndex) < 0 &&
-				ledger.slotIndex !== activeSlotIndex &&
-				!isCompleted(ledger, completedSignatures)
+				ledger.slotIndex !== activeSlotIndex
 		)
 		.toSorted((left, right) =>
 			compareLedgerSequences(left.slotIndex, right.slotIndex)
-		);
-	const retainedQueue = currentQueue.filter(
-		(ledger) =>
-			ledger.slotIndex !== activeSlotIndex &&
-			!isCompleted(ledger, completedSignatures)
-	);
-	const queue = [...retainedQueue];
-	for (const candidate of playableLedgers) {
-		if (!isQueued(queue, candidate.slotIndex)) queue.push(candidate);
-	}
+		)
+		.at(-1);
+	const queue =
+		latestPlayableLedger &&
+		!isCompleted(latestPlayableLedger, completedSignatures)
+			? [latestPlayableLedger]
+			: [];
 
 	return {
 		acceptedBoundarySlotIndex: boundarySlotIndex,
-		queue: queue
-			.toSorted((left, right) =>
-				compareLedgerSequences(left.slotIndex, right.slotIndex)
-			)
-			.slice(-maxQueuedPlaybackLedgers)
+		queue
 	};
 };

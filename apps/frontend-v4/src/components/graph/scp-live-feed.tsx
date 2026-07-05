@@ -235,17 +235,26 @@ export function ScpLiveFeed({
 
 	useEffect(() => {
 		setFeedOffset(0);
-	}, [feedSlotIndex, recentStatements[0]?.statementHash]);
+	}, [feedSlotIndex]);
+
+	const maxFeedOffset = Math.max(
+		0,
+		recentStatements.length - visibleStatementCount
+	);
+
+	useEffect(() => {
+		setFeedOffset((current) => Math.min(current, maxFeedOffset));
+	}, [maxFeedOffset]);
 
 	useEffect(() => {
 		if (activeSlotIndex === null) return;
-		if (recentStatements.length <= visibleStatementCount) return;
+		if (feedOffset >= maxFeedOffset) return;
 		const interval = window.setInterval(() => {
-			setFeedOffset((current) => (current + 1) % recentStatements.length);
+			setFeedOffset((current) => Math.min(current + 1, maxFeedOffset));
 		}, 650);
 
 		return () => window.clearInterval(interval);
-	}, [activeSlotIndex, recentStatements.length]);
+	}, [activeSlotIndex, feedOffset, maxFeedOffset]);
 
 	useEffect(() => {
 		if (!selectedTransactionSet) return;
@@ -259,12 +268,9 @@ export function ScpLiveFeed({
 	const visibleStatements = useMemo(() => {
 		if (recentStatements.length <= visibleStatementCount)
 			return recentStatements;
-		return Array.from({ length: visibleStatementCount }, (_, index) => {
-			const nextIndex = (feedOffset + index) % recentStatements.length;
-			return recentStatements[nextIndex];
-		}).filter(
-			(statement): statement is PublicScpStatementObservation =>
-				statement !== undefined
+		return recentStatements.slice(
+			feedOffset,
+			feedOffset + visibleStatementCount
 		);
 	}, [feedOffset, recentStatements]);
 

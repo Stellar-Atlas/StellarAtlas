@@ -453,7 +453,6 @@ export const useGraphAnimation = ({
 			activeSlotIndex: activeLedgerRef.current?.slotIndex ?? null,
 			boundarySlotIndex: playbackBoundarySlotIndex,
 			completedSignatures: completedSlotSignaturesRef.current,
-			currentQueue: playbackQueueRef.current,
 			ledgers: playbackLedgers
 		});
 		playbackQueueRef.current = queueResult.queue;
