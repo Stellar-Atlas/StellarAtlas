@@ -26,17 +26,31 @@ that all run as `observe`, not root.
 - `stellaratlas-users.service` runs the user/mail service.
 
 `10-stellaratlas-observe.rules` lets the `observe` user start, stop, restart,
-and reset only the listed StellarAtlas units without an interactive password.
+reload, try-restart, and reset only the listed StellarAtlas units without an
+interactive password. It also permits `systemctl daemon-reload` for `observe` so
+repo unit-template changes can be reloaded after the one-time system link setup.
 
-Install or migrate deliberately:
+Link or migrate deliberately:
 
 ```bash
 sudo ./setup-systemd.sh
 ```
 
-The script installs the split units, installs the polkit rule, disables and
-masks the old root-run all-in-one `stellaratlas.service`, reloads systemd, and
-starts `stellaratlas.target`.
+The script links each active StellarAtlas unit in `/etc/systemd/system` back to
+the matching file under `ops/systemd`. `/etc` is not the source of truth; it only
+contains symlinks that systemd requires for system units. The script also
+installs the polkit rule, disables and masks the old root-run all-in-one
+`stellaratlas.service`, reloads systemd, and starts `stellaratlas.target`.
+
+After this migration, editing `ops/systemd/*.service` is enough. Reload and
+restart without sudo:
+
+```bash
+systemctl daemon-reload
+systemctl restart stellaratlas-api.service
+systemctl restart stellaratlas-scp-live-scanner.service
+systemctl restart stellaratlas-history-scanner@1.service
+```
 
 Production frontend deploy:
 
@@ -58,6 +72,7 @@ Backend/API deploy:
 
 ```bash
 pnpm build:api
+systemctl daemon-reload
 systemctl restart stellaratlas-api.service
 ```
 
@@ -65,6 +80,7 @@ Live SCP collector deploy:
 
 ```bash
 pnpm build:scp-live-scanner
+systemctl daemon-reload
 systemctl restart stellaratlas-scp-live-scanner.service
 systemctl status stellaratlas-scp-live-scanner.service --no-pager
 ```
@@ -110,9 +126,9 @@ explicitly.
 - `stellaratlas-radar-network-comparison-refresh.timer` starts the service every
   six hours with jitter and persistent catch-up after downtime.
 
-## Install
+## Link Timers
 
-Review these values in the service before installing:
+Review these values in the service before linking:
 
 - `User=observe`
 - `WorkingDirectory=/home/observe/stellarbeat-data/Observer`
@@ -120,13 +136,13 @@ Review these values in the service before installing:
 - `Environment=PATH=...`
 - `EnvironmentFile=-/etc/stellaratlas/stellaratlas.env`
 
-Then install deliberately:
+Then link deliberately:
 
 ```bash
-sudo install -m 0644 ops/systemd/stellaratlas-api-docs-comparison-refresh.service /etc/systemd/system/
-sudo install -m 0644 ops/systemd/stellaratlas-api-docs-comparison-refresh.timer /etc/systemd/system/
-sudo install -m 0644 ops/systemd/stellaratlas-radar-network-comparison-refresh.service /etc/systemd/system/
-sudo install -m 0644 ops/systemd/stellaratlas-radar-network-comparison-refresh.timer /etc/systemd/system/
+sudo ln -sfnT "$PWD/ops/systemd/stellaratlas-api-docs-comparison-refresh.service" /etc/systemd/system/stellaratlas-api-docs-comparison-refresh.service
+sudo ln -sfnT "$PWD/ops/systemd/stellaratlas-api-docs-comparison-refresh.timer" /etc/systemd/system/stellaratlas-api-docs-comparison-refresh.timer
+sudo ln -sfnT "$PWD/ops/systemd/stellaratlas-radar-network-comparison-refresh.service" /etc/systemd/system/stellaratlas-radar-network-comparison-refresh.service
+sudo ln -sfnT "$PWD/ops/systemd/stellaratlas-radar-network-comparison-refresh.timer" /etc/systemd/system/stellaratlas-radar-network-comparison-refresh.timer
 sudo systemctl daemon-reload
 sudo systemctl enable --now stellaratlas-api-docs-comparison-refresh.timer
 sudo systemctl enable --now stellaratlas-radar-network-comparison-refresh.timer

@@ -1,6 +1,16 @@
 polkit.addRule(function(action, subject) {
-  if (action.id !== "org.freedesktop.systemd1.manage-units") {
+  if (
+    action.id !== "org.freedesktop.systemd1.manage-units" &&
+    action.id !== "org.freedesktop.systemd1.reload-daemon"
+  ) {
     return;
+  }
+
+  if (
+    action.id === "org.freedesktop.systemd1.reload-daemon" &&
+    subject.user === "observe"
+  ) {
+    return polkit.Result.YES;
   }
 
   var unit = action.lookup("unit");

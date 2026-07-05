@@ -67,9 +67,13 @@ describe('history scanner runtime scripts', () => {
 		);
 
 		expect(setupScript).toContain(
-			'install_unit stellaratlas-history-scanner@.service'
+			'link_unit stellaratlas-history-scanner@.service'
 		);
+		expect(setupScript).toContain('ln -sfnT "$source" "$target"');
 		expect(target).toContain('stellaratlas-history-scanner@1.service');
 		expect(polkitRule).toContain('stellaratlas-history-scanner@1.service');
+		expect(polkitRule).toContain(
+			'org.freedesktop.systemd1.reload-daemon'
+		);
 	});
 });

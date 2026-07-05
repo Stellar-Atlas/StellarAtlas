@@ -4,20 +4,23 @@ set -euo pipefail
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SYSTEMD_DIR="$REPO_ROOT/ops/systemd"
 
-install_unit() {
+link_unit() {
 	local file_name="$1"
-	sudo install -m 0644 "$SYSTEMD_DIR/$file_name" "/etc/systemd/system/$file_name"
+	local source="$SYSTEMD_DIR/$file_name"
+	local target="/etc/systemd/system/$file_name"
+
+	sudo ln -sfnT "$source" "$target"
 }
 
-install_unit stellaratlas.target
-install_unit stellaratlas-api.service
-install_unit stellaratlas-frontend-v4.service
-install_unit stellaratlas-frontend-v4-staging.service
-install_unit stellaratlas-frontend-legacy.service
-install_unit stellaratlas-network-scanner.service
-install_unit stellaratlas-scp-live-scanner.service
-install_unit stellaratlas-users.service
-install_unit stellaratlas-history-scanner@.service
+link_unit stellaratlas.target
+link_unit stellaratlas-api.service
+link_unit stellaratlas-frontend-v4.service
+link_unit stellaratlas-frontend-v4-staging.service
+link_unit stellaratlas-frontend-legacy.service
+link_unit stellaratlas-network-scanner.service
+link_unit stellaratlas-scp-live-scanner.service
+link_unit stellaratlas-users.service
+link_unit stellaratlas-history-scanner@.service
 
 sudo install -m 0644 \
 	"$SYSTEMD_DIR/10-stellaratlas-observe.rules" \
@@ -30,12 +33,14 @@ sudo systemctl enable --now stellaratlas.target
 sudo systemctl enable --now stellaratlas-scp-live-scanner.service
 
 cat <<'EOF'
-Installed split StellarAtlas services.
+Linked split StellarAtlas services to repo unit templates.
 
 Production:
   systemctl status stellaratlas.target
+  systemctl restart stellaratlas-api.service
   systemctl restart stellaratlas-frontend-v4.service
   systemctl restart stellaratlas-scp-live-scanner.service
+  systemctl restart stellaratlas-history-scanner@1.service
 
 Staging frontend:
   pnpm build:frontend-v4:staging
