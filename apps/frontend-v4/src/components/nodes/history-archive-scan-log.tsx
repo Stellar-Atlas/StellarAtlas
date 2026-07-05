@@ -20,7 +20,7 @@ type ScanLogFilter = 'archive-errors' | 'worker-issues' | 'all';
 export function HistoryArchiveScanLog({
 	logs
 }: HistoryArchiveScanLogProps): React.JSX.Element {
-	const [filter, setFilter] = useState<ScanLogFilter>('all');
+	const [filter, setFilter] = useState<ScanLogFilter>('archive-errors');
 	const filteredLogs = useMemo(
 		() =>
 			logs.filter((entry) => {
@@ -119,12 +119,12 @@ export function HistoryArchiveScanLog({
 							rowTag = 'worker issue';
 						}
 
-							const rowErrors =
-								filter === 'archive-errors'
-									? archiveErrors
-									: filter === 'worker-issues'
-										? workerIssues
-										: [...archiveErrors, ...workerIssues];
+						const rowErrors =
+							filter === 'archive-errors'
+								? archiveErrors
+								: filter === 'worker-issues'
+									? workerIssues
+									: [...archiveErrors, ...workerIssues];
 
 						return (
 							<li
@@ -169,19 +169,13 @@ export function HistoryArchiveScanLog({
 									<ul className="archive-error-list compact">
 										{rowErrors.map((error, index) => (
 											<li key={`${error.type}:${error.url}:${index}`}>
-												<a
-													href={error.url}
-													rel="noopener noreferrer"
-													target="_blank"
-													>
-														{error.url}
-													</a>
-													<span>
-														{getErrorClassLabel(error.type)}: {error.message}
-													</span>
-												</li>
-											))}
-										</ul>
+												<ErrorUrl url={error.url} />
+												<span>
+													{getErrorClassLabel(error.type)}: {error.message}
+												</span>
+											</li>
+										))}
+									</ul>
 								) : null}
 							</li>
 						);
@@ -213,3 +207,15 @@ const getRowTagClassName = (rowTone: string): string => {
 
 const getErrorClassLabel = (type: string): string =>
 	type.startsWith('TYPE_VERIFICATION') ? 'Archive' : 'Worker';
+
+const ErrorUrl = ({ url }: { readonly url: string }): React.JSX.Element => {
+	if (url.startsWith('http://') || url.startsWith('https://')) {
+		return (
+			<a href={url} rel="noopener noreferrer" target="_blank">
+				{url}
+			</a>
+		);
+	}
+
+	return <span>{url}</span>;
+};

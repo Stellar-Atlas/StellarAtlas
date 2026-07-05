@@ -1,6 +1,9 @@
 import { Url } from 'http-helper';
 import { Scan } from '@history-scan-coordinator/domain/scan/Scan.js';
-import { ScanError, ScanErrorType } from '@history-scan-coordinator/domain/scan/ScanError.js';
+import {
+	ScanError,
+	ScanErrorType
+} from '@history-scan-coordinator/domain/scan/ScanError.js';
 import { mapScanToHistoryArchiveScan } from '../mapScanToHistoryArchiveScan.js';
 
 describe('mapScanToHistoryArchiveScan', () => {
@@ -88,5 +91,38 @@ describe('mapScanToHistoryArchiveScan', () => {
 				url: connectionError.url
 			}
 		]);
+	});
+
+	it('redacts local worker paths from public worker issue messages', () => {
+		const baseUrl = Url.create('https://history.example.com');
+		if (baseUrl.isErr()) throw baseUrl.error;
+
+		const connectionError = new ScanError(
+			ScanErrorType.TYPE_CONNECTION,
+			'https://history.example.com/bucket/32/90/bucket.xdr.gz',
+			"EACCES: permission denied, mkdir '/home/observe/stellarbeat-data/Observer/history-bucket-cache/32/90'"
+		);
+		const scan = new Scan(
+			new Date('2026-07-01T00:00:00.000Z'),
+			new Date('2026-07-01T00:00:00.000Z'),
+			new Date('2026-07-01T00:01:00.000Z'),
+			baseUrl.value,
+			0,
+			null,
+			0,
+			null,
+			0,
+			false,
+			connectionError,
+			[connectionError]
+		);
+
+		const dto = mapScanToHistoryArchiveScan(scan);
+
+		expect(dto.errors[0]).toEqual({
+			message: 'EACCES: permission denied, mkdir [history bucket cache path]',
+			type: 'TYPE_CONNECTION',
+			url: connectionError.url
+		});
 	});
 });

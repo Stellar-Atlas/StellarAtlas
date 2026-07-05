@@ -13,6 +13,7 @@ import { mapUnknownToError } from '@core/utilities/mapUnknownToError.js';
 import type { ScanJobRepository } from '../../domain/ScanJobRepository.js';
 import type { ScanJob } from '../../domain/ScanJob.js';
 import { getStaleScanJobCutoff } from '../../domain/ScanJobStaleness.js';
+import { mapScanErrorToPublicDTO } from '../../infrastructure/mappers/PublicScanErrorMapper.js';
 
 export type HistoryArchiveScanLogStatus =
 	'completed' | 'queued' | 'scanning' | 'stale';
@@ -157,11 +158,7 @@ export class GetScanLogs {
 			concurrency: scan.concurrency,
 			durationMs: scan.endDate.getTime() - scan.startDate.getTime(),
 			endDate: scan.endDate,
-			errors: scan.scanErrors.map((error) => ({
-				message: error.message,
-				type: ScanErrorType[error.type],
-				url: error.url
-			})),
+			errors: scan.scanErrors.map(mapScanErrorToPublicDTO),
 			fromLedger: scan.fromLedger,
 			hasArchiveVerificationError: scan.hasArchiveVerificationError(),
 			hasError: scan.hasError(),

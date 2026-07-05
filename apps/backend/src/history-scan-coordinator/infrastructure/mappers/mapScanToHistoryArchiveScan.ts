@@ -1,6 +1,7 @@
 import { HistoryArchiveScan } from 'shared';
 import type { Scan } from '../../domain/scan/Scan.js';
 import { ScanErrorType } from '../../domain/scan/ScanError.js';
+import { mapScanErrorToPublicDTO } from './PublicScanErrorMapper.js';
 
 export function mapScanToHistoryArchiveScan(scan: Scan): HistoryArchiveScan {
 	const scanErrors = scan.scanErrors;
@@ -18,10 +19,6 @@ export function mapScanToHistoryArchiveScan(scan: Scan): HistoryArchiveScan {
 		firstArchiveVerificationError?.url ?? null,
 		firstArchiveVerificationError?.message ?? null,
 		scan.isSlowArchive ?? false,
-		scanErrors.map((error) => ({
-			message: error.message,
-			type: ScanErrorType[error.type],
-			url: error.url
-		}))
+		scanErrors.map(mapScanErrorToPublicDTO)
 	);
 }

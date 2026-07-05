@@ -70,7 +70,7 @@ describe('GetScanLogs', () => {
 			new ScanError(
 				ScanErrorType.TYPE_CONNECTION,
 				historyUrl.value,
-				'Could not fetch latest ledger'
+				"EACCES: permission denied, mkdir '/home/observe/stellarbeat-data/Observer/history-bucket-cache/32/90'"
 			)
 		);
 		const archiveVerificationFailure = createScan(
@@ -124,7 +124,9 @@ describe('GetScanLogs', () => {
 		});
 		expect(logs[2].hasWorkerIssue).toBe(true);
 		expect(logs[2].hasArchiveVerificationError).toBe(false);
-		expect(logs[2].errors[0]?.message).toBe('Could not fetch latest ledger');
+		expect(logs[2].errors[0]?.message).toBe(
+			'EACCES: permission denied, mkdir [history bucket cache path]'
+		);
 		expect(logs[3].hasArchiveVerificationError).toBe(true);
 		expect(logs[3].errors[0]?.message).toBe('Wrong transaction hash');
 	});
