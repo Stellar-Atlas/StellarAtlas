@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useMemo, useState } from 'react';
-import type { PublicNetwork, PublicNode } from '../../api/types';
+import type { PublicKnownNode, PublicNetwork, PublicNode } from '../../api/types';
 import {
 	getNodeLabel,
 	getNodeTags,
@@ -16,46 +16,66 @@ type NodeFilter = 'all' | 'validators' | 'listeners' | 'warnings';
 
 interface NodeTableProps {
 	network: PublicNetwork;
-	nodes: PublicNode[];
+	nodes: readonly PublicKnownNode[];
 }
 
 const normalize = (value: string): string => value.toLowerCase();
 
+const getKnownNodeLabel = (knownNode: PublicKnownNode): string =>
+	knownNode.node ? getNodeLabel(knownNode.node) : knownNode.publicKey.slice(0, 12);
+
 const filterNodes = (
-	nodes: PublicNode[],
+	nodes: readonly PublicKnownNode[],
 	filter: NodeFilter,
 	query: string,
 	network: PublicNetwork
-): PublicNode[] => {
+): PublicKnownNode[] => {
 	const normalizedQuery = normalize(query.trim());
 
 	return nodes
-		.filter((node) => {
-			if (filter === 'validators' && !node.isValidator) return false;
-			if (filter === 'listeners' && (node.isValidator || !node.active)) return false;
+		.filter((knownNode) => {
+			const node = knownNode.node;
+			if (filter === 'validators' && (node === null || !node.isValidator))
+				return false;
+			if (
+				filter === 'listeners' &&
+				(node === null || node.isValidator || !node.active)
+			)
+				return false;
 			if (
 				filter === 'warnings' &&
-				!node.historyArchiveHasError &&
-				!node.connectivityError &&
-				!node.stellarCoreVersionBehind &&
-				node.isValidating
+				(node === null ||
+					(!node.historyArchiveHasError &&
+						!node.connectivityError &&
+						!node.stellarCoreVersionBehind &&
+						node.isValidating))
 			) return false;
 
 			if (normalizedQuery.length === 0) return true;
-			const organization = getOrganizationForNode(network, node);
+			const organization = node ? getOrganizationForNode(network, node) : null;
 			const haystack = normalize([
-				getNodeLabel(node),
-				node.publicKey,
-				node.homeDomain ?? '',
-				node.host ?? '',
-				node.ip,
+				getKnownNodeLabel(knownNode),
+				knownNode.publicKey,
+				node?.homeDomain ?? '',
+				node?.host ?? '',
+				node?.ip ?? '',
 				organization ? getOrganizationLabel(organization) : ''
 			].join(' '));
 			return haystack.includes(normalizedQuery);
 		})
 		.toSorted((left, right) => {
-			if (left.isValidator !== right.isValidator) return left.isValidator ? -1 : 1;
-			return right.index - left.index || getNodeLabel(left).localeCompare(getNodeLabel(right));
+			const leftNode = left.node;
+			const rightNode = right.node;
+			if ((leftNode?.isValidator ?? false) !== (rightNode?.isValidator ?? false)) {
+				return leftNode?.isValidator ? -1 : 1;
+			}
+			if (left.metadataState !== right.metadataState) {
+				return left.metadataState === 'snapshot' ? -1 : 1;
+			}
+			return (
+				(rightNode?.index ?? -1) - (leftNode?.index ?? -1) ||
+				getKnownNodeLabel(left).localeCompare(getKnownNodeLabel(right))
+			);
 		});
 };
 
@@ -114,17 +134,18 @@ export function NodeTable({
 						</tr>
 					</thead>
 					<tbody>
-						{visibleNodes.map((node) => {
-							const organization = getOrganizationForNode(network, node);
-							const validating24Hours = formatNode24HourValidating(node);
-							const validating30Days = formatNode30DayValidating(node);
+						{visibleNodes.map((knownNode) => {
+							const node = knownNode.node;
+							const organization = node ? getOrganizationForNode(network, node) : null;
+							const validating24Hours = node ? formatNode24HourValidating(node) : null;
+							const validating30Days = node ? formatNode30DayValidating(node) : null;
 							return (
-								<tr key={node.publicKey}>
+								<tr key={knownNode.publicKey}>
 									<td>
-										<Link href={`/nodes/${encodeURIComponent(node.publicKey)}`}>
-											<strong>{getNodeLabel(node)}</strong>
+										<Link href={`/nodes/${encodeURIComponent(knownNode.publicKey)}`}>
+											<strong>{getKnownNodeLabel(knownNode)}</strong>
 										</Link>
-										<small>{node.host ?? node.ip}</small>
+										<small>{node ? node.host ?? node.ip : 'Public key only'}</small>
 									</td>
 									<td>
 										{organization ? (
@@ -135,20 +156,33 @@ export function NodeTable({
 											<span className="muted">Unassigned</span>
 										)}
 									</td>
-									<td>{node.versionStr ?? 'Unknown'}</td>
-									<td>{node.geoData?.countryName ?? 'Unknown'}</td>
+									<td>{node?.versionStr ?? 'Unknown'}</td>
+									<td>{node?.geoData?.countryName ?? 'Unknown'}</td>
 									<td>
-										<span className={`metric-text ${validating24Hours.tone}`}>
-											{validating24Hours.value}
+										<span className={`metric-text ${validating24Hours?.tone ?? 'muted'}`}>
+											{validating24Hours?.value ?? 'No snapshot'}
 										</span>
 									</td>
 									<td>
-										<span className={`metric-text ${validating30Days.tone}`}>
-											{validating30Days.value}
+										<span className={`metric-text ${validating30Days?.tone ?? 'muted'}`}>
+											{validating30Days?.value ?? 'Unavailable'}
 										</span>
-										{validating30Days.detail ? <small>{validating30Days.detail}</small> : null}
+										{validating30Days?.detail ? <small>{validating30Days.detail}</small> : null}
 									</td>
-									<td><StatusTags tags={getNodeTags(node)} /></td>
+									<td>
+										<StatusTags
+											tags={
+												node
+													? [
+															...getNodeTags(node),
+															...(!knownNode.current
+																? [{ label: 'archived', tone: 'neutral' as const }]
+																: [])
+														]
+													: [{ label: 'public key only', tone: 'neutral' }]
+											}
+										/>
+									</td>
 								</tr>
 							);
 						})}

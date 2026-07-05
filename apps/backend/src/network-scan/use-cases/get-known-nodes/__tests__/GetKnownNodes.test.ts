@@ -1,7 +1,6 @@
 import { err, ok } from 'neverthrow';
 import { mock } from 'jest-mock-extended';
 import type { ExceptionLogger } from '@core/services/ExceptionLogger.js';
-import { Snapshot } from '@core/domain/Snapshot.js';
 import NodeMeasurement from '@network-scan/domain/node/NodeMeasurement.js';
 import { createDummyNode } from '@network-scan/domain/node/__fixtures__/createDummyNode.js';
 import type { NodeRepository } from '@network-scan/domain/node/NodeRepository.js';
@@ -26,6 +25,18 @@ describe('GetKnownNodes', () => {
 		const nodeDTOService = mock<NodeDTOService>();
 		const exceptionLogger = mock<ExceptionLogger>();
 		nodeRepository.findAllKnown.mockResolvedValue([activeNode, archivedNode]);
+		nodeRepository.findAllKnownIdentities.mockResolvedValue([
+			{
+				publicKey: activeNode.publicKey.value,
+				dateDiscovered: start,
+				lastMeasurementAt: start
+			},
+			{
+				publicKey: archivedNode.publicKey.value,
+				dateDiscovered: start,
+				lastMeasurementAt: null
+			}
+		]);
 		organizationRepository.findAllKnown.mockResolvedValue([]);
 		nodeDTOService.getNodeDTOs.mockResolvedValue(ok([activeDto, archivedDto]));
 
@@ -39,16 +50,28 @@ describe('GetKnownNodes', () => {
 		expect(result.isOk()).toBe(true);
 		if (result.isErr()) return;
 		expect(result.value.count).toBe(2);
-		expect(result.value.nodes[0]).toMatchObject({
+		const activeResult = result.value.nodes.find(
+			(node) => node.publicKey === activeNode.publicKey.value
+		);
+		const archivedResult = result.value.nodes.find(
+			(node) => node.publicKey === archivedNode.publicKey.value
+		);
+		expect(activeResult).toMatchObject({
+			publicKey: activeNode.publicKey.value,
+			dateDiscovered: start.toISOString(),
 			node: activeDto,
+			metadataState: 'snapshot',
 			current: true,
 			snapshotStartDate: start.toISOString(),
-			snapshotEndDate: Snapshot.MAX_DATE.toISOString(),
+			snapshotEndDate: null,
 			lastSeen: start.toISOString(),
 			lastMeasurementAt: start.toISOString()
 		});
-		expect(result.value.nodes[1]).toMatchObject({
+		expect(archivedResult).toMatchObject({
+			publicKey: archivedNode.publicKey.value,
+			dateDiscovered: start.toISOString(),
 			node: archivedDto,
+			metadataState: 'snapshot',
 			current: false,
 			snapshotStartDate: start.toISOString(),
 			snapshotEndDate: archivedAt.toISOString(),
@@ -62,6 +85,51 @@ describe('GetKnownNodes', () => {
 		);
 	});
 
+	it('returns public-key-only records for known nodes without snapshots', async () => {
+		const discoveredAt = new Date('2020-03-01T00:00:00.000Z');
+		const measuredAt = new Date('2020-03-02T00:00:00.000Z');
+		const nodeRepository = mock<NodeRepository>();
+		const organizationRepository = mock<OrganizationRepository>();
+		const nodeDTOService = mock<NodeDTOService>();
+		const exceptionLogger = mock<ExceptionLogger>();
+		nodeRepository.findAllKnown.mockResolvedValue([]);
+		nodeRepository.findAllKnownIdentities.mockResolvedValue([
+			{
+				publicKey: 'GA_SHELL_NODE',
+				dateDiscovered: discoveredAt,
+				lastMeasurementAt: measuredAt
+			}
+		]);
+		organizationRepository.findAllKnown.mockResolvedValue([]);
+		nodeDTOService.getNodeDTOs.mockResolvedValue(ok([]));
+
+		const result = await new GetKnownNodes(
+			nodeRepository,
+			organizationRepository,
+			nodeDTOService,
+			exceptionLogger
+		).execute();
+
+		expect(result.isOk()).toBe(true);
+		if (result.isErr()) return;
+		expect(result.value).toMatchObject({
+			count: 1,
+			nodes: [
+				{
+					publicKey: 'GA_SHELL_NODE',
+					dateDiscovered: discoveredAt.toISOString(),
+					node: null,
+					metadataState: 'public_key_only',
+					current: false,
+					snapshotStartDate: null,
+					snapshotEndDate: null,
+					lastSeen: measuredAt.toISOString(),
+					lastMeasurementAt: measuredAt.toISOString()
+				}
+			]
+		});
+	});
+
 	it('returns errors from the DTO service', async () => {
 		const nodeRepository = mock<NodeRepository>();
 		const organizationRepository = mock<OrganizationRepository>();
@@ -69,6 +137,7 @@ describe('GetKnownNodes', () => {
 		const exceptionLogger = mock<ExceptionLogger>();
 		const error = new Error('mapping failed');
 		nodeRepository.findAllKnown.mockResolvedValue([]);
+		nodeRepository.findAllKnownIdentities.mockResolvedValue([]);
 		organizationRepository.findAllKnown.mockResolvedValue([]);
 		nodeDTOService.getNodeDTOs.mockResolvedValue(err(error));
 

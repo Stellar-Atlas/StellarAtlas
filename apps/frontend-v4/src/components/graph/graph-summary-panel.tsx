@@ -78,7 +78,8 @@ export function GraphSummaryPanel({
 						<div>
 							<strong>{activeOrganization.name}</strong>
 							<small>
-								{activeOrganization.validatorCount} validators
+								{activeOrganization.validatorCount} validators /{' '}
+								{activeOrganization.nodeCount} nodes
 								{activeOrganization.inTransitiveQuorumSet ? ' / top tier' : ''}
 							</small>
 							{selectedNode &&
@@ -89,7 +90,7 @@ export function GraphSummaryPanel({
 					</div>
 				)}
 				<div className="organization-list">
-					{model.organizations.slice(0, 14).map((organization) => (
+					{model.organizations.map((organization) => (
 						<button
 							className={
 								activeOrganization?.id === organization.id ? 'active' : ''
@@ -103,7 +104,8 @@ export function GraphSummaryPanel({
 							<span style={{ backgroundColor: organization.color }} />
 							<strong>{organization.name}</strong>
 							<small>
-								{organization.validatorCount} validators
+								{organization.validatorCount} validators /{' '}
+								{organization.nodeCount} nodes
 								{organization.inTransitiveQuorumSet ? ' / top tier' : ''}
 							</small>
 						</button>

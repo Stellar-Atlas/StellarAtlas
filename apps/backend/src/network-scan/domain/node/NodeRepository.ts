@@ -1,6 +1,12 @@
 import PublicKey from './PublicKey.js';
 import Node from './Node.js';
 
+export interface KnownNodeIdentity {
+	publicKey: string;
+	dateDiscovered: Date;
+	lastMeasurementAt: Date | null;
+}
+
 //active means that the node is not archived. i.e. snapshot endDate = SNAPSHOT_MAX_END_DATE
 export interface NodeRepository {
 	save(nodes: Node[], from: Date): Promise<Node[]>;
@@ -8,6 +14,7 @@ export interface NodeRepository {
 	findActive(): Promise<Node[]>;
 	findActiveByPublicKey(publicKeys: string[]): Promise<Node[]>;
 	findAllKnown(): Promise<Node[]>;
+	findAllKnownIdentities(): Promise<KnownNodeIdentity[]>;
 	findActiveByPublicKeyAtTimePoint(
 		publicKey: PublicKey,
 		at: Date

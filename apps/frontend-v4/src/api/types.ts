@@ -16,6 +16,41 @@ export type PublicOrganizationSnapshot = OrganizationSnapshotV1;
 export type PublicHistoryArchiveScan = HistoryArchiveScanV1;
 export type PublicScpStatementObservation = ScpStatementObservationV1;
 
+export type PublicKnownNodeMetadataState = 'snapshot' | 'public_key_only';
+
+export interface PublicKnownNode {
+	readonly current: boolean;
+	readonly dateDiscovered: string;
+	readonly lastMeasurementAt: string | null;
+	readonly lastSeen: string | null;
+	readonly metadataState: PublicKnownNodeMetadataState;
+	readonly node: PublicNode | null;
+	readonly publicKey: string;
+	readonly snapshotEndDate: string | null;
+	readonly snapshotStartDate: string | null;
+}
+
+export interface PublicKnownNodes {
+	readonly count: number;
+	readonly generatedAt: string;
+	readonly nodes: readonly PublicKnownNode[];
+}
+
+export interface PublicKnownOrganization {
+	readonly current: boolean;
+	readonly lastMeasurementAt: string | null;
+	readonly lastSeen: string | null;
+	readonly organization: PublicOrganization;
+	readonly snapshotEndDate: string | null;
+	readonly snapshotStartDate: string;
+}
+
+export interface PublicKnownOrganizations {
+	readonly count: number;
+	readonly generatedAt: string;
+	readonly organizations: readonly PublicKnownOrganization[];
+}
+
 export interface PublicHistoryArchiveScanLogError {
 	readonly message: string;
 	readonly type: string;

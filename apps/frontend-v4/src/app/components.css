@@ -210,6 +210,8 @@ meter {
 .segmented {
 	border: 1px solid var(--border);
 	border-radius: 6px;
+	display: flex;
+	flex: 0 0 auto;
 	overflow: hidden;
 }
 
@@ -220,6 +222,7 @@ meter {
 	color: var(--muted);
 	font-weight: 800;
 	padding: 8px 10px;
+	white-space: nowrap;
 }
 
 .segmented button:last-child {
@@ -235,8 +238,15 @@ meter {
 .table-controls {
 	align-items: center;
 	display: flex;
+	flex: 0 1 600px;
 	gap: 10px;
-	inline-size: min(680px, 60%);
+	inline-size: min(600px, 52%);
+	min-inline-size: 0;
+}
+
+.table-controls input {
+	flex: 1 1 260px;
+	inline-size: auto;
 }
 
 .responsive-table {

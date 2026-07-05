@@ -97,9 +97,13 @@ const getMemberOffset = (index: number, count: number): { x: number; y: number; 
 	};
 };
 
-const groupNodes = (network: PublicNetwork): Map<string, PublicNode[]> => {
+const groupNodes = (
+	network: PublicNetwork,
+	validatorsOnly = false
+): Map<string, PublicNode[]> => {
 	const groups = new Map<string, PublicNode[]>();
-	for (const node of network.nodes.filter((candidate) => candidate.isValidator)) {
+	for (const node of network.nodes) {
+		if (validatorsOnly && !node.isValidator) continue;
 		const key = getNodeGroupId(node);
 		groups.set(key, [...(groups.get(key) ?? []), node]);
 	}
@@ -115,7 +119,7 @@ const getNodeGroupId = (node: PublicNode): string => {
 const getFallbackGroupName = (nodes: readonly PublicNode[]): string => {
 	const firstHomeDomain = nodes.find((node) => node.homeDomain)?.homeDomain;
 	if (firstHomeDomain) return firstHomeDomain;
-	return 'Unaffiliated validators';
+	return 'Unaffiliated nodes';
 };
 
 const buildValidatorNodes = (
@@ -123,11 +127,11 @@ const buildValidatorNodes = (
 	organizations: Graph3DOrganization[]
 ): Graph3DNode[] => {
 	const transitiveValidators = new Set(network.transitiveQuorumSet);
-	return (
-	Array.from(groupNodes(network).entries()).flatMap(([groupId, nodes], groupIndex) => {
-		const organization = organizations.find((candidate) => candidate.id === groupId);
-		const color = organization?.color ?? getColor(groupId, groupIndex);
-		const center = organization ?? getClusterCenter(groupIndex, organizations.length, false);
+	return Array.from(groupNodes(network, true).entries()).flatMap(
+		([groupId, nodes], groupIndex) => {
+			const organization = organizations.find((candidate) => candidate.id === groupId);
+			const color = organization?.color ?? getColor(groupId, groupIndex);
+			const center = organization ?? getClusterCenter(groupIndex, organizations.length, false);
 		const groupName = organization?.name ?? getFallbackGroupName(nodes);
 
 		return nodes.map((node, nodeIndex) => {
@@ -148,14 +152,20 @@ const buildValidatorNodes = (
 				fx: center.x + offset.x,
 				fy: center.y + offset.y,
 				fz: center.z + offset.z
-			};
-		});
-	})
+				};
+			});
+		}
 	);
 };
 
-const buildOuterNodes = (network: PublicNetwork): Graph3DNode[] => {
+const buildOuterNodes = (
+	network: PublicNetwork,
+	organizations: readonly Graph3DOrganization[]
+): Graph3DNode[] => {
 	const outerNodes = network.nodes.filter((node) => !node.isValidator);
+	const organizationMap = new Map(
+		network.organizations.map((organization) => [organization.id, organization])
+	);
 	return outerNodes.map((node, index) => {
 		const y = 1 - (index / Math.max(outerNodes.length - 1, 1)) * 2;
 		const radiusAtY = Math.sqrt(1 - y * y);
@@ -165,12 +175,17 @@ const buildOuterNodes = (network: PublicNetwork): Graph3DNode[] => {
 		const x = Math.cos(theta) * radiusAtY * radius;
 		const positionY = y * radius * 0.8;
 		const z = Math.sin(theta) * radiusAtY * radius;
+		const groupId = getNodeGroupId(node);
+		const organization = organizations.find((candidate) => candidate.id === groupId);
+		const sourceOrganization = organizationMap.get(groupId);
 		return {
 			id: node.publicKey,
-			color: node.active ? '#768390' : '#cf5f68',
+			color: organization?.color ?? (node.active ? '#768390' : '#cf5f68'),
 			detail: node.homeDomain ?? node.host ?? node.publicKey.slice(0, 12),
-			groupId: 'listeners',
-			groupName: node.active ? 'Listener nodes' : 'Unavailable nodes',
+			groupId,
+			groupName: sourceOrganization
+				? getOrganizationLabel(sourceOrganization)
+				: node.homeDomain ?? (node.active ? 'Listener nodes' : 'Unavailable nodes'),
 			isInTransitiveQuorumSet: false,
 			kind: node.active ? 'listener' : 'offline',
 			node,
@@ -205,7 +220,9 @@ const buildOrganizations = (network: PublicNetwork): Graph3DOrganization[] => {
 			color: getColor(id, index),
 			id,
 			inTransitiveQuorumSet,
-			name: organization ? getOrganizationLabel(organization) : getFallbackGroupName(nodes),
+			name: organization
+				? getOrganizationLabel(organization)
+				: getFallbackGroupName(nodes),
 			nodeCount: nodes.length,
 			validatorCount: nodes.filter((node) => node.isValidator).length
 		};
@@ -246,7 +263,10 @@ export const buildGraph3DModel = (network: PublicNetwork): Graph3DModel => {
 	const organizations = buildOrganizations(network);
 	return {
 		links: buildLinks(network.nodes),
-		nodes: [...buildValidatorNodes(network, organizations), ...buildOuterNodes(network)],
+		nodes: [
+			...buildValidatorNodes(network, organizations),
+			...buildOuterNodes(network, organizations)
+		],
 		organizations
 	};
 };
@@ -256,5 +276,5 @@ export const getNodeOrganizationName = (
 	node: PublicNode
 ): string => {
 	const organization = getOrganizationForNode(network, node);
-	return organization ? getOrganizationLabel(organization) : 'Unaffiliated validators';
+	return organization ? getOrganizationLabel(organization) : 'Unaffiliated nodes';
 };

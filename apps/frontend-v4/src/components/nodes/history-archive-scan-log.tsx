@@ -20,7 +20,7 @@ type ScanLogFilter = 'archive-errors' | 'worker-issues' | 'all';
 export function HistoryArchiveScanLog({
 	logs
 }: HistoryArchiveScanLogProps): React.JSX.Element {
-	const [filter, setFilter] = useState<ScanLogFilter>('archive-errors');
+	const [filter, setFilter] = useState<ScanLogFilter>('all');
 	const filteredLogs = useMemo(
 		() =>
 			logs.filter((entry) => {
@@ -119,12 +119,12 @@ export function HistoryArchiveScanLog({
 							rowTag = 'worker issue';
 						}
 
-						const rowErrors =
-							filter === 'worker-issues' && hasWorkerIssues
-								? workerIssues
-								: hasArchiveErrors
+							const rowErrors =
+								filter === 'archive-errors'
 									? archiveErrors
-									: workerIssues;
+									: filter === 'worker-issues'
+										? workerIssues
+										: [...archiveErrors, ...workerIssues];
 
 						return (
 							<li
@@ -173,13 +173,15 @@ export function HistoryArchiveScanLog({
 													href={error.url}
 													rel="noopener noreferrer"
 													target="_blank"
-												>
-													{error.url}
-												</a>
-												<span>{error.message}</span>
-											</li>
-										))}
-									</ul>
+													>
+														{error.url}
+													</a>
+													<span>
+														{getErrorClassLabel(error.type)}: {error.message}
+													</span>
+												</li>
+											))}
+										</ul>
 								) : null}
 							</li>
 						);
@@ -208,3 +210,6 @@ const getRowTagClassName = (rowTone: string): string => {
 
 	return 'tag good';
 };
+
+const getErrorClassLabel = (type: string): string =>
+	type.startsWith('TYPE_VERIFICATION') ? 'Archive' : 'Worker';

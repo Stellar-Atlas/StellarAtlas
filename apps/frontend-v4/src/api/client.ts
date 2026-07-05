@@ -1,5 +1,7 @@
 import type {
 	ApiFailure,
+	PublicKnownNodes,
+	PublicKnownOrganizations,
 	PublicApiStatus,
 	PublicConfiguredServiceStatus,
 	PublicDataQualityStatus,
@@ -200,11 +202,30 @@ export const fetchPublicNode = (
 		withTags(options, [frontendCacheTags.network, `node:${publicKey}`])
 	);
 
+export const fetchKnownNodes = (
+	options?: FetchOptions
+): Promise<PublicKnownNodes> =>
+	fetchJson<PublicKnownNodes>(
+		'/v1/known/nodes',
+		withTags(options, [frontendCacheTags.network])
+	);
+
 export const fetchPublicOrganizations = (
 	options?: FetchOptions
 ): Promise<PublicOrganization[]> =>
 	fetchJson<PublicOrganization[]>(
 		'/v1/organizations',
+		withTags(options, [
+			frontendCacheTags.network,
+			frontendCacheTags.organizations
+		])
+	);
+
+export const fetchKnownOrganizations = (
+	options?: FetchOptions
+): Promise<PublicKnownOrganizations> =>
+	fetchJson<PublicKnownOrganizations>(
+		'/v1/known/organizations',
 		withTags(options, [
 			frontendCacheTags.network,
 			frontendCacheTags.organizations

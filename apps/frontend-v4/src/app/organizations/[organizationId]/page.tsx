@@ -2,7 +2,11 @@ import { Suspense } from 'react';
 import { notFound } from 'next/navigation';
 import Link from 'next/link';
 import { connection } from 'next/server';
-import { fetchPublicNetwork } from '@api/client';
+import {
+	fetchKnownNodes,
+	fetchKnownOrganizations,
+	fetchPublicNetwork
+} from '@api/client';
 import { PageHeading } from '@components/layout/page-heading';
 import { RouteLoadingPanel } from '@components/layout/route-fallbacks';
 import { OrganizationDetail } from '@components/organizations/organization-detail';
@@ -24,12 +28,29 @@ async function OrganizationDetailRouteContent({
 }): Promise<React.JSX.Element> {
 	await connection();
 	const decodedOrganizationId = decodeURIComponent(organizationId);
-	const network = await fetchPublicNetwork({ revalidate });
-	const organization = network.organizations.find(
-		(candidate) => candidate.id === decodedOrganizationId
+	const [network, knownNodes, knownOrganizations] = await Promise.all([
+		fetchPublicNetwork({ revalidate }),
+		fetchKnownNodes({ revalidate }),
+		fetchKnownOrganizations({ revalidate })
+	]);
+	const knownOrganization = knownOrganizations.organizations.find(
+		(candidate) => candidate.organization.id === decodedOrganizationId
 	);
+	const organization = knownOrganization?.organization;
 
 	if (!organization) notFound();
+	const inventoryNetwork = {
+		...network,
+		nodes: knownNodes.nodes.flatMap((candidate) =>
+			candidate.node ? [candidate.node] : []
+		),
+		organizations: knownOrganizations.organizations.map(
+			(candidate) => candidate.organization
+		)
+	};
+	const organizations = knownOrganizations.organizations.map(
+		(candidate) => candidate.organization
+	);
 
 	return (
 		<main className="shell">
@@ -39,11 +60,11 @@ async function OrganizationDetailRouteContent({
 				title="Organizations"
 				aside={
 					<div className="heading-metrics">
-						<strong>{formatInteger(network.organizations.length)}</strong>
+						<strong>{formatInteger(knownOrganizations.count)}</strong>
 						<span>discovered</span>
 						<strong>
 							{formatInteger(
-								getTopOrganizations(network.organizations).at(0)?.validators
+								getTopOrganizations(organizations).at(0)?.validators
 									.length ?? 0
 							)}
 						</strong>
@@ -52,7 +73,7 @@ async function OrganizationDetailRouteContent({
 				}
 			/>
 			<OrganizationTable
-				organizations={network.organizations}
+				organizations={knownOrganizations.organizations}
 				selectedOrganizationId={organization.id}
 			/>
 			<div className="route-modal-layer" role="presentation">
@@ -78,7 +99,10 @@ async function OrganizationDetailRouteContent({
 							Close
 						</Link>
 					</div>
-					<OrganizationDetail network={network} organization={organization} />
+					<OrganizationDetail
+						network={inventoryNetwork}
+						organization={organization}
+					/>
 				</section>
 			</div>
 		</main>

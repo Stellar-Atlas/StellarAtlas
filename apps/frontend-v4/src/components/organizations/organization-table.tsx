@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useMemo, useState } from 'react';
-import type { PublicOrganization } from '../../api/types';
+import type { PublicKnownOrganization } from '../../api/types';
 import {
 	formatOrganization24HourAvailability,
 	formatOrganization30DayAvailability
@@ -14,7 +14,7 @@ import {
 import { StatusTags } from '../status-tags';
 
 interface OrganizationTableProps {
-	organizations: PublicOrganization[];
+	organizations: readonly PublicKnownOrganization[];
 	selectedOrganizationId?: string;
 }
 
@@ -29,7 +29,8 @@ export function OrganizationTable({
 		const normalizedQuery = normalize(query.trim());
 
 		return organizations
-			.filter((organization) => {
+			.filter((knownOrganization) => {
+				const organization = knownOrganization.organization;
 				if (normalizedQuery.length === 0) return true;
 				const haystack = normalize([
 					getOrganizationLabel(organization),
@@ -42,8 +43,11 @@ export function OrganizationTable({
 			})
 			.toSorted(
 				(left, right) =>
-					right.validators.length - left.validators.length ||
-					getOrganizationLabel(left).localeCompare(getOrganizationLabel(right))
+					right.organization.validators.length -
+						left.organization.validators.length ||
+					getOrganizationLabel(left.organization).localeCompare(
+						getOrganizationLabel(right.organization)
+					)
 			);
 	}, [organizations, query]);
 
@@ -73,7 +77,8 @@ export function OrganizationTable({
 						</tr>
 					</thead>
 					<tbody>
-						{visibleOrganizations.map((organization) => {
+						{visibleOrganizations.map((knownOrganization) => {
+							const organization = knownOrganization.organization;
 							const availability24Hours =
 								formatOrganization24HourAvailability(organization);
 							const availability30Days =
@@ -102,7 +107,16 @@ export function OrganizationTable({
 										</span>
 										{availability30Days.detail ? <small>{availability30Days.detail}</small> : null}
 									</td>
-									<td><StatusTags tags={getOrganizationTags(organization)} /></td>
+									<td>
+										<StatusTags
+											tags={[
+												...getOrganizationTags(organization),
+												...(!knownOrganization.current
+													? [{ label: 'archived', tone: 'neutral' as const }]
+													: [])
+											]}
+										/>
+									</td>
 								</tr>
 							);
 						})}

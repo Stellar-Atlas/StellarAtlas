@@ -2,6 +2,8 @@ import { Suspense } from 'react';
 import { notFound } from 'next/navigation';
 import { connection } from 'next/server';
 import {
+	fetchKnownNodes,
+	fetchKnownOrganizations,
 	fetchHistoryArchiveScan,
 	fetchHistoryArchiveScanLogs,
 	fetchPublicNetwork
@@ -25,13 +27,27 @@ async function NodeDetailRouteContent({
 }): Promise<React.JSX.Element> {
 	await connection();
 	const decodedPublicKey = decodeURIComponent(publicKey);
-	const network = await fetchPublicNetwork({ revalidate });
-	const node = network.nodes.find(
+	const [network, knownNodes, knownOrganizations] = await Promise.all([
+		fetchPublicNetwork({ revalidate }),
+		fetchKnownNodes({ revalidate }),
+		fetchKnownOrganizations({ revalidate })
+	]);
+	const knownNode = knownNodes.nodes.find(
 		(candidate) => candidate.publicKey === decodedPublicKey
 	);
+	const node = knownNode?.node ?? null;
 
-	if (!node) notFound();
-	const [historyArchiveScan, historyArchiveScanLogs] = node.historyUrl
+	if (!knownNode) notFound();
+	const inventoryNetwork = {
+		...network,
+		nodes: knownNodes.nodes.flatMap((candidate) =>
+			candidate.node ? [candidate.node] : []
+		),
+		organizations: knownOrganizations.organizations.map(
+			(candidate) => candidate.organization
+		)
+	};
+	const [historyArchiveScan, historyArchiveScanLogs] = node?.historyUrl
 		? await Promise.all([
 				fetchHistoryArchiveScan(node.historyUrl, { revalidate }),
 				fetchHistoryArchiveScanLogs(node.historyUrl, { revalidate })
@@ -41,14 +57,15 @@ async function NodeDetailRouteContent({
 	return (
 		<main className="shell">
 			<PageHeading
-				description={node.homeDomain ?? node.host ?? node.publicKey}
+				description={node?.homeDomain ?? node?.host ?? knownNode.publicKey}
 				eyebrow="Node"
-				title={getNodeLabel(node)}
+				title={node ? getNodeLabel(node) : knownNode.publicKey.slice(0, 12)}
 			/>
 			<NodeDetail
 				historyArchiveScan={historyArchiveScan}
 				historyArchiveScanLogs={historyArchiveScanLogs}
-				network={network}
+				knownNode={knownNode}
+				network={inventoryNetwork}
 				node={node}
 			/>
 		</main>

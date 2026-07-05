@@ -4,7 +4,7 @@ export interface KnownOrganizationDTO {
 	organization: OrganizationV1;
 	current: boolean;
 	snapshotStartDate: string;
-	snapshotEndDate: string;
+	snapshotEndDate: string | null;
 	lastSeen: string | null;
 	lastMeasurementAt: string | null;
 }

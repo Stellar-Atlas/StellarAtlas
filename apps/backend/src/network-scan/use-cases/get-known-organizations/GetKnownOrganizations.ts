@@ -83,7 +83,7 @@ function toKnownOrganizationDTO(
 		organization: organizationDto,
 		current,
 		snapshotStartDate: organization.snapshotStartDate.toISOString(),
-		snapshotEndDate,
+		snapshotEndDate: current ? null : snapshotEndDate,
 		lastSeen: lastMeasurementAt ?? (current ? null : snapshotEndDate),
 		lastMeasurementAt
 	};

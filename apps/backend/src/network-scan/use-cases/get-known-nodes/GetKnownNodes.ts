@@ -4,6 +4,7 @@ import { Snapshot } from '@core/domain/Snapshot.js';
 import type { ExceptionLogger } from '@core/services/ExceptionLogger.js';
 import { mapUnknownToError } from '@core/utilities/mapUnknownToError.js';
 import type Node from '@network-scan/domain/node/Node.js';
+import type { KnownNodeIdentity } from '@network-scan/domain/node/NodeRepository.js';
 import type { NodeRepository } from '@network-scan/domain/node/NodeRepository.js';
 import type { OrganizationRepository } from '@network-scan/domain/organization/OrganizationRepository.js';
 import { NETWORK_TYPES } from '@network-scan/infrastructure/di/di-types.js';
@@ -31,6 +32,8 @@ export class GetKnownNodes {
 				this.nodeRepository.findAllKnown(),
 				this.organizationRepository.findAllKnown()
 			]);
+			const nodeIdentities =
+				await this.nodeRepository.findAllKnownIdentities();
 			const nodesOrError = await this.nodeDTOService.getNodeDTOs(
 				generatedAt,
 				nodes,
@@ -52,11 +55,19 @@ export class GetKnownNodes {
 				}
 				return toKnownNodeDTO(node, nodeDto);
 			});
+			const snapshottedPublicKeys = new Set(
+				knownNodes.map((node) => node.publicKey)
+			);
+			const publicKeyOnlyNodes = nodeIdentities
+				.filter((identity) => !snapshottedPublicKeys.has(identity.publicKey))
+				.map(toPublicKeyOnlyKnownNodeDTO);
 
 			return ok({
 				generatedAt: generatedAt.toISOString(),
-				count: knownNodes.length,
-				nodes: knownNodes
+				count: knownNodes.length + publicKeyOnlyNodes.length,
+				nodes: [...knownNodes, ...publicKeyOnlyNodes].toSorted((left, right) =>
+					left.publicKey.localeCompare(right.publicKey)
+				)
 			});
 		} catch (error) {
 			const mappedError = mapUnknownToError(error);
@@ -68,7 +79,7 @@ export class GetKnownNodes {
 
 function toKnownNodeDTO(
 	node: Node,
-	nodeDto: KnownNodeDTO['node']
+	nodeDto: NonNullable<KnownNodeDTO['node']>
 ): KnownNodeDTO {
 	const current = isCurrentSnapshot(node.snapshotEndDate);
 	const lastMeasurementAt =
@@ -76,11 +87,32 @@ function toKnownNodeDTO(
 	const snapshotEndDate = node.snapshotEndDate.toISOString();
 
 	return {
+		publicKey: node.publicKey.value,
+		dateDiscovered: node.dateDiscovered.toISOString(),
 		node: nodeDto,
+		metadataState: 'snapshot',
 		current,
 		snapshotStartDate: node.snapshotStartDate.toISOString(),
-		snapshotEndDate,
+		snapshotEndDate: current ? null : snapshotEndDate,
 		lastSeen: lastMeasurementAt ?? (current ? null : snapshotEndDate),
+		lastMeasurementAt
+	};
+}
+
+function toPublicKeyOnlyKnownNodeDTO(
+	identity: KnownNodeIdentity
+): KnownNodeDTO {
+	const lastMeasurementAt = identity.lastMeasurementAt?.toISOString() ?? null;
+
+	return {
+		publicKey: identity.publicKey,
+		dateDiscovered: identity.dateDiscovered.toISOString(),
+		node: null,
+		metadataState: 'public_key_only',
+		current: false,
+		snapshotStartDate: null,
+		snapshotEndDate: null,
+		lastSeen: lastMeasurementAt,
 		lastMeasurementAt
 	};
 }

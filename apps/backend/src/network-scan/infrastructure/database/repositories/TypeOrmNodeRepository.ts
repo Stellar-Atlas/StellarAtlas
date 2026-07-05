@@ -1,7 +1,10 @@
 import { injectable } from 'inversify';
 import { EntityManager, Equal, Repository, SelectQueryBuilder } from 'typeorm';
 import Node from '@network-scan/domain/node/Node.js';
-import type { NodeRepository } from '@network-scan/domain/node/NodeRepository.js';
+import type {
+	KnownNodeIdentity,
+	NodeRepository
+} from '@network-scan/domain/node/NodeRepository.js';
 import PublicKey from '@network-scan/domain/node/PublicKey.js';
 import NodeMeasurement from '@network-scan/domain/node/NodeMeasurement.js';
 import { Snapshot } from '@core/domain/Snapshot.js';
@@ -149,6 +152,32 @@ export class TypeOrmNodeRepository implements NodeRepository {
 		return await this.getNodesBaseQuery()
 			.orderBy('node."publicKeyValue"', 'ASC')
 			.getMany();
+	}
+
+	async findAllKnownIdentities(): Promise<KnownNodeIdentity[]> {
+		const rows = (await this.baseNodeRepository.manager.query(
+			`select node."publicKeyValue" as "publicKey",
+				node."dateDiscovered" as "dateDiscovered",
+				max(measurement."time") as "lastMeasurementAt"
+			from "node" node
+			left join "node_measurement_v2" measurement
+				on measurement."nodeId" = node.id
+			group by node.id, node."publicKeyValue", node."dateDiscovered"
+			order by node."publicKeyValue" asc`
+		)) as Array<{
+			publicKey: string;
+			dateDiscovered: Date;
+			lastMeasurementAt: Date | null;
+		}>;
+
+		return rows.map((row) => ({
+			publicKey: row.publicKey,
+			dateDiscovered: new Date(row.dateDiscovered),
+			lastMeasurementAt:
+				row.lastMeasurementAt === null
+					? null
+					: new Date(row.lastMeasurementAt)
+		}));
 	}
 
 	async findActiveByPublicKey(publicKeys: string[]): Promise<Node[]> {

@@ -1,13 +1,16 @@
 import { Suspense } from 'react';
 import { connection } from 'next/server';
-import { fetchPublicNetwork } from '../../api/client';
+import {
+	fetchKnownNodes,
+	fetchKnownOrganizations,
+	fetchPublicNetwork
+} from '../../api/client';
 import { NodeTable } from '../../components/nodes/node-table';
 import { PageHeading } from '../../components/layout/page-heading';
 import { RouteLoadingPanel } from '../../components/layout/route-fallbacks';
 import {
 	getActiveValidators,
-	getListenerNodes,
-	getRiskNodes
+	getListenerNodes
 } from '../../domain/network';
 import { formatInteger } from '../../format/formatters';
 
@@ -15,7 +18,22 @@ export const revalidate = 10;
 
 async function NodesRouteContent(): Promise<React.JSX.Element> {
 	await connection();
-	const network = await fetchPublicNetwork({ revalidate });
+	const [network, knownNodes, knownOrganizations] = await Promise.all([
+		fetchPublicNetwork({ revalidate }),
+		fetchKnownNodes({ revalidate }),
+		fetchKnownOrganizations({ revalidate })
+	]);
+	const snapshottedNodes = knownNodes.nodes.flatMap((knownNode) =>
+		knownNode.node ? [knownNode.node] : []
+	);
+	const inventoryNetwork = {
+		...network,
+		nodes: snapshottedNodes,
+		organizations: knownOrganizations.organizations.map(
+			(knownOrganization) => knownOrganization.organization
+		)
+	};
+	const publicKeyOnlyCount = knownNodes.nodes.length - snapshottedNodes.length;
 
 	return (
 		<main className="shell">
@@ -26,19 +44,19 @@ async function NodesRouteContent(): Promise<React.JSX.Element> {
 				aside={
 					<div className="heading-metrics">
 						<strong>
-							{formatInteger(getActiveValidators(network.nodes).length)}
+							{formatInteger(getActiveValidators(snapshottedNodes).length)}
 						</strong>
 						<span>validators</span>
 						<strong>
-							{formatInteger(getListenerNodes(network.nodes).length)}
+							{formatInteger(getListenerNodes(snapshottedNodes).length)}
 						</strong>
 						<span>listeners</span>
-						<strong>{formatInteger(getRiskNodes(network.nodes).length)}</strong>
-						<span>warnings</span>
+						<strong>{formatInteger(publicKeyOnlyCount)}</strong>
+						<span>public-key only</span>
 					</div>
 				}
 			/>
-			<NodeTable network={network} nodes={network.nodes} />
+			<NodeTable network={inventoryNetwork} nodes={knownNodes.nodes} />
 		</main>
 	);
 }

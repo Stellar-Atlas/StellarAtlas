@@ -1,7 +1,6 @@
 import { err, ok } from 'neverthrow';
 import { mock } from 'jest-mock-extended';
 import type { ExceptionLogger } from '@core/services/ExceptionLogger.js';
-import { Snapshot } from '@core/domain/Snapshot.js';
 import Organization from '@network-scan/domain/organization/Organization.js';
 import OrganizationMeasurement from '@network-scan/domain/organization/OrganizationMeasurement.js';
 import { createDummyOrganizationId } from '@network-scan/domain/organization/__fixtures__/createDummyOrganizationId.js';
@@ -57,7 +56,7 @@ describe('GetKnownOrganizations', () => {
 			organization: activeDto,
 			current: true,
 			snapshotStartDate: start.toISOString(),
-			snapshotEndDate: Snapshot.MAX_DATE.toISOString(),
+			snapshotEndDate: null,
 			lastSeen: start.toISOString(),
 			lastMeasurementAt: start.toISOString()
 		});

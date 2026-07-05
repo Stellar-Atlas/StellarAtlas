@@ -1,6 +1,6 @@
 import { Suspense } from 'react';
 import { connection } from 'next/server';
-import { fetchPublicNetwork } from '../../api/client';
+import { fetchKnownOrganizations, fetchPublicNetwork } from '../../api/client';
 import { PageHeading } from '../../components/layout/page-heading';
 import { RouteLoadingPanel } from '../../components/layout/route-fallbacks';
 import { OrganizationTable } from '../../components/organizations/organization-table';
@@ -11,8 +11,14 @@ export const revalidate = 10;
 
 async function OrganizationsRouteContent(): Promise<React.JSX.Element> {
 	await connection();
-	const network = await fetchPublicNetwork({ revalidate });
-	const topOrganizations = getTopOrganizations(network.organizations);
+	const [network, knownOrganizations] = await Promise.all([
+		fetchPublicNetwork({ revalidate }),
+		fetchKnownOrganizations({ revalidate })
+	]);
+	const organizations = knownOrganizations.organizations.map(
+		(knownOrganization) => knownOrganization.organization
+	);
+	const topOrganizations = getTopOrganizations(organizations);
 
 	return (
 		<main className="shell">
@@ -22,7 +28,7 @@ async function OrganizationsRouteContent(): Promise<React.JSX.Element> {
 				title="Organizations"
 				aside={
 					<div className="heading-metrics">
-						<strong>{formatInteger(network.organizations.length)}</strong>
+						<strong>{formatInteger(knownOrganizations.count)}</strong>
 						<span>discovered</span>
 						<strong>
 							{formatInteger(topOrganizations.at(0)?.validators.length ?? 0)}
@@ -31,7 +37,7 @@ async function OrganizationsRouteContent(): Promise<React.JSX.Element> {
 					</div>
 				}
 			/>
-			<OrganizationTable organizations={network.organizations} />
+			<OrganizationTable organizations={knownOrganizations.organizations} />
 		</main>
 	);
 }

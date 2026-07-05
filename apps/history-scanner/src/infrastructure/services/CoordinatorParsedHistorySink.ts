@@ -18,7 +18,7 @@ export class CoordinatorParsedHistorySink implements ParsedHistorySink {
 		private readonly sourceArchiveUrl: string,
 		private readonly scanJobRemoteId: string,
 		private readonly exceptionLogger: ExceptionLogger,
-		private readonly batchSize = 500
+		private readonly batchSize = 50
 	) {}
 
 	async emit(record: ParsedHistoryRecord): Promise<void> {

@@ -2,6 +2,7 @@ import Link from 'next/link';
 import type {
 	PublicHistoryArchiveScan,
 	PublicHistoryArchiveScanLogEntry,
+	PublicKnownNode,
 	PublicNetwork,
 	PublicNode
 } from '../../api/types';
@@ -32,16 +33,49 @@ import { HistoryArchiveScanLog } from './history-archive-scan-log';
 interface NodeDetailProps {
 	historyArchiveScan: PublicHistoryArchiveScan | null;
 	historyArchiveScanLogs: readonly PublicHistoryArchiveScanLogEntry[];
+	knownNode: PublicKnownNode;
 	network: PublicNetwork;
-	node: PublicNode;
+	node: PublicNode | null;
 }
 
 export function NodeDetail({
 	historyArchiveScan,
 	historyArchiveScanLogs,
+	knownNode,
 	network,
 	node
 }: NodeDetailProps): React.JSX.Element {
+	if (node === null) {
+		return (
+			<section className="detail-grid">
+				<article className="panel detail-panel">
+					<div className="panel-heading">
+						<h2>Known public key</h2>
+						<StatusTags
+							tags={[{ label: 'public key only', tone: 'neutral' }]}
+						/>
+					</div>
+					<dl className="details">
+						<div><dt>Public key</dt><dd>{knownNode.publicKey}</dd></div>
+						<div>
+							<dt>Date discovered</dt>
+							<dd>{formatDateTime(knownNode.dateDiscovered)}</dd>
+						</div>
+						<div>
+							<dt>Last seen</dt>
+							<dd>
+								{knownNode.lastSeen
+									? formatDateTime(knownNode.lastSeen)
+									: 'Unavailable'}
+							</dd>
+						</div>
+						<div><dt>Metadata</dt><dd>No node snapshot is available.</dd></div>
+					</dl>
+				</article>
+			</section>
+		);
+	}
+
 	const organization = getOrganizationForNode(network, node);
 	const archiveErrors = getArchiveErrors(historyArchiveScan);
 	const archiveVerificationErrors = getArchiveVerificationErrors(archiveErrors);
