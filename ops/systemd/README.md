@@ -16,11 +16,13 @@ that all run as `observe`, not root.
 - `stellaratlas-network-scanner.service` runs the network scanner.
 - `stellaratlas-scp-live-scanner.service` continuously indexes live SCP
   observations into the live search read model.
-- `stellaratlas-history-scanner@.service` runs a bounded history-scanner
-  process cluster. The production template sets `HISTORY_SCAN_PROCESSES=24`,
-  `HISTORY_MAX_REQUESTS=24`, and `HISTORY_HASHER_WORKERS=24`; the cluster wrapper
-  partitions those totals across child processes and forces each child to one
-  scanner loop.
+- `stellaratlas-history-scanner@.service` runs a bounded history-scanner process
+  cluster. The production template sets `HISTORY_SCAN_PROCESSES=24`,
+  `HISTORY_MAX_REQUESTS=24`, and `HISTORY_HASHER_WORKERS=24`; the cluster
+  wrapper partitions those totals across child processes and forces each child
+  to one scanner loop. The service command repeats those caps through
+  `/usr/bin/env` so stale values in `/etc/stellaratlas/stellaratlas.env` cannot
+  turn the production template back into a single-process scanner.
 - `stellaratlas-users.service` runs the user/mail service.
 
 `10-stellaratlas-observe.rules` lets the `observe` user start, stop, restart,
@@ -32,9 +34,9 @@ Install or migrate deliberately:
 sudo ./setup-systemd.sh
 ```
 
-The script installs the split units, installs the polkit rule, disables and masks
-the old root-run all-in-one `stellaratlas.service`, reloads systemd, and starts
-`stellaratlas.target`.
+The script installs the split units, installs the polkit rule, disables and
+masks the old root-run all-in-one `stellaratlas.service`, reloads systemd, and
+starts `stellaratlas.target`.
 
 Production frontend deploy:
 
