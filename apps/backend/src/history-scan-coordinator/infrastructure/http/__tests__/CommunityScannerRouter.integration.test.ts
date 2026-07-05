@@ -269,9 +269,13 @@ describe('CommunityScannerRouter.integration', () => {
 				.set('Authorization', 'Bearer satlas_scanner_secret')
 				.expect(204);
 
-			expect(touchScanJob.execute).toHaveBeenCalledWith(remoteId, {
-				communityScannerId: scannerId
-			});
+			expect(touchScanJob.execute).toHaveBeenCalledWith(
+				remoteId,
+				{
+					communityScannerId: scannerId
+				},
+				{}
+			);
 		});
 
 		it('should return 404 when the job is not owned and active', async () => {

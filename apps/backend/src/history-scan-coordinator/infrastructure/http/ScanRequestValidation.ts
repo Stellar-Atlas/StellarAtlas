@@ -1,10 +1,16 @@
 import express from 'express';
 import { body, validationResult } from 'express-validator';
 import {
+	isArchiveMetadataDTO,
 	isScanErrorTypeDTO,
 	isScanEvidenceDTO,
 	ScanDTO
 } from 'history-scanner-dto';
+import type { ScanJobProgressUpdate } from '../../domain/ScanJobRepository.js';
+
+type MutableScanJobProgressUpdate = {
+	-readonly [Key in keyof ScanJobProgressUpdate]: ScanJobProgressUpdate[Key];
+};
 
 export function requireObjectBody(
 	req: express.Request,
@@ -74,6 +80,9 @@ export const scanDtoValidators = [
 		.withMessage('evidence must be an array'),
 	body('evidence.*').custom((value) => {
 		return isScanEvidenceDTO(value);
+	}),
+	body('archiveMetadata').optional().custom((value) => {
+		return isArchiveMetadataDTO(value);
 	})
 ];
 
@@ -96,6 +105,67 @@ export function parseValidatedScanDto(
 	return dto.value;
 }
 
+export function parseScanJobProgressUpdate(
+	req: express.Request,
+	res: express.Response
+): ScanJobProgressUpdate | null {
+	const body = req.body;
+	if (body === undefined) return {};
+	if (!isRecord(body)) {
+		res.status(400).json({ error: 'Request body must be an object' });
+		return null;
+	}
+
+	const progress: MutableScanJobProgressUpdate = {};
+	const concurrency = readOptionalInteger(body, 'concurrency', 1);
+	const fromLedger = readOptionalInteger(body, 'fromLedger', 0);
+	const toLedger = readOptionalNullableInteger(body, 'toLedger', 0);
+	const latestScannedLedger = readOptionalInteger(
+		body,
+		'latestScannedLedger',
+		0
+	);
+	const latestScannedLedgerHeaderHash = readOptionalNullableString(
+		body,
+		'latestScannedLedgerHeaderHash'
+	);
+	const invalidField = [
+		concurrency,
+		fromLedger,
+		toLedger,
+		latestScannedLedger,
+		latestScannedLedgerHeaderHash
+	].find((value) => value instanceof Error);
+	if (invalidField instanceof Error) {
+		res.status(400).json({ error: invalidField.message });
+		return null;
+	}
+
+	if (concurrency !== undefined && !(concurrency instanceof Error)) {
+		progress.concurrency = concurrency;
+	}
+	if (fromLedger !== undefined && !(fromLedger instanceof Error)) {
+		progress.fromLedger = fromLedger;
+	}
+	if (toLedger !== undefined && !(toLedger instanceof Error)) {
+		progress.toLedger = toLedger;
+	}
+	if (
+		latestScannedLedger !== undefined &&
+		!(latestScannedLedger instanceof Error)
+	) {
+		progress.latestScannedLedger = latestScannedLedger;
+	}
+	if (
+		latestScannedLedgerHeaderHash !== undefined &&
+		!(latestScannedLedgerHeaderHash instanceof Error)
+	) {
+		progress.latestScannedLedgerHeaderHash = latestScannedLedgerHeaderHash;
+	}
+
+	return progress;
+}
+
 function isValidScanErrorPayload(value: unknown): boolean {
 	if (typeof value !== 'object' || value === null) return false;
 
@@ -105,4 +175,52 @@ function isValidScanErrorPayload(value: unknown): boolean {
 		typeof candidate.url === 'string' &&
 		typeof candidate.message === 'string'
 	);
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+	return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function readOptionalInteger(
+	body: Record<string, unknown>,
+	field: string,
+	minimum: number
+): number | undefined | Error {
+	const value = body[field];
+	if (value === undefined) return undefined;
+	if (typeof value === 'number' && Number.isInteger(value) && value >= minimum) {
+		return value;
+	}
+
+	return new Error(
+		`${field} must be an integer greater than or equal to ${minimum}`
+	);
+}
+
+function readOptionalNullableInteger(
+	body: Record<string, unknown>,
+	field: string,
+	minimum: number
+): number | null | undefined | Error {
+	const value = body[field];
+	if (value === undefined) return undefined;
+	if (value === null) return null;
+	if (typeof value === 'number' && Number.isInteger(value) && value >= minimum) {
+		return value;
+	}
+
+	return new Error(
+		`${field} must be null or an integer greater than or equal to ${minimum}`
+	);
+}
+
+function readOptionalNullableString(
+	body: Record<string, unknown>,
+	field: string
+): string | null | undefined | Error {
+	const value = body[field];
+	if (value === undefined) return undefined;
+	if (value === null || typeof value === 'string') return value;
+
+	return new Error(`${field} must be null or a string`);
 }

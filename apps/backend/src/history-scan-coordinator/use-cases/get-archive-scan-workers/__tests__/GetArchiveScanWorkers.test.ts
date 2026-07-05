@@ -50,11 +50,24 @@ describe('GetArchiveScanWorkers', () => {
 		staleJob.createdAt = new Date('2026-07-03T10:00:00.000Z');
 		staleJob.claimedAt = new Date('2026-07-03T10:30:00.000Z');
 		staleJob.updatedAt = new Date('2026-07-03T11:00:00.000Z');
+		const startingJob = new ScanJob(
+			'https://starting.example',
+			0,
+			null,
+			null,
+			null,
+			null,
+			null
+		);
+		startingJob.status = 'TAKEN';
+		startingJob.createdAt = new Date('2026-07-03T11:10:00.000Z');
+		startingJob.claimedAt = new Date('2026-07-03T11:35:00.000Z');
+		startingJob.updatedAt = new Date('2026-07-03T11:50:00.000Z');
 		scanJobRepositoryMock.getTakenJobsSnapshot.mockResolvedValue({
-			activeTakenJobs: 1,
+			activeTakenJobs: 2,
 			staleTakenJobs: 1,
-			totalTakenJobs: 2,
-			jobs: [staleJob, activeJob]
+			totalTakenJobs: 3,
+			jobs: [staleJob, activeJob, startingJob]
 		});
 
 		const result = await getArchiveScanWorkers.execute();
@@ -63,9 +76,9 @@ describe('GetArchiveScanWorkers', () => {
 		expect(result._unsafeUnwrap()).toEqual({
 			generatedAt: '2026-07-03T12:00:00.000Z',
 			staleJobAgeMs: 1800000,
-			activeWorkers: 1,
+			activeWorkers: 2,
 			staleWorkers: 1,
-			totalTakenJobs: 2,
+			totalTakenJobs: 3,
 			workers: [
 				{
 					archiveUrl: 'https://stale.example',
@@ -88,6 +101,17 @@ describe('GetArchiveScanWorkers', () => {
 					toLedger: 99,
 					latestScannedLedger: 10,
 					concurrency: 24
+				},
+				{
+					archiveUrl: 'https://starting.example',
+					status: 'starting',
+					claimedAt: '2026-07-03T11:35:00.000Z',
+					lastHeartbeatAt: '2026-07-03T11:50:00.000Z',
+					heartbeatAgeMs: 600000,
+					fromLedger: 0,
+					toLedger: null,
+					latestScannedLedger: 0,
+					concurrency: null
 				}
 			]
 		});

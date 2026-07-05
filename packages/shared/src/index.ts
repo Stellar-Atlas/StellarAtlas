@@ -20,6 +20,7 @@ export { OrganizationSnapShot } from './organization-snap-shot.js';
 export { NodeSnapShot } from './node-snap-shot.js';
 export {
 	HistoryArchiveScan,
+	type HistoryArchiveMetadata,
 	type HistoryArchiveScanError
 } from './history-archive-scan.js';
 export { TransitiveQuorumSetFinder } from './transitive-quorum-set-finder.js';
@@ -34,9 +35,11 @@ export {
 export { type NodeV1, NodeV1Schema } from './dto/node-v1.js';
 export {
 	type OrganizationV1,
+	type OrganizationStellarTomlV1,
 	OrganizationV1Schema
 } from './dto/organization-v1.js';
 export {
+	type HistoryArchiveMetadataV1,
 	type HistoryArchiveScanV1,
 	HistoryArchiveScanV1Schema
 } from './dto/history-archive-scan-v1.js';

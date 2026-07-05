@@ -7,7 +7,7 @@ import {
 	mapScanErrorToDetails,
 	type ScanErrorDetails
 } from './ScanErrorDetails.js';
-import type { ScanEvidenceDTO } from 'history-scanner-dto';
+import type { ArchiveMetadataDTO, ScanEvidenceDTO } from 'history-scanner-dto';
 
 /**
  * Used to represent a chain of scans for a history url.
@@ -62,6 +62,9 @@ export class Scan extends CoreEntity {
 	@Column('jsonb', { nullable: false, default: () => "'[]'::jsonb" })
 	public readonly errors: readonly ScanErrorDetails[] = [];
 
+	@Column('jsonb', { nullable: true })
+	public readonly archiveMetadata: ArchiveMetadataDTO | null = null;
+
 	public readonly evidence: readonly ScanEvidenceDTO[] = [];
 
 	constructor(
@@ -79,7 +82,8 @@ export class Scan extends CoreEntity {
 		errors: readonly ScanError[] = [],
 		communityScannerId: string | null = null,
 		scanJobRemoteId: string | null = null,
-		evidence: readonly ScanEvidenceDTO[] = []
+		evidence: readonly ScanEvidenceDTO[] = [],
+		archiveMetadata: ArchiveMetadataDTO | null = null
 	) {
 		super();
 		const scanErrors = errors.length > 0 ? errors : error ? [error] : [];
@@ -94,6 +98,7 @@ export class Scan extends CoreEntity {
 		this.error = error ?? scanErrors[0] ?? null;
 		this.errors = scanErrors.map(mapScanErrorToDetails);
 		this.evidence = evidence;
+		this.archiveMetadata = archiveMetadata;
 		this.latestScannedLedger = latestScannedLedger;
 		this.latestScannedLedgerHeaderHash = latestScannedLedgerHeaderHash;
 		this.communityScannerId = communityScannerId;

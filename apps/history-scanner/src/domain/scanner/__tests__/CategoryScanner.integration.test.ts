@@ -102,6 +102,7 @@ describe('scan HAS files', () => {
 
 it('should verify  other categories', async function () {
 	const result = await getOtherCategoriesVerifyResult(false);
+	if (result.isErr()) throw result.error;
 	expect(result.isOk()).toBeTruthy();
 });
 
@@ -139,6 +140,7 @@ it('should not verify passed previous ledger headers (from a previous scan)', as
 		ledger: 556799,
 		hash: 'ev0m5kh9gybsCHkLBXJKex/KXL072Zl1NV4XTP92mtE='
 	});
+	if (result.isErr()) throw result.error;
 	expect(result.isOk()).toBeTruthy();
 });
 
@@ -186,7 +188,10 @@ it('should find latest ledger', async function () {
 	);
 	expect(result.isOk()).toBeTruthy();
 	if (result.isErr()) throw result.error;
-	expect(result.value).toEqual(43624895);
+	expect(result.value.ledger).toEqual(43624895);
+	expect(result.value.archiveMetadata.stellarHistory.currentLedger).toEqual(
+		43624895
+	);
 });
 
 function getMockedCategoryScanner(testEmptyFile: boolean) {

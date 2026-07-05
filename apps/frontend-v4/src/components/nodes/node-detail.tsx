@@ -5,7 +5,8 @@ import type {
 	PublicHistoryArchiveScanLogEntry,
 	PublicKnownNode,
 	PublicNetwork,
-	PublicNode
+	PublicNode,
+	PublicOrganization
 } from '../../api/types';
 import {
 	getNodeLabel,
@@ -25,9 +26,7 @@ import {
 	formatNode30DayValidating
 } from '../../domain/availability';
 import {
-	getArchiveVerificationErrors,
-	getWorkerIssues,
-	scanLogHasWorkerIssue
+	getArchiveVerificationErrors
 } from '../../domain/history-archive';
 import { StatusTags } from '../status-tags';
 import { HistoryArchiveScanLog } from './history-archive-scan-log';
@@ -39,6 +38,7 @@ interface NodeDetailProps {
 	knownNode: PublicKnownNode;
 	network: PublicNetwork;
 	node: PublicNode | null;
+	organization: PublicOrganization | null;
 }
 
 export function NodeDetail({
@@ -47,7 +47,8 @@ export function NodeDetail({
 	historyArchiveScanLogs,
 	knownNode,
 	network,
-	node
+	node,
+	organization: routeOrganization
 }: NodeDetailProps): React.JSX.Element {
 	if (node === null) {
 		return (
@@ -86,13 +87,13 @@ export function NodeDetail({
 		);
 	}
 
-	const organization = getOrganizationForNode(network, node);
+	const organization = routeOrganization ?? getOrganizationForNode(network, node);
 	const archiveErrors = getArchiveErrors(historyArchiveScan);
 	const archiveVerificationErrors = getArchiveVerificationErrors(archiveErrors);
-	const workerIssues = getWorkerIssues(archiveErrors);
-	const latestArchiveRun = historyArchiveScanLogs[0] ?? null;
-	const latestRunHasWorkerIssue =
-		latestArchiveRun !== null && scanLogHasWorkerIssue(latestArchiveRun);
+	const latestArchiveRun =
+		historyArchiveScanLogs.find((entry) => entry.status !== 'queued') ??
+		historyArchiveScanLogs[0] ??
+		null;
 	const active24Hours = formatNode24HourActive(node);
 	const active30Days = formatNode30DayActive(node);
 	const validating24Hours = formatNode24HourValidating(node);
@@ -103,7 +104,6 @@ export function NodeDetail({
 		hasHistoryArchive ||
 		node.historyArchiveHasError ||
 		archiveVerificationErrors.length > 0 ||
-		workerIssues.length > 0 ||
 		historyArchiveScan !== null ||
 		historyArchiveScanLogs.length > 0;
 
@@ -248,16 +248,6 @@ export function NodeDetail({
 										: 'No archive verification errors'}
 								</dd>
 							</div>
-							<div>
-								<dt>Worker status</dt>
-								<dd>
-									{latestRunHasWorkerIssue
-										? 'Worker issue in latest run'
-										: latestArchiveRun
-											? 'No worker issue in latest run'
-											: 'No recent scanner run'}
-								</dd>
-							</div>
 						</dl>
 					) : (
 						<p className="muted-copy">
@@ -265,25 +255,15 @@ export function NodeDetail({
 						</p>
 					)}
 					{archiveVerificationErrors.length > 0 ? (
-						<ul className="archive-error-list">
-							{archiveVerificationErrors.map((error, index) => (
-								<li
-									key={`${error.type}:${error.url}:${error.message}:${index}`}
-								>
-									<a href={error.url} rel="noopener noreferrer" target="_blank">
-										{error.url}
-									</a>
-									<span>{error.message}</span>
-								</li>
-							))}
-						</ul>
-					) : null}
-					{latestRunHasWorkerIssue ? (
 						<p className="muted-copy">
-							The latest scanner run had a worker issue. Archive evidence is
-							tracked separately from scanner setup and transport failures.
+							Archive verification errors are listed in the scan run log.
 						</p>
 					) : null}
+					<ArchiveMetadata
+						historyArchiveScan={historyArchiveScan}
+						node={node}
+						organization={organization}
+					/>
 					<ArchiveBucketEvidence evidence={historyArchiveEvidence} />
 					<div className="archive-log-section">
 						<div className="panel-heading archive-log-heading">
@@ -295,6 +275,116 @@ export function NodeDetail({
 			)}
 		</section>
 	);
+}
+
+function ArchiveMetadata({
+	historyArchiveScan,
+	node,
+	organization
+}: {
+	readonly historyArchiveScan: PublicHistoryArchiveScan | null;
+	readonly node: PublicNode;
+	readonly organization: PublicOrganization | null;
+}): React.JSX.Element {
+	const archiveMetadata = historyArchiveScan?.archiveMetadata ?? null;
+	const homeDomain = organization?.homeDomain ?? node.homeDomain;
+	const stellarHistoryUrl = archiveMetadata?.stellarHistoryUrl ?? buildHistoryUrl(
+		node.historyUrl
+	);
+	const stellarTomlUrl =
+		organization?.stellarToml?.url ??
+		(homeDomain === null
+			? null
+			: `https://${homeDomain}/.well-known/stellar.toml`);
+
+	if (stellarHistoryUrl === null && stellarTomlUrl === null) {
+		return (
+			<div className="archive-log-section">
+				<div className="panel-heading archive-log-heading">
+					<h3>Archive metadata</h3>
+				</div>
+				<p className="muted-copy">No archive or TOML metadata URL is known.</p>
+			</div>
+		);
+	}
+
+	return (
+		<div className="archive-log-section archive-metadata">
+			<div className="panel-heading archive-log-heading">
+				<h3>Archive metadata</h3>
+			</div>
+			<MetadataDocument
+				label="stellar-history.json"
+				missingCopy="No scanner-captured stellar-history.json is available yet."
+				text={
+					archiveMetadata === null
+						? null
+						: formatPersistedJson(archiveMetadata.stellarHistory)
+				}
+				url={stellarHistoryUrl}
+			/>
+			<MetadataDocument
+				label="stellar.toml"
+				missingCopy={formatTomlMissingCopy(organization)}
+				text={getPersistedTomlText(organization)}
+				url={stellarTomlUrl}
+			/>
+		</div>
+	);
+}
+
+function MetadataDocument({
+	label,
+	missingCopy,
+	text,
+	url
+}: {
+	readonly label: string;
+	readonly missingCopy: string;
+	readonly text: string | null;
+	readonly url: string | null;
+}): React.JSX.Element {
+	return (
+		<details className="metadata-document" open>
+			<summary>
+				<span>{label}</span>
+				{url ? (
+					<a href={url} rel="noopener noreferrer" target="_blank">
+						{url}
+					</a>
+				) : (
+					<span className="muted-inline">No URL</span>
+				)}
+			</summary>
+			{text ? <pre>{text}</pre> : <p className="muted-copy">{missingCopy}</p>}
+		</details>
+	);
+}
+
+function buildHistoryUrl(historyUrl: string | null): string | null {
+	if (historyUrl === null) return null;
+	const withSlash = historyUrl.endsWith('/') ? historyUrl : `${historyUrl}/`;
+	return new URL('.well-known/stellar-history.json', withSlash).toString();
+}
+
+function formatPersistedJson(value: unknown): string {
+	return JSON.stringify(value, null, 2);
+}
+
+function getPersistedTomlText(
+	organization: PublicOrganization | null
+): string | null {
+	return organization?.stellarToml?.content ?? null;
+}
+
+function formatTomlMissingCopy(
+	organization: PublicOrganization | null
+): string {
+	if (organization === null) {
+		return 'No organization is assigned, so no persisted stellar.toml is available.';
+	}
+
+	return `No scanner-captured stellar.toml text is available yet. Current TOML state is ${organization.tomlState}.`;
 }
 
 function ArchiveBucketEvidence({

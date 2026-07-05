@@ -43,6 +43,7 @@ describe('RESTScanCoordinatorService Integration Tests', () => {
 				false,
 				scanError,
 				[scanError],
+				[],
 				'remote-id'
 			);
 
@@ -100,6 +101,7 @@ describe('RESTScanCoordinatorService Integration Tests', () => {
 				5,
 				false,
 				null,
+				[],
 				[],
 				'82a309de-a5df-457b-9412-f267ed5e7388'
 			);
@@ -342,6 +344,43 @@ describe('RESTScanCoordinatorService Integration Tests', () => {
 					`${baseUrl}/v1/history-scan/job/82a309de-a5df-457b-9412-f267ed5e7388/heartbeat`
 				)._unsafeUnwrap(),
 				{},
+				{
+					auth: {
+						username,
+						password: secret
+					}
+				}
+			);
+		});
+
+		it('should send scan job progress with heartbeat', async () => {
+			const progress = {
+				concurrency: 12,
+				fromLedger: 64,
+				toLedger: 128,
+				latestScannedLedger: 63,
+				latestScannedLedgerHeaderHash: 'hash'
+			};
+			httpService.post.mockResolvedValue(
+				ok({
+					status: 204,
+					data: null,
+					headers: {},
+					statusText: 'No Content'
+				})
+			);
+
+			const result = await service.touchScanJob(
+				'82a309de-a5df-457b-9412-f267ed5e7388',
+				progress
+			);
+
+			expect(result.isOk()).toBe(true);
+			expect(httpService.post).toHaveBeenCalledWith(
+				Url.create(
+					`${baseUrl}/v1/history-scan/job/82a309de-a5df-457b-9412-f267ed5e7388/heartbeat`
+				)._unsafeUnwrap(),
+				progress,
 				{
 					auth: {
 						username,

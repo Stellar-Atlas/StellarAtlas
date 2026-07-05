@@ -5,9 +5,7 @@ import type { PublicHistoryArchiveScanLogEntry } from '../../api/types';
 import { formatDateTime, formatInteger } from '../../format/formatters';
 import {
 	getArchiveVerificationErrors,
-	getWorkerIssues,
 	scanLogHasArchiveVerificationError,
-	scanLogHasWorkerIssue,
 	scanLogIsActive
 } from '../../domain/history-archive';
 
@@ -15,7 +13,7 @@ interface HistoryArchiveScanLogProps {
 	readonly logs: readonly PublicHistoryArchiveScanLogEntry[];
 }
 
-type ScanLogFilter = 'archive-errors' | 'worker-issues' | 'successful' | 'all';
+type ScanLogFilter = 'archive-errors' | 'successful' | 'all';
 
 export function HistoryArchiveScanLog({
 	logs
@@ -27,7 +25,6 @@ export function HistoryArchiveScanLog({
 				if (filter === 'archive-errors') {
 					return scanLogHasArchiveVerificationError(entry);
 				}
-				if (filter === 'worker-issues') return scanLogHasWorkerIssue(entry);
 				if (filter === 'successful') return scanLogIsSuccessfulRun(entry);
 
 				return true;
@@ -37,7 +34,6 @@ export function HistoryArchiveScanLog({
 	const archiveErrorCount = logs.filter(
 		scanLogHasArchiveVerificationError
 	).length;
-	const workerIssueCount = logs.filter(scanLogHasWorkerIssue).length;
 	const successfulRunCount = logs.filter(scanLogIsSuccessfulRun).length;
 	const activeCount = logs.filter(scanLogIsActive).length;
 
@@ -57,7 +53,6 @@ export function HistoryArchiveScanLog({
 						{' '}
 						/ {formatInteger(activeCount)} active /{' '}
 						{formatInteger(archiveErrorCount)} archive errors /{' '}
-						{formatInteger(workerIssueCount)} worker issues /{' '}
 						{formatInteger(successfulRunCount)} successful runs
 					</span>
 				</div>
@@ -68,13 +63,6 @@ export function HistoryArchiveScanLog({
 						type="button"
 					>
 						Archive errors
-					</button>
-					<button
-						className={filter === 'worker-issues' ? 'active' : ''}
-						onClick={() => setFilter('worker-issues')}
-						type="button"
-					>
-						Worker issues
 					</button>
 					<button
 						className={filter === 'successful' ? 'active' : ''}
@@ -93,17 +81,13 @@ export function HistoryArchiveScanLog({
 				</div>
 			</div>
 			{filteredLogs.length === 0 ? (
-				<p className="muted-copy">
-					No archive scan runs match the current filter.
-				</p>
+				<p className="muted-copy">{getEmptyFilterMessage(filter)}</p>
 			) : (
 				<ul className="archive-scan-log-list">
 					{filteredLogs.map((entry) => {
 						const isActive = scanLogIsActive(entry);
 						const archiveErrors = getArchiveVerificationErrors(entry.errors);
-						const workerIssues = getWorkerIssues(entry.errors);
 						const hasArchiveErrors = archiveErrors.length > 0;
-						const hasWorkerIssues = workerIssues.length > 0;
 						let rowTone = 'is-success';
 						let rowTitle = 'No archive errors';
 						let rowTag = 'success';
@@ -111,30 +95,24 @@ export function HistoryArchiveScanLog({
 						if (isActive) {
 							rowTone = 'is-active';
 							rowTitle =
-								entry.status === 'scanning' ? 'Scanning now' : 'Queued scan';
+								entry.status === 'scanning'
+									? 'Scanning now'
+									: 'Pending scan';
 							rowTag = entry.status;
 						} else if (hasArchiveErrors) {
 							rowTone = 'has-error';
-							rowTitle = hasWorkerIssues
-								? 'Archive and worker issues'
-								: 'Archive verification errors';
-							rowTag = hasWorkerIssues ? 'archive + worker' : 'archive error';
+							rowTitle = 'Archive verification errors';
+							rowTag = 'archive error';
 						} else if (entry.status === 'stale') {
-							rowTone = 'has-error';
-							rowTitle = 'Stale scanner job';
-							rowTag = 'worker issue';
-						} else if (hasWorkerIssues) {
-							rowTone = 'has-error';
-							rowTitle = 'Worker issues';
-							rowTag = 'worker issue';
+							rowTone = 'is-active';
+							rowTitle = 'Scanner delayed';
+							rowTag = 'delayed';
 						}
 
 						const rowErrors =
 							filter === 'archive-errors'
 								? archiveErrors
-								: filter === 'worker-issues'
-									? workerIssues
-									: [...archiveErrors, ...workerIssues];
+								: archiveErrors;
 
 						return (
 							<li
@@ -159,20 +137,15 @@ export function HistoryArchiveScanLog({
 									</div>
 									<div>
 										<dt>Range</dt>
-										<dd>
-											{formatInteger(entry.fromLedger)} -{' '}
-											{entry.toLedger === null
-												? 'latest'
-												: formatInteger(entry.toLedger)}
-										</dd>
+										<dd>{formatRange(entry)}</dd>
 									</div>
 									<div>
 										<dt>Concurrency</dt>
-										<dd>{formatInteger(entry.concurrency)}</dd>
+										<dd>{formatConcurrency(entry)}</dd>
 									</div>
 									<div>
 										<dt>Duration</dt>
-										<dd>{formatDuration(entry.durationMs)}</dd>
+										<dd>{formatDuration(entry)}</dd>
 									</div>
 								</dl>
 								{rowErrors.length > 0 ? (
@@ -205,10 +178,41 @@ const scanLogIsSuccessfulRun = (
 ): boolean =>
 	entry.status === 'completed' &&
 	!scanLogIsActive(entry) &&
-	!scanLogHasArchiveVerificationError(entry) &&
-	!scanLogHasWorkerIssue(entry);
+	!scanLogHasArchiveVerificationError(entry);
 
-const formatDuration = (durationMs: number): string => {
+const getEmptyFilterMessage = (filter: ScanLogFilter): string => {
+	if (filter === 'archive-errors') {
+		return 'No current archive verification errors match this filter.';
+	}
+	if (filter === 'successful') {
+		return 'No successful completed scan runs are recorded for this archive yet.';
+	}
+
+	return 'No archive scan runs are available for this filter.';
+};
+
+const formatRange = (entry: PublicHistoryArchiveScanLogEntry): string => {
+	if (entry.status === 'queued' && entry.fromLedger === 0 && entry.toLedger === null) {
+		return 'pending';
+	}
+
+	return `${formatInteger(entry.fromLedger)} - ${
+		entry.toLedger === null ? 'latest' : formatInteger(entry.toLedger)
+	}`;
+};
+
+const formatConcurrency = (
+	entry: PublicHistoryArchiveScanLogEntry
+): string => {
+	if (entry.status === 'queued') return 'pending';
+	if (scanLogIsActive(entry) && entry.concurrency === 0) return 'starting';
+
+	return formatInteger(entry.concurrency);
+};
+
+const formatDuration = (entry: PublicHistoryArchiveScanLogEntry): string => {
+	if (entry.status === 'queued') return 'pending';
+	const durationMs = entry.durationMs;
 	if (!Number.isFinite(durationMs) || durationMs < 0) return 'Unknown';
 	if (durationMs < 1000) return `${Math.round(durationMs)} ms`;
 
@@ -227,8 +231,7 @@ const getRowTagClassName = (rowTone: string): string => {
 	return 'tag good';
 };
 
-const getErrorClassLabel = (type: string): string =>
-	type.startsWith('TYPE_VERIFICATION') ? 'Archive' : 'Worker';
+const getErrorClassLabel = (_type: string): string => 'Archive';
 
 const ErrorUrl = ({ url }: { readonly url: string }): React.JSX.Element => {
 	if (url.startsWith('http://') || url.startsWith('https://')) {

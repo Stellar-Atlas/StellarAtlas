@@ -95,7 +95,8 @@ export class ScanMapper {
 					scanErrors,
 					attribution.communityScannerId ?? null,
 					attribution.scanJobRemoteId ?? dto.scanJobRemoteId,
-					dto.evidence ?? []
+					dto.evidence ?? [],
+					dto.archiveMetadata ?? null
 				)
 			);
 		} catch (e) {

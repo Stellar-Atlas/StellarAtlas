@@ -133,6 +133,25 @@ describe('Organization', () => {
 		});
 	});
 
+	describe('stellarTomlText changes', () => {
+		test('stellarTomlText is updated', () => {
+			const organization = createOrganization();
+			organization.updateStellarTomlText(
+				'VERSION="2.0.0"',
+				new Date('2020-01-02')
+			);
+			expect(organization.stellarTomlText).toBe('VERSION="2.0.0"');
+			expect(organization.snapshotStartDate).toEqual(new Date('2020-01-02'));
+		});
+
+		test('stellarTomlText ignores null fetch results', () => {
+			const organization = createOrganization();
+			organization.updateStellarTomlText(null, new Date('2020-01-02'));
+			expect(organization.stellarTomlText).toBeNull();
+			expect(organization.snapshotStartDate).toEqual(new Date('2020-01-01'));
+		});
+	});
+
 	describe('validators changes', () => {
 		test('validators is updated', () => {
 			const organization = createOrganization();

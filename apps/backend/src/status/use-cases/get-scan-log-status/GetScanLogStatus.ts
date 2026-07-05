@@ -6,6 +6,7 @@ import { mapUnknownToError } from '@core/utilities/mapUnknownToError.js';
 import { TYPES as HISTORY_TYPES } from '@history-scan-coordinator/infrastructure/di/di-types.js';
 import type { ScanRepository } from '@history-scan-coordinator/domain/scan/ScanRepository.js';
 import type { Scan } from '@history-scan-coordinator/domain/scan/Scan.js';
+import { ScanErrorType } from '@history-scan-coordinator/domain/scan/ScanError.js';
 import { mapScanErrorToPublicDTO } from '@history-scan-coordinator/infrastructure/mappers/PublicScanErrorMapper.js';
 import type { PublicScanErrorDTO } from '@history-scan-coordinator/infrastructure/mappers/PublicScanErrorMapper.js';
 import type NetworkScan from '@network-scan/domain/network/scan/NetworkScan.js';
@@ -71,7 +72,9 @@ export class GetScanLogStatus {
 			]);
 
 			return ok({
-				archiveScans: archiveScans.map(mapArchiveScanLogEntry),
+				archiveScans: archiveScans
+					.filter(isPublicArchiveScanLogEntry)
+					.map(mapArchiveScanLogEntry),
 				generatedAt: generatedAt.toISOString(),
 				limit: safeLimit,
 				networkScans: networkScans.map(mapNetworkScanLogEntry)
@@ -101,7 +104,9 @@ function mapNetworkScanLogEntry(scan: NetworkScan): NetworkScanLogEntryDTO {
 }
 
 function mapArchiveScanLogEntry(scan: Scan): ArchiveScanLogEntryDTO {
-	const errors = scan.scanErrors.map(mapScanErrorToPublicDTO);
+	const errors = scan.scanErrors
+		.filter((error) => error.type === ScanErrorType.TYPE_VERIFICATION)
+		.map(mapScanErrorToPublicDTO);
 
 	return {
 		concurrency: scan.concurrency,
@@ -111,7 +116,7 @@ function mapArchiveScanLogEntry(scan: Scan): ArchiveScanLogEntryDTO {
 		errors,
 		fromLedger: scan.fromLedger,
 		hasArchiveVerificationError: scan.hasArchiveVerificationError(),
-		hasWorkerIssue: scan.hasWorkerIssue(),
+		hasWorkerIssue: false,
 		latestScannedLedger: scan.latestScannedLedger,
 		latestVerifiedLedger: scan.latestVerifiedLedger,
 		scanStatus: getArchiveScanStatus(scan),
@@ -121,10 +126,13 @@ function mapArchiveScanLogEntry(scan: Scan): ArchiveScanLogEntryDTO {
 	};
 }
 
+function isPublicArchiveScanLogEntry(scan: Scan): boolean {
+	return scan.concurrency > 0 || scan.hasArchiveVerificationError();
+}
+
 function getArchiveScanStatus(
 	scan: Scan
 ): ArchiveScanLogEntryDTO['scanStatus'] {
 	if (scan.hasArchiveVerificationError()) return 'archive_error';
-	if (scan.hasWorkerIssue()) return 'worker_issue';
 	return 'ok';
 }

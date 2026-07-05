@@ -36,6 +36,9 @@ describe('OrganizationScanner', function () {
 
 		expect(result.value.organizations).toHaveLength(1);
 		expect(result.value.organizations[0].name).toBe('toml');
+		expect(result.value.organizations[0].stellarTomlText).toBe(
+			'VERSION="2.0.0"'
+		);
 		expect(result.value.organizations[0].validators.value).toHaveLength(1);
 		expect(result.value.organizations[0].latestMeasurement()).toBeInstanceOf(
 			OrganizationMeasurement
@@ -169,6 +172,7 @@ describe('OrganizationScanner', function () {
 		return {
 			state: TomlState.Ok,
 			warnings: [],
+			stellarTomlText: 'VERSION="2.0.0"',
 			name: 'toml',
 			dba: 'dba',
 			github: 'github',

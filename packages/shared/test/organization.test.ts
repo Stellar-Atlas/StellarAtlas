@@ -9,6 +9,10 @@ describe('json', () => {
 	organization.homeDomain = 'homeDomain.com';
 	organization.dba = 'Organization DBA';
 	organization.tomlWarnings = ['TlsCertificateVerificationDisabled'];
+	organization.stellarToml = {
+		url: 'https://homeDomain.com/.well-known/stellar.toml',
+		content: 'VERSION="2.0.0"'
+	};
 	organization.url = 'https://www.domain.com';
 	organization.logo = 'https://www.domain.com/awesomelogo.jpg';
 	organization.description = 'Description of issuer';
@@ -53,6 +57,10 @@ describe('json', () => {
 	organizationObject.dateDiscovered = dateDiscovered.toISOString();
 	organizationObject.tomlState = 'Unknown';
 	organizationObject.tomlWarnings = ['TlsCertificateVerificationDisabled'];
+	organizationObject.stellarToml = {
+		url: 'https://homeDomain.com/.well-known/stellar.toml',
+		content: 'VERSION="2.0.0"'
+	};
 
 	test('OrgToJson', () => {
 		expect(JSON.parse(JSON.stringify(organization))).toEqual(

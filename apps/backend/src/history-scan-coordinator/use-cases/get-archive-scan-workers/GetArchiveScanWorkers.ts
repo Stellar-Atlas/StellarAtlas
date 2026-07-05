@@ -11,7 +11,7 @@ import {
 } from '../../domain/ScanJobStaleness.js';
 import { TYPES } from '../../infrastructure/di/di-types.js';
 
-export type ArchiveScanWorkerStatus = 'scanning' | 'stale';
+export type ArchiveScanWorkerStatus = 'scanning' | 'starting' | 'stale';
 
 export interface ArchiveScanWorkerDTO {
 	readonly archiveUrl: string;
@@ -22,7 +22,7 @@ export interface ArchiveScanWorkerDTO {
 	readonly fromLedger: number;
 	readonly toLedger: number | null;
 	readonly latestScannedLedger: number;
-	readonly concurrency: number;
+	readonly concurrency: number | null;
 }
 
 export interface ArchiveScanWorkersDTO {
@@ -82,7 +82,7 @@ export class GetArchiveScanWorkers {
 
 		return {
 			archiveUrl: job.url,
-			status: lastHeartbeatAt < staleCutoff ? 'stale' : 'scanning',
+			status: this.mapWorkerStatus(job, lastHeartbeatAt, staleCutoff),
 			claimedAt: claimedAt.toISOString(),
 			lastHeartbeatAt: lastHeartbeatAt.toISOString(),
 			heartbeatAgeMs: Math.max(
@@ -98,9 +98,19 @@ export class GetArchiveScanWorkers {
 		};
 	}
 
-	private mapVisibleConcurrency(concurrency: number | null): number {
-		if (concurrency === null) return 0;
+	private mapVisibleConcurrency(concurrency: number | null): number | null {
+		if (concurrency === null) return null;
 
 		return Math.min(concurrency, GetArchiveScanWorkers.maxVisibleConcurrency);
+	}
+
+	private mapWorkerStatus(
+		job: ScanJob,
+		lastHeartbeatAt: Date,
+		staleCutoff: Date
+	): ArchiveScanWorkerStatus {
+		if (lastHeartbeatAt < staleCutoff) return 'stale';
+		if (job.concurrency === null || job.concurrency <= 0) return 'starting';
+		return 'scanning';
 	}
 }

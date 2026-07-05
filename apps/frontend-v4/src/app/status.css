@@ -13,6 +13,10 @@
 	grid-column: 1 / -1;
 }
 
+.status-current-jobs-panel {
+	grid-column: 1 / -1;
+}
+
 .status-scan-log-panel {
 	grid-column: 1 / -1;
 }
@@ -115,4 +119,50 @@
 	background: #fde9ea;
 	border-color: #efbdc0;
 	color: #9e3037;
+}
+
+.status-current-jobs {
+	display: grid;
+}
+
+.status-current-job,
+.status-current-empty {
+	align-items: center;
+	border-block-end: 1px solid var(--border);
+	display: grid;
+	gap: 16px;
+	grid-template-columns: minmax(0, 1fr) minmax(180px, 0.7fr) auto;
+	min-block-size: 72px;
+	padding: 14px 18px;
+}
+
+.status-current-job:last-child,
+.status-current-empty:last-child {
+	border-block-end: 0;
+}
+
+.status-current-empty {
+	grid-template-columns: minmax(0, 1fr);
+}
+
+.status-current-job strong,
+.status-current-job small,
+.status-current-job-meta,
+.status-current-empty strong,
+.status-current-empty small {
+	display: block;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.status-current-job small,
+.status-current-empty small {
+	color: var(--muted);
+	margin-block-start: 4px;
+}
+
+.status-current-job-meta {
+	font-weight: 800;
+	text-align: right;
 }

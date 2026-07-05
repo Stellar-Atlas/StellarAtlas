@@ -7,7 +7,7 @@ import {
 import { mapScanToHistoryArchiveScan } from '../mapScanToHistoryArchiveScan.js';
 
 describe('mapScanToHistoryArchiveScan', () => {
-	it('returns all stored scan errors', () => {
+	it('returns stored archive verification errors', () => {
 		const baseUrl = Url.create('https://history.example.com');
 		if (baseUrl.isErr()) throw baseUrl.error;
 
@@ -46,11 +46,6 @@ describe('mapScanToHistoryArchiveScan', () => {
 				message: verificationError.message,
 				type: 'TYPE_VERIFICATION',
 				url: verificationError.url
-			},
-			{
-				message: connectionError.message,
-				type: 'TYPE_CONNECTION',
-				url: connectionError.url
 			}
 		]);
 	});
@@ -84,16 +79,10 @@ describe('mapScanToHistoryArchiveScan', () => {
 		expect(dto.hasError).toBe(false);
 		expect(dto.errorUrl).toBeNull();
 		expect(dto.errorMessage).toBeNull();
-		expect(dto.errors).toEqual([
-			{
-				message: connectionError.message,
-				type: 'TYPE_CONNECTION',
-				url: connectionError.url
-			}
-		]);
+		expect(dto.errors).toEqual([]);
 	});
 
-	it('redacts local worker paths from public worker issue messages', () => {
+	it('omits local worker paths from public scan errors', () => {
 		const baseUrl = Url.create('https://history.example.com');
 		if (baseUrl.isErr()) throw baseUrl.error;
 
@@ -119,10 +108,6 @@ describe('mapScanToHistoryArchiveScan', () => {
 
 		const dto = mapScanToHistoryArchiveScan(scan);
 
-		expect(dto.errors[0]).toEqual({
-			message: 'EACCES: permission denied, mkdir [history bucket cache path]',
-			type: 'TYPE_CONNECTION',
-			url: connectionError.url
-		});
+		expect(dto.errors).toEqual([]);
 	});
 });

@@ -30,6 +30,9 @@ describe('OrganizationScan', () => {
 			expect(result.isOk()).toBe(true);
 			if (result.isErr()) throw result.error;
 			expect(result.value).toHaveLength(0);
+			expect(organizationScan.organizations[0].stellarTomlText).toBe(
+				tomlInfo.stellarTomlText
+			);
 			assertOrganization(
 				organizationScan.organizations[0],
 				tomlInfo,
@@ -290,11 +293,12 @@ describe('OrganizationScan', () => {
 		});
 
 		function createOrganizationTomlInfoWithNullValues(): OrganizationTomlInfo {
-			return {
-				state: TomlState.Ok,
-				warnings: [],
-				horizonUrl: null,
-				url: null,
+				return {
+					state: TomlState.Ok,
+					warnings: [],
+					stellarTomlText: 'VERSION="2.0.0"',
+					horizonUrl: null,
+					url: null,
 				name: null,
 				keybase: null,
 				dba: null,
@@ -309,10 +313,11 @@ describe('OrganizationScan', () => {
 		}
 
 		function createTomlInfo(nodeScan: NodeScan) {
-			const tomlInfo: OrganizationTomlInfo = {
-				state: TomlState.Ok,
-				warnings: [],
-				horizonUrl: 'https://horizon.stellar.org',
+				const tomlInfo: OrganizationTomlInfo = {
+					state: TomlState.Ok,
+					warnings: [],
+					stellarTomlText: 'VERSION="2.0.0"',
+					horizonUrl: 'https://horizon.stellar.org',
 				url: 'https://stellar.org',
 				name: 'Stellar',
 				keybase: 'keybase',

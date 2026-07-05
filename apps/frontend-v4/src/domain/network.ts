@@ -41,8 +41,8 @@ export const getNodeTags = (node: PublicNode): NodeTag[] => {
 		tags.push({ label: 'version', tone: 'warning' });
 	if (node.overLoaded)
 		tags.push({
-			label: 'ERR_LOAD observed',
-			title: 'Crawler observed Stellar ERR_LOAD from this node',
+			label: 'load limited',
+			title: 'The latest crawl saw this node reject an overlay connection because it was busy',
 			tone: 'warning'
 		});
 

@@ -130,6 +130,7 @@ describe('tomlService', () => {
 			if (tomlResult.isErr()) return;
 			expect(tomlResult.value).toEqual({
 				tomlObject: tomlV2Object,
+				tomlText: tomlV2String,
 				warnings: []
 			});
 		});
@@ -143,6 +144,7 @@ describe('tomlService', () => {
 			expect(toml.size).toEqual(1);
 			expect(toml.get('my-domain.com')).toEqual({
 				tomlObject: tomlV2Object,
+				tomlText: tomlV2String,
 				warnings: []
 			});
 		});
@@ -163,6 +165,7 @@ describe('tomlService', () => {
 			if (tomlResult.isErr()) return;
 			expect(tomlResult.value).toEqual({
 				tomlObject: tomlV2Object,
+				tomlText: tomlV2String,
 				warnings: ['TlsCertificateVerificationDisabled']
 			});
 			expect(httpService.get).toHaveBeenCalledTimes(3);
@@ -204,6 +207,8 @@ describe('tomlService', () => {
 			);
 			const result = await mockedTomlService.fetchToml('home.com');
 			expect(result.isErr()).toBeTruthy();
+			if (result.isOk()) return;
+			expect(result.error.tomlText).toBe('<html lang="en"></html>');
 		});
 
 		it('should return error if toml file not present', async () => {

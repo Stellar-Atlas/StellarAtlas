@@ -31,13 +31,17 @@ const tlsCertificateErrorCodes = new Set([
 ]);
 
 export class TomlParseError extends CustomError {
-	constructor(public cause: Error) {
+	constructor(
+		public cause: Error,
+		public readonly tomlText: string | null = null
+	) {
 		super('Failed to parse toml', TomlParseError.name, cause);
 	}
 }
 
 export interface TomlFetchSuccess {
 	tomlObject: Record<string, unknown>;
+	tomlText: string;
 	warnings: TomlFetchWarning[];
 }
 
@@ -50,7 +54,9 @@ export class TomlFetchError {
 	public message: string;
 	constructor(
 		public domain: string,
-		public cause: HttpError | TomlParseError
+		public cause: HttpError | TomlParseError,
+		public readonly tomlText: string | null = null,
+		public readonly warnings: TomlFetchWarning[] = []
 	) {
 		this.message = 'Fetch toml failed for ' + domain;
 	}
@@ -218,11 +224,19 @@ export class TomlService {
 
 			return ok({
 				tomlObject,
+				tomlText: tomlFileResponse.data,
 				warnings
 			});
 		} catch (e) {
 			const error = mapUnknownToError(e);
-			return err(new TomlFetchError(homeDomain, new TomlParseError(error)));
+			return err(
+				new TomlFetchError(
+					homeDomain,
+					new TomlParseError(error, tomlFileResponse.data),
+					tomlFileResponse.data,
+					warnings
+				)
+			);
 		}
 	}
 

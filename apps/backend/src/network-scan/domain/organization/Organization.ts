@@ -60,6 +60,10 @@ export default class Organization extends VersionedEntity<OrganizationSnapShot> 
 		return this.currentSnapshot().horizonUrl;
 	}
 
+	get stellarTomlText(): string | null {
+		return this.currentSnapshot().stellarTomlText;
+	}
+
 	get contactInformation(): OrganizationContactInformation {
 		return this.currentSnapshot().contactInformation;
 	}
@@ -90,6 +94,13 @@ export default class Organization extends VersionedEntity<OrganizationSnapShot> 
 		if (this.horizonUrl === horizonUrl) return;
 		this.addSnapshotIfNotExistsFor(time);
 		this.currentSnapshot().horizonUrl = horizonUrl;
+	}
+
+	updateStellarTomlText(stellarTomlText: string | null, time: Date) {
+		if (stellarTomlText === null) return;
+		if (this.stellarTomlText === stellarTomlText) return;
+		this.addSnapshotIfNotExistsFor(time);
+		this.currentSnapshot().stellarTomlText = stellarTomlText;
 	}
 
 	updateValidators(validators: OrganizationValidators, time: Date) {

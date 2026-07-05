@@ -11,6 +11,7 @@ export interface HistoryArchiveScanV1 {
 	readonly errorMessage: string | null;
 	readonly isSlow: boolean;
 	readonly errors: readonly HistoryArchiveScanErrorV1[];
+	readonly archiveMetadata: HistoryArchiveMetadataV1 | null;
 }
 
 export interface HistoryArchiveScanErrorV1 {
@@ -18,6 +19,58 @@ export interface HistoryArchiveScanErrorV1 {
 	readonly url: string;
 	readonly message: string;
 }
+
+export interface HistoryArchiveMetadataV1 {
+	readonly stellarHistoryUrl: string;
+	readonly stellarHistory: HistoryArchiveStateV1;
+	readonly observedAt: string;
+}
+
+export interface HistoryArchiveStateV1 {
+	readonly version: number;
+	readonly server: string;
+	readonly currentLedger: number;
+	readonly networkPassphrase?: string;
+	readonly currentBuckets: readonly HistoryStateBucketV1[];
+	readonly hotArchiveBuckets?: readonly HistoryStateBucketV1[];
+}
+
+export interface HistoryStateBucketV1 {
+	readonly curr: string;
+	readonly snap: string;
+	readonly next: {
+		readonly state: number;
+		readonly output?: string;
+	};
+}
+
+const HistoryStateBucketV1Schema: JSONSchemaType<HistoryStateBucketV1> = {
+	type: 'object',
+	properties: {
+		curr: {
+			type: 'string'
+		},
+		snap: {
+			type: 'string'
+		},
+		next: {
+			type: 'object',
+			properties: {
+				state: {
+					type: 'number'
+				},
+				output: {
+					type: 'string',
+					nullable: true
+				}
+			},
+			required: ['state'],
+			additionalProperties: false
+		}
+	},
+	required: ['curr', 'snap', 'next'],
+	additionalProperties: false
+};
 
 export const HistoryArchiveScanV1Schema: JSONSchemaType<HistoryArchiveScanV1> =
 	{
@@ -68,7 +121,50 @@ export const HistoryArchiveScanV1Schema: JSONSchemaType<HistoryArchiveScanV1> =
 					required: ['type', 'url', 'message'],
 					additionalProperties: false
 				}
-			}
+			},
+			archiveMetadata: nullable({
+				type: 'object',
+				properties: {
+					stellarHistoryUrl: {
+						type: 'string'
+					},
+					stellarHistory: {
+						type: 'object',
+						properties: {
+							version: {
+								type: 'number'
+							},
+							server: {
+								type: 'string'
+							},
+							currentLedger: {
+								type: 'number'
+							},
+							networkPassphrase: {
+								type: 'string',
+								nullable: true
+							},
+							currentBuckets: {
+								type: 'array',
+								items: HistoryStateBucketV1Schema
+							},
+							hotArchiveBuckets: {
+								type: 'array',
+								nullable: true,
+								items: HistoryStateBucketV1Schema
+							}
+						},
+						required: ['version', 'server', 'currentLedger', 'currentBuckets'],
+						additionalProperties: false
+					},
+					observedAt: {
+						format: 'date-time',
+						type: 'string'
+					}
+				},
+				required: ['stellarHistoryUrl', 'stellarHistory', 'observedAt'],
+				additionalProperties: false
+			})
 		},
 		type: 'object',
 		required: [
@@ -80,6 +176,7 @@ export const HistoryArchiveScanV1Schema: JSONSchemaType<HistoryArchiveScanV1> =
 			'isSlow',
 			'errorUrl',
 			'errorMessage',
-			'errors'
+			'errors',
+			'archiveMetadata'
 		]
 	};

@@ -43,7 +43,14 @@ export class OrganizationV1DTOMapper {
 			),
 			logo: null,
 			tomlState: organization.latestMeasurement()?.tomlState ?? 'Unknown',
-			tomlWarnings: organization.latestMeasurement()?.tomlWarnings ?? []
+			tomlWarnings: organization.latestMeasurement()?.tomlWarnings ?? [],
+			stellarToml:
+				organization.stellarTomlText === null
+					? null
+					: {
+							url: `https://${organization.homeDomain}/.well-known/stellar.toml`,
+							content: organization.stellarTomlText
+						}
 		};
 	}
 

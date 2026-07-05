@@ -86,6 +86,42 @@ export function OrganizationDetail({
 					))}
 				</div>
 			</article>
+			<OrganizationTomlEvidence organization={organization} />
 		</section>
+	);
+}
+
+function OrganizationTomlEvidence({
+	organization
+}: {
+	readonly organization: PublicOrganization;
+}): React.JSX.Element {
+	const stellarToml = organization.stellarToml;
+	const tomlUrl =
+		stellarToml?.url ??
+		`https://${organization.homeDomain}/.well-known/stellar.toml`;
+
+	return (
+		<article className="panel detail-panel archive-metadata">
+			<div className="panel-heading">
+				<h2>TOML evidence</h2>
+				<span className="muted-inline">{organization.tomlState}</span>
+			</div>
+			<details className="metadata-document" open={stellarToml !== null}>
+				<summary>
+					<span>stellar.toml</span>
+					<a href={tomlUrl} rel="noopener noreferrer" target="_blank">
+						{tomlUrl}
+					</a>
+				</summary>
+				{stellarToml ? (
+					<pre>{stellarToml.content}</pre>
+				) : (
+					<p className="muted-copy">
+						No scanner-captured stellar.toml text is available yet.
+					</p>
+				)}
+			</details>
+		</article>
 	);
 }

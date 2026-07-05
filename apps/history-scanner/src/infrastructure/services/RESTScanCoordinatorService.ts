@@ -12,6 +12,7 @@ import {
 	type ScanJobJSONInput
 } from 'history-scanner-dto';
 import { ScanCoordinatorService } from '../../domain/scan/ScanCoordinatorService.js';
+import type { ScanJobProgressDTO } from '../../domain/scan/ScanCoordinatorService.js';
 import { isObject } from 'shared';
 import { type ScanError, ScanErrorType } from '../../domain/scan/ScanError.js';
 import type { CoordinatorAuthConfig } from '../config/CoordinatorAuthConfig.js';
@@ -116,7 +117,8 @@ export class RESTScanCoordinatorService implements ScanCoordinatorService {
 			error: scan.error ? this.mapScanErrorToDTO(scan.error) : null,
 			scanJobRemoteId: scan.scanJobRemoteId!,
 			errors,
-			evidence: scan.evidence
+			evidence: scan.evidence,
+			archiveMetadata: scan.archiveMetadata ?? undefined
 		};
 	}
 
@@ -181,7 +183,10 @@ export class RESTScanCoordinatorService implements ScanCoordinatorService {
 		return ok(scanJobDTOsResult.value);
 	}
 
-	async touchScanJob(remoteId: string): Promise<Result<void, Error>> {
+	async touchScanJob(
+		remoteId: string,
+		progress?: ScanJobProgressDTO
+	): Promise<Result<void, Error>> {
 		const urlResult = this.createUrl(this.getTouchScanJobPath(remoteId));
 		if (urlResult.isErr()) {
 			return err(new CoordinatorServiceError('Invalid URL', urlResult.error));
@@ -189,7 +194,7 @@ export class RESTScanCoordinatorService implements ScanCoordinatorService {
 
 		const response = await this.httpService.post(
 			urlResult.value,
-			{},
+			progress === undefined ? {} : { ...progress },
 			this.getHttpOptions()
 		);
 

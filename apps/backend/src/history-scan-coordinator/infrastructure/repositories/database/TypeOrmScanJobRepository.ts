@@ -10,6 +10,7 @@ import {
 	type CommunityScannerClaimState
 } from '@history-scan-coordinator/domain/CommunityScannerClaimPolicy.js';
 import { EntityManager, MoreThan, Repository } from 'typeorm';
+import type { QueryDeepPartialEntity } from 'typeorm/query-builder/QueryPartialEntity.js';
 import {
 	createScanJobFromRow,
 	extractQueryRows,
@@ -20,6 +21,7 @@ import {
 	type RawScanJobRow,
 	type RawTakenJobStatsRow
 } from './ScanJobRowMapper.js';
+import type { ScanJobProgressUpdate } from '@history-scan-coordinator/domain/ScanJobRepository.js';
 
 type RawActiveCommunityScannerJobsRow = {
 	readonly activeJobs?: NumericValue;
@@ -210,11 +212,11 @@ export class TypeOrmScanJobRepository implements ScanJobRepository {
 										candidate.url from '^[a-z][a-z0-9+.-]*://([^/?#:]+)'
 									),
 									candidate.url
-								)
-							)
+				)
+			)
 					) < $2
 				order by
-					case when candidate."fromLedger" is null then 1 else 0 end asc,
+					candidate."updatedAt" asc,
 					candidate.id asc
 				for update skip locked
 				limit 1
@@ -355,11 +357,14 @@ export class TypeOrmScanJobRepository implements ScanJobRepository {
 		};
 	}
 
-	async markTakenJobActive(remoteId: string): Promise<boolean> {
+	async markTakenJobActive(
+		remoteId: string,
+		progress?: ScanJobProgressUpdate
+	): Promise<boolean> {
 		const result = await this.baseRepository
 			.createQueryBuilder()
 			.update(ScanJob)
-			.set({ updatedAt: () => 'now()' })
+			.set(createTakenJobUpdate(progress))
 			.where('"remoteId" = :remoteId', { remoteId })
 			.andWhere('status = :status', { status: 'TAKEN' })
 			.execute();
@@ -369,12 +374,13 @@ export class TypeOrmScanJobRepository implements ScanJobRepository {
 
 	async markTakenJobActiveForCommunityScanner(
 		remoteId: string,
-		communityScannerId: string
+		communityScannerId: string,
+		progress?: ScanJobProgressUpdate
 	): Promise<boolean> {
 		const result = await this.baseRepository
 			.createQueryBuilder()
 			.update(ScanJob)
-			.set({ updatedAt: () => 'now()' })
+			.set(createTakenJobUpdate(progress))
 			.where('"remoteId" = :remoteId', { remoteId })
 			.andWhere('"claimedByCommunityScannerId" = :communityScannerId', {
 				communityScannerId
@@ -392,7 +398,8 @@ export class TypeOrmScanJobRepository implements ScanJobRepository {
 			.set({
 				status: 'PENDING',
 				claimedByCommunityScannerId: null,
-				claimedAt: null
+				claimedAt: null,
+				updatedAt: () => 'now()'
 			})
 			.where('"remoteId" = :remoteId', { remoteId })
 			.andWhere('"claimedByCommunityScannerId" is null')
@@ -409,7 +416,8 @@ export class TypeOrmScanJobRepository implements ScanJobRepository {
 			.set({
 				status: 'PENDING',
 				claimedByCommunityScannerId: null,
-				claimedAt: null
+				claimedAt: null,
+				updatedAt: () => 'now()'
 			})
 			.where('status = :status', { status: 'TAKEN' })
 			.andWhere('"updatedAt" < :before', { before })
@@ -417,6 +425,26 @@ export class TypeOrmScanJobRepository implements ScanJobRepository {
 
 		return result.affected ?? 0;
 	}
+}
+
+function createTakenJobUpdate(
+	progress?: ScanJobProgressUpdate
+): QueryDeepPartialEntity<ScanJob> {
+	const update: QueryDeepPartialEntity<ScanJob> = { updatedAt: () => 'now()' };
+	if (progress === undefined) return update;
+
+	if (progress.concurrency !== undefined) update.concurrency = progress.concurrency;
+	if (progress.fromLedger !== undefined) update.fromLedger = progress.fromLedger;
+	if (progress.toLedger !== undefined) update.toLedger = progress.toLedger;
+	if (progress.latestScannedLedger !== undefined) {
+		update.latestScannedLedger = progress.latestScannedLedger;
+	}
+	if (progress.latestScannedLedgerHeaderHash !== undefined) {
+		update.latestScannedLedgerHeaderHash =
+			progress.latestScannedLedgerHeaderHash;
+	}
+
+	return update;
 }
 
 function readBoolean(value: unknown, field: string): boolean {

@@ -13,6 +13,7 @@ import {
 } from './HistoryArchiveScanReadHandlers.js';
 import {
 	parseValidatedScanDto,
+	parseScanJobProgressUpdate,
 	requireObjectBody,
 	scanDtoValidators
 } from './ScanRequestValidation.js';
@@ -110,7 +111,14 @@ export const HistoryScanRouterWrapper = (
 					return res.status(400).json({ errors: errors.array() });
 				}
 
-				const result = await config.touchScanJob.execute(req.params.remoteId);
+				const progress = parseScanJobProgressUpdate(req, res);
+				if (progress === null) return;
+
+				const result = await config.touchScanJob.execute(
+					req.params.remoteId,
+					undefined,
+					progress
+				);
 				if (result.isErr()) {
 					return res.status(500).json({ error: result.error.message });
 				}

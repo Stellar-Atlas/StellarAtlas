@@ -57,8 +57,7 @@ export class GetDataQualityStatus {
 			status: getWorstStatus([
 				dataFreshness.status,
 				scans.status,
-				rollups.status,
-				archiveQueue.status
+				rollups.status
 			]),
 			dataFreshness,
 			scans,

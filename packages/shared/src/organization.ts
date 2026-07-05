@@ -1,6 +1,9 @@
 import { OrganizationId, PublicKey } from './network.js';
 import PropertyMapper from './PropertyMapper.js';
-import { OrganizationV1 } from './dto/organization-v1.js';
+import {
+	OrganizationStellarTomlV1,
+	OrganizationV1
+} from './dto/organization-v1.js';
 
 export function isOrganization(
 	organization: Organization | undefined
@@ -32,6 +35,7 @@ export class Organization {
 	homeDomain: string | null = null; //todo: not nullable
 	tomlState = 'Unknown';
 	tomlWarnings: string[] = [];
+	stellarToml: OrganizationStellarTomlV1 | null = null;
 
 	dateDiscovered?: Date;
 
@@ -83,7 +87,8 @@ export class Organization {
 			hasReliableUptime: this.hasReliableUptime,
 			homeDomain: this.homeDomain ?? 'unknown',
 			tomlState: this.tomlState,
-			tomlWarnings: this.tomlWarnings
+			tomlWarnings: this.tomlWarnings,
+			stellarToml: this.stellarToml
 		};
 	}
 

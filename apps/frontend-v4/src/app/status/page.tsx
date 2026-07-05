@@ -1,6 +1,7 @@
 import { Suspense } from 'react';
 import {
 	fetchApiStatus,
+	fetchArchiveScanWorkers,
 	fetchDataQualityStatus,
 	fetchFailoverStatus,
 	fetchFrontendStatus,
@@ -22,6 +23,7 @@ async function StatusRouteContent(): Promise<React.JSX.Element> {
 		dataQuality,
 		scanLogs,
 		workers,
+		archiveWorkers,
 		frontend,
 		horizon,
 		rpc,
@@ -31,6 +33,7 @@ async function StatusRouteContent(): Promise<React.JSX.Element> {
 		fetchDataQualityStatus({ revalidate }),
 		fetchScanLogStatus({ revalidate }),
 		fetchWorkerStatus({ revalidate }),
+		fetchArchiveScanWorkers({ revalidate }),
 		fetchFrontendStatus({ revalidate }),
 		fetchHorizonStatus({ revalidate }),
 		fetchRpcStatus({ revalidate }),
@@ -46,6 +49,7 @@ async function StatusRouteContent(): Promise<React.JSX.Element> {
 			/>
 			<StatusDashboard
 				api={api}
+				archiveWorkers={archiveWorkers}
 				dataQuality={dataQuality}
 				failover={failover}
 				frontend={frontend}

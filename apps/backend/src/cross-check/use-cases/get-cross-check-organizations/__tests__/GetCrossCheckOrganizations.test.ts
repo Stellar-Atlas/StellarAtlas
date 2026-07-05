@@ -137,6 +137,7 @@ function createOrganization(
 		subQuorumAvailable: false,
 		tomlState: 'Unknown',
 		tomlWarnings: [],
+		stellarToml: null,
 		twitter: null,
 		url: null,
 		validators: [],

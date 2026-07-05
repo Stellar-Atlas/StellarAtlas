@@ -319,7 +319,35 @@ describe('HistoryScanRouter.integration', () => {
 				.auth('admin', 'secret')
 				.expect(204);
 
-			expect(touchScanJob.execute).toHaveBeenCalledWith(remoteId);
+			expect(touchScanJob.execute).toHaveBeenCalledWith(
+				remoteId,
+				undefined,
+				{}
+			);
+		});
+
+		it('should pass scan progress when authenticated', async () => {
+			const remoteId = randomUUID();
+			const progress = {
+				concurrency: 12,
+				fromLedger: 64,
+				toLedger: 128,
+				latestScannedLedger: 63,
+				latestScannedLedgerHeaderHash: 'hash'
+			};
+			touchScanJob.execute.mockResolvedValue(ok(true));
+
+			await request(app)
+				.post(`/history-scan/job/${remoteId}/heartbeat`)
+				.auth('admin', 'secret')
+				.send(progress)
+				.expect(204);
+
+			expect(touchScanJob.execute).toHaveBeenCalledWith(
+				remoteId,
+				undefined,
+				progress
+			);
 		});
 
 		it('should return 404 when the scan job is not taken', async () => {

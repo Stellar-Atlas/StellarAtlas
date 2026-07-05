@@ -68,6 +68,24 @@ describe('GetDataQualityStatus', () => {
 		expect(result._unsafeUnwrap().status).toBe('degraded');
 	});
 
+	it('should keep archive queue health separate from data-quality status', async () => {
+		getArchiveQueueStatusMock.execute.mockResolvedValue(
+			ok({
+				...archiveQueue(),
+				status: 'degraded',
+				staleJobs: 3
+			})
+		);
+
+		const result = await getDataQualityStatus.execute();
+
+		expect(result.isOk()).toBe(true);
+		expect(result._unsafeUnwrap()).toMatchObject({
+			status: 'ok',
+			archiveQueue: { status: 'degraded', staleJobs: 3 }
+		});
+	});
+
 	it('should pass through section errors', async () => {
 		const error = new Error('scan status unavailable');
 		getScanStatusMock.execute.mockResolvedValue(err(error));

@@ -1,5 +1,6 @@
 import type {
 	PublicApiStatus,
+	PublicArchiveScanWorkers,
 	PublicArchiveScanLogEntry,
 	PublicConfiguredServiceStatus,
 	PublicDataQualityStatus,
@@ -15,9 +16,11 @@ import {
 	formatPercent
 } from '@format/formatters';
 import { StatCard } from '../stat-card';
+import { ArchiveWorkerJobs } from './archive-worker-jobs';
 
 interface StatusDashboardProps {
 	readonly api: PublicApiStatus;
+	readonly archiveWorkers: PublicArchiveScanWorkers;
 	readonly dataQuality: PublicDataQualityStatus;
 	readonly failover: PublicFailoverStatus;
 	readonly frontend: PublicConfiguredServiceStatus;
@@ -29,6 +32,7 @@ interface StatusDashboardProps {
 
 export function StatusDashboard({
 	api,
+	archiveWorkers,
 	dataQuality,
 	failover,
 	frontend,
@@ -42,9 +46,7 @@ export function StatusDashboard({
 	const archiveQueue = dataQuality.archiveQueue;
 	const services = [frontend, horizon, rpc];
 	const serviceStatus = serviceGroupStatus(services, failover);
-	const configuredServiceCount =
-		services.filter((service) => service.configured).length +
-		(failover.configured ? 1 : 0);
+	const configuredServiceCount = getConfiguredServiceCount(services, failover);
 
 	return (
 		<div className="status-dashboard">
@@ -56,34 +58,34 @@ export function StatusDashboard({
 					value={statusLabel(dataQuality.status)}
 				/>
 				<StatCard
-					detail={`${formatNullablePercent(scan.expectedCompletionRate)} of expected cadence`}
+					detail={`${formatInteger(scan.completedScans)} of ${formatInteger(scan.totalScans)} recorded scans completed; cadence target ${formatNullablePercent(scan.expectedCompletionRate)}`}
 					label="Network scans"
 					tone={statusTone(scan.status)}
-					value={`${formatInteger(scan.completedScans)} / ${formatInteger(scan.expectedScans)}`}
+					value={formatNullablePercent(scan.completionRate)}
 				/>
 				<StatCard
-					detail={`${formatInteger(rollups.rawCompletedScans)} raw scans, ${formatInteger(rollups.rollupCrawlCount)} rolled up`}
-					label="Daily rollups"
+					detail={`${formatInteger(rollups.missingRollupDays)} missing, ${formatInteger(rollups.mismatchedRollupDays)} mismatched`}
+					label="Rollup proof"
 					tone={statusTone(rollups.status)}
-					value={`${formatInteger(rollups.matchingDays)} / ${formatInteger(rollups.windowDays)}`}
+					value={`${formatInteger(rollups.matchingDays)} matched`}
 				/>
 				<StatCard
-					detail={`${formatInteger(archiveQueue.staleJobs)} stale jobs`}
-					label="Archive queue"
+					detail={`${formatInteger(archiveQueue.pendingJobs)} pending, ${formatInteger(archiveQueue.staleJobs)} stale`}
+					label="Archive jobs"
 					tone={statusTone(archiveQueue.status)}
-					value={formatInteger(archiveQueue.totalUnfinishedJobs)}
+					value={`${formatInteger(archiveQueue.activeJobs)} claimed`}
 				/>
 				<StatCard
-					detail={`${formatInteger(workers.archiveWorkers.staleWorkers)} stale workers`}
-					label="Archive workers"
+					detail={`${formatInteger(workers.archiveWorkers.activeWorkers)} fresh, ${formatInteger(workers.archiveWorkers.staleWorkers)} stale`}
+					label="Worker leases"
 					tone={statusTone(workers.status)}
-					value={formatInteger(workers.archiveWorkers.activeWorkers)}
+					value={`${formatInteger(workers.archiveWorkers.totalTakenJobs)} claimed`}
 				/>
 				<StatCard
-					detail="Targets configured locally"
+					detail="Optional missing targets are not failures"
 					label="Service targets"
 					tone={statusTone(serviceStatus)}
-					value={`${formatInteger(configuredServiceCount)} / 4`}
+					value={`${formatInteger(configuredServiceCount)} configured`}
 				/>
 			</div>
 
@@ -114,14 +116,14 @@ export function StatusDashboard({
 							)}
 						/>
 						<StatusRow
-							detail={`${formatInteger(scan.incompleteScans)} incomplete raw scans`}
-							label="Scan completion"
+							detail={`${formatInteger(scan.completedScans)} completed, ${formatInteger(scan.incompleteScans)} incomplete`}
+							label="Recorded scan completion"
 							status={scan.status}
 							value={formatNullablePercent(scan.completionRate)}
 						/>
 						<StatusRow
-							detail={`${formatInteger(rollups.missingRollupDays)} missing, ${formatInteger(rollups.mismatchedRollupDays)} mismatched`}
-							label="Rollup match"
+							detail={`${formatInteger(rollups.rawCompletedScans)} completed raw scans, ${formatInteger(rollups.rollupCrawlCount)} rolled up`}
+							label="Rollup continuity"
 							status={rollups.status}
 							value={`${formatInteger(rollups.matchingDays)} days`}
 						/>
@@ -138,16 +140,16 @@ export function StatusDashboard({
 					</div>
 					<div className="status-list">
 						<StatusRow
-							detail={`${formatInteger(archiveQueue.pendingJobs)} pending, ${formatInteger(archiveQueue.activeJobs)} active`}
+							detail={`${formatInteger(archiveQueue.pendingJobs)} pending, ${formatInteger(archiveQueue.staleJobs)} stale`}
 							label="Archive queue"
 							status={archiveQueue.status}
 							value={`${formatInteger(archiveQueue.totalUnfinishedJobs)} jobs`}
 						/>
 						<StatusRow
-							detail={`${formatInteger(workers.archiveWorkers.totalTakenJobs)} taken jobs`}
+							detail={`${formatInteger(workers.archiveWorkers.activeWorkers)} fresh, ${formatInteger(workers.archiveWorkers.staleWorkers)} stale; stale after ${formatDuration(workers.archiveWorkers.staleJobAgeMs)}`}
 							label="Archive workers"
 							status={workers.archiveWorkers.status}
-							value={`${formatInteger(workers.archiveWorkers.activeWorkers)} active`}
+							value={`${formatInteger(workers.archiveWorkers.totalTakenJobs)} claimed`}
 						/>
 						<StatusRow
 							detail={`${formatInteger(workers.communityScanners.offlineScanners)} offline, ${formatInteger(workers.communityScanners.degradedScanners)} degraded`}
@@ -179,6 +181,8 @@ export function StatusDashboard({
 						<FailoverRow failover={failover} />
 					</div>
 				</section>
+
+				<ArchiveWorkerJobs archiveWorkers={archiveWorkers} />
 
 				<section className="panel status-scan-log-panel">
 					<div className="panel-heading">
@@ -262,11 +266,13 @@ function EmptyLogRow({ label }: { readonly label: string }): React.JSX.Element {
 function StatusRow({
 	detail,
 	label,
+	pillText,
 	status,
 	value
 }: {
 	readonly detail: string;
 	readonly label: string;
+	readonly pillText?: string;
 	readonly status: PublicStatusLevel;
 	readonly value: string;
 }): React.JSX.Element {
@@ -278,7 +284,7 @@ function StatusRow({
 			</div>
 			<div className="status-row-value">
 				<span>{value}</span>
-				<StatusPill status={status} />
+				<StatusPill status={status} text={pillText} />
 			</div>
 		</div>
 	);
@@ -289,12 +295,21 @@ function ServiceRow({
 }: {
 	readonly service: PublicConfiguredServiceStatus;
 }): React.JSX.Element {
+	const optional = isOptionalService(service.service);
+	const status = service.configured || !optional ? service.status : 'ok';
+
 	return (
 		<StatusRow
-			detail={service.url ?? 'No target configured'}
+			detail={
+				service.url ??
+				(optional ? 'No optional target configured' : 'No target configured')
+			}
 			label={serviceLabel(service.service)}
-			status={service.status}
-			value={service.configured ? 'Configured' : 'Missing'}
+			pillText={!service.configured && optional ? 'Optional' : undefined}
+			status={status}
+			value={
+				service.configured ? 'Configured' : optional ? 'Optional' : 'Missing'
+			}
 		/>
 	);
 }
@@ -308,32 +323,36 @@ function FailoverRow({
 		? `${failover.frontendUrl} + ${failover.apiUrl}`
 		: failover.configured
 			? (failover.frontendUrl ?? failover.apiUrl ?? 'Partial target')
-			: 'No failover target configured';
+			: 'No optional failover target configured';
+	const status = failover.configured ? failover.status : 'ok';
 
 	return (
 		<StatusRow
 			detail={detail}
 			label="Failover"
-			status={failover.status}
+			pillText={!failover.configured ? 'Optional' : undefined}
+			status={status}
 			value={
 				failover.complete
 					? 'Complete'
 					: failover.configured
 						? 'Partial'
-						: 'Missing'
+						: 'Optional'
 			}
 		/>
 	);
 }
 
 function StatusPill({
-	status
+	status,
+	text
 }: {
 	readonly status: PublicStatusLevel;
+	readonly text?: string;
 }): React.JSX.Element {
 	return (
 		<span className={`status-pill ${statusTone(status)}`}>
-			{statusLabel(status)}
+			{text ?? statusLabel(status)}
 		</span>
 	);
 }
@@ -343,9 +362,14 @@ function serviceGroupStatus(
 	failover: PublicFailoverStatus
 ): PublicStatusLevel {
 	const statuses = [
-		...services.map((service) => service.status),
-		failover.status
+		...services
+			.filter(
+				(service) => service.configured || !isOptionalService(service.service)
+			)
+			.map((service) => service.status),
+		...(failover.configured ? [failover.status] : [])
 	];
+	if (statuses.length === 0) return 'ok';
 	if (statuses.every((status) => status === 'ok')) return 'ok';
 	if (statuses.every((status) => status === 'unavailable')) {
 		return 'unavailable';
@@ -353,10 +377,25 @@ function serviceGroupStatus(
 	return 'degraded';
 }
 
+function getConfiguredServiceCount(
+	services: readonly PublicConfiguredServiceStatus[],
+	failover: PublicFailoverStatus
+): number {
+	return (
+		services.filter((service) => service.configured).length +
+		(failover.configured ? 1 : 0)
+	);
+}
+
+function isOptionalService(
+	service: PublicConfiguredServiceStatus['service']
+): boolean {
+	return service === 'horizon' || service === 'rpc';
+}
+
 function archiveScanTone(scan: PublicArchiveScanLogEntry): PublicStatusLevel {
 	if (scan.scanStatus === 'ok') return 'ok';
-	if (scan.scanStatus === 'worker_issue') return 'degraded';
-	return 'unavailable';
+	return 'degraded';
 }
 
 function archiveScanLabel(scan: PublicArchiveScanLogEntry): string {

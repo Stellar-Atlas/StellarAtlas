@@ -32,6 +32,13 @@ export class OrganizationMapper {
 		organizationDTO.keybase = organization.contactInformation.keybase;
 		organizationDTO.horizonUrl = organization.horizonUrl;
 		organizationDTO.homeDomain = organization.homeDomain;
+		organizationDTO.stellarToml =
+			organization.stellarTomlText === null
+				? null
+				: {
+						url: `https://${organization.homeDomain}/.well-known/stellar.toml`,
+						content: organization.stellarTomlText
+					};
 
 		organization.validators.value.forEach((validator) => {
 			organizationDTO.validators.push(validator.value);

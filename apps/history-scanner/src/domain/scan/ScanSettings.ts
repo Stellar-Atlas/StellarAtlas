@@ -1,3 +1,5 @@
+import type { ArchiveMetadataDTO } from 'history-scanner-dto';
+
 //Actual settings used for scan, if necessary determined just before starting the scan
 export interface ScanSettings {
 	readonly fromLedger: number;
@@ -6,4 +8,5 @@ export interface ScanSettings {
 	readonly isSlowArchive: boolean | null;
 	readonly latestScannedLedger: number;
 	readonly latestScannedLedgerHeaderHash: string | null;
+	readonly archiveMetadata?: ArchiveMetadataDTO;
 }

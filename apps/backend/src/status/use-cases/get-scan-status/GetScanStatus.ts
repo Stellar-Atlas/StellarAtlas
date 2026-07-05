@@ -33,7 +33,6 @@ export interface ScanStatusDTO {
 const defaultNetworkScanLoopMs = 3 * 60 * 1000;
 const scanStatusWindowMs = 24 * 60 * 60 * 1000;
 const minimumRecordedCompletionRate = 95;
-const minimumExpectedCompletionRate = 95;
 
 @injectable()
 export class GetScanStatus {
@@ -102,11 +101,7 @@ export class GetScanStatus {
 		);
 
 		return {
-			status: getNetworkScanStatus(
-				summary.totalScans,
-				completionRate,
-				expectedCompletionRate
-			),
+			status: getNetworkScanStatus(summary.totalScans, completionRate),
 			windowStart: windowStart.toISOString(),
 			windowEnd: windowEnd.toISOString(),
 			windowMs: scanStatusWindowMs,
@@ -134,19 +129,12 @@ export class GetScanStatus {
 
 function getNetworkScanStatus(
 	totalScans: number,
-	completionRate: number | null,
-	expectedCompletionRate: number | null
+	completionRate: number | null
 ): StatusLevel {
 	if (totalScans === 0) return 'unavailable';
 	if (
 		completionRate !== null &&
 		completionRate < minimumRecordedCompletionRate
-	) {
-		return 'degraded';
-	}
-	if (
-		expectedCompletionRate !== null &&
-		expectedCompletionRate < minimumExpectedCompletionRate
 	) {
 		return 'degraded';
 	}

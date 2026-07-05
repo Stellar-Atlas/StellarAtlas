@@ -14,6 +14,14 @@ export interface ArchiveScanTakenJobsSnapshot {
 	readonly jobs: readonly ScanJob[];
 }
 
+export interface ScanJobProgressUpdate {
+	readonly concurrency?: number;
+	readonly fromLedger?: number;
+	readonly latestScannedLedger?: number;
+	readonly latestScannedLedgerHeaderHash?: string | null;
+	readonly toLedger?: number | null;
+}
+
 export interface ScanJobRepository {
 	hasPendingJobs: () => Promise<boolean>;
 	save: (scanJobs: ScanJob[]) => Promise<void>;
@@ -31,10 +39,14 @@ export interface ScanJobRepository {
 		staleTakenBefore: Date,
 		limit: number
 	) => Promise<ArchiveScanTakenJobsSnapshot>;
-	markTakenJobActive: (remoteId: string) => Promise<boolean>;
+	markTakenJobActive: (
+		remoteId: string,
+		progress?: ScanJobProgressUpdate
+	) => Promise<boolean>;
 	markTakenJobActiveForCommunityScanner: (
 		remoteId: string,
-		communityScannerId: string
+		communityScannerId: string,
+		progress?: ScanJobProgressUpdate
 	) => Promise<boolean>;
 	releaseTakenJob: (remoteId: string) => Promise<boolean>;
 	releaseStaleTakenJobs: (before: Date) => Promise<number>;

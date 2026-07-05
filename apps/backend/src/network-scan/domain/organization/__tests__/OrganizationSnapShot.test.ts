@@ -25,6 +25,7 @@ describe('OrganizationSnapShot', () => {
 		snapshot.description = 'description';
 		snapshot.horizonUrl = 'horizonUrl';
 		snapshot.url = 'url';
+		snapshot.stellarTomlText = 'VERSION="2.0.0"';
 
 		snapshot.organization = mock<Organization>();
 
@@ -34,6 +35,7 @@ describe('OrganizationSnapShot', () => {
 		expect(copy.name).toEqual('name');
 		expect(copy.description).toBe(snapshot.description);
 		expect(copy.horizonUrl).toBe(snapshot.horizonUrl);
+		expect(copy.stellarTomlText).toBe(snapshot.stellarTomlText);
 		expect(copy.validators.equals(snapshot.validators)).toBe(true);
 		expect(copy.contactInformation.equals(snapshot.contactInformation)).toBe(
 			true

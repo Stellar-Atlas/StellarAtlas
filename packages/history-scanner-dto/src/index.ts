@@ -16,5 +16,11 @@ export {
 	type ScanEvidenceKindDTO,
 	type ScanEvidenceStatusDTO
 } from './ScanEvidenceDTO.js';
+export {
+	isArchiveMetadataDTO,
+	type ArchiveMetadataDTO,
+	type HistoryArchiveStateDTO,
+	type HistoryStateBucketDTO
+} from './ArchiveMetadataDTO.js';
 export { ScanDTO } from './ScanDTO.js';
 export { ScanJobDTO, type ScanJobJSONInput } from './ScanJobDTO.js';

@@ -12,7 +12,7 @@ import {
 import { PageHeading } from '@components/layout/page-heading';
 import { RouteLoadingPanel } from '@components/layout/route-fallbacks';
 import { NodeDetail } from '@components/nodes/node-detail';
-import { getNodeLabel } from '@domain/network';
+import { getNodeLabel, getOrganizationForNode } from '@domain/network';
 
 interface NodeDetailPageProps {
 	params: Promise<{ publicKey: string }>;
@@ -58,6 +58,9 @@ async function NodeDetailRouteContent({
 					})
 				])
 			: [null, [], null];
+	const organization = node
+		? getOrganizationForNode(inventoryNetwork, node)
+		: null;
 
 	return (
 		<main className="shell">
@@ -73,6 +76,7 @@ async function NodeDetailRouteContent({
 				knownNode={knownNode}
 				network={inventoryNetwork}
 				node={node}
+				organization={organization}
 			/>
 		</main>
 	);

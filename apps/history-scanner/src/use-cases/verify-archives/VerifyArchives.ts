@@ -11,6 +11,9 @@ import { inject, injectable } from 'inversify';
 import { TYPES } from '../../infrastructure/di/di-types.js';
 import { ScanJobDTO } from 'history-scanner-dto';
 import { CoordinatorParsedHistorySink } from '../../infrastructure/services/CoordinatorParsedHistorySink.js';
+import { ScanErrorType } from '../../domain/scan/ScanError.js';
+import type { ScanJobProgressDTO } from '../../domain/scan/ScanCoordinatorService.js';
+import type { ScanSettings } from '../../domain/scan/ScanSettings.js';
 
 @injectable()
 export class VerifyArchives {
@@ -114,11 +117,25 @@ export class VerifyArchives {
 		const scan = await this.scanner.perform(
 			new Date(),
 			scanJob,
-			parsedHistorySink
+			parsedHistorySink,
+			async (settings) => {
+				await this.touchScanJob(scanJob, this.mapSettingsToProgress(settings));
+			}
 		);
 		await parsedHistorySink?.flush();
+		if (this.shouldRetryWorkerOnlyScan(scan)) {
+			if (scan.error !== null) this.exceptionLogger.captureException(scan.error);
+			return false;
+		}
 		if (persist) return await this.persist(scan);
 		return false;
+	}
+
+	private shouldRetryWorkerOnlyScan(scan: Scan): boolean {
+		return (
+			scan.errors.length > 0 &&
+			scan.errors.every((error) => error.type === ScanErrorType.TYPE_CONNECTION)
+		);
 	}
 
 	private async persist(scan: Scan): Promise<boolean> {
@@ -130,13 +147,29 @@ export class VerifyArchives {
 		return true;
 	}
 
-	private async touchScanJob(scanJob: ScanJob): Promise<void> {
+	private async touchScanJob(
+		scanJob: ScanJob,
+		progress?: ScanJobProgressDTO
+	): Promise<void> {
 		if (scanJob.remoteId === null) return;
 
-		const result = await this.scanCoordinator.touchScanJob(scanJob.remoteId);
+		const result = await this.scanCoordinator.touchScanJob(
+			scanJob.remoteId,
+			progress
+		);
 		if (result.isErr()) {
 			this.exceptionLogger.captureException(result.error);
 		}
+	}
+
+	private mapSettingsToProgress(settings: ScanSettings): ScanJobProgressDTO {
+		return {
+			concurrency: settings.concurrency,
+			fromLedger: settings.fromLedger,
+			toLedger: settings.toLedger,
+			latestScannedLedger: settings.latestScannedLedger,
+			latestScannedLedgerHeaderHash: settings.latestScannedLedgerHeaderHash
+		};
 	}
 
 	private async releaseScanJob(scanJob: ScanJob): Promise<void> {

@@ -112,7 +112,8 @@ export class ScanJob {
 			scanResult.error,
 			scanResult.errors ?? [],
 			scanResult.evidence ?? [],
-			this.remoteId
+			this.remoteId,
+			settings.archiveMetadata ?? null
 		);
 	}
 }

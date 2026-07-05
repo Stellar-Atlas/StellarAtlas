@@ -61,16 +61,20 @@
 	.archive-scan-log-row,
 	.archive-scan-log-row div,
 	.archive-bucket-evidence-list li,
+	.status-current-job,
 	.status-row,
 	.status-row-value {
 		align-items: flex-start;
 		flex-direction: column;
 	}
 
+	.status-current-job,
 	.status-row {
 		display: flex;
 	}
 
+	.status-current-job-meta,
+	.status-current-job div:nth-child(2),
 	.status-row-value {
 		text-align: left;
 	}

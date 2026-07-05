@@ -82,10 +82,10 @@ describe('GetScanStatus', () => {
 		});
 	});
 
-	it('should degrade when completed scans fall below expected cadence', async () => {
+	it('should keep cadence shortfall informational when recorded scans complete', async () => {
 		networkScanRepositoryMock.findScanSummary.mockResolvedValue({
-			totalScans: 20,
-			completedScans: 20,
+			totalScans: 375,
+			completedScans: 375,
 			latestScanAt: new Date('2026-07-03T11:59:00.000Z'),
 			latestCompletedScanAt: new Date('2026-07-03T11:59:00.000Z')
 		});
@@ -94,9 +94,10 @@ describe('GetScanStatus', () => {
 
 		expect(result.isOk()).toBe(true);
 		expect(result._unsafeUnwrap().networkScan).toMatchObject({
-			status: 'degraded',
+			status: 'ok',
 			completionRate: 100,
-			expectedCompletionRate: 4.17
+			expectedScans: 480,
+			expectedCompletionRate: 78.13
 		});
 	});
 

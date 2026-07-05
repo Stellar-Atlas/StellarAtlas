@@ -44,6 +44,7 @@ export class OrganizationTomlFetcher {
 		const tomlOrganizationInfo: OrganizationTomlInfo = {
 			state: TomlState.Unknown,
 			warnings: [],
+			stellarTomlText: null,
 			horizonUrl: null,
 			dba: null,
 			url: null,
@@ -59,6 +60,8 @@ export class OrganizationTomlFetcher {
 		};
 
 		if (tomlOrError instanceof TomlFetchError) {
+			tomlOrganizationInfo.stellarTomlText = tomlOrError.tomlText;
+			tomlOrganizationInfo.warnings = tomlOrError.warnings;
 			//todo: change to debug when stable
 			if (tomlOrError.cause instanceof HttpError) {
 				this.logger.info('Mapping http error to toml state', {
@@ -75,6 +78,7 @@ export class OrganizationTomlFetcher {
 		}
 
 		tomlOrganizationInfo.warnings = tomlOrError.warnings;
+		tomlOrganizationInfo.stellarTomlText = tomlOrError.tomlText;
 		const tomlObject = tomlOrError.tomlObject;
 
 		if (!TomlVersionChecker.isSupportedVersion(tomlObject, '2.0.0'))

@@ -20,6 +20,8 @@ export interface LedgerHeader {
 	hash?: string;
 }
 
+export type ScanSettingsReporter = (settings: ScanSettings) => Promise<void>;
+
 @injectable()
 export class Scanner {
 	constructor(
@@ -33,7 +35,8 @@ export class Scanner {
 	async perform(
 		time: Date,
 		scanJob: ScanJob,
-		parsedHistorySink: ParsedHistorySink = noopParsedHistorySink
+		parsedHistorySink: ParsedHistorySink = noopParsedHistorySink,
+		reportSettings?: ScanSettingsReporter
 	): Promise<Scan> {
 		const scanTimer = Scanner.createTimerLabel('scan');
 		console.time(scanTimer);
@@ -65,6 +68,7 @@ export class Scanner {
 			concurrency: scanSettings.concurrency,
 			isSlowArchive: scanSettings.isSlowArchive
 		});
+		await reportSettings?.(scanSettings);
 
 		const scanResult = await this.scanInRanges(
 			scanJob.url,

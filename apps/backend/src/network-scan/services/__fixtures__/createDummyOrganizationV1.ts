@@ -25,6 +25,7 @@ export function createDummyOrganizationV1(): OrganizationV1 {
 		subQuorum30DaysAvailability: 1,
 		subQuorumAvailable: true,
 		tomlState: 'Unknown',
-		tomlWarnings: []
+		tomlWarnings: [],
+		stellarToml: null
 	};
 }

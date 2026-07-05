@@ -67,6 +67,10 @@ describe('OrganizationV1DTOMapper', () => {
 		expect(organizationV1DTO.tomlWarnings).toEqual([
 			'TlsCertificateVerificationDisabled'
 		]);
+		expect(organizationV1DTO.stellarToml).toEqual({
+			url: 'https://domain.com/.well-known/stellar.toml',
+			content: 'VERSION="2.0.0"'
+		});
 	});
 	test('toOrganizationSnapshotV1DTO', () => {
 		const { organization } = createOrganization();
@@ -113,6 +117,7 @@ describe('OrganizationV1DTOMapper', () => {
 			time
 		);
 		organization.updateAvailability([], time);
+		organization.updateStellarTomlText('VERSION="2.0.0"', time);
 
 		const organizationMeasurement = new OrganizationMeasurement(
 			time,

@@ -8,6 +8,7 @@ import { ok, err } from 'neverthrow';
 import { ScanJobDTO } from 'history-scanner-dto';
 import { Scan } from '@domain/scan/Scan.js';
 import { Url } from 'http-helper';
+import { ScanError, ScanErrorType } from '@domain/scan/ScanError.js';
 
 class TestVerifyArchives extends VerifyArchives {
 	public readonly retryWaits: number[] = [];
@@ -130,9 +131,77 @@ describe('VerifyArchives', () => {
 		expect(scannerMock.perform).toHaveBeenCalledWith(
 			expect.any(Date),
 			expect.anything(),
-			expect.any(Object)
+			expect.any(Object),
+			expect.any(Function)
 		);
 		expect(scanCoordinatorMock.touchScanJob).toHaveBeenCalledTimes(1);
+	});
+
+	it('should report scan settings after they are determined', async () => {
+		scanCoordinatorMock.getScanJob.mockResolvedValue(ok(mockScanJobDTO));
+		jobMonitorMock.checkIn.mockResolvedValue(ok(undefined));
+		scannerMock.perform.mockImplementation(async (_time, scanJob, _sink, report) => {
+			await report?.({
+				fromLedger: 64,
+				toLedger: 128,
+				concurrency: 12,
+				isSlowArchive: false,
+				latestScannedLedger: 63,
+				latestScannedLedgerHeaderHash: 'hash'
+			});
+			return new Scan(
+				new Date(),
+				new Date(),
+				new Date(),
+				Url.create(scanJob.url.value)._unsafeUnwrap(),
+				64,
+				128
+			);
+		});
+
+		await verifyArchives.execute({ persist: false, loop: false });
+
+		expect(scanCoordinatorMock.touchScanJob).toHaveBeenCalledWith('test', {
+			concurrency: 12,
+			fromLedger: 64,
+			toLedger: 128,
+			latestScannedLedger: 63,
+			latestScannedLedgerHeaderHash: 'hash'
+		});
+	});
+
+	it('should release and retry worker-only scan failures instead of persisting them', async () => {
+		const workerError = new ScanError(
+			ScanErrorType.TYPE_CONNECTION,
+			'https://example.com',
+			'Could not fetch latest ledger'
+		);
+		scanCoordinatorMock.getScanJob.mockResolvedValue(ok(mockScanJobDTO));
+		scanCoordinatorMock.registerScan.mockResolvedValue(ok(undefined));
+		jobMonitorMock.checkIn.mockResolvedValue(ok(undefined));
+		scannerMock.perform.mockResolvedValue(
+			new Scan(
+				new Date(),
+				new Date(),
+				new Date(),
+				Url.create('https://example.com')._unsafeUnwrap(),
+				0,
+				null,
+				0,
+				null,
+				0,
+				null,
+				workerError
+			)
+		);
+
+		await verifyArchives.execute({ persist: true, loop: false });
+
+		expect(scanCoordinatorMock.registerScan).not.toHaveBeenCalled();
+		expect(scanCoordinatorMock.releaseScanJob).toHaveBeenCalledWith('test');
+		expect(exceptionLoggerMock.captureException).toHaveBeenCalledWith(
+			workerError
+		);
 	});
 
 	it('should release an unpersisted scan job after local execution', async () => {

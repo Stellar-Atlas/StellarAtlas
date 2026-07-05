@@ -1,5 +1,5 @@
 import 'reflect-metadata';
-import { ScanError, ScanErrorType } from './ScanError.js';
+import { ScanError } from './ScanError.js';
 import { injectable } from 'inversify';
 import { ScanJob } from './ScanJob.js';
 import { err, ok, Result } from 'neverthrow';
@@ -24,7 +24,7 @@ export class ScanSettingsFactory {
 		if (toLedgerResult.isErr()) {
 			return err(toLedgerResult.error);
 		}
-		const toLedger = toLedgerResult.value;
+		const { ledger: toLedger, archiveMetadata } = toLedgerResult.value;
 
 		const concurrencyResult = await this.determineConcurrencyAndSlowArchive(
 			scanJob,
@@ -58,7 +58,8 @@ export class ScanSettingsFactory {
 				isSlowArchive,
 				fromLedger,
 				latestLedgerHeader.ledger,
-				latestLedgerHeader.hash
+				latestLedgerHeader.hash,
+				archiveMetadata
 			)
 		);
 	}
@@ -70,7 +71,8 @@ export class ScanSettingsFactory {
 		isSlowArchive?: boolean | null,
 		fromLedger?: number,
 		latestLedgerHeaderLedger?: number,
-		latestLedgerHeaderHash?: string | null
+		latestLedgerHeaderHash?: string | null,
+		archiveMetadata?: ScanSettings['archiveMetadata']
 	): ScanSettings {
 		return {
 			fromLedger: fromLedger ?? scanJob.fromLedger,
@@ -82,7 +84,8 @@ export class ScanSettingsFactory {
 			latestScannedLedgerHeaderHash:
 				latestLedgerHeaderHash !== undefined //careful because it could be null
 					? latestLedgerHeaderHash
-					: scanJob.latestScannedLedgerHeaderHash
+					: scanJob.latestScannedLedgerHeaderHash,
+			archiveMetadata
 		};
 	}
 
@@ -176,9 +179,19 @@ export class ScanSettingsFactory {
 
 	private async determineToLedger(
 		scanJob: ScanJob
-	): Promise<Result<number, ScanError>> {
+	): Promise<
+		Result<
+			{
+				readonly ledger: number;
+				readonly archiveMetadata?: ScanSettings['archiveMetadata'];
+			},
+			ScanError
+		>
+	> {
 		if (scanJob.toLedger !== null) {
-			return ok(scanJob.toLedger);
+			return ok({
+				ledger: scanJob.toLedger
+			});
 		}
 
 		const latestLedgerOrError = await this.categoryScanner.findLatestLedger(
@@ -186,13 +199,7 @@ export class ScanSettingsFactory {
 		);
 
 		if (latestLedgerOrError.isErr()) {
-			return err(
-				new ScanError(
-					ScanErrorType.TYPE_CONNECTION,
-					scanJob.url.value,
-					'Could not fetch latest ledger'
-				)
-			);
+			return err(latestLedgerOrError.error);
 		}
 
 		return ok(latestLedgerOrError.value);

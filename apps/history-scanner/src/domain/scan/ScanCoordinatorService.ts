@@ -5,6 +5,14 @@ import {
 	ScanJobDTO
 } from 'history-scanner-dto';
 
+export interface ScanJobProgressDTO {
+	readonly concurrency?: number;
+	readonly fromLedger?: number;
+	readonly latestScannedLedger?: number;
+	readonly latestScannedLedgerHeaderHash?: string | null;
+	readonly toLedger?: number | null;
+}
+
 export interface ScanCoordinatorService {
 	registerScan(scan: Scan): Promise<Result<void, Error>>;
 	registerParsedLedgerHeaders(
@@ -12,5 +20,8 @@ export interface ScanCoordinatorService {
 	): Promise<Result<void, Error>>;
 	getScanJob(): Promise<Result<ScanJobDTO | null, Error>>;
 	releaseScanJob(remoteId: string): Promise<Result<void, Error>>;
-	touchScanJob(remoteId: string): Promise<Result<void, Error>>;
+	touchScanJob(
+		remoteId: string,
+		progress?: ScanJobProgressDTO
+	): Promise<Result<void, Error>>;
 }

@@ -34,7 +34,7 @@ describe('GetScanLogs', () => {
 		);
 	});
 
-	it('returns active jobs, stale jobs, archive errors, worker issues, and successes as distinct log entries', async () => {
+	it('returns active jobs, stale jobs, archive errors, and successes as distinct public log entries', async () => {
 		const now = Date.now();
 		const activeJob = new ScanJob(
 			historyUrl.value,
@@ -64,15 +64,6 @@ describe('GetScanLogs', () => {
 		staleJob.createdAt = new Date(now - 60 * 60_000);
 		staleJob.updatedAt = new Date(now - 31 * 60_000);
 
-		const workerOnlyFailure = createScan(
-			new Date('2026-07-01T13:23:00.000Z'),
-			0,
-			new ScanError(
-				ScanErrorType.TYPE_CONNECTION,
-				historyUrl.value,
-				"EACCES: permission denied, mkdir '/home/observe/stellarbeat-data/Observer/history-bucket-cache/32/90'"
-			)
-		);
 		const archiveVerificationFailure = createScan(
 			new Date('2026-04-05T01:51:00.000Z'),
 			50,
@@ -93,7 +84,6 @@ describe('GetScanLogs', () => {
 			staleJob
 		]);
 		scanRepositoryMock.findRecentByUrl.mockResolvedValue([
-			workerOnlyFailure,
 			archiveVerificationFailure,
 			successfulScan
 		]);
@@ -106,36 +96,120 @@ describe('GetScanLogs', () => {
 			historyUrl.value,
 			50
 		);
-		expect(logs).toHaveLength(5);
+		expect(logs).toHaveLength(4);
 		expect(logs.map((log) => log.status)).toEqual([
 			'scanning',
 			'stale',
 			'completed',
-			'completed',
 			'completed'
 		]);
 		expect(logs[0].hasWorkerIssue).toBe(false);
-		expect(logs[1].hasWorkerIssue).toBe(true);
+		expect(logs[1].hasWorkerIssue).toBe(false);
 		expect(logs[1].hasArchiveVerificationError).toBe(false);
-		expect(logs[1].errors[0]).toEqual({
-			message: 'Scanner heartbeat is stale',
-			type: 'TYPE_CONNECTION',
-			url: historyUrl.value
-		});
-		expect(logs[2].hasWorkerIssue).toBe(true);
-		expect(logs[2].hasArchiveVerificationError).toBe(false);
-		expect(logs[2].errors[0]?.message).toBe(
-			'EACCES: permission denied, mkdir [history bucket cache path]'
+		expect(logs[1].errors).toEqual([]);
+		expect(logs[2].hasArchiveVerificationError).toBe(true);
+		expect(logs[2].errors[0]?.message).toBe('Wrong transaction hash');
+	});
+
+	it('hides worker-only failures from public archive scan logs', async () => {
+		const newerJob = new ScanJob(
+			historyUrl.value,
+			0,
+			null,
+			null,
+			null,
+			null,
+			null,
+			'6e2a0f88-6b73-44b0-8fd7-e061bc846ac2'
 		);
-		expect(logs[3].hasArchiveVerificationError).toBe(true);
-		expect(logs[3].errors[0]?.message).toBe('Wrong transaction hash');
+		newerJob.status = 'PENDING';
+		newerJob.createdAt = new Date('2026-07-05T00:00:00.000Z');
+		newerJob.updatedAt = new Date('2026-07-05T00:00:00.000Z');
+		const resolvedWorkerOnlyFailure = createScan(
+			new Date('2026-07-04T00:00:00.000Z'),
+			24,
+			new ScanError(
+				ScanErrorType.TYPE_CONNECTION,
+				`${historyUrl.value}/bucket/32/90/bucket.xdr.gz`,
+				"EACCES: permission denied, mkdir '/home/observe/stellarbeat-data/Observer/history-bucket-cache/32/90'"
+			)
+		);
+		const archiveVerificationFailure = createScan(
+			new Date('2026-07-01T00:00:00.000Z'),
+			24,
+			new ScanError(
+				ScanErrorType.TYPE_VERIFICATION,
+				`${historyUrl.value}/transactions/03/80/a5/transactions-0380a53f.xdr.gz`,
+				'Wrong transaction hash'
+			)
+		);
+
+		scanJobRepositoryMock.findActiveByUrl.mockResolvedValue([newerJob]);
+		scanRepositoryMock.findRecentByUrl.mockResolvedValue([
+			resolvedWorkerOnlyFailure,
+			archiveVerificationFailure
+		]);
+
+		const result = await getScanLogs.execute(historyUrl.value);
+
+		expect(result.isOk()).toBe(true);
+		const logs = result._unsafeUnwrap();
+		expect(logs).toHaveLength(2);
+		expect(logs[0].hasArchiveVerificationError).toBe(true);
+		expect(logs[1].status).toBe('queued');
+		expect(logs.some((log) => log.hasWorkerIssue && log.status === 'completed'))
+			.toBe(false);
+	});
+
+	it('strips worker issues from mixed completed scans', async () => {
+		const workerOnlyFailure = createScan(
+			new Date('2026-07-04T00:00:00.000Z'),
+			24,
+			new ScanError(
+				ScanErrorType.TYPE_CONNECTION,
+				`${historyUrl.value}/bucket/32/90/bucket.xdr.gz`,
+				"EACCES: permission denied, mkdir '/home/observe/stellarbeat-data/Observer/history-bucket-cache/32/90'"
+			)
+		);
+		const archiveVerificationFailure = createScan(
+			new Date('2026-07-04T00:00:00.000Z'),
+			24,
+			new ScanError(
+				ScanErrorType.TYPE_VERIFICATION,
+				`${historyUrl.value}/transactions/03/80/a5/transactions-0380a53f.xdr.gz`,
+				'Wrong transaction hash'
+			),
+			new ScanError(
+				ScanErrorType.TYPE_CONNECTION,
+				`${historyUrl.value}/history/03/80/a5/history-0380a53f.json`,
+				'HTTP timeout'
+			)
+		);
+
+		scanJobRepositoryMock.findActiveByUrl.mockResolvedValue([]);
+		scanRepositoryMock.findRecentByUrl.mockResolvedValue([
+			workerOnlyFailure,
+			archiveVerificationFailure
+		]);
+
+		const result = await getScanLogs.execute(historyUrl.value);
+
+		expect(result.isOk()).toBe(true);
+		const logs = result._unsafeUnwrap();
+		expect(logs).toHaveLength(1);
+		expect(logs[0].hasArchiveVerificationError).toBe(true);
+		expect(logs[0].hasWorkerIssue).toBe(false);
+		expect(logs[0].errors).toHaveLength(1);
+		expect(logs[0].errors[0]?.message).toBe('Wrong transaction hash');
 	});
 
 	function createScan(
 		startDate: Date,
 		concurrency: number,
-		error: ScanError | null
+		error: ScanError | null,
+		...additionalErrors: readonly ScanError[]
 	): Scan {
+		const errors = error ? [error, ...additionalErrors] : additionalErrors;
 		return new Scan(
 			new Date('2026-01-01T00:00:00.000Z'),
 			startDate,
@@ -147,7 +221,8 @@ describe('GetScanLogs', () => {
 			null,
 			concurrency,
 			false,
-			error
+			error,
+			errors
 		);
 	}
 });

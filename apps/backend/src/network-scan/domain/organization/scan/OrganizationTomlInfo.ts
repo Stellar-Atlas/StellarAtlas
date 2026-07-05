@@ -4,6 +4,7 @@ import type { TomlFetchWarning } from '../../network/scan/TomlService.js';
 export interface OrganizationTomlInfo {
 	state: TomlState;
 	warnings: TomlFetchWarning[];
+	stellarTomlText: string | null;
 	name: string | null;
 	physicalAddress: string | null;
 	twitter: string | null;

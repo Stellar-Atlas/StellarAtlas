@@ -1,6 +1,6 @@
 import { Url } from 'http-helper';
 import { ScanError } from './ScanError.js';
-import type { ScanEvidenceDTO } from 'history-scanner-dto';
+import type { ArchiveMetadataDTO, ScanEvidenceDTO } from 'history-scanner-dto';
 
 /**
  * Used to represent a chain of scans for a history url.
@@ -22,6 +22,7 @@ export class Scan {
 	public readonly error: ScanError | null = null;
 	public readonly errors: readonly ScanError[] = [];
 	public readonly evidence: readonly ScanEvidenceDTO[] = [];
+	public readonly archiveMetadata: ArchiveMetadataDTO | null = null;
 	public readonly scanJobRemoteId: string | null = null;
 
 	constructor(
@@ -38,7 +39,8 @@ export class Scan {
 		error: ScanError | null = null,
 		errors: readonly ScanError[] = [],
 		evidence: readonly ScanEvidenceDTO[] = [],
-		scanJobRemoteId: string | null = null
+		scanJobRemoteId: string | null = null,
+		archiveMetadata: ArchiveMetadataDTO | null = null
 	) {
 		this.baseUrl = url;
 		this.scanChainInitDate = scanChainInitDate;
@@ -51,6 +53,7 @@ export class Scan {
 		this.errors = errors.length > 0 ? errors : error ? [error] : [];
 		this.error = error ?? this.errors[0] ?? null;
 		this.evidence = evidence;
+		this.archiveMetadata = archiveMetadata;
 		this.latestScannedLedger = latestScannedLedger;
 		this.latestScannedLedgerHeaderHash = latestScannedLedgerHeaderHash;
 		this.scanJobRemoteId = scanJobRemoteId;

@@ -17,6 +17,17 @@ describe('ScanDTO', () => {
 				isSlowArchive: false,
 				error: null,
 				errors: [],
+				archiveMetadata: {
+					stellarHistoryUrl:
+						'https://history.stellar.org/.well-known/stellar-history.json',
+					stellarHistory: {
+						version: 1,
+						server: 'stellar-core',
+						currentLedger: 100,
+						currentBuckets: []
+					},
+					observedAt: '2024-01-01T00:00:00.000Z'
+				},
 				evidence: [
 					{
 						bucketHash:
@@ -48,6 +59,7 @@ describe('ScanDTO', () => {
 			expect(dto.concurrency).toBe(5);
 			expect(dto.isSlowArchive).toBe(false);
 			expect(dto.error).toBeNull();
+			expect(dto.archiveMetadata?.stellarHistory.currentLedger).toBe(100);
 			expect(dto.evidence).toHaveLength(1);
 			expect(dto.scanJobRemoteId).toBe('test');
 		});
@@ -191,6 +203,37 @@ describe('ScanDTO', () => {
 						url: 'https://history.stellar.org/bucket/not-a-bucket-hash.xdr.gz'
 					}
 				],
+				scanJobRemoteId: 'test'
+			};
+
+			const result = ScanDTO.fromJSON(json);
+			expect(result.isErr()).toBe(true);
+		});
+
+		it('should reject JSON with invalid archive metadata', () => {
+			const json = {
+				startDate: '2024-01-01T00:00:00.000Z',
+				endDate: '2024-01-01T01:00:00.000Z',
+				baseUrl: 'https://history.stellar.org',
+				scanChainInitDate: '2024-01-01T00:00:00.000Z',
+				fromLedger: 1,
+				toLedger: 100,
+				latestVerifiedLedger: 90,
+				latestScannedLedger: 95,
+				latestScannedLedgerHeaderHash: 'hash123',
+				concurrency: 5,
+				isSlowArchive: false,
+				error: null,
+				errors: [],
+				archiveMetadata: {
+					stellarHistoryUrl: 'https://history.stellar.org/.well-known/stellar-history.json',
+					stellarHistory: {
+						version: 1,
+						server: 'stellar-core',
+						currentBuckets: []
+					},
+					observedAt: '2024-01-01T00:00:00.000Z'
+				},
 				scanJobRemoteId: 'test'
 			};
 

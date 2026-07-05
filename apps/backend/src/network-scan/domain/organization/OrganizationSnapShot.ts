@@ -29,6 +29,9 @@ export default class OrganizationSnapShot extends Snapshot {
 	@Column('text', { nullable: true })
 	horizonUrl: string | null = null;
 
+	@Column('text', { nullable: true })
+	stellarTomlText: string | null = null;
+
 	@Column(() => OrganizationContactInformation, { prefix: false })
 	contactInformation: OrganizationContactInformation;
 
@@ -64,6 +67,7 @@ export default class OrganizationSnapShot extends Snapshot {
 		copy.name = this.name;
 		copy.description = this.description;
 		copy.horizonUrl = this.horizonUrl;
+		copy.stellarTomlText = this.stellarTomlText;
 
 		return copy as this;
 	}

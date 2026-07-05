@@ -5,7 +5,6 @@ import type { ExceptionLogger } from '@core/services/ExceptionLogger.js';
 import { Url } from '@core/domain/Url.js';
 import type { Scan } from '../../domain/scan/Scan.js';
 import type { ScanRepository } from '../../domain/scan/ScanRepository.js';
-import type { ScanError } from '../../domain/scan/ScanError.js';
 import { ScanErrorType } from '../../domain/scan/ScanError.js';
 import { TYPES } from '../../infrastructure/di/di-types.js';
 import { InvalidUrlError } from '../get-latest-scan/InvalidUrlError.js';
@@ -49,7 +48,6 @@ export class GetScanLogs {
 	private static readonly maxStoredScansToInspect = 50;
 	private static readonly maxActiveJobs = 3;
 	private static readonly maxVisibleConcurrency = 24;
-	private static readonly staleJobMessage = 'Scanner heartbeat is stale';
 
 	constructor(
 		@inject(TYPES.HistoryArchiveScanRepository)
@@ -80,11 +78,17 @@ export class GetScanLogs {
 				)
 			]);
 
-			const publicCompletedScans = scans.slice(0, GetScanLogs.maxEntries);
+			const publicCompletedScans = scans
+				.filter((scan) => !this.isWorkerOnlyScan(scan))
+				.slice(0, GetScanLogs.maxEntries);
+
+			const takenJobs = activeJobs.filter((job) => job.status === 'TAKEN');
+			const pendingJobs = activeJobs.filter((job) => job.status === 'PENDING');
 
 			return ok([
-				...activeJobs.map((job) => this.mapActiveJob(job)),
-				...publicCompletedScans.map((scan) => this.mapScan(scan))
+				...takenJobs.map((job) => this.mapActiveJob(job)),
+				...publicCompletedScans.map((scan) => this.mapScan(scan)),
+				...pendingJobs.map((job) => this.mapActiveJob(job))
 			]);
 		} catch (e) {
 			const error = mapUnknownToError(e);
@@ -98,16 +102,6 @@ export class GetScanLogs {
 		const startDate = job.createdAt ?? now;
 		const updatedAt = job.updatedAt ?? now;
 		const status = this.mapJobStatus(job, updatedAt, now);
-		const errors =
-			status === 'stale'
-				? [
-						{
-							message: GetScanLogs.staleJobMessage,
-							type: ScanErrorType[ScanErrorType.TYPE_CONNECTION],
-							url: job.url
-						}
-					]
-				: [];
 		const fromLedger =
 			job.fromLedger ??
 			(job.latestScannedLedger > 0 ? job.latestScannedLedger + 1 : 0);
@@ -116,11 +110,11 @@ export class GetScanLogs {
 			concurrency: this.mapVisibleConcurrency(job.concurrency),
 			durationMs: now.getTime() - startDate.getTime(),
 			endDate: updatedAt,
-			errors,
+			errors: [],
 			fromLedger,
 			hasArchiveVerificationError: false,
 			hasError: false,
-			hasWorkerIssue: status === 'stale',
+			hasWorkerIssue: false,
 			isSlowArchive: false,
 			latestScannedLedger: job.latestScannedLedger,
 			latestVerifiedLedger: job.latestScannedLedger,
@@ -153,16 +147,24 @@ export class GetScanLogs {
 		return Math.min(concurrency, GetScanLogs.maxVisibleConcurrency);
 	}
 
+	private isWorkerOnlyScan(scan: Scan): boolean {
+		return scan.hasWorkerIssue() && !scan.hasArchiveVerificationError();
+	}
+
 	private mapScan(scan: Scan): HistoryArchiveScanLogEntryDTO {
+		const archiveErrors = scan.scanErrors.filter(
+			(error) => error.type === ScanErrorType.TYPE_VERIFICATION
+		);
+
 		return {
 			concurrency: scan.concurrency,
 			durationMs: scan.endDate.getTime() - scan.startDate.getTime(),
 			endDate: scan.endDate,
-			errors: scan.scanErrors.map(mapScanErrorToPublicDTO),
+			errors: archiveErrors.map(mapScanErrorToPublicDTO),
 			fromLedger: scan.fromLedger,
 			hasArchiveVerificationError: scan.hasArchiveVerificationError(),
-			hasError: scan.hasError(),
-			hasWorkerIssue: scan.hasWorkerIssue(),
+			hasError: archiveErrors.length > 0,
+			hasWorkerIssue: false,
 			isSlowArchive: scan.isSlowArchive ?? false,
 			latestScannedLedger: scan.latestScannedLedger,
 			latestVerifiedLedger: scan.latestVerifiedLedger,

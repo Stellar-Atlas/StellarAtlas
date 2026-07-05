@@ -24,6 +24,7 @@ import {
 } from '../../use-cases/register-scan/RegisterScan.js';
 import {
 	parseValidatedScanDto,
+	parseScanJobProgressUpdate,
 	requireObjectBody,
 	scanDtoValidators
 } from './ScanRequestValidation.js';
@@ -202,9 +203,12 @@ export const CommunityScannerRouterWrapper = (
 			const scannerId = await requireAuthenticatedScanner(req, res, config);
 			if (scannerId === null) return;
 
+			const progress = parseScanJobProgressUpdate(req, res);
+			if (progress === null) return;
+
 			const result = await config.touchScanJob.execute(req.params.remoteId, {
 				communityScannerId: scannerId
-			});
+			}, progress);
 			if (result.isErr()) {
 				return res.status(500).json({ error: result.error.message });
 			}

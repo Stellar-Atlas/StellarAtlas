@@ -349,6 +349,51 @@ td {
 	margin: 0;
 }
 
+.archive-metadata {
+	display: grid;
+	gap: 12px;
+	padding: 0 18px 18px;
+}
+
+.metadata-document {
+	border: 1px solid var(--border);
+	border-radius: 8px;
+	overflow: hidden;
+}
+
+.metadata-document summary {
+	align-items: center;
+	cursor: pointer;
+	display: flex;
+	gap: 10px;
+	justify-content: space-between;
+	padding: 12px;
+}
+
+.metadata-document summary span:first-child {
+	font-weight: 800;
+}
+
+.metadata-document summary a {
+	color: var(--blue);
+	font-size: 0.86rem;
+	overflow-wrap: anywhere;
+	text-align: end;
+}
+
+.metadata-document pre {
+	background: #0f172a;
+	color: #e5edf7;
+	font-size: 0.78rem;
+	line-height: 1.5;
+	margin: 0;
+	max-block-size: 420px;
+	overflow: auto;
+	padding: 14px;
+	white-space: pre-wrap;
+	word-break: break-word;
+}
+
 .archive-scan-log {
 	display: grid;
 	gap: 12px;

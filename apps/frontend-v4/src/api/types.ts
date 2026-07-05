@@ -340,6 +340,27 @@ export interface PublicArchiveQueueStatus {
 	readonly totalUnfinishedJobs: number;
 }
 
+export interface PublicArchiveScanWorker {
+	readonly archiveUrl: string;
+	readonly claimedAt: string;
+	readonly concurrency: number | null;
+	readonly fromLedger: number;
+	readonly heartbeatAgeMs: number;
+	readonly lastHeartbeatAt: string;
+	readonly latestScannedLedger: number;
+	readonly status: 'scanning' | 'starting' | 'stale';
+	readonly toLedger: number | null;
+}
+
+export interface PublicArchiveScanWorkers {
+	readonly activeWorkers: number;
+	readonly generatedAt: string;
+	readonly staleJobAgeMs: number;
+	readonly staleWorkers: number;
+	readonly totalTakenJobs: number;
+	readonly workers: readonly PublicArchiveScanWorker[];
+}
+
 export interface PublicNetworkScanLogEntry {
 	readonly completed: boolean;
 	readonly latestLedger: string;

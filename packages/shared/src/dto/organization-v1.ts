@@ -26,6 +26,12 @@ export interface OrganizationV1 {
 	hasReliableUptime: boolean;
 	tomlState: string;
 	tomlWarnings: string[];
+	stellarToml: OrganizationStellarTomlV1 | null;
+}
+
+export interface OrganizationStellarTomlV1 {
+	url: string;
+	content: string;
 }
 
 export const OrganizationV1Schema: JSONSchemaType<OrganizationV1> = {
@@ -105,6 +111,9 @@ export const OrganizationV1Schema: JSONSchemaType<OrganizationV1> = {
 			},
 			type: 'array'
 		},
+		stellarToml: {
+			$ref: '#/definitions/OrganizationStellarTomlV1'
+		},
 		validators: {
 			items: {
 				type: 'string'
@@ -137,6 +146,22 @@ export const OrganizationV1Schema: JSONSchemaType<OrganizationV1> = {
 		'url',
 		'homeDomain',
 		'tomlState',
-		'tomlWarnings'
-	]
+		'tomlWarnings',
+		'stellarToml'
+	],
+	definitions: {
+		OrganizationStellarTomlV1: {
+			properties: {
+				content: {
+					type: 'string'
+				},
+				url: {
+					type: 'string'
+				}
+			},
+			type: 'object',
+			nullable: true,
+			required: ['content', 'url']
+		}
+	}
 };

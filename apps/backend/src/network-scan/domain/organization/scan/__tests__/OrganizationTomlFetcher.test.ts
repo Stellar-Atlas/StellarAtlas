@@ -108,10 +108,12 @@ describe('OrganizationTomlFetcher', () => {
 
 	function createTomlSuccess(
 		tomlObject: Record<string, unknown> = tomlV2Object,
-		warnings: TomlFetchSuccess['warnings'] = []
+		warnings: TomlFetchSuccess['warnings'] = [],
+		tomlText = tomlV2String
 	): TomlFetchSuccess {
 		return {
 			tomlObject,
+			tomlText,
 			warnings
 		};
 	}
@@ -158,6 +160,7 @@ describe('OrganizationTomlFetcher', () => {
 		);
 		expect(info.state).toBe(TomlState.Ok);
 		expect(info.warnings).toEqual([]);
+		expect(info.stellarTomlText).toBe(tomlV2String);
 	});
 
 	test('fetchOrganizationTomlInfo with warning evidence', async () => {
@@ -182,7 +185,8 @@ describe('OrganizationTomlFetcher', () => {
 	it('should map TomlFetchError to correct TomlState', async function () {
 		const error = new TomlFetchError(
 			'test',
-			new TomlParseError(new Error('test'))
+			new TomlParseError(new Error('test'), 'not toml'),
+			'not toml'
 		);
 
 		const fetcher = createFetcher(new Map([['my-domain', error]]));
@@ -197,6 +201,7 @@ describe('OrganizationTomlFetcher', () => {
 		if (!info) return;
 		expect(info.state).toBe(TomlState.ParsingError);
 		expect(info.warnings).toEqual([]);
+		expect(info.stellarTomlText).toBe('not toml');
 	});
 
 	it('should set correct state for unsupported version', async function () {

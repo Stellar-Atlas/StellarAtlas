@@ -36,9 +36,15 @@ import { createCategoryVerificationScanErrors } from './createCategoryVerificati
 import { terminateHasherPool } from './terminateHasherPool.js';
 import { noopParsedHistorySink } from './parsed-history/ParsedHistorySink.js';
 import type { ParsedHistorySink } from './parsed-history/ParsedHistorySink.js';
+import type { ArchiveMetadataDTO } from 'history-scanner-dto';
 
 type Ledger = number;
 type Hash = string;
+
+export interface LatestLedgerArchiveState {
+	readonly ledger: number;
+	readonly archiveMetadata: ArchiveMetadataDTO;
+}
 
 export interface ExpectedHashes {
 	txSetHash: Hash;
@@ -75,7 +81,7 @@ export class CategoryScanner {
 
 	public async findLatestLedger(
 		baseUrl: Url
-	): Promise<Result<number, ScanError>> {
+	): Promise<Result<LatestLedgerArchiveState, ScanError>> {
 		const rootHASUrl = UrlBuilder.getRootHASUrl(baseUrl);
 		const rootHASUrlRequest: Request[] = [
 			{
@@ -85,7 +91,7 @@ export class CategoryScanner {
 			}
 		];
 
-		let ledger: number | undefined;
+		let archiveMetadata: ArchiveMetadataDTO | undefined;
 		const successOrError = await this.httpQueue.sendRequests(
 			rootHASUrlRequest[Symbol.iterator](),
 			{
@@ -104,7 +110,11 @@ export class CategoryScanner {
 				}
 				const validateHASResult = this.hasValidator.validate(result);
 				if (validateHASResult.isOk()) {
-					ledger = validateHASResult.value.currentLedger;
+					archiveMetadata = {
+						stellarHistoryUrl: rootHASUrl.value,
+						stellarHistory: validateHASResult.value,
+						observedAt: new Date().toISOString()
+					};
 					return ok(undefined);
 				} else {
 					return err(new QueueError(request, validateHASResult.error));
@@ -116,7 +126,7 @@ export class CategoryScanner {
 			return err(mapHttpQueueErrorToScanError(successOrError.error));
 		}
 
-		if (!ledger) {
+		if (archiveMetadata === undefined) {
 			return err(
 				new ScanError(
 					ScanErrorType.TYPE_VERIFICATION,
@@ -126,7 +136,10 @@ export class CategoryScanner {
 			);
 		}
 
-		return ok(ledger);
+		return ok({
+			ledger: archiveMetadata.stellarHistory.currentLedger,
+			archiveMetadata
+		});
 	}
 
 	//fetches all HAS files in checkpoint range and returns all detected bucket urls

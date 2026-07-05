@@ -19,6 +19,7 @@ export function mapScanToHistoryArchiveScan(scan: Scan): HistoryArchiveScan {
 		firstArchiveVerificationError?.url ?? null,
 		firstArchiveVerificationError?.message ?? null,
 		scan.isSlowArchive ?? false,
-		scanErrors.map(mapScanErrorToPublicDTO)
+		archiveVerificationErrors.map(mapScanErrorToPublicDTO),
+		scan.archiveMetadata
 	);
 }

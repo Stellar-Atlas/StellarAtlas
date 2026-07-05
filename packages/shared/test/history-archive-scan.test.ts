@@ -18,7 +18,9 @@ it('should map from json', function () {
         hasError: hasError,
         errorUrl: errorUrl,
         errorMessage: errorMessage,
-        isSlow: isSlow
+        isSlow: isSlow,
+        errors: [],
+        archiveMetadata: null
     }
 
     const scan = HistoryArchiveScan.fromHistoryArchiveScanV1(scanDTO);
