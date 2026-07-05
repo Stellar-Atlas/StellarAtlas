@@ -3,6 +3,107 @@
 	gap: 16px;
 }
 
+.transaction-lookup {
+	display: grid;
+	gap: 14px;
+	margin-block-end: 16px;
+}
+
+.transaction-lookup .panel-heading > div {
+	display: grid;
+	gap: 3px;
+}
+
+.transaction-lookup-form {
+	display: grid;
+	gap: 10px;
+	grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.transaction-lookup-form input {
+	border: 1px solid var(--border);
+	border-radius: 6px;
+	font-family: var(--font-mono);
+	inline-size: 100%;
+	min-inline-size: 0;
+	padding: 11px 12px;
+}
+
+.transaction-lookup-form button {
+	background: var(--blue);
+	border: 0;
+	border-radius: 6px;
+	color: #ffffff;
+	font-weight: 800;
+	padding: 0 16px;
+}
+
+.transaction-lookup-form button:disabled {
+	background: #a9bed4;
+	cursor: not-allowed;
+}
+
+.transaction-lookup-state {
+	background: #fff7ed;
+	border: 1px solid #fed7aa;
+	border-radius: 6px;
+	color: #9a3412;
+	font-weight: 700;
+	padding: 10px 12px;
+}
+
+.transaction-result {
+	background: #f7fafc;
+	border: 1px solid var(--border);
+	border-radius: 8px;
+	display: grid;
+	gap: 12px;
+	padding: 12px;
+}
+
+.transaction-result > div:first-child {
+	align-items: center;
+	display: flex;
+	gap: 10px;
+	justify-content: space-between;
+	min-inline-size: 0;
+}
+
+.transaction-result strong {
+	font-family: var(--font-mono);
+	overflow-wrap: anywhere;
+}
+
+.transaction-result span {
+	background: #e9f2fa;
+	border-radius: 999px;
+	color: var(--blue);
+	font-size: 0.76rem;
+	font-weight: 800;
+	padding: 4px 8px;
+	text-transform: uppercase;
+}
+
+.transaction-result dl {
+	display: grid;
+	gap: 10px;
+	grid-template-columns: repeat(3, minmax(0, 1fr));
+	margin: 0;
+}
+
+.transaction-result dt {
+	color: var(--muted);
+	font-size: 0.72rem;
+	font-weight: 800;
+	text-transform: uppercase;
+}
+
+.transaction-result dd {
+	margin: 2px 0 0;
+	min-inline-size: 0;
+	overflow-wrap: anywhere;
+}
+
 .blockchain-stats {
 	grid-template-columns: repeat(4, minmax(0, 1fr));
 }
@@ -134,6 +235,15 @@
 }
 
 @media (max-width: 720px) {
+	.transaction-lookup-form,
+	.transaction-result dl {
+		grid-template-columns: 1fr;
+	}
+
+	.transaction-lookup-form button {
+		block-size: 42px;
+	}
+
 	.blockchain-graph-stage,
 	.blockchain-graph-svg {
 		min-block-size: 430px;

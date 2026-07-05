@@ -15,6 +15,7 @@ interface HorizonTransactionRecord {
 	created_at?: string;
 	fee_charged?: string;
 	hash?: string;
+	ledger?: number;
 	operation_count?: number;
 	source_account?: string;
 	successful?: boolean;
@@ -31,6 +32,13 @@ interface HorizonTransactionsResponse {
 	};
 }
 
+type CompleteHorizonTransactionRecord = Required<
+	Omit<HorizonTransactionRecord, 'ledger'>
+> &
+	Pick<HorizonTransactionRecord, 'ledger'>;
+type CompleteHorizonTransactionLookupRecord =
+	Required<HorizonTransactionRecord>;
+
 export interface LatestLedgerDTO {
 	closedAt: string;
 	protocolVersion: number;
@@ -44,6 +52,11 @@ export interface LedgerTransactionDTO {
 	operationCount: number;
 	sourceAccount: string;
 	successful: boolean;
+}
+
+export interface TransactionLookupDTO extends LedgerTransactionDTO {
+	ledger: string;
+	source: 'horizon';
 }
 
 export interface LedgerTransactionsDTO {
@@ -62,7 +75,10 @@ const buildHorizonLedgerTransactionsUrl = (
 	horizonUrl: string,
 	slotIndex: string
 ): string => {
-	const url = new URL(`ledgers/${slotIndex}/transactions`, getBaseUrl(horizonUrl));
+	const url = new URL(
+		`ledgers/${slotIndex}/transactions`,
+		getBaseUrl(horizonUrl)
+	);
 	url.searchParams.set('order', 'asc');
 	url.searchParams.set('limit', horizonPageLimit.toString());
 	return url.toString();
@@ -75,6 +91,9 @@ const buildLatestLedgerUrl = (horizonUrl: string): string => {
 	return url.toString();
 };
 
+const buildHorizonTransactionUrl = (horizonUrl: string, hash: string): string =>
+	new URL(`transactions/${hash}`, getBaseUrl(horizonUrl)).toString();
+
 const isCompleteHorizonLedgerRecord = (
 	record: HorizonLedgerRecord
 ): record is Required<HorizonLedgerRecord> =>
@@ -84,7 +103,7 @@ const isCompleteHorizonLedgerRecord = (
 
 const isCompleteHorizonTransactionRecord = (
 	record: HorizonTransactionRecord
-): record is Required<HorizonTransactionRecord> =>
+): record is CompleteHorizonTransactionRecord =>
 	typeof record.created_at === 'string' &&
 	typeof record.fee_charged === 'string' &&
 	typeof record.hash === 'string' &&
@@ -92,8 +111,14 @@ const isCompleteHorizonTransactionRecord = (
 	typeof record.source_account === 'string' &&
 	typeof record.successful === 'boolean';
 
+const isCompleteHorizonTransactionLookupRecord = (
+	record: HorizonTransactionRecord
+): record is CompleteHorizonTransactionLookupRecord =>
+	isCompleteHorizonTransactionRecord(record) &&
+	typeof record.ledger === 'number';
+
 const mapHorizonTransactionRecord = (
-	record: Required<HorizonTransactionRecord>
+	record: CompleteHorizonTransactionRecord
 ): LedgerTransactionDTO => ({
 	createdAt: record.created_at,
 	feeCharged: record.fee_charged,
@@ -101,6 +126,14 @@ const mapHorizonTransactionRecord = (
 	operationCount: record.operation_count,
 	sourceAccount: record.source_account,
 	successful: record.successful
+});
+
+const mapHorizonTransactionLookupRecord = (
+	record: CompleteHorizonTransactionLookupRecord
+): TransactionLookupDTO => ({
+	...mapHorizonTransactionRecord(record),
+	ledger: record.ledger.toString(),
+	source: 'horizon'
 });
 
 export const fetchLatestLedger = async (
@@ -124,6 +157,24 @@ export const fetchLatestLedger = async (
 	};
 };
 
+export const fetchTransactionByHash = async (
+	horizonUrl: string,
+	hash: string
+): Promise<TransactionLookupDTO | null> => {
+	const response = await fetch(buildHorizonTransactionUrl(horizonUrl, hash), {
+		headers: { Accept: 'application/json' },
+		signal: AbortSignal.timeout(8_000)
+	});
+	if (response.status === 404) return null;
+	if (!response.ok) throw new Error(`Horizon returned HTTP ${response.status}`);
+
+	const record = (await response.json()) as HorizonTransactionRecord;
+	if (!isCompleteHorizonTransactionLookupRecord(record))
+		throw new Error('Transaction record missing from Horizon response');
+
+	return mapHorizonTransactionLookupRecord(record);
+};
+
 export const fetchLedgerTransactions = async (
 	horizonUrl: string,
 	slotIndex: string
@@ -139,7 +190,8 @@ export const fetchLedgerTransactions = async (
 			headers: { Accept: 'application/json' },
 			signal: AbortSignal.timeout(12_000)
 		});
-		if (!response.ok) throw new Error(`Horizon returned HTTP ${response.status}`);
+		if (!response.ok)
+			throw new Error(`Horizon returned HTTP ${response.status}`);
 
 		const payload = (await response.json()) as HorizonTransactionsResponse;
 		const pageRecords = payload._embedded?.records ?? [];

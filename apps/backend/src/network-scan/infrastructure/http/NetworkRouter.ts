@@ -13,10 +13,6 @@ import { query } from 'express-validator';
 import { handleMeasurementsAggregationRequest } from './handleMeasurementsAggregationRequest.js';
 import { GetScpStatements } from '../../use-cases/get-scp-statements/GetScpStatements.js';
 import { handleScpStatementsRequest } from './handleScpStatementsRequest.js';
-import {
-	fetchLatestLedger,
-	fetchLedgerTransactions
-} from './HorizonLedgerClient.js';
 import { NetworkSearchService } from '../search/NetworkSearchService.js';
 import {
 	compareScpStatement,
@@ -40,12 +36,9 @@ export interface NetworkRouterConfig {
 	getLatestNodeSnapshots: GetLatestNodeSnapshots;
 	getLatestOrganizationSnapshots: GetLatestOrganizationSnapshots;
 	getScpStatements: GetScpStatements;
-	horizonUrl: string;
 	logger?: Logger;
 	searchConfig: NetworkSearchConfig;
 }
-
-const isLedgerSequence = (value: string): boolean => /^\d+$/.test(value);
 
 const isSearchEntityType = (
 	value: string | undefined
@@ -396,43 +389,6 @@ const networkRouterWrapper = (config: NetworkRouterConfig): Router => {
 				clearInterval(interval);
 				if (!res.writableEnded) res.end();
 			});
-		}
-	);
-
-	networkRouter.get(
-		['/ledger/latest'],
-		async (req: express.Request, res: express.Response) => {
-			res.setHeader('Cache-Control', 'public, max-age=' + 2);
-			res.setHeader('Content-Type', 'application/json');
-
-			try {
-				const payload = await fetchLatestLedger(config.horizonUrl);
-				return res.status(200).send(payload);
-			} catch (error) {
-				return res.status(502).send('Latest ledger unavailable');
-			}
-		}
-	);
-
-	networkRouter.get(
-		['/scp/slots/:slotIndex/transactions'],
-		async (req: express.Request, res: express.Response) => {
-			const slotIndex = req.params.slotIndex;
-			if (!isLedgerSequence(slotIndex))
-				return res.status(400).send('Invalid ledger slot');
-
-			res.setHeader('Cache-Control', 'public, max-age=' + 30);
-			res.setHeader('Content-Type', 'application/json');
-
-			try {
-				const payload = await fetchLedgerTransactions(
-					config.horizonUrl,
-					slotIndex
-				);
-				return res.status(200).send(payload);
-			} catch (error) {
-				return res.status(502).send('Ledger transactions unavailable');
-			}
 		}
 	);
 

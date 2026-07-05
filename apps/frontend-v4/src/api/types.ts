@@ -85,6 +85,11 @@ export interface PublicLedgerTransaction {
 	readonly successful: boolean;
 }
 
+export interface PublicTransactionLookup extends PublicLedgerTransaction {
+	readonly ledger: string;
+	readonly source: 'horizon';
+}
+
 export interface PublicLedgerTransactions {
 	readonly ledger: string;
 	readonly records: readonly PublicLedgerTransaction[];
@@ -98,6 +103,16 @@ export interface PublicLatestLedger {
 }
 
 export type PublicSearchEntityType = 'node' | 'organization';
+export type PublicSearchArchiveStatus = 'error' | 'ok' | 'unknown';
+export type PublicSearchFacetName =
+	| 'active'
+	| 'archiveStatus'
+	| 'countryCode'
+	| 'entityType'
+	| 'fullValidator'
+	| 'topTier'
+	| 'validating'
+	| 'validator';
 
 export interface PublicSearchHit {
 	readonly detail: string;
@@ -109,8 +124,19 @@ export interface PublicSearchHit {
 	readonly organizationName?: string;
 }
 
+export interface PublicSearchFacetValue {
+	readonly count: number;
+	readonly value: string;
+}
+
+export type PublicSearchFacets = Record<
+	PublicSearchFacetName,
+	readonly PublicSearchFacetValue[]
+>;
+
 export interface PublicSearchResponse {
 	readonly estimatedTotalHits: number;
+	readonly facets: PublicSearchFacets;
 	readonly hits: readonly PublicSearchHit[];
 	readonly indexedNetworkTime: string;
 	readonly query: string;

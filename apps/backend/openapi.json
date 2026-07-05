@@ -69,6 +69,10 @@
 			"description": "Discovered organization-operated Horizon API URLs"
 		},
 		{
+			"name": "Explorer",
+			"description": "Explorer lookup endpoints backed by configured Horizon or future full-history stores"
+		},
+		{
 			"name": "Subscription",
 			"description": "Notification subscription management"
 		}
@@ -383,6 +387,62 @@
 					},
 					"400": { "description": "Invalid search query" },
 					"500": { "description": "Server error" }
+				}
+			}
+		},
+		"/v1/transactions/{hash}": {
+			"get": {
+				"summary": "Look up a transaction by hash",
+				"description": "Returns lean public transaction facts from the configured Horizon source. This is a lookup boundary, not the full-history graph API.",
+				"tags": ["Explorer", "Horizon"],
+				"operationId": "getTransactionByHash",
+				"parameters": [
+					{
+						"name": "hash",
+						"in": "path",
+						"description": "64-character transaction hash",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"pattern": "^[0-9a-fA-F]{64}$"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "Transaction lookup result",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/TransactionLookup"
+								}
+							}
+						}
+					},
+					"400": {
+						"description": "Invalid transaction hash",
+						"content": {
+							"application/json": {
+								"schema": { "$ref": "#/components/schemas/ErrorResponse" }
+							}
+						}
+					},
+					"404": {
+						"description": "Transaction not found in configured Horizon",
+						"content": {
+							"application/json": {
+								"schema": { "$ref": "#/components/schemas/ErrorResponse" }
+							}
+						}
+					},
+					"502": {
+						"description": "Transaction lookup unavailable",
+						"content": {
+							"application/json": {
+								"schema": { "$ref": "#/components/schemas/ErrorResponse" }
+							}
+						}
+					}
 				}
 			}
 		},
@@ -6051,6 +6111,42 @@
 					}
 				}
 			},
+			"ErrorResponse": {
+				"type": "object",
+				"required": ["error"],
+				"properties": {
+					"error": { "type": "string" }
+				}
+			},
+			"TransactionLookup": {
+				"type": "object",
+				"required": [
+					"createdAt",
+					"feeCharged",
+					"hash",
+					"ledger",
+					"operationCount",
+					"source",
+					"sourceAccount",
+					"successful"
+				],
+				"properties": {
+					"createdAt": {
+						"type": "string",
+						"format": "date-time"
+					},
+					"feeCharged": { "type": "string" },
+					"hash": { "type": "string" },
+					"ledger": { "type": "string" },
+					"operationCount": { "type": "integer", "minimum": 0 },
+					"source": {
+						"type": "string",
+						"enum": ["horizon"]
+					},
+					"sourceAccount": { "type": "string" },
+					"successful": { "type": "boolean" }
+				}
+			},
 			"SearchFacetValue": {
 				"type": "object",
 				"required": ["count", "value"],
@@ -6129,7 +6225,11 @@
 					"fallbackReason": {
 						"type": "string",
 						"nullable": true,
-						"enum": ["meilisearch_unavailable", "meilisearch_unconfigured"]
+						"enum": [
+							"meilisearch_syncing",
+							"meilisearch_unavailable",
+							"meilisearch_unconfigured"
+						]
 					},
 					"schemaVersion": { "type": "string", "enum": ["v1"] }
 				}

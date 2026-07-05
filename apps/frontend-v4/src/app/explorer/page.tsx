@@ -1,5 +1,6 @@
 import { PageHeading } from '@components/layout/page-heading';
 import { BlockchainGraphPrototype } from '@components/blockchain/blockchain-graph-prototype';
+import { TransactionHashLookup } from '@components/blockchain/transaction-hash-lookup';
 
 export default function ExplorerPage(): React.JSX.Element {
 	return (
@@ -9,6 +10,7 @@ export default function ExplorerPage(): React.JSX.Element {
 				eyebrow="Graph Explorer"
 				title="Explorer"
 			/>
+			<TransactionHashLookup />
 			<BlockchainGraphPrototype />
 		</main>
 	);

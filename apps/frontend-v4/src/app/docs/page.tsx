@@ -19,7 +19,8 @@ const endpointGroups: EndpointGroup[] = [
 			'/v1/scp-statements?limit=:limit',
 			'/v1/scp-statements?nodeId=:publicKey',
 			'/v1/scp-statements?slotIndex=:slot',
-			'/v1/scp/slots/:slotIndex/transactions'
+			'/v1/scp/slots/:slotIndex/transactions',
+			'/v1/transactions/:hash'
 		],
 		title: 'Network'
 	},

@@ -16,6 +16,7 @@ import { UnmuteNotification } from '@notifications/use-cases/unmute-notification
 import { Unsubscribe } from '@notifications/use-cases/unsubscribe/Unsubscribe.js';
 import { networkRouter } from '@network-scan/infrastructure/http/NetworkRouter.js';
 import { knownNetworkRouter } from '@network-scan/infrastructure/http/KnownNetworkRouter.js';
+import { horizonExplorerRouter } from '@network-scan/infrastructure/http/HorizonExplorerRouter.js';
 import { attachNetworkLiveWebSocket } from '@network-scan/infrastructure/http/NetworkLiveWebSocket.js';
 
 import helmet from 'helmet';
@@ -259,6 +260,13 @@ const listen = async () => {
 	);
 
 	api.use(
+		'/v1',
+		horizonExplorerRouter({
+			horizonUrl: config.horizonUrl.value
+		})
+	);
+
+	api.use(
 		['/v1/node', '/v1/nodes'],
 		nodeRouter({
 			getNode: kernel.container.get(GetNode),
@@ -297,7 +305,6 @@ const listen = async () => {
 				GetLatestOrganizationSnapshots
 			),
 			getScpStatements: kernel.container.get(GetScpStatements),
-			horizonUrl: config.horizonUrl.value,
 			logger: kernel.container.get<Logger>('Logger'),
 			searchConfig: {
 				apiKey: config.meilisearchApiKey,

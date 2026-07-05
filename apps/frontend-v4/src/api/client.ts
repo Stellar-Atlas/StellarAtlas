@@ -14,6 +14,7 @@ import type {
 	PublicNode,
 	PublicOrganization,
 	PublicScpStatementObservation,
+	PublicTransactionLookup,
 	PublicWorkerStatus
 } from './types';
 import { frontendCacheTags } from './cache-policy';
@@ -273,6 +274,15 @@ export const fetchLedgerTransactions = (
 ): Promise<PublicLedgerTransactions> =>
 	fetchJson<PublicLedgerTransactions>(
 		`/v1/scp/slots/${encodeURIComponent(slotIndex)}/transactions`,
+		options
+	);
+
+export const fetchTransactionByHash = (
+	hash: string,
+	options?: FetchOptions
+): Promise<PublicTransactionLookup> =>
+	fetchJson<PublicTransactionLookup>(
+		`/v1/transactions/${encodeURIComponent(hash)}`,
 		options
 	);
 
