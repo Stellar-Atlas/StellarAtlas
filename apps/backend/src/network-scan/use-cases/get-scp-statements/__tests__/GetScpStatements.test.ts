@@ -15,16 +15,81 @@ describe('GetScpStatements', () => {
 		expect(sut.repository.findLatest).not.toHaveBeenCalled();
 	});
 
-	it('falls back to stored observations when the live store is unavailable', async () => {
+	it('does not fall back to stored observations by default when live is unavailable', async () => {
+		const sut = setupSUT();
+		sut.liveStore.findLatest.mockResolvedValue(null);
+
+		const result = await sut.getScpStatements.execute({ limit: 100 });
+
+		expect(result._unsafeUnwrap()).toEqual([]);
+		expect(sut.repository.findLatest).not.toHaveBeenCalled();
+	});
+
+	it('falls back to stored observations when auto source is requested', async () => {
 		const sut = setupSUT();
 		const observation = createObservation();
 		sut.liveStore.findLatest.mockResolvedValue(null);
 		sut.repository.findLatest.mockResolvedValue([observation]);
 
-		const result = await sut.getScpStatements.execute({ limit: 100 });
+		const result = await sut.getScpStatements.execute({
+			limit: 100,
+			source: 'auto'
+		});
 
 		expect(result._unsafeUnwrap()).toEqual([observation.toDTO()]);
-		expect(sut.repository.findLatest).toHaveBeenCalledWith({ limit: 100 });
+		expect(sut.repository.findLatest).toHaveBeenCalledWith({
+			limit: 100,
+			nodeId: undefined,
+			slotIndex: undefined
+		});
+	});
+
+	it('reads stored observations directly when stored source is requested', async () => {
+		const sut = setupSUT();
+		const observation = createObservation();
+		sut.repository.findLatest.mockResolvedValue([observation]);
+
+		const result = await sut.getScpStatements.execute({
+			limit: 100,
+			source: 'stored'
+		});
+
+		expect(result._unsafeUnwrap()).toEqual([observation.toDTO()]);
+		expect(sut.liveStore.findLatest).not.toHaveBeenCalled();
+		expect(sut.repository.findLatest).toHaveBeenCalledWith({
+			limit: 100,
+			nodeId: undefined,
+			slotIndex: undefined
+		});
+	});
+
+	it('passes cursor and ascending order to the live read model', async () => {
+		const sut = setupSUT();
+		const liveObservation = createObservation().toDTO();
+		sut.liveStore.findLatest.mockResolvedValue([liveObservation]);
+
+		const result = await sut.getScpStatements.execute({
+			after: {
+				observedAtMs: 1_783_398_400_000,
+				statementHash: 'statement-a'
+			},
+			limit: 50,
+			order: 'asc',
+			source: 'live'
+		});
+
+		expect(result._unsafeUnwrap()).toEqual([liveObservation]);
+		expect(sut.liveStore.findLatest).toHaveBeenCalledWith({
+			after: {
+				observedAtMs: 1_783_398_400_000,
+				statementHash: 'statement-a'
+			},
+			limit: 50,
+			nodeId: undefined,
+			order: 'asc',
+			slotIndex: undefined
+		});
+		expect(sut.repository.findLatest).not.toHaveBeenCalled();
 	});
 });
 
@@ -40,7 +105,8 @@ function setupSUT() {
 
 function createObservation(): ScpStatementObservation {
 	const observation = new ScpStatementObservation();
-	observation.nodeId = 'GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF';
+	observation.nodeId =
+		'GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF';
 	observation.observedAt = new Date('2026-07-05T00:00:00.000Z');
 	observation.observedFromAddress = '127.0.0.1:11625';
 	observation.observedFromPeer =

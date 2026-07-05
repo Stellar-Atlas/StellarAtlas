@@ -6,12 +6,16 @@ import type {
 	StellarValueSummary
 } from 'crawler';
 import type {
-	ScpStatementObservationV1,
 	ScpStatementPledgesV1,
+	ScpStatementObservationV1,
 	ScpStatementValueV1
 } from 'shared';
-import type { ScpStatementObservationFilter } from '../../domain/scp/ScpStatementObservationRepository.js';
-import type { ScpStatementLiveStore } from '../../domain/scp/ScpStatementLiveStore.js';
+import type {
+	ScpStatementLiveCursor,
+	ScpStatementLiveFilter,
+	ScpStatementLiveOrder,
+	ScpStatementLiveStore
+} from '../../domain/scp/ScpStatementLiveStore.js';
 import type { NetworkSearchConfig } from './NetworkSearchTypes.js';
 
 interface ScpStatementSearchDocument extends ScpStatementObservationV1 {
@@ -25,12 +29,20 @@ const filterableAttributes = [
 	'observedAtMs',
 	'observedFromPeer',
 	'slotIndex',
+	'statementHash',
 	'statementType'
 ] as const;
-const sortableAttributes = ['observedAtMs', 'slotIndex'] as const;
+const sortableAttributes = [
+	'observedAtMs',
+	'slotIndex',
+	'statementHash'
+] as const;
 const liveFreshnessMs = 30_000;
 const liveRetentionMs = 3 * 60 * 1_000;
 const retentionCleanupIntervalMs = 30_000;
+const taskPollIntervalMs = 50;
+const settingsTaskTimeoutMs = 60_000;
+const documentTaskTimeoutMs = 30_000;
 
 const mapStellarValueSummary = (
 	value: StellarValueSummary
@@ -118,15 +130,26 @@ const toDTO = (
 
 const quoteFilterValue = (value: string): string => JSON.stringify(value);
 
-export class MeilisearchScpStatementLiveStore
-	implements ScpStatementLiveStore
-{
+const assertTaskSucceeded = (status: string, taskName: string): void => {
+	if (status !== 'succeeded')
+		throw new Error(
+			`Meilisearch live SCP ${taskName} task ended with ${status}`
+		);
+};
+
+const errorMessage = (error: unknown): string =>
+	error instanceof Error ? error.message : String(error);
+
+export class MeilisearchScpStatementLiveStore implements ScpStatementLiveStore {
 	private indexReady = false;
 	private readonly index: Index<ScpStatementSearchDocument> | undefined;
 	private indexSetupPromise: Promise<void> | undefined;
 	private lastRetentionCleanupAtMs = 0;
 
-	constructor(config: NetworkSearchConfig, private logger?: Logger) {
+	constructor(
+		config: NetworkSearchConfig,
+		private logger?: Logger
+	) {
 		if (config.host && config.host.length > 0) {
 			const client = new Meilisearch({
 				apiKey: config.apiKey,
@@ -143,26 +166,40 @@ export class MeilisearchScpStatementLiveStore
 		await this.ensureIndexReady();
 
 		const documents = observations.map(toDocument);
-		await this.index.addDocuments(documents, { primaryKey: 'id' });
+		const documentTask = await this.index
+			.addDocuments(documents, { primaryKey: 'id' })
+			.waitTask({
+				interval: taskPollIntervalMs,
+				timeout: documentTaskTimeoutMs
+			});
+		assertTaskSucceeded(documentTask.status, 'document update');
 		await this.enqueueRetentionCleanup(Date.now());
 	}
 
 	async findLatest({
+		after,
 		limit,
 		nodeId,
+		order,
 		slotIndex
-	}: ScpStatementObservationFilter): Promise<ScpStatementObservationV1[] | null> {
+	}: ScpStatementLiveFilter): Promise<ScpStatementObservationV1[] | null> {
 		if (!this.index) return null;
 
 		try {
 			await this.ensureIndexReady();
 			const response = await this.index.search<ScpStatementSearchDocument>('', {
-				filter: this.buildFilter({ limit, nodeId, slotIndex }, Date.now()),
+				filter: this.buildFilter(
+					{ after, limit, nodeId, order, slotIndex },
+					Date.now()
+				),
 				limit,
-				sort: ['observedAtMs:desc']
+				sort: this.buildSort(order)
 			});
 			return response.hits.map(toDTO);
-		} catch {
+		} catch (error) {
+			this.logger?.error('Could not read live SCP Meilisearch index', {
+				error: errorMessage(error)
+			});
 			return null;
 		}
 	}
@@ -176,27 +213,34 @@ export class MeilisearchScpStatementLiveStore
 	private async enqueueIndexSettings(): Promise<void> {
 		if (!this.index) return;
 		try {
-			await this.index.updateSettings({
-				filterableAttributes: [...filterableAttributes],
-				sortableAttributes: [...sortableAttributes]
-			});
+			const settingsTask = await this.index
+				.updateSettings({
+					filterableAttributes: [...filterableAttributes],
+					sortableAttributes: [...sortableAttributes]
+				})
+				.waitTask({
+					interval: taskPollIntervalMs,
+					timeout: settingsTaskTimeoutMs
+				});
+			assertTaskSucceeded(settingsTask.status, 'settings');
 			this.indexReady = true;
 		} catch (error) {
 			this.indexSetupPromise = undefined;
 			this.logger?.error('Could not queue live SCP Meilisearch settings', {
-				error
+				error: errorMessage(error)
 			});
 			throw error;
 		}
 	}
 
-	private buildFilter({
-		nodeId,
-		slotIndex
-	}: ScpStatementObservationFilter, nowMs: number): string | undefined {
+	private buildFilter(
+		{ after, nodeId, slotIndex }: ScpStatementLiveFilter,
+		nowMs: number
+	): string | undefined {
 		const freshAfterMs = nowMs - liveFreshnessMs;
 		const filters = [
 			`observedAtMs >= ${freshAfterMs}`,
+			after ? this.buildCursorFilter(after) : undefined,
 			nodeId ? `nodeId = ${quoteFilterValue(nodeId)}` : undefined,
 			slotIndex ? `slotIndex = ${quoteFilterValue(slotIndex)}` : undefined
 		].filter((filter): filter is string => filter !== undefined);
@@ -204,12 +248,21 @@ export class MeilisearchScpStatementLiveStore
 		return filters.join(' AND ');
 	}
 
+	private buildCursorFilter(after: ScpStatementLiveCursor): string {
+		return `(${[
+			`observedAtMs > ${after.observedAtMs}`,
+			`(observedAtMs = ${after.observedAtMs} AND statementHash > ${quoteFilterValue(after.statementHash)})`
+		].join(' OR ')})`;
+	}
+
+	private buildSort(order: ScpStatementLiveOrder | undefined): string[] {
+		const direction = order === 'asc' ? 'asc' : 'desc';
+		return [`observedAtMs:${direction}`, `statementHash:${direction}`];
+	}
+
 	private async enqueueRetentionCleanup(nowMs: number): Promise<void> {
 		if (!this.index) return;
-		if (
-			nowMs - this.lastRetentionCleanupAtMs <
-			retentionCleanupIntervalMs
-		) {
+		if (nowMs - this.lastRetentionCleanupAtMs < retentionCleanupIntervalMs) {
 			return;
 		}
 		this.lastRetentionCleanupAtMs = nowMs;
