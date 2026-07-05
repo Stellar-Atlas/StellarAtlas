@@ -5,6 +5,7 @@ import { GetApiStatus } from '../../use-cases/get-api-status/GetApiStatus.js';
 import { GetDataQualityStatus } from '../../use-cases/get-data-quality-status/GetDataQualityStatus.js';
 import { GetDataFreshnessStatus } from '../../use-cases/get-data-freshness-status/GetDataFreshnessStatus.js';
 import { GetRollupStatus } from '../../use-cases/get-rollup-status/GetRollupStatus.js';
+import { GetScanLogStatus } from '../../use-cases/get-scan-log-status/GetScanLogStatus.js';
 import { GetScanStatus } from '../../use-cases/get-scan-status/GetScanStatus.js';
 import {
 	GetFailoverStatus,
@@ -20,6 +21,7 @@ export interface StatusRouterConfig {
 	readonly getApiStatus: GetApiStatus;
 	readonly getDataQualityStatus: GetDataQualityStatus;
 	readonly getDataFreshnessStatus: GetDataFreshnessStatus;
+	readonly getScanLogStatus: GetScanLogStatus;
 	readonly getScanStatus: GetScanStatus;
 	readonly getRollupStatus: GetRollupStatus;
 	readonly getFrontendStatus: GetFrontendStatus;
@@ -55,6 +57,13 @@ export const StatusRouterWrapper = (config: StatusRouterConfig): Router => {
 		return sendStatusResult(res, await config.getScanStatus.execute());
 	});
 
+	statusRouter.get('/scan-logs', async function (req, res) {
+		return sendStatusResult(
+			res,
+			await config.getScanLogStatus.execute(parseLimit(req.query.limit))
+		);
+	});
+
 	statusRouter.get('/rollups', async function (_req, res) {
 		return sendStatusResult(res, await config.getRollupStatus.execute());
 	});
@@ -85,6 +94,13 @@ export const StatusRouterWrapper = (config: StatusRouterConfig): Router => {
 
 	return statusRouter;
 };
+
+function parseLimit(value: unknown): number | undefined {
+	if (typeof value !== 'string') return undefined;
+	if (!/^\d+$/.test(value)) return undefined;
+	const parsed = Number(value);
+	return Number.isSafeInteger(parsed) ? parsed : undefined;
+}
 
 function sendStatusResult<T>(
 	res: express.Response,

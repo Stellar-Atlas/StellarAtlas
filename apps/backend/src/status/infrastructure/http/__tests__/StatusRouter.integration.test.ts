@@ -8,6 +8,7 @@ import { GetApiStatus } from '@status/use-cases/get-api-status/GetApiStatus.js';
 import { GetDataQualityStatus } from '@status/use-cases/get-data-quality-status/GetDataQualityStatus.js';
 import { GetDataFreshnessStatus } from '@status/use-cases/get-data-freshness-status/GetDataFreshnessStatus.js';
 import { GetRollupStatus } from '@status/use-cases/get-rollup-status/GetRollupStatus.js';
+import { GetScanLogStatus } from '@status/use-cases/get-scan-log-status/GetScanLogStatus.js';
 import { GetScanStatus } from '@status/use-cases/get-scan-status/GetScanStatus.js';
 import {
 	GetFailoverStatus,
@@ -24,6 +25,7 @@ describe('StatusRouter.integration', () => {
 	let getApiStatus: jest.Mocked<GetApiStatus>;
 	let getDataQualityStatus: jest.Mocked<GetDataQualityStatus>;
 	let getDataFreshnessStatus: jest.Mocked<GetDataFreshnessStatus>;
+	let getScanLogStatus: jest.Mocked<GetScanLogStatus>;
 	let getScanStatus: jest.Mocked<GetScanStatus>;
 	let getRollupStatus: jest.Mocked<GetRollupStatus>;
 	let getFrontendStatus: jest.Mocked<GetFrontendStatus>;
@@ -38,6 +40,7 @@ describe('StatusRouter.integration', () => {
 		getApiStatus = mock<GetApiStatus>();
 		getDataQualityStatus = mock<GetDataQualityStatus>();
 		getDataFreshnessStatus = mock<GetDataFreshnessStatus>();
+		getScanLogStatus = mock<GetScanLogStatus>();
 		getScanStatus = mock<GetScanStatus>();
 		getRollupStatus = mock<GetRollupStatus>();
 		getFrontendStatus = mock<GetFrontendStatus>();
@@ -54,6 +57,7 @@ describe('StatusRouter.integration', () => {
 				getApiStatus,
 				getDataQualityStatus,
 				getDataFreshnessStatus,
+				getScanLogStatus,
 				getScanStatus,
 				getRollupStatus,
 				getFrontendStatus,
@@ -288,6 +292,40 @@ describe('StatusRouter.integration', () => {
 				}
 			})
 		);
+		getScanLogStatus.execute.mockResolvedValue(
+			ok({
+				generatedAt: '2026-07-03T12:00:00.000Z',
+				limit: 12,
+				networkScans: [
+					{
+						completed: true,
+						latestLedger: '63340848',
+						latestLedgerCloseTime: '2026-07-03T11:59:45.000Z',
+						ledgersCount: 3,
+						status: 'ok',
+						time: '2026-07-03T12:00:00.000Z'
+					}
+				],
+				archiveScans: [
+					{
+						concurrency: 24,
+						durationMs: 2000,
+						endDate: '2026-07-03T12:00:02.000Z',
+						errorCount: 0,
+						errors: [],
+						fromLedger: 58551360,
+						hasArchiveVerificationError: false,
+						hasWorkerIssue: false,
+						latestScannedLedger: 58551424,
+						latestVerifiedLedger: 58551423,
+						scanStatus: 'ok',
+						startDate: '2026-07-03T12:00:00.000Z',
+						toLedger: 58551424,
+						url: 'https://history.example.com'
+					}
+				]
+			})
+		);
 		getRollupStatus.execute.mockResolvedValue(
 			ok({
 				generatedAt: '2026-07-03T12:00:00.000Z',
@@ -399,6 +437,13 @@ describe('StatusRouter.integration', () => {
 			.expect(200)
 			.expect((response) => {
 				expect(response.body.networkScan.completedScans).toBe(479);
+			});
+		await request(app)
+			.get('/status/scan-logs?limit=5')
+			.expect(200)
+			.expect((response) => {
+				expect(response.body.networkScans[0].latestLedger).toBe('63340848');
+				expect(getScanLogStatus.execute).toHaveBeenCalledWith(5);
 			});
 		await request(app)
 			.get('/status/rollups')

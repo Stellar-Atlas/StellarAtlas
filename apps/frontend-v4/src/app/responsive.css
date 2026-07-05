@@ -21,6 +21,10 @@
 	.status-panel-grid {
 		grid-template-columns: 1fr;
 	}
+
+	.status-scan-log-grid {
+		grid-template-columns: 1fr;
+	}
 }
 
 @media (max-width: 720px) {

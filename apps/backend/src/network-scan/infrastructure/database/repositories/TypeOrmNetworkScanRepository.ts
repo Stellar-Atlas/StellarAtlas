@@ -85,6 +85,15 @@ export class TypeOrmNetworkScanRepository implements NetworkScanRepository {
 		return scan;
 	}
 
+	async findRecent(limit: number): Promise<NetworkScan[]> {
+		if (!Number.isSafeInteger(limit) || limit < 1) return [];
+
+		return this.repository.find({
+			order: { time: 'DESC' },
+			take: limit
+		});
+	}
+
 	async findCompletedById(id: number): Promise<NetworkScan | undefined> {
 		const scan = await this.repository.findOne({
 			where: {

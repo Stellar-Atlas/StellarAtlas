@@ -324,6 +324,39 @@ export interface PublicArchiveQueueStatus {
 	readonly totalUnfinishedJobs: number;
 }
 
+export interface PublicNetworkScanLogEntry {
+	readonly completed: boolean;
+	readonly latestLedger: string;
+	readonly latestLedgerCloseTime: string | null;
+	readonly ledgersCount: number;
+	readonly status: 'ok' | 'incomplete';
+	readonly time: string;
+}
+
+export interface PublicArchiveScanLogEntry {
+	readonly concurrency: number;
+	readonly durationMs: number;
+	readonly endDate: string;
+	readonly errorCount: number;
+	readonly errors: readonly PublicHistoryArchiveScanLogError[];
+	readonly fromLedger: number;
+	readonly hasArchiveVerificationError: boolean;
+	readonly hasWorkerIssue: boolean;
+	readonly latestScannedLedger: number;
+	readonly latestVerifiedLedger: number;
+	readonly scanStatus: 'ok' | 'archive_error' | 'worker_issue';
+	readonly startDate: string;
+	readonly toLedger: number | null;
+	readonly url: string;
+}
+
+export interface PublicScanLogStatus {
+	readonly archiveScans: readonly PublicArchiveScanLogEntry[];
+	readonly generatedAt: string;
+	readonly limit: number;
+	readonly networkScans: readonly PublicNetworkScanLogEntry[];
+}
+
 export interface PublicDataQualityStatus {
 	readonly archiveQueue: PublicArchiveQueueStatus;
 	readonly dataFreshness: PublicDataFreshnessStatus;

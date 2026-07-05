@@ -1513,6 +1513,170 @@
 				}
 			}
 		},
+		"/v1/status/scan-logs": {
+			"get": {
+				"summary": "Get recent scan log rows",
+				"description": "Returns bounded chronological network scan and archive scan run logs. Archive worker/setup issues and archive verification errors remain separate evidence classes.",
+				"tags": ["Status"],
+				"operationId": "getScanLogStatus",
+				"parameters": [
+					{
+						"name": "limit",
+						"in": "query",
+						"description": "Maximum rows per scan class. Defaults to 12 and is capped by the server.",
+						"required": false,
+						"schema": {
+							"type": "integer",
+							"minimum": 1,
+							"maximum": 50
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "recent scan logs",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object",
+									"required": [
+										"archiveScans",
+										"generatedAt",
+										"limit",
+										"networkScans"
+									],
+									"properties": {
+										"archiveScans": {
+											"type": "array",
+											"items": {
+												"type": "object",
+												"required": [
+													"concurrency",
+													"durationMs",
+													"endDate",
+													"errorCount",
+													"errors",
+													"fromLedger",
+													"hasArchiveVerificationError",
+													"hasWorkerIssue",
+													"latestScannedLedger",
+													"latestVerifiedLedger",
+													"scanStatus",
+													"startDate",
+													"toLedger",
+													"url"
+												],
+												"properties": {
+													"concurrency": {
+														"type": "integer",
+														"minimum": 0
+													},
+													"durationMs": {
+														"type": "integer",
+														"minimum": 0
+													},
+													"endDate": {
+														"type": "string",
+														"format": "date-time"
+													},
+													"errorCount": {
+														"type": "integer",
+														"minimum": 0
+													},
+													"errors": {
+														"type": "array",
+														"items": {
+															"type": "object",
+															"required": ["message", "type", "url"],
+															"properties": {
+																"message": { "type": "string" },
+																"type": { "type": "string" },
+																"url": { "type": "string" }
+															}
+														}
+													},
+													"fromLedger": {
+														"type": "integer",
+														"minimum": 0
+													},
+													"hasArchiveVerificationError": {
+														"type": "boolean"
+													},
+													"hasWorkerIssue": { "type": "boolean" },
+													"latestScannedLedger": {
+														"type": "integer",
+														"minimum": 0
+													},
+													"latestVerifiedLedger": {
+														"type": "integer",
+														"minimum": 0
+													},
+													"scanStatus": {
+														"type": "string",
+														"enum": ["ok", "archive_error", "worker_issue"]
+													},
+													"startDate": {
+														"type": "string",
+														"format": "date-time"
+													},
+													"toLedger": {
+														"type": "integer",
+														"minimum": 0,
+														"nullable": true
+													},
+													"url": { "type": "string", "format": "uri" }
+												}
+											}
+										},
+										"generatedAt": {
+											"type": "string",
+											"format": "date-time"
+										},
+										"limit": { "type": "integer", "minimum": 1 },
+										"networkScans": {
+											"type": "array",
+											"items": {
+												"type": "object",
+												"required": [
+													"completed",
+													"latestLedger",
+													"latestLedgerCloseTime",
+													"ledgersCount",
+													"status",
+													"time"
+												],
+												"properties": {
+													"completed": { "type": "boolean" },
+													"latestLedger": { "type": "string" },
+													"latestLedgerCloseTime": {
+														"type": "string",
+														"format": "date-time",
+														"nullable": true
+													},
+													"ledgersCount": {
+														"type": "integer",
+														"minimum": 0
+													},
+													"status": {
+														"type": "string",
+														"enum": ["ok", "incomplete"]
+													},
+													"time": {
+														"type": "string",
+														"format": "date-time"
+													}
+												}
+											}
+										}
+									}
+								}
+							}
+						}
+					},
+					"500": { "description": "Server error" }
+				}
+			}
+		},
 		"/v1/status/rollups": {
 			"get": {
 				"summary": "Get daily rollup continuity status",

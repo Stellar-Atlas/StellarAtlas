@@ -6,6 +6,7 @@ import { GetApiStatus } from '../../use-cases/get-api-status/GetApiStatus.js';
 import { GetDataQualityStatus } from '../../use-cases/get-data-quality-status/GetDataQualityStatus.js';
 import { GetDataFreshnessStatus } from '../../use-cases/get-data-freshness-status/GetDataFreshnessStatus.js';
 import { GetRollupStatus } from '../../use-cases/get-rollup-status/GetRollupStatus.js';
+import { GetScanLogStatus } from '../../use-cases/get-scan-log-status/GetScanLogStatus.js';
 import { GetScanStatus } from '../../use-cases/get-scan-status/GetScanStatus.js';
 import {
 	GetFailoverStatus,
@@ -24,6 +25,7 @@ export function load(container: Container, config: Config) {
 	container.bind(GetApiStatus).toSelf();
 	container.bind(GetDataQualityStatus).toSelf();
 	container.bind(GetDataFreshnessStatus).toSelf();
+	container.bind(GetScanLogStatus).toSelf();
 	container.bind(GetScanStatus).toSelf();
 	container.bind(GetRollupStatus).toSelf();
 	container.bind(GetFrontendStatus).toSelf();

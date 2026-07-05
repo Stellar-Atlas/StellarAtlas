@@ -60,6 +60,7 @@ import { GetApiStatus } from '@status/use-cases/get-api-status/GetApiStatus.js';
 import { GetDataQualityStatus } from '@status/use-cases/get-data-quality-status/GetDataQualityStatus.js';
 import { GetDataFreshnessStatus } from '@status/use-cases/get-data-freshness-status/GetDataFreshnessStatus.js';
 import { GetRollupStatus } from '@status/use-cases/get-rollup-status/GetRollupStatus.js';
+import { GetScanLogStatus } from '@status/use-cases/get-scan-log-status/GetScanLogStatus.js';
 import { GetScanStatus } from '@status/use-cases/get-scan-status/GetScanStatus.js';
 import {
 	GetFailoverStatus,
@@ -180,6 +181,7 @@ const listen = async () => {
 			getApiStatus: kernel.container.get(GetApiStatus),
 			getDataQualityStatus: kernel.container.get(GetDataQualityStatus),
 			getDataFreshnessStatus: kernel.container.get(GetDataFreshnessStatus),
+			getScanLogStatus: kernel.container.get(GetScanLogStatus),
 			getScanStatus: kernel.container.get(GetScanStatus),
 			getRollupStatus: kernel.container.get(GetRollupStatus),
 			getFrontendStatus: kernel.container.get(GetFrontendStatus),

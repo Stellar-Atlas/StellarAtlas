@@ -23,6 +23,7 @@ import type {
 	PublicOrganization,
 	PublicRecentTransactions,
 	PublicScpStatementObservation,
+	PublicScanLogStatus,
 	PublicTransactionLookup,
 	PublicWorkerStatus
 } from './types';
@@ -404,6 +405,14 @@ export const fetchDataQualityStatus = (
 ): Promise<PublicDataQualityStatus> =>
 	fetchJson<PublicDataQualityStatus>(
 		'/v1/status/data-quality',
+		withTags(options, [frontendCacheTags.status])
+	);
+
+export const fetchScanLogStatus = (
+	options?: FetchOptions
+): Promise<PublicScanLogStatus> =>
+	fetchJson<PublicScanLogStatus>(
+		'/v1/status/scan-logs',
 		withTags(options, [frontendCacheTags.status])
 	);
 

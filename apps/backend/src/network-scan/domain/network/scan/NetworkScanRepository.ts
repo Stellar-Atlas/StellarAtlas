@@ -14,6 +14,8 @@ export interface NetworkScanRepository {
 
 	findLatest(): Promise<NetworkScan | undefined>;
 
+	findRecent(limit: number): Promise<NetworkScan[]>;
+
 	findCompletedById(id: number): Promise<NetworkScan | undefined>;
 
 	findAt(at: Date): Promise<NetworkScan | undefined>;

@@ -13,9 +13,36 @@
 	grid-column: 1 / -1;
 }
 
+.status-scan-log-panel {
+	grid-column: 1 / -1;
+}
+
+.status-scan-log-grid {
+	display: grid;
+	gap: 16px;
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+	padding: 0 18px 18px;
+}
+
+.status-scan-log-column {
+	min-inline-size: 0;
+}
+
+.status-scan-log-column h3 {
+	font-size: 0.86rem;
+	margin: 16px 0 8px;
+	text-transform: uppercase;
+}
+
 .status-dashboard .panel-heading > div {
 	display: grid;
 	gap: 3px;
+}
+
+.status-muted {
+	color: var(--muted);
+	font-size: 0.82rem;
+	font-weight: 800;
 }
 
 .status-list {

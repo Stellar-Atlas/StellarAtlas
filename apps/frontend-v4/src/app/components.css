@@ -442,6 +442,12 @@ td {
 	padding: 0;
 }
 
+.archive-scan-log-note {
+	color: var(--muted);
+	font-size: 0.9rem;
+	margin: 0;
+}
+
 .docs-panel,
 .error-panel {
 	display: grid;
@@ -502,4 +508,11 @@ code {
 	padding: 8px 10px;
 }
 
-@keyframes loading-sheen { from { opacity: 0.52; } to { opacity: 1; } }
+@keyframes loading-sheen {
+	from {
+		opacity: 0.52;
+	}
+	to {
+		opacity: 1;
+	}
+}

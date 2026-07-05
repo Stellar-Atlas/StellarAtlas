@@ -15,7 +15,7 @@ interface HistoryArchiveScanLogProps {
 	readonly logs: readonly PublicHistoryArchiveScanLogEntry[];
 }
 
-type ScanLogFilter = 'archive-errors' | 'worker-issues' | 'all';
+type ScanLogFilter = 'archive-errors' | 'worker-issues' | 'successful' | 'all';
 
 export function HistoryArchiveScanLog({
 	logs
@@ -28,6 +28,7 @@ export function HistoryArchiveScanLog({
 					return scanLogHasArchiveVerificationError(entry);
 				}
 				if (filter === 'worker-issues') return scanLogHasWorkerIssue(entry);
+				if (filter === 'successful') return scanLogIsSuccessfulRun(entry);
 
 				return true;
 			}),
@@ -37,6 +38,7 @@ export function HistoryArchiveScanLog({
 		scanLogHasArchiveVerificationError
 	).length;
 	const workerIssueCount = logs.filter(scanLogHasWorkerIssue).length;
+	const successfulRunCount = logs.filter(scanLogIsSuccessfulRun).length;
 	const activeCount = logs.filter(scanLogIsActive).length;
 
 	if (logs.length === 0) {
@@ -55,7 +57,8 @@ export function HistoryArchiveScanLog({
 						{' '}
 						/ {formatInteger(activeCount)} active /{' '}
 						{formatInteger(archiveErrorCount)} archive errors /{' '}
-						{formatInteger(workerIssueCount)} worker issues
+						{formatInteger(workerIssueCount)} worker issues /{' '}
+						{formatInteger(successfulRunCount)} successful runs
 					</span>
 				</div>
 				<div className="segmented" aria-label="Archive scan log filter">
@@ -72,6 +75,13 @@ export function HistoryArchiveScanLog({
 						type="button"
 					>
 						Worker issues
+					</button>
+					<button
+						className={filter === 'successful' ? 'active' : ''}
+						onClick={() => setFilter('successful')}
+						type="button"
+					>
+						Successful runs
 					</button>
 					<button
 						className={filter === 'all' ? 'active' : ''}
@@ -176,7 +186,11 @@ export function HistoryArchiveScanLog({
 											</li>
 										))}
 									</ul>
-								) : null}
+								) : (
+									<p className="archive-scan-log-note">
+										No archive errors detected for this scan run.
+									</p>
+								)}
 							</li>
 						);
 					})}
@@ -185,6 +199,14 @@ export function HistoryArchiveScanLog({
 		</div>
 	);
 }
+
+const scanLogIsSuccessfulRun = (
+	entry: PublicHistoryArchiveScanLogEntry
+): boolean =>
+	entry.status === 'completed' &&
+	!scanLogIsActive(entry) &&
+	!scanLogHasArchiveVerificationError(entry) &&
+	!scanLogHasWorkerIssue(entry);
 
 const formatDuration = (durationMs: number): string => {
 	if (!Number.isFinite(durationMs) || durationMs < 0) return 'Unknown';

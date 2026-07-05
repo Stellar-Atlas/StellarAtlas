@@ -45,6 +45,18 @@ export class TypeOrmHistoryArchiveScanResultRepository implements ScanRepository
 		return this.findByIds(scanIds);
 	}
 
+	async findRecentLimited(limit: number): Promise<Scan[]> {
+		if (!Number.isSafeInteger(limit) || limit < 1) return [];
+
+		return await this.baseRepository
+			.createQueryBuilder('scan')
+			.leftJoinAndSelect('scan.error', 'error')
+			.orderBy('scan.startDate', 'DESC')
+			.addOrderBy('scan.id', 'DESC')
+			.take(limit)
+			.getMany();
+	}
+
 	async findLatest(): Promise<Scan[]> {
 		const scanIds = await this.findSelectedScanIds({});
 		if (scanIds.length === 0) return [];

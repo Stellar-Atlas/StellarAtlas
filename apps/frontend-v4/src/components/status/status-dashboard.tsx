@@ -1,8 +1,11 @@
 import type {
 	PublicApiStatus,
+	PublicArchiveScanLogEntry,
 	PublicConfiguredServiceStatus,
 	PublicDataQualityStatus,
 	PublicFailoverStatus,
+	PublicNetworkScanLogEntry,
+	PublicScanLogStatus,
 	PublicStatusLevel,
 	PublicWorkerStatus
 } from '@api/types';
@@ -20,6 +23,7 @@ interface StatusDashboardProps {
 	readonly frontend: PublicConfiguredServiceStatus;
 	readonly horizon: PublicConfiguredServiceStatus;
 	readonly rpc: PublicConfiguredServiceStatus;
+	readonly scanLogs: PublicScanLogStatus;
 	readonly workers: PublicWorkerStatus;
 }
 
@@ -30,6 +34,7 @@ export function StatusDashboard({
 	frontend,
 	horizon,
 	rpc,
+	scanLogs,
 	workers
 }: StatusDashboardProps): React.JSX.Element {
 	const scan = dataQuality.scans.networkScan;
@@ -174,8 +179,83 @@ export function StatusDashboard({
 						<FailoverRow failover={failover} />
 					</div>
 				</section>
+
+				<section className="panel status-scan-log-panel">
+					<div className="panel-heading">
+						<div>
+							<strong>Recent Scan Logs</strong>
+							<span>{formatDateTime(scanLogs.generatedAt)}</span>
+						</div>
+						<span className="status-muted">
+							{formatInteger(scanLogs.limit)} row limit
+						</span>
+					</div>
+					<div className="status-scan-log-grid">
+						<RecentNetworkScans scans={scanLogs.networkScans} />
+						<RecentArchiveScans scans={scanLogs.archiveScans} />
+					</div>
+				</section>
 			</div>
 		</div>
+	);
+}
+
+function RecentNetworkScans({
+	scans
+}: {
+	readonly scans: readonly PublicNetworkScanLogEntry[];
+}): React.JSX.Element {
+	return (
+		<div className="status-scan-log-column">
+			<h3>Network scans</h3>
+			<div className="status-list">
+				{scans.map((scan) => (
+					<StatusRow
+						detail={`${formatInteger(scan.ledgersCount)} processed ledgers, close ${formatNullableDate(scan.latestLedgerCloseTime)}`}
+						key={scan.time}
+						label={formatDateTime(scan.time)}
+						status={scan.completed ? 'ok' : 'degraded'}
+						value={`Ledger ${scan.latestLedger}`}
+					/>
+				))}
+				{scans.length === 0 && <EmptyLogRow label="No network scans" />}
+			</div>
+		</div>
+	);
+}
+
+function RecentArchiveScans({
+	scans
+}: {
+	readonly scans: readonly PublicArchiveScanLogEntry[];
+}): React.JSX.Element {
+	return (
+		<div className="status-scan-log-column">
+			<h3>Archive scan runs</h3>
+			<div className="status-list">
+				{scans.map((scan) => (
+					<StatusRow
+						detail={archiveScanDetail(scan)}
+						key={`${scan.url}-${scan.startDate}-${scan.latestScannedLedger}`}
+						label={formatArchiveUrl(scan.url)}
+						status={archiveScanTone(scan)}
+						value={archiveScanLabel(scan)}
+					/>
+				))}
+				{scans.length === 0 && <EmptyLogRow label="No archive scans" />}
+			</div>
+		</div>
+	);
+}
+
+function EmptyLogRow({ label }: { readonly label: string }): React.JSX.Element {
+	return (
+		<StatusRow
+			detail="No recent rows returned"
+			label={label}
+			status="unavailable"
+			value="No data"
+		/>
 	);
 }
 
@@ -271,6 +351,40 @@ function serviceGroupStatus(
 		return 'unavailable';
 	}
 	return 'degraded';
+}
+
+function archiveScanTone(scan: PublicArchiveScanLogEntry): PublicStatusLevel {
+	if (scan.scanStatus === 'ok') return 'ok';
+	if (scan.scanStatus === 'worker_issue') return 'degraded';
+	return 'unavailable';
+}
+
+function archiveScanLabel(scan: PublicArchiveScanLogEntry): string {
+	if (scan.scanStatus === 'ok') return 'No archive errors';
+	if (scan.scanStatus === 'worker_issue') return 'Worker issue';
+	return 'Archive error';
+}
+
+function archiveScanDetail(scan: PublicArchiveScanLogEntry): string {
+	const rangeEnd =
+		scan.toLedger === null ? 'latest' : formatInteger(scan.toLedger);
+	const range = `${formatInteger(scan.fromLedger)}-${rangeEnd}`;
+	const duration = formatDuration(scan.durationMs);
+	const errorText =
+		scan.errorCount === 0
+			? 'run completed with no archive errors'
+			: `${formatInteger(scan.errorCount)} errors`;
+
+	return `${range}, verified ${formatInteger(scan.latestVerifiedLedger)}, ${formatInteger(scan.concurrency)} workers, ${duration}, ${errorText}`;
+}
+
+function formatArchiveUrl(value: string): string {
+	try {
+		const url = new URL(value);
+		return url.hostname;
+	} catch {
+		return value;
+	}
 }
 
 function statusTone(status: PublicStatusLevel): 'good' | 'warning' | 'danger' {
