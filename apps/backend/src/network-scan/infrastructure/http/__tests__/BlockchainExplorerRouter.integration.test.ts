@@ -65,6 +65,65 @@ describe('BlockchainExplorerRouter.integration', () => {
 		expect(fetchSpy).not.toHaveBeenCalled();
 	});
 
+	it('returns a bounded recent transaction feed', async () => {
+		jest.spyOn(global, 'fetch').mockResolvedValue(
+			new Response(
+				JSON.stringify({
+					_embedded: {
+						records: [
+							{
+								created_at: '2026-07-05T05:11:31Z',
+								fee_charged: '100',
+								hash: 'a'.repeat(64),
+								ledger: 63335066,
+								operation_count: 3,
+								source_account: `G${'A'.repeat(55)}`,
+								successful: true
+							}
+						]
+					},
+					_links: {
+						next: {
+							href: 'https://horizon.example/transactions?cursor=next'
+						}
+					}
+				}),
+				{ status: 200 }
+			)
+		);
+
+		await request(createApp())
+			.get('/v1/explorer/transactions?limit=10')
+			.expect(200)
+			.expect((response) => {
+				expect(response.body).toMatchObject({
+					limit: 10,
+					source: 'horizon',
+					truncated: true,
+					records: [
+						{
+							hash: 'a'.repeat(64),
+							ledger: '63335066',
+							source: 'horizon'
+						}
+					]
+				});
+			});
+	});
+
+	it('rejects unbounded transaction feed limits', async () => {
+		const fetchSpy = jest.spyOn(global, 'fetch');
+
+		await request(createApp())
+			.get('/v1/explorer/transactions?limit=500')
+			.expect(400)
+			.expect((response) => {
+				expect(response.body).toEqual({ error: 'Invalid transaction limit' });
+			});
+
+		expect(fetchSpy).not.toHaveBeenCalled();
+	});
+
 	it('reports contract lookup as unconfigured until RPC is wired', async () => {
 		await request(createApp())
 			.get(`/v1/explorer/contracts/${contractId}`)

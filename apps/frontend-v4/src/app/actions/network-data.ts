@@ -5,6 +5,7 @@ import {
 	fetchExplorerAssets,
 	fetchExplorerContract,
 	fetchExplorerOperations,
+	fetchExplorerRecentTransactions,
 	fetchExplorerSearch,
 	fetchLatestLedger,
 	fetchLedgerTransactions,
@@ -20,6 +21,7 @@ import type {
 	PublicHistoryArchiveScanLogEntry,
 	PublicLatestLedger,
 	PublicLedgerTransactions,
+	PublicRecentTransactions,
 	PublicTransactionLookup
 } from '../../api/types';
 import { normalizeTransactionHash } from '../../domain/transaction-hash';
@@ -57,6 +59,12 @@ export interface ExplorerContractResult {
 	readonly contract: PublicExplorerContract | null;
 	readonly message: string | null;
 	readonly status: ExplorerActionStatus;
+}
+
+export interface ExplorerTransactionsResult {
+	readonly message: string | null;
+	readonly status: ExplorerActionStatus;
+	readonly transactions: PublicRecentTransactions | null;
 }
 
 export async function getHistoryArchiveScanLogs(
@@ -142,6 +150,34 @@ export async function searchExplorer(
 			message: 'Explorer search unavailable',
 			search: null,
 			status: 'unavailable'
+		};
+	}
+}
+
+export async function getExplorerRecentTransactions(
+	limit = 20
+): Promise<ExplorerTransactionsResult> {
+	if (!Number.isInteger(limit) || limit < 1 || limit > 50) {
+		return {
+			message: 'Invalid transaction feed limit',
+			status: 'invalid',
+			transactions: null
+		};
+	}
+
+	try {
+		return {
+			message: null,
+			status: 'loaded',
+			transactions: await fetchExplorerRecentTransactions(limit, {
+				cache: 'no-store'
+			})
+		};
+	} catch {
+		return {
+			message: 'Transaction feed unavailable',
+			status: 'unavailable',
+			transactions: null
 		};
 	}
 }

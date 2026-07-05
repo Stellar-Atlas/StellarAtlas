@@ -21,6 +21,7 @@ import type {
 	PublicNetwork,
 	PublicNode,
 	PublicOrganization,
+	PublicRecentTransactions,
 	PublicScpStatementObservation,
 	PublicTransactionLookup,
 	PublicWorkerStatus
@@ -302,6 +303,15 @@ export const fetchExplorerSearch = (
 	const path = `/v1/explorer/search?query=${encodeURIComponent(query)}&type=${encodeURIComponent(type)}`;
 	return fetchJson<PublicExplorerSearch>(path, options);
 };
+
+export const fetchExplorerRecentTransactions = (
+	limit: number,
+	options?: FetchOptions
+): Promise<PublicRecentTransactions> =>
+	fetchJson<PublicRecentTransactions>(
+		`/v1/explorer/transactions?limit=${encodeURIComponent(limit.toString())}`,
+		options
+	);
 
 export const fetchExplorerLedger = (
 	sequence: string,

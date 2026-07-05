@@ -6,6 +6,7 @@ import type {
 
 export interface NodeTag {
 	label: string;
+	title?: string;
 	tone: 'good' | 'warning' | 'danger' | 'neutral';
 }
 
@@ -38,7 +39,12 @@ export const getNodeTags = (node: PublicNode): NodeTag[] => {
 		tags.push({ label: 'connectivity', tone: 'danger' });
 	if (node.stellarCoreVersionBehind)
 		tags.push({ label: 'version', tone: 'warning' });
-	if (node.overLoaded) tags.push({ label: 'overloaded', tone: 'warning' });
+	if (node.overLoaded)
+		tags.push({
+			label: 'ERR_LOAD observed',
+			title: 'Crawler observed Stellar ERR_LOAD from this node',
+			tone: 'warning'
+		});
 
 	return tags.length > 0 ? tags : [{ label: 'observed', tone: 'neutral' }];
 };

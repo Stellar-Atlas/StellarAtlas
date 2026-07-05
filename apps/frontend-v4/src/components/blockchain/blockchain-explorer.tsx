@@ -1,7 +1,8 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
+	getExplorerRecentTransactions,
 	lookupExplorerContract,
 	searchExplorer,
 	searchExplorerAssets,
@@ -9,7 +10,8 @@ import {
 	type ExplorerAssetsResult,
 	type ExplorerContractResult,
 	type ExplorerOperationsResult,
-	type ExplorerSearchResult
+	type ExplorerSearchResult,
+	type ExplorerTransactionsResult
 } from '../../app/actions/network-data';
 import type {
 	PublicExplorerOperationFilters,
@@ -20,6 +22,7 @@ import {
 	AssetsView,
 	ContractView,
 	OperationsView,
+	RecentTransactionsView,
 	SearchResultView,
 	toDateInputValue
 } from './blockchain-explorer-results';
@@ -57,6 +60,12 @@ const initialContract: ExplorerContractResult = {
 	status: 'invalid'
 };
 
+const initialTransactions: ExplorerTransactionsResult = {
+	message: null,
+	status: 'invalid',
+	transactions: null
+};
+
 export function BlockchainExplorer(): React.JSX.Element {
 	const [searchQuery, setSearchQuery] = useState('');
 	const [searchType, setSearchType] =
@@ -70,14 +79,40 @@ export function BlockchainExplorer(): React.JSX.Element {
 	const [assetResult, setAssetResult] = useState(initialAssets);
 	const [contractId, setContractId] = useState('');
 	const [contractResult, setContractResult] = useState(initialContract);
+	const [transactionFeed, setTransactionFeed] = useState(initialTransactions);
 	const [loading, setLoading] = useState<string | null>(null);
+	const [transactionFeedLoading, setTransactionFeedLoading] = useState(false);
+
+	const runExplorerSearch = (
+		query: string,
+		type: PublicExplorerSearchType
+	): void => {
+		setLoading('search');
+		void searchExplorer(query, type)
+			.then(setSearchResult)
+			.finally(() => setLoading(null));
+	};
+
+	const loadRecentTransactions = (): void => {
+		setTransactionFeedLoading(true);
+		void getExplorerRecentTransactions(20)
+			.then(setTransactionFeed)
+			.finally(() => setTransactionFeedLoading(false));
+	};
+
+	const inspectTransaction = (hash: string): void => {
+		setSearchQuery(hash);
+		setSearchType('transaction');
+		runExplorerSearch(hash, 'transaction');
+	};
+
+	useEffect(() => {
+		loadRecentTransactions();
+	}, []);
 
 	const submitSearch = (event: React.FormEvent<HTMLFormElement>): void => {
 		event.preventDefault();
-		setLoading('search');
-		void searchExplorer(searchQuery, searchType)
-			.then(setSearchResult)
-			.finally(() => setLoading(null));
+		runExplorerSearch(searchQuery, searchType);
 	};
 
 	const submitOperations = (event: React.FormEvent<HTMLFormElement>): void => {
@@ -140,6 +175,26 @@ export function BlockchainExplorer(): React.JSX.Element {
 					</button>
 				</form>
 				<SearchResultView result={searchResult} />
+			</section>
+
+			<section className="explorer-panel explorer-feed-panel">
+				<div className="panel-heading explorer-feed-heading">
+					<div>
+						<strong>Recent Transactions</strong>
+						<span>Latest Horizon transactions</span>
+					</div>
+					<button
+						disabled={transactionFeedLoading}
+						onClick={loadRecentTransactions}
+						type="button"
+					>
+						{transactionFeedLoading ? 'Loading' : 'Refresh'}
+					</button>
+				</div>
+				<RecentTransactionsView
+					onInspect={inspectTransaction}
+					result={transactionFeed}
+				/>
 			</section>
 
 			<section className="explorer-grid">

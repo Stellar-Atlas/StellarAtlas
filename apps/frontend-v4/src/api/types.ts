@@ -90,6 +90,14 @@ export interface PublicTransactionLookup extends PublicLedgerTransaction {
 	readonly source: 'horizon';
 }
 
+export interface PublicRecentTransactions {
+	readonly generatedAt: string;
+	readonly limit: number;
+	readonly records: readonly PublicTransactionLookup[];
+	readonly source: 'horizon';
+	readonly truncated: boolean;
+}
+
 export interface PublicLedgerTransactions {
 	readonly ledger: string;
 	readonly records: readonly PublicLedgerTransaction[];

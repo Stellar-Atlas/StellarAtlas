@@ -8,7 +8,7 @@ export function StatusTags({ tags }: StatusTagsProps): React.JSX.Element {
 	return (
 		<div className="tags">
 			{tags.map((tag) => (
-				<span className={`tag ${tag.tone}`} key={tag.label}>
+				<span className={`tag ${tag.tone}`} key={tag.label} title={tag.title}>
 					{tag.label}
 				</span>
 			))}

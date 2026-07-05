@@ -5,13 +5,15 @@ import type {
 	PublicExplorerContract,
 	PublicExplorerLedger,
 	PublicExplorerOperation,
+	PublicRecentTransactions,
 	PublicTransactionLookup
 } from '@api/types';
 import type {
 	ExplorerAssetsResult,
 	ExplorerContractResult,
 	ExplorerOperationsResult,
-	ExplorerSearchResult
+	ExplorerSearchResult,
+	ExplorerTransactionsResult
 } from '../../app/actions/network-data';
 
 export function SearchResultView({
@@ -85,11 +87,69 @@ export function ContractView({
 	return result.contract ? <ContractCard contract={result.contract} /> : null;
 }
 
+export function RecentTransactionsView({
+	onInspect,
+	result
+}: {
+	readonly onInspect: (hash: string) => void;
+	readonly result: ExplorerTransactionsResult;
+}): React.JSX.Element | null {
+	if (result.message)
+		return <ExplorerState tone="warning" text={result.message} />;
+	if (!result.transactions)
+		return <ExplorerState tone="neutral" text="Loading recent transactions." />;
+
+	return (
+		<div className="explorer-transaction-feed">
+			{result.transactions.truncated ? (
+				<ExplorerState
+					tone="neutral"
+					text={`Showing latest ${result.transactions.records.length} of a larger Horizon window.`}
+				/>
+			) : null}
+			<TransactionFeedRows
+				onInspect={onInspect}
+				transactions={result.transactions}
+			/>
+		</div>
+	);
+}
+
 export function toDateInputValue(value: string | undefined): string {
 	if (!value) return '';
 	const date = new Date(value);
 	if (Number.isNaN(date.getTime())) return '';
 	return date.toISOString().slice(0, 16);
+}
+
+function TransactionFeedRows({
+	onInspect,
+	transactions
+}: {
+	readonly onInspect: (hash: string) => void;
+	readonly transactions: PublicRecentTransactions;
+}): React.JSX.Element {
+	if (transactions.records.length === 0)
+		return <ExplorerState tone="neutral" text="No transactions returned." />;
+
+	return (
+		<div className="explorer-table transaction-feed">
+			{transactions.records.slice(0, transactions.limit).map((transaction) => (
+				<button
+					className="explorer-transaction-row"
+					key={transaction.hash}
+					onClick={() => onInspect(transaction.hash)}
+					type="button"
+				>
+					<strong>{transaction.hash}</strong>
+					<span>{formatDate(transaction.createdAt)}</span>
+					<span>ledger {transaction.ledger}</span>
+					<span>{transaction.operationCount} ops</span>
+					<span>{transaction.successful ? 'successful' : 'failed'}</span>
+				</button>
+			))}
+		</div>
+	);
 }
 
 function LedgerCard({

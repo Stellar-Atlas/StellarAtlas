@@ -23,6 +23,23 @@
 	gap: 3px;
 }
 
+.explorer-feed-heading {
+	align-items: center;
+	display: flex;
+	gap: 12px;
+	justify-content: space-between;
+}
+
+.explorer-feed-heading button {
+	background: #e9f2fa;
+	border: 1px solid #bfd3e8;
+	border-radius: 6px;
+	color: var(--blue);
+	font-weight: 800;
+	min-block-size: 36px;
+	padding: 0 12px;
+}
+
 .explorer-grid {
 	display: grid;
 	gap: 16px;
@@ -151,17 +168,55 @@
 		minmax(120px, 0.5fr);
 }
 
+.explorer-table.transaction-feed {
+	max-block-size: 420px;
+	overflow: auto;
+}
+
+.explorer-transaction-feed {
+	display: grid;
+	gap: 10px;
+}
+
+.explorer-transaction-row {
+	background: #ffffff;
+	border: 0;
+	border-block-start: 1px solid var(--border);
+	color: var(--ink);
+	cursor: pointer;
+	display: grid;
+	font: inherit;
+	gap: 10px;
+	grid-template-columns:
+		minmax(220px, 1.3fr) minmax(150px, 0.8fr) minmax(110px, 0.5fr)
+		minmax(70px, 0.4fr) minmax(90px, 0.4fr);
+	padding: 10px 12px;
+	text-align: start;
+}
+
+.explorer-transaction-row:first-child {
+	border-block-start: 0;
+}
+
+.explorer-transaction-row:hover,
+.explorer-transaction-row:focus-visible {
+	background: #f7fafc;
+}
+
 .explorer-table-row + .explorer-table-row {
 	border-block-start: 1px solid var(--border);
 }
 
 .explorer-table-row strong,
-.explorer-table-row span {
+.explorer-table-row span,
+.explorer-transaction-row strong,
+.explorer-transaction-row span {
 	min-inline-size: 0;
 	overflow-wrap: anywhere;
 }
 
-.explorer-table-row strong {
+.explorer-table-row strong,
+.explorer-transaction-row strong {
 	color: var(--blue);
 }
 

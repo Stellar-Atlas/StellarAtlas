@@ -59,6 +59,14 @@ export interface TransactionLookupDTO extends LedgerTransactionDTO {
 	source: 'horizon';
 }
 
+export interface RecentTransactionsDTO {
+	generatedAt: string;
+	limit: number;
+	records: TransactionLookupDTO[];
+	source: 'horizon';
+	truncated: boolean;
+}
+
 export interface LedgerTransactionsDTO {
 	ledger: string;
 	records: LedgerTransactionDTO[];
@@ -93,6 +101,16 @@ const buildLatestLedgerUrl = (horizonUrl: string): string => {
 
 const buildHorizonTransactionUrl = (horizonUrl: string, hash: string): string =>
 	new URL(`transactions/${hash}`, getBaseUrl(horizonUrl)).toString();
+
+const buildRecentTransactionsUrl = (
+	horizonUrl: string,
+	limit: number
+): string => {
+	const url = new URL('transactions', getBaseUrl(horizonUrl));
+	url.searchParams.set('order', 'desc');
+	url.searchParams.set('limit', limit.toString());
+	return url.toString();
+};
 
 const isCompleteHorizonLedgerRecord = (
 	record: HorizonLedgerRecord
@@ -173,6 +191,29 @@ export const fetchTransactionByHash = async (
 		throw new Error('Transaction record missing from Horizon response');
 
 	return mapHorizonTransactionLookupRecord(record);
+};
+
+export const fetchRecentTransactions = async (
+	horizonUrl: string,
+	limit: number
+): Promise<RecentTransactionsDTO> => {
+	const response = await fetch(buildRecentTransactionsUrl(horizonUrl, limit), {
+		headers: { Accept: 'application/json' },
+		signal: AbortSignal.timeout(8_000)
+	});
+	if (!response.ok) throw new Error(`Horizon returned HTTP ${response.status}`);
+
+	const payload = (await response.json()) as HorizonTransactionsResponse;
+	const pageRecords = payload._embedded?.records ?? [];
+	return {
+		generatedAt: new Date().toISOString(),
+		limit,
+		records: pageRecords
+			.filter(isCompleteHorizonTransactionLookupRecord)
+			.map(mapHorizonTransactionLookupRecord),
+		source: 'horizon',
+		truncated: typeof payload._links?.next?.href === 'string'
+	};
 };
 
 export const fetchLedgerTransactions = async (

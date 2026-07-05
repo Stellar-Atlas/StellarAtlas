@@ -12,7 +12,10 @@ import {
 	type ExplorerOperationFilters,
 	type ExplorerSearchType
 } from './BlockchainExplorerClient.js';
-import { fetchTransactionByHash } from './HorizonLedgerClient.js';
+import {
+	fetchRecentTransactions,
+	fetchTransactionByHash
+} from './HorizonLedgerClient.js';
 
 export interface BlockchainExplorerRouterConfig {
 	readonly horizonUrl: string;
@@ -20,6 +23,7 @@ export interface BlockchainExplorerRouterConfig {
 }
 
 const explorerCacheMaxAgeSeconds = 20;
+const maxRecentTransactionLimit = 50;
 const operationTypePattern = /^[a-z][a-z0-9_]{0,63}$/;
 
 export const blockchainExplorerRouter = (
@@ -47,6 +51,21 @@ export const blockchainExplorerRouter = (
 				);
 		} catch {
 			return res.status(502).json({ error: 'Explorer search unavailable' });
+		}
+	});
+
+	router.get('/transactions', async (req, res) => {
+		const limit = readRecentTransactionLimit(req.query.limit);
+		if (limit === null)
+			return res.status(400).json({ error: 'Invalid transaction limit' });
+
+		setCacheHeader(res);
+		try {
+			return res
+				.status(200)
+				.json(await fetchRecentTransactions(config.horizonUrl, limit));
+		} catch {
+			return res.status(502).json({ error: 'Transaction feed unavailable' });
 		}
 	});
 
@@ -176,6 +195,22 @@ function readOperationFilters(
 function readQueryString(value: unknown): string | null {
 	const query = readOptionalString(value);
 	return query && query.length > 0 ? query : null;
+}
+
+function readRecentTransactionLimit(value: unknown): number | null {
+	if (value === undefined) return 20;
+	if (typeof value !== 'string') return null;
+
+	const limit = Number(value);
+	if (
+		!Number.isInteger(limit) ||
+		limit < 1 ||
+		limit > maxRecentTransactionLimit
+	) {
+		return null;
+	}
+
+	return limit;
 }
 
 function readOptionalString(value: unknown): string | undefined {
