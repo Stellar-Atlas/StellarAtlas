@@ -10,7 +10,7 @@ import {
 import { getHighestLedgerSequence } from '../../domain/ledger-sequence';
 import { subscribeToLiveNetworkStream } from '../../api/live-network-stream';
 
-const scpStatementFetchLimit = 1_000;
+const scpStatementFetchLimit = 4_000;
 
 const getNewerLedger = (current: string | null, next: unknown): string | null =>
 	getHighestLedgerSequence([current, next]) ?? current;

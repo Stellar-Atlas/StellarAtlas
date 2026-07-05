@@ -160,13 +160,17 @@ export function ScpLiveFeed({
 		toLedgerSequenceText(network.latestLedger) ??
 		network.latestLedger.toString();
 	const observedSlotText = observedSlotIndex ?? summary?.slotIndex ?? null;
+	const activeSlotHasRows =
+		activeSlotIndex !== null &&
+		statements.some((statement) => statement.slotIndex === activeSlotIndex);
+	const visibleActiveSlotIndex = activeSlotHasRows ? activeSlotIndex : null;
 	const feedSlotIndex =
-		activeSlotIndex ??
+		visibleActiveSlotIndex ??
 		summary?.slotIndex ??
 		observedSlotText ??
 		latestLedgerText;
 	const timelineSlotIndex =
-		activeSlotIndex ??
+		visibleActiveSlotIndex ??
 		observedSlotText ??
 		summary?.slotIndex ??
 		latestLedgerText;
@@ -295,10 +299,10 @@ export function ScpLiveFeed({
 				<span className="prepare">Prepare</span>
 				<span className="confirm">Confirm</span>
 				<span className="externalize">Externalize</span>
-			</div>
-			<ScpPhaseTimeline
-				activeSlotIndex={activeSlotIndex}
-				activeStatements={activeStatements}
+				</div>
+				<ScpPhaseTimeline
+					activeSlotIndex={visibleActiveSlotIndex}
+					activeStatements={activeStatements}
 				fallbackSlotIndex={timelineSlotIndex}
 				focusedStatement={null}
 				network={network}
