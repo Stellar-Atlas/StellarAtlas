@@ -2,7 +2,7 @@ import valueValidator from 'validator';
 
 import { TomlFetchError, TomlService } from '../TomlService.js';
 import * as toml from 'toml';
-import { HttpError, type HttpService } from 'http-helper';
+import { HttpError, type HttpResponse, type HttpService } from 'http-helper';
 import { err, ok } from 'neverthrow';
 import { LoggerMock } from '@core/services/__mocks__/LoggerMock.js';
 import { mock } from 'jest-mock-extended';
@@ -10,6 +10,7 @@ import { mock } from 'jest-mock-extended';
 const httpService = mock<HttpService>();
 let tomlService: TomlService;
 beforeEach(() => {
+	httpService.get.mockReset();
 	tomlService = new TomlService(httpService, new LoggerMock());
 });
 
@@ -108,20 +109,20 @@ const tomlV2String =
 const tomlV2Object = toml.parse(tomlV2String);
 tomlV2Object.domain = 'my-domain.com';
 
+function okTomlResponse(): HttpResponse<string> {
+	return {
+		data: tomlV2String,
+		status: 200,
+		statusText: 'ok',
+		headers: {}
+	};
+}
+
 describe('tomlService', () => {
 	describe('fetchToml', () => {
 		it('should fetch a single toml file', async () => {
 			httpService.get.mockReturnValue(
-				new Promise((resolve) =>
-					resolve(
-						ok({
-							data: tomlV2String,
-							status: 200,
-							statusText: 'ok',
-							headers: {}
-						})
-					)
-				)
+				new Promise((resolve) => resolve(ok(okTomlResponse())))
 			);
 
 			const tomlResult = await tomlService.fetchToml('my-domain.com');
@@ -132,21 +133,53 @@ describe('tomlService', () => {
 
 		it('should fetch multiple toml files', async () => {
 			httpService.get.mockReturnValue(
-				new Promise((resolve) =>
-					resolve(
-						ok({
-							data: tomlV2String,
-							status: 200,
-							statusText: 'ok',
-							headers: {}
-						})
-					)
-				)
+				new Promise((resolve) => resolve(ok(okTomlResponse())))
 			);
 
 			const toml = await tomlService.fetchTomlObjects(['my-domain.com']);
 			expect(toml.size).toEqual(1);
 			expect(toml.get('my-domain.com')).toEqual(tomlV2Object);
+		});
+
+		it('should retry certificate failures with TLS verification disabled', async () => {
+			const certificateError = new HttpError(
+				'certificate has expired',
+				'CERT_HAS_EXPIRED'
+			);
+			httpService.get
+				.mockResolvedValueOnce(err(certificateError))
+				.mockResolvedValueOnce(err(certificateError))
+				.mockResolvedValueOnce(ok(okTomlResponse()));
+
+			const tomlResult = await tomlService.fetchToml('my-domain.com');
+
+			expect(tomlResult.isOk()).toBeTruthy();
+			if (tomlResult.isErr()) return;
+			expect(tomlResult.value).toEqual(tomlV2Object);
+			expect(httpService.get).toHaveBeenCalledTimes(3);
+			expect(httpService.get.mock.calls[0]?.[1]?.httpsAgent).toBeUndefined();
+			expect(httpService.get.mock.calls[1]?.[1]?.httpsAgent).toBeUndefined();
+			expect(httpService.get.mock.calls[2]?.[1]?.httpsAgent).toBeDefined();
+		});
+
+		it('should not retry non-certificate failures with TLS verification disabled', async () => {
+			const notFoundResponse: HttpResponse<string> = {
+				data: '',
+				status: 404,
+				statusText: 'Not Found',
+				headers: {}
+			};
+			httpService.get.mockResolvedValue(
+				err(new HttpError('Not Found', undefined, notFoundResponse))
+			);
+
+			const result = await tomlService.fetchToml('my-domain.com');
+
+			expect(result.isErr()).toBeTruthy();
+			expect(httpService.get).toHaveBeenCalledTimes(2);
+			expect(
+				httpService.get.mock.calls.some((call) => call[1]?.httpsAgent)
+			).toBe(false);
 		});
 
 		it('should return err when toml file cannot be parsed', async function () {
