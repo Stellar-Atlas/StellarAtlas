@@ -92,7 +92,7 @@ it('should find the latest scans', async function () {
 	expect(latestByUrl?.scanErrors).toHaveLength(1);
 });
 
-it('should find a bounded latest scan list with verification preference', async function () {
+it('should find a bounded latest scan list with archive-evidence preference', async function () {
 	const repo: ScanRepository = kernel.container.get(
 		TYPES.HistoryArchiveScanRepository
 	);
@@ -160,7 +160,7 @@ it('should find a bounded latest scan list with verification preference', async 
 		null,
 		150,
 		null,
-		0,
+		24,
 		null,
 		new ScanError(
 			ScanErrorType.TYPE_CONNECTION,
@@ -193,7 +193,7 @@ it('should find a bounded latest scan list with verification preference', async 
 	]);
 });
 
-it('should prefer the latest verification scan over a newer worker setup failure', async function () {
+it('should prefer latest archive evidence over a newer worker-only failure', async function () {
 	const repo: ScanRepository = kernel.container.get(
 		TYPES.HistoryArchiveScanRepository
 	);
@@ -226,7 +226,7 @@ it('should prefer the latest verification scan over a newer worker setup failure
 		null,
 		150,
 		null,
-		0,
+		24,
 		null,
 		new ScanError(
 			ScanErrorType.TYPE_CONNECTION,

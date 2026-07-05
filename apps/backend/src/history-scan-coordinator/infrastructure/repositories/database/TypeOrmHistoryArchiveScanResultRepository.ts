@@ -6,6 +6,10 @@ import { injectable } from 'inversify';
 type NumericValue = number | string;
 type RawLatestScanIdRow = { id?: NumericValue };
 type ScanWithId = Scan & { id: number };
+type LatestScanQueryOptions = {
+	readonly limit?: number;
+	readonly url?: string;
+};
 
 @injectable()
 export class TypeOrmHistoryArchiveScanResultRepository implements ScanRepository {
@@ -16,17 +20,10 @@ export class TypeOrmHistoryArchiveScanResultRepository implements ScanRepository
 	}
 
 	async findLatestByUrl(url: string): Promise<Scan | null> {
-		const latestVerificationScan = await this.createFindByUrlQuery(url)
-			.andWhere('scan.concurrency > 0')
-			.orderBy('scan.startDate', 'DESC')
-			.getOne();
+		const [scanId] = await this.findSelectedScanIds({ url });
+		if (scanId === undefined) return null;
 
-		return (
-			latestVerificationScan ??
-			(await this.createFindByUrlQuery(url)
-				.orderBy('scan.startDate', 'DESC')
-				.getOne())
-		);
+		return await this.findById(scanId);
 	}
 
 	async findRecentByUrl(url: string, limit: number): Promise<Scan[]> {
@@ -42,7 +39,33 @@ export class TypeOrmHistoryArchiveScanResultRepository implements ScanRepository
 	async findLatestLimited(limit: number): Promise<Scan[]> {
 		if (!Number.isSafeInteger(limit) || limit < 1) return [];
 
-		const scanIds = await this.findLatestScanIds(limit);
+		const scanIds = await this.findSelectedScanIds({ limit });
+		if (scanIds.length === 0) return [];
+
+		return this.findByIds(scanIds);
+	}
+
+	async findLatest(): Promise<Scan[]> {
+		const scanIds = await this.findSelectedScanIds({});
+		if (scanIds.length === 0) return [];
+
+		return this.findByIds(scanIds);
+	}
+
+	private async findById(scanId: number): Promise<Scan> {
+		const scan = await this.baseRepository
+			.createQueryBuilder('scan')
+			.where('scan.id = :scanId', { scanId })
+			.leftJoinAndSelect('scan.error', 'error')
+			.getOne();
+		if (scan === null) {
+			throw new Error('Latest history archive scan row was not found');
+		}
+
+		return scan;
+	}
+
+	private async findByIds(scanIds: readonly number[]): Promise<Scan[]> {
 		if (scanIds.length === 0) return [];
 
 		const scans = await this.baseRepository
@@ -64,62 +87,84 @@ export class TypeOrmHistoryArchiveScanResultRepository implements ScanRepository
 		});
 	}
 
-	async findLatest(): Promise<Scan[]> {
-		const latestScans = await this.findLatestScans(false);
-		const latestVerificationScans = await this.findLatestScans(true);
-		const latestVerificationScansByUrl = new Map(
-			latestVerificationScans.map((scan) => [scan.baseUrl.value, scan])
-		);
-
-		return latestScans.map(
-			(scan) => latestVerificationScansByUrl.get(scan.baseUrl.value) ?? scan
-		);
-	}
-
-	private createFindByUrlQuery(url: string) {
-		return this.baseRepository
-			.createQueryBuilder('scan')
-			.where('scan.url=:url', { url })
-			.leftJoinAndSelect('scan.error', 'error');
-	}
-
-	private async findLatestScanIds(limit: number): Promise<number[]> {
+	private async findSelectedScanIds(
+		options: LatestScanQueryOptions
+	): Promise<number[]> {
+		const params: (number | string)[] = [];
+		const urlFilter =
+			options.url === undefined
+				? ''
+				: `where scan.url = $${params.push(options.url)}`;
+		const limitClause =
+			options.limit === undefined ? '' : `limit $${params.push(options.limit)}`;
 		const rows = (await this.baseRepository.query(
 			`
-				with latest_scan as (
+				with scan_with_error_flags as (
+					select
+						scan.id,
+						scan.url,
+						scan."startDate",
+						scan.concurrency,
+						(
+							exists (
+								select 1
+								from jsonb_array_elements(coalesce(scan.errors, '[]'::jsonb)) error
+								where error->>'type' = 'TYPE_VERIFICATION'
+							)
+							or archive_error.type::text in ('0', 'TYPE_VERIFICATION')
+						) as "hasArchiveVerificationError",
+						(
+							exists (
+								select 1
+								from jsonb_array_elements(coalesce(scan.errors, '[]'::jsonb)) error
+								where error->>'type' = 'TYPE_CONNECTION'
+							)
+							or archive_error.type::text in ('1', 'TYPE_CONNECTION')
+						) as "hasWorkerIssue"
+					from history_archive_scan_v2 scan
+					left join history_archive_scan_error archive_error
+						on archive_error.id = scan."errorId"
+					${urlFilter}
+				),
+				latest_scan as (
 					select distinct on (url)
 						id,
 						url,
 						"startDate"
-					from history_archive_scan_v2
+					from scan_with_error_flags
 					order by url, "startDate" desc, id desc
 				),
-				latest_verification_scan as (
+				latest_archive_evidence_scan as (
 					select distinct on (url)
 						id,
 						url,
 						"startDate"
-					from history_archive_scan_v2
-					where concurrency > 0
+					from scan_with_error_flags
+					where
+						"hasArchiveVerificationError"
+						or (
+							concurrency > 0
+							and not "hasWorkerIssue"
+						)
 					order by url, "startDate" desc, id desc
 				),
 				selected_scan as (
 					select
-						coalesce(latest_verification_scan.id, latest_scan.id) as id,
+						coalesce(latest_archive_evidence_scan.id, latest_scan.id) as id,
 						coalesce(
-							latest_verification_scan."startDate",
+							latest_archive_evidence_scan."startDate",
 							latest_scan."startDate"
 						) as "selectedStartDate"
 					from latest_scan
-					left join latest_verification_scan
-						on latest_verification_scan.url = latest_scan.url
+					left join latest_archive_evidence_scan
+						on latest_archive_evidence_scan.url = latest_scan.url
 				)
 				select id
 				from selected_scan
 				order by "selectedStartDate" desc, id desc
-				limit $1
+				${limitClause}
 			`,
-			[limit]
+			params
 		)) as RawLatestScanIdRow[];
 
 		return rows.map((row) => this.requireNumber(row.id, 'id'));
@@ -138,25 +183,5 @@ export class TypeOrmHistoryArchiveScanResultRepository implements ScanRepository
 		throw new Error(
 			`History archive scan row is missing numeric field ${field}`
 		);
-	}
-
-	private async findLatestScans(
-		verificationScansOnly: boolean
-	): Promise<Scan[]> {
-		return await this.baseRepository
-			.createQueryBuilder('ha')
-			.innerJoin(
-				(qb) => {
-					const query = qb
-						.select('max(id) id')
-						.from('history_archive_scan_v2', 'haj');
-					if (verificationScansOnly) query.where('haj.concurrency > 0');
-					return query.groupBy('url');
-				},
-				'haj',
-				'ha.id = haj.id'
-			)
-			.leftJoinAndSelect('ha.error', 'error')
-			.getMany();
 	}
 }

@@ -25,7 +25,8 @@ import {
 } from '../../domain/availability';
 import {
 	getArchiveVerificationErrors,
-	getWorkerIssues
+	getWorkerIssues,
+	scanLogHasWorkerIssue
 } from '../../domain/history-archive';
 import { StatusTags } from '../status-tags';
 import { HistoryArchiveScanLog } from './history-archive-scan-log';
@@ -56,7 +57,10 @@ export function NodeDetail({
 						/>
 					</div>
 					<dl className="details">
-						<div><dt>Public key</dt><dd>{knownNode.publicKey}</dd></div>
+						<div>
+							<dt>Public key</dt>
+							<dd>{knownNode.publicKey}</dd>
+						</div>
 						<div>
 							<dt>Date discovered</dt>
 							<dd>{formatDateTime(knownNode.dateDiscovered)}</dd>
@@ -69,7 +73,10 @@ export function NodeDetail({
 									: 'Unavailable'}
 							</dd>
 						</div>
-						<div><dt>Metadata</dt><dd>No node snapshot is available.</dd></div>
+						<div>
+							<dt>Metadata</dt>
+							<dd>No node snapshot is available.</dd>
+						</div>
 					</dl>
 				</article>
 			</section>
@@ -80,6 +87,9 @@ export function NodeDetail({
 	const archiveErrors = getArchiveErrors(historyArchiveScan);
 	const archiveVerificationErrors = getArchiveVerificationErrors(archiveErrors);
 	const workerIssues = getWorkerIssues(archiveErrors);
+	const latestArchiveRun = historyArchiveScanLogs[0] ?? null;
+	const latestRunHasWorkerIssue =
+		latestArchiveRun !== null && scanLogHasWorkerIssue(latestArchiveRun);
 	const active24Hours = formatNode24HourActive(node);
 	const active30Days = formatNode30DayActive(node);
 	const validating24Hours = formatNode24HourValidating(node);
@@ -91,7 +101,8 @@ export function NodeDetail({
 		node.historyArchiveHasError ||
 		archiveVerificationErrors.length > 0 ||
 		workerIssues.length > 0 ||
-		historyArchiveScan !== null;
+		historyArchiveScan !== null ||
+		historyArchiveScanLogs.length > 0;
 
 	return (
 		<section className="detail-grid">
@@ -101,53 +112,101 @@ export function NodeDetail({
 					<StatusTags tags={getNodeTags(node)} />
 				</div>
 				<dl className="details">
-					<div><dt>Public key</dt><dd>{node.publicKey}</dd></div>
-					<div><dt>Host</dt><dd>{node.host ?? node.ip}</dd></div>
-					<div><dt>Port</dt><dd>{node.port}</dd></div>
-					<div><dt>Version</dt><dd>{node.versionStr ?? 'Unknown'}</dd></div>
-					<div><dt>Ledger protocol</dt><dd>{node.ledgerVersion ?? 'Unknown'}</dd></div>
-					<div><dt>Validating</dt><dd>{formatBoolean(node.isValidating)}</dd></div>
-					<div><dt>Full validator</dt><dd>{formatBoolean(node.isFullValidator)}</dd></div>
+					<div>
+						<dt>Public key</dt>
+						<dd>{node.publicKey}</dd>
+					</div>
+					<div>
+						<dt>Host</dt>
+						<dd>{node.host ?? node.ip}</dd>
+					</div>
+					<div>
+						<dt>Port</dt>
+						<dd>{node.port}</dd>
+					</div>
+					<div>
+						<dt>Version</dt>
+						<dd>{node.versionStr ?? 'Unknown'}</dd>
+					</div>
+					<div>
+						<dt>Ledger protocol</dt>
+						<dd>{node.ledgerVersion ?? 'Unknown'}</dd>
+					</div>
+					<div>
+						<dt>Validating</dt>
+						<dd>{formatBoolean(node.isValidating)}</dd>
+					</div>
+					<div>
+						<dt>Full validator</dt>
+						<dd>{formatBoolean(node.isFullValidator)}</dd>
+					</div>
 					<div>
 						<dt>Organization</dt>
 						<dd>
 							{organization ? (
-								<Link href={`/organizations/${encodeURIComponent(organization.id)}`}>
+								<Link
+									href={`/organizations/${encodeURIComponent(organization.id)}`}
+								>
 									{getOrganizationLabel(organization)}
 								</Link>
-							) : 'Unassigned'}
+							) : (
+								'Unassigned'
+							)}
 						</dd>
 					</div>
 				</dl>
 			</article>
 			<article className="panel detail-panel">
-				<div className="panel-heading"><h2>Availability</h2></div>
+				<div className="panel-heading">
+					<h2>Availability</h2>
+				</div>
 				<dl className="details">
 					<div>
 						<dt>24H active</dt>
-						<dd className={`metric-text ${active24Hours.tone}`}>{active24Hours.value}</dd>
+						<dd className={`metric-text ${active24Hours.tone}`}>
+							{active24Hours.value}
+						</dd>
 					</div>
 					<div>
 						<dt>24H validating</dt>
-						<dd className={`metric-text ${validating24Hours.tone}`}>{validating24Hours.value}</dd>
+						<dd className={`metric-text ${validating24Hours.tone}`}>
+							{validating24Hours.value}
+						</dd>
 					</div>
 					<div>
 						<dt>30D active</dt>
 						<dd>
-							<span className={`metric-text ${active30Days.tone}`}>{active30Days.value}</span>
-							{active30Days.detail ? <small>{active30Days.detail}</small> : null}
+							<span className={`metric-text ${active30Days.tone}`}>
+								{active30Days.value}
+							</span>
+							{active30Days.detail ? (
+								<small>{active30Days.detail}</small>
+							) : null}
 						</dd>
 					</div>
 					<div>
 						<dt>30D validating</dt>
 						<dd>
-							<span className={`metric-text ${validating30Days.tone}`}>{validating30Days.value}</span>
-							{validating30Days.detail ? <small>{validating30Days.detail}</small> : null}
+							<span className={`metric-text ${validating30Days.tone}`}>
+								{validating30Days.value}
+							</span>
+							{validating30Days.detail ? (
+								<small>{validating30Days.detail}</small>
+							) : null}
 						</dd>
 					</div>
-					<div><dt>Country</dt><dd>{node.geoData?.countryName ?? 'Unknown'}</dd></div>
-					<div><dt>ISP</dt><dd>{node.isp ?? 'Unknown'}</dd></div>
-					<div><dt>History archive</dt><dd>{node.historyUrl ?? 'None reported'}</dd></div>
+					<div>
+						<dt>Country</dt>
+						<dd>{node.geoData?.countryName ?? 'Unknown'}</dd>
+					</div>
+					<div>
+						<dt>ISP</dt>
+						<dd>{node.isp ?? 'Unknown'}</dd>
+					</div>
+					<div>
+						<dt>History archive</dt>
+						<dd>{node.historyUrl ?? 'None reported'}</dd>
+					</div>
 				</dl>
 			</article>
 			{showArchivePanel && (
@@ -161,31 +220,53 @@ export function NodeDetail({
 					{historyArchiveScan ? (
 						<dl className="details">
 							<div>
-								<dt>Last scan</dt>
+								<dt>Latest run</dt>
+								<dd>
+									{latestArchiveRun
+										? `${latestArchiveRun.status} at ${formatDateTime(latestArchiveRun.updatedAt)}`
+										: 'No recent scanner run'}
+								</dd>
+							</div>
+							<div>
+								<dt>Archive evidence</dt>
 								<dd>{formatDateTime(historyArchiveScan.endDate)}</dd>
 							</div>
 							<div>
 								<dt>Latest verified</dt>
-								<dd>{formatInteger(historyArchiveScan.latestVerifiedLedger)}</dd>
+								<dd>
+									{formatInteger(historyArchiveScan.latestVerifiedLedger)}
+								</dd>
 							</div>
 							<div>
-								<dt>Scan status</dt>
+								<dt>Archive status</dt>
 								<dd>
 									{archiveVerificationErrors.length > 0
 										? 'Archive verification errors'
-										: workerIssues.length > 0
-											? 'Worker issue in latest run'
-											: 'No archive verification errors'}
+										: 'No archive verification errors'}
+								</dd>
+							</div>
+							<div>
+								<dt>Worker status</dt>
+								<dd>
+									{latestRunHasWorkerIssue
+										? 'Worker issue in latest run'
+										: latestArchiveRun
+											? 'No worker issue in latest run'
+											: 'No recent scanner run'}
 								</dd>
 							</div>
 						</dl>
 					) : (
-						<p className="muted-copy">No completed archive scan is available yet.</p>
+						<p className="muted-copy">
+							No completed archive scan is available yet.
+						</p>
 					)}
 					{archiveVerificationErrors.length > 0 ? (
 						<ul className="archive-error-list">
 							{archiveVerificationErrors.map((error, index) => (
-								<li key={`${error.type}:${error.url}:${error.message}:${index}`}>
+								<li
+									key={`${error.type}:${error.url}:${error.message}:${index}`}
+								>
 									<a href={error.url} rel="noopener noreferrer" target="_blank">
 										{error.url}
 									</a>
@@ -194,10 +275,10 @@ export function NodeDetail({
 							))}
 						</ul>
 					) : null}
-					{archiveVerificationErrors.length === 0 && workerIssues.length > 0 ? (
+					{latestRunHasWorkerIssue ? (
 						<p className="muted-copy">
-							The latest scanner run had a worker issue. Archive data errors are
-							shown separately in the scan run log.
+							The latest scanner run had a worker issue. Archive evidence is
+							tracked separately from scanner setup and transport failures.
 						</p>
 					) : null}
 					<div className="archive-log-section">
