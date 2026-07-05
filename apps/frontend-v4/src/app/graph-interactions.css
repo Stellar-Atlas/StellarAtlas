@@ -62,25 +62,26 @@
 	white-space: nowrap;
 }
 
-.ledger-slot-button,
+.scp-clock-card,
 .tx-set-button {
 	background: rgba(88, 166, 255, 0.16);
 	border: 1px solid rgba(88, 166, 255, 0.42);
 	border-radius: 6px;
 	color: #e7edf5;
-	cursor: pointer;
 	font: inherit;
 	padding: 8px;
 	text-align: left;
 }
 
-.ledger-slot-button:hover,
-.ledger-slot-button:focus-visible,
 .tx-set-button:hover,
 .tx-set-button:focus-visible {
 	background: rgba(88, 166, 255, 0.24);
 	outline: 2px solid rgba(88, 166, 255, 0.5);
 	outline-offset: 2px;
+}
+
+.tx-set-button {
+	cursor: pointer;
 }
 
 .tx-set-button code {

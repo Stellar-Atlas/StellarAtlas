@@ -38,6 +38,7 @@ const mergeScpStatements = (
 interface UseGraphLiveDataResult {
 	latestLedger: string | null;
 	latestLedgerClosedAt: string | null;
+	latestObservedScpSlotIndex: string | null;
 	network: PublicNetwork;
 	scpStatements: PublicScpStatementObservation[];
 }
@@ -52,6 +53,10 @@ export const useGraphLiveData = (
 	const [latestLedgerClosedAt, setLatestLedgerClosedAt] = useState<
 		string | null
 	>(null);
+	const latestObservedScpSlotIndex =
+		getHighestLedgerSequence(
+			scpStatements.map((statement) => statement.slotIndex)
+		);
 
 	useEffect(() => {
 		setNetwork(initialNetwork);
@@ -95,5 +100,11 @@ export const useGraphLiveData = (
 		[]
 	);
 
-	return { latestLedger, latestLedgerClosedAt, network, scpStatements };
+	return {
+		latestLedger,
+		latestLedgerClosedAt,
+		latestObservedScpSlotIndex,
+		network,
+		scpStatements
+	};
 };

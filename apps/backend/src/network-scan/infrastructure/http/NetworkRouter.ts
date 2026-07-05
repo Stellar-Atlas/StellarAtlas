@@ -12,6 +12,7 @@ import { AggregationTarget } from '../../use-cases/get-measurement-aggregations/
 import { query } from 'express-validator';
 import { handleMeasurementsAggregationRequest } from './handleMeasurementsAggregationRequest.js';
 import { GetScpStatements } from '../../use-cases/get-scp-statements/GetScpStatements.js';
+import { handleScpStatementsRequest } from './handleScpStatementsRequest.js';
 import {
 	fetchLatestLedger,
 	fetchLedgerTransactions
@@ -348,19 +349,7 @@ const networkRouterWrapper = (config: NetworkRouterConfig): Router => {
 	networkRouter.get(
 		['/scp-statements'],
 		async (req: express.Request, res: express.Response) => {
-			res.setHeader('Cache-Control', 'public, max-age=' + 5);
-			res.setHeader('Content-Type', 'application/json');
-
-			const statementsOrError = await config.getScpStatements.execute({
-				limit: getOptionalLimit(req.query.limit),
-				nodeId: getOptionalString(req.query.nodeId),
-				slotIndex: getOptionalString(req.query.slotIndex)
-			});
-
-			if (statementsOrError.isErr())
-				return res.status(500).send('Internal Server Error');
-
-			return res.status(200).send(statementsOrError.value);
+			return handleScpStatementsRequest(req, res, config.getScpStatements);
 		}
 	);
 

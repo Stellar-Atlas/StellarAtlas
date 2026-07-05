@@ -36,3 +36,8 @@ export const getHighestLedgerSequence = (
 		if (highest === null) return sequence;
 		return compareLedgerSequences(sequence, highest) > 0 ? sequence : highest;
 	}, null);
+
+export const getNextLedgerSequence = (value: unknown): string | null => {
+	const sequence = toLedgerSequenceText(value);
+	return sequence === null ? null : (BigInt(sequence) + 1n).toString();
+};

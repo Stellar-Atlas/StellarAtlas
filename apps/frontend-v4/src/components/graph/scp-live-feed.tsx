@@ -18,7 +18,9 @@ import { ScpPhaseTimeline } from './scp-phase-timeline';
 interface ScpLiveFeedProps {
 	activeSlotIndex: string | null;
 	activeStatements: readonly PublicScpStatementObservation[];
+	latestLedgerSlotIndex: string | null;
 	network: PublicNetwork;
+	observedSlotIndex: string | null;
 	statements: readonly PublicScpStatementObservation[];
 }
 
@@ -144,18 +146,22 @@ const getStatementTransactionSet = (
 export function ScpLiveFeed({
 	activeSlotIndex,
 	activeStatements,
+	latestLedgerSlotIndex,
 	network,
+	observedSlotIndex,
 	statements
 }: ScpLiveFeedProps): React.JSX.Element {
 	const summary = useMemo(
 		() => summarizeStatements(network, statements),
 		[network, statements]
 	);
-	const currentLedgerSlot =
-		summary?.slotIndex ??
+	const latestLedgerText =
+		latestLedgerSlotIndex ??
 		toLedgerSequenceText(network.latestLedger) ??
 		network.latestLedger.toString();
-	const feedSlotIndex = activeSlotIndex ?? summary?.slotIndex ?? currentLedgerSlot;
+	const observedSlotText = observedSlotIndex ?? summary?.slotIndex ?? null;
+	const feedSlotIndex =
+		activeSlotIndex ?? summary?.slotIndex ?? observedSlotText ?? latestLedgerText;
 	const recentStatements = useMemo(
 		() =>
 			statements
@@ -297,12 +303,28 @@ export function ScpLiveFeed({
 			{summary && (
 				<div className="scp-slot-summary">
 					<div
-						aria-label={`Current SCP slot ${currentLedgerSlot}`}
-						className="ledger-slot-button"
+						aria-label={`Animating SCP slot ${activeSlotIndex ?? 'waiting'}`}
+						className="scp-clock-card"
 						role="status"
 					>
-						<span>SCP slot</span>
-						<strong>{currentLedgerSlot}</strong>
+						<span>Animating</span>
+						<strong>{activeSlotIndex ?? 'waiting'}</strong>
+					</div>
+					<div
+						aria-label={`Observed SCP slot ${observedSlotText ?? 'collecting'}`}
+						className="scp-clock-card"
+						role="status"
+					>
+						<span>Observed SCP</span>
+						<strong>{observedSlotText ?? 'collecting'}</strong>
+					</div>
+					<div
+						aria-label={`Latest ledger ${latestLedgerText}`}
+						className="scp-clock-card"
+						role="status"
+					>
+						<span>Latest ledger</span>
+						<strong>{latestLedgerText}</strong>
 					</div>
 					<button
 						className="tx-set-button"

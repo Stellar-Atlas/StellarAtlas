@@ -24,6 +24,7 @@ import {
 	type WaveMeshPool
 } from './graph-wave-animation';
 import type { PublicScpStatementObservation } from '../../api/types';
+import { compareLedgerSequences } from '../../domain/ledger-sequence';
 
 interface UseGraphAnimationOptions {
 	activeWavesRef: RefObject<Map<number, ActiveWave>>;
@@ -77,6 +78,7 @@ export const useGraphAnimation = ({
 	const playbackFinishTimeoutRef = useRef<number | null>(null);
 	const completedSlotSignaturesRef = useRef<Map<string, string>>(new Map());
 	const completedSlotOrderRef = useRef<string[]>([]);
+	const startedThroughSlotIndexRef = useRef<string | null>(null);
 	const advancePlaybackRef = useRef<() => void>(() => undefined);
 
 	const activateFlowPath = useCallback(
@@ -351,6 +353,14 @@ export const useGraphAnimation = ({
 			clearPlaybackFinishTimeout();
 			clearAnimationEffects();
 			activeLedgerRef.current = ledger;
+			startedThroughSlotIndexRef.current =
+				startedThroughSlotIndexRef.current === null ||
+				compareLedgerSequences(
+					ledger.slotIndex,
+					startedThroughSlotIndexRef.current
+				) > 0
+					? ledger.slotIndex
+					: startedThroughSlotIndexRef.current;
 			setActivePlaybackSlotIndex(ledger.slotIndex);
 			playbackStartedAtRef.current = performance.now();
 			graphRef.current?.resumeAnimation();
@@ -453,7 +463,8 @@ export const useGraphAnimation = ({
 			activeSlotIndex: activeLedgerRef.current?.slotIndex ?? null,
 			boundarySlotIndex: playbackBoundarySlotIndex,
 			completedSignatures: completedSlotSignaturesRef.current,
-			ledgers: playbackLedgers
+			ledgers: playbackLedgers,
+			startedThroughSlotIndex: startedThroughSlotIndexRef.current
 		});
 		playbackQueueRef.current = queueResult.queue;
 		advancePlayback();

@@ -111,4 +111,57 @@ describe('NetworkRouter.integration', () => {
 		await request(app).get(path).expect(400);
 		expect(config.getNetwork.execute).not.toHaveBeenCalled();
 	});
+
+	it('should forward SCP statement source, order, slot, and cursor filters', async () => {
+		const config = mockDeep<NetworkRouterConfig>();
+		config.searchConfig = { indexName: 'test_network_entities' };
+		config.getScpStatements.execute.mockResolvedValue(ok([]));
+
+		const app = express();
+		app.use('/network', networkRouter(config));
+
+		await request(app)
+			.get(
+				[
+					'/network/scp-statements?source=auto',
+					'order=asc',
+					'afterObservedAtMs=1783398400000',
+					'afterStatementHash=abc123',
+					'limit=25',
+					'nodeId=GA_SEARCH_NODE',
+					'slotIndex=63332754'
+				].join('&')
+			)
+			.expect(200);
+
+		expect(config.getScpStatements.execute).toHaveBeenCalledWith({
+			after: {
+				observedAtMs: 1783398400000,
+				statementHash: 'abc123'
+			},
+			limit: 25,
+			nodeId: 'GA_SEARCH_NODE',
+			order: 'asc',
+			slotIndex: '63332754',
+			source: 'auto'
+		});
+	});
+
+	it.each([
+		'/network/scp-statements?source=archive',
+		'/network/scp-statements?order=oldest',
+		'/network/scp-statements?slotIndex=abc',
+		'/network/scp-statements?afterObservedAtMs=1783398400000',
+		'/network/scp-statements?afterStatementHash=abc123',
+		'/network/scp-statements?afterObservedAtMs=abc&afterStatementHash=abc123'
+	])('should reject invalid SCP statement query %s', async (path) => {
+		const config = mockDeep<NetworkRouterConfig>();
+		config.searchConfig = { indexName: 'test_network_entities' };
+
+		const app = express();
+		app.use('/network', networkRouter(config));
+
+		await request(app).get(path).expect(400);
+		expect(config.getScpStatements.execute).not.toHaveBeenCalled();
+	});
 });

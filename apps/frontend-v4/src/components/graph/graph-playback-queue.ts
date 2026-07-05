@@ -6,6 +6,7 @@ interface MergePlaybackQueueOptions {
 	boundarySlotIndex: string;
 	completedSignatures: ReadonlyMap<string, string>;
 	ledgers: readonly LedgerPlaybackFrame[];
+	startedThroughSlotIndex: string | null;
 }
 
 interface MergePlaybackQueueResult {
@@ -32,13 +33,19 @@ export const mergePlaybackQueue = ({
 	activeSlotIndex,
 	boundarySlotIndex,
 	completedSignatures,
-	ledgers
+	ledgers,
+	startedThroughSlotIndex
 }: MergePlaybackQueueOptions): MergePlaybackQueueResult => {
 	const latestPlayableLedger = ledgers
 		.filter(
 			(ledger) =>
 				ledger.statements.length > 0 &&
 				compareLedgerSequences(ledger.slotIndex, boundarySlotIndex) < 0 &&
+				(startedThroughSlotIndex === null ||
+					compareLedgerSequences(
+						ledger.slotIndex,
+						startedThroughSlotIndex
+					) > 0) &&
 				ledger.slotIndex !== activeSlotIndex
 		)
 		.toSorted((left, right) =>

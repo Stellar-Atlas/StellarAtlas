@@ -44,6 +44,7 @@ import {
 	type GraphRendererStatus
 } from './use-graph-renderer';
 import { buildLedgerPlaybackFrames } from './graph-ledger-playback';
+import { getNextLedgerSequence } from '../../domain/ledger-sequence';
 
 interface GraphExplorerProps {
 	network: PublicNetwork;
@@ -70,8 +71,13 @@ export function GraphExplorer({
 	const wavePoolRef = useRef<WaveMeshPool | null>(null);
 	const nodeActivityRef = useRef<Map<string, number>>(new Map());
 	const flowLinkColorsRef = useRef<Map<string, string>>(new Map());
-	const { latestLedger, latestLedgerClosedAt, network, scpStatements } =
-		useGraphLiveData(initialNetwork, initialScpStatements);
+	const {
+		latestLedger,
+		latestLedgerClosedAt,
+		latestObservedScpSlotIndex,
+		network,
+		scpStatements
+	} = useGraphLiveData(initialNetwork, initialScpStatements);
 	const [graphStatus, setGraphStatus] =
 		useState<GraphRendererStatus>('loading');
 	const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
@@ -126,6 +132,7 @@ export function GraphExplorer({
 		[modelNodesById, selectedNode]
 	);
 	const playbackBoundarySlotIndex =
+		getNextLedgerSequence(latestObservedScpSlotIndex) ??
 		latestLedger ??
 		getLatestSlotIndex(scpStatements) ??
 		network.latestLedger.toString();
@@ -362,7 +369,9 @@ export function GraphExplorer({
 				<ScpLiveFeed
 					activeSlotIndex={activePlaybackSlotIndex}
 					activeStatements={activeStatements}
+					latestLedgerSlotIndex={latestLedger}
 					network={liveNetwork}
+					observedSlotIndex={latestObservedScpSlotIndex}
 					statements={scpStatements}
 				/>
 			</section>

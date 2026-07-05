@@ -10,7 +10,9 @@ async function GraphRouteContent(): Promise<React.JSX.Element> {
 	await connection();
 	const [network, scpStatements] = await Promise.all([
 		fetchPublicNetwork({ revalidate }),
-		fetchScpStatements({ limit: 160, revalidate: 3 }).catch(() => [])
+		fetchScpStatements({ limit: 160, revalidate: 3, source: 'auto' }).catch(
+			() => []
+		)
 	]);
 
 	return <GraphExplorer network={network} scpStatements={scpStatements} />;

@@ -49,8 +49,10 @@ interface ScpStatementFetchOptions {
 	cache?: 'no-store';
 	limit?: number;
 	nodeId?: string;
+	order?: 'asc' | 'desc';
 	revalidate?: number;
 	slotIndex?: string;
+	source?: 'auto' | 'live' | 'stored';
 	tags?: string[];
 }
 
@@ -86,8 +88,16 @@ const buildScpStatementUrl = (
 		url.searchParams.set('nodeId', options.nodeId);
 	}
 
+	if (options.order !== undefined) {
+		url.searchParams.set('order', options.order);
+	}
+
 	if (options.slotIndex !== undefined) {
 		url.searchParams.set('slotIndex', options.slotIndex);
+	}
+
+	if (options.source !== undefined) {
+		url.searchParams.set('source', options.source);
 	}
 
 	return url.toString();

@@ -37,8 +37,8 @@ const sortableAttributes = [
 	'slotIndex',
 	'statementHash'
 ] as const;
-const liveFreshnessMs = 30_000;
-const liveRetentionMs = 3 * 60 * 1_000;
+const liveFreshnessMs = 2 * 60 * 1_000;
+const liveRetentionMs = 5 * 60 * 1_000;
 const retentionCleanupIntervalMs = 30_000;
 const taskPollIntervalMs = 50;
 const settingsTaskTimeoutMs = 60_000;
