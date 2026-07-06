@@ -34,6 +34,7 @@ const maxActiveObjectsPerArchive = 1;
 const maxActiveObjectsPerHost = 2;
 const maxActiveObjectsTotal = 24;
 const claimLockName = 'history_archive_object_claim';
+const saveObjectChunkSize = 200;
 
 @injectable()
 export class TypeOrmHistoryArchiveObjectRepository
@@ -221,20 +222,24 @@ export class TypeOrmHistoryArchiveObjectRepository
 	): Promise<number> {
 		if (objects.length === 0) return 0;
 
-		const result = await this.repository
-			.createQueryBuilder()
-			.insert()
-			.into(HistoryArchiveObject)
-			.values([...objects])
-			.orIgnore()
-			.execute();
+		let insertedCount = 0;
+		for (let index = 0; index < objects.length; index += saveObjectChunkSize) {
+			const result = await this.repository
+				.createQueryBuilder()
+				.insert()
+				.into(HistoryArchiveObject)
+				.values([...objects.slice(index, index + saveObjectChunkSize)])
+				.orIgnore()
+				.execute();
+			insertedCount += result.identifiers.length;
+		}
 
 		const refreshedCount = await this.requeueStaleHistoryArchiveStateObjects(
 			objects,
 			getHistoryArchiveStateRefreshBefore()
 		);
 
-		return result.identifiers.length + refreshedCount;
+		return insertedCount + refreshedCount;
 	}
 
 	private async requeueStaleHistoryArchiveStateObjects(
