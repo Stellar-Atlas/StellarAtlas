@@ -37,7 +37,7 @@ describe('GetFullHistoryStatus', () => {
 		expect(result.isOk()).toBe(true);
 		expect(result._unsafeUnwrap()).toEqual({
 			generatedAt: '2026-07-06T12:00:00.000Z',
-			status: 'degraded',
+			status: 'ok',
 			mode: 'archive_header_parser',
 			parsedLedgerCount: 2,
 			earliestParsedLedger: '1',

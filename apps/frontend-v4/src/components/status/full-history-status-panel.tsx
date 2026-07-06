@@ -18,7 +18,11 @@ export function FullHistoryStatusPanel({
 				</div>
 				<StatusPill
 					status={parserStatus(fullHistory)}
-					text={fullHistory.status === 'degraded' ? 'Partial' : undefined}
+					text={
+						fullHistory.parsedLedgerCount > 0 && !indexesReady(fullHistory)
+							? 'Header-only'
+							: undefined
+					}
 				/>
 			</div>
 			<div className="status-list">

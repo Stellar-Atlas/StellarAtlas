@@ -24,7 +24,7 @@ describe('FullHistoryRouter.integration', () => {
 		getFullHistoryStatus.executeFullHistory.mockResolvedValue(
 			ok({
 				generatedAt: '2026-07-05T15:00:00.000Z',
-				status: 'degraded',
+				status: 'ok',
 				mode: 'archive_header_parser',
 				parsedLedgerCount: 100,
 				earliestParsedLedger: '1',

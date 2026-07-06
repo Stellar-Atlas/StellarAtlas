@@ -252,7 +252,7 @@ export class GetFullHistoryStatus {
 		const parsedLedgerCount = row.parsedLedgerCount;
 		return {
 			generatedAt: new Date().toISOString(),
-			status: parsedLedgerCount > 0 ? 'degraded' : 'unavailable',
+			status: parsedLedgerCount > 0 ? 'ok' : 'unavailable',
 			mode: 'archive_header_parser',
 			parsedLedgerCount,
 			earliestParsedLedger: toNullableString(row.earliestLedgerSequence),
