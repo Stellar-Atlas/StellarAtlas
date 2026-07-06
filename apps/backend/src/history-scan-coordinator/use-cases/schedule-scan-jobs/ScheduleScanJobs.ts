@@ -13,7 +13,7 @@ import type { ScanJobRepository } from '../../domain/ScanJobRepository.js';
 import { getStaleScanJobCutoff } from '../../domain/ScanJobStaleness.js';
 import { mapUnknownToError } from '@core/utilities/mapUnknownToError.js';
 import { ScanJob } from '@history-scan-coordinator/domain/ScanJob.js';
-import { Url } from 'http-helper';
+import { getHistoryArchiveUrlIdentity } from '@history-scan-coordinator/domain/ArchiveUrlIdentity.js';
 
 /**
  * Schedule scansJobs and adds them to the queue. If the scan queue is empty, new ScanJobs will be created.
@@ -161,8 +161,5 @@ function calculateDuplicateSuppressedArchiveScanJobCount(
 }
 
 function normalizeHistoryArchiveUrl(url: string): string | null {
-	const parsedUrl = Url.create(url);
-	if (parsedUrl.isErr()) return null;
-
-	return parsedUrl.value.value.replace(/\/+$/, '').toLowerCase();
+	return getHistoryArchiveUrlIdentity(url);
 }

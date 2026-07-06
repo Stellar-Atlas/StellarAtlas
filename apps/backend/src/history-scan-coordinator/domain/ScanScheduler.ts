@@ -1,9 +1,12 @@
 import { sortHistoryUrls } from './sortHistoryUrls.js';
 import { Scan } from './scan/Scan.js';
 import { ScanJob } from './ScanJob.js';
-import { Url } from 'http-helper';
 import { extractLedgerFromHistoryArchiveUrl } from './scan/extractLedgerFromHistoryArchiveUrl.js';
 import { ScanErrorType } from './scan/ScanError.js';
+import {
+	getHistoryArchiveUrlIdentity,
+	uniqueHistoryArchiveUrls
+} from './ArchiveUrlIdentity.js';
 
 export interface ScanScheduler {
 	schedule(
@@ -35,29 +38,37 @@ export class RestartAtLeastOneScan implements ScanScheduler {
 		unfinishedScanJobs: ScanJob[] = [],
 		options: ScanSchedulerOptions = { includeRegularJobs: true }
 	): ScanJob[] {
-		const scanJobs: ScanJob[] = [];
-
-		const validArchiveUrls = this.mapToValidUrls(archives);
-		const uniqueArchives = this.removeDuplicates(validArchiveUrls);
-		const unfinishedUrls = new Set(unfinishedScanJobs.map((job) => job.url));
+		const uniqueArchives = uniqueHistoryArchiveUrls(archives);
+		const unfinishedUrlIdentities = new Set(
+			unfinishedScanJobs
+				.map((job) => getHistoryArchiveUrlIdentity(job.url))
+				.filter((identity): identity is string => identity !== null)
+		);
 		const unfinishedErrorRecheckUrls = new Set(
 			unfinishedScanJobs
 				.filter((job) => job.fromLedger !== null || job.toLedger !== null)
-				.map((job) => job.url)
+				.map((job) => getHistoryArchiveUrlIdentity(job.url))
+				.filter((identity): identity is string => identity !== null)
 		);
 		const previousScansMap = new Map(
 			previousScans.map((scan) => {
-				return [scan.baseUrl.value, scan];
+				return [
+					getHistoryArchiveUrlIdentity(scan.baseUrl.value) ??
+						scan.baseUrl.value,
+					scan
+				];
 			})
 		);
 		const archivesReadyForErrorRecheck = uniqueArchives.filter(
-			(archive) => !unfinishedErrorRecheckUrls.has(archive)
-		);
-		const archivesReadyForRegularScan = uniqueArchives.filter(
-			(archive) => !unfinishedUrls.has(archive)
+			(archive) =>
+				!unfinishedErrorRecheckUrls.has(
+					getHistoryArchiveUrlIdentity(archive) ?? archive
+				)
 		);
 		const errorRecheckJobs = archivesReadyForErrorRecheck
-			.map((archive) => previousScansMap.get(archive))
+			.map((archive) =>
+				previousScansMap.get(getHistoryArchiveUrlIdentity(archive) ?? archive)
+			)
 			.filter(
 				(scan): scan is Scan =>
 					scan !== undefined &&
@@ -66,8 +77,19 @@ export class RestartAtLeastOneScan implements ScanScheduler {
 			)
 			.map((scan) => this.createErrorRecheckJob(scan));
 
-		if (errorRecheckJobs.length > 0) return errorRecheckJobs;
-		if (!options.includeRegularJobs) return [];
+		if (!options.includeRegularJobs) return errorRecheckJobs;
+		const errorRecheckUrlIdentities = new Set(
+			errorRecheckJobs
+				.map((job) => getHistoryArchiveUrlIdentity(job.url))
+				.filter((identity): identity is string => identity !== null)
+		);
+		const archivesReadyForRegularScan = uniqueArchives.filter((archive) => {
+			const identity = getHistoryArchiveUrlIdentity(archive) ?? archive;
+			return (
+				!unfinishedUrlIdentities.has(identity) &&
+				!errorRecheckUrlIdentities.has(identity)
+			);
+		});
 
 		const archivesSortedByInitDate = sortHistoryUrls(
 			archivesReadyForRegularScan,
@@ -80,6 +102,7 @@ export class RestartAtLeastOneScan implements ScanScheduler {
 			)
 		);
 
+		const scanJobs: ScanJob[] = [...errorRecheckJobs];
 		//we want to start at least one scan from the very beginning
 		let hasAtLeastOneInitScan = false;
 		archivesSortedByInitDate.forEach((archive) => {
@@ -89,7 +112,9 @@ export class RestartAtLeastOneScan implements ScanScheduler {
 				return;
 			}
 
-			const previousScan = previousScansMap.get(archive);
+			const previousScan = previousScansMap.get(
+				getHistoryArchiveUrlIdentity(archive) ?? archive
+			);
 			if (!previousScan) {
 				scanJobs.push(new ScanJob(archive));
 			} else {
@@ -105,17 +130,6 @@ export class RestartAtLeastOneScan implements ScanScheduler {
 		});
 
 		return scanJobs;
-	}
-
-	private removeDuplicates(urls: string[]): string[] {
-		return Array.from(new Set(urls));
-	}
-
-	private mapToValidUrls(archives: string[]): string[] {
-		return archives
-			.map((archive) => Url.create(archive))
-			.filter((result) => result.isOk())
-			.map((result) => result.value.value);
 	}
 
 	private createErrorRecheckJob(previousScan: Scan): ScanJob {

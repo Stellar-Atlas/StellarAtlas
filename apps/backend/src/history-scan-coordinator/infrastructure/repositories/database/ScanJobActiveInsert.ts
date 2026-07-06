@@ -1,5 +1,5 @@
 import { ScanJob } from '@history-scan-coordinator/domain/ScanJob.js';
-import { Url } from 'http-helper';
+import { getHistoryArchiveUrlIdentity } from '@history-scan-coordinator/domain/ArchiveUrlIdentity.js';
 import type { EntityManager, Repository } from 'typeorm';
 
 const activeInsertLockName = 'history_archive_scan_job_active_identity_insert';
@@ -134,10 +134,7 @@ function isActive(job: ScanJob): boolean {
 }
 
 function normalizeScanJobUrl(url: string): string {
-	const parsedUrl = Url.create(url);
-	const value = parsedUrl.isOk() ? parsedUrl.value.value : url;
-
-	return value.replace(/\/+$/, '').toLowerCase();
+	return getHistoryArchiveUrlIdentity(url) ?? url.trim().toLowerCase();
 }
 
 function extractRows(result: InsertQueryResult): InsertedScanJobRow[] {

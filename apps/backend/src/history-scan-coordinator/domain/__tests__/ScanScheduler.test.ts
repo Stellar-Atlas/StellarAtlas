@@ -120,7 +120,7 @@ it('should not schedule regular jobs when disabled', () => {
 	expect(jobs).toHaveLength(0);
 });
 
-it('should prioritize errored archive rechecks before normal scans', () => {
+it('should schedule errored archive rechecks before regular scans', () => {
 	const scheduler = new RestartAtLeastOneScan();
 	const healthyArchive = createDummyHistoryBaseUrl();
 	const erroredArchive = createDummyHistoryBaseUrl();
@@ -157,12 +157,13 @@ it('should prioritize errored archive rechecks before normal scans', () => {
 		[previousHealthyScan, previousErroredScan]
 	);
 
-	expect(jobs).toHaveLength(1);
+	expect(jobs).toHaveLength(2);
 	expect(jobs[0].url).toEqual(erroredArchive.value);
 	expect(jobs[0].fromLedger).toEqual(128);
 	expect(jobs[0].toLedger).toEqual(191);
 	expect(jobs[0].concurrency).toEqual(4);
 	expect(jobs[0].isNewScanChainJob()).toBeFalsy();
+	expect(jobs[1].url).toEqual(healthyArchive.value);
 });
 
 it('should schedule errored archive rechecks when regular scans are disabled', () => {
