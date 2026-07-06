@@ -37,3 +37,20 @@ it('should sort older scans in the front', function () {
 	expect(sortedUrls[2]).toEqual(newScan);
 	expect(sortedUrls[3]).toEqual(newestScan);
 });
+
+it('should use normalized archive identity when matching scan dates', function () {
+	const scannedUrl = 'https://history.stellar.org/scanned';
+	const sameScannedUrlWithVariant = 'https://HISTORY.stellar.org/scanned/';
+	const notYetScannedUrl = 'https://history.stellar.org/not-yet-scanned';
+
+	const scanDates = new Map<string, Date>();
+	scanDates.set(scannedUrl, new Date());
+
+	const sortedUrls = sortHistoryUrls(
+		[sameScannedUrlWithVariant, notYetScannedUrl],
+		scanDates
+	);
+
+	expect(sortedUrls[0]).toEqual(notYetScannedUrl);
+	expect(sortedUrls[1]).toEqual(sameScannedUrlWithVariant);
+});

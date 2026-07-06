@@ -1,4 +1,4 @@
-import { Url } from 'http-helper';
+import { getHistoryArchiveUrlIdentity } from './ArchiveUrlIdentity.js';
 
 type urlString = string;
 //older or never before scanned urls go to the front
@@ -7,8 +7,8 @@ export function sortHistoryUrls(
 	scanDates: Map<urlString, Date>
 ): string[] {
 	return historyUrls.sort((a: string, b: string): number => {
-		const aScanDate = scanDates.get(a);
-		const bScanDate = scanDates.get(b);
+		const aScanDate = scanDates.get(getSortIdentity(a));
+		const bScanDate = scanDates.get(getSortIdentity(b));
 
 		if (!aScanDate) return -1;
 
@@ -16,4 +16,8 @@ export function sortHistoryUrls(
 
 		return aScanDate.getTime() - bScanDate.getTime();
 	});
+}
+
+function getSortIdentity(url: string): string {
+	return getHistoryArchiveUrlIdentity(url) ?? url;
 }
