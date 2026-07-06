@@ -5,6 +5,7 @@ import {
 	fetchHistoryArchiveScan,
 	fetchHistoryArchiveScanEvidence,
 	fetchHistoryArchiveScanLogs,
+	fetchHistoryArchiveObjectSummaryForArchive,
 	fetchHistoryArchiveObjectsForArchive,
 	fetchHistoryArchiveState
 } from '@api/client';
@@ -27,22 +28,27 @@ async function ArchiveScanDetailRouteContent({
 	readonly historyUrl: string;
 }): Promise<React.JSX.Element> {
 	await connection();
-	const [scan, logs, evidence, objects, events, state] = await Promise.all([
-		fetchHistoryArchiveScan(historyUrl, liveArchiveFetchOptions),
-		fetchHistoryArchiveScanLogs(historyUrl, liveArchiveFetchOptions),
-		fetchHistoryArchiveScanEvidence(historyUrl, 500, liveArchiveFetchOptions),
-		fetchHistoryArchiveObjectsForArchive(
-			historyUrl,
-			250,
-			liveArchiveFetchOptions
-		),
-		fetchHistoryArchiveObjectEventsForArchive(
-			historyUrl,
-			250,
-			liveArchiveFetchOptions
-		),
-		fetchHistoryArchiveState(historyUrl, liveArchiveFetchOptions)
-	]);
+	const [scan, logs, evidence, summary, objects, events, state] =
+		await Promise.all([
+			fetchHistoryArchiveScan(historyUrl, liveArchiveFetchOptions),
+			fetchHistoryArchiveScanLogs(historyUrl, liveArchiveFetchOptions),
+			fetchHistoryArchiveScanEvidence(historyUrl, 500, liveArchiveFetchOptions),
+			fetchHistoryArchiveObjectSummaryForArchive(
+				historyUrl,
+				liveArchiveFetchOptions
+			),
+			fetchHistoryArchiveObjectsForArchive(
+				historyUrl,
+				250,
+				liveArchiveFetchOptions
+			),
+			fetchHistoryArchiveObjectEventsForArchive(
+				historyUrl,
+				250,
+				liveArchiveFetchOptions
+			),
+			fetchHistoryArchiveState(historyUrl, liveArchiveFetchOptions)
+		]);
 
 	return (
 		<main className="shell">
@@ -59,6 +65,7 @@ async function ArchiveScanDetailRouteContent({
 				objects={objects}
 				scan={scan}
 				state={state}
+				summary={summary}
 			/>
 		</main>
 	);

@@ -8,6 +8,7 @@ import {
 	fetchHistoryArchiveScan,
 	fetchHistoryArchiveScanEvidence,
 	fetchHistoryArchiveScanLogs,
+	fetchHistoryArchiveObjectSummaryForArchive,
 	fetchHistoryArchiveObjectsForArchive,
 	fetchHistoryArchiveState,
 	fetchPublicNetwork
@@ -56,35 +57,36 @@ async function NodeDetailRouteContent({
 		historyArchiveScan,
 		historyArchiveScanLogs,
 		historyArchiveEvidence,
+		historyArchiveSummary,
 		historyArchiveObjects,
 		historyArchiveEvents,
 		historyArchiveState
-	] =
-		node?.historyUrl
-			? await Promise.all([
-					fetchHistoryArchiveScan(node.historyUrl, liveArchiveFetchOptions),
-					fetchHistoryArchiveScanLogs(
-						node.historyUrl,
-						liveArchiveFetchOptions
-					),
-					fetchHistoryArchiveScanEvidence(
-						node.historyUrl,
-						500,
-						liveArchiveFetchOptions
-					),
-					fetchHistoryArchiveObjectsForArchive(
-						node.historyUrl,
-						250,
-						liveArchiveFetchOptions
-					),
-					fetchHistoryArchiveObjectEventsForArchive(
-						node.historyUrl,
-						250,
-						liveArchiveFetchOptions
-					),
-					fetchHistoryArchiveState(node.historyUrl, liveArchiveFetchOptions)
-				])
-			: [null, [], null, null, null, null];
+	] = node?.historyUrl
+		? await Promise.all([
+				fetchHistoryArchiveScan(node.historyUrl, liveArchiveFetchOptions),
+				fetchHistoryArchiveScanLogs(node.historyUrl, liveArchiveFetchOptions),
+				fetchHistoryArchiveScanEvidence(
+					node.historyUrl,
+					500,
+					liveArchiveFetchOptions
+				),
+				fetchHistoryArchiveObjectSummaryForArchive(
+					node.historyUrl,
+					liveArchiveFetchOptions
+				),
+				fetchHistoryArchiveObjectsForArchive(
+					node.historyUrl,
+					250,
+					liveArchiveFetchOptions
+				),
+				fetchHistoryArchiveObjectEventsForArchive(
+					node.historyUrl,
+					250,
+					liveArchiveFetchOptions
+				),
+				fetchHistoryArchiveState(node.historyUrl, liveArchiveFetchOptions)
+			])
+		: [null, [], null, null, null, null, null];
 	const organization = node
 		? getOrganizationForNode(inventoryNetwork, node)
 		: null;
@@ -103,6 +105,7 @@ async function NodeDetailRouteContent({
 				historyArchiveScan={historyArchiveScan}
 				historyArchiveScanLogs={historyArchiveScanLogs}
 				historyArchiveState={historyArchiveState}
+				historyArchiveSummary={historyArchiveSummary}
 				knownNode={knownNode}
 				network={inventoryNetwork}
 				node={node}

@@ -5,6 +5,7 @@ import type {
 	PublicHistoryArchiveScanLogError,
 	PublicHistoryArchiveObjectEvents,
 	PublicHistoryArchiveObjectQueue,
+	PublicHistoryArchiveObjectSummary,
 	PublicHistoryArchiveState
 } from '@api/types';
 import { HistoryArchiveScanLog } from '@components/nodes/history-archive-scan-log';
@@ -16,6 +17,7 @@ import {
 } from '@domain/history-archive';
 import { formatDateTime, formatInteger } from '@format/formatters';
 import { HistoryArchiveStateDocument } from './history-archive-state-document';
+import { HistoryArchiveObjectCoverage } from './history-archive-object-coverage';
 import { HistoryArchiveObjectInventory } from './history-archive-object-inventory';
 import { HistoryArchiveObjectEventLog } from './history-archive-object-event-log';
 
@@ -27,6 +29,7 @@ interface ArchiveScanDetailProps {
 	readonly objects: PublicHistoryArchiveObjectQueue;
 	readonly scan: PublicHistoryArchiveScan | null;
 	readonly state: PublicHistoryArchiveState | null;
+	readonly summary: PublicHistoryArchiveObjectSummary;
 }
 
 export function ArchiveScanDetail({
@@ -36,7 +39,8 @@ export function ArchiveScanDetail({
 	logs,
 	objects,
 	scan,
-	state
+	state,
+	summary
 }: ArchiveScanDetailProps): React.JSX.Element {
 	const archiveErrors = getArchiveVerificationErrors(scan?.errors ?? []);
 	const workerIssues = getWorkerIssues(scan?.errors ?? []);
@@ -46,9 +50,13 @@ export function ArchiveScanDetail({
 
 	return (
 		<section className="detail-grid">
+			<HistoryArchiveObjectCoverage
+				summary={summary}
+				title="Archive object coverage"
+			/>
 			<article className="panel detail-panel archive-panel">
 				<div className="panel-heading">
-					<h2>Scanner-owned status</h2>
+					<h2>Range scan history</h2>
 					<StatusPill
 						status={archiveErrors.length > 0 ? 'degraded' : 'ok'}
 						text={

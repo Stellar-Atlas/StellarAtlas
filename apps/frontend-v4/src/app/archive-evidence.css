@@ -95,6 +95,67 @@
 	padding: 0 12px 12px;
 }
 
+.archive-object-coverage {
+	display: grid;
+	gap: 14px;
+}
+
+.archive-coverage-grid {
+	display: grid;
+	gap: 10px;
+	grid-template-columns: repeat(3, minmax(0, 1fr));
+	padding: 0 18px;
+}
+
+.archive-coverage-grid div {
+	background: var(--surface-subtle);
+	border: 1px solid var(--border);
+	border-radius: 8px;
+	display: grid;
+	gap: 4px;
+	padding: 12px;
+}
+
+.archive-coverage-grid strong {
+	font-size: 1.08rem;
+	overflow-wrap: anywhere;
+}
+
+.archive-coverage-grid span {
+	color: var(--muted);
+	font-size: 0.78rem;
+	font-weight: 800;
+	text-transform: uppercase;
+}
+
+.archive-object-type-table {
+	padding: 0 18px 18px;
+}
+
+.archive-org-row {
+	align-items: start;
+	grid-template-columns: minmax(0, 1fr);
+}
+
+.archive-org-row strong,
+.archive-org-row small {
+	overflow: visible;
+	overflow-wrap: anywhere;
+	text-overflow: clip;
+	white-space: normal;
+}
+
+.archive-org-state,
+.archive-org-coverage {
+	display: grid;
+	gap: 4px;
+	text-align: start;
+}
+
+.archive-org-state strong {
+	text-transform: capitalize;
+}
+
 .nested-metadata-document {
 	border-inline: 0;
 	border-block-end: 0;

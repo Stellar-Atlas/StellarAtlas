@@ -16,6 +16,7 @@ import type {
 	PublicFailoverStatus,
 	PublicFullHistoryStatus,
 	PublicHistoryArchiveObjectQueue,
+	PublicHistoryArchiveObjectSummary,
 	PublicHistoryArchiveScan,
 	PublicHistoryArchiveScanEvidence,
 	PublicHistoryArchiveScanLogEntry,
@@ -305,6 +306,14 @@ export const fetchHistoryArchiveObjects = (
 		withTags(options, [frontendCacheTags.historyScan])
 	);
 
+export const fetchHistoryArchiveObjectSummary = (
+	options?: FetchOptions
+): Promise<PublicHistoryArchiveObjectSummary> =>
+	fetchJson<PublicHistoryArchiveObjectSummary>(
+		'/v1/archive-scans/objects/summary',
+		withTags(options, [frontendCacheTags.historyScan])
+	);
+
 export const fetchHistoryArchiveObjectsForArchive = (
 	historyUrl: string,
 	limit: number,
@@ -312,6 +321,15 @@ export const fetchHistoryArchiveObjectsForArchive = (
 ): Promise<PublicHistoryArchiveObjectQueue> =>
 	fetchJson<PublicHistoryArchiveObjectQueue>(
 		`/v1/archive-scans/${encodeURIComponent(historyUrl)}/objects?limit=${encodeURIComponent(limit.toString())}`,
+		withTags(options, [frontendCacheTags.historyScan])
+	);
+
+export const fetchHistoryArchiveObjectSummaryForArchive = (
+	historyUrl: string,
+	options?: FetchOptions
+): Promise<PublicHistoryArchiveObjectSummary> =>
+	fetchJson<PublicHistoryArchiveObjectSummary>(
+		`/v1/archive-scans/${encodeURIComponent(historyUrl)}/objects/summary`,
 		withTags(options, [frontendCacheTags.historyScan])
 	);
 

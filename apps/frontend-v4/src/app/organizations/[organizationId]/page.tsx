@@ -5,6 +5,7 @@ import { connection } from 'next/server';
 import { fetchHistoryArchiveObjectEventsForArchive } from '@api/archive-scans-client';
 import {
 	fetchHistoryArchiveObjectsForArchive,
+	fetchHistoryArchiveObjectSummaryForArchive,
 	fetchHistoryArchiveState,
 	fetchKnownNodes,
 	fetchKnownOrganizations,
@@ -78,6 +79,10 @@ async function OrganizationDetailRouteContent({
 				5,
 				liveArchiveFetchOptions
 			),
+			summary: await fetchHistoryArchiveObjectSummaryForArchive(
+				historyUrl,
+				liveArchiveFetchOptions
+			),
 			state: await fetchHistoryArchiveState(historyUrl, liveArchiveFetchOptions)
 		}))
 	);
@@ -94,8 +99,7 @@ async function OrganizationDetailRouteContent({
 						<span>discovered</span>
 						<strong>
 							{formatInteger(
-								getTopOrganizations(organizations).at(0)?.validators
-									.length ?? 0
+								getTopOrganizations(organizations).at(0)?.validators.length ?? 0
 							)}
 						</strong>
 						<span>largest validator set</span>

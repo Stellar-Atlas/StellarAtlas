@@ -2,6 +2,7 @@ import Link from 'next/link';
 import type {
 	PublicHistoryArchiveObjectEvents,
 	PublicHistoryArchiveObjectQueue,
+	PublicHistoryArchiveObjectSummary,
 	PublicNetwork,
 	PublicNode,
 	PublicHistoryArchiveState,
@@ -36,6 +37,7 @@ interface OrganizationArchiveState {
 	readonly historyUrl: string;
 	readonly objects: PublicHistoryArchiveObjectQueue;
 	readonly state: PublicHistoryArchiveState | null;
+	readonly summary: PublicHistoryArchiveObjectSummary;
 }
 
 export function OrganizationDetail({
@@ -45,11 +47,13 @@ export function OrganizationDetail({
 	organizationNodes
 }: OrganizationDetailProps): React.JSX.Element {
 	const validators = organization.validators
-		.map((publicKey): PublicNode | null =>
-			network.nodes.find((node) => node.publicKey === publicKey) ?? null
+		.map(
+			(publicKey): PublicNode | null =>
+				network.nodes.find((node) => node.publicKey === publicKey) ?? null
 		)
 		.filter((node): node is PublicNode => node !== null);
-	const availability24Hours = formatOrganization24HourAvailability(organization);
+	const availability24Hours =
+		formatOrganization24HourAvailability(organization);
 	const availability30Days = formatOrganization30DayAvailability(organization);
 
 	return (
@@ -60,18 +64,35 @@ export function OrganizationDetail({
 					<StatusTags tags={getOrganizationTags(organization)} />
 				</div>
 				<dl className="details">
-					<div><dt>Home domain</dt><dd>{organization.homeDomain}</dd></div>
-					<div><dt>URL</dt><dd>{organization.url ?? 'Not reported'}</dd></div>
-					<div><dt>Horizon</dt><dd>{organization.horizonUrl ?? 'Not reported'}</dd></div>
-					<div><dt>Validators</dt><dd>{organization.validators.length}</dd></div>
-					<div><dt>Subquorum available</dt><dd>{formatBoolean(organization.subQuorumAvailable)}</dd></div>
+					<div>
+						<dt>Home domain</dt>
+						<dd>{organization.homeDomain}</dd>
+					</div>
+					<div>
+						<dt>URL</dt>
+						<dd>{organization.url ?? 'Not reported'}</dd>
+					</div>
+					<div>
+						<dt>Horizon</dt>
+						<dd>{organization.horizonUrl ?? 'Not reported'}</dd>
+					</div>
+					<div>
+						<dt>Validators</dt>
+						<dd>{organization.validators.length}</dd>
+					</div>
+					<div>
+						<dt>Subquorum available</dt>
+						<dd>{formatBoolean(organization.subQuorumAvailable)}</dd>
+					</div>
 					<div>
 						<dt>24H availability</dt>
 						<dd>
 							<span className={`metric-text ${availability24Hours.tone}`}>
 								{availability24Hours.value}
 							</span>
-							{availability24Hours.detail ? <small>{availability24Hours.detail}</small> : null}
+							{availability24Hours.detail ? (
+								<small>{availability24Hours.detail}</small>
+							) : null}
 						</dd>
 					</div>
 					<div>
@@ -80,13 +101,17 @@ export function OrganizationDetail({
 							<span className={`metric-text ${availability30Days.tone}`}>
 								{availability30Days.value}
 							</span>
-							{availability30Days.detail ? <small>{availability30Days.detail}</small> : null}
+							{availability30Days.detail ? (
+								<small>{availability30Days.detail}</small>
+							) : null}
 						</dd>
 					</div>
 				</dl>
 			</article>
 			<article className="panel detail-panel">
-				<div className="panel-heading"><h2>Validators</h2></div>
+				<div className="panel-heading">
+					<h2>Validators</h2>
+				</div>
 				<div className="table">
 					{validators.map((node) => (
 						<div className="row compact" key={node.publicKey}>
@@ -147,20 +172,30 @@ function OrganizationArchiveEvidence({
 							stateByUrl.get(normalizeArchiveUrl(historyUrl))?.objects ?? null;
 						const events =
 							stateByUrl.get(normalizeArchiveUrl(historyUrl))?.events ?? null;
+						const summary =
+							stateByUrl.get(normalizeArchiveUrl(historyUrl))?.summary ?? null;
 
 						return (
-							<div className="row compact" key={`${node.publicKey}:${historyUrl}`}>
+							<div
+								className="row compact archive-org-row"
+								key={`${node.publicKey}:${historyUrl}`}
+							>
 								<div>
 									<Link href={`/nodes/${encodeURIComponent(node.publicKey)}`}>
 										<strong>{getNodeLabel(node)}</strong>
 									</Link>
 									<small>{historyUrl}</small>
 								</div>
-								<div className="metric">
+								<div className="archive-org-state">
 									<strong>{archiveState?.status ?? 'No state record'}</strong>
 									<small>{formatArchiveStateDetail(archiveState)}</small>
+								</div>
+								<div className="archive-org-coverage">
 									{objects ? (
-										<small>{formatObjectQueueSummary(objects)}</small>
+										<small>{formatQueueSampleSummary(objects)}</small>
+									) : null}
+									{summary ? (
+										<small>{formatArchiveCoverageSummary(summary)}</small>
 									) : null}
 									{events ? (
 										<small>{formatLatestArchiveEvent(events)}</small>
@@ -180,14 +215,24 @@ function formatLatestArchiveEvent(
 ): string {
 	const latest = events.events.at(0);
 	if (latest === undefined) return 'No object events recorded';
+	const stage =
+		latest.workerStage === null || latest.workerStage === latest.eventType
+			? latest.objectType
+			: latest.workerStage;
 
-	return `${latest.eventType} ${latest.workerStage ?? latest.objectType} at ${formatDateTime(latest.createdAt)}`;
+	return `${latest.eventType} ${stage} at ${formatDateTime(latest.createdAt)}`;
 }
 
-function formatObjectQueueSummary(
+function formatArchiveCoverageSummary(
+	summary: PublicHistoryArchiveObjectSummary
+): string {
+	return `${formatInteger(summary.checkpoints.completeArchiveCheckpoints)} complete checkpoints, ${formatInteger(summary.checkpoints.partialArchiveCheckpoints)} partial, ${formatInteger(summary.checkpoints.failedArchiveCheckpoints)} failed; ${formatInteger(summary.buckets.totalBucketObjects)} bucket objects`;
+}
+
+function formatQueueSampleSummary(
 	objects: PublicHistoryArchiveObjectQueue
 ): string {
-	return `${formatInteger(objects.activeObjects)} scanning, ${formatInteger(
+	return `Current rows: ${formatInteger(objects.activeObjects)} scanning, ${formatInteger(
 		objects.pendingObjects
 	)} pending, ${formatInteger(objects.verifiedObjects)} verified, ${formatInteger(
 		objects.failedObjects

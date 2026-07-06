@@ -2,6 +2,7 @@ import type {
 	PublicApiStatus,
 	PublicHistoryArchiveObjectEvents,
 	PublicHistoryArchiveObjectQueue,
+	PublicHistoryArchiveObjectSummary,
 	PublicConfiguredServiceStatus,
 	PublicDataQualityStatus,
 	PublicStatusLevel,
@@ -15,6 +16,7 @@ import {
 } from '@format/formatters';
 import { StatCard } from '../stat-card';
 import { HistoryArchiveObjectEventLog } from '@components/archive-scans/history-archive-object-event-log';
+import { HistoryArchiveObjectCoverage } from '@components/archive-scans/history-archive-object-coverage';
 import { HistoryArchiveObjectInventory } from '@components/archive-scans/history-archive-object-inventory';
 import { RecentScanLogs } from './recent-scan-logs';
 import { ProductionServiceStatusPanel } from './service-status-panels';
@@ -24,6 +26,7 @@ interface StatusDashboardProps {
 	readonly api: PublicApiStatus;
 	readonly archiveEvents: PublicHistoryArchiveObjectEvents;
 	readonly archiveObjects: PublicHistoryArchiveObjectQueue;
+	readonly archiveSummary: PublicHistoryArchiveObjectSummary;
 	readonly dataQuality: PublicDataQualityStatus;
 	readonly frontend: PublicConfiguredServiceStatus;
 	readonly scanLogs: PublicScanLogStatus;
@@ -34,6 +37,7 @@ export function StatusDashboard({
 	api,
 	archiveEvents,
 	archiveObjects,
+	archiveSummary,
 	dataQuality,
 	frontend,
 	scanLogs,
@@ -41,8 +45,8 @@ export function StatusDashboard({
 }: StatusDashboardProps): React.JSX.Element {
 	const scan = dataQuality.scans.networkScan;
 	const rollups = dataQuality.rollups.networkRollups;
-	const archiveObjectSummary = summarizeArchiveObjects(archiveObjects);
-	const archiveFreshnessDetail = `Latest completed age ${formatDuration(dataQuality.dataFreshness.archiveScan.ageMs)}; ${formatInteger(archiveObjects.activeObjects)} active objects`;
+	const archiveObjectActivity = summarizeArchiveObjects(archiveObjects);
+	const archiveFreshnessDetail = `Latest completed age ${formatDuration(dataQuality.dataFreshness.archiveScan.ageMs)}; ${formatInteger(archiveSummary.activeObjects)} active objects`;
 
 	return (
 		<div className="status-dashboard">
@@ -66,16 +70,16 @@ export function StatusDashboard({
 					value={`${formatInteger(rollups.matchingDays)} matched`}
 				/>
 				<StatCard
-					detail={`${formatInteger(archiveObjects.pendingObjects)} pending, ${formatInteger(archiveObjects.failedObjects)} evidence failures`}
+					detail={`${formatInteger(archiveSummary.pendingObjects)} pending, ${formatInteger(archiveSummary.failedObjects)} evidence failures`}
 					label="Archive objects"
-					tone={statusTone(archiveObjectSummary.status)}
-					value={`${formatInteger(archiveObjects.activeObjects)} active`}
+					tone={statusTone(archiveObjectActivity.status)}
+					value={`${formatInteger(archiveSummary.totalObjects)} stored`}
 				/>
 				<StatCard
-					detail={`${formatInteger(archiveObjectSummary.freshActiveObjects)} fresh, ${formatInteger(archiveObjectSummary.staleActiveObjects)} delayed`}
+					detail={`${formatInteger(archiveObjectActivity.freshActiveObjects)} fresh, ${formatInteger(archiveObjectActivity.staleActiveObjects)} delayed`}
 					label="Object workers"
-					tone={statusTone(archiveObjectSummary.workerStatus)}
-					value={`${formatInteger(archiveObjects.activeObjects)} active`}
+					tone={statusTone(archiveObjectActivity.workerStatus)}
+					value={`${formatInteger(archiveSummary.activeObjects)} active`}
 				/>
 				<StatCard
 					detail={`API ${statusLabel(api.status)}, frontend ${
@@ -138,16 +142,16 @@ export function StatusDashboard({
 					</div>
 					<div className="status-list">
 						<StatusRow
-							detail={`${formatInteger(archiveObjects.pendingObjects)} pending, ${formatInteger(archiveObjects.failedObjects)} evidence failures, ${formatInteger(archiveObjects.verifiedObjects)} verified`}
+							detail={`${formatInteger(archiveSummary.pendingObjects)} pending, ${formatInteger(archiveSummary.failedObjects)} evidence failures, ${formatInteger(archiveSummary.verifiedObjects)} verified`}
 							label="Archive object queue"
-							status={archiveObjectSummary.status}
-							value={`${formatInteger(archiveObjectSummary.totalOpenObjects)} open objects`}
+							status={archiveObjectActivity.status}
+							value={`${formatInteger(archiveObjectActivity.totalOpenObjects)} open objects`}
 						/>
 						<StatusRow
-							detail={`${formatInteger(archiveObjectSummary.freshActiveObjects)} fresh, ${formatInteger(archiveObjectSummary.staleActiveObjects)} delayed; delayed after ${formatDuration(ARCHIVE_OBJECT_STALE_AGE_MS)}`}
+							detail={`${formatInteger(archiveObjectActivity.freshActiveObjects)} fresh, ${formatInteger(archiveObjectActivity.staleActiveObjects)} delayed; delayed after ${formatDuration(ARCHIVE_OBJECT_STALE_AGE_MS)}`}
 							label="Archive object workers"
-							status={archiveObjectSummary.workerStatus}
-							value={`${formatInteger(archiveObjects.activeObjects)} active`}
+							status={archiveObjectActivity.workerStatus}
+							value={`${formatInteger(archiveSummary.activeObjects)} active`}
 						/>
 						<StatusRow
 							detail={`${formatInteger(workers.communityScanners.offlineScanners)} offline, ${formatInteger(workers.communityScanners.degradedScanners)} degraded`}
@@ -162,7 +166,13 @@ export function StatusDashboard({
 					api={api}
 					dataQuality={dataQuality}
 					archiveObjects={archiveObjects}
+					archiveSummary={archiveSummary}
 					frontend={frontend}
+				/>
+
+				<HistoryArchiveObjectCoverage
+					summary={archiveSummary}
+					title="Archive object coverage"
 				/>
 
 				<HistoryArchiveObjectInventory

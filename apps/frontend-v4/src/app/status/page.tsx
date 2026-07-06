@@ -4,6 +4,7 @@ import {
 	fetchApiStatus,
 	fetchDataQualityStatus,
 	fetchFrontendStatus,
+	fetchHistoryArchiveObjectSummary,
 	fetchHistoryArchiveObjects,
 	fetchScanLogStatus,
 	fetchWorkerStatus
@@ -23,6 +24,7 @@ async function StatusRouteContent(): Promise<React.JSX.Element> {
 		scanLogs,
 		workers,
 		archiveEvents,
+		archiveSummary,
 		archiveObjects,
 		frontend
 	] = await Promise.all([
@@ -31,6 +33,7 @@ async function StatusRouteContent(): Promise<React.JSX.Element> {
 		fetchScanLogStatus(statusFetchOptions),
 		fetchWorkerStatus(statusFetchOptions),
 		fetchHistoryArchiveObjectEvents(100, statusFetchOptions),
+		fetchHistoryArchiveObjectSummary(statusFetchOptions),
 		fetchHistoryArchiveObjects(100, statusFetchOptions),
 		fetchFrontendStatus(statusFetchOptions)
 	]);
@@ -46,6 +49,7 @@ async function StatusRouteContent(): Promise<React.JSX.Element> {
 				api={api}
 				archiveEvents={archiveEvents}
 				archiveObjects={archiveObjects}
+				archiveSummary={archiveSummary}
 				dataQuality={dataQuality}
 				frontend={frontend}
 				scanLogs={scanLogs}

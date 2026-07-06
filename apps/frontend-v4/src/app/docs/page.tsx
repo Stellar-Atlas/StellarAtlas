@@ -67,6 +67,11 @@ const endpointGroups: EndpointGroup[] = [
 		endpoints: [
 			'/v1/history-scan/:encodedHistoryUrl',
 			'/v1/history-scan/logs/:encodedHistoryUrl',
+			'/v1/archive-scans/objects/summary',
+			'/v1/archive-scans/:encodedHistoryUrl/objects/summary',
+			'/v1/archive-scans/:encodedHistoryUrl/state',
+			'/v1/archive-scans/:encodedHistoryUrl/objects',
+			'/v1/archive-scans/:encodedHistoryUrl/objects/events',
 			'POST /v1/history-scan/archive-metadata/backfill'
 		],
 		title: 'History archive'

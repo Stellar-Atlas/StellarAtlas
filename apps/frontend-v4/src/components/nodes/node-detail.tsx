@@ -5,6 +5,7 @@ import type {
 	PublicHistoryArchiveScanLogEntry,
 	PublicHistoryArchiveObjectEvents,
 	PublicHistoryArchiveObjectQueue,
+	PublicHistoryArchiveObjectSummary,
 	PublicHistoryArchiveState,
 	PublicKnownNode,
 	PublicNetwork,
@@ -40,6 +41,7 @@ import {
 } from './node-archive-evidence';
 import { HistoryArchiveObjectInventory } from '@components/archive-scans/history-archive-object-inventory';
 import { HistoryArchiveObjectEventLog } from '@components/archive-scans/history-archive-object-event-log';
+import { HistoryArchiveObjectCoverage } from '@components/archive-scans/history-archive-object-coverage';
 
 interface NodeDetailProps {
 	historyArchiveEvidence: PublicHistoryArchiveScanEvidence | null;
@@ -48,6 +50,7 @@ interface NodeDetailProps {
 	historyArchiveScan: PublicHistoryArchiveScan | null;
 	historyArchiveScanLogs: readonly PublicHistoryArchiveScanLogEntry[];
 	historyArchiveState: PublicHistoryArchiveState | null;
+	historyArchiveSummary: PublicHistoryArchiveObjectSummary | null;
 	knownNode: PublicKnownNode;
 	network: PublicNetwork;
 	node: PublicNode | null;
@@ -61,6 +64,7 @@ export function NodeDetail({
 	historyArchiveScan,
 	historyArchiveScanLogs,
 	historyArchiveState,
+	historyArchiveSummary,
 	knownNode,
 	network,
 	node,
@@ -121,7 +125,8 @@ export function NodeDetail({
 		node.historyArchiveHasError ||
 		archiveVerificationErrors.length > 0 ||
 		historyArchiveScan !== null ||
-		historyArchiveScanLogs.length > 0;
+		historyArchiveScanLogs.length > 0 ||
+		historyArchiveSummary !== null;
 
 	return (
 		<section className="detail-grid">
@@ -236,8 +241,22 @@ export function NodeDetail({
 							<span className="tag warning">slow archive</span>
 						) : null}
 					</div>
+					{historyArchiveSummary ? (
+						<HistoryArchiveObjectCoverage
+							framed={false}
+							summary={historyArchiveSummary}
+							title="Archive object coverage"
+						/>
+					) : null}
 					{historyArchiveScan ? (
 						<dl className="details">
+							<div>
+								<dt>Historical range verification</dt>
+								<dd>
+									Legacy range scan evidence retained for comparison while the
+									object scheduler catches up.
+								</dd>
+							</div>
 							<div>
 								<dt>Active progress</dt>
 								<dd>
