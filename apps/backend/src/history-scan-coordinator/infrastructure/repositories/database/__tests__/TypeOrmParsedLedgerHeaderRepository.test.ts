@@ -70,6 +70,79 @@ describe('TypeOrmParsedLedgerHeaderRepository', () => {
 		expect(repository.createQueryBuilder).not.toHaveBeenCalled();
 	});
 
+	it('should find the latest parsed header for a ledger sequence', async () => {
+		const repository = {
+			find: jest.fn().mockResolvedValueOnce([
+				{
+					bucketListHash: 'bucket-list-hash',
+					lastSourceArchiveUrl: 'https://archive-a.example',
+					ledgerHeaderHash: 'ledger-header-hash',
+					protocolVersion: 27,
+					transactionResultHash: 'transaction-result-hash',
+					transactionSetHash: 'transaction-set-hash'
+				}
+			])
+		} as unknown as Repository<ParsedLedgerHeader>;
+		const parsedHeaderRepository = new TypeOrmParsedLedgerHeaderRepository(
+			repository
+		);
+
+		await expect(
+			parsedHeaderRepository.findByLedgerSequence(64)
+		).resolves.toEqual({
+			bucketListHash: 'bucket-list-hash',
+			lastSourceArchiveUrl: 'https://archive-a.example',
+			ledgerHeaderHash: 'ledger-header-hash',
+			protocolVersion: 27,
+			transactionResultHash: 'transaction-result-hash',
+			transactionSetHash: 'transaction-set-hash'
+		});
+		expect(repository.find).toHaveBeenCalledWith({
+			order: { lastSeenAt: 'DESC' },
+			select: {
+				bucketListHash: true,
+				lastSourceArchiveUrl: true,
+				ledgerHeaderHash: true,
+				protocolVersion: true,
+				transactionResultHash: true,
+				transactionSetHash: true
+			},
+			take: 1,
+			where: { ledgerSequence: 64 }
+		});
+	});
+
+	it('should read parsed header ranges by source archive', async () => {
+		const repository = {
+			query: jest.fn().mockResolvedValueOnce([
+				{
+					archiveUrl: 'https://archive-a.example',
+					earliestLedgerSequence: '1',
+					latestLedgerSequence: '64',
+					latestObservedAt: '2026-07-06T00:00:00.000Z',
+					parsedLedgerCount: '2'
+				}
+			])
+		} as unknown as Repository<ParsedLedgerHeader>;
+		const parsedHeaderRepository = new TypeOrmParsedLedgerHeaderRepository(
+			repository
+		);
+
+		await expect(parsedHeaderRepository.findSourceRanges(5)).resolves.toEqual([
+			{
+				archiveUrl: 'https://archive-a.example',
+				earliestLedgerSequence: 1,
+				latestLedgerSequence: 64,
+				latestObservedAt: new Date('2026-07-06T00:00:00.000Z'),
+				parsedLedgerCount: 2
+			}
+		]);
+		expect(repository.query).toHaveBeenCalledWith(
+			expect.stringContaining('from parsed_ledger_header'),
+			[5]
+		);
+	});
+
 	it('should read a parsed ledger header watermark', async () => {
 		const repository = {
 			find: jest

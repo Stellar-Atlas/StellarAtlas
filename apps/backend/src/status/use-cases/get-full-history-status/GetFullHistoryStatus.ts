@@ -3,6 +3,11 @@ import { inject, injectable } from 'inversify';
 import { DataSource } from 'typeorm';
 import { err, ok, Result } from 'neverthrow';
 import { mapUnknownToError } from '@core/utilities/mapUnknownToError.js';
+import type {
+	ParsedLedgerHeaderRepository,
+	ParsedLedgerHeaderWatermark
+} from '@history-scan-coordinator/domain/parsed-history/ParsedLedgerHeaderRepository.js';
+import { TYPES as HISTORY_TYPES } from '@history-scan-coordinator/infrastructure/di/di-types.js';
 import type { StatusLevel } from '../../domain/StatusTypes.js';
 
 export interface FullHistoryStatusDTO {
@@ -76,27 +81,6 @@ export interface LedgerIngestionStatusDTO {
 	readonly status: 'parsed' | 'unparsed';
 }
 
-interface HeaderStatsRow {
-	readonly earliestParsedLedger: string | null;
-	readonly latestObservedAt: Date | string | null;
-	readonly latestParsedLedger: string | null;
-	readonly parsedLedgerCount: string | number;
-	readonly sourceArchiveCount: string | number;
-}
-
-interface HeaderBoundaryRow {
-	readonly ledgerSequence: number | string;
-	readonly lastSeenAt: Date | string | null;
-}
-
-interface HeaderApproximateCountRow {
-	readonly parsedLedgerCount: string | number | null;
-}
-
-interface SourceArchiveCountRow {
-	readonly sourceArchiveCount: string | number | null;
-}
-
 interface QueueSummaryRow {
 	readonly doneJobs: string | number | null;
 	readonly latestJobUpdateAt: Date | string | null;
@@ -115,30 +99,19 @@ interface JobRow {
 	readonly url: string;
 }
 
-interface RangeRow {
-	readonly archiveUrl: string;
-	readonly earliestParsedLedger: number | string;
-	readonly latestObservedAt: Date | string;
-	readonly latestParsedLedger: number | string;
-	readonly parsedLedgerCount: string | number;
-}
-
-interface LedgerHeaderRow {
-	readonly bucketListHash: string;
-	readonly ledgerHeaderHash: string;
-	readonly lastSourceArchiveUrl: string;
-	readonly protocolVersion: number;
-	readonly transactionResultHash: string;
-	readonly transactionSetHash: string;
-}
-
 @injectable()
 export class GetFullHistoryStatus {
-	constructor(@inject(DataSource) private readonly dataSource: DataSource) {}
+	constructor(
+		@inject(DataSource) private readonly dataSource: DataSource,
+		@inject(HISTORY_TYPES.ParsedLedgerHeaderRepository)
+		private readonly parsedLedgerHeaders: ParsedLedgerHeaderRepository
+	) {}
 
 	async executeFullHistory(): Promise<Result<FullHistoryStatusDTO, Error>> {
 		try {
-			return ok(this.mapFullHistory(await this.readHeaderStats()));
+			return ok(
+				this.mapFullHistory(await this.parsedLedgerHeaders.getWatermark())
+			);
 		} catch (error) {
 			return err(mapUnknownToError(error));
 		}
@@ -147,7 +120,7 @@ export class GetFullHistoryStatus {
 	async executeIngestion(): Promise<Result<IngestionStatusDTO, Error>> {
 		try {
 			const [stats, queue] = await Promise.all([
-				this.readHeaderStats(),
+				this.parsedLedgerHeaders.getWatermark(),
 				this.readQueueSummary()
 			]);
 			return ok({ ...this.mapFullHistory(stats), queue });
@@ -189,23 +162,10 @@ export class GetFullHistoryStatus {
 		sequence: string
 	): Promise<Result<LedgerIngestionStatusDTO, Error>> {
 		try {
-			const rows = await this.dataSource.query<LedgerHeaderRow[]>(
-				`
-					select
-						"ledgerHeaderHash",
-						"transactionSetHash",
-						"transactionResultHash",
-						"bucketListHash",
-						"protocolVersion",
-						"lastSourceArchiveUrl"
-					from parsed_ledger_header
-					where "ledgerSequence" = $1
-					order by "lastSeenAt" desc
-					limit 1
-				`,
-				[sequence]
-			);
-			const row = rows[0] ?? null;
+			const ledgerSequence = Number(sequence);
+			const row = Number.isSafeInteger(ledgerSequence)
+				? await this.parsedLedgerHeaders.findByLedgerSequence(ledgerSequence)
+				: null;
 			return ok({
 				generatedAt: new Date().toISOString(),
 				header: row
@@ -225,49 +185,6 @@ export class GetFullHistoryStatus {
 		} catch (error) {
 			return err(mapUnknownToError(error));
 		}
-	}
-
-	private async readHeaderStats(): Promise<HeaderStatsRow> {
-		const [countRows, earliestRows, latestRows, sourceRows] = await Promise.all([
-			this.dataSource.query<HeaderApproximateCountRow[]>(`
-				select greatest(
-					coalesce(nullif(stat.n_live_tup, 0), class.reltuples)::bigint,
-					0
-				) as "parsedLedgerCount"
-				from pg_class class
-				left join pg_stat_all_tables stat on stat.relid = class.oid
-				where class.oid = 'parsed_ledger_header'::regclass
-			`),
-			this.dataSource.query<HeaderBoundaryRow[]>(`
-				select
-					"ledgerSequence",
-					"lastSeenAt"
-				from parsed_ledger_header
-				order by "ledgerSequence" asc
-				limit 1
-			`),
-			this.dataSource.query<HeaderBoundaryRow[]>(`
-				select
-					"ledgerSequence",
-					"lastSeenAt"
-				from parsed_ledger_header
-				order by "ledgerSequence" desc
-				limit 1
-			`),
-			this.dataSource.query<SourceArchiveCountRow[]>(`
-				select count(distinct url) as "sourceArchiveCount"
-				from history_archive_scan_v2
-			`)
-		]);
-		const earliest = earliestRows[0];
-		const latest = latestRows[0];
-		return {
-			earliestParsedLedger: toNullableString(earliest?.ledgerSequence),
-			latestObservedAt: latest?.lastSeenAt ?? null,
-			latestParsedLedger: toNullableString(latest?.ledgerSequence),
-			parsedLedgerCount: toNumber(countRows[0]?.parsedLedgerCount),
-			sourceArchiveCount: toNumber(sourceRows[0]?.sourceArchiveCount)
-		};
 	}
 
 	private async readQueueSummary(): Promise<IngestionStatusDTO['queue']> {
@@ -319,41 +236,29 @@ export class GetFullHistoryStatus {
 	}
 
 	private async readRanges(limit: number): Promise<IndexingRangeDTO[]> {
-		const rows = await this.dataSource.query<RangeRow[]>(
-			`
-				select
-					"lastSourceArchiveUrl" as "archiveUrl",
-					count(*) as "parsedLedgerCount",
-					min("ledgerSequence") as "earliestParsedLedger",
-					max("ledgerSequence") as "latestParsedLedger",
-					max("lastSeenAt") as "latestObservedAt"
-				from parsed_ledger_header
-				group by "lastSourceArchiveUrl"
-				order by max("lastSeenAt") desc
-				limit $1
-			`,
-			[limit]
-		);
+		const rows = await this.parsedLedgerHeaders.findSourceRanges(limit);
 		return rows.map((row) => ({
 			archiveUrl: row.archiveUrl,
-			earliestParsedLedger: toStringValue(row.earliestParsedLedger),
+			earliestParsedLedger: toStringValue(row.earliestLedgerSequence),
 			latestObservedAt: toIso(row.latestObservedAt) ?? '',
-			latestParsedLedger: toStringValue(row.latestParsedLedger),
-			parsedLedgerCount: toNumber(row.parsedLedgerCount)
+			latestParsedLedger: toStringValue(row.latestLedgerSequence),
+			parsedLedgerCount: row.parsedLedgerCount
 		}));
 	}
 
-	private mapFullHistory(row: HeaderStatsRow): FullHistoryStatusDTO {
-		const parsedLedgerCount = toNumber(row.parsedLedgerCount);
+	private mapFullHistory(
+		row: ParsedLedgerHeaderWatermark
+	): FullHistoryStatusDTO {
+		const parsedLedgerCount = row.parsedLedgerCount;
 		return {
 			generatedAt: new Date().toISOString(),
 			status: parsedLedgerCount > 0 ? 'degraded' : 'unavailable',
 			mode: 'archive_header_parser',
 			parsedLedgerCount,
-			earliestParsedLedger: toNullableString(row.earliestParsedLedger),
-			latestParsedLedger: toNullableString(row.latestParsedLedger),
+			earliestParsedLedger: toNullableString(row.earliestLedgerSequence),
+			latestParsedLedger: toNullableString(row.latestLedgerSequence),
 			latestObservedAt: toIso(row.latestObservedAt),
-			sourceArchiveCount: toNumber(row.sourceArchiveCount),
+			sourceArchiveCount: row.sourceArchiveCount,
 			localTransactionIndexReady: false,
 			localOperationIndexReady: false,
 			localAssetIndexReady: false,
@@ -361,14 +266,6 @@ export class GetFullHistoryStatus {
 		};
 	}
 }
-
-const emptyHeaderStats: HeaderStatsRow = {
-	earliestParsedLedger: null,
-	latestObservedAt: null,
-	latestParsedLedger: null,
-	parsedLedgerCount: 0,
-	sourceArchiveCount: 0
-};
 
 function toNumber(value: number | string | null | undefined): number {
 	if (typeof value === 'number') return value;
