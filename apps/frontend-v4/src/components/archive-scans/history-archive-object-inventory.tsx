@@ -313,12 +313,12 @@ function formatObjectStatus(status: ObjectDisplayStatus): string {
 function formatObjectType(
 	type: PublicHistoryArchiveObject['objectType']
 ): string {
-	if (type === 'history-archive-state') return 'root state file';
-	if (type === 'checkpoint-state') return 'checkpoint state file';
+	if (type === 'history-archive-state') return 'history archive state file';
+	if (type === 'checkpoint-state') return 'checkpoint history file';
 	if (type === 'ledger') return 'ledger file';
-	if (type === 'transactions') return 'transaction category file';
-	if (type === 'results') return 'result category file';
-	if (type === 'scp') return 'SCP category file';
+	if (type === 'transactions') return 'transaction archive file';
+	if (type === 'results') return 'result archive file';
+	if (type === 'scp') return 'SCP archive file';
 	if (type === 'bucket') return 'bucket file';
 	return type;
 }

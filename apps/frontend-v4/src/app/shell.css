@@ -15,7 +15,8 @@
 
 .site-header-inner,
 .shell {
-	inline-size: min(1440px, calc(100vw - 48px));
+	inline-size: min(1440px, calc(100% - 48px));
+	max-inline-size: calc(100% - 48px);
 	margin: 0 auto;
 }
 
@@ -23,7 +24,7 @@
 	align-items: center;
 	display: grid;
 	gap: 18px;
-	grid-template-columns: auto 1fr minmax(340px, 480px);
+	grid-template-columns: auto minmax(0, 1fr) minmax(280px, 420px);
 	min-block-size: 68px;
 }
 
@@ -97,7 +98,9 @@
 }
 
 .nav {
+	flex-wrap: wrap;
 	gap: 8px;
+	min-inline-size: 0;
 }
 
 .nav-link {

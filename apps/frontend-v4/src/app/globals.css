@@ -75,6 +75,7 @@ html {
 body {
 	background: var(--background);
 	margin: 0;
+	overflow-x: hidden;
 }
 
 a {

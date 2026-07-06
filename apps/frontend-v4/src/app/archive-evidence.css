@@ -130,6 +130,7 @@
 
 .archive-object-type-table {
 	padding: 0 18px 18px;
+	table-layout: fixed;
 }
 
 .archive-org-row {
@@ -351,6 +352,15 @@
 .archive-object-table {
 	max-block-size: 520px;
 	overflow-y: auto;
+	table-layout: fixed;
+}
+
+.archive-object-table th,
+.archive-object-table td,
+.archive-object-type-table th,
+.archive-object-type-table td {
+	min-inline-size: 0;
+	overflow-wrap: anywhere;
 }
 
 .archive-object-row {

@@ -19,6 +19,12 @@
 	grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
+.detail-grid > *,
+.panel,
+.detail-panel {
+	min-inline-size: 0;
+}
+
 .stat-card,
 .panel,
 .graph-panel,
@@ -250,12 +256,19 @@ meter {
 }
 
 .responsive-table {
+	max-inline-size: 100%;
+	min-inline-size: 0;
 	overflow-x: auto;
+	overscroll-behavior-inline: contain;
 }
 
 table {
 	border-collapse: collapse;
 	inline-size: 100%;
+}
+
+.responsive-table table {
+	min-inline-size: min(760px, 100%);
 }
 
 th,

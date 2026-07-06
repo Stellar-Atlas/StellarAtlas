@@ -31,25 +31,22 @@ export function HistoryArchiveStateDocument({
 	const archiveRootUrl = getArchiveRootUrl(resolvedMetadata.stellarHistoryUrl);
 
 	return (
-		<details className="metadata-document history-archive-state" open>
+		<details className="metadata-document history-archive-state">
 			<summary>
 				<span>History archive state</span>
-				<a
-					href={resolvedMetadata.stellarHistoryUrl}
-					rel="noopener noreferrer"
-					target="_blank"
-				>
-					{resolvedMetadata.stellarHistoryUrl}
-				</a>
+				<span className="muted-inline">{archiveRootUrl}</span>
 			</summary>
 			<p className="muted-copy">
-				Archive root state file captured by the scanner{' '}
-				{formatDateTime(resolvedMetadata.observedAt)}.
+				History archive state observed {formatDateTime(resolvedMetadata.observedAt)}.
 			</p>
 			<dl className="details">
 				<div>
 					<dt>Archive root</dt>
 					<dd>{archiveRootUrl}</dd>
+				</div>
+				<div>
+					<dt>State file</dt>
+					<dd>{resolvedMetadata.stellarHistoryUrl}</dd>
 				</div>
 				<div>
 					<dt>Version</dt>
@@ -92,16 +89,10 @@ function HistoryArchiveStateFailure({
 	readonly archiveState: PublicHistoryArchiveState;
 }): React.JSX.Element {
 	return (
-		<details className="metadata-document history-archive-state" open>
+		<details className="metadata-document history-archive-state">
 			<summary>
 				<span>History archive state</span>
-				<a
-					href={archiveState.stateUrl}
-					rel="noopener noreferrer"
-					target="_blank"
-				>
-					{archiveState.stateUrl}
-				</a>
+				<span className="muted-inline">{getArchiveRootUrl(archiveState.stateUrl)}</span>
 			</summary>
 			<dl className="details">
 				<div>
@@ -132,7 +123,7 @@ function HistoryArchiveStateFailure({
 			</dl>
 			<p className="muted-copy">
 				{archiveState.failure?.message ??
-					'The scanner has not captured a valid history archive state document for this archive.'}
+					'No valid history archive state document is stored for this archive.'}
 			</p>
 		</details>
 	);
@@ -147,20 +138,15 @@ function MissingHistoryArchiveState({
 		archiveUrl === null ? null : buildStellarHistoryUrl(archiveUrl);
 
 	return (
-		<details className="metadata-document history-archive-state" open>
+		<details className="metadata-document history-archive-state">
 			<summary>
 				<span>History archive state</span>
-				{stellarHistoryUrl === null ? (
-					<span className="muted-inline">No archive URL</span>
-				) : (
-					<a href={stellarHistoryUrl} rel="noopener noreferrer" target="_blank">
-						{stellarHistoryUrl}
-					</a>
-				)}
+				<span className="muted-inline">
+					{stellarHistoryUrl === null ? 'No archive URL' : getArchiveRootUrl(stellarHistoryUrl)}
+				</span>
 			</summary>
 			<p className="muted-copy">
-				No scanner-captured history archive state is stored for this archive
-				yet.
+				No history archive state is stored for this archive yet.
 			</p>
 		</details>
 	);

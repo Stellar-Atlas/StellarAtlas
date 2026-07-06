@@ -2,21 +2,16 @@ import type {
 	PublicHistoryArchiveBucketCrossCoverage,
 	PublicHistoryArchiveScan,
 	PublicHistoryArchiveScanEvidence,
-	PublicHistoryArchiveScanLogEntry,
 	PublicHistoryArchiveScanLogError,
 	PublicHistoryArchiveObjectEvents,
 	PublicHistoryArchiveObjectQueue,
 	PublicHistoryArchiveObjectSummary,
 	PublicHistoryArchiveState
 } from '@api/types';
-import { HistoryArchiveScanLog } from '@components/nodes/history-archive-scan-log';
-import { StatusPill } from '@components/status/status-ui';
 import {
 	getArchiveVerificationErrors,
-	getWorkerIssues,
-	scanLogIsActive
+	getWorkerIssues
 } from '@domain/history-archive';
-import { formatDateTime, formatInteger } from '@format/formatters';
 import { HistoryArchiveStateDocument } from './history-archive-state-document';
 import { HistoryArchiveObjectCoverage } from './history-archive-object-coverage';
 import { HistoryArchiveObjectInventory } from './history-archive-object-inventory';
@@ -27,7 +22,7 @@ interface ArchiveScanDetailProps {
 	readonly evidence: PublicHistoryArchiveScanEvidence;
 	readonly events: PublicHistoryArchiveObjectEvents;
 	readonly historyUrl: string;
-	readonly logs: readonly PublicHistoryArchiveScanLogEntry[];
+	readonly logs: readonly unknown[];
 	readonly objects: PublicHistoryArchiveObjectQueue;
 	readonly scan: PublicHistoryArchiveScan | null;
 	readonly state: PublicHistoryArchiveState | null;
@@ -38,7 +33,6 @@ export function ArchiveScanDetail({
 	bucketCoverages,
 	events,
 	historyUrl,
-	logs,
 	objects,
 	scan,
 	state,
@@ -46,68 +40,15 @@ export function ArchiveScanDetail({
 }: ArchiveScanDetailProps): React.JSX.Element {
 	const archiveErrors = getArchiveVerificationErrors(scan?.errors ?? []);
 	const workerIssues = getWorkerIssues(scan?.errors ?? []);
-	const activeLog = logs.find(scanLogIsActive) ?? null;
-	const latestCompletedLog =
-		logs.find((entry) => entry.status === 'completed') ?? null;
-
 	return (
 		<section className="detail-grid">
 			<HistoryArchiveObjectCoverage
 				summary={summary}
 				title="Archive file coverage"
 			/>
-			<details className="panel detail-panel archive-panel">
-				<summary className="panel-heading">
-					<h2>Legacy range-scan history</h2>
-					<StatusPill
-						status={archiveErrors.length > 0 ? 'degraded' : 'ok'}
-						text={
-							archiveErrors.length > 0 ? 'Archive errors' : 'Historical record'
-						}
-					/>
-				</summary>
-				<dl className="details">
-					<div>
-						<dt>Archive URL</dt>
-						<dd>
-							<ArchiveTarget url={historyUrl} />
-						</dd>
-					</div>
-					<div>
-						<dt>Latest verified</dt>
-						<dd>{formatNullableInteger(scan?.latestVerifiedLedger)}</dd>
-					</div>
-					<div>
-						<dt>Latest completed</dt>
-						<dd>{formatNullableDate(latestCompletedLog?.endDate ?? null)}</dd>
-					</div>
-					<div>
-						<dt>Active worker</dt>
-						<dd>{formatActiveStatus(activeLog)}</dd>
-					</div>
-					<div>
-						<dt>Active verified contiguous</dt>
-						<dd>{formatActiveVerifiedProgress(activeLog)}</dd>
-					</div>
-					<div>
-						<dt>Active attempted through</dt>
-						<dd>{formatActiveAttemptedLedger(activeLog)}</dd>
-					</div>
-					<div>
-						<dt>Active current range</dt>
-						<dd>{formatActiveCurrentRange(activeLog)}</dd>
-					</div>
-					<div>
-						<dt>Metadata captured</dt>
-						<dd>
-							{formatNullableDate(scan?.archiveMetadata?.observedAt ?? null)}
-						</dd>
-					</div>
-				</dl>
-			</details>
 			<article className="panel detail-panel archive-panel">
 				<div className="panel-heading">
-					<h2>Scanner-captured archive metadata</h2>
+					<h2>History archive state</h2>
 				</div>
 				<ArchiveMetadata historyUrl={historyUrl} scan={scan} state={state} />
 				<EvidenceList
@@ -130,15 +71,6 @@ export function ArchiveScanDetail({
 				events={events}
 				title="Recent archive file activity"
 			/>
-			<details className="panel detail-panel archive-panel">
-				<summary className="panel-heading">
-					<h2>Legacy range-scan log</h2>
-					<span className="muted-inline">
-						{formatInteger(logs.length)} rows
-					</span>
-				</summary>
-				<HistoryArchiveScanLog logs={logs} />
-			</details>
 		</section>
 	);
 }
@@ -204,64 +136,8 @@ function ArchiveTarget({
 			</a>
 		);
 	}
-	if (looksLikeInternalPath(url)) return <span>Scanner-owned evidence</span>;
+	if (looksLikeInternalPath(url)) return <span>Stored evidence</span>;
 	return <span>{sanitizeEvidenceText(label ?? url)}</span>;
-}
-
-function formatActiveStatus(
-	entry: PublicHistoryArchiveScanLogEntry | null
-): string {
-	if (entry === null) return 'No active queue row in the current snapshot';
-	return `${entry.status} at ${formatDateTime(entry.updatedAt)}`;
-}
-
-function formatActiveVerifiedProgress(
-	entry: PublicHistoryArchiveScanLogEntry | null
-): string {
-	if (entry === null) return 'No active queue row in the current snapshot';
-	if (entry.latestScannedLedger > 0) {
-		return formatInteger(entry.latestScannedLedger);
-	}
-	return 'No contiguous progress yet';
-}
-
-function formatActiveAttemptedLedger(
-	entry: PublicHistoryArchiveScanLogEntry | null
-): string {
-	if (entry === null) return 'No active queue row in the current snapshot';
-	if (
-		typeof entry.latestAttemptedLedger === 'number' &&
-		Number.isFinite(entry.latestAttemptedLedger)
-	) {
-		return formatInteger(entry.latestAttemptedLedger);
-	}
-	return 'Not reported yet';
-}
-
-function formatActiveCurrentRange(
-	entry: PublicHistoryArchiveScanLogEntry | null
-): string {
-	if (entry === null) return 'No active queue row in the current snapshot';
-	if (
-		typeof entry.currentRangeFromLedger === 'number' &&
-		Number.isFinite(entry.currentRangeFromLedger)
-	) {
-		const end =
-			typeof entry.currentRangeToLedger === 'number' &&
-			Number.isFinite(entry.currentRangeToLedger)
-				? formatInteger(entry.currentRangeToLedger)
-				: 'latest';
-		return `${formatInteger(entry.currentRangeFromLedger)}-${end}`;
-	}
-	return 'No current range reported';
-}
-
-function formatNullableDate(value: string | null): string {
-	return value === null ? 'No data' : formatDateTime(value);
-}
-
-function formatNullableInteger(value: number | undefined): string {
-	return value === undefined ? 'No data' : formatInteger(value);
 }
 
 function isPublicHttpUrl(value: string): boolean {

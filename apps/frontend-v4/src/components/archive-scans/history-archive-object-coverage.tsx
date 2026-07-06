@@ -110,24 +110,32 @@ function ObjectTypeTable({
 					{formatInteger(objectTypes.length)} file groups
 				</span>
 			</summary>
-			<div className="table archive-object-type-table">
-				{objectTypes.map((entry) => (
-					<div className="row compact" key={entry.objectType}>
-						<div>
-							<strong>{formatObjectType(entry.objectType)}</strong>
-							<small>{formatInteger(entry.totalObjects)} tracked files</small>
-						</div>
-						<div className="metric">
-							<strong>
-								{formatCoverage(entry.verifiedObjects, entry.totalObjects)}
-							</strong>
-							<small>
-								{formatInteger(entry.pendingObjects)} queued /{' '}
-								{formatInteger(entry.failedObjects)} failed
-							</small>
-						</div>
-					</div>
-				))}
+			<p className="muted-copy">
+				These are archive files, not individual ledger transactions or operations.
+			</p>
+			<div className="responsive-table">
+				<table className="archive-object-type-table">
+					<thead>
+						<tr>
+							<th>File group</th>
+							<th>Tracked</th>
+							<th>Verified</th>
+							<th>Queued</th>
+							<th>Failed</th>
+						</tr>
+					</thead>
+					<tbody>
+						{objectTypes.map((entry) => (
+							<tr key={entry.objectType}>
+								<td>{formatObjectType(entry.objectType)}</td>
+								<td>{formatInteger(entry.totalObjects)}</td>
+								<td>{formatCoverage(entry.verifiedObjects, entry.totalObjects)}</td>
+								<td>{formatInteger(entry.pendingObjects)}</td>
+								<td>{formatInteger(entry.failedObjects)}</td>
+							</tr>
+						))}
+					</tbody>
+				</table>
 			</div>
 		</details>
 	);
@@ -148,12 +156,12 @@ function formatCoverage(verified: number, total: number): string {
 function formatObjectType(
 	type: PublicHistoryArchiveObjectTypeSummary['objectType']
 ): string {
-	if (type === 'history-archive-state') return 'root state files';
-	if (type === 'checkpoint-state') return 'checkpoint state files';
+	if (type === 'history-archive-state') return 'history archive state files';
+	if (type === 'checkpoint-state') return 'checkpoint history files';
 	if (type === 'ledger') return 'ledger files';
-	if (type === 'transactions') return 'transaction category files';
-	if (type === 'results') return 'result category files';
-	if (type === 'scp') return 'SCP category files';
+	if (type === 'transactions') return 'transaction archive files';
+	if (type === 'results') return 'result archive files';
+	if (type === 'scp') return 'SCP archive files';
 	if (type === 'bucket') return 'bucket files';
 	return type;
 }

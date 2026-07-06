@@ -2,7 +2,6 @@ import Link from 'next/link';
 import type {
 	PublicHistoryArchiveScan,
 	PublicHistoryArchiveScanEvidence,
-	PublicHistoryArchiveScanLogEntry,
 	PublicHistoryArchiveBucketCrossCoverage,
 	PublicHistoryArchiveObjectEvents,
 	PublicHistoryArchiveObjectQueue,
@@ -14,15 +13,13 @@ import type {
 	PublicOrganization
 } from '../../api/types';
 import {
-	getNodeLabel,
 	getNodeTags,
 	getOrganizationForNode,
 	getOrganizationLabel
 } from '../../domain/network';
 import {
 	formatBoolean,
-	formatDateTime,
-	formatInteger
+	formatDateTime
 } from '../../format/formatters';
 import {
 	formatNode24HourActive,
@@ -30,12 +27,7 @@ import {
 	formatNode30DayActive,
 	formatNode30DayValidating
 } from '../../domain/availability';
-import {
-	getArchiveVerificationErrors,
-	scanLogIsActive
-} from '../../domain/history-archive';
 import { StatusTags } from '../status-tags';
-import { HistoryArchiveScanLog } from './history-archive-scan-log';
 import { ArchiveMetadata } from './node-archive-evidence';
 import { HistoryArchiveObjectInventory } from '@components/archive-scans/history-archive-object-inventory';
 import { HistoryArchiveObjectEventLog } from '@components/archive-scans/history-archive-object-event-log';
@@ -47,7 +39,7 @@ interface NodeDetailProps {
 	historyArchiveEvents: PublicHistoryArchiveObjectEvents | null;
 	historyArchiveObjects: PublicHistoryArchiveObjectQueue | null;
 	historyArchiveScan: PublicHistoryArchiveScan | null;
-	historyArchiveScanLogs: readonly PublicHistoryArchiveScanLogEntry[];
+	historyArchiveScanLogs: readonly unknown[];
 	historyArchiveState: PublicHistoryArchiveState | null;
 	historyArchiveSummary: PublicHistoryArchiveObjectSummary | null;
 	knownNode: PublicKnownNode;
@@ -61,7 +53,6 @@ export function NodeDetail({
 	historyArchiveEvents,
 	historyArchiveObjects,
 	historyArchiveScan,
-	historyArchiveScanLogs,
 	historyArchiveState,
 	historyArchiveSummary,
 	knownNode,
@@ -108,11 +99,6 @@ export function NodeDetail({
 
 	const organization =
 		routeOrganization ?? getOrganizationForNode(network, node);
-	const archiveErrors = getArchiveErrors(historyArchiveScan);
-	const archiveVerificationErrors = getArchiveVerificationErrors(archiveErrors);
-	const activeArchiveRun = historyArchiveScanLogs.find(scanLogIsActive) ?? null;
-	const latestCompletedArchiveRun =
-		historyArchiveScanLogs.find((entry) => !scanLogIsActive(entry)) ?? null;
 	const active24Hours = formatNode24HourActive(node);
 	const active30Days = formatNode30DayActive(node);
 	const validating24Hours = formatNode24HourValidating(node);
@@ -122,9 +108,7 @@ export function NodeDetail({
 	const showArchivePanel =
 		hasHistoryArchive ||
 		node.historyArchiveHasError ||
-		archiveVerificationErrors.length > 0 ||
 		historyArchiveScan !== null ||
-		historyArchiveScanLogs.length > 0 ||
 		historyArchiveSummary !== null;
 
 	return (
@@ -247,65 +231,6 @@ export function NodeDetail({
 							title="Archive file coverage"
 						/>
 					) : null}
-					{historyArchiveScan ? (
-						<details className="metadata-document">
-							<summary>
-								<span>Historical range verification</span>
-							</summary>
-							<dl className="details">
-								<div>
-									<dt>Legacy record</dt>
-									<dd>
-										Range scan evidence retained for comparison while object
-										verification becomes the primary archive signal.
-									</dd>
-								</div>
-								<div>
-									<dt>Active progress</dt>
-									<dd>
-										{activeArchiveRun
-											? `${formatActiveArchiveRun(activeArchiveRun)} updated ${formatDateTime(activeArchiveRun.updatedAt)}`
-											: 'No active queue row in the current scanner snapshot'}
-									</dd>
-								</div>
-								<div>
-									<dt>Completed evidence</dt>
-									<dd>
-										{latestCompletedArchiveRun
-											? `${latestCompletedArchiveRun.status} at ${formatDateTime(latestCompletedArchiveRun.endDate)}`
-											: 'No completed scan evidence row is available yet'}
-									</dd>
-								</div>
-								<div>
-									<dt>Archive evidence</dt>
-									<dd>{formatDateTime(historyArchiveScan.endDate)}</dd>
-								</div>
-								<div>
-									<dt>Latest verified</dt>
-									<dd>
-										{formatInteger(historyArchiveScan.latestVerifiedLedger)}
-									</dd>
-								</div>
-								<div>
-									<dt>Archive status</dt>
-									<dd>
-										{archiveVerificationErrors.length > 0
-											? 'Archive verification errors'
-											: 'No archive verification errors'}
-									</dd>
-								</div>
-							</dl>
-						</details>
-					) : (
-						<p className="muted-copy">
-							No completed archive scan is available yet.
-						</p>
-					)}
-					{archiveVerificationErrors.length > 0 ? (
-						<p className="muted-copy">
-							Archive verification errors are listed in the scan run log.
-						</p>
-					) : null}
 					<ArchiveMetadata
 						historyArchiveScan={historyArchiveScan}
 						historyArchiveState={historyArchiveState}
@@ -324,42 +249,8 @@ export function NodeDetail({
 							framed={false}
 						/>
 					) : null}
-					<details className="archive-log-section metadata-document">
-						<summary>
-							<span>Legacy range-scan log</span>
-							<span className="muted-inline">
-								{formatInteger(historyArchiveScanLogs.length)} rows
-							</span>
-						</summary>
-						<HistoryArchiveScanLog logs={historyArchiveScanLogs} />
-					</details>
 				</article>
 			)}
 		</section>
 	);
 }
-
-function formatActiveArchiveRun(
-	entry: PublicHistoryArchiveScanLogEntry
-): string {
-	if (entry.status === 'queued') return 'queued for a worker';
-	if (entry.status === 'starting') return 'starting scanner work';
-	if (entry.status === 'scanning') return 'scanner is checking archive files';
-	return 'scanner heartbeat is delayed';
-}
-
-const getArchiveErrors = (
-	scan: PublicHistoryArchiveScan | null
-): PublicHistoryArchiveScan['errors'] => {
-	if (scan === null) return [];
-	if (scan.errors.length > 0) return scan.errors;
-	if (scan.errorUrl === null || scan.errorMessage === null) return [];
-
-	return [
-		{
-			message: scan.errorMessage,
-			type: 'TYPE_VERIFICATION',
-			url: scan.errorUrl
-		}
-	];
-};

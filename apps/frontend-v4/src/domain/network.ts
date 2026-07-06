@@ -41,9 +41,9 @@ export const getNodeTags = (node: PublicNode): NodeTag[] => {
 		tags.push({ label: 'core behind', tone: 'warning' });
 	if (node.overLoaded)
 		tags.push({
-			label: 'connection busy',
+			label: 'overlay busy',
 			title:
-				'The latest crawl saw this node reject an overlay connection because it was busy',
+				'The latest crawl could not open a Stellar overlay connection because the peer reported it was busy',
 			tone: 'warning'
 		});
 

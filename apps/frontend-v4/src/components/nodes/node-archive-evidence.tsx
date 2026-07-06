@@ -19,20 +19,20 @@ export function ArchiveMetadata({
 
 	if (archiveMetadata === null && historyUrl === null) {
 		return (
-			<div className="archive-log-section">
-				<div className="panel-heading archive-log-heading">
-					<h3>Scanner-captured archive metadata</h3>
-				</div>
-				<p className="muted-copy">No archive metadata URL is known.</p>
+			<div className="archive-log-section archive-metadata">
+				<details className="metadata-document history-archive-state">
+					<summary>
+						<span>History archive state</span>
+						<span className="muted-inline">No archive URL</span>
+					</summary>
+					<p className="muted-copy">No archive metadata URL is known.</p>
+				</details>
 			</div>
 		);
 	}
 
 	return (
 		<div className="archive-log-section archive-metadata">
-			<div className="panel-heading archive-log-heading">
-				<h3>Scanner-captured archive metadata</h3>
-			</div>
 			<HistoryArchiveStateDocument
 				archiveState={historyArchiveState}
 				archiveMetadata={archiveMetadata}

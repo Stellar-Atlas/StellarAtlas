@@ -37,10 +37,23 @@ export function HistoryArchiveObjectEventLog({
 			{events.events.length === 0 ? (
 				<p className="muted-copy">No archive file activity is available yet.</p>
 			) : (
-				<div className="table archive-object-table">
-					{events.events.map((event) => (
-						<EventRow event={event} key={event.remoteId} />
-					))}
+				<div className="responsive-table">
+					<table className="archive-object-table">
+						<thead>
+							<tr>
+								<th>Status</th>
+								<th>File type</th>
+								<th>Archive</th>
+								<th>File</th>
+								<th>Activity</th>
+							</tr>
+						</thead>
+						<tbody>
+							{events.events.map((event) => (
+								<EventRow event={event} key={event.remoteId} />
+							))}
+						</tbody>
+					</table>
 				</div>
 			)}
 		</>
@@ -59,31 +72,33 @@ function EventRow({
 	readonly event: ObjectEvents['events'][number];
 }): React.JSX.Element {
 	return (
-		<div className="row archive-object-row">
-			<div className="archive-object-main">
-				<div className="archive-object-title">
-					<StatusPill
-						status={mapEventStatus(event.eventType)}
-						text={formatEventType(event.eventType)}
-					/>
-					<strong>{formatObjectType(event.objectType)}</strong>
-					<span>{formatEventLedger(event.checkpointLedger)}</span>
-				</div>
-				<small className="archive-object-source">
-					Source: {formatArchiveSource(event.archiveUrl)}
-				</small>
-				<small className="archive-object-url">File: {event.objectKey}</small>
+		<tr>
+			<td>
+				<StatusPill
+					status={mapEventStatus(event.eventType)}
+					text={formatEventType(event.eventType)}
+				/>
+			</td>
+			<td>
+				<strong>{formatObjectType(event.objectType)}</strong>
+				{event.checkpointLedger === null ? null : (
+					<small>{formatEventLedger(event.checkpointLedger)}</small>
+				)}
+			</td>
+			<td>{formatArchiveSource(event.archiveUrl)}</td>
+			<td>
+				<span className="archive-object-url">{event.objectKey}</span>
 				{event.error ? (
 					<small className="archive-object-error">
 						{event.error.type}: {event.error.message}
 					</small>
 				) : null}
-			</div>
-			<div className="metric archive-object-metric">
+			</td>
+			<td>
 				<strong>{event.workerStage ?? formatEventType(event.eventType)}</strong>
 				<small>{formatEventWork(event)}</small>
-			</div>
-		</div>
+			</td>
+		</tr>
 	);
 }
 
@@ -107,12 +122,12 @@ function formatEventType(
 function formatObjectType(
 	type: ObjectEvents['events'][number]['objectType']
 ): string {
-	if (type === 'history-archive-state') return 'root state file';
-	if (type === 'checkpoint-state') return 'checkpoint state file';
+	if (type === 'history-archive-state') return 'history archive state file';
+	if (type === 'checkpoint-state') return 'checkpoint history file';
 	if (type === 'ledger') return 'ledger file';
-	if (type === 'transactions') return 'transaction category file';
-	if (type === 'results') return 'result category file';
-	if (type === 'scp') return 'SCP category file';
+	if (type === 'transactions') return 'transaction archive file';
+	if (type === 'results') return 'result archive file';
+	if (type === 'scp') return 'SCP archive file';
 	if (type === 'bucket') return 'bucket file';
 	return type;
 }
@@ -135,7 +150,6 @@ function formatEventWork(event: ObjectEvents['events'][number]): string {
 	const parts = [
 		`attempt ${event.claimAttempt === null ? 'n/a' : formatInteger(event.claimAttempt)}`,
 		event.bytesDownloaded === null ? null : formatBytes(event.bytesDownloaded),
-		event.evidenceClass,
 		event.nextAttemptAt ? `retry ${formatDateTime(event.nextAttemptAt)}` : null,
 		`at ${formatDateTime(event.createdAt)}`
 	].filter((part): part is string => part !== null && part.length > 0);
