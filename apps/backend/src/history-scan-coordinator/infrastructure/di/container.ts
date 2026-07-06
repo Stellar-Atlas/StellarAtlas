@@ -42,8 +42,10 @@ import { HistoryArchiveObject } from '../../domain/history-archive-object/Histor
 import type { HistoryArchiveObjectRepository } from '../../domain/history-archive-object/HistoryArchiveObjectRepository.js';
 import { HistoryArchiveObjectEvent } from '../../domain/history-archive-object/HistoryArchiveObjectEvent.js';
 import type { HistoryArchiveObjectEventRepository } from '../../domain/history-archive-object/HistoryArchiveObjectEventRepository.js';
+import type { HistoryArchiveCheckpointProofRepository } from '../../domain/history-archive-checkpoint-proof/HistoryArchiveCheckpointProofRepository.js';
 import { TypeOrmHistoryArchiveObjectRepository } from '../repositories/database/TypeOrmHistoryArchiveObjectRepository.js';
 import { TypeOrmHistoryArchiveObjectEventRepository } from '../repositories/database/TypeOrmHistoryArchiveObjectEventRepository.js';
+import { TypeOrmHistoryArchiveCheckpointProofRepository } from '../repositories/database/TypeOrmHistoryArchiveCheckpointProofRepository.js';
 import { GetHistoryArchiveObjects } from '../../use-cases/get-history-archive-objects/GetHistoryArchiveObjects.js';
 import { GetHistoryArchiveObjectSummary } from '../../use-cases/get-history-archive-object-summary/GetHistoryArchiveObjectSummary.js';
 import { GetHistoryArchiveObjectEvents } from '../../use-cases/get-history-archive-object-events/GetHistoryArchiveObjectEvents.js';
@@ -132,9 +134,7 @@ export function load(container: Container, config: Config) {
 		.inRequestScope();
 
 	container
-		.bind<HistoryArchiveObjectRepository>(
-			TYPES.HistoryArchiveObjectRepository
-		)
+		.bind<HistoryArchiveObjectRepository>(TYPES.HistoryArchiveObjectRepository)
 		.toDynamicValue(() => {
 			return new TypeOrmHistoryArchiveObjectRepository(
 				dataSource.getRepository(HistoryArchiveObject)
@@ -150,6 +150,15 @@ export function load(container: Container, config: Config) {
 			return new TypeOrmHistoryArchiveObjectEventRepository(
 				dataSource.getRepository(HistoryArchiveObjectEvent)
 			);
+		})
+		.inRequestScope();
+
+	container
+		.bind<HistoryArchiveCheckpointProofRepository>(
+			TYPES.HistoryArchiveCheckpointProofRepository
+		)
+		.toDynamicValue(() => {
+			return new TypeOrmHistoryArchiveCheckpointProofRepository(dataSource);
 		})
 		.inRequestScope();
 

@@ -7,6 +7,9 @@ export const TYPES = {
 	HistoryArchiveObjectEventRepository: Symbol(
 		'HistoryArchiveObjectEventRepository'
 	),
+	HistoryArchiveCheckpointProofRepository: Symbol(
+		'HistoryArchiveCheckpointProofRepository'
+	),
 	HistoryArchiveObjectRepository: Symbol('HistoryArchiveObjectRepository'),
 	HistoryArchiveScanRepository: Symbol('HistoryArchiveScanRepository'),
 	ParsedLedgerHeaderRepository: Symbol('ParsedLedgerHeaderRepository'),

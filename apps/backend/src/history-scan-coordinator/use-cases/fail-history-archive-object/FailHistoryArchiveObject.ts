@@ -1,10 +1,13 @@
 import 'reflect-metadata';
 import { inject, injectable } from 'inversify';
 import { err, ok, Result } from 'neverthrow';
+import type { HistoryArchiveCheckpointProofRepository } from '../../domain/history-archive-checkpoint-proof/HistoryArchiveCheckpointProofRepository.js';
+import type { HistoryArchiveObject } from '../../domain/history-archive-object/HistoryArchiveObject.js';
 import type { HistoryArchiveObjectFailure } from '../../domain/history-archive-object/HistoryArchiveObjectRepository.js';
 import type { HistoryArchiveObjectRepository } from '../../domain/history-archive-object/HistoryArchiveObjectRepository.js';
 import { getHistoryArchiveObjectRetryPolicy } from '../../domain/history-archive-object/HistoryArchiveObjectRetryPolicy.js';
 import { TYPES } from '../../infrastructure/di/di-types.js';
+import type { ExceptionLogger } from '@core/services/ExceptionLogger.js';
 import { mapUnknownToError } from '@core/utilities/mapUnknownToError.js';
 import { HistoryArchiveObjectEventRecorder } from '../record-history-archive-object-event/HistoryArchiveObjectEventRecorder.js';
 
@@ -13,7 +16,11 @@ export class FailHistoryArchiveObject {
 	constructor(
 		@inject(TYPES.HistoryArchiveObjectRepository)
 		private readonly objectRepository: HistoryArchiveObjectRepository,
-		private readonly eventRecorder: HistoryArchiveObjectEventRecorder
+		private readonly eventRecorder: HistoryArchiveObjectEventRecorder,
+		@inject(TYPES.HistoryArchiveCheckpointProofRepository)
+		private readonly checkpointProofRepository: HistoryArchiveCheckpointProofRepository,
+		@inject('ExceptionLogger')
+		private readonly exceptionLogger: ExceptionLogger
 	) {}
 
 	async execute(
@@ -54,12 +61,23 @@ export class FailHistoryArchiveObject {
 						eventType: 'failed',
 						evidenceClass: retryPolicy.evidenceClass
 					});
+					await this.refreshCheckpointProof(failedObject);
 				}
 			}
 
 			return ok(updated);
 		} catch (e) {
 			return err(mapUnknownToError(e));
+		}
+	}
+
+	private async refreshCheckpointProof(
+		object: HistoryArchiveObject
+	): Promise<void> {
+		try {
+			await this.checkpointProofRepository.refreshForObject(object);
+		} catch (e) {
+			this.exceptionLogger.captureException(mapUnknownToError(e));
 		}
 	}
 }

@@ -1,5 +1,7 @@
 import { mock, type MockProxy } from 'jest-mock-extended';
 import type { ArchiveMetadataDTO } from 'history-scanner-dto';
+import type { ExceptionLogger } from '@core/services/ExceptionLogger.js';
+import type { HistoryArchiveCheckpointProofRepository } from '../../../domain/history-archive-checkpoint-proof/HistoryArchiveCheckpointProofRepository.js';
 import { HistoryArchiveObject } from '../../../domain/history-archive-object/HistoryArchiveObject.js';
 import type { HistoryArchiveObjectRepository } from '../../../domain/history-archive-object/HistoryArchiveObjectRepository.js';
 import type { HistoryArchiveStateRepository } from '../../../domain/history-archive-state/HistoryArchiveStateRepository.js';
@@ -9,11 +11,15 @@ import { CompleteHistoryArchiveObject } from '../CompleteHistoryArchiveObject.js
 
 describe('CompleteHistoryArchiveObject', () => {
 	let eventRecorder: MockProxy<HistoryArchiveObjectEventRecorder>;
+	let checkpointProofRepository: MockProxy<HistoryArchiveCheckpointProofRepository>;
+	let exceptionLogger: MockProxy<ExceptionLogger>;
 	let objectRepository: MockProxy<HistoryArchiveObjectRepository>;
 	let stateRepository: MockProxy<HistoryArchiveStateRepository>;
 
 	beforeEach(() => {
 		eventRecorder = mock<HistoryArchiveObjectEventRecorder>();
+		checkpointProofRepository = mock<HistoryArchiveCheckpointProofRepository>();
+		exceptionLogger = mock<ExceptionLogger>();
 		objectRepository = mock<HistoryArchiveObjectRepository>();
 		stateRepository = mock<HistoryArchiveStateRepository>();
 		objectRepository.markObjectVerified.mockResolvedValue(true);
@@ -29,7 +35,9 @@ describe('CompleteHistoryArchiveObject', () => {
 		const result = await new CompleteHistoryArchiveObject(
 			objectRepository,
 			stateRepository,
-			eventRecorder
+			eventRecorder,
+			checkpointProofRepository,
+			exceptionLogger
 		).execute(archiveObject.remoteId, {
 			archiveMetadata: createArchiveMetadata(255),
 			claimAttempt: 1,
@@ -62,6 +70,9 @@ describe('CompleteHistoryArchiveObject', () => {
 		expect(objectRepository.clearHostThrottle).toHaveBeenCalledWith(
 			'history.example.com'
 		);
+		expect(checkpointProofRepository.refreshForObject).toHaveBeenCalledWith(
+			archiveObject
+		);
 	});
 
 	it('schedules checkpoint sibling objects from verified checkpoint state facts', async () => {
@@ -71,7 +82,9 @@ describe('CompleteHistoryArchiveObject', () => {
 		const result = await new CompleteHistoryArchiveObject(
 			objectRepository,
 			stateRepository,
-			eventRecorder
+			eventRecorder,
+			checkpointProofRepository,
+			exceptionLogger
 		).execute(archiveObject.remoteId, {
 			claimAttempt: 1,
 			verificationFacts: {
@@ -109,7 +122,9 @@ describe('CompleteHistoryArchiveObject', () => {
 		const result = await new CompleteHistoryArchiveObject(
 			objectRepository,
 			stateRepository,
-			eventRecorder
+			eventRecorder,
+			checkpointProofRepository,
+			exceptionLogger
 		).execute(archiveObject.remoteId, {
 			claimAttempt: 1,
 			verificationFacts: {
@@ -140,7 +155,9 @@ describe('CompleteHistoryArchiveObject', () => {
 		const result = await new CompleteHistoryArchiveObject(
 			objectRepository,
 			stateRepository,
-			eventRecorder
+			eventRecorder,
+			checkpointProofRepository,
+			exceptionLogger
 		).execute(archiveObject.remoteId, {
 			claimAttempt: 1,
 			verificationFacts: {
@@ -153,6 +170,33 @@ describe('CompleteHistoryArchiveObject', () => {
 		const savedObjects = objectRepository.saveObjects.mock.calls[0]?.[0] ?? [];
 		expect(savedObjects.map((object) => object.objectKey)).toContain(
 			'scp:0012863f'
+		);
+	});
+
+	it('does not fail object completion when checkpoint proof refresh fails', async () => {
+		const archiveObject = createCheckpointObject();
+		objectRepository.findByRemoteId.mockResolvedValue(archiveObject);
+		checkpointProofRepository.refreshForObject.mockRejectedValue(
+			new Error('proof refresh failed')
+		);
+
+		const result = await new CompleteHistoryArchiveObject(
+			objectRepository,
+			stateRepository,
+			eventRecorder,
+			checkpointProofRepository,
+			exceptionLogger
+		).execute(archiveObject.remoteId, {
+			claimAttempt: 1,
+			verificationFacts: {
+				checkpointHistoryArchiveState: createArchiveMetadata(127)
+			},
+			workerStage: 'verified'
+		});
+
+		expect(result._unsafeUnwrap()).toBe(true);
+		expect(exceptionLogger.captureException).toHaveBeenCalledWith(
+			expect.objectContaining({ message: 'proof refresh failed' })
 		);
 	});
 });

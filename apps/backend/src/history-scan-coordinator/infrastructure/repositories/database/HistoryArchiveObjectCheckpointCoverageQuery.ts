@@ -87,7 +87,10 @@ function numberField(
 	row: CheckpointCoverageRow | undefined,
 	field: keyof CheckpointCoverageRow
 ): number {
-	return requireNumber(row?.[field] ?? row?.[lowercase(field)] ?? undefined, field);
+	return requireNumber(
+		row?.[field] ?? row?.[lowercase(field)] ?? undefined,
+		field
+	);
 }
 
 function nullableNumberField(
@@ -99,7 +102,9 @@ function nullableNumberField(
 	return requireNumber(value, field);
 }
 
-function lowercase(field: keyof CheckpointCoverageRow): keyof CheckpointCoverageRow {
+function lowercase(
+	field: keyof CheckpointCoverageRow
+): keyof CheckpointCoverageRow {
 	return field.toLowerCase() as keyof CheckpointCoverageRow;
 }
 
@@ -284,11 +289,20 @@ const checkpointCoverageSql = `
 			and state_facts."checkpointLedger" = ledger_chain."checkpointLedger"
 		group by ledger_chain."archiveUrlIdentity", ledger_chain."checkpointLedger"
 	),
+	materialized_proof as (
+		select
+			"archiveUrlIdentity",
+			"checkpointLedger",
+			status
+		from history_archive_checkpoint_proof
+		where ${archiveFilterSql}
+	),
 	classified as (
 		select
 			checkpoint_rollup."checkpointLedger",
 			checkpoint_rollup.has_failed,
 			checkpoint_rollup.has_active,
+			materialized_proof.status as materialized_status,
 			(
 				not checkpoint_rollup.has_failed
 				and checkpoint_rollup.has_checkpoint_state
@@ -316,19 +330,35 @@ const checkpointCoverageSql = `
 				checkpoint_rollup."archiveUrlIdentity"
 			and proof_rollup."checkpointLedger" =
 				checkpoint_rollup."checkpointLedger"
+		left join materialized_proof
+			on materialized_proof."archiveUrlIdentity" =
+				checkpoint_rollup."archiveUrlIdentity"
+			and materialized_proof."checkpointLedger" =
+				checkpoint_rollup."checkpointLedger"
 	),
 	proof_classified as (
 		select
 			*,
-			is_object_complete
-				and has_complete_proof_facts
-				and proof_matches as is_category_consistent,
-			is_object_complete
-				and has_complete_proof_facts
-				and not proof_matches as is_category_failed,
-			is_object_complete
-				and not coalesce(has_complete_proof_facts, false)
-				as is_category_not_evaluated
+			case
+				when materialized_status is not null
+					then materialized_status = 'verified'
+				else is_object_complete
+					and has_complete_proof_facts
+					and proof_matches
+			end as is_category_consistent,
+			case
+				when materialized_status is not null
+					then materialized_status = 'mismatch'
+				else is_object_complete
+					and has_complete_proof_facts
+					and not proof_matches
+			end as is_category_failed,
+			case
+				when materialized_status is not null
+					then materialized_status = 'not-evaluable' and not has_failed
+				else is_object_complete
+					and not coalesce(has_complete_proof_facts, false)
+			end as is_category_not_evaluated
 		from classified
 	)
 	select
