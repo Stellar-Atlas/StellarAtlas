@@ -68,11 +68,11 @@ describe('GetDataQualityStatus', () => {
 		expect(result._unsafeUnwrap().status).toBe('degraded');
 	});
 
-	it('should degrade headline data quality when archive scan freshness is stale', async () => {
+	it('should keep headline data quality ok when only completed archive evidence is stale', async () => {
 		getDataFreshnessStatusMock.execute.mockResolvedValue(
 			ok({
 				...dataFreshness(),
-				status: 'degraded',
+				status: 'ok',
 				archiveScan: {
 					...dataFreshness().archiveScan,
 					status: 'degraded',
@@ -86,9 +86,9 @@ describe('GetDataQualityStatus', () => {
 
 		expect(result.isOk()).toBe(true);
 		expect(result._unsafeUnwrap()).toMatchObject({
-			status: 'degraded',
+			status: 'ok',
 			dataFreshness: {
-				status: 'degraded',
+				status: 'ok',
 				archiveScan: {
 					status: 'degraded',
 					staleAfterMs: 6 * 60 * 60 * 1000

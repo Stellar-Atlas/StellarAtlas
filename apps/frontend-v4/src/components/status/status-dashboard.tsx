@@ -3,8 +3,6 @@ import type {
 	PublicArchiveScanWorkers,
 	PublicConfiguredServiceStatus,
 	PublicDataQualityStatus,
-	PublicFailoverStatus,
-	PublicFullHistoryStatus,
 	PublicScanLogStatus,
 	PublicWorkerStatus
 } from '@api/types';
@@ -15,23 +13,15 @@ import {
 } from '@format/formatters';
 import { StatCard } from '../stat-card';
 import { ArchiveWorkerJobs } from './archive-worker-jobs';
-import { FullHistoryStatusPanel } from './full-history-status-panel';
 import { RecentScanLogs } from './recent-scan-logs';
-import {
-	ServiceStatusPanels,
-	criticalServiceStatus
-} from './service-status-panels';
+import { ProductionServiceStatusPanel } from './service-status-panels';
 import { StatusPill, StatusRow, statusLabel, statusTone } from './status-ui';
 
 interface StatusDashboardProps {
 	readonly api: PublicApiStatus;
 	readonly archiveWorkers: PublicArchiveScanWorkers;
 	readonly dataQuality: PublicDataQualityStatus;
-	readonly failover: PublicFailoverStatus;
 	readonly frontend: PublicConfiguredServiceStatus;
-	readonly fullHistory: PublicFullHistoryStatus;
-	readonly horizon: PublicConfiguredServiceStatus;
-	readonly rpc: PublicConfiguredServiceStatus;
 	readonly scanLogs: PublicScanLogStatus;
 	readonly workers: PublicWorkerStatus;
 }
@@ -40,18 +30,14 @@ export function StatusDashboard({
 	api,
 	archiveWorkers,
 	dataQuality,
-	failover,
 	frontend,
-	fullHistory,
-	horizon,
-	rpc,
 	scanLogs,
 	workers
 }: StatusDashboardProps): React.JSX.Element {
 	const scan = dataQuality.scans.networkScan;
 	const rollups = dataQuality.rollups.networkRollups;
 	const archiveQueue = dataQuality.archiveQueue;
-	const productionServiceStatus = criticalServiceStatus(api, frontend);
+	const archiveFreshnessDetail = `Latest completed age ${formatDuration(dataQuality.dataFreshness.archiveScan.ageMs)}; ${formatInteger(archiveQueue.activeJobs)} claimed jobs`;
 
 	return (
 		<div className="status-dashboard">
@@ -89,10 +75,10 @@ export function StatusDashboard({
 				<StatCard
 					detail={`API ${statusLabel(api.status)}, frontend ${
 						frontend.configured ? 'configured' : 'missing'
-					}; Horizon/RPC are roadmap services unless configured as required`}
+					}`}
 					label="Production services"
-					tone={statusTone(productionServiceStatus)}
-					value={statusLabel(productionServiceStatus)}
+					tone={statusTone(api.status)}
+					value={statusLabel(api.status)}
 				/>
 			</div>
 
@@ -115,7 +101,7 @@ export function StatusDashboard({
 							)}
 						/>
 						<StatusRow
-							detail={`Age ${formatDuration(dataQuality.dataFreshness.archiveScan.ageMs)}`}
+							detail={archiveFreshnessDetail}
 							label="Archive scan"
 							status={dataQuality.dataFreshness.archiveScan.status}
 							value={formatNullableDate(
@@ -167,15 +153,12 @@ export function StatusDashboard({
 					</div>
 				</section>
 
-				<ServiceStatusPanels
+				<ProductionServiceStatusPanel
 					api={api}
-					failover={failover}
+					dataQuality={dataQuality}
 					frontend={frontend}
-					horizon={horizon}
-					rpc={rpc}
+					workers={workers}
 				/>
-
-				<FullHistoryStatusPanel fullHistory={fullHistory} />
 
 				<ArchiveWorkerJobs archiveWorkers={archiveWorkers} />
 

@@ -1,5 +1,5 @@
 import { mock } from 'jest-mock-extended';
-import { ok } from 'neverthrow';
+import { err, ok } from 'neverthrow';
 import type { ExceptionLogger } from 'exception-logger';
 import type { ScanCoordinatorService } from '../../../domain/scan/ScanCoordinatorService.js';
 import { CoordinatorParsedHistorySink } from '../CoordinatorParsedHistorySink.js';
@@ -33,6 +33,27 @@ describe('CoordinatorParsedHistorySink', () => {
 		expect(
 			coordinator.registerParsedLedgerHeaders.mock.calls[1][0].headers
 		).toHaveLength(1);
+		expect(exceptionLogger.captureException).not.toHaveBeenCalled();
+	});
+
+	it('should retry short coordinator failures before logging an error', async () => {
+		const coordinator = mock<ScanCoordinatorService>();
+		const exceptionLogger = mock<ExceptionLogger>();
+		coordinator.registerParsedLedgerHeaders
+			.mockResolvedValueOnce(err(new Error('ECONNREFUSED')))
+			.mockResolvedValueOnce(ok(undefined));
+		const sink = new CoordinatorParsedHistorySink(
+			coordinator,
+			'https://history.stellar.org',
+			'remote-id',
+			exceptionLogger,
+			1,
+			[0]
+		);
+
+		await sink.emit(createLedgerHeaderRecord(1));
+
+		expect(coordinator.registerParsedLedgerHeaders).toHaveBeenCalledTimes(2);
 		expect(exceptionLogger.captureException).not.toHaveBeenCalled();
 	});
 });

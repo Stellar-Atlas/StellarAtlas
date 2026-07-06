@@ -8,6 +8,7 @@ import { err, ok } from 'neverthrow';
 import { ScanError, ScanErrorType } from '../ScanError.js';
 import { Scan } from '../Scan.js';
 import type { LatestLedgerArchiveState } from '../../scanner/CategoryScanner.js';
+import { ScanJobDTO } from 'history-scanner-dto';
 
 function latestLedgerState(ledger: number): LatestLedgerArchiveState {
 	return {
@@ -99,6 +100,42 @@ it('should clamp stored concurrency to the configured maximum', async function (
 	expect(settingsOrError.isOk()).toBeTruthy();
 	if (settingsOrError.isErr()) throw settingsOrError.error;
 	expect(settingsOrError.value.concurrency).toEqual(24);
+});
+
+it('should include the configured maximum in the performance concurrency range', async function () {
+	const performanceTester = mock<ArchivePerformanceTester>();
+	performanceTester.test.mockResolvedValue(
+		ok({
+			optimalConcurrency: 2,
+			timeMsPerFile: 100,
+			isSlowArchive: false
+		})
+	);
+	const categoryScanner = mock<CategoryScanner>();
+	categoryScanner.findLatestLedger.mockResolvedValue(
+		ok(latestLedgerState(500))
+	);
+	const settingsFactory = new ScanSettingsFactory(
+		categoryScanner,
+		performanceTester,
+		120960,
+		2,
+		2
+	);
+	const historyBaseUrl = createDummyHistoryBaseUrl();
+
+	const scanJob = ScanJob.newScanChain(historyBaseUrl);
+	const settingsOrError = await settingsFactory.determineSettings(scanJob);
+
+	expect(settingsOrError.isOk()).toBeTruthy();
+	if (settingsOrError.isErr()) throw settingsOrError.error;
+	expect(settingsOrError.value.concurrency).toEqual(2);
+	expect(performanceTester.test).toHaveBeenCalledWith(
+		historyBaseUrl,
+		500,
+		false,
+		[2, 1]
+	);
 });
 
 it('should return error if latest ledger cannot be determined', async function () {
@@ -228,6 +265,186 @@ it('should determine optimal concurrency, signal slow archive and update toLedge
 	expect(settingsOrError.value.concurrency).toEqual(10);
 	expect(settingsOrError.value.isSlowArchive).toEqual(true);
 	expect(settingsOrError.value.fromLedger > 0).toBeTruthy();
+});
+
+it('should scan a recent window for oversized implicit live jobs even when the archive is not slow', async function () {
+	const performanceTester = mock<ArchivePerformanceTester>();
+	performanceTester.test.mockResolvedValue(
+		ok({
+			optimalConcurrency: 2,
+			timeMsPerFile: 100,
+			isSlowArchive: false
+		})
+	);
+	const categoryScanner = mock<CategoryScanner>();
+	categoryScanner.findLatestLedger.mockResolvedValue(
+		ok(latestLedgerState(1_000_000))
+	);
+	const settingsFactory = new ScanSettingsFactory(
+		categoryScanner,
+		performanceTester,
+		100,
+		2,
+		2
+	);
+	const scanJob = ScanJob.newScanChain(createDummyHistoryBaseUrl());
+	const settingsOrError = await settingsFactory.determineSettings(scanJob);
+
+	expect(settingsOrError.isOk()).toBeTruthy();
+	if (settingsOrError.isErr()) throw settingsOrError.error;
+	expect(settingsOrError.value.fromLedger).toEqual(999_900);
+	expect(settingsOrError.value.toLedger).toEqual(1_000_000);
+	expect(settingsOrError.value.latestScannedLedger).toEqual(0);
+	expect(settingsOrError.value.latestScannedLedgerHeaderHash).toEqual(null);
+});
+
+it('should recover an oversized new-chain job whose runtime to-ledger was persisted after release', async function () {
+	const performanceTester = mock<ArchivePerformanceTester>();
+	performanceTester.test.mockResolvedValue(
+		ok({
+			optimalConcurrency: 2,
+			timeMsPerFile: 100,
+			isSlowArchive: false
+		})
+	);
+	const categoryScanner = mock<CategoryScanner>();
+	categoryScanner.findLatestLedger.mockResolvedValue(
+		ok(latestLedgerState(1_000_000))
+	);
+	const settingsFactory = new ScanSettingsFactory(
+		categoryScanner,
+		performanceTester,
+		100,
+		2,
+		2
+	);
+	const scanJobResult = ScanJob.fromScanJobCoordinatorDTO(
+		new ScanJobDTO(
+			createDummyHistoryBaseUrl().value,
+			0,
+			null,
+			null,
+			'00000000-0000-4000-8000-000000000001',
+			0,
+			1_000_000,
+			1
+		)
+	);
+	expect(scanJobResult.isOk()).toBeTruthy();
+	if (scanJobResult.isErr()) throw scanJobResult.error;
+	const scanJob = scanJobResult.value;
+	const settingsOrError = await settingsFactory.determineSettings(scanJob);
+
+	expect(settingsOrError.isOk()).toBeTruthy();
+	if (settingsOrError.isErr()) throw settingsOrError.error;
+	expect(settingsOrError.value.fromLedger).toEqual(999_900);
+	expect(settingsOrError.value.toLedger).toEqual(1_000_000);
+	expect(settingsOrError.value.concurrency).toEqual(2);
+	expect(settingsOrError.value.latestScannedLedger).toEqual(0);
+	expect(settingsOrError.value.latestScannedLedgerHeaderHash).toEqual(null);
+});
+
+it('should normalize coordinator history archive state urls to archive roots', function () {
+	const scanJobResult = ScanJob.fromScanJobCoordinatorDTO(
+		new ScanJobDTO(
+			'https://history.example.com/archive/.well-known/stellar-history.json',
+			0,
+			null,
+			null,
+			'00000000-0000-4000-8000-000000000003'
+		)
+	);
+
+	expect(scanJobResult.isOk()).toBeTruthy();
+	if (scanJobResult.isErr()) throw scanJobResult.error;
+	expect(scanJobResult.value.url.value).toBe(
+		'https://history.example.com/archive'
+	);
+});
+
+it('should reject coordinator archive object urls', function () {
+	const scanJobResult = ScanJob.fromScanJobCoordinatorDTO(
+		new ScanJobDTO(
+			'https://history.example.com/archive/history/00/00/00/history-0000003f.json',
+			0,
+			null,
+			null,
+			'00000000-0000-4000-8000-000000000004'
+		)
+	);
+
+	expect(scanJobResult.isErr()).toBeTruthy();
+});
+
+it('should recover an oversized coordinator job even after a failed run set chain init date', async function () {
+	const performanceTester = mock<ArchivePerformanceTester>();
+	performanceTester.test.mockResolvedValue(
+		ok({
+			optimalConcurrency: 2,
+			timeMsPerFile: 100,
+			isSlowArchive: false
+		})
+	);
+	const categoryScanner = mock<CategoryScanner>();
+	categoryScanner.findLatestLedger.mockResolvedValue(
+		ok(latestLedgerState(1_000_000))
+	);
+	const settingsFactory = new ScanSettingsFactory(
+		categoryScanner,
+		performanceTester,
+		100,
+		2,
+		2
+	);
+	const scanJobResult = ScanJob.fromScanJobCoordinatorDTO(
+		new ScanJobDTO(
+			createDummyHistoryBaseUrl().value,
+			0,
+			null,
+			new Date('2026-07-05T10:02:02.594Z'),
+			'00000000-0000-4000-8000-000000000002',
+			0,
+			1_000_000,
+			1
+		)
+	);
+	expect(scanJobResult.isOk()).toBeTruthy();
+	if (scanJobResult.isErr()) throw scanJobResult.error;
+	const settingsOrError = await settingsFactory.determineSettings(
+		scanJobResult.value
+	);
+
+	expect(settingsOrError.isOk()).toBeTruthy();
+	if (settingsOrError.isErr()) throw settingsOrError.error;
+	expect(settingsOrError.value.fromLedger).toEqual(999_900);
+	expect(settingsOrError.value.toLedger).toEqual(1_000_000);
+	expect(settingsOrError.value.concurrency).toEqual(2);
+	expect(performanceTester.test).toHaveBeenCalled();
+});
+
+it('should preserve explicit operator ranges from the single-archive scanner', async function () {
+	const performanceTester = mock<ArchivePerformanceTester>();
+	const categoryScanner = mock<CategoryScanner>();
+	categoryScanner.findLatestLedger.mockResolvedValue(
+		ok(latestLedgerState(1_000_000))
+	);
+	const settingsFactory = new ScanSettingsFactory(
+		categoryScanner,
+		performanceTester,
+		100
+	);
+	const scanJob = ScanJob.newScanChain(
+		createDummyHistoryBaseUrl(),
+		0,
+		1_000_000,
+		1
+	);
+	const settingsOrError = await settingsFactory.determineSettings(scanJob);
+
+	expect(settingsOrError.isOk()).toBeTruthy();
+	if (settingsOrError.isErr()) throw settingsOrError.error;
+	expect(settingsOrError.value.fromLedger).toEqual(0);
+	expect(settingsOrError.value.toLedger).toEqual(1_000_000);
 });
 
 it('should detect a slow archive', async function () {

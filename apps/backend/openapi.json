@@ -3467,7 +3467,7 @@
 							}
 						}
 					},
-					"404": {
+					"204": {
 						"description": "No scan found for url"
 					},
 					"500": {
@@ -3784,6 +3784,130 @@
 								}
 							}
 						}
+					},
+					"400": { "description": "Invalid archive URL" },
+					"500": { "description": "Server error" }
+				}
+			}
+		},
+		"/v1/archive-scans/{encodedUrl}/state": {
+			"get": {
+				"summary": "Get history archive state by URL",
+				"description": "Returns the latest scanner-owned history archive state record for a history archive URL. Available records contain the parsed .well-known/stellar-history.json body. Invalid and unreachable records contain the persisted scanner failure evidence for that archive URL.",
+				"tags": ["ArchiveScans"],
+				"operationId": "getHistoryArchiveStateByUrl",
+				"parameters": [
+					{
+						"name": "encodedUrl",
+						"in": "path",
+						"description": "URL of the history archive, URL encoded",
+						"required": true,
+						"schema": { "type": "string", "format": "uri" }
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "history archive state record",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object",
+									"required": [
+										"archiveUrl",
+										"archiveUrlIdentity",
+										"stateUrl",
+										"status",
+										"observedAt",
+										"source",
+										"metadata",
+										"failure"
+									],
+									"properties": {
+										"archiveUrl": { "type": "string", "format": "uri" },
+										"archiveUrlIdentity": { "type": "string" },
+										"stateUrl": { "type": "string", "format": "uri" },
+										"status": {
+											"type": "string",
+											"enum": ["available", "invalid", "unreachable"]
+										},
+										"observedAt": {
+											"type": "string",
+											"format": "date-time"
+										},
+										"source": {
+											"type": "string",
+											"enum": ["backfill", "history-scanner", "network-scan"]
+										},
+										"metadata": {
+											"type": "object",
+											"nullable": true,
+											"required": [
+												"stellarHistoryUrl",
+												"stellarHistory",
+												"observedAt"
+											],
+											"properties": {
+												"stellarHistoryUrl": {
+													"type": "string",
+													"format": "uri"
+												},
+												"observedAt": {
+													"type": "string",
+													"format": "date-time"
+												},
+												"stellarHistory": {
+													"type": "object",
+													"required": [
+														"version",
+														"server",
+														"currentLedger",
+														"currentBuckets"
+													],
+													"properties": {
+														"version": { "type": "integer" },
+														"server": { "type": "string" },
+														"currentLedger": { "type": "integer" },
+														"networkPassphrase": {
+															"type": "string",
+															"nullable": true
+														},
+														"currentBuckets": {
+															"type": "array",
+															"items": {
+																"$ref": "#/components/schemas/HistoryStateBucket"
+															}
+														},
+														"hotArchiveBuckets": {
+															"type": "array",
+															"nullable": true,
+															"items": {
+																"$ref": "#/components/schemas/HistoryStateBucket"
+															}
+														}
+													}
+												}
+											}
+										},
+										"failure": {
+											"type": "object",
+											"nullable": true,
+											"required": ["message", "type", "httpStatus"],
+											"properties": {
+												"message": { "type": "string" },
+												"type": { "type": "string" },
+												"httpStatus": {
+													"type": "integer",
+													"nullable": true
+												}
+											}
+										}
+									}
+								}
+							}
+						}
+					},
+					"204": {
+						"description": "No scanner-owned history archive state record exists for this URL yet"
 					},
 					"400": { "description": "Invalid archive URL" },
 					"500": { "description": "Server error" }
@@ -4409,7 +4533,7 @@
 		"/v1/history-scan/archive-metadata/backfill": {
 			"post": {
 				"summary": "Backfill scanner-captured archive metadata",
-				"description": "Internal authenticated operator endpoint. Fetches a bounded set of missing root stellar-history.json files and stores validated HAS metadata on existing selected archive scan rows. It does not create successful scan rows or fetch data from frontend page renders.",
+				"description": "Internal authenticated operator endpoint. Fetches a bounded set of missing root stellar-history.json files and stores validated history archive state metadata on existing selected archive scan rows. It does not create successful scan rows or fetch data from frontend page renders.",
 				"tags": ["HistoryScan"],
 				"operationId": "backfillArchiveMetadata",
 				"security": [{ "basicAuth": [] }],
@@ -5699,6 +5823,22 @@
 	},
 	"components": {
 		"schemas": {
+			"HistoryStateBucket": {
+				"type": "object",
+				"required": ["curr", "snap", "next"],
+				"properties": {
+					"curr": { "type": "string" },
+					"snap": { "type": "string" },
+					"next": {
+						"type": "object",
+						"required": ["state"],
+						"properties": {
+							"state": { "type": "integer" },
+							"output": { "type": "string", "nullable": true }
+						}
+					}
+				}
+			},
 			"KnownNode": {
 				"type": "object",
 				"required": [

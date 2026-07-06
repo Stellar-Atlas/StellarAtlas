@@ -16,6 +16,7 @@ export interface ScanRepository {
 	findRecentLimited(limit: number): Promise<Scan[]>;
 	findLatest(): Promise<Scan[]>;
 	findUrlsMissingSelectedArchiveMetadata(limit: number): Promise<string[]>;
+	findDiscoveredUrlsMissingArchiveState(limit: number): Promise<string[]>;
 	backfillSelectedArchiveMetadata(
 		url: string,
 		archiveMetadata: ArchiveMetadataDTO

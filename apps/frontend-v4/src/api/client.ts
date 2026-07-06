@@ -18,6 +18,7 @@ import type {
 	PublicHistoryArchiveScan,
 	PublicHistoryArchiveScanEvidence,
 	PublicHistoryArchiveScanLogEntry,
+	PublicHistoryArchiveState,
 	PublicArchiveScanWorkers,
 	PublicLatestLedger,
 	PublicLedgerTransactions,
@@ -264,6 +265,15 @@ export const fetchHistoryArchiveScan = (
 ): Promise<PublicHistoryArchiveScan | null> =>
 	fetchNullableJson<PublicHistoryArchiveScan>(
 		`/v1/history-scan/${encodeURIComponent(historyUrl)}`,
+		withTags(options, [frontendCacheTags.historyScan])
+	);
+
+export const fetchHistoryArchiveState = (
+	historyUrl: string,
+	options?: FetchOptions
+): Promise<PublicHistoryArchiveState | null> =>
+	fetchNullableJson<PublicHistoryArchiveState>(
+		`/v1/archive-scans/${encodeURIComponent(historyUrl)}/state`,
 		withTags(options, [frontendCacheTags.historyScan])
 	);
 

@@ -53,6 +53,7 @@ export class GetArchiveScanWorkers {
 		const staleCutoff = getStaleScanJobCutoff(generatedAt);
 
 		try {
+			await this.scanJobRepository.releaseStaleTakenJobs(staleCutoff);
 			const snapshot = await this.scanJobRepository.getTakenJobsSnapshot(
 				staleCutoff,
 				GetArchiveScanWorkers.maxWorkers
@@ -64,9 +65,9 @@ export class GetArchiveScanWorkers {
 				activeWorkers: snapshot.activeTakenJobs,
 				staleWorkers: snapshot.staleTakenJobs,
 				totalTakenJobs: snapshot.totalTakenJobs,
-				workers: snapshot.jobs.map((job) =>
-					this.mapTakenJob(job, generatedAt, staleCutoff)
-				)
+				workers: snapshot.jobs
+					.map((job) => this.mapTakenJob(job, generatedAt, staleCutoff))
+					.sort(GetArchiveScanWorkers.compareWorkers)
 			});
 		} catch (e) {
 			const error = mapUnknownToError(e);
@@ -118,5 +119,28 @@ export class GetArchiveScanWorkers {
 		if (lastHeartbeatAt < staleCutoff) return 'stale';
 		if (job.concurrency === null || job.concurrency <= 0) return 'starting';
 		return 'scanning';
+	}
+
+	private static compareWorkers(
+		left: ArchiveScanWorkerDTO,
+		right: ArchiveScanWorkerDTO
+	): number {
+		const statusDifference =
+			GetArchiveScanWorkers.getStatusRank(left.status) -
+			GetArchiveScanWorkers.getStatusRank(right.status);
+		if (statusDifference !== 0) return statusDifference;
+
+		return left.heartbeatAgeMs - right.heartbeatAgeMs;
+	}
+
+	private static getStatusRank(status: ArchiveScanWorkerStatus): number {
+		switch (status) {
+			case 'scanning':
+				return 0;
+			case 'starting':
+				return 1;
+			case 'stale':
+				return 2;
+		}
 	}
 }

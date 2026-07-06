@@ -131,7 +131,7 @@ export class Scanner {
 			ledger: latestLedgerHeader.ledger,
 			hash: latestLedgerHeader.hash
 		};
-		let hasUnverifiedGap = false;
+		let hasUnverifiedGap = Scanner.hasInitialUnverifiedGap(scanSettings);
 
 		while (rangeFromLedger < scanSettings.toLedger) {
 			const rangeTimer = Scanner.createTimerLabel(
@@ -248,5 +248,9 @@ export class Scanner {
 			latestScannedLedger: scanSettings.latestScannedLedger,
 			latestScannedLedgerHeaderHash: scanSettings.latestScannedLedgerHeaderHash
 		};
+	}
+
+	private static hasInitialUnverifiedGap(scanSettings: ScanSettings): boolean {
+		return scanSettings.fromLedger > scanSettings.latestScannedLedger + 1;
 	}
 }

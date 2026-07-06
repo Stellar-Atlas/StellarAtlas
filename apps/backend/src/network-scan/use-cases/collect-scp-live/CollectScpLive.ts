@@ -24,6 +24,8 @@ const liveBufferFlushDelayMs = 4_500;
 
 @injectable()
 export class CollectScpLive {
+	private currentLiveStatements: ScpStatementLiveStoreBuffer | null = null;
+	private shuttingDown = false;
 	private latestLedger: bigint | null = null;
 	private latestLedgerCloseTime: Date | null = null;
 
@@ -43,6 +45,14 @@ export class CollectScpLive {
 
 	async execute(): Promise<Result<CollectScpLiveResult, Error>> {
 		try {
+			if (this.shuttingDown) {
+				return ok({
+					latestLedger: this.latestLedger ?? 0n,
+					observedStatements: 0,
+					processedLedgers: 0
+				});
+			}
+
 			const scanDataOrError = await this.scanRepository.findScanDataForUpdate();
 			if (scanDataOrError.isErr()) return err(scanDataOrError.error);
 
@@ -64,6 +74,7 @@ export class CollectScpLive {
 					flushDelayMs: liveBufferFlushDelayMs
 				}
 			);
+			this.currentLiveStatements = liveStatements;
 
 			const crawlResult = await this.crawlerService.crawl(
 				networkOrError.value.quorumSetConfiguration,
@@ -97,7 +108,14 @@ export class CollectScpLive {
 			});
 		} catch (error) {
 			return err(mapUnknownToError(error));
+		} finally {
+			this.currentLiveStatements = null;
 		}
+	}
+
+	shutDown(): void {
+		this.shuttingDown = true;
+		this.currentLiveStatements?.abort();
 	}
 
 	private async getNetwork() {

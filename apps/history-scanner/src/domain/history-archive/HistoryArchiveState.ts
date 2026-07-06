@@ -4,7 +4,7 @@ export interface HistoryArchiveState {
 	version: number;
 	server: string;
 	currentLedger: number;
-	networkPassphrase?: string;
+	networkPassphrase?: string | null;
 	currentBuckets: HistoryStateBucket[];
 	hotArchiveBuckets?: HistoryStateBucket[];
 }
@@ -14,7 +14,7 @@ export interface HistoryStateBucket {
 	snap: string;
 	next: {
 		state: number;
-		output?: string;
+		output?: string | null;
 	};
 }
 

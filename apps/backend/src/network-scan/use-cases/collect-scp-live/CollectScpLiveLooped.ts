@@ -48,6 +48,7 @@ export class CollectScpLiveLooped {
 	shutDown(callback: () => void): void {
 		this.aborted = true;
 		this.shutdownCallback = callback;
+		this.collectScpLive.shutDown();
 		if (!this.running) this.finishShutdownIfRequested();
 	}
 

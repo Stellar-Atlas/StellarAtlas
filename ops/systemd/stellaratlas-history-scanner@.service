@@ -3,6 +3,7 @@ Description=StellarAtlas history scanner %i
 Documentation=https://github.com/Stellar-Atlas/StellarAtlas
 Wants=stellaratlas-api.service
 After=stellaratlas-api.service
+PartOf=stellaratlas.target
 Conflicts=stellaratlas.service
 
 [Service]
@@ -19,6 +20,7 @@ Environment=HISTORY_SCAN_WORKERS=1
 Environment=HISTORY_MAX_REQUESTS=24
 Environment=HISTORY_HASHER_WORKERS=24
 EnvironmentFile=-/etc/stellaratlas/stellaratlas.env
+ExecStartPre=/usr/bin/env node scripts/wait-for-url.mjs http://127.0.0.1:3000/v1/status 90
 ExecStart=/usr/bin/env pnpm start:scan-history
 Restart=always
 RestartSec=15

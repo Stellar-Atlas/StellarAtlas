@@ -3,6 +3,7 @@ import { notFound } from 'next/navigation';
 import Link from 'next/link';
 import { connection } from 'next/server';
 import {
+	fetchHistoryArchiveState,
 	fetchKnownNodes,
 	fetchKnownOrganizations,
 	fetchPublicNetwork
@@ -50,6 +51,22 @@ async function OrganizationDetailRouteContent({
 	};
 	const organizations = knownOrganizations.organizations.map(
 		(candidate) => candidate.organization
+	);
+	const organizationNodes = inventoryNetwork.nodes.filter(
+		(node) => node.organizationId === organization.id
+	);
+	const validatorHistoryUrls = Array.from(
+		new Set(
+			organizationNodes.flatMap((node) =>
+				node.historyUrl === null ? [] : [node.historyUrl]
+			)
+		)
+	);
+	const archiveStates = await Promise.all(
+		validatorHistoryUrls.map(async (historyUrl) => ({
+			historyUrl,
+			state: await fetchHistoryArchiveState(historyUrl, { revalidate })
+		}))
 	);
 
 	return (
@@ -100,8 +117,10 @@ async function OrganizationDetailRouteContent({
 						</Link>
 					</div>
 					<OrganizationDetail
+						archiveStates={archiveStates}
 						network={inventoryNetwork}
 						organization={organization}
+						organizationNodes={organizationNodes}
 					/>
 				</section>
 			</div>

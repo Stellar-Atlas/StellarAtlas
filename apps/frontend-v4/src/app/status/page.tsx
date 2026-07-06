@@ -3,11 +3,7 @@ import {
 	fetchApiStatus,
 	fetchArchiveScanWorkers,
 	fetchDataQualityStatus,
-	fetchFailoverStatus,
 	fetchFrontendStatus,
-	fetchFullHistoryStatus,
-	fetchHorizonStatus,
-	fetchRpcStatus,
 	fetchScanLogStatus,
 	fetchWorkerStatus
 } from '@api/client';
@@ -25,28 +21,20 @@ async function StatusRouteContent(): Promise<React.JSX.Element> {
 		scanLogs,
 		workers,
 		archiveWorkers,
-		frontend,
-		fullHistory,
-		horizon,
-		rpc,
-		failover
+		frontend
 	] = await Promise.all([
 		fetchApiStatus({ revalidate }),
 		fetchDataQualityStatus({ revalidate }),
 		fetchScanLogStatus({ revalidate }),
 		fetchWorkerStatus({ revalidate }),
 		fetchArchiveScanWorkers({ revalidate }),
-		fetchFrontendStatus({ revalidate }),
-		fetchFullHistoryStatus({ revalidate }),
-		fetchHorizonStatus({ revalidate }),
-		fetchRpcStatus({ revalidate }),
-		fetchFailoverStatus({ revalidate })
+		fetchFrontendStatus({ revalidate })
 	]);
 
 	return (
 		<main className="shell">
 			<PageHeading
-				description="Current public API, scan continuity, network rollups, archive queue, worker, full-history parser, and owned service target status."
+				description="Current public API, scan continuity, network rollups, archive queue, worker leases, and archive verification activity."
 				eyebrow="Operations"
 				title="Status"
 			/>
@@ -54,11 +42,7 @@ async function StatusRouteContent(): Promise<React.JSX.Element> {
 				api={api}
 				archiveWorkers={archiveWorkers}
 				dataQuality={dataQuality}
-				failover={failover}
 				frontend={frontend}
-				fullHistory={fullHistory}
-				horizon={horizon}
-				rpc={rpc}
 				scanLogs={scanLogs}
 				workers={workers}
 			/>

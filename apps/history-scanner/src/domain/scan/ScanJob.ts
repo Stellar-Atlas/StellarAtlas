@@ -5,6 +5,7 @@ import { ScanError } from './ScanError.js';
 import { ScanResult } from './ScanResult.js';
 import { err, ok, Result } from 'neverthrow';
 import { ScanJobDTO } from 'history-scanner-dto';
+import { normalizeHistoryArchiveRootUrl } from 'shared';
 
 //a scheduled scan with optional settings. Has no start and end time yet.
 export class ScanJob {
@@ -20,7 +21,12 @@ export class ScanJob {
 	) {}
 
 	static fromScanJobCoordinatorDTO(dto: ScanJobDTO): Result<ScanJob, Error> {
-		const urlResult = Url.create(dto.url);
+		const normalizedUrl = normalizeHistoryArchiveRootUrl(dto.url);
+		if (normalizedUrl === null) {
+			return err(new Error('Invalid history archive root URL'));
+		}
+
+		const urlResult = Url.create(normalizedUrl);
 		if (urlResult.isErr()) {
 			return err(urlResult.error);
 		}
@@ -62,7 +68,27 @@ export class ScanJob {
 		toLedger: number | null = null,
 		concurrency = 0
 	) {
-		return new ScanJob(url, 0, null, null, fromLedger, toLedger, concurrency);
+		return new ScanJob(
+			ScanJob.normalizeUrl(url),
+			0,
+			null,
+			null,
+			fromLedger,
+			toLedger,
+			concurrency
+		);
+	}
+
+	private static normalizeUrl(url: Url): Url {
+		const normalizedUrl = normalizeHistoryArchiveRootUrl(url.value);
+		if (normalizedUrl === null) {
+			throw new Error('Invalid history archive root URL');
+		}
+
+		const urlResult = Url.create(normalizedUrl);
+		if (urlResult.isErr()) throw urlResult.error;
+
+		return urlResult.value;
 	}
 
 	isNewScanChainJob() {

@@ -2,6 +2,7 @@
 Description=StellarAtlas users service
 Documentation=https://github.com/Stellar-Atlas/StellarAtlas
 After=network-online.target
+PartOf=stellaratlas.target
 Conflicts=stellaratlas.service
 
 [Service]

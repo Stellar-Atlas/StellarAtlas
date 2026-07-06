@@ -9,6 +9,8 @@ import type { Logger } from 'logger';
 import { TYPES } from '../../infrastructure/di/di-types.js';
 import type { ScanRepository } from '../../domain/scan/ScanRepository.js';
 import { mapUnknownToError } from '@core/utilities/mapUnknownToError.js';
+import type { HistoryArchiveStateRepository } from '../../domain/history-archive-state/HistoryArchiveStateRepository.js';
+import type { HistoryArchiveStateStatus } from '../../domain/history-archive-state/HistoryArchiveStateSnapshot.js';
 
 export interface BackfillArchiveMetadataRequest {
 	readonly limit?: number;
@@ -38,6 +40,8 @@ export class BackfillArchiveMetadata {
 	constructor(
 		@inject(TYPES.HistoryArchiveScanRepository)
 		private readonly scanRepository: ScanRepository,
+		@inject(TYPES.HistoryArchiveStateRepository)
+		private readonly stateRepository: HistoryArchiveStateRepository,
 		@inject('Logger') private readonly logger: Logger
 	) {}
 
@@ -46,8 +50,14 @@ export class BackfillArchiveMetadata {
 	): Promise<Result<BackfillArchiveMetadataResult, Error>> {
 		try {
 			const limit = normalizeLimit(request.limit);
-			const urls =
+			const scanUrls =
 				await this.scanRepository.findUrlsMissingSelectedArchiveMetadata(limit);
+			const discoveredUrls =
+				await this.scanRepository.findDiscoveredUrlsMissingArchiveState(limit);
+			const urls = dedupeArchiveUrls([...scanUrls, ...discoveredUrls]).slice(
+				0,
+				limit
+			);
 			let updatedCount = 0;
 			let skippedCount = 0;
 			const failures: BackfillArchiveMetadataFailure[] = [];
@@ -55,6 +65,7 @@ export class BackfillArchiveMetadata {
 			for (const archiveUrl of urls) {
 				const metadataResult = await this.fetchArchiveMetadata(archiveUrl);
 				if (metadataResult.isErr()) {
+					await this.saveFetchFailure(archiveUrl, metadataResult.error);
 					failures.push({
 						archiveUrl,
 						error: metadataResult.error.message
@@ -69,6 +80,11 @@ export class BackfillArchiveMetadata {
 					);
 				if (updated) updatedCount += 1;
 				else skippedCount += 1;
+				await this.stateRepository.saveAvailable(
+					archiveUrl,
+					metadataResult.value,
+					'backfill'
+				);
 			}
 
 			return ok({
@@ -94,7 +110,12 @@ export class BackfillArchiveMetadata {
 			});
 			if (!response.ok) {
 				return err(
-					new Error(`HAS fetch returned HTTP ${response.status.toString()}`)
+					new ArchiveStateFetchError(
+						`History archive state fetch returned HTTP ${response.status.toString()}`,
+						'unreachable',
+						'http_error',
+						response.status
+					)
 				);
 			}
 
@@ -105,7 +126,13 @@ export class BackfillArchiveMetadata {
 				observedAt: new Date().toISOString()
 			};
 			if (!isArchiveMetadataDTO(archiveMetadata)) {
-				return err(new Error('HAS response did not match expected shape'));
+				return err(
+					new ArchiveStateFetchError(
+						'History archive state response did not match expected shape',
+						'invalid',
+						'invalid_shape'
+					)
+				);
 			}
 
 			return ok(archiveMetadata);
@@ -120,6 +147,40 @@ export class BackfillArchiveMetadata {
 			return err(mappedError);
 		}
 	}
+
+	private async saveFetchFailure(archiveUrl: string, error: Error): Promise<void> {
+		const fetchError =
+			error instanceof ArchiveStateFetchError
+				? error
+				: new ArchiveStateFetchError(
+						error.message,
+						'unreachable',
+						error.name || 'fetch_error'
+					);
+
+		await this.stateRepository.saveFailure({
+			archiveUrl,
+			stateUrl: buildStellarHistoryUrl(archiveUrl),
+			status: fetchError.status,
+			errorType: fetchError.errorType,
+			errorMessage: fetchError.message,
+			httpStatus: fetchError.httpStatus,
+			observedAt: new Date(),
+			source: 'backfill'
+		});
+	}
+}
+
+class ArchiveStateFetchError extends Error {
+	constructor(
+		message: string,
+		public readonly status: Exclude<HistoryArchiveStateStatus, 'available'>,
+		public readonly errorType: string,
+		public readonly httpStatus: number | null = null
+	) {
+		super(message);
+		this.name = 'ArchiveStateFetchError';
+	}
 }
 
 function normalizeLimit(limit: number | undefined): number {
@@ -131,4 +192,14 @@ function normalizeLimit(limit: number | undefined): number {
 
 function buildStellarHistoryUrl(archiveUrl: string): string {
 	return `${archiveUrl.replace(/\/+$/, '')}/.well-known/stellar-history.json`;
+}
+
+function dedupeArchiveUrls(urls: readonly string[]): string[] {
+	const byIdentity = new Map<string, string>();
+	for (const url of urls) {
+		const identity = url.replace(/\/+$/, '').toLowerCase();
+		if (!byIdentity.has(identity)) byIdentity.set(identity, url);
+	}
+
+	return [...byIdentity.values()];
 }

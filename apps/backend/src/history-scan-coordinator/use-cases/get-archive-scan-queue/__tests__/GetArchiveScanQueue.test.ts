@@ -23,11 +23,12 @@ describe('GetArchiveScanQueue', () => {
 	});
 
 	it('should return queue stats with stale job policy metadata', async () => {
+		scanJobRepositoryMock.releaseStaleTakenJobs.mockResolvedValue(1);
 		scanJobRepositoryMock.getQueueStats.mockResolvedValue({
 			pendingJobs: 3,
 			activeJobs: 2,
-			staleJobs: 1,
-			totalUnfinishedJobs: 6
+			staleJobs: 0,
+			totalUnfinishedJobs: 5
 		});
 
 		const result = await getArchiveScanQueue.execute();
@@ -36,11 +37,14 @@ describe('GetArchiveScanQueue', () => {
 		expect(result._unsafeUnwrap()).toEqual({
 			pendingJobs: 3,
 			activeJobs: 2,
-			staleJobs: 1,
-			totalUnfinishedJobs: 6,
+			staleJobs: 0,
+			totalUnfinishedJobs: 5,
 			generatedAt: '2026-07-03T12:00:00.000Z',
 			staleJobAgeMs: 1800000
 		});
+		expect(scanJobRepositoryMock.releaseStaleTakenJobs).toHaveBeenCalledWith(
+			new Date('2026-07-03T11:30:00.000Z')
+		);
 		expect(scanJobRepositoryMock.getQueueStats).toHaveBeenCalledWith(
 			new Date('2026-07-03T11:30:00.000Z')
 		);
@@ -48,7 +52,7 @@ describe('GetArchiveScanQueue', () => {
 
 	it('should log and return repository errors', async () => {
 		const error = new Error('database unavailable');
-		scanJobRepositoryMock.getQueueStats.mockRejectedValue(error);
+		scanJobRepositoryMock.releaseStaleTakenJobs.mockRejectedValue(error);
 
 		const result = await getArchiveScanQueue.execute();
 

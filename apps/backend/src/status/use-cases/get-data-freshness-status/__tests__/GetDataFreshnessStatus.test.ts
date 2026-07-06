@@ -66,7 +66,7 @@ describe('GetDataFreshnessStatus', () => {
 		expect(scanRepositoryMock.findLatestLimited).toHaveBeenCalledWith(1);
 	});
 
-	it('should degrade when archive scan freshness exceeds policy', async () => {
+	it('should keep headline freshness tied to network scans when archive scan evidence is stale', async () => {
 		networkScanRepositoryMock.findLatestSuccessfulScanTime.mockResolvedValue(
 			new Date('2026-07-03T11:45:00.000Z')
 		);
@@ -77,7 +77,7 @@ describe('GetDataFreshnessStatus', () => {
 		const result = await getDataFreshnessStatus.execute();
 
 		expect(result.isOk()).toBe(true);
-		expect(result._unsafeUnwrap().status).toBe('degraded');
+		expect(result._unsafeUnwrap().status).toBe('ok');
 		expect(result._unsafeUnwrap().archiveScan).toEqual({
 			status: 'degraded',
 			latestAt: '2026-07-03T02:00:00.000Z',

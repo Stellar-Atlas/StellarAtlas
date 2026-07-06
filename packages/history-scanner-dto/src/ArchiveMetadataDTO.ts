@@ -3,7 +3,7 @@ export interface HistoryStateBucketDTO {
 	readonly snap: string;
 	readonly next: {
 		readonly state: number;
-		readonly output?: string;
+		readonly output?: string | null;
 	};
 }
 
@@ -11,7 +11,7 @@ export interface HistoryArchiveStateDTO {
 	readonly version: number;
 	readonly server: string;
 	readonly currentLedger: number;
-	readonly networkPassphrase?: string;
+	readonly networkPassphrase?: string | null;
 	readonly currentBuckets: readonly HistoryStateBucketDTO[];
 	readonly hotArchiveBuckets?: readonly HistoryStateBucketDTO[];
 }
@@ -47,6 +47,7 @@ function isHistoryArchiveStateDTO(
 		typeof value.currentLedger === 'number' &&
 		Number.isInteger(value.currentLedger) &&
 		(value.networkPassphrase === undefined ||
+			value.networkPassphrase === null ||
 			typeof value.networkPassphrase === 'string') &&
 		Array.isArray(value.currentBuckets) &&
 		value.currentBuckets.every(isHistoryStateBucketDTO) &&
@@ -66,7 +67,9 @@ function isHistoryStateBucketDTO(
 		typeof value.snap === 'string' &&
 		typeof value.next.state === 'number' &&
 		Number.isInteger(value.next.state) &&
-		(value.next.output === undefined || typeof value.next.output === 'string')
+		(value.next.output === undefined ||
+			value.next.output === null ||
+			typeof value.next.output === 'string')
 	);
 }
 

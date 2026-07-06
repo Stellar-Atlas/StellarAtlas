@@ -3,6 +3,7 @@ import type {
 	PublicHistoryArchiveScan,
 	PublicHistoryArchiveScanEvidence,
 	PublicHistoryArchiveScanLogEntry,
+	PublicHistoryArchiveState,
 	PublicKnownNode,
 	PublicNetwork,
 	PublicNode,
@@ -40,6 +41,7 @@ interface NodeDetailProps {
 	historyArchiveEvidence: PublicHistoryArchiveScanEvidence | null;
 	historyArchiveScan: PublicHistoryArchiveScan | null;
 	historyArchiveScanLogs: readonly PublicHistoryArchiveScanLogEntry[];
+	historyArchiveState: PublicHistoryArchiveState | null;
 	knownNode: PublicKnownNode;
 	network: PublicNetwork;
 	node: PublicNode | null;
@@ -50,6 +52,7 @@ export function NodeDetail({
 	historyArchiveEvidence,
 	historyArchiveScan,
 	historyArchiveScanLogs,
+	historyArchiveState,
 	knownNode,
 	network,
 	node,
@@ -274,6 +277,7 @@ export function NodeDetail({
 					) : null}
 					<ArchiveMetadata
 						historyArchiveScan={historyArchiveScan}
+						historyArchiveState={historyArchiveState}
 						node={node}
 						organization={organization}
 					/>

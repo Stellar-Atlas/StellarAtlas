@@ -11,6 +11,7 @@ import type { ScanJobRepository } from '../../domain/ScanJobRepository.js';
 import type { CommunityScannerJobContext } from '../../domain/CommunityScannerJobContext.js';
 import type { Repository } from 'typeorm';
 import { CommunityScanner } from '../../infrastructure/database/entities/CommunityScanner.js';
+import type { HistoryArchiveStateRepository } from '../../domain/history-archive-state/HistoryArchiveStateRepository.js';
 
 export class ScanJobNotFoundError extends Error {
 	constructor() {
@@ -46,6 +47,8 @@ export class RegisterScan {
 		private mapper: ScanMapper,
 		@inject(TYPES.HistoryArchiveScanRepository)
 		private scanRepository: ScanRepository,
+		@inject(TYPES.HistoryArchiveStateRepository)
+		private stateRepository: HistoryArchiveStateRepository,
 		@inject(TYPES.ScanJobRepository)
 		private scanJobRepository: ScanJobRepository,
 		@inject(TYPES.CommunityScannerRepository)
@@ -89,6 +92,13 @@ export class RegisterScan {
 			}
 
 			await this.scanRepository.save([scanResult.value]);
+			if (scanResult.value.archiveMetadata !== null) {
+				await this.stateRepository.saveAvailable(
+					scanResult.value.baseUrl.value,
+					scanResult.value.archiveMetadata,
+					'history-scanner'
+				);
+			}
 			const scanJob =
 				attributedJob ??
 				(await this.scanJobRepository.findByRemoteId(dto.scanJobRemoteId));

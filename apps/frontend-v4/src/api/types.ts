@@ -5,6 +5,7 @@ import type {
 	OrganizationSnapshotV1,
 	OrganizationV1,
 	HistoryArchiveScanV1,
+	HistoryArchiveStateSnapshotV1,
 	ScpStatementObservationV1
 } from 'shared';
 
@@ -14,6 +15,7 @@ export type PublicNodeSnapshot = NodeSnapshotV1;
 export type PublicOrganization = OrganizationV1;
 export type PublicOrganizationSnapshot = OrganizationSnapshotV1;
 export type PublicHistoryArchiveScan = HistoryArchiveScanV1;
+export type PublicHistoryArchiveState = HistoryArchiveStateSnapshotV1;
 export type PublicScpStatementObservation = ScpStatementObservationV1;
 
 export type PublicKnownNodeMetadataState = 'snapshot' | 'public_key_only';

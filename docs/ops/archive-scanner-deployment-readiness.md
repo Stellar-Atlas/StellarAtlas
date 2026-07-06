@@ -5,7 +5,7 @@ Date: 2026-07-06
 This is the public-safe deployment checklist for the archive scanner queue,
 metadata, progress, and node/status UI fixes. It documents the exact gate before
 production can stop showing duplicate active ranges, missing
-`stellar-history.json` bodies, and active jobs that look stuck at
+scanner-owned history archive state snapshots, and active jobs that look stuck at
 `latestScannedLedger=0`.
 
 Do not treat this file as approval to delete rows, truncate tables, restart
@@ -273,27 +273,30 @@ BrowserOS checks:
   links and `Per-job requests` labels.
 - `/status` does not show hidden current archive jobs without a route to view
   them.
-- The Blockdaemon node page for
-  `GAAV2GCVFLNN522ORUYFV33E76VPC22E72S75AQ6MBR5V45Z5DWVPWEU` has no duplicate
-  active range rows for the same archive/range.
+- Representative node pages have no duplicate active range rows for the same
+  archive/range.
+- Representative organization pages show persisted scanner-owned metadata and
+  do not perform browser-time remote TOML/archive fetches.
 - Node archive rows show assigned range, verified contiguous progress,
   attempted-through ledger, and current range separately.
 - Node and status pages do not expose internal filesystem paths.
-- `stellar-history.json` still shows as missing until the scanner-owned
-  metadata backfill or a new scan stores it. The page must never fetch it from
-  the remote archive during render.
+- Root history archive state still shows as missing until the scanner-owned
+  metadata backfill or a new scan stores it. The page must never fetch the
+  remote archive during render.
 
 ## Metadata Backfill Gate
 
-After API deploy and migration success, backfill scanner-owned root
-`stellar-history.json` metadata through the authenticated backend route. Use a
-small selected URL set first, then verify the node page. Do not create fake
-successful scan rows for metadata-only backfill.
+After API deploy and migration success, backfill scanner-owned root history
+archive state metadata through the authenticated backend route. Use a small
+selected URL set first, then verify the node page. Do not create fake successful
+scan rows for metadata-only backfill.
 
 Acceptance:
 
-- Existing archive URLs can show scanner-captured root HAS metadata.
-- Missing root HAS metadata remains explicit when no scanner-owned body exists.
+- Existing archive URLs can show scanner-captured root history archive state
+  metadata.
+- Missing root history archive state metadata remains explicit when no
+  scanner-owned body exists.
 - Archive verification errors remain archive evidence.
 - Worker/setup failures remain infrastructure evidence.
 

@@ -8,6 +8,7 @@ import { GetArchiveScanQueue } from '@history-scan-coordinator/use-cases/get-arc
 import { GetArchiveScanWorkers } from '@history-scan-coordinator/use-cases/get-archive-scan-workers/GetArchiveScanWorkers.js';
 import { GetLatestScan } from '@history-scan-coordinator/use-cases/get-latest-scan/GetLatestScan.js';
 import { GetScanEvidence } from '@history-scan-coordinator/use-cases/get-scan-evidence/GetScanEvidence.js';
+import { GetHistoryArchiveState } from '@history-scan-coordinator/use-cases/get-history-archive-state/GetHistoryArchiveState.js';
 import { GetScanLogs } from '@history-scan-coordinator/use-cases/get-scan-logs/GetScanLogs.js';
 import { InvalidUrlError } from '@history-scan-coordinator/use-cases/get-latest-scan/InvalidUrlError.js';
 import { HistoryArchiveScan } from 'shared';
@@ -18,6 +19,7 @@ describe('ArchiveScanRouter.integration', () => {
 	let getArchiveScans: jest.Mocked<GetArchiveScans>;
 	let getArchiveScanQueue: jest.Mocked<GetArchiveScanQueue>;
 	let getArchiveScanWorkers: jest.Mocked<GetArchiveScanWorkers>;
+	let getHistoryArchiveState: jest.Mocked<GetHistoryArchiveState>;
 	let getLatestScan: jest.Mocked<GetLatestScan>;
 	let getScanEvidence: jest.Mocked<GetScanEvidence>;
 	let getScanLogs: jest.Mocked<GetScanLogs>;
@@ -26,6 +28,7 @@ describe('ArchiveScanRouter.integration', () => {
 		getArchiveScans = mock<GetArchiveScans>();
 		getArchiveScanQueue = mock<GetArchiveScanQueue>();
 		getArchiveScanWorkers = mock<GetArchiveScanWorkers>();
+		getHistoryArchiveState = mock<GetHistoryArchiveState>();
 		getLatestScan = mock<GetLatestScan>();
 		getScanEvidence = mock<GetScanEvidence>();
 		getScanLogs = mock<GetScanLogs>();
@@ -37,11 +40,68 @@ describe('ArchiveScanRouter.integration', () => {
 				getArchiveScans,
 				getArchiveScanQueue,
 				getArchiveScanWorkers,
+				getHistoryArchiveState,
 				getLatestScan,
 				getScanEvidence,
 				getScanLogs
 			})
 		);
+	});
+
+	describe('GET /:encodedUrl/state', () => {
+		it('should expose scanner-owned history archive state', async () => {
+			getHistoryArchiveState.execute.mockResolvedValue(
+				ok({
+					archiveUrl: 'https://test.com',
+					archiveUrlIdentity: 'https://test.com',
+					stateUrl: 'https://test.com/.well-known/stellar-history.json',
+					status: 'available',
+					observedAt: '2026-07-03T10:00:00.000Z',
+					source: 'history-scanner',
+					failure: null,
+					metadata: {
+						stellarHistoryUrl:
+							'https://test.com/.well-known/stellar-history.json',
+						observedAt: '2026-07-03T10:00:00.000Z',
+						stellarHistory: {
+							version: 1,
+							server: 'stellar-core',
+							currentLedger: 100,
+							currentBuckets: []
+						}
+					}
+				})
+			);
+
+			await request(app)
+				.get('/archive-scans/https%3A%2F%2Ftest.com/state')
+				.expect(200)
+				.expect('Cache-Control', 'public, max-age=10')
+				.expect((response) => {
+					expect(response.body).toMatchObject({
+						archiveUrl: 'https://test.com',
+						status: 'available',
+						metadata: {
+							stellarHistory: {
+								currentLedger: 100
+							}
+						}
+					});
+				});
+
+			expect(getHistoryArchiveState.execute).toHaveBeenCalledWith(
+				'https://test.com'
+			);
+		});
+
+		it('should return 204 when no scanner-owned state exists yet', async () => {
+			getHistoryArchiveState.execute.mockResolvedValue(ok(null));
+
+			await request(app)
+				.get('/archive-scans/https%3A%2F%2Ftest.com/state')
+				.expect(204)
+				.expect('Cache-Control', 'public, max-age=10');
+		});
 	});
 
 	describe('GET /', () => {

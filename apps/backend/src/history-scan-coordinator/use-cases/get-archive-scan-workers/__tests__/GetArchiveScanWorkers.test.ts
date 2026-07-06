@@ -24,6 +24,7 @@ describe('GetArchiveScanWorkers', () => {
 	});
 
 	it('should return safe public worker metadata for taken jobs', async () => {
+		scanJobRepositoryMock.releaseStaleTakenJobs.mockResolvedValue(1);
 		const activeJob = new ScanJob(
 			'https://active.example',
 			10,
@@ -84,20 +85,6 @@ describe('GetArchiveScanWorkers', () => {
 			totalTakenJobs: 3,
 			workers: [
 				{
-					archiveUrl: 'https://stale.example',
-					status: 'stale',
-					claimedAt: '2026-07-03T10:30:00.000Z',
-					lastHeartbeatAt: '2026-07-03T11:00:00.000Z',
-					heartbeatAgeMs: 3600000,
-					fromLedger: 0,
-					currentRangeFromLedger: null,
-					currentRangeToLedger: null,
-					toLedger: null,
-					latestAttemptedLedger: null,
-					latestScannedLedger: 0,
-					concurrency: 2
-				},
-				{
 					archiveUrl: 'https://active.example',
 					status: 'scanning',
 					claimedAt: '2026-07-03T11:30:00.000Z',
@@ -124,9 +111,26 @@ describe('GetArchiveScanWorkers', () => {
 					latestAttemptedLedger: null,
 					latestScannedLedger: 0,
 					concurrency: null
+				},
+				{
+					archiveUrl: 'https://stale.example',
+					status: 'stale',
+					claimedAt: '2026-07-03T10:30:00.000Z',
+					lastHeartbeatAt: '2026-07-03T11:00:00.000Z',
+					heartbeatAgeMs: 3600000,
+					fromLedger: 0,
+					currentRangeFromLedger: null,
+					currentRangeToLedger: null,
+					toLedger: null,
+					latestAttemptedLedger: null,
+					latestScannedLedger: 0,
+					concurrency: 2
 				}
 			]
 		});
+		expect(scanJobRepositoryMock.releaseStaleTakenJobs).toHaveBeenCalledWith(
+			new Date('2026-07-03T11:30:00.000Z')
+		);
 		expect(scanJobRepositoryMock.getTakenJobsSnapshot).toHaveBeenCalledWith(
 			new Date('2026-07-03T11:30:00.000Z'),
 			50
@@ -135,7 +139,7 @@ describe('GetArchiveScanWorkers', () => {
 
 	it('should log and return repository errors', async () => {
 		const error = new Error('database unavailable');
-		scanJobRepositoryMock.getTakenJobsSnapshot.mockRejectedValue(error);
+		scanJobRepositoryMock.releaseStaleTakenJobs.mockRejectedValue(error);
 
 		const result = await getArchiveScanWorkers.execute();
 

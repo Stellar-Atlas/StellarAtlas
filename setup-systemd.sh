@@ -32,17 +32,14 @@ sudo systemctl daemon-reload
 sudo systemctl disable --now stellaratlas.service 2>/dev/null || true
 sudo systemctl mask stellaratlas.service 2>/dev/null || true
 sudo systemctl enable --now stellaratlas.target
-sudo systemctl enable --now stellaratlas-scp-live-scanner.service
 
 cat <<'EOF'
 Linked split StellarAtlas services to repo unit templates.
 
 Production:
   systemctl status stellaratlas.target
-  systemctl restart stellaratlas-api.service
-  systemctl restart stellaratlas-frontend-v4.service
-  systemctl restart stellaratlas-scp-live-scanner.service
-  systemctl restart stellaratlas-history-scanner@1.service
+  systemctl daemon-reload
+  systemctl restart stellaratlas.target
 
 Local full-history services, after binaries/config/DB exist:
   systemctl start stellaratlas-horizon.service

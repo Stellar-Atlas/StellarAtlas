@@ -11,8 +11,9 @@ const createDummyHistoryBaseUrl = () => {
 	return url.value;
 };
 
-it('should start new scans for newly detected archives', function () {
-	const scheduler = new RestartAtLeastOneScan();
+it('should start rolling scans for newly detected archives', function () {
+	const now = new Date('2026-07-06T10:00:00.000Z');
+	const scheduler = new RestartAtLeastOneScan(24, undefined, () => now);
 	const archiveUrl1 = createDummyHistoryBaseUrl();
 	const archiveUrl2 = createDummyHistoryBaseUrl();
 
@@ -21,10 +22,14 @@ it('should start new scans for newly detected archives', function () {
 		[]
 	);
 	expect(scanJobs).toHaveLength(2);
-	expect(scanJobs.filter((scan) => scan.isNewScanChainJob())).toHaveLength(2);
+	expect(scanJobs.filter((scan) => scan.isNewScanChainJob())).toHaveLength(0);
+	expect(scanJobs.map((scan) => scan.chainInitDate?.toISOString())).toEqual([
+		now.toISOString(),
+		now.toISOString()
+	]);
 });
 
-it('should restart at least one scan, the oldest chain', async function () {
+it('should continue all known scan chains instead of restarting the oldest from genesis', async function () {
 	const scheduler = new RestartAtLeastOneScan();
 	const archiveUrl = createDummyHistoryBaseUrl();
 	const olderArchiveUrl = createDummyHistoryBaseUrl();
@@ -69,12 +74,19 @@ it('should restart at least one scan, the oldest chain', async function () {
 		previousScan.latestScannedLedgerHeaderHash
 	);
 
-	const newChainJob = scanJobs
+	const olderContinueJob = scanJobs
 		.filter((scan) => scan.url === olderArchiveUrl.value)
 		.pop() as ScanJob;
-	expect(newChainJob.isNewScanChainJob()).toBeTruthy();
-	expect(newChainJob.latestScannedLedger).toEqual(0);
-	expect(newChainJob.latestScannedLedgerHeaderHash).toBeNull();
+	expect(olderContinueJob.isNewScanChainJob()).toBeFalsy();
+	expect(olderContinueJob.chainInitDate?.getTime()).toEqual(
+		olderPreviousScan.scanChainInitDate.getTime()
+	);
+	expect(olderContinueJob.latestScannedLedger).toEqual(
+		olderPreviousScan.latestScannedLedger
+	);
+	expect(olderContinueJob.latestScannedLedgerHeaderHash).toEqual(
+		olderPreviousScan.latestScannedLedgerHeaderHash
+	);
 });
 
 it('should only schedule valid history urls', () => {

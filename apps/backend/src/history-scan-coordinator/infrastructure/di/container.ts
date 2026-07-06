@@ -34,6 +34,10 @@ import type { ParsedLedgerHeaderRepository } from '../../domain/parsed-history/P
 import { TypeOrmParsedLedgerHeaderRepository } from '../repositories/database/TypeOrmParsedLedgerHeaderRepository.js';
 import { ParsedLedgerHeader } from '../database/entities/ParsedLedgerHeader.js';
 import { BackfillArchiveMetadata } from '../../use-cases/backfill-archive-metadata/BackfillArchiveMetadata.js';
+import type { HistoryArchiveStateRepository } from '../../domain/history-archive-state/HistoryArchiveStateRepository.js';
+import { TypeOrmHistoryArchiveStateRepository } from '../repositories/database/TypeOrmHistoryArchiveStateRepository.js';
+import { HistoryArchiveStateSnapshot } from '../../domain/history-archive-state/HistoryArchiveStateSnapshot.js';
+import { GetHistoryArchiveState } from '../../use-cases/get-history-archive-state/GetHistoryArchiveState.js';
 
 export function load(container: Container, config: Config) {
 	const dataSource = container.get(DataSource);
@@ -44,6 +48,7 @@ export function load(container: Container, config: Config) {
 	container.bind(GetArchiveScans).toSelf();
 	container.bind(GetArchiveScanQueue).toSelf();
 	container.bind(GetArchiveScanWorkers).toSelf();
+	container.bind(GetHistoryArchiveState).toSelf();
 	container.bind(GetScannerMetrics).toSelf();
 	container.bind(BackfillArchiveMetadata).toSelf();
 	container.bind(RegisterCommunityScanner).toSelf();
@@ -87,6 +92,15 @@ export function load(container: Container, config: Config) {
 		.toDynamicValue(() => {
 			return new TypeOrmHistoryArchiveScanResultRepository(
 				dataSource.getRepository(Scan)
+			);
+		})
+		.inRequestScope();
+
+	container
+		.bind<HistoryArchiveStateRepository>(TYPES.HistoryArchiveStateRepository)
+		.toDynamicValue(() => {
+			return new TypeOrmHistoryArchiveStateRepository(
+				dataSource.getRepository(HistoryArchiveStateSnapshot)
 			);
 		})
 		.inRequestScope();

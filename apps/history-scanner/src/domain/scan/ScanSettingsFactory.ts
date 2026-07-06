@@ -51,6 +51,7 @@ export class ScanSettingsFactory {
 		const latestLedgerHeader = this.determineLatestLedgerHeader(
 			scanJob,
 			toLedger,
+			fromLedger,
 			isSlowArchive
 		);
 
@@ -102,7 +103,10 @@ export class ScanSettingsFactory {
 	): Promise<
 		Result<{ concurrency: number; isSlowArchive: boolean | null }, ScanError>
 	> {
-		if (scanJob.concurrency !== 0) {
+		if (
+			scanJob.concurrency !== 0 &&
+			!this.shouldRecoverOversizedCoordinatorJob(scanJob, toLedger)
+		) {
 			return ok({
 				concurrency: this.clampConcurrency(scanJob.concurrency),
 				isSlowArchive: null
@@ -134,9 +138,9 @@ export class ScanSettingsFactory {
 	}
 
 	private createPerformanceConcurrencyRange(): number[] {
-		return [24, 16, 12, 8, 4, 1].filter(
-			(concurrency) => concurrency <= this.maxConcurrency
-		);
+		return Array.from(
+			new Set([this.maxConcurrency, 24, 16, 12, 8, 4, 2, 1])
+		).filter((concurrency) => concurrency <= this.maxConcurrency);
 	}
 
 	private clampConcurrency(concurrency: number): number {
@@ -146,12 +150,10 @@ export class ScanSettingsFactory {
 	private determineLatestLedgerHeader(
 		scanJob: ScanJob,
 		toLedger: number,
+		fromLedger: number,
 		isSlowArchive: boolean | null
 	): { ledger: number; hash: string | null } {
-		if (
-			isSlowArchive &&
-			this.slowArchiveExceedsMaxLedgersToScan(toLedger, scanJob)
-		)
+		if (fromLedger > scanJob.fromLedger)
 			return {
 				ledger: 0,
 				hash: null
@@ -167,20 +169,43 @@ export class ScanSettingsFactory {
 		toLedger: number,
 		isSlowArchive: boolean | null
 	) {
-		if (isSlowArchive)
-			return this.slowArchiveExceedsMaxLedgersToScan(toLedger, scanJob)
-				? toLedger - this.slowArchiveMaxNumberOfLedgersToScan
-				: scanJob.fromLedger;
+		if (
+			this.scanExceedsMaxLedgersToScan(toLedger, scanJob) &&
+			(this.shouldTreatAsRollingLiveJob(scanJob) || isSlowArchive === true)
+		) {
+			return Math.max(0, toLedger - this.slowArchiveMaxNumberOfLedgersToScan);
+		}
 
 		return scanJob.fromLedger;
 	}
 
-	private slowArchiveExceedsMaxLedgersToScan(
+	private scanExceedsMaxLedgersToScan(
 		toLedger: number,
 		scanJob: ScanJob
 	) {
 		return (
 			toLedger - scanJob.fromLedger >= this.slowArchiveMaxNumberOfLedgersToScan
+		);
+	}
+
+	private shouldTreatAsRollingLiveJob(scanJob: ScanJob): boolean {
+		return (
+			scanJob.toLedger === null ||
+			this.shouldRecoverOversizedCoordinatorJob(scanJob)
+		);
+	}
+
+	private shouldRecoverOversizedCoordinatorJob(
+		scanJob: ScanJob,
+		toLedger?: number
+	): boolean {
+		const oversized =
+			toLedger === undefined || this.scanExceedsMaxLedgersToScan(toLedger, scanJob);
+		return (
+			oversized &&
+			scanJob.remoteId !== null &&
+			scanJob.latestScannedLedger === 0 &&
+			scanJob.fromLedger === 0
 		);
 	}
 

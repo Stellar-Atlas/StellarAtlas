@@ -7,6 +7,7 @@ import {
 	fetchHistoryArchiveScan,
 	fetchHistoryArchiveScanEvidence,
 	fetchHistoryArchiveScanLogs,
+	fetchHistoryArchiveState,
 	fetchPublicNetwork
 } from '@api/client';
 import { PageHeading } from '@components/layout/page-heading';
@@ -48,16 +49,22 @@ async function NodeDetailRouteContent({
 			(candidate) => candidate.organization
 		)
 	};
-	const [historyArchiveScan, historyArchiveScanLogs, historyArchiveEvidence] =
+	const [
+		historyArchiveScan,
+		historyArchiveScanLogs,
+		historyArchiveEvidence,
+		historyArchiveState
+	] =
 		node?.historyUrl
 			? await Promise.all([
 					fetchHistoryArchiveScan(node.historyUrl, { revalidate }),
 					fetchHistoryArchiveScanLogs(node.historyUrl, { revalidate }),
 					fetchHistoryArchiveScanEvidence(node.historyUrl, 500, {
 						revalidate
-					})
+					}),
+					fetchHistoryArchiveState(node.historyUrl, { revalidate })
 				])
-			: [null, [], null];
+			: [null, [], null, null];
 	const organization = node
 		? getOrganizationForNode(inventoryNetwork, node)
 		: null;
@@ -73,6 +80,7 @@ async function NodeDetailRouteContent({
 				historyArchiveEvidence={historyArchiveEvidence}
 				historyArchiveScan={historyArchiveScan}
 				historyArchiveScanLogs={historyArchiveScanLogs}
+				historyArchiveState={historyArchiveState}
 				knownNode={knownNode}
 				network={inventoryNetwork}
 				node={node}

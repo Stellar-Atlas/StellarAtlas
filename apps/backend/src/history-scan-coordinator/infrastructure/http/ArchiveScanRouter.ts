@@ -3,6 +3,7 @@ import { param, query, validationResult } from 'express-validator';
 import {
 	handleGetArchiveScanEvidence,
 	handleGetArchiveScanLogs,
+	handleGetHistoryArchiveState,
 	handleGetLatestArchiveScan
 } from './HistoryArchiveScanReadHandlers.js';
 import { GetArchiveScans } from '../../use-cases/get-archive-scans/GetArchiveScans.js';
@@ -14,11 +15,13 @@ import {
 	maxEvidenceLimit
 } from '../../use-cases/get-scan-evidence/GetScanEvidence.js';
 import { GetScanLogs } from '../../use-cases/get-scan-logs/GetScanLogs.js';
+import { GetHistoryArchiveState } from '../../use-cases/get-history-archive-state/GetHistoryArchiveState.js';
 
 export interface ArchiveScanRouterConfig {
 	getArchiveScans: GetArchiveScans;
 	getArchiveScanQueue: GetArchiveScanQueue;
 	getArchiveScanWorkers: GetArchiveScanWorkers;
+	getHistoryArchiveState: GetHistoryArchiveState;
 	getLatestScan: GetLatestScan;
 	getScanEvidence: GetScanEvidence;
 	getScanLogs: GetScanLogs;
@@ -88,6 +91,14 @@ export const ArchiveScanRouterWrapper = (
 
 		return res.status(200).json(workersOrError.value);
 	});
+
+	archiveScanRouter.get(
+		'/:encodedUrl/state',
+		[param('encodedUrl').isURL()],
+		async function (req: express.Request, res: express.Response) {
+			return handleGetHistoryArchiveState(req, res, config, 'encodedUrl');
+		}
+	);
 
 	archiveScanRouter.get(
 		'/:encodedUrl/errors',

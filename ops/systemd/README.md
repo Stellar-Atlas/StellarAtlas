@@ -17,12 +17,12 @@ that all run as `observe`, not root.
 - `stellaratlas-scp-live-scanner.service` continuously indexes live SCP
   observations into the live search read model.
 - `stellaratlas-history-scanner@.service` runs a bounded history-scanner process
-  cluster. The production template sets `HISTORY_SCAN_PROCESSES=24`,
+  cluster. The current stopgap template sets `HISTORY_SCAN_PROCESSES=12`,
   `HISTORY_MAX_REQUESTS=24`, and `HISTORY_HASHER_WORKERS=24`; the cluster
   wrapper partitions those totals across child processes and forces each child
-  to one scanner loop. The service command repeats those caps through
-  `/usr/bin/env` so stale values in `/etc/stellaratlas/stellaratlas.env` cannot
-  turn the production template back into a single-process scanner.
+  to one scanner loop. This is a temporary range-scanner runtime until the
+  object-level scheduler replaces it with separate durable fetch and
+  verification worker pools.
 - `stellaratlas-users.service` runs the user/mail service.
 
 ## Optional full-history services
@@ -87,14 +87,17 @@ only contains symlinks that systemd requires for system units. The script also
 installs the polkit rule, disables and masks the old root-run all-in-one
 `stellaratlas.service`, reloads systemd, and starts `stellaratlas.target`.
 
-After this migration, editing `ops/systemd/*.service` is enough. Reload and
-restart without sudo:
+After this migration, editing `ops/systemd/*.service` is enough. Production
+split units use `PartOf=stellaratlas.target`, so target restarts propagate to
+the API, frontend, legacy frontend, network scanner, SCP collector, users
+service, and `history-scanner@1` without using the old monolithic
+`stellaratlas.service`.
+
+Reload and restart the production service set without sudo:
 
 ```bash
 systemctl daemon-reload
-systemctl restart stellaratlas-api.service
-systemctl restart stellaratlas-scp-live-scanner.service
-systemctl restart stellaratlas-history-scanner@1.service
+systemctl restart stellaratlas.target
 ```
 
 Production frontend deploy:
@@ -118,7 +121,7 @@ Backend/API deploy:
 ```bash
 pnpm build:api
 systemctl daemon-reload
-systemctl restart stellaratlas-api.service
+systemctl restart stellaratlas.target
 ```
 
 Live SCP collector deploy:
@@ -126,7 +129,7 @@ Live SCP collector deploy:
 ```bash
 pnpm build:scp-live-scanner
 systemctl daemon-reload
-systemctl restart stellaratlas-scp-live-scanner.service
+systemctl restart stellaratlas.target
 systemctl status stellaratlas-scp-live-scanner.service --no-pager
 ```
 

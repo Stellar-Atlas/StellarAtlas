@@ -2,7 +2,8 @@ import type {
 	PublicHistoryArchiveScan,
 	PublicHistoryArchiveScanEvidence,
 	PublicHistoryArchiveScanLogEntry,
-	PublicHistoryArchiveScanLogError
+	PublicHistoryArchiveScanLogError,
+	PublicHistoryArchiveState
 } from '@api/types';
 import { HistoryArchiveScanLog } from '@components/nodes/history-archive-scan-log';
 import { StatusPill } from '@components/status/status-ui';
@@ -19,13 +20,15 @@ interface ArchiveScanDetailProps {
 	readonly historyUrl: string;
 	readonly logs: readonly PublicHistoryArchiveScanLogEntry[];
 	readonly scan: PublicHistoryArchiveScan | null;
+	readonly state: PublicHistoryArchiveState | null;
 }
 
 export function ArchiveScanDetail({
 	evidence,
 	historyUrl,
 	logs,
-	scan
+	scan,
+	state
 }: ArchiveScanDetailProps): React.JSX.Element {
 	const archiveErrors = getArchiveVerificationErrors(scan?.errors ?? []);
 	const workerIssues = getWorkerIssues(scan?.errors ?? []);
@@ -92,7 +95,7 @@ export function ArchiveScanDetail({
 				<div className="panel-heading">
 					<h2>Scanner metadata and evidence</h2>
 				</div>
-				<ArchiveMetadata scan={scan} />
+				<ArchiveMetadata historyUrl={historyUrl} scan={scan} state={state} />
 				<EvidenceList
 					errors={archiveErrors}
 					emptyText="No archive verification errors are recorded for this archive."
@@ -119,13 +122,23 @@ export function ArchiveScanDetail({
 }
 
 function ArchiveMetadata({
-	scan
+	historyUrl,
+	scan,
+	state
 }: {
+	readonly historyUrl: string;
 	readonly scan: PublicHistoryArchiveScan | null;
+	readonly state: PublicHistoryArchiveState | null;
 }): React.JSX.Element {
 	const archiveMetadata = scan?.archiveMetadata ?? null;
 
-	return <HistoryArchiveStateDocument archiveMetadata={archiveMetadata} />;
+	return (
+		<HistoryArchiveStateDocument
+			archiveState={state}
+			archiveMetadata={archiveMetadata}
+			archiveUrl={historyUrl}
+		/>
+	);
 }
 
 function EvidenceList({

@@ -8,7 +8,7 @@ import type { ScanRepository } from '@history-scan-coordinator/domain/scan/ScanR
 import { TYPES as HISTORY_TYPES } from '@history-scan-coordinator/infrastructure/di/di-types.js';
 import type { NetworkScanRepository } from '@network-scan/domain/network/scan/NetworkScanRepository.js';
 import { NETWORK_TYPES } from '@network-scan/infrastructure/di/di-types.js';
-import { getWorstStatus, type StatusLevel } from '../../domain/StatusTypes.js';
+import type { StatusLevel } from '../../domain/StatusTypes.js';
 
 export interface FreshnessProbeDTO {
 	readonly status: StatusLevel;
@@ -60,7 +60,7 @@ export class GetDataFreshnessStatus {
 
 			return ok({
 				generatedAt: generatedAt.toISOString(),
-				status: getWorstStatus([networkScan.status, archiveScan.status]),
+				status: networkScan.status,
 				networkScan,
 				archiveScan
 			});

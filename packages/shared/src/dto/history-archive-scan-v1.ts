@@ -30,7 +30,7 @@ export interface HistoryArchiveStateV1 {
 	readonly version: number;
 	readonly server: string;
 	readonly currentLedger: number;
-	readonly networkPassphrase?: string;
+	readonly networkPassphrase?: string | null;
 	readonly currentBuckets: readonly HistoryStateBucketV1[];
 	readonly hotArchiveBuckets?: readonly HistoryStateBucketV1[];
 }
@@ -40,11 +40,11 @@ export interface HistoryStateBucketV1 {
 	readonly snap: string;
 	readonly next: {
 		readonly state: number;
-		readonly output?: string;
+		readonly output?: string | null;
 	};
 }
 
-const HistoryStateBucketV1Schema: JSONSchemaType<HistoryStateBucketV1> = {
+export const HistoryStateBucketV1Schema: JSONSchemaType<HistoryStateBucketV1> = {
 	type: 'object',
 	properties: {
 		curr: {
@@ -71,6 +71,37 @@ const HistoryStateBucketV1Schema: JSONSchemaType<HistoryStateBucketV1> = {
 	required: ['curr', 'snap', 'next'],
 	additionalProperties: false
 };
+
+export const HistoryArchiveStateV1Schema: JSONSchemaType<HistoryArchiveStateV1> =
+	{
+		type: 'object',
+		properties: {
+			version: {
+				type: 'number'
+			},
+			server: {
+				type: 'string'
+			},
+			currentLedger: {
+				type: 'number'
+			},
+			networkPassphrase: {
+				type: 'string',
+				nullable: true
+			},
+			currentBuckets: {
+				type: 'array',
+				items: HistoryStateBucketV1Schema
+			},
+			hotArchiveBuckets: {
+				type: 'array',
+				nullable: true,
+				items: HistoryStateBucketV1Schema
+			}
+		},
+		required: ['version', 'server', 'currentLedger', 'currentBuckets'],
+		additionalProperties: false
+	};
 
 export const HistoryArchiveScanV1Schema: JSONSchemaType<HistoryArchiveScanV1> =
 	{
@@ -128,35 +159,7 @@ export const HistoryArchiveScanV1Schema: JSONSchemaType<HistoryArchiveScanV1> =
 					stellarHistoryUrl: {
 						type: 'string'
 					},
-					stellarHistory: {
-						type: 'object',
-						properties: {
-							version: {
-								type: 'number'
-							},
-							server: {
-								type: 'string'
-							},
-							currentLedger: {
-								type: 'number'
-							},
-							networkPassphrase: {
-								type: 'string',
-								nullable: true
-							},
-							currentBuckets: {
-								type: 'array',
-								items: HistoryStateBucketV1Schema
-							},
-							hotArchiveBuckets: {
-								type: 'array',
-								nullable: true,
-								items: HistoryStateBucketV1Schema
-							}
-						},
-						required: ['version', 'server', 'currentLedger', 'currentBuckets'],
-						additionalProperties: false
-					},
+					stellarHistory: HistoryArchiveStateV1Schema,
 					observedAt: {
 						format: 'date-time',
 						type: 'string'

@@ -3,6 +3,7 @@ Description=StellarAtlas API
 Documentation=https://github.com/Stellar-Atlas/StellarAtlas
 Wants=network-online.target
 After=network-online.target
+PartOf=stellaratlas.target
 Conflicts=stellaratlas.service
 
 [Service]

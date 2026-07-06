@@ -1,10 +1,7 @@
-import { Url } from 'http-helper';
+import { normalizeHistoryArchiveRootUrl } from 'shared';
 
 export function parseHistoryArchiveUrl(url: string): string | null {
-	const result = Url.create(url.trim());
-	if (result.isErr()) return null;
-
-	return trimTrailingSlashes(result.value.value);
+	return normalizeHistoryArchiveRootUrl(url);
 }
 
 export function getHistoryArchiveUrlIdentity(url: string): string | null {
@@ -25,8 +22,4 @@ export function uniqueHistoryArchiveUrls(urls: readonly string[]): string[] {
 	}
 
 	return Array.from(uniqueUrls.values());
-}
-
-function trimTrailingSlashes(value: string): string {
-	return value.replace(/\/+$/, '');
 }

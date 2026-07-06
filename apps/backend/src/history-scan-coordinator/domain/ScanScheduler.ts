@@ -107,20 +107,12 @@ export class RestartAtLeastOneScan implements ScanScheduler {
 		);
 
 		const scanJobs: ScanJob[] = [...errorRecheckJobs];
-		//we want to start at least one scan from the very beginning
-		let hasAtLeastOneInitScan = false;
 		archivesSortedByInitDate.forEach((archive) => {
-			if (!hasAtLeastOneInitScan) {
-				hasAtLeastOneInitScan = true;
-				scanJobs.push(new ScanJob(archive));
-				return;
-			}
-
 			const previousScan = previousScansMap.get(
 				getHistoryArchiveUrlIdentity(archive) ?? archive
 			);
 			if (!previousScan) {
-				scanJobs.push(new ScanJob(archive));
+				scanJobs.push(this.createRollingScanJob(archive));
 			} else {
 				scanJobs.push(
 					new ScanJob(
@@ -134,6 +126,10 @@ export class RestartAtLeastOneScan implements ScanScheduler {
 		});
 
 		return scanJobs;
+	}
+
+	private createRollingScanJob(archiveUrl: string): ScanJob {
+		return new ScanJob(archiveUrl, 0, null, this.now());
 	}
 
 	private createErrorRecheckJob(previousScan: Scan): ScanJob {

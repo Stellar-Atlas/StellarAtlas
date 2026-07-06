@@ -185,6 +185,30 @@ export class TypeOrmHistoryArchiveScanResultRepository implements ScanRepository
 		return rows.map((row) => this.requireString(row.url, 'url'));
 	}
 
+	async findDiscoveredUrlsMissingArchiveState(
+		limit: number
+	): Promise<string[]> {
+		if (!Number.isSafeInteger(limit) || limit < 1) return [];
+
+		const rows = (await this.baseRepository.query(
+			`
+				select distinct regexp_replace(node_details."historyUrl", '/+$', '') as url
+				from node_details
+				left join history_archive_state_snapshot state
+					on state."archiveUrlIdentity" =
+						lower(regexp_replace(node_details."historyUrl", '/+$', ''))
+				where node_details."historyUrl" is not null
+					and trim(node_details."historyUrl") <> ''
+					and state.id is null
+				order by url
+				limit $1
+			`,
+			[limit]
+		)) as RawUrlRow[];
+
+		return rows.map((row) => this.requireString(row.url, 'url'));
+	}
+
 	async backfillSelectedArchiveMetadata(
 		url: string,
 		archiveMetadata: ArchiveMetadataDTO

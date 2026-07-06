@@ -28,11 +28,11 @@ export class GetArchiveScanQueue {
 
 	async execute(): Promise<Result<ArchiveScanQueueDTO, Error>> {
 		const generatedAt = new Date();
+		const staleCutoff = getStaleScanJobCutoff(generatedAt);
 
 		try {
-			const stats = await this.scanJobRepository.getQueueStats(
-				getStaleScanJobCutoff(generatedAt)
-			);
+			await this.scanJobRepository.releaseStaleTakenJobs(staleCutoff);
+			const stats = await this.scanJobRepository.getQueueStats(staleCutoff);
 
 			return ok({
 				...stats,

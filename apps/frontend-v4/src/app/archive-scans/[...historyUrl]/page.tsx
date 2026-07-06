@@ -3,7 +3,8 @@ import { connection } from 'next/server';
 import {
 	fetchHistoryArchiveScan,
 	fetchHistoryArchiveScanEvidence,
-	fetchHistoryArchiveScanLogs
+	fetchHistoryArchiveScanLogs,
+	fetchHistoryArchiveState
 } from '@api/client';
 import { ArchiveScanDetail } from '@components/archive-scans/archive-scan-detail';
 import { PageHeading } from '@components/layout/page-heading';
@@ -23,10 +24,11 @@ async function ArchiveScanDetailRouteContent({
 	readonly historyUrl: string;
 }): Promise<React.JSX.Element> {
 	await connection();
-	const [scan, logs, evidence] = await Promise.all([
+	const [scan, logs, evidence, state] = await Promise.all([
 		fetchHistoryArchiveScan(historyUrl, { revalidate }),
 		fetchHistoryArchiveScanLogs(historyUrl, { revalidate }),
-		fetchHistoryArchiveScanEvidence(historyUrl, 500, { revalidate })
+		fetchHistoryArchiveScanEvidence(historyUrl, 500, { revalidate }),
+		fetchHistoryArchiveState(historyUrl, { revalidate })
 	]);
 
 	return (
@@ -41,6 +43,7 @@ async function ArchiveScanDetailRouteContent({
 				historyUrl={historyUrl}
 				logs={logs}
 				scan={scan}
+				state={state}
 			/>
 		</main>
 	);

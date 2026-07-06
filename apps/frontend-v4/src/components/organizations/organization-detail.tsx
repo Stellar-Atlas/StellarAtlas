@@ -2,6 +2,7 @@ import Link from 'next/link';
 import type {
 	PublicNetwork,
 	PublicNode,
+	PublicHistoryArchiveState,
 	PublicOrganization
 } from '../../api/types';
 import {
@@ -14,17 +15,30 @@ import {
 	formatOrganization24HourAvailability,
 	formatOrganization30DayAvailability
 } from '../../domain/availability';
-import { formatBoolean } from '../../format/formatters';
+import {
+	formatBoolean,
+	formatDateTime,
+	formatInteger
+} from '../../format/formatters';
 import { StatusTags } from '../status-tags';
 
 interface OrganizationDetailProps {
+	archiveStates: readonly OrganizationArchiveState[];
 	network: PublicNetwork;
 	organization: PublicOrganization;
+	organizationNodes: readonly PublicNode[];
+}
+
+interface OrganizationArchiveState {
+	readonly historyUrl: string;
+	readonly state: PublicHistoryArchiveState | null;
 }
 
 export function OrganizationDetail({
+	archiveStates,
 	network,
-	organization
+	organization,
+	organizationNodes
 }: OrganizationDetailProps): React.JSX.Element {
 	const validators = organization.validators
 		.map((publicKey): PublicNode | null =>
@@ -86,9 +100,80 @@ export function OrganizationDetail({
 					))}
 				</div>
 			</article>
+			<OrganizationArchiveEvidence
+				archiveStates={archiveStates}
+				nodes={organizationNodes}
+			/>
 			<OrganizationTomlEvidence organization={organization} />
 		</section>
 	);
+}
+
+function OrganizationArchiveEvidence({
+	archiveStates,
+	nodes
+}: {
+	readonly archiveStates: readonly OrganizationArchiveState[];
+	readonly nodes: readonly PublicNode[];
+}): React.JSX.Element {
+	const stateByUrl = new Map(
+		archiveStates.map((entry) => [normalizeArchiveUrl(entry.historyUrl), entry])
+	);
+	const nodesWithArchives = nodes.filter((node) => node.historyUrl !== null);
+
+	return (
+		<article className="panel detail-panel archive-metadata">
+				<div className="panel-heading">
+					<h2>History archive state</h2>
+					<span className="muted-inline">
+						{formatInteger(nodesWithArchives.length)} archives
+					</span>
+				</div>
+			{nodesWithArchives.length === 0 ? (
+				<p className="muted-copy">
+					No node archive URLs are known for this organization.
+				</p>
+			) : (
+				<div className="table">
+					{nodesWithArchives.map((node) => {
+						const historyUrl = node.historyUrl ?? '';
+						const archiveState =
+							stateByUrl.get(normalizeArchiveUrl(historyUrl))?.state ?? null;
+
+						return (
+							<div className="row compact" key={`${node.publicKey}:${historyUrl}`}>
+								<div>
+									<Link href={`/nodes/${encodeURIComponent(node.publicKey)}`}>
+										<strong>{getNodeLabel(node)}</strong>
+									</Link>
+									<small>{historyUrl}</small>
+								</div>
+								<div className="metric">
+									<strong>{archiveState?.status ?? 'No state record'}</strong>
+									<small>{formatArchiveStateDetail(archiveState)}</small>
+								</div>
+							</div>
+						);
+					})}
+				</div>
+			)}
+		</article>
+	);
+}
+
+function formatArchiveStateDetail(
+	archiveState: PublicHistoryArchiveState | null
+): string {
+	if (archiveState === null) return 'Scanner has not persisted state yet';
+	if (archiveState.metadata !== null) {
+		return `ledger ${formatInteger(archiveState.metadata.stellarHistory.currentLedger)} observed ${formatDateTime(archiveState.observedAt)}`;
+	}
+
+	return archiveState.failure?.message ?? 'State fetch failed';
+}
+
+function normalizeArchiveUrl(historyUrl: string): string {
+	return historyUrl.replace(/\/+$/, '').toLowerCase();
 }
 
 function OrganizationTomlEvidence({

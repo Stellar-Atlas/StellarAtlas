@@ -1,13 +1,21 @@
-import { ok } from 'neverthrow';
+import { err, ok } from 'neverthrow';
 import { HistoryService } from '../HistoryService.js';
 import { LoggerMock } from '@core/services/__mocks__/LoggerMock.js';
-import { mock } from 'jest-mock-extended';
-import type { HttpService } from 'http-helper';
+import { mock, mockReset } from 'jest-mock-extended';
+import { HttpError, type HttpService } from 'http-helper';
 import type { HistoryArchiveScanService } from '../HistoryArchiveScanService.js';
 import { HistoryArchiveScan } from 'shared';
+import type { HistoryArchiveStateRepository } from '@history-scan-coordinator/domain/history-archive-state/HistoryArchiveStateRepository.js';
 
 const httpService = mock<HttpService>();
 const historyArchiveScanService = mock<HistoryArchiveScanService>();
+const historyArchiveStateRepository = mock<HistoryArchiveStateRepository>();
+
+beforeEach(() => {
+	mockReset(httpService);
+	mockReset(historyArchiveScanService);
+	mockReset(historyArchiveStateRepository);
+});
 
 const stellarHistoryJson =
 	'{\n' +
@@ -24,11 +32,7 @@ const stellarHistoryJson =
 	'        }]}';
 
 test('fetchStellarHistory', async () => {
-	const historyService = new HistoryService(
-		httpService,
-		historyArchiveScanService,
-		new LoggerMock()
-	);
+	const historyService = createHistoryService();
 	httpService.get.mockReturnValue(
 		new Promise((resolve) =>
 			resolve(
@@ -48,14 +52,18 @@ test('fetchStellarHistory', async () => {
 	expect(result.isOk()).toBeTruthy();
 	if (result.isErr()) return;
 	expect(result.value).toEqual(23586760);
+	expect(historyArchiveStateRepository.saveAvailable).toHaveBeenCalledWith(
+		'https://stellar.sui.li/history',
+		expect.objectContaining({
+			stellarHistoryUrl:
+				'https://stellar.sui.li/history/.well-known/stellar-history.json'
+		}),
+		'network-scan'
+	);
 });
 
 test('stellarHistoryIsUpToDate', async () => {
-	const historyService = new HistoryService(
-		httpService,
-		historyArchiveScanService,
-		new LoggerMock()
-	);
+	const historyService = createHistoryService();
 	httpService.get.mockReturnValue(
 		new Promise((resolve) =>
 			resolve(
@@ -78,11 +86,7 @@ test('stellarHistoryIsUpToDate', async () => {
 });
 
 test('stellarHistoryIsNotUpToDate', async () => {
-	const historyService = new HistoryService(
-		httpService,
-		historyArchiveScanService,
-		new LoggerMock()
-	);
+	const historyService = createHistoryService();
 	httpService.get.mockReturnValue(
 		new Promise((resolve) =>
 			resolve(
@@ -104,12 +108,30 @@ test('stellarHistoryIsNotUpToDate', async () => {
 	).toEqual(false);
 });
 
-it('should return urls with historyErrors', async function () {
-	const historyService = new HistoryService(
-		httpService,
-		historyArchiveScanService,
-		new LoggerMock()
+test('fetchStellarHistory records unreachable state fetches', async () => {
+	const historyService = createHistoryService();
+	httpService.get.mockResolvedValue(
+		err(new HttpError('connection refused', 'ECONNREFUSED'))
 	);
+
+	const result = await historyService.fetchStellarHistoryLedger(
+		'https://stellar.sui.li/history/'
+	);
+
+	expect(result.isErr()).toBeTruthy();
+	expect(historyArchiveStateRepository.saveFailure).toHaveBeenCalledWith(
+		expect.objectContaining({
+			archiveUrl: 'https://stellar.sui.li/history',
+			stateUrl: 'https://stellar.sui.li/history/.well-known/stellar-history.json',
+			status: 'unreachable',
+			errorType: 'ECONNREFUSED',
+			source: 'network-scan'
+		})
+	);
+});
+
+it('should return urls with historyErrors', async function () {
+	const historyService = createHistoryService();
 	const urlWithError = 'https://gap.co/'; //trailing slash should be removed when comparing with scan
 
 	const urlWithoutError = 'https://nogap.co';
@@ -180,3 +202,12 @@ it('should return urls with historyErrors', async function () {
 	expect(result.value.size).toEqual(1);
 	expect(result.value.has(urlWithError)).toBeTruthy();
 });
+
+function createHistoryService(): HistoryService {
+	return new HistoryService(
+		httpService,
+		historyArchiveScanService,
+		historyArchiveStateRepository,
+		new LoggerMock()
+	);
+}

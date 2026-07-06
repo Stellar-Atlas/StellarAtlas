@@ -11,6 +11,9 @@ const defaultBatchSize = 1_000;
 const defaultFlushDelayMs = 1_500;
 
 export class ScpStatementLiveStoreBuffer {
+	private aborted = false;
+	private abortFlush: () => void = () => {};
+	private readonly abortPromise: Promise<void>;
 	private buffer: CrawlerScpStatementObservation[] = [];
 	private flushPromise: Promise<void> = Promise.resolve();
 	private flushTimer: ReturnType<typeof setTimeout> | undefined;
@@ -24,9 +27,13 @@ export class ScpStatementLiveStoreBuffer {
 	) {
 		this.batchSize = options.batchSize ?? defaultBatchSize;
 		this.flushDelayMs = options.flushDelayMs ?? defaultFlushDelayMs;
+		this.abortPromise = new Promise((resolve) => {
+			this.abortFlush = resolve;
+		});
 	}
 
 	add(observation: CrawlerScpStatementObservation): void {
+		if (this.aborted) return;
 		this.buffer.push(observation);
 		if (this.buffer.length >= this.batchSize) {
 			void this.flush();
@@ -37,13 +44,19 @@ export class ScpStatementLiveStoreBuffer {
 
 	async flush(): Promise<void> {
 		this.clearFlushTimer();
+		if (this.aborted) {
+			this.buffer = [];
+			return;
+		}
+
 		const batch = this.buffer.splice(0);
 		if (batch.length === 0) {
-			await this.flushPromise;
+			await this.waitForActiveFlush();
 			return;
 		}
 
 		this.flushPromise = this.flushPromise.then(async () => {
+			if (this.aborted) return;
 			try {
 				await this.liveStore.saveMany(batch);
 			} catch (error) {
@@ -52,7 +65,15 @@ export class ScpStatementLiveStoreBuffer {
 				});
 			}
 		});
-		await this.flushPromise;
+		await this.waitForActiveFlush();
+	}
+
+	abort(): void {
+		if (this.aborted) return;
+		this.aborted = true;
+		this.buffer = [];
+		this.clearFlushTimer();
+		this.abortFlush();
 	}
 
 	private scheduleFlush(): void {
@@ -66,5 +87,10 @@ export class ScpStatementLiveStoreBuffer {
 		if (this.flushTimer === undefined) return;
 		clearTimeout(this.flushTimer);
 		this.flushTimer = undefined;
+	}
+
+	private async waitForActiveFlush(): Promise<void> {
+		if (this.aborted) return;
+		await Promise.race([this.flushPromise, this.abortPromise]);
 	}
 }

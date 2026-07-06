@@ -1,7 +1,7 @@
 import { err, ok, Result } from 'neverthrow';
 import { Scanner } from '../../domain/scanner/Scanner.js';
 import type { ExceptionLogger } from 'exception-logger';
-import { mapUnknownToError } from 'shared';
+import { mapUnknownToError, normalizeHistoryArchiveRootUrl } from 'shared';
 import { VerifySingleArchiveDTO } from './VerifySingleArchiveDTO.js';
 import { ScanJob } from '../../domain/scan/ScanJob.js';
 import { Url } from 'http-helper';
@@ -44,7 +44,12 @@ export class VerifySingleArchive {
 	private static async getArchiveUrl(
 		historyUrl: string
 	): Promise<Result<Url, Error>> {
-		const historyBaseUrl = Url.create(historyUrl);
+		const normalizedUrl = normalizeHistoryArchiveRootUrl(historyUrl);
+		if (normalizedUrl === null) {
+			return err(new Error('Invalid history archive root URL'));
+		}
+
+		const historyBaseUrl = Url.create(normalizedUrl);
 
 		if (historyBaseUrl.isErr()) {
 			return err(historyBaseUrl.error);

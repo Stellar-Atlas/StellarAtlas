@@ -107,8 +107,14 @@ export class ScheduleScanJobs {
 		this.logger.info('Scheduling new scan jobs', {
 			app: 'history-scan-coordinator',
 			historyArchiveUrls: dto.historyArchiveUrls,
-			fullScans: scanJobs
-				.filter((job) => job.chainInitDate === null)
+			rollingScans: scanJobs
+				.filter(
+					(job) =>
+						job.chainInitDate !== null &&
+						job.latestScannedLedger === 0 &&
+						job.fromLedger === null &&
+						job.toLedger === null
+				)
 				.map((job) => job.url),
 			scheduledCount,
 			duplicateSuppressedCount

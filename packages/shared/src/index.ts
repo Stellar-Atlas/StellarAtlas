@@ -40,9 +40,17 @@ export {
 } from './dto/organization-v1.js';
 export {
 	type HistoryArchiveMetadataV1,
+	type HistoryArchiveStateV1,
 	type HistoryArchiveScanV1,
 	HistoryArchiveScanV1Schema
 } from './dto/history-archive-scan-v1.js';
+export {
+	type HistoryArchiveStateFailureV1,
+	type HistoryArchiveStateSnapshotV1,
+	HistoryArchiveStateSnapshotV1Schema,
+	type HistoryArchiveStateSourceV1,
+	type HistoryArchiveStateStatusV1
+} from './dto/history-archive-state-v1.js';
 export type {
 	ScpBallotV1,
 	ScpNominationV1,
@@ -77,6 +85,7 @@ export { default as NetworkStatistics } from './network-statistics.js';
 export { default as StellarCoreConfigurationGenerator } from './stellar-core-configuration-generator.js';
 export { mapUnknownToError } from './utilities/mapUnknownToError.js';
 export { asyncSleep } from './utilities/asyncSleep.js';
+export { normalizeHistoryArchiveRootUrl } from './history-archive-url.js';
 export {
 	frontendCacheTags,
 	type FrontendCacheTag

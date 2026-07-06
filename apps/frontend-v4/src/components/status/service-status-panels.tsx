@@ -1,196 +1,109 @@
 import type {
 	PublicApiStatus,
 	PublicConfiguredServiceStatus,
-	PublicFailoverStatus,
-	PublicStatusLevel
+	PublicDataQualityStatus,
+	PublicStatusLevel,
+	PublicWorkerStatus
 } from '@api/types';
-import { formatDateTime } from '@format/formatters';
+import { formatDateTime, formatInteger } from '@format/formatters';
 import { StatusPill, StatusRow, statusLabel } from './status-ui';
 
-interface ServiceStatusPanelsProps {
+interface ProductionServiceStatusPanelProps {
 	readonly api: PublicApiStatus;
-	readonly failover: PublicFailoverStatus;
+	readonly dataQuality: PublicDataQualityStatus;
 	readonly frontend: PublicConfiguredServiceStatus;
-	readonly horizon: PublicConfiguredServiceStatus;
-	readonly rpc: PublicConfiguredServiceStatus;
+	readonly workers: PublicWorkerStatus;
 }
 
-export function ServiceStatusPanels({
+export function ProductionServiceStatusPanel({
 	api,
-	failover,
+	dataQuality,
 	frontend,
-	horizon,
-	rpc
-}: ServiceStatusPanelsProps): React.JSX.Element {
-	return (
-		<>
-			<section className="panel status-services-panel">
-				<div className="panel-heading">
-					<div>
-						<strong>Production Critical Services</strong>
-						<span>Live API status and required frontend configuration</span>
-					</div>
-					<StatusPill status={criticalServiceStatus(api, frontend)} />
-				</div>
-				<div className="status-list">
-					<StatusRow
-						detail={formatDateTime(api.generatedAt)}
-						label="API origin"
-						status={api.status}
-						value={statusLabel(api.status)}
-					/>
-					<ServiceRow required service={frontend} />
-				</div>
-			</section>
-
-			<section className="panel status-services-panel">
-				<div className="panel-heading">
-					<div>
-						<strong>Roadmap And Optional Services</strong>
-						<span>Not counted as production outages unless configured</span>
-					</div>
-					<StatusPill status={roadmapServiceStatus([horizon, rpc], failover)} />
-				</div>
-				<div className="status-list">
-					<ServiceRow service={horizon} />
-					<ServiceRow service={rpc} />
-					<FailoverRow failover={failover} />
-				</div>
-			</section>
-		</>
-	);
-}
-
-function ServiceRow({
-	required = false,
-	service
-}: {
-	readonly required?: boolean;
-	readonly service: PublicConfiguredServiceStatus;
-}): React.JSX.Element {
-	if (service.readiness === 'external_fallback') {
-		return (
-			<StatusRow
-				detail={`External public fallback only; no StellarAtlas-owned target or live probe is deployed. Target ${service.url ?? 'unknown'}`}
-				label={serviceLabel(service.service)}
-				pillText="Fallback"
-				status="ok"
-				value="External fallback"
-			/>
-		);
-	}
-
-	if (!service.configured && !required) {
-		return (
-			<StatusRow
-				detail="Roadmap service is not deployed for this environment; probe:not_run is expected."
-				label={serviceLabel(service.service)}
-				pillText="Planned"
-				status="ok"
-				value="Not deployed"
-			/>
-		);
-	}
-
-	if (!service.configured) {
-		return (
-			<StatusRow
-				detail="Required production target is not configured; probe:not_run."
-				label={serviceLabel(service.service)}
-				pillText="Config missing"
-				status="unavailable"
-				value="Missing"
-			/>
-		);
-	}
+	workers
+}: ProductionServiceStatusPanelProps): React.JSX.Element {
+	const networkScan = dataQuality.dataFreshness.networkScan;
+	const archiveQueue = dataQuality.archiveQueue;
+	const archiveWorkerStatus = getWorstStatus([
+		workers.archiveWorkers.status,
+		archiveQueue.status
+	]);
 
 	return (
-		<StatusRow
-			detail={formatConfiguredServiceDetail(service)}
-			label={serviceLabel(service.service)}
-			pillText="probe:not_run"
-			status="ok"
-			value="Configured"
-		/>
-	);
-}
-
-function FailoverRow({
-	failover
-}: {
-	readonly failover: PublicFailoverStatus;
-}): React.JSX.Element {
-	if (!failover.configured) {
-		return (
-			<StatusRow
-				detail="Optional failover target is not configured; probe:not_run is expected."
-				label="Failover"
-				pillText="Optional"
-				status="ok"
-				value="Not configured"
-			/>
-		);
-	}
-
-	return (
-		<StatusRow
-			detail={`Configuration only; probe:not_run. ${formatFailoverTarget(failover)}`}
-			label="Failover"
-			pillText="probe:not_run"
-			status="ok"
-			value={failover.complete ? 'Complete' : 'Partial'}
-		/>
+		<section className="panel status-services-panel">
+			<div className="panel-heading">
+				<div>
+					<strong>Production Critical Services</strong>
+					<span>Frontend, API, network scanner, and archive worker runtime</span>
+				</div>
+				<StatusPill
+					status={criticalServiceStatus(
+						api,
+						frontend,
+						networkScan.status,
+						archiveWorkerStatus
+					)}
+				/>
+			</div>
+			<div className="status-list">
+				<StatusRow
+					detail={formatDateTime(api.generatedAt)}
+					label="API origin"
+					status={api.status}
+					value={statusLabel(api.status)}
+				/>
+				<StatusRow
+					detail="This page rendered from the production frontend."
+					label="Frontend"
+					status={frontend.configured ? 'ok' : 'unavailable'}
+					value={frontend.configured ? 'Online' : 'Missing'}
+				/>
+				<StatusRow
+					detail={`Latest successful scan ${formatFreshness(networkScan.latestAt, networkScan.ageMs)}`}
+					label="Network scanner"
+					status={networkScan.status}
+					value={statusLabel(networkScan.status)}
+				/>
+				<StatusRow
+					detail={`${formatInteger(workers.archiveWorkers.activeWorkers)} active worker leases, ${formatInteger(workers.archiveWorkers.staleWorkers)} stale; ${formatInteger(archiveQueue.pendingJobs)} queued`}
+					label="Archive scanner"
+					status={archiveWorkerStatus}
+					value={`${formatInteger(workers.archiveWorkers.totalTakenJobs)} claimed`}
+				/>
+			</div>
+		</section>
 	);
 }
 
 export function criticalServiceStatus(
 	api: PublicApiStatus,
-	frontend: PublicConfiguredServiceStatus
+	frontend: PublicConfiguredServiceStatus,
+	networkScannerStatus: PublicStatusLevel,
+	archiveScannerStatus: PublicStatusLevel
 ): PublicStatusLevel {
 	const statuses: PublicStatusLevel[] = [
 		api.status,
-		frontend.configured ? frontend.status : 'unavailable'
+		frontend.configured ? 'ok' : 'unavailable',
+		networkScannerStatus,
+		archiveScannerStatus
 	];
-	if (statuses.every((status) => status === 'ok')) return 'ok';
-	if (statuses.every((status) => status === 'unavailable')) {
-		return 'unavailable';
-	}
-	return 'degraded';
+	return getWorstStatus(statuses);
 }
 
-function roadmapServiceStatus(
-	services: readonly PublicConfiguredServiceStatus[],
-	failover: PublicFailoverStatus
-): PublicStatusLevel {
-	if (
-		services.some(
-			(service) => service.configured && service.status === 'unavailable'
-		) ||
-		(failover.configured && failover.status === 'unavailable')
-	) {
-		return 'unavailable';
-	}
+function getWorstStatus(statuses: readonly PublicStatusLevel[]): PublicStatusLevel {
+	if (statuses.some((status) => status === 'unavailable')) return 'unavailable';
+	if (statuses.some((status) => status === 'degraded')) return 'degraded';
 	return 'ok';
 }
 
-function formatConfiguredServiceDetail(
-	service: PublicConfiguredServiceStatus
-): string {
-	const target = service.url ?? 'configured target';
-	return `Configuration only; probe:not_run. Target ${target}`;
+function formatFreshness(latestAt: string | null, ageMs: number | null): string {
+	if (latestAt === null) return 'not recorded';
+	return `${formatDateTime(latestAt)} (${formatDuration(ageMs)})`;
 }
 
-function formatFailoverTarget(failover: PublicFailoverStatus): string {
-	if (failover.complete) return `${failover.frontendUrl} + ${failover.apiUrl}`;
-	return failover.frontendUrl ?? failover.apiUrl ?? 'Partial target';
-}
-
-function serviceLabel(
-	service: PublicConfiguredServiceStatus['service']
-): string {
-	if (service === 'frontend') return 'Frontend';
-	if (service === 'horizon') return 'Horizon';
-	if (service === 'rpc') return 'RPC';
-	const exhaustive: never = service;
-	return exhaustive;
+function formatDuration(value: number | null): string {
+	if (value === null) return 'age unknown';
+	const minutes = Math.round(value / 60000);
+	if (minutes < 1) return '<1 min old';
+	if (minutes < 60) return `${formatInteger(minutes)} min old`;
+	return `${formatInteger(Math.round(minutes / 60))} hr old`;
 }

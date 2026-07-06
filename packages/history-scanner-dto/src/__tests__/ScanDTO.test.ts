@@ -92,6 +92,56 @@ describe('ScanDTO', () => {
 			expect(dto.isSlowArchive).toBeNull();
 		});
 
+		it('should parse archive metadata with nullable history archive state fields', () => {
+			const json = {
+				startDate: '2024-01-01T00:00:00.000Z',
+				endDate: '2024-01-01T01:00:00.000Z',
+				baseUrl: 'https://history.stellar.org',
+				scanChainInitDate: '2024-01-01T00:00:00.000Z',
+				fromLedger: 1,
+				toLedger: 100,
+				latestVerifiedLedger: 90,
+				latestScannedLedger: 95,
+				latestScannedLedgerHeaderHash: 'hash123',
+				concurrency: 5,
+				isSlowArchive: false,
+				error: null,
+				errors: [],
+				archiveMetadata: {
+					stellarHistoryUrl:
+						'https://history.stellar.org/.well-known/stellar-history.json',
+					stellarHistory: {
+						version: 1,
+						server: 'stellar-core',
+						currentLedger: 100,
+						networkPassphrase: null,
+						currentBuckets: [
+							{
+								curr: 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=',
+								snap: 'BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB=',
+								next: { state: 0, output: null }
+							}
+						]
+					},
+					observedAt: '2024-01-01T00:00:00.000Z'
+				},
+				evidence: [],
+				scanJobRemoteId: 'test'
+			};
+
+			const result = ScanDTO.fromJSON(json);
+			expect(result.isOk()).toBe(true);
+			if (!result.isOk()) throw result.error;
+
+			expect(
+				result.value.archiveMetadata?.stellarHistory.networkPassphrase
+			).toBeNull();
+			expect(
+				result.value.archiveMetadata?.stellarHistory.currentBuckets[0]?.next
+					.output
+			).toBeNull();
+		});
+
 		it('should parse JSON with error object', () => {
 			const json = {
 				startDate: '2024-01-01T00:00:00.000Z',

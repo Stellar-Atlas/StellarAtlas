@@ -166,6 +166,60 @@ it('should continue scanning after range errors without advancing verified ledge
 	expect(scan.latestScannedLedgerHeaderHash).toEqual(null);
 });
 
+it('should not advance contiguous progress when settings intentionally skip an older range', async () => {
+	const rangeScanner = mock<RangeScanner>();
+	rangeScanner.scan.mockResolvedValue(
+		ok({
+			latestLedgerHeader: { ledger: 1000, hash: 'ledger_hash_1000' },
+			scannedBucketHashes: new Set(['a']),
+			verifiedBucketHashes: new Set(['a']),
+			errors: []
+		})
+	);
+	const settingsFactory = mock<ScanSettingsFactory>();
+	settingsFactory.determineSettings.mockResolvedValue(
+		ok({
+			archiveMetadata: undefined,
+			concurrency: 1,
+			errors: [],
+			fromLedger: 900,
+			isSlowArchive: false,
+			latestScannedLedger: 0,
+			latestScannedLedgerHeaderHash: null,
+			toLedger: 1000
+		})
+	);
+	const scanner = new Scanner(
+		rangeScanner,
+		settingsFactory,
+		mock<Logger>(),
+		mock<ExceptionLogger>(),
+		100
+	);
+	const progressReports: unknown[] = [];
+
+	const scanJob = ScanJob.newScanChain(createDummyHistoryBaseUrl(), 0, 1000, 1);
+	const scan = await scanner.perform(
+		new Date(),
+		scanJob,
+		undefined,
+		async (progress) => {
+			progressReports.push(progress);
+		}
+	);
+
+	expect(rangeScanner.scan).toHaveBeenCalledTimes(1);
+	expect(scan.error).toBeNull();
+	expect(scan.errors).toEqual([]);
+	expect(scan.latestScannedLedger).toEqual(0);
+	expect(scan.latestScannedLedgerHeaderHash).toEqual(null);
+	expect(progressReports).toContainEqual({
+		currentRangeFromLedger: 900,
+		currentRangeToLedger: 1000,
+		latestAttemptedLedger: 1000
+	});
+});
+
 it('should report attempted range progress separately from verified progress', async () => {
 	const rangeScanner = mock<RangeScanner>();
 	const firstError = new ScanError(

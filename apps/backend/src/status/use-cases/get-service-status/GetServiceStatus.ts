@@ -61,8 +61,8 @@ export class GetHorizonStatus {
 
 		return ok(
 			mapConfiguredServiceStatus('horizon', horizonUrl, {
-				reportConfiguredAsOk: false,
-				requiredForProduction: true
+				reportConfiguredAsOk: true,
+				requiredForProduction: false
 			})
 		);
 	}
@@ -75,8 +75,8 @@ export class GetRpcStatus {
 	execute(): Result<ConfiguredServiceStatusDTO, Error> {
 		return ok(
 			mapConfiguredServiceStatus('rpc', this.config.rpcUrl?.value, {
-				reportConfiguredAsOk: false,
-				requiredForProduction: this.config.rpcUrl !== undefined
+				reportConfiguredAsOk: true,
+				requiredForProduction: false
 			})
 		);
 	}
@@ -94,7 +94,7 @@ export class GetFailoverStatus {
 
 		return ok({
 			generatedAt: new Date().toISOString(),
-			status: complete ? 'ok' : configured ? 'degraded' : 'unavailable',
+			status: 'ok',
 			service: 'failover',
 			configured,
 			complete,
@@ -122,7 +122,7 @@ function mapConfiguredServiceStatus(
 				: 'degraded'
 			: options.requiredForProduction
 				? 'unavailable'
-				: 'degraded',
+				: 'ok',
 		service,
 		configured,
 		configurationState: configured ? 'configured' : 'not_configured',
@@ -140,7 +140,7 @@ function mapExternalFallbackStatus(
 ): ConfiguredServiceStatusDTO {
 	return {
 		generatedAt: new Date().toISOString(),
-		status: 'degraded',
+		status: 'ok',
 		service,
 		configured: false,
 		configurationState: 'external_fallback',

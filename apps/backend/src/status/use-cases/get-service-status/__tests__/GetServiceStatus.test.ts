@@ -59,7 +59,7 @@ describe('GetServiceStatus', () => {
 
 		expect(result.isOk()).toBe(true);
 		expect(result._unsafeUnwrap()).toMatchObject({
-			status: 'degraded',
+			status: 'ok',
 			service: 'horizon',
 			configured: true,
 			configurationState: 'configured',
@@ -67,7 +67,7 @@ describe('GetServiceStatus', () => {
 			url: 'http://127.0.0.1:8000',
 			probe: 'not_run',
 			readiness: 'configured_not_probed',
-			requiredForProduction: true
+			requiredForProduction: false
 		});
 	});
 
@@ -78,7 +78,7 @@ describe('GetServiceStatus', () => {
 
 		expect(result.isOk()).toBe(true);
 		expect(result._unsafeUnwrap()).toMatchObject({
-			status: 'degraded',
+			status: 'ok',
 			service: 'horizon',
 			configured: false,
 			configurationState: 'external_fallback',
@@ -97,17 +97,17 @@ describe('GetServiceStatus', () => {
 		const missing = new GetRpcStatus({} as Config).execute();
 
 		expect(configured._unsafeUnwrap()).toMatchObject({
-			status: 'degraded',
+			status: 'ok',
 			service: 'rpc',
 			configured: true,
 			configurationState: 'configured',
 			health: 'not_probed',
 			url: 'https://rpc.example.com',
 			readiness: 'configured_not_probed',
-			requiredForProduction: true
+			requiredForProduction: false
 		});
 		expect(missing._unsafeUnwrap()).toMatchObject({
-			status: 'degraded',
+			status: 'ok',
 			service: 'rpc',
 			configured: false,
 			configurationState: 'not_configured',
@@ -136,14 +136,14 @@ describe('GetServiceStatus', () => {
 			probe: 'not_run'
 		});
 		expect(partial._unsafeUnwrap()).toMatchObject({
-			status: 'degraded',
+			status: 'ok',
 			configured: true,
 			complete: false,
 			frontendUrl: 'https://aws.example.com',
 			apiUrl: null
 		});
 		expect(missing._unsafeUnwrap()).toMatchObject({
-			status: 'unavailable',
+			status: 'ok',
 			configured: false,
 			complete: false,
 			frontendUrl: null,

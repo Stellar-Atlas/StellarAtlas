@@ -1,6 +1,7 @@
 import type {
 	PublicHistoryArchiveScan,
 	PublicHistoryArchiveScanEvidence,
+	PublicHistoryArchiveState,
 	PublicNode,
 	PublicOrganization
 } from '../../api/types';
@@ -9,14 +10,17 @@ import { HistoryArchiveStateDocument } from '../archive-scans/history-archive-st
 
 export function ArchiveMetadata({
 	historyArchiveScan,
+	historyArchiveState,
 	node,
 	organization
 }: {
 	readonly historyArchiveScan: PublicHistoryArchiveScan | null;
+	readonly historyArchiveState: PublicHistoryArchiveState | null;
 	readonly node: PublicNode;
 	readonly organization: PublicOrganization | null;
 }): React.JSX.Element {
 	const archiveMetadata = historyArchiveScan?.archiveMetadata ?? null;
+	const historyUrl = node.historyUrl ?? historyArchiveScan?.url ?? null;
 	const homeDomain = organization?.homeDomain ?? node.homeDomain;
 	const stellarTomlUrl =
 		organization?.stellarToml?.url ??
@@ -24,7 +28,11 @@ export function ArchiveMetadata({
 			? null
 			: `https://${homeDomain}/.well-known/stellar.toml`);
 
-	if (archiveMetadata === null && stellarTomlUrl === null) {
+	if (
+		archiveMetadata === null &&
+		historyUrl === null &&
+		stellarTomlUrl === null
+	) {
 		return (
 			<div className="archive-log-section">
 				<div className="panel-heading archive-log-heading">
@@ -40,7 +48,11 @@ export function ArchiveMetadata({
 			<div className="panel-heading archive-log-heading">
 				<h3>Archive metadata</h3>
 			</div>
-			<HistoryArchiveStateDocument archiveMetadata={archiveMetadata} />
+			<HistoryArchiveStateDocument
+				archiveState={historyArchiveState}
+				archiveMetadata={archiveMetadata}
+				archiveUrl={historyUrl}
+			/>
 			<MetadataDocument
 				capturedAt={null}
 				label="stellar.toml"

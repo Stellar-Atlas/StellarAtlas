@@ -6,6 +6,7 @@ import type { Logger } from '@core/services/Logger.js';
 import { CollectScpLiveLooped } from '../../use-cases/collect-scp-live/CollectScpLiveLooped.js';
 
 const defaultLoopIntervalMs = 1_000;
+const forcedShutdownTimeoutMs = 5_000;
 
 void run();
 
@@ -52,11 +53,23 @@ function shutdownGracefully(
 	kernel: Kernel,
 	logger: Logger
 ) {
+	let shutdownStarted = false;
 	return (): void => {
+		if (shutdownStarted) return;
+		shutdownStarted = true;
 		logger.info('Received shutdown signal, stopping live SCP collector', {
 			signal
 		});
+		const forcedExit = setTimeout(() => {
+			logger.error('Forced live SCP collector shutdown after timeout', {
+				signal,
+				timeoutMs: forcedShutdownTimeoutMs
+			});
+			process.exit(0);
+		}, forcedShutdownTimeoutMs);
+		forcedExit.unref();
 		useCase.shutDown(async () => {
+			clearTimeout(forcedExit);
 			await shutdownKernel(kernel, logger);
 			process.exit(0);
 		});
