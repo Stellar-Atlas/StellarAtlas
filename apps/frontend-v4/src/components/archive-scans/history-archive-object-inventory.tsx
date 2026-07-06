@@ -49,19 +49,32 @@ export function HistoryArchiveObjectInventory({
 					No archive file rows match the current filter.
 				</p>
 			) : (
-				<div className="table archive-object-table">
-					{objects.objects.map((object) => (
-						<ObjectRow
-							bucketCoverage={
-								object.bucketHash === null
-									? null
-									: (coverageByBucketHash.get(object.bucketHash) ?? null)
-							}
-							key={object.remoteId}
-							generatedAt={objects.generatedAt}
-							object={object}
-						/>
-					))}
+				<div className="responsive-table">
+					<table className="archive-object-table">
+						<thead>
+							<tr>
+								<th>Status</th>
+								<th>File type</th>
+								<th>Archive</th>
+								<th>File</th>
+								<th>Worker activity</th>
+							</tr>
+						</thead>
+						<tbody>
+							{objects.objects.map((object) => (
+								<ObjectRow
+									bucketCoverage={
+										object.bucketHash === null
+											? null
+											: (coverageByBucketHash.get(object.bucketHash) ?? null)
+									}
+									key={object.remoteId}
+									generatedAt={objects.generatedAt}
+									object={object}
+								/>
+							))}
+						</tbody>
+					</table>
 				</div>
 			)}
 		</>
@@ -123,25 +136,26 @@ function ObjectRow({
 	const objectStatus = getObjectDisplayStatus(object, generatedAt);
 
 	return (
-		<div className="row archive-object-row">
-			<div className="archive-object-main">
-				<div className="archive-object-title">
-					<StatusPill
-						status={mapObjectStatus(objectStatus)}
-						text={formatObjectStatus(objectStatus)}
-					/>
-					<strong>{formatObjectType(object.objectType)}</strong>
-					<span>{formatObjectLedger(object)}</span>
-				</div>
-				<small className="archive-object-source">
-					Archive:{' '}
-					<Link href={getArchiveScanDetailPath(object.archiveUrl)}>
-						{formatArchiveSource(object.archiveUrl)}
-					</Link>
-				</small>
-				<small className="archive-object-url">
-					File: <ArchiveObjectUrl object={object} />
-				</small>
+		<tr>
+			<td>
+				<StatusPill
+					status={mapObjectStatus(objectStatus)}
+					text={formatObjectStatus(objectStatus)}
+				/>
+			</td>
+			<td>
+				<strong>{formatObjectType(object.objectType)}</strong>
+				{object.checkpointLedger === null ? null : (
+					<small>{formatObjectLedger(object)}</small>
+				)}
+			</td>
+			<td>
+				<Link href={getArchiveScanDetailPath(object.archiveUrl)}>
+					{formatArchiveSource(object.archiveUrl)}
+				</Link>
+			</td>
+			<td>
+				<ArchiveObjectUrl object={object} />
 				{object.bucketHash ? (
 					<small className="archive-object-hash">{object.bucketHash}</small>
 				) : null}
@@ -156,14 +170,14 @@ function ObjectRow({
 						{object.error.type}: {sanitizeEvidenceText(object.error.message)}
 					</small>
 				) : null}
-			</div>
-			<div className="metric archive-object-metric">
+			</td>
+			<td>
 				<strong>
 					{object.workerStage ?? formatObjectStatus(objectStatus)}
 				</strong>
 				<small>{formatObjectWork(object)}</small>
-			</div>
-		</div>
+			</td>
+		</tr>
 	);
 }
 
