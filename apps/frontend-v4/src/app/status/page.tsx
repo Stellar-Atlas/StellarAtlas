@@ -1,5 +1,8 @@
 import { Suspense } from 'react';
-import { fetchHistoryArchiveObjectEvents } from '@api/archive-scans-client';
+import {
+	fetchHistoryArchiveBucketCoveragesForObjects,
+	fetchHistoryArchiveObjectEvents
+} from '@api/archive-scans-client';
 import {
 	fetchApiStatus,
 	fetchDataQualityStatus,
@@ -16,6 +19,7 @@ import { StatusDashboard } from '@components/status/status-dashboard';
 export const revalidate = 0;
 export const dynamic = 'force-dynamic';
 const statusFetchOptions = { cache: 'no-store' } as const;
+const maxBucketCoverageLookups = 8;
 
 async function StatusRouteContent(): Promise<React.JSX.Element> {
 	const [
@@ -37,6 +41,12 @@ async function StatusRouteContent(): Promise<React.JSX.Element> {
 		fetchHistoryArchiveObjects(100, statusFetchOptions),
 		fetchFrontendStatus(statusFetchOptions)
 	]);
+	const archiveBucketCoverages =
+		await fetchHistoryArchiveBucketCoveragesForObjects(
+			archiveObjects,
+			maxBucketCoverageLookups,
+			statusFetchOptions
+		);
 
 	return (
 		<main className="shell">
@@ -48,6 +58,7 @@ async function StatusRouteContent(): Promise<React.JSX.Element> {
 			<StatusDashboard
 				api={api}
 				archiveEvents={archiveEvents}
+				archiveBucketCoverages={archiveBucketCoverages}
 				archiveObjects={archiveObjects}
 				archiveSummary={archiveSummary}
 				dataQuality={dataQuality}

@@ -1,6 +1,8 @@
 import type {
+	PublicHistoryArchiveBucketCrossCoverage,
 	PublicHistoryArchiveEvidence,
-	PublicHistoryArchiveObjectEvents
+	PublicHistoryArchiveObjectEvents,
+	PublicHistoryArchiveObjectQueue
 } from './types';
 import { fetchJson, type FetchOptions } from './client';
 import { frontendCacheTags } from './cache-policy';
@@ -29,6 +31,32 @@ export const fetchHistoryArchiveObjectEventsForArchive = (
 		withHistoryScanTags(options)
 	);
 
+export const fetchHistoryArchiveBucketCoverage = (
+	bucketHash: string,
+	options?: FetchOptions
+): Promise<PublicHistoryArchiveBucketCrossCoverage> =>
+	fetchJson<PublicHistoryArchiveBucketCrossCoverage>(
+		`/v1/archive-scans/objects/buckets/${encodeURIComponent(bucketHash)}/coverage`,
+		withHistoryScanTags(options)
+	);
+
+export const fetchHistoryArchiveBucketCoveragesForObjects = async (
+	objects: PublicHistoryArchiveObjectQueue,
+	limit: number,
+	options?: FetchOptions
+): Promise<readonly PublicHistoryArchiveBucketCrossCoverage[]> => {
+	const bucketHashes = getSampledBucketHashes(objects).slice(0, limit);
+	const results = await Promise.allSettled(
+		bucketHashes.map((bucketHash) =>
+			fetchHistoryArchiveBucketCoverage(bucketHash, options)
+		)
+	);
+
+	return results.flatMap((result) =>
+		result.status === 'fulfilled' ? [result.value] : []
+	);
+};
+
 export const fetchHistoryArchiveObjectEvidenceForArchive = (
 	historyUrl: string,
 	evidenceOptions: HistoryArchiveEvidenceOptions = {},
@@ -55,4 +83,16 @@ function withHistoryScanTags(options: FetchOptions | undefined): FetchOptions {
 		...options,
 		tags: [frontendCacheTags.historyScan, ...(options?.tags ?? [])]
 	};
+}
+
+function getSampledBucketHashes(
+	objects: PublicHistoryArchiveObjectQueue
+): readonly string[] {
+	const bucketHashes = new Set<string>();
+	for (const object of objects.objects) {
+		if (object.bucketHash === null) continue;
+		bucketHashes.add(object.bucketHash);
+	}
+
+	return Array.from(bucketHashes);
 }

@@ -1,4 +1,5 @@
 import type {
+	PublicHistoryArchiveBucketCrossCoverage,
 	PublicHistoryArchiveScan,
 	PublicHistoryArchiveScanEvidence,
 	PublicHistoryArchiveScanLogEntry,
@@ -22,6 +23,7 @@ import { HistoryArchiveObjectInventory } from './history-archive-object-inventor
 import { HistoryArchiveObjectEventLog } from './history-archive-object-event-log';
 
 interface ArchiveScanDetailProps {
+	readonly bucketCoverages: readonly PublicHistoryArchiveBucketCrossCoverage[];
 	readonly evidence: PublicHistoryArchiveScanEvidence;
 	readonly events: PublicHistoryArchiveObjectEvents;
 	readonly historyUrl: string;
@@ -33,6 +35,7 @@ interface ArchiveScanDetailProps {
 }
 
 export function ArchiveScanDetail({
+	bucketCoverages,
 	evidence,
 	events,
 	historyUrl,
@@ -124,7 +127,10 @@ export function ArchiveScanDetail({
 				/>
 				<BucketEvidence evidence={evidence} />
 			</article>
-			<HistoryArchiveObjectInventory objects={objects} />
+			<HistoryArchiveObjectInventory
+				bucketCoverages={bucketCoverages}
+				objects={objects}
+			/>
 			<HistoryArchiveObjectEventLog events={events} />
 			<article className="panel detail-panel archive-panel">
 				<div className="panel-heading">

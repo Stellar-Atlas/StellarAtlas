@@ -1,6 +1,9 @@
 import { Suspense } from 'react';
 import { connection } from 'next/server';
-import { fetchHistoryArchiveObjectEvidenceForArchive } from '@api/archive-scans-client';
+import {
+	fetchHistoryArchiveBucketCoveragesForObjects,
+	fetchHistoryArchiveObjectEvidenceForArchive
+} from '@api/archive-scans-client';
 import {
 	fetchHistoryArchiveScan,
 	fetchHistoryArchiveScanEvidence,
@@ -18,6 +21,7 @@ interface ArchiveScanDetailPageProps {
 export const dynamicParams = true;
 export const revalidate = 0;
 const liveArchiveFetchOptions = { cache: 'no-store' } as const;
+const maxBucketCoverageLookups = 8;
 
 async function ArchiveScanDetailRouteContent({
 	historyUrl
@@ -25,17 +29,21 @@ async function ArchiveScanDetailRouteContent({
 	readonly historyUrl: string;
 }): Promise<React.JSX.Element> {
 	await connection();
-	const [scan, logs, evidence, objectEvidence] =
-		await Promise.all([
-			fetchHistoryArchiveScan(historyUrl, liveArchiveFetchOptions),
-			fetchHistoryArchiveScanLogs(historyUrl, liveArchiveFetchOptions),
-			fetchHistoryArchiveScanEvidence(historyUrl, 500, liveArchiveFetchOptions),
-			fetchHistoryArchiveObjectEvidenceForArchive(
-				historyUrl,
-				{ eventLimit: 250, objectLimit: 250 },
-				liveArchiveFetchOptions
-			)
-		]);
+	const [scan, logs, evidence, objectEvidence] = await Promise.all([
+		fetchHistoryArchiveScan(historyUrl, liveArchiveFetchOptions),
+		fetchHistoryArchiveScanLogs(historyUrl, liveArchiveFetchOptions),
+		fetchHistoryArchiveScanEvidence(historyUrl, 500, liveArchiveFetchOptions),
+		fetchHistoryArchiveObjectEvidenceForArchive(
+			historyUrl,
+			{ eventLimit: 250, objectLimit: 250 },
+			liveArchiveFetchOptions
+		)
+	]);
+	const bucketCoverages = await fetchHistoryArchiveBucketCoveragesForObjects(
+		objectEvidence.objects,
+		maxBucketCoverageLookups,
+		liveArchiveFetchOptions
+	);
 
 	return (
 		<main className="shell">
@@ -47,6 +55,7 @@ async function ArchiveScanDetailRouteContent({
 			<ArchiveScanDetail
 				evidence={evidence}
 				events={objectEvidence.objectEvents}
+				bucketCoverages={bucketCoverages}
 				historyUrl={historyUrl}
 				logs={logs}
 				objects={objectEvidence.objects}

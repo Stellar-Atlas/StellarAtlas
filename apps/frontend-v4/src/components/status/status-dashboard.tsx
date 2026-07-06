@@ -1,5 +1,6 @@
 import type {
 	PublicApiStatus,
+	PublicHistoryArchiveBucketCrossCoverage,
 	PublicHistoryArchiveObjectEvents,
 	PublicHistoryArchiveObjectQueue,
 	PublicHistoryArchiveObjectSummary,
@@ -24,6 +25,7 @@ import { StatusPill, StatusRow, statusLabel, statusTone } from './status-ui';
 
 interface StatusDashboardProps {
 	readonly api: PublicApiStatus;
+	readonly archiveBucketCoverages: readonly PublicHistoryArchiveBucketCrossCoverage[];
 	readonly archiveEvents: PublicHistoryArchiveObjectEvents;
 	readonly archiveObjects: PublicHistoryArchiveObjectQueue;
 	readonly archiveSummary: PublicHistoryArchiveObjectSummary;
@@ -35,6 +37,7 @@ interface StatusDashboardProps {
 
 export function StatusDashboard({
 	api,
+	archiveBucketCoverages,
 	archiveEvents,
 	archiveObjects,
 	archiveSummary,
@@ -174,6 +177,7 @@ export function StatusDashboard({
 				/>
 
 				<HistoryArchiveObjectInventory
+					bucketCoverages={archiveBucketCoverages}
 					objects={archiveObjects}
 					title="Current archive object queue"
 				/>

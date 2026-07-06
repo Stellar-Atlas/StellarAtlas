@@ -9,6 +9,7 @@ import type {
 	HistoryArchiveObjectQueueV1,
 	HistoryArchiveObjectSummaryV1,
 	HistoryArchiveObjectTypeSummaryV1,
+	HistoryArchiveBucketCrossCoverageV1,
 	HistoryArchiveObjectEventsV1,
 	HistoryArchiveObjectV1,
 	HistoryArchiveStateSnapshotV1,
@@ -23,6 +24,8 @@ export type PublicOrganizationSnapshot = OrganizationSnapshotV1;
 export type PublicHistoryArchiveScan = HistoryArchiveScanV1;
 export type PublicHistoryArchiveEvidence = HistoryArchiveEvidenceV1;
 export type PublicHistoryArchiveObject = HistoryArchiveObjectV1;
+export type PublicHistoryArchiveBucketCrossCoverage =
+	HistoryArchiveBucketCrossCoverageV1;
 export type PublicHistoryArchiveObjectEvents = HistoryArchiveObjectEventsV1;
 export type PublicHistoryArchiveObjectQueue = HistoryArchiveObjectQueueV1;
 export type PublicHistoryArchiveObjectSummary = HistoryArchiveObjectSummaryV1;

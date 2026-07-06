@@ -408,3 +408,26 @@
 	color: var(--state-warning-ink);
 	font-weight: 800;
 }
+
+.archive-object-bucket-coverage {
+	border: 1px solid var(--border);
+	border-radius: 8px;
+	color: var(--muted);
+	display: grid;
+	gap: 10px;
+	margin-block-start: 4px;
+	padding: 10px 12px;
+}
+
+.archive-object-bucket-coverage summary {
+	color: var(--ink);
+	cursor: pointer;
+	font-size: 0.86rem;
+	font-weight: 800;
+	overflow-wrap: anywhere;
+}
+
+.archive-object-bucket-copy-table {
+	max-block-size: 240px;
+	overflow-y: auto;
+}

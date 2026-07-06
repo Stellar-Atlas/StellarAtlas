@@ -1,22 +1,30 @@
+import Link from 'next/link';
 import type {
+	PublicHistoryArchiveBucketCrossCoverage,
 	PublicHistoryArchiveObject,
 	PublicHistoryArchiveObjectQueue,
 	PublicStatusLevel
 } from '@api/types';
 import { StatusPill } from '@components/status/status-ui';
+import { getArchiveScanDetailPath } from '@domain/archive-scan-routes';
 import { formatDateTime, formatInteger } from '@format/formatters';
 
 interface HistoryArchiveObjectInventoryProps {
+	readonly bucketCoverages?: readonly PublicHistoryArchiveBucketCrossCoverage[];
 	readonly framed?: boolean;
 	readonly objects: PublicHistoryArchiveObjectQueue;
 	readonly title?: string;
 }
 
 export function HistoryArchiveObjectInventory({
+	bucketCoverages = [],
 	framed = true,
 	objects,
 	title = 'History archive object inventory'
 }: HistoryArchiveObjectInventoryProps): React.JSX.Element {
+	const coverageByBucketHash = new Map(
+		bucketCoverages.map((coverage) => [coverage.bucketHash, coverage])
+	);
 	const content = (
 		<>
 			<div className="panel-heading">
@@ -40,6 +48,11 @@ export function HistoryArchiveObjectInventory({
 				<div className="table archive-object-table">
 					{objects.objects.map((object) => (
 						<ObjectRow
+							bucketCoverage={
+								object.bucketHash === null
+									? null
+									: (coverageByBucketHash.get(object.bucketHash) ?? null)
+							}
 							key={object.remoteId}
 							generatedAt={objects.generatedAt}
 							object={object}
@@ -95,9 +108,11 @@ function ObjectSummary({
 }
 
 function ObjectRow({
+	bucketCoverage,
 	generatedAt,
 	object
 }: {
+	readonly bucketCoverage: PublicHistoryArchiveBucketCrossCoverage | null;
 	readonly generatedAt: string;
 	readonly object: PublicHistoryArchiveObject;
 }): React.JSX.Element {
@@ -115,14 +130,22 @@ function ObjectRow({
 					<span>{formatObjectLedger(object)}</span>
 				</div>
 				<small className="archive-object-source">
-					Source: {formatArchiveSource(object.archiveUrl)}
+					Source:{' '}
+					<Link href={getArchiveScanDetailPath(object.archiveUrl)}>
+						{formatArchiveSource(object.archiveUrl)}
+					</Link>
 				</small>
 				<small className="archive-object-url">
-					Object:{' '}
-					<ArchiveObjectUrl object={object} />
+					Object: <ArchiveObjectUrl object={object} />
 				</small>
 				{object.bucketHash ? (
 					<small className="archive-object-hash">{object.bucketHash}</small>
+				) : null}
+				{object.bucketHash ? (
+					<BucketCoverageDrilldown
+						bucketCoverage={bucketCoverage}
+						bucketHash={object.bucketHash}
+					/>
 				) : null}
 				{object.error ? (
 					<small className="archive-object-error">
@@ -131,9 +154,76 @@ function ObjectRow({
 				) : null}
 			</div>
 			<div className="metric archive-object-metric">
-				<strong>{object.workerStage ?? formatObjectStatus(objectStatus)}</strong>
+				<strong>
+					{object.workerStage ?? formatObjectStatus(objectStatus)}
+				</strong>
 				<small>{formatObjectWork(object)}</small>
 			</div>
+		</div>
+	);
+}
+
+function BucketCoverageDrilldown({
+	bucketCoverage,
+	bucketHash
+}: {
+	readonly bucketCoverage: PublicHistoryArchiveBucketCrossCoverage | null;
+	readonly bucketHash: string;
+}): React.JSX.Element | null {
+	if (bucketCoverage === null) return null;
+
+	return (
+		<details className="archive-object-bucket-coverage">
+			<summary>{formatBucketCoverageSummary(bucketCoverage)}</summary>
+			<dl className="details compact-details">
+				<div>
+					<dt>Bucket</dt>
+					<dd>{bucketHash.slice(0, 16)}...</dd>
+				</div>
+				<div>
+					<dt>Generated</dt>
+					<dd>{formatDateTime(bucketCoverage.generatedAt)}</dd>
+				</div>
+				<div>
+					<dt>Archive roots</dt>
+					<dd>{formatInteger(bucketCoverage.counts.archiveRoots)}</dd>
+				</div>
+			</dl>
+			<BucketCoverageSamples bucketCoverage={bucketCoverage} />
+		</details>
+	);
+}
+
+function BucketCoverageSamples({
+	bucketCoverage
+}: {
+	readonly bucketCoverage: PublicHistoryArchiveBucketCrossCoverage;
+}): React.JSX.Element {
+	const samples = [
+		...bucketCoverage.failedCopies.slice(0, 2),
+		...bucketCoverage.scanningCopies.slice(0, 2),
+		...bucketCoverage.pendingCopies.slice(0, 2),
+		...bucketCoverage.verifiedCopies.slice(0, 2)
+	];
+
+	if (samples.length === 0) {
+		return <p className="muted-copy">No archive copies are recorded.</p>;
+	}
+
+	return (
+		<div className="table archive-object-bucket-copy-table">
+			{samples.map((copy) => (
+				<div className="row compact" key={copy.remoteId}>
+					<div>
+						<strong>{formatArchiveSource(copy.archiveUrl)}</strong>
+						<small>{copy.objectKey}</small>
+					</div>
+					<div className="metric">
+						<strong>{copy.workerStage ?? copy.status}</strong>
+						<small>{formatBucketCopyWork(copy)}</small>
+					</div>
+				</div>
+			))}
 		</div>
 	);
 }
@@ -183,7 +273,8 @@ function getObjectDisplayStatus(
 
 function hasDelayedObject(objects: PublicHistoryArchiveObjectQueue): boolean {
 	return objects.objects.some(
-		(object) => getObjectDisplayStatus(object, objects.generatedAt) === 'delayed'
+		(object) =>
+			getObjectDisplayStatus(object, objects.generatedAt) === 'delayed'
 	);
 }
 
@@ -201,7 +292,9 @@ function formatObjectStatus(status: ObjectDisplayStatus): string {
 	return 'pending';
 }
 
-function formatObjectType(type: PublicHistoryArchiveObject['objectType']): string {
+function formatObjectType(
+	type: PublicHistoryArchiveObject['objectType']
+): string {
 	if (type === 'history-archive-state') return 'history archive state';
 	if (type === 'checkpoint-state') return 'checkpoint state';
 	return type;
@@ -215,10 +308,39 @@ function formatObjectLedger(object: PublicHistoryArchiveObject): string {
 function formatObjectWork(object: PublicHistoryArchiveObject): string {
 	const parts = [
 		`${formatInteger(object.attempts)} attempts`,
-		object.bytesDownloaded === null ? null : formatBytes(object.bytesDownloaded),
+		object.bytesDownloaded === null
+			? null
+			: formatBytes(object.bytesDownloaded),
 		object.claimedAt ? `claimed ${formatDateTime(object.claimedAt)}` : null,
 		object.verifiedAt ? `verified ${formatDateTime(object.verifiedAt)}` : null,
 		`updated ${formatDateTime(object.updatedAt)}`
+	].filter((part): part is string => part !== null && part.length > 0);
+
+	return parts.join(' / ');
+}
+
+function formatBucketCoverageSummary(
+	bucketCoverage: PublicHistoryArchiveBucketCrossCoverage
+): string {
+	const counts = bucketCoverage.counts;
+	return `${formatInteger(counts.verifiedCopies)} verified / ${formatInteger(
+		counts.scanningCopies
+	)} scanning / ${formatInteger(counts.pendingCopies)} pending / ${formatInteger(
+		counts.failedCopies
+	)} failed across ${formatInteger(counts.archiveRoots)} archive roots`;
+}
+
+function formatBucketCopyWork({
+	attempts,
+	bytesDownloaded,
+	verifiedAt,
+	updatedAt
+}: PublicHistoryArchiveBucketCrossCoverage['verifiedCopies'][number]): string {
+	const parts = [
+		`${formatInteger(attempts)} attempts`,
+		bytesDownloaded === null ? null : formatBytes(bytesDownloaded),
+		verifiedAt === null ? null : `verified ${formatDateTime(verifiedAt)}`,
+		`updated ${formatDateTime(updatedAt)}`
 	].filter((part): part is string => part !== null && part.length > 0);
 
 	return parts.join(' / ');

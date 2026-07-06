@@ -1,7 +1,10 @@
 import { Suspense } from 'react';
 import { notFound } from 'next/navigation';
 import { connection } from 'next/server';
-import { fetchHistoryArchiveObjectEvidenceForArchive } from '@api/archive-scans-client';
+import {
+	fetchHistoryArchiveBucketCoveragesForObjects,
+	fetchHistoryArchiveObjectEvidenceForArchive
+} from '@api/archive-scans-client';
 import { fetchKnownNode } from '@api/known-network-client';
 import {
 	fetchKnownOrganizations,
@@ -22,6 +25,7 @@ interface NodeDetailPageProps {
 export const dynamicParams = true;
 export const revalidate = 10;
 const liveArchiveFetchOptions = { cache: 'no-store' } as const;
+const maxBucketCoverageLookups = 8;
 
 async function NodeDetailRouteContent({
 	publicKey
@@ -69,6 +73,13 @@ async function NodeDetailRouteContent({
 	const organization = node
 		? getOrganizationForNode(inventoryNetwork, node)
 		: null;
+	const historyArchiveBucketCoverages = historyArchiveObjectEvidence
+		? await fetchHistoryArchiveBucketCoveragesForObjects(
+				historyArchiveObjectEvidence.objects,
+				maxBucketCoverageLookups,
+				liveArchiveFetchOptions
+			)
+		: [];
 
 	return (
 		<main className="shell">
@@ -82,6 +93,7 @@ async function NodeDetailRouteContent({
 				historyArchiveEvents={
 					historyArchiveObjectEvidence?.objectEvents ?? null
 				}
+				historyArchiveBucketCoverages={historyArchiveBucketCoverages}
 				historyArchiveObjects={historyArchiveObjectEvidence?.objects ?? null}
 				historyArchiveScan={historyArchiveScan}
 				historyArchiveScanLogs={historyArchiveScanLogs}

@@ -3,6 +3,7 @@ import type {
 	PublicHistoryArchiveScan,
 	PublicHistoryArchiveScanEvidence,
 	PublicHistoryArchiveScanLogEntry,
+	PublicHistoryArchiveBucketCrossCoverage,
 	PublicHistoryArchiveObjectEvents,
 	PublicHistoryArchiveObjectQueue,
 	PublicHistoryArchiveObjectSummary,
@@ -44,6 +45,7 @@ import { HistoryArchiveObjectEventLog } from '@components/archive-scans/history-
 import { HistoryArchiveObjectCoverage } from '@components/archive-scans/history-archive-object-coverage';
 
 interface NodeDetailProps {
+	historyArchiveBucketCoverages: readonly PublicHistoryArchiveBucketCrossCoverage[];
 	historyArchiveEvidence: PublicHistoryArchiveScanEvidence | null;
 	historyArchiveEvents: PublicHistoryArchiveObjectEvents | null;
 	historyArchiveObjects: PublicHistoryArchiveObjectQueue | null;
@@ -58,6 +60,7 @@ interface NodeDetailProps {
 }
 
 export function NodeDetail({
+	historyArchiveBucketCoverages,
 	historyArchiveEvidence,
 	historyArchiveEvents,
 	historyArchiveObjects,
@@ -316,6 +319,7 @@ export function NodeDetail({
 					<ArchiveBucketEvidence evidence={historyArchiveEvidence} />
 					{historyArchiveObjects ? (
 						<HistoryArchiveObjectInventory
+							bucketCoverages={historyArchiveBucketCoverages}
 							framed={false}
 							objects={historyArchiveObjects}
 						/>
