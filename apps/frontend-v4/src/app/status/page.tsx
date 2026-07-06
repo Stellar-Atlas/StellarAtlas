@@ -1,4 +1,5 @@
 import { Suspense } from 'react';
+import { fetchHistoryArchiveObjectEvents } from '@api/archive-scans-client';
 import {
 	fetchApiStatus,
 	fetchDataQualityStatus,
@@ -21,6 +22,7 @@ async function StatusRouteContent(): Promise<React.JSX.Element> {
 		dataQuality,
 		scanLogs,
 		workers,
+		archiveEvents,
 		archiveObjects,
 		frontend
 	] = await Promise.all([
@@ -28,6 +30,7 @@ async function StatusRouteContent(): Promise<React.JSX.Element> {
 		fetchDataQualityStatus(statusFetchOptions),
 		fetchScanLogStatus(statusFetchOptions),
 		fetchWorkerStatus(statusFetchOptions),
+		fetchHistoryArchiveObjectEvents(100, statusFetchOptions),
 		fetchHistoryArchiveObjects(100, statusFetchOptions),
 		fetchFrontendStatus(statusFetchOptions)
 	]);
@@ -41,6 +44,7 @@ async function StatusRouteContent(): Promise<React.JSX.Element> {
 			/>
 			<StatusDashboard
 				api={api}
+				archiveEvents={archiveEvents}
 				archiveObjects={archiveObjects}
 				dataQuality={dataQuality}
 				frontend={frontend}

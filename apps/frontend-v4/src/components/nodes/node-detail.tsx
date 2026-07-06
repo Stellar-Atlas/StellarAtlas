@@ -3,6 +3,7 @@ import type {
 	PublicHistoryArchiveScan,
 	PublicHistoryArchiveScanEvidence,
 	PublicHistoryArchiveScanLogEntry,
+	PublicHistoryArchiveObjectEvents,
 	PublicHistoryArchiveObjectQueue,
 	PublicHistoryArchiveState,
 	PublicKnownNode,
@@ -38,9 +39,11 @@ import {
 	ArchiveMetadata
 } from './node-archive-evidence';
 import { HistoryArchiveObjectInventory } from '@components/archive-scans/history-archive-object-inventory';
+import { HistoryArchiveObjectEventLog } from '@components/archive-scans/history-archive-object-event-log';
 
 interface NodeDetailProps {
 	historyArchiveEvidence: PublicHistoryArchiveScanEvidence | null;
+	historyArchiveEvents: PublicHistoryArchiveObjectEvents | null;
 	historyArchiveObjects: PublicHistoryArchiveObjectQueue | null;
 	historyArchiveScan: PublicHistoryArchiveScan | null;
 	historyArchiveScanLogs: readonly PublicHistoryArchiveScanLogEntry[];
@@ -53,6 +56,7 @@ interface NodeDetailProps {
 
 export function NodeDetail({
 	historyArchiveEvidence,
+	historyArchiveEvents,
 	historyArchiveObjects,
 	historyArchiveScan,
 	historyArchiveScanLogs,
@@ -290,6 +294,12 @@ export function NodeDetail({
 						<HistoryArchiveObjectInventory
 							framed={false}
 							objects={historyArchiveObjects}
+						/>
+					) : null}
+					{historyArchiveEvents ? (
+						<HistoryArchiveObjectEventLog
+							events={historyArchiveEvents}
+							framed={false}
 						/>
 					) : null}
 					<div className="archive-log-section">

@@ -1,6 +1,7 @@
 import { Suspense } from 'react';
 import { notFound } from 'next/navigation';
 import { connection } from 'next/server';
+import { fetchHistoryArchiveObjectEventsForArchive } from '@api/archive-scans-client';
 import {
 	fetchKnownNodes,
 	fetchKnownOrganizations,
@@ -56,6 +57,7 @@ async function NodeDetailRouteContent({
 		historyArchiveScanLogs,
 		historyArchiveEvidence,
 		historyArchiveObjects,
+		historyArchiveEvents,
 		historyArchiveState
 	] =
 		node?.historyUrl
@@ -75,9 +77,14 @@ async function NodeDetailRouteContent({
 						250,
 						liveArchiveFetchOptions
 					),
+					fetchHistoryArchiveObjectEventsForArchive(
+						node.historyUrl,
+						250,
+						liveArchiveFetchOptions
+					),
 					fetchHistoryArchiveState(node.historyUrl, liveArchiveFetchOptions)
 				])
-			: [null, [], null, null, null];
+			: [null, [], null, null, null, null];
 	const organization = node
 		? getOrganizationForNode(inventoryNetwork, node)
 		: null;
@@ -91,6 +98,7 @@ async function NodeDetailRouteContent({
 			/>
 			<NodeDetail
 				historyArchiveEvidence={historyArchiveEvidence}
+				historyArchiveEvents={historyArchiveEvents}
 				historyArchiveObjects={historyArchiveObjects}
 				historyArchiveScan={historyArchiveScan}
 				historyArchiveScanLogs={historyArchiveScanLogs}

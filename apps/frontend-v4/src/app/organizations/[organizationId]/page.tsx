@@ -2,6 +2,7 @@ import { Suspense } from 'react';
 import { notFound } from 'next/navigation';
 import Link from 'next/link';
 import { connection } from 'next/server';
+import { fetchHistoryArchiveObjectEventsForArchive } from '@api/archive-scans-client';
 import {
 	fetchHistoryArchiveObjectsForArchive,
 	fetchHistoryArchiveState,
@@ -70,6 +71,11 @@ async function OrganizationDetailRouteContent({
 			objects: await fetchHistoryArchiveObjectsForArchive(
 				historyUrl,
 				1,
+				liveArchiveFetchOptions
+			),
+			events: await fetchHistoryArchiveObjectEventsForArchive(
+				historyUrl,
+				5,
 				liveArchiveFetchOptions
 			),
 			state: await fetchHistoryArchiveState(historyUrl, liveArchiveFetchOptions)

@@ -3,6 +3,7 @@ import type {
 	PublicHistoryArchiveScanEvidence,
 	PublicHistoryArchiveScanLogEntry,
 	PublicHistoryArchiveScanLogError,
+	PublicHistoryArchiveObjectEvents,
 	PublicHistoryArchiveObjectQueue,
 	PublicHistoryArchiveState
 } from '@api/types';
@@ -16,9 +17,11 @@ import {
 import { formatDateTime, formatInteger } from '@format/formatters';
 import { HistoryArchiveStateDocument } from './history-archive-state-document';
 import { HistoryArchiveObjectInventory } from './history-archive-object-inventory';
+import { HistoryArchiveObjectEventLog } from './history-archive-object-event-log';
 
 interface ArchiveScanDetailProps {
 	readonly evidence: PublicHistoryArchiveScanEvidence;
+	readonly events: PublicHistoryArchiveObjectEvents;
 	readonly historyUrl: string;
 	readonly logs: readonly PublicHistoryArchiveScanLogEntry[];
 	readonly objects: PublicHistoryArchiveObjectQueue;
@@ -28,6 +31,7 @@ interface ArchiveScanDetailProps {
 
 export function ArchiveScanDetail({
 	evidence,
+	events,
 	historyUrl,
 	logs,
 	objects,
@@ -113,6 +117,7 @@ export function ArchiveScanDetail({
 				<BucketEvidence evidence={evidence} />
 			</article>
 			<HistoryArchiveObjectInventory objects={objects} />
+			<HistoryArchiveObjectEventLog events={events} />
 			<article className="panel detail-panel archive-panel">
 				<div className="panel-heading">
 					<h2>Scan run log</h2>

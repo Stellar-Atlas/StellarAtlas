@@ -1,5 +1,6 @@
 import type {
 	PublicApiStatus,
+	PublicHistoryArchiveObjectEvents,
 	PublicHistoryArchiveObjectQueue,
 	PublicConfiguredServiceStatus,
 	PublicDataQualityStatus,
@@ -13,6 +14,7 @@ import {
 	formatPercent
 } from '@format/formatters';
 import { StatCard } from '../stat-card';
+import { HistoryArchiveObjectEventLog } from '@components/archive-scans/history-archive-object-event-log';
 import { HistoryArchiveObjectInventory } from '@components/archive-scans/history-archive-object-inventory';
 import { RecentScanLogs } from './recent-scan-logs';
 import { ProductionServiceStatusPanel } from './service-status-panels';
@@ -20,6 +22,7 @@ import { StatusPill, StatusRow, statusLabel, statusTone } from './status-ui';
 
 interface StatusDashboardProps {
 	readonly api: PublicApiStatus;
+	readonly archiveEvents: PublicHistoryArchiveObjectEvents;
 	readonly archiveObjects: PublicHistoryArchiveObjectQueue;
 	readonly dataQuality: PublicDataQualityStatus;
 	readonly frontend: PublicConfiguredServiceStatus;
@@ -29,6 +32,7 @@ interface StatusDashboardProps {
 
 export function StatusDashboard({
 	api,
+	archiveEvents,
 	archiveObjects,
 	dataQuality,
 	frontend,
@@ -165,6 +169,8 @@ export function StatusDashboard({
 					objects={archiveObjects}
 					title="Current archive object queue"
 				/>
+
+				<HistoryArchiveObjectEventLog events={archiveEvents} />
 
 				<RecentScanLogs scanLogs={scanLogs} />
 			</div>

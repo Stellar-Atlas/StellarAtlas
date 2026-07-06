@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import type {
+	PublicHistoryArchiveObjectEvents,
 	PublicHistoryArchiveObjectQueue,
 	PublicNetwork,
 	PublicNode,
@@ -31,6 +32,7 @@ interface OrganizationDetailProps {
 }
 
 interface OrganizationArchiveState {
+	readonly events: PublicHistoryArchiveObjectEvents;
 	readonly historyUrl: string;
 	readonly objects: PublicHistoryArchiveObjectQueue;
 	readonly state: PublicHistoryArchiveState | null;
@@ -143,6 +145,8 @@ function OrganizationArchiveEvidence({
 							stateByUrl.get(normalizeArchiveUrl(historyUrl))?.state ?? null;
 						const objects =
 							stateByUrl.get(normalizeArchiveUrl(historyUrl))?.objects ?? null;
+						const events =
+							stateByUrl.get(normalizeArchiveUrl(historyUrl))?.events ?? null;
 
 						return (
 							<div className="row compact" key={`${node.publicKey}:${historyUrl}`}>
@@ -158,6 +162,9 @@ function OrganizationArchiveEvidence({
 									{objects ? (
 										<small>{formatObjectQueueSummary(objects)}</small>
 									) : null}
+									{events ? (
+										<small>{formatLatestArchiveEvent(events)}</small>
+									) : null}
 								</div>
 							</div>
 						);
@@ -166,6 +173,15 @@ function OrganizationArchiveEvidence({
 			)}
 		</article>
 	);
+}
+
+function formatLatestArchiveEvent(
+	events: PublicHistoryArchiveObjectEvents
+): string {
+	const latest = events.events.at(0);
+	if (latest === undefined) return 'No object events recorded';
+
+	return `${latest.eventType} ${latest.workerStage ?? latest.objectType} at ${formatDateTime(latest.createdAt)}`;
 }
 
 function formatObjectQueueSummary(

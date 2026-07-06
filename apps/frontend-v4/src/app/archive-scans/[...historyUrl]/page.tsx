@@ -1,5 +1,6 @@
 import { Suspense } from 'react';
 import { connection } from 'next/server';
+import { fetchHistoryArchiveObjectEventsForArchive } from '@api/archive-scans-client';
 import {
 	fetchHistoryArchiveScan,
 	fetchHistoryArchiveScanEvidence,
@@ -26,11 +27,16 @@ async function ArchiveScanDetailRouteContent({
 	readonly historyUrl: string;
 }): Promise<React.JSX.Element> {
 	await connection();
-	const [scan, logs, evidence, objects, state] = await Promise.all([
+	const [scan, logs, evidence, objects, events, state] = await Promise.all([
 		fetchHistoryArchiveScan(historyUrl, liveArchiveFetchOptions),
 		fetchHistoryArchiveScanLogs(historyUrl, liveArchiveFetchOptions),
 		fetchHistoryArchiveScanEvidence(historyUrl, 500, liveArchiveFetchOptions),
 		fetchHistoryArchiveObjectsForArchive(
+			historyUrl,
+			250,
+			liveArchiveFetchOptions
+		),
+		fetchHistoryArchiveObjectEventsForArchive(
 			historyUrl,
 			250,
 			liveArchiveFetchOptions
@@ -47,6 +53,7 @@ async function ArchiveScanDetailRouteContent({
 			/>
 			<ArchiveScanDetail
 				evidence={evidence}
+				events={events}
 				historyUrl={historyUrl}
 				logs={logs}
 				objects={objects}
