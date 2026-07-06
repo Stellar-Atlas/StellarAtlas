@@ -8,6 +8,7 @@ import type {
 	HistoryArchiveObjectTypeV1
 } from 'shared';
 import { requireNumber, type NumericValue } from './ScanJobRowMapper.js';
+import { getHistoryArchiveObjectHostThrottles } from './HistoryArchiveObjectHostThrottleSummaryQuery.js';
 
 interface SummaryOptions {
 	readonly archiveUrl?: string | null;
@@ -30,7 +31,10 @@ type ObjectTypeSummaryRow = {
 	readonly failedobjects?: NumericValue;
 };
 
-type BucketCoverageRow = Omit<ObjectTypeSummaryRow, 'objectType' | 'objecttype'> & {
+type BucketCoverageRow = Omit<
+	ObjectTypeSummaryRow,
+	'objectType' | 'objecttype'
+> & {
 	readonly uniqueBucketHashes?: NumericValue;
 	readonly uniquebuckethashes?: NumericValue;
 };
@@ -65,10 +69,11 @@ export async function getHistoryArchiveObjectSummary(
 	options: SummaryOptions = {}
 ): Promise<HistoryArchiveObjectSummaryV1> {
 	const archiveUrlIdentity = options.archiveUrlIdentity ?? null;
-	const [objectTypes, buckets, checkpoints] = await Promise.all([
+	const [objectTypes, buckets, checkpoints, hostThrottles] = await Promise.all([
 		getObjectTypeSummaries(manager, archiveUrlIdentity),
 		getBucketCoverage(manager, archiveUrlIdentity),
-		getCheckpointCoverage(manager, archiveUrlIdentity)
+		getCheckpointCoverage(manager, archiveUrlIdentity),
+		getHistoryArchiveObjectHostThrottles(manager, archiveUrlIdentity)
 	]);
 	const totals = sumObjectTypeCounts(objectTypes);
 
@@ -79,6 +84,7 @@ export async function getHistoryArchiveObjectSummary(
 		buckets,
 		checkpoints,
 		generatedAt: (options.generatedAt ?? new Date()).toISOString(),
+		hostThrottles,
 		objectTypes,
 		scope: archiveUrlIdentity === null ? 'global' : 'archive'
 	};
@@ -153,8 +159,7 @@ async function getCheckpointCoverage(
 			'completeArchiveCheckpoints'
 		),
 		discoveryCompleteArchiveRoots: requireNumber(
-			row?.discoveryCompleteArchiveRoots ??
-				row?.discoverycompletearchiveroots,
+			row?.discoveryCompleteArchiveRoots ?? row?.discoverycompletearchiveroots,
 			'discoveryCompleteArchiveRoots'
 		),
 		expectedArchiveCheckpoints: requireNumber(
@@ -235,7 +240,9 @@ function sumObjectTypeCounts(
 	);
 }
 
-function requireObjectType(value: string | undefined): HistoryArchiveObjectTypeV1 {
+function requireObjectType(
+	value: string | undefined
+): HistoryArchiveObjectTypeV1 {
 	if (
 		value === 'history-archive-state' ||
 		value === 'checkpoint-state' ||
@@ -251,7 +258,9 @@ function requireObjectType(value: string | undefined): HistoryArchiveObjectTypeV
 	throw new Error('Archive object summary row is missing object type');
 }
 
-function toNullableNumber(value: NumericValue | null | undefined): number | null {
+function toNullableNumber(
+	value: NumericValue | null | undefined
+): number | null {
 	if (value === null || value === undefined) return null;
 	return requireNumber(value, 'checkpointLedger');
 }

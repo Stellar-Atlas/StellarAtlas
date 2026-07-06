@@ -8213,8 +8213,8 @@
 					"partialArchiveCheckpoints",
 					"totalArchiveCheckpoints"
 				],
-				"properties": {
-					"activeArchiveCheckpoints": { "type": "integer", "minimum": 0 },
+					"properties": {
+						"activeArchiveCheckpoints": { "type": "integer", "minimum": 0 },
 					"archiveRootsWithState": { "type": "integer", "minimum": 0 },
 					"completeArchiveCheckpoints": {
 						"type": "integer",
@@ -8244,20 +8244,71 @@
 						"nullable": true
 					},
 					"partialArchiveCheckpoints": { "type": "integer", "minimum": 0 },
-					"totalArchiveCheckpoints": { "type": "integer", "minimum": 0 }
-				}
-			},
-			"HistoryArchiveObjectSummaryV1": {
-				"type": "object",
-				"required": [
+						"totalArchiveCheckpoints": { "type": "integer", "minimum": 0 }
+					}
+				},
+				"HistoryArchiveObjectHostThrottleV1": {
+					"type": "object",
+					"required": [
+						"archiveUrlIdentity",
+						"blockedUntil",
+						"consecutiveFailures",
+						"errorType",
+						"evidenceClass",
+						"failureClass",
+						"hostIdentity",
+						"httpStatus",
+						"lastFailureAt"
+					],
+					"properties": {
+						"archiveUrlIdentity": { "type": "string" },
+						"blockedUntil": { "type": "string", "format": "date-time" },
+						"consecutiveFailures": { "type": "integer", "minimum": 1 },
+						"errorType": { "type": "string" },
+						"evidenceClass": {
+							"type": "string",
+							"enum": [
+								"archive-object",
+								"worker-infrastructure",
+								"coordinator-infrastructure"
+							]
+						},
+						"failureClass": {
+							"type": "string",
+							"enum": [
+								"http",
+								"auth",
+								"not-found",
+								"rate-limit",
+								"timeout",
+								"transport",
+								"worker",
+								"coordinator",
+								"unknown"
+							]
+						},
+						"hostIdentity": { "type": "string" },
+						"httpStatus": {
+							"type": "integer",
+							"minimum": 100,
+							"maximum": 599,
+							"nullable": true
+						},
+						"lastFailureAt": { "type": "string", "format": "date-time" }
+					}
+				},
+				"HistoryArchiveObjectSummaryV1": {
+					"type": "object",
+					"required": [
 					"activeObjects",
 					"archiveUrl",
 					"archiveUrlIdentity",
 					"buckets",
-					"checkpoints",
-					"failedObjects",
-					"generatedAt",
-					"objectTypes",
+						"checkpoints",
+						"failedObjects",
+						"generatedAt",
+						"hostThrottles",
+						"objectTypes",
 					"pendingObjects",
 					"scope",
 					"totalObjects",
@@ -8277,9 +8328,15 @@
 					"checkpoints": {
 						"$ref": "#/components/schemas/HistoryArchiveCheckpointCoverageV1"
 					},
-					"failedObjects": { "type": "integer", "minimum": 0 },
-					"generatedAt": { "type": "string", "format": "date-time" },
-					"objectTypes": {
+						"failedObjects": { "type": "integer", "minimum": 0 },
+						"generatedAt": { "type": "string", "format": "date-time" },
+						"hostThrottles": {
+							"type": "array",
+							"items": {
+								"$ref": "#/components/schemas/HistoryArchiveObjectHostThrottleV1"
+							}
+						},
+						"objectTypes": {
 						"type": "array",
 						"items": {
 							"$ref": "#/components/schemas/HistoryArchiveObjectTypeSummaryV1"

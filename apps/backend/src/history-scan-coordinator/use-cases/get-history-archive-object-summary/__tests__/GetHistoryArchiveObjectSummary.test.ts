@@ -90,6 +90,7 @@ function createSummary(options: {
 		},
 		failedObjects: 0,
 		generatedAt: '2026-07-06T15:35:00.000Z',
+		hostThrottles: [],
 		objectTypes: [],
 		pendingObjects: 0,
 		scope: options.scope,

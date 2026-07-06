@@ -37,12 +37,39 @@ export interface HistoryArchiveBucketCoverageV1 {
 	readonly verifiedBucketObjects: number;
 }
 
+export type HistoryArchiveObjectFailureClassV1 =
+	| 'http'
+	| 'auth'
+	| 'not-found'
+	| 'rate-limit'
+	| 'timeout'
+	| 'transport'
+	| 'worker'
+	| 'coordinator'
+	| 'unknown';
+
+export type HistoryArchiveObjectEvidenceClassV1 =
+	'archive-object' | 'worker-infrastructure' | 'coordinator-infrastructure';
+
+export interface HistoryArchiveObjectHostThrottleV1 {
+	readonly archiveUrlIdentity: string;
+	readonly blockedUntil: string;
+	readonly consecutiveFailures: number;
+	readonly errorType: string;
+	readonly evidenceClass: HistoryArchiveObjectEvidenceClassV1;
+	readonly failureClass: HistoryArchiveObjectFailureClassV1;
+	readonly hostIdentity: string;
+	readonly httpStatus: number | null;
+	readonly lastFailureAt: string;
+}
+
 export interface HistoryArchiveObjectSummaryV1 extends HistoryArchiveObjectStatusCountsV1 {
 	readonly archiveUrl: string | null;
 	readonly archiveUrlIdentity: string | null;
 	readonly buckets: HistoryArchiveBucketCoverageV1;
 	readonly checkpoints: HistoryArchiveCheckpointCoverageV1;
 	readonly generatedAt: string;
+	readonly hostThrottles: readonly HistoryArchiveObjectHostThrottleV1[];
 	readonly objectTypes: readonly HistoryArchiveObjectTypeSummaryV1[];
 	readonly scope: 'archive' | 'global';
 }
@@ -154,6 +181,54 @@ const HistoryArchiveBucketCoverageV1Schema: JSONSchemaType<HistoryArchiveBucketC
 		additionalProperties: false
 	};
 
+const HistoryArchiveObjectHostThrottleV1Schema: JSONSchemaType<HistoryArchiveObjectHostThrottleV1> =
+	{
+		type: 'object',
+		properties: {
+			archiveUrlIdentity: { type: 'string' },
+			blockedUntil: { type: 'string', format: 'date-time' },
+			consecutiveFailures: { type: 'number' },
+			errorType: { type: 'string' },
+			evidenceClass: {
+				type: 'string',
+				enum: [
+					'archive-object',
+					'worker-infrastructure',
+					'coordinator-infrastructure'
+				]
+			},
+			failureClass: {
+				type: 'string',
+				enum: [
+					'http',
+					'auth',
+					'not-found',
+					'rate-limit',
+					'timeout',
+					'transport',
+					'worker',
+					'coordinator',
+					'unknown'
+				]
+			},
+			hostIdentity: { type: 'string' },
+			httpStatus: nullable({ type: 'number' }),
+			lastFailureAt: { type: 'string', format: 'date-time' }
+		},
+		required: [
+			'archiveUrlIdentity',
+			'blockedUntil',
+			'consecutiveFailures',
+			'errorType',
+			'evidenceClass',
+			'failureClass',
+			'hostIdentity',
+			'httpStatus',
+			'lastFailureAt'
+		],
+		additionalProperties: false
+	};
+
 export const HistoryArchiveObjectSummaryV1Schema: JSONSchemaType<HistoryArchiveObjectSummaryV1> =
 	{
 		$id: 'history-archive-object-summary-v1.json',
@@ -167,6 +242,10 @@ export const HistoryArchiveObjectSummaryV1Schema: JSONSchemaType<HistoryArchiveO
 			checkpoints: HistoryArchiveCheckpointCoverageV1Schema,
 			failedObjects: { type: 'number' },
 			generatedAt: { type: 'string', format: 'date-time' },
+			hostThrottles: {
+				type: 'array',
+				items: HistoryArchiveObjectHostThrottleV1Schema
+			},
 			objectTypes: {
 				type: 'array',
 				items: HistoryArchiveObjectTypeSummaryV1Schema
@@ -184,6 +263,7 @@ export const HistoryArchiveObjectSummaryV1Schema: JSONSchemaType<HistoryArchiveO
 			'checkpoints',
 			'failedObjects',
 			'generatedAt',
+			'hostThrottles',
 			'objectTypes',
 			'pendingObjects',
 			'scope',

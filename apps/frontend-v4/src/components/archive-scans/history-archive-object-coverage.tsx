@@ -50,6 +50,7 @@ export function HistoryArchiveObjectCoverage({
 			</dl>
 			<CoverageGrid summary={summary} />
 			<ObjectTypeTable objectTypes={summary.objectTypes} />
+			<HostThrottleTable hostThrottles={summary.hostThrottles} />
 		</>
 	);
 
@@ -145,6 +146,39 @@ function ObjectTypeTable({
 	);
 }
 
+function HostThrottleTable({
+	hostThrottles
+}: {
+	readonly hostThrottles: PublicHistoryArchiveObjectSummary['hostThrottles'];
+}): React.JSX.Element | null {
+	if (hostThrottles.length === 0) return null;
+
+	return (
+		<div className="table archive-host-throttle-table">
+			{hostThrottles.map((throttle) => (
+				<div className="row compact" key={throttle.hostIdentity}>
+					<div>
+						<strong>{throttle.hostIdentity}</strong>
+						<small>
+							{formatHostThrottleReason(throttle.failureClass)} /{' '}
+							{throttle.evidenceClass}
+						</small>
+					</div>
+					<div className="metric">
+						<strong>
+							Backoff until {formatDateTime(throttle.blockedUntil)}
+						</strong>
+						<small>
+							{formatInteger(throttle.consecutiveFailures)} failures /{' '}
+							{formatHttpStatus(throttle.httpStatus)}
+						</small>
+					</div>
+				</div>
+			))}
+		</div>
+	);
+}
+
 function formatCheckpointRange(
 	summary: PublicHistoryArchiveObjectSummary
 ): string {
@@ -167,4 +201,21 @@ function formatObjectType(
 	if (type === 'history-archive-state') return 'history archive state';
 	if (type === 'checkpoint-state') return 'checkpoint state';
 	return type;
+}
+
+function formatHostThrottleReason(
+	value: PublicHistoryArchiveObjectSummary['hostThrottles'][number]['failureClass']
+): string {
+	if (value === 'not-found') return 'missing object';
+	if (value === 'rate-limit') return 'rate limited';
+	if (value === 'auth') return 'access denied';
+	if (value === 'transport') return 'transport';
+	if (value === 'timeout') return 'timeout';
+	if (value === 'coordinator') return 'coordinator';
+	if (value === 'worker') return 'worker';
+	return value;
+}
+
+function formatHttpStatus(value: number | null): string {
+	return value === null ? 'no HTTP status' : `HTTP ${value}`;
 }

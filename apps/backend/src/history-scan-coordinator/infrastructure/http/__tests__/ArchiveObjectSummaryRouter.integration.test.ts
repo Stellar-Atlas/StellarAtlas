@@ -30,6 +30,12 @@ describe('ArchiveObjectSummaryRouter.integration', () => {
 				expect(response.body).toMatchObject({
 					scope: 'global',
 					totalObjects: 10,
+					hostThrottles: [
+						{
+							failureClass: 'rate-limit',
+							hostIdentity: 'history.example.com'
+						}
+					],
 					checkpoints: {
 						expectedArchiveCheckpoints: 4,
 						missingArchiveCheckpoints: 1,
@@ -135,6 +141,19 @@ function createObjectSummary(
 		},
 		failedObjects: 1,
 		generatedAt: '2026-07-06T15:30:00.000Z',
+		hostThrottles: [
+			{
+				archiveUrlIdentity: 'https://history.example.com',
+				blockedUntil: '2026-07-06T16:00:00.000Z',
+				consecutiveFailures: 3,
+				errorType: 'archive_http_error',
+				evidenceClass: 'archive-object',
+				failureClass: 'rate-limit',
+				hostIdentity: 'history.example.com',
+				httpStatus: 429,
+				lastFailureAt: '2026-07-06T15:30:00.000Z'
+			}
+		],
 		objectTypes: [
 			{
 				activeObjects: 1,
