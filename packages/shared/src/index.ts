@@ -59,6 +59,13 @@ export {
 	type HistoryArchiveObjectTypeV1,
 	type HistoryArchiveObjectV1
 } from './dto/history-archive-object-v1.js';
+export {
+	type HistoryArchiveObjectEventTypeV1,
+	type HistoryArchiveObjectEventV1,
+	type HistoryArchiveObjectEventsV1,
+	type HistoryArchiveObjectEvidenceClassV1,
+	HistoryArchiveObjectEventsV1Schema
+} from './dto/history-archive-object-event-v1.js';
 export type {
 	ScpBallotV1,
 	ScpNominationV1,

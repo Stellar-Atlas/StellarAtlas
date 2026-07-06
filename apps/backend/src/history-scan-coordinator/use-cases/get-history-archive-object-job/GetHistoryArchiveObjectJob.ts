@@ -6,6 +6,7 @@ import type { HistoryArchiveObjectType } from '../../domain/history-archive-obje
 import type { HistoryArchiveObjectRepository } from '../../domain/history-archive-object/HistoryArchiveObjectRepository.js';
 import { TYPES } from '../../infrastructure/di/di-types.js';
 import { mapUnknownToError } from '@core/utilities/mapUnknownToError.js';
+import { HistoryArchiveObjectEventRecorder } from '../record-history-archive-object-event/HistoryArchiveObjectEventRecorder.js';
 
 export interface HistoryArchiveObjectJobDTO {
 	readonly archiveUrl: string;
@@ -32,6 +33,7 @@ export class GetHistoryArchiveObjectJob {
 	constructor(
 		@inject(TYPES.HistoryArchiveObjectRepository)
 		private readonly objectRepository: HistoryArchiveObjectRepository,
+		private readonly eventRecorder: HistoryArchiveObjectEventRecorder,
 		@inject('Logger') private readonly logger: Logger
 	) {}
 
@@ -42,6 +44,10 @@ export class GetHistoryArchiveObjectJob {
 				supportedObjectTypes
 			);
 			if (object === null) return ok(null);
+			await this.eventRecorder.record(object, {
+				claimAttempt: object.attempts,
+				eventType: 'claimed'
+			});
 
 			return ok({
 				archiveUrl: object.archiveUrl,

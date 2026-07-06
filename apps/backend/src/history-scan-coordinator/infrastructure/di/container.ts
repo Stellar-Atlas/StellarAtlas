@@ -40,14 +40,19 @@ import { HistoryArchiveStateSnapshot } from '../../domain/history-archive-state/
 import { GetHistoryArchiveState } from '../../use-cases/get-history-archive-state/GetHistoryArchiveState.js';
 import { HistoryArchiveObject } from '../../domain/history-archive-object/HistoryArchiveObject.js';
 import type { HistoryArchiveObjectRepository } from '../../domain/history-archive-object/HistoryArchiveObjectRepository.js';
+import { HistoryArchiveObjectEvent } from '../../domain/history-archive-object/HistoryArchiveObjectEvent.js';
+import type { HistoryArchiveObjectEventRepository } from '../../domain/history-archive-object/HistoryArchiveObjectEventRepository.js';
 import { TypeOrmHistoryArchiveObjectRepository } from '../repositories/database/TypeOrmHistoryArchiveObjectRepository.js';
+import { TypeOrmHistoryArchiveObjectEventRepository } from '../repositories/database/TypeOrmHistoryArchiveObjectEventRepository.js';
 import { GetHistoryArchiveObjects } from '../../use-cases/get-history-archive-objects/GetHistoryArchiveObjects.js';
+import { GetHistoryArchiveObjectEvents } from '../../use-cases/get-history-archive-object-events/GetHistoryArchiveObjectEvents.js';
 import { ScheduleHistoryArchiveObjects } from '../../use-cases/schedule-history-archive-objects/ScheduleHistoryArchiveObjects.js';
 import { GetHistoryArchiveObjectJob } from '../../use-cases/get-history-archive-object-job/GetHistoryArchiveObjectJob.js';
 import { TouchHistoryArchiveObject } from '../../use-cases/touch-history-archive-object/TouchHistoryArchiveObject.js';
 import { CompleteHistoryArchiveObject } from '../../use-cases/complete-history-archive-object/CompleteHistoryArchiveObject.js';
 import { FailHistoryArchiveObject } from '../../use-cases/fail-history-archive-object/FailHistoryArchiveObject.js';
 import { ReleaseHistoryArchiveObject } from '../../use-cases/release-history-archive-object/ReleaseHistoryArchiveObject.js';
+import { HistoryArchiveObjectEventRecorder } from '../../use-cases/record-history-archive-object-event/HistoryArchiveObjectEventRecorder.js';
 
 export function load(container: Container, config: Config) {
 	const dataSource = container.get(DataSource);
@@ -60,6 +65,7 @@ export function load(container: Container, config: Config) {
 	container.bind(GetArchiveScanWorkers).toSelf();
 	container.bind(GetHistoryArchiveState).toSelf();
 	container.bind(GetHistoryArchiveObjects).toSelf();
+	container.bind(GetHistoryArchiveObjectEvents).toSelf();
 	container.bind(GetHistoryArchiveObjectJob).toSelf();
 	container.bind(GetScannerMetrics).toSelf();
 	container.bind(BackfillArchiveMetadata).toSelf();
@@ -69,6 +75,7 @@ export function load(container: Container, config: Config) {
 	container.bind(CompleteHistoryArchiveObject).toSelf();
 	container.bind(FailHistoryArchiveObject).toSelf();
 	container.bind(ReleaseHistoryArchiveObject).toSelf();
+	container.bind(HistoryArchiveObjectEventRecorder).toSelf();
 	container.bind(TouchScanJob).toSelf();
 	container.bind(ReleaseScanJob).toSelf();
 	container.bind(RegisterScan).toSelf();
@@ -129,6 +136,17 @@ export function load(container: Container, config: Config) {
 		.toDynamicValue(() => {
 			return new TypeOrmHistoryArchiveObjectRepository(
 				dataSource.getRepository(HistoryArchiveObject)
+			);
+		})
+		.inRequestScope();
+
+	container
+		.bind<HistoryArchiveObjectEventRepository>(
+			TYPES.HistoryArchiveObjectEventRepository
+		)
+		.toDynamicValue(() => {
+			return new TypeOrmHistoryArchiveObjectEventRepository(
+				dataSource.getRepository(HistoryArchiveObjectEvent)
 			);
 		})
 		.inRequestScope();

@@ -6,12 +6,14 @@ import type { HistoryArchiveObjectRepository } from '../../domain/history-archiv
 import { getHistoryArchiveObjectRetryPolicy } from '../../domain/history-archive-object/HistoryArchiveObjectRetryPolicy.js';
 import { TYPES } from '../../infrastructure/di/di-types.js';
 import { mapUnknownToError } from '@core/utilities/mapUnknownToError.js';
+import { HistoryArchiveObjectEventRecorder } from '../record-history-archive-object-event/HistoryArchiveObjectEventRecorder.js';
 
 @injectable()
 export class FailHistoryArchiveObject {
 	constructor(
 		@inject(TYPES.HistoryArchiveObjectRepository)
-		private readonly objectRepository: HistoryArchiveObjectRepository
+		private readonly objectRepository: HistoryArchiveObjectRepository,
+		private readonly eventRecorder: HistoryArchiveObjectEventRecorder
 	) {}
 
 	async execute(
@@ -30,12 +32,22 @@ export class FailHistoryArchiveObject {
 				objectType: object.objectType
 			});
 
-			return ok(
-				await this.objectRepository.markObjectFailed(remoteId, {
+			const updated = await this.objectRepository.markObjectFailed(remoteId, {
 					...failure,
 					nextAttemptAt: retryPolicy.nextAttemptAt
-				})
-			);
+				});
+			if (updated) {
+				const failedObject = await this.objectRepository.findByRemoteId(remoteId);
+				if (failedObject !== null) {
+					await this.eventRecorder.record(failedObject, {
+						claimAttempt: failure.claimAttempt,
+						eventType: 'failed',
+						evidenceClass: retryPolicy.evidenceClass
+					});
+				}
+			}
+
+			return ok(updated);
 		} catch (e) {
 			return err(mapUnknownToError(e));
 		}

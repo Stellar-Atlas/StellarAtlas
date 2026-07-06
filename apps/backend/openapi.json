@@ -3733,6 +3733,42 @@
 				}
 			}
 		},
+		"/v1/archive-scans/objects/events": {
+			"get": {
+				"summary": "List recent history archive object events",
+				"description": "Returns a bounded scanner-owned event log for archive object claims, heartbeats, completions, failures, and releases.",
+				"tags": ["ArchiveScans"],
+				"operationId": "getHistoryArchiveObjectEvents",
+				"parameters": [
+					{
+						"name": "limit",
+						"in": "query",
+						"description": "Maximum number of event rows to return.",
+						"required": false,
+						"schema": {
+							"type": "integer",
+							"minimum": 1,
+							"maximum": 5000,
+							"default": 250
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "history archive object event log",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/HistoryArchiveObjectEventsV1"
+								}
+							}
+						}
+					},
+					"400": { "description": "Invalid limit" },
+					"500": { "description": "Server error" }
+				}
+			}
+		},
 		"/v1/archive-scans/{encodedUrl}/objects": {
 			"get": {
 				"summary": "List history archive objects by archive URL",
@@ -3767,6 +3803,49 @@
 							"application/json": {
 								"schema": {
 									"$ref": "#/components/schemas/HistoryArchiveObjectQueueV1"
+								}
+							}
+						}
+					},
+					"400": { "description": "Invalid archive URL or limit" },
+					"500": { "description": "Server error" }
+				}
+			}
+		},
+		"/v1/archive-scans/{encodedUrl}/objects/events": {
+			"get": {
+				"summary": "List recent history archive object events by archive URL",
+				"description": "Returns a bounded scanner-owned event log for one history archive URL.",
+				"tags": ["ArchiveScans"],
+				"operationId": "getHistoryArchiveObjectEventsByUrl",
+				"parameters": [
+					{
+						"name": "encodedUrl",
+						"in": "path",
+						"description": "URL of the history archive, URL encoded",
+						"required": true,
+						"schema": { "type": "string", "format": "uri" }
+					},
+					{
+						"name": "limit",
+						"in": "query",
+						"description": "Maximum number of event rows to return.",
+						"required": false,
+						"schema": {
+							"type": "integer",
+							"minimum": 1,
+							"maximum": 5000,
+							"default": 250
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "history archive object event log",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/HistoryArchiveObjectEventsV1"
 								}
 							}
 						}
@@ -8009,6 +8088,110 @@
 					}
 				}
 			},
+			"HistoryArchiveObjectEventV1": {
+				"type": "object",
+				"required": [
+					"archiveUrl",
+					"archiveUrlIdentity",
+					"bucketHash",
+					"bytesDownloaded",
+					"checkpointLedger",
+					"claimAttempt",
+					"createdAt",
+					"error",
+					"eventType",
+					"evidenceClass",
+					"nextAttemptAt",
+					"objectKey",
+					"objectRemoteId",
+					"objectType",
+					"objectUrl",
+					"remoteId",
+					"verificationFacts",
+					"workerStage"
+				],
+				"properties": {
+					"archiveUrl": { "type": "string", "format": "uri" },
+					"archiveUrlIdentity": { "type": "string" },
+					"bucketHash": { "type": "string", "nullable": true },
+					"bytesDownloaded": {
+						"type": "integer",
+						"minimum": 0,
+						"nullable": true
+					},
+					"checkpointLedger": {
+						"type": "integer",
+						"minimum": 0,
+						"nullable": true
+					},
+					"claimAttempt": {
+						"type": "integer",
+						"minimum": 1,
+						"nullable": true
+					},
+					"createdAt": { "type": "string", "format": "date-time" },
+					"error": {
+						"nullable": true,
+						"allOf": [
+							{ "$ref": "#/components/schemas/HistoryArchiveObjectErrorV1" }
+						]
+					},
+					"eventType": {
+						"type": "string",
+						"enum": ["claimed", "heartbeat", "verified", "failed", "released"]
+					},
+					"evidenceClass": {
+						"type": "string",
+						"enum": [
+							"archive-object",
+							"worker-infrastructure",
+							"coordinator-infrastructure"
+						],
+						"nullable": true
+					},
+					"nextAttemptAt": {
+						"type": "string",
+						"format": "date-time",
+						"nullable": true
+					},
+					"objectKey": { "type": "string" },
+					"objectRemoteId": { "type": "string", "format": "uuid" },
+					"objectType": {
+						"type": "string",
+						"enum": [
+							"history-archive-state",
+							"checkpoint-state",
+							"ledger",
+							"transactions",
+							"results",
+							"bucket"
+						]
+					},
+					"objectUrl": { "type": "string", "format": "uri" },
+					"remoteId": { "type": "string", "format": "uuid" },
+					"verificationFacts": {
+						"type": "object",
+						"additionalProperties": true,
+						"nullable": true
+					},
+					"workerStage": { "type": "string", "nullable": true }
+				}
+			},
+			"HistoryArchiveObjectEventsV1": {
+				"type": "object",
+				"required": ["count", "events", "generatedAt", "limit"],
+				"properties": {
+					"count": { "type": "integer", "minimum": 0 },
+					"events": {
+						"type": "array",
+						"items": {
+							"$ref": "#/components/schemas/HistoryArchiveObjectEventV1"
+						}
+					},
+					"generatedAt": { "type": "string", "format": "date-time" },
+					"limit": { "type": "integer", "minimum": 1 }
+				}
+			},
 			"HistoryArchiveObjectJobDTO": {
 				"type": "object",
 				"required": [
@@ -8062,6 +8245,11 @@
 							"bytesDownloaded": {
 								"type": "integer",
 								"minimum": 0,
+								"nullable": true
+							},
+							"verificationFacts": {
+								"type": "object",
+								"additionalProperties": true,
 								"nullable": true
 							},
 							"workerStage": { "type": "string", "nullable": true }

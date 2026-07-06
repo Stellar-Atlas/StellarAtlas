@@ -9,6 +9,8 @@ import { GetArchiveScanWorkers } from '@history-scan-coordinator/use-cases/get-a
 import { GetLatestScan } from '@history-scan-coordinator/use-cases/get-latest-scan/GetLatestScan.js';
 import { GetScanEvidence } from '@history-scan-coordinator/use-cases/get-scan-evidence/GetScanEvidence.js';
 import { GetHistoryArchiveState } from '@history-scan-coordinator/use-cases/get-history-archive-state/GetHistoryArchiveState.js';
+import { GetHistoryArchiveObjectEvents } from '@history-scan-coordinator/use-cases/get-history-archive-object-events/GetHistoryArchiveObjectEvents.js';
+import { GetHistoryArchiveObjects } from '@history-scan-coordinator/use-cases/get-history-archive-objects/GetHistoryArchiveObjects.js';
 import { GetScanLogs } from '@history-scan-coordinator/use-cases/get-scan-logs/GetScanLogs.js';
 import { InvalidUrlError } from '@history-scan-coordinator/use-cases/get-latest-scan/InvalidUrlError.js';
 import { HistoryArchiveScan } from 'shared';
@@ -19,6 +21,8 @@ describe('ArchiveScanRouter.integration', () => {
 	let getArchiveScans: jest.Mocked<GetArchiveScans>;
 	let getArchiveScanQueue: jest.Mocked<GetArchiveScanQueue>;
 	let getArchiveScanWorkers: jest.Mocked<GetArchiveScanWorkers>;
+	let getHistoryArchiveObjectEvents: jest.Mocked<GetHistoryArchiveObjectEvents>;
+	let getHistoryArchiveObjects: jest.Mocked<GetHistoryArchiveObjects>;
 	let getHistoryArchiveState: jest.Mocked<GetHistoryArchiveState>;
 	let getLatestScan: jest.Mocked<GetLatestScan>;
 	let getScanEvidence: jest.Mocked<GetScanEvidence>;
@@ -28,6 +32,8 @@ describe('ArchiveScanRouter.integration', () => {
 		getArchiveScans = mock<GetArchiveScans>();
 		getArchiveScanQueue = mock<GetArchiveScanQueue>();
 		getArchiveScanWorkers = mock<GetArchiveScanWorkers>();
+		getHistoryArchiveObjectEvents = mock<GetHistoryArchiveObjectEvents>();
+		getHistoryArchiveObjects = mock<GetHistoryArchiveObjects>();
 		getHistoryArchiveState = mock<GetHistoryArchiveState>();
 		getLatestScan = mock<GetLatestScan>();
 		getScanEvidence = mock<GetScanEvidence>();
@@ -40,12 +46,84 @@ describe('ArchiveScanRouter.integration', () => {
 				getArchiveScans,
 				getArchiveScanQueue,
 				getArchiveScanWorkers,
+				getHistoryArchiveObjectEvents,
+				getHistoryArchiveObjects,
 				getHistoryArchiveState,
 				getLatestScan,
 				getScanEvidence,
 				getScanLogs
 			})
 		);
+	});
+
+	describe('GET /objects/events', () => {
+		it('should expose recent history archive object events', async () => {
+			getHistoryArchiveObjectEvents.execute.mockResolvedValue(
+				ok({
+					count: 1,
+					events: [
+						{
+							archiveUrl: 'https://history.example.com',
+							archiveUrlIdentity: 'https://history.example.com',
+							bucketHash: null,
+							bytesDownloaded: 512,
+							checkpointLedger: 63,
+							claimAttempt: 1,
+							createdAt: '2026-07-06T14:00:00.000Z',
+							error: null,
+							eventType: 'heartbeat',
+							evidenceClass: null,
+							nextAttemptAt: null,
+							objectKey: 'ledger:0000003f',
+							objectRemoteId: '11111111-1111-4111-8111-111111111111',
+							objectType: 'ledger',
+							objectUrl:
+								'https://history.example.com/ledger/00/00/00/ledger-0000003f.xdr.gz',
+							remoteId: '22222222-2222-4222-8222-222222222222',
+							verificationFacts: null,
+							workerStage: 'downloading_ledger'
+						}
+					],
+					generatedAt: '2026-07-06T14:00:01.000Z',
+					limit: 10
+				})
+			);
+
+			await request(app)
+				.get('/archive-scans/objects/events?limit=10')
+				.expect(200)
+				.expect('Cache-Control', 'public, max-age=10')
+				.expect((response) => {
+					expect(response.body.events[0]).toMatchObject({
+						eventType: 'heartbeat',
+						workerStage: 'downloading_ledger'
+					});
+				});
+
+			expect(getHistoryArchiveObjectEvents.execute).toHaveBeenCalledWith({
+				limit: 10
+			});
+		});
+
+		it('should expose archive-scoped object events', async () => {
+			getHistoryArchiveObjectEvents.execute.mockResolvedValue(
+				ok({
+					count: 0,
+					events: [],
+					generatedAt: '2026-07-06T14:00:01.000Z',
+					limit: 25
+				})
+			);
+
+			await request(app)
+				.get('/archive-scans/https%3A%2F%2Ftest.com/objects/events?limit=25')
+				.expect(200);
+
+			expect(getHistoryArchiveObjectEvents.execute).toHaveBeenCalledWith({
+				limit: 25,
+				url: 'https://test.com'
+			});
+		});
 	});
 
 	describe('GET /:encodedUrl/state', () => {

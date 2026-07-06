@@ -10,6 +10,7 @@ import type { HistoryArchiveStateRepository } from '../../domain/history-archive
 import { buildHistoryArchiveObjectsFromState } from '../../domain/history-archive-object/HistoryArchiveObjectBuilder.js';
 import { TYPES } from '../../infrastructure/di/di-types.js';
 import { mapUnknownToError } from '@core/utilities/mapUnknownToError.js';
+import { HistoryArchiveObjectEventRecorder } from '../record-history-archive-object-event/HistoryArchiveObjectEventRecorder.js';
 
 export interface CompleteHistoryArchiveObjectRequest
 	extends HistoryArchiveObjectProgressUpdate {
@@ -22,7 +23,8 @@ export class CompleteHistoryArchiveObject {
 		@inject(TYPES.HistoryArchiveObjectRepository)
 		private readonly objectRepository: HistoryArchiveObjectRepository,
 		@inject(TYPES.HistoryArchiveStateRepository)
-		private readonly stateRepository: HistoryArchiveStateRepository
+		private readonly stateRepository: HistoryArchiveStateRepository,
+		private readonly eventRecorder: HistoryArchiveObjectEventRecorder
 	) {}
 
 	async execute(
@@ -47,13 +49,23 @@ export class CompleteHistoryArchiveObject {
 				);
 			}
 
-			return ok(
-				await this.objectRepository.markObjectVerified(remoteId, {
+			const updated = await this.objectRepository.markObjectVerified(remoteId, {
 					bytesDownloaded: request.bytesDownloaded,
 					claimAttempt: request.claimAttempt,
+					verificationFacts: request.verificationFacts,
 					workerStage: request.workerStage
-				})
-			);
+				});
+			if (updated) {
+				const verifiedObject = await this.objectRepository.findByRemoteId(remoteId);
+				if (verifiedObject !== null) {
+					await this.eventRecorder.record(verifiedObject, {
+						claimAttempt: request.claimAttempt,
+						eventType: 'verified'
+					});
+				}
+			}
+
+			return ok(updated);
 		} catch (e) {
 			return err(mapUnknownToError(e));
 		}

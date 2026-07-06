@@ -21,6 +21,7 @@ export function parseArchiveObjectProgress(
 	const progress: {
 		bytesDownloaded?: number | null;
 		claimAttempt: number;
+		verificationFacts?: object | null;
 		workerStage?: string | null;
 	} = { claimAttempt };
 	if ('bytesDownloaded' in body) {
@@ -44,6 +45,19 @@ export function parseArchiveObjectProgress(
 			return null;
 		}
 		progress.workerStage = body.workerStage;
+	}
+	if ('verificationFacts' in body) {
+		if (
+			body.verificationFacts !== null &&
+			(typeof body.verificationFacts !== 'object' ||
+				Array.isArray(body.verificationFacts))
+		) {
+			res
+				.status(400)
+				.json({ error: 'verificationFacts must be an object or null' });
+			return null;
+		}
+		progress.verificationFacts = body.verificationFacts;
 	}
 
 	return progress;

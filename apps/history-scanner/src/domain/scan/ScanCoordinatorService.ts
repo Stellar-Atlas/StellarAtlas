@@ -31,6 +31,7 @@ export interface HistoryArchiveObjectJobDTO {
 export interface HistoryArchiveObjectProgressDTO {
 	readonly bytesDownloaded?: number | null;
 	readonly claimAttempt?: number;
+	readonly verificationFacts?: object | null;
 	readonly workerStage?: string | null;
 }
 
