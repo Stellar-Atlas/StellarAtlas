@@ -23,6 +23,7 @@ import {
 } from './ScanJobRowMapper.js';
 import type { ScanJobProgressUpdate } from '@history-scan-coordinator/domain/ScanJobRepository.js';
 import { saveScanJobsWithActiveIdentityGuard } from './ScanJobActiveInsert.js';
+import { getHistoryArchiveUrlIdentity } from '@history-scan-coordinator/domain/ArchiveUrlIdentity.js';
 
 type RawActiveCommunityScannerJobsRow = {
 	readonly activeJobs?: NumericValue;
@@ -186,9 +187,14 @@ export class TypeOrmScanJobRepository implements ScanJobRepository {
 	}
 
 	async findActiveByUrl(url: string, limit: number): Promise<ScanJob[]> {
+		const urlIdentity = getHistoryArchiveUrlIdentity(url);
+		if (urlIdentity === null) return [];
+
 		return this.baseRepository
 			.createQueryBuilder('job')
-			.where('job.url = :url', { url })
+			.where("lower(regexp_replace(job.url, '/+$', '')) = :urlIdentity", {
+				urlIdentity
+			})
 			.andWhere('job.status in (:...statuses)', {
 				statuses: ['TAKEN', 'PENDING']
 			})

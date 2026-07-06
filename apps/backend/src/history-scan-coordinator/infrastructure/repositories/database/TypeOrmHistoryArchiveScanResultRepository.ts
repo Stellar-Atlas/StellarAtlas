@@ -4,6 +4,7 @@ import { Scan } from '@history-scan-coordinator/domain/scan/Scan.js';
 import { injectable } from 'inversify';
 import { ScanEvidence } from '@history-scan-coordinator/domain/scan/ScanEvidence.js';
 import type { ArchiveMetadataDTO } from 'history-scanner-dto';
+import { getHistoryArchiveUrlIdentity } from '@history-scan-coordinator/domain/ArchiveUrlIdentity.js';
 
 type NumericValue = number | string;
 type RawLatestScanIdRow = { id?: NumericValue };
@@ -33,9 +34,14 @@ export class TypeOrmHistoryArchiveScanResultRepository implements ScanRepository
 	}
 
 	async findRecentByUrl(url: string, limit: number): Promise<Scan[]> {
+		const urlIdentity = getHistoryArchiveUrlIdentity(url);
+		if (urlIdentity === null) return [];
+
 		return await this.baseRepository
 			.createQueryBuilder('scan')
-			.where('scan.url=:url', { url })
+			.where(getUrlIdentitySql('scan.url') + ' = :urlIdentity', {
+				urlIdentity
+			})
 			.leftJoinAndSelect('scan.error', 'error')
 			.orderBy('scan.startDate', 'DESC')
 			.take(limit)
@@ -46,14 +52,20 @@ export class TypeOrmHistoryArchiveScanResultRepository implements ScanRepository
 		if (!Number.isSafeInteger(limit) || limit < 1) {
 			return { count: 0, evidence: [] };
 		}
+		const urlIdentity = getHistoryArchiveUrlIdentity(url);
+		if (urlIdentity === null) return { count: 0, evidence: [] };
 
 		const evidenceRepository =
 			this.baseRepository.manager.getRepository(ScanEvidence);
-		const [evidence, count] = await evidenceRepository.findAndCount({
-			where: { archiveUrl: url },
-			order: { observedAt: 'DESC', bucketHash: 'ASC' },
-			take: limit
-		});
+		const [evidence, count] = await evidenceRepository
+			.createQueryBuilder('evidence')
+			.where(getUrlIdentitySql('evidence.archiveUrl') + ' = :urlIdentity', {
+				urlIdentity
+			})
+			.orderBy('evidence.observedAt', 'DESC')
+			.addOrderBy('evidence.bucketHash', 'ASC')
+			.take(limit)
+			.getManyAndCount();
 
 		return { count, evidence };
 	}
@@ -266,10 +278,12 @@ export class TypeOrmHistoryArchiveScanResultRepository implements ScanRepository
 		options: LatestScanQueryOptions
 	): Promise<number[]> {
 		const params: (number | string)[] = [];
-		const urlFilter =
-			options.url === undefined
-				? ''
-				: `where scan.url = $${params.push(options.url)}`;
+		let urlFilter = '';
+		if (options.url !== undefined) {
+			const urlIdentity = getHistoryArchiveUrlIdentity(options.url);
+			if (urlIdentity === null) return [];
+			urlFilter = `where ${getUrlIdentitySql('scan.url')} = $${params.push(urlIdentity)}`;
+		}
 		const limitClause =
 			options.limit === undefined ? '' : `limit $${params.push(options.limit)}`;
 		const rows = (await this.baseRepository.query(
@@ -377,6 +391,10 @@ export class TypeOrmHistoryArchiveScanResultRepository implements ScanRepository
 			Number.isSafeInteger(Number(row.id))
 		).length;
 	}
+}
+
+function getUrlIdentitySql(column: string): string {
+	return `lower(regexp_replace(${column}, '/+$', ''))`;
 }
 
 function dedupeEvidence<T extends { readonly bucketHash: string }>(
