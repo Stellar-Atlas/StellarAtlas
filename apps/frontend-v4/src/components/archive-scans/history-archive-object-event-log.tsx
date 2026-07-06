@@ -11,11 +11,17 @@ interface HistoryArchiveObjectEventLogProps {
 	readonly title?: string;
 }
 
+const MAX_ARCHIVE_EVENT_ROWS = 80;
+
 export function HistoryArchiveObjectEventLog({
 	events,
 	framed = true,
 	title = 'Recent archive file activity'
 }: HistoryArchiveObjectEventLogProps): React.JSX.Element {
+	const failedEvents = events.events.filter(
+		(event) => event.eventType === 'failed'
+	);
+	const recentEvents = events.events.slice(0, MAX_ARCHIVE_EVENT_ROWS);
 	const content = (
 		<>
 			<div className="panel-heading">
@@ -34,28 +40,11 @@ export function HistoryArchiveObjectEventLog({
 					text={`${formatInteger(events.count)} events`}
 				/>
 			</div>
-			{events.events.length === 0 ? (
-				<p className="muted-copy">No archive file activity is available yet.</p>
-			) : (
-				<div className="responsive-table">
-					<table className="archive-object-table">
-						<thead>
-							<tr>
-								<th>Status</th>
-								<th>File type</th>
-								<th>Archive</th>
-								<th>File</th>
-								<th>Activity</th>
-							</tr>
-						</thead>
-						<tbody>
-							{events.events.map((event) => (
-								<EventRow event={event} key={event.remoteId} />
-							))}
-						</tbody>
-					</table>
-				</div>
-			)}
+			<EventFailureTable events={failedEvents} />
+			<EventHistoryDetails
+				events={recentEvents}
+				totalEvents={events.events.length}
+			/>
 		</>
 	);
 
@@ -63,6 +52,83 @@ export function HistoryArchiveObjectEventLog({
 
 	return (
 		<section className="panel detail-panel archive-panel">{content}</section>
+	);
+}
+
+function EventFailureTable({
+	events
+}: {
+	readonly events: readonly ObjectEvents['events'][number][];
+}): React.JSX.Element {
+	if (events.length === 0) {
+		return (
+			<p className="archive-good-state">
+				No failed archive file activity is in the recent event window.
+			</p>
+		);
+	}
+
+	return (
+		<div className="archive-priority-block">
+			<div className="archive-table-caption">
+				<strong>Failed archive activity</strong>
+				<span>{formatInteger(events.length)} shown</span>
+			</div>
+			<EventTable events={events} />
+		</div>
+	);
+}
+
+function EventHistoryDetails({
+	events,
+	totalEvents
+}: {
+	readonly events: readonly ObjectEvents['events'][number][];
+	readonly totalEvents: number;
+}): React.JSX.Element {
+	if (totalEvents === 0) {
+		return (
+			<p className="muted-copy">No archive file activity is available yet.</p>
+		);
+	}
+
+	return (
+		<details className="metadata-document archive-object-details">
+			<summary>
+				<span>Recent file activity</span>
+				<span className="muted-inline">
+					Showing {formatInteger(events.length)} of {formatInteger(totalEvents)}
+				</span>
+			</summary>
+			<EventTable events={events} />
+		</details>
+	);
+}
+
+function EventTable({
+	events
+}: {
+	readonly events: readonly ObjectEvents['events'][number][];
+}): React.JSX.Element {
+	return (
+		<div className="responsive-table">
+			<table className="archive-object-table">
+				<thead>
+					<tr>
+						<th>Status</th>
+						<th>File type</th>
+						<th>Archive</th>
+						<th>File</th>
+						<th>Activity</th>
+					</tr>
+				</thead>
+				<tbody>
+					{events.map((event) => (
+						<EventRow event={event} key={event.remoteId} />
+					))}
+				</tbody>
+			</table>
+		</div>
 	);
 }
 

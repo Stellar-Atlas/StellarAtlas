@@ -64,32 +64,32 @@ function CoverageSummary({
 	);
 
 	return (
-		<dl className="details compact-details">
-			<div>
-				<dt>Archive files verified</dt>
-				<dd>{formatCoverage(summary.verifiedObjects, summary.totalObjects)}</dd>
-			</div>
-			<div>
-				<dt>Bucket copies verified</dt>
-				<dd>{bucketCoverage}</dd>
-			</div>
-			<div>
-				<dt>Unique bucket hashes</dt>
-				<dd>{formatInteger(buckets.uniqueBucketHashes)}</dd>
-			</div>
-			<div>
-				<dt>Active file checks</dt>
-				<dd>{formatInteger(summary.activeObjects)}</dd>
-			</div>
-			<div>
-				<dt>Queued file checks</dt>
-				<dd>{formatInteger(summary.pendingObjects)}</dd>
-			</div>
-			<div>
-				<dt>Failed archive evidence</dt>
-				<dd>{formatInteger(summary.failedObjects)}</dd>
-			</div>
-		</dl>
+		<div className="responsive-table archive-summary-table-wrap">
+			<table className="archive-summary-table">
+				<thead>
+					<tr>
+						<th>Archive files</th>
+						<th>Bucket copies</th>
+						<th>Unique buckets</th>
+						<th>Active checks</th>
+						<th>Queued checks</th>
+						<th>Failed evidence</th>
+					</tr>
+				</thead>
+				<tbody>
+					<tr>
+						<td>
+							{formatCoverage(summary.verifiedObjects, summary.totalObjects)}
+						</td>
+						<td>{bucketCoverage}</td>
+						<td>{formatInteger(buckets.uniqueBucketHashes)}</td>
+						<td>{formatInteger(summary.activeObjects)}</td>
+						<td>{formatInteger(summary.pendingObjects)}</td>
+						<td>{formatInteger(summary.failedObjects)}</td>
+					</tr>
+				</tbody>
+			</table>
+		</div>
 	);
 }
 
@@ -111,7 +111,8 @@ function ObjectTypeTable({
 				</span>
 			</summary>
 			<p className="muted-copy">
-				These are archive files, not individual ledger transactions or operations.
+				These are archive files, not individual ledger transactions or
+				operations.
 			</p>
 			<div className="responsive-table">
 				<table className="archive-object-type-table">
@@ -129,7 +130,9 @@ function ObjectTypeTable({
 							<tr key={entry.objectType}>
 								<td>{formatObjectType(entry.objectType)}</td>
 								<td>{formatInteger(entry.totalObjects)}</td>
-								<td>{formatCoverage(entry.verifiedObjects, entry.totalObjects)}</td>
+								<td>
+									{formatCoverage(entry.verifiedObjects, entry.totalObjects)}
+								</td>
 								<td>{formatInteger(entry.pendingObjects)}</td>
 								<td>{formatInteger(entry.failedObjects)}</td>
 							</tr>
