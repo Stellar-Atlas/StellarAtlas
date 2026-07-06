@@ -224,12 +224,16 @@ their claim fields are cleared.
 
 ## Targeted Restart Gate
 
-Restart only these services after builds and migrations pass:
+Restart only these services after builds and migrations pass. Stop archive
+workers before restarting the API so planned API downtime does not create
+coordinator-refused worker noise:
 
 ```bash
 systemctl daemon-reload
+systemctl stop stellaratlas-history-scanner@1.service
 systemctl restart stellaratlas-api.service
-systemctl restart stellaratlas-history-scanner@1.service
+node scripts/wait-for-url.mjs http://127.0.0.1:3000/v1/status 90
+systemctl start stellaratlas-history-scanner@1.service
 systemctl restart stellaratlas-frontend-v4.service
 ```
 
