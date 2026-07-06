@@ -31,6 +31,8 @@ describe('ArchiveObjectSummaryRouter.integration', () => {
 					scope: 'global',
 					totalObjects: 10,
 					checkpoints: {
+						expectedArchiveCheckpoints: 4,
+						missingArchiveCheckpoints: 1,
 						totalArchiveCheckpoints: 3
 					}
 				});
@@ -120,9 +122,13 @@ function createObjectSummary(
 		},
 		checkpoints: {
 			activeArchiveCheckpoints: 1,
+			archiveRootsWithState: 1,
 			completeArchiveCheckpoints: 1,
+			discoveryCompleteArchiveRoots: 0,
+			expectedArchiveCheckpoints: 4,
 			failedArchiveCheckpoints: 1,
 			latestCheckpointLedger: 255,
+			missingArchiveCheckpoints: 1,
 			oldestCheckpointLedger: 63,
 			partialArchiveCheckpoints: 1,
 			totalArchiveCheckpoints: 3

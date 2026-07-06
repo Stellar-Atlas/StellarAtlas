@@ -16,9 +16,13 @@ export interface HistoryArchiveObjectTypeSummaryV1 extends HistoryArchiveObjectS
 
 export interface HistoryArchiveCheckpointCoverageV1 {
 	readonly activeArchiveCheckpoints: number;
+	readonly archiveRootsWithState: number;
 	readonly completeArchiveCheckpoints: number;
+	readonly discoveryCompleteArchiveRoots: number;
+	readonly expectedArchiveCheckpoints: number;
 	readonly failedArchiveCheckpoints: number;
 	readonly latestCheckpointLedger: number | null;
+	readonly missingArchiveCheckpoints: number;
 	readonly oldestCheckpointLedger: number | null;
 	readonly partialArchiveCheckpoints: number;
 	readonly totalArchiveCheckpoints: number;
@@ -101,18 +105,26 @@ const HistoryArchiveCheckpointCoverageV1Schema: JSONSchemaType<HistoryArchiveChe
 		type: 'object',
 		properties: {
 			activeArchiveCheckpoints: { type: 'number' },
+			archiveRootsWithState: { type: 'number' },
 			completeArchiveCheckpoints: { type: 'number' },
+			discoveryCompleteArchiveRoots: { type: 'number' },
+			expectedArchiveCheckpoints: { type: 'number' },
 			failedArchiveCheckpoints: { type: 'number' },
 			latestCheckpointLedger: nullable({ type: 'number' }),
+			missingArchiveCheckpoints: { type: 'number' },
 			oldestCheckpointLedger: nullable({ type: 'number' }),
 			partialArchiveCheckpoints: { type: 'number' },
 			totalArchiveCheckpoints: { type: 'number' }
 		},
 		required: [
 			'activeArchiveCheckpoints',
+			'archiveRootsWithState',
 			'completeArchiveCheckpoints',
+			'discoveryCompleteArchiveRoots',
+			'expectedArchiveCheckpoints',
 			'failedArchiveCheckpoints',
 			'latestCheckpointLedger',
+			'missingArchiveCheckpoints',
 			'oldestCheckpointLedger',
 			'partialArchiveCheckpoints',
 			'totalArchiveCheckpoints'

@@ -8202,16 +8202,29 @@
 				"type": "object",
 				"required": [
 					"activeArchiveCheckpoints",
+					"archiveRootsWithState",
 					"completeArchiveCheckpoints",
+					"discoveryCompleteArchiveRoots",
+					"expectedArchiveCheckpoints",
 					"failedArchiveCheckpoints",
 					"latestCheckpointLedger",
+					"missingArchiveCheckpoints",
 					"oldestCheckpointLedger",
 					"partialArchiveCheckpoints",
 					"totalArchiveCheckpoints"
 				],
 				"properties": {
 					"activeArchiveCheckpoints": { "type": "integer", "minimum": 0 },
+					"archiveRootsWithState": { "type": "integer", "minimum": 0 },
 					"completeArchiveCheckpoints": {
+						"type": "integer",
+						"minimum": 0
+					},
+					"discoveryCompleteArchiveRoots": {
+						"type": "integer",
+						"minimum": 0
+					},
+					"expectedArchiveCheckpoints": {
 						"type": "integer",
 						"minimum": 0
 					},
@@ -8220,6 +8233,10 @@
 						"type": "integer",
 						"minimum": 0,
 						"nullable": true
+					},
+					"missingArchiveCheckpoints": {
+						"type": "integer",
+						"minimum": 0
 					},
 					"oldestCheckpointLedger": {
 						"type": "integer",

@@ -38,12 +38,20 @@ type BucketCoverageRow = Omit<ObjectTypeSummaryRow, 'objectType' | 'objecttype'>
 type CheckpointCoverageRow = {
 	readonly activeArchiveCheckpoints?: NumericValue;
 	readonly activearchivecheckpoints?: NumericValue;
+	readonly archiveRootsWithState?: NumericValue;
+	readonly archiverootswithstate?: NumericValue;
 	readonly completeArchiveCheckpoints?: NumericValue;
 	readonly completearchivecheckpoints?: NumericValue;
+	readonly discoveryCompleteArchiveRoots?: NumericValue;
+	readonly discoverycompletearchiveroots?: NumericValue;
+	readonly expectedArchiveCheckpoints?: NumericValue;
+	readonly expectedarchivecheckpoints?: NumericValue;
 	readonly failedArchiveCheckpoints?: NumericValue;
 	readonly failedarchivecheckpoints?: NumericValue;
 	readonly latestCheckpointLedger?: NumericValue | null;
 	readonly latestcheckpointledger?: NumericValue | null;
+	readonly missingArchiveCheckpoints?: NumericValue;
+	readonly missingarchivecheckpoints?: NumericValue;
 	readonly oldestCheckpointLedger?: NumericValue | null;
 	readonly oldestcheckpointledger?: NumericValue | null;
 	readonly partialArchiveCheckpoints?: NumericValue;
@@ -136,9 +144,22 @@ async function getCheckpointCoverage(
 			row?.activeArchiveCheckpoints ?? row?.activearchivecheckpoints,
 			'activeArchiveCheckpoints'
 		),
+		archiveRootsWithState: requireNumber(
+			row?.archiveRootsWithState ?? row?.archiverootswithstate,
+			'archiveRootsWithState'
+		),
 		completeArchiveCheckpoints: requireNumber(
 			row?.completeArchiveCheckpoints ?? row?.completearchivecheckpoints,
 			'completeArchiveCheckpoints'
+		),
+		discoveryCompleteArchiveRoots: requireNumber(
+			row?.discoveryCompleteArchiveRoots ??
+				row?.discoverycompletearchiveroots,
+			'discoveryCompleteArchiveRoots'
+		),
+		expectedArchiveCheckpoints: requireNumber(
+			row?.expectedArchiveCheckpoints ?? row?.expectedarchivecheckpoints,
+			'expectedArchiveCheckpoints'
 		),
 		failedArchiveCheckpoints: requireNumber(
 			row?.failedArchiveCheckpoints ?? row?.failedarchivecheckpoints,
@@ -146,6 +167,10 @@ async function getCheckpointCoverage(
 		),
 		latestCheckpointLedger: toNullableNumber(
 			row?.latestCheckpointLedger ?? row?.latestcheckpointledger
+		),
+		missingArchiveCheckpoints: requireNumber(
+			row?.missingArchiveCheckpoints ?? row?.missingarchivecheckpoints,
+			'missingArchiveCheckpoints'
 		),
 		oldestCheckpointLedger: toNullableNumber(
 			row?.oldestCheckpointLedger ?? row?.oldestcheckpointledger
@@ -262,7 +287,18 @@ const bucketCoverageSql = `
 `;
 
 const checkpointCoverageSql = `
-	with checkpoint_rollup as (
+	with root_state as (
+		select
+			"archiveUrlIdentity",
+			floor((greatest("currentLedger", 63) + 1)::numeric / 64)::integer
+				as "expectedCheckpointCount"
+		from history_archive_state_snapshot
+		where ${archiveFilterSql}
+			and status = 'available'
+			and "currentLedger" is not null
+			and "currentLedger" >= 0
+	),
+	checkpoint_rollup as (
 		select
 			"archiveUrlIdentity",
 			"checkpointLedger",
@@ -280,6 +316,21 @@ const checkpointCoverageSql = `
 		where ${archiveFilterSql}
 			and "checkpointLedger" is not null
 		group by "archiveUrlIdentity", "checkpointLedger"
+	),
+	root_coverage as (
+		select
+			root_state."archiveUrlIdentity",
+			root_state."expectedCheckpointCount",
+			count(distinct checkpoint_rollup."checkpointLedger")
+				as "scheduledCheckpointCount",
+			min(checkpoint_rollup."checkpointLedger") as "oldestCheckpointLedger"
+		from root_state
+		left join checkpoint_rollup
+			on checkpoint_rollup."archiveUrlIdentity" =
+				root_state."archiveUrlIdentity"
+		group by
+			root_state."archiveUrlIdentity",
+			root_state."expectedCheckpointCount"
 	),
 	classified as (
 		select
@@ -304,6 +355,34 @@ const checkpointCoverageSql = `
 		count(*) filter (where not is_complete and not has_failed)
 			as "partialArchiveCheckpoints",
 		min("checkpointLedger") as "oldestCheckpointLedger",
-		max("checkpointLedger") as "latestCheckpointLedger"
+		max("checkpointLedger") as "latestCheckpointLedger",
+		coalesce((select count(*) from root_coverage), 0)
+			as "archiveRootsWithState",
+		coalesce(
+			(select sum("expectedCheckpointCount") from root_coverage),
+			0
+		) as "expectedArchiveCheckpoints",
+		coalesce(
+			(
+				select sum(
+					greatest(
+						"expectedCheckpointCount" - "scheduledCheckpointCount",
+						0
+					)
+				)
+				from root_coverage
+			),
+			0
+		) as "missingArchiveCheckpoints",
+		coalesce(
+			(
+				select count(*)
+				from root_coverage
+				where "expectedCheckpointCount" > 0
+					and "scheduledCheckpointCount" >= "expectedCheckpointCount"
+					and "oldestCheckpointLedger" <= 63
+			),
+			0
+		) as "discoveryCompleteArchiveRoots"
 	from classified
 `;

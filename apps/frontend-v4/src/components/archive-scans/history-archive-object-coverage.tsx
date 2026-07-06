@@ -77,6 +77,14 @@ function CoverageGrid({
 				<span>complete checkpoints</span>
 			</div>
 			<div>
+				<strong>{formatInteger(checkpoints.expectedArchiveCheckpoints)}</strong>
+				<span>expected checkpoints</span>
+			</div>
+			<div>
+				<strong>{formatInteger(checkpoints.missingArchiveCheckpoints)}</strong>
+				<span>missing checkpoints</span>
+			</div>
+			<div>
 				<strong>{formatInteger(checkpoints.partialArchiveCheckpoints)}</strong>
 				<span>partial checkpoints</span>
 			</div>
@@ -95,6 +103,13 @@ function CoverageGrid({
 			<div>
 				<strong>{formatCheckpointRange(summary)}</strong>
 				<span>checkpoint range</span>
+			</div>
+			<div>
+				<strong>
+					{formatInteger(checkpoints.discoveryCompleteArchiveRoots)} /{' '}
+					{formatInteger(checkpoints.archiveRootsWithState)}
+				</strong>
+				<span>roots fully discovered</span>
 			</div>
 		</div>
 	);
