@@ -324,12 +324,15 @@ export function NodeDetail({
 							framed={false}
 						/>
 					) : null}
-					<div className="archive-log-section">
-						<div className="panel-heading archive-log-heading">
-							<h3>Legacy range scan log</h3>
-						</div>
+					<details className="archive-log-section metadata-document">
+						<summary>
+							<span>Legacy range-scan log</span>
+							<span className="muted-inline">
+								{formatInteger(historyArchiveScanLogs.length)} rows
+							</span>
+						</summary>
 						<HistoryArchiveScanLog logs={historyArchiveScanLogs} />
-					</div>
+					</details>
 				</article>
 			)}
 		</section>

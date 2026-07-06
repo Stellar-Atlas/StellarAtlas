@@ -246,7 +246,7 @@ function formatCoverage(verified: number, total: number): string {
 		' / ' +
 		formatInteger(total) +
 		' verified (' +
-		formatPercent(verified / total) +
+		formatPercent((verified / total) * 100) +
 		')'
 	);
 }

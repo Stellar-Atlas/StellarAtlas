@@ -340,7 +340,7 @@ function formatBucketCoverageSummary(
 	const percent =
 		totalCopies === 0
 			? '0%'
-			: formatPercent(counts.verifiedCopies / totalCopies);
+			: formatPercent((counts.verifiedCopies / totalCopies) * 100);
 
 	return `${formatInteger(counts.verifiedCopies)} / ${formatInteger(
 		totalCopies

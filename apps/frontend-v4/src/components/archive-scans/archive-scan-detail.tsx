@@ -130,15 +130,15 @@ export function ArchiveScanDetail({
 				events={events}
 				title="Recent archive file activity"
 			/>
-			<article className="panel detail-panel archive-panel">
-				<div className="panel-heading">
+			<details className="panel detail-panel archive-panel">
+				<summary className="panel-heading">
 					<h2>Legacy range-scan log</h2>
 					<span className="muted-inline">
 						{formatInteger(logs.length)} rows
 					</span>
-				</div>
+				</summary>
 				<HistoryArchiveScanLog logs={logs} />
-			</article>
+			</details>
 		</section>
 	);
 }
