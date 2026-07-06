@@ -82,6 +82,10 @@ export {
 	type HistoryArchiveObjectEvidenceClassV1,
 	HistoryArchiveObjectEventsV1Schema
 } from './dto/history-archive-object-event-v1.js';
+export {
+	type HistoryArchiveEvidenceV1,
+	HistoryArchiveEvidenceV1Schema
+} from './dto/history-archive-evidence-v1.js';
 export type {
 	ScpBallotV1,
 	ScpNominationV1,

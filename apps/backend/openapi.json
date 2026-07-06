@@ -3907,6 +3907,61 @@
 				}
 			}
 		},
+		"/v1/archive-scans/{encodedUrl}/object-evidence": {
+			"get": {
+				"summary": "Get scanner-owned archive object evidence",
+				"description": "Returns persisted history archive state, object coverage summary, current archive object rows, and recent archive object events for one archive root. This endpoint is scanner-owned and does not fetch files from the remote archive during page render.",
+				"tags": ["ArchiveScans"],
+				"operationId": "getHistoryArchiveObjectEvidenceByUrl",
+				"parameters": [
+					{
+						"name": "encodedUrl",
+						"in": "path",
+						"description": "URL of the history archive, URL encoded",
+						"required": true,
+						"schema": { "type": "string", "format": "uri" }
+					},
+					{
+						"name": "objectLimit",
+						"in": "query",
+						"description": "Maximum number of current object rows to return.",
+						"required": false,
+						"schema": {
+							"type": "integer",
+							"minimum": 1,
+							"maximum": 5000,
+							"default": 250
+						}
+					},
+					{
+						"name": "eventLimit",
+						"in": "query",
+						"description": "Maximum number of event rows to return.",
+						"required": false,
+						"schema": {
+							"type": "integer",
+							"minimum": 1,
+							"maximum": 5000,
+							"default": 250
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "scanner-owned archive object evidence",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/HistoryArchiveEvidenceV1"
+								}
+							}
+						}
+					},
+					"400": { "description": "Invalid archive URL or limit" },
+					"500": { "description": "Server error" }
+				}
+			}
+		},
 		"/v1/archive-scans/{encodedUrl}/errors": {
 			"get": {
 				"summary": "Get archive scan log entries",
@@ -8561,6 +8616,37 @@
 					},
 					"generatedAt": { "type": "string", "format": "date-time" },
 					"limit": { "type": "integer", "minimum": 1 }
+				}
+			},
+			"HistoryArchiveEvidenceV1": {
+				"type": "object",
+				"additionalProperties": false,
+				"required": [
+					"archiveUrl",
+					"generatedAt",
+					"objectEvents",
+					"objects",
+					"scannerOwnedState",
+					"summary"
+				],
+				"properties": {
+					"archiveUrl": { "type": "string", "format": "uri" },
+					"generatedAt": { "type": "string", "format": "date-time" },
+					"objectEvents": {
+						"$ref": "#/components/schemas/HistoryArchiveObjectEventsV1"
+					},
+					"objects": {
+						"$ref": "#/components/schemas/HistoryArchiveObjectQueueV1"
+					},
+					"scannerOwnedState": {
+						"nullable": true,
+						"allOf": [
+							{ "$ref": "#/components/schemas/HistoryArchiveStateSnapshotV1" }
+						]
+					},
+					"summary": {
+						"$ref": "#/components/schemas/HistoryArchiveObjectSummaryV1"
+					}
 				}
 			},
 			"HistoryArchiveObjectJobDTO": {

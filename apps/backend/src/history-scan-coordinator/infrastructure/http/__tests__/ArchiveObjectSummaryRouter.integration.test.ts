@@ -2,7 +2,12 @@ import express from 'express';
 import request from 'supertest';
 import { mock } from 'jest-mock-extended';
 import { ok } from 'neverthrow';
-import type { HistoryArchiveObjectSummaryV1 } from 'shared';
+import type {
+	HistoryArchiveObjectEventsV1,
+	HistoryArchiveObjectQueueV1,
+	HistoryArchiveObjectSummaryV1,
+	HistoryArchiveStateSnapshotV1
+} from 'shared';
 import { ArchiveScanRouterWrapper } from '../ArchiveScanRouter.js';
 import { GetArchiveScans } from '@history-scan-coordinator/use-cases/get-archive-scans/GetArchiveScans.js';
 import { GetArchiveScanQueue } from '@history-scan-coordinator/use-cases/get-archive-scan-queue/GetArchiveScanQueue.js';
@@ -85,11 +90,67 @@ describe('ArchiveObjectSummaryRouter.integration', () => {
 
 		expect(getHistoryArchiveObjectSummary.execute).not.toHaveBeenCalled();
 	});
+
+	it('should compose scanner-owned object evidence for an archive root', async () => {
+		const harness = createHarness();
+		harness.getHistoryArchiveState.execute.mockResolvedValue(ok(createState()));
+		harness.getHistoryArchiveObjectSummary.execute.mockResolvedValue(
+			ok(
+				createObjectSummary({
+					archiveUrl: 'https://history.example.com',
+					archiveUrlIdentity: 'https://history.example.com',
+					scope: 'archive'
+				})
+			)
+		);
+		harness.getHistoryArchiveObjects.execute.mockResolvedValue(
+			ok(createQueue())
+		);
+		harness.getHistoryArchiveObjectEvents.execute.mockResolvedValue(
+			ok(createEvents())
+		);
+
+		await request(harness.app)
+			.get(
+				'/archive-scans/https%3A%2F%2Fhistory.example.com/object-evidence?objectLimit=5&eventLimit=7'
+			)
+			.expect(200)
+			.expect('Cache-Control', 'public, max-age=10')
+			.expect((response) => {
+				expect(response.body).toMatchObject({
+					archiveUrl: 'https://history.example.com',
+					objectEvents: { count: 1 },
+					objects: { activeObjects: 1 },
+					scannerOwnedState: { status: 'available' },
+					summary: { scope: 'archive' }
+				});
+			});
+
+		expect(harness.getHistoryArchiveState.execute).toHaveBeenCalledWith(
+			'https://history.example.com'
+		);
+		expect(harness.getHistoryArchiveObjectSummary.execute).toHaveBeenCalledWith(
+			{
+				url: 'https://history.example.com'
+			}
+		);
+		expect(harness.getHistoryArchiveObjects.execute).toHaveBeenCalledWith({
+			limit: 5,
+			url: 'https://history.example.com'
+		});
+		expect(harness.getHistoryArchiveObjectEvents.execute).toHaveBeenCalledWith({
+			limit: 7,
+			url: 'https://history.example.com'
+		});
+	});
 });
 
 function createHarness() {
 	const app = express();
+	const getHistoryArchiveObjectEvents = mock<GetHistoryArchiveObjectEvents>();
+	const getHistoryArchiveObjects = mock<GetHistoryArchiveObjects>();
 	const getHistoryArchiveObjectSummary = mock<GetHistoryArchiveObjectSummary>();
+	const getHistoryArchiveState = mock<GetHistoryArchiveState>();
 	app.use(express.json());
 	app.use(
 		'/archive-scans',
@@ -97,17 +158,103 @@ function createHarness() {
 			getArchiveScans: mock<GetArchiveScans>(),
 			getArchiveScanQueue: mock<GetArchiveScanQueue>(),
 			getArchiveScanWorkers: mock<GetArchiveScanWorkers>(),
-			getHistoryArchiveObjectEvents: mock<GetHistoryArchiveObjectEvents>(),
-			getHistoryArchiveObjects: mock<GetHistoryArchiveObjects>(),
+			getHistoryArchiveObjectEvents,
+			getHistoryArchiveObjects,
 			getHistoryArchiveObjectSummary,
-			getHistoryArchiveState: mock<GetHistoryArchiveState>(),
+			getHistoryArchiveState,
 			getLatestScan: mock<GetLatestScan>(),
 			getScanEvidence: mock<GetScanEvidence>(),
 			getScanLogs: mock<GetScanLogs>()
 		})
 	);
 
-	return { app, getHistoryArchiveObjectSummary };
+	return {
+		app,
+		getHistoryArchiveObjectEvents,
+		getHistoryArchiveObjects,
+		getHistoryArchiveObjectSummary,
+		getHistoryArchiveState
+	};
+}
+
+function createState(): HistoryArchiveStateSnapshotV1 {
+	return {
+		archiveUrl: 'https://history.example.com',
+		archiveUrlIdentity: 'https://history.example.com',
+		failure: null,
+		metadata: null,
+		observedAt: '2026-07-06T15:30:00.000Z',
+		source: 'history-scanner',
+		stateUrl: 'https://history.example.com/.well-known/stellar-history.json',
+		status: 'available'
+	};
+}
+
+function createQueue(): HistoryArchiveObjectQueueV1 {
+	return {
+		activeObjects: 1,
+		failedObjects: 0,
+		generatedAt: '2026-07-06T15:30:00.000Z',
+		objects: [
+			{
+				archiveUrl: 'https://history.example.com',
+				archiveUrlIdentity: 'https://history.example.com',
+				attempts: 1,
+				bucketHash:
+					'4eae73efaa0ce061441dfe43ffc61c0ed24fcbc59e5ee512d1b60e8da2509655',
+				bytesDownloaded: 392000,
+				checkpointLedger: null,
+				claimedAt: '2026-07-06T15:29:00.000Z',
+				error: null,
+				nextAttemptAt: null,
+				objectKey:
+					'bucket:4eae73efaa0ce061441dfe43ffc61c0ed24fcbc59e5ee512d1b60e8da2509655',
+				objectType: 'bucket',
+				objectUrl:
+					'https://history.example.com/bucket/4e/ae/73/bucket-4eae73efaa0ce061441dfe43ffc61c0ed24fcbc59e5ee512d1b60e8da2509655.xdr.gz',
+				refreshAfter: null,
+				remoteId: '11111111-1111-4111-8111-111111111111',
+				status: 'scanning',
+				updatedAt: '2026-07-06T15:30:00.000Z',
+				verificationFacts: null,
+				verifiedAt: null,
+				workerStage: 'downloading_bucket'
+			}
+		],
+		pendingObjects: 2,
+		verifiedObjects: 3
+	};
+}
+
+function createEvents(): HistoryArchiveObjectEventsV1 {
+	return {
+		count: 1,
+		events: [
+			{
+				archiveUrl: 'https://history.example.com',
+				archiveUrlIdentity: 'https://history.example.com',
+				bucketHash: null,
+				bytesDownloaded: null,
+				checkpointLedger: 127,
+				claimAttempt: 1,
+				createdAt: '2026-07-06T15:30:00.000Z',
+				error: null,
+				eventType: 'claimed',
+				evidenceClass: null,
+				nextAttemptAt: null,
+				objectKey: 'ledger:0000007f',
+				objectRemoteId: '11111111-1111-4111-8111-111111111111',
+				objectType: 'ledger',
+				objectUrl:
+					'https://history.example.com/ledger/00/00/00/ledger-0000007f.xdr.gz',
+				remoteId: '22222222-2222-4222-8222-222222222222',
+				verificationFacts: null,
+				workerStage: 'claimed'
+			}
+		],
+		generatedAt: '2026-07-06T15:30:00.000Z',
+		limit: 7
+	};
 }
 
 function createObjectSummary(

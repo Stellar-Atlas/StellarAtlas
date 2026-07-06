@@ -20,6 +20,7 @@ import { GetHistoryArchiveObjects } from '../../use-cases/get-history-archive-ob
 import { GetHistoryArchiveObjectSummary } from '../../use-cases/get-history-archive-object-summary/GetHistoryArchiveObjectSummary.js';
 import { GetHistoryArchiveObjectEvents } from '../../use-cases/get-history-archive-object-events/GetHistoryArchiveObjectEvents.js';
 import { InvalidUrlError } from '../../use-cases/get-latest-scan/InvalidUrlError.js';
+import type { HistoryArchiveEvidenceV1 } from 'shared';
 
 export interface ArchiveScanRouterConfig {
 	getArchiveScans: GetArchiveScans;
@@ -292,6 +293,74 @@ export const ArchiveScanRouterWrapper = (
 			}
 
 			return res.status(200).json(eventsOrError.value);
+		}
+	);
+
+	archiveScanRouter.get(
+		'/:encodedUrl/object-evidence',
+		[
+			param('encodedUrl').isURL(),
+			query('objectLimit').optional().isInt({ min: 1, max: 5000 }),
+			query('eventLimit').optional().isInt({ min: 1, max: 5000 })
+		],
+		async function (req: express.Request, res: express.Response) {
+			res.setHeader(
+				'Cache-Control',
+				'public, max-age=' + archiveScanCacheMaxAgeSeconds
+			);
+			const errors = validationResult(req);
+			if (!errors.isEmpty()) {
+				return res.status(400).json({ errors: errors.array() });
+			}
+
+			const archiveUrl = req.params.encodedUrl;
+			const objectLimit =
+				typeof req.query.objectLimit === 'string'
+					? Number(req.query.objectLimit)
+					: undefined;
+			const eventLimit =
+				typeof req.query.eventLimit === 'string'
+					? Number(req.query.eventLimit)
+					: undefined;
+			const [state, summary, objects, objectEvents] = await Promise.all([
+				config.getHistoryArchiveState.execute(archiveUrl),
+				config.getHistoryArchiveObjectSummary.execute({ url: archiveUrl }),
+				config.getHistoryArchiveObjects.execute({
+					limit: objectLimit,
+					url: archiveUrl
+				}),
+				config.getHistoryArchiveObjectEvents.execute({
+					limit: eventLimit,
+					url: archiveUrl
+				})
+			]);
+
+			const invalidUrlResult = [state, summary, objects, objectEvents].find(
+				(result) => result.isErr() && result.error instanceof InvalidUrlError
+			);
+			if (invalidUrlResult !== undefined) {
+				return res.status(400).json({ error: 'Invalid url' });
+			}
+
+			if (
+				state.isErr() ||
+				summary.isErr() ||
+				objects.isErr() ||
+				objectEvents.isErr()
+			) {
+				return res.status(500).json({ error: 'Internal server error' });
+			}
+
+			const evidence: HistoryArchiveEvidenceV1 = {
+				archiveUrl,
+				generatedAt: new Date().toISOString(),
+				objectEvents: objectEvents.value,
+				objects: objects.value,
+				scannerOwnedState: state.value,
+				summary: summary.value
+			};
+
+			return res.status(200).json(evidence);
 		}
 	);
 
