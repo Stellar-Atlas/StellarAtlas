@@ -65,7 +65,7 @@ export function ProductionServiceStatusPanel({
 					value={statusLabel(networkScan.status)}
 				/>
 				<StatusRow
-					detail={`${formatInteger(archiveSummary.activeObjects)} active objects, ${formatInteger(archiveSummary.pendingObjects)} pending, ${formatInteger(archiveSummary.failedObjects)} archive evidence failures; ${formatInteger(archiveObjects.objects.length)} current rows shown`}
+					detail={`${formatInteger(archiveSummary.activeObjects)} active objects, ${formatInteger(archiveSummary.pendingObjects)} pending, ${formatInteger(archiveSummary.failedObjects)} archive evidence failures; ${formatInteger(archiveSummary.checkpoints.objectCompleteArchiveCheckpoints)} object-complete checkpoints, ${formatInteger(archiveSummary.checkpoints.categoryConsistentArchiveCheckpoints)} category-consistent; ${formatInteger(archiveObjects.objects.length)} current rows shown`}
 					label="Archive scanner"
 					status={archiveObjectStatus}
 					value={`${formatInteger(archiveSummary.totalObjects)} objects`}

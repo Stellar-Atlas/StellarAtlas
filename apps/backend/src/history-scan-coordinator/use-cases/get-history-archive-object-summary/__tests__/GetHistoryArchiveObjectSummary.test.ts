@@ -78,12 +78,17 @@ function createSummary(options: {
 		checkpoints: {
 			activeArchiveCheckpoints: 0,
 			archiveRootsWithState: 0,
+			categoryConsistencyFailedCheckpoints: 0,
+			categoryConsistencyNotEvaluatedCheckpoints: 0,
+			categoryConsistencyPendingCheckpoints: 0,
+			categoryConsistentArchiveCheckpoints: 0,
 			completeArchiveCheckpoints: 0,
 			discoveryCompleteArchiveRoots: 0,
 			expectedArchiveCheckpoints: 0,
 			failedArchiveCheckpoints: 0,
 			latestCheckpointLedger: null,
 			missingArchiveCheckpoints: 0,
+			objectCompleteArchiveCheckpoints: 0,
 			oldestCheckpointLedger: null,
 			partialArchiveCheckpoints: 0,
 			totalArchiveCheckpoints: 0

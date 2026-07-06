@@ -74,8 +74,24 @@ function CoverageGrid({
 	return (
 		<div className="archive-coverage-grid">
 			<div>
-				<strong>{formatInteger(checkpoints.completeArchiveCheckpoints)}</strong>
-				<span>complete checkpoints</span>
+				<strong>
+					{formatInteger(checkpoints.objectCompleteArchiveCheckpoints)}
+				</strong>
+				<span>object-complete checkpoints</span>
+			</div>
+			<div>
+				<strong>
+					{formatInteger(checkpoints.categoryConsistentArchiveCheckpoints)}
+				</strong>
+				<span>category-consistent checkpoints</span>
+			</div>
+			<div>
+				<strong>
+					{formatInteger(
+						checkpoints.categoryConsistencyNotEvaluatedCheckpoints
+					)}
+				</strong>
+				<span>proof not evaluated</span>
 			</div>
 			<div>
 				<strong>{formatInteger(checkpoints.expectedArchiveCheckpoints)}</strong>
@@ -87,7 +103,7 @@ function CoverageGrid({
 			</div>
 			<div>
 				<strong>{formatInteger(checkpoints.partialArchiveCheckpoints)}</strong>
-				<span>partial checkpoints</span>
+				<span>object-incomplete checkpoints</span>
 			</div>
 			<div>
 				<strong>{formatInteger(checkpoints.failedArchiveCheckpoints)}</strong>

@@ -4,8 +4,12 @@ import { pipeline } from 'node:stream/promises';
 import { err, ok, type Result } from 'neverthrow';
 import { Url, isHttpError, type HttpService } from 'http-helper';
 import type { ExceptionLogger } from 'exception-logger';
-import { mapUnknownToError } from 'shared';
+import {
+	mapUnknownToError,
+	type HistoryArchiveObjectVerificationFactsV1
+} from 'shared';
 import { Category } from '../../domain/history-archive/Category.js';
+import { hashBucketList } from '../../domain/history-archive/hashBucketList.js';
 import { HistoryArchiveStateValidator } from '../../domain/history-archive/HistoryArchiveStateValidator.js';
 import type { CategoryVerificationData } from '../../domain/scanner/CategoryScanner.js';
 import { CategoryXDRProcessor } from '../../domain/scanner/CategoryXDRProcessor.js';
@@ -70,8 +74,18 @@ export class ArchiveObjectCategoryVerifier {
 		}
 
 		const bytesDownloaded = Buffer.byteLength(JSON.stringify(state));
+		const bucketListHashResult = hashBucketList(validation.value);
+		if (bucketListHashResult.isErr()) {
+			return err({
+				errorMessage: bucketListHashResult.error.message,
+				errorType: 'invalid_checkpoint_state',
+				httpStatus: response.value.status
+			});
+		}
+
+		const observedAt = new Date().toISOString();
 		const checkpointHistoryArchiveState = {
-			observedAt: new Date().toISOString(),
+			observedAt,
 			stellarHistory: validation.value,
 			stellarHistoryUrl: job.objectUrl
 		};
@@ -82,7 +96,15 @@ export class ArchiveObjectCategoryVerifier {
 		);
 		return ok({
 			bytesDownloaded,
-			verificationFacts: { checkpointHistoryArchiveState },
+			verificationFacts: {
+				checkpointHistoryArchiveState,
+				checkpointHistoryArchiveStateFact: {
+					bucketListHash: bucketListHashResult.value.hash,
+					checkpointLedger: bucketListHashResult.value.ledger,
+					observedAt,
+					stellarHistoryUrl: job.objectUrl
+				}
+			},
 			workerStage: 'verified'
 		});
 	}
@@ -143,26 +165,38 @@ export class ArchiveObjectCategoryVerifier {
 					)
 				: undefined;
 
+		const categoryVerificationData = createCategoryVerificationData();
+		let processedEntries = 0;
 		try {
+			const processor = new CategoryXDRProcessor(
+				pool,
+				urlResult.value,
+				category,
+				categoryVerificationData,
+				parsedHistorySink
+			);
 			await pipeline([
 				countedStream,
 				createGunzip(),
 				new XdrStreamReader(),
-				new CategoryXDRProcessor(
-					pool,
-					urlResult.value,
-					category,
-					createCategoryVerificationData(),
-					parsedHistorySink
-				)
+				processor
 			]);
+			processedEntries = processor.processedEntries;
 			await parsedHistorySink?.flush();
 			this.reportProgress(
 				job.remoteId,
 				`verified_${job.objectType}`,
 				bytesDownloaded
 			);
-			return ok({ bytesDownloaded, workerStage: 'verified' });
+			return ok({
+				bytesDownloaded,
+				verificationFacts: createCategoryVerificationFacts(
+					job.objectType,
+					categoryVerificationData,
+					processedEntries
+				),
+				workerStage: 'verified'
+			});
 		} catch (error) {
 			return err({
 				errorMessage: mapUnknownToError(error).message,
@@ -238,6 +272,61 @@ function createCategoryVerificationData(): CategoryVerificationData {
 		expectedHashesPerLedger: new Map(),
 		protocolVersions: new Map()
 	};
+}
+
+function createCategoryVerificationFacts(
+	objectType: string,
+	data: CategoryVerificationData,
+	entryCount: number
+): HistoryArchiveObjectVerificationFactsV1 {
+	if (objectType === 'ledger') {
+		return {
+			ledgerCategory: {
+				entryCount,
+				ledgers: Array.from(data.expectedHashesPerLedger.entries())
+					.map(([ledger, expectedHashes]) => ({
+						bucketListHash: expectedHashes.bucketListHash,
+						ledger,
+						ledgerHeaderHash:
+							data.calculatedLedgerHeaderHashes.get(ledger) ?? null,
+						previousLedgerHeaderHash:
+							expectedHashes.previousLedgerHeaderHash,
+						protocolVersion: data.protocolVersions.get(ledger) ?? null,
+						transactionResultSetHash: expectedHashes.txSetResultHash,
+						transactionSetHash: expectedHashes.txSetHash
+					}))
+					.sort((left, right) => left.ledger - right.ledger)
+			}
+		};
+	}
+
+	if (objectType === 'transactions') {
+		return {
+			transactionsCategory: {
+				entryCount,
+				ledgers: mapHashFacts(data.calculatedTxSetHashes)
+			}
+		};
+	}
+
+	if (objectType === 'results') {
+		return {
+			resultsCategory: {
+				entryCount,
+				ledgers: mapHashFacts(data.calculatedTxSetResultHashes)
+			}
+		};
+	}
+
+	return { scpCategory: { entryCount } };
+}
+
+function mapHashFacts(
+	hashes: ReadonlyMap<number, string>
+): readonly { readonly hash: string; readonly ledger: number }[] {
+	return Array.from(hashes.entries())
+		.map(([ledger, hash]) => ({ hash, ledger }))
+		.sort((left, right) => left.ledger - right.ledger);
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

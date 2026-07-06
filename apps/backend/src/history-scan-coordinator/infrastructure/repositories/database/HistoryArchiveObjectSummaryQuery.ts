@@ -44,6 +44,14 @@ type CheckpointCoverageRow = {
 	readonly activearchivecheckpoints?: NumericValue;
 	readonly archiveRootsWithState?: NumericValue;
 	readonly archiverootswithstate?: NumericValue;
+	readonly categoryConsistencyFailedCheckpoints?: NumericValue;
+	readonly categoryconsistencyfailedcheckpoints?: NumericValue;
+	readonly categoryConsistencyNotEvaluatedCheckpoints?: NumericValue;
+	readonly categoryconsistencynotevaluatedcheckpoints?: NumericValue;
+	readonly categoryConsistencyPendingCheckpoints?: NumericValue;
+	readonly categoryconsistencypendingcheckpoints?: NumericValue;
+	readonly categoryConsistentArchiveCheckpoints?: NumericValue;
+	readonly categoryconsistentarchivecheckpoints?: NumericValue;
 	readonly completeArchiveCheckpoints?: NumericValue;
 	readonly completearchivecheckpoints?: NumericValue;
 	readonly discoveryCompleteArchiveRoots?: NumericValue;
@@ -56,6 +64,8 @@ type CheckpointCoverageRow = {
 	readonly latestcheckpointledger?: NumericValue | null;
 	readonly missingArchiveCheckpoints?: NumericValue;
 	readonly missingarchivecheckpoints?: NumericValue;
+	readonly objectCompleteArchiveCheckpoints?: NumericValue;
+	readonly objectcompletearchivecheckpoints?: NumericValue;
 	readonly oldestCheckpointLedger?: NumericValue | null;
 	readonly oldestcheckpointledger?: NumericValue | null;
 	readonly partialArchiveCheckpoints?: NumericValue;
@@ -154,6 +164,26 @@ async function getCheckpointCoverage(
 			row?.archiveRootsWithState ?? row?.archiverootswithstate,
 			'archiveRootsWithState'
 		),
+		categoryConsistencyFailedCheckpoints: requireNumber(
+			row?.categoryConsistencyFailedCheckpoints ??
+				row?.categoryconsistencyfailedcheckpoints,
+			'categoryConsistencyFailedCheckpoints'
+		),
+		categoryConsistencyNotEvaluatedCheckpoints: requireNumber(
+			row?.categoryConsistencyNotEvaluatedCheckpoints ??
+				row?.categoryconsistencynotevaluatedcheckpoints,
+			'categoryConsistencyNotEvaluatedCheckpoints'
+		),
+		categoryConsistencyPendingCheckpoints: requireNumber(
+			row?.categoryConsistencyPendingCheckpoints ??
+				row?.categoryconsistencypendingcheckpoints,
+			'categoryConsistencyPendingCheckpoints'
+		),
+		categoryConsistentArchiveCheckpoints: requireNumber(
+			row?.categoryConsistentArchiveCheckpoints ??
+				row?.categoryconsistentarchivecheckpoints,
+			'categoryConsistentArchiveCheckpoints'
+		),
 		completeArchiveCheckpoints: requireNumber(
 			row?.completeArchiveCheckpoints ?? row?.completearchivecheckpoints,
 			'completeArchiveCheckpoints'
@@ -176,6 +206,11 @@ async function getCheckpointCoverage(
 		missingArchiveCheckpoints: requireNumber(
 			row?.missingArchiveCheckpoints ?? row?.missingarchivecheckpoints,
 			'missingArchiveCheckpoints'
+		),
+		objectCompleteArchiveCheckpoints: requireNumber(
+			row?.objectCompleteArchiveCheckpoints ??
+				row?.objectcompletearchivecheckpoints,
+			'objectCompleteArchiveCheckpoints'
 		),
 		oldestCheckpointLedger: toNullableNumber(
 			row?.oldestCheckpointLedger ?? row?.oldestcheckpointledger
@@ -353,15 +388,24 @@ const checkpointCoverageSql = `
 				and has_transactions
 				and has_results
 				and (not expects_scp or has_scp)
-			) as is_complete
+			) as is_object_complete
 		from checkpoint_rollup
 	)
 	select
 		count(*) as "totalArchiveCheckpoints",
 		count(*) filter (where has_active) as "activeArchiveCheckpoints",
 		count(*) filter (where has_failed) as "failedArchiveCheckpoints",
-		count(*) filter (where is_complete) as "completeArchiveCheckpoints",
-		count(*) filter (where not is_complete and not has_failed)
+		count(*) filter (where is_object_complete)
+			as "completeArchiveCheckpoints",
+		count(*) filter (where is_object_complete)
+			as "objectCompleteArchiveCheckpoints",
+		0 as "categoryConsistentArchiveCheckpoints",
+		0 as "categoryConsistencyFailedCheckpoints",
+		count(*) filter (where is_object_complete)
+			as "categoryConsistencyNotEvaluatedCheckpoints",
+		count(*) filter (where not is_object_complete and not has_failed)
+			as "categoryConsistencyPendingCheckpoints",
+		count(*) filter (where not is_object_complete and not has_failed)
 			as "partialArchiveCheckpoints",
 		min("checkpointLedger") as "oldestCheckpointLedger",
 		max("checkpointLedger") as "latestCheckpointLedger",

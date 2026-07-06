@@ -226,7 +226,7 @@ function formatLatestArchiveEvent(
 function formatArchiveCoverageSummary(
 	summary: PublicHistoryArchiveObjectSummary
 ): string {
-	return `${formatInteger(summary.checkpoints.completeArchiveCheckpoints)} complete checkpoints, ${formatInteger(summary.checkpoints.partialArchiveCheckpoints)} partial, ${formatInteger(summary.checkpoints.failedArchiveCheckpoints)} failed; ${formatInteger(summary.buckets.totalBucketObjects)} bucket objects`;
+	return `${formatInteger(summary.checkpoints.objectCompleteArchiveCheckpoints)} object-complete checkpoints, ${formatInteger(summary.checkpoints.categoryConsistentArchiveCheckpoints)} category-consistent, ${formatInteger(summary.checkpoints.failedArchiveCheckpoints)} failed; ${formatInteger(summary.buckets.totalBucketObjects)} bucket objects`;
 }
 
 function formatQueueSampleSummary(

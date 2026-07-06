@@ -46,7 +46,7 @@ export function StatusDashboard({
 	const scan = dataQuality.scans.networkScan;
 	const rollups = dataQuality.rollups.networkRollups;
 	const archiveObjectActivity = summarizeArchiveObjects(archiveObjects);
-	const archiveFreshnessDetail = `Latest completed age ${formatDuration(dataQuality.dataFreshness.archiveScan.ageMs)}; ${formatInteger(archiveSummary.activeObjects)} active objects`;
+	const archiveVerifierDetail = `${formatInteger(archiveObjectActivity.freshActiveObjects)} fresh active objects, ${formatInteger(archiveObjectActivity.staleActiveObjects)} delayed; ${formatInteger(archiveSummary.pendingObjects)} pending`;
 
 	return (
 		<div className="status-dashboard">
@@ -110,12 +110,10 @@ export function StatusDashboard({
 							)}
 						/>
 						<StatusRow
-							detail={archiveFreshnessDetail}
-							label="Archive scan"
-							status={dataQuality.dataFreshness.archiveScan.status}
-							value={formatNullableDate(
-								dataQuality.dataFreshness.archiveScan.latestAt
-							)}
+							detail={archiveVerifierDetail}
+							label="Archive object verifier"
+							status={archiveObjectActivity.workerStatus}
+							value={`${formatInteger(archiveSummary.activeObjects)} active`}
 						/>
 						<StatusRow
 							detail={`${formatInteger(scan.completedScans)} completed, ${formatInteger(scan.incompleteScans)} incomplete`}

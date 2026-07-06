@@ -8,6 +8,8 @@ import { noopParsedHistorySink } from './parsed-history/ParsedHistorySink.js';
 import type { ParsedHistorySink } from './parsed-history/ParsedHistorySink.js';
 
 export class CategoryXDRProcessor extends Writable {
+	public processedEntries = 0;
+
 	constructor(
 		public pool: HasherPool,
 		public url: Url,
@@ -24,7 +26,10 @@ export class CategoryXDRProcessor extends Writable {
 		callback: (error?: Error | null) => void
 	): void {
 		void this.processXdr(xdr).then(
-			() => callback(),
+			() => {
+				this.processedEntries += 1;
+				callback();
+			},
 			(error: unknown) => callback(toError(error))
 		);
 	}

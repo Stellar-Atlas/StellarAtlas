@@ -9,7 +9,8 @@ import {
 } from 'typeorm';
 import type {
 	HistoryArchiveObjectStatusV1,
-	HistoryArchiveObjectTypeV1
+	HistoryArchiveObjectTypeV1,
+	HistoryArchiveObjectVerificationFactsV1
 } from 'shared';
 import { getHistoryArchiveObjectHostIdentity } from './HistoryArchiveObjectHostIdentity.js';
 
@@ -22,7 +23,8 @@ export interface HistoryArchiveObjectError {
 	readonly httpStatus: number | null;
 }
 
-export type HistoryArchiveObjectVerificationFacts = object;
+export type HistoryArchiveObjectVerificationFacts =
+	HistoryArchiveObjectVerificationFactsV1;
 
 @Entity({ name: 'history_archive_object_queue' })
 @Index('idx_history_archive_object_status', ['status', 'objectOrder'])

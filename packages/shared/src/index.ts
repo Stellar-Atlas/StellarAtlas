@@ -59,6 +59,12 @@ export {
 	type HistoryArchiveObjectTypeV1,
 	type HistoryArchiveObjectV1
 } from './dto/history-archive-object-v1.js';
+export type {
+	HistoryArchiveCategoryHashFactV1,
+	HistoryArchiveCheckpointStateFactV1,
+	HistoryArchiveLedgerCategoryFactV1,
+	HistoryArchiveObjectVerificationFactsV1
+} from './dto/history-archive-object-verification-facts-v1.js';
 export {
 	type HistoryArchiveBucketCoverageV1,
 	type HistoryArchiveCheckpointCoverageV1,

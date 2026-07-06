@@ -295,6 +295,13 @@ export class VerifyArchiveObjects {
 		this.updateProgress(job.remoteId, 'verified_bucket', bytesDownloaded);
 		return ok({
 			bytesDownloaded,
+			verificationFacts: {
+				bucketObject: {
+					expectedBucketHash: job.bucketHash.toLowerCase(),
+					hashAlgorithm: 'sha256',
+					matched: true
+				}
+			},
 			workerStage: 'verified'
 		});
 	}

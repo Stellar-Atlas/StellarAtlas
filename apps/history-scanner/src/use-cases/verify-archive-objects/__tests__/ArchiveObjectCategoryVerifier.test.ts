@@ -73,6 +73,12 @@ describe('ArchiveObjectCategoryVerifier', () => {
 		expect(result._unsafeUnwrap()).toMatchObject({
 			bytesDownloaded: expect.any(Number),
 			verificationFacts: {
+				checkpointHistoryArchiveStateFact: {
+					bucketListHash: expect.any(String),
+					checkpointLedger: 127,
+					stellarHistoryUrl:
+						'https://archive.example/history/00/00/00/history-0000007f.json'
+				},
 				checkpointHistoryArchiveState: {
 					stellarHistory: { currentLedger: 127 },
 					stellarHistoryUrl:

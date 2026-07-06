@@ -8288,12 +8288,17 @@
 				"required": [
 					"activeArchiveCheckpoints",
 					"archiveRootsWithState",
+					"categoryConsistencyFailedCheckpoints",
+					"categoryConsistencyNotEvaluatedCheckpoints",
+					"categoryConsistencyPendingCheckpoints",
+					"categoryConsistentArchiveCheckpoints",
 					"completeArchiveCheckpoints",
 					"discoveryCompleteArchiveRoots",
 					"expectedArchiveCheckpoints",
 					"failedArchiveCheckpoints",
 					"latestCheckpointLedger",
 					"missingArchiveCheckpoints",
+					"objectCompleteArchiveCheckpoints",
 					"oldestCheckpointLedger",
 					"partialArchiveCheckpoints",
 					"totalArchiveCheckpoints"
@@ -8301,6 +8306,22 @@
 				"properties": {
 					"activeArchiveCheckpoints": { "type": "integer", "minimum": 0 },
 					"archiveRootsWithState": { "type": "integer", "minimum": 0 },
+					"categoryConsistencyFailedCheckpoints": {
+						"type": "integer",
+						"minimum": 0
+					},
+					"categoryConsistencyNotEvaluatedCheckpoints": {
+						"type": "integer",
+						"minimum": 0
+					},
+					"categoryConsistencyPendingCheckpoints": {
+						"type": "integer",
+						"minimum": 0
+					},
+					"categoryConsistentArchiveCheckpoints": {
+						"type": "integer",
+						"minimum": 0
+					},
 					"completeArchiveCheckpoints": {
 						"type": "integer",
 						"minimum": 0
@@ -8320,6 +8341,10 @@
 						"nullable": true
 					},
 					"missingArchiveCheckpoints": {
+						"type": "integer",
+						"minimum": 0
+					},
+					"objectCompleteArchiveCheckpoints": {
 						"type": "integer",
 						"minimum": 0
 					},

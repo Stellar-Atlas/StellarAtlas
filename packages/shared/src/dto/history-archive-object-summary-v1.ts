@@ -17,12 +17,17 @@ export interface HistoryArchiveObjectTypeSummaryV1 extends HistoryArchiveObjectS
 export interface HistoryArchiveCheckpointCoverageV1 {
 	readonly activeArchiveCheckpoints: number;
 	readonly archiveRootsWithState: number;
+	readonly categoryConsistencyFailedCheckpoints: number;
+	readonly categoryConsistencyNotEvaluatedCheckpoints: number;
+	readonly categoryConsistencyPendingCheckpoints: number;
+	readonly categoryConsistentArchiveCheckpoints: number;
 	readonly completeArchiveCheckpoints: number;
 	readonly discoveryCompleteArchiveRoots: number;
 	readonly expectedArchiveCheckpoints: number;
 	readonly failedArchiveCheckpoints: number;
 	readonly latestCheckpointLedger: number | null;
 	readonly missingArchiveCheckpoints: number;
+	readonly objectCompleteArchiveCheckpoints: number;
 	readonly oldestCheckpointLedger: number | null;
 	readonly partialArchiveCheckpoints: number;
 	readonly totalArchiveCheckpoints: number;
@@ -133,12 +138,17 @@ const HistoryArchiveCheckpointCoverageV1Schema: JSONSchemaType<HistoryArchiveChe
 		properties: {
 			activeArchiveCheckpoints: { type: 'number' },
 			archiveRootsWithState: { type: 'number' },
+			categoryConsistencyFailedCheckpoints: { type: 'number' },
+			categoryConsistencyNotEvaluatedCheckpoints: { type: 'number' },
+			categoryConsistencyPendingCheckpoints: { type: 'number' },
+			categoryConsistentArchiveCheckpoints: { type: 'number' },
 			completeArchiveCheckpoints: { type: 'number' },
 			discoveryCompleteArchiveRoots: { type: 'number' },
 			expectedArchiveCheckpoints: { type: 'number' },
 			failedArchiveCheckpoints: { type: 'number' },
 			latestCheckpointLedger: nullable({ type: 'number' }),
 			missingArchiveCheckpoints: { type: 'number' },
+			objectCompleteArchiveCheckpoints: { type: 'number' },
 			oldestCheckpointLedger: nullable({ type: 'number' }),
 			partialArchiveCheckpoints: { type: 'number' },
 			totalArchiveCheckpoints: { type: 'number' }
@@ -146,12 +156,17 @@ const HistoryArchiveCheckpointCoverageV1Schema: JSONSchemaType<HistoryArchiveChe
 		required: [
 			'activeArchiveCheckpoints',
 			'archiveRootsWithState',
+			'categoryConsistencyFailedCheckpoints',
+			'categoryConsistencyNotEvaluatedCheckpoints',
+			'categoryConsistencyPendingCheckpoints',
+			'categoryConsistentArchiveCheckpoints',
 			'completeArchiveCheckpoints',
 			'discoveryCompleteArchiveRoots',
 			'expectedArchiveCheckpoints',
 			'failedArchiveCheckpoints',
 			'latestCheckpointLedger',
 			'missingArchiveCheckpoints',
+			'objectCompleteArchiveCheckpoints',
 			'oldestCheckpointLedger',
 			'partialArchiveCheckpoints',
 			'totalArchiveCheckpoints'
