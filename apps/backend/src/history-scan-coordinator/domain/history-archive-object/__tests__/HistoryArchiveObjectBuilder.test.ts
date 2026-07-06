@@ -74,6 +74,25 @@ describe('HistoryArchiveObjectBuilder', () => {
 		]);
 	});
 
+	it('uses a bounded catch-up page size by default', () => {
+		const objects = buildCheckpointStateDiscoveryObjects(
+			createSnapshot(createArchiveMetadata(20_000))
+		);
+
+		expect(objects).toHaveLength(256);
+		expect(objects[0]?.objectKey).toBe('checkpoint-state:00004dff');
+		expect(objects.at(-1)?.objectKey).toBe('checkpoint-state:00000e3f');
+	});
+
+	it('caps explicitly requested checkpoint discovery pages', () => {
+		const objects = buildCheckpointStateDiscoveryObjects(
+			createSnapshot(createArchiveMetadata(400_000)),
+			{ maxObjects: 10_000 }
+		);
+
+		expect(objects).toHaveLength(4096);
+	});
+
 	it('continues checkpoint discovery older than the oldest already scheduled checkpoint', () => {
 		const objects = buildCheckpointStateDiscoveryObjects(
 			createSnapshot(createArchiveMetadata(255)),
