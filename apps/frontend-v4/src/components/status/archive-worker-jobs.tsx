@@ -1,5 +1,6 @@
 import type {
 	PublicArchiveScanWorker,
+	PublicArchiveScanWorkerStatus,
 	PublicArchiveScanWorkers,
 	PublicStatusLevel
 } from '@api/types';
@@ -10,16 +11,31 @@ interface ArchiveWorkerJobsProps {
 	readonly archiveWorkers: PublicArchiveScanWorkers;
 }
 
+interface DisplayArchiveWorker {
+	readonly groupedCount: number;
+	readonly worker: PublicArchiveScanWorker;
+}
+
 export function ArchiveWorkerJobs({
 	archiveWorkers
 }: ArchiveWorkerJobsProps): React.JSX.Element {
-	const workers = [...archiveWorkers.workers].sort(compareWorkers);
+	const workers = groupWorkers(archiveWorkers.workers).sort((left, right) =>
+		compareWorkers(left.worker, right.worker)
+	);
 	const hiddenWorkers = Math.max(
 		0,
-		archiveWorkers.totalTakenJobs - workers.length
+		archiveWorkers.totalTakenJobs - archiveWorkers.workers.length
 	);
-	const runningWorkers = workers.filter(isRunningWorker).length;
-	const startingWorkers = workers.filter(isStartingWorker).length;
+	const groupedDuplicateCount = Math.max(
+		0,
+		archiveWorkers.workers.length - workers.length
+	);
+	const runningWorkers = workers.filter(({ worker }) =>
+		isRunningWorker(worker)
+	).length;
+	const startingWorkers = workers.filter(({ worker }) =>
+		isStartingWorker(worker)
+	).length;
 
 	return (
 		<section className="panel status-current-jobs-panel">
@@ -41,13 +57,26 @@ export function ArchiveWorkerJobs({
 						<small>Workers have no fresh or stale taken jobs right now.</small>
 					</div>
 				) : (
-					workers.map((worker, index) => (
+					workers.map(({ groupedCount, worker }, index) => (
 						<ArchiveWorkerJobRow
 							id={getWorkerFragmentId(worker, index)}
 							key={`${worker.archiveUrl}-${worker.claimedAt}-${worker.fromLedger}-${index}`}
+							groupedCount={groupedCount}
 							worker={worker}
 						/>
 					))
+				)}
+				{groupedDuplicateCount > 0 && (
+					<div className="status-current-empty">
+						<strong>
+							{formatInteger(groupedDuplicateCount)} duplicate active rows
+							grouped
+						</strong>
+						<small>
+							Rows sharing the same archive target and ledger range are shown
+							once with the most actionable current state.
+						</small>
+					</div>
 				)}
 				{hiddenWorkers > 0 && (
 					<div className="status-current-empty">
@@ -66,26 +95,28 @@ export function ArchiveWorkerJobs({
 }
 
 function ArchiveWorkerJobRow({
+	groupedCount,
 	id,
 	worker
 }: {
+	readonly groupedCount: number;
 	readonly id: string;
 	readonly worker: PublicArchiveScanWorker;
 }): React.JSX.Element {
 	const displayStatus = getDisplayStatus(worker);
 	const status: PublicStatusLevel =
 		displayStatus === 'scanning' ? 'ok' : 'degraded';
-	const concurrencyLabel =
-		displayStatus === 'scanning'
-			? `${formatInteger(worker.concurrency ?? 0)} workers`
-			: displayStatus;
+	const workerMetric = getWorkerMetric(worker, displayStatus);
 
 	return (
 		<details className="metadata-document" id={id} open={status !== 'ok'}>
 			<summary>
 				<span>{formatArchiveUrl(worker.archiveUrl)}</span>
 				<span>
-					<StatusPill status={status} text={displayStatus} />
+					<StatusPill
+						status={status}
+						text={formatWorkerStatus(displayStatus)}
+					/>
 				</span>
 			</summary>
 			<dl className="details">
@@ -98,8 +129,8 @@ function ArchiveWorkerJobRow({
 					<dd>{formatInteger(worker.latestScannedLedger)}</dd>
 				</div>
 				<div>
-					<dt>Concurrency</dt>
-					<dd>{concurrencyLabel}</dd>
+					<dt>{workerMetric.label}</dt>
+					<dd>{workerMetric.value}</dd>
 				</div>
 				<div>
 					<dt>Claimed</dt>
@@ -113,6 +144,12 @@ function ArchiveWorkerJobRow({
 					<dt>Heartbeat age</dt>
 					<dd>{formatDuration(worker.heartbeatAgeMs)}</dd>
 				</div>
+				{groupedCount > 1 ? (
+					<div>
+						<dt>Grouped rows</dt>
+						<dd>{formatInteger(groupedCount)}</dd>
+					</div>
+				) : null}
 			</dl>
 		</details>
 	);
@@ -123,7 +160,8 @@ function formatArchiveUrl(value: string): string {
 	try {
 		const url = new URL(value);
 		if (url.protocol === 'http:' || url.protocol === 'https:') {
-			return url.hostname;
+			const path = url.pathname.replace(/\/+$/, '');
+			return path.length > 0 ? `${url.hostname}${path}` : url.hostname;
 		}
 		return 'Internal scanner target';
 	} catch {
@@ -158,12 +196,13 @@ function workerRank(worker: PublicArchiveScanWorker): number {
 	const status = getDisplayStatus(worker);
 	if (status === 'scanning') return 0;
 	if (status === 'starting') return 1;
-	return 2;
+	if (status === 'pending') return 2;
+	return 3;
 }
 
 function getDisplayStatus(
 	worker: PublicArchiveScanWorker
-): 'scanning' | 'starting' | 'stale' {
+): PublicArchiveScanWorkerStatus {
 	return worker.status;
 }
 
@@ -173,6 +212,104 @@ function isRunningWorker(worker: PublicArchiveScanWorker): boolean {
 
 function isStartingWorker(worker: PublicArchiveScanWorker): boolean {
 	return getDisplayStatus(worker) === 'starting';
+}
+
+function getWorkerMetric(
+	worker: PublicArchiveScanWorker,
+	status: PublicArchiveScanWorkerStatus
+): {
+	readonly label: 'Concurrency' | 'Worker state';
+	readonly value: string;
+} {
+	if (
+		typeof worker.concurrency === 'number' &&
+		Number.isFinite(worker.concurrency) &&
+		worker.concurrency > 0
+	) {
+		return {
+			label: 'Concurrency',
+			value: `${formatInteger(worker.concurrency)} workers`
+		};
+	}
+
+	return { label: 'Worker state', value: formatWorkerState(status) };
+}
+
+function formatWorkerStatus(status: PublicArchiveScanWorkerStatus): string {
+	if (status === 'stale') return 'Delayed';
+	if (status === 'pending') return 'Pending';
+	if (status === 'starting') return 'Starting';
+	return 'Scanning';
+}
+
+function formatWorkerState(status: PublicArchiveScanWorkerStatus): string {
+	if (status === 'stale') return 'Heartbeat stale';
+	if (status === 'pending') return 'Waiting for worker';
+	if (status === 'starting') return 'Starting';
+	return 'Concurrency not reported';
+}
+
+function groupWorkers(
+	workers: readonly PublicArchiveScanWorker[]
+): DisplayArchiveWorker[] {
+	const byKey = new Map<string, DisplayArchiveWorker>();
+	for (const worker of workers) {
+		const key = getWorkerDedupeKey(worker);
+		const existing = byKey.get(key);
+		byKey.set(
+			key,
+			existing === undefined
+				? { groupedCount: 1, worker }
+				: {
+						groupedCount: existing.groupedCount + 1,
+						worker: pickPreferredWorker(existing.worker, worker)
+					}
+		);
+	}
+	return [...byKey.values()];
+}
+
+function getWorkerDedupeKey(worker: PublicArchiveScanWorker): string {
+	return `${normalizeArchiveUrl(worker.archiveUrl)}:${worker.fromLedger}:${
+		worker.toLedger ?? 'latest'
+	}`;
+}
+
+function pickPreferredWorker(
+	left: PublicArchiveScanWorker,
+	right: PublicArchiveScanWorker
+): PublicArchiveScanWorker {
+	const rankDifference = preferredWorkerRank(right) - preferredWorkerRank(left);
+	if (rankDifference > 0) return right;
+	if (rankDifference < 0) return left;
+
+	const heartbeatDifference =
+		Date.parse(right.lastHeartbeatAt) - Date.parse(left.lastHeartbeatAt);
+	if (heartbeatDifference > 0) return right;
+	if (heartbeatDifference < 0) return left;
+
+	return right.latestScannedLedger > left.latestScannedLedger ? right : left;
+}
+
+function preferredWorkerRank(worker: PublicArchiveScanWorker): number {
+	const status = getDisplayStatus(worker);
+	if (status === 'scanning') return 4;
+	if (status === 'stale') return 3;
+	if (status === 'starting') return 2;
+	if (status === 'pending') return 1;
+	return 0;
+}
+
+function normalizeArchiveUrl(value: string): string {
+	try {
+		const url = new URL(value);
+		url.hash = '';
+		url.search = '';
+		url.pathname = url.pathname.replace(/\/+$/, '');
+		return url.toString().toLowerCase();
+	} catch {
+		return value.trim().toLowerCase();
+	}
 }
 
 function getWorkerFragmentId(

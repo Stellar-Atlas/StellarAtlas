@@ -33,6 +33,7 @@ import { RegisterParsedLedgerHeaders } from '../../use-cases/register-parsed-led
 import type { ParsedLedgerHeaderRepository } from '../../domain/parsed-history/ParsedLedgerHeaderRepository.js';
 import { TypeOrmParsedLedgerHeaderRepository } from '../repositories/database/TypeOrmParsedLedgerHeaderRepository.js';
 import { ParsedLedgerHeader } from '../database/entities/ParsedLedgerHeader.js';
+import { BackfillArchiveMetadata } from '../../use-cases/backfill-archive-metadata/BackfillArchiveMetadata.js';
 
 export function load(container: Container, config: Config) {
 	const dataSource = container.get(DataSource);
@@ -44,6 +45,7 @@ export function load(container: Container, config: Config) {
 	container.bind(GetArchiveScanQueue).toSelf();
 	container.bind(GetArchiveScanWorkers).toSelf();
 	container.bind(GetScannerMetrics).toSelf();
+	container.bind(BackfillArchiveMetadata).toSelf();
 	container.bind(RegisterCommunityScanner).toSelf();
 	container.bind(SendScannerHeartbeat).toSelf();
 	container.bind(TouchScanJob).toSelf();

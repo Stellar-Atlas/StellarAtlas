@@ -2178,6 +2178,7 @@
 											"items": {
 												"type": "object",
 												"required": [
+													"archiveScheduling",
 													"completed",
 													"latestLedger",
 													"latestLedgerCloseTime",
@@ -2186,6 +2187,33 @@
 													"time"
 												],
 												"properties": {
+													"archiveScheduling": {
+														"type": "object",
+														"required": [
+															"discoveredArchiveUrlCount",
+															"scheduledArchiveScanJobCount",
+															"duplicateSuppressedArchiveScanJobCount",
+															"schedulerErrorCount"
+														],
+														"properties": {
+															"discoveredArchiveUrlCount": {
+																"type": "integer",
+																"minimum": 0
+															},
+															"scheduledArchiveScanJobCount": {
+																"type": "integer",
+																"minimum": 0
+															},
+															"duplicateSuppressedArchiveScanJobCount": {
+																"type": "integer",
+																"minimum": 0
+															},
+															"schedulerErrorCount": {
+																"type": "integer",
+																"minimum": 0
+															}
+														}
+													},
 													"completed": { "type": "boolean" },
 													"latestLedger": { "type": "string" },
 													"latestLedgerCloseTime": {
@@ -4304,6 +4332,83 @@
 							}
 						}
 					},
+					"500": { "description": "Server error" }
+				}
+			}
+		},
+		"/v1/history-scan/archive-metadata/backfill": {
+			"post": {
+				"summary": "Backfill scanner-captured archive metadata",
+				"description": "Internal authenticated operator endpoint. Fetches a bounded set of missing root stellar-history.json files and stores validated HAS metadata on existing selected archive scan rows. It does not create successful scan rows or fetch data from frontend page renders.",
+				"tags": ["HistoryScan"],
+				"operationId": "backfillArchiveMetadata",
+				"security": [{ "basicAuth": [] }],
+				"parameters": [
+					{
+						"name": "limit",
+						"in": "query",
+						"description": "Maximum number of archive URLs to backfill in this request.",
+						"required": false,
+						"schema": {
+							"type": "integer",
+							"minimum": 1,
+							"maximum": 25,
+							"default": 5
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "archive metadata backfill result",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object",
+									"required": [
+										"candidateCount",
+										"updatedCount",
+										"skippedCount",
+										"failedCount",
+										"failures"
+									],
+									"properties": {
+										"candidateCount": {
+											"type": "integer",
+											"minimum": 0
+										},
+										"updatedCount": {
+											"type": "integer",
+											"minimum": 0
+										},
+										"skippedCount": {
+											"type": "integer",
+											"minimum": 0
+										},
+										"failedCount": {
+											"type": "integer",
+											"minimum": 0
+										},
+										"failures": {
+											"type": "array",
+											"items": {
+												"type": "object",
+												"required": ["archiveUrl", "error"],
+												"properties": {
+													"archiveUrl": {
+														"type": "string",
+														"format": "uri"
+													},
+													"error": { "type": "string" }
+												}
+											}
+										}
+									}
+								}
+							}
+						}
+					},
+					"400": { "description": "Invalid limit" },
+					"401": { "description": "Authentication required" },
 					"500": { "description": "Server error" }
 				}
 			}

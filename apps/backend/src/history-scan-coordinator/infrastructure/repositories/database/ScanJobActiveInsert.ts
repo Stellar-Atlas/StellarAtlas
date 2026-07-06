@@ -22,31 +22,47 @@ type InsertQueryArray = InsertedScanJobRow[] | [InsertedScanJobRow[], number];
 export async function saveScanJobsWithActiveIdentityGuard(
 	repository: Repository<ScanJob>,
 	scanJobs: readonly ScanJob[]
-): Promise<void> {
+): Promise<number> {
 	const existingJobs = scanJobs.filter(hasPersistedId);
 	const newJobs = scanJobs.filter((job) => !hasPersistedId(job));
 	const inactiveNewJobs = newJobs.filter((job) => !isActive(job));
 	const activeNewJobs = newJobs.filter(isActive);
+	let savedCount = 0;
 
-	if (existingJobs.length > 0) await repository.save(existingJobs);
-	if (inactiveNewJobs.length > 0) await repository.save(inactiveNewJobs);
-	if (activeNewJobs.length === 0) return;
+	if (existingJobs.length > 0) {
+		await repository.save(existingJobs);
+		savedCount += existingJobs.length;
+	}
+	if (inactiveNewJobs.length > 0) {
+		await repository.save(inactiveNewJobs);
+		savedCount += inactiveNewJobs.length;
+	}
+	if (activeNewJobs.length === 0) return savedCount;
 
-	await repository.manager.transaction(async (manager) => {
-		await manager.query('select pg_advisory_xact_lock(hashtext($1))', [
-			activeInsertLockName
-		]);
+	const insertedCount = await repository.manager.transaction(
+		async (manager) => {
+			await manager.query('select pg_advisory_xact_lock(hashtext($1))', [
+				activeInsertLockName
+			]);
 
-		for (const job of activeNewJobs) {
-			await insertActiveJobIfIdentityIsNew(manager, job);
+			let activeInsertedCount = 0;
+			for (const job of activeNewJobs) {
+				if (await insertActiveJobIfIdentityIsNew(manager, job)) {
+					activeInsertedCount += 1;
+				}
+			}
+
+			return activeInsertedCount;
 		}
-	});
+	);
+
+	return savedCount + insertedCount;
 }
 
 async function insertActiveJobIfIdentityIsNew(
 	manager: EntityManager,
 	job: ScanJob
-): Promise<void> {
+): Promise<boolean> {
 	const rows = extractRows(
 		(await manager.query(
 			`
@@ -94,12 +110,13 @@ async function insertActiveJobIfIdentityIsNew(
 		)) as InsertQueryResult
 	);
 	const row = rows[0];
-	if (row === undefined) return;
+	if (row === undefined) return false;
 
 	const id = Number(row.id);
 	if (Number.isSafeInteger(id)) job.id = id;
 	job.createdAt = toDate(row.createdAt ?? row.createdat);
 	job.updatedAt = toDate(row.updatedAt ?? row.updatedat);
+	return true;
 }
 
 function hasPersistedId(job: ScanJob): boolean {

@@ -1,5 +1,5 @@
 import express, { Router } from 'express';
-import { param, validationResult } from 'express-validator';
+import { param, query, validationResult } from 'express-validator';
 import basicAuth from 'express-basic-auth';
 import { GetLatestScan } from '../../use-cases/get-latest-scan/GetLatestScan.js';
 import { GetScanLogs } from '../../use-cases/get-scan-logs/GetScanLogs.js';
@@ -20,6 +20,10 @@ import {
 import { ParsedLedgerHeaderBatchDTO } from 'history-scanner-dto';
 import { RegisterParsedLedgerHeaders } from '../../use-cases/register-parsed-ledger-headers/RegisterParsedLedgerHeaders.js';
 import {
+	BackfillArchiveMetadata,
+	type BackfillArchiveMetadataRequest
+} from '../../use-cases/backfill-archive-metadata/BackfillArchiveMetadata.js';
+import {
 	frontendCacheTags,
 	type FrontendRevalidationConfig,
 	triggerFrontendRevalidation
@@ -33,6 +37,7 @@ export interface HistoryScanRouterConfig extends FrontendRevalidationConfig {
 	registerScan: RegisterScan;
 	releaseScanJob: ReleaseScanJob;
 	touchScanJob: TouchScanJob;
+	backfillArchiveMetadata: BackfillArchiveMetadata;
 	userName?: string;
 	password?: string;
 }
@@ -67,6 +72,44 @@ export const HistoryScanRouterWrapper = (
 				]);
 
 				return res.status(201).json({ message: 'Scan created successfully' });
+			}
+		);
+
+	if (config.userName && config.password)
+		historyScanRouter.post(
+			'/archive-metadata/backfill',
+			basicAuth({
+				users: { [config.userName]: config.password },
+				challenge: true
+			}),
+			[
+				query('limit')
+					.optional()
+					.isInt({ min: 1, max: BackfillArchiveMetadata.maxLimit })
+			],
+			async (req: express.Request, res: express.Response) => {
+				const errors = validationResult(req);
+				if (!errors.isEmpty()) {
+					return res.status(400).json({ errors: errors.array() });
+				}
+
+				const request: BackfillArchiveMetadataRequest = {
+					limit:
+						typeof req.query.limit === 'string'
+							? Number(req.query.limit)
+							: undefined
+				};
+				const result = await config.backfillArchiveMetadata.execute(request);
+				if (result.isErr()) {
+					return res.status(500).json({ error: result.error.message });
+				}
+
+				triggerFrontendRevalidation(config, [
+					frontendCacheTags.historyScan,
+					frontendCacheTags.network
+				]);
+
+				return res.status(200).json(result.value);
 			}
 		);
 
@@ -147,9 +190,7 @@ export const HistoryScanRouterWrapper = (
 					return res.status(400).json({ errors: errors.array() });
 				}
 
-				const result = await config.releaseScanJob.execute(
-					req.params.remoteId
-				);
+				const result = await config.releaseScanJob.execute(req.params.remoteId);
 				if (result.isErr()) {
 					return res.status(500).json({ error: result.error.message });
 				}

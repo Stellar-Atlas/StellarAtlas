@@ -42,6 +42,7 @@ import { GetScpStatements } from '@network-scan/use-cases/get-scp-statements/Get
 import { RequestUnsubscribeLink } from '@notifications/use-cases/request-unsubscribe-link/RequestUnsubscribeLink.js';
 import { RegisterScan } from '@history-scan-coordinator/use-cases/register-scan/RegisterScan.js';
 import { RegisterParsedLedgerHeaders } from '@history-scan-coordinator/use-cases/register-parsed-ledger-headers/RegisterParsedLedgerHeaders.js';
+import { BackfillArchiveMetadata } from '@history-scan-coordinator/use-cases/backfill-archive-metadata/BackfillArchiveMetadata.js';
 import { historyScanRouter } from '@history-scan-coordinator/infrastructure/http/HistoryScanRouter.js';
 import { archiveScanRouter } from '@history-scan-coordinator/infrastructure/http/ArchiveScanRouter.js';
 import { communityScannerRouter } from '@history-scan-coordinator/infrastructure/http/CommunityScannerRouter.js';
@@ -254,7 +255,8 @@ const listen = async () => {
 			frontendRevalidateToken: config.frontendRevalidateToken,
 			getScanJob: kernel.container.get(GetScanJob),
 			releaseScanJob: kernel.container.get(ReleaseScanJob),
-			touchScanJob: kernel.container.get(TouchScanJob)
+			touchScanJob: kernel.container.get(TouchScanJob),
+			backfillArchiveMetadata: kernel.container.get(BackfillArchiveMetadata)
 		})
 	);
 

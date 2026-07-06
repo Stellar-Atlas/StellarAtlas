@@ -3,6 +3,7 @@ import { mock } from 'jest-mock-extended';
 import { HistoryArchiveStatusFinder } from '../HistoryArchiveStatusFinder.js';
 import { NodeScan } from '../NodeScan.js';
 import type { HistoryArchiveScanService } from '../history/HistoryArchiveScanService.js';
+import type { HistoryArchiveSchedulingResult } from '../history/HistoryArchiveScanService.js';
 import type { Logger } from '@core/services/Logger.js';
 import { err, ok, type Result } from 'neverthrow';
 
@@ -18,7 +19,9 @@ describe('NodeScannerHistoryArchiveStep', () => {
 
 	beforeEach(() => {
 		jest.clearAllMocks();
-		historyArchiveScanService.scheduleScans.mockResolvedValue(ok(undefined));
+		historyArchiveScanService.scheduleScans.mockResolvedValue(
+			ok(makeSchedulingResult())
+		);
 	});
 
 	it('should update full validator status', async () => {
@@ -57,15 +60,24 @@ describe('NodeScannerHistoryArchiveStep', () => {
 		);
 		expect(logger.info).toHaveBeenCalledWith(
 			'History archive scan scheduling completed',
-			{ archiveUrlCount: 1 }
+			{
+				archiveUrlCount: 1,
+				scheduledCount: 1,
+				duplicateSuppressedCount: 0,
+				schedulerErrorCount: 0
+			}
 		);
+		expect(
+			nodeScan.updateHistoryArchiveSchedulingCounters
+		).toHaveBeenCalledWith(makeSchedulingResult());
 	});
 
 	it('should await archive scan scheduling before completing', async () => {
 		const nodeScan = mock<NodeScan>();
 		const urls = new Map<string, string>([['a', 'url']]);
 		nodeScan.getHistoryArchiveUrls.mockReturnValue(urls);
-		const scheduling = deferred<Result<void, Error>>();
+		const scheduling =
+			deferred<Result<HistoryArchiveSchedulingResult, Error>>();
 		let completed = false;
 		historyArchiveScanService.scheduleScans.mockReturnValue(scheduling.promise);
 
@@ -93,8 +105,25 @@ describe('NodeScannerHistoryArchiveStep', () => {
 			'History archive scan scheduling failed',
 			{ archiveUrlCount: 1, errorMessage: error.message }
 		);
+		expect(
+			nodeScan.updateHistoryArchiveSchedulingCounters
+		).toHaveBeenCalledWith({
+			discoveredArchiveUrlCount: 1,
+			scheduledArchiveScanJobCount: 0,
+			duplicateSuppressedArchiveScanJobCount: 0,
+			schedulerErrorCount: 1
+		});
 	});
 });
+
+function makeSchedulingResult(): HistoryArchiveSchedulingResult {
+	return {
+		discoveredArchiveUrlCount: 1,
+		scheduledArchiveScanJobCount: 1,
+		duplicateSuppressedArchiveScanJobCount: 0,
+		schedulerErrorCount: 0
+	};
+}
 
 function deferred<T>(): {
 	readonly promise: Promise<T>;

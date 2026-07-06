@@ -35,6 +35,12 @@ export class NodeScannerHistoryArchiveStep {
 			const scheduleResult =
 				await this.historyArchiveScanService.scheduleScans(historyArchiveUrls);
 			if (scheduleResult.isErr()) {
+				nodeScan.updateHistoryArchiveSchedulingCounters({
+					discoveredArchiveUrlCount: historyArchiveUrls.length,
+					scheduledArchiveScanJobCount: 0,
+					duplicateSuppressedArchiveScanJobCount: 0,
+					schedulerErrorCount: 1
+				});
 				this.logger.error('History archive scan scheduling failed', {
 					archiveUrlCount: historyArchiveUrls.length,
 					errorMessage: scheduleResult.error.message
@@ -42,11 +48,22 @@ export class NodeScannerHistoryArchiveStep {
 				return;
 			}
 
+			nodeScan.updateHistoryArchiveSchedulingCounters(scheduleResult.value);
 			this.logger.info('History archive scan scheduling completed', {
-				archiveUrlCount: historyArchiveUrls.length
+				archiveUrlCount: historyArchiveUrls.length,
+				scheduledCount: scheduleResult.value.scheduledArchiveScanJobCount,
+				duplicateSuppressedCount:
+					scheduleResult.value.duplicateSuppressedArchiveScanJobCount,
+				schedulerErrorCount: scheduleResult.value.schedulerErrorCount
 			});
 		} catch (error) {
 			const mappedError = mapUnknownToError(error);
+			nodeScan.updateHistoryArchiveSchedulingCounters({
+				discoveredArchiveUrlCount: historyArchiveUrls.length,
+				scheduledArchiveScanJobCount: 0,
+				duplicateSuppressedArchiveScanJobCount: 0,
+				schedulerErrorCount: 1
+			});
 			this.logger.error('History archive scan scheduling failed', {
 				archiveUrlCount: historyArchiveUrls.length,
 				errorMessage: mappedError.message

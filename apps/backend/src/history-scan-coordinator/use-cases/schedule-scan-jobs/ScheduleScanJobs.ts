@@ -1,6 +1,9 @@
 import 'reflect-metadata';
 import { err, ok, Result } from 'neverthrow';
-import { ScheduleScansDTO as ScheduleScanJobsDTO } from './ScheduleScanJobsDTO.js';
+import type {
+	ScheduleScanJobsResultDTO,
+	ScheduleScansDTO as ScheduleScanJobsDTO
+} from './ScheduleScanJobsDTO.js';
 import { inject, injectable } from 'inversify';
 import { TYPES } from '../../infrastructure/di/di-types.js';
 import type { ScanRepository } from '../../domain/scan/ScanRepository.js';
@@ -9,6 +12,8 @@ import type { Logger } from 'logger';
 import type { ScanJobRepository } from '../../domain/ScanJobRepository.js';
 import { getStaleScanJobCutoff } from '../../domain/ScanJobStaleness.js';
 import { mapUnknownToError } from '@core/utilities/mapUnknownToError.js';
+import { ScanJob } from '@history-scan-coordinator/domain/ScanJob.js';
+import { Url } from 'http-helper';
 
 /**
  * Schedule scansJobs and adds them to the queue. If the scan queue is empty, new ScanJobs will be created.
@@ -32,14 +37,18 @@ export class ScheduleScanJobs {
 		@inject('Logger') private logger: Logger
 	) {}
 
-	public async execute(dto: ScheduleScanJobsDTO): Promise<Result<void, Error>> {
+	public async execute(
+		dto: ScheduleScanJobsDTO
+	): Promise<Result<ScheduleScanJobsResultDTO, Error>> {
 		try {
-			await this.scanJobRepository.withSchedulingLock(async () => {
-				await this.releaseStaleJobs();
-				await this.scheduleScanJobs(dto, await this.isQueueEmpty());
-			});
+			const result = await this.scanJobRepository.withSchedulingLock(
+				async () => {
+					await this.releaseStaleJobs();
+					return await this.scheduleScanJobs(dto, await this.isQueueEmpty());
+				}
+			);
 
-			return ok(undefined);
+			return ok(result);
 		} catch (e) {
 			const error = mapUnknownToError(e);
 			this.logger.error('Failed to schedule scan jobs', {
@@ -71,7 +80,7 @@ export class ScheduleScanJobs {
 	private async scheduleScanJobs(
 		dto: ScheduleScanJobsDTO,
 		queueIsEmpty: boolean
-	): Promise<void> {
+	): Promise<ScheduleScanJobsResultDTO> {
 		const previousScans = await this.scanRepository.findLatest();
 		//jobs that are running for over 4 days are considered failed
 		const unfinishedScanJobs = await this.scanJobRepository.findUnfinishedJobs(
@@ -79,20 +88,81 @@ export class ScheduleScanJobs {
 		); //todo: this should be configurable
 
 		const scanJobs = this.scanScheduler.schedule(
-			dto.historyArchiveUrls,
+			[...dto.historyArchiveUrls],
 			previousScans,
 			unfinishedScanJobs,
 			{ includeRegularJobs: queueIsEmpty }
 		);
+
+		const scheduledCount =
+			scanJobs.length > 0 ? await this.scanJobRepository.save(scanJobs) : 0;
+		const duplicateSuppressedCount =
+			calculateDuplicateSuppressedArchiveScanJobCount(
+				dto.historyArchiveUrls,
+				scanJobs,
+				unfinishedScanJobs,
+				scheduledCount
+			);
 
 		this.logger.info('Scheduling new scan jobs', {
 			app: 'history-scan-coordinator',
 			historyArchiveUrls: dto.historyArchiveUrls,
 			fullScans: scanJobs
 				.filter((job) => job.chainInitDate === null)
-				.map((job) => job.url)
+				.map((job) => job.url),
+			scheduledCount,
+			duplicateSuppressedCount
 		});
 
-		if (scanJobs.length > 0) await this.scanJobRepository.save(scanJobs);
+		return {
+			discoveredArchiveUrlCount: dto.historyArchiveUrls.length,
+			scheduledArchiveScanJobCount: scheduledCount,
+			duplicateSuppressedArchiveScanJobCount: duplicateSuppressedCount,
+			schedulerErrorCount: 0
+		};
 	}
+}
+
+function calculateDuplicateSuppressedArchiveScanJobCount(
+	historyArchiveUrls: readonly string[],
+	scanJobs: readonly ScanJob[],
+	unfinishedScanJobs: readonly ScanJob[],
+	scheduledCount: number
+): number {
+	const validArchiveUrls = historyArchiveUrls
+		.map(normalizeHistoryArchiveUrl)
+		.filter((url): url is string => url !== null);
+	const uniqueArchiveUrls = Array.from(new Set(validArchiveUrls));
+	const duplicateDiscoveredCount =
+		validArchiveUrls.length - uniqueArchiveUrls.length;
+	const scheduledUrls = new Set(
+		scanJobs
+			.map((job) => normalizeHistoryArchiveUrl(job.url))
+			.filter((url): url is string => url !== null)
+	);
+	const unfinishedUrls = new Set(
+		unfinishedScanJobs
+			.map((job) => normalizeHistoryArchiveUrl(job.url))
+			.filter((url): url is string => url !== null)
+	);
+	const unfinishedSuppressedCount = uniqueArchiveUrls.filter(
+		(url) => unfinishedUrls.has(url) && !scheduledUrls.has(url)
+	).length;
+	const repositorySuppressedCount = Math.max(
+		0,
+		scanJobs.length - scheduledCount
+	);
+
+	return (
+		duplicateDiscoveredCount +
+		unfinishedSuppressedCount +
+		repositorySuppressedCount
+	);
+}
+
+function normalizeHistoryArchiveUrl(url: string): string | null {
+	const parsedUrl = Url.create(url);
+	if (parsedUrl.isErr()) return null;
+
+	return parsedUrl.value.value.replace(/\/+$/, '').toLowerCase();
 }

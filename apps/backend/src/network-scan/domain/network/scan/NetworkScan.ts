@@ -44,6 +44,18 @@ export default class NetworkScan extends CoreEntity {
 	@Column('boolean', { default: false })
 	completed = false;
 
+	@Column('integer', { default: 0 })
+	historyArchiveSchedulingDiscoveredUrlCount = 0;
+
+	@Column('integer', { default: 0 })
+	historyArchiveSchedulingScheduledCount = 0;
+
+	@Column('integer', { default: 0 })
+	historyArchiveSchedulingDuplicateSuppressedCount = 0;
+
+	@Column('integer', { default: 0 })
+	historyArchiveSchedulingErrorCount = 0;
+
 	measurement: NetworkMeasurement | null = null;
 
 	fbasProof: NetworkScanFbasProof | null = null;
@@ -57,6 +69,14 @@ export default class NetworkScan extends CoreEntity {
 		this.latestLedgerCloseTime = nodeScan.latestLedgerCloseTime;
 		this.ledgers = nodeScan.processedLedgers;
 		this.latestLedger = nodeScan.latestLedger;
+		this.historyArchiveSchedulingDiscoveredUrlCount =
+			nodeScan.historyArchiveSchedulingDiscoveredUrlCount;
+		this.historyArchiveSchedulingScheduledCount =
+			nodeScan.historyArchiveSchedulingScheduledCount;
+		this.historyArchiveSchedulingDuplicateSuppressedCount =
+			nodeScan.historyArchiveSchedulingDuplicateSuppressedCount;
+		this.historyArchiveSchedulingErrorCount =
+			nodeScan.historyArchiveSchedulingErrorCount;
 	}
 
 	addMeasurement(

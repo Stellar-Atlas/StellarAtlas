@@ -11,10 +11,21 @@ import { NodeTomlInfo } from './NodeTomlInfo.js';
 import { SemanticVersionComparer } from 'shared';
 import { StellarCoreVersion } from '../../network/StellarCoreVersion.js';
 
+export interface HistoryArchiveSchedulingCounters {
+	readonly discoveredArchiveUrlCount: number;
+	readonly scheduledArchiveScanJobCount: number;
+	readonly duplicateSuppressedArchiveScanJobCount: number;
+	readonly schedulerErrorCount: number;
+}
+
 export class NodeScan {
 	public processedLedgers: number[] = [];
 	public latestLedger = BigInt(0);
 	public latestLedgerCloseTime: Date | null = null;
+	public historyArchiveSchedulingDiscoveredUrlCount = 0;
+	public historyArchiveSchedulingScheduledCount = 0;
+	public historyArchiveSchedulingDuplicateSuppressedCount = 0;
+	public historyArchiveSchedulingErrorCount = 0;
 
 	constructor(
 		public readonly time: Date,
@@ -144,6 +155,22 @@ export class NodeScan {
 		);
 	}
 
+	updateHistoryArchiveSchedulingCounters(
+		counters: HistoryArchiveSchedulingCounters
+	): void {
+		this.historyArchiveSchedulingDiscoveredUrlCount = toNonNegativeInteger(
+			counters.discoveredArchiveUrlCount
+		);
+		this.historyArchiveSchedulingScheduledCount = toNonNegativeInteger(
+			counters.scheduledArchiveScanJobCount
+		);
+		this.historyArchiveSchedulingDuplicateSuppressedCount =
+			toNonNegativeInteger(counters.duplicateSuppressedArchiveScanJobCount);
+		this.historyArchiveSchedulingErrorCount = toNonNegativeInteger(
+			counters.schedulerErrorCount
+		);
+	}
+
 	updateHistoryArchiveUpToDateStatus(
 		nodesWithUpToDateHistoryArchives: Set<string>
 	) {
@@ -253,4 +280,10 @@ export class NodeScan {
 	getActiveFullValidatorsCount(): number {
 		return this.nodes.filter((node) => node.isTrackingFullValidator()).length;
 	}
+}
+
+function toNonNegativeInteger(value: number): number {
+	if (!Number.isFinite(value)) return 0;
+
+	return Math.max(0, Math.trunc(value));
 }

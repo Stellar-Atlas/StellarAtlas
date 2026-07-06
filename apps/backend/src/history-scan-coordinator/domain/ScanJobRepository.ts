@@ -25,7 +25,7 @@ export interface ScanJobProgressUpdate {
 export interface ScanJobRepository {
 	withSchedulingLock: <T>(work: () => Promise<T>) => Promise<T>;
 	hasPendingJobs: () => Promise<boolean>;
-	save: (scanJobs: ScanJob[]) => Promise<void>;
+	save: (scanJobs: ScanJob[]) => Promise<number>;
 	fetchNextJob: () => Promise<ScanJob | null>;
 	fetchNextJobForCommunityScanner: (
 		communityScannerId: string,

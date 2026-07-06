@@ -1,4 +1,5 @@
 import type { HistoryArchiveScanService } from '../../domain/node/scan/history/HistoryArchiveScanService.js';
+import type { HistoryArchiveSchedulingResult } from '../../domain/node/scan/history/HistoryArchiveScanService.js';
 import type { ScanRepository } from '@history-scan-coordinator/domain/scan/ScanRepository.js';
 import { err, ok, Result } from 'neverthrow';
 import { mapUnknownToError } from '@core/utilities/mapUnknownToError.js';
@@ -20,7 +21,7 @@ export class HistoryScanCoordinatorScanService implements HistoryArchiveScanServ
 
 	async scheduleScans(
 		historyArchiveUrls: string[]
-	): Promise<Result<void, Error>> {
+	): Promise<Result<HistoryArchiveSchedulingResult, Error>> {
 		return this.scheduleScansUseCase.execute({
 			historyArchiveUrls
 		});

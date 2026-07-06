@@ -48,8 +48,11 @@ const maxActiveTakenJobsPerArchiveHost = 1;
 export class TypeOrmScanJobRepository implements ScanJobRepository {
 	constructor(private baseRepository: Repository<ScanJob>) {}
 
-	async save(scanJobs: ScanJob[]): Promise<void> {
-		await saveScanJobsWithActiveIdentityGuard(this.baseRepository, scanJobs);
+	async save(scanJobs: ScanJob[]): Promise<number> {
+		return await saveScanJobsWithActiveIdentityGuard(
+			this.baseRepository,
+			scanJobs
+		);
 	}
 
 	async withSchedulingLock<T>(work: () => Promise<T>): Promise<T> {

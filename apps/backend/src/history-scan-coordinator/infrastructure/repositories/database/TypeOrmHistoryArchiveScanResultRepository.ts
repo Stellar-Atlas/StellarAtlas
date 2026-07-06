@@ -3,9 +3,12 @@ import { Repository } from 'typeorm';
 import { Scan } from '@history-scan-coordinator/domain/scan/Scan.js';
 import { injectable } from 'inversify';
 import { ScanEvidence } from '@history-scan-coordinator/domain/scan/ScanEvidence.js';
+import type { ArchiveMetadataDTO } from 'history-scanner-dto';
 
 type NumericValue = number | string;
 type RawLatestScanIdRow = { id?: NumericValue };
+type RawUrlRow = { url?: string };
+type RawAffectedRow = { id?: NumericValue };
 type ScanWithId = Scan & { id: number };
 type LatestScanQueryOptions = {
 	readonly limit?: number;
@@ -81,6 +84,114 @@ export class TypeOrmHistoryArchiveScanResultRepository implements ScanRepository
 		if (scanIds.length === 0) return [];
 
 		return this.findByIds(scanIds);
+	}
+
+	async findUrlsMissingSelectedArchiveMetadata(
+		limit: number
+	): Promise<string[]> {
+		if (!Number.isSafeInteger(limit) || limit < 1) return [];
+
+		const rows = (await this.baseRepository.query(
+			`
+				with scan_with_error_flags as (
+					select
+						scan.id,
+						scan.url,
+						scan."startDate",
+						scan.concurrency,
+						scan."archiveMetadata",
+						(
+							exists (
+								select 1
+								from jsonb_array_elements(coalesce(scan.errors, '[]'::jsonb)) error
+								where error->>'type' = 'TYPE_VERIFICATION'
+							)
+							or archive_error.type::text in ('0', 'TYPE_VERIFICATION')
+						) as "hasArchiveVerificationError",
+						(
+							exists (
+								select 1
+								from jsonb_array_elements(coalesce(scan.errors, '[]'::jsonb)) error
+								where error->>'type' = 'TYPE_CONNECTION'
+							)
+							or archive_error.type::text in ('1', 'TYPE_CONNECTION')
+						) as "hasWorkerIssue"
+					from history_archive_scan_v2 scan
+					left join history_archive_scan_error archive_error
+						on archive_error.id = scan."errorId"
+				),
+				latest_scan as (
+					select distinct on (url)
+						id,
+						url,
+						"archiveMetadata",
+						"startDate"
+					from scan_with_error_flags
+					order by url, "startDate" desc, id desc
+				),
+				latest_archive_evidence_scan as (
+					select distinct on (url)
+						id,
+						url,
+						"archiveMetadata",
+						"startDate"
+					from scan_with_error_flags
+					where
+						"hasArchiveVerificationError"
+						or (
+							concurrency > 0
+							and not "hasWorkerIssue"
+						)
+					order by url, "startDate" desc, id desc
+				),
+				selected_scan as (
+					select
+						coalesce(latest_archive_evidence_scan.id, latest_scan.id) as id,
+						coalesce(latest_archive_evidence_scan.url, latest_scan.url) as url,
+						case
+							when latest_archive_evidence_scan.id is not null
+								then latest_archive_evidence_scan."archiveMetadata"
+							else latest_scan."archiveMetadata"
+						end as "archiveMetadata",
+						coalesce(
+							latest_archive_evidence_scan."startDate",
+							latest_scan."startDate"
+						) as "selectedStartDate"
+					from latest_scan
+					left join latest_archive_evidence_scan
+						on latest_archive_evidence_scan.url = latest_scan.url
+				)
+				select url
+				from selected_scan
+				where "archiveMetadata" is null
+				order by "selectedStartDate" desc, id desc
+				limit $1
+			`,
+			[limit]
+		)) as RawUrlRow[];
+
+		return rows.map((row) => this.requireString(row.url, 'url'));
+	}
+
+	async backfillSelectedArchiveMetadata(
+		url: string,
+		archiveMetadata: ArchiveMetadataDTO
+	): Promise<boolean> {
+		const [scanId] = await this.findSelectedScanIds({ url });
+		if (scanId === undefined) return false;
+
+		const result = await this.baseRepository.query(
+			`
+				update history_archive_scan_v2
+				set "archiveMetadata" = $2::jsonb
+				where id = $1
+					and "archiveMetadata" is null
+				returning id
+			`,
+			[scanId, JSON.stringify(archiveMetadata)]
+		);
+
+		return this.getAffectedRowCount(result) > 0;
 	}
 
 	private async findById(scanId: number): Promise<Scan> {
@@ -247,6 +358,24 @@ export class TypeOrmHistoryArchiveScanResultRepository implements ScanRepository
 		throw new Error(
 			`History archive scan row is missing numeric field ${field}`
 		);
+	}
+
+	private requireString(value: unknown, field: string): string {
+		if (typeof value === 'string') return value;
+
+		throw new Error(
+			`History archive scan row is missing string field ${field}`
+		);
+	}
+
+	private getAffectedRowCount(result: unknown): number {
+		if (!Array.isArray(result)) return 0;
+		if (Array.isArray(result[0]) && typeof result[1] === 'number')
+			return result[1];
+
+		return (result as RawAffectedRow[]).filter((row) =>
+			Number.isSafeInteger(Number(row.id))
+		).length;
 	}
 }
 

@@ -1,5 +1,6 @@
 import { Scan } from './Scan.js';
 import { ScanEvidence } from './ScanEvidence.js';
+import type { ArchiveMetadataDTO } from 'history-scanner-dto';
 
 export interface ScanEvidencePage {
 	readonly count: number;
@@ -14,4 +15,9 @@ export interface ScanRepository {
 	findLatestLimited(limit: number): Promise<Scan[]>;
 	findRecentLimited(limit: number): Promise<Scan[]>;
 	findLatest(): Promise<Scan[]>;
+	findUrlsMissingSelectedArchiveMetadata(limit: number): Promise<string[]>;
+	backfillSelectedArchiveMetadata(
+		url: string,
+		archiveMetadata: ArchiveMetadataDTO
+	): Promise<boolean>;
 }

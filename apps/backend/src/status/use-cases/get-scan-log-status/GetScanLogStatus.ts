@@ -14,12 +14,20 @@ import type { NetworkScanRepository } from '@network-scan/domain/network/scan/Ne
 import { NETWORK_TYPES } from '@network-scan/infrastructure/di/di-types.js';
 
 export interface NetworkScanLogEntryDTO {
+	readonly archiveScheduling: NetworkScanArchiveSchedulingDTO;
 	readonly completed: boolean;
 	readonly latestLedger: string;
 	readonly latestLedgerCloseTime: string | null;
 	readonly ledgersCount: number;
 	readonly status: 'ok' | 'incomplete';
 	readonly time: string;
+}
+
+export interface NetworkScanArchiveSchedulingDTO {
+	readonly discoveredArchiveUrlCount: number;
+	readonly scheduledArchiveScanJobCount: number;
+	readonly duplicateSuppressedArchiveScanJobCount: number;
+	readonly schedulerErrorCount: number;
 }
 
 export interface ArchiveScanLogEntryDTO {
@@ -94,6 +102,14 @@ function normalizeLimit(limit: number): number {
 
 function mapNetworkScanLogEntry(scan: NetworkScan): NetworkScanLogEntryDTO {
 	return {
+		archiveScheduling: {
+			discoveredArchiveUrlCount:
+				scan.historyArchiveSchedulingDiscoveredUrlCount,
+			scheduledArchiveScanJobCount: scan.historyArchiveSchedulingScheduledCount,
+			duplicateSuppressedArchiveScanJobCount:
+				scan.historyArchiveSchedulingDuplicateSuppressedCount,
+			schedulerErrorCount: scan.historyArchiveSchedulingErrorCount
+		},
 		completed: scan.completed,
 		latestLedger: scan.latestLedger.toString(),
 		latestLedgerCloseTime: scan.latestLedgerCloseTime?.toISOString() ?? null,

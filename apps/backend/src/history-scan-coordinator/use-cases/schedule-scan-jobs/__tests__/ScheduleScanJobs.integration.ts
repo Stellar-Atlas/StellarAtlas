@@ -30,6 +30,13 @@ test('ScheduleScanJobs integration test', async () => {
 		historyArchiveUrls: ['https://example.com']
 	});
 	expect(result.isOk()).toBe(true);
+	if (result.isErr()) fail(result.error);
+	expect(result.value).toEqual({
+		discoveredArchiveUrlCount: 1,
+		scheduledArchiveScanJobCount: 1,
+		duplicateSuppressedArchiveScanJobCount: 0,
+		schedulerErrorCount: 0
+	});
 });
 
 test('ScheduleScanJobs does not insert duplicate active jobs under concurrent callers', async () => {
@@ -53,5 +60,22 @@ test('ScheduleScanJobs does not insert duplicate active jobs under concurrent ca
 	)) as Array<{ count: number | string }>;
 
 	expect(results.every((result) => result.isOk())).toBe(true);
+	const resultValues = results.map((result) => {
+		if (result.isErr()) fail(result.error);
+
+		return result.value;
+	});
+	expect(
+		resultValues.reduce(
+			(total, result) => total + result.scheduledArchiveScanJobCount,
+			0
+		)
+	).toBe(1);
+	expect(
+		resultValues.reduce(
+			(total, result) => total + result.duplicateSuppressedArchiveScanJobCount,
+			0
+		)
+	).toBe(7);
 	expect(Number(rows[0]?.count)).toBe(1);
 });

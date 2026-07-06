@@ -171,6 +171,7 @@ export function HistoryArchiveScanLog({
 							hasArchiveErrors,
 							hasWorkerIssues
 						);
+						const concurrencyMetric = getConcurrencyMetric(entry);
 
 						return (
 							<li
@@ -201,8 +202,8 @@ export function HistoryArchiveScanLog({
 										<dd>{formatRange(entry)}</dd>
 									</div>
 									<div>
-										<dt>Concurrency</dt>
-										<dd>{formatConcurrency(entry)}</dd>
+										<dt>{concurrencyMetric.label}</dt>
+										<dd>{concurrencyMetric.value}</dd>
 									</div>
 									<div>
 										<dt>Duration</dt>
@@ -267,13 +268,40 @@ const formatRange = (entry: PublicHistoryArchiveScanLogEntry): string => {
 };
 
 const formatConcurrency = (entry: PublicHistoryArchiveScanLogEntry): string => {
-	if (entry.status === 'queued') return 'waiting for worker';
+	if (entry.status === 'queued') return 'Waiting for worker';
 	if (entry.status === 'stale' && entry.concurrency === null) {
-		return 'worker heartbeat stale';
+		return 'Worker heartbeat stale';
 	}
-	if (entry.concurrency === null) return 'starting';
+	if (
+		entry.concurrency === null ||
+		!Number.isFinite(entry.concurrency) ||
+		entry.concurrency <= 0
+	) {
+		if (entry.status === 'completed') return 'Not reported';
+		if (entry.status === 'stale') return 'Worker heartbeat stale';
+		return 'Starting';
+	}
 
-	return formatInteger(entry.concurrency);
+	return `${formatInteger(entry.concurrency)} workers`;
+};
+
+const getConcurrencyMetric = (
+	entry: PublicHistoryArchiveScanLogEntry
+): {
+	readonly label: 'Concurrency' | 'Worker state';
+	readonly value: string;
+} => {
+	if (typeof entry.concurrency === 'number' && entry.concurrency > 0) {
+		return {
+			label: 'Concurrency',
+			value: formatConcurrency(entry)
+		};
+	}
+
+	return {
+		label: 'Worker state',
+		value: formatConcurrency(entry)
+	};
 };
 
 const formatDuration = (entry: PublicHistoryArchiveScanLogEntry): string => {

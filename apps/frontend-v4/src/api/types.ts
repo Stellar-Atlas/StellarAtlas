@@ -342,6 +342,9 @@ export interface PublicArchiveQueueStatus {
 	readonly totalUnfinishedJobs: number;
 }
 
+export type PublicArchiveScanWorkerStatus =
+	'pending' | 'scanning' | 'starting' | 'stale';
+
 export interface PublicArchiveScanWorker {
 	readonly archiveUrl: string;
 	readonly claimedAt: string;
@@ -350,7 +353,7 @@ export interface PublicArchiveScanWorker {
 	readonly heartbeatAgeMs: number;
 	readonly lastHeartbeatAt: string;
 	readonly latestScannedLedger: number;
-	readonly status: 'scanning' | 'starting' | 'stale';
+	readonly status: PublicArchiveScanWorkerStatus;
 	readonly toLedger: number | null;
 }
 
@@ -364,6 +367,7 @@ export interface PublicArchiveScanWorkers {
 }
 
 export interface PublicNetworkScanLogEntry {
+	readonly archiveScheduling: PublicNetworkScanArchiveScheduling;
 	readonly completed: boolean;
 	readonly latestLedger: string;
 	readonly latestLedgerCloseTime: string | null;
@@ -372,8 +376,18 @@ export interface PublicNetworkScanLogEntry {
 	readonly time: string;
 }
 
+export interface PublicNetworkScanArchiveScheduling {
+	readonly discoveredArchiveUrlCount: number;
+	readonly scheduledArchiveScanJobCount: number;
+	readonly duplicateSuppressedArchiveScanJobCount: number;
+	readonly schedulerErrorCount: number;
+}
+
+export type PublicArchiveScanLogConcurrency =
+	number | null | 'pending' | 'unknown';
+
 export interface PublicArchiveScanLogEntry {
-	readonly concurrency: number;
+	readonly concurrency: PublicArchiveScanLogConcurrency;
 	readonly durationMs: number;
 	readonly endDate: string;
 	readonly errorCount: number;

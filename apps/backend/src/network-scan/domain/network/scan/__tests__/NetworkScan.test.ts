@@ -24,12 +24,24 @@ describe('NetworkScan', () => {
 		nodeScan.latestLedger = BigInt(123);
 		nodeScan.latestLedgerCloseTime = new Date('2020-01-01T00:00:00.000Z');
 		nodeScan.processedLedgers = [123];
+		nodeScan.updateHistoryArchiveSchedulingCounters({
+			discoveredArchiveUrlCount: 3,
+			scheduledArchiveScanJobCount: 1,
+			duplicateSuppressedArchiveScanJobCount: 2,
+			schedulerErrorCount: 0
+		});
 		networkScan.processNodeScan(nodeScan);
 		expect(networkScan.latestLedger).toEqual(nodeScan.latestLedger);
 		expect(networkScan.latestLedgerCloseTime).toEqual(
 			nodeScan.latestLedgerCloseTime
 		);
 		expect(networkScan.ledgers).toEqual(nodeScan.processedLedgers);
+		expect(networkScan.historyArchiveSchedulingDiscoveredUrlCount).toBe(3);
+		expect(networkScan.historyArchiveSchedulingScheduledCount).toBe(1);
+		expect(networkScan.historyArchiveSchedulingDuplicateSuppressedCount).toBe(
+			2
+		);
+		expect(networkScan.historyArchiveSchedulingErrorCount).toBe(0);
 	});
 
 	it('should add measurement', () => {

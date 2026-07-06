@@ -39,7 +39,7 @@ export function ScanLogDetails({
 				</div>
 				<div>
 					<dt>Status</dt>
-					<dd>{entry.status}</dd>
+					<dd>{formatScanStatus(entry.status)}</dd>
 				</div>
 				<div>
 					<dt>Started</dt>
@@ -161,10 +161,17 @@ const getActiveRowTitle = (
 	return 'Waiting for worker';
 };
 
+function formatScanStatus(
+	status: PublicHistoryArchiveScanLogEntry['status']
+): string {
+	if (status === 'completed') return 'Completed';
+	return getActiveRowTitle(status);
+}
+
 function getScanLogDedupeKey(entry: PublicHistoryArchiveScanLogEntry): string {
 	const range = `${entry.fromLedger}:${entry.toLedger ?? 'latest'}`;
 	const url = normalizeArchiveUrl(entry.url);
-	if (scanLogIsActive(entry)) return `${url}:${range}:${entry.status}`;
+	if (scanLogIsActive(entry)) return `${url}:${range}:active`;
 	return `${url}:${range}:${entry.status}:${entry.updatedAt}`;
 }
 
@@ -172,6 +179,11 @@ function pickPreferredScanLog(
 	left: PublicHistoryArchiveScanLogEntry,
 	right: PublicHistoryArchiveScanLogEntry
 ): PublicHistoryArchiveScanLogEntry {
+	const leftActiveRank = getActiveStatusRank(left.status);
+	const rightActiveRank = getActiveStatusRank(right.status);
+	if (rightActiveRank > leftActiveRank) return right;
+	if (leftActiveRank > rightActiveRank) return left;
+
 	const leftUpdatedAt = Date.parse(left.updatedAt);
 	const rightUpdatedAt = Date.parse(right.updatedAt);
 	if (rightUpdatedAt > leftUpdatedAt) return right;
@@ -179,6 +191,16 @@ function pickPreferredScanLog(
 	if (right.errors.length > left.errors.length) return right;
 	if (left.errors.length > right.errors.length) return left;
 	return right.latestScannedLedger > left.latestScannedLedger ? right : left;
+}
+
+function getActiveStatusRank(
+	status: PublicHistoryArchiveScanLogEntry['status']
+): number {
+	if (status === 'scanning') return 4;
+	if (status === 'stale') return 3;
+	if (status === 'starting') return 2;
+	if (status === 'queued') return 1;
+	return 0;
 }
 
 function normalizeArchiveUrl(value: string): string {

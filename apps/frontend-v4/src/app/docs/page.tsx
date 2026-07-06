@@ -66,7 +66,8 @@ const endpointGroups: EndpointGroup[] = [
 			'Latest public archive verification evidence and recent scan run logs for a normalized archive URL.',
 		endpoints: [
 			'/v1/history-scan/:encodedHistoryUrl',
-			'/v1/history-scan/logs/:encodedHistoryUrl'
+			'/v1/history-scan/logs/:encodedHistoryUrl',
+			'POST /v1/history-scan/archive-metadata/backfill'
 		],
 		title: 'History archive'
 	},

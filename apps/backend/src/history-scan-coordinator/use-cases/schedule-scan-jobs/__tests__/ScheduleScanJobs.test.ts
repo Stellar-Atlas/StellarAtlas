@@ -21,6 +21,7 @@ describe('ScheduleScanJobs', () => {
 		scanJobRepositoryMock.withSchedulingLock.mockImplementation(async (work) =>
 			work()
 		);
+		scanJobRepositoryMock.save.mockImplementation(async (jobs) => jobs.length);
 
 		scheduleScanJobs = new ScheduleScanJobs(
 			scanRepositoryMock,
@@ -40,6 +41,13 @@ describe('ScheduleScanJobs', () => {
 			historyArchiveUrls: ['https://example.com']
 		});
 		expect(result.isOk()).toBe(true);
+		if (result.isErr()) fail(result.error);
+		expect(result.value).toEqual({
+			discoveredArchiveUrlCount: 1,
+			scheduledArchiveScanJobCount: 0,
+			duplicateSuppressedArchiveScanJobCount: 0,
+			schedulerErrorCount: 0
+		});
 		expect(scanRepositoryMock.findLatest).toHaveBeenCalledTimes(1);
 		expect(scanSchedulerMock.schedule).toHaveBeenCalledWith(
 			['https://example.com'],
@@ -64,6 +72,9 @@ describe('ScheduleScanJobs', () => {
 		});
 
 		expect(result.isOk()).toBe(true);
+		if (result.isErr()) fail(result.error);
+		expect(result.value.scheduledArchiveScanJobCount).toBe(1);
+		expect(result.value.duplicateSuppressedArchiveScanJobCount).toBe(0);
 		expect(scanRepositoryMock.findLatest).toHaveBeenCalledTimes(1);
 		expect(scanSchedulerMock.schedule).toHaveBeenCalledWith(
 			['https://example.com'],
@@ -88,7 +99,62 @@ describe('ScheduleScanJobs', () => {
 		});
 
 		expect(result.isOk()).toBe(true);
+		if (result.isErr()) fail(result.error);
+		expect(result.value.scheduledArchiveScanJobCount).toBe(1);
 		expect(scanJobRepositoryMock.save).toHaveBeenCalledTimes(1);
+	});
+
+	it('should report duplicate suppressed discovered archive URLs', async () => {
+		scanJobRepositoryMock.releaseStaleTakenJobs.mockResolvedValue(0);
+		scanJobRepositoryMock.hasPendingJobs.mockResolvedValue(false);
+		scanJobRepositoryMock.findUnfinishedJobs.mockResolvedValue([
+			new ScanJob('https://queued.example.com')
+		]);
+		scanRepositoryMock.findLatest.mockResolvedValue([]);
+		scanSchedulerMock.schedule.mockReturnValue([
+			new ScanJob('https://fresh.example.com')
+		]);
+
+		const result = await scheduleScanJobs.execute({
+			historyArchiveUrls: [
+				'https://fresh.example.com/',
+				'https://fresh.example.com',
+				'https://queued.example.com'
+			]
+		});
+
+		expect(result.isOk()).toBe(true);
+		if (result.isErr()) fail(result.error);
+		expect(result.value).toEqual({
+			discoveredArchiveUrlCount: 3,
+			scheduledArchiveScanJobCount: 1,
+			duplicateSuppressedArchiveScanJobCount: 2,
+			schedulerErrorCount: 0
+		});
+	});
+
+	it('should report repository-suppressed active queue duplicates', async () => {
+		scanJobRepositoryMock.releaseStaleTakenJobs.mockResolvedValue(0);
+		scanJobRepositoryMock.hasPendingJobs.mockResolvedValue(false);
+		scanJobRepositoryMock.findUnfinishedJobs.mockResolvedValue([]);
+		scanRepositoryMock.findLatest.mockResolvedValue([]);
+		scanSchedulerMock.schedule.mockReturnValue([
+			new ScanJob('https://race.example.com')
+		]);
+		scanJobRepositoryMock.save.mockResolvedValue(0);
+
+		const result = await scheduleScanJobs.execute({
+			historyArchiveUrls: ['https://race.example.com']
+		});
+
+		expect(result.isOk()).toBe(true);
+		if (result.isErr()) fail(result.error);
+		expect(result.value).toEqual({
+			discoveredArchiveUrlCount: 1,
+			scheduledArchiveScanJobCount: 0,
+			duplicateSuppressedArchiveScanJobCount: 1,
+			schedulerErrorCount: 0
+		});
 	});
 
 	it('should release stale taken jobs before checking queue state', async () => {
@@ -103,6 +169,8 @@ describe('ScheduleScanJobs', () => {
 		});
 
 		expect(result.isOk()).toBe(true);
+		if (result.isErr()) fail(result.error);
+		expect(result.value.schedulerErrorCount).toBe(0);
 		expect(scanJobRepositoryMock.releaseStaleTakenJobs).toHaveBeenCalledTimes(
 			1
 		);

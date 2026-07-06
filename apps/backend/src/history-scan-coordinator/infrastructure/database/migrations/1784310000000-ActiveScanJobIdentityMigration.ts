@@ -1,14 +1,13 @@
 import { MigrationInterface, QueryRunner } from 'typeorm';
 
-export class ActiveScanJobIdentityMigration1784300000000 implements MigrationInterface {
-	name = 'ActiveScanJobIdentityMigration1784300000000';
+export class ActiveScanJobIdentityMigration1784310000000 implements MigrationInterface {
+	name = 'ActiveScanJobIdentityMigration1784310000000';
 
 	public async up(queryRunner: QueryRunner): Promise<void> {
 		await queryRunner.query(`
 			with ranked as (
 				select
 					id,
-					status,
 					row_number() over (
 						partition by
 							lower(regexp_replace(url, '/+$', '')),
@@ -31,7 +30,6 @@ export class ActiveScanJobIdentityMigration1784300000000 implements MigrationInt
 			from ranked
 			where job.id = ranked.id
 				and ranked.row_number > 1
-				and ranked.status = 'PENDING'
 		`);
 
 		await queryRunner.query(`
