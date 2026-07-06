@@ -12,6 +12,7 @@ import {
 	scanLogIsActive
 } from '@domain/history-archive';
 import { formatDateTime, formatInteger } from '@format/formatters';
+import { HistoryArchiveStateDocument } from './history-archive-state-document';
 
 interface ArchiveScanDetailProps {
 	readonly evidence: PublicHistoryArchiveScanEvidence;
@@ -124,38 +125,7 @@ function ArchiveMetadata({
 }): React.JSX.Element {
 	const archiveMetadata = scan?.archiveMetadata ?? null;
 
-	return (
-		<details className="metadata-document" open>
-			<summary>
-				<span>stellar-history.json</span>
-				{archiveMetadata ? (
-					<a
-						href={archiveMetadata.stellarHistoryUrl}
-						rel="noopener noreferrer"
-						target="_blank"
-					>
-						{archiveMetadata.stellarHistoryUrl}
-					</a>
-				) : (
-					<span className="muted-inline">No scanner copy</span>
-				)}
-			</summary>
-			{archiveMetadata ? (
-				<>
-					<p className="muted-copy">
-						Scanner-captured copy observed{' '}
-						{formatDateTime(archiveMetadata.observedAt)}.
-					</p>
-					<pre>{JSON.stringify(archiveMetadata.stellarHistory, null, 2)}</pre>
-				</>
-			) : (
-				<p className="muted-copy">
-					No scanner-captured root history metadata is stored for this archive
-					yet.
-				</p>
-			)}
-		</details>
-	);
+	return <HistoryArchiveStateDocument archiveMetadata={archiveMetadata} />;
 }
 
 function EvidenceList({

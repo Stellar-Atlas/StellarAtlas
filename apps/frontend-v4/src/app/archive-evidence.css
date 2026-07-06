@@ -91,6 +91,69 @@
 	word-break: break-word;
 }
 
+.history-archive-state > .details {
+	padding: 0 12px 12px;
+}
+
+.nested-metadata-document {
+	border-inline: 0;
+	border-block-end: 0;
+	border-radius: 0;
+}
+
+.history-state-bucket-section {
+	display: grid;
+	gap: 8px;
+	padding: 0 12px 12px;
+}
+
+.history-state-bucket-section h4 {
+	font-size: 0.88rem;
+	margin: 0;
+}
+
+.history-state-buckets {
+	display: grid;
+	gap: 8px;
+	list-style-position: inside;
+	margin: 0;
+	padding: 0;
+}
+
+.history-state-buckets li {
+	background: color-mix(in srgb, var(--panel) 82%, var(--background));
+	border: 1px solid var(--border);
+	border-radius: 8px;
+	padding: 10px;
+}
+
+.history-state-buckets dl {
+	display: grid;
+	gap: 8px;
+	margin: 0;
+}
+
+.history-state-buckets dl div {
+	display: grid;
+	gap: 4px;
+}
+
+.history-state-buckets dt {
+	color: var(--muted);
+	font-size: 0.76rem;
+	font-weight: 800;
+	text-transform: uppercase;
+}
+
+.history-state-buckets dd {
+	font-family:
+		ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono',
+		'Courier New', monospace;
+	font-size: 0.78rem;
+	margin: 0;
+	overflow-wrap: anywhere;
+}
+
 .archive-scan-log {
 	display: grid;
 	gap: 12px;

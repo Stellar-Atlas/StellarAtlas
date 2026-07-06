@@ -73,7 +73,9 @@ export function HistoryArchiveScanLog({
 		scanLogHasArchiveVerificationError
 	).length;
 	const workerIssueCount = dedupedLogs.filter(scanLogHasWorkerIssue).length;
-	const successfulRunCount = dedupedLogs.filter(scanLogIsSuccessfulRun).length;
+	const cleanCompletedRunCount = dedupedLogs.filter(
+		scanLogIsCleanCompletedRun
+	).length;
 	const activeCount = dedupedLogs.filter(scanLogIsActive).length;
 	const completedCount = dedupedLogs.length - activeCount;
 
@@ -95,7 +97,7 @@ export function HistoryArchiveScanLog({
 						{formatInteger(completedCount)} completed /{' '}
 						{formatInteger(archiveErrorCount)} archive errors /{' '}
 						{formatInteger(workerIssueCount)} worker issues /{' '}
-						{formatInteger(successfulRunCount)} successful runs
+						{formatInteger(cleanCompletedRunCount)} clean runs
 					</span>
 					{hiddenDuplicateCount > 0 ? (
 						<span className="muted-inline">
@@ -225,7 +227,7 @@ export function HistoryArchiveScanLog({
 	);
 }
 
-const scanLogIsSuccessfulRun = (
+const scanLogIsCleanCompletedRun = (
 	entry: PublicHistoryArchiveScanLogEntry
 ): boolean =>
 	entry.status === 'completed' &&

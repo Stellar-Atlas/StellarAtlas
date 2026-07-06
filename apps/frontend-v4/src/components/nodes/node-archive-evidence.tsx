@@ -5,6 +5,7 @@ import type {
 	PublicOrganization
 } from '../../api/types';
 import { formatDateTime, formatInteger } from '../../format/formatters';
+import { HistoryArchiveStateDocument } from '../archive-scans/history-archive-state-document';
 
 export function ArchiveMetadata({
 	historyArchiveScan,
@@ -17,15 +18,13 @@ export function ArchiveMetadata({
 }): React.JSX.Element {
 	const archiveMetadata = historyArchiveScan?.archiveMetadata ?? null;
 	const homeDomain = organization?.homeDomain ?? node.homeDomain;
-	const stellarHistoryUrl =
-		archiveMetadata?.stellarHistoryUrl ?? buildHistoryUrl(node.historyUrl);
 	const stellarTomlUrl =
 		organization?.stellarToml?.url ??
 		(homeDomain === null
 			? null
 			: `https://${homeDomain}/.well-known/stellar.toml`);
 
-	if (stellarHistoryUrl === null && stellarTomlUrl === null) {
+	if (archiveMetadata === null && stellarTomlUrl === null) {
 		return (
 			<div className="archive-log-section">
 				<div className="panel-heading archive-log-heading">
@@ -41,17 +40,7 @@ export function ArchiveMetadata({
 			<div className="panel-heading archive-log-heading">
 				<h3>Archive metadata</h3>
 			</div>
-			<MetadataDocument
-				capturedAt={archiveMetadata?.observedAt ?? null}
-				label="stellar-history.json"
-				missingCopy="The scanner source URL is known, but no scanner-captured stellar-history.json body is stored for this archive yet. This page does not fetch validator metadata during render, so this is a persistence/backfill gap, not proof the archive lacks HAS metadata."
-				text={
-					archiveMetadata === null
-						? null
-						: formatPersistedJson(archiveMetadata.stellarHistory)
-				}
-				url={stellarHistoryUrl}
-			/>
+			<HistoryArchiveStateDocument archiveMetadata={archiveMetadata} />
 			<MetadataDocument
 				capturedAt={null}
 				label="stellar.toml"
@@ -122,7 +111,7 @@ function MetadataDocument({
 }: {
 	readonly capturedAt: string | null;
 	readonly label: string;
-	readonly missingCopy: string;
+	readonly missingCopy?: string;
 	readonly text: string | null;
 	readonly url: string | null;
 }): React.JSX.Element {
@@ -143,7 +132,10 @@ function MetadataDocument({
 					Scanner-captured copy observed {formatDateTime(capturedAt)}.
 				</p>
 			) : null}
-			{text ? <pre>{text}</pre> : <p className="muted-copy">{missingCopy}</p>}
+			{text ? <pre>{text}</pre> : null}
+			{text === null && missingCopy ? (
+				<p className="muted-copy">{missingCopy}</p>
+			) : null}
 		</details>
 	);
 }
@@ -160,16 +152,6 @@ function BucketEvidenceLink({
 			{entry.bucketHash}
 		</a>
 	);
-}
-
-function buildHistoryUrl(historyUrl: string | null): string | null {
-	if (historyUrl === null) return null;
-	const withSlash = historyUrl.endsWith('/') ? historyUrl : `${historyUrl}/`;
-	return new URL('.well-known/stellar-history.json', withSlash).toString();
-}
-
-function formatPersistedJson(value: unknown): string {
-	return JSON.stringify(value, null, 2);
 }
 
 function getPersistedTomlText(
