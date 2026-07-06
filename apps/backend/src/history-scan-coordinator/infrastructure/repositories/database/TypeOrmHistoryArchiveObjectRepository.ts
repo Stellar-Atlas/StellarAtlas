@@ -1,6 +1,5 @@
 import { injectable } from 'inversify';
 import { Repository } from 'typeorm';
-import type { QueryDeepPartialEntity } from 'typeorm/query-builder/QueryPartialEntity.js';
 import { getHistoryArchiveUrlIdentity } from '@history-scan-coordinator/domain/ArchiveUrlIdentity.js';
 import { HistoryArchiveObject } from '@history-scan-coordinator/domain/history-archive-object/HistoryArchiveObject.js';
 import {
@@ -24,6 +23,11 @@ import {
 	type RawObjectQueryResult,
 	type RawObjectStatsRow
 } from './HistoryArchiveObjectRowMapper.js';
+import {
+	createActiveUpdate,
+	createFailedUpdate,
+	createVerifiedUpdate
+} from './HistoryArchiveObjectUpdateFactory.js';
 
 const maxActiveObjectsPerArchive = 1;
 const maxActiveObjectsTotal = 24;
@@ -57,7 +61,10 @@ export class TypeOrmHistoryArchiveObjectRepository
 							candidate.status = 'pending'
 							or (
 								candidate.status = 'failed'
-								and candidate."updatedAt" < now() - interval '1 hour'
+								and coalesce(
+									candidate."nextAttemptAt",
+									candidate."updatedAt" + interval '1 hour'
+								) <= now()
 							)
 						)
 						and candidate."objectType" = any($1)
@@ -88,6 +95,7 @@ export class TypeOrmHistoryArchiveObjectRepository
 					"errorType" = null,
 					"errorMessage" = null,
 					"httpStatus" = null,
+					"nextAttemptAt" = null,
 					"updatedAt" = now()
 				where id = (select id from next_candidate)
 				returning
@@ -104,11 +112,14 @@ export class TypeOrmHistoryArchiveObjectRepository
 					"bucketHash" as "bucketHash",
 					"bytesDownloaded" as "bytesDownloaded",
 					attempts as "attempts",
+					"nextAttemptAt" as "nextAttemptAt",
+					"refreshAfter" as "refreshAfter",
 					"claimedAt" as "claimedAt",
 					"claimedByCommunityScannerId" as "claimedByCommunityScannerId",
 					"errorType" as "errorType",
 					"errorMessage" as "errorMessage",
 					"httpStatus" as "httpStatus",
+					"verificationFacts" as "verificationFacts",
 					"verifiedAt" as "verifiedAt",
 					"createdAt" as "createdAt",
 					"updatedAt" as "updatedAt"
@@ -213,6 +224,7 @@ export class TypeOrmHistoryArchiveObjectRepository
 				errorMessage: null,
 				errorType: null,
 				httpStatus: null,
+				nextAttemptAt: null,
 				status: 'pending',
 				updatedAt: () => 'now()',
 				verifiedAt: null,
@@ -226,7 +238,16 @@ export class TypeOrmHistoryArchiveObjectRepository
 			})
 			.andWhere('"objectKey" = :objectKey', { objectKey: 'root' })
 			.andWhere('status = :status', { status: 'verified' })
-			.andWhere('"updatedAt" < :before', { before })
+			.andWhere(
+				`(
+					"refreshAfter" <= now()
+					or (
+						"refreshAfter" is null
+						and "updatedAt" < :before
+					)
+				)`,
+				{ before }
+			)
 			.execute();
 
 		return result.affected ?? 0;
@@ -259,18 +280,7 @@ export class TypeOrmHistoryArchiveObjectRepository
 		const result = await this.repository
 			.createQueryBuilder()
 			.update(HistoryArchiveObject)
-			.set({
-				...createProgressUpdate(progress),
-				claimedAt: null,
-				claimedByCommunityScannerId: null,
-				errorMessage: null,
-				errorType: null,
-				httpStatus: null,
-				status: 'verified',
-				updatedAt: () => 'now()',
-				verifiedAt: () => 'now()',
-				workerStage: null
-			})
+			.set(createVerifiedUpdate(progress))
 			.where('"remoteId" = :remoteId', { remoteId })
 			.andWhere('status = :status', { status: 'scanning' })
 			.andWhere('attempts = :claimAttempt', {
@@ -288,16 +298,7 @@ export class TypeOrmHistoryArchiveObjectRepository
 		const result = await this.repository
 			.createQueryBuilder()
 			.update(HistoryArchiveObject)
-			.set({
-				claimedAt: null,
-				claimedByCommunityScannerId: null,
-				errorMessage: failure.errorMessage,
-				errorType: failure.errorType,
-				httpStatus: failure.httpStatus ?? null,
-				status: 'failed',
-				updatedAt: () => 'now()',
-				workerStage: null
-			})
+			.set(createFailedUpdate(failure))
 			.where('"remoteId" = :remoteId', { remoteId })
 			.andWhere('status = :status', { status: 'scanning' })
 			.andWhere('attempts = :claimAttempt', {
@@ -315,6 +316,7 @@ export class TypeOrmHistoryArchiveObjectRepository
 			.set({
 				claimedAt: null,
 				claimedByCommunityScannerId: null,
+				nextAttemptAt: null,
 				status: 'pending',
 				updatedAt: () => 'now()',
 				workerStage: null
@@ -427,29 +429,4 @@ export class TypeOrmHistoryArchiveObjectRepository
 
 		return await query.getMany();
 	}
-}
-
-function createActiveUpdate(
-	progress?: HistoryArchiveObjectProgressUpdate
-): QueryDeepPartialEntity<HistoryArchiveObject> {
-	return {
-		...createProgressUpdate(progress),
-		updatedAt: () => 'now()'
-	};
-}
-
-function createProgressUpdate(
-	progress?: HistoryArchiveObjectProgressUpdate
-): QueryDeepPartialEntity<HistoryArchiveObject> {
-	const update: QueryDeepPartialEntity<HistoryArchiveObject> = {};
-	if (progress === undefined) return update;
-
-	if (progress.bytesDownloaded !== undefined) {
-		update.bytesDownloaded = progress.bytesDownloaded;
-	}
-	if (progress.workerStage !== undefined) {
-		update.workerStage = progress.workerStage;
-	}
-
-	return update;
 }

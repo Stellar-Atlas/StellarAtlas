@@ -97,13 +97,18 @@ Required behavior:
 - all pending jobs count as active unfinished work;
 - stale release applies to claimed jobs, not pending jobs;
 - active pending/claimed jobs are unique by normalized archive URL and range;
+- object queue rows are unique by normalized archive URL, object type, and
+  object key;
+- failed object rows are eligible only when `nextAttemptAt` is due;
+- root history archive state rows are refreshed through `refreshAfter`, while
+  immutable checkpoint/category/bucket objects remain deduped by identity;
 - claim-time host limiting prevents all workers from hitting one host at once;
 - overdue archive-error rechecks cannot starve regular archive coverage;
 - scheduler decisions are recorded as counts: discovered, scheduled,
   duplicate-suppressed, and scheduler errors.
 
-The fairness policy should use normalized archive identity and host identity as
-first-class fields, not ad hoc URL string comparison.
+The fairness policy should use normalized archive identity, object identity, and
+host identity as first-class fields, not ad hoc URL string comparison.
 
 ## Worker Stage Visibility
 
@@ -142,6 +147,8 @@ started at
 ended at
 duration ms
 error class code
+retry eligible at
+verification fact summary
 ```
 
 Do not store long free-form log strings for every worker action. Use compact

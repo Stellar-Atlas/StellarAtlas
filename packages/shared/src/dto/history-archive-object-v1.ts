@@ -34,8 +34,11 @@ export interface HistoryArchiveObjectV1 {
 	readonly bucketHash: string | null;
 	readonly bytesDownloaded: number | null;
 	readonly attempts: number;
+	readonly nextAttemptAt: string | null;
+	readonly refreshAfter: string | null;
 	readonly claimedAt: string | null;
 	readonly updatedAt: string;
+	readonly verificationFacts: Readonly<Record<string, unknown>> | null;
 	readonly verifiedAt: string | null;
 	readonly error: HistoryArchiveObjectErrorV1 | null;
 }
@@ -89,8 +92,15 @@ const HistoryArchiveObjectV1Schema: JSONSchemaType<HistoryArchiveObjectV1> = {
 		bucketHash: nullable({ type: 'string' }),
 		bytesDownloaded: nullable({ type: 'number' }),
 		attempts: { type: 'number' },
+		nextAttemptAt: nullable({ type: 'string' }),
+		refreshAfter: nullable({ type: 'string' }),
 		claimedAt: nullable({ type: 'string' }),
 		updatedAt: { type: 'string' },
+		verificationFacts: nullable({
+			type: 'object',
+			additionalProperties: true,
+			required: []
+		}),
 		verifiedAt: nullable({ type: 'string' }),
 		error: nullable(HistoryArchiveObjectErrorV1Schema)
 	},
@@ -107,8 +117,11 @@ const HistoryArchiveObjectV1Schema: JSONSchemaType<HistoryArchiveObjectV1> = {
 		'bucketHash',
 		'bytesDownloaded',
 		'attempts',
+		'nextAttemptAt',
+		'refreshAfter',
 		'claimedAt',
 		'updatedAt',
+		'verificationFacts',
 		'verifiedAt',
 		'error'
 	],

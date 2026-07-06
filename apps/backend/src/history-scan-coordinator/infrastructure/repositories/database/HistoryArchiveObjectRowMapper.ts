@@ -39,6 +39,10 @@ type RawObjectRow = {
 	readonly bytesDownloaded?: NumericValue | null;
 	readonly bytesdownloaded?: NumericValue | null;
 	readonly attempts?: NumericValue;
+	readonly nextAttemptAt?: Date | string | null;
+	readonly nextattemptat?: Date | string | null;
+	readonly refreshAfter?: Date | string | null;
+	readonly refreshafter?: Date | string | null;
 	readonly claimedAt?: Date | string | null;
 	readonly claimedat?: Date | string | null;
 	readonly claimedByCommunityScannerId?: string | null;
@@ -49,6 +53,8 @@ type RawObjectRow = {
 	readonly errormessage?: string | null;
 	readonly httpStatus?: NumericValue | null;
 	readonly httpstatus?: NumericValue | null;
+	readonly verificationFacts?: Record<string, unknown> | null;
+	readonly verificationfacts?: Record<string, unknown> | null;
 	readonly verifiedAt?: Date | string | null;
 	readonly verifiedat?: Date | string | null;
 	readonly createdAt?: Date | string;
@@ -92,6 +98,12 @@ export function createObjectFromRow(row: RawObjectRow): HistoryArchiveObject {
 			: row.bytesDownloaded
 	);
 	object.attempts = requireNumber(row.attempts, 'attempts');
+	object.nextAttemptAt = toNullableDate(
+		row.nextAttemptAt === undefined ? row.nextattemptat : row.nextAttemptAt
+	);
+	object.refreshAfter = toNullableDate(
+		row.refreshAfter === undefined ? row.refreshafter : row.refreshAfter
+	);
 	object.claimedAt = toNullableDate(
 		row.claimedAt === undefined ? row.claimedat : row.claimedAt
 	);
@@ -104,6 +116,10 @@ export function createObjectFromRow(row: RawObjectRow): HistoryArchiveObject {
 	object.httpStatus = toNullableNumber(
 		row.httpStatus === undefined ? row.httpstatus : row.httpStatus
 	);
+	object.verificationFacts =
+		row.verificationFacts === undefined
+			? row.verificationfacts ?? null
+			: row.verificationFacts;
 	object.verifiedAt = toNullableDate(
 		row.verifiedAt === undefined ? row.verifiedat : row.verifiedAt
 	);

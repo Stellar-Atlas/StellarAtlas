@@ -21,6 +21,8 @@ export interface HistoryArchiveObjectError {
 	readonly httpStatus: number | null;
 }
 
+export type HistoryArchiveObjectVerificationFacts = object;
+
 @Entity({ name: 'history_archive_object_queue' })
 @Index('idx_history_archive_object_status', ['status', 'objectOrder'])
 @Index('idx_history_archive_object_archive', ['archiveUrlIdentity', 'status'])
@@ -72,6 +74,12 @@ export class HistoryArchiveObject extends CoreEntity {
 	public attempts!: number;
 
 	@Column('timestamptz', { nullable: true })
+	public nextAttemptAt!: Date | null;
+
+	@Column('timestamptz', { nullable: true })
+	public refreshAfter!: Date | null;
+
+	@Column('timestamptz', { nullable: true })
 	public claimedAt!: Date | null;
 
 	@Column('uuid', { nullable: true })
@@ -85,6 +93,9 @@ export class HistoryArchiveObject extends CoreEntity {
 
 	@Column('integer', { nullable: true })
 	public httpStatus!: number | null;
+
+	@Column('jsonb', { nullable: true })
+	public verificationFacts!: HistoryArchiveObjectVerificationFacts | null;
 
 	@Column('timestamptz', { nullable: true })
 	public verifiedAt!: Date | null;
@@ -123,11 +134,14 @@ export class HistoryArchiveObject extends CoreEntity {
 		this.workerStage = null;
 		this.bytesDownloaded = null;
 		this.attempts = 0;
+		this.nextAttemptAt = null;
+		this.refreshAfter = null;
 		this.claimedAt = null;
 		this.claimedByCommunityScannerId = null;
 		this.errorType = null;
 		this.errorMessage = null;
 		this.httpStatus = null;
+		this.verificationFacts = null;
 		this.verifiedAt = null;
 	}
 }

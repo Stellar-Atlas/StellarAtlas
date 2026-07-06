@@ -7909,8 +7909,11 @@
 					"bucketHash",
 					"bytesDownloaded",
 					"attempts",
+					"nextAttemptAt",
+					"refreshAfter",
 					"claimedAt",
 					"updatedAt",
+					"verificationFacts",
 					"verifiedAt",
 					"error"
 				],
@@ -7948,12 +7951,27 @@
 						"nullable": true
 					},
 					"attempts": { "type": "integer", "minimum": 0 },
+					"nextAttemptAt": {
+						"type": "string",
+						"format": "date-time",
+						"nullable": true
+					},
+					"refreshAfter": {
+						"type": "string",
+						"format": "date-time",
+						"nullable": true
+					},
 					"claimedAt": {
 						"type": "string",
 						"format": "date-time",
 						"nullable": true
 					},
 					"updatedAt": { "type": "string", "format": "date-time" },
+					"verificationFacts": {
+						"type": "object",
+						"additionalProperties": true,
+						"nullable": true
+					},
 					"verifiedAt": {
 						"type": "string",
 						"format": "date-time",

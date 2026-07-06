@@ -1,5 +1,6 @@
 import type { HistoryArchiveObject } from './HistoryArchiveObject.js';
 import type { HistoryArchiveObjectType } from './HistoryArchiveObject.js';
+import type { HistoryArchiveObjectVerificationFacts } from './HistoryArchiveObject.js';
 
 export interface HistoryArchiveObjectQueueStats {
 	readonly activeObjects: number;
@@ -16,6 +17,7 @@ export interface HistoryArchiveObjectQueueSnapshot
 export interface HistoryArchiveObjectProgressUpdate {
 	readonly bytesDownloaded?: number | null;
 	readonly claimAttempt: number;
+	readonly verificationFacts?: HistoryArchiveObjectVerificationFacts | null;
 	readonly workerStage?: string | null;
 }
 
@@ -24,6 +26,7 @@ export interface HistoryArchiveObjectFailure {
 	readonly errorMessage: string;
 	readonly errorType: string;
 	readonly httpStatus?: number | null;
+	readonly nextAttemptAt?: Date | null;
 }
 
 export interface HistoryArchiveObjectRepository {

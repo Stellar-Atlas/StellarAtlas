@@ -43,8 +43,11 @@ function mapHistoryArchiveObject(
 		objectType: object.objectType,
 		objectUrl: object.objectUrl,
 		remoteId: object.remoteId,
+		nextAttemptAt: object.nextAttemptAt?.toISOString() ?? null,
+		refreshAfter: object.refreshAfter?.toISOString() ?? null,
 		status: object.status,
 		updatedAt: requireDate(object.updatedAt).toISOString(),
+		verificationFacts: toPublicVerificationFacts(object.verificationFacts),
 		verifiedAt: object.verifiedAt?.toISOString() ?? null,
 		workerStage: object.workerStage
 	};
@@ -53,4 +56,12 @@ function mapHistoryArchiveObject(
 function requireDate(value: Date | undefined): Date {
 	if (value instanceof Date) return value;
 	return new Date(0);
+}
+
+function toPublicVerificationFacts(
+	value: object | null
+): Readonly<Record<string, unknown>> | null {
+	if (value === null || Array.isArray(value)) return null;
+
+	return value as Readonly<Record<string, unknown>>;
 }
