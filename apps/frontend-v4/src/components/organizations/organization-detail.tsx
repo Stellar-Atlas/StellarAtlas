@@ -1,13 +1,13 @@
 import Link from 'next/link';
 import type {
-	PublicHistoryArchiveObjectEvents,
-	PublicHistoryArchiveObjectQueue,
-	PublicHistoryArchiveObjectSummary,
 	PublicNetwork,
 	PublicNode,
-	PublicHistoryArchiveState,
 	PublicOrganization
 } from '../../api/types';
+import {
+	OrganizationArchiveEvidence,
+	type OrganizationArchiveState
+} from '../archive-scans/organization-archive-evidence';
 import {
 	getNodeLabel,
 	getOrganizationLabel,
@@ -18,11 +18,7 @@ import {
 	formatOrganization24HourAvailability,
 	formatOrganization30DayAvailability
 } from '../../domain/availability';
-import {
-	formatBoolean,
-	formatDateTime,
-	formatInteger
-} from '../../format/formatters';
+import { formatBoolean } from '../../format/formatters';
 import { StatusTags } from '../status-tags';
 
 interface OrganizationDetailProps {
@@ -30,14 +26,6 @@ interface OrganizationDetailProps {
 	network: PublicNetwork;
 	organization: PublicOrganization;
 	organizationNodes: readonly PublicNode[];
-}
-
-interface OrganizationArchiveState {
-	readonly events: PublicHistoryArchiveObjectEvents;
-	readonly historyUrl: string;
-	readonly objects: PublicHistoryArchiveObjectQueue;
-	readonly state: PublicHistoryArchiveState | null;
-	readonly summary: PublicHistoryArchiveObjectSummary;
 }
 
 export function OrganizationDetail({
@@ -136,122 +124,6 @@ export function OrganizationDetail({
 			<OrganizationTomlEvidence organization={organization} />
 		</section>
 	);
-}
-
-function OrganizationArchiveEvidence({
-	archiveStates,
-	nodes
-}: {
-	readonly archiveStates: readonly OrganizationArchiveState[];
-	readonly nodes: readonly PublicNode[];
-}): React.JSX.Element {
-	const stateByUrl = new Map(
-		archiveStates.map((entry) => [normalizeArchiveUrl(entry.historyUrl), entry])
-	);
-	const nodesWithArchives = nodes.filter((node) => node.historyUrl !== null);
-
-	return (
-		<article className="panel detail-panel archive-metadata">
-			<div className="panel-heading">
-				<h2>History archive state</h2>
-				<span className="muted-inline">
-					{formatInteger(nodesWithArchives.length)} archives
-				</span>
-			</div>
-			{nodesWithArchives.length === 0 ? (
-				<p className="muted-copy">
-					No node archive URLs are known for this organization.
-				</p>
-			) : (
-				<div className="table">
-					{nodesWithArchives.map((node) => {
-						const historyUrl = node.historyUrl ?? '';
-						const archiveState =
-							stateByUrl.get(normalizeArchiveUrl(historyUrl))?.state ?? null;
-						const objects =
-							stateByUrl.get(normalizeArchiveUrl(historyUrl))?.objects ?? null;
-						const events =
-							stateByUrl.get(normalizeArchiveUrl(historyUrl))?.events ?? null;
-						const summary =
-							stateByUrl.get(normalizeArchiveUrl(historyUrl))?.summary ?? null;
-
-						return (
-							<div
-								className="row compact archive-org-row"
-								key={`${node.publicKey}:${historyUrl}`}
-							>
-								<div>
-									<Link href={`/nodes/${encodeURIComponent(node.publicKey)}`}>
-										<strong>{getNodeLabel(node)}</strong>
-									</Link>
-									<small>{historyUrl}</small>
-								</div>
-								<div className="archive-org-state">
-									<strong>{archiveState?.status ?? 'No state record'}</strong>
-									<small>{formatArchiveStateDetail(archiveState)}</small>
-								</div>
-								<div className="archive-org-coverage">
-									{objects ? (
-										<small>{formatQueueSampleSummary(objects)}</small>
-									) : null}
-									{summary ? (
-										<small>{formatArchiveCoverageSummary(summary)}</small>
-									) : null}
-									{events ? (
-										<small>{formatLatestArchiveEvent(events)}</small>
-									) : null}
-								</div>
-							</div>
-						);
-					})}
-				</div>
-			)}
-		</article>
-	);
-}
-
-function formatLatestArchiveEvent(
-	events: PublicHistoryArchiveObjectEvents
-): string {
-	const latest = events.events.at(0);
-	if (latest === undefined) return 'No object events recorded';
-	const stage =
-		latest.workerStage === null || latest.workerStage === latest.eventType
-			? latest.objectType
-			: latest.workerStage;
-
-	return `${latest.eventType} ${stage} at ${formatDateTime(latest.createdAt)}`;
-}
-
-function formatArchiveCoverageSummary(
-	summary: PublicHistoryArchiveObjectSummary
-): string {
-	return `${formatInteger(summary.checkpoints.objectCompleteArchiveCheckpoints)} object-complete checkpoints, ${formatInteger(summary.checkpoints.categoryConsistentArchiveCheckpoints)} category-consistent, ${formatInteger(summary.checkpoints.failedArchiveCheckpoints)} failed; ${formatInteger(summary.buckets.totalBucketObjects)} bucket objects`;
-}
-
-function formatQueueSampleSummary(
-	objects: PublicHistoryArchiveObjectQueue
-): string {
-	return `Current rows: ${formatInteger(objects.activeObjects)} scanning, ${formatInteger(
-		objects.pendingObjects
-	)} pending, ${formatInteger(objects.verifiedObjects)} verified, ${formatInteger(
-		objects.failedObjects
-	)} failed`;
-}
-
-function formatArchiveStateDetail(
-	archiveState: PublicHistoryArchiveState | null
-): string {
-	if (archiveState === null) return 'Scanner has not persisted state yet';
-	if (archiveState.metadata !== null) {
-		return `ledger ${formatInteger(archiveState.metadata.stellarHistory.currentLedger)} observed ${formatDateTime(archiveState.observedAt)}`;
-	}
-
-	return archiveState.failure?.message ?? 'State fetch failed';
-}
-
-function normalizeArchiveUrl(historyUrl: string): string {
-	return historyUrl.replace(/\/+$/, '').toLowerCase();
 }
 
 function OrganizationTomlEvidence({
