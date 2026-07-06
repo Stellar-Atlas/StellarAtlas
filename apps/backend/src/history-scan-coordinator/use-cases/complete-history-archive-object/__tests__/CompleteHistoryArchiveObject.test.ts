@@ -101,7 +101,8 @@ describe('CompleteHistoryArchiveObject', () => {
 			'ledger:0000007f',
 			'transactions:0000007f',
 			'results:0000007f',
-			'bucket:4eae73efaa0ce061441dfe43ffc61c0ed24fcbc59e5ee512d1b60e8da2509655'
+			'bucket:4eae73efaa0ce061441dfe43ffc61c0ed24fcbc59e5ee512d1b60e8da2509655',
+			'checkpoint-state:0000003f'
 		]);
 		expect(objectRepository.markObjectVerified).toHaveBeenCalledWith(
 			archiveObject.remoteId,

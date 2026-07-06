@@ -58,9 +58,15 @@ export const historyArchiveObjectClaimSql = `
 			and coalesce(active_host.active_count, 0) < $4
 			and host_throttle."hostIdentity" is null
 		order by
+			archive_claims.last_claimed_at asc nulls first,
+			case
+				when candidate."objectType" = 'history-archive-state' then 0
+				when candidate."objectType" = 'checkpoint-state' then 2
+				else 1
+			end asc,
+			coalesce(candidate."checkpointLedger", -1) desc,
 			candidate."objectOrder" asc,
 			candidate."objectKey" asc,
-			archive_claims.last_claimed_at asc nulls first,
 			candidate."archiveUrlIdentity" asc
 		for update of candidate skip locked
 		limit 1

@@ -74,14 +74,13 @@ describe('HistoryArchiveObjectBuilder', () => {
 		]);
 	});
 
-	it('uses a bounded catch-up page size by default', () => {
+	it('uses a cursor-sized discovery page by default', () => {
 		const objects = buildCheckpointStateDiscoveryObjects(
 			createSnapshot(createArchiveMetadata(20_000))
 		);
 
-		expect(objects).toHaveLength(256);
+		expect(objects).toHaveLength(1);
 		expect(objects[0]?.objectKey).toBe('checkpoint-state:00004dff');
-		expect(objects.at(-1)?.objectKey).toBe('checkpoint-state:00000e3f');
 	});
 
 	it('caps explicitly requested checkpoint discovery pages', () => {
@@ -90,7 +89,7 @@ describe('HistoryArchiveObjectBuilder', () => {
 			{ maxObjects: 10_000 }
 		);
 
-		expect(objects).toHaveLength(4096);
+		expect(objects).toHaveLength(256);
 	});
 
 	it('continues checkpoint discovery older than the oldest already scheduled checkpoint', () => {

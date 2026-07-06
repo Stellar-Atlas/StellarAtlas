@@ -44,6 +44,7 @@ export class ScheduleHistoryArchiveObjects {
 			const stateObjects = states.flatMap(buildHistoryArchiveObjectsFromState);
 			const checkpointDiscoveryObjects = states.flatMap((state) =>
 				buildCheckpointStateDiscoveryObjects(state, {
+					maxObjects: 1,
 					oldestScheduledCheckpointLedger:
 						oldestCheckpointByArchive.get(state.archiveUrlIdentity) ?? null
 				})

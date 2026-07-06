@@ -128,12 +128,19 @@ export class CompleteHistoryArchiveObject {
 				[archiveUrlIdentity]
 			);
 
+		const oldestScheduledCheckpointLedger =
+			oldestCheckpointByArchive.get(archiveUrlIdentity);
+		const olderCheckpointObjects =
+			oldestScheduledCheckpointLedger === undefined
+				? []
+				: buildCheckpointStateDiscoveryObjects(snapshot, {
+						maxObjects: 1,
+						oldestScheduledCheckpointLedger
+					});
+
 		return [
 			...buildHistoryArchiveObjectsFromState(snapshot),
-			...buildCheckpointStateDiscoveryObjects(snapshot, {
-				oldestScheduledCheckpointLedger:
-					oldestCheckpointByArchive.get(archiveUrlIdentity) ?? null
-			})
+			...olderCheckpointObjects
 		];
 	}
 
@@ -157,9 +164,18 @@ export class CompleteHistoryArchiveObject {
 			'history-scanner'
 		);
 
-		return buildCheckpointSiblingObjectsFromState(snapshot, {
+		const siblingObjects = buildCheckpointSiblingObjectsFromState(snapshot, {
 			expectedCheckpointLedger: object.checkpointLedger
 		});
+		if (siblingObjects.length === 0) return [];
+
+		return [
+			...siblingObjects,
+			...buildCheckpointStateDiscoveryObjects(snapshot, {
+				maxObjects: 1,
+				oldestScheduledCheckpointLedger: object.checkpointLedger
+			})
+		];
 	}
 
 	private async addRootNetworkPassphraseIfMissing(
