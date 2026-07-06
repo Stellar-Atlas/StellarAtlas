@@ -146,6 +146,22 @@ Production observation on 2026-07-06:
   per host. This is a first host-level pressure guard; it is not yet the full
   host throttle/backoff table.
 
+Post-deploy observation on 2026-07-06 after the bounded checkpoint cursor and
+checkpoint fan-out slices:
+
+- a coordinator scheduler pass against existing persisted archive states inserted
+  4,494 object rows without a network crawl;
+- `/v1/archive-scans/objects?limit=500` showed 3,390 pending, 24 active, 5,174
+  verified, and 37 failed object rows;
+- the production status page rendered checkpoint-state rows as active scanner
+  work with BrowserOS/CDP proof at
+  `.codex/screenshots/prod-status-checkpoint-queue-20260706.png`;
+- `http://atgc.node.sl8.online` had checkpoint-state rows and ledger,
+  transactions, results, and bucket descendants in pending/verified states;
+- a verified checkpoint-state row carried `checkpointHistoryArchiveState`
+  verification facts whose state ledger matched the object checkpoint ledger
+  `63,351,935`.
+
 ## Target Object Queue Flow
 
 The target scanner contract is one durable row per archive object, not one row
