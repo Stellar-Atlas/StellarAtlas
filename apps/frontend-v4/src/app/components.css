@@ -289,6 +289,10 @@ td {
 	min-inline-size: 130px;
 }
 
+tr.selected-row td {
+	background: var(--surface-active);
+}
+
 .details {
 	display: grid;
 	gap: 0;

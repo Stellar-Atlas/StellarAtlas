@@ -1,7 +1,7 @@
 .route-modal-layer {
 	inset: 0;
 	position: fixed;
-	z-index: 60;
+	z-index: 320;
 }
 
 .route-modal-backdrop {

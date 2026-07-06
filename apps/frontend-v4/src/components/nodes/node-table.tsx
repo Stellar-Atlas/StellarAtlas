@@ -24,6 +24,7 @@ type NodeFilter = 'all' | 'validators' | 'listeners' | 'warnings';
 interface NodeTableProps {
 	network: PublicNetwork;
 	nodes: readonly PublicKnownNode[];
+	selectedPublicKey?: string;
 }
 
 const PAGE_SIZE = 50;
@@ -104,7 +105,8 @@ const filterNodes = (
 
 export function NodeTable({
 	network,
-	nodes
+	nodes,
+	selectedPublicKey = ''
 }: NodeTableProps): React.JSX.Element {
 	const [filter, setFilter] = useState<NodeFilter>('validators');
 	const [query, setQuery] = useState('');
@@ -186,7 +188,14 @@ export function NodeTable({
 								? formatNode30DayValidating(node)
 								: null;
 							return (
-								<tr key={knownNode.publicKey}>
+								<tr
+									className={
+										knownNode.publicKey === selectedPublicKey
+											? 'selected-row'
+											: undefined
+									}
+									key={knownNode.publicKey}
+								>
 									<td>
 										<Link
 											href={`/nodes/${encodeURIComponent(knownNode.publicKey)}`}
