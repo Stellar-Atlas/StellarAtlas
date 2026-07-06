@@ -2,7 +2,7 @@ import { createGunzip } from 'node:zlib';
 import { Transform, type Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 import { err, ok, type Result } from 'neverthrow';
-import { Url, type HttpService } from 'http-helper';
+import { Url, isHttpError, type HttpService } from 'http-helper';
 import type { ExceptionLogger } from 'exception-logger';
 import { mapUnknownToError } from 'shared';
 import { Category } from '../../domain/history-archive/Category.js';
@@ -161,6 +161,14 @@ export class ArchiveObjectCategoryVerifier {
 	}
 
 	private mapHttpError(error: unknown): HistoryArchiveObjectFailureDTO {
+		if (isHttpError(error)) {
+			return {
+				errorMessage: error.message,
+				errorType: error.response ? 'archive_http_error' : 'archive_transport_error',
+				httpStatus: error.response?.status ?? null
+			};
+		}
+
 		const mapped = mapUnknownToError(error);
 		return {
 			errorMessage: mapped.message,

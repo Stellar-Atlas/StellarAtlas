@@ -40,4 +40,13 @@ describe('ArchiveUrlIdentity', () => {
 			])
 		).toEqual(['https://history.example.com/archive']);
 	});
+
+	it('keeps same-host archive paths as distinct archive identities', () => {
+		expect(
+			getHistoryArchiveUrlIdentity('https://history.example.com/archive-a')
+		).toBe('https://history.example.com/archive-a');
+		expect(
+			getHistoryArchiveUrlIdentity('https://history.example.com/archive-b')
+		).toBe('https://history.example.com/archive-b');
+	});
 });

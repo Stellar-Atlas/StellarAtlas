@@ -132,6 +132,10 @@ Production observation on 2026-07-06:
   scanner contract;
 - object heartbeats now coalesce per active object and use jittered timers so a
   large bucket stream cannot pile overlapping coordinator writes onto the API.
+- object queue rows now carry `hostIdentity`, and production claim checks
+  enforce both one active object per archive root and a bounded active count
+  per host. This is a first host-level pressure guard; it is not yet the full
+  host throttle/backoff table.
 
 ## Target Object Queue Flow
 

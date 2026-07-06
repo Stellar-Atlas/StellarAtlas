@@ -12,6 +12,7 @@ export class HistoryArchiveObjectQueueMigration1784350000000
 				"remoteId" uuid not null default gen_random_uuid(),
 				"archiveUrl" text not null,
 				"archiveUrlIdentity" text not null,
+				"hostIdentity" text not null,
 				"objectType" text not null,
 				"objectKey" text not null,
 				"objectOrder" integer not null,
@@ -66,6 +67,10 @@ export class HistoryArchiveObjectQueueMigration1784350000000
 		await queryRunner.query(`
 			create index if not exists "idx_history_archive_object_archive"
 			on "history_archive_object_queue" ("archiveUrlIdentity", "status")
+		`);
+		await queryRunner.query(`
+			create index if not exists "idx_history_archive_object_host"
+			on "history_archive_object_queue" ("hostIdentity", "status")
 		`);
 		await queryRunner.query(`
 			create unique index if not exists "idx_history_archive_object_remote"
@@ -194,6 +199,7 @@ export class HistoryArchiveObjectQueueMigration1784350000000
 			insert into "history_archive_object_queue" (
 				"archiveUrl",
 				"archiveUrlIdentity",
+				"hostIdentity",
 				"remoteId",
 				"objectType",
 				"objectKey",
@@ -209,6 +215,13 @@ export class HistoryArchiveObjectQueueMigration1784350000000
 			select
 				"archiveUrl",
 				"archiveUrlIdentity",
+				lower(
+					split_part(
+						regexp_replace("archiveUrl", '^https?://', '', 'i'),
+						'/',
+						1
+					)
+				),
 				gen_random_uuid(),
 				"objectType",
 				"objectKey",
@@ -239,6 +252,7 @@ export class HistoryArchiveObjectQueueMigration1784350000000
 			insert into "history_archive_object_queue" (
 				"archiveUrl",
 				"archiveUrlIdentity",
+				"hostIdentity",
 				"remoteId",
 				"objectType",
 				"objectKey",
@@ -257,6 +271,13 @@ export class HistoryArchiveObjectQueueMigration1784350000000
 			)
 				regexp_replace(evidence."archiveUrl", '/+$', ''),
 				lower(regexp_replace(evidence."archiveUrl", '/+$', '')),
+				lower(
+					split_part(
+						regexp_replace(evidence."archiveUrl", '^https?://', '', 'i'),
+						'/',
+						1
+					)
+				),
 				gen_random_uuid(),
 				'bucket',
 				'bucket:' || lower(evidence."bucketHash"),

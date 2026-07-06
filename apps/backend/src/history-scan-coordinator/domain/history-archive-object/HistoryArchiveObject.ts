@@ -11,6 +11,7 @@ import type {
 	HistoryArchiveObjectStatusV1,
 	HistoryArchiveObjectTypeV1
 } from 'shared';
+import { getHistoryArchiveObjectHostIdentity } from './HistoryArchiveObjectHostIdentity.js';
 
 export type HistoryArchiveObjectType = HistoryArchiveObjectTypeV1;
 export type HistoryArchiveObjectStatus = HistoryArchiveObjectStatusV1;
@@ -26,6 +27,7 @@ export type HistoryArchiveObjectVerificationFacts = object;
 @Entity({ name: 'history_archive_object_queue' })
 @Index('idx_history_archive_object_status', ['status', 'objectOrder'])
 @Index('idx_history_archive_object_archive', ['archiveUrlIdentity', 'status'])
+@Index('idx_history_archive_object_host', ['hostIdentity', 'status'])
 @Index('idx_history_archive_object_key', ['objectType', 'objectKey'])
 @Index(
 	'uq_history_archive_object_identity',
@@ -42,6 +44,9 @@ export class HistoryArchiveObject extends CoreEntity {
 
 	@Column('text')
 	public archiveUrlIdentity!: string;
+
+	@Column('text')
+	public hostIdentity!: string;
 
 	@Column('text')
 	public objectType!: HistoryArchiveObjectType;
@@ -111,6 +116,7 @@ export class HistoryArchiveObject extends CoreEntity {
 		readonly archiveUrlIdentity: string;
 		readonly bucketHash?: string | null;
 		readonly checkpointLedger?: number | null;
+		readonly hostIdentity?: string;
 		readonly objectKey: string;
 		readonly objectOrder: number;
 		readonly objectType: HistoryArchiveObjectType;
@@ -124,6 +130,8 @@ export class HistoryArchiveObject extends CoreEntity {
 		this.remoteId = props.remoteId ?? randomUUID();
 		this.archiveUrl = props.archiveUrl;
 		this.archiveUrlIdentity = props.archiveUrlIdentity;
+		this.hostIdentity =
+			props.hostIdentity ?? getHistoryArchiveObjectHostIdentity(props.archiveUrl);
 		this.bucketHash = props.bucketHash ?? null;
 		this.checkpointLedger = props.checkpointLedger ?? null;
 		this.objectKey = props.objectKey;

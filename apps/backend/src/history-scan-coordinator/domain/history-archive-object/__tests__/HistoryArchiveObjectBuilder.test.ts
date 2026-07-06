@@ -1,0 +1,59 @@
+import type { ArchiveMetadataDTO } from 'history-scanner-dto';
+import { HistoryArchiveStateSnapshot } from '../../history-archive-state/HistoryArchiveStateSnapshot.js';
+import {
+	buildHistoryArchiveObjectsFromState,
+	buildRootHistoryArchiveObject
+} from '../HistoryArchiveObjectBuilder.js';
+
+describe('HistoryArchiveObjectBuilder', () => {
+	it('derives host identity while preserving root archive identity', () => {
+		const root = buildRootHistoryArchiveObject(
+			'https://history.example.com/archive-a'
+		);
+
+		expect(root).toMatchObject({
+			archiveUrlIdentity: 'https://history.example.com/archive-a',
+			hostIdentity: 'history.example.com',
+			objectKey: 'root'
+		});
+	});
+
+	it('builds state-derived objects with shared host and distinct archive identity', () => {
+		const objects = buildHistoryArchiveObjectsFromState(
+			HistoryArchiveStateSnapshot.available(
+				'https://history.example.com/archive-b',
+				'https://history.example.com/archive-b',
+				createArchiveMetadata(),
+				'history-scanner'
+			)
+		);
+
+		expect(objects.length).toBeGreaterThan(1);
+		expect(new Set(objects.map((object) => object.hostIdentity))).toEqual(
+			new Set(['history.example.com'])
+		);
+		expect(new Set(objects.map((object) => object.archiveUrlIdentity))).toEqual(
+			new Set(['https://history.example.com/archive-b'])
+		);
+	});
+});
+
+function createArchiveMetadata(): ArchiveMetadataDTO {
+	return {
+		observedAt: '2026-07-06T14:30:00.000Z',
+		stellarHistory: {
+			currentBuckets: [
+				{
+					curr: '4eae73efaa0ce061441dfe43ffc61c0ed24fcbc59e5ee512d1b60e8da2509655',
+					next: { state: 0 },
+					snap: '0000000000000000000000000000000000000000000000000000000000000000'
+				}
+			],
+			currentLedger: 63354047,
+			server: 'stellar-core',
+			version: 1
+		},
+		stellarHistoryUrl:
+			'https://history.example.com/archive-b/.well-known/stellar-history.json'
+	};
+}

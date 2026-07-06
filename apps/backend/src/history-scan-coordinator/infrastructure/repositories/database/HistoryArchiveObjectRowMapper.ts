@@ -21,6 +21,8 @@ type RawObjectRow = {
 	readonly archiveurl?: string;
 	readonly archiveUrlIdentity?: string;
 	readonly archiveurlidentity?: string;
+	readonly hostIdentity?: string;
+	readonly hostidentity?: string;
 	readonly objectType?: string;
 	readonly objecttype?: string;
 	readonly objectKey?: string;
@@ -83,6 +85,10 @@ export function createObjectFromRow(row: RawObjectRow): HistoryArchiveObject {
 			row.checkpointLedger === undefined
 				? row.checkpointledger
 				: row.checkpointLedger
+		),
+		hostIdentity: requireString(
+			row.hostIdentity ?? row.hostidentity,
+			'hostIdentity'
 		),
 		objectKey: requireString(row.objectKey ?? row.objectkey, 'objectKey'),
 		objectOrder: requireNumber(row.objectOrder ?? row.objectorder, 'objectOrder'),

@@ -30,6 +30,7 @@ import {
 } from './HistoryArchiveObjectUpdateFactory.js';
 
 const maxActiveObjectsPerArchive = 1;
+const maxActiveObjectsPerHost = 2;
 const maxActiveObjectsTotal = 24;
 const claimLockName = 'history_archive_object_claim';
 
@@ -80,7 +81,19 @@ export class TypeOrmHistoryArchiveObjectRepository
 								and active."archiveUrlIdentity" =
 									candidate."archiveUrlIdentity"
 						) < $2
+						and (
+							select count(*)
+							from history_archive_object_queue active
+							where active.status = 'scanning'
+								and active."hostIdentity" = candidate."hostIdentity"
+						) < $4
 					order by
+						(
+							select max(previous."claimedAt")
+							from history_archive_object_queue previous
+							where previous."archiveUrlIdentity" =
+								candidate."archiveUrlIdentity"
+						) asc nulls first,
 						candidate."objectOrder" asc,
 						candidate."objectKey" asc,
 						candidate."archiveUrlIdentity" asc
@@ -102,6 +115,7 @@ export class TypeOrmHistoryArchiveObjectRepository
 					"remoteId" as "remoteId",
 					"archiveUrl" as "archiveUrl",
 					"archiveUrlIdentity" as "archiveUrlIdentity",
+					"hostIdentity" as "hostIdentity",
 					"objectType" as "objectType",
 					"objectKey" as "objectKey",
 					"objectOrder" as "objectOrder",
@@ -124,7 +138,12 @@ export class TypeOrmHistoryArchiveObjectRepository
 					"createdAt" as "createdAt",
 					"updatedAt" as "updatedAt"
 				`,
-				[[...supportedTypes], maxActiveObjectsPerArchive, maxActiveObjectsTotal]
+				[
+					[...supportedTypes],
+					maxActiveObjectsPerArchive,
+					maxActiveObjectsTotal,
+					maxActiveObjectsPerHost
+				]
 				)) as RawObjectQueryResult
 			);
 
