@@ -110,21 +110,21 @@ export const historyArchiveCheckpointProofRefreshSql = `
 				and object.status = 'verified') as has_results,
 			bool_or(object."objectType" = 'scp'
 				and object.status = 'verified') as has_scp,
-			max(object."remoteId") filter (
+			(max(object."remoteId"::text) filter (
 				where object."objectType" = 'checkpoint-state'
-			) as "checkpointStateObjectRemoteId",
-			max(object."remoteId") filter (
+			))::uuid as "checkpointStateObjectRemoteId",
+			(max(object."remoteId"::text) filter (
 				where object."objectType" = 'ledger'
-			) as "ledgerObjectRemoteId",
-			max(object."remoteId") filter (
+			))::uuid as "ledgerObjectRemoteId",
+			(max(object."remoteId"::text) filter (
 				where object."objectType" = 'transactions'
-			) as "transactionsObjectRemoteId",
-			max(object."remoteId") filter (
+			))::uuid as "transactionsObjectRemoteId",
+			(max(object."remoteId"::text) filter (
 				where object."objectType" = 'results'
-			) as "resultsObjectRemoteId",
-			max(object."remoteId") filter (
+			))::uuid as "resultsObjectRemoteId",
+			(max(object."remoteId"::text) filter (
 				where object."objectType" = 'scp'
-			) as "scpObjectRemoteId"
+			))::uuid as "scpObjectRemoteId"
 		from target_checkpoints target
 		join history_archive_object_queue object
 			on object."archiveUrlIdentity" = target."archiveUrlIdentity"
