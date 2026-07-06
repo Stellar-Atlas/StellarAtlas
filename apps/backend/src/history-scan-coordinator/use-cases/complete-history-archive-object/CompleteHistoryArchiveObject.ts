@@ -15,7 +15,8 @@ import type { HistoryArchiveStateRepository } from '../../domain/history-archive
 import {
 	buildCheckpointStateDiscoveryObjects,
 	buildCheckpointSiblingObjectsFromState,
-	buildHistoryArchiveObjectsFromState
+	buildHistoryArchiveObjectsFromState,
+	maxCheckpointDiscoveryPageSize
 } from '../../domain/history-archive-object/HistoryArchiveObjectBuilder.js';
 import { TYPES } from '../../infrastructure/di/di-types.js';
 import type { ExceptionLogger } from '@core/services/ExceptionLogger.js';
@@ -134,7 +135,7 @@ export class CompleteHistoryArchiveObject {
 			oldestScheduledCheckpointLedger === undefined
 				? []
 				: buildCheckpointStateDiscoveryObjects(snapshot, {
-						maxObjects: 1,
+						maxObjects: maxCheckpointDiscoveryPageSize,
 						oldestScheduledCheckpointLedger
 					});
 
@@ -172,7 +173,7 @@ export class CompleteHistoryArchiveObject {
 		return [
 			...siblingObjects,
 			...buildCheckpointStateDiscoveryObjects(snapshot, {
-				maxObjects: 1,
+				maxObjects: maxCheckpointDiscoveryPageSize,
 				oldestScheduledCheckpointLedger: object.checkpointLedger
 			})
 		];

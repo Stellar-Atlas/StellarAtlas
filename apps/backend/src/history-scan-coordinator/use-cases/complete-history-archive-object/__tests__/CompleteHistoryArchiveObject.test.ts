@@ -116,6 +116,35 @@ describe('CompleteHistoryArchiveObject', () => {
 		);
 	});
 
+	it('schedules a bounded older checkpoint discovery page after checkpoint verification', async () => {
+		const archiveObject = createCheckpointObject(500_031);
+		objectRepository.findByRemoteId.mockResolvedValue(archiveObject);
+
+		const result = await new CompleteHistoryArchiveObject(
+			objectRepository,
+			stateRepository,
+			eventRecorder,
+			checkpointProofRepository,
+			exceptionLogger
+		).execute(archiveObject.remoteId, {
+			claimAttempt: 1,
+			verificationFacts: {
+				checkpointHistoryArchiveState: createArchiveMetadata(500_031)
+			},
+			workerStage: 'verified'
+		});
+
+		expect(result._unsafeUnwrap()).toBe(true);
+		const savedObjects = objectRepository.saveObjects.mock.calls[0]?.[0] ?? [];
+		const olderCheckpointObjects = savedObjects.filter(
+			(object) =>
+				object.objectType === 'checkpoint-state' &&
+				object.checkpointLedger !== null &&
+				object.checkpointLedger < 500_031
+		);
+		expect(olderCheckpointObjects).toHaveLength(256);
+	});
+
 	it('does not schedule sibling objects when checkpoint facts do not match the claimed checkpoint', async () => {
 		const archiveObject = createCheckpointObject();
 		objectRepository.findByRemoteId.mockResolvedValue(archiveObject);

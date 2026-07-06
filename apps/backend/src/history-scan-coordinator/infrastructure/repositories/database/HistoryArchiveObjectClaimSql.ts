@@ -75,11 +75,13 @@ export const historyArchiveObjectClaimSql = `
 	set status = 'scanning',
 		"claimedAt" = now(),
 		"attempts" = "attempts" + 1,
+		"bytesDownloaded" = null,
 		"workerStage" = 'claimed',
 		"errorType" = null,
 		"errorMessage" = null,
 		"httpStatus" = null,
 		"nextAttemptAt" = null,
+		"verificationFacts" = null,
 		"updatedAt" = now()
 	where id = (select id from next_candidate)
 	returning

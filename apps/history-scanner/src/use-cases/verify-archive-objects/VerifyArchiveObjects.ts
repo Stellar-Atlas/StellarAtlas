@@ -30,9 +30,9 @@ interface ActiveObjectProgress {
 
 @injectable()
 export class VerifyArchiveObjects {
-	private static readonly initialHeartbeatDelayMs = 10 * 1000;
-	private static readonly heartbeatIntervalMs = 45 * 1000;
-	private static readonly heartbeatJitterMs = 20 * 1000;
+	private static readonly initialHeartbeatDelayMs = 2 * 1000;
+	private static readonly heartbeatIntervalMs = 5 * 1000;
+	private static readonly heartbeatJitterMs = 2 * 1000;
 	private readonly activeObjectProgress = new Map<
 		string,
 		ActiveObjectProgress

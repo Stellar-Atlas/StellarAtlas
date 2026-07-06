@@ -6,6 +6,7 @@ import type { HistoryArchiveObjectType } from './HistoryArchiveObject.js';
 
 const checkpointFrequency = 64;
 const defaultCheckpointDiscoveryPageSize = 1;
+export const maxCheckpointDiscoveryPageSize = 256;
 const publicNetworkPassphrase =
 	'Public Global Stellar Network ; September 2015';
 const firstPublicNetworkScpCheckpoint = 0x0012867f;
@@ -252,7 +253,7 @@ function toCheckpointHex(checkpointLedger: number): string {
 function normalizeDiscoveryPageSize(value?: number): number {
 	if (value === undefined) return defaultCheckpointDiscoveryPageSize;
 	if (!Number.isSafeInteger(value) || value < 1) return 1;
-	return Math.min(value, 256);
+	return Math.min(value, maxCheckpointDiscoveryPageSize);
 }
 
 function dedupeObjects(

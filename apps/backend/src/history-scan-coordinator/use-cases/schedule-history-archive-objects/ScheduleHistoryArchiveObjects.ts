@@ -6,7 +6,8 @@ import { mapUnknownToError } from '@core/utilities/mapUnknownToError.js';
 import {
 	buildCheckpointStateDiscoveryObjects,
 	buildHistoryArchiveObjectsFromState,
-	buildRootHistoryArchiveObject
+	buildRootHistoryArchiveObject,
+	maxCheckpointDiscoveryPageSize
 } from '../../domain/history-archive-object/HistoryArchiveObjectBuilder.js';
 import type { HistoryArchiveObjectRepository } from '../../domain/history-archive-object/HistoryArchiveObjectRepository.js';
 import type { HistoryArchiveStateRepository } from '../../domain/history-archive-state/HistoryArchiveStateRepository.js';
@@ -44,7 +45,7 @@ export class ScheduleHistoryArchiveObjects {
 			const stateObjects = states.flatMap(buildHistoryArchiveObjectsFromState);
 			const checkpointDiscoveryObjects = states.flatMap((state) =>
 				buildCheckpointStateDiscoveryObjects(state, {
-					maxObjects: 1,
+					maxObjects: maxCheckpointDiscoveryPageSize,
 					oldestScheduledCheckpointLedger:
 						oldestCheckpointByArchive.get(state.archiveUrlIdentity) ?? null
 				})
