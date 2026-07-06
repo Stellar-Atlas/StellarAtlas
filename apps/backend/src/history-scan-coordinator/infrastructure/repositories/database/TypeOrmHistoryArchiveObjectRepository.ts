@@ -9,6 +9,7 @@ import {
 import type { HistoryArchiveObjectType } from '@history-scan-coordinator/domain/history-archive-object/HistoryArchiveObject.js';
 import type {
 	HistoryArchiveObjectFailure,
+	HistoryArchiveObjectHostFailure,
 	HistoryArchiveObjectQueueSnapshot,
 	HistoryArchiveObjectQueueStats,
 	HistoryArchiveObjectProgressUpdate,
@@ -31,10 +32,14 @@ import {
 import { findOldestCheckpointLedgers } from './HistoryArchiveObjectCheckpointQuery.js';
 import {
 	historyArchiveObjectClaimLockSql,
-	historyArchiveObjectClaimSql,
-	historyArchiveObjectHostBackoffPatterns
+	historyArchiveObjectClaimSql
 } from './HistoryArchiveObjectClaimSql.js';
 import { getHistoryArchiveObjectSummary } from './HistoryArchiveObjectSummaryQuery.js';
+import {
+	historyArchiveObjectHostFailureUpsertSql,
+	historyArchiveObjectHostThrottleDeleteSql,
+	toHistoryArchiveObjectHostFailureSqlParams
+} from './HistoryArchiveObjectHostThrottleSql.js';
 
 const maxActiveObjectsPerArchive = 1;
 const maxActiveObjectsPerHost = 2;
@@ -43,12 +48,8 @@ const claimLockName = 'history_archive_object_claim';
 const saveObjectChunkSize = 200;
 
 @injectable()
-export class TypeOrmHistoryArchiveObjectRepository
-	implements HistoryArchiveObjectRepository
-{
-	constructor(
-		private readonly repository: Repository<HistoryArchiveObject>
-	) {}
+export class TypeOrmHistoryArchiveObjectRepository implements HistoryArchiveObjectRepository {
+	constructor(private readonly repository: Repository<HistoryArchiveObject>) {}
 
 	async claimNextObject(
 		supportedTypes: readonly HistoryArchiveObjectType[]
@@ -57,23 +58,18 @@ export class TypeOrmHistoryArchiveObjectRepository
 
 		return await this.repository.manager.transaction(async (manager) => {
 			await manager.query('set local jit = off');
-			const [lockRow] = (await manager.query(
-				historyArchiveObjectClaimLockSql,
-				[claimLockName]
-			)) as readonly { readonly locked?: boolean }[];
+			const [lockRow] = (await manager.query(historyArchiveObjectClaimLockSql, [
+				claimLockName
+			])) as readonly { readonly locked?: boolean }[];
 			if (lockRow?.locked !== true) return null;
 
 			const rows = extractRows(
-				(await manager.query(
-					historyArchiveObjectClaimSql,
-					[
-						[...supportedTypes],
-						maxActiveObjectsPerArchive,
-						maxActiveObjectsTotal,
-						maxActiveObjectsPerHost,
-						[...historyArchiveObjectHostBackoffPatterns]
-					]
-				)) as RawObjectQueryResult
+				(await manager.query(historyArchiveObjectClaimSql, [
+					[...supportedTypes],
+					maxActiveObjectsPerArchive,
+					maxActiveObjectsTotal,
+					maxActiveObjectsPerHost
+				])) as RawObjectQueryResult
 			);
 
 			const row = rows[0];
@@ -103,6 +99,13 @@ export class TypeOrmHistoryArchiveObjectRepository
 
 	findByRemoteId(remoteId: string): Promise<HistoryArchiveObject | null> {
 		return this.repository.findOneBy({ remoteId });
+	}
+
+	async clearHostThrottle(hostIdentity: string): Promise<void> {
+		await this.repository.manager.query(
+			historyArchiveObjectHostThrottleDeleteSql,
+			[hostIdentity]
+		);
 	}
 
 	async findOldestCheckpointLedgerByArchiveUrlIdentities(
@@ -144,16 +147,19 @@ export class TypeOrmHistoryArchiveObjectRepository
 		return await this.getSnapshot(limit);
 	}
 
-	async getSummary(options: {
-		readonly archiveUrl?: string | null;
-		readonly archiveUrlIdentity?: string | null;
-	} = {}) {
-		return await getHistoryArchiveObjectSummary(this.repository.manager, options);
+	async getSummary(
+		options: {
+			readonly archiveUrl?: string | null;
+			readonly archiveUrlIdentity?: string | null;
+		} = {}
+	) {
+		return await getHistoryArchiveObjectSummary(
+			this.repository.manager,
+			options
+		);
 	}
 
-	async saveObjects(
-		objects: readonly HistoryArchiveObject[]
-	): Promise<number> {
+	async saveObjects(objects: readonly HistoryArchiveObject[]): Promise<number> {
 		if (objects.length === 0) return 0;
 
 		let insertedCount = 0;
@@ -261,6 +267,15 @@ export class TypeOrmHistoryArchiveObjectRepository
 		return (result.affected ?? 0) > 0;
 	}
 
+	async recordHostFailure(
+		failure: HistoryArchiveObjectHostFailure
+	): Promise<void> {
+		await this.repository.manager.query(
+			historyArchiveObjectHostFailureUpsertSql,
+			[...toHistoryArchiveObjectHostFailureSqlParams(failure)]
+		);
+	}
+
 	async markObjectFailed(
 		remoteId: string,
 		failure: HistoryArchiveObjectFailure
@@ -279,7 +294,10 @@ export class TypeOrmHistoryArchiveObjectRepository
 		return (result.affected ?? 0) > 0;
 	}
 
-	async releaseObject(remoteId: string, claimAttempt: number): Promise<boolean> {
+	async releaseObject(
+		remoteId: string,
+		claimAttempt: number
+	): Promise<boolean> {
 		const result = await this.repository
 			.createQueryBuilder()
 			.update(HistoryArchiveObject)

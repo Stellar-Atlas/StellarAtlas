@@ -33,11 +33,21 @@ export class FailHistoryArchiveObject {
 			});
 
 			const updated = await this.objectRepository.markObjectFailed(remoteId, {
-					...failure,
-					nextAttemptAt: retryPolicy.nextAttemptAt
-				});
+				...failure,
+				nextAttemptAt: retryPolicy.nextAttemptAt
+			});
 			if (updated) {
-				const failedObject = await this.objectRepository.findByRemoteId(remoteId);
+				await this.objectRepository.recordHostFailure({
+					archiveUrlIdentity: object.archiveUrlIdentity,
+					blockedUntil: retryPolicy.nextAttemptAt,
+					errorType: failure.errorType,
+					evidenceClass: retryPolicy.evidenceClass,
+					failureClass: retryPolicy.failureClass,
+					hostIdentity: object.hostIdentity,
+					httpStatus: failure.httpStatus
+				});
+				const failedObject =
+					await this.objectRepository.findByRemoteId(remoteId);
 				if (failedObject !== null) {
 					await this.eventRecorder.record(failedObject, {
 						claimAttempt: failure.claimAttempt,

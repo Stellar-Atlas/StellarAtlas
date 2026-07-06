@@ -20,15 +20,10 @@ export const historyArchiveObjectClaimSql = `
 		where status = 'scanning'
 		group by "hostIdentity"
 	),
-	host_backoff as (
-		select distinct "hostIdentity"
-		from history_archive_object_queue
-		where status = 'failed'
-			and "nextAttemptAt" > now()
-			and (
-				"httpStatus" in (401, 403, 408, 429, 500, 502, 503, 504)
-				or upper(coalesce("errorType", '')) like any($5)
-			)
+	host_throttle as (
+		select "hostIdentity"
+		from history_archive_object_host_throttle
+		where "blockedUntil" > now()
 	),
 	archive_claims as (
 		select "archiveUrlIdentity", max("claimedAt") as last_claimed_at
@@ -43,8 +38,8 @@ export const historyArchiveObjectClaimSql = `
 			on active_archive."archiveUrlIdentity" = candidate."archiveUrlIdentity"
 		left join active_host
 			on active_host."hostIdentity" = candidate."hostIdentity"
-		left join host_backoff
-			on host_backoff."hostIdentity" = candidate."hostIdentity"
+		left join host_throttle
+			on host_throttle."hostIdentity" = candidate."hostIdentity"
 		left join archive_claims
 			on archive_claims."archiveUrlIdentity" = candidate."archiveUrlIdentity"
 		where (
@@ -61,7 +56,7 @@ export const historyArchiveObjectClaimSql = `
 			and active_total.active_count < $3
 			and coalesce(active_archive.active_count, 0) < $2
 			and coalesce(active_host.active_count, 0) < $4
-			and host_backoff."hostIdentity" is null
+			and host_throttle."hostIdentity" is null
 		order by
 			candidate."objectOrder" asc,
 			candidate."objectKey" asc,
@@ -108,20 +103,3 @@ export const historyArchiveObjectClaimSql = `
 		"createdAt" as "createdAt",
 		"updatedAt" as "updatedAt"
 `;
-
-export const historyArchiveObjectHostBackoffPatterns = [
-	'%AUTH%',
-	'%FORBIDDEN%',
-	'%RATE_LIMIT%',
-	'%TOO_MANY_REQUESTS%',
-	'%TIMEOUT%',
-	'%TIMEDOUT%',
-	'%ABORT%',
-	'%ECONN%',
-	'%EAI_%',
-	'%ENOTFOUND%',
-	'%NETWORK%',
-	'%SOCKET%',
-	'%TLS%',
-	'%TRANSPORT%'
-] as const;

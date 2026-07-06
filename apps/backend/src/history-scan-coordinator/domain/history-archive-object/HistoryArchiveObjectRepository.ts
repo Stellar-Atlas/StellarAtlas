@@ -1,6 +1,10 @@
 import type { HistoryArchiveObject } from './HistoryArchiveObject.js';
 import type { HistoryArchiveObjectType } from './HistoryArchiveObject.js';
 import type { HistoryArchiveObjectVerificationFacts } from './HistoryArchiveObject.js';
+import type {
+	HistoryArchiveObjectEvidenceClass,
+	HistoryArchiveObjectFailureClass
+} from './HistoryArchiveObjectRetryPolicy.js';
 import type { HistoryArchiveObjectSummaryV1 } from 'shared';
 
 export interface HistoryArchiveObjectQueueStats {
@@ -10,8 +14,7 @@ export interface HistoryArchiveObjectQueueStats {
 	readonly verifiedObjects: number;
 }
 
-export interface HistoryArchiveObjectQueueSnapshot
-	extends HistoryArchiveObjectQueueStats {
+export interface HistoryArchiveObjectQueueSnapshot extends HistoryArchiveObjectQueueStats {
 	readonly objects: readonly HistoryArchiveObject[];
 }
 
@@ -30,7 +33,18 @@ export interface HistoryArchiveObjectFailure {
 	readonly nextAttemptAt?: Date | null;
 }
 
+export interface HistoryArchiveObjectHostFailure {
+	readonly archiveUrlIdentity: string;
+	readonly blockedUntil: Date;
+	readonly errorType: string;
+	readonly evidenceClass: HistoryArchiveObjectEvidenceClass;
+	readonly failureClass: HistoryArchiveObjectFailureClass;
+	readonly hostIdentity: string;
+	readonly httpStatus?: number | null;
+}
+
 export interface HistoryArchiveObjectRepository {
+	clearHostThrottle(hostIdentity: string): Promise<void>;
 	claimNextObject(
 		supportedTypes: readonly HistoryArchiveObjectType[]
 	): Promise<HistoryArchiveObject | null>;
@@ -63,6 +77,7 @@ export interface HistoryArchiveObjectRepository {
 		remoteId: string,
 		progress?: HistoryArchiveObjectProgressUpdate
 	): Promise<boolean>;
+	recordHostFailure(failure: HistoryArchiveObjectHostFailure): Promise<void>;
 	releaseObject(remoteId: string, claimAttempt: number): Promise<boolean>;
 	releaseStaleObjects(before: Date): Promise<number>;
 	saveObjects(objects: readonly HistoryArchiveObject[]): Promise<number>;

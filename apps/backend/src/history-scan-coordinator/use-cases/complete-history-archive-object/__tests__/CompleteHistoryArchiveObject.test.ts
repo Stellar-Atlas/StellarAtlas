@@ -44,9 +44,9 @@ describe('CompleteHistoryArchiveObject', () => {
 		);
 		const savedObjects = objectRepository.saveObjects.mock.calls[0]?.[0] ?? [];
 		expect(savedObjects.length).toBeGreaterThan(1);
-		expect(
-			new Set(savedObjects.map((object) => object.objectType))
-		).toEqual(new Set(['history-archive-state', 'checkpoint-state']));
+		expect(new Set(savedObjects.map((object) => object.objectType))).toEqual(
+			new Set(['history-archive-state', 'checkpoint-state'])
+		);
 		expect(savedObjects.map((object) => object.objectType)).not.toContain(
 			'ledger'
 		);
@@ -58,6 +58,9 @@ describe('CompleteHistoryArchiveObject', () => {
 		);
 		expect(savedObjects.map((object) => object.objectType)).not.toContain(
 			'bucket'
+		);
+		expect(objectRepository.clearHostThrottle).toHaveBeenCalledWith(
+			'history.example.com'
 		);
 	});
 

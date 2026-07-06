@@ -25,7 +25,8 @@ describe('FailHistoryArchiveObject', () => {
 			objectKey: 'bucket:abc',
 			objectOrder: 50,
 			objectType: 'bucket',
-			objectUrl: 'https://history.example.com/bucket/ab/cd/ef/bucket-abc.xdr.gz',
+			objectUrl:
+				'https://history.example.com/bucket/ab/cd/ef/bucket-abc.xdr.gz',
 			remoteId: '11111111-1111-4111-8111-111111111111',
 			status: 'scanning'
 		});
@@ -54,6 +55,15 @@ describe('FailHistoryArchiveObject', () => {
 				nextAttemptAt: new Date('2026-07-06T14:16:00.000Z')
 			}
 		);
+		expect(objectRepository.recordHostFailure).toHaveBeenCalledWith({
+			archiveUrlIdentity: archiveObject.archiveUrlIdentity,
+			blockedUntil: new Date('2026-07-06T14:16:00.000Z'),
+			errorType: 'archive_http_error',
+			evidenceClass: 'archive-object',
+			failureClass: 'auth',
+			hostIdentity: 'history.example.com',
+			httpStatus: 403
+		});
 		expect(eventRecorder.record).toHaveBeenCalledWith(archiveObject, {
 			claimAttempt: 1,
 			eventType: 'failed',

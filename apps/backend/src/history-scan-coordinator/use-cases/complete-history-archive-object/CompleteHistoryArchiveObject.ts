@@ -77,6 +77,9 @@ export class CompleteHistoryArchiveObject {
 				const verifiedObject =
 					await this.objectRepository.findByRemoteId(remoteId);
 				if (verifiedObject !== null) {
+					await this.objectRepository.clearHostThrottle(
+						verifiedObject.hostIdentity
+					);
 					await this.eventRecorder.record(verifiedObject, {
 						claimAttempt: request.claimAttempt,
 						eventType: 'verified'
