@@ -4,6 +4,7 @@ import { err, ok, Result } from 'neverthrow';
 import type { Logger } from 'logger';
 import { mapUnknownToError } from '@core/utilities/mapUnknownToError.js';
 import {
+	buildCheckpointStateDiscoveryObjects,
 	buildHistoryArchiveObjectsFromState,
 	buildRootHistoryArchiveObject
 } from '../../domain/history-archive-object/HistoryArchiveObjectBuilder.js';
@@ -36,8 +37,22 @@ export class ScheduleHistoryArchiveObjects {
 				.map(buildRootHistoryArchiveObject)
 				.filter((object) => object !== null);
 			const states = await this.stateRepository.findAvailable(5000);
+			const oldestCheckpointByArchive =
+				await this.objectRepository.findOldestCheckpointLedgerByArchiveUrlIdentities(
+					states.map((state) => state.archiveUrlIdentity)
+				);
 			const stateObjects = states.flatMap(buildHistoryArchiveObjectsFromState);
-			const objects = [...rootObjects, ...stateObjects];
+			const checkpointDiscoveryObjects = states.flatMap((state) =>
+				buildCheckpointStateDiscoveryObjects(state, {
+					oldestScheduledCheckpointLedger:
+						oldestCheckpointByArchive.get(state.archiveUrlIdentity) ?? null
+				})
+			);
+			const objects = [
+				...rootObjects,
+				...stateObjects,
+				...checkpointDiscoveryObjects
+			];
 			const scheduledCount = await this.objectRepository.saveObjects(objects);
 
 			this.logger.info('Scheduled history archive object checks', {

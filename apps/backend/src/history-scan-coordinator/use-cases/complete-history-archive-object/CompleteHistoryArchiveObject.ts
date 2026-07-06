@@ -7,7 +7,10 @@ import { HistoryArchiveStateSnapshot } from '../../domain/history-archive-state/
 import type { HistoryArchiveObjectProgressUpdate } from '../../domain/history-archive-object/HistoryArchiveObjectRepository.js';
 import type { HistoryArchiveObjectRepository } from '../../domain/history-archive-object/HistoryArchiveObjectRepository.js';
 import type { HistoryArchiveStateRepository } from '../../domain/history-archive-state/HistoryArchiveStateRepository.js';
-import { buildHistoryArchiveObjectsFromState } from '../../domain/history-archive-object/HistoryArchiveObjectBuilder.js';
+import {
+	buildCheckpointStateDiscoveryObjects,
+	buildHistoryArchiveObjectsFromState
+} from '../../domain/history-archive-object/HistoryArchiveObjectBuilder.js';
 import { TYPES } from '../../infrastructure/di/di-types.js';
 import { mapUnknownToError } from '@core/utilities/mapUnknownToError.js';
 import { HistoryArchiveObjectEventRecorder } from '../record-history-archive-object-event/HistoryArchiveObjectEventRecorder.js';
@@ -42,7 +45,7 @@ export class CompleteHistoryArchiveObject {
 					'history-scanner'
 				);
 				await this.objectRepository.saveObjects(
-					this.buildObjectsFromArchiveMetadata(
+					await this.buildObjectsFromArchiveMetadata(
 						object.archiveUrl,
 						request.archiveMetadata
 					)
@@ -71,20 +74,30 @@ export class CompleteHistoryArchiveObject {
 		}
 	}
 
-	private buildObjectsFromArchiveMetadata(
+	private async buildObjectsFromArchiveMetadata(
 		archiveUrl: string,
 		archiveMetadata: ArchiveMetadataDTO
 	) {
 		const archiveUrlIdentity = getHistoryArchiveUrlIdentity(archiveUrl);
 		if (archiveUrlIdentity === null) return [];
 
-		return buildHistoryArchiveObjectsFromState(
-			HistoryArchiveStateSnapshot.available(
-				archiveUrl,
-				archiveUrlIdentity,
-				archiveMetadata,
-				'history-scanner'
-			)
+		const snapshot = HistoryArchiveStateSnapshot.available(
+			archiveUrl,
+			archiveUrlIdentity,
+			archiveMetadata,
+			'history-scanner'
 		);
+		const oldestCheckpointByArchive =
+			await this.objectRepository.findOldestCheckpointLedgerByArchiveUrlIdentities(
+				[archiveUrlIdentity]
+			);
+
+		return [
+			...buildHistoryArchiveObjectsFromState(snapshot),
+			...buildCheckpointStateDiscoveryObjects(snapshot, {
+				oldestScheduledCheckpointLedger:
+					oldestCheckpointByArchive.get(archiveUrlIdentity) ?? null
+			})
+		];
 	}
 }

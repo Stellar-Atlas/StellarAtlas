@@ -111,9 +111,13 @@ Current behavior:
    - transaction category file,
    - result category file,
    - current and hot archive buckets referenced by the root state.
-4. Object workers claim one archive object at a time.
-5. Heartbeats update worker stage and downloaded byte counts.
-6. Completion/failure writes the object row and a compact object event.
+4. The coordinator also schedules a bounded backward page of checkpoint history
+   JSON objects from the latest/oldest scheduled checkpoint for the archive
+   root. This is the first discovery cursor; it does not yet enqueue sibling
+   category files or bucket references from each completed checkpoint state.
+5. Object workers claim one archive object at a time.
+6. Heartbeats update worker stage and downloaded byte counts.
+7. Completion/failure writes the object row and a compact object event.
 
 This is enough to prove that scanner-owned object telemetry works. It is not
 enough to prove an archive is fully verified, because whole-archive discovery
@@ -123,8 +127,9 @@ Production observation on 2026-07-06:
 
 - the live queue had 75 archive roots, 24 active bucket downloads, 3 pending
   buckets, 188 failed objects, and 5,074 verified objects;
-- only 3 distinct checkpoint ledgers were represented, proving discovery is
-  latest/current scoped rather than whole-archive scoped;
+- only 3 distinct checkpoint ledgers were represented before the bounded
+  checkpoint-state cursor, proving discovery was latest/current scoped rather
+  than whole-archive scoped;
 - all 75 root history archive state rows were due for refresh but still
   `verified`, proving root refresh needs a cursor-driven path;
 - legacy `history_archive_scan_job_queue` still contained pending range jobs,

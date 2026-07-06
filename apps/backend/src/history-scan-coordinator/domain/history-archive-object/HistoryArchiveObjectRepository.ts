@@ -38,6 +38,9 @@ export interface HistoryArchiveObjectRepository {
 		limit: number
 	): Promise<HistoryArchiveObjectQueueSnapshot>;
 	findByRemoteId(remoteId: string): Promise<HistoryArchiveObject | null>;
+	findOldestCheckpointLedgerByArchiveUrlIdentities(
+		archiveUrlIdentities: readonly string[]
+	): Promise<ReadonlyMap<string, number>>;
 	findVerifiedBucketObjectsByArchiveUrl(
 		archiveUrl: string,
 		limit: number

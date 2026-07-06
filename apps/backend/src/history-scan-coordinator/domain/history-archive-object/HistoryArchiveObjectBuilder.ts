@@ -5,6 +5,7 @@ import { HistoryArchiveObject } from './HistoryArchiveObject.js';
 import type { HistoryArchiveObjectType } from './HistoryArchiveObject.js';
 
 const checkpointFrequency = 64;
+const defaultCheckpointDiscoveryPageSize = 16;
 const zeroHashPattern = /^0+$/;
 const bucketHashPattern = /^[0-9a-f]{64}$/i;
 
@@ -54,6 +55,51 @@ export function buildHistoryArchiveObjectsFromState(
 	}
 
 	return dedupeObjects(objects);
+}
+
+export function buildCheckpointStateDiscoveryObjects(
+	snapshot: HistoryArchiveStateSnapshot,
+	options: {
+		readonly maxObjects?: number;
+		readonly oldestScheduledCheckpointLedger?: number | null;
+	} = {}
+): readonly HistoryArchiveObject[] {
+	if (snapshot.status !== 'available' || snapshot.rawState === null) return [];
+	const archiveUrl = normalizeHistoryArchiveRootUrl(snapshot.archiveUrl);
+	if (archiveUrl === null) return [];
+
+	const latestCheckpointLedger = getCheckpointLedger(
+		snapshot.rawState.currentLedger
+	);
+	if (latestCheckpointLedger === null) return [];
+
+	const pageSize = normalizeDiscoveryPageSize(options.maxObjects);
+	const startLedger =
+		options.oldestScheduledCheckpointLedger === null ||
+		options.oldestScheduledCheckpointLedger === undefined
+			? latestCheckpointLedger
+			: Math.min(
+					latestCheckpointLedger,
+					options.oldestScheduledCheckpointLedger - checkpointFrequency
+				);
+
+	const objects: HistoryArchiveObject[] = [];
+	for (
+		let checkpointLedger = startLedger;
+		checkpointLedger >= checkpointFrequency - 1 && objects.length < pageSize;
+		checkpointLedger -= checkpointFrequency
+	) {
+		objects.push(
+			createCheckpointObject(
+				snapshot,
+				archiveUrl,
+				checkpointLedger,
+				'checkpoint-state'
+			)
+		);
+	}
+
+	return objects;
 }
 
 export function buildRootHistoryArchiveObject(
@@ -138,6 +184,12 @@ function getBucketHashes(
 
 function toCheckpointHex(checkpointLedger: number): string {
 	return checkpointLedger.toString(16).padStart(8, '0');
+}
+
+function normalizeDiscoveryPageSize(value?: number): number {
+	if (value === undefined) return defaultCheckpointDiscoveryPageSize;
+	if (!Number.isSafeInteger(value) || value < 1) return 1;
+	return Math.min(value, 256);
 }
 
 function dedupeObjects(

@@ -1,6 +1,7 @@
 import type { ArchiveMetadataDTO } from 'history-scanner-dto';
 import { HistoryArchiveStateSnapshot } from '../../history-archive-state/HistoryArchiveStateSnapshot.js';
 import {
+	buildCheckpointStateDiscoveryObjects,
 	buildHistoryArchiveObjectsFromState,
 	buildRootHistoryArchiveObject
 } from '../HistoryArchiveObjectBuilder.js';
@@ -36,9 +37,53 @@ describe('HistoryArchiveObjectBuilder', () => {
 			new Set(['https://history.example.com/archive-b'])
 		);
 	});
+
+	it('discovers checkpoint state objects backwards from latest state', () => {
+		const objects = buildCheckpointStateDiscoveryObjects(
+			createSnapshot(createArchiveMetadata(255)),
+			{ maxObjects: 3 }
+		);
+
+		expect(objects.map((object) => object.objectKey)).toEqual([
+			'checkpoint-state:000000ff',
+			'checkpoint-state:000000bf',
+			'checkpoint-state:0000007f'
+		]);
+		expect(objects.map((object) => object.objectUrl)).toEqual([
+			'https://history.example.com/archive-b/history/00/00/00/history-000000ff.json',
+			'https://history.example.com/archive-b/history/00/00/00/history-000000bf.json',
+			'https://history.example.com/archive-b/history/00/00/00/history-0000007f.json'
+		]);
+	});
+
+	it('continues checkpoint discovery older than the oldest already scheduled checkpoint', () => {
+		const objects = buildCheckpointStateDiscoveryObjects(
+			createSnapshot(createArchiveMetadata(255)),
+			{
+				maxObjects: 3,
+				oldestScheduledCheckpointLedger: 191
+			}
+		);
+
+		expect(objects.map((object) => object.objectKey)).toEqual([
+			'checkpoint-state:0000007f',
+			'checkpoint-state:0000003f'
+		]);
+	});
 });
 
-function createArchiveMetadata(): ArchiveMetadataDTO {
+function createSnapshot(
+	archiveMetadata: ArchiveMetadataDTO
+): HistoryArchiveStateSnapshot {
+	return HistoryArchiveStateSnapshot.available(
+		'https://history.example.com/archive-b',
+		'https://history.example.com/archive-b',
+		archiveMetadata,
+		'history-scanner'
+	);
+}
+
+function createArchiveMetadata(currentLedger = 63354047): ArchiveMetadataDTO {
 	return {
 		observedAt: '2026-07-06T14:30:00.000Z',
 		stellarHistory: {
@@ -49,7 +94,7 @@ function createArchiveMetadata(): ArchiveMetadataDTO {
 					snap: '0000000000000000000000000000000000000000000000000000000000000000'
 				}
 			],
-			currentLedger: 63354047,
+			currentLedger,
 			server: 'stellar-core',
 			version: 1
 		},

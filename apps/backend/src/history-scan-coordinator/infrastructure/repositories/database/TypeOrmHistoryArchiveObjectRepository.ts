@@ -176,6 +176,35 @@ export class TypeOrmHistoryArchiveObjectRepository
 		return this.repository.findOneBy({ remoteId });
 	}
 
+	async findOldestCheckpointLedgerByArchiveUrlIdentities(
+		archiveUrlIdentities: readonly string[]
+	): Promise<ReadonlyMap<string, number>> {
+		if (archiveUrlIdentities.length === 0) return new Map();
+
+		const rows = await this.repository.manager.query(
+			`
+			select
+				"archiveUrlIdentity" as "archiveUrlIdentity",
+				min("checkpointLedger")::integer as "checkpointLedger"
+			from history_archive_object_queue
+			where "archiveUrlIdentity" = any($1)
+				and "objectType" = 'checkpoint-state'
+				and "checkpointLedger" is not null
+			group by "archiveUrlIdentity"
+			`,
+			[[...new Set(archiveUrlIdentities)]]
+		);
+		const checkpoints = new Map<string, number>();
+		for (const row of rows) {
+			checkpoints.set(
+				String(row.archiveUrlIdentity),
+				requireNumber(row.checkpointLedger, 'checkpointLedger')
+			);
+		}
+
+		return checkpoints;
+	}
+
 	async findVerifiedBucketObjectsByArchiveUrl(
 		archiveUrl: string,
 		limit: number
