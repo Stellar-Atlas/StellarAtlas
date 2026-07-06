@@ -2,12 +2,9 @@ import { Suspense } from 'react';
 import { notFound } from 'next/navigation';
 import Link from 'next/link';
 import { connection } from 'next/server';
-import { fetchHistoryArchiveObjectEventsForArchive } from '@api/archive-scans-client';
+import { fetchHistoryArchiveObjectEvidenceForArchive } from '@api/archive-scans-client';
 import { fetchKnownOrganization } from '@api/known-network-client';
 import {
-	fetchHistoryArchiveObjectsForArchive,
-	fetchHistoryArchiveObjectSummaryForArchive,
-	fetchHistoryArchiveState,
 	fetchKnownNodes,
 	fetchKnownOrganizations,
 	fetchPublicNetwork
@@ -67,24 +64,21 @@ async function OrganizationDetailRouteContent({
 		)
 	);
 	const archiveStates = await Promise.all(
-		validatorHistoryUrls.map(async (historyUrl) => ({
-			historyUrl,
-			objects: await fetchHistoryArchiveObjectsForArchive(
+		validatorHistoryUrls.map(async (historyUrl) => {
+			const evidence = await fetchHistoryArchiveObjectEvidenceForArchive(
 				historyUrl,
-				1,
+				{ eventLimit: 5, objectLimit: 1 },
 				liveArchiveFetchOptions
-			),
-			events: await fetchHistoryArchiveObjectEventsForArchive(
+			);
+
+			return {
+				events: evidence.objectEvents,
 				historyUrl,
-				5,
-				liveArchiveFetchOptions
-			),
-			summary: await fetchHistoryArchiveObjectSummaryForArchive(
-				historyUrl,
-				liveArchiveFetchOptions
-			),
-			state: await fetchHistoryArchiveState(historyUrl, liveArchiveFetchOptions)
-		}))
+				objects: evidence.objects,
+				state: evidence.scannerOwnedState,
+				summary: evidence.summary
+			};
+		})
 	);
 
 	return (

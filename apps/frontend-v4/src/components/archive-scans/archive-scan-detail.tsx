@@ -54,16 +54,16 @@ export function ArchiveScanDetail({
 				summary={summary}
 				title="Archive object coverage"
 			/>
-			<article className="panel detail-panel archive-panel">
-				<div className="panel-heading">
-					<h2>Range scan history</h2>
+			<details className="panel detail-panel archive-panel">
+				<summary className="panel-heading">
+					<h2>Historical range verification</h2>
 					<StatusPill
 						status={archiveErrors.length > 0 ? 'degraded' : 'ok'}
 						text={
-							archiveErrors.length > 0 ? 'Archive errors' : 'No archive errors'
+							archiveErrors.length > 0 ? 'Archive errors' : 'Archive record'
 						}
 					/>
-				</div>
+				</summary>
 				<dl className="details">
 					<div>
 						<dt>Archive URL</dt>
@@ -106,7 +106,7 @@ export function ArchiveScanDetail({
 						</dd>
 					</div>
 				</dl>
-			</article>
+			</details>
 			<article className="panel detail-panel archive-panel">
 				<div className="panel-heading">
 					<h2>Scanner metadata and evidence</h2>

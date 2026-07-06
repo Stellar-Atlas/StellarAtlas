@@ -5,6 +5,7 @@ import type {
 	OrganizationSnapshotV1,
 	OrganizationV1,
 	HistoryArchiveScanV1,
+	HistoryArchiveEvidenceV1,
 	HistoryArchiveObjectQueueV1,
 	HistoryArchiveObjectSummaryV1,
 	HistoryArchiveObjectTypeSummaryV1,
@@ -20,6 +21,7 @@ export type PublicNodeSnapshot = NodeSnapshotV1;
 export type PublicOrganization = OrganizationV1;
 export type PublicOrganizationSnapshot = OrganizationSnapshotV1;
 export type PublicHistoryArchiveScan = HistoryArchiveScanV1;
+export type PublicHistoryArchiveEvidence = HistoryArchiveEvidenceV1;
 export type PublicHistoryArchiveObject = HistoryArchiveObjectV1;
 export type PublicHistoryArchiveObjectEvents = HistoryArchiveObjectEventsV1;
 export type PublicHistoryArchiveObjectQueue = HistoryArchiveObjectQueueV1;

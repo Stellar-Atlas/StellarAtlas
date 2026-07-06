@@ -1,13 +1,10 @@
 import { Suspense } from 'react';
 import { connection } from 'next/server';
-import { fetchHistoryArchiveObjectEventsForArchive } from '@api/archive-scans-client';
+import { fetchHistoryArchiveObjectEvidenceForArchive } from '@api/archive-scans-client';
 import {
 	fetchHistoryArchiveScan,
 	fetchHistoryArchiveScanEvidence,
-	fetchHistoryArchiveScanLogs,
-	fetchHistoryArchiveObjectSummaryForArchive,
-	fetchHistoryArchiveObjectsForArchive,
-	fetchHistoryArchiveState
+	fetchHistoryArchiveScanLogs
 } from '@api/client';
 import { ArchiveScanDetail } from '@components/archive-scans/archive-scan-detail';
 import { PageHeading } from '@components/layout/page-heading';
@@ -28,26 +25,16 @@ async function ArchiveScanDetailRouteContent({
 	readonly historyUrl: string;
 }): Promise<React.JSX.Element> {
 	await connection();
-	const [scan, logs, evidence, summary, objects, events, state] =
+	const [scan, logs, evidence, objectEvidence] =
 		await Promise.all([
 			fetchHistoryArchiveScan(historyUrl, liveArchiveFetchOptions),
 			fetchHistoryArchiveScanLogs(historyUrl, liveArchiveFetchOptions),
 			fetchHistoryArchiveScanEvidence(historyUrl, 500, liveArchiveFetchOptions),
-			fetchHistoryArchiveObjectSummaryForArchive(
+			fetchHistoryArchiveObjectEvidenceForArchive(
 				historyUrl,
+				{ eventLimit: 250, objectLimit: 250 },
 				liveArchiveFetchOptions
-			),
-			fetchHistoryArchiveObjectsForArchive(
-				historyUrl,
-				250,
-				liveArchiveFetchOptions
-			),
-			fetchHistoryArchiveObjectEventsForArchive(
-				historyUrl,
-				250,
-				liveArchiveFetchOptions
-			),
-			fetchHistoryArchiveState(historyUrl, liveArchiveFetchOptions)
+			)
 		]);
 
 	return (
@@ -59,13 +46,13 @@ async function ArchiveScanDetailRouteContent({
 			/>
 			<ArchiveScanDetail
 				evidence={evidence}
-				events={events}
+				events={objectEvidence.objectEvents}
 				historyUrl={historyUrl}
 				logs={logs}
-				objects={objects}
+				objects={objectEvidence.objects}
 				scan={scan}
-				state={state}
-				summary={summary}
+				state={objectEvidence.scannerOwnedState}
+				summary={objectEvidence.summary}
 			/>
 		</main>
 	);

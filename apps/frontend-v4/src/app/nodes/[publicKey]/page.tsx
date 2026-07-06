@@ -1,16 +1,13 @@
 import { Suspense } from 'react';
 import { notFound } from 'next/navigation';
 import { connection } from 'next/server';
-import { fetchHistoryArchiveObjectEventsForArchive } from '@api/archive-scans-client';
+import { fetchHistoryArchiveObjectEvidenceForArchive } from '@api/archive-scans-client';
 import { fetchKnownNode } from '@api/known-network-client';
 import {
 	fetchKnownOrganizations,
 	fetchHistoryArchiveScan,
 	fetchHistoryArchiveScanEvidence,
 	fetchHistoryArchiveScanLogs,
-	fetchHistoryArchiveObjectSummaryForArchive,
-	fetchHistoryArchiveObjectsForArchive,
-	fetchHistoryArchiveState,
 	fetchPublicNetwork
 } from '@api/client';
 import { PageHeading } from '@components/layout/page-heading';
@@ -52,10 +49,7 @@ async function NodeDetailRouteContent({
 		historyArchiveScan,
 		historyArchiveScanLogs,
 		historyArchiveEvidence,
-		historyArchiveSummary,
-		historyArchiveObjects,
-		historyArchiveEvents,
-		historyArchiveState
+		historyArchiveObjectEvidence
 	] = node?.historyUrl
 		? await Promise.all([
 				fetchHistoryArchiveScan(node.historyUrl, liveArchiveFetchOptions),
@@ -65,23 +59,13 @@ async function NodeDetailRouteContent({
 					500,
 					liveArchiveFetchOptions
 				),
-				fetchHistoryArchiveObjectSummaryForArchive(
+				fetchHistoryArchiveObjectEvidenceForArchive(
 					node.historyUrl,
+					{ eventLimit: 250, objectLimit: 250 },
 					liveArchiveFetchOptions
-				),
-				fetchHistoryArchiveObjectsForArchive(
-					node.historyUrl,
-					250,
-					liveArchiveFetchOptions
-				),
-				fetchHistoryArchiveObjectEventsForArchive(
-					node.historyUrl,
-					250,
-					liveArchiveFetchOptions
-				),
-				fetchHistoryArchiveState(node.historyUrl, liveArchiveFetchOptions)
+				)
 			])
-		: [null, [], null, null, null, null, null];
+		: [null, [], null, null];
 	const organization = node
 		? getOrganizationForNode(inventoryNetwork, node)
 		: null;
@@ -95,12 +79,16 @@ async function NodeDetailRouteContent({
 			/>
 			<NodeDetail
 				historyArchiveEvidence={historyArchiveEvidence}
-				historyArchiveEvents={historyArchiveEvents}
-				historyArchiveObjects={historyArchiveObjects}
+				historyArchiveEvents={
+					historyArchiveObjectEvidence?.objectEvents ?? null
+				}
+				historyArchiveObjects={historyArchiveObjectEvidence?.objects ?? null}
 				historyArchiveScan={historyArchiveScan}
 				historyArchiveScanLogs={historyArchiveScanLogs}
-				historyArchiveState={historyArchiveState}
-				historyArchiveSummary={historyArchiveSummary}
+				historyArchiveState={
+					historyArchiveObjectEvidence?.scannerOwnedState ?? null
+				}
+				historyArchiveSummary={historyArchiveObjectEvidence?.summary ?? null}
 				knownNode={knownNode}
 				network={inventoryNetwork}
 				node={node}

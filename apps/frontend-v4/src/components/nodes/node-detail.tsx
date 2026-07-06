@@ -249,49 +249,54 @@ export function NodeDetail({
 						/>
 					) : null}
 					{historyArchiveScan ? (
-						<dl className="details">
-							<div>
-								<dt>Historical range verification</dt>
-								<dd>
-									Legacy range scan evidence retained for comparison while the
-									object scheduler catches up.
-								</dd>
-							</div>
-							<div>
-								<dt>Active progress</dt>
-								<dd>
-									{activeArchiveRun
-										? `${formatActiveArchiveRun(activeArchiveRun)} updated ${formatDateTime(activeArchiveRun.updatedAt)}`
-										: 'No active queue row in the current scanner snapshot'}
-								</dd>
-							</div>
-							<div>
-								<dt>Completed evidence</dt>
-								<dd>
-									{latestCompletedArchiveRun
-										? `${latestCompletedArchiveRun.status} at ${formatDateTime(latestCompletedArchiveRun.endDate)}`
-										: 'No completed scan evidence row is available yet'}
-								</dd>
-							</div>
-							<div>
-								<dt>Archive evidence</dt>
-								<dd>{formatDateTime(historyArchiveScan.endDate)}</dd>
-							</div>
-							<div>
-								<dt>Latest verified</dt>
-								<dd>
-									{formatInteger(historyArchiveScan.latestVerifiedLedger)}
-								</dd>
-							</div>
-							<div>
-								<dt>Archive status</dt>
-								<dd>
-									{archiveVerificationErrors.length > 0
-										? 'Archive verification errors'
-										: 'No archive verification errors'}
-								</dd>
-							</div>
-						</dl>
+						<details className="metadata-document">
+							<summary>
+								<span>Historical range verification</span>
+							</summary>
+							<dl className="details">
+								<div>
+									<dt>Legacy record</dt>
+									<dd>
+										Range scan evidence retained for comparison while object
+										verification becomes the primary archive signal.
+									</dd>
+								</div>
+								<div>
+									<dt>Active progress</dt>
+									<dd>
+										{activeArchiveRun
+											? `${formatActiveArchiveRun(activeArchiveRun)} updated ${formatDateTime(activeArchiveRun.updatedAt)}`
+											: 'No active queue row in the current scanner snapshot'}
+									</dd>
+								</div>
+								<div>
+									<dt>Completed evidence</dt>
+									<dd>
+										{latestCompletedArchiveRun
+											? `${latestCompletedArchiveRun.status} at ${formatDateTime(latestCompletedArchiveRun.endDate)}`
+											: 'No completed scan evidence row is available yet'}
+									</dd>
+								</div>
+								<div>
+									<dt>Archive evidence</dt>
+									<dd>{formatDateTime(historyArchiveScan.endDate)}</dd>
+								</div>
+								<div>
+									<dt>Latest verified</dt>
+									<dd>
+										{formatInteger(historyArchiveScan.latestVerifiedLedger)}
+									</dd>
+								</div>
+								<div>
+									<dt>Archive status</dt>
+									<dd>
+										{archiveVerificationErrors.length > 0
+											? 'Archive verification errors'
+											: 'No archive verification errors'}
+									</dd>
+								</div>
+							</dl>
+						</details>
 					) : (
 						<p className="muted-copy">
 							No completed archive scan is available yet.
