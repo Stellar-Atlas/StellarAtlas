@@ -38,10 +38,17 @@ describe('normalizeHistoryArchiveRootUrl', () => {
 				'https://history.example.com/archive/bucket/aa/bb/cc/bucket-aabbcc.xdr.gz'
 			)
 		).toBeNull();
+		expect(
+			normalizeHistoryArchiveRootUrl(
+				'https://history.example.com/archive/scp/00/12/86/scp-0012867f.xdr.gz'
+			)
+		).toBeNull();
 	});
 
 	it('rejects URLs with credentials, query strings, hashes, or unsupported protocols', () => {
-		expect(normalizeHistoryArchiveRootUrl('ftp://history.example.com')).toBeNull();
+		expect(
+			normalizeHistoryArchiveRootUrl('ftp://history.example.com')
+		).toBeNull();
 		expect(
 			normalizeHistoryArchiveRootUrl('https://user@history.example.com')
 		).toBeNull();

@@ -6,6 +6,9 @@ import type { HistoryArchiveObjectType } from './HistoryArchiveObject.js';
 
 const checkpointFrequency = 64;
 const defaultCheckpointDiscoveryPageSize = 16;
+const publicNetworkPassphrase =
+	'Public Global Stellar Network ; September 2015';
+const firstPublicNetworkScpCheckpoint = 0x0012867f;
 const zeroHashPattern = /^0+$/;
 const bucketHashPattern = /^[0-9a-f]{64}$/i;
 
@@ -15,6 +18,7 @@ const objectOrderByType: Record<HistoryArchiveObjectType, number> = {
 	ledger: 20,
 	transactions: 30,
 	results: 40,
+	scp: 45,
 	bucket: 50
 };
 
@@ -40,7 +44,12 @@ export function buildHistoryArchiveObjectsFromState(
 	const checkpointLedger = getCheckpointLedger(snapshot.rawState.currentLedger);
 	if (checkpointLedger !== null) {
 		objects.push(
-			createCheckpointObject(snapshot, archiveUrl, checkpointLedger, 'checkpoint-state')
+			createCheckpointObject(
+				snapshot,
+				archiveUrl,
+				checkpointLedger,
+				'checkpoint-state'
+			)
 		);
 	}
 
@@ -69,14 +78,26 @@ export function buildCheckpointSiblingObjectsFromState(
 
 	const objects: HistoryArchiveObject[] = [
 		createCheckpointObject(snapshot, archiveUrl, checkpointLedger, 'ledger'),
-		createCheckpointObject(snapshot, archiveUrl, checkpointLedger, 'transactions'),
+		createCheckpointObject(
+			snapshot,
+			archiveUrl,
+			checkpointLedger,
+			'transactions'
+		),
 		createCheckpointObject(snapshot, archiveUrl, checkpointLedger, 'results')
 	];
+	if (isScpArchiveObjectExpected(snapshot, checkpointLedger)) {
+		objects.push(
+			createCheckpointObject(snapshot, archiveUrl, checkpointLedger, 'scp')
+		);
+	}
 
 	for (const bucketHash of getBucketHashes(snapshot.rawState.currentBuckets)) {
 		objects.push(createBucketObject(snapshot, archiveUrl, bucketHash));
 	}
-	for (const bucketHash of getBucketHashes(snapshot.rawState.hotArchiveBuckets ?? [])) {
+	for (const bucketHash of getBucketHashes(
+		snapshot.rawState.hotArchiveBuckets ?? []
+	)) {
 		objects.push(createBucketObject(snapshot, archiveUrl, bucketHash));
 	}
 
@@ -148,7 +169,10 @@ function createCheckpointObject(
 	snapshot: HistoryArchiveStateSnapshot,
 	archiveUrl: string,
 	checkpointLedger: number,
-	objectType: Exclude<HistoryArchiveObjectType, 'history-archive-state' | 'bucket'>
+	objectType: Exclude<
+		HistoryArchiveObjectType,
+		'history-archive-state' | 'bucket'
+	>
 ): HistoryArchiveObject {
 	const category = objectType === 'checkpoint-state' ? 'history' : objectType;
 	const extension = objectType === 'checkpoint-state' ? 'json' : 'xdr.gz';
@@ -205,7 +229,22 @@ function getBucketHashes(
 
 	return hashes
 		.map((hash) => hash.toLowerCase())
-		.filter((hash) => bucketHashPattern.test(hash) && !zeroHashPattern.test(hash));
+		.filter(
+			(hash) => bucketHashPattern.test(hash) && !zeroHashPattern.test(hash)
+		);
+}
+
+function isScpArchiveObjectExpected(
+	snapshot: HistoryArchiveStateSnapshot,
+	checkpointLedger: number
+): boolean {
+	if (checkpointLedger >= firstPublicNetworkScpCheckpoint) return true;
+
+	const networkPassphrase = snapshot.rawState?.networkPassphrase ?? null;
+	if (networkPassphrase === null || networkPassphrase === undefined)
+		return false;
+
+	return networkPassphrase !== publicNetworkPassphrase;
 }
 
 function toCheckpointHex(checkpointLedger: number): string {

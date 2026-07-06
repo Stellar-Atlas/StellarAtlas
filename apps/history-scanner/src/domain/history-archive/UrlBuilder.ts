@@ -65,7 +65,7 @@ export class UrlBuilder {
 	}
 
 	private static getExtension(category: Category) {
-		if (['results', 'transactions', 'ledger'].includes(category))
+		if (['results', 'transactions', 'ledger', 'scp'].includes(category))
 			return '.xdr.gz';
 
 		return '.json';

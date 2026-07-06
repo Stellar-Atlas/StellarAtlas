@@ -11,6 +11,11 @@ it('extracts category ledger numbers from archive urls', () => {
 			'https://history.example/history/00/00/77/history-000077bf.json'
 		)
 	).toEqual(30655);
+	expect(
+		extractLedgerFromHistoryArchiveUrl(
+			'https://history.example/scp/00/12/86/scp-0012867f.xdr.gz'
+		)
+	).toEqual(1214079);
 });
 
 it('returns null for bucket urls and non archive urls', () => {

@@ -79,11 +79,19 @@ export function processTransactionHistoryEntryXDR(
 	const transactionHistoryEntry = xdr.TransactionHistoryEntry.fromXDR(
 		Buffer.from(transactionHistoryEntryXDR)
 	);
-	const transactionSetHash = hashTransactionHistoryEntry(transactionHistoryEntry);
+	const transactionSetHash = hashTransactionHistoryEntry(
+		transactionHistoryEntry
+	);
 	return {
 		ledger: transactionHistoryEntry.ledgerSeq(),
 		hash: transactionSetHash.toString('base64')
 	};
+}
+
+export function processScpHistoryEntryXDR(
+	scpHistoryEntryXDR: Uint8Array
+): void {
+	xdr.ScpHistoryEntry.fromXDR(Buffer.from(scpHistoryEntryXDR));
 }
 
 function hashTransactionHistoryEntry(
@@ -109,6 +117,7 @@ if (!isMainThread) {
 		processTransactionHistoryResultEntryXDR:
 			processTransactionHistoryResultEntryXDR,
 		processTransactionHistoryEntryXDR: processTransactionHistoryEntryXDR,
+		processScpHistoryEntryXDR: processScpHistoryEntryXDR,
 		processLedgerHeaderHistoryEntryXDR: processLedgerHeaderHistoryEntryXDR
 	});
 }

@@ -25,6 +25,7 @@ const supportedObjectTypes: readonly HistoryArchiveObjectType[] = [
 	'ledger',
 	'transactions',
 	'results',
+	'scp',
 	'bucket'
 ];
 
@@ -40,9 +41,8 @@ export class GetHistoryArchiveObjectJob {
 	async execute(): Promise<Result<HistoryArchiveObjectJobDTO | null, Error>> {
 		try {
 			await this.objectRepository.releaseStaleObjects(getStaleObjectCutoff());
-			const object = await this.objectRepository.claimNextObject(
-				supportedObjectTypes
-			);
+			const object =
+				await this.objectRepository.claimNextObject(supportedObjectTypes);
 			if (object === null) return ok(null);
 			await this.eventRecorder.record(object, {
 				claimAttempt: object.attempts,

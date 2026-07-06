@@ -33,7 +33,10 @@ export class VerifyArchiveObjects {
 	private static readonly initialHeartbeatDelayMs = 10 * 1000;
 	private static readonly heartbeatIntervalMs = 45 * 1000;
 	private static readonly heartbeatJitterMs = 20 * 1000;
-	private readonly activeObjectProgress = new Map<string, ActiveObjectProgress>();
+	private readonly activeObjectProgress = new Map<
+		string,
+		ActiveObjectProgress
+	>();
 	private readonly activeObjectHeartbeatsInFlight = new Set<string>();
 	private readonly categoryVerifier: ArchiveObjectCategoryVerifier;
 
@@ -139,10 +142,11 @@ export class VerifyArchiveObjects {
 				return;
 			}
 
-			const completionResult = await this.scanCoordinator.completeHistoryArchiveObject(
-				job.remoteId,
-				{ ...result.value, claimAttempt: job.claimAttempt }
-			);
+			const completionResult =
+				await this.scanCoordinator.completeHistoryArchiveObject(job.remoteId, {
+					...result.value,
+					claimAttempt: job.claimAttempt
+				});
 			if (completionResult.isErr()) {
 				this.exceptionLogger.captureException(completionResult.error);
 				await this.checkIn('error');
@@ -157,7 +161,9 @@ export class VerifyArchiveObjects {
 
 	private async performObjectVerification(
 		job: HistoryArchiveObjectJobDTO
-	): Promise<Result<HistoryArchiveObjectCompletionDTO, HistoryArchiveObjectFailureDTO>> {
+	): Promise<
+		Result<HistoryArchiveObjectCompletionDTO, HistoryArchiveObjectFailureDTO>
+	> {
 		switch (job.objectType) {
 			case 'history-archive-state':
 				return this.verifyHistoryArchiveState(job);
@@ -166,6 +172,7 @@ export class VerifyArchiveObjects {
 			case 'ledger':
 			case 'transactions':
 			case 'results':
+			case 'scp':
 				return this.categoryVerifier.verifyCategoryObject(job);
 			case 'bucket':
 				return this.verifyBucket(job);
@@ -180,7 +187,9 @@ export class VerifyArchiveObjects {
 
 	private async verifyHistoryArchiveState(
 		job: HistoryArchiveObjectJobDTO
-	): Promise<Result<HistoryArchiveObjectCompletionDTO, HistoryArchiveObjectFailureDTO>> {
+	): Promise<
+		Result<HistoryArchiveObjectCompletionDTO, HistoryArchiveObjectFailureDTO>
+	> {
 		this.updateProgress(job.remoteId, 'fetching_history_archive_state', null);
 		const urlResult = Url.create(job.objectUrl);
 		if (urlResult.isErr()) return err(this.mapLocalError(urlResult.error));
@@ -211,7 +220,11 @@ export class VerifyArchiveObjects {
 		}
 
 		const bytesDownloaded = Buffer.byteLength(JSON.stringify(state));
-		this.updateProgress(job.remoteId, 'verified_history_archive_state', bytesDownloaded);
+		this.updateProgress(
+			job.remoteId,
+			'verified_history_archive_state',
+			bytesDownloaded
+		);
 		return ok({
 			archiveMetadata: {
 				observedAt: new Date().toISOString(),
@@ -225,7 +238,9 @@ export class VerifyArchiveObjects {
 
 	private async verifyBucket(
 		job: HistoryArchiveObjectJobDTO
-	): Promise<Result<HistoryArchiveObjectProgressDTO, HistoryArchiveObjectFailureDTO>> {
+	): Promise<
+		Result<HistoryArchiveObjectProgressDTO, HistoryArchiveObjectFailureDTO>
+	> {
 		if (job.bucketHash === null || !/^[a-fA-F0-9]{64}$/.test(job.bucketHash)) {
 			return err({
 				errorMessage: 'Bucket object is missing a valid bucket hash',
@@ -257,7 +272,11 @@ export class VerifyArchiveObjects {
 			response.value.data,
 			(bytes) => {
 				bytesDownloaded += bytes;
-				this.updateProgress(job.remoteId, 'downloading_bucket', bytesDownloaded);
+				this.updateProgress(
+					job.remoteId,
+					'downloading_bucket',
+					bytesDownloaded
+				);
 			}
 		);
 		const verifyResult = await this.bucketCache.verifyAndStore(
@@ -393,7 +412,9 @@ export class VerifyArchiveObjects {
 		if (isHttpError(error)) {
 			return {
 				errorMessage: error.message,
-				errorType: error.response ? 'archive_http_error' : 'archive_transport_error',
+				errorType: error.response
+					? 'archive_http_error'
+					: 'archive_transport_error',
 				httpStatus: error.response?.status ?? null
 			};
 		}

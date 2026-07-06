@@ -37,7 +37,9 @@ export class ArchiveObjectCategoryVerifier {
 
 	async verifyCheckpointState(
 		job: HistoryArchiveObjectJobDTO
-	): Promise<Result<HistoryArchiveObjectProgressDTO, HistoryArchiveObjectFailureDTO>> {
+	): Promise<
+		Result<HistoryArchiveObjectProgressDTO, HistoryArchiveObjectFailureDTO>
+	> {
 		this.reportProgress(job.remoteId, 'fetching_checkpoint_state', null);
 		const urlResult = Url.create(job.objectUrl);
 		if (urlResult.isErr()) return err(this.mapLocalError(urlResult.error));
@@ -87,7 +89,9 @@ export class ArchiveObjectCategoryVerifier {
 
 	async verifyCategoryObject(
 		job: HistoryArchiveObjectJobDTO
-	): Promise<Result<HistoryArchiveObjectProgressDTO, HistoryArchiveObjectFailureDTO>> {
+	): Promise<
+		Result<HistoryArchiveObjectProgressDTO, HistoryArchiveObjectFailureDTO>
+	> {
 		const category = getCategory(job.objectType);
 		if (category === null) {
 			return err({
@@ -126,7 +130,9 @@ export class ArchiveObjectCategoryVerifier {
 				);
 			})
 		);
-		const pool = new HasherPool(Math.max(Math.floor(this.hasherWorkerCount), 1));
+		const pool = new HasherPool(
+			Math.max(Math.floor(this.hasherWorkerCount), 1)
+		);
 		const parsedHistorySink =
 			category === Category.ledger
 				? new CoordinatorParsedHistorySink(
@@ -173,7 +179,9 @@ export class ArchiveObjectCategoryVerifier {
 		if (isHttpError(error)) {
 			return {
 				errorMessage: error.message,
-				errorType: error.response ? 'archive_http_error' : 'archive_transport_error',
+				errorType: error.response
+					? 'archive_http_error'
+					: 'archive_transport_error',
 				httpStatus: error.response?.status ?? null
 			};
 		}
@@ -215,6 +223,8 @@ function getCategory(objectType: string): Category | null {
 			return Category.transactions;
 		case 'results':
 			return Category.results;
+		case 'scp':
+			return Category.scp;
 		default:
 			return null;
 	}

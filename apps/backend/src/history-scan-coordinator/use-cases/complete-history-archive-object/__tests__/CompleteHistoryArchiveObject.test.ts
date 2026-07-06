@@ -3,6 +3,7 @@ import type { ArchiveMetadataDTO } from 'history-scanner-dto';
 import { HistoryArchiveObject } from '../../../domain/history-archive-object/HistoryArchiveObject.js';
 import type { HistoryArchiveObjectRepository } from '../../../domain/history-archive-object/HistoryArchiveObjectRepository.js';
 import type { HistoryArchiveStateRepository } from '../../../domain/history-archive-state/HistoryArchiveStateRepository.js';
+import { HistoryArchiveStateSnapshot } from '../../../domain/history-archive-state/HistoryArchiveStateSnapshot.js';
 import type { HistoryArchiveObjectEventRecorder } from '../../record-history-archive-object-event/HistoryArchiveObjectEventRecorder.js';
 import { CompleteHistoryArchiveObject } from '../CompleteHistoryArchiveObject.js';
 
@@ -76,24 +77,61 @@ describe('CompleteHistoryArchiveObject', () => {
 		expect(objectRepository.saveObjects).toHaveBeenCalledWith([]);
 		expect(objectRepository.markObjectVerified).toHaveBeenCalled();
 	});
+
+	it('uses persisted root state passphrase before scheduling early scp objects', async () => {
+		const archiveObject = createCheckpointObject(1_214_015);
+		objectRepository.findByRemoteId.mockResolvedValue(archiveObject);
+		stateRepository.findByUrl.mockResolvedValue(
+			HistoryArchiveStateSnapshot.available(
+				archiveObject.archiveUrl,
+				archiveObject.archiveUrlIdentity,
+				createArchiveMetadata(1_214_079, {
+					networkPassphrase: 'Test SDF Network ; September 2015'
+				}),
+				'history-scanner'
+			)
+		);
+
+		const result = await new CompleteHistoryArchiveObject(
+			objectRepository,
+			stateRepository,
+			eventRecorder
+		).execute(archiveObject.remoteId, {
+			claimAttempt: 1,
+			verificationFacts: {
+				checkpointHistoryArchiveState: createArchiveMetadata(1_214_015)
+			},
+			workerStage: 'verified'
+		});
+
+		expect(result._unsafeUnwrap()).toBe(true);
+		const savedObjects = objectRepository.saveObjects.mock.calls[0]?.[0] ?? [];
+		expect(savedObjects.map((object) => object.objectKey)).toContain(
+			'scp:0012863f'
+		);
+	});
 });
 
-function createCheckpointObject(): HistoryArchiveObject {
+function createCheckpointObject(checkpointLedger = 127): HistoryArchiveObject {
+	const checkpointHex = checkpointLedger.toString(16).padStart(8, '0');
+
 	return new HistoryArchiveObject({
 		archiveUrl: 'https://history.example.com/archive',
 		archiveUrlIdentity: 'https://history.example.com/archive',
-		checkpointLedger: 127,
-		objectKey: 'checkpoint-state:0000007f',
+		checkpointLedger,
+		objectKey: `checkpoint-state:${checkpointHex}`,
 		objectOrder: 10,
 		objectType: 'checkpoint-state',
-		objectUrl:
-			'https://history.example.com/archive/history/00/00/00/history-0000007f.json',
+		objectUrl: `https://history.example.com/archive/history/${checkpointHex.slice(0, 2)}/${checkpointHex.slice(2, 4)}/${checkpointHex.slice(4, 6)}/history-${checkpointHex}.json`,
 		remoteId: '11111111-1111-4111-8111-111111111111',
 		status: 'scanning'
 	});
 }
 
-function createArchiveMetadata(currentLedger: number): ArchiveMetadataDTO {
+function createArchiveMetadata(
+	currentLedger: number,
+	options: { readonly networkPassphrase?: string | null } = {}
+): ArchiveMetadataDTO {
 	return {
 		observedAt: '2026-07-06T15:00:00.000Z',
 		stellarHistory: {
@@ -105,6 +143,7 @@ function createArchiveMetadata(currentLedger: number): ArchiveMetadataDTO {
 				}
 			],
 			currentLedger,
+			networkPassphrase: options.networkPassphrase,
 			server: 'stellar-core',
 			version: 1
 		},

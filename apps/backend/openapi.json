@@ -4870,7 +4870,9 @@
 					"204": { "description": "heartbeat accepted" },
 					"400": { "description": "Invalid remote id or request body" },
 					"401": { "description": "Authentication required" },
-					"404": { "description": "Archive object job is not currently claimed" },
+					"404": {
+						"description": "Archive object job is not currently claimed"
+					},
 					"500": { "description": "Server error" }
 				}
 			}
@@ -4905,7 +4907,9 @@
 					"204": { "description": "completion accepted" },
 					"400": { "description": "Invalid remote id or request body" },
 					"401": { "description": "Authentication required" },
-					"404": { "description": "Archive object job is not currently claimed" },
+					"404": {
+						"description": "Archive object job is not currently claimed"
+					},
 					"500": { "description": "Server error" }
 				}
 			}
@@ -4940,7 +4944,9 @@
 					"204": { "description": "failure accepted" },
 					"400": { "description": "Invalid remote id or request body" },
 					"401": { "description": "Authentication required" },
-					"404": { "description": "Archive object job is not currently claimed" },
+					"404": {
+						"description": "Archive object job is not currently claimed"
+					},
 					"500": { "description": "Server error" }
 				}
 			}
@@ -4975,7 +4981,9 @@
 					"204": { "description": "release accepted" },
 					"400": { "description": "Invalid remote id or request body" },
 					"401": { "description": "Authentication required" },
-					"404": { "description": "Archive object job is not currently claimed" },
+					"404": {
+						"description": "Archive object job is not currently claimed"
+					},
 					"500": { "description": "Server error" }
 				}
 			}
@@ -8008,6 +8016,7 @@
 							"ledger",
 							"transactions",
 							"results",
+							"scp",
 							"bucket"
 						]
 					},
@@ -8164,6 +8173,7 @@
 							"ledger",
 							"transactions",
 							"results",
+							"scp",
 							"bucket"
 						]
 					},
@@ -8222,6 +8232,7 @@
 							"ledger",
 							"transactions",
 							"results",
+							"scp",
 							"bucket"
 						]
 					},

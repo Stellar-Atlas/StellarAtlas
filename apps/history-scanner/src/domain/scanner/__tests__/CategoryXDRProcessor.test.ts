@@ -109,6 +109,21 @@ it('should not emit parsed history records for transaction categories', async ()
 	expect(emit).not.toHaveBeenCalled();
 });
 
+it('should validate scp frames through the worker pool', async () => {
+	const exec = jest.fn(async () => undefined);
+	const processor = newProcessor(
+		Category.scp,
+		createPool(exec),
+		createVerificationData()
+	);
+
+	await writeXdr(processor);
+
+	expect(exec).toHaveBeenCalledWith('processScpHistoryEntryXDR', [
+		Buffer.from('xdr')
+	]);
+});
+
 function newProcessor(
 	category: Category,
 	pool: HasherPool,

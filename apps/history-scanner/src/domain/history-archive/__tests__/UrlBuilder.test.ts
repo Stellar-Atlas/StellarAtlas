@@ -18,6 +18,21 @@ it('should return ledger url', function () {
 	);
 });
 
+it('should return scp url', function () {
+	const historyBaseUrl = Url.create('https://history.stellar.org');
+	if (historyBaseUrl.isErr()) throw historyBaseUrl.error;
+
+	const url = UrlBuilder.getCategoryUrl(
+		historyBaseUrl.value,
+		1_214_079,
+		Category.scp
+	);
+
+	expect(url.value).toEqual(
+		'https://history.stellar.org/scp/00/12/86/scp-0012867f.xdr.gz'
+	);
+});
+
 it('should construct category urls from normalized root history archive state urls', function () {
 	const historyBaseUrl = Url.create(
 		'https://history.stellar.org/archive/.well-known/stellar-history.json'

@@ -1,6 +1,6 @@
 const rootStatePath = '/.well-known/stellar-history.json';
 const categoryObjectPathPattern =
-	/\/(history|ledger|transactions|results)\/[0-9a-f]{2}\/[0-9a-f]{2}\/[0-9a-f]{2}\/\1-[0-9a-f]{8}\.(json|xdr\.gz)$/i;
+	/\/(history|ledger|transactions|results|scp)\/[0-9a-f]{2}\/[0-9a-f]{2}\/[0-9a-f]{2}\/\1-[0-9a-f]{8}\.(json|xdr\.gz)$/i;
 const bucketObjectPathPattern =
 	/\/bucket\/[0-9a-f]{2}\/[0-9a-f]{2}\/[0-9a-f]{2}\/bucket-[0-9a-f]+\.xdr\.gz$/i;
 

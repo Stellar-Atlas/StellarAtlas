@@ -1,7 +1,10 @@
 import 'reflect-metadata';
 import { inject, injectable } from 'inversify';
 import { err, ok, Result } from 'neverthrow';
-import { isArchiveMetadataDTO, type ArchiveMetadataDTO } from 'history-scanner-dto';
+import {
+	isArchiveMetadataDTO,
+	type ArchiveMetadataDTO
+} from 'history-scanner-dto';
 import { getHistoryArchiveUrlIdentity } from '../../domain/ArchiveUrlIdentity.js';
 import { HistoryArchiveStateSnapshot } from '../../domain/history-archive-state/HistoryArchiveStateSnapshot.js';
 import type { HistoryArchiveObject } from '../../domain/history-archive-object/HistoryArchiveObject.js';
@@ -17,8 +20,7 @@ import { TYPES } from '../../infrastructure/di/di-types.js';
 import { mapUnknownToError } from '@core/utilities/mapUnknownToError.js';
 import { HistoryArchiveObjectEventRecorder } from '../record-history-archive-object-event/HistoryArchiveObjectEventRecorder.js';
 
-export interface CompleteHistoryArchiveObjectRequest
-	extends HistoryArchiveObjectProgressUpdate {
+export interface CompleteHistoryArchiveObjectRequest extends HistoryArchiveObjectProgressUpdate {
 	readonly archiveMetadata?: ArchiveMetadataDTO;
 }
 
@@ -58,7 +60,7 @@ export class CompleteHistoryArchiveObject {
 			}
 			if (object.objectType === 'checkpoint-state') {
 				await this.objectRepository.saveObjects(
-					this.buildObjectsFromCheckpointArchiveMetadata(
+					await this.buildObjectsFromCheckpointArchiveMetadata(
 						object,
 						request.verificationFacts
 					)
@@ -66,13 +68,14 @@ export class CompleteHistoryArchiveObject {
 			}
 
 			const updated = await this.objectRepository.markObjectVerified(remoteId, {
-					bytesDownloaded: request.bytesDownloaded,
-					claimAttempt: request.claimAttempt,
-					verificationFacts: request.verificationFacts,
-					workerStage: request.workerStage
-				});
+				bytesDownloaded: request.bytesDownloaded,
+				claimAttempt: request.claimAttempt,
+				verificationFacts: request.verificationFacts,
+				workerStage: request.workerStage
+			});
 			if (updated) {
-				const verifiedObject = await this.objectRepository.findByRemoteId(remoteId);
+				const verifiedObject =
+					await this.objectRepository.findByRemoteId(remoteId);
 				if (verifiedObject !== null) {
 					await this.eventRecorder.record(verifiedObject, {
 						claimAttempt: request.claimAttempt,
@@ -114,24 +117,48 @@ export class CompleteHistoryArchiveObject {
 		];
 	}
 
-	private buildObjectsFromCheckpointArchiveMetadata(
+	private async buildObjectsFromCheckpointArchiveMetadata(
 		object: HistoryArchiveObject,
 		verificationFacts?: object | null
 	) {
 		const archiveMetadata =
 			getCheckpointHistoryArchiveStateMetadata(verificationFacts);
 		if (archiveMetadata === null) return [];
+		const metadataWithNetworkPassphrase =
+			await this.addRootNetworkPassphraseIfMissing(
+				object.archiveUrl,
+				archiveMetadata
+			);
 
 		const snapshot = HistoryArchiveStateSnapshot.available(
 			object.archiveUrl,
 			object.archiveUrlIdentity,
-			archiveMetadata,
+			metadataWithNetworkPassphrase,
 			'history-scanner'
 		);
 
 		return buildCheckpointSiblingObjectsFromState(snapshot, {
 			expectedCheckpointLedger: object.checkpointLedger
 		});
+	}
+
+	private async addRootNetworkPassphraseIfMissing(
+		archiveUrl: string,
+		archiveMetadata: ArchiveMetadataDTO
+	): Promise<ArchiveMetadataDTO> {
+		if (archiveMetadata.stellarHistory.networkPassphrase) {
+			return archiveMetadata;
+		}
+		const rootState = await this.stateRepository.findByUrl(archiveUrl);
+		if (!rootState?.networkPassphrase) return archiveMetadata;
+
+		return {
+			...archiveMetadata,
+			stellarHistory: {
+				...archiveMetadata.stellarHistory,
+				networkPassphrase: rootState.networkPassphrase
+			}
+		};
 	}
 }
 

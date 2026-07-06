@@ -12,9 +12,7 @@ export type HistoryArchiveObjectFailureClass =
 	| 'unknown';
 
 export type HistoryArchiveObjectEvidenceClass =
-	| 'archive-object'
-	| 'worker-infrastructure'
-	| 'coordinator-infrastructure';
+	'archive-object' | 'worker-infrastructure' | 'coordinator-infrastructure';
 
 export interface HistoryArchiveObjectRetryPolicyInput {
 	readonly now: Date;
@@ -39,20 +37,22 @@ const objectBaseDelayMs: Record<HistoryArchiveObjectType, number> = {
 	ledger: 60_000,
 	transactions: 60_000,
 	results: 60_000,
+	scp: 60_000,
 	bucket: 120_000
 };
 
-const failureDelayMultiplier: Record<HistoryArchiveObjectFailureClass, number> = {
-	http: 2,
-	auth: 8,
-	'not-found': 4,
-	'rate-limit': 6,
-	timeout: 2,
-	transport: 2,
-	worker: 1,
-	coordinator: 1,
-	unknown: 3
-};
+const failureDelayMultiplier: Record<HistoryArchiveObjectFailureClass, number> =
+	{
+		http: 2,
+		auth: 8,
+		'not-found': 4,
+		'rate-limit': 6,
+		timeout: 2,
+		transport: 2,
+		worker: 1,
+		coordinator: 1,
+		unknown: 3
+	};
 
 const failureDelayCapMs: Record<HistoryArchiveObjectFailureClass, number> = {
 	http: 30 * 60_000,
@@ -179,7 +179,8 @@ function classifyHttpStatus(
 }
 
 function normalizeRetryCount(currentRetryCount: number): number {
-	if (!Number.isSafeInteger(currentRetryCount) || currentRetryCount < 0) return 0;
+	if (!Number.isSafeInteger(currentRetryCount) || currentRetryCount < 0)
+		return 0;
 
 	return currentRetryCount;
 }

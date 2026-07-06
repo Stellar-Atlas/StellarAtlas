@@ -45,6 +45,9 @@ export class CategoryXDRProcessor extends Writable {
 			case Category.ledger:
 				await this.processLedgerHeader(xdr);
 				return;
+			case Category.scp:
+				await this.processScpHistoryEntry(xdr);
+				return;
 			default:
 				return;
 		}
@@ -73,18 +76,18 @@ export class CategoryXDRProcessor extends Writable {
 	}
 
 	private async processLedgerHeader(xdr: Buffer): Promise<void> {
-		const ledgerHeaderResult = await this.performInPool<LedgerHeaderHistoryEntryResult>(
-			xdr,
-			'processLedgerHeaderHistoryEntryXDR'
-		);
+		const ledgerHeaderResult =
+			await this.performInPool<LedgerHeaderHistoryEntryResult>(
+				xdr,
+				'processLedgerHeaderHistoryEntryXDR'
+			);
 		await this.parsedHistorySink.emit({
 			recordType: 'ledger-header',
 			sourceUrl: this.url.value,
 			ledger: ledgerHeaderResult.ledger,
 			protocolVersion: ledgerHeaderResult.protocolVersion,
 			ledgerHeaderHash: ledgerHeaderResult.ledgerHeaderHash,
-			previousLedgerHeaderHash:
-				ledgerHeaderResult.previousLedgerHeaderHash,
+			previousLedgerHeaderHash: ledgerHeaderResult.previousLedgerHeaderHash,
 			transactionSetHash: ledgerHeaderResult.transactionsHash,
 			transactionResultSetHash: ledgerHeaderResult.transactionResultsHash,
 			bucketListHash: ledgerHeaderResult.bucketListHash
@@ -95,8 +98,7 @@ export class CategoryXDRProcessor extends Writable {
 			{
 				txSetResultHash: ledgerHeaderResult.transactionResultsHash,
 				txSetHash: ledgerHeaderResult.transactionsHash,
-				previousLedgerHeaderHash:
-					ledgerHeaderResult.previousLedgerHeaderHash,
+				previousLedgerHeaderHash: ledgerHeaderResult.previousLedgerHeaderHash,
 				bucketListHash: ledgerHeaderResult.bucketListHash
 			}
 		);
@@ -111,11 +113,16 @@ export class CategoryXDRProcessor extends Writable {
 		);
 	}
 
+	private async processScpHistoryEntry(xdr: Buffer): Promise<void> {
+		await this.performInPool<void>(xdr, 'processScpHistoryEntryXDR');
+	}
+
 	private async performInPool<Return>(
 		data: Buffer,
 		method:
 			| 'processTransactionHistoryResultEntryXDR'
 			| 'processTransactionHistoryEntryXDR'
+			| 'processScpHistoryEntryXDR'
 			| 'processLedgerHeaderHistoryEntryXDR'
 	): Promise<Return> {
 		return (await this.pool.workerpool.exec(method, [data])) as Return;

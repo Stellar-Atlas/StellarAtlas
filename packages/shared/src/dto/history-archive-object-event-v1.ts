@@ -3,16 +3,10 @@ import { nullable } from './helper/nullable.js';
 import type { HistoryArchiveObjectTypeV1 } from './history-archive-object-v1.js';
 
 export type HistoryArchiveObjectEventTypeV1 =
-	| 'claimed'
-	| 'heartbeat'
-	| 'verified'
-	| 'failed'
-	| 'released';
+	'claimed' | 'heartbeat' | 'verified' | 'failed' | 'released';
 
 export type HistoryArchiveObjectEvidenceClassV1 =
-	| 'archive-object'
-	| 'worker-infrastructure'
-	| 'coordinator-infrastructure';
+	'archive-object' | 'worker-infrastructure' | 'coordinator-infrastructure';
 
 export interface HistoryArchiveObjectEventV1 {
 	readonly archiveUrl: string;
@@ -94,6 +88,7 @@ const HistoryArchiveObjectEventV1Schema: JSONSchemaType<HistoryArchiveObjectEven
 					'ledger',
 					'transactions',
 					'results',
+					'scp',
 					'bucket'
 				]
 			},

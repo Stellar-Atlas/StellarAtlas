@@ -1,8 +1,6 @@
 import { MigrationInterface, QueryRunner } from 'typeorm';
 
-export class HistoryArchiveObjectQueueMigration1784350000000
-	implements MigrationInterface
-{
+export class HistoryArchiveObjectQueueMigration1784350000000 implements MigrationInterface {
 	name = 'HistoryArchiveObjectQueueMigration1784350000000';
 
 	public async up(queryRunner: QueryRunner): Promise<void> {
@@ -44,6 +42,7 @@ export class HistoryArchiveObjectQueueMigration1784350000000
 						'ledger',
 						'transactions',
 						'results',
+						'scp',
 						'bucket'
 					)),
 				constraint "CHK_history_archive_object_queue_status"
@@ -102,6 +101,7 @@ export class HistoryArchiveObjectQueueMigration1784350000000
 					"currentLedger",
 					"currentBuckets",
 					"hotArchiveBuckets",
+					"networkPassphrase",
 					"observedAt",
 					case
 						when "currentLedger" < 63 then 63
@@ -150,13 +150,20 @@ export class HistoryArchiveObjectQueueMigration1784350000000
 						('checkpoint-state', 'history', '.json', 10),
 						('ledger', 'ledger', '.xdr.gz', 20),
 						('transactions', 'transactions', '.xdr.gz', 30),
-						('results', 'results', '.xdr.gz', 40)
+						('results', 'results', '.xdr.gz', 40),
+						('scp', 'scp', '.xdr.gz', 45)
 				) as object_type(
 					"objectType",
 					category,
 					extension,
 					"objectOrder"
 				)
+				where object_type."objectType" <> 'scp'
+					or state.checkpoint >= 1214079
+					or (
+						state."networkPassphrase" is not null
+						and state."networkPassphrase" <> 'Public Global Stellar Network ; September 2015'
+					)
 			),
 			bucket_hashes as (
 				select distinct

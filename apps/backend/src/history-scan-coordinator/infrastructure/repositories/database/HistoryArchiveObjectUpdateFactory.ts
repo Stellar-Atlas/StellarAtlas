@@ -25,11 +25,11 @@ export function createVerifiedUpdate(
 		errorType: null,
 		httpStatus: null,
 		nextAttemptAt: null,
-		refreshAfter: () => rootHistoryArchiveStateRefreshSql(),
-		status: 'verified',
-		updatedAt: () => 'now()',
-		verifiedAt: () => 'now()',
-		workerStage: null
+			refreshAfter: () => rootHistoryArchiveStateRefreshSql(),
+			status: 'verified',
+			updatedAt: () => 'now()',
+			verifiedAt: () => 'now()',
+			workerStage: progress?.workerStage ?? 'verified'
 	};
 }
 
@@ -42,15 +42,15 @@ export function createFailedUpdate(
 		errorMessage: failure.errorMessage,
 		errorType: failure.errorType,
 		httpStatus: failure.httpStatus ?? null,
-		nextAttemptAt:
-			failure.nextAttemptAt === undefined
-				? () => "now() + interval '1 hour'"
-				: failure.nextAttemptAt,
-		status: 'failed',
-		updatedAt: () => 'now()',
-		workerStage: null
-	};
-}
+			nextAttemptAt:
+				failure.nextAttemptAt === undefined
+					? () => "now() + interval '1 hour'"
+					: failure.nextAttemptAt,
+			status: 'failed',
+			updatedAt: () => 'now()',
+			workerStage: 'failed'
+		};
+	}
 
 export function createProgressUpdate(
 	progress?: HistoryArchiveObjectProgressUpdate

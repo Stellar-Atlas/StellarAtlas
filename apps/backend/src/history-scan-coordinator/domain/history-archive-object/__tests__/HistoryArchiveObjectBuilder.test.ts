@@ -97,6 +97,43 @@ describe('HistoryArchiveObjectBuilder', () => {
 		expect(objects).toEqual([]);
 	});
 
+	it('builds scp sibling objects for modern checkpoints', () => {
+		const objects = buildCheckpointSiblingObjectsFromState(
+			createSnapshot(createArchiveMetadata(1_214_079))
+		);
+
+		expect(objects.map((object) => object.objectKey)).toContain('scp:0012867f');
+		expect(
+			objects.find((object) => object.objectKey === 'scp:0012867f')?.objectUrl
+		).toBe(
+			'https://history.example.com/archive-b/scp/00/12/86/scp-0012867f.xdr.gz'
+		);
+	});
+
+	it('skips the public network scp history gap before the first scp checkpoint', () => {
+		const objects = buildCheckpointSiblingObjectsFromState(
+			createSnapshot(
+				createArchiveMetadata(1_214_015, {
+					networkPassphrase: 'Public Global Stellar Network ; September 2015'
+				})
+			)
+		);
+
+		expect(objects.map((object) => object.objectType)).not.toContain('scp');
+	});
+
+	it('builds early scp objects when a non-public network explicitly reports them', () => {
+		const objects = buildCheckpointSiblingObjectsFromState(
+			createSnapshot(
+				createArchiveMetadata(1_214_015, {
+					networkPassphrase: 'Test SDF Network ; September 2015'
+				})
+			)
+		);
+
+		expect(objects.map((object) => object.objectKey)).toContain('scp:0012863f');
+	});
+
 	it('deduplicates bucket objects found in checkpoint state buckets', () => {
 		const objects = buildCheckpointSiblingObjectsFromState(
 			createSnapshot(createArchiveMetadataWithDuplicateBuckets(127))
@@ -119,7 +156,10 @@ function createSnapshot(
 	);
 }
 
-function createArchiveMetadata(currentLedger = 63354047): ArchiveMetadataDTO {
+function createArchiveMetadata(
+	currentLedger = 63354047,
+	options: { readonly networkPassphrase?: string | null } = {}
+): ArchiveMetadataDTO {
 	return {
 		observedAt: '2026-07-06T14:30:00.000Z',
 		stellarHistory: {
@@ -131,6 +171,7 @@ function createArchiveMetadata(currentLedger = 63354047): ArchiveMetadataDTO {
 				}
 			],
 			currentLedger,
+			networkPassphrase: options.networkPassphrase,
 			server: 'stellar-core',
 			version: 1
 		},

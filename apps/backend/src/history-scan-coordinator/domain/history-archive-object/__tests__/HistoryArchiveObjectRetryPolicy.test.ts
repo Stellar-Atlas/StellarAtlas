@@ -134,6 +134,7 @@ describe('HistoryArchiveObjectRetryPolicy', () => {
 		['ledger', 120_000],
 		['transactions', 120_000],
 		['results', 120_000],
+		['scp', 120_000],
 		['bucket', 240_000]
 	] satisfies readonly (readonly [HistoryArchiveObjectType, number])[])(
 		'uses the %s object base delay',

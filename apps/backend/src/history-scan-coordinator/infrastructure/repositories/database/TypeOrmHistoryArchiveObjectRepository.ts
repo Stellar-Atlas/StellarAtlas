@@ -29,6 +29,11 @@ import {
 	createVerifiedUpdate
 } from './HistoryArchiveObjectUpdateFactory.js';
 import { findOldestCheckpointLedgers } from './HistoryArchiveObjectCheckpointQuery.js';
+import {
+	historyArchiveObjectClaimLockSql,
+	historyArchiveObjectClaimSql,
+	historyArchiveObjectHostBackoffPatterns
+} from './HistoryArchiveObjectClaimSql.js';
 
 const maxActiveObjectsPerArchive = 1;
 const maxActiveObjectsPerHost = 2;
@@ -50,102 +55,23 @@ export class TypeOrmHistoryArchiveObjectRepository
 		if (supportedTypes.length === 0) return null;
 
 		return await this.repository.manager.transaction(async (manager) => {
-			await manager.query('select pg_advisory_xact_lock(hashtext($1))', [
-				claimLockName
-			]);
+			await manager.query('set local jit = off');
+			const [lockRow] = (await manager.query(
+				historyArchiveObjectClaimLockSql,
+				[claimLockName]
+			)) as readonly { readonly locked?: boolean }[];
+			if (lockRow?.locked !== true) return null;
 
 			const rows = extractRows(
 				(await manager.query(
-				`
-				with next_candidate as (
-					select candidate.id
-					from history_archive_object_queue candidate
-					where (
-							candidate.status = 'pending'
-							or (
-								candidate.status = 'failed'
-								and coalesce(
-									candidate."nextAttemptAt",
-									candidate."updatedAt" + interval '1 hour'
-								) <= now()
-							)
-						)
-						and candidate."objectType" = any($1)
-						and (
-							select count(*)
-							from history_archive_object_queue active
-							where active.status = 'scanning'
-						) < $3
-						and (
-							select count(*)
-							from history_archive_object_queue active
-							where active.status = 'scanning'
-								and active."archiveUrlIdentity" =
-									candidate."archiveUrlIdentity"
-						) < $2
-						and (
-							select count(*)
-							from history_archive_object_queue active
-							where active.status = 'scanning'
-								and active."hostIdentity" = candidate."hostIdentity"
-						) < $4
-					order by
-						(
-							select max(previous."claimedAt")
-							from history_archive_object_queue previous
-							where previous."archiveUrlIdentity" =
-								candidate."archiveUrlIdentity"
-						) asc nulls first,
-						candidate."objectOrder" asc,
-						candidate."objectKey" asc,
-						candidate."archiveUrlIdentity" asc
-					for update skip locked
-					limit 1
-				)
-				update history_archive_object_queue
-				set status = 'scanning',
-					"claimedAt" = now(),
-					"attempts" = "attempts" + 1,
-					"workerStage" = 'claimed',
-					"errorType" = null,
-					"errorMessage" = null,
-					"httpStatus" = null,
-					"nextAttemptAt" = null,
-					"updatedAt" = now()
-				where id = (select id from next_candidate)
-				returning
-					"remoteId" as "remoteId",
-					"archiveUrl" as "archiveUrl",
-					"archiveUrlIdentity" as "archiveUrlIdentity",
-					"hostIdentity" as "hostIdentity",
-					"objectType" as "objectType",
-					"objectKey" as "objectKey",
-					"objectOrder" as "objectOrder",
-					"objectUrl" as "objectUrl",
-					status as "status",
-					"workerStage" as "workerStage",
-					"checkpointLedger" as "checkpointLedger",
-					"bucketHash" as "bucketHash",
-					"bytesDownloaded" as "bytesDownloaded",
-					attempts as "attempts",
-					"nextAttemptAt" as "nextAttemptAt",
-					"refreshAfter" as "refreshAfter",
-					"claimedAt" as "claimedAt",
-					"claimedByCommunityScannerId" as "claimedByCommunityScannerId",
-					"errorType" as "errorType",
-					"errorMessage" as "errorMessage",
-					"httpStatus" as "httpStatus",
-					"verificationFacts" as "verificationFacts",
-					"verifiedAt" as "verifiedAt",
-					"createdAt" as "createdAt",
-					"updatedAt" as "updatedAt"
-				`,
-				[
-					[...supportedTypes],
-					maxActiveObjectsPerArchive,
-					maxActiveObjectsTotal,
-					maxActiveObjectsPerHost
-				]
+					historyArchiveObjectClaimSql,
+					[
+						[...supportedTypes],
+						maxActiveObjectsPerArchive,
+						maxActiveObjectsTotal,
+						maxActiveObjectsPerHost,
+						[...historyArchiveObjectHostBackoffPatterns]
+					]
 				)) as RawObjectQueryResult
 			);
 

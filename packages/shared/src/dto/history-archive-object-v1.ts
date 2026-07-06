@@ -7,13 +7,11 @@ export type HistoryArchiveObjectTypeV1 =
 	| 'ledger'
 	| 'transactions'
 	| 'results'
+	| 'scp'
 	| 'bucket';
 
 export type HistoryArchiveObjectStatusV1 =
-	| 'pending'
-	| 'scanning'
-	| 'verified'
-	| 'failed';
+	'pending' | 'scanning' | 'verified' | 'failed';
 
 export interface HistoryArchiveObjectErrorV1 {
 	readonly message: string;
@@ -78,6 +76,7 @@ const HistoryArchiveObjectV1Schema: JSONSchemaType<HistoryArchiveObjectV1> = {
 				'ledger',
 				'transactions',
 				'results',
+				'scp',
 				'bucket'
 			]
 		},

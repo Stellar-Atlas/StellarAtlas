@@ -91,7 +91,10 @@ export function createObjectFromRow(row: RawObjectRow): HistoryArchiveObject {
 			'hostIdentity'
 		),
 		objectKey: requireString(row.objectKey ?? row.objectkey, 'objectKey'),
-		objectOrder: requireNumber(row.objectOrder ?? row.objectorder, 'objectOrder'),
+		objectOrder: requireNumber(
+			row.objectOrder ?? row.objectorder,
+			'objectOrder'
+		),
 		objectType: requireObjectType(row.objectType ?? row.objecttype),
 		objectUrl: requireString(row.objectUrl ?? row.objecturl, 'objectUrl'),
 		remoteId: requireString(row.remoteId ?? row.remoteid, 'remoteId'),
@@ -114,9 +117,7 @@ export function createObjectFromRow(row: RawObjectRow): HistoryArchiveObject {
 		row.claimedAt === undefined ? row.claimedat : row.claimedAt
 	);
 	object.claimedByCommunityScannerId =
-		row.claimedByCommunityScannerId ??
-		row.claimedbycommunityscannerid ??
-		null;
+		row.claimedByCommunityScannerId ?? row.claimedbycommunityscannerid ?? null;
 	object.errorType = row.errorType ?? row.errortype ?? null;
 	object.errorMessage = row.errorMessage ?? row.errormessage ?? null;
 	object.httpStatus = toNullableNumber(
@@ -124,7 +125,7 @@ export function createObjectFromRow(row: RawObjectRow): HistoryArchiveObject {
 	);
 	object.verificationFacts =
 		row.verificationFacts === undefined
-			? row.verificationfacts ?? null
+			? (row.verificationfacts ?? null)
 			: row.verificationFacts;
 	object.verifiedAt = toNullableDate(
 		row.verifiedAt === undefined ? row.verifiedat : row.verifiedAt
@@ -189,13 +190,16 @@ function requireDate(value: Date | string | undefined, field: string): Date {
 	return date;
 }
 
-function requireObjectType(value: string | undefined): HistoryArchiveObjectType {
+function requireObjectType(
+	value: string | undefined
+): HistoryArchiveObjectType {
 	if (
 		value === 'history-archive-state' ||
 		value === 'checkpoint-state' ||
 		value === 'ledger' ||
 		value === 'transactions' ||
 		value === 'results' ||
+		value === 'scp' ||
 		value === 'bucket'
 	) {
 		return value;
