@@ -11,6 +11,7 @@ import { GetScanEvidence } from '@history-scan-coordinator/use-cases/get-scan-ev
 import { GetHistoryArchiveState } from '@history-scan-coordinator/use-cases/get-history-archive-state/GetHistoryArchiveState.js';
 import { GetHistoryArchiveObjectEvents } from '@history-scan-coordinator/use-cases/get-history-archive-object-events/GetHistoryArchiveObjectEvents.js';
 import { GetHistoryArchiveObjects } from '@history-scan-coordinator/use-cases/get-history-archive-objects/GetHistoryArchiveObjects.js';
+import { GetHistoryArchiveObjectSummary } from '@history-scan-coordinator/use-cases/get-history-archive-object-summary/GetHistoryArchiveObjectSummary.js';
 import { GetScanLogs } from '@history-scan-coordinator/use-cases/get-scan-logs/GetScanLogs.js';
 import { InvalidUrlError } from '@history-scan-coordinator/use-cases/get-latest-scan/InvalidUrlError.js';
 import { HistoryArchiveScan } from 'shared';
@@ -23,6 +24,7 @@ describe('ArchiveScanRouter.integration', () => {
 	let getArchiveScanWorkers: jest.Mocked<GetArchiveScanWorkers>;
 	let getHistoryArchiveObjectEvents: jest.Mocked<GetHistoryArchiveObjectEvents>;
 	let getHistoryArchiveObjects: jest.Mocked<GetHistoryArchiveObjects>;
+	let getHistoryArchiveObjectSummary: jest.Mocked<GetHistoryArchiveObjectSummary>;
 	let getHistoryArchiveState: jest.Mocked<GetHistoryArchiveState>;
 	let getLatestScan: jest.Mocked<GetLatestScan>;
 	let getScanEvidence: jest.Mocked<GetScanEvidence>;
@@ -34,6 +36,7 @@ describe('ArchiveScanRouter.integration', () => {
 		getArchiveScanWorkers = mock<GetArchiveScanWorkers>();
 		getHistoryArchiveObjectEvents = mock<GetHistoryArchiveObjectEvents>();
 		getHistoryArchiveObjects = mock<GetHistoryArchiveObjects>();
+		getHistoryArchiveObjectSummary = mock<GetHistoryArchiveObjectSummary>();
 		getHistoryArchiveState = mock<GetHistoryArchiveState>();
 		getLatestScan = mock<GetLatestScan>();
 		getScanEvidence = mock<GetScanEvidence>();
@@ -48,6 +51,7 @@ describe('ArchiveScanRouter.integration', () => {
 				getArchiveScanWorkers,
 				getHistoryArchiveObjectEvents,
 				getHistoryArchiveObjects,
+				getHistoryArchiveObjectSummary,
 				getHistoryArchiveState,
 				getLatestScan,
 				getScanEvidence,
@@ -482,55 +486,6 @@ describe('ArchiveScanRouter.integration', () => {
 				.expect((response) => {
 					expect(response.body).toEqual({ error: 'Internal server error' });
 				});
-		});
-	});
-
-	describe('GET /:encodedUrl/evidence', () => {
-		it('should expose verified bucket evidence', async () => {
-			getScanEvidence.execute.mockResolvedValue(
-				ok({
-					count: 1,
-					evidence: [
-						{
-							bucketHash:
-								'32900289ef7cd0eb0f5982cc58fc489abb1efb53a99de8142d2b68bcc1ec36b8',
-							bucketUrl:
-								'https://test.com/bucket/32/90/02/bucket-32900289ef7cd0eb0f5982cc58fc489abb1efb53a99de8142d2b68bcc1ec36b8.xdr.gz',
-							kind: 'bucket',
-							observedAt: '2026-07-03T10:05:00.000Z',
-							status: 'verified'
-						}
-					],
-					limit: 10,
-					url: 'https://test.com'
-				})
-			);
-
-			await request(app)
-				.get('/archive-scans/https%3A%2F%2Ftest.com/evidence?limit=10')
-				.expect(200)
-				.expect('Cache-Control', 'public, max-age=10')
-				.expect((response) => {
-					expect(response.body.count).toBe(1);
-					expect(response.body.evidence[0]).toMatchObject({
-						kind: 'bucket',
-						status: 'verified'
-					});
-				});
-
-			expect(getScanEvidence.execute).toHaveBeenCalledWith(
-				'https://test.com',
-				10
-			);
-			expect(getLatestScan.execute).not.toHaveBeenCalled();
-			expect(getScanLogs.execute).not.toHaveBeenCalled();
-		});
-
-		it('should return 400 for invalid evidence limits', async () => {
-			await request(app)
-				.get('/archive-scans/https%3A%2F%2Ftest.com/evidence?limit=5001')
-				.expect(400);
-			expect(getScanEvidence.execute).not.toHaveBeenCalled();
 		});
 	});
 });

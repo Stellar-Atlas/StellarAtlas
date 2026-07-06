@@ -3733,6 +3733,27 @@
 				}
 			}
 		},
+		"/v1/archive-scans/objects/summary": {
+			"get": {
+				"summary": "Summarize history archive object coverage",
+				"description": "Returns scanner-owned archive object coverage grouped by object type, checkpoint, and bucket state across all known history archive URLs.",
+				"tags": ["ArchiveScans"],
+				"operationId": "getHistoryArchiveObjectSummary",
+				"responses": {
+					"200": {
+						"description": "history archive object coverage summary",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/HistoryArchiveObjectSummaryV1"
+								}
+							}
+						}
+					},
+					"500": { "description": "Server error" }
+				}
+			}
+		},
 		"/v1/archive-scans/objects/events": {
 			"get": {
 				"summary": "List recent history archive object events",
@@ -3808,6 +3829,37 @@
 						}
 					},
 					"400": { "description": "Invalid archive URL or limit" },
+					"500": { "description": "Server error" }
+				}
+			}
+		},
+		"/v1/archive-scans/{encodedUrl}/objects/summary": {
+			"get": {
+				"summary": "Summarize history archive object coverage by archive URL",
+				"description": "Returns scanner-owned archive object coverage grouped by object type, checkpoint, and bucket state for one history archive URL.",
+				"tags": ["ArchiveScans"],
+				"operationId": "getHistoryArchiveObjectSummaryByUrl",
+				"parameters": [
+					{
+						"name": "encodedUrl",
+						"in": "path",
+						"description": "URL of the history archive, URL encoded",
+						"required": true,
+						"schema": { "type": "string", "format": "uri" }
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "history archive object coverage summary",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/HistoryArchiveObjectSummaryV1"
+								}
+							}
+						}
+					},
+					"400": { "description": "Invalid archive URL" },
 					"500": { "description": "Server error" }
 				}
 			}
@@ -8095,6 +8147,131 @@
 							"$ref": "#/components/schemas/HistoryArchiveObjectV1"
 						}
 					}
+				}
+			},
+			"HistoryArchiveObjectTypeSummaryV1": {
+				"type": "object",
+				"required": [
+					"activeObjects",
+					"failedObjects",
+					"objectType",
+					"pendingObjects",
+					"totalObjects",
+					"verifiedObjects"
+				],
+				"properties": {
+					"activeObjects": { "type": "integer", "minimum": 0 },
+					"failedObjects": { "type": "integer", "minimum": 0 },
+					"objectType": {
+						"type": "string",
+						"enum": [
+							"history-archive-state",
+							"checkpoint-state",
+							"ledger",
+							"transactions",
+							"results",
+							"scp",
+							"bucket"
+						]
+					},
+					"pendingObjects": { "type": "integer", "minimum": 0 },
+					"totalObjects": { "type": "integer", "minimum": 0 },
+					"verifiedObjects": { "type": "integer", "minimum": 0 }
+				}
+			},
+			"HistoryArchiveBucketCoverageV1": {
+				"type": "object",
+				"required": [
+					"activeBucketObjects",
+					"failedBucketObjects",
+					"pendingBucketObjects",
+					"totalBucketObjects",
+					"uniqueBucketHashes",
+					"verifiedBucketObjects"
+				],
+				"properties": {
+					"activeBucketObjects": { "type": "integer", "minimum": 0 },
+					"failedBucketObjects": { "type": "integer", "minimum": 0 },
+					"pendingBucketObjects": { "type": "integer", "minimum": 0 },
+					"totalBucketObjects": { "type": "integer", "minimum": 0 },
+					"uniqueBucketHashes": { "type": "integer", "minimum": 0 },
+					"verifiedBucketObjects": { "type": "integer", "minimum": 0 }
+				}
+			},
+			"HistoryArchiveCheckpointCoverageV1": {
+				"type": "object",
+				"required": [
+					"activeArchiveCheckpoints",
+					"completeArchiveCheckpoints",
+					"failedArchiveCheckpoints",
+					"latestCheckpointLedger",
+					"oldestCheckpointLedger",
+					"partialArchiveCheckpoints",
+					"totalArchiveCheckpoints"
+				],
+				"properties": {
+					"activeArchiveCheckpoints": { "type": "integer", "minimum": 0 },
+					"completeArchiveCheckpoints": {
+						"type": "integer",
+						"minimum": 0
+					},
+					"failedArchiveCheckpoints": { "type": "integer", "minimum": 0 },
+					"latestCheckpointLedger": {
+						"type": "integer",
+						"minimum": 0,
+						"nullable": true
+					},
+					"oldestCheckpointLedger": {
+						"type": "integer",
+						"minimum": 0,
+						"nullable": true
+					},
+					"partialArchiveCheckpoints": { "type": "integer", "minimum": 0 },
+					"totalArchiveCheckpoints": { "type": "integer", "minimum": 0 }
+				}
+			},
+			"HistoryArchiveObjectSummaryV1": {
+				"type": "object",
+				"required": [
+					"activeObjects",
+					"archiveUrl",
+					"archiveUrlIdentity",
+					"buckets",
+					"checkpoints",
+					"failedObjects",
+					"generatedAt",
+					"objectTypes",
+					"pendingObjects",
+					"scope",
+					"totalObjects",
+					"verifiedObjects"
+				],
+				"properties": {
+					"activeObjects": { "type": "integer", "minimum": 0 },
+					"archiveUrl": {
+						"type": "string",
+						"format": "uri",
+						"nullable": true
+					},
+					"archiveUrlIdentity": { "type": "string", "nullable": true },
+					"buckets": {
+						"$ref": "#/components/schemas/HistoryArchiveBucketCoverageV1"
+					},
+					"checkpoints": {
+						"$ref": "#/components/schemas/HistoryArchiveCheckpointCoverageV1"
+					},
+					"failedObjects": { "type": "integer", "minimum": 0 },
+					"generatedAt": { "type": "string", "format": "date-time" },
+					"objectTypes": {
+						"type": "array",
+						"items": {
+							"$ref": "#/components/schemas/HistoryArchiveObjectTypeSummaryV1"
+						}
+					},
+					"pendingObjects": { "type": "integer", "minimum": 0 },
+					"scope": { "type": "string", "enum": ["archive", "global"] },
+					"totalObjects": { "type": "integer", "minimum": 0 },
+					"verifiedObjects": { "type": "integer", "minimum": 0 }
 				}
 			},
 			"HistoryArchiveObjectEventV1": {

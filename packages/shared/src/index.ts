@@ -60,6 +60,14 @@ export {
 	type HistoryArchiveObjectV1
 } from './dto/history-archive-object-v1.js';
 export {
+	type HistoryArchiveBucketCoverageV1,
+	type HistoryArchiveCheckpointCoverageV1,
+	type HistoryArchiveObjectStatusCountsV1,
+	type HistoryArchiveObjectSummaryV1,
+	HistoryArchiveObjectSummaryV1Schema,
+	type HistoryArchiveObjectTypeSummaryV1
+} from './dto/history-archive-object-summary-v1.js';
+export {
 	type HistoryArchiveObjectEventTypeV1,
 	type HistoryArchiveObjectEventV1,
 	type HistoryArchiveObjectEventsV1,

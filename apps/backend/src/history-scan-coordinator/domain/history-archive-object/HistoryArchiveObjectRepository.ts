@@ -1,6 +1,7 @@
 import type { HistoryArchiveObject } from './HistoryArchiveObject.js';
 import type { HistoryArchiveObjectType } from './HistoryArchiveObject.js';
 import type { HistoryArchiveObjectVerificationFacts } from './HistoryArchiveObject.js';
+import type { HistoryArchiveObjectSummaryV1 } from 'shared';
 
 export interface HistoryArchiveObjectQueueStats {
 	readonly activeObjects: number;
@@ -46,6 +47,10 @@ export interface HistoryArchiveObjectRepository {
 		limit: number
 	): Promise<readonly HistoryArchiveObject[]>;
 	getQueueSnapshot(limit: number): Promise<HistoryArchiveObjectQueueSnapshot>;
+	getSummary(options?: {
+		readonly archiveUrl?: string | null;
+		readonly archiveUrlIdentity?: string | null;
+	}): Promise<HistoryArchiveObjectSummaryV1>;
 	markObjectActive(
 		remoteId: string,
 		progress?: HistoryArchiveObjectProgressUpdate

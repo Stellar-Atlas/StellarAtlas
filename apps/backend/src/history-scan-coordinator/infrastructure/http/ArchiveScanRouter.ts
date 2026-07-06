@@ -17,6 +17,7 @@ import {
 import { GetScanLogs } from '../../use-cases/get-scan-logs/GetScanLogs.js';
 import { GetHistoryArchiveState } from '../../use-cases/get-history-archive-state/GetHistoryArchiveState.js';
 import { GetHistoryArchiveObjects } from '../../use-cases/get-history-archive-objects/GetHistoryArchiveObjects.js';
+import { GetHistoryArchiveObjectSummary } from '../../use-cases/get-history-archive-object-summary/GetHistoryArchiveObjectSummary.js';
 import { GetHistoryArchiveObjectEvents } from '../../use-cases/get-history-archive-object-events/GetHistoryArchiveObjectEvents.js';
 import { InvalidUrlError } from '../../use-cases/get-latest-scan/InvalidUrlError.js';
 
@@ -26,6 +27,7 @@ export interface ArchiveScanRouterConfig {
 	getArchiveScanWorkers: GetArchiveScanWorkers;
 	getHistoryArchiveObjectEvents: GetHistoryArchiveObjectEvents;
 	getHistoryArchiveObjects: GetHistoryArchiveObjects;
+	getHistoryArchiveObjectSummary: GetHistoryArchiveObjectSummary;
 	getHistoryArchiveState: GetHistoryArchiveState;
 	getLatestScan: GetLatestScan;
 	getScanEvidence: GetScanEvidence;
@@ -126,6 +128,23 @@ export const ArchiveScanRouterWrapper = (
 	);
 
 	archiveScanRouter.get(
+		'/objects/summary',
+		async function (_req: express.Request, res: express.Response) {
+			res.setHeader(
+				'Cache-Control',
+				'public, max-age=' + archiveScanCacheMaxAgeSeconds
+			);
+			const summaryOrError =
+				await config.getHistoryArchiveObjectSummary.execute();
+			if (summaryOrError.isErr()) {
+				return res.status(500).json({ error: 'Internal server error' });
+			}
+
+			return res.status(200).json(summaryOrError.value);
+		}
+	);
+
+	archiveScanRouter.get(
 		'/objects/events',
 		[query('limit').optional().isInt({ min: 1, max: 5000 })],
 		async function (req: express.Request, res: express.Response) {
@@ -142,8 +161,9 @@ export const ArchiveScanRouterWrapper = (
 				typeof req.query.limit === 'string'
 					? Number(req.query.limit)
 					: undefined;
-			const eventsOrError =
-				await config.getHistoryArchiveObjectEvents.execute({ limit });
+			const eventsOrError = await config.getHistoryArchiveObjectEvents.execute({
+				limit
+			});
 			if (eventsOrError.isErr()) {
 				return res.status(500).json({ error: 'Internal server error' });
 			}
@@ -207,6 +227,37 @@ export const ArchiveScanRouterWrapper = (
 	);
 
 	archiveScanRouter.get(
+		'/:encodedUrl/objects/summary',
+		[param('encodedUrl').isURL()],
+		async function (req: express.Request, res: express.Response) {
+			res.setHeader(
+				'Cache-Control',
+				'public, max-age=' + archiveScanCacheMaxAgeSeconds
+			);
+			const errors = validationResult(req);
+			if (!errors.isEmpty()) {
+				return res.status(400).json({ errors: errors.array() });
+			}
+
+			const summaryOrError =
+				await config.getHistoryArchiveObjectSummary.execute({
+					url: req.params.encodedUrl
+				});
+			if (
+				summaryOrError.isErr() &&
+				summaryOrError.error instanceof InvalidUrlError
+			) {
+				return res.status(400).json({ error: 'Invalid url' });
+			}
+			if (summaryOrError.isErr()) {
+				return res.status(500).json({ error: 'Internal server error' });
+			}
+
+			return res.status(200).json(summaryOrError.value);
+		}
+	);
+
+	archiveScanRouter.get(
 		'/:encodedUrl/objects/events',
 		[
 			param('encodedUrl').isURL(),
@@ -226,12 +277,14 @@ export const ArchiveScanRouterWrapper = (
 				typeof req.query.limit === 'string'
 					? Number(req.query.limit)
 					: undefined;
-			const eventsOrError =
-				await config.getHistoryArchiveObjectEvents.execute({
-					limit,
-					url: req.params.encodedUrl
-				});
-			if (eventsOrError.isErr() && eventsOrError.error instanceof InvalidUrlError) {
+			const eventsOrError = await config.getHistoryArchiveObjectEvents.execute({
+				limit,
+				url: req.params.encodedUrl
+			});
+			if (
+				eventsOrError.isErr() &&
+				eventsOrError.error instanceof InvalidUrlError
+			) {
 				return res.status(400).json({ error: 'Invalid url' });
 			}
 			if (eventsOrError.isErr()) {

@@ -34,6 +34,7 @@ import {
 	historyArchiveObjectClaimSql,
 	historyArchiveObjectHostBackoffPatterns
 } from './HistoryArchiveObjectClaimSql.js';
+import { getHistoryArchiveObjectSummary } from './HistoryArchiveObjectSummaryQuery.js';
 
 const maxActiveObjectsPerArchive = 1;
 const maxActiveObjectsPerHost = 2;
@@ -141,6 +142,13 @@ export class TypeOrmHistoryArchiveObjectRepository
 		limit: number
 	): Promise<HistoryArchiveObjectQueueSnapshot> {
 		return await this.getSnapshot(limit);
+	}
+
+	async getSummary(options: {
+		readonly archiveUrl?: string | null;
+		readonly archiveUrlIdentity?: string | null;
+	} = {}) {
+		return await getHistoryArchiveObjectSummary(this.repository.manager, options);
 	}
 
 	async saveObjects(
