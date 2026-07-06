@@ -3,6 +3,10 @@ import { Repository } from 'typeorm';
 import type { QueryDeepPartialEntity } from 'typeorm/query-builder/QueryPartialEntity.js';
 import { getHistoryArchiveUrlIdentity } from '@history-scan-coordinator/domain/ArchiveUrlIdentity.js';
 import { HistoryArchiveObject } from '@history-scan-coordinator/domain/history-archive-object/HistoryArchiveObject.js';
+import {
+	getHistoryArchiveStateRefreshBefore,
+	getRefreshableHistoryArchiveStateArchiveIdentities
+} from '@history-scan-coordinator/domain/history-archive-object/HistoryArchiveObjectRefreshPolicy.js';
 import type { HistoryArchiveObjectType } from '@history-scan-coordinator/domain/history-archive-object/HistoryArchiveObject.js';
 import type {
 	HistoryArchiveObjectFailure,
@@ -183,7 +187,49 @@ export class TypeOrmHistoryArchiveObjectRepository
 			.orIgnore()
 			.execute();
 
-		return result.identifiers.length;
+		const refreshedCount = await this.requeueStaleHistoryArchiveStateObjects(
+			objects,
+			getHistoryArchiveStateRefreshBefore()
+		);
+
+		return result.identifiers.length + refreshedCount;
+	}
+
+	private async requeueStaleHistoryArchiveStateObjects(
+		objects: readonly HistoryArchiveObject[],
+		before: Date
+	): Promise<number> {
+		const archiveUrlIdentities =
+			getRefreshableHistoryArchiveStateArchiveIdentities(objects);
+		if (archiveUrlIdentities.length === 0) return 0;
+
+		const result = await this.repository
+			.createQueryBuilder()
+			.update(HistoryArchiveObject)
+			.set({
+				bytesDownloaded: null,
+				claimedAt: null,
+				claimedByCommunityScannerId: null,
+				errorMessage: null,
+				errorType: null,
+				httpStatus: null,
+				status: 'pending',
+				updatedAt: () => 'now()',
+				verifiedAt: null,
+				workerStage: null
+			})
+			.where('"archiveUrlIdentity" IN (:...archiveUrlIdentities)', {
+				archiveUrlIdentities
+			})
+			.andWhere('"objectType" = :objectType', {
+				objectType: 'history-archive-state'
+			})
+			.andWhere('"objectKey" = :objectKey', { objectKey: 'root' })
+			.andWhere('status = :status', { status: 'verified' })
+			.andWhere('"updatedAt" < :before', { before })
+			.execute();
+
+		return result.affected ?? 0;
 	}
 
 	async markObjectActive(
