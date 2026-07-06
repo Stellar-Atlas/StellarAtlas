@@ -129,7 +129,7 @@ export async function lookupTransactionByHash(
 		return {
 			message:
 				statusCode === 404
-					? 'Transaction not found in the external lookup source'
+					? 'Transaction not found'
 					: 'Transaction lookup unavailable',
 			status: statusCode === 404 ? 'not_found' : 'unavailable',
 			transaction: null
@@ -229,7 +229,7 @@ export async function getExplorerLocalReadModel(): Promise<ExplorerLocalReadMode
 		};
 	} catch {
 		return {
-			message: 'Explorer local read model unavailable',
+			message: 'Explorer status unavailable',
 			readModel: null,
 			status: 'unavailable'
 		};

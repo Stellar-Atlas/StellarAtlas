@@ -36,15 +36,6 @@ const booleanFacetLabels: Partial<Record<PublicSearchFacetName, string>> = {
 	validator: 'Validators'
 };
 
-const fallbackLabels: Record<
-	NonNullable<PublicSearchResponse['readModel']['fallbackReason']>,
-	string
-> = {
-	meilisearch_syncing: 'Meilisearch syncing',
-	meilisearch_unavailable: 'Meilisearch unavailable',
-	meilisearch_unconfigured: 'Meilisearch unconfigured'
-};
-
 const normalize = (value: string): string => value.trim().toLowerCase();
 
 const searchHitToOption = (hit: PublicSearchHit): SearchOption => ({
@@ -152,7 +143,6 @@ export function SearchBox(): React.JSX.Element {
 		() => selectFacetOptions(response, filters).slice(0, 10),
 		[filters, response]
 	);
-	const fallbackReason = response?.readModel.fallbackReason ?? null;
 
 	useEffect(() => {
 		if (!canSearch) {
@@ -194,11 +184,7 @@ export function SearchBox(): React.JSX.Element {
 			{canSearch && response && (
 				<div className="search-menu">
 					<div className="search-menu-meta">
-						<span>
-							{response.source === 'meilisearch' ? 'Meilisearch' : 'Memory'}{' '}
-							search
-						</span>
-						{fallbackReason && <span>{fallbackLabels[fallbackReason]}</span>}
+						<span>{matches.length} matches</span>
 					</div>
 					{facets.length > 0 && (
 						<div className="search-facets">

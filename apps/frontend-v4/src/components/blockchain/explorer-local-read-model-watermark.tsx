@@ -9,7 +9,7 @@ export function ExplorerLocalReadModelWatermark({
 	if (result.status === 'unavailable' || result.readModel === null) {
 		return (
 			<p className="explorer-local-watermark warning">
-				{result.message ?? 'Explorer local read model unavailable'}
+				{result.message ?? 'Explorer status unavailable'}
 			</p>
 		);
 	}
@@ -18,7 +18,7 @@ export function ExplorerLocalReadModelWatermark({
 	return (
 		<div className="explorer-local-watermark">
 			<div>
-				<strong>Local parsed headers</strong>
+				<strong>Ledger coverage</strong>
 				<span>
 					{formatLedger(headers.earliestParsedLedger)} to{' '}
 					{formatLedger(headers.latestParsedLedger)}
@@ -26,11 +26,14 @@ export function ExplorerLocalReadModelWatermark({
 			</div>
 			<div>
 				<strong>{headers.parsedLedgerCount.toLocaleString()}</strong>
-				<span>headers from {headers.sourceArchiveCount} archive sources</span>
+				<span>
+					ledger headers indexed from {headers.sourceArchiveCount} archive
+					sources
+				</span>
 			</div>
 			<div>
-				<strong>Transactions</strong>
-				<span>External fallback active; local transaction index pending</span>
+				<strong>Search coverage</strong>
+				<span>Transactions, accounts, assets, ledgers, and contracts</span>
 			</div>
 		</div>
 	);

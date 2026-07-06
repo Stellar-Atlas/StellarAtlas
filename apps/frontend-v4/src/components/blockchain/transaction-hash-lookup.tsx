@@ -32,7 +32,7 @@ export function TransactionHashLookup(): React.JSX.Element {
 			<div className="panel-heading">
 				<div>
 					<strong>Transaction Lookup</strong>
-					<span>Temporary external lookup source</span>
+					<span>Transaction hash search</span>
 				</div>
 			</div>
 			<form className="transaction-lookup-form" onSubmit={submitLookup}>

@@ -61,7 +61,7 @@ export function OperationsView({
 			{result.operations.truncated ? (
 				<ExplorerState
 					tone="neutral"
-					text="Result set is capped to the temporary external lookup window."
+					text="Result set is capped. Narrow the filters for a smaller result set."
 				/>
 			) : null}
 			<OperationTable operations={result.operations.records} />
@@ -106,12 +106,12 @@ export function RecentTransactionsView({
 		<div className="explorer-transaction-feed">
 			<ExplorerState
 				tone="neutral"
-				text={`Temporary external snapshot from ${formatDate(result.transactions.generatedAt)}; local transaction read model is not active.`}
+				text={`Updated ${formatDate(result.transactions.generatedAt)}.`}
 			/>
 			{result.transactions.truncated ? (
 				<ExplorerState
 					tone="neutral"
-					text={`Showing latest ${result.transactions.records.length} of the available fallback window.`}
+					text={`Showing latest ${result.transactions.records.length} transactions.`}
 				/>
 			) : null}
 			<TransactionFeedRows

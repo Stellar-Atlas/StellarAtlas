@@ -174,7 +174,9 @@ export function BlockchainExplorer(): React.JSX.Element {
 				<div className="panel-heading">
 					<div>
 						<strong>Search</strong>
-						<span>Temporary external lookup while local indexes are built</span>
+						<span>
+							Search transactions, ledgers, accounts, assets, and contracts
+						</span>
 					</div>
 				</div>
 				<form className="explorer-search-form" onSubmit={submitSearch}>
@@ -224,10 +226,8 @@ export function BlockchainExplorer(): React.JSX.Element {
 			<section className="explorer-panel explorer-feed-panel">
 				<div className="panel-heading explorer-feed-heading">
 					<div>
-						<strong>Recent transaction snapshot</strong>
-						<span>
-							Temporary external fallback, not indexed StellarAtlas history
-						</span>
+						<strong>Recent transactions</strong>
+						<span>Latest observed transaction activity</span>
 					</div>
 					<button
 						disabled={transactionFeedLoading}
@@ -349,9 +349,7 @@ export function BlockchainExplorer(): React.JSX.Element {
 					<div className="panel-heading">
 						<div>
 							<strong>Contracts</strong>
-							<span>
-								Contract lookup fallback; local contract index pending
-							</span>
+							<span>Contract lookup</span>
 						</div>
 					</div>
 					<form className="explorer-filter-form" onSubmit={submitContract}>

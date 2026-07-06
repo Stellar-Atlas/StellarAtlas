@@ -5,7 +5,7 @@
 }
 
 .route-modal-backdrop {
-	background: rgba(11, 20, 32, 0.54);
+	background: var(--background);
 	display: block;
 	inset: 0;
 	position: absolute;
@@ -16,7 +16,7 @@
 	border: 1px solid var(--border);
 	border-radius: 8px;
 	box-shadow: 0 26px 80px rgba(11, 20, 32, 0.32);
-	inset-block: 6vh;
+	inset-block: 16px;
 	inset-inline: max(24px, calc((100vw - 1180px) / 2));
 	overflow: auto;
 	position: absolute;
