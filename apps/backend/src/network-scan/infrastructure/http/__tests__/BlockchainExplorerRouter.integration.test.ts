@@ -200,8 +200,10 @@ describe('BlockchainExplorerRouter.integration', () => {
 			.expect(200)
 			.expect((response) => {
 				expect(response.body).toMatchObject({
+					probe: 'not_run',
+					readiness: 'planned',
 					source: 'rpc',
-					status: 'unconfigured'
+					status: 'not_configured'
 				});
 			});
 	});

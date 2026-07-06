@@ -180,10 +180,12 @@ export const blockchainExplorerRouter = (
 		return res.status(200).json({
 			contractId,
 			message: config.rpcUrl
-				? 'Contract indexing is waiting for the local RPC read path.'
-				: 'Stellar RPC is not configured on this host yet.',
+				? 'Local Stellar RPC is configured, but contract probing and indexing are not wired yet.'
+				: 'Local Stellar RPC is planned and not configured on this host yet.',
+			probe: 'not_run',
+			readiness: config.rpcUrl ? 'configured_not_probed' : 'planned',
 			source: 'rpc',
-			status: config.rpcUrl ? 'unavailable' : 'unconfigured'
+			status: config.rpcUrl ? 'configured_not_probed' : 'not_configured'
 		});
 	});
 

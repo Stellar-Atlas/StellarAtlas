@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { NetworkStrip } from './network-strip';
 import { NavLink } from './nav-link';
 import { SearchBox } from './search-box';
+import { ThemeToggle } from './theme-toggle';
 
 interface AppShellProps {
 	children: React.ReactNode;
@@ -25,7 +26,10 @@ export function AppShell({ children }: AppShellProps): React.JSX.Element {
 						<NavLink href="/status" label="Status" />
 						<NavLink href="/docs" label="API" />
 					</nav>
-					<SearchBox />
+					<div className="header-tools">
+						<SearchBox />
+						<ThemeToggle />
+					</div>
 				</div>
 			</header>
 			<NetworkStrip />

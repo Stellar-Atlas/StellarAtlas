@@ -1538,7 +1538,7 @@
 		"/v1/status/frontend": {
 			"get": {
 				"summary": "Get frontend configuration status",
-				"description": "Returns configured frontend target status from local configuration. It does not probe the frontend.",
+				"description": "Returns configured frontend target readiness from local configuration. It does not probe the frontend.",
 				"tags": ["Status"],
 				"operationId": "getFrontendStatus",
 				"responses": {
@@ -1553,8 +1553,12 @@
 										"status",
 										"service",
 										"configured",
+										"configurationState",
+										"health",
 										"url",
-										"probe"
+										"probe",
+										"readiness",
+										"requiredForProduction"
 									],
 									"properties": {
 										"generatedAt": {
@@ -1567,12 +1571,30 @@
 										},
 										"service": { "type": "string", "enum": ["frontend"] },
 										"configured": { "type": "boolean" },
+										"configurationState": {
+											"type": "string",
+											"enum": [
+												"configured",
+												"external_fallback",
+												"not_configured"
+											]
+										},
+										"health": { "type": "string", "enum": ["not_probed"] },
 										"url": {
 											"type": "string",
 											"format": "uri",
 											"nullable": true
 										},
-										"probe": { "type": "string", "enum": ["not_run"] }
+										"probe": { "type": "string", "enum": ["not_run"] },
+										"readiness": {
+											"type": "string",
+											"enum": [
+												"configured_not_probed",
+												"external_fallback",
+												"planned"
+											]
+										},
+										"requiredForProduction": { "type": "boolean" }
 									}
 								}
 							}
@@ -1585,7 +1607,7 @@
 		"/v1/status/horizon": {
 			"get": {
 				"summary": "Get Horizon configuration status",
-				"description": "Returns configured Horizon target status from local configuration. It does not probe Horizon.",
+				"description": "Returns local Horizon readiness from configuration, including external fallback state. It does not probe Horizon.",
 				"tags": ["Status"],
 				"operationId": "getHorizonStatus",
 				"responses": {
@@ -1600,8 +1622,12 @@
 										"status",
 										"service",
 										"configured",
+										"configurationState",
+										"health",
 										"url",
-										"probe"
+										"probe",
+										"readiness",
+										"requiredForProduction"
 									],
 									"properties": {
 										"generatedAt": {
@@ -1614,12 +1640,30 @@
 										},
 										"service": { "type": "string", "enum": ["horizon"] },
 										"configured": { "type": "boolean" },
+										"configurationState": {
+											"type": "string",
+											"enum": [
+												"configured",
+												"external_fallback",
+												"not_configured"
+											]
+										},
+										"health": { "type": "string", "enum": ["not_probed"] },
 										"url": {
 											"type": "string",
 											"format": "uri",
 											"nullable": true
 										},
-										"probe": { "type": "string", "enum": ["not_run"] }
+										"probe": { "type": "string", "enum": ["not_run"] },
+										"readiness": {
+											"type": "string",
+											"enum": [
+												"configured_not_probed",
+												"external_fallback",
+												"planned"
+											]
+										},
+										"requiredForProduction": { "type": "boolean" }
 									}
 								}
 							}
@@ -1632,7 +1676,7 @@
 		"/v1/status/rpc": {
 			"get": {
 				"summary": "Get RPC configuration status",
-				"description": "Returns configured Stellar RPC target status from local configuration. It does not probe RPC.",
+				"description": "Returns local Stellar RPC readiness from configuration. It does not probe RPC.",
 				"tags": ["Status"],
 				"operationId": "getRpcStatus",
 				"responses": {
@@ -1647,8 +1691,12 @@
 										"status",
 										"service",
 										"configured",
+										"configurationState",
+										"health",
 										"url",
-										"probe"
+										"probe",
+										"readiness",
+										"requiredForProduction"
 									],
 									"properties": {
 										"generatedAt": {
@@ -1661,12 +1709,30 @@
 										},
 										"service": { "type": "string", "enum": ["rpc"] },
 										"configured": { "type": "boolean" },
+										"configurationState": {
+											"type": "string",
+											"enum": [
+												"configured",
+												"external_fallback",
+												"not_configured"
+											]
+										},
+										"health": { "type": "string", "enum": ["not_probed"] },
 										"url": {
 											"type": "string",
 											"format": "uri",
 											"nullable": true
 										},
-										"probe": { "type": "string", "enum": ["not_run"] }
+										"probe": { "type": "string", "enum": ["not_run"] },
+										"readiness": {
+											"type": "string",
+											"enum": [
+												"configured_not_probed",
+												"external_fallback",
+												"planned"
+											]
+										},
+										"requiredForProduction": { "type": "boolean" }
 									}
 								}
 							}
@@ -7066,14 +7132,26 @@
 			},
 			"ExplorerContract": {
 				"type": "object",
-				"required": ["contractId", "message", "source", "status"],
+				"required": [
+					"contractId",
+					"message",
+					"probe",
+					"readiness",
+					"source",
+					"status"
+				],
 				"properties": {
 					"contractId": { "type": "string" },
 					"message": { "type": "string" },
+					"probe": { "type": "string", "enum": ["not_run"] },
+					"readiness": {
+						"type": "string",
+						"enum": ["configured_not_probed", "planned"]
+					},
 					"source": { "type": "string", "enum": ["rpc"] },
 					"status": {
 						"type": "string",
-						"enum": ["loaded", "unavailable", "unconfigured"]
+						"enum": ["configured_not_probed", "loaded", "not_configured"]
 					}
 				}
 			},
@@ -7285,9 +7363,7 @@
 					"generatedAt": { "type": "string", "format": "date-time" },
 					"header": {
 						"nullable": true,
-						"allOf": [
-							{ "$ref": "#/components/schemas/LedgerIngestionHeader" }
-						]
+						"allOf": [{ "$ref": "#/components/schemas/LedgerIngestionHeader" }]
 					},
 					"ledger": { "type": "string" },
 					"parsedHeaderAvailable": { "type": "boolean" },

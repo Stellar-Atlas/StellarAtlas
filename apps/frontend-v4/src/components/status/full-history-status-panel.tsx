@@ -1,5 +1,6 @@
 import type { PublicFullHistoryStatus, PublicStatusLevel } from '@api/types';
 import { formatDateTime, formatInteger } from '@format/formatters';
+import { StatusPill, StatusRow } from './status-ui';
 
 interface FullHistoryStatusPanelProps {
 	readonly fullHistory: PublicFullHistoryStatus;
@@ -12,16 +13,19 @@ export function FullHistoryStatusPanel({
 		<section className="panel status-full-history-panel">
 			<div className="panel-heading">
 				<div>
-					<strong>Full-History Parser</strong>
+					<strong>Full-History Header Parser</strong>
 					<span>{formatDateTime(fullHistory.generatedAt)}</span>
 				</div>
-				<StatusPill status={fullHistory.status} />
+				<StatusPill
+					status={parserStatus(fullHistory)}
+					text={fullHistory.status === 'degraded' ? 'Partial' : undefined}
+				/>
 			</div>
 			<div className="status-list">
 				<StatusRow
 					detail={`${formatInteger(fullHistory.sourceArchiveCount)} archive sources`}
 					label="Parsed ledger headers"
-					status={fullHistory.status}
+					status={parserStatus(fullHistory)}
 					value={formatInteger(fullHistory.parsedLedgerCount)}
 				/>
 				<StatusRow
@@ -31,10 +35,11 @@ export function FullHistoryStatusPanel({
 					value={formatNullableLedger(fullHistory.latestParsedLedger)}
 				/>
 				<StatusRow
-					detail="Explorer search tables are not ready until these are indexed."
+					detail="Transaction, operation, asset, and contract indexes are roadmap read models, not current scanner health."
 					label="Explorer indexes"
-					status={indexesReady(fullHistory) ? 'ok' : 'degraded'}
-					value={indexesReady(fullHistory) ? 'Ready' : 'Not ready'}
+					pillText={indexesReady(fullHistory) ? undefined : 'Planned'}
+					status="ok"
+					value={indexesReady(fullHistory) ? 'Ready' : 'Planned'}
 				/>
 				<StatusRow
 					detail="Latest parsed header observation"
@@ -47,43 +52,6 @@ export function FullHistoryStatusPanel({
 	);
 }
 
-function StatusRow({
-	detail,
-	label,
-	status,
-	value
-}: {
-	readonly detail: string;
-	readonly label: string;
-	readonly status: PublicStatusLevel;
-	readonly value: string;
-}): React.JSX.Element {
-	return (
-		<div className="status-row">
-			<div>
-				<strong>{label}</strong>
-				<small>{detail}</small>
-			</div>
-			<div className="status-row-value">
-				<span>{value}</span>
-				<StatusPill status={status} />
-			</div>
-		</div>
-	);
-}
-
-function StatusPill({
-	status
-}: {
-	readonly status: PublicStatusLevel;
-}): React.JSX.Element {
-	return (
-		<span className={`status-pill ${statusTone(status)}`}>
-			{statusLabel(status)}
-		</span>
-	);
-}
-
 function indexesReady(fullHistory: PublicFullHistoryStatus): boolean {
 	return (
 		fullHistory.localTransactionIndexReady &&
@@ -93,22 +61,15 @@ function indexesReady(fullHistory: PublicFullHistoryStatus): boolean {
 	);
 }
 
+function parserStatus(fullHistory: PublicFullHistoryStatus): PublicStatusLevel {
+	if (fullHistory.parsedLedgerCount > 0) return 'ok';
+	return fullHistory.status;
+}
+
 function formatNullableLedger(value: string | null): string {
 	return value === null ? 'No data' : formatInteger(Number(value));
 }
 
 function formatNullableDate(value: string | null): string {
 	return value === null ? 'No data' : formatDateTime(value);
-}
-
-function statusTone(status: PublicStatusLevel): 'good' | 'warning' | 'danger' {
-	if (status === 'ok') return 'good';
-	if (status === 'degraded') return 'warning';
-	return 'danger';
-}
-
-function statusLabel(status: PublicStatusLevel): string {
-	if (status === 'ok') return 'OK';
-	if (status === 'degraded') return 'Degraded';
-	return 'Unavailable';
 }

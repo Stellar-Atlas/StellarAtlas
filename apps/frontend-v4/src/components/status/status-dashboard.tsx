@@ -1,14 +1,11 @@
 import type {
 	PublicApiStatus,
 	PublicArchiveScanWorkers,
-	PublicArchiveScanLogEntry,
 	PublicConfiguredServiceStatus,
 	PublicDataQualityStatus,
 	PublicFailoverStatus,
 	PublicFullHistoryStatus,
-	PublicNetworkScanLogEntry,
 	PublicScanLogStatus,
-	PublicStatusLevel,
 	PublicWorkerStatus
 } from '@api/types';
 import {
@@ -19,6 +16,12 @@ import {
 import { StatCard } from '../stat-card';
 import { ArchiveWorkerJobs } from './archive-worker-jobs';
 import { FullHistoryStatusPanel } from './full-history-status-panel';
+import { RecentScanLogs } from './recent-scan-logs';
+import {
+	ServiceStatusPanels,
+	criticalServiceStatus
+} from './service-status-panels';
+import { StatusPill, StatusRow, statusLabel, statusTone } from './status-ui';
 
 interface StatusDashboardProps {
 	readonly api: PublicApiStatus;
@@ -48,12 +51,7 @@ export function StatusDashboard({
 	const scan = dataQuality.scans.networkScan;
 	const rollups = dataQuality.rollups.networkRollups;
 	const archiveQueue = dataQuality.archiveQueue;
-	const services = [frontend, horizon, rpc];
-	const serviceStatus = serviceGroupStatus(services, failover);
-	const configuredServiceCount = getConfiguredServiceCount(services);
-	const missingOwnedServiceCount = services.filter(
-		(service) => !service.configured
-	).length;
+	const productionServiceStatus = criticalServiceStatus(api, frontend);
 
 	return (
 		<div className="status-dashboard">
@@ -89,10 +87,12 @@ export function StatusDashboard({
 					value={`${formatInteger(workers.archiveWorkers.totalTakenJobs)} claimed`}
 				/>
 				<StatCard
-					detail={`${formatInteger(missingOwnedServiceCount)} missing owned targets; failover is optional`}
-					label="Owned service targets"
-					tone={statusTone(serviceStatus)}
-					value={`${formatInteger(configuredServiceCount)} configured`}
+					detail={`API ${statusLabel(api.status)}, frontend ${
+						frontend.configured ? 'configured' : 'missing'
+					}; Horizon/RPC are roadmap services unless configured as required`}
+					label="Production services"
+					tone={statusTone(productionServiceStatus)}
+					value={statusLabel(productionServiceStatus)}
 				/>
 			</div>
 
@@ -164,287 +164,25 @@ export function StatusDashboard({
 							status={workers.communityScanners.status}
 							value={`${formatInteger(workers.communityScanners.activeScanners)} active`}
 						/>
-						<StatusRow
-							detail={formatDateTime(api.generatedAt)}
-							label="API origin"
-							status={api.status}
-							value={statusLabel(api.status)}
-						/>
 					</div>
 				</section>
 
-				<section className="panel status-services-panel">
-					<div className="panel-heading">
-						<div>
-							<strong>Owned Service Targets</strong>
-							<span>Local deployment configuration</span>
-						</div>
-						<StatusPill status={serviceStatus} />
-					</div>
-					<div className="status-list">
-						<ServiceRow service={frontend} />
-						<ServiceRow service={horizon} />
-						<ServiceRow service={rpc} />
-						<FailoverRow failover={failover} />
-					</div>
-				</section>
+				<ServiceStatusPanels
+					api={api}
+					failover={failover}
+					frontend={frontend}
+					horizon={horizon}
+					rpc={rpc}
+				/>
 
 				<FullHistoryStatusPanel fullHistory={fullHistory} />
 
 				<ArchiveWorkerJobs archiveWorkers={archiveWorkers} />
 
-				<section className="panel status-scan-log-panel">
-					<div className="panel-heading">
-						<div>
-							<strong>Recent Scan Logs</strong>
-							<span>{formatDateTime(scanLogs.generatedAt)}</span>
-						</div>
-						<span className="status-muted">
-							{formatInteger(scanLogs.limit)} row limit
-						</span>
-					</div>
-					<div className="status-scan-log-grid">
-						<RecentNetworkScans scans={scanLogs.networkScans} />
-						<RecentArchiveScans scans={scanLogs.archiveScans} />
-					</div>
-				</section>
+				<RecentScanLogs scanLogs={scanLogs} />
 			</div>
 		</div>
 	);
-}
-
-function RecentNetworkScans({
-	scans
-}: {
-	readonly scans: readonly PublicNetworkScanLogEntry[];
-}): React.JSX.Element {
-	return (
-		<div className="status-scan-log-column">
-			<h3>Network scans</h3>
-			<div className="status-list">
-				{scans.map((scan) => (
-					<StatusRow
-						detail={`${formatInteger(scan.ledgersCount)} processed ledgers, close ${formatNullableDate(scan.latestLedgerCloseTime)}`}
-						key={scan.time}
-						label={formatDateTime(scan.time)}
-						status={scan.completed ? 'ok' : 'degraded'}
-						value={`Ledger ${scan.latestLedger}`}
-					/>
-				))}
-				{scans.length === 0 && <EmptyLogRow label="No network scans" />}
-			</div>
-		</div>
-	);
-}
-
-function RecentArchiveScans({
-	scans
-}: {
-	readonly scans: readonly PublicArchiveScanLogEntry[];
-}): React.JSX.Element {
-	return (
-		<div className="status-scan-log-column">
-			<h3>Archive scan runs</h3>
-			<div className="status-list">
-				{scans.map((scan) => (
-					<StatusRow
-						detail={archiveScanDetail(scan)}
-						key={`${scan.url}-${scan.startDate}-${scan.latestScannedLedger}`}
-						label={formatArchiveUrl(scan.url)}
-						status={archiveScanTone(scan)}
-						value={archiveScanLabel(scan)}
-					/>
-				))}
-				{scans.length === 0 && <EmptyLogRow label="No archive scans" />}
-			</div>
-		</div>
-	);
-}
-
-function EmptyLogRow({ label }: { readonly label: string }): React.JSX.Element {
-	return (
-		<StatusRow
-			detail="No recent rows returned"
-			label={label}
-			status="unavailable"
-			value="No data"
-		/>
-	);
-}
-
-function StatusRow({
-	detail,
-	label,
-	pillText,
-	status,
-	value
-}: {
-	readonly detail: string;
-	readonly label: string;
-	readonly pillText?: string;
-	readonly status: PublicStatusLevel;
-	readonly value: string;
-}): React.JSX.Element {
-	return (
-		<div className="status-row">
-			<div>
-				<strong>{label}</strong>
-				<small>{detail}</small>
-			</div>
-			<div className="status-row-value">
-				<span>{value}</span>
-				<StatusPill status={status} text={pillText} />
-			</div>
-		</div>
-	);
-}
-
-function ServiceRow({
-	service
-}: {
-	readonly service: PublicConfiguredServiceStatus;
-}): React.JSX.Element {
-	const usesExternalFallback = !service.configured && service.url !== null;
-
-	return (
-		<StatusRow
-			detail={formatServiceDetail(service, usesExternalFallback)}
-			label={serviceLabel(service.service)}
-			status={service.status}
-			value={service.configured ? 'Configured' : 'Missing'}
-		/>
-	);
-}
-
-function FailoverRow({
-	failover
-}: {
-	readonly failover: PublicFailoverStatus;
-}): React.JSX.Element {
-	const detail = failover.complete
-		? `${failover.frontendUrl} + ${failover.apiUrl}`
-		: failover.configured
-			? (failover.frontendUrl ?? failover.apiUrl ?? 'Partial target')
-			: 'No optional failover target configured';
-	const status = failover.configured ? failover.status : 'ok';
-
-	return (
-		<StatusRow
-			detail={detail}
-			label="Failover"
-			pillText={!failover.configured ? 'Optional' : undefined}
-			status={status}
-			value={
-				failover.complete
-					? 'Complete'
-					: failover.configured
-						? 'Partial'
-						: 'Optional'
-			}
-		/>
-	);
-}
-
-function StatusPill({
-	status,
-	text
-}: {
-	readonly status: PublicStatusLevel;
-	readonly text?: string;
-}): React.JSX.Element {
-	return (
-		<span className={`status-pill ${statusTone(status)}`}>
-			{text ?? statusLabel(status)}
-		</span>
-	);
-}
-
-function serviceGroupStatus(
-	services: readonly PublicConfiguredServiceStatus[],
-	failover: PublicFailoverStatus
-): PublicStatusLevel {
-	const statuses = [
-		...services.map((service) => service.status),
-		...(failover.configured ? [failover.status] : [])
-	];
-	if (statuses.length === 0) return 'ok';
-	if (statuses.every((status) => status === 'ok')) return 'ok';
-	if (statuses.every((status) => status === 'unavailable')) {
-		return 'unavailable';
-	}
-	return 'degraded';
-}
-
-function getConfiguredServiceCount(
-	services: readonly PublicConfiguredServiceStatus[]
-): number {
-	return services.filter((service) => service.configured).length;
-}
-
-function formatServiceDetail(
-	service: PublicConfiguredServiceStatus,
-	usesExternalFallback: boolean
-): string {
-	if (service.configured) return service.url ?? 'Configured';
-	if (usesExternalFallback && service.url !== null) {
-		return `External fallback only: ${service.url}`;
-	}
-	return 'No StellarAtlas-owned target configured';
-}
-
-function archiveScanTone(scan: PublicArchiveScanLogEntry): PublicStatusLevel {
-	if (scan.scanStatus === 'ok') return 'ok';
-	return 'degraded';
-}
-
-function archiveScanLabel(scan: PublicArchiveScanLogEntry): string {
-	if (scan.scanStatus === 'ok') return 'No archive errors';
-	if (scan.scanStatus === 'worker_issue') return 'Worker issue';
-	return 'Archive error';
-}
-
-function archiveScanDetail(scan: PublicArchiveScanLogEntry): string {
-	const rangeEnd =
-		scan.toLedger === null ? 'latest' : formatInteger(scan.toLedger);
-	const range = `${formatInteger(scan.fromLedger)}-${rangeEnd}`;
-	const duration = formatDuration(scan.durationMs);
-	const errorText =
-		scan.errorCount === 0
-			? 'run completed with no archive errors'
-			: `${formatInteger(scan.errorCount)} errors`;
-
-	return `${range}, verified ${formatInteger(scan.latestVerifiedLedger)}, ${formatInteger(scan.concurrency)} workers, ${duration}, ${errorText}`;
-}
-
-function formatArchiveUrl(value: string): string {
-	try {
-		const url = new URL(value);
-		return url.hostname;
-	} catch {
-		return value;
-	}
-}
-
-function statusTone(status: PublicStatusLevel): 'good' | 'warning' | 'danger' {
-	if (status === 'ok') return 'good';
-	if (status === 'degraded') return 'warning';
-	return 'danger';
-}
-
-function statusLabel(status: PublicStatusLevel): string {
-	if (status === 'ok') return 'OK';
-	if (status === 'degraded') return 'Degraded';
-	return 'Unavailable';
-}
-
-function serviceLabel(
-	service: PublicConfiguredServiceStatus['service']
-): string {
-	if (service === 'frontend') return 'Frontend';
-	if (service === 'horizon') return 'Horizon';
-	if (service === 'rpc') return 'RPC';
-	const exhaustive: never = service;
-	return exhaustive;
 }
 
 function formatNullableDate(value: string | null): string {

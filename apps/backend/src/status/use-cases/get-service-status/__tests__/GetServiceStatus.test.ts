@@ -26,8 +26,12 @@ describe('GetServiceStatus', () => {
 			status: 'ok',
 			service: 'frontend',
 			configured: true,
+			configurationState: 'configured',
+			health: 'not_probed',
 			url: 'https://stellaratlas.io',
-			probe: 'not_run'
+			probe: 'not_run',
+			readiness: 'configured_not_probed',
+			requiredForProduction: true
 		});
 	});
 
@@ -39,23 +43,31 @@ describe('GetServiceStatus', () => {
 			status: 'unavailable',
 			service: 'frontend',
 			configured: false,
+			configurationState: 'not_configured',
+			health: 'not_probed',
 			url: null,
-			probe: 'not_run'
+			probe: 'not_run',
+			readiness: 'planned',
+			requiredForProduction: true
 		});
 	});
 
-	it('should report configured Horizon status from required config', () => {
+	it('should report configured Horizon as unprobed local readiness', () => {
 		const result = new GetHorizonStatus({
 			horizonUrl: { value: 'http://127.0.0.1:8000' }
 		} as Config).execute();
 
 		expect(result.isOk()).toBe(true);
 		expect(result._unsafeUnwrap()).toMatchObject({
-			status: 'ok',
+			status: 'degraded',
 			service: 'horizon',
 			configured: true,
+			configurationState: 'configured',
+			health: 'not_probed',
 			url: 'http://127.0.0.1:8000',
-			probe: 'not_run'
+			probe: 'not_run',
+			readiness: 'configured_not_probed',
+			requiredForProduction: true
 		});
 	});
 
@@ -66,11 +78,15 @@ describe('GetServiceStatus', () => {
 
 		expect(result.isOk()).toBe(true);
 		expect(result._unsafeUnwrap()).toMatchObject({
-			status: 'unavailable',
+			status: 'degraded',
 			service: 'horizon',
 			configured: false,
+			configurationState: 'external_fallback',
+			health: 'not_probed',
 			url: 'https://horizon.stellar.org',
-			probe: 'not_run'
+			probe: 'not_run',
+			readiness: 'external_fallback',
+			requiredForProduction: false
 		});
 	});
 
@@ -81,16 +97,24 @@ describe('GetServiceStatus', () => {
 		const missing = new GetRpcStatus({} as Config).execute();
 
 		expect(configured._unsafeUnwrap()).toMatchObject({
-			status: 'ok',
+			status: 'degraded',
 			service: 'rpc',
 			configured: true,
-			url: 'https://rpc.example.com'
+			configurationState: 'configured',
+			health: 'not_probed',
+			url: 'https://rpc.example.com',
+			readiness: 'configured_not_probed',
+			requiredForProduction: true
 		});
 		expect(missing._unsafeUnwrap()).toMatchObject({
-			status: 'unavailable',
+			status: 'degraded',
 			service: 'rpc',
 			configured: false,
-			url: null
+			configurationState: 'not_configured',
+			health: 'not_probed',
+			url: null,
+			readiness: 'planned',
+			requiredForProduction: false
 		});
 	});
 

@@ -1,4 +1,34 @@
 :root {
+	color-scheme: dark;
+	--background: #101418;
+	--border: #324048;
+	--ink: #eef3ef;
+	--muted: #a7b2ad;
+	--panel: #181f23;
+	--blue: #5bb8b2;
+	--green: #78c77a;
+	--yellow: #e3b94d;
+	--red: #f06c78;
+	--font-mono: 'SFMono-Regular', Consolas, 'Liberation Mono', monospace;
+	--shell-background: rgba(16, 20, 24, 0.94);
+	--surface-soft: #20282d;
+	--surface-subtle: #151b1f;
+	--surface-hover: #263139;
+	--surface-active: #17363a;
+	--field: #11171b;
+	--field-disabled: #3a4850;
+	--accent-ink: #041516;
+	--button-secondary: #1e2b30;
+	--button-secondary-border: #3d565d;
+	--state-neutral-bg: #1a2429;
+	--state-warning-bg: #312714;
+	--state-warning-border: #725f2a;
+	--state-warning-ink: #ffd776;
+	--shadow: 0 16px 36px rgba(0, 0, 0, 0.32);
+}
+
+html[data-theme='light'] {
+	color-scheme: light;
 	--background: #f4f7fa;
 	--border: #d8e1ea;
 	--ink: #172231;
@@ -8,6 +38,20 @@
 	--green: #4d985d;
 	--yellow: #b98400;
 	--red: #c64f56;
+	--shell-background: rgba(255, 255, 255, 0.94);
+	--surface-soft: #eef3f8;
+	--surface-subtle: #f7fafc;
+	--surface-hover: #f0f5fa;
+	--surface-active: #e9f2fa;
+	--field: #ffffff;
+	--field-disabled: #a9bed4;
+	--accent-ink: #ffffff;
+	--button-secondary: #e9f2fa;
+	--button-secondary-border: #bfd3e8;
+	--state-neutral-bg: #f7fafc;
+	--state-warning-bg: #fff7ed;
+	--state-warning-border: #fed7aa;
+	--state-warning-ink: #9a3412;
 	--shadow: 0 14px 32px rgba(23, 34, 49, 0.08);
 }
 
@@ -19,11 +63,17 @@ html {
 	background: var(--background);
 	color: var(--ink);
 	font-family:
-		Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont,
-		"Segoe UI", sans-serif;
+		Inter,
+		ui-sans-serif,
+		system-ui,
+		-apple-system,
+		BlinkMacSystemFont,
+		'Segoe UI',
+		sans-serif;
 }
 
 body {
+	background: var(--background);
 	margin: 0;
 }
 
@@ -33,12 +83,23 @@ a {
 }
 
 button,
-input {
+input,
+select {
 	font: inherit;
 }
 
 button {
 	cursor: pointer;
+}
+
+input,
+select {
+	background: var(--field);
+	color: var(--ink);
+}
+
+input::placeholder {
+	color: var(--muted);
 }
 
 h1,

@@ -78,8 +78,10 @@ export interface ExplorerAssetsDTO {
 export interface ExplorerContractDTO {
 	readonly contractId: string;
 	readonly message: string;
+	readonly probe: 'not_run';
+	readonly readiness: 'configured_not_probed' | 'planned';
 	readonly source: 'rpc';
-	readonly status: 'loaded' | 'unavailable' | 'unconfigured';
+	readonly status: 'configured_not_probed' | 'loaded' | 'not_configured';
 }
 
 export interface ExplorerSearchDTO {
@@ -471,10 +473,12 @@ function mapContractStatus(
 	return {
 		contractId,
 		message: rpcUrl
-			? 'Contract indexing is waiting for the local RPC read path.'
-			: 'Stellar RPC is not configured on this host yet.',
+			? 'Local Stellar RPC is configured, but contract probing and indexing are not wired yet.'
+			: 'Local Stellar RPC is planned and not configured on this host yet.',
+		probe: 'not_run',
+		readiness: rpcUrl ? 'configured_not_probed' : 'planned',
 		source: 'rpc',
-		status: rpcUrl ? 'unavailable' : 'unconfigured'
+		status: rpcUrl ? 'configured_not_probed' : 'not_configured'
 	};
 }
 

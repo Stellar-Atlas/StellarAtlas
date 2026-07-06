@@ -161,7 +161,7 @@ export function BlockchainExplorer(): React.JSX.Element {
 				<div className="panel-heading">
 					<div>
 						<strong>Search</strong>
-						<span>Transaction, address, ledger, asset, or contract</span>
+						<span>Horizon lookup with RPC readiness for contracts</span>
 					</div>
 				</div>
 				<form className="explorer-search-form" onSubmit={submitSearch}>
@@ -211,8 +211,8 @@ export function BlockchainExplorer(): React.JSX.Element {
 			<section className="explorer-panel explorer-feed-panel">
 				<div className="panel-heading explorer-feed-heading">
 					<div>
-						<strong>Recent Transactions</strong>
-						<span>Latest Horizon transactions</span>
+						<strong>Horizon Transaction Snapshot</strong>
+						<span>Bounded fallback page, not a local live read model</span>
 					</div>
 					<button
 						disabled={transactionFeedLoading}
@@ -334,7 +334,7 @@ export function BlockchainExplorer(): React.JSX.Element {
 					<div className="panel-heading">
 						<div>
 							<strong>Contracts</strong>
-							<span>RPC-backed status</span>
+							<span>Local RPC readiness, not contract index health</span>
 						</div>
 					</div>
 					<form className="explorer-filter-form" onSubmit={submitContract}>

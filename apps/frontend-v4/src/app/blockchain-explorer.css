@@ -31,8 +31,8 @@
 }
 
 .explorer-feed-heading button {
-	background: #e9f2fa;
-	border: 1px solid #bfd3e8;
+	background: var(--button-secondary);
+	border: 1px solid var(--button-secondary-border);
 	border-radius: 6px;
 	color: var(--blue);
 	font-weight: 800;
@@ -100,14 +100,14 @@
 	background: var(--blue);
 	border: 0;
 	border-radius: 6px;
-	color: #ffffff;
+	color: var(--accent-ink);
 	font-weight: 800;
 	min-block-size: 40px;
 	padding: 0 14px;
 }
 
 .explorer-result-grid {
-	background: #f7fafc;
+	background: var(--surface-subtle);
 	border: 1px solid var(--border);
 	border-radius: 8px;
 	display: grid;
@@ -138,15 +138,15 @@
 }
 
 .explorer-state.neutral {
-	background: #f7fafc;
+	background: var(--state-neutral-bg);
 	border: 1px solid var(--border);
 	color: var(--muted);
 }
 
 .explorer-state.warning {
-	background: #fff7ed;
-	border: 1px solid #fed7aa;
-	color: #9a3412;
+	background: var(--state-warning-bg);
+	border: 1px solid var(--state-warning-border);
+	color: var(--state-warning-ink);
 }
 
 .explorer-table {
@@ -183,19 +183,16 @@
 }
 
 .explorer-transaction-row {
-	background: #ffffff;
-	border: 0;
+	background: var(--panel);
 	border-block-start: 1px solid var(--border);
 	color: var(--ink);
-	cursor: pointer;
 	display: grid;
 	font: inherit;
 	gap: 10px;
 	grid-template-columns:
-		minmax(220px, 1.3fr) minmax(150px, 0.8fr) minmax(110px, 0.5fr)
-		minmax(70px, 0.4fr) minmax(90px, 0.4fr);
+		minmax(230px, 1.4fr) minmax(145px, 0.75fr) minmax(100px, 0.45fr)
+		minmax(70px, 0.35fr) minmax(88px, 0.35fr) auto;
 	padding: 10px 12px;
-	text-align: start;
 }
 
 .explorer-transaction-row:first-child {
@@ -204,7 +201,7 @@
 
 .explorer-transaction-row:hover,
 .explorer-transaction-row:focus-visible {
-	background: #f7fafc;
+	background: var(--surface-hover);
 }
 
 .explorer-table-row + .explorer-table-row {
@@ -213,116 +210,63 @@
 
 .explorer-table-row strong,
 .explorer-table-row span,
-.explorer-transaction-row strong,
-.explorer-transaction-row span {
+.explorer-transaction-row > span {
 	min-inline-size: 0;
 	overflow-wrap: anywhere;
 }
 
 .explorer-table-row strong,
-.explorer-transaction-row strong {
+.transaction-hash-short {
 	color: var(--blue);
 }
 
-.transaction-lookup {
-	display: grid;
-	gap: 14px;
-	margin-block-end: 16px;
-}
-
-.transaction-lookup .panel-heading > div {
-	display: grid;
-	gap: 3px;
-}
-
-.transaction-lookup-form {
-	display: grid;
-	gap: 10px;
-	grid-template-columns: minmax(0, 1fr) auto;
-}
-
-.transaction-lookup-form input {
-	border: 1px solid var(--border);
-	border-radius: 6px;
-	font-family: var(--font-mono);
-	inline-size: 100%;
-	min-inline-size: 0;
-	padding: 11px 12px;
-}
-
-.transaction-lookup-form button {
-	background: var(--blue);
-	border: 0;
-	border-radius: 6px;
-	color: #ffffff;
-	font-weight: 800;
-	padding: 0 16px;
-}
-
-.transaction-lookup-form button:disabled {
-	background: #a9bed4;
-	cursor: not-allowed;
-}
-
-.transaction-lookup-state {
-	background: #fff7ed;
-	border: 1px solid #fed7aa;
-	border-radius: 6px;
-	color: #9a3412;
-	font-weight: 700;
-	padding: 10px 12px;
-}
-
-.transaction-result {
-	background: #f7fafc;
-	border: 1px solid var(--border);
-	border-radius: 8px;
-	display: grid;
-	gap: 12px;
-	padding: 12px;
-}
-
-.transaction-result > div:first-child {
+.transaction-hash-cell {
 	align-items: center;
-	display: flex;
-	gap: 10px;
-	justify-content: space-between;
+	display: grid;
+	gap: 6px;
+	grid-template-columns: minmax(0, 1fr) auto auto;
 	min-inline-size: 0;
 }
 
-.transaction-result strong {
+.transaction-hash-short,
+.transaction-hash-full {
 	font-family: var(--font-mono);
-	overflow-wrap: anywhere;
 }
 
-.transaction-result span {
-	background: #e9f2fa;
-	border-radius: 999px;
+.transaction-hash-short {
+	display: block;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.transaction-hash-full {
+	background: var(--surface-subtle);
+	border: 1px solid var(--border);
+	border-radius: 6px;
+	color: var(--muted);
+	grid-column: 1 / -1;
+	overflow-wrap: anywhere;
+	padding: 7px 8px;
+}
+
+.hash-action,
+.inspect-action {
+	background: var(--button-secondary);
+	border: 1px solid var(--button-secondary-border);
+	border-radius: 6px;
 	color: var(--blue);
 	font-size: 0.76rem;
 	font-weight: 800;
-	padding: 4px 8px;
-	text-transform: uppercase;
+	min-block-size: 30px;
+	padding: 0 8px;
 }
 
-.transaction-result dl {
-	display: grid;
-	gap: 10px;
-	grid-template-columns: repeat(3, minmax(0, 1fr));
-	margin: 0;
-}
-
-.transaction-result dt {
-	color: var(--muted);
-	font-size: 0.72rem;
-	font-weight: 800;
-	text-transform: uppercase;
-}
-
-.transaction-result dd {
-	margin: 2px 0 0;
-	min-inline-size: 0;
-	overflow-wrap: anywhere;
+.hash-action:hover,
+.hash-action:focus-visible,
+.inspect-action:hover,
+.inspect-action:focus-visible {
+	background: var(--surface-active);
 }
 
 .blockchain-stats {
@@ -463,21 +407,20 @@
 @media (max-width: 720px) {
 	.explorer-filter-form,
 	.explorer-result-grid,
-	.explorer-search-form,
-	.transaction-lookup-form,
-	.transaction-result dl {
+	.explorer-search-form {
 		grid-template-columns: 1fr;
 	}
 
 	.explorer-table-row,
-	.explorer-table.assets .explorer-table-row {
+	.explorer-table.assets .explorer-table-row,
+	.explorer-transaction-row {
 		align-items: start;
 		grid-template-columns: 1fr;
 	}
 
 	.explorer-search-form button,
 	.explorer-filter-form button,
-	.transaction-lookup-form button {
+	.inspect-action {
 		block-size: 42px;
 	}
 

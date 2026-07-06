@@ -353,28 +353,40 @@ describe('StatusRouter.integration', () => {
 				status: 'ok',
 				service: 'frontend',
 				configured: true,
+				configurationState: 'configured',
+				health: 'not_probed',
 				url: 'https://stellaratlas.io',
-				probe: 'not_run'
+				probe: 'not_run',
+				readiness: 'configured_not_probed',
+				requiredForProduction: true
 			})
 		);
 		getHorizonStatus.execute.mockReturnValue(
 			ok({
 				generatedAt: '2026-07-03T12:00:00.000Z',
-				status: 'ok',
+				status: 'degraded',
 				service: 'horizon',
 				configured: true,
+				configurationState: 'configured',
+				health: 'not_probed',
 				url: 'https://horizon.example.com',
-				probe: 'not_run'
+				probe: 'not_run',
+				readiness: 'configured_not_probed',
+				requiredForProduction: true
 			})
 		);
 		getRpcStatus.execute.mockReturnValue(
 			ok({
 				generatedAt: '2026-07-03T12:00:00.000Z',
-				status: 'unavailable',
+				status: 'degraded',
 				service: 'rpc',
 				configured: false,
+				configurationState: 'not_configured',
+				health: 'not_probed',
 				url: null,
-				probe: 'not_run'
+				probe: 'not_run',
+				readiness: 'planned',
+				requiredForProduction: false
 			})
 		);
 		getFailoverStatus.execute.mockReturnValue(

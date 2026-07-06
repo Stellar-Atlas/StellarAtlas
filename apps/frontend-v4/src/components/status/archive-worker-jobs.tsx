@@ -4,21 +4,19 @@ import type {
 	PublicStatusLevel
 } from '@api/types';
 import { formatDateTime, formatInteger } from '@format/formatters';
+import { StatusPill } from './status-ui';
 
 interface ArchiveWorkerJobsProps {
 	readonly archiveWorkers: PublicArchiveScanWorkers;
 }
 
-const maxVisibleJobs = 8;
-
 export function ArchiveWorkerJobs({
 	archiveWorkers
 }: ArchiveWorkerJobsProps): React.JSX.Element {
 	const workers = [...archiveWorkers.workers].sort(compareWorkers);
-	const visibleWorkers = workers.slice(0, maxVisibleJobs);
 	const hiddenWorkers = Math.max(
 		0,
-		workers.length - visibleWorkers.length
+		archiveWorkers.totalTakenJobs - workers.length
 	);
 	const runningWorkers = workers.filter(isRunningWorker).length;
 	const startingWorkers = workers.filter(isStartingWorker).length;
@@ -37,24 +35,28 @@ export function ArchiveWorkerJobs({
 				</span>
 			</div>
 			<div className="status-current-jobs">
-				{visibleWorkers.length === 0 ? (
+				{workers.length === 0 ? (
 					<div className="status-current-empty">
 						<strong>No current archive jobs</strong>
 						<small>Workers have no fresh or stale taken jobs right now.</small>
 					</div>
 				) : (
-					visibleWorkers.map((worker) => (
+					workers.map((worker, index) => (
 						<ArchiveWorkerJobRow
-							key={`${worker.archiveUrl}-${worker.claimedAt}-${worker.fromLedger}`}
+							id={getWorkerFragmentId(worker, index)}
+							key={`${worker.archiveUrl}-${worker.claimedAt}-${worker.fromLedger}-${index}`}
 							worker={worker}
 						/>
 					))
 				)}
 				{hiddenWorkers > 0 && (
 					<div className="status-current-empty">
-						<strong>{formatInteger(hiddenWorkers)} more jobs hidden</strong>
+						<strong>
+							{formatInteger(hiddenWorkers)} more jobs beyond this snapshot
+						</strong>
 						<small>
-							The worker endpoint caps the full snapshot separately.
+							The worker endpoint returned {formatInteger(workers.length)} of{' '}
+							{formatInteger(archiveWorkers.totalTakenJobs)} claimed jobs.
 						</small>
 					</div>
 				)}
@@ -64,8 +66,10 @@ export function ArchiveWorkerJobs({
 }
 
 function ArchiveWorkerJobRow({
+	id,
 	worker
 }: {
+	readonly id: string;
 	readonly worker: PublicArchiveScanWorker;
 }): React.JSX.Element {
 	const displayStatus = getDisplayStatus(worker);
@@ -77,46 +81,53 @@ function ArchiveWorkerJobRow({
 			: displayStatus;
 
 	return (
-		<div className="status-current-job">
-			<div>
-				<strong title={worker.archiveUrl}>
-					{formatArchiveUrl(worker.archiveUrl)}
-				</strong>
-				<small>
-					{formatLedgerRange(worker)}; latest scanned{' '}
-					{formatInteger(worker.latestScannedLedger)}
-				</small>
-			</div>
-			<div>
-				<span className="status-current-job-meta">
-					{concurrencyLabel}
+		<details className="metadata-document" id={id} open={status !== 'ok'}>
+			<summary>
+				<span>{formatArchiveUrl(worker.archiveUrl)}</span>
+				<span>
+					<StatusPill status={status} text={displayStatus} />
 				</span>
-				<small>
-					Heartbeat {formatDuration(worker.heartbeatAgeMs)} ago, claimed{' '}
-					{formatDateTime(worker.claimedAt)}
-				</small>
-			</div>
-			<StatusPill status={status} text={displayStatus} />
-		</div>
+			</summary>
+			<dl className="details">
+				<div>
+					<dt>Range</dt>
+					<dd>{formatLedgerRange(worker)}</dd>
+				</div>
+				<div>
+					<dt>Latest scanned</dt>
+					<dd>{formatInteger(worker.latestScannedLedger)}</dd>
+				</div>
+				<div>
+					<dt>Concurrency</dt>
+					<dd>{concurrencyLabel}</dd>
+				</div>
+				<div>
+					<dt>Claimed</dt>
+					<dd>{formatDateTime(worker.claimedAt)}</dd>
+				</div>
+				<div>
+					<dt>Last heartbeat</dt>
+					<dd>{formatDateTime(worker.lastHeartbeatAt)}</dd>
+				</div>
+				<div>
+					<dt>Heartbeat age</dt>
+					<dd>{formatDuration(worker.heartbeatAgeMs)}</dd>
+				</div>
+			</dl>
+		</details>
 	);
 }
 
-function StatusPill({
-	status,
-	text
-}: {
-	readonly status: PublicStatusLevel;
-	readonly text: string;
-}): React.JSX.Element {
-	return <span className={`status-pill ${statusTone(status)}`}>{text}</span>;
-}
-
 function formatArchiveUrl(value: string): string {
+	if (looksLikeInternalPath(value)) return 'Internal scanner target';
 	try {
 		const url = new URL(value);
-		return url.hostname;
+		if (url.protocol === 'http:' || url.protocol === 'https:') {
+			return url.hostname;
+		}
+		return 'Internal scanner target';
 	} catch {
-		return value;
+		return sanitizeEvidenceText(value);
 	}
 }
 
@@ -164,8 +175,34 @@ function isStartingWorker(worker: PublicArchiveScanWorker): boolean {
 	return getDisplayStatus(worker) === 'starting';
 }
 
-function statusTone(status: PublicStatusLevel): 'good' | 'warning' | 'danger' {
-	if (status === 'ok') return 'good';
-	if (status === 'degraded') return 'warning';
-	return 'danger';
+function getWorkerFragmentId(
+	worker: PublicArchiveScanWorker,
+	index: number
+): string {
+	return `archive-job-${index}-${hashText(
+		`${worker.archiveUrl}:${worker.fromLedger}:${worker.toLedger ?? 'latest'}:${worker.claimedAt}`
+	)}`;
+}
+
+function hashText(value: string): string {
+	let hash = 0;
+	for (const character of value) {
+		hash = (hash * 31 + character.charCodeAt(0)) >>> 0;
+	}
+	return hash.toString(36);
+}
+
+function sanitizeEvidenceText(value: string): string {
+	return value.replace(
+		/(?:file:\/\/)?\/(?:home|var|tmp|etc|opt|srv|mnt|root|usr)\/[^\s'"`<>)]*/g,
+		'[internal path]'
+	);
+}
+
+function looksLikeInternalPath(value: string): boolean {
+	return (
+		/^(?:file:\/\/)?\/(?:home|var|tmp|etc|opt|srv|mnt|root|usr)\//.test(
+			value
+		) || /^[A-Za-z]:\\/.test(value)
+	);
 }

@@ -25,9 +25,16 @@ import {
 	formatNode30DayActive,
 	formatNode30DayValidating
 } from '../../domain/availability';
-import { getArchiveVerificationErrors } from '../../domain/history-archive';
+import {
+	getArchiveVerificationErrors,
+	scanLogIsActive
+} from '../../domain/history-archive';
 import { StatusTags } from '../status-tags';
 import { HistoryArchiveScanLog } from './history-archive-scan-log';
+import {
+	ArchiveBucketEvidence,
+	ArchiveMetadata
+} from './node-archive-evidence';
 
 interface NodeDetailProps {
 	historyArchiveEvidence: PublicHistoryArchiveScanEvidence | null;
@@ -89,10 +96,9 @@ export function NodeDetail({
 		routeOrganization ?? getOrganizationForNode(network, node);
 	const archiveErrors = getArchiveErrors(historyArchiveScan);
 	const archiveVerificationErrors = getArchiveVerificationErrors(archiveErrors);
-	const latestArchiveRun =
-		historyArchiveScanLogs.find((entry) => entry.status !== 'queued') ??
-		historyArchiveScanLogs[0] ??
-		null;
+	const activeArchiveRun = historyArchiveScanLogs.find(scanLogIsActive) ?? null;
+	const latestCompletedArchiveRun =
+		historyArchiveScanLogs.find((entry) => !scanLogIsActive(entry)) ?? null;
 	const active24Hours = formatNode24HourActive(node);
 	const active30Days = formatNode30DayActive(node);
 	const validating24Hours = formatNode24HourValidating(node);
@@ -222,11 +228,19 @@ export function NodeDetail({
 					{historyArchiveScan ? (
 						<dl className="details">
 							<div>
-								<dt>Latest run</dt>
+								<dt>Active progress</dt>
 								<dd>
-									{latestArchiveRun
-										? `${latestArchiveRun.status} at ${formatDateTime(latestArchiveRun.updatedAt)}`
-										: 'No recent scanner run'}
+									{activeArchiveRun
+										? `${formatActiveArchiveRun(activeArchiveRun)} updated ${formatDateTime(activeArchiveRun.updatedAt)}`
+										: 'No active queue row in the current scanner snapshot'}
+								</dd>
+							</div>
+							<div>
+								<dt>Completed evidence</dt>
+								<dd>
+									{latestCompletedArchiveRun
+										? `${latestCompletedArchiveRun.status} at ${formatDateTime(latestCompletedArchiveRun.endDate)}`
+										: 'No completed scan evidence row is available yet'}
 								</dd>
 							</div>
 							<div>
@@ -276,176 +290,13 @@ export function NodeDetail({
 	);
 }
 
-function ArchiveMetadata({
-	historyArchiveScan,
-	node,
-	organization
-}: {
-	readonly historyArchiveScan: PublicHistoryArchiveScan | null;
-	readonly node: PublicNode;
-	readonly organization: PublicOrganization | null;
-}): React.JSX.Element {
-	const archiveMetadata = historyArchiveScan?.archiveMetadata ?? null;
-	const homeDomain = organization?.homeDomain ?? node.homeDomain;
-	const stellarHistoryUrl =
-		archiveMetadata?.stellarHistoryUrl ?? buildHistoryUrl(node.historyUrl);
-	const stellarTomlUrl =
-		organization?.stellarToml?.url ??
-		(homeDomain === null
-			? null
-			: `https://${homeDomain}/.well-known/stellar.toml`);
-
-	if (stellarHistoryUrl === null && stellarTomlUrl === null) {
-		return (
-			<div className="archive-log-section">
-				<div className="panel-heading archive-log-heading">
-					<h3>Archive metadata</h3>
-				</div>
-				<p className="muted-copy">No archive or TOML metadata URL is known.</p>
-			</div>
-		);
-	}
-
-	return (
-		<div className="archive-log-section archive-metadata">
-			<div className="panel-heading archive-log-heading">
-				<h3>Archive metadata</h3>
-			</div>
-			<MetadataDocument
-				capturedAt={archiveMetadata?.observedAt ?? null}
-				label="stellar-history.json"
-				missingCopy="The scanner source URL is known, but this scan row does not yet have a persisted stellar-history.json body. The scanner still requires the remote HAS file to determine archive state; this message is a persistence/backfill gap, not proof that the archive lacks the file."
-				text={
-					archiveMetadata === null
-						? null
-						: formatPersistedJson(archiveMetadata.stellarHistory)
-				}
-				url={stellarHistoryUrl}
-			/>
-			<MetadataDocument
-				capturedAt={null}
-				label="stellar.toml"
-				missingCopy={formatTomlMissingCopy(organization)}
-				text={getPersistedTomlText(organization)}
-				url={stellarTomlUrl}
-			/>
-		</div>
-	);
-}
-
-function MetadataDocument({
-	capturedAt,
-	label,
-	missingCopy,
-	text,
-	url
-}: {
-	readonly capturedAt: string | null;
-	readonly label: string;
-	readonly missingCopy: string;
-	readonly text: string | null;
-	readonly url: string | null;
-}): React.JSX.Element {
-	return (
-		<details className="metadata-document" open>
-			<summary>
-				<span>{label}</span>
-				{url ? (
-					<a href={url} rel="noopener noreferrer" target="_blank">
-						{url}
-					</a>
-				) : (
-					<span className="muted-inline">No URL</span>
-				)}
-			</summary>
-			{capturedAt ? (
-				<p className="muted-copy">
-					Scanner-captured copy observed {formatDateTime(capturedAt)}.
-				</p>
-			) : null}
-			{text ? <pre>{text}</pre> : <p className="muted-copy">{missingCopy}</p>}
-		</details>
-	);
-}
-
-function buildHistoryUrl(historyUrl: string | null): string | null {
-	if (historyUrl === null) return null;
-	const withSlash = historyUrl.endsWith('/') ? historyUrl : `${historyUrl}/`;
-	return new URL('.well-known/stellar-history.json', withSlash).toString();
-}
-
-function formatPersistedJson(value: unknown): string {
-	return JSON.stringify(value, null, 2);
-}
-
-function getPersistedTomlText(
-	organization: PublicOrganization | null
-): string | null {
-	return organization?.stellarToml?.content ?? null;
-}
-
-function formatTomlMissingCopy(
-	organization: PublicOrganization | null
+function formatActiveArchiveRun(
+	entry: PublicHistoryArchiveScanLogEntry
 ): string {
-	if (organization === null) {
-		return 'No organization is assigned, so no persisted stellar.toml is available.';
-	}
-
-	return `No persisted scanner copy of stellar.toml is available yet. Current TOML state is ${organization.tomlState}. This is stored scanner evidence, not a browser-time fetch from the organization.`;
-}
-
-function ArchiveBucketEvidence({
-	evidence
-}: {
-	readonly evidence: PublicHistoryArchiveScanEvidence | null;
-}): React.JSX.Element {
-	if (evidence === null) {
-		return (
-			<div className="archive-log-section">
-				<div className="panel-heading archive-log-heading">
-					<h3>Verified bucket evidence</h3>
-				</div>
-				<p className="muted-copy">
-					No verified bucket evidence has been recorded yet.
-				</p>
-			</div>
-		);
-	}
-
-	const visibleCount = evidence.evidence.length;
-	const countLabel =
-		evidence.count > visibleCount
-			? `${formatInteger(visibleCount)} / ${formatInteger(evidence.count)} verified buckets`
-			: `${formatInteger(evidence.count)} verified buckets`;
-
-	return (
-		<div className="archive-log-section">
-			<div className="panel-heading archive-log-heading">
-				<h3>Verified bucket evidence</h3>
-				<span className="muted-inline">{countLabel}</span>
-			</div>
-			{evidence.evidence.length === 0 ? (
-				<p className="muted-copy">
-					No verified bucket evidence has been recorded yet.
-				</p>
-			) : (
-				<ul className="archive-bucket-evidence-list">
-					{evidence.evidence.map((entry) => (
-						<li key={`${entry.bucketHash}:${entry.observedAt}`}>
-							<a
-								href={entry.bucketUrl}
-								rel="noopener noreferrer"
-								target="_blank"
-							>
-								{entry.bucketHash}
-							</a>
-							<span>{formatDateTime(entry.observedAt)}</span>
-						</li>
-					))}
-				</ul>
-			)}
-		</div>
-	);
+	if (entry.status === 'queued') return 'queued for a worker';
+	if (entry.status === 'starting') return 'starting scanner work';
+	if (entry.status === 'scanning') return 'scanner is verifying ledgers';
+	return 'scanner heartbeat is delayed';
 }
 
 const getArchiveErrors = (

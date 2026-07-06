@@ -1,3 +1,6 @@
+'use client';
+
+import { useEffect, useRef, useState } from 'react';
 import type {
 	PublicExplorerAccount,
 	PublicExplorerAsset,
@@ -101,6 +104,10 @@ export function RecentTransactionsView({
 
 	return (
 		<div className="explorer-transaction-feed">
+			<ExplorerState
+				tone="neutral"
+				text={`Bounded Horizon snapshot from ${formatDate(result.transactions.generatedAt)}; local transaction read model is not active.`}
+			/>
 			{result.transactions.truncated ? (
 				<ExplorerState
 					tone="neutral"
@@ -129,25 +136,94 @@ function TransactionFeedRows({
 	readonly onInspect: (hash: string) => void;
 	readonly transactions: PublicRecentTransactions;
 }): React.JSX.Element {
+	const [expandedHash, setExpandedHash] = useState<string | null>(null);
+	const [copiedHash, setCopiedHash] = useState<string | null>(null);
+	const copyResetTimer = useRef<number | null>(null);
+
+	useEffect(() => {
+		return () => {
+			if (copyResetTimer.current !== null) {
+				window.clearTimeout(copyResetTimer.current);
+			}
+		};
+	}, []);
+
 	if (transactions.records.length === 0)
 		return <ExplorerState tone="neutral" text="No transactions returned." />;
 
+	const copyHash = (hash: string): void => {
+		void writeClipboardText(hash)
+			.then(() => {
+				setCopiedHash(hash);
+				if (copyResetTimer.current !== null) {
+					window.clearTimeout(copyResetTimer.current);
+				}
+				copyResetTimer.current = window.setTimeout(() => {
+					setCopiedHash(null);
+					copyResetTimer.current = null;
+				}, 1600);
+			})
+			.catch(() => setCopiedHash(null));
+	};
+
 	return (
 		<div className="explorer-table transaction-feed">
-			{transactions.records.slice(0, transactions.limit).map((transaction) => (
-				<button
-					className="explorer-transaction-row"
-					key={transaction.hash}
-					onClick={() => onInspect(transaction.hash)}
-					type="button"
-				>
-					<strong>{transaction.hash}</strong>
-					<span>{formatDate(transaction.createdAt)}</span>
-					<span>ledger {transaction.ledger}</span>
-					<span>{transaction.operationCount} ops</span>
-					<span>{transaction.successful ? 'successful' : 'failed'}</span>
-				</button>
-			))}
+			{transactions.records.slice(0, transactions.limit).map((transaction) => {
+				const expanded = expandedHash === transaction.hash;
+				const copied = copiedHash === transaction.hash;
+				const hashDetailsId = `transaction-hash-${transaction.hash}`;
+
+				return (
+					<div className="explorer-transaction-row" key={transaction.hash}>
+						<div className="transaction-hash-cell">
+							<strong
+								aria-label={`Transaction hash ${transaction.hash}`}
+								className="transaction-hash-short"
+								title={transaction.hash}
+							>
+								{formatTransactionHash(transaction.hash)}
+							</strong>
+							<button
+								aria-label={`Copy transaction hash ${transaction.hash}`}
+								className="hash-action"
+								onClick={() => copyHash(transaction.hash)}
+								type="button"
+							>
+								{copied ? 'Copied' : 'Copy'}
+							</button>
+							<button
+								aria-controls={hashDetailsId}
+								aria-expanded={expanded}
+								aria-label={`${expanded ? 'Collapse' : 'Expand'} transaction hash ${transaction.hash}`}
+								className="hash-action"
+								onClick={() =>
+									setExpandedHash(expanded ? null : transaction.hash)
+								}
+								type="button"
+							>
+								{expanded ? 'Hide' : 'Full'}
+							</button>
+							{expanded ? (
+								<code className="transaction-hash-full" id={hashDetailsId}>
+									{transaction.hash}
+								</code>
+							) : null}
+						</div>
+						<span>{formatDate(transaction.createdAt)}</span>
+						<span>ledger {transaction.ledger}</span>
+						<span>{transaction.operationCount} ops</span>
+						<span>{transaction.successful ? 'successful' : 'failed'}</span>
+						<button
+							aria-label={`Inspect transaction ${transaction.hash}`}
+							className="inspect-action"
+							onClick={() => onInspect(transaction.hash)}
+							type="button"
+						>
+							Inspect
+						</button>
+					</div>
+				);
+			})}
 		</div>
 	);
 }
@@ -204,8 +280,9 @@ function ContractCard({
 	return (
 		<dl className="explorer-result-grid">
 			<ResultItem label="Contract" value={contract.contractId} />
-			<ResultItem label="Status" value={contract.status} />
+			<ResultItem label="Readiness" value={formatContractReadiness(contract)} />
 			<ResultItem label="Source" value={contract.source} />
+			<ResultItem label="Probe" value={contract.probe.replace('_', ' ')} />
 			<ResultItem label="Message" value={contract.message} />
 		</dl>
 	);
@@ -348,4 +425,33 @@ function mapBalanceAsset(
 function formatDate(value: string): string {
 	if (value.length === 0) return 'Unknown';
 	return new Date(value).toLocaleString();
+}
+
+function formatTransactionHash(hash: string): string {
+	if (hash.length <= 24) return hash;
+	return `${hash.slice(0, 12)}...${hash.slice(-10)}`;
+}
+
+function formatContractReadiness(contract: PublicExplorerContract): string {
+	if (contract.readiness === 'planned') return 'Planned';
+	if (contract.readiness === 'configured_not_probed') return 'Not probed';
+	return contract.status;
+}
+
+async function writeClipboardText(value: string): Promise<void> {
+	if (navigator.clipboard?.writeText) {
+		await navigator.clipboard.writeText(value);
+		return;
+	}
+
+	const field = document.createElement('textarea');
+	field.value = value;
+	field.setAttribute('readonly', 'true');
+	field.style.position = 'fixed';
+	field.style.inset = '0';
+	field.style.opacity = '0';
+	document.body.append(field);
+	field.select();
+	document.execCommand('copy');
+	field.remove();
 }

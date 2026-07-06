@@ -201,8 +201,10 @@ export interface PublicExplorerOperations {
 export interface PublicExplorerContract {
 	readonly contractId: string;
 	readonly message: string;
+	readonly probe: 'not_run';
+	readonly readiness: 'configured_not_probed' | 'planned';
 	readonly source: 'rpc';
-	readonly status: 'loaded' | 'unavailable' | 'unconfigured';
+	readonly status: 'configured_not_probed' | 'loaded' | 'not_configured';
 }
 
 export interface PublicExplorerSearch {
@@ -432,8 +434,13 @@ export interface PublicWorkerStatus {
 
 export interface PublicConfiguredServiceStatus {
 	readonly configured: boolean;
+	readonly configurationState:
+		'configured' | 'external_fallback' | 'not_configured';
 	readonly generatedAt: string;
+	readonly health: 'not_probed';
 	readonly probe: 'not_run';
+	readonly readiness: 'configured_not_probed' | 'external_fallback' | 'planned';
+	readonly requiredForProduction: boolean;
 	readonly service: 'frontend' | 'horizon' | 'rpc';
 	readonly status: PublicStatusLevel;
 	readonly url: string | null;
