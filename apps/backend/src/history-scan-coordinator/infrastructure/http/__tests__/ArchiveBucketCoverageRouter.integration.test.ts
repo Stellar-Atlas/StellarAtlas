@@ -2,6 +2,7 @@ import express from 'express';
 import request from 'supertest';
 import { mock } from 'jest-mock-extended';
 import { ok } from 'neverthrow';
+import type { HistoryArchiveBucketCrossCoverageV1 } from 'shared';
 import { ArchiveScanRouterWrapper } from '../ArchiveScanRouter.js';
 import { GetArchiveScans } from '@history-scan-coordinator/use-cases/get-archive-scans/GetArchiveScans.js';
 import { GetArchiveScanQueue } from '@history-scan-coordinator/use-cases/get-archive-scan-queue/GetArchiveScanQueue.js';
@@ -15,65 +16,55 @@ import { GetLatestScan } from '@history-scan-coordinator/use-cases/get-latest-sc
 import { GetScanEvidence } from '@history-scan-coordinator/use-cases/get-scan-evidence/GetScanEvidence.js';
 import { GetScanLogs } from '@history-scan-coordinator/use-cases/get-scan-logs/GetScanLogs.js';
 
-describe('ArchiveEvidenceRouter.integration', () => {
-	it('should expose verified bucket evidence', async () => {
-		const { app, getLatestScan, getScanEvidence, getScanLogs } =
-			createHarness();
-		getScanEvidence.execute.mockResolvedValue(
-			ok({
-				count: 1,
-				evidence: [
-					{
-						bucketHash:
-							'32900289ef7cd0eb0f5982cc58fc489abb1efb53a99de8142d2b68bcc1ec36b8',
-						bucketUrl:
-							'https://test.com/bucket/32/90/02/bucket-32900289ef7cd0eb0f5982cc58fc489abb1efb53a99de8142d2b68bcc1ec36b8.xdr.gz',
-						kind: 'bucket',
-						observedAt: '2026-07-03T10:05:00.000Z',
-						status: 'verified'
-					}
-				],
-				limit: 10,
-				url: 'https://test.com'
-			})
+const bucketHash =
+	'4eae73efaa0ce061441dfe43ffc61c0ed24fcbc59e5ee512d1b60e8da2509655';
+
+describe('ArchiveBucketCoverageRouter.integration', () => {
+	it('exposes bucket hash coverage across archive roots', async () => {
+		const { app, getHistoryArchiveBucketCoverage } = createHarness();
+		getHistoryArchiveBucketCoverage.execute.mockResolvedValue(
+			ok(createCoverage())
 		);
 
 		await request(app)
-			.get('/archive-scans/https%3A%2F%2Ftest.com/evidence?limit=10')
+			.get(`/archive-scans/objects/buckets/${bucketHash}/coverage`)
 			.expect(200)
 			.expect('Cache-Control', 'public, max-age=10')
 			.expect((response) => {
-				expect(response.body.count).toBe(1);
-				expect(response.body.evidence[0]).toMatchObject({
-					kind: 'bucket',
-					status: 'verified'
+				expect(response.body).toMatchObject({
+					bucketHash,
+					counts: {
+						archiveRoots: 2,
+						failedCopies: 1,
+						verifiedCopies: 1
+					},
+					archiveRoots: [
+						{ archiveUrl: 'https://history-a.example.com' },
+						{ archiveUrl: 'https://history-b.example.com' }
+					]
 				});
 			});
 
-		expect(getScanEvidence.execute).toHaveBeenCalledWith(
-			'https://test.com',
-			10
+		expect(getHistoryArchiveBucketCoverage.execute).toHaveBeenCalledWith(
+			bucketHash
 		);
-		expect(getLatestScan.execute).not.toHaveBeenCalled();
-		expect(getScanLogs.execute).not.toHaveBeenCalled();
 	});
 
-	it('should return 400 for invalid evidence limits', async () => {
-		const { app, getScanEvidence } = createHarness();
+	it('rejects invalid bucket hashes before calling the use case', async () => {
+		const { app, getHistoryArchiveBucketCoverage } = createHarness();
 
 		await request(app)
-			.get('/archive-scans/https%3A%2F%2Ftest.com/evidence?limit=5001')
+			.get('/archive-scans/objects/buckets/not-a-bucket/coverage')
 			.expect(400);
 
-		expect(getScanEvidence.execute).not.toHaveBeenCalled();
+		expect(getHistoryArchiveBucketCoverage.execute).not.toHaveBeenCalled();
 	});
 });
 
 function createHarness() {
 	const app = express();
-	const getLatestScan = mock<GetLatestScan>();
-	const getScanEvidence = mock<GetScanEvidence>();
-	const getScanLogs = mock<GetScanLogs>();
+	const getHistoryArchiveBucketCoverage =
+		mock<GetHistoryArchiveBucketCoverage>();
 	app.use(express.json());
 	app.use(
 		'/archive-scans',
@@ -81,16 +72,51 @@ function createHarness() {
 			getArchiveScans: mock<GetArchiveScans>(),
 			getArchiveScanQueue: mock<GetArchiveScanQueue>(),
 			getArchiveScanWorkers: mock<GetArchiveScanWorkers>(),
-			getHistoryArchiveBucketCoverage: mock<GetHistoryArchiveBucketCoverage>(),
+			getHistoryArchiveBucketCoverage,
 			getHistoryArchiveObjectEvents: mock<GetHistoryArchiveObjectEvents>(),
 			getHistoryArchiveObjects: mock<GetHistoryArchiveObjects>(),
 			getHistoryArchiveObjectSummary: mock<GetHistoryArchiveObjectSummary>(),
 			getHistoryArchiveState: mock<GetHistoryArchiveState>(),
-			getLatestScan,
-			getScanEvidence,
-			getScanLogs
+			getLatestScan: mock<GetLatestScan>(),
+			getScanEvidence: mock<GetScanEvidence>(),
+			getScanLogs: mock<GetScanLogs>()
 		})
 	);
 
-	return { app, getLatestScan, getScanEvidence, getScanLogs };
+	return { app, getHistoryArchiveBucketCoverage };
+}
+
+function createCoverage(): HistoryArchiveBucketCrossCoverageV1 {
+	return {
+		archiveRoots: [
+			{
+				archiveUrl: 'https://history-a.example.com',
+				archiveUrlIdentity: 'https://history-a.example.com',
+				status: 'verified',
+				updatedAt: '2026-07-06T16:00:00.000Z',
+				verifiedAt: '2026-07-06T16:00:00.000Z'
+			},
+			{
+				archiveUrl: 'https://history-b.example.com',
+				archiveUrlIdentity: 'https://history-b.example.com',
+				status: 'failed',
+				updatedAt: '2026-07-06T16:02:00.000Z',
+				verifiedAt: null
+			}
+		],
+		bucketHash,
+		counts: {
+			archiveRoots: 2,
+			failedCopies: 1,
+			pendingCopies: 0,
+			scanningCopies: 0,
+			totalCopies: 2,
+			verifiedCopies: 1
+		},
+		failedCopies: [],
+		generatedAt: '2026-07-06T16:05:00.000Z',
+		pendingCopies: [],
+		scanningCopies: [],
+		verifiedCopies: []
+	};
 }

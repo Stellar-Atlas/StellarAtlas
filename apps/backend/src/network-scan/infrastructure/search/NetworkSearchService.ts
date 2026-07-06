@@ -2,6 +2,10 @@ import { Meilisearch, type Index } from 'meilisearch';
 import { networkSearchIndexSchemaVersion } from '@core/config/SearchConfigDefaults.js';
 import type { Logger } from '@core/services/Logger.js';
 import type { NetworkV1 } from 'shared';
+import {
+	assertMeilisearchTaskSucceeded,
+	ensureMeilisearchSettings
+} from './MeilisearchIndexSettings.js';
 import { buildNetworkSearchDocuments } from './NetworkSearchDocumentBuilder.js';
 import type {
 	NetworkSearchConfig,
@@ -71,6 +75,12 @@ const SORTABLE_ATTRIBUTES = ['label', 'networkTime', 'latestLedger'] as const;
 const taskPollIntervalMs = 50;
 const settingsTaskTimeoutMs = 60_000;
 const documentTaskTimeoutMs = 60_000;
+const syncRetryCooldownMs = 60_000;
+const requiredSettings = {
+	filterableAttributes: FILTERABLE_ATTRIBUTES,
+	searchableAttributes: SEARCHABLE_ATTRIBUTES,
+	sortableAttributes: SORTABLE_ATTRIBUTES
+};
 
 const sanitizeLimit = (limit: number): number => {
 	if (!Number.isInteger(limit)) return 8;
@@ -258,11 +268,6 @@ const buildFacetsFromDistribution = (
 	return facets;
 };
 
-const assertTaskSucceeded = (status: string, taskName: string): void => {
-	if (status !== 'succeeded')
-		throw new Error(`Meilisearch ${taskName} task ended with ${status}`);
-};
-
 const errorMessage = (error: unknown): string =>
 	error instanceof Error ? error.message : String(error);
 
@@ -281,9 +286,13 @@ export class NetworkSearchService {
 	private syncFailed = false;
 	private readonly index: Index<NetworkSearchDocument> | undefined;
 	private readonly indexName: string;
+	private nextSyncAttemptAtMs = 0;
 	private syncPromise: Promise<void> | undefined;
 
-	constructor(config: NetworkSearchConfig, private logger?: Logger) {
+	constructor(
+		config: NetworkSearchConfig,
+		private logger?: Logger
+	) {
 		this.indexName = config.indexName;
 		if (config.host && config.host.length > 0) {
 			const client = new Meilisearch({
@@ -367,13 +376,14 @@ export class NetworkSearchService {
 		this.documents = buildNetworkSearchDocuments(network);
 		this.indexedNetworkTime = network.time;
 		this.indexReady = false;
-		this.syncFailed = false;
+		if (Date.now() >= this.nextSyncAttemptAtMs) this.syncFailed = false;
 		this.syncPromise = undefined;
 	}
 
 	private syncIndex(): Promise<void> {
 		if (!this.index || this.indexReady) return Promise.resolve();
 		if (this.syncPromise) return this.syncPromise;
+		if (Date.now() < this.nextSyncAttemptAtMs) return Promise.resolve();
 
 		const networkTime = this.indexedNetworkTime;
 		const documents = [...this.documents];
@@ -382,6 +392,7 @@ export class NetworkSearchService {
 				if (this.indexedNetworkTime !== networkTime) return;
 				this.indexReady = true;
 				this.syncFailed = false;
+				this.nextSyncAttemptAtMs = 0;
 				this.logger?.info('Network search Meilisearch index synced', {
 					documentCount: documents.length,
 					indexName: this.indexName,
@@ -390,6 +401,7 @@ export class NetworkSearchService {
 			})
 			.catch((error: unknown) => {
 				this.syncFailed = true;
+				this.nextSyncAttemptAtMs = Date.now() + syncRetryCooldownMs;
 				this.logger?.error('Network search Meilisearch sync failed', {
 					error: errorMessage(error),
 					indexName: this.indexName,
@@ -423,24 +435,22 @@ export class NetworkSearchService {
 				interval: taskPollIntervalMs,
 				timeout: documentTaskTimeoutMs
 			});
-		assertTaskSucceeded(documentTask.status, 'document update');
+		assertMeilisearchTaskSucceeded(documentTask.status, 'document update');
 		if (this.indexedNetworkTime !== networkTime) return;
 	}
 
 	private async syncSettings(): Promise<void> {
 		if (!this.index || this.settingsReady) return;
 
-		const searchableTask = await this.index
-			.updateSettings({
-				filterableAttributes: [...FILTERABLE_ATTRIBUTES],
-				searchableAttributes: [...SEARCHABLE_ATTRIBUTES],
-				sortableAttributes: [...SORTABLE_ATTRIBUTES]
-			})
-			.waitTask({
+		await ensureMeilisearchSettings(
+			this.index,
+			requiredSettings,
+			{
 				interval: taskPollIntervalMs,
 				timeout: settingsTaskTimeoutMs
-			});
-		assertTaskSucceeded(searchableTask.status, 'settings');
+			},
+			'settings'
+		);
 
 		this.settingsReady = true;
 	}

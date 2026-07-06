@@ -16,6 +16,10 @@ import type {
 	ScpStatementLiveOrder,
 	ScpStatementLiveStore
 } from '../../domain/scp/ScpStatementLiveStore.js';
+import {
+	assertMeilisearchTaskSucceeded,
+	ensureMeilisearchSettings
+} from './MeilisearchIndexSettings.js';
 import type { NetworkSearchConfig } from './NetworkSearchTypes.js';
 
 interface ScpStatementSearchDocument extends ScpStatementObservationV1 {
@@ -43,6 +47,12 @@ const retentionCleanupIntervalMs = 30_000;
 const taskPollIntervalMs = 50;
 const settingsTaskTimeoutMs = 60_000;
 const documentTaskTimeoutMs = 30_000;
+const settingsRetryCooldownMs = 60_000;
+const documentWriteRetryCooldownMs = 60_000;
+const requiredSettings = {
+	filterableAttributes,
+	sortableAttributes
+};
 
 const mapStellarValueSummary = (
 	value: StellarValueSummary
@@ -130,13 +140,6 @@ const toDTO = (
 
 const quoteFilterValue = (value: string): string => JSON.stringify(value);
 
-const assertTaskSucceeded = (status: string, taskName: string): void => {
-	if (status !== 'succeeded')
-		throw new Error(
-			`Meilisearch live SCP ${taskName} task ended with ${status}`
-		);
-};
-
 const errorMessage = (error: unknown): string =>
 	error instanceof Error ? error.message : String(error);
 
@@ -145,6 +148,8 @@ export class MeilisearchScpStatementLiveStore implements ScpStatementLiveStore {
 	private readonly index: Index<ScpStatementSearchDocument> | undefined;
 	private indexSetupPromise: Promise<void> | undefined;
 	private lastRetentionCleanupAtMs = 0;
+	private nextDocumentWriteAttemptAtMs = 0;
+	private nextIndexSetupAttemptAtMs = 0;
 
 	constructor(
 		config: NetworkSearchConfig,
@@ -163,16 +168,27 @@ export class MeilisearchScpStatementLiveStore implements ScpStatementLiveStore {
 		observations: readonly CrawlerScpStatementObservation[]
 	): Promise<void> {
 		if (!this.index || observations.length === 0) return;
-		await this.ensureIndexReady();
+		const nowMs = Date.now();
+		if (nowMs < this.nextDocumentWriteAttemptAtMs) return;
+		if (!(await this.ensureIndexReady(nowMs))) return;
 
 		const documents = observations.map(toDocument);
-		const documentTask = await this.index
-			.addDocuments(documents, { primaryKey: 'id' })
-			.waitTask({
-				interval: taskPollIntervalMs,
-				timeout: documentTaskTimeoutMs
-			});
-		assertTaskSucceeded(documentTask.status, 'document update');
+		try {
+			const documentTask = await this.index
+				.addDocuments(documents, { primaryKey: 'id' })
+				.waitTask({
+					interval: taskPollIntervalMs,
+					timeout: documentTaskTimeoutMs
+				});
+			assertMeilisearchTaskSucceeded(
+				documentTask.status,
+				'live SCP document update'
+			);
+		} catch (error) {
+			this.nextDocumentWriteAttemptAtMs =
+				Date.now() + documentWriteRetryCooldownMs;
+			throw error;
+		}
 		await this.enqueueRetentionCleanup(Date.now());
 	}
 
@@ -186,7 +202,7 @@ export class MeilisearchScpStatementLiveStore implements ScpStatementLiveStore {
 		if (!this.index) return null;
 
 		try {
-			await this.ensureIndexReady();
+			if (!(await this.ensureIndexReady())) return null;
 			const response = await this.index.search<ScpStatementSearchDocument>('', {
 				filter: this.buildFilter(
 					{ after, limit, nodeId, order, slotIndex },
@@ -204,32 +220,36 @@ export class MeilisearchScpStatementLiveStore implements ScpStatementLiveStore {
 		}
 	}
 
-	private async ensureIndexReady(): Promise<void> {
-		if (!this.index || this.indexReady) return;
-		this.indexSetupPromise ??= this.enqueueIndexSettings();
+	private async ensureIndexReady(nowMs = Date.now()): Promise<boolean> {
+		if (!this.index) return false;
+		if (this.indexReady) return true;
+		if (nowMs < this.nextIndexSetupAttemptAtMs) return false;
+		this.indexSetupPromise ??= this.enqueueIndexSettings().finally(() => {
+			if (!this.indexReady) this.indexSetupPromise = undefined;
+		});
 		await this.indexSetupPromise;
+		return this.indexReady;
 	}
 
 	private async enqueueIndexSettings(): Promise<void> {
 		if (!this.index) return;
 		try {
-			const settingsTask = await this.index
-				.updateSettings({
-					filterableAttributes: [...filterableAttributes],
-					sortableAttributes: [...sortableAttributes]
-				})
-				.waitTask({
+			await ensureMeilisearchSettings(
+				this.index,
+				requiredSettings,
+				{
 					interval: taskPollIntervalMs,
 					timeout: settingsTaskTimeoutMs
-				});
-			assertTaskSucceeded(settingsTask.status, 'settings');
+				},
+				'live SCP settings'
+			);
 			this.indexReady = true;
+			this.nextIndexSetupAttemptAtMs = 0;
 		} catch (error) {
-			this.indexSetupPromise = undefined;
+			this.nextIndexSetupAttemptAtMs = Date.now() + settingsRetryCooldownMs;
 			this.logger?.error('Could not queue live SCP Meilisearch settings', {
 				error: errorMessage(error)
 			});
-			throw error;
 		}
 	}
 

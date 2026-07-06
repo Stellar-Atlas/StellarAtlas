@@ -12,6 +12,7 @@ import { ArchiveScanRouterWrapper } from '../ArchiveScanRouter.js';
 import { GetArchiveScans } from '@history-scan-coordinator/use-cases/get-archive-scans/GetArchiveScans.js';
 import { GetArchiveScanQueue } from '@history-scan-coordinator/use-cases/get-archive-scan-queue/GetArchiveScanQueue.js';
 import { GetArchiveScanWorkers } from '@history-scan-coordinator/use-cases/get-archive-scan-workers/GetArchiveScanWorkers.js';
+import { GetHistoryArchiveBucketCoverage } from '@history-scan-coordinator/use-cases/get-history-archive-bucket-coverage/GetHistoryArchiveBucketCoverage.js';
 import { GetHistoryArchiveObjectEvents } from '@history-scan-coordinator/use-cases/get-history-archive-object-events/GetHistoryArchiveObjectEvents.js';
 import { GetHistoryArchiveObjects } from '@history-scan-coordinator/use-cases/get-history-archive-objects/GetHistoryArchiveObjects.js';
 import { GetHistoryArchiveObjectSummary } from '@history-scan-coordinator/use-cases/get-history-archive-object-summary/GetHistoryArchiveObjectSummary.js';
@@ -158,6 +159,7 @@ function createHarness() {
 			getArchiveScans: mock<GetArchiveScans>(),
 			getArchiveScanQueue: mock<GetArchiveScanQueue>(),
 			getArchiveScanWorkers: mock<GetArchiveScanWorkers>(),
+			getHistoryArchiveBucketCoverage: mock<GetHistoryArchiveBucketCoverage>(),
 			getHistoryArchiveObjectEvents,
 			getHistoryArchiveObjects,
 			getHistoryArchiveObjectSummary,

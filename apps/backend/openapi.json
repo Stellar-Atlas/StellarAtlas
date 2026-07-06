@@ -3733,6 +3733,40 @@
 				}
 			}
 		},
+		"/v1/archive-scans/objects/buckets/{bucketHash}/coverage": {
+			"get": {
+				"summary": "Get bucket hash coverage across archive roots",
+				"description": "Returns scanner-owned bucket object rows for one bucket hash grouped into verified, failed, pending, and scanning copies, with the archive roots where that bucket has been scheduled or observed.",
+				"tags": ["ArchiveScans"],
+				"operationId": "getHistoryArchiveBucketCoverage",
+				"parameters": [
+					{
+						"name": "bucketHash",
+						"in": "path",
+						"description": "Lowercase or uppercase 64-character hexadecimal Stellar bucket hash.",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"pattern": "^[0-9a-fA-F]{64}$"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "bucket hash coverage across archive roots",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/HistoryArchiveBucketCrossCoverageV1"
+								}
+							}
+						}
+					},
+					"400": { "description": "Invalid bucket hash" },
+					"500": { "description": "Server error" }
+				}
+			}
+		},
 		"/v1/archive-scans/objects/summary": {
 			"get": {
 				"summary": "Summarize history archive object coverage",
@@ -8285,6 +8319,161 @@
 						"type": "array",
 						"items": {
 							"$ref": "#/components/schemas/HistoryArchiveObjectV1"
+						}
+					}
+				}
+			},
+			"HistoryArchiveBucketCopyV1": {
+				"type": "object",
+				"required": [
+					"archiveUrl",
+					"archiveUrlIdentity",
+					"attempts",
+					"bytesDownloaded",
+					"claimedAt",
+					"error",
+					"nextAttemptAt",
+					"objectKey",
+					"objectUrl",
+					"remoteId",
+					"status",
+					"updatedAt",
+					"verifiedAt",
+					"workerStage"
+				],
+				"properties": {
+					"archiveUrl": { "type": "string", "format": "uri" },
+					"archiveUrlIdentity": { "type": "string" },
+					"attempts": { "type": "integer", "minimum": 0 },
+					"bytesDownloaded": {
+						"type": "integer",
+						"minimum": 0,
+						"nullable": true
+					},
+					"claimedAt": {
+						"type": "string",
+						"format": "date-time",
+						"nullable": true
+					},
+					"error": {
+						"nullable": true,
+						"allOf": [
+							{ "$ref": "#/components/schemas/HistoryArchiveObjectErrorV1" }
+						]
+					},
+					"nextAttemptAt": {
+						"type": "string",
+						"format": "date-time",
+						"nullable": true
+					},
+					"objectKey": { "type": "string" },
+					"objectUrl": { "type": "string", "format": "uri" },
+					"remoteId": { "type": "string", "format": "uuid" },
+					"status": {
+						"type": "string",
+						"enum": ["pending", "scanning", "verified", "failed"]
+					},
+					"updatedAt": { "type": "string", "format": "date-time" },
+					"verifiedAt": {
+						"type": "string",
+						"format": "date-time",
+						"nullable": true
+					},
+					"workerStage": { "type": "string", "nullable": true }
+				}
+			},
+			"HistoryArchiveBucketArchiveRootV1": {
+				"type": "object",
+				"required": [
+					"archiveUrl",
+					"archiveUrlIdentity",
+					"status",
+					"updatedAt",
+					"verifiedAt"
+				],
+				"properties": {
+					"archiveUrl": { "type": "string", "format": "uri" },
+					"archiveUrlIdentity": { "type": "string" },
+					"status": {
+						"type": "string",
+						"enum": ["pending", "scanning", "verified", "failed"]
+					},
+					"updatedAt": { "type": "string", "format": "date-time" },
+					"verifiedAt": {
+						"type": "string",
+						"format": "date-time",
+						"nullable": true
+					}
+				}
+			},
+			"HistoryArchiveBucketCoverageCountsV1": {
+				"type": "object",
+				"required": [
+					"archiveRoots",
+					"failedCopies",
+					"pendingCopies",
+					"scanningCopies",
+					"totalCopies",
+					"verifiedCopies"
+				],
+				"properties": {
+					"archiveRoots": { "type": "integer", "minimum": 0 },
+					"failedCopies": { "type": "integer", "minimum": 0 },
+					"pendingCopies": { "type": "integer", "minimum": 0 },
+					"scanningCopies": { "type": "integer", "minimum": 0 },
+					"totalCopies": { "type": "integer", "minimum": 0 },
+					"verifiedCopies": { "type": "integer", "minimum": 0 }
+				}
+			},
+			"HistoryArchiveBucketCrossCoverageV1": {
+				"type": "object",
+				"required": [
+					"archiveRoots",
+					"bucketHash",
+					"counts",
+					"failedCopies",
+					"generatedAt",
+					"pendingCopies",
+					"scanningCopies",
+					"verifiedCopies"
+				],
+				"properties": {
+					"archiveRoots": {
+						"type": "array",
+						"items": {
+							"$ref": "#/components/schemas/HistoryArchiveBucketArchiveRootV1"
+						}
+					},
+					"bucketHash": {
+						"type": "string",
+						"pattern": "^[0-9a-f]{64}$"
+					},
+					"counts": {
+						"$ref": "#/components/schemas/HistoryArchiveBucketCoverageCountsV1"
+					},
+					"failedCopies": {
+						"type": "array",
+						"items": {
+							"$ref": "#/components/schemas/HistoryArchiveBucketCopyV1"
+						}
+					},
+					"generatedAt": { "type": "string", "format": "date-time" },
+					"pendingCopies": {
+						"type": "array",
+						"items": {
+							"$ref": "#/components/schemas/HistoryArchiveBucketCopyV1"
+						}
+					},
+					"scanningCopies": {
+						"type": "array",
+						"items": {
+							"$ref": "#/components/schemas/HistoryArchiveBucketCopyV1"
+						}
+					},
+					"verifiedCopies": {
+						"type": "array",
+						"items": {
+							"$ref": "#/components/schemas/HistoryArchiveBucketCopyV1"
 						}
 					}
 				}

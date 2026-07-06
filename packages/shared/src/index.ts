@@ -76,6 +76,13 @@ export {
 	type HistoryArchiveObjectTypeSummaryV1
 } from './dto/history-archive-object-summary-v1.js';
 export {
+	type HistoryArchiveBucketArchiveRootV1,
+	type HistoryArchiveBucketCopyV1,
+	type HistoryArchiveBucketCoverageCountsV1,
+	type HistoryArchiveBucketCrossCoverageV1,
+	HistoryArchiveBucketCrossCoverageV1Schema
+} from './dto/history-archive-bucket-coverage-v1.js';
+export {
 	type HistoryArchiveObjectEventTypeV1,
 	type HistoryArchiveObjectEventV1,
 	type HistoryArchiveObjectEventsV1,

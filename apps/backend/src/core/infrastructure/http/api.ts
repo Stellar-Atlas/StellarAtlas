@@ -58,6 +58,7 @@ import { GetArchiveScanWorkers } from '@history-scan-coordinator/use-cases/get-a
 import { GetScanEvidence } from '@history-scan-coordinator/use-cases/get-scan-evidence/GetScanEvidence.js';
 import { GetHistoryArchiveState } from '@history-scan-coordinator/use-cases/get-history-archive-state/GetHistoryArchiveState.js';
 import { GetHistoryArchiveObjects } from '@history-scan-coordinator/use-cases/get-history-archive-objects/GetHistoryArchiveObjects.js';
+import { GetHistoryArchiveBucketCoverage } from '@history-scan-coordinator/use-cases/get-history-archive-bucket-coverage/GetHistoryArchiveBucketCoverage.js';
 import { GetHistoryArchiveObjectSummary } from '@history-scan-coordinator/use-cases/get-history-archive-object-summary/GetHistoryArchiveObjectSummary.js';
 import { GetHistoryArchiveObjectEvents } from '@history-scan-coordinator/use-cases/get-history-archive-object-events/GetHistoryArchiveObjectEvents.js';
 import { GetHistoryArchiveObjectJob } from '@history-scan-coordinator/use-cases/get-history-archive-object-job/GetHistoryArchiveObjectJob.js';
@@ -171,6 +172,9 @@ const listen = async () => {
 			getArchiveScans: kernel.container.get(GetArchiveScans),
 			getArchiveScanQueue: kernel.container.get(GetArchiveScanQueue),
 			getArchiveScanWorkers: kernel.container.get(GetArchiveScanWorkers),
+			getHistoryArchiveBucketCoverage: kernel.container.get(
+				GetHistoryArchiveBucketCoverage
+			),
 			getHistoryArchiveObjectEvents: kernel.container.get(
 				GetHistoryArchiveObjectEvents
 			),

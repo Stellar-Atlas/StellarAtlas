@@ -101,6 +101,25 @@ export class TypeOrmHistoryArchiveObjectRepository implements HistoryArchiveObje
 		return this.repository.findOneBy({ remoteId });
 	}
 
+	async findBucketObjectsByHash(
+		bucketHash: string
+	): Promise<readonly HistoryArchiveObject[]> {
+		const normalizedBucketHash = bucketHash.toLowerCase();
+
+		return await this.repository
+			.createQueryBuilder('archiveObject')
+			.where('archiveObject.objectType = :objectType', {
+				objectType: 'bucket'
+			})
+			.andWhere('archiveObject.objectKey = :objectKey', {
+				objectKey: `bucket:${normalizedBucketHash}`
+			})
+			.orderBy(statusRankSql('"archiveObject"."status"'), 'ASC')
+			.addOrderBy('archiveObject.archiveUrlIdentity', 'ASC')
+			.addOrderBy('archiveObject.updatedAt', 'DESC')
+			.getMany();
+	}
+
 	async clearHostThrottle(hostIdentity: string): Promise<void> {
 		await this.repository.manager.query(
 			historyArchiveObjectHostThrottleDeleteSql,

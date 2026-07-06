@@ -47,6 +47,7 @@ import { TypeOrmHistoryArchiveObjectRepository } from '../repositories/database/
 import { TypeOrmHistoryArchiveObjectEventRepository } from '../repositories/database/TypeOrmHistoryArchiveObjectEventRepository.js';
 import { TypeOrmHistoryArchiveCheckpointProofRepository } from '../repositories/database/TypeOrmHistoryArchiveCheckpointProofRepository.js';
 import { GetHistoryArchiveObjects } from '../../use-cases/get-history-archive-objects/GetHistoryArchiveObjects.js';
+import { GetHistoryArchiveBucketCoverage } from '../../use-cases/get-history-archive-bucket-coverage/GetHistoryArchiveBucketCoverage.js';
 import { GetHistoryArchiveObjectSummary } from '../../use-cases/get-history-archive-object-summary/GetHistoryArchiveObjectSummary.js';
 import { GetHistoryArchiveObjectEvents } from '../../use-cases/get-history-archive-object-events/GetHistoryArchiveObjectEvents.js';
 import { ScheduleHistoryArchiveObjects } from '../../use-cases/schedule-history-archive-objects/ScheduleHistoryArchiveObjects.js';
@@ -67,6 +68,7 @@ export function load(container: Container, config: Config) {
 	container.bind(GetArchiveScanQueue).toSelf();
 	container.bind(GetArchiveScanWorkers).toSelf();
 	container.bind(GetHistoryArchiveState).toSelf();
+	container.bind(GetHistoryArchiveBucketCoverage).toSelf();
 	container.bind(GetHistoryArchiveObjects).toSelf();
 	container.bind(GetHistoryArchiveObjectSummary).toSelf();
 	container.bind(GetHistoryArchiveObjectEvents).toSelf();

@@ -9,6 +9,7 @@ import { GetArchiveScanWorkers } from '@history-scan-coordinator/use-cases/get-a
 import { GetLatestScan } from '@history-scan-coordinator/use-cases/get-latest-scan/GetLatestScan.js';
 import { GetScanEvidence } from '@history-scan-coordinator/use-cases/get-scan-evidence/GetScanEvidence.js';
 import { GetHistoryArchiveState } from '@history-scan-coordinator/use-cases/get-history-archive-state/GetHistoryArchiveState.js';
+import { GetHistoryArchiveBucketCoverage } from '@history-scan-coordinator/use-cases/get-history-archive-bucket-coverage/GetHistoryArchiveBucketCoverage.js';
 import { GetHistoryArchiveObjectEvents } from '@history-scan-coordinator/use-cases/get-history-archive-object-events/GetHistoryArchiveObjectEvents.js';
 import { GetHistoryArchiveObjects } from '@history-scan-coordinator/use-cases/get-history-archive-objects/GetHistoryArchiveObjects.js';
 import { GetHistoryArchiveObjectSummary } from '@history-scan-coordinator/use-cases/get-history-archive-object-summary/GetHistoryArchiveObjectSummary.js';
@@ -22,6 +23,7 @@ describe('ArchiveScanRouter.integration', () => {
 	let getArchiveScans: jest.Mocked<GetArchiveScans>;
 	let getArchiveScanQueue: jest.Mocked<GetArchiveScanQueue>;
 	let getArchiveScanWorkers: jest.Mocked<GetArchiveScanWorkers>;
+	let getHistoryArchiveBucketCoverage: jest.Mocked<GetHistoryArchiveBucketCoverage>;
 	let getHistoryArchiveObjectEvents: jest.Mocked<GetHistoryArchiveObjectEvents>;
 	let getHistoryArchiveObjects: jest.Mocked<GetHistoryArchiveObjects>;
 	let getHistoryArchiveObjectSummary: jest.Mocked<GetHistoryArchiveObjectSummary>;
@@ -34,6 +36,7 @@ describe('ArchiveScanRouter.integration', () => {
 		getArchiveScans = mock<GetArchiveScans>();
 		getArchiveScanQueue = mock<GetArchiveScanQueue>();
 		getArchiveScanWorkers = mock<GetArchiveScanWorkers>();
+		getHistoryArchiveBucketCoverage = mock<GetHistoryArchiveBucketCoverage>();
 		getHistoryArchiveObjectEvents = mock<GetHistoryArchiveObjectEvents>();
 		getHistoryArchiveObjects = mock<GetHistoryArchiveObjects>();
 		getHistoryArchiveObjectSummary = mock<GetHistoryArchiveObjectSummary>();
@@ -49,6 +52,7 @@ describe('ArchiveScanRouter.integration', () => {
 				getArchiveScans,
 				getArchiveScanQueue,
 				getArchiveScanWorkers,
+				getHistoryArchiveBucketCoverage,
 				getHistoryArchiveObjectEvents,
 				getHistoryArchiveObjects,
 				getHistoryArchiveObjectSummary,

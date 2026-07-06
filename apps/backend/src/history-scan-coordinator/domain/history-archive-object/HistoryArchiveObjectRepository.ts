@@ -52,6 +52,9 @@ export interface HistoryArchiveObjectRepository {
 		archiveUrl: string,
 		limit: number
 	): Promise<HistoryArchiveObjectQueueSnapshot>;
+	findBucketObjectsByHash(
+		bucketHash: string
+	): Promise<readonly HistoryArchiveObject[]>;
 	findByRemoteId(remoteId: string): Promise<HistoryArchiveObject | null>;
 	findOldestCheckpointLedgerByArchiveUrlIdentities(
 		archiveUrlIdentities: readonly string[]

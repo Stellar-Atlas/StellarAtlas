@@ -17,6 +17,10 @@ import {
 import { GetScanLogs } from '../../use-cases/get-scan-logs/GetScanLogs.js';
 import { GetHistoryArchiveState } from '../../use-cases/get-history-archive-state/GetHistoryArchiveState.js';
 import { GetHistoryArchiveObjects } from '../../use-cases/get-history-archive-objects/GetHistoryArchiveObjects.js';
+import {
+	GetHistoryArchiveBucketCoverage,
+	InvalidBucketHashError
+} from '../../use-cases/get-history-archive-bucket-coverage/GetHistoryArchiveBucketCoverage.js';
 import { GetHistoryArchiveObjectSummary } from '../../use-cases/get-history-archive-object-summary/GetHistoryArchiveObjectSummary.js';
 import { GetHistoryArchiveObjectEvents } from '../../use-cases/get-history-archive-object-events/GetHistoryArchiveObjectEvents.js';
 import { InvalidUrlError } from '../../use-cases/get-latest-scan/InvalidUrlError.js';
@@ -26,6 +30,7 @@ export interface ArchiveScanRouterConfig {
 	getArchiveScans: GetArchiveScans;
 	getArchiveScanQueue: GetArchiveScanQueue;
 	getArchiveScanWorkers: GetArchiveScanWorkers;
+	getHistoryArchiveBucketCoverage: GetHistoryArchiveBucketCoverage;
 	getHistoryArchiveObjectEvents: GetHistoryArchiveObjectEvents;
 	getHistoryArchiveObjects: GetHistoryArchiveObjects;
 	getHistoryArchiveObjectSummary: GetHistoryArchiveObjectSummary;
@@ -99,6 +104,37 @@ export const ArchiveScanRouterWrapper = (
 
 		return res.status(200).json(workersOrError.value);
 	});
+
+	archiveScanRouter.get(
+		'/objects/buckets/:bucketHash/coverage',
+		[param('bucketHash').matches(/^[0-9a-f]{64}$/i)],
+		async function (req: express.Request, res: express.Response) {
+			res.setHeader(
+				'Cache-Control',
+				'public, max-age=' + archiveScanCacheMaxAgeSeconds
+			);
+			const errors = validationResult(req);
+			if (!errors.isEmpty()) {
+				return res.status(400).json({ errors: errors.array() });
+			}
+
+			const coverageOrError =
+				await config.getHistoryArchiveBucketCoverage.execute(
+					req.params.bucketHash
+				);
+			if (
+				coverageOrError.isErr() &&
+				coverageOrError.error instanceof InvalidBucketHashError
+			) {
+				return res.status(400).json({ error: 'Invalid bucket hash' });
+			}
+			if (coverageOrError.isErr()) {
+				return res.status(500).json({ error: 'Internal server error' });
+			}
+
+			return res.status(200).json(coverageOrError.value);
+		}
+	);
 
 	archiveScanRouter.get(
 		'/objects',
