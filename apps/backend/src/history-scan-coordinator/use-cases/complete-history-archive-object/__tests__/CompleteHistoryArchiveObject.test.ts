@@ -17,6 +17,48 @@ describe('CompleteHistoryArchiveObject', () => {
 		objectRepository = mock<HistoryArchiveObjectRepository>();
 		stateRepository = mock<HistoryArchiveStateRepository>();
 		objectRepository.markObjectVerified.mockResolvedValue(true);
+		objectRepository.findOldestCheckpointLedgerByArchiveUrlIdentities.mockResolvedValue(
+			new Map()
+		);
+	});
+
+	it('schedules only root and checkpoint-state discovery objects from verified root state', async () => {
+		const archiveObject = createRootObject();
+		objectRepository.findByRemoteId.mockResolvedValue(archiveObject);
+
+		const result = await new CompleteHistoryArchiveObject(
+			objectRepository,
+			stateRepository,
+			eventRecorder
+		).execute(archiveObject.remoteId, {
+			archiveMetadata: createArchiveMetadata(255),
+			claimAttempt: 1,
+			workerStage: 'verified'
+		});
+
+		expect(result._unsafeUnwrap()).toBe(true);
+		expect(stateRepository.saveAvailable).toHaveBeenCalledWith(
+			archiveObject.archiveUrl,
+			createArchiveMetadata(255),
+			'history-scanner'
+		);
+		const savedObjects = objectRepository.saveObjects.mock.calls[0]?.[0] ?? [];
+		expect(savedObjects.length).toBeGreaterThan(1);
+		expect(
+			new Set(savedObjects.map((object) => object.objectType))
+		).toEqual(new Set(['history-archive-state', 'checkpoint-state']));
+		expect(savedObjects.map((object) => object.objectType)).not.toContain(
+			'ledger'
+		);
+		expect(savedObjects.map((object) => object.objectType)).not.toContain(
+			'transactions'
+		);
+		expect(savedObjects.map((object) => object.objectType)).not.toContain(
+			'results'
+		);
+		expect(savedObjects.map((object) => object.objectType)).not.toContain(
+			'bucket'
+		);
 	});
 
 	it('schedules checkpoint sibling objects from verified checkpoint state facts', async () => {
@@ -111,6 +153,20 @@ describe('CompleteHistoryArchiveObject', () => {
 		);
 	});
 });
+
+function createRootObject(): HistoryArchiveObject {
+	return new HistoryArchiveObject({
+		archiveUrl: 'https://history.example.com/archive',
+		archiveUrlIdentity: 'https://history.example.com/archive',
+		objectKey: 'root',
+		objectOrder: 0,
+		objectType: 'history-archive-state',
+		objectUrl:
+			'https://history.example.com/archive/.well-known/stellar-history.json',
+		remoteId: '11111111-1111-4111-8111-111111111111',
+		status: 'scanning'
+	});
+}
 
 function createCheckpointObject(checkpointLedger = 127): HistoryArchiveObject {
 	const checkpointHex = checkpointLedger.toString(16).padStart(8, '0');

@@ -39,6 +39,23 @@ describe('HistoryArchiveObjectBuilder', () => {
 		);
 	});
 
+	it('does not build checkpoint category or bucket descendants directly from root state', () => {
+		const objects = buildHistoryArchiveObjectsFromState(
+			createSnapshot(createArchiveMetadata(255))
+		);
+
+		expect(objects.map((object) => object.objectKey)).toEqual([
+			'root',
+			'checkpoint-state:000000ff'
+		]);
+		expect(objects.map((object) => object.objectType)).not.toContain('ledger');
+		expect(objects.map((object) => object.objectType)).not.toContain(
+			'transactions'
+		);
+		expect(objects.map((object) => object.objectType)).not.toContain('results');
+		expect(objects.map((object) => object.objectType)).not.toContain('bucket');
+	});
+
 	it('discovers checkpoint state objects backwards from latest state', () => {
 		const objects = buildCheckpointStateDiscoveryObjects(
 			createSnapshot(createArchiveMetadata(255)),

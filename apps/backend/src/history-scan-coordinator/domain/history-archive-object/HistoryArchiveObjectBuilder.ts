@@ -53,8 +53,6 @@ export function buildHistoryArchiveObjectsFromState(
 		);
 	}
 
-	objects.push(...buildCheckpointSiblingObjectsFromState(snapshot));
-
 	return dedupeObjects(objects);
 }
 
