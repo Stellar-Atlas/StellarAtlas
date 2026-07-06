@@ -24,7 +24,31 @@ describe('GetScanJob', () => {
 		);
 	});
 
-	it('should return ok(null) when no scan job is available', async () => {
+	it('should return ok(null) when first-party legacy range claims are disabled', async () => {
+		scanJobRepositoryMock.releaseStaleTakenJobs.mockResolvedValue(0);
+		const result = await getScanJob.execute();
+
+		expect(result.isOk()).toBe(true);
+		expect(result._unsafeUnwrap()).toBeNull();
+		expect(loggerMock.info).toHaveBeenCalledWith(
+			'Legacy range scan job claims are disabled',
+			{
+				app: 'history-scan-coordinator'
+			}
+		);
+		expect(scanJobRepositoryMock.fetchNextJob).not.toHaveBeenCalled();
+		expect(scanJobRepositoryMock.releaseStaleTakenJobs).toHaveBeenCalledTimes(
+			1
+		);
+	});
+
+	it('should return ok(null) when explicitly enabled and no scan job is available', async () => {
+		getScanJob = new GetScanJob(
+			scanJobRepositoryMock,
+			exceptionLoggerMock,
+			loggerMock,
+			true
+		);
 		scanJobRepositoryMock.releaseStaleTakenJobs.mockResolvedValue(0);
 		scanJobRepositoryMock.fetchNextJob.mockResolvedValue(null);
 		const result = await getScanJob.execute();
@@ -34,12 +58,15 @@ describe('GetScanJob', () => {
 		expect(loggerMock.info).toHaveBeenCalledWith('No scan jobs available', {
 			app: 'history-scan-coordinator'
 		});
-		expect(scanJobRepositoryMock.releaseStaleTakenJobs).toHaveBeenCalledTimes(
-			1
-		);
 	});
 
-	it('should return ok(job) when a scan job is available', async () => {
+	it('should return ok(job) when explicitly enabled and a scan job is available', async () => {
+		getScanJob = new GetScanJob(
+			scanJobRepositoryMock,
+			exceptionLoggerMock,
+			loggerMock,
+			true
+		);
 		const mockJob = new ScanJob('http://test.com');
 		mockJob.status = 'TAKEN';
 		scanJobRepositoryMock.releaseStaleTakenJobs.mockResolvedValue(0);
@@ -114,6 +141,12 @@ describe('GetScanJob', () => {
 	});
 
 	it('should return err(error) when fetchNextJob fails', async () => {
+		getScanJob = new GetScanJob(
+			scanJobRepositoryMock,
+			exceptionLoggerMock,
+			loggerMock,
+			true
+		);
 		const error = new Error('Database error');
 		scanJobRepositoryMock.releaseStaleTakenJobs.mockResolvedValue(0);
 		scanJobRepositoryMock.fetchNextJob.mockRejectedValueOnce(error);

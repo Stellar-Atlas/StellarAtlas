@@ -23,7 +23,8 @@ export class GetScanJob {
 		@inject(TYPES.ScanJobRepository)
 		private scanJobRepository: ScanJobRepository,
 		@inject('ExceptionLogger') private exceptionLogger: ExceptionLogger,
-		@inject('Logger') private logger: Logger
+		@inject('Logger') private logger: Logger,
+		private readonly firstPartyLegacyRangeClaimsEnabled = false
 	) {}
 
 	public async execute(
@@ -32,6 +33,14 @@ export class GetScanJob {
 		try {
 			const staleTakenBefore = getStaleScanJobCutoff();
 			await this.releaseStaleJobs(staleTakenBefore);
+			if (context === undefined && !this.firstPartyLegacyRangeClaimsEnabled) {
+				this.logger.info('Legacy range scan job claims are disabled', {
+					app: 'history-scan-coordinator'
+				});
+
+				return ok(null);
+			}
+
 			const nextScanJob =
 				context === undefined
 					? await this.scanJobRepository.fetchNextJob()
