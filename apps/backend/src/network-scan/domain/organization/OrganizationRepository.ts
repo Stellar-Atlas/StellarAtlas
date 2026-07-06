@@ -1,10 +1,14 @@
 import Organization from './Organization.js';
+import { OrganizationId } from './OrganizationId.js';
 
 //active means that the organization is not archived. i.e. snapshot endDate = SNAPSHOT_MAX_END_DATE
 export interface OrganizationRepository {
 	findActiveAtTimePoint(at: Date): Promise<Organization[]>; //active snapshot at time x
 	findActive(): Promise<Organization[]>; //active snapshot at time now
 	findAllKnown(): Promise<Organization[]>; //active or archived latest snapshot
+	findByOrganizationId(
+		organizationId: OrganizationId
+	): Promise<Organization | null>; //active or archived latest snapshot
 	findByHomeDomains(homeDomains: string[]): Promise<Organization[]>; //active or archived
 	save(organizations: Organization[], from: Date): Promise<Organization[]>;
 }

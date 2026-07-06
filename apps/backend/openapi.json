@@ -5299,6 +5299,40 @@
 				}
 			}
 		},
+		"/v1/known/nodes/{publicKey}": {
+			"get": {
+				"summary": "Get a known node",
+				"description": "Returns the latest stored known-node record for a public key, including archived or public-key-only evidence when available.",
+				"tags": ["Network", "Node"],
+				"operationId": "getKnownNode",
+				"parameters": [
+					{
+						"name": "publicKey",
+						"in": "path",
+						"required": true,
+						"schema": { "type": "string" }
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "successful operation",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/KnownNode"
+								}
+							}
+						}
+					},
+					"404": {
+						"description": "Known node not found"
+					},
+					"500": {
+						"description": "Server error"
+					}
+				}
+			}
+		},
 		"/v1/known/nodes": {
 			"get": {
 				"summary": "Get all known nodes",
@@ -5315,6 +5349,40 @@
 								}
 							}
 						}
+					},
+					"500": {
+						"description": "Server error"
+					}
+				}
+			}
+		},
+		"/v1/known/organizations/{organizationId}": {
+			"get": {
+				"summary": "Get a known organization",
+				"description": "Returns the latest stored known-organization record, including archived evidence when available.",
+				"tags": ["Network", "Organization", "Horizon"],
+				"operationId": "getKnownOrganization",
+				"parameters": [
+					{
+						"name": "organizationId",
+						"in": "path",
+						"required": true,
+						"schema": { "type": "string" }
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "successful operation",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/KnownOrganization"
+								}
+							}
+						}
+					},
+					"404": {
+						"description": "Known organization not found"
 					},
 					"500": {
 						"description": "Server error"
@@ -6224,7 +6292,10 @@
 			"KnownNode": {
 				"type": "object",
 				"required": [
+					"publicKey",
+					"dateDiscovered",
 					"node",
+					"metadataState",
 					"current",
 					"snapshotStartDate",
 					"snapshotEndDate",
@@ -6232,15 +6303,29 @@
 					"lastMeasurementAt"
 				],
 				"properties": {
-					"node": { "$ref": "https://StellarAtlas.io/schemas/node.json" },
-					"current": { "type": "boolean" },
-					"snapshotStartDate": {
+					"publicKey": { "type": "string" },
+					"dateDiscovered": {
 						"type": "string",
 						"format": "date-time"
 					},
+					"node": {
+						"$ref": "https://StellarAtlas.io/schemas/node.json",
+						"nullable": true
+					},
+					"metadataState": {
+						"type": "string",
+						"enum": ["snapshot", "public_key_only"]
+					},
+					"current": { "type": "boolean" },
+					"snapshotStartDate": {
+						"type": "string",
+						"format": "date-time",
+						"nullable": true
+					},
 					"snapshotEndDate": {
 						"type": "string",
-						"format": "date-time"
+						"format": "date-time",
+						"nullable": true
 					},
 					"lastSeen": {
 						"type": "string",
@@ -8213,8 +8298,8 @@
 					"partialArchiveCheckpoints",
 					"totalArchiveCheckpoints"
 				],
-					"properties": {
-						"activeArchiveCheckpoints": { "type": "integer", "minimum": 0 },
+				"properties": {
+					"activeArchiveCheckpoints": { "type": "integer", "minimum": 0 },
 					"archiveRootsWithState": { "type": "integer", "minimum": 0 },
 					"completeArchiveCheckpoints": {
 						"type": "integer",
@@ -8244,71 +8329,71 @@
 						"nullable": true
 					},
 					"partialArchiveCheckpoints": { "type": "integer", "minimum": 0 },
-						"totalArchiveCheckpoints": { "type": "integer", "minimum": 0 }
-					}
-				},
-				"HistoryArchiveObjectHostThrottleV1": {
-					"type": "object",
-					"required": [
-						"archiveUrlIdentity",
-						"blockedUntil",
-						"consecutiveFailures",
-						"errorType",
-						"evidenceClass",
-						"failureClass",
-						"hostIdentity",
-						"httpStatus",
-						"lastFailureAt"
-					],
-					"properties": {
-						"archiveUrlIdentity": { "type": "string" },
-						"blockedUntil": { "type": "string", "format": "date-time" },
-						"consecutiveFailures": { "type": "integer", "minimum": 1 },
-						"errorType": { "type": "string" },
-						"evidenceClass": {
-							"type": "string",
-							"enum": [
-								"archive-object",
-								"worker-infrastructure",
-								"coordinator-infrastructure"
-							]
-						},
-						"failureClass": {
-							"type": "string",
-							"enum": [
-								"http",
-								"auth",
-								"not-found",
-								"rate-limit",
-								"timeout",
-								"transport",
-								"worker",
-								"coordinator",
-								"unknown"
-							]
-						},
-						"hostIdentity": { "type": "string" },
-						"httpStatus": {
-							"type": "integer",
-							"minimum": 100,
-							"maximum": 599,
-							"nullable": true
-						},
-						"lastFailureAt": { "type": "string", "format": "date-time" }
-					}
-				},
-				"HistoryArchiveObjectSummaryV1": {
-					"type": "object",
-					"required": [
+					"totalArchiveCheckpoints": { "type": "integer", "minimum": 0 }
+				}
+			},
+			"HistoryArchiveObjectHostThrottleV1": {
+				"type": "object",
+				"required": [
+					"archiveUrlIdentity",
+					"blockedUntil",
+					"consecutiveFailures",
+					"errorType",
+					"evidenceClass",
+					"failureClass",
+					"hostIdentity",
+					"httpStatus",
+					"lastFailureAt"
+				],
+				"properties": {
+					"archiveUrlIdentity": { "type": "string" },
+					"blockedUntil": { "type": "string", "format": "date-time" },
+					"consecutiveFailures": { "type": "integer", "minimum": 1 },
+					"errorType": { "type": "string" },
+					"evidenceClass": {
+						"type": "string",
+						"enum": [
+							"archive-object",
+							"worker-infrastructure",
+							"coordinator-infrastructure"
+						]
+					},
+					"failureClass": {
+						"type": "string",
+						"enum": [
+							"http",
+							"auth",
+							"not-found",
+							"rate-limit",
+							"timeout",
+							"transport",
+							"worker",
+							"coordinator",
+							"unknown"
+						]
+					},
+					"hostIdentity": { "type": "string" },
+					"httpStatus": {
+						"type": "integer",
+						"minimum": 100,
+						"maximum": 599,
+						"nullable": true
+					},
+					"lastFailureAt": { "type": "string", "format": "date-time" }
+				}
+			},
+			"HistoryArchiveObjectSummaryV1": {
+				"type": "object",
+				"required": [
 					"activeObjects",
 					"archiveUrl",
 					"archiveUrlIdentity",
 					"buckets",
-						"checkpoints",
-						"failedObjects",
-						"generatedAt",
-						"hostThrottles",
-						"objectTypes",
+					"checkpoints",
+					"failedObjects",
+					"generatedAt",
+					"hostThrottles",
+					"objectTypes",
 					"pendingObjects",
 					"scope",
 					"totalObjects",
@@ -8328,15 +8413,15 @@
 					"checkpoints": {
 						"$ref": "#/components/schemas/HistoryArchiveCheckpointCoverageV1"
 					},
-						"failedObjects": { "type": "integer", "minimum": 0 },
-						"generatedAt": { "type": "string", "format": "date-time" },
-						"hostThrottles": {
-							"type": "array",
-							"items": {
-								"$ref": "#/components/schemas/HistoryArchiveObjectHostThrottleV1"
-							}
-						},
-						"objectTypes": {
+					"failedObjects": { "type": "integer", "minimum": 0 },
+					"generatedAt": { "type": "string", "format": "date-time" },
+					"hostThrottles": {
+						"type": "array",
+						"items": {
+							"$ref": "#/components/schemas/HistoryArchiveObjectHostThrottleV1"
+						}
+					},
+					"objectTypes": {
 						"type": "array",
 						"items": {
 							"$ref": "#/components/schemas/HistoryArchiveObjectTypeSummaryV1"

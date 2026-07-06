@@ -26,7 +26,9 @@ import { GetLatestScan } from '@history-scan-coordinator/use-cases/get-latest-sc
 import { GetScanLogs } from '@history-scan-coordinator/use-cases/get-scan-logs/GetScanLogs.js';
 import { GetLatestNodeSnapshots } from '@network-scan/use-cases/get-latest-node-snapshots/GetLatestNodeSnapshots.js';
 import { GetLatestOrganizationSnapshots } from '@network-scan/use-cases/get-latest-organization-snapshots/GetLatestOrganizationSnapshots.js';
+import { GetKnownNode } from '@network-scan/use-cases/get-known-node/GetKnownNode.js';
 import { GetKnownNodes } from '@network-scan/use-cases/get-known-nodes/GetKnownNodes.js';
+import { GetKnownOrganization } from '@network-scan/use-cases/get-known-organization/GetKnownOrganization.js';
 import { GetKnownOrganizations } from '@network-scan/use-cases/get-known-organizations/GetKnownOrganizations.js';
 import { nodeRouter } from '@network-scan/infrastructure/http/NodeRouter.js';
 import { organizationRouter } from '@network-scan/infrastructure/http/OrganizationRouter.js';
@@ -301,7 +303,9 @@ const listen = async () => {
 	api.use(
 		'/v1/known',
 		knownNetworkRouter({
+			getKnownNode: kernel.container.get(GetKnownNode),
 			getKnownNodes: kernel.container.get(GetKnownNodes),
+			getKnownOrganization: kernel.container.get(GetKnownOrganization),
 			getKnownOrganizations: kernel.container.get(GetKnownOrganizations)
 		})
 	);

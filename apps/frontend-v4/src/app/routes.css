@@ -24,7 +24,7 @@
 
 .route-modal-header {
 	align-items: center;
-	background: rgba(255, 255, 255, 0.96);
+	background: var(--panel);
 	border-block-end: 1px solid var(--border);
 	display: flex;
 	justify-content: space-between;
@@ -39,10 +39,10 @@
 }
 
 .close-route-modal {
-	background: #eef3f8;
+	background: var(--button-secondary);
 	border: 1px solid var(--border);
 	border-radius: 999px;
-	color: var(--muted);
+	color: var(--ink);
 	font-weight: 800;
 	padding: 8px 12px;
 }

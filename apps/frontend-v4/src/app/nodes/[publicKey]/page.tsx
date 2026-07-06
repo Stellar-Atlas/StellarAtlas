@@ -2,8 +2,8 @@ import { Suspense } from 'react';
 import { notFound } from 'next/navigation';
 import { connection } from 'next/server';
 import { fetchHistoryArchiveObjectEventsForArchive } from '@api/archive-scans-client';
+import { fetchKnownNode } from '@api/known-network-client';
 import {
-	fetchKnownNodes,
 	fetchKnownOrganizations,
 	fetchHistoryArchiveScan,
 	fetchHistoryArchiveScanEvidence,
@@ -33,22 +33,17 @@ async function NodeDetailRouteContent({
 }): Promise<React.JSX.Element> {
 	await connection();
 	const decodedPublicKey = decodeURIComponent(publicKey);
-	const [network, knownNodes, knownOrganizations] = await Promise.all([
+	const [network, knownNode, knownOrganizations] = await Promise.all([
 		fetchPublicNetwork({ revalidate }),
-		fetchKnownNodes({ revalidate }),
+		fetchKnownNode(decodedPublicKey, { revalidate }),
 		fetchKnownOrganizations({ revalidate })
 	]);
-	const knownNode = knownNodes.nodes.find(
-		(candidate) => candidate.publicKey === decodedPublicKey
-	);
 	const node = knownNode?.node ?? null;
 
 	if (!knownNode) notFound();
 	const inventoryNetwork = {
 		...network,
-		nodes: knownNodes.nodes.flatMap((candidate) =>
-			candidate.node ? [candidate.node] : []
-		),
+		nodes: node ? [node] : network.nodes,
 		organizations: knownOrganizations.organizations.map(
 			(candidate) => candidate.organization
 		)

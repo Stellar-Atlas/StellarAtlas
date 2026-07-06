@@ -3,6 +3,7 @@ import { notFound } from 'next/navigation';
 import Link from 'next/link';
 import { connection } from 'next/server';
 import { fetchHistoryArchiveObjectEventsForArchive } from '@api/archive-scans-client';
+import { fetchKnownOrganization } from '@api/known-network-client';
 import {
 	fetchHistoryArchiveObjectsForArchive,
 	fetchHistoryArchiveObjectSummaryForArchive,
@@ -33,14 +34,13 @@ async function OrganizationDetailRouteContent({
 }): Promise<React.JSX.Element> {
 	await connection();
 	const decodedOrganizationId = decodeURIComponent(organizationId);
-	const [network, knownNodes, knownOrganizations] = await Promise.all([
-		fetchPublicNetwork({ revalidate }),
-		fetchKnownNodes({ revalidate }),
-		fetchKnownOrganizations({ revalidate })
-	]);
-	const knownOrganization = knownOrganizations.organizations.find(
-		(candidate) => candidate.organization.id === decodedOrganizationId
-	);
+	const [network, knownNodes, knownOrganizations, knownOrganization] =
+		await Promise.all([
+			fetchPublicNetwork({ revalidate }),
+			fetchKnownNodes({ revalidate }),
+			fetchKnownOrganizations({ revalidate }),
+			fetchKnownOrganization(decodedOrganizationId, { revalidate })
+		]);
 	const organization = knownOrganization?.organization;
 
 	if (!organization) notFound();
