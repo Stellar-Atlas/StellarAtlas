@@ -104,63 +104,110 @@ Current behavior:
 1. Network scans discover archive roots from scanner-owned organization TOML.
 2. The coordinator schedules one root history archive state object per archive
    root.
-3. When a root state is available, the coordinator schedules objects for the
-   latest checkpoint only:
-   - checkpoint history JSON,
-   - ledger category file,
-   - transaction category file,
-   - result category file,
-   - current and hot archive buckets referenced by the root state.
-4. The coordinator also schedules a bounded backward page of checkpoint history
-   JSON objects from the latest/oldest scheduled checkpoint for the archive
-   root.
+3. Root history archive state completion schedules current checkpoint objects,
+   current/hot bucket objects, and a bounded backward page of older checkpoint
+   state objects.
+4. Verified checkpoint state objects fan out into supported descendants:
+   ledger, transactions, results, SCP where applicable, and buckets referenced
+   by that checkpoint state.
 5. Object workers claim one archive object at a time.
 6. Heartbeats update worker stage and downloaded byte counts.
 7. Completion/failure writes the object row and a compact object event.
-8. When a checkpoint history JSON object verifies, the scanner sends parsed
-   checkpoint history archive state as structured facts. The coordinator then
-   schedules supported sibling objects for that checkpoint: ledger,
-   transactions, results, and bucket objects referenced by the checkpoint
-   state. SCP category files are not scheduled yet.
+8. Object rows expose status, retry timing, refresh timing, worker stage,
+   byte counters, archive identity, host identity, and verification facts.
 
-This is enough to prove that scanner-owned object telemetry works. It is not
-enough to prove an archive is fully verified, because whole-archive discovery
-and cross-category consistency are still open.
+This proves scanner-owned object telemetry works and proves individual objects.
+It does not yet prove an archive is fully verified. The open gaps are complete
+checkpoint enumeration, cross-category proof promotion, durable host backoff,
+and cross-archive bucket coverage.
 
-Production observation on 2026-07-06:
+Important current constraints:
 
-- the live queue had 75 archive roots, 24 active bucket downloads, 3 pending
-  buckets, 188 failed objects, and 5,074 verified objects;
-- only 3 distinct checkpoint ledgers were represented before the bounded
-  checkpoint-state cursor, proving discovery was latest/current scoped rather
-  than whole-archive scoped;
-- all 75 root history archive state rows were due for refresh but still
-  `verified`, proving root refresh needs a cursor-driven path;
-- legacy `history_archive_scan_job_queue` still contained pending range jobs,
-  so range claiming must be gated or reconciled before object mode is the only
-  scanner contract;
-- object heartbeats now coalesce per active object and use jittered timers so a
-  large bucket stream cannot pile overlapping coordinator writes onto the API.
-- object queue rows now carry `hostIdentity`, and production claim checks
-  enforce both one active object per archive root and a bounded active count
-  per host. This is a first host-level pressure guard; it is not yet the full
-  host throttle/backoff table.
+- legacy `history_archive_scan_job_queue` rows are historical range evidence and
+  must not drive live public status;
+- object heartbeats coalesce per active object and use jittered timers;
+- object queue rows carry `hostIdentity`, and claim checks enforce one active
+  object per archive root plus a bounded active count per host;
+- host caps are immediate pressure guards, not the final durable host throttle
+  table;
+- object summaries are suitable for public aggregate counts, but raw bounded
+  object-list pages are not aggregate truth.
 
-Post-deploy observation on 2026-07-06 after the bounded checkpoint cursor and
-checkpoint fan-out slices:
+## Verification Proof Semantics
 
-- a coordinator scheduler pass against existing persisted archive states inserted
-  4,494 object rows without a network crawl;
-- `/v1/archive-scans/objects?limit=500` showed 3,390 pending, 24 active, 5,174
-  verified, and 37 failed object rows;
-- the production status page rendered checkpoint-state rows as active scanner
-  work with BrowserOS/CDP proof at
-  `.codex/screenshots/prod-status-checkpoint-queue-20260706.png`;
-- `http://atgc.node.sl8.online` had checkpoint-state rows and ledger,
-  transactions, results, and bucket descendants in pending/verified states;
-- a verified checkpoint-state row carried `checkpointHistoryArchiveState`
-  verification facts whose state ledger matched the object checkpoint ledger
-  `63,351,935`.
+The scanner needs two levels of evidence.
+
+Object evidence proves one archive root served one expected object:
+
+- root history archive state: fetch, parse, latest checkpoint, current bucket
+  list, hot bucket list;
+- checkpoint state: fetch, parse, checkpoint ledger, bucket-list facts;
+- category file: fetch, decompress, stream XDR, parse facts, compute category
+  hashes;
+- bucket file: fetch, decompress, hash raw bucket XDR, compare the hash with
+  the bucket hash in the path/checkpoint state.
+
+Checkpoint proof proves the category facts agree:
+
+- ledger header hash and previous-ledger hash agree with the ledger chain;
+- transaction-set hash agrees with transaction XDR;
+- result hash agrees with result XDR;
+- bucket-list hash agrees with the checkpoint state and referenced buckets;
+- SCP category expectations are honored for the network/checkpoint where SCP
+  archive files should exist.
+
+Archive coverage proves inventory completeness:
+
+- expected checkpoint states have been scheduled from the root history archive
+  state's checkpoint range;
+- every expected category object has a terminal state;
+- every referenced bucket hash has a terminal state for the archive root or a
+  clear missing/failure state;
+- equivalent bucket hashes can be compared across archive roots.
+
+`verified` on a single object must not be presented as whole-archive proof. The
+public UI should say exactly which proof level is complete.
+
+## Storage And Full-History ETL Contract
+
+The scanner should not persist duplicate copies of the same immutable archive
+content. It also should not throw away data that must later feed the explorer,
+Horizon, Stellar RPC, or StellarAtlas-owned archive serving.
+
+Storage rules:
+
+- Persist scanner evidence per archive root/object. This proves which archive
+  root served, missed, corrupted, refused, or delayed a specific object.
+- Persist immutable raw XDR/object content once by content hash when retaining
+  bytes is required for future serving or replay.
+- Persist bucket content once by bucket hash. If another archive root serves the
+  same bucket hash, verify that response and store a new evidence row, not a
+  second bucket blob.
+- Do not keep both per-source compressed files and duplicate decompressed files
+  forever. Keep one canonical raw object source plus parsed read models.
+- Parsed transaction, result, ledger, operation, asset, account, contract, and
+  event tables are read models. They should be rebuildable from the retained
+  raw XDR/object source.
+- Exact gzip bytes are not the source of truth. Archive clients consume the
+  decompressed XDR stream. StellarAtlas can materialize `.xdr.gz` files for an
+  archive mirror from canonical raw XDR/object content when needed.
+- Parsed-only rows are not enough for a durable archive mirror because future
+  protocol extensions, ordering, and byte-for-byte XDR preservation matter.
+
+Fetching rules:
+
+- To prove a specific archive root serves a bucket/category/checkpoint object,
+  the scanner must fetch enough bytes from that archive root to verify the
+  object. It may discard duplicate bytes after hashing when the canonical
+  content is already stored.
+- HTTP headers alone are not archive proof.
+- Access-denied, not-found, timeout, and transport outcomes are archive-object
+  evidence only after URL construction, retry policy, and host backoff have
+  ruled out local worker/coordinator mistakes.
+
+Future Horizon/RPC/archive serving should mount or materialize from the
+deduplicated raw object store and typed read models. It should not require
+downloading every validator's identical bucket content again.
 
 ## Target Object Queue Flow
 
