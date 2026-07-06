@@ -1,9 +1,9 @@
 import { Suspense } from 'react';
 import {
 	fetchApiStatus,
-	fetchArchiveScanWorkers,
 	fetchDataQualityStatus,
 	fetchFrontendStatus,
+	fetchHistoryArchiveObjects,
 	fetchScanLogStatus,
 	fetchWorkerStatus
 } from '@api/client';
@@ -11,8 +11,9 @@ import { PageHeading } from '@components/layout/page-heading';
 import { RouteLoadingPanel } from '@components/layout/route-fallbacks';
 import { StatusDashboard } from '@components/status/status-dashboard';
 
-export const revalidate = 10;
+export const revalidate = 0;
 export const dynamic = 'force-dynamic';
+const statusFetchOptions = { cache: 'no-store' } as const;
 
 async function StatusRouteContent(): Promise<React.JSX.Element> {
 	const [
@@ -20,27 +21,27 @@ async function StatusRouteContent(): Promise<React.JSX.Element> {
 		dataQuality,
 		scanLogs,
 		workers,
-		archiveWorkers,
+		archiveObjects,
 		frontend
 	] = await Promise.all([
-		fetchApiStatus({ revalidate }),
-		fetchDataQualityStatus({ revalidate }),
-		fetchScanLogStatus({ revalidate }),
-		fetchWorkerStatus({ revalidate }),
-		fetchArchiveScanWorkers({ revalidate }),
-		fetchFrontendStatus({ revalidate })
+		fetchApiStatus(statusFetchOptions),
+		fetchDataQualityStatus(statusFetchOptions),
+		fetchScanLogStatus(statusFetchOptions),
+		fetchWorkerStatus(statusFetchOptions),
+		fetchHistoryArchiveObjects(100, statusFetchOptions),
+		fetchFrontendStatus(statusFetchOptions)
 	]);
 
 	return (
 		<main className="shell">
 			<PageHeading
-				description="Current public API, scan continuity, network rollups, archive queue, worker leases, and archive verification activity."
+				description="Current public API, scan continuity, network rollups, archive object queue, scanner runtime, and archive verification activity."
 				eyebrow="Operations"
 				title="Status"
 			/>
 			<StatusDashboard
 				api={api}
-				archiveWorkers={archiveWorkers}
+				archiveObjects={archiveObjects}
 				dataQuality={dataQuality}
 				frontend={frontend}
 				scanLogs={scanLogs}

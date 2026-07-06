@@ -25,7 +25,7 @@ actual archive failures whenever the data supports it.
 - Capture all real archive errors found in a run, not only the first convenient
   failure.
 - Error explanations should be evidence-based: wrong hash, missing object,
-  malformed XDR, stale HAS, HTTP status, timeout, bucket mismatch, or unknown.
+  malformed XDR, stale history archive state, HTTP status, timeout, bucket mismatch, or unknown.
 - Total scanner caps may target 24 fetch workers and 24 bucket/hash workers.
   Avoid nested concurrency explosions.
 - Bucket content is deduplicated by hash. Ramdisk cache must be rebuildable from

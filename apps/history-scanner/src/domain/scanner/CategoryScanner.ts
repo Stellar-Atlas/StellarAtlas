@@ -11,9 +11,9 @@ import {
 	Url,
 	asyncSleep
 } from 'http-helper';
-import { HASValidator } from '../history-archive/HASValidator.js';
+import { HistoryArchiveStateValidator } from '../history-archive/HistoryArchiveStateValidator.js';
 import { inject, injectable } from 'inversify';
-import { HASBucketHashExtractor } from '../history-archive/HASBucketHashExtractor.js';
+import { HistoryArchiveStateBucketHashExtractor } from '../history-archive/HistoryArchiveStateBucketHashExtractor.js';
 import { mapHttpQueueErrorToScanError } from './mapHttpQueueErrorToScanError.js';
 import { isObject, mapUnknownToError } from 'shared';
 import { createGunzip } from 'zlib';
@@ -48,7 +48,7 @@ export interface LatestLedgerArchiveState {
 	readonly archiveMetadata: ArchiveMetadataDTO;
 }
 
-export interface HASScanResult {
+export interface HistoryArchiveStateScanResult {
 	readonly bucketHashes: Set<string>;
 	readonly bucketListHashes: Map<number, string>;
 	readonly errors: readonly ScanError[];
@@ -80,7 +80,7 @@ export class CategoryScanner {
 	static POOL_MAX_PENDING_TASKS = 20000;
 
 	constructor(
-		private hasValidator: HASValidator,
+		private hasValidator: HistoryArchiveStateValidator,
 		@inject(TYPES.HttpQueue) private httpQueue: HttpQueue,
 		private checkPointGenerator: CheckPointGenerator,
 		private categoryVerificationService: CategoryVerificationService,
@@ -90,10 +90,10 @@ export class CategoryScanner {
 	public async findLatestLedger(
 		baseUrl: Url
 	): Promise<Result<LatestLedgerArchiveState, ScanError>> {
-		const rootHASUrl = UrlBuilder.getRootHASUrl(baseUrl);
-		const rootHASUrlRequest: Request[] = [
+		const rootHistoryArchiveStateUrl = UrlBuilder.getRootHistoryArchiveStateUrl(baseUrl);
+		const rootHistoryArchiveStateUrlRequest: Request[] = [
 			{
-				url: rootHASUrl,
+				url: rootHistoryArchiveStateUrl,
 				method: RequestMethod.GET,
 				meta: {}
 			}
@@ -101,7 +101,7 @@ export class CategoryScanner {
 
 		let archiveMetadata: ArchiveMetadataDTO | undefined;
 		const successOrError = await this.httpQueue.sendRequests(
-			rootHASUrlRequest[Symbol.iterator](),
+			rootHistoryArchiveStateUrlRequest[Symbol.iterator](),
 			{
 				stallTimeMs: 150,
 				concurrency: 1,
@@ -116,16 +116,16 @@ export class CategoryScanner {
 				if (!isObject(result)) {
 					return err(new FileNotFoundError(request));
 				}
-				const validateHASResult = this.hasValidator.validate(result);
-				if (validateHASResult.isOk()) {
+				const validateHistoryArchiveStateResult = this.hasValidator.validate(result);
+				if (validateHistoryArchiveStateResult.isOk()) {
 					archiveMetadata = {
-						stellarHistoryUrl: rootHASUrl.value,
-						stellarHistory: validateHASResult.value,
+						stellarHistoryUrl: rootHistoryArchiveStateUrl.value,
+						stellarHistory: validateHistoryArchiveStateResult.value,
 						observedAt: new Date().toISOString()
 					};
 					return ok(undefined);
 				} else {
-					return err(new QueueError(request, validateHASResult.error));
+					return err(new QueueError(request, validateHistoryArchiveStateResult.error));
 				}
 			}
 		);
@@ -138,7 +138,7 @@ export class CategoryScanner {
 			return err(
 				new ScanError(
 					ScanErrorType.TYPE_VERIFICATION,
-					rootHASUrl.value,
+					rootHistoryArchiveStateUrl.value,
 					'No latest ledger found'
 				)
 			);
@@ -150,13 +150,13 @@ export class CategoryScanner {
 		});
 	}
 
-	//fetches all HAS files in checkpoint range and returns all detected bucket urls
-	public async scanHASFilesAndReturnBucketHashes(
+	//fetches all history archive state files in checkpoint range and returns all detected bucket urls
+	public async scanHistoryArchiveStateFilesAndReturnBucketHashes(
 		scanState: CategoryScanState,
 		verify = true
-	): Promise<Result<HASScanResult, ScanError>> {
+	): Promise<Result<HistoryArchiveStateScanResult, ScanError>> {
 		const historyArchiveStateURLGenerator =
-			RequestGenerator.generateHASRequests(
+			RequestGenerator.generateHistoryArchiveStateRequests(
 				scanState.baseUrl,
 				scanState.checkPoints,
 				RequestMethod.GET
@@ -182,14 +182,14 @@ export class CategoryScanner {
 				if (!isObject(result)) {
 					return err(new FileNotFoundError(request));
 				}
-				const validateHASResult = this.hasValidator.validate(result);
-				if (validateHASResult.isOk()) {
-					HASBucketHashExtractor.getNonZeroHashes(
-						validateHASResult.value
+				const validateHistoryArchiveStateResult = this.hasValidator.validate(result);
+				if (validateHistoryArchiveStateResult.isOk()) {
+					HistoryArchiveStateBucketHashExtractor.getNonZeroHashes(
+						validateHistoryArchiveStateResult.value
 					).forEach((hash) => bucketHashes.add(hash));
 					if (verify) {
 						const bucketListHashResult = hashBucketList(
-							validateHASResult.value
+							validateHistoryArchiveStateResult.value
 						);
 						if (bucketListHashResult.isOk())
 							scanState.bucketListHashes.set(
@@ -199,7 +199,7 @@ export class CategoryScanner {
 					}
 					return ok(undefined);
 				} else {
-					return err(new QueueError(request, validateHASResult.error));
+					return err(new QueueError(request, validateHistoryArchiveStateResult.error));
 				}
 			}
 		);

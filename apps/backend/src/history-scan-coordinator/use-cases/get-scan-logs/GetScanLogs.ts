@@ -102,7 +102,10 @@ export class GetScanLogs {
 
 	private mapActiveJob(job: ScanJob): HistoryArchiveScanLogEntryDTO {
 		const now = new Date();
-		const startDate = job.createdAt ?? now;
+		const startDate =
+			job.status === 'TAKEN'
+				? job.claimedAt ?? job.updatedAt ?? job.createdAt ?? now
+				: job.createdAt ?? now;
 		const updatedAt = job.updatedAt ?? now;
 		const status = this.mapJobStatus(job, updatedAt, now);
 		const fromLedger =
@@ -121,7 +124,8 @@ export class GetScanLogs {
 			hasError: false,
 			hasWorkerIssue: false,
 			isSlowArchive: false,
-			latestAttemptedLedger: job.latestAttemptedLedger,
+			latestAttemptedLedger:
+				job.latestAttemptedLedger ?? job.currentRangeToLedger,
 			latestScannedLedger: job.latestScannedLedger,
 			latestVerifiedLedger: job.latestScannedLedger,
 			startDate,
@@ -176,7 +180,7 @@ export class GetScanLogs {
 			hasError: archiveErrors.length > 0,
 			hasWorkerIssue: false,
 			isSlowArchive: scan.isSlowArchive ?? false,
-			latestAttemptedLedger: scan.latestScannedLedger,
+			latestAttemptedLedger: null,
 			latestScannedLedger: scan.latestScannedLedger,
 			latestVerifiedLedger: scan.latestVerifiedLedger,
 			startDate: scan.startDate,

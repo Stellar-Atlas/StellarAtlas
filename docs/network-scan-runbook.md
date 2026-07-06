@@ -29,11 +29,32 @@ history-scan coordinator to schedule verification jobs.
 
 ## Archive Scheduling Relationship
 
-Network scans only discover archive URLs. `ScheduleScanJobs` releases stale
-taken jobs, checks current unfinished queue state, asks the scheduler for
-candidate jobs, and saves them through the queue repository active-identity
-guard. The scheduler and repository both suppress duplicate active work; they do
-not weaken queue idempotency to improve the counter values.
+Network scans only discover archive URLs. `ScheduleScanJobs` is a compatibility
+wrapper used by the network scanner; it releases stale legacy range jobs and
+then delegates to the archive object scheduler.
+
+The active scheduler creates durable object rows, not whole-archive range rows.
+Object identities are:
+
+```text
+normalized archive URL + object type + object key
+```
+
+Examples:
+
+```text
+history-archive-state:root
+checkpoint-state:03c6b47f
+ledger:03c6b47f
+transactions:03c6b47f
+results:03c6b47f
+bucket:178b2f3801db8ee5f01098169c7d7174a7bb3070804ea0fe4a5becab9c3763fd
+```
+
+The object queue suppresses duplicate active work by that identity. The scanner
+workers claim one object at a time with a global active cap and a per-archive
+active cap. This prevents one archive from monopolizing workers and lets the
+same object position be checked across many archive sources.
 
 ## Archive Scheduling Counters
 
@@ -41,10 +62,11 @@ Each completed network scan exposes four archive scheduling counters:
 
 - `discoveredArchiveUrlCount`: number of history archive URLs discovered from
   the current node/TOML state.
-- `scheduledArchiveScanJobCount`: number of new archive scan jobs inserted into
-  the coordinator queue.
-- `duplicateSuppressedArchiveScanJobCount`: number of discovered URLs/ranges
-  already covered by active queue state or duplicate discovery.
+- `scheduledArchiveScanJobCount`: number of new archive object rows inserted
+  into the coordinator queue. The field name is legacy API compatibility; the
+  value is object-row count.
+- `duplicateSuppressedArchiveScanJobCount`: number of candidate archive object
+  rows already covered by object queue state or duplicate discovery.
 - `schedulerErrorCount`: `0` for a successful scheduling call, `1` when the
   scheduler failed or threw during that network scan.
 
@@ -55,7 +77,7 @@ evidence rows.
 ## Operator Notes
 
 - A network scan with zero scheduled jobs can be healthy when all discovered
-  archive ranges are already pending or scanning.
+  archive objects are already pending, scanning, or verified.
 - Archive verification errors are validator/archive evidence.
 - Worker issues are StellarAtlas scanner infrastructure evidence.
 - Do not treat missing local Horizon/RPC services as network-scan failures.

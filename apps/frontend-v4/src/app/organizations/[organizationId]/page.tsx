@@ -3,6 +3,7 @@ import { notFound } from 'next/navigation';
 import Link from 'next/link';
 import { connection } from 'next/server';
 import {
+	fetchHistoryArchiveObjectsForArchive,
 	fetchHistoryArchiveState,
 	fetchKnownNodes,
 	fetchKnownOrganizations,
@@ -21,6 +22,7 @@ interface OrganizationDetailPageProps {
 
 export const dynamicParams = true;
 export const revalidate = 10;
+const liveArchiveFetchOptions = { cache: 'no-store' } as const;
 
 async function OrganizationDetailRouteContent({
 	organizationId
@@ -65,7 +67,12 @@ async function OrganizationDetailRouteContent({
 	const archiveStates = await Promise.all(
 		validatorHistoryUrls.map(async (historyUrl) => ({
 			historyUrl,
-			state: await fetchHistoryArchiveState(historyUrl, { revalidate })
+			objects: await fetchHistoryArchiveObjectsForArchive(
+				historyUrl,
+				1,
+				liveArchiveFetchOptions
+			),
+			state: await fetchHistoryArchiveState(historyUrl, liveArchiveFetchOptions)
 		}))
 	);
 

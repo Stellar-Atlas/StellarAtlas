@@ -8,14 +8,14 @@ import {
 } from './HistoryArchiveState.js';
 import { CustomError } from 'custom-error';
 
-export class InvalidHASError extends CustomError {
+export class InvalidHistoryArchiveStateError extends CustomError {
 	constructor(message: string) {
-		super('Invalid HAS file: ' + message, InvalidHASError.name);
+		super('Invalid history archive state file: ' + message, InvalidHistoryArchiveStateError.name);
 	}
 }
 
 @injectable()
-export class HASValidator {
+export class HistoryArchiveStateValidator {
 	private readonly validateHistoryArchiveState: ValidateFunction<HistoryArchiveState>;
 
 	constructor(@inject('Logger') protected logger: Logger) {
@@ -25,7 +25,7 @@ export class HASValidator {
 
 	validate(
 		historyArchiveStateRaw: Record<string, unknown>
-	): Result<HistoryArchiveState, InvalidHASError> {
+	): Result<HistoryArchiveState, InvalidHistoryArchiveStateError> {
 		const validate = this.validateHistoryArchiveState;
 		if (validate(historyArchiveStateRaw)) {
 			return ok(historyArchiveStateRaw);
@@ -33,7 +33,7 @@ export class HASValidator {
 
 		const errors = validate.errors;
 		if (errors === undefined || errors === null)
-			return err(new InvalidHASError('Unknown error'));
-		return err(new InvalidHASError(errors.toString()));
+			return err(new InvalidHistoryArchiveStateError('Unknown error'));
+		return err(new InvalidHistoryArchiveStateError(errors.toString()));
 	}
 }

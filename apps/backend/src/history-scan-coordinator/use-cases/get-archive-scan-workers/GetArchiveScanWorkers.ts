@@ -53,7 +53,6 @@ export class GetArchiveScanWorkers {
 		const staleCutoff = getStaleScanJobCutoff(generatedAt);
 
 		try {
-			await this.scanJobRepository.releaseStaleTakenJobs(staleCutoff);
 			const snapshot = await this.scanJobRepository.getTakenJobsSnapshot(
 				staleCutoff,
 				GetArchiveScanWorkers.maxWorkers
@@ -99,7 +98,8 @@ export class GetArchiveScanWorkers {
 			currentRangeFromLedger: job.currentRangeFromLedger,
 			currentRangeToLedger: job.currentRangeToLedger,
 			toLedger: job.toLedger,
-			latestAttemptedLedger: job.latestAttemptedLedger,
+			latestAttemptedLedger:
+				job.latestAttemptedLedger ?? job.currentRangeToLedger,
 			latestScannedLedger: job.latestScannedLedger,
 			concurrency: this.mapVisibleConcurrency(job.concurrency)
 		};

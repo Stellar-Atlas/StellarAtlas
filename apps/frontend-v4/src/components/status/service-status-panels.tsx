@@ -2,45 +2,41 @@ import type {
 	PublicApiStatus,
 	PublicConfiguredServiceStatus,
 	PublicDataQualityStatus,
-	PublicStatusLevel,
-	PublicWorkerStatus
+	PublicHistoryArchiveObjectQueue,
+	PublicStatusLevel
 } from '@api/types';
 import { formatDateTime, formatInteger } from '@format/formatters';
 import { StatusPill, StatusRow, statusLabel } from './status-ui';
 
 interface ProductionServiceStatusPanelProps {
 	readonly api: PublicApiStatus;
+	readonly archiveObjects: PublicHistoryArchiveObjectQueue;
 	readonly dataQuality: PublicDataQualityStatus;
 	readonly frontend: PublicConfiguredServiceStatus;
-	readonly workers: PublicWorkerStatus;
 }
 
 export function ProductionServiceStatusPanel({
 	api,
+	archiveObjects,
 	dataQuality,
-	frontend,
-	workers
+	frontend
 }: ProductionServiceStatusPanelProps): React.JSX.Element {
 	const networkScan = dataQuality.dataFreshness.networkScan;
-	const archiveQueue = dataQuality.archiveQueue;
-	const archiveWorkerStatus = getWorstStatus([
-		workers.archiveWorkers.status,
-		archiveQueue.status
-	]);
+	const archiveObjectStatus = getArchiveObjectStatus(archiveObjects);
 
 	return (
 		<section className="panel status-services-panel">
 			<div className="panel-heading">
 				<div>
 					<strong>Production Critical Services</strong>
-					<span>Frontend, API, network scanner, and archive worker runtime</span>
+					<span>Frontend, API, network scanner, and archive object verifier runtime</span>
 				</div>
 				<StatusPill
 					status={criticalServiceStatus(
 						api,
 						frontend,
 						networkScan.status,
-						archiveWorkerStatus
+						archiveObjectStatus
 					)}
 				/>
 			</div>
@@ -64,10 +60,10 @@ export function ProductionServiceStatusPanel({
 					value={statusLabel(networkScan.status)}
 				/>
 				<StatusRow
-					detail={`${formatInteger(workers.archiveWorkers.activeWorkers)} active worker leases, ${formatInteger(workers.archiveWorkers.staleWorkers)} stale; ${formatInteger(archiveQueue.pendingJobs)} queued`}
+					detail={`${formatInteger(archiveObjects.activeObjects)} active objects, ${formatInteger(archiveObjects.pendingObjects)} pending, ${formatInteger(archiveObjects.failedObjects)} archive evidence failures`}
 					label="Archive scanner"
-					status={archiveWorkerStatus}
-					value={`${formatInteger(workers.archiveWorkers.totalTakenJobs)} claimed`}
+					status={archiveObjectStatus}
+					value={`${formatInteger(archiveObjects.activeObjects)} active`}
 				/>
 			</div>
 		</section>
@@ -93,6 +89,12 @@ function getWorstStatus(statuses: readonly PublicStatusLevel[]): PublicStatusLev
 	if (statuses.some((status) => status === 'unavailable')) return 'unavailable';
 	if (statuses.some((status) => status === 'degraded')) return 'degraded';
 	return 'ok';
+}
+
+function getArchiveObjectStatus(
+	objects: PublicHistoryArchiveObjectQueue
+): PublicStatusLevel {
+	return objects.activeObjects > 0 || objects.pendingObjects > 0 ? 'ok' : 'degraded';
 }
 
 function formatFreshness(latestAt: string | null, ageMs: number | null): string {

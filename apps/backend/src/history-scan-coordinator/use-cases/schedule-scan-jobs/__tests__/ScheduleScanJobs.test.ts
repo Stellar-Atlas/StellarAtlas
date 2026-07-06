@@ -1,202 +1,97 @@
-import { mock, MockProxy } from 'jest-mock-extended';
-import { ScheduleScanJobs } from '../ScheduleScanJobs.js';
-import type { ScanRepository } from '@history-scan-coordinator/domain/scan/ScanRepository.js';
+import { mock, type MockProxy } from 'jest-mock-extended';
+import { err, ok } from 'neverthrow';
 import type { ScanJobRepository } from '@history-scan-coordinator/domain/ScanJobRepository.js';
-import type { ScanScheduler } from '@history-scan-coordinator/domain/ScanScheduler.js';
 import type { Logger } from 'logger';
-import { ScanJob } from '@history-scan-coordinator/domain/ScanJob.js';
+import { ScheduleHistoryArchiveObjects } from '../../schedule-history-archive-objects/ScheduleHistoryArchiveObjects.js';
+import { ScheduleScanJobs } from '../ScheduleScanJobs.js';
 
 describe('ScheduleScanJobs', () => {
-	let scheduleScanJobs: ScheduleScanJobs;
-	let scanRepositoryMock: MockProxy<ScanRepository>;
+	let objectSchedulerMock: MockProxy<ScheduleHistoryArchiveObjects>;
 	let scanJobRepositoryMock: MockProxy<ScanJobRepository>;
-	let scanSchedulerMock: MockProxy<ScanScheduler>;
 	let loggerMock: MockProxy<Logger>;
+	let scheduleScanJobs: ScheduleScanJobs;
 
 	beforeEach(() => {
-		scanRepositoryMock = mock<ScanRepository>();
+		objectSchedulerMock = mock<ScheduleHistoryArchiveObjects>();
 		scanJobRepositoryMock = mock<ScanJobRepository>();
-		scanSchedulerMock = mock<ScanScheduler>();
 		loggerMock = mock<Logger>();
 		scanJobRepositoryMock.withSchedulingLock.mockImplementation(async (work) =>
 			work()
 		);
-		scanJobRepositoryMock.save.mockImplementation(async (jobs) => jobs.length);
+		scanJobRepositoryMock.releaseStaleTakenJobs.mockResolvedValue(0);
+		objectSchedulerMock.execute.mockResolvedValue(
+			ok({
+				discoveredArchiveUrlCount: 2,
+				duplicateSuppressedArchiveScanJobCount: 1,
+				scheduledArchiveScanJobCount: 1,
+				schedulerErrorCount: 0
+			})
+		);
 
 		scheduleScanJobs = new ScheduleScanJobs(
-			scanRepositoryMock,
 			scanJobRepositoryMock,
-			scanSchedulerMock,
-			loggerMock
+			loggerMock,
+			objectSchedulerMock
 		);
 	});
 
-	it('should do nothing if queue is not empty', async () => {
-		scanJobRepositoryMock.releaseStaleTakenJobs.mockResolvedValue(0);
-		scanJobRepositoryMock.hasPendingJobs.mockResolvedValue(true);
-		scanJobRepositoryMock.findUnfinishedJobs.mockResolvedValue([]);
-		scanRepositoryMock.findLatest.mockResolvedValue([]);
-		scanSchedulerMock.schedule.mockReturnValue([]);
+	it('schedules archive objects inside the scheduler lock', async () => {
 		const result = await scheduleScanJobs.execute({
-			historyArchiveUrls: ['https://example.com']
-		});
-		expect(result.isOk()).toBe(true);
-		if (result.isErr()) fail(result.error);
-		expect(result.value).toEqual({
-			discoveredArchiveUrlCount: 1,
-			scheduledArchiveScanJobCount: 0,
-			duplicateSuppressedArchiveScanJobCount: 0,
-			schedulerErrorCount: 0
-		});
-		expect(scanRepositoryMock.findLatest).toHaveBeenCalledTimes(1);
-		expect(scanSchedulerMock.schedule).toHaveBeenCalledWith(
-			['https://example.com'],
-			[],
-			[],
-			{ includeRegularJobs: false }
-		);
-		expect(scanJobRepositoryMock.save).not.toHaveBeenCalled();
-	});
-
-	it('should schedule jobs if queue is empty', async () => {
-		scanJobRepositoryMock.releaseStaleTakenJobs.mockResolvedValue(0);
-		scanJobRepositoryMock.hasPendingJobs.mockResolvedValue(false);
-		scanJobRepositoryMock.findUnfinishedJobs.mockResolvedValue([]);
-		scanRepositoryMock.findLatest.mockResolvedValue([]);
-		scanSchedulerMock.schedule.mockReturnValue([
-			new ScanJob('https://example.com')
-		]);
-
-		const result = await scheduleScanJobs.execute({
-			historyArchiveUrls: ['https://example.com']
-		});
-
-		expect(result.isOk()).toBe(true);
-		if (result.isErr()) fail(result.error);
-		expect(result.value.scheduledArchiveScanJobCount).toBe(1);
-		expect(result.value.duplicateSuppressedArchiveScanJobCount).toBe(0);
-		expect(scanRepositoryMock.findLatest).toHaveBeenCalledTimes(1);
-		expect(scanSchedulerMock.schedule).toHaveBeenCalledWith(
-			['https://example.com'],
-			[],
-			[],
-			{ includeRegularJobs: true }
-		);
-		expect(scanJobRepositoryMock.save).toHaveBeenCalledTimes(1);
-	});
-
-	it('should save prioritized jobs even when regular jobs are pending', async () => {
-		scanJobRepositoryMock.releaseStaleTakenJobs.mockResolvedValue(0);
-		scanJobRepositoryMock.hasPendingJobs.mockResolvedValue(true);
-		scanJobRepositoryMock.findUnfinishedJobs.mockResolvedValue([]);
-		scanRepositoryMock.findLatest.mockResolvedValue([]);
-		scanSchedulerMock.schedule.mockReturnValue([
-			new ScanJob('https://example.com', 0, null, null, 0, 127, 4)
-		]);
-
-		const result = await scheduleScanJobs.execute({
-			historyArchiveUrls: ['https://example.com']
-		});
-
-		expect(result.isOk()).toBe(true);
-		if (result.isErr()) fail(result.error);
-		expect(result.value.scheduledArchiveScanJobCount).toBe(1);
-		expect(scanJobRepositoryMock.save).toHaveBeenCalledTimes(1);
-	});
-
-	it('should report duplicate suppressed discovered archive URLs', async () => {
-		scanJobRepositoryMock.releaseStaleTakenJobs.mockResolvedValue(0);
-		scanJobRepositoryMock.hasPendingJobs.mockResolvedValue(false);
-		scanJobRepositoryMock.findUnfinishedJobs.mockResolvedValue([
-			new ScanJob('https://queued.example.com')
-		]);
-		scanRepositoryMock.findLatest.mockResolvedValue([]);
-		scanSchedulerMock.schedule.mockReturnValue([
-			new ScanJob('https://fresh.example.com')
-		]);
-
-		const result = await scheduleScanJobs.execute({
-			historyArchiveUrls: [
-				'https://fresh.example.com/',
-				'https://fresh.example.com',
-				'https://queued.example.com'
-			]
+			historyArchiveUrls: ['https://a.example', 'https://b.example']
 		});
 
 		expect(result.isOk()).toBe(true);
 		if (result.isErr()) fail(result.error);
 		expect(result.value).toEqual({
-			discoveredArchiveUrlCount: 3,
-			scheduledArchiveScanJobCount: 1,
-			duplicateSuppressedArchiveScanJobCount: 2,
-			schedulerErrorCount: 0
-		});
-	});
-
-	it('should report repository-suppressed active queue duplicates', async () => {
-		scanJobRepositoryMock.releaseStaleTakenJobs.mockResolvedValue(0);
-		scanJobRepositoryMock.hasPendingJobs.mockResolvedValue(false);
-		scanJobRepositoryMock.findUnfinishedJobs.mockResolvedValue([]);
-		scanRepositoryMock.findLatest.mockResolvedValue([]);
-		scanSchedulerMock.schedule.mockReturnValue([
-			new ScanJob('https://race.example.com')
-		]);
-		scanJobRepositoryMock.save.mockResolvedValue(0);
-
-		const result = await scheduleScanJobs.execute({
-			historyArchiveUrls: ['https://race.example.com']
-		});
-
-		expect(result.isOk()).toBe(true);
-		if (result.isErr()) fail(result.error);
-		expect(result.value).toEqual({
-			discoveredArchiveUrlCount: 1,
-			scheduledArchiveScanJobCount: 0,
+			discoveredArchiveUrlCount: 2,
 			duplicateSuppressedArchiveScanJobCount: 1,
+			scheduledArchiveScanJobCount: 1,
 			schedulerErrorCount: 0
 		});
-	});
-
-	it('should release stale taken jobs before checking queue state', async () => {
-		scanJobRepositoryMock.releaseStaleTakenJobs.mockResolvedValue(3);
-		scanJobRepositoryMock.hasPendingJobs.mockResolvedValue(false);
-		scanJobRepositoryMock.findUnfinishedJobs.mockResolvedValue([]);
-		scanRepositoryMock.findLatest.mockResolvedValue([]);
-		scanSchedulerMock.schedule.mockReturnValue([]);
-
-		const result = await scheduleScanJobs.execute({
-			historyArchiveUrls: ['https://example.com']
-		});
-
-		expect(result.isOk()).toBe(true);
-		if (result.isErr()) fail(result.error);
-		expect(result.value.schedulerErrorCount).toBe(0);
-		expect(scanJobRepositoryMock.releaseStaleTakenJobs).toHaveBeenCalledTimes(
-			1
-		);
-		expect(loggerMock.info).toHaveBeenCalledWith('Released stale scan jobs', {
-			app: 'history-scan-coordinator',
-			released: 3
-		});
-		expect(scanJobRepositoryMock.hasPendingJobs).toHaveBeenCalledTimes(1);
-	});
-
-	it('should run scheduling inside the scheduler lock', async () => {
-		scanJobRepositoryMock.releaseStaleTakenJobs.mockResolvedValue(0);
-		scanJobRepositoryMock.hasPendingJobs.mockResolvedValue(false);
-		scanJobRepositoryMock.findUnfinishedJobs.mockResolvedValue([]);
-		scanRepositoryMock.findLatest.mockResolvedValue([]);
-		scanSchedulerMock.schedule.mockReturnValue([]);
-
-		const result = await scheduleScanJobs.execute({
-			historyArchiveUrls: ['https://example.com']
-		});
-
-		expect(result.isOk()).toBe(true);
 		expect(scanJobRepositoryMock.withSchedulingLock).toHaveBeenCalledTimes(1);
+		expect(objectSchedulerMock.execute).toHaveBeenCalledWith([
+			'https://a.example',
+			'https://b.example'
+		]);
 	});
 
-	it('should return an error when scheduler locking fails', async () => {
+	it('releases stale legacy range jobs before object scheduling', async () => {
+		scanJobRepositoryMock.releaseStaleTakenJobs.mockResolvedValue(3);
+
+		const result = await scheduleScanJobs.execute({
+			historyArchiveUrls: ['https://example.com']
+		});
+
+		expect(result.isOk()).toBe(true);
+		expect(scanJobRepositoryMock.releaseStaleTakenJobs).toHaveBeenCalledTimes(1);
+		expect(loggerMock.info).toHaveBeenCalledWith(
+			'Released stale legacy archive range jobs',
+			{
+				app: 'history-scan-coordinator',
+				released: 3
+			}
+		);
+	});
+
+	it('returns an error when the object scheduler fails', async () => {
+		const error = new Error('object scheduling failed');
+		objectSchedulerMock.execute.mockResolvedValue(err(error));
+
+		const result = await scheduleScanJobs.execute({
+			historyArchiveUrls: ['https://example.com']
+		});
+
+		expect(result.isErr()).toBe(true);
+		expect(loggerMock.error).toHaveBeenCalledWith(
+			'Failed to schedule history archive objects',
+			{
+				app: 'history-scan-coordinator',
+				errorMessage: error.message
+			}
+		);
+	});
+
+	it('returns an error when scheduler locking fails', async () => {
 		const error = new Error('lock unavailable');
 		scanJobRepositoryMock.withSchedulingLock.mockRejectedValue(error);
 
@@ -206,7 +101,7 @@ describe('ScheduleScanJobs', () => {
 
 		expect(result.isErr()).toBe(true);
 		expect(loggerMock.error).toHaveBeenCalledWith(
-			'Failed to schedule scan jobs',
+			'Failed to schedule history archive objects',
 			{
 				app: 'history-scan-coordinator',
 				errorMessage: error.message

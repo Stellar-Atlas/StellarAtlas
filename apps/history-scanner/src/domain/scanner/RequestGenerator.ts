@@ -52,7 +52,7 @@ export class RequestGenerator {
 		}
 	}
 
-	static *generateHASRequests(
+	static *generateHistoryArchiveStateRequests(
 		historyArchiveBaseUrl: Url,
 		checkPointGenerator: IterableIterator<number>,
 		requestMethod: RequestMethod

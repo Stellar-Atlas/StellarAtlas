@@ -1,0 +1,155 @@
+import { normalizeHistoryArchiveRootUrl } from 'shared';
+import type { HistoryStateBucketDTO } from 'history-scanner-dto';
+import type { HistoryArchiveStateSnapshot } from '../history-archive-state/HistoryArchiveStateSnapshot.js';
+import { HistoryArchiveObject } from './HistoryArchiveObject.js';
+import type { HistoryArchiveObjectType } from './HistoryArchiveObject.js';
+
+const checkpointFrequency = 64;
+const zeroHashPattern = /^0+$/;
+const bucketHashPattern = /^[0-9a-f]{64}$/i;
+
+const objectOrderByType: Record<HistoryArchiveObjectType, number> = {
+	'history-archive-state': 0,
+	'checkpoint-state': 10,
+	ledger: 20,
+	transactions: 30,
+	results: 40,
+	bucket: 50
+};
+
+export function buildHistoryArchiveObjectsFromState(
+	snapshot: HistoryArchiveStateSnapshot
+): readonly HistoryArchiveObject[] {
+	if (snapshot.status !== 'available' || snapshot.rawState === null) return [];
+
+	const archiveUrl = normalizeHistoryArchiveRootUrl(snapshot.archiveUrl);
+	if (archiveUrl === null) return [];
+
+	const objects: HistoryArchiveObject[] = [
+		new HistoryArchiveObject({
+			archiveUrl,
+			archiveUrlIdentity: snapshot.archiveUrlIdentity,
+			objectKey: 'root',
+			objectOrder: objectOrderByType['history-archive-state'],
+			objectType: 'history-archive-state',
+			objectUrl: snapshot.stateUrl
+		})
+	];
+
+	const checkpointLedger = getCheckpointLedger(snapshot.rawState.currentLedger);
+	if (checkpointLedger !== null) {
+		objects.push(
+			createCheckpointObject(snapshot, archiveUrl, checkpointLedger, 'checkpoint-state'),
+			createCheckpointObject(snapshot, archiveUrl, checkpointLedger, 'ledger'),
+			createCheckpointObject(snapshot, archiveUrl, checkpointLedger, 'transactions'),
+			createCheckpointObject(snapshot, archiveUrl, checkpointLedger, 'results')
+		);
+	}
+
+	for (const bucketHash of getBucketHashes(snapshot.rawState.currentBuckets)) {
+		objects.push(createBucketObject(snapshot, archiveUrl, bucketHash));
+	}
+	for (const bucketHash of getBucketHashes(snapshot.rawState.hotArchiveBuckets ?? [])) {
+		objects.push(createBucketObject(snapshot, archiveUrl, bucketHash));
+	}
+
+	return dedupeObjects(objects);
+}
+
+export function buildRootHistoryArchiveObject(
+	archiveUrl: string
+): HistoryArchiveObject | null {
+	const normalizedArchiveUrl = normalizeHistoryArchiveRootUrl(archiveUrl);
+	if (normalizedArchiveUrl === null) return null;
+
+	return new HistoryArchiveObject({
+		archiveUrl: normalizedArchiveUrl,
+		archiveUrlIdentity: normalizedArchiveUrl.toLowerCase(),
+		objectKey: 'root',
+		objectOrder: objectOrderByType['history-archive-state'],
+		objectType: 'history-archive-state',
+		objectUrl: `${normalizedArchiveUrl}/.well-known/stellar-history.json`
+	});
+}
+
+function createCheckpointObject(
+	snapshot: HistoryArchiveStateSnapshot,
+	archiveUrl: string,
+	checkpointLedger: number,
+	objectType: Exclude<HistoryArchiveObjectType, 'history-archive-state' | 'bucket'>
+): HistoryArchiveObject {
+	const category = objectType === 'checkpoint-state' ? 'history' : objectType;
+	const extension = objectType === 'checkpoint-state' ? 'json' : 'xdr.gz';
+	const checkpointHex = toCheckpointHex(checkpointLedger);
+
+	return new HistoryArchiveObject({
+		archiveUrl,
+		archiveUrlIdentity: snapshot.archiveUrlIdentity,
+		checkpointLedger,
+		objectKey: `${objectType}:${checkpointHex}`,
+		objectOrder: objectOrderByType[objectType],
+		objectType,
+		objectUrl: `${archiveUrl}/${category}/${checkpointHex.slice(0, 2)}/${checkpointHex.slice(2, 4)}/${checkpointHex.slice(4, 6)}/${category}-${checkpointHex}.${extension}`
+	});
+}
+
+function createBucketObject(
+	snapshot: HistoryArchiveStateSnapshot,
+	archiveUrl: string,
+	bucketHash: string
+): HistoryArchiveObject {
+	const normalizedHash = bucketHash.toLowerCase();
+
+	return new HistoryArchiveObject({
+		archiveUrl,
+		archiveUrlIdentity: snapshot.archiveUrlIdentity,
+		bucketHash: normalizedHash,
+		objectKey: `bucket:${normalizedHash}`,
+		objectOrder: objectOrderByType.bucket,
+		objectType: 'bucket',
+		objectUrl: `${archiveUrl}/bucket/${normalizedHash.slice(0, 2)}/${normalizedHash.slice(2, 4)}/${normalizedHash.slice(4, 6)}/bucket-${normalizedHash}.xdr.gz`
+	});
+}
+
+function getCheckpointLedger(currentLedger: number): number | null {
+	if (!Number.isSafeInteger(currentLedger) || currentLedger < 0) return null;
+	if (currentLedger < checkpointFrequency - 1) return checkpointFrequency - 1;
+
+	return (
+		Math.floor((currentLedger + 1) / checkpointFrequency) *
+			checkpointFrequency -
+		1
+	);
+}
+
+function getBucketHashes(
+	buckets: readonly HistoryStateBucketDTO[]
+): readonly string[] {
+	const hashes: string[] = [];
+	for (const bucket of buckets) {
+		hashes.push(bucket.curr, bucket.snap);
+		if (bucket.next.output) hashes.push(bucket.next.output);
+	}
+
+	return hashes
+		.map((hash) => hash.toLowerCase())
+		.filter((hash) => bucketHashPattern.test(hash) && !zeroHashPattern.test(hash));
+}
+
+function toCheckpointHex(checkpointLedger: number): string {
+	return checkpointLedger.toString(16).padStart(8, '0');
+}
+
+function dedupeObjects(
+	objects: readonly HistoryArchiveObject[]
+): readonly HistoryArchiveObject[] {
+	const objectsByIdentity = new Map<string, HistoryArchiveObject>();
+	for (const object of objects) {
+		objectsByIdentity.set(
+			`${object.archiveUrlIdentity}:${object.objectType}:${object.objectKey}`,
+			object
+		);
+	}
+
+	return Array.from(objectsByIdentity.values());
+}

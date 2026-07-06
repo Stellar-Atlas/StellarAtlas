@@ -7,6 +7,7 @@ import {
 	fetchHistoryArchiveScan,
 	fetchHistoryArchiveScanEvidence,
 	fetchHistoryArchiveScanLogs,
+	fetchHistoryArchiveObjectsForArchive,
 	fetchHistoryArchiveState,
 	fetchPublicNetwork
 } from '@api/client';
@@ -21,6 +22,7 @@ interface NodeDetailPageProps {
 
 export const dynamicParams = true;
 export const revalidate = 10;
+const liveArchiveFetchOptions = { cache: 'no-store' } as const;
 
 async function NodeDetailRouteContent({
 	publicKey
@@ -53,18 +55,29 @@ async function NodeDetailRouteContent({
 		historyArchiveScan,
 		historyArchiveScanLogs,
 		historyArchiveEvidence,
+		historyArchiveObjects,
 		historyArchiveState
 	] =
 		node?.historyUrl
 			? await Promise.all([
-					fetchHistoryArchiveScan(node.historyUrl, { revalidate }),
-					fetchHistoryArchiveScanLogs(node.historyUrl, { revalidate }),
-					fetchHistoryArchiveScanEvidence(node.historyUrl, 500, {
-						revalidate
-					}),
-					fetchHistoryArchiveState(node.historyUrl, { revalidate })
+					fetchHistoryArchiveScan(node.historyUrl, liveArchiveFetchOptions),
+					fetchHistoryArchiveScanLogs(
+						node.historyUrl,
+						liveArchiveFetchOptions
+					),
+					fetchHistoryArchiveScanEvidence(
+						node.historyUrl,
+						500,
+						liveArchiveFetchOptions
+					),
+					fetchHistoryArchiveObjectsForArchive(
+						node.historyUrl,
+						250,
+						liveArchiveFetchOptions
+					),
+					fetchHistoryArchiveState(node.historyUrl, liveArchiveFetchOptions)
 				])
-			: [null, [], null, null];
+			: [null, [], null, null, null];
 	const organization = node
 		? getOrganizationForNode(inventoryNetwork, node)
 		: null;
@@ -78,6 +91,7 @@ async function NodeDetailRouteContent({
 			/>
 			<NodeDetail
 				historyArchiveEvidence={historyArchiveEvidence}
+				historyArchiveObjects={historyArchiveObjects}
 				historyArchiveScan={historyArchiveScan}
 				historyArchiveScanLogs={historyArchiveScanLogs}
 				historyArchiveState={historyArchiveState}

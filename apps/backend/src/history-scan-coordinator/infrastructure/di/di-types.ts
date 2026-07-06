@@ -4,6 +4,7 @@ export const TYPES = {
 	),
 	CommunityScannerRepository: Symbol('CommunityScannerRepository'),
 	HistoryArchiveStateRepository: Symbol('HistoryArchiveStateRepository'),
+	HistoryArchiveObjectRepository: Symbol('HistoryArchiveObjectRepository'),
 	HistoryArchiveScanRepository: Symbol('HistoryArchiveScanRepository'),
 	ParsedLedgerHeaderRepository: Symbol('ParsedLedgerHeaderRepository'),
 	ScanJobRepository: Symbol('ScanJobRepository'),

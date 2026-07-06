@@ -51,6 +51,14 @@ export {
 	type HistoryArchiveStateSourceV1,
 	type HistoryArchiveStateStatusV1
 } from './dto/history-archive-state-v1.js';
+export {
+	type HistoryArchiveObjectErrorV1,
+	type HistoryArchiveObjectQueueV1,
+	HistoryArchiveObjectQueueV1Schema,
+	type HistoryArchiveObjectStatusV1,
+	type HistoryArchiveObjectTypeV1,
+	type HistoryArchiveObjectV1
+} from './dto/history-archive-object-v1.js';
 export type {
 	ScpBallotV1,
 	ScpNominationV1,

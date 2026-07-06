@@ -1,6 +1,6 @@
 import { CheckPointGenerator } from '../../check-point/CheckPointGenerator.js';
 import { StandardCheckPointFrequency } from '../../check-point/StandardCheckPointFrequency.js';
-import { HASValidator } from '../../history-archive/HASValidator.js';
+import { HistoryArchiveStateValidator } from '../../history-archive/HistoryArchiveStateValidator.js';
 import { mock } from 'jest-mock-extended';
 import {
 	FileNotFoundError,
@@ -28,7 +28,7 @@ jest.setTimeout(30000);
 const loggerMock = mock<Logger>();
 const currentDir = path.dirname(fileURLToPath(import.meta.url));
 
-describe('scan HAS files', () => {
+describe('scan history archive state files', () => {
 	it('should extract bucket hashes', async function () {
 		const httpQueue = mock<HttpQueue>();
 		httpQueue.sendRequests.mockImplementation(
@@ -64,7 +64,7 @@ describe('scan HAS files', () => {
 		);
 
 		const bucketHashesOrError =
-			await scanHASFilesAndReturnBucketHashes(httpQueue);
+			await scanHistoryArchiveStateFilesAndReturnBucketHashes(httpQueue);
 
 		expect(bucketHashesOrError.isOk()).toBeTruthy();
 		if (bucketHashesOrError.isErr()) throw bucketHashesOrError.error;
@@ -78,7 +78,7 @@ describe('scan HAS files', () => {
 		expect(bucketHashesOrError.value.errors).toEqual([]);
 	});
 
-	it('should collect HAS request errors and continue scanning the range', async function () {
+	it('should collect history archive state request errors and continue scanning the range', async function () {
 		const httpQueue = mock<HttpQueue>();
 		const url = createDummyHistoryBaseUrl();
 		let requestCount = 0;
@@ -127,7 +127,7 @@ describe('scan HAS files', () => {
 			}
 		);
 
-		const bucketHashesOrError = await scanHASFilesAndReturnBucketHashes(
+		const bucketHashesOrError = await scanHistoryArchiveStateFilesAndReturnBucketHashes(
 			httpQueue,
 			127
 		);
@@ -145,7 +145,7 @@ describe('scan HAS files', () => {
 		);
 	});
 
-	it('should stop HAS aggregation on worker connection errors', async function () {
+	it('should stop history archive state aggregation on worker connection errors', async function () {
 		const httpQueue = mock<HttpQueue>();
 		const url = createDummyHistoryBaseUrl();
 		httpQueue.sendRequests.mockResolvedValue(
@@ -159,7 +159,7 @@ describe('scan HAS files', () => {
 		);
 
 		const bucketHashesOrError =
-			await scanHASFilesAndReturnBucketHashes(httpQueue);
+			await scanHistoryArchiveStateFilesAndReturnBucketHashes(httpQueue);
 		expect(bucketHashesOrError.isOk()).toBeFalsy();
 		if (bucketHashesOrError.isOk()) throw new Error();
 
@@ -242,7 +242,7 @@ it('should find latest ledger', async function () {
 	const checkPointGenerator = new CheckPointGenerator(
 		new StandardCheckPointFrequency()
 	);
-	const hasValidator = new HASValidator(loggerMock);
+	const hasValidator = new HistoryArchiveStateValidator(loggerMock);
 	const categoryScanner = new CategoryScanner(
 		hasValidator,
 		httpQueue,
@@ -308,7 +308,7 @@ function getMockedCategoryScanner(testEmptyFile: boolean) {
 	const checkPointGenerator = new CheckPointGenerator(
 		new StandardCheckPointFrequency()
 	);
-	const hasValidator = new HASValidator(loggerMock);
+	const hasValidator = new HistoryArchiveStateValidator(loggerMock);
 	return new CategoryScanner(
 		hasValidator,
 		httpQueue,
@@ -348,14 +348,14 @@ async function getOtherCategoriesVerifyResult(
 	);
 }
 
-async function scanHASFilesAndReturnBucketHashes(
+async function scanHistoryArchiveStateFilesAndReturnBucketHashes(
 	httpQueue: HttpQueue,
 	toLedger = 100
 ) {
 	const checkPointGenerator = new CheckPointGenerator(
 		new StandardCheckPointFrequency()
 	);
-	const hasValidator = new HASValidator(loggerMock);
+	const hasValidator = new HistoryArchiveStateValidator(loggerMock);
 	const categoryScanner = new CategoryScanner(
 		hasValidator,
 		httpQueue,
@@ -364,7 +364,7 @@ async function scanHASFilesAndReturnBucketHashes(
 		1
 	);
 
-	return await categoryScanner.scanHASFilesAndReturnBucketHashes({
+	return await categoryScanner.scanHistoryArchiveStateFilesAndReturnBucketHashes({
 		baseUrl: createDummyHistoryBaseUrl(),
 		checkPoints: checkPointGenerator.generate(0, toLedger),
 		concurrency: 100,

@@ -3,6 +3,7 @@ import type {
 	PublicHistoryArchiveScan,
 	PublicHistoryArchiveScanEvidence,
 	PublicHistoryArchiveScanLogEntry,
+	PublicHistoryArchiveObjectQueue,
 	PublicHistoryArchiveState,
 	PublicKnownNode,
 	PublicNetwork,
@@ -36,9 +37,11 @@ import {
 	ArchiveBucketEvidence,
 	ArchiveMetadata
 } from './node-archive-evidence';
+import { HistoryArchiveObjectInventory } from '@components/archive-scans/history-archive-object-inventory';
 
 interface NodeDetailProps {
 	historyArchiveEvidence: PublicHistoryArchiveScanEvidence | null;
+	historyArchiveObjects: PublicHistoryArchiveObjectQueue | null;
 	historyArchiveScan: PublicHistoryArchiveScan | null;
 	historyArchiveScanLogs: readonly PublicHistoryArchiveScanLogEntry[];
 	historyArchiveState: PublicHistoryArchiveState | null;
@@ -50,6 +53,7 @@ interface NodeDetailProps {
 
 export function NodeDetail({
 	historyArchiveEvidence,
+	historyArchiveObjects,
 	historyArchiveScan,
 	historyArchiveScanLogs,
 	historyArchiveState,
@@ -282,6 +286,12 @@ export function NodeDetail({
 						organization={organization}
 					/>
 					<ArchiveBucketEvidence evidence={historyArchiveEvidence} />
+					{historyArchiveObjects ? (
+						<HistoryArchiveObjectInventory
+							framed={false}
+							objects={historyArchiveObjects}
+						/>
+					) : null}
 					<div className="archive-log-section">
 						<div className="panel-heading archive-log-heading">
 							<h3>Scan run log</h3>

@@ -6,6 +6,8 @@ import type { ExceptionLogger } from '@core/services/ExceptionLogger.js';
 import { mapUnknownToError } from '@core/utilities/mapUnknownToError.js';
 import type { ScanRepository } from '../../domain/scan/ScanRepository.js';
 import type { ScanEvidence } from '../../domain/scan/ScanEvidence.js';
+import type { HistoryArchiveObject } from '../../domain/history-archive-object/HistoryArchiveObject.js';
+import type { HistoryArchiveObjectRepository } from '../../domain/history-archive-object/HistoryArchiveObjectRepository.js';
 import { TYPES } from '../../infrastructure/di/di-types.js';
 import { InvalidUrlError } from '../get-latest-scan/InvalidUrlError.js';
 
@@ -32,6 +34,8 @@ export class GetScanEvidence {
 	constructor(
 		@inject(TYPES.HistoryArchiveScanRepository)
 		private readonly scanRepository: ScanRepository,
+		@inject(TYPES.HistoryArchiveObjectRepository)
+		private readonly objectRepository: HistoryArchiveObjectRepository,
 		@inject('ExceptionLogger') private readonly exceptionLogger: ExceptionLogger
 	) {}
 
@@ -48,10 +52,19 @@ export class GetScanEvidence {
 				urlOrError.value.value,
 				safeLimit
 			);
+			const objectEvidence =
+				await this.objectRepository.findVerifiedBucketObjectsByArchiveUrl(
+					urlOrError.value.value,
+					safeLimit
+				);
+			const evidence = dedupeEvidence([
+				...objectEvidence.map(mapObjectEvidence),
+				...page.evidence.map(mapEvidence)
+			]).slice(0, safeLimit);
 
 			return ok({
-				count: page.count,
-				evidence: page.evidence.map(mapEvidence),
+				count: Math.max(page.count, evidence.length),
+				evidence,
 				limit: safeLimit,
 				url: urlOrError.value.value
 			});
@@ -76,4 +89,31 @@ function mapEvidence(evidence: ScanEvidence): ArchiveScanEvidenceEntryDTO {
 		observedAt: evidence.observedAt.toISOString(),
 		status: evidence.status
 	};
+}
+
+function mapObjectEvidence(
+	object: HistoryArchiveObject
+): ArchiveScanEvidenceEntryDTO {
+	return {
+		bucketHash: object.bucketHash ?? object.objectKey.replace(/^bucket:/, ''),
+		bucketUrl: object.objectUrl,
+		kind: 'bucket',
+		observedAt: (object.verifiedAt ?? object.updatedAt ?? new Date(0)).toISOString(),
+		status: 'verified'
+	};
+}
+
+function dedupeEvidence(
+	evidence: readonly ArchiveScanEvidenceEntryDTO[]
+): ArchiveScanEvidenceEntryDTO[] {
+	const seen = new Set<string>();
+	const result: ArchiveScanEvidenceEntryDTO[] = [];
+	for (const entry of evidence) {
+		const key = `${entry.kind}:${entry.bucketHash}:${entry.bucketUrl}`;
+		if (seen.has(key)) continue;
+		seen.add(key);
+		result.push(entry);
+	}
+
+	return result.sort((a, b) => b.observedAt.localeCompare(a.observedAt));
 }

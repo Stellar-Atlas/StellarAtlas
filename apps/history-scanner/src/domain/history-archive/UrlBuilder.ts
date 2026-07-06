@@ -14,7 +14,7 @@ export class UrlBuilder {
 		return urlOrError.value;
 	}
 
-	static getRootHASUrl(historyBaseUrl: Url) {
+	static getRootHistoryArchiveStateUrl(historyBaseUrl: Url) {
 		const urlResult = Url.create(
 			`${UrlBuilder.getBaseUrlValue(historyBaseUrl)}/.well-known/stellar-history.json`
 		);
@@ -40,8 +40,8 @@ export class UrlBuilder {
 		return urlResult.value;
 	}
 
-	static getHASUrl(historyBaseUrl: Url) {
-		return UrlBuilder.getRootHASUrl(historyBaseUrl);
+	static getHistoryArchiveStateUrl(historyBaseUrl: Url) {
+		return UrlBuilder.getRootHistoryArchiveStateUrl(historyBaseUrl);
 	}
 
 	private static getBaseUrlValue(historyBaseUrl: Url): string {

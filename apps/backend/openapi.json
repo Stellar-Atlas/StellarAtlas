@@ -3697,6 +3697,85 @@
 				}
 			}
 		},
+		"/v1/archive-scans/objects": {
+			"get": {
+				"summary": "List history archive object work",
+				"description": "Returns a bounded scanner-owned archive object queue snapshot. Object rows represent concrete history archive files such as root history archive state, checkpoint state, ledger, transaction, result, and bucket files.",
+				"tags": ["ArchiveScans"],
+				"operationId": "getHistoryArchiveObjects",
+				"parameters": [
+					{
+						"name": "limit",
+						"in": "query",
+						"description": "Maximum number of object rows to return.",
+						"required": false,
+						"schema": {
+							"type": "integer",
+							"minimum": 1,
+							"maximum": 5000,
+							"default": 250
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "history archive object queue snapshot",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/HistoryArchiveObjectQueueV1"
+								}
+							}
+						}
+					},
+					"400": { "description": "Invalid limit" },
+					"500": { "description": "Server error" }
+				}
+			}
+		},
+		"/v1/archive-scans/{encodedUrl}/objects": {
+			"get": {
+				"summary": "List history archive objects by archive URL",
+				"description": "Returns a bounded scanner-owned archive object queue snapshot for one history archive URL.",
+				"tags": ["ArchiveScans"],
+				"operationId": "getHistoryArchiveObjectsByUrl",
+				"parameters": [
+					{
+						"name": "encodedUrl",
+						"in": "path",
+						"description": "URL of the history archive, URL encoded",
+						"required": true,
+						"schema": { "type": "string", "format": "uri" }
+					},
+					{
+						"name": "limit",
+						"in": "query",
+						"description": "Maximum number of object rows to return.",
+						"required": false,
+						"schema": {
+							"type": "integer",
+							"minimum": 1,
+							"maximum": 5000,
+							"default": 250
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "history archive object queue snapshot",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/HistoryArchiveObjectQueueV1"
+								}
+							}
+						}
+					},
+					"400": { "description": "Invalid archive URL or limit" },
+					"500": { "description": "Server error" }
+				}
+			}
+		},
 		"/v1/archive-scans/{encodedUrl}/errors": {
 			"get": {
 				"summary": "Get archive scan log entries",
@@ -4654,6 +4733,170 @@
 					},
 					"204": { "description": "No scan job available" },
 					"401": { "description": "Authentication required" },
+					"500": { "description": "Server error" }
+				}
+			}
+		},
+		"/v1/history-scan/archive-object-job": {
+			"get": {
+				"summary": "Claim the next pending history archive object",
+				"description": "Internal authenticated worker endpoint. Atomically marks one pending history archive object as scanning and returns it to an object verifier worker.",
+				"tags": ["HistoryScan"],
+				"operationId": "getHistoryArchiveObjectJob",
+				"security": [{ "basicAuth": [] }],
+				"responses": {
+					"200": {
+						"description": "archive object job claimed",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/HistoryArchiveObjectJobDTO"
+								}
+							}
+						}
+					},
+					"204": { "description": "No archive object job available" },
+					"401": { "description": "Authentication required" },
+					"500": { "description": "Server error" }
+				}
+			}
+		},
+		"/v1/history-scan/archive-object-job/{remoteId}/heartbeat": {
+			"post": {
+				"summary": "Refresh a claimed history archive object",
+				"description": "Internal authenticated worker endpoint. Updates object verifier heartbeat/progress for the current claim attempt.",
+				"tags": ["HistoryScan"],
+				"operationId": "touchHistoryArchiveObjectJob",
+				"security": [{ "basicAuth": [] }],
+				"parameters": [
+					{
+						"name": "remoteId",
+						"in": "path",
+						"description": "Remote id of the claimed archive object",
+						"required": true,
+						"schema": { "type": "string", "format": "uuid" }
+					}
+				],
+				"requestBody": {
+					"required": true,
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/HistoryArchiveObjectProgressUpdate"
+							}
+						}
+					}
+				},
+				"responses": {
+					"204": { "description": "heartbeat accepted" },
+					"400": { "description": "Invalid remote id or request body" },
+					"401": { "description": "Authentication required" },
+					"404": { "description": "Archive object job is not currently claimed" },
+					"500": { "description": "Server error" }
+				}
+			}
+		},
+		"/v1/history-scan/archive-object-job/{remoteId}/complete": {
+			"post": {
+				"summary": "Complete a history archive object",
+				"description": "Internal authenticated worker endpoint. Marks a claimed history archive object verified for the current claim attempt.",
+				"tags": ["HistoryScan"],
+				"operationId": "completeHistoryArchiveObjectJob",
+				"security": [{ "basicAuth": [] }],
+				"parameters": [
+					{
+						"name": "remoteId",
+						"in": "path",
+						"description": "Remote id of the claimed archive object",
+						"required": true,
+						"schema": { "type": "string", "format": "uuid" }
+					}
+				],
+				"requestBody": {
+					"required": true,
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/CompleteHistoryArchiveObjectRequest"
+							}
+						}
+					}
+				},
+				"responses": {
+					"204": { "description": "completion accepted" },
+					"400": { "description": "Invalid remote id or request body" },
+					"401": { "description": "Authentication required" },
+					"404": { "description": "Archive object job is not currently claimed" },
+					"500": { "description": "Server error" }
+				}
+			}
+		},
+		"/v1/history-scan/archive-object-job/{remoteId}/fail": {
+			"post": {
+				"summary": "Fail a history archive object",
+				"description": "Internal authenticated worker endpoint. Marks a claimed history archive object failed for the current claim attempt and stores sanitized failure evidence.",
+				"tags": ["HistoryScan"],
+				"operationId": "failHistoryArchiveObjectJob",
+				"security": [{ "basicAuth": [] }],
+				"parameters": [
+					{
+						"name": "remoteId",
+						"in": "path",
+						"description": "Remote id of the claimed archive object",
+						"required": true,
+						"schema": { "type": "string", "format": "uuid" }
+					}
+				],
+				"requestBody": {
+					"required": true,
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/HistoryArchiveObjectFailure"
+							}
+						}
+					}
+				},
+				"responses": {
+					"204": { "description": "failure accepted" },
+					"400": { "description": "Invalid remote id or request body" },
+					"401": { "description": "Authentication required" },
+					"404": { "description": "Archive object job is not currently claimed" },
+					"500": { "description": "Server error" }
+				}
+			}
+		},
+		"/v1/history-scan/archive-object-job/{remoteId}/release": {
+			"post": {
+				"summary": "Release a claimed history archive object",
+				"description": "Internal authenticated worker endpoint. Releases the current archive object claim attempt back to pending without marking the archive object verified or failed.",
+				"tags": ["HistoryScan"],
+				"operationId": "releaseHistoryArchiveObjectJob",
+				"security": [{ "basicAuth": [] }],
+				"parameters": [
+					{
+						"name": "remoteId",
+						"in": "path",
+						"description": "Remote id of the claimed archive object",
+						"required": true,
+						"schema": { "type": "string", "format": "uuid" }
+					}
+				],
+				"requestBody": {
+					"required": true,
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/HistoryArchiveObjectClaimAttempt"
+							}
+						}
+					}
+				},
+				"responses": {
+					"204": { "description": "release accepted" },
+					"400": { "description": "Invalid remote id or request body" },
+					"401": { "description": "Authentication required" },
+					"404": { "description": "Archive object job is not currently claimed" },
 					"500": { "description": "Server error" }
 				}
 			}
@@ -7638,6 +7881,201 @@
 							"queue": {
 								"$ref": "#/components/schemas/IngestionQueueSummary"
 							}
+						}
+					}
+				]
+			},
+			"HistoryArchiveObjectErrorV1": {
+				"type": "object",
+				"required": ["message", "type", "httpStatus"],
+				"properties": {
+					"message": { "type": "string" },
+					"type": { "type": "string" },
+					"httpStatus": { "type": "integer", "nullable": true }
+				}
+			},
+			"HistoryArchiveObjectV1": {
+				"type": "object",
+				"required": [
+					"archiveUrl",
+					"archiveUrlIdentity",
+					"objectKey",
+					"objectType",
+					"objectUrl",
+					"remoteId",
+					"status",
+					"workerStage",
+					"checkpointLedger",
+					"bucketHash",
+					"bytesDownloaded",
+					"attempts",
+					"claimedAt",
+					"updatedAt",
+					"verifiedAt",
+					"error"
+				],
+				"properties": {
+					"archiveUrl": { "type": "string", "format": "uri" },
+					"archiveUrlIdentity": { "type": "string" },
+					"objectKey": { "type": "string" },
+					"objectType": {
+						"type": "string",
+						"enum": [
+							"history-archive-state",
+							"checkpoint-state",
+							"ledger",
+							"transactions",
+							"results",
+							"bucket"
+						]
+					},
+					"objectUrl": { "type": "string", "format": "uri" },
+					"remoteId": { "type": "string", "format": "uuid" },
+					"status": {
+						"type": "string",
+						"enum": ["pending", "scanning", "verified", "failed"]
+					},
+					"workerStage": { "type": "string", "nullable": true },
+					"checkpointLedger": {
+						"type": "integer",
+						"minimum": 0,
+						"nullable": true
+					},
+					"bucketHash": { "type": "string", "nullable": true },
+					"bytesDownloaded": {
+						"type": "integer",
+						"minimum": 0,
+						"nullable": true
+					},
+					"attempts": { "type": "integer", "minimum": 0 },
+					"claimedAt": {
+						"type": "string",
+						"format": "date-time",
+						"nullable": true
+					},
+					"updatedAt": { "type": "string", "format": "date-time" },
+					"verifiedAt": {
+						"type": "string",
+						"format": "date-time",
+						"nullable": true
+					},
+					"error": {
+						"nullable": true,
+						"allOf": [
+							{ "$ref": "#/components/schemas/HistoryArchiveObjectErrorV1" }
+						]
+					}
+				}
+			},
+			"HistoryArchiveObjectQueueV1": {
+				"type": "object",
+				"required": [
+					"generatedAt",
+					"pendingObjects",
+					"activeObjects",
+					"verifiedObjects",
+					"failedObjects",
+					"objects"
+				],
+				"properties": {
+					"generatedAt": { "type": "string", "format": "date-time" },
+					"pendingObjects": { "type": "integer", "minimum": 0 },
+					"activeObjects": { "type": "integer", "minimum": 0 },
+					"verifiedObjects": { "type": "integer", "minimum": 0 },
+					"failedObjects": { "type": "integer", "minimum": 0 },
+					"objects": {
+						"type": "array",
+						"items": {
+							"$ref": "#/components/schemas/HistoryArchiveObjectV1"
+						}
+					}
+				}
+			},
+			"HistoryArchiveObjectJobDTO": {
+				"type": "object",
+				"required": [
+					"archiveUrl",
+					"bucketHash",
+					"checkpointLedger",
+					"claimAttempt",
+					"objectKey",
+					"objectType",
+					"objectUrl",
+					"remoteId"
+				],
+				"properties": {
+					"archiveUrl": { "type": "string", "format": "uri" },
+					"bucketHash": { "type": "string", "nullable": true },
+					"checkpointLedger": {
+						"type": "integer",
+						"minimum": 0,
+						"nullable": true
+					},
+					"claimAttempt": { "type": "integer", "minimum": 1 },
+					"objectKey": { "type": "string" },
+					"objectType": {
+						"type": "string",
+						"enum": [
+							"history-archive-state",
+							"checkpoint-state",
+							"ledger",
+							"transactions",
+							"results",
+							"bucket"
+						]
+					},
+					"objectUrl": { "type": "string", "format": "uri" },
+					"remoteId": { "type": "string", "format": "uuid" }
+				}
+			},
+			"HistoryArchiveObjectClaimAttempt": {
+				"type": "object",
+				"required": ["claimAttempt"],
+				"properties": {
+					"claimAttempt": { "type": "integer", "minimum": 1 }
+				}
+			},
+			"HistoryArchiveObjectProgressUpdate": {
+				"allOf": [
+					{ "$ref": "#/components/schemas/HistoryArchiveObjectClaimAttempt" },
+					{
+						"type": "object",
+						"properties": {
+							"bytesDownloaded": {
+								"type": "integer",
+								"minimum": 0,
+								"nullable": true
+							},
+							"workerStage": { "type": "string", "nullable": true }
+						}
+					}
+				]
+			},
+			"CompleteHistoryArchiveObjectRequest": {
+				"allOf": [
+					{ "$ref": "#/components/schemas/HistoryArchiveObjectProgressUpdate" },
+					{
+						"type": "object",
+						"properties": {
+							"archiveMetadata": {
+								"type": "object",
+								"nullable": true,
+								"additionalProperties": true
+							}
+						}
+					}
+				]
+			},
+			"HistoryArchiveObjectFailure": {
+				"allOf": [
+					{ "$ref": "#/components/schemas/HistoryArchiveObjectClaimAttempt" },
+					{
+						"type": "object",
+						"required": ["errorMessage", "errorType"],
+						"properties": {
+							"errorMessage": { "type": "string" },
+							"errorType": { "type": "string" },
+							"httpStatus": { "type": "integer", "nullable": true }
 						}
 					}
 				]

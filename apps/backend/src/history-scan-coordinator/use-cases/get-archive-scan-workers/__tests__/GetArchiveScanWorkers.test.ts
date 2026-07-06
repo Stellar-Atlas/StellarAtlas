@@ -24,7 +24,6 @@ describe('GetArchiveScanWorkers', () => {
 	});
 
 	it('should return safe public worker metadata for taken jobs', async () => {
-		scanJobRepositoryMock.releaseStaleTakenJobs.mockResolvedValue(1);
 		const activeJob = new ScanJob(
 			'https://active.example',
 			10,
@@ -128,9 +127,7 @@ describe('GetArchiveScanWorkers', () => {
 				}
 			]
 		});
-		expect(scanJobRepositoryMock.releaseStaleTakenJobs).toHaveBeenCalledWith(
-			new Date('2026-07-03T11:30:00.000Z')
-		);
+		expect(scanJobRepositoryMock.releaseStaleTakenJobs).not.toHaveBeenCalled();
 		expect(scanJobRepositoryMock.getTakenJobsSnapshot).toHaveBeenCalledWith(
 			new Date('2026-07-03T11:30:00.000Z'),
 			50
@@ -139,7 +136,7 @@ describe('GetArchiveScanWorkers', () => {
 
 	it('should log and return repository errors', async () => {
 		const error = new Error('database unavailable');
-		scanJobRepositoryMock.releaseStaleTakenJobs.mockRejectedValue(error);
+		scanJobRepositoryMock.getTakenJobsSnapshot.mockRejectedValue(error);
 
 		const result = await getArchiveScanWorkers.execute();
 

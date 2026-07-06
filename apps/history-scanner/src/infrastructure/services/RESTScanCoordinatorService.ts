@@ -12,7 +12,13 @@ import {
 	type ScanJobJSONInput
 } from 'history-scanner-dto';
 import { ScanCoordinatorService } from '../../domain/scan/ScanCoordinatorService.js';
-import type { ScanJobProgressDTO } from '../../domain/scan/ScanCoordinatorService.js';
+import type {
+	HistoryArchiveObjectCompletionDTO,
+	HistoryArchiveObjectFailureDTO,
+	HistoryArchiveObjectJobDTO,
+	HistoryArchiveObjectProgressDTO,
+	ScanJobProgressDTO
+} from '../../domain/scan/ScanCoordinatorService.js';
 import { isObject } from 'shared';
 import { type ScanError, ScanErrorType } from '../../domain/scan/ScanError.js';
 import type { CoordinatorAuthConfig } from '../config/CoordinatorAuthConfig.js';
@@ -183,6 +189,42 @@ export class RESTScanCoordinatorService implements ScanCoordinatorService {
 		return ok(scanJobDTOsResult.value);
 	}
 
+	async getHistoryArchiveObjectJob(): Promise<
+		Result<HistoryArchiveObjectJobDTO | null, Error>
+	> {
+		const urlResult = this.createUrl('/v1/history-scan/archive-object-job');
+		if (urlResult.isErr()) {
+			return err(new CoordinatorServiceError('Invalid URL', urlResult.error));
+		}
+
+		const response = await this.httpService.get(
+			urlResult.value,
+			this.getHttpOptions({ responseType: 'json' })
+		);
+
+		if (response.isErr()) {
+			return err(
+				new CoordinatorServiceError(
+					'Failed to get pending history archive object jobs',
+					response.error
+				)
+			);
+		}
+
+		if (response.value.status === 204) return ok(null);
+		if (response.value.status !== 200) {
+			return err(
+				new CoordinatorServiceError(
+					'Failed to get pending history archive object jobs'
+				)
+			);
+		}
+
+		return this.convertResponseToHistoryArchiveObjectJobDTO(
+			response.value.data
+		);
+	}
+
 	async touchScanJob(
 		remoteId: string,
 		progress?: ScanJobProgressDTO
@@ -209,6 +251,54 @@ export class RESTScanCoordinatorService implements ScanCoordinatorService {
 		}
 
 		return ok(undefined);
+	}
+
+	async touchHistoryArchiveObject(
+		remoteId: string,
+		progress?: HistoryArchiveObjectProgressDTO
+	): Promise<Result<void, Error>> {
+		return this.postHistoryArchiveObjectJobUpdate(
+			remoteId,
+			'heartbeat',
+			progress === undefined ? {} : { ...progress },
+			'Failed to touch history archive object job'
+		);
+	}
+
+	async completeHistoryArchiveObject(
+		remoteId: string,
+		completion: HistoryArchiveObjectCompletionDTO
+	): Promise<Result<void, Error>> {
+		return this.postHistoryArchiveObjectJobUpdate(
+			remoteId,
+			'complete',
+			{ ...completion },
+			'Failed to complete history archive object job'
+		);
+	}
+
+	async failHistoryArchiveObject(
+		remoteId: string,
+		failure: HistoryArchiveObjectFailureDTO
+	): Promise<Result<void, Error>> {
+		return this.postHistoryArchiveObjectJobUpdate(
+			remoteId,
+			'fail',
+			{ ...failure },
+			'Failed to fail history archive object job'
+		);
+	}
+
+	async releaseHistoryArchiveObject(
+		remoteId: string,
+		claimAttempt: number
+	): Promise<Result<void, Error>> {
+		return this.postHistoryArchiveObjectJobUpdate(
+			remoteId,
+			'release',
+			{ claimAttempt },
+			'Failed to release history archive object job'
+		);
 	}
 
 	async releaseScanJob(remoteId: string): Promise<Result<void, Error>> {
@@ -269,6 +359,13 @@ export class RESTScanCoordinatorService implements ScanCoordinatorService {
 		return `/v1/history-scan/job/${remoteId}/heartbeat`;
 	}
 
+	private getHistoryArchiveObjectJobPath(
+		remoteId: string,
+		action: 'heartbeat' | 'complete' | 'fail' | 'release'
+	): string {
+		return `/v1/history-scan/archive-object-job/${remoteId}/${action}`;
+	}
+
 	private getReleaseScanJobPath(remoteId: string): string {
 		return `/v1/history-scan/job/${remoteId}/release`;
 	}
@@ -302,5 +399,105 @@ export class RESTScanCoordinatorService implements ScanCoordinatorService {
 		}
 
 		return ok(scanJobDTO.value);
+	}
+
+	private async postHistoryArchiveObjectJobUpdate(
+		remoteId: string,
+		action: 'heartbeat' | 'complete' | 'fail' | 'release',
+		data: Record<string, unknown>,
+		errorMessage: string
+	): Promise<Result<void, Error>> {
+		const urlResult = this.createUrl(
+			this.getHistoryArchiveObjectJobPath(remoteId, action)
+		);
+		if (urlResult.isErr()) {
+			return err(new CoordinatorServiceError('Invalid URL', urlResult.error));
+		}
+
+		const response = await this.httpService.post(
+			urlResult.value,
+			data,
+			this.getHttpOptions()
+		);
+
+		if (response.isErr()) {
+			return err(
+				new CoordinatorServiceError(errorMessage, response.error)
+			);
+		}
+
+		if (response.value.status !== 204 && response.value.status !== 404) {
+			return err(new CoordinatorServiceError(errorMessage));
+		}
+
+		if (response.value.status === 404) {
+			return err(new CoordinatorServiceError('History archive object job not found'));
+		}
+
+		return ok(undefined);
+	}
+
+	private convertResponseToHistoryArchiveObjectJobDTO(
+		response: unknown
+	): Result<HistoryArchiveObjectJobDTO, Error> {
+		if (!isObject(response)) {
+			return err(
+				new CoordinatorServiceError(
+					'History archive object job JSON must be an object'
+				)
+			);
+		}
+
+		if (
+			typeof response.archiveUrl !== 'string' ||
+			typeof response.claimAttempt !== 'number' ||
+			!Number.isSafeInteger(response.claimAttempt) ||
+			typeof response.objectKey !== 'string' ||
+			typeof response.objectType !== 'string' ||
+			typeof response.objectUrl !== 'string' ||
+			typeof response.remoteId !== 'string'
+		) {
+			return err(
+				new CoordinatorServiceError(
+					'Invalid history archive object job response format'
+				)
+			);
+		}
+
+		const checkpointLedger = response.checkpointLedger;
+		if (
+			checkpointLedger !== null &&
+			checkpointLedger !== undefined &&
+			(typeof checkpointLedger !== 'number' ||
+				!Number.isSafeInteger(checkpointLedger))
+		) {
+			return err(
+				new CoordinatorServiceError(
+					'Invalid history archive object checkpoint ledger'
+				)
+			);
+		}
+
+		const bucketHash = response.bucketHash;
+		if (
+			bucketHash !== null &&
+			bucketHash !== undefined &&
+			typeof bucketHash !== 'string'
+		) {
+			return err(
+				new CoordinatorServiceError('Invalid history archive object bucket hash')
+			);
+		}
+
+		return ok({
+			archiveUrl: response.archiveUrl,
+			bucketHash: bucketHash ?? null,
+			checkpointLedger: checkpointLedger ?? null,
+			claimAttempt: response.claimAttempt,
+			objectKey: response.objectKey,
+			objectType: response.objectType,
+			objectUrl: response.objectUrl,
+			remoteId: response.remoteId
+		});
 	}
 }

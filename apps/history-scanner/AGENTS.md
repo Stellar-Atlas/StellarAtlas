@@ -13,7 +13,7 @@ mislabeling worker/setup failures as validator archive faults.
 
 ## Code Map
 
-- `domain/history-archive` validates HAS files, categories, checkpoints, and URL
+- `domain/history-archive` validates history archive state files, categories, checkpoints, and URL
   construction.
 - `domain/scanner` owns range/category scanning, XDR streaming, hashing, bucket
   cache, worker pool load tracking, and HTTP error mapping.

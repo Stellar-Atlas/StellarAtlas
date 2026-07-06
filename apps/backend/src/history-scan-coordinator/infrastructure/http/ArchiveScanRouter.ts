@@ -16,11 +16,14 @@ import {
 } from '../../use-cases/get-scan-evidence/GetScanEvidence.js';
 import { GetScanLogs } from '../../use-cases/get-scan-logs/GetScanLogs.js';
 import { GetHistoryArchiveState } from '../../use-cases/get-history-archive-state/GetHistoryArchiveState.js';
+import { GetHistoryArchiveObjects } from '../../use-cases/get-history-archive-objects/GetHistoryArchiveObjects.js';
+import { InvalidUrlError } from '../../use-cases/get-latest-scan/InvalidUrlError.js';
 
 export interface ArchiveScanRouterConfig {
 	getArchiveScans: GetArchiveScans;
 	getArchiveScanQueue: GetArchiveScanQueue;
 	getArchiveScanWorkers: GetArchiveScanWorkers;
+	getHistoryArchiveObjects: GetHistoryArchiveObjects;
 	getHistoryArchiveState: GetHistoryArchiveState;
 	getLatestScan: GetLatestScan;
 	getScanEvidence: GetScanEvidence;
@@ -93,6 +96,34 @@ export const ArchiveScanRouterWrapper = (
 	});
 
 	archiveScanRouter.get(
+		'/objects',
+		[query('limit').optional().isInt({ min: 1, max: 5000 })],
+		async function (req: express.Request, res: express.Response) {
+			res.setHeader(
+				'Cache-Control',
+				'public, max-age=' + archiveScanCacheMaxAgeSeconds
+			);
+			const errors = validationResult(req);
+			if (!errors.isEmpty()) {
+				return res.status(400).json({ errors: errors.array() });
+			}
+
+			const limit =
+				typeof req.query.limit === 'string'
+					? Number(req.query.limit)
+					: undefined;
+			const objectsOrError = await config.getHistoryArchiveObjects.execute({
+				limit
+			});
+			if (objectsOrError.isErr()) {
+				return res.status(500).json({ error: 'Internal server error' });
+			}
+
+			return res.status(200).json(objectsOrError.value);
+		}
+	);
+
+	archiveScanRouter.get(
 		'/:encodedUrl/state',
 		[param('encodedUrl').isURL()],
 		async function (req: express.Request, res: express.Response) {
@@ -105,6 +136,44 @@ export const ArchiveScanRouterWrapper = (
 		[param('encodedUrl').isURL()],
 		async function (req: express.Request, res: express.Response) {
 			return handleGetArchiveScanLogs(req, res, config, 'encodedUrl');
+		}
+	);
+
+	archiveScanRouter.get(
+		'/:encodedUrl/objects',
+		[
+			param('encodedUrl').isURL(),
+			query('limit').optional().isInt({ min: 1, max: 5000 })
+		],
+		async function (req: express.Request, res: express.Response) {
+			res.setHeader(
+				'Cache-Control',
+				'public, max-age=' + archiveScanCacheMaxAgeSeconds
+			);
+			const errors = validationResult(req);
+			if (!errors.isEmpty()) {
+				return res.status(400).json({ errors: errors.array() });
+			}
+
+			const limit =
+				typeof req.query.limit === 'string'
+					? Number(req.query.limit)
+					: undefined;
+			const objectsOrError = await config.getHistoryArchiveObjects.execute({
+				limit,
+				url: req.params.encodedUrl
+			});
+			if (
+				objectsOrError.isErr() &&
+				objectsOrError.error instanceof InvalidUrlError
+			) {
+				return res.status(400).json({ error: 'Invalid url' });
+			}
+			if (objectsOrError.isErr()) {
+				return res.status(500).json({ error: 'Internal server error' });
+			}
+
+			return res.status(200).json(objectsOrError.value);
 		}
 	);
 

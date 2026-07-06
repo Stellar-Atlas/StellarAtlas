@@ -24,9 +24,21 @@ export class TypeOrmHistoryArchiveStateRepository
 		private readonly repository: Repository<HistoryArchiveStateSnapshot>
 	) {}
 
+	async findAvailable(
+		limit: number
+	): Promise<readonly HistoryArchiveStateSnapshot[]> {
+		if (!Number.isSafeInteger(limit) || limit < 1) return [];
+
+		return await this.repository.find({
+			where: { status: 'available' },
+			order: { observedAt: 'DESC' },
+			take: limit
+		});
+	}
+
 	async findByUrl(
-		url: string
-	): Promise<HistoryArchiveStateSnapshot | null> {
+	url: string
+): Promise<HistoryArchiveStateSnapshot | null> {
 		const archiveUrlIdentity = getHistoryArchiveUrlIdentity(url);
 		if (archiveUrlIdentity === null) return null;
 

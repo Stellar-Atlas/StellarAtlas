@@ -3,23 +3,23 @@ import {
 	type HistoryStateBucket
 } from './HistoryArchiveState.js';
 
-export class HASBucketHashExtractor {
+export class HistoryArchiveStateBucketHashExtractor {
 	static getNonZeroHashes(historyArchiveState: HistoryArchiveState): string[] {
 		const bucketHashes: string[] = [];
-		HASBucketHashExtractor.addBucketHashes(
+		HistoryArchiveStateBucketHashExtractor.addBucketHashes(
 			bucketHashes,
 			historyArchiveState.currentBuckets
 		);
 
 		if (historyArchiveState.hotArchiveBuckets !== undefined) {
-			HASBucketHashExtractor.addBucketHashes(
+			HistoryArchiveStateBucketHashExtractor.addBucketHashes(
 				bucketHashes,
 				historyArchiveState.hotArchiveBuckets
 			);
 		}
 
 		return bucketHashes.filter(
-			(hash) => !HASBucketHashExtractor.isZeroHash(hash)
+			(hash) => !HistoryArchiveStateBucketHashExtractor.isZeroHash(hash)
 		);
 	}
 

@@ -5,6 +5,8 @@ import type {
 	OrganizationSnapshotV1,
 	OrganizationV1,
 	HistoryArchiveScanV1,
+	HistoryArchiveObjectQueueV1,
+	HistoryArchiveObjectV1,
 	HistoryArchiveStateSnapshotV1,
 	ScpStatementObservationV1
 } from 'shared';
@@ -15,6 +17,8 @@ export type PublicNodeSnapshot = NodeSnapshotV1;
 export type PublicOrganization = OrganizationV1;
 export type PublicOrganizationSnapshot = OrganizationSnapshotV1;
 export type PublicHistoryArchiveScan = HistoryArchiveScanV1;
+export type PublicHistoryArchiveObject = HistoryArchiveObjectV1;
+export type PublicHistoryArchiveObjectQueue = HistoryArchiveObjectQueueV1;
 export type PublicHistoryArchiveState = HistoryArchiveStateSnapshotV1;
 export type PublicScpStatementObservation = ScpStatementObservationV1;
 
@@ -345,33 +349,6 @@ export interface PublicArchiveQueueStatus {
 	readonly staleJobs: number;
 	readonly status: PublicStatusLevel;
 	readonly totalUnfinishedJobs: number;
-}
-
-export type PublicArchiveScanWorkerStatus =
-	'pending' | 'scanning' | 'starting' | 'stale';
-
-export interface PublicArchiveScanWorker {
-	readonly archiveUrl: string;
-	readonly claimedAt: string;
-	readonly concurrency: number | null;
-	readonly currentRangeFromLedger?: number | null;
-	readonly currentRangeToLedger?: number | null;
-	readonly fromLedger: number;
-	readonly heartbeatAgeMs: number;
-	readonly lastHeartbeatAt: string;
-	readonly latestAttemptedLedger?: number | null;
-	readonly latestScannedLedger: number;
-	readonly status: PublicArchiveScanWorkerStatus;
-	readonly toLedger: number | null;
-}
-
-export interface PublicArchiveScanWorkers {
-	readonly activeWorkers: number;
-	readonly generatedAt: string;
-	readonly staleJobAgeMs: number;
-	readonly staleWorkers: number;
-	readonly totalTakenJobs: number;
-	readonly workers: readonly PublicArchiveScanWorker[];
 }
 
 export interface PublicNetworkScanLogEntry {

@@ -36,7 +36,7 @@ describe('history scanner runtime scripts', () => {
 			'pnpm --filter history-scanner run scan-history'
 		);
 		expect(scannerScripts['scan-history']).toBe(
-			'node lib/infrastructure/cli/verify-archives-cluster.js 1 1'
+			'node lib/infrastructure/cli/verify-archive-objects-cluster.js 1'
 		);
 		expect(scannerScripts['build-and-scan-history']).toBe(
 			'pnpm run build && pnpm run scan-history'
@@ -48,15 +48,14 @@ describe('history scanner runtime scripts', () => {
 			'ops/systemd/stellaratlas-history-scanner@.service'
 		);
 
-		expect(service).toContain('Environment=HISTORY_SCAN_PROCESSES=12');
+		expect(service).toContain('Environment=HISTORY_OBJECT_WORKER_PROCESSES=24');
 		expect(service).toContain('Environment=HISTORY_SCAN_WORKERS=1');
 		expect(service).toContain(
-			'These are total scanner caps; the cluster wrapper divides them per process.'
+			'These are total object workers; each worker claims one archive object at a time.'
 		);
-		expect(service).toContain('Environment=HISTORY_MAX_REQUESTS=24');
-		expect(service).toContain('Environment=HISTORY_HASHER_WORKERS=24');
 		expect(service).toContain('ExecStart=/usr/bin/env pnpm start:scan-history');
 		expect(service).not.toContain('verify-archives.js');
+		expect(service).not.toContain('verify-archives-cluster.js');
 		expect(service).not.toContain('scan-history:single');
 	});
 

@@ -174,6 +174,9 @@ export function HistoryArchiveScanLog({
 							hasWorkerIssues
 						);
 						const concurrencyMetric = getConcurrencyMetric(entry);
+						const primaryProgressMetric = getPrimaryProgressMetric(entry);
+						const secondaryProgressMetric = getSecondaryProgressMetric(entry);
+						const rangeMetric = getRangeMetric(entry);
 
 						return (
 							<li
@@ -192,16 +195,16 @@ export function HistoryArchiveScanLog({
 								</div>
 								<dl className="archive-scan-log-metrics">
 									<div>
-										<dt>Verified</dt>
-										<dd>{formatInteger(entry.latestVerifiedLedger)}</dd>
+										<dt>{primaryProgressMetric.label}</dt>
+										<dd>{primaryProgressMetric.value}</dd>
 									</div>
 									<div>
-										<dt>Scanned</dt>
-										<dd>{formatInteger(entry.latestScannedLedger)}</dd>
+										<dt>{secondaryProgressMetric.label}</dt>
+										<dd>{secondaryProgressMetric.value}</dd>
 									</div>
 									<div>
-										<dt>Range</dt>
-										<dd>{formatRange(entry)}</dd>
+										<dt>{rangeMetric.label}</dt>
+										<dd>{rangeMetric.value}</dd>
 									</div>
 									<div>
 										<dt>{concurrencyMetric.label}</dt>
@@ -267,6 +270,93 @@ const formatRange = (entry: PublicHistoryArchiveScanLogEntry): string => {
 	return `${formatInteger(entry.fromLedger)} - ${
 		entry.toLedger === null ? 'latest' : formatInteger(entry.toLedger)
 	}`;
+};
+
+const getRangeMetric = (
+	entry: PublicHistoryArchiveScanLogEntry
+): {
+	readonly label: 'Current range' | 'Range';
+	readonly value: string;
+} => {
+	if (scanLogIsActive(entry)) {
+		const currentRange = formatOptionalRange(
+			entry.currentRangeFromLedger,
+			entry.currentRangeToLedger
+		);
+		if (currentRange !== null) {
+			return { label: 'Current range', value: currentRange };
+		}
+	}
+
+	return { label: 'Range', value: formatRange(entry) };
+};
+
+const getPrimaryProgressMetric = (
+	entry: PublicHistoryArchiveScanLogEntry
+): {
+	readonly label: 'Contiguous' | 'Verified';
+	readonly value: string;
+} => {
+	if (scanLogIsActive(entry)) {
+		return {
+			label: 'Contiguous',
+			value: formatContiguousProgress(entry.latestScannedLedger)
+		};
+	}
+
+	return {
+		label: 'Verified',
+		value: formatInteger(entry.latestVerifiedLedger)
+	};
+};
+
+const getSecondaryProgressMetric = (
+	entry: PublicHistoryArchiveScanLogEntry
+): {
+	readonly label: 'Attempted' | 'Scanned';
+	readonly value: string;
+} => {
+	if (scanLogIsActive(entry)) {
+		return {
+			label: 'Attempted',
+			value: formatAttemptedProgress(entry)
+		};
+	}
+
+	return {
+		label: 'Scanned',
+		value: formatInteger(entry.latestScannedLedger)
+	};
+};
+
+const formatContiguousProgress = (value: number): string => {
+	if (value > 0) return formatInteger(value);
+	return 'Not advanced yet';
+};
+
+const formatAttemptedProgress = (
+	entry: PublicHistoryArchiveScanLogEntry
+): string => {
+	const ledger =
+		entry.latestAttemptedLedger ??
+		entry.currentRangeToLedger ??
+		entry.latestScannedLedger;
+	if (ledger > 0) return formatInteger(ledger);
+	return entry.status === 'queued' ? 'Waiting for worker' : 'Starting';
+};
+
+const formatOptionalRange = (
+	fromLedger: number | null | undefined,
+	toLedger: number | null | undefined
+): string | null => {
+	if (typeof fromLedger === 'number' && Number.isFinite(fromLedger)) {
+		const end =
+			typeof toLedger === 'number' && Number.isFinite(toLedger)
+				? formatInteger(toLedger)
+				: 'latest';
+		return `${formatInteger(fromLedger)} - ${end}`;
+	}
+	return null;
 };
 
 const formatConcurrency = (entry: PublicHistoryArchiveScanLogEntry): string => {

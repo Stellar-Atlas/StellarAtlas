@@ -61,6 +61,9 @@ export class RestartAtLeastOneScan implements ScanScheduler {
 		);
 		const archivesReadyForErrorRecheck = uniqueArchives.filter(
 			(archive) =>
+				!unfinishedUrlIdentities.has(
+					getHistoryArchiveUrlIdentity(archive) ?? archive
+				) &&
 				!unfinishedErrorRecheckUrls.has(
 					getHistoryArchiveUrlIdentity(archive) ?? archive
 				)
@@ -133,6 +136,10 @@ export class RestartAtLeastOneScan implements ScanScheduler {
 	}
 
 	private createErrorRecheckJob(previousScan: Scan): ScanJob {
+		if (this.shouldVerifyCurrentWindowAfterInitialAccessDenied(previousScan)) {
+			return this.createRollingScanJob(previousScan.baseUrl.value);
+		}
+
 		const fromLedger =
 			previousScan.latestScannedLedger > 0
 				? previousScan.latestScannedLedger + 1
@@ -184,5 +191,16 @@ export class RestartAtLeastOneScan implements ScanScheduler {
 	private isArchiveErrorRecheckDue(scan: Scan): boolean {
 		const ageMs = this.now().getTime() - scan.endDate.getTime();
 		return ageMs >= this.archiveErrorRecheckIntervalMs;
+	}
+
+	private shouldVerifyCurrentWindowAfterInitialAccessDenied(scan: Scan): boolean {
+		if (scan.latestScannedLedger > 0) return false;
+
+		return scan.scanErrors.some(
+			(error) =>
+				error.type === ScanErrorType.TYPE_VERIFICATION &&
+				/^HTTP 40[13](\s|$)/.test(error.message) &&
+				error.url.endsWith('/history/00/00/00/history-0000003f.json')
+		);
 	}
 }

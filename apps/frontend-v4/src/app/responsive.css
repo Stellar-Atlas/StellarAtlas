@@ -57,6 +57,10 @@
 		grid-template-columns: 1fr;
 	}
 
+	.archive-object-row {
+		grid-template-columns: 1fr;
+	}
+
 	.archive-scan-log-toolbar,
 	.archive-scan-log-row,
 	.archive-scan-log-row div,

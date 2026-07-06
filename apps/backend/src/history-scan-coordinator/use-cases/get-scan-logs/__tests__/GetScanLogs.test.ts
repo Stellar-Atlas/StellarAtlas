@@ -50,7 +50,8 @@ describe('GetScanLogs', () => {
 		activeJob.currentRangeFromLedger = 58_583_680;
 		activeJob.currentRangeToLedger = 58_584_000;
 		activeJob.status = 'TAKEN';
-		activeJob.createdAt = new Date(now - 60_000);
+		activeJob.claimedAt = new Date(now - 60_000);
+		activeJob.createdAt = new Date(now - 20 * 60_000);
 		activeJob.updatedAt = new Date(now - 30_000);
 
 		const staleJob = new ScanJob(
@@ -107,6 +108,7 @@ describe('GetScanLogs', () => {
 			'completed'
 		]);
 		expect(logs[0].hasWorkerIssue).toBe(false);
+		expect(logs[0].durationMs).toBeLessThan(2 * 60_000);
 		expect(logs[0].latestAttemptedLedger).toBe(58_584_000);
 		expect(logs[0].currentRangeFromLedger).toBe(58_583_680);
 		expect(logs[0].currentRangeToLedger).toBe(58_584_000);

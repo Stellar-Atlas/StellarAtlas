@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import type {
+	PublicHistoryArchiveObjectQueue,
 	PublicNetwork,
 	PublicNode,
 	PublicHistoryArchiveState,
@@ -31,6 +32,7 @@ interface OrganizationDetailProps {
 
 interface OrganizationArchiveState {
 	readonly historyUrl: string;
+	readonly objects: PublicHistoryArchiveObjectQueue;
 	readonly state: PublicHistoryArchiveState | null;
 }
 
@@ -123,12 +125,12 @@ function OrganizationArchiveEvidence({
 
 	return (
 		<article className="panel detail-panel archive-metadata">
-				<div className="panel-heading">
-					<h2>History archive state</h2>
-					<span className="muted-inline">
-						{formatInteger(nodesWithArchives.length)} archives
-					</span>
-				</div>
+			<div className="panel-heading">
+				<h2>History archive state</h2>
+				<span className="muted-inline">
+					{formatInteger(nodesWithArchives.length)} archives
+				</span>
+			</div>
 			{nodesWithArchives.length === 0 ? (
 				<p className="muted-copy">
 					No node archive URLs are known for this organization.
@@ -139,6 +141,8 @@ function OrganizationArchiveEvidence({
 						const historyUrl = node.historyUrl ?? '';
 						const archiveState =
 							stateByUrl.get(normalizeArchiveUrl(historyUrl))?.state ?? null;
+						const objects =
+							stateByUrl.get(normalizeArchiveUrl(historyUrl))?.objects ?? null;
 
 						return (
 							<div className="row compact" key={`${node.publicKey}:${historyUrl}`}>
@@ -151,6 +155,9 @@ function OrganizationArchiveEvidence({
 								<div className="metric">
 									<strong>{archiveState?.status ?? 'No state record'}</strong>
 									<small>{formatArchiveStateDetail(archiveState)}</small>
+									{objects ? (
+										<small>{formatObjectQueueSummary(objects)}</small>
+									) : null}
 								</div>
 							</div>
 						);
@@ -159,6 +166,16 @@ function OrganizationArchiveEvidence({
 			)}
 		</article>
 	);
+}
+
+function formatObjectQueueSummary(
+	objects: PublicHistoryArchiveObjectQueue
+): string {
+	return `${formatInteger(objects.activeObjects)} scanning, ${formatInteger(
+		objects.pendingObjects
+	)} pending, ${formatInteger(objects.verifiedObjects)} verified, ${formatInteger(
+		objects.failedObjects
+	)} failed`;
 }
 
 function formatArchiveStateDetail(

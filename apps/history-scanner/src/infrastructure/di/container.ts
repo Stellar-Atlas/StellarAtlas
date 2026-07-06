@@ -1,7 +1,7 @@
 import { Scanner } from '../../domain/scanner/Scanner.js';
 import { interfaces } from 'inversify';
 import Container = interfaces.Container;
-import { HASValidator } from '../../domain/history-archive/HASValidator.js';
+import { HistoryArchiveStateValidator } from '../../domain/history-archive/HistoryArchiveStateValidator.js';
 import { CheckPointGenerator } from '../../domain/check-point/CheckPointGenerator.js';
 import type { CheckPointFrequency } from '../../domain/check-point/CheckPointFrequency.js';
 import { TYPES } from './di-types.js';
@@ -11,6 +11,7 @@ import { BucketScanner } from '../../domain/scanner/BucketScanner.js';
 import { BucketCache } from '../../domain/scanner/BucketCache.js';
 import { RangeScanner } from '../../domain/scanner/RangeScanner.js';
 import { VerifyArchives } from '../../use-cases/verify-archives/VerifyArchives.js';
+import { VerifyArchiveObjects } from '../../use-cases/verify-archive-objects/VerifyArchiveObjects.js';
 import { ArchivePerformanceTester } from '../../domain/scanner/ArchivePerformanceTester.js';
 import { ScanSettingsFactory } from '../../domain/scan/ScanSettingsFactory.js';
 import { CategoryVerificationService } from '../../domain/scanner/CategoryVerificationService.js';
@@ -53,7 +54,7 @@ export function load(container: Container, config: Config) {
 			container.get(BucketCache)
 		);
 	});
-	container.bind(HASValidator).toSelf();
+	container.bind(HistoryArchiveStateValidator).toSelf();
 	container
 		.bind(Scanner)
 		.toDynamicValue(() => {
@@ -68,6 +69,7 @@ export function load(container: Container, config: Config) {
 		.inSingletonScope();
 	container.bind(RangeScanner).toSelf();
 	container.bind(VerifyArchives).toSelf();
+	container.bind(VerifyArchiveObjects).toSelf();
 	container.bind(VerifySingleArchive).toSelf();
 	container.bind(CheckPointGenerator).toSelf();
 	container.bind(CategoryVerificationService).toSelf();

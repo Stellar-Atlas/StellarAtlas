@@ -31,7 +31,6 @@ export class GetArchiveScanQueue {
 		const staleCutoff = getStaleScanJobCutoff(generatedAt);
 
 		try {
-			await this.scanJobRepository.releaseStaleTakenJobs(staleCutoff);
 			const stats = await this.scanJobRepository.getQueueStats(staleCutoff);
 
 			return ok({

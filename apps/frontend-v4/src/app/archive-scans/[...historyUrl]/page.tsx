@@ -4,6 +4,7 @@ import {
 	fetchHistoryArchiveScan,
 	fetchHistoryArchiveScanEvidence,
 	fetchHistoryArchiveScanLogs,
+	fetchHistoryArchiveObjectsForArchive,
 	fetchHistoryArchiveState
 } from '@api/client';
 import { ArchiveScanDetail } from '@components/archive-scans/archive-scan-detail';
@@ -16,7 +17,8 @@ interface ArchiveScanDetailPageProps {
 }
 
 export const dynamicParams = true;
-export const revalidate = 10;
+export const revalidate = 0;
+const liveArchiveFetchOptions = { cache: 'no-store' } as const;
 
 async function ArchiveScanDetailRouteContent({
 	historyUrl
@@ -24,11 +26,16 @@ async function ArchiveScanDetailRouteContent({
 	readonly historyUrl: string;
 }): Promise<React.JSX.Element> {
 	await connection();
-	const [scan, logs, evidence, state] = await Promise.all([
-		fetchHistoryArchiveScan(historyUrl, { revalidate }),
-		fetchHistoryArchiveScanLogs(historyUrl, { revalidate }),
-		fetchHistoryArchiveScanEvidence(historyUrl, 500, { revalidate }),
-		fetchHistoryArchiveState(historyUrl, { revalidate })
+	const [scan, logs, evidence, objects, state] = await Promise.all([
+		fetchHistoryArchiveScan(historyUrl, liveArchiveFetchOptions),
+		fetchHistoryArchiveScanLogs(historyUrl, liveArchiveFetchOptions),
+		fetchHistoryArchiveScanEvidence(historyUrl, 500, liveArchiveFetchOptions),
+		fetchHistoryArchiveObjectsForArchive(
+			historyUrl,
+			250,
+			liveArchiveFetchOptions
+		),
+		fetchHistoryArchiveState(historyUrl, liveArchiveFetchOptions)
 	]);
 
 	return (
@@ -42,6 +49,7 @@ async function ArchiveScanDetailRouteContent({
 				evidence={evidence}
 				historyUrl={historyUrl}
 				logs={logs}
+				objects={objects}
 				scan={scan}
 				state={state}
 			/>

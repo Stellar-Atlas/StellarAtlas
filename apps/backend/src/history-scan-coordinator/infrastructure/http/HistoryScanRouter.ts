@@ -28,15 +28,31 @@ import {
 	type FrontendRevalidationConfig,
 	triggerFrontendRevalidation
 } from '@core/services/FrontendRevalidation.js';
+import { GetHistoryArchiveObjectJob } from '../../use-cases/get-history-archive-object-job/GetHistoryArchiveObjectJob.js';
+import { TouchHistoryArchiveObject } from '../../use-cases/touch-history-archive-object/TouchHistoryArchiveObject.js';
+import { CompleteHistoryArchiveObject } from '../../use-cases/complete-history-archive-object/CompleteHistoryArchiveObject.js';
+import { FailHistoryArchiveObject } from '../../use-cases/fail-history-archive-object/FailHistoryArchiveObject.js';
+import { ReleaseHistoryArchiveObject } from '../../use-cases/release-history-archive-object/ReleaseHistoryArchiveObject.js';
+import {
+	parseArchiveObjectCompletion,
+	parseArchiveObjectFailure,
+	parseArchiveObjectProgress,
+	parseClaimAttempt
+} from './ArchiveObjectJobRequestParsers.js';
 
 export interface HistoryScanRouterConfig extends FrontendRevalidationConfig {
 	getLatestScan: GetLatestScan;
 	getScanLogs: GetScanLogs;
 	getScanJob: GetScanJob;
+	getHistoryArchiveObjectJob: GetHistoryArchiveObjectJob;
 	registerParsedLedgerHeaders: RegisterParsedLedgerHeaders;
 	registerScan: RegisterScan;
 	releaseScanJob: ReleaseScanJob;
 	touchScanJob: TouchScanJob;
+	touchHistoryArchiveObject: TouchHistoryArchiveObject;
+	completeHistoryArchiveObject: CompleteHistoryArchiveObject;
+	failHistoryArchiveObject: FailHistoryArchiveObject;
+	releaseHistoryArchiveObject: ReleaseHistoryArchiveObject;
 	backfillArchiveMetadata: BackfillArchiveMetadata;
 	userName?: string;
 	password?: string;
@@ -72,6 +88,159 @@ export const HistoryScanRouterWrapper = (
 				]);
 
 				return res.status(201).json({ message: 'Scan created successfully' });
+			}
+		);
+
+	if (config.userName && config.password)
+		historyScanRouter.get(
+			'/archive-object-job',
+			basicAuth({
+				users: { [config.userName]: config.password },
+				challenge: true
+			}),
+			async (_req: express.Request, res: express.Response) => {
+				const result = await config.getHistoryArchiveObjectJob.execute();
+				if (result.isErr()) {
+					return res.status(500).json({ error: result.error.message });
+				}
+				if (result.value === null) {
+					return res.status(204).json({ message: 'No archive object job available' });
+				}
+
+				triggerFrontendRevalidation(config, [frontendCacheTags.historyScan]);
+				return res.status(200).json(result.value);
+			}
+		);
+
+	if (config.userName && config.password)
+		historyScanRouter.post(
+			'/archive-object-job/:remoteId/heartbeat',
+			basicAuth({
+				users: { [config.userName]: config.password },
+				challenge: true
+			}),
+			[param('remoteId').isUUID().withMessage('Invalid archive object remoteId')],
+			async (req: express.Request, res: express.Response) => {
+				const errors = validationResult(req);
+				if (!errors.isEmpty()) {
+					return res.status(400).json({ errors: errors.array() });
+				}
+
+				const progress = parseArchiveObjectProgress(req, res);
+				if (progress === null) return;
+
+				const result = await config.touchHistoryArchiveObject.execute(
+					req.params.remoteId,
+					progress
+				);
+				if (result.isErr()) {
+					return res.status(500).json({ error: result.error.message });
+				}
+				if (!result.value) {
+					return res.status(404).json({ error: 'Archive object job not found' });
+				}
+
+				triggerFrontendRevalidation(config, [frontendCacheTags.historyScan]);
+				return res.status(204).send();
+			}
+		);
+
+	if (config.userName && config.password)
+		historyScanRouter.post(
+			'/archive-object-job/:remoteId/complete',
+			basicAuth({
+				users: { [config.userName]: config.password },
+				challenge: true
+			}),
+			[param('remoteId').isUUID().withMessage('Invalid archive object remoteId')],
+			async (req: express.Request, res: express.Response) => {
+				const errors = validationResult(req);
+				if (!errors.isEmpty()) {
+					return res.status(400).json({ errors: errors.array() });
+				}
+
+				const completion = parseArchiveObjectCompletion(req, res);
+				if (completion === null) return;
+
+				const result = await config.completeHistoryArchiveObject.execute(
+					req.params.remoteId,
+					completion
+				);
+				if (result.isErr()) {
+					return res.status(500).json({ error: result.error.message });
+				}
+				if (!result.value) {
+					return res.status(404).json({ error: 'Archive object job not found' });
+				}
+
+				triggerFrontendRevalidation(config, [frontendCacheTags.historyScan]);
+				return res.status(204).send();
+			}
+		);
+
+	if (config.userName && config.password)
+		historyScanRouter.post(
+			'/archive-object-job/:remoteId/fail',
+			basicAuth({
+				users: { [config.userName]: config.password },
+				challenge: true
+			}),
+			[param('remoteId').isUUID().withMessage('Invalid archive object remoteId')],
+			async (req: express.Request, res: express.Response) => {
+				const errors = validationResult(req);
+				if (!errors.isEmpty()) {
+					return res.status(400).json({ errors: errors.array() });
+				}
+
+				const failure = parseArchiveObjectFailure(req, res);
+				if (failure === null) return;
+
+				const result = await config.failHistoryArchiveObject.execute(
+					req.params.remoteId,
+					failure
+				);
+				if (result.isErr()) {
+					return res.status(500).json({ error: result.error.message });
+				}
+				if (!result.value) {
+					return res.status(404).json({ error: 'Archive object job not found' });
+				}
+
+				triggerFrontendRevalidation(config, [frontendCacheTags.historyScan]);
+				return res.status(204).send();
+			}
+		);
+
+	if (config.userName && config.password)
+		historyScanRouter.post(
+			'/archive-object-job/:remoteId/release',
+			basicAuth({
+				users: { [config.userName]: config.password },
+				challenge: true
+			}),
+			[param('remoteId').isUUID().withMessage('Invalid archive object remoteId')],
+			async (req: express.Request, res: express.Response) => {
+				const errors = validationResult(req);
+				if (!errors.isEmpty()) {
+					return res.status(400).json({ errors: errors.array() });
+				}
+
+				const claimAttempt = parseClaimAttempt(req.body, res);
+				if (claimAttempt === null) return;
+
+				const result = await config.releaseHistoryArchiveObject.execute(
+					req.params.remoteId,
+					claimAttempt
+				);
+				if (result.isErr()) {
+					return res.status(500).json({ error: result.error.message });
+				}
+				if (!result.value) {
+					return res.status(404).json({ error: 'Archive object job not found' });
+				}
+
+				triggerFrontendRevalidation(config, [frontendCacheTags.historyScan]);
+				return res.status(204).send();
 			}
 		);
 

@@ -1,9 +1,9 @@
-import { HASBucketHashExtractor } from '../HASBucketHashExtractor.js';
+import { HistoryArchiveStateBucketHashExtractor } from '../HistoryArchiveStateBucketHashExtractor.js';
 import { getDummyHistoryArchiveState } from '../__fixtures__/getDummyHistoryArchiveState.js';
 
-it('should extract all non zero hashes from HAS', function () {
+it('should extract all non zero hashes from history archive state', function () {
 	expect(
-		HASBucketHashExtractor.getNonZeroHashes(getDummyHistoryArchiveState())
+		HistoryArchiveStateBucketHashExtractor.getNonZeroHashes(getDummyHistoryArchiveState())
 	).toEqual([
 		'17c917990b64770e9139406cf57067abb250017017bc3882d433d81b4fe02303',
 		'4776a45500b6552e8ac2836db8e9993d8c1fc89da25cc59a95ef85e1db1674c1',
@@ -31,7 +31,7 @@ it('should extract all non zero hashes from HAS', function () {
 
 it('should extract non zero hot archive bucket hashes', function () {
 	expect(
-		HASBucketHashExtractor.getNonZeroHashes({
+		HistoryArchiveStateBucketHashExtractor.getNonZeroHashes({
 			version: 2,
 			server: 'stellar-core 27.0.0',
 			currentLedger: 100,

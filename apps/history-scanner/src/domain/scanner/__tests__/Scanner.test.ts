@@ -266,13 +266,21 @@ it('should report attempted range progress separately from verified progress', a
 			latestScannedLedger: 0,
 			latestScannedLedgerHeaderHash: null
 		},
-		{ currentRangeFromLedger: 0, currentRangeToLedger: 100 },
 		{
 			currentRangeFromLedger: 0,
 			currentRangeToLedger: 100,
 			latestAttemptedLedger: 100
 		},
-		{ currentRangeFromLedger: 100, currentRangeToLedger: 200 },
+		{
+			currentRangeFromLedger: 0,
+			currentRangeToLedger: 100,
+			latestAttemptedLedger: 100
+		},
+		{
+			currentRangeFromLedger: 100,
+			currentRangeToLedger: 200,
+			latestAttemptedLedger: 200
+		},
 		{
 			currentRangeFromLedger: 100,
 			currentRangeToLedger: 200,
@@ -281,7 +289,7 @@ it('should report attempted range progress separately from verified progress', a
 	]);
 });
 
-it('should stop scanning ranges after archive access is denied', async () => {
+it('should continue scanning ranges after archive access is denied without advancing contiguous progress', async () => {
 	const rangeScanner = mock<RangeScanner>();
 	const accessDeniedError = new ScanError(
 		ScanErrorType.TYPE_VERIFICATION,
@@ -294,7 +302,7 @@ it('should stop scanning ranges after archive access is denied', async () => {
 	const scanJob = ScanJob.newScanChain(createDummyHistoryBaseUrl(), 0, 200, 1);
 	const scan = await scanner.perform(new Date(), scanJob);
 
-	expect(rangeScanner.scan).toHaveBeenCalledTimes(1);
+	expect(rangeScanner.scan).toHaveBeenCalledTimes(2);
 	expect(scan.error).toEqual(accessDeniedError);
 	expect(scan.errors).toEqual([accessDeniedError]);
 	expect(scan.latestScannedLedger).toEqual(0);

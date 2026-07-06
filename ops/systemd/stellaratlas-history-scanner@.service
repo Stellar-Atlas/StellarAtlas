@@ -14,11 +14,9 @@ WorkingDirectory=/home/observe/stellarbeat-data/Observer
 Environment=NODE_ENV=production
 Environment=HOME=/home/observe
 Environment=PATH=/home/observe/.nvm/versions/node/v26.4.0/bin:/usr/local/sbin:/usr/local/bin:/sbin:/bin
-# These are total scanner caps; the cluster wrapper divides them per process.
-Environment=HISTORY_SCAN_PROCESSES=12
+# These are total object workers; each worker claims one archive object at a time.
+Environment=HISTORY_OBJECT_WORKER_PROCESSES=24
 Environment=HISTORY_SCAN_WORKERS=1
-Environment=HISTORY_MAX_REQUESTS=24
-Environment=HISTORY_HASHER_WORKERS=24
 EnvironmentFile=-/etc/stellaratlas/stellaratlas.env
 ExecStartPre=/usr/bin/env node scripts/wait-for-url.mjs http://127.0.0.1:3000/v1/status 90
 ExecStart=/usr/bin/env pnpm start:scan-history

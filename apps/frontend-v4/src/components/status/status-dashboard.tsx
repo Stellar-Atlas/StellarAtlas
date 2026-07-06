@@ -1,8 +1,9 @@
 import type {
 	PublicApiStatus,
-	PublicArchiveScanWorkers,
+	PublicHistoryArchiveObjectQueue,
 	PublicConfiguredServiceStatus,
 	PublicDataQualityStatus,
+	PublicStatusLevel,
 	PublicScanLogStatus,
 	PublicWorkerStatus
 } from '@api/types';
@@ -12,14 +13,14 @@ import {
 	formatPercent
 } from '@format/formatters';
 import { StatCard } from '../stat-card';
-import { ArchiveWorkerJobs } from './archive-worker-jobs';
+import { HistoryArchiveObjectInventory } from '@components/archive-scans/history-archive-object-inventory';
 import { RecentScanLogs } from './recent-scan-logs';
 import { ProductionServiceStatusPanel } from './service-status-panels';
 import { StatusPill, StatusRow, statusLabel, statusTone } from './status-ui';
 
 interface StatusDashboardProps {
 	readonly api: PublicApiStatus;
-	readonly archiveWorkers: PublicArchiveScanWorkers;
+	readonly archiveObjects: PublicHistoryArchiveObjectQueue;
 	readonly dataQuality: PublicDataQualityStatus;
 	readonly frontend: PublicConfiguredServiceStatus;
 	readonly scanLogs: PublicScanLogStatus;
@@ -28,7 +29,7 @@ interface StatusDashboardProps {
 
 export function StatusDashboard({
 	api,
-	archiveWorkers,
+	archiveObjects,
 	dataQuality,
 	frontend,
 	scanLogs,
@@ -36,8 +37,8 @@ export function StatusDashboard({
 }: StatusDashboardProps): React.JSX.Element {
 	const scan = dataQuality.scans.networkScan;
 	const rollups = dataQuality.rollups.networkRollups;
-	const archiveQueue = dataQuality.archiveQueue;
-	const archiveFreshnessDetail = `Latest completed age ${formatDuration(dataQuality.dataFreshness.archiveScan.ageMs)}; ${formatInteger(archiveQueue.activeJobs)} claimed jobs`;
+	const archiveObjectSummary = summarizeArchiveObjects(archiveObjects);
+	const archiveFreshnessDetail = `Latest completed age ${formatDuration(dataQuality.dataFreshness.archiveScan.ageMs)}; ${formatInteger(archiveObjects.activeObjects)} active objects`;
 
 	return (
 		<div className="status-dashboard">
@@ -61,16 +62,16 @@ export function StatusDashboard({
 					value={`${formatInteger(rollups.matchingDays)} matched`}
 				/>
 				<StatCard
-					detail={`${formatInteger(archiveQueue.pendingJobs)} pending, ${formatInteger(archiveQueue.staleJobs)} stale`}
-					label="Archive jobs"
-					tone={statusTone(archiveQueue.status)}
-					value={`${formatInteger(archiveQueue.activeJobs)} claimed`}
+					detail={`${formatInteger(archiveObjects.pendingObjects)} pending, ${formatInteger(archiveObjects.failedObjects)} evidence failures`}
+					label="Archive objects"
+					tone={statusTone(archiveObjectSummary.status)}
+					value={`${formatInteger(archiveObjects.activeObjects)} active`}
 				/>
 				<StatCard
-					detail={`${formatInteger(workers.archiveWorkers.activeWorkers)} fresh, ${formatInteger(workers.archiveWorkers.staleWorkers)} stale`}
-					label="Worker leases"
-					tone={statusTone(workers.status)}
-					value={`${formatInteger(workers.archiveWorkers.totalTakenJobs)} claimed`}
+					detail={`${formatInteger(archiveObjectSummary.freshActiveObjects)} fresh, ${formatInteger(archiveObjectSummary.staleActiveObjects)} delayed`}
+					label="Object workers"
+					tone={statusTone(archiveObjectSummary.workerStatus)}
+					value={`${formatInteger(archiveObjects.activeObjects)} active`}
 				/>
 				<StatCard
 					detail={`API ${statusLabel(api.status)}, frontend ${
@@ -133,16 +134,16 @@ export function StatusDashboard({
 					</div>
 					<div className="status-list">
 						<StatusRow
-							detail={`${formatInteger(archiveQueue.pendingJobs)} pending, ${formatInteger(archiveQueue.staleJobs)} stale`}
-							label="Archive queue"
-							status={archiveQueue.status}
-							value={`${formatInteger(archiveQueue.totalUnfinishedJobs)} jobs`}
+							detail={`${formatInteger(archiveObjects.pendingObjects)} pending, ${formatInteger(archiveObjects.failedObjects)} evidence failures, ${formatInteger(archiveObjects.verifiedObjects)} verified`}
+							label="Archive object queue"
+							status={archiveObjectSummary.status}
+							value={`${formatInteger(archiveObjectSummary.totalOpenObjects)} open objects`}
 						/>
 						<StatusRow
-							detail={`${formatInteger(workers.archiveWorkers.activeWorkers)} fresh, ${formatInteger(workers.archiveWorkers.staleWorkers)} stale; stale after ${formatDuration(workers.archiveWorkers.staleJobAgeMs)}`}
-							label="Archive workers"
-							status={workers.archiveWorkers.status}
-							value={`${formatInteger(workers.archiveWorkers.totalTakenJobs)} claimed`}
+							detail={`${formatInteger(archiveObjectSummary.freshActiveObjects)} fresh, ${formatInteger(archiveObjectSummary.staleActiveObjects)} delayed; delayed after ${formatDuration(ARCHIVE_OBJECT_STALE_AGE_MS)}`}
+							label="Archive object workers"
+							status={archiveObjectSummary.workerStatus}
+							value={`${formatInteger(archiveObjects.activeObjects)} active`}
 						/>
 						<StatusRow
 							detail={`${formatInteger(workers.communityScanners.offlineScanners)} offline, ${formatInteger(workers.communityScanners.degradedScanners)} degraded`}
@@ -156,16 +157,59 @@ export function StatusDashboard({
 				<ProductionServiceStatusPanel
 					api={api}
 					dataQuality={dataQuality}
+					archiveObjects={archiveObjects}
 					frontend={frontend}
-					workers={workers}
 				/>
 
-				<ArchiveWorkerJobs archiveWorkers={archiveWorkers} />
+				<HistoryArchiveObjectInventory
+					objects={archiveObjects}
+					title="Current archive object queue"
+				/>
 
 				<RecentScanLogs scanLogs={scanLogs} />
 			</div>
 		</div>
 	);
+}
+
+const ARCHIVE_OBJECT_STALE_AGE_MS = 2 * 60 * 1000;
+
+interface ArchiveObjectSummary {
+	readonly freshActiveObjects: number;
+	readonly staleActiveObjects: number;
+	readonly status: PublicStatusLevel;
+	readonly totalOpenObjects: number;
+	readonly workerStatus: PublicStatusLevel;
+}
+
+function summarizeArchiveObjects(
+	objects: PublicHistoryArchiveObjectQueue
+): ArchiveObjectSummary {
+	const generatedAtMs = Date.parse(objects.generatedAt);
+	const staleActiveObjects = objects.objects.filter((object) => {
+		if (object.status !== 'scanning') return false;
+		const updatedAtMs = Date.parse(object.updatedAt);
+		return (
+			Number.isFinite(generatedAtMs) &&
+			Number.isFinite(updatedAtMs) &&
+			generatedAtMs - updatedAtMs > ARCHIVE_OBJECT_STALE_AGE_MS
+		);
+	}).length;
+	const freshActiveObjects = Math.max(
+		0,
+		objects.activeObjects - staleActiveObjects
+	);
+	const status: PublicStatusLevel = staleActiveObjects > 0 ? 'degraded' : 'ok';
+	const workerStatus: PublicStatusLevel =
+		staleActiveObjects > 0 ? 'degraded' : 'ok';
+
+	return {
+		freshActiveObjects,
+		staleActiveObjects,
+		status,
+		totalOpenObjects: objects.activeObjects + objects.pendingObjects,
+		workerStatus
+	};
 }
 
 function formatNullableDate(value: string | null): string {

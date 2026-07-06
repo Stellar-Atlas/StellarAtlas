@@ -22,6 +22,13 @@ export function mapHttpQueueErrorToScanError(error: QueueError): ScanError {
 			`HTTP ${status}${statusText ? ` ${statusText}` : ''}`
 		);
 	}
+	if (isHttpError(error.cause) && isRemoteArchiveUrl(error.request.url.value)) {
+		return new ScanError(
+			ScanErrorType.TYPE_VERIFICATION,
+			error.request.url.value,
+			`Archive fetch failed: ${formatHttpErrorMessage(error.cause.message)}`
+		);
+	}
 	return new ScanError(
 		ScanErrorType.TYPE_CONNECTION,
 		error.request.url.value,
@@ -32,4 +39,17 @@ export function mapHttpQueueErrorToScanError(error: QueueError): ScanError {
 function isArchiveEvidenceStatus(error: { response?: { status: number } }) {
 	const status = error.response?.status;
 	return status !== undefined && status >= 400 && status < 500;
+}
+
+function isRemoteArchiveUrl(url: string): boolean {
+	try {
+		const parsedUrl = new URL(url);
+		return parsedUrl.protocol === 'http:' || parsedUrl.protocol === 'https:';
+	} catch {
+		return false;
+	}
+}
+
+function formatHttpErrorMessage(message: string): string {
+	return message.replace(/^HttpError:\s*/, '');
 }

@@ -12,7 +12,7 @@ it('should hash correctly', function () {
 	);
 });
 
-it('should include hot archive buckets for version 2 HAS files', function () {
+it('should include hot archive buckets for version 2 history archive state files', function () {
 	const result = hashBucketList({
 		version: 2,
 		server: 'stellar-core 27.0.0',

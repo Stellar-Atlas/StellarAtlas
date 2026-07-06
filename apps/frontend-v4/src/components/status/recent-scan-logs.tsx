@@ -2,22 +2,14 @@
 
 import { useMemo, useState } from 'react';
 import type {
-	PublicArchiveScanLogEntry,
 	PublicNetworkScanLogEntry,
 	PublicScanLogStatus,
 	PublicStatusLevel
 } from '@api/types';
 import { formatDateTime, formatInteger } from '@format/formatters';
-import { ArchiveScanDetails } from './recent-archive-scan-details';
 import { StatusPill, StatusRow } from './status-ui';
 
-type ScanLogFilter =
-	| 'attention'
-	| 'network'
-	| 'archive'
-	| 'archive-errors'
-	| 'worker-issues'
-	| 'all';
+type ScanLogFilter = 'attention' | 'network' | 'all';
 
 const segmentedControlStyle = {
 	flexWrap: 'wrap',
@@ -35,18 +27,12 @@ export function RecentScanLogs({
 		() => filterNetworkScans(scanLogs.networkScans, filter),
 		[filter, scanLogs.networkScans]
 	);
-	const archiveScans = useMemo(
-		() => filterArchiveScans(scanLogs.archiveScans, filter),
-		[filter, scanLogs.archiveScans]
-	);
-	const showNetwork = shouldShowNetworkColumn(filter);
-	const showArchive = shouldShowArchiveColumn(filter);
 
 	return (
 		<section className="panel status-scan-log-panel">
 			<div className="panel-heading">
 				<div>
-					<strong>Recent Scan Logs</strong>
+					<strong>Recent Network Scan Logs</strong>
 					<span>{formatDateTime(scanLogs.generatedAt)}</span>
 				</div>
 				<span className="status-muted">
@@ -73,12 +59,7 @@ export function RecentScanLogs({
 				</div>
 			</div>
 			<div className="status-scan-log-grid">
-				{showNetwork ? (
-					<RecentNetworkScans filter={filter} scans={networkScans} />
-				) : null}
-				{showArchive ? (
-					<RecentArchiveScans filter={filter} scans={archiveScans} />
-				) : null}
+				<RecentNetworkScans filter={filter} scans={networkScans} />
 			</div>
 		</section>
 	);
@@ -90,9 +71,6 @@ const scanLogFilters: readonly {
 }[] = [
 	{ label: 'Attention', value: 'attention' },
 	{ label: 'Network', value: 'network' },
-	{ label: 'Archive', value: 'archive' },
-	{ label: 'Archive errors', value: 'archive-errors' },
-	{ label: 'Worker issues', value: 'worker-issues' },
 	{ label: 'All', value: 'all' }
 ];
 
@@ -111,31 +89,6 @@ function RecentNetworkScans({
 			<div className="status-list">
 				{scans.map((scan) => (
 					<NetworkScanDetails key={scan.time} scan={scan} />
-				))}
-				{scans.length === 0 && <EmptyLogRow state={emptyState} />}
-			</div>
-		</div>
-	);
-}
-
-function RecentArchiveScans({
-	filter,
-	scans
-}: {
-	readonly filter: ScanLogFilter;
-	readonly scans: readonly PublicArchiveScanLogEntry[];
-}): React.JSX.Element {
-	const emptyState = getEmptyArchiveState(filter);
-
-	return (
-		<div className="status-scan-log-column">
-			<h3>Archive scan runs</h3>
-			<div className="status-list">
-				{scans.map((scan, index) => (
-					<ArchiveScanDetails
-						key={`${scan.url}-${scan.startDate}-${scan.latestScannedLedger}-${index}`}
-						scan={scan}
-					/>
 				))}
 				{scans.length === 0 && <EmptyLogRow state={emptyState} />}
 			</div>
@@ -254,65 +207,12 @@ function getEmptyNetworkState(filter: ScanLogFilter): EmptyLogState {
 	};
 }
 
-function getEmptyArchiveState(filter: ScanLogFilter): EmptyLogState {
-	if (filter === 'worker-issues') {
-		return {
-			detail: 'No worker infrastructure issue rows match this filter',
-			label: 'No worker issues',
-			status: 'ok',
-			value: 'Clear'
-		};
-	}
-	if (filter === 'archive-errors' || filter === 'attention') {
-		return {
-			detail: 'No archive verification error rows match this filter',
-			label: 'No archive errors',
-			status: 'ok',
-			value: 'Clear'
-		};
-	}
-
-	return {
-		detail: 'No recent archive scan rows match this filter',
-		label: 'No archive scans',
-		status: 'unavailable',
-		value: 'No data'
-	};
-}
-
 function filterNetworkScans(
 	scans: readonly PublicNetworkScanLogEntry[],
 	filter: ScanLogFilter
 ): readonly PublicNetworkScanLogEntry[] {
-	if (filter === 'archive' || filter === 'archive-errors') return [];
-	if (filter === 'worker-issues') return [];
 	if (filter === 'attention') return scans.filter((scan) => !scan.completed);
 	return scans;
-}
-
-function filterArchiveScans(
-	scans: readonly PublicArchiveScanLogEntry[],
-	filter: ScanLogFilter
-): readonly PublicArchiveScanLogEntry[] {
-	if (filter === 'network') return [];
-	if (filter === 'archive-errors') {
-		return scans.filter((scan) => scan.hasArchiveVerificationError);
-	}
-	if (filter === 'worker-issues') {
-		return scans.filter((scan) => scan.hasWorkerIssue);
-	}
-	if (filter === 'attention') {
-		return scans.filter((scan) => scan.scanStatus !== 'ok');
-	}
-	return scans;
-}
-
-function shouldShowNetworkColumn(filter: ScanLogFilter): boolean {
-	return filter === 'all' || filter === 'attention' || filter === 'network';
-}
-
-function shouldShowArchiveColumn(filter: ScanLogFilter): boolean {
-	return filter !== 'network';
 }
 
 function formatNullableDate(value: string | null): string {

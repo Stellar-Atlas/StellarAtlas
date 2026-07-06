@@ -15,11 +15,11 @@ import type {
 	PublicExplorerSearchType,
 	PublicFailoverStatus,
 	PublicFullHistoryStatus,
+	PublicHistoryArchiveObjectQueue,
 	PublicHistoryArchiveScan,
 	PublicHistoryArchiveScanEvidence,
 	PublicHistoryArchiveScanLogEntry,
 	PublicHistoryArchiveState,
-	PublicArchiveScanWorkers,
 	PublicLatestLedger,
 	PublicLedgerTransactions,
 	PublicNetwork,
@@ -296,11 +296,22 @@ export const fetchHistoryArchiveScanEvidence = (
 		withTags(options, [frontendCacheTags.historyScan])
 	);
 
-export const fetchArchiveScanWorkers = (
+export const fetchHistoryArchiveObjects = (
+	limit: number,
 	options?: FetchOptions
-): Promise<PublicArchiveScanWorkers> =>
-	fetchJson<PublicArchiveScanWorkers>(
-		'/v1/archive-scans/workers',
+): Promise<PublicHistoryArchiveObjectQueue> =>
+	fetchJson<PublicHistoryArchiveObjectQueue>(
+		`/v1/archive-scans/objects?limit=${encodeURIComponent(limit.toString())}`,
+		withTags(options, [frontendCacheTags.historyScan])
+	);
+
+export const fetchHistoryArchiveObjectsForArchive = (
+	historyUrl: string,
+	limit: number,
+	options?: FetchOptions
+): Promise<PublicHistoryArchiveObjectQueue> =>
+	fetchJson<PublicHistoryArchiveObjectQueue>(
+		`/v1/archive-scans/${encodeURIComponent(historyUrl)}/objects?limit=${encodeURIComponent(limit.toString())}`,
 		withTags(options, [frontendCacheTags.historyScan])
 	);
 

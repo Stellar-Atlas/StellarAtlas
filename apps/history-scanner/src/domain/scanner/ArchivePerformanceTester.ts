@@ -68,7 +68,7 @@ export class ArchivePerformanceTester {
 
 			await this.testDownload(
 				baseUrl,
-				//we need to warmup concurrency amount of connections because there is one HAS-file per checkpoint
+				//we need to warmup concurrency amount of connections because there is one history archive state file per checkpoint
 				httpAgent,
 				httpsAgent,
 				warmupSettings
@@ -181,7 +181,7 @@ export class ArchivePerformanceTester {
 			Request<CategoryRequestMeta | Record<string, unknown>>
 		>;
 		if (!settings.largeFiles)
-			requests = RequestGenerator.generateHASRequests(
+			requests = RequestGenerator.generateHistoryArchiveStateRequests(
 				baseUrl,
 				checkPoints,
 				RequestMethod.GET

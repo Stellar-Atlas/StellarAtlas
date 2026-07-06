@@ -17,7 +17,7 @@ it('should verify', async function () {
 
 	const categoryScanner = mock<CategoryScanner>();
 	const bucketScanner = mock<BucketScanner>();
-	categoryScanner.scanHASFilesAndReturnBucketHashes.mockResolvedValue(
+	categoryScanner.scanHistoryArchiveStateFilesAndReturnBucketHashes.mockResolvedValue(
 		ok({
 			bucketHashes: new Set(['a', 'b']),
 			bucketListHashes: new Map<number, string>(),
@@ -58,13 +58,13 @@ it('should verify', async function () {
 	expect(result.value.latestLedgerHeader?.hash).toEqual('hash');
 
 	expect(
-		categoryScanner.scanHASFilesAndReturnBucketHashes
+		categoryScanner.scanHistoryArchiveStateFilesAndReturnBucketHashes
 	).toHaveBeenCalledTimes(1); //three chunks
 	expect(categoryScanner.scanOtherCategories).toHaveBeenCalledTimes(1); //three chunks
 	expect(bucketScanner.scan).toHaveBeenCalledTimes(1);
 });
 
-it('should preserve HAS category and bucket scan errors from the same range', async function () {
+it('should preserve history archive state category and bucket scan errors from the same range', async function () {
 	const checkPointGenerator = new CheckPointGenerator(
 		new StandardCheckPointFrequency()
 	);
@@ -76,7 +76,7 @@ it('should preserve HAS category and bucket scan errors from the same range', as
 		'has-url',
 		'has-message'
 	);
-	categoryScanner.scanHASFilesAndReturnBucketHashes.mockResolvedValue(
+	categoryScanner.scanHistoryArchiveStateFilesAndReturnBucketHashes.mockResolvedValue(
 		ok({
 			bucketHashes: new Set(['a', 'b']),
 			bucketListHashes: new Map<number, string>(),

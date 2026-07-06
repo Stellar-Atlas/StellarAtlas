@@ -3,6 +3,7 @@ import type {
 	PublicHistoryArchiveScanEvidence,
 	PublicHistoryArchiveScanLogEntry,
 	PublicHistoryArchiveScanLogError,
+	PublicHistoryArchiveObjectQueue,
 	PublicHistoryArchiveState
 } from '@api/types';
 import { HistoryArchiveScanLog } from '@components/nodes/history-archive-scan-log';
@@ -14,11 +15,13 @@ import {
 } from '@domain/history-archive';
 import { formatDateTime, formatInteger } from '@format/formatters';
 import { HistoryArchiveStateDocument } from './history-archive-state-document';
+import { HistoryArchiveObjectInventory } from './history-archive-object-inventory';
 
 interface ArchiveScanDetailProps {
 	readonly evidence: PublicHistoryArchiveScanEvidence;
 	readonly historyUrl: string;
 	readonly logs: readonly PublicHistoryArchiveScanLogEntry[];
+	readonly objects: PublicHistoryArchiveObjectQueue;
 	readonly scan: PublicHistoryArchiveScan | null;
 	readonly state: PublicHistoryArchiveState | null;
 }
@@ -27,6 +30,7 @@ export function ArchiveScanDetail({
 	evidence,
 	historyUrl,
 	logs,
+	objects,
 	scan,
 	state
 }: ArchiveScanDetailProps): React.JSX.Element {
@@ -108,6 +112,7 @@ export function ArchiveScanDetail({
 				/>
 				<BucketEvidence evidence={evidence} />
 			</article>
+			<HistoryArchiveObjectInventory objects={objects} />
 			<article className="panel detail-panel archive-panel">
 				<div className="panel-heading">
 					<h2>Scan run log</h2>

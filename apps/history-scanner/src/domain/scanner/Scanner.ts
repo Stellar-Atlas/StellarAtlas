@@ -16,8 +16,7 @@ import { UrlBuilder } from '../history-archive/UrlBuilder.js';
 import type { ScanEvidenceDTO } from 'history-scanner-dto';
 import {
 	ArchiveScanErrorAccumulator,
-	expandScanError,
-	isArchiveAccessDeniedError
+	expandScanError
 } from './ArchiveScanErrorAccumulator.js';
 
 export interface LedgerHeader {
@@ -140,7 +139,8 @@ export class Scanner {
 			console.time(rangeTimer);
 			await reportProgress?.({
 				currentRangeFromLedger: rangeFromLedger,
-				currentRangeToLedger: rangeToLedger
+				currentRangeToLedger: rangeToLedger,
+				latestAttemptedLedger: rangeToLedger
 			});
 			const rangeResult = await this.rangeScanner.scan(
 				url,
@@ -167,7 +167,6 @@ export class Scanner {
 					ledger: rangeToLedger,
 					hash: undefined
 				};
-				if (this.isArchiveAccessDeniedError(rangeResult.error)) break;
 			} else {
 				if (rangeResult.value.errors.length > 0) {
 					scanErrors.addMany(rangeResult.value.errors);
@@ -226,10 +225,6 @@ export class Scanner {
 
 	private expandScanError(error: ScanError): readonly ScanError[] {
 		return expandScanError(error);
-	}
-
-	private isArchiveAccessDeniedError(error: ScanError): boolean {
-		return isArchiveAccessDeniedError(error);
 	}
 
 	private static createTimerLabel(name: string): string {

@@ -38,6 +38,16 @@ import type { HistoryArchiveStateRepository } from '../../domain/history-archive
 import { TypeOrmHistoryArchiveStateRepository } from '../repositories/database/TypeOrmHistoryArchiveStateRepository.js';
 import { HistoryArchiveStateSnapshot } from '../../domain/history-archive-state/HistoryArchiveStateSnapshot.js';
 import { GetHistoryArchiveState } from '../../use-cases/get-history-archive-state/GetHistoryArchiveState.js';
+import { HistoryArchiveObject } from '../../domain/history-archive-object/HistoryArchiveObject.js';
+import type { HistoryArchiveObjectRepository } from '../../domain/history-archive-object/HistoryArchiveObjectRepository.js';
+import { TypeOrmHistoryArchiveObjectRepository } from '../repositories/database/TypeOrmHistoryArchiveObjectRepository.js';
+import { GetHistoryArchiveObjects } from '../../use-cases/get-history-archive-objects/GetHistoryArchiveObjects.js';
+import { ScheduleHistoryArchiveObjects } from '../../use-cases/schedule-history-archive-objects/ScheduleHistoryArchiveObjects.js';
+import { GetHistoryArchiveObjectJob } from '../../use-cases/get-history-archive-object-job/GetHistoryArchiveObjectJob.js';
+import { TouchHistoryArchiveObject } from '../../use-cases/touch-history-archive-object/TouchHistoryArchiveObject.js';
+import { CompleteHistoryArchiveObject } from '../../use-cases/complete-history-archive-object/CompleteHistoryArchiveObject.js';
+import { FailHistoryArchiveObject } from '../../use-cases/fail-history-archive-object/FailHistoryArchiveObject.js';
+import { ReleaseHistoryArchiveObject } from '../../use-cases/release-history-archive-object/ReleaseHistoryArchiveObject.js';
 
 export function load(container: Container, config: Config) {
 	const dataSource = container.get(DataSource);
@@ -49,14 +59,21 @@ export function load(container: Container, config: Config) {
 	container.bind(GetArchiveScanQueue).toSelf();
 	container.bind(GetArchiveScanWorkers).toSelf();
 	container.bind(GetHistoryArchiveState).toSelf();
+	container.bind(GetHistoryArchiveObjects).toSelf();
+	container.bind(GetHistoryArchiveObjectJob).toSelf();
 	container.bind(GetScannerMetrics).toSelf();
 	container.bind(BackfillArchiveMetadata).toSelf();
 	container.bind(RegisterCommunityScanner).toSelf();
 	container.bind(SendScannerHeartbeat).toSelf();
+	container.bind(TouchHistoryArchiveObject).toSelf();
+	container.bind(CompleteHistoryArchiveObject).toSelf();
+	container.bind(FailHistoryArchiveObject).toSelf();
+	container.bind(ReleaseHistoryArchiveObject).toSelf();
 	container.bind(TouchScanJob).toSelf();
 	container.bind(ReleaseScanJob).toSelf();
 	container.bind(RegisterScan).toSelf();
 	container.bind(RegisterParsedLedgerHeaders).toSelf();
+	container.bind(ScheduleHistoryArchiveObjects).toSelf();
 	container.bind(ScheduleScanJobs).toSelf();
 	container.bind<ScanScheduler>(TYPES.ScanScheduler).toDynamicValue(() => {
 		return new RestartAtLeastOneScan();
@@ -101,6 +118,17 @@ export function load(container: Container, config: Config) {
 		.toDynamicValue(() => {
 			return new TypeOrmHistoryArchiveStateRepository(
 				dataSource.getRepository(HistoryArchiveStateSnapshot)
+			);
+		})
+		.inRequestScope();
+
+	container
+		.bind<HistoryArchiveObjectRepository>(
+			TYPES.HistoryArchiveObjectRepository
+		)
+		.toDynamicValue(() => {
+			return new TypeOrmHistoryArchiveObjectRepository(
+				dataSource.getRepository(HistoryArchiveObject)
 			);
 		})
 		.inRequestScope();

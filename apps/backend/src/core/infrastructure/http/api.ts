@@ -55,6 +55,12 @@ import { GetArchiveScanQueue } from '@history-scan-coordinator/use-cases/get-arc
 import { GetArchiveScanWorkers } from '@history-scan-coordinator/use-cases/get-archive-scan-workers/GetArchiveScanWorkers.js';
 import { GetScanEvidence } from '@history-scan-coordinator/use-cases/get-scan-evidence/GetScanEvidence.js';
 import { GetHistoryArchiveState } from '@history-scan-coordinator/use-cases/get-history-archive-state/GetHistoryArchiveState.js';
+import { GetHistoryArchiveObjects } from '@history-scan-coordinator/use-cases/get-history-archive-objects/GetHistoryArchiveObjects.js';
+import { GetHistoryArchiveObjectJob } from '@history-scan-coordinator/use-cases/get-history-archive-object-job/GetHistoryArchiveObjectJob.js';
+import { TouchHistoryArchiveObject } from '@history-scan-coordinator/use-cases/touch-history-archive-object/TouchHistoryArchiveObject.js';
+import { CompleteHistoryArchiveObject } from '@history-scan-coordinator/use-cases/complete-history-archive-object/CompleteHistoryArchiveObject.js';
+import { FailHistoryArchiveObject } from '@history-scan-coordinator/use-cases/fail-history-archive-object/FailHistoryArchiveObject.js';
+import { ReleaseHistoryArchiveObject } from '@history-scan-coordinator/use-cases/release-history-archive-object/ReleaseHistoryArchiveObject.js';
 import { GetScannerMetrics } from '@history-scan-coordinator/use-cases/GetScannerMetrics.js';
 import { RegisterCommunityScanner } from '@history-scan-coordinator/use-cases/RegisterCommunityScanner.js';
 import { SendScannerHeartbeat } from '@history-scan-coordinator/use-cases/SendScannerHeartbeat.js';
@@ -161,6 +167,7 @@ const listen = async () => {
 			getArchiveScans: kernel.container.get(GetArchiveScans),
 			getArchiveScanQueue: kernel.container.get(GetArchiveScanQueue),
 			getArchiveScanWorkers: kernel.container.get(GetArchiveScanWorkers),
+			getHistoryArchiveObjects: kernel.container.get(GetHistoryArchiveObjects),
 			getHistoryArchiveState: kernel.container.get(GetHistoryArchiveState),
 			getLatestScan: kernel.container.get(GetLatestScan),
 			getScanEvidence: kernel.container.get(GetScanEvidence),
@@ -250,6 +257,19 @@ const listen = async () => {
 			getScanLogs: kernel.container.get(GetScanLogs),
 			registerParsedLedgerHeaders: kernel.container.get(
 				RegisterParsedLedgerHeaders
+			),
+			getHistoryArchiveObjectJob: kernel.container.get(
+				GetHistoryArchiveObjectJob
+			),
+			touchHistoryArchiveObject: kernel.container.get(
+				TouchHistoryArchiveObject
+			),
+			completeHistoryArchiveObject: kernel.container.get(
+				CompleteHistoryArchiveObject
+			),
+			failHistoryArchiveObject: kernel.container.get(FailHistoryArchiveObject),
+			releaseHistoryArchiveObject: kernel.container.get(
+				ReleaseHistoryArchiveObject
 			),
 			registerScan: kernel.container.get(RegisterScan),
 			userName: config.historyScanAPIUsername,

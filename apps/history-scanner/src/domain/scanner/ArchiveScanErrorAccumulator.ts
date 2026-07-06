@@ -70,8 +70,5 @@ export function isArchiveAccessDeniedError(error: ScanError): boolean {
 export function isCollectableArchiveVerificationError(
 	error: ScanError
 ): boolean {
-	return (
-		error.type === ScanErrorType.TYPE_VERIFICATION &&
-		!isArchiveAccessDeniedError(error)
-	);
+	return error.type === ScanErrorType.TYPE_VERIFICATION;
 }

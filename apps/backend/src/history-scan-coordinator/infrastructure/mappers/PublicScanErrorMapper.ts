@@ -17,13 +17,17 @@ export function mapScanErrorToPublicDTO(error: ScanError): PublicScanErrorDTO {
 	};
 }
 
-function sanitizeScanErrorMessage(error: ScanError): string {
-	if (error.type === ScanErrorType.TYPE_VERIFICATION) return error.message;
-
-	return error.message.replace(
+export function sanitizePublicInfrastructureText(value: string): string {
+	return value.replace(
 		localHistoryCachePathPattern,
 		'[history bucket cache path]'
 	);
+}
+
+function sanitizeScanErrorMessage(error: ScanError): string {
+	if (error.type === ScanErrorType.TYPE_VERIFICATION) return error.message;
+
+	return sanitizePublicInfrastructureText(error.message);
 }
 
 function sanitizeScanErrorUrl(url: string): string {

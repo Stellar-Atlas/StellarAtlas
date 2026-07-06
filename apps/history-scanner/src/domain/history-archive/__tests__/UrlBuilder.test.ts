@@ -55,6 +55,6 @@ it('should reject archive object urls as base urls', function () {
 	if (historyBaseUrl.isErr()) throw historyBaseUrl.error;
 
 	expect(() =>
-		UrlBuilder.getRootHASUrl(historyBaseUrl.value)
+		UrlBuilder.getRootHistoryArchiveStateUrl(historyBaseUrl.value)
 	).toThrow('Invalid history archive root URL');
 });

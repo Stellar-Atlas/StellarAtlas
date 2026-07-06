@@ -14,7 +14,7 @@ import { LedgerHeader } from './Scanner.js';
 import { TYPES } from '../../infrastructure/di/di-types.js';
 import { noopParsedHistorySink } from './parsed-history/ParsedHistorySink.js';
 import type { ParsedHistorySink } from './parsed-history/ParsedHistorySink.js';
-import type { HASScanResult } from './CategoryScanner.js';
+import type { HistoryArchiveStateScanResult } from './CategoryScanner.js';
 import type { BucketScanResult } from './BucketScanner.js';
 import { expandScanError } from './ArchiveScanErrorAccumulator.js';
 
@@ -68,7 +68,7 @@ export class RangeScanner {
 			scheduling: 'fifo'
 		});
 
-		const hasScanState = new CategoryScanState(
+		const historyArchiveStateScanState = new CategoryScanState(
 			baseUrl,
 			concurrency,
 			httpAgent,
@@ -85,7 +85,7 @@ export class RangeScanner {
 
 		try {
 			const bucketHashesOrError =
-				await this.scanHASFilesAndReturnBucketHashes(hasScanState);
+				await this.scanHistoryArchiveStateFilesAndReturnBucketHashes(historyArchiveStateScanState);
 			if (bucketHashesOrError.isErr()) return err(bucketHashesOrError.error);
 			const bucketHashesToScan = bucketHashesOrError.value.bucketHashes;
 			const errors: ScanError[] = [...bucketHashesOrError.value.errors];
@@ -148,23 +148,23 @@ export class RangeScanner {
 		}
 	}
 
-	private async scanHASFilesAndReturnBucketHashes(
+	private async scanHistoryArchiveStateFilesAndReturnBucketHashes(
 		scanState: CategoryScanState
-	): Promise<Result<HASScanResult, ScanError>> {
-		this.logger.info('Scanning HAS files');
-		const timerLabel = RangeScanner.createTimerLabel('HAS');
+	): Promise<Result<HistoryArchiveStateScanResult, ScanError>> {
+		this.logger.info('Scanning history archive state files');
+		const timerLabel = RangeScanner.createTimerLabel('history archive state');
 		console.time(timerLabel);
 
-		const scanHASResult =
-			await this.categoryScanner.scanHASFilesAndReturnBucketHashes(scanState);
+		const scanHistoryArchiveStateResult =
+			await this.categoryScanner.scanHistoryArchiveStateFilesAndReturnBucketHashes(scanState);
 
-		if (scanHASResult.isErr()) {
-			return err(scanHASResult.error);
+		if (scanHistoryArchiveStateResult.isErr()) {
+			return err(scanHistoryArchiveStateResult.error);
 		}
 
 		console.timeEnd(timerLabel);
 
-		return ok(scanHASResult.value);
+		return ok(scanHistoryArchiveStateResult.value);
 	}
 
 	private async scanBucketFiles(

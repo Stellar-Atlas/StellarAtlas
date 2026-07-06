@@ -132,6 +132,43 @@ it('should not schedule regular jobs when disabled', () => {
 	expect(jobs).toHaveLength(0);
 });
 
+it('should not schedule archive rechecks when any unfinished job exists for the archive', () => {
+	const scheduler = new RestartAtLeastOneScan();
+	const archive = createDummyHistoryBaseUrl();
+	const previousErroredScan = new Scan(
+		new Date('01-01-2020'),
+		new Date('01-03-2020'),
+		new Date('01-03-2020'),
+		archive,
+		128,
+		255,
+		127,
+		'hash',
+		4,
+		false,
+		new ScanError(
+			ScanErrorType.TYPE_VERIFICATION,
+			`${archive.value}/transactions/00/00/00/transactions-000000bf.xdr.gz`,
+			'Wrong transaction hash'
+		)
+	);
+	const unfinishedRollingJob = new ScanJob(
+		archive.value,
+		127,
+		'hash',
+		new Date('01-01-2020')
+	);
+
+	const jobs = scheduler.schedule(
+		[archive.value],
+		[previousErroredScan],
+		[unfinishedRollingJob],
+		{ includeRegularJobs: false }
+	);
+
+	expect(jobs).toHaveLength(0);
+});
+
 it('should schedule errored archive rechecks before regular scans', () => {
 	const scheduler = new RestartAtLeastOneScan();
 	const healthyArchive = createDummyHistoryBaseUrl();
@@ -209,6 +246,40 @@ it('should schedule errored archive rechecks when regular scans are disabled', (
 	expect(jobs[0].toLedger).toEqual(191);
 });
 
+it('should verify the current window after an initial genesis access-denied scan', () => {
+	const now = new Date('2026-07-06T10:00:00.000Z');
+	const scheduler = new RestartAtLeastOneScan(24, undefined, () => now);
+	const archive = createDummyHistoryBaseUrl();
+	const previousErroredScan = new Scan(
+		new Date('01-01-2020'),
+		new Date('01-03-2020'),
+		new Date('01-03-2020'),
+		archive,
+		0,
+		63343359,
+		0,
+		null,
+		1,
+		false,
+		new ScanError(
+			ScanErrorType.TYPE_VERIFICATION,
+			`${archive.value}/history/00/00/00/history-0000003f.json`,
+			'HTTP 403 Forbidden'
+		)
+	);
+
+	const jobs = scheduler.schedule([archive.value], [previousErroredScan], [], {
+		includeRegularJobs: false
+	});
+
+	expect(jobs).toHaveLength(1);
+	expect(jobs[0].url).toEqual(archive.value);
+	expect(jobs[0].latestScannedLedger).toEqual(0);
+	expect(jobs[0].fromLedger).toBeNull();
+	expect(jobs[0].toLedger).toBeNull();
+	expect(jobs[0].chainInitDate?.toISOString()).toEqual(now.toISOString());
+});
+
 it('should not prioritize worker-only setup failures as archive rechecks', () => {
 	const scheduler = new RestartAtLeastOneScan();
 	const archive = createDummyHistoryBaseUrl();
@@ -267,7 +338,7 @@ it('should cap errored archive recheck concurrency to the configured maximum', (
 	expect(jobs[0].concurrency).toEqual(24);
 });
 
-it('should schedule an errored archive recheck when a regular scan is already pending', () => {
+it('should not schedule an errored archive recheck when a regular scan is already pending', () => {
 	const scheduler = new RestartAtLeastOneScan();
 	const archive = createDummyHistoryBaseUrl();
 	const previousErroredScan = new Scan(
@@ -296,10 +367,7 @@ it('should schedule an errored archive recheck when a regular scan is already pe
 		[regularPendingJob]
 	);
 
-	expect(jobs).toHaveLength(1);
-	expect(jobs[0].url).toEqual(archive.value);
-	expect(jobs[0].fromLedger).toEqual(128);
-	expect(jobs[0].toLedger).toEqual(191);
+	expect(jobs).toHaveLength(0);
 });
 
 it('should not duplicate an errored archive recheck when a range scan is already pending', () => {
