@@ -401,6 +401,7 @@ export interface PublicArchiveScanLogEntry {
 	readonly fromLedger: number;
 	readonly hasArchiveVerificationError: boolean;
 	readonly hasWorkerIssue: boolean;
+	readonly latestAttemptedLedger?: number | null;
 	readonly latestScannedLedger: number;
 	readonly latestVerifiedLedger: number;
 	readonly scanStatus: 'ok' | 'archive_error' | 'worker_issue';

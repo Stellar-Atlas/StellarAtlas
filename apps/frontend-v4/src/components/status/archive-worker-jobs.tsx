@@ -123,7 +123,7 @@ function ArchiveWorkerJobRow({
 			</summary>
 			<dl className="details">
 				<div>
-					<dt>Range</dt>
+					<dt>Assigned range</dt>
 					<dd>{formatLedgerRange(worker)}</dd>
 				</div>
 				<div>
@@ -135,8 +135,21 @@ function ArchiveWorkerJobRow({
 					</dd>
 				</div>
 				<div>
-					<dt>Latest scanned</dt>
-					<dd>{formatInteger(worker.latestScannedLedger)}</dd>
+					<dt>Verified contiguous</dt>
+					<dd>{formatVerifiedProgress(worker.latestScannedLedger)}</dd>
+				</div>
+				<div>
+					<dt>Attempted through</dt>
+					<dd>{formatOptionalLedger(worker.latestAttemptedLedger)}</dd>
+				</div>
+				<div>
+					<dt>Current range</dt>
+					<dd>
+						{formatOptionalRange(
+							worker.currentRangeFromLedger,
+							worker.currentRangeToLedger
+						)}
+					</dd>
 				</div>
 				<div>
 					<dt>{workerMetric.label}</dt>
@@ -298,6 +311,11 @@ function pickPreferredWorker(
 	if (heartbeatDifference > 0) return right;
 	if (heartbeatDifference < 0) return left;
 
+	const progressDifference =
+		getLatestProgressLedger(right) - getLatestProgressLedger(left);
+	if (progressDifference > 0) return right;
+	if (progressDifference < 0) return left;
+
 	return right.latestScannedLedger > left.latestScannedLedger ? right : left;
 }
 
@@ -337,6 +355,40 @@ function hashText(value: string): string {
 		hash = (hash * 31 + character.charCodeAt(0)) >>> 0;
 	}
 	return hash.toString(36);
+}
+
+function formatVerifiedProgress(value: number): string {
+	if (value > 0) return formatInteger(value);
+	return 'No contiguous progress yet';
+}
+
+function formatOptionalLedger(value: number | null | undefined): string {
+	if (typeof value === 'number' && Number.isFinite(value)) {
+		return formatInteger(value);
+	}
+	return 'Not reported yet';
+}
+
+function formatOptionalRange(
+	fromLedger: number | null | undefined,
+	toLedger: number | null | undefined
+): string {
+	if (typeof fromLedger === 'number' && Number.isFinite(fromLedger)) {
+		const end =
+			typeof toLedger === 'number' && Number.isFinite(toLedger)
+				? formatInteger(toLedger)
+				: 'latest';
+		return `${formatInteger(fromLedger)}-${end}`;
+	}
+	return 'No current range reported';
+}
+
+function getLatestProgressLedger(worker: PublicArchiveScanWorker): number {
+	return (
+		worker.latestAttemptedLedger ??
+		worker.currentRangeToLedger ??
+		worker.latestScannedLedger
+	);
 }
 
 function sanitizeEvidenceText(value: string): string {

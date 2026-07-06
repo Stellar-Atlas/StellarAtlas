@@ -98,6 +98,11 @@ export class ScanJob {
 		settings: ScanSettings,
 		scanResult: ScanResult
 	) {
+		const errors = [
+			...(settings.errors ?? []),
+			...(scanResult.errors ?? (scanResult.error ? [scanResult.error] : []))
+		];
+
 		return new Scan(
 			this.chainInitDate ?? startDate,
 			startDate,
@@ -109,8 +114,8 @@ export class ScanJob {
 			scanResult.latestLedgerHeader.hash,
 			settings.concurrency,
 			settings.isSlowArchive,
-			scanResult.error,
-			scanResult.errors ?? [],
+			errors[0] ?? null,
+			errors,
 			scanResult.evidence ?? [],
 			this.remoteId,
 			settings.archiveMetadata ?? null

@@ -130,6 +130,66 @@ it('should return error if latest ledger cannot be determined', async function (
 	expect(settingsOrError.isErr()).toBeTruthy();
 });
 
+it('should continue fixed-range scans when root metadata lookup has a connection error', async function () {
+	const performanceTester = mock<ArchivePerformanceTester>();
+	const categoryScanner = mock<CategoryScanner>();
+	categoryScanner.findLatestLedger.mockResolvedValue(
+		err(
+			new ScanError(
+				ScanErrorType.TYPE_CONNECTION,
+				createDummyHistoryBaseUrl().value,
+				'Could not fetch latest ledger'
+			)
+		)
+	);
+	const settingsFactory = new ScanSettingsFactory(
+		categoryScanner,
+		performanceTester
+	);
+	const scanJob = ScanJob.newScanChain(
+		createDummyHistoryBaseUrl(),
+		64,
+		127,
+		12
+	);
+
+	const settingsOrError = await settingsFactory.determineSettings(scanJob);
+
+	expect(settingsOrError.isOk()).toBeTruthy();
+	if (settingsOrError.isErr()) throw settingsOrError.error;
+	expect(settingsOrError.value.toLedger).toBe(127);
+	expect(settingsOrError.value.archiveMetadata).toBeUndefined();
+	expect(settingsOrError.value.errors).toEqual([]);
+});
+
+it('should keep fixed-range root metadata verification errors as non-blocking scan evidence', async function () {
+	const performanceTester = mock<ArchivePerformanceTester>();
+	const categoryScanner = mock<CategoryScanner>();
+	const metadataError = new ScanError(
+		ScanErrorType.TYPE_VERIFICATION,
+		`${createDummyHistoryBaseUrl().value}/.well-known/stellar-history.json`,
+		'HTTP 404 Not Found'
+	);
+	categoryScanner.findLatestLedger.mockResolvedValue(err(metadataError));
+	const settingsFactory = new ScanSettingsFactory(
+		categoryScanner,
+		performanceTester
+	);
+	const scanJob = ScanJob.newScanChain(
+		createDummyHistoryBaseUrl(),
+		64,
+		127,
+		12
+	);
+
+	const settingsOrError = await settingsFactory.determineSettings(scanJob);
+
+	expect(settingsOrError.isOk()).toBeTruthy();
+	if (settingsOrError.isErr()) throw settingsOrError.error;
+	expect(settingsOrError.value.toLedger).toBe(127);
+	expect(settingsOrError.value.errors).toEqual([metadataError]);
+});
+
 it('should determine optimal concurrency, signal slow archive and update toLedger accordingly', async function () {
 	const performanceTester = mock<ArchivePerformanceTester>();
 	performanceTester.test.mockResolvedValue(

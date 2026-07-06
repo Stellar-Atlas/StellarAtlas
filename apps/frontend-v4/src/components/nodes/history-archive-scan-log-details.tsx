@@ -4,7 +4,7 @@ import type {
 	PublicHistoryArchiveScanLogError
 } from '../../api/types';
 import { getArchiveScanDetailPath } from '../../domain/archive-scan-routes';
-import { formatDateTime } from '../../format/formatters';
+import { formatDateTime, formatInteger } from '../../format/formatters';
 import { scanLogIsActive } from '../../domain/history-archive';
 
 export function ScanLogDetails({
@@ -50,6 +50,27 @@ export function ScanLogDetails({
 				<div>
 					<dt>Status</dt>
 					<dd>{formatScanStatus(entry.status)}</dd>
+				</div>
+				<div>
+					<dt>Assigned range</dt>
+					<dd>{formatLedgerRange(entry.fromLedger, entry.toLedger)}</dd>
+				</div>
+				<div>
+					<dt>Verified contiguous</dt>
+					<dd>{formatVerifiedProgress(entry.latestScannedLedger)}</dd>
+				</div>
+				<div>
+					<dt>Attempted through</dt>
+					<dd>{formatOptionalLedger(entry.latestAttemptedLedger)}</dd>
+				</div>
+				<div>
+					<dt>Current range</dt>
+					<dd>
+						{formatOptionalRange(
+							entry.currentRangeFromLedger,
+							entry.currentRangeToLedger
+						)}
+					</dd>
 				</div>
 				<div>
 					<dt>Started</dt>
@@ -200,6 +221,12 @@ function pickPreferredScanLog(
 	if (leftUpdatedAt > rightUpdatedAt) return left;
 	if (right.errors.length > left.errors.length) return right;
 	if (left.errors.length > right.errors.length) return left;
+	if (getLatestProgressLedger(right) > getLatestProgressLedger(left)) {
+		return right;
+	}
+	if (getLatestProgressLedger(left) > getLatestProgressLedger(right)) {
+		return left;
+	}
 	return right.latestScannedLedger > left.latestScannedLedger ? right : left;
 }
 
@@ -235,6 +262,47 @@ function ArchiveTarget({ url }: { readonly url: string }): React.JSX.Element {
 	}
 	if (looksLikeInternalPath(url)) return <span>Internal scanner target</span>;
 	return <span>{sanitizeEvidenceText(url)}</span>;
+}
+
+function formatLedgerRange(fromLedger: number, toLedger: number | null): string {
+	const end = toLedger === null ? 'latest' : formatInteger(toLedger);
+	return `${formatInteger(fromLedger)}-${end}`;
+}
+
+function formatVerifiedProgress(value: number): string {
+	if (value > 0) return formatInteger(value);
+	return 'No contiguous progress yet';
+}
+
+function formatOptionalLedger(value: number | null | undefined): string {
+	if (typeof value === 'number' && Number.isFinite(value)) {
+		return formatInteger(value);
+	}
+	return 'Not reported yet';
+}
+
+function formatOptionalRange(
+	fromLedger: number | null | undefined,
+	toLedger: number | null | undefined
+): string {
+	if (typeof fromLedger === 'number' && Number.isFinite(fromLedger)) {
+		const end =
+			typeof toLedger === 'number' && Number.isFinite(toLedger)
+				? formatInteger(toLedger)
+				: 'latest';
+		return `${formatInteger(fromLedger)}-${end}`;
+	}
+	return 'No current range reported';
+}
+
+function getLatestProgressLedger(
+	entry: PublicHistoryArchiveScanLogEntry
+): number {
+	return (
+		entry.latestAttemptedLedger ??
+		entry.currentRangeToLedger ??
+		entry.latestScannedLedger
+	);
 }
 
 const ErrorUrl = ({ url }: { readonly url: string }): React.JSX.Element => {

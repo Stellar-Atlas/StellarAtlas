@@ -40,12 +40,16 @@ export function ArchiveScanDetails({
 					</dd>
 				</div>
 				<div>
-					<dt>Verified</dt>
-					<dd>{formatInteger(scan.latestVerifiedLedger)}</dd>
+					<dt>Verified through</dt>
+					<dd>{formatVerifiedProgress(scan.latestVerifiedLedger)}</dd>
 				</div>
 				<div>
-					<dt>Scanned</dt>
-					<dd>{formatInteger(scan.latestScannedLedger)}</dd>
+					<dt>Verified contiguous</dt>
+					<dd>{formatVerifiedProgress(scan.latestScannedLedger)}</dd>
+				</div>
+				<div>
+					<dt>Attempted through</dt>
+					<dd>{formatOptionalLedger(scan.latestAttemptedLedger)}</dd>
 				</div>
 				<div>
 					<dt>{concurrencyMetric.label}</dt>
@@ -157,6 +161,18 @@ function formatLedgerRange(
 ): string {
 	const end = toLedger === null ? 'latest' : formatInteger(toLedger);
 	return `${formatInteger(fromLedger)}-${end}`;
+}
+
+function formatVerifiedProgress(value: number): string {
+	if (value > 0) return formatInteger(value);
+	return 'No contiguous progress yet';
+}
+
+function formatOptionalLedger(value: number | null | undefined): string {
+	if (typeof value === 'number' && Number.isFinite(value)) {
+		return formatInteger(value);
+	}
+	return 'Not reported yet';
 }
 
 function formatArchiveUrl(value: string): string {

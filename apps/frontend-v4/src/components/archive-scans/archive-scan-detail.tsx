@@ -60,8 +60,20 @@ export function ArchiveScanDetail({
 						<dd>{formatNullableDate(latestCompletedLog?.endDate ?? null)}</dd>
 					</div>
 					<div>
-						<dt>Active progress</dt>
-						<dd>{formatActiveLog(activeLog)}</dd>
+						<dt>Active worker</dt>
+						<dd>{formatActiveStatus(activeLog)}</dd>
+					</div>
+					<div>
+						<dt>Active verified contiguous</dt>
+						<dd>{formatActiveVerifiedProgress(activeLog)}</dd>
+					</div>
+					<div>
+						<dt>Active attempted through</dt>
+						<dd>{formatActiveAttemptedLedger(activeLog)}</dd>
+					</div>
+					<div>
+						<dt>Active current range</dt>
+						<dd>{formatActiveCurrentRange(activeLog)}</dd>
 					</div>
 					<div>
 						<dt>Verified buckets</dt>
@@ -220,11 +232,52 @@ function ArchiveTarget({
 	return <span>{sanitizeEvidenceText(label ?? url)}</span>;
 }
 
-function formatActiveLog(
+function formatActiveStatus(
 	entry: PublicHistoryArchiveScanLogEntry | null
 ): string {
 	if (entry === null) return 'No active queue row in the current snapshot';
 	return `${entry.status} at ${formatDateTime(entry.updatedAt)}`;
+}
+
+function formatActiveVerifiedProgress(
+	entry: PublicHistoryArchiveScanLogEntry | null
+): string {
+	if (entry === null) return 'No active queue row in the current snapshot';
+	if (entry.latestScannedLedger > 0) {
+		return formatInteger(entry.latestScannedLedger);
+	}
+	return 'No contiguous progress yet';
+}
+
+function formatActiveAttemptedLedger(
+	entry: PublicHistoryArchiveScanLogEntry | null
+): string {
+	if (entry === null) return 'No active queue row in the current snapshot';
+	if (
+		typeof entry.latestAttemptedLedger === 'number' &&
+		Number.isFinite(entry.latestAttemptedLedger)
+	) {
+		return formatInteger(entry.latestAttemptedLedger);
+	}
+	return 'Not reported yet';
+}
+
+function formatActiveCurrentRange(
+	entry: PublicHistoryArchiveScanLogEntry | null
+): string {
+	if (entry === null) return 'No active queue row in the current snapshot';
+	if (
+		typeof entry.currentRangeFromLedger === 'number' &&
+		Number.isFinite(entry.currentRangeFromLedger)
+	) {
+		const end =
+			typeof entry.currentRangeToLedger === 'number' &&
+			Number.isFinite(entry.currentRangeToLedger)
+				? formatInteger(entry.currentRangeToLedger)
+				: 'latest';
+		return `${formatInteger(entry.currentRangeFromLedger)}-${end}`;
+	}
+	return 'No current range reported';
 }
 
 function formatBucketCount(evidence: PublicHistoryArchiveScanEvidence): string {

@@ -86,6 +86,50 @@ it('should preserve all related range scan errors', async () => {
 	expect(scan.errors).toEqual([firstError, secondError]);
 });
 
+it('should include settings-level archive evidence in the completed scan', async () => {
+	const rangeScanner = mock<RangeScanner>();
+	rangeScanner.scan.mockResolvedValue(
+		ok({
+			latestLedgerHeader: { ledger: 100, hash: 'ledger_hash' },
+			scannedBucketHashes: new Set(['a']),
+			verifiedBucketHashes: new Set(['a']),
+			errors: []
+		})
+	);
+	const settingsError = new ScanError(
+		ScanErrorType.TYPE_VERIFICATION,
+		'https://history.stellar.org/.well-known/stellar-history.json',
+		'HTTP 404 Not Found'
+	);
+	const settingsFactory = mock<ScanSettingsFactory>();
+	settingsFactory.determineSettings.mockResolvedValue(
+		ok({
+			archiveMetadata: undefined,
+			concurrency: 1,
+			errors: [settingsError],
+			fromLedger: 0,
+			isSlowArchive: null,
+			latestScannedLedger: 0,
+			latestScannedLedgerHeaderHash: null,
+			toLedger: 100
+		})
+	);
+	const scanner = new Scanner(
+		rangeScanner,
+		settingsFactory,
+		mock<Logger>(),
+		mock<ExceptionLogger>(),
+		100
+	);
+
+	const scanJob = ScanJob.newScanChain(createDummyHistoryBaseUrl(), 0, 100, 1);
+	const scan = await scanner.perform(new Date(), scanJob);
+
+	expect(scan.errors).toEqual([settingsError]);
+	expect(scan.error).toEqual(settingsError);
+	expect(scan.latestScannedLedger).toEqual(100);
+});
+
 it('should continue scanning after range errors without advancing verified ledger past the gap', async () => {
 	const rangeScanner = mock<RangeScanner>();
 	const firstError = new ScanError(

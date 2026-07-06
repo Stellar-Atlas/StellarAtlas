@@ -1,5 +1,5 @@
 import 'reflect-metadata';
-import { ScanError } from './ScanError.js';
+import { ScanError, ScanErrorType } from './ScanError.js';
 import { injectable } from 'inversify';
 import { ScanJob } from './ScanJob.js';
 import { err, ok, Result } from 'neverthrow';
@@ -24,7 +24,11 @@ export class ScanSettingsFactory {
 		if (toLedgerResult.isErr()) {
 			return err(toLedgerResult.error);
 		}
-		const { ledger: toLedger, archiveMetadata } = toLedgerResult.value;
+		const {
+			ledger: toLedger,
+			archiveMetadata,
+			errors: settingsErrors
+		} = toLedgerResult.value;
 
 		const concurrencyResult = await this.determineConcurrencyAndSlowArchive(
 			scanJob,
@@ -59,7 +63,8 @@ export class ScanSettingsFactory {
 				fromLedger,
 				latestLedgerHeader.ledger,
 				latestLedgerHeader.hash,
-				archiveMetadata
+				archiveMetadata,
+				settingsErrors
 			)
 		);
 	}
@@ -72,7 +77,8 @@ export class ScanSettingsFactory {
 		fromLedger?: number,
 		latestLedgerHeaderLedger?: number,
 		latestLedgerHeaderHash?: string | null,
-		archiveMetadata?: ScanSettings['archiveMetadata']
+		archiveMetadata?: ScanSettings['archiveMetadata'],
+		errors?: readonly ScanError[]
 	): ScanSettings {
 		return {
 			fromLedger: fromLedger ?? scanJob.fromLedger,
@@ -85,7 +91,8 @@ export class ScanSettingsFactory {
 				latestLedgerHeaderHash !== undefined //careful because it could be null
 					? latestLedgerHeaderHash
 					: scanJob.latestScannedLedgerHeaderHash,
-			archiveMetadata
+			archiveMetadata,
+			errors
 		};
 	}
 
@@ -182,6 +189,7 @@ export class ScanSettingsFactory {
 			{
 				readonly ledger: number;
 				readonly archiveMetadata?: ScanSettings['archiveMetadata'];
+				readonly errors?: readonly ScanError[];
 			},
 			ScanError
 		>
@@ -191,7 +199,14 @@ export class ScanSettingsFactory {
 		);
 
 		if (scanJob.toLedger !== null) {
-			if (latestLedgerOrError.isErr()) return err(latestLedgerOrError.error);
+			if (latestLedgerOrError.isErr()) {
+				return ok({
+					ledger: scanJob.toLedger,
+					errors: this.getNonBlockingMetadataErrors(
+						latestLedgerOrError.error
+					)
+				});
+			}
 
 			return ok({
 				ledger: scanJob.toLedger,
@@ -204,5 +219,11 @@ export class ScanSettingsFactory {
 		}
 
 		return ok(latestLedgerOrError.value);
+	}
+
+	private getNonBlockingMetadataErrors(
+		error: ScanError
+	): readonly ScanError[] {
+		return error.type === ScanErrorType.TYPE_VERIFICATION ? [error] : [];
 	}
 }
