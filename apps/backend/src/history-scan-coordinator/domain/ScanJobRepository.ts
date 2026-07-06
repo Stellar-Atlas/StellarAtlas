@@ -23,6 +23,7 @@ export interface ScanJobProgressUpdate {
 }
 
 export interface ScanJobRepository {
+	withSchedulingLock: <T>(work: () => Promise<T>) => Promise<T>;
 	hasPendingJobs: () => Promise<boolean>;
 	save: (scanJobs: ScanJob[]) => Promise<void>;
 	fetchNextJob: () => Promise<ScanJob | null>;

@@ -4,7 +4,7 @@ import { Scan } from '../scan/Scan.js';
 import type { ExceptionLogger } from 'exception-logger';
 import { RangeScanner } from './RangeScanner.js';
 import { ScanJob } from '../scan/ScanJob.js';
-import { ScanError, ScanErrorType } from '../scan/ScanError.js';
+import { ScanError } from '../scan/ScanError.js';
 import { ScanSettingsFactory } from '../scan/ScanSettingsFactory.js';
 import { ScanSettings } from '../scan/ScanSettings.js';
 import { ScanResult } from '../scan/ScanResult.js';
@@ -14,6 +14,11 @@ import { noopParsedHistorySink } from './parsed-history/ParsedHistorySink.js';
 import type { ParsedHistorySink } from './parsed-history/ParsedHistorySink.js';
 import { UrlBuilder } from '../history-archive/UrlBuilder.js';
 import type { ScanEvidenceDTO } from 'history-scanner-dto';
+import {
+	ArchiveScanErrorAccumulator,
+	expandScanError,
+	isArchiveAccessDeniedError
+} from './ArchiveScanErrorAccumulator.js';
 
 export interface LedgerHeader {
 	ledger: number;
@@ -24,6 +29,8 @@ export type ScanSettingsReporter = (settings: ScanSettings) => Promise<void>;
 
 @injectable()
 export class Scanner {
+	private static readonly maxBucketEvidenceEntries = 500;
+
 	constructor(
 		private rangeScanner: RangeScanner,
 		private scanJobSettingsFactory: ScanSettingsFactory,
@@ -104,8 +111,7 @@ export class Scanner {
 
 		let alreadyScannedBucketHashes = new Set<string>();
 		const verifiedBucketHashes = new Set<string>();
-		let error: ScanError | undefined;
-		const errors: ScanError[] = [];
+		const scanErrors = new ArchiveScanErrorAccumulator();
 		let previousRangeHeader: LedgerHeader = {
 			ledger: latestLedgerHeader.ledger,
 			hash: latestLedgerHeader.hash
@@ -131,8 +137,7 @@ export class Scanner {
 
 			if (rangeResult.isErr()) {
 				const rangeErrors = this.expandScanError(rangeResult.error);
-				error = error ?? rangeErrors[0] ?? rangeResult.error;
-				errors.push(...rangeErrors);
+				scanErrors.addMany(rangeErrors);
 				hasUnverifiedGap = true;
 				previousRangeHeader = {
 					ledger: rangeToLedger,
@@ -141,8 +146,7 @@ export class Scanner {
 				if (this.isArchiveAccessDeniedError(rangeResult.error)) break;
 			} else {
 				if (rangeResult.value.errors.length > 0) {
-					error = error ?? rangeResult.value.errors[0];
-					errors.push(...rangeResult.value.errors);
+					scanErrors.addMany(rangeResult.value.errors);
 					hasUnverifiedGap = true;
 				} else if (!hasUnverifiedGap) {
 					latestLedgerHeader.ledger = rangeResult.value.latestLedgerHeader
@@ -175,8 +179,8 @@ export class Scanner {
 
 		return {
 			latestLedgerHeader,
-			error,
-			errors,
+			error: scanErrors.first,
+			errors: scanErrors.values,
 			evidence: this.createBucketEvidence(url, verifiedBucketHashes)
 		};
 	}
@@ -187,6 +191,7 @@ export class Scanner {
 	): readonly ScanEvidenceDTO[] {
 		return Array.from(bucketHashes)
 			.sort()
+			.slice(0, Scanner.maxBucketEvidenceEntries)
 			.map((bucketHash) => ({
 				bucketHash,
 				kind: 'bucket',
@@ -196,16 +201,11 @@ export class Scanner {
 	}
 
 	private expandScanError(error: ScanError): readonly ScanError[] {
-		return error.relatedErrors.length > 0 ? error.relatedErrors : [error];
+		return expandScanError(error);
 	}
 
 	private isArchiveAccessDeniedError(error: ScanError): boolean {
-		const errors = this.expandScanError(error);
-		return errors.some(
-			(scanError) =>
-				scanError.type === ScanErrorType.TYPE_VERIFICATION &&
-				/^HTTP 40[13](\s|$)/.test(scanError.message)
-		);
+		return isArchiveAccessDeniedError(error);
 	}
 
 	private static createTimerLabel(name: string): string {

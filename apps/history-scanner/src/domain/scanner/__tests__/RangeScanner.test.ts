@@ -20,13 +20,19 @@ it('should verify', async function () {
 	categoryScanner.scanHASFilesAndReturnBucketHashes.mockResolvedValue(
 		ok({
 			bucketHashes: new Set(['a', 'b']),
-			bucketListHashes: new Map<number, string>()
+			bucketListHashes: new Map<number, string>(),
+			errors: []
 		})
 	);
 	categoryScanner.scanOtherCategories.mockResolvedValue(
 		ok({ ledger: 50, hash: 'hash' })
 	);
-	bucketScanner.scan.mockResolvedValue(ok(undefined));
+	bucketScanner.scan.mockResolvedValue(
+		ok({
+			verifiedBucketHashes: new Set(['a', 'b']),
+			errors: []
+		})
+	);
 
 	const httpQueue = mock<HttpQueue>();
 	httpQueue.sendRequests.mockResolvedValue(ok(undefined));
@@ -58,17 +64,23 @@ it('should verify', async function () {
 	expect(bucketScanner.scan).toHaveBeenCalledTimes(1);
 });
 
-it('should preserve category and bucket scan errors from the same range', async function () {
+it('should preserve HAS category and bucket scan errors from the same range', async function () {
 	const checkPointGenerator = new CheckPointGenerator(
 		new StandardCheckPointFrequency()
 	);
 
 	const categoryScanner = mock<CategoryScanner>();
 	const bucketScanner = mock<BucketScanner>();
+	const hasError = new ScanError(
+		ScanErrorType.TYPE_VERIFICATION,
+		'has-url',
+		'has-message'
+	);
 	categoryScanner.scanHASFilesAndReturnBucketHashes.mockResolvedValue(
 		ok({
 			bucketHashes: new Set(['a', 'b']),
-			bucketListHashes: new Map<number, string>()
+			bucketListHashes: new Map<number, string>(),
+			errors: [hasError]
 		})
 	);
 	const categoryError = new ScanError(
@@ -103,6 +115,6 @@ it('should preserve category and bucket scan errors from the same range', async 
 
 	expect(result.isOk()).toBeTruthy();
 	if (result.isErr()) throw result.error;
-	expect(result.value.errors).toEqual([categoryError, bucketError]);
+	expect(result.value.errors).toEqual([hasError, categoryError, bucketError]);
 	expect(bucketScanner.scan).toHaveBeenCalledTimes(1);
 });

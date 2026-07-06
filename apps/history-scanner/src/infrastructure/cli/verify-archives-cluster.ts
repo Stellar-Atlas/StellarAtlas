@@ -7,9 +7,9 @@ import {
 	runVerifyArchives
 } from './verify-archives-runner.js';
 
-const defaultTotalRequests = 12;
+const defaultTotalRequests = 24;
 const defaultHistoryScanProcesses = 12;
-const defaultHistoryHasherWorkers = 12;
+const defaultHistoryHasherWorkers = 24;
 const maxHistoryScanProcesses = 24;
 const maxHistoryHasherWorkers = 24;
 const maxHistoryRequests = 24;

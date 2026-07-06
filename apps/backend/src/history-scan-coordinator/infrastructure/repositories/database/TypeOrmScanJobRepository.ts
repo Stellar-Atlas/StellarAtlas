@@ -22,6 +22,7 @@ import {
 	type RawTakenJobStatsRow
 } from './ScanJobRowMapper.js';
 import type { ScanJobProgressUpdate } from '@history-scan-coordinator/domain/ScanJobRepository.js';
+import { saveScanJobsWithActiveIdentityGuard } from './ScanJobActiveInsert.js';
 
 type RawActiveCommunityScannerJobsRow = {
 	readonly activeJobs?: NumericValue;
@@ -40,6 +41,7 @@ type RawCommunityScannerClaimStateRow = {
 };
 
 const claimLockName = 'history_archive_scan_job_claim';
+const schedulingLockName = 'history_archive_scan_job_schedule';
 const maxActiveTakenJobsPerArchiveHost = 1;
 
 @injectable()
@@ -47,7 +49,28 @@ export class TypeOrmScanJobRepository implements ScanJobRepository {
 	constructor(private baseRepository: Repository<ScanJob>) {}
 
 	async save(scanJobs: ScanJob[]): Promise<void> {
-		await this.baseRepository.save(scanJobs);
+		await saveScanJobsWithActiveIdentityGuard(this.baseRepository, scanJobs);
+	}
+
+	async withSchedulingLock<T>(work: () => Promise<T>): Promise<T> {
+		const queryRunner =
+			this.baseRepository.manager.connection.createQueryRunner();
+
+		try {
+			await queryRunner.connect();
+			await queryRunner.query('select pg_advisory_lock(hashtext($1))', [
+				schedulingLockName
+			]);
+			try {
+				return await work();
+			} finally {
+				await queryRunner.query('select pg_advisory_unlock(hashtext($1))', [
+					schedulingLockName
+				]);
+			}
+		} finally {
+			await queryRunner.release();
+		}
 	}
 
 	async fetchNextJob(): Promise<ScanJob | null> {
@@ -121,10 +144,7 @@ export class TypeOrmScanJobRepository implements ScanJobRepository {
 		if (row === undefined) return null;
 
 		return {
-			isBlocked: readBoolean(
-				row.isBlocked ?? row.isblocked,
-				'isBlocked'
-			),
+			isBlocked: readBoolean(row.isBlocked ?? row.isblocked, 'isBlocked'),
 			successRate: readFiniteNumber(
 				row.successRate ?? row.successrate,
 				'successRate'
@@ -257,7 +277,7 @@ export class TypeOrmScanJobRepository implements ScanJobRepository {
 		return this.baseRepository.find({
 			where: [
 				{ status: 'TAKEN', updatedAt: MoreThan(afterUpdatedAt) },
-				{ status: 'PENDING', updatedAt: MoreThan(afterUpdatedAt) }
+				{ status: 'PENDING' }
 			]
 		});
 	}
@@ -433,8 +453,10 @@ function createTakenJobUpdate(
 	const update: QueryDeepPartialEntity<ScanJob> = { updatedAt: () => 'now()' };
 	if (progress === undefined) return update;
 
-	if (progress.concurrency !== undefined) update.concurrency = progress.concurrency;
-	if (progress.fromLedger !== undefined) update.fromLedger = progress.fromLedger;
+	if (progress.concurrency !== undefined)
+		update.concurrency = progress.concurrency;
+	if (progress.fromLedger !== undefined)
+		update.fromLedger = progress.fromLedger;
 	if (progress.toLedger !== undefined) update.toLedger = progress.toLedger;
 	if (progress.latestScannedLedger !== undefined) {
 		update.latestScannedLedger = progress.latestScannedLedger;

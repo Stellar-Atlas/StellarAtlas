@@ -14,6 +14,9 @@ import { LedgerHeader } from './Scanner.js';
 import { TYPES } from '../../infrastructure/di/di-types.js';
 import { noopParsedHistorySink } from './parsed-history/ParsedHistorySink.js';
 import type { ParsedHistorySink } from './parsed-history/ParsedHistorySink.js';
+import type { HASScanResult } from './CategoryScanner.js';
+import type { BucketScanResult } from './BucketScanner.js';
+import { expandScanError } from './ArchiveScanErrorAccumulator.js';
 
 export interface RangeScanResult {
 	latestLedgerHeader?: LedgerHeader;
@@ -85,6 +88,7 @@ export class RangeScanner {
 				await this.scanHASFilesAndReturnBucketHashes(hasScanState);
 			if (bucketHashesOrError.isErr()) return err(bucketHashesOrError.error);
 			const bucketHashesToScan = bucketHashesOrError.value.bucketHashes;
+			const errors: ScanError[] = [...bucketHashesOrError.value.errors];
 
 			const categoryScanState = new CategoryScanState(
 				baseUrl,
@@ -101,7 +105,6 @@ export class RangeScanner {
 					: undefined
 			);
 
-			const errors: ScanError[] = [];
 			let latestLedgerHeader: LedgerHeader | undefined;
 			const categoryScanResult = await this.scanCategories(
 				categoryScanState,
@@ -126,6 +129,7 @@ export class RangeScanner {
 			const bucketScanResult = await this.scanBucketFiles(bucketScanState);
 			if (bucketScanResult.isErr())
 				errors.push(...this.expandScanError(bucketScanResult.error));
+			else errors.push(...bucketScanResult.value.errors);
 
 			return ok({
 				latestLedgerHeader,
@@ -135,7 +139,7 @@ export class RangeScanner {
 					...alreadyScannedBucketHashes
 				]),
 				verifiedBucketHashes: bucketScanResult.isOk()
-					? bucketScanResult.value
+					? bucketScanResult.value.verifiedBucketHashes
 					: new Set<string>()
 			});
 		} finally {
@@ -146,15 +150,7 @@ export class RangeScanner {
 
 	private async scanHASFilesAndReturnBucketHashes(
 		scanState: CategoryScanState
-	): Promise<
-		Result<
-			{
-				bucketHashes: Set<string>;
-				bucketListHashes: Map<number, string>;
-			},
-			ScanError
-		>
-	> {
+	): Promise<Result<HASScanResult, ScanError>> {
 		this.logger.info('Scanning HAS files');
 		const timerLabel = RangeScanner.createTimerLabel('HAS');
 		console.time(timerLabel);
@@ -173,7 +169,7 @@ export class RangeScanner {
 
 	private async scanBucketFiles(
 		scanState: BucketScanState
-	): Promise<Result<Set<string>, ScanError>> {
+	): Promise<Result<BucketScanResult, ScanError>> {
 		const timerLabel = RangeScanner.createTimerLabel('bucket');
 		console.time(timerLabel);
 		this.logger.info(`Scanning ${scanState.bucketHashesToScan.size} buckets`);
@@ -205,7 +201,7 @@ export class RangeScanner {
 	}
 
 	private expandScanError(error: ScanError): readonly ScanError[] {
-		return error.relatedErrors.length > 0 ? error.relatedErrors : [error];
+		return expandScanError(error);
 	}
 
 	private static createTimerLabel(name: string): string {

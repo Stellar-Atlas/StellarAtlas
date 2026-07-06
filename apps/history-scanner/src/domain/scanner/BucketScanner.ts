@@ -20,6 +20,16 @@ import { ScanError, ScanErrorType } from '../scan/ScanError.js';
 import { isZLibError } from './isZLibError.js';
 import { TYPES } from '../../infrastructure/di/di-types.js';
 import { BucketCache } from './BucketCache.js';
+import {
+	ArchiveScanErrorAccumulator,
+	isCollectableArchiveVerificationError
+} from './ArchiveScanErrorAccumulator.js';
+import { sendRequestsCollectingArchiveErrors } from './sendRequestsCollectingArchiveErrors.js';
+
+export interface BucketScanResult {
+	readonly verifiedBucketHashes: Set<string>;
+	readonly errors: readonly ScanError[];
+}
 
 @injectable()
 export class BucketScanner {
@@ -31,7 +41,7 @@ export class BucketScanner {
 	async scan(
 		scanState: BucketScanState,
 		verify = false
-	): Promise<Result<Set<string>, ScanError>> {
+	): Promise<Result<BucketScanResult, ScanError>> {
 		if (verify) {
 			return await this.verify(scanState);
 		} else {
@@ -39,7 +49,9 @@ export class BucketScanner {
 		}
 	}
 
-	private async verify(scanState: BucketScanState) {
+	private async verify(
+		scanState: BucketScanState
+	): Promise<Result<BucketScanResult, ScanError>> {
 		const verifyBucketStream = async (
 			readStream: unknown,
 			request: Request<BucketRequestMeta>
@@ -91,65 +103,75 @@ export class BucketScanner {
 			)
 		);
 		const verifiedBucketHashes = new Set<string>();
+		const scanErrors = new ArchiveScanErrorAccumulator();
 		const missingBucketRequestsResult = await this.verifyCachedBuckets(
 			bucketRequests,
 			scanState.concurrency,
-			verifiedBucketHashes
+			verifiedBucketHashes,
+			scanErrors
 		);
 		if (missingBucketRequestsResult.isErr()) {
-			return err(
-				mapHttpQueueErrorToScanError(missingBucketRequestsResult.error)
-			);
+			return err(missingBucketRequestsResult.error);
 		}
 
 		const missingBucketRequests = missingBucketRequestsResult.value;
-		if (missingBucketRequests.length === 0) return ok(verifiedBucketHashes);
-
-		const verifyBucketsResult =
-			await this.httpQueue.sendRequests<BucketRequestMeta>(
-				missingBucketRequests.values(),
-				{
-					stallTimeMs: 150,
-					concurrency: scanState.concurrency,
-					nrOfRetries: 6, //last retry is after 1 min wait. 2 minute total wait time
-					rampUpConnections: true,
-					httpOptions: {
-						httpAgent: scanState.httpAgent,
-						httpsAgent: scanState.httpsAgent,
-						responseType: 'stream',
-						socketTimeoutMs: 60000,
-						connectionTimeoutMs: 10000
-					}
-				},
-				async (readStream, request) => {
-					if (!(readStream instanceof stream.Readable))
-						return err(new FileNotFoundError(request));
-
-					const verifyResult = await this.bucketCache.verifyAndStore(
-						request.meta.hash,
-						readStream,
-						(streamToVerify) => verifyBucketStream(streamToVerify, request)
-					);
-
-					if (verifyResult.isErr()) {
-						const error = verifyResult.error;
-						if (error instanceof QueueError) return err(error);
-						return err(new RetryableQueueError(request, error));
-					}
-
-					verifiedBucketHashes.add(request.meta.hash);
-					return ok(undefined);
-				}
-			);
-
-		if (verifyBucketsResult.isErr()) {
-			return err(mapHttpQueueErrorToScanError(verifyBucketsResult.error));
+		if (missingBucketRequests.length === 0 || scanErrors.isFull) {
+			return ok({
+				verifiedBucketHashes,
+				errors: scanErrors.values
+			});
 		}
 
-		return ok(verifiedBucketHashes);
+		const verifyBucketsResult = await sendRequestsCollectingArchiveErrors(
+			this.httpQueue,
+			missingBucketRequests.values(),
+			{
+				stallTimeMs: 150,
+				concurrency: scanState.concurrency,
+				nrOfRetries: 6, //last retry is after 1 min wait. 2 minute total wait time
+				rampUpConnections: true,
+				httpOptions: {
+					httpAgent: scanState.httpAgent,
+					httpsAgent: scanState.httpsAgent,
+					responseType: 'stream',
+					socketTimeoutMs: 60000,
+					connectionTimeoutMs: 10000
+				}
+			},
+			async (readStream, request) => {
+				if (!(readStream instanceof stream.Readable))
+					return err(new FileNotFoundError(request));
+
+				const verifyResult = await this.bucketCache.verifyAndStore(
+					request.meta.hash,
+					readStream,
+					(streamToVerify) => verifyBucketStream(streamToVerify, request)
+				);
+
+				if (verifyResult.isErr()) {
+					const error = verifyResult.error;
+					if (error instanceof QueueError) return err(error);
+					return err(new RetryableQueueError(request, error));
+				}
+
+				verifiedBucketHashes.add(request.meta.hash);
+				return ok(undefined);
+			}
+		);
+
+		if (verifyBucketsResult.isErr()) return err(verifyBucketsResult.error);
+
+		scanErrors.addMany(verifyBucketsResult.value.errors);
+
+		return ok({
+			verifiedBucketHashes,
+			errors: scanErrors.values
+		});
 	}
 
-	private async exists(scanState: BucketScanState) {
+	private async exists(
+		scanState: BucketScanState
+	): Promise<Result<BucketScanResult, ScanError>> {
 		const bucketRequests = Array.from(
 			RequestGenerator.generateBucketRequests(
 				scanState.bucketHashesToScan,
@@ -168,7 +190,12 @@ export class BucketScanner {
 		}
 
 		const missingBucketRequests = missingBucketRequestsResult.value;
-		if (missingBucketRequests.length === 0) return ok(new Set<string>());
+		if (missingBucketRequests.length === 0) {
+			return ok({
+				verifiedBucketHashes: new Set<string>(),
+				errors: []
+			});
+		}
 
 		const bucketsExistResult =
 			await this.httpQueue.sendRequests<BucketRequestMeta>(
@@ -192,22 +219,26 @@ export class BucketScanner {
 			return err(mapHttpQueueErrorToScanError(bucketsExistResult.error));
 		}
 
-		return ok(new Set<string>());
+		return ok({
+			verifiedBucketHashes: new Set<string>(),
+			errors: []
+		});
 	}
 
 	private async verifyCachedBuckets(
 		requests: readonly Request<BucketRequestMeta>[],
 		concurrency: number,
-		verifiedBucketHashes: Set<string>
-	): Promise<Result<readonly Request<BucketRequestMeta>[], QueueError>> {
+		verifiedBucketHashes: Set<string>,
+		scanErrors: ArchiveScanErrorAccumulator
+	): Promise<Result<readonly Request<BucketRequestMeta>[], ScanError>> {
 		const missingRequests: Request<BucketRequestMeta>[] = [];
 		let cursor = 0;
-		let firstError: QueueError | null = null;
+		let fatalError: ScanError | null = null;
 
 		const workerCount = Math.min(Math.max(concurrency, 1), requests.length);
 		await Promise.all(
 			Array.from({ length: workerCount }, async () => {
-				while (firstError === null) {
+				while (fatalError === null && !scanErrors.isFull) {
 					const request = requests[cursor];
 					cursor++;
 					if (request === undefined) return;
@@ -226,7 +257,12 @@ export class BucketScanner {
 					);
 					if (verifyResult.isErr()) {
 						await this.bucketCache.remove(request.meta.hash);
-						firstError = verifyResult.error;
+						const scanError = mapHttpQueueErrorToScanError(verifyResult.error);
+						if (isCollectableArchiveVerificationError(scanError)) {
+							scanErrors.add(scanError);
+							continue;
+						}
+						fatalError = scanError;
 						continue;
 					}
 					verifiedBucketHashes.add(request.meta.hash);
@@ -234,7 +270,7 @@ export class BucketScanner {
 			})
 		);
 
-		if (firstError !== null) return err(firstError);
+		if (fatalError !== null) return err(fatalError);
 		return ok(missingRequests);
 	}
 

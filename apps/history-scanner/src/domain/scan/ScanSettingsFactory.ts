@@ -177,9 +177,7 @@ export class ScanSettingsFactory {
 		);
 	}
 
-	private async determineToLedger(
-		scanJob: ScanJob
-	): Promise<
+	private async determineToLedger(scanJob: ScanJob): Promise<
 		Result<
 			{
 				readonly ledger: number;
@@ -188,15 +186,18 @@ export class ScanSettingsFactory {
 			ScanError
 		>
 	> {
-		if (scanJob.toLedger !== null) {
-			return ok({
-				ledger: scanJob.toLedger
-			});
-		}
-
 		const latestLedgerOrError = await this.categoryScanner.findLatestLedger(
 			scanJob.url
 		);
+
+		if (scanJob.toLedger !== null) {
+			if (latestLedgerOrError.isErr()) return err(latestLedgerOrError.error);
+
+			return ok({
+				ledger: scanJob.toLedger,
+				archiveMetadata: latestLedgerOrError.value.archiveMetadata
+			});
+		}
 
 		if (latestLedgerOrError.isErr()) {
 			return err(latestLedgerOrError.error);

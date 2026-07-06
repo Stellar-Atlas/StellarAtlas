@@ -50,11 +50,12 @@ describe('history scanner runtime scripts', () => {
 
 		expect(service).toContain('Environment=HISTORY_SCAN_PROCESSES=12');
 		expect(service).toContain('Environment=HISTORY_SCAN_WORKERS=1');
-		expect(service).toContain('Environment=HISTORY_MAX_REQUESTS=12');
-		expect(service).toContain('Environment=HISTORY_HASHER_WORKERS=12');
 		expect(service).toContain(
-			'ExecStart=/usr/bin/env pnpm start:scan-history'
+			'These are total scanner caps; the cluster wrapper divides them per process.'
 		);
+		expect(service).toContain('Environment=HISTORY_MAX_REQUESTS=24');
+		expect(service).toContain('Environment=HISTORY_HASHER_WORKERS=24');
+		expect(service).toContain('ExecStart=/usr/bin/env pnpm start:scan-history');
 		expect(service).not.toContain('verify-archives.js');
 		expect(service).not.toContain('scan-history:single');
 	});
@@ -72,8 +73,6 @@ describe('history scanner runtime scripts', () => {
 		expect(setupScript).toContain('ln -sfnT "$source" "$target"');
 		expect(target).toContain('stellaratlas-history-scanner@1.service');
 		expect(polkitRule).toContain('stellaratlas-history-scanner@1.service');
-		expect(polkitRule).toContain(
-			'org.freedesktop.systemd1.reload-daemon'
-		);
+		expect(polkitRule).toContain('org.freedesktop.systemd1.reload-daemon');
 	});
 });

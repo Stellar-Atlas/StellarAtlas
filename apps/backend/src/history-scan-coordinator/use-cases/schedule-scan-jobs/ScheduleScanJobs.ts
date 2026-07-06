@@ -1,5 +1,5 @@
 import 'reflect-metadata';
-import { ok, Result } from 'neverthrow';
+import { err, ok, Result } from 'neverthrow';
 import { ScheduleScansDTO as ScheduleScanJobsDTO } from './ScheduleScanJobsDTO.js';
 import { inject, injectable } from 'inversify';
 import { TYPES } from '../../infrastructure/di/di-types.js';
@@ -8,6 +8,7 @@ import type { ScanScheduler } from '../../domain/ScanScheduler.js';
 import type { Logger } from 'logger';
 import type { ScanJobRepository } from '../../domain/ScanJobRepository.js';
 import { getStaleScanJobCutoff } from '../../domain/ScanJobStaleness.js';
+import { mapUnknownToError } from '@core/utilities/mapUnknownToError.js';
 
 /**
  * Schedule scansJobs and adds them to the queue. If the scan queue is empty, new ScanJobs will be created.
@@ -32,10 +33,22 @@ export class ScheduleScanJobs {
 	) {}
 
 	public async execute(dto: ScheduleScanJobsDTO): Promise<Result<void, Error>> {
-		await this.releaseStaleJobs();
-		await this.scheduleScanJobs(dto, await this.isQueueEmpty());
+		try {
+			await this.scanJobRepository.withSchedulingLock(async () => {
+				await this.releaseStaleJobs();
+				await this.scheduleScanJobs(dto, await this.isQueueEmpty());
+			});
 
-		return ok(undefined);
+			return ok(undefined);
+		} catch (e) {
+			const error = mapUnknownToError(e);
+			this.logger.error('Failed to schedule scan jobs', {
+				app: 'history-scan-coordinator',
+				errorMessage: error.message
+			});
+
+			return err(error);
+		}
 	}
 
 	private async releaseStaleJobs(): Promise<void> {

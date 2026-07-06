@@ -48,9 +48,16 @@ it('should verify the bucket hash', async function () {
 		scanner
 	);
 	expect(result.isOk()).toBeTruthy();
+	if (result.isErr()) throw result.error;
+	expect(result.value.verifiedBucketHashes).toEqual(
+		new Set([
+			'fed2affac90580353d1d7845194ecedea42363219c27e0e0788d48b6c739962a'
+		])
+	);
+	expect(result.value.errors).toEqual([]);
 });
 
-it('should return verification error when zip archive is corrupt', async function () {
+it('should collect verification error when zip archive is corrupt', async function () {
 	const bucketPath = path.join(
 		currentDir,
 		'../__fixtures__/bucket_empty.xdr.gz'
@@ -85,10 +92,11 @@ it('should return verification error when zip archive is corrupt', async functio
 		},
 		scanner
 	);
-	expect(result.isErr()).toBeTruthy();
-	if (!result.isErr()) throw Error();
-	expect(result.error).toBeInstanceOf(ScanError);
-	expect(result.error.type).toEqual(ScanErrorType.TYPE_VERIFICATION);
+	expect(result.isOk()).toBeTruthy();
+	if (result.isErr()) throw result.error;
+	expect(result.value.errors).toHaveLength(1);
+	expect(result.value.errors[0]).toBeInstanceOf(ScanError);
+	expect(result.value.errors[0].type).toEqual(ScanErrorType.TYPE_VERIFICATION);
 });
 
 const scan = async (scanState: BucketScanState, scanner: BucketScanner) => {

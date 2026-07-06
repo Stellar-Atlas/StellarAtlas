@@ -17,6 +17,7 @@ it('should scan', async function () {
 		ok({
 			latestLedgerHeader: { ledger: 200, hash: 'ledger_hash' },
 			scannedBucketHashes: new Set(['a']),
+			verifiedBucketHashes: new Set(['a']),
 			errors: []
 		})
 	);
@@ -50,7 +51,6 @@ it('should not update latestScannedLedger in case of error', async () => {
 	const scanJob = ScanJob.newScanChain(createDummyHistoryBaseUrl(), 0, 200, 1);
 	const scan = await scanner.perform(new Date(), scanJob);
 
-	console.log(scan);
 	expect(scan.error?.type).toEqual(ScanErrorType.TYPE_VERIFICATION);
 	expect(scan.error?.url).toEqual('url');
 	expect(scan.latestScannedLedger).toEqual(0);
@@ -71,12 +71,10 @@ it('should preserve all related range scan errors', async () => {
 	);
 	rangeScanner.scan.mockResolvedValue(
 		err(
-			new ScanError(
-				firstError.type,
-				firstError.url,
-				firstError.message,
-				[firstError, secondError]
-			)
+			new ScanError(firstError.type, firstError.url, firstError.message, [
+				firstError,
+				secondError
+			])
 		)
 	);
 	const scanner = getScanner(rangeScanner);
@@ -100,6 +98,7 @@ it('should continue scanning after range errors without advancing verified ledge
 			ok({
 				latestLedgerHeader: { ledger: 100, hash: 'ledger_hash_100' },
 				scannedBucketHashes: new Set(['a']),
+				verifiedBucketHashes: new Set(['a']),
 				errors: [firstError]
 			})
 		)
@@ -107,6 +106,7 @@ it('should continue scanning after range errors without advancing verified ledge
 			ok({
 				latestLedgerHeader: { ledger: 200, hash: 'ledger_hash_200' },
 				scannedBucketHashes: new Set(['a', 'b']),
+				verifiedBucketHashes: new Set(['a', 'b']),
 				errors: []
 			})
 		);
@@ -142,13 +142,54 @@ it('should stop scanning ranges after archive access is denied', async () => {
 	expect(scan.latestScannedLedgerHeaderHash).toEqual(null);
 });
 
+it('should cap bucket evidence while preserving unique hashes', async () => {
+	const rangeScanner = mock<RangeScanner>();
+	const bucketHashes = new Set(
+		Array.from({ length: 600 }, (_value, index) =>
+			index.toString(16).padStart(64, '0')
+		)
+	);
+	rangeScanner.scan.mockResolvedValue(
+		ok({
+			latestLedgerHeader: { ledger: 100, hash: 'ledger_hash' },
+			scannedBucketHashes: bucketHashes,
+			verifiedBucketHashes: bucketHashes,
+			errors: []
+		})
+	);
+	const scanner = getScanner(rangeScanner);
+
+	const scanJob = ScanJob.newScanChain(createDummyHistoryBaseUrl(), 0, 100, 1);
+	const scan = await scanner.perform(new Date(), scanJob);
+
+	expect(scan.evidence).toHaveLength(500);
+	expect(
+		new Set(scan.evidence.map((evidence) => evidence.bucketHash)).size
+	).toBe(500);
+});
+
 function getScanner(rangeScanner: RangeScanner) {
+	const categoryScanner = mock<CategoryScanner>();
+	categoryScanner.findLatestLedger.mockResolvedValue(
+		ok({
+			ledger: 200,
+			archiveMetadata: {
+				stellarHistoryUrl:
+					'https://history.stellar.org/.well-known/stellar-history.json',
+				stellarHistory: {
+					version: 1,
+					server: 'stellar-core',
+					currentLedger: 200,
+					currentBuckets: []
+				},
+				observedAt: '2026-07-05T00:00:00.000Z'
+			}
+		})
+	);
+
 	return new Scanner(
 		rangeScanner,
-		new ScanSettingsFactory(
-			mock<CategoryScanner>(),
-			mock<ArchivePerformanceTester>()
-		),
+		new ScanSettingsFactory(categoryScanner, mock<ArchivePerformanceTester>()),
 		mock<Logger>(),
 		mock<ExceptionLogger>(),
 		100

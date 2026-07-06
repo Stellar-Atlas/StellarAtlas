@@ -75,14 +75,82 @@ describe('scan HAS files', () => {
 				'ca1b62a33d8ea05710328e4c8e6ee95980cf41d3304474f2af5550b49497420e'
 			])
 		);
+		expect(bucketHashesOrError.value.errors).toEqual([]);
 	});
 
-	it('should signal a scan error if an error occurred during http request', async function () {
+	it('should collect HAS request errors and continue scanning the range', async function () {
+		const httpQueue = mock<HttpQueue>();
+		const url = createDummyHistoryBaseUrl();
+		let requestCount = 0;
+		httpQueue.sendRequests.mockImplementation(
+			async (
+				requests: IterableIterator<Request<Record<string, unknown>>>,
+				options,
+				resultHandler
+			): Promise<Result<void, QueueError>> => {
+				const request = requests.next().value;
+				if (request === undefined) return ok(undefined);
+
+				requestCount++;
+				if (requestCount === 1) {
+					return err(
+						new FileNotFoundError({
+							url: url,
+							meta: { checkPoint: 100 },
+							method: RequestMethod.GET
+						})
+					);
+				}
+
+				if (!resultHandler) throw new Error('No result handler');
+				return await resultHandler(
+					{
+						version: 1,
+						server: 'stellar-core',
+						currentLedger: 200,
+						currentBuckets: [
+							{
+								curr: '3cb6cd408d76ddee1f1c47b6c04184f256449f30130021c33db24a77a534c5eb',
+								next: {
+									state: 0
+								},
+								snap: 'ca1b62a33d8ea05710328e4c8e6ee95980cf41d3304474f2af5550b49497420e'
+							}
+						]
+					},
+					{
+						url: url,
+						meta: { checkPoint: 127 },
+						method: RequestMethod.GET
+					}
+				);
+			}
+		);
+
+		const bucketHashesOrError = await scanHASFilesAndReturnBucketHashes(
+			httpQueue,
+			127
+		);
+		expect(bucketHashesOrError.isOk()).toBeTruthy();
+		if (bucketHashesOrError.isErr()) throw bucketHashesOrError.error;
+
+		expect(bucketHashesOrError.value.errors).toHaveLength(1);
+		expect(bucketHashesOrError.value.errors[0]).toBeInstanceOf(ScanError);
+		expect(bucketHashesOrError.value.errors[0].url).toEqual(url.value);
+		expect(bucketHashesOrError.value.bucketHashes).toEqual(
+			new Set([
+				'3cb6cd408d76ddee1f1c47b6c04184f256449f30130021c33db24a77a534c5eb',
+				'ca1b62a33d8ea05710328e4c8e6ee95980cf41d3304474f2af5550b49497420e'
+			])
+		);
+	});
+
+	it('should stop HAS aggregation on worker connection errors', async function () {
 		const httpQueue = mock<HttpQueue>();
 		const url = createDummyHistoryBaseUrl();
 		httpQueue.sendRequests.mockResolvedValue(
 			err(
-				new FileNotFoundError({
+				new QueueError({
 					url: url,
 					meta: { checkPoint: 100 },
 					method: RequestMethod.GET
@@ -280,7 +348,10 @@ async function getOtherCategoriesVerifyResult(
 	);
 }
 
-async function scanHASFilesAndReturnBucketHashes(httpQueue: HttpQueue) {
+async function scanHASFilesAndReturnBucketHashes(
+	httpQueue: HttpQueue,
+	toLedger = 100
+) {
 	const checkPointGenerator = new CheckPointGenerator(
 		new StandardCheckPointFrequency()
 	);
@@ -295,7 +366,7 @@ async function scanHASFilesAndReturnBucketHashes(httpQueue: HttpQueue) {
 
 	return await categoryScanner.scanHASFilesAndReturnBucketHashes({
 		baseUrl: createDummyHistoryBaseUrl(),
-		checkPoints: checkPointGenerator.generate(0, 100),
+		checkPoints: checkPointGenerator.generate(0, toLedger),
 		concurrency: 100,
 		httpAgent: {} as http.Agent,
 		httpsAgent: {} as https.Agent,

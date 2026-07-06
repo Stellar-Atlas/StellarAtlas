@@ -37,6 +37,8 @@ import { terminateHasherPool } from './terminateHasherPool.js';
 import { noopParsedHistorySink } from './parsed-history/ParsedHistorySink.js';
 import type { ParsedHistorySink } from './parsed-history/ParsedHistorySink.js';
 import type { ArchiveMetadataDTO } from 'history-scanner-dto';
+import { sendRequestsCollectingArchiveErrors } from './sendRequestsCollectingArchiveErrors.js';
+import { ArchiveScanErrorAccumulator } from './ArchiveScanErrorAccumulator.js';
 
 type Ledger = number;
 type Hash = string;
@@ -44,6 +46,12 @@ type Hash = string;
 export interface LatestLedgerArchiveState {
 	readonly ledger: number;
 	readonly archiveMetadata: ArchiveMetadataDTO;
+}
+
+export interface HASScanResult {
+	readonly bucketHashes: Set<string>;
+	readonly bucketListHashes: Map<number, string>;
+	readonly errors: readonly ScanError[];
 }
 
 export interface ExpectedHashes {
@@ -146,15 +154,7 @@ export class CategoryScanner {
 	public async scanHASFilesAndReturnBucketHashes(
 		scanState: CategoryScanState,
 		verify = true
-	): Promise<
-		Result<
-			{
-				bucketHashes: Set<string>;
-				bucketListHashes: Map<number, string>;
-			},
-			ScanError
-		>
-	> {
+	): Promise<Result<HASScanResult, ScanError>> {
 		const historyArchiveStateURLGenerator =
 			RequestGenerator.generateHASRequests(
 				scanState.baseUrl,
@@ -163,7 +163,8 @@ export class CategoryScanner {
 			);
 
 		const bucketHashes = new Set<string>();
-		const successOrError = await this.httpQueue.sendRequests(
+		const successOrError = await sendRequestsCollectingArchiveErrors(
+			this.httpQueue,
 			historyArchiveStateURLGenerator,
 			{
 				stallTimeMs: 150,
@@ -203,13 +204,12 @@ export class CategoryScanner {
 			}
 		);
 
-		if (successOrError.isErr()) {
-			return err(mapHttpQueueErrorToScanError(successOrError.error));
-		}
+		if (successOrError.isErr()) return err(successOrError.error);
 
 		return ok({
 			bucketHashes: bucketHashes,
-			bucketListHashes: scanState.bucketListHashes
+			bucketListHashes: scanState.bucketListHashes,
+			errors: successOrError.value.errors
 		});
 	}
 
@@ -248,14 +248,6 @@ export class CategoryScanner {
 			if (!(readStream instanceof stream.Readable)) {
 				return err(new FileNotFoundError(request));
 			}
-			//debugging, can be removed if no more pipeline issues
-			const streamErrorListener = (error: unknown) =>
-				console.log(
-					'readstream error',
-					mapUnknownToError(error).message,
-					request.url.value
-				);
-			readStream.on('error', streamErrorListener);
 
 			const xdrStreamReader = new XdrStreamReader();
 			const gunzip = createGunzip();
@@ -297,12 +289,11 @@ export class CategoryScanner {
 						new RetryableQueueError(request, mapUnknownToError(error))
 					);
 				}
-			} finally {
-				readStream.off('error', streamErrorListener);
 			}
 		};
 
-		const verifyResult = await this.httpQueue.sendRequests(
+		const requestResult = await sendRequestsCollectingArchiveErrors(
+			this.httpQueue,
 			RequestGenerator.generateCategoryRequests(
 				scanState.checkPoints,
 				scanState.baseUrl,
@@ -326,9 +317,10 @@ export class CategoryScanner {
 
 		await terminateHasherPool(poolLoadTracker, pool);
 
-		if (verifyResult.isErr()) {
-			return err(mapHttpQueueErrorToScanError(verifyResult.error));
-		}
+		if (requestResult.isErr()) return err(requestResult.error);
+
+		const scanErrors = new ArchiveScanErrorAccumulator();
+		scanErrors.addMany(requestResult.value.errors);
 
 		const verificationErrors = this.categoryVerificationService.verifyAll(
 			categoryVerificationData,
@@ -338,32 +330,23 @@ export class CategoryScanner {
 		);
 
 		if (verificationErrors.length > 0) {
-			const scanErrors = createCategoryVerificationScanErrors(
-				scanState.baseUrl,
-				this.checkPointGenerator,
-				verificationErrors
-			);
-			const firstError = scanErrors[0];
-			return err(
-				new ScanError(
-					firstError.type,
-					firstError.url,
-					firstError.message,
-					scanErrors
+			scanErrors.addMany(
+				createCategoryVerificationScanErrors(
+					scanState.baseUrl,
+					this.checkPointGenerator,
+					verificationErrors
 				)
 			);
+		}
+
+		const aggregateError = scanErrors.toAggregate();
+		if (aggregateError !== undefined) {
+			return err(aggregateError);
 		}
 
 		const maxLedger = getMaximumNumber([
 			...categoryVerificationData.calculatedLedgerHeaderHashes.keys()
 		]);
-
-		if (poolLoadTracker.getPoolFullPercentage() > 50) {
-			console.log(
-				'Pool full percentage',
-				poolLoadTracker.getPoolFullPercentagePretty()
-			);
-		}
 
 		return ok({
 			ledger: maxLedger,

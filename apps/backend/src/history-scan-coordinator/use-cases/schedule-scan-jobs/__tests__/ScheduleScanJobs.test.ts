@@ -18,6 +18,9 @@ describe('ScheduleScanJobs', () => {
 		scanJobRepositoryMock = mock<ScanJobRepository>();
 		scanSchedulerMock = mock<ScanScheduler>();
 		loggerMock = mock<Logger>();
+		scanJobRepositoryMock.withSchedulingLock.mockImplementation(async (work) =>
+			work()
+		);
 
 		scheduleScanJobs = new ScheduleScanJobs(
 			scanRepositoryMock,
@@ -108,5 +111,38 @@ describe('ScheduleScanJobs', () => {
 			released: 3
 		});
 		expect(scanJobRepositoryMock.hasPendingJobs).toHaveBeenCalledTimes(1);
+	});
+
+	it('should run scheduling inside the scheduler lock', async () => {
+		scanJobRepositoryMock.releaseStaleTakenJobs.mockResolvedValue(0);
+		scanJobRepositoryMock.hasPendingJobs.mockResolvedValue(false);
+		scanJobRepositoryMock.findUnfinishedJobs.mockResolvedValue([]);
+		scanRepositoryMock.findLatest.mockResolvedValue([]);
+		scanSchedulerMock.schedule.mockReturnValue([]);
+
+		const result = await scheduleScanJobs.execute({
+			historyArchiveUrls: ['https://example.com']
+		});
+
+		expect(result.isOk()).toBe(true);
+		expect(scanJobRepositoryMock.withSchedulingLock).toHaveBeenCalledTimes(1);
+	});
+
+	it('should return an error when scheduler locking fails', async () => {
+		const error = new Error('lock unavailable');
+		scanJobRepositoryMock.withSchedulingLock.mockRejectedValue(error);
+
+		const result = await scheduleScanJobs.execute({
+			historyArchiveUrls: ['https://example.com']
+		});
+
+		expect(result.isErr()).toBe(true);
+		expect(loggerMock.error).toHaveBeenCalledWith(
+			'Failed to schedule scan jobs',
+			{
+				app: 'history-scan-coordinator',
+				errorMessage: error.message
+			}
+		);
 	});
 });
