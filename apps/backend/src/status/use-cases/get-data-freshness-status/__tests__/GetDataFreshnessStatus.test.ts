@@ -60,10 +60,30 @@ describe('GetDataFreshnessStatus', () => {
 				status: 'ok',
 				latestAt: '2026-07-03T11:50:00.000Z',
 				ageMs: 10 * 60 * 1000,
-				staleAfterMs: null
+				staleAfterMs: 6 * 60 * 60 * 1000
 			}
 		});
 		expect(scanRepositoryMock.findLatestLimited).toHaveBeenCalledWith(1);
+	});
+
+	it('should degrade when archive scan freshness exceeds policy', async () => {
+		networkScanRepositoryMock.findLatestSuccessfulScanTime.mockResolvedValue(
+			new Date('2026-07-03T11:45:00.000Z')
+		);
+		scanRepositoryMock.findLatestLimited.mockResolvedValue([
+			createScan(new Date('2026-07-03T02:00:00.000Z'))
+		]);
+
+		const result = await getDataFreshnessStatus.execute();
+
+		expect(result.isOk()).toBe(true);
+		expect(result._unsafeUnwrap().status).toBe('degraded');
+		expect(result._unsafeUnwrap().archiveScan).toEqual({
+			status: 'degraded',
+			latestAt: '2026-07-03T02:00:00.000Z',
+			ageMs: 10 * 60 * 60 * 1000,
+			staleAfterMs: 6 * 60 * 60 * 1000
+		});
 	});
 
 	it('should degrade when network scan freshness exceeds policy', async () => {

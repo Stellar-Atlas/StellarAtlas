@@ -68,6 +68,35 @@ describe('GetDataQualityStatus', () => {
 		expect(result._unsafeUnwrap().status).toBe('degraded');
 	});
 
+	it('should degrade headline data quality when archive scan freshness is stale', async () => {
+		getDataFreshnessStatusMock.execute.mockResolvedValue(
+			ok({
+				...dataFreshness(),
+				status: 'degraded',
+				archiveScan: {
+					...dataFreshness().archiveScan,
+					status: 'degraded',
+					ageMs: 10 * 60 * 60 * 1000,
+					staleAfterMs: 6 * 60 * 60 * 1000
+				}
+			})
+		);
+
+		const result = await getDataQualityStatus.execute();
+
+		expect(result.isOk()).toBe(true);
+		expect(result._unsafeUnwrap()).toMatchObject({
+			status: 'degraded',
+			dataFreshness: {
+				status: 'degraded',
+				archiveScan: {
+					status: 'degraded',
+					staleAfterMs: 6 * 60 * 60 * 1000
+				}
+			}
+		});
+	});
+
 	it('should keep archive queue health separate from data-quality status', async () => {
 		getArchiveQueueStatusMock.execute.mockResolvedValue(
 			ok({
@@ -111,7 +140,7 @@ function dataFreshness() {
 			status: 'ok' as const,
 			latestAt: '2026-07-03T11:50:00.000Z',
 			ageMs: 600000,
-			staleAfterMs: null
+			staleAfterMs: 6 * 60 * 60 * 1000
 		}
 	};
 }

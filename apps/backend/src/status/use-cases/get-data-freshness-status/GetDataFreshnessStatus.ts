@@ -25,6 +25,7 @@ export interface DataFreshnessStatusDTO {
 }
 
 const defaultNetworkScanLoopMs = 3 * 60 * 1000;
+const defaultArchiveScanStaleAfterMs = 6 * 60 * 60 * 1000;
 
 @injectable()
 export class GetDataFreshnessStatus {
@@ -54,7 +55,7 @@ export class GetDataFreshnessStatus {
 			const archiveScan = this.mapFreshnessProbe(
 				latestArchiveScans[0]?.endDate ?? null,
 				generatedAt,
-				null
+				defaultArchiveScanStaleAfterMs
 			);
 
 			return ok({
