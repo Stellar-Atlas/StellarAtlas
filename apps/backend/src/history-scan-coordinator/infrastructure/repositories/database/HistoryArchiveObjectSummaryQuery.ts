@@ -1,13 +1,13 @@
 import type { EntityManager } from 'typeorm';
 import type {
 	HistoryArchiveBucketCoverageV1,
-	HistoryArchiveCheckpointCoverageV1,
 	HistoryArchiveObjectStatusCountsV1,
 	HistoryArchiveObjectSummaryV1,
 	HistoryArchiveObjectTypeSummaryV1,
 	HistoryArchiveObjectTypeV1
 } from 'shared';
 import { requireNumber, type NumericValue } from './ScanJobRowMapper.js';
+import { getCheckpointCoverage } from './HistoryArchiveObjectCheckpointCoverageQuery.js';
 import { getHistoryArchiveObjectHostThrottles } from './HistoryArchiveObjectHostThrottleSummaryQuery.js';
 
 interface SummaryOptions {
@@ -37,41 +37,6 @@ type BucketCoverageRow = Omit<
 > & {
 	readonly uniqueBucketHashes?: NumericValue;
 	readonly uniquebuckethashes?: NumericValue;
-};
-
-type CheckpointCoverageRow = {
-	readonly activeArchiveCheckpoints?: NumericValue;
-	readonly activearchivecheckpoints?: NumericValue;
-	readonly archiveRootsWithState?: NumericValue;
-	readonly archiverootswithstate?: NumericValue;
-	readonly categoryConsistencyFailedCheckpoints?: NumericValue;
-	readonly categoryconsistencyfailedcheckpoints?: NumericValue;
-	readonly categoryConsistencyNotEvaluatedCheckpoints?: NumericValue;
-	readonly categoryconsistencynotevaluatedcheckpoints?: NumericValue;
-	readonly categoryConsistencyPendingCheckpoints?: NumericValue;
-	readonly categoryconsistencypendingcheckpoints?: NumericValue;
-	readonly categoryConsistentArchiveCheckpoints?: NumericValue;
-	readonly categoryconsistentarchivecheckpoints?: NumericValue;
-	readonly completeArchiveCheckpoints?: NumericValue;
-	readonly completearchivecheckpoints?: NumericValue;
-	readonly discoveryCompleteArchiveRoots?: NumericValue;
-	readonly discoverycompletearchiveroots?: NumericValue;
-	readonly expectedArchiveCheckpoints?: NumericValue;
-	readonly expectedarchivecheckpoints?: NumericValue;
-	readonly failedArchiveCheckpoints?: NumericValue;
-	readonly failedarchivecheckpoints?: NumericValue;
-	readonly latestCheckpointLedger?: NumericValue | null;
-	readonly latestcheckpointledger?: NumericValue | null;
-	readonly missingArchiveCheckpoints?: NumericValue;
-	readonly missingarchivecheckpoints?: NumericValue;
-	readonly objectCompleteArchiveCheckpoints?: NumericValue;
-	readonly objectcompletearchivecheckpoints?: NumericValue;
-	readonly oldestCheckpointLedger?: NumericValue | null;
-	readonly oldestcheckpointledger?: NumericValue | null;
-	readonly partialArchiveCheckpoints?: NumericValue;
-	readonly partialarchivecheckpoints?: NumericValue;
-	readonly totalArchiveCheckpoints?: NumericValue;
-	readonly totalarchivecheckpoints?: NumericValue;
 };
 
 export async function getHistoryArchiveObjectSummary(
@@ -147,85 +112,6 @@ async function getBucketCoverage(
 	};
 }
 
-async function getCheckpointCoverage(
-	manager: EntityManager,
-	archiveUrlIdentity: string | null
-): Promise<HistoryArchiveCheckpointCoverageV1> {
-	const [row] = (await manager.query(checkpointCoverageSql, [
-		archiveUrlIdentity
-	])) as readonly CheckpointCoverageRow[];
-
-	return {
-		activeArchiveCheckpoints: requireNumber(
-			row?.activeArchiveCheckpoints ?? row?.activearchivecheckpoints,
-			'activeArchiveCheckpoints'
-		),
-		archiveRootsWithState: requireNumber(
-			row?.archiveRootsWithState ?? row?.archiverootswithstate,
-			'archiveRootsWithState'
-		),
-		categoryConsistencyFailedCheckpoints: requireNumber(
-			row?.categoryConsistencyFailedCheckpoints ??
-				row?.categoryconsistencyfailedcheckpoints,
-			'categoryConsistencyFailedCheckpoints'
-		),
-		categoryConsistencyNotEvaluatedCheckpoints: requireNumber(
-			row?.categoryConsistencyNotEvaluatedCheckpoints ??
-				row?.categoryconsistencynotevaluatedcheckpoints,
-			'categoryConsistencyNotEvaluatedCheckpoints'
-		),
-		categoryConsistencyPendingCheckpoints: requireNumber(
-			row?.categoryConsistencyPendingCheckpoints ??
-				row?.categoryconsistencypendingcheckpoints,
-			'categoryConsistencyPendingCheckpoints'
-		),
-		categoryConsistentArchiveCheckpoints: requireNumber(
-			row?.categoryConsistentArchiveCheckpoints ??
-				row?.categoryconsistentarchivecheckpoints,
-			'categoryConsistentArchiveCheckpoints'
-		),
-		completeArchiveCheckpoints: requireNumber(
-			row?.completeArchiveCheckpoints ?? row?.completearchivecheckpoints,
-			'completeArchiveCheckpoints'
-		),
-		discoveryCompleteArchiveRoots: requireNumber(
-			row?.discoveryCompleteArchiveRoots ?? row?.discoverycompletearchiveroots,
-			'discoveryCompleteArchiveRoots'
-		),
-		expectedArchiveCheckpoints: requireNumber(
-			row?.expectedArchiveCheckpoints ?? row?.expectedarchivecheckpoints,
-			'expectedArchiveCheckpoints'
-		),
-		failedArchiveCheckpoints: requireNumber(
-			row?.failedArchiveCheckpoints ?? row?.failedarchivecheckpoints,
-			'failedArchiveCheckpoints'
-		),
-		latestCheckpointLedger: toNullableNumber(
-			row?.latestCheckpointLedger ?? row?.latestcheckpointledger
-		),
-		missingArchiveCheckpoints: requireNumber(
-			row?.missingArchiveCheckpoints ?? row?.missingarchivecheckpoints,
-			'missingArchiveCheckpoints'
-		),
-		objectCompleteArchiveCheckpoints: requireNumber(
-			row?.objectCompleteArchiveCheckpoints ??
-				row?.objectcompletearchivecheckpoints,
-			'objectCompleteArchiveCheckpoints'
-		),
-		oldestCheckpointLedger: toNullableNumber(
-			row?.oldestCheckpointLedger ?? row?.oldestcheckpointledger
-		),
-		partialArchiveCheckpoints: requireNumber(
-			row?.partialArchiveCheckpoints ?? row?.partialarchivecheckpoints,
-			'partialArchiveCheckpoints'
-		),
-		totalArchiveCheckpoints: requireNumber(
-			row?.totalArchiveCheckpoints ?? row?.totalarchivecheckpoints,
-			'totalArchiveCheckpoints'
-		)
-	};
-}
-
 function mapObjectTypeSummaryRow(
 	row: ObjectTypeSummaryRow
 ): HistoryArchiveObjectTypeSummaryV1 {
@@ -293,13 +179,6 @@ function requireObjectType(
 	throw new Error('Archive object summary row is missing object type');
 }
 
-function toNullableNumber(
-	value: NumericValue | null | undefined
-): number | null {
-	if (value === null || value === undefined) return null;
-	return requireNumber(value, 'checkpointLedger');
-}
-
 const archiveFilterSql =
 	'($1::text is null or "archiveUrlIdentity" = $1::text)';
 
@@ -328,114 +207,4 @@ const bucketCoverageSql = `
 	from history_archive_object_queue
 	where ${archiveFilterSql}
 		and "objectType" = 'bucket'
-`;
-
-const checkpointCoverageSql = `
-	with root_state as (
-		select
-			"archiveUrlIdentity",
-			floor((greatest("currentLedger", 63) + 1)::numeric / 64)::integer
-				as "expectedCheckpointCount"
-		from history_archive_state_snapshot
-		where ${archiveFilterSql}
-			and status = 'available'
-			and "currentLedger" is not null
-			and "currentLedger" >= 0
-	),
-	checkpoint_rollup as (
-		select
-			"archiveUrlIdentity",
-			"checkpointLedger",
-			bool_or(status = 'failed') as has_failed,
-			bool_or(status = 'scanning') as has_active,
-			bool_or("objectType" = 'scp') as expects_scp,
-			bool_or("objectType" = 'checkpoint-state' and status = 'verified')
-				as has_checkpoint_state,
-			bool_or("objectType" = 'ledger' and status = 'verified') as has_ledger,
-			bool_or("objectType" = 'transactions' and status = 'verified')
-				as has_transactions,
-			bool_or("objectType" = 'results' and status = 'verified') as has_results,
-			bool_or("objectType" = 'scp' and status = 'verified') as has_scp
-		from history_archive_object_queue
-		where ${archiveFilterSql}
-			and "checkpointLedger" is not null
-		group by "archiveUrlIdentity", "checkpointLedger"
-	),
-	root_coverage as (
-		select
-			root_state."archiveUrlIdentity",
-			root_state."expectedCheckpointCount",
-			count(distinct checkpoint_rollup."checkpointLedger")
-				as "scheduledCheckpointCount",
-			min(checkpoint_rollup."checkpointLedger") as "oldestCheckpointLedger"
-		from root_state
-		left join checkpoint_rollup
-			on checkpoint_rollup."archiveUrlIdentity" =
-				root_state."archiveUrlIdentity"
-		group by
-			root_state."archiveUrlIdentity",
-			root_state."expectedCheckpointCount"
-	),
-	classified as (
-		select
-			"checkpointLedger",
-			has_failed,
-			has_active,
-			(
-				not has_failed
-				and has_checkpoint_state
-				and has_ledger
-				and has_transactions
-				and has_results
-				and (not expects_scp or has_scp)
-			) as is_object_complete
-		from checkpoint_rollup
-	)
-	select
-		count(*) as "totalArchiveCheckpoints",
-		count(*) filter (where has_active) as "activeArchiveCheckpoints",
-		count(*) filter (where has_failed) as "failedArchiveCheckpoints",
-		count(*) filter (where is_object_complete)
-			as "completeArchiveCheckpoints",
-		count(*) filter (where is_object_complete)
-			as "objectCompleteArchiveCheckpoints",
-		0 as "categoryConsistentArchiveCheckpoints",
-		0 as "categoryConsistencyFailedCheckpoints",
-		count(*) filter (where is_object_complete)
-			as "categoryConsistencyNotEvaluatedCheckpoints",
-		count(*) filter (where not is_object_complete and not has_failed)
-			as "categoryConsistencyPendingCheckpoints",
-		count(*) filter (where not is_object_complete and not has_failed)
-			as "partialArchiveCheckpoints",
-		min("checkpointLedger") as "oldestCheckpointLedger",
-		max("checkpointLedger") as "latestCheckpointLedger",
-		coalesce((select count(*) from root_coverage), 0)
-			as "archiveRootsWithState",
-		coalesce(
-			(select sum("expectedCheckpointCount") from root_coverage),
-			0
-		) as "expectedArchiveCheckpoints",
-		coalesce(
-			(
-				select sum(
-					greatest(
-						"expectedCheckpointCount" - "scheduledCheckpointCount",
-						0
-					)
-				)
-				from root_coverage
-			),
-			0
-		) as "missingArchiveCheckpoints",
-		coalesce(
-			(
-				select count(*)
-				from root_coverage
-				where "expectedCheckpointCount" > 0
-					and "scheduledCheckpointCount" >= "expectedCheckpointCount"
-					and "oldestCheckpointLedger" <= 63
-			),
-			0
-		) as "discoveryCompleteArchiveRoots"
-	from classified
 `;
