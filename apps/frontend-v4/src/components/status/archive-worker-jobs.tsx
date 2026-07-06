@@ -241,7 +241,7 @@ function getWorkerMetric(
 	worker: PublicArchiveScanWorker,
 	status: PublicArchiveScanWorkerStatus
 ): {
-	readonly label: 'Concurrency' | 'Worker state';
+	readonly label: 'Per-job requests' | 'Worker state';
 	readonly value: string;
 } {
 	if (
@@ -250,8 +250,8 @@ function getWorkerMetric(
 		worker.concurrency > 0
 	) {
 		return {
-			label: 'Concurrency',
-			value: `${formatInteger(worker.concurrency)} workers`
+			label: 'Per-job requests',
+			value: formatInteger(worker.concurrency)
 		};
 	}
 
@@ -269,7 +269,7 @@ function formatWorkerState(status: PublicArchiveScanWorkerStatus): string {
 	if (status === 'stale') return 'Heartbeat stale';
 	if (status === 'pending') return 'Waiting for worker';
 	if (status === 'starting') return 'Starting';
-	return 'Concurrency not reported';
+	return 'Request concurrency not reported';
 }
 
 function groupWorkers(

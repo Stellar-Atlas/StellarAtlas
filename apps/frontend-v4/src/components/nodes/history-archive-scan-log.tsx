@@ -282,18 +282,18 @@ const formatConcurrency = (entry: PublicHistoryArchiveScanLogEntry): string => {
 		return 'Starting';
 	}
 
-	return `${formatInteger(entry.concurrency)} workers`;
+	return `${formatInteger(entry.concurrency)} requests`;
 };
 
 const getConcurrencyMetric = (
 	entry: PublicHistoryArchiveScanLogEntry
 ): {
-	readonly label: 'Concurrency' | 'Worker state';
+	readonly label: 'Per-job requests' | 'Worker state';
 	readonly value: string;
 } => {
 	if (typeof entry.concurrency === 'number' && entry.concurrency > 0) {
 		return {
-			label: 'Concurrency',
+			label: 'Per-job requests',
 			value: formatConcurrency(entry)
 		};
 	}

@@ -125,7 +125,7 @@ function archiveScanEmptyDetail(scan: PublicArchiveScanLogEntry): string {
 }
 
 function getArchiveConcurrencyMetric(scan: PublicArchiveScanLogEntry): {
-	readonly label: 'Concurrency' | 'Worker state';
+	readonly label: 'Per-job requests' | 'Worker state';
 	readonly value: string;
 } {
 	if (
@@ -134,8 +134,8 @@ function getArchiveConcurrencyMetric(scan: PublicArchiveScanLogEntry): {
 		scan.concurrency > 0
 	) {
 		return {
-			label: 'Concurrency',
-			value: `${formatInteger(scan.concurrency)} workers`
+			label: 'Per-job requests',
+			value: formatInteger(scan.concurrency)
 		};
 	}
 
