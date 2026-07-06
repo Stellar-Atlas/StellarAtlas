@@ -17,8 +17,13 @@ import {
 	fetchTransactionByHash
 } from './HorizonLedgerClient.js';
 import { fetchExplorerTransactionOperations } from './ExplorerTransactionOperationClient.js';
+import type { GetExplorerLocalReadModel } from '../../use-cases/get-explorer-local-read-model/GetExplorerLocalReadModel.js';
 
 export interface BlockchainExplorerRouterConfig {
+	readonly getExplorerLocalReadModel: Pick<
+		GetExplorerLocalReadModel,
+		'execute'
+	>;
 	readonly horizonUrl: string;
 	readonly rpcUrl?: string;
 }
@@ -31,6 +36,19 @@ export const blockchainExplorerRouter = (
 	config: BlockchainExplorerRouterConfig
 ): express.Router => {
 	const router = express.Router();
+
+	router.get('/local-read-model', async (_req, res) => {
+		setCacheHeader(res);
+		try {
+			return res
+				.status(200)
+				.json(await config.getExplorerLocalReadModel.execute());
+		} catch {
+			return res
+				.status(502)
+				.json({ error: 'Explorer local read model unavailable' });
+		}
+	});
 
 	router.get('/search', async (req, res) => {
 		const query = readQueryString(req.query.query);

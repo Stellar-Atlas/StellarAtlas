@@ -1,8 +1,10 @@
+import Link from 'next/link';
 import type {
 	PublicArchiveScanLogEntry,
 	PublicHistoryArchiveScanLogError,
 	PublicStatusLevel
 } from '@api/types';
+import { getArchiveScanDetailPath } from '@domain/archive-scan-routes';
 import { formatDateTime, formatInteger } from '@format/formatters';
 import { StatusPill } from './status-ui';
 
@@ -28,6 +30,14 @@ export function ArchiveScanDetails({
 				<div>
 					<dt>Range</dt>
 					<dd>{formatLedgerRange(scan.fromLedger, scan.toLedger)}</dd>
+				</div>
+				<div>
+					<dt>Archive detail</dt>
+					<dd>
+						<Link href={getArchiveScanDetailPath(scan.url)}>
+							Open scan detail
+						</Link>
+					</dd>
 				</div>
 				<div>
 					<dt>Verified</dt>

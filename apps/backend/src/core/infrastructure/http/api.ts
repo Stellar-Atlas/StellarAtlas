@@ -39,6 +39,7 @@ import { GetOrganizations } from '@network-scan/use-cases/get-organizations/GetO
 import { GetMeasurementsFactory } from '@network-scan/use-cases/get-measurements/GetMeasurementsFactory.js';
 import { GetMeasurementAggregations } from '@network-scan/use-cases/get-measurement-aggregations/GetMeasurementAggregations.js';
 import { GetScpStatements } from '@network-scan/use-cases/get-scp-statements/GetScpStatements.js';
+import { GetExplorerLocalReadModel } from '@network-scan/use-cases/get-explorer-local-read-model/GetExplorerLocalReadModel.js';
 import { RequestUnsubscribeLink } from '@notifications/use-cases/request-unsubscribe-link/RequestUnsubscribeLink.js';
 import { RegisterScan } from '@history-scan-coordinator/use-cases/register-scan/RegisterScan.js';
 import { RegisterParsedLedgerHeaders } from '@history-scan-coordinator/use-cases/register-parsed-ledger-headers/RegisterParsedLedgerHeaders.js';
@@ -285,6 +286,9 @@ const listen = async () => {
 	api.use(
 		'/v1/explorer',
 		blockchainExplorerRouter({
+			getExplorerLocalReadModel: kernel.container.get(
+				GetExplorerLocalReadModel
+			),
 			horizonUrl: config.horizonUrl.value,
 			rpcUrl: config.rpcUrl?.value
 		})

@@ -209,34 +209,35 @@ export class TypeOrmScanJobRepository implements ScanJobRepository {
 
 		const result = (await manager.query(
 			`
-			update history_archive_scan_job_queue
-			set status = 'TAKEN',
-				"claimedByCommunityScannerId" = $1,
-				"claimedAt" = now(),
-				"updatedAt" = now()
-			where id = (
+			with next_candidate as (
 				select candidate.id
 				from history_archive_scan_job_queue candidate
+				cross join lateral (
+					select lower(
+						coalesce(
+							substring(
+								candidate.url from '^[a-z][a-z0-9+.-]*://([^/?#:]+)'
+							),
+							candidate.url
+						)
+					) as host_identity
+				) candidate_key
 				where candidate.status = 'PENDING'
 					and (
 						select count(*)
 						from history_archive_scan_job_queue active
-						where active.status = 'TAKEN'
-							and lower(
+						cross join lateral (
+							select lower(
 								coalesce(
 									substring(
 										active.url from '^[a-z][a-z0-9+.-]*://([^/?#:]+)'
 									),
 									active.url
 								)
-							) = lower(
-								coalesce(
-									substring(
-										candidate.url from '^[a-z][a-z0-9+.-]*://([^/?#:]+)'
-									),
-									candidate.url
-				)
-			)
+							) as host_identity
+						) active_key
+						where active.status = 'TAKEN'
+							and active_key.host_identity = candidate_key.host_identity
 					) < $2
 				order by
 					candidate."updatedAt" asc,
@@ -244,6 +245,15 @@ export class TypeOrmScanJobRepository implements ScanJobRepository {
 				for update skip locked
 				limit 1
 			)
+			update history_archive_scan_job_queue
+			set status = 'TAKEN',
+				"claimedByCommunityScannerId" = $1,
+				"claimedAt" = now(),
+				"latestAttemptedLedger" = null,
+				"currentRangeFromLedger" = null,
+				"currentRangeToLedger" = null,
+				"updatedAt" = now()
+			where id = (select id from next_candidate)
 			returning
 				id as "id",
 				"remoteId" as "remoteId",
@@ -254,6 +264,9 @@ export class TypeOrmScanJobRepository implements ScanJobRepository {
 				"fromLedger" as "fromLedger",
 				"toLedger" as "toLedger",
 				concurrency as "concurrency",
+				"latestAttemptedLedger" as "latestAttemptedLedger",
+				"currentRangeFromLedger" as "currentRangeFromLedger",
+				"currentRangeToLedger" as "currentRangeToLedger",
 				"claimedByCommunityScannerId" as "claimedByCommunityScannerId",
 				"claimedAt" as "claimedAt",
 				status as "status",
@@ -422,6 +435,9 @@ export class TypeOrmScanJobRepository implements ScanJobRepository {
 				status: 'PENDING',
 				claimedByCommunityScannerId: null,
 				claimedAt: null,
+				latestAttemptedLedger: null,
+				currentRangeFromLedger: null,
+				currentRangeToLedger: null,
 				updatedAt: () => 'now()'
 			})
 			.where('"remoteId" = :remoteId', { remoteId })
@@ -440,6 +456,9 @@ export class TypeOrmScanJobRepository implements ScanJobRepository {
 				status: 'PENDING',
 				claimedByCommunityScannerId: null,
 				claimedAt: null,
+				latestAttemptedLedger: null,
+				currentRangeFromLedger: null,
+				currentRangeToLedger: null,
 				updatedAt: () => 'now()'
 			})
 			.where('status = :status', { status: 'TAKEN' })
@@ -458,6 +477,15 @@ function createTakenJobUpdate(
 
 	if (progress.concurrency !== undefined)
 		update.concurrency = progress.concurrency;
+	if (progress.latestAttemptedLedger !== undefined) {
+		update.latestAttemptedLedger = progress.latestAttemptedLedger;
+	}
+	if (progress.currentRangeFromLedger !== undefined) {
+		update.currentRangeFromLedger = progress.currentRangeFromLedger;
+	}
+	if (progress.currentRangeToLedger !== undefined) {
+		update.currentRangeToLedger = progress.currentRangeToLedger;
+	}
 	if (progress.fromLedger !== undefined)
 		update.fromLedger = progress.fromLedger;
 	if (progress.toLedger !== undefined) update.toLedger = progress.toLedger;

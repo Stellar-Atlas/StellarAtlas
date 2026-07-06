@@ -12,6 +12,9 @@ type ScanJobRow = {
 	fromLedger: number | null;
 	toLedger: number | null;
 	concurrency: number | null;
+	latestAttemptedLedger: number | null;
+	currentRangeFromLedger: number | null;
+	currentRangeToLedger: number | null;
 	claimedByCommunityScannerId: string | null;
 	claimedAt: Date | null;
 	status: 'PENDING' | 'TAKEN' | 'DONE';
@@ -31,6 +34,12 @@ export type RawScanJobRow = Partial<ScanJobRow> & {
 	toLedger?: NumericValue | null;
 	toledger?: NumericValue | null;
 	concurrency?: NumericValue | null;
+	latestAttemptedLedger?: NumericValue | null;
+	latestattemptedledger?: NumericValue | null;
+	currentRangeFromLedger?: NumericValue | null;
+	currentrangefromledger?: NumericValue | null;
+	currentRangeToLedger?: NumericValue | null;
+	currentrangetoledger?: NumericValue | null;
 	claimedbycommunityscannerid?: string | null;
 	claimedat?: Date | string | null;
 	createdat?: Date | string;
@@ -77,7 +86,10 @@ export function createScanJobFromRow(row: RawScanJobRow): ScanJob {
 		scanJobRow.concurrency,
 		scanJobRow.remoteId,
 		scanJobRow.claimedByCommunityScannerId,
-		scanJobRow.claimedAt
+		scanJobRow.claimedAt,
+		scanJobRow.latestAttemptedLedger,
+		scanJobRow.currentRangeFromLedger,
+		scanJobRow.currentRangeToLedger
 	);
 	scanJob.id = scanJobRow.id;
 	scanJob.status = scanJobRow.status;
@@ -135,6 +147,21 @@ function normalizeScanJobRow(row: RawScanJobRow): ScanJobRow {
 			row.toLedger === undefined ? row.toledger : row.toLedger
 		),
 		concurrency: toNullableNumber(row.concurrency),
+		latestAttemptedLedger: toNullableNumber(
+			row.latestAttemptedLedger === undefined
+				? row.latestattemptedledger
+				: row.latestAttemptedLedger
+		),
+		currentRangeFromLedger: toNullableNumber(
+			row.currentRangeFromLedger === undefined
+				? row.currentrangefromledger
+				: row.currentRangeFromLedger
+		),
+		currentRangeToLedger: toNullableNumber(
+			row.currentRangeToLedger === undefined
+				? row.currentrangetoledger
+				: row.currentRangeToLedger
+		),
 		claimedByCommunityScannerId:
 			row.claimedByCommunityScannerId ??
 			row.claimedbycommunityscannerid ??

@@ -119,6 +119,7 @@ import { ScpStatementObservation } from '../../domain/scp/ScpStatementObservatio
 import type { ScpStatementObservationRepository } from '../../domain/scp/ScpStatementObservationRepository.js';
 import { TypeOrmScpStatementObservationRepository } from '../database/repositories/TypeOrmScpStatementObservationRepository.js';
 import { GetScpStatements } from '../../use-cases/get-scp-statements/GetScpStatements.js';
+import { GetExplorerLocalReadModel } from '../../use-cases/get-explorer-local-read-model/GetExplorerLocalReadModel.js';
 import type { ScpStatementLiveStore } from '../../domain/scp/ScpStatementLiveStore.js';
 import { MeilisearchScpStatementLiveStore } from '../search/MeilisearchScpStatementLiveStore.js';
 
@@ -399,6 +400,7 @@ function loadUseCases(container: Container) {
 	container.bind(GetMeasurementsFactory).toSelf();
 	container.bind(GetMeasurementAggregations).toSelf();
 	container.bind(GetScpStatements).toSelf();
+	container.bind(GetExplorerLocalReadModel).toSelf();
 	container.bind(CollectScpLive).toSelf();
 	container.bind(CollectScpLiveLooped).toSelf();
 	container.bind(UpdateNetwork).toSelf();

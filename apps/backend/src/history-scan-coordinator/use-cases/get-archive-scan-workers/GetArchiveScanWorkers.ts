@@ -20,7 +20,10 @@ export interface ArchiveScanWorkerDTO {
 	readonly lastHeartbeatAt: string;
 	readonly heartbeatAgeMs: number;
 	readonly fromLedger: number;
+	readonly currentRangeFromLedger: number | null;
+	readonly currentRangeToLedger: number | null;
 	readonly toLedger: number | null;
+	readonly latestAttemptedLedger: number | null;
 	readonly latestScannedLedger: number;
 	readonly concurrency: number | null;
 }
@@ -92,7 +95,10 @@ export class GetArchiveScanWorkers {
 			fromLedger:
 				job.fromLedger ??
 				(job.latestScannedLedger > 0 ? job.latestScannedLedger + 1 : 0),
+			currentRangeFromLedger: job.currentRangeFromLedger,
+			currentRangeToLedger: job.currentRangeToLedger,
 			toLedger: job.toLedger,
+			latestAttemptedLedger: job.latestAttemptedLedger,
 			latestScannedLedger: job.latestScannedLedger,
 			concurrency: this.mapVisibleConcurrency(job.concurrency)
 		};

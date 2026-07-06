@@ -1,7 +1,9 @@
+import Link from 'next/link';
 import type {
 	PublicHistoryArchiveScanLogEntry,
 	PublicHistoryArchiveScanLogError
 } from '../../api/types';
+import { getArchiveScanDetailPath } from '../../domain/archive-scan-routes';
 import { formatDateTime } from '../../format/formatters';
 import { scanLogIsActive } from '../../domain/history-archive';
 
@@ -35,6 +37,14 @@ export function ScanLogDetails({
 					<dt>Archive</dt>
 					<dd>
 						<ArchiveTarget url={entry.url} />
+					</dd>
+				</div>
+				<div>
+					<dt>Archive detail</dt>
+					<dd>
+						<Link href={getArchiveScanDetailPath(entry.url)}>
+							Open scan detail
+						</Link>
 					</dd>
 				</div>
 				<div>

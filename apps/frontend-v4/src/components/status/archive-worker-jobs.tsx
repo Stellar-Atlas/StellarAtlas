@@ -1,9 +1,11 @@
+import Link from 'next/link';
 import type {
 	PublicArchiveScanWorker,
 	PublicArchiveScanWorkerStatus,
 	PublicArchiveScanWorkers,
 	PublicStatusLevel
 } from '@api/types';
+import { getArchiveScanDetailPath } from '@domain/archive-scan-routes';
 import { formatDateTime, formatInteger } from '@format/formatters';
 import { StatusPill } from './status-ui';
 
@@ -123,6 +125,14 @@ function ArchiveWorkerJobRow({
 				<div>
 					<dt>Range</dt>
 					<dd>{formatLedgerRange(worker)}</dd>
+				</div>
+				<div>
+					<dt>Archive detail</dt>
+					<dd>
+						<Link href={getArchiveScanDetailPath(worker.archiveUrl)}>
+							Open scan detail
+						</Link>
+					</dd>
 				</div>
 				<div>
 					<dt>Latest scanned</dt>

@@ -69,6 +69,52 @@ describe('TypeOrmParsedLedgerHeaderRepository', () => {
 
 		expect(repository.createQueryBuilder).not.toHaveBeenCalled();
 	});
+
+	it('should read a parsed ledger header watermark', async () => {
+		const repository = {
+			find: jest
+				.fn()
+				.mockResolvedValueOnce([{ ledgerSequence: 64 }])
+				.mockResolvedValueOnce([
+					{
+						lastSeenAt: new Date('2026-07-06T00:00:00.000Z'),
+						ledgerHeaderHash: 'latest-header-hash',
+						ledgerSequence: 128
+					}
+				]),
+			query: jest
+				.fn()
+				.mockResolvedValueOnce([{ parsedLedgerCount: '2' }])
+				.mockResolvedValueOnce([{ sourceArchiveCount: '1' }])
+		} as unknown as Repository<ParsedLedgerHeader>;
+		const parsedHeaderRepository = new TypeOrmParsedLedgerHeaderRepository(
+			repository
+		);
+
+		await expect(parsedHeaderRepository.getWatermark()).resolves.toEqual({
+			earliestLedgerSequence: 64,
+			latestLedgerHeaderHash: 'latest-header-hash',
+			latestLedgerSequence: 128,
+			latestObservedAt: new Date('2026-07-06T00:00:00.000Z'),
+			parsedLedgerCount: 2,
+			sourceArchiveCount: 1
+		});
+		expect(repository.query).toHaveBeenCalledTimes(2);
+		expect(repository.find).toHaveBeenNthCalledWith(1, {
+			order: { ledgerSequence: 'ASC' },
+			select: { ledgerSequence: true },
+			take: 1
+		});
+		expect(repository.find).toHaveBeenNthCalledWith(2, {
+			order: { ledgerSequence: 'DESC', lastSeenAt: 'DESC' },
+			select: {
+				lastSeenAt: true,
+				ledgerHeaderHash: true,
+				ledgerSequence: true
+			},
+			take: 1
+		});
+	});
 });
 
 function createInsertBuilder() {

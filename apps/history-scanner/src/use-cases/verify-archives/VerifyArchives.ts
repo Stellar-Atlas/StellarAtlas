@@ -1,4 +1,7 @@
-import { Scanner } from '../../domain/scanner/Scanner.js';
+import {
+	Scanner,
+	type ScanProgressReport
+} from '../../domain/scanner/Scanner.js';
 import type { ScanCoordinatorService } from '../../domain/scan/ScanCoordinatorService.js';
 import type { ExceptionLogger } from 'exception-logger';
 import { mapUnknownToError } from 'shared';
@@ -13,7 +16,6 @@ import { ScanJobDTO } from 'history-scanner-dto';
 import { CoordinatorParsedHistorySink } from '../../infrastructure/services/CoordinatorParsedHistorySink.js';
 import { ScanErrorType } from '../../domain/scan/ScanError.js';
 import type { ScanJobProgressDTO } from '../../domain/scan/ScanCoordinatorService.js';
-import type { ScanSettings } from '../../domain/scan/ScanSettings.js';
 
 @injectable()
 export class VerifyArchives {
@@ -86,7 +88,10 @@ export class VerifyArchives {
 		}
 
 		if (scanJobResult.value.remoteId !== null) {
-			this.activeScanJobs.set(scanJobResult.value.remoteId, scanJobResult.value);
+			this.activeScanJobs.set(
+				scanJobResult.value.remoteId,
+				scanJobResult.value
+			);
 		}
 		await this.checkIn('in_progress');
 		await this.touchScanJob(scanJobResult.value);
@@ -118,13 +123,14 @@ export class VerifyArchives {
 			new Date(),
 			scanJob,
 			parsedHistorySink,
-			async (settings) => {
-				await this.touchScanJob(scanJob, this.mapSettingsToProgress(settings));
+			async (progress) => {
+				await this.touchScanJob(scanJob, this.mapProgressToDTO(progress));
 			}
 		);
 		await parsedHistorySink?.flush();
 		if (this.shouldRetryWorkerOnlyScan(scan)) {
-			if (scan.error !== null) this.exceptionLogger.captureException(scan.error);
+			if (scan.error !== null)
+				this.exceptionLogger.captureException(scan.error);
 			return false;
 		}
 		if (persist) return await this.persist(scan);
@@ -162,14 +168,32 @@ export class VerifyArchives {
 		}
 	}
 
-	private mapSettingsToProgress(settings: ScanSettings): ScanJobProgressDTO {
-		return {
-			concurrency: settings.concurrency,
-			fromLedger: settings.fromLedger,
-			toLedger: settings.toLedger,
-			latestScannedLedger: settings.latestScannedLedger,
-			latestScannedLedgerHeaderHash: settings.latestScannedLedgerHeaderHash
-		};
+	private mapProgressToDTO(progress: ScanProgressReport): ScanJobProgressDTO {
+		const dto: {
+			-readonly [Key in keyof ScanJobProgressDTO]: ScanJobProgressDTO[Key];
+		} = {};
+		if (progress.concurrency !== undefined) {
+			dto.concurrency = progress.concurrency;
+		}
+		if (progress.currentRangeFromLedger !== undefined) {
+			dto.currentRangeFromLedger = progress.currentRangeFromLedger;
+		}
+		if (progress.currentRangeToLedger !== undefined) {
+			dto.currentRangeToLedger = progress.currentRangeToLedger;
+		}
+		if (progress.fromLedger !== undefined) dto.fromLedger = progress.fromLedger;
+		if (progress.latestAttemptedLedger !== undefined) {
+			dto.latestAttemptedLedger = progress.latestAttemptedLedger;
+		}
+		if (progress.latestScannedLedger !== undefined) {
+			dto.latestScannedLedger = progress.latestScannedLedger;
+		}
+		if (progress.latestScannedLedgerHeaderHash !== undefined) {
+			dto.latestScannedLedgerHeaderHash =
+				progress.latestScannedLedgerHeaderHash;
+		}
+		if (progress.toLedger !== undefined) dto.toLedger = progress.toLedger;
+		return dto;
 	}
 
 	private async releaseScanJob(scanJob: ScanJob): Promise<void> {

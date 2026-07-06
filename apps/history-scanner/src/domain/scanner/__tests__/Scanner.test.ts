@@ -122,6 +122,67 @@ it('should continue scanning after range errors without advancing verified ledge
 	expect(scan.latestScannedLedgerHeaderHash).toEqual(null);
 });
 
+it('should report attempted range progress separately from verified progress', async () => {
+	const rangeScanner = mock<RangeScanner>();
+	const firstError = new ScanError(
+		ScanErrorType.TYPE_VERIFICATION,
+		'first-url',
+		'first-message'
+	);
+	rangeScanner.scan
+		.mockResolvedValueOnce(
+			ok({
+				latestLedgerHeader: { ledger: 100, hash: 'ledger_hash_100' },
+				scannedBucketHashes: new Set(['a']),
+				verifiedBucketHashes: new Set(['a']),
+				errors: [firstError]
+			})
+		)
+		.mockResolvedValueOnce(
+			ok({
+				latestLedgerHeader: { ledger: 200, hash: 'ledger_hash_200' },
+				scannedBucketHashes: new Set(['a', 'b']),
+				verifiedBucketHashes: new Set(['a', 'b']),
+				errors: []
+			})
+		);
+	const scanner = getScanner(rangeScanner);
+	const progressReports: unknown[] = [];
+
+	const scanJob = ScanJob.newScanChain(createDummyHistoryBaseUrl(), 0, 200, 1);
+	const scan = await scanner.perform(
+		new Date(),
+		scanJob,
+		undefined,
+		async (progress) => {
+			progressReports.push(progress);
+		}
+	);
+
+	expect(scan.latestScannedLedger).toEqual(0);
+	expect(progressReports).toEqual([
+		{
+			concurrency: 1,
+			fromLedger: 0,
+			toLedger: 200,
+			latestScannedLedger: 0,
+			latestScannedLedgerHeaderHash: null
+		},
+		{ currentRangeFromLedger: 0, currentRangeToLedger: 100 },
+		{
+			currentRangeFromLedger: 0,
+			currentRangeToLedger: 100,
+			latestAttemptedLedger: 100
+		},
+		{ currentRangeFromLedger: 100, currentRangeToLedger: 200 },
+		{
+			currentRangeFromLedger: 100,
+			currentRangeToLedger: 200,
+			latestAttemptedLedger: 200
+		}
+	]);
+});
+
 it('should stop scanning ranges after archive access is denied', async () => {
 	const rangeScanner = mock<RangeScanner>();
 	const accessDeniedError = new ScanError(

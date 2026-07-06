@@ -33,6 +33,9 @@ describe('GetArchiveScanWorkers', () => {
 			99,
 			50
 		);
+		activeJob.latestAttemptedLedger = 42;
+		activeJob.currentRangeFromLedger = 32;
+		activeJob.currentRangeToLedger = 64;
 		activeJob.status = 'TAKEN';
 		activeJob.createdAt = new Date('2026-07-03T11:00:00.000Z');
 		activeJob.claimedAt = new Date('2026-07-03T11:30:00.000Z');
@@ -87,7 +90,10 @@ describe('GetArchiveScanWorkers', () => {
 					lastHeartbeatAt: '2026-07-03T11:00:00.000Z',
 					heartbeatAgeMs: 3600000,
 					fromLedger: 0,
+					currentRangeFromLedger: null,
+					currentRangeToLedger: null,
 					toLedger: null,
+					latestAttemptedLedger: null,
 					latestScannedLedger: 0,
 					concurrency: 2
 				},
@@ -98,7 +104,10 @@ describe('GetArchiveScanWorkers', () => {
 					lastHeartbeatAt: '2026-07-03T11:45:00.000Z',
 					heartbeatAgeMs: 900000,
 					fromLedger: 11,
+					currentRangeFromLedger: 32,
+					currentRangeToLedger: 64,
 					toLedger: 99,
+					latestAttemptedLedger: 42,
 					latestScannedLedger: 10,
 					concurrency: 24
 				},
@@ -109,7 +118,10 @@ describe('GetArchiveScanWorkers', () => {
 					lastHeartbeatAt: '2026-07-03T11:50:00.000Z',
 					heartbeatAgeMs: 600000,
 					fromLedger: 0,
+					currentRangeFromLedger: null,
+					currentRangeToLedger: null,
 					toLedger: null,
+					latestAttemptedLedger: null,
 					latestScannedLedger: 0,
 					concurrency: null
 				}

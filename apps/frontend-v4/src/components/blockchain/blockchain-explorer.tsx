@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import {
 	getExplorerRecentTransactions,
+	getExplorerLocalReadModel,
 	getExplorerTransactionOperations,
 	lookupExplorerContract,
 	searchExplorer,
@@ -10,6 +11,7 @@ import {
 	searchExplorerOperations,
 	type ExplorerAssetsResult,
 	type ExplorerContractResult,
+	type ExplorerLocalReadModelResult,
 	type ExplorerOperationsResult,
 	type ExplorerSearchResult,
 	type ExplorerTransactionsResult
@@ -27,6 +29,7 @@ import {
 	SearchResultView,
 	toDateInputValue
 } from './blockchain-explorer-results';
+import { ExplorerLocalReadModelWatermark } from './explorer-local-read-model-watermark';
 
 const searchTypeOptions: readonly PublicExplorerSearchType[] = [
 	'auto',
@@ -67,6 +70,12 @@ const initialTransactions: ExplorerTransactionsResult = {
 	transactions: null
 };
 
+const initialLocalReadModel: ExplorerLocalReadModelResult = {
+	message: null,
+	readModel: null,
+	status: 'invalid'
+};
+
 export function BlockchainExplorer(): React.JSX.Element {
 	const [searchQuery, setSearchQuery] = useState('');
 	const [searchType, setSearchType] =
@@ -81,6 +90,7 @@ export function BlockchainExplorer(): React.JSX.Element {
 	const [contractId, setContractId] = useState('');
 	const [contractResult, setContractResult] = useState(initialContract);
 	const [transactionFeed, setTransactionFeed] = useState(initialTransactions);
+	const [localReadModel, setLocalReadModel] = useState(initialLocalReadModel);
 	const [transactionOperations, setTransactionOperations] =
 		useState(initialOperations);
 	const [loading, setLoading] = useState<string | null>(null);
@@ -123,6 +133,7 @@ export function BlockchainExplorer(): React.JSX.Element {
 	};
 
 	useEffect(() => {
+		void getExplorerLocalReadModel().then(setLocalReadModel);
 		loadRecentTransactions();
 	}, []);
 
@@ -157,6 +168,8 @@ export function BlockchainExplorer(): React.JSX.Element {
 
 	return (
 		<section className="blockchain-explorer-workspace">
+			<ExplorerLocalReadModelWatermark result={localReadModel} />
+
 			<section className="explorer-panel explorer-primary">
 				<div className="panel-heading">
 					<div>

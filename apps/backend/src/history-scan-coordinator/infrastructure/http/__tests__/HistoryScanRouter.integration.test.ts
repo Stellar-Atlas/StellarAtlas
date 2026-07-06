@@ -330,7 +330,10 @@ describe('HistoryScanRouter.integration', () => {
 			const remoteId = randomUUID();
 			const progress = {
 				concurrency: 12,
+				currentRangeFromLedger: 64,
+				currentRangeToLedger: 96,
 				fromLedger: 64,
+				latestAttemptedLedger: 96,
 				toLedger: 128,
 				latestScannedLedger: 63,
 				latestScannedLedgerHeaderHash: 'hash'

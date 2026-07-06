@@ -63,10 +63,13 @@ export interface PublicHistoryArchiveScanLogEntry {
 	readonly endDate: string;
 	readonly errors: readonly PublicHistoryArchiveScanLogError[];
 	readonly fromLedger: number;
+	readonly currentRangeFromLedger?: number | null;
+	readonly currentRangeToLedger?: number | null;
 	readonly hasArchiveVerificationError?: boolean;
 	readonly hasError: boolean;
 	readonly hasWorkerIssue?: boolean;
 	readonly isSlowArchive: boolean;
+	readonly latestAttemptedLedger?: number | null;
 	readonly latestScannedLedger: number;
 	readonly latestVerifiedLedger: number;
 	readonly startDate: string;
@@ -349,9 +352,12 @@ export interface PublicArchiveScanWorker {
 	readonly archiveUrl: string;
 	readonly claimedAt: string;
 	readonly concurrency: number | null;
+	readonly currentRangeFromLedger?: number | null;
+	readonly currentRangeToLedger?: number | null;
 	readonly fromLedger: number;
 	readonly heartbeatAgeMs: number;
 	readonly lastHeartbeatAt: string;
+	readonly latestAttemptedLedger?: number | null;
 	readonly latestScannedLedger: number;
 	readonly status: PublicArchiveScanWorkerStatus;
 	readonly toLedger: number | null;

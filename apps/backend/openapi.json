@@ -439,6 +439,27 @@
 				}
 			}
 		},
+		"/v1/explorer/local-read-model": {
+			"get": {
+				"summary": "Get local explorer read-model coverage",
+				"description": "Reports StellarAtlas-owned parsed ledger-header coverage and explicitly marks transaction, asset, operation, and contract indexes as not ready until local full-history ETL is complete.",
+				"tags": ["Explorer", "Full History"],
+				"operationId": "getExplorerLocalReadModel",
+				"responses": {
+					"200": {
+						"description": "Local explorer read-model coverage",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/ExplorerLocalReadModel"
+								}
+							}
+						}
+					},
+					"502": { "description": "Explorer local read model unavailable" }
+				}
+			}
+		},
 		"/v1/explorer/search": {
 			"get": {
 				"summary": "Search the Horizon-backed explorer helpers",
@@ -2099,6 +2120,7 @@
 													"fromLedger",
 													"hasArchiveVerificationError",
 													"hasWorkerIssue",
+													"latestAttemptedLedger",
 													"latestScannedLedger",
 													"latestVerifiedLedger",
 													"scanStatus",
@@ -2143,6 +2165,11 @@
 														"type": "boolean"
 													},
 													"hasWorkerIssue": { "type": "boolean" },
+													"latestAttemptedLedger": {
+														"type": "integer",
+														"minimum": 0,
+														"nullable": true
+													},
 													"latestScannedLedger": {
 														"type": "integer",
 														"minimum": 0
@@ -3603,7 +3630,10 @@
 													"lastHeartbeatAt",
 													"heartbeatAgeMs",
 													"fromLedger",
+													"currentRangeFromLedger",
+													"currentRangeToLedger",
 													"toLedger",
+													"latestAttemptedLedger",
 													"latestScannedLedger",
 													"concurrency"
 												],
@@ -3611,7 +3641,7 @@
 													"archiveUrl": { "type": "string", "format": "uri" },
 													"status": {
 														"type": "string",
-														"enum": ["scanning", "stale"]
+														"enum": ["scanning", "starting", "stale"]
 													},
 													"claimedAt": {
 														"type": "string",
@@ -3626,7 +3656,22 @@
 														"minimum": 0
 													},
 													"fromLedger": { "type": "integer", "minimum": 0 },
+													"currentRangeFromLedger": {
+														"type": "integer",
+														"minimum": 0,
+														"nullable": true
+													},
+													"currentRangeToLedger": {
+														"type": "integer",
+														"minimum": 0,
+														"nullable": true
+													},
 													"toLedger": {
+														"type": "integer",
+														"minimum": 0,
+														"nullable": true
+													},
+													"latestAttemptedLedger": {
 														"type": "integer",
 														"minimum": 0,
 														"nullable": true
@@ -3635,7 +3680,11 @@
 														"type": "integer",
 														"minimum": 0
 													},
-													"concurrency": { "type": "integer", "minimum": 0 }
+													"concurrency": {
+														"type": "integer",
+														"minimum": 0,
+														"nullable": true
+													}
 												}
 											}
 										}
@@ -3679,8 +3728,11 @@
 											"hasArchiveVerificationError",
 											"hasWorkerIssue",
 											"latestVerifiedLedger",
+											"latestAttemptedLedger",
 											"latestScannedLedger",
 											"fromLedger",
+											"currentRangeFromLedger",
+											"currentRangeToLedger",
 											"toLedger",
 											"updatedAt"
 										],
@@ -3688,7 +3740,13 @@
 											"url": { "type": "string", "format": "uri" },
 											"status": {
 												"type": "string",
-												"enum": ["completed", "queued", "scanning", "stale"]
+												"enum": [
+													"completed",
+													"queued",
+													"scanning",
+													"starting",
+													"stale"
+												]
 											},
 											"errors": {
 												"type": "array",
@@ -3705,8 +3763,20 @@
 											"hasArchiveVerificationError": { "type": "boolean" },
 											"hasWorkerIssue": { "type": "boolean" },
 											"latestVerifiedLedger": { "type": "integer" },
+											"latestAttemptedLedger": {
+												"type": "integer",
+												"nullable": true
+											},
 											"latestScannedLedger": { "type": "integer" },
 											"fromLedger": { "type": "integer" },
+											"currentRangeFromLedger": {
+												"type": "integer",
+												"nullable": true
+											},
+											"currentRangeToLedger": {
+												"type": "integer",
+												"nullable": true
+											},
 											"toLedger": { "type": "integer", "nullable": true },
 											"updatedAt": { "type": "string", "format": "date-time" }
 										}
@@ -7090,6 +7160,73 @@
 					},
 					"source": { "type": "string", "enum": ["horizon"] },
 					"truncated": { "type": "boolean" }
+				}
+			},
+			"ExplorerLocalReadModel": {
+				"type": "object",
+				"required": [
+					"generatedAt",
+					"indexes",
+					"parsedLedgerHeaders",
+					"source",
+					"transactions"
+				],
+				"properties": {
+					"generatedAt": { "type": "string", "format": "date-time" },
+					"indexes": {
+						"type": "object",
+						"required": [
+							"assetIndexReady",
+							"contractIndexReady",
+							"operationIndexReady",
+							"transactionIndexReady"
+						],
+						"properties": {
+							"assetIndexReady": { "type": "boolean", "enum": [false] },
+							"contractIndexReady": { "type": "boolean", "enum": [false] },
+							"operationIndexReady": { "type": "boolean", "enum": [false] },
+							"transactionIndexReady": { "type": "boolean", "enum": [false] }
+						}
+					},
+					"parsedLedgerHeaders": {
+						"type": "object",
+						"required": [
+							"earliestParsedLedger",
+							"latestObservedAt",
+							"latestParsedLedger",
+							"latestParsedLedgerHash",
+							"parsedLedgerCount",
+							"sourceArchiveCount"
+						],
+						"properties": {
+							"earliestParsedLedger": { "type": "string", "nullable": true },
+							"latestObservedAt": {
+								"type": "string",
+								"format": "date-time",
+								"nullable": true
+							},
+							"latestParsedLedger": { "type": "string", "nullable": true },
+							"latestParsedLedgerHash": {
+								"type": "string",
+								"nullable": true
+							},
+							"parsedLedgerCount": { "type": "integer", "minimum": 0 },
+							"sourceArchiveCount": { "type": "integer", "minimum": 0 }
+						}
+					},
+					"source": {
+						"type": "string",
+						"enum": ["parsed_ledger_header_repository"]
+					},
+					"transactions": {
+						"type": "object",
+						"required": ["localCoverage", "message", "source"],
+						"properties": {
+							"localCoverage": { "type": "boolean", "enum": [false] },
+							"message": { "type": "string" },
+							"source": { "type": "string", "enum": ["horizon_fallback"] }
+						}
+					}
 				}
 			},
 			"ExplorerLedger": {

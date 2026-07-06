@@ -54,7 +54,7 @@ export const getApiBaseUrl = (): string => {
 	return baseUrl.endsWith('/') ? baseUrl.slice(0, -1) : baseUrl;
 };
 
-interface FetchOptions {
+export interface FetchOptions {
 	at?: Date;
 	cache?: 'no-store';
 	revalidate?: number;
@@ -152,7 +152,7 @@ const withTags = <Options extends FetchOptions | ScpStatementFetchOptions>(
 	} as Options;
 };
 
-const fetchJson = async <Payload>(
+export const fetchJson = async <Payload>(
 	path: string,
 	options: FetchOptions = {}
 ): Promise<Payload> => {

@@ -12,6 +12,7 @@ import {
 	fetchLedgerTransactions,
 	fetchTransactionByHash
 } from '../../api/client';
+import { fetchExplorerLocalReadModel } from '../../api/explorer-client';
 import type {
 	PublicExplorerAssets,
 	PublicExplorerContract,
@@ -25,6 +26,7 @@ import type {
 	PublicRecentTransactions,
 	PublicTransactionLookup
 } from '../../api/types';
+import type { PublicExplorerLocalReadModel } from '../../api/explorer-types';
 import { normalizeTransactionHash } from '../../domain/transaction-hash';
 
 export type TransactionLookupStatus =
@@ -66,6 +68,12 @@ export interface ExplorerTransactionsResult {
 	readonly message: string | null;
 	readonly status: ExplorerActionStatus;
 	readonly transactions: PublicRecentTransactions | null;
+}
+
+export interface ExplorerLocalReadModelResult {
+	readonly message: string | null;
+	readonly readModel: PublicExplorerLocalReadModel | null;
+	readonly status: ExplorerActionStatus;
 }
 
 export async function getHistoryArchiveScanLogs(
@@ -208,6 +216,22 @@ export async function getExplorerRecentTransactions(
 			message: 'Transaction feed unavailable',
 			status: 'unavailable',
 			transactions: null
+		};
+	}
+}
+
+export async function getExplorerLocalReadModel(): Promise<ExplorerLocalReadModelResult> {
+	try {
+		return {
+			message: null,
+			readModel: await fetchExplorerLocalReadModel({ cache: 'no-store' }),
+			status: 'loaded'
+		};
+	} catch {
+		return {
+			message: 'Explorer local read model unavailable',
+			readModel: null,
+			status: 'unavailable'
 		};
 	}
 }

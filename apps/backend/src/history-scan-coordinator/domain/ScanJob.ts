@@ -40,6 +40,15 @@ export class ScanJob {
 	@Column({ type: 'integer', nullable: true })
 	public concurrency: number | null;
 
+	@Column({ type: 'integer', nullable: true })
+	public latestAttemptedLedger: number | null;
+
+	@Column({ type: 'integer', nullable: true })
+	public currentRangeFromLedger: number | null;
+
+	@Column({ type: 'integer', nullable: true })
+	public currentRangeToLedger: number | null;
+
 	@Column({ type: 'uuid', nullable: true })
 	public claimedByCommunityScannerId: string | null;
 
@@ -65,7 +74,10 @@ export class ScanJob {
 		concurrency: number | null = null,
 		remoteId: string = randomUUID(),
 		claimedByCommunityScannerId: string | null = null,
-		claimedAt: Date | null = null
+		claimedAt: Date | null = null,
+		latestAttemptedLedger: number | null = null,
+		currentRangeFromLedger: number | null = null,
+		currentRangeToLedger: number | null = null
 	) {
 		this.remoteId = remoteId;
 		this.url = url;
@@ -75,6 +87,9 @@ export class ScanJob {
 		this.fromLedger = fromLedger;
 		this.toLedger = toLedger;
 		this.concurrency = concurrency;
+		this.latestAttemptedLedger = latestAttemptedLedger;
+		this.currentRangeFromLedger = currentRangeFromLedger;
+		this.currentRangeToLedger = currentRangeToLedger;
 		this.claimedByCommunityScannerId = claimedByCommunityScannerId;
 		this.claimedAt = claimedAt;
 		this.status = 'PENDING';

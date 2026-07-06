@@ -46,6 +46,9 @@ describe('GetScanLogs', () => {
 			50,
 			'6e2a0f88-6b73-44b0-8fd7-e061bc846ac2'
 		);
+		activeJob.latestAttemptedLedger = 58_584_000;
+		activeJob.currentRangeFromLedger = 58_583_680;
+		activeJob.currentRangeToLedger = 58_584_000;
 		activeJob.status = 'TAKEN';
 		activeJob.createdAt = new Date(now - 60_000);
 		activeJob.updatedAt = new Date(now - 30_000);
@@ -104,6 +107,9 @@ describe('GetScanLogs', () => {
 			'completed'
 		]);
 		expect(logs[0].hasWorkerIssue).toBe(false);
+		expect(logs[0].latestAttemptedLedger).toBe(58_584_000);
+		expect(logs[0].currentRangeFromLedger).toBe(58_583_680);
+		expect(logs[0].currentRangeToLedger).toBe(58_584_000);
 		expect(logs[1].hasWorkerIssue).toBe(false);
 		expect(logs[1].hasArchiveVerificationError).toBe(false);
 		expect(logs[1].errors).toEqual([]);

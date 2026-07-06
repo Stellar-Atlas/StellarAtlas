@@ -23,10 +23,13 @@ export interface HistoryArchiveScanLogEntryDTO {
 	readonly endDate: Date;
 	readonly errors: readonly HistoryArchiveScanLogErrorDTO[];
 	readonly fromLedger: number;
+	readonly currentRangeFromLedger: number | null;
+	readonly currentRangeToLedger: number | null;
 	readonly hasArchiveVerificationError: boolean;
 	readonly hasError: boolean;
 	readonly hasWorkerIssue: boolean;
 	readonly isSlowArchive: boolean;
+	readonly latestAttemptedLedger: number | null;
 	readonly latestScannedLedger: number;
 	readonly latestVerifiedLedger: number;
 	readonly startDate: Date;
@@ -112,10 +115,13 @@ export class GetScanLogs {
 			endDate: updatedAt,
 			errors: [],
 			fromLedger,
+			currentRangeFromLedger: job.currentRangeFromLedger,
+			currentRangeToLedger: job.currentRangeToLedger,
 			hasArchiveVerificationError: false,
 			hasError: false,
 			hasWorkerIssue: false,
 			isSlowArchive: false,
+			latestAttemptedLedger: job.latestAttemptedLedger,
 			latestScannedLedger: job.latestScannedLedger,
 			latestVerifiedLedger: job.latestScannedLedger,
 			startDate,
@@ -164,10 +170,13 @@ export class GetScanLogs {
 			endDate: scan.endDate,
 			errors: archiveErrors.map(mapScanErrorToPublicDTO),
 			fromLedger: scan.fromLedger,
+			currentRangeFromLedger: null,
+			currentRangeToLedger: null,
 			hasArchiveVerificationError: scan.hasArchiveVerificationError(),
 			hasError: archiveErrors.length > 0,
 			hasWorkerIssue: false,
 			isSlowArchive: scan.isSlowArchive ?? false,
+			latestAttemptedLedger: scan.latestScannedLedger,
 			latestScannedLedger: scan.latestScannedLedger,
 			latestVerifiedLedger: scan.latestVerifiedLedger,
 			startDate: scan.startDate,

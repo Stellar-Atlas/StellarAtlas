@@ -81,9 +81,11 @@ export const scanDtoValidators = [
 	body('evidence.*').custom((value) => {
 		return isScanEvidenceDTO(value);
 	}),
-	body('archiveMetadata').optional().custom((value) => {
-		return isArchiveMetadataDTO(value);
-	})
+	body('archiveMetadata')
+		.optional()
+		.custom((value) => {
+			return isArchiveMetadataDTO(value);
+		})
 ];
 
 export function parseValidatedScanDto(
@@ -118,7 +120,22 @@ export function parseScanJobProgressUpdate(
 
 	const progress: MutableScanJobProgressUpdate = {};
 	const concurrency = readOptionalInteger(body, 'concurrency', 1);
+	const currentRangeFromLedger = readOptionalNullableInteger(
+		body,
+		'currentRangeFromLedger',
+		0
+	);
+	const currentRangeToLedger = readOptionalNullableInteger(
+		body,
+		'currentRangeToLedger',
+		0
+	);
 	const fromLedger = readOptionalInteger(body, 'fromLedger', 0);
+	const latestAttemptedLedger = readOptionalInteger(
+		body,
+		'latestAttemptedLedger',
+		0
+	);
 	const toLedger = readOptionalNullableInteger(body, 'toLedger', 0);
 	const latestScannedLedger = readOptionalInteger(
 		body,
@@ -131,7 +148,10 @@ export function parseScanJobProgressUpdate(
 	);
 	const invalidField = [
 		concurrency,
+		currentRangeFromLedger,
+		currentRangeToLedger,
 		fromLedger,
+		latestAttemptedLedger,
 		toLedger,
 		latestScannedLedger,
 		latestScannedLedgerHeaderHash
@@ -144,8 +164,26 @@ export function parseScanJobProgressUpdate(
 	if (concurrency !== undefined && !(concurrency instanceof Error)) {
 		progress.concurrency = concurrency;
 	}
+	if (
+		currentRangeFromLedger !== undefined &&
+		!(currentRangeFromLedger instanceof Error)
+	) {
+		progress.currentRangeFromLedger = currentRangeFromLedger;
+	}
+	if (
+		currentRangeToLedger !== undefined &&
+		!(currentRangeToLedger instanceof Error)
+	) {
+		progress.currentRangeToLedger = currentRangeToLedger;
+	}
 	if (fromLedger !== undefined && !(fromLedger instanceof Error)) {
 		progress.fromLedger = fromLedger;
+	}
+	if (
+		latestAttemptedLedger !== undefined &&
+		!(latestAttemptedLedger instanceof Error)
+	) {
+		progress.latestAttemptedLedger = latestAttemptedLedger;
 	}
 	if (toLedger !== undefined && !(toLedger instanceof Error)) {
 		progress.toLedger = toLedger;
@@ -188,7 +226,11 @@ function readOptionalInteger(
 ): number | undefined | Error {
 	const value = body[field];
 	if (value === undefined) return undefined;
-	if (typeof value === 'number' && Number.isInteger(value) && value >= minimum) {
+	if (
+		typeof value === 'number' &&
+		Number.isInteger(value) &&
+		value >= minimum
+	) {
 		return value;
 	}
 
@@ -205,7 +247,11 @@ function readOptionalNullableInteger(
 	const value = body[field];
 	if (value === undefined) return undefined;
 	if (value === null) return null;
-	if (typeof value === 'number' && Number.isInteger(value) && value >= minimum) {
+	if (
+		typeof value === 'number' &&
+		Number.isInteger(value) &&
+		value >= minimum
+	) {
 		return value;
 	}
 

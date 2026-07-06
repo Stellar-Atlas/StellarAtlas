@@ -140,24 +140,26 @@ describe('VerifyArchives', () => {
 	it('should report scan settings after they are determined', async () => {
 		scanCoordinatorMock.getScanJob.mockResolvedValue(ok(mockScanJobDTO));
 		jobMonitorMock.checkIn.mockResolvedValue(ok(undefined));
-		scannerMock.perform.mockImplementation(async (_time, scanJob, _sink, report) => {
-			await report?.({
-				fromLedger: 64,
-				toLedger: 128,
-				concurrency: 12,
-				isSlowArchive: false,
-				latestScannedLedger: 63,
-				latestScannedLedgerHeaderHash: 'hash'
-			});
-			return new Scan(
-				new Date(),
-				new Date(),
-				new Date(),
-				Url.create(scanJob.url.value)._unsafeUnwrap(),
-				64,
-				128
-			);
-		});
+		scannerMock.perform.mockImplementation(
+			async (_time, scanJob, _sink, report) => {
+				await report?.({
+					fromLedger: 64,
+					toLedger: 128,
+					concurrency: 12,
+					isSlowArchive: false,
+					latestScannedLedger: 63,
+					latestScannedLedgerHeaderHash: 'hash'
+				});
+				return new Scan(
+					new Date(),
+					new Date(),
+					new Date(),
+					Url.create(scanJob.url.value)._unsafeUnwrap(),
+					64,
+					128
+				);
+			}
+		);
 
 		await verifyArchives.execute({ persist: false, loop: false });
 
@@ -167,6 +169,44 @@ describe('VerifyArchives', () => {
 			toLedger: 128,
 			latestScannedLedger: 63,
 			latestScannedLedgerHeaderHash: 'hash'
+		});
+	});
+
+	it('should forward attempted range progress from the scanner', async () => {
+		scanCoordinatorMock.getScanJob.mockResolvedValue(ok(mockScanJobDTO));
+		jobMonitorMock.checkIn.mockResolvedValue(ok(undefined));
+		scannerMock.perform.mockImplementation(
+			async (_time, scanJob, _sink, report) => {
+				await report?.({
+					currentRangeFromLedger: 64,
+					currentRangeToLedger: 128
+				});
+				await report?.({
+					currentRangeFromLedger: 64,
+					currentRangeToLedger: 128,
+					latestAttemptedLedger: 128
+				});
+				return new Scan(
+					new Date(),
+					new Date(),
+					new Date(),
+					Url.create(scanJob.url.value)._unsafeUnwrap(),
+					64,
+					128
+				);
+			}
+		);
+
+		await verifyArchives.execute({ persist: false, loop: false });
+
+		expect(scanCoordinatorMock.touchScanJob).toHaveBeenCalledWith('test', {
+			currentRangeFromLedger: 64,
+			currentRangeToLedger: 128
+		});
+		expect(scanCoordinatorMock.touchScanJob).toHaveBeenCalledWith('test', {
+			currentRangeFromLedger: 64,
+			currentRangeToLedger: 128,
+			latestAttemptedLedger: 128
 		});
 	});
 

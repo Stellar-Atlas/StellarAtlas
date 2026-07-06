@@ -75,16 +75,19 @@ async function insertActiveJobIfIdentityIsNew(
 				"fromLedger",
 				"toLedger",
 				concurrency,
+				"latestAttemptedLedger",
+				"currentRangeFromLedger",
+				"currentRangeToLedger",
 				"claimedByCommunityScannerId",
 				"claimedAt",
 				status
 			)
-			select $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11
+			select $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14
 			where not exists (
 				select 1
 				from history_archive_scan_job_queue existing
 				where existing.status in ('PENDING', 'TAKEN')
-					and lower(regexp_replace(existing.url, '/+$', '')) = $12
+					and lower(regexp_replace(existing.url, '/+$', '')) = $15
 					and existing."fromLedger" is not distinct from $6
 					and existing."toLedger" is not distinct from $7
 			)
@@ -102,6 +105,9 @@ async function insertActiveJobIfIdentityIsNew(
 				job.fromLedger,
 				job.toLedger,
 				job.concurrency,
+				job.latestAttemptedLedger,
+				job.currentRangeFromLedger,
+				job.currentRangeToLedger,
 				job.claimedByCommunityScannerId,
 				job.claimedAt,
 				job.status,

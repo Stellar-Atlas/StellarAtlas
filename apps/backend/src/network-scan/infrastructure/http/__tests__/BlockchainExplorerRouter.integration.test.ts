@@ -7,6 +7,32 @@ const createApp = () => {
 	app.use(
 		'/v1/explorer',
 		blockchainExplorerRouter({
+			getExplorerLocalReadModel: {
+				execute: async () => ({
+					generatedAt: '2026-07-06T00:00:00.000Z',
+					indexes: {
+						assetIndexReady: false,
+						contractIndexReady: false,
+						operationIndexReady: false,
+						transactionIndexReady: false
+					},
+					parsedLedgerHeaders: {
+						earliestParsedLedger: '64',
+						latestObservedAt: '2026-07-06T00:00:00.000Z',
+						latestParsedLedger: '128',
+						latestParsedLedgerHash: 'hash-128',
+						parsedLedgerCount: 2,
+						sourceArchiveCount: 1
+					},
+					source: 'parsed_ledger_header_repository',
+					transactions: {
+						localCoverage: false,
+						message:
+							'Transactions remain Horizon fallback; no StellarAtlas local transaction index is available yet.',
+						source: 'horizon_fallback'
+					}
+				})
+			},
 			horizonUrl: 'https://horizon.example'
 		})
 	);
@@ -47,6 +73,27 @@ describe('BlockchainExplorerRouter.integration', () => {
 						operationCount: 623,
 						sequence: '63335066',
 						source: 'horizon'
+					}
+				});
+			});
+	});
+
+	it('returns local parsed-header read model state without transaction coverage', async () => {
+		await request(createApp())
+			.get('/v1/explorer/local-read-model')
+			.expect(200)
+			.expect('Cache-Control', 'public, max-age=20')
+			.expect((response) => {
+				expect(response.body).toMatchObject({
+					indexes: { transactionIndexReady: false },
+					parsedLedgerHeaders: {
+						latestParsedLedger: '128',
+						latestParsedLedgerHash: 'hash-128'
+					},
+					source: 'parsed_ledger_header_repository',
+					transactions: {
+						localCoverage: false,
+						source: 'horizon_fallback'
 					}
 				});
 			});

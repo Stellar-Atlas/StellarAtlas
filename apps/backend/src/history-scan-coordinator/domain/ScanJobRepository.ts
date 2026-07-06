@@ -16,7 +16,10 @@ export interface ArchiveScanTakenJobsSnapshot {
 
 export interface ScanJobProgressUpdate {
 	readonly concurrency?: number;
+	readonly currentRangeFromLedger?: number | null;
+	readonly currentRangeToLedger?: number | null;
 	readonly fromLedger?: number;
+	readonly latestAttemptedLedger?: number;
 	readonly latestScannedLedger?: number;
 	readonly latestScannedLedgerHeaderHash?: string | null;
 	readonly toLedger?: number | null;

@@ -25,7 +25,20 @@ export interface LedgerHeader {
 	hash?: string;
 }
 
-export type ScanSettingsReporter = (settings: ScanSettings) => Promise<void>;
+export interface ScanProgressReport {
+	readonly concurrency?: number;
+	readonly currentRangeFromLedger?: number | null;
+	readonly currentRangeToLedger?: number | null;
+	readonly fromLedger?: number;
+	readonly latestAttemptedLedger?: number;
+	readonly latestScannedLedger?: number;
+	readonly latestScannedLedgerHeaderHash?: string | null;
+	readonly toLedger?: number | null;
+}
+
+export type ScanProgressReporter = (
+	progress: ScanProgressReport
+) => Promise<void>;
 
 @injectable()
 export class Scanner {
@@ -43,7 +56,7 @@ export class Scanner {
 		time: Date,
 		scanJob: ScanJob,
 		parsedHistorySink: ParsedHistorySink = noopParsedHistorySink,
-		reportSettings?: ScanSettingsReporter
+		reportProgress?: ScanProgressReporter
 	): Promise<Scan> {
 		const scanTimer = Scanner.createTimerLabel('scan');
 		console.time(scanTimer);
@@ -75,12 +88,13 @@ export class Scanner {
 			concurrency: scanSettings.concurrency,
 			isSlowArchive: scanSettings.isSlowArchive
 		});
-		await reportSettings?.(scanSettings);
+		await reportProgress?.(Scanner.mapSettingsToProgress(scanSettings));
 
 		const scanResult = await this.scanInRanges(
 			scanJob.url,
 			scanSettings,
-			parsedHistorySink
+			parsedHistorySink,
+			reportProgress
 		);
 		const scan = scanJob.createScanFromScanResult(
 			time,
@@ -96,7 +110,8 @@ export class Scanner {
 	private async scanInRanges(
 		url: Url,
 		scanSettings: ScanSettings,
-		parsedHistorySink: ParsedHistorySink
+		parsedHistorySink: ParsedHistorySink,
+		reportProgress?: ScanProgressReporter
 	): Promise<ScanResult> {
 		const latestLedgerHeader: LedgerHeader = {
 			ledger: scanSettings.latestScannedLedger,
@@ -123,6 +138,10 @@ export class Scanner {
 				`range_scan:${rangeFromLedger}-${rangeToLedger}`
 			);
 			console.time(rangeTimer);
+			await reportProgress?.({
+				currentRangeFromLedger: rangeFromLedger,
+				currentRangeToLedger: rangeToLedger
+			});
 			const rangeResult = await this.rangeScanner.scan(
 				url,
 				scanSettings.concurrency,
@@ -134,6 +153,11 @@ export class Scanner {
 				parsedHistorySink
 			);
 			console.timeEnd(rangeTimer);
+			await reportProgress?.({
+				currentRangeFromLedger: rangeFromLedger,
+				currentRangeToLedger: rangeToLedger,
+				latestAttemptedLedger: rangeToLedger
+			});
 
 			if (rangeResult.isErr()) {
 				const rangeErrors = this.expandScanError(rangeResult.error);
@@ -212,5 +236,17 @@ export class Scanner {
 		return `${name}:${process.pid}:${Date.now()}:${Math.random()
 			.toString(36)
 			.slice(2)}`;
+	}
+
+	private static mapSettingsToProgress(
+		scanSettings: ScanSettings
+	): ScanProgressReport {
+		return {
+			concurrency: scanSettings.concurrency,
+			fromLedger: scanSettings.fromLedger,
+			toLedger: scanSettings.toLedger,
+			latestScannedLedger: scanSettings.latestScannedLedger,
+			latestScannedLedgerHeaderHash: scanSettings.latestScannedLedgerHeaderHash
+		};
 	}
 }
