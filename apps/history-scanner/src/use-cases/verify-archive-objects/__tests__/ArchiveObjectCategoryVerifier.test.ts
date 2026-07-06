@@ -1,8 +1,9 @@
 import 'reflect-metadata';
 import { mock } from 'jest-mock-extended';
-import { err } from 'neverthrow';
+import { err, ok } from 'neverthrow';
 import { HttpError, type HttpService } from 'http-helper';
 import type { ExceptionLogger } from 'exception-logger';
+import type { Logger } from 'logger';
 import type { HistoryArchiveObjectJobDTO } from '../../../domain/scan/ScanCoordinatorService.js';
 import type { ScanCoordinatorService } from '../../../domain/scan/ScanCoordinatorService.js';
 import { HistoryArchiveStateValidator } from '../../../domain/history-archive/HistoryArchiveStateValidator.js';
@@ -40,9 +41,52 @@ describe('ArchiveObjectCategoryVerifier', () => {
 			});
 		}
 	});
+
+	it('returns checkpoint history archive state facts for checkpoint objects', async () => {
+		const httpService = mock<HttpService>();
+		httpService.get.mockResolvedValue(
+			ok({
+				data: createHistoryArchiveState(),
+				headers: {},
+				status: 200,
+				statusText: 'OK'
+			})
+		);
+		const verifier = new ArchiveObjectCategoryVerifier(
+			httpService,
+			mock<ScanCoordinatorService>(),
+			new HistoryArchiveStateValidator(mock<Logger>()),
+			mock<ExceptionLogger>(),
+			1,
+			() => undefined
+		);
+
+		const result = await verifier.verifyCheckpointState(
+			createObjectJob({
+				objectKey: 'checkpoint-state:0000007f',
+				objectType: 'checkpoint-state',
+				objectUrl:
+					'https://archive.example/history/00/00/00/history-0000007f.json'
+			})
+		);
+
+		expect(result._unsafeUnwrap()).toMatchObject({
+			bytesDownloaded: expect.any(Number),
+			verificationFacts: {
+				checkpointHistoryArchiveState: {
+					stellarHistory: { currentLedger: 127 },
+					stellarHistoryUrl:
+						'https://archive.example/history/00/00/00/history-0000007f.json'
+				}
+			},
+			workerStage: 'verified'
+		});
+	});
 });
 
-function createObjectJob(): HistoryArchiveObjectJobDTO {
+function createObjectJob(
+	overrides: Partial<HistoryArchiveObjectJobDTO> = {}
+): HistoryArchiveObjectJobDTO {
 	return {
 		archiveUrl: 'https://archive.example',
 		bucketHash: null,
@@ -51,6 +95,22 @@ function createObjectJob(): HistoryArchiveObjectJobDTO {
 		objectKey: 'ledger:0000003f',
 		objectType: 'ledger',
 		objectUrl: 'https://archive.example/ledger/00/00/00/ledger-0000003f.xdr.gz',
-		remoteId: 'object-1'
+		remoteId: 'object-1',
+		...overrides
+	};
+}
+
+function createHistoryArchiveState(): Record<string, unknown> {
+	return {
+		currentBuckets: [
+			{
+				curr: '4eae73efaa0ce061441dfe43ffc61c0ed24fcbc59e5ee512d1b60e8da2509655',
+				next: { state: 0 },
+				snap: '0000000000000000000000000000000000000000000000000000000000000000'
+			}
+		],
+		currentLedger: 127,
+		server: 'stellar-core',
+		version: 1
 	};
 }

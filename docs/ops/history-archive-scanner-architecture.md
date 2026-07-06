@@ -113,11 +113,15 @@ Current behavior:
    - current and hot archive buckets referenced by the root state.
 4. The coordinator also schedules a bounded backward page of checkpoint history
    JSON objects from the latest/oldest scheduled checkpoint for the archive
-   root. This is the first discovery cursor; it does not yet enqueue sibling
-   category files or bucket references from each completed checkpoint state.
+   root.
 5. Object workers claim one archive object at a time.
 6. Heartbeats update worker stage and downloaded byte counts.
 7. Completion/failure writes the object row and a compact object event.
+8. When a checkpoint history JSON object verifies, the scanner sends parsed
+   checkpoint history archive state as structured facts. The coordinator then
+   schedules supported sibling objects for that checkpoint: ledger,
+   transactions, results, and bucket objects referenced by the checkpoint
+   state. SCP category files are not scheduled yet.
 
 This is enough to prove that scanner-owned object telemetry works. It is not
 enough to prove an archive is fully verified, because whole-archive discovery
@@ -152,7 +156,8 @@ per archive root/range.
    through the root state's current checkpoint, in bounded batches.
 3. Verify each checkpoint history state object and extract bucket hashes.
 4. Schedule sibling category objects for the checkpoint:
-   ledger, transactions, and results.
+   ledger, transactions, results, and SCP where the network/checkpoint requires
+   SCP archive files.
 5. Schedule bucket objects by bucket hash and archive root, deduplicating stored
    bucket content by bucket hash.
 6. Rotate claims across archive roots and hosts so one archive or host cannot

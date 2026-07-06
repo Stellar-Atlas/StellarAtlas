@@ -2,6 +2,7 @@ import type { ArchiveMetadataDTO } from 'history-scanner-dto';
 import { HistoryArchiveStateSnapshot } from '../../history-archive-state/HistoryArchiveStateSnapshot.js';
 import {
 	buildCheckpointStateDiscoveryObjects,
+	buildCheckpointSiblingObjectsFromState,
 	buildHistoryArchiveObjectsFromState,
 	buildRootHistoryArchiveObject
 } from '../HistoryArchiveObjectBuilder.js';
@@ -70,6 +71,41 @@ describe('HistoryArchiveObjectBuilder', () => {
 			'checkpoint-state:0000003f'
 		]);
 	});
+
+	it('builds checkpoint sibling objects without creating a root state object', () => {
+		const objects = buildCheckpointSiblingObjectsFromState(
+			createSnapshot(createArchiveMetadata(127))
+		);
+
+		expect(objects.map((object) => object.objectKey)).toEqual([
+			'ledger:0000007f',
+			'transactions:0000007f',
+			'results:0000007f',
+			'bucket:4eae73efaa0ce061441dfe43ffc61c0ed24fcbc59e5ee512d1b60e8da2509655'
+		]);
+		expect(objects.map((object) => object.objectType)).not.toContain(
+			'history-archive-state'
+		);
+	});
+
+	it('does not build checkpoint siblings from mismatched checkpoint state', () => {
+		const objects = buildCheckpointSiblingObjectsFromState(
+			createSnapshot(createArchiveMetadata(127)),
+			{ expectedCheckpointLedger: 191 }
+		);
+
+		expect(objects).toEqual([]);
+	});
+
+	it('deduplicates bucket objects found in checkpoint state buckets', () => {
+		const objects = buildCheckpointSiblingObjectsFromState(
+			createSnapshot(createArchiveMetadataWithDuplicateBuckets(127))
+		);
+
+		expect(
+			objects.filter((object) => object.objectType === 'bucket')
+		).toHaveLength(1);
+	});
 });
 
 function createSnapshot(
@@ -100,5 +136,37 @@ function createArchiveMetadata(currentLedger = 63354047): ArchiveMetadataDTO {
 		},
 		stellarHistoryUrl:
 			'https://history.example.com/archive-b/.well-known/stellar-history.json'
+	};
+}
+
+function createArchiveMetadataWithDuplicateBuckets(
+	currentLedger: number
+): ArchiveMetadataDTO {
+	const bucketHash =
+		'4eae73efaa0ce061441dfe43ffc61c0ed24fcbc59e5ee512d1b60e8da2509655';
+
+	return {
+		observedAt: '2026-07-06T14:30:00.000Z',
+		stellarHistory: {
+			currentBuckets: [
+				{
+					curr: bucketHash,
+					next: { output: bucketHash, state: 1 },
+					snap: bucketHash
+				}
+			],
+			currentLedger,
+			hotArchiveBuckets: [
+				{
+					curr: bucketHash,
+					next: { output: bucketHash, state: 1 },
+					snap: bucketHash
+				}
+			],
+			server: 'stellar-core',
+			version: 1
+		},
+		stellarHistoryUrl:
+			'https://history.example.com/archive-b/history/00/00/00/history-0000007f.json'
 	};
 }

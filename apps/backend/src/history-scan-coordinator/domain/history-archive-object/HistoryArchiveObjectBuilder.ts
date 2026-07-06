@@ -40,12 +40,38 @@ export function buildHistoryArchiveObjectsFromState(
 	const checkpointLedger = getCheckpointLedger(snapshot.rawState.currentLedger);
 	if (checkpointLedger !== null) {
 		objects.push(
-			createCheckpointObject(snapshot, archiveUrl, checkpointLedger, 'checkpoint-state'),
-			createCheckpointObject(snapshot, archiveUrl, checkpointLedger, 'ledger'),
-			createCheckpointObject(snapshot, archiveUrl, checkpointLedger, 'transactions'),
-			createCheckpointObject(snapshot, archiveUrl, checkpointLedger, 'results')
+			createCheckpointObject(snapshot, archiveUrl, checkpointLedger, 'checkpoint-state')
 		);
 	}
+
+	objects.push(...buildCheckpointSiblingObjectsFromState(snapshot));
+
+	return dedupeObjects(objects);
+}
+
+export function buildCheckpointSiblingObjectsFromState(
+	snapshot: HistoryArchiveStateSnapshot,
+	options: { readonly expectedCheckpointLedger?: number | null } = {}
+): readonly HistoryArchiveObject[] {
+	if (snapshot.status !== 'available' || snapshot.rawState === null) return [];
+	const archiveUrl = normalizeHistoryArchiveRootUrl(snapshot.archiveUrl);
+	if (archiveUrl === null) return [];
+
+	const checkpointLedger = getCheckpointLedger(snapshot.rawState.currentLedger);
+	if (checkpointLedger === null) return [];
+	if (
+		options.expectedCheckpointLedger !== undefined &&
+		options.expectedCheckpointLedger !== null &&
+		checkpointLedger !== options.expectedCheckpointLedger
+	) {
+		return [];
+	}
+
+	const objects: HistoryArchiveObject[] = [
+		createCheckpointObject(snapshot, archiveUrl, checkpointLedger, 'ledger'),
+		createCheckpointObject(snapshot, archiveUrl, checkpointLedger, 'transactions'),
+		createCheckpointObject(snapshot, archiveUrl, checkpointLedger, 'results')
+	];
 
 	for (const bucketHash of getBucketHashes(snapshot.rawState.currentBuckets)) {
 		objects.push(createBucketObject(snapshot, archiveUrl, bucketHash));

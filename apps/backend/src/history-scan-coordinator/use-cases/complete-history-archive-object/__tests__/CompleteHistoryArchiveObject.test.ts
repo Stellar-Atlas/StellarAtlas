@@ -1,0 +1,114 @@
+import { mock, type MockProxy } from 'jest-mock-extended';
+import type { ArchiveMetadataDTO } from 'history-scanner-dto';
+import { HistoryArchiveObject } from '../../../domain/history-archive-object/HistoryArchiveObject.js';
+import type { HistoryArchiveObjectRepository } from '../../../domain/history-archive-object/HistoryArchiveObjectRepository.js';
+import type { HistoryArchiveStateRepository } from '../../../domain/history-archive-state/HistoryArchiveStateRepository.js';
+import type { HistoryArchiveObjectEventRecorder } from '../../record-history-archive-object-event/HistoryArchiveObjectEventRecorder.js';
+import { CompleteHistoryArchiveObject } from '../CompleteHistoryArchiveObject.js';
+
+describe('CompleteHistoryArchiveObject', () => {
+	let eventRecorder: MockProxy<HistoryArchiveObjectEventRecorder>;
+	let objectRepository: MockProxy<HistoryArchiveObjectRepository>;
+	let stateRepository: MockProxy<HistoryArchiveStateRepository>;
+
+	beforeEach(() => {
+		eventRecorder = mock<HistoryArchiveObjectEventRecorder>();
+		objectRepository = mock<HistoryArchiveObjectRepository>();
+		stateRepository = mock<HistoryArchiveStateRepository>();
+		objectRepository.markObjectVerified.mockResolvedValue(true);
+	});
+
+	it('schedules checkpoint sibling objects from verified checkpoint state facts', async () => {
+		const archiveObject = createCheckpointObject();
+		objectRepository.findByRemoteId.mockResolvedValue(archiveObject);
+
+		const result = await new CompleteHistoryArchiveObject(
+			objectRepository,
+			stateRepository,
+			eventRecorder
+		).execute(archiveObject.remoteId, {
+			claimAttempt: 1,
+			verificationFacts: {
+				checkpointHistoryArchiveState: createArchiveMetadata(127)
+			},
+			workerStage: 'verified'
+		});
+
+		expect(result._unsafeUnwrap()).toBe(true);
+		expect(stateRepository.saveAvailable).not.toHaveBeenCalled();
+		expect(objectRepository.saveObjects).toHaveBeenCalledTimes(1);
+		const savedObjects = objectRepository.saveObjects.mock.calls[0]?.[0] ?? [];
+		expect(savedObjects.map((object) => object.objectKey)).toEqual([
+			'ledger:0000007f',
+			'transactions:0000007f',
+			'results:0000007f',
+			'bucket:4eae73efaa0ce061441dfe43ffc61c0ed24fcbc59e5ee512d1b60e8da2509655'
+		]);
+		expect(objectRepository.markObjectVerified).toHaveBeenCalledWith(
+			archiveObject.remoteId,
+			expect.objectContaining({
+				claimAttempt: 1,
+				verificationFacts: {
+					checkpointHistoryArchiveState: createArchiveMetadata(127)
+				},
+				workerStage: 'verified'
+			})
+		);
+	});
+
+	it('does not schedule sibling objects when checkpoint facts do not match the claimed checkpoint', async () => {
+		const archiveObject = createCheckpointObject();
+		objectRepository.findByRemoteId.mockResolvedValue(archiveObject);
+
+		const result = await new CompleteHistoryArchiveObject(
+			objectRepository,
+			stateRepository,
+			eventRecorder
+		).execute(archiveObject.remoteId, {
+			claimAttempt: 1,
+			verificationFacts: {
+				checkpointHistoryArchiveState: createArchiveMetadata(191)
+			},
+			workerStage: 'verified'
+		});
+
+		expect(result._unsafeUnwrap()).toBe(true);
+		expect(objectRepository.saveObjects).toHaveBeenCalledWith([]);
+		expect(objectRepository.markObjectVerified).toHaveBeenCalled();
+	});
+});
+
+function createCheckpointObject(): HistoryArchiveObject {
+	return new HistoryArchiveObject({
+		archiveUrl: 'https://history.example.com/archive',
+		archiveUrlIdentity: 'https://history.example.com/archive',
+		checkpointLedger: 127,
+		objectKey: 'checkpoint-state:0000007f',
+		objectOrder: 10,
+		objectType: 'checkpoint-state',
+		objectUrl:
+			'https://history.example.com/archive/history/00/00/00/history-0000007f.json',
+		remoteId: '11111111-1111-4111-8111-111111111111',
+		status: 'scanning'
+	});
+}
+
+function createArchiveMetadata(currentLedger: number): ArchiveMetadataDTO {
+	return {
+		observedAt: '2026-07-06T15:00:00.000Z',
+		stellarHistory: {
+			currentBuckets: [
+				{
+					curr: '4eae73efaa0ce061441dfe43ffc61c0ed24fcbc59e5ee512d1b60e8da2509655',
+					next: { state: 0 },
+					snap: '0000000000000000000000000000000000000000000000000000000000000000'
+				}
+			],
+			currentLedger,
+			server: 'stellar-core',
+			version: 1
+		},
+		stellarHistoryUrl:
+			'https://history.example.com/archive/history/00/00/00/history-0000007f.json'
+	};
+}

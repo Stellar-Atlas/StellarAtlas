@@ -1,14 +1,16 @@
 import 'reflect-metadata';
 import { inject, injectable } from 'inversify';
 import { err, ok, Result } from 'neverthrow';
-import type { ArchiveMetadataDTO } from 'history-scanner-dto';
+import { isArchiveMetadataDTO, type ArchiveMetadataDTO } from 'history-scanner-dto';
 import { getHistoryArchiveUrlIdentity } from '../../domain/ArchiveUrlIdentity.js';
 import { HistoryArchiveStateSnapshot } from '../../domain/history-archive-state/HistoryArchiveStateSnapshot.js';
+import type { HistoryArchiveObject } from '../../domain/history-archive-object/HistoryArchiveObject.js';
 import type { HistoryArchiveObjectProgressUpdate } from '../../domain/history-archive-object/HistoryArchiveObjectRepository.js';
 import type { HistoryArchiveObjectRepository } from '../../domain/history-archive-object/HistoryArchiveObjectRepository.js';
 import type { HistoryArchiveStateRepository } from '../../domain/history-archive-state/HistoryArchiveStateRepository.js';
 import {
 	buildCheckpointStateDiscoveryObjects,
+	buildCheckpointSiblingObjectsFromState,
 	buildHistoryArchiveObjectsFromState
 } from '../../domain/history-archive-object/HistoryArchiveObjectBuilder.js';
 import { TYPES } from '../../infrastructure/di/di-types.js';
@@ -38,7 +40,10 @@ export class CompleteHistoryArchiveObject {
 			const object = await this.objectRepository.findByRemoteId(remoteId);
 			if (object === null) return ok(false);
 
-			if (request.archiveMetadata !== undefined) {
+			if (
+				object.objectType === 'history-archive-state' &&
+				request.archiveMetadata !== undefined
+			) {
 				await this.stateRepository.saveAvailable(
 					object.archiveUrl,
 					request.archiveMetadata,
@@ -48,6 +53,14 @@ export class CompleteHistoryArchiveObject {
 					await this.buildObjectsFromArchiveMetadata(
 						object.archiveUrl,
 						request.archiveMetadata
+					)
+				);
+			}
+			if (object.objectType === 'checkpoint-state') {
+				await this.objectRepository.saveObjects(
+					this.buildObjectsFromCheckpointArchiveMetadata(
+						object,
+						request.verificationFacts
 					)
 				);
 			}
@@ -100,4 +113,36 @@ export class CompleteHistoryArchiveObject {
 			})
 		];
 	}
+
+	private buildObjectsFromCheckpointArchiveMetadata(
+		object: HistoryArchiveObject,
+		verificationFacts?: object | null
+	) {
+		const archiveMetadata =
+			getCheckpointHistoryArchiveStateMetadata(verificationFacts);
+		if (archiveMetadata === null) return [];
+
+		const snapshot = HistoryArchiveStateSnapshot.available(
+			object.archiveUrl,
+			object.archiveUrlIdentity,
+			archiveMetadata,
+			'history-scanner'
+		);
+
+		return buildCheckpointSiblingObjectsFromState(snapshot, {
+			expectedCheckpointLedger: object.checkpointLedger
+		});
+	}
+}
+
+function getCheckpointHistoryArchiveStateMetadata(
+	verificationFacts?: object | null
+): ArchiveMetadataDTO | null {
+	if (!isRecord(verificationFacts)) return null;
+	const value = verificationFacts.checkpointHistoryArchiveState;
+	return isArchiveMetadataDTO(value) ? value : null;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+	return typeof value === 'object' && value !== null && !Array.isArray(value);
 }

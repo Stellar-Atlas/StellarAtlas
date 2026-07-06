@@ -68,12 +68,21 @@ export class ArchiveObjectCategoryVerifier {
 		}
 
 		const bytesDownloaded = Buffer.byteLength(JSON.stringify(state));
+		const checkpointHistoryArchiveState = {
+			observedAt: new Date().toISOString(),
+			stellarHistory: validation.value,
+			stellarHistoryUrl: job.objectUrl
+		};
 		this.reportProgress(
 			job.remoteId,
 			'verified_checkpoint_state',
 			bytesDownloaded
 		);
-		return ok({ bytesDownloaded, workerStage: 'verified' });
+		return ok({
+			bytesDownloaded,
+			verificationFacts: { checkpointHistoryArchiveState },
+			workerStage: 'verified'
+		});
 	}
 
 	async verifyCategoryObject(
