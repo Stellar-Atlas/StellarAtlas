@@ -28,7 +28,7 @@ function mapHistoryArchiveObject(
 		archiveUrlIdentity: object.archiveUrlIdentity,
 		attempts: object.attempts,
 		bucketHash: object.bucketHash,
-		bytesDownloaded: object.bytesDownloaded,
+		bytesDownloaded: toPublicNumber(object.bytesDownloaded),
 		checkpointLedger: object.checkpointLedger,
 		claimedAt: object.claimedAt?.toISOString() ?? null,
 		error:
@@ -56,6 +56,14 @@ function mapHistoryArchiveObject(
 function requireDate(value: Date | undefined): Date {
 	if (value instanceof Date) return value;
 	return new Date(0);
+}
+
+function toPublicNumber(value: number | string | null): number | null {
+	if (value === null) return null;
+	if (typeof value === 'number') return value;
+
+	const parsed = Number(value);
+	return Number.isSafeInteger(parsed) && parsed >= 0 ? parsed : null;
 }
 
 function toPublicVerificationFacts(

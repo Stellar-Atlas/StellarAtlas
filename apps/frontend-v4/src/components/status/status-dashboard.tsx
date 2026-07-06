@@ -79,7 +79,7 @@ export function StatusDashboard({
 				/>
 				<StatCard
 					detail={`API ${statusLabel(api.status)}, frontend ${
-						frontend.configured ? 'configured' : 'missing'
+						frontend.configured ? 'online' : 'missing'
 					}`}
 					label="Production services"
 					tone={statusTone(api.status)}

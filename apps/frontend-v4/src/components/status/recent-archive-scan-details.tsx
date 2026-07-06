@@ -116,12 +116,12 @@ function archiveScanLabel(scan: PublicArchiveScanLogEntry): string {
 
 function archiveScanEmptyDetail(scan: PublicArchiveScanLogEntry): string {
 	if (scan.scanStatus === 'ok') {
-		return 'Compact status payload reports no archive verification errors.';
+		return 'No archive verification errors were reported for this row.';
 	}
 	if (scan.scanStatus === 'worker_issue') {
-		return 'No individual worker issue rows were included in this compact status payload.';
+		return 'No individual worker issue rows were included for this row.';
 	}
-	return 'No individual error rows were included in this compact status payload.';
+	return 'No individual archive error rows were included for this row.';
 }
 
 function getArchiveConcurrencyMetric(scan: PublicArchiveScanLogEntry): {

@@ -221,7 +221,7 @@ function ArchiveTarget({
 			</a>
 		);
 	}
-	if (looksLikeInternalPath(url)) return <span>Internal scanner target</span>;
+	if (looksLikeInternalPath(url)) return <span>Scanner-owned evidence</span>;
 	return <span>{sanitizeEvidenceText(label ?? url)}</span>;
 }
 

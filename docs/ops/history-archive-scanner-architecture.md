@@ -3,8 +3,8 @@
 Date: 2026-07-06
 
 This note documents how StellarAtlas history archive scanning is supposed to
-work, what the current worker stages are, and what observability must be added
-before the status page can show per-thread activity and recent scan timelines.
+work, what the current worker stages are, and what observability must exist for
+status, node, organization, and archive pages to show truthful evidence.
 
 This document is a design and verification guide. It is not approval to delete
 downloaded buckets, parsed ledgers, scan rows, state rows, or queue rows.
@@ -55,7 +55,11 @@ archive URL, including fetch/parse failures. Node and organization pages should
 read that scanner-owned state; they must not fetch archive state directly from
 remote validators during page render.
 
-## Current Scanner Flow
+## Legacy Range Scanner Flow
+
+The older scanner contract is archive-root/range based. It remains in source as
+historical scan evidence and for compatibility, but it is not the target live
+scanner contract.
 
 1. Network scan discovers node archive URLs from organization TOML validator
    entries.
@@ -87,18 +91,105 @@ Verified contiguous progress must only advance through ledgers whose dependency
 chain verified cleanly. Attempted progress may advance past a bad range and is
 separate evidence.
 
+Range scan rows are historical range verification evidence. They must not be the
+primary public current-worker view once object workers are deployed.
+
+## Current Object Queue Flow
+
+The deployed object queue contract is concrete-file based, but it is not yet a
+whole-archive proof system.
+
+Current behavior:
+
+1. Network scans discover archive roots from scanner-owned organization TOML.
+2. The coordinator schedules one root history archive state object per archive
+   root.
+3. When a root state is available, the coordinator schedules objects for the
+   latest checkpoint only:
+   - checkpoint history JSON,
+   - ledger category file,
+   - transaction category file,
+   - result category file,
+   - current and hot archive buckets referenced by the root state.
+4. Object workers claim one archive object at a time.
+5. Heartbeats update worker stage and downloaded byte counts.
+6. Completion/failure writes the object row and a compact object event.
+
+This is enough to prove that scanner-owned object telemetry works. It is not
+enough to prove an archive is fully verified, because whole-archive discovery
+and cross-category consistency are still open.
+
+Production observation on 2026-07-06:
+
+- the live queue had 75 archive roots, 24 active bucket downloads, 3 pending
+  buckets, 188 failed objects, and 5,074 verified objects;
+- only 3 distinct checkpoint ledgers were represented, proving discovery is
+  latest/current scoped rather than whole-archive scoped;
+- all 75 root history archive state rows were due for refresh but still
+  `verified`, proving root refresh needs a cursor-driven path;
+- legacy `history_archive_scan_job_queue` still contained pending range jobs,
+  so range claiming must be gated or reconciled before object mode is the only
+  scanner contract;
+- object heartbeats now coalesce per active object and use jittered timers so a
+  large bucket stream cannot pile overlapping coordinator writes onto the API.
+
+## Target Object Queue Flow
+
+The target scanner contract is one durable row per archive object, not one row
+per archive root/range.
+
+1. Persist root history archive state for every archive root.
+2. Enumerate checkpoint history state objects from the archive start point
+   through the root state's current checkpoint, in bounded batches.
+3. Verify each checkpoint history state object and extract bucket hashes.
+4. Schedule sibling category objects for the checkpoint:
+   ledger, transactions, and results.
+5. Schedule bucket objects by bucket hash and archive root, deduplicating stored
+   bucket content by bucket hash.
+6. Rotate claims across archive roots and hosts so one archive or host cannot
+   monopolize all worker slots.
+7. Enforce total scanner caps and per-host caps before any HTTP fetch.
+8. Store object facts once: checkpoint state facts, category hashes, ledger
+   header facts, transaction/result hashes, bucket-list hashes, and bucket
+   content hashes.
+9. Mark an object as fetched/parsed/hash-verified only for the proof it actually
+   has. Mark checkpoint or archive coverage as verified only after the required
+   sibling facts agree.
+10. Expose object queue, object events, bucket coverage, range history, and
+    state snapshots through scanner-owned APIs.
+
+Object-mode category `verified` must not be presented as full archive proof
+until ledger, transaction, result, previous-ledger, and bucket-list facts are
+checked together.
+
+Minimum additive schema needed for the target flow:
+
+- `hostIdentity` on the object queue, backfilled from `archiveUrl`;
+- a discovery cursor per archive URL identity with latest root ledger,
+  next checkpoint ledger, oldest discovered checkpoint ledger, root refresh
+  timing, and last scheduling timestamp;
+- checkpoint state rows that store parsed checkpoint state, bucket-list hash,
+  bucket hashes, raw state, and validation status;
+- checkpoint verification rows that join checkpoint state, ledger,
+  transactions, results, and bucket-list facts into a single proof record;
+- host throttle rows with active cap, failure counters, failure class,
+  `backoffUntil`, and last success/failure timestamps.
+
 ## Scheduler Fairness Requirements
 
 The scheduler must rotate across archive URLs, not repeatedly schedule the same
-archive/range while other archives wait.
+archive object or host while other archives wait.
 
 Required behavior:
 
 - all pending jobs count as active unfinished work;
 - stale release applies to claimed jobs, not pending jobs;
-- active pending/claimed jobs are unique by normalized archive URL and range;
 - object queue rows are unique by normalized archive URL, object type, and
   object key;
+- archive roots are rotated fairly; workers must not exhaust all slots on a
+  single archive root or host;
+- host backoff is separate from object retry timing, so a rate-limited host
+  cannot create noisy repeated failures while other hosts wait;
 - failed object rows are eligible only when `nextAttemptAt` is due;
 - root history archive state rows are refreshed through `refreshAfter`, while
   immutable checkpoint/category/bucket objects remain deduped by identity;
@@ -122,11 +213,13 @@ process id
 thread id or slot id
 job remote id
 archive url identity
+host identity
 stage code
-range from/to
 checkpoint ledger
 category code
 bucket hash
+object key
+bytes downloaded
 started at
 last heartbeat at
 ```
@@ -136,13 +229,15 @@ Historical activity is a bounded structured event log:
 ```text
 job remote id
 archive url identity
+host identity
 sequence number
 stage code
 status code
-range from/to
 checkpoint ledger
 category code
 bucket hash
+object key
+bytes downloaded
 started at
 ended at
 duration ms
@@ -161,7 +256,7 @@ Suggested stage codes:
 | ---: | :---- |
 | 1 | claim job |
 | 2 | fetch history archive state |
-| 3 | plan range |
+| 3 | plan object discovery |
 | 4 | fetch checkpoint state |
 | 5 | fetch category file |
 | 6 | parse category XDR |
@@ -196,9 +291,12 @@ Retention should be bounded:
 The archive section of the status page should have at least these tabs:
 
 - Queue: pending, claimed, stale, duplicate-suppressed, and next eligible jobs.
-- Workers: every scanner process/thread slot and its current stage.
-- Runs: recent completed runs with attempted range, verified range, duration,
-  and error classes.
+- Workers: every scanner process/thread slot and its current object, stage, byte
+  count, host, and heartbeat.
+- Events: bounded recent object events with claim, heartbeat, verified, failed,
+  and released transitions.
+- Range history: older completed range scans with attempted range, verified
+  range, duration, and error classes, clearly labeled historical.
 - Archive state: latest history archive state per archive URL, including
   invalid/unreachable state fetch evidence.
 - Buckets: recent bucket verification evidence and cross-archive bucket status.

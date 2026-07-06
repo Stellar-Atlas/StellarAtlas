@@ -21,7 +21,7 @@ export class HistoryArchiveObjectEventMigration1784370000000
 				"workerStage" text,
 				"checkpointLedger" integer,
 				"bucketHash" text,
-				"bytesDownloaded" integer,
+				"bytesDownloaded" bigint,
 				"claimAttempt" integer,
 				"errorType" text,
 				"errorMessage" text,

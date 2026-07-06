@@ -30,8 +30,11 @@ interface ActiveObjectProgress {
 
 @injectable()
 export class VerifyArchiveObjects {
-	private static readonly heartbeatIntervalMs = 30 * 1000;
+	private static readonly initialHeartbeatDelayMs = 10 * 1000;
+	private static readonly heartbeatIntervalMs = 45 * 1000;
+	private static readonly heartbeatJitterMs = 20 * 1000;
 	private readonly activeObjectProgress = new Map<string, ActiveObjectProgress>();
+	private readonly activeObjectHeartbeatsInFlight = new Set<string>();
 	private readonly categoryVerifier: ArchiveObjectCategoryVerifier;
 
 	constructor(
@@ -121,7 +124,6 @@ export class VerifyArchiveObjects {
 			claimAttempt: job.claimAttempt,
 			workerStage: 'claimed'
 		});
-		await this.touchObject(job.remoteId);
 		await this.checkIn('in_progress');
 		const stopHeartbeat = this.startHeartbeat(job.remoteId);
 
@@ -325,26 +327,48 @@ export class VerifyArchiveObjects {
 	}
 
 	private startHeartbeat(remoteId: string): () => void {
-		const heartbeat = setInterval(() => {
-			void this.touchObject(remoteId);
-		}, VerifyArchiveObjects.heartbeatIntervalMs);
+		let stopped = false;
+		let timeout: ReturnType<typeof setTimeout> | null = null;
+		const schedule = (delayMs: number) => {
+			timeout = setTimeout(() => {
+				if (stopped) return;
+				void this.touchObject(remoteId).finally(() => {
+					if (!stopped) {
+						schedule(VerifyArchiveObjects.heartbeatIntervalMs);
+					}
+				});
+			}, delayMs);
+		};
+		schedule(
+			VerifyArchiveObjects.initialHeartbeatDelayMs +
+				Math.floor(Math.random() * VerifyArchiveObjects.heartbeatJitterMs)
+		);
 
-		return () => clearInterval(heartbeat);
+		return () => {
+			stopped = true;
+			if (timeout !== null) clearTimeout(timeout);
+		};
 	}
 
 	private async touchObject(remoteId: string): Promise<void> {
+		if (this.activeObjectHeartbeatsInFlight.has(remoteId)) return;
 		const progress = this.activeObjectProgress.get(remoteId);
-		const result = await this.scanCoordinator.touchHistoryArchiveObject(
-			remoteId,
-			progress === undefined
-				? undefined
-				: {
-						bytesDownloaded: progress.bytesDownloaded,
-						claimAttempt: progress.claimAttempt,
-						workerStage: progress.workerStage
-					}
-		);
-		if (result.isErr()) this.exceptionLogger.captureException(result.error);
+		this.activeObjectHeartbeatsInFlight.add(remoteId);
+		try {
+			const result = await this.scanCoordinator.touchHistoryArchiveObject(
+				remoteId,
+				progress === undefined
+					? undefined
+					: {
+							bytesDownloaded: progress.bytesDownloaded,
+							claimAttempt: progress.claimAttempt,
+							workerStage: progress.workerStage
+						}
+			);
+			if (result.isErr()) this.exceptionLogger.captureException(result.error);
+		} finally {
+			this.activeObjectHeartbeatsInFlight.delete(remoteId);
+		}
 	}
 
 	private async failObject(

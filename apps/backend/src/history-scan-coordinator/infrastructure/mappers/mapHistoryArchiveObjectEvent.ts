@@ -25,7 +25,7 @@ function mapHistoryArchiveObjectEvent(
 		archiveUrl: event.archiveUrl,
 		archiveUrlIdentity: event.archiveUrlIdentity,
 		bucketHash: event.bucketHash,
-		bytesDownloaded: event.bytesDownloaded,
+		bytesDownloaded: toPublicNumber(event.bytesDownloaded),
 		checkpointLedger: event.checkpointLedger,
 		claimAttempt: event.claimAttempt,
 		createdAt: requireDate(event.createdAt).toISOString(),
@@ -53,6 +53,14 @@ function mapHistoryArchiveObjectEvent(
 function requireDate(value: Date | undefined): Date {
 	if (value instanceof Date) return value;
 	return new Date(0);
+}
+
+function toPublicNumber(value: number | string | null): number | null {
+	if (value === null) return null;
+	if (typeof value === 'number') return value;
+
+	const parsed = Number(value);
+	return Number.isSafeInteger(parsed) && parsed >= 0 ? parsed : null;
 }
 
 function toPublicVerificationFacts(

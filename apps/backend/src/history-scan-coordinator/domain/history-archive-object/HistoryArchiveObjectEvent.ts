@@ -64,7 +64,7 @@ export class HistoryArchiveObjectEvent extends CoreEntity {
 	@Column('text', { nullable: true })
 	public bucketHash!: string | null;
 
-	@Column('integer', { nullable: true })
+	@Column('bigint', { nullable: true })
 	public bytesDownloaded!: number | null;
 
 	@Column('integer', { nullable: true })

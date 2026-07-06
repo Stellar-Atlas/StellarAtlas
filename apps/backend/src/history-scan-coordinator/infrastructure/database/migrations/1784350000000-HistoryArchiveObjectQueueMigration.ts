@@ -20,7 +20,7 @@ export class HistoryArchiveObjectQueueMigration1784350000000
 				"workerStage" text,
 				"checkpointLedger" integer,
 				"bucketHash" text,
-				"bytesDownloaded" integer,
+				"bytesDownloaded" bigint,
 				"attempts" integer not null default 0,
 				"claimedAt" timestamptz,
 				"claimedByCommunityScannerId" uuid,
