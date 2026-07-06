@@ -77,7 +77,7 @@ export function BlockchainGraphPrototype(): React.JSX.Element {
 		<div className="blockchain-explorer">
 			<div className="stats-grid blockchain-stats">
 				<StatCard
-					detail="Latest Horizon ledger"
+					detail="Latest ledger"
 					label="Ledger"
 					value={state.latestLedger?.sequence ?? '...'}
 				/>

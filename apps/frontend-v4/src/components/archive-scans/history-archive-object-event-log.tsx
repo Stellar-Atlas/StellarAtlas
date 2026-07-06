@@ -14,7 +14,7 @@ interface HistoryArchiveObjectEventLogProps {
 export function HistoryArchiveObjectEventLog({
 	events,
 	framed = true,
-	title = 'Recent archive object activity'
+	title = 'Recent archive file activity'
 }: HistoryArchiveObjectEventLogProps): React.JSX.Element {
 	const content = (
 		<>
@@ -35,7 +35,7 @@ export function HistoryArchiveObjectEventLog({
 				/>
 			</div>
 			{events.events.length === 0 ? (
-				<p className="muted-copy">No archive object events are available yet.</p>
+				<p className="muted-copy">No archive file activity is available yet.</p>
 			) : (
 				<div className="table archive-object-table">
 					{events.events.map((event) => (
@@ -48,7 +48,9 @@ export function HistoryArchiveObjectEventLog({
 
 	if (!framed) return <div className="archive-object-events">{content}</div>;
 
-	return <section className="panel detail-panel archive-panel">{content}</section>;
+	return (
+		<section className="panel detail-panel archive-panel">{content}</section>
+	);
 }
 
 function EventRow({
@@ -70,9 +72,7 @@ function EventRow({
 				<small className="archive-object-source">
 					Source: {formatArchiveSource(event.archiveUrl)}
 				</small>
-				<small className="archive-object-url">
-					Object: {event.objectKey}
-				</small>
+				<small className="archive-object-url">File: {event.objectKey}</small>
 				{event.error ? (
 					<small className="archive-object-error">
 						{event.error.type}: {event.error.message}
@@ -107,8 +107,13 @@ function formatEventType(
 function formatObjectType(
 	type: ObjectEvents['events'][number]['objectType']
 ): string {
-	if (type === 'history-archive-state') return 'history archive state';
-	if (type === 'checkpoint-state') return 'checkpoint state';
+	if (type === 'history-archive-state') return 'root state file';
+	if (type === 'checkpoint-state') return 'checkpoint state file';
+	if (type === 'ledger') return 'ledger file';
+	if (type === 'transactions') return 'transaction category file';
+	if (type === 'results') return 'result category file';
+	if (type === 'scp') return 'SCP category file';
+	if (type === 'bucket') return 'bucket file';
 	return type;
 }
 

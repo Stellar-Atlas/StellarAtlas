@@ -52,14 +52,14 @@ const endpointGroups: EndpointGroup[] = [
 	},
 	{
 		description:
-			'Organization-operated Horizon API URLs discovered from Stellar TOML metadata.',
+			'Organization-operated public ledger API URLs discovered from Stellar TOML metadata.',
 		endpoints: [
 			'/v1',
 			'/v1/organizations',
 			'/v1/organizations/:organizationId',
 			'organization.horizonUrl'
 		],
-		title: 'Horizon discovery'
+		title: 'Public ledger API discovery'
 	},
 	{
 		description:

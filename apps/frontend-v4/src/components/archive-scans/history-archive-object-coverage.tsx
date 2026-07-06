@@ -3,7 +3,11 @@ import type {
 	PublicHistoryArchiveObjectTypeSummary
 } from '@api/types';
 import { StatusPill } from '@components/status/status-ui';
-import { formatDateTime, formatInteger } from '@format/formatters';
+import {
+	formatDateTime,
+	formatInteger,
+	formatPercent
+} from '@format/formatters';
 
 interface HistoryArchiveObjectCoverageProps {
 	readonly framed?: boolean;
@@ -14,8 +18,12 @@ interface HistoryArchiveObjectCoverageProps {
 export function HistoryArchiveObjectCoverage({
 	framed = true,
 	summary,
-	title = 'History archive object coverage'
+	title = 'Archive file coverage'
 }: HistoryArchiveObjectCoverageProps): React.JSX.Element {
+	const coverageText = formatCoverage(
+		summary.verifiedObjects,
+		summary.totalObjects
+	);
 	const content = (
 		<>
 			<div className="panel-heading">
@@ -27,29 +35,12 @@ export function HistoryArchiveObjectCoverage({
 				</div>
 				<StatusPill
 					status={summary.totalObjects > 0 ? 'ok' : 'degraded'}
-					text={`${formatInteger(summary.verifiedObjects)} verified`}
+					text={coverageText}
 				/>
 			</div>
-			<dl className="details compact-details">
-				<div>
-					<dt>Total objects</dt>
-					<dd>{formatInteger(summary.totalObjects)}</dd>
-				</div>
-				<div>
-					<dt>Scanning</dt>
-					<dd>{formatInteger(summary.activeObjects)}</dd>
-				</div>
-				<div>
-					<dt>Pending</dt>
-					<dd>{formatInteger(summary.pendingObjects)}</dd>
-				</div>
-				<div>
-					<dt>Failed evidence</dt>
-					<dd>{formatInteger(summary.failedObjects)}</dd>
-				</div>
-			</dl>
-			<CoverageGrid summary={summary} />
+			<CoverageSummary summary={summary} />
 			<ObjectTypeTable objectTypes={summary.objectTypes} />
+			<AdvancedCheckpointDiscovery summary={summary} />
 			<HostThrottleTable hostThrottles={summary.hostThrottles} />
 		</>
 	);
@@ -63,72 +54,55 @@ export function HistoryArchiveObjectCoverage({
 	);
 }
 
-function CoverageGrid({
+function CoverageSummary({
 	summary
 }: {
 	readonly summary: PublicHistoryArchiveObjectSummary;
 }): React.JSX.Element {
-	const checkpoints = summary.checkpoints;
 	const buckets = summary.buckets;
+	const bucketCoverage = formatCoverage(
+		buckets.verifiedBucketObjects,
+		buckets.totalBucketObjects
+	);
 
 	return (
-		<div className="archive-coverage-grid">
+		<dl className="details compact-details">
 			<div>
-				<strong>
-					{formatInteger(checkpoints.objectCompleteArchiveCheckpoints)}
-				</strong>
-				<span>object-complete checkpoints</span>
+				<dt>Archive files verified</dt>
+				<dd>{formatCoverage(summary.verifiedObjects, summary.totalObjects)}</dd>
 			</div>
 			<div>
-				<strong>
-					{formatInteger(checkpoints.categoryConsistentArchiveCheckpoints)}
-				</strong>
-				<span>category-consistent checkpoints</span>
+				<dt>Bucket copies verified</dt>
+				<dd>{bucketCoverage}</dd>
 			</div>
 			<div>
-				<strong>
-					{formatInteger(
-						checkpoints.categoryConsistencyNotEvaluatedCheckpoints
-					)}
-				</strong>
-				<span>proof not evaluated</span>
+				<dt>Unique bucket hashes</dt>
+				<dd>{formatInteger(buckets.uniqueBucketHashes)}</dd>
 			</div>
 			<div>
-				<strong>{formatInteger(checkpoints.expectedArchiveCheckpoints)}</strong>
-				<span>expected checkpoints</span>
+				<dt>Active file checks</dt>
+				<dd>{formatInteger(summary.activeObjects)}</dd>
 			</div>
 			<div>
-				<strong>{formatInteger(checkpoints.missingArchiveCheckpoints)}</strong>
-				<span>missing checkpoints</span>
+				<dt>Queued file checks</dt>
+				<dd>{formatInteger(summary.pendingObjects)}</dd>
 			</div>
 			<div>
-				<strong>{formatInteger(checkpoints.partialArchiveCheckpoints)}</strong>
-				<span>object-incomplete checkpoints</span>
+				<dt>Failed archive evidence</dt>
+				<dd>{formatInteger(summary.failedObjects)}</dd>
 			</div>
 			<div>
-				<strong>{formatInteger(checkpoints.failedArchiveCheckpoints)}</strong>
-				<span>failed checkpoints</span>
+				<dt>Discovery range</dt>
+				<dd>{formatCheckpointRange(summary)}</dd>
 			</div>
 			<div>
-				<strong>{formatInteger(buckets.totalBucketObjects)}</strong>
-				<span>bucket objects</span>
+				<dt>Archive roots discovered</dt>
+				<dd>
+					{formatInteger(summary.checkpoints.discoveryCompleteArchiveRoots)} /{' '}
+					{formatInteger(summary.checkpoints.archiveRootsWithState)} complete
+				</dd>
 			</div>
-			<div>
-				<strong>{formatInteger(buckets.uniqueBucketHashes)}</strong>
-				<span>unique bucket hashes</span>
-			</div>
-			<div>
-				<strong>{formatCheckpointRange(summary)}</strong>
-				<span>checkpoint range</span>
-			</div>
-			<div>
-				<strong>
-					{formatInteger(checkpoints.discoveryCompleteArchiveRoots)} /{' '}
-					{formatInteger(checkpoints.archiveRootsWithState)}
-				</strong>
-				<span>roots fully discovered</span>
-			</div>
-		</div>
+		</dl>
 	);
 }
 
@@ -138,7 +112,7 @@ function ObjectTypeTable({
 	readonly objectTypes: readonly PublicHistoryArchiveObjectTypeSummary[];
 }): React.JSX.Element {
 	if (objectTypes.length === 0) {
-		return <p className="muted-copy">No archive object rows are stored yet.</p>;
+		return <p className="muted-copy">No archive file rows are stored yet.</p>;
 	}
 
 	return (
@@ -147,18 +121,76 @@ function ObjectTypeTable({
 				<div className="row compact" key={entry.objectType}>
 					<div>
 						<strong>{formatObjectType(entry.objectType)}</strong>
-						<small>{formatInteger(entry.totalObjects)} stored objects</small>
+						<small>{formatInteger(entry.totalObjects)} tracked files</small>
 					</div>
 					<div className="metric">
-						<strong>{formatInteger(entry.verifiedObjects)} verified</strong>
+						<strong>
+							{formatCoverage(entry.verifiedObjects, entry.totalObjects)}
+						</strong>
 						<small>
-							{formatInteger(entry.pendingObjects)} pending /{' '}
+							{formatInteger(entry.pendingObjects)} queued /{' '}
 							{formatInteger(entry.failedObjects)} failed
 						</small>
 					</div>
 				</div>
 			))}
 		</div>
+	);
+}
+
+function AdvancedCheckpointDiscovery({
+	summary
+}: {
+	readonly summary: PublicHistoryArchiveObjectSummary;
+}): React.JSX.Element {
+	const checkpoints = summary.checkpoints;
+
+	return (
+		<details className="metadata-document">
+			<summary>
+				<span>Advanced checkpoint discovery</span>
+				<span className="muted-inline">
+					{formatInteger(checkpoints.objectCompleteArchiveCheckpoints)} complete
+					/ {formatInteger(checkpoints.expectedArchiveCheckpoints)} expected
+				</span>
+			</summary>
+			<dl className="details compact-details">
+				<div>
+					<dt>Complete checkpoints</dt>
+					<dd>{formatInteger(checkpoints.objectCompleteArchiveCheckpoints)}</dd>
+				</div>
+				<div>
+					<dt>Category files consistent</dt>
+					<dd>
+						{formatInteger(checkpoints.categoryConsistentArchiveCheckpoints)}
+					</dd>
+				</div>
+				<div>
+					<dt>Waiting for consistency proof</dt>
+					<dd>
+						{formatInteger(
+							checkpoints.categoryConsistencyNotEvaluatedCheckpoints
+						)}
+					</dd>
+				</div>
+				<div>
+					<dt>Expected checkpoints</dt>
+					<dd>{formatInteger(checkpoints.expectedArchiveCheckpoints)}</dd>
+				</div>
+				<div>
+					<dt>Missing checkpoint state files</dt>
+					<dd>{formatInteger(checkpoints.missingArchiveCheckpoints)}</dd>
+				</div>
+				<div>
+					<dt>Incomplete checkpoints</dt>
+					<dd>{formatInteger(checkpoints.partialArchiveCheckpoints)}</dd>
+				</div>
+				<div>
+					<dt>Failed checkpoints</dt>
+					<dd>{formatInteger(checkpoints.failedArchiveCheckpoints)}</dd>
+				</div>
+			</dl>
+		</details>
 	);
 }
 
@@ -170,28 +202,52 @@ function HostThrottleTable({
 	if (hostThrottles.length === 0) return null;
 
 	return (
-		<div className="table archive-host-throttle-table">
-			{hostThrottles.map((throttle) => (
-				<div className="row compact" key={throttle.hostIdentity}>
-					<div>
-						<strong>{throttle.hostIdentity}</strong>
-						<small>
-							{formatHostThrottleReason(throttle.failureClass)} /{' '}
-							{throttle.evidenceClass}
-						</small>
+		<details className="metadata-document">
+			<summary>
+				<span>Temporary archive host backoff</span>
+				<span className="muted-inline">
+					{formatInteger(hostThrottles.length)} hosts paused
+				</span>
+			</summary>
+			<p className="muted-copy">
+				Backoff pauses retries for a specific archive host after repeated file
+				fetch failures. It is not a StellarAtlas service outage.
+			</p>
+			<div className="table archive-host-throttle-table">
+				{hostThrottles.map((throttle) => (
+					<div className="row compact" key={throttle.hostIdentity}>
+						<div>
+							<strong>{throttle.hostIdentity}</strong>
+							<small>
+								{formatHostThrottleReason(throttle.failureClass)} /{' '}
+								{throttle.evidenceClass}
+							</small>
+						</div>
+						<div className="metric">
+							<strong>
+								Retry after {formatDateTime(throttle.blockedUntil)}
+							</strong>
+							<small>
+								{formatInteger(throttle.consecutiveFailures)} failures /{' '}
+								{formatHttpStatus(throttle.httpStatus)}
+							</small>
+						</div>
 					</div>
-					<div className="metric">
-						<strong>
-							Backoff until {formatDateTime(throttle.blockedUntil)}
-						</strong>
-						<small>
-							{formatInteger(throttle.consecutiveFailures)} failures /{' '}
-							{formatHttpStatus(throttle.httpStatus)}
-						</small>
-					</div>
-				</div>
-			))}
-		</div>
+				))}
+			</div>
+		</details>
+	);
+}
+
+function formatCoverage(verified: number, total: number): string {
+	if (total <= 0) return '0 / 0 verified';
+	return (
+		formatInteger(verified) +
+		' / ' +
+		formatInteger(total) +
+		' verified (' +
+		formatPercent(verified / total) +
+		')'
 	);
 }
 
@@ -206,23 +262,30 @@ function formatCheckpointRange(
 	if (oldestCheckpointLedger === latestCheckpointLedger) {
 		return formatInteger(latestCheckpointLedger);
 	}
-	return `${formatInteger(oldestCheckpointLedger)} - ${formatInteger(
-		latestCheckpointLedger
-	)}`;
+	return (
+		formatInteger(oldestCheckpointLedger) +
+		' - ' +
+		formatInteger(latestCheckpointLedger)
+	);
 }
 
 function formatObjectType(
 	type: PublicHistoryArchiveObjectTypeSummary['objectType']
 ): string {
-	if (type === 'history-archive-state') return 'history archive state';
-	if (type === 'checkpoint-state') return 'checkpoint state';
+	if (type === 'history-archive-state') return 'root state files';
+	if (type === 'checkpoint-state') return 'checkpoint state files';
+	if (type === 'ledger') return 'ledger files';
+	if (type === 'transactions') return 'transaction category files';
+	if (type === 'results') return 'result category files';
+	if (type === 'scp') return 'SCP category files';
+	if (type === 'bucket') return 'bucket files';
 	return type;
 }
 
 function formatHostThrottleReason(
 	value: PublicHistoryArchiveObjectSummary['hostThrottles'][number]['failureClass']
 ): string {
-	if (value === 'not-found') return 'missing object';
+	if (value === 'not-found') return 'missing file';
 	if (value === 'rate-limit') return 'rate limited';
 	if (value === 'auth') return 'access denied';
 	if (value === 'transport') return 'transport';
@@ -233,5 +296,5 @@ function formatHostThrottleReason(
 }
 
 function formatHttpStatus(value: number | null): string {
-	return value === null ? 'no HTTP status' : `HTTP ${value}`;
+	return value === null ? 'No HTTP response' : 'HTTP ' + value;
 }

@@ -31,9 +31,9 @@ export function ProductionServiceStatusPanel({
 		<section className="panel status-services-panel">
 			<div className="panel-heading">
 				<div>
-					<strong>Production Critical Services</strong>
+					<strong>Production services</strong>
 					<span>
-						Frontend, API, network scanner, and archive object verifier runtime
+						Frontend, API, network scanner, and archive verifier runtime
 					</span>
 				</div>
 				<StatusPill
@@ -48,7 +48,7 @@ export function ProductionServiceStatusPanel({
 			<div className="status-list">
 				<StatusRow
 					detail={formatDateTime(api.generatedAt)}
-					label="API origin"
+					label="API"
 					status={api.status}
 					value={statusLabel(api.status)}
 				/>
@@ -65,10 +65,10 @@ export function ProductionServiceStatusPanel({
 					value={statusLabel(networkScan.status)}
 				/>
 				<StatusRow
-					detail={`${formatInteger(archiveSummary.activeObjects)} active objects, ${formatInteger(archiveSummary.pendingObjects)} pending, ${formatInteger(archiveSummary.failedObjects)} archive evidence failures; ${formatInteger(archiveSummary.checkpoints.objectCompleteArchiveCheckpoints)} object-complete checkpoints, ${formatInteger(archiveSummary.checkpoints.categoryConsistentArchiveCheckpoints)} category-consistent; ${formatInteger(archiveObjects.objects.length)} current rows shown`}
-					label="Archive scanner"
+					detail={`${formatInteger(archiveSummary.activeObjects)} file checks active, ${formatInteger(archiveSummary.pendingObjects)} queued, ${formatInteger(archiveSummary.failedObjects)} archive evidence failures; ${formatInteger(archiveObjects.objects.length)} current work rows shown`}
+					label="Archive verifier"
 					status={archiveObjectStatus}
-					value={`${formatInteger(archiveSummary.totalObjects)} objects`}
+					value={`${formatInteger(archiveSummary.totalObjects)} files tracked`}
 				/>
 			</div>
 		</section>

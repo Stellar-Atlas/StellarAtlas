@@ -361,6 +361,35 @@ td {
 	width: max-content;
 }
 
+.table-pagination {
+	align-items: center;
+	display: flex;
+	gap: 12px;
+	justify-content: flex-end;
+	padding: 12px 0 0;
+}
+
+.table-pagination button {
+	background: #fff;
+	border: 1px solid var(--border);
+	border-radius: 6px;
+	color: var(--text);
+	font-weight: 800;
+	padding: 8px 12px;
+}
+
+.table-pagination button:disabled {
+	color: var(--muted);
+	cursor: not-allowed;
+	opacity: 0.56;
+}
+
+.table-pagination span {
+	color: var(--muted);
+	font-size: 0.86rem;
+	font-weight: 800;
+}
+
 code {
 	background: #eef3f8;
 	border: 1px solid var(--border);

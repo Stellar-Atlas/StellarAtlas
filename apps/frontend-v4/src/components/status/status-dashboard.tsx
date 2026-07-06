@@ -10,11 +10,7 @@ import type {
 	PublicScanLogStatus,
 	PublicWorkerStatus
 } from '@api/types';
-import {
-	formatDateTime,
-	formatInteger,
-	formatPercent
-} from '@format/formatters';
+import { formatDateTime, formatInteger } from '@format/formatters';
 import { StatCard } from '../stat-card';
 import { HistoryArchiveObjectEventLog } from '@components/archive-scans/history-archive-object-event-log';
 import { HistoryArchiveObjectCoverage } from '@components/archive-scans/history-archive-object-coverage';
@@ -49,7 +45,11 @@ export function StatusDashboard({
 	const scan = dataQuality.scans.networkScan;
 	const rollups = dataQuality.rollups.networkRollups;
 	const archiveObjectActivity = summarizeArchiveObjects(archiveObjects);
-	const archiveVerifierDetail = `${formatInteger(archiveObjectActivity.freshActiveObjects)} fresh active objects, ${formatInteger(archiveObjectActivity.staleActiveObjects)} delayed; ${formatInteger(archiveSummary.pendingObjects)} pending`;
+	const archiveVerifierDetail = `${formatInteger(archiveObjectActivity.freshActiveObjects)} active file checks, ${formatInteger(archiveObjectActivity.staleActiveObjects)} delayed; ${formatInteger(archiveSummary.pendingObjects)} queued`;
+	const showCommunityScanners =
+		workers.communityScanners.activeScanners > 0 ||
+		workers.communityScanners.offlineScanners > 0 ||
+		workers.communityScanners.degradedScanners > 0;
 
 	return (
 		<div className="status-dashboard">
@@ -61,26 +61,26 @@ export function StatusDashboard({
 					value={statusLabel(dataQuality.status)}
 				/>
 				<StatCard
-					detail={`${formatInteger(scan.completedScans)} of ${formatInteger(scan.totalScans)} recorded scans completed; cadence target ${formatNullablePercent(scan.expectedCompletionRate)}`}
-					label="Network scans"
+					detail={`${formatInteger(scan.incompleteScans)} incomplete recorded rows`}
+					label="Network scanner"
 					tone={statusTone(scan.status)}
-					value={formatNullablePercent(scan.completionRate)}
+					value={`${formatInteger(scan.completedScans)} / ${formatInteger(scan.totalScans)} complete`}
 				/>
 				<StatCard
 					detail={`${formatInteger(rollups.missingRollupDays)} missing, ${formatInteger(rollups.mismatchedRollupDays)} mismatched`}
-					label="Rollup continuity"
+					label="Daily network snapshots"
 					tone={statusTone(rollups.status)}
-					value={`${formatInteger(rollups.matchingDays)} matched`}
+					value={`${formatInteger(rollups.matchingDays)} current`}
 				/>
 				<StatCard
 					detail={`${formatInteger(archiveSummary.pendingObjects)} pending, ${formatInteger(archiveSummary.failedObjects)} evidence failures`}
-					label="Archive objects"
+					label="Archive files"
 					tone={statusTone(archiveObjectActivity.status)}
 					value={`${formatInteger(archiveSummary.totalObjects)} stored`}
 				/>
 				<StatCard
 					detail={`${formatInteger(archiveObjectActivity.freshActiveObjects)} fresh, ${formatInteger(archiveObjectActivity.staleActiveObjects)} delayed`}
-					label="Object workers"
+					label="Archive file workers"
 					tone={statusTone(archiveObjectActivity.workerStatus)}
 					value={`${formatInteger(archiveSummary.activeObjects)} active`}
 				/>
@@ -114,19 +114,19 @@ export function StatusDashboard({
 						/>
 						<StatusRow
 							detail={archiveVerifierDetail}
-							label="Archive object verifier"
+							label="Archive verifier"
 							status={archiveObjectActivity.workerStatus}
 							value={`${formatInteger(archiveSummary.activeObjects)} active`}
 						/>
 						<StatusRow
 							detail={`${formatInteger(scan.completedScans)} completed, ${formatInteger(scan.incompleteScans)} incomplete`}
-							label="Recorded scan completion"
+							label="Network scanner records"
 							status={scan.status}
-							value={formatNullablePercent(scan.completionRate)}
+							value={`${formatInteger(scan.completedScans)} / ${formatInteger(scan.totalScans)}`}
 						/>
 						<StatusRow
-							detail={`${formatInteger(rollups.rawCompletedScans)} completed raw scans, ${formatInteger(rollups.rollupCrawlCount)} rolled up`}
-							label="Rollup continuity"
+							detail={`${formatInteger(rollups.rawCompletedScans)} completed scans summarized into ${formatInteger(rollups.rollupCrawlCount)} daily snapshots`}
+							label="Daily network snapshots"
 							status={rollups.status}
 							value={`${formatInteger(rollups.matchingDays)} days`}
 						/>
@@ -143,23 +143,25 @@ export function StatusDashboard({
 					</div>
 					<div className="status-list">
 						<StatusRow
-							detail={`${formatInteger(archiveSummary.pendingObjects)} pending, ${formatInteger(archiveSummary.failedObjects)} evidence failures, ${formatInteger(archiveSummary.verifiedObjects)} verified`}
-							label="Archive object queue"
+							detail={`${formatInteger(archiveSummary.pendingObjects)} queued, ${formatInteger(archiveSummary.failedObjects)} evidence failures, ${formatInteger(archiveSummary.verifiedObjects)} verified`}
+							label="Archive file queue"
 							status={archiveObjectActivity.status}
-							value={`${formatInteger(archiveObjectActivity.totalOpenObjects)} open objects`}
+							value={`${formatInteger(archiveObjectActivity.totalOpenObjects)} open files`}
 						/>
 						<StatusRow
 							detail={`${formatInteger(archiveObjectActivity.freshActiveObjects)} fresh, ${formatInteger(archiveObjectActivity.staleActiveObjects)} delayed; delayed after ${formatDuration(ARCHIVE_OBJECT_STALE_AGE_MS)}`}
-							label="Archive object workers"
+							label="Archive file workers"
 							status={archiveObjectActivity.workerStatus}
 							value={`${formatInteger(archiveSummary.activeObjects)} active`}
 						/>
-						<StatusRow
-							detail={`${formatInteger(workers.communityScanners.offlineScanners)} offline, ${formatInteger(workers.communityScanners.degradedScanners)} degraded`}
-							label="Community scanners"
-							status={workers.communityScanners.status}
-							value={`${formatInteger(workers.communityScanners.activeScanners)} active`}
-						/>
+						{showCommunityScanners ? (
+							<StatusRow
+								detail={`${formatInteger(workers.communityScanners.offlineScanners)} offline, ${formatInteger(workers.communityScanners.degradedScanners)} degraded`}
+								label="External scanner clients"
+								status={workers.communityScanners.status}
+								value={`${formatInteger(workers.communityScanners.activeScanners)} active`}
+							/>
+						) : null}
 					</div>
 				</section>
 
@@ -173,16 +175,19 @@ export function StatusDashboard({
 
 				<HistoryArchiveObjectCoverage
 					summary={archiveSummary}
-					title="Archive object coverage"
+					title="Archive file coverage"
 				/>
 
 				<HistoryArchiveObjectInventory
 					bucketCoverages={archiveBucketCoverages}
 					objects={archiveObjects}
-					title="Current archive object queue"
+					title="Current archive file work"
 				/>
 
-				<HistoryArchiveObjectEventLog events={archiveEvents} />
+				<HistoryArchiveObjectEventLog
+					events={archiveEvents}
+					title="Recent archive file activity"
+				/>
 
 				<RecentScanLogs scanLogs={scanLogs} />
 			</div>
@@ -232,10 +237,6 @@ function summarizeArchiveObjects(
 
 function formatNullableDate(value: string | null): string {
 	return value === null ? 'No data' : formatDateTime(value);
-}
-
-function formatNullablePercent(value: number | null): string {
-	return value === null ? 'No data' : formatPercent(value);
 }
 
 function formatDuration(value: number | null): string {

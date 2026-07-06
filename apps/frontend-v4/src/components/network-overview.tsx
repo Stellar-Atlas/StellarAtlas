@@ -26,10 +26,15 @@ interface NetworkOverviewProps {
 	network: PublicNetwork;
 }
 
-export function NetworkOverview({ network }: NetworkOverviewProps): React.JSX.Element {
+export function NetworkOverview({
+	network
+}: NetworkOverviewProps): React.JSX.Element {
 	const topVersions = getTopVersions(network.nodes);
 	const riskNodes = getRiskNodes(network.nodes).slice(0, 8);
-	const topOrganizations = getTopOrganizations(network.organizations).slice(0, 8);
+	const topOrganizations = getTopOrganizations(network.organizations).slice(
+		0,
+		8
+	);
 
 	return (
 		<main className="shell">
@@ -79,8 +84,8 @@ export function NetworkOverview({ network }: NetworkOverviewProps): React.JSX.El
 					<h2>Interactive topology moved to the primary graph view</h2>
 					<p>
 						The live 3D view shows organization clusters, listener nodes, quorum
-						edges, archive warnings, and observed SCP statements without compressing
-						the network into a small dashboard chart.
+						edges, archive warnings, and observed SCP statements without
+						compressing the network into a small dashboard chart.
 					</p>
 				</div>
 				<Link className="primary-button" href="/">
@@ -99,15 +104,25 @@ export function NetworkOverview({ network }: NetworkOverviewProps): React.JSX.El
 							<div className="row" key={node.publicKey}>
 								<div>
 									<Link href={`/nodes/${encodeURIComponent(node.publicKey)}`}>
-										<strong>{node.alias ?? node.name ?? node.publicKey.slice(0, 12)}</strong>
+										<strong>
+											{node.alias ?? node.name ?? node.publicKey.slice(0, 12)}
+										</strong>
 									</Link>
 									<small>{node.homeDomain ?? node.publicKey}</small>
 								</div>
 								<div className="tags">
-									{!node.isValidating && <span className="tag danger">not validating</span>}
-									{node.historyArchiveHasError && <span className="tag warning">archive</span>}
-									{node.connectivityError && <span className="tag danger">connectivity</span>}
-									{node.stellarCoreVersionBehind && <span className="tag warning">version</span>}
+									{!node.isValidating && (
+										<span className="tag danger">not validating</span>
+									)}
+									{node.historyArchiveHasError && (
+										<span className="tag warning">archive issue</span>
+									)}
+									{node.connectivityError && (
+										<span className="tag danger">connection failed</span>
+									)}
+									{node.stellarCoreVersionBehind && (
+										<span className="tag warning">core behind</span>
+									)}
 								</div>
 							</div>
 						))}
@@ -123,16 +138,26 @@ export function NetworkOverview({ network }: NetworkOverviewProps): React.JSX.El
 						{topOrganizations.map((organization) => (
 							<div className="row compact" key={organization.id}>
 								<div>
-									<Link href={`/organizations/${encodeURIComponent(organization.id)}`}>
-										<strong>{organization.name ?? organization.dba ?? organization.homeDomain}</strong>
+									<Link
+										href={`/organizations/${encodeURIComponent(organization.id)}`}
+									>
+										<strong>
+											{organization.name ??
+												organization.dba ??
+												organization.homeDomain}
+										</strong>
 									</Link>
 									<small>{organization.homeDomain}</small>
 								</div>
-							<div className="metric">
-								<strong>{formatInteger(organization.validators.length)}</strong>
-								<small>{formatOrganization30DayAvailability(organization).value}</small>
+								<div className="metric">
+									<strong>
+										{formatInteger(organization.validators.length)}
+									</strong>
+									<small>
+										{formatOrganization30DayAvailability(organization).value}
+									</small>
+								</div>
 							</div>
-						</div>
 						))}
 					</div>
 				</article>

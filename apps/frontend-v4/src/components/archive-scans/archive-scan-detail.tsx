@@ -36,7 +36,6 @@ interface ArchiveScanDetailProps {
 
 export function ArchiveScanDetail({
 	bucketCoverages,
-	evidence,
 	events,
 	historyUrl,
 	logs,
@@ -55,15 +54,15 @@ export function ArchiveScanDetail({
 		<section className="detail-grid">
 			<HistoryArchiveObjectCoverage
 				summary={summary}
-				title="Archive object coverage"
+				title="Archive file coverage"
 			/>
 			<details className="panel detail-panel archive-panel">
 				<summary className="panel-heading">
-					<h2>Historical range verification</h2>
+					<h2>Legacy range-scan history</h2>
 					<StatusPill
 						status={archiveErrors.length > 0 ? 'degraded' : 'ok'}
 						text={
-							archiveErrors.length > 0 ? 'Archive errors' : 'Archive record'
+							archiveErrors.length > 0 ? 'Archive errors' : 'Historical record'
 						}
 					/>
 				</summary>
@@ -99,10 +98,6 @@ export function ArchiveScanDetail({
 						<dd>{formatActiveCurrentRange(activeLog)}</dd>
 					</div>
 					<div>
-						<dt>Verified buckets</dt>
-						<dd>{formatInteger(evidence.count)}</dd>
-					</div>
-					<div>
 						<dt>Metadata captured</dt>
 						<dd>
 							{formatNullableDate(scan?.archiveMetadata?.observedAt ?? null)}
@@ -112,7 +107,7 @@ export function ArchiveScanDetail({
 			</details>
 			<article className="panel detail-panel archive-panel">
 				<div className="panel-heading">
-					<h2>Scanner metadata and evidence</h2>
+					<h2>Scanner-captured archive metadata</h2>
 				</div>
 				<ArchiveMetadata historyUrl={historyUrl} scan={scan} state={state} />
 				<EvidenceList
@@ -125,16 +120,19 @@ export function ArchiveScanDetail({
 					emptyText="No worker infrastructure issues are recorded for this archive."
 					label="Worker infrastructure"
 				/>
-				<BucketEvidence evidence={evidence} />
 			</article>
 			<HistoryArchiveObjectInventory
 				bucketCoverages={bucketCoverages}
 				objects={objects}
+				title="Archive file work queue"
 			/>
-			<HistoryArchiveObjectEventLog events={events} />
+			<HistoryArchiveObjectEventLog
+				events={events}
+				title="Recent archive file activity"
+			/>
 			<article className="panel detail-panel archive-panel">
 				<div className="panel-heading">
-					<h2>Scan run log</h2>
+					<h2>Legacy range-scan log</h2>
 					<span className="muted-inline">
 						{formatInteger(logs.length)} rows
 					</span>
@@ -189,35 +187,6 @@ function EvidenceList({
 				</li>
 			))}
 		</ul>
-	);
-}
-
-function BucketEvidence({
-	evidence
-}: {
-	readonly evidence: PublicHistoryArchiveScanEvidence;
-}): React.JSX.Element {
-	return (
-		<details className="metadata-document" open={evidence.evidence.length > 0}>
-			<summary>
-				<span>Verified bucket evidence</span>
-				<span className="muted-inline">{formatBucketCount(evidence)}</span>
-			</summary>
-			{evidence.evidence.length === 0 ? (
-				<p className="muted-copy">
-					No verified bucket rows have been persisted for this archive yet.
-				</p>
-			) : (
-				<ul className="archive-bucket-evidence-list">
-					{evidence.evidence.map((entry) => (
-						<li key={`${entry.bucketHash}:${entry.observedAt}`}>
-							<ArchiveTarget label={entry.bucketHash} url={entry.bucketUrl} />
-							<span>{formatDateTime(entry.observedAt)}</span>
-						</li>
-					))}
-				</ul>
-			)}
-		</details>
 	);
 }
 
@@ -285,15 +254,6 @@ function formatActiveCurrentRange(
 		return `${formatInteger(entry.currentRangeFromLedger)}-${end}`;
 	}
 	return 'No current range reported';
-}
-
-function formatBucketCount(evidence: PublicHistoryArchiveScanEvidence): string {
-	if (evidence.count === evidence.evidence.length) {
-		return `${formatInteger(evidence.count)} verified`;
-	}
-	return `${formatInteger(evidence.evidence.length)} of ${formatInteger(
-		evidence.count
-	)} shown`;
 }
 
 function formatNullableDate(value: string | null): string {

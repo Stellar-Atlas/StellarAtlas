@@ -174,7 +174,7 @@ export function BlockchainExplorer(): React.JSX.Element {
 				<div className="panel-heading">
 					<div>
 						<strong>Search</strong>
-						<span>Horizon lookup with RPC readiness for contracts</span>
+						<span>Temporary external lookup while local indexes are built</span>
 					</div>
 				</div>
 				<form className="explorer-search-form" onSubmit={submitSearch}>
@@ -211,7 +211,7 @@ export function BlockchainExplorer(): React.JSX.Element {
 								<strong>Transaction Operations</strong>
 								<span>
 									{transactionOperationsLoading
-										? 'Loading Horizon operation rows'
+										? 'Loading operation rows'
 										: 'Selected transaction'}
 								</span>
 							</div>
@@ -224,8 +224,10 @@ export function BlockchainExplorer(): React.JSX.Element {
 			<section className="explorer-panel explorer-feed-panel">
 				<div className="panel-heading explorer-feed-heading">
 					<div>
-						<strong>Horizon Transaction Snapshot</strong>
-						<span>Bounded fallback page, not a local live read model</span>
+						<strong>Recent transaction snapshot</strong>
+						<span>
+							Temporary external fallback, not indexed StellarAtlas history
+						</span>
 					</div>
 					<button
 						disabled={transactionFeedLoading}
@@ -347,7 +349,9 @@ export function BlockchainExplorer(): React.JSX.Element {
 					<div className="panel-heading">
 						<div>
 							<strong>Contracts</strong>
-							<span>Local RPC readiness, not contract index health</span>
+							<span>
+								Contract lookup fallback; local contract index pending
+							</span>
 						</div>
 					</div>
 					<form className="explorer-filter-form" onSubmit={submitContract}>

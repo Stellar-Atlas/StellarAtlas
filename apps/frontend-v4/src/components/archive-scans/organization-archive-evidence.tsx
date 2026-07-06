@@ -124,8 +124,7 @@ function ArchiveRootDrilldown({
 				</>
 			) : (
 				<p className="muted-copy">
-					No scanner-owned archive object evidence is available for this root
-					yet.
+					No scanner-owned archive file evidence is available for this root yet.
 				</p>
 			)}
 		</details>
@@ -225,33 +224,34 @@ function formatStateSummary(state: PublicHistoryArchiveState | null): string {
 function formatCoverageSummary(
 	summary: PublicHistoryArchiveObjectSummary | null
 ): string {
-	if (summary === null) return 'No object coverage summary stored';
+	if (summary === null) return 'No archive file coverage summary stored';
 	return `${formatInteger(summary.verifiedObjects)} verified of ${formatInteger(
 		summary.totalObjects
-	)} rows; ${formatInteger(
+	)} archive files; ${formatInteger(
 		summary.checkpoints.objectCompleteArchiveCheckpoints
-	)} object-complete checkpoints`;
+	)} complete checkpoints`;
 }
 
 function formatObjectSample(
 	objects: PublicHistoryArchiveObjectQueue | null
 ): string {
-	if (objects === null) return 'No object row sample stored';
-	if (objects.objects.length === 0) return 'No sampled object rows returned';
+	if (objects === null) return 'No archive file queue sample stored';
+	if (objects.objects.length === 0)
+		return 'No sampled archive file rows returned';
 	return `${formatInteger(objects.objects.length)} sampled of ${formatInteger(
 		objects.activeObjects +
 			objects.pendingObjects +
 			objects.verifiedObjects +
 			objects.failedObjects
-	)} queue rows`;
+	)} archive file queue rows`;
 }
 
 function formatEventSample(
 	events: PublicHistoryArchiveObjectEvents | null
 ): string {
-	if (events === null) return 'No recent object events stored';
+	if (events === null) return 'No recent archive file activity stored';
 	const latest = events.events.at(0);
-	if (latest === undefined) return 'No recent object events returned';
+	if (latest === undefined) return 'No recent archive file activity returned';
 	return `${latest.eventType} ${latest.objectType} at ${formatDateTime(
 		latest.createdAt
 	)}`;

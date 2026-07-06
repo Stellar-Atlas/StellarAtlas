@@ -30,7 +30,7 @@ export function ExplorerLocalReadModelWatermark({
 			</div>
 			<div>
 				<strong>Transactions</strong>
-				<span>Horizon fallback remains active; no local transaction index</span>
+				<span>External fallback active; local transaction index pending</span>
 			</div>
 		</div>
 	);

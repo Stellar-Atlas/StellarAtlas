@@ -34,19 +34,22 @@ export const getNodeTags = (node: PublicNode): NodeTag[] => {
 	else if (node.active) tags.push({ label: 'listener', tone: 'neutral' });
 
 	if (node.historyArchiveHasError)
-		tags.push({ label: 'archive', tone: 'warning' });
+		tags.push({ label: 'archive issue', tone: 'warning' });
 	if (node.connectivityError)
-		tags.push({ label: 'connectivity', tone: 'danger' });
+		tags.push({ label: 'connection failed', tone: 'danger' });
 	if (node.stellarCoreVersionBehind)
-		tags.push({ label: 'version', tone: 'warning' });
+		tags.push({ label: 'core behind', tone: 'warning' });
 	if (node.overLoaded)
 		tags.push({
-			label: 'load limited',
-			title: 'The latest crawl saw this node reject an overlay connection because it was busy',
+			label: 'connection busy',
+			title:
+				'The latest crawl saw this node reject an overlay connection because it was busy',
 			tone: 'warning'
 		});
 
-	return tags.length > 0 ? tags : [{ label: 'observed', tone: 'neutral' }];
+	return tags.length > 0
+		? tags
+		: [{ label: 'active listener', tone: 'neutral' }];
 };
 
 export const getOrganizationTags = (
@@ -55,13 +58,13 @@ export const getOrganizationTags = (
 	const tags: NodeTag[] = [];
 
 	if (organization.subQuorumAvailable) {
-		tags.push({ label: 'subquorum available', tone: 'good' });
+		tags.push({ label: 'quorum path available', tone: 'good' });
 	} else {
-		tags.push({ label: 'subquorum risk', tone: 'warning' });
+		tags.push({ label: 'quorum path risk', tone: 'warning' });
 	}
 
 	if (!organization.hasReliableUptime) {
-		tags.push({ label: 'uptime watch', tone: 'warning' });
+		tags.push({ label: 'low uptime', tone: 'warning' });
 	}
 
 	if (organization.tomlState !== 'Ok') {

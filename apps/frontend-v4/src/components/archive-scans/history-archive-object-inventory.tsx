@@ -7,7 +7,11 @@ import type {
 } from '@api/types';
 import { StatusPill } from '@components/status/status-ui';
 import { getArchiveScanDetailPath } from '@domain/archive-scan-routes';
-import { formatDateTime, formatInteger } from '@format/formatters';
+import {
+	formatDateTime,
+	formatInteger,
+	formatPercent
+} from '@format/formatters';
 
 interface HistoryArchiveObjectInventoryProps {
 	readonly bucketCoverages?: readonly PublicHistoryArchiveBucketCrossCoverage[];
@@ -20,7 +24,7 @@ export function HistoryArchiveObjectInventory({
 	bucketCoverages = [],
 	framed = true,
 	objects,
-	title = 'History archive object inventory'
+	title = 'Archive file work queue'
 }: HistoryArchiveObjectInventoryProps): React.JSX.Element {
 	const coverageByBucketHash = new Map(
 		bucketCoverages.map((coverage) => [coverage.bucketHash, coverage])
@@ -36,13 +40,13 @@ export function HistoryArchiveObjectInventory({
 				</div>
 				<StatusPill
 					status={hasDelayedObject(objects) ? 'degraded' : 'ok'}
-					text={`${formatInteger(objects.activeObjects)} active`}
+					text={`${formatInteger(objects.activeObjects)} scanning`}
 				/>
 			</div>
 			<ObjectSummary objects={objects} />
 			{objects.objects.length === 0 ? (
 				<p className="muted-copy">
-					No history archive object rows match the current filter.
+					No archive file rows match the current filter.
 				</p>
 			) : (
 				<div className="table archive-object-table">
@@ -88,19 +92,19 @@ function ObjectSummary({
 	return (
 		<dl className="details compact-details">
 			<div>
-				<dt>Scanning</dt>
+				<dt>Scanning files</dt>
 				<dd>{formatInteger(objects.activeObjects)}</dd>
 			</div>
 			<div>
-				<dt>Pending</dt>
+				<dt>Queued files</dt>
 				<dd>{formatInteger(objects.pendingObjects)}</dd>
 			</div>
 			<div>
-				<dt>Verified</dt>
+				<dt>Verified files</dt>
 				<dd>{formatInteger(objects.verifiedObjects)}</dd>
 			</div>
 			<div>
-				<dt>Failed</dt>
+				<dt>Failed files</dt>
 				<dd>{formatInteger(objects.failedObjects)}</dd>
 			</div>
 		</dl>
@@ -130,13 +134,13 @@ function ObjectRow({
 					<span>{formatObjectLedger(object)}</span>
 				</div>
 				<small className="archive-object-source">
-					Source:{' '}
+					Archive:{' '}
 					<Link href={getArchiveScanDetailPath(object.archiveUrl)}>
 						{formatArchiveSource(object.archiveUrl)}
 					</Link>
 				</small>
 				<small className="archive-object-url">
-					Object: <ArchiveObjectUrl object={object} />
+					File: <ArchiveObjectUrl object={object} />
 				</small>
 				{object.bucketHash ? (
 					<small className="archive-object-hash">{object.bucketHash}</small>
@@ -295,8 +299,13 @@ function formatObjectStatus(status: ObjectDisplayStatus): string {
 function formatObjectType(
 	type: PublicHistoryArchiveObject['objectType']
 ): string {
-	if (type === 'history-archive-state') return 'history archive state';
-	if (type === 'checkpoint-state') return 'checkpoint state';
+	if (type === 'history-archive-state') return 'root state file';
+	if (type === 'checkpoint-state') return 'checkpoint state file';
+	if (type === 'ledger') return 'ledger file';
+	if (type === 'transactions') return 'transaction category file';
+	if (type === 'results') return 'result category file';
+	if (type === 'scp') return 'SCP category file';
+	if (type === 'bucket') return 'bucket file';
 	return type;
 }
 
@@ -323,11 +332,21 @@ function formatBucketCoverageSummary(
 	bucketCoverage: PublicHistoryArchiveBucketCrossCoverage
 ): string {
 	const counts = bucketCoverage.counts;
-	return `${formatInteger(counts.verifiedCopies)} verified / ${formatInteger(
-		counts.scanningCopies
-	)} scanning / ${formatInteger(counts.pendingCopies)} pending / ${formatInteger(
-		counts.failedCopies
-	)} failed across ${formatInteger(counts.archiveRoots)} archive roots`;
+	const totalCopies =
+		counts.verifiedCopies +
+		counts.scanningCopies +
+		counts.pendingCopies +
+		counts.failedCopies;
+	const percent =
+		totalCopies === 0
+			? '0%'
+			: formatPercent(counts.verifiedCopies / totalCopies);
+
+	return `${formatInteger(counts.verifiedCopies)} / ${formatInteger(
+		totalCopies
+	)} bucket copies verified (${percent}) across ${formatInteger(
+		counts.archiveRoots
+	)} archive roots`;
 }
 
 function formatBucketCopyWork({

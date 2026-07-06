@@ -7,9 +7,6 @@ import { formatDateTime, formatInteger } from '@format/formatters';
 type HistoryArchiveMetadata = NonNullable<
 	PublicHistoryArchiveScan['archiveMetadata']
 >;
-type HistoryStateBucket =
-	HistoryArchiveMetadata['stellarHistory']['currentBuckets'][number];
-
 export function HistoryArchiveStateDocument({
 	archiveState = null,
 	archiveMetadata = null,
@@ -79,13 +76,9 @@ export function HistoryArchiveStateDocument({
 					<dd>{formatInteger(hotArchiveBuckets.length)}</dd>
 				</div>
 			</dl>
-			<BucketList label="Current bucket list" buckets={state.currentBuckets} />
-			{hotArchiveBuckets.length > 0 ? (
-				<BucketList label="Hot archive bucket list" buckets={hotArchiveBuckets} />
-			) : null}
 			<details className="metadata-document nested-metadata-document">
 				<summary>
-					<span>Raw captured JSON</span>
+					<span>Raw bucket state JSON</span>
 				</summary>
 				<pre>{JSON.stringify(state, null, 2)}</pre>
 			</details>
@@ -102,7 +95,11 @@ function HistoryArchiveStateFailure({
 		<details className="metadata-document history-archive-state" open>
 			<summary>
 				<span>History archive state</span>
-				<a href={archiveState.stateUrl} rel="noopener noreferrer" target="_blank">
+				<a
+					href={archiveState.stateUrl}
+					rel="noopener noreferrer"
+					target="_blank"
+				>
 					{archiveState.stateUrl}
 				</a>
 			</summary>
@@ -170,53 +167,12 @@ function MissingHistoryArchiveState({
 }
 
 function getArchiveRootUrl(stellarHistoryUrl: string): string {
-	return stellarHistoryUrl.replace(/\/\.well-known\/stellar-history\.json$/, '');
+	return stellarHistoryUrl.replace(
+		/\/\.well-known\/stellar-history\.json$/,
+		''
+	);
 }
 
 function buildStellarHistoryUrl(archiveUrl: string): string {
 	return `${archiveUrl.replace(/\/+$/, '')}/.well-known/stellar-history.json`;
-}
-
-function BucketList({
-	buckets,
-	label
-}: {
-	readonly buckets: readonly HistoryStateBucket[];
-	readonly label: string;
-}): React.JSX.Element {
-	return (
-		<div className="history-state-bucket-section">
-			<h4>{label}</h4>
-			{buckets.length === 0 ? (
-				<p className="muted-copy">No bucket hashes are declared.</p>
-			) : (
-				<ol className="history-state-buckets">
-					{buckets.map((bucket, index) => (
-						<li key={`${bucket.curr}:${bucket.snap}:${index}`}>
-							<dl>
-								<div>
-									<dt>Current</dt>
-									<dd>{bucket.curr}</dd>
-								</div>
-								<div>
-									<dt>Snapshot</dt>
-									<dd>{bucket.snap}</dd>
-								</div>
-								<div>
-									<dt>Next state</dt>
-									<dd>{formatInteger(bucket.next.state)}</dd>
-								</div>
-								{bucket.next.output ? (
-									<div>
-										<dt>Next output</dt>
-										<dd>{bucket.next.output}</dd>
-									</div>
-								) : null}
-							</dl>
-						</li>
-					))}
-				</ol>
-			)}
-		</div>
-	);
 }

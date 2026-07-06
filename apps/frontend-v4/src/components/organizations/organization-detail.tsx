@@ -61,7 +61,7 @@ export function OrganizationDetail({
 						<dd>{organization.url ?? 'Not reported'}</dd>
 					</div>
 					<div>
-						<dt>Horizon</dt>
+						<dt>Public ledger API</dt>
 						<dd>{organization.horizonUrl ?? 'Not reported'}</dd>
 					</div>
 					<div>
@@ -69,7 +69,7 @@ export function OrganizationDetail({
 						<dd>{organization.validators.length}</dd>
 					</div>
 					<div>
-						<dt>Subquorum available</dt>
+						<dt>Quorum path available</dt>
 						<dd>{formatBoolean(organization.subQuorumAvailable)}</dd>
 					</div>
 					<div>
@@ -110,7 +110,9 @@ export function OrganizationDetail({
 								<small>{node.versionStr ?? node.publicKey}</small>
 							</div>
 							<div className="metric">
-								<strong>{node.isValidating ? 'Validating' : 'Watch'}</strong>
+								<strong>
+									{node.isValidating ? 'Validating' : 'Not validating'}
+								</strong>
 								<small>{formatNode30DayValidating(node).value}</small>
 							</div>
 						</div>
@@ -139,7 +141,7 @@ function OrganizationTomlEvidence({
 	return (
 		<article className="panel detail-panel archive-metadata">
 			<div className="panel-heading">
-				<h2>TOML evidence</h2>
+				<h2>Scanner-captured stellar.toml</h2>
 				<span className="muted-inline">{organization.tomlState}</span>
 			</div>
 			<details className="metadata-document" open={stellarToml !== null}>

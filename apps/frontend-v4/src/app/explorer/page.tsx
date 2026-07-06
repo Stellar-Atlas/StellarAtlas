@@ -5,7 +5,7 @@ export default function ExplorerPage(): React.JSX.Element {
 	return (
 		<main className="shell">
 			<PageHeading
-				description="Search bounded Horizon-backed ledger, transaction, address, operation, and asset data while local full-history read models are still being built."
+				description="Search ledger, transaction, address, asset, and contract references while StellarAtlas local transaction indexes are still being built."
 				eyebrow="Blockchain Explorer"
 				title="Explorer"
 			/>

@@ -36,10 +36,7 @@ import {
 } from '../../domain/history-archive';
 import { StatusTags } from '../status-tags';
 import { HistoryArchiveScanLog } from './history-archive-scan-log';
-import {
-	ArchiveBucketEvidence,
-	ArchiveMetadata
-} from './node-archive-evidence';
+import { ArchiveMetadata } from './node-archive-evidence';
 import { HistoryArchiveObjectInventory } from '@components/archive-scans/history-archive-object-inventory';
 import { HistoryArchiveObjectEventLog } from '@components/archive-scans/history-archive-object-event-log';
 import { HistoryArchiveObjectCoverage } from '@components/archive-scans/history-archive-object-coverage';
@@ -61,7 +58,6 @@ interface NodeDetailProps {
 
 export function NodeDetail({
 	historyArchiveBucketCoverages,
-	historyArchiveEvidence,
 	historyArchiveEvents,
 	historyArchiveObjects,
 	historyArchiveScan,
@@ -239,7 +235,7 @@ export function NodeDetail({
 			{showArchivePanel && (
 				<article className="panel detail-panel archive-panel">
 					<div className="panel-heading">
-						<h2>History archive verification</h2>
+						<h2>Archive health</h2>
 						{historyArchiveScan?.isSlow ? (
 							<span className="tag warning">slow archive</span>
 						) : null}
@@ -248,7 +244,7 @@ export function NodeDetail({
 						<HistoryArchiveObjectCoverage
 							framed={false}
 							summary={historyArchiveSummary}
-							title="Archive object coverage"
+							title="Archive file coverage"
 						/>
 					) : null}
 					{historyArchiveScan ? (
@@ -314,9 +310,7 @@ export function NodeDetail({
 						historyArchiveScan={historyArchiveScan}
 						historyArchiveState={historyArchiveState}
 						node={node}
-						organization={organization}
 					/>
-					<ArchiveBucketEvidence evidence={historyArchiveEvidence} />
 					{historyArchiveObjects ? (
 						<HistoryArchiveObjectInventory
 							bucketCoverages={historyArchiveBucketCoverages}
@@ -332,7 +326,7 @@ export function NodeDetail({
 					) : null}
 					<div className="archive-log-section">
 						<div className="panel-heading archive-log-heading">
-							<h3>Scan run log</h3>
+							<h3>Legacy range scan log</h3>
 						</div>
 						<HistoryArchiveScanLog logs={historyArchiveScanLogs} />
 					</div>
@@ -347,7 +341,7 @@ function formatActiveArchiveRun(
 ): string {
 	if (entry.status === 'queued') return 'queued for a worker';
 	if (entry.status === 'starting') return 'starting scanner work';
-	if (entry.status === 'scanning') return 'scanner is verifying ledgers';
+	if (entry.status === 'scanning') return 'scanner is checking archive files';
 	return 'scanner heartbeat is delayed';
 }
 

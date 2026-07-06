@@ -84,7 +84,7 @@ async function OrganizationDetailRouteContent({
 	return (
 		<main className="shell">
 			<PageHeading
-				description="Explore organizations, validator sets, TOML state, Horizon URLs, and subquorum availability."
+				description="Explore organizations, validator sets, scanner-captured stellar.toml state, public ledger API URLs, and quorum-path availability."
 				eyebrow={network.name}
 				title="Organizations"
 				aside={

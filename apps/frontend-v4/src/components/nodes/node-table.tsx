@@ -1,15 +1,22 @@
 'use client';
 
 import Link from 'next/link';
-import { useMemo, useState } from 'react';
-import type { PublicKnownNode, PublicNetwork, PublicNode } from '../../api/types';
+import { useEffect, useMemo, useState } from 'react';
+import type {
+	PublicKnownNode,
+	PublicNetwork,
+	PublicNode
+} from '../../api/types';
 import {
 	getNodeLabel,
 	getNodeTags,
 	getOrganizationForNode,
 	getOrganizationLabel
 } from '../../domain/network';
-import { formatNode24HourValidating, formatNode30DayValidating } from '../../domain/availability';
+import {
+	formatNode24HourValidating,
+	formatNode30DayValidating
+} from '../../domain/availability';
 import { StatusTags } from '../status-tags';
 
 type NodeFilter = 'all' | 'validators' | 'listeners' | 'warnings';
@@ -19,10 +26,21 @@ interface NodeTableProps {
 	nodes: readonly PublicKnownNode[];
 }
 
+const PAGE_SIZE = 50;
+
+const filterLabels: Record<NodeFilter, string> = {
+	all: 'All nodes',
+	validators: 'Validators',
+	listeners: 'Listeners',
+	warnings: 'Needs attention'
+};
+
 const normalize = (value: string): string => value.toLowerCase();
 
 const getKnownNodeLabel = (knownNode: PublicKnownNode): string =>
-	knownNode.node ? getNodeLabel(knownNode.node) : knownNode.publicKey.slice(0, 12);
+	knownNode.node
+		? getNodeLabel(knownNode.node)
+		: knownNode.publicKey.slice(0, 12);
 
 const filterNodes = (
 	nodes: readonly PublicKnownNode[],
@@ -49,24 +67,29 @@ const filterNodes = (
 						!node.connectivityError &&
 						!node.stellarCoreVersionBehind &&
 						node.isValidating))
-			) return false;
+			)
+				return false;
 
 			if (normalizedQuery.length === 0) return true;
 			const organization = node ? getOrganizationForNode(network, node) : null;
-			const haystack = normalize([
-				getKnownNodeLabel(knownNode),
-				knownNode.publicKey,
-				node?.homeDomain ?? '',
-				node?.host ?? '',
-				node?.ip ?? '',
-				organization ? getOrganizationLabel(organization) : ''
-			].join(' '));
+			const haystack = normalize(
+				[
+					getKnownNodeLabel(knownNode),
+					knownNode.publicKey,
+					node?.homeDomain ?? '',
+					node?.host ?? '',
+					node?.ip ?? '',
+					organization ? getOrganizationLabel(organization) : ''
+				].join(' ')
+			);
 			return haystack.includes(normalizedQuery);
 		})
 		.toSorted((left, right) => {
 			const leftNode = left.node;
 			const rightNode = right.node;
-			if ((leftNode?.isValidator ?? false) !== (rightNode?.isValidator ?? false)) {
+			if (
+				(leftNode?.isValidator ?? false) !== (rightNode?.isValidator ?? false)
+			) {
 				return leftNode?.isValidator ? -1 : 1;
 			}
 			if (left.metadataState !== right.metadataState) {
@@ -83,19 +106,36 @@ export function NodeTable({
 	network,
 	nodes
 }: NodeTableProps): React.JSX.Element {
-	const [filter, setFilter] = useState<NodeFilter>('all');
+	const [filter, setFilter] = useState<NodeFilter>('validators');
 	const [query, setQuery] = useState('');
+	const [page, setPage] = useState(1);
 	const visibleNodes = useMemo(
 		() => filterNodes(nodes, filter, query, network),
 		[filter, network, nodes, query]
 	);
+	const pageCount = Math.max(1, Math.ceil(visibleNodes.length / PAGE_SIZE));
+	const currentPage = Math.min(page, pageCount);
+	const pageStart = (currentPage - 1) * PAGE_SIZE;
+	const pagedNodes = visibleNodes.slice(pageStart, pageStart + PAGE_SIZE);
+
+	useEffect(() => {
+		setPage(1);
+	}, [filter, query]);
 
 	return (
 		<section className="panel data-panel">
 			<div className="panel-heading controls-heading">
 				<div>
 					<h2>Nodes</h2>
-					<span>{visibleNodes.length} shown from {nodes.length}</span>
+					<span>
+						Showing{' '}
+						{formatVisibleRange(
+							pageStart,
+							pagedNodes.length,
+							visibleNodes.length
+						)}{' '}
+						from {nodes.length}
+					</span>
 				</div>
 				<div className="table-controls">
 					<input
@@ -105,18 +145,18 @@ export function NodeTable({
 						value={query}
 					/>
 					<div className="segmented">
-						{(['all', 'validators', 'listeners', 'warnings'] as NodeFilter[]).map(
-							(option) => (
-								<button
-									className={filter === option ? 'active' : ''}
-									key={option}
-									onClick={() => setFilter(option)}
-									type="button"
-								>
-									{option}
-								</button>
-							)
-						)}
+						{(
+							['all', 'validators', 'listeners', 'warnings'] as NodeFilter[]
+						).map((option) => (
+							<button
+								className={filter === option ? 'active' : ''}
+								key={option}
+								onClick={() => setFilter(option)}
+								type="button"
+							>
+								{filterLabels[option]}
+							</button>
+						))}
 					</div>
 				</div>
 			</div>
@@ -134,22 +174,34 @@ export function NodeTable({
 						</tr>
 					</thead>
 					<tbody>
-						{visibleNodes.map((knownNode) => {
+						{pagedNodes.map((knownNode) => {
 							const node = knownNode.node;
-							const organization = node ? getOrganizationForNode(network, node) : null;
-							const validating24Hours = node ? formatNode24HourValidating(node) : null;
-							const validating30Days = node ? formatNode30DayValidating(node) : null;
+							const organization = node
+								? getOrganizationForNode(network, node)
+								: null;
+							const validating24Hours = node
+								? formatNode24HourValidating(node)
+								: null;
+							const validating30Days = node
+								? formatNode30DayValidating(node)
+								: null;
 							return (
 								<tr key={knownNode.publicKey}>
 									<td>
-										<Link href={`/nodes/${encodeURIComponent(knownNode.publicKey)}`}>
+										<Link
+											href={`/nodes/${encodeURIComponent(knownNode.publicKey)}`}
+										>
 											<strong>{getKnownNodeLabel(knownNode)}</strong>
 										</Link>
-										<small>{node ? node.host ?? node.ip : 'Public key only'}</small>
+										<small>
+											{node ? (node.host ?? node.ip) : 'Public key only'}
+										</small>
 									</td>
 									<td>
 										{organization ? (
-											<Link href={`/organizations/${encodeURIComponent(organization.id)}`}>
+											<Link
+												href={`/organizations/${encodeURIComponent(organization.id)}`}
+											>
 												{getOrganizationLabel(organization)}
 											</Link>
 										) : (
@@ -159,15 +211,21 @@ export function NodeTable({
 									<td>{node?.versionStr ?? 'Unknown'}</td>
 									<td>{node?.geoData?.countryName ?? 'Unknown'}</td>
 									<td>
-										<span className={`metric-text ${validating24Hours?.tone ?? 'muted'}`}>
+										<span
+											className={`metric-text ${validating24Hours?.tone ?? 'muted'}`}
+										>
 											{validating24Hours?.value ?? 'No snapshot'}
 										</span>
 									</td>
 									<td>
-										<span className={`metric-text ${validating30Days?.tone ?? 'muted'}`}>
+										<span
+											className={`metric-text ${validating30Days?.tone ?? 'muted'}`}
+										>
 											{validating30Days?.value ?? 'Unavailable'}
 										</span>
-										{validating30Days?.detail ? <small>{validating30Days.detail}</small> : null}
+										{validating30Days?.detail ? (
+											<small>{validating30Days.detail}</small>
+										) : null}
 									</td>
 									<td>
 										<StatusTags
@@ -176,7 +234,12 @@ export function NodeTable({
 													? [
 															...getNodeTags(node),
 															...(!knownNode.current
-																? [{ label: 'archived', tone: 'neutral' as const }]
+																? [
+																		{
+																			label: 'archived',
+																			tone: 'neutral' as const
+																		}
+																	]
 																: [])
 														]
 													: [{ label: 'public key only', tone: 'neutral' }]
@@ -189,6 +252,34 @@ export function NodeTable({
 					</tbody>
 				</table>
 			</div>
+			<div className="table-pagination">
+				<button
+					disabled={currentPage <= 1}
+					onClick={() => setPage((value) => Math.max(1, value - 1))}
+					type="button"
+				>
+					Previous
+				</button>
+				<span>
+					Page {currentPage} of {pageCount}
+				</span>
+				<button
+					disabled={currentPage >= pageCount}
+					onClick={() => setPage((value) => Math.min(pageCount, value + 1))}
+					type="button"
+				>
+					Next
+				</button>
+			</div>
 		</section>
 	);
+}
+
+function formatVisibleRange(
+	start: number,
+	count: number,
+	total: number
+): string {
+	if (total === 0) return '0';
+	return start + 1 + '-' + (start + count) + ' of ' + total;
 }
