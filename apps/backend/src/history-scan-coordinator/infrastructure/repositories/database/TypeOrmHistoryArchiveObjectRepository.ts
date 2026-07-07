@@ -13,7 +13,8 @@ import type {
 	HistoryArchiveObjectQueueSnapshot,
 	HistoryArchiveObjectQueueStats,
 	HistoryArchiveObjectProgressUpdate,
-	HistoryArchiveObjectRepository
+	HistoryArchiveObjectRepository,
+	HistoryArchiveObjectWorkerSnapshot
 } from '@history-scan-coordinator/domain/history-archive-object/HistoryArchiveObjectRepository.js';
 import { requireNumber } from './ScanJobRowMapper.js';
 import {
@@ -196,6 +197,66 @@ export class TypeOrmHistoryArchiveObjectRepository implements HistoryArchiveObje
 			this.repository.manager,
 			options
 		);
+	}
+
+	async getWorkerSnapshot(
+		staleCutoff: Date
+	): Promise<HistoryArchiveObjectWorkerSnapshot> {
+		const [row] = (await this.repository.manager.query(
+			`
+			with scanning as (
+				select
+					count(*)::int as "totalScanningObjects",
+					count(*) filter (where "updatedAt" >= $1)::int as "activeObjects",
+					count(*) filter (where "updatedAt" < $1)::int as "staleObjects"
+				from "history_archive_object_queue"
+				where status = 'scanning'
+			),
+			pending as (
+				select exists (
+					select 1
+					from "history_archive_object_queue"
+					where status = 'pending'
+						and ("nextAttemptAt" is null or "nextAttemptAt" <= now())
+					limit 1
+				) as "hasPendingObjects"
+			)
+			select
+				scanning."totalScanningObjects",
+				scanning."activeObjects",
+				scanning."staleObjects",
+				pending."hasPendingObjects"
+			from scanning, pending
+			`,
+			[staleCutoff]
+		)) as readonly {
+			readonly activeObjects?: number | string;
+			readonly activeobjects?: number | string;
+			readonly hasPendingObjects?: boolean;
+			readonly haspendingobjects?: boolean;
+			readonly staleObjects?: number | string;
+			readonly staleobjects?: number | string;
+			readonly totalScanningObjects?: number | string;
+			readonly totalscanningobjects?: number | string;
+		}[];
+
+		return {
+			activeObjects: requireNumber(
+				row?.activeObjects ?? row?.activeobjects,
+				'activeObjects'
+			),
+			hasPendingObjects: Boolean(
+				row?.hasPendingObjects ?? row?.haspendingobjects
+			),
+			staleObjects: requireNumber(
+				row?.staleObjects ?? row?.staleobjects,
+				'staleObjects'
+			),
+			totalScanningObjects: requireNumber(
+				row?.totalScanningObjects ?? row?.totalscanningobjects,
+				'totalScanningObjects'
+			)
+		};
 	}
 
 	async saveObjects(objects: readonly HistoryArchiveObject[]): Promise<number> {

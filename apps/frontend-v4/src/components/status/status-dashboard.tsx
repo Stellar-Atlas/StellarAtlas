@@ -54,9 +54,16 @@ export function StatusDashboard({
 	const archiveQueueDetail = archiveEvidenceAvailable
 		? formatArchiveObjectQueueDetail(archiveSummary)
 		: 'Archive file evidence endpoints did not respond';
-	const archiveVerifierDetail = formatArchiveWorkerDetail(workers);
+	const archiveVerifierDetail = formatArchiveWorkerDetail(
+		archiveObjectActivity,
+		archiveSummary,
+		workers
+	);
 	const archiveCoverageText = formatArchiveVerificationCoverage(archiveSummary);
-	const archiveAttentionText = formatArchiveAttentionText(archiveSummary);
+	const archiveAttentionText = formatArchiveAttentionText(
+		archiveSummary,
+		workers
+	);
 	const frontendApiStatus = criticalRuntimeStatus(
 		api.status,
 		frontend.configured
@@ -65,10 +72,11 @@ export function StatusDashboard({
 		? archiveObjectActivity.status
 		: 'unavailable';
 	const archiveWorkerStatus = getArchiveWorkerStatus(
-		workers,
-	archiveEvidenceAvailable,
-	archiveSummary
-);
+		archiveObjectActivity,
+		archiveEvidenceAvailable,
+		archiveSummary,
+		workers
+	);
 
 	return (
 		<div className="status-dashboard">
@@ -97,7 +105,11 @@ export function StatusDashboard({
 					detail={archiveVerifierDetail}
 					label="Archive scanner workers"
 					tone={statusTone(archiveWorkerStatus)}
-					value={formatWorkerHeadline(workers)}
+					value={formatWorkerHeadline(
+						archiveObjectActivity,
+						archiveSummary,
+						workers
+					)}
 				/>
 			</div>
 
@@ -161,7 +173,11 @@ export function StatusDashboard({
 							detail={archiveVerifierDetail}
 							label="Worker slots"
 							status={archiveWorkerStatus}
-							value={formatWorkerHeadline(workers)}
+							value={formatWorkerHeadline(
+								archiveObjectActivity,
+								archiveSummary,
+								workers
+							)}
 						/>
 					</div>
 				</section>
@@ -250,7 +266,7 @@ function summarizeArchiveObjects(
 		return {
 			freshActiveObjects: summary.activeObjects,
 			staleActiveObjects: 0,
-			status: summary.failedObjects > 0 ? 'degraded' : 'ok'
+			status: summary.totalObjects > 0 ? 'ok' : 'unavailable'
 		};
 	}
 
@@ -269,7 +285,11 @@ function summarizeArchiveObjects(
 		objects.activeObjects - staleActiveObjects
 	);
 	const status: PublicStatusLevel =
-		objects.failedObjects > 0 || staleActiveObjects > 0 ? 'degraded' : 'ok';
+		staleActiveObjects > 0
+			? 'degraded'
+			: summary.totalObjects > 0
+				? 'ok'
+				: 'unavailable';
 	return {
 		freshActiveObjects,
 		staleActiveObjects,
@@ -295,46 +315,68 @@ function formatArchiveVerificationCoverage(
 function formatArchiveObjectQueueDetail(
 	summary: PublicHistoryArchiveObjectSummary
 ): string {
-	return `${formatInteger(summary.verifiedObjects)} verified of ${formatInteger(summary.totalObjects)} tracked; ${formatInteger(summary.pendingObjects)} waiting`;
+	const remoteFailureText =
+		summary.failedObjects > 0
+			? `; ${formatInteger(summary.failedObjects)} remote failures`
+			: '';
+	return `${formatInteger(summary.verifiedObjects)} verified of ${formatInteger(summary.totalObjects)} tracked; ${formatInteger(summary.pendingObjects)} waiting${remoteFailureText}`;
 }
 
 function formatArchiveAttentionText(
-	summary: PublicHistoryArchiveObjectSummary
+	summary: PublicHistoryArchiveObjectSummary,
+	workers: PublicWorkerStatus
 ): string {
-	if (summary.failedObjects > 0) {
-		return `${formatInteger(summary.failedObjects)} evidence failures`;
-	}
-	if (summary.activeObjects > 0) {
-		return `${formatInteger(summary.activeObjects)} checking now`;
+	const activeChecks = Math.max(
+		summary.activeObjects,
+		workers.archiveWorkers.activeWorkers
+	);
+	if (activeChecks > 0) {
+		return `${formatInteger(activeChecks)} active checks`;
 	}
 	return formatArchiveVerificationCoverage(summary);
 }
 
-function formatWorkerHeadline(workers: PublicWorkerStatus): string {
-	const archiveWorkers = workers.archiveWorkers;
-	if (archiveWorkers.activeWorkers > 0) {
-		return `${formatInteger(archiveWorkers.activeWorkers)} active workers`;
+function formatWorkerHeadline(
+	activity: ArchiveObjectSummary,
+	summary: PublicHistoryArchiveObjectSummary,
+	workers: PublicWorkerStatus
+): string {
+	const objectWorkers = workers.archiveWorkers;
+	if (
+		objectWorkers.status === 'degraded' &&
+		objectWorkers.activeWorkers === 0 &&
+		summary.pendingObjects > 0
+	) {
+		return 'No active workers';
 	}
-	if (archiveWorkers.totalTakenJobs > 0) {
-		return `${formatInteger(archiveWorkers.totalTakenJobs)} claimed jobs`;
+	if (objectWorkers.activeWorkers > 0) {
+		return `${formatInteger(objectWorkers.activeWorkers)} active checks`;
 	}
-	return 'No active workers';
+	if (objectWorkers.staleWorkers > 0 || activity.staleActiveObjects > 0) {
+		return `${formatInteger(Math.max(objectWorkers.staleWorkers, activity.staleActiveObjects))} stale checks`;
+	}
+	if (summary.pendingObjects > 0) return 'Waiting for claims';
+	return 'Idle';
 }
 
-function formatArchiveWorkerDetail(workers: PublicWorkerStatus): string {
-	const archiveWorkers = workers.archiveWorkers;
-	return `${formatInteger(archiveWorkers.totalTakenJobs)} claimed jobs, ${formatInteger(archiveWorkers.activeWorkers)} active workers, ${formatInteger(archiveWorkers.staleWorkers)} stale workers`;
+function formatArchiveWorkerDetail(
+	activity: ArchiveObjectSummary,
+	summary: PublicHistoryArchiveObjectSummary,
+	workers: PublicWorkerStatus
+): string {
+	const objectWorkers = workers.archiveWorkers;
+	return `${formatInteger(objectWorkers.activeWorkers)} active object checks, ${formatInteger(summary.pendingObjects)} waiting, ${formatInteger(Math.max(objectWorkers.staleWorkers, activity.staleActiveObjects))} stale checks`;
 }
 
 function getArchiveWorkerStatus(
-	workers: PublicWorkerStatus,
+	activity: ArchiveObjectSummary,
 	archiveEvidenceAvailable: boolean,
-	summary: PublicHistoryArchiveObjectSummary
+	summary: PublicHistoryArchiveObjectSummary,
+	workers: PublicWorkerStatus
 ): PublicStatusLevel {
 	if (!archiveEvidenceAvailable) return 'unavailable';
-	if (workers.archiveWorkers.status !== 'ok') {
-		return workers.archiveWorkers.status;
-	}
+	if (workers.archiveWorkers.status === 'degraded') return 'degraded';
+	if (activity.staleActiveObjects > 0) return 'degraded';
 	if (summary.pendingObjects > 0 && workers.archiveWorkers.activeWorkers === 0) {
 		return 'degraded';
 	}

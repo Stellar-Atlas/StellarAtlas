@@ -61,7 +61,9 @@ export class FailHistoryArchiveObject {
 						eventType: 'failed',
 						evidenceClass: retryPolicy.evidenceClass
 					});
-					await this.refreshCheckpointProof(failedObject);
+					if (shouldRefreshCheckpointProof(failedObject)) {
+						await this.refreshCheckpointProof(failedObject);
+					}
 				}
 			}
 
@@ -80,4 +82,8 @@ export class FailHistoryArchiveObject {
 			this.exceptionLogger.captureException(mapUnknownToError(e));
 		}
 	}
+}
+
+function shouldRefreshCheckpointProof(object: HistoryArchiveObject): boolean {
+	return object.objectType !== 'bucket';
 }

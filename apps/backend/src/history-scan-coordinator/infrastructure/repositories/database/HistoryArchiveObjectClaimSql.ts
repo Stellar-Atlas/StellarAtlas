@@ -25,40 +25,24 @@ export const historyArchiveObjectClaimSql = `
 		from history_archive_object_host_throttle
 		where "blockedUntil" > now()
 	),
-	archive_claims as (
-		select "archiveUrlIdentity", max("claimedAt") as last_claimed_at
-		from history_archive_object_queue
-		group by "archiveUrlIdentity"
-	),
-	next_candidate as (
-		select candidate.id
+	pending_candidates as (
+		select
+			candidate.id,
+			candidate."archiveUrlIdentity",
+			candidate."hostIdentity",
+			candidate."objectType",
+			candidate."objectOrder",
+			candidate."checkpointLedger",
+			candidate."objectKey"
 		from history_archive_object_queue candidate
-		cross join active_total
-		left join active_archive
-			on active_archive."archiveUrlIdentity" = candidate."archiveUrlIdentity"
-		left join active_host
-			on active_host."hostIdentity" = candidate."hostIdentity"
-		left join host_throttle
-			on host_throttle."hostIdentity" = candidate."hostIdentity"
-		left join archive_claims
-			on archive_claims."archiveUrlIdentity" = candidate."archiveUrlIdentity"
-		where (
-				candidate.status = 'pending'
-				or (
-					candidate.status = 'failed'
-					and coalesce(
-						candidate."nextAttemptAt",
-						candidate."updatedAt" + interval '1 hour'
-					) <= now()
-				)
-			)
+		where candidate.status = 'pending'
 			and candidate."objectType" = any($1)
-			and active_total.active_count < $3
-			and coalesce(active_archive.active_count, 0) < $2
-			and coalesce(active_host.active_count, 0) < $4
-			and host_throttle."hostIdentity" is null
+			and not exists (
+				select 1
+				from host_throttle
+				where host_throttle."hostIdentity" = candidate."hostIdentity"
+			)
 		order by
-			archive_claims.last_claimed_at asc nulls first,
 			case
 				when candidate."objectType" = 'history-archive-state' then 0
 				when candidate."objectType" = 'checkpoint-state' then 2
@@ -68,7 +52,70 @@ export const historyArchiveObjectClaimSql = `
 			candidate."objectOrder" asc,
 			candidate."objectKey" asc,
 			candidate."archiveUrlIdentity" asc
-		for update of candidate skip locked
+		limit 512
+	),
+	failed_candidates as (
+		select
+			candidate.id,
+			candidate."archiveUrlIdentity",
+			candidate."hostIdentity",
+			candidate."objectType",
+			candidate."objectOrder",
+			candidate."checkpointLedger",
+			candidate."objectKey"
+		from history_archive_object_queue candidate
+		where candidate.status = 'failed'
+			and coalesce(
+				candidate."nextAttemptAt",
+				candidate."updatedAt" + interval '1 hour'
+			) <= now()
+			and candidate."objectType" = any($1)
+			and not exists (
+				select 1
+				from host_throttle
+				where host_throttle."hostIdentity" = candidate."hostIdentity"
+			)
+		order by
+			case
+				when candidate."objectType" = 'history-archive-state' then 0
+				when candidate."objectType" = 'checkpoint-state' then 2
+				else 1
+			end asc,
+			coalesce(candidate."checkpointLedger", -1) desc,
+			candidate."objectOrder" asc,
+			candidate."objectKey" asc,
+			candidate."archiveUrlIdentity" asc
+		limit 64
+	),
+	candidate_pool as (
+		select * from pending_candidates
+		union all
+		select * from failed_candidates
+	),
+	next_candidate as (
+		select candidate.id
+		from candidate_pool candidate
+		cross join active_total
+		left join active_archive
+			on active_archive."archiveUrlIdentity" = candidate."archiveUrlIdentity"
+		left join active_host
+			on active_host."hostIdentity" = candidate."hostIdentity"
+		left join host_throttle
+			on host_throttle."hostIdentity" = candidate."hostIdentity"
+		where active_total.active_count < $3
+			and coalesce(active_archive.active_count, 0) < $2
+			and coalesce(active_host.active_count, 0) < $4
+			and host_throttle."hostIdentity" is null
+		order by
+			case
+				when candidate."objectType" = 'history-archive-state' then 0
+				when candidate."objectType" = 'checkpoint-state' then 2
+				else 1
+			end asc,
+			coalesce(candidate."checkpointLedger", -1) desc,
+			candidate."objectOrder" asc,
+			candidate."objectKey" asc,
+			candidate."archiveUrlIdentity" asc
 		limit 1
 	)
 	update history_archive_object_queue

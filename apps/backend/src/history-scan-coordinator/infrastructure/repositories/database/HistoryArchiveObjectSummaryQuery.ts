@@ -19,6 +19,9 @@ interface SummaryOptions {
 type ObjectTypeSummaryRow = {
 	readonly objectType?: string;
 	readonly objecttype?: string;
+	readonly status?: string;
+	readonly objectCount?: NumericValue;
+	readonly objectcount?: NumericValue;
 	readonly totalObjects?: NumericValue;
 	readonly totalobjects?: NumericValue;
 	readonly pendingObjects?: NumericValue;
@@ -69,11 +72,14 @@ async function getObjectTypeSummaries(
 	manager: EntityManager,
 	archiveUrlIdentity: string | null
 ): Promise<readonly HistoryArchiveObjectTypeSummaryV1[]> {
-	const rows = (await manager.query(objectTypeSummarySql, [
-		archiveUrlIdentity
-	])) as readonly ObjectTypeSummaryRow[];
+	const rows = (await manager.query(
+		archiveUrlIdentity === null
+			? objectTypeStatusSummaryGlobalSql
+			: objectTypeStatusSummaryArchiveSql,
+		archiveUrlIdentity === null ? [] : [archiveUrlIdentity]
+	)) as readonly ObjectTypeSummaryRow[];
 
-	return rows.map(mapObjectTypeSummaryRow);
+	return mapObjectTypeStatusRows(rows);
 }
 
 async function getBucketCoverage(
@@ -112,32 +118,66 @@ async function getBucketCoverage(
 	};
 }
 
-function mapObjectTypeSummaryRow(
-	row: ObjectTypeSummaryRow
+function mapObjectTypeStatusRows(
+	rows: readonly ObjectTypeSummaryRow[]
+): readonly HistoryArchiveObjectTypeSummaryV1[] {
+	const summaries = new Map<
+		HistoryArchiveObjectTypeV1,
+		HistoryArchiveObjectTypeSummaryV1
+	>();
+
+	for (const row of rows) {
+		const objectType = requireObjectType(row.objectType ?? row.objecttype);
+		const objectCount = requireNumber(
+			row.objectCount ?? row.objectcount,
+			'objectCount'
+		);
+		const existing =
+			summaries.get(objectType) ?? createEmptyObjectTypeSummary(objectType);
+		const next = addStatusCount(existing, row.status, objectCount);
+		summaries.set(objectType, next);
+	}
+
+	return Array.from(summaries.values()).sort(
+		(left, right) =>
+			getObjectTypeOrder(left.objectType) - getObjectTypeOrder(right.objectType)
+	);
+}
+
+function createEmptyObjectTypeSummary(
+	objectType: HistoryArchiveObjectTypeV1
 ): HistoryArchiveObjectTypeSummaryV1 {
 	return {
-		activeObjects: requireNumber(
-			row.activeObjects ?? row.activeobjects,
-			'activeObjects'
-		),
-		failedObjects: requireNumber(
-			row.failedObjects ?? row.failedobjects,
-			'failedObjects'
-		),
-		objectType: requireObjectType(row.objectType ?? row.objecttype),
-		pendingObjects: requireNumber(
-			row.pendingObjects ?? row.pendingobjects,
-			'pendingObjects'
-		),
-		totalObjects: requireNumber(
-			row.totalObjects ?? row.totalobjects,
-			'totalObjects'
-		),
-		verifiedObjects: requireNumber(
-			row.verifiedObjects ?? row.verifiedobjects,
-			'verifiedObjects'
-		)
+		activeObjects: 0,
+		failedObjects: 0,
+		objectType,
+		pendingObjects: 0,
+		totalObjects: 0,
+		verifiedObjects: 0
 	};
+}
+
+function addStatusCount(
+	summary: HistoryArchiveObjectTypeSummaryV1,
+	status: string | undefined,
+	objectCount: number
+): HistoryArchiveObjectTypeSummaryV1 {
+	const next = {
+		...summary,
+		totalObjects: summary.totalObjects + objectCount
+	};
+	switch (status) {
+		case 'pending':
+			return { ...next, pendingObjects: summary.pendingObjects + objectCount };
+		case 'scanning':
+			return { ...next, activeObjects: summary.activeObjects + objectCount };
+		case 'verified':
+			return { ...next, verifiedObjects: summary.verifiedObjects + objectCount };
+		case 'failed':
+			return { ...next, failedObjects: summary.failedObjects + objectCount };
+		default:
+			return next;
+	}
 }
 
 function sumObjectTypeCounts(
@@ -179,21 +219,47 @@ function requireObjectType(
 	throw new Error('Archive object summary row is missing object type');
 }
 
+function getObjectTypeOrder(objectType: HistoryArchiveObjectTypeV1): number {
+	switch (objectType) {
+		case 'history-archive-state':
+			return 0;
+		case 'checkpoint-state':
+			return 1;
+		case 'ledger':
+			return 2;
+		case 'transactions':
+			return 3;
+		case 'results':
+			return 4;
+		case 'scp':
+			return 5;
+		case 'bucket':
+			return 6;
+	}
+}
+
 const archiveFilterSql =
 	'($1::text is null or "archiveUrlIdentity" = $1::text)';
 
-const objectTypeSummarySql = `
+const objectTypeStatusSummarySelectSql = `
 	select
 		"objectType" as "objectType",
-		count(*) as "totalObjects",
-		count(*) filter (where status = 'pending') as "pendingObjects",
-		count(*) filter (where status = 'scanning') as "activeObjects",
-		count(*) filter (where status = 'verified') as "verifiedObjects",
-		count(*) filter (where status = 'failed') as "failedObjects"
+		status,
+		count(*) as "objectCount"
 	from history_archive_object_queue
-	where ${archiveFilterSql}
-	group by "objectType"
-	order by min("objectOrder") asc, "objectType" asc
+`;
+
+const objectTypeStatusSummaryGlobalSql = `
+	${objectTypeStatusSummarySelectSql}
+	group by "objectType", status
+	order by "objectType" asc, status asc
+`;
+
+const objectTypeStatusSummaryArchiveSql = `
+	${objectTypeStatusSummarySelectSql}
+	where "archiveUrlIdentity" = $1::text
+	group by "objectType", status
+	order by "objectType" asc, status asc
 `;
 
 const bucketCoverageSql = `

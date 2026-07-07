@@ -156,7 +156,7 @@ export class ArchiveObjectCategoryVerifier {
 			Math.max(Math.floor(this.hasherWorkerCount), 1)
 		);
 		const parsedHistorySink =
-			category === Category.ledger
+			shouldPersistParsedHistory(category)
 				? new CoordinatorParsedHistorySink(
 						this.scanCoordinator,
 						job.archiveUrl,
@@ -262,6 +262,14 @@ function getCategory(objectType: string): Category | null {
 		default:
 			return null;
 	}
+}
+
+function shouldPersistParsedHistory(category: Category): boolean {
+	return (
+		category === Category.ledger ||
+		category === Category.transactions ||
+		category === Category.results
+	);
 }
 
 function createCategoryVerificationData(): CategoryVerificationData {

@@ -339,16 +339,14 @@ function getArchiveRootStatus(
 	summary: PublicHistoryArchiveObjectSummary
 ): PublicStatusLevel {
 	const checkpoints = summary.checkpoints;
-	if (checkpoints.archiveRootsWithState === 0) return 'degraded';
-	if (checkpoints.missingArchiveCheckpoints > 0) return 'degraded';
+	if (checkpoints.archiveRootsWithState === 0) return 'unavailable';
 	return 'ok';
 }
 
 function getObjectQueueStatus(
 	summary: PublicHistoryArchiveObjectSummary
 ): PublicStatusLevel {
-	if (summary.failedObjects > 0 || summary.totalObjects === 0)
-		return 'degraded';
+	if (summary.totalObjects === 0) return 'unavailable';
 	return 'ok';
 }
 
@@ -356,19 +354,7 @@ function getCheckpointProofStatus(
 	summary: PublicHistoryArchiveObjectSummary
 ): PublicStatusLevel {
 	const checkpoints = summary.checkpoints;
-	if (
-		checkpoints.categoryConsistencyFailedCheckpoints > 0 ||
-		checkpoints.missingArchiveCheckpoints > 0
-	) {
-		return 'degraded';
-	}
-	if (
-		checkpoints.expectedArchiveCheckpoints === 0 ||
-		checkpoints.categoryConsistencyPendingCheckpoints > 0 ||
-		checkpoints.categoryConsistencyNotEvaluatedCheckpoints > 0
-	) {
-		return 'degraded';
-	}
+	if (checkpoints.expectedArchiveCheckpoints === 0) return 'unavailable';
 	return 'ok';
 }
 

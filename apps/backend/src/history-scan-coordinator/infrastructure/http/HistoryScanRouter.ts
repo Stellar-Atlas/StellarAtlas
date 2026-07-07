@@ -148,7 +148,6 @@ export const HistoryScanRouterWrapper = (
 						.json({ error: 'Archive object job not found' });
 				}
 
-				triggerFrontendRevalidation(config, [frontendCacheTags.historyScan]);
 				return res.status(204).send();
 			}
 		);

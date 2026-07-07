@@ -91,7 +91,9 @@ export class CompleteHistoryArchiveObject {
 						claimAttempt: request.claimAttempt,
 						eventType: 'verified'
 					});
-					await this.refreshCheckpointProof(verifiedObject);
+					if (shouldRefreshCheckpointProof(verifiedObject)) {
+						await this.refreshCheckpointProof(verifiedObject);
+					}
 				}
 			}
 
@@ -209,4 +211,8 @@ function getCheckpointHistoryArchiveStateMetadata(
 
 function isRecord(value: unknown): value is Record<string, unknown> {
 	return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function shouldRefreshCheckpointProof(object: HistoryArchiveObject): boolean {
+	return object.objectType !== 'bucket';
 }

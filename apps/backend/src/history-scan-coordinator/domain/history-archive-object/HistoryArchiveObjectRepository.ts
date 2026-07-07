@@ -18,6 +18,13 @@ export interface HistoryArchiveObjectQueueSnapshot extends HistoryArchiveObjectQ
 	readonly objects: readonly HistoryArchiveObject[];
 }
 
+export interface HistoryArchiveObjectWorkerSnapshot {
+	readonly activeObjects: number;
+	readonly hasPendingObjects: boolean;
+	readonly staleObjects: number;
+	readonly totalScanningObjects: number;
+}
+
 export interface HistoryArchiveObjectProgressUpdate {
 	readonly bytesDownloaded?: number | null;
 	readonly claimAttempt: number;
@@ -72,6 +79,9 @@ export interface HistoryArchiveObjectRepository {
 		readonly archiveUrl?: string | null;
 		readonly archiveUrlIdentity?: string | null;
 	}): Promise<HistoryArchiveObjectSummaryV1>;
+	getWorkerSnapshot(
+		staleCutoff: Date
+	): Promise<HistoryArchiveObjectWorkerSnapshot>;
 	markObjectActive(
 		remoteId: string,
 		progress?: HistoryArchiveObjectProgressUpdate

@@ -101,8 +101,7 @@ function getWorstStatus(
 function getArchiveObjectStatus(
 	summary: PublicHistoryArchiveObjectSummary
 ): PublicStatusLevel {
-	if (summary.failedObjects > 0) return 'degraded';
-	return summary.totalObjects > 0 ? 'ok' : 'degraded';
+	return summary.totalObjects > 0 ? 'ok' : 'unavailable';
 }
 
 function formatFreshness(

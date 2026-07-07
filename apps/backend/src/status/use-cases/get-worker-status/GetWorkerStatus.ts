@@ -1,9 +1,13 @@
 import 'reflect-metadata';
 import { inject, injectable } from 'inversify';
 import { err, ok, Result } from 'neverthrow';
-import { GetArchiveScanWorkers } from '@history-scan-coordinator/use-cases/get-archive-scan-workers/GetArchiveScanWorkers.js';
 import { GetScannerMetrics } from '@history-scan-coordinator/use-cases/GetScannerMetrics.js';
+import { TYPES as HISTORY_TYPES } from '@history-scan-coordinator/infrastructure/di/di-types.js';
+import type { HistoryArchiveObjectRepository } from '@history-scan-coordinator/domain/history-archive-object/HistoryArchiveObjectRepository.js';
+import { mapUnknownToError } from '@core/utilities/mapUnknownToError.js';
 import { getWorstStatus, type StatusLevel } from '../../domain/StatusTypes.js';
+
+const archiveObjectWorkerStaleAgeMs = 2 * 60 * 1000;
 
 export interface ArchiveWorkerStatusDTO {
 	readonly status: StatusLevel;
@@ -33,21 +37,26 @@ export interface WorkerStatusDTO {
 @injectable()
 export class GetWorkerStatus {
 	constructor(
-		@inject(GetArchiveScanWorkers)
-		private readonly getArchiveScanWorkers: GetArchiveScanWorkers,
 		@inject(GetScannerMetrics)
-		private readonly getScannerMetrics: GetScannerMetrics
+		private readonly getScannerMetrics: GetScannerMetrics,
+		@inject(HISTORY_TYPES.HistoryArchiveObjectRepository)
+		private readonly objectRepository: HistoryArchiveObjectRepository
 	) {}
 
 	async execute(): Promise<Result<WorkerStatusDTO, Error>> {
-		const [workersResult, scannerMetricsResult] = await Promise.all([
-			this.getArchiveScanWorkers.execute(),
+		const staleCutoff = new Date(Date.now() - archiveObjectWorkerStaleAgeMs);
+		const [workerSnapshot, scannerMetricsResult] = await Promise.all([
+			this.objectRepository.getWorkerSnapshot(staleCutoff).catch((error) => {
+				throw mapUnknownToError(error);
+			}),
 			this.getScannerMetrics.execute()
-		]);
-		if (workersResult.isErr()) return err(workersResult.error);
+		]).catch((error: unknown) => {
+			return [null, err(mapUnknownToError(error))] as const;
+		});
+		if (workerSnapshot === null) return err(scannerMetricsResult.error);
 		if (scannerMetricsResult.isErr()) return err(scannerMetricsResult.error);
 
-		const workerStatus = this.mapArchiveWorkerStatus(workersResult.value);
+		const workerStatus = this.mapArchiveWorkerStatus(workerSnapshot);
 		const scannerStatus = this.mapCommunityScannerStatus(
 			scannerMetricsResult.value
 		);
@@ -61,17 +70,20 @@ export class GetWorkerStatus {
 	}
 
 	private mapArchiveWorkerStatus(value: {
-		readonly staleWorkers: number;
-		readonly activeWorkers: number;
-		readonly totalTakenJobs: number;
-		readonly staleJobAgeMs: number;
+		readonly activeObjects: number;
+		readonly hasPendingObjects: boolean;
+		readonly staleObjects: number;
+		readonly totalScanningObjects: number;
 	}): ArchiveWorkerStatusDTO {
+		const stalledWithBacklog =
+			value.hasPendingObjects && value.activeObjects === 0;
 		return {
-			status: value.staleWorkers > 0 ? 'degraded' : 'ok',
-			activeWorkers: value.activeWorkers,
-			staleWorkers: value.staleWorkers,
-			totalTakenJobs: value.totalTakenJobs,
-			staleJobAgeMs: value.staleJobAgeMs
+			status:
+				value.staleObjects > 0 || stalledWithBacklog ? 'degraded' : 'ok',
+			activeWorkers: value.activeObjects,
+			staleWorkers: value.staleObjects,
+			totalTakenJobs: value.totalScanningObjects,
+			staleJobAgeMs: archiveObjectWorkerStaleAgeMs
 		};
 	}
 

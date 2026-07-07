@@ -1,5 +1,5 @@
 import 'reflect-metadata';
-import { Url, type HttpOptions, type HttpService } from 'http-helper';
+import { Url, isHttpError, type HttpOptions, type HttpService } from 'http-helper';
 import { injectable } from 'inversify';
 import { err, ok, Result } from 'neverthrow';
 import { Scan } from '../../domain/scan/Scan.js';
@@ -25,6 +25,15 @@ import { type ScanError, ScanErrorType } from '../../domain/scan/ScanError.js';
 import type { CoordinatorAuthConfig } from '../config/CoordinatorAuthConfig.js';
 import { CoordinatorServiceError } from './CoordinatorServiceError.js';
 import { parseHistoryArchiveObjectJobDTO } from './HistoryArchiveObjectJobResponseParser.js';
+
+const coordinatorReadOptions: HttpOptions = {
+	connectionTimeoutMs: 30_000,
+	socketTimeoutMs: 30_000
+};
+const coordinatorWriteOptions: HttpOptions = {
+	connectionTimeoutMs: 30_000,
+	socketTimeoutMs: 30_000
+};
 
 @injectable()
 export class RESTScanCoordinatorService implements ScanCoordinatorService {
@@ -146,7 +155,10 @@ export class RESTScanCoordinatorService implements ScanCoordinatorService {
 
 		const response = await this.httpService.get(
 			urlResult.value,
-			this.getHttpOptions({ responseType: 'json' })
+			this.getHttpOptions({
+				...coordinatorReadOptions,
+				responseType: 'json'
+			})
 		);
 
 		if (response.isErr()) {
@@ -379,7 +391,7 @@ export class RESTScanCoordinatorService implements ScanCoordinatorService {
 		const response = await this.httpService.post(
 			urlResult.value,
 			batch as unknown as Record<string, unknown>,
-			this.getHttpOptions()
+			this.getHttpOptions(coordinatorWriteOptions)
 		);
 
 		if (response.isErr()) {
@@ -440,11 +452,32 @@ export class RESTScanCoordinatorService implements ScanCoordinatorService {
 		const response = await this.httpService.post(
 			urlResult.value,
 			data,
-			this.getHttpOptions()
+			this.getHttpOptions(coordinatorWriteOptions)
 		);
 
 		if (response.isErr()) {
+			if (
+				action === 'heartbeat' &&
+				isHttpError(response.error) &&
+				response.error.response?.status === 404
+			) {
+				return ok(undefined);
+			}
+			if (
+				action === 'release' &&
+				isHttpError(response.error) &&
+				response.error.response?.status === 404
+			) {
+				return ok(undefined);
+			}
 			return err(new CoordinatorServiceError(errorMessage, response.error));
+		}
+
+		if (
+			response.value.status === 404 &&
+			(action === 'heartbeat' || action === 'release')
+		) {
+			return ok(undefined);
 		}
 
 		if (response.value.status !== 204 && response.value.status !== 404) {
