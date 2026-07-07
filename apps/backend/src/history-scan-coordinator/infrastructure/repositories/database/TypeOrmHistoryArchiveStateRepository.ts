@@ -2,6 +2,7 @@ import {
 	getHistoryArchiveUrlIdentity,
 	parseHistoryArchiveUrl
 } from '@history-scan-coordinator/domain/ArchiveUrlIdentity.js';
+import { HistoryArchiveObject } from '@history-scan-coordinator/domain/history-archive-object/HistoryArchiveObject.js';
 import type { HistoryArchiveStateRepository } from '@history-scan-coordinator/domain/history-archive-state/HistoryArchiveStateRepository.js';
 import {
 	HistoryArchiveStateSnapshot,
@@ -17,9 +18,7 @@ const upsertConflictPaths: readonly (keyof HistoryArchiveStateSnapshot)[] = [
 ];
 
 @injectable()
-export class TypeOrmHistoryArchiveStateRepository
-	implements HistoryArchiveStateRepository
-{
+export class TypeOrmHistoryArchiveStateRepository implements HistoryArchiveStateRepository {
 	constructor(
 		private readonly repository: Repository<HistoryArchiveStateSnapshot>
 	) {}
@@ -36,9 +35,7 @@ export class TypeOrmHistoryArchiveStateRepository
 		});
 	}
 
-	async findByUrl(
-	url: string
-): Promise<HistoryArchiveStateSnapshot | null> {
+	async findByUrl(url: string): Promise<HistoryArchiveStateSnapshot | null> {
 		const archiveUrlIdentity = getHistoryArchiveUrlIdentity(url);
 		if (archiveUrlIdentity === null) return null;
 
@@ -51,7 +48,8 @@ export class TypeOrmHistoryArchiveStateRepository
 		source: HistoryArchiveStateSource
 	): Promise<void> {
 		const normalizedArchiveUrl = this.requireArchiveUrl(archiveUrl);
-		const archiveUrlIdentity = this.requireArchiveUrlIdentity(normalizedArchiveUrl);
+		const archiveUrlIdentity =
+			this.requireArchiveUrlIdentity(normalizedArchiveUrl);
 		const snapshot = HistoryArchiveStateSnapshot.available(
 			normalizedArchiveUrl,
 			archiveUrlIdentity,
@@ -60,13 +58,19 @@ export class TypeOrmHistoryArchiveStateRepository
 		);
 
 		await this.repository.upsert(snapshot, [...upsertConflictPaths]);
+		await this.markRootObjectCaptured(
+			normalizedArchiveUrl,
+			archiveUrlIdentity,
+			archiveMetadata.stellarHistoryUrl
+		);
 	}
 
 	async saveFailure(
 		input: Omit<HistoryArchiveStateFailureInput, 'archiveUrlIdentity'>
 	): Promise<void> {
 		const normalizedArchiveUrl = this.requireArchiveUrl(input.archiveUrl);
-		const archiveUrlIdentity = this.requireArchiveUrlIdentity(normalizedArchiveUrl);
+		const archiveUrlIdentity =
+			this.requireArchiveUrlIdentity(normalizedArchiveUrl);
 		const snapshot = HistoryArchiveStateSnapshot.failure({
 			...input,
 			archiveUrl: normalizedArchiveUrl,
@@ -90,5 +94,61 @@ export class TypeOrmHistoryArchiveStateRepository
 		}
 
 		return archiveUrlIdentity;
+	}
+
+	private async markRootObjectCaptured(
+		archiveUrl: string,
+		archiveUrlIdentity: string,
+		stateUrl: string
+	): Promise<void> {
+		const objectRepository =
+			this.repository.manager.getRepository(HistoryArchiveObject);
+
+		await objectRepository
+			.createQueryBuilder()
+			.insert()
+			.into(HistoryArchiveObject)
+			.values(
+				new HistoryArchiveObject({
+					archiveUrl,
+					archiveUrlIdentity,
+					objectKey: 'root',
+					objectOrder: 0,
+					objectType: 'history-archive-state',
+					objectUrl: stateUrl,
+					status: 'verified'
+				})
+			)
+			.orIgnore()
+			.execute();
+
+		await objectRepository
+			.createQueryBuilder()
+			.update(HistoryArchiveObject)
+			.set({
+				bytesDownloaded: null,
+				claimedAt: null,
+				claimedByCommunityScannerId: null,
+				errorMessage: null,
+				errorType: null,
+				httpStatus: null,
+				nextAttemptAt: null,
+				refreshAfter: () => 'now() + make_interval(mins => 5)',
+				status: 'verified',
+				updatedAt: () => 'now()',
+				verifiedAt: () => 'now()',
+				workerStage: 'captured_history_archive_state'
+			})
+			.where('"archiveUrlIdentity" = :archiveUrlIdentity', {
+				archiveUrlIdentity
+			})
+			.andWhere('"objectType" = :objectType', {
+				objectType: 'history-archive-state'
+			})
+			.andWhere('"objectKey" = :objectKey', { objectKey: 'root' })
+			.andWhere('status != :scanningStatus', {
+				scanningStatus: 'scanning'
+			})
+			.execute();
 	}
 }

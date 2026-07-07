@@ -47,6 +47,11 @@ describe('ScheduleHistoryArchiveObjects', () => {
 				object.checkpointLedger < 500_000
 		);
 		expect(checkpointDiscoveryObjects).toHaveLength(256);
+		expect(
+			savedObjects.find(
+				(object) => object.objectType === 'history-archive-state'
+			)?.status
+		).toBe('verified');
 	});
 });
 

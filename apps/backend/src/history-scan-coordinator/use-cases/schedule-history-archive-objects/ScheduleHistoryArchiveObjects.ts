@@ -42,7 +42,9 @@ export class ScheduleHistoryArchiveObjects {
 				await this.objectRepository.findOldestCheckpointLedgerByArchiveUrlIdentities(
 					states.map((state) => state.archiveUrlIdentity)
 				);
-			const stateObjects = states.flatMap(buildHistoryArchiveObjectsFromState);
+			const stateObjects = states.flatMap((state) =>
+				buildHistoryArchiveObjectsFromState(state, { rootStatus: 'verified' })
+			);
 			const checkpointDiscoveryObjects = states.flatMap((state) =>
 				buildCheckpointStateDiscoveryObjects(state, {
 					maxObjects: maxCheckpointDiscoveryPageSize,

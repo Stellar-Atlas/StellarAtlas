@@ -2,7 +2,10 @@ import { normalizeHistoryArchiveRootUrl } from 'shared';
 import type { HistoryStateBucketDTO } from 'history-scanner-dto';
 import type { HistoryArchiveStateSnapshot } from '../history-archive-state/HistoryArchiveStateSnapshot.js';
 import { HistoryArchiveObject } from './HistoryArchiveObject.js';
-import type { HistoryArchiveObjectType } from './HistoryArchiveObject.js';
+import type {
+	HistoryArchiveObjectStatus,
+	HistoryArchiveObjectType
+} from './HistoryArchiveObject.js';
 
 const checkpointFrequency = 64;
 const defaultCheckpointDiscoveryPageSize = 1;
@@ -24,7 +27,8 @@ const objectOrderByType: Record<HistoryArchiveObjectType, number> = {
 };
 
 export function buildHistoryArchiveObjectsFromState(
-	snapshot: HistoryArchiveStateSnapshot
+	snapshot: HistoryArchiveStateSnapshot,
+	options: { readonly rootStatus?: HistoryArchiveObjectStatus } = {}
 ): readonly HistoryArchiveObject[] {
 	if (snapshot.status !== 'available' || snapshot.rawState === null) return [];
 
@@ -38,7 +42,8 @@ export function buildHistoryArchiveObjectsFromState(
 			objectKey: 'root',
 			objectOrder: objectOrderByType['history-archive-state'],
 			objectType: 'history-archive-state',
-			objectUrl: snapshot.stateUrl
+			objectUrl: snapshot.stateUrl,
+			status: options.rootStatus ?? 'pending'
 		})
 	];
 

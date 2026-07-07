@@ -197,8 +197,56 @@ export class TypeOrmHistoryArchiveObjectRepository implements HistoryArchiveObje
 			objects,
 			getHistoryArchiveStateRefreshBefore()
 		);
+		await this.markCapturedHistoryArchiveStateObjectsVerified(objects);
 
 		return insertedCount + refreshedCount;
+	}
+
+	private async markCapturedHistoryArchiveStateObjectsVerified(
+		objects: readonly HistoryArchiveObject[]
+	): Promise<void> {
+		const archiveUrlIdentities = Array.from(
+			new Set(
+				objects
+					.filter(
+						(object) =>
+							object.objectType === 'history-archive-state' &&
+							object.objectKey === 'root' &&
+							object.status === 'verified'
+					)
+					.map((object) => object.archiveUrlIdentity)
+			)
+		);
+		if (archiveUrlIdentities.length === 0) return;
+
+		await this.repository
+			.createQueryBuilder()
+			.update(HistoryArchiveObject)
+			.set({
+				bytesDownloaded: null,
+				claimedAt: null,
+				claimedByCommunityScannerId: null,
+				errorMessage: null,
+				errorType: null,
+				httpStatus: null,
+				nextAttemptAt: null,
+				refreshAfter: () => 'now() + make_interval(mins => 5)',
+				status: 'verified',
+				updatedAt: () => 'now()',
+				verifiedAt: () => 'now()',
+				workerStage: 'captured_history_archive_state'
+			})
+			.where('"archiveUrlIdentity" IN (:...archiveUrlIdentities)', {
+				archiveUrlIdentities
+			})
+			.andWhere('"objectType" = :objectType', {
+				objectType: 'history-archive-state'
+			})
+			.andWhere('"objectKey" = :objectKey', { objectKey: 'root' })
+			.andWhere('status != :scanningStatus', {
+				scanningStatus: 'scanning'
+			})
+			.execute();
 	}
 
 	private async requeueStaleHistoryArchiveStateObjects(
