@@ -91,10 +91,46 @@ export function formatArchiveObjectTypeGroupLabel(
 }
 
 export function formatArchiveObjectTypeRole(type: ArchiveObjectType): string {
-	if (type === 'history-archive-state') return 'latest published checkpoint';
-	if (type === 'checkpoint-state') return 'checkpoint bucket-list record';
-	if (type === 'bucket') return 'deduplicated ledger-state payload';
-	return '64-ledger archive range file';
+	if (type === 'history-archive-state') return 'latest checkpoint pointer';
+	if (type === 'checkpoint-state') return 'checkpoint file list';
+	if (type === 'bucket') return 'deduplicated state file';
+	return 'checkpoint-range file';
+}
+
+export function formatArchiveObjectStatusLabel(
+	status:
+		| PublicHistoryArchiveObject['status']
+		| 'claimed'
+		| 'delayed'
+		| 'heartbeat'
+		| 'released'
+): string {
+	if (status === 'delayed') return 'delayed';
+	if (status === 'scanning' || status === 'claimed' || status === 'heartbeat') {
+		return 'checking';
+	}
+	if (status === 'verified') return 'verified';
+	if (status === 'failed') return 'failed';
+	if (status === 'released') return 'waiting';
+	return 'waiting';
+}
+
+export function formatArchiveWorkerStageLabel(stage: string | null): string {
+	if (stage === null || stage.length === 0) return '';
+	if (stage.includes('download')) return 'downloading';
+	if (stage.includes('hash') || stage.includes('verify')) return 'verifying';
+	if (stage.includes('parse')) return 'parsing';
+	if (stage.includes('claim')) return 'checking';
+	if (stage.includes('release')) return 'waiting';
+	if (stage.includes('backoff')) return 'waiting';
+	return stage.replaceAll('_', ' ');
+}
+
+export function formatArchiveErrorTypeLabel(type: string): string {
+	if (type === verificationErrorType) return 'Archive file evidence';
+	if (type.toLowerCase().includes('http')) return 'Archive HTTP evidence';
+	if (type.toLowerCase().includes('worker')) return 'Scanner infrastructure';
+	return 'Scanner evidence';
 }
 
 export function sanitizeArchiveEvidenceText(value: string): string {

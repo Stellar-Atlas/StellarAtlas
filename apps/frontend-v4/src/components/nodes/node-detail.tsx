@@ -245,6 +245,8 @@ function getEvidenceAwareNodeTags(
 
 	if (!currentArchiveEvidenceIsClean) return tags;
 
-	const filteredTags = tags.filter((tag) => tag.label !== 'archive issue');
+	const filteredTags = tags.filter(
+		(tag) => tag.label !== 'archive evidence warning'
+	);
 	return filteredTags.length > 0 ? filteredTags : tags;
 }

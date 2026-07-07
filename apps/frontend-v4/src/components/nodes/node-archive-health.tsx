@@ -19,8 +19,13 @@ import {
 } from '@components/archive-scans/history-archive-object-table';
 import { HistoryArchiveObjectEventLog } from '@components/archive-scans/history-archive-object-event-log';
 import { StatusPill } from '@components/status/status-ui';
-import { formatDateTime, formatInteger, formatPercent } from '@format/formatters';
+import {
+	formatDateTime,
+	formatInteger,
+	formatPercent
+} from '@format/formatters';
 import { ArchiveMetadata } from './node-archive-evidence';
+import { NodeArchiveRawEvidence } from './node-archive-raw-evidence';
 import { NodeArchiveRepairPlan } from './node-archive-repair-plan';
 
 interface NodeArchiveHealthProps {
@@ -96,7 +101,7 @@ export function NodeArchiveHealth({
 		<article className="panel detail-panel archive-panel archive-health-panel">
 			<div className="panel-heading">
 				<div>
-					<h2>Archive evidence</h2>
+					<h2>Archive health</h2>
 					<span className="muted-inline">
 						{historyArchiveSummary
 							? `Updated ${formatDateTime(historyArchiveSummary.generatedAt)}`
@@ -113,11 +118,7 @@ export function NodeArchiveHealth({
 				node={node}
 				summary={historyArchiveSummary}
 			/>
-			<ArchiveHealthTabs
-				activeTab={tab}
-				counts={tabCounts}
-				onSelect={setTab}
-			/>
+			<ArchiveHealthTabs activeTab={tab} counts={tabCounts} onSelect={setTab} />
 			<div className="archive-health-tab-panel">
 				{tab === 'state' ? (
 					<ArchiveMetadata
@@ -130,11 +131,11 @@ export function NodeArchiveHealth({
 					<HistoryArchiveObjectEventLog
 						events={historyArchiveEvents}
 						framed={false}
-						title="Recent archive object activity"
+						title="Recent archive file activity"
 					/>
 				) : null}
 				{tab === 'raw' ? (
-					<RawArchiveEvidence
+					<NodeArchiveRawEvidence
 						events={historyArchiveEvents}
 						objects={historyArchiveObjects}
 						state={historyArchiveState}
@@ -142,19 +143,21 @@ export function NodeArchiveHealth({
 					/>
 				) : null}
 				{isObjectTableTab(tab) ? (
-					tab === 'attention' &&
-					historyArchiveRepairPlan !== null &&
-					(historyArchiveRepairPlan.actions.length > 0 ||
-						historyArchiveRepairPlan.infrastructureBlocks.length > 0) ? (
-						<NodeArchiveRepairPlan repairPlan={historyArchiveRepairPlan} />
-					) : (
+					<>
+						{tab === 'attention' &&
+						historyArchiveRepairPlan !== null &&
+						(historyArchiveRepairPlan.actions.length > 0 ||
+							historyArchiveRepairPlan.infrastructureBlocks.length > 0) ? (
+							<NodeArchiveRepairPlan repairPlan={historyArchiveRepairPlan} />
+						) : null}
 						<ArchiveObjectTableOrEmpty
 							coverageByBucketHash={coverageByBucketHash}
 							generatedAt={historyArchiveObjects?.generatedAt ?? ''}
 							objects={objectsForCurrentTab}
+							summary={historyArchiveSummary}
 							tab={tab}
 						/>
-					)
+					</>
 				) : null}
 			</div>
 		</article>
@@ -177,10 +180,10 @@ function ArchiveHealthSummary({
 					<tr>
 						<th>Archive source</th>
 						<th>History archive state</th>
-						<th>Archive-source files checked</th>
-						<th>Cross-file checks</th>
-						<th>Bucket references</th>
-						<th>Checking now</th>
+						<th>Files checked</th>
+						<th>Checkpoint proof</th>
+						<th>Bucket copies</th>
+						<th>Active</th>
 						<th>Failures</th>
 					</tr>
 				</thead>
@@ -196,7 +199,9 @@ function ArchiveHealthSummary({
 								? formatCoverage(summary.verifiedObjects, summary.totalObjects)
 								: '0 / 0'}
 						</td>
-						<td>{summary ? formatCheckpointProof(summary) : 'not checked yet'}</td>
+						<td>
+							{summary ? formatCheckpointProof(summary) : 'not checked yet'}
+						</td>
 						<td>
 							{summary
 								? formatCoverage(
@@ -224,7 +229,10 @@ function ArchiveHealthTabs({
 	readonly onSelect: (tab: ArchiveHealthTab) => void;
 }): React.JSX.Element {
 	return (
-		<div className="archive-health-tabs segmented" aria-label="Archive evidence view">
+		<div
+			className="archive-health-tabs segmented"
+			aria-label="Archive evidence view"
+		>
 			{archiveHealthTabs.map((tab) => (
 				<button
 					aria-pressed={activeTab === tab.value}
@@ -244,6 +252,7 @@ function ArchiveObjectTableOrEmpty({
 	coverageByBucketHash,
 	generatedAt,
 	objects,
+	summary,
 	tab
 }: {
 	readonly coverageByBucketHash: ReadonlyMap<
@@ -252,10 +261,15 @@ function ArchiveObjectTableOrEmpty({
 	>;
 	readonly generatedAt: string;
 	readonly objects: readonly PublicHistoryArchiveObject[];
+	readonly summary: PublicHistoryArchiveObjectSummary | null;
 	readonly tab: ArchiveHealthTab;
 }): React.JSX.Element {
 	if (objects.length === 0) {
-		return <p className="archive-good-state">{getEmptyTabText(tab)}</p>;
+		return (
+			<p className="archive-good-state">
+				{getEmptyTabText(tab, summary)}
+			</p>
+		);
 	}
 
 	return (
@@ -264,51 +278,6 @@ function ArchiveObjectTableOrEmpty({
 			generatedAt={generatedAt}
 			objects={objects}
 		/>
-	);
-}
-
-function RawArchiveEvidence({
-	events,
-	objects,
-	state,
-	summary
-}: {
-	readonly events: PublicHistoryArchiveObjectEvents | null;
-	readonly objects: PublicHistoryArchiveObjectQueue | null;
-	readonly state: PublicHistoryArchiveState | null;
-	readonly summary: PublicHistoryArchiveObjectSummary | null;
-}): React.JSX.Element {
-	return (
-		<div className="archive-raw-evidence">
-			<RawJsonDetails label="Summary JSON" value={summary} />
-			<RawJsonDetails label="History archive state JSON" value={state} />
-			<RawJsonDetails
-				label="Current work sample JSON"
-				value={objects ? { ...objects, objects: objects.objects.slice(0, 20) } : null}
-			/>
-			<RawJsonDetails
-				label="Recent event sample JSON"
-				value={events ? { ...events, events: events.events.slice(0, 20) } : null}
-			/>
-		</div>
-	);
-}
-
-function RawJsonDetails({
-	label,
-	value
-}: {
-	readonly label: string;
-	readonly value: unknown;
-}): React.JSX.Element {
-	return (
-		<details className="metadata-document">
-			<summary>
-				<span>{label}</span>
-				<span className="muted-inline">{value === null ? 'not available' : 'available'}</span>
-			</summary>
-			<pre>{JSON.stringify(value, null, 2)}</pre>
-		</details>
 	);
 }
 
@@ -372,20 +341,29 @@ function isObjectTableTab(tab: ArchiveHealthTab): boolean {
 	);
 }
 
-function getEmptyTabText(tab: ArchiveHealthTab): string {
+function getEmptyTabText(
+	tab: ArchiveHealthTab,
+	summary: PublicHistoryArchiveObjectSummary | null
+): string {
 	if (tab === 'attention') {
-		return 'No failed, delayed, or missing root archive-state checks are visible in this snapshot.';
+		if (summary !== null && !checkpointProofIsComplete(summary)) {
+			return 'No failed archive files are visible in this snapshot, but cross-file checkpoint proof is still incomplete.';
+		}
+		return 'No failed or delayed archive file checks are visible in this snapshot.';
 	}
-	if (tab === 'active') return 'No archive object checks are active right now.';
-	if (tab === 'verified') return 'No passed archive object checks are in this sample.';
-	if (tab === 'pending') return 'No queued archive object checks are in this sample.';
-	return 'No archive evidence is available for this tab.';
+	if (tab === 'active') return 'No archive file checks are active right now.';
+	if (tab === 'verified')
+		return 'No passed archive file checks are in this sample.';
+	if (tab === 'pending') return 'No waiting archive file checks are in this sample.';
+	return 'No archive file evidence is available for this tab.';
 }
 
 function getArchivePanelStatus(
 	summary: PublicHistoryArchiveObjectSummary | null
 ): 'degraded' | 'ok' {
-	return summary && summary.failedObjects > 0 ? 'degraded' : 'ok';
+	if (!summary) return 'degraded';
+	if (summary.failedObjects > 0) return 'degraded';
+	return checkpointProofIsComplete(summary) ? 'ok' : 'degraded';
 }
 
 function getArchivePanelStatusText(
@@ -395,14 +373,34 @@ function getArchivePanelStatusText(
 	if (summary.failedObjects > 0) {
 		return `${formatInteger(summary.failedObjects)} failures`;
 	}
-	return `${formatInteger(summary.verifiedObjects)} object checks passed`;
+	if (!checkpointProofIsComplete(summary)) {
+		return 'checkpoint proof pending';
+	}
+	return `${formatInteger(summary.verifiedObjects)} archive files verified`;
+}
+
+function checkpointProofIsComplete(
+	summary: PublicHistoryArchiveObjectSummary
+): boolean {
+	const checkpoints = summary.checkpoints;
+	return (
+		checkpoints.expectedArchiveCheckpoints > 0 &&
+		checkpoints.categoryConsistentArchiveCheckpoints ===
+			checkpoints.expectedArchiveCheckpoints &&
+		checkpoints.categoryConsistencyFailedCheckpoints === 0 &&
+		checkpoints.categoryConsistencyPendingCheckpoints === 0 &&
+		checkpoints.categoryConsistencyNotEvaluatedCheckpoints === 0 &&
+		checkpoints.missingArchiveCheckpoints === 0
+	);
 }
 
 function formatArchiveRoot(value: string | null): string {
 	if (!value) return 'none reported';
 	try {
 		const url = new URL(value);
-		return url.host + (url.pathname === '/' ? '' : url.pathname.replace(/\/$/, ''));
+		return (
+			url.host + (url.pathname === '/' ? '' : url.pathname.replace(/\/$/, ''))
+		);
 	} catch {
 		return value;
 	}
@@ -438,7 +436,9 @@ function sanitizeStateFailure(value: string): string {
 	);
 }
 
-function formatCheckpointProof(summary: PublicHistoryArchiveObjectSummary): string {
+function formatCheckpointProof(
+	summary: PublicHistoryArchiveObjectSummary
+): string {
 	const checkpoints = summary.checkpoints;
 	if (checkpoints.categoryConsistentArchiveCheckpoints > 0) {
 		return formatCoverage(
@@ -458,7 +458,6 @@ function formatCoverage(verified: number, total: number): string {
 		(verified / total) * 100
 	)})`;
 }
-
 function formatTabLabel(
 	label: string,
 	tab: ArchiveHealthTab,

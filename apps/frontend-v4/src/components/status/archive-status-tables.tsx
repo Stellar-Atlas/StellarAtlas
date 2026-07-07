@@ -47,7 +47,7 @@ function ArchiveRootPanel({
 		<section className="panel detail-panel archive-panel">
 			<div className="panel-heading">
 				<div>
-					<h2>Archive roots</h2>
+					<h2>Archive sources</h2>
 					<span className="muted-inline">
 						Updated {formatDateTime(summary.generatedAt)}
 					</span>
@@ -61,10 +61,8 @@ function ArchiveRootPanel({
 				<table className="archive-summary-table">
 					<thead>
 						<tr>
-							<th>Roots with state</th>
-							<th>Discovery complete</th>
-							<th>Expected checkpoints</th>
-							<th>Missing checkpoints</th>
+							<th>Sources with state</th>
+							<th>Fully discovered</th>
 							<th>Oldest checkpoint</th>
 							<th>Latest checkpoint</th>
 						</tr>
@@ -76,14 +74,13 @@ function ArchiveRootPanel({
 								{formatInteger(checkpoints.discoveryCompleteArchiveRoots)} /{' '}
 								{formatInteger(checkpoints.archiveRootsWithState)}
 							</td>
-							<td>{formatInteger(checkpoints.expectedArchiveCheckpoints)}</td>
-							<td>{formatInteger(checkpoints.missingArchiveCheckpoints)}</td>
 							<td>{formatLedger(checkpoints.oldestCheckpointLedger)}</td>
 							<td>{formatLedger(checkpoints.latestCheckpointLedger)}</td>
 						</tr>
 					</tbody>
 				</table>
 			</div>
+			<CheckpointDiscoveryDetails summary={summary} />
 		</section>
 	);
 }
@@ -101,7 +98,7 @@ function ArchiveObjectQueuePanel({
 		<section className="panel detail-panel archive-panel">
 			<div className="panel-heading">
 				<div>
-					<h2>Object queue</h2>
+					<h2>Archive file checks</h2>
 					<span className="muted-inline">
 						Updated {formatDateTime(summary.generatedAt)}
 					</span>
@@ -117,7 +114,7 @@ function ArchiveObjectQueuePanel({
 						<tr>
 							<th>Tracked</th>
 							<th>Verified</th>
-							<th>Queued</th>
+							<th>Waiting</th>
 							<th>Failed</th>
 							<th>Active checks</th>
 							<th>Recent sample</th>
@@ -161,6 +158,10 @@ function ObjectTypeDetails({
 					{formatInteger(objectTypes.length)} groups
 				</span>
 			</summary>
+			<p className="muted-copy">
+				These rows count archive files being checked at each archive source.
+				They are not transaction, operation, or ledger entity counts.
+			</p>
 			<div className="responsive-table">
 				<table className="archive-object-type-table">
 					<thead>
@@ -168,7 +169,7 @@ function ObjectTypeDetails({
 							<th>File group</th>
 							<th>Tracked</th>
 							<th>Verified</th>
-							<th>Queued</th>
+							<th>Waiting</th>
 							<th>Failed</th>
 							<th>Active checks</th>
 						</tr>
@@ -204,7 +205,7 @@ function CheckpointProofPanel({
 		<section className="panel detail-panel archive-panel">
 			<div className="panel-heading">
 				<div>
-					<h2>Checkpoint proof</h2>
+					<h2>Cross-file checkpoint checks</h2>
 					<span className="muted-inline">
 						Updated {formatDateTime(summary.generatedAt)}
 					</span>
@@ -219,21 +220,18 @@ function CheckpointProofPanel({
 					<thead>
 						<tr>
 							<th>Object complete</th>
-							<th>Category consistent</th>
+							<th>Files agree</th>
 							<th>Failed</th>
-							<th>Pending</th>
+							<th>Waiting</th>
 							<th>Not checked yet</th>
-							<th>Expected</th>
-							<th>Missing</th>
-							<th>Roots discovered</th>
+							<th>Sources with state</th>
+							<th>Fully discovered</th>
 						</tr>
 					</thead>
 					<tbody>
 						<tr>
 							<td>
-								{formatInteger(
-									checkpoints.objectCompleteArchiveCheckpoints
-								)}
+								{formatInteger(checkpoints.objectCompleteArchiveCheckpoints)}
 							</td>
 							<td>
 								{formatInteger(
@@ -255,8 +253,7 @@ function CheckpointProofPanel({
 									checkpoints.categoryConsistencyNotEvaluatedCheckpoints
 								)}
 							</td>
-							<td>{formatInteger(checkpoints.expectedArchiveCheckpoints)}</td>
-							<td>{formatInteger(checkpoints.missingArchiveCheckpoints)}</td>
+							<td>{formatInteger(checkpoints.archiveRootsWithState)}</td>
 							<td>
 								{formatInteger(checkpoints.discoveryCompleteArchiveRoots)} /{' '}
 								{formatInteger(checkpoints.archiveRootsWithState)}
@@ -266,6 +263,75 @@ function CheckpointProofPanel({
 				</table>
 			</div>
 		</section>
+	);
+}
+
+function CheckpointDiscoveryDetails({
+	summary
+}: {
+	readonly summary: PublicHistoryArchiveObjectSummary;
+}): React.JSX.Element {
+	const checkpoints = summary.checkpoints;
+
+	return (
+		<details className="metadata-document archive-checkpoint-discovery">
+			<summary>
+				<span>Checkpoint discovery backlog</span>
+				<span className="muted-inline">
+					{formatInteger(checkpoints.missingArchiveCheckpoints)} not discovered
+					yet
+				</span>
+			</summary>
+			<p className="muted-copy">
+				Expected checkpoint rows are the full theoretical archive coverage
+				across every captured archive source. Missing rows mean the object
+				scheduler has not discovered or verified those checkpoint files yet.
+			</p>
+			<div className="responsive-table">
+				<table className="archive-summary-table">
+					<thead>
+						<tr>
+							<th>Expected</th>
+							<th>Missing</th>
+							<th>Object complete</th>
+							<th>Files agree</th>
+							<th>Failed</th>
+							<th>Waiting</th>
+							<th>Not checked yet</th>
+						</tr>
+					</thead>
+					<tbody>
+						<tr>
+							<td>{formatInteger(checkpoints.expectedArchiveCheckpoints)}</td>
+							<td>{formatInteger(checkpoints.missingArchiveCheckpoints)}</td>
+							<td>
+								{formatInteger(checkpoints.objectCompleteArchiveCheckpoints)}
+							</td>
+							<td>
+								{formatInteger(
+									checkpoints.categoryConsistentArchiveCheckpoints
+								)}
+							</td>
+							<td>
+								{formatInteger(
+									checkpoints.categoryConsistencyFailedCheckpoints
+								)}
+							</td>
+							<td>
+								{formatInteger(
+									checkpoints.categoryConsistencyPendingCheckpoints
+								)}
+							</td>
+							<td>
+								{formatInteger(
+									checkpoints.categoryConsistencyNotEvaluatedCheckpoints
+								)}
+							</td>
+						</tr>
+					</tbody>
+				</table>
+			</div>
+		</details>
 	);
 }
 
@@ -281,7 +347,8 @@ function getArchiveRootStatus(
 function getObjectQueueStatus(
 	summary: PublicHistoryArchiveObjectSummary
 ): PublicStatusLevel {
-	if (summary.failedObjects > 0 || summary.totalObjects === 0) return 'degraded';
+	if (summary.failedObjects > 0 || summary.totalObjects === 0)
+		return 'degraded';
 	return 'ok';
 }
 
@@ -314,7 +381,7 @@ function formatArchiveRootStatus(
 		formatInteger(checkpoints.discoveryCompleteArchiveRoots) +
 		' / ' +
 		formatInteger(checkpoints.archiveRootsWithState) +
-		' complete'
+		' sources complete'
 	);
 }
 

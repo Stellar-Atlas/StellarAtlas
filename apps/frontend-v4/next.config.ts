@@ -24,10 +24,6 @@ const nextConfig: NextConfig = {
 	reactStrictMode: true,
 	rewrites: async () => [
 		{
-			destination: `${normalizedApiBaseUrl}/docs`,
-			source: '/api-docs'
-		},
-		{
 			destination: `${normalizedApiBaseUrl}/docs/:path*`,
 			source: '/api-docs/:path*'
 		},

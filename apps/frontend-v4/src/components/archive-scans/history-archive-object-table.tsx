@@ -7,8 +7,11 @@ import type {
 import { StatusPill } from '@components/status/status-ui';
 import { getArchiveScanDetailPath } from '@domain/archive-scan-routes';
 import {
+	formatArchiveErrorTypeLabel,
 	formatArchiveObjectTypeLabel,
 	formatArchiveObjectTypeRole,
+	formatArchiveObjectStatusLabel,
+	formatArchiveWorkerStageLabel,
 	sanitizeArchiveEvidenceText
 } from '@domain/history-archive';
 import {
@@ -40,7 +43,7 @@ export function ArchiveObjectTable({
 				<thead>
 					<tr>
 						<th>Status</th>
-						<th>Archive object</th>
+						<th>Archive file</th>
 						<th>Archive source</th>
 						<th>File id</th>
 						<th>Check result</th>
@@ -149,15 +152,13 @@ function ObjectRow({
 				) : null}
 				{object.error ? (
 					<small className="archive-object-error">
-						{object.error.type}:{' '}
+						{formatArchiveErrorTypeLabel(object.error.type)}:{' '}
 						{sanitizeArchiveEvidenceText(object.error.message)}
 					</small>
 				) : null}
 			</td>
 			<td>
-				<strong>
-					{object.workerStage ?? formatObjectStatus(objectStatus)}
-				</strong>
+				<strong>{formatObjectStage(object, objectStatus)}</strong>
 				<small>{formatObjectWork(object)}</small>
 			</td>
 		</tr>
@@ -222,7 +223,10 @@ function BucketCoverageSamples({
 						<small>{copy.objectKey}</small>
 					</div>
 					<div className="metric">
-						<strong>{copy.workerStage ?? copy.status}</strong>
+						<strong>
+							{formatArchiveWorkerStageLabel(copy.workerStage) ||
+								formatArchiveObjectStatusLabel(copy.status)}
+						</strong>
 						<small>{formatBucketCopyWork(copy)}</small>
 					</div>
 				</div>
@@ -272,11 +276,17 @@ function mapObjectStatus(
 }
 
 function formatObjectStatus(status: ArchiveObjectDisplayStatus): string {
-	if (status === 'delayed') return 'delayed';
-	if (status === 'scanning') return 'scanning';
-	if (status === 'verified') return 'verified';
-	if (status === 'failed') return 'failed';
-	return 'pending';
+	return formatArchiveObjectStatusLabel(status);
+}
+
+function formatObjectStage(
+	object: PublicHistoryArchiveObject,
+	status: ArchiveObjectDisplayStatus
+): string {
+	return (
+		formatArchiveWorkerStageLabel(object.workerStage) ||
+		formatArchiveObjectStatusLabel(status)
+	);
 }
 
 function formatObjectDescriptor(object: PublicHistoryArchiveObject): string {
@@ -297,7 +307,6 @@ function formatObjectWork(object: PublicHistoryArchiveObject): string {
 		object.bytesDownloaded === null
 			? null
 			: formatBytes(object.bytesDownloaded),
-		object.claimedAt ? 'claimed ' + formatDateTime(object.claimedAt) : null,
 		object.verifiedAt ? 'verified ' + formatDateTime(object.verifiedAt) : null,
 		'updated ' + formatDateTime(object.updatedAt)
 	].filter((part): part is string => part !== null && part.length > 0);

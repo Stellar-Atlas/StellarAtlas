@@ -106,12 +106,12 @@ export function RecentTransactionsView({
 		<div className="explorer-transaction-feed">
 			<ExplorerState
 				tone="neutral"
-				text={`${formatExplorerSource(result.transactions.source)} transaction sample updated ${formatDate(result.transactions.generatedAt)}.`}
+				text={`Transaction sample updated ${formatDate(result.transactions.generatedAt)}.`}
 			/>
 			{result.transactions.truncated ? (
 				<ExplorerState
 					tone="neutral"
-					text={`Showing ${result.transactions.records.length} external fallback rows from the current response window.`}
+					text={`Showing ${result.transactions.records.length} rows from the current response window.`}
 				/>
 			) : null}
 			<TransactionFeedRows
@@ -120,11 +120,6 @@ export function RecentTransactionsView({
 			/>
 		</div>
 	);
-}
-
-function formatExplorerSource(source: PublicRecentTransactions['source']): string {
-	if (source === 'horizon') return 'External fallback';
-	return source;
 }
 
 export function toDateInputValue(value: string | undefined): string {
@@ -304,7 +299,10 @@ function TransactionCard({
 			<ResultItem label="Ledger" value={transaction.ledger} />
 			<ResultItem label="Created" value={formatDate(transaction.createdAt)} />
 			<ResultItem label="Source account" value={transaction.sourceAccount} />
-			<ResultItem label="Data source" value={formatExplorerSource(transaction.source)} />
+			<ResultItem
+				label="Data source"
+				value={formatTransactionSource(transaction.source)}
+			/>
 			<ResultItem
 				label="Operations"
 				value={transaction.operationCount.toString()}
@@ -316,6 +314,11 @@ function TransactionCard({
 			/>
 		</dl>
 	);
+}
+
+function formatTransactionSource(source: PublicTransactionLookup['source']): string {
+	if (source === 'horizon') return 'current network lookup';
+	return source;
 }
 
 function OperationTable({

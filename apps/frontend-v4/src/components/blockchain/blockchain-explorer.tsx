@@ -175,8 +175,7 @@ export function BlockchainExplorer(): React.JSX.Element {
 					<div>
 						<strong>Search</strong>
 						<span>
-							Local parsed-header coverage is shown below. Explorer lookups use
-							external fallback data until decoded local indexes exist.
+							Search available ledger data and current lookup sources.
 						</span>
 					</div>
 				</div>
@@ -227,10 +226,8 @@ export function BlockchainExplorer(): React.JSX.Element {
 			<section className="explorer-panel explorer-feed-panel">
 				<div className="panel-heading explorer-feed-heading">
 					<div>
-						<strong>External transaction sample</strong>
-						<span>
-							Bounded fallback rows until the local transaction index is active
-						</span>
+						<strong>Recent transactions</strong>
+						<span>Latest transaction rows currently available</span>
 					</div>
 					<button
 						disabled={transactionFeedLoading}
@@ -249,9 +246,9 @@ export function BlockchainExplorer(): React.JSX.Element {
 			<section className="explorer-grid">
 				<section className="explorer-panel">
 					<div className="panel-heading">
-					<div>
-						<strong>Operations</strong>
-							<span>External fallback, capped result window</span>
+						<div>
+							<strong>Operations</strong>
+							<span>Filter rows when the local operation index is available</span>
 						</div>
 					</div>
 					<form className="explorer-filter-form" onSubmit={submitOperations}>
@@ -327,7 +324,7 @@ export function BlockchainExplorer(): React.JSX.Element {
 					<div className="panel-heading">
 						<div>
 							<strong>Assets</strong>
-							<span>External fallback, capped result window</span>
+							<span>Search asset rows when the local asset index is available</span>
 						</div>
 					</div>
 					<form className="explorer-filter-form" onSubmit={submitAssets}>
@@ -351,8 +348,8 @@ export function BlockchainExplorer(): React.JSX.Element {
 				<section className="explorer-panel">
 					<div className="panel-heading">
 						<div>
-							<strong>Contract index status</strong>
-							<span>RPC/index readiness only until contract indexing exists</span>
+							<strong>Contracts</strong>
+							<span>Check contract rows when the local contract index is available</span>
 						</div>
 					</div>
 					<form className="explorer-filter-form" onSubmit={submitContract}>
@@ -391,8 +388,7 @@ function getTransactionHashFromSearch(
 
 function formatSearchTypeOption(type: PublicExplorerSearchType): string {
 	if (type === 'auto') return 'auto';
-	if (type === 'ledger') return 'ledger (external fallback)';
-	return `${type} (external fallback)`;
+	return type;
 }
 
 function ExplorerInput({

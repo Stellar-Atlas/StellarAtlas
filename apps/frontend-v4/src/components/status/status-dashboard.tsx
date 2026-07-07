@@ -53,18 +53,22 @@ export function StatusDashboard({
 	);
 	const archiveQueueDetail = archiveEvidenceAvailable
 		? formatArchiveObjectQueueDetail(archiveSummary)
-		: 'Archive evidence endpoints did not respond';
-	const archiveVerifierDetail = archiveEvidenceAvailable
-		? `${formatInteger(archiveObjectActivity.freshActiveObjects)} current active checks, ${formatInteger(archiveObjectActivity.staleActiveObjects)} delayed, ${formatInteger(archiveSummary.pendingObjects)} queued`
-		: 'Archive worker activity is unavailable';
+		: 'Archive file evidence endpoints did not respond';
+	const archiveVerifierDetail = formatArchiveWorkerDetail(workers);
 	const archiveCoverageText = formatArchiveVerificationCoverage(archiveSummary);
-	const frontendApiStatus = criticalRuntimeStatus(api.status, frontend.configured);
+	const archiveAttentionText = formatArchiveAttentionText(archiveSummary);
+	const frontendApiStatus = criticalRuntimeStatus(
+		api.status,
+		frontend.configured
+	);
 	const archiveStatus = archiveEvidenceAvailable
 		? archiveObjectActivity.status
 		: 'unavailable';
-	const archiveWorkerStatus = archiveEvidenceAvailable
-		? archiveObjectActivity.workerStatus
-		: 'unavailable';
+	const archiveWorkerStatus = getArchiveWorkerStatus(
+		workers,
+	archiveEvidenceAvailable,
+	archiveSummary
+);
 
 	return (
 		<div className="status-dashboard">
@@ -83,19 +87,17 @@ export function StatusDashboard({
 				/>
 				<StatCard
 					detail={archiveQueueDetail}
-					label="Archive object queue"
+					label="Archive file checks"
 					tone={statusTone(archiveStatus)}
-					value={archiveEvidenceAvailable ? archiveCoverageText : 'Unavailable'}
+					value={
+						archiveEvidenceAvailable ? archiveAttentionText : 'Unavailable'
+					}
 				/>
 				<StatCard
 					detail={archiveVerifierDetail}
-					label="Object workers"
+					label="Archive scanner workers"
 					tone={statusTone(archiveWorkerStatus)}
-					value={
-						archiveEvidenceAvailable
-							? `${formatInteger(archiveSummary.activeObjects)} active checks`
-							: 'Unavailable'
-					}
+					value={formatWorkerHeadline(workers)}
 				/>
 			</div>
 
@@ -119,12 +121,10 @@ export function StatusDashboard({
 						/>
 						<StatusRow
 							detail={archiveQueueDetail}
-							label="Archive object queue"
+							label="Archive file checks"
 							status={archiveStatus}
 							value={
-								archiveEvidenceAvailable
-									? `${formatInteger(archiveSummary.pendingObjects)} queued`
-									: 'No data'
+								archiveEvidenceAvailable ? archiveAttentionText : 'No data'
 							}
 						/>
 						<StatusRow
@@ -139,7 +139,7 @@ export function StatusDashboard({
 				<section className="panel">
 					<div className="panel-heading">
 						<div>
-							<strong>Object workers</strong>
+							<strong>Archive scanner workers</strong>
 							<span>{formatDateTime(workers.generatedAt)}</span>
 						</div>
 						<StatusPill status={archiveWorkerStatus} />
@@ -149,29 +149,19 @@ export function StatusDashboard({
 							detail={
 								archiveEvidenceAvailable
 									? archiveQueueDetail
-									: 'Archive evidence endpoints did not respond'
+									: 'Archive file evidence endpoints did not respond'
 							}
-							label="Object queue"
+							label="Archive file checks"
 							status={archiveStatus}
 							value={
-								archiveEvidenceAvailable
-									? `${formatInteger(archiveSummary.pendingObjects)} queued`
-									: 'No data'
+								archiveEvidenceAvailable ? archiveAttentionText : 'No data'
 							}
 						/>
 						<StatusRow
-							detail={
-								archiveEvidenceAvailable
-									? `${formatInteger(archiveObjectActivity.freshActiveObjects)} current, ${formatInteger(archiveObjectActivity.staleActiveObjects)} delayed after ${formatDuration(ARCHIVE_OBJECT_STALE_AGE_MS)}`
-									: 'Archive worker activity is unavailable'
-							}
-							label="Active object checks"
+							detail={archiveVerifierDetail}
+							label="Worker slots"
 							status={archiveWorkerStatus}
-							value={
-								archiveEvidenceAvailable
-									? `${formatInteger(archiveSummary.activeObjects)} active`
-									: 'No data'
-							}
+							value={formatWorkerHeadline(workers)}
 						/>
 					</div>
 				</section>
@@ -192,7 +182,7 @@ export function StatusDashboard({
 
 				<HistoryArchiveObjectEventLog
 					events={archiveEvents}
-					title="Archive object events"
+					title="Archive file activity"
 				/>
 
 				<RecentScanLogs scanLogs={scanLogs} />
@@ -206,9 +196,9 @@ function ArchiveEvidenceUnavailablePanel(): React.JSX.Element {
 		<section className="panel detail-panel archive-panel">
 			<div className="panel-heading">
 				<div>
-					<h2>Archive evidence</h2>
+					<h2>Archive file checks unavailable</h2>
 					<span className="muted-inline">
-						Archive evidence endpoints did not respond before the status page
+						Archive file evidence endpoints did not respond before the status page
 						timeout.
 					</span>
 				</div>
@@ -216,7 +206,7 @@ function ArchiveEvidenceUnavailablePanel(): React.JSX.Element {
 			</div>
 			<p className="archive-good-state">
 				No archive verification claim is shown because the status page could not
-				load the archive evidence snapshot.
+				load the archive file evidence snapshot.
 			</p>
 		</section>
 	);
@@ -227,7 +217,7 @@ function ArchiveQueueUnavailablePanel(): React.JSX.Element {
 		<section className="panel detail-panel archive-panel">
 			<div className="panel-heading">
 				<div>
-					<h2>Object queue sample</h2>
+					<h2>Archive file sample</h2>
 					<span className="muted-inline">
 						The aggregate archive summary loaded, but the queue sample did not
 						respond before the status page timeout.
@@ -249,7 +239,6 @@ interface ArchiveObjectSummary {
 	readonly freshActiveObjects: number;
 	readonly staleActiveObjects: number;
 	readonly status: PublicStatusLevel;
-	readonly workerStatus: PublicStatusLevel;
 }
 
 function summarizeArchiveObjects(
@@ -261,8 +250,7 @@ function summarizeArchiveObjects(
 		return {
 			freshActiveObjects: summary.activeObjects,
 			staleActiveObjects: 0,
-			status: summary.failedObjects > 0 ? 'degraded' : 'ok',
-			workerStatus: summary.activeObjects > 0 ? 'unavailable' : 'ok'
+			status: summary.failedObjects > 0 ? 'degraded' : 'ok'
 		};
 	}
 
@@ -282,14 +270,10 @@ function summarizeArchiveObjects(
 	);
 	const status: PublicStatusLevel =
 		objects.failedObjects > 0 || staleActiveObjects > 0 ? 'degraded' : 'ok';
-	const workerStatus: PublicStatusLevel =
-		staleActiveObjects > 0 ? 'degraded' : 'ok';
-
 	return {
 		freshActiveObjects,
 		staleActiveObjects,
-		status,
-		workerStatus
+		status
 	};
 }
 
@@ -311,7 +295,50 @@ function formatArchiveVerificationCoverage(
 function formatArchiveObjectQueueDetail(
 	summary: PublicHistoryArchiveObjectSummary
 ): string {
-	return `${formatInteger(summary.totalObjects)} tracked; ${formatInteger(summary.verifiedObjects)} verified; ${formatInteger(summary.pendingObjects)} queued; ${formatInteger(summary.failedObjects)} failed`;
+	return `${formatInteger(summary.verifiedObjects)} verified of ${formatInteger(summary.totalObjects)} tracked; ${formatInteger(summary.pendingObjects)} waiting`;
+}
+
+function formatArchiveAttentionText(
+	summary: PublicHistoryArchiveObjectSummary
+): string {
+	if (summary.failedObjects > 0) {
+		return `${formatInteger(summary.failedObjects)} evidence failures`;
+	}
+	if (summary.activeObjects > 0) {
+		return `${formatInteger(summary.activeObjects)} checking now`;
+	}
+	return formatArchiveVerificationCoverage(summary);
+}
+
+function formatWorkerHeadline(workers: PublicWorkerStatus): string {
+	const archiveWorkers = workers.archiveWorkers;
+	if (archiveWorkers.activeWorkers > 0) {
+		return `${formatInteger(archiveWorkers.activeWorkers)} active workers`;
+	}
+	if (archiveWorkers.totalTakenJobs > 0) {
+		return `${formatInteger(archiveWorkers.totalTakenJobs)} claimed jobs`;
+	}
+	return 'No active workers';
+}
+
+function formatArchiveWorkerDetail(workers: PublicWorkerStatus): string {
+	const archiveWorkers = workers.archiveWorkers;
+	return `${formatInteger(archiveWorkers.totalTakenJobs)} claimed jobs, ${formatInteger(archiveWorkers.activeWorkers)} active workers, ${formatInteger(archiveWorkers.staleWorkers)} stale workers`;
+}
+
+function getArchiveWorkerStatus(
+	workers: PublicWorkerStatus,
+	archiveEvidenceAvailable: boolean,
+	summary: PublicHistoryArchiveObjectSummary
+): PublicStatusLevel {
+	if (!archiveEvidenceAvailable) return 'unavailable';
+	if (workers.archiveWorkers.status !== 'ok') {
+		return workers.archiveWorkers.status;
+	}
+	if (summary.pendingObjects > 0 && workers.archiveWorkers.activeWorkers === 0) {
+		return 'degraded';
+	}
+	return 'ok';
 }
 
 function criticalRuntimeStatus(

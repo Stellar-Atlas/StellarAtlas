@@ -4,7 +4,10 @@ import type {
 } from '@api/types';
 import { StatusPill } from '@components/status/status-ui';
 import {
+	formatArchiveErrorTypeLabel,
 	formatArchiveObjectTypeLabel,
+	formatArchiveObjectStatusLabel,
+	formatArchiveWorkerStageLabel,
 	sanitizeArchiveEvidenceText
 } from '@domain/history-archive';
 import { formatDateTime, formatInteger } from '@format/formatters';
@@ -20,7 +23,7 @@ const MAX_ARCHIVE_EVENT_ROWS = 80;
 export function HistoryArchiveObjectEventLog({
 	events,
 	framed = true,
-	title = 'Recent archive object activity'
+	title = 'Recent archive file activity'
 }: HistoryArchiveObjectEventLogProps): React.JSX.Element {
 	const failedEvents = events.events.filter(
 		(event) => event.eventType === 'failed'
@@ -63,7 +66,7 @@ function EventFailureTable({
 	if (events.length === 0) {
 		return (
 			<p className="archive-good-state">
-				No failed archive object checks are in the recent event window.
+				No failed archive file checks are in the recent event window.
 			</p>
 		);
 	}
@@ -71,7 +74,7 @@ function EventFailureTable({
 	return (
 		<div className="archive-priority-block">
 			<div className="archive-table-caption">
-				<strong>Failed archive object evidence</strong>
+				<strong>Failed archive file evidence</strong>
 				<span>{formatInteger(events.length)} shown</span>
 			</div>
 			<EventTable events={events} />
@@ -88,14 +91,14 @@ function EventHistoryDetails({
 }): React.JSX.Element {
 	if (totalEvents === 0) {
 		return (
-			<p className="muted-copy">No archive object activity is available yet.</p>
+			<p className="muted-copy">No archive file activity is available yet.</p>
 		);
 	}
 
 	return (
 		<details className="metadata-document archive-object-details">
 			<summary>
-				<span>Recent archive object activity</span>
+				<span>Recent archive file activity</span>
 				<span className="muted-inline">
 					Showing {formatInteger(events.length)} of {formatInteger(totalEvents)}
 				</span>
@@ -116,7 +119,7 @@ function EventTable({
 				<thead>
 					<tr>
 						<th>Event</th>
-						<th>Archive object</th>
+						<th>Archive file</th>
 						<th>Archive source</th>
 						<th>File id</th>
 						<th>Activity</th>
@@ -156,13 +159,13 @@ function EventRow({
 				<span className="archive-object-url">{event.objectKey}</span>
 				{event.error ? (
 					<small className="archive-object-error">
-						{event.error.type}:{' '}
+						{formatArchiveErrorTypeLabel(event.error.type)}:{' '}
 						{sanitizeArchiveEvidenceText(event.error.message)}
 					</small>
 				) : null}
 			</td>
 			<td>
-				<strong>{event.workerStage ?? formatEventType(event.eventType)}</strong>
+				<strong>{formatEventStage(event)}</strong>
 				<small>{formatEventWork(event)}</small>
 			</td>
 		</tr>
@@ -180,10 +183,14 @@ function formatEventType(
 	eventType: ObjectEvents['events'][number]['eventType']
 ): string {
 	if (eventType === 'heartbeat') return 'heartbeat';
-	if (eventType === 'verified') return 'verified';
-	if (eventType === 'failed') return 'failed';
-	if (eventType === 'released') return 'released';
-	return 'claimed';
+	return formatArchiveObjectStatusLabel(eventType);
+}
+
+function formatEventStage(event: ObjectEvents['events'][number]): string {
+	return (
+		formatArchiveWorkerStageLabel(event.workerStage) ||
+		formatArchiveObjectStatusLabel(event.eventType)
+	);
 }
 
 function formatEventStatusText(
@@ -215,7 +222,6 @@ function formatEventWork(event: ObjectEvents['events'][number]): string {
 	const parts = [
 		`attempt ${event.claimAttempt === null ? 'n/a' : formatInteger(event.claimAttempt)}`,
 		event.bytesDownloaded === null ? null : formatBytes(event.bytesDownloaded),
-		event.nextAttemptAt ? `retry ${formatDateTime(event.nextAttemptAt)}` : null,
 		`at ${formatDateTime(event.createdAt)}`
 	].filter((part): part is string => part !== null && part.length > 0);
 

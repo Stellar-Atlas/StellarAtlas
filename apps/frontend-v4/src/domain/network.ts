@@ -34,7 +34,11 @@ export const getNodeTags = (node: PublicNode): NodeTag[] => {
 	else if (node.active) tags.push({ label: 'listener', tone: 'neutral' });
 
 	if (node.historyArchiveHasError)
-		tags.push({ label: 'archive issue', tone: 'warning' });
+		tags.push({
+			label: 'archive evidence warning',
+			title: 'Archive verification evidence needs review on the node detail',
+			tone: 'warning'
+		});
 	if (node.connectivityError)
 		tags.push({ label: 'connection failed', tone: 'danger' });
 	if (node.stellarCoreVersionBehind)

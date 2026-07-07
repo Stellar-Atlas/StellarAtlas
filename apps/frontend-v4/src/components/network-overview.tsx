@@ -115,7 +115,9 @@ export function NetworkOverview({
 										<span className="tag danger">not validating</span>
 									)}
 									{node.historyArchiveHasError && (
-										<span className="tag warning">archive issue</span>
+										<span className="tag warning">
+											archive evidence warning
+										</span>
 									)}
 									{node.connectivityError && (
 										<span className="tag danger">connection failed</span>

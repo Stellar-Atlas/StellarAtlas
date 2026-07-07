@@ -73,13 +73,12 @@ const endpointGroups: EndpointGroup[] = [
 	},
 	{
 		description:
-			'Faceted lookup across current network entities with read-model fallback metadata.',
+			'Faceted lookup across current network entities and indexed metadata.',
 		endpoints: ['/v1/search', '/v1/search/nodes', '/v1/search/organizations'],
 		title: 'Search'
 	},
 	{
-		description:
-			'Horizon-backed explorer lookup and current full-history read-model state.',
+		description: 'Explorer lookup and current full-history read-model state.',
 		endpoints: [
 			'/v1/explorer/search',
 			'/v1/explorer/transactions',
@@ -108,16 +107,14 @@ const endpointGroups: EndpointGroup[] = [
 	},
 	{
 		description:
-			'Persisted external comparison evidence for RADAR parity and API-doc drift review.',
+			'Persisted external comparison evidence for API drift review.',
 		endpoints: [
 			'/v1/cross-check/sources',
 			'/v1/cross-check/validators',
 			'/v1/cross-check/organizations',
 			'/v1/cross-check/archives',
 			'/v1/cross-check/api-docs/latest',
-			'/v1/cross-check/api-docs/snapshots',
-			'/v1/cross-check/radar-network/latest',
-			'/v1/cross-check/radar-network/snapshots'
+			'/v1/cross-check/api-docs/snapshots'
 		],
 		title: 'Cross-source review'
 	},
@@ -144,7 +141,7 @@ export default function DocsPage(): React.JSX.Element {
 				title="Developer reference"
 			/>
 			<section className="panel docs-panel">
-				<a className="primary-button" href="/api-docs/">
+				<a className="primary-button" href="/api-docs">
 					Open Swagger documentation
 				</a>
 				<code>/v1</code>

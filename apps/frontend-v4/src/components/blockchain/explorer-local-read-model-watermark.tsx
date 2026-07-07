@@ -34,7 +34,7 @@ export function ExplorerLocalReadModelWatermark({
 				</span>
 			</div>
 			<div>
-				<strong>Decoded indexes</strong>
+				<strong>Local decoded indexes</strong>
 				<span>{formatDecodedIndexCoverage(indexes)}</span>
 			</div>
 		</div>
@@ -64,7 +64,7 @@ function formatDecodedIndexCoverage(
 	].filter((label): label is string => label !== null);
 
 	if (ready.length === 0) {
-		return 'decoded transaction, operation, asset, and contract indexes are not active yet';
+		return 'transaction, operation, asset, and contract indexes are still building';
 	}
 
 	return ready.join(', ') + ' active';

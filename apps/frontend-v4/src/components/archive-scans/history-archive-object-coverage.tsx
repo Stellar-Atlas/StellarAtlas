@@ -22,7 +22,7 @@ export function HistoryArchiveObjectCoverage({
 	framed = true,
 	proofOpen = false,
 	summary,
-	title = 'Archive object checks',
+	title = 'Archive file checks',
 	typeDetailsOpen = false
 }: HistoryArchiveObjectCoverageProps): React.JSX.Element {
 	const coverageText = formatCoverage(
@@ -195,7 +195,7 @@ function ObjectTypeTable({
 	return (
 		<details className="metadata-document" open={open}>
 			<summary>
-				<span>Archive object-check details</span>
+				<span>Archive file-check details</span>
 				<span className="muted-inline">
 					{formatInteger(objectTypes.length)} file groups
 				</span>

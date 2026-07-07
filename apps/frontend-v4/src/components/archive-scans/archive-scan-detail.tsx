@@ -44,7 +44,7 @@ export function ArchiveScanDetail({
 		<section className="detail-grid">
 			<HistoryArchiveObjectCoverage
 				summary={summary}
-				title="Archive object checks"
+				title="Archive file checks"
 			/>
 			<article className="panel detail-panel archive-panel">
 				<div className="panel-heading">
@@ -65,11 +65,11 @@ export function ArchiveScanDetail({
 			<HistoryArchiveObjectInventory
 				bucketCoverages={bucketCoverages}
 				objects={objects}
-				title="Archive object-check sample"
+				title="Archive file-check sample"
 			/>
 			<HistoryArchiveObjectEventLog
 				events={events}
-				title="Recent archive object activity"
+				title="Recent archive file activity"
 			/>
 		</section>
 	);

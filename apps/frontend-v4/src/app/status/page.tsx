@@ -71,12 +71,12 @@ async function StatusRouteContent(): Promise<React.JSX.Element> {
 	const archiveSummary =
 		archiveSummaryResult.value ?? buildArchiveSummaryFromQueue(archiveObjects);
 	const archiveEvidenceAvailable =
-		archiveSummaryResult.ok || archiveObjectsResult.ok;
+		archiveSummaryResult.ok && archiveSummaryResult.value !== null;
 
 	return (
 		<main className="shell">
 			<PageHeading
-				description="Current public API, network scan records, archive object checks, scanner runtime, and archive evidence activity."
+				description="Current public API, network scan records, archive file checks, scanner runtime, and archive evidence activity."
 				eyebrow="Operations"
 				title="Status"
 			/>
