@@ -20,7 +20,6 @@ import { HistoryArchiveObjectEventLog } from '@components/archive-scans/history-
 import { HistoryArchiveObjectCoverage } from '@components/archive-scans/history-archive-object-coverage';
 import { HistoryArchiveObjectInventory } from '@components/archive-scans/history-archive-object-inventory';
 import { RecentScanLogs } from './recent-scan-logs';
-import { ProductionServiceStatusPanel } from './service-status-panels';
 import { StatusPill, StatusRow, statusLabel, statusTone } from './status-ui';
 
 interface StatusDashboardProps {
@@ -49,53 +48,40 @@ export function StatusDashboard({
 	const scan = dataQuality.scans.networkScan;
 	const rollups = dataQuality.rollups.networkRollups;
 	const archiveObjectActivity = summarizeArchiveObjects(archiveObjects);
-	const archiveVerifierDetail = `${formatInteger(archiveObjectActivity.freshActiveObjects)} active file checks, ${formatInteger(archiveObjectActivity.staleActiveObjects)} delayed; ${formatInteger(archiveSummary.pendingObjects)} queued`;
+	const archiveVerifierDetail = `${formatInteger(archiveObjectActivity.freshActiveObjects)} checking now, ${formatInteger(archiveObjectActivity.staleActiveObjects)} delayed, ${formatInteger(archiveSummary.pendingObjects)} waiting`;
 	const archiveCoverageText = formatArchiveVerificationCoverage(archiveSummary);
 	const showCommunityScanners =
 		workers.communityScanners.activeScanners > 0 ||
 		workers.communityScanners.offlineScanners > 0 ||
 		workers.communityScanners.degradedScanners > 0;
+	const frontendApiStatus = criticalRuntimeStatus(api.status, frontend.configured);
 
 	return (
 		<div className="status-dashboard">
 			<div className="stats-grid">
 				<StatCard
-					detail={`Generated ${formatDateTime(dataQuality.generatedAt)}`}
-					label="Data quality"
-					tone={statusTone(dataQuality.status)}
-					value={statusLabel(dataQuality.status)}
+					detail={`API checked ${formatDateTime(api.generatedAt)}`}
+					label="Frontend / API"
+					tone={statusTone(frontendApiStatus)}
+					value={statusLabel(frontendApiStatus)}
 				/>
 				<StatCard
 					detail={`${formatInteger(scan.incompleteScans)} incomplete recorded rows`}
-					label="Network scanner"
+					label="Network scans"
 					tone={statusTone(scan.status)}
 					value={`${formatInteger(scan.completedScans)} / ${formatInteger(scan.totalScans)} complete`}
 				/>
 				<StatCard
-					detail={`${formatInteger(rollups.missingRollupDays)} missing, ${formatInteger(rollups.mismatchedRollupDays)} mismatched`}
-					label="Network history"
-					tone={statusTone(rollups.status)}
-					value={`${formatInteger(rollups.matchingDays)} current`}
-				/>
-				<StatCard
 					detail={`${formatInteger(archiveSummary.verifiedObjects)} of ${formatInteger(archiveSummary.totalObjects)} verified; ${formatInteger(archiveSummary.failedObjects)} evidence failures`}
-					label="Archive files"
+					label="Archive verification"
 					tone={statusTone(archiveObjectActivity.status)}
 					value={archiveCoverageText}
 				/>
 				<StatCard
-					detail={`${formatInteger(archiveObjectActivity.freshActiveObjects)} fresh, ${formatInteger(archiveObjectActivity.staleActiveObjects)} delayed`}
-					label="Archive workers"
+					detail={archiveVerifierDetail}
+					label="Archive work"
 					tone={statusTone(archiveObjectActivity.workerStatus)}
-					value={`${formatInteger(archiveSummary.activeObjects)} active`}
-				/>
-				<StatCard
-					detail={`API ${statusLabel(api.status)}, frontend ${
-						frontend.configured ? 'online' : 'missing'
-					}`}
-					label="Production services"
-					tone={statusTone(api.status)}
-					value={statusLabel(api.status)}
+					value={`${formatInteger(archiveSummary.activeObjects)} checking`}
 				/>
 			</div>
 
@@ -119,9 +105,9 @@ export function StatusDashboard({
 						/>
 						<StatusRow
 							detail={archiveVerifierDetail}
-							label="Archive verifier"
+							label="Archive work"
 							status={archiveObjectActivity.workerStatus}
-							value={`${formatInteger(archiveSummary.activeObjects)} active`}
+							value={`${formatInteger(archiveSummary.activeObjects)} checking`}
 						/>
 						<StatusRow
 							detail={`${formatInteger(scan.completedScans)} completed, ${formatInteger(scan.incompleteScans)} incomplete`}
@@ -141,23 +127,23 @@ export function StatusDashboard({
 				<section className="panel">
 					<div className="panel-heading">
 						<div>
-							<strong>Operations</strong>
+							<strong>Scanner Work</strong>
 							<span>{formatDateTime(workers.generatedAt)}</span>
 						</div>
-						<StatusPill status={workers.status} />
+						<StatusPill status={archiveObjectActivity.status} />
 					</div>
 					<div className="status-list">
 						<StatusRow
 							detail={`${formatInteger(archiveSummary.failedObjects)} failures, ${formatInteger(archiveSummary.verifiedObjects)} verified`}
-							label="Archive file checks"
+							label="Archive checks"
 							status={archiveObjectActivity.status}
-							value={`${formatInteger(archiveObjectActivity.pendingOrActiveObjects)} pending`}
+							value={`${formatInteger(archiveObjectActivity.pendingOrActiveObjects)} open`}
 						/>
 						<StatusRow
-							detail={`${formatInteger(archiveObjectActivity.freshActiveObjects)} fresh, ${formatInteger(archiveObjectActivity.staleActiveObjects)} delayed; delayed after ${formatDuration(ARCHIVE_OBJECT_STALE_AGE_MS)}`}
+							detail={`${formatInteger(archiveObjectActivity.freshActiveObjects)} current, ${formatInteger(archiveObjectActivity.staleActiveObjects)} delayed after ${formatDuration(ARCHIVE_OBJECT_STALE_AGE_MS)}`}
 							label="Archive workers"
 							status={archiveObjectActivity.workerStatus}
-							value={`${formatInteger(archiveSummary.activeObjects)} active`}
+							value={`${formatInteger(archiveSummary.activeObjects)} checking`}
 						/>
 						{showCommunityScanners ? (
 							<StatusRow
@@ -170,23 +156,18 @@ export function StatusDashboard({
 					</div>
 				</section>
 
-				<ProductionServiceStatusPanel
-					api={api}
-					dataQuality={dataQuality}
-					archiveObjects={archiveObjects}
-					archiveSummary={archiveSummary}
-					frontend={frontend}
-				/>
-
 				<HistoryArchiveObjectCoverage
+					proofOpen={false}
 					summary={archiveSummary}
-					title="Archive file coverage"
+					title="Archive verification coverage"
 				/>
 
 				<HistoryArchiveObjectInventory
 					bucketCoverages={archiveBucketCoverages}
 					objects={archiveObjects}
-					title="Current archive file checks"
+					priorityOpen={false}
+					showHelperCopy={false}
+					title="Archive work queue"
 				/>
 
 				<HistoryArchiveObjectEventLog
@@ -250,6 +231,15 @@ function formatArchiveVerificationCoverage(
 		formatPercent((summary.verifiedObjects / summary.totalObjects) * 100) +
 		' verified'
 	);
+}
+
+function criticalRuntimeStatus(
+	apiStatus: PublicStatusLevel,
+	frontendConfigured: boolean
+): PublicStatusLevel {
+	if (!frontendConfigured || apiStatus === 'unavailable') return 'unavailable';
+	if (apiStatus === 'degraded') return 'degraded';
+	return 'ok';
 }
 
 function formatNullableDate(value: string | null): string {

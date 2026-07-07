@@ -65,10 +65,10 @@ export function ProductionServiceStatusPanel({
 					value={statusLabel(networkScan.status)}
 				/>
 				<StatusRow
-					detail={`${formatInteger(archiveSummary.activeObjects)} file checks active, ${formatInteger(archiveSummary.pendingObjects)} queued, ${formatInteger(archiveSummary.failedObjects)} archive evidence failures; ${formatInteger(archiveObjects.objects.length)} current file checks shown`}
+					detail={`${formatInteger(archiveSummary.activeObjects)} checks running, ${formatInteger(archiveSummary.pendingObjects)} waiting, ${formatInteger(archiveSummary.failedObjects)} archive evidence failures; ${formatInteger(archiveObjects.objects.length)} recent checks shown`}
 					label="Archive verifier"
 					status={archiveObjectStatus}
-					value={`${formatInteger(archiveSummary.totalObjects)} file checks tracked`}
+					value={`${formatInteger(archiveSummary.totalObjects)} checks tracked`}
 				/>
 			</div>
 		</section>
@@ -101,6 +101,7 @@ function getWorstStatus(
 function getArchiveObjectStatus(
 	summary: PublicHistoryArchiveObjectSummary
 ): PublicStatusLevel {
+	if (summary.failedObjects > 0) return 'degraded';
 	return summary.totalObjects > 0 ? 'ok' : 'degraded';
 }
 

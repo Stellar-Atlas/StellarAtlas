@@ -43,7 +43,7 @@ export function ArchiveObjectTable({
 						<th>Archive file</th>
 						<th>Archive root</th>
 						<th>Path or hash</th>
-						<th>Worker activity</th>
+						<th>Check result</th>
 					</tr>
 				</thead>
 				<tbody>

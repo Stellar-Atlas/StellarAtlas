@@ -16,6 +16,8 @@ interface HistoryArchiveObjectInventoryProps {
 	readonly bucketCoverages?: readonly PublicHistoryArchiveBucketCrossCoverage[];
 	readonly framed?: boolean;
 	readonly objects: PublicHistoryArchiveObjectQueue;
+	readonly priorityOpen?: boolean;
+	readonly showHelperCopy?: boolean;
 	readonly title?: string;
 }
 
@@ -26,6 +28,8 @@ export function HistoryArchiveObjectInventory({
 	bucketCoverages = [],
 	framed = true,
 	objects,
+	priorityOpen = false,
+	showHelperCopy = false,
 	title = 'Archive file checks'
 }: HistoryArchiveObjectInventoryProps): React.JSX.Element {
 	const coverageByBucketHash = new Map(
@@ -58,15 +62,18 @@ export function HistoryArchiveObjectInventory({
 				/>
 			</div>
 			<ObjectSummary objects={objects} />
-			<p className="muted-copy">
-				Rows are archive file checks, not OS file handles. Bucket payloads
-				are content-addressed by hash, and repeated bucket references are not
-				duplicate stored payloads.
-			</p>
+			{showHelperCopy ? (
+				<p className="muted-copy">
+					Each row is one archive-root file check. Bucket payload bytes are
+					deduplicated by hash; repeated bucket rows are evidence that
+					different archive roots referenced the same bucket.
+				</p>
+			) : null}
 			<ObjectPriorityTable
 				coverageByBucketHash={coverageByBucketHash}
 				generatedAt={objects.generatedAt}
 				objects={priorityObjects}
+				open={priorityOpen}
 			/>
 			<ObjectBacklogDetails
 				coverageByBucketHash={coverageByBucketHash}
@@ -104,10 +111,10 @@ function ObjectSummary({
 			<table className="archive-summary-table archive-work-summary-table">
 				<thead>
 					<tr>
-						<th>Active files</th>
-						<th>Queued files</th>
-						<th>Verified files</th>
-						<th>Evidence failures</th>
+						<th>Checking now</th>
+						<th>Waiting</th>
+						<th>Verified</th>
+						<th>Failures</th>
 					</tr>
 				</thead>
 				<tbody>
@@ -126,7 +133,8 @@ function ObjectSummary({
 function ObjectPriorityTable({
 	coverageByBucketHash,
 	generatedAt,
-	objects
+	objects,
+	open
 }: {
 	readonly coverageByBucketHash: ReadonlyMap<
 		string,
@@ -134,28 +142,28 @@ function ObjectPriorityTable({
 	>;
 	readonly generatedAt: string;
 	readonly objects: readonly PublicHistoryArchiveObject[];
+	readonly open: boolean;
 }): React.JSX.Element {
 	if (objects.length === 0) {
 		return (
 			<p className="archive-good-state">
-				No failed, delayed, active, or root-state archive file checks are in
-				this snapshot.
+				No failed or delayed archive checks are visible in this snapshot.
 			</p>
 		);
 	}
 
 	return (
-		<div className="archive-priority-block">
-			<div className="archive-table-caption">
-				<strong>Priority archive file checks</strong>
+		<details className="metadata-document archive-priority-block" open={open}>
+			<summary>
+				<span>Archive checks needing attention</span>
 				<span>{formatInteger(objects.length)} shown</span>
-			</div>
+			</summary>
 			<ArchiveObjectTable
 				coverageByBucketHash={coverageByBucketHash}
 				generatedAt={generatedAt}
 				objects={objects}
 			/>
-		</div>
+		</details>
 	);
 }
 
@@ -210,6 +218,12 @@ function formatInventoryStatusText(
 	if (objects.failedObjects > 0) {
 		return formatInteger(objects.failedObjects) + ' evidence failures';
 	}
+	if (objects.activeObjects > 0) {
+		return formatInteger(objects.activeObjects) + ' checking';
+	}
+	if (objects.pendingObjects > 0) {
+		return formatInteger(objects.pendingObjects) + ' waiting';
+	}
 
-	return formatInteger(objects.activeObjects) + ' active';
+	return formatInteger(objects.verifiedObjects) + ' verified';
 }

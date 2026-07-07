@@ -12,14 +12,18 @@ import {
 
 interface HistoryArchiveObjectCoverageProps {
 	readonly framed?: boolean;
+	readonly proofOpen?: boolean;
 	readonly summary: PublicHistoryArchiveObjectSummary;
 	readonly title?: string;
+	readonly typeDetailsOpen?: boolean;
 }
 
 export function HistoryArchiveObjectCoverage({
 	framed = true,
+	proofOpen = false,
 	summary,
-	title = 'Archive file coverage'
+	title = 'Archive file coverage',
+	typeDetailsOpen = false
 }: HistoryArchiveObjectCoverageProps): React.JSX.Element {
 	const coverageText = formatCoverage(
 		summary.verifiedObjects,
@@ -35,13 +39,20 @@ export function HistoryArchiveObjectCoverage({
 					</span>
 				</div>
 				<StatusPill
-					status={summary.totalObjects > 0 ? 'ok' : 'degraded'}
+					status={
+						summary.failedObjects > 0 || summary.totalObjects === 0
+							? 'degraded'
+							: 'ok'
+					}
 					text={coverageText}
 				/>
 			</div>
 			<CoverageSummary summary={summary} />
-			<CheckpointProofSummary summary={summary} />
-			<ObjectTypeTable objectTypes={summary.objectTypes} />
+			<CheckpointProofSummary open={proofOpen} summary={summary} />
+			<ObjectTypeTable
+				objectTypes={summary.objectTypes}
+				open={typeDetailsOpen}
+			/>
 		</>
 	);
 
@@ -70,12 +81,12 @@ function CoverageSummary({
 			<table className="archive-summary-table">
 				<thead>
 					<tr>
-						<th>Archive files</th>
-						<th>Bucket references</th>
-						<th>Unique bucket hashes</th>
-						<th>Active files</th>
-						<th>Queued files</th>
-						<th>Evidence failures</th>
+						<th>File checks verified</th>
+						<th>Bucket copies verified</th>
+						<th>Unique bucket payloads</th>
+						<th>Checking now</th>
+						<th>Waiting</th>
+						<th>Failures</th>
 					</tr>
 				</thead>
 				<tbody>
@@ -96,37 +107,40 @@ function CoverageSummary({
 }
 
 function CheckpointProofSummary({
+	open,
 	summary
 }: {
+	readonly open: boolean;
 	readonly summary: PublicHistoryArchiveObjectSummary;
 }): React.JSX.Element {
 	const checkpoints = summary.checkpoints;
 
 	return (
-		<details className="metadata-document archive-checkpoint-proof" open>
+		<details className="metadata-document archive-checkpoint-proof" open={open}>
 			<summary>
-				<span>Checkpoint proof</span>
+				<span>Chain consistency proof</span>
 				<span className="muted-inline">
 					{formatCheckpointProofHeadline(summary)}
 				</span>
 			</summary>
 			<p className="muted-copy">
-				File coverage means archive files were fetched and checked. Checkpoint proof
-				is stricter: it requires the checkpoint category files and bucket list
-				to agree with ledger-header facts.
+				File coverage means individual archive files were fetched and checked.
+				Chain consistency proof is stricter: the checkpoint history file,
+				ledger headers, transaction files, result files, and bucket list all
+				have to agree.
 			</p>
 			<div className="responsive-table">
 				<table className="archive-checkpoint-proof-table">
 					<thead>
 						<tr>
 							<th>Files present</th>
-							<th>Category-consistent</th>
-							<th>Failed proof</th>
-							<th>Pending proof</th>
-							<th>Not evaluated</th>
-							<th>Expected checkpoints</th>
-							<th>Missing checkpoints</th>
-							<th>Roots discovered</th>
+							<th>Consistent</th>
+							<th>Failed</th>
+							<th>Waiting</th>
+							<th>Not checked yet</th>
+							<th>Expected</th>
+							<th>Missing</th>
+							<th>Roots complete</th>
 						</tr>
 					</thead>
 					<tbody>
@@ -169,20 +183,16 @@ function CheckpointProofSummary({
 }
 
 function ObjectTypeTable({
-	objectTypes
+	objectTypes,
+	open
 }: {
 	readonly objectTypes: readonly PublicHistoryArchiveObjectTypeSummary[];
-}): React.JSX.Element {
-	if (objectTypes.length === 0) {
-		return (
-			<p className="muted-copy">
-				No file-type summary is available in this response.
-			</p>
-		);
-	}
+	readonly open: boolean;
+}): React.JSX.Element | null {
+	if (objectTypes.length === 0) return null;
 
 	return (
-		<details className="metadata-document">
+		<details className="metadata-document" open={open}>
 			<summary>
 				<span>Archive file type details</span>
 				<span className="muted-inline">
@@ -190,9 +200,9 @@ function ObjectTypeTable({
 				</span>
 			</summary>
 			<p className="muted-copy">
-				These are archive file checks. Bucket payloads are
-				content-addressed by hash; checkpoint and category files cover the
-				history, ledger, transaction, result, and SCP files for a checkpoint.
+				These are counts of archive-root file checks. A transaction archive
+				file can contain transaction data for many ledgers; this is not a
+				transaction count.
 			</p>
 			<div className="responsive-table">
 				<table className="archive-object-type-table">

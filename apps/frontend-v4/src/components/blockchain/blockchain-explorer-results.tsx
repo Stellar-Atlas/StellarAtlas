@@ -106,12 +106,12 @@ export function RecentTransactionsView({
 		<div className="explorer-transaction-feed">
 			<ExplorerState
 				tone="neutral"
-				text={`Updated ${formatDate(result.transactions.generatedAt)}.`}
+				text={`${formatExplorerSource(result.transactions.source)} updated ${formatDate(result.transactions.generatedAt)}.`}
 			/>
 			{result.transactions.truncated ? (
 				<ExplorerState
 					tone="neutral"
-					text={`Showing latest ${result.transactions.records.length} transactions.`}
+					text={`Showing ${result.transactions.records.length} external fallback rows from the current response window.`}
 				/>
 			) : null}
 			<TransactionFeedRows
@@ -120,6 +120,11 @@ export function RecentTransactionsView({
 			/>
 		</div>
 	);
+}
+
+function formatExplorerSource(source: PublicRecentTransactions['source']): string {
+	if (source === 'horizon') return 'External fallback';
+	return source;
 }
 
 export function toDateInputValue(value: string | undefined): string {

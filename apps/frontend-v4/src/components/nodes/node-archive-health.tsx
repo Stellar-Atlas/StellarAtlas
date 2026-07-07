@@ -82,7 +82,7 @@ export function NodeArchiveHealth({
 		<article className="panel detail-panel archive-panel archive-health-panel">
 			<div className="panel-heading">
 				<div>
-					<h2>Archive health</h2>
+					<h2>Archive evidence</h2>
 					<span className="muted-inline">
 						{historyArchiveSummary
 							? `Updated ${formatDateTime(historyArchiveSummary.generatedAt)}`
@@ -152,10 +152,10 @@ function ArchiveHealthSummary({
 					<tr>
 						<th>Archive root</th>
 						<th>History state</th>
-						<th>Files verified</th>
-						<th>Checkpoint proof</th>
-						<th>Bucket references</th>
-						<th>Active</th>
+						<th>Object files verified</th>
+						<th>Chain proof</th>
+						<th>Bucket copies</th>
+						<th>Checking now</th>
 						<th>Failures</th>
 					</tr>
 				</thead>
@@ -194,7 +194,7 @@ function ArchiveHealthTabs({
 	readonly onSelect: (tab: ArchiveHealthTab) => void;
 }): React.JSX.Element {
 	return (
-		<div className="archive-health-tabs segmented" aria-label="Archive health view">
+		<div className="archive-health-tabs segmented" aria-label="Archive evidence view">
 			{archiveHealthTabs.map((tab) => (
 				<button
 					aria-pressed={activeTab === tab.value}
@@ -291,11 +291,7 @@ function getObjectsForTab(
 	return objects.filter((object) => {
 		const status = getArchiveObjectDisplayStatus(object, generatedAt);
 		if (tab === 'attention') {
-			return (
-				status === 'failed' ||
-				status === 'delayed' ||
-				(object.objectType === 'history-archive-state' && status !== 'verified')
-			);
+			return status === 'failed' || status === 'delayed';
 		}
 		if (tab === 'active') return status === 'scanning' || status === 'delayed';
 		return status === tab;
@@ -313,7 +309,7 @@ function isObjectTableTab(tab: ArchiveHealthTab): boolean {
 
 function getEmptyTabText(tab: ArchiveHealthTab): string {
 	if (tab === 'attention') {
-		return 'No failed, delayed, or missing history-state file checks are in this snapshot.';
+		return 'No failed or delayed archive checks are visible in this snapshot.';
 	}
 	if (tab === 'active') return 'No archive file checks are active right now.';
 	if (tab === 'verified') return 'No verified archive file rows are in this sample.';
@@ -334,7 +330,7 @@ function getArchivePanelStatusText(
 	if (summary.failedObjects > 0) {
 		return `${formatInteger(summary.failedObjects)} failures`;
 	}
-	return `${formatInteger(summary.verifiedObjects)} files verified`;
+	return `${formatInteger(summary.verifiedObjects)} object files verified`;
 }
 
 function formatArchiveRoot(value: string | null): string {
@@ -356,9 +352,9 @@ function formatCheckpointProof(summary: PublicHistoryArchiveObjectSummary): stri
 		);
 	}
 	if (checkpoints.categoryConsistencyNotEvaluatedCheckpoints > 0) {
-		return `${formatInteger(checkpoints.categoryConsistencyNotEvaluatedCheckpoints)} not evaluated`;
+		return `${formatInteger(checkpoints.categoryConsistencyNotEvaluatedCheckpoints)} pending proof checks`;
 	}
-	return 'not evaluated';
+	return 'proof not ready';
 }
 
 function formatCoverage(verified: number, total: number): string {
@@ -373,10 +369,10 @@ const archiveHealthTabs: readonly {
 	readonly value: ArchiveHealthTab;
 }[] = [
 	{ label: 'Needs attention', value: 'attention' },
-	{ label: 'Active checks', value: 'active' },
-	{ label: 'Verified files', value: 'verified' },
-	{ label: 'Pending files', value: 'pending' },
-	{ label: 'History archive state', value: 'state' },
-	{ label: 'Recent activity', value: 'activity' },
-	{ label: 'Raw JSON', value: 'raw' }
+	{ label: 'Checking now', value: 'active' },
+	{ label: 'Verified sample', value: 'verified' },
+	{ label: 'Waiting', value: 'pending' },
+	{ label: 'Archive state', value: 'state' },
+	{ label: 'Activity', value: 'activity' },
+	{ label: 'Raw evidence', value: 'raw' }
 ];
