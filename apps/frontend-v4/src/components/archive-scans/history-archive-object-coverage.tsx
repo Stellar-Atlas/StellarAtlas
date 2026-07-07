@@ -3,6 +3,7 @@ import type {
 	PublicHistoryArchiveObjectTypeSummary
 } from '@api/types';
 import { StatusPill } from '@components/status/status-ui';
+import { formatArchiveObjectTypeGroupLabel } from '@domain/history-archive';
 import {
 	formatDateTime,
 	formatInteger,
@@ -18,7 +19,7 @@ interface HistoryArchiveObjectCoverageProps {
 export function HistoryArchiveObjectCoverage({
 	framed = true,
 	summary,
-	title = 'Archive file coverage'
+	title = 'Archive object coverage'
 }: HistoryArchiveObjectCoverageProps): React.JSX.Element {
 	const coverageText = formatCoverage(
 		summary.verifiedObjects,
@@ -68,12 +69,12 @@ function CoverageSummary({
 			<table className="archive-summary-table">
 				<thead>
 					<tr>
-						<th>Archive files</th>
-						<th>Bucket copies</th>
-						<th>Unique buckets</th>
+						<th>Object checks</th>
+						<th>Bucket references</th>
+						<th>Unique bucket hashes</th>
 						<th>Active checks</th>
 						<th>Queued checks</th>
-						<th>Failed evidence</th>
+						<th>Evidence failures</th>
 					</tr>
 				</thead>
 				<tbody>
@@ -99,36 +100,39 @@ function ObjectTypeTable({
 	readonly objectTypes: readonly PublicHistoryArchiveObjectTypeSummary[];
 }): React.JSX.Element {
 	if (objectTypes.length === 0) {
-		return <p className="muted-copy">No archive file rows are stored yet.</p>;
+		return (
+			<p className="muted-copy">No archive object checks are stored yet.</p>
+		);
 	}
 
 	return (
 		<details className="metadata-document">
 			<summary>
-				<span>Archive file type details</span>
+				<span>Object check type details</span>
 				<span className="muted-inline">
-					{formatInteger(objectTypes.length)} file groups
+					{formatInteger(objectTypes.length)} check groups
 				</span>
 			</summary>
 			<p className="muted-copy">
-				These are archive files, not individual ledger transactions or
-				operations.
+				These are archive object checks. Bucket payloads are content-addressed
+				by hash; checkpoint and category checks cover the history, ledger,
+				transaction, result, and SCP objects for a checkpoint.
 			</p>
 			<div className="responsive-table">
 				<table className="archive-object-type-table">
 					<thead>
 						<tr>
-							<th>File group</th>
+							<th>Check group</th>
 							<th>Tracked</th>
 							<th>Verified</th>
 							<th>Queued</th>
-							<th>Failed</th>
+							<th>Evidence failures</th>
 						</tr>
 					</thead>
 					<tbody>
 						{objectTypes.map((entry) => (
 							<tr key={entry.objectType}>
-								<td>{formatObjectType(entry.objectType)}</td>
+								<td>{formatArchiveObjectTypeGroupLabel(entry.objectType)}</td>
 								<td>{formatInteger(entry.totalObjects)}</td>
 								<td>
 									{formatCoverage(entry.verifiedObjects, entry.totalObjects)}
@@ -154,17 +158,4 @@ function formatCoverage(verified: number, total: number): string {
 		formatPercent((verified / total) * 100) +
 		')'
 	);
-}
-
-function formatObjectType(
-	type: PublicHistoryArchiveObjectTypeSummary['objectType']
-): string {
-	if (type === 'history-archive-state') return 'history archive state files';
-	if (type === 'checkpoint-state') return 'checkpoint history files';
-	if (type === 'ledger') return 'ledger files';
-	if (type === 'transactions') return 'transaction archive files';
-	if (type === 'results') return 'result archive files';
-	if (type === 'scp') return 'SCP archive files';
-	if (type === 'bucket') return 'bucket files';
-	return type;
 }

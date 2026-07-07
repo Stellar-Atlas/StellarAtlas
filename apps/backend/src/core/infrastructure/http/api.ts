@@ -135,8 +135,21 @@ const listen = async () => {
 	const exceptionLogger =
 		kernel.container.get<ExceptionLogger>('ExceptionLogger');
 
+	const swaggerCss = [
+		'.swagger-ui .topbar { display: none }',
+		'body, .swagger-ui { background: #101417; color: #e8f0ef }',
+		'.swagger-ui .info .title, .swagger-ui .opblock-tag, .swagger-ui .scheme-container, .swagger-ui table thead tr td, .swagger-ui table thead tr th { color: #e8f0ef }',
+		'.swagger-ui .info p, .swagger-ui .info li, .swagger-ui .parameter__name, .swagger-ui .parameter__type, .swagger-ui .response-col_status, .swagger-ui .response-col_description, .swagger-ui .tab li, .swagger-ui label { color: #c3d0ce }',
+		'.swagger-ui .scheme-container, .swagger-ui .opblock, .swagger-ui section.models, .swagger-ui .model-box { background: #182023; border-color: #2b373b }',
+		'.swagger-ui .opblock .opblock-summary, .swagger-ui section.models h4, .swagger-ui .responses-inner h4, .swagger-ui .responses-inner h5 { color: #e8f0ef }',
+		'.swagger-ui .opblock .opblock-summary-path, .swagger-ui .opblock .opblock-summary-description, .swagger-ui .opblock-summary-operation-id, .swagger-ui .opblock-summary-path__deprecated { color: #d9e7e4 }',
+		'.swagger-ui input, .swagger-ui textarea, .swagger-ui select { background: #0f1517; color: #e8f0ef; border-color: #334247 }',
+		'.swagger-ui .btn, .swagger-ui select { border-color: #79c7c0; color: #d7fffb }',
+		'.swagger-ui .model, .swagger-ui .model-title, .swagger-ui .prop-type, .swagger-ui .prop-format, .swagger-ui .renderedMarkdown p { color: #c3d0ce }'
+	].join('\n');
+
 	const swaggerOptions = {
-		customCss: '.swagger-ui .topbar { display: none }',
+		customCss: swaggerCss,
 		explorer: true,
 		customSiteTitle: 'StellarAtlas API doc'
 	};

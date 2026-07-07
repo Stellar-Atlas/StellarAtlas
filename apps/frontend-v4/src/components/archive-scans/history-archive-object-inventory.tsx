@@ -26,7 +26,7 @@ export function HistoryArchiveObjectInventory({
 	bucketCoverages = [],
 	framed = true,
 	objects,
-	title = 'Archive file work queue'
+	title = 'Archive object checks'
 }: HistoryArchiveObjectInventoryProps): React.JSX.Element {
 	const coverageByBucketHash = new Map(
 		bucketCoverages.map((coverage) => [coverage.bucketHash, coverage])
@@ -49,11 +49,20 @@ export function HistoryArchiveObjectInventory({
 					</span>
 				</div>
 				<StatusPill
-					status={hasDelayedObject(objects) ? 'degraded' : 'ok'}
-					text={formatInteger(objects.activeObjects) + ' scanning'}
+					status={
+						objects.failedObjects > 0 || hasDelayedObject(objects)
+							? 'degraded'
+							: 'ok'
+					}
+					text={formatInventoryStatusText(objects)}
 				/>
 			</div>
 			<ObjectSummary objects={objects} />
+			<p className="muted-copy">
+				Entries are archive object checks, not OS file handles. Bucket payloads
+				are content-addressed by hash, and repeated bucket references are not
+				duplicate stored payloads.
+			</p>
 			<ObjectPriorityTable
 				coverageByBucketHash={coverageByBucketHash}
 				generatedAt={objects.generatedAt}
@@ -95,10 +104,10 @@ function ObjectSummary({
 			<table className="archive-summary-table archive-work-summary-table">
 				<thead>
 					<tr>
-						<th>Scanning</th>
-						<th>Queued</th>
-						<th>Verified</th>
-						<th>Failed</th>
+						<th>Active checks</th>
+						<th>Queued checks</th>
+						<th>Verified checks</th>
+						<th>Evidence failures</th>
 					</tr>
 				</thead>
 				<tbody>
@@ -129,8 +138,8 @@ function ObjectPriorityTable({
 	if (objects.length === 0) {
 		return (
 			<p className="archive-good-state">
-				No failed, active, delayed, or root-state pending archive file checks
-				are in this snapshot.
+				No failed, delayed, active, or root-state archive object checks are in
+				this snapshot.
 			</p>
 		);
 	}
@@ -138,7 +147,7 @@ function ObjectPriorityTable({
 	return (
 		<div className="archive-priority-block">
 			<div className="archive-table-caption">
-				<strong>Files needing attention</strong>
+				<strong>Priority object checks</strong>
 				<span>{formatInteger(objects.length)} shown</span>
 			</div>
 			<ArchiveObjectTable
@@ -165,13 +174,15 @@ function ObjectBacklogDetails({
 	readonly totalObjects: number;
 }): React.JSX.Element {
 	if (totalObjects === 0) {
-		return <p className="muted-copy">No archive file rows match this node.</p>;
+		return (
+			<p className="muted-copy">No archive object checks match this node.</p>
+		);
 	}
 
 	return (
 		<details className="metadata-document archive-object-details">
 			<summary>
-				<span>Current file rows</span>
+				<span>Object check sample</span>
 				<span className="muted-inline">
 					Showing {formatInteger(objects.length)} of{' '}
 					{formatInteger(totalObjects)}
@@ -191,4 +202,14 @@ function hasDelayedObject(objects: PublicHistoryArchiveObjectQueue): boolean {
 		(object) =>
 			getArchiveObjectDisplayStatus(object, objects.generatedAt) === 'delayed'
 	);
+}
+
+function formatInventoryStatusText(
+	objects: PublicHistoryArchiveObjectQueue
+): string {
+	if (objects.failedObjects > 0) {
+		return formatInteger(objects.failedObjects) + ' evidence failures';
+	}
+
+	return formatInteger(objects.activeObjects) + ' active';
 }

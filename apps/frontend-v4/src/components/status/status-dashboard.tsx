@@ -10,7 +10,11 @@ import type {
 	PublicScanLogStatus,
 	PublicWorkerStatus
 } from '@api/types';
-import { formatDateTime, formatInteger } from '@format/formatters';
+import {
+	formatDateTime,
+	formatInteger,
+	formatPercent
+} from '@format/formatters';
 import { StatCard } from '../stat-card';
 import { HistoryArchiveObjectEventLog } from '@components/archive-scans/history-archive-object-event-log';
 import { HistoryArchiveObjectCoverage } from '@components/archive-scans/history-archive-object-coverage';
@@ -45,7 +49,8 @@ export function StatusDashboard({
 	const scan = dataQuality.scans.networkScan;
 	const rollups = dataQuality.rollups.networkRollups;
 	const archiveObjectActivity = summarizeArchiveObjects(archiveObjects);
-	const archiveVerifierDetail = `${formatInteger(archiveObjectActivity.freshActiveObjects)} active file checks, ${formatInteger(archiveObjectActivity.staleActiveObjects)} delayed; ${formatInteger(archiveSummary.pendingObjects)} queued`;
+	const archiveVerifierDetail = `${formatInteger(archiveObjectActivity.freshActiveObjects)} active object checks, ${formatInteger(archiveObjectActivity.staleActiveObjects)} delayed; ${formatInteger(archiveSummary.pendingObjects)} pending`;
+	const archiveCoverageText = formatArchiveVerificationCoverage(archiveSummary);
 	const showCommunityScanners =
 		workers.communityScanners.activeScanners > 0 ||
 		workers.communityScanners.offlineScanners > 0 ||
@@ -73,14 +78,14 @@ export function StatusDashboard({
 					value={`${formatInteger(rollups.matchingDays)} current`}
 				/>
 				<StatCard
-					detail={`${formatInteger(archiveSummary.pendingObjects)} pending, ${formatInteger(archiveSummary.failedObjects)} evidence failures`}
-					label="Archive files"
+					detail={`${formatInteger(archiveSummary.verifiedObjects)} of ${formatInteger(archiveSummary.totalObjects)} verified; ${formatInteger(archiveSummary.failedObjects)} evidence failures`}
+					label="Archive verification"
 					tone={statusTone(archiveObjectActivity.status)}
-					value={`${formatInteger(archiveSummary.totalObjects)} stored`}
+					value={archiveCoverageText}
 				/>
 				<StatCard
 					detail={`${formatInteger(archiveObjectActivity.freshActiveObjects)} fresh, ${formatInteger(archiveObjectActivity.staleActiveObjects)} delayed`}
-					label="Archive file workers"
+					label="Archive object workers"
 					tone={statusTone(archiveObjectActivity.workerStatus)}
 					value={`${formatInteger(archiveSummary.activeObjects)} active`}
 				/>
@@ -143,14 +148,14 @@ export function StatusDashboard({
 					</div>
 					<div className="status-list">
 						<StatusRow
-							detail={`${formatInteger(archiveSummary.pendingObjects)} queued, ${formatInteger(archiveSummary.failedObjects)} evidence failures, ${formatInteger(archiveSummary.verifiedObjects)} verified`}
-							label="Archive file queue"
+							detail={`${formatInteger(archiveSummary.failedObjects)} failures, ${formatInteger(archiveSummary.verifiedObjects)} verified`}
+							label="Archive object checks"
 							status={archiveObjectActivity.status}
-							value={`${formatInteger(archiveObjectActivity.totalOpenObjects)} open files`}
+							value={`${formatInteger(archiveObjectActivity.pendingOrActiveObjects)} pending`}
 						/>
 						<StatusRow
 							detail={`${formatInteger(archiveObjectActivity.freshActiveObjects)} fresh, ${formatInteger(archiveObjectActivity.staleActiveObjects)} delayed; delayed after ${formatDuration(ARCHIVE_OBJECT_STALE_AGE_MS)}`}
-							label="Archive file workers"
+							label="Archive object workers"
 							status={archiveObjectActivity.workerStatus}
 							value={`${formatInteger(archiveSummary.activeObjects)} active`}
 						/>
@@ -175,18 +180,18 @@ export function StatusDashboard({
 
 				<HistoryArchiveObjectCoverage
 					summary={archiveSummary}
-					title="Archive file coverage"
+					title="Archive object coverage"
 				/>
 
 				<HistoryArchiveObjectInventory
 					bucketCoverages={archiveBucketCoverages}
 					objects={archiveObjects}
-					title="Current archive file work"
+					title="Current archive object checks"
 				/>
 
 				<HistoryArchiveObjectEventLog
 					events={archiveEvents}
-					title="Recent archive file activity"
+					title="Recent archive object activity"
 				/>
 
 				<RecentScanLogs scanLogs={scanLogs} />
@@ -201,7 +206,7 @@ interface ArchiveObjectSummary {
 	readonly freshActiveObjects: number;
 	readonly staleActiveObjects: number;
 	readonly status: PublicStatusLevel;
-	readonly totalOpenObjects: number;
+	readonly pendingOrActiveObjects: number;
 	readonly workerStatus: PublicStatusLevel;
 }
 
@@ -222,7 +227,8 @@ function summarizeArchiveObjects(
 		0,
 		objects.activeObjects - staleActiveObjects
 	);
-	const status: PublicStatusLevel = staleActiveObjects > 0 ? 'degraded' : 'ok';
+	const status: PublicStatusLevel =
+		objects.failedObjects > 0 || staleActiveObjects > 0 ? 'degraded' : 'ok';
 	const workerStatus: PublicStatusLevel =
 		staleActiveObjects > 0 ? 'degraded' : 'ok';
 
@@ -230,9 +236,20 @@ function summarizeArchiveObjects(
 		freshActiveObjects,
 		staleActiveObjects,
 		status,
-		totalOpenObjects: objects.activeObjects + objects.pendingObjects,
+		pendingOrActiveObjects: objects.activeObjects + objects.pendingObjects,
 		workerStatus
 	};
+}
+
+function formatArchiveVerificationCoverage(
+	summary: PublicHistoryArchiveObjectSummary
+): string {
+	if (summary.totalObjects <= 0) return '0% verified';
+
+	return (
+		formatPercent((summary.verifiedObjects / summary.totalObjects) * 100) +
+		' verified'
+	);
 }
 
 function formatNullableDate(value: string | null): string {

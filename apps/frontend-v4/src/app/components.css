@@ -112,7 +112,7 @@ td small {
 }
 
 .tag {
-	background: #eef3f8;
+	background: var(--surface-subtle);
 	border: 1px solid var(--border);
 	border-radius: 999px;
 	color: var(--muted);
@@ -340,7 +340,7 @@ tr.selected-row td {
 }
 
 .endpoint-card {
-	background: #f8fbfe;
+	background: var(--surface);
 	border: 1px solid var(--border);
 	border-radius: 8px;
 	display: grid;
@@ -387,7 +387,7 @@ tr.selected-row td {
 }
 
 .table-pagination button {
-	background: #fff;
+	background: var(--surface);
 	border: 1px solid var(--border);
 	border-radius: 6px;
 	color: var(--text);
@@ -408,7 +408,8 @@ tr.selected-row td {
 }
 
 code {
-	background: #eef3f8;
+	background: var(--surface-subtle);
+	color: var(--text);
 	border: 1px solid var(--border);
 	border-radius: 6px;
 	display: block;

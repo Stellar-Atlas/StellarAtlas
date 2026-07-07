@@ -3,6 +3,10 @@ import type {
 	PublicStatusLevel
 } from '@api/types';
 import { StatusPill } from '@components/status/status-ui';
+import {
+	formatArchiveObjectTypeLabel,
+	sanitizeArchiveEvidenceText
+} from '@domain/history-archive';
 import { formatDateTime, formatInteger } from '@format/formatters';
 
 interface HistoryArchiveObjectEventLogProps {
@@ -16,7 +20,7 @@ const MAX_ARCHIVE_EVENT_ROWS = 80;
 export function HistoryArchiveObjectEventLog({
 	events,
 	framed = true,
-	title = 'Recent archive file activity'
+	title = 'Recent archive object activity'
 }: HistoryArchiveObjectEventLogProps): React.JSX.Element {
 	const failedEvents = events.events.filter(
 		(event) => event.eventType === 'failed'
@@ -32,12 +36,8 @@ export function HistoryArchiveObjectEventLog({
 					</span>
 				</div>
 				<StatusPill
-					status={
-						events.events.some((event) => event.eventType === 'failed')
-							? 'degraded'
-							: 'ok'
-					}
-					text={`${formatInteger(events.count)} events`}
+					status={failedEvents.length > 0 ? 'degraded' : 'ok'}
+					text={formatEventStatusText(events.count, failedEvents.length)}
 				/>
 			</div>
 			<EventFailureTable events={failedEvents} />
@@ -63,7 +63,7 @@ function EventFailureTable({
 	if (events.length === 0) {
 		return (
 			<p className="archive-good-state">
-				No failed archive file activity is in the recent event window.
+				No failed archive object checks are in the recent event window.
 			</p>
 		);
 	}
@@ -71,7 +71,7 @@ function EventFailureTable({
 	return (
 		<div className="archive-priority-block">
 			<div className="archive-table-caption">
-				<strong>Failed archive activity</strong>
+				<strong>Failed object check evidence</strong>
 				<span>{formatInteger(events.length)} shown</span>
 			</div>
 			<EventTable events={events} />
@@ -88,14 +88,14 @@ function EventHistoryDetails({
 }): React.JSX.Element {
 	if (totalEvents === 0) {
 		return (
-			<p className="muted-copy">No archive file activity is available yet.</p>
+			<p className="muted-copy">No archive object activity is available yet.</p>
 		);
 	}
 
 	return (
 		<details className="metadata-document archive-object-details">
 			<summary>
-				<span>Recent file activity</span>
+				<span>Recent object check activity</span>
 				<span className="muted-inline">
 					Showing {formatInteger(events.length)} of {formatInteger(totalEvents)}
 				</span>
@@ -115,10 +115,10 @@ function EventTable({
 			<table className="archive-object-table">
 				<thead>
 					<tr>
-						<th>Status</th>
-						<th>File type</th>
-						<th>Archive</th>
-						<th>File</th>
+						<th>Event</th>
+						<th>Object type</th>
+						<th>Archive root</th>
+						<th>Object key</th>
 						<th>Activity</th>
 					</tr>
 				</thead>
@@ -146,7 +146,7 @@ function EventRow({
 				/>
 			</td>
 			<td>
-				<strong>{formatObjectType(event.objectType)}</strong>
+				<strong>{formatArchiveObjectTypeLabel(event.objectType)}</strong>
 				{event.checkpointLedger === null ? null : (
 					<small>{formatEventLedger(event.checkpointLedger)}</small>
 				)}
@@ -156,7 +156,8 @@ function EventRow({
 				<span className="archive-object-url">{event.objectKey}</span>
 				{event.error ? (
 					<small className="archive-object-error">
-						{event.error.type}: {event.error.message}
+						{event.error.type}:{' '}
+						{sanitizeArchiveEvidenceText(event.error.message)}
 					</small>
 				) : null}
 			</td>
@@ -185,17 +186,15 @@ function formatEventType(
 	return 'claimed';
 }
 
-function formatObjectType(
-	type: ObjectEvents['events'][number]['objectType']
+function formatEventStatusText(
+	totalEvents: number,
+	failedEvents: number
 ): string {
-	if (type === 'history-archive-state') return 'history archive state file';
-	if (type === 'checkpoint-state') return 'checkpoint history file';
-	if (type === 'ledger') return 'ledger file';
-	if (type === 'transactions') return 'transaction archive file';
-	if (type === 'results') return 'result archive file';
-	if (type === 'scp') return 'SCP archive file';
-	if (type === 'bucket') return 'bucket file';
-	return type;
+	if (failedEvents > 0) {
+		return formatInteger(failedEvents) + ' failures';
+	}
+
+	return formatInteger(totalEvents) + ' events';
 }
 
 function formatEventLedger(value: number | null): string {

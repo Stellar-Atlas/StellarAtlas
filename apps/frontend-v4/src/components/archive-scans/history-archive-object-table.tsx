@@ -7,6 +7,11 @@ import type {
 import { StatusPill } from '@components/status/status-ui';
 import { getArchiveScanDetailPath } from '@domain/archive-scan-routes';
 import {
+	formatArchiveObjectTypeLabel,
+	formatArchiveObjectTypeRole,
+	sanitizeArchiveEvidenceText
+} from '@domain/history-archive';
+import {
 	formatDateTime,
 	formatInteger,
 	formatPercent
@@ -34,11 +39,11 @@ export function ArchiveObjectTable({
 			<table className="archive-object-table">
 				<thead>
 					<tr>
-						<th>Status</th>
-						<th>File type</th>
-						<th>Archive</th>
-						<th>File</th>
-						<th>Worker activity</th>
+						<th>Check</th>
+						<th>Object type</th>
+						<th>Archive root</th>
+						<th>Object key</th>
+						<th>Check activity</th>
 					</tr>
 				</thead>
 				<tbody>
@@ -123,10 +128,8 @@ function ObjectRow({
 				/>
 			</td>
 			<td>
-				<strong>{formatObjectType(object.objectType)}</strong>
-				{object.checkpointLedger === null ? null : (
-					<small>{formatObjectLedger(object)}</small>
-				)}
+				<strong>{formatArchiveObjectTypeLabel(object.objectType)}</strong>
+				<small>{formatObjectDescriptor(object)}</small>
 			</td>
 			<td>
 				<Link href={getArchiveScanDetailPath(object.archiveUrl)}>
@@ -146,7 +149,8 @@ function ObjectRow({
 				) : null}
 				{object.error ? (
 					<small className="archive-object-error">
-						{object.error.type}: {sanitizeEvidenceText(object.error.message)}
+						{object.error.type}:{' '}
+						{sanitizeArchiveEvidenceText(object.error.message)}
 					</small>
 				) : null}
 			</td>
@@ -174,7 +178,7 @@ function BucketCoverageDrilldown({
 			<summary>{formatBucketCoverageSummary(bucketCoverage)}</summary>
 			<dl className="details compact-details">
 				<div>
-					<dt>Bucket</dt>
+					<dt>Bucket hash</dt>
 					<dd>{bucketHash.slice(0, 16)}...</dd>
 				</div>
 				<div>
@@ -204,7 +208,9 @@ function BucketCoverageSamples({
 	];
 
 	if (samples.length === 0) {
-		return <p className="muted-copy">No archive copies are recorded.</p>;
+		return (
+			<p className="muted-copy">No archive-root references are recorded.</p>
+		);
 	}
 
 	return (
@@ -273,17 +279,11 @@ function formatObjectStatus(status: ArchiveObjectDisplayStatus): string {
 	return 'pending';
 }
 
-function formatObjectType(
-	type: PublicHistoryArchiveObject['objectType']
-): string {
-	if (type === 'history-archive-state') return 'history archive state file';
-	if (type === 'checkpoint-state') return 'checkpoint history file';
-	if (type === 'ledger') return 'ledger file';
-	if (type === 'transactions') return 'transaction archive file';
-	if (type === 'results') return 'result archive file';
-	if (type === 'scp') return 'SCP archive file';
-	if (type === 'bucket') return 'bucket file';
-	return type;
+function formatObjectDescriptor(object: PublicHistoryArchiveObject): string {
+	const role = formatArchiveObjectTypeRole(object.objectType);
+	const ledger = formatObjectLedger(object);
+	if (ledger.length === 0) return role;
+	return role + '; ' + ledger;
 }
 
 function formatObjectLedger(object: PublicHistoryArchiveObject): string {
@@ -323,11 +323,11 @@ function formatBucketCoverageSummary(
 		formatInteger(counts.verifiedCopies) +
 		' / ' +
 		formatInteger(totalCopies) +
-		' bucket copies verified (' +
+		' archive-root references verified (' +
 		percent +
-		') across ' +
+		') for this bucket across ' +
 		formatInteger(counts.archiveRoots) +
-		' archive roots'
+		' roots'
 	);
 }
 
@@ -379,18 +379,6 @@ function isPublicHttpUrl(value: string): boolean {
 	} catch {
 		return false;
 	}
-}
-
-function sanitizeEvidenceText(value: string): string {
-	return value
-		.replace(
-			/\/home\/observe\/stellarbeat-data\/Observer\/history-bucket-cache(?:\/[A-Za-z0-9._-]+)*/g,
-			'[history bucket cache path]'
-		)
-		.replace(
-			/\/tmp\/stellaratlas-history-scanner-test-cache(?:\/[A-Za-z0-9._-]+)*/g,
-			'[history bucket cache path]'
-		);
 }
 
 const ARCHIVE_OBJECT_STALE_AGE_MS = 2 * 60 * 1000;

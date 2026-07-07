@@ -15,12 +15,10 @@ import type {
 import {
 	getNodeTags,
 	getOrganizationForNode,
-	getOrganizationLabel
+	getOrganizationLabel,
+	type NodeTag
 } from '../../domain/network';
-import {
-	formatBoolean,
-	formatDateTime
-} from '../../format/formatters';
+import { formatBoolean, formatDateTime } from '../../format/formatters';
 import {
 	formatNode24HourActive,
 	formatNode24HourValidating,
@@ -110,13 +108,18 @@ export function NodeDetail({
 		node.historyArchiveHasError ||
 		historyArchiveScan !== null ||
 		historyArchiveSummary !== null;
+	const nodeTags = getEvidenceAwareNodeTags(
+		node,
+		historyArchiveSummary,
+		historyArchiveState
+	);
 
 	return (
 		<section className="detail-grid">
 			<article className="panel detail-panel">
 				<div className="panel-heading">
 					<h2>Node status</h2>
-					<StatusTags tags={getNodeTags(node)} />
+					<StatusTags tags={nodeTags} />
 				</div>
 				<dl className="details">
 					<div>
@@ -228,7 +231,7 @@ export function NodeDetail({
 						<HistoryArchiveObjectCoverage
 							framed={false}
 							summary={historyArchiveSummary}
-							title="Archive file coverage"
+							title="Archive object coverage"
 						/>
 					) : null}
 					<ArchiveMetadata
@@ -253,4 +256,21 @@ export function NodeDetail({
 			)}
 		</section>
 	);
+}
+
+function getEvidenceAwareNodeTags(
+	node: PublicNode,
+	historyArchiveSummary: PublicHistoryArchiveObjectSummary | null,
+	historyArchiveState: PublicHistoryArchiveState | null
+): NodeTag[] {
+	const tags = getNodeTags(node);
+	const currentArchiveEvidenceIsClean =
+		historyArchiveSummary !== null &&
+		historyArchiveSummary.failedObjects === 0 &&
+		historyArchiveState?.status === 'available';
+
+	if (!currentArchiveEvidenceIsClean) return tags;
+
+	const filteredTags = tags.filter((tag) => tag.label !== 'archive issue');
+	return filteredTags.length > 0 ? filteredTags : tags;
 }
