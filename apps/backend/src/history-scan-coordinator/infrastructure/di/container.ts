@@ -33,6 +33,14 @@ import { RegisterParsedLedgerHeaders } from '../../use-cases/register-parsed-led
 import type { ParsedLedgerHeaderRepository } from '../../domain/parsed-history/ParsedLedgerHeaderRepository.js';
 import { TypeOrmParsedLedgerHeaderRepository } from '../repositories/database/TypeOrmParsedLedgerHeaderRepository.js';
 import { ParsedLedgerHeader } from '../database/entities/ParsedLedgerHeader.js';
+import { RegisterParsedTransactionEnvelopes } from '../../use-cases/register-parsed-transaction-envelopes/RegisterParsedTransactionEnvelopes.js';
+import { RegisterParsedTransactionResults } from '../../use-cases/register-parsed-transaction-results/RegisterParsedTransactionResults.js';
+import type { ParsedTransactionEnvelopeRepository } from '../../domain/parsed-history/ParsedTransactionEnvelopeRepository.js';
+import type { ParsedTransactionResultRepository } from '../../domain/parsed-history/ParsedTransactionResultRepository.js';
+import { TypeOrmParsedTransactionEnvelopeRepository } from '../repositories/database/TypeOrmParsedTransactionEnvelopeRepository.js';
+import { TypeOrmParsedTransactionResultRepository } from '../repositories/database/TypeOrmParsedTransactionResultRepository.js';
+import { ParsedTransactionEnvelope } from '../database/entities/ParsedTransactionEnvelope.js';
+import { ParsedTransactionResult } from '../database/entities/ParsedTransactionResult.js';
 import { BackfillArchiveMetadata } from '../../use-cases/backfill-archive-metadata/BackfillArchiveMetadata.js';
 import type { HistoryArchiveStateRepository } from '../../domain/history-archive-state/HistoryArchiveStateRepository.js';
 import { TypeOrmHistoryArchiveStateRepository } from '../repositories/database/TypeOrmHistoryArchiveStateRepository.js';
@@ -88,6 +96,8 @@ export function load(container: Container, config: Config) {
 	container.bind(ReleaseScanJob).toSelf();
 	container.bind(RegisterScan).toSelf();
 	container.bind(RegisterParsedLedgerHeaders).toSelf();
+	container.bind(RegisterParsedTransactionEnvelopes).toSelf();
+	container.bind(RegisterParsedTransactionResults).toSelf();
 	container.bind(ScheduleHistoryArchiveObjects).toSelf();
 	container.bind(ScheduleScanJobs).toSelf();
 	container.bind<ScanScheduler>(TYPES.ScanScheduler).toDynamicValue(() => {
@@ -171,6 +181,28 @@ export function load(container: Container, config: Config) {
 		.toDynamicValue(() => {
 			return new TypeOrmParsedLedgerHeaderRepository(
 				dataSource.getRepository(ParsedLedgerHeader)
+			);
+		})
+		.inRequestScope();
+
+	container
+		.bind<ParsedTransactionEnvelopeRepository>(
+			TYPES.ParsedTransactionEnvelopeRepository
+		)
+		.toDynamicValue(() => {
+			return new TypeOrmParsedTransactionEnvelopeRepository(
+				dataSource.getRepository(ParsedTransactionEnvelope)
+			);
+		})
+		.inRequestScope();
+
+	container
+		.bind<ParsedTransactionResultRepository>(
+			TYPES.ParsedTransactionResultRepository
+		)
+		.toDynamicValue(() => {
+			return new TypeOrmParsedTransactionResultRepository(
+				dataSource.getRepository(ParsedTransactionResult)
 			);
 		})
 		.inRequestScope();

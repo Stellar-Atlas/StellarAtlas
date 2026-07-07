@@ -17,8 +17,10 @@ import {
 	requireObjectBody,
 	scanDtoValidators
 } from './ScanRequestValidation.js';
-import { ParsedLedgerHeaderBatchDTO } from 'history-scanner-dto';
-import { RegisterParsedLedgerHeaders } from '../../use-cases/register-parsed-ledger-headers/RegisterParsedLedgerHeaders.js';
+import {
+	registerParsedHistoryRegistrationRoutes,
+	type ParsedHistoryRegistrationRouteConfig
+} from './ParsedHistoryRegistrationRoutes.js';
 import {
 	BackfillArchiveMetadata,
 	type BackfillArchiveMetadataRequest
@@ -40,12 +42,12 @@ import {
 	parseClaimAttempt
 } from './ArchiveObjectJobRequestParsers.js';
 
-export interface HistoryScanRouterConfig extends FrontendRevalidationConfig {
+export interface HistoryScanRouterConfig
+	extends FrontendRevalidationConfig, ParsedHistoryRegistrationRouteConfig {
 	getLatestScan: GetLatestScan;
 	getScanLogs: GetScanLogs;
 	getScanJob: GetScanJob;
 	getHistoryArchiveObjectJob: GetHistoryArchiveObjectJob;
-	registerParsedLedgerHeaders: RegisterParsedLedgerHeaders;
 	registerScan: RegisterScan;
 	releaseScanJob: ReleaseScanJob;
 	touchScanJob: TouchScanJob;
@@ -54,8 +56,6 @@ export interface HistoryScanRouterConfig extends FrontendRevalidationConfig {
 	failHistoryArchiveObject: FailHistoryArchiveObject;
 	releaseHistoryArchiveObject: ReleaseHistoryArchiveObject;
 	backfillArchiveMetadata: BackfillArchiveMetadata;
-	userName?: string;
-	password?: string;
 }
 
 export const HistoryScanRouterWrapper = (
@@ -104,7 +104,9 @@ export const HistoryScanRouterWrapper = (
 					return res.status(500).json({ error: result.error.message });
 				}
 				if (result.value === null) {
-					return res.status(204).json({ message: 'No archive object job available' });
+					return res
+						.status(204)
+						.json({ message: 'No archive object job available' });
 				}
 
 				triggerFrontendRevalidation(config, [frontendCacheTags.historyScan]);
@@ -119,7 +121,11 @@ export const HistoryScanRouterWrapper = (
 				users: { [config.userName]: config.password },
 				challenge: true
 			}),
-			[param('remoteId').isUUID().withMessage('Invalid archive object remoteId')],
+			[
+				param('remoteId')
+					.isUUID()
+					.withMessage('Invalid archive object remoteId')
+			],
 			async (req: express.Request, res: express.Response) => {
 				const errors = validationResult(req);
 				if (!errors.isEmpty()) {
@@ -137,7 +143,9 @@ export const HistoryScanRouterWrapper = (
 					return res.status(500).json({ error: result.error.message });
 				}
 				if (!result.value) {
-					return res.status(404).json({ error: 'Archive object job not found' });
+					return res
+						.status(404)
+						.json({ error: 'Archive object job not found' });
 				}
 
 				triggerFrontendRevalidation(config, [frontendCacheTags.historyScan]);
@@ -152,7 +160,11 @@ export const HistoryScanRouterWrapper = (
 				users: { [config.userName]: config.password },
 				challenge: true
 			}),
-			[param('remoteId').isUUID().withMessage('Invalid archive object remoteId')],
+			[
+				param('remoteId')
+					.isUUID()
+					.withMessage('Invalid archive object remoteId')
+			],
 			async (req: express.Request, res: express.Response) => {
 				const errors = validationResult(req);
 				if (!errors.isEmpty()) {
@@ -170,7 +182,9 @@ export const HistoryScanRouterWrapper = (
 					return res.status(500).json({ error: result.error.message });
 				}
 				if (!result.value) {
-					return res.status(404).json({ error: 'Archive object job not found' });
+					return res
+						.status(404)
+						.json({ error: 'Archive object job not found' });
 				}
 
 				triggerFrontendRevalidation(config, [frontendCacheTags.historyScan]);
@@ -185,7 +199,11 @@ export const HistoryScanRouterWrapper = (
 				users: { [config.userName]: config.password },
 				challenge: true
 			}),
-			[param('remoteId').isUUID().withMessage('Invalid archive object remoteId')],
+			[
+				param('remoteId')
+					.isUUID()
+					.withMessage('Invalid archive object remoteId')
+			],
 			async (req: express.Request, res: express.Response) => {
 				const errors = validationResult(req);
 				if (!errors.isEmpty()) {
@@ -203,7 +221,9 @@ export const HistoryScanRouterWrapper = (
 					return res.status(500).json({ error: result.error.message });
 				}
 				if (!result.value) {
-					return res.status(404).json({ error: 'Archive object job not found' });
+					return res
+						.status(404)
+						.json({ error: 'Archive object job not found' });
 				}
 
 				triggerFrontendRevalidation(config, [frontendCacheTags.historyScan]);
@@ -218,7 +238,11 @@ export const HistoryScanRouterWrapper = (
 				users: { [config.userName]: config.password },
 				challenge: true
 			}),
-			[param('remoteId').isUUID().withMessage('Invalid archive object remoteId')],
+			[
+				param('remoteId')
+					.isUUID()
+					.withMessage('Invalid archive object remoteId')
+			],
 			async (req: express.Request, res: express.Response) => {
 				const errors = validationResult(req);
 				if (!errors.isEmpty()) {
@@ -236,7 +260,9 @@ export const HistoryScanRouterWrapper = (
 					return res.status(500).json({ error: result.error.message });
 				}
 				if (!result.value) {
-					return res.status(404).json({ error: 'Archive object job not found' });
+					return res
+						.status(404)
+						.json({ error: 'Archive object job not found' });
 				}
 
 				triggerFrontendRevalidation(config, [frontendCacheTags.historyScan]);
@@ -282,32 +308,7 @@ export const HistoryScanRouterWrapper = (
 			}
 		);
 
-	if (config.userName && config.password)
-		historyScanRouter.post(
-			'/parsed-ledger-headers',
-			basicAuth({
-				users: { [config.userName]: config.password },
-				challenge: true
-			}),
-			requireObjectBody,
-			async (req: express.Request, res: express.Response) => {
-				const dtoResult = ParsedLedgerHeaderBatchDTO.fromJSON(req.body);
-				if (dtoResult.isErr()) {
-					return res.status(400).json({ error: dtoResult.error.message });
-				}
-
-				const result = await config.registerParsedLedgerHeaders.execute(
-					dtoResult.value
-				);
-				if (result.isErr()) {
-					return res.status(500).json({ error: result.error.message });
-				}
-
-				return res
-					.status(201)
-					.json({ message: 'Parsed ledger headers registered' });
-			}
-		);
+	registerParsedHistoryRegistrationRoutes(historyScanRouter, config);
 
 	if (config.userName && config.password)
 		historyScanRouter.post(

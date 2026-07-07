@@ -45,6 +45,8 @@ import { GetExplorerLocalReadModel } from '@network-scan/use-cases/get-explorer-
 import { RequestUnsubscribeLink } from '@notifications/use-cases/request-unsubscribe-link/RequestUnsubscribeLink.js';
 import { RegisterScan } from '@history-scan-coordinator/use-cases/register-scan/RegisterScan.js';
 import { RegisterParsedLedgerHeaders } from '@history-scan-coordinator/use-cases/register-parsed-ledger-headers/RegisterParsedLedgerHeaders.js';
+import { RegisterParsedTransactionEnvelopes } from '@history-scan-coordinator/use-cases/register-parsed-transaction-envelopes/RegisterParsedTransactionEnvelopes.js';
+import { RegisterParsedTransactionResults } from '@history-scan-coordinator/use-cases/register-parsed-transaction-results/RegisterParsedTransactionResults.js';
 import { BackfillArchiveMetadata } from '@history-scan-coordinator/use-cases/backfill-archive-metadata/BackfillArchiveMetadata.js';
 import { historyScanRouter } from '@history-scan-coordinator/infrastructure/http/HistoryScanRouter.js';
 import { archiveScanRouter } from '@history-scan-coordinator/infrastructure/http/ArchiveScanRouter.js';
@@ -288,6 +290,12 @@ const listen = async () => {
 			getScanLogs: kernel.container.get(GetScanLogs),
 			registerParsedLedgerHeaders: kernel.container.get(
 				RegisterParsedLedgerHeaders
+			),
+			registerParsedTransactionEnvelopes: kernel.container.get(
+				RegisterParsedTransactionEnvelopes
+			),
+			registerParsedTransactionResults: kernel.container.get(
+				RegisterParsedTransactionResults
 			),
 			getHistoryArchiveObjectJob: kernel.container.get(
 				GetHistoryArchiveObjectJob

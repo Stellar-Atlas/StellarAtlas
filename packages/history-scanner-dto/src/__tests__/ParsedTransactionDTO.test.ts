@@ -48,9 +48,7 @@ describe('ParsedTransactionEnvelopeBatchDTO', () => {
 			sourceArchiveUrl: 'https://history.example'
 		}
 	])('should reject invalid envelope batches %#', (json) => {
-		expect(ParsedTransactionEnvelopeBatchDTO.fromJSON(json).isErr()).toBe(
-			true
-		);
+		expect(ParsedTransactionEnvelopeBatchDTO.fromJSON(json).isErr()).toBe(true);
 	});
 });
 

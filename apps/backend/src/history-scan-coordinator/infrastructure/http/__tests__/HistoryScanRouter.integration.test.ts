@@ -14,6 +14,8 @@ import { ReleaseScanJob } from '@history-scan-coordinator/use-cases/release-scan
 import { TouchScanJob } from '@history-scan-coordinator/use-cases/touch-scan-job/TouchScanJob.js';
 import { GetScanLogs } from '@history-scan-coordinator/use-cases/get-scan-logs/GetScanLogs.js';
 import { RegisterParsedLedgerHeaders } from '@history-scan-coordinator/use-cases/register-parsed-ledger-headers/RegisterParsedLedgerHeaders.js';
+import { RegisterParsedTransactionEnvelopes } from '@history-scan-coordinator/use-cases/register-parsed-transaction-envelopes/RegisterParsedTransactionEnvelopes.js';
+import { RegisterParsedTransactionResults } from '@history-scan-coordinator/use-cases/register-parsed-transaction-results/RegisterParsedTransactionResults.js';
 import { randomUUID } from 'crypto';
 
 describe('HistoryScanRouter.integration', () => {
@@ -21,6 +23,8 @@ describe('HistoryScanRouter.integration', () => {
 	let getLatestScan: jest.Mocked<GetLatestScan>;
 	let registerScan: jest.Mocked<RegisterScan>;
 	let registerParsedLedgerHeaders: jest.Mocked<RegisterParsedLedgerHeaders>;
+	let registerParsedTransactionEnvelopes: jest.Mocked<RegisterParsedTransactionEnvelopes>;
+	let registerParsedTransactionResults: jest.Mocked<RegisterParsedTransactionResults>;
 	let getScanJob: jest.Mocked<GetScanJob>;
 	let releaseScanJob: jest.Mocked<ReleaseScanJob>;
 	let touchScanJob: jest.Mocked<TouchScanJob>;
@@ -30,6 +34,9 @@ describe('HistoryScanRouter.integration', () => {
 		getLatestScan = mock<GetLatestScan>();
 		registerScan = mock<RegisterScan>();
 		registerParsedLedgerHeaders = mock<RegisterParsedLedgerHeaders>();
+		registerParsedTransactionEnvelopes =
+			mock<RegisterParsedTransactionEnvelopes>();
+		registerParsedTransactionResults = mock<RegisterParsedTransactionResults>();
 		getScanJob = mock<GetScanJob>();
 		releaseScanJob = mock<ReleaseScanJob>();
 		touchScanJob = mock<TouchScanJob>();
@@ -44,6 +51,8 @@ describe('HistoryScanRouter.integration', () => {
 				getScanLogs,
 				registerScan,
 				registerParsedLedgerHeaders,
+				registerParsedTransactionEnvelopes,
+				registerParsedTransactionResults,
 				getScanJob,
 				releaseScanJob,
 				touchScanJob,
@@ -244,6 +253,121 @@ describe('HistoryScanRouter.integration', () => {
 			expect(registerParsedLedgerHeaders.execute).toHaveBeenCalledWith(
 				expect.objectContaining({
 					headers: body.headers,
+					scanJobRemoteId: body.scanJobRemoteId,
+					sourceArchiveUrl: body.sourceArchiveUrl
+				})
+			);
+		});
+	});
+
+	describe('POST /parsed-transaction-envelopes', () => {
+		it('should require authentication', async () => {
+			await request(app)
+				.post('/history-scan/parsed-transaction-envelopes')
+				.send({})
+				.expect(401);
+		});
+
+		it('should validate parsed transaction envelope batches', async () => {
+			await request(app)
+				.post('/history-scan/parsed-transaction-envelopes')
+				.auth('admin', 'secret')
+				.send({})
+				.expect(400);
+
+			expect(registerParsedTransactionEnvelopes.execute).not.toHaveBeenCalled();
+		});
+
+		it('should register parsed transaction envelope batches', async () => {
+			registerParsedTransactionEnvelopes.execute.mockResolvedValue(
+				ok(undefined)
+			);
+
+			const body = {
+				observedAt: '2026-07-07T19:30:00.000Z',
+				records: [
+					{
+						envelopeXdr: 'AAAA-envelope',
+						ledgerSequence: 63355967,
+						transactionIndex: 4,
+						transactionSetHash: 'transaction-set-hash'
+					}
+				],
+				scanJobRemoteId: 'scan-job-1',
+				sourceArchiveUrl: 'https://history.stellar.org'
+			};
+
+			await request(app)
+				.post('/history-scan/parsed-transaction-envelopes')
+				.auth('admin', 'secret')
+				.send(body)
+				.expect(201)
+				.expect((response) => {
+					expect(response.body.message).toBe(
+						'Parsed transaction envelopes registered'
+					);
+				});
+
+			expect(registerParsedTransactionEnvelopes.execute).toHaveBeenCalledWith(
+				expect.objectContaining({
+					records: body.records,
+					scanJobRemoteId: body.scanJobRemoteId,
+					sourceArchiveUrl: body.sourceArchiveUrl
+				})
+			);
+		});
+	});
+
+	describe('POST /parsed-transaction-results', () => {
+		it('should require authentication', async () => {
+			await request(app)
+				.post('/history-scan/parsed-transaction-results')
+				.send({})
+				.expect(401);
+		});
+
+		it('should validate parsed transaction result batches', async () => {
+			await request(app)
+				.post('/history-scan/parsed-transaction-results')
+				.auth('admin', 'secret')
+				.send({})
+				.expect(400);
+
+			expect(registerParsedTransactionResults.execute).not.toHaveBeenCalled();
+		});
+
+		it('should register parsed transaction result batches', async () => {
+			registerParsedTransactionResults.execute.mockResolvedValue(ok(undefined));
+
+			const body = {
+				observedAt: '2026-07-07T19:30:00.000Z',
+				records: [
+					{
+						ledgerSequence: 63355967,
+						resultXdr: 'AAAA-result',
+						transactionHash: 'transaction-hash',
+						transactionIndex: 4,
+						transactionResultHash: 'transaction-result-hash'
+					}
+				],
+				scanJobRemoteId: 'scan-job-1',
+				sourceArchiveUrl: 'https://history.stellar.org'
+			};
+
+			await request(app)
+				.post('/history-scan/parsed-transaction-results')
+				.auth('admin', 'secret')
+				.send(body)
+				.expect(201)
+				.expect((response) => {
+					expect(response.body.message).toBe(
+						'Parsed transaction results registered'
+					);
+				});
+
+			expect(registerParsedTransactionResults.execute).toHaveBeenCalledWith(
+				expect.objectContaining({
+					records: body.records,
 					scanJobRemoteId: body.scanJobRemoteId,
 					sourceArchiveUrl: body.sourceArchiveUrl
 				})

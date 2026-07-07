@@ -13,6 +13,12 @@ export const TYPES = {
 	HistoryArchiveObjectRepository: Symbol('HistoryArchiveObjectRepository'),
 	HistoryArchiveScanRepository: Symbol('HistoryArchiveScanRepository'),
 	ParsedLedgerHeaderRepository: Symbol('ParsedLedgerHeaderRepository'),
+	ParsedTransactionEnvelopeRepository: Symbol(
+		'ParsedTransactionEnvelopeRepository'
+	),
+	ParsedTransactionResultRepository: Symbol(
+		'ParsedTransactionResultRepository'
+	),
 	ScanJobRepository: Symbol('ScanJobRepository'),
 	ScanScheduler: Symbol('ScanScheduler'),
 	HistoryArchiveRepository: Symbol('HistoryArchiveRepository')

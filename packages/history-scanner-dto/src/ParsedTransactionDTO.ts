@@ -22,7 +22,6 @@ abstract class ParsedTransactionBatchDTO<RecordType> {
 		public readonly observedAt: Date,
 		public readonly records: readonly RecordType[]
 	) {}
-
 }
 
 export class ParsedTransactionEnvelopeBatchDTO extends ParsedTransactionBatchDTO<ParsedTransactionEnvelopeDTO> {
