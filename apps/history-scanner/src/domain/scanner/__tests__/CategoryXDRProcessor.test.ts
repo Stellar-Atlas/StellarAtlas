@@ -27,7 +27,7 @@ it('should apply workerpool results before acknowledging a write', async () => {
 	expect(processor.categoryVerificationData.calculatedTxSetHashes.size).toBe(0);
 
 	if (resolveExec === undefined) throw new Error('workerpool was not called');
-	resolveExec({ ledger: 7, hash: 'tx-set-hash' });
+	resolveExec({ ledger: 7, hash: 'tx-set-hash', envelopes: [] });
 	await writePromise;
 
 	expect(processor.categoryVerificationData.calculatedTxSetHashes.get(7)).toBe(
@@ -94,19 +94,74 @@ it('should emit parsed ledger header records while preserving verification data'
 	expect(verificationData.protocolVersions.get(127)).toBe(22);
 });
 
-it('should not emit parsed history records for transaction categories', async () => {
+it('should emit parsed transaction envelope records', async () => {
 	const emit = jest.fn<(record: ParsedHistoryRecord) => void>();
-	const exec = jest.fn(async () => ({ ledger: 7, hash: 'tx-set-hash' }));
+	const exec = jest.fn(async () => ({
+		ledger: 7,
+		hash: 'tx-set-hash',
+		envelopes: [
+			{
+				envelopeXdr: 'AAAA-envelope',
+				transactionIndex: 2
+			}
+		]
+	}));
+	const verificationData = createVerificationData();
 	const processor = newProcessor(
 		Category.transactions,
 		createPool(exec),
-		createVerificationData(),
+		verificationData,
 		{ emit }
 	);
 
 	await writeXdr(processor);
 
-	expect(emit).not.toHaveBeenCalled();
+	expect(verificationData.calculatedTxSetHashes.get(7)).toBe('tx-set-hash');
+	expect(emit).toHaveBeenCalledWith({
+		recordType: 'transaction-envelope',
+		sourceUrl: 'https://history.example',
+		ledger: 7,
+		transactionIndex: 2,
+		transactionSetHash: 'tx-set-hash',
+		envelopeXdr: 'AAAA-envelope'
+	});
+});
+
+it('should emit parsed transaction result records', async () => {
+	const emit = jest.fn<(record: ParsedHistoryRecord) => void>();
+	const exec = jest.fn(async () => ({
+		ledger: 7,
+		hash: 'tx-result-hash',
+		results: [
+			{
+				resultXdr: 'AAAA-result',
+				transactionHash: 'transaction-hash',
+				transactionIndex: 1
+			}
+		]
+	}));
+	const verificationData = createVerificationData();
+	const processor = newProcessor(
+		Category.results,
+		createPool(exec),
+		verificationData,
+		{ emit }
+	);
+
+	await writeXdr(processor);
+
+	expect(verificationData.calculatedTxSetResultHashes.get(7)).toBe(
+		'tx-result-hash'
+	);
+	expect(emit).toHaveBeenCalledWith({
+		recordType: 'transaction-result',
+		sourceUrl: 'https://history.example',
+		ledger: 7,
+		transactionIndex: 1,
+		transactionResultHash: 'tx-result-hash',
+		transactionHash: 'transaction-hash',
+		resultXdr: 'AAAA-result'
+	});
 });
 
 it('should validate scp frames through the worker pool', async () => {

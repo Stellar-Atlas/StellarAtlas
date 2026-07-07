@@ -1,11 +1,12 @@
 import 'reflect-metadata';
-import { CustomError } from 'custom-error';
 import { Url, type HttpOptions, type HttpService } from 'http-helper';
 import { injectable } from 'inversify';
 import { err, ok, Result } from 'neverthrow';
 import { Scan } from '../../domain/scan/Scan.js';
 import {
 	ParsedLedgerHeaderBatchDTO,
+	ParsedTransactionEnvelopeBatchDTO,
+	ParsedTransactionResultBatchDTO,
 	ScanDTO,
 	ScanJobDTO,
 	type ScanErrorDTO,
@@ -22,12 +23,8 @@ import type {
 import { isObject } from 'shared';
 import { type ScanError, ScanErrorType } from '../../domain/scan/ScanError.js';
 import type { CoordinatorAuthConfig } from '../config/CoordinatorAuthConfig.js';
-
-export class CoordinatorServiceError extends CustomError {
-	constructor(message: string, cause?: Error) {
-		super(message, CoordinatorServiceError.name, cause);
-	}
-}
+import { CoordinatorServiceError } from './CoordinatorServiceError.js';
+import { parseHistoryArchiveObjectJobDTO } from './HistoryArchiveObjectJobResponseParser.js';
 
 @injectable()
 export class RESTScanCoordinatorService implements ScanCoordinatorService {
@@ -74,35 +71,31 @@ export class RESTScanCoordinatorService implements ScanCoordinatorService {
 	async registerParsedLedgerHeaders(
 		batch: ParsedLedgerHeaderBatchDTO
 	): Promise<Result<void, Error>> {
-		if (this.coordinatorAuth.type === 'community') return ok(undefined);
-
-		const urlResult = this.createUrl('/v1/history-scan/parsed-ledger-headers');
-		if (urlResult.isErr()) {
-			return err(new CoordinatorServiceError('Invalid URL', urlResult.error));
-		}
-
-		const response = await this.httpService.post(
-			urlResult.value,
-			batch as unknown as Record<string, unknown>,
-			this.getHttpOptions()
+		return this.registerParsedHistoryBatch(
+			'/v1/history-scan/parsed-ledger-headers',
+			batch,
+			'Failed to save parsed ledger headers'
 		);
+	}
 
-		if (response.isErr()) {
-			return err(
-				new CoordinatorServiceError(
-					'Failed to save parsed ledger headers',
-					response.error
-				)
-			);
-		}
+	async registerParsedTransactionEnvelopes(
+		batch: ParsedTransactionEnvelopeBatchDTO
+	): Promise<Result<void, Error>> {
+		return this.registerParsedHistoryBatch(
+			'/v1/history-scan/parsed-transaction-envelopes',
+			batch,
+			'Failed to save parsed transaction envelopes'
+		);
+	}
 
-		if (response.value.status !== 201) {
-			return err(
-				new CoordinatorServiceError('Failed to save parsed ledger headers')
-			);
-		}
-
-		return ok(undefined);
+	async registerParsedTransactionResults(
+		batch: ParsedTransactionResultBatchDTO
+	): Promise<Result<void, Error>> {
+		return this.registerParsedHistoryBatch(
+			'/v1/history-scan/parsed-transaction-results',
+			batch,
+			'Failed to save parsed transaction results'
+		);
 	}
 
 	private convertScanToDTO(scan: Scan): ScanDTO {
@@ -220,9 +213,7 @@ export class RESTScanCoordinatorService implements ScanCoordinatorService {
 			);
 		}
 
-		return this.convertResponseToHistoryArchiveObjectJobDTO(
-			response.value.data
-		);
+		return parseHistoryArchiveObjectJobDTO(response.value.data);
 	}
 
 	async touchScanJob(
@@ -370,6 +361,38 @@ export class RESTScanCoordinatorService implements ScanCoordinatorService {
 		return `/v1/history-scan/job/${remoteId}/release`;
 	}
 
+	private async registerParsedHistoryBatch(
+		path: string,
+		batch:
+			| ParsedLedgerHeaderBatchDTO
+			| ParsedTransactionEnvelopeBatchDTO
+			| ParsedTransactionResultBatchDTO,
+		errorMessage: string
+	): Promise<Result<void, Error>> {
+		if (this.coordinatorAuth.type === 'community') return ok(undefined);
+
+		const urlResult = this.createUrl(path);
+		if (urlResult.isErr()) {
+			return err(new CoordinatorServiceError('Invalid URL', urlResult.error));
+		}
+
+		const response = await this.httpService.post(
+			urlResult.value,
+			batch as unknown as Record<string, unknown>,
+			this.getHttpOptions()
+		);
+
+		if (response.isErr()) {
+			return err(new CoordinatorServiceError(errorMessage, response.error));
+		}
+
+		if (response.value.status !== 201) {
+			return err(new CoordinatorServiceError(errorMessage));
+		}
+
+		return ok(undefined);
+	}
+
 	private getHttpOptions(options: HttpOptions = {}): HttpOptions {
 		if (this.coordinatorAuth.type === 'community') {
 			return {
@@ -421,9 +444,7 @@ export class RESTScanCoordinatorService implements ScanCoordinatorService {
 		);
 
 		if (response.isErr()) {
-			return err(
-				new CoordinatorServiceError(errorMessage, response.error)
-			);
+			return err(new CoordinatorServiceError(errorMessage, response.error));
 		}
 
 		if (response.value.status !== 204 && response.value.status !== 404) {
@@ -431,73 +452,11 @@ export class RESTScanCoordinatorService implements ScanCoordinatorService {
 		}
 
 		if (response.value.status === 404) {
-			return err(new CoordinatorServiceError('History archive object job not found'));
+			return err(
+				new CoordinatorServiceError('History archive object job not found')
+			);
 		}
 
 		return ok(undefined);
-	}
-
-	private convertResponseToHistoryArchiveObjectJobDTO(
-		response: unknown
-	): Result<HistoryArchiveObjectJobDTO, Error> {
-		if (!isObject(response)) {
-			return err(
-				new CoordinatorServiceError(
-					'History archive object job JSON must be an object'
-				)
-			);
-		}
-
-		if (
-			typeof response.archiveUrl !== 'string' ||
-			typeof response.claimAttempt !== 'number' ||
-			!Number.isSafeInteger(response.claimAttempt) ||
-			typeof response.objectKey !== 'string' ||
-			typeof response.objectType !== 'string' ||
-			typeof response.objectUrl !== 'string' ||
-			typeof response.remoteId !== 'string'
-		) {
-			return err(
-				new CoordinatorServiceError(
-					'Invalid history archive object job response format'
-				)
-			);
-		}
-
-		const checkpointLedger = response.checkpointLedger;
-		if (
-			checkpointLedger !== null &&
-			checkpointLedger !== undefined &&
-			(typeof checkpointLedger !== 'number' ||
-				!Number.isSafeInteger(checkpointLedger))
-		) {
-			return err(
-				new CoordinatorServiceError(
-					'Invalid history archive object checkpoint ledger'
-				)
-			);
-		}
-
-		const bucketHash = response.bucketHash;
-		if (
-			bucketHash !== null &&
-			bucketHash !== undefined &&
-			typeof bucketHash !== 'string'
-		) {
-			return err(
-				new CoordinatorServiceError('Invalid history archive object bucket hash')
-			);
-		}
-
-		return ok({
-			archiveUrl: response.archiveUrl,
-			bucketHash: bucketHash ?? null,
-			checkpointLedger: checkpointLedger ?? null,
-			claimAttempt: response.claimAttempt,
-			objectKey: response.objectKey,
-			objectType: response.objectType,
-			objectUrl: response.objectUrl,
-			remoteId: response.remoteId
-		});
 	}
 }

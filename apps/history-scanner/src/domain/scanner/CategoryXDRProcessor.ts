@@ -1,6 +1,10 @@
 import { Writable } from 'stream';
 import { Category } from '../history-archive/Category.js';
-import { LedgerHeaderHistoryEntryResult } from './hash-worker.js';
+import {
+	LedgerHeaderHistoryEntryResult,
+	TransactionEnvelopeHistoryEntryResult,
+	TransactionResultHistoryEntryResult
+} from './hash-worker.js';
 import { Url } from 'http-helper';
 import { CategoryVerificationData } from './CategoryScanner.js';
 import { HasherPool } from './HasherPool.js';
@@ -59,25 +63,48 @@ export class CategoryXDRProcessor extends Writable {
 	}
 
 	private async processTransactionResult(xdr: Buffer): Promise<void> {
-		const hashMap = await this.performInPool<{
-			ledger: number;
-			hash: string;
-		}>(xdr, 'processTransactionHistoryResultEntryXDR');
+		const result =
+			await this.performInPool<TransactionResultHistoryEntryResult>(
+				xdr,
+				'processTransactionHistoryResultEntryXDR'
+			);
 		this.categoryVerificationData.calculatedTxSetResultHashes.set(
-			hashMap.ledger,
-			hashMap.hash
+			result.ledger,
+			result.hash
 		);
+		for (const transactionResult of result.results) {
+			await this.parsedHistorySink.emit({
+				recordType: 'transaction-result',
+				sourceUrl: this.url.value,
+				ledger: result.ledger,
+				transactionIndex: transactionResult.transactionIndex,
+				transactionResultHash: result.hash,
+				transactionHash: transactionResult.transactionHash,
+				resultXdr: transactionResult.resultXdr
+			});
+		}
 	}
 
 	private async processTransaction(xdr: Buffer): Promise<void> {
-		const hashMap = await this.performInPool<{
-			ledger: number;
-			hash: string;
-		}>(xdr, 'processTransactionHistoryEntryXDR');
+		const hashMap =
+			await this.performInPool<TransactionEnvelopeHistoryEntryResult>(
+				xdr,
+				'processTransactionHistoryEntryXDR'
+			);
 		this.categoryVerificationData.calculatedTxSetHashes.set(
 			hashMap.ledger,
 			hashMap.hash
 		);
+		for (const envelope of hashMap.envelopes) {
+			await this.parsedHistorySink.emit({
+				recordType: 'transaction-envelope',
+				sourceUrl: this.url.value,
+				ledger: hashMap.ledger,
+				transactionIndex: envelope.transactionIndex,
+				transactionSetHash: hashMap.hash,
+				envelopeXdr: envelope.envelopeXdr
+			});
+		}
 	}
 
 	private async processLedgerHeader(xdr: Buffer): Promise<void> {

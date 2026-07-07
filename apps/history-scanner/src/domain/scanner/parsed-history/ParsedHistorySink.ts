@@ -1,10 +1,5 @@
 export type JsonValue =
-	| string
-	| number
-	| boolean
-	| null
-	| JsonObject
-	| readonly JsonValue[];
+	string | number | boolean | null | JsonObject | readonly JsonValue[];
 
 export interface JsonObject {
 	readonly [key: string]: JsonValue;
@@ -22,7 +17,29 @@ export interface ParsedLedgerHeaderRecord extends JsonObject {
 	readonly bucketListHash: string;
 }
 
-export type ParsedHistoryRecord = ParsedLedgerHeaderRecord;
+export interface ParsedTransactionEnvelopeRecord extends JsonObject {
+	readonly recordType: 'transaction-envelope';
+	readonly sourceUrl: string;
+	readonly ledger: number;
+	readonly transactionIndex: number;
+	readonly transactionSetHash: string;
+	readonly envelopeXdr: string;
+}
+
+export interface ParsedTransactionResultRecord extends JsonObject {
+	readonly recordType: 'transaction-result';
+	readonly sourceUrl: string;
+	readonly ledger: number;
+	readonly transactionIndex: number;
+	readonly transactionResultHash: string;
+	readonly transactionHash: string;
+	readonly resultXdr: string;
+}
+
+export type ParsedHistoryRecord =
+	| ParsedLedgerHeaderRecord
+	| ParsedTransactionEnvelopeRecord
+	| ParsedTransactionResultRecord;
 
 export interface ParsedHistorySink {
 	emit(record: ParsedHistoryRecord): void | Promise<void>;

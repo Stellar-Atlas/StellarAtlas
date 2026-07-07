@@ -4,7 +4,11 @@ import { mock } from 'jest-mock-extended';
 import { ok } from 'neverthrow';
 import { Scan } from '@domain/scan/Scan.js';
 import { ScanError, ScanErrorType } from '@domain/scan/ScanError.js';
-import { ParsedLedgerHeaderBatchDTO } from 'history-scanner-dto';
+import {
+	ParsedLedgerHeaderBatchDTO,
+	ParsedTransactionEnvelopeBatchDTO,
+	ParsedTransactionResultBatchDTO
+} from 'history-scanner-dto';
 
 describe('RESTScanCoordinatorService Integration Tests', () => {
 	let httpService: jest.Mocked<HttpService>;
@@ -193,6 +197,137 @@ describe('RESTScanCoordinatorService Integration Tests', () => {
 					'https://history.stellar.org',
 					'remote-id',
 					new Date('2026-07-05T01:42:51.000Z'),
+					[]
+				)
+			);
+
+			expect(result.isOk()).toBe(true);
+			expect(httpService.post).not.toHaveBeenCalled();
+		});
+	});
+
+	describe('registerParsedTransactionEnvelopes', () => {
+		it('should post parsed transaction envelopes for internal scanners', async () => {
+			const batch = new ParsedTransactionEnvelopeBatchDTO(
+				'https://history.stellar.org',
+				'remote-id',
+				new Date('2026-07-07T19:30:00.000Z'),
+				[
+					{
+						envelopeXdr: 'AAAA-envelope',
+						ledgerSequence: 63355967,
+						transactionIndex: 4,
+						transactionSetHash: 'transaction-set-hash'
+					}
+				]
+			);
+			httpService.post.mockResolvedValue(
+				ok({
+					status: 201,
+					statusText: 'Created',
+					headers: {},
+					data: { message: 'Parsed transaction envelopes registered' }
+				})
+			);
+
+			const result = await service.registerParsedTransactionEnvelopes(batch);
+
+			expect(result.isOk()).toBe(true);
+			expect(httpService.post).toHaveBeenCalledWith(
+				Url.create(
+					`${baseUrl}/v1/history-scan/parsed-transaction-envelopes`
+				)._unsafeUnwrap(),
+				batch as unknown as Record<string, unknown>,
+				{
+					auth: {
+						username,
+						password: secret
+					}
+				}
+			);
+		});
+
+		it('should not post parsed transaction envelopes for community scanners', async () => {
+			const communityService = new RESTScanCoordinatorService(
+				httpService,
+				baseUrl,
+				{
+					type: 'community',
+					scannerId: '164f7788-9edb-4bb5-81c1-b928d85a21a5',
+					apiKey: 'satlas_scanner_secret'
+				}
+			);
+			const result = await communityService.registerParsedTransactionEnvelopes(
+				new ParsedTransactionEnvelopeBatchDTO(
+					'https://history.stellar.org',
+					'remote-id',
+					new Date('2026-07-07T19:30:00.000Z'),
+					[]
+				)
+			);
+
+			expect(result.isOk()).toBe(true);
+			expect(httpService.post).not.toHaveBeenCalled();
+		});
+	});
+
+	describe('registerParsedTransactionResults', () => {
+		it('should post parsed transaction results for internal scanners', async () => {
+			const batch = new ParsedTransactionResultBatchDTO(
+				'https://history.stellar.org',
+				'remote-id',
+				new Date('2026-07-07T19:30:00.000Z'),
+				[
+					{
+						ledgerSequence: 63355967,
+						resultXdr: 'AAAA-result',
+						transactionHash: 'transaction-hash',
+						transactionIndex: 4,
+						transactionResultHash: 'transaction-result-hash'
+					}
+				]
+			);
+			httpService.post.mockResolvedValue(
+				ok({
+					status: 201,
+					statusText: 'Created',
+					headers: {},
+					data: { message: 'Parsed transaction results registered' }
+				})
+			);
+
+			const result = await service.registerParsedTransactionResults(batch);
+
+			expect(result.isOk()).toBe(true);
+			expect(httpService.post).toHaveBeenCalledWith(
+				Url.create(
+					`${baseUrl}/v1/history-scan/parsed-transaction-results`
+				)._unsafeUnwrap(),
+				batch as unknown as Record<string, unknown>,
+				{
+					auth: {
+						username,
+						password: secret
+					}
+				}
+			);
+		});
+
+		it('should not post parsed transaction results for community scanners', async () => {
+			const communityService = new RESTScanCoordinatorService(
+				httpService,
+				baseUrl,
+				{
+					type: 'community',
+					scannerId: '164f7788-9edb-4bb5-81c1-b928d85a21a5',
+					apiKey: 'satlas_scanner_secret'
+				}
+			);
+			const result = await communityService.registerParsedTransactionResults(
+				new ParsedTransactionResultBatchDTO(
+					'https://history.stellar.org',
+					'remote-id',
+					new Date('2026-07-07T19:30:00.000Z'),
 					[]
 				)
 			);

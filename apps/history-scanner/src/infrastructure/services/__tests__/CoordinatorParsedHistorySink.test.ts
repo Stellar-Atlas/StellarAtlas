@@ -9,6 +9,12 @@ describe('CoordinatorParsedHistorySink', () => {
 		const coordinator = mock<ScanCoordinatorService>();
 		const exceptionLogger = mock<ExceptionLogger>();
 		coordinator.registerParsedLedgerHeaders.mockResolvedValue(ok(undefined));
+		coordinator.registerParsedTransactionEnvelopes.mockResolvedValue(
+			ok(undefined)
+		);
+		coordinator.registerParsedTransactionResults.mockResolvedValue(
+			ok(undefined)
+		);
 		const sink = new CoordinatorParsedHistorySink(
 			coordinator,
 			'https://history.stellar.org',
@@ -42,6 +48,12 @@ describe('CoordinatorParsedHistorySink', () => {
 		coordinator.registerParsedLedgerHeaders
 			.mockResolvedValueOnce(err(new Error('ECONNREFUSED')))
 			.mockResolvedValueOnce(ok(undefined));
+		coordinator.registerParsedTransactionEnvelopes.mockResolvedValue(
+			ok(undefined)
+		);
+		coordinator.registerParsedTransactionResults.mockResolvedValue(
+			ok(undefined)
+		);
 		const sink = new CoordinatorParsedHistorySink(
 			coordinator,
 			'https://history.stellar.org',
@@ -54,6 +66,49 @@ describe('CoordinatorParsedHistorySink', () => {
 		await sink.emit(createLedgerHeaderRecord(1));
 
 		expect(coordinator.registerParsedLedgerHeaders).toHaveBeenCalledTimes(2);
+		expect(exceptionLogger.captureException).not.toHaveBeenCalled();
+	});
+
+	it('should batch parsed transaction envelopes and results independently', async () => {
+		const coordinator = mock<ScanCoordinatorService>();
+		const exceptionLogger = mock<ExceptionLogger>();
+		coordinator.registerParsedLedgerHeaders.mockResolvedValue(ok(undefined));
+		coordinator.registerParsedTransactionEnvelopes.mockResolvedValue(
+			ok(undefined)
+		);
+		coordinator.registerParsedTransactionResults.mockResolvedValue(
+			ok(undefined)
+		);
+		const sink = new CoordinatorParsedHistorySink(
+			coordinator,
+			'https://history.stellar.org',
+			'remote-id',
+			exceptionLogger,
+			2
+		);
+
+		await sink.emit(createTransactionEnvelopeRecord(1, 0));
+		await sink.emit(createTransactionResultRecord(1, 0));
+		expect(
+			coordinator.registerParsedTransactionEnvelopes
+		).not.toHaveBeenCalled();
+		expect(coordinator.registerParsedTransactionResults).not.toHaveBeenCalled();
+
+		await sink.emit(createTransactionEnvelopeRecord(1, 1));
+		await sink.emit(createTransactionResultRecord(1, 1));
+
+		expect(
+			coordinator.registerParsedTransactionEnvelopes
+		).toHaveBeenCalledTimes(1);
+		expect(coordinator.registerParsedTransactionResults).toHaveBeenCalledTimes(
+			1
+		);
+		expect(
+			coordinator.registerParsedTransactionEnvelopes.mock.calls[0][0].records
+		).toHaveLength(2);
+		expect(
+			coordinator.registerParsedTransactionResults.mock.calls[0][0].records
+		).toHaveLength(2);
 		expect(exceptionLogger.captureException).not.toHaveBeenCalled();
 	});
 });
@@ -69,5 +124,34 @@ function createLedgerHeaderRecord(ledger: number) {
 		sourceUrl: 'https://history.stellar.org',
 		transactionResultSetHash: `transaction-result-${ledger}`,
 		transactionSetHash: `transaction-set-${ledger}`
+	};
+}
+
+function createTransactionEnvelopeRecord(
+	ledger: number,
+	transactionIndex: number
+) {
+	return {
+		envelopeXdr: `envelope-${ledger}-${transactionIndex}`,
+		ledger,
+		recordType: 'transaction-envelope' as const,
+		sourceUrl: 'https://history.stellar.org',
+		transactionIndex,
+		transactionSetHash: `transaction-set-${ledger}`
+	};
+}
+
+function createTransactionResultRecord(
+	ledger: number,
+	transactionIndex: number
+) {
+	return {
+		ledger,
+		recordType: 'transaction-result' as const,
+		resultXdr: `result-${ledger}-${transactionIndex}`,
+		sourceUrl: 'https://history.stellar.org',
+		transactionHash: `transaction-${ledger}-${transactionIndex}`,
+		transactionIndex,
+		transactionResultHash: `transaction-result-${ledger}`
 	};
 }

@@ -3,6 +3,8 @@ import { Scan } from './Scan.js';
 import {
 	type ArchiveMetadataDTO,
 	type ParsedLedgerHeaderBatchDTO,
+	type ParsedTransactionEnvelopeBatchDTO,
+	type ParsedTransactionResultBatchDTO,
 	ScanJobDTO
 } from 'history-scanner-dto';
 
@@ -35,8 +37,7 @@ export interface HistoryArchiveObjectProgressDTO {
 	readonly workerStage?: string | null;
 }
 
-export interface HistoryArchiveObjectCompletionDTO
-	extends HistoryArchiveObjectProgressDTO {
+export interface HistoryArchiveObjectCompletionDTO extends HistoryArchiveObjectProgressDTO {
 	readonly archiveMetadata?: ArchiveMetadataDTO;
 }
 
@@ -51,6 +52,12 @@ export interface ScanCoordinatorService {
 	registerScan(scan: Scan): Promise<Result<void, Error>>;
 	registerParsedLedgerHeaders(
 		batch: ParsedLedgerHeaderBatchDTO
+	): Promise<Result<void, Error>>;
+	registerParsedTransactionEnvelopes(
+		batch: ParsedTransactionEnvelopeBatchDTO
+	): Promise<Result<void, Error>>;
+	registerParsedTransactionResults(
+		batch: ParsedTransactionResultBatchDTO
 	): Promise<Result<void, Error>>;
 	getScanJob(): Promise<Result<ScanJobDTO | null, Error>>;
 	releaseScanJob(remoteId: string): Promise<Result<void, Error>>;
