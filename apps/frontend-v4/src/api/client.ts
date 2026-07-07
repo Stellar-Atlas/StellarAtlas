@@ -61,6 +61,7 @@ export interface FetchOptions {
 	cache?: 'no-store';
 	revalidate?: number;
 	tags?: string[];
+	timeoutMs?: number;
 }
 
 interface ScpStatementFetchOptions {
@@ -158,10 +159,9 @@ export const fetchJson = async <Payload>(
 	path: string,
 	options: FetchOptions = {}
 ): Promise<Payload> => {
-	const response = await fetch(
-		buildApiUrl(path, options),
-		buildFetchInit(options)
-	);
+	const timedFetch = buildTimedFetchInit(options);
+	const response = await fetch(buildApiUrl(path, options), timedFetch.init)
+		.finally(timedFetch.cancel);
 
 	if (!response.ok) {
 		throw new ApiClientError({
@@ -177,10 +177,9 @@ const fetchNullableJson = async <Payload>(
 	path: string,
 	options: FetchOptions = {}
 ): Promise<Payload | null> => {
-	const response = await fetch(
-		buildApiUrl(path, options),
-		buildFetchInit(options)
-	);
+	const timedFetch = buildTimedFetchInit(options);
+	const response = await fetch(buildApiUrl(path, options), timedFetch.init)
+		.finally(timedFetch.cancel);
 
 	if (response.status === 204) return null;
 	if (!response.ok) {
@@ -192,6 +191,28 @@ const fetchNullableJson = async <Payload>(
 
 	return response.json() as Promise<Payload>;
 };
+
+function buildTimedFetchInit(options: FetchOptions): {
+	readonly cancel: () => void;
+	readonly init: NextFetchInit;
+} {
+	const init = buildFetchInit(options);
+	if (options.timeoutMs === undefined) {
+		return { cancel: noop, init };
+	}
+
+	const controller = new AbortController();
+	const timer = setTimeout(() => controller.abort(), options.timeoutMs);
+	return {
+		cancel: () => clearTimeout(timer),
+		init: {
+			...init,
+			signal: controller.signal
+		}
+	};
+}
+
+function noop(): void {}
 
 export const fetchPublicNetwork = (
 	options?: FetchOptions

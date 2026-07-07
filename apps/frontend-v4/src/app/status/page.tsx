@@ -23,8 +23,11 @@ import { StatusDashboard } from '@components/status/status-dashboard';
 export const revalidate = 0;
 export const dynamic = 'force-dynamic';
 const statusFetchOptions = { cache: 'no-store' } as const;
+const optionalArchiveFetchOptions = {
+	cache: 'no-store',
+	timeoutMs: 5000
+} as const;
 const maxBucketCoverageLookups = 8;
-const archiveSummaryTimeoutMs = 8000;
 
 async function StatusRouteContent(): Promise<React.JSX.Element> {
 	const [
@@ -41,12 +44,15 @@ async function StatusRouteContent(): Promise<React.JSX.Element> {
 		fetchDataQualityStatus(statusFetchOptions),
 		fetchScanLogStatus(statusFetchOptions),
 		fetchWorkerStatus(statusFetchOptions),
-		fetchHistoryArchiveObjectEvents(100, statusFetchOptions),
-		withNullableTimeout(
-			fetchHistoryArchiveObjectSummary(statusFetchOptions),
-			archiveSummaryTimeoutMs
+		fetchHistoryArchiveObjectEvents(100, optionalArchiveFetchOptions).catch(
+			() => buildEmptyArchiveEvents()
 		),
-		fetchHistoryArchiveObjects(100, statusFetchOptions),
+		fetchHistoryArchiveObjectSummary(optionalArchiveFetchOptions).catch(
+			() => null
+		),
+		fetchHistoryArchiveObjects(100, optionalArchiveFetchOptions).catch(() =>
+			buildEmptyArchiveQueue()
+		),
 		fetchFrontendStatus(statusFetchOptions)
 	]);
 	const archiveSummary =
@@ -55,8 +61,8 @@ async function StatusRouteContent(): Promise<React.JSX.Element> {
 		await fetchHistoryArchiveBucketCoveragesForObjects(
 			archiveObjects,
 			maxBucketCoverageLookups,
-			statusFetchOptions
-		);
+			optionalArchiveFetchOptions
+		).catch(() => []);
 
 	return (
 		<main className="shell">
@@ -78,18 +84,6 @@ async function StatusRouteContent(): Promise<React.JSX.Element> {
 			/>
 		</main>
 	);
-}
-
-function withNullableTimeout<T>(
-	promise: Promise<T>,
-	timeoutMs: number
-): Promise<T | null> {
-	return Promise.race([
-		promise.catch(() => null),
-		new Promise<null>((resolve) => {
-			setTimeout(() => resolve(null), timeoutMs);
-		})
-	]);
 }
 
 function buildArchiveSummaryFromQueue(
@@ -154,6 +148,26 @@ function countBucketStatus(
 	status: PublicHistoryArchiveObjectQueue['objects'][number]['status']
 ): number {
 	return bucketObjects.filter((object) => object.status === status).length;
+}
+
+function buildEmptyArchiveEvents() {
+	return {
+		count: 0,
+		events: [],
+		generatedAt: new Date().toISOString(),
+		limit: 100
+	};
+}
+
+function buildEmptyArchiveQueue(): PublicHistoryArchiveObjectQueue {
+	return {
+		activeObjects: 0,
+		failedObjects: 0,
+		generatedAt: new Date().toISOString(),
+		objects: [],
+		pendingObjects: 0,
+		verifiedObjects: 0
+	};
 }
 
 export default function StatusPage(): React.JSX.Element {
