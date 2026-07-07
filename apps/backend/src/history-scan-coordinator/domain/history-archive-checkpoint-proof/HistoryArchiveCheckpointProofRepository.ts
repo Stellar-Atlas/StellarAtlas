@@ -1,4 +1,5 @@
 import type { HistoryArchiveObject } from '../history-archive-object/HistoryArchiveObject.js';
+import type { HistoryArchiveCheckpointProof } from './HistoryArchiveCheckpointProof.js';
 
 export interface HistoryArchiveCheckpointProofRefreshTarget {
 	readonly archiveUrlIdentity: string;
@@ -7,6 +8,10 @@ export interface HistoryArchiveCheckpointProofRefreshTarget {
 }
 
 export interface HistoryArchiveCheckpointProofRepository {
+	findActionableByArchiveUrlIdentity(
+		archiveUrlIdentity: string,
+		limit: number
+	): Promise<readonly HistoryArchiveCheckpointProof[]>;
 	refreshForArchiveCheckpoint(
 		target: HistoryArchiveCheckpointProofRefreshTarget
 	): Promise<void>;

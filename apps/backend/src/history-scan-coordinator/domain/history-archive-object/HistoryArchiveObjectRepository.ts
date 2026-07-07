@@ -48,6 +48,10 @@ export interface HistoryArchiveObjectRepository {
 	claimNextObject(
 		supportedTypes: readonly HistoryArchiveObjectType[]
 	): Promise<HistoryArchiveObject | null>;
+	findActionableByArchiveUrl(
+		archiveUrl: string,
+		limit: number
+	): Promise<readonly HistoryArchiveObject[]>;
 	findByArchiveUrl(
 		archiveUrl: string,
 		limit: number

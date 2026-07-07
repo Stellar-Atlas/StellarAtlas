@@ -23,6 +23,10 @@ import {
 } from '../../use-cases/get-history-archive-bucket-coverage/GetHistoryArchiveBucketCoverage.js';
 import { GetHistoryArchiveObjectSummary } from '../../use-cases/get-history-archive-object-summary/GetHistoryArchiveObjectSummary.js';
 import { GetHistoryArchiveObjectEvents } from '../../use-cases/get-history-archive-object-events/GetHistoryArchiveObjectEvents.js';
+import {
+	GetHistoryArchiveRepairPlan,
+	maxRepairPlanLimit
+} from '../../use-cases/get-history-archive-repair-plan/GetHistoryArchiveRepairPlan.js';
 import { InvalidUrlError } from '../../use-cases/get-latest-scan/InvalidUrlError.js';
 import type { HistoryArchiveEvidenceV1 } from 'shared';
 
@@ -34,6 +38,7 @@ export interface ArchiveScanRouterConfig {
 	getHistoryArchiveObjectEvents: GetHistoryArchiveObjectEvents;
 	getHistoryArchiveObjects: GetHistoryArchiveObjects;
 	getHistoryArchiveObjectSummary: GetHistoryArchiveObjectSummary;
+	getHistoryArchiveRepairPlan: GetHistoryArchiveRepairPlan;
 	getHistoryArchiveState: GetHistoryArchiveState;
 	getLatestScan: GetLatestScan;
 	getScanEvidence: GetScanEvidence;
@@ -397,6 +402,44 @@ export const ArchiveScanRouterWrapper = (
 			};
 
 			return res.status(200).json(evidence);
+		}
+	);
+
+	archiveScanRouter.get(
+		'/:encodedUrl/repair-plan',
+		[
+			param('encodedUrl').isURL(),
+			query('limit').optional().isInt({ min: 1, max: maxRepairPlanLimit })
+		],
+		async function (req: express.Request, res: express.Response) {
+			res.setHeader(
+				'Cache-Control',
+				'public, max-age=' + archiveScanCacheMaxAgeSeconds
+			);
+			const errors = validationResult(req);
+			if (!errors.isEmpty()) {
+				return res.status(400).json({ errors: errors.array() });
+			}
+
+			const limit =
+				typeof req.query.limit === 'string'
+					? Number(req.query.limit)
+					: undefined;
+			const planOrError = await config.getHistoryArchiveRepairPlan.execute({
+				limit,
+				url: req.params.encodedUrl
+			});
+			if (
+				planOrError.isErr() &&
+				planOrError.error instanceof InvalidUrlError
+			) {
+				return res.status(400).json({ error: 'Invalid url' });
+			}
+			if (planOrError.isErr()) {
+				return res.status(500).json({ error: 'Internal server error' });
+			}
+
+			return res.status(200).json(planOrError.value);
 		}
 	);
 

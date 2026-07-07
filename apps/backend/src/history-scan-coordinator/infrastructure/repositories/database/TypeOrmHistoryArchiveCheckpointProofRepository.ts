@@ -1,5 +1,6 @@
 import { injectable } from 'inversify';
 import type { DataSource } from 'typeorm';
+import { HistoryArchiveCheckpointProof } from '@history-scan-coordinator/domain/history-archive-checkpoint-proof/HistoryArchiveCheckpointProof.js';
 import type { HistoryArchiveObject } from '@history-scan-coordinator/domain/history-archive-object/HistoryArchiveObject.js';
 import type {
 	HistoryArchiveCheckpointProofRefreshTarget,
@@ -13,6 +14,25 @@ import {
 @injectable()
 export class TypeOrmHistoryArchiveCheckpointProofRepository implements HistoryArchiveCheckpointProofRepository {
 	constructor(private readonly dataSource: DataSource) {}
+
+	async findActionableByArchiveUrlIdentity(
+		archiveUrlIdentity: string,
+		limit: number
+	): Promise<readonly HistoryArchiveCheckpointProof[]> {
+		return await this.dataSource
+			.getRepository(HistoryArchiveCheckpointProof)
+			.createQueryBuilder('proof')
+			.where('proof.archiveUrlIdentity = :archiveUrlIdentity', {
+				archiveUrlIdentity
+			})
+			.andWhere('proof.status in (:...statuses)', {
+				statuses: ['mismatch', 'not-evaluable']
+			})
+			.orderBy('proof.evaluatedAt', 'DESC')
+			.addOrderBy('proof.checkpointLedger', 'DESC')
+			.take(normalizeLimit(limit))
+			.getMany();
+	}
 
 	async refreshForArchiveCheckpoint(
 		target: HistoryArchiveCheckpointProofRefreshTarget
@@ -34,4 +54,9 @@ export class TypeOrmHistoryArchiveCheckpointProofRepository implements HistoryAr
 			checkpointLedger: object.checkpointLedger
 		});
 	}
+}
+
+function normalizeLimit(limit: number): number {
+	if (!Number.isSafeInteger(limit) || limit < 1) return 250;
+	return Math.min(limit, 500);
 }

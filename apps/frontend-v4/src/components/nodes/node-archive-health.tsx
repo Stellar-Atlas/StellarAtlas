@@ -11,6 +11,7 @@ import type {
 	PublicHistoryArchiveState,
 	PublicNode
 } from '@api/types';
+import type { PublicHistoryArchiveRepairPlan } from '@api/archive-repair-types';
 import {
 	ArchiveObjectTable,
 	getArchiveObjectDisplayStatus,
@@ -20,11 +21,13 @@ import { HistoryArchiveObjectEventLog } from '@components/archive-scans/history-
 import { StatusPill } from '@components/status/status-ui';
 import { formatDateTime, formatInteger, formatPercent } from '@format/formatters';
 import { ArchiveMetadata } from './node-archive-evidence';
+import { NodeArchiveRepairPlan } from './node-archive-repair-plan';
 
 interface NodeArchiveHealthProps {
 	readonly historyArchiveBucketCoverages: readonly PublicHistoryArchiveBucketCrossCoverage[];
 	readonly historyArchiveEvents: PublicHistoryArchiveObjectEvents | null;
 	readonly historyArchiveObjects: PublicHistoryArchiveObjectQueue | null;
+	readonly historyArchiveRepairPlan: PublicHistoryArchiveRepairPlan | null;
 	readonly historyArchiveScan: PublicHistoryArchiveScan | null;
 	readonly historyArchiveState: PublicHistoryArchiveState | null;
 	readonly historyArchiveSummary: PublicHistoryArchiveObjectSummary | null;
@@ -46,6 +49,7 @@ export function NodeArchiveHealth({
 	historyArchiveBucketCoverages,
 	historyArchiveEvents,
 	historyArchiveObjects,
+	historyArchiveRepairPlan,
 	historyArchiveScan,
 	historyArchiveState,
 	historyArchiveSummary,
@@ -124,12 +128,19 @@ export function NodeArchiveHealth({
 					/>
 				) : null}
 				{isObjectTableTab(tab) ? (
-					<ArchiveObjectTableOrEmpty
-						coverageByBucketHash={coverageByBucketHash}
-						generatedAt={historyArchiveObjects?.generatedAt ?? ''}
-						objects={objectsForCurrentTab}
-						tab={tab}
-					/>
+					tab === 'attention' &&
+					historyArchiveRepairPlan !== null &&
+					(historyArchiveRepairPlan.actions.length > 0 ||
+						historyArchiveRepairPlan.infrastructureBlocks.length > 0) ? (
+						<NodeArchiveRepairPlan repairPlan={historyArchiveRepairPlan} />
+					) : (
+						<ArchiveObjectTableOrEmpty
+							coverageByBucketHash={coverageByBucketHash}
+							generatedAt={historyArchiveObjects?.generatedAt ?? ''}
+							objects={objectsForCurrentTab}
+							tab={tab}
+						/>
+					)
 				) : null}
 			</div>
 		</article>

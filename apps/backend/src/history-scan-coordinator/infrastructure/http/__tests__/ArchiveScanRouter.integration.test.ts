@@ -13,6 +13,7 @@ import { GetHistoryArchiveBucketCoverage } from '@history-scan-coordinator/use-c
 import { GetHistoryArchiveObjectEvents } from '@history-scan-coordinator/use-cases/get-history-archive-object-events/GetHistoryArchiveObjectEvents.js';
 import { GetHistoryArchiveObjects } from '@history-scan-coordinator/use-cases/get-history-archive-objects/GetHistoryArchiveObjects.js';
 import { GetHistoryArchiveObjectSummary } from '@history-scan-coordinator/use-cases/get-history-archive-object-summary/GetHistoryArchiveObjectSummary.js';
+import { GetHistoryArchiveRepairPlan } from '@history-scan-coordinator/use-cases/get-history-archive-repair-plan/GetHistoryArchiveRepairPlan.js';
 import { GetScanLogs } from '@history-scan-coordinator/use-cases/get-scan-logs/GetScanLogs.js';
 import { InvalidUrlError } from '@history-scan-coordinator/use-cases/get-latest-scan/InvalidUrlError.js';
 import { HistoryArchiveScan } from 'shared';
@@ -27,6 +28,7 @@ describe('ArchiveScanRouter.integration', () => {
 	let getHistoryArchiveObjectEvents: jest.Mocked<GetHistoryArchiveObjectEvents>;
 	let getHistoryArchiveObjects: jest.Mocked<GetHistoryArchiveObjects>;
 	let getHistoryArchiveObjectSummary: jest.Mocked<GetHistoryArchiveObjectSummary>;
+	let getHistoryArchiveRepairPlan: jest.Mocked<GetHistoryArchiveRepairPlan>;
 	let getHistoryArchiveState: jest.Mocked<GetHistoryArchiveState>;
 	let getLatestScan: jest.Mocked<GetLatestScan>;
 	let getScanEvidence: jest.Mocked<GetScanEvidence>;
@@ -40,6 +42,7 @@ describe('ArchiveScanRouter.integration', () => {
 		getHistoryArchiveObjectEvents = mock<GetHistoryArchiveObjectEvents>();
 		getHistoryArchiveObjects = mock<GetHistoryArchiveObjects>();
 		getHistoryArchiveObjectSummary = mock<GetHistoryArchiveObjectSummary>();
+		getHistoryArchiveRepairPlan = mock<GetHistoryArchiveRepairPlan>();
 		getHistoryArchiveState = mock<GetHistoryArchiveState>();
 		getLatestScan = mock<GetLatestScan>();
 		getScanEvidence = mock<GetScanEvidence>();
@@ -56,12 +59,75 @@ describe('ArchiveScanRouter.integration', () => {
 				getHistoryArchiveObjectEvents,
 				getHistoryArchiveObjects,
 				getHistoryArchiveObjectSummary,
+				getHistoryArchiveRepairPlan,
 				getHistoryArchiveState,
 				getLatestScan,
 				getScanEvidence,
 				getScanLogs
 			})
 		);
+	});
+
+	describe('GET /:encodedUrl/repair-plan', () => {
+		it('should expose archive repair actions', async () => {
+			getHistoryArchiveRepairPlan.execute.mockResolvedValue(
+				ok({
+					actionCount: 1,
+					actions: [
+						{
+							actionId: 'replace-bucket-file:11111111-1111-4111-8111-111111111111',
+							bucketHash:
+								'4eae73efaa0ce061441dfe43ffc61c0ed24fcbc59e5ee512d1b60e8da2509655',
+							checkpointEvidence: [],
+							checkpointLedger: 63355999,
+							evidence: [],
+							kind: 'replace-bucket-file',
+							knownGoodSources: [],
+							reason: 'bucket-hash-mismatch',
+							severity: 'error',
+							summary:
+								'Replace the bucket file with bytes that match the expected bucket hash.'
+						}
+					],
+					archiveUrl: 'https://history.example.com',
+					archiveUrlIdentity: 'https://history.example.com',
+					generatedAt: '2026-07-07T18:00:00.000Z',
+					infrastructureBlocks: [],
+					limit: 5,
+					summary: {
+						activeObjectChecks: 0,
+						failedCheckpointProofs: 1,
+						failedObjectChecks: 1,
+						pendingObjectChecks: 0,
+						verifiedObjectChecks: 10
+					}
+				})
+			);
+
+			await request(app)
+				.get('/archive-scans/https%3A%2F%2Fhistory.example.com/repair-plan?limit=5')
+				.expect(200)
+				.expect('Cache-Control', 'public, max-age=10')
+				.expect((response) => {
+					expect(response.body.actions[0]).toMatchObject({
+						kind: 'replace-bucket-file',
+						reason: 'bucket-hash-mismatch'
+					});
+				});
+
+			expect(getHistoryArchiveRepairPlan.execute).toHaveBeenCalledWith({
+				limit: 5,
+				url: 'https://history.example.com'
+			});
+		});
+
+		it('should reject invalid repair plan limits', async () => {
+			await request(app)
+				.get('/archive-scans/https%3A%2F%2Fhistory.example.com/repair-plan?limit=9999')
+				.expect(400);
+
+			expect(getHistoryArchiveRepairPlan.execute).not.toHaveBeenCalled();
+		});
 	});
 
 	describe('GET /objects/events', () => {

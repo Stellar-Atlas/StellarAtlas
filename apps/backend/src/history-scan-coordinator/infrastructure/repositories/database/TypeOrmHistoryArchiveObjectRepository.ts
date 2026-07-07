@@ -97,6 +97,26 @@ export class TypeOrmHistoryArchiveObjectRepository implements HistoryArchiveObje
 		return await this.getSnapshot(limit, archiveUrlIdentity);
 	}
 
+	async findActionableByArchiveUrl(
+		archiveUrl: string,
+		limit: number
+	): Promise<readonly HistoryArchiveObject[]> {
+		const archiveUrlIdentity = getHistoryArchiveUrlIdentity(archiveUrl);
+		if (archiveUrlIdentity === null) return [];
+
+		return await this.repository
+			.createQueryBuilder('archiveObject')
+			.where('archiveObject.archiveUrlIdentity = :archiveUrlIdentity', {
+				archiveUrlIdentity
+			})
+			.andWhere('archiveObject.status = :status', { status: 'failed' })
+			.orderBy('archiveObject.updatedAt', 'DESC')
+			.addOrderBy('archiveObject.objectOrder', 'ASC')
+			.addOrderBy('archiveObject.objectKey', 'ASC')
+			.take(normalizeLimit(limit))
+			.getMany();
+	}
+
 	findByRemoteId(remoteId: string): Promise<HistoryArchiveObject | null> {
 		return this.repository.findOneBy({ remoteId });
 	}

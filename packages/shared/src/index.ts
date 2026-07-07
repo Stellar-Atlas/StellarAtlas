@@ -94,6 +94,17 @@ export {
 	HistoryArchiveEvidenceV1Schema
 } from './dto/history-archive-evidence-v1.js';
 export type {
+	HistoryArchiveCheckpointRepairEvidenceV1,
+	HistoryArchiveRepairActionKindV1,
+	HistoryArchiveRepairActionSeverityV1,
+	HistoryArchiveRepairActionV1,
+	HistoryArchiveRepairInfrastructureBlockV1,
+	HistoryArchiveRepairObjectEvidenceV1,
+	HistoryArchiveRepairPlanV1,
+	HistoryArchiveRepairReasonV1,
+	HistoryArchiveRepairSourceCandidateV1
+} from './dto/history-archive-repair-plan-v1.js';
+export type {
 	ScpBallotV1,
 	ScpNominationV1,
 	ScpStatementConfirmV1,

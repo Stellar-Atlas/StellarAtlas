@@ -37,13 +37,17 @@ export function OrganizationArchiveEvidence({
 	nodes
 }: OrganizationArchiveEvidenceProps): React.JSX.Element {
 	const archiveRoots = getArchiveRoots(nodes, archiveStates);
+	const rootsWithEvidence = archiveRoots.filter(
+		(archiveRoot) => archiveRoot.evidence !== null
+	).length;
 
 	return (
-		<article className="panel detail-panel archive-metadata">
+		<article className="panel detail-panel archive-panel archive-metadata">
 			<div className="panel-heading">
 				<h2>History archive evidence</h2>
 				<span className="muted-inline">
-					{formatInteger(archiveRoots.length)} archive sources
+					{formatInteger(archiveRoots.length)} archive sources;{' '}
+					{formatInteger(rootsWithEvidence)} with scanner object evidence
 				</span>
 			</div>
 			{archiveRoots.length === 0 ? (
@@ -51,14 +55,77 @@ export function OrganizationArchiveEvidence({
 					No archive sources are known for this organization.
 				</p>
 			) : (
-				archiveRoots.map((archiveRoot) => (
-					<ArchiveRootDrilldown
-						archiveRoot={archiveRoot}
-						key={normalizeArchiveUrl(archiveRoot.historyUrl)}
-					/>
-				))
+				<ArchiveRootEvidenceTable archiveRoots={archiveRoots} />
 			)}
 		</article>
+	);
+}
+
+function ArchiveRootEvidenceTable({
+	archiveRoots
+}: {
+	readonly archiveRoots: readonly ArchiveRootEvidence[];
+}): React.JSX.Element {
+	return (
+		<div className="responsive-table">
+			<table>
+				<thead>
+					<tr>
+						<th>Archive source</th>
+						<th>Nodes</th>
+						<th>Latest pointer</th>
+						<th>Object checks</th>
+						<th>Bucket references</th>
+						<th>Cross-file checks</th>
+						<th>Recent activity</th>
+					</tr>
+				</thead>
+				<tbody>
+					{archiveRoots.map((archiveRoot) => (
+						<ArchiveRootEvidenceRows
+							archiveRoot={archiveRoot}
+							key={normalizeArchiveUrl(archiveRoot.historyUrl)}
+						/>
+					))}
+				</tbody>
+			</table>
+		</div>
+	);
+}
+
+function ArchiveRootEvidenceRows({
+	archiveRoot
+}: {
+	readonly archiveRoot: ArchiveRootEvidence;
+}): React.JSX.Element {
+	const evidence = archiveRoot.evidence;
+
+	return (
+		<>
+			<tr>
+				<td>
+					<a
+						className="archive-object-url"
+						href={archiveRoot.historyUrl}
+						rel="noopener noreferrer"
+						target="_blank"
+					>
+						{formatArchiveSource(archiveRoot.historyUrl)}
+					</a>
+				</td>
+				<td>{formatNodeSummary(archiveRoot.archiveNodes)}</td>
+				<td>{formatStateSummary(evidence?.state ?? null)}</td>
+				<td>{formatObjectCheckSummary(evidence?.summary ?? null)}</td>
+				<td>{formatBucketReferenceSummary(evidence?.summary ?? null)}</td>
+				<td>{formatCrossFileCheckSummary(evidence?.summary ?? null)}</td>
+				<td>{formatEventSample(evidence?.events ?? null)}</td>
+			</tr>
+			<tr>
+				<td colSpan={7}>
+					<ArchiveRootDrilldown archiveRoot={archiveRoot} />
+				</td>
+			</tr>
+		</>
 	);
 }
 
@@ -70,9 +137,9 @@ function ArchiveRootDrilldown({
 	const evidence = archiveRoot.evidence;
 
 	return (
-		<details className="metadata-document" open>
+		<details className="metadata-document">
 			<summary>
-				<span>{formatArchiveSource(archiveRoot.historyUrl)}</span>
+				<span>Raw state and archive object evidence</span>
 				<a
 					href={archiveRoot.historyUrl}
 					rel="noopener noreferrer"
@@ -88,7 +155,15 @@ function ArchiveRootDrilldown({
 				</div>
 				<div>
 					<dt>Archive object checks</dt>
-					<dd>{formatCoverageSummary(evidence?.summary ?? null)}</dd>
+					<dd>{formatObjectCheckSummary(evidence?.summary ?? null)}</dd>
+				</div>
+				<div>
+					<dt>Bucket references</dt>
+					<dd>{formatBucketReferenceSummary(evidence?.summary ?? null)}</dd>
+				</div>
+				<div>
+					<dt>Cross-file checks</dt>
+					<dd>{formatCrossFileCheckSummary(evidence?.summary ?? null)}</dd>
 				</div>
 				<div>
 					<dt>Archive object-check sample</dt>
@@ -129,6 +204,19 @@ function ArchiveRootDrilldown({
 				</p>
 			)}
 		</details>
+	);
+}
+
+function formatNodeSummary(nodes: readonly PublicNode[]): React.JSX.Element {
+	if (nodes.length === 0) {
+		return <span className="muted-inline">Scanner source only</span>;
+	}
+
+	return (
+		<>
+			<strong>{formatInteger(nodes.length)} nodes</strong>
+			<span className="muted-inline">{formatNodeSamples(nodes)}</span>
+		</>
 	);
 }
 
@@ -222,15 +310,43 @@ function formatStateSummary(state: PublicHistoryArchiveState | null): string {
 	)} observed ${formatDateTime(state.observedAt)}`;
 }
 
-function formatCoverageSummary(
+function formatObjectCheckSummary(
 	summary: PublicHistoryArchiveObjectSummary | null
 ): string {
 	if (summary === null) return 'No archive object-check summary stored';
 	return `${formatInteger(summary.verifiedObjects)} verified of ${formatInteger(
 		summary.totalObjects
-	)} file checks; ${formatInteger(
+	)} object checks; ${formatInteger(summary.activeObjects)} checking; ${formatInteger(
+		summary.pendingObjects
+	)} waiting; ${formatInteger(summary.failedObjects)} evidence failures`;
+}
+
+function formatBucketReferenceSummary(
+	summary: PublicHistoryArchiveObjectSummary | null
+): string {
+	if (summary === null) return 'No bucket-reference summary stored';
+	return `${formatInteger(
+		summary.buckets.verifiedBucketObjects
+	)} verified of ${formatInteger(
+		summary.buckets.totalBucketObjects
+	)} bucket references; ${formatInteger(
+		summary.buckets.uniqueBucketHashes
+	)} unique bucket files`;
+}
+
+function formatCrossFileCheckSummary(
+	summary: PublicHistoryArchiveObjectSummary | null
+): string {
+	if (summary === null) return 'No cross-file check summary stored';
+	return `${formatInteger(
+		summary.checkpoints.categoryConsistentArchiveCheckpoints
+	)} checkpoint file sets agree; ${formatInteger(
 		summary.checkpoints.objectCompleteArchiveCheckpoints
-	)} complete checkpoints`;
+	)} complete; ${formatInteger(
+		summary.checkpoints.categoryConsistencyFailedCheckpoints
+	)} failed; ${formatInteger(
+		summary.checkpoints.categoryConsistencyPendingCheckpoints
+	)} waiting`;
 }
 
 function formatObjectSample(
@@ -270,4 +386,11 @@ function formatArchiveSource(value: string): string {
 
 function normalizeArchiveUrl(historyUrl: string): string {
 	return historyUrl.replace(/\/+$/, '').toLowerCase();
+}
+
+function formatNodeSamples(nodes: readonly PublicNode[]): string {
+	const sample = nodes.slice(0, 3).map(getNodeLabel).join(', ');
+	const remainingNodes = nodes.length - 3;
+	if (remainingNodes <= 0) return sample;
+	return `${sample}, ${formatInteger(remainingNodes)} more`;
 }

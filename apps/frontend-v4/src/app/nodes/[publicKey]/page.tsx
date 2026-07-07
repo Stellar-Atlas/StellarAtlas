@@ -4,7 +4,8 @@ import { notFound } from 'next/navigation';
 import { connection } from 'next/server';
 import {
 	fetchHistoryArchiveBucketCoveragesForObjects,
-	fetchHistoryArchiveObjectEvidenceForArchive
+	fetchHistoryArchiveObjectEvidenceForArchive,
+	fetchHistoryArchiveRepairPlanForArchive
 } from '@api/archive-scans-client';
 import { fetchKnownNode } from '@api/known-network-client';
 import {
@@ -67,7 +68,8 @@ async function NodeDetailRouteContent({
 	const publicKeyOnlyCount = knownNodes.nodes.length - snapshottedNodes.length;
 	const [
 		historyArchiveScan,
-		historyArchiveObjectEvidence
+		historyArchiveObjectEvidence,
+		historyArchiveRepairPlan
 	] = node?.historyUrl
 		? await Promise.all([
 				fetchHistoryArchiveScan(node.historyUrl, liveArchiveFetchOptions).catch(
@@ -77,9 +79,14 @@ async function NodeDetailRouteContent({
 					node.historyUrl,
 					{ eventLimit: 250, objectLimit: 250 },
 					liveArchiveFetchOptions
+				).catch(() => null),
+				fetchHistoryArchiveRepairPlanForArchive(
+					node.historyUrl,
+					100,
+					liveArchiveFetchOptions
 				).catch(() => null)
 			])
-		: [null, null];
+		: [null, null, null];
 	const organization = node
 		? getOrganizationForNode(inventoryNetwork, node)
 		: null;
@@ -142,6 +149,7 @@ async function NodeDetailRouteContent({
 						}
 						historyArchiveBucketCoverages={historyArchiveBucketCoverages}
 						historyArchiveObjects={historyArchiveObjectEvidence?.objects ?? null}
+						historyArchiveRepairPlan={historyArchiveRepairPlan}
 						historyArchiveScan={historyArchiveScan}
 						historyArchiveState={
 							historyArchiveObjectEvidence?.scannerOwnedState ?? null

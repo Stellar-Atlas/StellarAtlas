@@ -50,6 +50,7 @@ import { GetHistoryArchiveObjects } from '../../use-cases/get-history-archive-ob
 import { GetHistoryArchiveBucketCoverage } from '../../use-cases/get-history-archive-bucket-coverage/GetHistoryArchiveBucketCoverage.js';
 import { GetHistoryArchiveObjectSummary } from '../../use-cases/get-history-archive-object-summary/GetHistoryArchiveObjectSummary.js';
 import { GetHistoryArchiveObjectEvents } from '../../use-cases/get-history-archive-object-events/GetHistoryArchiveObjectEvents.js';
+import { GetHistoryArchiveRepairPlan } from '../../use-cases/get-history-archive-repair-plan/GetHistoryArchiveRepairPlan.js';
 import { ScheduleHistoryArchiveObjects } from '../../use-cases/schedule-history-archive-objects/ScheduleHistoryArchiveObjects.js';
 import { GetHistoryArchiveObjectJob } from '../../use-cases/get-history-archive-object-job/GetHistoryArchiveObjectJob.js';
 import { TouchHistoryArchiveObject } from '../../use-cases/touch-history-archive-object/TouchHistoryArchiveObject.js';
@@ -72,6 +73,7 @@ export function load(container: Container, config: Config) {
 	container.bind(GetHistoryArchiveObjects).toSelf();
 	container.bind(GetHistoryArchiveObjectSummary).toSelf();
 	container.bind(GetHistoryArchiveObjectEvents).toSelf();
+	container.bind(GetHistoryArchiveRepairPlan).toSelf();
 	container.bind(GetHistoryArchiveObjectJob).toSelf();
 	container.bind(GetScannerMetrics).toSelf();
 	container.bind(BackfillArchiveMetadata).toSelf();

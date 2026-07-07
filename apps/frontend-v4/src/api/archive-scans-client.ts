@@ -4,6 +4,7 @@ import type {
 	PublicHistoryArchiveObjectEvents,
 	PublicHistoryArchiveObjectQueue
 } from './types';
+import type { PublicHistoryArchiveRepairPlan } from './archive-repair-types';
 import { fetchJson, type FetchOptions } from './client';
 import { frontendCacheTags } from './cache-policy';
 
@@ -77,6 +78,16 @@ export const fetchHistoryArchiveObjectEvidenceForArchive = (
 		withHistoryScanTags(options)
 	);
 };
+
+export const fetchHistoryArchiveRepairPlanForArchive = (
+	historyUrl: string,
+	limit = 100,
+	options?: FetchOptions
+): Promise<PublicHistoryArchiveRepairPlan> =>
+	fetchJson<PublicHistoryArchiveRepairPlan>(
+		`/v1/archive-scans/${encodeURIComponent(historyUrl)}/repair-plan?limit=${encodeURIComponent(limit.toString())}`,
+		withHistoryScanTags(options)
+	);
 
 function withHistoryScanTags(options: FetchOptions | undefined): FetchOptions {
 	return {

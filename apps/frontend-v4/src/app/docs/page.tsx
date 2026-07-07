@@ -9,7 +9,7 @@ interface EndpointGroup {
 const endpointGroups: EndpointGroup[] = [
 	{
 		description:
-			'Current network snapshot, aggregate history, and SCP observations.',
+			'Current network snapshot, ledger state, aggregate history, and SCP observations.',
 		endpoints: [
 			'/v1',
 			'/v1/ledger/latest',
@@ -26,21 +26,14 @@ const endpointGroups: EndpointGroup[] = [
 	},
 	{
 		description:
-			'Node inventory, current detail, snapshots, and time-window metrics.',
+			'Validator, node, and organization inventory with snapshots and time-window metrics.',
 		endpoints: [
 			'/v1/nodes',
 			'/v1/nodes/:publicKey',
 			'/v1/nodes/:publicKey/snapshots',
 			'/v1/node-snapshots',
 			'/v1/node/:publicKey/statistics?from=:iso&to=:iso',
-			'/v1/node/:publicKey/day-statistics?from=:iso&to=:iso'
-		],
-		title: 'Nodes'
-	},
-	{
-		description:
-			'Organization metadata, validator membership, and subquorum history.',
-		endpoints: [
+			'/v1/node/:publicKey/day-statistics?from=:iso&to=:iso',
 			'/v1/organizations',
 			'/v1/organizations/:organizationId',
 			'/v1/organizations/:organizationId/snapshots',
@@ -48,46 +41,85 @@ const endpointGroups: EndpointGroup[] = [
 			'/v1/organization/:organizationId/statistics?from=:iso&to=:iso',
 			'/v1/organization/:organizationId/day-statistics?from=:iso&to=:iso'
 		],
-		title: 'Organizations'
+		title: 'Validators and organizations'
 	},
 	{
 		description:
-			'Organization-operated public ledger API URLs discovered from Stellar TOML metadata.',
+			'Public archive verification summaries, error logs, and captured evidence for normalized history archive URLs.',
 		endpoints: [
-			'/v1',
-			'/v1/organizations',
-			'/v1/organizations/:organizationId',
-			'organization.horizonUrl'
+			'/v1/archive-scans',
+			'/v1/archive-scans/:encodedUrl',
+			'/v1/archive-scans/:encodedUrl/errors',
+			'/v1/archive-scans/:encodedUrl/evidence',
+			'/v1/archive-scans/:encodedUrl/object-evidence',
+			'/v1/archive-scans/:encodedUrl/repair-plan'
 		],
-		title: 'Discovered public ledger APIs'
+		title: 'Archive verification'
 	},
 	{
 		description:
-			'Public archive verification evidence, scanner-captured history archive state, and object queue views for a normalized archive URL.',
+			'Read-only status, freshness, continuity, and ingestion evidence.',
 		endpoints: [
-			'/v1/history-scan/:encodedHistoryUrl',
-			'/v1/history-scan/logs/:encodedHistoryUrl',
-			'/v1/archive-scans/objects/summary',
-			'/v1/archive-scans/:encodedHistoryUrl/objects/summary',
-			'/v1/archive-scans/:encodedHistoryUrl/state',
-			'/v1/archive-scans/:encodedHistoryUrl/objects',
-			'/v1/archive-scans/:encodedHistoryUrl/objects/events'
+			'/v1/status',
+			'/v1/status/api',
+			'/v1/status/data-quality',
+			'/v1/status/data-freshness',
+			'/v1/status/scans',
+			'/v1/status/rollups',
+			'/v1/status/full-history',
+			'/v1/status/ingestion'
 		],
-		title: 'History archive evidence'
+		title: 'Status and freshness'
 	},
 	{
 		description:
-			'Authenticated coordinator and worker endpoints. These are operational APIs, not public explorer data routes.',
+			'Faceted lookup across current network entities with read-model fallback metadata.',
+		endpoints: ['/v1/search', '/v1/search/nodes', '/v1/search/organizations'],
+		title: 'Search'
+	},
+	{
+		description:
+			'Horizon-backed explorer lookup and current full-history read-model state.',
 		endpoints: [
-			'/v1/history-scan/job',
-			'/v1/history-scan/archive-object-job',
-			'POST /v1/history-scan/archive-object-job/:remoteId/heartbeat',
-			'POST /v1/history-scan/archive-object-job/:remoteId/complete',
-			'POST /v1/history-scan/archive-object-job/:remoteId/fail',
-			'POST /v1/history-scan/archive-object-job/:remoteId/release',
-			'POST /v1/history-scan/archive-metadata/backfill'
+			'/v1/explorer/search',
+			'/v1/explorer/transactions',
+			'/v1/explorer/transactions/:hash',
+			'/v1/explorer/transactions/:hash/operations',
+			'/v1/explorer/ledgers/:sequence',
+			'/v1/explorer/accounts/:accountId',
+			'/v1/explorer/assets',
+			'/v1/explorer/contracts/:contractId',
+			'/v1/explorer/local-read-model'
 		],
-		title: 'Operator archive APIs'
+		title: 'Explorer'
+	},
+	{
+		description:
+			'Persisted quorum-set, top-tier, blocking-set, and splitting-set evidence.',
+		endpoints: [
+			'/v1/fbas/latest',
+			'/v1/fbas/analyses/:scanId',
+			'/v1/fbas/analyses/:scanId/proof',
+			'/v1/fbas/top-tier/history?from=:date&to=:date',
+			'/v1/fbas/blocking-sets/latest',
+			'/v1/fbas/splitting-sets/latest'
+		],
+		title: 'FBAS and quorum'
+	},
+	{
+		description:
+			'Persisted external comparison evidence for RADAR parity and API-doc drift review.',
+		endpoints: [
+			'/v1/cross-check/sources',
+			'/v1/cross-check/validators',
+			'/v1/cross-check/organizations',
+			'/v1/cross-check/archives',
+			'/v1/cross-check/api-docs/latest',
+			'/v1/cross-check/api-docs/snapshots',
+			'/v1/cross-check/radar-network/latest',
+			'/v1/cross-check/radar-network/snapshots'
+		],
+		title: 'Cross-source review'
 	},
 	{
 		description:
@@ -116,6 +148,10 @@ export default function DocsPage(): React.JSX.Element {
 					Open Swagger documentation
 				</a>
 				<code>/v1</code>
+				<p className="muted-inline">
+					This page lists public read surfaces. Authenticated coordinator,
+					worker, and backfill routes remain in Swagger for operators.
+				</p>
 				<div className="endpoint-grid">
 					{endpointGroups.map((group) => (
 						<article className="endpoint-card" key={group.title}>

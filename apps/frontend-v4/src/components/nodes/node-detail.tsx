@@ -11,6 +11,7 @@ import type {
 	PublicNode,
 	PublicOrganization
 } from '../../api/types';
+import type { PublicHistoryArchiveRepairPlan } from '@api/archive-repair-types';
 import {
 	getNodeTags,
 	getOrganizationForNode,
@@ -31,6 +32,7 @@ interface NodeDetailProps {
 	historyArchiveBucketCoverages: readonly PublicHistoryArchiveBucketCrossCoverage[];
 	historyArchiveEvents: PublicHistoryArchiveObjectEvents | null;
 	historyArchiveObjects: PublicHistoryArchiveObjectQueue | null;
+	historyArchiveRepairPlan: PublicHistoryArchiveRepairPlan | null;
 	historyArchiveScan: PublicHistoryArchiveScan | null;
 	historyArchiveState: PublicHistoryArchiveState | null;
 	historyArchiveSummary: PublicHistoryArchiveObjectSummary | null;
@@ -44,6 +46,7 @@ export function NodeDetail({
 	historyArchiveBucketCoverages,
 	historyArchiveEvents,
 	historyArchiveObjects,
+	historyArchiveRepairPlan,
 	historyArchiveScan,
 	historyArchiveState,
 	historyArchiveSummary,
@@ -218,6 +221,7 @@ export function NodeDetail({
 					historyArchiveBucketCoverages={historyArchiveBucketCoverages}
 					historyArchiveEvents={historyArchiveEvents}
 					historyArchiveObjects={historyArchiveObjects}
+					historyArchiveRepairPlan={historyArchiveRepairPlan}
 					historyArchiveScan={historyArchiveScan}
 					historyArchiveState={historyArchiveState}
 					historyArchiveSummary={historyArchiveSummary}
