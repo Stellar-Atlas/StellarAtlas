@@ -1,7 +1,6 @@
 import Link from 'next/link';
 import type {
 	PublicHistoryArchiveScan,
-	PublicHistoryArchiveScanEvidence,
 	PublicHistoryArchiveBucketCrossCoverage,
 	PublicHistoryArchiveObjectEvents,
 	PublicHistoryArchiveObjectQueue,
@@ -26,18 +25,13 @@ import {
 	formatNode30DayValidating
 } from '../../domain/availability';
 import { StatusTags } from '../status-tags';
-import { ArchiveMetadata } from './node-archive-evidence';
-import { HistoryArchiveObjectInventory } from '@components/archive-scans/history-archive-object-inventory';
-import { HistoryArchiveObjectEventLog } from '@components/archive-scans/history-archive-object-event-log';
-import { HistoryArchiveObjectCoverage } from '@components/archive-scans/history-archive-object-coverage';
+import { NodeArchiveHealth } from './node-archive-health';
 
 interface NodeDetailProps {
 	historyArchiveBucketCoverages: readonly PublicHistoryArchiveBucketCrossCoverage[];
-	historyArchiveEvidence: PublicHistoryArchiveScanEvidence | null;
 	historyArchiveEvents: PublicHistoryArchiveObjectEvents | null;
 	historyArchiveObjects: PublicHistoryArchiveObjectQueue | null;
 	historyArchiveScan: PublicHistoryArchiveScan | null;
-	historyArchiveScanLogs: readonly unknown[];
 	historyArchiveState: PublicHistoryArchiveState | null;
 	historyArchiveSummary: PublicHistoryArchiveObjectSummary | null;
 	knownNode: PublicKnownNode;
@@ -219,41 +213,17 @@ export function NodeDetail({
 					</div>
 				</dl>
 			</article>
-			{showArchivePanel && (
-				<article className="panel detail-panel archive-panel">
-					<div className="panel-heading">
-						<h2>Archive health</h2>
-						{historyArchiveScan?.isSlow ? (
-							<span className="tag warning">slow archive</span>
-						) : null}
-					</div>
-					{historyArchiveSummary ? (
-						<HistoryArchiveObjectCoverage
-							framed={false}
-							summary={historyArchiveSummary}
-							title="Archive object coverage"
-						/>
-					) : null}
-					<ArchiveMetadata
-						historyArchiveScan={historyArchiveScan}
-						historyArchiveState={historyArchiveState}
-						node={node}
-					/>
-					{historyArchiveObjects ? (
-						<HistoryArchiveObjectInventory
-							bucketCoverages={historyArchiveBucketCoverages}
-							framed={false}
-							objects={historyArchiveObjects}
-						/>
-					) : null}
-					{historyArchiveEvents ? (
-						<HistoryArchiveObjectEventLog
-							events={historyArchiveEvents}
-							framed={false}
-						/>
-					) : null}
-				</article>
-			)}
+			{showArchivePanel ? (
+				<NodeArchiveHealth
+					historyArchiveBucketCoverages={historyArchiveBucketCoverages}
+					historyArchiveEvents={historyArchiveEvents}
+					historyArchiveObjects={historyArchiveObjects}
+					historyArchiveScan={historyArchiveScan}
+					historyArchiveState={historyArchiveState}
+					historyArchiveSummary={historyArchiveSummary}
+					node={node}
+				/>
+			) : null}
 		</section>
 	);
 }

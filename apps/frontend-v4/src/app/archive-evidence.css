@@ -100,6 +100,51 @@
 	gap: 14px;
 }
 
+.archive-health-panel {
+	display: grid;
+	gap: 0;
+}
+
+.archive-health-summary-wrap {
+	padding: 0 18px 16px;
+}
+
+.archive-health-summary-table {
+	min-inline-size: min(1080px, 100%);
+	table-layout: fixed;
+}
+
+.archive-health-summary-table th,
+.archive-health-summary-table td,
+.archive-checkpoint-proof-table th,
+.archive-checkpoint-proof-table td {
+	overflow-wrap: anywhere;
+}
+
+.archive-health-tabs {
+	border-inline: 0;
+	border-radius: 0;
+	margin: 0 18px 16px;
+	overflow-x: auto;
+}
+
+.archive-health-tab-panel {
+	border-block-start: 1px solid var(--border);
+	display: grid;
+	gap: 14px;
+	padding: 18px;
+}
+
+.archive-health-tab-panel > .responsive-table,
+.archive-health-tab-panel > .archive-object-events {
+	min-inline-size: 0;
+}
+
+.archive-raw-evidence {
+	display: grid;
+	gap: 12px;
+}
+
 .archive-summary-table-wrap {
 	padding: 0 18px;
 }
@@ -121,6 +166,15 @@
 
 .archive-work-summary-table {
 	min-inline-size: min(520px, 100%);
+}
+
+.archive-checkpoint-proof {
+	margin: 0 18px;
+}
+
+.archive-checkpoint-proof-table {
+	min-inline-size: min(1040px, 100%);
+	table-layout: fixed;
 }
 
 .archive-priority-block {
@@ -390,49 +444,20 @@
 	overflow-wrap: anywhere;
 }
 
-.archive-object-row {
-	align-items: flex-start;
-	grid-template-columns: minmax(0, 1fr) minmax(220px, 0.34fr);
-}
-
-.archive-object-main {
-	display: grid;
-	gap: 6px;
-	min-inline-size: 0;
-}
-
-.archive-object-title {
-	align-items: center;
-	display: flex;
-	flex-wrap: wrap;
-	gap: 8px;
-}
-
-.archive-object-title strong,
-.archive-object-title span,
-.archive-object-source,
 .archive-object-url,
 .archive-object-url a,
 .archive-object-hash,
-.archive-object-error,
-.archive-object-metric strong,
-.archive-object-metric small {
+.archive-object-error {
 	overflow: visible;
 	text-overflow: clip;
 	white-space: normal;
 }
 
 .archive-object-url,
-.archive-object-source,
 .archive-object-url a,
 .archive-object-hash,
 .archive-object-error {
 	overflow-wrap: anywhere;
-}
-
-.archive-object-source {
-	color: var(--ink);
-	font-weight: 800;
 }
 
 .archive-object-hash {

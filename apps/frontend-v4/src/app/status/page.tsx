@@ -12,6 +12,10 @@ import {
 	fetchScanLogStatus,
 	fetchWorkerStatus
 } from '@api/client';
+import type {
+	PublicHistoryArchiveObjectQueue,
+	PublicHistoryArchiveObjectSummary
+} from '@api/types';
 import { PageHeading } from '@components/layout/page-heading';
 import { RouteLoadingPanel } from '@components/layout/route-fallbacks';
 import { StatusDashboard } from '@components/status/status-dashboard';
@@ -20,6 +24,7 @@ export const revalidate = 0;
 export const dynamic = 'force-dynamic';
 const statusFetchOptions = { cache: 'no-store' } as const;
 const maxBucketCoverageLookups = 8;
+const archiveSummaryTimeoutMs = 8000;
 
 async function StatusRouteContent(): Promise<React.JSX.Element> {
 	const [
@@ -28,7 +33,7 @@ async function StatusRouteContent(): Promise<React.JSX.Element> {
 		scanLogs,
 		workers,
 		archiveEvents,
-		archiveSummary,
+		archiveSummaryResult,
 		archiveObjects,
 		frontend
 	] = await Promise.all([
@@ -37,10 +42,15 @@ async function StatusRouteContent(): Promise<React.JSX.Element> {
 		fetchScanLogStatus(statusFetchOptions),
 		fetchWorkerStatus(statusFetchOptions),
 		fetchHistoryArchiveObjectEvents(100, statusFetchOptions),
-		fetchHistoryArchiveObjectSummary(statusFetchOptions),
+		withNullableTimeout(
+			fetchHistoryArchiveObjectSummary(statusFetchOptions),
+			archiveSummaryTimeoutMs
+		),
 		fetchHistoryArchiveObjects(100, statusFetchOptions),
 		fetchFrontendStatus(statusFetchOptions)
 	]);
+	const archiveSummary =
+		archiveSummaryResult ?? buildArchiveSummaryFromQueue(archiveObjects);
 	const archiveBucketCoverages =
 		await fetchHistoryArchiveBucketCoveragesForObjects(
 			archiveObjects,
@@ -51,7 +61,7 @@ async function StatusRouteContent(): Promise<React.JSX.Element> {
 	return (
 		<main className="shell">
 			<PageHeading
-				description="Current public API, network scan records, archive object checks, scanner runtime, and archive verification activity."
+				description="Current public API, network scan records, archive file checks, scanner runtime, and archive verification activity."
 				eyebrow="Operations"
 				title="Status"
 			/>
@@ -68,6 +78,82 @@ async function StatusRouteContent(): Promise<React.JSX.Element> {
 			/>
 		</main>
 	);
+}
+
+function withNullableTimeout<T>(
+	promise: Promise<T>,
+	timeoutMs: number
+): Promise<T | null> {
+	return Promise.race([
+		promise.catch(() => null),
+		new Promise<null>((resolve) => {
+			setTimeout(() => resolve(null), timeoutMs);
+		})
+	]);
+}
+
+function buildArchiveSummaryFromQueue(
+	objects: PublicHistoryArchiveObjectQueue
+): PublicHistoryArchiveObjectSummary {
+	const bucketObjects = objects.objects.filter(
+		(object) => object.objectType === 'bucket'
+	);
+	const uniqueBucketHashes = new Set(
+		bucketObjects.flatMap((object) =>
+			object.bucketHash === null ? [] : [object.bucketHash]
+		)
+	);
+
+	return {
+		activeObjects: objects.activeObjects,
+		archiveUrl: null,
+		archiveUrlIdentity: null,
+		buckets: {
+			activeBucketObjects: countBucketStatus(bucketObjects, 'scanning'),
+			failedBucketObjects: countBucketStatus(bucketObjects, 'failed'),
+			pendingBucketObjects: countBucketStatus(bucketObjects, 'pending'),
+			totalBucketObjects: bucketObjects.length,
+			uniqueBucketHashes: uniqueBucketHashes.size,
+			verifiedBucketObjects: countBucketStatus(bucketObjects, 'verified')
+		},
+		checkpoints: {
+			activeArchiveCheckpoints: 0,
+			archiveRootsWithState: 0,
+			categoryConsistencyFailedCheckpoints: 0,
+			categoryConsistencyNotEvaluatedCheckpoints: 0,
+			categoryConsistencyPendingCheckpoints: 0,
+			categoryConsistentArchiveCheckpoints: 0,
+			completeArchiveCheckpoints: 0,
+			discoveryCompleteArchiveRoots: 0,
+			expectedArchiveCheckpoints: 0,
+			failedArchiveCheckpoints: 0,
+			latestCheckpointLedger: null,
+			missingArchiveCheckpoints: 0,
+			objectCompleteArchiveCheckpoints: 0,
+			oldestCheckpointLedger: null,
+			partialArchiveCheckpoints: 0,
+			totalArchiveCheckpoints: 0
+		},
+		failedObjects: objects.failedObjects,
+		generatedAt: objects.generatedAt,
+		hostThrottles: [],
+		objectTypes: [],
+		pendingObjects: objects.pendingObjects,
+		scope: 'global',
+		totalObjects:
+			objects.activeObjects +
+			objects.pendingObjects +
+			objects.verifiedObjects +
+			objects.failedObjects,
+		verifiedObjects: objects.verifiedObjects
+	};
+}
+
+function countBucketStatus(
+	bucketObjects: PublicHistoryArchiveObjectQueue['objects'],
+	status: PublicHistoryArchiveObjectQueue['objects'][number]['status']
+): number {
+	return bucketObjects.filter((object) => object.status === status).length;
 }
 
 export default function StatusPage(): React.JSX.Element {

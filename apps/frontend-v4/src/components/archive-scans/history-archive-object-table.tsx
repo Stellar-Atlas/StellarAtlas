@@ -39,11 +39,11 @@ export function ArchiveObjectTable({
 			<table className="archive-object-table">
 				<thead>
 					<tr>
-						<th>Check</th>
-						<th>Object type</th>
+						<th>Status</th>
+						<th>Archive file</th>
 						<th>Archive root</th>
-						<th>Object key</th>
-						<th>Check activity</th>
+						<th>Path or hash</th>
+						<th>Worker activity</th>
 					</tr>
 				</thead>
 				<tbody>
@@ -327,7 +327,7 @@ function formatBucketCoverageSummary(
 		percent +
 		') for this bucket across ' +
 		formatInteger(counts.archiveRoots) +
-		' roots'
+		' archive roots'
 	);
 }
 

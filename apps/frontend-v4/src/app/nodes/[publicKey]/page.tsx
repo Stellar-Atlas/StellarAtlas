@@ -11,8 +11,6 @@ import {
 	fetchKnownNodes,
 	fetchKnownOrganizations,
 	fetchHistoryArchiveScan,
-	fetchHistoryArchiveScanEvidence,
-	fetchHistoryArchiveScanLogs,
 	fetchPublicNetwork
 } from '@api/client';
 import { PageHeading } from '@components/layout/page-heading';
@@ -66,25 +64,17 @@ async function NodeDetailRouteContent({
 	const publicKeyOnlyCount = knownNodes.nodes.length - snapshottedNodes.length;
 	const [
 		historyArchiveScan,
-		historyArchiveScanLogs,
-		historyArchiveEvidence,
 		historyArchiveObjectEvidence
 	] = node?.historyUrl
 		? await Promise.all([
 				fetchHistoryArchiveScan(node.historyUrl, liveArchiveFetchOptions),
-				fetchHistoryArchiveScanLogs(node.historyUrl, liveArchiveFetchOptions),
-				fetchHistoryArchiveScanEvidence(
-					node.historyUrl,
-					500,
-					liveArchiveFetchOptions
-				),
 				fetchHistoryArchiveObjectEvidenceForArchive(
 					node.historyUrl,
 					{ eventLimit: 250, objectLimit: 250 },
 					liveArchiveFetchOptions
 				)
 			])
-		: [null, [], null, null];
+		: [null, null];
 	const organization = node
 		? getOrganizationForNode(inventoryNetwork, node)
 		: null;
@@ -142,14 +132,12 @@ async function NodeDetailRouteContent({
 						</Link>
 					</div>
 					<NodeDetail
-						historyArchiveEvidence={historyArchiveEvidence}
 						historyArchiveEvents={
 							historyArchiveObjectEvidence?.objectEvents ?? null
 						}
 						historyArchiveBucketCoverages={historyArchiveBucketCoverages}
 						historyArchiveObjects={historyArchiveObjectEvidence?.objects ?? null}
 						historyArchiveScan={historyArchiveScan}
-						historyArchiveScanLogs={historyArchiveScanLogs}
 						historyArchiveState={
 							historyArchiveObjectEvidence?.scannerOwnedState ?? null
 						}

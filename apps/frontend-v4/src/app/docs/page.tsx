@@ -59,11 +59,11 @@ const endpointGroups: EndpointGroup[] = [
 			'/v1/organizations/:organizationId',
 			'organization.horizonUrl'
 		],
-		title: 'Public ledger API discovery'
+		title: 'Discovered public ledger APIs'
 	},
 	{
 		description:
-			'Latest public archive verification evidence and recent scan run logs for a normalized archive URL.',
+			'Public archive verification evidence, scanner-captured history archive state, and object queue views for a normalized archive URL.',
 		endpoints: [
 			'/v1/history-scan/:encodedHistoryUrl',
 			'/v1/history-scan/logs/:encodedHistoryUrl',
@@ -71,10 +71,23 @@ const endpointGroups: EndpointGroup[] = [
 			'/v1/archive-scans/:encodedHistoryUrl/objects/summary',
 			'/v1/archive-scans/:encodedHistoryUrl/state',
 			'/v1/archive-scans/:encodedHistoryUrl/objects',
-			'/v1/archive-scans/:encodedHistoryUrl/objects/events',
+			'/v1/archive-scans/:encodedHistoryUrl/objects/events'
+		],
+		title: 'History archive evidence'
+	},
+	{
+		description:
+			'Authenticated coordinator and worker endpoints. These are operational APIs, not public explorer data routes.',
+		endpoints: [
+			'/v1/history-scan/job',
+			'/v1/history-scan/archive-object-job',
+			'POST /v1/history-scan/archive-object-job/:remoteId/heartbeat',
+			'POST /v1/history-scan/archive-object-job/:remoteId/complete',
+			'POST /v1/history-scan/archive-object-job/:remoteId/fail',
+			'POST /v1/history-scan/archive-object-job/:remoteId/release',
 			'POST /v1/history-scan/archive-metadata/backfill'
 		],
-		title: 'History archive'
+		title: 'Operator archive APIs'
 	},
 	{
 		description:

@@ -222,7 +222,7 @@ meter {
 }
 
 .segmented button {
-	background: #fff;
+	background: var(--button-secondary);
 	border: 0;
 	border-inline-end: 1px solid var(--border);
 	color: var(--muted);
@@ -237,7 +237,7 @@ meter {
 
 .segmented button.active,
 .segmented button:hover {
-	background: #e9f2fa;
+	background: var(--surface-active);
 	color: var(--blue);
 }
 
@@ -291,6 +291,36 @@ td {
 
 tr.selected-row td {
 	background: var(--surface-active);
+}
+
+.pagination-bar {
+	align-items: center;
+	border-block-start: 1px solid var(--border);
+	display: flex;
+	gap: 12px;
+	justify-content: flex-end;
+	padding: 12px 18px;
+}
+
+.pagination-bar button {
+	background: var(--button-secondary);
+	border: 1px solid var(--button-secondary-border);
+	border-radius: 6px;
+	color: var(--ink);
+	font-weight: 800;
+	padding: 7px 10px;
+}
+
+.pagination-bar button:disabled {
+	background: var(--surface-subtle);
+	color: var(--muted);
+	cursor: not-allowed;
+}
+
+.pagination-bar span {
+	color: var(--muted);
+	font-size: 0.84rem;
+	font-weight: 800;
 }
 
 .details {

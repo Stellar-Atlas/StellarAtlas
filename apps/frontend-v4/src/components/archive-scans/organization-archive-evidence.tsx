@@ -87,11 +87,11 @@ function ArchiveRootDrilldown({
 					<dd>{formatStateSummary(evidence?.state ?? null)}</dd>
 				</div>
 				<div>
-					<dt>Object check coverage</dt>
+					<dt>Archive file coverage</dt>
 					<dd>{formatCoverageSummary(evidence?.summary ?? null)}</dd>
 				</div>
 				<div>
-					<dt>Object check sample</dt>
+					<dt>Archive file sample</dt>
 					<dd>{formatObjectSample(evidence?.objects ?? null)}</dd>
 				</div>
 				<div>
@@ -109,22 +109,22 @@ function ArchiveRootDrilldown({
 					<HistoryArchiveObjectCoverage
 						framed={false}
 						summary={evidence.summary}
-						title="Object check coverage"
+						title="Archive file coverage"
 					/>
 					<HistoryArchiveObjectInventory
 						framed={false}
 						objects={evidence.objects}
-						title="Object check sample"
+						title="Archive file sample"
 					/>
 					<HistoryArchiveObjectEventLog
 						events={evidence.events}
 						framed={false}
-						title="Recent object event sample"
+						title="Recent archive file event sample"
 					/>
 				</>
 			) : (
 				<p className="muted-copy">
-					No scanner-owned archive object evidence is available for this root
+					No scanner-owned archive file evidence is available for this root
 					yet.
 				</p>
 			)}
@@ -225,10 +225,10 @@ function formatStateSummary(state: PublicHistoryArchiveState | null): string {
 function formatCoverageSummary(
 	summary: PublicHistoryArchiveObjectSummary | null
 ): string {
-	if (summary === null) return 'No archive object coverage summary stored';
+	if (summary === null) return 'No archive file coverage summary stored';
 	return `${formatInteger(summary.verifiedObjects)} verified of ${formatInteger(
 		summary.totalObjects
-	)} object checks; ${formatInteger(
+	)} file checks; ${formatInteger(
 		summary.checkpoints.objectCompleteArchiveCheckpoints
 	)} complete checkpoints`;
 }
@@ -236,23 +236,23 @@ function formatCoverageSummary(
 function formatObjectSample(
 	objects: PublicHistoryArchiveObjectQueue | null
 ): string {
-	if (objects === null) return 'No archive object check sample stored';
+	if (objects === null) return 'No archive file check sample stored';
 	if (objects.objects.length === 0)
-		return 'No sampled archive object checks returned';
+		return 'No sampled archive file checks returned';
 	return `${formatInteger(objects.objects.length)} sampled of ${formatInteger(
 		objects.activeObjects +
 			objects.pendingObjects +
 			objects.verifiedObjects +
 			objects.failedObjects
-	)} archive object checks`;
+	)} archive file checks`;
 }
 
 function formatEventSample(
 	events: PublicHistoryArchiveObjectEvents | null
 ): string {
-	if (events === null) return 'No recent archive object activity stored';
+	if (events === null) return 'No recent archive file activity stored';
 	const latest = events.events.at(0);
-	if (latest === undefined) return 'No recent archive object activity returned';
+	if (latest === undefined) return 'No recent archive file activity returned';
 	return `${latest.eventType} ${latest.objectType} at ${formatDateTime(
 		latest.createdAt
 	)}`;

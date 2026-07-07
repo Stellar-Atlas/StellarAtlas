@@ -67,34 +67,34 @@ export const scanLogIsActive = (
 export type ArchiveObjectType = PublicHistoryArchiveObject['objectType'];
 
 export function formatArchiveObjectTypeLabel(type: ArchiveObjectType): string {
-	if (type === 'history-archive-state') return 'Archive state';
-	if (type === 'checkpoint-state') return 'Checkpoint state';
-	if (type === 'ledger') return 'Ledger category';
-	if (type === 'transactions') return 'Transaction category';
-	if (type === 'results') return 'Result category';
-	if (type === 'scp') return 'SCP category';
-	if (type === 'bucket') return 'Bucket payload';
+	if (type === 'history-archive-state') return 'History archive state';
+	if (type === 'checkpoint-state') return 'Checkpoint history file';
+	if (type === 'ledger') return 'Ledger archive file';
+	if (type === 'transactions') return 'Transaction archive file';
+	if (type === 'results') return 'Result archive file';
+	if (type === 'scp') return 'SCP archive file';
+	if (type === 'bucket') return 'Bucket file';
 	return type;
 }
 
 export function formatArchiveObjectTypeGroupLabel(
 	type: ArchiveObjectType
 ): string {
-	if (type === 'history-archive-state') return 'Archive state checks';
-	if (type === 'checkpoint-state') return 'Checkpoint state checks';
-	if (type === 'ledger') return 'Ledger category checks';
-	if (type === 'transactions') return 'Transaction category checks';
-	if (type === 'results') return 'Result category checks';
-	if (type === 'scp') return 'SCP category checks';
-	if (type === 'bucket') return 'Bucket payload checks';
+	if (type === 'history-archive-state') return 'History archive state files';
+	if (type === 'checkpoint-state') return 'Checkpoint history files';
+	if (type === 'ledger') return 'Ledger archive files';
+	if (type === 'transactions') return 'Transaction archive files';
+	if (type === 'results') return 'Result archive files';
+	if (type === 'scp') return 'SCP archive files';
+	if (type === 'bucket') return 'Bucket files';
 	return type;
 }
 
 export function formatArchiveObjectTypeRole(type: ArchiveObjectType): string {
-	if (type === 'history-archive-state') return 'root history JSON';
-	if (type === 'checkpoint-state') return 'checkpoint history JSON';
-	if (type === 'bucket') return 'content-addressed bucket object';
-	return 'checkpoint category file';
+	if (type === 'history-archive-state') return 'latest archive pointer';
+	if (type === 'checkpoint-state') return 'checkpoint state JSON';
+	if (type === 'bucket') return 'content-addressed state shard';
+	return '64-ledger checkpoint file';
 }
 
 export function sanitizeArchiveEvidenceText(value: string): string {

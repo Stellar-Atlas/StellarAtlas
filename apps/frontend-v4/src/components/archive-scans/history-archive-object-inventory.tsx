@@ -26,7 +26,7 @@ export function HistoryArchiveObjectInventory({
 	bucketCoverages = [],
 	framed = true,
 	objects,
-	title = 'Archive object checks'
+	title = 'Archive file checks'
 }: HistoryArchiveObjectInventoryProps): React.JSX.Element {
 	const coverageByBucketHash = new Map(
 		bucketCoverages.map((coverage) => [coverage.bucketHash, coverage])
@@ -59,7 +59,7 @@ export function HistoryArchiveObjectInventory({
 			</div>
 			<ObjectSummary objects={objects} />
 			<p className="muted-copy">
-				Entries are archive object checks, not OS file handles. Bucket payloads
+				Rows are archive file checks, not OS file handles. Bucket payloads
 				are content-addressed by hash, and repeated bucket references are not
 				duplicate stored payloads.
 			</p>
@@ -104,9 +104,9 @@ function ObjectSummary({
 			<table className="archive-summary-table archive-work-summary-table">
 				<thead>
 					<tr>
-						<th>Active checks</th>
-						<th>Queued checks</th>
-						<th>Verified checks</th>
+						<th>Active files</th>
+						<th>Queued files</th>
+						<th>Verified files</th>
 						<th>Evidence failures</th>
 					</tr>
 				</thead>
@@ -138,7 +138,7 @@ function ObjectPriorityTable({
 	if (objects.length === 0) {
 		return (
 			<p className="archive-good-state">
-				No failed, delayed, active, or root-state archive object checks are in
+				No failed, delayed, active, or root-state archive file checks are in
 				this snapshot.
 			</p>
 		);
@@ -147,7 +147,7 @@ function ObjectPriorityTable({
 	return (
 		<div className="archive-priority-block">
 			<div className="archive-table-caption">
-				<strong>Priority object checks</strong>
+				<strong>Priority archive file checks</strong>
 				<span>{formatInteger(objects.length)} shown</span>
 			</div>
 			<ArchiveObjectTable
@@ -175,14 +175,14 @@ function ObjectBacklogDetails({
 }): React.JSX.Element {
 	if (totalObjects === 0) {
 		return (
-			<p className="muted-copy">No archive object checks match this node.</p>
+			<p className="muted-copy">No archive file checks match this node.</p>
 		);
 	}
 
 	return (
 		<details className="metadata-document archive-object-details">
 			<summary>
-				<span>Object check sample</span>
+				<span>Archive file sample</span>
 				<span className="muted-inline">
 					Showing {formatInteger(objects.length)} of{' '}
 					{formatInteger(totalObjects)}

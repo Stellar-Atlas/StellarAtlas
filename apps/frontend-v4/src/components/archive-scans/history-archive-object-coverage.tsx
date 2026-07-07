@@ -19,7 +19,7 @@ interface HistoryArchiveObjectCoverageProps {
 export function HistoryArchiveObjectCoverage({
 	framed = true,
 	summary,
-	title = 'Archive object coverage'
+	title = 'Archive file coverage'
 }: HistoryArchiveObjectCoverageProps): React.JSX.Element {
 	const coverageText = formatCoverage(
 		summary.verifiedObjects,
@@ -40,6 +40,7 @@ export function HistoryArchiveObjectCoverage({
 				/>
 			</div>
 			<CoverageSummary summary={summary} />
+			<CheckpointProofSummary summary={summary} />
 			<ObjectTypeTable objectTypes={summary.objectTypes} />
 		</>
 	);
@@ -69,11 +70,11 @@ function CoverageSummary({
 			<table className="archive-summary-table">
 				<thead>
 					<tr>
-						<th>Object checks</th>
+						<th>Archive files</th>
 						<th>Bucket references</th>
 						<th>Unique bucket hashes</th>
-						<th>Active checks</th>
-						<th>Queued checks</th>
+						<th>Active files</th>
+						<th>Queued files</th>
 						<th>Evidence failures</th>
 					</tr>
 				</thead>
@@ -94,6 +95,79 @@ function CoverageSummary({
 	);
 }
 
+function CheckpointProofSummary({
+	summary
+}: {
+	readonly summary: PublicHistoryArchiveObjectSummary;
+}): React.JSX.Element {
+	const checkpoints = summary.checkpoints;
+
+	return (
+		<details className="metadata-document archive-checkpoint-proof" open>
+			<summary>
+				<span>Checkpoint proof</span>
+				<span className="muted-inline">
+					{formatCheckpointProofHeadline(summary)}
+				</span>
+			</summary>
+			<p className="muted-copy">
+				File coverage means archive files were fetched and checked. Checkpoint proof
+				is stricter: it requires the checkpoint category files and bucket list
+				to agree with ledger-header facts.
+			</p>
+			<div className="responsive-table">
+				<table className="archive-checkpoint-proof-table">
+					<thead>
+						<tr>
+							<th>Files present</th>
+							<th>Category-consistent</th>
+							<th>Failed proof</th>
+							<th>Pending proof</th>
+							<th>Not evaluated</th>
+							<th>Expected checkpoints</th>
+							<th>Missing checkpoints</th>
+							<th>Roots discovered</th>
+						</tr>
+					</thead>
+					<tbody>
+						<tr>
+							<td>
+								{formatInteger(checkpoints.objectCompleteArchiveCheckpoints)}
+							</td>
+							<td>
+								{formatInteger(
+									checkpoints.categoryConsistentArchiveCheckpoints
+								)}
+							</td>
+							<td>
+								{formatInteger(
+									checkpoints.categoryConsistencyFailedCheckpoints
+								)}
+							</td>
+							<td>
+								{formatInteger(
+									checkpoints.categoryConsistencyPendingCheckpoints
+								)}
+							</td>
+							<td>
+								{formatInteger(
+									checkpoints.categoryConsistencyNotEvaluatedCheckpoints
+								)}
+							</td>
+							<td>{formatInteger(checkpoints.expectedArchiveCheckpoints)}</td>
+							<td>{formatInteger(checkpoints.missingArchiveCheckpoints)}</td>
+							<td>
+								{formatInteger(checkpoints.discoveryCompleteArchiveRoots)} /{' '}
+								{formatInteger(checkpoints.archiveRootsWithState)}
+							</td>
+						</tr>
+					</tbody>
+				</table>
+			</div>
+		</details>
+	);
+}
+
 function ObjectTypeTable({
 	objectTypes
 }: {
@@ -101,28 +175,30 @@ function ObjectTypeTable({
 }): React.JSX.Element {
 	if (objectTypes.length === 0) {
 		return (
-			<p className="muted-copy">No archive object checks are stored yet.</p>
+			<p className="muted-copy">
+				No file-type summary is available in this response.
+			</p>
 		);
 	}
 
 	return (
 		<details className="metadata-document">
 			<summary>
-				<span>Object check type details</span>
+				<span>Archive file type details</span>
 				<span className="muted-inline">
-					{formatInteger(objectTypes.length)} check groups
+					{formatInteger(objectTypes.length)} file groups
 				</span>
 			</summary>
 			<p className="muted-copy">
-				These are archive object checks. Bucket payloads are content-addressed
-				by hash; checkpoint and category checks cover the history, ledger,
-				transaction, result, and SCP objects for a checkpoint.
+				These are archive file checks. Bucket payloads are
+				content-addressed by hash; checkpoint and category files cover the
+				history, ledger, transaction, result, and SCP files for a checkpoint.
 			</p>
 			<div className="responsive-table">
 				<table className="archive-object-type-table">
 					<thead>
 						<tr>
-							<th>Check group</th>
+							<th>File group</th>
 							<th>Tracked</th>
 							<th>Verified</th>
 							<th>Queued</th>
@@ -158,4 +234,23 @@ function formatCoverage(verified: number, total: number): string {
 		formatPercent((verified / total) * 100) +
 		')'
 	);
+}
+
+function formatCheckpointProofHeadline(
+	summary: PublicHistoryArchiveObjectSummary
+): string {
+	const checkpoints = summary.checkpoints;
+	if (checkpoints.categoryConsistentArchiveCheckpoints > 0) {
+		return (
+			formatInteger(checkpoints.categoryConsistentArchiveCheckpoints) +
+			' category-consistent'
+		);
+	}
+	if (checkpoints.categoryConsistencyNotEvaluatedCheckpoints > 0) {
+		return (
+			formatInteger(checkpoints.categoryConsistencyNotEvaluatedCheckpoints) +
+			' not evaluated'
+		);
+	}
+	return 'proof not evaluated';
 }

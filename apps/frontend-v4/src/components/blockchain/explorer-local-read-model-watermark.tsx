@@ -1,4 +1,5 @@
 import type { ExplorerLocalReadModelResult } from '../../app/actions/network-data';
+import type { PublicExplorerLocalReadModel } from '../../api/explorer-types';
 
 export function ExplorerLocalReadModelWatermark({
 	result
@@ -15,10 +16,11 @@ export function ExplorerLocalReadModelWatermark({
 	}
 
 	const headers = result.readModel.parsedLedgerHeaders;
+	const indexes = result.readModel.indexes;
 	return (
 		<div className="explorer-local-watermark">
 			<div>
-				<strong>Ledger coverage</strong>
+				<strong>Local ledger headers</strong>
 				<span>
 					{formatLedger(headers.earliestParsedLedger)} to{' '}
 					{formatLedger(headers.latestParsedLedger)}
@@ -32,8 +34,8 @@ export function ExplorerLocalReadModelWatermark({
 				</span>
 			</div>
 			<div>
-				<strong>Search coverage</strong>
-				<span>Transactions, accounts, assets, ledgers, and contracts</span>
+				<strong>Decoded indexes</strong>
+				<span>{formatDecodedIndexCoverage(indexes)}</span>
 			</div>
 		</div>
 	);
@@ -49,4 +51,21 @@ function WatermarkSkeleton(): React.JSX.Element {
 
 function formatLedger(value: string | null): string {
 	return value === null ? 'none' : `ledger ${Number(value).toLocaleString()}`;
+}
+
+function formatDecodedIndexCoverage(
+	indexes: PublicExplorerLocalReadModel['indexes']
+): string {
+	const ready = [
+		indexes.transactionIndexReady ? 'transactions' : null,
+		indexes.operationIndexReady ? 'operations' : null,
+		indexes.assetIndexReady ? 'assets' : null,
+		indexes.contractIndexReady ? 'contracts' : null
+	].filter((label): label is string => label !== null);
+
+	if (ready.length === 0) {
+		return 'decoded transaction, operation, asset, and contract indexes are not active yet';
+	}
+
+	return ready.join(', ') + ' active';
 }

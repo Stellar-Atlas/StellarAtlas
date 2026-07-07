@@ -20,7 +20,7 @@ const MAX_ARCHIVE_EVENT_ROWS = 80;
 export function HistoryArchiveObjectEventLog({
 	events,
 	framed = true,
-	title = 'Recent archive object activity'
+	title = 'Recent archive file activity'
 }: HistoryArchiveObjectEventLogProps): React.JSX.Element {
 	const failedEvents = events.events.filter(
 		(event) => event.eventType === 'failed'
@@ -63,7 +63,7 @@ function EventFailureTable({
 	if (events.length === 0) {
 		return (
 			<p className="archive-good-state">
-				No failed archive object checks are in the recent event window.
+				No failed archive file checks are in the recent event window.
 			</p>
 		);
 	}
@@ -71,7 +71,7 @@ function EventFailureTable({
 	return (
 		<div className="archive-priority-block">
 			<div className="archive-table-caption">
-				<strong>Failed object check evidence</strong>
+				<strong>Failed archive file evidence</strong>
 				<span>{formatInteger(events.length)} shown</span>
 			</div>
 			<EventTable events={events} />
@@ -88,14 +88,14 @@ function EventHistoryDetails({
 }): React.JSX.Element {
 	if (totalEvents === 0) {
 		return (
-			<p className="muted-copy">No archive object activity is available yet.</p>
+			<p className="muted-copy">No archive file activity is available yet.</p>
 		);
 	}
 
 	return (
 		<details className="metadata-document archive-object-details">
 			<summary>
-				<span>Recent object check activity</span>
+				<span>Recent archive file activity</span>
 				<span className="muted-inline">
 					Showing {formatInteger(events.length)} of {formatInteger(totalEvents)}
 				</span>
@@ -116,9 +116,9 @@ function EventTable({
 				<thead>
 					<tr>
 						<th>Event</th>
-						<th>Object type</th>
+						<th>Archive file</th>
 						<th>Archive root</th>
-						<th>Object key</th>
+						<th>Path or hash</th>
 						<th>Activity</th>
 					</tr>
 				</thead>

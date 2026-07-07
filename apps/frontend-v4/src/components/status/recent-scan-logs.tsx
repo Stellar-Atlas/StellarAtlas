@@ -7,15 +7,9 @@ import type {
 	PublicStatusLevel
 } from '@api/types';
 import { formatDateTime, formatInteger } from '@format/formatters';
-import { StatusPill, StatusRow } from './status-ui';
+import { StatusPill } from './status-ui';
 
 type ScanLogFilter = 'attention' | 'network' | 'all';
-
-const segmentedControlStyle = {
-	flexWrap: 'wrap',
-	maxWidth: '100%',
-	overflow: 'visible'
-} as const;
 
 export function RecentScanLogs({
 	scanLogs
@@ -32,7 +26,7 @@ export function RecentScanLogs({
 		<section className="panel status-scan-log-panel">
 			<div className="panel-heading">
 				<div>
-					<strong>Recent Network Scan Logs</strong>
+					<strong>Recent network scans</strong>
 					<span>{formatDateTime(scanLogs.generatedAt)}</span>
 				</div>
 				<span className="status-muted">
@@ -40,11 +34,7 @@ export function RecentScanLogs({
 				</span>
 			</div>
 			<div className="archive-scan-log">
-				<div
-					className="segmented"
-					aria-label="Recent scan log filter"
-					style={segmentedControlStyle}
-				>
+				<div className="segmented" aria-label="Recent scan log filter">
 					{scanLogFilters.map((candidate) => (
 						<button
 							aria-pressed={filter === candidate.value}
@@ -58,153 +48,94 @@ export function RecentScanLogs({
 					))}
 				</div>
 			</div>
-			<div className="status-scan-log-grid">
-				<RecentNetworkScans filter={filter} scans={networkScans} />
-			</div>
+			<NetworkScanTable filter={filter} scans={networkScans} />
 		</section>
 	);
 }
 
-const scanLogFilters: readonly {
-	readonly label: string;
-	readonly value: ScanLogFilter;
-}[] = [
-	{ label: 'Attention', value: 'attention' },
-	{ label: 'Network', value: 'network' },
-	{ label: 'All', value: 'all' }
-];
-
-function RecentNetworkScans({
+function NetworkScanTable({
 	filter,
 	scans
 }: {
 	readonly filter: ScanLogFilter;
 	readonly scans: readonly PublicNetworkScanLogEntry[];
 }): React.JSX.Element {
-	const emptyState = getEmptyNetworkState(filter);
+	if (scans.length === 0) return <EmptyNetworkScanTable filter={filter} />;
 
 	return (
-		<div className="status-scan-log-column">
-			<h3>Network scans</h3>
-			<div className="status-list">
-				{scans.map((scan) => (
-					<NetworkScanDetails key={scan.time} scan={scan} />
-				))}
-				{scans.length === 0 && <EmptyLogRow state={emptyState} />}
-			</div>
+		<div className="responsive-table status-network-scan-table-wrap">
+			<table className="status-network-scan-table">
+				<thead>
+					<tr>
+						<th>Scan time</th>
+						<th>Status</th>
+						<th>Latest ledger</th>
+						<th>Processed ledgers</th>
+						<th>Archive roots observed</th>
+						<th>New checks queued</th>
+						<th>Already tracked</th>
+						<th>Scheduler errors</th>
+					</tr>
+				</thead>
+				<tbody>
+					{scans.map((scan) => (
+						<NetworkScanRow key={scan.time} scan={scan} />
+					))}
+				</tbody>
+			</table>
 		</div>
 	);
 }
 
-function NetworkScanDetails({
+function NetworkScanRow({
 	scan
 }: {
 	readonly scan: PublicNetworkScanLogEntry;
 }): React.JSX.Element {
+	const scheduling = scan.archiveScheduling;
 	const status: PublicStatusLevel = scan.completed ? 'ok' : 'degraded';
 
 	return (
-		<details className="metadata-document" open={!scan.completed}>
-			<summary>
-				<span>{formatDateTime(scan.time)}</span>
-				<span>
-					<StatusPill
-						status={status}
-						text={scan.completed ? 'Complete' : 'Incomplete'}
-					/>
-				</span>
-			</summary>
-			<dl className="details">
-				<div>
-					<dt>Latest ledger</dt>
-					<dd>{scan.latestLedger}</dd>
-				</div>
-				<div>
-					<dt>Processed ledgers</dt>
-					<dd>{formatInteger(scan.ledgersCount)}</dd>
-				</div>
-				<div>
-					<dt>Latest close</dt>
-					<dd>{formatNullableDate(scan.latestLedgerCloseTime)}</dd>
-				</div>
-				{scan.archiveScheduling ? (
-					<>
-						<div>
-							<dt>Archive URLs</dt>
-							<dd>
-								{formatInteger(
-									scan.archiveScheduling.discoveredArchiveUrlCount
-								)}{' '}
-								discovered
-							</dd>
-						</div>
-						<div>
-							<dt>Archive jobs</dt>
-							<dd>{formatArchiveScheduling(scan.archiveScheduling)}</dd>
-						</div>
-					</>
-				) : null}
-				<div>
-					<dt>Status</dt>
-					<dd>{scan.status}</dd>
-				</div>
-			</dl>
-		</details>
+		<tr>
+			<td>
+				<strong>{formatDateTime(scan.time)}</strong>
+				<small>{formatLatestClose(scan.latestLedgerCloseTime)}</small>
+			</td>
+			<td>
+				<StatusPill
+					status={status}
+					text={scan.completed ? 'complete' : 'incomplete'}
+				/>
+			</td>
+			<td>{scan.latestLedger}</td>
+			<td>{formatInteger(scan.ledgersCount)}</td>
+			<td>{formatInteger(scheduling.discoveredArchiveUrlCount)}</td>
+			<td>{formatInteger(scheduling.scheduledArchiveScanJobCount)}</td>
+			<td>{formatInteger(scheduling.duplicateSuppressedArchiveScanJobCount)}</td>
+			<td>{formatInteger(scheduling.schedulerErrorCount)}</td>
+		</tr>
 	);
 }
 
-function formatArchiveScheduling(
-	archiveScheduling: NonNullable<PublicNetworkScanLogEntry['archiveScheduling']>
-): string {
-	const scheduled = formatInteger(
-		archiveScheduling.scheduledArchiveScanJobCount
-	);
-	const suppressed = formatInteger(
-		archiveScheduling.duplicateSuppressedArchiveScanJobCount
-	);
-	const errors = formatInteger(archiveScheduling.schedulerErrorCount);
-
-	return `${scheduled} scheduled, ${suppressed} already queued, ${errors} errors`;
-}
-
-interface EmptyLogState {
-	readonly detail: string;
-	readonly label: string;
-	readonly status: PublicStatusLevel;
-	readonly value: string;
-}
-
-function EmptyLogRow({
-	state
+function EmptyNetworkScanTable({
+	filter
 }: {
-	readonly state: EmptyLogState;
+	readonly filter: ScanLogFilter;
 }): React.JSX.Element {
 	return (
-		<StatusRow
-			detail={state.detail}
-			label={state.label}
-			status={state.status}
-			value={state.value}
-		/>
+		<div className="responsive-table status-network-scan-table-wrap">
+			<table className="status-network-scan-table">
+				<tbody>
+					<tr>
+						<td>
+							<strong>{getEmptyNetworkLabel(filter)}</strong>
+							<small>{getEmptyNetworkDetail(filter)}</small>
+						</td>
+					</tr>
+				</tbody>
+			</table>
+		</div>
 	);
-}
-
-function getEmptyNetworkState(filter: ScanLogFilter): EmptyLogState {
-	if (filter === 'attention') {
-		return {
-			detail: 'No incomplete network scan rows match this filter',
-			label: 'No network scan issues',
-			status: 'ok',
-			value: 'Clear'
-		};
-	}
-
-	return {
-		detail: 'No recent network scan rows match this filter',
-		label: 'No network scans',
-		status: 'unavailable',
-		value: 'No data'
-	};
 }
 
 function filterNetworkScans(
@@ -215,6 +146,25 @@ function filterNetworkScans(
 	return scans;
 }
 
-function formatNullableDate(value: string | null): string {
-	return value === null ? 'No data' : formatDateTime(value);
+function formatLatestClose(value: string | null): string {
+	return value === null ? 'latest close not recorded' : formatDateTime(value);
 }
+
+function getEmptyNetworkLabel(filter: ScanLogFilter): string {
+	return filter === 'attention' ? 'No network scan issues' : 'No network scans';
+}
+
+function getEmptyNetworkDetail(filter: ScanLogFilter): string {
+	return filter === 'attention'
+		? 'No incomplete network scan rows match this filter.'
+		: 'No recent network scan rows match this filter.';
+}
+
+const scanLogFilters: readonly {
+	readonly label: string;
+	readonly value: ScanLogFilter;
+}[] = [
+	{ label: 'Attention', value: 'attention' },
+	{ label: 'Network', value: 'network' },
+	{ label: 'All', value: 'all' }
+];

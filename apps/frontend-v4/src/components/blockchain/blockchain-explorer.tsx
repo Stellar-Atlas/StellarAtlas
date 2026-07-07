@@ -226,8 +226,8 @@ export function BlockchainExplorer(): React.JSX.Element {
 			<section className="explorer-panel explorer-feed-panel">
 				<div className="panel-heading explorer-feed-heading">
 					<div>
-						<strong>Recent transactions</strong>
-						<span>Latest observed transaction activity</span>
+						<strong>External transaction snapshot</strong>
+						<span>Bounded fallback rows until the local transaction index is active</span>
 					</div>
 					<button
 						disabled={transactionFeedLoading}
