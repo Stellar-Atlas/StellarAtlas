@@ -40,9 +40,9 @@ export function ArchiveObjectTable({
 				<thead>
 					<tr>
 						<th>Status</th>
-						<th>Archive file</th>
-						<th>Archive root</th>
-						<th>Path or hash</th>
+						<th>Archive object</th>
+						<th>Archive source</th>
+						<th>File id</th>
 						<th>Check result</th>
 					</tr>
 				</thead>
@@ -186,7 +186,7 @@ function BucketCoverageDrilldown({
 					<dd>{formatDateTime(bucketCoverage.generatedAt)}</dd>
 				</div>
 				<div>
-					<dt>Archive roots</dt>
+					<dt>Archive sources</dt>
 					<dd>{formatInteger(bucketCoverage.counts.archiveRoots)}</dd>
 				</div>
 			</dl>
@@ -209,7 +209,7 @@ function BucketCoverageSamples({
 
 	if (samples.length === 0) {
 		return (
-			<p className="muted-copy">No archive-root references are recorded.</p>
+			<p className="muted-copy">No archive-source references are recorded.</p>
 		);
 	}
 
@@ -323,11 +323,11 @@ function formatBucketCoverageSummary(
 		formatInteger(counts.verifiedCopies) +
 		' / ' +
 		formatInteger(totalCopies) +
-		' archive-root references verified (' +
+		' archive-source checks verified (' +
 		percent +
 		') for this bucket across ' +
 		formatInteger(counts.archiveRoots) +
-		' archive roots'
+		' archive sources'
 	);
 }
 

@@ -41,7 +41,7 @@ export function HistoryArchiveStateDocument({
 			</p>
 			<dl className="details">
 				<div>
-					<dt>Archive root</dt>
+					<dt>Archive source</dt>
 					<dd>{archiveRootUrl}</dd>
 				</div>
 				<div>

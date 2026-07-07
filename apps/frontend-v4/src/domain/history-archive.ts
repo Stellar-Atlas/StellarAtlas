@@ -91,10 +91,10 @@ export function formatArchiveObjectTypeGroupLabel(
 }
 
 export function formatArchiveObjectTypeRole(type: ArchiveObjectType): string {
-	if (type === 'history-archive-state') return 'latest archive pointer';
-	if (type === 'checkpoint-state') return 'checkpoint state JSON';
-	if (type === 'bucket') return 'content-addressed state shard';
-	return '64-ledger checkpoint file';
+	if (type === 'history-archive-state') return 'latest published checkpoint';
+	if (type === 'checkpoint-state') return 'checkpoint bucket-list record';
+	if (type === 'bucket') return 'deduplicated ledger-state payload';
+	return '64-ledger archive range file';
 }
 
 export function sanitizeArchiveEvidenceText(value: string): string {

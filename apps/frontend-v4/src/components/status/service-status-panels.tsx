@@ -66,7 +66,7 @@ export function ProductionServiceStatusPanel({
 				/>
 				<StatusRow
 					detail={`${formatInteger(archiveSummary.activeObjects)} checks running, ${formatInteger(archiveSummary.pendingObjects)} waiting, ${formatInteger(archiveSummary.failedObjects)} archive evidence failures; ${formatInteger(archiveObjects.objects.length)} recent checks shown`}
-					label="Archive verifier"
+					label="Archive object checks"
 					status={archiveObjectStatus}
 					value={`${formatInteger(archiveSummary.totalObjects)} checks tracked`}
 				/>

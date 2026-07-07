@@ -112,7 +112,7 @@ export function NodeArchiveHealth({
 					<HistoryArchiveObjectEventLog
 						events={historyArchiveEvents}
 						framed={false}
-						title="Recent archive file activity"
+						title="Recent archive object activity"
 					/>
 				) : null}
 				{tab === 'raw' ? (
@@ -150,11 +150,11 @@ function ArchiveHealthSummary({
 			<table className="archive-health-summary-table">
 				<thead>
 					<tr>
-						<th>Archive root</th>
-						<th>History state</th>
-						<th>Object files verified</th>
-						<th>Chain proof</th>
-						<th>Bucket copies</th>
+						<th>Archive source</th>
+						<th>Latest checkpoint pointer</th>
+						<th>Archive-source files checked</th>
+						<th>Cross-file checks</th>
+						<th>Bucket references</th>
 						<th>Checking now</th>
 						<th>Failures</th>
 					</tr>
@@ -168,7 +168,7 @@ function ArchiveHealthSummary({
 								? formatCoverage(summary.verifiedObjects, summary.totalObjects)
 								: '0 / 0'}
 						</td>
-						<td>{summary ? formatCheckpointProof(summary) : 'not evaluated'}</td>
+						<td>{summary ? formatCheckpointProof(summary) : 'not checked yet'}</td>
 						<td>
 							{summary
 								? formatCoverage(
@@ -311,9 +311,9 @@ function getEmptyTabText(tab: ArchiveHealthTab): string {
 	if (tab === 'attention') {
 		return 'No failed or delayed archive checks are visible in this snapshot.';
 	}
-	if (tab === 'active') return 'No archive file checks are active right now.';
-	if (tab === 'verified') return 'No verified archive file rows are in this sample.';
-	if (tab === 'pending') return 'No pending archive file rows are in this sample.';
+	if (tab === 'active') return 'No archive object checks are active right now.';
+	if (tab === 'verified') return 'No passed archive object checks are in this sample.';
+	if (tab === 'pending') return 'No queued archive object checks are in this sample.';
 	return 'No archive evidence is available for this tab.';
 }
 
@@ -330,7 +330,7 @@ function getArchivePanelStatusText(
 	if (summary.failedObjects > 0) {
 		return `${formatInteger(summary.failedObjects)} failures`;
 	}
-	return `${formatInteger(summary.verifiedObjects)} object files verified`;
+	return `${formatInteger(summary.verifiedObjects)} object checks passed`;
 }
 
 function formatArchiveRoot(value: string | null): string {
@@ -352,9 +352,9 @@ function formatCheckpointProof(summary: PublicHistoryArchiveObjectSummary): stri
 		);
 	}
 	if (checkpoints.categoryConsistencyNotEvaluatedCheckpoints > 0) {
-		return `${formatInteger(checkpoints.categoryConsistencyNotEvaluatedCheckpoints)} pending proof checks`;
+		return `${formatInteger(checkpoints.categoryConsistencyNotEvaluatedCheckpoints)} not checked yet`;
 	}
-	return 'proof not ready';
+	return 'not checked yet';
 }
 
 function formatCoverage(verified: number, total: number): string {
@@ -370,7 +370,7 @@ const archiveHealthTabs: readonly {
 }[] = [
 	{ label: 'Needs attention', value: 'attention' },
 	{ label: 'Checking now', value: 'active' },
-	{ label: 'Verified sample', value: 'verified' },
+	{ label: 'Checks passed', value: 'verified' },
 	{ label: 'Waiting', value: 'pending' },
 	{ label: 'Archive state', value: 'state' },
 	{ label: 'Activity', value: 'activity' },

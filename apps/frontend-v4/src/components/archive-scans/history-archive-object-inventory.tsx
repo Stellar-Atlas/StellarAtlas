@@ -30,7 +30,7 @@ export function HistoryArchiveObjectInventory({
 	objects,
 	priorityOpen = false,
 	showHelperCopy = false,
-	title = 'Archive file checks'
+	title = 'Archive object-check sample'
 }: HistoryArchiveObjectInventoryProps): React.JSX.Element {
 	const coverageByBucketHash = new Map(
 		bucketCoverages.map((coverage) => [coverage.bucketHash, coverage])
@@ -64,9 +64,9 @@ export function HistoryArchiveObjectInventory({
 			<ObjectSummary objects={objects} />
 			{showHelperCopy ? (
 				<p className="muted-copy">
-					Each row is one archive-root file check. Bucket payload bytes are
-					deduplicated by hash; repeated bucket rows are evidence that
-					different archive roots referenced the same bucket.
+					Each row is one archive-source object check. Bucket payload bytes
+					are deduplicated by hash; repeated bucket rows are evidence that
+					different archive sources referenced the same bucket file.
 				</p>
 			) : null}
 			<ObjectPriorityTable
@@ -111,10 +111,10 @@ function ObjectSummary({
 			<table className="archive-summary-table archive-work-summary-table">
 				<thead>
 					<tr>
-						<th>Checking now</th>
-						<th>Waiting</th>
-						<th>Verified</th>
-						<th>Failures</th>
+		<th>Checking now</th>
+		<th>Waiting</th>
+		<th>Checks passed</th>
+		<th>Evidence failures</th>
 					</tr>
 				</thead>
 				<tbody>
@@ -147,7 +147,7 @@ function ObjectPriorityTable({
 	if (objects.length === 0) {
 		return (
 			<p className="archive-good-state">
-				No failed or delayed archive checks are visible in this snapshot.
+				No failed or delayed archive object checks are visible in this sample.
 			</p>
 		);
 	}
@@ -155,7 +155,7 @@ function ObjectPriorityTable({
 	return (
 		<details className="metadata-document archive-priority-block" open={open}>
 			<summary>
-				<span>Archive checks needing attention</span>
+				<span>Archive object checks needing attention</span>
 				<span>{formatInteger(objects.length)} shown</span>
 			</summary>
 			<ArchiveObjectTable
@@ -183,14 +183,14 @@ function ObjectBacklogDetails({
 }): React.JSX.Element {
 	if (totalObjects === 0) {
 		return (
-			<p className="muted-copy">No archive file checks match this node.</p>
+			<p className="muted-copy">No archive object checks match this node.</p>
 		);
 	}
 
 	return (
 		<details className="metadata-document archive-object-details">
 			<summary>
-				<span>Archive file sample</span>
+				<span>Archive object-check sample</span>
 				<span className="muted-inline">
 					Showing {formatInteger(objects.length)} of{' '}
 					{formatInteger(totalObjects)}

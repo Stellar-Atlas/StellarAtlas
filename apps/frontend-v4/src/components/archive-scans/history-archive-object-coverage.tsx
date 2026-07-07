@@ -22,7 +22,7 @@ export function HistoryArchiveObjectCoverage({
 	framed = true,
 	proofOpen = false,
 	summary,
-	title = 'Archive file coverage',
+	title = 'Archive object checks',
 	typeDetailsOpen = false
 }: HistoryArchiveObjectCoverageProps): React.JSX.Element {
 	const coverageText = formatCoverage(
@@ -81,12 +81,12 @@ function CoverageSummary({
 			<table className="archive-summary-table">
 				<thead>
 					<tr>
-						<th>File checks verified</th>
-						<th>Bucket copies verified</th>
-						<th>Unique bucket payloads</th>
+						<th>Archive-source files checked</th>
+						<th>Bucket references verified</th>
+						<th>Unique bucket files</th>
 						<th>Checking now</th>
 						<th>Waiting</th>
-						<th>Failures</th>
+						<th>Evidence failures</th>
 					</tr>
 				</thead>
 				<tbody>
@@ -118,29 +118,30 @@ function CheckpointProofSummary({
 	return (
 		<details className="metadata-document archive-checkpoint-proof" open={open}>
 			<summary>
-				<span>Chain consistency proof</span>
+				<span>Cross-file checkpoint checks</span>
 				<span className="muted-inline">
 					{formatCheckpointProofHeadline(summary)}
 				</span>
 			</summary>
 			<p className="muted-copy">
-				File coverage means individual archive files were fetched and checked.
-				Chain consistency proof is stricter: the checkpoint history file,
-				ledger headers, transaction files, result files, and bucket list all
-				have to agree.
+				Archive-source file checks mean individual archive files were fetched
+				and verified in isolation. Cross-file checkpoint checks are stricter:
+				history, ledger,
+				transaction, result, and bucket-list data all have to agree for the
+				same checkpoint.
 			</p>
 			<div className="responsive-table">
 				<table className="archive-checkpoint-proof-table">
 					<thead>
 						<tr>
-							<th>Files present</th>
-							<th>Consistent</th>
+							<th>Complete file sets</th>
+							<th>File sets agree</th>
 							<th>Failed</th>
 							<th>Waiting</th>
 							<th>Not checked yet</th>
 							<th>Expected</th>
 							<th>Missing</th>
-							<th>Roots complete</th>
+							<th>Sources fully discovered</th>
 						</tr>
 					</thead>
 					<tbody>
@@ -194,15 +195,15 @@ function ObjectTypeTable({
 	return (
 		<details className="metadata-document" open={open}>
 			<summary>
-				<span>Archive file type details</span>
+				<span>Archive object-check details</span>
 				<span className="muted-inline">
 					{formatInteger(objectTypes.length)} file groups
 				</span>
 			</summary>
 			<p className="muted-copy">
-				These are counts of archive-root file checks. A transaction archive
-				file can contain transaction data for many ledgers; this is not a
-				transaction count.
+				These are counts of archive-source file checks, not decoded blockchain
+				entities. A transaction archive file can contain transaction data for
+				many ledgers; this is not a transaction count.
 			</p>
 			<div className="responsive-table">
 				<table className="archive-object-type-table">
@@ -253,14 +254,14 @@ function formatCheckpointProofHeadline(
 	if (checkpoints.categoryConsistentArchiveCheckpoints > 0) {
 		return (
 			formatInteger(checkpoints.categoryConsistentArchiveCheckpoints) +
-			' category-consistent'
+			' checkpoint file sets agree'
 		);
 	}
 	if (checkpoints.categoryConsistencyNotEvaluatedCheckpoints > 0) {
 		return (
 			formatInteger(checkpoints.categoryConsistencyNotEvaluatedCheckpoints) +
-			' not evaluated'
+			' not checked yet'
 		);
 	}
-	return 'proof not evaluated';
+	return 'not checked yet';
 }

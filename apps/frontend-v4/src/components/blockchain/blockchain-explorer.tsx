@@ -175,8 +175,9 @@ export function BlockchainExplorer(): React.JSX.Element {
 					<div>
 						<strong>Search</strong>
 						<span>
-							Local ledger headers are indexed. Other lookups use external
-							fallback data until decoded indexes are active.
+							Local ledger-header search is active. Transaction, account, asset,
+							and contract lookups use external fallback data until decoded
+							indexes exist.
 						</span>
 					</div>
 				</div>
@@ -227,9 +228,9 @@ export function BlockchainExplorer(): React.JSX.Element {
 			<section className="explorer-panel explorer-feed-panel">
 				<div className="panel-heading explorer-feed-heading">
 					<div>
-						<strong>Recent transactions</strong>
+						<strong>External transaction sample</strong>
 						<span>
-							External fallback sample until the local transaction index is active
+							Bounded fallback rows until the local transaction index is active
 						</span>
 					</div>
 					<button
@@ -391,7 +392,7 @@ function getTransactionHashFromSearch(
 
 function formatSearchTypeOption(type: PublicExplorerSearchType): string {
 	if (type === 'auto') return 'auto';
-	if (type === 'ledger') return 'ledger headers';
+	if (type === 'ledger') return 'ledger headers (local)';
 	return `${type} (external fallback)`;
 }
 

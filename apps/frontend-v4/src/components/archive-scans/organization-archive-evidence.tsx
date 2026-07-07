@@ -43,12 +43,12 @@ export function OrganizationArchiveEvidence({
 			<div className="panel-heading">
 				<h2>History archive evidence</h2>
 				<span className="muted-inline">
-					{formatInteger(archiveRoots.length)} archive roots
+					{formatInteger(archiveRoots.length)} archive sources
 				</span>
 			</div>
 			{archiveRoots.length === 0 ? (
 				<p className="muted-copy">
-					No node archive URLs are known for this organization.
+					No archive sources are known for this organization.
 				</p>
 			) : (
 				archiveRoots.map((archiveRoot) => (
@@ -83,15 +83,15 @@ function ArchiveRootDrilldown({
 			</summary>
 			<dl className="details">
 				<div>
-					<dt>Scanner-owned state</dt>
+					<dt>Latest checkpoint pointer</dt>
 					<dd>{formatStateSummary(evidence?.state ?? null)}</dd>
 				</div>
 				<div>
-					<dt>Archive file coverage</dt>
+					<dt>Archive object checks</dt>
 					<dd>{formatCoverageSummary(evidence?.summary ?? null)}</dd>
 				</div>
 				<div>
-					<dt>Archive file sample</dt>
+					<dt>Archive object-check sample</dt>
 					<dd>{formatObjectSample(evidence?.objects ?? null)}</dd>
 				</div>
 				<div>
@@ -109,22 +109,22 @@ function ArchiveRootDrilldown({
 					<HistoryArchiveObjectCoverage
 						framed={false}
 						summary={evidence.summary}
-						title="Archive file coverage"
+						title="Archive object checks"
 					/>
 					<HistoryArchiveObjectInventory
 						framed={false}
 						objects={evidence.objects}
-						title="Archive file sample"
+						title="Archive object-check sample"
 					/>
 					<HistoryArchiveObjectEventLog
 						events={evidence.events}
 						framed={false}
-						title="Recent archive file event sample"
+						title="Recent archive object event sample"
 					/>
 				</>
 			) : (
 				<p className="muted-copy">
-					No scanner-owned archive file evidence is available for this root
+					No scanner-captured archive object evidence is available for this source
 					yet.
 				</p>
 			)}
@@ -140,7 +140,7 @@ function ArchiveNodeList({
 	if (nodes.length === 0) {
 		return (
 			<p className="muted-copy">
-				This archive root was returned by the scanner but is not attached to a
+				This archive source was returned by the scanner but is not attached to a
 				current organization node snapshot.
 			</p>
 		);
@@ -213,7 +213,7 @@ function getArchiveRoots(
 }
 
 function formatStateSummary(state: PublicHistoryArchiveState | null): string {
-	if (state === null) return 'No scanner-owned state row stored';
+	if (state === null) return 'Not captured by scanner yet';
 	if (state.metadata === null) {
 		return `${state.status} at ${formatDateTime(state.observedAt)}`;
 	}
@@ -225,7 +225,7 @@ function formatStateSummary(state: PublicHistoryArchiveState | null): string {
 function formatCoverageSummary(
 	summary: PublicHistoryArchiveObjectSummary | null
 ): string {
-	if (summary === null) return 'No archive file coverage summary stored';
+	if (summary === null) return 'No archive object-check summary stored';
 	return `${formatInteger(summary.verifiedObjects)} verified of ${formatInteger(
 		summary.totalObjects
 	)} file checks; ${formatInteger(
@@ -236,23 +236,23 @@ function formatCoverageSummary(
 function formatObjectSample(
 	objects: PublicHistoryArchiveObjectQueue | null
 ): string {
-	if (objects === null) return 'No archive file check sample stored';
+	if (objects === null) return 'No archive object-check sample stored';
 	if (objects.objects.length === 0)
-		return 'No sampled archive file checks returned';
+		return 'No sampled archive object checks returned';
 	return `${formatInteger(objects.objects.length)} sampled of ${formatInteger(
 		objects.activeObjects +
 			objects.pendingObjects +
 			objects.verifiedObjects +
 			objects.failedObjects
-	)} archive file checks`;
+	)} archive object checks`;
 }
 
 function formatEventSample(
 	events: PublicHistoryArchiveObjectEvents | null
 ): string {
-	if (events === null) return 'No recent archive file activity stored';
+	if (events === null) return 'No recent archive object activity stored';
 	const latest = events.events.at(0);
-	if (latest === undefined) return 'No recent archive file activity returned';
+	if (latest === undefined) return 'No recent archive object activity returned';
 	return `${latest.eventType} ${latest.objectType} at ${formatDateTime(
 		latest.createdAt
 	)}`;

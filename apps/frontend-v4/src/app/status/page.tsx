@@ -32,6 +32,15 @@ const archiveDetailFetchOptions = {
 	timeoutMs: 12000
 } as const;
 const maxBucketCoverageLookups = 8;
+type FetchResult<T> =
+	| {
+			readonly ok: true;
+			readonly value: T;
+	  }
+	| {
+			readonly ok: false;
+			readonly value: T;
+	  };
 
 async function StatusRouteContent(): Promise<React.JSX.Element> {
 	const [
@@ -39,28 +48,34 @@ async function StatusRouteContent(): Promise<React.JSX.Element> {
 		dataQuality,
 		scanLogs,
 		workers,
-		archiveEvents,
+		archiveEventsResult,
 		archiveSummaryResult,
-		archiveObjects,
+		archiveObjectsResult,
 		frontend
 	] = await Promise.all([
 		fetchApiStatus(statusFetchOptions),
 		fetchDataQualityStatus(statusFetchOptions),
 		fetchScanLogStatus(statusFetchOptions),
 		fetchWorkerStatus(statusFetchOptions),
-		fetchHistoryArchiveObjectEvents(100, archiveDetailFetchOptions).catch(
-			() => buildEmptyArchiveEvents()
+		withFallback(
+			fetchHistoryArchiveObjectEvents(100, archiveDetailFetchOptions),
+			buildEmptyArchiveEvents()
 		),
-		fetchHistoryArchiveObjectSummary(archiveSummaryFetchOptions).catch(
-			() => null
+		withFallback<PublicHistoryArchiveObjectSummary | null>(
+			fetchHistoryArchiveObjectSummary(archiveSummaryFetchOptions),
+			null
 		),
-		fetchHistoryArchiveObjects(100, archiveDetailFetchOptions).catch(() =>
+		withFallback(
+			fetchHistoryArchiveObjects(100, archiveDetailFetchOptions),
 			buildEmptyArchiveQueue()
 		),
 		fetchFrontendStatus(statusFetchOptions)
 	]);
+	const archiveObjects = archiveObjectsResult.value;
 	const archiveSummary =
-		archiveSummaryResult ?? buildArchiveSummaryFromQueue(archiveObjects);
+		archiveSummaryResult.value ?? buildArchiveSummaryFromQueue(archiveObjects);
+	const archiveEvidenceAvailable =
+		archiveSummaryResult.ok || archiveObjectsResult.ok;
 	const archiveBucketCoverages =
 		await fetchHistoryArchiveBucketCoveragesForObjects(
 			archiveObjects,
@@ -71,15 +86,17 @@ async function StatusRouteContent(): Promise<React.JSX.Element> {
 	return (
 		<main className="shell">
 			<PageHeading
-				description="Current public API, network scan records, archive file checks, scanner runtime, and archive verification activity."
+				description="Current public API, network scan records, archive object checks, scanner runtime, and archive evidence activity."
 				eyebrow="Operations"
 				title="Status"
 			/>
 			<StatusDashboard
 				api={api}
-				archiveEvents={archiveEvents}
+				archiveEvents={archiveEventsResult.value}
 				archiveBucketCoverages={archiveBucketCoverages}
+				archiveEvidenceAvailable={archiveEvidenceAvailable}
 				archiveObjects={archiveObjects}
+				archiveObjectsAvailable={archiveObjectsResult.ok}
 				archiveSummary={archiveSummary}
 				dataQuality={dataQuality}
 				frontend={frontend}
@@ -88,6 +105,17 @@ async function StatusRouteContent(): Promise<React.JSX.Element> {
 			/>
 		</main>
 	);
+}
+
+async function withFallback<T>(
+	promise: Promise<T>,
+	value: T
+): Promise<FetchResult<T>> {
+	try {
+		return { ok: true, value: await promise };
+	} catch {
+		return { ok: false, value };
+	}
 }
 
 function buildArchiveSummaryFromQueue(

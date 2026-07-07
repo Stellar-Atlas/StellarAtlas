@@ -30,7 +30,7 @@ export function RecentScanLogs({
 					<span>{formatDateTime(scanLogs.generatedAt)}</span>
 				</div>
 				<span className="status-muted">
-					{formatInteger(scanLogs.limit)} row API limit
+					Showing up to {formatInteger(scanLogs.limit)} recent rows
 				</span>
 			</div>
 			<div className="archive-scan-log">
@@ -71,9 +71,9 @@ function NetworkScanTable({
 						<th>Status</th>
 						<th>Latest ledger</th>
 						<th>Processed ledgers</th>
-						<th>Archive roots observed</th>
+						<th>Archive sources observed</th>
 						<th>New checks queued</th>
-						<th>Already tracked</th>
+						<th>Already queued</th>
 						<th>Scheduler errors</th>
 					</tr>
 				</thead>

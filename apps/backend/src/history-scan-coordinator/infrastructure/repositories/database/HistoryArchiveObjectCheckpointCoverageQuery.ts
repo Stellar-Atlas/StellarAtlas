@@ -111,27 +111,6 @@ function lowercase(
 const archiveFilterSql =
 	'($1::text is null or "archiveUrlIdentity" = $1::text)';
 
-const categoryLedgersJsonSql = `
-	coalesce(
-		"verificationFacts"->'ledgerCategory'->'ledgers',
-		'[]'::jsonb
-	)
-`;
-
-const transactionsLedgersJsonSql = `
-	coalesce(
-		"verificationFacts"->'transactionsCategory'->'ledgers',
-		'[]'::jsonb
-	)
-`;
-
-const resultsLedgersJsonSql = `
-	coalesce(
-		"verificationFacts"->'resultsCategory'->'ledgers',
-		'[]'::jsonb
-	)
-`;
-
 const checkpointCoverageSql = `
 	with root_state as (
 		select
@@ -144,243 +123,65 @@ const checkpointCoverageSql = `
 			and "currentLedger" is not null
 			and "currentLedger" >= 0
 	),
-	checkpoint_rollup as (
+	proof_rows as (
 		select
 			"archiveUrlIdentity",
 			"checkpointLedger",
-			bool_or(status = 'failed') as has_failed,
-			bool_or(status = 'scanning') as has_active,
-			bool_or("objectType" = 'scp') as expects_scp,
-			bool_or("objectType" = 'checkpoint-state' and status = 'verified')
-				as has_checkpoint_state,
-			bool_or("objectType" = 'ledger' and status = 'verified') as has_ledger,
-			bool_or("objectType" = 'transactions' and status = 'verified')
-				as has_transactions,
-			bool_or("objectType" = 'results' and status = 'verified') as has_results,
-			bool_or("objectType" = 'scp' and status = 'verified') as has_scp
-		from history_archive_object_queue
+			status,
+			"requiredObjectsComplete"
+		from history_archive_checkpoint_proof
 		where ${archiveFilterSql}
-			and "checkpointLedger" is not null
-		group by "archiveUrlIdentity", "checkpointLedger"
 	),
 	root_coverage as (
 		select
 			root_state."archiveUrlIdentity",
 			root_state."expectedCheckpointCount",
-			count(distinct checkpoint_rollup."checkpointLedger")
+			count(distinct proof_rows."checkpointLedger")
 				as "scheduledCheckpointCount",
-			min(checkpoint_rollup."checkpointLedger") as "oldestCheckpointLedger"
+			min(proof_rows."checkpointLedger") as "oldestCheckpointLedger"
 		from root_state
-		left join checkpoint_rollup
-			on checkpoint_rollup."archiveUrlIdentity" = root_state."archiveUrlIdentity"
+		left join proof_rows
+			on proof_rows."archiveUrlIdentity" = root_state."archiveUrlIdentity"
 		group by
 			root_state."archiveUrlIdentity",
 			root_state."expectedCheckpointCount"
 	),
-	state_facts as (
+	proof_summary as (
 		select
-			"archiveUrlIdentity",
-			"checkpointLedger",
-			"verificationFacts"#>>'{checkpointHistoryArchiveStateFact,bucketListHash}'
-				as bucket_list_hash
-		from history_archive_object_queue
-		where ${archiveFilterSql}
-			and "objectType" = 'checkpoint-state'
-			and status = 'verified'
-			and "checkpointLedger" is not null
-	),
-	ledger_facts as (
-		select
-			object."archiveUrlIdentity",
-			object."checkpointLedger",
-			(fact->>'ledger')::bigint as ledger,
-			fact->>'ledgerHeaderHash' as ledger_header_hash,
-			fact->>'previousLedgerHeaderHash' as previous_ledger_header_hash,
-			fact->>'transactionSetHash' as transaction_set_hash,
-			fact->>'transactionResultSetHash' as transaction_result_hash,
-			fact->>'bucketListHash' as bucket_list_hash
-		from history_archive_object_queue object
-		cross join lateral jsonb_array_elements(${categoryLedgersJsonSql}) fact
-		where ${archiveFilterSql}
-			and object."objectType" = 'ledger'
-			and object.status = 'verified'
-			and object."checkpointLedger" is not null
-	),
-	ledger_chain as (
-		select
-			ledger_facts.*,
-			lag(ledger_header_hash) over (
-				partition by "archiveUrlIdentity", "checkpointLedger"
-				order by ledger
-			) as previous_fact_hash,
-			min(ledger) over (
-				partition by "archiveUrlIdentity", "checkpointLedger"
-			) as first_ledger
-		from ledger_facts
-	),
-	transaction_facts as (
-		select
-			object."archiveUrlIdentity",
-			object."checkpointLedger",
-			(fact->>'ledger')::bigint as ledger,
-			fact->>'hash' as hash
-		from history_archive_object_queue object
-		cross join lateral jsonb_array_elements(${transactionsLedgersJsonSql}) fact
-		where ${archiveFilterSql}
-			and object."objectType" = 'transactions'
-			and object.status = 'verified'
-			and object."checkpointLedger" is not null
-	),
-	result_facts as (
-		select
-			object."archiveUrlIdentity",
-			object."checkpointLedger",
-			(fact->>'ledger')::bigint as ledger,
-			fact->>'hash' as hash
-		from history_archive_object_queue object
-		cross join lateral jsonb_array_elements(${resultsLedgersJsonSql}) fact
-		where ${archiveFilterSql}
-			and object."objectType" = 'results'
-			and object.status = 'verified'
-			and object."checkpointLedger" is not null
-	),
-	proof_rollup as (
-		select
-			ledger_chain."archiveUrlIdentity",
-			ledger_chain."checkpointLedger",
-			count(*) as ledger_fact_count,
-			count(transaction_facts.hash) as transaction_fact_count,
-			count(result_facts.hash) as result_fact_count,
-			bool_or(
-				ledger_chain.ledger = ledger_chain."checkpointLedger"
-				and ledger_chain.bucket_list_hash = state_facts.bucket_list_hash
-			) as checkpoint_bucket_matches,
-			bool_or(state_facts.bucket_list_hash is not null)
-				as has_checkpoint_bucket_fact,
-			bool_and(coalesce(
-				ledger_chain.transaction_set_hash = transaction_facts.hash,
-				false
-			)) as transactions_match,
-			bool_and(coalesce(
-				ledger_chain.transaction_result_hash = result_facts.hash,
-				false
-			)) as results_match,
-			bool_and(
-				ledger_chain.ledger = ledger_chain.first_ledger
-				or coalesce(
-					ledger_chain.previous_ledger_header_hash =
-						ledger_chain.previous_fact_hash,
-					false
-				)
-			) as previous_ledgers_match
-		from ledger_chain
-		left join transaction_facts
-			on transaction_facts."archiveUrlIdentity" =
-				ledger_chain."archiveUrlIdentity"
-			and transaction_facts."checkpointLedger" =
-				ledger_chain."checkpointLedger"
-			and transaction_facts.ledger = ledger_chain.ledger
-		left join result_facts
-			on result_facts."archiveUrlIdentity" = ledger_chain."archiveUrlIdentity"
-			and result_facts."checkpointLedger" = ledger_chain."checkpointLedger"
-			and result_facts.ledger = ledger_chain.ledger
-		left join state_facts
-			on state_facts."archiveUrlIdentity" = ledger_chain."archiveUrlIdentity"
-			and state_facts."checkpointLedger" = ledger_chain."checkpointLedger"
-		group by ledger_chain."archiveUrlIdentity", ledger_chain."checkpointLedger"
-	),
-	materialized_proof as (
-		select
-			"archiveUrlIdentity",
-			"checkpointLedger",
-			status
-		from history_archive_checkpoint_proof
-		where ${archiveFilterSql}
-	),
-	classified as (
-		select
-			checkpoint_rollup."checkpointLedger",
-			checkpoint_rollup.has_failed,
-			checkpoint_rollup.has_active,
-			materialized_proof.status as materialized_status,
-			(
-				not checkpoint_rollup.has_failed
-				and checkpoint_rollup.has_checkpoint_state
-				and checkpoint_rollup.has_ledger
-				and checkpoint_rollup.has_transactions
-				and checkpoint_rollup.has_results
-				and (not checkpoint_rollup.expects_scp or checkpoint_rollup.has_scp)
-			) as is_object_complete,
-			(
-				proof_rollup.ledger_fact_count > 0
-				and proof_rollup.transaction_fact_count =
-					proof_rollup.ledger_fact_count
-				and proof_rollup.result_fact_count = proof_rollup.ledger_fact_count
-				and proof_rollup.has_checkpoint_bucket_fact
-			) as has_complete_proof_facts,
-			(
-				proof_rollup.checkpoint_bucket_matches
-				and proof_rollup.transactions_match
-				and proof_rollup.results_match
-				and proof_rollup.previous_ledgers_match
-			) as proof_matches
-		from checkpoint_rollup
-		left join proof_rollup
-			on proof_rollup."archiveUrlIdentity" =
-				checkpoint_rollup."archiveUrlIdentity"
-			and proof_rollup."checkpointLedger" =
-				checkpoint_rollup."checkpointLedger"
-		left join materialized_proof
-			on materialized_proof."archiveUrlIdentity" =
-				checkpoint_rollup."archiveUrlIdentity"
-			and materialized_proof."checkpointLedger" =
-				checkpoint_rollup."checkpointLedger"
-	),
-	proof_classified as (
-		select
-			*,
-			case
-				when materialized_status is not null
-					then materialized_status = 'verified'
-				else is_object_complete
-					and has_complete_proof_facts
-					and proof_matches
-			end as is_category_consistent,
-			case
-				when materialized_status is not null
-					then materialized_status = 'mismatch'
-				else is_object_complete
-					and has_complete_proof_facts
-					and not proof_matches
-			end as is_category_failed,
-			case
-				when materialized_status is not null
-					then materialized_status = 'not-evaluable' and not has_failed
-				else is_object_complete
-					and not coalesce(has_complete_proof_facts, false)
-			end as is_category_not_evaluated
-		from classified
+			count(*) as "totalArchiveCheckpoints",
+			count(*) filter (where false) as "activeArchiveCheckpoints",
+			count(*) filter (where status = 'mismatch') as "failedArchiveCheckpoints",
+			count(*) filter (where "requiredObjectsComplete")
+				as "completeArchiveCheckpoints",
+			count(*) filter (where "requiredObjectsComplete")
+				as "objectCompleteArchiveCheckpoints",
+			count(*) filter (where status = 'verified')
+				as "categoryConsistentArchiveCheckpoints",
+			count(*) filter (where status = 'mismatch')
+				as "categoryConsistencyFailedCheckpoints",
+			count(*) filter (where status = 'not-evaluable')
+				as "categoryConsistencyNotEvaluatedCheckpoints",
+			count(*) filter (where status = 'pending')
+				as "categoryConsistencyPendingCheckpoints",
+			count(*) filter (where status = 'pending')
+				as "partialArchiveCheckpoints",
+			min("checkpointLedger") as "oldestCheckpointLedger",
+			max("checkpointLedger") as "latestCheckpointLedger"
+		from proof_rows
 	)
 	select
-		count(*) as "totalArchiveCheckpoints",
-		count(*) filter (where has_active) as "activeArchiveCheckpoints",
-		count(*) filter (where has_failed) as "failedArchiveCheckpoints",
-		count(*) filter (where is_object_complete)
-			as "completeArchiveCheckpoints",
-		count(*) filter (where is_object_complete)
-			as "objectCompleteArchiveCheckpoints",
-		count(*) filter (where is_category_consistent)
-			as "categoryConsistentArchiveCheckpoints",
-		count(*) filter (where is_category_failed)
-			as "categoryConsistencyFailedCheckpoints",
-		count(*) filter (where is_category_not_evaluated)
-			as "categoryConsistencyNotEvaluatedCheckpoints",
-		count(*) filter (where not is_object_complete and not has_failed)
-			as "categoryConsistencyPendingCheckpoints",
-		count(*) filter (where not is_object_complete and not has_failed)
-			as "partialArchiveCheckpoints",
-		min("checkpointLedger") as "oldestCheckpointLedger",
-		max("checkpointLedger") as "latestCheckpointLedger",
+		"totalArchiveCheckpoints",
+		"activeArchiveCheckpoints",
+		"failedArchiveCheckpoints",
+		"completeArchiveCheckpoints",
+		"objectCompleteArchiveCheckpoints",
+		"categoryConsistentArchiveCheckpoints",
+		"categoryConsistencyFailedCheckpoints",
+		"categoryConsistencyNotEvaluatedCheckpoints",
+		"categoryConsistencyPendingCheckpoints",
+		"partialArchiveCheckpoints",
+		"oldestCheckpointLedger",
+		"latestCheckpointLedger",
 		coalesce((select count(*) from root_coverage), 0)
 			as "archiveRootsWithState",
 		coalesce(
@@ -409,5 +210,5 @@ const checkpointCoverageSql = `
 			),
 			0
 		) as "discoveryCompleteArchiveRoots"
-	from proof_classified
+	from proof_summary
 `;
