@@ -20,7 +20,7 @@ export function ExplorerLocalReadModelWatermark({
 	return (
 		<div className="explorer-local-watermark">
 			<div>
-				<strong>Local ledger headers</strong>
+				<strong>Sparse parsed-header watermark</strong>
 				<span>
 					{formatLedger(headers.earliestParsedLedger)} to{' '}
 					{formatLedger(headers.latestParsedLedger)}
@@ -29,8 +29,8 @@ export function ExplorerLocalReadModelWatermark({
 			<div>
 				<strong>{headers.parsedLedgerCount.toLocaleString()}</strong>
 				<span>
-					ledger headers indexed from {headers.sourceArchiveCount} archive
-					sources
+					parsed headers observed across {headers.sourceArchiveCount} archive
+					roots
 				</span>
 			</div>
 			<div>

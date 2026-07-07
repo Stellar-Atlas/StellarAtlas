@@ -9,7 +9,7 @@ import type {
 import { formatDateTime, formatInteger } from '@format/formatters';
 import { StatusPill } from './status-ui';
 
-type ScanLogFilter = 'attention' | 'network' | 'all';
+type ScanLogFilter = 'attention' | 'all';
 
 export function RecentScanLogs({
 	scanLogs
@@ -26,7 +26,7 @@ export function RecentScanLogs({
 		<section className="panel status-scan-log-panel">
 			<div className="panel-heading">
 				<div>
-					<strong>Recent network scans</strong>
+					<strong>Network scans</strong>
 					<span>{formatDateTime(scanLogs.generatedAt)}</span>
 				</div>
 				<span className="status-muted">
@@ -65,18 +65,7 @@ function NetworkScanTable({
 	return (
 		<div className="responsive-table status-network-scan-table-wrap">
 			<table className="status-network-scan-table">
-				<thead>
-					<tr>
-						<th>Scan time</th>
-						<th>Status</th>
-						<th>Latest ledger</th>
-						<th>Processed ledgers</th>
-						<th>Archive sources observed</th>
-						<th>New checks queued</th>
-						<th>Already queued</th>
-						<th>Scheduler errors</th>
-					</tr>
-				</thead>
+				<NetworkScanTableHead />
 				<tbody>
 					{scans.map((scan) => (
 						<NetworkScanRow key={scan.time} scan={scan} />
@@ -125,9 +114,10 @@ function EmptyNetworkScanTable({
 	return (
 		<div className="responsive-table status-network-scan-table-wrap">
 			<table className="status-network-scan-table">
+				<NetworkScanTableHead />
 				<tbody>
 					<tr>
-						<td>
+						<td colSpan={NETWORK_SCAN_COLUMN_COUNT}>
 							<strong>{getEmptyNetworkLabel(filter)}</strong>
 							<small>{getEmptyNetworkDetail(filter)}</small>
 						</td>
@@ -135,6 +125,23 @@ function EmptyNetworkScanTable({
 				</tbody>
 			</table>
 		</div>
+	);
+}
+
+function NetworkScanTableHead(): React.JSX.Element {
+	return (
+		<thead>
+			<tr>
+				<th>Scan time</th>
+				<th>Status</th>
+				<th>Latest ledger</th>
+				<th>Processed ledgers</th>
+				<th>Archive roots observed</th>
+				<th>New checks queued</th>
+				<th>Already tracked checks</th>
+				<th>Scheduler errors</th>
+			</tr>
+		</thead>
 	);
 }
 
@@ -165,6 +172,7 @@ const scanLogFilters: readonly {
 	readonly value: ScanLogFilter;
 }[] = [
 	{ label: 'Attention', value: 'attention' },
-	{ label: 'Network', value: 'network' },
-	{ label: 'All', value: 'all' }
+	{ label: 'All scans', value: 'all' }
 ];
+
+const NETWORK_SCAN_COLUMN_COUNT = 8;

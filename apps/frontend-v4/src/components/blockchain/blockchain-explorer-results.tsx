@@ -106,7 +106,7 @@ export function RecentTransactionsView({
 		<div className="explorer-transaction-feed">
 			<ExplorerState
 				tone="neutral"
-				text={`${formatExplorerSource(result.transactions.source)} updated ${formatDate(result.transactions.generatedAt)}.`}
+				text={`${formatExplorerSource(result.transactions.source)} transaction sample updated ${formatDate(result.transactions.generatedAt)}.`}
 			/>
 			{result.transactions.truncated ? (
 				<ExplorerState
@@ -303,7 +303,8 @@ function TransactionCard({
 			<ResultItem label="Transaction" value={transaction.hash} />
 			<ResultItem label="Ledger" value={transaction.ledger} />
 			<ResultItem label="Created" value={formatDate(transaction.createdAt)} />
-			<ResultItem label="Source" value={transaction.sourceAccount} />
+			<ResultItem label="Source account" value={transaction.sourceAccount} />
+			<ResultItem label="Data source" value={formatExplorerSource(transaction.source)} />
 			<ResultItem
 				label="Operations"
 				value={transaction.operationCount.toString()}

@@ -1,8 +1,5 @@
 import { Suspense } from 'react';
-import {
-	fetchHistoryArchiveBucketCoveragesForObjects,
-	fetchHistoryArchiveObjectEvents
-} from '@api/archive-scans-client';
+import { fetchHistoryArchiveObjectEvents } from '@api/archive-scans-client';
 import {
 	fetchApiStatus,
 	fetchDataQualityStatus,
@@ -31,7 +28,6 @@ const archiveDetailFetchOptions = {
 	cache: 'no-store',
 	timeoutMs: 12000
 } as const;
-const maxBucketCoverageLookups = 8;
 type FetchResult<T> =
 	| {
 			readonly ok: true;
@@ -76,12 +72,6 @@ async function StatusRouteContent(): Promise<React.JSX.Element> {
 		archiveSummaryResult.value ?? buildArchiveSummaryFromQueue(archiveObjects);
 	const archiveEvidenceAvailable =
 		archiveSummaryResult.ok || archiveObjectsResult.ok;
-	const archiveBucketCoverages =
-		await fetchHistoryArchiveBucketCoveragesForObjects(
-			archiveObjects,
-			maxBucketCoverageLookups,
-			archiveDetailFetchOptions
-		).catch(() => []);
 
 	return (
 		<main className="shell">
@@ -93,7 +83,6 @@ async function StatusRouteContent(): Promise<React.JSX.Element> {
 			<StatusDashboard
 				api={api}
 				archiveEvents={archiveEventsResult.value}
-				archiveBucketCoverages={archiveBucketCoverages}
 				archiveEvidenceAvailable={archiveEvidenceAvailable}
 				archiveObjects={archiveObjects}
 				archiveObjectsAvailable={archiveObjectsResult.ok}

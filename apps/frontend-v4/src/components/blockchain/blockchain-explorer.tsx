@@ -175,9 +175,8 @@ export function BlockchainExplorer(): React.JSX.Element {
 					<div>
 						<strong>Search</strong>
 						<span>
-							Local ledger-header search is active. Transaction, account, asset,
-							and contract lookups use external fallback data until decoded
-							indexes exist.
+							Local parsed-header coverage is shown below. Explorer lookups use
+							external fallback data until decoded local indexes exist.
 						</span>
 					</div>
 				</div>
@@ -250,9 +249,9 @@ export function BlockchainExplorer(): React.JSX.Element {
 			<section className="explorer-grid">
 				<section className="explorer-panel">
 					<div className="panel-heading">
-						<div>
-							<strong>Operations</strong>
-							<span>Ledger, address, type, and date filters</span>
+					<div>
+						<strong>Operations</strong>
+							<span>External fallback, capped result window</span>
 						</div>
 					</div>
 					<form className="explorer-filter-form" onSubmit={submitOperations}>
@@ -328,7 +327,7 @@ export function BlockchainExplorer(): React.JSX.Element {
 					<div className="panel-heading">
 						<div>
 							<strong>Assets</strong>
-							<span>Asset code and issuer search</span>
+							<span>External fallback, capped result window</span>
 						</div>
 					</div>
 					<form className="explorer-filter-form" onSubmit={submitAssets}>
@@ -352,8 +351,8 @@ export function BlockchainExplorer(): React.JSX.Element {
 				<section className="explorer-panel">
 					<div className="panel-heading">
 						<div>
-							<strong>Contracts</strong>
-							<span>Contract lookup</span>
+							<strong>Contract index status</strong>
+							<span>RPC/index readiness only until contract indexing exists</span>
 						</div>
 					</div>
 					<form className="explorer-filter-form" onSubmit={submitContract}>
@@ -363,7 +362,7 @@ export function BlockchainExplorer(): React.JSX.Element {
 							value={contractId}
 						/>
 						<button disabled={loading === 'contract'} type="submit">
-							{loading === 'contract' ? 'Checking' : 'Check'}
+							{loading === 'contract' ? 'Checking' : 'Show status'}
 						</button>
 					</form>
 					<ContractView result={contractResult} />
@@ -392,7 +391,7 @@ function getTransactionHashFromSearch(
 
 function formatSearchTypeOption(type: PublicExplorerSearchType): string {
 	if (type === 'auto') return 'auto';
-	if (type === 'ledger') return 'ledger headers (local)';
+	if (type === 'ledger') return 'ledger (external fallback)';
 	return `${type} (external fallback)`;
 }
 

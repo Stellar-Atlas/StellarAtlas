@@ -45,6 +45,8 @@ type ArchiveHealthTab =
 
 const maxTableRows = 80;
 
+type ArchiveHealthTabCounts = Readonly<Record<ArchiveHealthTab, number>>;
+
 export function NodeArchiveHealth({
 	historyArchiveBucketCoverages,
 	historyArchiveEvents,
@@ -76,6 +78,14 @@ export function NodeArchiveHealth({
 				: [],
 		[historyArchiveObjects]
 	);
+	const tabCounts = useMemo(
+		() =>
+			countObjectsForTabs(
+				prioritizedObjects,
+				historyArchiveObjects?.generatedAt ?? ''
+			),
+		[historyArchiveObjects?.generatedAt, prioritizedObjects]
+	);
 	const objectsForCurrentTab = getObjectsForTab(
 		prioritizedObjects,
 		historyArchiveObjects?.generatedAt ?? '',
@@ -103,7 +113,11 @@ export function NodeArchiveHealth({
 				node={node}
 				summary={historyArchiveSummary}
 			/>
-			<ArchiveHealthTabs activeTab={tab} onSelect={setTab} />
+			<ArchiveHealthTabs
+				activeTab={tab}
+				counts={tabCounts}
+				onSelect={setTab}
+			/>
 			<div className="archive-health-tab-panel">
 				{tab === 'state' ? (
 					<ArchiveMetadata
@@ -162,7 +176,7 @@ function ArchiveHealthSummary({
 				<thead>
 					<tr>
 						<th>Archive source</th>
-						<th>Latest checkpoint pointer</th>
+						<th>History archive state</th>
 						<th>Archive-source files checked</th>
 						<th>Cross-file checks</th>
 						<th>Bucket references</th>
@@ -173,7 +187,10 @@ function ArchiveHealthSummary({
 				<tbody>
 					<tr>
 						<td>{formatArchiveRoot(node.historyUrl)}</td>
-						<td>{historyArchiveState?.status ?? 'not captured'}</td>
+						<td>
+							<strong>{formatArchiveStateSummary(historyArchiveState)}</strong>
+							<small>{formatArchiveStateDetail(historyArchiveState)}</small>
+						</td>
 						<td>
 							{summary
 								? formatCoverage(summary.verifiedObjects, summary.totalObjects)
@@ -199,9 +216,11 @@ function ArchiveHealthSummary({
 
 function ArchiveHealthTabs({
 	activeTab,
+	counts,
 	onSelect
 }: {
 	readonly activeTab: ArchiveHealthTab;
+	readonly counts: ArchiveHealthTabCounts;
 	readonly onSelect: (tab: ArchiveHealthTab) => void;
 }): React.JSX.Element {
 	return (
@@ -214,7 +233,7 @@ function ArchiveHealthTabs({
 					onClick={() => onSelect(tab.value)}
 					type="button"
 				>
-					{tab.label}
+					{formatTabLabel(tab.label, tab.value, counts)}
 				</button>
 			))}
 		</div>
@@ -302,11 +321,46 @@ function getObjectsForTab(
 	return objects.filter((object) => {
 		const status = getArchiveObjectDisplayStatus(object, generatedAt);
 		if (tab === 'attention') {
-			return status === 'failed' || status === 'delayed';
+			return (
+				status === 'failed' ||
+				status === 'delayed' ||
+				(object.objectType === 'history-archive-state' && status !== 'verified')
+			);
 		}
 		if (tab === 'active') return status === 'scanning' || status === 'delayed';
 		return status === tab;
 	});
+}
+
+function countObjectsForTabs(
+	objects: readonly PublicHistoryArchiveObject[],
+	generatedAt: string
+): ArchiveHealthTabCounts {
+	const counts: Record<ArchiveHealthTab, number> = {
+		attention: 0,
+		active: 0,
+		verified: 0,
+		pending: 0,
+		state: 0,
+		activity: 0,
+		raw: 0
+	};
+
+	for (const object of objects) {
+		const status = getArchiveObjectDisplayStatus(object, generatedAt);
+		if (
+			status === 'failed' ||
+			status === 'delayed' ||
+			(object.objectType === 'history-archive-state' && status !== 'verified')
+		) {
+			counts.attention += 1;
+		}
+		if (status === 'scanning' || status === 'delayed') counts.active += 1;
+		if (status === 'verified') counts.verified += 1;
+		if (status === 'pending') counts.pending += 1;
+	}
+
+	return counts;
 }
 
 function isObjectTableTab(tab: ArchiveHealthTab): boolean {
@@ -320,7 +374,7 @@ function isObjectTableTab(tab: ArchiveHealthTab): boolean {
 
 function getEmptyTabText(tab: ArchiveHealthTab): string {
 	if (tab === 'attention') {
-		return 'No failed or delayed archive checks are visible in this snapshot.';
+		return 'No failed, delayed, or missing root archive-state checks are visible in this snapshot.';
 	}
 	if (tab === 'active') return 'No archive object checks are active right now.';
 	if (tab === 'verified') return 'No passed archive object checks are in this sample.';
@@ -354,6 +408,36 @@ function formatArchiveRoot(value: string | null): string {
 	}
 }
 
+function formatArchiveStateSummary(
+	state: PublicHistoryArchiveState | null
+): string {
+	if (state === null) return 'not captured';
+	if (state.status !== 'available') return state.status;
+	const currentLedger = state.metadata?.stellarHistory.currentLedger;
+	if (typeof currentLedger !== 'number') return 'captured';
+	return 'checkpoint ' + formatInteger(currentLedger);
+}
+
+function formatArchiveStateDetail(
+	state: PublicHistoryArchiveState | null
+): string {
+	if (state === null) return 'scanner has not captured the root pointer yet';
+	if (state.failure !== null) {
+		return sanitizeStateFailure(state.failure.message);
+	}
+	const buckets = state.metadata?.stellarHistory.currentBuckets.length ?? null;
+	const observed = 'observed ' + formatDateTime(state.observedAt);
+	if (buckets === null) return `${state.source}; ${observed}`;
+	return `${formatInteger(buckets)} bucket levels; ${state.source}; ${observed}`;
+}
+
+function sanitizeStateFailure(value: string): string {
+	return value.replace(
+		/(?:file:\/\/)?\/(?:home|var|tmp|etc|opt|srv|mnt|root|usr)\/[^\s'"<>)]*/g,
+		'[internal path]'
+	);
+}
+
 function formatCheckpointProof(summary: PublicHistoryArchiveObjectSummary): string {
 	const checkpoints = summary.checkpoints;
 	if (checkpoints.categoryConsistentArchiveCheckpoints > 0) {
@@ -373,6 +457,15 @@ function formatCoverage(verified: number, total: number): string {
 	return `${formatInteger(verified)} / ${formatInteger(total)} (${formatPercent(
 		(verified / total) * 100
 	)})`;
+}
+
+function formatTabLabel(
+	label: string,
+	tab: ArchiveHealthTab,
+	counts: ArchiveHealthTabCounts
+): string {
+	if (!isObjectTableTab(tab)) return label;
+	return `${label} (${formatInteger(counts[tab])})`;
 }
 
 const archiveHealthTabs: readonly {

@@ -194,7 +194,7 @@ function formatEventStatusText(
 		return formatInteger(failedEvents) + ' failures';
 	}
 
-	return formatInteger(totalEvents) + ' events';
+	return totalEvents > 0 ? '0 recent failures' : 'no recent events';
 }
 
 function formatEventLedger(value: number | null): string {
