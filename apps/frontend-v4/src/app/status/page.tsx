@@ -23,9 +23,13 @@ import { StatusDashboard } from '@components/status/status-dashboard';
 export const revalidate = 0;
 export const dynamic = 'force-dynamic';
 const statusFetchOptions = { cache: 'no-store' } as const;
-const optionalArchiveFetchOptions = {
+const archiveSummaryFetchOptions = {
 	cache: 'no-store',
 	timeoutMs: 5000
+} as const;
+const archiveDetailFetchOptions = {
+	cache: 'no-store',
+	timeoutMs: 12000
 } as const;
 const maxBucketCoverageLookups = 8;
 
@@ -44,13 +48,13 @@ async function StatusRouteContent(): Promise<React.JSX.Element> {
 		fetchDataQualityStatus(statusFetchOptions),
 		fetchScanLogStatus(statusFetchOptions),
 		fetchWorkerStatus(statusFetchOptions),
-		fetchHistoryArchiveObjectEvents(100, optionalArchiveFetchOptions).catch(
+		fetchHistoryArchiveObjectEvents(100, archiveDetailFetchOptions).catch(
 			() => buildEmptyArchiveEvents()
 		),
-		fetchHistoryArchiveObjectSummary(optionalArchiveFetchOptions).catch(
+		fetchHistoryArchiveObjectSummary(archiveSummaryFetchOptions).catch(
 			() => null
 		),
-		fetchHistoryArchiveObjects(100, optionalArchiveFetchOptions).catch(() =>
+		fetchHistoryArchiveObjects(100, archiveDetailFetchOptions).catch(() =>
 			buildEmptyArchiveQueue()
 		),
 		fetchFrontendStatus(statusFetchOptions)
@@ -61,7 +65,7 @@ async function StatusRouteContent(): Promise<React.JSX.Element> {
 		await fetchHistoryArchiveBucketCoveragesForObjects(
 			archiveObjects,
 			maxBucketCoverageLookups,
-			optionalArchiveFetchOptions
+			archiveDetailFetchOptions
 		).catch(() => []);
 
 	return (
