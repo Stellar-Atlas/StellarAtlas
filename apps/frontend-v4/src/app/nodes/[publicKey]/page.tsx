@@ -31,7 +31,10 @@ interface NodeDetailPageProps {
 
 export const dynamicParams = true;
 export const revalidate = 10;
-const liveArchiveFetchOptions = { cache: 'no-store' } as const;
+const liveArchiveFetchOptions = {
+	cache: 'no-store',
+	timeoutMs: 12000
+} as const;
 const maxBucketCoverageLookups = 8;
 
 async function NodeDetailRouteContent({
@@ -67,12 +70,14 @@ async function NodeDetailRouteContent({
 		historyArchiveObjectEvidence
 	] = node?.historyUrl
 		? await Promise.all([
-				fetchHistoryArchiveScan(node.historyUrl, liveArchiveFetchOptions),
+				fetchHistoryArchiveScan(node.historyUrl, liveArchiveFetchOptions).catch(
+					() => null
+				),
 				fetchHistoryArchiveObjectEvidenceForArchive(
 					node.historyUrl,
 					{ eventLimit: 250, objectLimit: 250 },
 					liveArchiveFetchOptions
-				)
+				).catch(() => null)
 			])
 		: [null, null];
 	const organization = node
@@ -83,7 +88,7 @@ async function NodeDetailRouteContent({
 				historyArchiveObjectEvidence.objects,
 				maxBucketCoverageLookups,
 				liveArchiveFetchOptions
-			)
+			).catch(() => [])
 		: [];
 
 	return (
