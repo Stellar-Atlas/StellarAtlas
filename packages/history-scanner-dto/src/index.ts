@@ -9,6 +9,12 @@ export {
 	type ParsedLedgerHeaderDTO
 } from './ParsedLedgerHeaderDTO.js';
 export {
+	ParsedTransactionEnvelopeBatchDTO,
+	type ParsedTransactionEnvelopeDTO,
+	ParsedTransactionResultBatchDTO,
+	type ParsedTransactionResultDTO
+} from './ParsedTransactionDTO.js';
+export {
 	isScanEvidenceDTO,
 	scanEvidenceKinds,
 	scanEvidenceStatuses,
