@@ -173,6 +173,10 @@ describe('TypeOrmParsedLedgerHeaderRepository', () => {
 			sourceArchiveCount: 1
 		});
 		expect(repository.query).toHaveBeenCalledTimes(2);
+		expect(repository.query).toHaveBeenNthCalledWith(
+			2,
+			expect.stringContaining('from parsed_ledger_header')
+		);
 		expect(repository.find).toHaveBeenNthCalledWith(1, {
 			order: { ledgerSequence: 'ASC' },
 			select: { ledgerSequence: true },

@@ -93,8 +93,8 @@ export class TypeOrmParsedLedgerHeaderRepository implements ParsedLedgerHeaderRe
 				where class.oid = 'parsed_ledger_header'::regclass
 			`) as Promise<ParsedLedgerHeaderWatermarkRow[]>,
 			this.repository.query(`
-				select count(distinct url) as "sourceArchiveCount"
-				from history_archive_scan_v2
+				select count(distinct "lastSourceArchiveUrl") as "sourceArchiveCount"
+				from parsed_ledger_header
 			`) as Promise<ParsedLedgerHeaderWatermarkRow[]>,
 			this.repository
 				.find({
