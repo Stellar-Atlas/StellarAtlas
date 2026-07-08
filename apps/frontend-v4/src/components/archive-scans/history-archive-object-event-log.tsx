@@ -21,7 +21,7 @@ interface HistoryArchiveObjectEventLogProps {
 	readonly title?: string;
 }
 
-const MAX_ARCHIVE_EVENT_ROWS = 80;
+const ARCHIVE_EVENT_PAGE_SIZE = 25;
 const EVENT_FILTERS = [
 	'all',
 	'download',
@@ -39,16 +39,26 @@ export function HistoryArchiveObjectEventLog({
 	title = 'Recent archive file activity'
 }: HistoryArchiveObjectEventLogProps): React.JSX.Element {
 	const [filter, setFilter] = useState<EventFilter>('all');
+	const [page, setPage] = useState(0);
 	const failedEvents = events.events.filter(
 		(event) => event.eventType === 'failed'
 	);
 	const filteredEvents = useMemo(
-		() => filterEvents(events.events, filter).slice(0, MAX_ARCHIVE_EVENT_ROWS),
+		() => filterEvents(events.events, filter),
 		[events.events, filter]
 	);
 	const filterCounts = useMemo(
 		() => countEventFilters(events.events),
 		[events.events]
+	);
+	const pageCount = Math.max(
+		1,
+		Math.ceil(filteredEvents.length / ARCHIVE_EVENT_PAGE_SIZE)
+	);
+	const currentPage = Math.min(page, pageCount - 1);
+	const pageEvents = filteredEvents.slice(
+		currentPage * ARCHIVE_EVENT_PAGE_SIZE,
+		(currentPage + 1) * ARCHIVE_EVENT_PAGE_SIZE
 	);
 	const content = (
 		<>
@@ -68,12 +78,18 @@ export function HistoryArchiveObjectEventLog({
 			<EventFilterTabs
 				activeFilter={filter}
 				counts={filterCounts}
-				onChange={setFilter}
+				onChange={(nextFilter) => {
+					setFilter(nextFilter);
+					setPage(0);
+				}}
 			/>
 			<EventHistoryDetails
 				activeFilter={filter}
-				events={filteredEvents}
-				totalEvents={events.events.length}
+				events={pageEvents}
+				onPageChange={setPage}
+				page={currentPage}
+				pageCount={pageCount}
+				totalEvents={filteredEvents.length}
 			/>
 		</>
 	);
@@ -112,10 +128,16 @@ function EventFailureTable({
 function EventHistoryDetails({
 	activeFilter,
 	events,
+	onPageChange,
+	page,
+	pageCount,
 	totalEvents
 }: {
 	readonly activeFilter: EventFilter;
 	readonly events: readonly ObjectEvents['events'][number][];
+	readonly onPageChange: (page: number) => void;
+	readonly page: number;
+	readonly pageCount: number;
 	readonly totalEvents: number;
 }): React.JSX.Element {
 	if (totalEvents === 0) {
@@ -129,11 +151,58 @@ function EventHistoryDetails({
 			<summary>
 				<span>{formatFilterTitle(activeFilter)} activity</span>
 				<span className="muted-inline">
-					Showing {formatInteger(events.length)} of {formatInteger(totalEvents)}
+					{formatInteger(totalEvents)} events in the recent window
 				</span>
 			</summary>
 			<EventTable events={events} />
+			<EventPagination
+				onPageChange={onPageChange}
+				page={page}
+				pageCount={pageCount}
+				pageSize={ARCHIVE_EVENT_PAGE_SIZE}
+				totalEvents={totalEvents}
+			/>
 		</details>
+	);
+}
+
+function EventPagination({
+	onPageChange,
+	page,
+	pageCount,
+	pageSize,
+	totalEvents
+}: {
+	readonly onPageChange: (page: number) => void;
+	readonly page: number;
+	readonly pageCount: number;
+	readonly pageSize: number;
+	readonly totalEvents: number;
+}): React.JSX.Element {
+	const firstRow = totalEvents === 0 ? 0 : page * pageSize + 1;
+	const lastRow = Math.min(totalEvents, (page + 1) * pageSize);
+
+	return (
+		<div className="table-pagination">
+			<button
+				disabled={page === 0}
+				onClick={() => onPageChange(page - 1)}
+				type="button"
+			>
+				Previous
+			</button>
+			<span>
+				{formatInteger(firstRow)}-{formatInteger(lastRow)} of{' '}
+				{formatInteger(totalEvents)}
+			</span>
+			<button
+				disabled={page >= pageCount - 1}
+				onClick={() => onPageChange(page + 1)}
+				type="button"
+			>
+				Next
+			</button>
+		</div>
 	);
 }
 
@@ -154,8 +223,9 @@ function EventFilterTabs({
 					key={filter}
 					onClick={() => onChange(filter)}
 					type="button"
+					title={`${formatInteger(counts[filter])} recent ${formatFilterTitle(filter).toLowerCase()} events`}
 				>
-					{formatFilterTitle(filter)} {formatInteger(counts[filter])}
+					{formatFilterTitle(filter)}
 				</button>
 			))}
 		</div>
@@ -180,13 +250,27 @@ function EventTable({
 					</tr>
 				</thead>
 				<tbody>
-					{events.map((event) => (
-						<EventRow event={event} key={event.remoteId} />
+					{events.map((event, index) => (
+						<EventRow event={event} key={formatEventKey(event, index)} />
 					))}
 				</tbody>
 			</table>
 		</div>
 	);
+}
+
+function formatEventKey(
+	event: ObjectEvents['events'][number],
+	index: number
+): string {
+	return [
+		event.remoteId,
+		event.objectRemoteId,
+		event.eventType,
+		event.workerStage ?? 'none',
+		event.createdAt,
+		index.toString()
+	].join(':');
 }
 
 function EventRow({

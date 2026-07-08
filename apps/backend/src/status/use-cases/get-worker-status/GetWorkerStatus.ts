@@ -8,10 +8,13 @@ import { mapUnknownToError } from '@core/utilities/mapUnknownToError.js';
 import { getWorstStatus, type StatusLevel } from '../../domain/StatusTypes.js';
 
 const archiveObjectWorkerStaleAgeMs = 2 * 60 * 1000;
+const defaultConfiguredObjectWorkers = 24;
+const maxConfiguredObjectWorkers = 24;
 
 export interface ArchiveWorkerStatusDTO {
 	readonly status: StatusLevel;
 	readonly activeWorkers: number;
+	readonly configuredWorkerProcesses: number;
 	readonly staleWorkers: number;
 	readonly totalTakenJobs: number;
 	readonly staleJobAgeMs: number;
@@ -81,6 +84,9 @@ export class GetWorkerStatus {
 			status:
 				value.staleObjects > 0 || stalledWithBacklog ? 'degraded' : 'ok',
 			activeWorkers: value.activeObjects,
+			configuredWorkerProcesses: readConfiguredObjectWorkerProcesses(
+				process.env
+			),
 			staleWorkers: value.staleObjects,
 			totalTakenJobs: value.totalScanningObjects,
 			staleJobAgeMs: archiveObjectWorkerStaleAgeMs
@@ -108,4 +114,22 @@ export class GetWorkerStatus {
 			heartbeatFreshnessMs: value.heartbeatFreshnessMs
 		};
 	}
+}
+
+function readConfiguredObjectWorkerProcesses(env: NodeJS.ProcessEnv): number {
+	const rawValue = env.HISTORY_OBJECT_WORKER_PROCESSES;
+	if (rawValue === undefined || rawValue.trim() === '') {
+		return defaultConfiguredObjectWorkers;
+	}
+
+	const parsed = Number(rawValue);
+	if (
+		!Number.isInteger(parsed) ||
+		parsed < 1 ||
+		parsed > maxConfiguredObjectWorkers
+	) {
+		return defaultConfiguredObjectWorkers;
+	}
+
+	return parsed;
 }

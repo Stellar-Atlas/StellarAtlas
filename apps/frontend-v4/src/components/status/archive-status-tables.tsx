@@ -1,5 +1,4 @@
 import type {
-	PublicHistoryArchiveObjectQueue,
 	PublicHistoryArchiveObjectSummary,
 	PublicHistoryArchiveObjectTypeSummary,
 	PublicStatusLevel
@@ -13,26 +12,18 @@ import {
 import { StatusPill } from './status-ui';
 
 interface StatusArchiveEvidenceTablesProps {
-	readonly archiveObjects: PublicHistoryArchiveObjectQueue;
-	readonly archiveObjectsAvailable: boolean;
 	readonly summary: PublicHistoryArchiveObjectSummary;
 }
 
 type ArchiveSourceSummary = PublicHistoryArchiveObjectSummary['sources'][number];
 
 export function StatusArchiveEvidenceTables({
-	archiveObjects,
-	archiveObjectsAvailable,
 	summary
 }: StatusArchiveEvidenceTablesProps): React.JSX.Element {
 	return (
 		<>
 			<ArchiveRootPanel summary={summary} />
-			<ArchiveObjectQueuePanel
-				archiveObjects={archiveObjects}
-				archiveObjectsAvailable={archiveObjectsAvailable}
-				summary={summary}
-			/>
+			<ArchiveObjectQueuePanel summary={summary} />
 			<CheckpointProofPanel summary={summary} />
 		</>
 	);
@@ -120,12 +111,8 @@ function ArchiveSourceRow({
 }
 
 function ArchiveObjectQueuePanel({
-	archiveObjects,
-	archiveObjectsAvailable,
 	summary
 }: {
-	readonly archiveObjects: PublicHistoryArchiveObjectQueue;
-	readonly archiveObjectsAvailable: boolean;
 	readonly summary: PublicHistoryArchiveObjectSummary;
 }): React.JSX.Element {
 	return (
@@ -155,7 +142,6 @@ function ArchiveObjectQueuePanel({
 							<th>Checking now</th>
 							<th>Verified evidence</th>
 							<th>Remote failures</th>
-							<th>Recent sample</th>
 						</tr>
 					</thead>
 					<tbody>
@@ -164,11 +150,6 @@ function ArchiveObjectQueuePanel({
 							<td>{formatInteger(summary.activeObjects)}</td>
 							<td>{formatInteger(summary.verifiedObjects)}</td>
 							<td>{formatInteger(summary.failedObjects)}</td>
-							<td>
-								{archiveObjectsAvailable
-									? formatInteger(archiveObjects.objects.length)
-									: 'unavailable'}
-							</td>
 						</tr>
 					</tbody>
 				</table>

@@ -73,6 +73,7 @@ import { GetScannerMetrics } from '@history-scan-coordinator/use-cases/GetScanne
 import { RegisterCommunityScanner } from '@history-scan-coordinator/use-cases/RegisterCommunityScanner.js';
 import { SendScannerHeartbeat } from '@history-scan-coordinator/use-cases/SendScannerHeartbeat.js';
 import { statusRouter } from '@status/infrastructure/http/StatusRouter.js';
+import { attachStatusLiveWebSocket } from '@status/infrastructure/http/StatusLiveWebSocket.js';
 import { fullHistoryRouter } from '@status/infrastructure/http/FullHistoryRouter.js';
 import { GetArchiveQueueStatus } from '@status/use-cases/get-archive-queue-status/GetArchiveQueueStatus.js';
 import { GetApiStatus } from '@status/use-cases/get-api-status/GetApiStatus.js';
@@ -413,6 +414,20 @@ const listen = async () => {
 		getNetwork: kernel.container.get(GetNetwork),
 		getScpStatements: kernel.container.get(GetScpStatements),
 		horizonUrl: config.horizonUrl.value,
+		logger: kernel.container.get<Logger>('Logger')
+	});
+	attachStatusLiveWebSocket(server, {
+		getApiStatus: kernel.container.get(GetApiStatus),
+		getDataQualityStatus: kernel.container.get(GetDataQualityStatus),
+		getFrontendStatus: kernel.container.get(GetFrontendStatus),
+		getHistoryArchiveObjectEvents: kernel.container.get(
+			GetHistoryArchiveObjectEvents
+		),
+		getHistoryArchiveObjectSummary: kernel.container.get(
+			GetHistoryArchiveObjectSummary
+		),
+		getScanLogStatus: kernel.container.get(GetScanLogStatus),
+		getWorkerStatus: kernel.container.get(GetWorkerStatus),
 		logger: kernel.container.get<Logger>('Logger')
 	});
 

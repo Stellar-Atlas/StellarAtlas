@@ -1,3 +1,5 @@
+'use client';
+
 import type {
 	PublicApiStatus,
 	PublicHistoryArchiveObjectEvents,
@@ -20,7 +22,7 @@ import { StatusArchiveEvidenceTables } from './archive-status-tables';
 import { RecentScanLogs } from './recent-scan-logs';
 import { StatusPill, StatusRow, statusLabel, statusTone } from './status-ui';
 
-interface StatusDashboardProps {
+export interface StatusDashboardProps {
 	readonly api: PublicApiStatus;
 	readonly archiveEvidenceAvailable: boolean;
 	readonly archiveEvents: PublicHistoryArchiveObjectEvents;
@@ -182,17 +184,11 @@ export function StatusDashboard({
 
 				{archiveEvidenceAvailable ? (
 					<StatusArchiveEvidenceTables
-						archiveObjects={archiveObjects}
-						archiveObjectsAvailable={archiveObjectsAvailable}
 						summary={archiveSummary}
 					/>
 				) : (
 					<ArchiveEvidenceUnavailablePanel />
 				)}
-
-				{archiveEvidenceAvailable && !archiveObjectsAvailable ? (
-					<ArchiveQueueUnavailablePanel />
-				) : null}
 
 				<HistoryArchiveObjectEventLog
 					events={archiveEvents}
@@ -221,27 +217,6 @@ function ArchiveEvidenceUnavailablePanel(): React.JSX.Element {
 			<p className="archive-good-state">
 				No archive verification claim is shown because the status page could not
 				load the archive evidence snapshot.
-			</p>
-		</section>
-	);
-}
-
-function ArchiveQueueUnavailablePanel(): React.JSX.Element {
-	return (
-		<section className="panel detail-panel archive-panel">
-			<div className="panel-heading">
-				<div>
-					<h2>Archive evidence sample</h2>
-					<span className="muted-inline">
-						The aggregate archive summary loaded, but the queue sample did not
-						respond before the status page timeout.
-					</span>
-				</div>
-				<StatusPill status="degraded" text="Sample unavailable" />
-			</div>
-			<p className="archive-good-state">
-				Aggregate counts above still come from the archive evidence summary.
-				Individual check rows are hidden until the sample endpoint responds.
 			</p>
 		</section>
 	);
@@ -350,21 +325,14 @@ function formatWorkerHeadline(
 	workers: PublicWorkerStatus
 ): string {
 	const objectWorkers = workers.archiveWorkers;
-	if (
-		objectWorkers.status === 'degraded' &&
-		objectWorkers.activeWorkers === 0 &&
-		summary.pendingObjects > 0
-	) {
-		return 'No active workers';
-	}
-	if (objectWorkers.activeWorkers > 0) {
-		return `${formatInteger(objectWorkers.activeWorkers)} active checks`;
-	}
 	if (objectWorkers.staleWorkers > 0 || activity.staleActiveObjects > 0) {
 		return `${formatInteger(Math.max(objectWorkers.staleWorkers, activity.staleActiveObjects))} stale checks`;
 	}
-	if (summary.pendingObjects > 0) return 'Waiting for claims';
-	return 'Idle';
+	if (objectWorkers.configuredWorkerProcesses > 0) {
+		return `${formatInteger(objectWorkers.configuredWorkerProcesses)} configured workers`;
+	}
+	if (summary.pendingObjects > 0) return 'Waiting for scanner';
+	return 'Scanner idle';
 }
 
 function formatArchiveWorkerDetail(
@@ -380,7 +348,11 @@ function formatArchiveWorkerDetail(
 		staleChecks > 0
 			? `; ${formatInteger(staleChecks)} stale check${staleChecks === 1 ? '' : 's'} being reclaimed`
 			: '';
-	return `${formatInteger(objectWorkers.activeWorkers)} active checks${staleText}`;
+	const activeText =
+		objectWorkers.activeWorkers > 0
+			? `${formatInteger(objectWorkers.activeWorkers)} active object check${objectWorkers.activeWorkers === 1 ? '' : 's'}`
+			: 'no active object checks at this instant';
+	return `${formatInteger(objectWorkers.configuredWorkerProcesses)} configured worker processes; ${activeText}${staleText}`;
 }
 
 function getArchiveWorkerStatus(
@@ -391,11 +363,14 @@ function getArchiveWorkerStatus(
 ): PublicStatusLevel {
 	if (!archiveEvidenceAvailable) return 'unavailable';
 	if (workers.archiveWorkers.activeWorkers > 0) return 'ok';
-	if (summary.pendingObjects > 0 && workers.archiveWorkers.activeWorkers === 0) {
-		return 'degraded';
-	}
 	if (workers.archiveWorkers.status === 'degraded') return 'degraded';
 	if (activity.staleActiveObjects > 0) return 'degraded';
+	if (
+		summary.pendingObjects > 0 &&
+		workers.archiveWorkers.configuredWorkerProcesses === 0
+	) {
+		return 'degraded';
+	}
 	return 'ok';
 }
 

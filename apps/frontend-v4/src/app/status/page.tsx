@@ -15,7 +15,7 @@ import type {
 } from '@api/types';
 import { PageHeading } from '@components/layout/page-heading';
 import { RouteLoadingPanel } from '@components/layout/route-fallbacks';
-import { StatusDashboard } from '@components/status/status-dashboard';
+import { StatusDashboardLive } from '@components/status/status-dashboard-live';
 
 export const revalidate = 0;
 export const dynamic = 'force-dynamic';
@@ -80,7 +80,7 @@ async function StatusRouteContent(): Promise<React.JSX.Element> {
 				eyebrow="Operations"
 				title="Status"
 			/>
-			<StatusDashboard
+			<StatusDashboardLive
 				api={api}
 				archiveEvents={archiveEventsResult.value}
 				archiveEvidenceAvailable={archiveEvidenceAvailable}

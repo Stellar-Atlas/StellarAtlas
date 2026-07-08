@@ -118,6 +118,7 @@ describe('GetStatus', () => {
 				archiveWorkers: {
 					status: 'ok',
 					activeWorkers: 0,
+					configuredWorkerProcesses: 24,
 					staleWorkers: 0,
 					totalTakenJobs: 0,
 					staleJobAgeMs: 1800000

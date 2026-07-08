@@ -426,6 +426,7 @@ export interface PublicApiStatus {
 export interface PublicWorkerStatus {
 	readonly archiveWorkers: {
 		readonly activeWorkers: number;
+		readonly configuredWorkerProcesses: number;
 		readonly staleJobAgeMs: number;
 		readonly staleWorkers: number;
 		readonly status: PublicStatusLevel;

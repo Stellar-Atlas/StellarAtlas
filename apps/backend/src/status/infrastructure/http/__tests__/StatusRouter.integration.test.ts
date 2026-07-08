@@ -149,6 +149,7 @@ describe('StatusRouter.integration', () => {
 					archiveWorkers: {
 						status: 'ok',
 						activeWorkers: 0,
+						configuredWorkerProcesses: 24,
 						staleWorkers: 0,
 						totalTakenJobs: 0,
 						staleJobAgeMs: 1800000
@@ -419,6 +420,7 @@ describe('StatusRouter.integration', () => {
 				archiveWorkers: {
 					status: 'ok',
 					activeWorkers: 1,
+					configuredWorkerProcesses: 24,
 					staleWorkers: 0,
 					totalTakenJobs: 1,
 					staleJobAgeMs: 1800000
