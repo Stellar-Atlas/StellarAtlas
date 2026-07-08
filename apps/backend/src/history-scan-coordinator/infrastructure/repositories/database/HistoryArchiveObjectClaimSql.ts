@@ -53,8 +53,9 @@ export const historyArchiveObjectClaimSql = `
 		order by
 			case
 				when candidate."objectType" = 'history-archive-state' then 0
+				when candidate."objectType" = 'bucket' then 1
 				when candidate."objectType" = 'checkpoint-state' then 2
-				else 1
+				else 3
 			end asc,
 			coalesce(candidate."checkpointLedger", -1) desc,
 			candidate."objectOrder" asc,
@@ -94,8 +95,9 @@ export const historyArchiveObjectClaimSql = `
 		order by
 			case
 				when candidate."objectType" = 'history-archive-state' then 0
+				when candidate."objectType" = 'bucket' then 1
 				when candidate."objectType" = 'checkpoint-state' then 2
-				else 1
+				else 3
 			end asc,
 			coalesce(candidate."checkpointLedger", -1) desc,
 			candidate."objectOrder" asc,
@@ -125,8 +127,9 @@ export const historyArchiveObjectClaimSql = `
 		order by
 			case
 				when candidate."objectType" = 'history-archive-state' then 0
+				when candidate."objectType" = 'bucket' then 1
 				when candidate."objectType" = 'checkpoint-state' then 2
-				else 1
+				else 3
 			end asc,
 			coalesce(candidate."checkpointLedger", -1) desc,
 			candidate."objectOrder" asc,

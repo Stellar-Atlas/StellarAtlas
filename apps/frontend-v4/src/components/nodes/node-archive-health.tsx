@@ -347,7 +347,7 @@ function getEmptyTabText(
 ): string {
 	if (tab === 'attention') {
 		if (summary !== null && !checkpointProofIsComplete(summary)) {
-			return 'No failed archive files are visible in this snapshot. Checkpoint proof is still being evaluated.';
+			return getCheckpointProofWaitText(summary);
 		}
 		return 'No failed or delayed archive file checks are visible in this snapshot.';
 	}
@@ -374,6 +374,9 @@ function getArchivePanelStatusText(
 		return `${formatInteger(summary.failedObjects)} failures`;
 	}
 	if (!checkpointProofIsComplete(summary)) {
+		if (getPendingBucketCheckCount(summary) > 0) {
+			return 'waiting for bucket checks';
+		}
 		return 'checkpoint proof running';
 	}
 	return `${formatInteger(summary.verifiedObjects)} archive files verified`;
@@ -446,10 +449,39 @@ function formatCheckpointProof(
 			checkpoints.expectedArchiveCheckpoints
 		);
 	}
+	const pendingBuckets = getPendingBucketCheckCount(summary);
+	if (
+		checkpoints.categoryConsistencyNotEvaluatedCheckpoints > 0 &&
+		pendingBuckets > 0
+	) {
+		return `${formatInteger(
+			checkpoints.categoryConsistencyNotEvaluatedCheckpoints
+		)} waiting for ${formatInteger(pendingBuckets)} bucket copies`;
+	}
 	if (checkpoints.categoryConsistencyNotEvaluatedCheckpoints > 0) {
-		return `${formatInteger(checkpoints.categoryConsistencyNotEvaluatedCheckpoints)} not checked yet`;
+		return `${formatInteger(checkpoints.categoryConsistencyNotEvaluatedCheckpoints)} waiting for proof facts`;
 	}
 	return 'not checked yet';
+}
+
+function getCheckpointProofWaitText(
+	summary: PublicHistoryArchiveObjectSummary
+): string {
+	const pendingBuckets = getPendingBucketCheckCount(summary);
+	if (
+		summary.checkpoints.categoryConsistencyNotEvaluatedCheckpoints > 0 &&
+		pendingBuckets > 0
+	) {
+		return `No failed archive files are visible in this snapshot. Checkpoint proof is waiting on ${formatInteger(pendingBuckets)} bucket copy checks.`;
+	}
+
+	return 'No failed archive files are visible in this snapshot. Checkpoint proof is still collecting cross-file evidence.';
+}
+
+function getPendingBucketCheckCount(
+	summary: PublicHistoryArchiveObjectSummary
+): number {
+	return summary.buckets.pendingBucketObjects + summary.buckets.activeBucketObjects;
 }
 
 function formatCoverage(verified: number, total: number): string {
