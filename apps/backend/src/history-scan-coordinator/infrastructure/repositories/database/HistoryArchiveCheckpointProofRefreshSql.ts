@@ -42,6 +42,7 @@ export const historyArchiveCheckpointProofRefreshSql = `
 			and "objectType" = 'checkpoint-state'
 			and status = 'verified'
 			and "checkpointLedger" is not null
+			and ($2::integer is null or "checkpointLedger" = $2::integer)
 	),
 	expected_bucket_hashes as (
 		select distinct

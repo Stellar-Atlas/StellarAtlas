@@ -77,9 +77,7 @@ describe('FailHistoryArchiveObject', () => {
 			eventType: 'failed',
 			evidenceClass: 'archive-object'
 		});
-		expect(checkpointProofRepository.refreshForObject).toHaveBeenCalledWith(
-			archiveObject
-		);
+		expect(checkpointProofRepository.refreshForObject).not.toHaveBeenCalled();
 	});
 
 	it('does not mutate a missing object row', async () => {

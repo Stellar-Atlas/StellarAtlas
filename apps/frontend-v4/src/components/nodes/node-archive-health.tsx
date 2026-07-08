@@ -347,7 +347,7 @@ function getEmptyTabText(
 ): string {
 	if (tab === 'attention') {
 		if (summary !== null && !checkpointProofIsComplete(summary)) {
-			return 'No failed archive files are visible in this snapshot, but cross-file checkpoint proof is still incomplete.';
+			return 'No failed archive files are visible in this snapshot. Checkpoint proof is still being evaluated.';
 		}
 		return 'No failed or delayed archive file checks are visible in this snapshot.';
 	}
@@ -363,7 +363,7 @@ function getArchivePanelStatus(
 ): 'degraded' | 'ok' {
 	if (!summary) return 'degraded';
 	if (summary.failedObjects > 0) return 'degraded';
-	return checkpointProofIsComplete(summary) ? 'ok' : 'degraded';
+	return 'ok';
 }
 
 function getArchivePanelStatusText(
@@ -374,7 +374,7 @@ function getArchivePanelStatusText(
 		return `${formatInteger(summary.failedObjects)} failures`;
 	}
 	if (!checkpointProofIsComplete(summary)) {
-		return 'checkpoint proof pending';
+		return 'checkpoint proof running';
 	}
 	return `${formatInteger(summary.verifiedObjects)} archive files verified`;
 }

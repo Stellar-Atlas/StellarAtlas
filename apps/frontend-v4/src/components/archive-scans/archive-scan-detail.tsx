@@ -44,7 +44,7 @@ export function ArchiveScanDetail({
 		<section className="detail-grid">
 			<HistoryArchiveObjectCoverage
 				summary={summary}
-				title="Archive file checks"
+				title="Archive evidence checks"
 			/>
 			<article className="panel detail-panel archive-panel">
 				<div className="panel-heading">

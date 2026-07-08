@@ -1,3 +1,6 @@
+'use client';
+
+import { useMemo, useState } from 'react';
 import type {
 	PublicHistoryArchiveObjectEvents as ObjectEvents,
 	PublicStatusLevel
@@ -19,16 +22,34 @@ interface HistoryArchiveObjectEventLogProps {
 }
 
 const MAX_ARCHIVE_EVENT_ROWS = 80;
+const EVENT_FILTERS = [
+	'all',
+	'download',
+	'check',
+	'parse',
+	'verified',
+	'failed'
+] as const;
+
+type EventFilter = (typeof EVENT_FILTERS)[number];
 
 export function HistoryArchiveObjectEventLog({
 	events,
 	framed = true,
 	title = 'Recent archive file activity'
 }: HistoryArchiveObjectEventLogProps): React.JSX.Element {
+	const [filter, setFilter] = useState<EventFilter>('all');
 	const failedEvents = events.events.filter(
 		(event) => event.eventType === 'failed'
 	);
-	const recentEvents = events.events.slice(0, MAX_ARCHIVE_EVENT_ROWS);
+	const filteredEvents = useMemo(
+		() => filterEvents(events.events, filter).slice(0, MAX_ARCHIVE_EVENT_ROWS),
+		[events.events, filter]
+	);
+	const filterCounts = useMemo(
+		() => countEventFilters(events.events),
+		[events.events]
+	);
 	const content = (
 		<>
 			<div className="panel-heading">
@@ -44,8 +65,14 @@ export function HistoryArchiveObjectEventLog({
 				/>
 			</div>
 			<EventFailureTable events={failedEvents} />
+			<EventFilterTabs
+				activeFilter={filter}
+				counts={filterCounts}
+				onChange={setFilter}
+			/>
 			<EventHistoryDetails
-				events={recentEvents}
+				activeFilter={filter}
+				events={filteredEvents}
 				totalEvents={events.events.length}
 			/>
 		</>
@@ -83,9 +110,11 @@ function EventFailureTable({
 }
 
 function EventHistoryDetails({
+	activeFilter,
 	events,
 	totalEvents
 }: {
+	readonly activeFilter: EventFilter;
 	readonly events: readonly ObjectEvents['events'][number][];
 	readonly totalEvents: number;
 }): React.JSX.Element {
@@ -98,13 +127,38 @@ function EventHistoryDetails({
 	return (
 		<details className="metadata-document archive-object-details">
 			<summary>
-				<span>Recent archive file activity</span>
+				<span>{formatFilterTitle(activeFilter)} activity</span>
 				<span className="muted-inline">
 					Showing {formatInteger(events.length)} of {formatInteger(totalEvents)}
 				</span>
 			</summary>
 			<EventTable events={events} />
 		</details>
+	);
+}
+
+function EventFilterTabs({
+	activeFilter,
+	counts,
+	onChange
+}: {
+	readonly activeFilter: EventFilter;
+	readonly counts: Readonly<Record<EventFilter, number>>;
+	readonly onChange: (filter: EventFilter) => void;
+}): React.JSX.Element {
+	return (
+		<div className="segmented" aria-label="Archive activity filter">
+			{EVENT_FILTERS.map((filter) => (
+				<button
+					className={filter === activeFilter ? 'active' : undefined}
+					key={filter}
+					onClick={() => onChange(filter)}
+					type="button"
+				>
+					{formatFilterTitle(filter)} {formatInteger(counts[filter])}
+				</button>
+			))}
+		</div>
 	);
 }
 
@@ -202,6 +256,56 @@ function formatEventStatusText(
 	}
 
 	return totalEvents > 0 ? '0 recent failures' : 'no recent events';
+}
+
+function filterEvents(
+	events: readonly ObjectEvents['events'][number][],
+	filter: EventFilter
+): readonly ObjectEvents['events'][number][] {
+	if (filter === 'all') return events;
+	return events.filter((event) => eventMatchesFilter(event, filter));
+}
+
+function countEventFilters(
+	events: readonly ObjectEvents['events'][number][]
+): Readonly<Record<EventFilter, number>> {
+	return {
+		all: events.length,
+		check: events.filter((event) => eventMatchesFilter(event, 'check')).length,
+		download: events.filter((event) => eventMatchesFilter(event, 'download'))
+			.length,
+		failed: events.filter((event) => eventMatchesFilter(event, 'failed')).length,
+		parse: events.filter((event) => eventMatchesFilter(event, 'parse')).length,
+		verified: events.filter((event) => eventMatchesFilter(event, 'verified'))
+			.length
+	};
+}
+
+function eventMatchesFilter(
+	event: ObjectEvents['events'][number],
+	filter: Exclude<EventFilter, 'all'>
+): boolean {
+	if (filter === 'failed') return event.eventType === 'failed';
+	if (filter === 'verified') return event.eventType === 'verified';
+	const stage = event.workerStage ?? '';
+	if (filter === 'download') return stage.includes('download');
+	if (filter === 'parse') return stage.includes('parse');
+	return (
+		event.eventType === 'claimed' ||
+		event.eventType === 'heartbeat' ||
+		stage.includes('claim') ||
+		stage.includes('verify') ||
+		stage.includes('hash')
+	);
+}
+
+function formatFilterTitle(filter: EventFilter): string {
+	if (filter === 'all') return 'All';
+	if (filter === 'download') return 'Download';
+	if (filter === 'check') return 'Check';
+	if (filter === 'parse') return 'Parse';
+	if (filter === 'verified') return 'Verified';
+	return 'Failed';
 }
 
 function formatEventLedger(value: number | null): string {

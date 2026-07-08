@@ -3,6 +3,7 @@ import type {
 	HistoryArchiveBucketCoverageV1,
 	HistoryArchiveObjectStatusCountsV1,
 	HistoryArchiveObjectSummaryV1,
+	HistoryArchiveSourceSummaryV1,
 	HistoryArchiveObjectTypeSummaryV1,
 	HistoryArchiveObjectTypeV1
 } from 'shared';
@@ -42,17 +43,45 @@ type BucketCoverageRow = Omit<
 	readonly uniquebuckethashes?: NumericValue;
 };
 
+type SourceSummaryRow = ObjectTypeSummaryRow & {
+	readonly archiveUrl?: string;
+	readonly archiveurl?: string;
+	readonly archiveUrlIdentity?: string;
+	readonly archiveurlidentity?: string;
+	readonly currentLedger?: NumericValue | null;
+	readonly currentledger?: NumericValue | null;
+	readonly latestCheckpointLedger?: NumericValue | null;
+	readonly latestcheckpointledger?: NumericValue | null;
+	readonly latestDiscoveredCheckpointLedger?: NumericValue | null;
+	readonly latestdiscoveredcheckpointledger?: NumericValue | null;
+	readonly objectCompleteCheckpoints?: NumericValue;
+	readonly objectcompletecheckpoints?: NumericValue;
+	readonly observedAt?: Date | string;
+	readonly observedat?: Date | string;
+	readonly rootObjectStatus?: string | null;
+	readonly rootobjectstatus?: string | null;
+	readonly source?: string;
+	readonly stateStatus?: string;
+	readonly statestatus?: string;
+	readonly stateUrl?: string;
+	readonly stateurl?: string;
+	readonly verifiedCheckpoints?: NumericValue;
+	readonly verifiedcheckpoints?: NumericValue;
+};
+
 export async function getHistoryArchiveObjectSummary(
 	manager: EntityManager,
 	options: SummaryOptions = {}
 ): Promise<HistoryArchiveObjectSummaryV1> {
 	const archiveUrlIdentity = options.archiveUrlIdentity ?? null;
-	const [objectTypes, buckets, checkpoints, hostThrottles] = await Promise.all([
+	const [objectTypes, buckets, checkpoints, hostThrottles, sources] =
+		await Promise.all([
 		getObjectTypeSummaries(manager, archiveUrlIdentity),
 		getBucketCoverage(manager, archiveUrlIdentity),
 		getCheckpointCoverage(manager, archiveUrlIdentity),
-		getHistoryArchiveObjectHostThrottles(manager, archiveUrlIdentity)
-	]);
+			getHistoryArchiveObjectHostThrottles(manager, archiveUrlIdentity),
+			getSourceSummaries(manager, archiveUrlIdentity)
+		]);
 	const totals = sumObjectTypeCounts(objectTypes);
 
 	return {
@@ -64,8 +93,20 @@ export async function getHistoryArchiveObjectSummary(
 		generatedAt: (options.generatedAt ?? new Date()).toISOString(),
 		hostThrottles,
 		objectTypes,
-		scope: archiveUrlIdentity === null ? 'global' : 'archive'
+		scope: archiveUrlIdentity === null ? 'global' : 'archive',
+		sources
 	};
+}
+
+async function getSourceSummaries(
+	manager: EntityManager,
+	archiveUrlIdentity: string | null
+): Promise<readonly HistoryArchiveSourceSummaryV1[]> {
+	const rows = (await manager.query(sourceSummarySql, [
+		archiveUrlIdentity
+	])) as readonly SourceSummaryRow[];
+
+	return rows.map(mapSourceSummaryRow);
 }
 
 async function getObjectTypeSummaries(
@@ -219,6 +260,114 @@ function requireObjectType(
 	throw new Error('Archive object summary row is missing object type');
 }
 
+function mapSourceSummaryRow(
+	row: SourceSummaryRow
+): HistoryArchiveSourceSummaryV1 {
+	return {
+		activeObjects: requireNumber(
+			row.activeObjects ?? row.activeobjects,
+			'activeObjects'
+		),
+		archiveUrl: requireString(row.archiveUrl ?? row.archiveurl, 'archiveUrl'),
+		archiveUrlIdentity: requireString(
+			row.archiveUrlIdentity ?? row.archiveurlidentity,
+			'archiveUrlIdentity'
+		),
+		currentLedger: nullableNumber(row.currentLedger ?? row.currentledger),
+		failedObjects: requireNumber(
+			row.failedObjects ?? row.failedobjects,
+			'failedObjects'
+		),
+		latestCheckpointLedger: nullableNumber(
+			row.latestCheckpointLedger ?? row.latestcheckpointledger
+		),
+		latestDiscoveredCheckpointLedger: nullableNumber(
+			row.latestDiscoveredCheckpointLedger ??
+				row.latestdiscoveredcheckpointledger
+		),
+		objectCompleteCheckpoints: requireNumber(
+			row.objectCompleteCheckpoints ?? row.objectcompletecheckpoints,
+			'objectCompleteCheckpoints'
+		),
+		observedAt: formatDateField(row.observedAt ?? row.observedat),
+		pendingObjects: requireNumber(
+			row.pendingObjects ?? row.pendingobjects,
+			'pendingObjects'
+		),
+		rootObjectStatus: requireNullableObjectStatus(
+			row.rootObjectStatus ?? row.rootobjectstatus
+		),
+		source: requireStateSource(row.source),
+		stateStatus: requireStateStatus(row.stateStatus ?? row.statestatus),
+		stateUrl: requireString(row.stateUrl ?? row.stateurl, 'stateUrl'),
+		totalObjects: requireNumber(
+			row.totalObjects ?? row.totalobjects,
+			'totalObjects'
+		),
+		verifiedCheckpoints: requireNumber(
+			row.verifiedCheckpoints ?? row.verifiedcheckpoints,
+			'verifiedCheckpoints'
+		),
+		verifiedObjects: requireNumber(
+			row.verifiedObjects ?? row.verifiedobjects,
+			'verifiedObjects'
+		)
+	};
+}
+
+function requireString(value: string | undefined, field: string): string {
+	if (typeof value === 'string' && value.length > 0) return value;
+	throw new Error(`Archive object source summary row is missing ${field}`);
+}
+
+function nullableNumber(value: NumericValue | null | undefined): number | null {
+	if (value === null || value === undefined) return null;
+	return requireNumber(value, 'nullableNumber');
+}
+
+function formatDateField(value: Date | string | undefined): string {
+	if (value instanceof Date) return value.toISOString();
+	if (typeof value === 'string') return new Date(value).toISOString();
+	throw new Error('Archive object source summary row is missing observedAt');
+}
+
+function requireNullableObjectStatus(
+	value: string | null | undefined
+): HistoryArchiveSourceSummaryV1['rootObjectStatus'] {
+	if (value === null || value === undefined) return null;
+	if (
+		value === 'pending' ||
+		value === 'scanning' ||
+		value === 'verified' ||
+		value === 'failed'
+	) {
+		return value;
+	}
+	throw new Error('Archive object source summary row has invalid root status');
+}
+
+function requireStateSource(
+	value: string | undefined
+): HistoryArchiveSourceSummaryV1['source'] {
+	if (
+		value === 'backfill' ||
+		value === 'history-scanner' ||
+		value === 'network-scan'
+	) {
+		return value;
+	}
+	throw new Error('Archive object source summary row has invalid source');
+}
+
+function requireStateStatus(
+	value: string | undefined
+): HistoryArchiveSourceSummaryV1['stateStatus'] {
+	if (value === 'available' || value === 'invalid' || value === 'unreachable') {
+		return value;
+	}
+	throw new Error('Archive object source summary row has invalid state status');
+}
+
 function getObjectTypeOrder(objectType: HistoryArchiveObjectTypeV1): number {
 	switch (objectType) {
 		case 'history-archive-state':
@@ -273,4 +422,77 @@ const bucketCoverageSql = `
 	from history_archive_object_queue
 	where ${archiveFilterSql}
 		and "objectType" = 'bucket'
+`;
+
+const sourceSummarySql = `
+	with object_counts as (
+		select
+			"archiveUrlIdentity",
+			count(*) as "totalObjects",
+			count(*) filter (where status = 'pending') as "pendingObjects",
+			count(*) filter (where status = 'scanning') as "activeObjects",
+			count(*) filter (where status = 'verified') as "verifiedObjects",
+			count(*) filter (where status = 'failed') as "failedObjects"
+		from history_archive_object_queue
+		where ${archiveFilterSql}
+		group by "archiveUrlIdentity"
+	),
+	root_object as (
+		select distinct on ("archiveUrlIdentity")
+			"archiveUrlIdentity",
+			status as "rootObjectStatus"
+		from history_archive_object_queue
+		where ${archiveFilterSql}
+			and "objectType" = 'history-archive-state'
+		order by "archiveUrlIdentity", "updatedAt" desc
+	),
+	checkpoint_bounds as (
+		select
+			"archiveUrlIdentity",
+			max("checkpointLedger") as "latestDiscoveredCheckpointLedger",
+			count(*) filter (where "requiredObjectsComplete")
+				as "objectCompleteCheckpoints",
+			count(*) filter (where status = 'verified') as "verifiedCheckpoints"
+		from history_archive_checkpoint_proof
+		where ${archiveFilterSql}
+		group by "archiveUrlIdentity"
+	)
+	select
+		state."archiveUrl",
+		state."archiveUrlIdentity",
+		state."stateUrl",
+		state.status as "stateStatus",
+		state."observedAt",
+		state.source,
+		state."currentLedger",
+		case
+			when state."currentLedger" is null then null
+			else (
+				floor((greatest(state."currentLedger", 63) + 1)::numeric / 64)::integer
+					* 64
+			) - 1
+		end as "latestCheckpointLedger",
+		checkpoint_bounds."latestDiscoveredCheckpointLedger",
+		coalesce(checkpoint_bounds."objectCompleteCheckpoints", 0)
+			as "objectCompleteCheckpoints",
+		coalesce(checkpoint_bounds."verifiedCheckpoints", 0)
+			as "verifiedCheckpoints",
+		root_object."rootObjectStatus",
+		coalesce(object_counts."totalObjects", 0) as "totalObjects",
+		coalesce(object_counts."pendingObjects", 0) as "pendingObjects",
+		coalesce(object_counts."activeObjects", 0) as "activeObjects",
+		coalesce(object_counts."verifiedObjects", 0) as "verifiedObjects",
+		coalesce(object_counts."failedObjects", 0) as "failedObjects"
+	from history_archive_state_snapshot state
+	left join object_counts
+		on object_counts."archiveUrlIdentity" = state."archiveUrlIdentity"
+	left join root_object
+		on root_object."archiveUrlIdentity" = state."archiveUrlIdentity"
+	left join checkpoint_bounds
+		on checkpoint_bounds."archiveUrlIdentity" = state."archiveUrlIdentity"
+	where ($1::text is null or state."archiveUrlIdentity" = $1::text)
+	order by
+		state.status asc,
+		coalesce(state."currentLedger", -1) desc,
+		state."archiveUrlIdentity" asc
 `;

@@ -70,6 +70,7 @@ export {
 	type HistoryArchiveCheckpointCoverageV1,
 	type HistoryArchiveObjectFailureClassV1,
 	type HistoryArchiveObjectHostThrottleV1,
+	type HistoryArchiveSourceSummaryV1,
 	type HistoryArchiveObjectStatusCountsV1,
 	type HistoryArchiveObjectSummaryV1,
 	HistoryArchiveObjectSummaryV1Schema,

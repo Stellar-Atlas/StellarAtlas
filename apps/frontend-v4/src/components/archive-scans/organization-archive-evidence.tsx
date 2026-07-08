@@ -76,7 +76,7 @@ function ArchiveRootEvidenceTable({
 						<th>Latest pointer</th>
 						<th>Object checks</th>
 						<th>Bucket references</th>
-						<th>Cross-file checks</th>
+						<th>Checkpoint proof</th>
 						<th>Recent activity</th>
 					</tr>
 				</thead>
@@ -117,7 +117,7 @@ function ArchiveRootEvidenceRows({
 				<td>{formatStateSummary(evidence?.state ?? null)}</td>
 				<td>{formatObjectCheckSummary(evidence?.summary ?? null)}</td>
 				<td>{formatBucketReferenceSummary(evidence?.summary ?? null)}</td>
-				<td>{formatCrossFileCheckSummary(evidence?.summary ?? null)}</td>
+				<td>{formatCheckpointProofSummary(evidence?.summary ?? null)}</td>
 				<td>{formatEventSample(evidence?.events ?? null)}</td>
 			</tr>
 			<tr>
@@ -154,7 +154,7 @@ function ArchiveRootDrilldown({
 					<dd>{formatStateSummary(evidence?.state ?? null)}</dd>
 				</div>
 				<div>
-					<dt>Archive file checks</dt>
+					<dt>Archive evidence checks</dt>
 					<dd>{formatObjectCheckSummary(evidence?.summary ?? null)}</dd>
 				</div>
 				<div>
@@ -162,8 +162,8 @@ function ArchiveRootDrilldown({
 					<dd>{formatBucketReferenceSummary(evidence?.summary ?? null)}</dd>
 				</div>
 				<div>
-					<dt>Cross-file checks</dt>
-					<dd>{formatCrossFileCheckSummary(evidence?.summary ?? null)}</dd>
+					<dt>Checkpoint proof</dt>
+					<dd>{formatCheckpointProofSummary(evidence?.summary ?? null)}</dd>
 				</div>
 				<div>
 					<dt>Archive file-check sample</dt>
@@ -184,7 +184,7 @@ function ArchiveRootDrilldown({
 					<HistoryArchiveObjectCoverage
 						framed={false}
 						summary={evidence.summary}
-						title="Archive file checks"
+						title="Archive evidence checks"
 					/>
 					<HistoryArchiveObjectInventory
 						framed={false}
@@ -315,10 +315,10 @@ function formatObjectCheckSummary(
 ): string {
 	if (summary === null) return 'No archive file-check summary stored';
 	return `${formatInteger(summary.verifiedObjects)} verified of ${formatInteger(
-		summary.totalObjects
-	)} file checks; ${formatInteger(summary.activeObjects)} checking; ${formatInteger(
-		summary.pendingObjects
-	)} waiting; ${formatInteger(summary.failedObjects)} evidence failures`;
+				summary.totalObjects
+	)} source/file checks; ${formatInteger(summary.activeObjects)} checking; ${formatInteger(
+		summary.failedObjects
+	)} remote failures`;
 }
 
 function formatBucketReferenceSummary(
@@ -334,13 +334,13 @@ function formatBucketReferenceSummary(
 	)} unique bucket files`;
 }
 
-function formatCrossFileCheckSummary(
+function formatCheckpointProofSummary(
 	summary: PublicHistoryArchiveObjectSummary | null
 ): string {
-	if (summary === null) return 'No cross-file check summary stored';
+	if (summary === null) return 'No checkpoint proof summary stored';
 	return `${formatInteger(
 		summary.checkpoints.categoryConsistentArchiveCheckpoints
-	)} checkpoint file sets agree; ${formatInteger(
+	)} checkpoint file sets verified; ${formatInteger(
 		summary.checkpoints.objectCompleteArchiveCheckpoints
 	)} complete; ${formatInteger(
 		summary.checkpoints.categoryConsistencyFailedCheckpoints

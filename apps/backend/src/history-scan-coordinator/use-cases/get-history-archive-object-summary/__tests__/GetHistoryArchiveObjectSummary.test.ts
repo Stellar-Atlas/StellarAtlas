@@ -99,6 +99,7 @@ function createSummary(options: {
 		objectTypes: [],
 		pendingObjects: 0,
 		scope: options.scope,
+		sources: [],
 		totalObjects: 0,
 		verifiedObjects: 0
 	};

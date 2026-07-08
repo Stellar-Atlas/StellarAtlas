@@ -22,7 +22,7 @@ export const dynamic = 'force-dynamic';
 const statusFetchOptions = { cache: 'no-store' } as const;
 const archiveSummaryFetchOptions = {
 	cache: 'no-store',
-	timeoutMs: 5000
+	timeoutMs: 30000
 } as const;
 const archiveDetailFetchOptions = {
 	cache: 'no-store',
@@ -76,7 +76,7 @@ async function StatusRouteContent(): Promise<React.JSX.Element> {
 	return (
 		<main className="shell">
 			<PageHeading
-				description="Current public API, network scan records, archive file checks, scanner runtime, and archive evidence activity."
+				description="Current public API, network scan records, archive evidence checks, scanner runtime, and archive activity."
 				eyebrow="Operations"
 				title="Status"
 			/>
@@ -155,6 +155,7 @@ function buildArchiveSummaryFromQueue(
 		objectTypes: [],
 		pendingObjects: objects.pendingObjects,
 		scope: 'global',
+		sources: [],
 		totalObjects:
 			objects.activeObjects +
 			objects.pendingObjects +

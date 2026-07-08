@@ -155,7 +155,7 @@ function ObjectPriorityTable({
 	return (
 		<details className="metadata-document archive-priority-block" open={open}>
 			<summary>
-				<span>Archive file checks needing attention</span>
+				<span>Archive evidence needing attention</span>
 				<span>{formatInteger(objects.length)} shown</span>
 			</summary>
 			<ArchiveObjectTable
@@ -216,7 +216,7 @@ function formatInventoryStatusText(
 	objects: PublicHistoryArchiveObjectQueue
 ): string {
 	if (objects.failedObjects > 0) {
-		return formatInteger(objects.failedObjects) + ' evidence failures';
+		return formatInteger(objects.failedObjects) + ' remote failures';
 	}
 	if (objects.activeObjects > 0) {
 		return formatInteger(objects.activeObjects) + ' checking';

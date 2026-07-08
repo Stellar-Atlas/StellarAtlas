@@ -22,7 +22,7 @@ export function HistoryArchiveObjectCoverage({
 	framed = true,
 	proofOpen = false,
 	summary,
-	title = 'Archive file checks',
+	title = 'Archive evidence checks',
 	typeDetailsOpen = false
 }: HistoryArchiveObjectCoverageProps): React.JSX.Element {
 	const coverageText = formatCoverage(
@@ -118,17 +118,15 @@ function CheckpointProofSummary({
 	return (
 		<details className="metadata-document archive-checkpoint-proof" open={open}>
 			<summary>
-				<span>Cross-file checkpoint checks</span>
+				<span>Checkpoint proof</span>
 				<span className="muted-inline">
 					{formatCheckpointProofHeadline(summary)}
 				</span>
 			</summary>
 			<p className="muted-copy">
-				Archive-source file checks mean individual archive files were fetched
-				and verified in isolation. Cross-file checkpoint checks are stricter:
-				history, ledger,
-				transaction, result, and bucket-list data all have to agree for the
-				same checkpoint.
+				Archive-source file checks verify one object at one archive source.
+				Checkpoint proof verifies that the history, ledger, transaction,
+				result, and bucket-list facts agree for the same checkpoint.
 			</p>
 			<div className="responsive-table">
 				<table className="archive-checkpoint-proof-table">

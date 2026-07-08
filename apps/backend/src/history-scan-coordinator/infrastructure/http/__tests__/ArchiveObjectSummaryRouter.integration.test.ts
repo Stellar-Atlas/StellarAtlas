@@ -324,6 +324,27 @@ function createObjectSummary(
 		],
 		pendingObjects: 3,
 		scope: options.scope,
+		sources: [
+			{
+				activeObjects: 1,
+				archiveUrl: 'https://history.example.com',
+				archiveUrlIdentity: 'https://history.example.com',
+				currentLedger: 255,
+				failedObjects: 1,
+				latestCheckpointLedger: 255,
+				latestDiscoveredCheckpointLedger: 255,
+				objectCompleteCheckpoints: 1,
+				observedAt: '2026-07-06T15:30:00.000Z',
+				pendingObjects: 3,
+				rootObjectStatus: 'verified',
+				source: 'history-scanner',
+				stateStatus: 'available',
+				stateUrl: 'https://history.example.com/.well-known/stellar-history.json',
+				totalObjects: 10,
+				verifiedCheckpoints: 0,
+				verifiedObjects: 5
+			}
+		],
 		totalObjects: 10,
 		verifiedObjects: 5
 	};

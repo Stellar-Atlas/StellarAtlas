@@ -65,10 +65,10 @@ export function ProductionServiceStatusPanel({
 					value={statusLabel(networkScan.status)}
 				/>
 				<StatusRow
-					detail={`${formatInteger(archiveSummary.verifiedObjects)} verified; ${formatInteger(archiveSummary.pendingObjects)} queued; ${formatInteger(archiveSummary.failedObjects)} failed; ${formatInteger(archiveObjects.objects.length)} recent rows shown`}
-					label="Archive file checks"
+					detail={`${formatInteger(archiveSummary.verifiedObjects)} verified checks; ${formatInteger(archiveSummary.activeObjects)} checking now; ${formatInteger(archiveSummary.failedObjects)} remote failures; ${formatInteger(archiveObjects.objects.length)} recent rows shown`}
+					label="Archive evidence"
 					status={archiveObjectStatus}
-					value={`${formatInteger(archiveSummary.totalObjects)} tracked`}
+					value={`${formatInteger(archiveSummary.sources.length)} sources`}
 				/>
 			</div>
 		</section>

@@ -198,6 +198,7 @@ function createSummary(): HistoryArchiveObjectSummaryV1 {
 		objectTypes: [],
 		pendingObjects: 0,
 		scope: 'archive',
+		sources: [],
 		totalObjects: 3,
 		verifiedObjects: 1
 	};

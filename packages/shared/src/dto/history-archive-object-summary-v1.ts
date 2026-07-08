@@ -14,6 +14,26 @@ export interface HistoryArchiveObjectTypeSummaryV1 extends HistoryArchiveObjectS
 	readonly objectType: HistoryArchiveObjectTypeV1;
 }
 
+export interface HistoryArchiveSourceSummaryV1 extends HistoryArchiveObjectStatusCountsV1 {
+	readonly archiveUrl: string;
+	readonly archiveUrlIdentity: string;
+	readonly currentLedger: number | null;
+	readonly latestCheckpointLedger: number | null;
+	readonly latestDiscoveredCheckpointLedger: number | null;
+	readonly objectCompleteCheckpoints: number;
+	readonly observedAt: string;
+	readonly rootObjectStatus:
+		| 'pending'
+		| 'scanning'
+		| 'verified'
+		| 'failed'
+		| null;
+	readonly source: 'backfill' | 'history-scanner' | 'network-scan';
+	readonly stateStatus: 'available' | 'invalid' | 'unreachable';
+	readonly stateUrl: string;
+	readonly verifiedCheckpoints: number;
+}
+
 export interface HistoryArchiveCheckpointCoverageV1 {
 	readonly activeArchiveCheckpoints: number;
 	readonly archiveRootsWithState: number;
@@ -77,6 +97,7 @@ export interface HistoryArchiveObjectSummaryV1 extends HistoryArchiveObjectStatu
 	readonly hostThrottles: readonly HistoryArchiveObjectHostThrottleV1[];
 	readonly objectTypes: readonly HistoryArchiveObjectTypeSummaryV1[];
 	readonly scope: 'archive' | 'global';
+	readonly sources: readonly HistoryArchiveSourceSummaryV1[];
 }
 
 const HistoryArchiveObjectStatusCountsV1Schema: JSONSchemaType<HistoryArchiveObjectStatusCountsV1> =
@@ -128,6 +149,59 @@ const HistoryArchiveObjectTypeSummaryV1Schema: JSONSchemaType<HistoryArchiveObje
 			'totalObjects',
 			'verifiedObjects',
 			'objectType'
+		],
+		additionalProperties: false
+	};
+
+const HistoryArchiveSourceSummaryV1Schema: JSONSchemaType<HistoryArchiveSourceSummaryV1> =
+	{
+		type: 'object',
+		properties: {
+			activeObjects: { type: 'number' },
+			archiveUrl: { type: 'string' },
+			archiveUrlIdentity: { type: 'string' },
+			currentLedger: nullable({ type: 'number' }),
+			failedObjects: { type: 'number' },
+			latestCheckpointLedger: nullable({ type: 'number' }),
+			latestDiscoveredCheckpointLedger: nullable({ type: 'number' }),
+			objectCompleteCheckpoints: { type: 'number' },
+			observedAt: { type: 'string', format: 'date-time' },
+			pendingObjects: { type: 'number' },
+			rootObjectStatus: nullable({
+				type: 'string',
+				enum: ['pending', 'scanning', 'verified', 'failed']
+			}),
+			source: {
+				type: 'string',
+				enum: ['backfill', 'history-scanner', 'network-scan']
+			},
+			stateStatus: {
+				type: 'string',
+				enum: ['available', 'invalid', 'unreachable']
+			},
+			stateUrl: { type: 'string' },
+			totalObjects: { type: 'number' },
+			verifiedCheckpoints: { type: 'number' },
+			verifiedObjects: { type: 'number' }
+		},
+		required: [
+			'activeObjects',
+			'archiveUrl',
+			'archiveUrlIdentity',
+			'currentLedger',
+			'failedObjects',
+			'latestCheckpointLedger',
+			'latestDiscoveredCheckpointLedger',
+			'objectCompleteCheckpoints',
+			'observedAt',
+			'pendingObjects',
+			'rootObjectStatus',
+			'source',
+			'stateStatus',
+			'stateUrl',
+			'totalObjects',
+			'verifiedCheckpoints',
+			'verifiedObjects'
 		],
 		additionalProperties: false
 	};
@@ -267,6 +341,10 @@ export const HistoryArchiveObjectSummaryV1Schema: JSONSchemaType<HistoryArchiveO
 			},
 			pendingObjects: { type: 'number' },
 			scope: { type: 'string', enum: ['archive', 'global'] },
+			sources: {
+				type: 'array',
+				items: HistoryArchiveSourceSummaryV1Schema
+			},
 			totalObjects: { type: 'number' },
 			verifiedObjects: { type: 'number' }
 		},
@@ -282,6 +360,7 @@ export const HistoryArchiveObjectSummaryV1Schema: JSONSchemaType<HistoryArchiveO
 			'objectTypes',
 			'pendingObjects',
 			'scope',
+			'sources',
 			'totalObjects',
 			'verifiedObjects'
 		],
