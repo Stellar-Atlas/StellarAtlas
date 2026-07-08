@@ -19,17 +19,21 @@ export function StatusDashboardLive(
 	useEffect(
 		() =>
 			subscribeToStatusStream((message) => {
-				if (message.type !== 'status') return;
+				if (message.type === 'error') return;
 				setDashboardProps((current) => ({
 					...current,
-					api: message.payload.api,
-					archiveEvents: message.payload.archiveEvents,
-					archiveEvidenceAvailable: true,
-					archiveSummary: message.payload.archiveSummary,
-					dataQuality: message.payload.dataQuality,
-					frontend: message.payload.frontend,
-					scanLogs: message.payload.scanLogs,
-					workers: message.payload.workers
+					api: message.payload.api ?? current.api,
+					archiveEvents: message.payload.archiveEvents ?? current.archiveEvents,
+					archiveEvidenceAvailable:
+						message.payload.archiveEvents !== undefined ||
+						message.payload.archiveSummary !== undefined ||
+						current.archiveEvidenceAvailable,
+					archiveSummary:
+						message.payload.archiveSummary ?? current.archiveSummary,
+					dataQuality: message.payload.dataQuality ?? current.dataQuality,
+					frontend: message.payload.frontend ?? current.frontend,
+					scanLogs: message.payload.scanLogs ?? current.scanLogs,
+					workers: message.payload.workers ?? current.workers
 				}));
 			}),
 		[]

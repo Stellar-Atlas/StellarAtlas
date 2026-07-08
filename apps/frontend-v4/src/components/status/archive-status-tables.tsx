@@ -130,9 +130,9 @@ function ArchiveObjectQueuePanel({
 				/>
 			</div>
 			<p className="muted-copy">
-				Counts are per archive source and file identity. Shared bucket payloads
-				are deduplicated by hash, but each archive source still needs its own
-				evidence row.
+				This is per-source archive evidence. A shared bucket payload is stored
+				once by hash, but each archive source still gets its own evidence row
+				showing whether that source served the expected file.
 			</p>
 			<div className="responsive-table archive-summary-table-wrap">
 				<table className="archive-summary-table">
@@ -140,7 +140,7 @@ function ArchiveObjectQueuePanel({
 						<tr>
 							<th>Archive sources</th>
 							<th>Checking now</th>
-							<th>Verified evidence</th>
+							<th>Verified checks</th>
 							<th>Remote failures</th>
 						</tr>
 					</thead>
@@ -156,23 +156,21 @@ function ArchiveObjectQueuePanel({
 			</div>
 			<details className="metadata-document">
 				<summary>
-					<span>Scheduler backlog</span>
-					<span className="muted-inline">
-						{formatInteger(summary.pendingObjects)} queued evidence checks
-					</span>
+					<span>Technical queue counts</span>
+					<span className="muted-inline">open details</span>
 				</summary>
 				<p className="muted-copy">
-					This is the scanner work queue across all archive sources. It is not
-					the number of unique bucket payloads stored locally and it is not a
-					public service outage by itself.
+					Queued checks are scanner work still to run across all archive
+					sources. They are not unique bucket payloads stored locally, and they
+					are not a service outage by themselves.
 				</p>
 				<div className="responsive-table">
 					<table className="archive-summary-table">
 						<thead>
 							<tr>
-								<th>Discovered checks</th>
+								<th>Known checks</th>
 								<th>Verified</th>
-								<th>Queued</th>
+								<th>Waiting to check</th>
 								<th>Checking now</th>
 								<th>Remote failures</th>
 							</tr>
@@ -204,24 +202,24 @@ function ObjectTypeDetails({
 	return (
 		<details className="metadata-document">
 			<summary>
-				<span>File-check breakdown</span>
+				<span>Archive file group coverage</span>
 				<span className="muted-inline">
 					{formatInteger(objectTypes.length)} groups
 				</span>
 			</summary>
 			<p className="muted-copy">
-				These rows are queue evidence by archive file group. They are not
-				decoded transaction, operation, or ledger entity counts.
+				These are archive file checks grouped by file type. They are not
+				decoded ledger, transaction, operation, or contract counts.
 			</p>
 			<div className="responsive-table">
 				<table className="archive-object-type-table">
 					<thead>
 						<tr>
 							<th>File group</th>
-							<th>Tracked</th>
-							<th>Verified</th>
-							<th>Waiting</th>
-							<th>Failed</th>
+							<th>Known checks</th>
+							<th>Verified checks</th>
+							<th>Waiting to check</th>
+							<th>Remote failures</th>
 							<th>Active checks</th>
 						</tr>
 					</thead>
@@ -256,7 +254,7 @@ function CheckpointProofPanel({
 		<section className="panel detail-panel archive-panel">
 			<div className="panel-heading">
 				<div>
-					<h2>Checkpoint proof</h2>
+					<h2>Checkpoint file-consistency proof</h2>
 					<span className="muted-inline">
 						Updated {formatDateTime(summary.generatedAt)}
 					</span>
@@ -270,12 +268,12 @@ function CheckpointProofPanel({
 				<table className="archive-checkpoint-proof-table">
 					<thead>
 						<tr>
-							<th>Object complete</th>
-							<th>Files agree</th>
-							<th>Failed</th>
-							<th>Waiting</th>
-							<th>Not checked yet</th>
-							<th>Sources with state</th>
+							<th>Required files present</th>
+							<th>Hash agreement proven</th>
+							<th>Hash mismatches</th>
+							<th>Waiting for files</th>
+							<th>Cannot evaluate yet</th>
+							<th>Sources captured</th>
 						</tr>
 					</thead>
 					<tbody>
@@ -309,10 +307,10 @@ function CheckpointProofPanel({
 				</table>
 			</div>
 			<p className="muted-copy">
-				Checkpoint proof checks whether one archive source has the expected
-				history, ledger, transaction, result, SCP, and bucket files for a
-				64-ledger checkpoint, then whether those files agree by hash. It is a
-				file-consistency proof, not a decoded transaction count.
+				Each row represents one archive source at one 64-ledger checkpoint.
+				The proof first waits for the expected history, ledger, transaction,
+				result, SCP, and bucket files, then verifies that those files agree by
+				hash. This is archive consistency evidence, not decoded explorer data.
 			</p>
 		</section>
 	);

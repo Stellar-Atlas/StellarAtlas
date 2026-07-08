@@ -23,6 +23,7 @@ export class CoordinatorParsedHistorySink implements ParsedHistorySink {
 	private readonly envelopes: ParsedTransactionEnvelopeDTO[] = [];
 	private readonly results: ParsedTransactionResultDTO[] = [];
 	private static readonly defaultRetryDelaysMs = [250, 500, 1000, 2000];
+	private static readonly defaultMaxPayloadBytes = 80_000;
 
 	constructor(
 		private readonly coordinator: ScanCoordinatorService,
@@ -30,24 +31,22 @@ export class CoordinatorParsedHistorySink implements ParsedHistorySink {
 		private readonly scanJobRemoteId: string,
 		private readonly exceptionLogger: ExceptionLogger,
 		private readonly batchSize = 50,
-		private readonly retryDelaysMs: readonly number[] = CoordinatorParsedHistorySink.defaultRetryDelaysMs
+		private readonly retryDelaysMs: readonly number[] = CoordinatorParsedHistorySink.defaultRetryDelaysMs,
+		private readonly maxPayloadBytes = CoordinatorParsedHistorySink.defaultMaxPayloadBytes
 	) {}
 
 	async emit(record: ParsedHistoryRecord): Promise<void> {
 		if (record.recordType === 'ledger-header') {
-			this.headers.push(this.toHeaderDTO(record));
-			if (this.headers.length >= this.batchSize) await this.flushHeaders();
+			await this.appendHeader(this.toHeaderDTO(record));
 			return;
 		}
 
 		if (record.recordType === 'transaction-envelope') {
-			this.envelopes.push(this.toEnvelopeDTO(record));
-			if (this.envelopes.length >= this.batchSize) await this.flushEnvelopes();
+			await this.appendEnvelope(this.toEnvelopeDTO(record));
 			return;
 		}
 
-		this.results.push(this.toResultDTO(record));
-		if (this.results.length >= this.batchSize) await this.flushResults();
+		await this.appendResult(this.toResultDTO(record));
 	}
 
 	async flush(): Promise<void> {
@@ -93,6 +92,112 @@ export class CoordinatorParsedHistorySink implements ParsedHistorySink {
 		);
 		const result = await this.registerResultsWithRetry(batch);
 		if (result !== null) this.exceptionLogger.captureException(result);
+	}
+
+	private async appendHeader(record: ParsedLedgerHeaderDTO): Promise<void> {
+		if (this.shouldFlushBeforeAppend(this.headers, record, (records) =>
+			this.createHeaderBatch(records)
+		)) {
+			await this.flushHeaders();
+		}
+
+		this.headers.push(record);
+		if (this.shouldFlushAfterAppend(this.headers, (records) =>
+			this.createHeaderBatch(records)
+		)) {
+			await this.flushHeaders();
+		}
+	}
+
+	private async appendEnvelope(
+		record: ParsedTransactionEnvelopeDTO
+	): Promise<void> {
+		if (this.shouldFlushBeforeAppend(this.envelopes, record, (records) =>
+			this.createEnvelopeBatch(records)
+		)) {
+			await this.flushEnvelopes();
+		}
+
+		this.envelopes.push(record);
+		if (this.shouldFlushAfterAppend(this.envelopes, (records) =>
+			this.createEnvelopeBatch(records)
+		)) {
+			await this.flushEnvelopes();
+		}
+	}
+
+	private async appendResult(record: ParsedTransactionResultDTO): Promise<void> {
+		if (this.shouldFlushBeforeAppend(this.results, record, (records) =>
+			this.createResultBatch(records)
+		)) {
+			await this.flushResults();
+		}
+
+		this.results.push(record);
+		if (this.shouldFlushAfterAppend(this.results, (records) =>
+			this.createResultBatch(records)
+		)) {
+			await this.flushResults();
+		}
+	}
+
+	private shouldFlushBeforeAppend<Record>(
+		records: readonly Record[],
+		nextRecord: Record,
+		createBatch: (records: readonly Record[]) => object
+	): boolean {
+		return (
+			records.length > 0 &&
+			this.payloadSize(createBatch([...records, nextRecord])) >
+				this.maxPayloadBytes
+		);
+	}
+
+	private shouldFlushAfterAppend<Record>(
+		records: readonly Record[],
+		createBatch: (records: readonly Record[]) => object
+	): boolean {
+		return (
+			records.length >= this.batchSize ||
+			this.payloadSize(createBatch(records)) > this.maxPayloadBytes
+		);
+	}
+
+	private createHeaderBatch(
+		headers: readonly ParsedLedgerHeaderDTO[]
+	): ParsedLedgerHeaderBatchDTO {
+		return new ParsedLedgerHeaderBatchDTO(
+			this.sourceArchiveUrl,
+			this.scanJobRemoteId,
+			new Date(),
+			[...headers]
+		);
+	}
+
+	private createEnvelopeBatch(
+		records: readonly ParsedTransactionEnvelopeDTO[]
+	): ParsedTransactionEnvelopeBatchDTO {
+		return new ParsedTransactionEnvelopeBatchDTO(
+			this.sourceArchiveUrl,
+			this.scanJobRemoteId,
+			new Date(),
+			[...records]
+		);
+	}
+
+	private createResultBatch(
+		records: readonly ParsedTransactionResultDTO[]
+	): ParsedTransactionResultBatchDTO {
+		return new ParsedTransactionResultBatchDTO(
+			this.sourceArchiveUrl,
+			this.scanJobRemoteId,
+			new Date(),
+			[...records]
+		);
+	}
+
+	private payloadSize(payload: object): number {
+		return Buffer.byteLength(JSON.stringify(payload), 'utf8');
 	}
 
 	private async registerHeadersWithRetry(

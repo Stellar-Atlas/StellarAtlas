@@ -53,9 +53,13 @@ export function StatusDashboard({
 		archiveObjectsAvailable,
 		archiveSummary
 	);
+	const archiveTelemetryAvailable =
+		archiveEvidenceAvailable || workers.archiveWorkers.configuredWorkerProcesses > 0;
 	const archiveQueueDetail = archiveEvidenceAvailable
 		? formatArchiveObjectQueueDetail(archiveSummary)
-		: 'Archive file evidence endpoints did not respond';
+		: archiveTelemetryAvailable
+			? 'Archive aggregate is loading; worker telemetry is live'
+			: 'Archive file evidence endpoints did not respond';
 	const archiveVerifierDetail = formatArchiveWorkerDetail(
 		archiveObjectActivity,
 		workers
@@ -70,10 +74,12 @@ export function StatusDashboard({
 	);
 	const archiveStatus = archiveEvidenceAvailable
 		? getArchiveEvidenceStatus(archiveSummary)
-		: 'unavailable';
+		: archiveTelemetryAvailable
+			? 'ok'
+			: 'unavailable';
 	const archiveWorkerStatus = getArchiveWorkerStatus(
 		archiveObjectActivity,
-		archiveEvidenceAvailable,
+		archiveTelemetryAvailable,
 		archiveSummary,
 		workers
 	);
@@ -98,7 +104,9 @@ export function StatusDashboard({
 					label="Archive evidence checks"
 					tone={statusTone(archiveStatus)}
 					value={
-						archiveEvidenceAvailable ? archiveAttentionText : 'Unavailable'
+						archiveEvidenceAvailable || archiveTelemetryAvailable
+							? archiveAttentionText
+							: 'Unavailable'
 					}
 				/>
 				<StatCard
@@ -136,7 +144,9 @@ export function StatusDashboard({
 							label="Archive evidence checks"
 							status={archiveStatus}
 							value={
-								archiveEvidenceAvailable ? archiveAttentionText : 'No data'
+								archiveEvidenceAvailable || archiveTelemetryAvailable
+									? archiveAttentionText
+									: 'No data'
 							}
 						/>
 						<StatusRow
@@ -159,14 +169,14 @@ export function StatusDashboard({
 					<div className="status-list">
 						<StatusRow
 							detail={
-								archiveEvidenceAvailable
-									? archiveQueueDetail
-									: 'Archive file evidence endpoints did not respond'
+								archiveQueueDetail
 							}
 							label="Archive evidence checks"
 							status={archiveStatus}
 							value={
-								archiveEvidenceAvailable ? archiveAttentionText : 'No data'
+								archiveEvidenceAvailable || archiveTelemetryAvailable
+									? archiveAttentionText
+									: 'No data'
 							}
 						/>
 						<StatusRow
@@ -187,7 +197,9 @@ export function StatusDashboard({
 						summary={archiveSummary}
 					/>
 				) : (
-					<ArchiveEvidenceUnavailablePanel />
+					<ArchiveEvidenceDeferredPanel
+						archiveTelemetryAvailable={archiveTelemetryAvailable}
+					/>
 				)}
 
 				<HistoryArchiveObjectEventLog
@@ -201,22 +213,26 @@ export function StatusDashboard({
 	);
 }
 
-function ArchiveEvidenceUnavailablePanel(): React.JSX.Element {
+function ArchiveEvidenceDeferredPanel({
+	archiveTelemetryAvailable
+}: {
+	readonly archiveTelemetryAvailable: boolean;
+}): React.JSX.Element {
 	return (
 		<section className="panel detail-panel archive-panel">
 			<div className="panel-heading">
 				<div>
-					<h2>Archive evidence unavailable</h2>
+					<h2>Archive aggregate loading</h2>
 					<span className="muted-inline">
-						Archive evidence endpoints did not respond before the status page
-						timeout.
+						Worker telemetry is live; the aggregate evidence snapshot has not
+						loaded yet.
 					</span>
 				</div>
-				<StatusPill status="unavailable" />
+				<StatusPill status={archiveTelemetryAvailable ? 'ok' : 'unavailable'} />
 			</div>
 			<p className="archive-good-state">
-				No archive verification claim is shown because the status page could not
-				load the archive evidence snapshot.
+				The status stream is updating scanner activity while the archive
+				coverage summary catches up.
 			</p>
 		</section>
 	);

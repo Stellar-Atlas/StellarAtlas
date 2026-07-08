@@ -19,7 +19,6 @@ import { knownNetworkRouter } from '@network-scan/infrastructure/http/KnownNetwo
 import { horizonExplorerRouter } from '@network-scan/infrastructure/http/HorizonExplorerRouter.js';
 import { blockchainExplorerRouter } from '@network-scan/infrastructure/http/BlockchainExplorerRouter.js';
 import { attachNetworkLiveWebSocket } from '@network-scan/infrastructure/http/NetworkLiveWebSocket.js';
-
 import helmet from 'helmet';
 import { GetNetwork } from '@network-scan/use-cases/get-network/GetNetwork.js';
 import { GetLatestScan } from '@history-scan-coordinator/use-cases/get-latest-scan/GetLatestScan.js';
@@ -113,6 +112,7 @@ const serverSockets = new Set<Socket>();
 let shutdownStarted = false;
 const api = express();
 api.use(corsMiddleware);
+api.use('/v1/history-scan', bodyParser.json({ limit: '2mb' }));
 api.use(bodyParser.json());
 api.use(frontendV4ProxyMiddleware);
 api.use(helmet());

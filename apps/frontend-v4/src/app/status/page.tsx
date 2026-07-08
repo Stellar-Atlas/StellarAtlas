@@ -1,11 +1,8 @@
 import { Suspense } from 'react';
-import { fetchHistoryArchiveObjectEvents } from '@api/archive-scans-client';
 import {
 	fetchApiStatus,
 	fetchDataQualityStatus,
 	fetchFrontendStatus,
-	fetchHistoryArchiveObjectSummary,
-	fetchHistoryArchiveObjects,
 	fetchScanLogStatus,
 	fetchWorkerStatus
 } from '@api/client';
@@ -20,58 +17,18 @@ import { StatusDashboardLive } from '@components/status/status-dashboard-live';
 export const revalidate = 0;
 export const dynamic = 'force-dynamic';
 const statusFetchOptions = { cache: 'no-store' } as const;
-const archiveSummaryFetchOptions = {
-	cache: 'no-store',
-	timeoutMs: 30000
-} as const;
-const archiveDetailFetchOptions = {
-	cache: 'no-store',
-	timeoutMs: 12000
-} as const;
-type FetchResult<T> =
-	| {
-			readonly ok: true;
-			readonly value: T;
-	  }
-	| {
-			readonly ok: false;
-			readonly value: T;
-	  };
 
 async function StatusRouteContent(): Promise<React.JSX.Element> {
-	const [
-		api,
-		dataQuality,
-		scanLogs,
-		workers,
-		archiveEventsResult,
-		archiveSummaryResult,
-		archiveObjectsResult,
-		frontend
-	] = await Promise.all([
+	const [api, dataQuality, scanLogs, workers, frontend] = await Promise.all([
 		fetchApiStatus(statusFetchOptions),
 		fetchDataQualityStatus(statusFetchOptions),
 		fetchScanLogStatus(statusFetchOptions),
 		fetchWorkerStatus(statusFetchOptions),
-		withFallback(
-			fetchHistoryArchiveObjectEvents(100, archiveDetailFetchOptions),
-			buildEmptyArchiveEvents()
-		),
-		withFallback<PublicHistoryArchiveObjectSummary | null>(
-			fetchHistoryArchiveObjectSummary(archiveSummaryFetchOptions),
-			null
-		),
-		withFallback(
-			fetchHistoryArchiveObjects(100, archiveDetailFetchOptions),
-			buildEmptyArchiveQueue()
-		),
 		fetchFrontendStatus(statusFetchOptions)
 	]);
-	const archiveObjects = archiveObjectsResult.value;
-	const archiveSummary =
-		archiveSummaryResult.value ?? buildArchiveSummaryFromQueue(archiveObjects);
-	const archiveEvidenceAvailable =
-		archiveSummaryResult.ok && archiveSummaryResult.value !== null;
+	const archiveEvents = buildEmptyArchiveEvents();
+	const archiveObjects = buildEmptyArchiveQueue();
+	const archiveSummary = buildArchiveSummaryFromQueue(archiveObjects);
 
 	return (
 		<main className="shell">
@@ -82,10 +39,10 @@ async function StatusRouteContent(): Promise<React.JSX.Element> {
 			/>
 			<StatusDashboardLive
 				api={api}
-				archiveEvents={archiveEventsResult.value}
-				archiveEvidenceAvailable={archiveEvidenceAvailable}
+				archiveEvents={archiveEvents}
+				archiveEvidenceAvailable={false}
 				archiveObjects={archiveObjects}
-				archiveObjectsAvailable={archiveObjectsResult.ok}
+				archiveObjectsAvailable={false}
 				archiveSummary={archiveSummary}
 				dataQuality={dataQuality}
 				frontend={frontend}
@@ -94,17 +51,6 @@ async function StatusRouteContent(): Promise<React.JSX.Element> {
 			/>
 		</main>
 	);
-}
-
-async function withFallback<T>(
-	promise: Promise<T>,
-	value: T
-): Promise<FetchResult<T>> {
-	try {
-		return { ok: true, value: await promise };
-	} catch {
-		return { ok: false, value };
-	}
 }
 
 function buildArchiveSummaryFromQueue(

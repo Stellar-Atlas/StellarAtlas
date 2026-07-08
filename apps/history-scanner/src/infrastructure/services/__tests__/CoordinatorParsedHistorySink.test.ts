@@ -111,6 +111,40 @@ describe('CoordinatorParsedHistorySink', () => {
 		).toHaveLength(2);
 		expect(exceptionLogger.captureException).not.toHaveBeenCalled();
 	});
+
+	it('should flush parsed transaction envelopes when payload size is capped', async () => {
+		const coordinator = mock<ScanCoordinatorService>();
+		const exceptionLogger = mock<ExceptionLogger>();
+		coordinator.registerParsedLedgerHeaders.mockResolvedValue(ok(undefined));
+		coordinator.registerParsedTransactionEnvelopes.mockResolvedValue(
+			ok(undefined)
+		);
+		coordinator.registerParsedTransactionResults.mockResolvedValue(
+			ok(undefined)
+		);
+		const sink = new CoordinatorParsedHistorySink(
+			coordinator,
+			'https://history.stellar.org',
+			'remote-id',
+			exceptionLogger,
+			50,
+			[0],
+			1
+		);
+
+		await sink.emit(createTransactionEnvelopeRecord(1, 0));
+		await sink.emit(createTransactionEnvelopeRecord(1, 1));
+
+		expect(
+			coordinator.registerParsedTransactionEnvelopes
+		).toHaveBeenCalledTimes(2);
+		expect(
+			coordinator.registerParsedTransactionEnvelopes.mock.calls[0][0].records
+		).toHaveLength(1);
+		expect(
+			coordinator.registerParsedTransactionEnvelopes.mock.calls[1][0].records
+		).toHaveLength(1);
+	});
 });
 
 function createLedgerHeaderRecord(ledger: number) {

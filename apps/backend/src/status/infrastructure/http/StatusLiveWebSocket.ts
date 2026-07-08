@@ -42,12 +42,19 @@ interface StatusLiveSnapshot {
 }
 
 type StatusLiveMessage =
+	| { readonly payload: StatusLivePatch; readonly type: 'status-patch' }
 	| { readonly payload: StatusLiveSnapshot; readonly type: 'status' }
 	| { readonly payload: { readonly message: string }; readonly type: 'error' };
 
+type StatusLivePatch = Partial<StatusLiveSnapshot> & {
+	readonly generatedAt: string;
+};
+
 const defaultPath = '/v1/status/ws';
 const statusIntervalMs = 2_500;
-const archiveEventLimit = 250;
+const archiveEventIntervalMs = 5_000;
+const archiveSummaryIntervalMs = 30_000;
+const archiveEventLimit = 100;
 const scanLogLimit = 25;
 
 export function attachStatusLiveWebSocket(
@@ -57,8 +64,12 @@ export function attachStatusLiveWebSocket(
 	const path = config.path ?? defaultPath;
 	const clients = new Set<WebSocket>();
 	const webSocketServer = new WebSocketServer({ noServer: true });
-	let timer: ReturnType<typeof setInterval> | undefined;
-	let writing = false;
+	let archiveEventTimer: ReturnType<typeof setInterval> | undefined;
+	let archiveEventWriting = false;
+	let archiveSummaryTimer: ReturnType<typeof setInterval> | undefined;
+	let archiveSummaryWriting = false;
+	let fastTimer: ReturnType<typeof setInterval> | undefined;
+	let fastWriting = false;
 
 	const broadcast = (message: StatusLiveMessage): void => {
 		const payload = JSON.stringify(message);
@@ -67,11 +78,11 @@ export function attachStatusLiveWebSocket(
 		}
 	};
 
-	const writeStatus = (): void => {
-		if (writing) return;
-		writing = true;
-		void collectStatusLiveSnapshot(config)
-			.then((payload) => broadcast({ payload, type: 'status' }))
+	const writeFastStatus = (): void => {
+		if (fastWriting) return;
+		fastWriting = true;
+		void collectFastStatusPatch(config)
+			.then((payload) => broadcast({ payload, type: 'status-patch' }))
 			.catch((error) => {
 				config.logger?.error('Status WebSocket snapshot unavailable', {
 					error: errorMessage(error)
@@ -82,20 +93,70 @@ export function attachStatusLiveWebSocket(
 				});
 			})
 			.finally(() => {
-				writing = false;
+				fastWriting = false;
+			});
+	};
+
+	const writeArchiveEvents = (): void => {
+		if (archiveEventWriting) return;
+		archiveEventWriting = true;
+		void collectArchiveEventsPatch(config)
+			.then((payload) => broadcast({ payload, type: 'status-patch' }))
+			.catch((error) => {
+				config.logger?.error('Status WebSocket archive events unavailable', {
+					error: errorMessage(error)
+				});
+			})
+			.finally(() => {
+				archiveEventWriting = false;
+			});
+	};
+
+	const writeArchiveSummary = (): void => {
+		if (archiveSummaryWriting) return;
+		archiveSummaryWriting = true;
+		void collectArchiveSummaryPatch(config)
+			.then((payload) => broadcast({ payload, type: 'status-patch' }))
+			.catch((error) => {
+				config.logger?.error('Status WebSocket archive summary unavailable', {
+					error: errorMessage(error)
+				});
+			})
+			.finally(() => {
+				archiveSummaryWriting = false;
 			});
 	};
 
 	const start = (): void => {
-		if (timer !== undefined) return;
-		writeStatus();
-		timer = setInterval(writeStatus, statusIntervalMs);
+		if (
+			fastTimer !== undefined ||
+			archiveEventTimer !== undefined ||
+			archiveSummaryTimer !== undefined
+		) {
+			return;
+		}
+		writeFastStatus();
+		writeArchiveEvents();
+		writeArchiveSummary();
+		fastTimer = setInterval(writeFastStatus, statusIntervalMs);
+		archiveEventTimer = setInterval(
+			writeArchiveEvents,
+			archiveEventIntervalMs
+		);
+		archiveSummaryTimer = setInterval(
+			writeArchiveSummary,
+			archiveSummaryIntervalMs
+		);
 	};
 
 	const stop = (): void => {
-		if (clients.size > 0 || timer === undefined) return;
-		clearInterval(timer);
-		timer = undefined;
+		if (clients.size > 0) return;
+		if (archiveEventTimer !== undefined) clearInterval(archiveEventTimer);
+		if (archiveSummaryTimer !== undefined) clearInterval(archiveSummaryTimer);
+		if (fastTimer !== undefined) clearInterval(fastTimer);
+		archiveEventTimer = undefined;
+		archiveSummaryTimer = undefined;
+		fastTimer = undefined;
 	};
 
 	webSocketServer.on('connection', (client) => {
@@ -126,38 +187,63 @@ export function attachStatusLiveWebSocket(
 	});
 }
 
-async function collectStatusLiveSnapshot(
+async function collectFastStatusPatch(
 	config: StatusLiveWebSocketConfig
-): Promise<StatusLiveSnapshot> {
-	const [
-		api,
-		dataQuality,
-		frontend,
-		archiveEvents,
-		archiveSummary,
-		scanLogs,
-		workers
-	] = await Promise.all([
+): Promise<StatusLivePatch> {
+	const [api, dataQuality, frontend, scanLogs, workers] = await Promise.all([
 		readResult(config.getApiStatus.execute()),
 		readResult(config.getDataQualityStatus.execute()),
 		readResult(config.getFrontendStatus.execute()),
-		readResult(
-			config.getHistoryArchiveObjectEvents.execute({ limit: archiveEventLimit })
-		),
-		readResult(config.getHistoryArchiveObjectSummary.execute()),
 		readResult(config.getScanLogStatus.execute(scanLogLimit)),
 		readResult(config.getWorkerStatus.execute())
 	]);
 
 	return {
 		api,
-		archiveEvents,
-		archiveSummary,
 		dataQuality,
 		frontend,
 		generatedAt: new Date().toISOString(),
 		scanLogs,
 		workers
+	};
+}
+
+async function collectArchiveEventsPatch(
+	config: StatusLiveWebSocketConfig
+): Promise<StatusLivePatch> {
+	const archiveEvents = await readResult(
+		config.getHistoryArchiveObjectEvents.execute({ limit: archiveEventLimit })
+	);
+
+	return {
+		archiveEvents: stripArchiveEventFacts(archiveEvents),
+		generatedAt: new Date().toISOString()
+	};
+}
+
+async function collectArchiveSummaryPatch(
+	config: StatusLiveWebSocketConfig
+): Promise<StatusLivePatch> {
+	const archiveSummary = await readResult(
+		config.getHistoryArchiveObjectSummary.execute()
+	);
+
+	return {
+		archiveSummary,
+		generatedAt: new Date().toISOString()
+	};
+}
+
+function stripArchiveEventFacts(
+	events: HistoryArchiveObjectEventsV1
+): HistoryArchiveObjectEventsV1 {
+	return {
+		...events,
+		events: events.events.map((event) =>
+			event.verificationFacts === null
+				? event
+				: { ...event, verificationFacts: null }
+		)
 	};
 }
 

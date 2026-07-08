@@ -35,8 +35,16 @@ export const historyArchiveObjectClaimSql = `
 			candidate."checkpointLedger",
 			candidate."objectKey"
 		from history_archive_object_queue candidate
+		cross join active_total
+		left join active_archive
+			on active_archive."archiveUrlIdentity" = candidate."archiveUrlIdentity"
+		left join active_host
+			on active_host."hostIdentity" = candidate."hostIdentity"
 		where candidate.status = 'pending'
 			and candidate."objectType" = any($1)
+			and active_total.active_count < $3
+			and coalesce(active_archive.active_count, 0) < $2
+			and coalesce(active_host.active_count, 0) < $4
 			and not exists (
 				select 1
 				from host_throttle
@@ -45,10 +53,8 @@ export const historyArchiveObjectClaimSql = `
 		order by
 			case
 				when candidate."objectType" = 'history-archive-state' then 0
-				when candidate."objectType" = 'checkpoint-state' then 1
-				when candidate."objectType" in ('ledger', 'transactions', 'results', 'scp') then 2
-				when candidate."objectType" = 'bucket' then 3
-				else 4
+				when candidate."objectType" = 'checkpoint-state' then 2
+				else 1
 			end asc,
 			coalesce(candidate."checkpointLedger", -1) desc,
 			candidate."objectOrder" asc,
@@ -66,12 +72,20 @@ export const historyArchiveObjectClaimSql = `
 			candidate."checkpointLedger",
 			candidate."objectKey"
 		from history_archive_object_queue candidate
+		cross join active_total
+		left join active_archive
+			on active_archive."archiveUrlIdentity" = candidate."archiveUrlIdentity"
+		left join active_host
+			on active_host."hostIdentity" = candidate."hostIdentity"
 		where candidate.status = 'failed'
 			and coalesce(
 				candidate."nextAttemptAt",
 				candidate."updatedAt" + interval '1 hour'
 			) <= now()
 			and candidate."objectType" = any($1)
+			and active_total.active_count < $3
+			and coalesce(active_archive.active_count, 0) < $2
+			and coalesce(active_host.active_count, 0) < $4
 			and not exists (
 				select 1
 				from host_throttle
@@ -80,10 +94,8 @@ export const historyArchiveObjectClaimSql = `
 		order by
 			case
 				when candidate."objectType" = 'history-archive-state' then 0
-				when candidate."objectType" = 'checkpoint-state' then 1
-				when candidate."objectType" in ('ledger', 'transactions', 'results', 'scp') then 2
-				when candidate."objectType" = 'bucket' then 3
-				else 4
+				when candidate."objectType" = 'checkpoint-state' then 2
+				else 1
 			end asc,
 			coalesce(candidate."checkpointLedger", -1) desc,
 			candidate."objectOrder" asc,
@@ -113,10 +125,8 @@ export const historyArchiveObjectClaimSql = `
 		order by
 			case
 				when candidate."objectType" = 'history-archive-state' then 0
-				when candidate."objectType" = 'checkpoint-state' then 1
-				when candidate."objectType" in ('ledger', 'transactions', 'results', 'scp') then 2
-				when candidate."objectType" = 'bucket' then 3
-				else 4
+				when candidate."objectType" = 'checkpoint-state' then 2
+				else 1
 			end asc,
 			coalesce(candidate."checkpointLedger", -1) desc,
 			candidate."objectOrder" asc,

@@ -21,6 +21,12 @@ export interface StatusLiveSnapshot {
 }
 
 export type StatusLiveMessage =
+	| {
+			readonly payload: Partial<StatusLiveSnapshot> & {
+				readonly generatedAt: string;
+			};
+			readonly type: 'status-patch';
+	  }
 	| { readonly payload: StatusLiveSnapshot; readonly type: 'status' }
 	| { readonly payload: { readonly message: string }; readonly type: 'error' };
 

@@ -70,9 +70,7 @@ describe('CompleteHistoryArchiveObject', () => {
 		expect(objectRepository.clearHostThrottle).toHaveBeenCalledWith(
 			'history.example.com'
 		);
-		expect(checkpointProofRepository.refreshForObject).toHaveBeenCalledWith(
-			archiveObject
-		);
+		expect(checkpointProofRepository.refreshForObject).not.toHaveBeenCalled();
 	});
 
 	it('schedules checkpoint sibling objects from verified checkpoint state facts', async () => {
@@ -168,6 +166,28 @@ describe('CompleteHistoryArchiveObject', () => {
 		expect(objectRepository.markObjectVerified).toHaveBeenCalled();
 	});
 
+	it('refreshes checkpoint proof after bucket verification', async () => {
+		const archiveObject = createBucketObject();
+		objectRepository.findByRemoteId.mockResolvedValue(archiveObject);
+
+		const result = await new CompleteHistoryArchiveObject(
+			objectRepository,
+			stateRepository,
+			eventRecorder,
+			checkpointProofRepository,
+			exceptionLogger
+		).execute(archiveObject.remoteId, {
+			bytesDownloaded: 1234,
+			claimAttempt: 1,
+			workerStage: 'verified'
+		});
+
+		expect(result._unsafeUnwrap()).toBe(true);
+		expect(checkpointProofRepository.refreshForObject).toHaveBeenCalledWith(
+			archiveObject
+		);
+	});
+
 	it('uses persisted root state passphrase before scheduling early scp objects', async () => {
 		const archiveObject = createCheckpointObject(1_214_015);
 		objectRepository.findByRemoteId.mockResolvedValue(archiveObject);
@@ -256,6 +276,23 @@ function createCheckpointObject(checkpointLedger = 127): HistoryArchiveObject {
 		objectOrder: 10,
 		objectType: 'checkpoint-state',
 		objectUrl: `https://history.example.com/archive/history/${checkpointHex.slice(0, 2)}/${checkpointHex.slice(2, 4)}/${checkpointHex.slice(4, 6)}/history-${checkpointHex}.json`,
+		remoteId: '11111111-1111-4111-8111-111111111111',
+		status: 'scanning'
+	});
+}
+
+function createBucketObject(): HistoryArchiveObject {
+	const bucketHash =
+		'4eae73efaa0ce061441dfe43ffc61c0ed24fcbc59e5ee512d1b60e8da2509655';
+
+	return new HistoryArchiveObject({
+		archiveUrl: 'https://history.example.com/archive',
+		archiveUrlIdentity: 'https://history.example.com/archive',
+		bucketHash,
+		objectKey: `bucket:${bucketHash}`,
+		objectOrder: 50,
+		objectType: 'bucket',
+		objectUrl: `https://history.example.com/archive/bucket/4e/ae/73/bucket-${bucketHash}.xdr.gz`,
 		remoteId: '11111111-1111-4111-8111-111111111111',
 		status: 'scanning'
 	});

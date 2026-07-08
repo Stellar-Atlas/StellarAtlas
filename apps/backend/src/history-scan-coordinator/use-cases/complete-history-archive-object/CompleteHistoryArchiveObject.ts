@@ -214,5 +214,5 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 function shouldRefreshCheckpointProof(object: HistoryArchiveObject): boolean {
-	return object.objectType !== 'bucket';
+	return object.checkpointLedger !== null || object.bucketHash !== null;
 }
