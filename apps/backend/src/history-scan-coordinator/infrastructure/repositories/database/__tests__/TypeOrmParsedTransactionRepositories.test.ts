@@ -191,6 +191,55 @@ describe('TypeOrmParsedTransactionResultRepository', () => {
 			transactionResultHash: 'transaction-result-hash'
 		});
 	});
+
+	it('should find recent transaction results with ledger and envelope context', async () => {
+		const repository = {
+			query: jest.fn().mockResolvedValueOnce([
+				{
+					envelopeObservedAt: '2026-07-07T19:34:00.000Z',
+					envelopeSourceArchiveUrl: 'https://archive-envelope.example',
+					headerObservedAt: '2026-07-07T19:33:00.000Z',
+					headerSourceArchiveUrl: 'https://archive-header.example',
+					ledgerHeaderHash: 'ledger-header-hash',
+					ledgerSequence: '63355967',
+					protocolVersion: '27',
+					resultObservedAt: '2026-07-07T19:35:00.000Z',
+					resultSourceArchiveUrl: 'https://archive-result.example',
+					transactionHash: 'transaction-hash',
+					transactionIndex: '4',
+					transactionResultHash: 'transaction-result-hash',
+					transactionSetHash: 'transaction-set-hash'
+				}
+			])
+		} as unknown as Repository<ParsedTransactionResult>;
+		const parsedRepository = new TypeOrmParsedTransactionResultRepository(
+			repository
+		);
+
+		await expect(
+			parsedRepository.findRecentWithLedgerContext(5)
+		).resolves.toEqual([
+			{
+				envelopeObservedAt: new Date('2026-07-07T19:34:00.000Z'),
+				envelopeSourceArchiveUrl: 'https://archive-envelope.example',
+				headerObservedAt: new Date('2026-07-07T19:33:00.000Z'),
+				headerSourceArchiveUrl: 'https://archive-header.example',
+				ledgerHeaderHash: 'ledger-header-hash',
+				ledgerSequence: 63355967,
+				protocolVersion: 27,
+				resultObservedAt: new Date('2026-07-07T19:35:00.000Z'),
+				resultSourceArchiveUrl: 'https://archive-result.example',
+				transactionHash: 'transaction-hash',
+				transactionIndex: 4,
+				transactionResultHash: 'transaction-result-hash',
+				transactionSetHash: 'transaction-set-hash'
+			}
+		]);
+		expect(repository.query).toHaveBeenCalledWith(
+			expect.stringContaining('from parsed_transaction_result tx_result'),
+			[5]
+		);
+	});
 });
 
 function createInsertBuilder() {

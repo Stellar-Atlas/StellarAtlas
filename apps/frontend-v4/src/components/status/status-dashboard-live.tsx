@@ -2,10 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { subscribeToStatusStream } from '@api/status-live-stream';
-import {
-	StatusDashboard,
-	type StatusDashboardProps
-} from './status-dashboard';
+import { StatusDashboard, type StatusDashboardProps } from './status-dashboard';
 
 export function StatusDashboardLive(
 	props: StatusDashboardProps
@@ -25,7 +22,6 @@ export function StatusDashboardLive(
 					api: message.payload.api ?? current.api,
 					archiveEvents: message.payload.archiveEvents ?? current.archiveEvents,
 					archiveEvidenceAvailable:
-						message.payload.archiveEvents !== undefined ||
 						message.payload.archiveSummary !== undefined ||
 						current.archiveEvidenceAvailable,
 					archiveSummary:

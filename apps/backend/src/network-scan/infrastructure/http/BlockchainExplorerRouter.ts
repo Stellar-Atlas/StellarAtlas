@@ -18,10 +18,15 @@ import {
 } from './HorizonLedgerClient.js';
 import { fetchExplorerTransactionOperations } from './ExplorerTransactionOperationClient.js';
 import type { GetExplorerLocalReadModel } from '../../use-cases/get-explorer-local-read-model/GetExplorerLocalReadModel.js';
+import type { GetExplorerLocalTransactions } from '../../use-cases/get-explorer-local-transactions/GetExplorerLocalTransactions.js';
 
 export interface BlockchainExplorerRouterConfig {
 	readonly getExplorerLocalReadModel: Pick<
 		GetExplorerLocalReadModel,
+		'execute'
+	>;
+	readonly getExplorerLocalTransactions: Pick<
+		GetExplorerLocalTransactions,
 		'execute'
 	>;
 	readonly horizonUrl: string;
@@ -47,6 +52,23 @@ export const blockchainExplorerRouter = (
 			return res
 				.status(502)
 				.json({ error: 'Explorer local read model unavailable' });
+		}
+	});
+
+	router.get('/local-transactions', async (req, res) => {
+		const limit = readRecentTransactionLimit(req.query.limit);
+		if (limit === null)
+			return res.status(400).json({ error: 'Invalid local transaction limit' });
+
+		setCacheHeader(res);
+		try {
+			return res
+				.status(200)
+				.json(await config.getExplorerLocalTransactions.execute(limit));
+		} catch {
+			return res
+				.status(502)
+				.json({ error: 'Explorer local transactions unavailable' });
 		}
 	});
 

@@ -460,6 +460,36 @@
 				}
 			}
 		},
+		"/v1/explorer/local-transactions": {
+			"get": {
+				"summary": "Get recent locally parsed transactions",
+				"description": "Returns bounded recent transaction-result rows persisted by the archive parser, with parsed ledger-header and envelope join evidence when present. This proves local ETL progress without using Horizon.",
+				"tags": ["Explorer", "Full History"],
+				"operationId": "getExplorerLocalTransactions",
+				"parameters": [
+					{
+						"name": "limit",
+						"in": "query",
+						"required": false,
+						"schema": { "type": "integer", "minimum": 1, "maximum": 50 }
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "Recent locally parsed transactions",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/ExplorerLocalTransactions"
+								}
+							}
+						}
+					},
+					"400": { "description": "Invalid local transaction limit" },
+					"502": { "description": "Explorer local transactions unavailable" }
+				}
+			}
+		},
 		"/v1/explorer/search": {
 			"get": {
 				"summary": "Search the Horizon-backed explorer helpers",
@@ -7923,6 +7953,128 @@
 							"source": { "type": "string", "enum": ["horizon_fallback"] }
 						}
 					}
+				}
+			},
+			"ExplorerLocalTransactions": {
+				"type": "object",
+				"required": [
+					"count",
+					"generatedAt",
+					"limit",
+					"readModel",
+					"records",
+					"source"
+				],
+				"properties": {
+					"count": { "type": "integer", "minimum": 0 },
+					"generatedAt": { "type": "string", "format": "date-time" },
+					"limit": { "type": "integer", "minimum": 1, "maximum": 50 },
+					"readModel": {
+						"type": "object",
+						"required": [
+							"assetIndexReady",
+							"contractIndexReady",
+							"envelopeJoinReady",
+							"evidenceSelection",
+							"ledgerHeaderJoinReady",
+							"operationIndexReady",
+							"parsedTransactionResultsReady"
+						],
+						"properties": {
+							"assetIndexReady": { "type": "boolean", "enum": [false] },
+							"contractIndexReady": { "type": "boolean", "enum": [false] },
+							"envelopeJoinReady": { "type": "boolean" },
+							"evidenceSelection": {
+								"type": "string",
+								"enum": [
+									"parsed_transaction_result_joined_to_parsed_ledger_header_and_envelope"
+								]
+							},
+							"ledgerHeaderJoinReady": { "type": "boolean" },
+							"operationIndexReady": { "type": "boolean", "enum": [false] },
+							"parsedTransactionResultsReady": { "type": "boolean" }
+						}
+					},
+					"records": {
+						"type": "array",
+						"items": {
+							"$ref": "#/components/schemas/ExplorerLocalTransaction"
+						}
+					},
+					"source": {
+						"type": "string",
+						"enum": ["parsed_history_postgres"]
+					}
+				}
+			},
+			"ExplorerLocalTransaction": {
+				"type": "object",
+				"required": [
+					"joins",
+					"ledger",
+					"ledgerHeaderHash",
+					"localEvidence",
+					"protocolVersion",
+					"transactionHash",
+					"transactionIndex",
+					"transactionResultHash",
+					"transactionSetHash"
+				],
+				"properties": {
+					"joins": {
+						"type": "object",
+						"required": ["envelopeAvailable", "ledgerHeaderAvailable"],
+						"properties": {
+							"envelopeAvailable": { "type": "boolean" },
+							"ledgerHeaderAvailable": { "type": "boolean" }
+						}
+					},
+					"ledger": { "type": "string" },
+					"ledgerHeaderHash": { "type": "string", "nullable": true },
+					"localEvidence": {
+						"type": "object",
+						"required": [
+							"envelopeObservedAt",
+							"envelopeSourceArchiveUrl",
+							"ledgerHeaderObservedAt",
+							"ledgerHeaderSourceArchiveUrl",
+							"resultObservedAt",
+							"resultSourceArchiveUrl"
+						],
+						"properties": {
+							"envelopeObservedAt": {
+								"type": "string",
+								"format": "date-time",
+								"nullable": true
+							},
+							"envelopeSourceArchiveUrl": {
+								"type": "string",
+								"nullable": true
+							},
+							"ledgerHeaderObservedAt": {
+								"type": "string",
+								"format": "date-time",
+								"nullable": true
+							},
+							"ledgerHeaderSourceArchiveUrl": {
+								"type": "string",
+								"nullable": true
+							},
+							"resultObservedAt": {
+								"type": "string",
+								"format": "date-time"
+							},
+							"resultSourceArchiveUrl": { "type": "string" }
+						}
+					},
+					"protocolVersion": {
+						"type": "integer",
+						"nullable": true
+					},
+					"transactionHash": { "type": "string" },
+					"transactionIndex": { "type": "integer", "minimum": 0 },
+					"transactionResultHash": { "type": "string" },
+					"transactionSetHash": { "type": "string", "nullable": true }
 				}
 			},
 			"ExplorerLedger": {

@@ -16,7 +16,7 @@ export function RecentScanLogs({
 }: {
 	readonly scanLogs: PublicScanLogStatus;
 }): React.JSX.Element {
-	const [filter, setFilter] = useState<ScanLogFilter>('attention');
+	const [filter, setFilter] = useState<ScanLogFilter>('all');
 	const networkScans = useMemo(
 		() => filterNetworkScans(scanLogs.networkScans, filter),
 		[filter, scanLogs.networkScans]
@@ -48,6 +48,12 @@ export function RecentScanLogs({
 					))}
 				</div>
 			</div>
+			{filter === 'attention' ? (
+				<p className="muted-copy">
+					Attention shows incomplete scans only. Use All scans for the normal
+					recent scan history.
+				</p>
+			) : null}
 			<NetworkScanTable filter={filter} scans={networkScans} />
 		</section>
 	);
@@ -100,7 +106,9 @@ function NetworkScanRow({
 			<td>{formatInteger(scan.ledgersCount)}</td>
 			<td>{formatInteger(scheduling.discoveredArchiveUrlCount)}</td>
 			<td>{formatInteger(scheduling.scheduledArchiveScanJobCount)}</td>
-			<td>{formatInteger(scheduling.duplicateSuppressedArchiveScanJobCount)}</td>
+			<td>
+				{formatInteger(scheduling.duplicateSuppressedArchiveScanJobCount)}
+			</td>
 			<td>{formatInteger(scheduling.schedulerErrorCount)}</td>
 		</tr>
 	);

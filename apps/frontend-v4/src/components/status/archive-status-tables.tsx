@@ -10,12 +10,14 @@ import {
 	formatPercent
 } from '@format/formatters';
 import { StatusPill } from './status-ui';
+import { CheckpointProofGuide } from './checkpoint-proof-guide';
 
 interface StatusArchiveEvidenceTablesProps {
 	readonly summary: PublicHistoryArchiveObjectSummary;
 }
 
-type ArchiveSourceSummary = PublicHistoryArchiveObjectSummary['sources'][number];
+type ArchiveSourceSummary =
+	PublicHistoryArchiveObjectSummary['sources'][number];
 
 export function StatusArchiveEvidenceTables({
 	summary
@@ -67,7 +69,10 @@ function ArchiveRootPanel({
 					<tbody>
 						{sources.length > 0 ? (
 							sources.map((source) => (
-								<ArchiveSourceRow key={source.archiveUrlIdentity} source={source} />
+								<ArchiveSourceRow
+									key={source.archiveUrlIdentity}
+									source={source}
+								/>
 							))
 						) : (
 							<tr>
@@ -208,8 +213,8 @@ function ObjectTypeDetails({
 				</span>
 			</summary>
 			<p className="muted-copy">
-				These are archive file checks grouped by file type. They are not
-				decoded ledger, transaction, operation, or contract counts.
+				These are archive file checks grouped by file type. They are not decoded
+				ledger, transaction, operation, or contract counts.
 			</p>
 			<div className="responsive-table">
 				<table className="archive-object-type-table">
@@ -307,11 +312,12 @@ function CheckpointProofPanel({
 				</table>
 			</div>
 			<p className="muted-copy">
-				Each row represents one archive source at one 64-ledger checkpoint.
-				The proof first waits for the expected history, ledger, transaction,
-				result, SCP, and bucket files, then verifies that those files agree by
-				hash. This is archive consistency evidence, not decoded explorer data.
+				This section tracks one proof row per archive source and 64-ledger
+				checkpoint. A proof can run only after the scanner has evidence for the
+				checkpoint history file, ledger file, transaction file, result file, SCP
+				file, and bucket files referenced by that checkpoint.
 			</p>
+			<CheckpointProofGuide />
 		</section>
 	);
 }
@@ -413,12 +419,21 @@ function formatCheckpointProofStatus(
 ): string {
 	const checkpoints = summary.checkpoints;
 	if (checkpoints.categoryConsistencyFailedCheckpoints > 0) {
-		return `${formatInteger(checkpoints.categoryConsistencyFailedCheckpoints)} failed`;
+		return `${formatInteger(checkpoints.categoryConsistencyFailedCheckpoints)} mismatches`;
 	}
 	if (checkpoints.categoryConsistentArchiveCheckpoints > 0) {
-		return `${formatInteger(checkpoints.categoryConsistentArchiveCheckpoints)} consistent`;
+		return `${formatInteger(checkpoints.categoryConsistentArchiveCheckpoints)} proven`;
 	}
-	return 'not checked yet';
+	if (checkpoints.objectCompleteArchiveCheckpoints > 0) {
+		return `${formatInteger(checkpoints.objectCompleteArchiveCheckpoints)} ready`;
+	}
+	if (checkpoints.categoryConsistencyPendingCheckpoints > 0) {
+		return 'waiting for files';
+	}
+	if (checkpoints.categoryConsistencyNotEvaluatedCheckpoints > 0) {
+		return 'collecting evidence';
+	}
+	return 'no proofs yet';
 }
 
 function formatObjectQueuePill(

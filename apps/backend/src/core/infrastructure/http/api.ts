@@ -16,8 +16,6 @@ import { UnmuteNotification } from '@notifications/use-cases/unmute-notification
 import { Unsubscribe } from '@notifications/use-cases/unsubscribe/Unsubscribe.js';
 import { networkRouter } from '@network-scan/infrastructure/http/NetworkRouter.js';
 import { knownNetworkRouter } from '@network-scan/infrastructure/http/KnownNetworkRouter.js';
-import { horizonExplorerRouter } from '@network-scan/infrastructure/http/HorizonExplorerRouter.js';
-import { blockchainExplorerRouter } from '@network-scan/infrastructure/http/BlockchainExplorerRouter.js';
 import { attachNetworkLiveWebSocket } from '@network-scan/infrastructure/http/NetworkLiveWebSocket.js';
 import helmet from 'helmet';
 import { GetNetwork } from '@network-scan/use-cases/get-network/GetNetwork.js';
@@ -40,7 +38,6 @@ import { GetOrganizations } from '@network-scan/use-cases/get-organizations/GetO
 import { GetMeasurementsFactory } from '@network-scan/use-cases/get-measurements/GetMeasurementsFactory.js';
 import { GetMeasurementAggregations } from '@network-scan/use-cases/get-measurement-aggregations/GetMeasurementAggregations.js';
 import { GetScpStatements } from '@network-scan/use-cases/get-scp-statements/GetScpStatements.js';
-import { GetExplorerLocalReadModel } from '@network-scan/use-cases/get-explorer-local-read-model/GetExplorerLocalReadModel.js';
 import { RequestUnsubscribeLink } from '@notifications/use-cases/request-unsubscribe-link/RequestUnsubscribeLink.js';
 import { RegisterScan } from '@history-scan-coordinator/use-cases/register-scan/RegisterScan.js';
 import { RegisterParsedLedgerHeaders } from '@history-scan-coordinator/use-cases/register-parsed-ledger-headers/RegisterParsedLedgerHeaders.js';
@@ -106,6 +103,7 @@ import { GetLatestFbasProofSets } from '@fbas/use-cases/get-latest-fbas-proof-se
 import { GetLatestFbas } from '@fbas/use-cases/get-latest-fbas/GetLatestFbas.js';
 import { GetTopTierHistory } from '@fbas/use-cases/get-top-tier-history/GetTopTierHistory.js';
 import { frontendV4ProxyMiddleware } from './FrontendV4Proxy.js';
+import { mountExplorerRoutes } from './ExplorerRoutes.js';
 
 let server: Server;
 const serverSockets = new Set<Socket>();
@@ -340,23 +338,7 @@ const listen = async () => {
 		})
 	);
 
-	api.use(
-		'/v1',
-		horizonExplorerRouter({
-			horizonUrl: config.horizonUrl.value
-		})
-	);
-
-	api.use(
-		'/v1/explorer',
-		blockchainExplorerRouter({
-			getExplorerLocalReadModel: kernel.container.get(
-				GetExplorerLocalReadModel
-			),
-			horizonUrl: config.horizonUrl.value,
-			rpcUrl: config.rpcUrl?.value
-		})
-	);
+	mountExplorerRoutes(api, kernel, config);
 
 	api.use(
 		['/v1/node', '/v1/nodes'],

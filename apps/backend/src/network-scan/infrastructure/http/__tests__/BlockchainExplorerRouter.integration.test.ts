@@ -33,6 +33,47 @@ const createApp = () => {
 					}
 				})
 			},
+			getExplorerLocalTransactions: {
+				execute: async (limit: number) => ({
+					count: 1,
+					generatedAt: '2026-07-06T00:00:00.000Z',
+					limit,
+					readModel: {
+						assetIndexReady: false,
+						contractIndexReady: false,
+						envelopeJoinReady: true,
+						evidenceSelection:
+							'parsed_transaction_result_joined_to_parsed_ledger_header_and_envelope',
+						ledgerHeaderJoinReady: true,
+						operationIndexReady: false,
+						parsedTransactionResultsReady: true
+					},
+					records: [
+						{
+							joins: {
+								envelopeAvailable: true,
+								ledgerHeaderAvailable: true
+							},
+							ledger: '63355967',
+							ledgerHeaderHash: 'ledger-header-hash',
+							localEvidence: {
+								envelopeObservedAt: '2026-07-06T00:00:00.000Z',
+								envelopeSourceArchiveUrl: 'https://archive-a.example',
+								ledgerHeaderObservedAt: '2026-07-06T00:00:00.000Z',
+								ledgerHeaderSourceArchiveUrl: 'https://archive-a.example',
+								resultObservedAt: '2026-07-06T00:00:00.000Z',
+								resultSourceArchiveUrl: 'https://archive-a.example'
+							},
+							protocolVersion: 27,
+							transactionHash: 'a'.repeat(64),
+							transactionIndex: 4,
+							transactionResultHash: 'transaction-result-hash',
+							transactionSetHash: 'transaction-set-hash'
+						}
+					],
+					source: 'parsed_history_postgres'
+				})
+			},
 			horizonUrl: 'https://horizon.example'
 		})
 	);
@@ -97,6 +138,54 @@ describe('BlockchainExplorerRouter.integration', () => {
 					}
 				});
 			});
+	});
+
+	it('returns local parsed transaction evidence', async () => {
+		const fetchSpy = jest.spyOn(global, 'fetch');
+
+		await request(createApp())
+			.get('/v1/explorer/local-transactions?limit=2')
+			.expect(200)
+			.expect('Cache-Control', 'public, max-age=20')
+			.expect((response) => {
+				expect(response.body).toMatchObject({
+					count: 1,
+					limit: 2,
+					readModel: {
+						envelopeJoinReady: true,
+						ledgerHeaderJoinReady: true,
+						parsedTransactionResultsReady: true
+					},
+					records: [
+						{
+							joins: {
+								envelopeAvailable: true,
+								ledgerHeaderAvailable: true
+							},
+							ledger: '63355967',
+							transactionHash: 'a'.repeat(64)
+						}
+					],
+					source: 'parsed_history_postgres'
+				});
+			});
+
+		expect(fetchSpy).not.toHaveBeenCalled();
+	});
+
+	it('rejects unbounded local transaction limits before any lookup', async () => {
+		const fetchSpy = jest.spyOn(global, 'fetch');
+
+		await request(createApp())
+			.get('/v1/explorer/local-transactions?limit=500')
+			.expect(400)
+			.expect((response) => {
+				expect(response.body).toEqual({
+					error: 'Invalid local transaction limit'
+				});
+			});
+
+		expect(fetchSpy).not.toHaveBeenCalled();
 	});
 
 	it('rejects invalid account operation filters before Horizon lookup', async () => {

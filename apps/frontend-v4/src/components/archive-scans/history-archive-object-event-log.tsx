@@ -147,7 +147,7 @@ function EventHistoryDetails({
 	}
 
 	return (
-		<details className="metadata-document archive-object-details">
+		<details className="metadata-document archive-object-details" open>
 			<summary>
 				<span>{formatFilterTitle(activeFilter)} activity</span>
 				<span className="muted-inline">
@@ -358,7 +358,8 @@ function countEventFilters(
 		check: events.filter((event) => eventMatchesFilter(event, 'check')).length,
 		download: events.filter((event) => eventMatchesFilter(event, 'download'))
 			.length,
-		failed: events.filter((event) => eventMatchesFilter(event, 'failed')).length,
+		failed: events.filter((event) => eventMatchesFilter(event, 'failed'))
+			.length,
 		parse: events.filter((event) => eventMatchesFilter(event, 'parse')).length,
 		verified: events.filter((event) => eventMatchesFilter(event, 'verified'))
 			.length
