@@ -26,7 +26,7 @@ export class TypeOrmHistoryArchiveCheckpointProofRepository implements HistoryAr
 				archiveUrlIdentity
 			})
 			.andWhere('proof.status in (:...statuses)', {
-				statuses: ['mismatch', 'not-evaluable']
+				statuses: ['mismatch']
 			})
 			.orderBy('proof.evaluatedAt', 'DESC')
 			.addOrderBy('proof.checkpointLedger', 'DESC')

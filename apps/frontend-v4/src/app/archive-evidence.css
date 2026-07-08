@@ -470,6 +470,13 @@
 	overflow-wrap: anywhere;
 }
 
+.archive-repair-table td strong,
+.archive-repair-table td small {
+	overflow: visible;
+	text-overflow: clip;
+	white-space: normal;
+}
+
 .archive-object-url,
 .archive-object-url a,
 .archive-object-hash,

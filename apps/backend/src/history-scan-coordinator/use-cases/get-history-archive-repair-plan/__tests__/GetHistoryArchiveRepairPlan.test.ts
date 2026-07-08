@@ -65,6 +65,28 @@ describe('GetHistoryArchiveRepairPlan', () => {
 		);
 	});
 
+	it('does not turn incomplete checkpoint proofs into repair actions', async () => {
+		const objectRepository = mock<HistoryArchiveObjectRepository>();
+		const proofRepository = mock<HistoryArchiveCheckpointProofRepository>();
+		const useCase = new GetHistoryArchiveRepairPlan(
+			objectRepository,
+			proofRepository,
+			mock<ExceptionLogger>()
+		);
+		objectRepository.getSummary.mockResolvedValue(createSummary());
+		objectRepository.findActionableByArchiveUrl.mockResolvedValue([]);
+		objectRepository.findBucketObjectsByHash.mockResolvedValue([]);
+		proofRepository.findActionableByArchiveUrlIdentity.mockResolvedValue([
+			createIncompleteCheckpointProof()
+		]);
+
+		const result = await useCase.execute({ limit: 25, url: archiveUrl });
+
+		expect(result.isOk()).toBe(true);
+		if (result.isErr()) return;
+		expect(result.value.actions).toEqual([]);
+	});
+
 	it('rejects invalid archive URLs before hitting repositories', async () => {
 		const objectRepository = mock<HistoryArchiveObjectRepository>();
 		const proofRepository = mock<HistoryArchiveCheckpointProofRepository>();
@@ -158,6 +180,16 @@ function createCheckpointProof(): HistoryArchiveCheckpointProof {
 		transactionFactCount: 1,
 		transactionsMatch: false,
 		verifiedBucketCount: 4
+	} satisfies Partial<HistoryArchiveCheckpointProof>);
+}
+
+function createIncompleteCheckpointProof(): HistoryArchiveCheckpointProof {
+	return Object.assign(createCheckpointProof(), {
+		bucketsVerified: false,
+		failureKind: 'bucket-missing',
+		missingBucketCount: 4,
+		status: 'not-evaluable',
+		verifiedBucketCount: 0
 	} satisfies Partial<HistoryArchiveCheckpointProof>);
 }
 

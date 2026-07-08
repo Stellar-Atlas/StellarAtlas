@@ -21,7 +21,9 @@ export function NodeArchiveRepairPlan({
 	if (!hasActions && !hasBlocks) {
 		return (
 			<p className="archive-good-state">
-				No archive repair actions are supported by current scanner evidence.
+				No confirmed repair actions yet. The scanner is still collecting
+				checkpoint proof and will list repairable archive files only after it
+				has concrete failure evidence.
 			</p>
 		);
 	}
@@ -176,8 +178,10 @@ function formatActionKind(
 	}
 	if (kind === 'replace-bucket-file') return 'Replace bucket file';
 	if (kind === 'replace-archive-file') return 'Replace archive file';
-	if (kind === 'repair-checkpoint-proof') return 'Repair checkpoint proof';
-	return 'Wait for scanner proof';
+	if (kind === 'repair-checkpoint-proof') {
+		return 'Repair checkpoint consistency';
+	}
+	return 'Waiting for scanner proof';
 }
 
 function formatActionReason(
@@ -191,7 +195,7 @@ function formatSeverity(
 ): string {
 	if (severity === 'error') return 'repair';
 	if (severity === 'blocked') return 'blocked';
-	return 'watch';
+	return 'waiting';
 }
 
 function formatArchiveSource(value: string): string {

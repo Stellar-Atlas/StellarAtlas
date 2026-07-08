@@ -183,6 +183,8 @@ function toObjectAction(
 function toCheckpointAction(
 	proof: HistoryArchiveCheckpointProof
 ): readonly HistoryArchiveRepairActionV1[] {
+	if (proof.status !== 'mismatch') return [];
+
 	const reason = getCheckpointRepairReason(proof.failureKind);
 	if (reason === 'object-incomplete' || reason === 'proof-facts-incomplete') {
 		return [];
@@ -199,7 +201,7 @@ function toCheckpointAction(
 			knownGoodSources: [],
 			reason,
 			severity: 'error',
-			summary: `Checkpoint ${proof.checkpointLedger} has failed cross-file proof.`
+			summary: `Checkpoint ${proof.checkpointLedger} has a hash mismatch across archive files.`
 		}
 	];
 }
