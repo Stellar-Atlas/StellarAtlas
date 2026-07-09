@@ -28,6 +28,8 @@ describe('FailHistoryArchiveObject', () => {
 		const archiveObject = new HistoryArchiveObject({
 			archiveUrl: 'https://history.example.com',
 			archiveUrlIdentity: 'https://history.example.com',
+			bucketHash:
+				'abcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcd',
 			objectKey: 'bucket:abc',
 			objectOrder: 50,
 			objectType: 'bucket',
@@ -77,7 +79,9 @@ describe('FailHistoryArchiveObject', () => {
 			eventType: 'failed',
 			evidenceClass: 'archive-object'
 		});
-		expect(checkpointProofRepository.refreshForObject).not.toHaveBeenCalled();
+		expect(checkpointProofRepository.refreshForObject).toHaveBeenCalledWith(
+			archiveObject
+		);
 	});
 
 	it('does not mutate a missing object row', async () => {

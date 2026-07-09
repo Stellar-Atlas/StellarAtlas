@@ -8,8 +8,8 @@ import type {
 } from '@history-scan-coordinator/domain/history-archive-checkpoint-proof/HistoryArchiveCheckpointProofRepository.js';
 import {
 	historyArchiveCheckpointProofRefreshSql,
-	toHistoryArchiveCheckpointProofRefreshParams
 } from './HistoryArchiveCheckpointProofRefreshSql.js';
+import { toHistoryArchiveCheckpointProofRefreshParams } from './HistoryArchiveCheckpointProofSqlInputs.js';
 
 @injectable()
 export class TypeOrmHistoryArchiveCheckpointProofRepository implements HistoryArchiveCheckpointProofRepository {

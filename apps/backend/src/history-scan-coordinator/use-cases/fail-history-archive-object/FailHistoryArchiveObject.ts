@@ -85,5 +85,5 @@ export class FailHistoryArchiveObject {
 }
 
 function shouldRefreshCheckpointProof(object: HistoryArchiveObject): boolean {
-	return object.objectType !== 'bucket';
+	return object.checkpointLedger !== null || object.bucketHash !== null;
 }

@@ -1,38 +1,10 @@
-import type { HistoryArchiveCheckpointProofRefreshTarget } from '@history-scan-coordinator/domain/history-archive-checkpoint-proof/HistoryArchiveCheckpointProofRepository.js';
-
-export function toHistoryArchiveCheckpointProofRefreshParams(
-	target: HistoryArchiveCheckpointProofRefreshTarget
-): readonly [string, number | null, string | null] {
-	return [
-		target.archiveUrlIdentity,
-		target.checkpointLedger ?? null,
-		target.bucketHash ?? null
-	];
-}
-
-const ledgerFactsJsonSql = `
-	coalesce(
-		"verificationFacts"->'ledgerCategory'->'ledgers',
-		'[]'::jsonb
-	)
-`;
-
-const transactionsFactsJsonSql = `
-	coalesce(
-		"verificationFacts"->'transactionsCategory'->'ledgers',
-		'[]'::jsonb
-	)
-`;
-
-const resultsFactsJsonSql = `
-	coalesce(
-		"verificationFacts"->'resultsCategory'->'ledgers',
-		'[]'::jsonb
-	)
-`;
-
-const archiveObjectFilterSql =
-	'"archiveUrlIdentity" = $1::text and "checkpointLedger" is not null';
+import {
+	archiveObjectFilterSql,
+	expectedBucketHashesSql,
+	ledgerFactsJsonSql,
+	resultsFactsJsonSql,
+	transactionsFactsJsonSql
+} from './HistoryArchiveCheckpointProofSqlInputs.js';
 
 export const historyArchiveCheckpointProofRefreshSql = `
 	with checkpoint_state_objects as (
@@ -44,39 +16,7 @@ export const historyArchiveCheckpointProofRefreshSql = `
 			and "checkpointLedger" is not null
 			and ($2::integer is null or "checkpointLedger" = $2::integer)
 	),
-	expected_bucket_hashes as (
-		select distinct
-			object."archiveUrl",
-			object."archiveUrlIdentity",
-			object."checkpointLedger",
-			lower(hash.value) as "bucketHash"
-		from checkpoint_state_objects object
-		cross join lateral jsonb_array_elements(
-			coalesce(
-				object."verificationFacts"
-					->'checkpointHistoryArchiveState'
-					->'stellarHistory'
-					->'currentBuckets',
-				'[]'::jsonb
-			)
-			|| coalesce(
-				object."verificationFacts"
-					->'checkpointHistoryArchiveState'
-					->'stellarHistory'
-					->'hotArchiveBuckets',
-				'[]'::jsonb
-			)
-		) bucket
-		cross join lateral (
-			values
-				(bucket->>'curr'),
-				(bucket->>'snap'),
-				(bucket->'next'->>'output')
-		) hash(value)
-		where hash.value is not null
-			and lower(hash.value) ~ '^[0-9a-f]{64}$'
-			and lower(hash.value) !~ '^0+$'
-	),
+	${expectedBucketHashesSql},
 	target_checkpoints as (
 		select distinct
 			"archiveUrlIdentity",
@@ -92,6 +32,20 @@ export const historyArchiveCheckpointProofRefreshSql = `
 		from expected_bucket_hashes
 		where $3::text is not null
 			and "bucketHash" = lower($3::text)
+	),
+	expected_checkpoint_ranges as (
+		select
+			"archiveUrlIdentity",
+			"checkpointLedger",
+			greatest("checkpointLedger" - 63, 1)::bigint
+				as first_expected_ledger,
+			"checkpointLedger"::bigint as last_expected_ledger,
+			(
+				"checkpointLedger"::bigint
+					- greatest("checkpointLedger" - 63, 1)::bigint
+					+ 1
+			)::bigint as expected_ledger_count
+		from target_checkpoints
 	),
 	checkpoint_rollup as (
 		select
@@ -143,10 +97,10 @@ export const historyArchiveCheckpointProofRefreshSql = `
 			select "checkpointLedger" from target_checkpoints
 		)
 	),
-	ledger_facts as (
+	all_ledger_facts as (
 		select
 			object."archiveUrlIdentity",
-			object."checkpointLedger",
+			object."checkpointLedger" as "sourceCheckpointLedger",
 			(fact->>'ledger')::bigint as ledger,
 			fact->>'ledgerHeaderHash' as ledger_header_hash,
 			fact->>'previousLedgerHeaderHash' as previous_ledger_header_hash,
@@ -154,12 +108,43 @@ export const historyArchiveCheckpointProofRefreshSql = `
 			fact->>'transactionResultSetHash' as transaction_result_hash,
 			fact->>'bucketListHash' as bucket_list_hash
 		from history_archive_object_queue object
-		join target_checkpoints target
-			on target."archiveUrlIdentity" = object."archiveUrlIdentity"
-			and target."checkpointLedger" = object."checkpointLedger"
 		cross join lateral jsonb_array_elements(${ledgerFactsJsonSql}) fact
 		where object."objectType" = 'ledger'
 			and object.status = 'verified'
+			and object."archiveUrlIdentity" in (
+				select "archiveUrlIdentity" from target_checkpoints
+			)
+	),
+	ledger_facts as (
+		select
+			target."archiveUrlIdentity",
+			target."checkpointLedger",
+			target.first_expected_ledger,
+			target.last_expected_ledger,
+			target.expected_ledger_count,
+			ledger.ledger,
+			ledger.ledger_header_hash,
+			ledger.previous_ledger_header_hash,
+			ledger.transaction_set_hash,
+			ledger.transaction_result_hash,
+			ledger.bucket_list_hash
+		from expected_checkpoint_ranges target
+		join all_ledger_facts ledger
+			on ledger."archiveUrlIdentity" = target."archiveUrlIdentity"
+			and ledger."sourceCheckpointLedger" = target."checkpointLedger"
+			and ledger.ledger between target.first_expected_ledger
+				and target.last_expected_ledger
+	),
+	previous_boundary_facts as (
+		select
+			target."archiveUrlIdentity",
+			target."checkpointLedger",
+			max(previous.ledger_header_hash) as previous_boundary_hash
+		from expected_checkpoint_ranges target
+		left join all_ledger_facts previous
+			on previous."archiveUrlIdentity" = target."archiveUrlIdentity"
+			and previous.ledger = target.first_expected_ledger - 1
+		group by target."archiveUrlIdentity", target."checkpointLedger"
 	),
 	ledger_chain as (
 		select
@@ -167,10 +152,7 @@ export const historyArchiveCheckpointProofRefreshSql = `
 			lag(ledger_header_hash) over (
 				partition by "archiveUrlIdentity", "checkpointLedger"
 				order by ledger
-			) as previous_fact_hash,
-			min(ledger) over (
-				partition by "archiveUrlIdentity", "checkpointLedger"
-			) as first_ledger
+			) as previous_fact_hash
 		from ledger_facts
 	),
 	transaction_facts as (
@@ -180,12 +162,14 @@ export const historyArchiveCheckpointProofRefreshSql = `
 			(fact->>'ledger')::bigint as ledger,
 			fact->>'hash' as hash
 		from history_archive_object_queue object
-		join target_checkpoints target
+		join expected_checkpoint_ranges target
 			on target."archiveUrlIdentity" = object."archiveUrlIdentity"
 			and target."checkpointLedger" = object."checkpointLedger"
 		cross join lateral jsonb_array_elements(${transactionsFactsJsonSql}) fact
 		where object."objectType" = 'transactions'
 			and object.status = 'verified'
+			and (fact->>'ledger')::bigint between target.first_expected_ledger
+				and target.last_expected_ledger
 	),
 	result_facts as (
 		select
@@ -194,20 +178,23 @@ export const historyArchiveCheckpointProofRefreshSql = `
 			(fact->>'ledger')::bigint as ledger,
 			fact->>'hash' as hash
 		from history_archive_object_queue object
-		join target_checkpoints target
+		join expected_checkpoint_ranges target
 			on target."archiveUrlIdentity" = object."archiveUrlIdentity"
 			and target."checkpointLedger" = object."checkpointLedger"
 		cross join lateral jsonb_array_elements(${resultsFactsJsonSql}) fact
 		where object."objectType" = 'results'
 			and object.status = 'verified'
+			and (fact->>'ledger')::bigint between target.first_expected_ledger
+				and target.last_expected_ledger
 	),
 	proof_rollup as (
 		select
 			ledger_chain."archiveUrlIdentity",
 			ledger_chain."checkpointLedger",
-			count(*) as ledger_fact_count,
-			count(transaction_facts.hash) as transaction_fact_count,
-			count(result_facts.hash) as result_fact_count,
+			max(ledger_chain.expected_ledger_count) as expected_ledger_count,
+			count(distinct ledger_chain.ledger) as ledger_fact_count,
+			count(distinct transaction_facts.ledger) as transaction_fact_count,
+			count(distinct result_facts.ledger) as result_fact_count,
 			max(state_facts.bucket_list_hash) as checkpoint_bucket_list_hash,
 			max(ledger_chain.bucket_list_hash) filter (
 				where ledger_chain.ledger = ledger_chain."checkpointLedger"
@@ -227,12 +214,20 @@ export const historyArchiveCheckpointProofRefreshSql = `
 				false
 			)) as results_match,
 			bool_and(
-				ledger_chain.ledger = ledger_chain.first_ledger
-				or coalesce(
-					ledger_chain.previous_ledger_header_hash =
-						ledger_chain.previous_fact_hash,
-					false
-				)
+				case
+					when ledger_chain.ledger = ledger_chain.first_expected_ledger
+						then ledger_chain.first_expected_ledger = 1
+							or coalesce(
+								ledger_chain.previous_ledger_header_hash =
+									previous_boundary.previous_boundary_hash,
+								false
+							)
+					else coalesce(
+						ledger_chain.previous_ledger_header_hash =
+							ledger_chain.previous_fact_hash,
+						false
+					)
+				end
 			) as previous_ledgers_match
 		from ledger_chain
 		left join transaction_facts
@@ -248,6 +243,11 @@ export const historyArchiveCheckpointProofRefreshSql = `
 		left join state_facts
 			on state_facts."archiveUrlIdentity" = ledger_chain."archiveUrlIdentity"
 			and state_facts."checkpointLedger" = ledger_chain."checkpointLedger"
+		left join previous_boundary_facts previous_boundary
+			on previous_boundary."archiveUrlIdentity" =
+				ledger_chain."archiveUrlIdentity"
+			and previous_boundary."checkpointLedger" =
+				ledger_chain."checkpointLedger"
 		group by ledger_chain."archiveUrlIdentity", ledger_chain."checkpointLedger"
 	),
 	bucket_rollup as (
@@ -274,6 +274,8 @@ export const historyArchiveCheckpointProofRefreshSql = `
 	classified as (
 		select
 			checkpoint_rollup.*,
+			coalesce(proof_rollup.expected_ledger_count, 0)
+				as expected_ledger_count,
 			coalesce(proof_rollup.ledger_fact_count, 0) as ledger_fact_count,
 			coalesce(
 				proof_rollup.transaction_fact_count,
@@ -304,10 +306,13 @@ export const historyArchiveCheckpointProofRefreshSql = `
 				)
 			) as required_objects_complete,
 			(
-				coalesce(proof_rollup.ledger_fact_count, 0) > 0
+				coalesce(proof_rollup.expected_ledger_count, 0) > 0
+				and proof_rollup.ledger_fact_count =
+					proof_rollup.expected_ledger_count
 				and proof_rollup.transaction_fact_count =
-					proof_rollup.ledger_fact_count
-				and proof_rollup.result_fact_count = proof_rollup.ledger_fact_count
+					proof_rollup.expected_ledger_count
+				and proof_rollup.result_fact_count =
+					proof_rollup.expected_ledger_count
 				and coalesce(proof_rollup.has_checkpoint_bucket_fact, false)
 			) as proof_facts_complete,
 			coalesce(proof_rollup.checkpoint_bucket_matches, false)
@@ -405,7 +410,7 @@ export const historyArchiveCheckpointProofRefreshSql = `
 		"archiveUrlIdentity",
 		"checkpointLedger",
 		status,
-		1,
+		2,
 		required_objects_complete,
 		proof_facts_complete,
 		checkpoint_bucket_list_matches,
@@ -429,6 +434,7 @@ export const historyArchiveCheckpointProofRefreshSql = `
 		"scpObjectRemoteId",
 		failure_kind,
 		jsonb_build_object(
+			'expectedLedgerCount', expected_ledger_count,
 			'hasActiveObject', has_active,
 			'hasFailedObject', has_failed,
 			'expectsScp', expects_scp
