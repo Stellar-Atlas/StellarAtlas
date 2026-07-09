@@ -13,10 +13,24 @@ export type HistoryArchiveObjectTypeV1 =
 export type HistoryArchiveObjectStatusV1 =
 	'pending' | 'scanning' | 'verified' | 'failed';
 
+export type HistoryArchiveObjectDelayReasonCodeV1 =
+	| 'archive-active-cap'
+	| 'global-active-cap'
+	| 'host-active-cap'
+	| 'host-backoff'
+	| 'missing-dependency'
+	| 'object-already-active'
+	| 'retry-window';
+
 export interface HistoryArchiveObjectErrorV1 {
 	readonly message: string;
 	readonly type: string;
 	readonly httpStatus: number | null;
+}
+
+export interface HistoryArchiveObjectDelayReasonV1 {
+	readonly code: HistoryArchiveObjectDelayReasonCodeV1;
+	readonly until: string | null;
 }
 
 export interface HistoryArchiveObjectV1 {
@@ -32,6 +46,7 @@ export interface HistoryArchiveObjectV1 {
 	readonly bucketHash: string | null;
 	readonly bytesDownloaded: number | null;
 	readonly attempts: number;
+	readonly delayReason: HistoryArchiveObjectDelayReasonV1 | null;
 	readonly nextAttemptAt: string | null;
 	readonly refreshAfter: string | null;
 	readonly claimedAt: string | null;
@@ -59,6 +74,28 @@ const HistoryArchiveObjectErrorV1Schema: JSONSchemaType<HistoryArchiveObjectErro
 			httpStatus: nullable({ type: 'number' })
 		},
 		required: ['message', 'type', 'httpStatus'],
+		additionalProperties: false
+	};
+
+const HistoryArchiveObjectDelayReasonV1Schema: JSONSchemaType<HistoryArchiveObjectDelayReasonV1> =
+	{
+		type: 'object',
+		properties: {
+			code: {
+				type: 'string',
+				enum: [
+					'archive-active-cap',
+					'global-active-cap',
+					'host-active-cap',
+					'host-backoff',
+					'missing-dependency',
+					'object-already-active',
+					'retry-window'
+				]
+			},
+			until: nullable({ type: 'string' })
+		},
+		required: ['code', 'until'],
 		additionalProperties: false
 	};
 
@@ -91,6 +128,7 @@ const HistoryArchiveObjectV1Schema: JSONSchemaType<HistoryArchiveObjectV1> = {
 		bucketHash: nullable({ type: 'string' }),
 		bytesDownloaded: nullable({ type: 'number' }),
 		attempts: { type: 'number' },
+		delayReason: nullable(HistoryArchiveObjectDelayReasonV1Schema),
 		nextAttemptAt: nullable({ type: 'string' }),
 		refreshAfter: nullable({ type: 'string' }),
 		claimedAt: nullable({ type: 'string' }),
@@ -116,6 +154,7 @@ const HistoryArchiveObjectV1Schema: JSONSchemaType<HistoryArchiveObjectV1> = {
 		'bucketHash',
 		'bytesDownloaded',
 		'attempts',
+		'delayReason',
 		'nextAttemptAt',
 		'refreshAfter',
 		'claimedAt',

@@ -209,6 +209,7 @@ function createQueue(): HistoryArchiveObjectQueueV1 {
 				bytesDownloaded: 392000,
 				checkpointLedger: null,
 				claimedAt: '2026-07-06T15:29:00.000Z',
+				delayReason: null,
 				error: null,
 				nextAttemptAt: null,
 				objectKey:

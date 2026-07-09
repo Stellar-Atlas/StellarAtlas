@@ -8355,6 +8355,29 @@
 					"httpStatus": { "type": "integer", "nullable": true }
 				}
 			},
+			"HistoryArchiveObjectDelayReasonV1": {
+				"type": "object",
+				"required": ["code", "until"],
+				"properties": {
+					"code": {
+						"type": "string",
+						"enum": [
+							"archive-active-cap",
+							"global-active-cap",
+							"host-active-cap",
+							"host-backoff",
+							"missing-dependency",
+							"object-already-active",
+							"retry-window"
+						]
+					},
+					"until": {
+						"type": "string",
+						"format": "date-time",
+						"nullable": true
+					}
+				}
+			},
 			"HistoryArchiveObjectV1": {
 				"type": "object",
 				"required": [
@@ -8370,6 +8393,7 @@
 					"bucketHash",
 					"bytesDownloaded",
 					"attempts",
+					"delayReason",
 					"nextAttemptAt",
 					"refreshAfter",
 					"claimedAt",
@@ -8413,6 +8437,14 @@
 						"nullable": true
 					},
 					"attempts": { "type": "integer", "minimum": 0 },
+					"delayReason": {
+						"nullable": true,
+						"allOf": [
+							{
+								"$ref": "#/components/schemas/HistoryArchiveObjectDelayReasonV1"
+							}
+						]
+					},
 					"nextAttemptAt": {
 						"type": "string",
 						"format": "date-time",

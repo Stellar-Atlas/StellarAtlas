@@ -37,6 +37,7 @@ import {
 } from './HistoryArchiveObjectClaimSql.js';
 import { getHistoryArchiveObjectSummary } from './HistoryArchiveObjectSummaryQuery.js';
 import { getHistoryArchiveObjectStatusSummary } from './HistoryArchiveObjectStatusSummaryQuery.js';
+import { findHistoryArchiveObjects } from './HistoryArchiveObjectListQuery.js';
 import {
 	historyArchiveObjectHostFailureUpsertSql,
 	historyArchiveObjectHostThrottleDeleteSql,
@@ -554,20 +555,12 @@ export class TypeOrmHistoryArchiveObjectRepository implements HistoryArchiveObje
 		limit: number,
 		archiveUrlIdentity?: string
 	): Promise<readonly HistoryArchiveObject[]> {
-		const query = this.repository
-			.createQueryBuilder('archiveObject')
-			.orderBy(statusRankSql('"archiveObject"."status"'), 'ASC')
-			.addOrderBy('archiveObject.objectOrder', 'ASC')
-			.addOrderBy('archiveObject.objectKey', 'ASC')
-			.addOrderBy('archiveObject.archiveUrlIdentity', 'ASC')
-			.addOrderBy('archiveObject.updatedAt', 'DESC')
-			.take(limit);
-		if (archiveUrlIdentity !== undefined) {
-			query.where('archiveObject.archiveUrlIdentity = :archiveUrlIdentity', {
-				archiveUrlIdentity
-			});
-		}
-
-		return await query.getMany();
+		return await findHistoryArchiveObjects(this.repository.manager, {
+			archiveUrlIdentity,
+			limit,
+			maxActiveObjectsPerArchive,
+			maxActiveObjectsPerHost,
+			maxActiveObjectsTotal
+		});
 	}
 }

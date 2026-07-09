@@ -31,6 +31,7 @@ function mapHistoryArchiveObject(
 		bytesDownloaded: toPublicNumber(object.bytesDownloaded),
 		checkpointLedger: object.checkpointLedger,
 		claimedAt: object.claimedAt?.toISOString() ?? null,
+		delayReason: object.delayReason,
 		error:
 			object.errorMessage === null
 				? null

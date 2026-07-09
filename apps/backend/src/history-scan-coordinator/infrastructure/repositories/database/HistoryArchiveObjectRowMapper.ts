@@ -1,5 +1,6 @@
 import { HistoryArchiveObject } from '@history-scan-coordinator/domain/history-archive-object/HistoryArchiveObject.js';
 import type { HistoryArchiveObjectType } from '@history-scan-coordinator/domain/history-archive-object/HistoryArchiveObject.js';
+import type { HistoryArchiveObjectDelayReasonCodeV1 } from 'shared';
 import type { NumericValue } from './ScanJobRowMapper.js';
 import { requireNumber } from './ScanJobRowMapper.js';
 
@@ -63,6 +64,10 @@ type RawObjectRow = {
 	readonly createdat?: Date | string;
 	readonly updatedAt?: Date | string;
 	readonly updatedat?: Date | string;
+	readonly delayReasonCode?: string | null;
+	readonly delayreasoncode?: string | null;
+	readonly delayReasonUntil?: Date | string | null;
+	readonly delayreasonuntil?: Date | string | null;
 };
 
 export type RawObjectQueryResult =
@@ -134,6 +139,20 @@ export function createObjectFromRow(row: RawObjectRow): HistoryArchiveObject {
 		requireDate(row.createdAt ?? row.createdat, 'createdAt');
 	(object as HistoryArchiveObject & { updatedAt?: Date }).updatedAt =
 		requireDate(row.updatedAt ?? row.updatedat, 'updatedAt');
+	const delayReasonCode = toDelayReasonCode(
+		row.delayReasonCode ?? row.delayreasoncode ?? null
+	);
+	object.delayReason =
+		delayReasonCode === null
+			? null
+			: {
+					code: delayReasonCode,
+					until: toNullableDate(
+						row.delayReasonUntil === undefined
+							? row.delayreasonuntil
+							: row.delayReasonUntil
+					)?.toISOString() ?? null
+				};
 
 	return object;
 }
@@ -221,6 +240,25 @@ function requireObjectStatus(
 	}
 
 	throw new Error('Archive object row is missing status');
+}
+
+function toDelayReasonCode(
+	value: string | null
+): HistoryArchiveObjectDelayReasonCodeV1 | null {
+	if (value === null) return null;
+	if (
+		value === 'archive-active-cap' ||
+		value === 'global-active-cap' ||
+		value === 'host-active-cap' ||
+		value === 'host-backoff' ||
+		value === 'missing-dependency' ||
+		value === 'object-already-active' ||
+		value === 'retry-window'
+	) {
+		return value;
+	}
+
+	throw new Error('Archive object row has invalid delay reason code');
 }
 
 function toNullableDate(value: Date | string | null | undefined): Date | null {

@@ -53,6 +53,8 @@ export {
 } from './dto/history-archive-state-v1.js';
 export {
 	type HistoryArchiveObjectErrorV1,
+	type HistoryArchiveObjectDelayReasonCodeV1,
+	type HistoryArchiveObjectDelayReasonV1,
 	type HistoryArchiveObjectQueueV1,
 	HistoryArchiveObjectQueueV1Schema,
 	type HistoryArchiveObjectStatusV1,

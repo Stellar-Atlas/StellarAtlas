@@ -9,6 +9,7 @@ import {
 } from 'typeorm';
 import type {
 	HistoryArchiveObjectStatusV1,
+	HistoryArchiveObjectDelayReasonV1,
 	HistoryArchiveObjectTypeV1,
 	HistoryArchiveObjectVerificationFactsV1
 } from 'shared';
@@ -16,6 +17,7 @@ import { getHistoryArchiveObjectHostIdentity } from './HistoryArchiveObjectHostI
 
 export type HistoryArchiveObjectType = HistoryArchiveObjectTypeV1;
 export type HistoryArchiveObjectStatus = HistoryArchiveObjectStatusV1;
+export type HistoryArchiveObjectDelayReason = HistoryArchiveObjectDelayReasonV1;
 
 export interface HistoryArchiveObjectError {
 	readonly message: string;
@@ -106,6 +108,8 @@ export class HistoryArchiveObject extends CoreEntity {
 
 	@Column('timestamptz', { nullable: true })
 	public verifiedAt!: Date | null;
+
+	public delayReason: HistoryArchiveObjectDelayReason | null = null;
 
 	@CreateDateColumn({ type: 'timestamptz' })
 	public readonly createdAt?: Date;
