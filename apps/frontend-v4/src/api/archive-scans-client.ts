@@ -31,6 +31,14 @@ export const fetchHistoryArchiveObjectSummary = (
 		withHistoryScanTags(options)
 	);
 
+export const fetchHistoryArchiveObjectStatusSummary = (
+	options?: FetchOptions
+): Promise<PublicHistoryArchiveObjectSummary> =>
+	fetchJson<PublicHistoryArchiveObjectSummary>(
+		'/v1/archive-scans/objects/status-summary',
+		withHistoryScanTags(options)
+	);
+
 export const fetchHistoryArchiveObjectEventsForArchive = (
 	historyUrl: string,
 	limit: number,

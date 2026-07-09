@@ -63,7 +63,7 @@ function ArchiveRootPanel({
 							<th>Latest checkpoint</th>
 							<th>Discovered through</th>
 							<th>Root state check</th>
-							<th>File checks</th>
+							<th>Checkpoint proofs</th>
 							<th>Failures</th>
 						</tr>
 					</thead>
@@ -125,7 +125,7 @@ function ArchiveObjectQueuePanel({
 		<section className="panel detail-panel archive-panel">
 			<div className="panel-heading">
 				<div>
-					<h2>Archive evidence checks</h2>
+				<h2>Archive checkpoint proof checks</h2>
 					<span className="muted-inline">
 						Updated {formatDateTime(summary.generatedAt)}
 					</span>
@@ -136,9 +136,9 @@ function ArchiveObjectQueuePanel({
 				/>
 			</div>
 			<p className="muted-copy">
-				This is per-source archive evidence. A shared bucket payload is stored
-				once by hash, but each archive source still gets its own evidence row
-				showing whether that source served the expected file.
+				This status view counts one proof row per archive source and 64-ledger
+				checkpoint. It is intentionally smaller than the full archive object
+				drilldown so the status page can render quickly.
 			</p>
 			<div className="responsive-table archive-summary-table-wrap">
 				<table className="archive-summary-table">
@@ -146,8 +146,8 @@ function ArchiveObjectQueuePanel({
 						<tr>
 							<th>Archive sources</th>
 							<th>Checking now</th>
-							<th>Verified checks</th>
-							<th>Remote failures</th>
+							<th>Hash agreement proven</th>
+							<th>Hash mismatches</th>
 						</tr>
 					</thead>
 					<tbody>
@@ -166,19 +166,19 @@ function ArchiveObjectQueuePanel({
 					<span className="muted-inline">open details</span>
 				</summary>
 				<p className="muted-copy">
-					Queued checks are scanner work still to run across all archive
-					sources. They are not unique bucket payloads stored locally, and they
-					are not a service outage by themselves.
+					Waiting rows are checkpoint proofs whose required files or structured
+					hash facts are not complete yet. They are not unique bucket payloads
+					stored locally, and they are not a service outage by themselves.
 				</p>
 				<div className="responsive-table">
 					<table className="archive-summary-table">
 						<thead>
 							<tr>
-								<th>Known checks</th>
-								<th>Verified</th>
-								<th>Waiting to check</th>
+								<th>Known proof rows</th>
+								<th>Hash agreement proven</th>
+								<th>Waiting for evidence</th>
 								<th>Checking now</th>
-								<th>Remote failures</th>
+								<th>Hash mismatches</th>
 							</tr>
 						</thead>
 						<tbody>
@@ -221,12 +221,12 @@ function ObjectTypeDetails({
 				<table className="archive-object-type-table">
 					<thead>
 						<tr>
-							<th>File group</th>
-							<th>Known checks</th>
-							<th>Verified checks</th>
-							<th>Waiting to check</th>
-							<th>Remote failures</th>
-							<th>Active checks</th>
+								<th>File group</th>
+								<th>Known rows</th>
+								<th>Verified rows</th>
+								<th>Waiting rows</th>
+								<th>Failed rows</th>
+								<th>Active checks</th>
 						</tr>
 					</thead>
 					<tbody>
@@ -383,7 +383,6 @@ function getArchiveRootStatus(
 ): PublicStatusLevel {
 	const checkpoints = summary.checkpoints;
 	if (checkpoints.archiveRootsWithState === 0) return 'unavailable';
-	if (!checkpointProofIsComplete(summary)) return 'degraded';
 	return 'ok';
 }
 
@@ -391,7 +390,6 @@ function getObjectQueueStatus(
 	summary: PublicHistoryArchiveObjectSummary
 ): PublicStatusLevel {
 	if (summary.totalObjects === 0) return 'unavailable';
-	if (!checkpointProofIsComplete(summary)) return 'degraded';
 	return 'ok';
 }
 
@@ -401,7 +399,6 @@ function getCheckpointProofStatus(
 	const checkpoints = summary.checkpoints;
 	if (checkpoints.expectedArchiveCheckpoints === 0) return 'unavailable';
 	if (checkpoints.categoryConsistencyFailedCheckpoints > 0) return 'degraded';
-	if (!checkpointProofIsComplete(summary)) return 'degraded';
 	return 'ok';
 }
 

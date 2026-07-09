@@ -22,6 +22,7 @@ import {
 	InvalidBucketHashError
 } from '../../use-cases/get-history-archive-bucket-coverage/GetHistoryArchiveBucketCoverage.js';
 import { GetHistoryArchiveObjectSummary } from '../../use-cases/get-history-archive-object-summary/GetHistoryArchiveObjectSummary.js';
+import { GetHistoryArchiveObjectStatusSummary } from '../../use-cases/get-history-archive-object-status-summary/GetHistoryArchiveObjectStatusSummary.js';
 import { GetHistoryArchiveObjectEvents } from '../../use-cases/get-history-archive-object-events/GetHistoryArchiveObjectEvents.js';
 import {
 	GetHistoryArchiveRepairPlan,
@@ -38,6 +39,7 @@ export interface ArchiveScanRouterConfig {
 	getHistoryArchiveObjectEvents: GetHistoryArchiveObjectEvents;
 	getHistoryArchiveObjects: GetHistoryArchiveObjects;
 	getHistoryArchiveObjectSummary: GetHistoryArchiveObjectSummary;
+	getHistoryArchiveObjectStatusSummary: GetHistoryArchiveObjectStatusSummary;
 	getHistoryArchiveRepairPlan: GetHistoryArchiveRepairPlan;
 	getHistoryArchiveState: GetHistoryArchiveState;
 	getLatestScan: GetLatestScan;
@@ -178,6 +180,23 @@ export const ArchiveScanRouterWrapper = (
 			);
 			const summaryOrError =
 				await config.getHistoryArchiveObjectSummary.execute();
+			if (summaryOrError.isErr()) {
+				return res.status(500).json({ error: 'Internal server error' });
+			}
+
+			return res.status(200).json(summaryOrError.value);
+		}
+	);
+
+	archiveScanRouter.get(
+		'/objects/status-summary',
+		async function (_req: express.Request, res: express.Response) {
+			res.setHeader(
+				'Cache-Control',
+				'public, max-age=' + archiveScanCacheMaxAgeSeconds
+			);
+			const summaryOrError =
+				await config.getHistoryArchiveObjectStatusSummary.execute();
 			if (summaryOrError.isErr()) {
 				return res.status(500).json({ error: 'Internal server error' });
 			}

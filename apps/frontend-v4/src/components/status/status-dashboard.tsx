@@ -105,7 +105,7 @@ export function StatusDashboard({
 				/>
 				<StatCard
 					detail={archiveQueueDetail}
-					label="Archive evidence checks"
+					label="Archive proof checks"
 					tone={statusTone(archiveStatus)}
 					value={
 						archiveEvidenceAvailable || archiveTelemetryAvailable
@@ -145,7 +145,7 @@ export function StatusDashboard({
 						/>
 						<StatusRow
 							detail={archiveQueueDetail}
-							label="Archive evidence checks"
+							label="Archive proof checks"
 							status={archiveStatus}
 							value={
 								archiveEvidenceAvailable || archiveTelemetryAvailable
@@ -175,7 +175,7 @@ export function StatusDashboard({
 							detail={
 								archiveQueueDetail
 							}
-							label="Archive evidence checks"
+							label="Archive proof checks"
 							status={archiveStatus}
 							value={
 								archiveEvidenceAvailable || archiveTelemetryAvailable
@@ -290,8 +290,7 @@ function getArchiveEvidenceStatus(
 	summary: PublicHistoryArchiveObjectSummary
 ): PublicStatusLevel {
 	if (summary.totalObjects <= 0) return 'unavailable';
-	if (checkpointProofIsComplete(summary)) return 'ok';
-	return 'degraded';
+	return 'ok';
 }
 
 function formatArchiveVerificationCoverage(

@@ -6,7 +6,6 @@ import type { Logger } from '@core/services/Logger.js';
 import type { HistoryArchiveObjectEventsV1 } from 'shared';
 import type { HistoryArchiveObjectSummaryV1 } from 'shared';
 import type { GetHistoryArchiveObjectEvents } from '@history-scan-coordinator/use-cases/get-history-archive-object-events/GetHistoryArchiveObjectEvents.js';
-import type { GetHistoryArchiveObjectSummary } from '@history-scan-coordinator/use-cases/get-history-archive-object-summary/GetHistoryArchiveObjectSummary.js';
 import type { ApiStatusDTO } from '../../domain/StatusTypes.js';
 import type { ConfiguredServiceStatusDTO } from '../../use-cases/get-service-status/GetServiceStatus.js';
 import type { DataQualityStatusDTO } from '../../use-cases/get-data-quality-status/GetDataQualityStatus.js';
@@ -23,11 +22,15 @@ interface StatusLiveWebSocketConfig {
 	readonly getDataQualityStatus: GetDataQualityStatus;
 	readonly getFrontendStatus: GetFrontendStatus;
 	readonly getHistoryArchiveObjectEvents: GetHistoryArchiveObjectEvents;
-	readonly getHistoryArchiveObjectSummary: GetHistoryArchiveObjectSummary;
+	readonly getHistoryArchiveObjectSummary: HistoryArchiveSummaryReader;
 	readonly getScanLogStatus: GetScanLogStatus;
 	readonly getWorkerStatus: GetWorkerStatus;
 	readonly logger?: Logger;
 	readonly path?: string;
+}
+
+interface HistoryArchiveSummaryReader {
+	execute(): Promise<Result<HistoryArchiveObjectSummaryV1, Error>>;
 }
 
 interface StatusLiveSnapshot {

@@ -79,6 +79,7 @@ export interface HistoryArchiveObjectRepository {
 		readonly archiveUrl?: string | null;
 		readonly archiveUrlIdentity?: string | null;
 	}): Promise<HistoryArchiveObjectSummaryV1>;
+	getStatusSummary(): Promise<HistoryArchiveObjectSummaryV1>;
 	getWorkerSnapshot(
 		staleCutoff: Date
 	): Promise<HistoryArchiveObjectWorkerSnapshot>;

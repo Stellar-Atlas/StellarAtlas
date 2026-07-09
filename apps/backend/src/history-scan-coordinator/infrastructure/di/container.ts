@@ -57,6 +57,7 @@ import { TypeOrmHistoryArchiveCheckpointProofRepository } from '../repositories/
 import { GetHistoryArchiveObjects } from '../../use-cases/get-history-archive-objects/GetHistoryArchiveObjects.js';
 import { GetHistoryArchiveBucketCoverage } from '../../use-cases/get-history-archive-bucket-coverage/GetHistoryArchiveBucketCoverage.js';
 import { GetHistoryArchiveObjectSummary } from '../../use-cases/get-history-archive-object-summary/GetHistoryArchiveObjectSummary.js';
+import { GetHistoryArchiveObjectStatusSummary } from '../../use-cases/get-history-archive-object-status-summary/GetHistoryArchiveObjectStatusSummary.js';
 import { GetHistoryArchiveObjectEvents } from '../../use-cases/get-history-archive-object-events/GetHistoryArchiveObjectEvents.js';
 import { GetHistoryArchiveRepairPlan } from '../../use-cases/get-history-archive-repair-plan/GetHistoryArchiveRepairPlan.js';
 import { ScheduleHistoryArchiveObjects } from '../../use-cases/schedule-history-archive-objects/ScheduleHistoryArchiveObjects.js';
@@ -80,6 +81,7 @@ export function load(container: Container, config: Config) {
 	container.bind(GetHistoryArchiveBucketCoverage).toSelf();
 	container.bind(GetHistoryArchiveObjects).toSelf();
 	container.bind(GetHistoryArchiveObjectSummary).toSelf();
+	container.bind(GetHistoryArchiveObjectStatusSummary).toSelf();
 	container.bind(GetHistoryArchiveObjectEvents).toSelf();
 	container.bind(GetHistoryArchiveRepairPlan).toSelf();
 	container.bind(GetHistoryArchiveObjectJob).toSelf();

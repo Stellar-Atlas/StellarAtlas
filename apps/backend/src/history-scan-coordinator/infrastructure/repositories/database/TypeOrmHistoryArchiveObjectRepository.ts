@@ -36,6 +36,7 @@ import {
 	historyArchiveObjectClaimSql
 } from './HistoryArchiveObjectClaimSql.js';
 import { getHistoryArchiveObjectSummary } from './HistoryArchiveObjectSummaryQuery.js';
+import { getHistoryArchiveObjectStatusSummary } from './HistoryArchiveObjectStatusSummaryQuery.js';
 import {
 	historyArchiveObjectHostFailureUpsertSql,
 	historyArchiveObjectHostThrottleDeleteSql,
@@ -197,6 +198,10 @@ export class TypeOrmHistoryArchiveObjectRepository implements HistoryArchiveObje
 			this.repository.manager,
 			options
 		);
+	}
+
+	async getStatusSummary() {
+		return await getHistoryArchiveObjectStatusSummary(this.repository.manager);
 	}
 
 	async getWorkerSnapshot(

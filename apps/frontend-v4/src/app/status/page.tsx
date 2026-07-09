@@ -8,7 +8,7 @@ import {
 } from '@api/client';
 import {
 	fetchHistoryArchiveObjectEvents,
-	fetchHistoryArchiveObjectSummary
+	fetchHistoryArchiveObjectStatusSummary
 } from '@api/archive-scans-client';
 import type {
 	PublicApiStatus,
@@ -70,7 +70,7 @@ async function StatusRouteContent(): Promise<React.JSX.Element> {
 				buildEmptyArchiveEvents()
 			),
 			fetchOptional(
-				fetchHistoryArchiveObjectSummary(archiveSampleFetchOptions),
+				fetchHistoryArchiveObjectStatusSummary(archiveSampleFetchOptions),
 				buildArchiveSummaryFromQueue(emptyArchiveObjects)
 			)
 		]);
