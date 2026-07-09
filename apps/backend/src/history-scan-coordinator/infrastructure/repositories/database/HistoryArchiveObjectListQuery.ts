@@ -20,7 +20,7 @@ export async function findHistoryArchiveObjects(
 	options: HistoryArchiveObjectListOptions
 ): Promise<readonly HistoryArchiveObject[]> {
 	const rows = extractRows(
-		(await manager.query(historyArchiveObjectListSql(options), [
+		(await manager.query(historyArchiveObjectListSql(), [
 			options.maxActiveObjectsPerArchive,
 			options.maxActiveObjectsTotal,
 			options.maxActiveObjectsPerHost,
@@ -32,14 +32,7 @@ export async function findHistoryArchiveObjects(
 	return rows.map(createObjectFromRow);
 }
 
-function historyArchiveObjectListSql(
-	options: HistoryArchiveObjectListOptions
-): string {
-	const archiveFilter =
-		options.archiveUrlIdentity === undefined
-			? ''
-			: 'where archive_object."archiveUrlIdentity" = $4';
-
+function historyArchiveObjectListSql(): string {
 	return `
 		with
 		active_total as (
@@ -64,6 +57,26 @@ function historyArchiveObjectListSql(
 			from history_archive_object_host_throttle
 			where "blockedUntil" > now()
 			group by "hostIdentity"
+		),
+		status_candidates as (
+			${statusCandidateSql('scanning')}
+			union all
+			${statusCandidateSql('failed')}
+			union all
+			${statusCandidateSql('pending')}
+			union all
+			${statusCandidateSql('verified')}
+		),
+		target_objects as (
+			select *
+			from status_candidates archive_object
+			order by
+				${statusRankSql('archive_object.status')} asc,
+				archive_object."objectOrder" asc,
+				archive_object."objectKey" asc,
+				archive_object."archiveUrlIdentity" asc,
+				archive_object."updatedAt" desc
+			limit $5
 		)
 		select
 			archive_object."remoteId" as "remoteId",
@@ -125,7 +138,7 @@ function historyArchiveObjectListSql(
 					)
 				else null
 			end as "delayReasonUntil"
-		from history_archive_object_queue archive_object
+		from target_objects archive_object
 		cross join active_total
 		left join active_archive
 			on active_archive."archiveUrlIdentity" =
@@ -134,7 +147,6 @@ function historyArchiveObjectListSql(
 			on active_host."hostIdentity" = archive_object."hostIdentity"
 		left join host_throttle
 			on host_throttle."hostIdentity" = archive_object."hostIdentity"
-		${archiveFilter}
 		order by
 			${statusRankSql('archive_object.status')} asc,
 			archive_object."objectOrder" asc,
@@ -142,5 +154,25 @@ function historyArchiveObjectListSql(
 			archive_object."archiveUrlIdentity" asc,
 			archive_object."updatedAt" desc
 		limit $5
+	`;
+}
+
+function statusCandidateSql(status: string): string {
+	return `
+		(
+			select archive_object.*
+			from history_archive_object_queue archive_object
+			where archive_object.status = '${status}'
+				and (
+					$4::text is null
+					or archive_object."archiveUrlIdentity" = $4::text
+				)
+			order by
+				archive_object."objectOrder" asc,
+				archive_object."objectKey" asc,
+				archive_object."archiveUrlIdentity" asc,
+				archive_object."updatedAt" desc
+			limit $5
+		)
 	`;
 }

@@ -2,10 +2,6 @@ import { injectable } from 'inversify';
 import { Repository } from 'typeorm';
 import { getHistoryArchiveUrlIdentity } from '@history-scan-coordinator/domain/ArchiveUrlIdentity.js';
 import { HistoryArchiveObject } from '@history-scan-coordinator/domain/history-archive-object/HistoryArchiveObject.js';
-import {
-	getHistoryArchiveStateRefreshBefore,
-	getRefreshableHistoryArchiveStateArchiveIdentities
-} from '@history-scan-coordinator/domain/history-archive-object/HistoryArchiveObjectRefreshPolicy.js';
 import type { HistoryArchiveObjectType } from '@history-scan-coordinator/domain/history-archive-object/HistoryArchiveObject.js';
 import type {
 	HistoryArchiveObjectFailure,
@@ -22,8 +18,7 @@ import {
 	extractRows,
 	normalizeLimit,
 	statusRankSql,
-	type RawObjectQueryResult,
-	type RawObjectStatsRow
+	type RawObjectQueryResult
 } from './HistoryArchiveObjectRowMapper.js';
 import {
 	createActiveUpdate,
@@ -38,6 +33,11 @@ import {
 import { getHistoryArchiveObjectSummary } from './HistoryArchiveObjectSummaryQuery.js';
 import { getHistoryArchiveObjectStatusSummary } from './HistoryArchiveObjectStatusSummaryQuery.js';
 import { findHistoryArchiveObjects } from './HistoryArchiveObjectListQuery.js';
+import { getHistoryArchiveObjectStats } from './HistoryArchiveObjectStatsQuery.js';
+import {
+	markCapturedHistoryArchiveStateObjectsVerified,
+	requeueStaleHistoryArchiveStateObjects
+} from './HistoryArchiveObjectStateRefreshQuery.js';
 import {
 	historyArchiveObjectHostFailureUpsertSql,
 	historyArchiveObjectHostThrottleDeleteSql,
@@ -280,107 +280,16 @@ export class TypeOrmHistoryArchiveObjectRepository implements HistoryArchiveObje
 			insertedCount += result.identifiers.length;
 		}
 
-		const refreshedCount = await this.requeueStaleHistoryArchiveStateObjects(
-			objects,
-			getHistoryArchiveStateRefreshBefore()
+		const refreshedCount = await requeueStaleHistoryArchiveStateObjects(
+			this.repository.manager,
+			objects
 		);
-		await this.markCapturedHistoryArchiveStateObjectsVerified(objects);
+		await markCapturedHistoryArchiveStateObjectsVerified(
+			this.repository.manager,
+			objects
+		);
 
 		return insertedCount + refreshedCount;
-	}
-
-	private async markCapturedHistoryArchiveStateObjectsVerified(
-		objects: readonly HistoryArchiveObject[]
-	): Promise<void> {
-		const archiveUrlIdentities = Array.from(
-			new Set(
-				objects
-					.filter(
-						(object) =>
-							object.objectType === 'history-archive-state' &&
-							object.objectKey === 'root' &&
-							object.status === 'verified'
-					)
-					.map((object) => object.archiveUrlIdentity)
-			)
-		);
-		if (archiveUrlIdentities.length === 0) return;
-
-		await this.repository
-			.createQueryBuilder()
-			.update(HistoryArchiveObject)
-			.set({
-				bytesDownloaded: null,
-				claimedAt: null,
-				claimedByCommunityScannerId: null,
-				errorMessage: null,
-				errorType: null,
-				httpStatus: null,
-				nextAttemptAt: null,
-				refreshAfter: () => 'now() + make_interval(mins => 5)',
-				status: 'verified',
-				updatedAt: () => 'now()',
-				verifiedAt: () => 'now()',
-				workerStage: 'captured_history_archive_state'
-			})
-			.where('"archiveUrlIdentity" IN (:...archiveUrlIdentities)', {
-				archiveUrlIdentities
-			})
-			.andWhere('"objectType" = :objectType', {
-				objectType: 'history-archive-state'
-			})
-			.andWhere('"objectKey" = :objectKey', { objectKey: 'root' })
-			.andWhere('status != :scanningStatus', {
-				scanningStatus: 'scanning'
-			})
-			.execute();
-	}
-
-	private async requeueStaleHistoryArchiveStateObjects(
-		objects: readonly HistoryArchiveObject[],
-		before: Date
-	): Promise<number> {
-		const archiveUrlIdentities =
-			getRefreshableHistoryArchiveStateArchiveIdentities(objects);
-		if (archiveUrlIdentities.length === 0) return 0;
-
-		const result = await this.repository
-			.createQueryBuilder()
-			.update(HistoryArchiveObject)
-			.set({
-				bytesDownloaded: null,
-				claimedAt: null,
-				claimedByCommunityScannerId: null,
-				errorMessage: null,
-				errorType: null,
-				httpStatus: null,
-				nextAttemptAt: null,
-				status: 'pending',
-				updatedAt: () => 'now()',
-				verifiedAt: null,
-				workerStage: null
-			})
-			.where('"archiveUrlIdentity" IN (:...archiveUrlIdentities)', {
-				archiveUrlIdentities
-			})
-			.andWhere('"objectType" = :objectType', {
-				objectType: 'history-archive-state'
-			})
-			.andWhere('"objectKey" = :objectKey', { objectKey: 'root' })
-			.andWhere('status = :status', { status: 'verified' })
-			.andWhere(
-				`(
-					"refreshAfter" <= now()
-					or (
-						"refreshAfter" is null
-						and "updatedAt" < :before
-					)
-				)`,
-				{ before }
-			)
-			.execute();
-
-		return result.affected ?? 0;
 	}
 
 	async markObjectActive(
@@ -505,50 +414,10 @@ export class TypeOrmHistoryArchiveObjectRepository implements HistoryArchiveObje
 	private async getStats(
 		archiveUrlIdentity?: string
 	): Promise<HistoryArchiveObjectQueueStats> {
-		const query = this.repository
-			.createQueryBuilder('archiveObject')
-			.select(
-				"count(*) filter (where archiveObject.status = 'pending')",
-				'pendingObjects'
-			)
-			.addSelect(
-				"count(*) filter (where archiveObject.status = 'scanning')",
-				'activeObjects'
-			)
-			.addSelect(
-				"count(*) filter (where archiveObject.status = 'verified')",
-				'verifiedObjects'
-			)
-			.addSelect(
-				"count(*) filter (where archiveObject.status = 'failed')",
-				'failedObjects'
-			);
-		if (archiveUrlIdentity !== undefined) {
-			query.where('archiveObject.archiveUrlIdentity = :archiveUrlIdentity', {
-				archiveUrlIdentity
-			});
-		}
-
-		const row = await query.getRawOne<RawObjectStatsRow>();
-
-		return {
-			activeObjects: requireNumber(
-				row?.activeObjects ?? row?.activeobjects,
-				'activeObjects'
-			),
-			failedObjects: requireNumber(
-				row?.failedObjects ?? row?.failedobjects,
-				'failedObjects'
-			),
-			pendingObjects: requireNumber(
-				row?.pendingObjects ?? row?.pendingobjects,
-				'pendingObjects'
-			),
-			verifiedObjects: requireNumber(
-				row?.verifiedObjects ?? row?.verifiedobjects,
-				'verifiedObjects'
-			)
-		};
+		return await getHistoryArchiveObjectStats(
+			this.repository.manager,
+			archiveUrlIdentity
+		);
 	}
 
 	private async getObjects(
