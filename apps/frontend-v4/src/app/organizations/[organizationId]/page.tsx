@@ -65,19 +65,31 @@ async function OrganizationDetailRouteContent({
 	);
 	const archiveStates = await Promise.all(
 		validatorHistoryUrls.map(async (historyUrl) => {
-			const evidence = await fetchHistoryArchiveObjectEvidenceForArchive(
-				historyUrl,
-				{ eventLimit: 5, objectLimit: 1 },
-				liveArchiveFetchOptions
-			);
+			try {
+				const evidence = await fetchHistoryArchiveObjectEvidenceForArchive(
+					historyUrl,
+					{ eventLimit: 10, objectLimit: 25 },
+					liveArchiveFetchOptions
+				);
 
-			return {
-				events: evidence.objectEvents,
-				historyUrl,
-				objects: evidence.objects,
-				state: evidence.scannerOwnedState,
-				summary: evidence.summary
-			};
+				return {
+					events: evidence.objectEvents,
+					fetchError: null,
+					historyUrl,
+					objects: evidence.objects,
+					state: evidence.scannerOwnedState,
+					summary: evidence.summary
+				};
+			} catch {
+				return {
+					events: null,
+					fetchError: 'Archive evidence request did not complete.',
+					historyUrl,
+					objects: null,
+					state: null,
+					summary: null
+				};
+			}
 		})
 	);
 

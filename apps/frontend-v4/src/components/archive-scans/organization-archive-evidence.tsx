@@ -14,11 +14,12 @@ import { HistoryArchiveObjectInventory } from './history-archive-object-inventor
 import { HistoryArchiveStateDocument } from './history-archive-state-document';
 
 export interface OrganizationArchiveState {
-	readonly events: PublicHistoryArchiveObjectEvents;
+	readonly events: PublicHistoryArchiveObjectEvents | null;
+	readonly fetchError: string | null;
 	readonly historyUrl: string;
-	readonly objects: PublicHistoryArchiveObjectQueue;
+	readonly objects: PublicHistoryArchiveObjectQueue | null;
 	readonly state: PublicHistoryArchiveState | null;
-	readonly summary: PublicHistoryArchiveObjectSummary;
+	readonly summary: PublicHistoryArchiveObjectSummary | null;
 }
 
 interface OrganizationArchiveEvidenceProps {
@@ -175,11 +176,14 @@ function ArchiveRootDrilldown({
 				</div>
 			</dl>
 			<ArchiveNodeList nodes={archiveRoot.archiveNodes} />
+			{evidence?.fetchError ? (
+				<p className="muted-copy">{evidence.fetchError}</p>
+			) : null}
 			<HistoryArchiveStateDocument
 				archiveState={evidence?.state ?? null}
 				archiveUrl={archiveRoot.historyUrl}
 			/>
-			{evidence ? (
+			{hasCompleteEvidence(evidence) ? (
 				<>
 					<HistoryArchiveObjectCoverage
 						framed={false}
@@ -372,6 +376,21 @@ function formatEventSample(
 	return `${latest.eventType} ${latest.objectType} at ${formatDateTime(
 		latest.createdAt
 	)}`;
+}
+
+function hasCompleteEvidence(
+	evidence: OrganizationArchiveState | null
+): evidence is OrganizationArchiveState & {
+	readonly events: PublicHistoryArchiveObjectEvents;
+	readonly objects: PublicHistoryArchiveObjectQueue;
+	readonly summary: PublicHistoryArchiveObjectSummary;
+} {
+	return (
+		evidence !== null &&
+		evidence.events !== null &&
+		evidence.objects !== null &&
+		evidence.summary !== null
+	);
 }
 
 function formatArchiveSource(value: string): string {
