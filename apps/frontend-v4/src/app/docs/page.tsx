@@ -141,7 +141,7 @@ export default function DocsPage(): React.JSX.Element {
 				title="Developer reference"
 			/>
 			<section className="panel docs-panel">
-				<a className="primary-button" href="/api-docs">
+				<a className="primary-button" href="/api-docs?view=swagger">
 					Open Swagger documentation
 				</a>
 				<code>/v1</code>

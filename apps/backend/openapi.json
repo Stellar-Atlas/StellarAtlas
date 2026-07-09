@@ -33,16 +33,16 @@
 			"description": "Information about the organizations in the network"
 		},
 		{
-			"name": "HistoryScan",
-			"description": "History archive verification evidence"
+			"name": "Archive scanner operators",
+			"description": "Operator-facing archive scanner worker and backfill routes"
 		},
 		{
-			"name": "ArchiveScans",
+			"name": "Archive verification",
 			"description": "Public history archive scan views and queue health"
 		},
 		{
-			"name": "CommunityScanners",
-			"description": "Community archive scanner registration, heartbeat, and aggregate metrics"
+			"name": "Community scanner operators",
+			"description": "Operator-facing community scanner registration and heartbeat routes"
 		},
 		{
 			"name": "Status",
@@ -65,12 +65,8 @@
 			"description": "Observed Stellar Consensus Protocol statements"
 		},
 		{
-			"name": "Horizon",
-			"description": "Discovered organization-operated Horizon API URLs"
-		},
-		{
 			"name": "Explorer",
-			"description": "Explorer lookup endpoints backed by configured Horizon or future full-history stores"
+			"description": "Explorer lookup endpoints and local full-history read-model status"
 		},
 		{
 			"name": "Subscription",
@@ -82,7 +78,7 @@
 			"get": {
 				"summary": "Get network information",
 				"description": "Get current network information, statistics, nodes, organizations, SCP analysis fields, and organization horizonUrl values when reported.",
-				"tags": ["Network", "Horizon"],
+				"tags": ["Network"],
 				"operationId": "getNetwork",
 				"parameters": [
 					{
@@ -394,7 +390,7 @@
 			"get": {
 				"summary": "Get the latest Horizon ledger",
 				"description": "Returns the latest ledger from the configured Horizon source for frontend graph and explorer views.",
-				"tags": ["Explorer", "Horizon"],
+				"tags": ["Explorer"],
 				"operationId": "getLatestLedger",
 				"responses": {
 					"200": {
@@ -413,7 +409,7 @@
 			"get": {
 				"summary": "Get transactions for a ledger slot",
 				"description": "Returns a bounded transaction list for a ledger sequence from configured Horizon.",
-				"tags": ["Explorer", "Horizon", "SCP"],
+				"tags": ["Explorer", "SCP"],
 				"operationId": "getLedgerTransactions",
 				"parameters": [
 					{
@@ -443,7 +439,7 @@
 			"get": {
 				"summary": "Get local explorer read-model coverage",
 				"description": "Reports StellarAtlas-owned parsed ledger-header coverage and explicitly marks transaction, asset, operation, and contract indexes as not ready until local full-history ETL is complete.",
-				"tags": ["Explorer", "Full History"],
+				"tags": ["Explorer"],
 				"operationId": "getExplorerLocalReadModel",
 				"responses": {
 					"200": {
@@ -464,7 +460,7 @@
 			"get": {
 				"summary": "Get recent locally parsed transactions",
 				"description": "Returns bounded recent transaction-result rows persisted by the archive parser, with parsed ledger-header and envelope join evidence when present. This proves local ETL progress without using Horizon.",
-				"tags": ["Explorer", "Full History"],
+				"tags": ["Explorer"],
 				"operationId": "getExplorerLocalTransactions",
 				"parameters": [
 					{
@@ -494,7 +490,7 @@
 			"get": {
 				"summary": "Search the Horizon-backed explorer helpers",
 				"description": "Searches transaction hashes, account IDs, ledger sequences, asset queries, and contract IDs using the currently configured Horizon/RPC helper paths.",
-				"tags": ["Explorer", "Horizon"],
+				"tags": ["Explorer"],
 				"operationId": "searchExplorer",
 				"parameters": [
 					{
@@ -538,7 +534,7 @@
 			"get": {
 				"summary": "Get recent transactions",
 				"description": "Returns a bounded recent transaction feed from configured Horizon.",
-				"tags": ["Explorer", "Horizon"],
+				"tags": ["Explorer"],
 				"operationId": "getExplorerRecentTransactions",
 				"parameters": [
 					{
@@ -566,7 +562,7 @@
 			"get": {
 				"summary": "Look up an explorer transaction",
 				"description": "Explorer namespace alias for Horizon-backed transaction lookup.",
-				"tags": ["Explorer", "Horizon"],
+				"tags": ["Explorer"],
 				"operationId": "getExplorerTransactionByHash",
 				"parameters": [
 					{
@@ -595,7 +591,7 @@
 			"get": {
 				"summary": "Get operations for a transaction",
 				"description": "Returns bounded Horizon operation rows for one transaction hash.",
-				"tags": ["Explorer", "Horizon"],
+				"tags": ["Explorer"],
 				"operationId": "getExplorerTransactionOperations",
 				"parameters": [
 					{
@@ -624,7 +620,7 @@
 			"get": {
 				"summary": "Look up a ledger",
 				"description": "Returns ledger facts from configured Horizon.",
-				"tags": ["Explorer", "Horizon"],
+				"tags": ["Explorer"],
 				"operationId": "getExplorerLedger",
 				"parameters": [
 					{
@@ -653,7 +649,7 @@
 			"get": {
 				"summary": "Look up an account",
 				"description": "Returns account state from configured Horizon.",
-				"tags": ["Explorer", "Horizon"],
+				"tags": ["Explorer"],
 				"operationId": "getExplorerAccount",
 				"parameters": [
 					{
@@ -682,7 +678,7 @@
 			"get": {
 				"summary": "Search assets",
 				"description": "Returns a bounded Horizon asset search result by optional code and issuer.",
-				"tags": ["Explorer", "Horizon"],
+				"tags": ["Explorer"],
 				"operationId": "getExplorerAssets",
 				"parameters": [
 					{
@@ -716,7 +712,7 @@
 			"get": {
 				"summary": "Search operations",
 				"description": "Returns bounded Horizon operation rows filtered by ledger, account, operation type, or date range.",
-				"tags": ["Explorer", "Horizon"],
+				"tags": ["Explorer"],
 				"operationId": "getExplorerOperations",
 				"parameters": [
 					{
@@ -768,7 +764,7 @@
 			"get": {
 				"summary": "Look up contract readiness",
 				"description": "Reports RPC-backed contract lookup readiness for a contract ID.",
-				"tags": ["Explorer", "Horizon"],
+				"tags": ["Explorer"],
 				"operationId": "getExplorerContract",
 				"parameters": [
 					{
@@ -919,7 +915,7 @@
 			"get": {
 				"summary": "Look up a transaction by hash",
 				"description": "Returns lean public transaction facts from the configured Horizon source. This is a lookup boundary, not the full-history graph API.",
-				"tags": ["Explorer", "Horizon"],
+				"tags": ["Explorer"],
 				"operationId": "getTransactionByHash",
 				"parameters": [
 					{
@@ -1168,7 +1164,7 @@
 			"get": {
 				"summary": "Get all organizations",
 				"description": "Returns all crawled organizations, including horizonUrl when reported by Stellar TOML metadata.",
-				"tags": ["Organization", "Horizon"],
+				"tags": ["Organization"],
 				"operationId": "getOrganizations",
 				"responses": {
 					"200": {
@@ -3385,7 +3381,7 @@
 			"get": {
 				"summary": "Get an organization by id",
 				"description": "Returns the requested organization, including horizonUrl when reported by Stellar TOML metadata.",
-				"tags": ["Organization", "Horizon"],
+				"tags": ["Organization"],
 				"operationId": "getOrganizationById",
 				"parameters": [
 					{
@@ -3473,7 +3469,7 @@
 			"get": {
 				"summary": "Get the latest history scan by url",
 				"description": "Returns the latest history scan by url",
-				"tags": ["HistoryScan"],
+				"tags": ["Archive scanner operators"],
 				"operationId": "getHistoryScanByUrl",
 				"parameters": [
 					{
@@ -3510,7 +3506,7 @@
 			"get": {
 				"summary": "List latest archive scans",
 				"description": "Returns a bounded list of the latest public history archive scan state per archive URL.",
-				"tags": ["ArchiveScans"],
+				"tags": ["Archive verification"],
 				"operationId": "getArchiveScans",
 				"parameters": [
 					{
@@ -3568,7 +3564,7 @@
 			"get": {
 				"summary": "Get archive scan queue stats",
 				"description": "Returns a read-only queue snapshot for unfinished history archive scan jobs.",
-				"tags": ["ArchiveScans"],
+				"tags": ["Archive verification"],
 				"operationId": "getArchiveScanQueue",
 				"responses": {
 					"200": {
@@ -3623,7 +3619,7 @@
 			"get": {
 				"summary": "Get archive scan worker health",
 				"description": "Returns a read-only worker-slot snapshot derived from currently taken archive scan jobs.",
-				"tags": ["ArchiveScans"],
+				"tags": ["Archive verification"],
 				"operationId": "getArchiveScanWorkers",
 				"responses": {
 					"200": {
@@ -3731,7 +3727,7 @@
 			"get": {
 				"summary": "List history archive object work",
 				"description": "Returns a bounded scanner-owned archive object queue snapshot. Object rows represent concrete history archive files such as root history archive state, checkpoint state, ledger, transaction, result, and bucket files.",
-				"tags": ["ArchiveScans"],
+				"tags": ["Archive verification"],
 				"operationId": "getHistoryArchiveObjects",
 				"parameters": [
 					{
@@ -3767,7 +3763,7 @@
 			"get": {
 				"summary": "Get bucket hash coverage across archive roots",
 				"description": "Returns scanner-owned bucket object rows for one bucket hash grouped into verified, failed, pending, and scanning copies, with the archive roots where that bucket has been scheduled or observed.",
-				"tags": ["ArchiveScans"],
+				"tags": ["Archive verification"],
 				"operationId": "getHistoryArchiveBucketCoverage",
 				"parameters": [
 					{
@@ -3801,7 +3797,7 @@
 			"get": {
 				"summary": "Summarize history archive object coverage",
 				"description": "Returns scanner-owned archive object coverage grouped by object type, checkpoint, and bucket state across all known history archive URLs.",
-				"tags": ["ArchiveScans"],
+				"tags": ["Archive verification"],
 				"operationId": "getHistoryArchiveObjectSummary",
 				"responses": {
 					"200": {
@@ -3822,7 +3818,7 @@
 			"get": {
 				"summary": "List recent history archive object events",
 				"description": "Returns a bounded scanner-owned event log for archive object claims, heartbeats, completions, failures, and releases.",
-				"tags": ["ArchiveScans"],
+				"tags": ["Archive verification"],
 				"operationId": "getHistoryArchiveObjectEvents",
 				"parameters": [
 					{
@@ -3858,7 +3854,7 @@
 			"get": {
 				"summary": "List history archive objects by archive URL",
 				"description": "Returns a bounded scanner-owned archive object queue snapshot for one history archive URL.",
-				"tags": ["ArchiveScans"],
+				"tags": ["Archive verification"],
 				"operationId": "getHistoryArchiveObjectsByUrl",
 				"parameters": [
 					{
@@ -3901,7 +3897,7 @@
 			"get": {
 				"summary": "Summarize history archive object coverage by archive URL",
 				"description": "Returns scanner-owned archive object coverage grouped by object type, checkpoint, and bucket state for one history archive URL.",
-				"tags": ["ArchiveScans"],
+				"tags": ["Archive verification"],
 				"operationId": "getHistoryArchiveObjectSummaryByUrl",
 				"parameters": [
 					{
@@ -3932,7 +3928,7 @@
 			"get": {
 				"summary": "List recent history archive object events by archive URL",
 				"description": "Returns a bounded scanner-owned event log for one history archive URL.",
-				"tags": ["ArchiveScans"],
+				"tags": ["Archive verification"],
 				"operationId": "getHistoryArchiveObjectEventsByUrl",
 				"parameters": [
 					{
@@ -3975,7 +3971,7 @@
 			"get": {
 				"summary": "Get scanner-owned archive object evidence",
 				"description": "Returns persisted history archive state, object coverage summary, current archive object rows, and recent archive object events for one archive root. This endpoint is scanner-owned and does not fetch files from the remote archive during page render.",
-				"tags": ["ArchiveScans"],
+				"tags": ["Archive verification"],
 				"operationId": "getHistoryArchiveObjectEvidenceByUrl",
 				"parameters": [
 					{
@@ -4030,7 +4026,7 @@
 			"get": {
 				"summary": "Get archive scan log entries",
 				"description": "Returns recent completed scan entries and active queue entries for a history archive URL.",
-				"tags": ["ArchiveScans"],
+				"tags": ["Archive verification"],
 				"operationId": "getArchiveScanErrors",
 				"parameters": [
 					{
@@ -4123,7 +4119,7 @@
 			"get": {
 				"summary": "Get history archive state by URL",
 				"description": "Returns the latest scanner-owned history archive state record for a history archive URL. Available records contain the parsed .well-known/stellar-history.json body. Invalid and unreachable records contain the persisted scanner failure evidence for that archive URL.",
-				"tags": ["ArchiveScans"],
+				"tags": ["Archive verification"],
 				"operationId": "getHistoryArchiveStateByUrl",
 				"parameters": [
 					{
@@ -4247,7 +4243,7 @@
 			"get": {
 				"summary": "Get verified archive bucket evidence",
 				"description": "Returns verified bucket evidence persisted by history scanner runs for a history archive URL. Evidence rows are successful bucket-hash verification records and are separate from archive error logs and worker/setup failures.",
-				"tags": ["ArchiveScans"],
+				"tags": ["Archive verification"],
 				"operationId": "getArchiveScanEvidence",
 				"parameters": [
 					{
@@ -4329,7 +4325,7 @@
 			"get": {
 				"summary": "Get the latest archive scan by URL",
 				"description": "Returns the latest history archive scan for a URL.",
-				"tags": ["ArchiveScans"],
+				"tags": ["Archive verification"],
 				"operationId": "getArchiveScanByUrl",
 				"parameters": [
 					{
@@ -4361,7 +4357,7 @@
 			"post": {
 				"summary": "Register a community archive scanner",
 				"description": "Creates a community scanner identity and returns a one-time API key. Contact email and the stored API key hash are never returned by this public response.",
-				"tags": ["CommunityScanners"],
+				"tags": ["Community scanner operators"],
 				"operationId": "registerCommunityScanner",
 				"requestBody": {
 					"required": true,
@@ -4443,7 +4439,7 @@
 			"post": {
 				"summary": "Refresh a community scanner heartbeat",
 				"description": "Authenticates a community scanner with its one-time API key and updates its heartbeat timestamp.",
-				"tags": ["CommunityScanners"],
+				"tags": ["Community scanner operators"],
 				"operationId": "sendCommunityScannerHeartbeat",
 				"parameters": [
 					{
@@ -4498,7 +4494,7 @@
 			"get": {
 				"summary": "Claim the next community scanner job",
 				"description": "Authenticates a community scanner, refreshes its heartbeat, enforces scanner claim admission controls, atomically marks one pending history archive scan job as taken, and attributes the claim to that scanner.",
-				"tags": ["CommunityScanners"],
+				"tags": ["Community scanner operators"],
 				"operationId": "getCommunityScannerJob",
 				"parameters": [
 					{
@@ -4571,7 +4567,7 @@
 			"post": {
 				"summary": "Refresh a community scanner job heartbeat",
 				"description": "Authenticates a community scanner, refreshes its scanner heartbeat, and updates a taken scan job only when that scanner owns the claim.",
-				"tags": ["CommunityScanners"],
+				"tags": ["Community scanner operators"],
 				"operationId": "touchCommunityScannerJob",
 				"parameters": [
 					{
@@ -4614,7 +4610,7 @@
 			"post": {
 				"summary": "Submit a community scanner result",
 				"description": "Authenticates a community scanner, validates that the scan job is active and owned by that scanner, stores the scan result with attribution, marks the job done, and updates scanner completion metrics.",
-				"tags": ["CommunityScanners"],
+				"tags": ["Community scanner operators"],
 				"operationId": "registerCommunityScannerScan",
 				"parameters": [
 					{
@@ -4727,7 +4723,7 @@
 			"get": {
 				"summary": "Get community scanner metrics",
 				"description": "Returns aggregate community scanner metrics. Active/offline counts are derived from heartbeat freshness and scanner blocking state, and no contact email or API key material is returned.",
-				"tags": ["CommunityScanners"],
+				"tags": ["Community scanner operators"],
 				"operationId": "getCommunityScannerMetrics",
 				"responses": {
 					"200": {
@@ -4863,7 +4859,7 @@
 			"post": {
 				"summary": "Backfill scanner-captured archive metadata",
 				"description": "Internal authenticated operator endpoint. Fetches a bounded set of missing root stellar-history.json files and stores validated history archive state metadata on existing selected archive scan rows. It does not create successful scan rows or fetch data from frontend page renders.",
-				"tags": ["HistoryScan"],
+				"tags": ["Archive scanner operators"],
 				"operationId": "backfillArchiveMetadata",
 				"security": [{ "basicAuth": [] }],
 				"parameters": [
@@ -4940,7 +4936,7 @@
 			"get": {
 				"summary": "Claim the next pending history scan job",
 				"description": "Internal authenticated worker endpoint. Atomically marks one pending history archive scan job as taken and returns it to a scanner.",
-				"tags": ["HistoryScan"],
+				"tags": ["Archive scanner operators"],
 				"operationId": "getHistoryScanJob",
 				"security": [{ "basicAuth": [] }],
 				"responses": {
@@ -4991,7 +4987,7 @@
 			"get": {
 				"summary": "Claim the next pending history archive object",
 				"description": "Internal authenticated worker endpoint. Atomically marks one pending history archive object as scanning and returns it to an object verifier worker.",
-				"tags": ["HistoryScan"],
+				"tags": ["Archive scanner operators"],
 				"operationId": "getHistoryArchiveObjectJob",
 				"security": [{ "basicAuth": [] }],
 				"responses": {
@@ -5015,7 +5011,7 @@
 			"post": {
 				"summary": "Refresh a claimed history archive object",
 				"description": "Internal authenticated worker endpoint. Updates object verifier heartbeat/progress for the current claim attempt.",
-				"tags": ["HistoryScan"],
+				"tags": ["Archive scanner operators"],
 				"operationId": "touchHistoryArchiveObjectJob",
 				"security": [{ "basicAuth": [] }],
 				"parameters": [
@@ -5052,7 +5048,7 @@
 			"post": {
 				"summary": "Complete a history archive object",
 				"description": "Internal authenticated worker endpoint. Marks a claimed history archive object verified for the current claim attempt.",
-				"tags": ["HistoryScan"],
+				"tags": ["Archive scanner operators"],
 				"operationId": "completeHistoryArchiveObjectJob",
 				"security": [{ "basicAuth": [] }],
 				"parameters": [
@@ -5089,7 +5085,7 @@
 			"post": {
 				"summary": "Fail a history archive object",
 				"description": "Internal authenticated worker endpoint. Marks a claimed history archive object failed for the current claim attempt and stores sanitized failure evidence.",
-				"tags": ["HistoryScan"],
+				"tags": ["Archive scanner operators"],
 				"operationId": "failHistoryArchiveObjectJob",
 				"security": [{ "basicAuth": [] }],
 				"parameters": [
@@ -5126,7 +5122,7 @@
 			"post": {
 				"summary": "Release a claimed history archive object",
 				"description": "Internal authenticated worker endpoint. Releases the current archive object claim attempt back to pending without marking the archive object verified or failed.",
-				"tags": ["HistoryScan"],
+				"tags": ["Archive scanner operators"],
 				"operationId": "releaseHistoryArchiveObjectJob",
 				"security": [{ "basicAuth": [] }],
 				"parameters": [
@@ -5163,7 +5159,7 @@
 			"post": {
 				"summary": "Refresh a taken history scan job",
 				"description": "Internal authenticated worker endpoint. Updates the heartbeat timestamp for a taken scan job so long-running archive scans are not treated as stale.",
-				"tags": ["HistoryScan"],
+				"tags": ["Archive scanner operators"],
 				"operationId": "touchHistoryScanJob",
 				"security": [{ "basicAuth": [] }],
 				"parameters": [
@@ -5479,7 +5475,7 @@
 			"get": {
 				"summary": "Get a known organization",
 				"description": "Returns the latest stored known-organization record, including archived evidence when available.",
-				"tags": ["Network", "Organization", "Horizon"],
+				"tags": ["Network", "Organization"],
 				"operationId": "getKnownOrganization",
 				"parameters": [
 					{
@@ -5513,7 +5509,7 @@
 			"get": {
 				"summary": "Get all known organizations",
 				"description": "Returns the latest stored snapshot for every known organization, including current, archived, and inactive rows, with snapshot and last-measurement evidence.",
-				"tags": ["Network", "Organization", "Horizon"],
+				"tags": ["Network", "Organization"],
 				"operationId": "getKnownOrganizations",
 				"responses": {
 					"200": {
@@ -5903,7 +5899,7 @@
 			"get": {
 				"summary": "Get all organizations",
 				"description": "Returns all crawled organizations, including horizonUrl when reported by Stellar TOML metadata.",
-				"tags": ["Organization", "Horizon"],
+				"tags": ["Organization"],
 				"operationId": "getOrganizations",
 				"responses": {
 					"200": {
@@ -5926,7 +5922,7 @@
 			"get": {
 				"summary": "Get an organization by id",
 				"description": "Returns the requested organization, including horizonUrl when reported by Stellar TOML metadata.",
-				"tags": ["Organization", "Horizon"],
+				"tags": ["Organization"],
 				"operationId": "getOrganizationById",
 				"parameters": [
 					{

@@ -17,6 +17,7 @@ export async function GET(): Promise<Response> {
 
 	return new Response(rewrittenBody, {
 		headers: {
+			'cache-control': 'no-store',
 			'content-type': upstream.headers.get('content-type') ?? 'text/html'
 		},
 		status: upstream.status
