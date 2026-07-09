@@ -4145,7 +4145,8 @@
 										"observedAt",
 										"source",
 										"metadata",
-										"failure"
+										"failure",
+										"latestFailure"
 									],
 									"properties": {
 										"archiveUrl": { "type": "string", "format": "uri" },
@@ -4223,6 +4224,37 @@
 												"httpStatus": {
 													"type": "integer",
 													"nullable": true
+												}
+											}
+										},
+										"latestFailure": {
+											"type": "object",
+											"nullable": true,
+											"required": [
+												"message",
+												"type",
+												"httpStatus",
+												"observedAt",
+												"source"
+											],
+											"properties": {
+												"message": { "type": "string" },
+												"type": { "type": "string" },
+												"httpStatus": {
+													"type": "integer",
+													"nullable": true
+												},
+												"observedAt": {
+													"type": "string",
+													"format": "date-time"
+												},
+												"source": {
+													"type": "string",
+													"enum": [
+														"backfill",
+														"history-scanner",
+														"network-scan"
+													]
 												}
 											}
 										}

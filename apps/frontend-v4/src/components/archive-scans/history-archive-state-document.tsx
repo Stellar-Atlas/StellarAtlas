@@ -72,7 +72,24 @@ export function HistoryArchiveStateDocument({
 					<dt>Hot archive buckets</dt>
 					<dd>{formatInteger(hotArchiveBuckets.length)}</dd>
 				</div>
+				{archiveState?.latestFailure ? (
+					<>
+						<div>
+							<dt>Latest failed refresh</dt>
+							<dd>{formatDateTime(archiveState.latestFailure.observedAt)}</dd>
+						</div>
+						<div>
+							<dt>Refresh failure</dt>
+							<dd>{archiveState.latestFailure.type}</dd>
+						</div>
+					</>
+				) : null}
 			</dl>
+			{archiveState?.latestFailure ? (
+				<p className="muted-copy">
+					Latest failed refresh: {archiveState.latestFailure.message}
+				</p>
+			) : null}
 			<details className="metadata-document nested-metadata-document">
 				<summary>
 					<span>Raw bucket state JSON</span>
@@ -110,6 +127,14 @@ function HistoryArchiveStateFailure({
 				<div>
 					<dt>Failure type</dt>
 					<dd>{archiveState.failure?.type ?? 'unknown'}</dd>
+				</div>
+				<div>
+					<dt>Latest failed refresh</dt>
+					<dd>
+						{archiveState.latestFailure
+							? formatDateTime(archiveState.latestFailure.observedAt)
+							: 'Not reported'}
+					</dd>
 				</div>
 				<div>
 					<dt>HTTP status</dt>

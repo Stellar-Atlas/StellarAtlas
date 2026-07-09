@@ -16,6 +16,24 @@ import type { Repository } from 'typeorm';
 const upsertConflictPaths: readonly (keyof HistoryArchiveStateSnapshot)[] = [
 	'archiveUrlIdentity'
 ];
+const availableUpsertColumns: readonly (keyof HistoryArchiveStateSnapshot)[] = [
+	'archiveUrl',
+	'stateUrl',
+	'status',
+	'observedAt',
+	'source',
+	'version',
+	'server',
+	'currentLedger',
+	'networkPassphrase',
+	'currentBuckets',
+	'hotArchiveBuckets',
+	'rawState',
+	'errorType',
+	'errorMessage',
+	'httpStatus',
+	'updatedAt'
+];
 
 @injectable()
 export class TypeOrmHistoryArchiveStateRepository implements HistoryArchiveStateRepository {
@@ -57,7 +75,13 @@ export class TypeOrmHistoryArchiveStateRepository implements HistoryArchiveState
 			source
 		);
 
-		await this.repository.upsert(snapshot, [...upsertConflictPaths]);
+		await this.repository
+			.createQueryBuilder()
+			.insert()
+			.into(HistoryArchiveStateSnapshot)
+			.values(snapshot)
+			.orUpdate([...availableUpsertColumns], [...upsertConflictPaths])
+			.execute();
 		await this.markRootObjectCaptured(
 			normalizedArchiveUrl,
 			archiveUrlIdentity,
@@ -71,13 +95,81 @@ export class TypeOrmHistoryArchiveStateRepository implements HistoryArchiveState
 		const normalizedArchiveUrl = this.requireArchiveUrl(input.archiveUrl);
 		const archiveUrlIdentity =
 			this.requireArchiveUrlIdentity(normalizedArchiveUrl);
-		const snapshot = HistoryArchiveStateSnapshot.failure({
-			...input,
-			archiveUrl: normalizedArchiveUrl,
-			archiveUrlIdentity
-		});
-
-		await this.repository.upsert(snapshot, [...upsertConflictPaths]);
+		await this.repository.manager.query(
+			`
+				insert into "history_archive_state_snapshot" (
+					"archiveUrl",
+					"archiveUrlIdentity",
+					"stateUrl",
+					"status",
+					"observedAt",
+					"source",
+					"errorType",
+					"errorMessage",
+					"httpStatus",
+					"latestFailureObservedAt",
+					"latestFailureSource",
+					"latestFailureType",
+					"latestFailureMessage",
+					"latestFailureHttpStatus"
+				)
+				values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $5, $6, $7, $8, $9)
+				on conflict ("archiveUrlIdentity") do update set
+					"archiveUrl" = excluded."archiveUrl",
+					"latestFailureObservedAt" = excluded."latestFailureObservedAt",
+					"latestFailureSource" = excluded."latestFailureSource",
+					"latestFailureType" = excluded."latestFailureType",
+					"latestFailureMessage" = excluded."latestFailureMessage",
+					"latestFailureHttpStatus" = excluded."latestFailureHttpStatus",
+					"stateUrl" = case
+						when "history_archive_state_snapshot"."status" = 'available'
+							then "history_archive_state_snapshot"."stateUrl"
+						else excluded."stateUrl"
+					end,
+					"status" = case
+						when "history_archive_state_snapshot"."status" = 'available'
+							then "history_archive_state_snapshot"."status"
+						else excluded."status"
+					end,
+					"observedAt" = case
+						when "history_archive_state_snapshot"."status" = 'available'
+							then "history_archive_state_snapshot"."observedAt"
+						else excluded."observedAt"
+					end,
+					"source" = case
+						when "history_archive_state_snapshot"."status" = 'available'
+							then "history_archive_state_snapshot"."source"
+						else excluded."source"
+					end,
+					"errorType" = case
+						when "history_archive_state_snapshot"."status" = 'available'
+							then "history_archive_state_snapshot"."errorType"
+						else excluded."errorType"
+					end,
+					"errorMessage" = case
+						when "history_archive_state_snapshot"."status" = 'available'
+							then "history_archive_state_snapshot"."errorMessage"
+						else excluded."errorMessage"
+					end,
+					"httpStatus" = case
+						when "history_archive_state_snapshot"."status" = 'available'
+							then "history_archive_state_snapshot"."httpStatus"
+						else excluded."httpStatus"
+					end,
+					"updatedAt" = now()
+			`,
+			[
+				normalizedArchiveUrl,
+				archiveUrlIdentity,
+				input.stateUrl,
+				input.status,
+				input.observedAt,
+				input.source,
+				input.errorType,
+				input.errorMessage,
+				input.httpStatus ?? null
+			]
+		);
 	}
 
 	private requireArchiveUrl(url: string): string {

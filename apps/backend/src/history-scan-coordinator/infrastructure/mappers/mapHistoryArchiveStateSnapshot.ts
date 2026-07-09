@@ -12,6 +12,22 @@ export function mapHistoryArchiveStateSnapshot(
 		observedAt: snapshot.observedAt.toISOString(),
 		source: snapshot.source,
 		metadata: snapshot.toArchiveMetadata(),
-		failure: snapshot.toFailure()
+		failure: snapshot.toFailure(),
+		latestFailure: mapLatestFailure(snapshot)
+	};
+}
+
+function mapLatestFailure(
+	snapshot: HistoryArchiveStateSnapshot
+): HistoryArchiveStateSnapshotV1['latestFailure'] {
+	const latestFailure = snapshot.toLatestFailure();
+	if (latestFailure === null) return null;
+
+	return {
+		message: latestFailure.message,
+		type: latestFailure.type,
+		httpStatus: latestFailure.httpStatus,
+		observedAt: latestFailure.observedAt.toISOString(),
+		source: latestFailure.source
 	};
 }

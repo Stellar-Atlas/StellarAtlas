@@ -46,6 +46,7 @@ export {
 } from './dto/history-archive-scan-v1.js';
 export {
 	type HistoryArchiveStateFailureV1,
+	type HistoryArchiveStateLatestFailureV1,
 	type HistoryArchiveStateSnapshotV1,
 	HistoryArchiveStateSnapshotV1Schema,
 	type HistoryArchiveStateSourceV1,

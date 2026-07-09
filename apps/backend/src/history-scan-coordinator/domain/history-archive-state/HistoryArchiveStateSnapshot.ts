@@ -22,6 +22,12 @@ export interface HistoryArchiveStateFailure {
 	readonly httpStatus: number | null;
 }
 
+export interface HistoryArchiveStateLatestFailure
+	extends HistoryArchiveStateFailure {
+	readonly observedAt: Date;
+	readonly source: HistoryArchiveStateSource;
+}
+
 export interface HistoryArchiveStateFailureInput {
 	readonly archiveUrl: string;
 	readonly archiveUrlIdentity: string;
@@ -88,6 +94,21 @@ export class HistoryArchiveStateSnapshot extends CoreEntity {
 	@Column('integer', { nullable: true })
 	public readonly httpStatus!: number | null;
 
+	@Column('timestamptz', { nullable: true })
+	public readonly latestFailureObservedAt!: Date | null;
+
+	@Column('text', { nullable: true })
+	public readonly latestFailureSource!: HistoryArchiveStateSource | null;
+
+	@Column('text', { nullable: true })
+	public readonly latestFailureType!: string | null;
+
+	@Column('text', { nullable: true })
+	public readonly latestFailureMessage!: string | null;
+
+	@Column('integer', { nullable: true })
+	public readonly latestFailureHttpStatus!: number | null;
+
 	@CreateDateColumn({ type: 'timestamptz' })
 	public readonly createdAt?: Date;
 
@@ -103,6 +124,11 @@ export class HistoryArchiveStateSnapshot extends CoreEntity {
 		readonly errorType: string | null;
 		readonly hotArchiveBuckets: readonly HistoryStateBucketDTO[] | null;
 		readonly httpStatus: number | null;
+		readonly latestFailureHttpStatus: number | null;
+		readonly latestFailureMessage: string | null;
+		readonly latestFailureObservedAt: Date | null;
+		readonly latestFailureSource: HistoryArchiveStateSource | null;
+		readonly latestFailureType: string | null;
 		readonly networkPassphrase: string | null;
 		readonly observedAt: Date;
 		readonly rawState: HistoryArchiveStateDTO | null;
@@ -123,6 +149,11 @@ export class HistoryArchiveStateSnapshot extends CoreEntity {
 		this.errorType = props.errorType;
 		this.hotArchiveBuckets = props.hotArchiveBuckets;
 		this.httpStatus = props.httpStatus;
+		this.latestFailureHttpStatus = props.latestFailureHttpStatus;
+		this.latestFailureMessage = props.latestFailureMessage;
+		this.latestFailureObservedAt = props.latestFailureObservedAt;
+		this.latestFailureSource = props.latestFailureSource;
+		this.latestFailureType = props.latestFailureType;
 		this.networkPassphrase = props.networkPassphrase;
 		this.observedAt = props.observedAt;
 		this.rawState = props.rawState;
@@ -150,6 +181,11 @@ export class HistoryArchiveStateSnapshot extends CoreEntity {
 			errorType: null,
 			hotArchiveBuckets: state.hotArchiveBuckets ?? null,
 			httpStatus: null,
+			latestFailureHttpStatus: null,
+			latestFailureMessage: null,
+			latestFailureObservedAt: null,
+			latestFailureSource: null,
+			latestFailureType: null,
 			networkPassphrase: state.networkPassphrase ?? null,
 			observedAt: new Date(archiveMetadata.observedAt),
 			rawState: state,
@@ -173,6 +209,11 @@ export class HistoryArchiveStateSnapshot extends CoreEntity {
 			errorType: input.errorType,
 			hotArchiveBuckets: null,
 			httpStatus: input.httpStatus ?? null,
+			latestFailureHttpStatus: input.httpStatus ?? null,
+			latestFailureMessage: input.errorMessage,
+			latestFailureObservedAt: input.observedAt,
+			latestFailureSource: input.source,
+			latestFailureType: input.errorType,
 			networkPassphrase: null,
 			observedAt: input.observedAt,
 			rawState: null,
@@ -201,6 +242,24 @@ export class HistoryArchiveStateSnapshot extends CoreEntity {
 			message: this.errorMessage ?? 'History archive state is unavailable',
 			type: this.errorType ?? this.status,
 			httpStatus: this.httpStatus
+		};
+	}
+
+	toLatestFailure(): HistoryArchiveStateLatestFailure | null {
+		if (
+			this.latestFailureObservedAt === null ||
+			this.latestFailureSource === null
+		) {
+			return null;
+		}
+
+		return {
+			message:
+				this.latestFailureMessage ?? 'History archive state is unavailable',
+			type: this.latestFailureType ?? 'unreachable',
+			httpStatus: this.latestFailureHttpStatus,
+			observedAt: this.latestFailureObservedAt,
+			source: this.latestFailureSource
 		};
 	}
 }

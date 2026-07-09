@@ -21,6 +21,12 @@ export interface HistoryArchiveStateFailureV1 {
 	readonly httpStatus: number | null;
 }
 
+export interface HistoryArchiveStateLatestFailureV1
+	extends HistoryArchiveStateFailureV1 {
+	readonly observedAt: string;
+	readonly source: HistoryArchiveStateSourceV1;
+}
+
 export interface HistoryArchiveStateSnapshotV1 {
 	readonly archiveUrl: string;
 	readonly archiveUrlIdentity: string;
@@ -30,6 +36,7 @@ export interface HistoryArchiveStateSnapshotV1 {
 	readonly source: HistoryArchiveStateSourceV1;
 	readonly metadata: HistoryArchiveMetadataV1 | null;
 	readonly failure: HistoryArchiveStateFailureV1 | null;
+	readonly latestFailure: HistoryArchiveStateLatestFailureV1 | null;
 }
 
 const HistoryArchiveStateFailureV1Schema: JSONSchemaType<HistoryArchiveStateFailureV1> =
@@ -49,6 +56,33 @@ const HistoryArchiveStateFailureV1Schema: JSONSchemaType<HistoryArchiveStateFail
 		required: ['message', 'type', 'httpStatus'],
 		additionalProperties: false
 	};
+
+const HistoryArchiveStateLatestFailureV1Schema: JSONSchemaType<HistoryArchiveStateLatestFailureV1> =
+	{
+		type: 'object',
+		properties: {
+			message: {
+				type: 'string'
+			},
+			type: {
+				type: 'string'
+			},
+			httpStatus: nullable({
+				type: 'number'
+			}),
+			observedAt: {
+				type: 'string',
+				format: 'date-time'
+			},
+			source: {
+				type: 'string',
+				enum: ['backfill', 'history-scanner', 'network-scan']
+			}
+		},
+		required: ['message', 'type', 'httpStatus', 'observedAt', 'source'],
+		additionalProperties: false
+	};
+
 
 const HistoryArchiveMetadataV1Schema: JSONSchemaType<HistoryArchiveMetadataV1> =
 	{
@@ -95,7 +129,8 @@ export const HistoryArchiveStateSnapshotV1Schema: JSONSchemaType<HistoryArchiveS
 				enum: ['backfill', 'history-scanner', 'network-scan']
 			},
 			metadata: nullable(HistoryArchiveMetadataV1Schema),
-			failure: nullable(HistoryArchiveStateFailureV1Schema)
+			failure: nullable(HistoryArchiveStateFailureV1Schema),
+			latestFailure: nullable(HistoryArchiveStateLatestFailureV1Schema)
 		},
 		required: [
 			'archiveUrl',
@@ -105,7 +140,8 @@ export const HistoryArchiveStateSnapshotV1Schema: JSONSchemaType<HistoryArchiveS
 			'observedAt',
 			'source',
 			'metadata',
-			'failure'
+			'failure',
+			'latestFailure'
 		],
 		additionalProperties: false
 	};
