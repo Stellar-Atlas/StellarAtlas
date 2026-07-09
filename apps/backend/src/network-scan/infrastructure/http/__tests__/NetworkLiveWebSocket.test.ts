@@ -4,9 +4,44 @@ import { ok } from 'neverthrow';
 import type { ScpStatementObservationV1 } from 'shared';
 import type { GetNetwork } from '../../../use-cases/get-network/GetNetwork.js';
 import type { GetScpStatements } from '../../../use-cases/get-scp-statements/GetScpStatements.js';
+import type { GetLatestObservedLedger } from '../../../use-cases/get-latest-observed-ledger/GetLatestObservedLedger.js';
 import { attachNetworkLiveWebSocket } from '../NetworkLiveWebSocket.js';
 
 describe('NetworkLiveWebSocket', () => {
+	it('sends scanner-owned latest ledger before falling back to Horizon', async () => {
+		const server = createServer();
+		const getNetwork = {
+			execute: jest.fn().mockResolvedValue(ok({ latestLedger: '1' }))
+		} as unknown as GetNetwork;
+		const getScpStatements = {
+			execute: jest.fn().mockResolvedValue(ok([]))
+		} as unknown as GetScpStatements;
+
+		attachNetworkLiveWebSocket(server, {
+			getLatestObservedLedger: createLatestObservedLedgerReader(),
+			getNetwork,
+			getScpStatements,
+			horizonUrl: 'http://127.0.0.1:1',
+			path: '/ws'
+		});
+		await listen(server);
+
+		const socket = new WebSocket(`ws://127.0.0.1:${addressPort(server)}/ws`);
+		try {
+			const message = await waitForLatestLedgerMessage(socket);
+
+			expect(message.payload).toEqual({
+				closedAt: '2026-07-05T00:00:01.000Z',
+				protocolVersion: null,
+				sequence: '63326550',
+				source: 'network_scan'
+			});
+		} finally {
+			socket.close();
+			await close(server);
+		}
+	});
+
 	it('sends live-only SCP deltas in cursor order', async () => {
 		const server = createServer();
 		const getNetwork = {
@@ -22,6 +57,7 @@ describe('NetworkLiveWebSocket', () => {
 		} as unknown as GetScpStatements;
 
 		attachNetworkLiveWebSocket(server, {
+			getLatestObservedLedger: createLatestObservedLedgerReader(),
 			getNetwork,
 			getScpStatements,
 			horizonUrl: 'http://127.0.0.1:1',
@@ -76,6 +112,7 @@ describe('NetworkLiveWebSocket', () => {
 		} as unknown as GetScpStatements;
 
 		attachNetworkLiveWebSocket(server, {
+			getLatestObservedLedger: createLatestObservedLedgerReader(),
 			getNetwork,
 			getScpStatements,
 			horizonUrl: 'http://127.0.0.1:1',
@@ -98,6 +135,19 @@ describe('NetworkLiveWebSocket', () => {
 	});
 });
 
+function createLatestObservedLedgerReader(): GetLatestObservedLedger {
+	return {
+		execute: jest.fn().mockResolvedValue(
+			ok({
+				closedAt: '2026-07-05T00:00:01.000Z',
+				protocolVersion: null,
+				sequence: '63326550',
+				source: 'network_scan'
+			})
+		)
+	} as unknown as GetLatestObservedLedger;
+}
+
 function createStatement(
 	statementHash: string,
 	observedAt = '2026-07-05T00:00:00.000Z'
@@ -116,6 +166,44 @@ function createStatement(
 		statementXdr: '',
 		values: []
 	};
+}
+
+function waitForLatestLedgerMessage(socket: WebSocket): Promise<{
+	payload: {
+		closedAt: string;
+		protocolVersion: number | null;
+		sequence: string;
+		source?: string;
+	};
+	type: 'latestLedger';
+}> {
+	return new Promise((resolve, reject) => {
+		const timeout = setTimeout(() => {
+			reject(new Error('Timed out waiting for latest ledger websocket message'));
+		}, 2_000);
+
+		socket.on('message', (data) => {
+			const message = JSON.parse(data.toString()) as {
+				payload?: unknown;
+				type?: unknown;
+			};
+			if (message.type !== 'latestLedger') return;
+			clearTimeout(timeout);
+			resolve({
+				payload: message.payload as {
+					closedAt: string;
+					protocolVersion: number | null;
+					sequence: string;
+					source?: string;
+				},
+				type: 'latestLedger'
+			});
+		});
+		socket.on('error', (error) => {
+			clearTimeout(timeout);
+			reject(error);
+		});
+	});
 }
 
 function expectNoScpMessage(socket: WebSocket): Promise<void> {

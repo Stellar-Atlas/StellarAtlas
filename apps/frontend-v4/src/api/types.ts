@@ -142,8 +142,9 @@ export interface PublicLedgerTransactions {
 
 export interface PublicLatestLedger {
 	readonly closedAt: string;
-	readonly protocolVersion: number;
+	readonly protocolVersion: number | null;
 	readonly sequence: string;
+	readonly source?: 'horizon_fallback' | 'network_scan';
 }
 
 export type PublicExplorerSource = 'horizon' | 'rpc';

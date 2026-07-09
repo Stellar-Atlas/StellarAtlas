@@ -38,6 +38,7 @@ import { GetOrganizations } from '@network-scan/use-cases/get-organizations/GetO
 import { GetMeasurementsFactory } from '@network-scan/use-cases/get-measurements/GetMeasurementsFactory.js';
 import { GetMeasurementAggregations } from '@network-scan/use-cases/get-measurement-aggregations/GetMeasurementAggregations.js';
 import { GetScpStatements } from '@network-scan/use-cases/get-scp-statements/GetScpStatements.js';
+import { GetLatestObservedLedger } from '@network-scan/use-cases/get-latest-observed-ledger/GetLatestObservedLedger.js';
 import { RequestUnsubscribeLink } from '@notifications/use-cases/request-unsubscribe-link/RequestUnsubscribeLink.js';
 import { RegisterScan } from '@history-scan-coordinator/use-cases/register-scan/RegisterScan.js';
 import { RegisterParsedLedgerHeaders } from '@history-scan-coordinator/use-cases/register-parsed-ledger-headers/RegisterParsedLedgerHeaders.js';
@@ -397,6 +398,7 @@ const listen = async () => {
 	});
 	trackServerSockets(server);
 	attachNetworkLiveWebSocket(server, {
+		getLatestObservedLedger: kernel.container.get(GetLatestObservedLedger),
 		getNetwork: kernel.container.get(GetNetwork),
 		getScpStatements: kernel.container.get(GetScpStatements),
 		horizonUrl: config.horizonUrl.value,

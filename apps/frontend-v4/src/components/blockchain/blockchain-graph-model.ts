@@ -79,7 +79,10 @@ export const buildBlockchainGraphModel = (
 	const accountCount = Math.max(sourceAccounts.length, 1);
 	const nodes: BlockchainGraphNode[] = [
 		{
-			detail: `${latestLedger.protocolVersion} protocol`,
+			detail:
+				latestLedger.protocolVersion === null
+					? 'protocol not reported'
+					: `${latestLedger.protocolVersion} protocol`,
 			id: `ledger:${transactions.ledger}`,
 			label: 'Ledger',
 			tone: 'yellow',

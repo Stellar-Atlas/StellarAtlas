@@ -21,6 +21,7 @@ export interface CollectScpLiveResult {
 
 const liveBufferBatchSize = 10_000;
 const liveBufferFlushDelayMs = 4_500;
+const liveBufferFlushTimeoutMs = 5_000;
 
 @injectable()
 export class CollectScpLive {
@@ -86,7 +87,7 @@ export class CollectScpLive {
 					null,
 				(observation) => liveStatements.add(observation)
 			);
-			await liveStatements.flush();
+			await this.flushLiveScpStatements(liveStatements);
 
 			if (crawlResult.isErr()) return err(crawlResult.error);
 
@@ -123,5 +124,24 @@ export class CollectScpLive {
 		const network = await this.networkRepository.findActiveByNetworkId(networkId);
 		if (!network) return err(new Error(`Network with id ${networkId} not found`));
 		return ok(network);
+	}
+
+	private async flushLiveScpStatements(
+		liveStatements: ScpStatementLiveStoreBuffer
+	): Promise<void> {
+		let timedOut = false;
+		const timeout = new Promise<void>((resolve) => {
+			setTimeout(() => {
+				timedOut = true;
+				resolve();
+			}, liveBufferFlushTimeoutMs);
+		});
+
+		await Promise.race([liveStatements.flush(), timeout]);
+		if (!timedOut) return;
+
+		this.logger.warn('Live SCP statement flush timed out', {
+			timeoutMs: liveBufferFlushTimeoutMs
+		});
 	}
 }

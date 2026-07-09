@@ -4,6 +4,10 @@ import type { Logger } from '@core/services/Logger.js';
 import { WebSocket, WebSocketServer } from 'ws';
 import type { GetNetwork } from '../../use-cases/get-network/GetNetwork.js';
 import type { GetScpStatements } from '../../use-cases/get-scp-statements/GetScpStatements.js';
+import type {
+	GetLatestObservedLedger,
+	LatestObservedLedgerDTO
+} from '../../use-cases/get-latest-observed-ledger/GetLatestObservedLedger.js';
 import { fetchLatestLedger } from './HorizonLedgerClient.js';
 import {
 	compareScpStatement,
@@ -16,6 +20,7 @@ import {
 } from './ScpStatementStreamState.js';
 
 interface NetworkLiveWebSocketConfig {
+	getLatestObservedLedger: GetLatestObservedLedger;
 	getNetwork: GetNetwork;
 	getScpStatements: GetScpStatements;
 	horizonUrl: string;
@@ -26,6 +31,15 @@ interface NetworkLiveWebSocketConfig {
 type LiveMessage =
 	| { payload: unknown; type: 'network' | 'scp' | 'latestLedger' }
 	| { payload: { message: string }; type: 'error' };
+
+type LiveLatestLedgerDTO =
+	| LatestObservedLedgerDTO
+	| {
+			readonly closedAt: string;
+			readonly protocolVersion: number;
+			readonly sequence: string;
+			readonly source: 'horizon_fallback';
+	  };
 
 interface LiveClient {
 	scpState: ScpStatementStreamState;
@@ -46,6 +60,25 @@ const isWebSocketPath = (request: IncomingMessage, path: string): boolean => {
 
 const errorMessage = (error: unknown): string =>
 	error instanceof Error ? error.message : String(error);
+
+async function getLatestLedger(
+	config: NetworkLiveWebSocketConfig
+): Promise<LiveLatestLedgerDTO> {
+	const scannerLedger = await config.getLatestObservedLedger.execute();
+	if (scannerLedger.isErr()) {
+		config.logger?.error('Scanner-owned latest ledger unavailable', {
+			error: errorMessage(scannerLedger.error)
+		});
+	} else if (scannerLedger.value !== null) {
+		return scannerLedger.value;
+	}
+
+	const horizonLedger = await fetchLatestLedger(config.horizonUrl);
+	return {
+		...horizonLedger,
+		source: 'horizon_fallback'
+	};
+}
 
 export function attachNetworkLiveWebSocket(
 	server: Server,
@@ -93,7 +126,7 @@ export function attachNetworkLiveWebSocket(
 	const writeLatestLedger = (): void => {
 		if (latestLedgerWriting) return;
 		latestLedgerWriting = true;
-		void fetchLatestLedger(config.horizonUrl)
+		void getLatestLedger(config)
 			.then((payload) => broadcast({ payload, type: 'latestLedger' }))
 			.catch((error) => {
 				config.logger?.error('Live WebSocket latest ledger unavailable', {
