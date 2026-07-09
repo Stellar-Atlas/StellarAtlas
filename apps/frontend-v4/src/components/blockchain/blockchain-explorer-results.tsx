@@ -106,7 +106,7 @@ export function RecentTransactionsView({
 		<div className="explorer-transaction-feed">
 			<ExplorerState
 				tone="neutral"
-				text={`Transaction sample updated ${formatDate(result.transactions.generatedAt)}.`}
+				text={`Horizon fallback transaction sample updated ${formatDate(result.transactions.generatedAt)}.`}
 			/>
 			{result.transactions.truncated ? (
 				<ExplorerState
@@ -213,6 +213,7 @@ function TransactionFeedRows({
 						<span>ledger {transaction.ledger}</span>
 						<span>{transaction.operationCount} ops</span>
 						<span>{transaction.successful ? 'successful' : 'failed'}</span>
+						<span>Horizon fallback</span>
 						<button
 							aria-label={`Inspect transaction ${transaction.hash}`}
 							className="inspect-action"
@@ -236,6 +237,7 @@ function LedgerCard({
 	return (
 		<dl className="explorer-result-grid">
 			<ResultItem label="Ledger" value={ledger.sequence} />
+			<ResultItem label="Data source" value={formatExplorerSource(ledger.source)} />
 			<ResultItem label="Closed" value={formatDate(ledger.closedAt)} />
 			<ResultItem label="Operations" value={ledger.operationCount.toString()} />
 			<ResultItem
@@ -257,6 +259,10 @@ function AccountCard({
 		<div className="explorer-result-stack">
 			<dl className="explorer-result-grid">
 				<ResultItem label="Account" value={account.accountId} />
+				<ResultItem
+					label="Data source"
+					value={formatExplorerSource(account.source)}
+				/>
 				<ResultItem label="Sequence" value={account.sequence} />
 				<ResultItem
 					label="Subentries"
@@ -317,7 +323,7 @@ function TransactionCard({
 }
 
 function formatTransactionSource(source: PublicTransactionLookup['source']): string {
-	if (source === 'horizon') return 'current network lookup';
+	if (source === 'horizon') return 'Horizon fallback';
 	return source;
 }
 
@@ -333,6 +339,7 @@ function OperationTable({
 			{operations.slice(0, 50).map((operation) => (
 				<div className="explorer-table-row" key={operation.id}>
 					<strong>{operation.type}</strong>
+					<span>{formatExplorerSource(operation.source)}</span>
 					<span>{formatDate(operation.createdAt)}</span>
 					<span>{operation.ledger ?? 'ledger unknown'}</span>
 					<span>{operation.sourceAccount ?? 'source unknown'}</span>
@@ -358,6 +365,7 @@ function AssetsTable({
 					key={`${asset.assetType}:${asset.assetCode}:${asset.assetIssuer}:${index}`}
 				>
 					<strong>{asset.assetCode ?? asset.assetType}</strong>
+					<span>{formatExplorerSource(asset.source)}</span>
 					<span>{asset.assetIssuer ?? 'native'}</span>
 					<span>{asset.numAccounts?.toString() ?? 'accounts unknown'}</span>
 					<span>{asset.amount ?? 'amount unknown'}</span>
@@ -434,6 +442,13 @@ function mapBalanceAsset(
 function formatDate(value: string): string {
 	if (value.length === 0) return 'Unknown';
 	return new Date(value).toLocaleString();
+}
+
+function formatExplorerSource(source: string): string {
+	if (source === 'horizon') return 'Horizon fallback';
+	if (source === 'local') return 'StellarAtlas local index';
+	if (source === 'rpc') return 'Soroban RPC';
+	return source.replaceAll('_', ' ');
 }
 
 function formatTransactionHash(hash: string): string {

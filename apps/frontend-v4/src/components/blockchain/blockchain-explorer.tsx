@@ -97,6 +97,10 @@ export function BlockchainExplorer(): React.JSX.Element {
 	const [transactionOperationsLoading, setTransactionOperationsLoading] =
 		useState(false);
 	const [transactionFeedLoading, setTransactionFeedLoading] = useState(false);
+	const indexReadiness = localReadModel.readModel?.indexes;
+	const operationIndexReady = Boolean(indexReadiness?.operationIndexReady);
+	const assetIndexReady = Boolean(indexReadiness?.assetIndexReady);
+	const contractIndexReady = Boolean(indexReadiness?.contractIndexReady);
 
 	const runExplorerSearch = (
 		query: string,
@@ -175,7 +179,8 @@ export function BlockchainExplorer(): React.JSX.Element {
 					<div>
 						<strong>Search</strong>
 						<span>
-							Search available ledger data and current lookup sources.
+							Search uses local parsed headers where available and Horizon/RPC
+							fallbacks for decoded records.
 						</span>
 					</div>
 				</div>
@@ -183,7 +188,7 @@ export function BlockchainExplorer(): React.JSX.Element {
 					<input
 						aria-label="Explorer search"
 						onChange={(event) => setSearchQuery(event.currentTarget.value)}
-						placeholder="Hash, G address, ledger, asset code, contract"
+						placeholder="Transaction hash, G address, ledger, asset code, contract"
 						value={searchQuery}
 					/>
 					<select
@@ -213,8 +218,8 @@ export function BlockchainExplorer(): React.JSX.Element {
 								<strong>Transaction Operations</strong>
 								<span>
 									{transactionOperationsLoading
-										? 'Loading operation rows'
-										: 'Selected transaction'}
+										? 'Loading Horizon operation rows'
+										: 'Horizon fallback for the selected transaction'}
 								</span>
 							</div>
 						</div>
@@ -227,7 +232,7 @@ export function BlockchainExplorer(): React.JSX.Element {
 				<div className="panel-heading explorer-feed-heading">
 					<div>
 						<strong>Recent transactions</strong>
-						<span>Latest transaction rows currently available</span>
+						<span>Horizon fallback sample; local transaction index is not active</span>
 					</div>
 					<button
 						disabled={transactionFeedLoading}
@@ -248,7 +253,11 @@ export function BlockchainExplorer(): React.JSX.Element {
 					<div className="panel-heading">
 						<div>
 							<strong>Operations</strong>
-							<span>Filter rows when the local operation index is available</span>
+							<span>
+								{operationIndexReady
+									? 'Local operation index available'
+									: 'Local operation index is not available yet'}
+							</span>
 						</div>
 					</div>
 					<form className="explorer-filter-form" onSubmit={submitOperations}>
@@ -260,6 +269,7 @@ export function BlockchainExplorer(): React.JSX.Element {
 									ledger: value || undefined
 								}))
 							}
+							disabled={!operationIndexReady}
 							value={operationFilters.ledger ?? ''}
 						/>
 						<ExplorerInput
@@ -270,11 +280,13 @@ export function BlockchainExplorer(): React.JSX.Element {
 									accountId: value || undefined
 								}))
 							}
+							disabled={!operationIndexReady}
 							value={operationFilters.accountId ?? ''}
 						/>
 						<label>
 							<span>Type</span>
 							<select
+								disabled={!operationIndexReady}
 								onChange={(event) => {
 									const value = event.currentTarget.value;
 									setOperationFilters((filters) => ({
@@ -300,6 +312,7 @@ export function BlockchainExplorer(): React.JSX.Element {
 								}))
 							}
 							type="datetime-local"
+							disabled={!operationIndexReady}
 							value={toDateInputValue(operationFilters.from)}
 						/>
 						<ExplorerInput
@@ -311,12 +324,22 @@ export function BlockchainExplorer(): React.JSX.Element {
 								}))
 							}
 							type="datetime-local"
+							disabled={!operationIndexReady}
 							value={toDateInputValue(operationFilters.to)}
 						/>
-						<button disabled={loading === 'operations'} type="submit">
+						<button
+							disabled={!operationIndexReady || loading === 'operations'}
+							type="submit"
+						>
 							{loading === 'operations' ? 'Loading' : 'Load'}
 						</button>
 					</form>
+					{operationIndexReady ? null : (
+						<p className="explorer-state neutral">
+							Operation filters require the local decoded operation index. Use
+							transaction hash lookup for Horizon fallback operation rows.
+						</p>
+					)}
 					<OperationsView result={operationResult} />
 				</section>
 
@@ -324,24 +347,38 @@ export function BlockchainExplorer(): React.JSX.Element {
 					<div className="panel-heading">
 						<div>
 							<strong>Assets</strong>
-							<span>Search asset rows when the local asset index is available</span>
+							<span>
+								{assetIndexReady
+									? 'Local asset index available'
+									: 'Local asset index is not available yet'}
+							</span>
 						</div>
 					</div>
 					<form className="explorer-filter-form" onSubmit={submitAssets}>
 						<ExplorerInput
 							label="Code"
+							disabled={!assetIndexReady}
 							onChange={setAssetCode}
 							value={assetCode}
 						/>
 						<ExplorerInput
 							label="Issuer"
+							disabled={!assetIndexReady}
 							onChange={setAssetIssuer}
 							value={assetIssuer}
 						/>
-						<button disabled={loading === 'assets'} type="submit">
+						<button
+							disabled={!assetIndexReady || loading === 'assets'}
+							type="submit"
+						>
 							{loading === 'assets' ? 'Loading' : 'Find'}
 						</button>
 					</form>
+					{assetIndexReady ? null : (
+						<p className="explorer-state neutral">
+							Asset search requires the local decoded asset index.
+						</p>
+					)}
 					<AssetsView result={assetResult} />
 				</section>
 
@@ -349,19 +386,33 @@ export function BlockchainExplorer(): React.JSX.Element {
 					<div className="panel-heading">
 						<div>
 							<strong>Contracts</strong>
-							<span>Check contract rows when the local contract index is available</span>
+							<span>
+								{contractIndexReady
+									? 'Local contract index available'
+									: 'Local contract index is not available yet'}
+							</span>
 						</div>
 					</div>
 					<form className="explorer-filter-form" onSubmit={submitContract}>
 						<ExplorerInput
 							label="Contract"
+							disabled={!contractIndexReady}
 							onChange={setContractId}
 							value={contractId}
 						/>
-						<button disabled={loading === 'contract'} type="submit">
-							{loading === 'contract' ? 'Checking' : 'Show status'}
+						<button
+							disabled={!contractIndexReady || loading === 'contract'}
+							type="submit"
+						>
+							{loading === 'contract' ? 'Checking' : 'Lookup'}
 						</button>
 					</form>
+					{contractIndexReady ? null : (
+						<p className="explorer-state neutral">
+							Contract search requires the local decoded contract index. RPC
+							service readiness is tracked separately.
+						</p>
+					)}
 					<ContractView result={contractResult} />
 				</section>
 			</section>
@@ -388,15 +439,19 @@ function getTransactionHashFromSearch(
 
 function formatSearchTypeOption(type: PublicExplorerSearchType): string {
 	if (type === 'auto') return 'auto';
+	if (type === 'asset') return 'asset via fallback';
+	if (type === 'contract') return 'contract RPC status';
 	return type;
 }
 
 function ExplorerInput({
+	disabled = false,
 	label,
 	onChange,
 	type = 'text',
 	value
 }: {
+	readonly disabled?: boolean;
 	readonly label: string;
 	readonly onChange: (value: string) => void;
 	readonly type?: string;
@@ -406,6 +461,7 @@ function ExplorerInput({
 		<label>
 			<span>{label}</span>
 			<input
+				disabled={disabled}
 				onChange={(event) => onChange(event.currentTarget.value)}
 				type={type}
 				value={value}

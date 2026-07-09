@@ -37,6 +37,10 @@ export function ExplorerLocalReadModelWatermark({
 				<strong>Local decoded indexes</strong>
 				<span>{formatDecodedIndexCoverage(indexes)}</span>
 			</div>
+			<div>
+				<strong>Transaction source</strong>
+				<span>{formatTransactionSource(result.readModel.transactions.source)}</span>
+			</div>
 		</div>
 	);
 }
@@ -64,8 +68,15 @@ function formatDecodedIndexCoverage(
 	].filter((label): label is string => label !== null);
 
 	if (ready.length === 0) {
-		return 'transaction, operation, asset, and contract indexes are still building';
+		return 'transaction, operation, asset, and contract indexes are not available yet';
 	}
 
 	return ready.join(', ') + ' active';
+}
+
+function formatTransactionSource(
+	source: PublicExplorerLocalReadModel['transactions']['source']
+): string {
+	if (source === 'horizon_fallback') return 'Horizon fallback';
+	return source;
 }
