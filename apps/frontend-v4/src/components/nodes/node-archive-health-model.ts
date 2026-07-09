@@ -19,8 +19,6 @@ export type ArchiveHealthTab =
 	| 'activity'
 	| 'raw';
 
-export const maxArchiveHealthTableRows = 80;
-
 export type ArchiveHealthTabCounts = Readonly<Record<ArchiveHealthTab, number>>;
 
 export function getObjectsForArchiveHealthTab(

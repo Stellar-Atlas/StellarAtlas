@@ -35,7 +35,6 @@ import {
 	getCheckpointProofWaitText,
 	getObjectsForArchiveHealthTab,
 	isArchiveObjectTableTab,
-	maxArchiveHealthTableRows,
 	type ArchiveHealthTab,
 	type ArchiveHealthTabCounts
 } from './node-archive-health-model';
@@ -98,7 +97,7 @@ export function NodeArchiveHealth({
 		prioritizedObjects,
 		historyArchiveObjects?.generatedAt ?? '',
 		tab
-	).slice(0, maxArchiveHealthTableRows);
+	);
 
 	return (
 		<article className="panel detail-panel archive-panel archive-health-panel">

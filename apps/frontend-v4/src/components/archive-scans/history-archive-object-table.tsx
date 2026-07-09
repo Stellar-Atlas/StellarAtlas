@@ -1,4 +1,7 @@
+'use client';
+
 import Link from 'next/link';
+import { useMemo, useState } from 'react';
 import type {
 	PublicHistoryArchiveBucketCrossCoverage,
 	PublicHistoryArchiveObject,
@@ -27,6 +30,7 @@ interface ArchiveObjectTableProps {
 	>;
 	readonly generatedAt: string;
 	readonly objects: readonly PublicHistoryArchiveObject[];
+	readonly pageSize?: number;
 }
 
 export type ArchiveObjectDisplayStatus =
@@ -35,36 +39,56 @@ export type ArchiveObjectDisplayStatus =
 export function ArchiveObjectTable({
 	coverageByBucketHash,
 	generatedAt,
-	objects
+	objects,
+	pageSize = 25
 }: ArchiveObjectTableProps): React.JSX.Element {
+	const [page, setPage] = useState(0);
+	const pageCount = Math.max(1, Math.ceil(objects.length / pageSize));
+	const safePage = Math.min(page, pageCount - 1);
+	const pageObjects = useMemo(
+		() => objects.slice(safePage * pageSize, safePage * pageSize + pageSize),
+		[objects, pageSize, safePage]
+	);
+
 	return (
-		<div className="responsive-table">
-			<table className="archive-object-table">
-				<thead>
-					<tr>
-						<th>Status</th>
-						<th>Archive file</th>
-						<th>Archive source</th>
-						<th>File id</th>
-						<th>Check result</th>
-					</tr>
-				</thead>
-				<tbody>
-					{objects.map((object) => (
-						<ObjectRow
-							bucketCoverage={
-								object.bucketHash === null
-									? null
-									: (coverageByBucketHash.get(object.bucketHash) ?? null)
-							}
-							generatedAt={generatedAt}
-							key={object.remoteId}
-							object={object}
-						/>
-					))}
-				</tbody>
-			</table>
-		</div>
+		<>
+			<div className="responsive-table">
+				<table className="archive-object-table">
+					<thead>
+						<tr>
+							<th>Status</th>
+							<th>Archive file</th>
+							<th>Archive source</th>
+							<th>File id</th>
+							<th>Check result</th>
+						</tr>
+					</thead>
+					<tbody>
+						{pageObjects.map((object) => (
+							<ObjectRow
+								bucketCoverage={
+									object.bucketHash === null
+										? null
+										: (coverageByBucketHash.get(object.bucketHash) ?? null)
+								}
+								generatedAt={generatedAt}
+								key={object.remoteId}
+								object={object}
+							/>
+						))}
+					</tbody>
+				</table>
+			</div>
+			{objects.length > pageSize ? (
+				<TablePagination
+					onPageChange={setPage}
+					page={safePage}
+					pageCount={pageCount}
+					pageSize={pageSize}
+					totalRows={objects.length}
+				/>
+			) : null}
+		</>
 	);
 }
 
@@ -283,6 +307,10 @@ function formatObjectStage(
 	object: PublicHistoryArchiveObject,
 	status: ArchiveObjectDisplayStatus
 ): string {
+	if (object.delayReason !== null) {
+		return formatDelayReasonCode(object.delayReason.code);
+	}
+
 	return (
 		formatArchiveWorkerStageLabel(object.workerStage) ||
 		formatArchiveObjectStatusLabel(status)
@@ -308,10 +336,72 @@ function formatObjectWork(object: PublicHistoryArchiveObject): string {
 			? null
 			: formatBytes(object.bytesDownloaded),
 		object.verifiedAt ? 'verified ' + formatDateTime(object.verifiedAt) : null,
+		object.delayReason?.until
+			? 'available after ' + formatDateTime(object.delayReason.until)
+			: null,
 		'updated ' + formatDateTime(object.updatedAt)
 	].filter((part): part is string => part !== null && part.length > 0);
 
 	return parts.join(' / ');
+}
+
+function TablePagination({
+	onPageChange,
+	page,
+	pageCount,
+	pageSize,
+	totalRows
+}: {
+	readonly onPageChange: (page: number) => void;
+	readonly page: number;
+	readonly pageCount: number;
+	readonly pageSize: number;
+	readonly totalRows: number;
+}): React.JSX.Element {
+	const first = page * pageSize + 1;
+	const last = Math.min(totalRows, (page + 1) * pageSize);
+
+	return (
+		<div className="table-pagination">
+			<button
+				disabled={page === 0}
+				onClick={() => onPageChange(page - 1)}
+				type="button"
+			>
+				Previous
+			</button>
+			<span>
+				Showing {formatInteger(first)}-{formatInteger(last)} of{' '}
+				{formatInteger(totalRows)}
+			</span>
+			<button
+				disabled={page >= pageCount - 1}
+				onClick={() => onPageChange(page + 1)}
+				type="button"
+			>
+				Next
+			</button>
+		</div>
+	);
+}
+
+function formatDelayReasonCode(
+	code: NonNullable<PublicHistoryArchiveObject['delayReason']>['code']
+): string {
+	const labels: Record<
+		NonNullable<PublicHistoryArchiveObject['delayReason']>['code'],
+		string
+	> = {
+		'archive-active-cap': 'archive source at active-check cap',
+		'global-active-cap': 'global scanner active-check cap',
+		'host-active-cap': 'host at active-check cap',
+		'host-backoff': 'host retry backoff',
+		'missing-dependency': 'waiting for prerequisite file',
+		'object-already-active': 'checking now',
+		'retry-window': 'retry window'
+	};
+
+	return labels[code];
 }
 
 function formatBucketCoverageSummary(
