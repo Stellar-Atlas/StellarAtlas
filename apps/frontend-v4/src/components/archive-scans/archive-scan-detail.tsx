@@ -1,17 +1,12 @@
 import type {
 	PublicHistoryArchiveBucketCrossCoverage,
 	PublicHistoryArchiveScan,
-	PublicHistoryArchiveScanEvidence,
-	PublicHistoryArchiveScanLogError,
 	PublicHistoryArchiveObjectEvents,
 	PublicHistoryArchiveObjectQueue,
 	PublicHistoryArchiveObjectSummary,
 	PublicHistoryArchiveState
 } from '@api/types';
-import {
-	getArchiveVerificationErrors,
-	getWorkerIssues
-} from '@domain/history-archive';
+import { formatDateTime, formatInteger } from '@format/formatters';
 import { HistoryArchiveStateDocument } from './history-archive-state-document';
 import { HistoryArchiveObjectCoverage } from './history-archive-object-coverage';
 import { HistoryArchiveObjectInventory } from './history-archive-object-inventory';
@@ -19,10 +14,8 @@ import { HistoryArchiveObjectEventLog } from './history-archive-object-event-log
 
 interface ArchiveScanDetailProps {
 	readonly bucketCoverages: readonly PublicHistoryArchiveBucketCrossCoverage[];
-	readonly evidence: PublicHistoryArchiveScanEvidence;
 	readonly events: PublicHistoryArchiveObjectEvents;
 	readonly historyUrl: string;
-	readonly logs: readonly unknown[];
 	readonly objects: PublicHistoryArchiveObjectQueue;
 	readonly scan: PublicHistoryArchiveScan | null;
 	readonly state: PublicHistoryArchiveState | null;
@@ -38,8 +31,6 @@ export function ArchiveScanDetail({
 	state,
 	summary
 }: ArchiveScanDetailProps): React.JSX.Element {
-	const archiveErrors = getArchiveVerificationErrors(scan?.errors ?? []);
-	const workerIssues = getWorkerIssues(scan?.errors ?? []);
 	return (
 		<section className="detail-grid">
 			<HistoryArchiveObjectCoverage
@@ -51,16 +42,7 @@ export function ArchiveScanDetail({
 					<h2>History archive state</h2>
 				</div>
 				<ArchiveMetadata historyUrl={historyUrl} scan={scan} state={state} />
-				<EvidenceList
-					errors={archiveErrors}
-					emptyText="No archive verification errors are recorded for this archive."
-					label="Archive evidence"
-				/>
-				<EvidenceList
-					errors={workerIssues}
-					emptyText="No worker infrastructure issues are recorded for this archive."
-					label="Worker infrastructure"
-				/>
+				<LegacyRangeScanSummary scan={scan} />
 			</article>
 			<HistoryArchiveObjectInventory
 				bucketCoverages={bucketCoverages}
@@ -95,71 +77,37 @@ function ArchiveMetadata({
 	);
 }
 
-function EvidenceList({
-	emptyText,
-	errors,
-	label
+function LegacyRangeScanSummary({
+	scan
 }: {
-	readonly emptyText: string;
-	readonly errors: readonly PublicHistoryArchiveScanLogError[];
-	readonly label: string;
-}): React.JSX.Element {
-	if (errors.length === 0) {
-		return <p className="muted-copy">{emptyText}</p>;
-	}
+	readonly scan: PublicHistoryArchiveScan | null;
+}): React.JSX.Element | null {
+	if (scan === null) return null;
 
 	return (
-		<ul className="archive-error-list compact">
-			{errors.map((error, index) => (
-				<li key={`${error.type}:${error.url}:${index}`}>
-					<ArchiveTarget url={error.url} />
-					<span>
-						{label}: {sanitizeEvidenceText(error.message)}
-					</span>
-				</li>
-			))}
-		</ul>
-	);
-}
-
-function ArchiveTarget({
-	label,
-	url
-}: {
-	readonly label?: string;
-	readonly url: string;
-}): React.JSX.Element {
-	if (isPublicHttpUrl(url)) {
-		return (
-			<a href={url} rel="noopener noreferrer" target="_blank">
-				{label ?? url}
-			</a>
-		);
-	}
-	if (looksLikeInternalPath(url)) return <span>Stored evidence</span>;
-	return <span>{sanitizeEvidenceText(label ?? url)}</span>;
-}
-
-function isPublicHttpUrl(value: string): boolean {
-	try {
-		const url = new URL(value);
-		return url.protocol === 'http:' || url.protocol === 'https:';
-	} catch {
-		return false;
-	}
-}
-
-function sanitizeEvidenceText(value: string): string {
-	return value.replace(
-		/(?:file:\/\/)?\/(?:home|var|tmp|etc|opt|srv|mnt|root|usr)\/[^\s'"`<>)]*/g,
-		'[internal path]'
-	);
-}
-
-function looksLikeInternalPath(value: string): boolean {
-	return (
-		/^(?:file:\/\/)?\/(?:home|var|tmp|etc|opt|srv|mnt|root|usr)\//.test(
-			value
-		) || /^[A-Za-z]:\\/.test(value)
+		<details className="metadata-document nested-metadata-document">
+			<summary>
+				<span>Historical range-scan record</span>
+				<span className="muted-inline">not current archive health</span>
+			</summary>
+			<p className="muted-copy">
+				This older range-scan row is retained for audit context. Current archive
+				health is driven by the archive file checks above.
+			</p>
+			<dl className="details">
+				<div>
+					<dt>Last range scan</dt>
+					<dd>{formatDateTime(scan.endDate)}</dd>
+				</div>
+				<div>
+					<dt>Latest verified ledger</dt>
+					<dd>{formatInteger(scan.latestVerifiedLedger)}</dd>
+				</div>
+				<div>
+					<dt>Historical errors</dt>
+					<dd>{formatInteger(scan.errors.length)}</dd>
+				</div>
+			</dl>
+		</details>
 	);
 }

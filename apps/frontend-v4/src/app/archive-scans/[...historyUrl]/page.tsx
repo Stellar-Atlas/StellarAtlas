@@ -4,11 +4,7 @@ import {
 	fetchHistoryArchiveBucketCoveragesForObjects,
 	fetchHistoryArchiveObjectEvidenceForArchive
 } from '@api/archive-scans-client';
-import {
-	fetchHistoryArchiveScan,
-	fetchHistoryArchiveScanEvidence,
-	fetchHistoryArchiveScanLogs
-} from '@api/client';
+import { fetchHistoryArchiveScan } from '@api/client';
 import { ArchiveScanDetail } from '@components/archive-scans/archive-scan-detail';
 import { PageHeading } from '@components/layout/page-heading';
 import { RouteLoadingPanel } from '@components/layout/route-fallbacks';
@@ -29,10 +25,8 @@ async function ArchiveScanDetailRouteContent({
 	readonly historyUrl: string;
 }): Promise<React.JSX.Element> {
 	await connection();
-	const [scan, logs, evidence, objectEvidence] = await Promise.all([
+	const [scan, objectEvidence] = await Promise.all([
 		fetchHistoryArchiveScan(historyUrl, liveArchiveFetchOptions),
-		fetchHistoryArchiveScanLogs(historyUrl, liveArchiveFetchOptions),
-		fetchHistoryArchiveScanEvidence(historyUrl, 500, liveArchiveFetchOptions),
 		fetchHistoryArchiveObjectEvidenceForArchive(
 			historyUrl,
 			{ eventLimit: 250, objectLimit: 250 },
@@ -49,15 +43,13 @@ async function ArchiveScanDetailRouteContent({
 		<main className="shell">
 			<PageHeading
 				description={historyUrl}
-				eyebrow="Archive scan"
+				eyebrow="Archive source"
 				title={formatArchiveTitle(historyUrl)}
 			/>
 			<ArchiveScanDetail
-				evidence={evidence}
 				events={objectEvidence.objectEvents}
 				bucketCoverages={bucketCoverages}
 				historyUrl={historyUrl}
-				logs={logs}
 				objects={objectEvidence.objects}
 				scan={scan}
 				state={objectEvidence.scannerOwnedState}
