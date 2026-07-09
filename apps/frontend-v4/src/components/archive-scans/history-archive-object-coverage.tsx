@@ -4,6 +4,7 @@ import type {
 } from '@api/types';
 import { StatusPill } from '@components/status/status-ui';
 import { formatArchiveObjectTypeGroupLabel } from '@domain/history-archive';
+import { checkpointProofIsComplete } from '@domain/history-archive-proof';
 import {
 	formatDateTime,
 	formatInteger,
@@ -29,6 +30,7 @@ export function HistoryArchiveObjectCoverage({
 		summary.verifiedObjects,
 		summary.totalObjects
 	);
+	const proofComplete = checkpointProofIsComplete(summary);
 	const content = (
 		<>
 			<div className="panel-heading">
@@ -40,11 +42,13 @@ export function HistoryArchiveObjectCoverage({
 				</div>
 				<StatusPill
 					status={
-						summary.failedObjects > 0 || summary.totalObjects === 0
+						summary.failedObjects > 0 ||
+						summary.totalObjects === 0 ||
+						!proofComplete
 							? 'degraded'
 							: 'ok'
 					}
-					text={coverageText}
+					text={proofComplete ? coverageText : formatCheckpointProofHeadline(summary)}
 				/>
 			</div>
 			<CoverageSummary summary={summary} />

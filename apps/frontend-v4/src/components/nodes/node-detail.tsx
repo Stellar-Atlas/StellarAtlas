@@ -25,6 +25,7 @@ import {
 	formatNode30DayActive,
 	formatNode30DayValidating
 } from '../../domain/availability';
+import { checkpointProofIsComplete } from '@domain/history-archive-proof';
 import { StatusTags } from '../status-tags';
 import { NodeArchiveHealth } from './node-archive-health';
 
@@ -241,7 +242,8 @@ function getEvidenceAwareNodeTags(
 	const currentArchiveEvidenceIsClean =
 		historyArchiveSummary !== null &&
 		historyArchiveSummary.failedObjects === 0 &&
-		historyArchiveState?.status === 'available';
+		historyArchiveState?.status === 'available' &&
+		checkpointProofIsComplete(historyArchiveSummary);
 
 	if (!currentArchiveEvidenceIsClean) return tags;
 

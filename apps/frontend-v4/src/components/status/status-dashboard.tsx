@@ -18,6 +18,10 @@ import {
 } from '@format/formatters';
 import { StatCard } from '../stat-card';
 import { HistoryArchiveObjectEventLog } from '@components/archive-scans/history-archive-object-event-log';
+import {
+	checkpointProofIsComplete,
+	getPendingBucketCheckCount
+} from '@domain/history-archive-proof';
 import { StatusArchiveEvidenceTables } from './archive-status-tables';
 import { RecentScanLogs } from './recent-scan-logs';
 import { StatusPill, StatusRow, statusLabel, statusTone } from './status-ui';
@@ -285,7 +289,9 @@ function summarizeArchiveObjects(
 function getArchiveEvidenceStatus(
 	summary: PublicHistoryArchiveObjectSummary
 ): PublicStatusLevel {
-	return summary.totalObjects > 0 ? 'ok' : 'unavailable';
+	if (summary.totalObjects <= 0) return 'unavailable';
+	if (checkpointProofIsComplete(summary)) return 'ok';
+	return 'degraded';
 }
 
 function formatArchiveVerificationCoverage(
@@ -318,7 +324,10 @@ function formatArchiveObjectQueueDetail(
 		summary.activeObjects > 0
 			? `; ${formatInteger(summary.activeObjects)} checking now`
 			: '';
-	return `${formatInteger(sourceCount)} archive sources; ${formatInteger(summary.verifiedObjects)} verified checks${activeText}${remoteFailureText}`;
+	const proofText = checkpointProofIsComplete(summary)
+		? `${formatInteger(summary.checkpoints.categoryConsistentArchiveCheckpoints)} proven checkpoint file sets`
+		: formatArchiveProofWaitingDetail(summary);
+	return `${formatInteger(sourceCount)} archive sources; ${proofText}${activeText}${remoteFailureText}`;
 }
 
 function formatArchiveAttentionText(
@@ -331,6 +340,9 @@ function formatArchiveAttentionText(
 	);
 	if (activeChecks > 0) {
 		return `${formatInteger(activeChecks)} active checks`;
+	}
+	if (!checkpointProofIsComplete(summary)) {
+		return 'Proof pending';
 	}
 	return formatArchiveVerificationCoverage(summary);
 }
@@ -408,4 +420,23 @@ function formatDuration(value: number | null): string {
 	const minutes = Math.round(value / 60000);
 	if (minutes < 60) return `${formatInteger(minutes)} min`;
 	return `${formatInteger(Math.round(minutes / 60))} hr`;
+}
+
+function formatArchiveProofWaitingDetail(
+	summary: PublicHistoryArchiveObjectSummary
+): string {
+	const checkpoints = summary.checkpoints;
+	if (checkpoints.categoryConsistencyFailedCheckpoints > 0) {
+		return `${formatInteger(checkpoints.categoryConsistencyFailedCheckpoints)} checkpoint mismatches`;
+	}
+	if (checkpoints.categoryConsistencyPendingCheckpoints > 0) {
+		return `${formatInteger(checkpoints.categoryConsistencyPendingCheckpoints)} checkpoint file sets waiting`;
+	}
+	if (checkpoints.categoryConsistencyNotEvaluatedCheckpoints > 0) {
+		const pendingBuckets = getPendingBucketCheckCount(summary);
+		return pendingBuckets > 0
+			? `${formatInteger(checkpoints.categoryConsistencyNotEvaluatedCheckpoints)} file sets waiting for ${formatInteger(pendingBuckets)} bucket checks`
+			: `${formatInteger(checkpoints.categoryConsistencyNotEvaluatedCheckpoints)} file sets collecting proof facts`;
+	}
+	return 'checkpoint proof not started';
 }

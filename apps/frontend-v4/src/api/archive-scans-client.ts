@@ -2,7 +2,8 @@ import type {
 	PublicHistoryArchiveBucketCrossCoverage,
 	PublicHistoryArchiveEvidence,
 	PublicHistoryArchiveObjectEvents,
-	PublicHistoryArchiveObjectQueue
+	PublicHistoryArchiveObjectQueue,
+	PublicHistoryArchiveObjectSummary
 } from './types';
 import type { PublicHistoryArchiveRepairPlan } from './archive-repair-types';
 import { fetchJson, type FetchOptions } from './client';
@@ -19,6 +20,14 @@ export const fetchHistoryArchiveObjectEvents = (
 ): Promise<PublicHistoryArchiveObjectEvents> =>
 	fetchJson<PublicHistoryArchiveObjectEvents>(
 		`/v1/archive-scans/objects/events?limit=${encodeURIComponent(limit.toString())}`,
+		withHistoryScanTags(options)
+	);
+
+export const fetchHistoryArchiveObjectSummary = (
+	options?: FetchOptions
+): Promise<PublicHistoryArchiveObjectSummary> =>
+	fetchJson<PublicHistoryArchiveObjectSummary>(
+		'/v1/archive-scans/objects/summary',
 		withHistoryScanTags(options)
 	);
 

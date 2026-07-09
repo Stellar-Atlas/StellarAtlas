@@ -4,6 +4,7 @@ import type {
 	PublicStatusLevel
 } from '@api/types';
 import { formatArchiveObjectTypeGroupLabel } from '@domain/history-archive';
+import { checkpointProofIsComplete } from '@domain/history-archive-proof';
 import {
 	formatDateTime,
 	formatInteger,
@@ -382,6 +383,7 @@ function getArchiveRootStatus(
 ): PublicStatusLevel {
 	const checkpoints = summary.checkpoints;
 	if (checkpoints.archiveRootsWithState === 0) return 'unavailable';
+	if (!checkpointProofIsComplete(summary)) return 'degraded';
 	return 'ok';
 }
 
@@ -389,6 +391,7 @@ function getObjectQueueStatus(
 	summary: PublicHistoryArchiveObjectSummary
 ): PublicStatusLevel {
 	if (summary.totalObjects === 0) return 'unavailable';
+	if (!checkpointProofIsComplete(summary)) return 'degraded';
 	return 'ok';
 }
 
@@ -397,6 +400,8 @@ function getCheckpointProofStatus(
 ): PublicStatusLevel {
 	const checkpoints = summary.checkpoints;
 	if (checkpoints.expectedArchiveCheckpoints === 0) return 'unavailable';
+	if (checkpoints.categoryConsistencyFailedCheckpoints > 0) return 'degraded';
+	if (!checkpointProofIsComplete(summary)) return 'degraded';
 	return 'ok';
 }
 

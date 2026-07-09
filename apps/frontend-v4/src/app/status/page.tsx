@@ -6,7 +6,10 @@ import {
 	fetchScanLogStatus,
 	fetchWorkerStatus
 } from '@api/client';
-import { fetchHistoryArchiveObjectEvents } from '@api/archive-scans-client';
+import {
+	fetchHistoryArchiveObjectEvents,
+	fetchHistoryArchiveObjectSummary
+} from '@api/archive-scans-client';
 import type {
 	PublicApiStatus,
 	PublicConfiguredServiceStatus,
@@ -32,7 +35,15 @@ const archiveSampleFetchOptions = {
 async function StatusRouteContent(): Promise<React.JSX.Element> {
 	const emptyArchiveObjects = buildEmptyArchiveQueue();
 	const generatedAt = new Date().toISOString();
-	const [api, dataQuality, scanLogs, workers, frontend, archiveEvents] =
+	const [
+		api,
+		dataQuality,
+		scanLogs,
+		workers,
+		frontend,
+		archiveEvents,
+		archiveSummary
+	] =
 		await Promise.all([
 			fetchOptional(
 				fetchApiStatus(statusFetchOptions),
@@ -57,9 +68,12 @@ async function StatusRouteContent(): Promise<React.JSX.Element> {
 			fetchOptional(
 				fetchHistoryArchiveObjectEvents(100, archiveSampleFetchOptions),
 				buildEmptyArchiveEvents()
+			),
+			fetchOptional(
+				fetchHistoryArchiveObjectSummary(archiveSampleFetchOptions),
+				buildArchiveSummaryFromQueue(emptyArchiveObjects)
 			)
 		]);
-	const archiveSummaryValue = buildArchiveSummaryFromQueue(emptyArchiveObjects);
 
 	return (
 		<main className="shell">
@@ -71,10 +85,10 @@ async function StatusRouteContent(): Promise<React.JSX.Element> {
 			<StatusDashboardLive
 				api={api.value}
 				archiveEvents={archiveEvents.value}
-				archiveEvidenceAvailable={false}
+				archiveEvidenceAvailable={archiveSummary.available}
 				archiveObjects={emptyArchiveObjects}
 				archiveObjectsAvailable={false}
-				archiveSummary={archiveSummaryValue}
+				archiveSummary={archiveSummary.value}
 				dataQuality={dataQuality.value}
 				frontend={frontend.value}
 				scanLogs={scanLogs.value}
