@@ -12,6 +12,7 @@ User=observe
 Group=observe
 WorkingDirectory=/home/observe/stellarbeat-data/Observer
 Environment=NODE_ENV=production
+Environment=HISTORY_ARCHIVE_OBJECT_SCHEDULING_ENABLED=false
 Environment=DATABASE_SSL=false
 Environment=HOME=/home/observe
 Environment=PATH=/home/observe/.nvm/versions/node/v26.4.0/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin

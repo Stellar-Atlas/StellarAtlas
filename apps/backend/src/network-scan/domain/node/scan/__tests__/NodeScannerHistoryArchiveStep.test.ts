@@ -8,6 +8,8 @@ import type { Logger } from '@core/services/Logger.js';
 import { err, ok, type Result } from 'neverthrow';
 
 describe('NodeScannerHistoryArchiveStep', () => {
+	const originalSchedulingSetting =
+		process.env.HISTORY_ARCHIVE_OBJECT_SCHEDULING_ENABLED;
 	const historyArchiveStatusFinder = mock<HistoryArchiveStatusFinder>();
 	const historyArchiveScanService = mock<HistoryArchiveScanService>();
 	const logger = mock<Logger>();
@@ -19,9 +21,19 @@ describe('NodeScannerHistoryArchiveStep', () => {
 
 	beforeEach(() => {
 		jest.clearAllMocks();
+		delete process.env.HISTORY_ARCHIVE_OBJECT_SCHEDULING_ENABLED;
 		historyArchiveScanService.scheduleScans.mockResolvedValue(
 			ok(makeSchedulingResult())
 		);
+	});
+
+	afterAll(() => {
+		if (originalSchedulingSetting === undefined) {
+			delete process.env.HISTORY_ARCHIVE_OBJECT_SCHEDULING_ENABLED;
+		} else {
+			process.env.HISTORY_ARCHIVE_OBJECT_SCHEDULING_ENABLED =
+				originalSchedulingSetting;
+		}
 	});
 
 	it('should update full validator status', async () => {
@@ -90,6 +102,28 @@ describe('NodeScannerHistoryArchiveStep', () => {
 		scheduling.resolve(ok(undefined));
 		await execution;
 		expect(completed).toBe(true);
+	});
+
+	it('should keep archive status checks active while scheduling is paused', async () => {
+		process.env.HISTORY_ARCHIVE_OBJECT_SCHEDULING_ENABLED = 'false';
+		const nodeScan = mock<NodeScan>();
+		nodeScan.getHistoryArchiveUrls.mockReturnValue(new Map([['a', 'url']]));
+
+		await historyArchiveStep.execute(nodeScan);
+
+		expect(historyArchiveScanService.scheduleScans).not.toHaveBeenCalled();
+		expect(
+			nodeScan.updateHistoryArchiveSchedulingCounters
+		).toHaveBeenCalledWith({
+			discoveredArchiveUrlCount: 1,
+			scheduledArchiveScanJobCount: 0,
+			duplicateSuppressedArchiveScanJobCount: 0,
+			schedulerErrorCount: 0
+		});
+		expect(logger.warn).toHaveBeenCalledWith(
+			'History archive object scheduling is paused',
+			{ archiveUrlCount: 1 }
+		);
 	});
 
 	it('should log archive scan scheduling errors', async () => {

@@ -31,6 +31,19 @@ export class NodeScannerHistoryArchiveStep {
 		const historyArchiveUrls = Array.from(
 			nodeScan.getHistoryArchiveUrls().values()
 		);
+		if (!isHistoryArchiveObjectSchedulingEnabled()) {
+			nodeScan.updateHistoryArchiveSchedulingCounters({
+				discoveredArchiveUrlCount: historyArchiveUrls.length,
+				scheduledArchiveScanJobCount: 0,
+				duplicateSuppressedArchiveScanJobCount: 0,
+				schedulerErrorCount: 0
+			});
+			this.logger.warn('History archive object scheduling is paused', {
+				archiveUrlCount: historyArchiveUrls.length
+			});
+			return;
+		}
+
 		try {
 			const scheduleResult =
 				await this.historyArchiveScanService.scheduleScans(historyArchiveUrls);
@@ -70,4 +83,8 @@ export class NodeScannerHistoryArchiveStep {
 			});
 		}
 	}
+}
+
+function isHistoryArchiveObjectSchedulingEnabled(): boolean {
+	return process.env.HISTORY_ARCHIVE_OBJECT_SCHEDULING_ENABLED !== 'false';
 }
