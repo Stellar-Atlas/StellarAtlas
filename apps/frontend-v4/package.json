@@ -10,7 +10,7 @@
 		"build:staging": "node ../../scripts/refuse-root.mjs frontend-v4 build:staging && node ../../scripts/refuse-live-next-build.mjs .next-staging && NEXT_DIST_DIR=${NEXT_DIST_DIR:-.next-staging} next build",
 		"start": "node ../../scripts/refuse-root.mjs frontend-v4 start && NEXT_DIST_DIR=${NEXT_DIST_DIR:-.next-production} next start --hostname ${FRONTEND_V4_HOST:-127.0.0.1} --port ${FRONTEND_V4_PORT:-3104}",
 		"start:staging": "node ../../scripts/refuse-root.mjs frontend-v4 start:staging && NEXT_DIST_DIR=${NEXT_DIST_DIR:-.next-staging} next start --hostname ${FRONTEND_V4_HOST:-127.0.0.1} --port ${FRONTEND_V4_PORT:-3114}",
-		"typecheck": "next typegen && tsc --noEmit"
+		"typecheck": "NEXT_DIST_DIR=.next-staging next typegen && tsc --noEmit"
 	},
 	"dependencies": {
 		"3d-force-graph": "1.80.0",

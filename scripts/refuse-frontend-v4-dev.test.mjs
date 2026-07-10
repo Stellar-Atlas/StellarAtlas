@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
+import { readFileSync } from 'node:fs';
 import test from 'node:test';
 
 test('frontend-v4 development mode is disabled', () => {
@@ -11,4 +12,12 @@ test('frontend-v4 development mode is disabled', () => {
 	assert.equal(result.status, 1);
 	assert.match(result.stderr, /development mode is disabled/);
 	assert.match(result.stderr, /build:staging/);
+});
+
+test('frontend-v4 type generation never writes to production output', () => {
+	const packageJson = JSON.parse(
+		readFileSync('apps/frontend-v4/package.json', 'utf8')
+	);
+
+	assert.match(packageJson.scripts.typecheck, /^NEXT_DIST_DIR=.next-staging /);
 });
