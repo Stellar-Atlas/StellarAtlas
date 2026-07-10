@@ -77,6 +77,6 @@ function formatDecodedIndexCoverage(
 function formatTransactionSource(
 	source: PublicExplorerLocalReadModel['transactions']['source']
 ): string {
-	if (source === 'horizon_fallback') return 'Horizon fallback';
+	if (source === 'horizon_fallback') return 'Stellar public API';
 	return source;
 }

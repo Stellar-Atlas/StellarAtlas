@@ -5,7 +5,7 @@ export default function ExplorerPage(): React.JSX.Element {
 	return (
 		<main className="shell">
 			<PageHeading
-				description="Inspect current ledger and transaction samples while local transaction, operation, asset, and contract indexes continue building."
+				description="Inspect current ledger and transaction samples. Decoded operation, asset, and contract tools appear only when their local indexes are available."
 				eyebrow="Blockchain Explorer"
 				title="Explorer"
 			/>

@@ -42,12 +42,14 @@ const searchTypeOptions: readonly PublicExplorerSearchType[] = [
 
 const initialSearch: ExplorerSearchResult = {
 	message: null,
+	observedAt: null,
 	search: null,
 	status: 'invalid'
 };
 
 const initialOperations: ExplorerOperationsResult = {
 	message: null,
+	observedAt: null,
 	operations: null,
 	status: 'invalid'
 };
@@ -55,12 +57,14 @@ const initialOperations: ExplorerOperationsResult = {
 const initialAssets: ExplorerAssetsResult = {
 	assets: null,
 	message: null,
+	observedAt: null,
 	status: 'invalid'
 };
 
 const initialContract: ExplorerContractResult = {
 	contract: null,
 	message: null,
+	observedAt: null,
 	status: 'invalid'
 };
 
@@ -101,6 +105,11 @@ export function BlockchainExplorer(): React.JSX.Element {
 	const operationIndexReady = Boolean(indexReadiness?.operationIndexReady);
 	const assetIndexReady = Boolean(indexReadiness?.assetIndexReady);
 	const contractIndexReady = Boolean(indexReadiness?.contractIndexReady);
+	const availableSearchTypes = searchTypeOptions.filter(
+		(type) =>
+			(type !== 'asset' || assetIndexReady) &&
+			(type !== 'contract' || contractIndexReady)
+	);
 
 	const runExplorerSearch = (
 		query: string,
@@ -179,8 +188,7 @@ export function BlockchainExplorer(): React.JSX.Element {
 					<div>
 						<strong>Search</strong>
 						<span>
-							Search uses local parsed headers where available and Horizon/RPC
-							fallbacks for decoded records.
+							Search results identify their data source and observation time.
 						</span>
 					</div>
 				</div>
@@ -200,7 +208,7 @@ export function BlockchainExplorer(): React.JSX.Element {
 						}
 						value={searchType}
 					>
-						{searchTypeOptions.map((type) => (
+						{availableSearchTypes.map((type) => (
 							<option key={type} value={type}>
 								{formatSearchTypeOption(type)}
 							</option>
@@ -218,8 +226,8 @@ export function BlockchainExplorer(): React.JSX.Element {
 								<strong>Transaction Operations</strong>
 								<span>
 									{transactionOperationsLoading
-										? 'Loading Horizon operation rows'
-										: 'Horizon fallback for the selected transaction'}
+										? 'Loading operation rows'
+										: 'Operations for the selected transaction'}
 								</span>
 							</div>
 						</div>
@@ -232,7 +240,7 @@ export function BlockchainExplorer(): React.JSX.Element {
 				<div className="panel-heading explorer-feed-heading">
 					<div>
 						<strong>Recent transactions</strong>
-						<span>Horizon fallback sample; local transaction index is not active</span>
+						<span>Current transaction sample from the Stellar public network</span>
 					</div>
 					<button
 						disabled={transactionFeedLoading}
@@ -336,8 +344,8 @@ export function BlockchainExplorer(): React.JSX.Element {
 					</form>
 					{operationIndexReady ? null : (
 						<p className="explorer-state neutral">
-							Operation filters require the local decoded operation index. Use
-							transaction hash lookup for Horizon fallback operation rows.
+							Operation filters require the decoded operation index. Transaction
+							hash lookup remains available above.
 						</p>
 					)}
 					<OperationsView result={operationResult} />
@@ -409,8 +417,7 @@ export function BlockchainExplorer(): React.JSX.Element {
 					</form>
 					{contractIndexReady ? null : (
 						<p className="explorer-state neutral">
-							Contract search requires the local decoded contract index. RPC
-							service readiness is tracked separately.
+							Contract search requires the local decoded contract index.
 						</p>
 					)}
 					<ContractView result={contractResult} />
@@ -438,9 +445,6 @@ function getTransactionHashFromSearch(
 }
 
 function formatSearchTypeOption(type: PublicExplorerSearchType): string {
-	if (type === 'auto') return 'auto';
-	if (type === 'asset') return 'asset via fallback';
-	if (type === 'contract') return 'contract RPC status';
 	return type;
 }
 

@@ -34,6 +34,7 @@ export type TransactionLookupStatus =
 
 export interface TransactionLookupResult {
 	readonly message: string | null;
+	readonly observedAt: string | null;
 	readonly status: TransactionLookupStatus;
 	readonly transaction: PublicTransactionLookup | null;
 }
@@ -42,12 +43,14 @@ export type ExplorerActionStatus = 'invalid' | 'loaded' | 'unavailable';
 
 export interface ExplorerSearchResult {
 	readonly message: string | null;
+	readonly observedAt: string | null;
 	readonly search: PublicExplorerSearch | null;
 	readonly status: ExplorerActionStatus;
 }
 
 export interface ExplorerOperationsResult {
 	readonly message: string | null;
+	readonly observedAt: string | null;
 	readonly operations: PublicExplorerOperations | null;
 	readonly status: ExplorerActionStatus;
 }
@@ -55,12 +58,14 @@ export interface ExplorerOperationsResult {
 export interface ExplorerAssetsResult {
 	readonly assets: PublicExplorerAssets | null;
 	readonly message: string | null;
+	readonly observedAt: string | null;
 	readonly status: ExplorerActionStatus;
 }
 
 export interface ExplorerContractResult {
 	readonly contract: PublicExplorerContract | null;
 	readonly message: string | null;
+	readonly observedAt: string | null;
 	readonly status: ExplorerActionStatus;
 }
 
@@ -107,6 +112,7 @@ export async function lookupTransactionByHash(
 	if (!normalizedHash) {
 		return {
 			message: 'Invalid transaction hash',
+			observedAt: null,
 			status: 'invalid',
 			transaction: null
 		};
@@ -118,6 +124,7 @@ export async function lookupTransactionByHash(
 		});
 		return {
 			message: null,
+			observedAt: new Date().toISOString(),
 			status: 'loaded',
 			transaction
 		};
@@ -131,6 +138,7 @@ export async function lookupTransactionByHash(
 				statusCode === 404
 					? 'Transaction not found'
 					: 'Transaction lookup unavailable',
+			observedAt: null,
 			status: statusCode === 404 ? 'not_found' : 'unavailable',
 			transaction: null
 		};
@@ -143,12 +151,18 @@ export async function searchExplorer(
 ): Promise<ExplorerSearchResult> {
 	const normalizedQuery = query.trim();
 	if (normalizedQuery.length === 0) {
-		return { message: 'Enter a search value', search: null, status: 'invalid' };
+		return {
+			message: 'Enter a search value',
+			observedAt: null,
+			search: null,
+			status: 'invalid'
+		};
 	}
 
 	try {
 		return {
 			message: null,
+			observedAt: new Date().toISOString(),
 			search: await fetchExplorerSearch(normalizedQuery, type, {
 				cache: 'no-store'
 			}),
@@ -157,6 +171,7 @@ export async function searchExplorer(
 	} catch {
 		return {
 			message: 'Explorer search unavailable',
+			observedAt: null,
 			search: null,
 			status: 'unavailable'
 		};
@@ -170,6 +185,7 @@ export async function getExplorerTransactionOperations(
 	if (!normalizedHash) {
 		return {
 			message: 'Invalid transaction hash',
+			observedAt: null,
 			operations: null,
 			status: 'invalid'
 		};
@@ -178,6 +194,7 @@ export async function getExplorerTransactionOperations(
 	try {
 		return {
 			message: null,
+			observedAt: new Date().toISOString(),
 			operations: await fetchExplorerTransactionOperations(normalizedHash, {
 				cache: 'no-store'
 			}),
@@ -186,6 +203,7 @@ export async function getExplorerTransactionOperations(
 	} catch {
 		return {
 			message: 'Transaction operations unavailable',
+			observedAt: null,
 			operations: null,
 			status: 'unavailable'
 		};
@@ -242,12 +260,14 @@ export async function searchExplorerOperations(
 	try {
 		return {
 			message: null,
+			observedAt: new Date().toISOString(),
 			operations: await fetchExplorerOperations(filters, { cache: 'no-store' }),
 			status: 'loaded'
 		};
 	} catch {
 		return {
 			message: 'Operation search unavailable',
+			observedAt: null,
 			operations: null,
 			status: 'unavailable'
 		};
@@ -264,12 +284,14 @@ export async function searchExplorerAssets(
 				cache: 'no-store'
 			}),
 			message: null,
+			observedAt: new Date().toISOString(),
 			status: 'loaded'
 		};
 	} catch {
 		return {
 			assets: null,
 			message: 'Asset search unavailable',
+			observedAt: null,
 			status: 'unavailable'
 		};
 	}
@@ -283,6 +305,7 @@ export async function lookupExplorerContract(
 		return {
 			contract: null,
 			message: 'Enter a contract id',
+			observedAt: null,
 			status: 'invalid'
 		};
 	}
@@ -293,12 +316,14 @@ export async function lookupExplorerContract(
 				cache: 'no-store'
 			}),
 			message: null,
+			observedAt: new Date().toISOString(),
 			status: 'loaded'
 		};
 	} catch {
 		return {
 			contract: null,
 			message: 'Contract lookup unavailable',
+			observedAt: null,
 			status: 'unavailable'
 		};
 	}

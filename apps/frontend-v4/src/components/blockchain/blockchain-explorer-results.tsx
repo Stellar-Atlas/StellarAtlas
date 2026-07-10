@@ -35,17 +35,25 @@ export function SearchResultView({
 			/>
 		);
 	}
-	if (isLedger(result.search.result))
-		return <LedgerCard ledger={result.search.result} />;
-	if (isAccount(result.search.result))
-		return <AccountCard account={result.search.result} />;
-	if (isAssets(result.search.result))
-		return <AssetsTable assets={result.search.result.assets} />;
-	if (isContract(result.search.result))
-		return <ContractCard contract={result.search.result} />;
-	if (isTransaction(result.search.result))
-		return <TransactionCard transaction={result.search.result} />;
-	return <OperationTable operations={[result.search.result]} />;
+	const content = isLedger(result.search.result) ? (
+		<LedgerCard ledger={result.search.result} />
+	) : isAccount(result.search.result) ? (
+		<AccountCard account={result.search.result} />
+	) : isAssets(result.search.result) ? (
+		<AssetsTable assets={result.search.result.assets} />
+	) : isContract(result.search.result) ? (
+		<ContractCard contract={result.search.result} />
+	) : isTransaction(result.search.result) ? (
+		<TransactionCard transaction={result.search.result} />
+	) : (
+		<OperationTable operations={[result.search.result]} />
+	);
+	return (
+		<>
+			<ExplorerObservation observedAt={result.observedAt} />
+			{content}
+		</>
+	);
 }
 
 export function OperationsView({
@@ -58,6 +66,7 @@ export function OperationsView({
 	if (!result.operations) return null;
 	return (
 		<>
+			<ExplorerObservation observedAt={result.observedAt} />
 			{result.operations.truncated ? (
 				<ExplorerState
 					tone="neutral"
@@ -77,7 +86,12 @@ export function AssetsView({
 	if (result.message)
 		return <ExplorerState tone="warning" text={result.message} />;
 	if (!result.assets) return null;
-	return <AssetsTable assets={result.assets.assets} />;
+	return (
+		<>
+			<ExplorerObservation observedAt={result.observedAt} />
+			<AssetsTable assets={result.assets.assets} />
+		</>
+	);
 }
 
 export function ContractView({
@@ -87,7 +101,12 @@ export function ContractView({
 }): React.JSX.Element | null {
 	if (result.message)
 		return <ExplorerState tone="warning" text={result.message} />;
-	return result.contract ? <ContractCard contract={result.contract} /> : null;
+	return result.contract ? (
+		<>
+			<ExplorerObservation observedAt={result.observedAt} />
+			<ContractCard contract={result.contract} />
+		</>
+	) : null;
 }
 
 export function RecentTransactionsView({
@@ -106,7 +125,7 @@ export function RecentTransactionsView({
 		<div className="explorer-transaction-feed">
 			<ExplorerState
 				tone="neutral"
-				text={`Horizon fallback transaction sample updated ${formatDate(result.transactions.generatedAt)}.`}
+				text={`Transaction sample observed ${formatDate(result.transactions.generatedAt)} from the Stellar public API.`}
 			/>
 			{result.transactions.truncated ? (
 				<ExplorerState
@@ -213,7 +232,6 @@ function TransactionFeedRows({
 						<span>ledger {transaction.ledger}</span>
 						<span>{transaction.operationCount} ops</span>
 						<span>{transaction.successful ? 'successful' : 'failed'}</span>
-						<span>Horizon fallback</span>
 						<button
 							aria-label={`Inspect transaction ${transaction.hash}`}
 							className="inspect-action"
@@ -323,7 +341,7 @@ function TransactionCard({
 }
 
 function formatTransactionSource(source: PublicTransactionLookup['source']): string {
-	if (source === 'horizon') return 'Horizon fallback';
+	if (source === 'horizon') return 'Stellar public API';
 	return source;
 }
 
@@ -400,6 +418,23 @@ function ExplorerState({
 	return <p className={`explorer-state ${tone}`}>{text}</p>;
 }
 
+function ExplorerObservation({
+	observedAt
+}: {
+	readonly observedAt: string | null;
+}): React.JSX.Element {
+	return (
+		<ExplorerState
+			text={
+				observedAt === null
+					? 'Response time unavailable'
+					: `Response observed ${formatDate(observedAt)}`
+			}
+			tone="neutral"
+		/>
+	);
+}
+
 function isLedger(value: unknown): value is PublicExplorerLedger {
 	return (
 		isRecord(value) && 'operationCount' in value && 'protocolVersion' in value
@@ -445,7 +480,7 @@ function formatDate(value: string): string {
 }
 
 function formatExplorerSource(source: string): string {
-	if (source === 'horizon') return 'Horizon fallback';
+	if (source === 'horizon') return 'Stellar public API';
 	if (source === 'local') return 'StellarAtlas local index';
 	if (source === 'rpc') return 'Soroban RPC';
 	return source.replaceAll('_', ' ');

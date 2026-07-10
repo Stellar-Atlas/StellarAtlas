@@ -9,6 +9,7 @@ import { normalizeTransactionHash } from '../../domain/transaction-hash';
 
 const initialResult: TransactionLookupResult = {
 	message: null,
+	observedAt: null,
 	status: 'invalid',
 	transaction: null
 };
@@ -70,9 +71,21 @@ function TransactionLookupResultView({
 		<div className="transaction-result">
 			<div>
 				<strong>{transaction.hash}</strong>
-				<span>{transaction.source}</span>
+				<span>
+					{transaction.source === 'horizon'
+						? 'Stellar public API'
+						: transaction.source}
+				</span>
 			</div>
 			<dl>
+				<div>
+					<dt>Observed</dt>
+					<dd>
+						{result.observedAt
+							? new Date(result.observedAt).toLocaleString()
+							: 'Unknown'}
+					</dd>
+				</div>
 				<div>
 					<dt>Ledger</dt>
 					<dd>{transaction.ledger}</dd>
