@@ -26,5 +26,6 @@ mcp-config-update.json
 .codex
 apps/frontend-v3/
 docs/research/
+docs/issues/
 docs/*.md
 !docs/network-scan-runbook.md
