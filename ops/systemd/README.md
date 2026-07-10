@@ -106,15 +106,23 @@ root-run all-in-one `stellaratlas.service` with `/dev/null`. It then reloads
 systemd, enables the split target, and starts it if needed.
 
 Production split units use `PartOf=stellaratlas.target`, so target restarts
-propagate to the API, frontend, legacy frontend, network scanner, SCP collector,
+propagate to the API, frontend, public ingress, network scanner, SCP collector,
 users service, and `history-scanner@1` without reviving the old monolithic unit.
+That behavior is for boot recovery and deliberate full-stack maintenance only.
+Do not restart the target during a normal component deploy: stopping the legacy
+frontend also removes the public `8080` Cloudflare origin.
 
-After changing a unit template, install the new copies before restarting:
+After changing a unit template, install the new copies, then restart only the
+units whose definitions or runtime code changed:
 
 ```bash
 sudo ./setup-systemd.sh
-systemctl restart stellaratlas.target
+systemctl restart stellaratlas-api.service
+systemctl restart stellaratlas-frontend-v4.service
 ```
+
+Use `systemctl restart stellaratlas.target` only when an explicit full-stack
+maintenance window allows the public origin to stop.
 
 Production frontend deploy:
 
@@ -136,14 +144,26 @@ Backend/API deploy:
 
 ```bash
 pnpm build:api
-systemctl restart stellaratlas.target
+systemctl restart stellaratlas-api.service
+node scripts/wait-for-url.mjs http://127.0.0.1:3000/v1/status 90
+```
+
+Restart a scanner after the API readiness check only when that scanner's built
+backend code changed:
+
+```bash
+systemctl restart stellaratlas-network-scanner.service
+systemctl restart stellaratlas-scp-live-scanner.service
+systemctl restart stellaratlas-history-scanner@1.service
 ```
 
 Live SCP collector deploy:
 
 ```bash
 pnpm build:scp-live-scanner
-systemctl restart stellaratlas.target
+systemctl restart stellaratlas-api.service
+node scripts/wait-for-url.mjs http://127.0.0.1:3000/v1/status 90
+systemctl restart stellaratlas-scp-live-scanner.service
 systemctl status stellaratlas-scp-live-scanner.service --no-pager
 ```
 

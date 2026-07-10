@@ -203,7 +203,13 @@ restarted; an inactive target was started.
 
 Production:
   systemctl status stellaratlas.target
-  systemctl restart stellaratlas.target
+  # Restart only a changed component during normal deploys. Restarting the
+  # target also stops the public ingress proxy and causes avoidable downtime.
+  systemctl restart stellaratlas-api.service
+  systemctl restart stellaratlas-frontend-v4.service
+  systemctl restart stellaratlas-network-scanner.service
+  systemctl restart stellaratlas-scp-live-scanner.service
+  systemctl restart stellaratlas-history-scanner@1.service
 
 Local full-history services, after binaries/config/DB exist:
   systemctl start stellaratlas-horizon.service
