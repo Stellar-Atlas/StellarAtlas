@@ -101,6 +101,7 @@ async function proxyRequest(
   res: Response,
   origin: string,
   path: string,
+  transformBody?: (body: Buffer, response: globalThis.Response) => Buffer,
 ): Promise<void> {
   const targetUrl = new URL(path, origin);
   const hasBody = req.method !== "GET" && req.method !== "HEAD";
@@ -130,8 +131,25 @@ async function proxyRequest(
     return;
   }
 
-  const responseBody = Buffer.from(await response.arrayBuffer());
+  const upstreamBody = Buffer.from(await response.arrayBuffer());
+  const responseBody = transformBody
+    ? transformBody(upstreamBody, response)
+    : upstreamBody;
   res.send(responseBody);
+}
+
+function rewriteApiDocsBody(
+  body: Buffer,
+  response: globalThis.Response,
+): Buffer {
+  if (!response.headers.get("content-type")?.includes("text/html")) return body;
+
+  return Buffer.from(
+    body
+      .toString("utf8")
+      .replaceAll('href="./', 'href="/api-docs/')
+      .replaceAll('src="./', 'src="/api-docs/'),
+  );
 }
 
 function shouldProxyFrontendV4(path: string): boolean {
@@ -187,7 +205,13 @@ app.use((req: Request, res: Response, next: NextFunction) => {
   const targetPath = apiDocsPathPattern.test(req.path)
     ? getApiDocsPath(req.originalUrl)
     : req.originalUrl;
-  proxyRequest(req, res, getApiOrigin(), targetPath).catch((error) => {
+  proxyRequest(
+    req,
+    res,
+    getApiOrigin(),
+    targetPath,
+    apiDocsPathPattern.test(req.path) ? rewriteApiDocsBody : undefined,
+  ).catch((error) => {
     const message = error instanceof Error ? error.message : "Proxy failed";
     res.status(502).send(`API unavailable: ${message}`);
   });
