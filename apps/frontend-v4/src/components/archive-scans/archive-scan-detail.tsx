@@ -41,7 +41,7 @@ export function ArchiveScanDetail({
 				<div className="panel-heading">
 					<h2>History archive state</h2>
 				</div>
-				<ArchiveMetadata historyUrl={historyUrl} scan={scan} state={state} />
+				<ArchiveMetadata historyUrl={historyUrl} state={state} />
 				<LegacyRangeScanSummary scan={scan} />
 			</article>
 			<HistoryArchiveObjectInventory
@@ -59,19 +59,14 @@ export function ArchiveScanDetail({
 
 function ArchiveMetadata({
 	historyUrl,
-	scan,
 	state
 }: {
 	readonly historyUrl: string;
-	readonly scan: PublicHistoryArchiveScan | null;
 	readonly state: PublicHistoryArchiveState | null;
 }): React.JSX.Element {
-	const archiveMetadata = scan?.archiveMetadata ?? null;
-
 	return (
 		<HistoryArchiveStateDocument
 			archiveState={state}
-			archiveMetadata={archiveMetadata}
 			archiveUrl={historyUrl}
 		/>
 	);
@@ -108,6 +103,14 @@ function LegacyRangeScanSummary({
 					<dd>{formatInteger(scan.errors.length)}</dd>
 				</div>
 			</dl>
+			{scan.archiveMetadata ? (
+				<details className="metadata-document nested-metadata-document">
+					<summary>
+						<span>Historical captured metadata</span>
+					</summary>
+					<pre>{JSON.stringify(scan.archiveMetadata, null, 2)}</pre>
+				</details>
+			) : null}
 		</details>
 	);
 }

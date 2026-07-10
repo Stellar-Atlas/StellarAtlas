@@ -3,12 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ForceGraph3DInstance } from '3d-force-graph';
 import type { Group as ThreeGroup } from 'three';
-import type {
-	PublicHistoryArchiveScanLogEntry,
-	PublicNetwork,
-	PublicScpStatementObservation
-} from '../../api/types';
-import { getHistoryArchiveScanLogs } from '../../app/actions/network-data';
+import type { PublicNetwork, PublicScpStatementObservation } from '../../api/types';
 import {
 	buildGraph3DModel,
 	type Graph3DNode,
@@ -24,7 +19,6 @@ import {
 	type GraphVisualState
 } from './graph-visual-state';
 import { ScpLiveFeed } from './scp-live-feed';
-import { scanLogHasArchiveVerificationError } from '../../domain/history-archive';
 import {
 	compareStatementsByObservation,
 	getDisplayLedger,
@@ -97,13 +91,6 @@ export function GraphExplorer({
 	const [activeStatementHashes, setActiveStatementHashes] = useState<
 		ReadonlySet<string>
 	>(() => new Set<string>());
-	const [selectedHistoryLogs, setSelectedHistoryLogs] = useState<
-		readonly PublicHistoryArchiveScanLogEntry[]
-	>([]);
-	const [selectedHistoryLogStatus, setSelectedHistoryLogStatus] = useState<
-		'idle' | 'loading' | 'loaded' | 'error'
-	>('idle');
-	const [showHistoryErrorsOnly, setShowHistoryErrorsOnly] = useState(false);
 	const liveNetwork = useMemo(
 		() => ({
 			...network,
@@ -181,9 +168,6 @@ export function GraphExplorer({
 	const graphDataRef = useRef(graphData);
 	const nodesByIdRef = useRef(nodesById);
 	const organizationsRef = useRef(model.organizations);
-	const selectedNodeHasArchiveErrors = selectedHistoryLogs.some(
-		scanLogHasArchiveVerificationError
-	);
 
 	const refreshGraphVisuals = useCallback((): void => {
 		visualStateRef.current = {
@@ -236,33 +220,6 @@ export function GraphExplorer({
 		};
 		graphRef.current?.refresh();
 	}, [activeOrganization?.id, selectedNodeId, selectedQuorumNodeIds]);
-
-	useEffect(() => {
-		const historyUrl = selectedNode?.node.historyUrl;
-		if (!historyUrl) {
-			setSelectedHistoryLogs([]);
-			setSelectedHistoryLogStatus('idle');
-			return;
-		}
-
-		let cancelled = false;
-		setSelectedHistoryLogStatus('loading');
-		void getHistoryArchiveScanLogs(historyUrl)
-			.then((logs) => {
-				if (cancelled) return;
-				setSelectedHistoryLogs(logs);
-				setSelectedHistoryLogStatus('loaded');
-			})
-			.catch(() => {
-				if (cancelled) return;
-				setSelectedHistoryLogs([]);
-				setSelectedHistoryLogStatus('error');
-			});
-
-		return () => {
-			cancelled = true;
-		};
-	}, [selectedNode?.node.historyUrl]);
 
 	useEffect(() => {
 		const closeContextMenu = (): void => setContextMenu(null);
@@ -378,17 +335,10 @@ export function GraphExplorer({
 			{selectedNode && (
 				<GraphNodePopover
 					onClose={() => setSelectedNodeId(null)}
-					onToggleHistoryErrorsOnly={() =>
-						setShowHistoryErrorsOnly((current) => !current)
-					}
-					selectedHistoryLogStatus={selectedHistoryLogStatus}
-					selectedHistoryLogs={selectedHistoryLogs}
 					selectedNode={selectedNode}
-					selectedNodeHasArchiveErrors={selectedNodeHasArchiveErrors}
 					selectedNodeStatements={selectedNodeStatements}
 					selectedQuorumNodeIds={selectedQuorumNodeIds}
 					selectedQuorumRows={selectedQuorumRows}
-					showHistoryErrorsOnly={showHistoryErrorsOnly}
 				/>
 			)}
 			<GraphContextMenu

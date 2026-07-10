@@ -1,6 +1,5 @@
 import Link from 'next/link';
 import type {
-	PublicHistoryArchiveScan,
 	PublicHistoryArchiveBucketCrossCoverage,
 	PublicHistoryArchiveObjectEvents,
 	PublicHistoryArchiveObjectQueue,
@@ -25,7 +24,6 @@ import {
 	formatNode30DayActive,
 	formatNode30DayValidating
 } from '../../domain/availability';
-import { checkpointProofIsComplete } from '@domain/history-archive-proof';
 import { StatusTags } from '../status-tags';
 import { NodeArchiveHealth } from './node-archive-health';
 
@@ -34,7 +32,6 @@ interface NodeDetailProps {
 	historyArchiveEvents: PublicHistoryArchiveObjectEvents | null;
 	historyArchiveObjects: PublicHistoryArchiveObjectQueue | null;
 	historyArchiveRepairPlan: PublicHistoryArchiveRepairPlan | null;
-	historyArchiveScan: PublicHistoryArchiveScan | null;
 	historyArchiveState: PublicHistoryArchiveState | null;
 	historyArchiveSummary: PublicHistoryArchiveObjectSummary | null;
 	knownNode: PublicKnownNode;
@@ -48,7 +45,6 @@ export function NodeDetail({
 	historyArchiveEvents,
 	historyArchiveObjects,
 	historyArchiveRepairPlan,
-	historyArchiveScan,
 	historyArchiveState,
 	historyArchiveSummary,
 	knownNode,
@@ -103,8 +99,7 @@ export function NodeDetail({
 		typeof node.historyUrl === 'string' && node.historyUrl.length > 0;
 	const showArchivePanel =
 		hasHistoryArchive ||
-		node.historyArchiveHasError ||
-		historyArchiveScan !== null ||
+		historyArchiveState !== null ||
 		historyArchiveSummary !== null;
 	const nodeTags = getEvidenceAwareNodeTags(
 		node,
@@ -223,7 +218,6 @@ export function NodeDetail({
 					historyArchiveEvents={historyArchiveEvents}
 					historyArchiveObjects={historyArchiveObjects}
 					historyArchiveRepairPlan={historyArchiveRepairPlan}
-					historyArchiveScan={historyArchiveScan}
 					historyArchiveState={historyArchiveState}
 					historyArchiveSummary={historyArchiveSummary}
 					node={node}
@@ -239,16 +233,41 @@ function getEvidenceAwareNodeTags(
 	historyArchiveState: PublicHistoryArchiveState | null
 ): NodeTag[] {
 	const tags = getNodeTags(node);
-	const currentArchiveEvidenceIsClean =
+	if (
 		historyArchiveSummary !== null &&
-		historyArchiveSummary.failedObjects === 0 &&
-		historyArchiveState?.status === 'available' &&
-		checkpointProofIsComplete(historyArchiveSummary);
+		historyArchiveSummary.checkpoints.categoryConsistencyFailedCheckpoints > 0
+	) {
+		return [
+			...tags,
+			{
+				label: 'archive proof mismatch',
+				title: 'Current object evidence contains a checkpoint hash mismatch',
+				tone: 'danger'
+			}
+		];
+	}
 
-	if (!currentArchiveEvidenceIsClean) return tags;
+	if (historyArchiveSummary !== null && historyArchiveSummary.failedObjects > 0) {
+		return [
+			...tags,
+			{
+				label: 'archive files need review',
+				title: 'Current scanner-owned archive file evidence contains failures',
+				tone: 'warning'
+			}
+		];
+	}
 
-	const filteredTags = tags.filter(
-		(tag) => tag.label !== 'archive evidence warning'
-	);
-	return filteredTags.length > 0 ? filteredTags : tags;
+	if (historyArchiveState !== null && historyArchiveState.status !== 'available') {
+		return [
+			...tags,
+			{
+				label: 'archive state unavailable',
+				title: 'The current history archive state could not be captured',
+				tone: 'warning'
+			}
+		];
+	}
+
+	return tags;
 }

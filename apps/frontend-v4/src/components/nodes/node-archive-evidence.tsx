@@ -1,23 +1,16 @@
-import type {
-	PublicHistoryArchiveScan,
-	PublicHistoryArchiveState,
-	PublicNode
-} from '../../api/types';
+import type { PublicHistoryArchiveState, PublicNode } from '../../api/types';
 import { HistoryArchiveStateDocument } from '../archive-scans/history-archive-state-document';
 
 export function ArchiveMetadata({
-	historyArchiveScan,
 	historyArchiveState,
 	node
 }: {
-	readonly historyArchiveScan: PublicHistoryArchiveScan | null;
 	readonly historyArchiveState: PublicHistoryArchiveState | null;
 	readonly node: PublicNode;
 }): React.JSX.Element {
-	const archiveMetadata = historyArchiveScan?.archiveMetadata ?? null;
-	const historyUrl = node.historyUrl ?? historyArchiveScan?.url ?? null;
+	const historyUrl = node.historyUrl;
 
-	if (archiveMetadata === null && historyUrl === null) {
+	if (historyArchiveState === null && historyUrl === null) {
 		return (
 			<div className="archive-log-section archive-metadata">
 				<details className="metadata-document history-archive-state">
@@ -35,7 +28,6 @@ export function ArchiveMetadata({
 		<div className="archive-log-section archive-metadata">
 			<HistoryArchiveStateDocument
 				archiveState={historyArchiveState}
-				archiveMetadata={archiveMetadata}
 				archiveUrl={historyUrl}
 			/>
 		</div>

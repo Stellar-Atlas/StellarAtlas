@@ -1,26 +1,18 @@
-import type {
-	PublicHistoryArchiveScan,
-	PublicHistoryArchiveState
-} from '@api/types';
+import type { PublicHistoryArchiveState } from '@api/types';
 import { formatDateTime, formatInteger } from '@format/formatters';
 
-type HistoryArchiveMetadata = NonNullable<
-	PublicHistoryArchiveScan['archiveMetadata']
->;
 export function HistoryArchiveStateDocument({
 	archiveState = null,
-	archiveMetadata = null,
 	archiveUrl = null
 }: {
 	readonly archiveState?: PublicHistoryArchiveState | null;
-	readonly archiveMetadata?: HistoryArchiveMetadata | null;
 	readonly archiveUrl?: string | null;
 }): React.JSX.Element | null {
 	if (archiveState !== null && archiveState.status !== 'available') {
 		return <HistoryArchiveStateFailure archiveState={archiveState} />;
 	}
 
-	const resolvedMetadata = archiveState?.metadata ?? archiveMetadata;
+	const resolvedMetadata = archiveState?.metadata ?? null;
 
 	if (resolvedMetadata === null) {
 		return <MissingHistoryArchiveState archiveUrl={archiveUrl} />;

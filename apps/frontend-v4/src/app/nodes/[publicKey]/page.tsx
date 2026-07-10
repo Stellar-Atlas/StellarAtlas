@@ -11,7 +11,6 @@ import { fetchKnownNode } from '@api/known-network-client';
 import {
 	fetchKnownNodes,
 	fetchKnownOrganizations,
-	fetchHistoryArchiveScan,
 	fetchPublicNetwork
 } from '@api/client';
 import { PageHeading } from '@components/layout/page-heading';
@@ -66,15 +65,8 @@ async function NodeDetailRouteContent({
 		)
 	};
 	const publicKeyOnlyCount = knownNodes.nodes.length - snapshottedNodes.length;
-	const [
-		historyArchiveScan,
-		historyArchiveObjectEvidence,
-		historyArchiveRepairPlan
-	] = node?.historyUrl
+	const [historyArchiveObjectEvidence, historyArchiveRepairPlan] = node?.historyUrl
 		? await Promise.all([
-				fetchHistoryArchiveScan(node.historyUrl, liveArchiveFetchOptions).catch(
-					() => null
-				),
 				fetchHistoryArchiveObjectEvidenceForArchive(
 					node.historyUrl,
 					{ eventLimit: 250, objectLimit: 250 },
@@ -86,7 +78,7 @@ async function NodeDetailRouteContent({
 					liveArchiveFetchOptions
 				).catch(() => null)
 			])
-		: [null, null, null];
+		: [null, null];
 	const organization = node
 		? getOrganizationForNode(inventoryNetwork, node)
 		: null;
@@ -150,7 +142,6 @@ async function NodeDetailRouteContent({
 						historyArchiveBucketCoverages={historyArchiveBucketCoverages}
 						historyArchiveObjects={historyArchiveObjectEvidence?.objects ?? null}
 						historyArchiveRepairPlan={historyArchiveRepairPlan}
-						historyArchiveScan={historyArchiveScan}
 						historyArchiveState={
 							historyArchiveObjectEvidence?.scannerOwnedState ?? null
 						}

@@ -33,12 +33,6 @@ export const getNodeTags = (node: PublicNode): NodeTag[] => {
 		tags.push({ label: 'not validating', tone: 'danger' });
 	else if (node.active) tags.push({ label: 'listener', tone: 'neutral' });
 
-	if (node.historyArchiveHasError)
-		tags.push({
-			label: 'archive evidence warning',
-			title: 'Archive verification evidence needs review on the node detail',
-			tone: 'warning'
-		});
 	if (node.connectivityError)
 		tags.push({ label: 'connection failed', tone: 'danger' });
 	if (node.stellarCoreVersionBehind)
@@ -99,7 +93,6 @@ export const getRiskNodes = (nodes: PublicNode[]): PublicNode[] =>
 				node.isValidator &&
 				(!node.isValidating ||
 					node.connectivityError ||
-					node.historyArchiveHasError ||
 					node.stellarCoreVersionBehind)
 		)
 		.toSorted((left, right) => right.index - left.index);

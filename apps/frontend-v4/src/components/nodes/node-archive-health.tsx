@@ -7,7 +7,6 @@ import type {
 	PublicHistoryArchiveObjectEvents,
 	PublicHistoryArchiveObjectQueue,
 	PublicHistoryArchiveObjectSummary,
-	PublicHistoryArchiveScan,
 	PublicHistoryArchiveState,
 	PublicNode
 } from '@api/types';
@@ -17,7 +16,7 @@ import {
 	prioritizeArchiveObjects
 } from '@components/archive-scans/history-archive-object-table';
 import { HistoryArchiveObjectEventLog } from '@components/archive-scans/history-archive-object-event-log';
-import { StatusPill } from '@components/status/status-ui';
+import { ArchiveHealthPill } from '@components/status/status-ui';
 import {
 	formatDateTime,
 	formatInteger,
@@ -30,7 +29,7 @@ import {
 	archiveHealthTabs,
 	countArchiveHealthTabs,
 	formatArchiveHealthTabLabel,
-	getArchivePanelStatus,
+	getArchivePanelHealth,
 	getArchivePanelStatusText,
 	getCheckpointProofWaitText,
 	getObjectsForArchiveHealthTab,
@@ -48,7 +47,6 @@ interface NodeArchiveHealthProps {
 	readonly historyArchiveEvents: PublicHistoryArchiveObjectEvents | null;
 	readonly historyArchiveObjects: PublicHistoryArchiveObjectQueue | null;
 	readonly historyArchiveRepairPlan: PublicHistoryArchiveRepairPlan | null;
-	readonly historyArchiveScan: PublicHistoryArchiveScan | null;
 	readonly historyArchiveState: PublicHistoryArchiveState | null;
 	readonly historyArchiveSummary: PublicHistoryArchiveObjectSummary | null;
 	readonly node: PublicNode;
@@ -59,7 +57,6 @@ export function NodeArchiveHealth({
 	historyArchiveEvents,
 	historyArchiveObjects,
 	historyArchiveRepairPlan,
-	historyArchiveScan,
 	historyArchiveState,
 	historyArchiveSummary,
 	node
@@ -110,8 +107,8 @@ export function NodeArchiveHealth({
 							: 'No scanner-owned archive evidence yet'}
 					</span>
 				</div>
-				<StatusPill
-					status={getArchivePanelStatus(historyArchiveSummary)}
+				<ArchiveHealthPill
+					state={getArchivePanelHealth(historyArchiveSummary)}
 					text={getArchivePanelStatusText(historyArchiveSummary)}
 				/>
 			</div>
@@ -124,7 +121,6 @@ export function NodeArchiveHealth({
 			<div className="archive-health-tab-panel">
 				{tab === 'state' ? (
 					<ArchiveMetadata
-						historyArchiveScan={historyArchiveScan}
 						historyArchiveState={historyArchiveState}
 						node={node}
 					/>

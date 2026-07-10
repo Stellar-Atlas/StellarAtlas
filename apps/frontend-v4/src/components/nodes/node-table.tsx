@@ -64,8 +64,7 @@ const filterNodes = (
 			if (
 				filter === 'warnings' &&
 				(node === null ||
-					(!node.historyArchiveHasError &&
-						!node.connectivityError &&
+					(!node.connectivityError &&
 						!node.stellarCoreVersionBehind &&
 						node.isValidating))
 			)

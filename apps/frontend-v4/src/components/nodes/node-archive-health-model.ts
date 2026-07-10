@@ -1,14 +1,15 @@
 import type {
 	PublicHistoryArchiveObject,
-	PublicHistoryArchiveObjectSummary,
-	PublicStatusLevel
+	PublicHistoryArchiveObjectSummary
 } from '@api/types';
 import { formatInteger } from '@format/formatters';
 import { getArchiveObjectDisplayStatus } from '@components/archive-scans/history-archive-object-table';
 import {
+	assessArchiveHealth,
 	checkpointProofIsComplete,
-	getPendingBucketCheckCount
-} from '@domain/history-archive-proof';
+	type ArchiveHealthState
+} from '@domain/history-archive-health';
+import { getPendingBucketCheckCount } from '@domain/history-archive-proof';
 
 export type ArchiveHealthTab =
 	| 'attention'
@@ -81,21 +82,27 @@ export function isArchiveObjectTableTab(tab: ArchiveHealthTab): boolean {
 	);
 }
 
-export function getArchivePanelStatus(
+export function getArchivePanelHealth(
 	summary: PublicHistoryArchiveObjectSummary | null
-): PublicStatusLevel {
-	if (!summary) return 'unavailable';
-	if (summary.failedObjects > 0) return 'degraded';
-	if (!checkpointProofIsComplete(summary)) return 'degraded';
-	return 'ok';
+): ArchiveHealthState {
+	return assessArchiveHealth({
+		evidenceAvailable: summary !== null,
+		summary
+	}).state;
 }
 
 export function getArchivePanelStatusText(
 	summary: PublicHistoryArchiveObjectSummary | null
 ): string {
 	if (!summary) return 'unchecked';
+	if (summary.checkpoints.categoryConsistencyFailedCheckpoints > 0) {
+		return `${formatInteger(summary.checkpoints.categoryConsistencyFailedCheckpoints)} checkpoint mismatches`;
+	}
 	if (summary.failedObjects > 0) {
 		return `${formatInteger(summary.failedObjects)} remote failures`;
+	}
+	if (summary.activeObjects > 0) {
+		return `${formatInteger(summary.activeObjects)} checking now`;
 	}
 	if (!checkpointProofIsComplete(summary)) {
 		if (getPendingBucketCheckCount(summary) > 0) {
