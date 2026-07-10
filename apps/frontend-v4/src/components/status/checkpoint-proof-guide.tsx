@@ -2,14 +2,14 @@ export function CheckpointProofGuide(): React.JSX.Element {
 	return (
 		<div className="archive-proof-guide">
 			<div>
-				<strong>Required files present</strong>
+				<strong>File set complete</strong>
 				<span>
 					The scanner has all archive files needed for that source and
 					checkpoint.
 				</span>
 			</div>
 			<div>
-				<strong>Hash agreement proven</strong>
+				<strong>Proof passed</strong>
 				<span>
 					Those files have been checked against each other and their hashes
 					match.
@@ -23,10 +23,10 @@ export function CheckpointProofGuide(): React.JSX.Element {
 				</span>
 			</div>
 			<div>
-				<strong>Cannot evaluate yet</strong>
+				<strong>Proof facts incomplete</strong>
 				<span>
-					The proof row exists, but the scanner does not yet have enough
-					structured evidence to decide pass or fail.
+					The files are present, but one or more required hash or continuity facts
+					have not been recorded, so the row cannot pass or fail yet.
 				</span>
 			</div>
 		</div>

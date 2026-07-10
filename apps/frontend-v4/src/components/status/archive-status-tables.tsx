@@ -1,70 +1,196 @@
 import type {
+	PublicHistoryArchiveObjectEvents,
 	PublicHistoryArchiveObjectSummary,
-	PublicHistoryArchiveObjectTypeSummary,
-	PublicStatusLevel
+	PublicHistoryArchiveObjectTypeSummary
 } from '@api/types';
-import { formatArchiveObjectTypeGroupLabel } from '@domain/history-archive';
-import { checkpointProofIsComplete } from '@domain/history-archive-proof';
+import { HistoryArchiveObjectEventLog } from '@components/archive-scans/history-archive-object-event-log';
 import {
-	formatDateTime,
-	formatInteger,
-	formatPercent
-} from '@format/formatters';
-import { StatusPill } from './status-ui';
+	formatArchiveObjectTypeGroupLabel,
+	formatArchiveObjectTypeLabel,
+	sanitizeArchiveEvidenceText
+} from '@domain/history-archive';
+import {
+	getArchiveFailureState,
+	type ArchiveHealthAssessment,
+	type ArchiveHealthState
+} from '@domain/history-archive-health';
+import { formatDateTime, formatInteger } from '@format/formatters';
+import { ArchiveHealthPill } from './status-ui';
 import { CheckpointProofGuide } from './checkpoint-proof-guide';
 
 interface StatusArchiveEvidenceTablesProps {
+	readonly events: PublicHistoryArchiveObjectEvents;
+	readonly health: ArchiveHealthAssessment;
 	readonly summary: PublicHistoryArchiveObjectSummary;
 }
 
-type ArchiveSourceSummary =
-	PublicHistoryArchiveObjectSummary['sources'][number];
+type ArchiveEvent = PublicHistoryArchiveObjectEvents['events'][number];
+type ArchiveSource = PublicHistoryArchiveObjectSummary['sources'][number];
 
 export function StatusArchiveEvidenceTables({
+	events,
+	health,
 	summary
 }: StatusArchiveEvidenceTablesProps): React.JSX.Element {
-	return (
-		<>
-			<ArchiveRootPanel summary={summary} />
-			<ArchiveObjectQueuePanel summary={summary} />
-			<CheckpointProofPanel summary={summary} />
-		</>
-	);
-}
-
-function ArchiveRootPanel({
-	summary
-}: {
-	readonly summary: PublicHistoryArchiveObjectSummary;
-}): React.JSX.Element {
-	const checkpoints = summary.checkpoints;
-	const sources = summary.sources;
-
 	return (
 		<section className="panel detail-panel archive-panel">
 			<div className="panel-heading">
 				<div>
-					<h2>Archive sources</h2>
+					<h2>Archive evidence</h2>
 					<span className="muted-inline">
 						Updated {formatDateTime(summary.generatedAt)}
 					</span>
 				</div>
-				<StatusPill
-					status={getArchiveRootStatus(summary)}
-					text={formatArchiveRootStatus(summary)}
-				/>
+				<ArchiveHealthPill state={health.state} />
 			</div>
-			<div className="responsive-table archive-summary-table-wrap">
+			<ArchiveEvidenceSummary health={health} />
+			<RecentFailureEvidence events={events.events} />
+			<div className="archive-metadata">
+				<ArchiveSourcesDetail summary={summary} />
+				<CheckpointProofDetail summary={summary} />
+				<ObjectTypeDetail objectTypes={summary.objectTypes} />
+				<ArchiveActivityDetail events={events} />
+			</div>
+		</section>
+	);
+}
+
+function ArchiveEvidenceSummary({
+	health
+}: {
+	readonly health: ArchiveHealthAssessment;
+}): React.JSX.Element {
+	const facts = health.facts;
+	return (
+		<div className="responsive-table archive-summary-table-wrap">
+			<table className="archive-summary-table">
+				<thead>
+					<tr>
+						<th>Current archive failures</th>
+						<th>Scanner issues</th>
+						<th>Checkpoint proof</th>
+						<th>Checking</th>
+						<th>Waiting</th>
+					</tr>
+				</thead>
+				<tbody>
+					<tr>
+						<td>{formatRemoteFailureSummary(health)}</td>
+						<td>{formatScannerIssueSummary(health)}</td>
+						<td>
+							{formatInteger(facts.provenCheckpointProofs)} /{' '}
+							{formatInteger(facts.expectedCheckpointProofs)} verified
+						</td>
+						<td>{formatInteger(facts.activeChecks)}</td>
+						<td>{formatInteger(facts.waitingChecks)}</td>
+					</tr>
+				</tbody>
+			</table>
+		</div>
+	);
+}
+
+function RecentFailureEvidence({
+	events
+}: {
+	readonly events: readonly ArchiveEvent[];
+}): React.JSX.Element | null {
+	const failedEvents = events
+		.filter((event) => event.eventType === 'failed')
+		.toSorted(compareFailureEvents);
+	if (failedEvents.length === 0) return null;
+
+	const visibleEvents = failedEvents.slice(0, RECENT_FAILURE_LIMIT);
+	const remoteFailures = failedEvents.filter(
+		(event) => getArchiveFailureState(event.evidenceClass) === 'remote_failure'
+	).length;
+	const scannerIssues = failedEvents.filter(
+		(event) => getArchiveFailureState(event.evidenceClass) === 'scanner_issue'
+	).length;
+
+	return (
+		<div className="archive-priority-block">
+			<div className="archive-table-caption">
+				<strong>Recent failure evidence</strong>
+				<span>
+					{formatInteger(remoteFailures)} remote, {formatInteger(scannerIssues)}{' '}
+					scanner; showing {formatInteger(visibleEvents.length)} of{' '}
+					{formatInteger(failedEvents.length)}
+				</span>
+			</div>
+			<div className="responsive-table">
+				<table className="archive-summary-table">
+					<thead>
+						<tr>
+							<th>Evidence class</th>
+							<th>Archive source</th>
+							<th>Archive file</th>
+							<th>Failure</th>
+							<th>Observed</th>
+						</tr>
+					</thead>
+					<tbody>
+						{visibleEvents.map((event, index) => (
+							<FailureEventRow
+								event={event}
+								key={`${event.remoteId}:${event.createdAt}:${index}`}
+							/>
+						))}
+					</tbody>
+				</table>
+			</div>
+		</div>
+	);
+}
+
+function FailureEventRow({
+	event
+}: {
+	readonly event: ArchiveEvent;
+}): React.JSX.Element {
+	const state = getArchiveFailureState(event.evidenceClass);
+	return (
+		<tr>
+			<td>
+				<ArchiveHealthPill state={state} />
+			</td>
+			<td>{formatArchiveSource(event.archiveUrl)}</td>
+			<td>
+				<strong>{formatArchiveObjectTypeLabel(event.objectType)}</strong>
+				<small>{event.objectKey}</small>
+			</td>
+			<td>{formatFailureDetail(event)}</td>
+			<td>{formatDateTime(event.createdAt)}</td>
+		</tr>
+	);
+}
+
+function ArchiveSourcesDetail({
+	summary
+}: {
+	readonly summary: PublicHistoryArchiveObjectSummary;
+}): React.JSX.Element {
+	const sources = summary.sources.toSorted(compareArchiveSources);
+	const failingSources = sources.filter(isFailingSource).length;
+
+	return (
+		<details className="metadata-document">
+			<summary>
+				<span>Archive sources</span>
+				<span className="muted-inline">
+					{formatInteger(failingSources)} failing /{' '}
+					{formatInteger(sources.length)} captured
+				</span>
+			</summary>
+			<div className="responsive-table">
 				<table className="archive-summary-table">
 					<thead>
 						<tr>
 							<th>Archive source</th>
-							<th>History archive state</th>
-							<th>Latest checkpoint</th>
-							<th>Discovered through</th>
-							<th>Root state check</th>
-							<th>Checkpoint proofs</th>
-							<th>Failures</th>
+							<th>Remote failure</th>
+							<th>Root state</th>
+							<th>Proven checkpoints</th>
+							<th>Current work</th>
 						</tr>
 					</thead>
 					<tbody>
@@ -77,171 +203,9 @@ function ArchiveRootPanel({
 							))
 						) : (
 							<tr>
-								<td colSpan={7}>No scanner-captured archive sources yet.</td>
+								<td colSpan={5}>No archive sources captured.</td>
 							</tr>
 						)}
-					</tbody>
-				</table>
-			</div>
-			<ArchiveSourceCoverageDetails
-				latestCheckpoint={checkpoints.latestCheckpointLedger}
-				oldestCheckpoint={checkpoints.oldestCheckpointLedger}
-				summary={summary}
-			/>
-		</section>
-	);
-}
-
-function ArchiveSourceRow({
-	source
-}: {
-	readonly source: ArchiveSourceSummary;
-}): React.JSX.Element {
-	return (
-		<tr>
-			<td>{formatArchiveSource(source.archiveUrl)}</td>
-			<td>
-				<strong>{formatHistoryArchiveState(source.stateStatus)}</strong>
-				<small>{formatDateTime(source.observedAt)}</small>
-			</td>
-			<td>{formatLedger(source.latestCheckpointLedger)}</td>
-			<td>{formatLedger(source.latestDiscoveredCheckpointLedger)}</td>
-			<td>{formatRootObjectStatus(source.rootObjectStatus)}</td>
-			<td>
-				{formatCoverage(source.verifiedObjects, source.totalObjects)}
-				<small>{formatInteger(source.activeObjects)} checking now</small>
-			</td>
-			<td>{formatInteger(source.failedObjects)}</td>
-		</tr>
-	);
-}
-
-function ArchiveObjectQueuePanel({
-	summary
-}: {
-	readonly summary: PublicHistoryArchiveObjectSummary;
-}): React.JSX.Element {
-	return (
-		<section className="panel detail-panel archive-panel">
-			<div className="panel-heading">
-				<div>
-				<h2>Archive checkpoint proof checks</h2>
-					<span className="muted-inline">
-						Updated {formatDateTime(summary.generatedAt)}
-					</span>
-				</div>
-				<StatusPill
-					status={getObjectQueueStatus(summary)}
-					text={formatObjectQueuePill(summary)}
-				/>
-			</div>
-			<p className="muted-copy">
-				This status view counts one proof row per archive source and 64-ledger
-				checkpoint. It is intentionally smaller than the full archive object
-				drilldown so the status page can render quickly.
-			</p>
-			<div className="responsive-table archive-summary-table-wrap">
-				<table className="archive-summary-table">
-					<thead>
-						<tr>
-							<th>Archive sources</th>
-							<th>Checking now</th>
-							<th>Hash agreement proven</th>
-							<th>Hash mismatches</th>
-						</tr>
-					</thead>
-					<tbody>
-						<tr>
-							<td>{formatInteger(getSourceCount(summary))}</td>
-							<td>{formatInteger(summary.activeObjects)}</td>
-							<td>{formatInteger(summary.verifiedObjects)}</td>
-							<td>{formatInteger(summary.failedObjects)}</td>
-						</tr>
-					</tbody>
-				</table>
-			</div>
-			<details className="metadata-document">
-				<summary>
-					<span>Technical queue counts</span>
-					<span className="muted-inline">open details</span>
-				</summary>
-				<p className="muted-copy">
-					Waiting rows are checkpoint proofs whose required files or structured
-					hash facts are not complete yet. They are not unique bucket payloads
-					stored locally, and they are not a service outage by themselves.
-				</p>
-				<div className="responsive-table">
-					<table className="archive-summary-table">
-						<thead>
-							<tr>
-								<th>Known proof rows</th>
-								<th>Hash agreement proven</th>
-								<th>Waiting for evidence</th>
-								<th>Checking now</th>
-								<th>Hash mismatches</th>
-							</tr>
-						</thead>
-						<tbody>
-							<tr>
-								<td>{formatInteger(summary.totalObjects)}</td>
-								<td>{formatInteger(summary.verifiedObjects)}</td>
-								<td>{formatInteger(summary.pendingObjects)}</td>
-								<td>{formatInteger(summary.activeObjects)}</td>
-								<td>{formatInteger(summary.failedObjects)}</td>
-							</tr>
-						</tbody>
-					</table>
-				</div>
-			</details>
-			<ObjectTypeDetails objectTypes={summary.objectTypes} />
-		</section>
-	);
-}
-
-function ObjectTypeDetails({
-	objectTypes
-}: {
-	readonly objectTypes: readonly PublicHistoryArchiveObjectTypeSummary[];
-}): React.JSX.Element | null {
-	if (objectTypes.length === 0) return null;
-
-	return (
-		<details className="metadata-document">
-			<summary>
-				<span>Archive file group coverage</span>
-				<span className="muted-inline">
-					{formatInteger(objectTypes.length)} groups
-				</span>
-			</summary>
-			<p className="muted-copy">
-				These are archive file checks grouped by file type. They are not decoded
-				ledger, transaction, operation, or contract counts.
-			</p>
-			<div className="responsive-table">
-				<table className="archive-object-type-table">
-					<thead>
-						<tr>
-								<th>File group</th>
-								<th>Known rows</th>
-								<th>Verified rows</th>
-								<th>Waiting rows</th>
-								<th>Failed rows</th>
-								<th>Active checks</th>
-						</tr>
-					</thead>
-					<tbody>
-						{objectTypes.map((entry) => (
-							<tr key={entry.objectType}>
-								<td>{formatArchiveObjectTypeGroupLabel(entry.objectType)}</td>
-								<td>{formatInteger(entry.totalObjects)}</td>
-								<td>
-									{formatCoverage(entry.verifiedObjects, entry.totalObjects)}
-								</td>
-								<td>{formatInteger(entry.pendingObjects)}</td>
-								<td>{formatInteger(entry.failedObjects)}</td>
-								<td>{formatInteger(entry.activeObjects)}</td>
-							</tr>
-						))}
 					</tbody>
 				</table>
 			</div>
@@ -249,52 +213,67 @@ function ObjectTypeDetails({
 	);
 }
 
-function CheckpointProofPanel({
+function ArchiveSourceRow({
+	source
+}: {
+	readonly source: ArchiveSource;
+}): React.JSX.Element {
+	return (
+		<tr>
+			<td>
+				<strong>{formatArchiveSource(source.archiveUrl)}</strong>
+				<small>{formatDateTime(source.observedAt)}</small>
+			</td>
+			<td>{formatSourceFailure(source)}</td>
+			<td>{formatSourceState(source)}</td>
+			<td>{formatInteger(source.verifiedCheckpoints)}</td>
+			<td>
+				{formatInteger(source.activeObjects)} checking /{' '}
+				{formatInteger(source.pendingObjects)} waiting
+			</td>
+		</tr>
+	);
+}
+
+function CheckpointProofDetail({
 	summary
 }: {
 	readonly summary: PublicHistoryArchiveObjectSummary;
 }): React.JSX.Element {
 	const checkpoints = summary.checkpoints;
-
 	return (
-		<section className="panel detail-panel archive-panel">
-			<div className="panel-heading">
-				<div>
-					<h2>Checkpoint file-consistency proof</h2>
-					<span className="muted-inline">
-						Updated {formatDateTime(summary.generatedAt)}
-					</span>
-				</div>
-				<StatusPill
-					status={getCheckpointProofStatus(summary)}
-					text={formatCheckpointProofStatus(summary)}
-				/>
-			</div>
-			<div className="responsive-table archive-summary-table-wrap">
+		<details className="metadata-document">
+			<summary>
+				<span>Checkpoint proof detail</span>
+				<span className="muted-inline">
+					{formatInteger(checkpoints.categoryConsistentArchiveCheckpoints)} /{' '}
+					{formatInteger(checkpoints.expectedArchiveCheckpoints)} verified
+				</span>
+			</summary>
+			<div className="responsive-table">
 				<table className="archive-checkpoint-proof-table">
 					<thead>
 						<tr>
-							<th>Required files present</th>
-							<th>Hash agreement proven</th>
-							<th>Hash mismatches</th>
+							<th>Hash mismatch</th>
+							<th>Missing checkpoints</th>
+							<th>Proof facts incomplete</th>
 							<th>Waiting for files</th>
-							<th>Cannot evaluate yet</th>
-							<th>Sources captured</th>
+							<th>File set complete</th>
+							<th>Verified proofs</th>
+							<th>Expected</th>
 						</tr>
 					</thead>
 					<tbody>
 						<tr>
 							<td>
-								{formatInteger(checkpoints.objectCompleteArchiveCheckpoints)}
-							</td>
-							<td>
-								{formatInteger(
-									checkpoints.categoryConsistentArchiveCheckpoints
-								)}
-							</td>
-							<td>
 								{formatInteger(
 									checkpoints.categoryConsistencyFailedCheckpoints
+								)}
+							</td>
+							<td>{formatInteger(checkpoints.missingArchiveCheckpoints)}</td>
+							<td>
+								{formatInteger(
+									checkpoints.categoryConsistencyNotEvaluatedCheckpoints
 								)}
 							</td>
 							<td>
@@ -303,74 +282,52 @@ function CheckpointProofPanel({
 								)}
 							</td>
 							<td>
+								{formatInteger(checkpoints.objectCompleteArchiveCheckpoints)}
+							</td>
+							<td>
 								{formatInteger(
-									checkpoints.categoryConsistencyNotEvaluatedCheckpoints
+									checkpoints.categoryConsistentArchiveCheckpoints
 								)}
 							</td>
-							<td>{formatInteger(checkpoints.archiveRootsWithState)}</td>
+							<td>{formatInteger(checkpoints.expectedArchiveCheckpoints)}</td>
 						</tr>
 					</tbody>
 				</table>
 			</div>
-			<p className="muted-copy">
-				This section tracks one proof row per archive source and 64-ledger
-				checkpoint. A proof can run only after the scanner has evidence for the
-				checkpoint history file, ledger file, transaction file, result file, SCP
-				file, and bucket files referenced by that checkpoint.
-			</p>
 			<CheckpointProofGuide />
-		</section>
+		</details>
 	);
 }
 
-function ArchiveSourceCoverageDetails({
-	latestCheckpoint,
-	oldestCheckpoint,
-	summary
+function ObjectTypeDetail({
+	objectTypes
 }: {
-	readonly latestCheckpoint: number | null;
-	readonly oldestCheckpoint: number | null;
-	readonly summary: PublicHistoryArchiveObjectSummary;
-}): React.JSX.Element {
-	const checkpoints = summary.checkpoints;
-
+	readonly objectTypes: readonly PublicHistoryArchiveObjectTypeSummary[];
+}): React.JSX.Element | null {
+	if (objectTypes.length === 0) return null;
 	return (
-		<details className="metadata-document archive-checkpoint-discovery">
+		<details className="metadata-document">
 			<summary>
-				<span>Full-history discovery detail</span>
+				<span>Archive file groups</span>
 				<span className="muted-inline">
-					{formatInteger(checkpoints.totalArchiveCheckpoints)} checkpoint rows
-					discovered
+					{formatInteger(objectTypes.length)} groups
 				</span>
 			</summary>
-			<p className="muted-copy">
-				Full coverage means every captured archive source has checkpoint rows
-				from genesis through its latest published checkpoint. This is a scanner
-				discovery target, not a production outage indicator.
-			</p>
 			<div className="responsive-table">
-				<table className="archive-summary-table">
+				<table className="archive-object-type-table">
 					<thead>
 						<tr>
-							<th>Sources</th>
-							<th>Discovered source roots</th>
-							<th>Oldest discovered checkpoint</th>
-							<th>Latest discovered checkpoint</th>
-							<th>Expected</th>
-							<th>Missing</th>
+							<th>File group</th>
+							<th>Failed</th>
+							<th>Verified</th>
+							<th>Checking</th>
+							<th>Waiting</th>
 						</tr>
 					</thead>
 					<tbody>
-						<tr>
-							<td>{formatInteger(checkpoints.archiveRootsWithState)}</td>
-							<td>
-								{formatInteger(checkpoints.discoveryCompleteArchiveRoots)}
-							</td>
-							<td>{formatLedger(oldestCheckpoint)}</td>
-							<td>{formatLedger(latestCheckpoint)}</td>
-							<td>{formatInteger(checkpoints.expectedArchiveCheckpoints)}</td>
-							<td>{formatInteger(checkpoints.missingArchiveCheckpoints)}</td>
-						</tr>
+						{objectTypes.map((entry) => (
+							<ObjectTypeRow entry={entry} key={entry.objectType} />
+						))}
 					</tbody>
 				</table>
 			</div>
@@ -378,82 +335,120 @@ function ArchiveSourceCoverageDetails({
 	);
 }
 
-function getArchiveRootStatus(
-	summary: PublicHistoryArchiveObjectSummary
-): PublicStatusLevel {
-	const checkpoints = summary.checkpoints;
-	if (checkpoints.archiveRootsWithState === 0) return 'unavailable';
-	return 'ok';
-}
-
-function getObjectQueueStatus(
-	summary: PublicHistoryArchiveObjectSummary
-): PublicStatusLevel {
-	if (summary.totalObjects === 0) return 'unavailable';
-	return 'ok';
-}
-
-function getCheckpointProofStatus(
-	summary: PublicHistoryArchiveObjectSummary
-): PublicStatusLevel {
-	const checkpoints = summary.checkpoints;
-	if (checkpoints.expectedArchiveCheckpoints === 0) return 'unavailable';
-	if (checkpoints.categoryConsistencyFailedCheckpoints > 0) return 'degraded';
-	return 'ok';
-}
-
-function formatArchiveRootStatus(
-	summary: PublicHistoryArchiveObjectSummary
-): string {
-	const checkpoints = summary.checkpoints;
-	const sourceCount = getSourceCount(summary);
-	if (sourceCount === 0) return 'no sources captured';
+function ObjectTypeRow({
+	entry
+}: {
+	readonly entry: PublicHistoryArchiveObjectTypeSummary;
+}): React.JSX.Element {
 	return (
-		formatInteger(checkpoints.archiveRootsWithState) +
-		' / ' +
-		formatInteger(sourceCount) +
-		' state files captured'
+		<tr>
+			<td>{formatArchiveObjectTypeGroupLabel(entry.objectType)}</td>
+			<td>{formatInteger(entry.failedObjects)}</td>
+			<td>{formatInteger(entry.verifiedObjects)}</td>
+			<td>{formatInteger(entry.activeObjects)}</td>
+			<td>{formatInteger(entry.pendingObjects)}</td>
+		</tr>
 	);
 }
 
-function formatCheckpointProofStatus(
-	summary: PublicHistoryArchiveObjectSummary
-): string {
-	const checkpoints = summary.checkpoints;
-	if (checkpoints.categoryConsistencyFailedCheckpoints > 0) {
-		return `${formatInteger(checkpoints.categoryConsistencyFailedCheckpoints)} mismatches`;
-	}
-	if (checkpoints.categoryConsistentArchiveCheckpoints > 0) {
-		return `${formatInteger(checkpoints.categoryConsistentArchiveCheckpoints)} proven`;
-	}
-	if (checkpoints.objectCompleteArchiveCheckpoints > 0) {
-		return `${formatInteger(checkpoints.objectCompleteArchiveCheckpoints)} ready`;
-	}
-	if (checkpoints.categoryConsistencyPendingCheckpoints > 0) {
-		return 'waiting for files';
-	}
-	if (checkpoints.categoryConsistencyNotEvaluatedCheckpoints > 0) {
-		return 'collecting evidence';
-	}
-	return 'no proofs yet';
+function ArchiveActivityDetail({
+	events
+}: {
+	readonly events: PublicHistoryArchiveObjectEvents;
+}): React.JSX.Element {
+	return (
+		<details className="metadata-document">
+			<summary>
+				<span>Recent archive activity</span>
+				<span className="muted-inline">
+					{formatInteger(events.count)} events
+				</span>
+			</summary>
+			<HistoryArchiveObjectEventLog
+				events={events}
+				framed={false}
+				title="Archive file activity"
+			/>
+		</details>
+	);
 }
 
-function formatObjectQueuePill(
-	summary: PublicHistoryArchiveObjectSummary
-): string {
-	if (summary.activeObjects > 0) {
-		return formatInteger(summary.activeObjects) + ' checking now';
+function formatRemoteFailureSummary(health: ArchiveHealthAssessment): string {
+	const facts = health.facts;
+	if (facts.checkpointMismatches > 0) {
+		return `${formatInteger(facts.checkpointMismatches)} checkpoint mismatches`;
 	}
-	return formatCoverage(summary.verifiedObjects, summary.totalObjects);
+	if (facts.failedEvidenceRows > 0) {
+		return `${formatInteger(facts.failedEvidenceRows)} failed evidence rows`;
+	}
+	if (facts.failingArchiveSources > 0) {
+		return `${formatInteger(facts.failingArchiveSources)} failing sources`;
+	}
+	if (facts.remoteHostFailures > 0) {
+		return `${formatInteger(facts.remoteHostFailures)} remote host failures`;
+	}
+	return 'None observed';
 }
 
-function formatCoverage(verified: number, total: number): string {
-	if (total <= 0) return '0 / 0 verified';
-	return `${formatInteger(verified)} / ${formatInteger(total)} verified (${formatPercent((verified / total) * 100)})`;
+function formatScannerIssueSummary(health: ArchiveHealthAssessment): string {
+	return health.facts.scannerIssues > 0
+		? `${formatInteger(health.facts.scannerIssues)} infrastructure issues`
+		: 'None observed';
 }
 
-function formatLedger(value: number | null): string {
-	return value === null ? 'not recorded' : formatInteger(value);
+function compareFailureEvents(left: ArchiveEvent, right: ArchiveEvent): number {
+	const classOrder =
+		failureStateOrder(getArchiveFailureState(left.evidenceClass)) -
+		failureStateOrder(getArchiveFailureState(right.evidenceClass));
+	if (classOrder !== 0) return classOrder;
+	return Date.parse(right.createdAt) - Date.parse(left.createdAt);
+}
+
+function failureStateOrder(state: ArchiveHealthState): number {
+	if (state === 'remote_failure') return 0;
+	if (state === 'scanner_issue') return 1;
+	return 2;
+}
+
+function compareArchiveSources(
+	left: ArchiveSource,
+	right: ArchiveSource
+): number {
+	const failureOrder =
+		Number(isFailingSource(right)) - Number(isFailingSource(left));
+	if (failureOrder !== 0) return failureOrder;
+	return right.failedObjects - left.failedObjects;
+}
+
+function isFailingSource(source: ArchiveSource): boolean {
+	return (
+		source.failedObjects > 0 ||
+		source.rootObjectStatus === 'failed' ||
+		source.stateStatus === 'invalid' ||
+		source.stateStatus === 'unreachable'
+	);
+}
+
+function formatSourceFailure(source: ArchiveSource): string {
+	if (source.failedObjects > 0) {
+		return `${formatInteger(source.failedObjects)} failed evidence rows`;
+	}
+	if (source.rootObjectStatus === 'failed') return 'Root check failed';
+	if (source.stateStatus === 'invalid') return 'State file invalid';
+	if (source.stateStatus === 'unreachable') return 'Source unreachable';
+	return 'None observed';
+}
+
+function formatSourceState(source: ArchiveSource): string {
+	const rootState = source.rootObjectStatus ?? 'not queued';
+	return `${source.stateStatus}; root ${rootState}`;
+}
+
+function formatFailureDetail(event: ArchiveEvent): string {
+	if (event.error === null) return 'Failure detail not recorded';
+	const status =
+		event.error.httpStatus === null ? '' : `HTTP ${event.error.httpStatus}: `;
+	return status + sanitizeArchiveEvidenceText(event.error.message);
 }
 
 function formatArchiveSource(value: string): string {
@@ -462,33 +457,8 @@ function formatArchiveSource(value: string): string {
 		const path = url.pathname === '/' ? '' : url.pathname.replace(/\/$/, '');
 		return `${url.host}${path}`;
 	} catch {
-		return value;
+		return sanitizeArchiveEvidenceText(value);
 	}
 }
 
-function getSourceCount(summary: PublicHistoryArchiveObjectSummary): number {
-	return summary.sources.length > 0
-		? summary.sources.length
-		: summary.checkpoints.archiveRootsWithState;
-}
-
-function formatHistoryArchiveState(
-	status: ArchiveSourceSummary['stateStatus']
-): string {
-	if (status === 'available') return 'captured';
-	if (status === 'invalid') return 'invalid';
-	return 'unreachable';
-}
-
-function formatRootObjectStatus(
-	status: ArchiveSourceSummary['rootObjectStatus']
-): string {
-	return status === null
-		? 'not queued'
-		: {
-				failed: 'failed',
-				pending: 'waiting',
-				scanning: 'checking',
-				verified: 'verified'
-			}[status];
-}
+const RECENT_FAILURE_LIMIT = 5;

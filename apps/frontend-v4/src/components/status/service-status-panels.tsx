@@ -6,8 +6,14 @@ import type {
 	PublicHistoryArchiveObjectSummary,
 	PublicStatusLevel
 } from '@api/types';
+import { assessArchiveHealth } from '@domain/history-archive-health';
 import { formatDateTime, formatInteger } from '@format/formatters';
-import { StatusPill, StatusRow, statusLabel } from './status-ui';
+import {
+	ArchiveHealthRow,
+	StatusPill,
+	StatusRow,
+	statusLabel
+} from './status-ui';
 
 interface ProductionServiceStatusPanelProps {
 	readonly api: PublicApiStatus;
@@ -25,24 +31,20 @@ export function ProductionServiceStatusPanel({
 	frontend
 }: ProductionServiceStatusPanelProps): React.JSX.Element {
 	const networkScan = dataQuality.dataFreshness.networkScan;
-	const archiveObjectStatus = getArchiveObjectStatus(archiveSummary);
+	const archiveHealth = assessArchiveHealth({
+		evidenceAvailable: true,
+		summary: archiveSummary
+	});
 
 	return (
 		<section className="panel status-services-panel">
 			<div className="panel-heading">
 				<div>
 					<strong>Production services</strong>
-					<span>
-						Frontend, API, network scanner, and archive verifier runtime
-					</span>
+					<span>Frontend, API, and network scanner runtime</span>
 				</div>
 				<StatusPill
-					status={criticalServiceStatus(
-						api,
-						frontend,
-						networkScan.status,
-						archiveObjectStatus
-					)}
+					status={criticalServiceStatus(api, frontend, networkScan.status)}
 				/>
 			</div>
 			<div className="status-list">
@@ -64,10 +66,10 @@ export function ProductionServiceStatusPanel({
 					status={networkScan.status}
 					value={statusLabel(networkScan.status)}
 				/>
-				<StatusRow
+				<ArchiveHealthRow
 					detail={`${formatInteger(archiveSummary.verifiedObjects)} verified checks; ${formatInteger(archiveSummary.activeObjects)} checking now; ${formatInteger(archiveSummary.failedObjects)} remote failures; ${formatInteger(archiveObjects.objects.length)} recent rows shown`}
 					label="Archive evidence"
-					status={archiveObjectStatus}
+					state={archiveHealth.state}
 					value={`${formatInteger(archiveSummary.sources.length)} sources`}
 				/>
 			</div>
@@ -78,14 +80,12 @@ export function ProductionServiceStatusPanel({
 export function criticalServiceStatus(
 	api: PublicApiStatus,
 	frontend: PublicConfiguredServiceStatus,
-	networkScannerStatus: PublicStatusLevel,
-	archiveScannerStatus: PublicStatusLevel
+	networkScannerStatus: PublicStatusLevel
 ): PublicStatusLevel {
 	const statuses: PublicStatusLevel[] = [
 		api.status,
 		frontend.configured ? 'ok' : 'unavailable',
-		networkScannerStatus,
-		archiveScannerStatus
+		networkScannerStatus
 	];
 	return getWorstStatus(statuses);
 }
@@ -96,12 +96,6 @@ function getWorstStatus(
 	if (statuses.some((status) => status === 'unavailable')) return 'unavailable';
 	if (statuses.some((status) => status === 'degraded')) return 'degraded';
 	return 'ok';
-}
-
-function getArchiveObjectStatus(
-	summary: PublicHistoryArchiveObjectSummary
-): PublicStatusLevel {
-	return summary.totalObjects > 0 ? 'ok' : 'unavailable';
 }
 
 function formatFreshness(

@@ -1,12 +1,12 @@
 import Link from 'next/link';
 import type {
 	PublicArchiveScanLogEntry,
-	PublicHistoryArchiveScanLogError,
-	PublicStatusLevel
+	PublicHistoryArchiveScanLogError
 } from '@api/types';
 import { getArchiveScanDetailPath } from '@domain/archive-scan-routes';
+import type { ArchiveHealthState } from '@domain/history-archive-health';
 import { formatDateTime, formatInteger } from '@format/formatters';
-import { StatusPill } from './status-ui';
+import { ArchiveHealthPill } from './status-ui';
 
 export function ArchiveScanDetails({
 	scan
@@ -20,8 +20,8 @@ export function ArchiveScanDetails({
 			<summary>
 				<span>{formatArchiveUrl(scan.url)}</span>
 				<span>
-					<StatusPill
-						status={archiveScanTone(scan)}
+					<ArchiveHealthPill
+						state={archiveScanState(scan)}
 						text={archiveScanLabel(scan)}
 					/>
 				</span>
@@ -103,20 +103,21 @@ function ErrorList({
 	);
 }
 
-function archiveScanTone(scan: PublicArchiveScanLogEntry): PublicStatusLevel {
-	if (scan.scanStatus === 'ok') return 'ok';
-	return 'degraded';
+function archiveScanState(scan: PublicArchiveScanLogEntry): ArchiveHealthState {
+	if (scan.scanStatus === 'archive_error') return 'remote_failure';
+	if (scan.scanStatus === 'worker_issue') return 'scanner_issue';
+	return 'unknown';
 }
 
 function archiveScanLabel(scan: PublicArchiveScanLogEntry): string {
-	if (scan.scanStatus === 'ok') return 'No archive errors';
-	if (scan.scanStatus === 'worker_issue') return 'Worker issue';
-	return 'Archive error';
+	if (scan.scanStatus === 'ok') return 'No row failures';
+	if (scan.scanStatus === 'worker_issue') return 'Scanner issue';
+	return 'Remote failure';
 }
 
 function archiveScanEmptyDetail(scan: PublicArchiveScanLogEntry): string {
 	if (scan.scanStatus === 'ok') {
-		return 'No archive verification errors were reported for this row.';
+		return 'No failures were reported for this historical range row.';
 	}
 	if (scan.scanStatus === 'worker_issue') {
 		return 'No individual worker issue rows were included for this row.';

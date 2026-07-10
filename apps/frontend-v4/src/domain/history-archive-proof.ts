@@ -1,25 +1,13 @@
 import type { PublicHistoryArchiveObjectSummary } from '@api/types';
 import { formatInteger } from '@format/formatters';
-
-export function checkpointProofIsComplete(
-	summary: PublicHistoryArchiveObjectSummary
-): boolean {
-	const checkpoints = summary.checkpoints;
-	return (
-		checkpoints.expectedArchiveCheckpoints > 0 &&
-		checkpoints.categoryConsistentArchiveCheckpoints ===
-			checkpoints.expectedArchiveCheckpoints &&
-		checkpoints.categoryConsistencyFailedCheckpoints === 0 &&
-		checkpoints.categoryConsistencyPendingCheckpoints === 0 &&
-		checkpoints.categoryConsistencyNotEvaluatedCheckpoints === 0 &&
-		checkpoints.missingArchiveCheckpoints === 0
-	);
-}
+export { checkpointProofIsComplete } from './history-archive-health';
 
 export function getPendingBucketCheckCount(
 	summary: PublicHistoryArchiveObjectSummary
 ): number {
-	return summary.buckets.pendingBucketObjects + summary.buckets.activeBucketObjects;
+	return (
+		summary.buckets.pendingBucketObjects + summary.buckets.activeBucketObjects
+	);
 }
 
 export function formatCheckpointProofWaitText(

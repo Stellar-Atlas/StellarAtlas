@@ -11,20 +11,26 @@ import type {
 	PublicScanLogStatus,
 	PublicWorkerStatus
 } from '@api/types';
-import {
-	formatDateTime,
-	formatInteger,
-	formatPercent
-} from '@format/formatters';
+import { formatDateTime, formatInteger } from '@format/formatters';
 import { StatCard } from '../stat-card';
-import { HistoryArchiveObjectEventLog } from '@components/archive-scans/history-archive-object-event-log';
 import {
+	archiveHealthLabel,
+	assessArchiveHealth,
+	assessArchiveScannerHealth,
 	checkpointProofIsComplete,
-	getPendingBucketCheckCount
-} from '@domain/history-archive-proof';
+	type ArchiveHealthAssessment,
+	type ArchiveHealthState
+} from '@domain/history-archive-health';
 import { StatusArchiveEvidenceTables } from './archive-status-tables';
 import { RecentScanLogs } from './recent-scan-logs';
-import { StatusPill, StatusRow, statusLabel, statusTone } from './status-ui';
+import {
+	ArchiveHealthPill,
+	ArchiveHealthRow,
+	StatusPill,
+	StatusRow,
+	statusLabel,
+	statusTone
+} from './status-ui';
 
 export interface StatusDashboardProps {
 	readonly api: PublicApiStatus;
@@ -58,9 +64,33 @@ export function StatusDashboard({
 		archiveSummary
 	);
 	const archiveTelemetryAvailable =
-		archiveEvidenceAvailable || workers.archiveWorkers.configuredWorkerProcesses > 0;
+		archiveEvidenceAvailable ||
+		workers.archiveWorkers.status !== 'unavailable' ||
+		workers.archiveWorkers.configuredWorkerProcesses > 0;
+	const observedActiveChecks = Math.max(
+		archiveObjectActivity.freshActiveObjects,
+		workers.archiveWorkers.activeWorkers
+	);
+	const archiveAssessment = assessArchiveHealth({
+		evidenceAvailable: archiveEvidenceAvailable,
+		observedActiveChecks,
+		summary: archiveEvidenceAvailable ? archiveSummary : null
+	});
+	const archiveScannerHealth = assessArchiveScannerHealth({
+		activeChecks: observedActiveChecks,
+		configuredWorkers: workers.archiveWorkers.configuredWorkerProcesses,
+		proofComplete:
+			archiveEvidenceAvailable && checkpointProofIsComplete(archiveSummary),
+		staleChecks: Math.max(
+			archiveObjectActivity.staleActiveObjects,
+			workers.archiveWorkers.staleWorkers
+		),
+		telemetryAvailable: archiveTelemetryAvailable,
+		waitingChecks: archiveSummary.pendingObjects,
+		workerStatus: workers.archiveWorkers.status
+	});
 	const archiveQueueDetail = archiveEvidenceAvailable
-		? formatArchiveObjectQueueDetail(archiveSummary)
+		? formatArchiveObjectQueueDetail(archiveSummary, archiveAssessment)
 		: archiveTelemetryAvailable
 			? 'Archive aggregate is loading; worker telemetry is live'
 			: 'Archive file evidence endpoints did not respond';
@@ -68,29 +98,31 @@ export function StatusDashboard({
 		archiveObjectActivity,
 		workers
 	);
-	const archiveAttentionText = formatArchiveAttentionText(
-		archiveSummary,
-		workers
-	);
 	const frontendApiStatus = criticalRuntimeStatus(
 		api.status,
 		frontend.configured
-	);
-	const archiveStatus = archiveEvidenceAvailable
-		? getArchiveEvidenceStatus(archiveSummary)
-		: archiveTelemetryAvailable
-			? 'ok'
-			: 'unavailable';
-	const archiveWorkerStatus = getArchiveWorkerStatus(
-		archiveObjectActivity,
-		archiveTelemetryAvailable,
-		archiveSummary,
-		workers
 	);
 
 	return (
 		<div className="status-dashboard">
 			<div className="stats-grid">
+				<StatCard
+					detail={archiveQueueDetail}
+					label="Archive evidence"
+					tone={archiveStatTone(archiveAssessment.state)}
+					value={archiveHealthLabel(archiveAssessment.state)}
+				/>
+				<StatCard
+					detail={archiveVerifierDetail}
+					label="Archive scanner activity"
+					tone={archiveStatTone(archiveScannerHealth)}
+					value={formatScannerHeadline(
+						archiveObjectActivity,
+						archiveSummary,
+						archiveScannerHealth,
+						workers
+					)}
+				/>
 				<StatCard
 					detail={`API checked ${formatDateTime(api.generatedAt)}`}
 					label="Frontend / API"
@@ -102,26 +134,6 @@ export function StatusDashboard({
 					label="Network scans"
 					tone={statusTone(scan.status)}
 					value={`${formatInteger(scan.completedScans)} / ${formatInteger(scan.totalScans)} complete`}
-				/>
-				<StatCard
-					detail={archiveQueueDetail}
-					label="Archive proof checks"
-					tone={statusTone(archiveStatus)}
-					value={
-						archiveEvidenceAvailable || archiveTelemetryAvailable
-							? archiveAttentionText
-							: 'Unavailable'
-					}
-				/>
-				<StatCard
-					detail={archiveVerifierDetail}
-					label="Archive scanner activity"
-					tone={statusTone(archiveWorkerStatus)}
-					value={formatWorkerHeadline(
-						archiveObjectActivity,
-						archiveSummary,
-						workers
-					)}
 				/>
 			</div>
 
@@ -135,6 +147,12 @@ export function StatusDashboard({
 						<StatusPill status={dataQuality.dataFreshness.status} />
 					</div>
 					<div className="status-list">
+						<ArchiveHealthRow
+							detail={archiveQueueDetail}
+							label="Archive evidence"
+							state={archiveAssessment.state}
+							value={formatArchiveEvidenceHeadline(archiveAssessment)}
+						/>
 						<StatusRow
 							detail={`Age ${formatDuration(dataQuality.dataFreshness.networkScan.ageMs)}`}
 							label="Network scan"
@@ -142,16 +160,6 @@ export function StatusDashboard({
 							value={formatNullableDate(
 								dataQuality.dataFreshness.networkScan.latestAt
 							)}
-						/>
-						<StatusRow
-							detail={archiveQueueDetail}
-							label="Archive proof checks"
-							status={archiveStatus}
-							value={
-								archiveEvidenceAvailable || archiveTelemetryAvailable
-									? archiveAttentionText
-									: 'No data'
-							}
 						/>
 						<StatusRow
 							detail={`${formatInteger(scan.completedScans)} completed, ${formatInteger(scan.incompleteScans)} incomplete`}
@@ -168,28 +176,17 @@ export function StatusDashboard({
 							<strong>Archive scanner activity</strong>
 							<span>{formatDateTime(workers.generatedAt)}</span>
 						</div>
-						<StatusPill status={archiveWorkerStatus} />
+						<ArchiveHealthPill state={archiveScannerHealth} />
 					</div>
 					<div className="status-list">
-						<StatusRow
-							detail={
-								archiveQueueDetail
-							}
-							label="Archive proof checks"
-							status={archiveStatus}
-							value={
-								archiveEvidenceAvailable || archiveTelemetryAvailable
-									? archiveAttentionText
-									: 'No data'
-							}
-						/>
-						<StatusRow
+						<ArchiveHealthRow
 							detail={archiveVerifierDetail}
 							label="Current checks"
-							status={archiveWorkerStatus}
-							value={formatWorkerHeadline(
+							state={archiveScannerHealth}
+							value={formatScannerHeadline(
 								archiveObjectActivity,
 								archiveSummary,
+								archiveScannerHealth,
 								workers
 							)}
 						/>
@@ -198,6 +195,8 @@ export function StatusDashboard({
 
 				{archiveEvidenceAvailable ? (
 					<StatusArchiveEvidenceTables
+						events={archiveEvents}
+						health={archiveAssessment}
 						summary={archiveSummary}
 					/>
 				) : (
@@ -205,11 +204,6 @@ export function StatusDashboard({
 						archiveTelemetryAvailable={archiveTelemetryAvailable}
 					/>
 				)}
-
-				<HistoryArchiveObjectEventLog
-					events={archiveEvents}
-					title="Archive file activity"
-				/>
 
 				<RecentScanLogs scanLogs={scanLogs} />
 			</div>
@@ -232,11 +226,12 @@ function ArchiveEvidenceDeferredPanel({
 						loaded yet.
 					</span>
 				</div>
-				<StatusPill status={archiveTelemetryAvailable ? 'ok' : 'unavailable'} />
+				<ArchiveHealthPill state="unknown" />
 			</div>
-			<p className="archive-good-state">
-				The status stream is updating scanner activity while the archive
-				coverage summary catches up.
+			<p className="muted-copy">
+				{archiveTelemetryAvailable
+					? 'Scanner activity is available, but checkpoint proof is not loaded.'
+					: 'Checkpoint proof and scanner activity are unavailable.'}
 			</p>
 		</section>
 	);
@@ -247,7 +242,6 @@ const ARCHIVE_OBJECT_STALE_AGE_MS = 2 * 60 * 1000;
 interface ArchiveObjectSummary {
 	readonly freshActiveObjects: number;
 	readonly staleActiveObjects: number;
-	readonly status: PublicStatusLevel;
 }
 
 function summarizeArchiveObjects(
@@ -258,8 +252,7 @@ function summarizeArchiveObjects(
 	if (!objectsAvailable) {
 		return {
 			freshActiveObjects: summary.activeObjects,
-			staleActiveObjects: 0,
-			status: summary.totalObjects > 0 ? 'ok' : 'unavailable'
+			staleActiveObjects: 0
 		};
 	}
 
@@ -277,89 +270,91 @@ function summarizeArchiveObjects(
 		0,
 		objects.activeObjects - staleActiveObjects
 	);
-	const status: PublicStatusLevel =
-		summary.totalObjects > 0 ? 'ok' : 'unavailable';
 	return {
 		freshActiveObjects,
-		staleActiveObjects,
-		status
+		staleActiveObjects
 	};
 }
 
-function getArchiveEvidenceStatus(
-	summary: PublicHistoryArchiveObjectSummary
-): PublicStatusLevel {
-	if (summary.totalObjects <= 0) return 'unavailable';
-	return 'ok';
-}
-
-function formatArchiveVerificationCoverage(
-	summary: PublicHistoryArchiveObjectSummary
-): string {
-	if (summary.totalObjects <= 0) return '0 / 0 verified';
-
-	return (
-		formatInteger(summary.verifiedObjects) +
-		' / ' +
-		formatInteger(summary.totalObjects) +
-		' verified (' +
-		formatPercent((summary.verifiedObjects / summary.totalObjects) * 100) +
-		')'
-	);
-}
-
 function formatArchiveObjectQueueDetail(
-	summary: PublicHistoryArchiveObjectSummary
+	summary: PublicHistoryArchiveObjectSummary,
+	health: ArchiveHealthAssessment
 ): string {
 	const sourceCount =
 		summary.sources.length > 0
 			? summary.sources.length
 			: summary.checkpoints.archiveRootsWithState;
-	const remoteFailureText =
-		summary.failedObjects > 0
-			? `; ${formatInteger(summary.failedObjects)} remote failures`
-			: '';
-	const activeText =
-		summary.activeObjects > 0
-			? `; ${formatInteger(summary.activeObjects)} checking now`
-			: '';
-	const proofText = checkpointProofIsComplete(summary)
-		? `${formatInteger(summary.checkpoints.categoryConsistentArchiveCheckpoints)} proven checkpoint file sets`
-		: formatArchiveProofWaitingDetail(summary);
-	return `${formatInteger(sourceCount)} archive sources; ${proofText}${activeText}${remoteFailureText}`;
+	const facts = health.facts;
+	return [
+		formatArchiveEvidenceHeadline(health),
+		`${formatInteger(sourceCount)} archive sources`,
+		`${formatInteger(facts.provenCheckpointProofs)} / ${formatInteger(facts.expectedCheckpointProofs)} checkpoint proofs verified`
+	].join('; ');
 }
 
-function formatArchiveAttentionText(
-	summary: PublicHistoryArchiveObjectSummary,
-	workers: PublicWorkerStatus
+function formatArchiveEvidenceHeadline(
+	health: ArchiveHealthAssessment
 ): string {
-	const activeChecks = Math.max(
-		summary.activeObjects,
-		workers.archiveWorkers.activeWorkers
-	);
-	if (activeChecks > 0) {
-		return `${formatInteger(activeChecks)} active checks`;
+	const facts = health.facts;
+	if (health.state === 'remote_failure') {
+		if (facts.checkpointMismatches > 0) {
+			return `${formatInteger(facts.checkpointMismatches)} checkpoint mismatches`;
+		}
+		if (facts.failedEvidenceRows > 0) {
+			return `${formatInteger(facts.failedEvidenceRows)} remote failures`;
+		}
+		if (facts.failingArchiveSources > 0) {
+			return `${formatInteger(facts.failingArchiveSources)} failing archive sources`;
+		}
+		return `${formatInteger(facts.remoteHostFailures)} remote host failures`;
 	}
-	if (!checkpointProofIsComplete(summary)) {
-		return 'Proof pending';
+	if (health.state === 'scanner_issue') {
+		return `${formatInteger(facts.scannerIssues)} scanner issues`;
 	}
-	return formatArchiveVerificationCoverage(summary);
+	if (health.state === 'verified') {
+		return `${formatInteger(facts.provenCheckpointProofs)} checkpoint proofs verified`;
+	}
+	if (health.state === 'checking') {
+		return `${formatInteger(facts.activeChecks)} checks active`;
+	}
+	if (health.state === 'waiting') {
+		return `${formatInteger(facts.waitingChecks)} proofs waiting`;
+	}
+	return 'Proof state unknown';
 }
 
-function formatWorkerHeadline(
+function formatScannerHeadline(
 	activity: ArchiveObjectSummary,
 	summary: PublicHistoryArchiveObjectSummary,
+	state: ArchiveHealthState,
 	workers: PublicWorkerStatus
 ): string {
 	const objectWorkers = workers.archiveWorkers;
-	if (objectWorkers.staleWorkers > 0 || activity.staleActiveObjects > 0) {
+	const staleChecks = Math.max(
+		objectWorkers.staleWorkers,
+		activity.staleActiveObjects
+	);
+	if (state === 'scanner_issue' && staleChecks > 0) {
 		return `${formatInteger(Math.max(objectWorkers.staleWorkers, activity.staleActiveObjects))} stale checks`;
 	}
-	if (objectWorkers.configuredWorkerProcesses > 0) {
-		return `${formatInteger(objectWorkers.configuredWorkerProcesses)} configured workers`;
+	if (state === 'scanner_issue') return 'Scanner issue';
+	if (state === 'checking') {
+		return `${formatInteger(Math.max(objectWorkers.activeWorkers, activity.freshActiveObjects))} checks active`;
 	}
-	if (summary.pendingObjects > 0) return 'Waiting for scanner';
-	return 'Scanner idle';
+	if (state === 'waiting') {
+		return `${formatInteger(summary.pendingObjects)} checks waiting`;
+	}
+	if (state === 'verified') return 'Scanner idle';
+	return 'Scanner state unknown';
+}
+
+function archiveStatTone(
+	state: ArchiveHealthState
+): 'good' | 'warning' | 'danger' | undefined {
+	if (state === 'verified') return 'good';
+	if (state === 'remote_failure') return 'danger';
+	if (state === 'scanner_issue') return 'warning';
+	return undefined;
 }
 
 function formatArchiveWorkerDetail(
@@ -382,25 +377,6 @@ function formatArchiveWorkerDetail(
 	return `${formatInteger(objectWorkers.configuredWorkerProcesses)} configured worker processes; ${activeText}${staleText}`;
 }
 
-function getArchiveWorkerStatus(
-	activity: ArchiveObjectSummary,
-	archiveEvidenceAvailable: boolean,
-	summary: PublicHistoryArchiveObjectSummary,
-	workers: PublicWorkerStatus
-): PublicStatusLevel {
-	if (!archiveEvidenceAvailable) return 'unavailable';
-	if (workers.archiveWorkers.activeWorkers > 0) return 'ok';
-	if (workers.archiveWorkers.status === 'degraded') return 'degraded';
-	if (activity.staleActiveObjects > 0) return 'degraded';
-	if (
-		summary.pendingObjects > 0 &&
-		workers.archiveWorkers.configuredWorkerProcesses === 0
-	) {
-		return 'degraded';
-	}
-	return 'ok';
-}
-
 function criticalRuntimeStatus(
 	apiStatus: PublicStatusLevel,
 	frontendConfigured: boolean
@@ -419,23 +395,4 @@ function formatDuration(value: number | null): string {
 	const minutes = Math.round(value / 60000);
 	if (minutes < 60) return `${formatInteger(minutes)} min`;
 	return `${formatInteger(Math.round(minutes / 60))} hr`;
-}
-
-function formatArchiveProofWaitingDetail(
-	summary: PublicHistoryArchiveObjectSummary
-): string {
-	const checkpoints = summary.checkpoints;
-	if (checkpoints.categoryConsistencyFailedCheckpoints > 0) {
-		return `${formatInteger(checkpoints.categoryConsistencyFailedCheckpoints)} checkpoint mismatches`;
-	}
-	if (checkpoints.categoryConsistencyPendingCheckpoints > 0) {
-		return `${formatInteger(checkpoints.categoryConsistencyPendingCheckpoints)} checkpoint file sets waiting`;
-	}
-	if (checkpoints.categoryConsistencyNotEvaluatedCheckpoints > 0) {
-		const pendingBuckets = getPendingBucketCheckCount(summary);
-		return pendingBuckets > 0
-			? `${formatInteger(checkpoints.categoryConsistencyNotEvaluatedCheckpoints)} file sets waiting for ${formatInteger(pendingBuckets)} bucket checks`
-			: `${formatInteger(checkpoints.categoryConsistencyNotEvaluatedCheckpoints)} file sets collecting proof facts`;
-	}
-	return 'checkpoint proof not started';
 }

@@ -1,4 +1,48 @@
 import type { PublicStatusLevel } from '@api/types';
+import {
+	archiveHealthLabel,
+	archiveHealthTone,
+	type ArchiveHealthState
+} from '@domain/history-archive-health';
+
+export function ArchiveHealthRow({
+	detail,
+	label,
+	state,
+	value
+}: {
+	readonly detail: string;
+	readonly label: string;
+	readonly state: ArchiveHealthState;
+	readonly value: string;
+}): React.JSX.Element {
+	return (
+		<div className="status-row">
+			<div>
+				<strong>{label}</strong>
+				<small>{detail}</small>
+			</div>
+			<div className="status-row-value">
+				<span>{value}</span>
+				<ArchiveHealthPill state={state} />
+			</div>
+		</div>
+	);
+}
+
+export function ArchiveHealthPill({
+	state,
+	text
+}: {
+	readonly state: ArchiveHealthState;
+	readonly text?: string;
+}): React.JSX.Element {
+	return (
+		<span className={`status-pill ${archiveHealthTone(state)}`}>
+			{text ?? archiveHealthLabel(state)}
+		</span>
+	);
+}
 
 export function StatusRow({
 	detail,
