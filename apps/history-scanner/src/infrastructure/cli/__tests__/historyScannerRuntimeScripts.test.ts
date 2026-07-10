@@ -59,17 +59,19 @@ describe('history scanner runtime scripts', () => {
 		expect(service).not.toContain('scan-history:single');
 	});
 
-	it('installs the history scanner template as a target-managed instance', () => {
+	it('installs a boot-safe history scanner unit as a target-managed instance', () => {
 		const setupScript = readRepoFile('setup-systemd.sh');
 		const target = readRepoFile('ops/systemd/stellaratlas.target');
 		const polkitRule = readRepoFile(
 			'ops/systemd/10-stellaratlas-observe.rules'
 		);
 
-		expect(setupScript).toContain(
-			'link_unit stellaratlas-history-scanner@.service'
+		expect(setupScript).toContain('stellaratlas-history-scanner@.service');
+		expect(setupScript).toContain('install_regular_file');
+		expect(setupScript).not.toContain('ln -sfnT "$source" "$target"');
+		expect(target).toContain(
+			'RequiresMountsFor=/home/observe/stellarbeat-data/Observer'
 		);
-		expect(setupScript).toContain('ln -sfnT "$source" "$target"');
 		expect(target).toContain('stellaratlas-history-scanner@1.service');
 		expect(polkitRule).toContain('stellaratlas-history-scanner@1.service');
 		expect(polkitRule).toContain('org.freedesktop.systemd1.reload-daemon');

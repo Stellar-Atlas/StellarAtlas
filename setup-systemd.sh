@@ -2,43 +2,207 @@
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-SYSTEMD_DIR="$REPO_ROOT/ops/systemd"
+SYSTEMD_SOURCE_DIR="$REPO_ROOT/ops/systemd"
+SYSTEMD_UNIT_DIR="/etc/systemd/system"
+POLKIT_RULE_DIR="/etc/polkit-1/rules.d"
+EXPECTED_REPO_ROOT="/home/observe/stellarbeat-data/Observer"
 
-link_unit() {
-	local file_name="$1"
-	local source="$SYSTEMD_DIR/$file_name"
-	local target="/etc/systemd/system/$file_name"
+INSTALL_UNIT_NAMES=(
+	stellaratlas.target
+	stellaratlas-api.service
+	stellaratlas-frontend-v4.service
+	stellaratlas-frontend-v4-staging.service
+	stellaratlas-frontend-legacy.service
+	stellaratlas-network-scanner.service
+	stellaratlas-scp-live-scanner.service
+	stellaratlas-users.service
+	stellaratlas-history-scanner@.service
+	stellaratlas-horizon.service
+	stellaratlas-stellar-rpc.service
+)
 
-	sudo ln -sfnT "$source" "$target"
+VERIFY_UNIT_NAMES=(
+	"${INSTALL_UNIT_NAMES[@]}"
+	stellaratlas-api-docs-comparison-refresh.service
+	stellaratlas-api-docs-comparison-refresh.timer
+	stellaratlas-radar-network-comparison-refresh.service
+	stellaratlas-radar-network-comparison-refresh.timer
+)
+
+die() {
+	printf 'setup-systemd: %s\n' "$*" >&2
+	exit 1
 }
 
-link_unit stellaratlas.target
-link_unit stellaratlas-api.service
-link_unit stellaratlas-frontend-v4.service
-link_unit stellaratlas-frontend-v4-staging.service
-link_unit stellaratlas-frontend-legacy.service
-link_unit stellaratlas-network-scanner.service
-link_unit stellaratlas-scp-live-scanner.service
-link_unit stellaratlas-users.service
-link_unit stellaratlas-history-scanner@.service
-link_unit stellaratlas-horizon.service
-link_unit stellaratlas-stellar-rpc.service
+usage() {
+	cat <<'EOF'
+Usage:
+  sudo ./setup-systemd.sh       Install and activate the boot-safe unit copies.
+  ./setup-systemd.sh --verify   Validate tracked unit templates without changes.
+  ./setup-systemd.sh --verify-installed
+                                Verify the installed boot contract without changes.
+EOF
+}
 
-sudo install -m 0644 \
-	"$SYSTEMD_DIR/10-stellaratlas-observe.rules" \
-	/etc/polkit-1/rules.d/10-stellaratlas-observe.rules
+verify_source_units() {
+	local file_name
+	local -a unit_paths=()
 
-sudo systemctl daemon-reload
-sudo systemctl disable --now stellaratlas.service 2>/dev/null || true
-sudo systemctl mask stellaratlas.service 2>/dev/null || true
-sudo systemctl enable --now stellaratlas.target
+	command -v systemd-analyze >/dev/null || die "systemd-analyze is required"
 
-cat <<'EOF'
-Linked split StellarAtlas services to repo unit templates.
+	for file_name in "${VERIFY_UNIT_NAMES[@]}"; do
+		[[ -f "$SYSTEMD_SOURCE_DIR/$file_name" ]] ||
+			die "missing unit template: $file_name"
+		[[ ! -L "$SYSTEMD_SOURCE_DIR/$file_name" ]] ||
+			die "unit template must be a regular file: $file_name"
+		unit_paths+=("$SYSTEMD_SOURCE_DIR/$file_name")
+	done
+
+	systemd-analyze verify "${unit_paths[@]}"
+	grep -Fqx \
+		"RequiresMountsFor=$EXPECTED_REPO_ROOT" \
+		"$SYSTEMD_SOURCE_DIR/stellaratlas.target" ||
+		die "stellaratlas.target must require the repository mount"
+
+	printf 'Verified %d tracked systemd unit templates.\n' "${#unit_paths[@]}"
+}
+
+verify_regular_copy() {
+	local source="$1"
+	local target="$2"
+
+	[[ -f "$target" ]] || die "installed file is missing: $target"
+	[[ ! -L "$target" ]] || die "installed file must not be a symlink: $target"
+	cmp --silent "$source" "$target" || die "installed file is stale: $target"
+	[[ "$(stat -c '%U:%G:%a' "$target")" == "root:root:644" ]] ||
+		die "installed file must be root:root mode 0644: $target"
+}
+
+verify_installed_units() {
+	local file_name
+	local legacy_unit="$SYSTEMD_UNIT_DIR/stellaratlas.service"
+	local fragment_path
+	local required_mounts
+
+	for file_name in "${INSTALL_UNIT_NAMES[@]}"; do
+		verify_regular_copy \
+			"$SYSTEMD_SOURCE_DIR/$file_name" \
+			"$SYSTEMD_UNIT_DIR/$file_name"
+	done
+
+	verify_regular_copy \
+		"$SYSTEMD_SOURCE_DIR/10-stellaratlas-observe.rules" \
+		"$POLKIT_RULE_DIR/10-stellaratlas-observe.rules"
+
+	[[ -L "$legacy_unit" ]] || die "legacy stellaratlas.service is not masked"
+	[[ "$(readlink "$legacy_unit")" == "/dev/null" ]] ||
+		die "legacy stellaratlas.service mask does not point to /dev/null"
+
+	fragment_path="$(
+		systemctl show stellaratlas.target --property=FragmentPath --value
+	)"
+	[[ "$fragment_path" == "$SYSTEMD_UNIT_DIR/stellaratlas.target" ]] ||
+		die "systemd has not loaded the installed stellaratlas.target copy"
+	required_mounts="$(
+		systemctl show stellaratlas.target --property=RequiresMountsFor --value
+	)"
+	[[ " $required_mounts " == *" $EXPECTED_REPO_ROOT "* ]] ||
+		die "loaded stellaratlas.target does not require the repository mount"
+	systemctl is-enabled --quiet stellaratlas.target ||
+		die "stellaratlas.target is not enabled"
+
+	printf 'Verified installed boot-safe systemd unit copies.\n'
+}
+
+install_regular_file() {
+	local source="$1"
+	local target="$2"
+	local directory="${target%/*}"
+	local file_name="${target##*/}"
+	local staged
+
+	if [[ ! -d "$directory" ]]; then
+		install -d -o root -g root -m 0755 "$directory"
+	fi
+
+	staged="$(mktemp --tmpdir="$directory" ".$file_name.XXXXXX")"
+	if ! install -o root -g root -m 0644 -T "$source" "$staged"; then
+		rm -f "$staged"
+		return 1
+	fi
+	if ! mv -fT "$staged" "$target"; then
+		rm -f "$staged"
+		return 1
+	fi
+}
+
+install_units() {
+	local file_name
+
+	for file_name in "${INSTALL_UNIT_NAMES[@]}"; do
+		install_regular_file \
+			"$SYSTEMD_SOURCE_DIR/$file_name" \
+			"$SYSTEMD_UNIT_DIR/$file_name"
+	done
+
+	install_regular_file \
+		"$SYSTEMD_SOURCE_DIR/10-stellaratlas-observe.rules" \
+		"$POLKIT_RULE_DIR/10-stellaratlas-observe.rules"
+}
+
+mask_legacy_unit() {
+	systemctl disable --now stellaratlas.service >/dev/null 2>&1 || true
+	rm -f "$SYSTEMD_UNIT_DIR/stellaratlas.service"
+	ln -sT /dev/null "$SYSTEMD_UNIT_DIR/stellaratlas.service"
+}
+
+main() {
+	case "${1:-}" in
+	--verify)
+		[[ "$#" -eq 1 ]] || die "--verify accepts no additional arguments"
+		verify_source_units
+		return
+		;;
+	--verify-installed)
+		[[ "$#" -eq 1 ]] ||
+			die "--verify-installed accepts no additional arguments"
+		verify_source_units
+		verify_installed_units
+		return
+		;;
+	--help | -h)
+		usage
+		return
+		;;
+	"")
+		;;
+	*)
+		usage >&2
+		die "unknown argument: $1"
+		;;
+	esac
+
+	[[ "$#" -eq 0 ]] || die "installation accepts no arguments"
+	[[ "$EUID" -eq 0 ]] || die "run installation with sudo"
+	[[ "$REPO_ROOT" == "$EXPECTED_REPO_ROOT" ]] ||
+		die "repository must be at $EXPECTED_REPO_ROOT"
+
+	verify_source_units
+	install_units
+	mask_legacy_unit
+	systemctl daemon-reload
+	systemctl enable --now stellaratlas.target
+	verify_installed_units
+	systemctl is-active --quiet stellaratlas.target ||
+		die "stellaratlas.target is not active"
+
+	cat <<'EOF'
+Installed boot-safe local copies of the split StellarAtlas units.
+The obsolete stellaratlas.service is masked. An already-active target was not
+restarted; an inactive target was started.
 
 Production:
   systemctl status stellaratlas.target
-  systemctl daemon-reload
   systemctl restart stellaratlas.target
 
 Local full-history services, after binaries/config/DB exist:
@@ -50,3 +214,6 @@ Staging frontend:
   systemctl start stellaratlas-frontend-v4-staging.service
   systemctl status stellaratlas-frontend-v4-staging.service
 EOF
+}
+
+main "$@"

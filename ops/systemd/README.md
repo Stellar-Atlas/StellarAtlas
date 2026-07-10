@@ -3,7 +3,9 @@
 ## Runtime services
 
 These templates split the production app into independently managed services
-that all run as `observe`, not root.
+that all run as `observe`, not root. `ops/systemd` is the tracked source of
+truth; systemd consumes root-owned regular-file copies installed under
+`/etc/systemd/system`.
 
 - `stellaratlas.target` starts the production service set.
 - `stellaratlas-api.service` serves the API on `127.0.0.1:3000`.
@@ -16,19 +18,34 @@ that all run as `observe`, not root.
 - `stellaratlas-network-scanner.service` runs the network scanner.
 - `stellaratlas-scp-live-scanner.service` continuously indexes live SCP
   observations into the live search read model.
-- `stellaratlas-history-scanner@.service` runs a bounded history-scanner process
-  cluster. The current stopgap template sets `HISTORY_SCAN_PROCESSES=12`,
-  `HISTORY_MAX_REQUESTS=24`, and `HISTORY_HASHER_WORKERS=24`; the cluster
-  wrapper partitions those totals across child processes and forces each child
-  to one scanner loop. This is a temporary range-scanner runtime until the
-  object-level scheduler replaces it with separate durable fetch and
-  verification worker pools.
+- `stellaratlas-history-scanner@.service` runs the bounded history object
+  scanner with 24 total object worker processes and one scanner loop per worker.
 - `stellaratlas-users.service` runs the user/mail service.
+
+## Boot contract
+
+Never symlink system units into `/home/observe/stellarbeat-data`. That path is a
+virtiofs mount and is not available when the system manager first loads enabled
+units during boot. A broken early-boot symlink leaves `stellaratlas.target`
+unloaded even after the mount appears.
+
+`setup-systemd.sh` atomically installs regular-file unit copies in
+`/etc/systemd/system`. The copied definitions remain loadable before virtiofs is
+mounted, while `WorkingDirectory` and `ExecStart` continue to run the checked-in
+application from `/home/observe/stellarbeat-data`. `stellaratlas.target` also
+uses `RequiresMountsFor=/home/observe/stellarbeat-data/Observer`, so its service
+transaction waits for the repo mount.
+
+Repo unit edits do not change the installed copies. Rerun `setup-systemd.sh`
+after every `ops/systemd` unit change, then restart only the services whose
+runtime behavior must change. The installer reloads systemd and starts the
+target only when it is inactive; it does not restart an active production
+target.
 
 ## Optional full-history services
 
-These units are linked by `setup-systemd.sh` but are intentionally not part of
-`stellaratlas.target` yet:
+These units are installed by `setup-systemd.sh` but are intentionally not part
+of `stellaratlas.target` yet:
 
 - `stellaratlas-horizon.service` runs the local Horizon binary from
   `/home/observe/stellarbeat-data/horizon/bin/horizon`.
@@ -73,30 +90,29 @@ STELLAR_RPC_URL=http://127.0.0.1:8002
 `10-stellaratlas-observe.rules` lets the `observe` user start, stop, restart,
 reload, try-restart, and reset only the listed StellarAtlas units without an
 interactive password. It also permits `systemctl daemon-reload` for `observe` so
-repo unit-template changes can be reloaded after the one-time system link setup.
+installed unit changes can be loaded after the privileged copy step.
 
-Link or migrate deliberately:
+Install or migrate deliberately:
+
+```bash
+./setup-systemd.sh --verify
+sudo ./setup-systemd.sh
+./setup-systemd.sh --verify-installed
+```
+
+The script validates every tracked unit, replaces existing repo symlinks with
+root-owned mode `0644` copies, installs the polkit rule, and masks the old
+root-run all-in-one `stellaratlas.service` with `/dev/null`. It then reloads
+systemd, enables the split target, and starts it if needed.
+
+Production split units use `PartOf=stellaratlas.target`, so target restarts
+propagate to the API, frontend, legacy frontend, network scanner, SCP collector,
+users service, and `history-scanner@1` without reviving the old monolithic unit.
+
+After changing a unit template, install the new copies before restarting:
 
 ```bash
 sudo ./setup-systemd.sh
-```
-
-The script links each active StellarAtlas unit in `/etc/systemd/system` back to
-the matching file under `ops/systemd`. `/etc` is not the source of truth; it
-only contains symlinks that systemd requires for system units. The script also
-installs the polkit rule, disables and masks the old root-run all-in-one
-`stellaratlas.service`, reloads systemd, and starts `stellaratlas.target`.
-
-After this migration, editing `ops/systemd/*.service` is enough. Production
-split units use `PartOf=stellaratlas.target`, so target restarts propagate to
-the API, frontend, legacy frontend, network scanner, SCP collector, users
-service, and `history-scanner@1` without using the old monolithic
-`stellaratlas.service`.
-
-Reload and restart the production service set without sudo:
-
-```bash
-systemctl daemon-reload
 systemctl restart stellaratlas.target
 ```
 
@@ -120,7 +136,6 @@ Backend/API deploy:
 
 ```bash
 pnpm build:api
-systemctl daemon-reload
 systemctl restart stellaratlas.target
 ```
 
@@ -128,7 +143,6 @@ Live SCP collector deploy:
 
 ```bash
 pnpm build:scp-live-scanner
-systemctl daemon-reload
 systemctl restart stellaratlas.target
 systemctl status stellaratlas-scp-live-scanner.service --no-pager
 ```
@@ -140,19 +154,18 @@ pnpm build:legacy-frontend
 systemctl restart stellaratlas-frontend-legacy.service
 ```
 
-Verify templates:
+Verify the tracked templates without touching `/etc` or production:
 
 ```bash
-systemd-analyze verify \
-  ops/systemd/stellaratlas.target \
-  ops/systemd/stellaratlas-api.service \
-  ops/systemd/stellaratlas-frontend-v4.service \
-  ops/systemd/stellaratlas-frontend-v4-staging.service \
-  ops/systemd/stellaratlas-frontend-legacy.service \
-  ops/systemd/stellaratlas-network-scanner.service \
-  ops/systemd/stellaratlas-scp-live-scanner.service \
-  ops/systemd/stellaratlas-users.service \
-  ops/systemd/stellaratlas-history-scanner@.service
+./setup-systemd.sh --verify
+```
+
+Verify the deployed copies and boot dependency after installation:
+
+```bash
+./setup-systemd.sh --verify-installed
+systemctl show stellaratlas.target \
+  -p FragmentPath -p RequiresMountsFor -p UnitFileState -p ActiveState
 ```
 
 # Cross-Check Refresh Timers
@@ -174,9 +187,9 @@ explicitly.
 - `stellaratlas-radar-network-comparison-refresh.timer` starts the service every
   six hours with jitter and persistent catch-up after downtime.
 
-## Link Timers
+## Install Timers
 
-Review these values in the service before linking:
+Review these values in the service before installing:
 
 - `User=observe`
 - `WorkingDirectory=/home/observe/stellarbeat-data/Observer`
@@ -184,13 +197,14 @@ Review these values in the service before linking:
 - `Environment=PATH=...`
 - `EnvironmentFile=-/etc/stellaratlas/stellaratlas.env`
 
-Then link deliberately:
+Then install regular-file copies deliberately. Do not symlink these units into
+the virtiofs-backed repo.
 
 ```bash
-sudo ln -sfnT "$PWD/ops/systemd/stellaratlas-api-docs-comparison-refresh.service" /etc/systemd/system/stellaratlas-api-docs-comparison-refresh.service
-sudo ln -sfnT "$PWD/ops/systemd/stellaratlas-api-docs-comparison-refresh.timer" /etc/systemd/system/stellaratlas-api-docs-comparison-refresh.timer
-sudo ln -sfnT "$PWD/ops/systemd/stellaratlas-radar-network-comparison-refresh.service" /etc/systemd/system/stellaratlas-radar-network-comparison-refresh.service
-sudo ln -sfnT "$PWD/ops/systemd/stellaratlas-radar-network-comparison-refresh.timer" /etc/systemd/system/stellaratlas-radar-network-comparison-refresh.timer
+sudo install -o root -g root -m 0644 -T "$PWD/ops/systemd/stellaratlas-api-docs-comparison-refresh.service" /etc/systemd/system/stellaratlas-api-docs-comparison-refresh.service
+sudo install -o root -g root -m 0644 -T "$PWD/ops/systemd/stellaratlas-api-docs-comparison-refresh.timer" /etc/systemd/system/stellaratlas-api-docs-comparison-refresh.timer
+sudo install -o root -g root -m 0644 -T "$PWD/ops/systemd/stellaratlas-radar-network-comparison-refresh.service" /etc/systemd/system/stellaratlas-radar-network-comparison-refresh.service
+sudo install -o root -g root -m 0644 -T "$PWD/ops/systemd/stellaratlas-radar-network-comparison-refresh.timer" /etc/systemd/system/stellaratlas-radar-network-comparison-refresh.timer
 sudo systemctl daemon-reload
 sudo systemctl enable --now stellaratlas-api-docs-comparison-refresh.timer
 sudo systemctl enable --now stellaratlas-radar-network-comparison-refresh.timer
