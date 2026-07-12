@@ -236,7 +236,7 @@ const networkRouterWrapper = (config: NetworkRouterConfig): Router => {
 			searchRequest,
 			canonicalNetworkTime
 		);
-		if (indexedPayload !== null) {
+		if (indexedPayload !== null && config.searchConfig.writable !== false) {
 			setImmediate(() => {
 				void networkSearchInventory
 					.load()

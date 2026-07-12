@@ -28,7 +28,7 @@ export interface PublicSearchHit {
 	readonly evidenceFailures?: number;
 	readonly evidenceProvenance?: 'postgres_canonical';
 	readonly evidenceVerified?: number;
-	readonly freshness: 'fresh';
+	readonly freshness: 'fresh' | 'stale';
 	readonly href: string;
 	readonly id: string;
 	readonly label: string;

@@ -76,7 +76,7 @@ function parseHit(value: unknown): PublicSearchHit | null {
 		(value.entityType !== 'archive-root' &&
 			value.entityType !== 'node' &&
 			value.entityType !== 'organization') ||
-		value.freshness !== 'fresh' ||
+		(value.freshness !== 'fresh' && value.freshness !== 'stale') ||
 		!isString(value.href) ||
 		!isString(value.id) ||
 		!isString(value.label) ||

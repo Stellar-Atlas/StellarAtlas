@@ -400,7 +400,8 @@ const listen = async () => {
 			searchConfig: {
 				apiKey: config.meilisearchApiKey,
 				host: config.meilisearchHost,
-				indexName: config.meilisearchNetworkIndex
+				indexName: config.meilisearchNetworkIndex,
+				writable: process.env.API_SEARCH_PROJECTION_WRITER !== 'false'
 			}
 		})
 	);

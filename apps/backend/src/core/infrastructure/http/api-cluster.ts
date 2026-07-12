@@ -38,12 +38,16 @@ function runPrimary(): void {
 	let shutdownStarted = false;
 	let shutdownTimer: NodeJS.Timeout | undefined;
 	const liveWorkerIds = new Set<number>();
+	const projectionWriterByWorkerId = new Map<number, boolean>();
 	const replacementTimers = new Set<NodeJS.Timeout>();
 
-	const forkWorker = (): void => {
+	const forkWorker = (projectionWriter: boolean): void => {
 		if (shutdownStarted) return;
-		const worker = cluster.fork();
+		const worker = cluster.fork({
+			API_SEARCH_PROJECTION_WRITER: projectionWriter ? 'true' : 'false'
+		});
 		liveWorkerIds.add(worker.id);
+		projectionWriterByWorkerId.set(worker.id, projectionWriter);
 	};
 
 	const finishShutdownIfDrained = (): void => {
@@ -55,6 +59,8 @@ function runPrimary(): void {
 
 	cluster.on('exit', (worker, code, signal) => {
 		liveWorkerIds.delete(worker.id);
+		const projectionWriter = projectionWriterByWorkerId.get(worker.id) ?? false;
+		projectionWriterByWorkerId.delete(worker.id);
 
 		if (
 			!shouldRestartApiWorker({
@@ -72,7 +78,7 @@ function runPrimary(): void {
 		);
 		const replacementTimer = setTimeout(() => {
 			replacementTimers.delete(replacementTimer);
-			forkWorker();
+			forkWorker(projectionWriter);
 		}, apiWorkerRestartDelayMs);
 		replacementTimers.add(replacementTimer);
 	});
@@ -108,7 +114,7 @@ function runPrimary(): void {
 	console.log(
 		`[api-cluster] primary ${process.pid} starting ${workerCount} API workers`
 	);
-	for (let index = 0; index < workerCount; index++) forkWorker();
+	for (let index = 0; index < workerCount; index++) forkWorker(index === 0);
 }
 
 async function runWorker(): Promise<void> {

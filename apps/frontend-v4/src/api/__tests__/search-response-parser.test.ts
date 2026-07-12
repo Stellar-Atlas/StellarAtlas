@@ -3,6 +3,53 @@
 import { parsePublicSearchResponse } from '../search-response-parser';
 
 describe('search response parser', () => {
+	it('accepts a bounded stale Meilisearch projection without calling it fresh', () => {
+		const parsed = parsePublicSearchResponse({
+			estimatedTotalHits: 1,
+			facets: emptyFacets(),
+			hits: [
+				{
+					detail: 'Indexed validator',
+					entityId: 'GA_STALE',
+					entityType: 'node',
+					freshness: 'stale',
+					href: '/nodes/GA_STALE',
+					id: 'node_GA_STALE',
+					label: 'Indexed validator',
+					observedAt: '2026-07-11T00:00:00.000Z',
+					recordState: 'current',
+					scope: 'current-validator',
+					source: 'meilisearch'
+				}
+			],
+			indexedNetworkTime: '2026-07-11T00:00:00.000Z',
+			pagination: {
+				hasMore: false,
+				limit: 8,
+				offset: 0,
+				total: 1,
+				totalIsExact: false
+			},
+			query: 'indexed',
+			readModel: {
+				canonicalCursor: 'stale-cursor',
+				fallbackReason: 'meilisearch_stale',
+				freshness: 'stale',
+				observedAt: '2026-07-11T00:00:01.000Z',
+				schemaVersion: 'v3',
+				source: 'meilisearch'
+			},
+			scope: 'all-known',
+			source: 'meilisearch'
+		});
+
+		expect(parsed).toMatchObject({
+			hits: [{ freshness: 'stale' }],
+			readModel: { freshness: 'stale' },
+			source: 'meilisearch'
+		});
+	});
+
 	it('retains canonical stale-index fallback and per-hit source metadata', () => {
 		const parsed = parsePublicSearchResponse({
 			estimatedTotalHits: 1,

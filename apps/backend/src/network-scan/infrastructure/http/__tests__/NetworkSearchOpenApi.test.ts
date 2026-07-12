@@ -65,6 +65,6 @@ describe('known-network search OpenAPI contract', () => {
 		expect(
 			document.components.schemas.SearchReadModel?.properties?.schemaVersion
 				?.enum
-		).toEqual(['v2']);
+		).toEqual(['v3']);
 	});
 });

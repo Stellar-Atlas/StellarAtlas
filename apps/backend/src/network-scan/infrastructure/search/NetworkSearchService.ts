@@ -21,6 +21,7 @@ import type {
 	NetworkSearchConfig,
 	NetworkSearchDocument,
 	NetworkSearchFallbackReason,
+	NetworkSearchFreshness,
 	NetworkSearchIndexStateDocument,
 	NetworkSearchInventory,
 	NetworkSearchReadModel,
@@ -37,6 +38,7 @@ const settingsTaskTimeoutMs = 60_000;
 const documentTaskTimeoutMs = 60_000;
 const searchRequestTimeoutMs = 500;
 const syncRetryCooldownMs = 60_000;
+const maxIndexedNetworkLagMs = 15 * 60_000;
 
 const errorMessage = (error: unknown): string =>
 	error instanceof Error ? error.message : String(error);
@@ -45,11 +47,12 @@ const readModel = (
 	snapshot: NetworkSearchSnapshot,
 	source: NetworkSearchReadModel['source'],
 	fallbackReason: NetworkSearchFallbackReason | null,
-	observedAt: string
+	observedAt: string,
+	freshness: NetworkSearchFreshness = 'fresh'
 ): NetworkSearchReadModel => ({
 	canonicalCursor: snapshot.canonicalCursor,
 	fallbackReason,
-	freshness: 'fresh',
+	freshness,
 	observedAt,
 	schemaVersion: networkSearchIndexSchemaVersion,
 	source
@@ -84,6 +87,7 @@ export class NetworkSearchService {
 	private syncFailed = false;
 	private readonly index: Index<NetworkSearchStoredDocument> | undefined;
 	private readonly indexName: string;
+	private readonly writable: boolean;
 	private nextSyncAttemptAtMs = 0;
 	private syncPromise: Promise<void> | undefined;
 
@@ -93,6 +97,7 @@ export class NetworkSearchService {
 		indexOverride?: Index<NetworkSearchStoredDocument>
 	) {
 		this.indexName = config.indexName;
+		this.writable = config.writable !== false;
 		if (indexOverride) {
 			this.index = indexOverride;
 		} else if (config.host && config.host.length > 0) {
@@ -210,13 +215,16 @@ export class NetworkSearchService {
 				await this.index.getDocument<NetworkSearchIndexStateDocument>(
 					networkSearchStateDocumentId
 				);
-			if (
-				!isIndexStateDocument(state) ||
-				state.networkTime !== canonicalNetworkTime.toISOString()
-			)
-				return null;
+			if (!isIndexStateDocument(state)) return null;
+			const lagMs =
+				canonicalNetworkTime.getTime() - Date.parse(state.networkTime);
+			if (lagMs < 0 || lagMs > maxIndexedNetworkLagMs) return null;
 			this.indexReady = true;
-			return await this.queryIndex(state, request);
+			return await this.queryIndex(
+				state,
+				request,
+				lagMs === 0 ? 'fresh' : 'stale'
+			);
 		} catch (error) {
 			this.indexReady = false;
 			this.syncFailed = true;
@@ -237,7 +245,8 @@ export class NetworkSearchService {
 
 	private async queryIndex(
 		state: NetworkSearchIndexStateDocument,
-		request: NetworkSearchRequest
+		request: NetworkSearchRequest,
+		freshness: NetworkSearchFreshness = 'fresh'
 	): Promise<NetworkSearchResponse> {
 		if (!this.index) throw new Error('Network search index is not configured');
 		const limit = sanitizeSearchLimit(request.limit);
@@ -263,7 +272,9 @@ export class NetworkSearchService {
 		return {
 			estimatedTotalHits: total,
 			facets: buildFacetsFromDistribution(response.facetDistribution),
-			hits: response.hits.map((hit) => toSearchHit(hit, 'meilisearch')),
+			hits: response.hits.map((hit) =>
+				toSearchHit(hit, 'meilisearch', freshness)
+			),
 			indexedNetworkTime: state.networkTime,
 			pagination: {
 				hasMore: offset + response.hits.length < total,
@@ -273,7 +284,13 @@ export class NetworkSearchService {
 				totalIsExact: false
 			},
 			query: request.query,
-			readModel: readModel(snapshot, 'meilisearch', null, state.indexedAt),
+			readModel: readModel(
+				snapshot,
+				'meilisearch',
+				freshness === 'stale' ? 'meilisearch_stale' : null,
+				state.indexedAt,
+				freshness
+			),
 			scope: request.scope,
 			source: 'meilisearch'
 		};
@@ -353,6 +370,7 @@ export class NetworkSearchService {
 	}
 
 	private startSyncIndex(): void {
+		if (!this.writable) return;
 		void this.syncIndex();
 	}
 

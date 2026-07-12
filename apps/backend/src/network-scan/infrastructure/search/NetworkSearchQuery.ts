@@ -88,7 +88,8 @@ export const sanitizeSearchOffset = (offset: number): number => {
 
 export const toSearchHit = (
 	document: NetworkSearchDocument,
-	source: NetworkSearchHit['source']
+	source: NetworkSearchHit['source'],
+	freshness: NetworkSearchHit['freshness'] = 'fresh'
 ): NetworkSearchHit => ({
 	detail: document.detail,
 	entityId: document.entityId,
@@ -96,7 +97,7 @@ export const toSearchHit = (
 	evidenceFailures: document.evidenceFailures,
 	evidenceProvenance: document.evidenceProvenance,
 	evidenceVerified: document.evidenceVerified,
-	freshness: 'fresh',
+	freshness,
 	href: document.href,
 	id: document.id,
 	label: document.label,

@@ -129,7 +129,7 @@
 		"/v1/search": {
 			"get": {
 				"summary": "Search network entities",
-				"description": "Faceted, paginated search across canonical all-known node and organization inventory. PostgreSQL remains canonical; Meilisearch serves a low-latency read only when its network time matches the latest completed canonical scan, and response metadata exposes its projection cursor and observation time.",
+				"description": "Faceted, paginated search across canonical all-known node and organization inventory. PostgreSQL remains canonical. Meilisearch serves the matching projection as fresh and may serve a projection up to 15 minutes behind as explicitly stale while one API worker reconciles it asynchronously.",
 				"tags": ["Search", "Network", "Node", "Organization"],
 				"operationId": "searchNetworkEntities",
 				"parameters": [
@@ -11557,7 +11557,10 @@
 						"type": "string",
 						"enum": ["node", "organization"]
 					},
-					"freshness": { "type": "string", "enum": ["fresh"] },
+					"freshness": {
+						"type": "string",
+						"enum": ["fresh", "stale"]
+					},
 					"href": { "type": "string" },
 					"id": { "type": "string" },
 					"label": { "type": "string" },
@@ -11605,9 +11608,12 @@
 							"meilisearch_unconfigured"
 						]
 					},
-					"freshness": { "type": "string", "enum": ["fresh"] },
+					"freshness": {
+						"type": "string",
+						"enum": ["fresh", "stale"]
+					},
 					"observedAt": { "type": "string", "format": "date-time" },
-					"schemaVersion": { "type": "string", "enum": ["v2"] },
+					"schemaVersion": { "type": "string", "enum": ["v3"] },
 					"source": {
 						"type": "string",
 						"enum": ["meilisearch", "postgres_canonical"]

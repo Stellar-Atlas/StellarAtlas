@@ -229,9 +229,47 @@ describe('NetworkSearchService', () => {
 		expect(harness.addDocuments).not.toHaveBeenCalled();
 	});
 
-	it('rejects an indexed projection that does not match canonical network time', async () => {
+	it('serves a bounded lagging projection as explicitly stale', async () => {
 		const inventory = createInventory(
 			[currentNode(createDummyNodeV1('GA'))],
+			[]
+		);
+		const snapshot = buildNetworkSearchSnapshot(inventory);
+		const state: NetworkSearchIndexStateDocument = {
+			canonicalCursor: snapshot.canonicalCursor,
+			documentKind: 'state',
+			id: networkSearchStateDocumentId,
+			indexedAt: '2026-07-11T00:00:02.000Z',
+			networkTime: snapshot.networkTime
+		};
+		const harness = createIndexHarness({
+			initialDocuments: [state, ...snapshot.documents]
+		});
+		const service = new NetworkSearchService(
+			{ indexName: 'network_test' },
+			undefined,
+			harness.index
+		);
+
+		await expect(
+			service.searchIndexed(
+				request('stale'),
+				new Date(Date.parse(snapshot.networkTime) + 60_000)
+			)
+		).resolves.toMatchObject({
+			hits: [expect.objectContaining({ freshness: 'stale' })],
+			readModel: {
+				fallbackReason: 'meilisearch_stale',
+				freshness: 'stale',
+				source: 'meilisearch'
+			},
+			source: 'meilisearch'
+		});
+	});
+
+	it('rejects a projection beyond the bounded network-time lag', async () => {
+		const inventory = createInventory(
+			[currentNode(createDummyNodeV1('GA_TOO_OLD'))],
 			[]
 		);
 		const snapshot = buildNetworkSearchSnapshot(inventory);
@@ -251,10 +289,28 @@ describe('NetworkSearchService', () => {
 
 		await expect(
 			service.searchIndexed(
-				request('stale'),
-				new Date(Date.parse(snapshot.networkTime) + 1)
+				request('too old'),
+				new Date(Date.parse(snapshot.networkTime) + 16 * 60_000)
 			)
 		).resolves.toBeNull();
+	});
+
+	it('does not enqueue projection writes from a read-only API worker', async () => {
+		const inventory = createInventory(
+			[currentNode(createDummyNodeV1('GA_READ_ONLY'))],
+			[]
+		);
+		const harness = createIndexHarness();
+		const service = new NetworkSearchService(
+			{ indexName: 'network_test', writable: false },
+			undefined,
+			harness.index
+		);
+
+		const result = await service.search(inventory, request('read only'));
+
+		expect(result.source).toBe('postgres_canonical');
+		expect(harness.addDocuments).not.toHaveBeenCalled();
 	});
 
 	it('rejects a stale or newer conflicting Meilisearch cursor', async () => {

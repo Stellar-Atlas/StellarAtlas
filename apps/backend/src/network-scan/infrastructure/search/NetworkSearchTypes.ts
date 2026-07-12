@@ -12,6 +12,7 @@ export type NetworkSearchDocumentScope =
 	KnownNodeRecordScope | 'archive-root' | 'current-organization';
 export type NetworkSearchRecordState =
 	'current' | 'historical' | 'identity-only';
+export type NetworkSearchFreshness = 'fresh' | 'stale';
 export type NetworkSearchFacetName =
 	| 'active'
 	| 'archiveStatus'
@@ -27,6 +28,7 @@ export interface NetworkSearchConfig {
 	readonly apiKey?: string;
 	readonly host?: string;
 	readonly indexName: string;
+	readonly writable?: boolean;
 }
 
 export interface NetworkSearchInventory {
@@ -113,7 +115,7 @@ export interface NetworkSearchHit {
 	readonly evidenceFailures?: number;
 	readonly evidenceProvenance?: 'postgres_canonical';
 	readonly evidenceVerified?: number;
-	readonly freshness: 'fresh';
+	readonly freshness: NetworkSearchFreshness;
 	readonly href: string;
 	readonly id: string;
 	readonly label: string;
@@ -138,7 +140,7 @@ export type NetworkSearchFallbackReason =
 export interface NetworkSearchReadModel {
 	readonly canonicalCursor: string;
 	readonly fallbackReason: NetworkSearchFallbackReason | null;
-	readonly freshness: 'fresh';
+	readonly freshness: NetworkSearchFreshness;
 	readonly observedAt: string;
 	readonly schemaVersion: string;
 	readonly source: 'meilisearch' | 'postgres_canonical';
