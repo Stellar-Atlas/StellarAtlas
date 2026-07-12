@@ -334,10 +334,7 @@ export function useKnownArchiveEvidence(
 			loadObjects(objectQuery.current, null, false);
 		} else if (
 			tab === 'activity' &&
-			shouldRefreshFirstArchiveEvidencePage(
-				eventState.phase,
-				eventData?.index
-			)
+			shouldRefreshFirstArchiveEvidencePage(eventState.phase, eventData?.index)
 		) {
 			loadEvents(eventQuery.current, null, false);
 		}
@@ -354,12 +351,8 @@ export function useKnownArchiveEvidence(
 	const selectTab = (nextTab: KnownArchiveEvidenceTab): void => {
 		setTab(nextTab);
 		const query = objectQuery.current;
-		if (nextTab === 'verified' && query.status !== 'verified') {
-			loadObjects({ ...query, status: 'verified' }, null, false);
-		}
-		if (nextTab === 'work' && query.status === 'verified') {
-			loadObjects({ ...query, status: 'pending' }, null, false);
-		}
+		const nextQuery = getObjectQueryForTab(nextTab, query);
+		if (nextQuery !== null) loadObjects(nextQuery, null, false);
 	};
 
 	return {
@@ -397,3 +390,20 @@ export function useKnownArchiveEvidence(
 export type KnownArchiveEvidenceViewState = ReturnType<
 	typeof useKnownArchiveEvidence
 >;
+
+export function getObjectQueryForTab(
+	tab: KnownArchiveEvidenceTab,
+	query: ArchiveEvidenceObjectQuery
+): ArchiveEvidenceObjectQuery | null {
+	if (tab === 'verified' && query.status !== 'verified') {
+		return { ...query, status: 'verified' };
+	}
+	if (
+		tab === 'work' &&
+		query.status !== 'pending' &&
+		query.status !== 'scanning'
+	) {
+		return { ...query, status: 'pending' };
+	}
+	return null;
+}

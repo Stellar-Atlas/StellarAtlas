@@ -148,7 +148,7 @@ function FailureEventRow({
 			<td>
 				<ArchiveHealthPill state={state} />
 			</td>
-			<td>{formatArchiveSource(event.archiveUrl)}</td>
+			<td>{formatArchiveSourceLabel(event.archiveUrl)}</td>
 			<td>
 				<strong>{formatArchiveObjectTypeLabel(event.objectType)}</strong>
 				<small>{event.objectKey}</small>
@@ -216,7 +216,7 @@ function ArchiveSourceRow({
 	return (
 		<tr>
 			<td>
-				<strong>{formatArchiveSource(source.archiveUrl)}</strong>
+				<strong>{formatArchiveSourceLabel(source.archiveUrl)}</strong>
 				<small>{formatDateTime(source.observedAt)}</small>
 			</td>
 			<td>{formatSourceFailure(source)}</td>
@@ -401,11 +401,11 @@ function formatFailureDetail(event: ArchiveEvent): string {
 	return status + sanitizeArchiveEvidenceText(event.error.message);
 }
 
-function formatArchiveSource(value: string): string {
+export function formatArchiveSourceLabel(value: string): string {
 	try {
 		const url = new URL(value);
 		const path = url.pathname === '/' ? '' : url.pathname.replace(/\/$/, '');
-		return `${url.host}${path}`;
+		return `${url.protocol}//${url.host}${path}`;
 	} catch {
 		return sanitizeArchiveEvidenceText(value);
 	}
