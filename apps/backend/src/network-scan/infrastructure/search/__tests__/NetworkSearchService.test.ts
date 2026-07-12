@@ -191,6 +191,72 @@ describe('NetworkSearchService', () => {
 		expect(harness.addDocuments).not.toHaveBeenCalled();
 	});
 
+	it('serves a persisted projection without rebuilding canonical inventory', async () => {
+		const node = createDummyNodeV1('GA_DIRECT_MEILI');
+		node.name = 'Direct indexed validator';
+		const inventory = createInventory([currentNode(node)], []);
+		const snapshot = buildNetworkSearchSnapshot(inventory);
+		const state: NetworkSearchIndexStateDocument = {
+			canonicalCursor: snapshot.canonicalCursor,
+			documentKind: 'state',
+			id: networkSearchStateDocumentId,
+			indexedAt: '2026-07-11T00:00:02.000Z',
+			networkTime: snapshot.networkTime
+		};
+		const harness = createIndexHarness({
+			initialDocuments: [state, ...snapshot.documents]
+		});
+		const service = new NetworkSearchService(
+			{ indexName: 'network_test' },
+			undefined,
+			harness.index
+		);
+
+		const result = await service.searchIndexed(
+			request('direct'),
+			new Date(snapshot.networkTime)
+		);
+
+		expect(result).toMatchObject({
+			indexedNetworkTime: snapshot.networkTime,
+			source: 'meilisearch'
+		});
+		expect(result?.readModel).toMatchObject({
+			canonicalCursor: snapshot.canonicalCursor,
+			observedAt: state.indexedAt,
+			source: 'meilisearch'
+		});
+		expect(harness.addDocuments).not.toHaveBeenCalled();
+	});
+
+	it('rejects an indexed projection that does not match canonical network time', async () => {
+		const inventory = createInventory(
+			[currentNode(createDummyNodeV1('GA'))],
+			[]
+		);
+		const snapshot = buildNetworkSearchSnapshot(inventory);
+		const state: NetworkSearchIndexStateDocument = {
+			canonicalCursor: snapshot.canonicalCursor,
+			documentKind: 'state',
+			id: networkSearchStateDocumentId,
+			indexedAt: '2026-07-11T00:00:02.000Z',
+			networkTime: snapshot.networkTime
+		};
+		const harness = createIndexHarness({ initialDocuments: [state] });
+		const service = new NetworkSearchService(
+			{ indexName: 'network_test' },
+			undefined,
+			harness.index
+		);
+
+		await expect(
+			service.searchIndexed(
+				request('stale'),
+				new Date(Date.parse(snapshot.networkTime) + 1)
+			)
+		).resolves.toBeNull();
+	});
+
 	it('rejects a stale or newer conflicting Meilisearch cursor', async () => {
 		const node = createDummyNodeV1('GA_CANONICAL_NODE');
 		node.name = 'Canonical validator';

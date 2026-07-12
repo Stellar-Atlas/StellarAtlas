@@ -11,6 +11,12 @@ export function scpEvidenceRouter(getScpEvidence: GetScpEvidence): Router {
 		const result = await getScpEvidence.getLatestSlots(limit);
 		return send(result, res);
 	});
+	router.get('/animation-backlog', async (req, res) => {
+		const limit = parseLimit(req.query.limit, 4, 25);
+		if (limit === null)
+			return res.status(400).json({ error: 'Invalid slot limit' });
+		return send(await getScpEvidence.getAnimationBacklog(limit), res);
+	});
 	router.get('/slots/:slotIndex', async (req, res) => {
 		if (!/^\d+$/.test(req.params.slotIndex))
 			return res.status(400).json({ error: 'Invalid slot' });

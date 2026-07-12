@@ -35,6 +35,7 @@ export const networkSearchStateDocumentId = 'network_search_state';
 const taskPollIntervalMs = 50;
 const settingsTaskTimeoutMs = 60_000;
 const documentTaskTimeoutMs = 60_000;
+const searchRequestTimeoutMs = 500;
 const syncRetryCooldownMs = 60_000;
 
 const errorMessage = (error: unknown): string =>
@@ -63,6 +64,18 @@ const stateMatchesSnapshot = (
 	state.canonicalCursor === snapshot.canonicalCursor &&
 	state.networkTime === snapshot.networkTime;
 
+const isIndexStateDocument = (
+	state: NetworkSearchIndexStateDocument
+): boolean =>
+	state.documentKind === 'state' &&
+	state.id === networkSearchStateDocumentId &&
+	typeof state.canonicalCursor === 'string' &&
+	state.canonicalCursor.length > 0 &&
+	typeof state.indexedAt === 'string' &&
+	Number.isFinite(Date.parse(state.indexedAt)) &&
+	typeof state.networkTime === 'string' &&
+	Number.isFinite(Date.parse(state.networkTime));
+
 export class NetworkSearchService {
 	private snapshot: NetworkSearchSnapshot | undefined;
 	private inventoryGeneratedAt: string | undefined;
@@ -85,7 +98,8 @@ export class NetworkSearchService {
 		} else if (config.host && config.host.length > 0) {
 			const client = new Meilisearch({
 				apiKey: config.apiKey,
-				host: config.host
+				host: config.host,
+				timeout: searchRequestTimeoutMs
 			});
 			this.index = client.index<NetworkSearchStoredDocument>(config.indexName);
 		}
@@ -169,37 +183,7 @@ export class NetworkSearchService {
 				);
 			}
 
-			const limit = sanitizeSearchLimit(request.limit);
-			const offset = sanitizeSearchOffset(request.offset);
-			const response = await this.index.search<NetworkSearchDocument>(
-				request.query,
-				{
-					attributesToRetrieve: [...networkSearchHitAttributes],
-					facets: [...networkSearchFacetAttributes],
-					filter: buildMeilisearchFilter(request, snapshot.canonicalCursor),
-					limit,
-					offset
-				}
-			);
-			const total = response.estimatedTotalHits ?? response.hits.length;
-
-			return {
-				estimatedTotalHits: total,
-				facets: buildFacetsFromDistribution(response.facetDistribution),
-				hits: response.hits.map((hit) => toSearchHit(hit, 'meilisearch')),
-				indexedNetworkTime: snapshot.networkTime,
-				pagination: {
-					hasMore: offset + response.hits.length < total,
-					limit,
-					offset,
-					total,
-					totalIsExact: false
-				},
-				query: request.query,
-				readModel: readModel(snapshot, 'meilisearch', null, state.indexedAt),
-				scope: request.scope,
-				source: 'meilisearch'
-			};
+			return await this.queryIndex(state, request);
 		} catch (error) {
 			this.markIndexUnavailable(error, snapshot, request);
 			return memorySearch(
@@ -213,6 +197,86 @@ export class NetworkSearchService {
 				)
 			);
 		}
+	}
+
+	async searchIndexed(
+		request: NetworkSearchRequest,
+		canonicalNetworkTime: Date | undefined
+	): Promise<NetworkSearchResponse | null> {
+		if (!this.index || canonicalNetworkTime === undefined) return null;
+
+		try {
+			const state =
+				await this.index.getDocument<NetworkSearchIndexStateDocument>(
+					networkSearchStateDocumentId
+				);
+			if (
+				!isIndexStateDocument(state) ||
+				state.networkTime !== canonicalNetworkTime.toISOString()
+			)
+				return null;
+			this.indexReady = true;
+			return await this.queryIndex(state, request);
+		} catch (error) {
+			this.indexReady = false;
+			this.syncFailed = true;
+			this.logger?.warn('Network search projection read unavailable', {
+				error: errorMessage(error),
+				indexName: this.indexName,
+				limit: sanitizeSearchLimit(request.limit),
+				queryLength: request.query.length
+			});
+			return null;
+		}
+	}
+
+	refreshProjection(inventory: NetworkSearchInventory): void {
+		this.refreshSnapshot(inventory);
+		this.startSyncIndex();
+	}
+
+	private async queryIndex(
+		state: NetworkSearchIndexStateDocument,
+		request: NetworkSearchRequest
+	): Promise<NetworkSearchResponse> {
+		if (!this.index) throw new Error('Network search index is not configured');
+		const limit = sanitizeSearchLimit(request.limit);
+		const offset = sanitizeSearchOffset(request.offset);
+		const response = await this.index.search<NetworkSearchDocument>(
+			request.query,
+			{
+				attributesToRetrieve: [...networkSearchHitAttributes],
+				facets: [...networkSearchFacetAttributes],
+				filter: buildMeilisearchFilter(request, state.canonicalCursor),
+				limit,
+				offset
+			}
+		);
+		const total = response.estimatedTotalHits ?? response.hits.length;
+		const snapshot = {
+			canonicalCursor: state.canonicalCursor,
+			documents: [],
+			generatedAt: state.indexedAt,
+			networkTime: state.networkTime
+		} satisfies NetworkSearchSnapshot;
+
+		return {
+			estimatedTotalHits: total,
+			facets: buildFacetsFromDistribution(response.facetDistribution),
+			hits: response.hits.map((hit) => toSearchHit(hit, 'meilisearch')),
+			indexedNetworkTime: state.networkTime,
+			pagination: {
+				hasMore: offset + response.hits.length < total,
+				limit,
+				offset,
+				total,
+				totalIsExact: false
+			},
+			query: request.query,
+			readModel: readModel(snapshot, 'meilisearch', null, state.indexedAt),
+			scope: request.scope,
+			source: 'meilisearch'
+		};
 	}
 
 	private refreshSnapshot(

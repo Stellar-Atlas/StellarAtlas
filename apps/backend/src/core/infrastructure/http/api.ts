@@ -39,6 +39,8 @@ import { GetMeasurementsFactory } from '@network-scan/use-cases/get-measurements
 import { GetMeasurementAggregations } from '@network-scan/use-cases/get-measurement-aggregations/GetMeasurementAggregations.js';
 import { GetScpStatements } from '@network-scan/use-cases/get-scp-statements/GetScpStatements.js';
 import { GetLatestObservedLedger } from '@network-scan/use-cases/get-latest-observed-ledger/GetLatestObservedLedger.js';
+import { NETWORK_TYPES } from '@network-scan/infrastructure/di/di-types.js';
+import type { NetworkScanRepository } from '@network-scan/domain/network/scan/NetworkScanRepository.js';
 import { RequestUnsubscribeLink } from '@notifications/use-cases/request-unsubscribe-link/RequestUnsubscribeLink.js';
 import { RegisterScan } from '@history-scan-coordinator/use-cases/register-scan/RegisterScan.js';
 import { RegisterParsedLedgerHeaders } from '@history-scan-coordinator/use-cases/register-parsed-ledger-headers/RegisterParsedLedgerHeaders.js';
@@ -392,6 +394,9 @@ const listen = async () => {
 			),
 			getScpStatements: kernel.container.get(GetScpStatements),
 			logger: kernel.container.get<Logger>('Logger'),
+			networkScanRepository: kernel.container.get<NetworkScanRepository>(
+				NETWORK_TYPES.NetworkScanRepository
+			),
 			searchConfig: {
 				apiKey: config.meilisearchApiKey,
 				host: config.meilisearchHost,

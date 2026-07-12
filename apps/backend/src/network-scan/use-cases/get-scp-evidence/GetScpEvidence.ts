@@ -64,6 +64,15 @@ export interface ScpLatestSlotEvidence {
 	readonly validatorCount: number;
 }
 
+export interface ScpAnimationBacklog {
+	readonly metadata: ScpEvidenceMetadata;
+	readonly slots: readonly {
+		readonly slotIndex: string;
+		readonly statements: readonly ScpAnimationStatement[];
+	}[];
+	readonly statementCount: number;
+}
+
 const maxStatements = 1000;
 
 export class GetScpEvidence {
@@ -88,6 +97,32 @@ export class GetScpEvidence {
 					toAnimationSlotEvidence(slotIndex, statements, read.value)
 				)
 		);
+	}
+
+	async getAnimationBacklog(
+		limit = 4
+	): Promise<Result<ScpAnimationBacklog, Error>> {
+		const boundedSlots = Math.min(Math.max(Math.floor(limit), 1), 25);
+		const read =
+			await this.getScpStatements.executeLatestAnimationSlots(boundedSlots);
+		if (read.isErr()) return err(read.error);
+		const slots = [...groupAnimationBySlot(read.value.observations).entries()]
+			.toSorted(([left], [right]) => compareSequence(right, left))
+			.slice(0, boundedSlots)
+			.map(([slotIndex, statements]) => ({ slotIndex, statements }));
+		return ok({
+			metadata: {
+				freshness: read.value.freshness,
+				freshnessMs: read.value.freshnessMs,
+				observedAt: read.value.observedAt,
+				source: read.value.source
+			},
+			slots,
+			statementCount: slots.reduce(
+				(total, slot) => total + slot.statements.length,
+				0
+			)
+		});
 	}
 
 	async getSlot(
@@ -330,11 +365,11 @@ function groupBySlot(
 	statements: readonly ScpStatementObservationV1[]
 ): Map<string, ScpStatementObservationV1[]> {
 	const grouped = new Map<string, ScpStatementObservationV1[]>();
-	for (const statement of statements)
-		grouped.set(statement.slotIndex, [
-			...(grouped.get(statement.slotIndex) ?? []),
-			statement
-		]);
+	for (const statement of statements) {
+		const rows = grouped.get(statement.slotIndex);
+		if (rows) rows.push(statement);
+		else grouped.set(statement.slotIndex, [statement]);
+	}
 	return grouped;
 }
 
@@ -342,11 +377,11 @@ function groupAnimationBySlot(
 	statements: readonly ScpAnimationStatement[]
 ): Map<string, ScpAnimationStatement[]> {
 	const grouped = new Map<string, ScpAnimationStatement[]>();
-	for (const statement of statements)
-		grouped.set(statement.slotIndex, [
-			...(grouped.get(statement.slotIndex) ?? []),
-			statement
-		]);
+	for (const statement of statements) {
+		const rows = grouped.get(statement.slotIndex);
+		if (rows) rows.push(statement);
+		else grouped.set(statement.slotIndex, [statement]);
+	}
 	return grouped;
 }
 

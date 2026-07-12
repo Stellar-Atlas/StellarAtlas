@@ -18,7 +18,7 @@ interface CachedInventory {
 	readonly inventory: NetworkSearchInventory;
 }
 
-const cacheDurationMs = 5_000;
+const cacheDurationMs = 3 * 60_000;
 
 export class NetworkSearchInventoryLoader {
 	private cached: CachedInventory | undefined;

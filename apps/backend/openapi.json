@@ -129,7 +129,7 @@
 		"/v1/search": {
 			"get": {
 				"summary": "Search network entities",
-				"description": "Faceted, paginated search across canonical all-known node and organization inventory. PostgreSQL is canonical and Meilisearch is used only when its projection cursor matches canonical inventory.",
+				"description": "Faceted, paginated search across canonical all-known node and organization inventory. PostgreSQL remains canonical; Meilisearch serves a low-latency read only when its network time matches the latest completed canonical scan, and response metadata exposes its projection cursor and observation time.",
 				"tags": ["Search", "Network", "Node", "Organization"],
 				"operationId": "searchNetworkEntities",
 				"parameters": [
@@ -5528,6 +5528,70 @@
 					"500": {
 						"description": "Server error"
 					}
+				}
+			}
+		},
+		"/v1/scp/evidence/animation-backlog": {
+			"get": {
+				"summary": "Get the compact SCP animation backlog",
+				"description": "Returns every compact SCP animation statement observed in a bounded number of recent slots. Statements are included once without the duplicate semantic-event envelope used by detailed evidence views.",
+				"tags": ["SCP"],
+				"operationId": "getScpAnimationBacklog",
+				"parameters": [
+					{
+						"name": "limit",
+						"in": "query",
+						"description": "Number of recent ledger slots to return",
+						"required": false,
+						"schema": {
+							"type": "integer",
+							"minimum": 1,
+							"maximum": 25,
+							"default": 4
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "Compact lossless animation backlog",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object",
+									"required": ["metadata", "slots", "statementCount"],
+									"properties": {
+										"metadata": {
+											"type": "object",
+											"additionalProperties": true
+										},
+										"slots": {
+											"type": "array",
+											"items": {
+												"type": "object",
+												"required": ["slotIndex", "statements"],
+												"properties": {
+													"slotIndex": { "type": "string" },
+													"statements": {
+														"type": "array",
+														"items": {
+															"type": "object",
+															"additionalProperties": true
+														}
+													}
+												}
+											}
+										},
+										"statementCount": {
+											"type": "integer",
+											"minimum": 0
+										}
+									}
+								}
+							}
+						}
+					},
+					"400": { "description": "Invalid slot limit" },
+					"500": { "description": "Server error" }
 				}
 			}
 		},

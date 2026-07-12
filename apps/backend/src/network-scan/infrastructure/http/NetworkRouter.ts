@@ -30,6 +30,7 @@ import type { KnownNodeScope } from '../../use-cases/known-network-scope/KnownNe
 import type { GetKnownArchiveEvidence } from '@history-scan-coordinator/use-cases/get-known-archive-evidence/GetKnownArchiveEvidence.js';
 import { GetScpEvidence } from '../../use-cases/get-scp-evidence/GetScpEvidence.js';
 import { scpEvidenceRouter } from './ScpEvidenceRouter.js';
+import type { NetworkScanRepository } from '../../domain/network/scan/NetworkScanRepository.js';
 
 export interface NetworkRouterConfig {
 	getNetwork: GetNetwork;
@@ -42,6 +43,7 @@ export interface NetworkRouterConfig {
 	getKnownArchiveEvidence: GetKnownArchiveEvidence;
 	getScpStatements: GetScpStatements;
 	logger?: Logger;
+	networkScanRepository: NetworkScanRepository;
 	searchConfig: NetworkSearchConfig;
 }
 
@@ -206,14 +208,7 @@ const networkRouterWrapper = (config: NetworkRouterConfig): Router => {
 		if (searchQuery.length > 128) {
 			return res.status(400).json({ error: 'Search query is too long' });
 		}
-
-		const inventoryOrError = await networkSearchInventory.load();
-		if (inventoryOrError.isErr())
-			return res.status(500).send('Internal Server Error');
-		if (inventoryOrError.value === null)
-			return res.status(404).send('No network found');
-
-		const payload = await networkSearch.search(inventoryOrError.value, {
+		const searchRequest = {
 			active,
 			archiveStatus: archiveStatusFilter,
 			countryCode: getSearchString(req, 'countryCode'),
@@ -227,7 +222,48 @@ const networkRouterWrapper = (config: NetworkRouterConfig): Router => {
 			topTier,
 			validating,
 			validator
-		});
+		};
+		let canonicalNetworkTime: Date | undefined;
+		try {
+			canonicalNetworkTime =
+				await config.networkScanRepository.findLatestSuccessfulScanTime();
+		} catch (error: unknown) {
+			config.logger?.warn('Canonical network time read failed', {
+				error: error instanceof Error ? error.message : String(error)
+			});
+		}
+		const indexedPayload = await networkSearch.searchIndexed(
+			searchRequest,
+			canonicalNetworkTime
+		);
+		if (indexedPayload !== null) {
+			setImmediate(() => {
+				void networkSearchInventory
+					.load()
+					.then((inventoryOrError) => {
+						if (inventoryOrError.isOk() && inventoryOrError.value !== null) {
+							networkSearch.refreshProjection(inventoryOrError.value);
+						}
+					})
+					.catch((error: unknown) => {
+						config.logger?.warn('Network search projection refresh failed', {
+							error: error instanceof Error ? error.message : String(error)
+						});
+					});
+			});
+			return res.status(200).send(indexedPayload);
+		}
+
+		const inventoryOrError = await networkSearchInventory.load();
+		if (inventoryOrError.isErr())
+			return res.status(500).send('Internal Server Error');
+		if (inventoryOrError.value === null)
+			return res.status(404).send('No network found');
+
+		const payload = await networkSearch.search(
+			inventoryOrError.value,
+			searchRequest
+		);
 
 		return res.status(200).send(payload);
 	};

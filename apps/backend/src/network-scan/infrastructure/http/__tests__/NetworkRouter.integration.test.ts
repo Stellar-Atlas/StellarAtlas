@@ -161,6 +161,9 @@ describe('NetworkRouter.integration', () => {
 		config.getKnownOrganizations.executeAll.mockResolvedValue(
 			ok(emptyKnownOrganizations(network.time))
 		);
+		config.getKnownArchiveEvidence.execute.mockResolvedValue(
+			ok({ roots: [] } as never)
+		);
 
 		const app = express();
 		app.use('/network', networkRouter(config));
@@ -280,6 +283,9 @@ function configureSearchInventory(
 			},
 			source: 'postgres_canonical'
 		})
+	);
+	config.getKnownArchiveEvidence.execute.mockResolvedValue(
+		ok({ roots: [] } as never)
 	);
 }
 

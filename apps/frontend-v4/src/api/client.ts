@@ -392,6 +392,21 @@ export const fetchScpEvidenceSlots = async (
 	return parsed;
 };
 
+export const fetchScpAnimationBacklog = async (
+	limit = 4,
+	options?: FetchOptions
+) => {
+	const payload = await fetchJson<unknown>(
+		`/v1/scp/evidence/animation-backlog?limit=${encodeURIComponent(limit.toString())}`,
+		withTags(options, [frontendCacheTags.scpStatements])
+	);
+	const { parseScpAnimationBacklog } = await import('./scp-evidence');
+	const parsed = parseScpAnimationBacklog(payload);
+	if (parsed === null)
+		throw new Error('SCP animation backlog response failed validation');
+	return parsed;
+};
+
 export const fetchApiStatus = (
 	options?: FetchOptions
 ): Promise<PublicApiStatus> =>

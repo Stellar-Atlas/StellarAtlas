@@ -1,4 +1,7 @@
-import { parseScpSlotEvidenceList } from '../scp-evidence';
+import {
+	parseScpAnimationBacklog,
+	parseScpSlotEvidenceList
+} from '../scp-evidence';
 
 describe('parseScpSlotEvidenceList', () => {
 	it('accepts semantic events with canonical provenance and rejects malformed statements', () => {
@@ -20,6 +23,26 @@ describe('parseScpSlotEvidenceList', () => {
 			parseScpSlotEvidenceList([
 				{ ...slotEvidence(), events: [{ broken: true }] }
 			])
+		).toBeNull();
+	});
+});
+
+describe('parseScpAnimationBacklog', () => {
+	it('accepts complete compact slots and rejects mismatched counts', () => {
+		const evidence = slotEvidence();
+		const statement = evidence.events[0]?.statement;
+		const payload = {
+			metadata: evidence.metadata,
+			slots: [{ slotIndex: evidence.slotIndex, statements: [statement] }],
+			statementCount: 1
+		};
+
+		expect(parseScpAnimationBacklog(payload)).toMatchObject({
+			slots: [{ slotIndex: '63390000' }],
+			statementCount: 1
+		});
+		expect(
+			parseScpAnimationBacklog({ ...payload, statementCount: 2 })
 		).toBeNull();
 	});
 });

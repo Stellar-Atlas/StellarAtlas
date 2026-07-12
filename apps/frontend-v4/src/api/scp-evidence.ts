@@ -33,6 +33,15 @@ export interface PublicScpSlotEvidence {
 	readonly validatorCount: number;
 }
 
+export interface PublicScpAnimationBacklog {
+	readonly metadata: PublicScpStatementReadMetadata;
+	readonly slots: readonly {
+		readonly slotIndex: string;
+		readonly statements: readonly PublicScpGraphStatement[];
+	}[];
+	readonly statementCount: number;
+}
+
 const record = (value: unknown): value is Record<string, unknown> =>
 	typeof value === 'object' && value !== null && !Array.isArray(value);
 const text = (value: unknown): value is string => typeof value === 'string';
@@ -47,6 +56,48 @@ export function parseScpSlotEvidenceList(
 	return parsed.every((item): item is PublicScpSlotEvidence => item !== null)
 		? parsed
 		: null;
+}
+
+export function parseScpAnimationBacklog(
+	value: unknown
+): PublicScpAnimationBacklog | null {
+	if (
+		!record(value) ||
+		!record(value.metadata) ||
+		!isMetadata(value.metadata) ||
+		!Array.isArray(value.slots) ||
+		!count(value.statementCount)
+	)
+		return null;
+	const parsedSlots: Array<PublicScpAnimationBacklog['slots'][number] | null> =
+		value.slots.map((slot) => {
+			if (
+				!record(slot) ||
+				!text(slot.slotIndex) ||
+				!Array.isArray(slot.statements)
+			)
+				return null;
+			const statements = slot.statements.map(parseGraphStatement);
+			return statements.every(
+				(statement): statement is PublicScpGraphStatement => statement !== null
+			)
+				? { slotIndex: slot.slotIndex, statements }
+				: null;
+		});
+	const slots = parsedSlots.filter(
+		(slot): slot is PublicScpAnimationBacklog['slots'][number] => slot !== null
+	);
+	if (
+		slots.length !== parsedSlots.length ||
+		slots.reduce((total, slot) => total + slot.statements.length, 0) !==
+			value.statementCount
+	)
+		return null;
+	return {
+		metadata: value.metadata,
+		slots,
+		statementCount: value.statementCount
+	};
 }
 
 function parseScpSlotEvidence(value: unknown): PublicScpSlotEvidence | null {

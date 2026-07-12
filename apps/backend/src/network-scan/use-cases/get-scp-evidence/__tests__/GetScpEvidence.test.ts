@@ -95,6 +95,54 @@ describe('GetScpEvidence', () => {
 			expect.objectContaining({ nodeId: 'GA', source: 'stored' })
 		);
 	});
+
+	it('returns every animation statement once in a bounded backlog', async () => {
+		const getScpStatements = mock<GetScpStatements>();
+		const rows = [
+			statement('21', 'GA', 'confirm'),
+			statement('21', 'GB', 'externalize'),
+			statement('20', 'GC', 'confirm')
+		].map((row) => ({
+			nodeId: row.nodeId,
+			observedAt: row.observedAt,
+			observedFromPeer: row.observedFromPeer,
+			quorumSetHash: row.pledges.quorumSetHash,
+			slotIndex: row.slotIndex,
+			statementHash: row.statementHash,
+			statementType: row.statementType,
+			values: row.values.map(({ closeTime, txSetHash }) => ({
+				closeTime,
+				txSetHash
+			}))
+		}));
+		getScpStatements.executeLatestAnimationSlots.mockResolvedValue(
+			ok({
+				freshness: 'fresh',
+				freshnessMs: 10,
+				observations: rows,
+				observedAt: '2026-07-11T00:00:00.000Z',
+				source: 'postgres_canonical'
+			})
+		);
+
+		const result = await new GetScpEvidence(
+			getScpStatements,
+			mock<GetKnownNodes>()
+		).getAnimationBacklog(2);
+
+		expect(result.isOk()).toBe(true);
+		if (result.isErr()) return;
+		expect(result.value.statementCount).toBe(3);
+		expect(result.value.slots.map((slot) => slot.slotIndex)).toEqual([
+			'21',
+			'20'
+		]);
+		expect(
+			result.value.slots.flatMap((slot) =>
+				slot.statements.map((row) => row.statementHash)
+			)
+		).toEqual(['21-GA', '21-GB', '20-GC']);
+	});
 });
 
 function statement(
