@@ -113,7 +113,7 @@ export function describeArchiveSourceFinding(
 			detail:
 				'External archive-source evidence; this does not indicate StellarAtlas service degradation. Review affected sources below.',
 			pillText: 'Source finding',
-			tone: 'warning',
+			tone: undefined,
 			value: formatRemoteFinding(health)
 		};
 	}
@@ -163,7 +163,7 @@ function formatRemoteFinding(health: ArchiveHealthAssessment): string {
 	const facts = health.facts;
 	if (facts.failingArchiveSources > 0) {
 		const count = facts.failingArchiveSources;
-		return `${formatInteger(count)} archive ${count === 1 ? 'source needs' : 'sources need'} review`;
+		return `${formatInteger(count)} archive ${count === 1 ? 'source' : 'sources'} with findings`;
 	}
 	if (facts.checkpointMismatches > 0) {
 		return formatFindingCount(facts.checkpointMismatches, 'checkpoint finding');

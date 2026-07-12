@@ -36,8 +36,8 @@ describe('status dashboard headlines', () => {
 		]);
 		expect(cards[0]).toMatchObject({ tone: 'good', value: 'Operational' });
 		expect(cards[3]).toMatchObject({
-			tone: 'warning',
-			value: '2 archive sources need review'
+			tone: undefined,
+			value: '2 archive sources with findings'
 		});
 		expect(cards[3]?.detail).toContain(
 			'does not indicate StellarAtlas service degradation'
