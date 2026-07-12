@@ -258,6 +258,7 @@ describe('history archive execution reconciliation in disposable PostgreSQL', ()
 		await dataSource.query(`
 			update "history_archive_object_queue"
 			set status = 'pending',
+				"dependencyReady" = true,
 				"executionDisposition" = 'executable',
 				"executionReason" = 'proof-completion-reserve'
 			where "objectType" = 'bucket'
@@ -301,10 +302,30 @@ describe('history archive execution reconciliation in disposable PostgreSQL', ()
 			.getRepository(HistoryArchiveObject)
 			.save([root, ...checkpoints, blockedLedger]);
 
-		for (let pass = 0; pass < 8; pass += 1) {
+		const admittedKeys = new Set<string>();
+		for (let pass = 0; pass < 4; pass += 1) {
 			const result = await repository.reconcileExecutionDisposition();
 			expect(result.admittedObjects).toBe(1);
+			const [active] = (await dataSource.query(`
+				select id, "objectKey"
+				from "history_archive_object_queue"
+				where status = 'pending'
+					and "executionDisposition" = 'executable'
+				limit 1
+			`)) as readonly { readonly id: string; readonly objectKey: string }[];
+			expect(active).toBeDefined();
+			admittedKeys.add(active?.objectKey ?? '');
+			await dataSource.query(
+				`update "history_archive_object_queue"
+				 set status = 'verified', "verifiedAt" = now()
+				 where id = $1`,
+				[active?.id]
+			);
 		}
+		expect(admittedKeys.size).toBe(4);
+
+		const fifth = await repository.reconcileExecutionDisposition();
+		expect(fifth.admittedObjects).toBe(1);
 		const capped = await repository.reconcileExecutionDisposition();
 		expect(capped.admittedObjects).toBe(0);
 
@@ -327,9 +348,59 @@ describe('history archive execution reconciliation in disposable PostgreSQL', ()
 		}[];
 		expect(counts).toEqual({
 			blockedBytes: 1234,
-			executable: 8,
+			executable: 1,
 			ledgerDeferred: true
 		});
+	});
+
+	it('redistributes a concentrated runnable backlog across archive roots', async () => {
+		const concentratedRoots = Array.from({ length: 6 }, (_, index) =>
+			createRoot(index)
+		);
+		const availableRoots = Array.from({ length: 60 }, (_, index) =>
+			createRoot(index + concentratedRoots.length)
+		);
+		const concentrated = concentratedRoots.flatMap((_, rootIndex) =>
+			Array.from({ length: 8 }, (_, itemIndex) => {
+				const object = createCheckpoint(rootIndex, 1_000_063 - itemIndex * 64);
+				object.executionDisposition = 'executable';
+				object.executionReason = 'planned-frontier';
+				object.dependencyReady = true;
+				return object;
+			})
+		);
+		const available = availableRoots.map((_, index) =>
+			createCheckpoint(index + concentratedRoots.length, 1_000_063)
+		);
+		await dataSource
+			.getRepository(HistoryArchiveObject)
+			.save([
+				...concentratedRoots,
+				...availableRoots,
+				...concentrated,
+				...available
+			]);
+
+		const result = await repository.reconcileExecutionDisposition();
+		const [distribution] = (await dataSource.query(`
+			select count(*)::integer as rows,
+				count(distinct "archiveUrlIdentity")::integer as roots,
+				max(root_count)::integer as "maxPerRoot"
+			from (
+				select "archiveUrlIdentity",
+					count(*) over (partition by "archiveUrlIdentity") as root_count
+				from "history_archive_object_queue"
+				where status = 'pending'
+					and "executionDisposition" = 'executable'
+			) runnable
+		`)) as readonly {
+			readonly maxPerRoot: number;
+			readonly roots: number;
+			readonly rows: number;
+		}[];
+
+		expect(result.admittedObjects).toBe(42);
+		expect(distribution).toEqual({ maxPerRoot: 1, roots: 48, rows: 48 });
 	});
 
 	it('preserves retries and admits only to the production idle watermark', async () => {

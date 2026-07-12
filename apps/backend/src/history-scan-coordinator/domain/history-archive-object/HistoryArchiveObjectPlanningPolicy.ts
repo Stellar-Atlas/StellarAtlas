@@ -1,7 +1,7 @@
 export const historyArchiveConsumerCount = 24;
 export const historyArchiveMinimumWatermark = historyArchiveConsumerCount * 2;
 export const historyArchiveMaximumWatermark = historyArchiveConsumerCount * 10;
-export const historyArchivePerRootFrontier = 8;
+export const historyArchivePerRootFrontier = 1;
 export const historyArchiveThroughputWindowMinutes = 15;
 const targetBacklogMinutes = 10;
 export const historyArchiveThroughputSampleCap = Math.ceil(

@@ -38,7 +38,9 @@ export async function reconcileHistoryArchiveObjectExecution(
 		const [preserved] = (await manager.query(
 			preserveRunnableRowsSql
 		)) as readonly { readonly count: number | string }[];
-		await manager.query(rebalanceProofCompletionReserveSql);
+		await manager.query(rebalanceRunnableFrontierSql, [
+			historyArchivePerRootFrontier
+		]);
 		const [counts] = (await manager.query(pressureSql, [
 			historyArchiveMaximumWatermark + 1,
 			historyArchiveThroughputSampleCap,
@@ -136,35 +138,45 @@ const preserveRunnableRowsSql = `
 	select count(*)::integer as count from preserved
 `;
 
-const rebalanceProofCompletionReserveSql = `
+const rebalanceRunnableFrontierSql = `
 	with active_roots as materialized (
-		select distinct "archiveUrlIdentity"
+		select "archiveUrlIdentity", count(*)::integer as active_count
 		from "history_archive_object_queue"
-		where "executionReason" = 'proof-completion-reserve'
-			and status = 'scanning'
+		where status = 'scanning'
+		group by "archiveUrlIdentity"
 	), ranked_pending as materialized (
 		select candidate.id, candidate."archiveUrlIdentity",
+			candidate."executionReason",
 			row_number() over (
 				partition by candidate."archiveUrlIdentity"
-				order by candidate."objectKey", candidate.id
+				order by
+					case when candidate."executionReason" =
+						'proof-completion-reserve' then 0 else 1 end,
+					candidate."objectOrder",
+					candidate."checkpointLedger" desc nulls last,
+					candidate."objectKey",
+					candidate.id
 			) as root_rank
 		from "history_archive_object_queue" candidate
-		where candidate."executionReason" = 'proof-completion-reserve'
-			and candidate."executionDisposition" = 'executable'
+		where candidate."executionDisposition" = 'executable'
+			and candidate."dependencyReady" = true
 			and candidate.status = 'pending'
 	), demoted as (
 		update "history_archive_object_queue" candidate
 		set "executionDisposition" = 'deferred',
-			"executionReason" = 'proof-completion-waiting',
+			"executionReason" = case
+				when ranked."executionReason" = 'proof-completion-reserve'
+					then 'proof-completion-waiting'
+				else 'frontier-waiting'
+			end,
 			"executionDispositionAt" = now()
 		from ranked_pending ranked
+		left join active_roots active
+			on active."archiveUrlIdentity" = ranked."archiveUrlIdentity"
 		where candidate.id = ranked.id
-			and (
-				ranked.root_rank > 1
-				or exists (
-					select 1 from active_roots active
-					where active."archiveUrlIdentity" = ranked."archiveUrlIdentity"
-				)
+			and ranked.root_rank > greatest(
+				$1::integer - coalesce(active.active_count, 0),
+				0
 			)
 		returning candidate.id
 	)
