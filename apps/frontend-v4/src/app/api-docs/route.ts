@@ -11,9 +11,7 @@ export async function GET(): Promise<Response> {
 		cache: 'no-store'
 	});
 	const body = await upstream.text();
-	const rewrittenBody = body
-		.replaceAll('href="./', 'href="/api-docs/')
-		.replaceAll('src="./', 'src="/api-docs/');
+	const rewrittenBody = rewriteSwaggerHtml(body, Date.now().toString(36));
 
 	return new Response(rewrittenBody, {
 		headers: {
@@ -23,3 +21,4 @@ export async function GET(): Promise<Response> {
 		status: upstream.status
 	});
 }
+import { rewriteSwaggerHtml } from './swagger-proxy';
