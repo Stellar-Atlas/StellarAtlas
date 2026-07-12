@@ -251,9 +251,38 @@ describe('history archive execution reconciliation in disposable PostgreSQL', ()
 			readonly archiveUrlIdentity: string;
 		}[];
 
-		expect(result.admittedObjects).toBe(24);
+		expect(result.admittedObjects).toBe(rootCount);
 		expect(admittedByRoot).toHaveLength(rootCount);
-		expect(admittedByRoot.map(({ count }) => count)).toEqual([6, 6, 6, 6]);
+		expect(admittedByRoot.map(({ count }) => count)).toEqual([1, 1, 1, 1]);
+
+		await dataSource.query(`
+			update "history_archive_object_queue"
+			set status = 'pending',
+				"executionDisposition" = 'executable',
+				"executionReason" = 'proof-completion-reserve'
+			where "objectType" = 'bucket'
+		`);
+
+		const second = await repository.reconcileExecutionDisposition();
+		const [reserve] = (await dataSource.query(`
+			select count(*)::integer as count,
+				count(distinct "archiveUrlIdentity")::integer as roots
+			from "history_archive_object_queue"
+			where "executionReason" = 'proof-completion-reserve'
+				and "executionDisposition" = 'executable'
+				and status in ('pending', 'scanning')
+		`)) as readonly { readonly count: number; readonly roots: number }[];
+		const [waiting] = (await dataSource.query(`
+			select count(*)::integer as count
+			from "history_archive_object_queue"
+			where "executionReason" = 'proof-completion-waiting'
+				and "executionDisposition" = 'deferred'
+				and status = 'pending'
+		`)) as readonly { readonly count: number }[];
+
+		expect(second.admittedObjects).toBe(0);
+		expect(reserve).toEqual({ count: rootCount, roots: rootCount });
+		expect(waiting?.count).toBe(rootCount * (bucketsPerRoot - 1));
 	});
 
 	it('rotates equivalent keys and enforces the per-root frontier cap', async () => {

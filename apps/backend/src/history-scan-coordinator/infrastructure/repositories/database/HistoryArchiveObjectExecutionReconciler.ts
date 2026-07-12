@@ -38,11 +38,7 @@ export async function reconcileHistoryArchiveObjectExecution(
 		const [preserved] = (await manager.query(
 			preserveRunnableRowsSql
 		)) as readonly { readonly count: number | string }[];
-		const [proofAdmission] = (await manager.query(
-			admitProofCompletionReserveSql,
-			[historyArchiveConsumerCount, historyArchivePerRootFrontier]
-		)) as readonly { readonly count: number | string }[];
-		const proofAdmittedObjects = Number(proofAdmission?.count ?? 0);
+		await manager.query(rebalanceProofCompletionReserveSql);
 		const [counts] = (await manager.query(pressureSql, [
 			historyArchiveMaximumWatermark + 1,
 			historyArchiveThroughputSampleCap,
@@ -54,20 +50,36 @@ export async function reconcileHistoryArchiveObjectExecution(
 		});
 
 		if (pressure.availableSlots === 0) {
-			await recordAdmissions(manager, proofAdmittedObjects);
 			return {
 				...pressure,
-				admittedObjects: proofAdmittedObjects,
+				admittedObjects: 0,
 				cursorAdvances: 0,
 				preservedObjects: Number(preserved?.count ?? 0)
 			};
 		}
 
-		await manager.query(seedFrontierCursorsSql);
-		const [admission] = (await manager.query(historyArchiveObjectFrontierSql, [
-			pressure.availableSlots,
-			historyArchivePerRootFrontier
-		])) as readonly AdmissionRow[];
+		const proofAdmissionLimit = Math.min(
+			historyArchiveConsumerCount,
+			pressure.availableSlots
+		);
+		const [proofAdmission] = (await manager.query(
+			admitProofCompletionReserveSql,
+			[proofAdmissionLimit]
+		)) as readonly { readonly count: number | string }[];
+		const proofAdmittedObjects = Number(proofAdmission?.count ?? 0);
+		const frontierSlots = Math.max(
+			0,
+			pressure.availableSlots - proofAdmittedObjects
+		);
+
+		let admission: AdmissionRow | undefined;
+		if (frontierSlots > 0) {
+			await manager.query(seedFrontierCursorsSql);
+			[admission] = (await manager.query(historyArchiveObjectFrontierSql, [
+				frontierSlots,
+				historyArchivePerRootFrontier
+			])) as readonly AdmissionRow[];
+		}
 		const admittedObjects =
 			proofAdmittedObjects + Number(admission?.admittedObjects ?? 0);
 		await recordAdmissions(manager, admittedObjects);
@@ -122,6 +134,41 @@ const preserveRunnableRowsSql = `
 		returning id
 	)
 	select count(*)::integer as count from preserved
+`;
+
+const rebalanceProofCompletionReserveSql = `
+	with active_roots as materialized (
+		select distinct "archiveUrlIdentity"
+		from "history_archive_object_queue"
+		where "executionReason" = 'proof-completion-reserve'
+			and status = 'scanning'
+	), ranked_pending as materialized (
+		select candidate.id, candidate."archiveUrlIdentity",
+			row_number() over (
+				partition by candidate."archiveUrlIdentity"
+				order by candidate."objectKey", candidate.id
+			) as root_rank
+		from "history_archive_object_queue" candidate
+		where candidate."executionReason" = 'proof-completion-reserve'
+			and candidate."executionDisposition" = 'executable'
+			and candidate.status = 'pending'
+	), demoted as (
+		update "history_archive_object_queue" candidate
+		set "executionDisposition" = 'deferred',
+			"executionReason" = 'proof-completion-waiting',
+			"executionDispositionAt" = now()
+		from ranked_pending ranked
+		where candidate.id = ranked.id
+			and (
+				ranked.root_rank > 1
+				or exists (
+					select 1 from active_roots active
+					where active."archiveUrlIdentity" = ranked."archiveUrlIdentity"
+				)
+			)
+		returning candidate.id
+	)
+	select count(*)::integer as count from demoted
 `;
 
 const pressureSql = `
@@ -222,6 +269,19 @@ const admitProofCompletionReserveSql = `
 			)
 			and candidate."executionReason" is distinct from
 				'proof-completion-reserve'
+			and not exists (
+				select 1
+				from "history_archive_object_queue" reserved
+				where reserved."archiveUrlIdentity" = candidate."archiveUrlIdentity"
+					and reserved."executionReason" = 'proof-completion-reserve'
+					and (
+						reserved.status = 'scanning'
+						or (
+							reserved.status = 'pending'
+							and reserved."executionDisposition" = 'executable'
+						)
+					)
+			)
 		group by candidate.id, candidate."archiveUrlIdentity",
 			candidate."objectKey"
 	), ranked as materialized (
@@ -234,7 +294,7 @@ const admitProofCompletionReserveSql = `
 	), selected as materialized (
 		select id
 		from ranked
-		where root_rank <= $2::integer
+		where root_rank = 1
 		order by root_rank, id
 		limit $1::integer
 	), admitted as (
@@ -325,6 +385,8 @@ export const historyArchiveObjectFrontierSql = `
 							candidate."executionDisposition" is null
 							or candidate."executionDisposition" = 'deferred'
 						)
+						and candidate."executionReason" is distinct from
+							'proof-completion-waiting'
 					order by candidate."objectKey" desc
 					limit 1
 				)
@@ -343,6 +405,8 @@ export const historyArchiveObjectFrontierSql = `
 							candidate."executionDisposition" is null
 							or candidate."executionDisposition" = 'deferred'
 						)
+						and candidate."executionReason" is distinct from
+							'proof-completion-waiting'
 						and candidate."objectKey" < cursor."objectKey"
 					order by candidate."objectKey" desc
 					limit 1
@@ -362,6 +426,8 @@ export const historyArchiveObjectFrontierSql = `
 							candidate."executionDisposition" is null
 							or candidate."executionDisposition" = 'deferred'
 						)
+						and candidate."executionReason" is distinct from
+							'proof-completion-waiting'
 					order by candidate."objectKey" desc
 					limit 1
 				)
