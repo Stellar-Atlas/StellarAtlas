@@ -80,6 +80,21 @@ verify_regular_copy() {
 		die "installed file must be root:root mode 0644: $target"
 }
 
+verify_installed_polkit_rule() {
+	if [[ "$EUID" -eq 0 ]]; then
+		verify_regular_copy \
+			"$SYSTEMD_SOURCE_DIR/10-stellaratlas-observe.rules" \
+			"$POLKIT_RULE_DIR/10-stellaratlas-observe.rules"
+		return
+	fi
+
+	# The protected polkit directory is intentionally unreadable by observe.
+	# A no-prompt reset of an active target proves the installed rule authorizes
+	# the operator without interrupting any service.
+	systemctl --no-ask-password reset-failed stellaratlas.target >/dev/null ||
+		die "installed polkit rule does not authorize non-root service management"
+}
+
 verify_installed_units() {
 	local file_name
 	local legacy_unit="$SYSTEMD_UNIT_DIR/stellaratlas.service"
@@ -92,9 +107,7 @@ verify_installed_units() {
 			"$SYSTEMD_UNIT_DIR/$file_name"
 	done
 
-	verify_regular_copy \
-		"$SYSTEMD_SOURCE_DIR/10-stellaratlas-observe.rules" \
-		"$POLKIT_RULE_DIR/10-stellaratlas-observe.rules"
+	verify_installed_polkit_rule
 
 	[[ -L "$legacy_unit" ]] || die "legacy stellaratlas.service is not masked"
 	[[ "$(readlink "$legacy_unit")" == "/dev/null" ]] ||
