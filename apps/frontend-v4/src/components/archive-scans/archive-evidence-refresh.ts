@@ -11,6 +11,13 @@ export function mergeArchiveEvidenceAggregate<
 	return { ...current, ...aggregate };
 }
 
+export function shouldRefreshFirstArchiveEvidencePage(
+	phase: 'error' | 'loading' | 'ready',
+	pageIndex: number | undefined
+): boolean {
+	return phase !== 'loading' && pageIndex === 0;
+}
+
 export function startBoundedArchiveEvidenceRefresh(
 	refresh: () => Promise<void>,
 	intervalMs: number,

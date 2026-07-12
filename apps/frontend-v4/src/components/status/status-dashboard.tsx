@@ -13,6 +13,7 @@ import type {
 	PublicWorkerStatus
 } from '@api/types';
 import { formatDateTime, formatInteger } from '@format/formatters';
+import { formatCanonicalEvidenceSelection } from '../canonical-history-copy';
 import { StatCard } from '../stat-card';
 import {
 	assessArchiveStatusHealth,
@@ -303,7 +304,7 @@ function CanonicalHistoryStatusRow({
 	const promotionLabel = describeCanonicalPromotion(fullHistory);
 	return (
 		<StatusRow
-			detail={`${formatInteger(coverage.ledgerCount)} ledgers from ${formatInteger(coverage.archiveSourceCount)} archive source; ${formatInteger(coverage.transactionCount)} transactions with matching results; ${promotionLabel}`}
+				detail={`${formatInteger(coverage.ledgerCount)} proof-gated ledgers; ${formatInteger(coverage.transactionCount)} transactions with matching results; ${formatCanonicalEvidenceSelection(coverage.archiveSourceCount)}; ${promotionLabel}`}
 			label="Canonical history"
 			pillText={canonicalPromotionPill(fullHistory)}
 			status={promotionStatus}

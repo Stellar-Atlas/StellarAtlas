@@ -1,5 +1,6 @@
 import type { ExplorerLocalReadModelResult } from '../../app/actions/network-data';
 import type { PublicExplorerLocalReadModel } from '../../api/explorer-types';
+import { formatCanonicalEvidenceSelection } from '../canonical-history-copy';
 
 export function ExplorerLocalReadModelWatermark({
 	result
@@ -40,7 +41,7 @@ export function ExplorerLocalReadModelWatermark({
 				<span>
 					{canonical === null
 						? `parsed headers observed across ${headers.sourceArchiveCount} archive roots`
-						: `proof-gated ledgers from ${canonical.archiveSourceCount} archive source`}
+						: formatCanonicalEvidenceSelection(canonical.archiveSourceCount)}
 				</span>
 			</div>
 			<div>

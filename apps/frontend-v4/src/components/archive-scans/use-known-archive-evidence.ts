@@ -46,6 +46,7 @@ import {
 } from './known-archive-evidence-view-model';
 import {
 	mergeArchiveEvidenceAggregate,
+	shouldRefreshFirstArchiveEvidencePage,
 	startBoundedArchiveEvidenceRefresh
 } from './archive-evidence-refresh';
 
@@ -316,16 +317,28 @@ export function useKnownArchiveEvidence(
 		);
 		if (
 			(tab === 'failures' || tab === 'repair') &&
-			failureData?.remote.index === 0 &&
-			failureData.worker.index === 0
+			shouldRefreshFirstArchiveEvidencePage(
+				failureState.phase,
+				failureData?.remote.index
+			) &&
+			failureData?.worker.index === 0
 		) {
 			loadFailures(failureQuery.current, null, null, 'both');
 		} else if (
 			(tab === 'work' || tab === 'verified') &&
-			objectData?.index === 0
+			shouldRefreshFirstArchiveEvidencePage(
+				objectState.phase,
+				objectData?.index
+			)
 		) {
 			loadObjects(objectQuery.current, null, false);
-		} else if (tab === 'activity' && eventData?.index === 0) {
+		} else if (
+			tab === 'activity' &&
+			shouldRefreshFirstArchiveEvidencePage(
+				eventState.phase,
+				eventData?.index
+			)
+		) {
 			loadEvents(eventQuery.current, null, false);
 		}
 	};
