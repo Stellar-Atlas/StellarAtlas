@@ -232,7 +232,8 @@ const admitProofCompletionReserveSql = `
 		where candidate."objectType" = 'bucket'
 			and candidate.status = 'pending'
 			and candidate."dependencyReady" = true
-			and candidate."executionDisposition" is distinct from 'executable'
+			and candidate."executionReason" is distinct from
+				'proof-completion-reserve'
 	), selected as materialized (
 		select id
 		from ranked
