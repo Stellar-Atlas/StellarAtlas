@@ -39,10 +39,10 @@ export class GetKnownNode {
 			);
 
 			if (node === null) {
-				const identities = await this.nodeRepository.findAllKnownIdentities();
-				const identity = identities.find(
-					(candidate) => candidate.publicKey === publicKeyValue
-				);
+				const identity =
+					await this.nodeRepository.findKnownIdentityByPublicKey(
+						publicKeyValue
+					);
 				return ok(identity ? toPublicKeyOnlyKnownNodeDTO(identity) : null);
 			}
 

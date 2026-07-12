@@ -19,6 +19,9 @@ export interface NodeRepository {
 		homeDomain: string | null
 	): Promise<Node[]>;
 	findAllKnownIdentities(): Promise<KnownNodeIdentity[]>;
+	findKnownIdentityByPublicKey(
+		publicKey: string
+	): Promise<KnownNodeIdentity | null>;
 	findActiveByPublicKeyAtTimePoint(
 		publicKey: PublicKey,
 		at: Date

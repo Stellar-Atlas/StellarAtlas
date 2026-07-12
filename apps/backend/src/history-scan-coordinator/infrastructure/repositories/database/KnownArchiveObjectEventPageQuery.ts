@@ -1,4 +1,4 @@
-import { In, type EntityManager, type SelectQueryBuilder } from 'typeorm';
+import { In, type EntityManager } from 'typeorm';
 import { HistoryArchiveObjectEvent } from '../../../domain/history-archive-object/HistoryArchiveObjectEvent.js';
 import type { KnownArchiveObjectEventPageRequest } from '../../../domain/known-archive-evidence/KnownArchiveEvidenceRepository.js';
 
@@ -14,19 +14,9 @@ export async function findKnownArchiveObjectEventPage(
 	if (page.snapshotTotal === 0) return { events: [], total: 0 };
 
 	const repository = manager.getRepository(HistoryArchiveObjectEvent);
-	const baseQuery = applyFilters(
-		repository
-			.createQueryBuilder('event')
-			.where('event.archiveUrlIdentity in (:...archiveUrlIdentities)', {
-				archiveUrlIdentities
-			}),
-		page
-	).andWhere('event.createdAt <= :snapshotAt', {
-		snapshotAt: page.snapshotAt
-	});
 	const totalPromise: Promise<number> =
 		page.snapshotTotal === null
-			? baseQuery.getCount()
+			? findEventTotal(manager, archiveUrlIdentities, page)
 			: Promise.resolve(page.snapshotTotal);
 	const pageKeyResult: Promise<unknown> = manager.query(
 		knownArchiveObjectEventPageKeysSql,
@@ -59,6 +49,29 @@ export async function findKnownArchiveObjectEventPage(
 		total
 	};
 }
+
+export const knownArchiveObjectEventTotalSql = `
+	with summarized as (
+		select coalesce(sum(summary."eventCount"), 0)::bigint as total
+		from history_archive_object_event_summary summary
+		where summary."archiveUrlIdentity" = any($1::text[])
+			and ($2::text is null or summary."archiveUrlIdentity" = $2::text)
+			and ($3::text is null or summary."evidenceClass" = $3::text)
+			and ($4::text is null or summary."eventType" = $4::text)
+			and ($5::text is null or summary."objectType" = $5::text)
+	), after_snapshot as (
+		select count(*)::bigint as total
+		from history_archive_object_event event
+		where event."archiveUrlIdentity" = any($1::text[])
+			and ($2::text is null or event."archiveUrlIdentity" = $2::text)
+			and ($3::text is null or event."evidenceClass" = $3::text)
+			and ($4::text is null or event."eventType" = $4::text)
+			and ($5::text is null or event."objectType" = $5::text)
+			and event."createdAt" > $6::timestamptz
+	)
+	select greatest(summarized.total - after_snapshot.total, 0)::bigint as total
+	from summarized, after_snapshot
+`;
 
 export const knownArchiveObjectEventPageKeysSql = `
 	with requested_roots as materialized (
@@ -95,32 +108,38 @@ export const knownArchiveObjectEventPageKeysSql = `
 	order by "createdAt" desc, "remoteId" desc
 `;
 
-function applyFilters(
-	query: SelectQueryBuilder<HistoryArchiveObjectEvent>,
+async function findEventTotal(
+	manager: EntityManager,
+	archiveUrlIdentities: readonly string[],
 	page: KnownArchiveObjectEventPageRequest
-): SelectQueryBuilder<HistoryArchiveObjectEvent> {
-	const filters = page.filters;
-	if (filters.archiveUrlIdentity !== null) {
-		query.andWhere('event.archiveUrlIdentity = :archiveUrlIdentity', {
-			archiveUrlIdentity: filters.archiveUrlIdentity
-		});
+): Promise<number> {
+	const value: unknown = await manager.query(knownArchiveObjectEventTotalSql, [
+		archiveUrlIdentities,
+		page.filters.archiveUrlIdentity,
+		page.filters.evidenceClass,
+		page.filters.eventType,
+		page.filters.objectType,
+		page.snapshotAt
+	]);
+	if (!Array.isArray(value)) {
+		throw new Error('Known archive event total did not return rows');
 	}
-	if (filters.evidenceClass !== null) {
-		query.andWhere('event.evidenceClass = :evidenceClass', {
-			evidenceClass: filters.evidenceClass
-		});
+	const values: unknown[] = value;
+	const row = values[0];
+	if (!isQueryRow(row)) {
+		throw new Error('Known archive event total row is invalid');
 	}
-	if (filters.eventType !== null) {
-		query.andWhere('event.eventType = :eventType', {
-			eventType: filters.eventType
-		});
+	const total = row.total;
+	const parsed =
+		typeof total === 'number'
+			? total
+			: typeof total === 'string'
+				? Number(total)
+				: Number.NaN;
+	if (!Number.isSafeInteger(parsed) || parsed < 0) {
+		throw new Error('Known archive event total is invalid');
 	}
-	if (filters.objectType !== null) {
-		query.andWhere('event.objectType = :objectType', {
-			objectType: filters.objectType
-		});
-	}
-	return query;
+	return parsed;
 }
 
 function requireEventPageRemoteIds(value: unknown): readonly string[] {

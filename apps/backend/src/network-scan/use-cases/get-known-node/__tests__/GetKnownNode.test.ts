@@ -56,13 +56,11 @@ describe('GetKnownNode', () => {
 		const nodeDTOService = mock<NodeDTOService>();
 		const exceptionLogger = mock<ExceptionLogger>();
 		nodeRepository.findOneByPublicKey.mockResolvedValue(null);
-		nodeRepository.findAllKnownIdentities.mockResolvedValue([
-			{
-				publicKey: shellNode.publicKey.value,
-				dateDiscovered: discoveredAt,
-				lastMeasurementAt: measuredAt
-			}
-		]);
+		nodeRepository.findKnownIdentityByPublicKey.mockResolvedValue({
+			publicKey: shellNode.publicKey.value,
+			dateDiscovered: discoveredAt,
+			lastMeasurementAt: measuredAt
+		});
 
 		const result = await new GetKnownNode(
 			nodeRepository,
@@ -82,6 +80,10 @@ describe('GetKnownNode', () => {
 			lastSeen: measuredAt.toISOString()
 		});
 		expect(nodeDTOService.getNodeDTOs).not.toHaveBeenCalled();
+		expect(nodeRepository.findKnownIdentityByPublicKey).toHaveBeenCalledWith(
+			shellNode.publicKey.value
+		);
+		expect(nodeRepository.findAllKnownIdentities).not.toHaveBeenCalled();
 	});
 
 	it('returns null for malformed or unknown public keys', async () => {

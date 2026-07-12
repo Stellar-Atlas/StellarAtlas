@@ -183,24 +183,43 @@ export class TypeOrmNodeRepository implements NodeRepository {
 		const rows = (await this.baseNodeRepository.manager.query(
 			`select node."publicKeyValue" as "publicKey",
 				node."dateDiscovered" as "dateDiscovered",
-				max(measurement."time") as "lastMeasurementAt"
+				latest_measurement."time" as "lastMeasurementAt"
 			from "node" node
-			left join "node_measurement_v2" measurement
-				on measurement."nodeId" = node.id
-			group by node.id, node."publicKeyValue", node."dateDiscovered"
+			left join lateral (
+				select measurement."time"
+				from "node_measurement_v2" measurement
+				where measurement."nodeId" = node.id
+				order by measurement."time" desc
+				limit 1
+			) latest_measurement on true
 			order by node."publicKeyValue" asc`
-		)) as Array<{
-			publicKey: string;
-			dateDiscovered: Date;
-			lastMeasurementAt: Date | null;
-		}>;
+		)) as KnownNodeIdentityRow[];
 
-		return rows.map((row) => ({
-			publicKey: row.publicKey,
-			dateDiscovered: new Date(row.dateDiscovered),
-			lastMeasurementAt:
-				row.lastMeasurementAt === null ? null : new Date(row.lastMeasurementAt)
-		}));
+		return rows.map(mapKnownNodeIdentity);
+	}
+
+	async findKnownIdentityByPublicKey(
+		publicKey: string
+	): Promise<KnownNodeIdentity | null> {
+		const rows = (await this.baseNodeRepository.manager.query(
+			`select node."publicKeyValue" as "publicKey",
+				node."dateDiscovered" as "dateDiscovered",
+				latest_measurement."time" as "lastMeasurementAt"
+			from "node" node
+			left join lateral (
+				select measurement."time"
+				from "node_measurement_v2" measurement
+				where measurement."nodeId" = node.id
+				order by measurement."time" desc
+				limit 1
+			) latest_measurement on true
+			where node."publicKeyValue" = $1
+			limit 1`,
+			[publicKey]
+		)) as KnownNodeIdentityRow[];
+
+		const row = rows[0];
+		return row === undefined ? null : mapKnownNodeIdentity(row);
 	}
 
 	async findActiveByPublicKey(publicKeys: string[]): Promise<Node[]> {
@@ -318,4 +337,19 @@ export class TypeOrmNodeRepository implements NodeRepository {
 				{ time: at }
 			);
 	}
+}
+
+interface KnownNodeIdentityRow {
+	publicKey: string;
+	dateDiscovered: Date | string;
+	lastMeasurementAt: Date | string | null;
+}
+
+function mapKnownNodeIdentity(row: KnownNodeIdentityRow): KnownNodeIdentity {
+	return {
+		publicKey: row.publicKey,
+		dateDiscovered: new Date(row.dateDiscovered),
+		lastMeasurementAt:
+			row.lastMeasurementAt === null ? null : new Date(row.lastMeasurementAt)
+	};
 }

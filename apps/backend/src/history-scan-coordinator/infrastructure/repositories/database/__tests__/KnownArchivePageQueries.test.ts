@@ -8,7 +8,8 @@ import {
 } from '../KnownArchiveObjectPageQuery.js';
 import {
 	findKnownArchiveObjectEventPage,
-	knownArchiveObjectEventPageKeysSql
+	knownArchiveObjectEventPageKeysSql,
+	knownArchiveObjectEventTotalSql
 } from '../KnownArchiveObjectEventPageQuery.js';
 import {
 	findKnownArchiveFailurePage,
@@ -253,7 +254,6 @@ describe('known archive page queries', () => {
 	it('applies event filters before exact counts and keyset pagination', async () => {
 		const manager = mock<EntityManager>();
 		const repository = mock<Repository<HistoryArchiveObjectEvent>>();
-		const base = mock<SelectQueryBuilder<HistoryArchiveObjectEvent>>();
 		const event = new HistoryArchiveObjectEvent({
 			archiveUrl: root,
 			archiveUrlIdentity: root,
@@ -265,12 +265,10 @@ describe('known archive page queries', () => {
 			objectUrl: `${root}/ledger/object.xdr.gz`
 		});
 		manager.getRepository.mockReturnValue(repository);
-		manager.query.mockResolvedValue([{ remoteId: event.remoteId }]);
-		repository.createQueryBuilder.mockReturnValue(base);
+		manager.query
+			.mockResolvedValueOnce([{ total: '12' }])
+			.mockResolvedValueOnce([{ remoteId: event.remoteId }]);
 		repository.findBy.mockResolvedValue([event]);
-		base.where.mockReturnValue(base);
-		base.andWhere.mockReturnValue(base);
-		base.getCount.mockResolvedValue(12);
 
 		const result = await findKnownArchiveObjectEventPage(manager, [root], {
 			before: cursor,
@@ -286,7 +284,10 @@ describe('known archive page queries', () => {
 		});
 
 		expect(result).toEqual({ events: [event], total: 12 });
-		expect(base.andWhere).toHaveBeenCalledTimes(5);
+		expect(manager.query).toHaveBeenCalledWith(
+			knownArchiveObjectEventTotalSql,
+			[[root], root, 'worker-infrastructure', 'failed', 'ledger', snapshotAt]
+		);
 		expect(manager.query).toHaveBeenCalledWith(
 			knownArchiveObjectEventPageKeysSql,
 			[
