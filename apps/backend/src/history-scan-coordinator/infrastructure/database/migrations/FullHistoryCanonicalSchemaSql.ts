@@ -66,7 +66,7 @@ export const createFullHistoryIngestionBatchSql = `
 			"ledger_count" = case
 				when "checkpoint_ledger" = 63 then 63 else 64
 			end
-			and "transaction_count" between 0 and 10000
+			and "transaction_count" between 0 and 100000
 			and "result_count" = "transaction_count"
 		),
 		constraint "chk_full_history_batch_proof_version"
@@ -269,8 +269,11 @@ export const createFullHistoryVerifiedSourceFunctionSql = `
 	$function$
 `;
 
-export const createFullHistoryBatchProofTriggerSql = `
-	create function validate_full_history_batch_provenance()
+function composeFullHistoryBatchProofFunctionSql(
+	proofTimestampPredicate: string
+): string {
+	return `
+	create or replace function validate_full_history_batch_provenance()
 	returns trigger
 	language plpgsql
 	as $function$
@@ -292,7 +295,7 @@ export const createFullHistoryBatchProofTriggerSql = `
 				and proof."transactionFactCount" = new."ledger_count"
 				and proof."resultFactCount" = new."ledger_count"
 				and proof."proofVersion" = new."proof_version"
-				and proof."evaluatedAt" = new."proof_evaluated_at"
+				and ${proofTimestampPredicate}
 				and proof."archiveUrlIdentity" = new."archive_url_identity"
 				and proof."checkpointLedger"::bigint = new."checkpoint_ledger"
 				and proof."checkpointStateObjectRemoteId" =
@@ -331,7 +334,22 @@ export const createFullHistoryBatchProofTriggerSql = `
 		return new;
 	end
 	$function$;
+	`;
+}
 
+export const createFullHistoryBatchProofFunctionSql =
+	composeFullHistoryBatchProofFunctionSql(
+		`date_trunc('milliseconds', proof."evaluatedAt") =
+			new."proof_evaluated_at"`
+	);
+
+export const createFullHistoryBatchProofExactTimestampFunctionSql =
+	composeFullHistoryBatchProofFunctionSql(
+		'proof."evaluatedAt" = new."proof_evaluated_at"'
+	);
+
+export const createFullHistoryBatchProofTriggerSql = `
+	${createFullHistoryBatchProofFunctionSql}
 	create trigger "trg_validate_full_history_batch_provenance"
 	before insert on "full_history_ingestion_batch"
 	for each row execute function validate_full_history_batch_provenance()

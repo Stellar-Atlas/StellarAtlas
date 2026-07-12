@@ -13,7 +13,7 @@ import {
 
 export const FULL_HISTORY_REGULAR_CHECKPOINT_LEDGER_COUNT = 64;
 export const FULL_HISTORY_GENESIS_CHECKPOINT_LEDGER_COUNT = 63;
-export const FULL_HISTORY_MAX_TRANSACTIONS_PER_CHECKPOINT = 10_000;
+export const FULL_HISTORY_MAX_TRANSACTIONS_PER_CHECKPOINT = 100_000;
 
 export type FullHistoryEnvelopeType = 'fee-bump' | 'tx' | 'tx-v0';
 

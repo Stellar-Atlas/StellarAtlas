@@ -10,6 +10,7 @@ import {
 	publicNetworkPassphrase,
 	readClassicArchiveTransactionFixture,
 	readFeeBumpEtlFixture,
+	resultSetHash,
 	type RealTransactionFixture
 } from './RealStellarXdrFixtures.js';
 
@@ -84,6 +85,60 @@ describe('StellarFullHistoryCheckpointDecoder', () => {
 				resultCode: 1,
 				successful: true
 			})
+		]);
+	});
+
+	it('pairs archive storage order to result execution order by hash', async () => {
+		const classic = createCandidate(
+			readClassicArchiveTransactionFixture(),
+			publicNetworkPassphrase
+		);
+		const feeBump = createCandidate(
+			readFeeBumpEtlFixture(),
+			publicNetworkPassphrase
+		);
+		const ledgerSequence = classic.envelopes[0]!.ledgerSequence;
+		const feeBumpResult = {
+			...feeBump.results[0]!,
+			ledgerSequence,
+			transactionIndex: 0
+		};
+		const classicResult = {
+			...classic.results[0]!,
+			ledgerSequence,
+			transactionIndex: 1
+		};
+		const transactionResultHash = resultSetHash([feeBumpResult, classicResult]);
+		const candidate: FullHistoryCheckpointCandidate = {
+			...classic,
+			envelopes: [
+				classic.envelopes[0]!,
+				{
+					...feeBump.envelopes[0]!,
+					ledgerSequence,
+					transactionIndex: 1,
+					transactionSetHash: classic.envelopes[0]!.transactionSetHash
+				}
+			],
+			ledgers: classic.ledgers.map((ledger) =>
+				ledger.ledgerSequence === ledgerSequence
+					? { ...ledger, transactionResultHash }
+					: ledger
+			),
+			results: [
+				{ ...feeBumpResult, transactionResultHash },
+				{ ...classicResult, transactionResultHash }
+			]
+		};
+
+		const decoded = await decoder.decode(candidate, publicNetworkPassphrase);
+
+		expect(decoded.transactions.map((row) => row.envelopeType)).toEqual([
+			'fee-bump',
+			'tx-v0'
+		]);
+		expect(decoded.transactions.map((row) => row.transactionIndex)).toEqual([
+			0, 1
 		]);
 	});
 

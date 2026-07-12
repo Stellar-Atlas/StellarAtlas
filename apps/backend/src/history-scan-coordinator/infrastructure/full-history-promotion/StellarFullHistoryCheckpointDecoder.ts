@@ -72,61 +72,82 @@ export class StellarFullHistoryCheckpointDecoder implements FullHistoryCheckpoin
 		);
 		const envelopes = candidate.envelopes.toSorted(compareCandidateRows);
 		const results = candidate.results.toSorted(compareCandidateRows);
-		validateRowIdentities(envelopes, results, ledgersBySequence);
+		validateRowIndexes(envelopes, ledgersBySequence, 'Envelope');
+		validateRowIndexes(results, ledgersBySequence, 'Result');
 
 		let decodedBytes = 0;
 		const transactions: FullHistoryTransactionInput[] = [];
 		const decodedResults: FullHistoryTransactionResultInput[] = [];
 		const resultPairs = new Map<string, xdr.TransactionResultPair[]>();
 		const transactionCounts = new Map<string, number>();
+		const decodedEnvelopes = new Map<
+			string,
+			{
+				readonly decoded: DecodedEnvelope;
+				readonly source: FullHistoryCandidateEnvelope;
+			}
+		>();
 		for (const [index, envelope] of envelopes.entries()) {
-			const result = results[index]!;
-			const ledger = ledgersBySequence.get(envelope.ledgerSequence)!;
-			assertCategoryHashes(envelope, result, ledger);
 			const envelopeBytes = decodeCanonicalBase64(
 				envelope.envelopeXdr,
 				'envelope XDR'
 			);
-			const resultBytes = decodeCanonicalBase64(result.resultXdr, 'result XDR');
-			decodedBytes += envelopeBytes.length + resultBytes.length;
-			if (decodedBytes > maximumCheckpointXdrBytes) {
-				throw new FullHistoryPromotionError(
-					'xdr-bound-exceeded',
-					'Checkpoint XDR exceeds the total decode byte bound'
-				);
-			}
-
+			decodedBytes = addDecodedBytes(decodedBytes, envelopeBytes.length);
 			const decodedEnvelope = decodeEnvelope(
 				envelope,
 				envelopeBytes,
 				networkPassphrase
 			);
-			if (
-				!decodedEnvelope.transaction.transactionHash.equals(
-					result.transactionHash
-				)
-			) {
+			const key = transactionPairKey(
+				envelope.ledgerSequence,
+				decodedEnvelope.transaction.transactionHash
+			);
+			if (decodedEnvelopes.has(key)) {
+				throw pairingError('Recomputed envelope identity is duplicated');
+			}
+			decodedEnvelopes.set(key, { decoded: decodedEnvelope, source: envelope });
+			if ((index + 1) % yieldEveryRecords === 0) await yieldToEventLoop();
+		}
+
+		for (const [index, result] of results.entries()) {
+			const key = transactionPairKey(
+				result.ledgerSequence,
+				result.transactionHash
+			);
+			const envelope = decodedEnvelopes.get(key);
+			if (envelope === undefined) {
 				throw new FullHistoryPromotionError(
 					'envelope-hash-mismatch',
-					'Recomputed envelope hash does not match its exact result observation'
+					'Recomputed envelope hash has no exact result observation'
 				);
 			}
+			decodedEnvelopes.delete(key);
+			const ledger = ledgersBySequence.get(result.ledgerSequence)!;
+			assertCategoryHashes(envelope.source, result, ledger);
+			const resultBytes = decodeCanonicalBase64(result.resultXdr, 'result XDR');
+			decodedBytes = addDecodedBytes(decodedBytes, resultBytes.length);
 			const decodedResult = decodeResult(
 				result,
 				resultBytes,
-				decodedEnvelope.sdkTransaction
+				envelope.decoded.sdkTransaction
 			);
-			transactions.push(decodedEnvelope.transaction);
+			transactions.push({
+				...envelope.decoded.transaction,
+				transactionIndex: result.transactionIndex
+			});
 			decodedResults.push(decodedResult.canonical);
-			resultPairs.set(envelope.ledgerSequence, [
-				...(resultPairs.get(envelope.ledgerSequence) ?? []),
+			resultPairs.set(result.ledgerSequence, [
+				...(resultPairs.get(result.ledgerSequence) ?? []),
 				decodedResult.xdrPair
 			]);
 			transactionCounts.set(
-				envelope.ledgerSequence,
-				(transactionCounts.get(envelope.ledgerSequence) ?? 0) + 1
+				result.ledgerSequence,
+				(transactionCounts.get(result.ledgerSequence) ?? 0) + 1
 			);
 			if ((index + 1) % yieldEveryRecords === 0) await yieldToEventLoop();
+		}
+		if (decodedEnvelopes.size !== 0) {
+			throw pairingError('Decoded envelopes have no exact result observations');
 		}
 		assertCompleteResultSets(candidate.ledgers, resultPairs);
 
@@ -176,28 +197,42 @@ function validateCandidateRange(
 	}
 }
 
-function validateRowIdentities(
-	envelopes: readonly FullHistoryCandidateEnvelope[],
-	results: readonly FullHistoryCandidateResult[],
-	ledgers: ReadonlyMap<string, FullHistoryCandidateLedger>
+function validateRowIndexes(
+	records: readonly (
+		FullHistoryCandidateEnvelope | FullHistoryCandidateResult
+	)[],
+	ledgers: ReadonlyMap<string, FullHistoryCandidateLedger>,
+	label: 'Envelope' | 'Result'
 ): void {
 	const nextIndex = new Map<string, number>();
-	for (const [position, envelope] of envelopes.entries()) {
-		const result = results[position];
-		const expectedIndex = nextIndex.get(envelope.ledgerSequence) ?? 0;
+	for (const record of records) {
+		const expectedIndex = nextIndex.get(record.ledgerSequence) ?? 0;
 		if (
-			result === undefined ||
-			result.ledgerSequence !== envelope.ledgerSequence ||
-			result.transactionIndex !== envelope.transactionIndex ||
-			ledgers.get(envelope.ledgerSequence) === undefined ||
-			envelope.transactionIndex !== expectedIndex
+			ledgers.get(record.ledgerSequence) === undefined ||
+			record.transactionIndex !== expectedIndex
 		) {
-			throw pairingError(
-				'Envelope and result rows are not exact contiguous ledger/index pairs'
-			);
+			throw pairingError(`${label} rows are not contiguous within each ledger`);
 		}
-		nextIndex.set(envelope.ledgerSequence, expectedIndex + 1);
+		nextIndex.set(record.ledgerSequence, expectedIndex + 1);
 	}
+}
+
+function transactionPairKey(
+	ledgerSequence: string,
+	transactionHash: FullHistoryHash
+): string {
+	return `${ledgerSequence}:${transactionHash.toHex()}`;
+}
+
+function addDecodedBytes(current: number, added: number): number {
+	const total = current + added;
+	if (total > maximumCheckpointXdrBytes) {
+		throw new FullHistoryPromotionError(
+			'xdr-bound-exceeded',
+			'Checkpoint XDR exceeds the total decode byte bound'
+		);
+	}
+	return total;
 }
 
 function assertCategoryHashes(

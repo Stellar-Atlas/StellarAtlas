@@ -81,7 +81,7 @@ export function readFeeBumpEtlFixture(): RealTransactionFixture {
 	throw new Error('No fee-bump transaction exists in the stellar-etl fixture');
 }
 
-function resultSetHash(
+export function resultSetHash(
 	rows: readonly {
 		readonly resultXdr: string;
 		readonly transactionHash: FullHistoryHash;

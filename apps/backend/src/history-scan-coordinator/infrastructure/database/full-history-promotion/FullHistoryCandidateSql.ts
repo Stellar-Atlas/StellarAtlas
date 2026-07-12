@@ -69,7 +69,7 @@ export const fullHistoryObservedEnvelopesSql = `
 		on envelope.id = observation."parsedTransactionEnvelopeId"
 	where observation."sourceObjectRemoteId" = $1
 	order by envelope."ledgerSequence", envelope."transactionIndex"
-	limit 10001
+limit $2
 `;
 
 export const fullHistoryObservedResultsSql = `
@@ -84,7 +84,7 @@ export const fullHistoryObservedResultsSql = `
 		on result.id = observation."parsedTransactionResultId"
 	where observation."sourceObjectRemoteId" = $1
 	order by result."ledgerSequence", result."transactionIndex"
-	limit 10001
+limit $2
 `;
 
 export const fullHistoryObservedTransactionBoundsSql = `

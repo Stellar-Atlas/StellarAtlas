@@ -7,6 +7,7 @@ import type {
 } from '../../../domain/full-history-promotion/FullHistoryCheckpointCandidate.js';
 import type { FullHistoryCheckpointCandidateRepository } from '../../../domain/full-history-promotion/FullHistoryCheckpointCandidateRepository.js';
 import { FullHistoryPromotionError } from '../../../domain/full-history-promotion/FullHistoryPromotionError.js';
+import { FULL_HISTORY_MAX_TRANSACTIONS_PER_CHECKPOINT } from '../../../domain/full-history/FullHistoryCanonicalBatch.js';
 import {
 	assertBoundedText,
 	assertInteger,
@@ -34,7 +35,6 @@ import {
 	fullHistorySourceObjectsSql
 } from './FullHistoryCandidateSql.js';
 
-const maximumTransactionRows = 10_000;
 const maximumCheckpointBase64Bytes = 89_478_488n;
 
 interface ProofRow {
@@ -129,15 +129,17 @@ async function loadCandidate(
 	)) as TransactionBoundsRow[];
 	validateTransactionBounds(boundsRows);
 	const envelopeRows = (await manager.query(fullHistoryObservedEnvelopesSql, [
-		sources.transactions.remoteId
+		sources.transactions.remoteId,
+		FULL_HISTORY_MAX_TRANSACTIONS_PER_CHECKPOINT + 1
 	])) as FullHistoryCandidateEnvelopeRow[];
 	const resultRows = (await manager.query(fullHistoryObservedResultsSql, [
-		sources.results.remoteId
+		sources.results.remoteId,
+		FULL_HISTORY_MAX_TRANSACTIONS_PER_CHECKPOINT + 1
 	])) as FullHistoryCandidateResultRow[];
 	if (
 		ledgerRows.length !== expectedLedgerCount ||
-		envelopeRows.length > maximumTransactionRows ||
-		resultRows.length > maximumTransactionRows
+		envelopeRows.length > FULL_HISTORY_MAX_TRANSACTIONS_PER_CHECKPOINT ||
+		resultRows.length > FULL_HISTORY_MAX_TRANSACTIONS_PER_CHECKPOINT
 	) {
 		throw promotionError(
 			'candidate-incomplete',
@@ -182,7 +184,7 @@ function validateTransactionBounds(
 		readFullHistoryDatabaseBigint(bounds.resultBytes);
 	if (
 		envelopeCount !== resultCount ||
-		envelopeCount > BigInt(maximumTransactionRows) ||
+		envelopeCount > BigInt(FULL_HISTORY_MAX_TRANSACTIONS_PER_CHECKPOINT) ||
 		encodedBytes > maximumCheckpointBase64Bytes
 	) {
 		throw promotionError(
