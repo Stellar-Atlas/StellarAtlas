@@ -1,5 +1,6 @@
 import { err, ok, Result } from 'neverthrow';
 import { isObject } from 'shared';
+import { historyArchiveObjectTypes } from 'history-scanner-dto';
 import type { HistoryArchiveObjectJobDTO } from '../../domain/scan/ScanCoordinatorService.js';
 import { CoordinatorServiceError } from './CoordinatorServiceError.js';
 
@@ -19,7 +20,7 @@ export function parseHistoryArchiveObjectJobDTO(
 		typeof response.claimAttempt !== 'number' ||
 		!Number.isSafeInteger(response.claimAttempt) ||
 		typeof response.objectKey !== 'string' ||
-		typeof response.objectType !== 'string' ||
+		!isHistoryArchiveObjectType(response.objectType) ||
 		typeof response.objectUrl !== 'string' ||
 		typeof response.remoteId !== 'string'
 	) {
@@ -65,4 +66,15 @@ export function parseHistoryArchiveObjectJobDTO(
 		objectUrl: response.objectUrl,
 		remoteId: response.remoteId
 	});
+}
+
+function isHistoryArchiveObjectType(
+	value: unknown
+): value is (typeof historyArchiveObjectTypes)[number] {
+	return (
+		typeof value === 'string' &&
+		historyArchiveObjectTypes.includes(
+			value as (typeof historyArchiveObjectTypes)[number]
+		)
+	);
 }

@@ -1,5 +1,5 @@
 import { Container } from 'inversify';
-import Kernel from '@core/infrastructure/Kernel.js';
+import type Kernel from '@core/infrastructure/Kernel.js';
 import { ConfigMock } from '@core/config/__mocks__/configMock.js';
 import { NETWORK_TYPES } from '@network-scan/infrastructure/di/di-types.js';
 import type { OrganizationRepository } from '@network-scan/domain/organization/OrganizationRepository.js';
@@ -11,15 +11,26 @@ import { createDummyPublicKey } from '@network-scan/domain/node/__fixtures__/cre
 import { TestUtils } from '@core/utilities/TestUtils.js';
 import OrganizationMeasurement from '@network-scan/domain/organization/OrganizationMeasurement.js';
 import { DataSource } from 'typeorm';
+import {
+	startDisposablePostgres,
+	type DisposablePostgres
+} from '@test-support/DisposablePostgres.js';
 
 describe('TypeOrmOrganizationRepository', () => {
 	let container: Container;
 	let kernel: Kernel;
+	let postgres: DisposablePostgres;
+	let previousDatabaseTestUrl: string | undefined;
 	let repo: OrganizationRepository;
-	jest.setTimeout(60000); //slow integration tests
+	jest.setTimeout(120000);
 
 	beforeAll(async () => {
-		kernel = await Kernel.getInstance(new ConfigMock());
+		previousDatabaseTestUrl = process.env.DATABASE_TEST_URL;
+		postgres = await startDisposablePostgres();
+		process.env.DATABASE_TEST_URL = postgres.url;
+		const { default: KernelImplementation } =
+			await import('@core/infrastructure/Kernel.js');
+		kernel = await KernelImplementation.getInstance(new ConfigMock());
 		container = kernel.container;
 		repo = container.get<OrganizationRepository>(
 			NETWORK_TYPES.OrganizationRepository
@@ -31,7 +42,13 @@ describe('TypeOrmOrganizationRepository', () => {
 	});
 
 	afterAll(async () => {
-		await kernel.close();
+		if (kernel !== undefined) await kernel.close();
+		if (previousDatabaseTestUrl === undefined) {
+			delete process.env.DATABASE_TEST_URL;
+		} else {
+			process.env.DATABASE_TEST_URL = previousDatabaseTestUrl;
+		}
+		if (postgres !== undefined) await postgres.stop();
 	});
 
 	function assertOrganization(
@@ -102,15 +119,12 @@ describe('TypeOrmOrganizationRepository', () => {
 		await repo.save([organization], time);
 
 		const dataSource = container.get(DataSource);
-		//get organization measurement repository
 		const organizationMeasurementRepository = dataSource.getRepository(
 			OrganizationMeasurement
 		);
 
 		const measurements = await organizationMeasurementRepository.find();
 		expect(measurements).toHaveLength(1);
-
-		expect(true).toBeTruthy();
 	});
 
 	test('findActiveAtTimePoint', async () => {

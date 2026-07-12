@@ -1,5 +1,26 @@
-import type { PublicHistoryArchiveState, PublicNode } from '../../api/types';
+import type {
+	PublicHistoryArchiveState,
+	PublicKnownNodeArchiveEvidence
+} from '../../api/archive-evidence-types';
+import type { PublicNode } from '../../api/types';
+import { KnownArchiveEvidence } from '../archive-scans/known-archive-evidence';
 import { HistoryArchiveStateDocument } from '../archive-scans/history-archive-state-document';
+
+export function NodeArchiveEvidence({
+	evidence,
+	publicKey
+}: {
+	readonly evidence: PublicKnownNodeArchiveEvidence;
+	readonly publicKey: string;
+}): React.JSX.Element {
+	return (
+		<KnownArchiveEvidence
+			evidence={evidence}
+			subject={{ id: publicKey, kind: 'node' }}
+			title="Archive evidence"
+		/>
+	);
+}
 
 export function ArchiveMetadata({
 	historyArchiveState,

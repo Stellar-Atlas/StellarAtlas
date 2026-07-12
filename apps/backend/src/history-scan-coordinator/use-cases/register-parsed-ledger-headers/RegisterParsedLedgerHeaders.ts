@@ -14,9 +14,7 @@ export class RegisterParsedLedgerHeaders {
 		@inject('Logger') private readonly logger: Logger
 	) {}
 
-	async execute(
-		dto: ParsedLedgerHeaderBatchDTO
-	): Promise<Result<void, Error>> {
+	async execute(dto: ParsedLedgerHeaderBatchDTO): Promise<Result<void, Error>> {
 		try {
 			await this.repository.saveBatch(dto);
 			this.logger.info('Parsed ledger headers registered', {
@@ -25,7 +23,13 @@ export class RegisterParsedLedgerHeaders {
 			});
 			return ok(undefined);
 		} catch (error) {
-			return err(mapUnknownToError(error));
+			const mappedError = mapUnknownToError(error);
+			this.logger.error('Failed to register parsed ledger headers', {
+				count: dto.headers.length,
+				error: mappedError.message,
+				sourceArchiveUrl: dto.sourceArchiveUrl
+			});
+			return err(mappedError);
 		}
 	}
 }

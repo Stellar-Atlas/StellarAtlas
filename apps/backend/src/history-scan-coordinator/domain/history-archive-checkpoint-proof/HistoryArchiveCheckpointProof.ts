@@ -17,6 +17,7 @@ export type HistoryArchiveCheckpointProofFailureKind =
 	| 'checkpoint-bucket-list-mismatch'
 	| 'transaction-hash-mismatch'
 	| 'result-hash-mismatch'
+	| 'predecessor-missing'
 	| 'previous-ledger-hash-mismatch'
 	| 'bucket-missing';
 

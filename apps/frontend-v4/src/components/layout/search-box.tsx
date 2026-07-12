@@ -2,11 +2,12 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import type { PublicKnownNodeScope } from '../../api/known-network-types';
 import type {
 	PublicSearchFacetName,
 	PublicSearchHit,
 	PublicSearchResponse
-} from '../../api/types';
+} from '../../api/search-types';
 import {
 	searchNetwork,
 	type SearchNetworkFilters
@@ -18,6 +19,7 @@ interface SearchOption {
 	detail: string;
 	href: string;
 	kind: PublicSearchHit['entityType'];
+	scope: PublicSearchHit['scope'];
 }
 
 interface SearchFacetOption {
@@ -36,6 +38,14 @@ const booleanFacetLabels: Partial<Record<PublicSearchFacetName, string>> = {
 	validator: 'Validators'
 };
 
+const scopeLabels: Record<PublicKnownNodeScope, string> = {
+	'all-known': 'All known',
+	archived: 'Archived / inactive',
+	'current-validator': 'Current validators',
+	listener: 'Current listeners',
+	'public-key-only': 'Public-key only'
+};
+
 const normalize = (value: string): string => value.trim().toLowerCase();
 
 const searchHitToOption = (hit: PublicSearchHit): SearchOption => ({
@@ -43,7 +53,8 @@ const searchHitToOption = (hit: PublicSearchHit): SearchOption => ({
 	href: hit.href,
 	id: hit.id,
 	kind: hit.entityType,
-	label: hit.label
+	label: hit.label,
+	scope: hit.scope
 });
 
 const getFilterValue = (
@@ -51,18 +62,48 @@ const getFilterValue = (
 	name: PublicSearchFacetName
 ): string | undefined => {
 	if (name === 'entityType') return filters.entityType;
-	const value = filters[name as keyof SearchNetworkFilters];
-	if (typeof value === 'boolean') return value ? 'true' : 'false';
-	return value;
+	if (name === 'archiveStatus') return filters.archiveStatus;
+	if (name === 'countryCode') return filters.countryCode;
+	if (name === 'scope') return filters.scope;
+	if (name === 'active') return booleanText(filters.active);
+	if (name === 'fullValidator') return booleanText(filters.fullValidator);
+	if (name === 'topTier') return booleanText(filters.topTier);
+	if (name === 'validating') return booleanText(filters.validating);
+	return booleanText(filters.validator);
 };
+
+const booleanText = (value: boolean | undefined): string | undefined =>
+	value === undefined ? undefined : value ? 'true' : 'false';
 
 const getFacetLabel = (name: PublicSearchFacetName, value: string): string => {
 	if (name === 'entityType')
-		return value === 'node' ? 'Nodes' : 'Organizations';
+		return value === 'node'
+			? 'Nodes'
+			: value === 'archive-root'
+				? 'Archive roots'
+				: 'Organizations';
 	if (name === 'archiveStatus') return `Archive ${value}`;
 	if (name === 'countryCode') return value.toUpperCase();
+	if (name === 'scope' && isKnownNodeScope(value)) return scopeLabels[value];
 	return booleanFacetLabels[name] ?? value;
 };
+
+const isKnownNodeScope = (value: string): value is PublicKnownNodeScope =>
+	value === 'all-known' ||
+	value === 'archived' ||
+	value === 'current-validator' ||
+	value === 'listener' ||
+	value === 'public-key-only';
+
+const isEntityType = (
+	value: string
+): value is NonNullable<SearchNetworkFilters['entityType']> =>
+	value === 'archive-root' || value === 'node' || value === 'organization';
+
+const isArchiveStatus = (
+	value: string
+): value is NonNullable<SearchNetworkFilters['archiveStatus']> =>
+	value === 'error' || value === 'ok' || value === 'unknown';
 
 const selectFacetOptions = (
 	response: PublicSearchResponse | null,
@@ -71,6 +112,7 @@ const selectFacetOptions = (
 	if (!response) return [];
 	const facetNames: PublicSearchFacetName[] = [
 		'entityType',
+		'scope',
 		'validator',
 		'validating',
 		'fullValidator',
@@ -81,7 +123,11 @@ const selectFacetOptions = (
 	return facetNames.flatMap((name) =>
 		response.facets[name]
 			.filter((facet) =>
-				name in booleanFacetLabels ? facet.value === 'true' : facet.count > 0
+				name in booleanFacetLabels
+					? facet.value === 'true'
+					: name === 'scope'
+						? isKnownNodeScope(facet.value)
+						: facet.count > 0
 			)
 			.slice(0, name === 'countryCode' ? 3 : 4)
 			.map((facet) => ({
@@ -104,6 +150,7 @@ const toggleFacetFilter = (
 		if (facet.name === 'entityType') delete next.entityType;
 		else if (facet.name === 'archiveStatus') delete next.archiveStatus;
 		else if (facet.name === 'countryCode') delete next.countryCode;
+		else if (facet.name === 'scope') next.scope = 'all-known';
 		else if (facet.name === 'active') delete next.active;
 		else if (facet.name === 'fullValidator') delete next.fullValidator;
 		else if (facet.name === 'topTier') delete next.topTier;
@@ -111,11 +158,13 @@ const toggleFacetFilter = (
 		else if (facet.name === 'validator') delete next.validator;
 		return next;
 	}
-	if (facet.name === 'entityType')
-		next.entityType = facet.value as 'node' | 'organization';
-	else if (facet.name === 'archiveStatus')
-		next.archiveStatus = facet.value as 'error' | 'ok' | 'unknown';
+	if (facet.name === 'entityType' && isEntityType(facet.value))
+		next.entityType = facet.value;
+	else if (facet.name === 'archiveStatus' && isArchiveStatus(facet.value))
+		next.archiveStatus = facet.value;
 	else if (facet.name === 'countryCode') next.countryCode = facet.value;
+	else if (facet.name === 'scope' && isKnownNodeScope(facet.value))
+		next.scope = facet.value;
 	else if (facet.name === 'active') next.active = facet.value === 'true';
 	else if (facet.name === 'fullValidator')
 		next.fullValidator = facet.value === 'true';
@@ -129,7 +178,9 @@ const toggleFacetFilter = (
 export function SearchBox(): React.JSX.Element {
 	const router = useRouter();
 	const [query, setQuery] = useState('');
-	const [filters, setFilters] = useState<SearchNetworkFilters>({});
+	const [filters, setFilters] = useState<SearchNetworkFilters>({
+		scope: 'all-known'
+	});
 	const [response, setResponse] = useState<PublicSearchResponse | null>(null);
 	const canSearch = useMemo(() => {
 		const normalizedQuery = normalize(query);
@@ -182,9 +233,19 @@ export function SearchBox(): React.JSX.Element {
 				value={query}
 			/>
 			{canSearch && response && (
-				<div className="search-menu">
+				<div
+					className="search-menu"
+					data-freshness={response.readModel.freshness}
+					data-source={response.source}
+				>
 					<div className="search-menu-meta">
-						<span>{matches.length} matches</span>
+						<span>
+							{response.pagination.total.toLocaleString()}{' '}
+							{response.pagination.totalIsExact
+								? 'matches'
+								: 'estimated matches'}
+						</span>
+						<small>{scopeLabels[response.scope]}</small>
 					</div>
 					{facets.length > 0 && (
 						<div className="search-facets">
@@ -214,6 +275,7 @@ export function SearchBox(): React.JSX.Element {
 						>
 							<strong>{match.label}</strong>
 							<span>{match.detail}</span>
+							<small>{getSearchResultScopeLabel(match)}</small>
 						</button>
 					))}
 					{matches.length === 0 && (
@@ -223,4 +285,10 @@ export function SearchBox(): React.JSX.Element {
 			)}
 		</form>
 	);
+}
+
+function getSearchResultScopeLabel(hit: SearchOption): string {
+	if (hit.scope === 'current-organization') return 'Current organization';
+	if (hit.scope === 'archive-root') return 'Archive root';
+	return scopeLabels[hit.scope];
 }

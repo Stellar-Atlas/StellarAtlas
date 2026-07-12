@@ -67,8 +67,94 @@ describe('OrganizationV1DTOMapper', () => {
 		expect(organizationV1DTO.tomlWarnings).toEqual([
 			'TlsCertificateVerificationDisabled'
 		]);
+		expect(organizationV1DTO.tomlLatestAttempt).toEqual({
+			authoritative: false,
+			contentCaptured: true,
+			observedAt: '2020-01-01T00:00:00.000Z',
+			result: 'success',
+			state: TomlState.Ok,
+			warnings: ['TlsCertificateVerificationDisabled']
+		});
+		expect(organizationV1DTO.tomlLatestFailure).toBeNull();
+		expect(organizationV1DTO.tomlLatestInsecureAttempt).toEqual(
+			organizationV1DTO.tomlLatestAttempt
+		);
 		expect(organizationV1DTO.stellarToml).toEqual({
 			url: 'https://domain.com/.well-known/stellar.toml',
+			content: 'VERSION="2.0.0"',
+			warnings: []
+		});
+	});
+
+	test('maps latest failure separately from a later successful attempt', () => {
+		const { organization } = createOrganization();
+		const mapper = new OrganizationV1DTOMapper();
+		const result = mapper.toOrganizationV1DTO(
+			organization,
+			undefined,
+			undefined,
+			{
+				latestAttempt: {
+					authoritative: true,
+					content: 'VERSION="2.0.0"',
+					observedAt: new Date('2020-01-03'),
+					result: 'success',
+					runId: 'success-run',
+					state: TomlState.Ok,
+					warnings: []
+				},
+				latestSuccess: {
+					content: 'VERSION="2.0.0"',
+					observedAt: new Date('2020-01-03'),
+					warnings: []
+				},
+				latestFailure: {
+					authoritative: false,
+					content: null,
+					observedAt: new Date('2020-01-02'),
+					result: 'failure',
+					runId: 'failure-run',
+					state: TomlState.ParsingError,
+					warnings: []
+				},
+				latestInsecureAttempt: null
+			}
+		);
+
+		expect(result.tomlLatestAttempt?.result).toBe('success');
+		expect(result.stellarToml?.observedAt).toBe('2020-01-03T00:00:00.000Z');
+		expect(result.tomlLatestFailure).toEqual({
+			authoritative: false,
+			contentCaptured: false,
+			observedAt: '2020-01-02T00:00:00.000Z',
+			result: 'failure',
+			state: TomlState.ParsingError,
+			warnings: []
+		});
+	});
+
+	test('fallback mapping keeps last-known-good content after failure', () => {
+		const { organization } = createOrganization();
+		const failedAt = new Date('2020-01-02T00:00:00.000Z');
+		organization.recordTomlAttempt(
+			'failure',
+			TomlState.ParsingError,
+			[],
+			failedAt,
+			'<html>',
+			false,
+			'failed-run'
+		);
+
+		const result = new OrganizationV1DTOMapper().toOrganizationV1DTO(
+			organization
+		);
+
+		expect(result.tomlLatestAttempt).toMatchObject({
+			observedAt: failedAt.toISOString(),
+			result: 'failure'
+		});
+		expect(result.stellarToml).toMatchObject({
 			content: 'VERSION="2.0.0"'
 		});
 	});
@@ -126,6 +212,9 @@ describe('OrganizationV1DTOMapper', () => {
 		organizationMeasurement.isSubQuorumAvailable = true;
 		organizationMeasurement.index = 1;
 		organizationMeasurement.tomlState = TomlState.Ok;
+		organizationMeasurement.tomlFetchResult = 'success';
+		organizationMeasurement.tomlAttemptAuthoritative = false;
+		organizationMeasurement.tomlAttemptContent = 'VERSION="2.0.0"';
 		organizationMeasurement.tomlWarnings = [
 			'TlsCertificateVerificationDisabled'
 		];

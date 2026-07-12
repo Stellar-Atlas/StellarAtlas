@@ -20,6 +20,8 @@ describe('GetKnownNodes', () => {
 
 		const activeDto = createDummyNodeV1(activeNode.publicKey.value);
 		const archivedDto = createDummyNodeV1(archivedNode.publicKey.value);
+		activeDto.isValidator = true;
+		archivedDto.isValidator = true;
 		const nodeRepository = mock<NodeRepository>();
 		const organizationRepository = mock<OrganizationRepository>();
 		const nodeDTOService = mock<NodeDTOService>();
@@ -50,6 +52,14 @@ describe('GetKnownNodes', () => {
 		expect(result.isOk()).toBe(true);
 		if (result.isErr()) return;
 		expect(result.value.count).toBe(2);
+		expect(result.value.scope).toBe('all-known');
+		expect(result.value.scopeTotals).toEqual({
+			'all-known': 2,
+			archived: 1,
+			'current-validator': 1,
+			listener: 0,
+			'public-key-only': 0
+		});
 		const activeResult = result.value.nodes.find(
 			(node) => node.publicKey === activeNode.publicKey.value
 		);
@@ -83,6 +93,52 @@ describe('GetKnownNodes', () => {
 			[activeNode, archivedNode],
 			[]
 		);
+	});
+
+	it('filters and paginates explicit node scopes with exact totals', async () => {
+		const start = new Date('2020-01-01T00:00:00.000Z');
+		const validator = createDummyNode('127.0.0.1', 11625, start);
+		const listener = createDummyNode('127.0.0.2', 11625, start);
+		const validatorDto = createDummyNodeV1(validator.publicKey.value);
+		const listenerDto = createDummyNodeV1(listener.publicKey.value);
+		validatorDto.isValidator = true;
+		listenerDto.isValidator = false;
+		const nodeRepository = mock<NodeRepository>();
+		const organizationRepository = mock<OrganizationRepository>();
+		const nodeDTOService = mock<NodeDTOService>();
+		const exceptionLogger = mock<ExceptionLogger>();
+		nodeRepository.findAllKnown.mockResolvedValue([validator, listener]);
+		nodeRepository.findAllKnownIdentities.mockResolvedValue([]);
+		organizationRepository.findAllKnown.mockResolvedValue([]);
+		nodeDTOService.getNodeDTOs.mockResolvedValue(
+			ok([validatorDto, listenerDto])
+		);
+
+		const result = await new GetKnownNodes(
+			nodeRepository,
+			organizationRepository,
+			nodeDTOService,
+			exceptionLogger
+		).execute({
+			limit: 1,
+			offset: 0,
+			query: listener.publicKey.value,
+			scope: 'listener'
+		});
+
+		expect(result.isOk()).toBe(true);
+		if (result.isErr()) return;
+		expect(result.value).toMatchObject({
+			count: 1,
+			page: { hasMore: false, limit: 1, offset: 0, total: 1 },
+			scope: 'listener'
+		});
+		expect(result.value.nodes).toEqual([
+			expect.objectContaining({
+				publicKey: listener.publicKey.value,
+				scope: 'listener'
+			})
+		]);
 	});
 
 	it('returns public-key-only records for known nodes without snapshots', async () => {
@@ -124,7 +180,8 @@ describe('GetKnownNodes', () => {
 					snapshotStartDate: null,
 					snapshotEndDate: null,
 					lastSeen: measuredAt.toISOString(),
-					lastMeasurementAt: measuredAt.toISOString()
+					lastMeasurementAt: measuredAt.toISOString(),
+					scope: 'public-key-only'
 				}
 			]
 		});

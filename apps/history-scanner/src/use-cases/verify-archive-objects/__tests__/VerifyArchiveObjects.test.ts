@@ -5,6 +5,7 @@ import type { ExceptionLogger } from 'exception-logger';
 import type { HttpService } from 'http-helper';
 import type { JobMonitor } from 'job-monitor';
 import type { Logger } from 'logger';
+import type { HistoryArchiveWorkerStatusReporter } from '../../../domain/scan/HistoryArchiveWorkerStatusReporter.js';
 import type {
 	HistoryArchiveObjectJobDTO,
 	ScanCoordinatorService
@@ -13,33 +14,31 @@ import { BucketCache } from '../../../domain/scanner/BucketCache.js';
 import { HistoryArchiveStateValidator } from '../../../domain/history-archive/HistoryArchiveStateValidator.js';
 import { VerifyArchiveObjects } from '../VerifyArchiveObjects.js';
 
-type TestProgress = {
-	bytesDownloaded: number | null;
-	claimAttempt: number;
-	workerStage: string;
-};
-
 type TestableVerifyArchiveObjects = VerifyArchiveObjects & {
-	activeObjectProgress: Map<string, TestProgress>;
-	touchObject(remoteId: string): Promise<void>;
 	verifyObject(job: HistoryArchiveObjectJobDTO): Promise<void>;
 };
 
 describe('VerifyArchiveObjects', () => {
 	let scanCoordinator: MockProxy<ScanCoordinatorService>;
+	let statusReporter: MockProxy<HistoryArchiveWorkerStatusReporter>;
 	let verifier: TestableVerifyArchiveObjects;
 
 	beforeEach(() => {
 		scanCoordinator = mock<ScanCoordinatorService>();
 		scanCoordinator.touchHistoryArchiveObject.mockResolvedValue(ok(undefined));
 		scanCoordinator.failHistoryArchiveObject.mockResolvedValue(ok(undefined));
-		scanCoordinator.completeHistoryArchiveObject.mockResolvedValue(ok(undefined));
+		scanCoordinator.completeHistoryArchiveObject.mockResolvedValue(
+			ok(undefined)
+		);
+		statusReporter = mock<HistoryArchiveWorkerStatusReporter>();
+		statusReporter.report.mockResolvedValue(ok(undefined));
 
 		const jobMonitor = mock<JobMonitor>();
 		jobMonitor.checkIn.mockResolvedValue(ok(undefined));
 
 		verifier = new VerifyArchiveObjects(
 			scanCoordinator,
+			statusReporter,
 			mock<HttpService>(),
 			mock<HistoryArchiveStateValidator>(),
 			mock<BucketCache>(),
@@ -51,41 +50,48 @@ describe('VerifyArchiveObjects', () => {
 		) as unknown as TestableVerifyArchiveObjects;
 	});
 
-	it('does not send a redundant heartbeat immediately after claiming an object', async () => {
-		await verifier.verifyObject(createObjectJob({ objectType: 'unsupported' }));
+	it('reports a worker outcome without sending a redundant object heartbeat', async () => {
+		await verifier.verifyObject(
+			createObjectJob({ objectType: 'bucket', bucketHash: null })
+		);
+		await flushPromises();
 
 		expect(scanCoordinator.touchHistoryArchiveObject).not.toHaveBeenCalled();
 		expect(scanCoordinator.failHistoryArchiveObject).toHaveBeenCalledWith(
 			'object-1',
-			expect.objectContaining({ claimAttempt: 3 })
+			expect.objectContaining({
+				claimAttempt: 3,
+				failureChannel: 'scanner_issue'
+			})
+		);
+		expect(statusReporter.report).toHaveBeenLastCalledWith(
+			expect.objectContaining({
+				currentObject: null,
+				lastOutcome: 'worker_issue',
+				stage: 'idle'
+			})
 		);
 	});
 
-	it('coalesces overlapping heartbeat writes for the same object', async () => {
-		let resolveTouch: ((value: ReturnType<typeof ok<void, Error>>) => void) | null =
-			null;
-		scanCoordinator.touchHistoryArchiveObject.mockImplementationOnce(
-			() =>
-				new Promise((resolve) => {
-					resolveTouch = resolve;
-				})
+	it('finishes archive work while the status API request is unresolved', async () => {
+		statusReporter.report.mockImplementation(
+			() => new Promise(() => undefined)
 		);
-		verifier.activeObjectProgress.set('object-1', {
-			bytesDownloaded: 1024,
-			claimAttempt: 3,
-			workerStage: 'downloading_bucket'
-		});
 
-		const first = verifier.touchObject('object-1');
-		const second = verifier.touchObject('object-1');
+		const result = await Promise.race([
+			verifier
+				.verifyObject(
+					createObjectJob({ objectType: 'bucket', bucketHash: null })
+				)
+				.then(() => 'completed' as const),
+			new Promise<'timed-out'>((resolve) =>
+				setTimeout(() => resolve('timed-out'), 100)
+			)
+		]);
 
-		expect(scanCoordinator.touchHistoryArchiveObject).toHaveBeenCalledTimes(1);
-		resolveTouch?.(ok(undefined));
-		await Promise.all([first, second]);
-
-		await verifier.touchObject('object-1');
-
-		expect(scanCoordinator.touchHistoryArchiveObject).toHaveBeenCalledTimes(2);
+		expect(result).toBe('completed');
+		expect(scanCoordinator.failHistoryArchiveObject).toHaveBeenCalledTimes(1);
+		expect(statusReporter.report).toHaveBeenCalledTimes(1);
 	});
 });
 
@@ -103,4 +109,8 @@ function createObjectJob(
 		remoteId: 'object-1',
 		...overrides
 	};
+}
+
+async function flushPromises(): Promise<void> {
+	await new Promise<void>((resolve) => setImmediate(resolve));
 }

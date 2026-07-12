@@ -3,16 +3,16 @@ import type {
 	PublicHistoryArchiveEvidence,
 	PublicHistoryArchiveObjectEvents,
 	PublicHistoryArchiveObjectQueue,
-	PublicHistoryArchiveObjectSummary
+	PublicHistoryArchiveObjectSummary,
+	PublicHistoryArchiveStatusSummary
 } from './types';
 import type { PublicHistoryArchiveRepairPlan } from './archive-repair-types';
 import { fetchJson, type FetchOptions } from './client';
 import { frontendCacheTags } from './cache-policy';
-
-interface HistoryArchiveEvidenceOptions {
-	readonly eventLimit?: number;
-	readonly objectLimit?: number;
-}
+import {
+	buildArchiveEvidencePath,
+	type KnownArchiveEvidenceQuery
+} from './known-network-client';
 
 export const fetchHistoryArchiveObjectEvents = (
 	limit: number,
@@ -33,8 +33,8 @@ export const fetchHistoryArchiveObjectSummary = (
 
 export const fetchHistoryArchiveObjectStatusSummary = (
 	options?: FetchOptions
-): Promise<PublicHistoryArchiveObjectSummary> =>
-	fetchJson<PublicHistoryArchiveObjectSummary>(
+): Promise<PublicHistoryArchiveStatusSummary> =>
+	fetchJson<PublicHistoryArchiveStatusSummary>(
 		'/v1/archive-scans/objects/status-summary',
 		withHistoryScanTags(options)
 	);
@@ -77,24 +77,16 @@ export const fetchHistoryArchiveBucketCoveragesForObjects = async (
 
 export const fetchHistoryArchiveObjectEvidenceForArchive = (
 	historyUrl: string,
-	evidenceOptions: HistoryArchiveEvidenceOptions = {},
+	query: KnownArchiveEvidenceQuery = {},
 	options?: FetchOptions
-): Promise<PublicHistoryArchiveEvidence> => {
-	const searchParams = new URLSearchParams();
-	if (evidenceOptions.objectLimit !== undefined) {
-		searchParams.set('objectLimit', evidenceOptions.objectLimit.toString());
-	}
-	if (evidenceOptions.eventLimit !== undefined) {
-		searchParams.set('eventLimit', evidenceOptions.eventLimit.toString());
-	}
-	const queryString = searchParams.toString();
-	const query = queryString.length > 0 ? `?${queryString}` : '';
-
-	return fetchJson<PublicHistoryArchiveEvidence>(
-		`/v1/archive-scans/${encodeURIComponent(historyUrl)}/object-evidence${query}`,
+): Promise<PublicHistoryArchiveEvidence> =>
+	fetchJson<PublicHistoryArchiveEvidence>(
+		buildArchiveEvidencePath(
+			`/v1/archive-scans/${encodeURIComponent(historyUrl)}/object-evidence`,
+			query
+		),
 		withHistoryScanTags(options)
 	);
-};
 
 export const fetchHistoryArchiveRepairPlanForArchive = (
 	historyUrl: string,

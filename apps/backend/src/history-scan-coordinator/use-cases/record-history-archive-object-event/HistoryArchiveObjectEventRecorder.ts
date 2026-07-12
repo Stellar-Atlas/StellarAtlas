@@ -31,4 +31,11 @@ export class HistoryArchiveObjectEventRecorder {
 			});
 		}
 	}
+
+	async recordDurably(
+		object: HistoryArchiveObject,
+		options: HistoryArchiveObjectEventOptions
+	): Promise<void> {
+		await this.eventRepository.appendFromObjectIdempotently(object, options);
+	}
 }

@@ -4,6 +4,24 @@ import { createHash } from 'crypto';
 import { isMainThread } from 'worker_threads';
 import { hash, xdr } from '@stellar/stellar-sdk';
 
+const archiveXdrErrorName = 'ArchiveXdrError';
+
+export class ArchiveXdrError extends Error {
+	constructor(message: string, options?: ErrorOptions) {
+		super(message, options);
+		this.name = archiveXdrErrorName;
+	}
+}
+
+export function isArchiveXdrError(error: unknown): boolean {
+	return (
+		typeof error === 'object' &&
+		error !== null &&
+		'name' in error &&
+		error.name === archiveXdrErrorName
+	);
+}
+
 async function unzipAndHash(zip: ArrayBuffer): Promise<string> {
 	return new Promise((resolve, reject) => {
 		gunzip(zip, (error, unzipped) => {
@@ -18,6 +36,7 @@ async function unzipAndHash(zip: ArrayBuffer): Promise<string> {
 }
 
 export interface LedgerHeaderHistoryEntryResult {
+	closedAt: string;
 	ledger: number;
 	transactionsHash: string;
 	transactionResultsHash: string;
@@ -53,10 +72,15 @@ export interface ParsedTransactionResult {
 export function processLedgerHeaderHistoryEntryXDR(
 	ledgerHeaderHistoryEntryXDR: Buffer | Uint8Array
 ): LedgerHeaderHistoryEntryResult {
-	const ledgerHeaderHistoryEntry = xdr.LedgerHeaderHistoryEntry.fromXDR(
-		Buffer.from(ledgerHeaderHistoryEntryXDR)
+	const ledgerHeaderHistoryEntry = decodeArchiveXdr('ledger header', () =>
+		xdr.LedgerHeaderHistoryEntry.fromXDR(
+			Buffer.from(ledgerHeaderHistoryEntryXDR)
+		)
 	);
 	return {
+		closedAt: closeTimeToIso(
+			ledgerHeaderHistoryEntry.header().scpValue().closeTime()
+		),
 		ledger: ledgerHeaderHistoryEntry.header().ledgerSeq(),
 		transactionResultsHash: ledgerHeaderHistoryEntry
 			.header()
@@ -80,13 +104,33 @@ export function processLedgerHeaderHistoryEntryXDR(
 	};
 }
 
+function closeTimeToIso(closeTime: { toString(): string }): string {
+	const serialized = closeTime.toString();
+	if (!/^\d+$/.test(serialized)) {
+		throw new ArchiveXdrError(`Invalid ledger close time ${serialized}`);
+	}
+
+	const seconds = BigInt(serialized);
+	const maximumDateSeconds = 8_640_000_000_000n;
+	if (seconds > maximumDateSeconds) {
+		throw new ArchiveXdrError(
+			'Ledger close time is outside the JavaScript date range'
+		);
+	}
+
+	return new Date(Number(seconds * 1000n)).toISOString();
+}
+
 export function processTransactionHistoryResultEntryXDR(
 	transactionHistoryResultXDR: Buffer | Uint8Array
 ): TransactionResultHistoryEntryResult {
-	const transactionHistoryResultEntry =
-		xdr.TransactionHistoryResultEntry.fromXDR(
-			Buffer.from(transactionHistoryResultXDR)
-		);
+	const transactionHistoryResultEntry = decodeArchiveXdr(
+		'transaction result',
+		() =>
+			xdr.TransactionHistoryResultEntry.fromXDR(
+				Buffer.from(transactionHistoryResultXDR)
+			)
+	);
 	const resultSetHash = hash(
 		transactionHistoryResultEntry.txResultSet().toXDR()
 	);
@@ -107,8 +151,8 @@ export function processTransactionHistoryResultEntryXDR(
 export function processTransactionHistoryEntryXDR(
 	transactionHistoryEntryXDR: Uint8Array
 ): TransactionEnvelopeHistoryEntryResult {
-	const transactionHistoryEntry = xdr.TransactionHistoryEntry.fromXDR(
-		Buffer.from(transactionHistoryEntryXDR)
+	const transactionHistoryEntry = decodeArchiveXdr('transaction envelope', () =>
+		xdr.TransactionHistoryEntry.fromXDR(Buffer.from(transactionHistoryEntryXDR))
 	);
 	const transactionSetHash = hashTransactionHistoryEntry(
 		transactionHistoryEntry
@@ -128,7 +172,18 @@ export function processTransactionHistoryEntryXDR(
 export function processScpHistoryEntryXDR(
 	scpHistoryEntryXDR: Uint8Array
 ): void {
-	xdr.ScpHistoryEntry.fromXDR(Buffer.from(scpHistoryEntryXDR));
+	decodeArchiveXdr('SCP history', () =>
+		xdr.ScpHistoryEntry.fromXDR(Buffer.from(scpHistoryEntryXDR))
+	);
+}
+
+function decodeArchiveXdr<Result>(label: string, decode: () => Result): Result {
+	try {
+		return decode();
+	} catch (error) {
+		if (isArchiveXdrError(error)) throw error;
+		throw new ArchiveXdrError(`Invalid ${label} archive XDR`, { cause: error });
+	}
 }
 
 function hashTransactionHistoryEntry(

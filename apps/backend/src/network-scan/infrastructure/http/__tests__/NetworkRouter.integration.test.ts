@@ -1,6 +1,6 @@
 import express from 'express';
 import request from 'supertest';
-import { mockDeep } from 'jest-mock-extended';
+import { mockDeep, type DeepMockProxy } from 'jest-mock-extended';
 import { ok } from 'neverthrow';
 import { networkRouter } from '../NetworkRouter.js';
 import type { NetworkRouterConfig } from '../NetworkRouter.js';
@@ -44,8 +44,11 @@ describe('NetworkRouter.integration', () => {
 
 		const config = mockDeep<NetworkRouterConfig>();
 		config.searchConfig = { indexName: 'test_network_entities' };
-		config.getNetwork.execute.mockResolvedValue(
-			ok(createDummyNetworkV1([node], [organization]))
+		configureSearchInventory(
+			config,
+			createDummyNetworkV1([node], [organization]),
+			[node],
+			[organization]
 		);
 
 		const app = express();
@@ -61,7 +64,7 @@ describe('NetworkRouter.integration', () => {
 					{ count: 1, value: 'node' },
 					{ count: 1, value: 'organization' }
 				]);
-				expect(response.body.source).toBe('memory');
+				expect(response.body.source).toBe('postgres_canonical');
 			});
 	});
 
@@ -77,8 +80,11 @@ describe('NetworkRouter.integration', () => {
 
 		const config = mockDeep<NetworkRouterConfig>();
 		config.searchConfig = { indexName: 'test_network_entities' };
-		config.getNetwork.execute.mockResolvedValue(
-			ok(createDummyNetworkV1([node], [organization]))
+		configureSearchInventory(
+			config,
+			createDummyNetworkV1([node], [organization]),
+			[node],
+			[organization]
 		);
 
 		const app = express();
@@ -97,7 +103,11 @@ describe('NetworkRouter.integration', () => {
 		'/network/search?limit=0',
 		'/network/search?limit=26',
 		'/network/search?limit=1.5',
+		'/network/search?offset=-1',
+		'/network/search?offset=10001',
 		'/network/search?type=validator',
+		'/network/search?scope=current',
+		'/network/search?scope=archived&scope=all-known',
 		'/network/search?archiveStatus=degraded',
 		'/network/search?validator=yes',
 		`/network/search?q=${'a'.repeat(129)}`
@@ -110,6 +120,68 @@ describe('NetworkRouter.integration', () => {
 
 		await request(app).get(path).expect(400);
 		expect(config.getNetwork.execute).not.toHaveBeenCalled();
+	});
+
+	it('searches archived and public-key-only canonical inventory by scope', async () => {
+		const archived = createDummyNodeV1('GA_ARCHIVED_SEARCH');
+		archived.name = 'Archived Alpha';
+		const network = createDummyNetworkV1([], []);
+		const config = mockDeep<NetworkRouterConfig>();
+		config.searchConfig = { indexName: 'test_network_entities' };
+		config.getNetwork.execute.mockResolvedValue(ok(network));
+		config.getKnownNodes.executeAll.mockResolvedValue(
+			ok({
+				count: 2,
+				generatedAt: network.time,
+				nodes: [
+					knownNode(archived, 'archived', false),
+					{
+						current: false,
+						dateDiscovered: network.time,
+						lastMeasurementAt: null,
+						lastSeen: network.time,
+						metadataState: 'public_key_only',
+						node: null,
+						publicKey: 'GA_PUBLIC_KEY_ONLY_SEARCH',
+						scope: 'public-key-only',
+						snapshotEndDate: null,
+						snapshotStartDate: null
+					}
+				],
+				scopeTotals: {
+					'all-known': 2,
+					archived: 1,
+					'current-validator': 0,
+					listener: 0,
+					'public-key-only': 1
+				},
+				source: 'postgres_canonical'
+			})
+		);
+		config.getKnownOrganizations.executeAll.mockResolvedValue(
+			ok(emptyKnownOrganizations(network.time))
+		);
+
+		const app = express();
+		app.use('/network', networkRouter(config));
+
+		await request(app)
+			.get('/network/search/nodes?q=public&scope=public-key-only')
+			.expect(200)
+			.expect((response) => {
+				expect(response.body.scope).toBe('public-key-only');
+				expect(response.body.pagination).toMatchObject({
+					total: 1,
+					totalIsExact: true
+				});
+				expect(response.body.hits[0]).toMatchObject({
+					entityId: 'GA_PUBLIC_KEY_ONLY_SEARCH',
+					freshness: 'fresh',
+					recordState: 'identity-only',
+					scope: 'public-key-only',
+					source: 'postgres_canonical'
+				});
+			});
 	});
 
 	it('should forward SCP statement source, order, slot, and cursor filters', async () => {
@@ -165,3 +237,77 @@ describe('NetworkRouter.integration', () => {
 		expect(config.getScpStatements.execute).not.toHaveBeenCalled();
 	});
 });
+
+function configureSearchInventory(
+	config: DeepMockProxy<NetworkRouterConfig>,
+	network: ReturnType<typeof createDummyNetworkV1>,
+	nodes: ReturnType<typeof createDummyNodeV1>[],
+	organizations: ReturnType<typeof createDummyOrganizationV1>[]
+): void {
+	config.getNetwork.execute.mockResolvedValue(ok(network));
+	config.getKnownNodes.executeAll.mockResolvedValue(
+		ok({
+			count: nodes.length,
+			generatedAt: network.time,
+			nodes: nodes.map((node) => knownNode(node, 'current-validator', true)),
+			scopeTotals: {
+				'all-known': nodes.length,
+				archived: 0,
+				'current-validator': nodes.length,
+				listener: 0,
+				'public-key-only': 0
+			},
+			source: 'postgres_canonical'
+		})
+	);
+	config.getKnownOrganizations.executeAll.mockResolvedValue(
+		ok({
+			count: organizations.length,
+			generatedAt: network.time,
+			organizations: organizations.map((organization) => ({
+				current: true,
+				lastMeasurementAt: network.time,
+				lastSeen: network.time,
+				organization,
+				scope: 'current',
+				snapshotEndDate: null,
+				snapshotStartDate: network.time
+			})),
+			scopeTotals: {
+				'all-known': organizations.length,
+				archived: 0,
+				current: organizations.length
+			},
+			source: 'postgres_canonical'
+		})
+	);
+}
+
+function knownNode(
+	node: ReturnType<typeof createDummyNodeV1>,
+	scope: 'archived' | 'current-validator',
+	current: boolean
+) {
+	return {
+		current,
+		dateDiscovered: '2020-01-01T00:00:00.000Z',
+		lastMeasurementAt: node.dateUpdated,
+		lastSeen: node.dateUpdated,
+		metadataState: 'snapshot' as const,
+		node,
+		publicKey: node.publicKey,
+		scope,
+		snapshotEndDate: current ? null : node.dateUpdated,
+		snapshotStartDate: '2020-01-01T00:00:00.000Z'
+	};
+}
+
+function emptyKnownOrganizations(generatedAt: string) {
+	return {
+		count: 0,
+		generatedAt,
+		organizations: [],
+		scopeTotals: { 'all-known': 0, archived: 0, current: 0 },
+		source: 'postgres_canonical' as const
+	};
+}

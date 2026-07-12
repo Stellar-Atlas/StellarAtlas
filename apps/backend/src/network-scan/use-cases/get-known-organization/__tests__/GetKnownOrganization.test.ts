@@ -41,6 +41,7 @@ describe('GetKnownOrganization', () => {
 		expect(result.value).toMatchObject({
 			organization: organizationDto,
 			current: true,
+			scope: 'current',
 			lastSeen: start.toISOString()
 		});
 	});

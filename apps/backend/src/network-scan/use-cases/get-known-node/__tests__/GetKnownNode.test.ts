@@ -37,6 +37,7 @@ describe('GetKnownNode', () => {
 			node: nodeDto,
 			metadataState: 'snapshot',
 			current: true,
+			scope: 'current-validator',
 			lastSeen: start.toISOString()
 		});
 		expect(nodeDTOService.getNodeDTOs).toHaveBeenCalledWith(
@@ -77,6 +78,7 @@ describe('GetKnownNode', () => {
 			node: null,
 			metadataState: 'public_key_only',
 			current: false,
+			scope: 'public-key-only',
 			lastSeen: measuredAt.toISOString()
 		});
 		expect(nodeDTOService.getNodeDTOs).not.toHaveBeenCalled();

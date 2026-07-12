@@ -1,5 +1,9 @@
 import { err, ok, Result } from 'neverthrow';
 
+const maximumBatchSize = 1_000;
+const maximumLedgerSequence = 0xffff_ffff;
+const maximumTransactionIndex = 0x7fff_ffff;
+
 export interface ParsedTransactionEnvelopeDTO {
 	readonly envelopeXdr: string;
 	readonly ledgerSequence: number;
@@ -50,8 +54,8 @@ export class ParsedTransactionEnvelopeBatchDTO extends ParsedTransactionBatchDTO
 		if (typeof record !== 'object' || record === null) return false;
 		const candidate = record as Record<string, unknown>;
 		return (
-			isNonNegativeInteger(candidate.ledgerSequence) &&
-			isNonNegativeInteger(candidate.transactionIndex) &&
+			isIntegerInRange(candidate.ledgerSequence, maximumLedgerSequence) &&
+			isIntegerInRange(candidate.transactionIndex, maximumTransactionIndex) &&
 			isNonEmptyString(candidate.transactionSetHash) &&
 			isNonEmptyString(candidate.envelopeXdr)
 		);
@@ -91,8 +95,8 @@ export class ParsedTransactionResultBatchDTO extends ParsedTransactionBatchDTO<P
 		if (typeof record !== 'object' || record === null) return false;
 		const candidate = record as Record<string, unknown>;
 		return (
-			isNonNegativeInteger(candidate.ledgerSequence) &&
-			isNonNegativeInteger(candidate.transactionIndex) &&
+			isIntegerInRange(candidate.ledgerSequence, maximumLedgerSequence) &&
+			isIntegerInRange(candidate.transactionIndex, maximumTransactionIndex) &&
 			isNonEmptyString(candidate.transactionResultHash) &&
 			isNonEmptyString(candidate.transactionHash) &&
 			isNonEmptyString(candidate.resultXdr)
@@ -125,22 +129,37 @@ function isValidBatch(
 	json: Record<string, unknown>,
 	isValidRecord: (record: unknown) => boolean
 ): boolean {
-	return (
+	if (!(
 		typeof json === 'object' &&
 		json !== null &&
 		isNonEmptyString(json.sourceArchiveUrl) &&
 		isNonEmptyString(json.scanJobRemoteId) &&
 		typeof json.observedAt === 'string' &&
-		!Number.isNaN(new Date(json.observedAt).getTime()) &&
+		isCanonicalTimestamp(json.observedAt) &&
 		Array.isArray(json.records) &&
+		json.records.length <= maximumBatchSize &&
 		json.records.every(isValidRecord)
-	);
+	)) {
+		return false;
+	}
+
+	return true;
 }
 
 function isNonEmptyString(value: unknown): value is string {
 	return typeof value === 'string' && value.trim().length > 0;
 }
 
-function isNonNegativeInteger(value: unknown): value is number {
-	return typeof value === 'number' && Number.isInteger(value) && value >= 0;
+function isIntegerInRange(value: unknown, maximum: number): value is number {
+	return (
+		typeof value === 'number' &&
+		Number.isSafeInteger(value) &&
+		value >= 0 &&
+		value <= maximum
+	);
+}
+
+function isCanonicalTimestamp(value: string): boolean {
+	const parsed = new Date(value);
+	return !Number.isNaN(parsed.getTime()) && parsed.toISOString() === value;
 }

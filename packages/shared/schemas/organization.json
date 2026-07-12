@@ -77,12 +77,111 @@
 			},
 			"type": "array"
 		},
+		"tomlLatestAttempt": {
+			"anyOf": [
+				{ "$ref": "#/definitions/OrganizationTomlAttemptV1" },
+				{ "type": "null" }
+			]
+		},
+		"tomlLatestFailure": {
+			"anyOf": [
+				{ "$ref": "#/definitions/OrganizationTomlFailureV1" },
+				{ "type": "null" }
+			]
+		},
+		"tomlLatestInsecureAttempt": {
+			"anyOf": [
+				{ "$ref": "#/definitions/OrganizationTomlAttemptV1" },
+				{ "type": "null" }
+			]
+		},
+		"stellarToml": {
+			"anyOf": [
+				{ "$ref": "#/definitions/OrganizationStellarTomlV1" },
+				{ "type": "null" }
+			]
+		},
 		"validators": {
 			"default": [],
 			"items": {
 				"type": "string"
 			},
 			"type": "array"
+		}
+	},
+	"definitions": {
+		"OrganizationTomlAttemptV1": {
+			"type": "object",
+			"required": ["observedAt", "result", "state", "warnings"],
+			"properties": {
+				"authoritative": { "type": "boolean" },
+				"contentCaptured": { "type": "boolean" },
+				"observedAt": { "type": "string", "format": "date-time" },
+				"result": { "type": "string", "enum": ["success", "failure"] },
+				"state": {
+					"type": "string",
+					"enum": [
+						"Unknown",
+						"Ok",
+						"RequestTimeout",
+						"DNSLookupFailed",
+						"HostnameResolutionFailed",
+						"ConnectionTimeout",
+						"ConnectionRefused",
+						"ConnectionResetByPeer",
+						"SocketClosedPrematurely",
+						"SocketTimeout",
+						"HostUnreachable",
+						"NotFound",
+						"ParsingError",
+						"Forbidden",
+						"ServerError",
+						"UnsupportedVersion",
+						"UnspecifiedError",
+						"ValidatorNotSEP20Linked",
+						"EmptyValidatorsField"
+					]
+				},
+				"warnings": {
+					"type": "array",
+					"items": {
+						"type": "string",
+						"enum": ["TlsCertificateVerificationDisabled"]
+					}
+				}
+			}
+		},
+		"OrganizationTomlFailureV1": {
+			"type": "object",
+			"required": ["observedAt", "result", "state", "warnings"],
+			"properties": {
+				"authoritative": { "type": "boolean" },
+				"contentCaptured": { "type": "boolean" },
+				"observedAt": { "type": "string", "format": "date-time" },
+				"result": { "type": "string", "enum": ["failure"] },
+				"state": {
+					"$ref": "#/definitions/OrganizationTomlAttemptV1/properties/state"
+				},
+				"warnings": {
+					"$ref": "#/definitions/OrganizationTomlAttemptV1/properties/warnings"
+				}
+			}
+		},
+		"OrganizationStellarTomlV1": {
+			"type": "object",
+			"required": ["content", "url"],
+			"properties": {
+				"content": { "type": "string" },
+				"observedAt": { "type": "string", "format": "date-time" },
+				"url": { "type": "string" },
+				"warnings": {
+					"type": "array",
+					"items": {
+						"type": "string",
+						"enum": ["TlsCertificateVerificationDisabled"]
+					}
+				}
+			}
 		}
 	},
 	"type": "object",

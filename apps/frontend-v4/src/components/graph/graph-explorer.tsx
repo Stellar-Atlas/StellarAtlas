@@ -3,7 +3,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ForceGraph3DInstance } from '3d-force-graph';
 import type { Group as ThreeGroup } from 'three';
-import type { PublicNetwork, PublicScpStatementObservation } from '../../api/types';
+import type {
+	PublicNetwork,
+	PublicScpStatementObservation
+} from '../../api/types';
 import {
 	buildGraph3DModel,
 	type Graph3DNode,
@@ -70,6 +73,7 @@ export function GraphExplorer({
 		latestLedgerClosedAt,
 		latestObservedScpSlotIndex,
 		network,
+		scpReadMetadata,
 		scpStatements
 	} = useGraphLiveData(initialNetwork, initialScpStatements);
 	const [graphStatus, setGraphStatus] =
@@ -329,6 +333,7 @@ export function GraphExplorer({
 					latestLedgerSlotIndex={latestLedger}
 					network={liveNetwork}
 					observedSlotIndex={latestObservedScpSlotIndex}
+					readMetadata={scpReadMetadata}
 					statements={scpStatements}
 				/>
 			</section>

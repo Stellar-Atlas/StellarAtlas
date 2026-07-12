@@ -1,6 +1,7 @@
 import { config } from 'dotenv';
 import { DataSource } from 'typeorm';
 import { resolveAppEnvPath } from 'shared/lib/env/resolve-app-env-path.js';
+import { managedMigrations } from './ManagedMigrations.js';
 
 config({
 	path: resolveAppEnvPath(import.meta.url, 'backend'),
@@ -15,6 +16,10 @@ function parseBoolean(value: string | undefined): boolean | undefined {
 	if (['0', 'false', 'no', 'off', 'disable'].includes(normalized)) return false;
 
 	return undefined;
+}
+
+export function databaseMigrationsEnabled(value: string | undefined): boolean {
+	return parseBoolean(value) ?? false;
 }
 
 function databaseSslEnabled(): boolean {
@@ -35,7 +40,9 @@ function databaseSslEnabled(): boolean {
 }
 
 const useDatabaseSsl = databaseSslEnabled();
-const runMigrations = parseBoolean(process.env.DATABASE_MIGRATIONS_RUN) ?? true;
+const runMigrations = databaseMigrationsEnabled(
+	process.env.DATABASE_MIGRATIONS_RUN
+);
 
 const AppDataSource = new DataSource({
 	type: 'postgres',
@@ -43,8 +50,9 @@ const AppDataSource = new DataSource({
 	synchronize: false,
 	url: process.env.ACTIVE_DATABASE_URL,
 	entities: ['lib/**/entities/*.js', 'lib/**/domain/**/!(*.test)*.js'],
-	migrations: ['lib/**/migrations/*.js'],
+	migrations: [...managedMigrations],
 	migrationsRun: runMigrations,
+	migrationsTransactionMode: 'each',
 	ssl: useDatabaseSsl,
 	extra: useDatabaseSsl
 		? {

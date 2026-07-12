@@ -4,7 +4,6 @@ import { OrganizationScanner } from '../OrganizationScanner.js';
 import { OrganizationTomlFetcher } from '../OrganizationTomlFetcher.js';
 import { OrganizationTomlInfo } from '../OrganizationTomlInfo.js';
 import { OrganizationScan } from '../OrganizationScan.js';
-import { createDummyNode } from '@network-scan/domain/node/__fixtures__/createDummyNode.js';
 import Organization from '../../Organization.js';
 import { createDummyOrganizationId } from '../../__fixtures__/createDummyOrganizationId.js';
 import { NodeScan } from '@network-scan/domain/node/scan/NodeScan.js';
@@ -12,7 +11,10 @@ import type { OrganizationRepository } from '../../OrganizationRepository.js';
 import OrganizationMeasurement from '../../OrganizationMeasurement.js';
 import type { Logger } from 'logger';
 import { CouldNotRetrieveArchivedOrganizationsError } from '../errors/CouldNotRetrieveArchivedOrganizationsError.js';
-import { createDummyPublicKeyString } from '@network-scan/domain/node/__fixtures__/createDummyPublicKey.js';
+import {
+	createValidPublicKeyString,
+	createValidValidatorNode
+} from './createValidValidatorNode.js';
 import { TomlState } from '../TomlState.js';
 
 describe('OrganizationScanner', function () {
@@ -47,8 +49,13 @@ describe('OrganizationScanner', function () {
 
 	it('should ignore invalid toml files', async function () {
 		const setup = setupHappyPath();
-		const invalidToml = createToml();
-		invalidToml.state = TomlState.UnspecifiedError;
+		const invalidToml: OrganizationTomlInfo = {
+			...createToml(),
+			authoritative: false,
+			fetchResult: 'failure',
+			state: TomlState.UnspecifiedError,
+			stellarTomlText: null
+		};
 		setup.organizationTomlFetcher.fetchOrganizationTomlInfoCollection.mockResolvedValue(
 			new Map([['domain', invalidToml]])
 		);
@@ -167,9 +174,11 @@ describe('OrganizationScanner', function () {
 	}
 
 	function createToml(
-		validator = createDummyPublicKeyString()
+		validator = createValidPublicKeyString()
 	): OrganizationTomlInfo {
 		return {
+			authoritative: true,
+			fetchResult: 'success',
 			state: TomlState.Ok,
 			warnings: [],
 			stellarTomlText: 'VERSION="2.0.0"',
@@ -184,12 +193,20 @@ describe('OrganizationScanner', function () {
 			physicalAddress: 'physicalAddress',
 			twitter: 'twitter',
 			validators: [validator],
+			validatorSetValid: true,
 			horizonUrl: 'horizonUrl'
 		};
 	}
 
 	function createNode(domain: string) {
-		const node = createDummyNode();
+		const seed =
+			([...domain].reduce(
+				(total, character) => total + character.charCodeAt(0),
+				0
+			) %
+				254) +
+			1;
+		const node = createValidValidatorNode(new Date(), seed);
 		node.updateHomeDomain(domain, new Date());
 		return node;
 	}

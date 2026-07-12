@@ -20,6 +20,20 @@ describe('HistoryArchiveObjectBuilder', () => {
 		});
 	});
 
+	it('normalizes only scheme and host while preserving path and query case', () => {
+		const root = buildRootHistoryArchiveObject(
+			'HTTPS://HISTORY.EXAMPLE.COM/ArchiveCase?Token=AbC123'
+		);
+
+		expect(root).toMatchObject({
+			archiveUrl: 'https://history.example.com/ArchiveCase?Token=AbC123',
+			archiveUrlIdentity:
+				'https://history.example.com/ArchiveCase?Token=AbC123',
+			objectUrl:
+				'https://history.example.com/ArchiveCase/.well-known/stellar-history.json?Token=AbC123'
+		});
+	});
+
 	it('builds state-derived objects with shared host and distinct archive identity', () => {
 		const objects = buildHistoryArchiveObjectsFromState(
 			HistoryArchiveStateSnapshot.available(

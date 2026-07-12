@@ -1,5 +1,14 @@
-import type { NetworkV1, NodeV1, OrganizationV1 } from 'shared';
-import type { NetworkSearchDocument } from './NetworkSearchTypes.js';
+import { createHash } from 'node:crypto';
+import type { NodeV1, OrganizationV1 } from 'shared';
+import type { KnownNodeListItemDTO } from '../../use-cases/get-known-nodes/GetKnownNodesDTO.js';
+import type { KnownOrganizationListItemDTO } from '../../use-cases/get-known-organizations/GetKnownOrganizationsDTO.js';
+import type {
+	NetworkSearchDocument,
+	NetworkSearchDocumentScope,
+	NetworkSearchInventory,
+	NetworkSearchRecordState,
+	NetworkSearchSnapshot
+} from './NetworkSearchTypes.js';
 
 const text = (value: string | null | undefined): string | undefined => {
 	const normalized = value?.trim();
@@ -30,74 +39,105 @@ const joinSearchText = (...parts: (string | undefined)[]): string =>
 const safeDocumentId = (prefix: string, value: string): string =>
 	`${prefix}_${value.replace(/[^a-zA-Z0-9_-]/g, '_')}`;
 
+const recordState = (
+	current: boolean,
+	identityOnly = false
+): NetworkSearchRecordState => {
+	if (identityOnly) return 'identity-only';
+	return current ? 'current' : 'historical';
+};
+
+const organizationScope = (
+	knownOrganization: KnownOrganizationListItemDTO
+): NetworkSearchDocumentScope => {
+	if (!knownOrganization.current) return 'archived';
+	return 'current-organization';
+};
+
 const nodeDocument = (
-	network: NetworkV1,
-	node: NodeV1,
+	inventory: NetworkSearchInventory,
+	knownNode: KnownNodeListItemDTO,
 	organizationsById: ReadonlyMap<string, OrganizationV1>,
 	topTierPublicKeys: ReadonlySet<string>,
-	indexedAt: string
+	canonicalCursor: string
 ): NetworkSearchDocument => {
-	const organization = node.organizationId
+	const node = knownNode.node;
+	const organization = node?.organizationId
 		? organizationsById.get(node.organizationId)
 		: undefined;
 	const organizationName = organization
 		? organizationLabel(organization)
 		: undefined;
-	const label = nodeLabel(node);
-	const detail = text(node.homeDomain) ?? text(node.host) ?? node.publicKey;
+	const label = node ? nodeLabel(node) : knownNode.publicKey;
+	const detail = node
+		? (text(node.homeDomain) ?? text(node.host) ?? node.publicKey)
+		: 'Public key observed without a retained node snapshot';
 
 	return {
-		active: node.active,
-		archiveStatus: nodeArchiveStatus(node),
+		active: knownNode.current && (node?.active ?? false),
+		archiveStatus: node ? nodeArchiveStatus(node) : 'unknown',
+		canonicalCursor,
 		content: joinSearchText(
 			label,
 			detail,
-			node.publicKey,
-			node.host ?? undefined,
-			node.ip,
-			node.versionStr ?? undefined,
-			node.homeDomain ?? undefined,
-			node.historyUrl ?? undefined,
-			node.isp ?? undefined,
-			node.geoData?.countryName ?? undefined,
-			node.geoData?.countryCode ?? undefined,
+			knownNode.publicKey,
+			node?.host ?? undefined,
+			node?.ip,
+			node?.versionStr ?? undefined,
+			node?.homeDomain ?? undefined,
+			node?.historyUrl ?? undefined,
+			node?.isp ?? undefined,
+			node?.geoData?.countryName ?? undefined,
+			node?.geoData?.countryCode ?? undefined,
 			organizationName
 		),
-		countryCode: node.geoData?.countryCode ?? undefined,
-		countryName: node.geoData?.countryName ?? undefined,
+		countryCode: node?.geoData?.countryCode ?? undefined,
+		countryName: node?.geoData?.countryName ?? undefined,
 		detail,
-		entityId: node.publicKey,
+		documentKind: 'entity',
+		entityId: knownNode.publicKey,
 		entityType: 'node',
-		fullValidator: node.isFullValidator,
-		homeDomain: node.homeDomain ?? undefined,
-		href: `/nodes/${encodeURIComponent(node.publicKey)}`,
-		id: safeDocumentId('node', node.publicKey),
-		indexedAt,
-		isp: node.isp ?? undefined,
+		fullValidator: node?.isFullValidator ?? false,
+		homeDomain: node?.homeDomain ?? undefined,
+		href: `/nodes/${encodeURIComponent(knownNode.publicKey)}`,
+		id: safeDocumentId('node', knownNode.publicKey),
+		indexedAt: inventory.generatedAt,
+		isp: node?.isp ?? undefined,
 		label,
-		latestLedger: network.latestLedger,
-		networkTime: network.time,
-		organizationId: node.organizationId ?? undefined,
+		latestLedger: inventory.network.latestLedger,
+		networkTime: inventory.network.time,
+		observedAt:
+			knownNode.lastSeen ??
+			knownNode.lastMeasurementAt ??
+			knownNode.dateDiscovered,
+		organizationId: node?.organizationId ?? undefined,
 		organizationName,
-		publicKey: node.publicKey,
-		topTier: topTierPublicKeys.has(node.publicKey),
-		validating: node.isValidating,
-		validator: node.isValidator,
-		version: node.versionStr ?? undefined
+		publicKey: knownNode.publicKey,
+		recordState: recordState(
+			knownNode.current,
+			knownNode.metadataState === 'public_key_only'
+		),
+		scope: knownNode.scope,
+		topTier: topTierPublicKeys.has(knownNode.publicKey),
+		validating: knownNode.current && (node?.isValidating ?? false),
+		validator: knownNode.current && (node?.isValidator ?? false),
+		version: node?.versionStr ?? undefined
 	};
 };
 
 const organizationDocument = (
-	network: NetworkV1,
-	organization: OrganizationV1,
-	indexedAt: string
+	inventory: NetworkSearchInventory,
+	knownOrganization: KnownOrganizationListItemDTO,
+	canonicalCursor: string
 ): NetworkSearchDocument => {
+	const organization = knownOrganization.organization;
 	const label = organizationLabel(organization);
 	const detail = text(organization.homeDomain) ?? organization.id;
 
 	return {
-		active: organization.validators.length > 0,
+		active: knownOrganization.current && organization.validators.length > 0,
 		archiveStatus: 'unknown',
+		canonicalCursor,
 		content: joinSearchText(
 			label,
 			detail,
@@ -111,44 +151,112 @@ const organizationDocument = (
 			organization.description ?? undefined
 		),
 		detail,
+		documentKind: 'entity',
 		entityId: organization.id,
 		entityType: 'organization',
 		homeDomain: organization.homeDomain,
 		href: `/organizations/${encodeURIComponent(organization.id)}`,
 		id: safeDocumentId('organization', organization.id),
-		indexedAt,
+		indexedAt: inventory.generatedAt,
 		label,
-		latestLedger: network.latestLedger,
-		networkTime: network.time,
+		latestLedger: inventory.network.latestLedger,
+		networkTime: inventory.network.time,
+		observedAt:
+			knownOrganization.lastSeen ?? knownOrganization.snapshotStartDate,
 		organizationId: organization.id,
 		organizationName: label,
-		topTier: organization.subQuorumAvailable,
-		validating: organization.validators.length > 0,
+		recordState: recordState(knownOrganization.current),
+		scope: organizationScope(knownOrganization),
+		topTier: knownOrganization.current && organization.subQuorumAvailable,
+		validating: knownOrganization.current && organization.validators.length > 0,
 		validator: false
 	};
 };
 
-export const buildNetworkSearchDocuments = (
-	network: NetworkV1
-): readonly NetworkSearchDocument[] => {
-	const indexedAt = new Date().toISOString();
-	const organizationsById = new Map(
-		network.organizations.map((organization) => [organization.id, organization])
-	);
-	const topTierPublicKeys = new Set(network.transitiveQuorumSet);
-
-	return [
-		...network.organizations.map((organization) =>
-			organizationDocument(network, organization, indexedAt)
+const archiveRootDocument = (
+	inventory: NetworkSearchInventory,
+	root: NetworkSearchInventory['archiveRoots'][number],
+	canonicalCursor: string
+): NetworkSearchDocument => {
+	const failures = root.objects.remoteFailureObjects;
+	const verified = root.objects.verifiedObjects;
+	const host = new URL(root.archiveUrl).host;
+	return {
+		active: root.objects.activeObjects > 0,
+		archiveStatus: failures > 0 ? 'error' : verified > 0 ? 'ok' : 'unknown',
+		canonicalCursor,
+		content: joinSearchText(
+			host,
+			root.archiveUrl,
+			...root.nodePublicKeys,
+			`${verified} verified`,
+			`${failures} failures`
 		),
-		...network.nodes.map((node) =>
-			nodeDocument(
-				network,
-				node,
-				organizationsById,
-				topTierPublicKeys,
-				indexedAt
-			)
+		detail: `${verified} verified file checks; ${failures} remote failures`,
+		documentKind: 'entity',
+		entityId: root.archiveUrlIdentity,
+		entityType: 'archive-root',
+		evidenceFailures: failures,
+		evidenceProvenance: 'postgres_canonical',
+		evidenceVerified: verified,
+		href: `/archive-scans/${encodeURIComponent(root.archiveUrl)}`,
+		id: safeDocumentId('archive', root.archiveUrlIdentity),
+		indexedAt: inventory.generatedAt,
+		label: host,
+		latestLedger: inventory.network.latestLedger,
+		networkTime: inventory.network.time,
+		observedAt: root.latestObjectAt ?? inventory.generatedAt,
+		recordState: 'current',
+		scope: 'archive-root'
+	};
+};
+
+export const buildNetworkSearchSnapshot = (
+	inventory: NetworkSearchInventory
+): NetworkSearchSnapshot => {
+	const nodes = inventory.nodes.toSorted((left, right) =>
+		left.publicKey.localeCompare(right.publicKey)
+	);
+	const organizations = inventory.organizations.toSorted((left, right) =>
+		left.organization.id.localeCompare(right.organization.id)
+	);
+	const canonicalCursor = createHash('sha256')
+		.update(
+			JSON.stringify({
+				archiveRoots: inventory.archiveRoots,
+				latestLedger: inventory.network.latestLedger,
+				networkTime: inventory.network.time,
+				nodes,
+				organizations,
+				transitiveQuorumSet: inventory.network.transitiveQuorumSet.toSorted()
+			})
 		)
-	];
+		.digest('hex');
+	const organizationsById = new Map(
+		organizations.map(({ organization }) => [organization.id, organization])
+	);
+	const topTierPublicKeys = new Set(inventory.network.transitiveQuorumSet);
+
+	return {
+		canonicalCursor,
+		documents: [
+			...inventory.archiveRoots.map((root) =>
+				archiveRootDocument(inventory, root, canonicalCursor)
+			),
+			...organizations.map((organization) =>
+				organizationDocument(inventory, organization, canonicalCursor)
+			),
+			...nodes.map((node) =>
+				nodeDocument(
+					inventory,
+					node,
+					organizationsById,
+					topTierPublicKeys,
+					canonicalCursor
+				)
+			)
+		],
+		generatedAt: inventory.generatedAt,
+		networkTime: inventory.network.time
+	};
 };

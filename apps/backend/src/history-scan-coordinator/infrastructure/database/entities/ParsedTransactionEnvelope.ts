@@ -1,19 +1,14 @@
 import { Column, Entity, Index } from 'typeorm';
 import { CoreEntity } from '@core/domain/CoreEntity.js';
 import type { ParsedTransactionEnvelopeDTO } from 'history-scanner-dto';
-
-const bigintTransformer = {
-	from: (value: string | number): number =>
-		typeof value === 'number' ? value : Number(value),
-	to: (value: number): number => value
-};
+import { parsedLedgerSequenceTransformer } from '../ParsedHistoryInteger.js';
 
 @Entity({ name: 'parsed_transaction_envelope' })
 @Index(['ledgerSequence', 'transactionSetHash', 'transactionIndex'], {
 	unique: true
 })
 export class ParsedTransactionEnvelope extends CoreEntity {
-	@Column('bigint', { transformer: bigintTransformer })
+	@Column('bigint', { transformer: parsedLedgerSequenceTransformer })
 	public readonly ledgerSequence!: number;
 
 	@Column('integer')

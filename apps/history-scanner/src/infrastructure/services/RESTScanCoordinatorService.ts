@@ -1,5 +1,10 @@
 import 'reflect-metadata';
-import { Url, isHttpError, type HttpOptions, type HttpService } from 'http-helper';
+import {
+	Url,
+	isHttpError,
+	type HttpOptions,
+	type HttpService
+} from 'http-helper';
 import { injectable } from 'inversify';
 import { err, ok, Result } from 'neverthrow';
 import { Scan } from '../../domain/scan/Scan.js';
@@ -25,6 +30,7 @@ import { type ScanError, ScanErrorType } from '../../domain/scan/ScanError.js';
 import type { CoordinatorAuthConfig } from '../config/CoordinatorAuthConfig.js';
 import { CoordinatorServiceError } from './CoordinatorServiceError.js';
 import { parseHistoryArchiveObjectJobDTO } from './HistoryArchiveObjectJobResponseParser.js';
+import { mapParsedHistoryRegistrationResponse } from './ParsedHistoryRegistrationConflictError.js';
 
 const coordinatorReadOptions: HttpOptions = {
 	connectionTimeoutMs: 30_000,
@@ -394,15 +400,7 @@ export class RESTScanCoordinatorService implements ScanCoordinatorService {
 			this.getHttpOptions(coordinatorWriteOptions)
 		);
 
-		if (response.isErr()) {
-			return err(new CoordinatorServiceError(errorMessage, response.error));
-		}
-
-		if (response.value.status !== 201) {
-			return err(new CoordinatorServiceError(errorMessage));
-		}
-
-		return ok(undefined);
+		return mapParsedHistoryRegistrationResponse(response, errorMessage);
 	}
 
 	private getHttpOptions(options: HttpOptions = {}): HttpOptions {

@@ -4,6 +4,7 @@ import { err, ok, Result } from 'neverthrow';
 import type { Config } from '@core/config/Config.js';
 import type { ExceptionLogger } from '@core/services/ExceptionLogger.js';
 import { mapUnknownToError } from '@core/utilities/mapUnknownToError.js';
+import type { HistoryArchiveObjectRepository } from '@history-scan-coordinator/domain/history-archive-object/HistoryArchiveObjectRepository.js';
 import type { ScanRepository } from '@history-scan-coordinator/domain/scan/ScanRepository.js';
 import { TYPES as HISTORY_TYPES } from '@history-scan-coordinator/infrastructure/di/di-types.js';
 import type { NetworkScanRepository } from '@network-scan/domain/network/scan/NetworkScanRepository.js';
@@ -21,7 +22,23 @@ export interface DataFreshnessStatusDTO {
 	readonly generatedAt: string;
 	readonly status: StatusLevel;
 	readonly networkScan: FreshnessProbeDTO;
-	readonly archiveScan: FreshnessProbeDTO;
+	readonly archiveEvidence: ArchiveEvidenceFreshnessProbeDTO;
+	/** @deprecated Historical legacy range-scanner freshness; not runtime health. */
+	readonly archiveScan: LegacyArchiveScanFreshnessProbeDTO;
+}
+
+export interface ArchiveEvidenceFreshnessProbeDTO extends FreshnessProbeDTO {
+	readonly drivesPlatformStatus: false;
+	readonly drivesRuntimeHealth: false;
+	readonly source: 'archive_object_evidence';
+}
+
+export interface LegacyArchiveScanFreshnessProbeDTO extends FreshnessProbeDTO {
+	readonly deprecated: true;
+	readonly drivesPlatformStatus: false;
+	readonly drivesRuntimeHealth: false;
+	readonly historical: true;
+	readonly source: 'legacy_range_scan';
 }
 
 const defaultNetworkScanLoopMs = 3 * 60 * 1000;
@@ -32,6 +49,8 @@ export class GetDataFreshnessStatus {
 	constructor(
 		@inject(NETWORK_TYPES.NetworkScanRepository)
 		private readonly networkScanRepository: NetworkScanRepository,
+		@inject(HISTORY_TYPES.HistoryArchiveObjectRepository)
+		private readonly objectRepository: HistoryArchiveObjectRepository,
 		@inject(HISTORY_TYPES.HistoryArchiveScanRepository)
 		private readonly scanRepository: ScanRepository,
 		@inject('Config') private readonly config: Config,
@@ -43,8 +62,13 @@ export class GetDataFreshnessStatus {
 		const networkStaleAfterMs = this.getNetworkStaleAfterMs();
 
 		try {
-			const [latestNetworkScanAt, latestArchiveScans] = await Promise.all([
+			const [
+				latestNetworkScanAt,
+				latestArchiveActivityAt,
+				latestLegacyArchiveScans
+			] = await Promise.all([
 				this.networkScanRepository.findLatestSuccessfulScanTime(),
+				this.objectRepository.findLatestActivityAt(),
 				this.scanRepository.findLatestLimited(1)
 			]);
 			const networkScan = this.mapFreshnessProbe(
@@ -52,16 +76,34 @@ export class GetDataFreshnessStatus {
 				generatedAt,
 				networkStaleAfterMs
 			);
-			const archiveScan = this.mapFreshnessProbe(
-				latestArchiveScans[0]?.endDate ?? null,
-				generatedAt,
-				defaultArchiveScanStaleAfterMs
-			);
+			const archiveEvidence = {
+				...this.mapFreshnessProbe(
+					latestArchiveActivityAt,
+					generatedAt,
+					defaultArchiveScanStaleAfterMs
+				),
+				drivesPlatformStatus: false,
+				drivesRuntimeHealth: false,
+				source: 'archive_object_evidence'
+			} as const;
+			const archiveScan = {
+				...this.mapFreshnessProbe(
+					latestLegacyArchiveScans[0]?.endDate ?? null,
+					generatedAt,
+					defaultArchiveScanStaleAfterMs
+				),
+				deprecated: true,
+				drivesPlatformStatus: false,
+				drivesRuntimeHealth: false,
+				historical: true,
+				source: 'legacy_range_scan'
+			} as const;
 
 			return ok({
 				generatedAt: generatedAt.toISOString(),
 				status: networkScan.status,
 				networkScan,
+				archiveEvidence,
 				archiveScan
 			});
 		} catch (e) {

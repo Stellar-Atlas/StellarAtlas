@@ -2,10 +2,18 @@ import { Column, Entity, Index } from 'typeorm';
 import { CoreEntity } from '@core/domain/CoreEntity.js';
 import type { ParsedLedgerHeaderDTO } from 'history-scanner-dto';
 
+const maximumLedgerSequence = 0xffff_ffff;
+const maximumProtocolVersion = 0x7fff_ffff;
+
 const bigintTransformer = {
 	from: (value: string | number): number =>
-		typeof value === 'number' ? value : Number(value),
-	to: (value: number): number => value
+		assertIntegerInRange(
+			typeof value === 'number' ? value : Number(value),
+			maximumLedgerSequence,
+			'ledgerSequence'
+		),
+	to: (value: number): number =>
+		assertIntegerInRange(value, maximumLedgerSequence, 'ledgerSequence')
 };
 
 @Entity({ name: 'parsed_ledger_header' })
@@ -31,6 +39,18 @@ export class ParsedLedgerHeader extends CoreEntity {
 
 	@Column('integer')
 	public readonly protocolVersion!: number;
+
+	@Column('timestamptz', { nullable: true })
+	public readonly closedAt!: Date | null;
+
+	@Column('text', { nullable: true })
+	public readonly closedAtSourceArchiveUrl!: string | null;
+
+	@Column('text', { nullable: true })
+	public readonly closedAtScanJobRemoteId!: string | null;
+
+	@Column('timestamptz', { nullable: true })
+	public readonly closedAtObservedAt!: Date | null;
 
 	@Column('text')
 	public readonly firstSourceArchiveUrl!: string;
@@ -62,17 +82,80 @@ export class ParsedLedgerHeader extends CoreEntity {
 		) {
 			return;
 		}
-		this.ledgerSequence = header.ledgerSequence;
-		this.ledgerHeaderHash = header.ledgerHeaderHash;
-		this.previousLedgerHeaderHash = header.previousLedgerHeaderHash;
-		this.transactionSetHash = header.transactionSetHash;
-		this.transactionResultHash = header.transactionResultHash;
-		this.bucketListHash = header.bucketListHash;
-		this.protocolVersion = header.protocolVersion;
-		this.firstSourceArchiveUrl = sourceArchiveUrl;
-		this.lastSourceArchiveUrl = sourceArchiveUrl;
-		this.lastScanJobRemoteId = scanJobRemoteId;
-		this.firstSeenAt = observedAt;
-		this.lastSeenAt = observedAt;
+		this.ledgerSequence = assertIntegerInRange(
+			header.ledgerSequence,
+			maximumLedgerSequence,
+			'ledgerSequence'
+		);
+		this.ledgerHeaderHash = assertNonEmpty(
+			header.ledgerHeaderHash,
+			'ledgerHeaderHash'
+		);
+		this.previousLedgerHeaderHash = assertNonEmpty(
+			header.previousLedgerHeaderHash,
+			'previousLedgerHeaderHash'
+		);
+		this.transactionSetHash = assertNonEmpty(
+			header.transactionSetHash,
+			'transactionSetHash'
+		);
+		this.transactionResultHash = assertNonEmpty(
+			header.transactionResultHash,
+			'transactionResultHash'
+		);
+		this.bucketListHash = assertNonEmpty(
+			header.bucketListHash,
+			'bucketListHash'
+		);
+		this.protocolVersion = assertIntegerInRange(
+			header.protocolVersion,
+			maximumProtocolVersion,
+			'protocolVersion'
+		);
+		this.closedAt = toNullableDate(header.closedAt);
+		this.closedAtSourceArchiveUrl =
+			this.closedAt === null ? null : sourceArchiveUrl;
+		this.closedAtScanJobRemoteId =
+			this.closedAt === null ? null : scanJobRemoteId;
+		this.closedAtObservedAt =
+			this.closedAt === null ? null : toValidDate(observedAt, 'observedAt');
+		this.firstSourceArchiveUrl = assertNonEmpty(
+			sourceArchiveUrl,
+			'sourceArchiveUrl'
+		);
+		this.lastSourceArchiveUrl = this.firstSourceArchiveUrl;
+		this.lastScanJobRemoteId = assertNonEmpty(
+			scanJobRemoteId,
+			'scanJobRemoteId'
+		);
+		this.firstSeenAt = toValidDate(observedAt, 'observedAt');
+		this.lastSeenAt = this.firstSeenAt;
 	}
+}
+
+function toNullableDate(value: string | null | undefined): Date | null {
+	return value === undefined || value === null
+		? null
+		: toValidDate(new Date(value), 'closedAt');
+}
+
+function assertIntegerInRange(
+	value: number,
+	maximum: number,
+	field: string
+): number {
+	if (!Number.isSafeInteger(value) || value < 0 || value > maximum) {
+		throw new RangeError(`${field} is outside its supported integer range`);
+	}
+	return value;
+}
+
+function assertNonEmpty(value: string, field: string): string {
+	if (value.trim().length === 0) throw new Error(`${field} must not be empty`);
+	return value;
+}
+
+function toValidDate(value: Date, field: string): Date {
+	if (Number.isNaN(value.getTime())) throw new Error(`${field} must be valid`);
+	return new Date(value);
 }

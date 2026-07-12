@@ -2,11 +2,16 @@ import 'reflect-metadata';
 import { inject, injectable } from 'inversify';
 import { err, ok, Result } from 'neverthrow';
 import type { Logger } from 'logger';
-import type { HistoryArchiveObjectType } from '../../domain/history-archive-object/HistoryArchiveObject.js';
+import type {
+	HistoryArchiveObject,
+	HistoryArchiveObjectType
+} from '../../domain/history-archive-object/HistoryArchiveObject.js';
 import type { HistoryArchiveObjectRepository } from '../../domain/history-archive-object/HistoryArchiveObjectRepository.js';
+import type { HistoryArchiveCheckpointProofRepository } from '../../domain/history-archive-checkpoint-proof/HistoryArchiveCheckpointProofRepository.js';
 import { TYPES } from '../../infrastructure/di/di-types.js';
 import { mapUnknownToError } from '@core/utilities/mapUnknownToError.js';
 import { HistoryArchiveObjectEventRecorder } from '../record-history-archive-object-event/HistoryArchiveObjectEventRecorder.js';
+import { ReconcileHistoryArchiveObjectTransitions } from '../reconcile-history-archive-object-transitions/ReconcileHistoryArchiveObjectTransitions.js';
 
 export interface HistoryArchiveObjectJobDTO {
 	readonly archiveUrl: string;
@@ -34,16 +39,30 @@ export class GetHistoryArchiveObjectJob {
 	constructor(
 		@inject(TYPES.HistoryArchiveObjectRepository)
 		private readonly objectRepository: HistoryArchiveObjectRepository,
+		@inject(TYPES.HistoryArchiveCheckpointProofRepository)
+		private readonly checkpointProofRepository: HistoryArchiveCheckpointProofRepository,
 		private readonly eventRecorder: HistoryArchiveObjectEventRecorder,
+		private readonly transitionReconciler: ReconcileHistoryArchiveObjectTransitions,
 		@inject('Logger') private readonly logger: Logger
 	) {}
 
 	async execute(): Promise<Result<HistoryArchiveObjectJobDTO | null, Error>> {
 		try {
-			await this.objectRepository.releaseStaleObjects(getStaleObjectCutoff());
+			await this.transitionReconciler.executeIfDue();
+			const staleObjects = await this.objectRepository.releaseStaleObjects(
+				getStaleObjectCutoff()
+			);
+			for (const staleObject of staleObjects) {
+				await this.refreshProof(staleObject);
+				await this.eventRecorder.recordDurably(staleObject, {
+					claimAttempt: staleObject.attempts,
+					eventType: 'released'
+				});
+			}
 			const object =
 				await this.objectRepository.claimNextObject(supportedObjectTypes);
 			if (object === null) return ok(null);
+			await this.refreshProof(object);
 			await this.eventRecorder.record(object, {
 				claimAttempt: object.attempts,
 				eventType: 'claimed'
@@ -67,6 +86,11 @@ export class GetHistoryArchiveObjectJob {
 			});
 			return err(error);
 		}
+	}
+
+	private async refreshProof(object: HistoryArchiveObject): Promise<void> {
+		if (object.checkpointLedger === null && object.bucketHash === null) return;
+		await this.checkpointProofRepository.refreshForObject(object);
 	}
 }
 

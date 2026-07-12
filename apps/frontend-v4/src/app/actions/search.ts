@@ -1,23 +1,17 @@
 'use server';
 
+import type { PublicKnownNodeScope } from '../../api/known-network-types';
 import type {
-	PublicSearchArchiveStatus,
-	PublicSearchEntityType,
-	PublicSearchFacetName,
 	PublicSearchFacets,
 	PublicSearchResponse
-} from '../../api/types';
+} from '../../api/search-types';
+import { parsePublicSearchResponse } from '../../api/search-response-parser';
+import {
+	buildNetworkSearchPath,
+	type SearchNetworkFilters
+} from '../../api/search-request';
 
-export interface SearchNetworkFilters {
-	active?: boolean;
-	archiveStatus?: PublicSearchArchiveStatus;
-	countryCode?: string;
-	entityType?: PublicSearchEntityType;
-	fullValidator?: boolean;
-	topTier?: boolean;
-	validating?: boolean;
-	validator?: boolean;
-}
+export type { SearchNetworkFilters } from '../../api/search-request';
 
 const getInternalApiBaseUrl = (): string => {
 	const configuredUrl =
@@ -35,52 +29,50 @@ const emptyFacets = (): PublicSearchFacets => ({
 	countryCode: [],
 	entityType: [],
 	fullValidator: [],
+	scope: [],
 	topTier: [],
 	validating: [],
 	validator: []
 });
 
-const emptySearchResponse = (query: string): PublicSearchResponse => ({
+const emptySearchResponse = (
+	query: string,
+	scope: PublicKnownNodeScope
+): PublicSearchResponse => ({
 	estimatedTotalHits: 0,
 	facets: emptyFacets(),
 	hits: [],
-	indexedNetworkTime: new Date(0).toISOString(),
+	indexedNetworkTime: null,
+	pagination: {
+		hasMore: false,
+		limit: 8,
+		offset: 0,
+		total: 0,
+		totalIsExact: true
+	},
 	query,
 	readModel: {
-		fallbackReason: 'meilisearch_unavailable',
-		schemaVersion: 'v1'
+		canonicalCursor: null,
+		fallbackReason: 'canonical_unavailable',
+		freshness: 'unavailable',
+		observedAt: null,
+		schemaVersion: 'unavailable',
+		source: 'unavailable'
 	},
-	source: 'memory'
+	scope,
+	source: 'unavailable'
 });
-
-const setBooleanFilter = (
-	url: URL,
-	name: PublicSearchFacetName,
-	value: boolean | undefined
-): void => {
-	if (value === undefined) return;
-	url.searchParams.set(name, value ? 'true' : 'false');
-};
 
 export async function searchNetwork(
 	query: string,
 	filters: SearchNetworkFilters = {}
 ): Promise<PublicSearchResponse> {
 	const normalizedQuery = query.trim();
-	const url = new URL('/v1/search', getInternalApiBaseUrl());
-	url.searchParams.set('q', normalizedQuery);
-	url.searchParams.set('limit', '8');
-	if (filters.entityType) url.searchParams.set('type', filters.entityType);
-	if (filters.archiveStatus) {
-		url.searchParams.set('archiveStatus', filters.archiveStatus);
-	}
-	if (filters.countryCode)
-		url.searchParams.set('countryCode', filters.countryCode);
-	setBooleanFilter(url, 'active', filters.active);
-	setBooleanFilter(url, 'fullValidator', filters.fullValidator);
-	setBooleanFilter(url, 'topTier', filters.topTier);
-	setBooleanFilter(url, 'validating', filters.validating);
-	setBooleanFilter(url, 'validator', filters.validator);
+	const scope = filters.scope ?? 'all-known';
+	const url = new URL(
+		buildNetworkSearchPath(normalizedQuery, filters),
+		getInternalApiBaseUrl()
+	);
 
 	try {
 		const response = await fetch(url, {
@@ -88,10 +80,14 @@ export async function searchNetwork(
 			headers: { Accept: 'application/json' }
 		});
 
-		if (!response.ok) return emptySearchResponse(normalizedQuery);
+		if (!response.ok) return emptySearchResponse(normalizedQuery, scope);
 
-		return response.json() as Promise<PublicSearchResponse>;
+		const payload: unknown = await response.json();
+		return (
+			parsePublicSearchResponse(payload) ??
+			emptySearchResponse(normalizedQuery, scope)
+		);
 	} catch {
-		return emptySearchResponse(normalizedQuery);
+		return emptySearchResponse(normalizedQuery, scope);
 	}
 }

@@ -1,10 +1,11 @@
 import { TomlState } from './TomlState.js';
 import type { TomlFetchWarning } from '../../network/scan/TomlService.js';
+import type { OrganizationTomlAttemptResult } from './OrganizationTomlFetchResult.js';
 
-export interface OrganizationTomlInfo {
+interface OrganizationTomlInfoBase {
+	authoritative: boolean;
 	state: TomlState;
 	warnings: TomlFetchWarning[];
-	stellarTomlText: string | null;
 	name: string | null;
 	physicalAddress: string | null;
 	twitter: string | null;
@@ -17,4 +18,17 @@ export interface OrganizationTomlInfo {
 	description: string | null;
 	phoneNumber: string | null;
 	validators: string[];
+	validatorSetValid: boolean;
 }
+
+export type OrganizationTomlInfo = OrganizationTomlInfoBase &
+	(
+		| {
+				fetchResult: Extract<OrganizationTomlAttemptResult, 'success'>;
+				stellarTomlText: string;
+		  }
+		| {
+				fetchResult: Extract<OrganizationTomlAttemptResult, 'failure'>;
+				stellarTomlText: string | null;
+		  }
+	);

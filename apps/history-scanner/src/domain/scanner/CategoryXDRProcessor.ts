@@ -1,15 +1,17 @@
 import { Writable } from 'stream';
 import { Category } from '../history-archive/Category.js';
-import {
+import type {
 	LedgerHeaderHistoryEntryResult,
 	TransactionEnvelopeHistoryEntryResult,
 	TransactionResultHistoryEntryResult
 } from './hash-worker.js';
+import { isArchiveXdrError } from './hash-worker.js';
 import { Url } from 'http-helper';
 import { CategoryVerificationData } from './CategoryScanner.js';
 import { HasherPool } from './HasherPool.js';
 import { noopParsedHistorySink } from './parsed-history/ParsedHistorySink.js';
 import type { ParsedHistorySink } from './parsed-history/ParsedHistorySink.js';
+import { ScannerIssueError } from './ScannerIssueError.js';
 
 export class CategoryXDRProcessor extends Writable {
 	public processedEntries = 0;
@@ -41,7 +43,7 @@ export class CategoryXDRProcessor extends Writable {
 	private async processXdr(xdr: Buffer): Promise<void> {
 		if (this.pool.terminated) {
 			//previous stream could still be transmitting
-			throw new Error('Workerpool terminated');
+			throw new ScannerIssueError('Worker pool terminated');
 		}
 
 		switch (this.category) {
@@ -114,6 +116,7 @@ export class CategoryXDRProcessor extends Writable {
 				'processLedgerHeaderHistoryEntryXDR'
 			);
 		await this.parsedHistorySink.emit({
+			closedAt: ledgerHeaderResult.closedAt,
 			recordType: 'ledger-header',
 			sourceUrl: this.url.value,
 			ledger: ledgerHeaderResult.ledger,
@@ -157,7 +160,17 @@ export class CategoryXDRProcessor extends Writable {
 			| 'processScpHistoryEntryXDR'
 			| 'processLedgerHeaderHistoryEntryXDR'
 	): Promise<Return> {
-		return (await this.pool.workerpool.exec(method, [data])) as Return;
+		try {
+			return (await this.pool.workerpool.exec(method, [data])) as Return;
+		} catch (error) {
+			if (isArchiveXdrError(error)) throw error;
+			throw new ScannerIssueError(
+				'Worker pool failed to process archive data',
+				{
+					cause: error
+				}
+			);
+		}
 	}
 }
 

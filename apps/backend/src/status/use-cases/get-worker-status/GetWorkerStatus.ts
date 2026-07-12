@@ -4,10 +4,18 @@ import { err, ok, Result } from 'neverthrow';
 import { GetScannerMetrics } from '@history-scan-coordinator/use-cases/GetScannerMetrics.js';
 import { TYPES as HISTORY_TYPES } from '@history-scan-coordinator/infrastructure/di/di-types.js';
 import type { HistoryArchiveObjectRepository } from '@history-scan-coordinator/domain/history-archive-object/HistoryArchiveObjectRepository.js';
+import type {
+	HistoryArchiveWorkerStatus,
+	HistoryArchiveWorkerStatusRepository
+} from '@history-scan-coordinator/domain/history-archive-worker/HistoryArchiveWorkerStatus.js';
 import { mapUnknownToError } from '@core/utilities/mapUnknownToError.js';
 import { getWorstStatus, type StatusLevel } from '../../domain/StatusTypes.js';
 
 const archiveObjectWorkerStaleAgeMs = 2 * 60 * 1000;
+const archiveObjectWorkerPublicRetentionMs = 15 * 60 * 1000;
+const archiveObjectWorkerStorageRetentionMs = 24 * 60 * 60 * 1000;
+const archiveObjectWorkerStartupGraceMs = 2 * 60 * 1000;
+const archiveObjectWorkerRowLimit = 128;
 const defaultConfiguredObjectWorkers = 24;
 const maxConfiguredObjectWorkers = 24;
 
@@ -15,9 +23,37 @@ export interface ArchiveWorkerStatusDTO {
 	readonly status: StatusLevel;
 	readonly activeWorkers: number;
 	readonly configuredWorkerProcesses: number;
+	readonly freshWorkers: number;
+	readonly idleWorkers: number;
+	readonly lastHeartbeatAt: string | null;
+	readonly missingWorkers: number;
+	readonly queueActiveWorkers: number;
+	readonly queueStaleWorkers: number;
+	readonly registeredWorkers: number;
+	readonly startupGraceActive: boolean;
+	readonly startupGraceMs: number;
 	readonly staleWorkers: number;
+	readonly telemetryMode: 'per-worker';
 	readonly totalTakenJobs: number;
 	readonly staleJobAgeMs: number;
+	readonly workers: readonly ArchiveWorkerRowDTO[];
+}
+
+export interface ArchiveWorkerRowDTO {
+	readonly bytesDownloaded: number | null;
+	readonly claimAttempt: number | null;
+	readonly currentObject: HistoryArchiveWorkerStatus['currentObject'];
+	readonly heartbeatAgeMs: number;
+	readonly lastHeartbeatAt: string;
+	readonly lastOutcome: HistoryArchiveWorkerStatus['lastOutcome'];
+	readonly lastOutcomeAt: string | null;
+	readonly pid: number;
+	readonly processGeneration: number;
+	readonly processId: string;
+	readonly processStartedAt: string;
+	readonly stage: HistoryArchiveWorkerStatus['stage'];
+	readonly status: 'active' | 'idle' | 'stale';
+	readonly workerId: string;
 }
 
 export interface CommunityScannerStatusDTO {
@@ -43,54 +79,187 @@ export class GetWorkerStatus {
 		@inject(GetScannerMetrics)
 		private readonly getScannerMetrics: GetScannerMetrics,
 		@inject(HISTORY_TYPES.HistoryArchiveObjectRepository)
-		private readonly objectRepository: HistoryArchiveObjectRepository
+		private readonly objectRepository: HistoryArchiveObjectRepository,
+		@inject(HISTORY_TYPES.HistoryArchiveWorkerStatusRepository)
+		private readonly workerStatusRepository: HistoryArchiveWorkerStatusRepository
 	) {}
 
 	async execute(): Promise<Result<WorkerStatusDTO, Error>> {
-		const staleCutoff = new Date(Date.now() - archiveObjectWorkerStaleAgeMs);
-		const [workerSnapshot, scannerMetricsResult] = await Promise.all([
-			this.objectRepository.getWorkerSnapshot(staleCutoff).catch((error) => {
-				throw mapUnknownToError(error);
-			}),
-			this.getScannerMetrics.execute()
-		]).catch((error: unknown) => {
-			return [null, err(mapUnknownToError(error))] as const;
-		});
-		if (workerSnapshot === null) return err(scannerMetricsResult.error);
-		if (scannerMetricsResult.isErr()) return err(scannerMetricsResult.error);
-
-		const workerStatus = this.mapArchiveWorkerStatus(workerSnapshot);
-		const scannerStatus = this.mapCommunityScannerStatus(
-			scannerMetricsResult.value
+		const generatedAt = new Date();
+		const staleCutoff = new Date(
+			generatedAt.getTime() - archiveObjectWorkerStaleAgeMs
+		);
+		const publicCutoff = new Date(
+			generatedAt.getTime() - archiveObjectWorkerPublicRetentionMs
+		);
+		const pruneBefore = new Date(
+			generatedAt.getTime() - archiveObjectWorkerStorageRetentionMs
 		);
 
-		return ok({
-			generatedAt: new Date().toISOString(),
-			status: getWorstStatus([workerStatus.status, scannerStatus.status]),
-			archiveWorkers: workerStatus,
-			communityScanners: scannerStatus
-		});
+		try {
+			const [queueSnapshot, workerRows, scannerMetricsResult] =
+				await Promise.all([
+					this.objectRepository.getWorkerSnapshot(staleCutoff),
+					this.workerStatusRepository.findRecent({
+						limit: archiveObjectWorkerRowLimit,
+						observedAfter: publicCutoff,
+						pruneBefore
+					}),
+					this.getScannerMetrics.execute()
+				]);
+			if (scannerMetricsResult.isErr()) return err(scannerMetricsResult.error);
+
+			const workerStatus = this.mapArchiveWorkerStatus(
+				workerRows,
+				queueSnapshot,
+				generatedAt,
+				staleCutoff
+			);
+			const scannerStatus = this.mapCommunityScannerStatus(
+				scannerMetricsResult.value
+			);
+
+			return ok({
+				generatedAt: generatedAt.toISOString(),
+				status: getWorstStatus([workerStatus.status, scannerStatus.status]),
+				archiveWorkers: workerStatus,
+				communityScanners: scannerStatus
+			});
+		} catch (error) {
+			return err(mapUnknownToError(error));
+		}
 	}
 
-	private mapArchiveWorkerStatus(value: {
-		readonly activeObjects: number;
-		readonly hasPendingObjects: boolean;
-		readonly staleObjects: number;
-		readonly totalScanningObjects: number;
-	}): ArchiveWorkerStatusDTO {
-		const stalledWithBacklog =
-			value.hasPendingObjects && value.activeObjects === 0;
+	private mapArchiveWorkerStatus(
+		rows: readonly HistoryArchiveWorkerStatus[],
+		queueSnapshot: {
+			readonly activeObjects: number;
+			readonly hasPendingObjects: boolean;
+			readonly staleObjects: number;
+			readonly totalScanningObjects: number;
+		},
+		generatedAt: Date,
+		staleCutoff: Date
+	): ArchiveWorkerStatusDTO {
+		const workers = rows
+			.map((row) => this.mapArchiveWorker(row, generatedAt, staleCutoff))
+			.sort(compareArchiveWorkers);
+		const registeredActiveWorkers = workers.filter(
+			(worker) => worker.status === 'active'
+		).length;
+		const idleWorkers = workers.filter(
+			(worker) => worker.status === 'idle'
+		).length;
+		const registryStaleWorkers = workers.filter(
+			(worker) => worker.status === 'stale'
+		).length;
+		const freshWorkers = registeredActiveWorkers + idleWorkers;
+		const configuredWorkerProcesses = readConfiguredObjectWorkerProcesses(
+			process.env
+		);
+		const missingWorkers = Math.max(
+			configuredWorkerProcesses - freshWorkers,
+			0
+		);
+		const activeWorkers = Math.max(
+			registeredActiveWorkers,
+			queueSnapshot.activeObjects
+		);
+		const staleWorkers = Math.max(
+			registryStaleWorkers,
+			queueSnapshot.staleObjects
+		);
+		const startupGraceActive = this.isStartupGraceActive(
+			rows,
+			freshWorkers,
+			missingWorkers,
+			generatedAt,
+			staleCutoff
+		);
+		const hasRuntimeSignal =
+			freshWorkers > 0 || queueSnapshot.activeObjects > 0;
+		const status: StatusLevel =
+			missingWorkers === 0 && staleWorkers === 0
+				? 'ok'
+				: freshWorkers === 0 && !startupGraceActive && !hasRuntimeSignal
+					? 'unavailable'
+					: 'degraded';
+
 		return {
-			status:
-				value.staleObjects > 0 || stalledWithBacklog ? 'degraded' : 'ok',
-			activeWorkers: value.activeObjects,
-			configuredWorkerProcesses: readConfiguredObjectWorkerProcesses(
-				process.env
+			status,
+			activeWorkers,
+			configuredWorkerProcesses,
+			freshWorkers,
+			idleWorkers,
+			lastHeartbeatAt: getLatestHeartbeat(rows),
+			missingWorkers,
+			queueActiveWorkers: queueSnapshot.activeObjects,
+			queueStaleWorkers: queueSnapshot.staleObjects,
+			registeredWorkers: workers.length,
+			startupGraceActive,
+			startupGraceMs: archiveObjectWorkerStartupGraceMs,
+			staleWorkers,
+			telemetryMode: 'per-worker',
+			totalTakenJobs: Math.max(
+				workers.filter((worker) => worker.currentObject !== null).length,
+				queueSnapshot.totalScanningObjects
 			),
-			staleWorkers: value.staleObjects,
-			totalTakenJobs: value.totalScanningObjects,
-			staleJobAgeMs: archiveObjectWorkerStaleAgeMs
+			staleJobAgeMs: archiveObjectWorkerStaleAgeMs,
+			workers
 		};
+	}
+
+	private mapArchiveWorker(
+		row: HistoryArchiveWorkerStatus,
+		generatedAt: Date,
+		staleCutoff: Date
+	): ArchiveWorkerRowDTO {
+		const stale = row.heartbeatAt < staleCutoff;
+		return {
+			bytesDownloaded: row.bytesDownloaded,
+			claimAttempt: row.claimAttempt,
+			currentObject:
+				row.currentObject === null
+					? null
+					: {
+							...row.currentObject,
+							source: redactArchiveSource(row.currentObject.source)
+						},
+			heartbeatAgeMs: Math.max(
+				0,
+				generatedAt.getTime() - row.heartbeatAt.getTime()
+			),
+			lastHeartbeatAt: row.heartbeatAt.toISOString(),
+			lastOutcome: row.lastOutcome,
+			lastOutcomeAt: row.lastOutcomeAt?.toISOString() ?? null,
+			pid: row.pid,
+			processGeneration: row.processGeneration,
+			processId: row.processId,
+			processStartedAt: row.processStartedAt.toISOString(),
+			stage: row.stage,
+			status: stale ? 'stale' : row.currentObject === null ? 'idle' : 'active',
+			workerId: row.workerId
+		};
+	}
+
+	private isStartupGraceActive(
+		rows: readonly HistoryArchiveWorkerStatus[],
+		freshWorkers: number,
+		missingWorkers: number,
+		generatedAt: Date,
+		staleCutoff: Date
+	): boolean {
+		if (missingWorkers === 0) return false;
+		if (process.uptime() * 1000 < archiveObjectWorkerStartupGraceMs)
+			return true;
+		if (freshWorkers === 0) return false;
+
+		return rows.some(
+			(row) =>
+				row.heartbeatAt >= staleCutoff &&
+				generatedAt.getTime() - row.processStartedAt.getTime() <
+					archiveObjectWorkerStartupGraceMs
+		);
 	}
 
 	private mapCommunityScannerStatus(value: {
@@ -114,6 +283,40 @@ export class GetWorkerStatus {
 			heartbeatFreshnessMs: value.heartbeatFreshnessMs
 		};
 	}
+}
+
+function redactArchiveSource(value: string): string {
+	try {
+		const url = new URL(value);
+		if (url.protocol !== 'http:' && url.protocol !== 'https:') {
+			return 'redacted';
+		}
+		return url.origin;
+	} catch {
+		return 'redacted';
+	}
+}
+
+function compareArchiveWorkers(
+	left: ArchiveWorkerRowDTO,
+	right: ArchiveWorkerRowDTO
+): number {
+	const statusRank = { active: 0, idle: 1, stale: 2 } as const;
+	const difference = statusRank[left.status] - statusRank[right.status];
+	if (difference !== 0) return difference;
+	const ageDifference = left.heartbeatAgeMs - right.heartbeatAgeMs;
+	if (ageDifference !== 0) return ageDifference;
+	return left.workerId.localeCompare(right.workerId);
+}
+
+function getLatestHeartbeat(
+	rows: readonly HistoryArchiveWorkerStatus[]
+): string | null {
+	let latest: Date | null = null;
+	for (const row of rows) {
+		if (latest === null || row.heartbeatAt > latest) latest = row.heartbeatAt;
+	}
+	return latest?.toISOString() ?? null;
 }
 
 function readConfiguredObjectWorkerProcesses(env: NodeJS.ProcessEnv): number {

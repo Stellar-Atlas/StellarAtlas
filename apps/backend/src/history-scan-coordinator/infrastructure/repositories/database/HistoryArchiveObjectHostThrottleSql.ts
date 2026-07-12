@@ -12,12 +12,13 @@ export const historyArchiveObjectHostFailureUpsertSql = `
 		"errorType",
 		"httpStatus",
 		"blockedUntil",
+		"retryAfterUntil",
 		"lastFailureAt",
 		"consecutiveFailures",
 		"createdAt",
 		"updatedAt"
 	)
-	values ($1, $2, $3, $4, $5, $6, $7, now(), 1, now(), now())
+	values ($1, $2, $3, $4, $5, $6, $7, $8, now(), 1, now(), now())
 	on conflict ("hostIdentity")
 	do update set
 		"archiveUrlIdentity" = excluded."archiveUrlIdentity",
@@ -29,6 +30,16 @@ export const historyArchiveObjectHostFailureUpsertSql = `
 			"history_archive_object_host_throttle"."blockedUntil",
 			excluded."blockedUntil"
 		),
+		"retryAfterUntil" = case
+			when excluded."retryAfterUntil" is null then
+				"history_archive_object_host_throttle"."retryAfterUntil"
+			when "history_archive_object_host_throttle"."retryAfterUntil" is null then
+				excluded."retryAfterUntil"
+			else greatest(
+				"history_archive_object_host_throttle"."retryAfterUntil",
+				excluded."retryAfterUntil"
+			)
+		end,
 		"lastFailureAt" = excluded."lastFailureAt",
 		"consecutiveFailures" =
 			case
@@ -54,6 +65,7 @@ export function toHistoryArchiveObjectHostFailureSqlParams(
 		failure.evidenceClass,
 		failure.errorType,
 		failure.httpStatus ?? null,
-		failure.blockedUntil
+		failure.blockedUntil,
+		failure.retryAfterUntil ?? null
 	];
 }

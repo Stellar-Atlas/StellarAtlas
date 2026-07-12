@@ -3,6 +3,7 @@ import { err, ok } from 'neverthrow';
 import type { ExceptionLogger } from 'exception-logger';
 import type { ScanCoordinatorService } from '../../../domain/scan/ScanCoordinatorService.js';
 import { CoordinatorParsedHistorySink } from '../CoordinatorParsedHistorySink.js';
+import { ParsedHistoryRegistrationConflictError } from '../ParsedHistoryRegistrationConflictError.js';
 
 describe('CoordinatorParsedHistorySink', () => {
 	it('should batch and flush parsed ledger header records', async () => {
@@ -31,6 +32,9 @@ describe('CoordinatorParsedHistorySink', () => {
 		expect(
 			coordinator.registerParsedLedgerHeaders.mock.calls[0][0].headers
 		).toHaveLength(2);
+		expect(
+			coordinator.registerParsedLedgerHeaders.mock.calls[0][0].headers[0]
+		).toMatchObject({ closedAt: '2026-07-05T01:42:50.000Z' });
 
 		await sink.emit(createLedgerHeaderRecord(3));
 		await sink.flush();
@@ -66,6 +70,30 @@ describe('CoordinatorParsedHistorySink', () => {
 		await sink.emit(createLedgerHeaderRecord(1));
 
 		expect(coordinator.registerParsedLedgerHeaders).toHaveBeenCalledTimes(2);
+		expect(exceptionLogger.captureException).not.toHaveBeenCalled();
+	});
+
+	it('should preserve archive content conflicts without retrying or logging them', async () => {
+		const coordinator = mock<ScanCoordinatorService>();
+		const exceptionLogger = mock<ExceptionLogger>();
+		const conflict = new ParsedHistoryRegistrationConflictError(
+			'Parsed ledger header content conflicts with its stored identity',
+			'stored-value-conflict',
+			[{ ledgerHeaderHash: 'ledger-header-1', ledgerSequence: 1 }]
+		);
+		coordinator.registerParsedLedgerHeaders.mockResolvedValue(err(conflict));
+		const sink = new CoordinatorParsedHistorySink(
+			coordinator,
+			'https://history.stellar.org',
+			'remote-id',
+			exceptionLogger,
+			1,
+			[0, 0]
+		);
+
+		await expect(sink.emit(createLedgerHeaderRecord(1))).rejects.toBe(conflict);
+
+		expect(coordinator.registerParsedLedgerHeaders).toHaveBeenCalledTimes(1);
 		expect(exceptionLogger.captureException).not.toHaveBeenCalled();
 	});
 
@@ -150,6 +178,7 @@ describe('CoordinatorParsedHistorySink', () => {
 function createLedgerHeaderRecord(ledger: number) {
 	return {
 		bucketListHash: `bucket-list-${ledger}`,
+		closedAt: '2026-07-05T01:42:50.000Z',
 		ledger,
 		ledgerHeaderHash: `ledger-header-${ledger}`,
 		previousLedgerHeaderHash: `previous-ledger-header-${ledger}`,

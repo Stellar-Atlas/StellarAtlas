@@ -3,21 +3,19 @@ import type { Socket } from 'net';
 import type { Logger } from '@core/services/Logger.js';
 import { WebSocket, WebSocketServer } from 'ws';
 import type { GetNetwork } from '../../use-cases/get-network/GetNetwork.js';
-import type { GetScpStatements } from '../../use-cases/get-scp-statements/GetScpStatements.js';
+import type {
+	GetScpStatements,
+	ScpStatementReadFreshness,
+	ScpStatementReadSource
+} from '../../use-cases/get-scp-statements/GetScpStatements.js';
 import type {
 	GetLatestObservedLedger,
 	LatestObservedLedgerDTO
 } from '../../use-cases/get-latest-observed-ledger/GetLatestObservedLedger.js';
 import { fetchLatestLedger } from './HorizonLedgerClient.js';
-import {
-	compareScpStatement,
-	compareScpStatementCursor,
-	createScpStatementStreamState,
-	getScpStatementReadCursor,
-	getScpStatementReadOrder,
-	selectScpStatementDelta,
-	type ScpStatementStreamState
-} from './ScpStatementStreamState.js';
+import { scpStatementObservationPolicy } from '../../domain/scp/ScpStatementObservationPolicy.js';
+import { getSharedScpStatementLiveHub } from './ScpStatementLiveHub.js';
+import { BoundedWebSocketSender } from './BoundedWebSocketSender.js';
 
 interface NetworkLiveWebSocketConfig {
 	getLatestObservedLedger: GetLatestObservedLedger;
@@ -29,28 +27,37 @@ interface NetworkLiveWebSocketConfig {
 }
 
 type LiveMessage =
-	| { payload: unknown; type: 'network' | 'scp' | 'latestLedger' }
+	| { payload: unknown; type: 'network' | 'latestLedger' }
+	| {
+			freshness: ScpStatementReadFreshness;
+			freshnessMs: number | null;
+			observedAt: string | null;
+			payload: unknown;
+			source: ScpStatementReadSource;
+			type: 'scp';
+	  }
 	| { payload: { message: string }; type: 'error' };
 
 type LiveLatestLedgerDTO =
 	| LatestObservedLedgerDTO
 	| {
 			readonly closedAt: string;
+			readonly freshness: 'fresh' | 'stale';
+			readonly freshnessMs: number;
+			readonly observedAt: string;
 			readonly protocolVersion: number;
 			readonly sequence: string;
 			readonly source: 'horizon_fallback';
 	  };
 
 interface LiveClient {
-	scpState: ScpStatementStreamState;
-	socket: WebSocket;
+	scpUnsubscribe: () => void;
+	sender: BoundedWebSocketSender;
 }
 
 const defaultPath = '/v1/live/ws';
 const latestLedgerIntervalMs = 2_000;
 const networkIntervalMs = 5_000;
-const scpIntervalMs = 1_200;
-const scpStatementLimit = 1_000;
 
 const isWebSocketPath = (request: IncomingMessage, path: string): boolean => {
 	if (!request.url) return false;
@@ -74,8 +81,21 @@ async function getLatestLedger(
 	}
 
 	const horizonLedger = await fetchLatestLedger(config.horizonUrl);
+	const observedAt = new Date();
+	const closedAtMs = Date.parse(horizonLedger.closedAt);
+	const ageMs = observedAt.getTime() - closedAtMs;
+	const freshnessMs = Number.isFinite(ageMs)
+		? Math.abs(ageMs)
+		: scpStatementObservationPolicy.readFreshnessMs + 1;
 	return {
 		...horizonLedger,
+		freshness:
+			ageMs >= -scpStatementObservationPolicy.readFutureToleranceMs &&
+			ageMs <= scpStatementObservationPolicy.readFreshnessMs
+				? 'fresh'
+				: 'stale',
+		freshnessMs,
+		observedAt: observedAt.toISOString(),
 		source: 'horizon_fallback'
 	};
 }
@@ -87,40 +107,18 @@ export function attachNetworkLiveWebSocket(
 	const path = config.path ?? defaultPath;
 	const clients = new Map<WebSocket, LiveClient>();
 	const webSocketServer = new WebSocketServer({ noServer: true });
+	const scpLiveHub = getSharedScpStatementLiveHub(
+		config.getScpStatements,
+		config.logger
+	);
 	let latestLedgerTimer: ReturnType<typeof setInterval> | undefined;
 	let networkTimer: ReturnType<typeof setInterval> | undefined;
-	let scpTimer: ReturnType<typeof setInterval> | undefined;
 	let latestLedgerWriting = false;
 	let networkWriting = false;
-	let scpWriting = false;
 
 	const broadcast = (message: LiveMessage): void => {
 		const payload = JSON.stringify(message);
-		for (const client of clients.values()) {
-			if (client.socket.readyState === WebSocket.OPEN)
-				client.socket.send(payload);
-		}
-	};
-
-	const send = (client: LiveClient, message: LiveMessage): void => {
-		if (client.socket.readyState !== WebSocket.OPEN) return;
-		client.socket.send(JSON.stringify(message));
-	};
-
-	const getOldestScpState = (): ScpStatementStreamState | undefined => {
-		let oldestState: ScpStatementStreamState | null = null;
-		for (const client of clients.values()) {
-			if (client.scpState.cursor === null) return undefined;
-			if (
-				oldestState === null ||
-				compareScpStatementCursor(client.scpState.cursor, oldestState.cursor!) <
-					0
-			) {
-				oldestState = client.scpState;
-			}
-		}
-
-		return oldestState ?? undefined;
+		for (const client of clients.values()) client.sender.send(payload);
 	};
 
 	const writeLatestLedger = (): void => {
@@ -171,81 +169,69 @@ export function attachNetworkLiveWebSocket(
 			});
 	};
 
-	const writeScp = (): void => {
-		if (scpWriting) return;
-		scpWriting = true;
-		const oldestState = getOldestScpState();
-		// Sweep the live freshness window so late-visible statements are still deduped and delivered.
-		void config.getScpStatements
-			.execute({
-				after: oldestState ? getScpStatementReadCursor(oldestState) : undefined,
-				limit: scpStatementLimit,
-				order: oldestState ? getScpStatementReadOrder(oldestState) : 'desc',
-				source: 'live'
-			})
-			.then((statementsOrError) => {
-				if (statementsOrError.isErr()) {
-					broadcast({
-						payload: { message: 'SCP statements unavailable' },
-						type: 'error'
-					});
-					return;
-				}
-				const statements =
-					statementsOrError.value.toSorted(compareScpStatement);
-				for (const client of clients.values()) {
-					const delta = selectScpStatementDelta(client.scpState, statements);
-					if (delta.length > 0) send(client, { payload: delta, type: 'scp' });
-				}
-			})
-			.catch((error) => {
-				config.logger?.error('Live WebSocket SCP unavailable', {
-					error: errorMessage(error)
-				});
-				broadcast({
-					payload: { message: 'SCP statements unavailable' },
-					type: 'error'
-				});
-			})
-			.finally(() => {
-				scpWriting = false;
-			});
-	};
-
 	const start = (): void => {
-		if (networkTimer || scpTimer || latestLedgerTimer) return;
+		if (networkTimer || latestLedgerTimer) return;
 		writeNetwork();
-		writeScp();
 		writeLatestLedger();
 		networkTimer = setInterval(writeNetwork, networkIntervalMs);
-		scpTimer = setInterval(writeScp, scpIntervalMs);
 		latestLedgerTimer = setInterval(writeLatestLedger, latestLedgerIntervalMs);
 	};
 
 	const stop = (): void => {
 		if (clients.size > 0) return;
 		if (networkTimer) clearInterval(networkTimer);
-		if (scpTimer) clearInterval(scpTimer);
 		if (latestLedgerTimer) clearInterval(latestLedgerTimer);
 		networkTimer = undefined;
-		scpTimer = undefined;
 		latestLedgerTimer = undefined;
 	};
 
-	webSocketServer.on('connection', (client) => {
-		clients.set(client, {
-			scpState: createScpStatementStreamState(),
-			socket: client
-		});
-		client.on('close', () => {
-			clients.delete(client);
-			stop();
-		});
-		client.on('error', (error) => {
+	const removeClient = (socket: WebSocket): void => {
+		const client = clients.get(socket);
+		if (client === undefined) return;
+		clients.delete(socket);
+		client.scpUnsubscribe();
+		stop();
+	};
+
+	webSocketServer.on('connection', (socket) => {
+		const client: LiveClient = {
+			scpUnsubscribe: () => undefined,
+			sender: new BoundedWebSocketSender(
+				socket,
+				() => removeClient(socket),
+				config.logger
+			)
+		};
+		clients.set(socket, client);
+		socket.once('close', () => client.sender.markClosed());
+		socket.on('error', (error) => {
 			config.logger?.error('Live WebSocket client error', {
 				error: errorMessage(error)
 			});
+			client.sender.close(1011, 'client error');
 		});
+		const unsubscribe = scpLiveHub.subscribe({
+			onError: (message) =>
+				client.sender.send(
+					JSON.stringify({
+						payload: { message },
+						type: 'error'
+					} satisfies LiveMessage)
+				),
+			onUpdate: ({ metadata, statements }) =>
+				client.sender.send(
+					JSON.stringify({
+						...metadata,
+						payload: statements,
+						type: 'scp'
+					} satisfies LiveMessage)
+				)
+		});
+		if (unsubscribe === null) {
+			client.sender.close(1013, 'SCP live capacity');
+			return;
+		}
+		client.scpUnsubscribe = unsubscribe;
 		start();
 	});
 
@@ -260,7 +246,7 @@ export function attachNetworkLiveWebSocket(
 	);
 
 	server.on('close', () => {
-		clients.clear();
+		for (const client of clients.values()) client.sender.terminate();
 		stop();
 		webSocketServer.close();
 	});

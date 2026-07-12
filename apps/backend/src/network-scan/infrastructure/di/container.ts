@@ -405,7 +405,7 @@ function loadUseCases(container: Container) {
 	container.bind(GetMeasurements).toSelf();
 	container.bind(GetMeasurementsFactory).toSelf();
 	container.bind(GetMeasurementAggregations).toSelf();
-	container.bind(GetScpStatements).toSelf();
+	container.bind(GetScpStatements).toSelf().inSingletonScope();
 	container.bind(GetLatestObservedLedger).toSelf();
 	container.bind(GetExplorerLocalReadModel).toSelf();
 	container.bind(GetExplorerLocalTransactions).toSelf();

@@ -12,6 +12,7 @@ import { GetHistoryArchiveObjects } from '@history-scan-coordinator/use-cases/ge
 import { GetHistoryArchiveObjectSummary } from '@history-scan-coordinator/use-cases/get-history-archive-object-summary/GetHistoryArchiveObjectSummary.js';
 import { GetHistoryArchiveRepairPlan } from '@history-scan-coordinator/use-cases/get-history-archive-repair-plan/GetHistoryArchiveRepairPlan.js';
 import { GetHistoryArchiveState } from '@history-scan-coordinator/use-cases/get-history-archive-state/GetHistoryArchiveState.js';
+import { GetHistoryArchiveEvidence } from '@history-scan-coordinator/use-cases/get-history-archive-evidence/GetHistoryArchiveEvidence.js';
 import { GetLatestScan } from '@history-scan-coordinator/use-cases/get-latest-scan/GetLatestScan.js';
 import { GetScanEvidence } from '@history-scan-coordinator/use-cases/get-scan-evidence/GetScanEvidence.js';
 import { GetScanLogs } from '@history-scan-coordinator/use-cases/get-scan-logs/GetScanLogs.js';
@@ -42,6 +43,7 @@ describe('ArchiveEvidenceRouter.integration', () => {
 		await request(app)
 			.get('/archive-scans/https%3A%2F%2Ftest.com/evidence?limit=10')
 			.expect(200)
+			.expect('Deprecation', 'true')
 			.expect('Cache-Control', 'public, max-age=10')
 			.expect((response) => {
 				expect(response.body.count).toBe(1);
@@ -83,6 +85,7 @@ function createHarness() {
 			getArchiveScanQueue: mock<GetArchiveScanQueue>(),
 			getArchiveScanWorkers: mock<GetArchiveScanWorkers>(),
 			getHistoryArchiveBucketCoverage: mock<GetHistoryArchiveBucketCoverage>(),
+			getHistoryArchiveEvidence: mock<GetHistoryArchiveEvidence>(),
 			getHistoryArchiveObjectEvents: mock<GetHistoryArchiveObjectEvents>(),
 			getHistoryArchiveObjects: mock<GetHistoryArchiveObjects>(),
 			getHistoryArchiveObjectSummary: mock<GetHistoryArchiveObjectSummary>(),

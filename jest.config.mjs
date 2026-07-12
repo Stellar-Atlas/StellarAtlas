@@ -58,28 +58,51 @@ const directorySourceAliases = aliasPattern([
 	'history-scan-coordinator',
 	'infrastructure',
 	'migrations',
-	'network-observer',
 	'network-scan',
 	'notifications',
 	'overlay',
 	'quorum',
 	'simulation',
+	'test-support',
 	'trust-graph',
 	'use-cases',
-	'utilities',
 	'worker'
 ]);
 
 const sourceAliasModuleNameMapper = {
+	'^@crawler/(.*)\\.js$': '<rootDir>/../../packages/crawler/src/$1',
+	'^@crawler/(.*)$': '<rootDir>/../../packages/crawler/src/$1',
+	'^@network-observer/(.*)\\.js$':
+		'<rootDir>/../../packages/crawler/src/network-observer/$1',
+	'^@network-observer/(.*)$':
+		'<rootDir>/../../packages/crawler/src/network-observer/$1',
+	'^@utilities/(.*)\\.js$': '<rootDir>/../../packages/crawler/src/utilities/$1',
+	'^@utilities/(.*)$': '<rootDir>/../../packages/crawler/src/utilities/$1',
 	[`^@(${rootSourceAliases})/(.*)\\.js$`]: '<rootDir>/src/$2',
 	[`^@(${rootSourceAliases})/(.*)$`]: '<rootDir>/src/$2',
 	'^@fixtures/(.*)\\.js$': '<rootDir>/src/__fixtures__/$1',
 	'^@fixtures/(.*)$': '<rootDir>/src/__fixtures__/$1',
 	'^@mocks/(.*)\\.js$': '<rootDir>/src/__mocks__/$1',
 	'^@mocks/(.*)$': '<rootDir>/src/__mocks__/$1',
-	[`^@(${directorySourceAliases})/(.*)\\.js$`]:
-		'<rootDir>/src/$1/$2',
+	[`^@(${directorySourceAliases})/(.*)\\.js$`]: '<rootDir>/src/$1/$2',
 	[`^@(${directorySourceAliases})/(.*)$`]: '<rootDir>/src/$1/$2'
+};
+
+const workspacePackageSourceMapper = {
+	'^crawler$': '<rootDir>/../../packages/crawler/src/index.ts',
+	'^custom-error$': '<rootDir>/../../packages/custom-error/src/index.ts',
+	'^exception-logger$':
+		'<rootDir>/../../packages/exception-logger/src/index.ts',
+	'^history-scanner-dto$':
+		'<rootDir>/../../packages/history-scanner-dto/src/index.ts',
+	'^http-helper$': '<rootDir>/../../packages/http-helper/src/index.ts',
+	'^job-monitor$': '<rootDir>/../../packages/job-monitor/src/index.ts',
+	'^logger$': '<rootDir>/../../packages/logger/src/index.ts',
+	'^node-connector$': '<rootDir>/../../packages/node-connector/src/index.ts',
+	'^scp-simulation$': '<rootDir>/../../packages/scp-simulation/src/index.ts',
+	'^shared$': '<rootDir>/../../packages/shared/src/index.ts',
+	'^stellar-halting-analysis$':
+		'<rootDir>/../../packages/stellar-halting-analysis/src/index.ts'
 };
 
 const project = (config) => ({
@@ -89,6 +112,7 @@ const project = (config) => ({
 	moduleNameMapper: {
 		'^(\\.{1,2}/.*)\\.js$': '$1',
 		...sourceAliasModuleNameMapper,
+		...workspacePackageSourceMapper,
 		...(config.moduleNameMapper ?? {})
 	},
 	transform: {
@@ -107,7 +131,11 @@ export default {
 			preset: 'ts-jest',
 			displayName: 'backend',
 			rootDir: 'apps/backend',
-			moduleDirectories: ['node_modules']
+			moduleDirectories: ['node_modules'],
+			testMatch: [
+				'**/__tests__/**/*.(integration|test).(js|jsx|ts|tsx)',
+				'**/?(*.)+(spec|test).(js|jsx|ts|tsx)'
+			]
 		}),
 		project({
 			testPathIgnorePatterns: ['<rootDir>/node_modules/', '<rootDir>/lib'],

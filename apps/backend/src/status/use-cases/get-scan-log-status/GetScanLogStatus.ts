@@ -49,6 +49,8 @@ export interface ArchiveScanLogEntryDTO {
 
 export interface ScanLogStatusDTO {
 	readonly archiveScans: readonly ArchiveScanLogEntryDTO[];
+	readonly archiveScansDeprecated: true;
+	readonly archiveScansHistorical: true;
 	readonly generatedAt: string;
 	readonly limit: number;
 	readonly networkScans: readonly NetworkScanLogEntryDTO[];
@@ -83,6 +85,8 @@ export class GetScanLogStatus {
 				archiveScans: archiveScans
 					.filter(isPublicArchiveScanLogEntry)
 					.map(mapArchiveScanLogEntry),
+				archiveScansDeprecated: true,
+				archiveScansHistorical: true,
 				generatedAt: generatedAt.toISOString(),
 				limit: safeLimit,
 				networkScans: networkScans.map(mapNetworkScanLogEntry)

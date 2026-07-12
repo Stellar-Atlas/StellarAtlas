@@ -50,6 +50,23 @@ it('should construct category urls from normalized root history archive state ur
 	);
 });
 
+it('preserves case-sensitive root paths and query values', function () {
+	const historyBaseUrl = Url.create(
+		'https://HISTORY.STELLAR.ORG/ArchiveCase?Token=AbC123'
+	);
+	if (historyBaseUrl.isErr()) throw historyBaseUrl.error;
+
+	const url = UrlBuilder.getCategoryUrl(
+		historyBaseUrl.value,
+		63,
+		Category.ledger
+	);
+
+	expect(url.value).toBe(
+		'https://history.stellar.org/ArchiveCase/ledger/00/00/00/ledger-0000003f.xdr.gz?Token=AbC123'
+	);
+});
+
 it('should generate correct bucket url', function () {
 	const url = createDummyHistoryBaseUrl();
 	expect(

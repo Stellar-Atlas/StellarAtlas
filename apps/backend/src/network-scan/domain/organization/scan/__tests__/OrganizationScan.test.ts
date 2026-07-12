@@ -1,6 +1,5 @@
 import { OrganizationScan } from '../OrganizationScan.js';
 import { NodeScan } from '@network-scan/domain/node/scan/NodeScan.js';
-import { createDummyNode } from '@network-scan/domain/node/__fixtures__/createDummyNode.js';
 import Organization from '../../Organization.js';
 import { OrganizationId } from '../../OrganizationId.js';
 import { OrganizationTomlInfo } from '../OrganizationTomlInfo.js';
@@ -10,11 +9,13 @@ import Node from '@network-scan/domain/node/Node.js';
 import NodeMeasurement from '@network-scan/domain/node/NodeMeasurement.js';
 import { ValidatorNotSEP20LinkedError } from '../errors/ValidatorNotSEP20LinkedError.js';
 import { WrongNodeScanForOrganizationScan } from '../errors/WrongNodeScanForOrganizationScan.js';
-import { createDummyPublicKey } from '@network-scan/domain/node/__fixtures__/createDummyPublicKey.js';
-import { Snapshot } from '@core/domain/Snapshot.js';
 import { TomlWithoutValidatorsError } from '../errors/TomlWithoutValidatorsError.js';
 import { TomlState } from '../TomlState.js';
 import { InvalidTomlStateError } from '../errors/InvalidTomlStateError.js';
+import {
+	createValidPublicKeyString,
+	createValidValidatorNode
+} from './createValidValidatorNode.js';
 
 describe('OrganizationScan', () => {
 	describe('updateWithTomlInfo', () => {
@@ -81,8 +82,13 @@ describe('OrganizationScan', () => {
 			const scanTime = new Date('2020-01-02');
 			const nodeScan = createNodeScan(scanTime, 'domain.com');
 			const organizationScan = createOrganizationScan(scanTime);
-			const tomlInfo = createTomlInfo(nodeScan);
-			tomlInfo.state = TomlState.UnspecifiedError;
+			const tomlInfo: OrganizationTomlInfo = {
+				...createTomlInfo(nodeScan),
+				authoritative: false,
+				fetchResult: 'failure',
+				state: TomlState.UnspecifiedError,
+				stellarTomlText: null
+			};
 			const result = organizationScan.updateWithTomlInfoCollection(
 				new Map([['domain.com', tomlInfo]]),
 				nodeScan
@@ -92,6 +98,39 @@ describe('OrganizationScan', () => {
 			expect(result.value).toHaveLength(1);
 			expect(result.value[0].homeDomain).toBe('domain.com');
 			expect(result.value[0].error).toBeInstanceOf(InvalidTomlStateError);
+		});
+
+		it('keeps last-known-good TOML content after a failed attempt', () => {
+			const previousSuccessAt = new Date('2020-01-01');
+			const scanTime = new Date('2020-01-02');
+			const organization = createOrganization('domain.com');
+			organization.updateStellarTomlText('VERSION="2.0.0"', previousSuccessAt);
+			const organizationScan = new OrganizationScan(scanTime, [organization]);
+			const nodeScan = createNodeScan(scanTime);
+			const failedToml: OrganizationTomlInfo = {
+				...createTomlInfo(nodeScan),
+				authoritative: false,
+				fetchResult: 'failure',
+				state: TomlState.ParsingError,
+				stellarTomlText: null
+			};
+
+			const result = organizationScan.updateWithTomlInfoCollection(
+				new Map([['domain.com', failedToml]]),
+				nodeScan
+			);
+
+			expect(result.isOk()).toBe(true);
+			expect(organization.stellarTomlText).toBe('VERSION="2.0.0"');
+			expect(organization.latestMeasurement()?.toTomlAttempt()).toEqual({
+				authoritative: false,
+				content: null,
+				observedAt: scanTime,
+				result: 'failure',
+				runId: organizationScan.runId,
+				state: TomlState.ParsingError,
+				warnings: []
+			});
 		});
 
 		it('should not update organizations if nodeScan has different time', () => {
@@ -235,6 +274,9 @@ describe('OrganizationScan', () => {
 				expect(measurement?.tomlWarnings).toEqual([
 					'TlsCertificateVerificationDisabled'
 				]);
+				expect(measurement?.toTomlAttempt()?.authoritative).toBe(false);
+				expect(organizationScan.organizations[0].stellarTomlText).toBeNull();
+				expect(organizationScan.organizations[0].name).toBeNull();
 			});
 
 			it('should update toml state to UnspecifiedError when toml is invalid', () => {
@@ -293,12 +335,14 @@ describe('OrganizationScan', () => {
 		});
 
 		function createOrganizationTomlInfoWithNullValues(): OrganizationTomlInfo {
-				return {
-					state: TomlState.Ok,
-					warnings: [],
-					stellarTomlText: 'VERSION="2.0.0"',
-					horizonUrl: null,
-					url: null,
+			return {
+				authoritative: true,
+				fetchResult: 'success',
+				state: TomlState.Ok,
+				warnings: [],
+				stellarTomlText: 'VERSION="2.0.0"',
+				horizonUrl: null,
+				url: null,
 				name: null,
 				keybase: null,
 				dba: null,
@@ -308,16 +352,19 @@ describe('OrganizationScan', () => {
 				physicalAddress: null,
 				phoneNumber: null,
 				twitter: null,
-				validators: ['a']
+				validators: [createValidPublicKeyString()],
+				validatorSetValid: true
 			};
 		}
 
 		function createTomlInfo(nodeScan: NodeScan) {
-				const tomlInfo: OrganizationTomlInfo = {
-					state: TomlState.Ok,
-					warnings: [],
-					stellarTomlText: 'VERSION="2.0.0"',
-					horizonUrl: 'https://horizon.stellar.org',
+			const tomlInfo: OrganizationTomlInfo = {
+				authoritative: true,
+				fetchResult: 'success',
+				state: TomlState.Ok,
+				warnings: [],
+				stellarTomlText: 'VERSION="2.0.0"',
+				horizonUrl: 'https://horizon.stellar.org',
 				url: 'https://stellar.org',
 				name: 'Stellar',
 				keybase: 'keybase',
@@ -328,7 +375,8 @@ describe('OrganizationScan', () => {
 				physicalAddress: 'address',
 				phoneNumber: 'phone',
 				twitter: 'twitter',
-				validators: [nodeScan.nodes[0].publicKey.value]
+				validators: [nodeScan.nodes[0].publicKey.value],
+				validatorSetValid: true
 			};
 			return tomlInfo;
 		}
@@ -376,46 +424,11 @@ describe('OrganizationScan', () => {
 		});
 	});
 
-	describe('archiveOrganizationsWithNoActiveValidators', () => {
-		it('should archive organizations with no active validators', () => {
-			const organizationScan = createOrganizationScan(new Date('2020-01-01'));
-			organizationScan.organizations[0].updateValidators(
-				new OrganizationValidators([createDummyPublicKey()]),
-				new Date('2020-01-01')
-			);
-
-			const archived =
-				organizationScan.archiveOrganizationsWithNoActiveValidators(
-					new NodeScan(new Date('2020-01-01'), [])
-				);
-			expect(archived).toHaveLength(1);
-			expect(organizationScan.organizations[0].snapshotEndDate).toEqual(
-				new Date('2020-01-01')
-			);
-		});
-
-		it('should not archive organizations with active validators', () => {
-			const organizationScan = createOrganizationScan(new Date('2020-01-01'));
-			const nodeScan = createNodeScan(new Date('2020-01-01'));
-			organizationScan.organizations[0].updateValidators(
-				new OrganizationValidators([nodeScan.nodes[0].publicKey]),
-				new Date('2020-01-01')
-			);
-
-			const archived =
-				organizationScan.archiveOrganizationsWithNoActiveValidators(nodeScan);
-			expect(archived).toHaveLength(0);
-			expect(organizationScan.organizations[0].snapshotEndDate).toEqual(
-				Snapshot.MAX_DATE
-			);
-		});
-	});
-
 	function createOrganizationScan(scanTime: Date, domain = 'domain.com') {
 		return new OrganizationScan(scanTime, [createOrganization(domain)]);
 	}
 	function createNodeScan(time: Date, domain = 'domain.com') {
-		const node = createDummyNode('localhost', 1, time);
+		const node = createValidValidatorNode(time);
 		node.updateHomeDomain(domain, time);
 		const measurement = new NodeMeasurement(time, node);
 		measurement.isValidating = true;

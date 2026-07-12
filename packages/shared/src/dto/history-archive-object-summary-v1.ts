@@ -23,11 +23,7 @@ export interface HistoryArchiveSourceSummaryV1 extends HistoryArchiveObjectStatu
 	readonly objectCompleteCheckpoints: number;
 	readonly observedAt: string;
 	readonly rootObjectStatus:
-		| 'pending'
-		| 'scanning'
-		| 'verified'
-		| 'failed'
-		| null;
+		'pending' | 'scanning' | 'verified' | 'failed' | null;
 	readonly source: 'backfill' | 'history-scanner' | 'network-scan';
 	readonly stateStatus: 'available' | 'invalid' | 'unreachable';
 	readonly stateUrl: string;
@@ -206,7 +202,7 @@ const HistoryArchiveSourceSummaryV1Schema: JSONSchemaType<HistoryArchiveSourceSu
 		additionalProperties: false
 	};
 
-const HistoryArchiveCheckpointCoverageV1Schema: JSONSchemaType<HistoryArchiveCheckpointCoverageV1> =
+export const HistoryArchiveCheckpointCoverageV1Schema: JSONSchemaType<HistoryArchiveCheckpointCoverageV1> =
 	{
 		type: 'object',
 		properties: {

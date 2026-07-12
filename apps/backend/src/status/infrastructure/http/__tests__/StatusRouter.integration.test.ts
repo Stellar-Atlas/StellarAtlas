@@ -150,9 +150,13 @@ describe('StatusRouter.integration', () => {
 						status: 'ok',
 						activeWorkers: 0,
 						configuredWorkerProcesses: 24,
+						idleWorkers: 0,
+						lastHeartbeatAt: null,
+						registeredWorkers: 0,
 						staleWorkers: 0,
 						totalTakenJobs: 0,
-						staleJobAgeMs: 1800000
+						staleJobAgeMs: 1800000,
+						workers: []
 					},
 					communityScanners: {
 						status: 'ok',
@@ -295,6 +299,8 @@ describe('StatusRouter.integration', () => {
 		);
 		getScanLogStatus.execute.mockResolvedValue(
 			ok({
+				archiveScansDeprecated: true,
+				archiveScansHistorical: true,
 				generatedAt: '2026-07-03T12:00:00.000Z',
 				limit: 12,
 				networkScans: [
@@ -413,30 +419,6 @@ describe('StatusRouter.integration', () => {
 				staleJobAgeMs: 1800000
 			})
 		);
-		getWorkerStatus.execute.mockResolvedValue(
-			ok({
-				generatedAt: '2026-07-03T12:00:00.000Z',
-				status: 'ok',
-				archiveWorkers: {
-					status: 'ok',
-					activeWorkers: 1,
-					configuredWorkerProcesses: 24,
-					staleWorkers: 0,
-					totalTakenJobs: 1,
-					staleJobAgeMs: 1800000
-				},
-				communityScanners: {
-					status: 'ok',
-					totalScanners: 1,
-					activeScanners: 1,
-					offlineScanners: 0,
-					degradedScanners: 0,
-					blacklistedScanners: 0,
-					heartbeatFreshnessMs: 300000
-				}
-			})
-		);
-
 		await request(app).get('/status/api').expect(200);
 		await request(app)
 			.get('/status/data-quality')
@@ -485,7 +467,6 @@ describe('StatusRouter.integration', () => {
 			.expect((response) => {
 				expect(response.body.status).toBe('degraded');
 			});
-		await request(app).get('/status/workers').expect(200);
 	});
 
 	it('should map use case failures to 500', async () => {

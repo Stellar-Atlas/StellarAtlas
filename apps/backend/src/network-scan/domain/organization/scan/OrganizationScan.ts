@@ -14,6 +14,8 @@ import { InvalidOrganizationIdError } from './errors/InvalidOrganizationIdError.
 import { OrganizationScanError } from './errors/OrganizationScanError.js';
 import { TomlState } from './TomlState.js';
 import { InvalidTomlStateError } from './errors/InvalidTomlStateError.js';
+import { InvalidValidatorPublicKeyError } from './errors/InvalidValidatorPublicKeyError.js';
+import { StrKey } from '@stellar/stellar-sdk';
 
 type homeDomain = string;
 
@@ -25,7 +27,8 @@ export interface InvalidOrganizationTomlInfo {
 export class OrganizationScan {
 	constructor(
 		public readonly time: Date,
-		public readonly organizations: Organization[]
+		public readonly organizations: Organization[],
+		public readonly runId: string = organizationTomlRunId(time)
 	) {}
 
 	public updateWithTomlInfoCollection(
@@ -60,21 +63,13 @@ export class OrganizationScan {
 
 	public calculateOrganizationAvailability(nodeScan: NodeScan) {
 		this.organizations.forEach((organization) => {
-			organization.updateAvailability(nodeScan.nodes, this.time);
+			organization.updateAvailability(nodeScan.nodes, this.time, this.runId);
 		});
 	}
 
-	public archiveOrganizationsWithNoActiveValidators(
-		nodeScan: NodeScan
-	): Organization[] {
+	public archiveOrganizationsWithNoActiveValidators(): Organization[] {
 		return this.organizations
-			.filter((organization) => {
-				const activeNodes = organization.validators.value.filter((validator) =>
-					nodeScan.getNodeByPublicKeyString(validator.value)
-				);
-
-				return activeNodes.length === 0;
-			})
+			.filter((organization) => organization.validators.value.length === 0)
 			.map((organization) => {
 				organization.archive(this.time);
 				return organization;
@@ -94,7 +89,7 @@ export class OrganizationScan {
 					const node = nodeScan.getNodeByPublicKeyString(publicKey.value);
 					if (node && node.homeDomain !== organization.homeDomain) {
 						return null;
-					} //if no node is found, it won't impact the application. It could be unknown or archived
+					}
 
 					return publicKey;
 				})
@@ -151,46 +146,79 @@ export class OrganizationScan {
 
 			this.organizations.push(organization);
 		}
+		const transportAuthoritative =
+			organizationTomlInfo.fetchResult === 'success' &&
+			organizationTomlInfo.authoritative !== false &&
+			!organizationTomlInfo.warnings.includes(
+				'TlsCertificateVerificationDisabled'
+			);
+		const validators =
+			transportAuthoritative && organizationTomlInfo.state === TomlState.Ok
+				? this.validateValidators(
+						organization,
+						organizationTomlInfo.validators,
+						organizationTomlInfo.validatorSetValid,
+						nodeScan
+					)
+				: null;
+		const authoritative = validators?.isOk() === true;
 
-		organization.updateTomlState(organizationTomlInfo.state, this.time);
-		organization.updateTomlWarnings(organizationTomlInfo.warnings, this.time);
-		organization.updateStellarTomlText(
+		organization.recordTomlAttempt(
+			organizationTomlInfo.fetchResult,
+			organizationTomlInfo.state,
+			organizationTomlInfo.warnings,
+			this.time,
 			organizationTomlInfo.stellarTomlText,
-			this.time
+			authoritative,
+			this.runId
 		);
+		if (organizationTomlInfo.fetchResult === 'success' && authoritative) {
+			organization.updateStellarTomlText(
+				organizationTomlInfo.stellarTomlText,
+				this.time
+			);
+		}
 		if (organizationTomlInfo.state !== TomlState.Ok) {
 			return {
 				homeDomain: homeDomain,
 				error: new InvalidTomlStateError(homeDomain, organizationTomlInfo.state)
 			};
 		}
-
-		const result = this.updateOrganization(
-			organization,
-			organizationTomlInfo,
-			nodeScan
-		);
-
-		if (result.isErr()) {
-			if (result.error instanceof ValidatorNotSEP20LinkedError)
+		if (
+			organizationTomlInfo.fetchResult !== 'success' ||
+			!transportAuthoritative
+		) {
+			return undefined;
+		}
+		if (validators === null) return undefined;
+		if (validators.isErr()) {
+			if (validators.error instanceof ValidatorNotSEP20LinkedError) {
 				organization.updateTomlState(
 					TomlState.ValidatorNotSEP20Linked,
 					this.time
 				);
-			if (result.error instanceof TomlWithoutValidatorsError)
+			}
+			if (validators.error instanceof TomlWithoutValidatorsError) {
 				organization.updateTomlState(TomlState.EmptyValidatorsField, this.time);
-			return {
-				homeDomain: homeDomain,
-				error: result.error
-			};
+			}
+			if (validators.error instanceof InvalidValidatorPublicKeyError) {
+				organization.updateTomlState(TomlState.Unknown, this.time);
+			}
+			return { homeDomain, error: validators.error };
 		}
+
+		this.updateOrganization(
+			organization,
+			organizationTomlInfo,
+			validators.value
+		);
 	}
 
 	private updateOrganization(
 		organization: Organization,
 		organizationTomlInfo: OrganizationTomlInfo,
-		nodeScan: NodeScan
-	): Result<void, ValidatorNotSEP20LinkedError | TomlWithoutValidatorsError> {
+		validators: OrganizationValidators
+	): void {
 		if (organizationTomlInfo.name)
 			organization.updateName(organizationTomlInfo.name, this.time);
 		if (organizationTomlInfo.description)
@@ -213,28 +241,43 @@ export class OrganizationScan {
 		});
 		organization.updateContactInformation(contactInformation, this.time);
 
-		return this.updateValidators(
-			organization,
-			organizationTomlInfo.validators,
-			nodeScan
-		);
+		organization.updateValidators(validators, this.time);
 	}
 
-	private updateValidators(
+	private validateValidators(
 		organization: Organization,
 		validators: string[],
+		validatorSetValid: boolean,
 		nodeScan: NodeScan
-	): Result<void, ValidatorNotSEP20LinkedError | TomlWithoutValidatorsError> {
+	): Result<
+		OrganizationValidators,
+		| InvalidValidatorPublicKeyError
+		| ValidatorNotSEP20LinkedError
+		| TomlWithoutValidatorsError
+	> {
+		if (!validatorSetValid) {
+			return err(new InvalidValidatorPublicKeyError(organization.homeDomain));
+		}
 		if (validators.length === 0)
 			return err(new TomlWithoutValidatorsError(organization.homeDomain));
 
 		const publicKeys: PublicKey[] = [];
-		validators.forEach((validator) => {
+		const uniqueValidators = new Set<string>();
+		for (const validator of validators) {
+			if (
+				!StrKey.isValidEd25519PublicKey(validator) ||
+				uniqueValidators.has(validator)
+			) {
+				return err(new InvalidValidatorPublicKeyError(organization.homeDomain));
+			}
 			const publicKeyOrError = PublicKey.create(validator);
-			if (publicKeyOrError.isErr()) return;
+			if (publicKeyOrError.isErr()) {
+				return err(new InvalidValidatorPublicKeyError(organization.homeDomain));
+			}
 			const publicKey = publicKeyOrError.value;
 			publicKeys.push(publicKey);
-		});
+			uniqueValidators.add(validator);
+		}
 
 		const validatorWithInvalidHomeDomain = publicKeys
 			.map((publicKey) => nodeScan.getNodeByPublicKeyString(publicKey.value))
@@ -250,12 +293,7 @@ export class OrganizationScan {
 				)
 			);
 
-		organization.updateValidators(
-			new OrganizationValidators(publicKeys),
-			this.time
-		);
-
-		return ok(undefined);
+		return ok(new OrganizationValidators(publicKeys));
 	}
 
 	private getOrganizationByHomeDomain(homeDomain: string): Organization | null {
@@ -269,4 +307,11 @@ export class OrganizationScan {
 	private isSameTime(nodeScan: NodeScan): boolean {
 		return this.time.getTime() === nodeScan.time.getTime();
 	}
+}
+
+function organizationTomlRunId(time: Date): string {
+	if (Number.isNaN(time.getTime())) {
+		throw new Error('Organization scan requires a valid observed time');
+	}
+	return `network-scan:${time.toISOString()}`;
 }

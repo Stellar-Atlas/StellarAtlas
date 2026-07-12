@@ -1,26 +1,21 @@
 import { CoreEntity } from '@core/domain/CoreEntity.js';
 import { randomUUID } from 'node:crypto';
-import {
-	Column,
-	CreateDateColumn,
-	Entity,
-	Index
-} from 'typeorm';
+import { Column, CreateDateColumn, Entity, Index } from 'typeorm';
 import type {
 	HistoryArchiveObjectType,
 	HistoryArchiveObjectVerificationFacts
 } from './HistoryArchiveObject.js';
 import type { HistoryArchiveObjectEvidenceClass } from './HistoryArchiveObjectRetryPolicy.js';
+import type { HistoryArchiveObjectFailureChannelDTO } from 'history-scanner-dto';
 
 export type HistoryArchiveObjectEventType =
-	| 'claimed'
-	| 'heartbeat'
-	| 'verified'
-	| 'failed'
-	| 'released';
+	'claimed' | 'heartbeat' | 'verified' | 'failed' | 'released';
 
 @Entity({ name: 'history_archive_object_event' })
-@Index('idx_history_archive_object_event_remote', ['objectRemoteId', 'createdAt'])
+@Index('idx_history_archive_object_event_remote', [
+	'objectRemoteId',
+	'createdAt'
+])
 @Index('idx_history_archive_object_event_archive', [
 	'archiveUrlIdentity',
 	'createdAt'
@@ -54,6 +49,9 @@ export class HistoryArchiveObjectEvent extends CoreEntity {
 
 	@Column('text', { nullable: true })
 	public evidenceClass!: HistoryArchiveObjectEvidenceClass | null;
+
+	@Column('text', { nullable: true })
+	public failureChannel!: HistoryArchiveObjectFailureChannelDTO | null;
 
 	@Column('text', { nullable: true })
 	public workerStage!: string | null;
@@ -99,6 +97,7 @@ export class HistoryArchiveObjectEvent extends CoreEntity {
 		readonly errorType?: string | null;
 		readonly eventType: HistoryArchiveObjectEventType;
 		readonly evidenceClass?: HistoryArchiveObjectEvidenceClass | null;
+		readonly failureChannel?: HistoryArchiveObjectFailureChannelDTO | null;
 		readonly httpStatus?: number | null;
 		readonly nextAttemptAt?: Date | null;
 		readonly objectKey: string;
@@ -124,6 +123,7 @@ export class HistoryArchiveObjectEvent extends CoreEntity {
 		this.errorType = props.errorType ?? null;
 		this.eventType = props.eventType;
 		this.evidenceClass = props.evidenceClass ?? null;
+		this.failureChannel = props.failureChannel ?? null;
 		this.httpStatus = props.httpStatus ?? null;
 		this.nextAttemptAt = props.nextAttemptAt ?? null;
 		this.objectKey = props.objectKey;

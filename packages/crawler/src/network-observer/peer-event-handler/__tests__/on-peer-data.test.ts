@@ -12,6 +12,8 @@ import { Observation } from '../../observation.js';
 import { ObservationState } from '../../observation-state.js';
 import { QuorumSet } from 'shared';
 import { Slots } from '../stellar-message-handlers/scp-envelope/scp-statement/externalize/slots.js';
+import type { ScpStatementObservation } from '../../scp-statement-observation.js';
+import type { ScpStatementObservationListener } from '../../observation.js';
 
 describe('OnDataHandler', () => {
 	const connectionManager = mock<ConnectionManager>();
@@ -26,14 +28,17 @@ describe('OnDataHandler', () => {
 		return new OnPeerData(stellarMessageHandler, logger, connectionManager);
 	}
 
-	function createObservation(): Observation {
+	function createObservation(
+		onScpStatementObservation?: ScpStatementObservationListener
+	): Observation {
 		return new Observation(
 			'test',
 			[],
 			mock<PeerNodeCollection>(),
 			mock<Ledger>(),
 			new Map<string, QuorumSet>(),
-			new Slots(new QuorumSet(1, ['A'], []), logger)
+			new Slots(new QuorumSet(1, ['A'], []), logger),
+			onScpStatementObservation
 		);
 	}
 
@@ -122,5 +127,53 @@ describe('OnDataHandler', () => {
 			new Error('error')
 		);
 		expect(result).toEqual({ closedLedger: null, peers: [] });
+	});
+
+	it('should withhold overlay flow credit until SCP persistence resolves', async () => {
+		let releasePersistence: (() => void) | undefined;
+		const persistence = new Promise<void>((resolve) => {
+			releasePersistence = resolve;
+		});
+		const observation = createObservation(() => persistence);
+		const result = createSuccessfulResult();
+		stellarMessageHandler.handleStellarMessage.mockImplementation(() => {
+			observation.recordScpStatementObservation(
+				mock<ScpStatementObservation>()
+			);
+			return ok(result);
+		});
+		const data = createData();
+
+		createDataHandler().handle(data, observation);
+
+		expect(data.stellarMessageWork.done).not.toHaveBeenCalled();
+		expect(observation.scpStatementObservationCount).toBe(1);
+		expect(observation.scpStatementObservations).toEqual([]);
+		releasePersistence?.();
+		await Promise.resolve();
+		expect(data.stellarMessageWork.done).toHaveBeenCalledTimes(1);
+	});
+
+	it('disconnects without acknowledging overlay credit when persistence rejects', async () => {
+		const persistenceError = new Error('canonical write timed out');
+		const observation = createObservation(() =>
+			Promise.reject(persistenceError)
+		);
+		stellarMessageHandler.handleStellarMessage.mockImplementation(() => {
+			observation.recordScpStatementObservation(
+				mock<ScpStatementObservation>()
+			);
+			return ok(createSuccessfulResult());
+		});
+		const data = createData();
+
+		createDataHandler().handle(data, observation);
+		await Promise.resolve();
+
+		expect(data.stellarMessageWork.done).not.toHaveBeenCalled();
+		expect(connectionManager.disconnectByAddress).toHaveBeenCalledWith(
+			data.address,
+			persistenceError
+		);
 	});
 });

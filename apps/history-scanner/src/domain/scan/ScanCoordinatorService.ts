@@ -7,6 +7,8 @@ import {
 	type ParsedTransactionResultBatchDTO,
 	ScanJobDTO
 } from 'history-scanner-dto';
+import type { HistoryArchiveObjectTypeDTO } from 'history-scanner-dto';
+import type { HistoryArchiveObjectFailureChannelDTO } from 'history-scanner-dto';
 
 export interface ScanJobProgressDTO {
 	readonly concurrency?: number;
@@ -25,7 +27,7 @@ export interface HistoryArchiveObjectJobDTO {
 	readonly checkpointLedger: number | null;
 	readonly claimAttempt: number;
 	readonly objectKey: string;
-	readonly objectType: string;
+	readonly objectType: HistoryArchiveObjectTypeDTO;
 	readonly objectUrl: string;
 	readonly remoteId: string;
 }
@@ -45,7 +47,9 @@ export interface HistoryArchiveObjectFailureDTO {
 	readonly claimAttempt?: number;
 	readonly errorMessage: string;
 	readonly errorType: string;
+	readonly failureChannel: HistoryArchiveObjectFailureChannelDTO;
 	readonly httpStatus?: number | null;
+	readonly retryAfterSeconds?: number | null;
 }
 
 export interface ScanCoordinatorService {

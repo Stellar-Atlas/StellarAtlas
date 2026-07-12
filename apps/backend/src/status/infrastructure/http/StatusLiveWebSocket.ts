@@ -4,7 +4,7 @@ import type { Result } from 'neverthrow';
 import { WebSocket, WebSocketServer } from 'ws';
 import type { Logger } from '@core/services/Logger.js';
 import type { HistoryArchiveObjectEventsV1 } from 'shared';
-import type { HistoryArchiveObjectSummaryV1 } from 'shared';
+import type { HistoryArchiveStatusSummaryV1 } from 'shared';
 import type { GetHistoryArchiveObjectEvents } from '@history-scan-coordinator/use-cases/get-history-archive-object-events/GetHistoryArchiveObjectEvents.js';
 import type { ApiStatusDTO } from '../../domain/StatusTypes.js';
 import type { ConfiguredServiceStatusDTO } from '../../use-cases/get-service-status/GetServiceStatus.js';
@@ -17,7 +17,7 @@ import type { GetWorkerStatus } from '../../use-cases/get-worker-status/GetWorke
 import type { ScanLogStatusDTO } from '../../use-cases/get-scan-log-status/GetScanLogStatus.js';
 import type { WorkerStatusDTO } from '../../use-cases/get-worker-status/GetWorkerStatus.js';
 
-interface StatusLiveWebSocketConfig {
+export interface StatusLiveWebSocketConfig {
 	readonly getApiStatus: GetApiStatus;
 	readonly getDataQualityStatus: GetDataQualityStatus;
 	readonly getFrontendStatus: GetFrontendStatus;
@@ -30,13 +30,13 @@ interface StatusLiveWebSocketConfig {
 }
 
 interface HistoryArchiveSummaryReader {
-	execute(): Promise<Result<HistoryArchiveObjectSummaryV1, Error>>;
+	execute(): Promise<Result<HistoryArchiveStatusSummaryV1, Error>>;
 }
 
 interface StatusLiveSnapshot {
 	readonly api: ApiStatusDTO;
 	readonly archiveEvents: HistoryArchiveObjectEventsV1;
-	readonly archiveSummary: HistoryArchiveObjectSummaryV1;
+	readonly archiveSummary: HistoryArchiveStatusSummaryV1;
 	readonly dataQuality: DataQualityStatusDTO;
 	readonly frontend: ConfiguredServiceStatusDTO;
 	readonly generatedAt: string;
@@ -57,8 +57,56 @@ const defaultPath = '/v1/status/ws';
 const statusIntervalMs = 2_500;
 const archiveEventIntervalMs = 5_000;
 const archiveSummaryIntervalMs = 30_000;
+const scanLogIntervalMs = 30_000;
 const archiveEventLimit = 100;
 const scanLogLimit = 25;
+const fastStatusDeadlineMs = 2_000;
+const archiveEventDeadlineMs = 4_000;
+const archiveSummaryDeadlineMs = 10_000;
+const scanLogDeadlineMs = 10_000;
+
+interface BoundedSingleFlightWriterConfig<T> {
+	readonly collect: () => Promise<T>;
+	readonly deadlineMs: number;
+	readonly onError: (error: unknown) => void;
+	readonly onValue: (value: T) => void;
+}
+
+export interface BoundedSingleFlightWriter {
+	write(): boolean;
+}
+
+export function createBoundedSingleFlightWriter<T>(
+	config: BoundedSingleFlightWriterConfig<T>
+): BoundedSingleFlightWriter {
+	let running = false;
+	return {
+		write(): boolean {
+			if (running) return false;
+			running = true;
+			let deadlineReached = false;
+			const collection = Promise.resolve().then(config.collect);
+			const deadline = setTimeout(() => {
+				deadlineReached = true;
+				config.onError(
+					new Error(`Status collection exceeded ${config.deadlineMs}ms`)
+				);
+			}, config.deadlineMs);
+			void collection
+				.then((value) => {
+					if (!deadlineReached) config.onValue(value);
+				})
+				.catch((error: unknown) => {
+					if (!deadlineReached) config.onError(error);
+				})
+				.finally(() => {
+					clearTimeout(deadline);
+					running = false;
+				});
+			return true;
+		}
+	};
+}
 
 export function attachStatusLiveWebSocket(
 	server: Server,
@@ -68,11 +116,9 @@ export function attachStatusLiveWebSocket(
 	const clients = new Set<WebSocket>();
 	const webSocketServer = new WebSocketServer({ noServer: true });
 	let archiveEventTimer: ReturnType<typeof setInterval> | undefined;
-	let archiveEventWriting = false;
 	let archiveSummaryTimer: ReturnType<typeof setInterval> | undefined;
-	let archiveSummaryWriting = false;
 	let fastTimer: ReturnType<typeof setInterval> | undefined;
-	let fastWriting = false;
+	let scanLogTimer: ReturnType<typeof setInterval> | undefined;
 
 	const broadcast = (message: StatusLiveMessage): void => {
 		const payload = JSON.stringify(message);
@@ -81,75 +127,75 @@ export function attachStatusLiveWebSocket(
 		}
 	};
 
-	const writeFastStatus = (): void => {
-		if (fastWriting) return;
-		fastWriting = true;
-		void collectFastStatusPatch(config)
-			.then((payload) => broadcast({ payload, type: 'status-patch' }))
-			.catch((error) => {
-				config.logger?.error('Status WebSocket snapshot unavailable', {
-					error: errorMessage(error)
-				});
-				broadcast({
-					payload: { message: 'Status snapshot unavailable' },
-					type: 'error'
-				});
-			})
-			.finally(() => {
-				fastWriting = false;
+	const fastWriter = createBoundedSingleFlightWriter({
+		collect: () => collectFastStatusPatch(config),
+		deadlineMs: fastStatusDeadlineMs,
+		onError: (error) => {
+			config.logger?.error('Status WebSocket snapshot unavailable', {
+				error: errorMessage(error)
 			});
-	};
-
-	const writeArchiveEvents = (): void => {
-		if (archiveEventWriting) return;
-		archiveEventWriting = true;
-		void collectArchiveEventsPatch(config)
-			.then((payload) => broadcast({ payload, type: 'status-patch' }))
-			.catch((error) => {
-				config.logger?.error('Status WebSocket archive events unavailable', {
-					error: errorMessage(error)
-				});
-			})
-			.finally(() => {
-				archiveEventWriting = false;
+			broadcast({
+				payload: { message: 'Status snapshot unavailable' },
+				type: 'error'
 			});
-	};
-
-	const writeArchiveSummary = (): void => {
-		if (archiveSummaryWriting) return;
-		archiveSummaryWriting = true;
-		void collectArchiveSummaryPatch(config)
-			.then((payload) => broadcast({ payload, type: 'status-patch' }))
-			.catch((error) => {
-				config.logger?.error('Status WebSocket archive summary unavailable', {
-					error: errorMessage(error)
-				});
-			})
-			.finally(() => {
-				archiveSummaryWriting = false;
+		},
+		onValue: (payload) => broadcast({ payload, type: 'status-patch' })
+	});
+	const archiveEventWriter = createBoundedSingleFlightWriter({
+		collect: () => collectArchiveEventsPatch(config),
+		deadlineMs: archiveEventDeadlineMs,
+		onError: (error) => {
+			config.logger?.error('Status WebSocket archive events unavailable', {
+				error: errorMessage(error)
 			});
-	};
+		},
+		onValue: (payload) => broadcast({ payload, type: 'status-patch' })
+	});
+	const archiveSummaryWriter = createBoundedSingleFlightWriter({
+		collect: () => collectArchiveSummaryPatch(config),
+		deadlineMs: archiveSummaryDeadlineMs,
+		onError: (error) => {
+			config.logger?.error('Status WebSocket archive summary unavailable', {
+				error: errorMessage(error)
+			});
+		},
+		onValue: (payload) => broadcast({ payload, type: 'status-patch' })
+	});
+	const scanLogWriter = createBoundedSingleFlightWriter({
+		collect: () => collectScanLogPatch(config),
+		deadlineMs: scanLogDeadlineMs,
+		onError: (error) => {
+			config.logger?.error('Status WebSocket scan logs unavailable', {
+				error: errorMessage(error)
+			});
+		},
+		onValue: (payload) => broadcast({ payload, type: 'status-patch' })
+	});
+	const writeFastStatus = (): void => void fastWriter.write();
+	const writeArchiveEvents = (): void => void archiveEventWriter.write();
+	const writeArchiveSummary = (): void => void archiveSummaryWriter.write();
+	const writeScanLogs = (): void => void scanLogWriter.write();
 
 	const start = (): void => {
 		if (
 			fastTimer !== undefined ||
 			archiveEventTimer !== undefined ||
-			archiveSummaryTimer !== undefined
+			archiveSummaryTimer !== undefined ||
+			scanLogTimer !== undefined
 		) {
 			return;
 		}
 		writeFastStatus();
 		writeArchiveEvents();
 		writeArchiveSummary();
+		writeScanLogs();
 		fastTimer = setInterval(writeFastStatus, statusIntervalMs);
-		archiveEventTimer = setInterval(
-			writeArchiveEvents,
-			archiveEventIntervalMs
-		);
+		archiveEventTimer = setInterval(writeArchiveEvents, archiveEventIntervalMs);
 		archiveSummaryTimer = setInterval(
 			writeArchiveSummary,
 			archiveSummaryIntervalMs
 		);
+		scanLogTimer = setInterval(writeScanLogs, scanLogIntervalMs);
 	};
 
 	const stop = (): void => {
@@ -157,9 +203,11 @@ export function attachStatusLiveWebSocket(
 		if (archiveEventTimer !== undefined) clearInterval(archiveEventTimer);
 		if (archiveSummaryTimer !== undefined) clearInterval(archiveSummaryTimer);
 		if (fastTimer !== undefined) clearInterval(fastTimer);
+		if (scanLogTimer !== undefined) clearInterval(scanLogTimer);
 		archiveEventTimer = undefined;
 		archiveSummaryTimer = undefined;
 		fastTimer = undefined;
+		scanLogTimer = undefined;
 	};
 
 	webSocketServer.on('connection', (client) => {
@@ -190,14 +238,13 @@ export function attachStatusLiveWebSocket(
 	});
 }
 
-async function collectFastStatusPatch(
+export async function collectFastStatusPatch(
 	config: StatusLiveWebSocketConfig
 ): Promise<StatusLivePatch> {
-	const [api, dataQuality, frontend, scanLogs, workers] = await Promise.all([
+	const [api, dataQuality, frontend, workers] = await Promise.all([
 		readResult(config.getApiStatus.execute()),
 		readResult(config.getDataQualityStatus.execute()),
 		readResult(config.getFrontendStatus.execute()),
-		readResult(config.getScanLogStatus.execute(scanLogLimit)),
 		readResult(config.getWorkerStatus.execute())
 	]);
 
@@ -206,9 +253,17 @@ async function collectFastStatusPatch(
 		dataQuality,
 		frontend,
 		generatedAt: new Date().toISOString(),
-		scanLogs,
 		workers
 	};
+}
+
+export async function collectScanLogPatch(
+	config: StatusLiveWebSocketConfig
+): Promise<StatusLivePatch> {
+	const scanLogs = await readResult(
+		config.getScanLogStatus.execute(scanLogLimit)
+	);
+	return { generatedAt: new Date().toISOString(), scanLogs };
 }
 
 async function collectArchiveEventsPatch(

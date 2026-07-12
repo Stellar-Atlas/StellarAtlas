@@ -9,6 +9,11 @@ export interface ParsedTransactionResultDetails {
 	readonly transactionResultHash: string;
 }
 
+export type ParsedTransactionResultObjectObservation = Omit<
+	ParsedTransactionResultDetails,
+	'lastSourceArchiveUrl'
+>;
+
 export interface ParsedRecentTransactionDetails {
 	readonly envelopeObservedAt: Date | null;
 	readonly envelopeSourceArchiveUrl: string | null;
@@ -29,6 +34,9 @@ export interface ParsedTransactionResultRepository {
 	findByTransactionHash(
 		transactionHash: string
 	): Promise<ParsedTransactionResultDetails | null>;
+	findBySourceObjectRemoteId(
+		sourceObjectRemoteId: string
+	): Promise<ParsedTransactionResultObjectObservation[]>;
 	findRecentWithLedgerContext(
 		limit: number
 	): Promise<ParsedRecentTransactionDetails[]>;

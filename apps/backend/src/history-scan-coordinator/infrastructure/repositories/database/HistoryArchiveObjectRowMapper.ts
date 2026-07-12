@@ -3,6 +3,7 @@ import type { HistoryArchiveObjectType } from '@history-scan-coordinator/domain/
 import type { HistoryArchiveObjectDelayReasonCodeV1 } from 'shared';
 import type { NumericValue } from './ScanJobRowMapper.js';
 import { requireNumber } from './ScanJobRowMapper.js';
+import type { HistoryArchiveObjectFailureChannelDTO } from 'history-scanner-dto';
 
 export type RawObjectStatsRow = {
 	readonly activeObjects?: NumericValue;
@@ -54,6 +55,8 @@ type RawObjectRow = {
 	readonly errortype?: string | null;
 	readonly errorMessage?: string | null;
 	readonly errormessage?: string | null;
+	readonly failureChannel?: string | null;
+	readonly failurechannel?: string | null;
 	readonly httpStatus?: NumericValue | null;
 	readonly httpstatus?: NumericValue | null;
 	readonly verificationFacts?: Record<string, unknown> | null;
@@ -125,6 +128,9 @@ export function createObjectFromRow(row: RawObjectRow): HistoryArchiveObject {
 		row.claimedByCommunityScannerId ?? row.claimedbycommunityscannerid ?? null;
 	object.errorType = row.errorType ?? row.errortype ?? null;
 	object.errorMessage = row.errorMessage ?? row.errormessage ?? null;
+	object.failureChannel = toFailureChannel(
+		row.failureChannel ?? row.failurechannel ?? null
+	);
 	object.httpStatus = toNullableNumber(
 		row.httpStatus === undefined ? row.httpstatus : row.httpStatus
 	);
@@ -147,14 +153,23 @@ export function createObjectFromRow(row: RawObjectRow): HistoryArchiveObject {
 			? null
 			: {
 					code: delayReasonCode,
-					until: toNullableDate(
-						row.delayReasonUntil === undefined
-							? row.delayreasonuntil
-							: row.delayReasonUntil
-					)?.toISOString() ?? null
+					until:
+						toNullableDate(
+							row.delayReasonUntil === undefined
+								? row.delayreasonuntil
+								: row.delayReasonUntil
+						)?.toISOString() ?? null
 				};
 
 	return object;
+}
+
+function toFailureChannel(
+	value: string | null
+): HistoryArchiveObjectFailureChannelDTO | null {
+	if (value === null) return null;
+	if (value === 'archive_evidence' || value === 'scanner_issue') return value;
+	throw new Error('History archive object row has invalid failureChannel');
 }
 
 export function extractRows(result: RawObjectQueryResult): RawObjectRow[] {
@@ -251,8 +266,10 @@ function toDelayReasonCode(
 		value === 'global-active-cap' ||
 		value === 'host-active-cap' ||
 		value === 'host-backoff' ||
+		value === 'legacy-deferred' ||
 		value === 'missing-dependency' ||
 		value === 'object-already-active' ||
+		value === 'planning-deferred' ||
 		value === 'retry-window'
 	) {
 		return value;

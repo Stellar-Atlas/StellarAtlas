@@ -14,6 +14,16 @@ interface CacheEntry {
 	mtimeMs: number;
 }
 
+export class BucketCacheFailure extends Error {
+	constructor(
+		readonly failureChannel: 'archive_evidence' | 'scanner_issue',
+		readonly failure: Error
+	) {
+		super(failure.message, { cause: failure });
+		this.name = 'BucketCacheFailure';
+	}
+}
+
 export class BucketCache {
 	private pruneLock: Promise<void> = Promise.resolve();
 
@@ -43,18 +53,23 @@ export class BucketCache {
 		hash: string,
 		source: Readable,
 		verify: (stream: Readable) => Promise<Result<void, Error>>
-	): Promise<Result<void, Error>> {
+	): Promise<Result<void, BucketCacheFailure>> {
 		const finalPath = this.getBucketPath(hash);
 		const temporaryPath = `${finalPath}.${process.pid}.${Date.now()}.tmp`;
 
+		let sourceError: Error | null = null;
 		try {
 			await mkdir(dirname(finalPath), { recursive: true });
 			const verifyStream = new PassThrough();
 			const cacheStream = new PassThrough();
-			const writePromise = pipeline(cacheStream, createWriteStream(temporaryPath));
+			const writePromise = pipeline(
+				cacheStream,
+				createWriteStream(temporaryPath)
+			);
 			const verifyPromise = verify(verifyStream);
 
 			source.on('error', (error) => {
+				sourceError = mapUnknownToError(error);
 				verifyStream.destroy(error);
 				cacheStream.destroy(error);
 			});
@@ -64,7 +79,9 @@ export class BucketCache {
 			const [verifyResult] = await Promise.all([verifyPromise, writePromise]);
 			if (verifyResult.isErr()) {
 				await rm(temporaryPath, { force: true });
-				return verifyResult;
+				return err(
+					new BucketCacheFailure('archive_evidence', verifyResult.error)
+				);
 			}
 
 			const temporaryStats = await stat(temporaryPath);
@@ -73,7 +90,12 @@ export class BucketCache {
 			return ok(undefined);
 		} catch (error) {
 			await rm(temporaryPath, { force: true }).catch(() => undefined);
-			return err(mapUnknownToError(error));
+			return err(
+				new BucketCacheFailure(
+					sourceError === null ? 'scanner_issue' : 'archive_evidence',
+					sourceError ?? mapUnknownToError(error)
+				)
+			);
 		}
 	}
 
@@ -81,11 +103,7 @@ export class BucketCache {
 		temporaryPath: string,
 		finalPath: string
 	): Promise<void> {
-		try {
-			await rename(temporaryPath, finalPath);
-		} catch {
-			await rm(temporaryPath, { force: true });
-		}
+		await rename(temporaryPath, finalPath);
 	}
 
 	private async pruneFor(incomingBytes: number): Promise<void> {
@@ -118,12 +136,9 @@ export class BucketCache {
 	}
 
 	private async listCacheEntries(directory: string): Promise<CacheEntry[]> {
-		let directoryEntries: Dirent<string>[];
-		try {
-			directoryEntries = await readdir(directory, { withFileTypes: true });
-		} catch {
-			return [];
-		}
+		const directoryEntries: Dirent<string>[] = await readdir(directory, {
+			withFileTypes: true
+		});
 
 		const cacheEntries: CacheEntry[] = [];
 		for (const directoryEntry of directoryEntries) {

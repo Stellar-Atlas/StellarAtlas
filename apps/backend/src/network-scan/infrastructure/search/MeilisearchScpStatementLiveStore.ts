@@ -14,6 +14,8 @@ import type {
 	ScpStatementLiveCursor,
 	ScpStatementLiveFilter,
 	ScpStatementLiveOrder,
+	ScpStatementProjectionOutcome,
+	ScpStatementProjectionTaskOutcome,
 	ScpStatementLiveStore
 } from '../../domain/scp/ScpStatementLiveStore.js';
 import {
@@ -21,6 +23,7 @@ import {
 	ensureMeilisearchSettings
 } from './MeilisearchIndexSettings.js';
 import type { NetworkSearchConfig } from './NetworkSearchTypes.js';
+import { scpStatementObservationPolicy } from '../../domain/scp/ScpStatementObservationPolicy.js';
 
 interface ScpStatementSearchDocument extends ScpStatementObservationV1 {
 	readonly id: string;
@@ -152,6 +155,7 @@ export class MeilisearchScpStatementLiveStore implements ScpStatementLiveStore {
 	private nextIndexSetupAttemptAtMs = 0;
 	private pendingDocumentTaskCheckedAtMs = 0;
 	private pendingDocumentTaskUid: number | undefined;
+	private retentionCleanupPromise: Promise<void> | undefined;
 
 	constructor(
 		config: NetworkSearchConfig,
@@ -163,7 +167,8 @@ export class MeilisearchScpStatementLiveStore implements ScpStatementLiveStore {
 		} else if (config.host && config.host.length > 0) {
 			const client = new Meilisearch({
 				apiKey: config.apiKey,
-				host: config.host
+				host: config.host,
+				timeout: scpStatementObservationPolicy.projectionTimeoutMs
 			});
 			this.index = client.index<ScpStatementSearchDocument>(config.indexName);
 		}
@@ -171,15 +176,38 @@ export class MeilisearchScpStatementLiveStore implements ScpStatementLiveStore {
 
 	async saveMany(
 		observations: readonly CrawlerScpStatementObservation[]
-	): Promise<void> {
-		if (!this.index || observations.length === 0) return;
+	): Promise<ScpStatementProjectionOutcome> {
+		if (observations.length === 0) return { status: 'accepted' };
+		if (!this.index) {
+			return { reason: 'index-unavailable', status: 'deferred' };
+		}
 		const nowMs = Date.now();
-		if (nowMs < this.nextDocumentWriteAttemptAtMs) return;
+		if (nowMs < this.nextDocumentWriteAttemptAtMs) {
+			return {
+				reason: 'write-cooldown',
+				retryAfterMs: this.nextDocumentWriteAttemptAtMs - nowMs,
+				status: 'deferred'
+			};
+		}
 		if (!this.indexReady) {
 			this.queueIndexSetup(nowMs);
-			return;
+			return { reason: 'index-setup', status: 'deferred' };
 		}
-		if (await this.hasPendingDocumentTask(nowMs)) return;
+		const reconciliation = await this.reconcilePendingTask(nowMs);
+		if (reconciliation.status === 'pending') {
+			return {
+				reason: 'document-task-pending',
+				retryAfterMs: reconciliation.retryAfterMs,
+				status: 'deferred'
+			};
+		}
+		if (reconciliation.status === 'failed') {
+			return {
+				reason: reconciliation.reason,
+				retryAfterMs: reconciliation.retryAfterMs,
+				status: 'deferred'
+			};
+		}
 
 		const documents = observations.map(toDocument);
 		try {
@@ -195,9 +223,66 @@ export class MeilisearchScpStatementLiveStore implements ScpStatementLiveStore {
 				cooldownMs: documentWriteRetryCooldownMs,
 				error: errorMessage(error)
 			});
-			return;
+			return {
+				reason: 'document-write-failed',
+				retryAfterMs: documentWriteRetryCooldownMs,
+				status: 'deferred'
+			};
 		}
-		await this.enqueueRetentionCleanup(Date.now());
+		this.queueRetentionCleanup(Date.now());
+		return { status: 'accepted', taskPending: true };
+	}
+
+	async reconcilePendingTask(
+		nowMs = Date.now()
+	): Promise<ScpStatementProjectionTaskOutcome> {
+		if (!this.index || this.pendingDocumentTaskUid === undefined) {
+			return { status: 'settled' };
+		}
+		const elapsedMs = nowMs - this.pendingDocumentTaskCheckedAtMs;
+		if (elapsedMs < pendingDocumentTaskPollIntervalMs) {
+			return {
+				retryAfterMs: pendingDocumentTaskPollIntervalMs - elapsedMs,
+				status: 'pending'
+			};
+		}
+
+		this.pendingDocumentTaskCheckedAtMs = nowMs;
+		try {
+			const task = await this.index.tasks.getTask(this.pendingDocumentTaskUid);
+			if (task.status === 'enqueued' || task.status === 'processing') {
+				return {
+					retryAfterMs: pendingDocumentTaskPollIntervalMs,
+					status: 'pending'
+				};
+			}
+			this.pendingDocumentTaskUid = undefined;
+			if (task.status === 'succeeded') return { status: 'settled' };
+			this.nextDocumentWriteAttemptAtMs =
+				Date.now() + documentWriteRetryCooldownMs;
+			this.logger?.warn('Live SCP Meilisearch document task did not succeed', {
+				cooldownMs: documentWriteRetryCooldownMs,
+				status: task.status,
+				taskUid: task.uid
+			});
+			return {
+				reason: `document-task-${task.status}`,
+				retryAfterMs: documentWriteRetryCooldownMs,
+				status: 'failed'
+			};
+		} catch (error) {
+			this.nextDocumentWriteAttemptAtMs =
+				Date.now() + documentWriteRetryCooldownMs;
+			this.logger?.warn('Could not read live SCP Meilisearch document task', {
+				cooldownMs: documentWriteRetryCooldownMs,
+				error: errorMessage(error),
+				taskUid: this.pendingDocumentTaskUid
+			});
+			return {
+				retryAfterMs: documentWriteRetryCooldownMs,
+				status: 'pending'
+			};
+		}
 	}
 
 	async findLatest({
@@ -268,41 +353,6 @@ export class MeilisearchScpStatementLiveStore implements ScpStatementLiveStore {
 		}
 	}
 
-	private async hasPendingDocumentTask(nowMs: number): Promise<boolean> {
-		if (!this.index || this.pendingDocumentTaskUid === undefined) return false;
-		if (
-			nowMs - this.pendingDocumentTaskCheckedAtMs <
-			pendingDocumentTaskPollIntervalMs
-		) {
-			return true;
-		}
-
-		this.pendingDocumentTaskCheckedAtMs = nowMs;
-		try {
-			const task = await this.index.tasks.getTask(this.pendingDocumentTaskUid);
-			if (task.status === 'enqueued' || task.status === 'processing') return true;
-			this.pendingDocumentTaskUid = undefined;
-			if (task.status === 'succeeded') return false;
-			this.nextDocumentWriteAttemptAtMs =
-				Date.now() + documentWriteRetryCooldownMs;
-			this.logger?.warn('Live SCP Meilisearch document task did not succeed', {
-				cooldownMs: documentWriteRetryCooldownMs,
-				status: task.status,
-				taskUid: task.uid
-			});
-			return true;
-		} catch (error) {
-			this.nextDocumentWriteAttemptAtMs =
-				Date.now() + documentWriteRetryCooldownMs;
-			this.logger?.warn('Could not read live SCP Meilisearch document task', {
-				cooldownMs: documentWriteRetryCooldownMs,
-				error: errorMessage(error),
-				taskUid: this.pendingDocumentTaskUid
-			});
-			return true;
-		}
-	}
-
 	private buildFilter(
 		{ after, nodeId, slotIndex }: ScpStatementLiveFilter,
 		nowMs: number
@@ -348,5 +398,14 @@ export class MeilisearchScpStatementLiveStore implements ScpStatementLiveStore {
 				error
 			});
 		}
+	}
+
+	private queueRetentionCleanup(nowMs: number): void {
+		if (this.retentionCleanupPromise !== undefined) return;
+		this.retentionCleanupPromise = this.enqueueRetentionCleanup(nowMs).finally(
+			() => {
+				this.retentionCleanupPromise = undefined;
+			}
+		);
 	}
 }

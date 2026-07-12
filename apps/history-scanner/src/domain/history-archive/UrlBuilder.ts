@@ -1,13 +1,16 @@
 import { Url } from 'http-helper';
 import { CheckPoint } from '../check-point/CheckPointGenerator.js';
 import { Category } from './Category.js';
-import { normalizeHistoryArchiveRootUrl } from 'shared';
+import {
+	appendHistoryArchiveRootPath,
+	normalizeHistoryArchiveRootUrl
+} from 'shared';
 
 export class UrlBuilder {
 	static getBucketUrl(baseUrl: Url, hash: string) {
 		const prefix = UrlBuilder.getHexPrefix(hash);
 		const urlOrError = Url.create(
-			`${UrlBuilder.getBaseUrlValue(baseUrl)}/bucket${prefix}/bucket-${hash}.xdr.gz`
+			UrlBuilder.appendPath(baseUrl, `bucket${prefix}/bucket-${hash}.xdr.gz`)
 		);
 		if (urlOrError.isErr()) throw urlOrError.error;
 
@@ -16,7 +19,7 @@ export class UrlBuilder {
 
 	static getRootHistoryArchiveStateUrl(historyBaseUrl: Url) {
 		const urlResult = Url.create(
-			`${UrlBuilder.getBaseUrlValue(historyBaseUrl)}/.well-known/stellar-history.json`
+			UrlBuilder.appendPath(historyBaseUrl, '.well-known/stellar-history.json')
 		);
 		if (urlResult.isErr()) throw urlResult.error;
 
@@ -33,7 +36,10 @@ export class UrlBuilder {
 		const hex = UrlBuilder.getPaddedHex(checkPoint);
 		const extension = UrlBuilder.getExtension(category);
 		const urlResult = Url.create(
-			`${UrlBuilder.getBaseUrlValue(historyBaseUrl)}/${category}${pathPrefix}/${category}-${hex}${extension}`
+			UrlBuilder.appendPath(
+				historyBaseUrl,
+				`${category}${pathPrefix}/${category}-${hex}${extension}`
+			)
 		);
 		if (urlResult.isErr()) throw urlResult.error;
 
@@ -51,6 +57,15 @@ export class UrlBuilder {
 		}
 
 		return normalizedUrl;
+	}
+
+	private static appendPath(historyBaseUrl: Url, path: string): string {
+		const value = appendHistoryArchiveRootPath(
+			UrlBuilder.getBaseUrlValue(historyBaseUrl),
+			path
+		);
+		if (value === null) throw new Error('Invalid history archive object URL');
+		return value;
 	}
 
 	private static getHexPrefix(paddedHex: string): string {

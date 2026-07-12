@@ -5,7 +5,14 @@ import type {
 	HistoryArchiveObjectEvidenceClass,
 	HistoryArchiveObjectFailureClass
 } from './HistoryArchiveObjectRetryPolicy.js';
-import type { HistoryArchiveObjectSummaryV1 } from 'shared';
+import type {
+	HistoryArchiveObjectSummaryV1,
+	HistoryArchiveStatusSummaryV1
+} from 'shared';
+import type {
+	ArchiveMetadataDTO,
+	HistoryArchiveObjectFailureChannelDTO
+} from 'history-scanner-dto';
 
 export interface HistoryArchiveObjectQueueStats {
 	readonly activeObjects: number;
@@ -26,6 +33,7 @@ export interface HistoryArchiveObjectWorkerSnapshot {
 }
 
 export interface HistoryArchiveObjectProgressUpdate {
+	readonly archiveMetadata?: ArchiveMetadataDTO | null;
 	readonly bytesDownloaded?: number | null;
 	readonly claimAttempt: number;
 	readonly verificationFacts?: HistoryArchiveObjectVerificationFacts | null;
@@ -36,8 +44,10 @@ export interface HistoryArchiveObjectFailure {
 	readonly claimAttempt: number;
 	readonly errorMessage: string;
 	readonly errorType: string;
+	readonly failureChannel: HistoryArchiveObjectFailureChannelDTO;
 	readonly httpStatus?: number | null;
 	readonly nextAttemptAt?: Date | null;
+	readonly retryAfterSeconds?: number | null;
 }
 
 export interface HistoryArchiveObjectHostFailure {
@@ -48,10 +58,28 @@ export interface HistoryArchiveObjectHostFailure {
 	readonly failureClass: HistoryArchiveObjectFailureClass;
 	readonly hostIdentity: string;
 	readonly httpStatus?: number | null;
+	readonly retryAfterUntil?: Date | null;
+}
+
+export interface HistoryArchiveObjectPlanPromotionResult {
+	readonly availableSlots: number;
+	readonly outstandingObjects: number;
+	readonly promotedObjects: number;
+	readonly recentCompletions: number;
+	readonly watermark: number;
+}
+
+export interface HistoryArchiveObjectExecutionReconciliationResult {
+	readonly admittedObjects: number;
+	readonly availableSlots: number;
+	readonly cursorAdvances: number;
+	readonly outstandingObjects: number;
+	readonly preservedObjects: number;
+	readonly recentCompletions: number;
+	readonly watermark: number;
 }
 
 export interface HistoryArchiveObjectRepository {
-	clearHostThrottle(hostIdentity: string): Promise<void>;
 	claimNextObject(
 		supportedTypes: readonly HistoryArchiveObjectType[]
 	): Promise<HistoryArchiveObject | null>;
@@ -67,6 +95,13 @@ export interface HistoryArchiveObjectRepository {
 		bucketHash: string
 	): Promise<readonly HistoryArchiveObject[]>;
 	findByRemoteId(remoteId: string): Promise<HistoryArchiveObject | null>;
+	findLatestActivityAt(): Promise<Date | null>;
+	findUnreconciledTransitions(
+		limit: number
+	): Promise<readonly HistoryArchiveObject[]>;
+	findVerifiedCheckpointsNeedingReconciliation(
+		limit: number
+	): Promise<readonly HistoryArchiveObject[]>;
 	findOldestCheckpointLedgerByArchiveUrlIdentities(
 		archiveUrlIdentities: readonly string[]
 	): Promise<ReadonlyMap<string, number>>;
@@ -79,7 +114,7 @@ export interface HistoryArchiveObjectRepository {
 		readonly archiveUrl?: string | null;
 		readonly archiveUrlIdentity?: string | null;
 	}): Promise<HistoryArchiveObjectSummaryV1>;
-	getStatusSummary(): Promise<HistoryArchiveObjectSummaryV1>;
+	getStatusSummary(): Promise<HistoryArchiveStatusSummaryV1>;
 	getWorkerSnapshot(
 		staleCutoff: Date
 	): Promise<HistoryArchiveObjectWorkerSnapshot>;
@@ -89,14 +124,29 @@ export interface HistoryArchiveObjectRepository {
 	): Promise<boolean>;
 	markObjectFailed(
 		remoteId: string,
-		failure: HistoryArchiveObjectFailure
+		failure: HistoryArchiveObjectFailure,
+		hostFailure?: HistoryArchiveObjectHostFailure
 	): Promise<boolean>;
 	markObjectVerified(
 		remoteId: string,
 		progress?: HistoryArchiveObjectProgressUpdate
 	): Promise<boolean>;
-	recordHostFailure(failure: HistoryArchiveObjectHostFailure): Promise<void>;
+	markTransitionEffectsCompleted(
+		remoteId: string,
+		claimAttempt: number,
+		status: 'failed' | 'verified'
+	): Promise<boolean>;
+	materializeCheckpointDependencies(remoteId: string): Promise<number>;
+	planObjects(objects: readonly HistoryArchiveObject[]): Promise<number>;
+	promotePlannedObjects(): Promise<HistoryArchiveObjectPlanPromotionResult>;
+	reconcileDependencyReadiness(limit: number): Promise<number>;
+	reconcileExecutionDisposition(): Promise<HistoryArchiveObjectExecutionReconciliationResult>;
+	tryWithTransitionReconciliationLock(
+		work: () => Promise<void>
+	): Promise<boolean>;
 	releaseObject(remoteId: string, claimAttempt: number): Promise<boolean>;
-	releaseStaleObjects(before: Date): Promise<number>;
-	saveObjects(objects: readonly HistoryArchiveObject[]): Promise<number>;
+	releaseStaleObjects(
+		before: Date,
+		limit?: number
+	): Promise<readonly HistoryArchiveObject[]>;
 }

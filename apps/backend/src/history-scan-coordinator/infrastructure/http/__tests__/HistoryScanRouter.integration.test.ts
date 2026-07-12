@@ -4,15 +4,12 @@ import { mock } from 'jest-mock-extended';
 import { ok, err } from 'neverthrow';
 import { HistoryScanRouterWrapper } from '../HistoryScanRouter.js';
 import { Url } from 'http-helper';
-import { GetLatestScan } from '@history-scan-coordinator/use-cases/get-latest-scan/GetLatestScan.js';
 import { RegisterScan } from '@history-scan-coordinator/use-cases/register-scan/RegisterScan.js';
-import { InvalidUrlError } from '@history-scan-coordinator/use-cases/get-latest-scan/InvalidUrlError.js';
 import { ScanDTO } from 'history-scanner-dto';
 import { ScanJob } from '@history-scan-coordinator/domain/ScanJob.js';
 import { GetScanJob } from '@history-scan-coordinator/use-cases/get-scan-job/GetScanJob.js';
 import { ReleaseScanJob } from '@history-scan-coordinator/use-cases/release-scan-job/ReleaseScanJob.js';
 import { TouchScanJob } from '@history-scan-coordinator/use-cases/touch-scan-job/TouchScanJob.js';
-import { GetScanLogs } from '@history-scan-coordinator/use-cases/get-scan-logs/GetScanLogs.js';
 import { RegisterParsedLedgerHeaders } from '@history-scan-coordinator/use-cases/register-parsed-ledger-headers/RegisterParsedLedgerHeaders.js';
 import { RegisterParsedTransactionEnvelopes } from '@history-scan-coordinator/use-cases/register-parsed-transaction-envelopes/RegisterParsedTransactionEnvelopes.js';
 import { RegisterParsedTransactionResults } from '@history-scan-coordinator/use-cases/register-parsed-transaction-results/RegisterParsedTransactionResults.js';
@@ -20,7 +17,6 @@ import { randomUUID } from 'crypto';
 
 describe('HistoryScanRouter.integration', () => {
 	let app: express.Application;
-	let getLatestScan: jest.Mocked<GetLatestScan>;
 	let registerScan: jest.Mocked<RegisterScan>;
 	let registerParsedLedgerHeaders: jest.Mocked<RegisterParsedLedgerHeaders>;
 	let registerParsedTransactionEnvelopes: jest.Mocked<RegisterParsedTransactionEnvelopes>;
@@ -28,10 +24,8 @@ describe('HistoryScanRouter.integration', () => {
 	let getScanJob: jest.Mocked<GetScanJob>;
 	let releaseScanJob: jest.Mocked<ReleaseScanJob>;
 	let touchScanJob: jest.Mocked<TouchScanJob>;
-	let getScanLogs: jest.Mocked<GetScanLogs>;
 
 	beforeEach(() => {
-		getLatestScan = mock<GetLatestScan>();
 		registerScan = mock<RegisterScan>();
 		registerParsedLedgerHeaders = mock<RegisterParsedLedgerHeaders>();
 		registerParsedTransactionEnvelopes =
@@ -40,15 +34,12 @@ describe('HistoryScanRouter.integration', () => {
 		getScanJob = mock<GetScanJob>();
 		releaseScanJob = mock<ReleaseScanJob>();
 		touchScanJob = mock<TouchScanJob>();
-		getScanLogs = mock<GetScanLogs>();
 
 		app = express();
 		app.use(express.json());
 		app.use(
 			'/history-scan',
 			HistoryScanRouterWrapper({
-				getLatestScan,
-				getScanLogs,
 				registerScan,
 				registerParsedLedgerHeaders,
 				registerParsedTransactionEnvelopes,
@@ -60,54 +51,6 @@ describe('HistoryScanRouter.integration', () => {
 				password: 'secret'
 			})
 		);
-	});
-
-	describe('GET /:url', () => {
-		it('should return 400 for invalid URL', async () => {
-			await request(app)
-				.get('/history-scan/invalid-url')
-				.expect(400)
-				.expect('Content-Type', /json/)
-				.expect((response) => {
-					expect(response.body.errors).toBeDefined();
-				});
-		});
-
-		it('should return 400 when InvalidUrlError', async () => {
-			getLatestScan.execute.mockResolvedValue(
-				err(new InvalidUrlError('test.com'))
-			);
-
-			await request(app)
-				.get('/history-scan/https%3A%2F%2Ftest.com')
-				.expect(400)
-				.expect((response) => {
-					expect(response.body.error).toBe('Invalid url');
-				});
-		});
-
-		it('should expose latest archive scans with frontend-aligned cache age', async () => {
-			getLatestScan.execute.mockResolvedValue(ok(null));
-
-			await request(app)
-				.get('/history-scan/https%3A%2F%2Ftest.com')
-				.expect(204)
-				.expect('Cache-Control', 'public, max-age=10');
-		});
-	});
-
-	describe('GET /logs/:url', () => {
-		it('should expose archive scan logs with frontend-aligned cache age', async () => {
-			getScanLogs.execute.mockResolvedValue(ok([]));
-
-			await request(app)
-				.get('/history-scan/logs/https%3A%2F%2Ftest.com')
-				.expect(200)
-				.expect('Cache-Control', 'public, max-age=10')
-				.expect((response) => {
-					expect(response.body).toEqual([]);
-				});
-		});
 	});
 
 	describe('POST /', () => {

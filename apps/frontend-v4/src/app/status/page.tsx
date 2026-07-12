@@ -3,20 +3,16 @@ import {
 	fetchApiStatus,
 	fetchDataQualityStatus,
 	fetchFrontendStatus,
-	fetchScanLogStatus,
 	fetchWorkerStatus
 } from '@api/client';
-import {
-	fetchHistoryArchiveObjectEvents,
-	fetchHistoryArchiveObjectStatusSummary
-} from '@api/archive-scans-client';
+import { fetchHistoryArchiveObjectStatusSummary } from '@api/archive-scans-client';
 import type {
 	PublicApiStatus,
 	PublicConfiguredServiceStatus,
 	PublicDataQualityStatus,
 	PublicHistoryArchiveObjectEvents,
 	PublicHistoryArchiveObjectQueue,
-	PublicHistoryArchiveObjectSummary,
+	PublicHistoryArchiveStatusSummary,
 	PublicScanLogStatus,
 	PublicWorkerStatus
 } from '@api/types';
@@ -26,52 +22,34 @@ import { StatusDashboardLive } from '@components/status/status-dashboard-live';
 
 export const revalidate = 0;
 export const dynamic = 'force-dynamic';
-const statusFetchOptions = { cache: 'no-store', timeoutMs: 15_000 } as const;
-const archiveSampleFetchOptions = {
-	cache: 'no-store',
-	timeoutMs: 3_500
-} as const;
+const headlineFetchOptions = { cache: 'no-store', timeoutMs: 3_500 } as const;
 
 async function StatusRouteContent(): Promise<React.JSX.Element> {
 	const emptyArchiveObjects = buildEmptyArchiveQueue();
 	const generatedAt = new Date().toISOString();
-	const [
-		api,
-		dataQuality,
-		scanLogs,
-		workers,
-		frontend,
-		archiveEvents,
-		archiveSummary
-	] =
+	const archiveEvents = buildEmptyArchiveEvents(generatedAt);
+	const scanLogs = buildEmptyScanLogs(generatedAt);
+	const [api, dataQuality, workers, frontend, archiveSummary] =
 		await Promise.all([
 			fetchOptional(
-				fetchApiStatus(statusFetchOptions),
+				fetchApiStatus(headlineFetchOptions),
 				buildUnavailableApi(generatedAt)
 			),
 			fetchOptional(
-				fetchDataQualityStatus(statusFetchOptions),
+				fetchDataQualityStatus(headlineFetchOptions),
 				buildUnavailableDataQuality(generatedAt)
 			),
 			fetchOptional(
-				fetchScanLogStatus(statusFetchOptions),
-				buildEmptyScanLogs(generatedAt)
-			),
-			fetchOptional(
-				fetchWorkerStatus(statusFetchOptions),
+				fetchWorkerStatus(headlineFetchOptions),
 				buildUnavailableWorkers(generatedAt)
 			),
 			fetchOptional(
-				fetchFrontendStatus(statusFetchOptions),
+				fetchFrontendStatus(headlineFetchOptions),
 				buildUnavailableFrontend(generatedAt)
 			),
 			fetchOptional(
-				fetchHistoryArchiveObjectEvents(100, archiveSampleFetchOptions),
-				buildEmptyArchiveEvents()
-			),
-			fetchOptional(
-				fetchHistoryArchiveObjectStatusSummary(archiveSampleFetchOptions),
-				buildArchiveSummaryFromQueue(emptyArchiveObjects)
+				fetchHistoryArchiveObjectStatusSummary(headlineFetchOptions),
+				buildUnavailableArchiveStatus(generatedAt)
 			)
 		]);
 
@@ -84,14 +62,16 @@ async function StatusRouteContent(): Promise<React.JSX.Element> {
 			/>
 			<StatusDashboardLive
 				api={api.value}
-				archiveEvents={archiveEvents.value}
+				archiveEvents={archiveEvents}
+				archiveEventsAvailable={false}
 				archiveEvidenceAvailable={archiveSummary.available}
 				archiveObjects={emptyArchiveObjects}
 				archiveObjectsAvailable={false}
 				archiveSummary={archiveSummary.value}
 				dataQuality={dataQuality.value}
 				frontend={frontend.value}
-				scanLogs={scanLogs.value}
+				scanLogs={scanLogs}
+				scanLogsAvailable={false}
 				workers={workers.value}
 			/>
 		</main>
@@ -145,10 +125,21 @@ function buildUnavailableWorkers(generatedAt: string): PublicWorkerStatus {
 		archiveWorkers: {
 			activeWorkers: 0,
 			configuredWorkerProcesses: 0,
+			freshWorkers: 0,
+			idleWorkers: 0,
+			lastHeartbeatAt: null,
+			missingWorkers: 0,
+			queueActiveWorkers: 0,
+			queueStaleWorkers: 0,
+			registeredWorkers: 0,
+			startupGraceActive: false,
+			startupGraceMs: 120_000,
 			staleJobAgeMs: 0,
 			staleWorkers: 0,
 			status: 'unavailable',
-			totalTakenJobs: 0
+			telemetryMode: 'aggregate-only',
+			totalTakenJobs: 0,
+			workers: []
 		},
 		communityScanners: {
 			activeScanners: 0,
@@ -167,6 +158,8 @@ function buildUnavailableWorkers(generatedAt: string): PublicWorkerStatus {
 function buildEmptyScanLogs(generatedAt: string): PublicScanLogStatus {
 	return {
 		archiveScans: [],
+		archiveScansDeprecated: true,
+		archiveScansHistorical: true,
 		generatedAt,
 		limit: 25,
 		networkScans: []
@@ -176,6 +169,12 @@ function buildEmptyScanLogs(generatedAt: string): PublicScanLogStatus {
 function buildUnavailableDataQuality(
 	generatedAt: string
 ): PublicDataQualityStatus {
+	const archiveEvidence = {
+		...buildUnavailableFreshnessProbe(),
+		drivesPlatformStatus: false as const,
+		drivesRuntimeHealth: false as const,
+		source: 'archive_object_evidence' as const
+	};
 	return {
 		archiveQueue: {
 			activeJobs: 0,
@@ -187,7 +186,15 @@ function buildUnavailableDataQuality(
 			totalUnfinishedJobs: 0
 		},
 		dataFreshness: {
-			archiveScan: buildUnavailableFreshnessProbe(),
+			archiveEvidence,
+			archiveScan: {
+				...buildUnavailableFreshnessProbe(),
+				deprecated: true,
+				drivesPlatformStatus: false,
+				drivesRuntimeHealth: false,
+				historical: true,
+				source: 'legacy_range_scan'
+			},
 			generatedAt,
 			networkScan: buildUnavailableFreshnessProbe(),
 			status: 'unavailable'
@@ -243,31 +250,13 @@ function buildUnavailableFreshnessProbe() {
 	};
 }
 
-function buildArchiveSummaryFromQueue(
-	objects: PublicHistoryArchiveObjectQueue
-): PublicHistoryArchiveObjectSummary {
-	const bucketObjects = objects.objects.filter(
-		(object) => object.objectType === 'bucket'
-	);
-	const uniqueBucketHashes = new Set(
-		bucketObjects.flatMap((object) =>
-			object.bucketHash === null ? [] : [object.bucketHash]
-		)
-	);
-
+function buildUnavailableArchiveStatus(
+	generatedAt: string
+): PublicHistoryArchiveStatusSummary {
 	return {
-		activeObjects: objects.activeObjects,
-		archiveUrl: null,
-		archiveUrlIdentity: null,
-		buckets: {
-			activeBucketObjects: countBucketStatus(bucketObjects, 'scanning'),
-			failedBucketObjects: countBucketStatus(bucketObjects, 'failed'),
-			pendingBucketObjects: countBucketStatus(bucketObjects, 'pending'),
-			totalBucketObjects: bucketObjects.length,
-			uniqueBucketHashes: uniqueBucketHashes.size,
-			verifiedBucketObjects: countBucketStatus(bucketObjects, 'verified')
-		},
-		checkpoints: {
+		activeObjectChecks: 0,
+		archiveEvidenceFailures: 0,
+		checkpointCoverage: {
 			activeArchiveCheckpoints: 0,
 			archiveRootsWithState: 0,
 			categoryConsistencyFailedCheckpoints: 0,
@@ -285,34 +274,23 @@ function buildArchiveSummaryFromQueue(
 			partialArchiveCheckpoints: 0,
 			totalArchiveCheckpoints: 0
 		},
-		failedObjects: objects.failedObjects,
-		generatedAt: objects.generatedAt,
-		hostThrottles: [],
-		objectTypes: [],
-		pendingObjects: objects.pendingObjects,
-		scope: 'global',
+		generatedAt,
+		sourceCount: 0,
+		sourceLimit: 256,
+		scannerIssueFailures: 0,
 		sources: [],
-		totalObjects:
-			objects.activeObjects +
-			objects.pendingObjects +
-			objects.verifiedObjects +
-			objects.failedObjects,
-		verifiedObjects: objects.verifiedObjects
+		sourcesTruncated: false,
+		unclassifiedFailures: 0
 	};
 }
 
-function countBucketStatus(
-	bucketObjects: PublicHistoryArchiveObjectQueue['objects'],
-	status: PublicHistoryArchiveObjectQueue['objects'][number]['status']
-): number {
-	return bucketObjects.filter((object) => object.status === status).length;
-}
-
-function buildEmptyArchiveEvents(): PublicHistoryArchiveObjectEvents {
+function buildEmptyArchiveEvents(
+	generatedAt: string
+): PublicHistoryArchiveObjectEvents {
 	return {
 		count: 0,
 		events: [],
-		generatedAt: new Date().toISOString(),
+		generatedAt,
 		limit: 100
 	};
 }

@@ -14,7 +14,7 @@ describe('NetworkLiveWebSocket', () => {
 			execute: jest.fn().mockResolvedValue(ok({ latestLedger: '1' }))
 		} as unknown as GetNetwork;
 		const getScpStatements = {
-			execute: jest.fn().mockResolvedValue(ok([]))
+			executeWithMetadata: jest.fn().mockResolvedValue(ok(readResult([])))
 		} as unknown as GetScpStatements;
 
 		attachNetworkLiveWebSocket(server, {
@@ -32,9 +32,12 @@ describe('NetworkLiveWebSocket', () => {
 
 			expect(message.payload).toEqual({
 				closedAt: '2026-07-05T00:00:01.000Z',
+				freshness: 'fresh',
+				freshnessMs: 1_000,
+				observedAt: '2026-07-05T00:00:02.000Z',
 				protocolVersion: null,
 				sequence: '63326550',
-				source: 'network_scan'
+				source: 'scp_live_collector'
 			});
 		} finally {
 			socket.close();
@@ -42,18 +45,77 @@ describe('NetworkLiveWebSocket', () => {
 		}
 	});
 
-	it('sends live-only SCP deltas in cursor order', async () => {
+	it('labels Horizon fallback after stale scanner-owned ledger rejection', async () => {
+		const closedAt = new Date().toISOString();
+		const server = createServer((_request, response) => {
+			response.setHeader('Content-Type', 'application/json');
+			response.end(
+				JSON.stringify({
+					_embedded: {
+						records: [
+							{
+								closed_at: closedAt,
+								id: 'ledger-id',
+								protocol_version: 23,
+								sequence: 63326551
+							}
+						]
+					}
+				})
+			);
+		});
+		await listen(server);
+		const getScpStatements = {
+			executeWithMetadata: jest.fn().mockResolvedValue(ok(readResult([])))
+		} as unknown as GetScpStatements;
+		attachNetworkLiveWebSocket(server, {
+			getLatestObservedLedger: {
+				execute: jest.fn().mockResolvedValue(ok(null))
+			} as unknown as GetLatestObservedLedger,
+			getNetwork: {
+				execute: jest.fn().mockResolvedValue(ok({ latestLedger: '1' }))
+			} as unknown as GetNetwork,
+			getScpStatements,
+			horizonUrl: `http://127.0.0.1:${addressPort(server)}`,
+			path: '/ws'
+		});
+
+		const socket = new WebSocket(`ws://127.0.0.1:${addressPort(server)}/ws`);
+		try {
+			const message = await waitForLatestLedgerMessage(socket);
+
+			expect(message.payload).toMatchObject({
+				closedAt,
+				freshness: 'fresh',
+				protocolVersion: 23,
+				sequence: '63326551',
+				source: 'horizon_fallback'
+			});
+			expect(message.payload.freshnessMs).toEqual(expect.any(Number));
+			expect(message.payload.observedAt).toEqual(expect.any(String));
+		} finally {
+			socket.close();
+			await close(server);
+		}
+	});
+
+	it('sends canonical fallback SCP deltas with source and freshness labels', async () => {
 		const server = createServer();
 		const getNetwork = {
 			execute: jest.fn().mockResolvedValue(ok({ latestLedger: '1' }))
 		} as unknown as GetNetwork;
 		const getScpStatements = {
-			execute: jest
+			executeWithMetadata: jest
 				.fn()
 				.mockResolvedValueOnce(
-					ok([createStatement('statement-b'), createStatement('statement-a')])
+					ok(
+						readResult([
+							createStatement('statement-b'),
+							createStatement('statement-a')
+						])
+					)
 				)
-				.mockResolvedValue(ok([]))
+				.mockResolvedValue(ok(readResult([])))
 		} as unknown as GetScpStatements;
 
 		attachNetworkLiveWebSocket(server, {
@@ -69,24 +131,30 @@ describe('NetworkLiveWebSocket', () => {
 		try {
 			const message = await waitForScpMessage(socket);
 
-			expect(getScpStatements.execute).toHaveBeenCalledWith({
+			expect(getScpStatements.executeWithMetadata).toHaveBeenCalledWith({
 				after: undefined,
 				limit: 1000,
 				order: 'desc',
-				source: 'live'
+				source: 'auto'
+			});
+			expect(message).toMatchObject({
+				freshness: 'fresh',
+				freshnessMs: 1_000,
+				observedAt: '2026-07-05T00:00:00.000Z',
+				source: 'postgres_canonical'
 			});
 			expect(
 				message.payload.map((statement) => statement.statementHash)
 			).toEqual(['statement-a', 'statement-b']);
 			await waitForScpReadCount(getScpStatements, 2);
-			expect(getScpStatements.execute).toHaveBeenLastCalledWith({
+			expect(getScpStatements.executeWithMetadata).toHaveBeenLastCalledWith({
 				after: {
 					observedAtMs: new Date('2026-07-05T00:00:00.000Z').getTime(),
 					statementHash: 'statement-b'
 				},
 				limit: 1000,
 				order: 'asc',
-				source: 'live'
+				source: 'auto'
 			});
 		} finally {
 			socket.close();
@@ -100,15 +168,23 @@ describe('NetworkLiveWebSocket', () => {
 			execute: jest.fn().mockResolvedValue(ok({ latestLedger: '1' }))
 		} as unknown as GetNetwork;
 		const getScpStatements = {
-			execute: jest
+			executeWithMetadata: jest
 				.fn()
 				.mockResolvedValueOnce(
-					ok([createStatement('statement-current', '2026-07-05T00:00:01.000Z')])
+					ok(
+						readResult([
+							createStatement('statement-current', '2026-07-05T00:00:01.000Z')
+						])
+					)
 				)
 				.mockResolvedValueOnce(
-					ok([createStatement('statement-older', '2026-07-05T00:00:00.000Z')])
+					ok(
+						readResult([
+							createStatement('statement-older', '2026-07-05T00:00:00.000Z')
+						])
+					)
 				)
-				.mockResolvedValue(ok([]))
+				.mockResolvedValue(ok(readResult([])))
 		} as unknown as GetScpStatements;
 
 		attachNetworkLiveWebSocket(server, {
@@ -140,12 +216,35 @@ function createLatestObservedLedgerReader(): GetLatestObservedLedger {
 		execute: jest.fn().mockResolvedValue(
 			ok({
 				closedAt: '2026-07-05T00:00:01.000Z',
+				freshness: 'fresh',
+				freshnessMs: 1_000,
+				observedAt: '2026-07-05T00:00:02.000Z',
 				protocolVersion: null,
 				sequence: '63326550',
-				source: 'network_scan'
+				source: 'scp_live_collector'
 			})
 		)
 	} as unknown as GetLatestObservedLedger;
+}
+
+function readResult(
+	observations: ScpStatementObservationV1[],
+	overrides: Partial<{
+		freshness: 'empty' | 'fresh' | 'stale' | 'unavailable';
+		freshnessMs: number | null;
+		observedAt: string | null;
+		source: 'meilisearch' | 'postgres_canonical';
+	}> = {}
+) {
+	return {
+		freshness:
+			observations.length === 0 ? ('empty' as const) : ('fresh' as const),
+		freshnessMs: observations.length === 0 ? null : 1_000,
+		observations,
+		observedAt: observations.length === 0 ? null : '2026-07-05T00:00:00.000Z',
+		source: 'postgres_canonical' as const,
+		...overrides
+	};
 }
 
 function createStatement(
@@ -171,6 +270,9 @@ function createStatement(
 function waitForLatestLedgerMessage(socket: WebSocket): Promise<{
 	payload: {
 		closedAt: string;
+		freshness?: string;
+		freshnessMs?: number;
+		observedAt?: string;
 		protocolVersion: number | null;
 		sequence: string;
 		source?: string;
@@ -179,14 +281,27 @@ function waitForLatestLedgerMessage(socket: WebSocket): Promise<{
 }> {
 	return new Promise((resolve, reject) => {
 		const timeout = setTimeout(() => {
-			reject(new Error('Timed out waiting for latest ledger websocket message'));
+			reject(
+				new Error('Timed out waiting for latest ledger websocket message')
+			);
 		}, 2_000);
 
 		socket.on('message', (data) => {
 			const message = JSON.parse(data.toString()) as {
+				freshness?: unknown;
+				freshnessMs?: unknown;
+				observedAt?: unknown;
 				payload?: unknown;
+				source?: unknown;
 				type?: unknown;
 			};
+			if (message.type === 'error') {
+				clearTimeout(timeout);
+				reject(
+					new Error(`WebSocket error: ${JSON.stringify(message.payload)}`)
+				);
+				return;
+			}
 			if (message.type !== 'latestLedger') return;
 			clearTimeout(timeout);
 			resolve({
@@ -202,6 +317,10 @@ function waitForLatestLedgerMessage(socket: WebSocket): Promise<{
 		socket.on('error', (error) => {
 			clearTimeout(timeout);
 			reject(error);
+		});
+		socket.on('close', (code, reason) => {
+			clearTimeout(timeout);
+			reject(new Error(`WebSocket closed ${code}: ${reason.toString()}`));
 		});
 	});
 }
@@ -246,7 +365,8 @@ function waitForScpReadCount(
 		}, 2_500);
 		const interval = setInterval(() => {
 			if (
-				jest.mocked(getScpStatements.execute).mock.calls.length < expectedCalls
+				jest.mocked(getScpStatements.executeWithMetadata).mock.calls.length <
+				expectedCalls
 			)
 				return;
 			clearTimeout(timeout);
@@ -271,7 +391,11 @@ function addressPort(server: Server): number {
 }
 
 function waitForScpMessage(socket: WebSocket): Promise<{
+	freshness: string;
+	freshnessMs: number | null;
+	observedAt: string | null;
 	payload: ScpStatementObservationV1[];
+	source: string;
 	type: 'scp';
 }> {
 	return new Promise((resolve, reject) => {
@@ -281,21 +405,42 @@ function waitForScpMessage(socket: WebSocket): Promise<{
 
 		socket.on('message', (data) => {
 			const message = JSON.parse(data.toString()) as {
+				freshness?: unknown;
+				freshnessMs?: unknown;
+				observedAt?: unknown;
 				payload?: unknown;
+				source?: unknown;
 				type?: unknown;
 			};
+			if (message.type === 'error') {
+				clearTimeout(timeout);
+				reject(
+					new Error(`WebSocket error: ${JSON.stringify(message.payload)}`)
+				);
+				return;
+			}
 			if (message.type !== 'scp' || !Array.isArray(message.payload)) {
 				return;
 			}
 			clearTimeout(timeout);
 			resolve({
+				freshness: String(message.freshness),
+				freshnessMs:
+					typeof message.freshnessMs === 'number' ? message.freshnessMs : null,
+				observedAt:
+					typeof message.observedAt === 'string' ? message.observedAt : null,
 				payload: message.payload as ScpStatementObservationV1[],
+				source: String(message.source),
 				type: 'scp'
 			});
 		});
 		socket.on('error', (error) => {
 			clearTimeout(timeout);
 			reject(error);
+		});
+		socket.on('close', (code, reason) => {
+			clearTimeout(timeout);
+			reject(new Error(`WebSocket closed ${code}: ${reason.toString()}`));
 		});
 	});
 }

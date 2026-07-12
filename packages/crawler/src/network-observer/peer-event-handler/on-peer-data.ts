@@ -21,6 +21,10 @@ export class OnPeerData {
 	public handle(data: DataPayload, observation: Observation): OnPeerDataResult {
 		const attemptLedgerClose = this.attemptLedgerClose(observation);
 		const result = this.performWork(data, observation, attemptLedgerClose);
+		this.acknowledgeWhenPersisted(
+			data,
+			observation.takeScpStatementBackpressure()
+		);
 
 		if (result.isErr()) {
 			this.disconnect(data, result.error);
@@ -53,8 +57,27 @@ export class OnPeerData {
 			data.address
 		);
 
-		data.stellarMessageWork.done();
 		return result;
+	}
+
+	private acknowledgeWhenPersisted(
+		data: DataPayload,
+		backpressure: Promise<void> | null
+	): void {
+		if (backpressure === null) {
+			data.stellarMessageWork.done();
+			return;
+		}
+
+		void backpressure.then(
+			() => data.stellarMessageWork.done(),
+			(error: unknown) => {
+				this.disconnect(
+					data,
+					error instanceof Error ? error : new Error(String(error))
+				);
+			}
+		);
 	}
 
 	private attemptLedgerClose(observation: Observation) {

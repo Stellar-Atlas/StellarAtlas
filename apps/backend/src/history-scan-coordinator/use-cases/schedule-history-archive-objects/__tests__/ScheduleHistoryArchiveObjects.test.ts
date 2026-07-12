@@ -5,20 +5,37 @@ import type { HistoryArchiveObjectRepository } from '../../../domain/history-arc
 import type { HistoryArchiveStateRepository } from '../../../domain/history-archive-state/HistoryArchiveStateRepository.js';
 import { HistoryArchiveStateSnapshot } from '../../../domain/history-archive-state/HistoryArchiveStateSnapshot.js';
 import { ScheduleHistoryArchiveObjects } from '../ScheduleHistoryArchiveObjects.js';
+import type { ReconcileHistoryArchiveObjectTransitions } from '../../reconcile-history-archive-object-transitions/ReconcileHistoryArchiveObjectTransitions.js';
 
 describe('ScheduleHistoryArchiveObjects', () => {
 	let logger: MockProxy<Logger>;
+	let transitionReconciler: MockProxy<ReconcileHistoryArchiveObjectTransitions>;
 	let objectRepository: MockProxy<HistoryArchiveObjectRepository>;
 	let stateRepository: MockProxy<HistoryArchiveStateRepository>;
 
 	beforeEach(() => {
 		logger = mock<Logger>();
+		transitionReconciler = mock<ReconcileHistoryArchiveObjectTransitions>();
 		objectRepository = mock<HistoryArchiveObjectRepository>();
 		stateRepository = mock<HistoryArchiveStateRepository>();
-		objectRepository.saveObjects.mockResolvedValue(0);
-		objectRepository.findOldestCheckpointLedgerByArchiveUrlIdentities.mockResolvedValue(
-			new Map([['https://history.example.com/archive', 500_000]])
-		);
+		objectRepository.planObjects.mockResolvedValue(0);
+		objectRepository.promotePlannedObjects.mockResolvedValue({
+			availableSlots: 48,
+			outstandingObjects: 0,
+			promotedObjects: 2,
+			recentCompletions: 0,
+			watermark: 48
+		});
+		objectRepository.reconcileDependencyReadiness.mockResolvedValue(0);
+		objectRepository.reconcileExecutionDisposition.mockResolvedValue({
+			admittedObjects: 0,
+			availableSlots: 48,
+			cursorAdvances: 0,
+			outstandingObjects: 0,
+			preservedObjects: 0,
+			recentCompletions: 0,
+			watermark: 48
+		});
 		stateRepository.findAvailable.mockResolvedValue([
 			HistoryArchiveStateSnapshot.available(
 				'https://history.example.com/archive',
@@ -29,29 +46,77 @@ describe('ScheduleHistoryArchiveObjects', () => {
 		]);
 	});
 
-	it('schedules a bounded checkpoint discovery page instead of one object', async () => {
+	it('plans only the current frontier instead of historical pages', async () => {
 		const scheduler = new ScheduleHistoryArchiveObjects(
 			objectRepository,
 			stateRepository,
+			transitionReconciler,
 			logger
 		);
 
 		const result = await scheduler.execute([]);
 
 		expect(result.isOk()).toBe(true);
-		const savedObjects = objectRepository.saveObjects.mock.calls[0]?.[0] ?? [];
-		const checkpointDiscoveryObjects = savedObjects.filter(
-			(object) =>
-				object.objectType === 'checkpoint-state' &&
-				object.checkpointLedger !== null &&
-				object.checkpointLedger < 500_000
-		);
-		expect(checkpointDiscoveryObjects).toHaveLength(256);
+		const plannedObjects =
+			objectRepository.planObjects.mock.calls[0]?.[0] ?? [];
+		expect(plannedObjects).toHaveLength(2);
 		expect(
-			savedObjects.find(
+			plannedObjects.filter(
+				(object) => object.objectType === 'checkpoint-state'
+			)
+		).toHaveLength(1);
+		expect(
+			plannedObjects.find(
 				(object) => object.objectType === 'history-archive-state'
 			)?.status
 		).toBe('verified');
+	});
+
+	it('bounds a production-size 79-root scheduling pass', async () => {
+		const states = Array.from({ length: 79 }, (_, index) => {
+			const archiveUrl = `https://history-${index}.example/archive`;
+			return HistoryArchiveStateSnapshot.available(
+				archiveUrl,
+				archiveUrl,
+				{
+					...createArchiveMetadata(700_000),
+					stellarHistoryUrl: `${archiveUrl}/.well-known/stellar-history.json`
+				},
+				'history-scanner'
+			);
+		});
+		stateRepository.findAvailable.mockResolvedValue(states);
+		const scheduler = new ScheduleHistoryArchiveObjects(
+			objectRepository,
+			stateRepository,
+			transitionReconciler,
+			logger
+		);
+
+		await scheduler.execute(states.map((state) => state.archiveUrl));
+
+		const plans = objectRepository.planObjects.mock.calls[0]?.[0] ?? [];
+		expect(plans).toHaveLength(79 * 3);
+		expect(plans.length).toBeLessThan(19_687 / 80);
+		expect(objectRepository.promotePlannedObjects).toHaveBeenCalledTimes(1);
+	});
+
+	it('replays durable terminal effects before producing more work', async () => {
+		const scheduler = new ScheduleHistoryArchiveObjects(
+			objectRepository,
+			stateRepository,
+			transitionReconciler,
+			logger
+		);
+
+		await scheduler.execute([]);
+
+		expect(transitionReconciler.executeIfDue).toHaveBeenCalledTimes(1);
+		expect(
+			transitionReconciler.executeIfDue.mock.invocationCallOrder[0]
+		).toBeLessThan(
+			objectRepository.planObjects.mock.invocationCallOrder[0] ?? 0
+		);
 	});
 });
 

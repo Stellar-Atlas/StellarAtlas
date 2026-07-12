@@ -13,10 +13,27 @@ import type {
 	ScpStatementLiveOrder,
 	ScpStatementLiveStore
 } from '../../domain/scp/ScpStatementLiveStore.js';
+import { scpStatementObservationPolicy } from '../../domain/scp/ScpStatementObservationPolicy.js';
 
 const DEFAULT_LIMIT = 200;
 const MAX_LIMIT = 1000;
 const DEFAULT_SOURCE: ScpStatementSource = 'live';
+
+export type ScpStatementReadSource = 'meilisearch' | 'postgres_canonical';
+export type ScpStatementReadFreshness =
+	'empty' | 'fresh' | 'stale' | 'unavailable';
+
+export interface ScpStatementReadResult {
+	freshness: ScpStatementReadFreshness;
+	freshnessMs: number | null;
+	observations: ScpStatementObservationV1[];
+	observedAt: string | null;
+	source: ScpStatementReadSource;
+}
+
+type ObservationRead =
+	| { observations: ScpStatementObservationV1[]; status: 'available' }
+	| { error: Error; status: 'unavailable' };
 
 @injectable()
 export class GetScpStatements {
@@ -30,32 +47,176 @@ export class GetScpStatements {
 	async execute(
 		dto: GetScpStatementsDTO
 	): Promise<Result<ScpStatementObservationV1[], Error>> {
+		const result = await this.executeWithMetadata(dto);
+		return result.map(({ observations }) => observations);
+	}
+
+	async executeWithMetadata(
+		dto: GetScpStatementsDTO
+	): Promise<Result<ScpStatementReadResult, Error>> {
 		try {
 			const repositoryFilter = {
+				after: normalizeCursor(dto.after),
 				limit: normalizeLimit(dto.limit),
 				nodeId: dto.nodeId,
+				order: normalizeOrder(dto.order),
 				slotIndex: dto.slotIndex
 			};
 			const source = normalizeSource(dto.source);
 			if (source === 'stored') {
 				const observations = await this.repository.findLatest(repositoryFilter);
-				return ok(observations.map((observation) => observation.toDTO()));
+				return ok(
+					toReadResult(
+						observations.map((observation) => observation.toDTO()),
+						'postgres_canonical'
+					)
+				);
 			}
 
-			const liveObservations = await this.liveStore.findLatest({
-				...repositoryFilter,
-				after: normalizeCursor(dto.after),
-				order: normalizeOrder(dto.order)
-			});
-			if (liveObservations !== null) return ok(liveObservations);
-			if (source === 'live') return ok([]);
+			const liveFilter = { ...repositoryFilter };
+			if (source === 'live') {
+				const observations = await this.liveStore.findLatest(liveFilter);
+				return ok(
+					observations === null
+						? unavailableReadResult('meilisearch')
+						: toReadResult(observations, 'meilisearch')
+				);
+			}
 
-			const observations = await this.repository.findLatest(repositoryFilter);
-			return ok(observations.map((observation) => observation.toDTO()));
+			const [live, canonical] = await Promise.all([
+				readObservations(async () => {
+					const observations = await this.liveStore.findLatest(liveFilter);
+					if (observations === null) throw new Error('Meilisearch unavailable');
+					return observations;
+				}),
+				readObservations(async () => {
+					const observations =
+						await this.repository.findLatest(repositoryFilter);
+					return observations.map((observation) => observation.toDTO());
+				})
+			]);
+			if (live.status === 'unavailable' && canonical.status === 'available') {
+				return ok(toReadResult(canonical.observations, 'postgres_canonical'));
+			}
+			if (live.status === 'available' && canonical.status === 'unavailable') {
+				return ok(toReadResult(live.observations, 'meilisearch'));
+			}
+			if (live.status === 'available' && canonical.status === 'available') {
+				const liveResult = toReadResult(live.observations, 'meilisearch');
+				const canonicalResult = toReadResult(
+					canonical.observations,
+					'postgres_canonical'
+				);
+				return ok(
+					pagesEquivalent(
+						liveResult.observations,
+						canonicalResult.observations
+					) && isMeilisearchSuitable(liveResult)
+						? liveResult
+						: canonicalResult
+				);
+			}
+			return ok(unavailableReadResult('postgres_canonical'));
 		} catch (error) {
 			return err(mapUnknownToError(error));
 		}
 	}
+}
+
+async function readObservations(
+	read: () => Promise<ScpStatementObservationV1[]>
+): Promise<ObservationRead> {
+	try {
+		return { observations: await read(), status: 'available' };
+	} catch (error) {
+		return { error: mapUnknownToError(error), status: 'unavailable' };
+	}
+}
+
+function toReadResult(
+	observations: ScpStatementObservationV1[],
+	source: ScpStatementReadSource
+): ScpStatementReadResult {
+	if (observations.length === 0) {
+		return {
+			freshness: 'empty',
+			freshnessMs: null,
+			observations,
+			observedAt: null,
+			source
+		};
+	}
+	const observedTimes = observations.map((observation) =>
+		Date.parse(observation.observedAt)
+	);
+	const validObservedTimes = observedTimes.filter(Number.isFinite);
+	const observedAtMs =
+		validObservedTimes.length === 0 ? null : Math.max(...validObservedTimes);
+	if (observedAtMs === null) {
+		return {
+			freshness: 'stale',
+			freshnessMs: null,
+			observations,
+			observedAt: null,
+			source
+		};
+	}
+	const ageMs = Date.now() - observedAtMs;
+	const hasInvalidObservedAt =
+		validObservedTimes.length !== observations.length;
+	return {
+		freshness:
+			!hasInvalidObservedAt &&
+			ageMs >= -scpStatementObservationPolicy.readFutureToleranceMs &&
+			ageMs <= scpStatementObservationPolicy.readFreshnessMs
+				? 'fresh'
+				: 'stale',
+		freshnessMs: Math.abs(ageMs),
+		observations,
+		observedAt: new Date(observedAtMs).toISOString(),
+		source
+	};
+}
+
+function unavailableReadResult(
+	source: ScpStatementReadSource
+): ScpStatementReadResult {
+	return {
+		freshness: 'unavailable',
+		freshnessMs: null,
+		observations: [],
+		observedAt: null,
+		source
+	};
+}
+
+function isMeilisearchSuitable(result: ScpStatementReadResult): boolean {
+	return result.freshness === 'fresh' || result.freshness === 'empty';
+}
+
+function pagesEquivalent(
+	left: readonly ScpStatementObservationV1[],
+	right: readonly ScpStatementObservationV1[]
+): boolean {
+	if (left.length !== right.length) return false;
+	const byHash = (observations: readonly ScpStatementObservationV1[]) =>
+		observations
+			.toSorted((a, b) => a.statementHash.localeCompare(b.statementHash))
+			.map(stableJson);
+	const rightRows = byHash(right);
+	return byHash(left).every((value, index) => value === rightRows[index]);
+}
+
+function stableJson(value: unknown): string {
+	if (Array.isArray(value)) return `[${value.map(stableJson).join(',')}]`;
+	if (typeof value !== 'object' || value === null)
+		return JSON.stringify(value) ?? 'undefined';
+	const entries = Object.entries(value).toSorted(([left], [right]) =>
+		left.localeCompare(right)
+	);
+	return `{${entries
+		.map(([key, entry]) => `${JSON.stringify(key)}:${stableJson(entry)}`)
+		.join(',')}}`;
 }
 
 function normalizeLimit(limit: number | undefined): number {

@@ -17,6 +17,7 @@ describe('HistoryArchiveObjectUpdateFactory', () => {
 			claimedByCommunityScannerId: null,
 			errorMessage: null,
 			errorType: null,
+			failureChannel: null,
 			httpStatus: null,
 			nextAttemptAt: null,
 			status: 'verified',
@@ -29,6 +30,7 @@ describe('HistoryArchiveObjectUpdateFactory', () => {
 			claimAttempt: 2,
 			errorMessage: 'HTTP 429 Too Many Requests',
 			errorType: 'TYPE_HTTP_STATUS',
+			failureChannel: 'archive_evidence',
 			httpStatus: 429,
 			nextAttemptAt: new Date('2026-07-06T16:00:00.000Z')
 		});
@@ -38,6 +40,7 @@ describe('HistoryArchiveObjectUpdateFactory', () => {
 			claimedByCommunityScannerId: null,
 			errorMessage: 'HTTP 429 Too Many Requests',
 			errorType: 'TYPE_HTTP_STATUS',
+			failureChannel: 'archive_evidence',
 			httpStatus: 429,
 			status: 'failed',
 			workerStage: 'failed'

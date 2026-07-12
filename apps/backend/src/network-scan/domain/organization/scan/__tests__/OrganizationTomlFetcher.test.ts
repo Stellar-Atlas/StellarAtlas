@@ -96,12 +96,6 @@ describe('OrganizationTomlFetcher', () => {
 		'DISPLAY_NAME="Domain United States"\n' +
 		'HOST="core-us.domain.com:11625"\n' +
 		'PUBLIC_KEY="GAOO3LWBC4XF6VWRP5ESJ6IBHAISVJMSBTALHOQM2EZG7Q477UWA6L7U"\n' +
-		'HISTORY="http://history.domain.com/prd/core-live/core_live_003/"\n' +
-		'[[VALIDATORS]]\n' +
-		'ALIAS="domain-other"\n' +
-		'DISPLAY_NAME="Domain Other"\n' +
-		'HOST="core-other.domain.com:11625"\n' +
-		'PUBLIC_KEY="GBH"\n' +
 		'HISTORY="http://history.domain.com/prd/core-live/core_live_003/"';
 
 	const tomlV2Object = toml.parse(tomlV2String);
@@ -112,6 +106,7 @@ describe('OrganizationTomlFetcher', () => {
 		tomlText = tomlV2String
 	): TomlFetchSuccess {
 		return {
+			authoritative: warnings.length === 0,
 			tomlObject,
 			tomlText,
 			warnings
@@ -146,6 +141,7 @@ describe('OrganizationTomlFetcher', () => {
 			'GAENZLGHJGJRCMX5VCHOLHQXU3EMCU5XWDNU4BGGJFNLI2EL354IVBK7',
 			'GAOO3LWBC4XF6VWRP5ESJ6IBHAISVJMSBTALHOQM2EZG7Q477UWA6L7U'
 		]);
+		expect(info.validatorSetValid).toBe(true);
 		expect(info.dba).toBe('Organization DBA');
 		expect(info.url).toBe('https://www.organization.com');
 		expect(info.keybase).toBe('keybase');
@@ -159,8 +155,30 @@ describe('OrganizationTomlFetcher', () => {
 			'123 Sesame Street, New York, NY 12345, United States'
 		);
 		expect(info.state).toBe(TomlState.Ok);
+		expect(info.fetchResult).toBe('success');
 		expect(info.warnings).toEqual([]);
 		expect(info.stellarTomlText).toBe(tomlV2String);
+	});
+
+	test('rejects a complete validator set when one length-valid StrKey is malformed', async () => {
+		const malformedToml = toml.parse(tomlV2String);
+		const validators = malformedToml.VALIDATORS as Array<
+			Record<string, unknown>
+		>;
+		const validKey = String(validators[0]?.PUBLIC_KEY);
+		validators.push({
+			PUBLIC_KEY: `${validKey.slice(0, -1)}${validKey.endsWith('A') ? 'B' : 'A'}`
+		});
+		const fetcher = createFetcher(
+			new Map([['my-domain', createTomlSuccess(malformedToml)]])
+		);
+
+		const info = (
+			await fetcher.fetchOrganizationTomlInfoCollection(['my-domain'])
+		).get('my-domain');
+
+		expect(info?.validatorSetValid).toBe(false);
+		expect(info?.validators).toEqual([]);
 	});
 
 	test('fetchOrganizationTomlInfo with warning evidence', async () => {
@@ -179,6 +197,9 @@ describe('OrganizationTomlFetcher', () => {
 
 		const info = result.get('my-domain');
 		expect(info?.state).toBe(TomlState.Ok);
+		expect(info?.authoritative).toBe(false);
+		expect(info?.name).toBeNull();
+		expect(info?.validators).toEqual([]);
 		expect(info?.warnings).toEqual([TOML_TLS_CERTIFICATE_WARNING]);
 	});
 
@@ -201,6 +222,7 @@ describe('OrganizationTomlFetcher', () => {
 		if (!info) return;
 		expect(info.state).toBe(TomlState.ParsingError);
 		expect(info.warnings).toEqual([]);
+		expect(info.fetchResult).toBe('failure');
 		expect(info.stellarTomlText).toBe('not toml');
 	});
 

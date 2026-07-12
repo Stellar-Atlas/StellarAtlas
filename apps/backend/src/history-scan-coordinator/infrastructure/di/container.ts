@@ -65,11 +65,34 @@ import { GetHistoryArchiveObjectJob } from '../../use-cases/get-history-archive-
 import { TouchHistoryArchiveObject } from '../../use-cases/touch-history-archive-object/TouchHistoryArchiveObject.js';
 import { CompleteHistoryArchiveObject } from '../../use-cases/complete-history-archive-object/CompleteHistoryArchiveObject.js';
 import { FailHistoryArchiveObject } from '../../use-cases/fail-history-archive-object/FailHistoryArchiveObject.js';
+import { ReconcileHistoryArchiveObjectTransitions } from '../../use-cases/reconcile-history-archive-object-transitions/ReconcileHistoryArchiveObjectTransitions.js';
 import { ReleaseHistoryArchiveObject } from '../../use-cases/release-history-archive-object/ReleaseHistoryArchiveObject.js';
 import { HistoryArchiveObjectEventRecorder } from '../../use-cases/record-history-archive-object-event/HistoryArchiveObjectEventRecorder.js';
+import { ReportHistoryArchiveWorkerStatus } from '../../use-cases/report-history-archive-worker-status/ReportHistoryArchiveWorkerStatus.js';
+import type { HistoryArchiveWorkerStatusRepository } from '../../domain/history-archive-worker/HistoryArchiveWorkerStatus.js';
+import { HistoryArchiveWorkerStatusRow } from '../database/entities/HistoryArchiveWorkerStatusRow.js';
+import { TypeOrmHistoryArchiveWorkerStatusRepository } from '../repositories/database/TypeOrmHistoryArchiveWorkerStatusRepository.js';
+import type { KnownArchiveEvidenceRepository } from '../../domain/known-archive-evidence/KnownArchiveEvidenceRepository.js';
+import { TypeOrmKnownArchiveEvidenceRepository } from '../repositories/database/TypeOrmKnownArchiveEvidenceRepository.js';
+import { GetKnownArchiveEvidence } from '../../use-cases/get-known-archive-evidence/GetKnownArchiveEvidence.js';
+import { GetKnownNodeArchiveEvidence } from '../../use-cases/get-known-node-archive-evidence/GetKnownNodeArchiveEvidence.js';
+import { GetKnownOrganizationArchiveEvidence } from '../../use-cases/get-known-organization-archive-evidence/GetKnownOrganizationArchiveEvidence.js';
+import { GetHistoryArchiveEvidence } from '../../use-cases/get-history-archive-evidence/GetHistoryArchiveEvidence.js';
+import {
+	ArchiveEvidenceCursorCodec,
+	createArchiveEvidenceCursorCodec
+} from '../../use-cases/get-known-archive-evidence/ArchiveEvidenceCursorCodec.js';
 
 export function load(container: Container, config: Config) {
 	const dataSource = container.get(DataSource);
+	container
+		.bind<ArchiveEvidenceCursorCodec>(TYPES.ArchiveEvidenceCursorCodec)
+		.toConstantValue(
+			createArchiveEvidenceCursorCodec({
+				encodedKeys: process.env.ARCHIVE_EVIDENCE_CURSOR_KEYS,
+				nodeEnv: config.nodeEnv
+			})
+		);
 	container.bind(GetLatestScan).toSelf();
 	container.bind(GetScanLogs).toSelf();
 	container.bind(GetScanEvidence).toSelf();
@@ -84,6 +107,10 @@ export function load(container: Container, config: Config) {
 	container.bind(GetHistoryArchiveObjectStatusSummary).toSelf();
 	container.bind(GetHistoryArchiveObjectEvents).toSelf();
 	container.bind(GetHistoryArchiveRepairPlan).toSelf();
+	container.bind(GetKnownArchiveEvidence).toSelf();
+	container.bind(GetKnownNodeArchiveEvidence).toSelf();
+	container.bind(GetKnownOrganizationArchiveEvidence).toSelf();
+	container.bind(GetHistoryArchiveEvidence).toSelf();
 	container.bind(GetHistoryArchiveObjectJob).toSelf();
 	container.bind(GetScannerMetrics).toSelf();
 	container.bind(BackfillArchiveMetadata).toSelf();
@@ -94,6 +121,11 @@ export function load(container: Container, config: Config) {
 	container.bind(FailHistoryArchiveObject).toSelf();
 	container.bind(ReleaseHistoryArchiveObject).toSelf();
 	container.bind(HistoryArchiveObjectEventRecorder).toSelf();
+	container
+		.bind(ReconcileHistoryArchiveObjectTransitions)
+		.toSelf()
+		.inSingletonScope();
+	container.bind(ReportHistoryArchiveWorkerStatus).toSelf();
 	container.bind(TouchScanJob).toSelf();
 	container.bind(ReleaseScanJob).toSelf();
 	container.bind(RegisterScan).toSelf();
@@ -176,6 +208,22 @@ export function load(container: Container, config: Config) {
 		.toDynamicValue(() => {
 			return new TypeOrmHistoryArchiveCheckpointProofRepository(dataSource);
 		})
+		.inRequestScope();
+
+	container
+		.bind<HistoryArchiveWorkerStatusRepository>(
+			TYPES.HistoryArchiveWorkerStatusRepository
+		)
+		.toDynamicValue(() => {
+			return new TypeOrmHistoryArchiveWorkerStatusRepository(
+				dataSource.getRepository(HistoryArchiveWorkerStatusRow)
+			);
+		})
+		.inRequestScope();
+
+	container
+		.bind<KnownArchiveEvidenceRepository>(TYPES.KnownArchiveEvidenceRepository)
+		.toDynamicValue(() => new TypeOrmKnownArchiveEvidenceRepository(dataSource))
 		.inRequestScope();
 
 	container

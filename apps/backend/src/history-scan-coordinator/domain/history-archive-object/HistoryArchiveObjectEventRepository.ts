@@ -22,6 +22,10 @@ export interface HistoryArchiveObjectEventRepository {
 		object: HistoryArchiveObject,
 		options: HistoryArchiveObjectEventOptions
 	): Promise<void>;
+	appendFromObjectIdempotently(
+		object: HistoryArchiveObject,
+		options: HistoryArchiveObjectEventOptions
+	): Promise<void>;
 	findRecent(options: {
 		readonly archiveUrlIdentity?: string;
 		readonly limit: number;

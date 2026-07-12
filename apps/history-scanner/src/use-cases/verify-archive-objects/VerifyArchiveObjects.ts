@@ -9,6 +9,7 @@ import type { ExceptionLogger } from 'exception-logger';
 import type { JobMonitor } from 'job-monitor';
 import type { Logger } from 'logger';
 import { asyncSleep, mapUnknownToError } from 'shared';
+import type { HistoryArchiveWorkerOutcomeDTO } from 'history-scanner-dto';
 import { HistoryArchiveStateValidator } from '../../domain/history-archive/HistoryArchiveStateValidator.js';
 import { BucketCache } from '../../domain/scanner/BucketCache.js';
 import type {
@@ -19,30 +20,33 @@ import type {
 	ScanCoordinatorService
 } from '../../domain/scan/ScanCoordinatorService.js';
 import { TYPES } from '../../infrastructure/di/di-types.js';
+import type { HistoryArchiveWorkerStatusReporter } from '../../domain/scan/HistoryArchiveWorkerStatusReporter.js';
 import { ArchiveObjectCategoryVerifier } from './ArchiveObjectCategoryVerifier.js';
+import {
+	ArchiveObjectWorkerTelemetry,
+	mapFailureToWorkerOutcome
+} from './ArchiveObjectWorkerTelemetry.js';
+import { CoalescingHistoryArchiveWorkerReporter } from './CoalescingHistoryArchiveWorkerReporter.js';
 import type { VerifyArchiveObjectsDTO } from './VerifyArchiveObjectsDTO.js';
+import { canonicalJsonContentDigest } from './ArchiveObjectContentDigest.js';
+import {
+	archiveEvidenceFailure,
+	getRetryAfterSecondsFromHttpError,
+	scannerIssueFailure
+} from './ArchiveObjectFailure.js';
 
-interface ActiveObjectProgress {
-	bytesDownloaded: number | null;
-	claimAttempt: number;
-	workerStage: string;
-}
+const maximumPendingWorkerReports = 24;
 
 @injectable()
 export class VerifyArchiveObjects {
-	private static readonly initialHeartbeatDelayMs = 2 * 1000;
-	private static readonly heartbeatIntervalMs = 5 * 1000;
-	private static readonly heartbeatJitterMs = 2 * 1000;
-	private readonly activeObjectProgress = new Map<
-		string,
-		ActiveObjectProgress
-	>();
-	private readonly activeObjectHeartbeatsInFlight = new Set<string>();
 	private readonly categoryVerifier: ArchiveObjectCategoryVerifier;
+	private readonly workerTelemetry: ArchiveObjectWorkerTelemetry;
 
 	constructor(
 		@inject(TYPES.ScanCoordinatorService)
 		private readonly scanCoordinator: ScanCoordinatorService,
+		@inject(TYPES.HistoryArchiveWorkerStatusReporter)
+		workerStatusReporter: HistoryArchiveWorkerStatusReporter,
 		@inject(TYPES.HttpService)
 		private readonly httpService: HttpService,
 		private readonly historyArchiveStateValidator: HistoryArchiveStateValidator,
@@ -58,6 +62,17 @@ export class VerifyArchiveObjects {
 		@inject('Logger')
 		private readonly logger: Logger
 	) {
+		const coalescingStatusReporter = new CoalescingHistoryArchiveWorkerReporter(
+			workerStatusReporter,
+			this.exceptionLogger,
+			maximumPendingWorkerReports
+		);
+		this.workerTelemetry = new ArchiveObjectWorkerTelemetry(
+			this.scanCoordinator,
+			coalescingStatusReporter,
+			this.exceptionLogger,
+			this.logger
+		);
 		this.categoryVerifier = new ArchiveObjectCategoryVerifier(
 			this.httpService,
 			this.scanCoordinator,
@@ -65,39 +80,35 @@ export class VerifyArchiveObjects {
 			this.exceptionLogger,
 			this.hasherWorkerCount,
 			(remoteId, workerStage, bytesDownloaded) =>
-				this.updateProgress(remoteId, workerStage, bytesDownloaded)
+				this.workerTelemetry.updateProgress(
+					remoteId,
+					workerStage,
+					bytesDownloaded
+				)
 		);
 	}
 
 	async execute(dto: VerifyArchiveObjectsDTO): Promise<void> {
 		const workerCount = Math.max(Math.floor(this.workerCount), 1);
 		await Promise.all(
-			Array.from({ length: workerCount }, () => this.runWorkerLoop(dto))
+			Array.from({ length: workerCount }, (_, slot) =>
+				this.runWorkerLoop(dto, slot)
+			)
 		);
 	}
 
 	async releaseActiveObjectJobs(): Promise<void> {
-		const results = await Promise.all(
-			Array.from(this.activeObjectProgress.entries(), ([remoteId, progress]) =>
-				this.scanCoordinator
-					.releaseHistoryArchiveObject(remoteId, progress.claimAttempt)
-					.then((result) => ({ remoteId, result }))
-			)
-		);
-
-		for (const { remoteId, result } of results) {
-			if (result.isOk()) continue;
-			this.exceptionLogger.captureException(result.error);
-			this.logger.warn('Failed to release active history archive object job', {
-				remoteId
-			});
-		}
+		await this.workerTelemetry.releaseActiveObjectJobs();
 	}
 
-	private async runWorkerLoop(dto: VerifyArchiveObjectsDTO): Promise<void> {
+	private async runWorkerLoop(
+		dto: VerifyArchiveObjectsDTO,
+		slot: number
+	): Promise<void> {
+		this.workerTelemetry.reportIdle(slot);
 		do {
 			try {
-				await this.claimAndVerifyObject();
+				await this.claimAndVerifyObject(slot);
 			} catch (error) {
 				this.exceptionLogger.captureException(mapUnknownToError(error));
 				await this.waitBeforeRetry();
@@ -105,7 +116,7 @@ export class VerifyArchiveObjects {
 		} while (dto.loop);
 	}
 
-	private async claimAndVerifyObject(): Promise<void> {
+	private async claimAndVerifyObject(slot: number): Promise<void> {
 		const jobResult = await this.scanCoordinator.getHistoryArchiveObjectJob();
 		if (jobResult.isErr()) {
 			this.exceptionLogger.captureException(jobResult.error);
@@ -114,21 +125,21 @@ export class VerifyArchiveObjects {
 		}
 
 		if (jobResult.value === null) {
+			this.workerTelemetry.reportIdle(slot);
 			await this.waitBeforeRetry();
 			return;
 		}
 
-		await this.verifyObject(jobResult.value);
+		await this.verifyObject(jobResult.value, slot);
 	}
 
-	private async verifyObject(job: HistoryArchiveObjectJobDTO): Promise<void> {
-		this.activeObjectProgress.set(job.remoteId, {
-			bytesDownloaded: null,
-			claimAttempt: job.claimAttempt,
-			workerStage: 'claimed'
-		});
+	private async verifyObject(
+		job: HistoryArchiveObjectJobDTO,
+		slot = 0
+	): Promise<void> {
+		this.workerTelemetry.startObject(slot, job);
 		await this.checkIn('in_progress');
-		const stopHeartbeat = this.startHeartbeat(job.remoteId);
+		let outcome: HistoryArchiveWorkerOutcomeDTO = 'worker_issue';
 
 		try {
 			const result = await this.performObjectVerification(job);
@@ -138,6 +149,7 @@ export class VerifyArchiveObjects {
 					await this.checkIn('error');
 					throw failResult.error;
 				}
+				outcome = mapFailureToWorkerOutcome(result.error);
 				await this.checkIn('error');
 				return;
 			}
@@ -152,10 +164,10 @@ export class VerifyArchiveObjects {
 				await this.checkIn('error');
 				throw completionResult.error;
 			}
+			outcome = 'verified';
 			await this.checkIn('ok');
 		} finally {
-			stopHeartbeat();
-			this.activeObjectProgress.delete(job.remoteId);
+			await this.workerTelemetry.finishObject(job.remoteId, outcome);
 		}
 	}
 
@@ -180,6 +192,7 @@ export class VerifyArchiveObjects {
 				return err({
 					errorMessage: `Unsupported history archive object type: ${job.objectType}`,
 					errorType: 'unsupported_object_type',
+					failureChannel: 'scanner_issue',
 					httpStatus: null
 				});
 		}
@@ -190,7 +203,11 @@ export class VerifyArchiveObjects {
 	): Promise<
 		Result<HistoryArchiveObjectCompletionDTO, HistoryArchiveObjectFailureDTO>
 	> {
-		this.updateProgress(job.remoteId, 'fetching_history_archive_state', null);
+		this.workerTelemetry.updateProgress(
+			job.remoteId,
+			'fetching_history_archive_state',
+			null
+		);
 		const urlResult = Url.create(job.objectUrl);
 		if (urlResult.isErr()) return err(this.mapLocalError(urlResult.error));
 
@@ -206,6 +223,7 @@ export class VerifyArchiveObjects {
 			return err({
 				errorMessage: 'History archive state response must be a JSON object',
 				errorType: 'invalid_history_archive_state',
+				failureChannel: 'archive_evidence',
 				httpStatus: response.value.status
 			});
 		}
@@ -215,12 +233,13 @@ export class VerifyArchiveObjects {
 			return err({
 				errorMessage: validation.error.message,
 				errorType: 'invalid_history_archive_state',
+				failureChannel: 'archive_evidence',
 				httpStatus: response.value.status
 			});
 		}
 
 		const bytesDownloaded = Buffer.byteLength(JSON.stringify(state));
-		this.updateProgress(
+		this.workerTelemetry.updateProgress(
 			job.remoteId,
 			'verified_history_archive_state',
 			bytesDownloaded
@@ -232,6 +251,9 @@ export class VerifyArchiveObjects {
 				stellarHistoryUrl: job.objectUrl
 			},
 			bytesDownloaded,
+			verificationFacts: {
+				content: canonicalJsonContentDigest(validation.value)
+			},
 			workerStage: 'verified'
 		});
 	}
@@ -245,11 +267,12 @@ export class VerifyArchiveObjects {
 			return err({
 				errorMessage: 'Bucket object is missing a valid bucket hash',
 				errorType: 'invalid_bucket_object',
+				failureChannel: 'scanner_issue',
 				httpStatus: null
 			});
 		}
 
-		this.updateProgress(job.remoteId, 'fetching_bucket', 0);
+		this.workerTelemetry.updateProgress(job.remoteId, 'fetching_bucket', 0);
 		const urlResult = Url.create(job.objectUrl);
 		if (urlResult.isErr()) return err(this.mapLocalError(urlResult.error));
 
@@ -263,6 +286,7 @@ export class VerifyArchiveObjects {
 			return err({
 				errorMessage: 'Bucket response must be a readable stream',
 				errorType: 'invalid_bucket_response',
+				failureChannel: 'scanner_issue',
 				httpStatus: response.value.status
 			});
 		}
@@ -272,7 +296,7 @@ export class VerifyArchiveObjects {
 			response.value.data,
 			(bytes) => {
 				bytesDownloaded += bytes;
-				this.updateProgress(
+				this.workerTelemetry.updateProgress(
 					job.remoteId,
 					'downloading_bucket',
 					bytesDownloaded
@@ -285,21 +309,39 @@ export class VerifyArchiveObjects {
 			(streamToVerify) => this.verifyBucketHash(streamToVerify, job.bucketHash!)
 		);
 		if (verifyResult.isErr()) {
-			return err({
-				errorMessage: verifyResult.error.message,
-				errorType: 'bucket_verification_failed',
-				httpStatus: response.value.status
-			});
+			return err(
+				verifyResult.error.failureChannel === 'archive_evidence'
+					? archiveEvidenceFailure({
+							error: verifyResult.error,
+							errorType: 'bucket_verification_failed',
+							httpStatus: response.value.status
+						})
+					: scannerIssueFailure({
+							error: verifyResult.error,
+							errorType: 'bucket_cache_failure',
+							httpStatus: null
+						})
+			);
 		}
 
-		this.updateProgress(job.remoteId, 'verified_bucket', bytesDownloaded);
+		this.workerTelemetry.updateProgress(
+			job.remoteId,
+			'verified_bucket',
+			bytesDownloaded
+		);
 		return ok({
 			bytesDownloaded,
 			verificationFacts: {
 				bucketObject: {
 					expectedBucketHash: job.bucketHash.toLowerCase(),
 					hashAlgorithm: 'sha256',
-					matched: true
+					matched: true,
+					sourceUrl: job.objectUrl
+				},
+				content: {
+					algorithm: 'sha256',
+					digest: job.bucketHash.toLowerCase(),
+					representation: 'uncompressed-xdr'
 				}
 			},
 			workerStage: 'verified'
@@ -337,66 +379,6 @@ export class VerifyArchiveObjects {
 		return source.pipe(counter);
 	}
 
-	private updateProgress(
-		remoteId: string,
-		workerStage: string,
-		bytesDownloaded: number | null
-	): void {
-		const existing = this.activeObjectProgress.get(remoteId);
-		if (existing === undefined) return;
-
-		this.activeObjectProgress.set(remoteId, {
-			bytesDownloaded,
-			claimAttempt: existing.claimAttempt,
-			workerStage
-		});
-	}
-
-	private startHeartbeat(remoteId: string): () => void {
-		let stopped = false;
-		let timeout: ReturnType<typeof setTimeout> | null = null;
-		const schedule = (delayMs: number) => {
-			timeout = setTimeout(() => {
-				if (stopped) return;
-				void this.touchObject(remoteId).finally(() => {
-					if (!stopped) {
-						schedule(VerifyArchiveObjects.heartbeatIntervalMs);
-					}
-				});
-			}, delayMs);
-		};
-		schedule(
-			VerifyArchiveObjects.initialHeartbeatDelayMs +
-				Math.floor(Math.random() * VerifyArchiveObjects.heartbeatJitterMs)
-		);
-
-		return () => {
-			stopped = true;
-			if (timeout !== null) clearTimeout(timeout);
-		};
-	}
-
-	private async touchObject(remoteId: string): Promise<void> {
-		if (this.activeObjectHeartbeatsInFlight.has(remoteId)) return;
-		const progress = this.activeObjectProgress.get(remoteId);
-		this.activeObjectHeartbeatsInFlight.add(remoteId);
-		try {
-			const result = await this.scanCoordinator.touchHistoryArchiveObject(
-				remoteId,
-				progress === undefined
-					? undefined
-					: {
-							bytesDownloaded: progress.bytesDownloaded,
-							claimAttempt: progress.claimAttempt,
-							workerStage: progress.workerStage
-						}
-			);
-			if (result.isErr()) this.exceptionLogger.captureException(result.error);
-		} finally {
-			this.activeObjectHeartbeatsInFlight.delete(remoteId);
-		}
-	}
-
 	private async failObject(
 		job: HistoryArchiveObjectJobDTO,
 		failure: HistoryArchiveObjectFailureDTO
@@ -417,30 +399,21 @@ export class VerifyArchiveObjects {
 
 	private mapHttpError(error: unknown): HistoryArchiveObjectFailureDTO {
 		if (isHttpError(error)) {
-			return {
-				errorMessage: error.message,
+			return archiveEvidenceFailure({
+				error,
 				errorType: error.response
 					? 'archive_http_error'
 					: 'archive_transport_error',
-				httpStatus: error.response?.status ?? null
-			};
+				httpStatus: error.response?.status ?? null,
+				retryAfterSeconds: getRetryAfterSecondsFromHttpError(error)
+			});
 		}
 
-		const mapped = mapUnknownToError(error);
-		return {
-			errorMessage: mapped.message,
-			errorType: 'worker_error',
-			httpStatus: null
-		};
+		return scannerIssueFailure({ error, errorType: 'http_client_failure' });
 	}
 
 	private mapLocalError(error: unknown): HistoryArchiveObjectFailureDTO {
-		const mapped = mapUnknownToError(error);
-		return {
-			errorMessage: mapped.message,
-			errorType: 'worker_error',
-			httpStatus: null
-		};
+		return scannerIssueFailure({ error, errorType: 'worker_setup_failure' });
 	}
 
 	private async checkIn(status: 'in_progress' | 'error' | 'ok') {

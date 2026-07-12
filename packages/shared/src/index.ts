@@ -34,8 +34,14 @@ export {
 } from './dto/network-v1.js';
 export { type NodeV1, NodeV1Schema } from './dto/node-v1.js';
 export {
+	type OrganizationTomlAttemptResultV1,
+	type OrganizationTomlAttemptV1,
+	type OrganizationTomlFailureV1,
+	type OrganizationTomlStateV1,
+	type OrganizationTomlWarningV1,
 	type OrganizationV1,
 	type OrganizationStellarTomlV1,
+	ORGANIZATION_TOML_STATES_V1,
 	OrganizationV1Schema
 } from './dto/organization-v1.js';
 export {
@@ -65,12 +71,16 @@ export {
 export type {
 	HistoryArchiveCategoryHashFactV1,
 	HistoryArchiveCheckpointStateFactV1,
+	HistoryArchiveContentDigestFactV1,
 	HistoryArchiveLedgerCategoryFactV1,
-	HistoryArchiveObjectVerificationFactsV1
+	HistoryArchiveObjectVerificationFactsV1,
+	HistoryArchivePublicCategorySummaryV1,
+	HistoryArchivePublicVerificationFactsV1
 } from './dto/history-archive-object-verification-facts-v1.js';
 export {
 	type HistoryArchiveBucketCoverageV1,
 	type HistoryArchiveCheckpointCoverageV1,
+	HistoryArchiveCheckpointCoverageV1Schema,
 	type HistoryArchiveObjectFailureClassV1,
 	type HistoryArchiveObjectHostThrottleV1,
 	type HistoryArchiveSourceSummaryV1,
@@ -79,6 +89,11 @@ export {
 	HistoryArchiveObjectSummaryV1Schema,
 	type HistoryArchiveObjectTypeSummaryV1
 } from './dto/history-archive-object-summary-v1.js';
+export {
+	type HistoryArchiveStatusSourceV1,
+	type HistoryArchiveStatusSummaryV1,
+	HistoryArchiveStatusSummaryV1Schema
+} from './dto/history-archive-status-summary-v1.js';
 export {
 	type HistoryArchiveBucketArchiveRootV1,
 	type HistoryArchiveBucketCopyV1,
@@ -97,6 +112,38 @@ export {
 	type HistoryArchiveEvidenceV1,
 	HistoryArchiveEvidenceV1Schema
 } from './dto/history-archive-evidence-v1.js';
+export {
+	type HistoryArchiveEvidenceV2,
+	HistoryArchiveEvidenceV2Schema
+} from './dto/history-archive-evidence-v2.js';
+export {
+	type HistoryArchiveObjectEventPageFiltersV1,
+	type HistoryArchiveObjectEventPageV1,
+	HistoryArchiveObjectEventPageV1Schema,
+	type HistoryArchiveObjectPageFiltersV1,
+	type HistoryArchiveObjectPageV1,
+	HistoryArchiveObjectPageV1Schema,
+	type HistoryArchivePageMetadataV1
+} from './dto/history-archive-evidence-page-v1.js';
+export {
+	type KnownArchiveCheckpointCountsV1,
+	type KnownArchiveEvidenceTotalsV1,
+	type KnownArchiveEvidenceV1,
+	type KnownArchiveFailureFiltersV1,
+	type KnownArchiveInfrastructureEvidenceClassV1,
+	type KnownArchiveObjectCountsV1,
+	type KnownArchiveRemoteFailurePageV1,
+	type KnownArchiveRemoteFailureV1,
+	type KnownArchiveRootEvidenceV1,
+	type KnownArchiveVerifiedCopySetV1,
+	type KnownArchiveVerifiedCopyV1,
+	type KnownArchiveWorkerIssuePageV1,
+	type KnownArchiveWorkerIssueV1,
+	type KnownNodeArchiveEvidenceV1,
+	KnownNodeArchiveEvidenceV1Schema,
+	type KnownOrganizationArchiveEvidenceV1,
+	KnownOrganizationArchiveEvidenceV1Schema
+} from './dto/known-archive-evidence-v1.js';
 export type {
 	HistoryArchiveCheckpointRepairEvidenceV1,
 	HistoryArchiveRepairActionKindV1,
@@ -142,7 +189,10 @@ export { default as NetworkStatistics } from './network-statistics.js';
 export { default as StellarCoreConfigurationGenerator } from './stellar-core-configuration-generator.js';
 export { mapUnknownToError } from './utilities/mapUnknownToError.js';
 export { asyncSleep } from './utilities/asyncSleep.js';
-export { normalizeHistoryArchiveRootUrl } from './history-archive-url.js';
+export {
+	appendHistoryArchiveRootPath,
+	normalizeHistoryArchiveRootUrl
+} from './history-archive-url.js';
 export {
 	frontendCacheTags,
 	type FrontendCacheTag

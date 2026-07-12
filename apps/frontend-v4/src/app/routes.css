@@ -18,7 +18,9 @@
 	box-shadow: 0 26px 80px rgba(11, 20, 32, 0.32);
 	inset-block: 16px;
 	inset-inline: max(24px, calc((100vw - 1180px) / 2));
-	overflow: auto;
+	overflow-x: hidden;
+	overflow-y: auto;
+	overscroll-behavior: contain;
 	position: absolute;
 }
 
@@ -34,17 +36,31 @@
 	z-index: 1;
 }
 
+.route-modal-header > div {
+	min-inline-size: 0;
+}
+
+.route-modal-header h2 {
+	overflow-wrap: anywhere;
+}
+
 .route-modal .detail-grid {
 	padding: 20px;
 }
 
 .close-route-modal {
+	align-items: center;
 	background: var(--button-secondary);
 	border: 1px solid var(--border);
-	border-radius: 999px;
+	border-radius: 6px;
+	block-size: 36px;
 	color: var(--ink);
-	font-weight: 800;
-	padding: 8px 12px;
+	display: inline-flex;
+	flex: 0 0 auto;
+	font-size: 1.3rem;
+	inline-size: 36px;
+	justify-content: center;
+	line-height: 1;
 }
 
 @media (max-width: 720px) {
@@ -54,8 +70,12 @@
 	}
 
 	.route-modal-header {
-		align-items: flex-start;
-		flex-direction: column;
-		gap: 12px;
+		align-items: center;
+		gap: 10px;
+		padding: 13px 14px;
+	}
+
+	.route-modal .detail-grid {
+		padding: 10px;
 	}
 }

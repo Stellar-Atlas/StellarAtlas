@@ -3,6 +3,8 @@ import './globals.css';
 import './shell.css';
 import './components.css';
 import './archive-evidence.css';
+import './organization-toml-evidence.css';
+import './known-archive-evidence.css';
 import './routes.css';
 import './graph-explorer.css';
 import './graph-live-feed.css';

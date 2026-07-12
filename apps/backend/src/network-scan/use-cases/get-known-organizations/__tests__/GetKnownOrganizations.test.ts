@@ -52,6 +52,11 @@ describe('GetKnownOrganizations', () => {
 		expect(result.isOk()).toBe(true);
 		if (result.isErr()) return;
 		expect(result.value.count).toBe(2);
+		expect(result.value.scopeTotals).toEqual({
+			'all-known': 2,
+			archived: 1,
+			current: 1
+		});
 		expect(result.value.organizations[0]).toMatchObject({
 			organization: activeDto,
 			current: true,
@@ -68,6 +73,39 @@ describe('GetKnownOrganizations', () => {
 			lastSeen: archivedAt.toISOString(),
 			lastMeasurementAt: null
 		});
+	});
+
+	it('filters archived organizations and reports page totals', async () => {
+		const start = new Date('2020-01-01T00:00:00.000Z');
+		const archivedAt = new Date('2020-02-01T00:00:00.000Z');
+		const organization = Organization.create(
+			createDummyOrganizationId('archived.example'),
+			'archived.example',
+			start
+		);
+		organization.archive(archivedAt);
+		const organizationDto = createDummyOrganizationV1();
+		organizationDto.id = organization.organizationId.value;
+		const repository = mock<OrganizationRepository>();
+		const dtoService = mock<OrganizationDTOService>();
+		const logger = mock<ExceptionLogger>();
+		repository.findAllKnown.mockResolvedValue([organization]);
+		dtoService.getOrganizationDTOs.mockResolvedValue(ok([organizationDto]));
+
+		const result = await new GetKnownOrganizations(
+			repository,
+			dtoService,
+			logger
+		).execute({ limit: 25, offset: 0, query: '', scope: 'archived' });
+
+		expect(result.isOk()).toBe(true);
+		if (result.isErr()) return;
+		expect(result.value).toMatchObject({
+			count: 1,
+			page: { hasMore: false, limit: 25, offset: 0, total: 1 },
+			scope: 'archived'
+		});
+		expect(result.value.organizations[0]?.scope).toBe('archived');
 	});
 
 	it('returns errors from the DTO service', async () => {

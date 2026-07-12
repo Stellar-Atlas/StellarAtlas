@@ -12,9 +12,7 @@ const maxEventLimit = 5000;
 const defaultEventLimit = 250;
 
 @injectable()
-export class TypeOrmHistoryArchiveObjectEventRepository
-	implements HistoryArchiveObjectEventRepository
-{
+export class TypeOrmHistoryArchiveObjectEventRepository implements HistoryArchiveObjectEventRepository {
 	constructor(
 		private readonly repository: Repository<HistoryArchiveObjectEvent>
 	) {}
@@ -23,28 +21,33 @@ export class TypeOrmHistoryArchiveObjectEventRepository
 		object: HistoryArchiveObject,
 		options: HistoryArchiveObjectEventOptions
 	): Promise<void> {
-		const event = new HistoryArchiveObjectEvent({
-			archiveUrl: object.archiveUrl,
-			archiveUrlIdentity: object.archiveUrlIdentity,
-			bucketHash: object.bucketHash,
-			bytesDownloaded: object.bytesDownloaded,
-			checkpointLedger: object.checkpointLedger,
-			claimAttempt: options.claimAttempt ?? object.attempts,
-			errorMessage: object.errorMessage,
-			errorType: object.errorType,
-			eventType: options.eventType,
-			evidenceClass: options.evidenceClass ?? null,
-			httpStatus: object.httpStatus,
-			nextAttemptAt: object.nextAttemptAt,
-			objectKey: object.objectKey,
-			objectRemoteId: object.remoteId,
-			objectType: object.objectType,
-			objectUrl: object.objectUrl,
-			verificationFacts: object.verificationFacts,
-			workerStage: object.workerStage
-		});
+		await this.repository.insert(createEvent(object, options));
+	}
 
-		await this.repository.insert(event);
+	async appendFromObjectIdempotently(
+		object: HistoryArchiveObject,
+		options: HistoryArchiveObjectEventOptions
+	): Promise<void> {
+		const claimAttempt = options.claimAttempt ?? object.attempts;
+		await this.repository.manager.transaction(async (manager) => {
+			await manager.query(
+				`select pg_advisory_xact_lock(hashtextextended($1::text, 8191))`,
+				[`${object.remoteId}:${options.eventType}:${claimAttempt}`]
+			);
+			const [existing] = (await manager.query(
+				`select 1 from "history_archive_object_event"
+				 where "objectRemoteId" = $1::uuid
+				 and "eventType" = $2::text
+				 and "claimAttempt" = $3::integer
+				 limit 1`,
+				[object.remoteId, options.eventType, claimAttempt]
+			)) as readonly unknown[];
+			if (existing !== undefined) return;
+			await manager.insert(
+				HistoryArchiveObjectEvent,
+				createEvent(object, { ...options, claimAttempt })
+			);
+		});
 	}
 
 	async findRecent(options: {
@@ -67,6 +70,33 @@ export class TypeOrmHistoryArchiveObjectEventRepository
 
 		return { count, events, limit };
 	}
+}
+
+function createEvent(
+	object: HistoryArchiveObject,
+	options: HistoryArchiveObjectEventOptions
+): HistoryArchiveObjectEvent {
+	return new HistoryArchiveObjectEvent({
+		archiveUrl: object.archiveUrl,
+		archiveUrlIdentity: object.archiveUrlIdentity,
+		bucketHash: object.bucketHash,
+		bytesDownloaded: object.bytesDownloaded,
+		checkpointLedger: object.checkpointLedger,
+		claimAttempt: options.claimAttempt ?? object.attempts,
+		errorMessage: object.errorMessage,
+		errorType: object.errorType,
+		eventType: options.eventType,
+		evidenceClass: options.evidenceClass ?? null,
+		failureChannel: object.failureChannel,
+		httpStatus: object.httpStatus,
+		nextAttemptAt: object.nextAttemptAt,
+		objectKey: object.objectKey,
+		objectRemoteId: object.remoteId,
+		objectType: object.objectType,
+		objectUrl: object.objectUrl,
+		verificationFacts: object.verificationFacts,
+		workerStage: object.workerStage
+	});
 }
 
 function normalizeLimit(limit: number): number {

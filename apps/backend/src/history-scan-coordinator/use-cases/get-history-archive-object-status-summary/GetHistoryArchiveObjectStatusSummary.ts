@@ -1,7 +1,7 @@
 import 'reflect-metadata';
 import { inject, injectable } from 'inversify';
 import { err, ok, Result } from 'neverthrow';
-import type { HistoryArchiveObjectSummaryV1 } from 'shared';
+import type { HistoryArchiveStatusSummaryV1 } from 'shared';
 import type { ExceptionLogger } from '@core/services/ExceptionLogger.js';
 import { mapUnknownToError } from '@core/utilities/mapUnknownToError.js';
 import type { HistoryArchiveObjectRepository } from '../../domain/history-archive-object/HistoryArchiveObjectRepository.js';
@@ -15,7 +15,7 @@ export class GetHistoryArchiveObjectStatusSummary {
 		@inject('ExceptionLogger') private readonly exceptionLogger: ExceptionLogger
 	) {}
 
-	async execute(): Promise<Result<HistoryArchiveObjectSummaryV1, Error>> {
+	async execute(): Promise<Result<HistoryArchiveStatusSummaryV1, Error>> {
 		try {
 			return ok(await this.objectRepository.getStatusSummary());
 		} catch (e) {

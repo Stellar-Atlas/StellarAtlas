@@ -1,7 +1,5 @@
-import {
-	archiveObjectFilterSql,
-	toHistoryArchiveCheckpointProofRefreshParams
-} from '../HistoryArchiveCheckpointProofSqlInputs.js';
+import { toHistoryArchiveCheckpointProofRefreshParams } from '../HistoryArchiveCheckpointProofSqlInputs.js';
+import { historyArchiveCheckpointProofRefreshSql } from '../HistoryArchiveCheckpointProofRefreshSql.js';
 
 describe('HistoryArchiveCheckpointProofSqlInputs', () => {
 	it('maps missing optional proof refresh target fields to null', () => {
@@ -27,8 +25,15 @@ describe('HistoryArchiveCheckpointProofSqlInputs', () => {
 		]);
 	});
 
-	it('keeps archive object proof refresh scoped to one archive identity', () => {
-		expect(archiveObjectFilterSql).toContain('"archiveUrlIdentity" = $1::text');
-		expect(archiveObjectFilterSql).toContain('"checkpointLedger" is not null');
+	it('keeps refresh checkpoint-local and dependency-local', () => {
+		expect(historyArchiveCheckpointProofRefreshSql).toContain(
+			'"history_archive_checkpoint_bucket_dependency"'
+		);
+		expect(historyArchiveCheckpointProofRefreshSql).toContain(
+			'$2::integer + 64'
+		);
+		expect(historyArchiveCheckpointProofRefreshSql).not.toContain(
+			'"archiveUrlIdentity" in ('
+		);
 	});
 });

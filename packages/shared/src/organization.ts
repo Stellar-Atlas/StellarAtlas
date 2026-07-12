@@ -2,6 +2,8 @@ import { OrganizationId, PublicKey } from './network.js';
 import PropertyMapper from './PropertyMapper.js';
 import {
 	OrganizationStellarTomlV1,
+	OrganizationTomlAttemptV1,
+	OrganizationTomlFailureV1,
 	OrganizationV1
 } from './dto/organization-v1.js';
 
@@ -35,6 +37,9 @@ export class Organization {
 	homeDomain: string | null = null; //todo: not nullable
 	tomlState = 'Unknown';
 	tomlWarnings: string[] = [];
+	tomlLatestAttempt: OrganizationTomlAttemptV1 | null = null;
+	tomlLatestFailure: OrganizationTomlFailureV1 | null = null;
+	tomlLatestInsecureAttempt: OrganizationTomlAttemptV1 | null = null;
 	stellarToml: OrganizationStellarTomlV1 | null = null;
 
 	dateDiscovered?: Date;
@@ -88,6 +93,9 @@ export class Organization {
 			homeDomain: this.homeDomain ?? 'unknown',
 			tomlState: this.tomlState,
 			tomlWarnings: this.tomlWarnings,
+			tomlLatestAttempt: this.tomlLatestAttempt,
+			tomlLatestFailure: this.tomlLatestFailure,
+			tomlLatestInsecureAttempt: this.tomlLatestInsecureAttempt,
 			stellarToml: this.stellarToml
 		};
 	}

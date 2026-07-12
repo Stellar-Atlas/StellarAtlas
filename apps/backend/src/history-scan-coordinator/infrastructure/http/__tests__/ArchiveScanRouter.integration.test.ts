@@ -13,6 +13,7 @@ import { GetHistoryArchiveBucketCoverage } from '@history-scan-coordinator/use-c
 import { GetHistoryArchiveObjectEvents } from '@history-scan-coordinator/use-cases/get-history-archive-object-events/GetHistoryArchiveObjectEvents.js';
 import { GetHistoryArchiveObjects } from '@history-scan-coordinator/use-cases/get-history-archive-objects/GetHistoryArchiveObjects.js';
 import { GetHistoryArchiveObjectSummary } from '@history-scan-coordinator/use-cases/get-history-archive-object-summary/GetHistoryArchiveObjectSummary.js';
+import { GetHistoryArchiveObjectStatusSummary } from '@history-scan-coordinator/use-cases/get-history-archive-object-status-summary/GetHistoryArchiveObjectStatusSummary.js';
 import { GetHistoryArchiveRepairPlan } from '@history-scan-coordinator/use-cases/get-history-archive-repair-plan/GetHistoryArchiveRepairPlan.js';
 import { GetScanLogs } from '@history-scan-coordinator/use-cases/get-scan-logs/GetScanLogs.js';
 import { InvalidUrlError } from '@history-scan-coordinator/use-cases/get-latest-scan/InvalidUrlError.js';
@@ -28,6 +29,7 @@ describe('ArchiveScanRouter.integration', () => {
 	let getHistoryArchiveObjectEvents: jest.Mocked<GetHistoryArchiveObjectEvents>;
 	let getHistoryArchiveObjects: jest.Mocked<GetHistoryArchiveObjects>;
 	let getHistoryArchiveObjectSummary: jest.Mocked<GetHistoryArchiveObjectSummary>;
+	let getHistoryArchiveObjectStatusSummary: jest.Mocked<GetHistoryArchiveObjectStatusSummary>;
 	let getHistoryArchiveRepairPlan: jest.Mocked<GetHistoryArchiveRepairPlan>;
 	let getHistoryArchiveState: jest.Mocked<GetHistoryArchiveState>;
 	let getLatestScan: jest.Mocked<GetLatestScan>;
@@ -42,6 +44,8 @@ describe('ArchiveScanRouter.integration', () => {
 		getHistoryArchiveObjectEvents = mock<GetHistoryArchiveObjectEvents>();
 		getHistoryArchiveObjects = mock<GetHistoryArchiveObjects>();
 		getHistoryArchiveObjectSummary = mock<GetHistoryArchiveObjectSummary>();
+		getHistoryArchiveObjectStatusSummary =
+			mock<GetHistoryArchiveObjectStatusSummary>();
 		getHistoryArchiveRepairPlan = mock<GetHistoryArchiveRepairPlan>();
 		getHistoryArchiveState = mock<GetHistoryArchiveState>();
 		getLatestScan = mock<GetLatestScan>();
@@ -59,6 +63,7 @@ describe('ArchiveScanRouter.integration', () => {
 				getHistoryArchiveObjectEvents,
 				getHistoryArchiveObjects,
 				getHistoryArchiveObjectSummary,
+				getHistoryArchiveObjectStatusSummary,
 				getHistoryArchiveRepairPlan,
 				getHistoryArchiveState,
 				getLatestScan,
@@ -66,68 +71,6 @@ describe('ArchiveScanRouter.integration', () => {
 				getScanLogs
 			})
 		);
-	});
-
-	describe('GET /:encodedUrl/repair-plan', () => {
-		it('should expose archive repair actions', async () => {
-			getHistoryArchiveRepairPlan.execute.mockResolvedValue(
-				ok({
-					actionCount: 1,
-					actions: [
-						{
-							actionId: 'replace-bucket-file:11111111-1111-4111-8111-111111111111',
-							bucketHash:
-								'4eae73efaa0ce061441dfe43ffc61c0ed24fcbc59e5ee512d1b60e8da2509655',
-							checkpointEvidence: [],
-							checkpointLedger: 63355999,
-							evidence: [],
-							kind: 'replace-bucket-file',
-							knownGoodSources: [],
-							reason: 'bucket-hash-mismatch',
-							severity: 'error',
-							summary:
-								'Replace the bucket file with bytes that match the expected bucket hash.'
-						}
-					],
-					archiveUrl: 'https://history.example.com',
-					archiveUrlIdentity: 'https://history.example.com',
-					generatedAt: '2026-07-07T18:00:00.000Z',
-					infrastructureBlocks: [],
-					limit: 5,
-					summary: {
-						activeObjectChecks: 0,
-						failedCheckpointProofs: 1,
-						failedObjectChecks: 1,
-						pendingObjectChecks: 0,
-						verifiedObjectChecks: 10
-					}
-				})
-			);
-
-			await request(app)
-				.get('/archive-scans/https%3A%2F%2Fhistory.example.com/repair-plan?limit=5')
-				.expect(200)
-				.expect('Cache-Control', 'public, max-age=10')
-				.expect((response) => {
-					expect(response.body.actions[0]).toMatchObject({
-						kind: 'replace-bucket-file',
-						reason: 'bucket-hash-mismatch'
-					});
-				});
-
-			expect(getHistoryArchiveRepairPlan.execute).toHaveBeenCalledWith({
-				limit: 5,
-				url: 'https://history.example.com'
-			});
-		});
-
-		it('should reject invalid repair plan limits', async () => {
-			await request(app)
-				.get('/archive-scans/https%3A%2F%2Fhistory.example.com/repair-plan?limit=9999')
-				.expect(400);
-
-			expect(getHistoryArchiveRepairPlan.execute).not.toHaveBeenCalled();
-		});
 	});
 
 	describe('GET /objects/events', () => {
@@ -166,6 +109,9 @@ describe('ArchiveScanRouter.integration', () => {
 			await request(app)
 				.get('/archive-scans/objects/events?limit=10')
 				.expect(200)
+				.expect((response) => {
+					expect(response.headers.deprecation).toBeUndefined();
+				})
 				.expect('Cache-Control', 'public, max-age=10')
 				.expect((response) => {
 					expect(response.body.events[0]).toMatchObject({
@@ -200,62 +146,6 @@ describe('ArchiveScanRouter.integration', () => {
 		});
 	});
 
-	describe('GET /:encodedUrl/state', () => {
-		it('should expose scanner-owned history archive state', async () => {
-			getHistoryArchiveState.execute.mockResolvedValue(
-				ok({
-					archiveUrl: 'https://test.com',
-					archiveUrlIdentity: 'https://test.com',
-					stateUrl: 'https://test.com/.well-known/stellar-history.json',
-					status: 'available',
-					observedAt: '2026-07-03T10:00:00.000Z',
-					source: 'history-scanner',
-					failure: null,
-					metadata: {
-						stellarHistoryUrl:
-							'https://test.com/.well-known/stellar-history.json',
-						observedAt: '2026-07-03T10:00:00.000Z',
-						stellarHistory: {
-							version: 1,
-							server: 'stellar-core',
-							currentLedger: 100,
-							currentBuckets: []
-						}
-					}
-				})
-			);
-
-			await request(app)
-				.get('/archive-scans/https%3A%2F%2Ftest.com/state')
-				.expect(200)
-				.expect('Cache-Control', 'public, max-age=10')
-				.expect((response) => {
-					expect(response.body).toMatchObject({
-						archiveUrl: 'https://test.com',
-						status: 'available',
-						metadata: {
-							stellarHistory: {
-								currentLedger: 100
-							}
-						}
-					});
-				});
-
-			expect(getHistoryArchiveState.execute).toHaveBeenCalledWith(
-				'https://test.com'
-			);
-		});
-
-		it('should return 204 when no scanner-owned state exists yet', async () => {
-			getHistoryArchiveState.execute.mockResolvedValue(ok(null));
-
-			await request(app)
-				.get('/archive-scans/https%3A%2F%2Ftest.com/state')
-				.expect(204)
-				.expect('Cache-Control', 'public, max-age=10');
-		});
-	});
-
 	describe('GET /', () => {
 		it('should expose a bounded archive scan list', async () => {
 			getArchiveScans.execute.mockResolvedValue(
@@ -281,6 +171,8 @@ describe('ArchiveScanRouter.integration', () => {
 			await request(app)
 				.get('/archive-scans?limit=2')
 				.expect(200)
+				.expect('Deprecation', 'true')
+				.expect('Link', '</v1/archive-scans/objects>; rel="successor-version"')
 				.expect('Cache-Control', 'public, max-age=10')
 				.expect((response) => {
 					expect(response.body).toMatchObject({
@@ -341,6 +233,7 @@ describe('ArchiveScanRouter.integration', () => {
 			await request(app)
 				.get('/archive-scans/queue')
 				.expect(200)
+				.expect('Deprecation', 'true')
 				.expect('Cache-Control', 'public, max-age=10')
 				.expect((response) => {
 					expect(response.body).toEqual({
@@ -472,6 +365,7 @@ describe('ArchiveScanRouter.integration', () => {
 			await request(app)
 				.get('/archive-scans/https%3A%2F%2Ftest.com')
 				.expect(200)
+				.expect('Deprecation', 'true')
 				.expect('Cache-Control', 'public, max-age=10')
 				.expect((response) => {
 					expect(response.body).toMatchObject({
@@ -530,6 +424,7 @@ describe('ArchiveScanRouter.integration', () => {
 			await request(app)
 				.get('/archive-scans/https%3A%2F%2Ftest.com/errors')
 				.expect(200)
+				.expect('Deprecation', 'true')
 				.expect('Cache-Control', 'public, max-age=10')
 				.expect((response) => {
 					expect(response.body).toHaveLength(1);

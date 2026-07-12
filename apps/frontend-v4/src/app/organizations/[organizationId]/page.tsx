@@ -1,8 +1,6 @@
 import { Suspense } from 'react';
 import { notFound } from 'next/navigation';
-import Link from 'next/link';
 import { connection } from 'next/server';
-import { fetchHistoryArchiveObjectEvidenceForArchive } from '@api/archive-scans-client';
 import { fetchKnownOrganization } from '@api/known-network-client';
 import {
 	fetchKnownNodes,
@@ -10,7 +8,11 @@ import {
 	fetchPublicNetwork
 } from '@api/client';
 import { PageHeading } from '@components/layout/page-heading';
+import { RouteModal } from '@components/layout/route-modal';
 import { RouteLoadingPanel } from '@components/layout/route-fallbacks';
+import { ArchiveEvidenceErrorBoundary } from '@components/archive-scans/archive-evidence-error-boundary';
+import { ArchiveEvidenceRouteState } from '@components/archive-scans/archive-evidence-route-state';
+import { OrganizationArchiveEvidenceRoute } from '@components/archive-scans/known-archive-evidence-route';
 import { OrganizationDetail } from '@components/organizations/organization-detail';
 import { OrganizationTable } from '@components/organizations/organization-table';
 import { getTopOrganizations } from '@domain/network';
@@ -22,8 +24,6 @@ interface OrganizationDetailPageProps {
 
 export const dynamicParams = true;
 export const revalidate = 10;
-const liveArchiveFetchOptions = { cache: 'no-store' } as const;
-
 async function OrganizationDetailRouteContent({
 	organizationId
 }: {
@@ -34,8 +34,11 @@ async function OrganizationDetailRouteContent({
 	const [network, knownNodes, knownOrganizations, knownOrganization] =
 		await Promise.all([
 			fetchPublicNetwork({ revalidate }),
-			fetchKnownNodes({ revalidate }),
-			fetchKnownOrganizations({ revalidate }),
+			fetchKnownNodes({ limit: 50, scope: 'all-known' }, { revalidate }),
+			fetchKnownOrganizations(
+				{ limit: 25, scope: 'all-known' },
+				{ revalidate }
+			),
 			fetchKnownOrganization(decodedOrganizationId, { revalidate })
 		]);
 	const organization = knownOrganization?.organization;
@@ -53,46 +56,22 @@ async function OrganizationDetailRouteContent({
 	const organizations = knownOrganizations.organizations.map(
 		(candidate) => candidate.organization
 	);
-	const organizationNodes = inventoryNetwork.nodes.filter(
-		(node) => node.organizationId === organization.id
+	const archiveEvidence = (
+		<ArchiveEvidenceErrorBoundary title="Organization archive evidence">
+			<Suspense
+				fallback={
+					<ArchiveEvidenceRouteState
+						state="loading"
+						title="Organization archive evidence"
+					/>
+				}
+			>
+				<OrganizationArchiveEvidenceRoute
+					organizationId={decodedOrganizationId}
+				/>
+			</Suspense>
+		</ArchiveEvidenceErrorBoundary>
 	);
-	const validatorHistoryUrls = Array.from(
-		new Set(
-			organizationNodes.flatMap((node) =>
-				node.historyUrl === null ? [] : [node.historyUrl]
-			)
-		)
-	);
-	const archiveStates = await Promise.all(
-		validatorHistoryUrls.map(async (historyUrl) => {
-			try {
-				const evidence = await fetchHistoryArchiveObjectEvidenceForArchive(
-					historyUrl,
-					{ eventLimit: 10, objectLimit: 25 },
-					liveArchiveFetchOptions
-				);
-
-				return {
-					events: evidence.objectEvents,
-					fetchError: null,
-					historyUrl,
-					objects: evidence.objects,
-					state: evidence.scannerOwnedState,
-					summary: evidence.summary
-				};
-			} catch {
-				return {
-					events: null,
-					fetchError: 'Archive evidence request did not complete.',
-					historyUrl,
-					objects: null,
-					state: null,
-					summary: null
-				};
-			}
-		})
-	);
-
 	return (
 		<main className="shell">
 			<PageHeading
@@ -114,39 +93,23 @@ async function OrganizationDetailRouteContent({
 			/>
 			<OrganizationTable
 				organizations={knownOrganizations.organizations}
+				page={knownOrganizations.page}
+				query=""
+				scope="all-known"
 				selectedOrganizationId={organization.id}
+				totalCount={knownOrganizations.scopeTotals['all-known']}
 			/>
-			<div className="route-modal-layer" role="presentation">
-				<Link
-					aria-label="Close organization details"
-					className="route-modal-backdrop"
-					href="/organizations"
+			<RouteModal
+				closeHref="/organizations"
+				eyebrow="Organization"
+				title={organization.name ?? organization.dba ?? organization.homeDomain}
+			>
+				<OrganizationDetail
+					archiveEvidence={archiveEvidence}
+					network={inventoryNetwork}
+					organization={organization}
 				/>
-				<section
-					aria-label={`${organization.homeDomain} organization details`}
-					className="route-modal"
-				>
-					<div className="route-modal-header">
-						<div>
-							<p className="eyebrow">Organization</p>
-							<h2>
-								{organization.name ??
-									organization.dba ??
-									organization.homeDomain}
-							</h2>
-						</div>
-						<Link className="close-route-modal" href="/organizations">
-							Close
-						</Link>
-					</div>
-					<OrganizationDetail
-						archiveStates={archiveStates}
-						network={inventoryNetwork}
-						organization={organization}
-						organizationNodes={organizationNodes}
-					/>
-				</section>
-			</div>
+			</RouteModal>
 		</main>
 	);
 }

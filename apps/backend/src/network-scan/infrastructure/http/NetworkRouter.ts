@@ -14,20 +14,22 @@ import { handleMeasurementsAggregationRequest } from './handleMeasurementsAggreg
 import { GetScpStatements } from '../../use-cases/get-scp-statements/GetScpStatements.js';
 import { handleScpStatementsRequest } from './handleScpStatementsRequest.js';
 import { NetworkSearchService } from '../search/NetworkSearchService.js';
-import {
-	compareScpStatement,
-	createScpStatementStreamState,
-	getScpStatementReadCursor,
-	getScpStatementReadOrder,
-	selectScpStatementDelta,
-	type ScpStatementStreamState
-} from './ScpStatementStreamState.js';
+import { NetworkSearchInventoryLoader } from '../search/NetworkSearchInventoryLoader.js';
+import { networkSearchMaxOffset } from '../search/NetworkSearchQuery.js';
+import { getSharedScpStatementLiveHub } from './ScpStatementLiveHub.js';
+import { createScpStatementSseSubscriber } from './ScpStatementSseSubscriber.js';
 import type {
 	NetworkSearchArchiveStatus,
 	NetworkSearchConfig,
 	NetworkSearchEntityType
 } from '../search/NetworkSearchTypes.js';
 import type { Logger } from '@core/services/Logger.js';
+import { GetKnownNodes } from '../../use-cases/get-known-nodes/GetKnownNodes.js';
+import { GetKnownOrganizations } from '../../use-cases/get-known-organizations/GetKnownOrganizations.js';
+import type { KnownNodeScope } from '../../use-cases/known-network-scope/KnownNetworkScope.js';
+import type { GetKnownArchiveEvidence } from '@history-scan-coordinator/use-cases/get-known-archive-evidence/GetKnownArchiveEvidence.js';
+import { GetScpEvidence } from '../../use-cases/get-scp-evidence/GetScpEvidence.js';
+import { scpEvidenceRouter } from './ScpEvidenceRouter.js';
 
 export interface NetworkRouterConfig {
 	getNetwork: GetNetwork;
@@ -35,6 +37,9 @@ export interface NetworkRouterConfig {
 	getMeasurementAggregations: GetMeasurementAggregations;
 	getLatestNodeSnapshots: GetLatestNodeSnapshots;
 	getLatestOrganizationSnapshots: GetLatestOrganizationSnapshots;
+	getKnownNodes: GetKnownNodes;
+	getKnownOrganizations: GetKnownOrganizations;
+	getKnownArchiveEvidence: GetKnownArchiveEvidence;
 	getScpStatements: GetScpStatements;
 	logger?: Logger;
 	searchConfig: NetworkSearchConfig;
@@ -43,22 +48,41 @@ export interface NetworkRouterConfig {
 const isSearchEntityType = (
 	value: string | undefined
 ): value is NetworkSearchEntityType =>
-	value === 'node' || value === 'organization';
+	value === 'archive-root' || value === 'node' || value === 'organization';
 
 const isSearchArchiveStatus = (
 	value: string | undefined
 ): value is NetworkSearchArchiveStatus =>
 	value === 'error' || value === 'ok' || value === 'unknown';
 
+const isSearchScope = (value: string | undefined): value is KnownNodeScope =>
+	value === 'current-validator' ||
+	value === 'listener' ||
+	value === 'public-key-only' ||
+	value === 'archived' ||
+	value === 'all-known';
+
 const networkRouterWrapper = (config: NetworkRouterConfig): Router => {
 	const networkRouter = express.Router();
 	const liveNetworkIntervalMs = 5_000;
-	const liveScpStatementIntervalMs = 1_200;
-	const liveScpStatementLimit = 1_000;
 	const currentNetworkCacheMaxAgeSeconds = 10;
 	const networkSearch = new NetworkSearchService(
 		config.searchConfig,
 		config.logger
+	);
+	const networkSearchInventory = new NetworkSearchInventoryLoader({
+		getKnownArchiveEvidence: config.getKnownArchiveEvidence,
+		getKnownNodes: config.getKnownNodes,
+		getKnownOrganizations: config.getKnownOrganizations,
+		getNetwork: config.getNetwork
+	});
+	const scpStatementLiveHub = getSharedScpStatementLiveHub(
+		config.getScpStatements,
+		config.logger
+	);
+	const scpEvidence = new GetScpEvidence(
+		config.getScpStatements,
+		config.getKnownNodes
 	);
 
 	const getTime = (at?: unknown): Date => {
@@ -91,6 +115,15 @@ const networkRouterWrapper = (config: NetworkRouterConfig): Router => {
 		return parsed >= 1 && parsed <= 25 ? parsed : null;
 	};
 
+	const getBoundedSearchOffset = (
+		value: express.Request['query'][string]
+	): number | null => {
+		if (value === undefined) return 0;
+		const parsed = getOptionalLimit(value);
+		if (parsed === undefined || !Number.isInteger(parsed)) return null;
+		return parsed >= 0 && parsed <= networkSearchMaxOffset ? parsed : null;
+	};
+
 	const getSearchBoolean = (
 		value: express.Request['query'][string]
 	): boolean | null | undefined => {
@@ -108,11 +141,35 @@ const networkRouterWrapper = (config: NetworkRouterConfig): Router => {
 	): Promise<express.Response> => {
 		res.setHeader('Cache-Control', 'public, max-age=' + 5);
 		res.setHeader('Content-Type', 'application/json');
+		const singleValueParams = [
+			'archiveStatus',
+			'countryCode',
+			'organizationId',
+			'q',
+			'scope',
+			'type'
+		] as const;
+		if (
+			singleValueParams.some(
+				(name) =>
+					req.query[name] !== undefined && typeof req.query[name] !== 'string'
+			)
+		) {
+			return res
+				.status(400)
+				.json({ error: 'Invalid repeated search parameter' });
+		}
 
 		const limit = getBoundedSearchLimit(req.query.limit);
-		if (limit === null) {
-			return res.status(400).json({ error: 'Invalid search limit' });
+		const offset = getBoundedSearchOffset(req.query.offset);
+		if (limit === null || offset === null) {
+			return res.status(400).json({ error: 'Invalid search pagination' });
 		}
+		const requestedScope = getSearchString(req, 'scope');
+		if (requestedScope && !isSearchScope(requestedScope)) {
+			return res.status(400).json({ error: 'Invalid search scope' });
+		}
+		const scope = isSearchScope(requestedScope) ? requestedScope : 'all-known';
 
 		const requestedType = getSearchString(req, 'type');
 		if (requestedType && !isSearchEntityType(requestedType)) {
@@ -150,21 +207,23 @@ const networkRouterWrapper = (config: NetworkRouterConfig): Router => {
 			return res.status(400).json({ error: 'Search query is too long' });
 		}
 
-		const networkOrError = await config.getNetwork.execute({});
-		if (networkOrError.isErr())
+		const inventoryOrError = await networkSearchInventory.load();
+		if (inventoryOrError.isErr())
 			return res.status(500).send('Internal Server Error');
-		if (networkOrError.value === null)
+		if (inventoryOrError.value === null)
 			return res.status(404).send('No network found');
 
-		const payload = await networkSearch.search(networkOrError.value, {
+		const payload = await networkSearch.search(inventoryOrError.value, {
 			active,
 			archiveStatus: archiveStatusFilter,
 			countryCode: getSearchString(req, 'countryCode'),
 			entityType: entityTypeOverride ?? entityType,
 			fullValidator,
 			limit,
+			offset,
 			organizationId: getSearchString(req, 'organizationId'),
 			query: searchQuery,
+			scope,
 			topTier,
 			validating,
 			validator
@@ -198,36 +257,6 @@ const networkRouterWrapper = (config: NetworkRouterConfig): Router => {
 		res.write(
 			`event: network\ndata: ${JSON.stringify(networkOrError.value)}\n\n`
 		);
-	};
-
-	const writeScpStatementEvent = async (
-		res: express.Response,
-		scpState: ScpStatementStreamState
-	): Promise<void> => {
-		const statementsOrError = await config.getScpStatements.execute({
-			after: getScpStatementReadCursor(scpState),
-			limit: liveScpStatementLimit,
-			order: getScpStatementReadOrder(scpState),
-			source: 'live'
-		});
-		if (res.writableEnded) return;
-
-		if (statementsOrError.isErr()) {
-			res.write(
-				`event: error\ndata: ${JSON.stringify({
-					message: 'SCP statements unavailable'
-				})}\n\n`
-			);
-			return;
-		}
-
-		const delta = selectScpStatementDelta(
-			scpState,
-			statementsOrError.value.toSorted(compareScpStatement)
-		);
-		if (delta.length === 0) return;
-
-		res.write(`event: scp\ndata: ${JSON.stringify(delta)}\n\n`);
 	};
 
 	networkRouter.get(
@@ -365,32 +394,29 @@ const networkRouterWrapper = (config: NetworkRouterConfig): Router => {
 	networkRouter.get(
 		['/scp-statements/live'],
 		async (req: express.Request, res: express.Response) => {
+			const unsubscribe = scpStatementLiveHub.subscribe(
+				createScpStatementSseSubscriber(res, config.logger)
+			);
+			if (unsubscribe === null) {
+				return res
+					.status(503)
+					.json({ error: 'SCP live stream is at capacity' });
+			}
 			res.setHeader('Cache-Control', 'no-cache, no-transform');
 			res.setHeader('Connection', 'keep-alive');
 			res.setHeader('Content-Type', 'text/event-stream');
 			res.setHeader('X-Accel-Buffering', 'no');
 			res.flushHeaders();
-			res.write(': connected\n\n');
-
-			let isWriting = false;
-			const scpState = createScpStatementStreamState();
-			const writeSnapshot = (): void => {
-				if (isWriting || res.writableEnded) return;
-				isWriting = true;
-				void writeScpStatementEvent(res, scpState).finally(() => {
-					isWriting = false;
-				});
-			};
-
-			writeSnapshot();
-			const interval = setInterval(writeSnapshot, liveScpStatementIntervalMs);
-
-			req.on('close', () => {
-				clearInterval(interval);
+			const closeStream = (): void => {
+				unsubscribe();
 				if (!res.writableEnded) res.end();
-			});
+			};
+			req.once('close', closeStream);
+			if (!res.write(': connected\n\n')) closeStream();
 		}
 	);
+
+	networkRouter.use('/scp/evidence', scpEvidenceRouter(scpEvidence));
 
 	networkRouter.get(
 		['/node-snapshots'],

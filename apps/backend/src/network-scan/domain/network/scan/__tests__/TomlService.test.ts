@@ -1,6 +1,10 @@
 import valueValidator from 'validator';
 
-import { TomlFetchError, TomlService } from '../TomlService.js';
+import {
+	publicTomlAddressLookup,
+	TomlFetchError,
+	TomlService
+} from '../TomlService.js';
 import * as toml from 'toml';
 import { HttpError, type HttpResponse, type HttpService } from 'http-helper';
 import { err, ok } from 'neverthrow';
@@ -129,6 +133,7 @@ describe('tomlService', () => {
 			expect(tomlResult.isOk()).toBeTruthy();
 			if (tomlResult.isErr()) return;
 			expect(tomlResult.value).toEqual({
+				authoritative: true,
 				tomlObject: tomlV2Object,
 				tomlText: tomlV2String,
 				warnings: []
@@ -143,6 +148,7 @@ describe('tomlService', () => {
 			const toml = await tomlService.fetchTomlObjects(['my-domain.com']);
 			expect(toml.size).toEqual(1);
 			expect(toml.get('my-domain.com')).toEqual({
+				authoritative: true,
 				tomlObject: tomlV2Object,
 				tomlText: tomlV2String,
 				warnings: []
@@ -164,14 +170,24 @@ describe('tomlService', () => {
 			expect(tomlResult.isOk()).toBeTruthy();
 			if (tomlResult.isErr()) return;
 			expect(tomlResult.value).toEqual({
+				authoritative: false,
 				tomlObject: tomlV2Object,
 				tomlText: tomlV2String,
 				warnings: ['TlsCertificateVerificationDisabled']
 			});
 			expect(httpService.get).toHaveBeenCalledTimes(3);
-			expect(httpService.get.mock.calls[0]?.[1]?.httpsAgent).toBeUndefined();
-			expect(httpService.get.mock.calls[1]?.[1]?.httpsAgent).toBeUndefined();
-			expect(httpService.get.mock.calls[2]?.[1]?.httpsAgent).toBeDefined();
+			expect(
+				httpService.get.mock.calls[0]?.[1]?.httpsAgent?.options
+					.rejectUnauthorized
+			).not.toBe(false);
+			expect(
+				httpService.get.mock.calls[1]?.[1]?.httpsAgent?.options
+					.rejectUnauthorized
+			).not.toBe(false);
+			expect(
+				httpService.get.mock.calls[2]?.[1]?.httpsAgent?.options
+					.rejectUnauthorized
+			).toBe(false);
 		});
 
 		it('should not retry non-certificate failures with TLS verification disabled', async () => {
@@ -190,8 +206,60 @@ describe('tomlService', () => {
 			expect(result.isErr()).toBeTruthy();
 			expect(httpService.get).toHaveBeenCalledTimes(2);
 			expect(
-				httpService.get.mock.calls.some((call) => call[1]?.httpsAgent)
+				httpService.get.mock.calls.some(
+					(call) => call[1]?.httpsAgent?.options.rejectUnauthorized === false
+				)
 			).toBe(false);
+		});
+
+		it('rejects private literal endpoints before issuing a request', async () => {
+			const httpService = mock<HttpService>();
+			const service = new TomlService(httpService, new LoggerMock());
+
+			const result = await service.fetchToml('127.0.0.1');
+
+			expect(result.isErr()).toBe(true);
+			if (result.isOk()) return;
+			expect(result.error.cause).toMatchObject({
+				code: 'TOML_PRIVATE_ADDRESS'
+			});
+			expect(httpService.get).not.toHaveBeenCalled();
+		});
+
+		it('rejects private addresses returned by DNS resolution', async () => {
+			const lookup = new Promise<void>((resolve, reject) => {
+				publicTomlAddressLookup('localhost', {}, (error) => {
+					if (error) reject(error);
+					else resolve();
+				});
+			});
+
+			await expect(lookup).rejects.toMatchObject({
+				code: 'TOML_PRIVATE_ADDRESS'
+			});
+		});
+
+		it('revalidates redirects and rejects private-address targets', async () => {
+			const httpService = mock<HttpService>();
+			httpService.get.mockResolvedValue(
+				err(
+					new HttpError('redirect', 'ERR_FR_REDIRECTION_FAILURE', {
+						data: '',
+						headers: { location: 'https://169.254.169.254/metadata' },
+						status: 302,
+						statusText: 'Found'
+					})
+				)
+			);
+			const service = new TomlService(httpService, new LoggerMock());
+
+			const result = await service.fetchToml('public.example');
+
+			expect(result.isErr()).toBe(true);
+			if (result.isOk()) return;
+			expect(result.error.cause).toMatchObject({
+				code: 'TOML_PRIVATE_ADDRESS'
+			});
 		});
 
 		it('should return err when toml file cannot be parsed', async function () {

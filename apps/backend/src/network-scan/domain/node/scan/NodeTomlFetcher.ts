@@ -16,6 +16,11 @@ export class NodeTomlFetcher {
 
 		tomlObjects.forEach((tomlOrError, domain) => {
 			if (tomlOrError instanceof TomlFetchError) return;
+			if (
+				tomlOrError.authoritative === false ||
+				tomlOrError.warnings.length > 0
+			)
+				return;
 			const tomlValidators = tomlOrError.tomlObject.VALIDATORS;
 			if (!isArray(tomlValidators)) return;
 			tomlValidators.forEach((tomlValidator: unknown) => {

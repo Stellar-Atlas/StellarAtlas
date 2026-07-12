@@ -41,6 +41,8 @@ import {
 	parseArchiveObjectProgress,
 	parseClaimAttempt
 } from './ArchiveObjectJobRequestParsers.js';
+import { ReportHistoryArchiveWorkerStatus } from '../../use-cases/report-history-archive-worker-status/ReportHistoryArchiveWorkerStatus.js';
+import { parseHistoryArchiveWorkerStatusReport } from './HistoryArchiveWorkerStatusRequestParser.js';
 
 export interface HistoryScanRouterConfig
 	extends FrontendRevalidationConfig, ParsedHistoryRegistrationRouteConfig {
@@ -55,6 +57,7 @@ export interface HistoryScanRouterConfig
 	completeHistoryArchiveObject: CompleteHistoryArchiveObject;
 	failHistoryArchiveObject: FailHistoryArchiveObject;
 	releaseHistoryArchiveObject: ReleaseHistoryArchiveObject;
+	reportHistoryArchiveWorkerStatus: ReportHistoryArchiveWorkerStatus;
 	backfillArchiveMetadata: BackfillArchiveMetadata;
 }
 
@@ -62,6 +65,27 @@ export const HistoryScanRouterWrapper = (
 	config: HistoryScanRouterConfig
 ): Router => {
 	const historyScanRouter = express.Router();
+
+	if (config.userName && config.password)
+		historyScanRouter.post(
+			'/worker-status',
+			basicAuth({
+				users: { [config.userName]: config.password },
+				challenge: true
+			}),
+			async (req: express.Request, res: express.Response) => {
+				const report = parseHistoryArchiveWorkerStatusReport(req, res);
+				if (report === null) return;
+
+				const result =
+					await config.reportHistoryArchiveWorkerStatus.execute(report);
+				if (result.isErr()) {
+					return res.status(500).json({ error: result.error.message });
+				}
+
+				return res.status(204).send();
+			}
+		);
 
 	if (config.userName && config.password)
 		historyScanRouter.post(

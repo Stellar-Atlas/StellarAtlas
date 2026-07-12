@@ -134,7 +134,7 @@ function isActive(job: ScanJob): boolean {
 }
 
 function normalizeScanJobUrl(url: string): string {
-	return getHistoryArchiveUrlIdentity(url) ?? url.trim().toLowerCase();
+	return getHistoryArchiveUrlIdentity(url) ?? url.trim();
 }
 
 function extractRows(result: InsertQueryResult): InsertedScanJobRow[] {

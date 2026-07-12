@@ -4,14 +4,13 @@ import { err, ok, Result } from 'neverthrow';
 import type { Logger } from 'logger';
 import { mapUnknownToError } from '@core/utilities/mapUnknownToError.js';
 import {
-	buildCheckpointStateDiscoveryObjects,
 	buildHistoryArchiveObjectsFromState,
-	buildRootHistoryArchiveObject,
-	maxCheckpointDiscoveryPageSize
+	buildRootHistoryArchiveObject
 } from '../../domain/history-archive-object/HistoryArchiveObjectBuilder.js';
 import type { HistoryArchiveObjectRepository } from '../../domain/history-archive-object/HistoryArchiveObjectRepository.js';
 import type { HistoryArchiveStateRepository } from '../../domain/history-archive-state/HistoryArchiveStateRepository.js';
 import { TYPES } from '../../infrastructure/di/di-types.js';
+import { ReconcileHistoryArchiveObjectTransitions } from '../reconcile-history-archive-object-transitions/ReconcileHistoryArchiveObjectTransitions.js';
 
 export interface ScheduleHistoryArchiveObjectsResult {
 	readonly discoveredArchiveUrlCount: number;
@@ -27,6 +26,7 @@ export class ScheduleHistoryArchiveObjects {
 		private readonly objectRepository: HistoryArchiveObjectRepository,
 		@inject(TYPES.HistoryArchiveStateRepository)
 		private readonly stateRepository: HistoryArchiveStateRepository,
+		private readonly transitionReconciler: ReconcileHistoryArchiveObjectTransitions,
 		@inject('Logger') private readonly logger: Logger
 	) {}
 
@@ -34,34 +34,28 @@ export class ScheduleHistoryArchiveObjects {
 		historyArchiveUrls: readonly string[]
 	): Promise<Result<ScheduleHistoryArchiveObjectsResult, Error>> {
 		try {
+			await this.transitionReconciler.executeIfDue();
+			const reconciliation =
+				await this.objectRepository.reconcileExecutionDisposition();
+			await this.objectRepository.reconcileDependencyReadiness(240);
 			const rootObjects = historyArchiveUrls
 				.map(buildRootHistoryArchiveObject)
 				.filter((object) => object !== null);
 			const states = await this.stateRepository.findAvailable(5000);
-			const oldestCheckpointByArchive =
-				await this.objectRepository.findOldestCheckpointLedgerByArchiveUrlIdentities(
-					states.map((state) => state.archiveUrlIdentity)
-				);
 			const stateObjects = states.flatMap((state) =>
 				buildHistoryArchiveObjectsFromState(state, { rootStatus: 'verified' })
 			);
-			const checkpointDiscoveryObjects = states.flatMap((state) =>
-				buildCheckpointStateDiscoveryObjects(state, {
-					maxObjects: maxCheckpointDiscoveryPageSize,
-					oldestScheduledCheckpointLedger:
-						oldestCheckpointByArchive.get(state.archiveUrlIdentity) ?? null
-				})
-			);
-			const objects = [
-				...rootObjects,
-				...stateObjects,
-				...checkpointDiscoveryObjects
-			];
-			const scheduledCount = await this.objectRepository.saveObjects(objects);
+			const objects = [...rootObjects, ...stateObjects];
+			const scheduledCount = await this.objectRepository.planObjects(objects);
+			const promotion = await this.objectRepository.promotePlannedObjects();
 
 			this.logger.info('Scheduled history archive object checks', {
 				app: 'history-scan-coordinator',
+				admittedLegacyObjects: reconciliation.admittedObjects,
 				discoveredArchiveUrlCount: historyArchiveUrls.length,
+				outstandingObjects: promotion.outstandingObjects,
+				promotedObjects: promotion.promotedObjects,
+				watermark: promotion.watermark,
 				scheduledCount
 			});
 

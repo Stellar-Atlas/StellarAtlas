@@ -5,8 +5,7 @@ export function parseHistoryArchiveUrl(url: string): string | null {
 }
 
 export function getHistoryArchiveUrlIdentity(url: string): string | null {
-	const parsedUrl = parseHistoryArchiveUrl(url);
-	return parsedUrl === null ? null : parsedUrl.toLowerCase();
+	return parseHistoryArchiveUrl(url);
 }
 
 export function uniqueHistoryArchiveUrls(urls: readonly string[]): string[] {

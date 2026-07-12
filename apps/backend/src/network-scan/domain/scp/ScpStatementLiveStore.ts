@@ -1,13 +1,26 @@
 import type { ScpStatementObservation as CrawlerScpStatementObservation } from 'crawler';
 import type { ScpStatementObservationV1 } from 'shared';
-import type { ScpStatementObservationFilter } from './ScpStatementObservationRepository.js';
+import type {
+	ScpStatementObservationFilter,
+	ScpStatementReadCursor,
+	ScpStatementReadOrder
+} from './ScpStatementObservationRepository.js';
 
-export interface ScpStatementLiveCursor {
-	observedAtMs: number;
-	statementHash: string;
-}
+export type ScpStatementLiveCursor = ScpStatementReadCursor;
+export type ScpStatementLiveOrder = ScpStatementReadOrder;
 
-export type ScpStatementLiveOrder = 'asc' | 'desc';
+export type ScpStatementProjectionOutcome =
+	| { status: 'accepted'; taskPending?: boolean }
+	| {
+			reason: string;
+			retryAfterMs?: number;
+			status: 'deferred';
+	  };
+
+export type ScpStatementProjectionTaskOutcome =
+	| { status: 'settled' }
+	| { retryAfterMs: number; status: 'pending' }
+	| { reason: string; retryAfterMs?: number; status: 'failed' };
 
 export interface ScpStatementLiveFilter extends ScpStatementObservationFilter {
 	after?: ScpStatementLiveCursor;
@@ -18,7 +31,8 @@ export interface ScpStatementLiveStore {
 	findLatest(
 		filter: ScpStatementLiveFilter
 	): Promise<ScpStatementObservationV1[] | null>;
+	reconcilePendingTask(): Promise<ScpStatementProjectionTaskOutcome>;
 	saveMany(
 		observations: readonly CrawlerScpStatementObservation[]
-	): Promise<void>;
+	): Promise<ScpStatementProjectionOutcome>;
 }

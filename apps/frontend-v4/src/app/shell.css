@@ -163,6 +163,7 @@
 
 .search input,
 .table-controls input,
+.table-controls select,
 .controls-heading input {
 	border: 1px solid var(--border);
 	border-radius: 6px;

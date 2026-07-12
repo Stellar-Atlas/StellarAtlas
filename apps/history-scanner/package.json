@@ -4,7 +4,8 @@
 	"description": "Scan history archives",
 	"type": "module",
 	"scripts": {
-		"build": "tsc --declaration && pnpm -w rewrite:aliases apps/history-scanner",
+		"prebuild": "pnpm --filter shared build && pnpm --filter history-scanner-dto build",
+		"build": "tsc --build tsconfig.json --force && pnpm -w rewrite:aliases apps/history-scanner",
 		"build-and-start": "pnpm build; node lib/index.js",
 		"start": "node lib/index.js",
 		"build-and-scan-history": "pnpm run build && pnpm run scan-history",

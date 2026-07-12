@@ -1,12 +1,13 @@
 'use client';
 
 import Link from 'next/link';
-import { useEffect, useMemo, useState } from 'react';
+import { useRouter } from 'next/navigation';
+import { useState } from 'react';
+import type { NetworkV1 } from 'shared';
 import type {
-	PublicKnownNode,
-	PublicNetwork,
-	PublicNode
-} from '../../api/types';
+	PublicKnownNetworkPage,
+	PublicKnownNodeListItem
+} from '../../api/known-network-types';
 import {
 	getNodeLabel,
 	getNodeTags,
@@ -18,110 +19,53 @@ import {
 	formatNode30DayValidating
 } from '../../domain/availability';
 import { StatusTags } from '../status-tags';
-
-type NodeFilter = 'all' | 'validators' | 'listeners' | 'warnings';
+import {
+	defaultNodeInventoryFilter,
+	isNodeInventoryFilter,
+	nodeInventoryFilterLabels,
+	nodeInventoryFilterOrder,
+	type NodeInventoryFilter
+} from '../../domain/known-network-scopes';
 
 interface NodeTableProps {
-	network: PublicNetwork;
-	nodes: readonly PublicKnownNode[];
+	network: NetworkV1;
+	nodes: readonly PublicKnownNodeListItem[];
+	page: PublicKnownNetworkPage;
+	query: string;
+	scope: NodeInventoryFilter;
 	selectedPublicKey?: string;
+	totalCount?: number;
 }
 
-const PAGE_SIZE = 50;
-
-const filterLabels: Record<NodeFilter, string> = {
-	all: 'All nodes',
-	validators: 'Validators',
-	listeners: 'Listeners',
-	warnings: 'Needs attention'
-};
-
-const normalize = (value: string): string => value.toLowerCase();
-
-const getKnownNodeLabel = (knownNode: PublicKnownNode): string =>
+const getKnownNodeLabel = (knownNode: PublicKnownNodeListItem): string =>
 	knownNode.node
 		? getNodeLabel(knownNode.node)
 		: knownNode.publicKey.slice(0, 12);
 
-const filterNodes = (
-	nodes: readonly PublicKnownNode[],
-	filter: NodeFilter,
-	query: string,
-	network: PublicNetwork
-): PublicKnownNode[] => {
-	const normalizedQuery = normalize(query.trim());
-
-	return nodes
-		.filter((knownNode) => {
-			const node = knownNode.node;
-			if (filter === 'validators' && (node === null || !node.isValidator))
-				return false;
-			if (
-				filter === 'listeners' &&
-				(node === null || node.isValidator || !node.active)
-			)
-				return false;
-			if (
-				filter === 'warnings' &&
-				(node === null ||
-					(!node.connectivityError &&
-						!node.stellarCoreVersionBehind &&
-						node.isValidating))
-			)
-				return false;
-
-			if (normalizedQuery.length === 0) return true;
-			const organization = node ? getOrganizationForNode(network, node) : null;
-			const haystack = normalize(
-				[
-					getKnownNodeLabel(knownNode),
-					knownNode.publicKey,
-					node?.homeDomain ?? '',
-					node?.host ?? '',
-					node?.ip ?? '',
-					organization ? getOrganizationLabel(organization) : ''
-				].join(' ')
-			);
-			return haystack.includes(normalizedQuery);
-		})
-		.toSorted((left, right) => {
-			const leftNode = left.node;
-			const rightNode = right.node;
-			if (
-				(leftNode?.isValidator ?? false) !== (rightNode?.isValidator ?? false)
-			) {
-				return leftNode?.isValidator ? -1 : 1;
-			}
-			if (left.metadataState !== right.metadataState) {
-				return left.metadataState === 'snapshot' ? -1 : 1;
-			}
-			return (
-				(rightNode?.index ?? -1) - (leftNode?.index ?? -1) ||
-				getKnownNodeLabel(left).localeCompare(getKnownNodeLabel(right))
-			);
-		});
-};
-
 export function NodeTable({
 	network,
 	nodes,
-	selectedPublicKey = ''
+	page,
+	query,
+	scope,
+	selectedPublicKey = '',
+	totalCount = nodes.length
 }: NodeTableProps): React.JSX.Element {
-	const [filter, setFilter] = useState<NodeFilter>('validators');
-	const [query, setQuery] = useState('');
-	const [page, setPage] = useState(1);
-	const visibleNodes = useMemo(
-		() => filterNodes(nodes, filter, query, network),
-		[filter, network, nodes, query]
-	);
-	const pageCount = Math.max(1, Math.ceil(visibleNodes.length / PAGE_SIZE));
-	const currentPage = Math.min(page, pageCount);
-	const pageStart = (currentPage - 1) * PAGE_SIZE;
-	const pagedNodes = visibleNodes.slice(pageStart, pageStart + PAGE_SIZE);
-
-	useEffect(() => {
-		setPage(1);
-	}, [filter, query]);
+	const router = useRouter();
+	const [input, setInput] = useState(query);
+	const pageNumber = Math.floor(page.offset / page.limit) + 1;
+	const pageCount = Math.max(1, Math.ceil(page.total / page.limit));
+	const navigate = (
+		nextScope: NodeInventoryFilter,
+		nextQuery: string,
+		nextPage: number
+	): void => {
+		const params = new URLSearchParams();
+		params.set('scope', nextScope);
+		if (nextQuery.trim()) params.set('q', nextQuery.trim());
+		if (nextPage > 1) params.set('page', nextPage.toString());
+		router.push(`/nodes?${params.toString()}`);
+	};
 
 	return (
 		<section className="panel data-panel">
@@ -129,36 +73,34 @@ export function NodeTable({
 				<div>
 					<h2>Nodes</h2>
 					<span>
-						Showing{' '}
-						{formatVisibleRange(
-							pageStart,
-							pagedNodes.length,
-							visibleNodes.length
-						)}{' '}
-						from {nodes.length}
+						Showing {formatVisibleRange(page.offset, nodes.length, page.total)}{' '}
+						from {totalCount} known
 					</span>
 				</div>
 				<div className="table-controls">
 					<input
 						aria-label="Filter nodes"
-						onChange={(event) => setQuery(event.currentTarget.value)}
+						onChange={(event) => setInput(event.currentTarget.value)}
+						onKeyDown={(event) => {
+							if (event.key === 'Enter') navigate(scope, input, 1);
+						}}
 						placeholder="Filter nodes"
-						value={query}
+						value={input}
 					/>
-					<div className="segmented">
-						{(
-							['all', 'validators', 'listeners', 'warnings'] as NodeFilter[]
-						).map((option) => (
-							<button
-								className={filter === option ? 'active' : ''}
-								key={option}
-								onClick={() => setFilter(option)}
-								type="button"
-							>
-								{filterLabels[option]}
-							</button>
+					<select
+						aria-label="Node inventory scope"
+						onChange={(event) => {
+							const value = event.currentTarget.value;
+							if (isNodeInventoryFilter(value)) navigate(value, input, 1);
+						}}
+						value={scope}
+					>
+						{nodeInventoryFilterOrder.map((option) => (
+							<option key={option} value={option}>
+								{nodeInventoryFilterLabels[option]}
+							</option>
 						))}
-					</div>
+					</select>
 				</div>
 			</div>
 			<div className="responsive-table">
@@ -175,7 +117,7 @@ export function NodeTable({
 						</tr>
 					</thead>
 					<tbody>
-						{pagedNodes.map((knownNode) => {
+						{nodes.map((knownNode) => {
 							const node = knownNode.node;
 							const organization = node
 								? getOrganizationForNode(network, node)
@@ -241,7 +183,7 @@ export function NodeTable({
 												node
 													? [
 															...getNodeTags(node),
-															...(!knownNode.current
+															...(knownNode.scope === 'archived'
 																? [
 																		{
 																			label: 'archived',
@@ -262,18 +204,18 @@ export function NodeTable({
 			</div>
 			<div className="table-pagination">
 				<button
-					disabled={currentPage <= 1}
-					onClick={() => setPage((value) => Math.max(1, value - 1))}
+					disabled={pageNumber <= 1}
+					onClick={() => navigate(scope, query, pageNumber - 1)}
 					type="button"
 				>
 					Previous
 				</button>
 				<span>
-					Page {currentPage} of {pageCount}
+					Page {pageNumber} of {pageCount}
 				</span>
 				<button
-					disabled={currentPage >= pageCount}
-					onClick={() => setPage((value) => Math.min(pageCount, value + 1))}
+					disabled={!page.hasMore}
+					onClick={() => navigate(scope, query, pageNumber + 1)}
 					type="button"
 				>
 					Next

@@ -396,8 +396,10 @@ function formatDelayReasonCode(
 		'global-active-cap': 'global scanner active-check cap',
 		'host-active-cap': 'host at active-check cap',
 		'host-backoff': 'host retry backoff',
+		'legacy-deferred': 'legacy row awaiting scanner planning metadata',
 		'missing-dependency': 'waiting for prerequisite file',
 		'object-already-active': 'checking now',
+		'planning-deferred': 'deferred by scanner planning',
 		'retry-window': 'retry window'
 	};
 

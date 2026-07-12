@@ -1,30 +1,14 @@
-import type {
-	PublicApiStatus,
-	PublicConfiguredServiceStatus,
-	PublicDataQualityStatus,
-	PublicHistoryArchiveObjectEvents,
-	PublicHistoryArchiveObjectSummary,
-	PublicScanLogStatus,
-	PublicWorkerStatus
-} from './types';
 import { buildBrowserRealtimeUrl } from './browser-client';
-
-export interface StatusLiveSnapshot {
-	readonly api: PublicApiStatus;
-	readonly archiveEvents: PublicHistoryArchiveObjectEvents;
-	readonly archiveSummary: PublicHistoryArchiveObjectSummary;
-	readonly dataQuality: PublicDataQualityStatus;
-	readonly frontend: PublicConfiguredServiceStatus;
-	readonly generatedAt: string;
-	readonly scanLogs: PublicScanLogStatus;
-	readonly workers: PublicWorkerStatus;
-}
+import {
+	parseStatusLivePayload,
+	type StatusLivePatch,
+	type StatusLiveSnapshot
+} from './status-live-contract';
+export type { StatusLiveSnapshot } from './status-live-contract';
 
 export type StatusLiveMessage =
 	| {
-			readonly payload: Partial<StatusLiveSnapshot> & {
-				readonly generatedAt: string;
-			};
+			readonly payload: StatusLivePatch;
 			readonly type: 'status-patch';
 	  }
 	| { readonly payload: StatusLiveSnapshot; readonly type: 'status' }
@@ -37,6 +21,41 @@ const reconnectDelayMs = 1_500;
 const listeners = new Set<StatusLiveListener>();
 let reconnectTimeout: number | null = null;
 let socket: WebSocket | null = null;
+
+export function parseStatusLiveMessage(
+	value: unknown
+): StatusLiveMessage | null {
+	if (!isRecord(value) || typeof value.type !== 'string') return null;
+	if (value.type === 'error') {
+		if (!isRecord(value.payload) || typeof value.payload.message !== 'string') {
+			return null;
+		}
+		return {
+			payload: { message: value.payload.message },
+			type: 'error'
+		};
+	}
+	if (value.type !== 'status' && value.type !== 'status-patch') return null;
+	if (!isRecord(value.payload)) return null;
+
+	const payload = parseStatusLivePayload(
+		value.payload,
+		value.type === 'status'
+	);
+	if (payload === null) return null;
+
+	if (value.type === 'status') {
+		return {
+			payload: payload as StatusLiveSnapshot,
+			type: 'status'
+		};
+	}
+
+	return {
+		payload,
+		type: 'status-patch'
+	};
+}
 
 const clearReconnectTimeout = (): void => {
 	if (reconnectTimeout === null) return;
@@ -73,10 +92,20 @@ const connectStatusStream = (): void => {
 	}
 
 	clearReconnectTimeout();
-	socket = new WebSocket(buildBrowserRealtimeUrl(statusWebSocketPath));
-	socket.addEventListener('message', (event) => {
+	const candidate = new WebSocket(buildBrowserRealtimeUrl(statusWebSocketPath));
+	socket = candidate;
+	candidate.addEventListener('message', (event) => {
+		if (socket !== candidate) return;
 		try {
-			notify(JSON.parse(event.data as string) as StatusLiveMessage);
+			const message = parseStatusLiveMessage(JSON.parse(event.data as string));
+			if (message !== null) {
+				notify(message);
+				return;
+			}
+			notify({
+				payload: { message: 'Status stream message was invalid' },
+				type: 'error'
+			});
 		} catch {
 			notify({
 				payload: { message: 'Status stream message was not valid JSON' },
@@ -84,14 +113,19 @@ const connectStatusStream = (): void => {
 			});
 		}
 	});
-	socket.addEventListener('close', () => {
+	candidate.addEventListener('close', () => {
+		if (socket !== candidate) return;
 		socket = null;
 		scheduleReconnect();
 	});
-	socket.addEventListener('error', () => {
-		closeSocket();
+	candidate.addEventListener('error', () => {
+		candidate.close();
 	});
 };
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+	return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
 
 export const subscribeToStatusStream = (
 	listener: StatusLiveListener

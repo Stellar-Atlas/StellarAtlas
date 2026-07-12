@@ -3,12 +3,26 @@ import * as fs from 'fs';
 import { gunzipSync } from 'zlib';
 import { fileURLToPath } from 'node:url';
 import {
+	ArchiveXdrError,
+	processLedgerHeaderHistoryEntryXDR,
+	processScpHistoryEntryXDR,
 	processTransactionHistoryEntryXDR,
 	processTransactionHistoryResultEntryXDR
 } from '../hash-worker.js';
 
 const currentDir = path.dirname(fileURLToPath(import.meta.url));
 const fixturesDir = path.join(currentDir, '../__fixtures__');
+
+it('should decode the true close time from a real ledger archive fixture', () => {
+	const result = processLedgerHeaderHistoryEntryXDR(
+		firstXdrFrame(path.join(fixturesDir, 'ledger.xdr.gz'))
+	);
+
+	expect(result).toMatchObject({
+		closedAt: '2015-11-03T22:54:05.000Z',
+		ledger: 556800
+	});
+});
 
 it('should extract transaction envelope records from a real archive fixture', () => {
 	const result = processTransactionHistoryEntryXDR(
@@ -42,6 +56,23 @@ it('should extract transaction result records from a real archive fixture', () =
 		transactionIndex: 0
 	});
 });
+
+it.each([
+	['ledger', processLedgerHeaderHistoryEntryXDR],
+	['transactions', processTransactionHistoryEntryXDR],
+	['results', processTransactionHistoryResultEntryXDR],
+	['scp', processScpHistoryEntryXDR]
+] as const)(
+	'should identify malformed %s XDR as remote archive content',
+	(_category, process) => {
+		expect(() => process(Buffer.from('not-xdr'))).toThrow(ArchiveXdrError);
+		try {
+			process(Buffer.from('not-xdr'));
+		} catch (error) {
+			expect(error).toMatchObject({ name: 'ArchiveXdrError' });
+		}
+	}
+);
 
 function firstXdrFrame(filePath: string): Buffer {
 	const unzipped = gunzipSync(fs.readFileSync(filePath));

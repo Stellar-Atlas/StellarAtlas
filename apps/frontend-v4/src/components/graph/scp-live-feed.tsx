@@ -4,7 +4,8 @@ import { useEffect, useMemo, useState } from 'react';
 import type {
 	PublicLedgerTransaction,
 	PublicNetwork,
-	PublicScpStatementObservation
+	PublicScpStatementObservation,
+	PublicScpStatementReadMetadata
 } from '../../api/types';
 import { getLedgerTransactions } from '../../app/actions/network-data';
 import {
@@ -14,6 +15,10 @@ import {
 } from '../../domain/ledger-sequence';
 import { getNodeLabel } from '../../domain/network';
 import { ScpPhaseTimeline } from './scp-phase-timeline';
+import {
+	formatScpReadMetadataLabel,
+	formatScpReadMetadataTitle
+} from './scp-read-metadata';
 
 interface ScpLiveFeedProps {
 	activeSlotIndex: string | null;
@@ -21,6 +26,7 @@ interface ScpLiveFeedProps {
 	latestLedgerSlotIndex: string | null;
 	network: PublicNetwork;
 	observedSlotIndex: string | null;
+	readMetadata: PublicScpStatementReadMetadata | null;
 	statements: readonly PublicScpStatementObservation[];
 }
 
@@ -149,6 +155,7 @@ export function ScpLiveFeed({
 	latestLedgerSlotIndex,
 	network,
 	observedSlotIndex,
+	readMetadata,
 	statements
 }: ScpLiveFeedProps): React.JSX.Element {
 	const summary = useMemo(
@@ -292,17 +299,23 @@ export function ScpLiveFeed({
 		<section className="scp-live-feed" aria-label="SCP live feed">
 			<div className="scp-live-heading">
 				<h2>SCP live feed</h2>
-				<span>{statements.length > 0 ? 'observed' : 'collecting'}</span>
+				<span
+					data-freshness={readMetadata?.freshness ?? 'connecting'}
+					data-source={readMetadata?.source ?? 'not_connected'}
+					title={formatScpReadMetadataTitle(readMetadata)}
+				>
+					{formatScpReadMetadataLabel(readMetadata)}
+				</span>
 			</div>
 			<div className="scp-packet-legend" aria-label="SCP packet color legend">
 				<span className="nominate">Nominate</span>
 				<span className="prepare">Prepare</span>
 				<span className="confirm">Confirm</span>
 				<span className="externalize">Externalize</span>
-				</div>
-				<ScpPhaseTimeline
-					activeSlotIndex={visibleActiveSlotIndex}
-					activeStatements={activeStatements}
+			</div>
+			<ScpPhaseTimeline
+				activeSlotIndex={visibleActiveSlotIndex}
+				activeStatements={activeStatements}
 				fallbackSlotIndex={timelineSlotIndex}
 				focusedStatement={null}
 				network={network}

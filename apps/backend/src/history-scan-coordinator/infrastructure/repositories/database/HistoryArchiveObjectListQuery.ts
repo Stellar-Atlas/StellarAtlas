@@ -6,6 +6,7 @@ import {
 	type RawObjectQueryResult
 } from './HistoryArchiveObjectRowMapper.js';
 import type { HistoryArchiveObject } from '@history-scan-coordinator/domain/history-archive-object/HistoryArchiveObject.js';
+import { historyArchiveObjectDependencySatisfiedSql } from './HistoryArchiveObjectDependencySql.js';
 
 export interface HistoryArchiveObjectListOptions {
 	readonly archiveUrlIdentity?: string;
@@ -65,6 +66,8 @@ function historyArchiveObjectListSql(): string {
 			union all
 			${statusCandidateSql('pending')}
 			union all
+			${deferredCandidateSql()}
+			union all
 			${statusCandidateSql('verified')}
 		),
 		target_objects as (
@@ -72,6 +75,14 @@ function historyArchiveObjectListSql(): string {
 			from status_candidates archive_object
 			order by
 				${statusRankSql('archive_object.status')} asc,
+				case
+					when archive_object.status = 'pending'
+						and coalesce(
+							archive_object."executionDisposition",
+							'deferred'
+						) <> 'executable' then 1
+					else 0
+				end asc,
 				archive_object."objectOrder" asc,
 				archive_object."objectKey" asc,
 				archive_object."archiveUrlIdentity" asc,
@@ -100,6 +111,7 @@ function historyArchiveObjectListSql(): string {
 				as "claimedByCommunityScannerId",
 			archive_object."errorType" as "errorType",
 			archive_object."errorMessage" as "errorMessage",
+			archive_object."failureChannel" as "failureChannel",
 			archive_object."httpStatus" as "httpStatus",
 			archive_object."verificationFacts" as "verificationFacts",
 			archive_object."verifiedAt" as "verifiedAt",
@@ -108,14 +120,25 @@ function historyArchiveObjectListSql(): string {
 			case
 				when archive_object.status = 'scanning'
 					then 'object-already-active'
+				when archive_object.status <> 'pending'
+					then null
+				when coalesce(
+					archive_object."executionDisposition",
+					'deferred'
+				) <> 'executable' then case
+					when archive_object."executionDisposition" is null
+						then 'legacy-deferred'
+					else 'planning-deferred'
+				end
 				when host_throttle."blockedUntil" is not null
 					then 'host-backoff'
-				when archive_object.status = 'failed'
-					and coalesce(
-						archive_object."nextAttemptAt",
-						archive_object."updatedAt" + interval '1 hour'
-					) > now()
+				when archive_object."nextAttemptAt" > now()
 					then 'retry-window'
+				when not coalesce(
+					${historyArchiveObjectDependencySatisfiedSql('archive_object')},
+					false
+				)
+					then 'missing-dependency'
 				when active_total.active_count >= $2
 					then 'global-active-cap'
 				when coalesce(active_archive.active_count, 0) >= $1
@@ -125,17 +148,16 @@ function historyArchiveObjectListSql(): string {
 				else null
 			end as "delayReasonCode",
 			case
+				when archive_object.status <> 'pending'
+					then null
+				when coalesce(
+					archive_object."executionDisposition",
+					'deferred'
+				) <> 'executable' then null
 				when host_throttle."blockedUntil" is not null
 					then host_throttle."blockedUntil"
-				when archive_object.status = 'failed'
-					and coalesce(
-						archive_object."nextAttemptAt",
-						archive_object."updatedAt" + interval '1 hour'
-					) > now()
-					then coalesce(
-						archive_object."nextAttemptAt",
-						archive_object."updatedAt" + interval '1 hour'
-					)
+				when archive_object."nextAttemptAt" > now()
+					then archive_object."nextAttemptAt"
 				else null
 			end as "delayReasonUntil"
 		from target_objects archive_object
@@ -149,11 +171,58 @@ function historyArchiveObjectListSql(): string {
 			on host_throttle."hostIdentity" = archive_object."hostIdentity"
 		order by
 			${statusRankSql('archive_object.status')} asc,
+			case
+				when archive_object.status = 'pending'
+					and coalesce(
+						archive_object."executionDisposition",
+						'deferred'
+					) <> 'executable' then 1
+				else 0
+			end asc,
 			archive_object."objectOrder" asc,
 			archive_object."objectKey" asc,
 			archive_object."archiveUrlIdentity" asc,
 			archive_object."updatedAt" desc
 		limit $5
+	`;
+}
+
+function deferredCandidateSql(): string {
+	return `
+		(
+			select deferred.*
+			from (
+				(
+					select archive_object.*
+					from history_archive_object_queue archive_object
+					where $4::text is null
+						and archive_object.status = 'pending'
+						and coalesce(
+							archive_object."executionDisposition",
+							'deferred'
+						) <> 'executable'
+					order by archive_object.id desc
+					limit $5
+				)
+				union all
+				(
+					select archive_object.*
+					from history_archive_object_queue archive_object
+					where $4::text is not null
+						and archive_object."archiveUrlIdentity" = $4::text
+						and archive_object.status = 'pending'
+						and coalesce(
+							archive_object."executionDisposition",
+							'deferred'
+						) <> 'executable'
+					order by
+						archive_object."objectType",
+						archive_object."objectKey"
+					limit $5
+				)
+			) deferred
+			limit $5
+		)
 	`;
 }
 
@@ -163,6 +232,7 @@ function statusCandidateSql(status: string): string {
 			select archive_object.*
 			from history_archive_object_queue archive_object
 			where archive_object.status = '${status}'
+				${status === 'pending' ? `and archive_object."executionDisposition" = 'executable'` : ''}
 				and (
 					$4::text is null
 					or archive_object."archiveUrlIdentity" = $4::text

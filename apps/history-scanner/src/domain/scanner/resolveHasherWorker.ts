@@ -16,15 +16,6 @@ export function resolveHasherWorker(moduleUrl: string): HasherWorkerResolution {
 		return { path: builtWorkerPath, options: {} };
 	}
 
-	const buildOutputWorkerPath = resolve(
-		directory,
-		'../../../lib/domain/scanner/hash-worker.js'
-	);
-
-	if (existsSync(buildOutputWorkerPath)) {
-		return { path: buildOutputWorkerPath, options: {} };
-	}
-
 	const sourceWorkerPath = resolve(directory, 'hash-worker.ts');
 
 	if (existsSync(sourceWorkerPath)) {
@@ -32,20 +23,13 @@ export function resolveHasherWorker(moduleUrl: string): HasherWorkerResolution {
 			path: sourceWorkerPath,
 			options: {
 				workerThreadOpts: {
-					execArgv: ['--import', createTsNodeEsmRegister()]
+					execArgv: ['--experimental-strip-types']
 				}
 			}
 		};
 	}
 
-	throw new Error(`History scanner worker not found at ${builtWorkerPath}`);
-}
-
-function createTsNodeEsmRegister(): string {
-	const source =
-		'import { register } from "node:module";' +
-		'import { pathToFileURL } from "node:url";' +
-		'register("ts-node/esm", pathToFileURL("./"));';
-
-	return `data:text/javascript,${encodeURIComponent(source)}`;
+	throw new Error(
+		`History scanner worker not found at ${builtWorkerPath} or ${sourceWorkerPath}`
+	);
 }

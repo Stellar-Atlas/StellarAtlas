@@ -17,6 +17,8 @@ import type {
 	ParsedTransactionResultRecord
 } from '../../domain/scanner/parsed-history/ParsedHistorySink.js';
 import { asyncSleep } from 'shared';
+import { ScannerIssueError } from '../../domain/scanner/ScannerIssueError.js';
+import { ParsedHistoryRegistrationConflictError } from './ParsedHistoryRegistrationConflictError.js';
 
 export class CoordinatorParsedHistorySink implements ParsedHistorySink {
 	private readonly headers: ParsedLedgerHeaderDTO[] = [];
@@ -65,7 +67,7 @@ export class CoordinatorParsedHistorySink implements ParsedHistorySink {
 			this.headers.splice(0, this.headers.length)
 		);
 		const result = await this.registerHeadersWithRetry(batch);
-		if (result !== null) this.exceptionLogger.captureException(result);
+		this.throwRegistrationFailure(result);
 	}
 
 	private async flushEnvelopes(): Promise<void> {
@@ -78,7 +80,7 @@ export class CoordinatorParsedHistorySink implements ParsedHistorySink {
 			this.envelopes.splice(0, this.envelopes.length)
 		);
 		const result = await this.registerEnvelopesWithRetry(batch);
-		if (result !== null) this.exceptionLogger.captureException(result);
+		this.throwRegistrationFailure(result);
 	}
 
 	private async flushResults(): Promise<void> {
@@ -91,20 +93,24 @@ export class CoordinatorParsedHistorySink implements ParsedHistorySink {
 			this.results.splice(0, this.results.length)
 		);
 		const result = await this.registerResultsWithRetry(batch);
-		if (result !== null) this.exceptionLogger.captureException(result);
+		this.throwRegistrationFailure(result);
 	}
 
 	private async appendHeader(record: ParsedLedgerHeaderDTO): Promise<void> {
-		if (this.shouldFlushBeforeAppend(this.headers, record, (records) =>
-			this.createHeaderBatch(records)
-		)) {
+		if (
+			this.shouldFlushBeforeAppend(this.headers, record, (records) =>
+				this.createHeaderBatch(records)
+			)
+		) {
 			await this.flushHeaders();
 		}
 
 		this.headers.push(record);
-		if (this.shouldFlushAfterAppend(this.headers, (records) =>
-			this.createHeaderBatch(records)
-		)) {
+		if (
+			this.shouldFlushAfterAppend(this.headers, (records) =>
+				this.createHeaderBatch(records)
+			)
+		) {
 			await this.flushHeaders();
 		}
 	}
@@ -112,31 +118,41 @@ export class CoordinatorParsedHistorySink implements ParsedHistorySink {
 	private async appendEnvelope(
 		record: ParsedTransactionEnvelopeDTO
 	): Promise<void> {
-		if (this.shouldFlushBeforeAppend(this.envelopes, record, (records) =>
-			this.createEnvelopeBatch(records)
-		)) {
+		if (
+			this.shouldFlushBeforeAppend(this.envelopes, record, (records) =>
+				this.createEnvelopeBatch(records)
+			)
+		) {
 			await this.flushEnvelopes();
 		}
 
 		this.envelopes.push(record);
-		if (this.shouldFlushAfterAppend(this.envelopes, (records) =>
-			this.createEnvelopeBatch(records)
-		)) {
+		if (
+			this.shouldFlushAfterAppend(this.envelopes, (records) =>
+				this.createEnvelopeBatch(records)
+			)
+		) {
 			await this.flushEnvelopes();
 		}
 	}
 
-	private async appendResult(record: ParsedTransactionResultDTO): Promise<void> {
-		if (this.shouldFlushBeforeAppend(this.results, record, (records) =>
-			this.createResultBatch(records)
-		)) {
+	private async appendResult(
+		record: ParsedTransactionResultDTO
+	): Promise<void> {
+		if (
+			this.shouldFlushBeforeAppend(this.results, record, (records) =>
+				this.createResultBatch(records)
+			)
+		) {
 			await this.flushResults();
 		}
 
 		this.results.push(record);
-		if (this.shouldFlushAfterAppend(this.results, (records) =>
-			this.createResultBatch(records)
-		)) {
+		if (
+			this.shouldFlushAfterAppend(this.results, (records) =>
+				this.createResultBatch(records)
+			)
+		) {
 			await this.flushResults();
 		}
 	}
@@ -232,6 +248,9 @@ export class CoordinatorParsedHistorySink implements ParsedHistorySink {
 			const result = await action();
 			if (result.isOk()) return null;
 			lastError = result.error;
+			if (lastError instanceof ParsedHistoryRegistrationConflictError) {
+				return lastError;
+			}
 
 			const delay = this.retryDelaysMs[attempt];
 			if (delay !== undefined) await asyncSleep(delay);
@@ -240,9 +259,17 @@ export class CoordinatorParsedHistorySink implements ParsedHistorySink {
 		return lastError;
 	}
 
+	private throwRegistrationFailure(error: Error | null): void {
+		if (error === null) return;
+		if (error instanceof ParsedHistoryRegistrationConflictError) throw error;
+		this.exceptionLogger.captureException(error);
+		throw new ScannerIssueError('Parsed history sink failed', { cause: error });
+	}
+
 	private toHeaderDTO(record: ParsedLedgerHeaderRecord): ParsedLedgerHeaderDTO {
 		return {
 			bucketListHash: record.bucketListHash,
+			closedAt: record.closedAt,
 			ledgerHeaderHash: record.ledgerHeaderHash,
 			ledgerSequence: record.ledger,
 			previousLedgerHeaderHash: record.previousLedgerHeaderHash,

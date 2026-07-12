@@ -9,6 +9,7 @@ import { RegisterParsedLedgerHeaders } from '../../use-cases/register-parsed-led
 import { RegisterParsedTransactionEnvelopes } from '../../use-cases/register-parsed-transaction-envelopes/RegisterParsedTransactionEnvelopes.js';
 import { RegisterParsedTransactionResults } from '../../use-cases/register-parsed-transaction-results/RegisterParsedTransactionResults.js';
 import { requireObjectBody } from './ScanRequestValidation.js';
+import { mapParsedHistoryRegistrationConflict } from './ParsedHistoryRegistrationConflictResponse.js';
 
 export interface ParsedHistoryRegistrationRouteConfig {
 	registerParsedLedgerHeaders: RegisterParsedLedgerHeaders;
@@ -43,7 +44,7 @@ export function registerParsedHistoryRegistrationRoutes(
 				dtoResult.value
 			);
 			if (result.isErr()) {
-				return res.status(500).json({ error: result.error.message });
+				return sendRegistrationError(res, result.error);
 			}
 
 			return res.status(201).json({
@@ -66,7 +67,7 @@ export function registerParsedHistoryRegistrationRoutes(
 				dtoResult.value
 			);
 			if (result.isErr()) {
-				return res.status(500).json({ error: result.error.message });
+				return sendRegistrationError(res, result.error);
 			}
 
 			return res.status(201).json({
@@ -89,7 +90,7 @@ export function registerParsedHistoryRegistrationRoutes(
 				dtoResult.value
 			);
 			if (result.isErr()) {
-				return res.status(500).json({ error: result.error.message });
+				return sendRegistrationError(res, result.error);
 			}
 
 			return res.status(201).json({
@@ -97,4 +98,14 @@ export function registerParsedHistoryRegistrationRoutes(
 			});
 		}
 	);
+}
+
+function sendRegistrationError(
+	res: express.Response,
+	error: Error
+): express.Response {
+	const conflict = mapParsedHistoryRegistrationConflict(error);
+	return conflict === null
+		? res.status(500).json({ error: error.message })
+		: res.status(409).json(conflict);
 }

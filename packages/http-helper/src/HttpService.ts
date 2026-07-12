@@ -35,6 +35,8 @@ export interface HttpOptions {
 	socketTimeoutMs?: number;
 	connectionTimeoutMs?: number; //if stream, this is time until stream is returned, if other, this is the time the whole operation can take
 	maxContentLength?: number;
+	maxRedirects?: number;
+	proxy?: false;
 	responseType?: 'arraybuffer' | 'json' | 'stream';
 	httpAgent?: http.Agent;
 	httpsAgent?: https.Agent;

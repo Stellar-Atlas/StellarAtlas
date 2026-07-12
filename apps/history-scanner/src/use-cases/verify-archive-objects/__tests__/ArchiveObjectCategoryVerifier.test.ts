@@ -7,7 +7,12 @@ import type { Logger } from 'logger';
 import type { HistoryArchiveObjectJobDTO } from '../../../domain/scan/ScanCoordinatorService.js';
 import type { ScanCoordinatorService } from '../../../domain/scan/ScanCoordinatorService.js';
 import { HistoryArchiveStateValidator } from '../../../domain/history-archive/HistoryArchiveStateValidator.js';
-import { ArchiveObjectCategoryVerifier } from '../ArchiveObjectCategoryVerifier.js';
+import { ArchiveXdrError } from '../../../domain/scanner/hash-worker.js';
+import { ScannerIssueError } from '../../../domain/scanner/ScannerIssueError.js';
+import {
+	ArchiveObjectCategoryVerifier,
+	classifyCategoryVerificationFailure
+} from '../ArchiveObjectCategoryVerifier.js';
 
 describe('ArchiveObjectCategoryVerifier', () => {
 	it('preserves HTTP status on category fetch failures', async () => {
@@ -37,6 +42,7 @@ describe('ArchiveObjectCategoryVerifier', () => {
 		if (result.isErr()) {
 			expect(result.error).toMatchObject({
 				errorType: 'archive_http_error',
+				failureChannel: 'archive_evidence',
 				httpStatus: 403
 			});
 		}
@@ -73,6 +79,11 @@ describe('ArchiveObjectCategoryVerifier', () => {
 		expect(result._unsafeUnwrap()).toMatchObject({
 			bytesDownloaded: expect.any(Number),
 			verificationFacts: {
+				content: {
+					algorithm: 'sha256',
+					digest: expect.stringMatching(/^[0-9a-f]{64}$/),
+					representation: 'canonical-json'
+				},
 				checkpointHistoryArchiveStateFact: {
 					bucketListHash: expect.any(String),
 					checkpointLedger: 127,
@@ -86,6 +97,29 @@ describe('ArchiveObjectCategoryVerifier', () => {
 				}
 			},
 			workerStage: 'verified'
+		});
+	});
+
+	it('classifies malformed remote XDR separately from worker failures', () => {
+		expect(
+			classifyCategoryVerificationFailure(
+				new ArchiveXdrError('Invalid ledger header archive XDR'),
+				200
+			)
+		).toMatchObject({
+			errorType: 'category_content_invalid',
+			failureChannel: 'archive_evidence',
+			httpStatus: 200
+		});
+		expect(
+			classifyCategoryVerificationFailure(
+				new ScannerIssueError('Worker pool terminated'),
+				200
+			)
+		).toMatchObject({
+			errorType: 'category_scanner_failure',
+			failureChannel: 'scanner_issue',
+			httpStatus: null
 		});
 	});
 });

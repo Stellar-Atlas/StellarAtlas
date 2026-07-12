@@ -105,7 +105,9 @@ describe('NodeTomlFetcher', () => {
 				[
 					'my-domain.com',
 					{
+						authoritative: true,
 						tomlObject: tomlV2Object,
+						tomlText: tomlV2String,
 						warnings: []
 					}
 				]
@@ -130,5 +132,28 @@ describe('NodeTomlFetcher', () => {
 			host: 'core-sg.domain.com:11625',
 			publicKey: 'GAENZLGHJGJRCMX5VCHOLHQXU3EMCU5XWDNU4BGGJFNLI2EL354IVBK7'
 		});
+	});
+
+	test('quarantines validator ownership and archive targets from TLS fallback', async () => {
+		const tomlService = mock<TomlService>();
+		tomlService.fetchTomlObjects.mockResolvedValue(
+			new Map([
+				[
+					'my-domain.com',
+					{
+						authoritative: false,
+						tomlObject: tomlV2Object,
+						tomlText: tomlV2String,
+						warnings: ['TlsCertificateVerificationDisabled'] as const
+					}
+				]
+			])
+		);
+
+		const collection = await new NodeTomlFetcher(
+			tomlService
+		).fetchNodeTomlInfoCollection(['my-domain.com']);
+
+		expect(collection.size).toBe(0);
 	});
 });

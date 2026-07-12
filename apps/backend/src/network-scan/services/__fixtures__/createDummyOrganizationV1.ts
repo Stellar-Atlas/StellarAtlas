@@ -26,6 +26,8 @@ export function createDummyOrganizationV1(): OrganizationV1 {
 		subQuorumAvailable: true,
 		tomlState: 'Unknown',
 		tomlWarnings: [],
+		tomlLatestAttempt: null,
+		tomlLatestFailure: null,
 		stellarToml: null
 	};
 }

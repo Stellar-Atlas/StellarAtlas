@@ -6,6 +6,7 @@ import type {
 	HistoryArchiveObjectEventsV1,
 	HistoryArchiveObjectQueueV1,
 	HistoryArchiveObjectSummaryV1,
+	HistoryArchiveStatusSummaryV1,
 	HistoryArchiveStateSnapshotV1
 } from 'shared';
 import { ArchiveScanRouterWrapper } from '../ArchiveScanRouter.js';
@@ -16,6 +17,7 @@ import { GetHistoryArchiveBucketCoverage } from '@history-scan-coordinator/use-c
 import { GetHistoryArchiveObjectEvents } from '@history-scan-coordinator/use-cases/get-history-archive-object-events/GetHistoryArchiveObjectEvents.js';
 import { GetHistoryArchiveObjects } from '@history-scan-coordinator/use-cases/get-history-archive-objects/GetHistoryArchiveObjects.js';
 import { GetHistoryArchiveObjectSummary } from '@history-scan-coordinator/use-cases/get-history-archive-object-summary/GetHistoryArchiveObjectSummary.js';
+import { GetHistoryArchiveObjectStatusSummary } from '@history-scan-coordinator/use-cases/get-history-archive-object-status-summary/GetHistoryArchiveObjectStatusSummary.js';
 import { GetHistoryArchiveRepairPlan } from '@history-scan-coordinator/use-cases/get-history-archive-repair-plan/GetHistoryArchiveRepairPlan.js';
 import { GetHistoryArchiveState } from '@history-scan-coordinator/use-cases/get-history-archive-state/GetHistoryArchiveState.js';
 import { GetLatestScan } from '@history-scan-coordinator/use-cases/get-latest-scan/GetLatestScan.js';
@@ -56,6 +58,28 @@ describe('ArchiveObjectSummaryRouter.integration', () => {
 		expect(getHistoryArchiveObjectSummary.execute).toHaveBeenCalledWith();
 	});
 
+	it('exposes a separate bounded status summary without object totals', async () => {
+		const { app, getHistoryArchiveObjectStatusSummary } = createHarness();
+		getHistoryArchiveObjectStatusSummary.execute.mockResolvedValue(
+			ok(createStatusSummary())
+		);
+
+		await request(app)
+			.get('/archive-scans/objects/status-summary')
+			.expect(200)
+			.expect('Cache-Control', 'public, max-age=10')
+			.expect((response) => {
+				expect(response.body).toMatchObject({
+					activeObjectChecks: 1,
+					sourceCount: 1,
+					sourceLimit: 256,
+					sourcesTruncated: false
+				});
+				expect(response.body).not.toHaveProperty('activeObjects');
+				expect(response.body).not.toHaveProperty('objectTypes');
+			});
+	});
+
 	it('should expose archive-scoped object coverage summary', async () => {
 		const { app, getHistoryArchiveObjectSummary } = createHarness();
 		getHistoryArchiveObjectSummary.execute.mockResolvedValue(
@@ -93,9 +117,14 @@ describe('ArchiveObjectSummaryRouter.integration', () => {
 		expect(getHistoryArchiveObjectSummary.execute).not.toHaveBeenCalled();
 	});
 
-	it('should compose scanner-owned object evidence for an archive root', async () => {
+	it('preserves the legacy V1 archive object evidence contract', async () => {
 		const harness = createHarness();
-		harness.getHistoryArchiveState.execute.mockResolvedValue(ok(createState()));
+		harness.getHistoryArchiveObjectEvents.execute.mockResolvedValue(
+			ok(createEvents())
+		);
+		harness.getHistoryArchiveObjects.execute.mockResolvedValue(
+			ok(createQueue())
+		);
 		harness.getHistoryArchiveObjectSummary.execute.mockResolvedValue(
 			ok(
 				createObjectSummary({
@@ -105,12 +134,7 @@ describe('ArchiveObjectSummaryRouter.integration', () => {
 				})
 			)
 		);
-		harness.getHistoryArchiveObjects.execute.mockResolvedValue(
-			ok(createQueue())
-		);
-		harness.getHistoryArchiveObjectEvents.execute.mockResolvedValue(
-			ok(createEvents())
-		);
+		harness.getHistoryArchiveState.execute.mockResolvedValue(ok(createState()));
 
 		await request(harness.app)
 			.get(
@@ -126,22 +150,44 @@ describe('ArchiveObjectSummaryRouter.integration', () => {
 					scannerOwnedState: { status: 'available' },
 					summary: { scope: 'archive' }
 				});
+				expect(response.body).not.toHaveProperty('eventPage');
+				expect(response.body).not.toHaveProperty('objectPage');
 			});
 
-		expect(harness.getHistoryArchiveState.execute).toHaveBeenCalledWith(
-			'https://history.example.com'
-		);
-		expect(harness.getHistoryArchiveObjectSummary.execute).toHaveBeenCalledWith(
-			{
-				url: 'https://history.example.com'
-			}
-		);
 		expect(harness.getHistoryArchiveObjects.execute).toHaveBeenCalledWith({
 			limit: 5,
 			url: 'https://history.example.com'
 		});
 		expect(harness.getHistoryArchiveObjectEvents.execute).toHaveBeenCalledWith({
 			limit: 7,
+			url: 'https://history.example.com'
+		});
+	});
+
+	it('preserves the legacy V1 5000-row limits', async () => {
+		const harness = createHarness();
+		harness.getHistoryArchiveObjectEvents.execute.mockResolvedValue(
+			ok(createEvents())
+		);
+		harness.getHistoryArchiveObjects.execute.mockResolvedValue(
+			ok(createQueue())
+		);
+		harness.getHistoryArchiveObjectSummary.execute.mockResolvedValue(
+			ok(createObjectSummary({ scope: 'archive' }))
+		);
+		harness.getHistoryArchiveState.execute.mockResolvedValue(ok(null));
+
+		await request(harness.app)
+			.get(
+				'/archive-scans/https%3A%2F%2Fhistory.example.com/object-evidence?objectLimit=5000&eventLimit=5000'
+			)
+			.expect(200);
+		expect(harness.getHistoryArchiveObjects.execute).toHaveBeenCalledWith({
+			limit: 5000,
+			url: 'https://history.example.com'
+		});
+		expect(harness.getHistoryArchiveObjectEvents.execute).toHaveBeenCalledWith({
+			limit: 5000,
 			url: 'https://history.example.com'
 		});
 	});
@@ -152,6 +198,8 @@ function createHarness() {
 	const getHistoryArchiveObjectEvents = mock<GetHistoryArchiveObjectEvents>();
 	const getHistoryArchiveObjects = mock<GetHistoryArchiveObjects>();
 	const getHistoryArchiveObjectSummary = mock<GetHistoryArchiveObjectSummary>();
+	const getHistoryArchiveObjectStatusSummary =
+		mock<GetHistoryArchiveObjectStatusSummary>();
 	const getHistoryArchiveState = mock<GetHistoryArchiveState>();
 	app.use(express.json());
 	app.use(
@@ -164,6 +212,7 @@ function createHarness() {
 			getHistoryArchiveObjectEvents,
 			getHistoryArchiveObjects,
 			getHistoryArchiveObjectSummary,
+			getHistoryArchiveObjectStatusSummary,
 			getHistoryArchiveRepairPlan: mock<GetHistoryArchiveRepairPlan>(),
 			getHistoryArchiveState,
 			getLatestScan: mock<GetLatestScan>(),
@@ -177,7 +226,65 @@ function createHarness() {
 		getHistoryArchiveObjectEvents,
 		getHistoryArchiveObjects,
 		getHistoryArchiveObjectSummary,
+		getHistoryArchiveObjectStatusSummary,
 		getHistoryArchiveState
+	};
+}
+
+function createStatusSummary(): HistoryArchiveStatusSummaryV1 {
+	return {
+		activeObjectChecks: 1,
+		archiveEvidenceFailures: 0,
+		checkpointCoverage: {
+			activeArchiveCheckpoints: 0,
+			archiveRootsWithState: 1,
+			categoryConsistencyFailedCheckpoints: 0,
+			categoryConsistencyNotEvaluatedCheckpoints: 0,
+			categoryConsistencyPendingCheckpoints: 1,
+			categoryConsistentArchiveCheckpoints: 3,
+			completeArchiveCheckpoints: 3,
+			discoveryCompleteArchiveRoots: 1,
+			expectedArchiveCheckpoints: 4,
+			failedArchiveCheckpoints: 0,
+			latestCheckpointLedger: 255,
+			missingArchiveCheckpoints: 0,
+			objectCompleteArchiveCheckpoints: 3,
+			oldestCheckpointLedger: 63,
+			partialArchiveCheckpoints: 1,
+			totalArchiveCheckpoints: 4
+		},
+		generatedAt: '2026-07-06T15:30:00.000Z',
+		sourceCount: 1,
+		sourceLimit: 256,
+		scannerIssueFailures: 0,
+		sources: [
+			{
+				activeObjectChecks: 1,
+				archiveEvidenceFailures: 0,
+				archiveUrl: 'https://history.example.com',
+				archiveUrlIdentity: 'https://history.example.com',
+				currentLedger: 255,
+				latestCheckpointLedger: 255,
+				latestDiscoveredCheckpointLedger: 255,
+				mismatchCheckpointProofs: 0,
+				notEvaluableCheckpointProofs: 0,
+				objectCompleteCheckpointProofs: 3,
+				observedAt: '2026-07-06T15:30:00.000Z',
+				pendingCheckpointProofs: 1,
+				rootObjectStatus: 'verified',
+				rootFailureChannel: null,
+				scannerIssueFailures: 0,
+				source: 'history-scanner',
+				stateStatus: 'available',
+				stateUrl:
+					'https://history.example.com/.well-known/stellar-history.json',
+				totalCheckpointProofs: 4,
+				unclassifiedFailures: 0,
+				verifiedCheckpointProofs: 3
+			}
+		],
+		sourcesTruncated: false,
+		unclassifiedFailures: 0
 	};
 }
 
@@ -186,6 +293,7 @@ function createState(): HistoryArchiveStateSnapshotV1 {
 		archiveUrl: 'https://history.example.com',
 		archiveUrlIdentity: 'https://history.example.com',
 		failure: null,
+		latestFailure: null,
 		metadata: null,
 		observedAt: '2026-07-06T15:30:00.000Z',
 		source: 'history-scanner',
@@ -340,7 +448,8 @@ function createObjectSummary(
 				rootObjectStatus: 'verified',
 				source: 'history-scanner',
 				stateStatus: 'available',
-				stateUrl: 'https://history.example.com/.well-known/stellar-history.json',
+				stateUrl:
+					'https://history.example.com/.well-known/stellar-history.json',
 				totalObjects: 10,
 				verifiedCheckpoints: 0,
 				verifiedObjects: 5

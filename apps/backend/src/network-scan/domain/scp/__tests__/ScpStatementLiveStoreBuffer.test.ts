@@ -18,6 +18,7 @@ describe('ScpStatementLiveStoreBuffer', () => {
 			await new Promise<void>((resolve) => {
 				finishSave = resolve;
 			});
+			return { status: 'accepted' };
 		});
 		const buffer = new ScpStatementLiveStoreBuffer(liveStore, logger, {
 			batchSize: 10,
@@ -39,7 +40,8 @@ function createObservation(): CrawlerScpStatementObservation {
 		nodeId: 'GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF',
 		observedAt: new Date('2026-07-03T00:00:11.250Z'),
 		observedFromAddress: '127.0.0.1:11625',
-		observedFromPeer: 'GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF',
+		observedFromPeer:
+			'GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF',
 		pledges: {} as CrawlerScpStatementObservation['pledges'],
 		signature: 'signature',
 		slotIndex: '11',

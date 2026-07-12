@@ -11,7 +11,7 @@ import type { ScpStatementObservation } from './scp-statement-observation.js';
 
 export type ScpStatementObservationListener = (
 	observation: ScpStatementObservation
-) => void;
+) => Promise<void> | void;
 
 export class Observation {
 	public state: ObservationState = ObservationState.Idle;
@@ -20,6 +20,8 @@ export class Observation {
 	public envelopeCache: LRUCache<string, number>;
 	public quorumSetState: QuorumSetState = new QuorumSetState();
 	public scpStatementObservations: ScpStatementObservation[] = [];
+	public scpStatementObservationCount = 0;
+	private scpStatementBackpressure: Promise<void> | null = null;
 
 	constructor(
 		public network: string,
@@ -78,7 +80,24 @@ export class Observation {
 	}
 
 	recordScpStatementObservation(observation: ScpStatementObservation): void {
-		this.scpStatementObservations.push(observation);
-		this.onScpStatementObservation?.(observation);
+		this.scpStatementObservationCount += 1;
+		if (this.onScpStatementObservation === undefined) {
+			this.scpStatementObservations.push(observation);
+			return;
+		}
+
+		try {
+			this.scpStatementBackpressure = Promise.resolve(
+				this.onScpStatementObservation(observation)
+			);
+		} catch (error) {
+			this.scpStatementBackpressure = Promise.reject(error);
+		}
+	}
+
+	takeScpStatementBackpressure(): Promise<void> | null {
+		const backpressure = this.scpStatementBackpressure;
+		this.scpStatementBackpressure = null;
+		return backpressure;
 	}
 }

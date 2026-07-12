@@ -1,11 +1,16 @@
 /// <reference types="jest" />
 
-import type { PublicHistoryArchiveObjectSummary } from '../../api/types';
+import type {
+	PublicHistoryArchiveObjectSummary,
+	PublicHistoryArchiveStatusSummary
+} from '../../api/types';
 import {
 	archiveHealthTone,
 	archiveHealthVocabulary,
 	assessArchiveHealth,
 	assessArchiveScannerHealth,
+	assessArchiveStatusHealth,
+	checkpointStatusProofIsComplete,
 	getArchiveFailureState
 } from '../history-archive-health';
 
@@ -167,6 +172,59 @@ describe('history archive health', () => {
 		);
 		expect(getArchiveFailureState(null)).toBe('unknown');
 	});
+
+	it('assesses the fast status contract without interpreting proofs as objects', () => {
+		const waiting = createStatusSummary({
+			activeObjectChecks: 20,
+			checkpointCoverage: {
+				categoryConsistencyPendingCheckpoints: 1,
+				categoryConsistentArchiveCheckpoints: 3,
+				expectedArchiveCheckpoints: 4,
+				totalArchiveCheckpoints: 4
+			}
+		});
+		const mismatch = createStatusSummary({
+			checkpointCoverage: {
+				categoryConsistencyFailedCheckpoints: 1,
+				expectedArchiveCheckpoints: 1,
+				totalArchiveCheckpoints: 1
+			}
+		});
+
+		expect(
+			assessArchiveStatusHealth({ evidenceAvailable: true, summary: waiting })
+				.state
+		).toBe('checking');
+		expect(
+			assessArchiveStatusHealth({ evidenceAvailable: true, summary: mismatch })
+				.state
+		).toBe('remote_failure');
+		expect(checkpointStatusProofIsComplete(waiting)).toBe(false);
+	});
+
+	it('keeps remote, scanner, and legacy failure channels distinct', () => {
+		const remoteAndScanner = createStatusSummary({
+			archiveEvidenceFailures: 1,
+			scannerIssueFailures: 2
+		});
+		const scanner = createStatusSummary({ scannerIssueFailures: 1 });
+		const legacy = createStatusSummary({ unclassifiedFailures: 1 });
+
+		expect(
+			assessArchiveStatusHealth({
+				evidenceAvailable: true,
+				summary: remoteAndScanner
+			}).state
+		).toBe('remote_failure');
+		expect(
+			assessArchiveStatusHealth({ evidenceAvailable: true, summary: scanner })
+				.state
+		).toBe('scanner_issue');
+		expect(
+			assessArchiveStatusHealth({ evidenceAvailable: true, summary: legacy })
+				.state
+		).toBe('unknown');
+	});
 });
 
 type SummaryOverrides = Omit<
@@ -245,5 +303,47 @@ function createHostThrottle(
 		hostIdentity: 'history.example.com',
 		httpStatus: null,
 		lastFailureAt: '2026-07-10T00:00:00.000Z'
+	};
+}
+
+function createStatusSummary(overrides: {
+	readonly activeObjectChecks?: number;
+	readonly archiveEvidenceFailures?: number;
+	readonly checkpointCoverage?: Partial<
+		PublicHistoryArchiveStatusSummary['checkpointCoverage']
+	>;
+	readonly scannerIssueFailures?: number;
+	readonly unclassifiedFailures?: number;
+}): PublicHistoryArchiveStatusSummary {
+	const checkpointCoverage = {
+		activeArchiveCheckpoints: 0,
+		archiveRootsWithState: 1,
+		categoryConsistencyFailedCheckpoints: 0,
+		categoryConsistencyNotEvaluatedCheckpoints: 0,
+		categoryConsistencyPendingCheckpoints: 0,
+		categoryConsistentArchiveCheckpoints: 0,
+		completeArchiveCheckpoints: 0,
+		discoveryCompleteArchiveRoots: 0,
+		expectedArchiveCheckpoints: 0,
+		failedArchiveCheckpoints: 0,
+		latestCheckpointLedger: null,
+		missingArchiveCheckpoints: 0,
+		objectCompleteArchiveCheckpoints: 0,
+		oldestCheckpointLedger: null,
+		partialArchiveCheckpoints: 0,
+		totalArchiveCheckpoints: 0,
+		...overrides.checkpointCoverage
+	};
+	return {
+		activeObjectChecks: overrides.activeObjectChecks ?? 0,
+		archiveEvidenceFailures: overrides.archiveEvidenceFailures ?? 0,
+		checkpointCoverage,
+		generatedAt: '2026-07-10T00:00:00.000Z',
+		sourceCount: 0,
+		sourceLimit: 256,
+		scannerIssueFailures: overrides.scannerIssueFailures ?? 0,
+		sources: [],
+		sourcesTruncated: false,
+		unclassifiedFailures: overrides.unclassifiedFailures ?? 0
 	};
 }

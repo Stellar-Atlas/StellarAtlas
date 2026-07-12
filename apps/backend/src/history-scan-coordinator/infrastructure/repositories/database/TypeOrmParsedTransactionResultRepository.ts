@@ -3,9 +3,15 @@ import type { ParsedTransactionResultBatchDTO } from 'history-scanner-dto';
 import type {
 	ParsedRecentTransactionDetails,
 	ParsedTransactionResultDetails,
+	ParsedTransactionResultObjectObservation,
 	ParsedTransactionResultRepository
 } from '../../../domain/parsed-history/ParsedTransactionResultRepository.js';
 import { ParsedTransactionResult } from '../../database/entities/ParsedTransactionResult.js';
+import {
+	toParsedLedgerSequence,
+	toParsedTransactionIndex
+} from '../../database/ParsedHistoryInteger.js';
+import { saveParsedTransactionResultBatch } from './ParsedTransactionBatchWrite.js';
 
 interface ParsedRecentTransactionRow {
 	readonly envelopeObservedAt: Date | string | null;
@@ -21,6 +27,14 @@ interface ParsedRecentTransactionRow {
 	readonly transactionIndex: number | string;
 	readonly transactionResultHash: string;
 	readonly transactionSetHash: string | null;
+}
+
+interface ParsedTransactionResultRow {
+	readonly ledgerSequence: number | string;
+	readonly resultXdr: string;
+	readonly transactionHash: string;
+	readonly transactionIndex: number | string;
+	readonly transactionResultHash: string;
 }
 
 export class TypeOrmParsedTransactionResultRepository implements ParsedTransactionResultRepository {
@@ -55,6 +69,29 @@ export class TypeOrmParsedTransactionResultRepository implements ParsedTransacti
 			transactionIndex: row.transactionIndex,
 			transactionResultHash: row.transactionResultHash
 		};
+	}
+
+	async findBySourceObjectRemoteId(
+		sourceObjectRemoteId: string
+	): Promise<ParsedTransactionResultObjectObservation[]> {
+		const rows = (await this.repository.query(
+			`
+				select result.*
+				from parsed_transaction_result_observation observation
+				join parsed_transaction_result result
+					on result.id = observation."parsedTransactionResultId"
+				where observation."sourceObjectRemoteId" = $1
+				order by result."ledgerSequence", result."transactionIndex"
+			`,
+			[sourceObjectRemoteId]
+		)) as ParsedTransactionResultRow[];
+		return rows.map((row) => ({
+			ledgerSequence: toParsedLedgerSequence(row.ledgerSequence),
+			resultXdr: row.resultXdr,
+			transactionHash: row.transactionHash,
+			transactionIndex: toParsedTransactionIndex(row.transactionIndex),
+			transactionResultHash: row.transactionResultHash
+		}));
 	}
 
 	async findRecentWithLedgerContext(
@@ -115,12 +152,12 @@ export class TypeOrmParsedTransactionResultRepository implements ParsedTransacti
 			headerObservedAt: toNullableDate(row.headerObservedAt),
 			headerSourceArchiveUrl: row.headerSourceArchiveUrl,
 			ledgerHeaderHash: row.ledgerHeaderHash,
-			ledgerSequence: toNumber(row.ledgerSequence),
-			protocolVersion: toNullableNumber(row.protocolVersion),
+			ledgerSequence: toParsedLedgerSequence(row.ledgerSequence),
+			protocolVersion: toNullableProtocolVersion(row.protocolVersion),
 			resultObservedAt: toDate(row.resultObservedAt),
 			resultSourceArchiveUrl: row.resultSourceArchiveUrl,
 			transactionHash: row.transactionHash,
-			transactionIndex: toNumber(row.transactionIndex),
+			transactionIndex: toParsedTransactionIndex(row.transactionIndex),
 			transactionResultHash: row.transactionResultHash,
 			transactionSetHash: row.transactionSetHash
 		}));
@@ -128,38 +165,21 @@ export class TypeOrmParsedTransactionResultRepository implements ParsedTransacti
 
 	async saveBatch(batch: ParsedTransactionResultBatchDTO): Promise<void> {
 		if (batch.records.length === 0) return;
-
-		const rows = batch.records.map(
-			(record) =>
-				new ParsedTransactionResult(
-					record,
-					batch.sourceArchiveUrl,
-					batch.scanJobRemoteId,
-					batch.observedAt
-				)
-		);
-
-		await this.repository
-			.createQueryBuilder()
-			.insert()
-			.into(ParsedTransactionResult)
-			.values(rows)
-			.orUpdate(
-				['lastSourceArchiveUrl', 'lastScanJobRemoteId', 'lastSeenAt'],
-				['ledgerSequence', 'transactionResultHash', 'transactionIndex'],
-				{ skipUpdateIfNoValuesChanged: true }
-			)
-			.execute();
+		await saveParsedTransactionResultBatch(this.repository.manager, batch);
 	}
 }
 
-function toNumber(value: number | string): number {
-	return typeof value === 'number' ? value : Number(value);
-}
-
-function toNullableNumber(value: number | string | null): number | null {
+function toNullableProtocolVersion(
+	value: number | string | null
+): number | null {
 	if (value === null) return null;
-	return toNumber(value);
+	const parsed = typeof value === 'number' ? value : Number(value);
+	if (!Number.isSafeInteger(parsed) || parsed < 0 || parsed > 0x7fff_ffff) {
+		throw new RangeError(
+			'protocolVersion is outside its supported integer range'
+		);
+	}
+	return parsed;
 }
 
 function toDate(value: Date | string): Date {

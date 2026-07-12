@@ -20,6 +20,7 @@ export interface CrawlResult {
 	latestClosedLedger: Ledger;
 	processedLedgers: number[];
 	peerNodes: Map<string, PeerNode>;
+	scpStatementObservationCount: number;
 	scpStatementObservations: ScpStatementObservation[];
 }
 
@@ -38,7 +39,7 @@ export class CrawlerService {
 		latestLedgerCloseTime: Date | null,
 		onScpStatementObservation?: (
 			observation: ScpStatementObservation
-		) => void
+		) => Promise<void> | void
 	): Promise<Result<CrawlResult, Error>> {
 		const nodeAddresses = NodeAddressDTOComposer.compose(
 			nodes,
@@ -49,6 +50,13 @@ export class CrawlerService {
 		if (nodeAddresses.length === 0) {
 			return err(new Error('Cannot crawl network without nodes'));
 		}
+		let streamedObservationCount = 0;
+		const observationListener = onScpStatementObservation
+			? (observation: ScpStatementObservation): Promise<void> | void => {
+					streamedObservationCount += 1;
+					return onScpStatementObservation(observation);
+				}
+			: undefined;
 
 		const crawlResultOrError = await this.tryCrawl(
 			networkQuorumSet,
@@ -56,21 +64,26 @@ export class CrawlerService {
 			nodeAddresses,
 			latestLedger,
 			latestLedgerCloseTime,
-			onScpStatementObservation
+			observationListener
 		);
 		if (crawlResultOrError.isErr()) return err(crawlResultOrError.error);
 
 		if (!CrawlerService.successFullyConnectedToAPeer(crawlResultOrError.value))
 			return err(new Error('Could not connect to a single node in crawl'));
 
+		const observations =
+			crawlResultOrError.value.scpStatementObservations ?? [];
 		return ok({
 			latestClosedLedger: crawlResultOrError.value.latestClosedLedger,
 			processedLedgers: crawlResultOrError.value.closedLedgers.map((sequence) =>
 				Number(sequence)
 			),
 			peerNodes: crawlResultOrError.value.peers,
-			scpStatementObservations:
-				crawlResultOrError.value.scpStatementObservations
+			scpStatementObservationCount:
+				onScpStatementObservation === undefined
+					? observations.length
+					: streamedObservationCount,
+			scpStatementObservations: observations
 		});
 	}
 
@@ -82,7 +95,7 @@ export class CrawlerService {
 		latestLedgerCloseTime: Date | null,
 		onScpStatementObservation?: (
 			observation: ScpStatementObservation
-		) => void
+		) => Promise<void> | void
 	): Promise<Result<CrawlResultDTO, Error>> {
 		try {
 			const topTierNodesQuorumSet =

@@ -55,7 +55,7 @@ export class OrganizationScanner {
 		organizationScan.calculateOrganizationAvailability(nodeScan);
 
 		const archiveOrganizations =
-			organizationScan.archiveOrganizationsWithNoActiveValidators(nodeScan);
+			organizationScan.archiveOrganizationsWithNoActiveValidators();
 		archiveOrganizations.forEach((organization) => {
 			this.logger.info('Archived organization', {
 				homeDomain: organization.homeDomain

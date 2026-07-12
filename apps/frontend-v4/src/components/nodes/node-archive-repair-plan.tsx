@@ -29,7 +29,7 @@ export function NodeArchiveRepairPlan({
 	}
 
 	return (
-		<div className="archive-repair-plan">
+		<div aria-label="Confirmed repair evidence" className="archive-repair-plan">
 			{hasActions ? <RepairActionTable repairPlan={repairPlan} /> : null}
 			{hasBlocks ? <InfrastructureBlockTable repairPlan={repairPlan} /> : null}
 		</div>
@@ -49,7 +49,7 @@ function RepairActionTable({
 						<th>Status</th>
 						<th>Repair action</th>
 						<th>Evidence</th>
-						<th>Known good source</th>
+						<th>Replacement readiness</th>
 					</tr>
 				</thead>
 				<tbody>
@@ -151,20 +151,29 @@ function formatSourceCandidates(
 	candidates: PublicHistoryArchiveRepairPlan['actions'][number]['knownGoodSources']
 ): React.JSX.Element {
 	if (candidates.length === 0) {
-		return <span className="muted-inline">No verified copy recorded yet</span>;
+		return (
+			<span className="muted-inline">
+				No proof-gated replacement download available
+			</span>
+		);
 	}
 
 	const first = candidates[0];
 	if (first === undefined) {
-		return <span className="muted-inline">No verified copy recorded yet</span>;
+		return (
+			<span className="muted-inline">
+				No proof-gated replacement download available
+			</span>
+		);
 	}
 
 	return (
 		<>
-			<strong>{formatArchiveSource(first.archiveUrl)}</strong>
+			<strong>
+				{formatInteger(candidates.length)} candidate source records
+			</strong>
 			<small>
-				{formatInteger(candidates.length)} verified source
-				{candidates.length === 1 ? '' : 's'}
+				Use the verified replacement evidence table below before downloading
 			</small>
 		</>
 	);
@@ -196,13 +205,4 @@ function formatSeverity(
 	if (severity === 'error') return 'repair';
 	if (severity === 'blocked') return 'blocked';
 	return 'waiting';
-}
-
-function formatArchiveSource(value: string): string {
-	try {
-		const url = new URL(value);
-		return url.host + (url.pathname === '/' ? '' : url.pathname);
-	} catch {
-		return value;
-	}
 }

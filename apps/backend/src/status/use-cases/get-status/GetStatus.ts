@@ -81,7 +81,6 @@ export class GetStatus {
 				dataFreshness.status,
 				scans.status,
 				rollups.status,
-				archiveQueue.status,
 				workers.status
 			]),
 			api,

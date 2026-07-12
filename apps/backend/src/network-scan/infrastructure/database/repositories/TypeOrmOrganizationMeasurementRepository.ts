@@ -4,6 +4,8 @@ import { injectable } from 'inversify';
 import type { OrganizationMeasurementRepository } from '@network-scan/domain/organization/OrganizationMeasurementRepository.js';
 import { OrganizationMeasurementAverage } from '@network-scan/domain/organization/OrganizationMeasurementAverage.js';
 import { OrganizationMeasurementEvent } from '@network-scan/domain/organization/OrganizationMeasurementEvent.js';
+import { saveOrganizationMeasurement } from './OrganizationTomlEvidencePersistence.js';
+import { findOrganizationTomlEvidenceAt } from './OrganizationTomlEvidenceRead.js';
 
 export interface OrganizationMeasurementAverageRecord {
 	organizationId: string;
@@ -25,7 +27,16 @@ export class TypeOrmOrganizationMeasurementRepository implements OrganizationMea
 	async save(
 		organizationMeasurements: OrganizationMeasurement[]
 	): Promise<void> {
-		await this.baseRepository.save(organizationMeasurements);
+		if (organizationMeasurements.length === 0) return;
+		await this.baseRepository.manager.transaction(async (entityManager) => {
+			for (const measurement of organizationMeasurements) {
+				await saveOrganizationMeasurement(
+					entityManager,
+					measurement.organization,
+					measurement
+				);
+			}
+		});
 	}
 
 	async findBetween(
@@ -80,6 +91,14 @@ export class TypeOrmOrganizationMeasurementRepository implements OrganizationMea
 
 		return result.map((record: OrganizationMeasurementAverageRecord) =>
 			organizationMeasurementAverageFromDatabaseRecord(record)
+		);
+	}
+
+	async findTomlEvidenceAt(organizationIds: string[], at: Date) {
+		return findOrganizationTomlEvidenceAt(
+			this.baseRepository.manager,
+			organizationIds,
+			at
 		);
 	}
 

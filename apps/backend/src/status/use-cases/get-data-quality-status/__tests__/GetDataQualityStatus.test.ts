@@ -136,11 +136,25 @@ function dataFreshness() {
 			ageMs: 300000,
 			staleAfterMs: 3600000
 		},
+		archiveEvidence: {
+			status: 'ok' as const,
+			latestAt: '2026-07-03T11:52:00.000Z',
+			ageMs: 480000,
+			staleAfterMs: 6 * 60 * 60 * 1000,
+			drivesPlatformStatus: false as const,
+			drivesRuntimeHealth: false as const,
+			source: 'archive_object_evidence' as const
+		},
 		archiveScan: {
 			status: 'ok' as const,
 			latestAt: '2026-07-03T11:50:00.000Z',
 			ageMs: 600000,
-			staleAfterMs: 6 * 60 * 60 * 1000
+			staleAfterMs: 6 * 60 * 60 * 1000,
+			deprecated: true as const,
+			drivesPlatformStatus: false as const,
+			drivesRuntimeHealth: false as const,
+			historical: true as const,
+			source: 'legacy_range_scan' as const
 		}
 	};
 }

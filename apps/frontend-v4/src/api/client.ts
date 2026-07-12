@@ -1,6 +1,8 @@
 import type {
 	PublicKnownNodes,
 	PublicKnownOrganizations,
+	PublicKnownNodesQuery,
+	PublicKnownOrganizationsQuery,
 	PublicApiStatus,
 	PublicConfiguredServiceStatus,
 	PublicDataQualityStatus,
@@ -32,6 +34,11 @@ import type {
 	PublicWorkerStatus
 } from './types';
 import { frontendCacheTags } from './cache-policy';
+import { parseWorkerStatusDTO } from './worker-status-parser';
+import {
+	buildKnownNodesPath,
+	buildKnownOrganizationsPath
+} from './known-network-query';
 import {
 	ApiClientError,
 	buildFetchInit,
@@ -122,10 +129,11 @@ export const fetchPublicNode = (
 	);
 
 export const fetchKnownNodes = (
+	query: PublicKnownNodesQuery = {},
 	options?: FetchOptions
 ): Promise<PublicKnownNodes> =>
 	fetchJson<PublicKnownNodes>(
-		'/v1/known/nodes',
+		buildKnownNodesPath(query),
 		withTags(options, [frontendCacheTags.network])
 	);
 
@@ -141,10 +149,11 @@ export const fetchPublicOrganizations = (
 	);
 
 export const fetchKnownOrganizations = (
+	query: PublicKnownOrganizationsQuery = {},
 	options?: FetchOptions
 ): Promise<PublicKnownOrganizations> =>
 	fetchJson<PublicKnownOrganizations>(
-		'/v1/known/organizations',
+		buildKnownOrganizationsPath(query),
 		withTags(options, [
 			frontendCacheTags.network,
 			frontendCacheTags.organizations
@@ -364,6 +373,21 @@ export const fetchScpStatements = async (
 	return response.json() as Promise<PublicScpStatementObservation[]>;
 };
 
+export const fetchScpEvidenceSlots = async (
+	limit = 12,
+	options?: FetchOptions
+) => {
+	const payload = await fetchJson<unknown>(
+		`/v1/scp/evidence/slots?limit=${encodeURIComponent(limit.toString())}`,
+		withTags(options, [frontendCacheTags.scpStatements])
+	);
+	const { parseScpSlotEvidenceList } = await import('./scp-evidence');
+	const parsed = parseScpSlotEvidenceList(payload);
+	if (parsed === null)
+		throw new Error('SCP evidence response failed validation');
+	return parsed;
+};
+
 export const fetchApiStatus = (
 	options?: FetchOptions
 ): Promise<PublicApiStatus> =>
@@ -388,13 +412,19 @@ export const fetchScanLogStatus = (
 		withTags(options, [frontendCacheTags.status])
 	);
 
-export const fetchWorkerStatus = (
+export const fetchWorkerStatus = async (
 	options?: FetchOptions
-): Promise<PublicWorkerStatus> =>
-	fetchJson<PublicWorkerStatus>(
+): Promise<PublicWorkerStatus> => {
+	const value = await fetchJson<unknown>(
 		'/v1/status/workers',
 		withTags(options, [frontendCacheTags.status])
 	);
+	const parsed = parseWorkerStatusDTO(value);
+	if (parsed === null) {
+		throw new ApiClientError({ message: 'Worker status response was invalid' });
+	}
+	return parsed;
+};
 
 export const fetchFrontendStatus = (
 	options?: FetchOptions

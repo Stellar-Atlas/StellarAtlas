@@ -8,23 +8,25 @@ import {
 import { getHistoryArchiveUrlIdentity } from '../../domain/ArchiveUrlIdentity.js';
 import type { HistoryArchiveCheckpointProofRepository } from '../../domain/history-archive-checkpoint-proof/HistoryArchiveCheckpointProofRepository.js';
 import { HistoryArchiveStateSnapshot } from '../../domain/history-archive-state/HistoryArchiveStateSnapshot.js';
-import type { HistoryArchiveObject } from '../../domain/history-archive-object/HistoryArchiveObject.js';
+import type {
+	HistoryArchiveObject,
+	HistoryArchiveObjectVerificationFacts
+} from '../../domain/history-archive-object/HistoryArchiveObject.js';
 import type { HistoryArchiveObjectProgressUpdate } from '../../domain/history-archive-object/HistoryArchiveObjectRepository.js';
 import type { HistoryArchiveObjectRepository } from '../../domain/history-archive-object/HistoryArchiveObjectRepository.js';
 import type { HistoryArchiveStateRepository } from '../../domain/history-archive-state/HistoryArchiveStateRepository.js';
 import {
 	buildCheckpointStateDiscoveryObjects,
 	buildCheckpointSiblingObjectsFromState,
-	buildHistoryArchiveObjectsFromState,
-	maxCheckpointDiscoveryPageSize
+	checkpointDiscoveryFrontierSize,
+	buildHistoryArchiveObjectsFromState
 } from '../../domain/history-archive-object/HistoryArchiveObjectBuilder.js';
 import { TYPES } from '../../infrastructure/di/di-types.js';
-import type { ExceptionLogger } from '@core/services/ExceptionLogger.js';
 import { mapUnknownToError } from '@core/utilities/mapUnknownToError.js';
 import { HistoryArchiveObjectEventRecorder } from '../record-history-archive-object-event/HistoryArchiveObjectEventRecorder.js';
 
 export interface CompleteHistoryArchiveObjectRequest extends HistoryArchiveObjectProgressUpdate {
-	readonly archiveMetadata?: ArchiveMetadataDTO;
+	readonly archiveMetadata?: ArchiveMetadataDTO | null;
 }
 
 @injectable()
@@ -36,9 +38,7 @@ export class CompleteHistoryArchiveObject {
 		private readonly stateRepository: HistoryArchiveStateRepository,
 		private readonly eventRecorder: HistoryArchiveObjectEventRecorder,
 		@inject(TYPES.HistoryArchiveCheckpointProofRepository)
-		private readonly checkpointProofRepository: HistoryArchiveCheckpointProofRepository,
-		@inject('ExceptionLogger')
-		private readonly exceptionLogger: ExceptionLogger
+		private readonly checkpointProofRepository: HistoryArchiveCheckpointProofRepository
 	) {}
 
 	async execute(
@@ -48,69 +48,115 @@ export class CompleteHistoryArchiveObject {
 		try {
 			const object = await this.objectRepository.findByRemoteId(remoteId);
 			if (object === null) return ok(false);
+			const progress = await this.prepareCompletionProgress(object, request);
 
+			const transitioned = await this.objectRepository.markObjectVerified(
+				remoteId,
+				progress
+			);
+			const verifiedObject =
+				await this.objectRepository.findByRemoteId(remoteId);
 			if (
-				object.objectType === 'history-archive-state' &&
-				request.archiveMetadata !== undefined
+				verifiedObject === null ||
+				(!transitioned &&
+					!isAcceptedCompletionReplay(verifiedObject, request.claimAttempt))
 			) {
-				await this.stateRepository.saveAvailable(
-					object.archiveUrl,
-					request.archiveMetadata,
-					'history-scanner'
-				);
-				await this.objectRepository.saveObjects(
-					await this.buildObjectsFromArchiveMetadata(
-						object.archiveUrl,
-						request.archiveMetadata
-					)
-				);
-			}
-			if (object.objectType === 'checkpoint-state') {
-				await this.objectRepository.saveObjects(
-					await this.buildObjectsFromCheckpointArchiveMetadata(
-						object,
-						request.verificationFacts
-					)
-				);
+				return ok(false);
 			}
 
-			const updated = await this.objectRepository.markObjectVerified(remoteId, {
-				bytesDownloaded: request.bytesDownloaded,
-				claimAttempt: request.claimAttempt,
-				verificationFacts: request.verificationFacts,
-				workerStage: request.workerStage
-			});
-			if (updated) {
-				const verifiedObject =
-					await this.objectRepository.findByRemoteId(remoteId);
-				if (verifiedObject !== null) {
-					await this.objectRepository.clearHostThrottle(
-						verifiedObject.hostIdentity
-					);
-					await this.eventRecorder.record(verifiedObject, {
-						claimAttempt: request.claimAttempt,
-						eventType: 'verified'
-					});
-					if (shouldRefreshCheckpointProof(verifiedObject)) {
-						await this.refreshCheckpointProof(verifiedObject);
-					}
-				}
-			}
+			await this.reconcilePersisted(verifiedObject);
 
-			return ok(updated);
+			return ok(true);
 		} catch (e) {
 			return err(mapUnknownToError(e));
 		}
 	}
 
-	private async refreshCheckpointProof(
+	async reconcilePersisted(object: HistoryArchiveObject): Promise<void> {
+		if (object.status !== 'verified') return;
+		if (object.transitionEffectsCompletedAt !== null) return;
+
+		let descendants: readonly HistoryArchiveObject[] = [];
+		if (
+			object.objectType === 'history-archive-state' &&
+			object.completionArchiveMetadata !== null
+		) {
+			await this.stateRepository.saveAvailable(
+				object.archiveUrl,
+				object.completionArchiveMetadata,
+				'history-scanner'
+			);
+			descendants = await this.buildObjectsFromArchiveMetadata(
+				object.archiveUrl,
+				object.completionArchiveMetadata
+			);
+		}
+		if (object.objectType === 'checkpoint-state') {
+			await this.objectRepository.materializeCheckpointDependencies(
+				object.remoteId
+			);
+			descendants = await this.buildObjectsFromCheckpointArchiveMetadata(
+				object,
+				object.verificationFacts
+			);
+		}
+		if (descendants.length > 0) {
+			await this.objectRepository.planObjects(descendants);
+		}
+		await this.objectRepository.promotePlannedObjects();
+		if (shouldRefreshCheckpointProof(object)) {
+			await this.checkpointProofRepository.refreshForObject(object);
+		}
+		await this.eventRecorder.recordDurably(object, {
+			claimAttempt: object.attempts,
+			eventType: 'verified'
+		});
+		await this.objectRepository.markTransitionEffectsCompleted(
+			object.remoteId,
+			object.attempts,
+			'verified'
+		);
+	}
+
+	async reconcileCheckpointDependencies(
 		object: HistoryArchiveObject
 	): Promise<void> {
-		try {
-			await this.checkpointProofRepository.refreshForObject(object);
-		} catch (e) {
-			this.exceptionLogger.captureException(mapUnknownToError(e));
+		if (
+			object.objectType !== 'checkpoint-state' ||
+			object.status !== 'verified'
+		) {
+			return;
 		}
+		if (object.dependenciesMaterializedAt === null) {
+			await this.objectRepository.materializeCheckpointDependencies(
+				object.remoteId
+			);
+		}
+		await this.checkpointProofRepository.refreshForObject(object);
+	}
+
+	private async prepareCompletionProgress(
+		object: HistoryArchiveObject,
+		request: CompleteHistoryArchiveObjectRequest
+	): Promise<HistoryArchiveObjectProgressUpdate> {
+		if (object.objectType !== 'checkpoint-state') return request;
+		const archiveMetadata = getCheckpointHistoryArchiveStateMetadata(
+			request.verificationFacts
+		);
+		if (archiveMetadata === null) return request;
+		const enrichedMetadata = await this.addRootNetworkPassphraseIfMissing(
+			object.archiveUrl,
+			archiveMetadata
+		);
+
+		return {
+			...request,
+			archiveMetadata: enrichedMetadata,
+			verificationFacts: enrichCheckpointFacts(
+				request.verificationFacts,
+				enrichedMetadata
+			)
+		};
 	}
 
 	private async buildObjectsFromArchiveMetadata(
@@ -137,7 +183,7 @@ export class CompleteHistoryArchiveObject {
 			oldestScheduledCheckpointLedger === undefined
 				? []
 				: buildCheckpointStateDiscoveryObjects(snapshot, {
-						maxObjects: maxCheckpointDiscoveryPageSize,
+						maxObjects: checkpointDiscoveryFrontierSize,
 						oldestScheduledCheckpointLedger
 					});
 
@@ -175,7 +221,7 @@ export class CompleteHistoryArchiveObject {
 		return [
 			...siblingObjects,
 			...buildCheckpointStateDiscoveryObjects(snapshot, {
-				maxObjects: maxCheckpointDiscoveryPageSize,
+				maxObjects: checkpointDiscoveryFrontierSize,
 				oldestScheduledCheckpointLedger: object.checkpointLedger
 			})
 		];
@@ -209,10 +255,33 @@ function getCheckpointHistoryArchiveStateMetadata(
 	return isArchiveMetadataDTO(value) ? value : null;
 }
 
+function enrichCheckpointFacts(
+	facts: HistoryArchiveObjectVerificationFacts | null | undefined,
+	archiveMetadata: ArchiveMetadataDTO
+): HistoryArchiveObjectVerificationFacts {
+	const networkPassphrase = archiveMetadata.stellarHistory.networkPassphrase;
+	const checkpointFact = facts?.checkpointHistoryArchiveStateFact;
+	return {
+		...facts,
+		checkpointHistoryArchiveState: archiveMetadata,
+		checkpointHistoryArchiveStateFact:
+			checkpointFact === undefined || !networkPassphrase
+				? checkpointFact
+				: { ...checkpointFact, networkPassphrase }
+	};
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
 	return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
 function shouldRefreshCheckpointProof(object: HistoryArchiveObject): boolean {
 	return object.checkpointLedger !== null || object.bucketHash !== null;
+}
+
+function isAcceptedCompletionReplay(
+	object: HistoryArchiveObject,
+	claimAttempt: number
+): boolean {
+	return object.status === 'verified' && object.attempts === claimAttempt;
 }

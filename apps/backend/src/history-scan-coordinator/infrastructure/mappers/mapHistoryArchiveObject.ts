@@ -4,7 +4,12 @@ import type {
 	HistoryArchiveObjectV1
 } from 'shared';
 import type { HistoryArchiveObjectQueueSnapshot } from '@history-scan-coordinator/domain/history-archive-object/HistoryArchiveObjectRepository.js';
-import { sanitizePublicInfrastructureText } from './PublicScanErrorMapper.js';
+import {
+	mapPublicArchiveError,
+	mapPublicArchiveUrl,
+	mapPublicVerificationFacts,
+	mapPublicWorkerStage
+} from './PublicArchiveObjectFactsMapper.js';
 
 export function mapHistoryArchiveObjectQueue(
 	snapshot: HistoryArchiveObjectQueueSnapshot,
@@ -20,37 +25,30 @@ export function mapHistoryArchiveObjectQueue(
 	};
 }
 
-function mapHistoryArchiveObject(
+export function mapHistoryArchiveObject(
 	object: HistoryArchiveObject
 ): HistoryArchiveObjectV1 {
 	return {
-		archiveUrl: object.archiveUrl,
-		archiveUrlIdentity: object.archiveUrlIdentity,
+		archiveUrl: mapPublicArchiveUrl(object.archiveUrl),
+		archiveUrlIdentity: mapPublicArchiveUrl(object.archiveUrlIdentity),
 		attempts: object.attempts,
 		bucketHash: object.bucketHash,
 		bytesDownloaded: toPublicNumber(object.bytesDownloaded),
 		checkpointLedger: object.checkpointLedger,
 		claimedAt: object.claimedAt?.toISOString() ?? null,
 		delayReason: object.delayReason,
-		error:
-			object.errorMessage === null
-				? null
-				: {
-						httpStatus: object.httpStatus,
-						message: sanitizePublicInfrastructureText(object.errorMessage),
-						type: object.errorType ?? 'error'
-					},
+		error: mapPublicArchiveError(object),
 		objectKey: object.objectKey,
 		objectType: object.objectType,
-		objectUrl: object.objectUrl,
+		objectUrl: mapPublicArchiveUrl(object.objectUrl),
 		remoteId: object.remoteId,
 		nextAttemptAt: object.nextAttemptAt?.toISOString() ?? null,
 		refreshAfter: object.refreshAfter?.toISOString() ?? null,
 		status: object.status,
 		updatedAt: requireDate(object.updatedAt).toISOString(),
-		verificationFacts: toPublicVerificationFacts(object.verificationFacts),
+		verificationFacts: mapPublicVerificationFacts(object.verificationFacts),
 		verifiedAt: object.verifiedAt?.toISOString() ?? null,
-		workerStage: object.workerStage
+		workerStage: mapPublicWorkerStage(object.workerStage)
 	};
 }
 
@@ -65,12 +63,4 @@ function toPublicNumber(value: number | string | null): number | null {
 
 	const parsed = Number(value);
 	return Number.isSafeInteger(parsed) && parsed >= 0 ? parsed : null;
-}
-
-function toPublicVerificationFacts(
-	value: object | null
-): Readonly<Record<string, unknown>> | null {
-	if (value === null || Array.isArray(value)) return null;
-
-	return value as Readonly<Record<string, unknown>>;
 }

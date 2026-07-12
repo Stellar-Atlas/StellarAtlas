@@ -1,4 +1,7 @@
-import { normalizeHistoryArchiveRootUrl } from 'shared';
+import {
+	appendHistoryArchiveRootPath,
+	normalizeHistoryArchiveRootUrl
+} from 'shared';
 import type { HistoryStateBucketDTO } from 'history-scanner-dto';
 import type { HistoryArchiveStateSnapshot } from '../history-archive-state/HistoryArchiveStateSnapshot.js';
 import { HistoryArchiveObject } from './HistoryArchiveObject.js';
@@ -6,13 +9,12 @@ import type {
 	HistoryArchiveObjectStatus,
 	HistoryArchiveObjectType
 } from './HistoryArchiveObject.js';
+import { isHistoryArchiveScpObjectExpected } from './HistoryArchiveObjectScpPolicy.js';
 
 const checkpointFrequency = 64;
 const defaultCheckpointDiscoveryPageSize = 1;
 export const maxCheckpointDiscoveryPageSize = 256;
-const publicNetworkPassphrase =
-	'Public Global Stellar Network ; September 2015';
-const firstPublicNetworkScpCheckpoint = 0x0012867f;
+export const checkpointDiscoveryFrontierSize = 1;
 const zeroHashPattern = /^0+$/;
 const bucketHashPattern = /^[0-9a-f]{64}$/i;
 
@@ -54,7 +56,8 @@ export function buildHistoryArchiveObjectsFromState(
 				snapshot,
 				archiveUrl,
 				checkpointLedger,
-				'checkpoint-state'
+				'checkpoint-state',
+				options.rootStatus === 'verified'
 			)
 		);
 	}
@@ -81,18 +84,42 @@ export function buildCheckpointSiblingObjectsFromState(
 	}
 
 	const objects: HistoryArchiveObject[] = [
-		createCheckpointObject(snapshot, archiveUrl, checkpointLedger, 'ledger'),
 		createCheckpointObject(
 			snapshot,
 			archiveUrl,
 			checkpointLedger,
-			'transactions'
+			'ledger',
+			true
 		),
-		createCheckpointObject(snapshot, archiveUrl, checkpointLedger, 'results')
+		createCheckpointObject(
+			snapshot,
+			archiveUrl,
+			checkpointLedger,
+			'transactions',
+			true
+		),
+		createCheckpointObject(
+			snapshot,
+			archiveUrl,
+			checkpointLedger,
+			'results',
+			true
+		)
 	];
-	if (isScpArchiveObjectExpected(snapshot, checkpointLedger)) {
+	if (
+		isHistoryArchiveScpObjectExpected({
+			checkpointLedger,
+			networkPassphrase: snapshot.rawState.networkPassphrase
+		})
+	) {
 		objects.push(
-			createCheckpointObject(snapshot, archiveUrl, checkpointLedger, 'scp')
+			createCheckpointObject(
+				snapshot,
+				archiveUrl,
+				checkpointLedger,
+				'scp',
+				true
+			)
 		);
 	}
 
@@ -145,7 +172,8 @@ export function buildCheckpointStateDiscoveryObjects(
 				snapshot,
 				archiveUrl,
 				checkpointLedger,
-				'checkpoint-state'
+				'checkpoint-state',
+				true
 			)
 		);
 	}
@@ -161,11 +189,15 @@ export function buildRootHistoryArchiveObject(
 
 	return new HistoryArchiveObject({
 		archiveUrl: normalizedArchiveUrl,
-		archiveUrlIdentity: normalizedArchiveUrl.toLowerCase(),
+		archiveUrlIdentity: normalizedArchiveUrl,
+		dependencyReady: true,
 		objectKey: 'root',
 		objectOrder: objectOrderByType['history-archive-state'],
 		objectType: 'history-archive-state',
-		objectUrl: `${normalizedArchiveUrl}/.well-known/stellar-history.json`
+		objectUrl: appendObjectPath(
+			normalizedArchiveUrl,
+			'.well-known/stellar-history.json'
+		)
 	});
 }
 
@@ -176,7 +208,8 @@ function createCheckpointObject(
 	objectType: Exclude<
 		HistoryArchiveObjectType,
 		'history-archive-state' | 'bucket'
-	>
+	>,
+	dependencyReady: boolean
 ): HistoryArchiveObject {
 	const category = objectType === 'checkpoint-state' ? 'history' : objectType;
 	const extension = objectType === 'checkpoint-state' ? 'json' : 'xdr.gz';
@@ -186,10 +219,14 @@ function createCheckpointObject(
 		archiveUrl,
 		archiveUrlIdentity: snapshot.archiveUrlIdentity,
 		checkpointLedger,
+		dependencyReady,
 		objectKey: `${objectType}:${checkpointHex}`,
 		objectOrder: objectOrderByType[objectType],
 		objectType,
-		objectUrl: `${archiveUrl}/${category}/${checkpointHex.slice(0, 2)}/${checkpointHex.slice(2, 4)}/${checkpointHex.slice(4, 6)}/${category}-${checkpointHex}.${extension}`
+		objectUrl: appendObjectPath(
+			archiveUrl,
+			`${category}/${checkpointHex.slice(0, 2)}/${checkpointHex.slice(2, 4)}/${checkpointHex.slice(4, 6)}/${category}-${checkpointHex}.${extension}`
+		)
 	});
 }
 
@@ -204,11 +241,21 @@ function createBucketObject(
 		archiveUrl,
 		archiveUrlIdentity: snapshot.archiveUrlIdentity,
 		bucketHash: normalizedHash,
+		dependencyReady: true,
 		objectKey: `bucket:${normalizedHash}`,
 		objectOrder: objectOrderByType.bucket,
 		objectType: 'bucket',
-		objectUrl: `${archiveUrl}/bucket/${normalizedHash.slice(0, 2)}/${normalizedHash.slice(2, 4)}/${normalizedHash.slice(4, 6)}/bucket-${normalizedHash}.xdr.gz`
+		objectUrl: appendObjectPath(
+			archiveUrl,
+			`bucket/${normalizedHash.slice(0, 2)}/${normalizedHash.slice(2, 4)}/${normalizedHash.slice(4, 6)}/bucket-${normalizedHash}.xdr.gz`
+		)
 	});
+}
+
+function appendObjectPath(archiveUrl: string, path: string): string {
+	const objectUrl = appendHistoryArchiveRootPath(archiveUrl, path);
+	if (objectUrl === null) throw new Error('Invalid history archive object URL');
+	return objectUrl;
 }
 
 function getCheckpointLedger(currentLedger: number): number | null {
@@ -236,19 +283,6 @@ function getBucketHashes(
 		.filter(
 			(hash) => bucketHashPattern.test(hash) && !zeroHashPattern.test(hash)
 		);
-}
-
-function isScpArchiveObjectExpected(
-	snapshot: HistoryArchiveStateSnapshot,
-	checkpointLedger: number
-): boolean {
-	if (checkpointLedger >= firstPublicNetworkScpCheckpoint) return true;
-
-	const networkPassphrase = snapshot.rawState?.networkPassphrase ?? null;
-	if (networkPassphrase === null || networkPassphrase === undefined)
-		return false;
-
-	return networkPassphrase !== publicNetworkPassphrase;
 }
 
 function toCheckpointHex(checkpointLedger: number): string {

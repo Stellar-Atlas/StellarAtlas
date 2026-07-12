@@ -50,6 +50,39 @@ describe('ParsedTransactionEnvelopeBatchDTO', () => {
 	])('should reject invalid envelope batches %#', (json) => {
 		expect(ParsedTransactionEnvelopeBatchDTO.fromJSON(json).isErr()).toBe(true);
 	});
+
+	it('should bound envelope input while deferring duplicate classification', () => {
+		const record = {
+			envelopeXdr: 'AAAA-envelope',
+			ledgerSequence: 1,
+			transactionIndex: 0,
+			transactionSetHash: 'set-hash'
+		};
+		const base = {
+			observedAt: '2026-07-07T19:30:00.000Z',
+			scanJobRemoteId: 'job-1',
+			sourceArchiveUrl: 'https://history.example'
+		};
+
+		expect(
+			ParsedTransactionEnvelopeBatchDTO.fromJSON({
+				...base,
+				records: [record, { ...record }]
+			}).isErr()
+		).toBe(false);
+		expect(
+			ParsedTransactionEnvelopeBatchDTO.fromJSON({
+				...base,
+				records: Array.from({ length: 1_001 }, () => record)
+			}).isErr()
+		).toBe(true);
+		expect(
+			ParsedTransactionEnvelopeBatchDTO.fromJSON({
+				...base,
+				records: [{ ...record, ledgerSequence: 0x1_0000_0000 }]
+			}).isErr()
+		).toBe(true);
+	});
 });
 
 describe('ParsedTransactionResultBatchDTO', () => {
@@ -98,5 +131,33 @@ describe('ParsedTransactionResultBatchDTO', () => {
 		}
 	])('should reject invalid result batches %#', (json) => {
 		expect(ParsedTransactionResultBatchDTO.fromJSON(json).isErr()).toBe(true);
+	});
+
+	it('should defer duplicate result classification and reject unsafe indexes', () => {
+		const record = {
+			ledgerSequence: 1,
+			resultXdr: 'AAAA-result',
+			transactionHash: 'transaction-hash',
+			transactionIndex: 1,
+			transactionResultHash: 'result-hash'
+		};
+		const base = {
+			observedAt: '2026-07-07T19:30:00.000Z',
+			scanJobRemoteId: 'job-1',
+			sourceArchiveUrl: 'https://history.example'
+		};
+
+		expect(
+			ParsedTransactionResultBatchDTO.fromJSON({
+				...base,
+				records: [record, { ...record, resultXdr: 'different' }]
+			}).isErr()
+		).toBe(false);
+		expect(
+			ParsedTransactionResultBatchDTO.fromJSON({
+				...base,
+				records: [{ ...record, transactionIndex: Number.MAX_SAFE_INTEGER }]
+			}).isErr()
+		).toBe(true);
 	});
 });

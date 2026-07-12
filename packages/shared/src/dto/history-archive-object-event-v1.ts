@@ -1,6 +1,10 @@
 import { JSONSchemaType } from 'ajv';
 import { nullable } from './helper/nullable.js';
-import type { HistoryArchiveObjectTypeV1 } from './history-archive-object-v1.js';
+import {
+	HistoryArchivePublicVerificationFactsV1Schema,
+	type HistoryArchiveObjectTypeV1
+} from './history-archive-object-v1.js';
+import type { HistoryArchivePublicVerificationFactsV1 } from './history-archive-object-verification-facts-v1.js';
 
 export type HistoryArchiveObjectEventTypeV1 =
 	'claimed' | 'heartbeat' | 'verified' | 'failed' | 'released';
@@ -29,7 +33,7 @@ export interface HistoryArchiveObjectEventV1 {
 	readonly objectType: HistoryArchiveObjectTypeV1;
 	readonly objectUrl: string;
 	readonly remoteId: string;
-	readonly verificationFacts: Readonly<Record<string, unknown>> | null;
+	readonly verificationFacts: HistoryArchivePublicVerificationFactsV1 | null;
 	readonly workerStage: string | null;
 }
 
@@ -53,7 +57,7 @@ const HistoryArchiveObjectEventErrorV1Schema: JSONSchemaType<
 	additionalProperties: false
 };
 
-const HistoryArchiveObjectEventV1Schema: JSONSchemaType<HistoryArchiveObjectEventV1> =
+export const HistoryArchiveObjectEventV1Schema: JSONSchemaType<HistoryArchiveObjectEventV1> =
 	{
 		type: 'object',
 		properties: {
@@ -94,11 +98,9 @@ const HistoryArchiveObjectEventV1Schema: JSONSchemaType<HistoryArchiveObjectEven
 			},
 			objectUrl: { type: 'string' },
 			remoteId: { type: 'string' },
-			verificationFacts: nullable({
-				type: 'object',
-				additionalProperties: true,
-				required: []
-			}),
+			verificationFacts: nullable(
+				HistoryArchivePublicVerificationFactsV1Schema
+			),
 			workerStage: nullable({ type: 'string' })
 		},
 		required: [

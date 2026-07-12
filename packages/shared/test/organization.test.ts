@@ -11,7 +11,28 @@ describe('json', () => {
 	organization.tomlWarnings = ['TlsCertificateVerificationDisabled'];
 	organization.stellarToml = {
 		url: 'https://homeDomain.com/.well-known/stellar.toml',
-		content: 'VERSION="2.0.0"'
+		content: 'VERSION="2.0.0"',
+		observedAt: '2026-07-10T10:00:00.000Z',
+		warnings: ['TlsCertificateVerificationDisabled']
+	};
+	organization.tomlLatestAttempt = {
+		observedAt: '2026-07-10T11:00:00.000Z',
+		result: 'failure',
+		state: 'ParsingError',
+		warnings: []
+	};
+	organization.tomlLatestFailure = {
+		observedAt: '2026-07-10T11:00:00.000Z',
+		result: 'failure',
+		state: 'ParsingError',
+		warnings: []
+	};
+	organization.tomlLatestInsecureAttempt = {
+		authoritative: false,
+		observedAt: '2026-07-10T09:00:00.000Z',
+		result: 'success',
+		state: 'Ok',
+		warnings: ['TlsCertificateVerificationDisabled']
 	};
 	organization.url = 'https://www.domain.com';
 	organization.logo = 'https://www.domain.com/awesomelogo.jpg';
@@ -57,9 +78,15 @@ describe('json', () => {
 	organizationObject.dateDiscovered = dateDiscovered.toISOString();
 	organizationObject.tomlState = 'Unknown';
 	organizationObject.tomlWarnings = ['TlsCertificateVerificationDisabled'];
+	organizationObject.tomlLatestAttempt = organization.tomlLatestAttempt;
+	organizationObject.tomlLatestFailure = organization.tomlLatestFailure;
+	organizationObject.tomlLatestInsecureAttempt =
+		organization.tomlLatestInsecureAttempt;
 	organizationObject.stellarToml = {
 		url: 'https://homeDomain.com/.well-known/stellar.toml',
-		content: 'VERSION="2.0.0"'
+		content: 'VERSION="2.0.0"',
+		observedAt: '2026-07-10T10:00:00.000Z',
+		warnings: ['TlsCertificateVerificationDisabled']
 	};
 
 	test('OrgToJson', () => {

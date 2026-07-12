@@ -67,6 +67,8 @@ export class AxiosHttpService implements HttpService {
 			auth: auth,
 			responseType: responseType,
 			maxContentLength: maxContentLength,
+			maxRedirects: httpOptions.maxRedirects,
+			proxy: httpOptions.proxy,
 			httpsAgent: httpOptions.httpsAgent,
 			httpAgent: httpOptions.httpAgent,
 			signal: httpOptions.abortSignal

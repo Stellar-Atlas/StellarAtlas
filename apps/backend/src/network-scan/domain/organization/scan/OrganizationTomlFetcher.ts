@@ -12,6 +12,7 @@ import { ErrorToTomlStateMapper } from './ErrorToTomlStateMapper.js';
 import { TomlVersionChecker } from '../../network/scan/TomlVersionChecker.js';
 import type { Logger } from 'logger';
 import { HttpError } from 'http-helper';
+import { StrKey } from '@stellar/stellar-sdk';
 
 type homeDomain = string;
 
@@ -41,10 +42,10 @@ export class OrganizationTomlFetcher {
 	private extractOrganizationTomlInfo(
 		tomlOrError: TomlFetchSuccess | TomlFetchError
 	): OrganizationTomlInfo {
-		const tomlOrganizationInfo: OrganizationTomlInfo = {
+		const emptyOrganizationInfo = {
+			authoritative: false,
 			state: TomlState.Unknown,
 			warnings: [],
-			stellarTomlText: null,
 			horizonUrl: null,
 			dba: null,
 			url: null,
@@ -56,12 +57,18 @@ export class OrganizationTomlFetcher {
 			github: null,
 			officialEmail: null,
 			name: null,
-			validators: []
+			validators: [],
+			validatorSetValid: false
 		};
 
 		if (tomlOrError instanceof TomlFetchError) {
-			tomlOrganizationInfo.stellarTomlText = tomlOrError.tomlText;
-			tomlOrganizationInfo.warnings = tomlOrError.warnings;
+			const tomlOrganizationInfo: OrganizationTomlInfo = {
+				...emptyOrganizationInfo,
+				authoritative: false,
+				fetchResult: 'failure',
+				stellarTomlText: tomlOrError.tomlText,
+				warnings: tomlOrError.warnings
+			};
 			//todo: change to debug when stable
 			if (tomlOrError.cause instanceof HttpError) {
 				this.logger.info('Mapping http error to toml state', {
@@ -77,13 +84,20 @@ export class OrganizationTomlFetcher {
 			return tomlOrganizationInfo;
 		}
 
-		tomlOrganizationInfo.warnings = tomlOrError.warnings;
-		tomlOrganizationInfo.stellarTomlText = tomlOrError.tomlText;
+		const tomlOrganizationInfo: OrganizationTomlInfo = {
+			...emptyOrganizationInfo,
+			authoritative:
+				tomlOrError.authoritative ?? tomlOrError.warnings.length === 0,
+			fetchResult: 'success',
+			stellarTomlText: tomlOrError.tomlText,
+			warnings: tomlOrError.warnings
+		};
 		const tomlObject = tomlOrError.tomlObject;
 
 		if (!TomlVersionChecker.isSupportedVersion(tomlObject, '2.0.0'))
 			tomlOrganizationInfo.state = TomlState.UnsupportedVersion;
 		else tomlOrganizationInfo.state = TomlState.Ok;
+		if (!tomlOrganizationInfo.authoritative) return tomlOrganizationInfo;
 
 		OrganizationTomlFetcher.updateHorizonUrl(tomlObject, tomlOrganizationInfo);
 		this.updateValidators(tomlObject, tomlOrganizationInfo);
@@ -121,20 +135,32 @@ export class OrganizationTomlFetcher {
 		tomlObject: Record<string, unknown>,
 		tomlOrganizationInfo: OrganizationTomlInfo
 	) {
-		const validators: string[] = [];
-
 		const tomlValidators = tomlObject.VALIDATORS;
-		if (isArray(tomlValidators)) {
-			tomlValidators.forEach((tomlValidator) => {
-				if (!isObject(tomlValidator)) return;
-				if (!isString(tomlValidator.PUBLIC_KEY)) return;
-				if (tomlValidator.PUBLIC_KEY.length !== 56) return;
+		if (!isArray(tomlValidators)) {
+			tomlOrganizationInfo.validatorSetValid = true;
+			return;
+		}
 
-				validators.push(tomlValidator.PUBLIC_KEY);
-			});
+		const validators: string[] = [];
+		const uniqueValidators = new Set<string>();
+		for (const tomlValidator of tomlValidators) {
+			if (
+				!isObject(tomlValidator) ||
+				!isString(tomlValidator.PUBLIC_KEY) ||
+				!StrKey.isValidEd25519PublicKey(tomlValidator.PUBLIC_KEY) ||
+				uniqueValidators.has(tomlValidator.PUBLIC_KEY)
+			) {
+				tomlOrganizationInfo.validators = [];
+				tomlOrganizationInfo.validatorSetValid = false;
+				return;
+			}
+
+			validators.push(tomlValidator.PUBLIC_KEY);
+			uniqueValidators.add(tomlValidator.PUBLIC_KEY);
 		}
 
 		tomlOrganizationInfo.validators = validators;
+		tomlOrganizationInfo.validatorSetValid = true;
 	}
 
 	private static updateEmail(

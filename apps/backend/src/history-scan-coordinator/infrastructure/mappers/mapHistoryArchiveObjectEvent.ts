@@ -4,7 +4,12 @@ import type {
 	HistoryArchiveObjectEventV1
 } from 'shared';
 import type { HistoryArchiveObjectEventPage } from '@history-scan-coordinator/domain/history-archive-object/HistoryArchiveObjectEventRepository.js';
-import { sanitizePublicInfrastructureText } from './PublicScanErrorMapper.js';
+import {
+	mapPublicArchiveError,
+	mapPublicArchiveUrl,
+	mapPublicVerificationFacts,
+	mapPublicWorkerStage
+} from './PublicArchiveObjectFactsMapper.js';
 
 export function mapHistoryArchiveObjectEvents(
 	page: HistoryArchiveObjectEventPage,
@@ -18,35 +23,39 @@ export function mapHistoryArchiveObjectEvents(
 	};
 }
 
-function mapHistoryArchiveObjectEvent(
+export function mapHistoryArchiveObjectEvent(
 	event: HistoryArchiveObjectEvent
 ): HistoryArchiveObjectEventV1 {
 	return {
-		archiveUrl: event.archiveUrl,
-		archiveUrlIdentity: event.archiveUrlIdentity,
+		archiveUrl: mapPublicArchiveUrl(event.archiveUrl),
+		archiveUrlIdentity: mapPublicArchiveUrl(event.archiveUrlIdentity),
 		bucketHash: event.bucketHash,
 		bytesDownloaded: toPublicNumber(event.bytesDownloaded),
 		checkpointLedger: event.checkpointLedger,
 		claimAttempt: event.claimAttempt,
 		createdAt: requireDate(event.createdAt).toISOString(),
-		error:
-			event.errorMessage === null
-				? null
-				: {
-						httpStatus: event.httpStatus,
-						message: sanitizePublicInfrastructureText(event.errorMessage),
-						type: event.errorType ?? 'error'
-					},
+		error: mapPublicArchiveError({
+			errorMessage: event.errorMessage,
+			errorType: event.errorType,
+			failureChannel:
+				event.failureChannel ??
+				(event.evidenceClass === 'archive-object'
+					? 'archive_evidence'
+					: event.evidenceClass === null
+						? null
+						: 'scanner_issue'),
+			httpStatus: event.httpStatus
+		}),
 		eventType: event.eventType,
 		evidenceClass: event.evidenceClass,
 		nextAttemptAt: event.nextAttemptAt?.toISOString() ?? null,
 		objectKey: event.objectKey,
 		objectRemoteId: event.objectRemoteId,
 		objectType: event.objectType,
-		objectUrl: event.objectUrl,
+		objectUrl: mapPublicArchiveUrl(event.objectUrl),
 		remoteId: event.remoteId,
-		verificationFacts: toPublicVerificationFacts(event.verificationFacts),
-		workerStage: event.workerStage
+		verificationFacts: mapPublicVerificationFacts(event.verificationFacts),
+		workerStage: mapPublicWorkerStage(event.workerStage)
 	};
 }
 
@@ -61,12 +70,4 @@ function toPublicNumber(value: number | string | null): number | null {
 
 	const parsed = Number(value);
 	return Number.isSafeInteger(parsed) && parsed >= 0 ? parsed : null;
-}
-
-function toPublicVerificationFacts(
-	value: object | null
-): Readonly<Record<string, unknown>> | null {
-	if (value === null || Array.isArray(value)) return null;
-
-	return value as Readonly<Record<string, unknown>>;
 }

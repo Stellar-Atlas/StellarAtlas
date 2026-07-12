@@ -35,8 +35,15 @@ async function countByStatus(
 	const rows = (await manager.query(
 		`
 			select count(*)::int as count
-			from history_archive_object_queue
-			where status = $1
+				from history_archive_object_queue
+				where status = $1
+					and (
+						$1::text <> 'pending'
+						or (
+							"executionDisposition" = 'executable'
+							and "dependencyReady" = true
+						)
+					)
 				and (
 					$2::text is null
 					or "archiveUrlIdentity" = $2::text

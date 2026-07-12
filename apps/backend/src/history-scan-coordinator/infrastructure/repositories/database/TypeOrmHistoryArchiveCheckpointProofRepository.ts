@@ -6,9 +6,7 @@ import type {
 	HistoryArchiveCheckpointProofRefreshTarget,
 	HistoryArchiveCheckpointProofRepository
 } from '@history-scan-coordinator/domain/history-archive-checkpoint-proof/HistoryArchiveCheckpointProofRepository.js';
-import {
-	historyArchiveCheckpointProofRefreshSql,
-} from './HistoryArchiveCheckpointProofRefreshSql.js';
+import { historyArchiveCheckpointProofRefreshSql } from './HistoryArchiveCheckpointProofRefreshSql.js';
 import { toHistoryArchiveCheckpointProofRefreshParams } from './HistoryArchiveCheckpointProofSqlInputs.js';
 
 @injectable()

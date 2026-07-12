@@ -111,7 +111,7 @@ function lowercase(
 const archiveFilterSql =
 	'($1::text is null or "archiveUrlIdentity" = $1::text)';
 
-const checkpointCoverageSql = `
+export const checkpointCoverageSql = `
 	with root_state as (
 		select
 			"archiveUrlIdentity",
@@ -123,51 +123,54 @@ const checkpointCoverageSql = `
 			and "currentLedger" is not null
 			and "currentLedger" >= 0
 	),
-	proof_rows as (
-		select
-			"archiveUrlIdentity",
-			"checkpointLedger",
-			status,
-			"requiredObjectsComplete"
-		from history_archive_checkpoint_proof
+	selected_rollup as (
+		select *
+		from history_archive_checkpoint_proof_rollup
 		where ${archiveFilterSql}
+	), active_checkpoints as (
+		select "archiveUrlIdentity", "checkpointLedger"
+		from history_archive_object_queue
+		where ${archiveFilterSql}
+			and status = 'scanning'
+			and "checkpointLedger" is not null
+		group by "archiveUrlIdentity", "checkpointLedger"
 	),
 	root_coverage as (
 		select
 			root_state."archiveUrlIdentity",
 			root_state."expectedCheckpointCount",
-			count(distinct proof_rows."checkpointLedger")
+			coalesce(selected_rollup."totalCheckpointProofs", 0)
 				as "scheduledCheckpointCount",
-			min(proof_rows."checkpointLedger") as "oldestCheckpointLedger"
+			selected_rollup."oldestCheckpointLedger"
 		from root_state
-		left join proof_rows
-			on proof_rows."archiveUrlIdentity" = root_state."archiveUrlIdentity"
-		group by
-			root_state."archiveUrlIdentity",
-			root_state."expectedCheckpointCount"
+		left join selected_rollup
+			on selected_rollup."archiveUrlIdentity" = root_state."archiveUrlIdentity"
 	),
 	proof_summary as (
 		select
-			count(*) as "totalArchiveCheckpoints",
-			count(*) filter (where false) as "activeArchiveCheckpoints",
-			count(*) filter (where status = 'mismatch') as "failedArchiveCheckpoints",
-			count(*) filter (where "requiredObjectsComplete")
+			coalesce(sum("totalCheckpointProofs"), 0)
+				as "totalArchiveCheckpoints",
+			(select count(*) from active_checkpoints)
+				as "activeArchiveCheckpoints",
+			coalesce(sum("mismatchCheckpointProofs"), 0)
+				as "failedArchiveCheckpoints",
+			coalesce(sum("objectCompleteCheckpointProofs"), 0)
 				as "completeArchiveCheckpoints",
-			count(*) filter (where "requiredObjectsComplete")
+			coalesce(sum("objectCompleteCheckpointProofs"), 0)
 				as "objectCompleteArchiveCheckpoints",
-			count(*) filter (where status = 'verified')
+			coalesce(sum("verifiedCheckpointProofs"), 0)
 				as "categoryConsistentArchiveCheckpoints",
-			count(*) filter (where status = 'mismatch')
+			coalesce(sum("mismatchCheckpointProofs"), 0)
 				as "categoryConsistencyFailedCheckpoints",
-			count(*) filter (where status = 'not-evaluable')
+			coalesce(sum("notEvaluableCheckpointProofs"), 0)
 				as "categoryConsistencyNotEvaluatedCheckpoints",
-			count(*) filter (where status = 'pending')
+			coalesce(sum("pendingCheckpointProofs"), 0)
 				as "categoryConsistencyPendingCheckpoints",
-			count(*) filter (where status = 'pending')
+			coalesce(sum("pendingCheckpointProofs"), 0)
 				as "partialArchiveCheckpoints",
-			min("checkpointLedger") as "oldestCheckpointLedger",
-			max("checkpointLedger") as "latestCheckpointLedger"
-		from proof_rows
+			min("oldestCheckpointLedger") as "oldestCheckpointLedger",
+			max("latestCheckpointLedger") as "latestCheckpointLedger"
+		from selected_rollup
 	)
 	select
 		"totalArchiveCheckpoints",

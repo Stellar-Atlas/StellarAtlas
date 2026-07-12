@@ -1,154 +1,428 @@
-import { NetworkSearchService } from '../NetworkSearchService.js';
+import type { Index } from 'meilisearch';
+import {
+	NetworkSearchService,
+	networkSearchStateDocumentId
+} from '../NetworkSearchService.js';
+import { buildNetworkSearchSnapshot } from '../NetworkSearchDocumentBuilder.js';
+import { networkSearchRequiredSettings } from '../NetworkSearchQuery.js';
+import type {
+	NetworkSearchIndexStateDocument,
+	NetworkSearchInventory,
+	NetworkSearchRequest,
+	NetworkSearchStoredDocument
+} from '../NetworkSearchTypes.js';
 import { createDummyNetworkV1 } from '@network-scan/services/__fixtures__/createDummyNetworkV1.js';
 import { createDummyNodeV1 } from '@network-scan/services/__fixtures__/createDummyNodeV1.js';
 import { createDummyOrganizationV1 } from '@network-scan/services/__fixtures__/createDummyOrganizationV1.js';
 
 describe('NetworkSearchService', () => {
-	it('searches latest network documents without requiring Meilisearch', async () => {
+	it('searches current, archived, and public-key-only canonical records', async () => {
 		const organization = createDummyOrganizationV1();
 		organization.id = 'sdf';
 		organization.name = 'Stellar Development Foundation';
 		organization.homeDomain = 'stellar.org';
+		const current = createDummyNodeV1('GA_CURRENT_SEARCH');
+		current.name = 'SDF Validator 1';
+		current.organizationId = organization.id;
+		const archived = createDummyNodeV1('GA_ARCHIVED_SEARCH');
+		archived.name = 'Historic SDF validator';
+		const inventory = createInventory(
+			[currentNode(current), archivedNode(archived), publicKeyOnlyNode()],
+			[currentOrganization(organization)]
+		);
+		const service = new NetworkSearchService({ indexName: 'network_test' });
 
-		const node = createDummyNodeV1('GA_SEARCH_NODE');
-		node.name = 'SDF Validator 1';
-		node.homeDomain = 'stellar.org';
-		node.organizationId = organization.id;
-		organization.validators = [node.publicKey];
+		const result = await service.search(inventory, request('sdf'));
 
-		const network = createDummyNetworkV1([node], [organization]);
-		const service = new NetworkSearchService({
-			indexName: 'test_network_entities'
-		});
-
-		const result = await service.search(network, {
-			limit: 8,
-			query: 'stellar'
-		});
-
-		expect(result.source).toBe('memory');
-		expect(result.readModel).toEqual({
+		expect(result.source).toBe('postgres_canonical');
+		expect(result.readModel).toMatchObject({
 			fallbackReason: 'meilisearch_unconfigured',
-			schemaVersion: 'v1'
+			freshness: 'fresh',
+			source: 'postgres_canonical'
 		});
-		expect(result.hits.map((hit) => hit.label)).toContain(
-			'Stellar Development Foundation'
+		expect(result.hits.map((hit) => hit.entityId)).toEqual(
+			expect.arrayContaining([
+				organization.id,
+				current.publicKey,
+				archived.publicKey
+			])
 		);
-		expect(result.hits.map((hit) => hit.label)).toContain('SDF Validator 1');
+		expect(
+			result.hits.find((hit) => hit.entityId === archived.publicKey)
+		).toMatchObject({
+			freshness: 'fresh',
+			recordState: 'historical',
+			scope: 'archived'
+		});
 	});
 
-	it('filters by entity type', async () => {
-		const organization = createDummyOrganizationV1();
-		organization.id = 'lobstr';
-		organization.name = 'LOBSTR';
+	it('filters explicit inventory scopes with exact canonical pagination', async () => {
+		const first = createDummyNodeV1('GA_LISTENER_A');
+		const second = createDummyNodeV1('GA_LISTENER_B');
+		first.name = 'Listener alpha';
+		second.name = 'Listener beta';
+		const inventory = createInventory(
+			[currentNode(first, 'listener'), currentNode(second, 'listener')],
+			[]
+		);
+		const service = new NetworkSearchService({ indexName: 'network_test' });
 
-		const node = createDummyNodeV1('GA_LOBSTR_NODE');
-		node.name = 'lobstr5';
-		node.organizationId = organization.id;
-
-		const network = createDummyNetworkV1([node], [organization]);
-		const service = new NetworkSearchService({
-			indexName: 'test_network_entities'
+		const result = await service.search(inventory, {
+			...request('listener'),
+			limit: 1,
+			offset: 1,
+			scope: 'listener'
 		});
 
-		const result = await service.search(network, {
-			entityType: 'organization',
-			limit: 8,
-			query: 'lobstr'
+		expect(result.pagination).toEqual({
+			hasMore: false,
+			limit: 1,
+			offset: 1,
+			total: 2,
+			totalIsExact: true
 		});
-
 		expect(result.hits).toHaveLength(1);
-		expect(result.hits[0]?.entityType).toBe('organization');
+		expect(result.facets.scope).toEqual([{ count: 2, value: 'listener' }]);
 	});
 
-	it('returns facet counts for filtered results', async () => {
-		const organization = createDummyOrganizationV1();
-		organization.id = 'sdf';
-		organization.name = 'SDF';
-		organization.homeDomain = 'stellar.org';
-
-		const archiveErrorNode = createDummyNodeV1('GA_ARCHIVE_ERROR');
-		archiveErrorNode.name = 'SDF validator';
-		archiveErrorNode.homeDomain = 'stellar.org';
-		archiveErrorNode.organizationId = organization.id;
-		archiveErrorNode.historyArchiveHasError = true;
-
-		const archiveOkNode = createDummyNodeV1('GA_ARCHIVE_OK');
-		archiveOkNode.name = 'SDF observer';
-		archiveOkNode.homeDomain = 'stellar.org';
-		archiveOkNode.organizationId = organization.id;
-		archiveOkNode.historyArchiveHasError = false;
-
-		const network = createDummyNetworkV1(
-			[archiveErrorNode, archiveOkNode],
-			[organization]
-		);
-		const service = new NetworkSearchService({
-			indexName: 'test_network_entities'
+	it('searches canonical archive evidence with explicit provenance', async () => {
+		const baseInventory = createInventory([], []);
+		const inventory: NetworkSearchInventory = {
+			...baseInventory,
+			archiveRoots: [
+				{
+					archiveUrl: 'https://history.example.org',
+					archiveUrlIdentity: 'https://history.example.org',
+					checkpoints: {
+						mismatchedCheckpoints: 0,
+						notEvaluableCheckpoints: 0,
+						pendingCheckpoints: 2,
+						totalCheckpoints: 4,
+						verifiedCheckpoints: 2
+					},
+					latestObjectAt: '2026-07-11T00:00:00.000Z',
+					nodePublicKeys: ['GA_ARCHIVE'],
+					objects: {
+						activeObjects: 1,
+						bucketObjects: 3,
+						pendingObjects: 2,
+						remoteFailureObjects: 1,
+						totalObjects: 8,
+						verifiedBucketObjects: 2,
+						verifiedObjects: 5,
+						workerIssueObjects: 0
+					},
+					scannerOwnedState: null
+				}
+			]
+		};
+		const result = await new NetworkSearchService({
+			indexName: 'network_test'
+		}).search(inventory, {
+			...request('history.example.org'),
+			entityType: 'archive-root'
 		});
 
-		const result = await service.search(network, {
-			archiveStatus: 'error',
-			entityType: 'node',
-			limit: 8,
-			query: 'stellar'
-		});
-
-		expect(result.hits.map((hit) => hit.entityId)).toEqual([
-			archiveErrorNode.publicKey
+		expect(result.source).toBe('postgres_canonical');
+		expect(result.hits).toEqual([
+			expect.objectContaining({
+				entityType: 'archive-root',
+				evidenceFailures: 1,
+				evidenceProvenance: 'postgres_canonical',
+				evidenceVerified: 5
+			})
 		]);
-		expect(result.facets.archiveStatus).toEqual([{ count: 1, value: 'error' }]);
-		expect(result.facets.entityType).toEqual([{ count: 1, value: 'node' }]);
-		expect(result.facets.fullValidator).toEqual([{ count: 1, value: 'true' }]);
-		expect(result.facets.validator).toEqual([{ count: 1, value: 'true' }]);
 	});
 
-	it('keeps memory results while Meilisearch syncs or is unavailable', async () => {
-		const node = createDummyNodeV1('GA_UNAVAILABLE_MEILI');
-		node.name = 'Fallback validator';
-		const network = createDummyNetworkV1([node], []);
-		const service = new NetworkSearchService({
-			host: 'http://127.0.0.1:9',
-			indexName: 'test_network_entities_v1'
-		});
+	it('uses a synchronized Meilisearch projection with matching cursor', async () => {
+		const node = createDummyNodeV1('GA_MEILI_CURRENT');
+		node.name = 'Indexed validator';
+		const inventory = createInventory([currentNode(node)], []);
+		const harness = createIndexHarness();
+		const service = new NetworkSearchService(
+			{ indexName: 'network_test' },
+			undefined,
+			harness.index
+		);
 
-		const result = await service.search(network, {
-			limit: 8,
-			query: 'fallback'
-		});
+		await service.search(inventory, request('indexed'));
+		await harness.waitForSync();
+		const result = await service.search(inventory, request('indexed'));
 
-		expect(result.source).toBe('memory');
-		expect(result.readModel).toEqual({
-			fallbackReason: 'meilisearch_syncing',
-			schemaVersion: 'v1'
+		expect(result.source).toBe('meilisearch');
+		expect(result.readModel).toMatchObject({
+			fallbackReason: null,
+			freshness: 'fresh',
+			source: 'meilisearch'
+		});
+		expect(result.hits[0]).toMatchObject({
+			entityId: node.publicKey,
+			freshness: 'fresh',
+			recordState: 'current',
+			scope: 'current-validator',
+			source: 'meilisearch'
+		});
+	});
+
+	it('reuses an already synchronized projection without rewriting it', async () => {
+		const node = createDummyNodeV1('GA_PRELOADED_MEILI');
+		node.name = 'Preloaded validator';
+		const inventory = createInventory([currentNode(node)], []);
+		const snapshot = buildNetworkSearchSnapshot(inventory);
+		const state: NetworkSearchIndexStateDocument = {
+			canonicalCursor: snapshot.canonicalCursor,
+			documentKind: 'state',
+			id: networkSearchStateDocumentId,
+			indexedAt: '2026-07-11T00:00:02.000Z',
+			networkTime: snapshot.networkTime
+		};
+		const harness = createIndexHarness({
+			initialDocuments: [state, ...snapshot.documents]
+		});
+		const service = new NetworkSearchService(
+			{ indexName: 'network_test' },
+			undefined,
+			harness.index
+		);
+
+		const result = await service.search(inventory, request('preloaded'));
+
+		expect(result.source).toBe('meilisearch');
+		expect(harness.addDocuments).not.toHaveBeenCalled();
+	});
+
+	it('rejects a stale or newer conflicting Meilisearch cursor', async () => {
+		const node = createDummyNodeV1('GA_CANONICAL_NODE');
+		node.name = 'Canonical validator';
+		const inventory = createInventory([currentNode(node)], []);
+		const harness = createIndexHarness();
+		const service = new NetworkSearchService(
+			{ indexName: 'network_test' },
+			undefined,
+			harness.index
+		);
+
+		await service.search(inventory, request('canonical'));
+		await harness.waitForSync();
+		const currentState = harness.state();
+		harness.getDocument.mockResolvedValueOnce({
+			...currentState,
+			canonicalCursor: `newer-${currentState.canonicalCursor}`
+		});
+		const result = await service.search(inventory, request('canonical'));
+
+		expect(result.source).toBe('postgres_canonical');
+		expect(result.readModel).toMatchObject({
+			fallbackReason: 'meilisearch_stale',
+			source: 'postgres_canonical'
 		});
 		expect(result.hits.map((hit) => hit.entityId)).toEqual([node.publicKey]);
+		expect(harness.search).not.toHaveBeenCalled();
+		await harness.waitForSync();
+	});
 
-		const retry = await waitForSearchFallback(service, network, 'fallback');
-		expect(retry.source).toBe('memory');
-		expect(retry.readModel).toEqual({
-			fallbackReason: 'meilisearch_unavailable',
-			schemaVersion: 'v1'
-		});
+	it('keeps canonical results when Meilisearch synchronization fails', async () => {
+		const node = createDummyNodeV1('GA_UNAVAILABLE_MEILI');
+		node.name = 'Fallback validator';
+		const inventory = createInventory([currentNode(node)], []);
+		const harness = createIndexHarness({ failSettings: true });
+		const service = new NetworkSearchService(
+			{ indexName: 'network_test' },
+			undefined,
+			harness.index
+		);
+
+		const first = await service.search(inventory, request('fallback'));
+		expect(first.readModel.fallbackReason).toBe('meilisearch_syncing');
+		await harness.waitForSyncFailure();
+		const retry = await service.search(inventory, request('fallback'));
+
+		expect(retry.source).toBe('postgres_canonical');
+		expect(retry.readModel.fallbackReason).toBe('meilisearch_unavailable');
 		expect(retry.hits.map((hit) => hit.entityId)).toEqual([node.publicKey]);
 	});
 });
 
-async function waitForSearchFallback(
-	service: NetworkSearchService,
-	network: ReturnType<typeof createDummyNetworkV1>,
-	query: string
-) {
-	for (let attempt = 0; attempt < 20; attempt += 1) {
-		await new Promise((resolve) => setTimeout(resolve, 25));
-		const result = await service.search(network, {
-			limit: 8,
-			query
-		});
-		if (result.readModel.fallbackReason === 'meilisearch_unavailable') {
-			return result;
-		}
-	}
+function request(query: string): NetworkSearchRequest {
+	return { limit: 8, offset: 0, query, scope: 'all-known' };
+}
 
-	throw new Error('Meilisearch fallback did not become unavailable');
+function createInventory(
+	nodes: NetworkSearchInventory['nodes'],
+	organizations: NetworkSearchInventory['organizations']
+): NetworkSearchInventory {
+	const network = createDummyNetworkV1(
+		nodes.flatMap((node) => (node.current && node.node ? [node.node] : [])),
+		organizations.flatMap((organization) =>
+			organization.current ? [organization.organization] : []
+		)
+	);
+	network.time = '2026-07-11T00:00:00.000Z';
+	network.latestLedger = '63390000';
+	return {
+		archiveRoots: [],
+		generatedAt: '2026-07-11T00:00:01.000Z',
+		network,
+		nodes,
+		organizations
+	};
+}
+
+function currentNode(
+	node: ReturnType<typeof createDummyNodeV1>,
+	scope: 'current-validator' | 'listener' = 'current-validator'
+): NetworkSearchInventory['nodes'][number] {
+	node.isValidator = scope === 'current-validator';
+	return {
+		current: true,
+		dateDiscovered: '2026-07-01T00:00:00.000Z',
+		lastMeasurementAt: node.dateUpdated,
+		lastSeen: node.dateUpdated,
+		metadataState: 'snapshot',
+		node,
+		publicKey: node.publicKey,
+		scope,
+		snapshotEndDate: null,
+		snapshotStartDate: '2026-07-01T00:00:00.000Z'
+	};
+}
+
+function archivedNode(
+	node: ReturnType<typeof createDummyNodeV1>
+): NetworkSearchInventory['nodes'][number] {
+	return {
+		...currentNode(node),
+		current: false,
+		scope: 'archived',
+		snapshotEndDate: '2026-07-10T00:00:00.000Z'
+	};
+}
+
+function publicKeyOnlyNode(): NetworkSearchInventory['nodes'][number] {
+	return {
+		current: false,
+		dateDiscovered: '2026-07-01T00:00:00.000Z',
+		lastMeasurementAt: null,
+		lastSeen: '2026-07-10T00:00:00.000Z',
+		metadataState: 'public_key_only',
+		node: null,
+		publicKey: 'GA_PUBLIC_KEY_ONLY',
+		scope: 'public-key-only',
+		snapshotEndDate: null,
+		snapshotStartDate: null
+	};
+}
+
+function currentOrganization(
+	organization: ReturnType<typeof createDummyOrganizationV1>
+): NetworkSearchInventory['organizations'][number] {
+	return {
+		current: true,
+		lastMeasurementAt: '2026-07-11T00:00:00.000Z',
+		lastSeen: '2026-07-11T00:00:00.000Z',
+		organization,
+		scope: 'current',
+		snapshotEndDate: null,
+		snapshotStartDate: '2026-07-01T00:00:00.000Z'
+	};
+}
+
+function createIndexHarness(
+	options: {
+		failSettings?: boolean;
+		initialDocuments?: readonly NetworkSearchStoredDocument[];
+	} = {}
+) {
+	let storedDocuments: NetworkSearchStoredDocument[] = [
+		...(options.initialDocuments ?? [])
+	];
+	const successfulTask = () => ({
+		waitTask: jest.fn(async () => ({ status: 'succeeded' }))
+	});
+	const getSettings = options.failSettings
+		? jest.fn(async () => {
+				throw new Error('Meilisearch unavailable');
+			})
+		: jest.fn(async () => ({
+				filterableAttributes: [
+					...(networkSearchRequiredSettings.filterableAttributes ?? [])
+				],
+				searchableAttributes: [
+					...(networkSearchRequiredSettings.searchableAttributes ?? [])
+				],
+				sortableAttributes: [
+					...(networkSearchRequiredSettings.sortableAttributes ?? [])
+				]
+			}));
+	const addDocuments = jest.fn((documents: NetworkSearchStoredDocument[]) => {
+		storedDocuments = documents;
+		return successfulTask();
+	});
+	const deleteDocuments = jest.fn(() => successfulTask());
+	const getDocument = jest.fn(async () => state());
+	const search = jest.fn(async () => {
+		const hits = storedDocuments.filter(
+			(document) => document.documentKind === 'entity'
+		);
+		return {
+			estimatedTotalHits: hits.length,
+			facetDistribution: {},
+			hits,
+			limit: 8,
+			offset: 0,
+			processingTimeMs: 1,
+			query: ''
+		};
+	});
+	const state = (): NetworkSearchIndexStateDocument => {
+		const value = storedDocuments.find(
+			(document) => document.documentKind === 'state'
+		);
+		if (!value || value.documentKind !== 'state') {
+			throw new Error('Search index state was not written');
+		}
+		return value;
+	};
+	const index = {
+		addDocuments,
+		deleteDocuments,
+		getDocument,
+		getSettings,
+		search,
+		updateSettings: jest.fn(() =>
+			options.failSettings
+				? {
+						waitTask: jest.fn(async () => {
+							throw new Error('Meilisearch unavailable');
+						})
+					}
+				: successfulTask()
+		)
+	} as unknown as Index<NetworkSearchStoredDocument>;
+
+	return {
+		addDocuments,
+		getDocument,
+		index,
+		search,
+		state,
+		waitForSync: () => waitUntil(() => deleteDocuments.mock.calls.length > 0),
+		waitForSyncFailure: () =>
+			waitUntil(
+				() =>
+					getSettings.mock.calls.length > 0 &&
+					addDocuments.mock.calls.length === 0
+			)
+	};
+}
+
+async function waitUntil(condition: () => boolean): Promise<void> {
+	for (let attempt = 0; attempt < 20; attempt += 1) {
+		if (condition()) {
+			await new Promise<void>((resolve) => setImmediate(resolve));
+			return;
+		}
+		await new Promise<void>((resolve) => setImmediate(resolve));
+	}
+	throw new Error('Search index synchronization did not settle');
 }

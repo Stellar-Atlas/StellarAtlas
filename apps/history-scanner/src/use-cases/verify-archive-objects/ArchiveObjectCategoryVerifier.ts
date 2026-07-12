@@ -4,10 +4,8 @@ import { pipeline } from 'node:stream/promises';
 import { err, ok, type Result } from 'neverthrow';
 import { Url, isHttpError, type HttpService } from 'http-helper';
 import type { ExceptionLogger } from 'exception-logger';
-import {
-	mapUnknownToError,
-	type HistoryArchiveObjectVerificationFactsV1
-} from 'shared';
+import { type HistoryArchiveObjectVerificationFactsV1 } from 'shared';
+import type { HistoryArchiveWorkerStageDTO } from 'history-scanner-dto';
 import { Category } from '../../domain/history-archive/Category.js';
 import { hashBucketList } from '../../domain/history-archive/hashBucketList.js';
 import { HistoryArchiveStateValidator } from '../../domain/history-archive/HistoryArchiveStateValidator.js';
@@ -22,10 +20,20 @@ import type {
 	HistoryArchiveObjectProgressDTO,
 	ScanCoordinatorService
 } from '../../domain/scan/ScanCoordinatorService.js';
+import {
+	canonicalJsonContentDigest,
+	XdrContentDigestTransform
+} from './ArchiveObjectContentDigest.js';
+import {
+	archiveEvidenceFailure,
+	getRetryAfterSecondsFromHttpError,
+	ScannerIssueError,
+	scannerIssueFailure
+} from './ArchiveObjectFailure.js';
 
 type ProgressReporter = (
 	remoteId: string,
-	workerStage: string,
+	workerStage: HistoryArchiveWorkerStageDTO,
 	bytesDownloaded: number | null
 ) => void;
 
@@ -60,6 +68,7 @@ export class ArchiveObjectCategoryVerifier {
 			return err({
 				errorMessage: 'Checkpoint state response must be a JSON object',
 				errorType: 'invalid_checkpoint_state',
+				failureChannel: 'archive_evidence',
 				httpStatus: response.value.status
 			});
 		}
@@ -69,6 +78,7 @@ export class ArchiveObjectCategoryVerifier {
 			return err({
 				errorMessage: validation.error.message,
 				errorType: 'invalid_checkpoint_state',
+				failureChannel: 'archive_evidence',
 				httpStatus: response.value.status
 			});
 		}
@@ -79,6 +89,7 @@ export class ArchiveObjectCategoryVerifier {
 			return err({
 				errorMessage: bucketListHashResult.error.message,
 				errorType: 'invalid_checkpoint_state',
+				failureChannel: 'archive_evidence',
 				httpStatus: response.value.status
 			});
 		}
@@ -103,7 +114,8 @@ export class ArchiveObjectCategoryVerifier {
 					checkpointLedger: bucketListHashResult.value.ledger,
 					observedAt,
 					stellarHistoryUrl: job.objectUrl
-				}
+				},
+				content: canonicalJsonContentDigest(validation.value)
 			},
 			workerStage: 'verified'
 		});
@@ -115,15 +127,17 @@ export class ArchiveObjectCategoryVerifier {
 		Result<HistoryArchiveObjectProgressDTO, HistoryArchiveObjectFailureDTO>
 	> {
 		const category = getCategory(job.objectType);
-		if (category === null) {
+		const workerStages = getCategoryWorkerStages(job.objectType);
+		if (category === null || workerStages === null) {
 			return err({
 				errorMessage: `Unsupported category object type: ${job.objectType}`,
 				errorType: 'unsupported_object_type',
+				failureChannel: 'scanner_issue',
 				httpStatus: null
 			});
 		}
 
-		this.reportProgress(job.remoteId, `fetching_${job.objectType}`, 0);
+		this.reportProgress(job.remoteId, workerStages.fetching, 0);
 		const urlResult = Url.create(job.objectUrl);
 		if (urlResult.isErr()) return err(this.mapLocalError(urlResult.error));
 
@@ -137,6 +151,7 @@ export class ArchiveObjectCategoryVerifier {
 			return err({
 				errorMessage: `${job.objectType} response must be a readable stream`,
 				errorType: 'invalid_category_response',
+				failureChannel: 'scanner_issue',
 				httpStatus: response.value.status
 			});
 		}
@@ -147,26 +162,35 @@ export class ArchiveObjectCategoryVerifier {
 				bytesDownloaded += bytes;
 				this.reportProgress(
 					job.remoteId,
-					`downloading_${job.objectType}`,
+					workerStages.downloading,
 					bytesDownloaded
 				);
 			})
 		);
-		const pool = new HasherPool(
-			Math.max(Math.floor(this.hasherWorkerCount), 1)
-		);
-		const parsedHistorySink =
-			shouldPersistParsedHistory(category)
-				? new CoordinatorParsedHistorySink(
-						this.scanCoordinator,
-						job.archiveUrl,
-						job.remoteId,
-						this.exceptionLogger
-					)
-				: undefined;
+		let pool: HasherPool;
+		try {
+			pool = new HasherPool(Math.max(Math.floor(this.hasherWorkerCount), 1));
+		} catch (error) {
+			return err(
+				scannerIssueFailure({ error, errorType: 'worker_pool_setup_failure' })
+			);
+		}
+		const parsedHistorySink = shouldPersistParsedHistory(category)
+			? new CoordinatorParsedHistorySink(
+					this.scanCoordinator,
+					job.archiveUrl,
+					job.remoteId,
+					this.exceptionLogger
+				)
+			: undefined;
 
 		const categoryVerificationData = createCategoryVerificationData();
+		const contentDigest = new XdrContentDigestTransform();
 		let processedEntries = 0;
+		let verificationResult: Result<
+			HistoryArchiveObjectProgressDTO,
+			HistoryArchiveObjectFailureDTO
+		>;
 		try {
 			const processor = new CategoryXDRProcessor(
 				pool,
@@ -178,64 +202,80 @@ export class ArchiveObjectCategoryVerifier {
 			await pipeline([
 				countedStream,
 				createGunzip(),
+				contentDigest,
 				new XdrStreamReader(),
 				processor
 			]);
 			processedEntries = processor.processedEntries;
 			await parsedHistorySink?.flush();
-			this.reportProgress(
-				job.remoteId,
-				`verified_${job.objectType}`,
-				bytesDownloaded
-			);
-			return ok({
+			this.reportProgress(job.remoteId, workerStages.verified, bytesDownloaded);
+			verificationResult = ok({
 				bytesDownloaded,
-				verificationFacts: createCategoryVerificationFacts(
-					job.objectType,
-					categoryVerificationData,
-					processedEntries
-				),
+				verificationFacts: {
+					...createCategoryVerificationFacts(
+						job.objectType,
+						categoryVerificationData,
+						processedEntries,
+						job.objectUrl
+					),
+					content: contentDigest.toFact()
+				},
 				workerStage: 'verified'
 			});
 		} catch (error) {
-			return err({
-				errorMessage: mapUnknownToError(error).message,
-				errorType: 'category_verification_failed',
-				httpStatus: response.value.status
-			});
+			verificationResult = err(
+				classifyCategoryVerificationFailure(error, response.value.status)
+			);
+		}
+		try {
+			await pool.workerpool.terminate(true);
+		} catch (error) {
+			return err(
+				scannerIssueFailure({
+					error,
+					errorType: 'worker_pool_termination_failure'
+				})
+			);
 		} finally {
-			await pool.workerpool.terminate(true).catch(() => undefined);
 			pool.terminated = true;
 		}
+		return verificationResult;
 	}
 
 	private mapHttpError(error: unknown): HistoryArchiveObjectFailureDTO {
 		if (isHttpError(error)) {
-			return {
-				errorMessage: error.message,
+			return archiveEvidenceFailure({
+				error,
 				errorType: error.response
 					? 'archive_http_error'
 					: 'archive_transport_error',
-				httpStatus: error.response?.status ?? null
-			};
+				httpStatus: error.response?.status ?? null,
+				retryAfterSeconds: getRetryAfterSecondsFromHttpError(error)
+			});
 		}
 
-		const mapped = mapUnknownToError(error);
-		return {
-			errorMessage: mapped.message,
-			errorType: 'archive_transport_error',
-			httpStatus: null
-		};
+		return scannerIssueFailure({ error, errorType: 'http_client_failure' });
 	}
 
 	private mapLocalError(error: unknown): HistoryArchiveObjectFailureDTO {
-		const mapped = mapUnknownToError(error);
-		return {
-			errorMessage: mapped.message,
-			errorType: 'worker_error',
-			httpStatus: null
-		};
+		return scannerIssueFailure({ error, errorType: 'worker_setup_failure' });
 	}
+}
+
+export function classifyCategoryVerificationFailure(
+	error: unknown,
+	httpStatus: number
+): HistoryArchiveObjectFailureDTO {
+	return error instanceof ScannerIssueError
+		? scannerIssueFailure({
+				error,
+				errorType: 'category_scanner_failure'
+			})
+		: archiveEvidenceFailure({
+				error,
+				errorType: 'category_content_invalid',
+				httpStatus
+			});
 }
 
 class ByteCounter extends Transform {
@@ -264,6 +304,43 @@ function getCategory(objectType: string): Category | null {
 	}
 }
 
+function getCategoryWorkerStages(
+	objectType: HistoryArchiveObjectJobDTO['objectType']
+): {
+	readonly downloading: HistoryArchiveWorkerStageDTO;
+	readonly fetching: HistoryArchiveWorkerStageDTO;
+	readonly verified: HistoryArchiveWorkerStageDTO;
+} | null {
+	switch (objectType) {
+		case 'ledger':
+			return {
+				downloading: 'downloading_ledger',
+				fetching: 'fetching_ledger',
+				verified: 'verified_ledger'
+			};
+		case 'transactions':
+			return {
+				downloading: 'downloading_transactions',
+				fetching: 'fetching_transactions',
+				verified: 'verified_transactions'
+			};
+		case 'results':
+			return {
+				downloading: 'downloading_results',
+				fetching: 'fetching_results',
+				verified: 'verified_results'
+			};
+		case 'scp':
+			return {
+				downloading: 'downloading_scp',
+				fetching: 'fetching_scp',
+				verified: 'verified_scp'
+			};
+		default:
+			return null;
+	}
+}
+
 function shouldPersistParsedHistory(category: Category): boolean {
 	return (
 		category === Category.ledger ||
@@ -285,7 +362,8 @@ function createCategoryVerificationData(): CategoryVerificationData {
 function createCategoryVerificationFacts(
 	objectType: string,
 	data: CategoryVerificationData,
-	entryCount: number
+	entryCount: number,
+	sourceUrl: string
 ): HistoryArchiveObjectVerificationFactsV1 {
 	if (objectType === 'ledger') {
 		return {
@@ -297,13 +375,13 @@ function createCategoryVerificationFacts(
 						ledger,
 						ledgerHeaderHash:
 							data.calculatedLedgerHeaderHashes.get(ledger) ?? null,
-						previousLedgerHeaderHash:
-							expectedHashes.previousLedgerHeaderHash,
+						previousLedgerHeaderHash: expectedHashes.previousLedgerHeaderHash,
 						protocolVersion: data.protocolVersions.get(ledger) ?? null,
 						transactionResultSetHash: expectedHashes.txSetResultHash,
 						transactionSetHash: expectedHashes.txSetHash
 					}))
-					.sort((left, right) => left.ledger - right.ledger)
+					.sort((left, right) => left.ledger - right.ledger),
+				sourceUrl
 			}
 		};
 	}
@@ -312,7 +390,8 @@ function createCategoryVerificationFacts(
 		return {
 			transactionsCategory: {
 				entryCount,
-				ledgers: mapHashFacts(data.calculatedTxSetHashes)
+				ledgers: mapHashFacts(data.calculatedTxSetHashes),
+				sourceUrl
 			}
 		};
 	}
@@ -321,12 +400,13 @@ function createCategoryVerificationFacts(
 		return {
 			resultsCategory: {
 				entryCount,
-				ledgers: mapHashFacts(data.calculatedTxSetResultHashes)
+				ledgers: mapHashFacts(data.calculatedTxSetResultHashes),
+				sourceUrl
 			}
 		};
 	}
 
-	return { scpCategory: { entryCount } };
+	return { scpCategory: { entryCount, sourceUrl } };
 }
 
 function mapHashFacts(

@@ -12,8 +12,10 @@ import { StatusPill } from './status-ui';
 type ScanLogFilter = 'attention' | 'all';
 
 export function RecentScanLogs({
+	available,
 	scanLogs
 }: {
+	readonly available: boolean;
 	readonly scanLogs: PublicScanLogStatus;
 }): React.JSX.Element {
 	const [filter, setFilter] = useState<ScanLogFilter>('all');
@@ -27,7 +29,11 @@ export function RecentScanLogs({
 			<div className="panel-heading">
 				<div>
 					<strong>Network scans</strong>
-					<span>{formatDateTime(scanLogs.generatedAt)}</span>
+					<span>
+						{available
+							? formatDateTime(scanLogs.generatedAt)
+							: 'Loading recent rows'}
+					</span>
 				</div>
 				<span className="status-muted">
 					Showing up to {formatInteger(scanLogs.limit)} recent rows
@@ -54,18 +60,25 @@ export function RecentScanLogs({
 					recent scan history.
 				</p>
 			) : null}
-			<NetworkScanTable filter={filter} scans={networkScans} />
+			<NetworkScanTable
+				available={available}
+				filter={filter}
+				scans={networkScans}
+			/>
 		</section>
 	);
 }
 
 function NetworkScanTable({
+	available,
 	filter,
 	scans
 }: {
+	readonly available: boolean;
 	readonly filter: ScanLogFilter;
 	readonly scans: readonly PublicNetworkScanLogEntry[];
 }): React.JSX.Element {
+	if (!available) return <UnavailableNetworkScanTable />;
 	if (scans.length === 0) return <EmptyNetworkScanTable filter={filter} />;
 
 	return (
@@ -76,6 +89,26 @@ function NetworkScanTable({
 					{scans.map((scan) => (
 						<NetworkScanRow key={scan.time} scan={scan} />
 					))}
+				</tbody>
+			</table>
+		</div>
+	);
+}
+
+function UnavailableNetworkScanTable(): React.JSX.Element {
+	return (
+		<div className="responsive-table status-network-scan-table-wrap">
+			<table className="status-network-scan-table">
+				<NetworkScanTableHead />
+				<tbody>
+					<tr>
+						<td colSpan={NETWORK_SCAN_COLUMN_COUNT}>
+							<strong>Recent network scan history loading</strong>
+							<small>
+								No empty-result claim is made until the drilldown arrives.
+							</small>
+						</td>
+					</tr>
 				</tbody>
 			</table>
 		</div>

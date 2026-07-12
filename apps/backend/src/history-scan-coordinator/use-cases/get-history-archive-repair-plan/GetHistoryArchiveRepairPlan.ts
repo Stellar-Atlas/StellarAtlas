@@ -66,9 +66,8 @@ export class GetHistoryArchiveRepairPlan {
 					limit
 				)
 			]);
-			const candidateSources = await this.getBucketSourceCandidates(
-				objectFailures
-			);
+			const candidateSources =
+				await this.getBucketSourceCandidates(objectFailures);
 			const actions = [
 				...objectFailures.flatMap((object) =>
 					toObjectAction(object, candidateSources)
@@ -95,7 +94,9 @@ export class GetHistoryArchiveRepairPlan {
 							summary: 'Scanner infrastructure is backing off this host.'
 						})),
 					...objectFailures
-						.filter((object) => getObjectEvidenceClass(object) !== 'archive-object')
+						.filter(
+							(object) => getObjectEvidenceClass(object) !== 'archive-object'
+						)
 						.map(toInfrastructureBlock)
 				],
 				limit,
@@ -117,7 +118,9 @@ export class GetHistoryArchiveRepairPlan {
 
 	private async getBucketSourceCandidates(
 		objects: readonly HistoryArchiveObject[]
-	): Promise<ReadonlyMap<string, readonly HistoryArchiveRepairSourceCandidateV1[]>> {
+	): Promise<
+		ReadonlyMap<string, readonly HistoryArchiveRepairSourceCandidateV1[]>
+	> {
 		const bucketHashes = Array.from(
 			new Set(objects.flatMap((object) => object.bucketHash ?? []))
 		).slice(0, maxRepairPlanLimit);
@@ -343,7 +346,8 @@ function toInfrastructureBlock(
 		failureClass: getObjectFailureClass(object),
 		hostIdentity: object.hostIdentity,
 		httpStatus: object.httpStatus,
-		summary: 'Scanner infrastructure must clear before this object can be evaluated.'
+		summary:
+			'Scanner infrastructure must clear before this object can be evaluated.'
 	};
 }
 
@@ -355,7 +359,14 @@ function getObjectFailureClass(object: HistoryArchiveObject) {
 }
 
 function getObjectEvidenceClass(object: HistoryArchiveObject) {
-	return getHistoryArchiveObjectEvidenceClass(getObjectFailureClass(object));
+	const failureClass = getObjectFailureClass(object);
+	return getHistoryArchiveObjectEvidenceClass(
+		failureClass,
+		object.failureChannel ??
+			(failureClass === 'worker' || failureClass === 'coordinator'
+				? 'scanner_issue'
+				: 'archive_evidence')
+	);
 }
 
 function getObjectTypeLabel(objectType: HistoryArchiveObject['objectType']) {

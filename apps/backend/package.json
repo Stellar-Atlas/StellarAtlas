@@ -5,6 +5,7 @@
 	"type": "module",
 	"description": "Backend & api",
 	"scripts": {
+		"prebuild": "pnpm --filter shared build && pnpm --filter history-scanner-dto build",
 		"build": "tsc --build tsconfig.json && pnpm -w rewrite:aliases apps/backend && pnpm post-build",
 		"post-build": "cp -R src/notifications/infrastructure/templates lib/notifications/infrastructure/templates",
 		"heroku-postbuild": "pnpm run build",
@@ -12,6 +13,9 @@
 		"scan-network": "node lib/network-scan/infrastructure/cli/scan-network.js",
 		"scan-scp-live": "node lib/network-scan/infrastructure/cli/scan-scp-live.js",
 		"build-and-start-api": "pnpm run build; node lib/core/infrastructure/http/api.js",
+		"backfill-organization-toml-evidence": "node lib/network-scan/infrastructure/cli/backfill-organization-toml-evidence.js",
+		"migrations": "node lib/core/infrastructure/cli/database-migrations.js",
+		"migrations:apply": "node lib/core/infrastructure/cli/database-migrations.js --apply",
 		"start-api": "node lib/core/infrastructure/http/api.js",
 		"refresh-api-docs-comparison": "node lib/cross-check/infrastructure/cli/refresh-api-docs-comparison-snapshot.js",
 		"refresh-radar-network-comparison": "node lib/cross-check/infrastructure/cli/refresh-radar-network-comparison-snapshot.js",

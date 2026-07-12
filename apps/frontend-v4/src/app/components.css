@@ -255,6 +255,11 @@ meter {
 	inline-size: auto;
 }
 
+.table-controls select {
+	flex: 0 1 220px;
+	inline-size: min(220px, 100%);
+}
+
 .responsive-table {
 	max-inline-size: 100%;
 	min-inline-size: 0;

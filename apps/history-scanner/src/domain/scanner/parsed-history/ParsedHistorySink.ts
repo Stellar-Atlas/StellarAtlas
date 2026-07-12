@@ -6,6 +6,7 @@ export interface JsonObject {
 }
 
 export interface ParsedLedgerHeaderRecord extends JsonObject {
+	readonly closedAt: string;
 	readonly recordType: 'ledger-header';
 	readonly sourceUrl: string;
 	readonly ledger: number;

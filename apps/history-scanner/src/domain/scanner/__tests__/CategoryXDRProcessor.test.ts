@@ -2,7 +2,9 @@ import { Url } from 'http-helper';
 import { Category } from '../../history-archive/Category.js';
 import type { CategoryVerificationData } from '../CategoryScanner.js';
 import { CategoryXDRProcessor } from '../CategoryXDRProcessor.js';
+import { ArchiveXdrError } from '../hash-worker.js';
 import type { HasherPool } from '../HasherPool.js';
+import { ScannerIssueError } from '../ScannerIssueError.js';
 import type {
 	ParsedHistoryRecord,
 	ParsedHistorySink
@@ -35,7 +37,7 @@ it('should apply workerpool results before acknowledging a write', async () => {
 	);
 });
 
-it('should propagate workerpool errors through the write callback', async () => {
+it('should classify workerpool failures as scanner infrastructure', async () => {
 	const error = new Error('hash worker failed');
 	const exec = jest.fn(async () => {
 		throw error;
@@ -46,11 +48,54 @@ it('should propagate workerpool errors through the write callback', async () => 
 		createVerificationData()
 	);
 
+	await expect(writeXdr(processor)).rejects.toBeInstanceOf(ScannerIssueError);
+	await expect(
+		writeXdr(
+			newProcessor(
+				Category.transactions,
+				createPool(exec),
+				createVerificationData()
+			)
+		)
+	).rejects.toMatchObject({
+		cause: error,
+		message: 'Worker pool failed to process archive data'
+	});
+});
+
+it('should preserve malformed archive XDR as archive content evidence', async () => {
+	const error = new ArchiveXdrError('Invalid transaction envelope archive XDR');
+	const exec = jest.fn(async () => {
+		throw error;
+	});
+	const processor = newProcessor(
+		Category.transactions,
+		createPool(exec),
+		createVerificationData()
+	);
+
 	await expect(writeXdr(processor)).rejects.toBe(error);
+	const serializedError = new Error(error.message);
+	serializedError.name = error.name;
+	await expect(
+		writeXdr(
+			newProcessor(
+				Category.transactions,
+				createPool(async () => {
+					throw serializedError;
+				}),
+				createVerificationData()
+			)
+		)
+	).rejects.toMatchObject({
+		message: error.message,
+		name: 'ArchiveXdrError'
+	});
 });
 
 it('should emit parsed ledger header records while preserving verification data', async () => {
 	const ledgerHeaderResult = {
+		closedAt: '2026-07-05T01:42:50.000Z',
 		ledger: 127,
 		transactionsHash: 'transactions-hash',
 		transactionResultsHash: 'transaction-results-hash',
@@ -59,7 +104,7 @@ it('should emit parsed ledger header records while preserving verification data'
 		bucketListHash: 'bucket-list-hash',
 		protocolVersion: 22
 	};
-	const emit = jest.fn<(record: ParsedHistoryRecord) => void>();
+	const emit = jest.fn<void, [ParsedHistoryRecord]>();
 	const exec = jest.fn(async () => ledgerHeaderResult);
 	const verificationData = createVerificationData();
 	const processor = newProcessor(
@@ -72,6 +117,7 @@ it('should emit parsed ledger header records while preserving verification data'
 	await writeXdr(processor);
 
 	expect(emit).toHaveBeenCalledWith({
+		closedAt: '2026-07-05T01:42:50.000Z',
 		recordType: 'ledger-header',
 		sourceUrl: 'https://history.example',
 		ledger: 127,
@@ -95,7 +141,7 @@ it('should emit parsed ledger header records while preserving verification data'
 });
 
 it('should emit parsed transaction envelope records', async () => {
-	const emit = jest.fn<(record: ParsedHistoryRecord) => void>();
+	const emit = jest.fn<void, [ParsedHistoryRecord]>();
 	const exec = jest.fn(async () => ({
 		ledger: 7,
 		hash: 'tx-set-hash',
@@ -128,7 +174,7 @@ it('should emit parsed transaction envelope records', async () => {
 });
 
 it('should emit parsed transaction result records', async () => {
-	const emit = jest.fn<(record: ParsedHistoryRecord) => void>();
+	const emit = jest.fn<void, [ParsedHistoryRecord]>();
 	const exec = jest.fn(async () => ({
 		ledger: 7,
 		hash: 'tx-result-hash',

@@ -3,9 +3,9 @@ import { EntityManager, Repository, SelectQueryBuilder } from 'typeorm';
 import Organization from '@network-scan/domain/organization/Organization.js';
 import type { OrganizationRepository } from '@network-scan/domain/organization/OrganizationRepository.js';
 import { OrganizationId } from '@network-scan/domain/organization/OrganizationId.js';
-import OrganizationMeasurement from '@network-scan/domain/organization/OrganizationMeasurement.js';
 import { Snapshot } from '@core/domain/Snapshot.js';
 import OrganizationSnapShot from '@network-scan/domain/organization/OrganizationSnapShot.js';
+import { saveOrganizationMeasurement } from './OrganizationTomlEvidencePersistence.js';
 
 @injectable()
 export class TypeOrmOrganizationRepository implements OrganizationRepository {
@@ -177,7 +177,7 @@ export class TypeOrmOrganizationRepository implements OrganizationRepository {
 
 		const measurement = organization.latestMeasurement();
 		if (measurement && measurement.time.getTime() >= from.getTime()) {
-			await baseRepo.save(OrganizationMeasurement, measurement);
+			await saveOrganizationMeasurement(baseRepo, organization, measurement);
 		}
 
 		return organization;

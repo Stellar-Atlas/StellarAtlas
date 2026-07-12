@@ -60,6 +60,7 @@ export const ArchiveScanRouterWrapper = (
 			query('limit').optional().isInt({ min: 1, max: GetArchiveScans.maxLimit })
 		],
 		async function (req: express.Request, res: express.Response) {
+			markHistoricalRangeResponse(res);
 			res.setHeader(
 				'Cache-Control',
 				'public, max-age=' + archiveScanCacheMaxAgeSeconds
@@ -85,6 +86,7 @@ export const ArchiveScanRouterWrapper = (
 	);
 
 	archiveScanRouter.get('/queue', async function (_req, res) {
+		markHistoricalRangeResponse(res);
 		res.setHeader(
 			'Cache-Control',
 			'public, max-age=' + archiveScanCacheMaxAgeSeconds
@@ -245,6 +247,7 @@ export const ArchiveScanRouterWrapper = (
 		'/:encodedUrl/errors',
 		[param('encodedUrl').isURL()],
 		async function (req: express.Request, res: express.Response) {
+			markHistoricalRangeResponse(res);
 			return handleGetArchiveScanLogs(req, res, config, 'encodedUrl');
 		}
 	);
@@ -401,7 +404,6 @@ export const ArchiveScanRouterWrapper = (
 			if (invalidUrlResult !== undefined) {
 				return res.status(400).json({ error: 'Invalid url' });
 			}
-
 			if (
 				state.isErr() ||
 				summary.isErr() ||
@@ -448,10 +450,7 @@ export const ArchiveScanRouterWrapper = (
 				limit,
 				url: req.params.encodedUrl
 			});
-			if (
-				planOrError.isErr() &&
-				planOrError.error instanceof InvalidUrlError
-			) {
+			if (planOrError.isErr() && planOrError.error instanceof InvalidUrlError) {
 				return res.status(400).json({ error: 'Invalid url' });
 			}
 			if (planOrError.isErr()) {
@@ -469,6 +468,7 @@ export const ArchiveScanRouterWrapper = (
 			query('limit').optional().isInt({ min: 1, max: maxEvidenceLimit })
 		],
 		async function (req: express.Request, res: express.Response) {
+			markHistoricalRangeResponse(res);
 			return handleGetArchiveScanEvidence(req, res, config, 'encodedUrl');
 		}
 	);
@@ -477,6 +477,7 @@ export const ArchiveScanRouterWrapper = (
 		'/:encodedUrl',
 		[param('encodedUrl').isURL()],
 		async function (req: express.Request, res: express.Response) {
+			markHistoricalRangeResponse(res);
 			return handleGetLatestArchiveScan(req, res, config, 'encodedUrl');
 		}
 	);
@@ -485,3 +486,12 @@ export const ArchiveScanRouterWrapper = (
 };
 
 export { ArchiveScanRouterWrapper as archiveScanRouter };
+
+function markHistoricalRangeResponse(res: express.Response): void {
+	res.setHeader('Deprecation', 'true');
+	res.setHeader('Link', '</v1/archive-scans/objects>; rel="successor-version"');
+	res.setHeader(
+		'Warning',
+		'299 - "Historical range-scan evidence; use archive object evidence for current health"'
+	);
+}

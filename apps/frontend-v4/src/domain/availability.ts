@@ -1,4 +1,7 @@
-import type { PublicNode, PublicOrganization } from '../api/types';
+import type {
+	NodeV1 as PublicNode,
+	OrganizationV1 as PublicOrganization
+} from 'shared';
 import { formatPercent } from '../format/formatters';
 
 export interface DisplayMetric {
@@ -9,7 +12,10 @@ export interface DisplayMetric {
 
 const minimumUsefulHistoryPercentage = 50;
 
-const isPartialCurrentWindow = (value: number, currentlyHealthy: boolean): boolean =>
+const isPartialCurrentWindow = (
+	value: number,
+	currentlyHealthy: boolean
+): boolean =>
 	currentlyHealthy && value > 0 && value < minimumUsefulHistoryPercentage;
 
 export const formatNode24HourActive = (node: PublicNode): DisplayMetric => {
@@ -32,14 +38,18 @@ export const formatNode24HourValidating = (node: PublicNode): DisplayMetric => {
 	}
 
 	return {
-		tone: node.statistics.validating24HoursPercentage >= 99.5 ? 'good' : 'warning',
+		tone:
+			node.statistics.validating24HoursPercentage >= 99.5 ? 'good' : 'warning',
 		value: formatPercent(node.statistics.validating24HoursPercentage)
 	};
 };
 
 export const formatNode30DayActive = (node: PublicNode): DisplayMetric => {
 	const value = node.statistics.active30DaysPercentage;
-	if (!node.statistics.has30DayStats || isPartialCurrentWindow(value, node.active)) {
+	if (
+		!node.statistics.has30DayStats ||
+		isPartialCurrentWindow(value, node.active)
+	) {
 		return {
 			detail: node.active ? 'Current scan is active' : undefined,
 			tone: 'muted',
@@ -55,7 +65,10 @@ export const formatNode30DayActive = (node: PublicNode): DisplayMetric => {
 
 export const formatNode30DayValidating = (node: PublicNode): DisplayMetric => {
 	const value = node.statistics.validating30DaysPercentage;
-	if (!node.statistics.has30DayStats || isPartialCurrentWindow(value, node.isValidating)) {
+	if (
+		!node.statistics.has30DayStats ||
+		isPartialCurrentWindow(value, node.isValidating)
+	) {
 		return {
 			detail: node.isValidating ? 'Current scan is validating' : undefined,
 			tone: 'muted',
@@ -72,7 +85,10 @@ export const formatNode30DayValidating = (node: PublicNode): DisplayMetric => {
 export const formatOrganization24HourAvailability = (
 	organization: PublicOrganization
 ): DisplayMetric => {
-	if (organization.subQuorumAvailable && organization.subQuorum24HoursAvailability >= 90) {
+	if (
+		organization.subQuorumAvailable &&
+		organization.subQuorum24HoursAvailability >= 90
+	) {
 		return {
 			detail: 'Current subquorum is available',
 			tone: 'good',
@@ -81,7 +97,8 @@ export const formatOrganization24HourAvailability = (
 	}
 
 	return {
-		tone: organization.subQuorum24HoursAvailability >= 99.5 ? 'good' : 'warning',
+		tone:
+			organization.subQuorum24HoursAvailability >= 99.5 ? 'good' : 'warning',
 		value: formatPercent(organization.subQuorum24HoursAvailability)
 	};
 };
@@ -90,9 +107,14 @@ export const formatOrganization30DayAvailability = (
 	organization: PublicOrganization
 ): DisplayMetric => {
 	const value = organization.subQuorum30DaysAvailability;
-	if (!organization.hasReliableUptime || isPartialCurrentWindow(value, organization.subQuorumAvailable)) {
+	if (
+		!organization.hasReliableUptime ||
+		isPartialCurrentWindow(value, organization.subQuorumAvailable)
+	) {
 		return {
-			detail: organization.subQuorumAvailable ? 'Current subquorum is available' : undefined,
+			detail: organization.subQuorumAvailable
+				? 'Current subquorum is available'
+				: undefined,
 			tone: 'muted',
 			value: 'Collecting'
 		};

@@ -1,8 +1,13 @@
 'use client';
 
 import Link from 'next/link';
-import { useEffect, useMemo, useState } from 'react';
-import type { PublicKnownOrganization } from '../../api/types';
+import { useRouter } from 'next/navigation';
+import { useState } from 'react';
+import type {
+	PublicKnownNetworkPage,
+	PublicKnownOrganizationListItem,
+	PublicKnownOrganizationScope
+} from '../../api/known-network-types';
 import {
 	formatOrganization24HourAvailability,
 	formatOrganization30DayAvailability
@@ -12,61 +17,47 @@ import {
 	getOrganizationTags
 } from '../../domain/network';
 import { StatusTags } from '../status-tags';
+import {
+	defaultOrganizationInventoryFilter,
+	isOrganizationInventoryFilter,
+	organizationInventoryFilterLabels,
+	organizationInventoryFilterOrder
+} from '../../domain/known-network-scopes';
 
 interface OrganizationTableProps {
-	organizations: readonly PublicKnownOrganization[];
+	organizations: readonly PublicKnownOrganizationListItem[];
+	page: PublicKnownNetworkPage;
+	query: string;
+	scope: PublicKnownOrganizationScope;
 	selectedOrganizationId?: string;
+	totalCount?: number;
 }
-
-const normalize = (value: string): string => value.toLowerCase();
-const pageSize = 12;
 
 export function OrganizationTable({
 	organizations,
-	selectedOrganizationId
+	page,
+	query,
+	scope,
+	selectedOrganizationId,
+	totalCount = organizations.length
 }: OrganizationTableProps): React.JSX.Element {
-	const [query, setQuery] = useState('');
-	const [page, setPage] = useState(0);
-	const visibleOrganizations = useMemo(() => {
-		const normalizedQuery = normalize(query.trim());
-
-		return organizations
-			.filter((knownOrganization) => {
-				const organization = knownOrganization.organization;
-				if (normalizedQuery.length === 0) return true;
-				const haystack = normalize([
-					getOrganizationLabel(organization),
-					organization.homeDomain,
-					organization.url ?? '',
-					organization.twitter ?? '',
-					organization.github ?? ''
-				].join(' '));
-				return haystack.includes(normalizedQuery);
-			})
-			.toSorted(
-				(left, right) =>
-					right.organization.validators.length -
-						left.organization.validators.length ||
-					getOrganizationLabel(left.organization).localeCompare(
-						getOrganizationLabel(right.organization)
-					)
-			);
-	}, [organizations, query]);
-	const pageCount = Math.max(1, Math.ceil(visibleOrganizations.length / pageSize));
-	const currentPage = Math.min(page, pageCount - 1);
-	const pagedOrganizations = visibleOrganizations.slice(
-		currentPage * pageSize,
-		currentPage * pageSize + pageSize
-	);
-	const firstVisible = visibleOrganizations.length === 0 ? 0 : currentPage * pageSize + 1;
-	const lastVisible = Math.min(
-		visibleOrganizations.length,
-		currentPage * pageSize + pageSize
-	);
-
-	useEffect(() => {
-		setPage(0);
-	}, [query]);
+	const router = useRouter();
+	const [input, setInput] = useState(query);
+	const pageNumber = Math.floor(page.offset / page.limit) + 1;
+	const pageCount = Math.max(1, Math.ceil(page.total / page.limit));
+	const navigate = (
+		nextScope: PublicKnownOrganizationScope,
+		nextQuery: string,
+		nextPage: number
+	): void => {
+		const params = new URLSearchParams();
+		params.set('scope', nextScope);
+		if (nextQuery.trim()) params.set('q', nextQuery.trim());
+		if (nextPage > 1) params.set('page', nextPage.toString());
+		router.push(`/organizations?${params.toString()}`);
+	};
+	const firstVisible = page.total === 0 ? 0 : page.offset + 1;
+	const lastVisible = page.offset + organizations.length;
 
 	return (
 		<section className="panel data-panel">
@@ -74,16 +65,36 @@ export function OrganizationTable({
 				<div>
 					<h2>Organizations</h2>
 					<span>
-						Showing {firstVisible}-{lastVisible} of{' '}
-						{visibleOrganizations.length} filtered from {organizations.length}
+						Showing {firstVisible}-{lastVisible} of {page.total} matching from{' '}
+						{totalCount} known
 					</span>
 				</div>
-				<input
-					aria-label="Filter organizations"
-					onChange={(event) => setQuery(event.currentTarget.value)}
-					placeholder="Filter organizations"
-					value={query}
-				/>
+				<div className="table-controls">
+					<input
+						aria-label="Filter organizations"
+						onChange={(event) => setInput(event.currentTarget.value)}
+						onKeyDown={(event) => {
+							if (event.key === 'Enter') navigate(scope, input, 1);
+						}}
+						placeholder="Filter organizations"
+						value={input}
+					/>
+					<select
+						aria-label="Organization inventory scope"
+						onChange={(event) => {
+							const value = event.currentTarget.value;
+							if (isOrganizationInventoryFilter(value))
+								navigate(value, input, 1);
+						}}
+						value={scope}
+					>
+						{organizationInventoryFilterOrder.map((option) => (
+							<option key={option} value={option}>
+								{organizationInventoryFilterLabels[option]}
+							</option>
+						))}
+					</select>
+				</div>
 			</div>
 			<div className="responsive-table">
 				<table>
@@ -97,7 +108,7 @@ export function OrganizationTable({
 						</tr>
 					</thead>
 					<tbody>
-						{pagedOrganizations.map((knownOrganization) => {
+						{organizations.map((knownOrganization) => {
 							const organization = knownOrganization.organization;
 							const availability24Hours =
 								formatOrganization24HourAvailability(organization);
@@ -105,11 +116,17 @@ export function OrganizationTable({
 								formatOrganization30DayAvailability(organization);
 							return (
 								<tr
-									className={selectedOrganizationId === organization.id ? 'active-row' : ''}
+									className={
+										selectedOrganizationId === organization.id
+											? 'active-row'
+											: ''
+									}
 									key={organization.id}
 								>
 									<td>
-										<Link href={`/organizations/${encodeURIComponent(organization.id)}`}>
+										<Link
+											href={`/organizations/${encodeURIComponent(organization.id)}`}
+										>
 											<strong>{getOrganizationLabel(organization)}</strong>
 										</Link>
 										<small>{organization.homeDomain}</small>
@@ -119,19 +136,23 @@ export function OrganizationTable({
 										<span className={`metric-text ${availability24Hours.tone}`}>
 											{availability24Hours.value}
 										</span>
-										{availability24Hours.detail ? <small>{availability24Hours.detail}</small> : null}
+										{availability24Hours.detail ? (
+											<small>{availability24Hours.detail}</small>
+										) : null}
 									</td>
 									<td>
 										<span className={`metric-text ${availability30Days.tone}`}>
 											{availability30Days.value}
 										</span>
-										{availability30Days.detail ? <small>{availability30Days.detail}</small> : null}
+										{availability30Days.detail ? (
+											<small>{availability30Days.detail}</small>
+										) : null}
 									</td>
 									<td>
 										<StatusTags
 											tags={[
 												...getOrganizationTags(organization),
-												...(!knownOrganization.current
+												...(knownOrganization.scope === 'archived'
 													? [{ label: 'archived', tone: 'neutral' as const }]
 													: [])
 											]}
@@ -145,20 +166,18 @@ export function OrganizationTable({
 			</div>
 			<div className="pagination-bar">
 				<button
-					disabled={currentPage === 0}
-					onClick={() => setPage((value) => Math.max(0, value - 1))}
+					disabled={pageNumber <= 1}
+					onClick={() => navigate(scope, query, pageNumber - 1)}
 					type="button"
 				>
 					Previous
 				</button>
 				<span>
-					Page {formatPage(currentPage)} of {formatPage(pageCount - 1)}
+					Page {pageNumber} of {pageCount}
 				</span>
 				<button
-					disabled={currentPage >= pageCount - 1}
-					onClick={() =>
-						setPage((value) => Math.min(pageCount - 1, value + 1))
-					}
+					disabled={!page.hasMore}
+					onClick={() => navigate(scope, query, pageNumber + 1)}
 					type="button"
 				>
 					Next
@@ -166,8 +185,4 @@ export function OrganizationTable({
 			</div>
 		</section>
 	);
-}
-
-function formatPage(pageIndex: number): number {
-	return pageIndex + 1;
 }

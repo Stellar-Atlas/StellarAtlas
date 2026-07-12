@@ -50,11 +50,25 @@ describe('GetStatus', () => {
 					ageMs: 300000,
 					staleAfterMs: 3600000
 				},
+				archiveEvidence: {
+					status: 'ok',
+					latestAt: '2026-07-03T11:50:00.000Z',
+					ageMs: 600000,
+					staleAfterMs: 21600000,
+					drivesPlatformStatus: false,
+					drivesRuntimeHealth: false,
+					source: 'archive_object_evidence'
+				},
 				archiveScan: {
 					status: 'ok',
 					latestAt: '2026-07-03T11:50:00.000Z',
 					ageMs: 600000,
-					staleAfterMs: null
+					staleAfterMs: 21600000,
+					deprecated: true,
+					drivesPlatformStatus: false,
+					drivesRuntimeHealth: false,
+					historical: true,
+					source: 'legacy_range_scan'
 				}
 			})
 		);
@@ -119,9 +133,13 @@ describe('GetStatus', () => {
 					status: 'ok',
 					activeWorkers: 0,
 					configuredWorkerProcesses: 24,
+					idleWorkers: 0,
+					lastHeartbeatAt: null,
+					registeredWorkers: 0,
 					staleWorkers: 0,
 					totalTakenJobs: 0,
-					staleJobAgeMs: 1800000
+					staleJobAgeMs: 1800000,
+					workers: []
 				},
 				communityScanners: {
 					status: 'ok',
@@ -156,7 +174,7 @@ describe('GetStatus', () => {
 		});
 	});
 
-	it('should surface the worst section status', async () => {
+	it('does not roll the legacy range queue into platform status', async () => {
 		getArchiveQueueStatusMock.execute.mockResolvedValue(
 			ok({
 				generatedAt: '2026-07-03T12:00:00.000Z',
@@ -172,7 +190,69 @@ describe('GetStatus', () => {
 		const result = await getStatus.execute();
 
 		expect(result.isOk()).toBe(true);
+		expect(result._unsafeUnwrap().archiveQueue.status).toBe('degraded');
+		expect(result._unsafeUnwrap().status).toBe('ok');
+	});
+
+	it('surfaces current object-worker runtime health', async () => {
+		const current = (await getWorkerStatusMock.execute())._unsafeUnwrap();
+		getWorkerStatusMock.execute.mockResolvedValue(
+			ok({
+				...current,
+				archiveWorkers: {
+					...current.archiveWorkers,
+					status: 'degraded'
+				},
+				status: 'degraded'
+			})
+		);
+
+		const result = await getStatus.execute();
+
 		expect(result._unsafeUnwrap().status).toBe('degraded');
+	});
+
+	it('does not roll remote archive evidence freshness into platform status', async () => {
+		const archiveEvidence = {
+			ageMs: 10 * 60 * 60 * 1000,
+			drivesPlatformStatus: false as const,
+			drivesRuntimeHealth: false as const,
+			latestAt: '2026-07-03T02:00:00.000Z',
+			source: 'archive_object_evidence' as const,
+			staleAfterMs: 6 * 60 * 60 * 1000,
+			status: 'degraded' as const
+		};
+		getDataFreshnessStatusMock.execute.mockResolvedValue(
+			ok({
+				archiveEvidence,
+				archiveScan: {
+					ageMs: 4 * 24 * 60 * 60 * 1000,
+					deprecated: true,
+					drivesPlatformStatus: false,
+					drivesRuntimeHealth: false,
+					historical: true,
+					latestAt: '2026-06-29T12:00:00.000Z',
+					source: 'legacy_range_scan',
+					staleAfterMs: 6 * 60 * 60 * 1000,
+					status: 'degraded'
+				},
+				generatedAt: '2026-07-03T12:00:00.000Z',
+				networkScan: {
+					ageMs: 300_000,
+					latestAt: '2026-07-03T11:55:00.000Z',
+					staleAfterMs: 3_600_000,
+					status: 'ok'
+				},
+				status: 'ok'
+			})
+		);
+
+		const result = await getStatus.execute();
+
+		expect(result._unsafeUnwrap().dataFreshness.archiveEvidence.status).toBe(
+			'degraded'
+		);
+		expect(result._unsafeUnwrap().status).toBe('ok');
 	});
 
 	it('should pass through section errors', async () => {

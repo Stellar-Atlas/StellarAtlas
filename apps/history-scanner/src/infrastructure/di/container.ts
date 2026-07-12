@@ -32,6 +32,8 @@ import type { ExceptionLogger } from 'exception-logger';
 import { PinoLogger } from 'logger';
 import type { Logger } from 'logger';
 import { VerifySingleArchive } from '../../use-cases/verify-single-archive/VerifySingleArchive.js';
+import type { HistoryArchiveWorkerStatusReporter } from '../../domain/scan/HistoryArchiveWorkerStatusReporter.js';
+import { RESTHistoryArchiveWorkerStatusReporter } from '../services/RESTHistoryArchiveWorkerStatusReporter.js';
 
 export function load(container: Container, config: Config) {
 	container.bind(CategoryScanner).toSelf();
@@ -101,6 +103,17 @@ export function load(container: Container, config: Config) {
 		.bind<ScanCoordinatorService>(TYPES.ScanCoordinatorService)
 		.toDynamicValue(() => {
 			return new RESTScanCoordinatorService(
+				container.get<HttpService>(TYPES.HttpService),
+				config.coordinatorAPIBaseUrl,
+				config.coordinatorAuth
+			);
+		});
+	container
+		.bind<HistoryArchiveWorkerStatusReporter>(
+			TYPES.HistoryArchiveWorkerStatusReporter
+		)
+		.toDynamicValue(() => {
+			return new RESTHistoryArchiveWorkerStatusReporter(
 				container.get<HttpService>(TYPES.HttpService),
 				config.coordinatorAPIBaseUrl,
 				config.coordinatorAuth

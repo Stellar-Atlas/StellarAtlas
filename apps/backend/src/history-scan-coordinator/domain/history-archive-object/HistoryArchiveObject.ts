@@ -13,11 +13,17 @@ import type {
 	HistoryArchiveObjectTypeV1,
 	HistoryArchiveObjectVerificationFactsV1
 } from 'shared';
+import type {
+	ArchiveMetadataDTO,
+	HistoryArchiveObjectFailureChannelDTO
+} from 'history-scanner-dto';
 import { getHistoryArchiveObjectHostIdentity } from './HistoryArchiveObjectHostIdentity.js';
 
 export type HistoryArchiveObjectType = HistoryArchiveObjectTypeV1;
 export type HistoryArchiveObjectStatus = HistoryArchiveObjectStatusV1;
 export type HistoryArchiveObjectDelayReason = HistoryArchiveObjectDelayReasonV1;
+export type HistoryArchiveObjectExecutionDisposition =
+	'executable' | 'deferred' | 'superseded';
 
 export interface HistoryArchiveObjectError {
 	readonly message: string;
@@ -91,11 +97,41 @@ export class HistoryArchiveObject extends CoreEntity {
 	@Column('timestamptz', { nullable: true })
 	public claimedAt!: Date | null;
 
+	@Column('timestamptz', { nullable: true })
+	public lastClaimedAt!: Date | null;
+
+	@Column('boolean', { nullable: true })
+	public dependencyReady!: boolean | null;
+
+	@Column('text', { default: 'deferred', nullable: true })
+	public executionDisposition!: HistoryArchiveObjectExecutionDisposition | null;
+
+	@Column('text', { default: 'legacy-planning-intent', nullable: true })
+	public executionReason!: string | null;
+
+	@Column('timestamptz', { nullable: true })
+	public executionDispositionAt!: Date | null;
+
+	@Column('timestamptz', { nullable: true })
+	public dependenciesMaterializedAt!: Date | null;
+
+	@Column('jsonb', { nullable: true })
+	public completionArchiveMetadata!: ArchiveMetadataDTO | null;
+
+	@Column('timestamptz', { nullable: true })
+	public transitionEffectsCompletedAt!: Date | null;
+
+	@Column('timestamptz', { nullable: true })
+	public transitionEffectsRequiredAt!: Date | null;
+
 	@Column('uuid', { nullable: true })
 	public claimedByCommunityScannerId!: string | null;
 
 	@Column('text', { nullable: true })
 	public errorType!: string | null;
+
+	@Column('text', { nullable: true })
+	public failureChannel!: HistoryArchiveObjectFailureChannelDTO | null;
 
 	@Column('text', { nullable: true })
 	public errorMessage!: string | null;
@@ -122,6 +158,8 @@ export class HistoryArchiveObject extends CoreEntity {
 		readonly archiveUrlIdentity: string;
 		readonly bucketHash?: string | null;
 		readonly checkpointLedger?: number | null;
+		readonly dependencyReady?: boolean;
+		readonly executionDisposition?: HistoryArchiveObjectExecutionDisposition;
 		readonly hostIdentity?: string;
 		readonly objectKey: string;
 		readonly objectOrder: number;
@@ -137,7 +175,8 @@ export class HistoryArchiveObject extends CoreEntity {
 		this.archiveUrl = props.archiveUrl;
 		this.archiveUrlIdentity = props.archiveUrlIdentity;
 		this.hostIdentity =
-			props.hostIdentity ?? getHistoryArchiveObjectHostIdentity(props.archiveUrl);
+			props.hostIdentity ??
+			getHistoryArchiveObjectHostIdentity(props.archiveUrl);
 		this.bucketHash = props.bucketHash ?? null;
 		this.checkpointLedger = props.checkpointLedger ?? null;
 		this.objectKey = props.objectKey;
@@ -151,8 +190,18 @@ export class HistoryArchiveObject extends CoreEntity {
 		this.nextAttemptAt = null;
 		this.refreshAfter = null;
 		this.claimedAt = null;
+		this.lastClaimedAt = null;
+		this.dependencyReady = props.dependencyReady ?? true;
+		this.executionDisposition = props.executionDisposition ?? 'executable';
+		this.executionReason = null;
+		this.executionDispositionAt = null;
+		this.dependenciesMaterializedAt = null;
+		this.completionArchiveMetadata = null;
+		this.transitionEffectsCompletedAt = null;
+		this.transitionEffectsRequiredAt = null;
 		this.claimedByCommunityScannerId = null;
 		this.errorType = null;
+		this.failureChannel = null;
 		this.errorMessage = null;
 		this.httpStatus = null;
 		this.verificationFacts = null;

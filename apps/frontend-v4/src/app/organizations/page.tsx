@@ -9,11 +9,25 @@ import { formatInteger } from '../../format/formatters';
 
 export const revalidate = 10;
 
-async function OrganizationsRouteContent(): Promise<React.JSX.Element> {
+interface OrganizationsRouteProps {
+	readonly searchParams: Promise<Record<string, string | string[] | undefined>>;
+}
+
+async function OrganizationsRouteContent({
+	searchParams
+}: OrganizationsRouteProps): Promise<React.JSX.Element> {
 	await connection();
+	const params = await searchParams;
+	const scope = parseOrganizationScope(params.scope);
+	const page = parsePage(params.page);
+	const query = singleValue(params.q)?.slice(0, 128) ?? '';
+	const limit = 25;
 	const [network, knownOrganizations] = await Promise.all([
 		fetchPublicNetwork({ revalidate }),
-		fetchKnownOrganizations({ revalidate })
+		fetchKnownOrganizations(
+			{ limit, offset: (page - 1) * limit, query, scope },
+			{ revalidate }
+		)
 	]);
 	const organizations = knownOrganizations.organizations.map(
 		(knownOrganization) => knownOrganization.organization
@@ -37,15 +51,37 @@ async function OrganizationsRouteContent(): Promise<React.JSX.Element> {
 					</div>
 				}
 			/>
-			<OrganizationTable organizations={knownOrganizations.organizations} />
+			<OrganizationTable
+				organizations={knownOrganizations.organizations}
+				page={knownOrganizations.page}
+				query={query}
+				scope={scope}
+				totalCount={knownOrganizations.scopeTotals['all-known']}
+			/>
 		</main>
 	);
 }
 
-export default function OrganizationsPage(): React.JSX.Element {
+export default function OrganizationsPage(
+	props: OrganizationsRouteProps
+): React.JSX.Element {
 	return (
 		<Suspense fallback={<RouteLoadingPanel />}>
-			<OrganizationsRouteContent />
+			<OrganizationsRouteContent {...props} />
 		</Suspense>
 	);
+}
+
+function singleValue(value: string | string[] | undefined): string | undefined {
+	return typeof value === 'string' ? value : undefined;
+}
+
+function parsePage(value: string | string[] | undefined): number {
+	const parsed = Number(singleValue(value));
+	return Number.isSafeInteger(parsed) && parsed >= 1 ? parsed : 1;
+}
+
+function parseOrganizationScope(value: string | string[] | undefined) {
+	const scope = singleValue(value);
+	return scope === 'archived' || scope === 'all-known' ? scope : 'current';
 }

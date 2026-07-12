@@ -49,4 +49,17 @@ describe('ArchiveUrlIdentity', () => {
 			getHistoryArchiveUrlIdentity('https://history.example.com/archive-b')
 		).toBe('https://history.example.com/archive-b');
 	});
+
+	it('preserves case-sensitive path and query identity data', () => {
+		expect(
+			getHistoryArchiveUrlIdentity(
+				'HTTPS://History.Example.COM/Archive/Case?Token=AbC'
+			)
+		).toBe('https://history.example.com/Archive/Case?Token=AbC');
+		expect(
+			getHistoryArchiveUrlIdentity(
+				'https://history.example.com/archive/case?Token=abc'
+			)
+		).not.toBe('https://history.example.com/Archive/Case?Token=AbC');
+	});
 });

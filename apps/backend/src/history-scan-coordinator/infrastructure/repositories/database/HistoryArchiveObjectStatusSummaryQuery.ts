@@ -1,13 +1,16 @@
 import type { EntityManager } from 'typeorm';
 import type {
-	HistoryArchiveCheckpointCoverageV1,
-	HistoryArchiveObjectSummaryV1,
-	HistoryArchiveSourceSummaryV1
+	HistoryArchiveStatusSourceV1,
+	HistoryArchiveStatusSummaryV1
 } from 'shared';
 import { requireNumber, type NumericValue } from './ScanJobRowMapper.js';
 import { getCheckpointCoverage } from './HistoryArchiveObjectCheckpointCoverageQuery.js';
 
 type SourceRow = {
+	readonly activeObjectChecks?: NumericValue;
+	readonly activeobjectchecks?: NumericValue;
+	readonly archiveEvidenceFailures?: NumericValue;
+	readonly archiveevidencefailures?: NumericValue;
 	readonly archiveUrl?: string;
 	readonly archiveurl?: string;
 	readonly archiveUrlIdentity?: string;
@@ -18,115 +21,153 @@ type SourceRow = {
 	readonly latestcheckpointledger?: NumericValue | null;
 	readonly latestDiscoveredCheckpointLedger?: NumericValue | null;
 	readonly latestdiscoveredcheckpointledger?: NumericValue | null;
-	readonly objectCompleteCheckpoints?: NumericValue;
-	readonly objectcompletecheckpoints?: NumericValue;
+	readonly mismatchCheckpointProofs?: NumericValue;
+	readonly mismatchcheckpointproofs?: NumericValue;
+	readonly notEvaluableCheckpointProofs?: NumericValue;
+	readonly notevaluablecheckpointproofs?: NumericValue;
+	readonly objectCompleteCheckpointProofs?: NumericValue;
+	readonly objectcompletecheckpointproofs?: NumericValue;
 	readonly observedAt?: Date | string;
 	readonly observedat?: Date | string;
+	readonly pendingCheckpointProofs?: NumericValue;
+	readonly pendingcheckpointproofs?: NumericValue;
 	readonly rootObjectStatus?: string | null;
 	readonly rootobjectstatus?: string | null;
+	readonly rootFailureChannel?: string | null;
+	readonly rootfailurechannel?: string | null;
+	readonly scannerIssueFailures?: NumericValue;
+	readonly scannerissuefailures?: NumericValue;
 	readonly source?: string;
 	readonly stateStatus?: string;
 	readonly statestatus?: string;
 	readonly stateUrl?: string;
 	readonly stateurl?: string;
-	readonly totalProofRows?: NumericValue;
-	readonly totalproofrows?: NumericValue;
-	readonly pendingProofRows?: NumericValue;
-	readonly pendingproofrows?: NumericValue;
-	readonly failedProofRows?: NumericValue;
-	readonly failedproofrows?: NumericValue;
-	readonly verifiedCheckpoints?: NumericValue;
-	readonly verifiedcheckpoints?: NumericValue;
+	readonly totalCheckpointProofs?: NumericValue;
+	readonly totalcheckpointproofs?: NumericValue;
+	readonly unclassifiedFailures?: NumericValue;
+	readonly unclassifiedfailures?: NumericValue;
+	readonly verifiedCheckpointProofs?: NumericValue;
+	readonly verifiedcheckpointproofs?: NumericValue;
 };
 
 type ActiveRow = {
-	readonly activeObjects?: NumericValue;
-	readonly activeobjects?: NumericValue;
+	readonly activeObjectChecks?: NumericValue;
+	readonly activeobjectchecks?: NumericValue;
 };
+
+type SourceCountRow = {
+	readonly sourceCount?: NumericValue;
+	readonly sourcecount?: NumericValue;
+};
+
+type FailureCountRow = {
+	readonly archiveEvidenceFailures?: NumericValue;
+	readonly archiveevidencefailures?: NumericValue;
+	readonly scannerIssueFailures?: NumericValue;
+	readonly scannerissuefailures?: NumericValue;
+	readonly unclassifiedFailures?: NumericValue;
+	readonly unclassifiedfailures?: NumericValue;
+};
+
+export const historyArchiveStatusSourceLimit = 256;
 
 export async function getHistoryArchiveObjectStatusSummary(
 	manager: EntityManager,
 	generatedAt = new Date()
-): Promise<HistoryArchiveObjectSummaryV1> {
-	const [checkpoints, sources, activeObjects] = await Promise.all([
+): Promise<HistoryArchiveStatusSummaryV1> {
+	const [
+		checkpointCoverage,
+		sources,
+		activeObjectChecks,
+		sourceCount,
+		failureCounts
+	] = await Promise.all([
 		getCheckpointCoverage(manager, null),
 		getStatusSourceSummaries(manager),
-		getActiveObjectCount(manager)
+		getActiveObjectCount(manager),
+		getSourceCount(manager),
+		getFailureCounts(manager)
 	]);
-	const totals = proofTotals(checkpoints, activeObjects);
 
 	return {
-		...totals,
-		archiveUrl: null,
-		archiveUrlIdentity: null,
-		buckets: {
-			activeBucketObjects: 0,
-			failedBucketObjects: 0,
-			pendingBucketObjects: 0,
-			totalBucketObjects: 0,
-			uniqueBucketHashes: 0,
-			verifiedBucketObjects: 0
-		},
-		checkpoints,
+		activeObjectChecks,
+		archiveEvidenceFailures: failureCounts.archiveEvidenceFailures,
+		checkpointCoverage,
 		generatedAt: generatedAt.toISOString(),
-		hostThrottles: [],
-		objectTypes: [],
-		scope: 'global',
-		sources
+		sourceCount,
+		sourceLimit: historyArchiveStatusSourceLimit,
+		scannerIssueFailures: failureCounts.scannerIssueFailures,
+		sources,
+		sourcesTruncated: sourceCount > sources.length,
+		unclassifiedFailures: failureCounts.unclassifiedFailures
 	};
+}
+
+async function getFailureCounts(
+	manager: EntityManager
+): Promise<RequiredFailureCounts> {
+	const [row] = (await manager.query(
+		failureCountSql
+	)) as readonly FailureCountRow[];
+	return {
+		archiveEvidenceFailures: failureCountField(row, 'archiveEvidenceFailures'),
+		scannerIssueFailures: failureCountField(row, 'scannerIssueFailures'),
+		unclassifiedFailures: failureCountField(row, 'unclassifiedFailures')
+	};
+}
+
+type RequiredFailureCounts = Pick<
+	HistoryArchiveStatusSummaryV1,
+	'archiveEvidenceFailures' | 'scannerIssueFailures' | 'unclassifiedFailures'
+>;
+
+function failureCountField(
+	row: FailureCountRow | undefined,
+	field: keyof FailureCountRow
+): number {
+	return requireNumber(row?.[field] ?? row?.[lowercaseFailure(field)], field);
+}
+
+function lowercaseFailure(field: keyof FailureCountRow): keyof FailureCountRow {
+	return field.toLowerCase() as keyof FailureCountRow;
 }
 
 async function getStatusSourceSummaries(
 	manager: EntityManager
-): Promise<readonly HistoryArchiveSourceSummaryV1[]> {
-	const rows = (await manager.query(sourceStatusSummarySql)) as readonly SourceRow[];
+): Promise<readonly HistoryArchiveStatusSourceV1[]> {
+	const rows = (await manager.query(sourceStatusSummarySql, [
+		historyArchiveStatusSourceLimit
+	])) as readonly SourceRow[];
 	return rows.map(mapSourceRow);
 }
 
+async function getSourceCount(manager: EntityManager): Promise<number> {
+	const [row] = (await manager.query(
+		sourceCountSql
+	)) as readonly SourceCountRow[];
+	return requireNumber(row?.sourceCount ?? row?.sourcecount, 'sourceCount');
+}
+
 async function getActiveObjectCount(manager: EntityManager): Promise<number> {
-	const [row] = (await manager.query(activeObjectCountSql)) as readonly ActiveRow[];
-	return requireNumber(row?.activeObjects ?? row?.activeobjects, 'activeObjects');
+	const [row] = (await manager.query(
+		activeObjectCountSql
+	)) as readonly ActiveRow[];
+	return requireNumber(
+		row?.activeObjectChecks ?? row?.activeobjectchecks,
+		'activeObjectChecks'
+	);
 }
 
-function proofTotals(
-	checkpoints: HistoryArchiveCheckpointCoverageV1,
-	activeObjects: number
-): Pick<
-	HistoryArchiveObjectSummaryV1,
-	| 'activeObjects'
-	| 'failedObjects'
-	| 'pendingObjects'
-	| 'totalObjects'
-	| 'verifiedObjects'
-> {
-	const pendingObjects =
-		checkpoints.categoryConsistencyPendingCheckpoints +
-		checkpoints.categoryConsistencyNotEvaluatedCheckpoints;
-
+function mapSourceRow(row: SourceRow): HistoryArchiveStatusSourceV1 {
 	return {
-		activeObjects,
-		failedObjects: checkpoints.categoryConsistencyFailedCheckpoints,
-		pendingObjects,
-		totalObjects: checkpoints.totalArchiveCheckpoints,
-		verifiedObjects: checkpoints.categoryConsistentArchiveCheckpoints
-	};
-}
-
-function mapSourceRow(row: SourceRow): HistoryArchiveSourceSummaryV1 {
-	const totalObjects = numberField(row, 'totalProofRows');
-	const failedObjects = numberField(row, 'failedProofRows');
-	const pendingObjects = numberField(row, 'pendingProofRows');
-	const verifiedCheckpoints = numberField(row, 'verifiedCheckpoints');
-
-	return {
-		activeObjects: 0,
+		activeObjectChecks: numberField(row, 'activeObjectChecks'),
+		archiveEvidenceFailures: numberField(row, 'archiveEvidenceFailures'),
 		archiveUrl: stringField(row.archiveUrl ?? row.archiveurl, 'archiveUrl'),
 		archiveUrlIdentity: stringField(
 			row.archiveUrlIdentity ?? row.archiveurlidentity,
 			'archiveUrlIdentity'
 		),
 		currentLedger: nullableNumber(row.currentLedger ?? row.currentledger),
-		failedObjects,
 		latestCheckpointLedger: nullableNumber(
 			row.latestCheckpointLedger ?? row.latestcheckpointledger
 		),
@@ -134,16 +175,28 @@ function mapSourceRow(row: SourceRow): HistoryArchiveSourceSummaryV1 {
 			row.latestDiscoveredCheckpointLedger ??
 				row.latestdiscoveredcheckpointledger
 		),
-		objectCompleteCheckpoints: numberField(row, 'objectCompleteCheckpoints'),
+		mismatchCheckpointProofs: numberField(row, 'mismatchCheckpointProofs'),
+		notEvaluableCheckpointProofs: numberField(
+			row,
+			'notEvaluableCheckpointProofs'
+		),
+		objectCompleteCheckpointProofs: numberField(
+			row,
+			'objectCompleteCheckpointProofs'
+		),
 		observedAt: dateField(row.observedAt ?? row.observedat),
-		pendingObjects,
+		pendingCheckpointProofs: numberField(row, 'pendingCheckpointProofs'),
 		rootObjectStatus: rootStatus(row.rootObjectStatus ?? row.rootobjectstatus),
+		rootFailureChannel: failureChannel(
+			row.rootFailureChannel ?? row.rootfailurechannel
+		),
+		scannerIssueFailures: numberField(row, 'scannerIssueFailures'),
 		source: sourceField(row.source),
 		stateStatus: stateStatus(row.stateStatus ?? row.statestatus),
 		stateUrl: stringField(row.stateUrl ?? row.stateurl, 'stateUrl'),
-		totalObjects,
-		verifiedCheckpoints,
-		verifiedObjects: verifiedCheckpoints
+		totalCheckpointProofs: numberField(row, 'totalCheckpointProofs'),
+		unclassifiedFailures: numberField(row, 'unclassifiedFailures'),
+		verifiedCheckpointProofs: numberField(row, 'verifiedCheckpointProofs')
 	};
 }
 
@@ -173,7 +226,7 @@ function dateField(value: Date | string | undefined): string {
 
 function rootStatus(
 	value: string | null | undefined
-): HistoryArchiveSourceSummaryV1['rootObjectStatus'] {
+): HistoryArchiveStatusSourceV1['rootObjectStatus'] {
 	if (value === null || value === undefined) return null;
 	if (
 		value === 'pending' ||
@@ -186,9 +239,17 @@ function rootStatus(
 	throw new Error('Archive status source row has invalid root status');
 }
 
+function failureChannel(
+	value: string | null | undefined
+): HistoryArchiveStatusSourceV1['rootFailureChannel'] {
+	if (value === null || value === undefined) return null;
+	if (value === 'archive_evidence' || value === 'scanner_issue') return value;
+	throw new Error('Archive status source row has invalid failure channel');
+}
+
 function sourceField(
 	value: string | undefined
-): HistoryArchiveSourceSummaryV1['source'] {
+): HistoryArchiveStatusSourceV1['source'] {
 	if (
 		value === 'backfill' ||
 		value === 'history-scanner' ||
@@ -201,7 +262,7 @@ function sourceField(
 
 function stateStatus(
 	value: string | undefined
-): HistoryArchiveSourceSummaryV1['stateStatus'] {
+): HistoryArchiveStatusSourceV1['stateStatus'] {
 	if (value === 'available' || value === 'invalid' || value === 'unreachable') {
 		return value;
 	}
@@ -212,33 +273,55 @@ function lowercase(field: keyof SourceRow): keyof SourceRow {
 	return field.toLowerCase() as keyof SourceRow;
 }
 
-const activeObjectCountSql = `
-	select count(*)::int as "activeObjects"
+export const activeObjectCountSql = `
+	select count(*)::int as "activeObjectChecks"
 	from history_archive_object_queue
 	where status = 'scanning'
 `;
 
-const sourceStatusSummarySql = `
+export const sourceCountSql = `
+	select count(*)::int as "sourceCount"
+	from history_archive_state_snapshot
+`;
+
+export const failureCountSql = `
+	select
+		count(*) filter (where "failureChannel" = 'archive_evidence')::bigint
+			as "archiveEvidenceFailures",
+		count(*) filter (where "failureChannel" = 'scanner_issue')::bigint
+			as "scannerIssueFailures",
+		count(*) filter (where "failureChannel" is null)::bigint
+			as "unclassifiedFailures"
+	from history_archive_object_queue
+	where status = 'failed'
+`;
+
+export const sourceStatusSummarySql = `
 	with root_object as (
 		select distinct on ("archiveUrlIdentity")
 			"archiveUrlIdentity",
-			status as "rootObjectStatus"
+			status as "rootObjectStatus",
+			"failureChannel" as "rootFailureChannel"
 		from history_archive_object_queue
 		where "objectType" = 'history-archive-state'
 		order by "archiveUrlIdentity", "updatedAt" desc
 	),
-	proof_counts as (
+	active_objects as (
+		select "archiveUrlIdentity", count(*)::int as "activeObjectChecks"
+		from history_archive_object_queue
+		where status = 'scanning'
+		group by "archiveUrlIdentity"
+	), failure_counts as (
 		select
 			"archiveUrlIdentity",
-			count(*) as "totalProofRows",
-			count(*) filter (where status = 'pending' or status = 'not-evaluable')
-				as "pendingProofRows",
-			count(*) filter (where status = 'mismatch') as "failedProofRows",
-			count(*) filter (where status = 'verified') as "verifiedCheckpoints",
-			count(*) filter (where "requiredObjectsComplete")
-				as "objectCompleteCheckpoints",
-			max("checkpointLedger") as "latestDiscoveredCheckpointLedger"
-		from history_archive_checkpoint_proof
+			count(*) filter (where "failureChannel" = 'archive_evidence')::bigint
+				as "archiveEvidenceFailures",
+			count(*) filter (where "failureChannel" = 'scanner_issue')::bigint
+				as "scannerIssueFailures",
+			count(*) filter (where "failureChannel" is null)::bigint
+				as "unclassifiedFailures"
+		from history_archive_object_queue
+		where status = 'failed'
 		group by "archiveUrlIdentity"
 	)
 	select
@@ -256,22 +339,36 @@ const sourceStatusSummarySql = `
 					* 64
 			) - 1
 		end as "latestCheckpointLedger",
-		proof_counts."latestDiscoveredCheckpointLedger",
-		coalesce(proof_counts."objectCompleteCheckpoints", 0)
-			as "objectCompleteCheckpoints",
-		coalesce(proof_counts."verifiedCheckpoints", 0)
-			as "verifiedCheckpoints",
+		proof."latestCheckpointLedger" as "latestDiscoveredCheckpointLedger",
+		coalesce(active."activeObjectChecks", 0) as "activeObjectChecks",
+		coalesce(failure_counts."archiveEvidenceFailures", 0)
+			as "archiveEvidenceFailures",
+		coalesce(failure_counts."scannerIssueFailures", 0)
+			as "scannerIssueFailures",
+		coalesce(failure_counts."unclassifiedFailures", 0)
+			as "unclassifiedFailures",
+		coalesce(proof."totalCheckpointProofs", 0) as "totalCheckpointProofs",
+		coalesce(proof."pendingCheckpointProofs", 0) as "pendingCheckpointProofs",
+		coalesce(proof."verifiedCheckpointProofs", 0) as "verifiedCheckpointProofs",
+		coalesce(proof."mismatchCheckpointProofs", 0) as "mismatchCheckpointProofs",
+		coalesce(proof."notEvaluableCheckpointProofs", 0)
+			as "notEvaluableCheckpointProofs",
+		coalesce(proof."objectCompleteCheckpointProofs", 0)
+			as "objectCompleteCheckpointProofs",
 		root_object."rootObjectStatus",
-		coalesce(proof_counts."totalProofRows", 0) as "totalProofRows",
-		coalesce(proof_counts."pendingProofRows", 0) as "pendingProofRows",
-		coalesce(proof_counts."failedProofRows", 0) as "failedProofRows"
+		root_object."rootFailureChannel"
 	from history_archive_state_snapshot state
 	left join root_object
 		on root_object."archiveUrlIdentity" = state."archiveUrlIdentity"
-	left join proof_counts
-		on proof_counts."archiveUrlIdentity" = state."archiveUrlIdentity"
+	left join history_archive_checkpoint_proof_rollup proof
+		on proof."archiveUrlIdentity" = state."archiveUrlIdentity"
+	left join active_objects active
+		on active."archiveUrlIdentity" = state."archiveUrlIdentity"
+	left join failure_counts
+		on failure_counts."archiveUrlIdentity" = state."archiveUrlIdentity"
 	order by
 		state.status asc,
 		coalesce(state."currentLedger", -1) desc,
 		state."archiveUrlIdentity" asc
+	limit $1
 `;

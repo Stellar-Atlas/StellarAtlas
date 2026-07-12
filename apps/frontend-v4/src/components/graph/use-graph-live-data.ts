@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
 import type {
 	PublicNetwork,
-	PublicScpStatementObservation
+	PublicScpStatementObservation,
+	PublicScpStatementReadMetadata
 } from '../../api/types';
 import {
 	publishLatestLedger,
@@ -9,37 +10,20 @@ import {
 } from '../../api/latest-ledger-events';
 import { getHighestLedgerSequence } from '../../domain/ledger-sequence';
 import { subscribeToLiveNetworkStream } from '../../api/live-network-stream';
-
-const scpStatementFetchLimit = 4_000;
+import {
+	applyLiveScpMessage,
+	createLiveScpConsumerState
+} from '../../api/live-scp-consumer-state';
 
 const getNewerLedger = (current: string | null, next: unknown): string | null =>
 	getHighestLedgerSequence([current, next]) ?? current;
-
-const compareStatementsNewestFirst = (
-	left: PublicScpStatementObservation,
-	right: PublicScpStatementObservation
-): number =>
-	new Date(right.observedAt).getTime() - new Date(left.observedAt).getTime() ||
-	right.statementHash.localeCompare(left.statementHash);
-
-const mergeScpStatements = (
-	current: readonly PublicScpStatementObservation[],
-	next: readonly PublicScpStatementObservation[]
-): PublicScpStatementObservation[] => {
-	const byHash = new Map(
-		current.map((statement) => [statement.statementHash, statement])
-	);
-	for (const statement of next) byHash.set(statement.statementHash, statement);
-	return Array.from(byHash.values())
-		.toSorted(compareStatementsNewestFirst)
-		.slice(0, scpStatementFetchLimit);
-};
 
 interface UseGraphLiveDataResult {
 	latestLedger: string | null;
 	latestLedgerClosedAt: string | null;
 	latestObservedScpSlotIndex: string | null;
 	network: PublicNetwork;
+	scpReadMetadata: PublicScpStatementReadMetadata | null;
 	scpStatements: PublicScpStatementObservation[];
 }
 
@@ -48,22 +32,26 @@ export const useGraphLiveData = (
 	initialScpStatements: PublicScpStatementObservation[]
 ): UseGraphLiveDataResult => {
 	const [network, setNetwork] = useState(initialNetwork);
-	const [scpStatements, setScpStatements] = useState(initialScpStatements);
+	const [scpState, setScpState] = useState(() =>
+		createLiveScpConsumerState(initialScpStatements)
+	);
 	const [latestLedger, setLatestLedger] = useState<string | null>(null);
 	const [latestLedgerClosedAt, setLatestLedgerClosedAt] = useState<
 		string | null
 	>(null);
-	const latestObservedScpSlotIndex =
-		getHighestLedgerSequence(
-			scpStatements.map((statement) => statement.slotIndex)
-		);
+	const latestObservedScpSlotIndex = getHighestLedgerSequence(
+		scpState.statements.map((statement) => statement.slotIndex)
+	);
 
 	useEffect(() => {
 		setNetwork(initialNetwork);
 	}, [initialNetwork]);
 
 	useEffect(() => {
-		setScpStatements(initialScpStatements);
+		setScpState((current) => ({
+			...current,
+			statements: [...initialScpStatements]
+		}));
 	}, [initialScpStatements]);
 
 	useEffect(
@@ -91,10 +79,8 @@ export const useGraphLiveData = (
 						getNewerLedger(current, message.payload.sequence)
 					);
 				}
-				if (message.type === 'scp' && message.payload.length > 0) {
-					setScpStatements((current) =>
-						mergeScpStatements(current, message.payload)
-					);
+				if (message.type === 'scp') {
+					setScpState((current) => applyLiveScpMessage(current, message));
 				}
 			}),
 		[]
@@ -105,6 +91,7 @@ export const useGraphLiveData = (
 		latestLedgerClosedAt,
 		latestObservedScpSlotIndex,
 		network,
-		scpStatements
+		scpReadMetadata: scpState.metadata,
+		scpStatements: scpState.statements
 	};
 };

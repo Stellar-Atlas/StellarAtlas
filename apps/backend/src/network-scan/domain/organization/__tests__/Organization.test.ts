@@ -5,6 +5,8 @@ import { OrganizationValidators } from '../OrganizationValidators.js';
 import { createDummyPublicKey } from '../../node/__fixtures__/createDummyPublicKey.js';
 import { createDummyNode } from '../../node/__fixtures__/createDummyNode.js';
 import NodeMeasurement from '../../node/NodeMeasurement.js';
+import { TomlState } from '../scan/TomlState.js';
+import { TOML_TLS_CERTIFICATE_WARNING } from '../../network/scan/TomlService.js';
 
 describe('Organization', () => {
 	describe('name changes', () => {
@@ -144,11 +146,68 @@ describe('Organization', () => {
 			expect(organization.snapshotStartDate).toEqual(new Date('2020-01-02'));
 		});
 
-		test('stellarTomlText ignores null fetch results', () => {
+		test('stellarTomlText ignores observations older than the current snapshot', () => {
 			const organization = createOrganization();
-			organization.updateStellarTomlText(null, new Date('2020-01-02'));
-			expect(organization.stellarTomlText).toBeNull();
-			expect(organization.snapshotStartDate).toEqual(new Date('2020-01-01'));
+			organization.updateStellarTomlText(
+				'VERSION="2.0.0"',
+				new Date('2020-01-02')
+			);
+			organization.updateStellarTomlText(
+				'VERSION="1.0.0"',
+				new Date('2020-01-01')
+			);
+			expect(organization.stellarTomlText).toBe('VERSION="2.0.0"');
+			expect(organization.snapshotStartDate).toEqual(new Date('2020-01-02'));
+		});
+	});
+
+	describe('TOML attempt observations', () => {
+		test('an older attempt cannot replace a newer observation', () => {
+			const organization = createOrganization();
+			const latestTime = new Date('2020-01-03');
+			organization.recordTomlAttempt(
+				'success',
+				TomlState.Ok,
+				[],
+				latestTime,
+				'VERSION="2.0.0"',
+				true,
+				'latest-run'
+			);
+			organization.recordTomlAttempt(
+				'failure',
+				TomlState.ParsingError,
+				[],
+				new Date('2020-01-02')
+			);
+
+			expect(organization.latestMeasurement()?.toTomlAttempt()).toEqual({
+				authoritative: true,
+				content: 'VERSION="2.0.0"',
+				observedAt: latestTime,
+				result: 'success',
+				runId: 'latest-run',
+				state: TomlState.Ok,
+				warnings: []
+			});
+		});
+
+		test('TLS-disabled evidence cannot be authoritative inside the aggregate', () => {
+			const organization = createOrganization();
+			organization.recordTomlAttempt(
+				'success',
+				TomlState.Ok,
+				[TOML_TLS_CERTIFICATE_WARNING],
+				new Date('2020-01-03'),
+				'VERSION="2.0.0"',
+				true,
+				'insecure-run'
+			);
+
+			expect(organization.latestMeasurement()?.toTomlAttempt()).toMatchObject({
+				authoritative: false,
+				warnings: [TOML_TLS_CERTIFICATE_WARNING]
+			});
 		});
 	});
 

@@ -7,7 +7,11 @@ import { OrganizationValidators } from './OrganizationValidators.js';
 import Node from '../node/Node.js';
 import OrganizationMeasurement from './OrganizationMeasurement.js';
 import { TomlState } from './scan/TomlState.js';
-import type { TomlFetchWarning } from '../network/scan/TomlService.js';
+import {
+	TOML_TLS_CERTIFICATE_WARNING,
+	type TomlFetchWarning
+} from '../network/scan/TomlService.js';
+import type { OrganizationTomlAttemptResult } from './scan/OrganizationTomlFetchResult.js';
 
 @Entity('organization')
 export default class Organization extends VersionedEntity<OrganizationSnapShot> {
@@ -96,8 +100,8 @@ export default class Organization extends VersionedEntity<OrganizationSnapShot> 
 		this.currentSnapshot().horizonUrl = horizonUrl;
 	}
 
-	updateStellarTomlText(stellarTomlText: string | null, time: Date) {
-		if (stellarTomlText === null) return;
+	updateStellarTomlText(stellarTomlText: string, time: Date) {
+		if (time.getTime() < this.currentSnapshot().startDate.getTime()) return;
 		if (this.stellarTomlText === stellarTomlText) return;
 		this.addSnapshotIfNotExistsFor(time);
 		this.currentSnapshot().stellarTomlText = stellarTomlText;
@@ -165,15 +169,19 @@ export default class Organization extends VersionedEntity<OrganizationSnapShot> 
 	}
 
 	addMeasurement(measurement: OrganizationMeasurement) {
+		const latestMeasurement = this.latestMeasurement();
+		if (
+			latestMeasurement !== null &&
+			measurement.time.getTime() < latestMeasurement.time.getTime()
+		) {
+			return;
+		}
 		this._measurements.push(measurement);
 	}
 
-	updateAvailability(validators: Node[], time: Date): void {
-		let measurement = this.latestMeasurement();
-		if (measurement === null || measurement.time.getTime() !== time.getTime()) {
-			measurement = new OrganizationMeasurement(time, this);
-			this._measurements.push(measurement);
-		}
+	updateAvailability(validators: Node[], time: Date, scanRunId?: string): void {
+		const measurement = this.getOrCreateMeasurement(time, scanRunId);
+		if (measurement === null) return;
 		const validatingNodesCount = validators
 			.filter((validator) => this.validators.contains(validator.publicKey))
 			.filter(
@@ -185,21 +193,37 @@ export default class Organization extends VersionedEntity<OrganizationSnapShot> 
 	}
 
 	updateTomlState(tomlState: TomlState, time: Date): void {
-		let measurement = this.latestMeasurement();
-		if (measurement === null || measurement.time.getTime() !== time.getTime()) {
-			measurement = new OrganizationMeasurement(time, this);
-			this._measurements.push(measurement);
-		}
+		const measurement = this.getOrCreateMeasurement(time);
+		if (measurement === null) return;
 		measurement.tomlState = tomlState;
 	}
 
 	updateTomlWarnings(warnings: TomlFetchWarning[], time: Date): void {
-		let measurement = this.latestMeasurement();
-		if (measurement === null || measurement.time.getTime() !== time.getTime()) {
-			measurement = new OrganizationMeasurement(time, this);
-			this._measurements.push(measurement);
-		}
+		const measurement = this.getOrCreateMeasurement(time);
+		if (measurement === null) return;
 		measurement.tomlWarnings = warnings;
+	}
+
+	recordTomlAttempt(
+		result: OrganizationTomlAttemptResult,
+		state: TomlState,
+		warnings: TomlFetchWarning[],
+		time: Date,
+		content: string | null = null,
+		authoritative = result === 'success' && warnings.length === 0,
+		scanRunId?: string
+	): void {
+		const measurement = this.getOrCreateMeasurement(time, scanRunId);
+		if (measurement === null) return;
+
+		measurement.tomlFetchResult = result;
+		measurement.tomlState = state;
+		measurement.tomlWarnings = [...warnings];
+		measurement.tomlAttemptContent = content;
+		measurement.tomlAttemptAuthoritative =
+			result === 'success' &&
+			authoritative &&
+			!warnings.includes(TOML_TLS_CERTIFICATE_WARNING);
 	}
 
 	isAvailable(): boolean {
@@ -213,5 +237,25 @@ export default class Organization extends VersionedEntity<OrganizationSnapShot> 
 		return Math.floor(
 			this.validators.value.length - (this.validators.value.length - 1) / 2
 		);
+	}
+
+	private getOrCreateMeasurement(
+		time: Date,
+		scanRunId?: string
+	): OrganizationMeasurement | null {
+		const measurement = this.latestMeasurement();
+		if (measurement === null) {
+			const created = new OrganizationMeasurement(time, this, scanRunId);
+			this._measurements.push(created);
+			return created;
+		}
+
+		const latestTime = measurement.time.getTime();
+		if (time.getTime() < latestTime) return null;
+		if (time.getTime() === latestTime) return measurement;
+
+		const created = new OrganizationMeasurement(time, this, scanRunId);
+		this._measurements.push(created);
+		return created;
 	}
 }

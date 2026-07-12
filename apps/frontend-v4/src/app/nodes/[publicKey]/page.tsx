@@ -1,28 +1,17 @@
 import { Suspense } from 'react';
-import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { connection } from 'next/server';
-import {
-	fetchHistoryArchiveBucketCoveragesForObjects,
-	fetchHistoryArchiveObjectEvidenceForArchive,
-	fetchHistoryArchiveRepairPlanForArchive
-} from '@api/archive-scans-client';
 import { fetchKnownNode } from '@api/known-network-client';
-import {
-	fetchKnownNodes,
-	fetchKnownOrganizations,
-	fetchPublicNetwork
-} from '@api/client';
+import { fetchKnownNodes, fetchPublicNetwork } from '@api/client';
 import { PageHeading } from '@components/layout/page-heading';
+import { RouteModal } from '@components/layout/route-modal';
 import { RouteLoadingPanel } from '@components/layout/route-fallbacks';
+import { ArchiveEvidenceErrorBoundary } from '@components/archive-scans/archive-evidence-error-boundary';
+import { ArchiveEvidenceRouteState } from '@components/archive-scans/archive-evidence-route-state';
+import { NodeArchiveEvidenceRoute } from '@components/archive-scans/known-archive-evidence-route';
 import { NodeDetail } from '@components/nodes/node-detail';
 import { NodeTable } from '@components/nodes/node-table';
-import {
-	getActiveValidators,
-	getListenerNodes,
-	getNodeLabel,
-	getOrganizationForNode
-} from '@domain/network';
+import { getNodeLabel, getOrganizationForNode } from '@domain/network';
 import { formatInteger } from '@format/formatters';
 
 interface NodeDetailPageProps {
@@ -31,12 +20,6 @@ interface NodeDetailPageProps {
 
 export const dynamicParams = true;
 export const revalidate = 10;
-const liveArchiveFetchOptions = {
-	cache: 'no-store',
-	timeoutMs: 12000
-} as const;
-const maxBucketCoverageLookups = 8;
-
 async function NodeDetailRouteContent({
 	publicKey
 }: {
@@ -44,13 +27,11 @@ async function NodeDetailRouteContent({
 }): Promise<React.JSX.Element> {
 	await connection();
 	const decodedPublicKey = decodeURIComponent(publicKey);
-	const [network, knownNode, knownNodes, knownOrganizations] =
-		await Promise.all([
-			fetchPublicNetwork({ revalidate }),
-			fetchKnownNode(decodedPublicKey, { revalidate }),
-			fetchKnownNodes({ revalidate }),
-			fetchKnownOrganizations({ revalidate })
-		]);
+	const [network, knownNode, knownNodes] = await Promise.all([
+		fetchPublicNetwork({ revalidate }),
+		fetchKnownNode(decodedPublicKey, { revalidate }),
+		fetchKnownNodes({ limit: 50, scope: 'all-known' }, { revalidate })
+	]);
 	const node = knownNode?.node ?? null;
 
 	if (!knownNode) notFound();
@@ -60,35 +41,22 @@ async function NodeDetailRouteContent({
 	const inventoryNetwork = {
 		...network,
 		nodes: snapshottedNodes,
-		organizations: knownOrganizations.organizations.map(
-			(candidate) => candidate.organization
-		)
+		organizations: network.organizations
 	};
-	const publicKeyOnlyCount = knownNodes.nodes.length - snapshottedNodes.length;
-	const [historyArchiveObjectEvidence, historyArchiveRepairPlan] = node?.historyUrl
-		? await Promise.all([
-				fetchHistoryArchiveObjectEvidenceForArchive(
-					node.historyUrl,
-					{ eventLimit: 250, objectLimit: 250 },
-					liveArchiveFetchOptions
-				).catch(() => null),
-				fetchHistoryArchiveRepairPlanForArchive(
-					node.historyUrl,
-					100,
-					liveArchiveFetchOptions
-				).catch(() => null)
-			])
-		: [null, null];
 	const organization = node
 		? getOrganizationForNode(inventoryNetwork, node)
 		: null;
-	const historyArchiveBucketCoverages = historyArchiveObjectEvidence
-		? await fetchHistoryArchiveBucketCoveragesForObjects(
-				historyArchiveObjectEvidence.objects,
-				maxBucketCoverageLookups,
-				liveArchiveFetchOptions
-			).catch(() => [])
-		: [];
+	const archiveEvidence = (
+		<ArchiveEvidenceErrorBoundary title="Archive evidence">
+			<Suspense
+				fallback={
+					<ArchiveEvidenceRouteState state="loading" title="Archive evidence" />
+				}
+			>
+				<NodeArchiveEvidenceRoute publicKey={decodedPublicKey} />
+			</Suspense>
+		</ArchiveEvidenceErrorBoundary>
+	);
 
 	return (
 		<main className="shell">
@@ -99,14 +67,14 @@ async function NodeDetailRouteContent({
 				aside={
 					<div className="heading-metrics">
 						<strong>
-							{formatInteger(getActiveValidators(snapshottedNodes).length)}
+							{formatInteger(knownNodes.scopeTotals['current-validator'])}
 						</strong>
-						<span>validators</span>
+						<span>current validators</span>
+						<strong>{formatInteger(knownNodes.scopeTotals.listener)}</strong>
+						<span>current listeners</span>
 						<strong>
-							{formatInteger(getListenerNodes(snapshottedNodes).length)}
+							{formatInteger(knownNodes.scopeTotals['public-key-only'])}
 						</strong>
-						<span>listeners</span>
-						<strong>{formatInteger(publicKeyOnlyCount)}</strong>
 						<span>public-key only</span>
 					</div>
 				}
@@ -114,45 +82,25 @@ async function NodeDetailRouteContent({
 			<NodeTable
 				network={inventoryNetwork}
 				nodes={knownNodes.nodes}
+				page={knownNodes.page}
+				query=""
+				scope="all-known"
 				selectedPublicKey={knownNode.publicKey}
+				totalCount={knownNodes.scopeTotals['all-known']}
 			/>
-			<div className="route-modal-layer" role="presentation">
-				<Link
-					aria-label="Close node details"
-					className="route-modal-backdrop"
-					href="/nodes"
+			<RouteModal
+				closeHref="/nodes"
+				eyebrow="Node"
+				title={node ? getNodeLabel(node) : knownNode.publicKey}
+			>
+				<NodeDetail
+					archiveEvidence={archiveEvidence}
+					knownNode={knownNode}
+					network={inventoryNetwork}
+					node={node}
+					organization={organization}
 				/>
-				<section
-					aria-label={`${node ? getNodeLabel(node) : knownNode.publicKey} node details`}
-					className="route-modal"
-				>
-					<div className="route-modal-header">
-						<div>
-							<p className="eyebrow">Node</p>
-							<h2>{node ? getNodeLabel(node) : knownNode.publicKey}</h2>
-						</div>
-						<Link className="close-route-modal" href="/nodes">
-							Close
-						</Link>
-					</div>
-					<NodeDetail
-						historyArchiveEvents={
-							historyArchiveObjectEvidence?.objectEvents ?? null
-						}
-						historyArchiveBucketCoverages={historyArchiveBucketCoverages}
-						historyArchiveObjects={historyArchiveObjectEvidence?.objects ?? null}
-						historyArchiveRepairPlan={historyArchiveRepairPlan}
-						historyArchiveState={
-							historyArchiveObjectEvidence?.scannerOwnedState ?? null
-						}
-						historyArchiveSummary={historyArchiveObjectEvidence?.summary ?? null}
-						knownNode={knownNode}
-						network={inventoryNetwork}
-						node={node}
-						organization={organization}
-					/>
-				</section>
-			</div>
+			</RouteModal>
 		</main>
 	);
 }

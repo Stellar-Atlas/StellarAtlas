@@ -1,8 +1,8 @@
 import type {
-	PublicNetwork,
-	PublicNode,
-	PublicOrganization
-} from '../api/types';
+	NetworkV1 as PublicNetwork,
+	NodeV1 as PublicNode,
+	OrganizationV1 as PublicOrganization
+} from 'shared';
 
 export interface NodeTag {
 	label: string;

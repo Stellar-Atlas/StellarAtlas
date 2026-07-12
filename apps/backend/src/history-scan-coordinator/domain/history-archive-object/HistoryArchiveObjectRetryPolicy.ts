@@ -1,4 +1,5 @@
 import type { HistoryArchiveObjectType } from './HistoryArchiveObject.js';
+import type { HistoryArchiveObjectFailureChannelDTO } from 'history-scanner-dto';
 
 export type HistoryArchiveObjectFailureClass =
 	| 'http'
@@ -20,6 +21,8 @@ export interface HistoryArchiveObjectRetryPolicyInput {
 	readonly objectType: HistoryArchiveObjectType;
 	readonly httpStatus?: number | null;
 	readonly errorType?: string | null;
+	readonly failureChannel: HistoryArchiveObjectFailureChannelDTO;
+	readonly retryAfterSeconds?: number | null;
 }
 
 export interface HistoryArchiveObjectRetryPolicyResult {
@@ -76,12 +79,19 @@ export function getHistoryArchiveObjectRetryPolicy(
 		errorType: input.errorType,
 		httpStatus: input.httpStatus
 	});
-	const evidenceClass = getHistoryArchiveObjectEvidenceClass(failureClass);
-	const delayMs = getHistoryArchiveObjectRetryDelayMs({
+	const evidenceClass = getHistoryArchiveObjectEvidenceClass(
+		failureClass,
+		input.failureChannel
+	);
+	const policyDelayMs = getHistoryArchiveObjectRetryDelayMs({
 		currentRetryCount: input.currentRetryCount,
 		failureClass,
 		objectType: input.objectType
 	});
+	const delayMs = Math.max(
+		policyDelayMs,
+		normalizeRetryAfterMs(input.retryAfterSeconds)
+	);
 
 	return {
 		delayMs,
@@ -138,12 +148,42 @@ export function classifyHistoryArchiveObjectFailure(input: {
 }
 
 export function getHistoryArchiveObjectEvidenceClass(
-	failureClass: HistoryArchiveObjectFailureClass
+	failureClass: HistoryArchiveObjectFailureClass,
+	failureChannel: HistoryArchiveObjectFailureChannelDTO
 ): HistoryArchiveObjectEvidenceClass {
+	if (failureChannel === 'archive_evidence') return 'archive-object';
 	if (failureClass === 'worker') return 'worker-infrastructure';
 	if (failureClass === 'coordinator') return 'coordinator-infrastructure';
+	return 'worker-infrastructure';
+}
 
-	return 'archive-object';
+export function shouldThrottleHistoryArchiveObjectHost(input: {
+	readonly errorType?: string | null;
+	readonly failureClass: HistoryArchiveObjectFailureClass;
+	readonly httpStatus?: number | null;
+}): boolean {
+	const normalizedErrorType = normalizeErrorType(input.errorType);
+	if (
+		includesAny(normalizedErrorType, ['WORKER', 'SCANNER']) ||
+		includesAny(normalizedErrorType, ['COORDINATOR', 'CLAIM', 'LEASE']) ||
+		includesAny(normalizedErrorType, ['HASH', 'CHECKSUM', 'MISMATCH'])
+	) {
+		return false;
+	}
+	if (
+		input.failureClass === 'auth' ||
+		input.failureClass === 'rate-limit' ||
+		input.failureClass === 'timeout' ||
+		input.failureClass === 'transport'
+	) {
+		return true;
+	}
+
+	return (
+		input.failureClass === 'http' &&
+		typeof input.httpStatus === 'number' &&
+		input.httpStatus >= 500
+	);
 }
 
 export function getHistoryArchiveObjectRetryDelayMs(input: {
@@ -183,6 +223,12 @@ function normalizeRetryCount(currentRetryCount: number): number {
 		return 0;
 
 	return currentRetryCount;
+}
+
+function normalizeRetryAfterMs(value: number | null | undefined): number {
+	if (!Number.isSafeInteger(value) || value === undefined || value === null)
+		return 0;
+	return Math.max(0, value * 1000);
 }
 
 function normalizeErrorType(errorType: string | null | undefined): string {

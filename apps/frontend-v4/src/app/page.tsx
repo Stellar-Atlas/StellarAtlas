@@ -1,6 +1,6 @@
 import { Suspense } from 'react';
 import { connection } from 'next/server';
-import { fetchPublicNetwork, fetchScpStatements } from '../api/client';
+import { fetchPublicNetwork, fetchScpEvidenceSlots } from '../api/client';
 import { GraphExplorer } from '../components/graph/graph-explorer';
 import { GraphLoadingPanel } from '../components/layout/route-fallbacks';
 
@@ -8,12 +8,13 @@ export const revalidate = 5;
 
 async function GraphRouteContent(): Promise<React.JSX.Element> {
 	await connection();
-	const [network, scpStatements] = await Promise.all([
+	const [network, scpEvidence] = await Promise.all([
 		fetchPublicNetwork({ revalidate }),
-		fetchScpStatements({ limit: 160, revalidate: 3, source: 'auto' }).catch(
-			() => []
-		)
+		fetchScpEvidenceSlots(4, { revalidate: 3 }).catch(() => [])
 	]);
+	const scpStatements = scpEvidence.flatMap((slot) =>
+		slot.events.map((event) => event.statement)
+	);
 
 	return <GraphExplorer network={network} scpStatements={scpStatements} />;
 }

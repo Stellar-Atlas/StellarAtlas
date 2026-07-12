@@ -21,15 +21,19 @@ export function createVerifiedUpdate(
 		...createProgressUpdate(progress),
 		claimedAt: null,
 		claimedByCommunityScannerId: null,
+		completionArchiveMetadata: progress?.archiveMetadata ?? null,
 		errorMessage: null,
 		errorType: null,
+		failureChannel: null,
 		httpStatus: null,
 		nextAttemptAt: null,
-			refreshAfter: () => rootHistoryArchiveStateRefreshSql(),
-			status: 'verified',
-			updatedAt: () => 'now()',
-			verifiedAt: () => 'now()',
-			workerStage: progress?.workerStage ?? 'verified'
+		refreshAfter: () => rootHistoryArchiveStateRefreshSql(),
+		status: 'verified',
+		transitionEffectsCompletedAt: null,
+		transitionEffectsRequiredAt: () => 'now()',
+		updatedAt: () => 'now()',
+		verifiedAt: () => 'now()',
+		workerStage: progress?.workerStage ?? 'verified'
 	};
 }
 
@@ -39,18 +43,22 @@ export function createFailedUpdate(
 	return {
 		claimedAt: null,
 		claimedByCommunityScannerId: null,
+		completionArchiveMetadata: null,
 		errorMessage: failure.errorMessage,
 		errorType: failure.errorType,
+		failureChannel: failure.failureChannel,
 		httpStatus: failure.httpStatus ?? null,
-			nextAttemptAt:
-				failure.nextAttemptAt === undefined
-					? () => "now() + interval '1 hour'"
-					: failure.nextAttemptAt,
-			status: 'failed',
-			updatedAt: () => 'now()',
-			workerStage: 'failed'
-		};
-	}
+		nextAttemptAt:
+			failure.nextAttemptAt === undefined
+				? () => "now() + interval '1 hour'"
+				: failure.nextAttemptAt,
+		status: 'failed',
+		transitionEffectsCompletedAt: null,
+		transitionEffectsRequiredAt: () => 'now()',
+		updatedAt: () => 'now()',
+		workerStage: 'failed'
+	};
+}
 
 export function createProgressUpdate(
 	progress?: HistoryArchiveObjectProgressUpdate

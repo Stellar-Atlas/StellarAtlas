@@ -4,112 +4,30 @@ import type {
 	NodeV1,
 	OrganizationSnapshotV1,
 	OrganizationV1,
-	HistoryArchiveScanV1,
-	HistoryArchiveEvidenceV1,
-	HistoryArchiveObjectQueueV1,
-	HistoryArchiveObjectSummaryV1,
-	HistoryArchiveObjectTypeSummaryV1,
-	HistoryArchiveBucketCrossCoverageV1,
-	HistoryArchiveObjectEventsV1,
-	HistoryArchiveObjectV1,
-	HistoryArchiveStateSnapshotV1,
 	ScpStatementObservationV1
 } from 'shared';
+import type { PublicHistoryArchiveScanLogError } from './archive-evidence-types';
+export type * from './archive-evidence-types';
+export type * from './known-network-types';
+export type * from './search-types';
+export type * from './worker-status-types';
+export type { HistoryArchiveStatusSummaryV1 as PublicHistoryArchiveStatusSummary } from 'shared';
 
 export type PublicNetwork = NetworkV1;
 export type PublicNode = NodeV1;
 export type PublicNodeSnapshot = NodeSnapshotV1;
 export type PublicOrganization = OrganizationV1;
 export type PublicOrganizationSnapshot = OrganizationSnapshotV1;
-export type PublicHistoryArchiveScan = HistoryArchiveScanV1;
-export type PublicHistoryArchiveEvidence = HistoryArchiveEvidenceV1;
-export type PublicHistoryArchiveObject = HistoryArchiveObjectV1;
-export type PublicHistoryArchiveBucketCrossCoverage =
-	HistoryArchiveBucketCrossCoverageV1;
-export type PublicHistoryArchiveObjectEvents = HistoryArchiveObjectEventsV1;
-export type PublicHistoryArchiveObjectQueue = HistoryArchiveObjectQueueV1;
-export type PublicHistoryArchiveObjectSummary = HistoryArchiveObjectSummaryV1;
-export type PublicHistoryArchiveObjectTypeSummary =
-	HistoryArchiveObjectTypeSummaryV1;
-export type PublicHistoryArchiveState = HistoryArchiveStateSnapshotV1;
 export type PublicScpStatementObservation = ScpStatementObservationV1;
+export type PublicScpStatementReadFreshness =
+	'empty' | 'fresh' | 'stale' | 'unavailable';
+export type PublicScpStatementReadSource = 'meilisearch' | 'postgres_canonical';
 
-export type PublicKnownNodeMetadataState = 'snapshot' | 'public_key_only';
-
-export interface PublicKnownNode {
-	readonly current: boolean;
-	readonly dateDiscovered: string;
-	readonly lastMeasurementAt: string | null;
-	readonly lastSeen: string | null;
-	readonly metadataState: PublicKnownNodeMetadataState;
-	readonly node: PublicNode | null;
-	readonly publicKey: string;
-	readonly snapshotEndDate: string | null;
-	readonly snapshotStartDate: string | null;
-}
-
-export interface PublicKnownNodes {
-	readonly count: number;
-	readonly generatedAt: string;
-	readonly nodes: readonly PublicKnownNode[];
-}
-
-export interface PublicKnownOrganization {
-	readonly current: boolean;
-	readonly lastMeasurementAt: string | null;
-	readonly lastSeen: string | null;
-	readonly organization: PublicOrganization;
-	readonly snapshotEndDate: string | null;
-	readonly snapshotStartDate: string;
-}
-
-export interface PublicKnownOrganizations {
-	readonly count: number;
-	readonly generatedAt: string;
-	readonly organizations: readonly PublicKnownOrganization[];
-}
-
-export interface PublicHistoryArchiveScanLogError {
-	readonly message: string;
-	readonly type: string;
-	readonly url: string;
-}
-
-export interface PublicHistoryArchiveScanLogEntry {
-	readonly concurrency: number | null;
-	readonly durationMs: number;
-	readonly endDate: string;
-	readonly errors: readonly PublicHistoryArchiveScanLogError[];
-	readonly fromLedger: number;
-	readonly currentRangeFromLedger?: number | null;
-	readonly currentRangeToLedger?: number | null;
-	readonly hasArchiveVerificationError?: boolean;
-	readonly hasError: boolean;
-	readonly hasWorkerIssue?: boolean;
-	readonly isSlowArchive: boolean;
-	readonly latestAttemptedLedger?: number | null;
-	readonly latestScannedLedger: number;
-	readonly latestVerifiedLedger: number;
-	readonly startDate: string;
-	readonly status: 'completed' | 'queued' | 'scanning' | 'starting' | 'stale';
-	readonly toLedger: number | null;
-	readonly updatedAt: string;
-	readonly url: string;
-}
-
-export interface PublicHistoryArchiveScanEvidenceEntry {
-	readonly bucketHash: string;
-	readonly bucketUrl: string;
-	readonly kind: 'bucket';
-	readonly observedAt: string;
-	readonly status: 'verified';
-}
-
-export interface PublicHistoryArchiveScanEvidence {
-	readonly count: number;
-	readonly evidence: readonly PublicHistoryArchiveScanEvidenceEntry[];
-	readonly limit: number;
-	readonly url: string;
+export interface PublicScpStatementReadMetadata {
+	readonly freshness: PublicScpStatementReadFreshness;
+	readonly freshnessMs: number | null;
+	readonly observedAt: string | null;
+	readonly source: PublicScpStatementReadSource;
 }
 
 export interface PublicLedgerTransaction {
@@ -142,9 +60,12 @@ export interface PublicLedgerTransactions {
 
 export interface PublicLatestLedger {
 	readonly closedAt: string;
+	readonly freshness?: 'fresh' | 'stale';
+	readonly freshnessMs?: number;
+	readonly observedAt?: string;
 	readonly protocolVersion: number | null;
 	readonly sequence: string;
-	readonly source?: 'horizon_fallback' | 'network_scan';
+	readonly source?: 'horizon_fallback' | 'network_scan' | 'scp_live_collector';
 }
 
 export type PublicExplorerSource = 'horizon' | 'rpc';
@@ -250,55 +171,6 @@ export interface PublicExplorerSearch {
 	readonly source: PublicExplorerSource;
 }
 
-export type PublicSearchEntityType = 'node' | 'organization';
-export type PublicSearchArchiveStatus = 'error' | 'ok' | 'unknown';
-export type PublicSearchFacetName =
-	| 'active'
-	| 'archiveStatus'
-	| 'countryCode'
-	| 'entityType'
-	| 'fullValidator'
-	| 'topTier'
-	| 'validating'
-	| 'validator';
-
-export interface PublicSearchHit {
-	readonly detail: string;
-	readonly entityId: string;
-	readonly entityType: PublicSearchEntityType;
-	readonly href: string;
-	readonly id: string;
-	readonly label: string;
-	readonly organizationName?: string;
-}
-
-export interface PublicSearchFacetValue {
-	readonly count: number;
-	readonly value: string;
-}
-
-export type PublicSearchFacets = Record<
-	PublicSearchFacetName,
-	readonly PublicSearchFacetValue[]
->;
-
-export interface PublicSearchResponse {
-	readonly estimatedTotalHits: number;
-	readonly facets: PublicSearchFacets;
-	readonly hits: readonly PublicSearchHit[];
-	readonly indexedNetworkTime: string;
-	readonly query: string;
-	readonly readModel: {
-		readonly fallbackReason:
-			| 'meilisearch_syncing'
-			| 'meilisearch_unavailable'
-			| 'meilisearch_unconfigured'
-			| null;
-		readonly schemaVersion: string;
-	};
-	readonly source: 'memory' | 'meilisearch';
-}
-
 export type PublicStatusLevel = 'ok' | 'degraded' | 'unavailable';
 
 export interface PublicFreshnessProbe {
@@ -308,8 +180,26 @@ export interface PublicFreshnessProbe {
 	readonly status: PublicStatusLevel;
 }
 
+export interface PublicArchiveEvidenceFreshnessProbe extends PublicFreshnessProbe {
+	readonly deprecated?: true;
+	readonly drivesPlatformStatus: false;
+	readonly drivesRuntimeHealth: false;
+	readonly source: 'archive_object_evidence';
+}
+
+export interface PublicLegacyArchiveScanFreshnessProbe extends PublicFreshnessProbe {
+	readonly deprecated: true;
+	readonly drivesPlatformStatus: false;
+	readonly drivesRuntimeHealth: false;
+	readonly historical: true;
+	readonly source: 'legacy_range_scan';
+}
+
 export interface PublicDataFreshnessStatus {
-	readonly archiveScan: PublicFreshnessProbe;
+	readonly archiveEvidence: PublicArchiveEvidenceFreshnessProbe;
+	readonly archiveScan:
+		| PublicLegacyArchiveScanFreshnessProbe
+		| (PublicArchiveEvidenceFreshnessProbe & { readonly deprecated: true });
 	readonly generatedAt: string;
 	readonly networkScan: PublicFreshnessProbe;
 	readonly status: PublicStatusLevel;
@@ -404,6 +294,8 @@ export interface PublicArchiveScanLogEntry {
 
 export interface PublicScanLogStatus {
 	readonly archiveScans: readonly PublicArchiveScanLogEntry[];
+	readonly archiveScansDeprecated: true;
+	readonly archiveScansHistorical: true;
 	readonly generatedAt: string;
 	readonly limit: number;
 	readonly networkScans: readonly PublicNetworkScanLogEntry[];
@@ -421,28 +313,6 @@ export interface PublicDataQualityStatus {
 export interface PublicApiStatus {
 	readonly generatedAt: string;
 	readonly service: 'api';
-	readonly status: PublicStatusLevel;
-}
-
-export interface PublicWorkerStatus {
-	readonly archiveWorkers: {
-		readonly activeWorkers: number;
-		readonly configuredWorkerProcesses: number;
-		readonly staleJobAgeMs: number;
-		readonly staleWorkers: number;
-		readonly status: PublicStatusLevel;
-		readonly totalTakenJobs: number;
-	};
-	readonly communityScanners: {
-		readonly activeScanners: number;
-		readonly blacklistedScanners: number;
-		readonly degradedScanners: number;
-		readonly heartbeatFreshnessMs: number;
-		readonly offlineScanners: number;
-		readonly status: PublicStatusLevel;
-		readonly totalScanners: number;
-	};
-	readonly generatedAt: string;
 	readonly status: PublicStatusLevel;
 }
 

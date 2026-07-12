@@ -10,14 +10,13 @@ import { err, ok } from 'neverthrow';
 import { createDummyPublicKey } from '../../__fixtures__/createDummyPublicKey.js';
 import Node from '../../Node.js';
 import { PeerNode } from 'crawler';
+import type { ScpStatementObservation as CrawlerScpStatementObservation } from 'crawler';
 import type { ScpStatementObservationRepository } from '@network-scan/domain/scp/ScpStatementObservationRepository.js';
-import type { ScpStatementLiveStore } from '@network-scan/domain/scp/ScpStatementLiveStore.js';
 
 describe('NodeScannerCrawlStep', () => {
 	const nodeRepository = mock<NodeRepository>();
 	const scpStatementObservationRepository =
 		mock<ScpStatementObservationRepository>();
-	const scpStatementLiveStore = mock<ScpStatementLiveStore>();
 	const crawlerService = mock<CrawlerService>();
 
 	const time = new Date();
@@ -36,6 +35,7 @@ describe('NodeScannerCrawlStep', () => {
 				[newlyFoundPublicKey.value, new PeerNode(newlyFoundPublicKey.value)]
 			]),
 			processedLedgers: [1],
+			scpStatementObservationCount: 0,
 			scpStatementObservations: []
 		})
 	);
@@ -45,13 +45,15 @@ describe('NodeScannerCrawlStep', () => {
 	const crawlStep = new NodeScannerCrawlStep(
 		nodeRepository,
 		scpStatementObservationRepository,
-		scpStatementLiveStore,
 		crawlerService,
 		mock<Logger>()
 	);
 
 	beforeEach(() => {
 		jest.clearAllMocks();
+		scpStatementObservationRepository.saveMany.mockImplementation(
+			async (observations) => [...observations]
+		);
 	});
 
 	it('should execute a crawl', async function () {
@@ -95,6 +97,7 @@ describe('NodeScannerCrawlStep', () => {
 					[activeNode.publicKey.value, new PeerNode(activeNode.publicKey.value)]
 				]),
 				processedLedgers: [1],
+				scpStatementObservationCount: 0,
 				scpStatementObservations: []
 			})
 		);
@@ -113,6 +116,7 @@ describe('NodeScannerCrawlStep', () => {
 				},
 				peerNodes: new Map([['malformed', new PeerNode('malformed')]]),
 				processedLedgers: [1],
+				scpStatementObservationCount: 0,
 				scpStatementObservations: []
 			})
 		);
@@ -141,4 +145,52 @@ describe('NodeScannerCrawlStep', () => {
 		);
 		expect(result.isErr()).toBe(true);
 	});
+
+	it('persists crawl observations without a duplicate live projection callback', async () => {
+		const observation = createObservation();
+		nodeRepository.findByPublicKey.mockResolvedValue([]);
+		crawlerService.crawl.mockResolvedValue(
+			ok({
+				latestClosedLedger: {
+					sequence: 1n,
+					closeTime: new Date(),
+					value: 'value',
+					localCloseTime: new Date()
+				},
+				peerNodes: new Map(),
+				processedLedgers: [1],
+				scpStatementObservationCount: 1,
+				scpStatementObservations: [observation]
+			})
+		);
+
+		const result = await crawlStep.execute(
+			nodeScan,
+			mock<NetworkQuorumSetConfiguration>()
+		);
+
+		expect(result.isOk()).toBe(true);
+		expect(scpStatementObservationRepository.saveMany).toHaveBeenCalledWith(
+			[observation],
+			'network_scan'
+		);
+		expect(crawlerService.crawl.mock.calls.at(-1)?.[5]).toBeUndefined();
+	});
 });
+
+function createObservation(): CrawlerScpStatementObservation {
+	return {
+		nodeId: 'GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF',
+		observedAt: new Date('2026-07-10T12:00:00.000Z'),
+		observedFromAddress: '127.0.0.1:11625',
+		observedFromPeer:
+			'GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF',
+		pledges: {} as CrawlerScpStatementObservation['pledges'],
+		signature: 'signature',
+		slotIndex: '1',
+		statementHash: 'statement-hash',
+		statementType: 'externalize',
+		statementXdr: 'xdr',
+		values: []
+	};
+}

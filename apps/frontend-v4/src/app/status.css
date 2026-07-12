@@ -17,6 +17,10 @@
 	grid-column: 1 / -1;
 }
 
+.status-worker-panel {
+	grid-column: 1 / -1;
+}
+
 .status-scan-log-panel {
 	grid-column: 1 / -1;
 }
@@ -154,12 +158,112 @@
 	padding: 0 18px 18px;
 }
 
-.status-network-scan-table {
-	min-inline-size: min(1080px, 100%);
+.status-network-scan-table-wrap .status-network-scan-table {
+	min-inline-size: 1080px;
 	table-layout: fixed;
 }
 
 .status-network-scan-table th,
 .status-network-scan-table td {
 	overflow-wrap: anywhere;
+}
+
+.status-worker-table-wrap .status-worker-table {
+	min-inline-size: 1120px;
+	table-layout: fixed;
+}
+
+.status-dashboard .archive-summary-table {
+	min-inline-size: 860px;
+}
+
+.status-dashboard .archive-source-finding-summary {
+	border-block-end: 1px solid var(--border);
+	display: grid;
+	gap: 5px;
+	padding: 14px 18px;
+}
+
+.status-dashboard .archive-source-finding-summary p {
+	color: var(--muted);
+	line-height: 1.45;
+	margin: 0;
+}
+
+.status-dashboard .archive-checkpoint-proof-table {
+	min-inline-size: 1040px;
+}
+
+.status-dashboard .archive-object-type-table {
+	min-inline-size: 760px;
+}
+
+.status-worker-table th:nth-child(1) {
+	inline-size: 19%;
+}
+
+.status-worker-table th:nth-child(2) {
+	inline-size: 22%;
+}
+
+.status-worker-table th:nth-child(3),
+.status-worker-table th:nth-child(4) {
+	inline-size: 14%;
+}
+
+.status-worker-table th:nth-child(5),
+.status-worker-table th:nth-child(6) {
+	inline-size: 15.5%;
+}
+
+.status-worker-table td {
+	font-size: 0.84rem;
+	min-inline-size: 0;
+	overflow-wrap: anywhere;
+}
+
+.status-worker-table strong,
+.status-worker-table small {
+	display: block;
+}
+
+.status-worker-table small {
+	color: var(--muted);
+	margin-block-start: 4px;
+}
+
+.status-worker-remote-id {
+	font-family: var(--font-mono);
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.status-worker-state {
+	align-items: center;
+	display: inline-flex;
+	font-size: 0.72rem;
+	font-weight: 900;
+	gap: 6px;
+	text-transform: uppercase;
+}
+
+.status-worker-state::before {
+	background: currentColor;
+	block-size: 7px;
+	border-radius: 50%;
+	content: '';
+	inline-size: 7px;
+}
+
+.status-worker-state.active {
+	color: #24733a;
+}
+
+.status-worker-state.idle {
+	color: #41666f;
+}
+
+.status-worker-state.stale {
+	color: #9e3037;
 }

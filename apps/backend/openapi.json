@@ -129,7 +129,7 @@
 		"/v1/search": {
 			"get": {
 				"summary": "Search network entities",
-				"description": "Faceted search for current validators, nodes, organizations, and archive-related network metadata.",
+				"description": "Faceted, paginated search across canonical all-known node and organization inventory. PostgreSQL is canonical and Meilisearch is used only when its projection cursor matches canonical inventory.",
 				"tags": ["Search", "Network", "Node", "Organization"],
 				"operationId": "searchNetworkEntities",
 				"parameters": [
@@ -150,6 +150,23 @@
 						"schema": {
 							"type": "string",
 							"enum": ["node", "organization"]
+						}
+					},
+					{
+						"name": "scope",
+						"in": "query",
+						"description": "Canonical inventory scope; defaults to all-known",
+						"required": false,
+						"schema": {
+							"type": "string",
+							"enum": [
+								"current-validator",
+								"listener",
+								"public-key-only",
+								"archived",
+								"all-known"
+							],
+							"default": "all-known"
 						}
 					},
 					{
@@ -221,6 +238,18 @@
 							"minimum": 1,
 							"maximum": 25
 						}
+					},
+					{
+						"name": "offset",
+						"in": "query",
+						"description": "Zero-based result offset",
+						"required": false,
+						"schema": {
+							"type": "integer",
+							"minimum": 0,
+							"maximum": 10000,
+							"default": 0
+						}
 					}
 				],
 				"responses": {
@@ -239,8 +268,8 @@
 		},
 		"/v1/search/nodes": {
 			"get": {
-				"summary": "Search current network nodes",
-				"description": "Fixed node-only alias for the current network search endpoint. Uses the same bounded filters and facet response as /v1/search with type=node.",
+				"summary": "Search all-known nodes",
+				"description": "Fixed node-only alias for canonical known-inventory search. Uses the same scope, pagination, filters, and projection fallback as /v1/search with type=node.",
 				"tags": ["Search", "Node"],
 				"operationId": "searchNetworkNodes",
 				"parameters": [
@@ -250,6 +279,14 @@
 						"description": "Search text",
 						"required": false,
 						"schema": { "type": "string" }
+					},
+					{
+						"name": "scope",
+						"in": "query",
+						"required": false,
+						"schema": {
+							"$ref": "#/components/schemas/KnownNodeScope"
+						}
 					},
 					{
 						"name": "active",
@@ -316,6 +353,12 @@
 						"description": "Maximum results to return",
 						"required": false,
 						"schema": { "type": "integer", "minimum": 1, "maximum": 25 }
+					},
+					{
+						"name": "offset",
+						"in": "query",
+						"required": false,
+						"schema": { "type": "integer", "minimum": 0, "maximum": 10000 }
 					}
 				],
 				"responses": {
@@ -336,8 +379,8 @@
 		},
 		"/v1/search/organizations": {
 			"get": {
-				"summary": "Search current network organizations",
-				"description": "Fixed organization-only alias for the current network search endpoint. Uses the same bounded facet response as /v1/search with type=organization.",
+				"summary": "Search all-known organizations",
+				"description": "Fixed organization-only alias for canonical known-inventory search. Uses the same pagination and projection fallback as /v1/search with type=organization.",
 				"tags": ["Search", "Organization"],
 				"operationId": "searchNetworkOrganizations",
 				"parameters": [
@@ -347,6 +390,14 @@
 						"description": "Search text",
 						"required": false,
 						"schema": { "type": "string" }
+					},
+					{
+						"name": "scope",
+						"in": "query",
+						"required": false,
+						"schema": {
+							"$ref": "#/components/schemas/KnownNodeScope"
+						}
 					},
 					{
 						"name": "organizationId",
@@ -368,6 +419,12 @@
 						"description": "Maximum results to return",
 						"required": false,
 						"schema": { "type": "integer", "minimum": 1, "maximum": 25 }
+					},
+					{
+						"name": "offset",
+						"in": "query",
+						"required": false,
+						"schema": { "type": "integer", "minimum": 0, "maximum": 10000 }
 					}
 				],
 				"responses": {
@@ -1174,7 +1231,7 @@
 								"schema": {
 									"type": "array",
 									"items": {
-										"$ref": "https://StellarAtlas.io/schemas/organization.json"
+										"$ref": "#/components/schemas/OrganizationV1"
 									}
 								}
 							}
@@ -1487,7 +1544,7 @@
 		"/v1/status": {
 			"get": {
 				"summary": "Get overall StellarAtlas status",
-				"description": "Returns a read-only aggregate of API health, persisted data freshness, archive queue health, and worker health.",
+				"description": "Returns a read-only aggregate of API, network-data, rollup, and current worker health. The legacy range queue remains present for compatibility but does not drive the headline status.",
 				"tags": ["Status"],
 				"operationId": "getStatus",
 				"responses": {
@@ -1847,7 +1904,7 @@
 		"/v1/status/data-freshness": {
 			"get": {
 				"summary": "Get persisted data freshness status",
-				"description": "Returns latest persisted network scan and archive scan timestamps with age and freshness status. It does not run live scans.",
+				"description": "Returns persisted network freshness, remote archive-object evidence freshness, and deprecated historical legacy range-scan freshness. Neither archive evidence nor the legacy range scanner drives current worker/runtime or platform health. It does not run live scans.",
 				"tags": ["Status"],
 				"operationId": "getDataFreshnessStatus",
 				"responses": {
@@ -1861,6 +1918,7 @@
 										"generatedAt",
 										"status",
 										"networkScan",
+										"archiveEvidence",
 										"archiveScan"
 									],
 									"properties": {
@@ -1902,13 +1960,16 @@
 												}
 											}
 										},
-										"archiveScan": {
+										"archiveEvidence": {
 											"type": "object",
 											"required": [
 												"status",
 												"latestAt",
 												"ageMs",
-												"staleAfterMs"
+												"staleAfterMs",
+												"drivesPlatformStatus",
+												"drivesRuntimeHealth",
+												"source"
 											],
 											"properties": {
 												"status": {
@@ -1929,8 +1990,29 @@
 													"type": "integer",
 													"minimum": 0,
 													"nullable": true
+												},
+												"drivesPlatformStatus": {
+													"type": "boolean",
+													"enum": [false]
+												},
+												"drivesRuntimeHealth": {
+													"type": "boolean",
+													"enum": [false]
+												},
+												"source": {
+													"type": "string",
+													"enum": ["archive_object_evidence"]
 												}
 											}
+										},
+										"archiveScan": {
+											"deprecated": true,
+											"description": "Compatibility field for the historical legacy range scanner. It is deprecated and does not drive current scanner runtime or platform health.",
+											"allOf": [
+												{
+													"$ref": "#/components/schemas/LegacyArchiveScanFreshnessProbeDTO"
+												}
+											]
 										}
 									}
 								}
@@ -1944,7 +2026,7 @@
 		"/v1/status/data-quality": {
 			"get": {
 				"summary": "Get persisted data-quality proof status",
-				"description": "Returns a read-only aggregate of persisted data freshness, raw scan continuity, daily rollup continuity, and archive queue health.",
+				"description": "Returns persisted network freshness, raw scan continuity, daily rollup continuity, and historical legacy range-queue evidence. The legacy queue is included for compatibility and does not drive the headline data-quality status.",
 				"tags": ["Status"],
 				"operationId": "getDataQualityStatus",
 				"responses": {
@@ -2128,11 +2210,23 @@
 									"type": "object",
 									"required": [
 										"archiveScans",
+										"archiveScansDeprecated",
+										"archiveScansHistorical",
 										"generatedAt",
 										"limit",
 										"networkScans"
 									],
 									"properties": {
+										"archiveScansDeprecated": {
+											"type": "boolean",
+											"enum": [true],
+											"description": "The archiveScans array is a deprecated historical range-scan compatibility view."
+										},
+										"archiveScansHistorical": {
+											"type": "boolean",
+											"enum": [true],
+											"description": "The archiveScans array is historical evidence and is not the current object-check queue."
+										},
 										"archiveScans": {
 											"type": "array",
 											"items": {
@@ -2487,7 +2581,7 @@
 		"/v1/status/workers": {
 			"get": {
 				"summary": "Get worker status",
-				"description": "Returns archive worker and community scanner aggregate status without exposing worker secrets or contact emails.",
+				"description": "Returns archive worker and community scanner aggregate status plus a bounded per-worker archive registry with process identity, current object, stage, byte progress, claim attempt, heartbeat age, and last outcome. Current-object sources are reduced to URL origins; credentials, paths, queries, fragments, worker secrets, and contact emails are not exposed.",
 				"tags": ["Status"],
 				"operationId": "getWorkerStatus",
 				"responses": {
@@ -2496,31 +2590,7 @@
 						"content": {
 							"application/json": {
 								"schema": {
-									"type": "object",
-									"required": [
-										"generatedAt",
-										"status",
-										"archiveWorkers",
-										"communityScanners"
-									],
-									"properties": {
-										"generatedAt": {
-											"type": "string",
-											"format": "date-time"
-										},
-										"status": {
-											"type": "string",
-											"enum": ["ok", "degraded", "unavailable"]
-										},
-										"archiveWorkers": {
-											"type": "object",
-											"additionalProperties": true
-										},
-										"communityScanners": {
-											"type": "object",
-											"additionalProperties": true
-										}
-									}
+									"$ref": "#/components/schemas/WorkerStatusDTO"
 								}
 							}
 						}
@@ -3410,7 +3480,7 @@
 						"content": {
 							"application/json": {
 								"schema": {
-									"$ref": "https://StellarAtlas.io/schemas/organization.json"
+									"$ref": "#/components/schemas/OrganizationV1"
 								}
 							}
 						}
@@ -3504,8 +3574,9 @@
 		},
 		"/v1/archive-scans": {
 			"get": {
-				"summary": "List latest archive scans",
-				"description": "Returns a bounded list of the latest public history archive scan state per archive URL.",
+				"summary": "List historical legacy range scans",
+				"description": "Deprecated compatibility view of historical whole-range scanner runs. It does not represent current object-worker health. Use /v1/archive-scans/objects and composed object-evidence routes for current evidence.",
+				"deprecated": true,
 				"tags": ["Archive verification"],
 				"operationId": "getArchiveScans",
 				"parameters": [
@@ -3562,8 +3633,9 @@
 		},
 		"/v1/archive-scans/queue": {
 			"get": {
-				"summary": "Get archive scan queue stats",
-				"description": "Returns a read-only queue snapshot for unfinished history archive scan jobs.",
+				"summary": "Get historical legacy range queue stats",
+				"description": "Deprecated compatibility snapshot of unfinished whole-range jobs. It is historical scheduler evidence, not the current archive-object queue.",
+				"deprecated": true,
 				"tags": ["Archive verification"],
 				"operationId": "getArchiveScanQueue",
 				"responses": {
@@ -3796,7 +3868,7 @@
 		"/v1/archive-scans/objects/summary": {
 			"get": {
 				"summary": "Summarize history archive object coverage",
-				"description": "Returns scanner-owned archive object coverage grouped by object type, checkpoint, and bucket state across all known history archive URLs.",
+				"description": "Returns the legacy scanner-owned object coverage contract across all known history archive URLs. Object totals retain queue-object semantics and are grouped by object type, checkpoint coverage, bucket coverage, and source. This drilldown may be slower than the bounded status summary.",
 				"tags": ["Archive verification"],
 				"operationId": "getHistoryArchiveObjectSummary",
 				"responses": {
@@ -3806,6 +3878,27 @@
 							"application/json": {
 								"schema": {
 									"$ref": "#/components/schemas/HistoryArchiveObjectSummaryV1"
+								}
+							}
+						}
+					},
+					"500": { "description": "Server error" }
+				}
+			}
+		},
+		"/v1/archive-scans/objects/status-summary": {
+			"get": {
+				"summary": "Get bounded archive verification status",
+				"description": "Returns the fast status headline from incremental per-archive checkpoint-proof rollups, active object checks, and at most 256 source rows. Checkpoint proof counts are named explicitly and are not archive object totals; use the legacy object summary for grouped object coverage.",
+				"tags": ["Archive verification", "Status"],
+				"operationId": "getHistoryArchiveObjectStatusSummary",
+				"responses": {
+					"200": {
+						"description": "bounded archive verification status summary",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/HistoryArchiveStatusSummaryV1"
 								}
 							}
 						}
@@ -3969,8 +4062,8 @@
 		},
 		"/v1/archive-scans/{encodedUrl}/object-evidence": {
 			"get": {
-				"summary": "Get scanner-owned archive object evidence",
-				"description": "Returns persisted history archive state, object coverage summary, current archive object rows, and recent archive object events for one archive root. This endpoint is scanner-owned and does not fetch files from the remote archive during page render.",
+				"summary": "Get legacy scanner-owned archive object evidence",
+				"description": "Returns the legacy aggregate archive evidence response. Use the V2 endpoint for independently cursor-paginated object, event, remote archive-failure, and worker/coordinator issue pages.",
 				"tags": ["Archive verification"],
 				"operationId": "getHistoryArchiveObjectEvidenceByUrl",
 				"parameters": [
@@ -3980,30 +4073,6 @@
 						"description": "URL of the history archive, URL encoded",
 						"required": true,
 						"schema": { "type": "string", "format": "uri" }
-					},
-					{
-						"name": "objectLimit",
-						"in": "query",
-						"description": "Maximum number of current object rows to return.",
-						"required": false,
-						"schema": {
-							"type": "integer",
-							"minimum": 1,
-							"maximum": 5000,
-							"default": 250
-						}
-					},
-					{
-						"name": "eventLimit",
-						"in": "query",
-						"description": "Maximum number of event rows to return.",
-						"required": false,
-						"schema": {
-							"type": "integer",
-							"minimum": 1,
-							"maximum": 5000,
-							"default": 250
-						}
 					}
 				],
 				"responses": {
@@ -4017,15 +4086,76 @@
 							}
 						}
 					},
-					"400": { "description": "Invalid archive URL or limit" },
+					"400": {
+						"description": "Invalid archive URL, filter, limit, or filter-bound cursor"
+					},
+					"500": { "description": "Server error" }
+				}
+			}
+		},
+		"/v2/archive-scans/{encodedUrl}/object-evidence": {
+			"get": {
+				"summary": "Get paginated scanner-owned archive object evidence",
+				"description": "Returns persisted archive state plus independently cursor-paginated object, event, remote archive-failure, and worker/coordinator issue pages for one archive root. Exact filtered totals accompany every page. This endpoint does not fetch remote archive files while serving a public request.",
+				"tags": ["Archive verification"],
+				"operationId": "getHistoryArchiveObjectEvidenceV2ByUrl",
+				"parameters": [
+					{
+						"name": "encodedUrl",
+						"in": "path",
+						"description": "URL of the history archive, URL encoded",
+						"required": true,
+						"schema": { "type": "string", "format": "uri" }
+					},
+					{ "$ref": "#/components/parameters/ArchiveEvidenceCopyLimit" },
+					{ "$ref": "#/components/parameters/ArchiveEvidenceObjectCursor" },
+					{ "$ref": "#/components/parameters/ArchiveEvidenceObjectLimit" },
+					{ "$ref": "#/components/parameters/ArchiveEvidenceObjectStatus" },
+					{ "$ref": "#/components/parameters/ArchiveEvidenceObjectType" },
+					{ "$ref": "#/components/parameters/ArchiveEvidenceEventCursor" },
+					{
+						"$ref": "#/components/parameters/ArchiveEvidenceEventEvidenceClass"
+					},
+					{ "$ref": "#/components/parameters/ArchiveEvidenceEventLimit" },
+					{
+						"$ref": "#/components/parameters/ArchiveEvidenceEventObjectType"
+					},
+					{ "$ref": "#/components/parameters/ArchiveEvidenceEventType" },
+					{ "$ref": "#/components/parameters/ArchiveEvidenceFailureCursor" },
+					{ "$ref": "#/components/parameters/ArchiveEvidenceFailureLimit" },
+					{
+						"$ref": "#/components/parameters/ArchiveEvidenceFailureObjectType"
+					},
+					{
+						"$ref": "#/components/parameters/ArchiveEvidenceWorkerIssueCursor"
+					},
+					{
+						"$ref": "#/components/parameters/ArchiveEvidenceWorkerIssueLimit"
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "paginated scanner-owned archive object evidence",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/HistoryArchiveEvidenceV2"
+								}
+							}
+						}
+					},
+					"400": {
+						"description": "Invalid archive URL, filter, limit, or filter-bound cursor"
+					},
 					"500": { "description": "Server error" }
 				}
 			}
 		},
 		"/v1/archive-scans/{encodedUrl}/errors": {
 			"get": {
-				"summary": "Get archive scan log entries",
-				"description": "Returns recent completed scan entries and active queue entries for a history archive URL.",
+				"summary": "Get historical legacy range scan logs",
+				"description": "Deprecated compatibility log of whole-range scanner runs for an archive URL. Use object-evidence failures for current archive evidence.",
+				"deprecated": true,
 				"tags": ["Archive verification"],
 				"operationId": "getArchiveScanErrors",
 				"parameters": [
@@ -4273,8 +4403,9 @@
 		},
 		"/v1/archive-scans/{encodedUrl}/evidence": {
 			"get": {
-				"summary": "Get verified archive bucket evidence",
-				"description": "Returns verified bucket evidence persisted by history scanner runs for a history archive URL. Evidence rows are successful bucket-hash verification records and are separate from archive error logs and worker/setup failures.",
+				"summary": "Get historical legacy bucket evidence",
+				"description": "Deprecated compatibility evidence emitted by whole-range scanner runs. Use the composed object-evidence and repair-plan routes for current proof-gated evidence.",
+				"deprecated": true,
 				"tags": ["Archive verification"],
 				"operationId": "getArchiveScanEvidence",
 				"parameters": [
@@ -4355,8 +4486,9 @@
 		},
 		"/v1/archive-scans/{encodedUrl}": {
 			"get": {
-				"summary": "Get the latest archive scan by URL",
-				"description": "Returns the latest history archive scan for a URL.",
+				"summary": "Get the latest historical legacy range scan",
+				"description": "Deprecated compatibility response for the latest whole-range scanner run. It does not represent current object-worker health.",
+				"deprecated": true,
 				"tags": ["Archive verification"],
 				"operationId": "getArchiveScanByUrl",
 				"parameters": [
@@ -5039,6 +5171,31 @@
 				}
 			}
 		},
+		"/v1/history-scan/worker-status": {
+			"post": {
+				"summary": "Report history archive object worker status",
+				"description": "Internal authenticated worker endpoint. Upserts one compact current-state row for a bounded object worker slot. This telemetry does not store archive failure details or verification evidence.",
+				"tags": ["Archive scanner operators"],
+				"operationId": "reportHistoryArchiveWorkerStatus",
+				"security": [{ "basicAuth": [] }],
+				"requestBody": {
+					"required": true,
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/HistoryArchiveWorkerReportDTO"
+							}
+						}
+					}
+				},
+				"responses": {
+					"204": { "description": "worker status accepted" },
+					"400": { "description": "Invalid worker status report" },
+					"401": { "description": "Authentication required" },
+					"500": { "description": "Server error" }
+				}
+			}
+		},
 		"/v1/history-scan/archive-object-job/{remoteId}/heartbeat": {
 			"post": {
 				"summary": "Refresh a claimed history archive object",
@@ -5446,6 +5603,67 @@
 				}
 			}
 		},
+		"/v1/known/nodes/{publicKey}/archive-evidence": {
+			"get": {
+				"summary": "Get known-node archive evidence",
+				"description": "Returns scanner-owned evidence for every deduplicated archive root advertised by the known node. Object, event, remote archive-failure, and worker/coordinator issue streams use independent server-side keyset pagination with exact filtered totals. Verified copies are classified as same-organization or outside-organization network evidence. No remote archive request is made while serving this endpoint.",
+				"tags": ["Network", "Node", "Archive verification"],
+				"operationId": "getKnownNodeArchiveEvidence",
+				"parameters": [
+					{
+						"name": "publicKey",
+						"in": "path",
+						"required": true,
+						"schema": { "type": "string" }
+					},
+					{
+						"$ref": "#/components/parameters/ArchiveEvidenceArchiveUrl"
+					},
+					{ "$ref": "#/components/parameters/ArchiveEvidenceCopyLimit" },
+					{ "$ref": "#/components/parameters/ArchiveEvidenceObjectCursor" },
+					{ "$ref": "#/components/parameters/ArchiveEvidenceObjectLimit" },
+					{ "$ref": "#/components/parameters/ArchiveEvidenceObjectStatus" },
+					{ "$ref": "#/components/parameters/ArchiveEvidenceObjectType" },
+					{ "$ref": "#/components/parameters/ArchiveEvidenceEventCursor" },
+					{
+						"$ref": "#/components/parameters/ArchiveEvidenceEventEvidenceClass"
+					},
+					{ "$ref": "#/components/parameters/ArchiveEvidenceEventLimit" },
+					{
+						"$ref": "#/components/parameters/ArchiveEvidenceEventObjectType"
+					},
+					{ "$ref": "#/components/parameters/ArchiveEvidenceEventType" },
+					{ "$ref": "#/components/parameters/ArchiveEvidenceFailureCursor" },
+					{ "$ref": "#/components/parameters/ArchiveEvidenceFailureLimit" },
+					{
+						"$ref": "#/components/parameters/ArchiveEvidenceFailureObjectType"
+					},
+					{
+						"$ref": "#/components/parameters/ArchiveEvidenceWorkerIssueCursor"
+					},
+					{
+						"$ref": "#/components/parameters/ArchiveEvidenceWorkerIssueLimit"
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "scanner-owned known-node archive evidence",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/KnownNodeArchiveEvidenceV1"
+								}
+							}
+						}
+					},
+					"400": {
+						"description": "Invalid archive filter, limit, or filter-bound cursor"
+					},
+					"404": { "description": "Known node not found" },
+					"500": { "description": "Server error" }
+				}
+			}
+		},
 		"/v1/known/nodes/{publicKey}": {
 			"get": {
 				"summary": "Get a known node",
@@ -5482,10 +5700,40 @@
 		},
 		"/v1/known/nodes": {
 			"get": {
-				"summary": "Get all known nodes",
-				"description": "Returns the latest stored snapshot for every known node, including current, archived, and inactive rows, with snapshot and last-measurement evidence.",
+				"summary": "Get known nodes by inventory scope",
+				"description": "Returns a bounded canonical PostgreSQL page of known nodes with exact totals for current validators, listeners, public-key-only identities, archived/inactive records, or all-known inventory.",
 				"tags": ["Network", "Node"],
 				"operationId": "getKnownNodes",
+				"parameters": [
+					{
+						"name": "scope",
+						"in": "query",
+						"required": false,
+						"schema": { "$ref": "#/components/schemas/KnownNodeScope" }
+					},
+					{
+						"name": "limit",
+						"in": "query",
+						"required": false,
+						"schema": {
+							"type": "integer",
+							"minimum": 1,
+							"maximum": 500,
+							"default": 100
+						}
+					},
+					{
+						"name": "offset",
+						"in": "query",
+						"required": false,
+						"schema": {
+							"type": "integer",
+							"minimum": 0,
+							"maximum": 1000000,
+							"default": 0
+						}
+					}
+				],
 				"responses": {
 					"200": {
 						"description": "successful operation",
@@ -5497,9 +5745,71 @@
 							}
 						}
 					},
+					"400": { "description": "Invalid inventory scope or pagination" },
 					"500": {
 						"description": "Server error"
 					}
+				}
+			}
+		},
+		"/v1/known/organizations/{organizationId}/archive-evidence": {
+			"get": {
+				"summary": "Get known-organization archive evidence",
+				"description": "Returns scanner-owned evidence for every deduplicated archive root advertised by every known validator in the organization. Object, event, remote archive-failure, and worker/coordinator issue streams use independent server-side keyset pagination with exact filtered totals. Verified copies are classified as same-organization or outside-organization network evidence. No remote archive request is made while serving this endpoint.",
+				"tags": ["Network", "Organization", "Archive verification"],
+				"operationId": "getKnownOrganizationArchiveEvidence",
+				"parameters": [
+					{
+						"name": "organizationId",
+						"in": "path",
+						"required": true,
+						"schema": { "type": "string" }
+					},
+					{
+						"$ref": "#/components/parameters/ArchiveEvidenceArchiveUrl"
+					},
+					{ "$ref": "#/components/parameters/ArchiveEvidenceCopyLimit" },
+					{ "$ref": "#/components/parameters/ArchiveEvidenceObjectCursor" },
+					{ "$ref": "#/components/parameters/ArchiveEvidenceObjectLimit" },
+					{ "$ref": "#/components/parameters/ArchiveEvidenceObjectStatus" },
+					{ "$ref": "#/components/parameters/ArchiveEvidenceObjectType" },
+					{ "$ref": "#/components/parameters/ArchiveEvidenceEventCursor" },
+					{
+						"$ref": "#/components/parameters/ArchiveEvidenceEventEvidenceClass"
+					},
+					{ "$ref": "#/components/parameters/ArchiveEvidenceEventLimit" },
+					{
+						"$ref": "#/components/parameters/ArchiveEvidenceEventObjectType"
+					},
+					{ "$ref": "#/components/parameters/ArchiveEvidenceEventType" },
+					{ "$ref": "#/components/parameters/ArchiveEvidenceFailureCursor" },
+					{ "$ref": "#/components/parameters/ArchiveEvidenceFailureLimit" },
+					{
+						"$ref": "#/components/parameters/ArchiveEvidenceFailureObjectType"
+					},
+					{
+						"$ref": "#/components/parameters/ArchiveEvidenceWorkerIssueCursor"
+					},
+					{
+						"$ref": "#/components/parameters/ArchiveEvidenceWorkerIssueLimit"
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "scanner-owned known-organization archive evidence",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/KnownOrganizationArchiveEvidenceV1"
+								}
+							}
+						}
+					},
+					"400": {
+						"description": "Invalid archive filter, limit, or filter-bound cursor"
+					},
+					"404": { "description": "Known organization not found" },
+					"500": { "description": "Server error" }
 				}
 			}
 		},
@@ -5539,10 +5849,40 @@
 		},
 		"/v1/known/organizations": {
 			"get": {
-				"summary": "Get all known organizations",
-				"description": "Returns the latest stored snapshot for every known organization, including current, archived, and inactive rows, with snapshot and last-measurement evidence.",
+				"summary": "Get known organizations by inventory scope",
+				"description": "Returns a bounded canonical PostgreSQL page of current, archived, or all-known organizations with exact totals.",
 				"tags": ["Network", "Organization"],
 				"operationId": "getKnownOrganizations",
+				"parameters": [
+					{
+						"name": "scope",
+						"in": "query",
+						"required": false,
+						"schema": { "$ref": "#/components/schemas/KnownOrganizationScope" }
+					},
+					{
+						"name": "limit",
+						"in": "query",
+						"required": false,
+						"schema": {
+							"type": "integer",
+							"minimum": 1,
+							"maximum": 500,
+							"default": 100
+						}
+					},
+					{
+						"name": "offset",
+						"in": "query",
+						"required": false,
+						"schema": {
+							"type": "integer",
+							"minimum": 0,
+							"maximum": 1000000,
+							"default": 0
+						}
+					}
+				],
 				"responses": {
 					"200": {
 						"description": "successful operation",
@@ -5554,6 +5894,7 @@
 							}
 						}
 					},
+					"400": { "description": "Invalid inventory scope or pagination" },
 					"500": {
 						"description": "Server error"
 					}
@@ -5941,7 +6282,7 @@
 								"schema": {
 									"type": "array",
 									"items": {
-										"$ref": "https://StellarAtlas.io/schemas/organization.json"
+										"$ref": "#/components/schemas/OrganizationV1"
 									}
 								}
 							}
@@ -5983,7 +6324,7 @@
 						"content": {
 							"application/json": {
 								"schema": {
-									"$ref": "https://StellarAtlas.io/schemas/organization.json"
+									"$ref": "#/components/schemas/OrganizationV1"
 								}
 							}
 						}
@@ -6419,7 +6760,299 @@
 		}
 	},
 	"components": {
+		"parameters": {
+			"ArchiveEvidenceArchiveUrl": {
+				"name": "archiveUrl",
+				"in": "query",
+				"description": "Restrict all evidence pages to one archive root owned by the requested entity.",
+				"required": false,
+				"schema": { "type": "string", "format": "uri" }
+			},
+			"ArchiveEvidenceCopyLimit": {
+				"name": "copyLimit",
+				"in": "query",
+				"description": "Maximum verified-copy rows retained in each same-organization and network sample. Exact copy counts are always returned.",
+				"required": false,
+				"schema": {
+					"type": "integer",
+					"minimum": 1,
+					"maximum": 10,
+					"default": 3
+				}
+			},
+			"ArchiveEvidenceObjectCursor": {
+				"name": "objectCursor",
+				"in": "query",
+				"description": "Opaque cursor for the next object page. Cursors are bound to the entity, archive root, and object filters.",
+				"required": false,
+				"schema": { "type": "string", "maxLength": 1024 }
+			},
+			"ArchiveEvidenceObjectLimit": {
+				"name": "objectLimit",
+				"in": "query",
+				"required": false,
+				"schema": {
+					"type": "integer",
+					"minimum": 1,
+					"maximum": 250,
+					"default": 25
+				}
+			},
+			"ArchiveEvidenceObjectStatus": {
+				"name": "objectStatus",
+				"in": "query",
+				"required": false,
+				"schema": {
+					"type": "string",
+					"enum": ["pending", "scanning", "verified", "failed"]
+				}
+			},
+			"ArchiveEvidenceObjectType": {
+				"name": "objectType",
+				"in": "query",
+				"required": false,
+				"schema": {
+					"$ref": "#/components/schemas/HistoryArchiveObjectTypeV1"
+				}
+			},
+			"ArchiveEvidenceEventCursor": {
+				"name": "eventCursor",
+				"in": "query",
+				"description": "Opaque cursor for the next object-event page. Cursors are bound to the entity, archive root, and event filters.",
+				"required": false,
+				"schema": { "type": "string", "maxLength": 1024 }
+			},
+			"ArchiveEvidenceEventEvidenceClass": {
+				"name": "eventEvidenceClass",
+				"in": "query",
+				"required": false,
+				"schema": {
+					"type": "string",
+					"enum": [
+						"archive-object",
+						"worker-infrastructure",
+						"coordinator-infrastructure"
+					]
+				}
+			},
+			"ArchiveEvidenceEventLimit": {
+				"name": "eventLimit",
+				"in": "query",
+				"required": false,
+				"schema": {
+					"type": "integer",
+					"minimum": 1,
+					"maximum": 250,
+					"default": 25
+				}
+			},
+			"ArchiveEvidenceEventObjectType": {
+				"name": "eventObjectType",
+				"in": "query",
+				"required": false,
+				"schema": {
+					"$ref": "#/components/schemas/HistoryArchiveObjectTypeV1"
+				}
+			},
+			"ArchiveEvidenceEventType": {
+				"name": "eventType",
+				"in": "query",
+				"required": false,
+				"schema": {
+					"type": "string",
+					"enum": ["claimed", "heartbeat", "verified", "failed", "released"]
+				}
+			},
+			"ArchiveEvidenceFailureCursor": {
+				"name": "failureCursor",
+				"in": "query",
+				"description": "Opaque cursor for the next remote archive-failure page.",
+				"required": false,
+				"schema": { "type": "string", "maxLength": 1024 }
+			},
+			"ArchiveEvidenceFailureLimit": {
+				"name": "failureLimit",
+				"in": "query",
+				"required": false,
+				"schema": {
+					"type": "integer",
+					"minimum": 1,
+					"maximum": 250,
+					"default": 25
+				}
+			},
+			"ArchiveEvidenceFailureObjectType": {
+				"name": "failureObjectType",
+				"in": "query",
+				"description": "Restrict both remote archive failures and worker issues to one object type.",
+				"required": false,
+				"schema": {
+					"$ref": "#/components/schemas/HistoryArchiveObjectTypeV1"
+				}
+			},
+			"ArchiveEvidenceWorkerIssueCursor": {
+				"name": "workerIssueCursor",
+				"in": "query",
+				"description": "Opaque cursor for the next worker/coordinator infrastructure-issue page.",
+				"required": false,
+				"schema": { "type": "string", "maxLength": 1024 }
+			},
+			"ArchiveEvidenceWorkerIssueLimit": {
+				"name": "workerIssueLimit",
+				"in": "query",
+				"required": false,
+				"schema": {
+					"type": "integer",
+					"minimum": 1,
+					"maximum": 250,
+					"default": 25
+				}
+			}
+		},
 		"schemas": {
+			"OrganizationV1": {
+				"allOf": [
+					{
+						"$ref": "https://StellarAtlas.io/schemas/organization.json"
+					},
+					{
+						"type": "object",
+						"properties": {
+							"tomlLatestAttempt": {
+								"$ref": "#/components/schemas/OrganizationTomlAttemptV1"
+							},
+							"tomlLatestFailure": {
+								"$ref": "#/components/schemas/OrganizationTomlFailureV1"
+							},
+							"tomlLatestInsecureAttempt": {
+								"$ref": "#/components/schemas/OrganizationTomlAttemptV1"
+							},
+							"stellarToml": {
+								"$ref": "#/components/schemas/OrganizationStellarTomlV1"
+							}
+						}
+					}
+				]
+			},
+			"OrganizationTomlAttemptV1": {
+				"type": "object",
+				"nullable": true,
+				"required": ["observedAt", "result", "state", "warnings"],
+				"properties": {
+					"authoritative": { "type": "boolean" },
+					"contentCaptured": { "type": "boolean" },
+					"observedAt": { "type": "string", "format": "date-time" },
+					"result": {
+						"type": "string",
+						"enum": ["success", "failure"]
+					},
+					"state": {
+						"type": "string",
+						"enum": [
+							"Unknown",
+							"Ok",
+							"RequestTimeout",
+							"DNSLookupFailed",
+							"HostnameResolutionFailed",
+							"ConnectionTimeout",
+							"ConnectionRefused",
+							"ConnectionResetByPeer",
+							"SocketClosedPrematurely",
+							"SocketTimeout",
+							"HostUnreachable",
+							"NotFound",
+							"ParsingError",
+							"Forbidden",
+							"ServerError",
+							"UnsupportedVersion",
+							"UnspecifiedError",
+							"ValidatorNotSEP20Linked",
+							"EmptyValidatorsField"
+						]
+					},
+					"warnings": {
+						"type": "array",
+						"items": {
+							"type": "string",
+							"enum": ["TlsCertificateVerificationDisabled"]
+						}
+					}
+				}
+			},
+			"OrganizationTomlFailureV1": {
+				"type": "object",
+				"nullable": true,
+				"required": ["observedAt", "result", "state", "warnings"],
+				"properties": {
+					"authoritative": { "type": "boolean" },
+					"contentCaptured": { "type": "boolean" },
+					"observedAt": { "type": "string", "format": "date-time" },
+					"result": { "type": "string", "enum": ["failure"] },
+					"state": {
+						"type": "string",
+						"enum": [
+							"Unknown",
+							"Ok",
+							"RequestTimeout",
+							"DNSLookupFailed",
+							"HostnameResolutionFailed",
+							"ConnectionTimeout",
+							"ConnectionRefused",
+							"ConnectionResetByPeer",
+							"SocketClosedPrematurely",
+							"SocketTimeout",
+							"HostUnreachable",
+							"NotFound",
+							"ParsingError",
+							"Forbidden",
+							"ServerError",
+							"UnsupportedVersion",
+							"UnspecifiedError",
+							"ValidatorNotSEP20Linked",
+							"EmptyValidatorsField"
+						]
+					},
+					"warnings": {
+						"type": "array",
+						"items": {
+							"type": "string",
+							"enum": ["TlsCertificateVerificationDisabled"]
+						}
+					}
+				}
+			},
+			"OrganizationStellarTomlV1": {
+				"type": "object",
+				"nullable": true,
+				"required": ["content", "url"],
+				"properties": {
+					"content": { "type": "string" },
+					"observedAt": {
+						"type": "string",
+						"format": "date-time"
+					},
+					"url": { "type": "string" },
+					"warnings": {
+						"type": "array",
+						"items": {
+							"type": "string",
+							"enum": ["TlsCertificateVerificationDisabled"]
+						}
+					}
+				}
+			},
+			"HistoryArchiveObjectTypeV1": {
+				"type": "string",
+				"enum": [
+					"history-archive-state",
+					"checkpoint-state",
+					"ledger",
+					"transactions",
+					"results",
+					"scp",
+					"bucket"
+				]
+			},
 			"HistoryStateBucket": {
 				"type": "object",
 				"required": ["curr", "snap", "next"],
@@ -6436,6 +7069,136 @@
 					}
 				}
 			},
+			"HistoryArchiveStateSnapshotV1": {
+				"type": "object",
+				"additionalProperties": false,
+				"required": [
+					"archiveUrl",
+					"archiveUrlIdentity",
+					"stateUrl",
+					"status",
+					"observedAt",
+					"source",
+					"metadata",
+					"failure",
+					"latestFailure"
+				],
+				"properties": {
+					"archiveUrl": { "type": "string", "format": "uri" },
+					"archiveUrlIdentity": { "type": "string" },
+					"stateUrl": { "type": "string", "format": "uri" },
+					"status": {
+						"type": "string",
+						"enum": ["available", "invalid", "unreachable"]
+					},
+					"observedAt": { "type": "string", "format": "date-time" },
+					"source": {
+						"type": "string",
+						"enum": ["backfill", "history-scanner", "network-scan"]
+					},
+					"metadata": {
+						"type": "object",
+						"additionalProperties": false,
+						"nullable": true,
+						"required": ["stellarHistoryUrl", "stellarHistory", "observedAt"],
+						"properties": {
+							"stellarHistoryUrl": { "type": "string", "format": "uri" },
+							"observedAt": { "type": "string", "format": "date-time" },
+							"stellarHistory": {
+								"type": "object",
+								"additionalProperties": false,
+								"required": [
+									"version",
+									"server",
+									"currentLedger",
+									"currentBuckets"
+								],
+								"properties": {
+									"version": { "type": "integer" },
+									"server": { "type": "string" },
+									"currentLedger": { "type": "integer", "minimum": 0 },
+									"networkPassphrase": {
+										"type": "string",
+										"nullable": true
+									},
+									"currentBuckets": {
+										"type": "array",
+										"items": {
+											"$ref": "#/components/schemas/HistoryStateBucket"
+										}
+									},
+									"hotArchiveBuckets": {
+										"type": "array",
+										"nullable": true,
+										"items": {
+											"$ref": "#/components/schemas/HistoryStateBucket"
+										}
+									}
+								}
+							}
+						}
+					},
+					"failure": {
+						"type": "object",
+						"additionalProperties": false,
+						"nullable": true,
+						"required": ["message", "type", "httpStatus"],
+						"properties": {
+							"message": { "type": "string" },
+							"type": { "type": "string" },
+							"httpStatus": { "type": "integer", "nullable": true }
+						}
+					},
+					"latestFailure": {
+						"type": "object",
+						"additionalProperties": false,
+						"nullable": true,
+						"required": [
+							"message",
+							"type",
+							"httpStatus",
+							"observedAt",
+							"source"
+						],
+						"properties": {
+							"message": { "type": "string" },
+							"type": { "type": "string" },
+							"httpStatus": { "type": "integer", "nullable": true },
+							"observedAt": { "type": "string", "format": "date-time" },
+							"source": {
+								"type": "string",
+								"enum": ["backfill", "history-scanner", "network-scan"]
+							}
+						}
+					}
+				}
+			},
+			"KnownNodeScope": {
+				"type": "string",
+				"enum": [
+					"current-validator",
+					"listener",
+					"public-key-only",
+					"archived",
+					"all-known"
+				],
+				"default": "all-known"
+			},
+			"KnownOrganizationScope": {
+				"type": "string",
+				"enum": ["current", "archived", "all-known"],
+				"default": "all-known"
+			},
+			"KnownInventoryPage": {
+				"type": "object",
+				"required": ["hasMore", "limit", "offset", "total"],
+				"properties": {
+					"hasMore": { "type": "boolean" },
+					"limit": { "type": "integer", "minimum": 1 },
+					"offset": { "type": "integer", "minimum": 0 },
+					"total": { "type": "integer", "minimum": 0 }
+				}
+			},
 			"KnownNode": {
 				"type": "object",
 				"required": [
@@ -6444,6 +7207,7 @@
 					"node",
 					"metadataState",
 					"current",
+					"scope",
 					"snapshotStartDate",
 					"snapshotEndDate",
 					"lastSeen",
@@ -6464,6 +7228,15 @@
 						"enum": ["snapshot", "public_key_only"]
 					},
 					"current": { "type": "boolean" },
+					"scope": {
+						"type": "string",
+						"enum": [
+							"current-validator",
+							"listener",
+							"public-key-only",
+							"archived"
+						]
+					},
 					"snapshotStartDate": {
 						"type": "string",
 						"format": "date-time",
@@ -6488,7 +7261,15 @@
 			},
 			"KnownNodesResponse": {
 				"type": "object",
-				"required": ["generatedAt", "count", "nodes"],
+				"required": [
+					"generatedAt",
+					"count",
+					"nodes",
+					"page",
+					"scope",
+					"scopeTotals",
+					"source"
+				],
 				"properties": {
 					"generatedAt": {
 						"type": "string",
@@ -6498,7 +7279,28 @@
 					"nodes": {
 						"type": "array",
 						"items": { "$ref": "#/components/schemas/KnownNode" }
-					}
+					},
+					"page": { "$ref": "#/components/schemas/KnownInventoryPage" },
+					"scope": { "$ref": "#/components/schemas/KnownNodeScope" },
+					"scopeTotals": {
+						"type": "object",
+						"required": [
+							"current-validator",
+							"listener",
+							"public-key-only",
+							"archived",
+							"all-known"
+						],
+						"additionalProperties": false,
+						"properties": {
+							"current-validator": { "type": "integer", "minimum": 0 },
+							"listener": { "type": "integer", "minimum": 0 },
+							"public-key-only": { "type": "integer", "minimum": 0 },
+							"archived": { "type": "integer", "minimum": 0 },
+							"all-known": { "type": "integer", "minimum": 0 }
+						}
+					},
+					"source": { "type": "string", "enum": ["postgres_canonical"] }
 				}
 			},
 			"KnownOrganization": {
@@ -6506,6 +7308,7 @@
 				"required": [
 					"organization",
 					"current",
+					"scope",
 					"snapshotStartDate",
 					"snapshotEndDate",
 					"lastSeen",
@@ -6513,16 +7316,21 @@
 				],
 				"properties": {
 					"organization": {
-						"$ref": "https://StellarAtlas.io/schemas/organization.json"
+						"$ref": "#/components/schemas/OrganizationV1"
 					},
 					"current": { "type": "boolean" },
+					"scope": {
+						"type": "string",
+						"enum": ["current", "archived"]
+					},
 					"snapshotStartDate": {
 						"type": "string",
 						"format": "date-time"
 					},
 					"snapshotEndDate": {
 						"type": "string",
-						"format": "date-time"
+						"format": "date-time",
+						"nullable": true
 					},
 					"lastSeen": {
 						"type": "string",
@@ -6538,7 +7346,15 @@
 			},
 			"KnownOrganizationsResponse": {
 				"type": "object",
-				"required": ["generatedAt", "count", "organizations"],
+				"required": [
+					"generatedAt",
+					"count",
+					"organizations",
+					"page",
+					"scope",
+					"scopeTotals",
+					"source"
+				],
 				"properties": {
 					"generatedAt": {
 						"type": "string",
@@ -6548,7 +7364,20 @@
 					"organizations": {
 						"type": "array",
 						"items": { "$ref": "#/components/schemas/KnownOrganization" }
-					}
+					},
+					"page": { "$ref": "#/components/schemas/KnownInventoryPage" },
+					"scope": { "$ref": "#/components/schemas/KnownOrganizationScope" },
+					"scopeTotals": {
+						"type": "object",
+						"required": ["current", "archived", "all-known"],
+						"additionalProperties": false,
+						"properties": {
+							"current": { "type": "integer", "minimum": 0 },
+							"archived": { "type": "integer", "minimum": 0 },
+							"all-known": { "type": "integer", "minimum": 0 }
+						}
+					},
+					"source": { "type": "string", "enum": ["postgres_canonical"] }
 				}
 			},
 			"FbasAnalysis": {
@@ -8813,6 +9642,70 @@
 					"totalArchiveCheckpoints": { "type": "integer", "minimum": 0 }
 				}
 			},
+			"HistoryArchiveSourceSummaryV1": {
+				"type": "object",
+				"additionalProperties": false,
+				"required": [
+					"activeObjects",
+					"archiveUrl",
+					"archiveUrlIdentity",
+					"currentLedger",
+					"failedObjects",
+					"latestCheckpointLedger",
+					"latestDiscoveredCheckpointLedger",
+					"objectCompleteCheckpoints",
+					"observedAt",
+					"pendingObjects",
+					"rootObjectStatus",
+					"source",
+					"stateStatus",
+					"stateUrl",
+					"totalObjects",
+					"verifiedCheckpoints",
+					"verifiedObjects"
+				],
+				"properties": {
+					"activeObjects": { "type": "integer", "minimum": 0 },
+					"archiveUrl": { "type": "string", "format": "uri" },
+					"archiveUrlIdentity": { "type": "string" },
+					"currentLedger": {
+						"type": "integer",
+						"minimum": 0,
+						"nullable": true
+					},
+					"failedObjects": { "type": "integer", "minimum": 0 },
+					"latestCheckpointLedger": {
+						"type": "integer",
+						"minimum": 0,
+						"nullable": true
+					},
+					"latestDiscoveredCheckpointLedger": {
+						"type": "integer",
+						"minimum": 0,
+						"nullable": true
+					},
+					"objectCompleteCheckpoints": { "type": "integer", "minimum": 0 },
+					"observedAt": { "type": "string", "format": "date-time" },
+					"pendingObjects": { "type": "integer", "minimum": 0 },
+					"rootObjectStatus": {
+						"type": "string",
+						"enum": ["pending", "scanning", "verified", "failed"],
+						"nullable": true
+					},
+					"source": {
+						"type": "string",
+						"enum": ["backfill", "history-scanner", "network-scan"]
+					},
+					"stateStatus": {
+						"type": "string",
+						"enum": ["available", "invalid", "unreachable"]
+					},
+					"stateUrl": { "type": "string", "format": "uri" },
+					"totalObjects": { "type": "integer", "minimum": 0 },
+					"verifiedCheckpoints": { "type": "integer", "minimum": 0 },
+					"verifiedObjects": { "type": "integer", "minimum": 0 }
+				}
+			},
 			"HistoryArchiveObjectHostThrottleV1": {
 				"type": "object",
 				"required": [
@@ -8877,6 +9770,7 @@
 					"objectTypes",
 					"pendingObjects",
 					"scope",
+					"sources",
 					"totalObjects",
 					"verifiedObjects"
 				],
@@ -8910,8 +9804,108 @@
 					},
 					"pendingObjects": { "type": "integer", "minimum": 0 },
 					"scope": { "type": "string", "enum": ["archive", "global"] },
+					"sources": {
+						"type": "array",
+						"items": {
+							"$ref": "#/components/schemas/HistoryArchiveSourceSummaryV1"
+						}
+					},
 					"totalObjects": { "type": "integer", "minimum": 0 },
 					"verifiedObjects": { "type": "integer", "minimum": 0 }
+				}
+			},
+			"HistoryArchiveStatusSourceV1": {
+				"type": "object",
+				"additionalProperties": false,
+				"required": [
+					"activeObjectChecks",
+					"archiveUrl",
+					"archiveUrlIdentity",
+					"currentLedger",
+					"latestCheckpointLedger",
+					"latestDiscoveredCheckpointLedger",
+					"mismatchCheckpointProofs",
+					"notEvaluableCheckpointProofs",
+					"objectCompleteCheckpointProofs",
+					"observedAt",
+					"pendingCheckpointProofs",
+					"rootObjectStatus",
+					"source",
+					"stateStatus",
+					"stateUrl",
+					"totalCheckpointProofs",
+					"verifiedCheckpointProofs"
+				],
+				"properties": {
+					"activeObjectChecks": { "type": "integer", "minimum": 0 },
+					"archiveUrl": { "type": "string", "format": "uri" },
+					"archiveUrlIdentity": { "type": "string" },
+					"currentLedger": {
+						"type": "integer",
+						"minimum": 0,
+						"nullable": true
+					},
+					"latestCheckpointLedger": {
+						"type": "integer",
+						"minimum": 0,
+						"nullable": true
+					},
+					"latestDiscoveredCheckpointLedger": {
+						"type": "integer",
+						"minimum": 0,
+						"nullable": true
+					},
+					"mismatchCheckpointProofs": { "type": "integer", "minimum": 0 },
+					"notEvaluableCheckpointProofs": { "type": "integer", "minimum": 0 },
+					"objectCompleteCheckpointProofs": { "type": "integer", "minimum": 0 },
+					"observedAt": { "type": "string", "format": "date-time" },
+					"pendingCheckpointProofs": { "type": "integer", "minimum": 0 },
+					"rootObjectStatus": {
+						"type": "string",
+						"enum": ["pending", "scanning", "verified", "failed"],
+						"nullable": true
+					},
+					"source": {
+						"type": "string",
+						"enum": ["backfill", "history-scanner", "network-scan"]
+					},
+					"stateStatus": {
+						"type": "string",
+						"enum": ["available", "invalid", "unreachable"]
+					},
+					"stateUrl": { "type": "string", "format": "uri" },
+					"totalCheckpointProofs": { "type": "integer", "minimum": 0 },
+					"verifiedCheckpointProofs": { "type": "integer", "minimum": 0 }
+				}
+			},
+			"HistoryArchiveStatusSummaryV1": {
+				"type": "object",
+				"additionalProperties": false,
+				"required": [
+					"activeObjectChecks",
+					"checkpointCoverage",
+					"generatedAt",
+					"sourceCount",
+					"sourceLimit",
+					"sources",
+					"sourcesTruncated"
+				],
+				"properties": {
+					"activeObjectChecks": { "type": "integer", "minimum": 0 },
+					"checkpointCoverage": {
+						"$ref": "#/components/schemas/HistoryArchiveCheckpointCoverageV1"
+					},
+					"generatedAt": { "type": "string", "format": "date-time" },
+					"sourceCount": { "type": "integer", "minimum": 0 },
+					"sourceLimit": { "type": "integer", "enum": [256] },
+					"sources": {
+						"type": "array",
+						"maxItems": 256,
+						"items": {
+							"$ref": "#/components/schemas/HistoryArchiveStatusSourceV1"
+						}
+					},
+					"sourcesTruncated": { "type": "boolean" }
 				}
 			},
 			"HistoryArchiveObjectEventV1": {
@@ -9019,25 +10013,490 @@
 					"limit": { "type": "integer", "minimum": 1 }
 				}
 			},
+			"HistoryArchivePageMetadataV1": {
+				"type": "object",
+				"additionalProperties": false,
+				"required": ["hasMore", "limit", "nextCursor", "snapshotAt", "total"],
+				"properties": {
+					"hasMore": { "type": "boolean" },
+					"limit": { "type": "integer", "minimum": 1, "maximum": 250 },
+					"nextCursor": {
+						"type": "string",
+						"maxLength": 1024,
+						"nullable": true
+					},
+					"snapshotAt": {
+						"type": "string",
+						"format": "date-time",
+						"description": "Compatibility field naming when this live-keyset page was evaluated. It is not a frozen database snapshot."
+					},
+					"total": {
+						"type": "integer",
+						"minimum": 0,
+						"description": "Exact count for this filter when the page was evaluated. It may change between live-keyset requests."
+					}
+				}
+			},
+			"HistoryArchiveObjectPageFiltersV1": {
+				"type": "object",
+				"additionalProperties": false,
+				"required": ["archiveUrlIdentity", "objectType", "status"],
+				"properties": {
+					"archiveUrlIdentity": { "type": "string", "nullable": true },
+					"objectType": {
+						"nullable": true,
+						"allOf": [
+							{ "$ref": "#/components/schemas/HistoryArchiveObjectTypeV1" }
+						]
+					},
+					"status": {
+						"type": "string",
+						"enum": ["pending", "scanning", "verified", "failed"],
+						"nullable": true
+					}
+				}
+			},
+			"HistoryArchiveObjectPageV1": {
+				"type": "object",
+				"additionalProperties": false,
+				"required": ["filters", "objects", "page"],
+				"properties": {
+					"filters": {
+						"$ref": "#/components/schemas/HistoryArchiveObjectPageFiltersV1"
+					},
+					"objects": {
+						"type": "array",
+						"items": { "$ref": "#/components/schemas/HistoryArchiveObjectV1" }
+					},
+					"page": {
+						"$ref": "#/components/schemas/HistoryArchivePageMetadataV1"
+					}
+				}
+			},
+			"HistoryArchiveObjectEventPageFiltersV1": {
+				"type": "object",
+				"additionalProperties": false,
+				"required": [
+					"archiveUrlIdentity",
+					"evidenceClass",
+					"eventType",
+					"objectType"
+				],
+				"properties": {
+					"archiveUrlIdentity": { "type": "string", "nullable": true },
+					"evidenceClass": {
+						"type": "string",
+						"enum": [
+							"archive-object",
+							"worker-infrastructure",
+							"coordinator-infrastructure"
+						],
+						"nullable": true
+					},
+					"eventType": {
+						"type": "string",
+						"enum": ["claimed", "heartbeat", "verified", "failed", "released"],
+						"nullable": true
+					},
+					"objectType": {
+						"nullable": true,
+						"allOf": [
+							{ "$ref": "#/components/schemas/HistoryArchiveObjectTypeV1" }
+						]
+					}
+				}
+			},
+			"HistoryArchiveObjectEventPageV1": {
+				"type": "object",
+				"additionalProperties": false,
+				"required": ["events", "filters", "page"],
+				"properties": {
+					"events": {
+						"type": "array",
+						"items": {
+							"$ref": "#/components/schemas/HistoryArchiveObjectEventV1"
+						}
+					},
+					"filters": {
+						"$ref": "#/components/schemas/HistoryArchiveObjectEventPageFiltersV1"
+					},
+					"page": {
+						"$ref": "#/components/schemas/HistoryArchivePageMetadataV1"
+					}
+				}
+			},
+			"KnownArchiveObjectCountsV1": {
+				"type": "object",
+				"additionalProperties": false,
+				"required": [
+					"activeObjects",
+					"bucketObjects",
+					"pendingObjects",
+					"remoteFailureObjects",
+					"totalObjects",
+					"verifiedBucketObjects",
+					"verifiedObjects",
+					"workerIssueObjects"
+				],
+				"properties": {
+					"activeObjects": { "type": "integer", "minimum": 0 },
+					"bucketObjects": { "type": "integer", "minimum": 0 },
+					"pendingObjects": { "type": "integer", "minimum": 0 },
+					"remoteFailureObjects": { "type": "integer", "minimum": 0 },
+					"totalObjects": { "type": "integer", "minimum": 0 },
+					"verifiedBucketObjects": { "type": "integer", "minimum": 0 },
+					"verifiedObjects": { "type": "integer", "minimum": 0 },
+					"workerIssueObjects": { "type": "integer", "minimum": 0 }
+				}
+			},
+			"KnownArchiveCheckpointCountsV1": {
+				"type": "object",
+				"additionalProperties": false,
+				"required": [
+					"mismatchedCheckpoints",
+					"notEvaluableCheckpoints",
+					"pendingCheckpoints",
+					"totalCheckpoints",
+					"verifiedCheckpoints"
+				],
+				"properties": {
+					"mismatchedCheckpoints": { "type": "integer", "minimum": 0 },
+					"notEvaluableCheckpoints": { "type": "integer", "minimum": 0 },
+					"pendingCheckpoints": { "type": "integer", "minimum": 0 },
+					"totalCheckpoints": { "type": "integer", "minimum": 0 },
+					"verifiedCheckpoints": { "type": "integer", "minimum": 0 }
+				}
+			},
+			"KnownArchiveRootEvidenceV1": {
+				"type": "object",
+				"additionalProperties": false,
+				"required": [
+					"archiveUrl",
+					"archiveUrlIdentity",
+					"checkpoints",
+					"latestObjectAt",
+					"nodePublicKeys",
+					"objects",
+					"scannerOwnedState"
+				],
+				"properties": {
+					"archiveUrl": { "type": "string", "format": "uri" },
+					"archiveUrlIdentity": { "type": "string" },
+					"checkpoints": {
+						"$ref": "#/components/schemas/KnownArchiveCheckpointCountsV1"
+					},
+					"latestObjectAt": {
+						"type": "string",
+						"format": "date-time",
+						"nullable": true
+					},
+					"nodePublicKeys": {
+						"type": "array",
+						"items": { "type": "string" }
+					},
+					"objects": {
+						"$ref": "#/components/schemas/KnownArchiveObjectCountsV1"
+					},
+					"scannerOwnedState": {
+						"nullable": true,
+						"allOf": [
+							{ "$ref": "#/components/schemas/HistoryArchiveStateSnapshotV1" }
+						]
+					}
+				}
+			},
+			"KnownArchiveVerifiedCopyV1": {
+				"type": "object",
+				"additionalProperties": false,
+				"required": [
+					"archiveUrl",
+					"archiveUrlIdentity",
+					"objectUrl",
+					"remoteId",
+					"verifiedAt"
+				],
+				"properties": {
+					"archiveUrl": { "type": "string", "format": "uri" },
+					"archiveUrlIdentity": { "type": "string" },
+					"objectUrl": {
+						"type": "string",
+						"format": "uri",
+						"maxLength": 2048,
+						"pattern": "^https?://"
+					},
+					"remoteId": { "type": "string", "format": "uuid" },
+					"verifiedAt": {
+						"type": "string",
+						"format": "date-time",
+						"nullable": true
+					}
+				}
+			},
+			"KnownArchiveVerifiedCopySetV1": {
+				"type": "object",
+				"additionalProperties": false,
+				"required": ["copies", "count", "sampleLimit"],
+				"properties": {
+					"copies": {
+						"type": "array",
+						"description": "Bounded representative rows; use count for exact coverage.",
+						"items": {
+							"$ref": "#/components/schemas/KnownArchiveVerifiedCopyV1"
+						}
+					},
+					"count": { "type": "integer", "minimum": 0 },
+					"sampleLimit": {
+						"type": "integer",
+						"minimum": 1,
+						"maximum": 10
+					}
+				}
+			},
+			"KnownArchiveFailureFiltersV1": {
+				"type": "object",
+				"additionalProperties": false,
+				"required": ["archiveUrlIdentity", "objectType"],
+				"properties": {
+					"archiveUrlIdentity": { "type": "string", "nullable": true },
+					"objectType": {
+						"nullable": true,
+						"allOf": [
+							{ "$ref": "#/components/schemas/HistoryArchiveObjectTypeV1" }
+						]
+					}
+				}
+			},
+			"KnownArchiveRemoteFailureV1": {
+				"type": "object",
+				"additionalProperties": false,
+				"required": [
+					"networkVerifiedCopies",
+					"object",
+					"sameOrganizationVerifiedCopies"
+				],
+				"properties": {
+					"networkVerifiedCopies": {
+						"description": "Verified copies on roots outside the subject organization.",
+						"$ref": "#/components/schemas/KnownArchiveVerifiedCopySetV1"
+					},
+					"object": {
+						"$ref": "#/components/schemas/HistoryArchiveObjectV1"
+					},
+					"sameOrganizationVerifiedCopies": {
+						"description": "Verified copies on other roots owned by the subject organization.",
+						"$ref": "#/components/schemas/KnownArchiveVerifiedCopySetV1"
+					}
+				}
+			},
+			"KnownArchiveRemoteFailurePageV1": {
+				"type": "object",
+				"additionalProperties": false,
+				"required": [
+					"failures",
+					"filters",
+					"hasMore",
+					"limit",
+					"nextCursor",
+					"snapshotAt",
+					"total"
+				],
+				"properties": {
+					"failures": {
+						"type": "array",
+						"items": {
+							"$ref": "#/components/schemas/KnownArchiveRemoteFailureV1"
+						}
+					},
+					"filters": {
+						"$ref": "#/components/schemas/KnownArchiveFailureFiltersV1"
+					},
+					"hasMore": { "type": "boolean" },
+					"limit": { "type": "integer", "minimum": 1, "maximum": 250 },
+					"nextCursor": {
+						"type": "string",
+						"maxLength": 1024,
+						"nullable": true
+					},
+					"snapshotAt": {
+						"type": "string",
+						"format": "date-time",
+						"description": "Compatibility field naming when this live-keyset page was evaluated. It is not a frozen database snapshot."
+					},
+					"total": {
+						"type": "integer",
+						"minimum": 0,
+						"description": "Exact count for this filter when the page was evaluated. It may change between live-keyset requests."
+					}
+				}
+			},
+			"KnownArchiveWorkerIssueV1": {
+				"type": "object",
+				"additionalProperties": false,
+				"required": ["evidenceClass", "object"],
+				"properties": {
+					"evidenceClass": {
+						"type": "string",
+						"enum": ["worker-infrastructure", "coordinator-infrastructure"]
+					},
+					"object": {
+						"$ref": "#/components/schemas/HistoryArchiveObjectV1"
+					}
+				}
+			},
+			"KnownArchiveWorkerIssuePageV1": {
+				"type": "object",
+				"additionalProperties": false,
+				"required": [
+					"filters",
+					"hasMore",
+					"issues",
+					"limit",
+					"nextCursor",
+					"snapshotAt",
+					"total"
+				],
+				"properties": {
+					"filters": {
+						"$ref": "#/components/schemas/KnownArchiveFailureFiltersV1"
+					},
+					"hasMore": { "type": "boolean" },
+					"issues": {
+						"type": "array",
+						"items": {
+							"$ref": "#/components/schemas/KnownArchiveWorkerIssueV1"
+						}
+					},
+					"limit": { "type": "integer", "minimum": 1, "maximum": 250 },
+					"nextCursor": {
+						"type": "string",
+						"maxLength": 1024,
+						"nullable": true
+					},
+					"snapshotAt": {
+						"type": "string",
+						"format": "date-time",
+						"description": "Compatibility field naming when this live-keyset page was evaluated. It is not a frozen database snapshot."
+					},
+					"total": {
+						"type": "integer",
+						"minimum": 0,
+						"description": "Exact count for this filter when the page was evaluated. It may change between live-keyset requests."
+					}
+				}
+			},
+			"KnownArchiveEvidenceTotalsV1": {
+				"type": "object",
+				"additionalProperties": false,
+				"required": ["archiveRoots", "checkpoints", "nodes", "objects"],
+				"properties": {
+					"archiveRoots": { "type": "integer", "minimum": 0 },
+					"checkpoints": {
+						"$ref": "#/components/schemas/KnownArchiveCheckpointCountsV1"
+					},
+					"nodes": { "type": "integer", "minimum": 0 },
+					"objects": {
+						"$ref": "#/components/schemas/KnownArchiveObjectCountsV1"
+					}
+				}
+			},
+			"KnownArchiveEvidenceV1": {
+				"type": "object",
+				"required": [
+					"eventPage",
+					"generatedAt",
+					"nodePublicKeys",
+					"objectPage",
+					"remoteFailures",
+					"roots",
+					"totals",
+					"workerIssues"
+				],
+				"properties": {
+					"eventPage": {
+						"$ref": "#/components/schemas/HistoryArchiveObjectEventPageV1"
+					},
+					"generatedAt": { "type": "string", "format": "date-time" },
+					"nodePublicKeys": {
+						"type": "array",
+						"items": { "type": "string" }
+					},
+					"objectPage": {
+						"$ref": "#/components/schemas/HistoryArchiveObjectPageV1"
+					},
+					"remoteFailures": {
+						"$ref": "#/components/schemas/KnownArchiveRemoteFailurePageV1"
+					},
+					"roots": {
+						"type": "array",
+						"items": {
+							"$ref": "#/components/schemas/KnownArchiveRootEvidenceV1"
+						}
+					},
+					"totals": {
+						"$ref": "#/components/schemas/KnownArchiveEvidenceTotalsV1"
+					},
+					"workerIssues": {
+						"$ref": "#/components/schemas/KnownArchiveWorkerIssuePageV1"
+					}
+				}
+			},
+			"KnownNodeArchiveEvidenceV1": {
+				"allOf": [
+					{ "$ref": "#/components/schemas/KnownArchiveEvidenceV1" },
+					{
+						"type": "object",
+						"required": ["organizationId", "publicKey"],
+						"properties": {
+							"organizationId": { "type": "string", "nullable": true },
+							"publicKey": { "type": "string" }
+						}
+					}
+				]
+			},
+			"KnownOrganizationArchiveEvidenceV1": {
+				"allOf": [
+					{ "$ref": "#/components/schemas/KnownArchiveEvidenceV1" },
+					{
+						"type": "object",
+						"required": ["organizationId"],
+						"properties": {
+							"organizationId": { "type": "string" }
+						}
+					}
+				]
+			},
 			"HistoryArchiveEvidenceV1": {
 				"type": "object",
 				"additionalProperties": false,
 				"required": [
 					"archiveUrl",
+					"eventPage",
 					"generatedAt",
 					"objectEvents",
+					"objectPage",
 					"objects",
+					"remoteFailures",
 					"scannerOwnedState",
-					"summary"
+					"summary",
+					"workerIssues"
 				],
 				"properties": {
 					"archiveUrl": { "type": "string", "format": "uri" },
+					"eventPage": {
+						"$ref": "#/components/schemas/HistoryArchiveObjectEventPageV1"
+					},
 					"generatedAt": { "type": "string", "format": "date-time" },
 					"objectEvents": {
 						"$ref": "#/components/schemas/HistoryArchiveObjectEventsV1"
 					},
+					"objectPage": {
+						"$ref": "#/components/schemas/HistoryArchiveObjectPageV1"
+					},
 					"objects": {
 						"$ref": "#/components/schemas/HistoryArchiveObjectQueueV1"
+					},
+					"remoteFailures": {
+						"$ref": "#/components/schemas/KnownArchiveRemoteFailurePageV1"
 					},
 					"scannerOwnedState": {
 						"nullable": true,
@@ -9047,6 +10506,41 @@
 					},
 					"summary": {
 						"$ref": "#/components/schemas/HistoryArchiveObjectSummaryV1"
+					},
+					"workerIssues": {
+						"$ref": "#/components/schemas/KnownArchiveWorkerIssuePageV1"
+					}
+				}
+			},
+			"HistoryArchiveEvidenceV2": {
+				"type": "object",
+				"additionalProperties": false,
+				"required": [
+					"archiveUrl",
+					"eventPage",
+					"generatedAt",
+					"objectPage",
+					"remoteFailures",
+					"root",
+					"workerIssues"
+				],
+				"properties": {
+					"archiveUrl": { "type": "string", "format": "uri" },
+					"eventPage": {
+						"$ref": "#/components/schemas/HistoryArchiveObjectEventPageV1"
+					},
+					"generatedAt": { "type": "string", "format": "date-time" },
+					"objectPage": {
+						"$ref": "#/components/schemas/HistoryArchiveObjectPageV1"
+					},
+					"remoteFailures": {
+						"$ref": "#/components/schemas/KnownArchiveRemoteFailurePageV1"
+					},
+					"root": {
+						"$ref": "#/components/schemas/KnownArchiveRootEvidenceV1"
+					},
+					"workerIssues": {
+						"$ref": "#/components/schemas/KnownArchiveWorkerIssuePageV1"
 					}
 				}
 			},
@@ -9086,6 +10580,403 @@
 					},
 					"objectUrl": { "type": "string", "format": "uri" },
 					"remoteId": { "type": "string", "format": "uuid" }
+				}
+			},
+			"HistoryArchiveWorkerReportDTO": {
+				"type": "object",
+				"additionalProperties": false,
+				"required": [
+					"bytesDownloaded",
+					"claimAttempt",
+					"currentObject",
+					"lastOutcome",
+					"lastOutcomeAt",
+					"pid",
+					"processGeneration",
+					"processId",
+					"processStartedAt",
+					"sequence",
+					"stage",
+					"workerId"
+				],
+				"properties": {
+					"bytesDownloaded": {
+						"type": "integer",
+						"minimum": 0,
+						"nullable": true
+					},
+					"claimAttempt": {
+						"type": "integer",
+						"minimum": 1,
+						"nullable": true
+					},
+					"currentObject": {
+						"type": "object",
+						"additionalProperties": false,
+						"nullable": true,
+						"required": ["remoteId", "source", "type"],
+						"properties": {
+							"remoteId": { "type": "string", "format": "uuid" },
+							"source": {
+								"type": "string",
+								"format": "uri",
+								"pattern": "^https?://",
+								"maxLength": 2048
+							},
+							"type": {
+								"type": "string",
+								"enum": [
+									"history-archive-state",
+									"checkpoint-state",
+									"ledger",
+									"transactions",
+									"results",
+									"scp",
+									"bucket"
+								]
+							}
+						}
+					},
+					"lastOutcome": {
+						"type": "string",
+						"enum": [
+							"none",
+							"verified",
+							"archive_error",
+							"worker_issue",
+							"released"
+						]
+					},
+					"lastOutcomeAt": {
+						"type": "string",
+						"format": "date-time",
+						"nullable": true
+					},
+					"pid": { "type": "integer", "minimum": 1 },
+					"processGeneration": { "type": "integer", "minimum": 0 },
+					"processId": { "type": "string", "format": "uuid" },
+					"processStartedAt": {
+						"type": "string",
+						"format": "date-time"
+					},
+					"sequence": { "type": "integer", "minimum": 1 },
+					"stage": {
+						"type": "string",
+						"enum": [
+							"idle",
+							"claimed",
+							"fetching_history_archive_state",
+							"verified_history_archive_state",
+							"fetching_checkpoint_state",
+							"verified_checkpoint_state",
+							"fetching_ledger",
+							"downloading_ledger",
+							"verified_ledger",
+							"fetching_transactions",
+							"downloading_transactions",
+							"verified_transactions",
+							"fetching_results",
+							"downloading_results",
+							"verified_results",
+							"fetching_scp",
+							"downloading_scp",
+							"verified_scp",
+							"fetching_bucket",
+							"downloading_bucket",
+							"verified_bucket"
+						]
+					},
+					"workerId": { "type": "string", "maxLength": 96 }
+				}
+			},
+			"ArchiveEvidenceFreshnessProbeDTO": {
+				"type": "object",
+				"additionalProperties": false,
+				"required": [
+					"ageMs",
+					"drivesPlatformStatus",
+					"drivesRuntimeHealth",
+					"latestAt",
+					"source",
+					"staleAfterMs",
+					"status"
+				],
+				"properties": {
+					"ageMs": { "type": "integer", "minimum": 0, "nullable": true },
+					"deprecated": { "type": "boolean", "enum": [true] },
+					"drivesPlatformStatus": { "type": "boolean", "enum": [false] },
+					"drivesRuntimeHealth": { "type": "boolean", "enum": [false] },
+					"latestAt": {
+						"type": "string",
+						"format": "date-time",
+						"nullable": true
+					},
+					"source": { "type": "string", "enum": ["archive_object_evidence"] },
+					"staleAfterMs": { "type": "integer", "minimum": 0, "nullable": true },
+					"status": {
+						"type": "string",
+						"enum": ["ok", "degraded", "unavailable"]
+					}
+				}
+			},
+			"LegacyArchiveScanFreshnessProbeDTO": {
+				"type": "object",
+				"additionalProperties": false,
+				"required": [
+					"ageMs",
+					"deprecated",
+					"drivesPlatformStatus",
+					"drivesRuntimeHealth",
+					"historical",
+					"latestAt",
+					"source",
+					"staleAfterMs",
+					"status"
+				],
+				"properties": {
+					"ageMs": { "type": "integer", "minimum": 0, "nullable": true },
+					"deprecated": { "type": "boolean", "enum": [true] },
+					"drivesPlatformStatus": { "type": "boolean", "enum": [false] },
+					"drivesRuntimeHealth": { "type": "boolean", "enum": [false] },
+					"historical": { "type": "boolean", "enum": [true] },
+					"latestAt": {
+						"type": "string",
+						"format": "date-time",
+						"nullable": true
+					},
+					"source": { "type": "string", "enum": ["legacy_range_scan"] },
+					"staleAfterMs": { "type": "integer", "minimum": 0, "nullable": true },
+					"status": {
+						"type": "string",
+						"enum": ["ok", "degraded", "unavailable"]
+					}
+				}
+			},
+			"ArchiveWorkerCurrentObjectDTO": {
+				"type": "object",
+				"additionalProperties": false,
+				"required": ["remoteId", "source", "type"],
+				"properties": {
+					"remoteId": { "type": "string", "format": "uuid" },
+					"source": {
+						"description": "HTTP(S) origin only, or redacted when a legacy stored value is not a safe URL.",
+						"oneOf": [
+							{
+								"type": "string",
+								"pattern": "^https?://[^@/?#]+$",
+								"maxLength": 512
+							},
+							{ "type": "string", "enum": ["redacted"] }
+						]
+					},
+					"type": {
+						"type": "string",
+						"enum": [
+							"history-archive-state",
+							"checkpoint-state",
+							"ledger",
+							"transactions",
+							"results",
+							"scp",
+							"bucket"
+						]
+					}
+				}
+			},
+			"ArchiveWorkerStatusRowDTO": {
+				"type": "object",
+				"additionalProperties": false,
+				"required": [
+					"bytesDownloaded",
+					"claimAttempt",
+					"currentObject",
+					"heartbeatAgeMs",
+					"lastHeartbeatAt",
+					"lastOutcome",
+					"lastOutcomeAt",
+					"pid",
+					"processGeneration",
+					"processId",
+					"processStartedAt",
+					"stage",
+					"status",
+					"workerId"
+				],
+				"properties": {
+					"bytesDownloaded": {
+						"type": "integer",
+						"minimum": 0,
+						"nullable": true
+					},
+					"claimAttempt": {
+						"type": "integer",
+						"minimum": 1,
+						"nullable": true
+					},
+					"currentObject": {
+						"allOf": [
+							{ "$ref": "#/components/schemas/ArchiveWorkerCurrentObjectDTO" }
+						],
+						"nullable": true
+					},
+					"heartbeatAgeMs": { "type": "integer", "minimum": 0 },
+					"lastHeartbeatAt": { "type": "string", "format": "date-time" },
+					"lastOutcome": {
+						"type": "string",
+						"enum": [
+							"none",
+							"verified",
+							"archive_error",
+							"worker_issue",
+							"released"
+						]
+					},
+					"lastOutcomeAt": {
+						"type": "string",
+						"format": "date-time",
+						"nullable": true
+					},
+					"pid": { "type": "integer", "minimum": 1 },
+					"processGeneration": { "type": "integer", "minimum": 0 },
+					"processId": { "type": "string", "format": "uuid" },
+					"processStartedAt": { "type": "string", "format": "date-time" },
+					"stage": {
+						"type": "string",
+						"enum": [
+							"idle",
+							"claimed",
+							"fetching_history_archive_state",
+							"verified_history_archive_state",
+							"fetching_checkpoint_state",
+							"verified_checkpoint_state",
+							"fetching_ledger",
+							"downloading_ledger",
+							"verified_ledger",
+							"fetching_transactions",
+							"downloading_transactions",
+							"verified_transactions",
+							"fetching_results",
+							"downloading_results",
+							"verified_results",
+							"fetching_scp",
+							"downloading_scp",
+							"verified_scp",
+							"fetching_bucket",
+							"downloading_bucket",
+							"verified_bucket"
+						]
+					},
+					"status": {
+						"type": "string",
+						"enum": ["active", "idle", "stale"]
+					},
+					"workerId": { "type": "string", "maxLength": 96 }
+				}
+			},
+			"ArchiveWorkerStatusDTO": {
+				"type": "object",
+				"additionalProperties": false,
+				"required": [
+					"activeWorkers",
+					"configuredWorkerProcesses",
+					"freshWorkers",
+					"idleWorkers",
+					"lastHeartbeatAt",
+					"missingWorkers",
+					"queueActiveWorkers",
+					"queueStaleWorkers",
+					"registeredWorkers",
+					"staleJobAgeMs",
+					"staleWorkers",
+					"startupGraceActive",
+					"startupGraceMs",
+					"status",
+					"telemetryMode",
+					"totalTakenJobs",
+					"workers"
+				],
+				"properties": {
+					"activeWorkers": { "type": "integer", "minimum": 0 },
+					"configuredWorkerProcesses": { "type": "integer", "minimum": 0 },
+					"freshWorkers": { "type": "integer", "minimum": 0 },
+					"idleWorkers": { "type": "integer", "minimum": 0 },
+					"lastHeartbeatAt": {
+						"type": "string",
+						"format": "date-time",
+						"nullable": true
+					},
+					"missingWorkers": { "type": "integer", "minimum": 0 },
+					"queueActiveWorkers": { "type": "integer", "minimum": 0 },
+					"queueStaleWorkers": { "type": "integer", "minimum": 0 },
+					"registeredWorkers": { "type": "integer", "minimum": 0 },
+					"staleJobAgeMs": { "type": "integer", "minimum": 0 },
+					"staleWorkers": { "type": "integer", "minimum": 0 },
+					"startupGraceActive": { "type": "boolean" },
+					"startupGraceMs": { "type": "integer", "minimum": 0 },
+					"status": {
+						"type": "string",
+						"enum": ["ok", "degraded", "unavailable"]
+					},
+					"telemetryMode": {
+						"type": "string",
+						"enum": ["per-worker"]
+					},
+					"totalTakenJobs": { "type": "integer", "minimum": 0 },
+					"workers": {
+						"type": "array",
+						"maxItems": 128,
+						"items": {
+							"$ref": "#/components/schemas/ArchiveWorkerStatusRowDTO"
+						}
+					}
+				}
+			},
+			"CommunityScannerStatusDTO": {
+				"type": "object",
+				"additionalProperties": false,
+				"required": [
+					"activeScanners",
+					"blacklistedScanners",
+					"degradedScanners",
+					"heartbeatFreshnessMs",
+					"offlineScanners",
+					"status",
+					"totalScanners"
+				],
+				"properties": {
+					"activeScanners": { "type": "integer", "minimum": 0 },
+					"blacklistedScanners": { "type": "integer", "minimum": 0 },
+					"degradedScanners": { "type": "integer", "minimum": 0 },
+					"heartbeatFreshnessMs": { "type": "integer", "minimum": 0 },
+					"offlineScanners": { "type": "integer", "minimum": 0 },
+					"status": {
+						"type": "string",
+						"enum": ["ok", "degraded", "unavailable"]
+					},
+					"totalScanners": { "type": "integer", "minimum": 0 }
+				}
+			},
+			"WorkerStatusDTO": {
+				"type": "object",
+				"additionalProperties": false,
+				"required": [
+					"archiveWorkers",
+					"communityScanners",
+					"generatedAt",
+					"status"
+				],
+				"properties": {
+					"archiveWorkers": {
+						"$ref": "#/components/schemas/ArchiveWorkerStatusDTO"
+					},
+					"communityScanners": {
+						"$ref": "#/components/schemas/CommunityScannerStatusDTO"
+					},
+					"generatedAt": { "type": "string", "format": "date-time" },
+					"status": {
+						"type": "string",
+						"enum": ["ok", "degraded", "unavailable"]
+					}
 				}
 			},
 			"HistoryArchiveObjectClaimAttempt": {
@@ -9271,6 +11162,7 @@
 					"countryCode",
 					"entityType",
 					"fullValidator",
+					"scope",
 					"topTier",
 					"validating",
 					"validator"
@@ -9296,6 +11188,10 @@
 						"type": "array",
 						"items": { "$ref": "#/components/schemas/SearchFacetValue" }
 					},
+					"scope": {
+						"type": "array",
+						"items": { "$ref": "#/components/schemas/SearchFacetValue" }
+					},
 					"topTier": {
 						"type": "array",
 						"items": { "$ref": "#/components/schemas/SearchFacetValue" }
@@ -9312,7 +11208,19 @@
 			},
 			"SearchHit": {
 				"type": "object",
-				"required": ["detail", "entityId", "entityType", "href", "id", "label"],
+				"required": [
+					"detail",
+					"entityId",
+					"entityType",
+					"freshness",
+					"href",
+					"id",
+					"label",
+					"observedAt",
+					"recordState",
+					"scope",
+					"source"
+				],
 				"properties": {
 					"detail": { "type": "string" },
 					"entityId": { "type": "string" },
@@ -9320,26 +11228,72 @@
 						"type": "string",
 						"enum": ["node", "organization"]
 					},
+					"freshness": { "type": "string", "enum": ["fresh"] },
 					"href": { "type": "string" },
 					"id": { "type": "string" },
 					"label": { "type": "string" },
-					"organizationName": { "type": "string" }
+					"observedAt": { "type": "string", "format": "date-time" },
+					"organizationName": { "type": "string" },
+					"recordState": {
+						"type": "string",
+						"enum": ["current", "historical", "identity-only"]
+					},
+					"scope": {
+						"type": "string",
+						"enum": [
+							"current-validator",
+							"listener",
+							"public-key-only",
+							"archived",
+							"current-organization"
+						]
+					},
+					"source": {
+						"type": "string",
+						"enum": ["meilisearch", "postgres_canonical"]
+					}
 				}
 			},
 			"SearchReadModel": {
 				"type": "object",
-				"required": ["fallbackReason", "schemaVersion"],
+				"required": [
+					"canonicalCursor",
+					"fallbackReason",
+					"freshness",
+					"observedAt",
+					"schemaVersion",
+					"source"
+				],
 				"properties": {
+					"canonicalCursor": { "type": "string" },
 					"fallbackReason": {
 						"type": "string",
 						"nullable": true,
 						"enum": [
+							"meilisearch_stale",
 							"meilisearch_syncing",
 							"meilisearch_unavailable",
 							"meilisearch_unconfigured"
 						]
 					},
-					"schemaVersion": { "type": "string", "enum": ["v1"] }
+					"freshness": { "type": "string", "enum": ["fresh"] },
+					"observedAt": { "type": "string", "format": "date-time" },
+					"schemaVersion": { "type": "string", "enum": ["v2"] },
+					"source": {
+						"type": "string",
+						"enum": ["meilisearch", "postgres_canonical"]
+					}
+				}
+			},
+			"SearchPagination": {
+				"type": "object",
+				"required": ["hasMore", "limit", "offset", "total", "totalIsExact"],
+				"properties": {
+					"hasMore": { "type": "boolean" },
+					"limit": { "type": "integer", "minimum": 1, "maximum": 25 },
+					"offset": { "type": "integer", "minimum": 0, "maximum": 10000 },
+					"total": { "type": "integer", "minimum": 0 },
+					"totalIsExact": { "type": "boolean" }
 				}
 			},
 			"SearchResponse": {
@@ -9349,8 +11303,10 @@
 					"facets",
 					"hits",
 					"indexedNetworkTime",
+					"pagination",
 					"query",
 					"readModel",
+					"scope",
 					"source"
 				],
 				"properties": {
@@ -9361,11 +11317,13 @@
 						"items": { "$ref": "#/components/schemas/SearchHit" }
 					},
 					"indexedNetworkTime": { "type": "string" },
+					"pagination": { "$ref": "#/components/schemas/SearchPagination" },
 					"query": { "type": "string" },
 					"readModel": { "$ref": "#/components/schemas/SearchReadModel" },
+					"scope": { "$ref": "#/components/schemas/KnownNodeScope" },
 					"source": {
 						"type": "string",
-						"enum": ["memory", "meilisearch"]
+						"enum": ["meilisearch", "postgres_canonical"]
 					}
 				}
 			}

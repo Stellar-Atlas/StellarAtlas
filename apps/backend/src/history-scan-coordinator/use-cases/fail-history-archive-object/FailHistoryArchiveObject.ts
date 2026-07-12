@@ -5,9 +5,11 @@ import type { HistoryArchiveCheckpointProofRepository } from '../../domain/histo
 import type { HistoryArchiveObject } from '../../domain/history-archive-object/HistoryArchiveObject.js';
 import type { HistoryArchiveObjectFailure } from '../../domain/history-archive-object/HistoryArchiveObjectRepository.js';
 import type { HistoryArchiveObjectRepository } from '../../domain/history-archive-object/HistoryArchiveObjectRepository.js';
-import { getHistoryArchiveObjectRetryPolicy } from '../../domain/history-archive-object/HistoryArchiveObjectRetryPolicy.js';
+import {
+	getHistoryArchiveObjectRetryPolicy,
+	shouldThrottleHistoryArchiveObjectHost
+} from '../../domain/history-archive-object/HistoryArchiveObjectRetryPolicy.js';
 import { TYPES } from '../../infrastructure/di/di-types.js';
-import type { ExceptionLogger } from '@core/services/ExceptionLogger.js';
 import { mapUnknownToError } from '@core/utilities/mapUnknownToError.js';
 import { HistoryArchiveObjectEventRecorder } from '../record-history-archive-object-event/HistoryArchiveObjectEventRecorder.js';
 
@@ -18,9 +20,7 @@ export class FailHistoryArchiveObject {
 		private readonly objectRepository: HistoryArchiveObjectRepository,
 		private readonly eventRecorder: HistoryArchiveObjectEventRecorder,
 		@inject(TYPES.HistoryArchiveCheckpointProofRepository)
-		private readonly checkpointProofRepository: HistoryArchiveCheckpointProofRepository,
-		@inject('ExceptionLogger')
-		private readonly exceptionLogger: ExceptionLogger
+		private readonly checkpointProofRepository: HistoryArchiveCheckpointProofRepository
 	) {}
 
 	async execute(
@@ -31,59 +31,120 @@ export class FailHistoryArchiveObject {
 			const object = await this.objectRepository.findByRemoteId(remoteId);
 			if (object === null) return ok(false);
 
+			const now = new Date();
 			const retryPolicy = getHistoryArchiveObjectRetryPolicy({
 				currentRetryCount: Math.max(0, object.attempts - 1),
 				errorType: failure.errorType,
+				failureChannel: failure.failureChannel,
 				httpStatus: failure.httpStatus,
-				now: new Date(),
-				objectType: object.objectType
+				now,
+				objectType: object.objectType,
+				retryAfterSeconds: failure.retryAfterSeconds
 			});
 
-			const updated = await this.objectRepository.markObjectFailed(remoteId, {
-				...failure,
-				nextAttemptAt: retryPolicy.nextAttemptAt
-			});
-			if (updated) {
-				await this.objectRepository.recordHostFailure({
-					archiveUrlIdentity: object.archiveUrlIdentity,
-					blockedUntil: retryPolicy.nextAttemptAt,
+			const hostFailure =
+				failure.failureChannel === 'archive_evidence' &&
+				shouldThrottleHistoryArchiveObjectHost({
 					errorType: failure.errorType,
-					evidenceClass: retryPolicy.evidenceClass,
 					failureClass: retryPolicy.failureClass,
-					hostIdentity: object.hostIdentity,
 					httpStatus: failure.httpStatus
-				});
-				const failedObject =
-					await this.objectRepository.findByRemoteId(remoteId);
-				if (failedObject !== null) {
-					await this.eventRecorder.record(failedObject, {
-						claimAttempt: failure.claimAttempt,
-						eventType: 'failed',
-						evidenceClass: retryPolicy.evidenceClass
-					});
-					if (shouldRefreshCheckpointProof(failedObject)) {
-						await this.refreshCheckpointProof(failedObject);
-					}
-				}
+				})
+					? {
+							archiveUrlIdentity: object.archiveUrlIdentity,
+							blockedUntil: retryPolicy.nextAttemptAt,
+							errorType: failure.errorType,
+							evidenceClass: retryPolicy.evidenceClass,
+							failureClass: retryPolicy.failureClass,
+							hostIdentity: object.hostIdentity,
+							httpStatus: failure.httpStatus,
+							retryAfterUntil: toRetryAfterUntil(failure.retryAfterSeconds, now)
+						}
+					: undefined;
+			const transitioned = await this.objectRepository.markObjectFailed(
+				remoteId,
+				{
+					...failure,
+					nextAttemptAt: retryPolicy.nextAttemptAt
+				},
+				hostFailure
+			);
+			const failedObject = await this.objectRepository.findByRemoteId(remoteId);
+			if (
+				failedObject === null ||
+				(!transitioned && !isAcceptedFailureReplay(failedObject, failure))
+			) {
+				return ok(false);
 			}
 
-			return ok(updated);
+			await this.reconcilePersisted(failedObject);
+
+			return ok(true);
 		} catch (e) {
 			return err(mapUnknownToError(e));
 		}
 	}
 
-	private async refreshCheckpointProof(
-		object: HistoryArchiveObject
-	): Promise<void> {
-		try {
+	async reconcilePersisted(object: HistoryArchiveObject): Promise<void> {
+		if (object.status !== 'failed') return;
+		if (object.transitionEffectsCompletedAt !== null) return;
+		const retryPolicy = getHistoryArchiveObjectRetryPolicy({
+			currentRetryCount: Math.max(0, object.attempts - 1),
+			errorType: object.errorType,
+			failureChannel: object.failureChannel ?? 'scanner_issue',
+			httpStatus: object.httpStatus,
+			now: new Date(),
+			objectType: object.objectType
+		});
+		if (shouldRefreshCheckpointProof(object)) {
 			await this.checkpointProofRepository.refreshForObject(object);
-		} catch (e) {
-			this.exceptionLogger.captureException(mapUnknownToError(e));
 		}
+		await this.eventRecorder.recordDurably(object, {
+			claimAttempt: object.attempts,
+			eventType: 'failed',
+			evidenceClass: retryPolicy.evidenceClass
+		});
+		await this.objectRepository.markTransitionEffectsCompleted(
+			object.remoteId,
+			object.attempts,
+			'failed'
+		);
 	}
 }
 
-function shouldRefreshCheckpointProof(object: HistoryArchiveObject): boolean {
+function toRetryAfterUntil(
+	value: number | null | undefined,
+	now: Date
+): Date | null {
+	if (!Number.isSafeInteger(value) || value === undefined || value === null) {
+		return null;
+	}
+	return new Date(now.getTime() + Math.max(0, value) * 1000);
+}
+
+function isAcceptedFailureReplay(
+	object: {
+		readonly attempts: number;
+		readonly errorMessage: string | null;
+		readonly errorType: string | null;
+		readonly failureChannel: string | null;
+		readonly httpStatus: number | null;
+		readonly status: string;
+	},
+	failure: HistoryArchiveObjectFailure
+): boolean {
+	return (
+		object.status === 'failed' &&
+		object.attempts === failure.claimAttempt &&
+		object.errorType === failure.errorType &&
+		object.errorMessage === failure.errorMessage &&
+		object.failureChannel === failure.failureChannel &&
+		object.httpStatus === (failure.httpStatus ?? null)
+	);
+}
+
+function shouldRefreshCheckpointProof(object: {
+	readonly bucketHash: string | null;
+	readonly checkpointLedger: number | null;
+}): boolean {
 	return object.checkpointLedger !== null || object.bucketHash !== null;
 }

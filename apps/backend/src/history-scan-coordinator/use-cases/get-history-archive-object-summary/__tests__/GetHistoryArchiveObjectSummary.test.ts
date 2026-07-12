@@ -23,6 +23,7 @@ describe('GetHistoryArchiveObjectSummary', () => {
 			archiveUrl: null,
 			archiveUrlIdentity: null
 		});
+		expect(repository.getStatusSummary).not.toHaveBeenCalled();
 	});
 
 	it('normalizes archive URL identity for scoped object summary', async () => {

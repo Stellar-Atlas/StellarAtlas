@@ -1,4 +1,7 @@
-import { normalizeHistoryArchiveRootUrl } from '../src/history-archive-url.js';
+import {
+	appendHistoryArchiveRootPath,
+	normalizeHistoryArchiveRootUrl
+} from '../src/history-archive-url.js';
 
 describe('normalizeHistoryArchiveRootUrl', () => {
 	it('normalizes archive roots and trims trailing slashes', () => {
@@ -45,15 +48,28 @@ describe('normalizeHistoryArchiveRootUrl', () => {
 		).toBeNull();
 	});
 
-	it('rejects URLs with credentials, query strings, hashes, or unsupported protocols', () => {
+	it('preserves case-sensitive path and query data while normalizing the origin', () => {
+		expect(
+			normalizeHistoryArchiveRootUrl(
+				'HTTPS://History.Example.COM/Archive/Case?Token=AbC%2F123'
+			)
+		).toBe('https://history.example.com/Archive/Case?Token=AbC%2F123');
+		expect(
+			appendHistoryArchiveRootPath(
+				'https://history.example.com/Archive?Token=AbC',
+				'ledger/00/00/00/ledger-0000003f.xdr.gz'
+			)
+		).toBe(
+			'https://history.example.com/Archive/ledger/00/00/00/ledger-0000003f.xdr.gz?Token=AbC'
+		);
+	});
+
+	it('rejects URLs with credentials, hashes, or unsupported protocols', () => {
 		expect(
 			normalizeHistoryArchiveRootUrl('ftp://history.example.com')
 		).toBeNull();
 		expect(
 			normalizeHistoryArchiveRootUrl('https://user@history.example.com')
-		).toBeNull();
-		expect(
-			normalizeHistoryArchiveRootUrl('https://history.example.com?x=1')
 		).toBeNull();
 		expect(
 			normalizeHistoryArchiveRootUrl('https://history.example.com#state')

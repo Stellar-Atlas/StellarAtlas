@@ -21,6 +21,9 @@ export function StatusDashboardLive(
 					...current,
 					api: message.payload.api ?? current.api,
 					archiveEvents: message.payload.archiveEvents ?? current.archiveEvents,
+					archiveEventsAvailable:
+						message.payload.archiveEvents !== undefined ||
+						current.archiveEventsAvailable,
 					archiveEvidenceAvailable:
 						message.payload.archiveSummary !== undefined ||
 						current.archiveEvidenceAvailable,
@@ -29,6 +32,8 @@ export function StatusDashboardLive(
 					dataQuality: message.payload.dataQuality ?? current.dataQuality,
 					frontend: message.payload.frontend ?? current.frontend,
 					scanLogs: message.payload.scanLogs ?? current.scanLogs,
+					scanLogsAvailable:
+						message.payload.scanLogs !== undefined || current.scanLogsAvailable,
 					workers: message.payload.workers ?? current.workers
 				}));
 			}),

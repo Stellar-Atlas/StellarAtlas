@@ -47,6 +47,7 @@ import { RegisterParsedTransactionResults } from '@history-scan-coordinator/use-
 import { BackfillArchiveMetadata } from '@history-scan-coordinator/use-cases/backfill-archive-metadata/BackfillArchiveMetadata.js';
 import { historyScanRouter } from '@history-scan-coordinator/infrastructure/http/HistoryScanRouter.js';
 import { archiveScanRouter } from '@history-scan-coordinator/infrastructure/http/ArchiveScanRouter.js';
+import { archiveEvidenceRouter } from '@history-scan-coordinator/infrastructure/http/ArchiveEvidenceRouter.js';
 import { communityScannerRouter } from '@history-scan-coordinator/infrastructure/http/CommunityScannerRouter.js';
 import { GetScanJob } from '@history-scan-coordinator/use-cases/get-scan-job/GetScanJob.js';
 import { ReleaseScanJob } from '@history-scan-coordinator/use-cases/release-scan-job/ReleaseScanJob.js';
@@ -62,11 +63,16 @@ import { GetHistoryArchiveObjectSummary } from '@history-scan-coordinator/use-ca
 import { GetHistoryArchiveObjectStatusSummary } from '@history-scan-coordinator/use-cases/get-history-archive-object-status-summary/GetHistoryArchiveObjectStatusSummary.js';
 import { GetHistoryArchiveObjectEvents } from '@history-scan-coordinator/use-cases/get-history-archive-object-events/GetHistoryArchiveObjectEvents.js';
 import { GetHistoryArchiveRepairPlan } from '@history-scan-coordinator/use-cases/get-history-archive-repair-plan/GetHistoryArchiveRepairPlan.js';
+import { GetHistoryArchiveEvidence } from '@history-scan-coordinator/use-cases/get-history-archive-evidence/GetHistoryArchiveEvidence.js';
+import { GetKnownNodeArchiveEvidence } from '@history-scan-coordinator/use-cases/get-known-node-archive-evidence/GetKnownNodeArchiveEvidence.js';
+import { GetKnownOrganizationArchiveEvidence } from '@history-scan-coordinator/use-cases/get-known-organization-archive-evidence/GetKnownOrganizationArchiveEvidence.js';
+import { GetKnownArchiveEvidence } from '@history-scan-coordinator/use-cases/get-known-archive-evidence/GetKnownArchiveEvidence.js';
 import { GetHistoryArchiveObjectJob } from '@history-scan-coordinator/use-cases/get-history-archive-object-job/GetHistoryArchiveObjectJob.js';
 import { TouchHistoryArchiveObject } from '@history-scan-coordinator/use-cases/touch-history-archive-object/TouchHistoryArchiveObject.js';
 import { CompleteHistoryArchiveObject } from '@history-scan-coordinator/use-cases/complete-history-archive-object/CompleteHistoryArchiveObject.js';
 import { FailHistoryArchiveObject } from '@history-scan-coordinator/use-cases/fail-history-archive-object/FailHistoryArchiveObject.js';
 import { ReleaseHistoryArchiveObject } from '@history-scan-coordinator/use-cases/release-history-archive-object/ReleaseHistoryArchiveObject.js';
+import { ReportHistoryArchiveWorkerStatus } from '@history-scan-coordinator/use-cases/report-history-archive-worker-status/ReportHistoryArchiveWorkerStatus.js';
 import { GetScannerMetrics } from '@history-scan-coordinator/use-cases/GetScannerMetrics.js';
 import { RegisterCommunityScanner } from '@history-scan-coordinator/use-cases/RegisterCommunityScanner.js';
 import { SendScannerHeartbeat } from '@history-scan-coordinator/use-cases/SendScannerHeartbeat.js';
@@ -195,6 +201,13 @@ const listen = async () => {
 	);
 
 	api.use(
+		'/v2/archive-scans',
+		archiveEvidenceRouter({
+			getHistoryArchiveEvidence: kernel.container.get(GetHistoryArchiveEvidence)
+		})
+	);
+
+	api.use(
 		'/v1/community-scanners',
 		communityScannerRouter({
 			registerCommunityScanner: kernel.container.get(RegisterCommunityScanner),
@@ -296,6 +309,9 @@ const listen = async () => {
 			releaseHistoryArchiveObject: kernel.container.get(
 				ReleaseHistoryArchiveObject
 			),
+			reportHistoryArchiveWorkerStatus: kernel.container.get(
+				ReportHistoryArchiveWorkerStatus
+			),
 			registerScan: kernel.container.get(RegisterScan),
 			userName: config.historyScanAPIUsername,
 			password: config.historyScanAPIPassword,
@@ -319,8 +335,14 @@ const listen = async () => {
 		'/v1/known',
 		knownNetworkRouter({
 			getKnownNode: kernel.container.get(GetKnownNode),
+			getKnownNodeArchiveEvidence: kernel.container.get(
+				GetKnownNodeArchiveEvidence
+			),
 			getKnownNodes: kernel.container.get(GetKnownNodes),
 			getKnownOrganization: kernel.container.get(GetKnownOrganization),
+			getKnownOrganizationArchiveEvidence: kernel.container.get(
+				GetKnownOrganizationArchiveEvidence
+			),
 			getKnownOrganizations: kernel.container.get(GetKnownOrganizations)
 		})
 	);
@@ -357,6 +379,9 @@ const listen = async () => {
 		'/v1',
 		networkRouter({
 			getNetwork: kernel.container.get(GetNetwork),
+			getKnownArchiveEvidence: kernel.container.get(GetKnownArchiveEvidence),
+			getKnownNodes: kernel.container.get(GetKnownNodes),
+			getKnownOrganizations: kernel.container.get(GetKnownOrganizations),
 			getMeasurementAggregations: kernel.container.get(
 				GetMeasurementAggregations
 			),

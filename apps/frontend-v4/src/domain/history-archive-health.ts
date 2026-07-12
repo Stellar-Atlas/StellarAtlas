@@ -1,5 +1,6 @@
 import type {
 	PublicHistoryArchiveObjectSummary,
+	PublicHistoryArchiveStatusSummary,
 	PublicStatusLevel
 } from '../api/types';
 
@@ -27,6 +28,7 @@ export interface ArchiveHealthFacts {
 	readonly provenCheckpointProofs: number;
 	readonly remoteHostFailures: number;
 	readonly scannerIssues: number;
+	readonly unclassifiedFailures: number;
 	readonly waitingChecks: number;
 }
 
@@ -40,6 +42,13 @@ export interface AssessArchiveHealthInput {
 	readonly observedActiveChecks?: number;
 	readonly scannerIssue?: boolean;
 	readonly summary: PublicHistoryArchiveObjectSummary | null;
+}
+
+export interface AssessArchiveStatusHealthInput {
+	readonly evidenceAvailable: boolean;
+	readonly observedActiveChecks?: number;
+	readonly scannerIssue?: boolean;
+	readonly summary: PublicHistoryArchiveStatusSummary | null;
 }
 
 export interface AssessArchiveScannerHealthInput {
@@ -72,7 +81,37 @@ export function assessArchiveHealth({
 	);
 	if (hasRemoteFailure(facts)) return { facts, state: 'remote_failure' };
 	if (facts.scannerIssues > 0) return { facts, state: 'scanner_issue' };
+	if (facts.unclassifiedFailures > 0) return { facts, state: 'unknown' };
 	if (checkpointProofIsComplete(summary)) return { facts, state: 'verified' };
+	if (facts.activeChecks > 0) return { facts, state: 'checking' };
+	if (facts.waitingChecks > 0) return { facts, state: 'waiting' };
+	return { facts, state: 'unknown' };
+}
+
+export function assessArchiveStatusHealth({
+	evidenceAvailable,
+	observedActiveChecks = 0,
+	scannerIssue = false,
+	summary
+}: AssessArchiveStatusHealthInput): ArchiveHealthAssessment {
+	if (!evidenceAvailable || summary === null) {
+		return {
+			facts: emptyArchiveHealthFacts(scannerIssue ? 1 : 0),
+			state: scannerIssue ? 'scanner_issue' : 'unknown'
+		};
+	}
+
+	const facts = getArchiveStatusHealthFacts(
+		summary,
+		observedActiveChecks,
+		scannerIssue
+	);
+	if (hasRemoteFailure(facts)) return { facts, state: 'remote_failure' };
+	if (facts.scannerIssues > 0) return { facts, state: 'scanner_issue' };
+	if (facts.unclassifiedFailures > 0) return { facts, state: 'unknown' };
+	if (checkpointStatusProofIsComplete(summary)) {
+		return { facts, state: 'verified' };
+	}
 	if (facts.activeChecks > 0) return { facts, state: 'checking' };
 	if (facts.waitingChecks > 0) return { facts, state: 'waiting' };
 	return { facts, state: 'unknown' };
@@ -105,6 +144,21 @@ export function checkpointProofIsComplete(
 	summary: PublicHistoryArchiveObjectSummary
 ): boolean {
 	const checkpoints = summary.checkpoints;
+	return (
+		checkpoints.expectedArchiveCheckpoints > 0 &&
+		checkpoints.categoryConsistentArchiveCheckpoints ===
+			checkpoints.expectedArchiveCheckpoints &&
+		checkpoints.categoryConsistencyFailedCheckpoints === 0 &&
+		checkpoints.categoryConsistencyPendingCheckpoints === 0 &&
+		checkpoints.categoryConsistencyNotEvaluatedCheckpoints === 0 &&
+		checkpoints.missingArchiveCheckpoints === 0
+	);
+}
+
+export function checkpointStatusProofIsComplete(
+	summary: PublicHistoryArchiveStatusSummary
+): boolean {
+	const checkpoints = summary.checkpointCoverage;
 	return (
 		checkpoints.expectedArchiveCheckpoints > 0 &&
 		checkpoints.categoryConsistentArchiveCheckpoints ===
@@ -197,6 +251,7 @@ function getArchiveHealthFacts(
 		),
 		remoteHostFailures,
 		scannerIssues: infrastructureFailures + (scannerIssue ? 1 : 0),
+		unclassifiedFailures: 0,
 		waitingChecks: Math.max(
 			0,
 			summary.pendingObjects,
@@ -207,6 +262,80 @@ function getArchiveHealthFacts(
 			proofGap
 		)
 	};
+}
+
+function getArchiveStatusHealthFacts(
+	summary: PublicHistoryArchiveStatusSummary,
+	observedActiveChecks: number,
+	scannerIssue: boolean
+): ArchiveHealthFacts {
+	const checkpoints = summary.checkpointCoverage;
+	const sourceActiveChecks = summary.sources.reduce(
+		(total, source) => total + source.activeObjectChecks,
+		0
+	);
+	const sourceWaitingChecks = summary.sources.reduce(
+		(total, source) =>
+			total +
+			source.pendingCheckpointProofs +
+			source.notEvaluableCheckpointProofs,
+		0
+	);
+	const proofGap = Math.max(
+		0,
+		checkpoints.expectedArchiveCheckpoints -
+			checkpoints.categoryConsistentArchiveCheckpoints -
+			checkpoints.categoryConsistencyFailedCheckpoints
+	);
+
+	return {
+		activeChecks: Math.max(
+			0,
+			observedActiveChecks,
+			summary.activeObjectChecks,
+			checkpoints.activeArchiveCheckpoints,
+			sourceActiveChecks
+		),
+		checkpointMismatches: Math.max(
+			0,
+			checkpoints.categoryConsistencyFailedCheckpoints
+		),
+		expectedCheckpointProofs: Math.max(
+			0,
+			checkpoints.expectedArchiveCheckpoints
+		),
+		failedEvidenceRows: Math.max(0, summary.archiveEvidenceFailures),
+		failingArchiveSources: summary.sources.filter(isFailingStatusSource).length,
+		provenCheckpointProofs: Math.max(
+			0,
+			checkpoints.categoryConsistentArchiveCheckpoints
+		),
+		remoteHostFailures: 0,
+		scannerIssues:
+			Math.max(0, summary.scannerIssueFailures) + (scannerIssue ? 1 : 0),
+		unclassifiedFailures: Math.max(0, summary.unclassifiedFailures),
+		waitingChecks: Math.max(
+			0,
+			checkpoints.categoryConsistencyPendingCheckpoints +
+				checkpoints.categoryConsistencyNotEvaluatedCheckpoints +
+				checkpoints.missingArchiveCheckpoints,
+			sourceWaitingChecks,
+			proofGap
+		)
+	};
+}
+
+function isFailingStatusSource(
+	source: PublicHistoryArchiveStatusSummary['sources'][number]
+): boolean {
+	return (
+		source.mismatchCheckpointProofs > 0 ||
+		source.archiveEvidenceFailures > 0 ||
+		(source.rootObjectStatus === 'failed' &&
+			source.rootFailureChannel === 'archive_evidence') ||
+		source.stateStatus === 'invalid' ||
+		source.stateStatus === 'unreachable'
+	);
 }
 
 function isFailingArchiveSource(
@@ -239,6 +368,7 @@ function emptyArchiveHealthFacts(scannerIssues: number): ArchiveHealthFacts {
 		provenCheckpointProofs: 0,
 		remoteHostFailures: 0,
 		scannerIssues,
+		unclassifiedFailures: 0,
 		waitingChecks: 0
 	};
 }

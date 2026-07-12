@@ -30,3 +30,19 @@ export {
 } from './ArchiveMetadataDTO.js';
 export { ScanDTO } from './ScanDTO.js';
 export { ScanJobDTO, type ScanJobJSONInput } from './ScanJobDTO.js';
+export {
+	historyArchiveObjectFailureChannels,
+	isHistoryArchiveObjectFailureChannelDTO,
+	type HistoryArchiveObjectFailureChannelDTO
+} from './HistoryArchiveObjectFailureDTO.js';
+export {
+	historyArchiveObjectTypes,
+	historyArchiveWorkerOutcomes,
+	historyArchiveWorkerStages,
+	isHistoryArchiveWorkerReportDTO,
+	type HistoryArchiveObjectTypeDTO,
+	type HistoryArchiveWorkerObjectDTO,
+	type HistoryArchiveWorkerOutcomeDTO,
+	type HistoryArchiveWorkerReportDTO,
+	type HistoryArchiveWorkerStageDTO
+} from './HistoryArchiveWorkerStatusDTO.js';

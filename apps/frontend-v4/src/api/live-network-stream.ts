@@ -1,15 +1,10 @@
-import type {
-	PublicLatestLedger,
-	PublicNetwork,
-	PublicScpStatementObservation
-} from './types';
 import { buildBrowserRealtimeUrl } from './browser-client';
+import {
+	parseLiveNetworkMessage,
+	type LiveNetworkMessage
+} from './live-network-message-parser';
 
-export type LiveNetworkMessage =
-	| { payload: PublicLatestLedger; type: 'latestLedger' }
-	| { payload: PublicNetwork; type: 'network' }
-	| { payload: PublicScpStatementObservation[]; type: 'scp' }
-	| { payload: { message: string }; type: 'error' };
+export type { LiveNetworkMessage } from './live-network-message-parser';
 
 type LiveNetworkListener = (message: LiveNetworkMessage) => void;
 
@@ -54,10 +49,25 @@ const connectLiveNetworkStream = (): void => {
 	}
 
 	clearReconnectTimeout();
-	socket = new WebSocket(buildBrowserRealtimeUrl(liveWebSocketPath));
-	socket.addEventListener('message', (event) => {
+	const candidate = new WebSocket(buildBrowserRealtimeUrl(liveWebSocketPath));
+	socket = candidate;
+	candidate.addEventListener('message', (event) => {
+		if (socket !== candidate) return;
+		if (typeof event.data !== 'string') {
+			notify({
+				payload: { message: 'Live stream message was not text' },
+				type: 'error'
+			});
+			return;
+		}
 		try {
-			notify(JSON.parse(event.data as string) as LiveNetworkMessage);
+			const message = parseLiveNetworkMessage(JSON.parse(event.data));
+			notify(
+				message ?? {
+					payload: { message: 'Live stream message failed validation' },
+					type: 'error'
+				}
+			);
 		} catch {
 			notify({
 				payload: { message: 'Live stream message was not valid JSON' },
@@ -65,12 +75,13 @@ const connectLiveNetworkStream = (): void => {
 			});
 		}
 	});
-	socket.addEventListener('close', () => {
+	candidate.addEventListener('close', () => {
+		if (socket !== candidate) return;
 		socket = null;
 		scheduleReconnect();
 	});
-	socket.addEventListener('error', () => {
-		closeSocket();
+	candidate.addEventListener('error', () => {
+		candidate.close();
 	});
 };
 

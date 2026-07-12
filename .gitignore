@@ -27,6 +27,8 @@ mcp-config-update.json
 apps/frontend-v3/
 docs/research/
 docs/issues/
+docs/issue-tracking/
 docs/agents/
 docs/*.md
+docs/ops/archive-evidence-cursor-keys.md
 !docs/network-scan-runbook.md

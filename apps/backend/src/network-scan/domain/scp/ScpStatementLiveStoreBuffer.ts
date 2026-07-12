@@ -58,7 +58,10 @@ export class ScpStatementLiveStoreBuffer {
 		this.flushPromise = this.flushPromise.then(async () => {
 			if (this.aborted) return;
 			try {
-				await this.liveStore.saveMany(batch);
+				const outcome = await this.liveStore.saveMany(batch);
+				if (outcome.status === 'deferred') {
+					throw new Error(`Live SCP projection deferred: ${outcome.reason}`);
+				}
 			} catch (error) {
 				this.logger.error('Error while indexing live SCP statements', {
 					error

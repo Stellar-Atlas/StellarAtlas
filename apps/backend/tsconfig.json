@@ -6,69 +6,34 @@
 		"outDir": "lib",
 		"rootDir": "src",
 		"composite": true,
-		"types": [
-			"jest",
-			"node",
-			"reflect-metadata"
-		],
+		"types": ["jest", "node", "reflect-metadata"],
 		"paths": {
-			"@backend/*.js": [
-				"./src/*.ts"
-			],
-			"@backend/*": [
-				"./src/*"
-			],
-			"@core/*.js": [
-				"./src/core/*.ts"
-			],
-			"@core/*": [
-				"./src/core/*"
-			],
-			"@cross-check/*.js": [
-				"./src/cross-check/*.ts"
-			],
-			"@cross-check/*": [
-				"./src/cross-check/*"
-			],
-			"@fbas/*.js": [
-				"./src/fbas/*.ts"
-			],
-			"@fbas/*": [
-				"./src/fbas/*"
-			],
-			"@history-scan-coordinator/*.js": [
-				"./src/history-scan-coordinator/*.ts"
-			],
-			"@history-scan-coordinator/*": [
-				"./src/history-scan-coordinator/*"
-			],
-			"@network-scan/*.js": [
-				"./src/network-scan/*.ts"
-			],
-			"@network-scan/*": [
-				"./src/network-scan/*"
-			],
-			"@notifications/*.js": [
-				"./src/notifications/*.ts"
-			],
-			"@notifications/*": [
-				"./src/notifications/*"
-			],
-			"@status/*.js": [
-				"./src/status/*.ts"
-			],
-			"@status/*": [
-				"./src/status/*"
-			]
+			"@backend/*.js": ["./src/*.ts"],
+			"@backend/*": ["./src/*"],
+			"@core/*.js": ["./src/core/*.ts"],
+			"@core/*": ["./src/core/*"],
+			"@cross-check/*.js": ["./src/cross-check/*.ts"],
+			"@cross-check/*": ["./src/cross-check/*"],
+			"@fbas/*.js": ["./src/fbas/*.ts"],
+			"@fbas/*": ["./src/fbas/*"],
+			"@history-scan-coordinator/*.js": ["./src/history-scan-coordinator/*.ts"],
+			"@history-scan-coordinator/*": ["./src/history-scan-coordinator/*"],
+			"@network-scan/*.js": ["./src/network-scan/*.ts"],
+			"@network-scan/*": ["./src/network-scan/*"],
+			"@notifications/*.js": ["./src/notifications/*.ts"],
+			"@notifications/*": ["./src/notifications/*"],
+			"@status/*.js": ["./src/status/*.ts"],
+			"@status/*": ["./src/status/*"],
+			"@test-support/*.js": ["./src/test-support/*.ts"],
+			"@test-support/*": ["./src/test-support/*"]
 		}
 	},
-	"include": [
-		"src/**/*.ts"
-	],
+	"include": ["src/**/*.ts"],
 	"exclude": [
 		"node_modules/**/*",
 		"src/**/__tests__/*",
 		"src/**/__mocks__/*",
-		"src/**/__fixtures__/*"
+		"src/**/__fixtures__/*",
+		"src/test-support/**/*"
 	]
 }

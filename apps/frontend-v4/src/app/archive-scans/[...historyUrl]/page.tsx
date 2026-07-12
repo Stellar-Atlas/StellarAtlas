@@ -1,14 +1,16 @@
 import { Suspense } from 'react';
 import { connection } from 'next/server';
-import {
-	fetchHistoryArchiveBucketCoveragesForObjects,
-	fetchHistoryArchiveObjectEvidenceForArchive
-} from '@api/archive-scans-client';
-import { fetchHistoryArchiveScan } from '@api/client';
-import { ArchiveScanDetail } from '@components/archive-scans/archive-scan-detail';
+import { fetchHistoryArchiveObjectEvidenceForArchive } from '@api/archive-scans-client';
+import { ArchiveEvidenceErrorBoundary } from '@components/archive-scans/archive-evidence-error-boundary';
+import { ArchiveEvidenceRouteState } from '@components/archive-scans/archive-evidence-route-state';
+import { KnownArchiveEvidence } from '@components/archive-scans/known-archive-evidence';
 import { PageHeading } from '@components/layout/page-heading';
-import { RouteLoadingPanel } from '@components/layout/route-fallbacks';
 import { decodeArchiveScanRouteParam } from '@domain/archive-scan-routes';
+import {
+	archiveEvidenceCopyLimit,
+	archiveEvidencePageLimit,
+	toKnownArchiveEvidence
+} from '@domain/known-archive-evidence';
 
 interface ArchiveScanDetailPageProps {
 	params: Promise<{ historyUrl: string[] }>;
@@ -17,45 +19,32 @@ interface ArchiveScanDetailPageProps {
 export const dynamicParams = true;
 export const revalidate = 0;
 const liveArchiveFetchOptions = { cache: 'no-store' } as const;
-const maxBucketCoverageLookups = 8;
 
-async function ArchiveScanDetailRouteContent({
+async function ArchiveSourceEvidenceRoute({
 	historyUrl
 }: {
 	readonly historyUrl: string;
 }): Promise<React.JSX.Element> {
 	await connection();
-	const [scan, objectEvidence] = await Promise.all([
-		fetchHistoryArchiveScan(historyUrl, liveArchiveFetchOptions),
-		fetchHistoryArchiveObjectEvidenceForArchive(
-			historyUrl,
-			{ eventLimit: 250, objectLimit: 250 },
-			liveArchiveFetchOptions
-		)
-	]);
-	const bucketCoverages = await fetchHistoryArchiveBucketCoveragesForObjects(
-		objectEvidence.objects,
-		maxBucketCoverageLookups,
+	const archiveEvidence = await fetchHistoryArchiveObjectEvidenceForArchive(
+		historyUrl,
+		{
+			copyLimit: archiveEvidenceCopyLimit,
+			eventLimit: archiveEvidencePageLimit,
+			failureLimit: archiveEvidencePageLimit,
+			objectLimit: archiveEvidencePageLimit,
+			objectStatus: 'pending',
+			workerIssueLimit: archiveEvidencePageLimit
+		},
 		liveArchiveFetchOptions
 	);
 
 	return (
-		<main className="shell">
-			<PageHeading
-				description={historyUrl}
-				eyebrow="Archive source"
-				title={formatArchiveTitle(historyUrl)}
-			/>
-			<ArchiveScanDetail
-				events={objectEvidence.objectEvents}
-				bucketCoverages={bucketCoverages}
-				historyUrl={historyUrl}
-				objects={objectEvidence.objects}
-				scan={scan}
-				state={objectEvidence.scannerOwnedState}
-				summary={objectEvidence.summary}
-			/>
-		</main>
+		<KnownArchiveEvidence
+			evidence={toKnownArchiveEvidence(archiveEvidence)}
+			subject={{ id: historyUrl, kind: 'archive' }}
+			title="Archive evidence"
+		/>
 	);
 }
 
@@ -63,13 +52,28 @@ export default async function ArchiveScanDetailPage({
 	params
 }: ArchiveScanDetailPageProps): Promise<React.JSX.Element> {
 	const { historyUrl } = await params;
+	const decodedHistoryUrl = decodeArchiveScanRouteParam(historyUrl);
 
 	return (
-		<Suspense fallback={<RouteLoadingPanel />}>
-			<ArchiveScanDetailRouteContent
-				historyUrl={decodeArchiveScanRouteParam(historyUrl)}
+		<main className="shell">
+			<PageHeading
+				description={decodedHistoryUrl}
+				eyebrow="Archive source"
+				title={formatArchiveTitle(decodedHistoryUrl)}
 			/>
-		</Suspense>
+			<ArchiveEvidenceErrorBoundary title="Archive evidence">
+				<Suspense
+					fallback={
+						<ArchiveEvidenceRouteState
+							state="loading"
+							title="Archive evidence"
+						/>
+					}
+				>
+					<ArchiveSourceEvidenceRoute historyUrl={decodedHistoryUrl} />
+				</Suspense>
+			</ArchiveEvidenceErrorBoundary>
+		</main>
 	);
 }
 

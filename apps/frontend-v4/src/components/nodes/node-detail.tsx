@@ -1,21 +1,14 @@
 import Link from 'next/link';
 import type {
-	PublicHistoryArchiveBucketCrossCoverage,
-	PublicHistoryArchiveObjectEvents,
-	PublicHistoryArchiveObjectQueue,
-	PublicHistoryArchiveObjectSummary,
-	PublicHistoryArchiveState,
 	PublicKnownNode,
 	PublicNetwork,
 	PublicNode,
 	PublicOrganization
 } from '../../api/types';
-import type { PublicHistoryArchiveRepairPlan } from '@api/archive-repair-types';
 import {
 	getNodeTags,
 	getOrganizationForNode,
-	getOrganizationLabel,
-	type NodeTag
+	getOrganizationLabel
 } from '../../domain/network';
 import { formatBoolean, formatDateTime } from '../../format/formatters';
 import {
@@ -25,15 +18,9 @@ import {
 	formatNode30DayValidating
 } from '../../domain/availability';
 import { StatusTags } from '../status-tags';
-import { NodeArchiveHealth } from './node-archive-health';
 
 interface NodeDetailProps {
-	historyArchiveBucketCoverages: readonly PublicHistoryArchiveBucketCrossCoverage[];
-	historyArchiveEvents: PublicHistoryArchiveObjectEvents | null;
-	historyArchiveObjects: PublicHistoryArchiveObjectQueue | null;
-	historyArchiveRepairPlan: PublicHistoryArchiveRepairPlan | null;
-	historyArchiveState: PublicHistoryArchiveState | null;
-	historyArchiveSummary: PublicHistoryArchiveObjectSummary | null;
+	archiveEvidence: React.ReactNode;
 	knownNode: PublicKnownNode;
 	network: PublicNetwork;
 	node: PublicNode | null;
@@ -41,12 +28,7 @@ interface NodeDetailProps {
 }
 
 export function NodeDetail({
-	historyArchiveBucketCoverages,
-	historyArchiveEvents,
-	historyArchiveObjects,
-	historyArchiveRepairPlan,
-	historyArchiveState,
-	historyArchiveSummary,
+	archiveEvidence,
 	knownNode,
 	network,
 	node,
@@ -55,6 +37,7 @@ export function NodeDetail({
 	if (node === null) {
 		return (
 			<section className="detail-grid">
+				{archiveEvidence}
 				<article className="panel detail-panel">
 					<div className="panel-heading">
 						<h2>Known public key</h2>
@@ -95,20 +78,11 @@ export function NodeDetail({
 	const active30Days = formatNode30DayActive(node);
 	const validating24Hours = formatNode24HourValidating(node);
 	const validating30Days = formatNode30DayValidating(node);
-	const hasHistoryArchive =
-		typeof node.historyUrl === 'string' && node.historyUrl.length > 0;
-	const showArchivePanel =
-		hasHistoryArchive ||
-		historyArchiveState !== null ||
-		historyArchiveSummary !== null;
-	const nodeTags = getEvidenceAwareNodeTags(
-		node,
-		historyArchiveSummary,
-		historyArchiveState
-	);
+	const nodeTags = getNodeTags(node);
 
 	return (
 		<section className="detail-grid">
+			{archiveEvidence}
 			<article className="panel detail-panel">
 				<div className="panel-heading">
 					<h2>Node status</h2>
@@ -212,62 +186,6 @@ export function NodeDetail({
 					</div>
 				</dl>
 			</article>
-			{showArchivePanel ? (
-				<NodeArchiveHealth
-					historyArchiveBucketCoverages={historyArchiveBucketCoverages}
-					historyArchiveEvents={historyArchiveEvents}
-					historyArchiveObjects={historyArchiveObjects}
-					historyArchiveRepairPlan={historyArchiveRepairPlan}
-					historyArchiveState={historyArchiveState}
-					historyArchiveSummary={historyArchiveSummary}
-					node={node}
-				/>
-			) : null}
 		</section>
 	);
-}
-
-function getEvidenceAwareNodeTags(
-	node: PublicNode,
-	historyArchiveSummary: PublicHistoryArchiveObjectSummary | null,
-	historyArchiveState: PublicHistoryArchiveState | null
-): NodeTag[] {
-	const tags = getNodeTags(node);
-	if (
-		historyArchiveSummary !== null &&
-		historyArchiveSummary.checkpoints.categoryConsistencyFailedCheckpoints > 0
-	) {
-		return [
-			...tags,
-			{
-				label: 'archive proof mismatch',
-				title: 'Current object evidence contains a checkpoint hash mismatch',
-				tone: 'danger'
-			}
-		];
-	}
-
-	if (historyArchiveSummary !== null && historyArchiveSummary.failedObjects > 0) {
-		return [
-			...tags,
-			{
-				label: 'archive files need review',
-				title: 'Current scanner-owned archive file evidence contains failures',
-				tone: 'warning'
-			}
-		];
-	}
-
-	if (historyArchiveState !== null && historyArchiveState.status !== 'available') {
-		return [
-			...tags,
-			{
-				label: 'archive state unavailable',
-				title: 'The current history archive state could not be captured',
-				tone: 'warning'
-			}
-		];
-	}
-
-	return tags;
 }

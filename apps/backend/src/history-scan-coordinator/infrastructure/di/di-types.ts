@@ -1,4 +1,5 @@
 export const TYPES = {
+	ArchiveEvidenceCursorCodec: Symbol('ArchiveEvidenceCursorCodec'),
 	CommunityScannerRegistrationThrottleRepository: Symbol(
 		'CommunityScannerRegistrationThrottleRepository'
 	),
@@ -11,6 +12,10 @@ export const TYPES = {
 		'HistoryArchiveCheckpointProofRepository'
 	),
 	HistoryArchiveObjectRepository: Symbol('HistoryArchiveObjectRepository'),
+	KnownArchiveEvidenceRepository: Symbol('KnownArchiveEvidenceRepository'),
+	HistoryArchiveWorkerStatusRepository: Symbol(
+		'HistoryArchiveWorkerStatusRepository'
+	),
 	HistoryArchiveScanRepository: Symbol('HistoryArchiveScanRepository'),
 	ParsedLedgerHeaderRepository: Symbol('ParsedLedgerHeaderRepository'),
 	ParsedTransactionEnvelopeRepository: Symbol(

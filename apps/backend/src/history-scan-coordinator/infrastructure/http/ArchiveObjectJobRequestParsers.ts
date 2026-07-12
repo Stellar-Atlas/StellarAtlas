@@ -1,5 +1,8 @@
 import type express from 'express';
-import { isArchiveMetadataDTO } from 'history-scanner-dto';
+import {
+	isArchiveMetadataDTO,
+	isHistoryArchiveObjectFailureChannelDTO
+} from 'history-scanner-dto';
 import type { CompleteHistoryArchiveObjectRequest } from '../../use-cases/complete-history-archive-object/CompleteHistoryArchiveObject.js';
 import type {
 	HistoryArchiveObjectFailure,
@@ -101,6 +104,10 @@ export function parseArchiveObjectFailure(
 		res.status(400).json({ error: 'errorMessage is required' });
 		return null;
 	}
+	if (!isHistoryArchiveObjectFailureChannelDTO(body.failureChannel)) {
+		res.status(400).json({ error: 'failureChannel is invalid' });
+		return null;
+	}
 	if (
 		body.httpStatus !== undefined &&
 		body.httpStatus !== null &&
@@ -110,12 +117,27 @@ export function parseArchiveObjectFailure(
 		res.status(400).json({ error: 'httpStatus must be an integer or null' });
 		return null;
 	}
+	if (
+		body.retryAfterSeconds !== undefined &&
+		body.retryAfterSeconds !== null &&
+		(typeof body.retryAfterSeconds !== 'number' ||
+			!Number.isSafeInteger(body.retryAfterSeconds) ||
+			body.retryAfterSeconds < 0)
+	) {
+		res.status(400).json({
+			error: 'retryAfterSeconds must be a non-negative integer or null'
+		});
+		return null;
+	}
 
 	return {
 		claimAttempt,
 		errorMessage: body.errorMessage,
 		errorType: body.errorType,
-		httpStatus: body.httpStatus === undefined ? null : body.httpStatus
+		failureChannel: body.failureChannel,
+		httpStatus: body.httpStatus === undefined ? null : body.httpStatus,
+		retryAfterSeconds:
+			body.retryAfterSeconds === undefined ? null : body.retryAfterSeconds
 	};
 }
 

@@ -2,9 +2,22 @@ import type { Repository } from 'typeorm';
 import type { ParsedTransactionEnvelopeBatchDTO } from 'history-scanner-dto';
 import type {
 	ParsedTransactionEnvelopeDetails,
+	ParsedTransactionEnvelopeObjectObservation,
 	ParsedTransactionEnvelopeRepository
 } from '../../../domain/parsed-history/ParsedTransactionEnvelopeRepository.js';
 import { ParsedTransactionEnvelope } from '../../database/entities/ParsedTransactionEnvelope.js';
+import {
+	toParsedLedgerSequence,
+	toParsedTransactionIndex
+} from '../../database/ParsedHistoryInteger.js';
+import { saveParsedTransactionEnvelopeBatch } from './ParsedTransactionBatchWrite.js';
+
+interface ParsedTransactionEnvelopeRow {
+	readonly envelopeXdr: string;
+	readonly ledgerSequence: number | string;
+	readonly transactionIndex: number | string;
+	readonly transactionSetHash: string;
+}
 
 export class TypeOrmParsedTransactionEnvelopeRepository implements ParsedTransactionEnvelopeRepository {
 	constructor(
@@ -44,29 +57,30 @@ export class TypeOrmParsedTransactionEnvelopeRepository implements ParsedTransac
 		};
 	}
 
+	async findBySourceObjectRemoteId(
+		sourceObjectRemoteId: string
+	): Promise<ParsedTransactionEnvelopeObjectObservation[]> {
+		const rows = (await this.repository.query(
+			`
+				select envelope.*
+				from parsed_transaction_envelope_observation observation
+				join parsed_transaction_envelope envelope
+					on envelope.id = observation."parsedTransactionEnvelopeId"
+				where observation."sourceObjectRemoteId" = $1
+				order by envelope."ledgerSequence", envelope."transactionIndex"
+			`,
+			[sourceObjectRemoteId]
+		)) as ParsedTransactionEnvelopeRow[];
+		return rows.map((row) => ({
+			envelopeXdr: row.envelopeXdr,
+			ledgerSequence: toParsedLedgerSequence(row.ledgerSequence),
+			transactionIndex: toParsedTransactionIndex(row.transactionIndex),
+			transactionSetHash: row.transactionSetHash
+		}));
+	}
+
 	async saveBatch(batch: ParsedTransactionEnvelopeBatchDTO): Promise<void> {
 		if (batch.records.length === 0) return;
-
-		const rows = batch.records.map(
-			(record) =>
-				new ParsedTransactionEnvelope(
-					record,
-					batch.sourceArchiveUrl,
-					batch.scanJobRemoteId,
-					batch.observedAt
-				)
-		);
-
-		await this.repository
-			.createQueryBuilder()
-			.insert()
-			.into(ParsedTransactionEnvelope)
-			.values(rows)
-			.orUpdate(
-				['lastSourceArchiveUrl', 'lastScanJobRemoteId', 'lastSeenAt'],
-				['ledgerSequence', 'transactionSetHash', 'transactionIndex'],
-				{ skipUpdateIfNoValuesChanged: true }
-			)
-			.execute();
+		await saveParsedTransactionEnvelopeBatch(this.repository.manager, batch);
 	}
 }

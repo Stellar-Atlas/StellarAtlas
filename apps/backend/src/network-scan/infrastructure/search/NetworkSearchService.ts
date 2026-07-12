@@ -1,402 +1,275 @@
 import { Meilisearch, type Index } from 'meilisearch';
 import { networkSearchIndexSchemaVersion } from '@core/config/SearchConfigDefaults.js';
 import type { Logger } from '@core/services/Logger.js';
-import type { NetworkV1 } from 'shared';
 import {
 	assertMeilisearchTaskSucceeded,
 	ensureMeilisearchSettings
 } from './MeilisearchIndexSettings.js';
-import { buildNetworkSearchDocuments } from './NetworkSearchDocumentBuilder.js';
+import { buildNetworkSearchSnapshot } from './NetworkSearchDocumentBuilder.js';
+import {
+	buildFacetsFromDistribution,
+	buildMeilisearchFilter,
+	memorySearch,
+	networkSearchFacetAttributes,
+	networkSearchHitAttributes,
+	networkSearchRequiredSettings,
+	sanitizeSearchLimit,
+	sanitizeSearchOffset,
+	toSearchHit
+} from './NetworkSearchQuery.js';
 import type {
 	NetworkSearchConfig,
 	NetworkSearchDocument,
-	NetworkSearchFacetName,
-	NetworkSearchFacets,
-	NetworkSearchFacetValue,
 	NetworkSearchFallbackReason,
-	NetworkSearchHit,
+	NetworkSearchIndexStateDocument,
+	NetworkSearchInventory,
 	NetworkSearchReadModel,
 	NetworkSearchRequest,
-	NetworkSearchResponse
+	NetworkSearchResponse,
+	NetworkSearchSnapshot,
+	NetworkSearchStoredDocument
 } from './NetworkSearchTypes.js';
 
-const SEARCHABLE_ATTRIBUTES = [
-	'label',
-	'detail',
-	'content',
-	'publicKey',
-	'homeDomain',
-	'organizationName',
-	'version',
-	'countryName',
-	'countryCode',
-	'isp'
-] as const;
+export const networkSearchStateDocumentId = 'network_search_state';
 
-const FILTERABLE_ATTRIBUTES = [
-	'entityType',
-	'organizationId',
-	'organizationName',
-	'validating',
-	'validator',
-	'fullValidator',
-	'topTier',
-	'active',
-	'archiveStatus',
-	'countryCode',
-	'countryName',
-	'isp',
-	'latestLedger',
-	'networkTime'
-] as const;
-
-const FACET_ATTRIBUTES: readonly NetworkSearchFacetName[] = [
-	'entityType',
-	'archiveStatus',
-	'countryCode',
-	'validator',
-	'validating',
-	'fullValidator',
-	'active',
-	'topTier'
-];
-
-const HIT_ATTRIBUTES = [
-	'detail',
-	'entityId',
-	'entityType',
-	'href',
-	'id',
-	'label',
-	'organizationName'
-] as const;
-
-const SORTABLE_ATTRIBUTES = ['label', 'networkTime', 'latestLedger'] as const;
 const taskPollIntervalMs = 50;
 const settingsTaskTimeoutMs = 60_000;
 const documentTaskTimeoutMs = 60_000;
 const syncRetryCooldownMs = 60_000;
-const requiredSettings = {
-	filterableAttributes: FILTERABLE_ATTRIBUTES,
-	searchableAttributes: SEARCHABLE_ATTRIBUTES,
-	sortableAttributes: SORTABLE_ATTRIBUTES
-};
-
-const sanitizeLimit = (limit: number): number => {
-	if (!Number.isInteger(limit)) return 8;
-	return Math.min(Math.max(limit, 1), 25);
-};
-
-const normalize = (value: string): string => value.trim().toLowerCase();
-
-const toHit = (document: NetworkSearchDocument): NetworkSearchHit => ({
-	detail: document.detail,
-	entityId: document.entityId,
-	entityType: document.entityType,
-	href: document.href,
-	id: document.id,
-	label: document.label,
-	organizationName: document.organizationName
-});
-
-const matchesDocument = (
-	document: NetworkSearchDocument,
-	request: NetworkSearchRequest
-): boolean => {
-	if (request.entityType && document.entityType !== request.entityType)
-		return false;
-	if (
-		request.archiveStatus &&
-		document.archiveStatus !== request.archiveStatus
-	) {
-		return false;
-	}
-	if (request.countryCode && document.countryCode !== request.countryCode)
-		return false;
-	if (
-		request.organizationId &&
-		document.organizationId !== request.organizationId
-	) {
-		return false;
-	}
-	if (request.active !== undefined && document.active !== request.active)
-		return false;
-	if (
-		request.fullValidator !== undefined &&
-		document.fullValidator !== request.fullValidator
-	) {
-		return false;
-	}
-	if (
-		request.validator !== undefined &&
-		document.validator !== request.validator
-	)
-		return false;
-	if (
-		request.validating !== undefined &&
-		document.validating !== request.validating
-	) {
-		return false;
-	}
-	if (request.topTier !== undefined && document.topTier !== request.topTier)
-		return false;
-
-	const query = normalize(request.query);
-	if (query.length === 0) return true;
-
-	return normalize(document.content).includes(query);
-};
-
-const emptyFacets = (): NetworkSearchFacets => ({
-	active: [],
-	archiveStatus: [],
-	countryCode: [],
-	entityType: [],
-	fullValidator: [],
-	topTier: [],
-	validating: [],
-	validator: []
-});
-
-const facetValue = (
-	document: NetworkSearchDocument,
-	facet: NetworkSearchFacetName
-): string | undefined => {
-	const value = document[facet];
-	if (value === undefined) return undefined;
-	return String(value);
-};
-
-const sortFacetValues = (
-	values: NetworkSearchFacetValue[]
-): NetworkSearchFacetValue[] =>
-	values.toSorted(
-		(left, right) =>
-			right.count - left.count || left.value.localeCompare(right.value)
-	);
-
-const buildFacetsFromDocuments = (
-	documents: readonly NetworkSearchDocument[]
-): NetworkSearchFacets => {
-	const facets = emptyFacets();
-
-	for (const facet of FACET_ATTRIBUTES) {
-		const counts = new Map<string, number>();
-		for (const document of documents) {
-			const value = facetValue(document, facet);
-			if (value) counts.set(value, (counts.get(value) ?? 0) + 1);
-		}
-		facets[facet] = sortFacetValues(
-			Array.from(counts, ([value, count]) => ({ count, value }))
-		);
-	}
-
-	return facets;
-};
-
-const memorySearch = (
-	documents: readonly NetworkSearchDocument[],
-	request: NetworkSearchRequest,
-	networkTime: string,
-	readModel: NetworkSearchReadModel
-): NetworkSearchResponse => {
-	const matching = documents.filter((document) =>
-		matchesDocument(document, request)
-	);
-
-	return {
-		estimatedTotalHits: matching.length,
-		facets: buildFacetsFromDocuments(matching),
-		hits: matching.slice(0, sanitizeLimit(request.limit)).map(toHit),
-		indexedNetworkTime: networkTime,
-		query: request.query,
-		readModel,
-		source: 'memory'
-	};
-};
-
-const quoteFilterValue = (value: string): string => JSON.stringify(value);
-
-const filterCondition = (
-	field: string,
-	value: string | boolean | undefined
-): string | undefined => {
-	if (value === undefined) return undefined;
-	return typeof value === 'boolean'
-		? `${field} = ${value}`
-		: `${field} = ${quoteFilterValue(value)}`;
-};
-
-const buildMeilisearchFilter = (
-	request: NetworkSearchRequest,
-	networkTime: string
-): string | undefined => {
-	const filters = [
-		filterCondition('networkTime', networkTime),
-		filterCondition('entityType', request.entityType),
-		filterCondition('archiveStatus', request.archiveStatus),
-		filterCondition('countryCode', request.countryCode),
-		filterCondition('organizationId', request.organizationId),
-		filterCondition('active', request.active),
-		filterCondition('fullValidator', request.fullValidator),
-		filterCondition('validator', request.validator),
-		filterCondition('validating', request.validating),
-		filterCondition('topTier', request.topTier)
-	].filter((filter): filter is string => filter !== undefined);
-
-	return filters.join(' AND ');
-};
-
-const facetDistributionValue = (
-	distribution: Record<string, Record<string, number>> | undefined,
-	facet: NetworkSearchFacetName
-): readonly NetworkSearchFacetValue[] => {
-	const values = distribution?.[facet];
-	if (!values) return [];
-	return sortFacetValues(
-		Object.entries(values).map(([value, count]) => ({ count, value }))
-	);
-};
-
-const buildFacetsFromDistribution = (
-	distribution: Record<string, Record<string, number>> | undefined
-): NetworkSearchFacets => {
-	const facets = emptyFacets();
-	for (const facet of FACET_ATTRIBUTES) {
-		facets[facet] = facetDistributionValue(distribution, facet);
-	}
-	return facets;
-};
 
 const errorMessage = (error: unknown): string =>
 	error instanceof Error ? error.message : String(error);
 
 const readModel = (
-	fallbackReason: NetworkSearchFallbackReason | null
+	snapshot: NetworkSearchSnapshot,
+	source: NetworkSearchReadModel['source'],
+	fallbackReason: NetworkSearchFallbackReason | null,
+	observedAt: string
 ): NetworkSearchReadModel => ({
+	canonicalCursor: snapshot.canonicalCursor,
 	fallbackReason,
-	schemaVersion: networkSearchIndexSchemaVersion
+	freshness: 'fresh',
+	observedAt,
+	schemaVersion: networkSearchIndexSchemaVersion,
+	source
 });
 
+const stateMatchesSnapshot = (
+	state: NetworkSearchIndexStateDocument,
+	snapshot: NetworkSearchSnapshot
+): boolean =>
+	state.documentKind === 'state' &&
+	state.id === networkSearchStateDocumentId &&
+	state.canonicalCursor === snapshot.canonicalCursor &&
+	state.networkTime === snapshot.networkTime;
+
 export class NetworkSearchService {
-	private documents: readonly NetworkSearchDocument[] = [];
-	private indexedNetworkTime: string | undefined;
+	private snapshot: NetworkSearchSnapshot | undefined;
+	private inventoryGeneratedAt: string | undefined;
 	private indexReady = false;
 	private settingsReady = false;
 	private syncFailed = false;
-	private readonly index: Index<NetworkSearchDocument> | undefined;
+	private readonly index: Index<NetworkSearchStoredDocument> | undefined;
 	private readonly indexName: string;
 	private nextSyncAttemptAtMs = 0;
 	private syncPromise: Promise<void> | undefined;
 
 	constructor(
 		config: NetworkSearchConfig,
-		private logger?: Logger
+		private logger?: Logger,
+		indexOverride?: Index<NetworkSearchStoredDocument>
 	) {
 		this.indexName = config.indexName;
-		if (config.host && config.host.length > 0) {
+		if (indexOverride) {
+			this.index = indexOverride;
+		} else if (config.host && config.host.length > 0) {
 			const client = new Meilisearch({
 				apiKey: config.apiKey,
 				host: config.host
 			});
-			this.index = client.index<NetworkSearchDocument>(config.indexName);
+			this.index = client.index<NetworkSearchStoredDocument>(config.indexName);
 		}
 	}
 
 	async search(
-		network: NetworkV1,
+		inventory: NetworkSearchInventory,
 		request: NetworkSearchRequest
 	): Promise<NetworkSearchResponse> {
-		this.refreshDocuments(network);
+		const snapshot = this.refreshSnapshot(inventory);
 
 		if (!this.index) {
 			return memorySearch(
-				this.documents,
+				snapshot,
 				request,
-				network.time,
-				readModel('meilisearch_unconfigured')
-			);
-		}
-
-		if (!this.indexReady) {
-			this.startSyncIndex();
-			return memorySearch(
-				this.documents,
-				request,
-				network.time,
 				readModel(
-					this.syncFailed ? 'meilisearch_unavailable' : 'meilisearch_syncing'
+					snapshot,
+					'postgres_canonical',
+					'meilisearch_unconfigured',
+					inventory.generatedAt
 				)
 			);
 		}
 
+		let validatedState: NetworkSearchIndexStateDocument | undefined;
+		if (!this.indexReady) {
+			try {
+				const existingState =
+					await this.index.getDocument<NetworkSearchIndexStateDocument>(
+						networkSearchStateDocumentId
+					);
+				if (stateMatchesSnapshot(existingState, snapshot)) {
+					this.indexReady = true;
+					validatedState = existingState;
+				} else {
+					this.startSyncIndex();
+					return memorySearch(
+						snapshot,
+						request,
+						readModel(
+							snapshot,
+							'postgres_canonical',
+							'meilisearch_stale',
+							inventory.generatedAt
+						)
+					);
+				}
+			} catch {
+				this.startSyncIndex();
+				return memorySearch(
+					snapshot,
+					request,
+					readModel(
+						snapshot,
+						'postgres_canonical',
+						this.syncFailed ? 'meilisearch_unavailable' : 'meilisearch_syncing',
+						inventory.generatedAt
+					)
+				);
+			}
+		}
+
 		try {
-			const filter = buildMeilisearchFilter(request, network.time);
+			const state =
+				validatedState ??
+				(await this.index.getDocument<NetworkSearchIndexStateDocument>(
+					networkSearchStateDocumentId
+				));
+			if (!stateMatchesSnapshot(state, snapshot)) {
+				this.indexReady = false;
+				this.startSyncIndex();
+				return memorySearch(
+					snapshot,
+					request,
+					readModel(
+						snapshot,
+						'postgres_canonical',
+						'meilisearch_stale',
+						inventory.generatedAt
+					)
+				);
+			}
+
+			const limit = sanitizeSearchLimit(request.limit);
+			const offset = sanitizeSearchOffset(request.offset);
 			const response = await this.index.search<NetworkSearchDocument>(
 				request.query,
 				{
-					attributesToRetrieve: [...HIT_ATTRIBUTES],
-					facets: [...FACET_ATTRIBUTES],
-					filter,
-					limit: sanitizeLimit(request.limit)
+					attributesToRetrieve: [...networkSearchHitAttributes],
+					facets: [...networkSearchFacetAttributes],
+					filter: buildMeilisearchFilter(request, snapshot.canonicalCursor),
+					limit,
+					offset
 				}
 			);
+			const total = response.estimatedTotalHits ?? response.hits.length;
 
 			return {
-				estimatedTotalHits: response.estimatedTotalHits ?? response.hits.length,
+				estimatedTotalHits: total,
 				facets: buildFacetsFromDistribution(response.facetDistribution),
-				hits: response.hits.map(toHit),
-				indexedNetworkTime: network.time,
+				hits: response.hits.map((hit) => toSearchHit(hit, 'meilisearch')),
+				indexedNetworkTime: snapshot.networkTime,
+				pagination: {
+					hasMore: offset + response.hits.length < total,
+					limit,
+					offset,
+					total,
+					totalIsExact: false
+				},
 				query: request.query,
-				readModel: readModel(null),
+				readModel: readModel(snapshot, 'meilisearch', null, state.indexedAt),
+				scope: request.scope,
 				source: 'meilisearch'
 			};
 		} catch (error) {
-			this.indexReady = false;
-			this.syncFailed = true;
-			this.startSyncIndex();
-			this.logger?.error('Network search Meilisearch unavailable', {
-				error: errorMessage(error),
-				indexName: this.indexName,
-				limit: sanitizeLimit(request.limit),
-				networkTime: network.time,
-				queryLength: request.query.length
-			});
+			this.markIndexUnavailable(error, snapshot, request);
 			return memorySearch(
-				this.documents,
+				snapshot,
 				request,
-				network.time,
-				readModel('meilisearch_unavailable')
+				readModel(
+					snapshot,
+					'postgres_canonical',
+					'meilisearch_unavailable',
+					inventory.generatedAt
+				)
 			);
 		}
 	}
 
-	private refreshDocuments(network: NetworkV1): void {
-		if (this.indexedNetworkTime === network.time) return;
-		this.documents = buildNetworkSearchDocuments(network);
-		this.indexedNetworkTime = network.time;
+	private refreshSnapshot(
+		inventory: NetworkSearchInventory
+	): NetworkSearchSnapshot {
+		if (this.snapshot && this.inventoryGeneratedAt === inventory.generatedAt) {
+			return this.snapshot;
+		}
+		const snapshot = buildNetworkSearchSnapshot(inventory);
+		this.inventoryGeneratedAt = inventory.generatedAt;
+		if (this.snapshot?.canonicalCursor === snapshot.canonicalCursor) {
+			return this.snapshot;
+		}
+
+		this.snapshot = snapshot;
 		this.indexReady = false;
 		if (Date.now() >= this.nextSyncAttemptAtMs) this.syncFailed = false;
 		this.syncPromise = undefined;
+		return snapshot;
+	}
+
+	private markIndexUnavailable(
+		error: unknown,
+		snapshot: NetworkSearchSnapshot,
+		request: NetworkSearchRequest
+	): void {
+		this.indexReady = false;
+		this.syncFailed = true;
+		this.startSyncIndex();
+		this.logger?.error('Network search Meilisearch unavailable', {
+			error: errorMessage(error),
+			indexName: this.indexName,
+			limit: sanitizeSearchLimit(request.limit),
+			networkTime: snapshot.networkTime,
+			queryLength: request.query.length
+		});
 	}
 
 	private syncIndex(): Promise<void> {
-		if (!this.index || this.indexReady) return Promise.resolve();
+		if (!this.index || this.indexReady || !this.snapshot) {
+			return Promise.resolve();
+		}
 		if (this.syncPromise) return this.syncPromise;
 		if (Date.now() < this.nextSyncAttemptAtMs) return Promise.resolve();
 
-		const networkTime = this.indexedNetworkTime;
-		const documents = [...this.documents];
-		const syncPromise = this.writeIndex(documents, networkTime)
+		const snapshot = this.snapshot;
+		const syncPromise = this.writeIndex(snapshot)
 			.then(() => {
-				if (this.indexedNetworkTime !== networkTime) return;
+				if (this.snapshot?.canonicalCursor !== snapshot.canonicalCursor) return;
 				this.indexReady = true;
 				this.syncFailed = false;
 				this.nextSyncAttemptAtMs = 0;
 				this.logger?.info('Network search Meilisearch index synced', {
-					documentCount: documents.length,
+					canonicalCursor: snapshot.canonicalCursor,
+					documentCount: snapshot.documents.length,
 					indexName: this.indexName,
-					networkTime
+					networkTime: snapshot.networkTime
 				});
 			})
 			.catch((error: unknown) => {
@@ -405,16 +278,13 @@ export class NetworkSearchService {
 				this.logger?.error('Network search Meilisearch sync failed', {
 					error: errorMessage(error),
 					indexName: this.indexName,
-					networkTime
+					networkTime: snapshot.networkTime
 				});
 			})
 			.finally(() => {
-				if (this.syncPromise === syncPromise) {
-					this.syncPromise = undefined;
-				}
+				if (this.syncPromise === syncPromise) this.syncPromise = undefined;
 			});
 		this.syncPromise = syncPromise;
-
 		return syncPromise;
 	}
 
@@ -422,36 +292,51 @@ export class NetworkSearchService {
 		void this.syncIndex();
 	}
 
-	private async writeIndex(
-		documents: readonly NetworkSearchDocument[],
-		networkTime: string | undefined
-	): Promise<void> {
+	private async writeIndex(snapshot: NetworkSearchSnapshot): Promise<void> {
 		if (!this.index) return;
 		if (!this.settingsReady) await this.syncSettings();
 
+		const state: NetworkSearchIndexStateDocument = {
+			canonicalCursor: snapshot.canonicalCursor,
+			documentKind: 'state',
+			id: networkSearchStateDocumentId,
+			indexedAt: new Date().toISOString(),
+			networkTime: snapshot.networkTime
+		};
 		const documentTask = await this.index
-			.addDocuments([...documents], { primaryKey: 'id' })
+			.addDocuments([state, ...snapshot.documents], { primaryKey: 'id' })
 			.waitTask({
 				interval: taskPollIntervalMs,
 				timeout: documentTaskTimeoutMs
 			});
 		assertMeilisearchTaskSucceeded(documentTask.status, 'document update');
-		if (this.indexedNetworkTime !== networkTime) return;
+		if (this.snapshot?.canonicalCursor !== snapshot.canonicalCursor) return;
+
+		const cleanupTask = await this.index
+			.deleteDocuments({
+				filter: `documentKind = "entity" AND canonicalCursor != ${JSON.stringify(snapshot.canonicalCursor)}`
+			})
+			.waitTask({
+				interval: taskPollIntervalMs,
+				timeout: documentTaskTimeoutMs
+			});
+		assertMeilisearchTaskSucceeded(
+			cleanupTask.status,
+			'stale document cleanup'
+		);
 	}
 
 	private async syncSettings(): Promise<void> {
 		if (!this.index || this.settingsReady) return;
-
 		await ensureMeilisearchSettings(
 			this.index,
-			requiredSettings,
+			networkSearchRequiredSettings,
 			{
 				interval: taskPollIntervalMs,
 				timeout: settingsTaskTimeoutMs
 			},
 			'settings'
 		);
-
 		this.settingsReady = true;
 	}
 }
