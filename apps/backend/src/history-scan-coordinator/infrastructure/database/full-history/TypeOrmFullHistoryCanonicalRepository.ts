@@ -6,6 +6,7 @@ import type {
 	FullHistoryCanonicalCoverageView,
 	FullHistoryCanonicalRepository,
 	FullHistoryLedgerView,
+	FullHistoryPrependReceipt,
 	FullHistoryRecentTransactionsView,
 	FullHistoryTransactionView,
 	FullHistoryWatermarkView,
@@ -29,6 +30,7 @@ import {
 	insertBatch,
 	lockWatermark
 } from './FullHistoryCanonicalBatchStore.js';
+import { prependCanonicalCheckpoint } from './FullHistoryCanonicalPrependStore.js';
 import {
 	assertCanonicalFacts,
 	storeCanonicalFacts
@@ -69,6 +71,12 @@ interface FullHistoryRecentTransactionRow {
 
 export class TypeOrmFullHistoryCanonicalRepository implements FullHistoryCanonicalRepository {
 	constructor(private readonly dataSource: DataSource) {}
+
+	async prependCheckpoint(
+		input: FullHistoryCheckpointWrite
+	): Promise<FullHistoryPrependReceipt> {
+		return prependCanonicalCheckpoint(this.dataSource, input);
+	}
 
 	async writeCheckpoint(
 		input: FullHistoryCheckpointWrite

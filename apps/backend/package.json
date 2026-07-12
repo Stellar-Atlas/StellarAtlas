@@ -21,6 +21,7 @@
 		"refresh-radar-network-comparison": "node lib/cross-check/infrastructure/cli/refresh-radar-network-comparison-snapshot.js",
 		"promote-full-history-checkpoint": "node lib/history-scan-coordinator/infrastructure/cli/full-history-promotion/promote-full-history-checkpoint.js",
 		"run-full-history-promotion": "node lib/history-scan-coordinator/infrastructure/cli/full-history-promotion/run-continuous-full-history-promotion.js",
+		"run-full-history-backfill": "node lib/history-scan-coordinator/infrastructure/cli/full-history-backfill/run-full-history-backfill.js",
 		"retrieve-home-domain": "node lib/network-scan/infrastructure/cli/retrieve-home-domain.js"
 	},
 	"author": "pieterjan84@github",

@@ -16,6 +16,13 @@ export interface FullHistoryWriteReceipt {
 	readonly replayed: boolean;
 }
 
+export interface FullHistoryPrependReceipt {
+	readonly batchId: string;
+	readonly firstLedger: FullHistoryLedgerSequence;
+	readonly nextLedger: FullHistoryUint64String;
+	readonly replayed: boolean;
+}
+
 export interface FullHistoryWatermarkView {
 	readonly lastBatchId: string;
 	readonly nextLedger: FullHistoryUint64String;
@@ -87,6 +94,9 @@ export interface FullHistoryCanonicalRepository {
 	getWatermark(
 		networkPassphrase: string
 	): Promise<FullHistoryWatermarkView | null>;
+	prependCheckpoint(
+		input: FullHistoryCheckpointWrite
+	): Promise<FullHistoryPrependReceipt>;
 	writeCheckpoint(
 		input: FullHistoryCheckpointWrite
 	): Promise<FullHistoryWriteReceipt>;

@@ -2,12 +2,29 @@ import type { EntityManager } from 'typeorm';
 import type { FullHistoryCheckpointWrite } from '../../../domain/full-history/FullHistoryCanonicalBatch.js';
 import { FullHistoryCanonicalError } from '../../../domain/full-history/FullHistoryCanonicalError.js';
 import {
+	fullHistoryLedgerSequence,
+	fullHistoryUint64,
 	FullHistoryHash,
 	incrementLedgerSequence,
+	type FullHistoryLedgerSequence,
 	type FullHistoryUint64String
 } from '../../../domain/full-history/FullHistoryCanonicalTypes.js';
 import { FullHistoryIngestionBatch } from './entities/FullHistoryIngestionBatch.js';
 import { FullHistoryWatermark } from './entities/FullHistoryWatermark.js';
+
+export interface LockedFullHistoryHistoricalFrontier {
+	readonly firstBatchId: string;
+	readonly firstLedger: FullHistoryLedgerSequence;
+	readonly lastBatchId: string;
+	readonly nextLedger: FullHistoryUint64String;
+}
+
+interface HistoricalFrontierRow {
+	readonly firstBatchId: string;
+	readonly firstLedger: string;
+	readonly lastBatchId: string;
+	readonly nextLedger: string;
+}
 
 export async function findBatch(
 	manager: EntityManager,
@@ -148,6 +165,33 @@ export async function lockWatermark(
 	return rows[0] ?? null;
 }
 
+export async function lockHistoricalFrontier(
+	manager: EntityManager,
+	networkHash: FullHistoryHash
+): Promise<LockedFullHistoryHistoricalFrontier | null> {
+	const rows = (await manager.query(
+		`
+			select "first_batch_id" as "firstBatchId",
+				"first_ledger"::text as "firstLedger",
+				"last_batch_id" as "lastBatchId",
+				"next_ledger"::text as "nextLedger"
+			from "full_history_watermark"
+			where "network_passphrase_hash" = $1
+			for update
+		`,
+		[networkHash.toBuffer()]
+	)) as HistoricalFrontierRow[];
+	const row = rows[0];
+	return row === undefined
+		? null
+		: {
+				firstBatchId: row.firstBatchId,
+				firstLedger: fullHistoryLedgerSequence(row.firstLedger, 'firstLedger'),
+				lastBatchId: row.lastBatchId,
+				nextLedger: fullHistoryUint64(row.nextLedger, 'nextLedger')
+			};
+}
+
 export function assertReplayWatermark(
 	watermark: FullHistoryWatermark | null,
 	input: FullHistoryCheckpointWrite
@@ -177,6 +221,114 @@ export function assertWritableWatermark(
 			`Expected ledger ${watermark.nextLedger}, received ${input.firstLedger}`
 		);
 	}
+}
+
+export function assertPrependReplayFrontier(
+	frontier: LockedFullHistoryHistoricalFrontier | null,
+	input: FullHistoryCheckpointWrite
+): LockedFullHistoryHistoricalFrontier {
+	if (
+		frontier === null ||
+		BigInt(frontier.firstLedger) > BigInt(input.firstLedger) ||
+		(frontier.firstLedger === input.firstLedger &&
+			frontier.firstBatchId !== input.batchId)
+	) {
+		throw new FullHistoryCanonicalError(
+			'canonical-row-conflict',
+			'Persisted historical batch is outside the canonical lower frontier'
+		);
+	}
+	return frontier;
+}
+
+export function assertWritablePrependFrontier(
+	frontier: LockedFullHistoryHistoricalFrontier | null,
+	input: FullHistoryCheckpointWrite
+): asserts frontier is LockedFullHistoryHistoricalFrontier {
+	if (
+		frontier === null ||
+		incrementLedgerSequence(input.lastLedger) !== frontier.firstLedger
+	) {
+		throw new FullHistoryCanonicalError(
+			'watermark-gap',
+			'Historical checkpoint is not immediately below the canonical frontier'
+		);
+	}
+}
+
+export async function assertPrependLedgerBoundary(
+	manager: EntityManager,
+	input: FullHistoryCheckpointWrite,
+	networkHash: FullHistoryHash,
+	frontier: LockedFullHistoryHistoricalFrontier
+): Promise<void> {
+	const finalLedger = input.ledgers.at(-1);
+	if (finalLedger === undefined) {
+		throw new FullHistoryCanonicalError(
+			'canonical-row-conflict',
+			'Historical checkpoint has no final ledger'
+		);
+	}
+	const rows = (await manager.query(
+		`
+			select "previous_ledger_hash" as "previousLedgerHash"
+			from "full_history_ledger"
+			where "network_passphrase_hash" = $1 and "ledger_sequence" = $2
+		`,
+		[networkHash.toBuffer(), frontier.firstLedger]
+	)) as Array<{ readonly previousLedgerHash: Uint8Array }>;
+	const boundary = rows[0];
+	if (
+		boundary === undefined ||
+		!FullHistoryHash.fromBytes(boundary.previousLedgerHash).equals(
+			finalLedger.ledgerHash
+		)
+	) {
+		throw new FullHistoryCanonicalError(
+			'canonical-row-conflict',
+			'Historical checkpoint does not join the canonical ledger hash chain'
+		);
+	}
+}
+
+export async function prependWatermark(
+	manager: EntityManager,
+	input: FullHistoryCheckpointWrite,
+	networkHash: FullHistoryHash,
+	current: LockedFullHistoryHistoricalFrontier
+): Promise<LockedFullHistoryHistoricalFrontier> {
+	await manager.query(
+		`
+			update "full_history_watermark"
+			set "first_ledger" = $1, "first_batch_id" = $2,
+				"updated_at" = now()
+			where "network_passphrase_hash" = $3
+				and "first_ledger" = $4 and "next_ledger" = $5
+				and "last_batch_id" = $6
+		`,
+		[
+			input.firstLedger,
+			input.batchId,
+			networkHash.toBuffer(),
+			current.firstLedger,
+			current.nextLedger,
+			current.lastBatchId
+		]
+	);
+	const updated = await lockHistoricalFrontier(manager, networkHash);
+	if (
+		updated === null ||
+		updated.firstLedger !== input.firstLedger ||
+		updated.firstBatchId !== input.batchId ||
+		updated.nextLedger !== current.nextLedger ||
+		updated.lastBatchId !== current.lastBatchId
+	) {
+		throw new FullHistoryCanonicalError(
+			'watermark-gap',
+			'Canonical lower frontier changed during historical ingestion'
+		);
+	}
+	return updated;
 }
 
 export async function advanceWatermark(
