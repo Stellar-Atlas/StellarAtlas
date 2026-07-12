@@ -19,7 +19,7 @@ export class RegisterParsedTransactionResults {
 	): Promise<Result<void, Error>> {
 		try {
 			await this.repository.saveBatch(dto);
-			this.logger.info('Parsed transaction results registered', {
+			this.logger.debug('Parsed transaction results registered', {
 				count: dto.records.length,
 				sourceArchiveUrl: dto.sourceArchiveUrl
 			});

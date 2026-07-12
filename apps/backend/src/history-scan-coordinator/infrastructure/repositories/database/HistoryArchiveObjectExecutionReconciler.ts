@@ -28,6 +28,7 @@ export async function reconcileHistoryArchiveObjectExecution(
 	return await repository.manager.transaction(async (manager) => {
 		await manager.query(`set local lock_timeout = '500ms'`);
 		await manager.query(`set local statement_timeout = '30s'`);
+		await manager.query(`set local jit = off`);
 		const [lock] = (await manager.query(
 			'select pg_try_advisory_xact_lock(hashtext($1)) as locked',
 			[reconciliationLockName]
@@ -52,7 +53,7 @@ export async function reconcileHistoryArchiveObjectExecution(
 			recentCompletions: Number(counts?.recentCompletions ?? 0)
 		});
 
-		if (proofAdmittedObjects > 0) {
+		if (pressure.availableSlots === 0) {
 			await recordAdmissions(manager, proofAdmittedObjects);
 			return {
 				...pressure,
@@ -62,17 +63,8 @@ export async function reconcileHistoryArchiveObjectExecution(
 			};
 		}
 
-		if (pressure.availableSlots === 0) {
-			return {
-				...pressure,
-				admittedObjects: 0,
-				cursorAdvances: 0,
-				preservedObjects: Number(preserved?.count ?? 0)
-			};
-		}
-
 		await manager.query(seedFrontierCursorsSql);
-		const [admission] = (await manager.query(admitFrontierSql, [
+		const [admission] = (await manager.query(historyArchiveObjectFrontierSql, [
 			pressure.availableSlots,
 			historyArchivePerRootFrontier
 		])) as readonly AdmissionRow[];
@@ -191,23 +183,6 @@ const seedFrontierCursorsSql = `
 
 const dependencyReadySql = dependencyEligibilitySql('candidate');
 
-const proofCompletionPrioritySql = `case
-	when candidate."objectType" = 'bucket' and exists (
-		select 1
-		from "history_archive_checkpoint_bucket_dependency" dependency
-		join "history_archive_checkpoint_proof" proof
-			on proof."archiveUrlIdentity" = dependency."archiveUrlIdentity"
-			and proof."checkpointLedger" = dependency."checkpointLedger"
-		where dependency."archiveUrlIdentity" = candidate."archiveUrlIdentity"
-			and dependency."bucketHash" = candidate."bucketHash"
-			and proof.status = 'not-evaluable'
-			and proof."failureKind" = 'bucket-missing'
-			and proof."requiredObjectsComplete" = true
-			and proof."proofFactsComplete" = true
-	) then 0
-	else 1
-end`;
-
 const admitProofCompletionReserveSql = `
 	with proof_candidates as materialized (
 		select proof."archiveUrlIdentity", proof."checkpointLedger"
@@ -280,7 +255,7 @@ const admitProofCompletionReserveSql = `
 	select count(*)::integer as count from admitted
 `;
 
-const admitFrontierSql = `
+export const historyArchiveObjectFrontierSql = `
 	with roots as materialized (
 		select root.id, root."archiveUrlIdentity", root."lastClaimedAt"
 		from "history_archive_object_queue" root
@@ -337,26 +312,27 @@ const admitFrontierSql = `
 			select sought.*
 			from (
 				(
-					select candidate.*, 0 as phase
+					select candidate.id, candidate."archiveUrlIdentity",
+						candidate."objectType", candidate."objectKey",
+						candidate."checkpointLedger", candidate."bucketHash", 0 as phase
 					from "history_archive_object_queue" candidate
-					where candidate."archiveUrlIdentity" =
-						cursor."archiveUrlIdentity"
+					where cursor."objectKey" is null
+						and candidate."archiveUrlIdentity" =
+							cursor."archiveUrlIdentity"
 						and candidate."objectType" = cursor."objectType"
 						and candidate.status = 'pending'
 						and (
 							candidate."executionDisposition" is null
 							or candidate."executionDisposition" = 'deferred'
 						)
-						and (
-							cursor."objectKey" is null
-							or candidate."objectKey" < cursor."objectKey"
-						)
-					order by ${proofCompletionPrioritySql}, candidate."objectKey" desc
+					order by candidate."objectKey" desc
 					limit 1
 				)
 				union all
 				(
-					select candidate.*, 1 as phase
+					select candidate.id, candidate."archiveUrlIdentity",
+						candidate."objectType", candidate."objectKey",
+						candidate."checkpointLedger", candidate."bucketHash", 0 as phase
 					from "history_archive_object_queue" candidate
 					where cursor."objectKey" is not null
 						and candidate."archiveUrlIdentity" =
@@ -367,7 +343,26 @@ const admitFrontierSql = `
 							candidate."executionDisposition" is null
 							or candidate."executionDisposition" = 'deferred'
 						)
-					order by ${proofCompletionPrioritySql}, candidate."objectKey" desc
+						and candidate."objectKey" < cursor."objectKey"
+					order by candidate."objectKey" desc
+					limit 1
+				)
+				union all
+				(
+					select candidate.id, candidate."archiveUrlIdentity",
+						candidate."objectType", candidate."objectKey",
+						candidate."checkpointLedger", candidate."bucketHash", 1 as phase
+					from "history_archive_object_queue" candidate
+					where cursor."objectKey" is not null
+						and candidate."archiveUrlIdentity" =
+							cursor."archiveUrlIdentity"
+						and candidate."objectType" = cursor."objectType"
+						and candidate.status = 'pending'
+						and (
+							candidate."executionDisposition" is null
+							or candidate."executionDisposition" = 'deferred'
+						)
+					order by candidate."objectKey" desc
 					limit 1
 				)
 			) sought

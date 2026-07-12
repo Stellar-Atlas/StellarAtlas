@@ -127,6 +127,8 @@ describe('history archive execution reconciliation in disposable PostgreSQL', ()
 
 	it('prioritizes a bucket that can complete a checkpoint proof', async () => {
 		const root = createRoot(0);
+		const ordinaryRoot = createRoot(1);
+		const ordinaryCheckpoint = createCheckpoint(1, 1_000_063);
 		const checkpoint = createCheckpoint(0, 1_000_063);
 		checkpoint.status = 'verified';
 		const ordinary = createBucket(0, 'f'.repeat(64));
@@ -134,7 +136,14 @@ describe('history archive execution reconciliation in disposable PostgreSQL', ()
 		proofBucket.status = 'verified';
 		await dataSource
 			.getRepository(HistoryArchiveObject)
-			.save([root, checkpoint, ordinary, proofBucket]);
+			.save([
+				root,
+				checkpoint,
+				ordinary,
+				proofBucket,
+				ordinaryRoot,
+				ordinaryCheckpoint
+			]);
 		await dataSource
 			.getRepository(HistoryArchiveCheckpointProof)
 			.save(
@@ -155,13 +164,21 @@ describe('history archive execution reconciliation in disposable PostgreSQL', ()
 		);
 
 		const result = await repository.reconcileExecutionDisposition();
-		const executable = await dataSource
+		const proofExecutable = await dataSource
 			.getRepository(HistoryArchiveObject)
-			.findOneBy({ executionDisposition: 'executable', objectType: 'bucket' });
+			.findOneBy({ executionReason: 'proof-completion-reserve' });
+		const ordinaryExecutable = await dataSource
+			.getRepository(HistoryArchiveObject)
+			.findOneBy({
+				executionReason: 'frontier-admitted',
+				remoteId: ordinaryCheckpoint.remoteId
+			});
 
-		expect(result.admittedObjects).toBe(1);
-		expect(executable?.remoteId).toBe(proofBucket.remoteId);
-		expect(executable?.status).toBe('pending');
+		expect(result.admittedObjects).toBe(2);
+		expect(result.cursorAdvances).toBeGreaterThan(0);
+		expect(proofExecutable?.remoteId).toBe(proofBucket.remoteId);
+		expect(proofExecutable?.status).toBe('pending');
+		expect(ordinaryExecutable?.status).toBe('pending');
 	});
 
 	it('deduplicates proof references before applying reserve limits', async () => {

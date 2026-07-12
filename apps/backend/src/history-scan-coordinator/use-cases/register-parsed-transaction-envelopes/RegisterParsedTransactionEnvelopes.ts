@@ -19,7 +19,7 @@ export class RegisterParsedTransactionEnvelopes {
 	): Promise<Result<void, Error>> {
 		try {
 			await this.repository.saveBatch(dto);
-			this.logger.info('Parsed transaction envelopes registered', {
+			this.logger.debug('Parsed transaction envelopes registered', {
 				count: dto.records.length,
 				sourceArchiveUrl: dto.sourceArchiveUrl
 			});
