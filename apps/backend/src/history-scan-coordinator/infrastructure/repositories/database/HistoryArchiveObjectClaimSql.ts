@@ -89,14 +89,39 @@ export const historyArchiveObjectClaimSql = `
 		order by slot.slot
 		for update of slot skip locked
 		limit 1
+	), root_priority as materialized (
+		select candidate."archiveUrlIdentity",
+			min(case candidate."executionReason"
+				when 'canonical-frontier-reserve' then 0
+				when 'proof-completion-reserve' then 1
+				else 2
+			end)::integer as priority
+		from "history_archive_object_queue" candidate
+		cross join free_slot
+		where candidate.status = 'pending'
+			and (
+				candidate."transitionEffectsRequiredAt" is null
+				or candidate."transitionEffectsCompletedAt" is not null
+			)
+			and candidate."executionDisposition" = 'executable'
+			and ${candidateDependencyReadySql}
+			and candidate."objectType" = any($1)
+			and (
+				candidate."nextAttemptAt" is null
+				or candidate."nextAttemptAt" <= now()
+			)
+		group by candidate."archiveUrlIdentity"
 	), root_candidate as materialized (
 		select
 			root.id,
 			root."archiveUrlIdentity",
 			root."hostIdentity",
-			root."lastClaimedAt"
+			root."lastClaimedAt",
+			coalesce(root_priority.priority, 2) as priority
 		from "history_archive_object_queue" root
 		cross join free_slot
+		left join root_priority
+			on root_priority."archiveUrlIdentity" = root."archiveUrlIdentity"
 		where root."objectType" = 'history-archive-state'
 			and root."objectKey" = 'root'
 			and (
@@ -157,7 +182,7 @@ export const historyArchiveObjectClaimSql = `
 					limit 1
 				)
 			)
-		order by root."lastClaimedAt" asc nulls first, root.id
+		order by priority, root."lastClaimedAt" asc nulls first, root.id
 		for update of root skip locked
 		limit 1
 	), host_lock as materialized (

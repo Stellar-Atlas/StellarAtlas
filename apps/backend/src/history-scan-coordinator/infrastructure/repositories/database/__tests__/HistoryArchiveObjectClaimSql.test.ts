@@ -16,9 +16,15 @@ describe('HistoryArchiveObjectClaimSql', () => {
 		);
 	});
 
-	it('seeks a fair root then a bounded per-root candidate', () => {
+	it('prioritizes proof work, then seeks a fair bounded root candidate', () => {
 		expect(historyArchiveObjectClaimSql).toContain(
-			'order by root."lastClaimedAt" asc nulls first, root.id'
+			'order by priority, root."lastClaimedAt" asc nulls first, root.id'
+		);
+		expect(historyArchiveObjectClaimSql).toContain(
+			"when 'canonical-frontier-reserve' then 0"
+		);
+		expect(historyArchiveObjectClaimSql).toContain(
+			"when 'proof-completion-reserve' then 1"
 		);
 		expect(historyArchiveObjectClaimSql).toContain(
 			'for update of root skip locked'
@@ -97,12 +103,12 @@ describe('HistoryArchiveObjectClaimSql', () => {
 			historyArchiveObjectClaimSql.match(
 				/candidate\."transitionEffectsRequiredAt" is null/g
 			)
-		).toHaveLength(4);
+		).toHaveLength(5);
 		expect(
 			historyArchiveObjectClaimSql.match(
 				/candidate\."transitionEffectsCompletedAt" is not null/g
 			)
-		).toHaveLength(4);
+		).toHaveLength(5);
 	});
 });
 

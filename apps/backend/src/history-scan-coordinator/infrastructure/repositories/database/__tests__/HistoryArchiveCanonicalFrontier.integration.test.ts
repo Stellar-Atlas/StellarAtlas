@@ -204,6 +204,58 @@ describe('canonical full-history archive frontier', () => {
 		expect(failedClaims.length).toBeLessThanOrEqual(12);
 	});
 
+	it('claims canonical proof work before older ordinary frontier work', async () => {
+		const ordinaryRoot = object(
+			0,
+			'history-archive-state',
+			'root',
+			null,
+			'verified'
+		);
+		ordinaryRoot.lastClaimedAt = new Date('2020-01-01T00:00:00.000Z');
+		const ordinary = object(
+			0,
+			'checkpoint-state',
+			'checkpoint-state:0000003f',
+			63
+		);
+		ordinary.dependencyReady = true;
+		ordinary.executionDisposition = 'executable';
+		ordinary.executionReason = 'planned-frontier';
+
+		const canonicalRoot = object(
+			1,
+			'history-archive-state',
+			'root',
+			null,
+			'verified'
+		);
+		canonicalRoot.lastClaimedAt = new Date('2026-01-01T00:00:00.000Z');
+		const canonical = object(1, 'bucket', `bucket:${bucketHash}`, null);
+		canonical.bucketHash = bucketHash;
+		canonical.dependencyReady = true;
+		canonical.executionDisposition = 'executable';
+		canonical.executionReason = 'canonical-frontier-reserve';
+
+		await dataSource
+			.getRepository(HistoryArchiveObject)
+			.save([ordinaryRoot, ordinary, canonicalRoot, canonical]);
+		await dataSource.query(`
+			update "history_archive_object_claim_slot"
+			set "objectRemoteId" = null, "claimedAt" = null
+		`);
+
+		const claimed = await repository.claimNextObject([
+			'checkpoint-state',
+			'bucket'
+		]);
+
+		expect(claimed).toMatchObject({
+			archiveUrlIdentity: canonical.archiveUrlIdentity,
+			objectKey: canonical.objectKey
+		});
+	});
+
 	async function seedArchive(
 		index: number,
 		archiveNetworkPassphrase = networkPassphrase
