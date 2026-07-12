@@ -4,6 +4,7 @@ import express, {
   type Request,
   type Response,
 } from "express";
+import { rewriteApiDocsHtml } from "./api-docs-proxy.js";
 
 const defaultPort = 3000;
 const assetCacheTimeMs = 86_400_000 * 7;
@@ -125,6 +126,7 @@ async function proxyRequest(
     const headerValue = response.headers.get(headerName);
     if (headerValue) res.setHeader(headerName, headerValue);
   }
+  if (transformBody) res.setHeader("cache-control", "no-store");
 
   if (req.method === "HEAD") {
     res.end();
@@ -145,10 +147,7 @@ function rewriteApiDocsBody(
   if (!response.headers.get("content-type")?.includes("text/html")) return body;
 
   return Buffer.from(
-    body
-      .toString("utf8")
-      .replaceAll('href="./', 'href="/api-docs/')
-      .replaceAll('src="./', 'src="/api-docs/'),
+    rewriteApiDocsHtml(body.toString("utf8"), Date.now().toString(36)),
   );
 }
 
