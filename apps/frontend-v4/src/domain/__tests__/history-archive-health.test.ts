@@ -47,7 +47,7 @@ describe('history archive health', () => {
 		});
 
 		expect(result.state).toBe('remote_failure');
-		expect(archiveHealthTone(result.state)).toBe('danger');
+		expect(archiveHealthTone(result.state)).toBe('warning');
 	});
 
 	it('makes remote evidence beat a simultaneous scanner issue', () => {

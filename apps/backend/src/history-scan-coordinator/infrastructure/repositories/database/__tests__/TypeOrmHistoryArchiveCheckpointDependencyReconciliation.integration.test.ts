@@ -45,6 +45,12 @@ describe('checkpoint dependency reconciliation in PostgreSQL', () => {
 		if (postgres !== undefined) await postgres.stop();
 	});
 
+	beforeEach(async () => {
+		await dataSource.query(
+			'truncate history_archive_checkpoint_proof, history_archive_object_queue restart identity cascade'
+		);
+	});
+
 	it('prioritizes stale mismatch proofs before the unmaterialized backlog', async () => {
 		const missing = checkpointObject('https://missing.example', 63, 'verified');
 		const done = checkpointObject('https://done.example', 127, 'verified');
@@ -61,6 +67,32 @@ describe('checkpoint dependency reconciliation in PostgreSQL', () => {
 			await repository.findVerifiedCheckpointsNeedingReconciliation(1);
 
 		expect(result.map((object) => object.remoteId)).toEqual([done.remoteId]);
+	});
+
+	it('prioritizes proof-ready checkpoints waiting only for buckets', async () => {
+		const ordinary = checkpointObject(
+			'https://ordinary.example',
+			255,
+			'verified'
+		);
+		const bucketReady = checkpointObject(
+			'https://bucket-ready.example',
+			319,
+			'verified'
+		);
+		await dataSource
+			.getRepository(HistoryArchiveObject)
+			.save([ordinary, bucketReady]);
+		await dataSource
+			.getRepository(HistoryArchiveCheckpointProof)
+			.save(bucketMissingProof(bucketReady));
+
+		const result =
+			await repository.findVerifiedCheckpointsNeedingReconciliation(1);
+
+		expect(result.map((object) => object.remoteId)).toEqual([
+			bucketReady.remoteId
+		]);
 	});
 });
 
@@ -97,5 +129,15 @@ function mismatchProof(
 	proof.failureKind = 'previous-ledger-hash-mismatch';
 	proof.details = null;
 	proof.evaluatedAt = new Date(0);
+	return proof;
+}
+
+function bucketMissingProof(
+	object: HistoryArchiveObject
+): HistoryArchiveCheckpointProof {
+	const proof = mismatchProof(object);
+	proof.status = 'not-evaluable';
+	proof.previousLedgersMatch = true;
+	proof.failureKind = 'bucket-missing';
 	return proof;
 }

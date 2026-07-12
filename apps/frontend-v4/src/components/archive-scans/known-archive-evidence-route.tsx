@@ -17,13 +17,12 @@ const initialEvidenceQuery = {
 	eventLimit: archiveEvidencePageLimit,
 	failureLimit: archiveEvidencePageLimit,
 	objectLimit: archiveEvidencePageLimit,
-	objectStatus: 'pending',
+	objectStatus: 'failed',
 	workerIssueLimit: archiveEvidencePageLimit
 } as const satisfies KnownArchiveEvidenceQuery;
 
 const liveEvidenceOptions = {
-	cache: 'no-store',
-	timeoutMs: 12000
+	cache: 'no-store'
 } as const;
 
 export async function NodeArchiveEvidenceRoute({

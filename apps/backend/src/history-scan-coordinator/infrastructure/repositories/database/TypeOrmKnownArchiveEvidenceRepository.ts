@@ -34,66 +34,64 @@ export class TypeOrmKnownArchiveEvidenceRepository implements KnownArchiveEviden
 		const archiveUrlIdentities = query.roots.map(
 			(root) => root.archiveUrlIdentity
 		);
-		return this.dataSource.transaction('REPEATABLE READ', async (manager) => {
-			const rootRows = await findKnownArchiveEvidenceRoots(
-				manager,
-				query.roots,
-				query.snapshotAt
-			);
-			const states = await manager
-				.getRepository(HistoryArchiveStateSnapshot)
-				.findBy({
-					archiveUrlIdentity: In(archiveUrlIdentities)
-				});
-			const remoteFailures = await findKnownArchiveFailurePage(
+		const manager = this.dataSource.manager;
+		const [rootRows, states] = await Promise.all([
+			findKnownArchiveEvidenceRoots(manager, query.roots, query.snapshotAt),
+			manager.getRepository(HistoryArchiveStateSnapshot).findBy({
+				archiveUrlIdentity: In(archiveUrlIdentities)
+			})
+		]);
+		const [remoteFailures, workerIssues] = await Promise.all([
+			findKnownArchiveFailurePage(
 				manager,
 				archiveUrlIdentities,
 				query.remoteFailures,
 				'remote'
-			);
-			const workerIssues = await findKnownArchiveFailurePage(
+			),
+			findKnownArchiveFailurePage(
 				manager,
 				archiveUrlIdentities,
 				query.workerIssues,
 				'infrastructure'
-			);
-			const objectPage = await findKnownArchiveObjectPage(
+			)
+		]);
+		const [objectPage, eventPage] = await Promise.all([
+			findKnownArchiveObjectPage(
 				manager,
 				archiveUrlIdentities,
 				query.objectPage
-			);
-			const eventPage = await findKnownArchiveObjectEventPage(
+			),
+			findKnownArchiveObjectEventPage(
 				manager.getRepository(HistoryArchiveObjectEvent),
 				archiveUrlIdentities,
 				query.eventPage
-			);
-			const pageRemoteFailures = remoteFailures.failures.slice(
-				0,
-				query.remoteFailures.limit
-			);
-			const copyCoverage = await findKnownArchiveCopyCoverage(
-				manager,
-				pageRemoteFailures.map((failure) => failure.object),
-				query.sameOrganizationArchiveUrlIdentities,
-				query.copyLimit,
-				query.snapshotAt
-			);
-			const statesByIdentity = new Map(
-				states.map((state) => [state.archiveUrlIdentity, state])
-			);
+			)
+		]);
+		const pageRemoteFailures = remoteFailures.failures.slice(
+			0,
+			query.remoteFailures.limit
+		);
+		const copyCoverage = await findKnownArchiveCopyCoverage(
+			manager,
+			pageRemoteFailures.map((failure) => failure.object),
+			query.sameOrganizationArchiveUrlIdentities,
+			query.copyLimit,
+			query.snapshotAt
+		);
+		const statesByIdentity = new Map(
+			states.map((state) => [state.archiveUrlIdentity, state])
+		);
 
-			return {
-				copyCoverage,
-				eventPage,
-				objectPage,
-				remoteFailures,
-				roots: rootRows.map((root) => ({
-					...root,
-					scannerOwnedState:
-						statesByIdentity.get(root.archiveUrlIdentity) ?? null
-				})),
-				workerIssues
-			};
-		});
+		return {
+			copyCoverage,
+			eventPage,
+			objectPage,
+			remoteFailures,
+			roots: rootRows.map((root) => ({
+				...root,
+				scannerOwnedState: statesByIdentity.get(root.archiveUrlIdentity) ?? null
+			})),
+			workerIssues
+		};
 	}
 }

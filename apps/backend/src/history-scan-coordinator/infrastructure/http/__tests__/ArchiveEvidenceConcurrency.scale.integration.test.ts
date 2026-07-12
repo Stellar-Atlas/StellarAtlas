@@ -11,6 +11,7 @@ import { HistoryArchiveObject } from '../../../domain/history-archive-object/His
 import { HistoryArchiveObjectEvent } from '../../../domain/history-archive-object/HistoryArchiveObjectEvent.js';
 import { HistoryArchiveCheckpointProof } from '../../../domain/history-archive-checkpoint-proof/HistoryArchiveCheckpointProof.js';
 import { HistoryArchiveStateSnapshot } from '../../../domain/history-archive-state/HistoryArchiveStateSnapshot.js';
+import { HistoryArchiveObjectHostThrottleMigration1784410000000 } from '../../database/migrations/1784410000000-HistoryArchiveObjectHostThrottleMigration.js';
 import type {
 	KnownArchiveEvidenceQuery,
 	KnownArchiveEvidenceReadModel,
@@ -46,6 +47,11 @@ describe('public archive evidence concurrency', () => {
 			url: postgres.url
 		});
 		await dataSource.initialize();
+		const runner = dataSource.createQueryRunner();
+		await new HistoryArchiveObjectHostThrottleMigration1784410000000().up(
+			runner
+		);
+		await runner.release();
 	});
 
 	afterAll(async () => {
@@ -91,9 +97,9 @@ describe('public archive evidence concurrency', () => {
 			}
 		).master;
 
-		expect(statuses.every((status) => status === 200 || status === 429)).toBe(
-			true
-		);
+		expect(
+			statuses.filter((status) => status !== 200 && status !== 429)
+		).toEqual([]);
 		expect(statuses).toContain(200);
 		expect(statuses).toContain(429);
 		expect(repository.maxActive).toBeLessThanOrEqual(4);

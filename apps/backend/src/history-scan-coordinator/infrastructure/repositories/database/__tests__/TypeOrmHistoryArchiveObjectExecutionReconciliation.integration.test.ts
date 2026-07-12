@@ -1,5 +1,6 @@
 import { DataSource } from 'typeorm';
 import { HistoryArchiveObject } from '../../../../domain/history-archive-object/HistoryArchiveObject.js';
+import { HistoryArchiveCheckpointProof } from '../../../../domain/history-archive-checkpoint-proof/HistoryArchiveCheckpointProof.js';
 import { HistoryArchiveObjectEventMigration1784370000000 } from '../../../database/migrations/1784370000000-HistoryArchiveObjectEventMigration.js';
 import { HistoryArchiveObjectHostThrottleMigration1784410000000 } from '../../../database/migrations/1784410000000-HistoryArchiveObjectHostThrottleMigration.js';
 import { HistoryArchiveObjectClaimCursorMigration1784780000000 } from '../../../database/migrations/1784780000000-HistoryArchiveObjectClaimCursorMigration.js';
@@ -20,7 +21,7 @@ describe('history archive execution reconciliation in disposable PostgreSQL', ()
 		postgres = await startDisposablePostgres();
 		dataSource = new DataSource({
 			dropSchema: true,
-			entities: [HistoryArchiveObject],
+			entities: [HistoryArchiveCheckpointProof, HistoryArchiveObject],
 			logging: false,
 			synchronize: true,
 			type: 'postgres',
@@ -43,7 +44,7 @@ describe('history archive execution reconciliation in disposable PostgreSQL', ()
 
 	beforeEach(async () => {
 		await dataSource.query(
-			'truncate "history_archive_object_event", "history_archive_object_queue", "history_archive_object_frontier_cursor" restart identity cascade'
+			'truncate "history_archive_checkpoint_proof", "history_archive_object_event", "history_archive_object_queue", "history_archive_object_frontier_cursor", "history_archive_checkpoint_bucket_dependency" restart identity cascade'
 		);
 		await dataSource.query(
 			`update "history_archive_reconciliation_state"
@@ -122,6 +123,43 @@ describe('history archive execution reconciliation in disposable PostgreSQL', ()
 
 		expect(result).toMatchObject({ admittedObjects: 1, cursorAdvances: 1 });
 		expect(counts).toEqual({ executable: 1, legacyDeferred: 99 });
+	});
+
+	it('prioritizes a bucket that can complete a checkpoint proof', async () => {
+		const root = createRoot(0);
+		const checkpoint = createCheckpoint(0, 1_000_063);
+		checkpoint.status = 'verified';
+		const ordinary = createBucket(0, 'f'.repeat(64));
+		const proofBucket = createBucket(0, '0'.repeat(64));
+		await dataSource
+			.getRepository(HistoryArchiveObject)
+			.save([root, checkpoint, ordinary, proofBucket]);
+		await dataSource
+			.getRepository(HistoryArchiveCheckpointProof)
+			.save(
+				createBucketMissingProof(
+					root.archiveUrl,
+					proofBucket.checkpointLedger ?? 0
+				)
+			);
+		await dataSource.query(
+			`insert into "history_archive_checkpoint_bucket_dependency" (
+				"archiveUrlIdentity", "checkpointLedger", "bucketHash"
+			) values ($1, $2, $3)`,
+			[
+				root.archiveUrlIdentity,
+				proofBucket.checkpointLedger,
+				proofBucket.bucketHash
+			]
+		);
+
+		const result = await repository.reconcileExecutionDisposition();
+		const executable = await dataSource
+			.getRepository(HistoryArchiveObject)
+			.findOneBy({ executionDisposition: 'executable', objectType: 'bucket' });
+
+		expect(result.admittedObjects).toBe(1);
+		expect(executable?.remoteId).toBe(proofBucket.remoteId);
 	});
 
 	it('rotates equivalent keys and enforces the per-root frontier cap', async () => {
@@ -282,6 +320,54 @@ function createCheckpoint(index: number, checkpointLedger: number) {
 		objectOrder: 10,
 		objectType: 'checkpoint-state'
 	});
+}
+
+function createBucket(index: number, bucketHash: string): HistoryArchiveObject {
+	const object = createObject(index, {
+		checkpointLedger: 1_000_063,
+		objectKey: `bucket:${bucketHash}`,
+		objectOrder: 60,
+		objectType: 'bucket'
+	});
+	object.bucketHash = bucketHash;
+	return object;
+}
+
+function createBucketMissingProof(
+	archiveUrl: string,
+	checkpointLedger: number
+): HistoryArchiveCheckpointProof {
+	const proof = new HistoryArchiveCheckpointProof();
+	proof.archiveUrl = archiveUrl;
+	proof.archiveUrlIdentity = archiveUrl;
+	proof.checkpointLedger = checkpointLedger;
+	proof.status = 'not-evaluable';
+	proof.proofVersion = 5;
+	proof.requiredObjectsComplete = true;
+	proof.proofFactsComplete = true;
+	proof.checkpointBucketListMatches = true;
+	proof.transactionsMatch = true;
+	proof.resultsMatch = true;
+	proof.previousLedgersMatch = true;
+	proof.bucketsVerified = false;
+	proof.ledgerFactCount = 64;
+	proof.transactionFactCount = 64;
+	proof.resultFactCount = 64;
+	proof.expectedBucketCount = 1;
+	proof.verifiedBucketCount = 0;
+	proof.failedBucketCount = 0;
+	proof.missingBucketCount = 1;
+	proof.checkpointBucketListHash = null;
+	proof.ledgerBucketListHash = null;
+	proof.checkpointStateObjectRemoteId = null;
+	proof.ledgerObjectRemoteId = null;
+	proof.transactionsObjectRemoteId = null;
+	proof.resultsObjectRemoteId = null;
+	proof.scpObjectRemoteId = null;
+	proof.failureKind = 'bucket-missing';
+	proof.details = null;
+	proof.evaluatedAt = new Date();
+	return proof;
 }
 
 function createObject(

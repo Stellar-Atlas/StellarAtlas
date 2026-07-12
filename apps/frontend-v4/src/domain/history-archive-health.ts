@@ -184,7 +184,7 @@ export function getArchiveFailureState(
 }
 
 export function archiveHealthLabel(state: ArchiveHealthState): string {
-	if (state === 'remote_failure') return 'Remote failure';
+	if (state === 'remote_failure') return 'Source finding';
 	if (state === 'scanner_issue') return 'Scanner issue';
 	return state.charAt(0).toUpperCase() + state.slice(1);
 }
@@ -193,7 +193,7 @@ export function archiveHealthTone(
 	state: ArchiveHealthState
 ): ArchiveHealthTone {
 	if (state === 'verified') return 'good';
-	if (state === 'remote_failure') return 'danger';
+	if (state === 'remote_failure') return 'warning';
 	return 'warning';
 }
 

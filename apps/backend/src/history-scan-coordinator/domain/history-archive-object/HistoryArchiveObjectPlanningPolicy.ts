@@ -22,14 +22,7 @@ export function calculateHistoryArchivePlanningPressure(input: {
 }): HistoryArchivePlanningPressure {
 	const outstandingObjects = normalizeCount(input.outstandingObjects);
 	const recentCompletions = normalizeCount(input.recentCompletions);
-	const throughputWatermark = Math.ceil(
-		(recentCompletions * targetBacklogMinutes) /
-			historyArchiveThroughputWindowMinutes
-	);
-	const watermark = Math.max(
-		historyArchiveMinimumWatermark,
-		Math.min(historyArchiveMaximumWatermark, throughputWatermark)
-	);
+	const watermark = historyArchiveMinimumWatermark;
 
 	return {
 		availableSlots: Math.max(0, watermark - outstandingObjects),

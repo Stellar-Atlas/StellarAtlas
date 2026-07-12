@@ -3,6 +3,7 @@ import type { HistoryArchiveObject } from '@history-scan-coordinator/domain/hist
 import type { HistoryArchiveObjectExecutionReconciliationResult } from '@history-scan-coordinator/domain/history-archive-object/HistoryArchiveObjectRepository.js';
 import {
 	calculateHistoryArchivePlanningPressure,
+	historyArchiveConsumerCount,
 	historyArchiveMaximumWatermark,
 	historyArchivePerRootFrontier,
 	historyArchiveThroughputSampleCap,
@@ -26,7 +27,7 @@ export async function reconcileHistoryArchiveObjectExecution(
 ): Promise<HistoryArchiveObjectExecutionReconciliationResult> {
 	return await repository.manager.transaction(async (manager) => {
 		await manager.query(`set local lock_timeout = '500ms'`);
-		await manager.query(`set local statement_timeout = '10s'`);
+		await manager.query(`set local statement_timeout = '30s'`);
 		const [lock] = (await manager.query(
 			'select pg_try_advisory_xact_lock(hashtext($1)) as locked',
 			[reconciliationLockName]
@@ -36,6 +37,11 @@ export async function reconcileHistoryArchiveObjectExecution(
 		const [preserved] = (await manager.query(
 			preserveRunnableRowsSql
 		)) as readonly { readonly count: number | string }[];
+		const [proofAdmission] = (await manager.query(
+			admitProofCompletionReserveSql,
+			[historyArchiveConsumerCount, historyArchivePerRootFrontier]
+		)) as readonly { readonly count: number | string }[];
+		const proofAdmittedObjects = Number(proofAdmission?.count ?? 0);
 		const [counts] = (await manager.query(pressureSql, [
 			historyArchiveMaximumWatermark + 1,
 			historyArchiveThroughputSampleCap,
@@ -45,6 +51,16 @@ export async function reconcileHistoryArchiveObjectExecution(
 			outstandingObjects: Number(counts?.outstandingObjects ?? 0),
 			recentCompletions: Number(counts?.recentCompletions ?? 0)
 		});
+
+		if (proofAdmittedObjects > 0) {
+			await recordAdmissions(manager, proofAdmittedObjects);
+			return {
+				...pressure,
+				admittedObjects: proofAdmittedObjects,
+				cursorAdvances: 0,
+				preservedObjects: Number(preserved?.count ?? 0)
+			};
+		}
 
 		if (pressure.availableSlots === 0) {
 			return {
@@ -60,16 +76,9 @@ export async function reconcileHistoryArchiveObjectExecution(
 			pressure.availableSlots,
 			historyArchivePerRootFrontier
 		])) as readonly AdmissionRow[];
-		const admittedObjects = Number(admission?.admittedObjects ?? 0);
-		if (admittedObjects > 0) {
-			await manager.query(
-				`update "history_archive_reconciliation_state"
-				 set "admittedRows" = "admittedRows" + $1::integer,
-					"updatedAt" = now()
-				 where name = 'execution-disposition'`,
-				[admittedObjects]
-			);
-		}
+		const admittedObjects =
+			proofAdmittedObjects + Number(admission?.admittedObjects ?? 0);
+		await recordAdmissions(manager, admittedObjects);
 
 		return {
 			...pressure,
@@ -78,6 +87,20 @@ export async function reconcileHistoryArchiveObjectExecution(
 			preservedObjects: Number(preserved?.count ?? 0)
 		};
 	});
+}
+
+async function recordAdmissions(
+	manager: Repository<HistoryArchiveObject>['manager'],
+	count: number
+): Promise<void> {
+	if (count === 0) return;
+	await manager.query(
+		`update "history_archive_reconciliation_state"
+		 set "admittedRows" = "admittedRows" + $1::integer,
+			"updatedAt" = now()
+		 where name = 'execution-disposition'`,
+		[count]
+	);
 }
 
 function emptyResult(): HistoryArchiveObjectExecutionReconciliationResult {
@@ -168,6 +191,67 @@ const seedFrontierCursorsSql = `
 
 const dependencyReadySql = dependencyEligibilitySql('candidate');
 
+const proofCompletionPrioritySql = `case
+	when candidate."objectType" = 'bucket' and exists (
+		select 1
+		from "history_archive_checkpoint_bucket_dependency" dependency
+		join "history_archive_checkpoint_proof" proof
+			on proof."archiveUrlIdentity" = dependency."archiveUrlIdentity"
+			and proof."checkpointLedger" = dependency."checkpointLedger"
+		where dependency."archiveUrlIdentity" = candidate."archiveUrlIdentity"
+			and dependency."bucketHash" = candidate."bucketHash"
+			and proof.status = 'not-evaluable'
+			and proof."failureKind" = 'bucket-missing'
+			and proof."requiredObjectsComplete" = true
+			and proof."proofFactsComplete" = true
+	) then 0
+	else 1
+end`;
+
+const admitProofCompletionReserveSql = `
+	with proof_candidates as materialized (
+		select proof."archiveUrlIdentity", proof."checkpointLedger"
+		from "history_archive_checkpoint_proof" proof
+		where proof.status = 'not-evaluable'
+			and proof."failureKind" = 'bucket-missing'
+			and proof."requiredObjectsComplete" = true
+			and proof."proofFactsComplete" = true
+	), ranked as materialized (
+		select candidate.id,
+			row_number() over (
+				partition by candidate."archiveUrlIdentity"
+				order by proof."checkpointLedger" desc, candidate."objectKey"
+			) as root_rank
+		from proof_candidates proof
+		join "history_archive_checkpoint_bucket_dependency" dependency
+			on proof."archiveUrlIdentity" = dependency."archiveUrlIdentity"
+			and proof."checkpointLedger" = dependency."checkpointLedger"
+		join "history_archive_object_queue" candidate
+			on candidate."archiveUrlIdentity" = dependency."archiveUrlIdentity"
+			and candidate."bucketHash" = dependency."bucketHash"
+		where candidate."objectType" = 'bucket'
+			and candidate.status = 'pending'
+			and candidate."dependencyReady" = true
+			and candidate."executionDisposition" is distinct from 'executable'
+	), selected as materialized (
+		select id
+		from ranked
+		where root_rank <= $2::integer
+		order by root_rank, id
+		limit $1::integer
+	), admitted as (
+		update "history_archive_object_queue" candidate
+		set "executionDisposition" = 'executable',
+			"executionReason" = 'proof-completion-reserve',
+			"executionDispositionAt" = now(),
+			"dependencyReady" = true
+		from selected
+		where candidate.id = selected.id
+		returning candidate.id
+	)
+	select count(*)::integer as count from admitted
+`;
+
 const admitFrontierSql = `
 	with roots as materialized (
 		select root.id, root."archiveUrlIdentity", root."lastClaimedAt"
@@ -239,7 +323,7 @@ const admitFrontierSql = `
 							cursor."objectKey" is null
 							or candidate."objectKey" < cursor."objectKey"
 						)
-					order by candidate."objectKey" desc
+					order by ${proofCompletionPrioritySql}, candidate."objectKey" desc
 					limit 1
 				)
 				union all
@@ -255,7 +339,7 @@ const admitFrontierSql = `
 							candidate."executionDisposition" is null
 							or candidate."executionDisposition" = 'deferred'
 						)
-					order by candidate."objectKey" desc
+					order by ${proofCompletionPrioritySql}, candidate."objectKey" desc
 					limit 1
 				)
 			) sought

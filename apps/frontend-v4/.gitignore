@@ -1,5 +1,6 @@
 .next/
 .next-*/
+.next-*
 .env*.local
 next-env.d.ts
 AGENTS.md

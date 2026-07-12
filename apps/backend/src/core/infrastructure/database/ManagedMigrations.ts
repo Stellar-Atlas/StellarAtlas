@@ -8,6 +8,8 @@ import { ParsedLedgerClosedAtMigration1784840000000 } from '@history-scan-coordi
 import { ParsedHistoryObservationMigration1784850000000 } from '@history-scan-coordinator/infrastructure/database/migrations/1784850000000-ParsedHistoryObservationMigration.js';
 import { FullHistoryCanonicalSchemaMigration1784860000000 } from '@history-scan-coordinator/infrastructure/database/migrations/1784860000000-FullHistoryCanonicalSchemaMigration.js';
 import { HistoryArchiveCheckpointProofPredecessorFailureMigration1784870000000 } from '@history-scan-coordinator/infrastructure/database/migrations/1784870000000-HistoryArchiveCheckpointProofPredecessorFailureMigration.js';
+import { HistoryArchiveEvidenceSummaryIndexMigration1784880000000 } from '@history-scan-coordinator/infrastructure/database/migrations/1784880000000-HistoryArchiveEvidenceSummaryIndexMigration.js';
+import { HistoryArchiveObjectBucketHashIndexMigration1784890000000 } from '@history-scan-coordinator/infrastructure/database/migrations/1784890000000-HistoryArchiveObjectBucketHashIndexMigration.js';
 import { OrganizationTomlEvidenceMigration1784795000000 } from '@network-scan/infrastructure/database/migrations/1784795000000-OrganizationTomlEvidenceMigration.js';
 import { ScpLiveCanonicalTailMigration1784800000000 } from '@network-scan/infrastructure/database/migrations/1784800000000-ScpLiveCanonicalTailMigration.js';
 
@@ -25,5 +27,7 @@ export const managedMigrations = [
 	ParsedLedgerClosedAtMigration1784840000000,
 	ParsedHistoryObservationMigration1784850000000,
 	FullHistoryCanonicalSchemaMigration1784860000000,
-	HistoryArchiveCheckpointProofPredecessorFailureMigration1784870000000
+	HistoryArchiveCheckpointProofPredecessorFailureMigration1784870000000,
+	HistoryArchiveEvidenceSummaryIndexMigration1784880000000,
+	HistoryArchiveObjectBucketHashIndexMigration1784890000000
 ] as const;

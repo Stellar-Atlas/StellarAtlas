@@ -1,6 +1,5 @@
 import {
 	calculateHistoryArchivePlanningPressure,
-	historyArchiveMaximumWatermark,
 	historyArchiveMinimumWatermark
 } from '../HistoryArchiveObjectPlanningPolicy.js';
 
@@ -19,28 +18,31 @@ describe('HistoryArchiveObjectPlanningPolicy', () => {
 		});
 	});
 
-	it('tracks ten minutes of measured throughput and caps amplification', () => {
+	it('does not amplify runnable backlog from measured throughput', () => {
 		expect(
 			calculateHistoryArchivePlanningPressure({
 				outstandingObjects: 100,
 				recentCompletions: 300
 			})
-		).toMatchObject({ availableSlots: 100, watermark: 200 });
+		).toMatchObject({
+			availableSlots: 0,
+			watermark: historyArchiveMinimumWatermark
+		});
 		expect(
 			calculateHistoryArchivePlanningPressure({
 				outstandingObjects: 0,
 				recentCompletions: 100_000
 			})
 		).toMatchObject({
-			availableSlots: historyArchiveMaximumWatermark,
-			watermark: historyArchiveMaximumWatermark
+			availableSlots: historyArchiveMinimumWatermark,
+			watermark: historyArchiveMinimumWatermark
 		});
 	});
 
 	it('stops promotion at the current watermark', () => {
 		expect(
 			calculateHistoryArchivePlanningPressure({
-				outstandingObjects: historyArchiveMaximumWatermark + 1,
+				outstandingObjects: historyArchiveMinimumWatermark + 1,
 				recentCompletions: 100_000
 			})
 		).toMatchObject({ availableSlots: 0 });
