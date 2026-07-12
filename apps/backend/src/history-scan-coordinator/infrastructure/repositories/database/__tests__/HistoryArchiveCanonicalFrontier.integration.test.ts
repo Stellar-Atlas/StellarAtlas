@@ -8,9 +8,14 @@ import { HistoryArchiveObjectClaimCursorMigration1784780000000 } from '../../../
 import { TypeOrmHistoryArchiveObjectRepository } from '../TypeOrmHistoryArchiveObjectRepository.js';
 import { createCanonicalFrontierTestSchema } from './HistoryArchiveCanonicalFrontierTestSchema.js';
 import {
+	createBucketMissingProof,
 	createCheckpoint,
 	createRoot
 } from './HistoryArchiveObjectExecutionTestFixtures.js';
+import {
+	admitCanonicalFrontierSql,
+	materializeCanonicalFrontierDependenciesSql
+} from '../HistoryArchiveCanonicalFrontierSql.js';
 import {
 	startDisposablePostgres,
 	type DisposablePostgres
@@ -175,6 +180,41 @@ describe('canonical full-history archive frontier', () => {
 			executionDisposition: 'deferred',
 			executionReason: 'frontier-waiting'
 		});
+	});
+
+	it('reserves the archive source closest to a strict proof first', async () => {
+		await seedArchive(0);
+		await seedArchive(1);
+		await seedRuntime();
+		const slower = createBucketMissingProof(
+			'https://canonical-0.example/history',
+			targetCheckpoint
+		);
+		slower.expectedBucketCount = 41;
+		slower.verifiedBucketCount = 1;
+		slower.missingBucketCount = 40;
+		const closer = createBucketMissingProof(
+			'https://canonical-1.example/history',
+			targetCheckpoint
+		);
+		closer.expectedBucketCount = 41;
+		closer.verifiedBucketCount = 27;
+		closer.missingBucketCount = 14;
+		await dataSource
+			.getRepository(HistoryArchiveCheckpointProof)
+			.save([slower, closer]);
+		await dataSource.query(materializeCanonicalFrontierDependenciesSql);
+
+		await dataSource.query(admitCanonicalFrontierSql, [1, 48, 2]);
+		const rows = (await dataSource.query(`
+			select "archiveUrlIdentity"
+			from "history_archive_object_queue"
+			where "executionReason" = 'canonical-frontier-reserve'
+		`)) as readonly { readonly archiveUrlIdentity: string }[];
+
+		expect(rows).toEqual([
+			{ archiveUrlIdentity: 'https://canonical-1.example/history' }
+		]);
 	});
 
 	it('reserves a bounded worker share for due failed retries', async () => {

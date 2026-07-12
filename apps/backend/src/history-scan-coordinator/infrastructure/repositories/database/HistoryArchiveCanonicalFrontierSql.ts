@@ -148,7 +148,13 @@ export const admitCanonicalFrontierSql = `
 			and "checkpoint_ledger" is not null
 	), network_roots as materialized (
 		select state."archiveUrlIdentity", target.checkpoint_ledger,
-			root."lastClaimedAt"
+			root."lastClaimedAt",
+			case
+				when coalesce(proof."expectedBucketCount", 0) > 0
+					then coalesce(proof."verifiedBucketCount", 0)::numeric /
+						proof."expectedBucketCount"::numeric
+				else 0::numeric
+			end as proof_progress
 		from runtime_target target
 		join "history_archive_state_snapshot" state
 			on state.status = 'available'
@@ -166,9 +172,13 @@ export const admitCanonicalFrontierSql = `
 				lpad(to_hex(target.checkpoint_ledger), 8, '0')
 			and checkpoint."checkpointLedger" = target.checkpoint_ledger
 			and checkpoint.status = 'verified'
+		left join "history_archive_checkpoint_proof" proof
+			on proof."archiveUrlIdentity" = state."archiveUrlIdentity"
+			and proof."checkpointLedger" = target.checkpoint_ledger
 	), category_objects as materialized (
 		select network_root."archiveUrlIdentity",
-			network_root."lastClaimedAt", desired.object_type,
+			network_root."lastClaimedAt", network_root.proof_progress,
+			desired.object_type,
 			desired.checkpoint_ledger as object_checkpoint_ledger,
 			desired.object_key, desired.object_priority
 		from network_roots network_root
@@ -205,7 +215,8 @@ export const admitCanonicalFrontierSql = `
 		where desired.checkpoint_ledger >= 63
 	), bucket_objects as materialized (
 		select network_root."archiveUrlIdentity",
-			network_root."lastClaimedAt", 'bucket'::text as object_type,
+			network_root."lastClaimedAt", network_root.proof_progress,
+			'bucket'::text as object_type,
 			null::integer as object_checkpoint_ledger,
 			'bucket:' || dependency."bucketHash" as object_key,
 			5 as object_priority
@@ -278,6 +289,7 @@ export const admitCanonicalFrontierSql = `
 		select candidate.id, candidate."archiveUrlIdentity",
 			candidate."hostIdentity", candidate."objectKey",
 			candidate."checkpointLedger", desired.object_priority,
+			desired.proof_progress,
 			desired."lastClaimedAt",
 			replaceable.id as replaceable_id,
 			coalesce(host.active_count, 0) as host_active
@@ -325,7 +337,8 @@ export const admitCanonicalFrontierSql = `
 		select root_ranked.*,
 			row_number() over (
 				partition by "hostIdentity"
-				order by "lastClaimedAt" asc nulls first,
+				order by proof_progress desc,
+					"lastClaimedAt" asc nulls first,
 					"archiveUrlIdentity", object_priority, id
 			) as host_rank
 		from root_ranked
@@ -333,7 +346,8 @@ export const admitCanonicalFrontierSql = `
 	), additions_ranked as materialized (
 		select host_ranked.*,
 			count(*) filter (where replaceable_id is null) over (
-				order by "lastClaimedAt" asc nulls first,
+				order by proof_progress desc,
+					"lastClaimedAt" asc nulls first,
 					"archiveUrlIdentity", id
 			) as addition_rank
 		from host_ranked
@@ -347,6 +361,7 @@ export const admitCanonicalFrontierSql = `
 				$2::integer - outstanding.count, 0
 			)
 		order by (candidate.replaceable_id is not null) desc,
+			candidate.proof_progress desc,
 			candidate."lastClaimedAt" asc nulls first,
 			candidate."archiveUrlIdentity", candidate.id
 		limit $1::integer
