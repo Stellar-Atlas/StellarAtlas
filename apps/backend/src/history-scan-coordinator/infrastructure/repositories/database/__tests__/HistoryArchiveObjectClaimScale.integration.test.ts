@@ -5,7 +5,12 @@ import { HistoryArchiveObjectEvent } from '../../../../domain/history-archive-ob
 import { HistoryArchiveObjectHostThrottleMigration1784410000000 } from '../../../database/migrations/1784410000000-HistoryArchiveObjectHostThrottleMigration.js';
 import { HistoryArchiveObjectClaimCursorMigration1784780000000 } from '../../../database/migrations/1784780000000-HistoryArchiveObjectClaimCursorMigration.js';
 import { HistoryArchiveSchedulerOnlineIndexesMigration1784810000000 } from '../../../database/migrations/1784810000000-HistoryArchiveSchedulerOnlineIndexesMigration.js';
-import { historyArchiveObjectClaimSql } from '../HistoryArchiveObjectClaimSql.js';
+import {
+	historyArchiveObjectClaimAdoptionSql,
+	historyArchiveObjectClaimCleanupSql,
+	historyArchiveObjectClaimFinalizeSql,
+	historyArchiveObjectClaimSelectionSql
+} from '../HistoryArchiveObjectClaimSql.js';
 import { TypeOrmHistoryArchiveObjectRepository } from '../TypeOrmHistoryArchiveObjectRepository.js';
 import {
 	startDisposablePostgres,
@@ -183,11 +188,45 @@ async function seedQueue(dataSource: DataSource): Promise<void> {
 }
 
 async function explainClaim(dataSource: DataSource): Promise<unknown> {
-	const [row] = (await dataSource.query(
-		`explain (format json) ${historyArchiveObjectClaimSql}`,
-		[['checkpoint-state'], 1, 24, 2]
-	)) as readonly { readonly 'QUERY PLAN': unknown }[];
-	return row?.['QUERY PLAN'];
+	const [root] = (await dataSource.query(`
+		select id, "archiveUrlIdentity", "hostIdentity"
+		from history_archive_object_queue
+		where "objectType" = 'history-archive-state'
+		order by id
+		limit 1
+	`)) as readonly {
+		readonly archiveUrlIdentity: string;
+		readonly hostIdentity: string;
+		readonly id: number;
+	}[];
+	if (root === undefined) throw new Error('Expected a scale root');
+	const statements: readonly (readonly [string, readonly unknown[]])[] = [
+		[historyArchiveObjectClaimCleanupSql, [false]],
+		[historyArchiveObjectClaimAdoptionSql, [24]],
+		[historyArchiveObjectClaimSelectionSql, [['checkpoint-state'], 1, 24, 2]],
+		[
+			historyArchiveObjectClaimFinalizeSql,
+			[
+				['checkpoint-state'],
+				1,
+				0,
+				2,
+				root.id,
+				root.archiveUrlIdentity,
+				root.hostIdentity,
+				'pending'
+			]
+		]
+	];
+	const plans: unknown[] = [];
+	for (const [sql, parameters] of statements) {
+		const [row] = (await dataSource.query(
+			`explain (format json) ${sql}`,
+			parameters
+		)) as readonly { readonly 'QUERY PLAN': unknown }[];
+		plans.push(row?.['QUERY PLAN']);
+	}
+	return plans;
 }
 
 function findQueueSequentialScans(value: unknown): readonly string[] {

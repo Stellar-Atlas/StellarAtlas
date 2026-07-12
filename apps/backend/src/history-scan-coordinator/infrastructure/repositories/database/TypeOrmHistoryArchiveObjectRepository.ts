@@ -19,15 +19,12 @@ import type {
 } from '@history-scan-coordinator/domain/history-archive-object/HistoryArchiveObjectRepository.js';
 import { requireNumber } from './ScanJobRowMapper.js';
 import {
-	createObjectFromRow,
-	extractRows,
 	normalizeLimit,
-	statusRankSql,
-	type RawObjectQueryResult
+	statusRankSql
 } from './HistoryArchiveObjectRowMapper.js';
 import { createActiveUpdate } from './HistoryArchiveObjectUpdateFactory.js';
 import { findOldestCheckpointLedgers } from './HistoryArchiveObjectCheckpointQuery.js';
-import { historyArchiveObjectClaimSql } from './HistoryArchiveObjectClaimSql.js';
+import { claimHistoryArchiveObject } from './HistoryArchiveObjectClaimRunner.js';
 import { getHistoryArchiveObjectSummary } from './HistoryArchiveObjectSummaryQuery.js';
 import { getHistoryArchiveObjectStatusSummary } from './HistoryArchiveObjectStatusSummaryQuery.js';
 import { findHistoryArchiveObjects } from './HistoryArchiveObjectListQuery.js';
@@ -65,19 +62,7 @@ export class TypeOrmHistoryArchiveObjectRepository implements HistoryArchiveObje
 		supportedTypes: readonly HistoryArchiveObjectType[]
 	): Promise<HistoryArchiveObject | null> {
 		if (supportedTypes.length === 0) return null;
-
-		return await this.repository.manager.transaction(async (manager) => {
-			await manager.query('set local jit = off');
-			const rows = extractRows(
-				(await manager.query(historyArchiveObjectClaimSql, [
-					[...supportedTypes],
-					maxActiveObjectsPerArchive,
-					maxActiveObjectsTotal,
-					maxActiveObjectsPerHost
-				])) as RawObjectQueryResult
-			);
-			return rows[0] === undefined ? null : createObjectFromRow(rows[0]);
-		});
+		return await claimHistoryArchiveObject(this.repository, supportedTypes);
 	}
 
 	async findActionableByArchiveUrl(

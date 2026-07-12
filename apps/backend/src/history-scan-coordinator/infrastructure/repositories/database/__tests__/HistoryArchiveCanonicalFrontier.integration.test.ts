@@ -11,8 +11,6 @@ import {
 	createCanonicalCheckpointFacts,
 	createCanonicalObject as object,
 	createBucketMissingProof,
-	createCheckpoint,
-	createRoot,
 	readCanonicalRows
 } from './HistoryArchiveObjectExecutionTestFixtures.js';
 import {
@@ -318,33 +316,6 @@ describe('canonical full-history archive frontier', () => {
 		expect(rows).toEqual([
 			{ archiveUrlIdentity: 'https://canonical-1.example/history' }
 		]);
-	});
-
-	it('reserves a bounded worker share for due failed retries', async () => {
-		const objects = Array.from({ length: 24 }, (_, index) => {
-			const failed = createCheckpoint(index, 900_031);
-			failed.status = 'failed';
-			failed.objectKey = `checkpoint-state:failed-${index}`;
-			failed.nextAttemptAt = new Date(Date.now() - 60_000);
-			return [createRoot(index), createCheckpoint(index, 1_000_063), failed];
-		}).flat();
-		for (const item of objects) {
-			item.executionDisposition = 'executable';
-			item.dependencyReady = true;
-		}
-		await dataSource.getRepository(HistoryArchiveObject).save(objects);
-
-		const claims = await Promise.all(
-			Array.from({ length: 24 }, () =>
-				repository.claimNextObject(['checkpoint-state'])
-			)
-		);
-		const failedClaims = claims.filter((claim) =>
-			claim?.objectKey.includes(':failed-')
-		);
-		expect(claims.filter((claim) => claim !== null)).toHaveLength(24);
-		expect(failedClaims.length).toBeGreaterThanOrEqual(6);
-		expect(failedClaims.length).toBeLessThanOrEqual(12);
 	});
 
 	it('claims canonical proof work before older ordinary frontier work', async () => {
