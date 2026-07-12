@@ -1,4 +1,7 @@
-import type { FullHistoryOperationBackfillBatch } from '../../../domain/full-history-operation-backfill/FullHistoryOperationBackfill.js';
+import {
+	assertOperationBackfillCandidateProvenance,
+	type FullHistoryOperationBackfillBatch
+} from '../../../domain/full-history-operation-backfill/FullHistoryOperationBackfill.js';
 import type {
 	FullHistoryOperationBackfillReceipt,
 	FullHistoryOperationBackfillRepository
@@ -28,6 +31,28 @@ const emptyDecoded: FullHistoryDecodedCheckpoint = {
 };
 
 describe('BackfillFullHistoryOperations bounded scheduler', () => {
+	it('accepts a re-evaluated proof timestamp when immutable proof and source identities still match', () => {
+		const batch = createBatches(1)[0]!;
+		const candidate = candidateForBatch(batch);
+		const reevaluatedCandidate = {
+			...candidate,
+			proof: {
+				...candidate.proof,
+				evaluatedAt: new Date(
+					candidate.proof.evaluatedAt.getTime() + 60_000
+				)
+			}
+		};
+
+		expect(() =>
+			assertOperationBackfillCandidateProvenance(
+				batch,
+				reevaluatedCandidate,
+				networkPassphrase
+			)
+		).not.toThrow();
+	});
+
 	it('never loads or decodes more batches than the total CPU worker cap', async () => {
 		const batches = createBatches(4);
 		const candidates = new CandidateFixtureRepository(batches);

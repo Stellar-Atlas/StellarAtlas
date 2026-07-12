@@ -71,7 +71,6 @@ export function assertOperationBackfillCandidateProvenance(
 	if (
 		proof.archiveUrlIdentity !== batch.archiveUrlIdentity ||
 		proof.checkpointLedger !== batch.checkpointLedger ||
-		proof.evaluatedAt.getTime() !== batch.proofEvaluatedAt.getTime() ||
 		proof.id !== batch.proofId ||
 		proof.networkPassphrase !== networkPassphrase ||
 		proof.version !== batch.proofVersion ||
