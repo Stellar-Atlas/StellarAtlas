@@ -133,12 +133,12 @@ export function RecentTransactionsView({
 		<div className="explorer-transaction-feed">
 			<ExplorerState
 				tone="neutral"
-				text={`Transaction sample observed ${formatDate(result.transactions.generatedAt)} from ${formatTransactionSource(result.transactions.source)}.`}
+				text={`Loaded ${formatDate(result.transactions.generatedAt)} from ${formatTransactionSource(result.transactions.source)}. Each row shows its ledger close time.`}
 			/>
 			{result.transactions.truncated ? (
 				<ExplorerState
 					tone="neutral"
-					text={`Showing ${result.transactions.records.length} rows from the current response window.`}
+					text={`Showing ${result.transactions.records.length} latest indexed rows returned by this query.`}
 				/>
 			) : null}
 			<TransactionFeedRows

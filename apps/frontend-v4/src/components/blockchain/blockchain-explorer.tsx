@@ -237,10 +237,10 @@ export function BlockchainExplorer(): React.JSX.Element {
 			<section className="explorer-panel explorer-feed-panel">
 				<div className="panel-heading explorer-feed-heading">
 					<div>
-						<strong>Recent transactions</strong>
+						<strong>Latest indexed transactions</strong>
 						<span>
 							{transactionFeed.transactions?.source === 'postgres_canonical'
-								? 'Proof-gated transactions from StellarAtlas canonical history'
+								? 'Latest proof-gated rows in StellarAtlas canonical history'
 								: 'Current transaction sample from the Stellar public network'}
 						</span>
 					</div>
