@@ -1,5 +1,8 @@
 import { canonicalBucketHasStrictSourceProofSql } from './HistoryArchiveCanonicalBucketProofSql.js';
-import { canonicalCategoryTargetsCteSql } from './HistoryArchiveCanonicalCategorySql.js';
+import {
+	canonicalCategoryAdmissionCteSql,
+	canonicalCategoryTargetsCteSql
+} from './HistoryArchiveCanonicalCategorySql.js';
 import { canonicalCheckpointHasStrictContentDigestSql } from './HistoryArchiveCanonicalCheckpointProofSql.js';
 export const canonicalRuntimeTargetCtes = `
 	forward_runtime_target as materialized (
@@ -180,7 +183,8 @@ export const materializeCanonicalFrontierDependenciesSql = `
 	select
 		(select count(*)::integer from inserted) as inserted,
 		(select count(*)::integer from marked) as marked,
-		(select count(*)::integer from inserted_categories) +
+		(select count(*)::integer from inserted_predecessor_checkpoints) +
+			(select count(*)::integer from inserted_categories) +
 			(select count(*)::integer from reopened_legacy_checkpoints) +
 			(select count(*)::integer from activated_categories) +
 			(select count(*)::integer from activated_buckets) +
@@ -225,52 +229,7 @@ export const admitCanonicalFrontierSql = `
 		left join "history_archive_checkpoint_proof" proof
 			on proof."archiveUrlIdentity" = state."archiveUrlIdentity"
 			and proof."checkpointLedger" = target.checkpoint_ledger
-	), category_objects as materialized (
-		select network_root."archiveUrlIdentity",
-			network_root."lastClaimedAt", network_root.proof_progress,
-			network_root.target_lane,
-			desired.object_type,
-			desired.checkpoint_ledger as object_checkpoint_ledger,
-			desired.object_key, desired.object_priority
-		from network_roots network_root
-		cross join lateral (
-			values
-				(
-					'checkpoint-state', network_root.checkpoint_ledger,
-					'checkpoint-state:' || lpad(
-						to_hex(network_root.checkpoint_ledger), 8, '0'
-					), -1
-				),
-				(
-					'ledger', network_root.checkpoint_ledger - 64,
-					'ledger:' || lpad(
-						to_hex(network_root.checkpoint_ledger - 64), 8, '0'
-					), 0
-				),
-				(
-					'ledger', network_root.checkpoint_ledger,
-					'ledger:' || lpad(to_hex(network_root.checkpoint_ledger), 8, '0'),
-					1
-				),
-				(
-					'transactions', network_root.checkpoint_ledger,
-					'transactions:' || lpad(
-						to_hex(network_root.checkpoint_ledger), 8, '0'
-					), 2
-				),
-				(
-					'results', network_root.checkpoint_ledger,
-					'results:' || lpad(
-						to_hex(network_root.checkpoint_ledger), 8, '0'
-					), 3
-				),
-				(
-					'scp', network_root.checkpoint_ledger,
-					'scp:' || lpad(to_hex(network_root.checkpoint_ledger), 8, '0'), 4
-				)
-		) desired(object_type, checkpoint_ledger, object_key, object_priority)
-		where desired.checkpoint_ledger >= 63
-	), bucket_objects as materialized (
+	), ${canonicalCategoryAdmissionCteSql}, bucket_objects as materialized (
 		select network_root."archiveUrlIdentity",
 			network_root."lastClaimedAt", network_root.proof_progress,
 			network_root.target_lane,

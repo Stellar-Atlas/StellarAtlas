@@ -229,8 +229,13 @@ function verifiedCheckpoint(
 	checkpoint.verificationFacts = {
 		checkpointHistoryArchiveState: {
 			stellarHistory: { currentBuckets: [], hotArchiveBuckets: [] }
+		},
+		content: {
+			algorithm: 'sha256',
+			digest: 'cd'.repeat(32),
+			representation: 'canonical-json'
 		}
-	} as HistoryArchiveObject['verificationFacts'];
+	} satisfies HistoryArchiveObject['verificationFacts'];
 	return checkpoint;
 }
 
