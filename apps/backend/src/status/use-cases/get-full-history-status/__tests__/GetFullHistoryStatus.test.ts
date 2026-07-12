@@ -114,13 +114,9 @@ describe('GetFullHistoryStatus', () => {
 		});
 		dataSourceMock.query.mockResolvedValueOnce([
 			{
-				completedCheckpoints: '1',
-				failedJobs: '0',
 				firstLedger: '63386240',
-				latestCompletedAt: new Date('2026-07-06T11:59:20.000Z'),
+				jobState: 'pending',
 				latestErrorCode: 'proof-pending',
-				pendingJobs: '1',
-				runningJobs: '0',
 				updatedAt: new Date('2026-07-06T11:59:50.000Z')
 			}
 		]);
@@ -150,9 +146,7 @@ describe('GetFullHistoryStatus', () => {
 				state: 'waiting-for-proof'
 			},
 			historicalBackfill: {
-				completedCheckpoints: 1,
 				failedJobs: 0,
-				latestCompletedAt: '2026-07-06T11:59:20.000Z',
 				latestErrorCode: 'proof-pending',
 				nextCheckpointLedger: '63386239',
 				pendingJobs: 1,

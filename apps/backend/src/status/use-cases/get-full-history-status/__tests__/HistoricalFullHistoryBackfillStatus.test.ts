@@ -12,29 +12,23 @@ describe('readHistoricalFullHistoryBackfillStatus', () => {
 	it('reports the next adjacent checkpoint after a completed prepend', async () => {
 		dataSource.query.mockResolvedValue([
 			{
-				completedCheckpoints: '1',
-				failedJobs: '0',
 				firstLedger: '63386176',
-				latestCompletedAt: '2026-07-12T09:48:02.715Z',
+				jobState: null,
 				latestErrorCode: null,
-				pendingJobs: '0',
-				runningJobs: '0',
-				updatedAt: '2026-07-12T09:48:02.715Z'
+				updatedAt: null
 			}
 		]);
 
 		await expect(
 			readHistoricalFullHistoryBackfillStatus(dataSource, 'Public network')
 		).resolves.toEqual({
-			completedCheckpoints: 1,
 			failedJobs: 0,
-			latestCompletedAt: '2026-07-12T09:48:02.715Z',
 			latestErrorCode: null,
 			nextCheckpointLedger: '63386175',
 			pendingJobs: 0,
 			runningJobs: 0,
 			state: 'idle',
-			updatedAt: '2026-07-12T09:48:02.715Z'
+			updatedAt: null
 		});
 		expect(dataSource.query).toHaveBeenCalledTimes(1);
 	});
@@ -42,13 +36,9 @@ describe('readHistoricalFullHistoryBackfillStatus', () => {
 	it('reports proof waiting as active backfill state, not platform failure', async () => {
 		dataSource.query.mockResolvedValue([
 			{
-				completedCheckpoints: '12',
-				failedJobs: '0',
 				firstLedger: '63385472',
-				latestCompletedAt: '2026-07-12T10:00:00.000Z',
+				jobState: 'pending',
 				latestErrorCode: 'proof-pending',
-				pendingJobs: '1',
-				runningJobs: '0',
 				updatedAt: '2026-07-12T10:00:05.000Z'
 			}
 		]);
@@ -59,7 +49,6 @@ describe('readHistoricalFullHistoryBackfillStatus', () => {
 		);
 
 		expect(result).toMatchObject({
-			completedCheckpoints: 12,
 			failedJobs: 0,
 			nextCheckpointLedger: '63385471',
 			pendingJobs: 1,

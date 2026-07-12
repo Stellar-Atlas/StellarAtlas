@@ -349,9 +349,7 @@ export interface PublicFullHistoryStatus {
 }
 
 export interface PublicHistoricalFullHistoryBackfill {
-	readonly completedCheckpoints: number;
 	readonly failedJobs: number;
-	readonly latestCompletedAt: string | null;
 	readonly latestErrorCode: string | null;
 	readonly nextCheckpointLedger: string | null;
 	readonly pendingJobs: number;

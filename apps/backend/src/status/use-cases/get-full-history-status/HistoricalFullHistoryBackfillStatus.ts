@@ -2,9 +2,7 @@ import type { DataSource } from 'typeorm';
 import { hashNetworkPassphrase } from '@history-scan-coordinator/domain/full-history/FullHistoryCanonicalTypes.js';
 
 export interface HistoricalFullHistoryBackfillDTO {
-	readonly completedCheckpoints: number;
 	readonly failedJobs: number;
-	readonly latestCompletedAt: string | null;
 	readonly latestErrorCode: string | null;
 	readonly nextCheckpointLedger: string | null;
 	readonly pendingJobs: number;
@@ -15,13 +13,9 @@ export interface HistoricalFullHistoryBackfillDTO {
 }
 
 interface HistoricalBackfillRow {
-	readonly completedCheckpoints: number | string | null;
-	readonly failedJobs: number | string | null;
 	readonly firstLedger: number | string;
-	readonly latestCompletedAt: Date | string | null;
+	readonly jobState: 'failed' | 'leased' | 'pending' | null;
 	readonly latestErrorCode: string | null;
-	readonly pendingJobs: number | string | null;
-	readonly runningJobs: number | string | null;
 	readonly updatedAt: Date | string | null;
 }
 
@@ -34,34 +28,24 @@ export async function readHistoricalFullHistoryBackfillStatus(
 		`
 			select
 				watermark."first_ledger"::text as "firstLedger",
-				coalesce(sum(
-					((job."last_checkpoint_ledger" - job."first_checkpoint_ledger") / 64) + 1
-				) filter (where job.state = 'completed'), 0)::text
-					as "completedCheckpoints",
-				count(*) filter (
-					where job.state = 'pending'
-						and watermark."first_ledger" <= job."last_checkpoint_ledger" + 1
-				)::text as "pendingJobs",
-				count(*) filter (
-					where job.state = 'leased'
-						and watermark."first_ledger" <= job."last_checkpoint_ledger" + 1
-				)::text as "runningJobs",
-				count(*) filter (
-					where job.state = 'failed'
-						and watermark."first_ledger" <= job."last_checkpoint_ledger" + 1
-				)::text as "failedJobs",
-				(array_agg(job."last_error_code" order by job."updated_at" desc)
-					filter (where job.state <> 'completed'
-						and watermark."first_ledger" <= job."last_checkpoint_ledger" + 1)
-				)[1] as "latestErrorCode",
-				max(job."completed_at") as "latestCompletedAt",
-				max(job."updated_at") as "updatedAt"
+				job.state as "jobState",
+				job."last_error_code" as "latestErrorCode",
+				job."updated_at" as "updatedAt"
 			from "full_history_watermark" watermark
-			left join "full_history_historical_backfill_job" job
-				on job."network_passphrase_hash" =
-					watermark."network_passphrase_hash"
+			left join lateral (
+				select candidate.state, candidate."last_error_code",
+					candidate."updated_at"
+				from "full_history_historical_backfill_job" candidate
+				where candidate."network_passphrase_hash" =
+						watermark."network_passphrase_hash"
+					and candidate.state <> 'completed'
+					and watermark."first_ledger" <=
+						candidate."last_checkpoint_ledger" + 1
+				order by candidate."last_checkpoint_ledger" desc,
+					candidate."created_at", candidate.id
+				limit 1
+			) job on true
 			where watermark."network_passphrase_hash" = $1
-			group by watermark."first_ledger"
 		`,
 		[networkHash.toBuffer()]
 	);
@@ -72,10 +56,9 @@ function mapHistoricalBackfill(
 	row: HistoricalBackfillRow
 ): HistoricalFullHistoryBackfillDTO {
 	const firstLedger = BigInt(row.firstLedger);
-	const completedCheckpoints = toCount(row.completedCheckpoints);
-	const failedJobs = toCount(row.failedJobs);
-	const pendingJobs = toCount(row.pendingJobs);
-	const runningJobs = toCount(row.runningJobs);
+	const failedJobs = row.jobState === 'failed' ? 1 : 0;
+	const pendingJobs = row.jobState === 'pending' ? 1 : 0;
+	const runningJobs = row.jobState === 'leased' ? 1 : 0;
 	const state: HistoricalFullHistoryBackfillDTO['state'] =
 		firstLedger === 1n
 			? 'complete'
@@ -89,9 +72,7 @@ function mapHistoricalBackfill(
 							? 'queued'
 							: 'idle';
 	return {
-		completedCheckpoints,
 		failedJobs,
-		latestCompletedAt: toIso(row.latestCompletedAt),
 		latestErrorCode: row.latestErrorCode,
 		nextCheckpointLedger:
 			firstLedger === 1n ? null : (firstLedger - 1n).toString(),
@@ -100,14 +81,6 @@ function mapHistoricalBackfill(
 		state,
 		updatedAt: toIso(row.updatedAt)
 	};
-}
-
-function toCount(value: number | string | null): number {
-	const count = value === null ? 0 : Number(value);
-	if (!Number.isSafeInteger(count) || count < 0) {
-		throw new TypeError('Invalid historical backfill count');
-	}
-	return count;
 }
 
 function toIso(value: Date | string | null): string | null {

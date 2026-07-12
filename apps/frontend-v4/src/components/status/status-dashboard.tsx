@@ -242,6 +242,7 @@ function HistoricalBackfillStatusRow({
 			: formatInteger(Number(backfill.nextCheckpointLedger));
 	const status: PublicStatusLevel =
 		backfill.state === 'failed' ? 'degraded' : 'ok';
+	const indexedFrom = fullHistory.canonicalCoverage?.firstLedger;
 	const value =
 		backfill.state === 'complete'
 			? 'Full history indexed'
@@ -254,9 +255,7 @@ function HistoricalBackfillStatusRow({
 						: backfill.state === 'failed'
 							? 'Backfill needs attention'
 							: `Ready for ${checkpoint ?? 'next checkpoint'}`;
-	const checkpointLabel =
-		backfill.completedCheckpoints === 1 ? 'checkpoint' : 'checkpoints';
-	const detail = `${formatInteger(backfill.completedCheckpoints)} historical ${checkpointLabel} added; ${formatInteger(backfill.runningJobs)} active, ${formatInteger(backfill.pendingJobs)} queued${backfill.latestErrorCode === null ? '' : `; last outcome ${backfill.latestErrorCode}`}`;
+	const detail = `${indexedFrom === undefined ? 'Historical lower frontier unavailable' : `Canonical history reaches back to ledger ${formatInteger(Number(indexedFrom))}`}; ${formatInteger(backfill.runningJobs)} active, ${formatInteger(backfill.pendingJobs)} queued${backfill.latestErrorCode === null ? '' : `; last outcome ${backfill.latestErrorCode}`}`;
 	return (
 		<StatusRow
 			detail={detail}

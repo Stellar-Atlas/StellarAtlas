@@ -137,9 +137,7 @@ const validateCanonicalPromotion = matches({
 });
 
 const validateHistoricalBackfill = matches({
-	completedCheckpoints: nonNegativeInteger,
 	failedJobs: nonNegativeInteger,
-	latestCompletedAt: nullable(dateTime),
 	latestErrorCode: nullable(string),
 	nextCheckpointLedger: nullable(unsignedIntegerString),
 	pendingJobs: nonNegativeInteger,

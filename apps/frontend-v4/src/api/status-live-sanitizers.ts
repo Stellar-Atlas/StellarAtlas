@@ -86,9 +86,7 @@ function sanitizeFullHistory(value: unknown): Record<string, unknown> {
 			source.historicalBackfill === null
 				? null
 				: pick(source.historicalBackfill, [
-						'completedCheckpoints',
 						'failedJobs',
-						'latestCompletedAt',
 						'latestErrorCode',
 						'nextCheckpointLedger',
 						'pendingJobs',
