@@ -230,8 +230,24 @@ const admitProofCompletionReserveSql = `
 			on candidate."archiveUrlIdentity" = dependency."archiveUrlIdentity"
 			and candidate."bucketHash" = dependency."bucketHash"
 		where candidate."objectType" = 'bucket'
-			and candidate.status = 'pending'
-			and candidate."dependencyReady" = true
+			and (
+				(
+					candidate.status = 'pending'
+					and candidate."dependencyReady" = true
+				)
+				or (
+					candidate.status = 'verified'
+					and not coalesce((
+						candidate."verificationFacts"#>>'{bucketObject,matched}' =
+							'true'
+						and lower(candidate."verificationFacts"#>>
+							'{bucketObject,expectedBucketHash}') =
+							dependency."bucketHash"
+						and candidate."verificationFacts"#>>'{bucketObject,sourceUrl}' =
+							candidate."objectUrl"
+					), false)
+				)
+			)
 			and candidate."executionReason" is distinct from
 				'proof-completion-reserve'
 	), selected as materialized (
@@ -242,10 +258,15 @@ const admitProofCompletionReserveSql = `
 		limit $1::integer
 	), admitted as (
 		update "history_archive_object_queue" candidate
-		set "executionDisposition" = 'executable',
+		set status = 'pending',
+			"executionDisposition" = 'executable',
 			"executionReason" = 'proof-completion-reserve',
 			"executionDispositionAt" = now(),
-			"dependencyReady" = true
+			"dependencyReady" = true,
+			"nextAttemptAt" = null,
+			"refreshAfter" = null,
+			"workerStage" = null,
+			"verifiedAt" = null
 		from selected
 		where candidate.id = selected.id
 		returning candidate.id

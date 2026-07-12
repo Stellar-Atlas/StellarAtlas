@@ -131,6 +131,7 @@ describe('history archive execution reconciliation in disposable PostgreSQL', ()
 		checkpoint.status = 'verified';
 		const ordinary = createBucket(0, 'f'.repeat(64));
 		const proofBucket = createBucket(0, '0'.repeat(64));
+		proofBucket.status = 'verified';
 		await dataSource
 			.getRepository(HistoryArchiveObject)
 			.save([root, checkpoint, ordinary, proofBucket]);
@@ -160,6 +161,7 @@ describe('history archive execution reconciliation in disposable PostgreSQL', ()
 
 		expect(result.admittedObjects).toBe(1);
 		expect(executable?.remoteId).toBe(proofBucket.remoteId);
+		expect(executable?.status).toBe('pending');
 	});
 
 	it('rotates equivalent keys and enforces the per-root frontier cap', async () => {
