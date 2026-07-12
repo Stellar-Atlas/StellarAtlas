@@ -1,20 +1,42 @@
 import { mock, MockProxy } from 'jest-mock-extended';
 import { DataSource } from 'typeorm';
 import type { ParsedLedgerHeaderRepository } from '@history-scan-coordinator/domain/parsed-history/ParsedLedgerHeaderRepository.js';
+import type { FullHistoryCanonicalRepository } from '@history-scan-coordinator/domain/full-history/FullHistoryCanonicalRepository.js';
+import type { FullHistoryPromotionRuntimeRepository } from '@history-scan-coordinator/domain/full-history-promotion/FullHistoryPromotionRuntimeRepository.js';
+import type { Config } from '@core/config/Config.js';
+import {
+	fullHistoryLedgerSequence,
+	fullHistoryUint64
+} from '@history-scan-coordinator/domain/full-history/FullHistoryCanonicalTypes.js';
 import { GetFullHistoryStatus } from '../GetFullHistoryStatus.js';
 
 describe('GetFullHistoryStatus', () => {
 	let dataSourceMock: MockProxy<DataSource>;
 	let parsedLedgerHeadersMock: MockProxy<ParsedLedgerHeaderRepository>;
+	let canonicalHistoryMock: MockProxy<FullHistoryCanonicalRepository>;
+	let canonicalPromotionMock: MockProxy<FullHistoryPromotionRuntimeRepository>;
+	let configMock: MockProxy<Config>;
 	let getFullHistoryStatus: GetFullHistoryStatus;
 
 	beforeEach(() => {
 		jest.useFakeTimers().setSystemTime(new Date('2026-07-06T12:00:00.000Z'));
 		dataSourceMock = mock<DataSource>();
 		parsedLedgerHeadersMock = mock<ParsedLedgerHeaderRepository>();
+		canonicalHistoryMock = mock<FullHistoryCanonicalRepository>();
+		canonicalHistoryMock.getCoverage.mockResolvedValue(null);
+		canonicalPromotionMock = mock<FullHistoryPromotionRuntimeRepository>();
+		canonicalPromotionMock.find.mockResolvedValue(null);
+		configMock = mock<Config>();
+		configMock.networkConfig = {
+			...configMock.networkConfig,
+			networkPassphrase: 'Public network'
+		};
 		getFullHistoryStatus = new GetFullHistoryStatus(
 			dataSourceMock,
-			parsedLedgerHeadersMock
+			parsedLedgerHeadersMock,
+			canonicalHistoryMock,
+			canonicalPromotionMock,
+			configMock
 		);
 	});
 
@@ -36,6 +58,8 @@ describe('GetFullHistoryStatus', () => {
 
 		expect(result.isOk()).toBe(true);
 		expect(result._unsafeUnwrap()).toEqual({
+			canonicalCoverage: null,
+			canonicalPromotion: null,
 			generatedAt: '2026-07-06T12:00:00.000Z',
 			status: 'ok',
 			mode: 'archive_header_parser',
@@ -51,6 +75,74 @@ describe('GetFullHistoryStatus', () => {
 		});
 		expect(parsedLedgerHeadersMock.getWatermark).toHaveBeenCalledTimes(1);
 		expect(dataSourceMock.query).not.toHaveBeenCalled();
+	});
+
+	it('reports the exact bounded canonical range without claiming later indexes', async () => {
+		parsedLedgerHeadersMock.getWatermark.mockResolvedValue({
+			earliestLedgerSequence: 1,
+			latestLedgerHeaderHash: 'hash',
+			latestLedgerSequence: 63386367,
+			latestObservedAt: new Date('2026-07-06T11:59:00.000Z'),
+			parsedLedgerCount: 128,
+			sourceArchiveCount: 2
+		});
+		canonicalHistoryMock.getCoverage.mockResolvedValue({
+			archiveSourceCount: 1,
+			batchCount: 2,
+			firstLedger: fullHistoryLedgerSequence(63386240n, 'firstLedger'),
+			lastLedger: fullHistoryLedgerSequence(63386367n, 'lastLedger'),
+			latestLedgerClosedAt: new Date('2026-07-06T11:58:30.000Z'),
+			ledgerCount: 128,
+			nextLedger: fullHistoryUint64(63386368n, 'nextLedger'),
+			transactionCount: 52000,
+			transactionResultCount: 52000,
+			updatedAt: new Date('2026-07-06T11:59:30.000Z')
+		});
+		canonicalPromotionMock.find.mockResolvedValue({
+			checkpointLedger: 63386431,
+			heartbeatAt: new Date('2026-07-06T11:59:55.000Z'),
+			instanceId: '00000000-0000-4000-8000-000000000001',
+			lastAttemptAt: new Date('2026-07-06T11:59:54.000Z'),
+			lastErrorCode: null,
+			lastFailureAt: null,
+			lastOutcome: 'proof-pending',
+			lastSuccessAt: new Date('2026-07-06T11:59:00.000Z'),
+			nextLedger: fullHistoryUint64(63386368n, 'nextLedger'),
+			startedAt: new Date('2026-07-06T11:50:00.000Z'),
+			state: 'waiting-for-proof'
+		});
+
+		const result = await getFullHistoryStatus.executeFullHistory();
+
+		expect(result._unsafeUnwrap()).toMatchObject({
+			canonicalCoverage: {
+				archiveSourceCount: 1,
+				batchCount: 2,
+				firstLedger: '63386240',
+				lastLedger: '63386367',
+				latestLedgerClosedAt: '2026-07-06T11:58:30.000Z',
+				ledgerCount: 128,
+				nextLedger: '63386368',
+				rangeKind: 'contiguous_bounded',
+				source: 'postgres_canonical',
+				transactionCount: 52000,
+				transactionResultCount: 52000,
+				updatedAt: '2026-07-06T11:59:30.000Z'
+			},
+			canonicalPromotion: {
+				checkpointLedger: '63386431',
+				heartbeatAt: '2026-07-06T11:59:55.000Z',
+				lastOutcome: 'proof-pending',
+				nextLedger: '63386368',
+				state: 'waiting-for-proof'
+			},
+			localAssetIndexReady: false,
+			localContractIndexReady: false,
+			localOperationIndexReady: false,
+			localTransactionIndexReady: true,
+			mode: 'canonical_checkpoint_index',
+			status: 'ok'
+		});
 	});
 
 	it('should keep header-only status unavailable when no headers are parsed', async () => {

@@ -9,6 +9,7 @@ import {
 } from '@history-scan-coordinator/domain/history-archive-object/HistoryArchiveObjectScpPolicy.js';
 import { historyArchiveCheckpointProofUpsertSql } from './HistoryArchiveCheckpointProofUpsertSql.js';
 import { historyArchiveCheckpointProofFailureCtesSql } from './HistoryArchiveCheckpointProofFailureSql.js';
+import { historyArchiveCheckpointProofTargetCtesSql } from './HistoryArchiveCheckpointProofTargetSql.js';
 
 const expectsScpSql = historyArchiveScpExpectationSql({
 	checkpointLedgerSql: 'checkpoint_rollup."checkpointLedger"',
@@ -22,38 +23,7 @@ const scpExpectationKnownSql = historyArchiveScpExpectationKnownSql({
 });
 
 export const historyArchiveCheckpointProofRefreshSql = `
-	with requested_checkpoints as (
-		select $1::text as "archiveUrlIdentity", ledger as "checkpointLedger"
-		from (values
-			($2::integer),
-			(case when $2::integer <= 2147483583 then $2::integer + 64 end)
-		) requested(ledger)
-		where ledger is not null
-		union
-		select dependency."archiveUrlIdentity", dependency."checkpointLedger"
-		from "history_archive_checkpoint_bucket_dependency" dependency
-		where dependency."archiveUrlIdentity" = $1::text
-			and $3::text is not null
-			and dependency."bucketHash" = lower($3::text)
-	), target_checkpoints as (
-		select requested.*
-		from requested_checkpoints requested
-		where exists (
-			select 1 from "history_archive_object_queue" object
-			where object."archiveUrlIdentity" = requested."archiveUrlIdentity"
-				and object."checkpointLedger" = requested."checkpointLedger"
-		)
-	), expected_checkpoint_ranges as (
-		select
-			target.*,
-			(case when target."checkpointLedger" = 63
-				then 1 else target."checkpointLedger" - 63 end)::bigint
-				as first_expected_ledger,
-			target."checkpointLedger"::bigint as last_expected_ledger,
-			(case when target."checkpointLedger" = 63 then 63 else 64 end)::bigint
-				as expected_ledger_count
-		from target_checkpoints target
-	), checkpoint_rollup as (
+	with ${historyArchiveCheckpointProofTargetCtesSql}, checkpoint_rollup as (
 		select
 			target."archiveUrlIdentity",
 			target."checkpointLedger",

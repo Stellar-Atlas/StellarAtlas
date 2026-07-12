@@ -35,6 +35,11 @@ describe('ReconcileHistoryArchiveObjectTransitions', () => {
 
 		await reconciler.executeIfDue(10_000);
 		expect(repository.reconcileExecutionDisposition).toHaveBeenCalledTimes(1);
+		expect(
+			repository.reconcileExecutionDisposition.mock.invocationCallOrder[0]
+		).toBeLessThan(
+			complete.reconcilePersisted.mock.invocationCallOrder[0] ?? Infinity
+		);
 
 		expect(complete.reconcilePersisted).toHaveBeenCalledWith(verified);
 		expect(fail.reconcilePersisted).toHaveBeenCalledWith(failed);
@@ -78,7 +83,7 @@ describe('ReconcileHistoryArchiveObjectTransitions', () => {
 		);
 	});
 
-	it('materializes legacy checkpoint dependencies before transition effects', async () => {
+	it('materializes legacy checkpoint dependencies under the reconciliation lock', async () => {
 		const repository = mock<HistoryArchiveObjectRepository>();
 		const complete = mock<CompleteHistoryArchiveObject>();
 		const checkpoint = terminalCheckpoint();
@@ -103,6 +108,72 @@ describe('ReconcileHistoryArchiveObjectTransitions', () => {
 
 		expect(complete.reconcileCheckpointDependencies).toHaveBeenCalledWith(
 			checkpoint
+		);
+	});
+
+	it('reconciles terminal transitions before legacy dirty checkpoints', async () => {
+		const repository = mock<HistoryArchiveObjectRepository>();
+		const complete = mock<CompleteHistoryArchiveObject>();
+		const verified = terminalObject('verified', 'verified.example');
+		const checkpoint = terminalCheckpoint();
+		repository.findUnreconciledTransitions.mockResolvedValue([verified]);
+		repository.findVerifiedCheckpointsNeedingReconciliation.mockResolvedValue([
+			checkpoint
+		]);
+		repository.tryWithTransitionReconciliationLock.mockImplementation(
+			async (work) => {
+				await work();
+				return true;
+			}
+		);
+		const reconciler = new ReconcileHistoryArchiveObjectTransitions(
+			repository,
+			complete,
+			mock<FailHistoryArchiveObject>(),
+			mock<Logger>()
+		);
+
+		await reconciler.executeIfDue(10_000);
+
+		expect(
+			complete.reconcilePersisted.mock.invocationCallOrder[0]
+		).toBeLessThan(
+			complete.reconcileCheckpointDependencies.mock.invocationCallOrder[0] ??
+				Infinity
+		);
+	});
+
+	it('continues terminal reconciliation when execution admission fails', async () => {
+		const repository = mock<HistoryArchiveObjectRepository>();
+		const complete = mock<CompleteHistoryArchiveObject>();
+		const logger = mock<Logger>();
+		const verified = terminalObject('verified', 'verified.example');
+		repository.reconcileExecutionDisposition.mockRejectedValue(
+			new Error('admission unavailable')
+		);
+		repository.findUnreconciledTransitions.mockResolvedValue([verified]);
+		repository.findVerifiedCheckpointsNeedingReconciliation.mockResolvedValue(
+			[]
+		);
+		repository.tryWithTransitionReconciliationLock.mockImplementation(
+			async (work) => {
+				await work();
+				return true;
+			}
+		);
+		const reconciler = new ReconcileHistoryArchiveObjectTransitions(
+			repository,
+			complete,
+			mock<FailHistoryArchiveObject>(),
+			logger
+		);
+
+		await reconciler.executeIfDue(10_000);
+
+		expect(complete.reconcilePersisted).toHaveBeenCalledWith(verified);
+		expect(logger.error).toHaveBeenCalledWith(
+			'Failed to reconcile archive execution frontier',
+			expect.objectContaining({ errorMessage: 'admission unavailable' })
 		);
 	});
 

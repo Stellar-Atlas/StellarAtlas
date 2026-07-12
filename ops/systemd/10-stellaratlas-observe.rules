@@ -24,7 +24,8 @@ polkit.addRule(function(action, subject) {
     "stellaratlas-network-scanner.service",
     "stellaratlas-scp-live-scanner.service",
     "stellaratlas-users.service",
-    "stellaratlas-history-scanner@1.service"
+    "stellaratlas-history-scanner@1.service",
+    "stellaratlas-full-history-promotion.service"
   ];
   var verbs = [
     "start",

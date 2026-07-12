@@ -82,6 +82,10 @@ import {
 	ArchiveEvidenceCursorCodec,
 	createArchiveEvidenceCursorCodec
 } from '../../use-cases/get-known-archive-evidence/ArchiveEvidenceCursorCodec.js';
+import type { FullHistoryCanonicalRepository } from '../../domain/full-history/FullHistoryCanonicalRepository.js';
+import type { FullHistoryPromotionRuntimeRepository } from '../../domain/full-history-promotion/FullHistoryPromotionRuntimeRepository.js';
+import { TypeOrmFullHistoryCanonicalRepository } from '../database/full-history/TypeOrmFullHistoryCanonicalRepository.js';
+import { TypeOrmFullHistoryPromotionRuntimeRepository } from '../database/full-history-promotion/TypeOrmFullHistoryPromotionRuntimeRepository.js';
 
 export function load(container: Container, config: Config) {
 	const dataSource = container.get(DataSource);
@@ -224,6 +228,20 @@ export function load(container: Container, config: Config) {
 	container
 		.bind<KnownArchiveEvidenceRepository>(TYPES.KnownArchiveEvidenceRepository)
 		.toDynamicValue(() => new TypeOrmKnownArchiveEvidenceRepository(dataSource))
+		.inRequestScope();
+
+	container
+		.bind<FullHistoryCanonicalRepository>(TYPES.FullHistoryCanonicalRepository)
+		.toDynamicValue(() => new TypeOrmFullHistoryCanonicalRepository(dataSource))
+		.inRequestScope();
+
+	container
+		.bind<FullHistoryPromotionRuntimeRepository>(
+			TYPES.FullHistoryPromotionRuntimeRepository
+		)
+		.toDynamicValue(
+			() => new TypeOrmFullHistoryPromotionRuntimeRepository(dataSource)
+		)
 		.inRequestScope();
 
 	container

@@ -81,14 +81,13 @@ describe('durable completion effects in disposable PostgreSQL', () => {
 			proofRepository
 		);
 
-		const first = await useCase.execute(object.remoteId, {
+		const completion = await useCase.execute(object.remoteId, {
 			claimAttempt: 1,
 			workerStage: 'verified'
 		});
-		expect(first._unsafeUnwrapErr().message).toBe('transient proof failure');
-		expect(
-			await objectRepository.findByRemoteId(object.remoteId)
-		).toMatchObject({
+		expect(completion._unsafeUnwrap()).toBe(true);
+		const persisted = await objectRepository.findByRemoteId(object.remoteId);
+		expect(persisted).toMatchObject({
 			status: 'verified',
 			transitionEffectsCompletedAt: null,
 			transitionEffectsRequiredAt: expect.any(Date)
@@ -97,11 +96,13 @@ describe('durable completion effects in disposable PostgreSQL', () => {
 			await dataSource.getRepository(HistoryArchiveObjectEvent).count()
 		).toBe(0);
 
-		const replay = await useCase.execute(object.remoteId, {
-			claimAttempt: 1,
-			workerStage: 'verified'
-		});
-		expect(replay._unsafeUnwrap()).toBe(true);
+		if (persisted === null) throw new Error('Expected persisted completion');
+		await expect(useCase.reconcilePersisted(persisted)).rejects.toThrow(
+			'transient proof failure'
+		);
+		const retry = await objectRepository.findByRemoteId(object.remoteId);
+		if (retry === null) throw new Error('Expected durable transition retry');
+		await useCase.reconcilePersisted(retry);
 		expect(
 			await objectRepository.findByRemoteId(object.remoteId)
 		).toMatchObject({

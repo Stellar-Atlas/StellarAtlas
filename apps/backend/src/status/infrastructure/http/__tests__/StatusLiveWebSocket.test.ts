@@ -2,6 +2,7 @@ import { mockDeep } from 'jest-mock-extended';
 import { ok } from 'neverthrow';
 import {
 	collectFastStatusPatch,
+	collectArchiveSummaryPatch,
 	collectScanLogPatch,
 	createBoundedSingleFlightWriter,
 	type StatusLiveWebSocketConfig
@@ -35,6 +36,23 @@ describe('StatusLiveWebSocket patch collection', () => {
 
 		expect(config.getScanLogStatus.execute).toHaveBeenCalledWith(25);
 		expect(patch).toMatchObject({ scanLogs: null });
+	});
+
+	it('publishes archive proof and canonical history in one slow patch', async () => {
+		const config = mockDeep<StatusLiveWebSocketConfig>();
+		config.getHistoryArchiveObjectSummary.execute.mockResolvedValue(
+			ok(null as never)
+		);
+		config.getFullHistoryStatus.executeFullHistory.mockResolvedValue(
+			ok(null as never)
+		);
+
+		const patch = await collectArchiveSummaryPatch(config);
+
+		expect(patch).toMatchObject({
+			archiveSummary: null,
+			fullHistory: null
+		});
 	});
 
 	it('does not overlap a lane and publishes when collection completes', async () => {

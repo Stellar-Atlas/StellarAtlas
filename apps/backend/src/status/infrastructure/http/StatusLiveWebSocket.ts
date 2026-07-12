@@ -12,6 +12,10 @@ import type { DataQualityStatusDTO } from '../../use-cases/get-data-quality-stat
 import type { GetApiStatus } from '../../use-cases/get-api-status/GetApiStatus.js';
 import type { GetDataQualityStatus } from '../../use-cases/get-data-quality-status/GetDataQualityStatus.js';
 import type { GetFrontendStatus } from '../../use-cases/get-service-status/GetServiceStatus.js';
+import type {
+	FullHistoryStatusDTO,
+	GetFullHistoryStatus
+} from '../../use-cases/get-full-history-status/GetFullHistoryStatus.js';
 import type { GetScanLogStatus } from '../../use-cases/get-scan-log-status/GetScanLogStatus.js';
 import type { GetWorkerStatus } from '../../use-cases/get-worker-status/GetWorkerStatus.js';
 import type { ScanLogStatusDTO } from '../../use-cases/get-scan-log-status/GetScanLogStatus.js';
@@ -21,6 +25,7 @@ export interface StatusLiveWebSocketConfig {
 	readonly getApiStatus: GetApiStatus;
 	readonly getDataQualityStatus: GetDataQualityStatus;
 	readonly getFrontendStatus: GetFrontendStatus;
+	readonly getFullHistoryStatus: GetFullHistoryStatus;
 	readonly getHistoryArchiveObjectEvents: GetHistoryArchiveObjectEvents;
 	readonly getHistoryArchiveObjectSummary: HistoryArchiveSummaryReader;
 	readonly getScanLogStatus: GetScanLogStatus;
@@ -39,6 +44,7 @@ interface StatusLiveSnapshot {
 	readonly archiveSummary: HistoryArchiveStatusSummaryV1;
 	readonly dataQuality: DataQualityStatusDTO;
 	readonly frontend: ConfiguredServiceStatusDTO;
+	readonly fullHistory: FullHistoryStatusDTO;
 	readonly generatedAt: string;
 	readonly scanLogs: ScanLogStatusDTO;
 	readonly workers: WorkerStatusDTO;
@@ -262,15 +268,17 @@ async function collectArchiveEventsPatch(
 	};
 }
 
-async function collectArchiveSummaryPatch(
+export async function collectArchiveSummaryPatch(
 	config: StatusLiveWebSocketConfig
 ): Promise<StatusLivePatch> {
-	const archiveSummary = await readResult(
-		config.getHistoryArchiveObjectSummary.execute()
-	);
+	const [archiveSummary, fullHistory] = await Promise.all([
+		readResult(config.getHistoryArchiveObjectSummary.execute()),
+		readResult(config.getFullHistoryStatus.executeFullHistory())
+	]);
 
 	return {
 		archiveSummary,
+		fullHistory,
 		generatedAt: new Date().toISOString()
 	};
 }

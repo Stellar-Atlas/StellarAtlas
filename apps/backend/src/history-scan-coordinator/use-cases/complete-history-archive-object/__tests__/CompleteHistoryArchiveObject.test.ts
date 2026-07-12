@@ -40,19 +40,23 @@ describe('CompleteHistoryArchiveObject', () => {
 	it('schedules only root and checkpoint-state discovery objects from verified root state', async () => {
 		const archiveObject = createRootObject();
 		objectRepository.findByRemoteId.mockResolvedValue(archiveObject);
-
-		const result = await new CompleteHistoryArchiveObject(
+		const useCase = new CompleteHistoryArchiveObject(
 			objectRepository,
 			stateRepository,
 			eventRecorder,
 			checkpointProofRepository
-		).execute(archiveObject.remoteId, {
+		);
+
+		const result = await useCase.execute(archiveObject.remoteId, {
 			archiveMetadata: createArchiveMetadata(255),
 			claimAttempt: 1,
 			workerStage: 'verified'
 		});
 
 		expect(result._unsafeUnwrap()).toBe(true);
+		expect(stateRepository.saveAvailable).not.toHaveBeenCalled();
+		expect(objectRepository.planObjects).not.toHaveBeenCalled();
+		await useCase.reconcilePersisted(archiveObject);
 		expect(stateRepository.saveAvailable).toHaveBeenCalledWith(
 			archiveObject.archiveUrl,
 			createArchiveMetadata(255),
@@ -86,13 +90,14 @@ describe('CompleteHistoryArchiveObject', () => {
 	it('schedules checkpoint sibling objects from verified checkpoint state facts', async () => {
 		const archiveObject = createCheckpointObject();
 		objectRepository.findByRemoteId.mockResolvedValue(archiveObject);
-
-		const result = await new CompleteHistoryArchiveObject(
+		const useCase = new CompleteHistoryArchiveObject(
 			objectRepository,
 			stateRepository,
 			eventRecorder,
 			checkpointProofRepository
-		).execute(archiveObject.remoteId, {
+		);
+
+		const result = await useCase.execute(archiveObject.remoteId, {
 			claimAttempt: 1,
 			verificationFacts: {
 				checkpointHistoryArchiveState: createArchiveMetadata(127)
@@ -101,6 +106,7 @@ describe('CompleteHistoryArchiveObject', () => {
 		});
 
 		expect(result._unsafeUnwrap()).toBe(true);
+		await useCase.reconcilePersisted(archiveObject);
 		expect(stateRepository.saveAvailable).not.toHaveBeenCalled();
 		expect(objectRepository.planObjects).toHaveBeenCalledTimes(1);
 		const savedObjects = objectRepository.planObjects.mock.calls[0]?.[0] ?? [];
@@ -126,13 +132,14 @@ describe('CompleteHistoryArchiveObject', () => {
 	it('schedules a bounded older checkpoint discovery page after checkpoint verification', async () => {
 		const archiveObject = createCheckpointObject(500_031);
 		objectRepository.findByRemoteId.mockResolvedValue(archiveObject);
-
-		const result = await new CompleteHistoryArchiveObject(
+		const useCase = new CompleteHistoryArchiveObject(
 			objectRepository,
 			stateRepository,
 			eventRecorder,
 			checkpointProofRepository
-		).execute(archiveObject.remoteId, {
+		);
+
+		const result = await useCase.execute(archiveObject.remoteId, {
 			claimAttempt: 1,
 			verificationFacts: {
 				checkpointHistoryArchiveState: createArchiveMetadata(500_031)
@@ -141,6 +148,7 @@ describe('CompleteHistoryArchiveObject', () => {
 		});
 
 		expect(result._unsafeUnwrap()).toBe(true);
+		await useCase.reconcilePersisted(archiveObject);
 		const savedObjects = objectRepository.planObjects.mock.calls[0]?.[0] ?? [];
 		const olderCheckpointObjects = savedObjects.filter(
 			(object) =>
@@ -154,13 +162,14 @@ describe('CompleteHistoryArchiveObject', () => {
 	it('does not schedule sibling objects when checkpoint facts do not match the claimed checkpoint', async () => {
 		const archiveObject = createCheckpointObject();
 		objectRepository.findByRemoteId.mockResolvedValue(archiveObject);
-
-		const result = await new CompleteHistoryArchiveObject(
+		const useCase = new CompleteHistoryArchiveObject(
 			objectRepository,
 			stateRepository,
 			eventRecorder,
 			checkpointProofRepository
-		).execute(archiveObject.remoteId, {
+		);
+
+		const result = await useCase.execute(archiveObject.remoteId, {
 			claimAttempt: 1,
 			verificationFacts: {
 				checkpointHistoryArchiveState: createArchiveMetadata(191)
@@ -169,6 +178,7 @@ describe('CompleteHistoryArchiveObject', () => {
 		});
 
 		expect(result._unsafeUnwrap()).toBe(true);
+		await useCase.reconcilePersisted(archiveObject);
 		expect(objectRepository.planObjects).not.toHaveBeenCalled();
 		expect(objectRepository.markObjectVerified).toHaveBeenCalled();
 	});
@@ -176,19 +186,22 @@ describe('CompleteHistoryArchiveObject', () => {
 	it('refreshes checkpoint proof after bucket verification', async () => {
 		const archiveObject = createBucketObject();
 		objectRepository.findByRemoteId.mockResolvedValue(archiveObject);
-
-		const result = await new CompleteHistoryArchiveObject(
+		const useCase = new CompleteHistoryArchiveObject(
 			objectRepository,
 			stateRepository,
 			eventRecorder,
 			checkpointProofRepository
-		).execute(archiveObject.remoteId, {
+		);
+
+		const result = await useCase.execute(archiveObject.remoteId, {
 			bytesDownloaded: 1234,
 			claimAttempt: 1,
 			workerStage: 'verified'
 		});
 
 		expect(result._unsafeUnwrap()).toBe(true);
+		expect(checkpointProofRepository.refreshForObject).not.toHaveBeenCalled();
+		await useCase.reconcilePersisted(archiveObject);
 		expect(checkpointProofRepository.refreshForObject).toHaveBeenCalledWith(
 			archiveObject
 		);
@@ -234,12 +247,14 @@ describe('CompleteHistoryArchiveObject', () => {
 			)
 		);
 
-		const result = await new CompleteHistoryArchiveObject(
+		const useCase = new CompleteHistoryArchiveObject(
 			objectRepository,
 			stateRepository,
 			eventRecorder,
 			checkpointProofRepository
-		).execute(archiveObject.remoteId, {
+		);
+
+		const result = await useCase.execute(archiveObject.remoteId, {
 			claimAttempt: 1,
 			verificationFacts: {
 				checkpointHistoryArchiveState: createArchiveMetadata(1_214_015),
@@ -254,6 +269,7 @@ describe('CompleteHistoryArchiveObject', () => {
 		});
 
 		expect(result._unsafeUnwrap()).toBe(true);
+		await useCase.reconcilePersisted(archiveObject);
 		const savedObjects = objectRepository.planObjects.mock.calls[0]?.[0] ?? [];
 		expect(savedObjects.map((object) => object.objectKey)).toContain(
 			'scp:0012863f'
@@ -280,12 +296,14 @@ describe('CompleteHistoryArchiveObject', () => {
 		objectRepository.findByRemoteId.mockResolvedValue(archiveObject);
 		objectRepository.markObjectVerified.mockResolvedValue(false);
 
-		const result = await new CompleteHistoryArchiveObject(
+		const useCase = new CompleteHistoryArchiveObject(
 			objectRepository,
 			stateRepository,
 			eventRecorder,
 			checkpointProofRepository
-		).execute(archiveObject.remoteId, {
+		);
+
+		const result = await useCase.execute(archiveObject.remoteId, {
 			claimAttempt: 1,
 			verificationFacts: {
 				checkpointHistoryArchiveState: createArchiveMetadata(191)
@@ -294,6 +312,7 @@ describe('CompleteHistoryArchiveObject', () => {
 		});
 
 		expect(result._unsafeUnwrap()).toBe(true);
+		await useCase.reconcilePersisted(archiveObject);
 		expect(objectRepository.planObjects).toHaveBeenCalled();
 		const savedObjects = objectRepository.planObjects.mock.calls[0]?.[0] ?? [];
 		expect(savedObjects.map((object) => object.objectKey)).toContain(
@@ -329,19 +348,21 @@ describe('CompleteHistoryArchiveObject', () => {
 		expect(stateRepository.saveAvailable).not.toHaveBeenCalled();
 	});
 
-	it('reports object completion failure when durable proof refresh fails', async () => {
+	it('leaves durable transition work pending when proof refresh fails', async () => {
 		const archiveObject = createCheckpointObject();
 		objectRepository.findByRemoteId.mockResolvedValue(archiveObject);
 		checkpointProofRepository.refreshForObject.mockRejectedValue(
 			new Error('proof refresh failed')
 		);
 
-		const result = await new CompleteHistoryArchiveObject(
+		const useCase = new CompleteHistoryArchiveObject(
 			objectRepository,
 			stateRepository,
 			eventRecorder,
 			checkpointProofRepository
-		).execute(archiveObject.remoteId, {
+		);
+
+		const result = await useCase.execute(archiveObject.remoteId, {
 			claimAttempt: 1,
 			verificationFacts: {
 				checkpointHistoryArchiveState: createArchiveMetadata(127)
@@ -349,8 +370,9 @@ describe('CompleteHistoryArchiveObject', () => {
 			workerStage: 'verified'
 		});
 
-		expect(result._unsafeUnwrapErr()).toEqual(
-			expect.objectContaining({ message: 'proof refresh failed' })
+		expect(result._unsafeUnwrap()).toBe(true);
+		await expect(useCase.reconcilePersisted(archiveObject)).rejects.toThrow(
+			'proof refresh failed'
 		);
 		expect(eventRecorder.recordDurably).not.toHaveBeenCalled();
 	});

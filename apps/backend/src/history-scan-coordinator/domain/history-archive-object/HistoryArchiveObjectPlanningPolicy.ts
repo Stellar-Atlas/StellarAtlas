@@ -1,4 +1,5 @@
 export const historyArchiveConsumerCount = 24;
+export const historyArchivePerHostConcurrency = 2;
 export const historyArchiveMinimumWatermark = historyArchiveConsumerCount * 2;
 export const historyArchiveMaximumWatermark = historyArchiveConsumerCount * 10;
 export const historyArchivePerRootFrontier = 1;

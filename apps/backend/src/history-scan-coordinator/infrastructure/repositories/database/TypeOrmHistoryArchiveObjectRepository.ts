@@ -3,6 +3,11 @@ import { Repository } from 'typeorm';
 import { getHistoryArchiveUrlIdentity } from '@history-scan-coordinator/domain/ArchiveUrlIdentity.js';
 import { HistoryArchiveObject } from '@history-scan-coordinator/domain/history-archive-object/HistoryArchiveObject.js';
 import type { HistoryArchiveObjectType } from '@history-scan-coordinator/domain/history-archive-object/HistoryArchiveObject.js';
+import {
+	historyArchiveConsumerCount,
+	historyArchivePerHostConcurrency,
+	historyArchivePerRootFrontier
+} from '@history-scan-coordinator/domain/history-archive-object/HistoryArchiveObjectPlanningPolicy.js';
 import type {
 	HistoryArchiveObjectFailure,
 	HistoryArchiveObjectHostFailure,
@@ -46,9 +51,9 @@ import {
 import { reconcileHistoryArchiveObjectExecution } from './HistoryArchiveObjectExecutionReconciler.js';
 import { findVerifiedCheckpointsNeedingReconciliation } from './HistoryArchiveCheckpointReconciliationQuery.js';
 
-const maxActiveObjectsPerArchive = 1;
-const maxActiveObjectsPerHost = 2;
-const maxActiveObjectsTotal = 24;
+const maxActiveObjectsPerArchive = historyArchivePerRootFrontier;
+const maxActiveObjectsPerHost = historyArchivePerHostConcurrency;
+const maxActiveObjectsTotal = historyArchiveConsumerCount;
 const transitionReconciliationLockName =
 	'history_archive_object_transition_reconciliation';
 

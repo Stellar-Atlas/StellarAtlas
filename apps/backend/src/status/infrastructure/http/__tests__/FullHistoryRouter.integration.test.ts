@@ -23,6 +23,8 @@ describe('FullHistoryRouter.integration', () => {
 	it('exposes full-history parser status', async () => {
 		getFullHistoryStatus.executeFullHistory.mockResolvedValue(
 			ok({
+				canonicalCoverage: null,
+				canonicalPromotion: null,
 				generatedAt: '2026-07-05T15:00:00.000Z',
 				status: 'ok',
 				mode: 'archive_header_parser',

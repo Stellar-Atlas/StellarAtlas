@@ -17,6 +17,7 @@ INSTALL_UNIT_NAMES=(
 	stellaratlas-scp-live-scanner.service
 	stellaratlas-users.service
 	stellaratlas-history-scanner@.service
+	stellaratlas-full-history-promotion.service
 	stellaratlas-horizon.service
 	stellaratlas-stellar-rpc.service
 )
@@ -192,14 +193,17 @@ main() {
 	mask_legacy_unit
 	systemctl daemon-reload
 	systemctl enable --now stellaratlas.target
+	systemctl start stellaratlas-full-history-promotion.service
 	verify_installed_units
 	systemctl is-active --quiet stellaratlas.target ||
 		die "stellaratlas.target is not active"
+	systemctl is-active --quiet stellaratlas-full-history-promotion.service ||
+		die "stellaratlas-full-history-promotion.service is not active"
 
 	cat <<'EOF'
 Installed boot-safe local copies of the split StellarAtlas units.
 The obsolete stellaratlas.service is masked. An already-active target was not
-restarted; an inactive target was started.
+restarted; newly installed canonical promotion was started explicitly.
 
 Production:
   systemctl status stellaratlas.target
@@ -210,6 +214,7 @@ Production:
   systemctl restart stellaratlas-network-scanner.service
   systemctl restart stellaratlas-scp-live-scanner.service
   systemctl restart stellaratlas-history-scanner@1.service
+  systemctl restart stellaratlas-full-history-promotion.service
 
 Local full-history services, after binaries/config/DB exist:
   systemctl start stellaratlas-horizon.service

@@ -1,15 +1,20 @@
 import type { DataSource, EntityManager } from 'typeorm';
 import type { FullHistoryCheckpointWrite } from '../../../domain/full-history/FullHistoryCanonicalBatch.js';
 import { FullHistoryCanonicalError } from '../../../domain/full-history/FullHistoryCanonicalError.js';
+import { FULL_HISTORY_RECENT_TRANSACTION_LIMIT_MAX } from '../../../domain/full-history/FullHistoryCanonicalRepository.js';
 import type {
+	FullHistoryCanonicalCoverageView,
 	FullHistoryCanonicalRepository,
 	FullHistoryLedgerView,
+	FullHistoryRecentTransactionsView,
 	FullHistoryTransactionView,
 	FullHistoryWatermarkView,
 	FullHistoryWriteReceipt
 } from '../../../domain/full-history/FullHistoryCanonicalRepository.js';
 import {
 	FullHistoryHash,
+	fullHistoryLedgerSequence,
+	fullHistoryUint64,
 	hashNetworkPassphrase,
 	type FullHistoryLedgerSequence
 } from '../../../domain/full-history/FullHistoryCanonicalTypes.js';
@@ -32,6 +37,35 @@ import { FullHistoryLedger } from './entities/FullHistoryLedger.js';
 import { FullHistoryTransaction } from './entities/FullHistoryTransaction.js';
 import { FullHistoryTransactionResult } from './entities/FullHistoryTransactionResult.js';
 import { FullHistoryWatermark } from './entities/FullHistoryWatermark.js';
+
+interface FullHistoryCoverageRow {
+	readonly archiveSourceCount: number | string;
+	readonly batchCount: number | string;
+	readonly firstLedger: string;
+	readonly lastLedger: string;
+	readonly latestLedgerClosedAt: Date | string;
+	readonly ledgerCount: number | string;
+	readonly nextLedger: string;
+	readonly transactionCount: number | string;
+	readonly transactionResultCount: number | string;
+	readonly updatedAt: Date | string;
+}
+
+interface FullHistoryRecentTransactionRow {
+	readonly closedAt: Date | string;
+	readonly envelopeType: FullHistoryTransactionView['envelopeType'];
+	readonly feeBid: string;
+	readonly feeCharged: string;
+	readonly ledgerSequence: string;
+	readonly operationCount: number;
+	readonly operationResultCount: number;
+	readonly resultCode: number;
+	readonly sourceAccount: string;
+	readonly sourceAccountSequence: string;
+	readonly successful: boolean;
+	readonly transactionHash: Uint8Array;
+	readonly transactionIndex: number;
+}
 
 export class TypeOrmFullHistoryCanonicalRepository implements FullHistoryCanonicalRepository {
 	constructor(private readonly dataSource: DataSource) {}
@@ -98,6 +132,62 @@ export class TypeOrmFullHistoryCanonicalRepository implements FullHistoryCanonic
 				};
 	}
 
+	async getCoverage(
+		networkPassphrase: string
+	): Promise<FullHistoryCanonicalCoverageView | null> {
+		const networkHash = hashNetworkPassphrase(networkPassphrase);
+		const rows = await this.dataSource.query<FullHistoryCoverageRow[]>(
+			`
+				select
+					count(distinct batch."archive_url_identity")::text as "archiveSourceCount",
+					count(batch.id)::text as "batchCount",
+					min(batch."first_ledger")::text as "firstLedger",
+					max(batch."last_ledger")::text as "lastLedger",
+					latest_ledger."closed_at" as "latestLedgerClosedAt",
+					sum(batch."ledger_count")::text as "ledgerCount",
+					watermark."next_ledger"::text as "nextLedger",
+					sum(batch."transaction_count")::text as "transactionCount",
+					sum(batch."result_count")::text as "transactionResultCount",
+					watermark."updated_at" as "updatedAt"
+				from "full_history_watermark" watermark
+				join "full_history_ingestion_batch" batch
+					on batch."network_passphrase_hash" =
+						watermark."network_passphrase_hash"
+				join "full_history_ledger" latest_ledger
+					on latest_ledger."network_passphrase_hash" =
+						watermark."network_passphrase_hash"
+					and latest_ledger."ledger_sequence" =
+						watermark."next_ledger" - 1
+				where watermark."network_passphrase_hash" = $1
+				group by
+					watermark."next_ledger", watermark."updated_at",
+					latest_ledger."closed_at"
+			`,
+			[networkHash.toBuffer()]
+		);
+		const row = rows[0];
+		if (row === undefined) return null;
+
+		return {
+			archiveSourceCount: toSafeCount(
+				row.archiveSourceCount,
+				'archiveSourceCount'
+			),
+			batchCount: toSafeCount(row.batchCount, 'batchCount'),
+			firstLedger: fullHistoryLedgerSequence(row.firstLedger, 'firstLedger'),
+			lastLedger: fullHistoryLedgerSequence(row.lastLedger, 'lastLedger'),
+			latestLedgerClosedAt: toDate(row.latestLedgerClosedAt),
+			ledgerCount: toSafeCount(row.ledgerCount, 'ledgerCount'),
+			nextLedger: fullHistoryUint64(row.nextLedger, 'nextLedger'),
+			transactionCount: toSafeCount(row.transactionCount, 'transactionCount'),
+			transactionResultCount: toSafeCount(
+				row.transactionResultCount,
+				'transactionResultCount'
+			),
+			updatedAt: toDate(row.updatedAt)
+		};
+	}
+
 	async findLedger(
 		networkPassphrase: string,
 		ledgerSequence: FullHistoryLedgerSequence
@@ -123,6 +213,69 @@ export class TypeOrmFullHistoryCanonicalRepository implements FullHistoryCanonic
 				};
 	}
 
+	async findRecentTransactions(
+		networkPassphrase: string,
+		limit: number
+	): Promise<FullHistoryRecentTransactionsView> {
+		assertRecentTransactionLimit(limit);
+		const networkHash = hashNetworkPassphrase(networkPassphrase);
+		const rows = await this.dataSource.query<FullHistoryRecentTransactionRow[]>(
+			`
+				with recent_transaction as materialized (
+					select
+						tx."network_passphrase_hash",
+						tx."transaction_hash",
+						tx."ledger_sequence",
+						tx."transaction_index",
+						tx."envelope_type",
+						tx."source_account",
+						tx."source_account_sequence",
+						tx."fee_bid",
+						tx."operation_count"
+					from "full_history_transaction" tx
+					where tx."network_passphrase_hash" = $1
+					order by
+						tx."ledger_sequence" desc,
+						tx."transaction_index" desc
+					limit $2
+				)
+				select
+					ledger."closed_at" as "closedAt",
+					tx."envelope_type" as "envelopeType",
+					tx."fee_bid"::text as "feeBid",
+					result."fee_charged"::text as "feeCharged",
+					tx."ledger_sequence"::text as "ledgerSequence",
+					tx."operation_count" as "operationCount",
+					result."operation_result_count" as "operationResultCount",
+					result."result_code" as "resultCode",
+					tx."source_account" as "sourceAccount",
+					tx."source_account_sequence"::text as "sourceAccountSequence",
+					result."successful" as "successful",
+					tx."transaction_hash" as "transactionHash",
+					tx."transaction_index" as "transactionIndex"
+				from recent_transaction tx
+				join "full_history_transaction_result" result
+					on result."network_passphrase_hash" =
+						tx."network_passphrase_hash"
+					and result."ledger_sequence" = tx."ledger_sequence"
+					and result."transaction_index" = tx."transaction_index"
+					and result."transaction_hash" = tx."transaction_hash"
+				join "full_history_ledger" ledger
+					on ledger."network_passphrase_hash" =
+						tx."network_passphrase_hash"
+					and ledger."ledger_sequence" = tx."ledger_sequence"
+				order by tx."ledger_sequence" desc, tx."transaction_index" desc
+			`,
+			[networkHash.toBuffer(), limit + 1]
+		);
+		const truncated = rows.length > limit;
+
+		return {
+			records: rows.slice(0, limit).map(mapRecentTransaction),
+			truncated
+		};
+	}
+
 	async findTransaction(
 		networkPassphrase: string,
 		transactionHash: FullHistoryHash
@@ -132,16 +285,29 @@ export class TypeOrmFullHistoryCanonicalRepository implements FullHistoryCanonic
 			.getRepository(FullHistoryTransaction)
 			.findOneBy({ networkPassphraseHash, transactionHash });
 		if (transaction === null) return null;
-		const result = await this.dataSource
-			.getRepository(FullHistoryTransactionResult)
-			.findOneBy({ networkPassphraseHash, transactionHash });
+		const [ledger, result] = await Promise.all([
+			this.dataSource.getRepository(FullHistoryLedger).findOneBy({
+				ledgerSequence: transaction.ledgerSequence,
+				networkPassphraseHash
+			}),
+			this.dataSource
+				.getRepository(FullHistoryTransactionResult)
+				.findOneBy({ networkPassphraseHash, transactionHash })
+		]);
 		if (result === null) {
 			throw new FullHistoryCanonicalError(
 				'canonical-row-conflict',
 				'Canonical transaction is missing its result'
 			);
 		}
+		if (ledger === null) {
+			throw new FullHistoryCanonicalError(
+				'canonical-row-conflict',
+				'Canonical transaction is missing its ledger'
+			);
+		}
 		return {
+			closedAt: new Date(ledger.closedAt),
 			envelopeType: transaction.envelopeType,
 			feeBid: transaction.feeBid,
 			feeCharged: result.feeCharged,
@@ -156,6 +322,63 @@ export class TypeOrmFullHistoryCanonicalRepository implements FullHistoryCanonic
 			transactionIndex: transaction.transactionIndex
 		};
 	}
+}
+
+function assertRecentTransactionLimit(limit: number): void {
+	if (
+		!Number.isSafeInteger(limit) ||
+		limit < 1 ||
+		limit > FULL_HISTORY_RECENT_TRANSACTION_LIMIT_MAX
+	) {
+		throw new RangeError(
+			`limit must be an integer between 1 and ${FULL_HISTORY_RECENT_TRANSACTION_LIMIT_MAX}`
+		);
+	}
+}
+
+function mapRecentTransaction(
+	row: FullHistoryRecentTransactionRow
+): FullHistoryTransactionView {
+	return {
+		closedAt: toDate(row.closedAt),
+		envelopeType: row.envelopeType,
+		feeBid: fullHistoryUint64(row.feeBid, 'feeBid'),
+		feeCharged: fullHistoryUint64(row.feeCharged, 'feeCharged'),
+		ledgerSequence: fullHistoryLedgerSequence(
+			row.ledgerSequence,
+			'ledgerSequence'
+		),
+		operationCount: row.operationCount,
+		operationResultCount: row.operationResultCount,
+		resultCode: row.resultCode,
+		sourceAccount: row.sourceAccount,
+		sourceAccountSequence: fullHistoryUint64(
+			row.sourceAccountSequence,
+			'sourceAccountSequence'
+		),
+		successful: row.successful,
+		transactionHash: FullHistoryHash.fromBytes(row.transactionHash),
+		transactionIndex: row.transactionIndex
+	};
+}
+
+function toDate(value: Date | string): Date {
+	const date =
+		value instanceof Date ? new Date(value.getTime()) : new Date(value);
+	if (Number.isNaN(date.getTime())) {
+		throw new TypeError(
+			'PostgreSQL returned an invalid full-history timestamp'
+		);
+	}
+	return date;
+}
+
+function toSafeCount(value: number | string, field: string): number {
+	const parsed = typeof value === 'number' ? value : Number(value);
+	if (!Number.isSafeInteger(parsed) || parsed < 0) {
+		throw new RangeError(`${field} is outside the safe count range`);
+	}
+	return parsed;
 }
 
 async function setTransactionBounds(manager: EntityManager): Promise<void> {

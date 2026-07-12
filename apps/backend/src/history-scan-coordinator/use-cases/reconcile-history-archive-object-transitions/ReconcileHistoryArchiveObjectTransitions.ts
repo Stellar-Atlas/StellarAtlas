@@ -27,18 +27,13 @@ export class ReconcileHistoryArchiveObjectTransitions {
 
 		await this.objectRepository.tryWithTransitionReconciliationLock(
 			async () => {
-				const checkpoints =
-					await this.objectRepository.findVerifiedCheckpointsNeedingReconciliation(
-						reconciliationBatchSize
-					);
-				for (const checkpoint of checkpoints) {
-					try {
-						await this.completeObject.reconcileCheckpointDependencies(
-							checkpoint
-						);
-					} catch (error) {
-						this.logFailure(error, checkpoint, 'checkpoint dependencies');
-					}
+				try {
+					await this.objectRepository.reconcileExecutionDisposition();
+				} catch (error) {
+					this.logger.error('Failed to reconcile archive execution frontier', {
+						app: 'history-scan-coordinator',
+						errorMessage: error instanceof Error ? error.message : String(error)
+					});
 				}
 				const objects = await this.objectRepository.findUnreconciledTransitions(
 					reconciliationBatchSize
@@ -54,13 +49,18 @@ export class ReconcileHistoryArchiveObjectTransitions {
 						this.logFailure(error, object, 'transition');
 					}
 				}
-				try {
-					await this.objectRepository.reconcileExecutionDisposition();
-				} catch (error) {
-					this.logger.error('Failed to reconcile archive execution frontier', {
-						app: 'history-scan-coordinator',
-						errorMessage: error instanceof Error ? error.message : String(error)
-					});
+				const checkpoints =
+					await this.objectRepository.findVerifiedCheckpointsNeedingReconciliation(
+						reconciliationBatchSize
+					);
+				for (const checkpoint of checkpoints) {
+					try {
+						await this.completeObject.reconcileCheckpointDependencies(
+							checkpoint
+						);
+					} catch (error) {
+						this.logFailure(error, checkpoint, 'checkpoint dependencies');
+					}
 				}
 			}
 		);

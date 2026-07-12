@@ -415,6 +415,7 @@ const listen = async () => {
 		getApiStatus: kernel.container.get(GetApiStatus),
 		getDataQualityStatus: kernel.container.get(GetDataQualityStatus),
 		getFrontendStatus: kernel.container.get(GetFrontendStatus),
+		getFullHistoryStatus: kernel.container.get(GetFullHistoryStatus),
 		getHistoryArchiveObjectEvents: kernel.container.get(
 			GetHistoryArchiveObjectEvents
 		),

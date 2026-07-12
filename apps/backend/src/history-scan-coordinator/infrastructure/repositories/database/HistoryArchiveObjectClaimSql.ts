@@ -192,8 +192,11 @@ export const historyArchiveObjectClaimSql = `
 					and active.status = 'scanning'
 			) < $4
 		order by
-			case when candidate."executionReason" =
-				'proof-completion-reserve' then 0 else 1 end,
+			case candidate."executionReason"
+				when 'canonical-frontier-reserve' then 0
+				when 'proof-completion-reserve' then 1
+				else 2
+			end,
 			candidate."lastClaimedAt" asc nulls first,
 			candidate."objectOrder",
 			candidate."checkpointLedger" desc nulls last,

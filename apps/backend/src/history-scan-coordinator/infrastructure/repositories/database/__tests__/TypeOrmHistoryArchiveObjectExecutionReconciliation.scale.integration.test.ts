@@ -6,12 +6,13 @@ import { HistoryArchiveObjectEvent } from '../../../../domain/history-archive-ob
 import { HistoryArchiveObjectHostThrottleMigration1784410000000 } from '../../../database/migrations/1784410000000-HistoryArchiveObjectHostThrottleMigration.js';
 import { HistoryArchiveObjectClaimCursorMigration1784780000000 } from '../../../database/migrations/1784780000000-HistoryArchiveObjectClaimCursorMigration.js';
 import { HistoryArchiveSchedulerOnlineIndexesMigration1784810000000 } from '../../../database/migrations/1784810000000-HistoryArchiveSchedulerOnlineIndexesMigration.js';
-import { historyArchiveObjectFrontierSql } from '../HistoryArchiveObjectExecutionReconciler.js';
+import { historyArchiveObjectFrontierSql } from '../HistoryArchiveObjectFrontierSql.js';
 import { TypeOrmHistoryArchiveObjectRepository } from '../TypeOrmHistoryArchiveObjectRepository.js';
 import {
 	startDisposablePostgres,
 	type DisposablePostgres
 } from '@test-support/DisposablePostgres.js';
+import { createCanonicalFrontierTestSchema } from './HistoryArchiveCanonicalFrontierTestSchema.js';
 
 const describeScale =
 	process.env.RUN_ARCHIVE_SCALE_TESTS === '1' ? describe : describe.skip;
@@ -50,6 +51,7 @@ describeScale('history archive execution reconciliation scale', () => {
 			await new HistoryArchiveObjectClaimCursorMigration1784780000000().up(
 				queryRunner
 			);
+			await createCanonicalFrontierTestSchema(dataSource);
 			await seedQueue(dataSource);
 			await seedCheckpointCursors(dataSource);
 			await new HistoryArchiveSchedulerOnlineIndexesMigration1784810000000().up(

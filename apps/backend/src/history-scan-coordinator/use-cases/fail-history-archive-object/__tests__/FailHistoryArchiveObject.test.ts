@@ -51,11 +51,12 @@ describe('FailHistoryArchiveObject', () => {
 		archiveObject.attempts = 1;
 		objectRepository.findByRemoteId.mockResolvedValue(archiveObject);
 
-		const result = await new FailHistoryArchiveObject(
+		const useCase = new FailHistoryArchiveObject(
 			objectRepository,
 			eventRecorder,
 			checkpointProofRepository
-		).execute(archiveObject.remoteId, {
+		);
+		const result = await useCase.execute(archiveObject.remoteId, {
 			claimAttempt: 1,
 			errorMessage: 'HTTP 403 Forbidden',
 			errorType: 'archive_http_error',
@@ -64,6 +65,9 @@ describe('FailHistoryArchiveObject', () => {
 		});
 
 		expect(result._unsafeUnwrap()).toBe(true);
+		expect(eventRecorder.recordDurably).not.toHaveBeenCalled();
+		expect(checkpointProofRepository.refreshForObject).not.toHaveBeenCalled();
+		await useCase.reconcilePersisted(archiveObject);
 		expect(objectRepository.markObjectFailed).toHaveBeenCalledWith(
 			archiveObject.remoteId,
 			{
@@ -157,7 +161,7 @@ describe('FailHistoryArchiveObject', () => {
 		}
 	);
 
-	it('reports failure when durable checkpoint proof refresh fails', async () => {
+	it('leaves durable failure effects pending when checkpoint proof refresh fails', async () => {
 		const archiveObject = new HistoryArchiveObject({
 			archiveUrl: 'https://history.example.com',
 			archiveUrlIdentity: 'https://history.example.com',
@@ -176,19 +180,21 @@ describe('FailHistoryArchiveObject', () => {
 			new Error('proof refresh failed')
 		);
 
-		const result = await new FailHistoryArchiveObject(
+		const useCase = new FailHistoryArchiveObject(
 			objectRepository,
 			eventRecorder,
 			checkpointProofRepository
-		).execute(archiveObject.remoteId, {
+		);
+		const result = await useCase.execute(archiveObject.remoteId, {
 			claimAttempt: 1,
 			errorMessage: 'Wrong ledger hash',
 			errorType: 'category_verification_failed',
 			failureChannel: 'archive_evidence'
 		});
 
-		expect(result._unsafeUnwrapErr()).toEqual(
-			expect.objectContaining({ message: 'proof refresh failed' })
+		expect(result._unsafeUnwrap()).toBe(true);
+		await expect(useCase.reconcilePersisted(archiveObject)).rejects.toThrow(
+			'proof refresh failed'
 		);
 		expect(eventRecorder.recordDurably).not.toHaveBeenCalled();
 	});
@@ -214,11 +220,12 @@ describe('FailHistoryArchiveObject', () => {
 		objectRepository.findByRemoteId.mockResolvedValue(archiveObject);
 		objectRepository.markObjectFailed.mockResolvedValue(false);
 
-		const result = await new FailHistoryArchiveObject(
+		const useCase = new FailHistoryArchiveObject(
 			objectRepository,
 			eventRecorder,
 			checkpointProofRepository
-		).execute(archiveObject.remoteId, {
+		);
+		const result = await useCase.execute(archiveObject.remoteId, {
 			claimAttempt: 1,
 			errorMessage: 'Wrong ledger hash',
 			errorType: 'category_verification_failed',
@@ -227,6 +234,8 @@ describe('FailHistoryArchiveObject', () => {
 		});
 
 		expect(result._unsafeUnwrap()).toBe(true);
+		expect(checkpointProofRepository.refreshForObject).not.toHaveBeenCalled();
+		await useCase.reconcilePersisted(archiveObject);
 		expect(checkpointProofRepository.refreshForObject).toHaveBeenCalledWith(
 			archiveObject
 		);

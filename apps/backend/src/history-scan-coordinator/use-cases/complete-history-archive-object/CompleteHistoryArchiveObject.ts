@@ -64,8 +64,6 @@ export class CompleteHistoryArchiveObject {
 				return ok(false);
 			}
 
-			await this.reconcilePersisted(verifiedObject);
-
 			return ok(true);
 		} catch (e) {
 			return err(mapUnknownToError(e));

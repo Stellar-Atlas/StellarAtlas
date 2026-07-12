@@ -51,6 +51,7 @@
 		"start:scan-scp-live": "pnpm --filter backend run scan-scp-live",
 		"start:scan-history": "pnpm --filter history-scanner run scan-history",
 		"promote:full-history-checkpoint": "pnpm --filter backend run promote-full-history-checkpoint",
+		"start:full-history-promotion": "pnpm --filter backend run run-full-history-promotion",
 		"start:users": "pnpm --filter users run start",
 		"start:all": "node start-all.cjs"
 	},

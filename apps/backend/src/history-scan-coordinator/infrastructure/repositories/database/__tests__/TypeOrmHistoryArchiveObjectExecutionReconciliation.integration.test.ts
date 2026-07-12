@@ -9,6 +9,12 @@ import {
 	startDisposablePostgres,
 	type DisposablePostgres
 } from '@test-support/DisposablePostgres.js';
+import { createCanonicalFrontierTestSchema } from './HistoryArchiveCanonicalFrontierTestSchema.js';
+import {
+	createCheckpoint,
+	createObject,
+	createRoot
+} from './HistoryArchiveObjectExecutionTestFixtures.js';
 
 jest.setTimeout(60_000);
 
@@ -36,6 +42,7 @@ describe('history archive execution reconciliation in disposable PostgreSQL', ()
 		await new HistoryArchiveObjectClaimCursorMigration1784780000000().up(
 			queryRunner
 		);
+		await createCanonicalFrontierTestSchema(dataSource);
 		await queryRunner.release();
 		repository = new TypeOrmHistoryArchiveObjectRepository(
 			dataSource.getRepository(HistoryArchiveObject)
@@ -123,167 +130,6 @@ describe('history archive execution reconciliation in disposable PostgreSQL', ()
 
 		expect(result).toMatchObject({ admittedObjects: 1, cursorAdvances: 1 });
 		expect(counts).toEqual({ executable: 1, legacyDeferred: 99 });
-	});
-
-	it('prioritizes a bucket that can complete a checkpoint proof', async () => {
-		const root = createRoot(0);
-		const ordinaryRoot = createRoot(1);
-		const ordinaryCheckpoint = createCheckpoint(1, 1_000_063);
-		const checkpoint = createCheckpoint(0, 1_000_063);
-		checkpoint.status = 'verified';
-		const ordinary = createBucket(0, 'f'.repeat(64));
-		const proofBucket = createBucket(0, '0'.repeat(64));
-		proofBucket.status = 'verified';
-		await dataSource
-			.getRepository(HistoryArchiveObject)
-			.save([
-				root,
-				checkpoint,
-				ordinary,
-				proofBucket,
-				ordinaryRoot,
-				ordinaryCheckpoint
-			]);
-		await dataSource
-			.getRepository(HistoryArchiveCheckpointProof)
-			.save(
-				createBucketMissingProof(
-					root.archiveUrl,
-					proofBucket.checkpointLedger ?? 0
-				)
-			);
-		await dataSource.query(
-			`insert into "history_archive_checkpoint_bucket_dependency" (
-				"archiveUrlIdentity", "checkpointLedger", "bucketHash"
-			) values ($1, $2, $3)`,
-			[
-				root.archiveUrlIdentity,
-				proofBucket.checkpointLedger,
-				proofBucket.bucketHash
-			]
-		);
-
-		const result = await repository.reconcileExecutionDisposition();
-		const proofExecutable = await dataSource
-			.getRepository(HistoryArchiveObject)
-			.findOneBy({ executionReason: 'proof-completion-reserve' });
-		const ordinaryExecutable = await dataSource
-			.getRepository(HistoryArchiveObject)
-			.findOneBy({
-				executionReason: 'frontier-admitted',
-				remoteId: ordinaryCheckpoint.remoteId
-			});
-
-		expect(result.admittedObjects).toBe(2);
-		expect(result.cursorAdvances).toBeGreaterThan(0);
-		expect(proofExecutable?.remoteId).toBe(proofBucket.remoteId);
-		expect(proofExecutable?.status).toBe('pending');
-		expect(ordinaryExecutable?.status).toBe('pending');
-	});
-
-	it('deduplicates proof references before applying reserve limits', async () => {
-		const rootCount = 4;
-		const bucketsPerRoot = 8;
-		const referencesPerBucket = 3;
-		const roots = Array.from({ length: rootCount }, (_, index) =>
-			createRoot(index)
-		);
-		const buckets = roots.flatMap((_, rootIndex) =>
-			Array.from({ length: bucketsPerRoot }, (_, bucketIndex) => {
-				const bucket = createBucket(
-					rootIndex,
-					`${rootIndex.toString(16)}${bucketIndex.toString(16)}`.padEnd(64, '0')
-				);
-				bucket.status = 'verified';
-				return bucket;
-			})
-		);
-		await dataSource
-			.getRepository(HistoryArchiveObject)
-			.save([...roots, ...buckets]);
-
-		for (let rootIndex = 0; rootIndex < rootCount; rootIndex += 1) {
-			for (
-				let bucketIndex = 0;
-				bucketIndex < bucketsPerRoot;
-				bucketIndex += 1
-			) {
-				const bucket = buckets[rootIndex * bucketsPerRoot + bucketIndex];
-				for (
-					let referenceIndex = 0;
-					referenceIndex < referencesPerBucket;
-					referenceIndex += 1
-				) {
-					const checkpointLedger =
-						1_000_063 -
-						(bucketIndex * referencesPerBucket + referenceIndex) * 64;
-					await dataSource
-						.getRepository(HistoryArchiveCheckpointProof)
-						.save(
-							createBucketMissingProof(
-								roots[rootIndex].archiveUrl,
-								checkpointLedger
-							)
-						);
-					await dataSource.query(
-						`insert into "history_archive_checkpoint_bucket_dependency" (
-							"archiveUrlIdentity", "checkpointLedger", "bucketHash"
-						) values ($1, $2, $3)`,
-						[
-							roots[rootIndex].archiveUrlIdentity,
-							checkpointLedger,
-							bucket?.bucketHash
-						]
-					);
-				}
-			}
-		}
-
-		const result = await repository.reconcileExecutionDisposition();
-		const admittedByRoot = (await dataSource.query(`
-			select "archiveUrlIdentity", count(*)::integer as count
-			from "history_archive_object_queue"
-			where "executionReason" = 'proof-completion-reserve'
-			group by "archiveUrlIdentity"
-			order by "archiveUrlIdentity"
-		`)) as readonly {
-			readonly count: number;
-			readonly archiveUrlIdentity: string;
-		}[];
-
-		expect(result.admittedObjects).toBe(rootCount);
-		expect(admittedByRoot).toHaveLength(rootCount);
-		expect(admittedByRoot.map(({ count }) => count)).toEqual([1, 1, 1, 1]);
-
-		await dataSource.query(`
-			update "history_archive_object_queue"
-			set status = 'pending',
-				"dependencyReady" = true,
-				"executionDisposition" = 'executable',
-				"executionReason" = 'proof-completion-reserve'
-			where "objectType" = 'bucket'
-		`);
-
-		const second = await repository.reconcileExecutionDisposition();
-		const [reserve] = (await dataSource.query(`
-			select count(*)::integer as count,
-				count(distinct "archiveUrlIdentity")::integer as roots
-			from "history_archive_object_queue"
-			where "executionReason" = 'proof-completion-reserve'
-				and "executionDisposition" = 'executable'
-				and status in ('pending', 'scanning')
-		`)) as readonly { readonly count: number; readonly roots: number }[];
-		const [waiting] = (await dataSource.query(`
-			select count(*)::integer as count
-			from "history_archive_object_queue"
-			where "executionReason" = 'proof-completion-waiting'
-				and "executionDisposition" = 'deferred'
-				and status = 'pending'
-		`)) as readonly { readonly count: number }[];
-
-		expect(second.admittedObjects).toBe(0);
-		expect(reserve).toEqual({ count: rootCount, roots: rootCount });
-		expect(waiting?.count).toBe(rootCount * (bucketsPerRoot - 1));
 	});
 
 	it('rotates equivalent keys and enforces the per-root frontier cap', async () => {
@@ -469,121 +315,4 @@ describe('history archive execution reconciliation in disposable PostgreSQL', ()
 			total: 228
 		});
 	});
-
-	it('reserves a bounded worker share for due failed retries', async () => {
-		const objects = Array.from({ length: 24 }, (_, index) => {
-			const failed = createCheckpoint(index, 900_031);
-			failed.status = 'failed';
-			failed.objectKey = `checkpoint-state:failed-${index}`;
-			failed.nextAttemptAt = new Date(Date.now() - 60_000);
-			return [createRoot(index), createCheckpoint(index, 1_000_063), failed];
-		}).flat();
-		for (const object of objects) {
-			object.executionDisposition = 'executable';
-			object.dependencyReady = true;
-		}
-		await dataSource.getRepository(HistoryArchiveObject).save(objects);
-
-		const claims = await Promise.all(
-			Array.from({ length: 24 }, () =>
-				repository.claimNextObject(['checkpoint-state'])
-			)
-		);
-		const failedClaims = claims.filter((claim) =>
-			claim?.objectKey.includes(':failed-')
-		);
-		expect(claims.filter((claim) => claim !== null)).toHaveLength(24);
-		expect(failedClaims.length).toBeGreaterThanOrEqual(6);
-		expect(failedClaims.length).toBeLessThanOrEqual(12);
-	});
 });
-
-function createRoot(index: number): HistoryArchiveObject {
-	return createObject(index, {
-		objectKey: 'root',
-		objectOrder: 0,
-		objectType: 'history-archive-state',
-		status: 'verified'
-	});
-}
-
-function createCheckpoint(index: number, checkpointLedger: number) {
-	return createObject(index, {
-		checkpointLedger,
-		objectKey: `checkpoint-state:${checkpointLedger.toString(16).padStart(8, '0')}`,
-		objectOrder: 10,
-		objectType: 'checkpoint-state'
-	});
-}
-
-function createBucket(index: number, bucketHash: string): HistoryArchiveObject {
-	const object = createObject(index, {
-		checkpointLedger: 1_000_063,
-		objectKey: `bucket:${bucketHash}`,
-		objectOrder: 60,
-		objectType: 'bucket'
-	});
-	object.bucketHash = bucketHash;
-	return object;
-}
-
-function createBucketMissingProof(
-	archiveUrl: string,
-	checkpointLedger: number
-): HistoryArchiveCheckpointProof {
-	const proof = new HistoryArchiveCheckpointProof();
-	proof.archiveUrl = archiveUrl;
-	proof.archiveUrlIdentity = archiveUrl;
-	proof.checkpointLedger = checkpointLedger;
-	proof.status = 'not-evaluable';
-	proof.proofVersion = 5;
-	proof.requiredObjectsComplete = true;
-	proof.proofFactsComplete = true;
-	proof.checkpointBucketListMatches = true;
-	proof.transactionsMatch = true;
-	proof.resultsMatch = true;
-	proof.previousLedgersMatch = true;
-	proof.bucketsVerified = false;
-	proof.ledgerFactCount = 64;
-	proof.transactionFactCount = 64;
-	proof.resultFactCount = 64;
-	proof.expectedBucketCount = 1;
-	proof.verifiedBucketCount = 0;
-	proof.failedBucketCount = 0;
-	proof.missingBucketCount = 1;
-	proof.checkpointBucketListHash = null;
-	proof.ledgerBucketListHash = null;
-	proof.checkpointStateObjectRemoteId = null;
-	proof.ledgerObjectRemoteId = null;
-	proof.transactionsObjectRemoteId = null;
-	proof.resultsObjectRemoteId = null;
-	proof.scpObjectRemoteId = null;
-	proof.failureKind = 'bucket-missing';
-	proof.details = null;
-	proof.evaluatedAt = new Date();
-	return proof;
-}
-
-function createObject(
-	index: number,
-	props: Pick<
-		ConstructorParameters<typeof HistoryArchiveObject>[0] & object,
-		'checkpointLedger' | 'objectKey' | 'objectOrder' | 'objectType' | 'status'
-	>
-): HistoryArchiveObject {
-	const archiveUrl = `https://archive-${index}.example/history`;
-	const object = new HistoryArchiveObject({
-		archiveUrl,
-		archiveUrlIdentity: archiveUrl,
-		checkpointLedger: props.checkpointLedger,
-		executionDisposition: 'deferred',
-		objectKey: props.objectKey,
-		objectOrder: props.objectOrder,
-		objectType: props.objectType,
-		objectUrl: `${archiveUrl}/${props.objectKey}`,
-		status: props.status ?? 'pending'
-	});
-	object.dependencyReady = null;
-	object.executionReason = 'legacy-planning-intent';
-	return object;
-}

@@ -13,7 +13,8 @@ const requiredRelations = [
 	'full_history_watermark',
 	'full_history_ledger',
 	'full_history_transaction',
-	'full_history_transaction_result'
+	'full_history_transaction_result',
+	'full_history_promotion_runtime'
 ] as const;
 
 const requiredColumns = [

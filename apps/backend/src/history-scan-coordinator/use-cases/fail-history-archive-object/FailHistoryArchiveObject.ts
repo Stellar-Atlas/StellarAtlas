@@ -76,8 +76,6 @@ export class FailHistoryArchiveObject {
 				return ok(false);
 			}
 
-			await this.reconcilePersisted(failedObject);
-
 			return ok(true);
 		} catch (e) {
 			return err(mapUnknownToError(e));

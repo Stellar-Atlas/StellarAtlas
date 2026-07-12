@@ -3,6 +3,15 @@ import { inject, injectable } from 'inversify';
 import { DataSource } from 'typeorm';
 import { err, ok, Result } from 'neverthrow';
 import { mapUnknownToError } from '@core/utilities/mapUnknownToError.js';
+import type { Config } from '@core/config/Config.js';
+import type {
+	FullHistoryCanonicalCoverageView,
+	FullHistoryCanonicalRepository
+} from '@history-scan-coordinator/domain/full-history/FullHistoryCanonicalRepository.js';
+import type {
+	FullHistoryPromotionRuntimeRepository,
+	FullHistoryPromotionRuntimeView
+} from '@history-scan-coordinator/domain/full-history-promotion/FullHistoryPromotionRuntimeRepository.js';
 import type {
 	ParsedLedgerHeaderRepository,
 	ParsedLedgerHeaderWatermark
@@ -11,18 +20,55 @@ import { TYPES as HISTORY_TYPES } from '@history-scan-coordinator/infrastructure
 import type { StatusLevel } from '../../domain/StatusTypes.js';
 
 export interface FullHistoryStatusDTO {
-	readonly generatedAt: string;
-	readonly status: StatusLevel;
-	readonly mode: 'archive_header_parser';
-	readonly parsedLedgerCount: number;
+	readonly canonicalCoverage: CanonicalFullHistoryCoverageDTO | null;
+	readonly canonicalPromotion: CanonicalFullHistoryPromotionDTO | null;
 	readonly earliestParsedLedger: string | null;
-	readonly latestParsedLedger: string | null;
+	readonly generatedAt: string;
 	readonly latestObservedAt: string | null;
-	readonly sourceArchiveCount: number;
-	readonly localTransactionIndexReady: boolean;
-	readonly localOperationIndexReady: boolean;
+	readonly latestParsedLedger: string | null;
 	readonly localAssetIndexReady: boolean;
 	readonly localContractIndexReady: boolean;
+	readonly localOperationIndexReady: boolean;
+	readonly localTransactionIndexReady: boolean;
+	readonly mode: 'archive_header_parser' | 'canonical_checkpoint_index';
+	readonly parsedLedgerCount: number | null;
+	readonly sourceArchiveCount: number | null;
+	readonly status: StatusLevel;
+}
+
+export interface CanonicalFullHistoryPromotionDTO {
+	readonly checkpointLedger: string | null;
+	readonly heartbeatAt: string;
+	readonly lastAttemptAt: string | null;
+	readonly lastErrorCode: string | null;
+	readonly lastFailureAt: string | null;
+	readonly lastOutcome:
+		'bootstrap-required' | 'proof-pending' | 'promoted' | 'replayed' | null;
+	readonly lastSuccessAt: string | null;
+	readonly nextLedger: string | null;
+	readonly startedAt: string;
+	readonly state:
+		| 'failed'
+		| 'promoting'
+		| 'running'
+		| 'stale'
+		| 'stopped'
+		| 'waiting-for-proof';
+}
+
+export interface CanonicalFullHistoryCoverageDTO {
+	readonly archiveSourceCount: number;
+	readonly batchCount: number;
+	readonly firstLedger: string;
+	readonly lastLedger: string;
+	readonly latestLedgerClosedAt: string;
+	readonly ledgerCount: number;
+	readonly nextLedger: string;
+	readonly rangeKind: 'contiguous_bounded';
+	readonly source: 'postgres_canonical';
+	readonly transactionCount: number;
+	readonly transactionResultCount: number;
+	readonly updatedAt: string;
 }
 
 export interface IngestionStatusDTO extends FullHistoryStatusDTO {
@@ -104,13 +150,31 @@ export class GetFullHistoryStatus {
 	constructor(
 		@inject(DataSource) private readonly dataSource: DataSource,
 		@inject(HISTORY_TYPES.ParsedLedgerHeaderRepository)
-		private readonly parsedLedgerHeaders: ParsedLedgerHeaderRepository
+		private readonly parsedLedgerHeaders: ParsedLedgerHeaderRepository,
+		@inject(HISTORY_TYPES.FullHistoryCanonicalRepository)
+		private readonly canonicalHistory: FullHistoryCanonicalRepository,
+		@inject(HISTORY_TYPES.FullHistoryPromotionRuntimeRepository)
+		private readonly canonicalPromotion: FullHistoryPromotionRuntimeRepository,
+		@inject('Config') private readonly config: Config
 	) {}
 
 	async executeFullHistory(): Promise<Result<FullHistoryStatusDTO, Error>> {
 		try {
+			const [canonical, promotion] = await Promise.all([
+				this.canonicalHistory.getCoverage(
+					this.config.networkConfig.networkPassphrase
+				),
+				this.canonicalPromotion.find(
+					this.config.networkConfig.networkPassphrase
+				)
+			]);
+			if (canonical !== null)
+				return ok(mapCanonicalStatus(canonical, promotion));
 			return ok(
-				this.mapFullHistory(await this.parsedLedgerHeaders.getWatermark())
+				this.mapParsedHeaders(
+					await this.parsedLedgerHeaders.getWatermark(),
+					promotion
+				)
 			);
 		} catch (error) {
 			return err(mapUnknownToError(error));
@@ -119,11 +183,23 @@ export class GetFullHistoryStatus {
 
 	async executeIngestion(): Promise<Result<IngestionStatusDTO, Error>> {
 		try {
-			const [stats, queue] = await Promise.all([
-				this.parsedLedgerHeaders.getWatermark(),
+			const [canonical, promotion, queue] = await Promise.all([
+				this.canonicalHistory.getCoverage(
+					this.config.networkConfig.networkPassphrase
+				),
+				this.canonicalPromotion.find(
+					this.config.networkConfig.networkPassphrase
+				),
 				this.readQueueSummary()
 			]);
-			return ok({ ...this.mapFullHistory(stats), queue });
+			const status =
+				canonical === null
+					? this.mapParsedHeaders(
+							await this.parsedLedgerHeaders.getWatermark(),
+							promotion
+						)
+					: mapCanonicalStatus(canonical, promotion);
+			return ok({ ...status, queue });
 		} catch (error) {
 			return err(mapUnknownToError(error));
 		}
@@ -146,7 +222,9 @@ export class GetFullHistoryStatus {
 		}
 	}
 
-	async executeRanges(limit: number): Promise<Result<IndexingRangesDTO, Error>> {
+	async executeRanges(
+		limit: number
+	): Promise<Result<IndexingRangesDTO, Error>> {
 		try {
 			return ok({
 				generatedAt: new Date().toISOString(),
@@ -246,11 +324,14 @@ export class GetFullHistoryStatus {
 		}));
 	}
 
-	private mapFullHistory(
-		row: ParsedLedgerHeaderWatermark
+	private mapParsedHeaders(
+		row: ParsedLedgerHeaderWatermark,
+		promotion: FullHistoryPromotionRuntimeView | null
 	): FullHistoryStatusDTO {
 		const parsedLedgerCount = row.parsedLedgerCount;
 		return {
+			canonicalCoverage: null,
+			canonicalPromotion: mapCanonicalPromotion(promotion),
 			generatedAt: new Date().toISOString(),
 			status: parsedLedgerCount > 0 ? 'ok' : 'unavailable',
 			mode: 'archive_header_parser',
@@ -265,6 +346,75 @@ export class GetFullHistoryStatus {
 			localContractIndexReady: false
 		};
 	}
+}
+
+function mapCanonicalStatus(
+	coverage: FullHistoryCanonicalCoverageView,
+	promotion: FullHistoryPromotionRuntimeView | null
+): FullHistoryStatusDTO {
+	return {
+		canonicalCoverage: mapCanonicalCoverage(coverage),
+		canonicalPromotion: mapCanonicalPromotion(promotion),
+		earliestParsedLedger: null,
+		generatedAt: new Date().toISOString(),
+		latestObservedAt: null,
+		latestParsedLedger: null,
+		localAssetIndexReady: false,
+		localContractIndexReady: false,
+		localOperationIndexReady: false,
+		localTransactionIndexReady:
+			coverage.transactionCount > 0 &&
+			coverage.transactionCount === coverage.transactionResultCount,
+		mode: 'canonical_checkpoint_index',
+		parsedLedgerCount: null,
+		sourceArchiveCount: null,
+		status: 'ok'
+	};
+}
+
+function mapCanonicalPromotion(
+	runtime: FullHistoryPromotionRuntimeView | null
+): CanonicalFullHistoryPromotionDTO | null {
+	if (runtime === null) return null;
+	const heartbeatAgeMs = Date.now() - runtime.heartbeatAt.valueOf();
+	const state =
+		heartbeatAgeMs > 120_000 &&
+		runtime.state !== 'failed' &&
+		runtime.state !== 'stopped'
+			? 'stale'
+			: runtime.state;
+	return {
+		checkpointLedger: runtime.checkpointLedger?.toString() ?? null,
+		heartbeatAt: runtime.heartbeatAt.toISOString(),
+		lastAttemptAt: runtime.lastAttemptAt?.toISOString() ?? null,
+		lastErrorCode: runtime.lastErrorCode,
+		lastFailureAt: runtime.lastFailureAt?.toISOString() ?? null,
+		lastOutcome: runtime.lastOutcome,
+		lastSuccessAt: runtime.lastSuccessAt?.toISOString() ?? null,
+		nextLedger: runtime.nextLedger,
+		startedAt: runtime.startedAt.toISOString(),
+		state
+	};
+}
+
+function mapCanonicalCoverage(
+	coverage: FullHistoryCanonicalCoverageView | null
+): CanonicalFullHistoryCoverageDTO | null {
+	if (coverage === null) return null;
+	return {
+		archiveSourceCount: coverage.archiveSourceCount,
+		batchCount: coverage.batchCount,
+		firstLedger: coverage.firstLedger,
+		lastLedger: coverage.lastLedger,
+		latestLedgerClosedAt: coverage.latestLedgerClosedAt.toISOString(),
+		ledgerCount: coverage.ledgerCount,
+		nextLedger: coverage.nextLedger,
+		rangeKind: 'contiguous_bounded',
+		source: 'postgres_canonical',
+		transactionCount: coverage.transactionCount,
+		transactionResultCount: coverage.transactionResultCount,
+		updatedAt: coverage.updatedAt.toISOString()
+	};
 }
 
 function toNumber(value: number | string | null | undefined): number {

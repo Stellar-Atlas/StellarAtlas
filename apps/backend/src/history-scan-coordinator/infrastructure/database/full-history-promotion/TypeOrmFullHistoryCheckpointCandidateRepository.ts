@@ -84,15 +84,30 @@ export class TypeOrmFullHistoryCheckpointCandidateRepository implements FullHist
 	async load(
 		target: FullHistoryPromotionTarget
 	): Promise<FullHistoryCheckpointCandidate> {
-		validateTarget(target);
-		return this.dataSource.transaction('REPEATABLE READ', async (manager) => {
-			await manager.query(`
-				set transaction read only;
-				set local lock_timeout = '2s';
-				set local statement_timeout = '30s'
-			`);
-			return loadCandidate(manager, target);
-		});
+		try {
+			validateTarget(target);
+			return await this.dataSource.transaction(
+				'REPEATABLE READ',
+				async (manager) => {
+					await manager.query(`
+						set transaction read only;
+						set local lock_timeout = '2s';
+						set local statement_timeout = '30s'
+					`);
+					return loadCandidate(manager, target);
+				}
+			);
+		} catch (error) {
+			if (error instanceof FullHistoryPromotionError) throw error;
+			if (error instanceof RangeError || error instanceof TypeError) {
+				throw promotionError(
+					'candidate-incomplete',
+					'Checkpoint candidate contains malformed evidence',
+					error
+				);
+			}
+			throw error;
+		}
 	}
 }
 

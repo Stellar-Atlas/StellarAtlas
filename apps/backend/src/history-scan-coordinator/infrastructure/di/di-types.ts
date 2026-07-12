@@ -4,6 +4,10 @@ export const TYPES = {
 		'CommunityScannerRegistrationThrottleRepository'
 	),
 	CommunityScannerRepository: Symbol('CommunityScannerRepository'),
+	FullHistoryCanonicalRepository: Symbol('FullHistoryCanonicalRepository'),
+	FullHistoryPromotionRuntimeRepository: Symbol(
+		'FullHistoryPromotionRuntimeRepository'
+	),
 	HistoryArchiveStateRepository: Symbol('HistoryArchiveStateRepository'),
 	HistoryArchiveObjectEventRepository: Symbol(
 		'HistoryArchiveObjectEventRepository'

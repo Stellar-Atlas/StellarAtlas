@@ -73,6 +73,7 @@ describe('TypeOrmFullHistoryCanonicalRepository', () => {
 		);
 		expect(transaction).toEqual(
 			expect.objectContaining({
+				closedAt: input.ledgers[0]!.closedAt,
 				feeBid: '9223372036854775807',
 				feeCharged: '100',
 				ledgerSequence: '1',
@@ -108,6 +109,82 @@ describe('TypeOrmFullHistoryCanonicalRepository', () => {
 			)
 		).rejects.toThrow(/fk_full_history_result_transaction/i);
 	});
+
+	it('returns aggregate coverage and a bounded recent transaction page', async () => {
+		const networkPassphrase = 'Canonical bounded read network';
+		const genesis = await seedFullHistoryCheckpoint(dataSource, {
+			batchNumber: 5,
+			networkPassphrase
+		});
+		const regular = await seedFullHistoryCheckpoint(dataSource, {
+			batchNumber: 6,
+			checkpointLedger: 127,
+			networkPassphrase
+		});
+		await repository.writeCheckpoint(genesis);
+		await repository.writeCheckpoint(regular);
+
+		await expect(repository.getCoverage(networkPassphrase)).resolves.toEqual({
+			archiveSourceCount: 2,
+			batchCount: 2,
+			firstLedger: '1',
+			lastLedger: '127',
+			latestLedgerClosedAt: regular.ledgers.at(-1)!.closedAt,
+			ledgerCount: 127,
+			nextLedger: '128',
+			transactionCount: 2,
+			transactionResultCount: 2,
+			updatedAt: expect.any(Date)
+		});
+
+		const firstPage = await repository.findRecentTransactions(
+			networkPassphrase,
+			1
+		);
+		expect(firstPage.truncated).toBe(true);
+		expect(firstPage.records).toHaveLength(1);
+		expect(firstPage.records[0]).toMatchObject({
+			closedAt: regular.ledgers[0]!.closedAt,
+			ledgerSequence: '64',
+			transactionIndex: 0
+		});
+		expect(firstPage.records[0]!.transactionHash.toHex()).toBe(
+			regular.transactions[0]!.transactionHash.toHex()
+		);
+
+		const completePage = await repository.findRecentTransactions(
+			networkPassphrase,
+			2
+		);
+		expect(completePage.truncated).toBe(false);
+		expect(
+			completePage.records.map((record) => record.transactionHash.toHex())
+		).toEqual([
+			regular.transactions[0]!.transactionHash.toHex(),
+			genesis.transactions[0]!.transactionHash.toHex()
+		]);
+	});
+
+	it('returns empty canonical reads for a network without coverage', async () => {
+		await expect(
+			repository.getCoverage('Canonical network without coverage')
+		).resolves.toBeNull();
+		await expect(
+			repository.findRecentTransactions(
+				'Canonical network without coverage',
+				10
+			)
+		).resolves.toEqual({ records: [], truncated: false });
+	});
+
+	it.each([0, -1, 1.5, 51, Number.NaN, Number.POSITIVE_INFINITY])(
+		'rejects an unbounded recent transaction limit of %p',
+		async (limit) => {
+			await expect(
+				repository.findRecentTransactions('Canonical limit network', limit)
+			).rejects.toThrow(/limit must be an integer between 1 and 50/);
+		}
+	);
 
 	it('deduplicates exact concurrent replay without mutating batch provenance', async () => {
 		const input = await seedFullHistoryCheckpoint(dataSource, {

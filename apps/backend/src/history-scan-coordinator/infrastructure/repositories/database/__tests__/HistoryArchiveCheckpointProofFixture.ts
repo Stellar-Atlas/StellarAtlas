@@ -13,6 +13,7 @@ import type { HistoryArchiveObjectEventRecorder } from '../../../../use-cases/re
 import { FailHistoryArchiveObject } from '../../../../use-cases/fail-history-archive-object/FailHistoryArchiveObject.js';
 import { HistoryArchiveObjectHostThrottleMigration1784410000000 } from '../../../database/migrations/1784410000000-HistoryArchiveObjectHostThrottleMigration.js';
 import { HistoryArchiveObjectClaimCursorMigration1784780000000 } from '../../../database/migrations/1784780000000-HistoryArchiveObjectClaimCursorMigration.js';
+import { createCanonicalFrontierTestSchema } from './HistoryArchiveCanonicalFrontierTestSchema.js';
 
 export const proofArchiveUrl = 'https://proof.example/archive';
 export const proofBucketHash = 'a'.repeat(64);
@@ -39,6 +40,7 @@ export async function createProofDataSource(url: string): Promise<{
 		queryRunner
 	);
 	await queryRunner.release();
+	await createCanonicalFrontierTestSchema(dataSource);
 	return {
 		dataSource,
 		repository: new TypeOrmHistoryArchiveCheckpointProofRepository(dataSource)
