@@ -434,21 +434,27 @@ describe('TypeOrmHistoryArchiveCheckpointProofRepository disposable PostgreSQL',
 		} = await exerciseFlakyProofRefresh(dataSource, repository);
 		expect(failedObject).toMatchObject({ attempts: 1, status: 'scanning' });
 		const firstResult = await useCase.execute(failedObject.remoteId, failure);
-		expect(firstResult._unsafeUnwrapErr()).toMatchObject({
-			message: 'transient proof refresh failure'
-		});
-		expect(
-			await objectRepository.findByRemoteId(failedObject.remoteId)
-		).toMatchObject({
+		expect(firstResult._unsafeUnwrap()).toBe(true);
+		const persistedFailure = await objectRepository.findByRemoteId(
+			failedObject.remoteId
+		);
+		expect(persistedFailure).toMatchObject({
 			status: 'failed',
 			transitionEffectsCompletedAt: null,
 			transitionEffectsRequiredAt: expect.any(Date)
 		});
-		const replayResult = await useCase.execute(failedObject.remoteId, failure);
+		if (persistedFailure === null) throw new Error('Missing persisted failure');
+		await expect(useCase.reconcilePersisted(persistedFailure)).rejects.toThrow(
+			'transient proof refresh failure'
+		);
+		const retryFailure = await objectRepository.findByRemoteId(
+			failedObject.remoteId
+		);
+		if (retryFailure === null) throw new Error('Missing retryable failure');
+		await useCase.reconcilePersisted(retryFailure);
 		const proof = await dataSource
 			.getRepository(HistoryArchiveCheckpointProof)
 			.findOneByOrFail({ archiveUrlIdentity: archiveUrl, checkpointLedger });
-		expect(replayResult._unsafeUnwrap()).toBe(true);
 		expect(
 			await objectRepository.findByRemoteId(failedObject.remoteId)
 		).toMatchObject({ transitionEffectsCompletedAt: expect.any(Date) });

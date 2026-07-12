@@ -1,4 +1,5 @@
 import { canonicalBucketHasStrictSourceProofSql } from './HistoryArchiveCanonicalBucketProofSql.js';
+import { canonicalCategoryTargetsCteSql } from './HistoryArchiveCanonicalCategorySql.js';
 const canonicalRuntimeTargetCtes = `
 	forward_runtime_target as materialized (
 		select "network_passphrase_hash", "checkpoint_ledger"::integer
@@ -47,7 +48,7 @@ const canonicalRuntimeTargetCtes = `
 
 export const materializeCanonicalFrontierDependenciesSql = `
 	with ${canonicalRuntimeTargetCtes}, checkpoints as materialized (
-		select checkpoint.*
+		select checkpoint.*, state."networkPassphrase"
 		from runtime_target target
 		join "history_archive_state_snapshot" state
 			on state.status = 'available'
@@ -88,56 +89,7 @@ export const materializeCanonicalFrontierDependenciesSql = `
 		where hash.value is not null
 			and lower(hash.value) ~ '^[0-9a-f]{64}$'
 			and lower(hash.value) !~ '^0+$'
-	), category_targets as materialized (
-		select checkpoint."archiveUrlIdentity", desired.object_type,
-			desired.checkpoint_ledger, desired.object_key
-		from checkpoints checkpoint
-		cross join lateral (
-			values
-				(
-					'ledger', checkpoint."checkpointLedger" - 64,
-					'ledger:' || lpad(
-						to_hex(checkpoint."checkpointLedger" - 64), 8, '0'
-					), 0
-				),
-				(
-					'ledger', checkpoint."checkpointLedger",
-					'ledger:' || lpad(to_hex(checkpoint."checkpointLedger"), 8, '0'),
-					1
-				),
-				(
-					'transactions', checkpoint."checkpointLedger",
-					'transactions:' || lpad(
-						to_hex(checkpoint."checkpointLedger"), 8, '0'
-					), 2
-				),
-				(
-					'results', checkpoint."checkpointLedger",
-					'results:' || lpad(
-						to_hex(checkpoint."checkpointLedger"), 8, '0'
-					), 3
-				),
-				(
-					'scp', checkpoint."checkpointLedger",
-					'scp:' || lpad(to_hex(checkpoint."checkpointLedger"), 8, '0'), 4
-				)
-		) desired(object_type, checkpoint_ledger, object_key, object_priority)
-		where desired.object_priority > 0
-			or (
-				checkpoint."checkpointLedger" > 63
-				and exists (
-					select 1
-					from "history_archive_object_queue" predecessor
-					where predecessor."archiveUrlIdentity" =
-						checkpoint."archiveUrlIdentity"
-						and predecessor."objectType" = 'checkpoint-state'
-						and predecessor."objectKey" = 'checkpoint-state:' || lpad(
-							to_hex(checkpoint."checkpointLedger" - 64), 8, '0'
-						)
-						and predecessor.status = 'verified'
-				)
-			)
-	), inserted as (
+	), ${canonicalCategoryTargetsCteSql}, inserted as (
 		insert into "history_archive_checkpoint_bucket_dependency" (
 			"archiveUrlIdentity", "checkpointLedger", "bucketHash"
 		)
@@ -201,7 +153,8 @@ export const materializeCanonicalFrontierDependenciesSql = `
 	select
 		(select count(*)::integer from inserted) as inserted,
 		(select count(*)::integer from marked) as marked,
-		(select count(*)::integer from activated_categories) +
+		(select count(*)::integer from inserted_categories) +
+			(select count(*)::integer from activated_categories) +
 			(select count(*)::integer from activated_buckets) +
 			(select count(*)::integer from reopened_legacy_buckets) as activated
 `;

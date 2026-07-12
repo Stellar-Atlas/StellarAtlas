@@ -65,6 +65,40 @@ describe('bidirectional canonical archive frontier', () => {
 
 	it('materializes both targets and reserves a fair bounded share for each', async () => {
 		await dataSource.query(materializeCanonicalFrontierDependenciesSql);
+		const predecessorLedger = historicalCheckpoint - 64;
+		const predecessorHex = predecessorLedger.toString(16).padStart(8, '0');
+		const predecessors = (await dataSource.query(
+			`select status, "dependencyReady", "executionDisposition",
+				"executionReason", "objectUrl"
+			 from "history_archive_object_queue"
+			 where "objectType" = 'ledger' and "checkpointLedger" = $1
+			 order by "archiveUrlIdentity"`,
+			[predecessorLedger]
+		)) as readonly MaterializedCategory[];
+		expect(predecessors).toHaveLength(rootCount);
+		expect(
+			predecessors.every(
+				(row) =>
+					row.status === 'pending' &&
+					row.dependencyReady &&
+					row.executionDisposition === 'deferred' &&
+					row.executionReason === 'canonical-frontier-materialization' &&
+					row.objectUrl.endsWith(
+						`/ledger/${predecessorHex.slice(0, 2)}/${predecessorHex.slice(
+							2,
+							4
+						)}/${predecessorHex.slice(4, 6)}/ledger-${predecessorHex}.xdr.gz`
+					)
+			)
+		).toBe(true);
+		await dataSource.query(materializeCanonicalFrontierDependenciesSql);
+		const [predecessorCount] = (await dataSource.query(
+			`select count(*)::integer as count
+			 from "history_archive_object_queue"
+			 where "objectType" = 'ledger' and "checkpointLedger" = $1`,
+			[predecessorLedger]
+		)) as readonly { readonly count: number }[];
+		expect(predecessorCount?.count).toBe(rootCount);
 		const materialized = (await dataSource.query(
 			`select "checkpointLedger", count(*)::integer as count
 			 from "history_archive_object_queue"
@@ -103,7 +137,7 @@ describe('bidirectional canonical archive frontier', () => {
 
 		expect(admission?.count).toBe(24);
 		expect(reservations).toEqual([
-			{ checkpointLedger: historicalCheckpoint, count: 12 },
+			{ checkpointLedger: historicalCheckpoint - 64, count: 12 },
 			{ checkpointLedger: forwardCheckpoint, count: 12 }
 		]);
 		expect(perHost.every((row) => row.count <= 2)).toBe(true);
@@ -116,11 +150,23 @@ interface CheckpointCount {
 	readonly count: number;
 }
 
+interface MaterializedCategory {
+	readonly dependencyReady: boolean;
+	readonly executionDisposition: string;
+	readonly executionReason: string;
+	readonly objectUrl: string;
+	readonly status: string;
+}
+
 async function seedArchive(
 	dataSource: DataSource,
 	index: number
 ): Promise<void> {
 	const root = createRoot(index);
+	const historicalPredecessorState = verifiedCheckpoint(
+		index,
+		historicalCheckpoint - 64
+	);
 	const historicalState = verifiedCheckpoint(index, historicalCheckpoint);
 	const forwardState = verifiedCheckpoint(index, forwardCheckpoint);
 	const generic = createCheckpoint(index, 63);
@@ -158,6 +204,7 @@ async function seedArchive(
 		.getRepository(HistoryArchiveObject)
 		.save([
 			root,
+			historicalPredecessorState,
 			historicalState,
 			forwardState,
 			generic,
