@@ -13,6 +13,7 @@ import type {
 	FullHistoryWriteReceipt
 } from '../../../domain/full-history/FullHistoryCanonicalRepository.js';
 import type {
+	FullHistoryOperationCoverage,
 	FullHistoryOperationPage,
 	FullHistoryOperationQuery
 } from '../../../domain/full-history/FullHistoryCanonicalOperation.js';
@@ -43,7 +44,10 @@ import { FullHistoryLedger } from './entities/FullHistoryLedger.js';
 import { FullHistoryTransaction } from './entities/FullHistoryTransaction.js';
 import { FullHistoryTransactionResult } from './entities/FullHistoryTransactionResult.js';
 import { FullHistoryWatermark } from './entities/FullHistoryWatermark.js';
-import { findCanonicalOperations } from './FullHistoryCanonicalOperationQuery.js';
+import {
+	findCanonicalOperations,
+	getCanonicalOperationCoverage
+} from './FullHistoryCanonicalOperationQuery.js';
 
 interface FullHistoryCoverageRow {
 	readonly archiveSourceCount: number | string;
@@ -85,6 +89,15 @@ export class TypeOrmFullHistoryCanonicalRepository implements FullHistoryCanonic
 			this.dataSource,
 			hashNetworkPassphrase(networkPassphrase),
 			query
+		);
+	}
+
+	async getOperationCoverage(
+		networkPassphrase: string
+	): Promise<FullHistoryOperationCoverage> {
+		return getCanonicalOperationCoverage(
+			this.dataSource,
+			hashNetworkPassphrase(networkPassphrase)
 		);
 	}
 

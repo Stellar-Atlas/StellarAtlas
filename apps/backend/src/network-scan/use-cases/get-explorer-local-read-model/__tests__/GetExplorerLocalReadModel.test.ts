@@ -10,7 +10,7 @@ import { GetExplorerLocalReadModel } from '../GetExplorerLocalReadModel.js';
 const networkPassphrase = 'Explorer read-model network';
 
 describe('GetExplorerLocalReadModel', () => {
-	it('reports bounded canonical transaction coverage without claiming other indexes', async () => {
+	it('reports complete canonical transaction and operation coverage', async () => {
 		const parsed = parsedRepository();
 		const canonical = mock<FullHistoryCanonicalRepository>();
 		canonical.getCoverage.mockResolvedValue({
@@ -25,6 +25,7 @@ describe('GetExplorerLocalReadModel', () => {
 			transactionResultCount: 26158,
 			updatedAt: new Date('2026-07-12T03:19:10.000Z')
 		});
+		canonical.getOperationCoverage.mockResolvedValue(operationCoverage(true));
 
 		const result = await new GetExplorerLocalReadModel(parsed, canonical, {
 			networkPassphrase
@@ -34,7 +35,7 @@ describe('GetExplorerLocalReadModel', () => {
 			indexes: {
 				assetIndexReady: false,
 				contractIndexReady: false,
-				operationIndexReady: false,
+				operationIndexReady: true,
 				transactionIndexReady: true
 			},
 			transactions: {
@@ -56,6 +57,7 @@ describe('GetExplorerLocalReadModel', () => {
 		const parsed = parsedRepository();
 		const canonical = mock<FullHistoryCanonicalRepository>();
 		canonical.getCoverage.mockResolvedValue(null);
+		canonical.getOperationCoverage.mockResolvedValue(operationCoverage(false));
 
 		await expect(
 			new GetExplorerLocalReadModel(parsed, canonical, {
@@ -88,4 +90,14 @@ function parsedRepository(): ParsedLedgerHeaderRepository {
 		sourceArchiveCount: 1
 	});
 	return repository;
+}
+
+function operationCoverage(complete: boolean) {
+	return {
+		canonicalBatches: complete ? 1 : 0,
+		complete,
+		firstIndexedLedger: complete ? fullHistoryLedgerSequence(63386240n) : null,
+		indexedBatches: complete ? 1 : 0,
+		lastIndexedLedger: complete ? fullHistoryLedgerSequence(63386303n) : null
+	};
 }

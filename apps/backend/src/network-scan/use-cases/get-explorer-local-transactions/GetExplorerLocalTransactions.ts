@@ -26,7 +26,7 @@ export interface ExplorerLocalTransactionsDTO {
 		readonly assetIndexReady: false;
 		readonly contractIndexReady: false;
 		readonly evidenceSelection: 'proof_gated_canonical_transaction_and_result';
-		readonly operationIndexReady: false;
+		readonly operationIndexReady: boolean;
 		readonly transactionIndexReady: boolean;
 	};
 	readonly records: readonly ExplorerCanonicalTransactionDTO[];
@@ -44,12 +44,15 @@ export class GetExplorerLocalTransactions {
 	) {}
 
 	async execute(limit: number): Promise<ExplorerLocalTransactionsDTO> {
-		const [recent, coverage] = await Promise.all([
+		const [recent, coverage, operationCoverage] = await Promise.all([
 			this.canonicalHistory.findRecentTransactions(
 				this.networkConfig.networkPassphrase,
 				limit
 			),
-			this.canonicalHistory.getCoverage(this.networkConfig.networkPassphrase)
+			this.canonicalHistory.getCoverage(this.networkConfig.networkPassphrase),
+			this.canonicalHistory.getOperationCoverage(
+				this.networkConfig.networkPassphrase
+			)
 		]);
 		if (coverage === null && recent.records.length > 0) {
 			throw new Error(
@@ -68,7 +71,7 @@ export class GetExplorerLocalTransactions {
 				assetIndexReady: false,
 				contractIndexReady: false,
 				evidenceSelection: 'proof_gated_canonical_transaction_and_result',
-				operationIndexReady: false,
+				operationIndexReady: operationCoverage.complete,
 				transactionIndexReady: canonicalTransactionsReady(coverage)
 			},
 			records,

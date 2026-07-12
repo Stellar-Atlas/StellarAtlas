@@ -326,10 +326,14 @@ export const fetchExplorerOperations = (
 ): Promise<PublicExplorerOperations> => {
 	const params = new URLSearchParams();
 	if (filters.accountId) params.set('accountId', filters.accountId);
+	if (filters.firstLedger) params.set('firstLedger', filters.firstLedger);
 	if (filters.from) params.set('from', filters.from);
 	if (filters.ledger) params.set('ledger', filters.ledger);
+	if (filters.lastLedger) params.set('lastLedger', filters.lastLedger);
 	if (filters.operationType) params.set('operationType', filters.operationType);
 	if (filters.to) params.set('to', filters.to);
+	if (filters.transactionHash)
+		params.set('transactionHash', filters.transactionHash);
 	const query = params.toString();
 	return fetchJson<PublicExplorerOperations>(
 		`/v1/explorer/operations${query.length > 0 ? `?${query}` : ''}`,

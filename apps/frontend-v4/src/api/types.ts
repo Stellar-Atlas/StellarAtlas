@@ -125,31 +125,71 @@ export interface PublicExplorerAssets {
 	readonly truncated: boolean;
 }
 
-export interface PublicExplorerOperation {
+interface PublicExplorerOperationBase {
 	readonly createdAt: string;
 	readonly id: string;
 	readonly ledger: string | null;
-	readonly source: 'horizon';
 	readonly sourceAccount: string | null;
-	readonly successful: boolean | null;
 	readonly transactionHash: string | null;
 	readonly type: string;
+}
+
+export interface PublicCanonicalExplorerOperation extends PublicExplorerOperationBase {
+	readonly evidence: {
+		readonly archiveSource: string;
+		readonly batchId: string;
+		readonly checkpointLedger: string;
+		readonly checkpointProofId: number;
+		readonly decoderVersion: string;
+		readonly proofEvaluatedAt: string;
+		readonly proofVersion: number;
+	};
+	readonly factScope: 'operation_body_and_envelope';
+	readonly operationIndex: number;
+	readonly outcomeAvailable: false;
+	readonly source: 'postgres_canonical';
+	readonly sourceAccountOrigin: 'operation' | 'transaction';
+	readonly transactionIndex: number;
+}
+
+export interface PublicHorizonExplorerOperation extends PublicExplorerOperationBase {
+	readonly source: 'horizon';
+	readonly successful: boolean | null;
 	readonly typeNumber: number | null;
 }
 
+export type PublicExplorerOperation =
+	PublicCanonicalExplorerOperation | PublicHorizonExplorerOperation;
+
 export interface PublicExplorerOperationFilters {
 	readonly accountId?: string;
+	readonly firstLedger?: string;
 	readonly from?: string;
 	readonly ledger?: string;
+	readonly lastLedger?: string;
 	readonly operationType?: string;
 	readonly to?: string;
 	readonly transactionHash?: string;
 }
 
 export interface PublicExplorerOperations {
+	readonly count?: number;
+	readonly coverage?: {
+		readonly canonicalBatches: number;
+		readonly complete: boolean;
+		readonly firstIndexedLedger: string | null;
+		readonly indexedBatches: number;
+		readonly lastIndexedLedger: string | null;
+	};
+	readonly factBoundary?: {
+		readonly includes: 'operation_type_and_effective_source';
+		readonly outcomes: 'unavailable_without_ledger_close_meta';
+	};
 	readonly filters: PublicExplorerOperationFilters;
+	readonly generatedAt?: string;
+	readonly limit?: number;
 	readonly records: readonly PublicExplorerOperation[];
-	readonly source: 'horizon';
+	readonly source: 'horizon' | 'postgres_canonical';
 	readonly truncated: boolean;
 }
 

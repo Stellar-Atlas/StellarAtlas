@@ -8,6 +8,7 @@ import type {
 	FullHistoryUint64String
 } from './FullHistoryCanonicalTypes.js';
 import type {
+	FullHistoryOperationCoverage,
 	FullHistoryOperationPage,
 	FullHistoryOperationQuery
 } from './FullHistoryCanonicalOperation.js';
@@ -92,6 +93,9 @@ export interface FullHistoryCanonicalRepository {
 		networkPassphrase: string,
 		query: FullHistoryOperationQuery
 	): Promise<FullHistoryOperationPage>;
+	getOperationCoverage(
+		networkPassphrase: string
+	): Promise<FullHistoryOperationCoverage>;
 	findTransaction(
 		networkPassphrase: string,
 		transactionHash: FullHistoryHash

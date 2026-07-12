@@ -15,6 +15,8 @@ interface BuildTestAppOptions {
 }
 
 const canonicalHash = 'a'.repeat(64);
+const canonicalSourceAccount =
+	'GCNDNEWL4WBR7DHE3VOVCKVMBB67JMZV3LBXUHPOVEPABEIBVVP5KPIC';
 const canonicalTransaction: ExplorerCanonicalTransactionDTO = {
 	createdAt: '2026-07-08T16:09:36.000Z',
 	feeCharged: '100',
@@ -22,8 +24,32 @@ const canonicalTransaction: ExplorerCanonicalTransactionDTO = {
 	ledger: '63386303',
 	operationCount: 3,
 	source: 'postgres_canonical',
-	sourceAccount: `G${'A'.repeat(55)}`,
+	sourceAccount: canonicalSourceAccount,
 	successful: true
+};
+
+const canonicalOperation: ExplorerLocalOperationsDTO['records'][number] = {
+	createdAt: '2026-07-08T16:09:36.000Z',
+	evidence: {
+		archiveSource: 'archive.example',
+		batchId: '00000000-0000-4000-8000-000000000001',
+		checkpointLedger: '63386303',
+		checkpointProofId: 41,
+		decoderVersion: 'stellar-sdk-16/archive-xdr-v2-operation-facts',
+		proofEvaluatedAt: '2026-07-08T16:10:00.000Z',
+		proofVersion: 5
+	},
+	factScope: 'operation_body_and_envelope',
+	id: `${canonicalHash}:0`,
+	ledger: '63386303',
+	operationIndex: 0,
+	outcomeAvailable: false,
+	source: 'postgres_canonical',
+	sourceAccount: canonicalSourceAccount,
+	sourceAccountOrigin: 'transaction',
+	transactionHash: canonicalHash,
+	transactionIndex: 0,
+	type: 'payment'
 };
 
 const canonicalCoverage = {
@@ -51,7 +77,7 @@ const canonicalFeed = (
 		assetIndexReady: false,
 		contractIndexReady: false,
 		evidenceSelection: 'proof_gated_canonical_transaction_and_result',
-		operationIndexReady: false,
+		operationIndexReady: true,
 		transactionIndexReady: records.length > 0
 	},
 	records,
@@ -64,7 +90,7 @@ const localReadModel = (): ExplorerLocalReadModelDTO => ({
 	indexes: {
 		assetIndexReady: false,
 		contractIndexReady: false,
-		operationIndexReady: false,
+		operationIndexReady: true,
 		transactionIndexReady: true
 	},
 	parsedLedgerHeaders: {
@@ -97,7 +123,14 @@ const buildTestApp = (options: BuildTestAppOptions = {}) => {
 				? canonicalTransaction
 				: options.localTransaction,
 		findOperations: async (): Promise<ExplorerLocalOperationsDTO> => ({
-			count: 0,
+			count: 1,
+			coverage: {
+				canonicalBatches: 1,
+				complete: true,
+				firstIndexedLedger: '63386240',
+				indexedBatches: 1,
+				lastIndexedLedger: '63386303'
+			},
 			factBoundary: {
 				includes: 'operation_type_and_effective_source',
 				outcomes: 'unavailable_without_ledger_close_meta'
@@ -105,7 +138,7 @@ const buildTestApp = (options: BuildTestAppOptions = {}) => {
 			filters: {},
 			generatedAt: '2026-07-12T04:00:00.000Z',
 			limit: 50,
-			records: [],
+			records: [canonicalOperation],
 			source: 'postgres_canonical',
 			truncated: false
 		})
@@ -179,7 +212,7 @@ describe('BlockchainExplorerRouter.integration', () => {
 					indexes: {
 						assetIndexReady: false,
 						contractIndexReady: false,
-						operationIndexReady: false,
+						operationIndexReady: true,
 						transactionIndexReady: true
 					},
 					parsedLedgerHeaders: {
@@ -217,7 +250,7 @@ describe('BlockchainExplorerRouter.integration', () => {
 					readModel: {
 						assetIndexReady: false,
 						contractIndexReady: false,
-						operationIndexReady: false,
+						operationIndexReady: true,
 						transactionIndexReady: true
 					},
 					records: [
@@ -257,6 +290,33 @@ describe('BlockchainExplorerRouter.integration', () => {
 			.expect(400)
 			.expect((response) => {
 				expect(response.body).toEqual({ error: 'Invalid operation filters' });
+			});
+
+		expect(fetchSpy).not.toHaveBeenCalled();
+	});
+
+	it('serves operation filters from the complete canonical index', async () => {
+		const fetchSpy = jest.spyOn(global, 'fetch');
+
+		await request(buildTestApp())
+			.get(
+				`/v1/explorer/operations?ledger=63386303&accountId=${canonicalOperation.sourceAccount}&operationType=payment&from=2026-07-08T16%3A00%3A00.000Z&to=2026-07-08T17%3A00%3A00.000Z`
+			)
+			.expect(200)
+			.expect((response) => {
+				expect(response.body).toMatchObject({
+					coverage: { complete: true },
+					records: [
+						{
+							id: `${canonicalHash}:0`,
+							outcomeAvailable: false,
+							source: 'postgres_canonical',
+							transactionHash: canonicalHash,
+							type: 'payment'
+						}
+					],
+					source: 'postgres_canonical'
+				});
 			});
 
 		expect(fetchSpy).not.toHaveBeenCalled();
@@ -403,7 +463,29 @@ describe('BlockchainExplorerRouter.integration', () => {
 		expect(fetchSpy).not.toHaveBeenCalled();
 	});
 
-	it('returns transaction operation detail rows', async () => {
+	it('returns canonical transaction operation detail rows without Horizon', async () => {
+		const fetchSpy = jest.spyOn(global, 'fetch');
+
+		await request(buildTestApp())
+			.get(`/v1/explorer/transactions/${canonicalHash}/operations`)
+			.expect(200)
+			.expect((response) => {
+				expect(response.body).toMatchObject({
+					coverage: { complete: true },
+					records: [
+						{
+							id: `${canonicalHash}:0`,
+							source: 'postgres_canonical'
+						}
+					],
+					source: 'postgres_canonical'
+				});
+			});
+
+		expect(fetchSpy).not.toHaveBeenCalled();
+	});
+
+	it('uses Horizon transaction operations only outside canonical coverage', async () => {
 		const transactionHash = 'b'.repeat(64);
 		jest.spyOn(global, 'fetch').mockResolvedValue(
 			new Response(
@@ -427,7 +509,7 @@ describe('BlockchainExplorerRouter.integration', () => {
 			)
 		);
 
-		await request(buildTestApp())
+		await request(buildTestApp({ localTransaction: null }))
 			.get(`/v1/explorer/transactions/${transactionHash}/operations`)
 			.expect(200)
 			.expect((response) => {
@@ -465,7 +547,7 @@ describe('BlockchainExplorerRouter.integration', () => {
 			.spyOn(global, 'fetch')
 			.mockResolvedValue(new Response('{}', { status: 404 }));
 
-		await request(buildTestApp())
+		await request(buildTestApp({ localTransaction: null }))
 			.get(`/v1/explorer/transactions/${'c'.repeat(64)}/operations`)
 			.expect(404)
 			.expect((response) => {

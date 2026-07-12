@@ -182,6 +182,8 @@ describe('TypeOrmFullHistoryCanonicalRepository', () => {
 		await repository.writeCheckpoint(regular);
 
 		const page = await repository.findOperations(networkPassphrase, {
+			closedAtFrom: regular.ledgers[0]!.closedAt,
+			closedAtTo: regular.ledgers.at(-1)!.closedAt,
 			firstLedger: fullHistoryLedgerSequence('64'),
 			lastLedger: fullHistoryLedgerSequence('127'),
 			limit: 10,
@@ -222,6 +224,13 @@ describe('TypeOrmFullHistoryCanonicalRepository', () => {
 		expect(page.records[0]).not.toHaveProperty('resultCode');
 		expect(page.records[0]).not.toHaveProperty('effects');
 		expect(page.records[0]).not.toHaveProperty('events');
+		await expect(
+			repository.getOperationCoverage(networkPassphrase)
+		).resolves.toMatchObject({
+			canonicalBatches: 2,
+			complete: true,
+			indexedBatches: 2
+		});
 
 		await expect(
 			repository.findOperations(networkPassphrase, { limit: 1 })
@@ -292,9 +301,7 @@ describe('TypeOrmFullHistoryCanonicalRepository', () => {
 		await expect(
 			repository.writeCheckpoint({
 				...input,
-				operations: [
-					{ ...input.operations[0]!, operationType: 'manage_data' }
-				]
+				operations: [{ ...input.operations[0]!, operationType: 'manage_data' }]
 			})
 		).rejects.toMatchObject({ reason: 'canonical-row-conflict' });
 	});

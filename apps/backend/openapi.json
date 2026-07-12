@@ -647,7 +647,7 @@
 		"/v1/explorer/transactions/{hash}/operations": {
 			"get": {
 				"summary": "Get operations for a transaction",
-				"description": "Returns bounded Horizon operation rows for one transaction hash.",
+				"description": "Returns proof-gated canonical operation facts when the transaction is in local canonical coverage, otherwise uses the configured Horizon source.",
 				"tags": ["Explorer"],
 				"operationId": "getExplorerTransactionOperations",
 				"parameters": [
@@ -768,7 +768,7 @@
 		"/v1/explorer/operations": {
 			"get": {
 				"summary": "Search operations",
-				"description": "Returns bounded Horizon operation rows filtered by ledger, account, operation type, or date range.",
+				"description": "Returns bounded proof-gated canonical operation facts filtered by ledger, account, operation type, transaction hash, or close-time range. Execution outcomes remain unavailable until LedgerCloseMeta ingestion is active.",
 				"tags": ["Explorer"],
 				"operationId": "getExplorerOperations",
 				"parameters": [
@@ -801,6 +801,12 @@
 						"in": "query",
 						"required": false,
 						"schema": { "type": "string", "format": "date-time" }
+					},
+					{
+						"name": "transactionHash",
+						"in": "query",
+						"required": false,
+						"schema": { "type": "string", "pattern": "^[0-9a-fA-F]{64}$" }
 					}
 				],
 				"responses": {
@@ -8799,7 +8805,7 @@
 						"properties": {
 							"assetIndexReady": { "type": "boolean", "enum": [false] },
 							"contractIndexReady": { "type": "boolean", "enum": [false] },
-							"operationIndexReady": { "type": "boolean", "enum": [false] },
+							"operationIndexReady": { "type": "boolean" },
 							"transactionIndexReady": { "type": "boolean" }
 						}
 					},
@@ -8899,7 +8905,7 @@
 								"type": "string",
 								"enum": ["proof_gated_canonical_transaction_and_result"]
 							},
-							"operationIndexReady": { "type": "boolean", "enum": [false] },
+							"operationIndexReady": { "type": "boolean" },
 							"transactionIndexReady": { "type": "boolean" }
 						}
 					},
@@ -9082,8 +9088,10 @@
 				"type": "object",
 				"properties": {
 					"accountId": { "type": "string" },
+					"firstLedger": { "type": "string" },
 					"from": { "type": "string", "format": "date-time" },
 					"ledger": { "type": "string" },
+					"lastLedger": { "type": "string" },
 					"operationType": { "type": "string" },
 					"to": { "type": "string", "format": "date-time" },
 					"transactionHash": { "type": "string" }
@@ -9097,19 +9105,55 @@
 					"ledger",
 					"source",
 					"sourceAccount",
-					"successful",
 					"transactionHash",
-					"type",
-					"typeNumber"
+					"type"
 				],
 				"properties": {
 					"createdAt": { "type": "string", "format": "date-time" },
+					"evidence": {
+						"type": "object",
+						"required": [
+							"archiveSource",
+							"batchId",
+							"checkpointLedger",
+							"checkpointProofId",
+							"decoderVersion",
+							"proofEvaluatedAt",
+							"proofVersion"
+						],
+						"properties": {
+							"archiveSource": { "type": "string" },
+							"batchId": { "type": "string", "format": "uuid" },
+							"checkpointLedger": { "type": "string" },
+							"checkpointProofId": { "type": "integer", "minimum": 1 },
+							"decoderVersion": { "type": "string" },
+							"proofEvaluatedAt": {
+								"type": "string",
+								"format": "date-time"
+							},
+							"proofVersion": { "type": "integer", "minimum": 1 }
+						}
+					},
+					"factScope": {
+						"type": "string",
+						"enum": ["operation_body_and_envelope"]
+					},
 					"id": { "type": "string" },
 					"ledger": { "type": "string", "nullable": true },
-					"source": { "type": "string", "enum": ["horizon"] },
+					"operationIndex": { "type": "integer", "minimum": 0 },
+					"outcomeAvailable": { "type": "boolean", "enum": [false] },
+					"source": {
+						"type": "string",
+						"enum": ["horizon", "postgres_canonical"]
+					},
 					"sourceAccount": { "type": "string", "nullable": true },
+					"sourceAccountOrigin": {
+						"type": "string",
+						"enum": ["operation", "transaction"]
+					},
 					"successful": { "type": "boolean", "nullable": true },
 					"transactionHash": { "type": "string", "nullable": true },
+					"transactionIndex": { "type": "integer", "minimum": 0 },
 					"type": { "type": "string" },
 					"typeNumber": { "type": "integer", "nullable": true }
 				}
@@ -9118,6 +9162,44 @@
 				"type": "object",
 				"required": ["filters", "records", "source", "truncated"],
 				"properties": {
+					"count": { "type": "integer", "minimum": 0 },
+					"coverage": {
+						"type": "object",
+						"required": [
+							"canonicalBatches",
+							"complete",
+							"firstIndexedLedger",
+							"indexedBatches",
+							"lastIndexedLedger"
+						],
+						"properties": {
+							"canonicalBatches": { "type": "integer", "minimum": 0 },
+							"complete": { "type": "boolean" },
+							"firstIndexedLedger": {
+								"type": "string",
+								"nullable": true
+							},
+							"indexedBatches": { "type": "integer", "minimum": 0 },
+							"lastIndexedLedger": {
+								"type": "string",
+								"nullable": true
+							}
+						}
+					},
+					"factBoundary": {
+						"type": "object",
+						"required": ["includes", "outcomes"],
+						"properties": {
+							"includes": {
+								"type": "string",
+								"enum": ["operation_type_and_effective_source"]
+							},
+							"outcomes": {
+								"type": "string",
+								"enum": ["unavailable_without_ledger_close_meta"]
+							}
+						}
+					},
 					"filters": {
 						"$ref": "#/components/schemas/ExplorerOperationFilters"
 					},
@@ -9125,7 +9207,12 @@
 						"type": "array",
 						"items": { "$ref": "#/components/schemas/ExplorerOperation" }
 					},
-					"source": { "type": "string", "enum": ["horizon"] },
+					"generatedAt": { "type": "string", "format": "date-time" },
+					"limit": { "type": "integer", "minimum": 1, "maximum": 100 },
+					"source": {
+						"type": "string",
+						"enum": ["horizon", "postgres_canonical"]
+					},
 					"truncated": { "type": "boolean" }
 				}
 			},

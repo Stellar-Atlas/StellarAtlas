@@ -15,7 +15,7 @@ export interface ExplorerLocalReadModelDTO {
 	readonly indexes: {
 		readonly assetIndexReady: false;
 		readonly contractIndexReady: false;
-		readonly operationIndexReady: false;
+		readonly operationIndexReady: boolean;
 		readonly transactionIndexReady: boolean;
 	};
 	readonly parsedLedgerHeaders: {
@@ -27,8 +27,7 @@ export interface ExplorerLocalReadModelDTO {
 		readonly sourceArchiveCount: number;
 	};
 	readonly source:
-		| 'full_history_canonical_repository'
-		| 'parsed_ledger_header_repository';
+		'full_history_canonical_repository' | 'parsed_ledger_header_repository';
 	readonly transactions: {
 		readonly canonicalCoverage: ExplorerCanonicalCoverageDTO | null;
 		readonly localCoverage: boolean;
@@ -49,9 +48,12 @@ export class GetExplorerLocalReadModel {
 	) {}
 
 	async execute(): Promise<ExplorerLocalReadModelDTO> {
-		const coverage = await this.canonicalHistory.getCoverage(
-			this.networkConfig.networkPassphrase
-		);
+		const [coverage, operationCoverage] = await Promise.all([
+			this.canonicalHistory.getCoverage(this.networkConfig.networkPassphrase),
+			this.canonicalHistory.getOperationCoverage(
+				this.networkConfig.networkPassphrase
+			)
+		]);
 		const watermark =
 			coverage === null
 				? await this.parsedLedgerHeaders.getWatermark()
@@ -66,7 +68,7 @@ export class GetExplorerLocalReadModel {
 			indexes: {
 				assetIndexReady: false,
 				contractIndexReady: false,
-				operationIndexReady: false,
+				operationIndexReady: operationCoverage.complete,
 				transactionIndexReady
 			},
 			parsedLedgerHeaders: {

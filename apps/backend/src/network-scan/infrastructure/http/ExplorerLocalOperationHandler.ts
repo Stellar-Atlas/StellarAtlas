@@ -21,7 +21,7 @@ export function createExplorerLocalOperationHandler(
 	return async (req, res) => {
 		const query = readOperationQuery(req);
 		if (query === null) {
-			return res.status(400).json({ error: 'Invalid local operation filters' });
+			return res.status(400).json({ error: 'Invalid operation filters' });
 		}
 
 		res.setHeader(
@@ -31,22 +31,36 @@ export function createExplorerLocalOperationHandler(
 		try {
 			return res.status(200).json(await useCase.findOperations(query));
 		} catch {
-			return res
-				.status(502)
-				.json({ error: 'Explorer local operations unavailable' });
+			return res.status(502).json({ error: 'Operation search unavailable' });
 		}
 	};
 }
 
-function readOperationQuery(req: express.Request): FullHistoryOperationQuery | null {
-	const firstLedger = readOptionalString(req.query.firstLedger);
-	const lastLedger = readOptionalString(req.query.lastLedger);
+function readOperationQuery(
+	req: express.Request
+): FullHistoryOperationQuery | null {
+	const exactLedger = readOptionalString(req.query.ledger);
+	const firstLedger = readAliasedString(req.query.firstLedger, exactLedger);
+	const lastLedger = readAliasedString(req.query.lastLedger, exactLedger);
 	const operationType = readOptionalString(req.query.operationType);
-	const sourceAccount = readOptionalString(req.query.sourceAccount);
+	const sourceAccount = readAliasedString(
+		req.query.sourceAccount,
+		readOptionalString(req.query.accountId)
+	);
 	const transactionHash = readOptionalString(req.query.transactionHash);
+	const closedAtFrom = readDate(req.query.from);
+	const closedAtTo = readDate(req.query.to);
 	const limit = readLimit(req.query.limit);
 	if (
 		limit === null ||
+		firstLedger === false ||
+		lastLedger === false ||
+		sourceAccount === false ||
+		closedAtFrom === false ||
+		closedAtTo === false ||
+		(closedAtFrom !== undefined &&
+			closedAtTo !== undefined &&
+			closedAtFrom.getTime() > closedAtTo.getTime()) ||
 		(operationType !== undefined &&
 			!isFullHistoryOperationType(operationType)) ||
 		(sourceAccount !== undefined &&
@@ -67,6 +81,8 @@ function readOperationQuery(req: express.Request): FullHistoryOperationQuery | n
 	}
 
 	return {
+		...(closedAtFrom === undefined ? {} : { closedAtFrom }),
+		...(closedAtTo === undefined ? {} : { closedAtTo }),
 		...(first === null ? {} : { firstLedger: first }),
 		...(last === null ? {} : { lastLedger: last }),
 		limit,
@@ -76,6 +92,23 @@ function readOperationQuery(req: express.Request): FullHistoryOperationQuery | n
 			? {}
 			: { transactionHash: FullHistoryHash.fromHex(transactionHash) })
 	};
+}
+
+function readAliasedString(
+	primary: unknown,
+	alias: string | undefined
+): string | undefined | false {
+	const value = readOptionalString(primary);
+	return value !== undefined && alias !== undefined && value !== alias
+		? false
+		: (value ?? alias);
+}
+
+function readDate(value: unknown): Date | undefined | false {
+	const input = readOptionalString(value);
+	if (input === undefined) return undefined;
+	const date = new Date(input);
+	return Number.isNaN(date.getTime()) ? false : date;
 }
 
 function parseLedger(value: string | undefined) {
@@ -91,7 +124,9 @@ function readLimit(value: unknown): number | null {
 	if (value === undefined) return defaultOperationLimit;
 	if (typeof value !== 'string') return null;
 	const limit = Number(value);
-	return Number.isSafeInteger(limit) && limit >= 1 && limit <= maximumOperationLimit
+	return Number.isSafeInteger(limit) &&
+		limit >= 1 &&
+		limit <= maximumOperationLimit
 		? limit
 		: null;
 }

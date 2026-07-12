@@ -62,6 +62,8 @@ export interface FullHistoryOperationInput {
 }
 
 export interface FullHistoryOperationQuery {
+	readonly closedAtFrom?: Date;
+	readonly closedAtTo?: Date;
 	readonly firstLedger?: FullHistoryLedgerSequence;
 	readonly lastLedger?: FullHistoryLedgerSequence;
 	readonly limit: number;
@@ -112,10 +114,7 @@ export function isFullHistoryOperationSourceAccount(value: string): boolean {
 }
 
 export function validateFullHistoryOperations(
-	input: Pick<
-		FullHistoryCheckpointWrite,
-		'operations' | 'transactions'
-	>
+	input: Pick<FullHistoryCheckpointWrite, 'operations' | 'transactions'>
 ): void {
 	const expectedCount = input.transactions.reduce(
 		(total, transaction) => total + transaction.operationCount,

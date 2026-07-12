@@ -47,7 +47,7 @@ export async function findCanonicalOperations(
 	query: FullHistoryOperationQuery
 ): Promise<FullHistoryOperationPage> {
 	validateQuery(query);
-	const coverage = await readOperationCoverage(dataSource, networkHash);
+	const coverage = await getCanonicalOperationCoverage(dataSource, networkHash);
 	const rows = await dataSource.query<FullHistoryOperationRow[]>(
 		`
 			select
@@ -84,12 +84,14 @@ export async function findCanonicalOperations(
 				and ($2::text is null or operation."operation_type" = $2)
 				and ($3::bigint is null or operation."ledger_sequence" >= $3)
 				and ($4::bigint is null or operation."ledger_sequence" <= $4)
-				and ($5::bytea is null or operation."transaction_hash" = $5)
-				and ($6::text is null or operation."source_account" = $6)
+					and ($5::bytea is null or operation."transaction_hash" = $5)
+					and ($6::text is null or operation."source_account" = $6)
+					and ($7::timestamptz is null or ledger."closed_at" >= $7)
+					and ($8::timestamptz is null or ledger."closed_at" <= $8)
 			order by operation."ledger_sequence" desc,
 				operation."transaction_index" desc,
 				operation."operation_index"
-			limit $7
+				limit $9
 		`,
 		[
 			networkHash.toBuffer(),
@@ -98,6 +100,8 @@ export async function findCanonicalOperations(
 			query.lastLedger ?? null,
 			query.transactionHash?.toBuffer() ?? null,
 			query.sourceAccount ?? null,
+			query.closedAtFrom ?? null,
+			query.closedAtTo ?? null,
 			query.limit + 1
 		]
 	);
@@ -108,7 +112,7 @@ export async function findCanonicalOperations(
 	};
 }
 
-async function readOperationCoverage(
+export async function getCanonicalOperationCoverage(
 	dataSource: DataSource,
 	networkHash: FullHistoryHash
 ): Promise<FullHistoryOperationCoverage> {
@@ -191,6 +195,26 @@ function validateQuery(query: FullHistoryOperationQuery): void {
 	) {
 		throw new RangeError('firstLedger must not exceed lastLedger');
 	}
+	const closedAtFrom = validateOptionalDate(query.closedAtFrom, 'closedAtFrom');
+	const closedAtTo = validateOptionalDate(query.closedAtTo, 'closedAtTo');
+	if (
+		closedAtFrom !== undefined &&
+		closedAtTo !== undefined &&
+		closedAtFrom.getTime() > closedAtTo.getTime()
+	) {
+		throw new RangeError('closedAtFrom must not exceed closedAtTo');
+	}
+}
+
+function validateOptionalDate(
+	value: Date | undefined,
+	name: string
+): Date | undefined {
+	if (value === undefined) return undefined;
+	if (!(value instanceof Date) || Number.isNaN(value.getTime())) {
+		throw new TypeError(`${name} must be a valid Date`);
+	}
+	return value;
 }
 
 function mapOperationRow(

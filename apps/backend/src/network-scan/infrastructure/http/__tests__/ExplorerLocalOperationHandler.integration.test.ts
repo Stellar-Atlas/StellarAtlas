@@ -12,14 +12,15 @@ describe('ExplorerLocalOperationHandler', () => {
 	it('returns only local proof-gated envelope facts for all supported filters', async () => {
 		const fetchSpy = jest.spyOn(global, 'fetch');
 		const findOperations = jest.fn(
-			async (query: FullHistoryOperationQuery): Promise<ExplorerLocalOperationsDTO> =>
-				operationPage(query)
+			async (
+				query: FullHistoryOperationQuery
+			): Promise<ExplorerLocalOperationsDTO> => operationPage(query)
 		);
 		const app = testApp(findOperations);
 
 		await request(app)
 			.get(
-				`/operations?operationType=payment&firstLedger=64&lastLedger=127&transactionHash=${transactionHash}&sourceAccount=${sourceAccount}&limit=25`
+				`/operations?operationType=payment&firstLedger=64&lastLedger=127&transactionHash=${transactionHash}&sourceAccount=${sourceAccount}&from=2026-07-12T11%3A00%3A00.000Z&to=2026-07-12T12%3A00%3A00.000Z&limit=25`
 			)
 			.expect(200)
 			.expect('Cache-Control', 'public, max-age=20')
@@ -52,6 +53,8 @@ describe('ExplorerLocalOperationHandler', () => {
 
 		const query = findOperations.mock.calls[0]?.[0];
 		expect(query).toMatchObject({
+			closedAtFrom: new Date('2026-07-12T11:00:00.000Z'),
+			closedAtTo: new Date('2026-07-12T12:00:00.000Z'),
 			firstLedger: '64',
 			lastLedger: '127',
 			limit: 25,
@@ -68,16 +71,20 @@ describe('ExplorerLocalOperationHandler', () => {
 		'firstLedger=999999999999999999999',
 		'sourceAccount=not-an-account',
 		'transactionHash=bad',
+		'from=not-a-date',
+		'from=2026-07-13T00%3A00%3A00.000Z&to=2026-07-12T00%3A00%3A00.000Z',
+		'ledger=127&firstLedger=64',
 		'limit=101'
 	])('rejects invalid local filters without querying: %s', async (query) => {
 		const findOperations = jest.fn(
-			async (input: FullHistoryOperationQuery): Promise<ExplorerLocalOperationsDTO> =>
-				operationPage(input)
+			async (
+				input: FullHistoryOperationQuery
+			): Promise<ExplorerLocalOperationsDTO> => operationPage(input)
 		);
 		await request(testApp(findOperations))
 			.get(`/operations?${query}`)
 			.expect(400)
-			.expect({ error: 'Invalid local operation filters' });
+			.expect({ error: 'Invalid operation filters' });
 		expect(findOperations).not.toHaveBeenCalled();
 	});
 });
@@ -122,7 +129,7 @@ function operationPage(
 		limit: query.limit,
 		records: [
 			{
-				closedAt: '2026-07-12T11:59:00.000Z',
+				createdAt: '2026-07-12T11:59:00.000Z',
 				evidence: {
 					archiveSource: 'archive.example',
 					batchId: '00000000-0000-4000-8000-000000000001',

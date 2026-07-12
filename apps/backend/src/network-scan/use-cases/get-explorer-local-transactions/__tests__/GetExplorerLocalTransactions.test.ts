@@ -12,13 +12,14 @@ const networkPassphrase = 'Explorer canonical network';
 const transactionHash = 'ab'.repeat(32);
 
 describe('GetExplorerLocalTransactions', () => {
-	it('maps bounded canonical recent transactions without claiming later indexes', async () => {
+	it('maps bounded canonical transactions with complete operation readiness', async () => {
 		const repository = mock<FullHistoryCanonicalRepository>();
 		repository.findRecentTransactions.mockResolvedValue({
 			records: [canonicalTransaction()],
 			truncated: true
 		});
 		repository.getCoverage.mockResolvedValue(canonicalCoverage());
+		repository.getOperationCoverage.mockResolvedValue(operationCoverage(true));
 
 		const result = await new GetExplorerLocalTransactions(repository, {
 			networkPassphrase
@@ -38,7 +39,7 @@ describe('GetExplorerLocalTransactions', () => {
 				assetIndexReady: false,
 				contractIndexReady: false,
 				evidenceSelection: 'proof_gated_canonical_transaction_and_result',
-				operationIndexReady: false,
+				operationIndexReady: true,
 				transactionIndexReady: true
 			},
 			records: [
@@ -70,6 +71,7 @@ describe('GetExplorerLocalTransactions', () => {
 			truncated: false
 		});
 		repository.getCoverage.mockResolvedValue(null);
+		repository.getOperationCoverage.mockResolvedValue(operationCoverage(false));
 
 		await expect(
 			new GetExplorerLocalTransactions(repository, {
@@ -107,6 +109,7 @@ describe('GetExplorerLocalTransactions', () => {
 			truncated: false
 		});
 		repository.getCoverage.mockResolvedValue(null);
+		repository.getOperationCoverage.mockResolvedValue(operationCoverage(false));
 
 		await expect(
 			new GetExplorerLocalTransactions(repository, {
@@ -222,5 +225,15 @@ function canonicalCoverage() {
 		transactionCount: 26158,
 		transactionResultCount: 26158,
 		updatedAt: new Date('2026-07-12T03:19:10.000Z')
+	};
+}
+
+function operationCoverage(complete: boolean) {
+	return {
+		canonicalBatches: complete ? 1 : 0,
+		complete,
+		firstIndexedLedger: complete ? fullHistoryLedgerSequence(63386240n) : null,
+		indexedBatches: complete ? 1 : 0,
+		lastIndexedLedger: complete ? fullHistoryLedgerSequence(63386303n) : null
 	};
 }

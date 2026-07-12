@@ -3,13 +3,11 @@ import {
 	fetchExplorerAccount,
 	fetchExplorerAssets,
 	fetchExplorerLedger,
-	fetchExplorerOperations,
 	fetchExplorerSearch,
 	isAccountAddress,
 	isContractAddress,
 	isLedgerSequence,
 	isTransactionHash,
-	type ExplorerOperationFilters,
 	type ExplorerSearchType
 } from './BlockchainExplorerClient.js';
 import {
@@ -18,6 +16,7 @@ import {
 } from './HorizonLedgerClient.js';
 import { fetchExplorerTransactionOperations } from './ExplorerTransactionOperationClient.js';
 import { createExplorerLocalOperationHandler } from './ExplorerLocalOperationHandler.js';
+import { FullHistoryHash } from '@history-scan-coordinator/domain/full-history/FullHistoryCanonicalTypes.js';
 import type { GetExplorerLocalReadModel } from '../../use-cases/get-explorer-local-read-model/GetExplorerLocalReadModel.js';
 import type { GetExplorerLocalTransactions } from '../../use-cases/get-explorer-local-transactions/GetExplorerLocalTransactions.js';
 
@@ -36,7 +35,6 @@ export interface BlockchainExplorerRouterConfig {
 
 const explorerCacheMaxAgeSeconds = 20;
 const maxRecentTransactionLimit = 50;
-const operationTypePattern = /^[a-z][a-z0-9_]{0,63}$/;
 
 export const blockchainExplorerRouter = (
 	config: BlockchainExplorerRouterConfig
@@ -149,6 +147,16 @@ export const blockchainExplorerRouter = (
 
 		setCacheHeader(res);
 		try {
+			const localTransaction =
+				await config.getExplorerLocalTransactions.findByHash(hash);
+			if (localTransaction !== null) {
+				return res.status(200).json(
+					await config.getExplorerLocalTransactions.findOperations({
+						limit: 100,
+						transactionHash: FullHistoryHash.fromHex(hash)
+					})
+				);
+			}
 			const operations = await fetchExplorerTransactionOperations(
 				config.horizonUrl,
 				hash
@@ -212,20 +220,10 @@ export const blockchainExplorerRouter = (
 		}
 	});
 
-	router.get('/operations', async (req, res) => {
-		const filters = readOperationFilters(req);
-		if (filters === null)
-			return res.status(400).json({ error: 'Invalid operation filters' });
-
-		setCacheHeader(res);
-		try {
-			return res
-				.status(200)
-				.json(await fetchExplorerOperations(config.horizonUrl, filters));
-		} catch {
-			return res.status(502).json({ error: 'Operation search unavailable' });
-		}
-	});
+	router.get(
+		'/operations',
+		createExplorerLocalOperationHandler(config.getExplorerLocalTransactions)
+	);
 
 	router.get('/contracts/:contractId', async (req, res) => {
 		const contractId = req.params.contractId.trim();
@@ -272,30 +270,6 @@ export function createExplorerTransactionLookupHandler(
 		} catch {
 			return res.status(502).json({ error: 'Transaction lookup unavailable' });
 		}
-	};
-}
-
-function readOperationFilters(
-	req: express.Request
-): ExplorerOperationFilters | null {
-	const ledger = readOptionalString(req.query.ledger);
-	const accountId = readOptionalString(req.query.accountId);
-	const operationType = readOptionalString(req.query.operationType);
-	const from = readOptionalString(req.query.from);
-	const to = readOptionalString(req.query.to);
-
-	if (ledger && !isLedgerSequence(ledger)) return null;
-	if (accountId && !isAccountAddress(accountId)) return null;
-	if (operationType && !operationTypePattern.test(operationType)) return null;
-	if (from && Number.isNaN(Date.parse(from))) return null;
-	if (to && Number.isNaN(Date.parse(to))) return null;
-
-	return {
-		...(accountId ? { accountId } : {}),
-		...(from ? { from } : {}),
-		...(ledger ? { ledger } : {}),
-		...(operationType ? { operationType } : {}),
-		...(to ? { to } : {})
 	};
 }
 

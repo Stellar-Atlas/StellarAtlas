@@ -3,7 +3,7 @@ export interface PublicExplorerLocalReadModel {
 	readonly indexes: {
 		readonly assetIndexReady: false;
 		readonly contractIndexReady: false;
-		readonly operationIndexReady: false;
+		readonly operationIndexReady: boolean;
 		readonly transactionIndexReady: boolean;
 	};
 	readonly parsedLedgerHeaders: {
@@ -15,8 +15,7 @@ export interface PublicExplorerLocalReadModel {
 		readonly sourceArchiveCount: number;
 	};
 	readonly source:
-		| 'full_history_canonical_repository'
-		| 'parsed_ledger_header_repository';
+		'full_history_canonical_repository' | 'parsed_ledger_header_repository';
 	readonly transactions: {
 		readonly canonicalCoverage: PublicExplorerCanonicalCoverage | null;
 		readonly localCoverage: boolean;
