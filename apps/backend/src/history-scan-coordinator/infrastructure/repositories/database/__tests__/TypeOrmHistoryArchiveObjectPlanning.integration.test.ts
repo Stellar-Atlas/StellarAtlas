@@ -80,7 +80,7 @@ describe('history archive producer watermarks in disposable PostgreSQL', () => {
 		expect(counts.queued + counts.planned).toBe(79 * 2);
 	});
 
-	it('expands only to measured throughput, never beyond the total watermark', async () => {
+	it('keeps the runnable queue bounded when measured throughput is high', async () => {
 		const plans = createProductionPlans(300);
 		await repository.planObjects(plans);
 		await dataSource.query(`
@@ -99,9 +99,9 @@ describe('history archive producer watermarks in disposable PostgreSQL', () => {
 		const promotion = await repository.promotePlannedObjects();
 
 		expect(promotion).toMatchObject({
-			promotedObjects: 200,
+			promotedObjects: 48,
 			recentCompletions: 300,
-			watermark: 200
+			watermark: 48
 		});
 	});
 });

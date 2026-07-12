@@ -216,12 +216,9 @@ const admitProofCompletionReserveSql = `
 			and proof."failureKind" = 'bucket-missing'
 			and proof."requiredObjectsComplete" = true
 			and proof."proofFactsComplete" = true
-	), ranked as materialized (
-		select candidate.id,
-			row_number() over (
-				partition by candidate."archiveUrlIdentity"
-				order by proof."checkpointLedger" desc, candidate."objectKey"
-			) as root_rank
+	), eligible as materialized (
+		select candidate.id, candidate."archiveUrlIdentity",
+			candidate."objectKey", max(proof."checkpointLedger") as checkpoint_ledger
 		from proof_candidates proof
 		join "history_archive_checkpoint_bucket_dependency" dependency
 			on proof."archiveUrlIdentity" = dependency."archiveUrlIdentity"
@@ -250,6 +247,15 @@ const admitProofCompletionReserveSql = `
 			)
 			and candidate."executionReason" is distinct from
 				'proof-completion-reserve'
+		group by candidate.id, candidate."archiveUrlIdentity",
+			candidate."objectKey"
+	), ranked as materialized (
+		select eligible.id,
+			row_number() over (
+				partition by eligible."archiveUrlIdentity"
+				order by eligible.checkpoint_ledger desc, eligible."objectKey"
+			) as root_rank
+		from eligible
 	), selected as materialized (
 		select id
 		from ranked

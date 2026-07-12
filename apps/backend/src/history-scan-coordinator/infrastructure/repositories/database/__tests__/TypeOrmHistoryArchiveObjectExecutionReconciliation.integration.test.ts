@@ -164,6 +164,81 @@ describe('history archive execution reconciliation in disposable PostgreSQL', ()
 		expect(executable?.status).toBe('pending');
 	});
 
+	it('deduplicates proof references before applying reserve limits', async () => {
+		const rootCount = 4;
+		const bucketsPerRoot = 8;
+		const referencesPerBucket = 3;
+		const roots = Array.from({ length: rootCount }, (_, index) =>
+			createRoot(index)
+		);
+		const buckets = roots.flatMap((_, rootIndex) =>
+			Array.from({ length: bucketsPerRoot }, (_, bucketIndex) => {
+				const bucket = createBucket(
+					rootIndex,
+					`${rootIndex.toString(16)}${bucketIndex.toString(16)}`.padEnd(64, '0')
+				);
+				bucket.status = 'verified';
+				return bucket;
+			})
+		);
+		await dataSource
+			.getRepository(HistoryArchiveObject)
+			.save([...roots, ...buckets]);
+
+		for (let rootIndex = 0; rootIndex < rootCount; rootIndex += 1) {
+			for (
+				let bucketIndex = 0;
+				bucketIndex < bucketsPerRoot;
+				bucketIndex += 1
+			) {
+				const bucket = buckets[rootIndex * bucketsPerRoot + bucketIndex];
+				for (
+					let referenceIndex = 0;
+					referenceIndex < referencesPerBucket;
+					referenceIndex += 1
+				) {
+					const checkpointLedger =
+						1_000_063 -
+						(bucketIndex * referencesPerBucket + referenceIndex) * 64;
+					await dataSource
+						.getRepository(HistoryArchiveCheckpointProof)
+						.save(
+							createBucketMissingProof(
+								roots[rootIndex].archiveUrl,
+								checkpointLedger
+							)
+						);
+					await dataSource.query(
+						`insert into "history_archive_checkpoint_bucket_dependency" (
+							"archiveUrlIdentity", "checkpointLedger", "bucketHash"
+						) values ($1, $2, $3)`,
+						[
+							roots[rootIndex].archiveUrlIdentity,
+							checkpointLedger,
+							bucket?.bucketHash
+						]
+					);
+				}
+			}
+		}
+
+		const result = await repository.reconcileExecutionDisposition();
+		const admittedByRoot = (await dataSource.query(`
+			select "archiveUrlIdentity", count(*)::integer as count
+			from "history_archive_object_queue"
+			where "executionReason" = 'proof-completion-reserve'
+			group by "archiveUrlIdentity"
+			order by "archiveUrlIdentity"
+		`)) as readonly {
+			readonly count: number;
+			readonly archiveUrlIdentity: string;
+		}[];
+
+		expect(result.admittedObjects).toBe(24);
+		expect(admittedByRoot).toHaveLength(rootCount);
+		expect(admittedByRoot.map(({ count }) => count)).toEqual([6, 6, 6, 6]);
+	});
+
 	it('rotates equivalent keys and enforces the per-root frontier cap', async () => {
 		const root = createRoot(0);
 		const checkpoints = Array.from({ length: 12 }, (_, index) =>
