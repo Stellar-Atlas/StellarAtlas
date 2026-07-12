@@ -1,11 +1,51 @@
-export const materializeCanonicalFrontierDependenciesSql = `
-	with runtime_target as materialized (
+const canonicalRuntimeTargetCtes = `
+	forward_runtime_target as materialized (
 		select "network_passphrase_hash", "checkpoint_ledger"::integer
-			as checkpoint_ledger
+			as checkpoint_ledger, 'forward'::text as target_lane
 		from "full_history_promotion_runtime"
 		where state in ('promoting', 'waiting-for-proof')
 			and "checkpoint_ledger" is not null
-	), checkpoints as materialized (
+	), historical_runtime_target as materialized (
+		select ranked."network_passphrase_hash", ranked.checkpoint_ledger,
+			'historical'::text as target_lane
+		from (
+			select job."network_passphrase_hash",
+				(watermark."first_ledger" - 1)::integer as checkpoint_ledger,
+				row_number() over (
+					partition by job."network_passphrase_hash"
+					order by case when job.state = 'leased' then 0 else 1 end,
+						job."last_checkpoint_ledger" desc,
+						job."created_at", job.id
+				) as target_rank
+			from "full_history_historical_backfill_job" job
+			join "full_history_watermark" watermark
+				on watermark."network_passphrase_hash" =
+					job."network_passphrase_hash"
+			where job.state in ('pending', 'leased')
+				and watermark."first_ledger" > 1
+				and watermark."first_ledger" - 1 between
+					job."first_checkpoint_ledger"
+					and job."last_checkpoint_ledger"
+		) ranked
+		where ranked.target_rank = 1
+	), runtime_target as materialized (
+		select "network_passphrase_hash", checkpoint_ledger, target_lane
+		from forward_runtime_target
+		union all
+		select historical."network_passphrase_hash",
+			historical.checkpoint_ledger, historical.target_lane
+		from historical_runtime_target historical
+		where not exists (
+			select 1 from forward_runtime_target forward
+			where forward."network_passphrase_hash" =
+				historical."network_passphrase_hash"
+				and forward.checkpoint_ledger = historical.checkpoint_ledger
+		)
+	)
+`;
+
+export const materializeCanonicalFrontierDependenciesSql = `
+	with ${canonicalRuntimeTargetCtes}, checkpoints as materialized (
 		select checkpoint.*
 		from runtime_target target
 		join "history_archive_state_snapshot" state
@@ -140,14 +180,9 @@ export const materializeCanonicalFrontierDependenciesSql = `
 `;
 
 export const admitCanonicalFrontierSql = `
-	with runtime_target as materialized (
-		select "network_passphrase_hash", "checkpoint_ledger"::integer
-			as checkpoint_ledger
-		from "full_history_promotion_runtime"
-		where state in ('promoting', 'waiting-for-proof')
-			and "checkpoint_ledger" is not null
-	), network_roots as materialized (
+	with ${canonicalRuntimeTargetCtes}, network_roots as materialized (
 		select state."archiveUrlIdentity", target.checkpoint_ledger,
+			target.target_lane,
 			root."lastClaimedAt",
 			case
 				when coalesce(proof."expectedBucketCount", 0) > 0
@@ -178,6 +213,7 @@ export const admitCanonicalFrontierSql = `
 	), category_objects as materialized (
 		select network_root."archiveUrlIdentity",
 			network_root."lastClaimedAt", network_root.proof_progress,
+			network_root.target_lane,
 			desired.object_type,
 			desired.checkpoint_ledger as object_checkpoint_ledger,
 			desired.object_key, desired.object_priority
@@ -216,6 +252,7 @@ export const admitCanonicalFrontierSql = `
 	), bucket_objects as materialized (
 		select network_root."archiveUrlIdentity",
 			network_root."lastClaimedAt", network_root.proof_progress,
+			network_root.target_lane,
 			'bucket'::text as object_type,
 			null::integer as object_checkpoint_ledger,
 			'bucket:' || dependency."bucketHash" as object_key,
@@ -286,10 +323,11 @@ export const admitCanonicalFrontierSql = `
 				) <= now()
 		) runnable
 	), candidates as materialized (
-		select candidate.id, candidate."archiveUrlIdentity",
+		select distinct on (candidate.id)
+			candidate.id, candidate."archiveUrlIdentity",
 			candidate."hostIdentity", candidate."objectKey",
 			candidate."checkpointLedger", desired.object_priority,
-			desired.proof_progress,
+			desired.proof_progress, desired.target_lane,
 			desired."lastClaimedAt",
 			replaceable.id as replaceable_id,
 			coalesce(host.active_count, 0) as host_active
@@ -326,41 +364,85 @@ export const admitCanonicalFrontierSql = `
 		where protected."archiveUrlIdentity" is null
 			and candidate."executionReason" is distinct from
 				'canonical-frontier-reserve'
+		order by candidate.id, desired.object_priority, desired.target_lane
 	), root_ranked as materialized (
 		select candidates.*,
 			row_number() over (
-				partition by "archiveUrlIdentity"
+				partition by "archiveUrlIdentity", target_lane
 				order by object_priority, "objectKey", id
 			) as root_rank
 		from candidates
-	), host_ranked as materialized (
+	), lane_host_ranked as materialized (
 		select root_ranked.*,
 			row_number() over (
-				partition by "hostIdentity"
+				partition by "hostIdentity", target_lane
 				order by proof_progress desc,
 					"lastClaimedAt" asc nulls first,
 					"archiveUrlIdentity", object_priority, id
-			) as host_rank
+			) as lane_host_rank
 		from root_ranked
 		where root_rank = 1
-	), additions_ranked as materialized (
+	), host_ranked as materialized (
+		select lane_host_ranked.*,
+			row_number() over (
+				partition by "hostIdentity"
+				order by lane_host_rank, target_lane,
+					proof_progress desc,
+					"lastClaimedAt" asc nulls first,
+					"archiveUrlIdentity", object_priority, id
+			) as host_rank
+		from lane_host_ranked
+	), target_ranked as materialized (
 		select host_ranked.*,
-			count(*) filter (where replaceable_id is null) over (
+			dense_rank() over (
+				order by "archiveUrlIdentity"
+			) as reservation_root_rank,
+			row_number() over (
+				partition by target_lane
 				order by proof_progress desc,
+					"lastClaimedAt" asc nulls first,
+					"archiveUrlIdentity", object_priority, id
+			) as target_rank
+		from host_ranked
+		where host_rank <= greatest($3::integer - host_active, 0)
+	), replacement_ranked as materialized (
+		select target_ranked.*,
+			case
+				when replaceable_id is not null and row_number() over (
+					partition by replaceable_id
+					order by case
+						when mod(reservation_root_rank, 2) = 1
+							and target_lane = 'forward' then 0
+						when mod(reservation_root_rank, 2) = 0
+							and target_lane = 'historical' then 0
+						else 1
+					end,
+						target_rank, target_lane,
+						proof_progress desc,
+						"lastClaimedAt" asc nulls first,
+						"archiveUrlIdentity", id
+				) = 1 then replaceable_id
+				else null
+			end as selected_replaceable_id
+		from target_ranked
+	), additions_ranked as materialized (
+		select replacement_ranked.*,
+			count(*) filter (where selected_replaceable_id is null) over (
+				order by target_rank, target_lane, proof_progress desc,
 					"lastClaimedAt" asc nulls first,
 					"archiveUrlIdentity", id
 			) as addition_rank
-		from host_ranked
-		where host_rank <= greatest($3::integer - host_active, 0)
+		from replacement_ranked
 	), selected as materialized (
 		select candidate.*
 		from additions_ranked candidate
 		cross join outstanding
-		where candidate.replaceable_id is not null
+		where candidate.selected_replaceable_id is not null
 			or candidate.addition_rank <= greatest(
 				$2::integer - outstanding.count, 0
 			)
-		order by (candidate.replaceable_id is not null) desc,
+		order by candidate.target_rank, candidate.target_lane,
+			(candidate.selected_replaceable_id is null),
 			candidate.proof_progress desc,
 			candidate."lastClaimedAt" asc nulls first,
 			candidate."archiveUrlIdentity", candidate.id
@@ -371,7 +453,7 @@ export const admitCanonicalFrontierSql = `
 			"executionReason" = 'frontier-waiting',
 			"executionDispositionAt" = now()
 		from selected
-		where generic.id = selected.replaceable_id
+		where generic.id = selected.selected_replaceable_id
 			and generic.id <> selected.id
 		returning generic.id
 	), admitted as (

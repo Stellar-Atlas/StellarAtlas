@@ -92,23 +92,21 @@ export class RunFullHistoryBackfill {
 				maximumProofTargets
 			);
 			if (targets.length === 0) {
-				return this.retryWithStatus(
+				return this.waitForProof(
 					owner,
 					checkpointLedger,
 					processedCheckpoints,
-					retryDelayMs,
-					'proof-pending'
+					retryDelayMs
 				);
 			}
 
 			const rejected = await this.promoteFromTargets(targets);
 			if (rejected !== null) {
-				return this.retryWithStatus(
+				return this.retryAfterEvidenceRejection(
 					owner,
 					checkpointLedger,
 					processedCheckpoints,
 					retryDelayMs,
-					'evidence-rejected',
 					rejected.reason
 				);
 			}
@@ -136,20 +134,35 @@ export class RunFullHistoryBackfill {
 		return rejected;
 	}
 
-	private async retryWithStatus(
+	private async waitForProof(
+		owner: OwnedFullHistoryHistoricalBackfillInput,
+		checkpointLedger: number,
+		processedCheckpoints: number,
+		retryDelayMs: number
+	): Promise<RunFullHistoryBackfillResult> {
+		const waiting = await this.repository.waitForProof({
+			...owner,
+			retryDelayMs
+		});
+		return {
+			checkpointLedger,
+			jobId: owner.id,
+			jobState: waiting.state,
+			processedCheckpoints,
+			status: 'proof-pending'
+		};
+	}
+
+	private async retryAfterEvidenceRejection(
 		owner: OwnedFullHistoryHistoricalBackfillInput,
 		checkpointLedger: number,
 		processedCheckpoints: number,
 		retryDelayMs: number,
-		status: 'evidence-rejected' | 'proof-pending',
-		reason?: FullHistoryPromotionError['reason']
+		reason: FullHistoryPromotionError['reason']
 	): Promise<RunFullHistoryBackfillResult> {
 		const retried = await this.repository.retry({
 			...owner,
-			errorCode:
-				status === 'proof-pending'
-					? 'proof-pending'
-					: `evidence-${reason ?? 'invalid-proof'}`,
+			errorCode: `evidence-${reason}`,
 			retryDelayMs
 		});
 		return {
@@ -157,7 +170,7 @@ export class RunFullHistoryBackfill {
 			jobId: owner.id,
 			jobState: retried.state,
 			processedCheckpoints,
-			status
+			status: 'evidence-rejected'
 		};
 	}
 }

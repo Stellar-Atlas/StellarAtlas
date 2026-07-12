@@ -53,6 +53,7 @@
 		"promote:full-history-checkpoint": "pnpm --filter backend run promote-full-history-checkpoint",
 		"start:full-history-promotion": "pnpm --filter backend run run-full-history-promotion",
 		"run:full-history-backfill": "pnpm --filter backend run run-full-history-backfill",
+		"start:full-history-backfill": "pnpm --filter backend run run-continuous-full-history-backfill",
 		"start:users": "pnpm --filter users run start",
 		"start:all": "node start-all.cjs"
 	},

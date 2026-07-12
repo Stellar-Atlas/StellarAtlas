@@ -17,4 +17,20 @@ export async function createCanonicalFrontierTestSchema(
 			"checkpoint_ledger" bigint
 		)
 	`);
+	await dataSource.query(`
+		create table if not exists "full_history_watermark" (
+			"network_passphrase_hash" bytea primary key,
+			"first_ledger" bigint not null
+		)
+	`);
+	await dataSource.query(`
+		create table if not exists "full_history_historical_backfill_job" (
+			id uuid primary key,
+			"network_passphrase_hash" bytea not null,
+			"first_checkpoint_ledger" bigint not null,
+			"last_checkpoint_ledger" bigint not null,
+			state text not null,
+			"created_at" timestamptz not null default now()
+		)
+	`);
 }

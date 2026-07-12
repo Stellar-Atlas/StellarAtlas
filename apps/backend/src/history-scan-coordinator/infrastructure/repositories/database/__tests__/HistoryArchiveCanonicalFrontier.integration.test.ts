@@ -60,7 +60,7 @@ describe('canonical full-history archive frontier', () => {
 
 	beforeEach(async () => {
 		await dataSource.query(
-			'truncate "history_archive_checkpoint_proof", "history_archive_object_event", "history_archive_object_queue", "history_archive_object_frontier_cursor", "history_archive_checkpoint_bucket_dependency", "history_archive_state_snapshot", "full_history_promotion_runtime" restart identity cascade'
+			'truncate "history_archive_checkpoint_proof", "history_archive_object_event", "history_archive_object_queue", "history_archive_object_frontier_cursor", "history_archive_checkpoint_bucket_dependency", "history_archive_state_snapshot", "full_history_historical_backfill_job", "full_history_watermark", "full_history_promotion_runtime" restart identity cascade'
 		);
 		await dataSource.query(`
 			update "history_archive_reconciliation_state"

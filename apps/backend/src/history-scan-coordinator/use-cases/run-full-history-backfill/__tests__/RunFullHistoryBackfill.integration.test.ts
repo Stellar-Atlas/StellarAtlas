@@ -159,25 +159,29 @@ describe('RunFullHistoryBackfill with strict PostgreSQL evidence', () => {
 		);
 		const scheduled = await schedulerWithId(1_131).execute({
 			checkpointCount: 1,
-			maxAttempts: 4,
+			maxAttempts: 1,
 			networkPassphrase: range[0]!.target.networkPassphrase
 		});
 		if (!('job' in scheduled)) throw new Error('Expected a scheduled job');
 
-		await expect(
-			worker(prepender).execute(
-				workerInput(range[0]!.target.networkPassphrase, workerOne)
-			)
-		).resolves.toMatchObject({
-			checkpointLedger: 127,
-			jobState: 'pending',
-			processedCheckpoints: 0,
-			status: 'proof-pending'
-		});
+		for (let cycle = 0; cycle < 12; cycle += 1) {
+			await expect(
+				worker(prepender).execute({
+					...workerInput(range[0]!.target.networkPassphrase, workerOne),
+					retryDelayMs: 0
+				})
+			).resolves.toMatchObject({
+				checkpointLedger: 127,
+				jobState: 'pending',
+				processedCheckpoints: 0,
+				status: 'proof-pending'
+			});
+		}
 		await expect(batchCount(range[0]!.proofId)).resolves.toBe(0);
 		await expect(
 			backfillRepository.find(scheduled.job.id)
 		).resolves.toMatchObject({
+			attemptCount: 0,
 			lastErrorCode: 'proof-pending',
 			state: 'pending'
 		});

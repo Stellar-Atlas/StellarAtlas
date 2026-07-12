@@ -178,7 +178,7 @@ describe('TypeOrmFullHistoryHistoricalBackfillRepository', () => {
 		const final = await requiredClaim(workerThree);
 		expect(final.attemptCount).toBe(3);
 		const failed = await repository.retry({
-			errorCode: 'proof-pending',
+			errorCode: 'source-invalid',
 			id: final.id,
 			leaseToken: final.leaseToken!,
 			retryDelayMs: 0,
@@ -189,6 +189,44 @@ describe('TypeOrmFullHistoryHistoricalBackfillRepository', () => {
 			attemptCount: 3,
 			state: 'failed'
 		});
+	});
+
+	it('waits durably for proof without exhausting failure attempts', async () => {
+		const scheduled = await repository.schedule({
+			id: '00000000-0000-4000-8000-000000009235',
+			maxAttempts: 1,
+			networkPassphrase,
+			range: fullHistoryHistoricalBackfillRange(255n, 255n)
+		});
+		for (let cycle = 0; cycle < 12; cycle += 1) {
+			const claimed = await requiredClaim(workerOne);
+			expect(claimed).toMatchObject({ attemptCount: 1, state: 'leased' });
+			const waiting = await repository.waitForProof({
+				id: claimed.id,
+				leaseToken: requiredLeaseToken(claimed.leaseToken),
+				retryDelayMs: 0,
+				workerId: workerOne
+			});
+			expect(waiting).toMatchObject({
+				attemptCount: 0,
+				lastErrorCode: 'proof-pending',
+				state: 'pending'
+			});
+		}
+		await expect(repository.find(scheduled.job.id)).resolves.toMatchObject({
+			attemptCount: 0,
+			state: 'pending'
+		});
+
+		const claimed = await requiredClaim(workerOne);
+		const failed = await repository.retry({
+			errorCode: 'evidence-invalid-proof',
+			id: claimed.id,
+			leaseToken: requiredLeaseToken(claimed.leaseToken),
+			retryDelayMs: 0,
+			workerId: workerOne
+		});
+		expect(failed).toMatchObject({ attemptCount: 1, state: 'failed' });
 	});
 
 	it('fails an expired final-attempt lease instead of stranding it', async () => {
@@ -258,3 +296,8 @@ describe('TypeOrmFullHistoryHistoricalBackfillRepository', () => {
 		);
 	}
 });
+
+function requiredLeaseToken(value: string | null): string {
+	if (value === null) throw new Error('Expected a leased job token');
+	return value;
+}

@@ -29,6 +29,10 @@ export interface RetryFullHistoryHistoricalBackfillInput extends OwnedFullHistor
 	readonly retryDelayMs: number;
 }
 
+export interface WaitForFullHistoryHistoricalProofInput extends OwnedFullHistoryHistoricalBackfillInput {
+	readonly retryDelayMs: number;
+}
+
 export interface FullHistoryHistoricalBackfillScheduleReceipt {
 	readonly created: boolean;
 	readonly job: FullHistoryHistoricalBackfillJob;
@@ -61,4 +65,7 @@ export interface FullHistoryHistoricalBackfillRepository {
 	schedule(
 		input: ScheduleFullHistoryHistoricalBackfillInput
 	): Promise<FullHistoryHistoricalBackfillScheduleReceipt>;
+	waitForProof(
+		input: WaitForFullHistoryHistoricalProofInput
+	): Promise<FullHistoryHistoricalBackfillJob>;
 }

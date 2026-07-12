@@ -18,6 +18,7 @@ INSTALL_UNIT_NAMES=(
 	stellaratlas-users.service
 	stellaratlas-history-scanner@.service
 	stellaratlas-full-history-promotion.service
+	stellaratlas-full-history-backfill.service
 	stellaratlas-horizon.service
 	stellaratlas-stellar-rpc.service
 )
@@ -111,6 +112,8 @@ verify_installed_units() {
 		die "loaded stellaratlas.target does not require the repository mount"
 	systemctl is-enabled --quiet stellaratlas.target ||
 		die "stellaratlas.target is not enabled"
+	systemctl is-enabled --quiet stellaratlas-full-history-backfill.service ||
+		die "stellaratlas-full-history-backfill.service is not enabled"
 
 	printf 'Verified installed boot-safe systemd unit copies.\n'
 }
@@ -192,18 +195,23 @@ main() {
 	install_units
 	mask_legacy_unit
 	systemctl daemon-reload
+	systemctl enable stellaratlas-full-history-backfill.service
 	systemctl enable --now stellaratlas.target
 	systemctl start stellaratlas-full-history-promotion.service
+	systemctl start stellaratlas-full-history-backfill.service
 	verify_installed_units
 	systemctl is-active --quiet stellaratlas.target ||
 		die "stellaratlas.target is not active"
 	systemctl is-active --quiet stellaratlas-full-history-promotion.service ||
 		die "stellaratlas-full-history-promotion.service is not active"
+	systemctl is-active --quiet stellaratlas-full-history-backfill.service ||
+		die "stellaratlas-full-history-backfill.service is not active"
 
 	cat <<'EOF'
 Installed boot-safe local copies of the split StellarAtlas units.
 The obsolete stellaratlas.service is masked. An already-active target was not
-restarted; newly installed canonical promotion was started explicitly.
+restarted; canonical promotion and bounded historical backfill were started
+explicitly.
 
 Production:
   systemctl status stellaratlas.target
@@ -215,6 +223,7 @@ Production:
   systemctl restart stellaratlas-scp-live-scanner.service
   systemctl restart stellaratlas-history-scanner@1.service
   systemctl restart stellaratlas-full-history-promotion.service
+  systemctl restart stellaratlas-full-history-backfill.service
 
 Local full-history services, after binaries/config/DB exist:
   systemctl start stellaratlas-horizon.service

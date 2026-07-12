@@ -14,7 +14,8 @@ import type {
 	FullHistoryHistoricalBackfillScheduleReceipt,
 	OwnedFullHistoryHistoricalBackfillInput,
 	RetryFullHistoryHistoricalBackfillInput,
-	ScheduleFullHistoryHistoricalBackfillInput
+	ScheduleFullHistoryHistoricalBackfillInput,
+	WaitForFullHistoryHistoricalProofInput
 } from '../../../domain/full-history-backfill/FullHistoryHistoricalBackfillRepository.js';
 import {
 	assertInteger,
@@ -226,6 +227,36 @@ export class TypeOrmFullHistoryHistoricalBackfillRepository implements FullHisto
 				input.errorCode,
 				retryDelayMs
 			]
+		);
+		return mapJob(requireOwnedRow(rows));
+	}
+
+	async waitForProof(
+		input: WaitForFullHistoryHistoricalProofInput
+	): Promise<FullHistoryHistoricalBackfillJob> {
+		const owner = validateOwner(input);
+		const retryDelayMs = assertInteger(
+			input.retryDelayMs,
+			'retryDelayMs',
+			0,
+			retryDelayMaximumMs
+		);
+		const rows = await this.dataSource.query<HistoricalBackfillJobRow[]>(
+			`with waiting as (
+				update "full_history_historical_backfill_job"
+				set state = 'pending',
+					"attempt_count" = "attempt_count" - 1,
+					"available_at" =
+						now() + $4::integer * interval '1 millisecond',
+					"lease_owner" = null, "lease_token" = null,
+					"lease_expires_at" = null,
+					"last_error_code" = 'proof-pending', "updated_at" = now()
+				where id = $1 and state = 'leased' and "lease_owner" = $2
+					and "lease_token" = $3 and "lease_expires_at" > now()
+					and "attempt_count" > 0
+				returning *
+			 ) select ${historicalBackfillJobProjection} from waiting`,
+			[owner.id, owner.workerId, owner.leaseToken, retryDelayMs]
 		);
 		return mapJob(requireOwnedRow(rows));
 	}
