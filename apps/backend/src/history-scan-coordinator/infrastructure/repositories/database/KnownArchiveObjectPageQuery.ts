@@ -1,10 +1,6 @@
 import type { EntityManager } from 'typeorm';
 import type { KnownArchiveObjectPageRequest } from '../../../domain/known-archive-evidence/KnownArchiveEvidenceRepository.js';
-import {
-	createObjectFromRow,
-	extractRows,
-	type RawObjectQueryResult
-} from './HistoryArchiveObjectRowMapper.js';
+import { createObjectFromRow } from './HistoryArchiveObjectRowMapper.js';
 import { historyArchiveObjectDependencySatisfiedSql } from './HistoryArchiveObjectDependencySql.js';
 import { requireNumber, type NumericValue } from './ScanJobRowMapper.js';
 
@@ -16,6 +12,8 @@ type CountRow = {
 	readonly objectCount?: NumericValue;
 	readonly objectcount?: NumericValue;
 };
+
+type ObjectRow = Parameters<typeof createObjectFromRow>[0];
 
 export async function findKnownArchiveObjectPage(
 	manager: EntityManager,
@@ -36,17 +34,20 @@ export async function findKnownArchiveObjectPage(
 	];
 	let total = page.snapshotTotal;
 	if (total === null) {
-		const countRows = (await manager.query(
+		const countResult: unknown = await manager.query(
 			knownArchiveObjectCountSql,
 			params
-		)) as readonly CountRow[];
+		);
+		const countRows = requireCountRows(countResult);
 		const [countRow] = countRows;
 		total = requireNumber(
 			countRow?.objectCount ?? countRow?.objectcount ?? 0,
 			'objectCount'
 		);
 	}
-	const objectResult = await manager.query(knownArchiveObjectPageSql, [
+	if (total === 0) return { objects: [], total };
+
+	const objectResult: unknown = await manager.query(knownArchiveObjectPageSql, [
 		...params,
 		page.before?.at ?? null,
 		page.before?.remoteId ?? null,
@@ -57,11 +58,47 @@ export async function findKnownArchiveObjectPage(
 	]);
 
 	return {
-		objects: extractRows(objectResult as RawObjectQueryResult).map(
-			createObjectFromRow
-		),
+		objects: requireObjectRows(objectResult).map(createObjectFromRow),
 		total
 	};
+}
+
+function requireCountRows(value: unknown): readonly CountRow[] {
+	if (!Array.isArray(value)) {
+		throw new Error('Known archive object count did not return rows');
+	}
+	const values: unknown[] = value;
+	const rows: CountRow[] = [];
+	for (const item of values) {
+		if (!isCountRow(item)) {
+			throw new Error('Known archive object count returned an invalid row');
+		}
+		rows.push(item);
+	}
+	return rows;
+}
+
+function requireObjectRows(value: unknown): readonly ObjectRow[] {
+	if (!Array.isArray(value)) {
+		throw new Error('Known archive object page did not return rows');
+	}
+	const values: unknown[] = value;
+	const rows: ObjectRow[] = [];
+	for (const item of values) {
+		if (!isObjectRow(item)) {
+			throw new Error('Known archive object page returned an invalid row');
+		}
+		rows.push(item);
+	}
+	return rows;
+}
+
+function isCountRow(value: unknown): value is CountRow {
+	return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function isObjectRow(value: unknown): value is ObjectRow {
+	return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
 const objectFilterSql = `

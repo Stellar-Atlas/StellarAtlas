@@ -7,7 +7,14 @@ import { HistoryArchiveObjectEvent } from '../../../../domain/history-archive-ob
 import { HistoryArchiveStateSnapshot } from '../../../../domain/history-archive-state/HistoryArchiveStateSnapshot.js';
 import { GetKnownArchiveEvidence } from '../../../../use-cases/get-known-archive-evidence/GetKnownArchiveEvidence.js';
 import { TypeOrmKnownArchiveEvidenceRepository } from '../TypeOrmKnownArchiveEvidenceRepository.js';
-import { findKnownArchiveObjectPage } from '../KnownArchiveObjectPageQuery.js';
+import {
+	findKnownArchiveObjectPage,
+	knownArchiveObjectCountSql
+} from '../KnownArchiveObjectPageQuery.js';
+import {
+	knownArchiveFailureCountSql,
+	knownArchiveFailurePageSql
+} from '../KnownArchiveFailurePageQuery.js';
 import {
 	startDisposablePostgres,
 	type DisposablePostgres
@@ -85,6 +92,7 @@ describe('TypeOrmKnownArchiveEvidenceRepository', () => {
 	});
 
 	it('keeps live status pages duplicate-safe and recounts each request', async () => {
+		const querySpy = jest.spyOn(dataSource.manager, 'query');
 		const newest = createObject(rootA, 'ledger:000000bf', 'ledger', 'pending');
 		const middle = createObject(rootA, 'ledger:0000007f', 'ledger', 'pending');
 		const oldest = createObject(rootA, 'ledger:0000003f', 'ledger', 'pending');
@@ -145,6 +153,19 @@ describe('TypeOrmKnownArchiveEvidenceRepository', () => {
 		expect(second.objectPage.objects).not.toContainEqual(
 			expect.objectContaining({ remoteId: newest.remoteId })
 		);
+		const sqlCalls = querySpy.mock.calls.flatMap(([sql]) =>
+			typeof sql === 'string' ? [sql] : []
+		);
+		expect(sqlCalls).not.toContain(knownArchiveObjectCountSql);
+		expect(sqlCalls).not.toContain(knownArchiveFailureCountSql('remote'));
+		expect(sqlCalls).not.toContain(
+			knownArchiveFailureCountSql('infrastructure')
+		);
+		expect(sqlCalls).not.toContain(knownArchiveFailurePageSql('remote'));
+		expect(sqlCalls).not.toContain(
+			knownArchiveFailurePageSql('infrastructure')
+		);
+		querySpy.mockRestore();
 	});
 
 	it('paginates persisted evidence and classifies verified copies', async () => {

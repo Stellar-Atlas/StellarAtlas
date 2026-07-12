@@ -12,6 +12,7 @@ import { HistoryArchiveObjectEvent } from '../../../domain/history-archive-objec
 import { HistoryArchiveCheckpointProof } from '../../../domain/history-archive-checkpoint-proof/HistoryArchiveCheckpointProof.js';
 import { HistoryArchiveStateSnapshot } from '../../../domain/history-archive-state/HistoryArchiveStateSnapshot.js';
 import { HistoryArchiveObjectHostThrottleMigration1784410000000 } from '../../database/migrations/1784410000000-HistoryArchiveObjectHostThrottleMigration.js';
+import { HistoryArchiveEvidenceRootSummaryMigration1784950000000 } from '../../database/migrations/1784950000000-HistoryArchiveEvidenceRootSummaryMigration.js';
 import type {
 	KnownArchiveEvidenceQuery,
 	KnownArchiveEvidenceReadModel,
@@ -24,7 +25,7 @@ import { createArchiveEvidenceCursorCodec } from '../../../use-cases/get-known-a
 import { archiveEvidenceRouter } from '../ArchiveEvidenceRouter.js';
 import { PublicArchiveEvidenceAdmission } from '../PublicArchiveEvidenceRequest.js';
 
-jest.setTimeout(60_000);
+jest.setTimeout(120_000);
 
 describe('public archive evidence concurrency', () => {
 	let dataSource: DataSource;
@@ -52,6 +53,16 @@ describe('public archive evidence concurrency', () => {
 			runner
 		);
 		await runner.release();
+		await seedArchiveObjects(dataSource, 100_001);
+		const summaryRunner = dataSource.createQueryRunner();
+		await summaryRunner.connect();
+		try {
+			await new HistoryArchiveEvidenceRootSummaryMigration1784950000000().up(
+				summaryRunner
+			);
+		} finally {
+			await summaryRunner.release();
+		}
 	});
 
 	afterAll(async () => {
@@ -91,11 +102,7 @@ describe('public archive evidence concurrency', () => {
 			)
 		);
 		const statuses = responses.map((response) => response.status);
-		const pool = (
-			dataSource.driver as unknown as {
-				master: { readonly totalCount: number };
-			}
-		).master;
+		const poolTotalCount = requirePoolTotalCount(dataSource.driver);
 
 		expect(
 			statuses.filter((status) => status !== 200 && status !== 429)
@@ -103,7 +110,7 @@ describe('public archive evidence concurrency', () => {
 		expect(statuses).toContain(200);
 		expect(statuses).toContain(429);
 		expect(repository.maxActive).toBeLessThanOrEqual(4);
-		expect(pool.totalCount).toBeLessThanOrEqual(4);
+		expect(poolTotalCount).toBeLessThanOrEqual(4);
 	});
 });
 
@@ -128,4 +135,38 @@ class TrackingEvidenceRepository implements KnownArchiveEvidenceRepository {
 			this.active--;
 		}
 	}
+}
+
+async function seedArchiveObjects(
+	dataSource: DataSource,
+	count: number
+): Promise<void> {
+	await dataSource.query(
+		`
+			insert into history_archive_object_queue (
+				"remoteId", "archiveUrl", "archiveUrlIdentity", "hostIdentity",
+				"objectType", "objectKey", "objectOrder", "objectUrl", status
+			)
+			select (
+				'00000000-0000-4000-8000-' || lpad(value::text, 12, '0')
+			)::uuid, $1, $1, 'history.example.com', 'ledger',
+			'ledger:' || lpad(value::text, 12, '0'), value,
+			$1 || '/ledger/' || value::text, 'pending'
+			from generate_series(1, $2::integer) value
+		`,
+		['https://history.example.com', count]
+	);
+}
+
+function requirePoolTotalCount(value: unknown): number {
+	if (!isRecord(value)) throw new Error('Expected a database driver');
+	const master = value.master;
+	if (!isRecord(master) || typeof master.totalCount !== 'number') {
+		throw new Error('Expected a database connection pool');
+	}
+	return master.totalCount;
+}
+
+function isRecord(value: unknown): value is Readonly<Record<string, unknown>> {
+	return typeof value === 'object' && value !== null && !Array.isArray(value);
 }

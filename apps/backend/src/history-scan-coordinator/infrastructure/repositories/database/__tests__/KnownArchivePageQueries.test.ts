@@ -6,7 +6,10 @@ import {
 	knownArchiveObjectCountSql,
 	knownArchiveObjectPageSql
 } from '../KnownArchiveObjectPageQuery.js';
-import { findKnownArchiveObjectEventPage } from '../KnownArchiveObjectEventPageQuery.js';
+import {
+	findKnownArchiveObjectEventPage,
+	knownArchiveObjectEventPageKeysSql
+} from '../KnownArchiveObjectEventPageQuery.js';
 import {
 	findKnownArchiveFailurePage,
 	knownArchiveFailureCountSql,
@@ -190,12 +193,67 @@ describe('known archive page queries', () => {
 		expect(knownArchiveFailureCountSql('infrastructure')).toContain(
 			'"failureChannel" = \'scanner_issue\''
 		);
+		expect(knownArchiveFailurePageSql('remote')).toContain(
+			'page_keys as materialized'
+		);
+		expect(knownArchiveFailurePageSql('remote')).toContain(
+			'cross join lateral'
+		);
+	});
+
+	it('does not query pages whose aggregate total is zero', async () => {
+		const manager = mock<EntityManager>();
+		const emptyObjectPage = await findKnownArchiveObjectPage(manager, [root], {
+			before: null,
+			filters: {
+				archiveUrlIdentity: null,
+				objectType: null,
+				status: null
+			},
+			limit: 25,
+			snapshotAt,
+			snapshotTotal: 0
+		});
+		const emptyFailurePage = await findKnownArchiveFailurePage(
+			manager,
+			[root],
+			{
+				before: null,
+				filters: { archiveUrlIdentity: null, objectType: null },
+				limit: 25,
+				snapshotAt,
+				snapshotTotal: 0
+			},
+			'remote'
+		);
+		const emptyEventPage = await findKnownArchiveObjectEventPage(
+			manager,
+			[root],
+			{
+				before: null,
+				filters: {
+					archiveUrlIdentity: null,
+					evidenceClass: null,
+					eventType: null,
+					objectType: null
+				},
+				limit: 25,
+				snapshotAt,
+				snapshotTotal: 0
+			}
+		);
+
+		expect(emptyObjectPage).toEqual({ objects: [], total: 0 });
+		expect(emptyFailurePage).toEqual({ failures: [], total: 0 });
+		expect(emptyEventPage).toEqual({ events: [], total: 0 });
+		expect(manager.query).not.toHaveBeenCalled();
+		expect(manager.getRepository).not.toHaveBeenCalled();
 	});
 
 	it('applies event filters before exact counts and keyset pagination', async () => {
+		const manager = mock<EntityManager>();
 		const repository = mock<Repository<HistoryArchiveObjectEvent>>();
 		const base = mock<SelectQueryBuilder<HistoryArchiveObjectEvent>>();
-		const pageQuery = mock<SelectQueryBuilder<HistoryArchiveObjectEvent>>();
 		const event = new HistoryArchiveObjectEvent({
 			archiveUrl: root,
 			archiveUrlIdentity: root,
@@ -206,18 +264,15 @@ describe('known archive page queries', () => {
 			objectType: 'ledger',
 			objectUrl: `${root}/ledger/object.xdr.gz`
 		});
+		manager.getRepository.mockReturnValue(repository);
+		manager.query.mockResolvedValue([{ remoteId: event.remoteId }]);
 		repository.createQueryBuilder.mockReturnValue(base);
+		repository.findBy.mockResolvedValue([event]);
 		base.where.mockReturnValue(base);
 		base.andWhere.mockReturnValue(base);
-		base.clone.mockReturnValue(pageQuery);
 		base.getCount.mockResolvedValue(12);
-		pageQuery.andWhere.mockReturnValue(pageQuery);
-		pageQuery.orderBy.mockReturnValue(pageQuery);
-		pageQuery.addOrderBy.mockReturnValue(pageQuery);
-		pageQuery.take.mockReturnValue(pageQuery);
-		pageQuery.getMany.mockResolvedValue([event]);
 
-		const result = await findKnownArchiveObjectEventPage(repository, [root], {
+		const result = await findKnownArchiveObjectEventPage(manager, [root], {
 			before: cursor,
 			filters: {
 				archiveUrlIdentity: root,
@@ -232,10 +287,21 @@ describe('known archive page queries', () => {
 
 		expect(result).toEqual({ events: [event], total: 12 });
 		expect(base.andWhere).toHaveBeenCalledTimes(5);
-		expect(pageQuery.andWhere).toHaveBeenCalledWith(
-			expect.stringContaining('event.createdAt < :cursorAt'),
-			{ cursorAt: cursor.at, cursorRemoteId: cursor.remoteId }
+		expect(manager.query).toHaveBeenCalledWith(
+			knownArchiveObjectEventPageKeysSql,
+			[
+				[root],
+				root,
+				'worker-infrastructure',
+				'failed',
+				'ledger',
+				snapshotAt,
+				cursor.at,
+				cursor.remoteId,
+				6
+			]
 		);
-		expect(pageQuery.take).toHaveBeenCalledWith(6);
+		expect(knownArchiveObjectEventPageKeysSql).toContain('cross join lateral');
+		expect(repository.findBy).toHaveBeenCalledTimes(1);
 	});
 });

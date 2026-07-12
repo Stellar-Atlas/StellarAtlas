@@ -1,7 +1,6 @@
 import { injectable } from 'inversify';
 import { DataSource, In } from 'typeorm';
 import { HistoryArchiveStateSnapshot } from '../../../domain/history-archive-state/HistoryArchiveStateSnapshot.js';
-import { HistoryArchiveObjectEvent } from '../../../domain/history-archive-object/HistoryArchiveObjectEvent.js';
 import type {
 	KnownArchiveEvidenceQuery,
 	KnownArchiveEvidenceReadModel,
@@ -12,6 +11,10 @@ import { findKnownArchiveFailurePage } from './KnownArchiveFailurePageQuery.js';
 import { findKnownArchiveCopyCoverage } from './KnownArchiveCopyCoverageQuery.js';
 import { findKnownArchiveObjectPage } from './KnownArchiveObjectPageQuery.js';
 import { findKnownArchiveObjectEventPage } from './KnownArchiveObjectEventPageQuery.js';
+import {
+	applyKnownArchiveFailureAggregateTotal,
+	applyKnownArchiveObjectAggregateTotal
+} from './KnownArchiveEvidenceAggregateTotals.js';
 
 @injectable()
 export class TypeOrmKnownArchiveEvidenceRepository implements KnownArchiveEvidenceRepository {
@@ -41,17 +44,31 @@ export class TypeOrmKnownArchiveEvidenceRepository implements KnownArchiveEviden
 				archiveUrlIdentity: In(archiveUrlIdentities)
 			})
 		]);
+		const remoteFailurePage = applyKnownArchiveFailureAggregateTotal(
+			query.remoteFailures,
+			rootRows,
+			'remote'
+		);
+		const workerIssuePage = applyKnownArchiveFailureAggregateTotal(
+			query.workerIssues,
+			rootRows,
+			'infrastructure'
+		);
+		const objectPageRequest = applyKnownArchiveObjectAggregateTotal(
+			query.objectPage,
+			rootRows
+		);
 		const [remoteFailures, workerIssues] = await Promise.all([
 			findKnownArchiveFailurePage(
 				manager,
 				archiveUrlIdentities,
-				query.remoteFailures,
+				remoteFailurePage,
 				'remote'
 			),
 			findKnownArchiveFailurePage(
 				manager,
 				archiveUrlIdentities,
-				query.workerIssues,
+				workerIssuePage,
 				'infrastructure'
 			)
 		]);
@@ -59,10 +76,10 @@ export class TypeOrmKnownArchiveEvidenceRepository implements KnownArchiveEviden
 			findKnownArchiveObjectPage(
 				manager,
 				archiveUrlIdentities,
-				query.objectPage
+				objectPageRequest
 			),
 			findKnownArchiveObjectEventPage(
-				manager.getRepository(HistoryArchiveObjectEvent),
+				manager,
 				archiveUrlIdentities,
 				query.eventPage
 			)
