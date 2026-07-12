@@ -1,4 +1,5 @@
 import { canonicalBucketHasStrictSourceProofSql } from './HistoryArchiveCanonicalBucketProofSql.js';
+import { canonicalBucketMaterializationCteSql } from './HistoryArchiveCanonicalBucketMaterializationSql.js';
 import {
 	canonicalCategoryAdmissionCteSql,
 	canonicalCategoryTargetsCteSql
@@ -100,7 +101,7 @@ export const materializeCanonicalFrontierDependenciesSql = `
 		where hash.value is not null
 			and lower(hash.value) ~ '^[0-9a-f]{64}$'
 			and lower(hash.value) !~ '^0+$'
-	), ${canonicalCategoryTargetsCteSql}, inserted as (
+	), ${canonicalCategoryTargetsCteSql}, ${canonicalBucketMaterializationCteSql}, inserted as (
 		insert into "history_archive_checkpoint_bucket_dependency" (
 			"archiveUrlIdentity", "checkpointLedger", "bucketHash"
 		)
@@ -185,6 +186,7 @@ export const materializeCanonicalFrontierDependenciesSql = `
 		(select count(*)::integer from marked) as marked,
 		(select count(*)::integer from inserted_predecessor_checkpoints) +
 			(select count(*)::integer from inserted_categories) +
+			(select count(*)::integer from inserted_buckets) +
 			(select count(*)::integer from reopened_legacy_checkpoints) +
 			(select count(*)::integer from activated_categories) +
 			(select count(*)::integer from activated_buckets) +

@@ -110,6 +110,26 @@ describe('bidirectional canonical archive frontier', () => {
 			{ checkpointLedger: historicalCheckpoint, count: rootCount },
 			{ checkpointLedger: forwardCheckpoint, count: rootCount }
 		]);
+		const buckets = (await dataSource.query(
+			`select "archiveUrlIdentity", "objectUrl", status,
+				"dependencyReady", "executionDisposition", "executionReason"
+			 from "history_archive_object_queue"
+			 where "objectType" = 'bucket'
+			 order by "archiveUrlIdentity", "objectKey"`
+		)) as readonly MaterializedBucket[];
+		expect(buckets).toHaveLength(rootCount * 2);
+		expect(
+			buckets.every(
+				(row) =>
+					row.status === 'pending' &&
+					row.dependencyReady &&
+					row.executionDisposition === 'deferred' &&
+					row.executionReason === 'canonical-frontier-materialization' &&
+					/^https:\/\/archive-\d+\.example\/history\/bucket\/[0-9a-f]{2}\/[0-9a-f]{2}\/[0-9a-f]{2}\/bucket-[0-9a-f]{64}\.xdr\.gz$/.test(
+						row.objectUrl
+					)
+			)
+		).toBe(true);
 
 		const [admission] = (await dataSource.query(
 			admitCanonicalFrontierSql,
@@ -156,6 +176,10 @@ interface MaterializedCategory {
 	readonly executionReason: string;
 	readonly objectUrl: string;
 	readonly status: string;
+}
+
+interface MaterializedBucket extends MaterializedCategory {
+	readonly archiveUrlIdentity: string;
 }
 
 async function seedArchive(
@@ -226,9 +250,15 @@ function verifiedCheckpoint(
 ): HistoryArchiveObject {
 	const checkpoint = createCheckpoint(index, checkpointLedger);
 	checkpoint.status = 'verified';
+	const bucketHash = createHash('sha256')
+		.update(`${index}:${checkpointLedger}`)
+		.digest('hex');
 	checkpoint.verificationFacts = {
 		checkpointHistoryArchiveState: {
-			stellarHistory: { currentBuckets: [], hotArchiveBuckets: [] }
+			stellarHistory: {
+				currentBuckets: [{ curr: bucketHash, snap: '0'.repeat(64) }],
+				hotArchiveBuckets: []
+			}
 		},
 		content: {
 			algorithm: 'sha256',
