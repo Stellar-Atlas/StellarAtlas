@@ -3,6 +3,7 @@ import type { ScpStatementObservationV1, ScpStatementTypeV1 } from 'shared';
 import { mapUnknownToError } from '@core/utilities/mapUnknownToError.js';
 import type { GetKnownNodes } from '../get-known-nodes/GetKnownNodes.js';
 import type {
+	ScpAnimationStatement,
 	ScpStatementReadFreshness,
 	ScpStatementReadSource,
 	GetScpStatements
@@ -26,6 +27,18 @@ export interface ScpSemanticEvent {
 	readonly transactionSetHashes: readonly string[];
 }
 
+export interface ScpAnimationSemanticEvent {
+	readonly eventId: string;
+	readonly kind: ScpSemanticEventKind;
+	readonly nodeId: string;
+	readonly observedAt: string;
+	readonly organizationId: null;
+	readonly quorumSetHash: string;
+	readonly slotIndex: string;
+	readonly statement: ScpAnimationStatement;
+	readonly transactionSetHashes: readonly string[];
+}
+
 export interface ScpEvidenceMetadata {
 	readonly freshness: ScpStatementReadFreshness;
 	readonly freshnessMs: number | null;
@@ -35,6 +48,15 @@ export interface ScpEvidenceMetadata {
 
 export interface ScpSlotEvidence {
 	readonly events: readonly ScpSemanticEvent[];
+	readonly metadata: ScpEvidenceMetadata;
+	readonly phaseCounts: Record<ScpStatementTypeV1, number>;
+	readonly slotIndex: string;
+	readonly statementCount: number;
+	readonly validatorCount: number;
+}
+
+export interface ScpLatestSlotEvidence {
+	readonly events: readonly ScpAnimationSemanticEvent[];
 	readonly metadata: ScpEvidenceMetadata;
 	readonly phaseCounts: Record<ScpStatementTypeV1, number>;
 	readonly slotIndex: string;
@@ -52,24 +74,18 @@ export class GetScpEvidence {
 
 	async getLatestSlots(
 		limit = 12
-	): Promise<Result<readonly ScpSlotEvidence[], Error>> {
+	): Promise<Result<readonly ScpLatestSlotEvidence[], Error>> {
 		const boundedSlots = Math.min(Math.max(Math.floor(limit), 1), 25);
-		const read = await this.read({ limit: maxStatements });
+		const read =
+			await this.getScpStatements.executeLatestAnimationSlots(boundedSlots);
 		if (read.isErr()) return err(read.error);
-		const nodeOrganizations = await this.nodeOrganizations();
-		if (nodeOrganizations.isErr()) return err(nodeOrganizations.error);
-		const slots = groupBySlot(read.value.observations);
+		const slots = groupAnimationBySlot(read.value.observations);
 		return ok(
 			[...slots.entries()]
 				.toSorted(([left], [right]) => compareSequence(right, left))
 				.slice(0, boundedSlots)
 				.map(([slotIndex, statements]) =>
-					toSlotEvidence(
-						slotIndex,
-						statements,
-						read.value,
-						nodeOrganizations.value
-					)
+					toAnimationSlotEvidence(slotIndex, statements, read.value)
 				)
 		);
 	}
@@ -237,20 +253,56 @@ function toSlotEvidence(
 	};
 }
 
+function toAnimationSlotEvidence(
+	slotIndex: string,
+	statements: readonly ScpAnimationStatement[],
+	metadata: ScpEvidenceMetadata
+): ScpLatestSlotEvidence {
+	const phaseCounts = { confirm: 0, externalize: 0, nominate: 0, prepare: 0 };
+	for (const statement of statements) phaseCounts[statement.statementType] += 1;
+	return {
+		events: statements.map(toAnimationSemanticEvent),
+		metadata: {
+			freshness: metadata.freshness,
+			freshnessMs: metadata.freshnessMs,
+			observedAt: metadata.observedAt,
+			source: metadata.source
+		},
+		phaseCounts,
+		slotIndex,
+		statementCount: statements.length,
+		validatorCount: new Set(statements.map((statement) => statement.nodeId))
+			.size
+	};
+}
+
+function toAnimationSemanticEvent(
+	statement: ScpAnimationStatement
+): ScpAnimationSemanticEvent {
+	return {
+		eventId: statement.statementHash,
+		kind: semanticEventKind(statement.statementType),
+		nodeId: statement.nodeId,
+		observedAt: statement.observedAt,
+		organizationId: null,
+		quorumSetHash: statement.quorumSetHash,
+		slotIndex: statement.slotIndex,
+		statement,
+		transactionSetHashes: [
+			...new Set(
+				statement.values.map((value) => value.txSetHash).filter(Boolean)
+			)
+		]
+	};
+}
+
 function toSemanticEvent(
 	statement: ScpStatementObservationV1,
 	organizations: ReadonlyMap<string, string>
 ): ScpSemanticEvent {
 	return {
 		eventId: statement.statementHash,
-		kind:
-			statement.statementType === 'nominate'
-				? 'nomination_observed'
-				: statement.statementType === 'prepare'
-					? 'prepare_observed'
-					: statement.statementType === 'confirm'
-						? 'commit_observed'
-						: 'externalized',
+		kind: semanticEventKind(statement.statementType),
 		nodeId: statement.nodeId,
 		observedAt: statement.observedAt,
 		organizationId: organizations.get(statement.nodeId) ?? null,
@@ -265,10 +317,31 @@ function toSemanticEvent(
 	};
 }
 
+function semanticEventKind(
+	statementType: ScpStatementTypeV1
+): ScpSemanticEventKind {
+	if (statementType === 'nominate') return 'nomination_observed';
+	if (statementType === 'prepare') return 'prepare_observed';
+	if (statementType === 'confirm') return 'commit_observed';
+	return 'externalized';
+}
+
 function groupBySlot(
 	statements: readonly ScpStatementObservationV1[]
 ): Map<string, ScpStatementObservationV1[]> {
 	const grouped = new Map<string, ScpStatementObservationV1[]>();
+	for (const statement of statements)
+		grouped.set(statement.slotIndex, [
+			...(grouped.get(statement.slotIndex) ?? []),
+			statement
+		]);
+	return grouped;
+}
+
+function groupAnimationBySlot(
+	statements: readonly ScpAnimationStatement[]
+): Map<string, ScpAnimationStatement[]> {
+	const grouped = new Map<string, ScpAnimationStatement[]>();
 	for (const statement of statements)
 		grouped.set(statement.slotIndex, [
 			...(grouped.get(statement.slotIndex) ?? []),

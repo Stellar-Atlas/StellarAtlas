@@ -19,6 +19,18 @@ export type PublicNodeSnapshot = NodeSnapshotV1;
 export type PublicOrganization = OrganizationV1;
 export type PublicOrganizationSnapshot = OrganizationSnapshotV1;
 export type PublicScpStatementObservation = ScpStatementObservationV1;
+export interface PublicScpGraphStatement {
+	readonly nodeId: string;
+	readonly observedAt: string;
+	readonly observedFromPeer: string;
+	readonly slotIndex: string;
+	readonly statementHash: string;
+	readonly statementType: ScpStatementObservationV1['statementType'];
+	readonly values: readonly Pick<
+		ScpStatementObservationV1['values'][number],
+		'closeTime' | 'txSetHash'
+	>[];
+}
 export type PublicScpStatementReadFreshness =
 	'empty' | 'fresh' | 'stale' | 'unavailable';
 export type PublicScpStatementReadSource = 'meilisearch' | 'postgres_canonical';

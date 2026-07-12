@@ -1,8 +1,8 @@
 import type {
+	PublicScpGraphStatement,
 	PublicScpStatementObservation,
 	PublicScpStatementReadMetadata
 } from './types';
-import { parseScpStatement } from './live-network-message-parser';
 
 export type PublicScpSemanticEventKind =
 	| 'nomination_observed'
@@ -18,7 +18,7 @@ export interface PublicScpSemanticEvent {
 	readonly organizationId: string | null;
 	readonly quorumSetHash: string;
 	readonly slotIndex: string;
-	readonly statement: PublicScpStatementObservation;
+	readonly statement: PublicScpGraphStatement;
 	readonly transactionSetHashes: readonly string[];
 }
 
@@ -99,7 +99,7 @@ function parseSemanticEvent(value: unknown): PublicScpSemanticEvent | null {
 		!value.transactionSetHashes.every(text)
 	)
 		return null;
-	const statement = parseScpStatement(value.statement);
+	const statement = parseGraphStatement(value.statement);
 	if (statement === null) return null;
 	return {
 		eventId: value.eventId,
@@ -112,6 +112,46 @@ function parseSemanticEvent(value: unknown): PublicScpSemanticEvent | null {
 		statement,
 		transactionSetHashes: value.transactionSetHashes
 	};
+}
+
+function parseGraphStatement(value: unknown): PublicScpGraphStatement | null {
+	if (
+		!record(value) ||
+		!text(value.nodeId) ||
+		!text(value.observedAt) ||
+		!text(value.observedFromPeer) ||
+		!text(value.slotIndex) ||
+		!text(value.statementHash) ||
+		!isStatementType(value.statementType) ||
+		!Array.isArray(value.values)
+	)
+		return null;
+	const values = value.values.flatMap((entry) =>
+		record(entry) && text(entry.closeTime) && text(entry.txSetHash)
+			? [{ closeTime: entry.closeTime, txSetHash: entry.txSetHash }]
+			: []
+	);
+	if (values.length !== value.values.length) return null;
+	return {
+		nodeId: value.nodeId,
+		observedAt: value.observedAt,
+		observedFromPeer: value.observedFromPeer,
+		slotIndex: value.slotIndex,
+		statementHash: value.statementHash,
+		statementType: value.statementType,
+		values
+	};
+}
+
+function isStatementType(
+	value: unknown
+): value is PublicScpStatementObservation['statementType'] {
+	return (
+		value === 'confirm' ||
+		value === 'externalize' ||
+		value === 'nominate' ||
+		value === 'prepare'
+	);
 }
 
 function isKind(value: unknown): value is PublicScpSemanticEventKind {

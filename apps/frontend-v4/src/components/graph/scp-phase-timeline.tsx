@@ -1,19 +1,16 @@
-import type {
-	PublicNetwork,
-	PublicScpStatementObservation
-} from '../../api/types';
+import type { PublicNetwork, PublicScpGraphStatement } from '../../api/types';
 import { getNodeLabel } from '../../domain/network';
 
 interface ScpPhaseTimelineProps {
 	activeSlotIndex: string | null;
-	activeStatements: readonly PublicScpStatementObservation[];
+	activeStatements: readonly PublicScpGraphStatement[];
 	fallbackSlotIndex: string | null;
-	focusedStatement: PublicScpStatementObservation | null;
+	focusedStatement: PublicScpGraphStatement | null;
 	network: PublicNetwork;
-	statements: readonly PublicScpStatementObservation[];
+	statements: readonly PublicScpGraphStatement[];
 }
 
-type ScpPhase = PublicScpStatementObservation['statementType'];
+type ScpPhase = PublicScpGraphStatement['statementType'];
 
 const phaseOrder: readonly ScpPhase[] = [
 	'nominate',
@@ -30,15 +27,15 @@ const phaseLabels: Record<ScpPhase, string> = {
 };
 
 const compareByObservation = (
-	left: PublicScpStatementObservation,
-	right: PublicScpStatementObservation
+	left: PublicScpGraphStatement,
+	right: PublicScpGraphStatement
 ): number =>
 	new Date(left.observedAt).getTime() - new Date(right.observedAt).getTime() ||
 	left.statementHash.localeCompare(right.statementHash);
 
 const getStatementNodeLabel = (
 	network: PublicNetwork,
-	statement: PublicScpStatementObservation
+	statement: PublicScpGraphStatement
 ): string => {
 	const node = network.nodes.find(
 		(candidate) => candidate.publicKey === statement.nodeId
@@ -47,9 +44,9 @@ const getStatementNodeLabel = (
 };
 
 const distinctNodeStatements = (
-	statements: readonly PublicScpStatementObservation[]
-): readonly PublicScpStatementObservation[] => {
-	const byNode = new Map<string, PublicScpStatementObservation>();
+	statements: readonly PublicScpGraphStatement[]
+): readonly PublicScpGraphStatement[] => {
+	const byNode = new Map<string, PublicScpGraphStatement>();
 	for (const statement of statements) byNode.set(statement.nodeId, statement);
 	return Array.from(byNode.values()).toSorted(compareByObservation).slice(-4);
 };
@@ -85,7 +82,8 @@ export function ScpPhaseTimeline({
 				);
 				const activePhaseStatements = activeStatements.filter(
 					(statement) =>
-						statement.slotIndex === slotIndex && statement.statementType === phase
+						statement.slotIndex === slotIndex &&
+						statement.statementType === phase
 				);
 				const focusedPhaseStatement =
 					focusedStatement?.slotIndex === slotIndex &&
@@ -97,7 +95,7 @@ export function ScpPhaseTimeline({
 						? activePhaseStatements
 						: focusedPhaseStatement
 							? [...phaseStatements, focusedPhaseStatement]
-						: phaseStatements
+							: phaseStatements
 				);
 				const isActive =
 					activePhaseStatements.length > 0 || focusedPhaseStatement !== null;

@@ -3,10 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ForceGraph3DInstance } from '3d-force-graph';
 import type { Group as ThreeGroup } from 'three';
-import type {
-	PublicNetwork,
-	PublicScpStatementObservation
-} from '../../api/types';
+import type { PublicNetwork, PublicScpGraphStatement } from '../../api/types';
 import {
 	buildGraph3DModel,
 	type Graph3DNode,
@@ -45,7 +42,7 @@ import { getNextLedgerSequence } from '../../domain/ledger-sequence';
 
 interface GraphExplorerProps {
 	network: PublicNetwork;
-	scpStatements: PublicScpStatementObservation[];
+	scpStatements: PublicScpGraphStatement[];
 }
 
 export function GraphExplorer({

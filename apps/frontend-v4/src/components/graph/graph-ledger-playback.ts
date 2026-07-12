@@ -1,4 +1,4 @@
-import type { PublicScpStatementObservation } from '../../api/types';
+import type { PublicScpGraphStatement } from '../../api/types';
 import { compareLedgerSequences } from '../../domain/ledger-sequence';
 import {
 	compareStatementsByObservation,
@@ -23,7 +23,7 @@ const parseTimeMs = (value: string | undefined): number | null => {
 };
 
 const getLedgerCloseTimeMs = (
-	statements: readonly PublicScpStatementObservation[]
+	statements: readonly PublicScpGraphStatement[]
 ): number | null => {
 	const closeTimes = statements
 		.map((statement) => parseTimeMs(statement.values[0]?.closeTime))
@@ -61,9 +61,9 @@ export const buildLedgerPlaybackFrames = ({
 }: {
 	boundarySlotIndex: string;
 	latestLedgerClosedAt: string | null;
-	statements: readonly PublicScpStatementObservation[];
+	statements: readonly PublicScpGraphStatement[];
 }): LedgerPlaybackFrame[] => {
-	const statementsBySlot = new Map<string, PublicScpStatementObservation[]>();
+	const statementsBySlot = new Map<string, PublicScpGraphStatement[]>();
 	for (const statement of statements) {
 		statementsBySlot.set(statement.slotIndex, [
 			...(statementsBySlot.get(statement.slotIndex) ?? []),

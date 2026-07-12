@@ -20,6 +20,7 @@ import { FullHistoryOperationFactsMigration1784960000000 } from '@history-scan-c
 import { FullHistoryOperationBackfillMigration1784970000000 } from '@history-scan-coordinator/infrastructure/database/migrations/1784970000000-FullHistoryOperationBackfillMigration.js';
 import { OrganizationTomlEvidenceMigration1784795000000 } from '@network-scan/infrastructure/database/migrations/1784795000000-OrganizationTomlEvidenceMigration.js';
 import { ScpLiveCanonicalTailMigration1784800000000 } from '@network-scan/infrastructure/database/migrations/1784800000000-ScpLiveCanonicalTailMigration.js';
+import { ScpAnimationSlotIndexMigration1784980000000 } from '@network-scan/infrastructure/database/migrations/1784980000000-ScpAnimationSlotIndexMigration.js';
 
 // The production database was imported with a partial legacy migration ledger.
 // Explicit registration prevents TypeORM from replaying pre-baseline migrations.
@@ -45,5 +46,6 @@ export const managedMigrations = [
 	FullHistoryHistoricalBackfillMigration1784940000000,
 	HistoryArchiveEvidenceRootSummaryMigration1784950000000,
 	FullHistoryOperationFactsMigration1784960000000,
-	FullHistoryOperationBackfillMigration1784970000000
+	FullHistoryOperationBackfillMigration1784970000000,
+	ScpAnimationSlotIndexMigration1784980000000
 ] as const;

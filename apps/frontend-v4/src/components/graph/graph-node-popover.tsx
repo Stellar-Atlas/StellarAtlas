@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import type { PublicScpStatementObservation } from '../../api/types';
+import type { PublicScpGraphStatement } from '../../api/types';
 import { getNodeLabel, getNodeTags } from '../../domain/network';
 import { formatInteger, formatPercent } from '../../format/formatters';
 import { StatusTags } from '../status-tags';
@@ -10,7 +10,7 @@ import { getStatementValueHash } from './scp-live-feed';
 interface GraphNodePopoverProps {
 	onClose: () => void;
 	selectedNode: Graph3DNode;
-	selectedNodeStatements: readonly PublicScpStatementObservation[];
+	selectedNodeStatements: readonly PublicScpGraphStatement[];
 	selectedQuorumNodeIds: ReadonlySet<string>;
 	selectedQuorumRows: readonly GraphQuorumRow[];
 }

@@ -1,18 +1,18 @@
 import type {
-	PublicScpStatementObservation,
+	PublicScpGraphStatement,
 	PublicScpStatementReadMetadata
 } from './types';
 import type { LiveNetworkMessage } from './live-network-message-parser';
 
 export interface LiveScpConsumerState {
 	readonly metadata: PublicScpStatementReadMetadata | null;
-	readonly statements: PublicScpStatementObservation[];
+	readonly statements: PublicScpGraphStatement[];
 }
 
 const maxRetainedStatements = 4_000;
 
 export const createLiveScpConsumerState = (
-	statements: readonly PublicScpStatementObservation[]
+	statements: readonly PublicScpGraphStatement[]
 ): LiveScpConsumerState => ({ metadata: null, statements: [...statements] });
 
 export const applyLiveScpMessage = (
@@ -29,9 +29,9 @@ export const applyLiveScpMessage = (
 });
 
 const mergeStatements = (
-	current: readonly PublicScpStatementObservation[],
-	next: readonly PublicScpStatementObservation[]
-): PublicScpStatementObservation[] => {
+	current: readonly PublicScpGraphStatement[],
+	next: readonly PublicScpGraphStatement[]
+): PublicScpGraphStatement[] => {
 	const byHash = new Map(
 		current.map((statement) => [statement.statementHash, statement])
 	);
@@ -42,8 +42,8 @@ const mergeStatements = (
 };
 
 const compareStatementsNewestFirst = (
-	left: PublicScpStatementObservation,
-	right: PublicScpStatementObservation
+	left: PublicScpGraphStatement,
+	right: PublicScpGraphStatement
 ): number =>
 	toSortableTime(right.observedAt) - toSortableTime(left.observedAt) ||
 	right.statementHash.localeCompare(left.statementHash);

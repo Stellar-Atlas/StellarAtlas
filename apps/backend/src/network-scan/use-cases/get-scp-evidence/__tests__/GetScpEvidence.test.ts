@@ -15,6 +15,27 @@ describe('GetScpEvidence', () => {
 			statement('20', 'GA', 'confirm'),
 			statement('19', 'GB', 'externalize')
 		];
+		getScpStatements.executeLatestAnimationSlots.mockResolvedValue(
+			ok({
+				freshness: 'fresh',
+				freshnessMs: 25,
+				observations: statements.map((row) => ({
+					nodeId: row.nodeId,
+					observedAt: row.observedAt,
+					observedFromPeer: row.observedFromPeer,
+					quorumSetHash: row.pledges.quorumSetHash,
+					slotIndex: row.slotIndex,
+					statementHash: row.statementHash,
+					statementType: row.statementType,
+					values: row.values.map(({ closeTime, txSetHash }) => ({
+						closeTime,
+						txSetHash
+					}))
+				})),
+				observedAt: '2026-07-11T00:00:00.000Z',
+				source: 'postgres_canonical'
+			})
+		);
 		getScpStatements.executeWithMetadata.mockImplementation(async (request) =>
 			ok({
 				freshness: 'fresh',
@@ -57,7 +78,8 @@ describe('GetScpEvidence', () => {
 		});
 		expect(slots.value[0]?.events[0]).toMatchObject({
 			kind: 'commit_observed',
-			organizationId: 'org-a'
+			organizationId: null,
+			statement: expect.not.objectContaining({ statementXdr: 'xdr' })
 		});
 		expect(organization.isOk()).toBe(true);
 		if (organization.isOk())
@@ -66,8 +88,8 @@ describe('GetScpEvidence', () => {
 					.flatMap((slot) => slot.events)
 					.every((event) => event.organizationId === 'org-a')
 			).toBe(true);
-		expect(getScpStatements.executeWithMetadata).toHaveBeenCalledWith(
-			expect.objectContaining({ limit: 1000, source: 'stored' })
+		expect(getScpStatements.executeLatestAnimationSlots).toHaveBeenCalledWith(
+			1
 		);
 		expect(getScpStatements.executeWithMetadata).toHaveBeenCalledWith(
 			expect.objectContaining({ nodeId: 'GA', source: 'stored' })

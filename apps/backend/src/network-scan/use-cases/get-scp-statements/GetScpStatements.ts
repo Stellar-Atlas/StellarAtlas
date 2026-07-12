@@ -31,6 +31,28 @@ export interface ScpStatementReadResult {
 	source: ScpStatementReadSource;
 }
 
+export interface ScpAnimationStatement {
+	readonly nodeId: string;
+	readonly observedAt: string;
+	readonly observedFromPeer: string;
+	readonly quorumSetHash: string;
+	readonly slotIndex: string;
+	readonly statementHash: string;
+	readonly statementType: ScpStatementObservationV1['statementType'];
+	readonly values: readonly {
+		readonly closeTime: string;
+		readonly txSetHash: string;
+	}[];
+}
+
+export interface ScpAnimationReadResult {
+	readonly freshness: ScpStatementReadFreshness;
+	readonly freshnessMs: number | null;
+	readonly observations: readonly ScpAnimationStatement[];
+	readonly observedAt: string | null;
+	readonly source: 'postgres_canonical';
+}
+
 type ObservationRead =
 	| { observations: ScpStatementObservationV1[]; status: 'available' }
 	| { error: Error; status: 'unavailable' };
@@ -49,6 +71,29 @@ export class GetScpStatements {
 	): Promise<Result<ScpStatementObservationV1[], Error>> {
 		const result = await this.executeWithMetadata(dto);
 		return result.map(({ observations }) => observations);
+	}
+
+	async executeLatestAnimationSlots(
+		limit: number
+	): Promise<Result<ScpAnimationReadResult, Error>> {
+		try {
+			const observations = (
+				await this.repository.findLatestAnimationSlots(limit)
+			).map((observation) => ({
+				nodeId: observation.nodeId,
+				observedAt: observation.observedAt.toISOString(),
+				observedFromPeer: observation.observedFromPeer,
+				quorumSetHash: observation.quorumSetHash,
+				slotIndex: observation.slotIndex,
+				statementHash: observation.statementHash,
+				statementType: observation.statementType,
+				values: observation.values
+			}));
+			const metadata = toReadMetadata(observations, 'postgres_canonical');
+			return ok({ ...metadata, observations, source: 'postgres_canonical' });
+		} catch (error) {
+			return err(mapUnknownToError(error));
+		}
 	}
 
 	async executeWithMetadata(
@@ -137,15 +182,21 @@ function toReadResult(
 	observations: ScpStatementObservationV1[],
 	source: ScpStatementReadSource
 ): ScpStatementReadResult {
-	if (observations.length === 0) {
+	const metadata = toReadMetadata(observations, source);
+	return { ...metadata, observations, source };
+}
+
+function toReadMetadata(
+	observations: readonly { readonly observedAt: string }[],
+	source: ScpStatementReadSource
+): Omit<ScpStatementReadResult, 'observations'> {
+	if (observations.length === 0)
 		return {
 			freshness: 'empty',
 			freshnessMs: null,
-			observations,
 			observedAt: null,
 			source
 		};
-	}
 	const observedTimes = observations.map((observation) =>
 		Date.parse(observation.observedAt)
 	);
@@ -156,7 +207,6 @@ function toReadResult(
 		return {
 			freshness: 'stale',
 			freshnessMs: null,
-			observations,
 			observedAt: null,
 			source
 		};
@@ -172,7 +222,6 @@ function toReadResult(
 				? 'fresh'
 				: 'stale',
 		freshnessMs: Math.abs(ageMs),
-		observations,
 		observedAt: new Date(observedAtMs).toISOString(),
 		source
 	};

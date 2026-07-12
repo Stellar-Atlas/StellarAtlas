@@ -15,6 +15,7 @@ import { scpStatementObservationPolicy } from '@network-scan/domain/scp/ScpState
 import { batchScpStatementObservationsForUpsert } from '@network-scan/domain/scp/ScpStatementObservationConflictPolicy.js';
 import { selectLatestObservedScpLedger } from '@network-scan/domain/scp/ScpLatestObservedLedger.js';
 import { createScpStatementObservationUpsertQuery } from './ScpStatementObservationUpsertQuery.js';
+import { findLatestScpAnimationSlots } from './ScpStatementAnimationQuery.js';
 
 type DeletedObservationRow = { readonly id: number | string };
 type DeleteQueryResult =
@@ -231,6 +232,12 @@ export class TypeOrmScpStatementObservationRepository implements ScpStatementObs
 				source: row.source
 			};
 		});
+	}
+
+	async findLatestAnimationSlots(limit: number) {
+		return await this.withTimeouts(async (manager) =>
+			findLatestScpAnimationSlots(manager, limit)
+		);
 	}
 
 	async findProjectionEventPage({

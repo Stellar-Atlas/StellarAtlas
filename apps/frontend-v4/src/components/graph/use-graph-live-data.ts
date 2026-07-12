@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import type {
 	PublicNetwork,
-	PublicScpStatementObservation,
+	PublicScpGraphStatement,
 	PublicScpStatementReadMetadata
 } from '../../api/types';
 import {
@@ -24,12 +24,12 @@ interface UseGraphLiveDataResult {
 	latestObservedScpSlotIndex: string | null;
 	network: PublicNetwork;
 	scpReadMetadata: PublicScpStatementReadMetadata | null;
-	scpStatements: PublicScpStatementObservation[];
+	scpStatements: PublicScpGraphStatement[];
 }
 
 export const useGraphLiveData = (
 	initialNetwork: PublicNetwork,
-	initialScpStatements: PublicScpStatementObservation[]
+	initialScpStatements: PublicScpGraphStatement[]
 ): UseGraphLiveDataResult => {
 	const [network, setNetwork] = useState(initialNetwork);
 	const [scpState, setScpState] = useState(() =>

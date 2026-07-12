@@ -6,6 +6,7 @@ import {
 	type DisposablePostgres
 } from '@test-support/DisposablePostgres.js';
 import { ScpLiveCanonicalTailMigration1784800000000 } from '../../migrations/1784800000000-ScpLiveCanonicalTailMigration.js';
+import { ScpAnimationSlotIndexMigration1784980000000 } from '../../migrations/1784980000000-ScpAnimationSlotIndexMigration.js';
 import { TypeOrmScpStatementObservationRepository } from '../TypeOrmScpStatementObservationRepository.js';
 
 jest.setTimeout(120_000);
@@ -30,6 +31,9 @@ describe('TypeOrmScpStatementObservationRepository.integration', () => {
 		await migrationRunner.connect();
 		try {
 			await new ScpLiveCanonicalTailMigration1784800000000().up(
+				migrationRunner
+			);
+			await new ScpAnimationSlotIndexMigration1784980000000().up(
 				migrationRunner
 			);
 		} finally {
@@ -147,6 +151,33 @@ describe('TypeOrmScpStatementObservationRepository.integration', () => {
 			sequence: '100',
 			source: 'scp_live_collector'
 		});
+	});
+
+	it('returns every compact statement from the bounded latest slots', async () => {
+		const repository = createRepository();
+		const observations = [
+			animationObservation('100', 'hash-100-a', 'peer-a'),
+			animationObservation('101', 'hash-101-a', 'peer-b'),
+			animationObservation('101', 'hash-101-b', 'peer-c'),
+			animationObservation('102', 'hash-102-a', 'peer-d')
+		];
+		await repository.saveMany(observations, 'scp_live_collector');
+
+		const latest = await repository.findLatestAnimationSlots(2);
+
+		expect(latest.map((row) => row.statementHash)).toEqual([
+			'hash-102-a',
+			'hash-101-a',
+			'hash-101-b'
+		]);
+		expect(latest[1]).toMatchObject({
+			observedFromPeer: 'peer-b',
+			quorumSetHash: 'qset',
+			slotIndex: '101',
+			values: [{ closeTime: '1783684801', txSetHash: 'tx-set-101' }]
+		});
+		expect(latest[1]).not.toHaveProperty('signature');
+		expect(latest[1]).not.toHaveProperty('statementXdr');
 	});
 
 	it('bounds a lock-blocked canonical write with the configured lock timeout', async () => {
@@ -296,6 +327,34 @@ function withLedgerValue(
 				txSetHash: 'tx-set',
 				upgradeCount: 0,
 				value: 'value'
+			}
+		]
+	};
+}
+
+function animationObservation(
+	slotIndex: string,
+	statementHash: string,
+	observedFromPeer: string
+): CrawlerScpStatementObservation {
+	return {
+		...createObservation(
+			new Date(`2026-07-10T12:00:${slotIndex.slice(-2)}.000Z`),
+			observedFromPeer
+		),
+		pledges: {
+			commit: { counter: 1, value: 'ballot' },
+			nH: 1,
+			quorumSetHash: 'qset'
+		},
+		slotIndex,
+		statementHash,
+		values: [
+			{
+				closeTime: `17836848${slotIndex.slice(-2)}`,
+				txSetHash: `tx-set-${slotIndex}`,
+				upgradeCount: 0,
+				value: 'large-raw-value-is-not-returned'
 			}
 		]
 	};

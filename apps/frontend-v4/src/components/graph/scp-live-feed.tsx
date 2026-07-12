@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import type {
 	PublicLedgerTransaction,
 	PublicNetwork,
-	PublicScpStatementObservation,
+	PublicScpGraphStatement,
 	PublicScpStatementReadMetadata
 } from '../../api/types';
 import { getLedgerTransactions } from '../../app/actions/network-data';
@@ -22,12 +22,12 @@ import {
 
 interface ScpLiveFeedProps {
 	activeSlotIndex: string | null;
-	activeStatements: readonly PublicScpStatementObservation[];
+	activeStatements: readonly PublicScpGraphStatement[];
 	latestLedgerSlotIndex: string | null;
 	network: PublicNetwork;
 	observedSlotIndex: string | null;
 	readMetadata: PublicScpStatementReadMetadata | null;
-	statements: readonly PublicScpStatementObservation[];
+	statements: readonly PublicScpGraphStatement[];
 }
 
 interface StatementSummary {
@@ -55,7 +55,7 @@ interface SelectedTransactionSet {
 
 const getStatementNodeLabel = (
 	network: PublicNetwork,
-	statement: PublicScpStatementObservation
+	statement: PublicScpGraphStatement
 ): string => {
 	const node = network.nodes.find(
 		(candidate) => candidate.publicKey === statement.nodeId
@@ -64,7 +64,7 @@ const getStatementNodeLabel = (
 };
 
 export const getStatementValueHash = (
-	statement: PublicScpStatementObservation
+	statement: PublicScpGraphStatement
 ): string => {
 	const value = statement.values[0];
 	if (value !== undefined) return value.txSetHash.slice(0, 12);
@@ -74,7 +74,7 @@ export const getStatementValueHash = (
 
 const summarizeStatements = (
 	network: PublicNetwork,
-	statements: readonly PublicScpStatementObservation[]
+	statements: readonly PublicScpGraphStatement[]
 ): StatementSummary | null => {
 	const latestSlotIndex = getHighestLedgerSequence(
 		statements.map((statement) => statement.slotIndex)
@@ -119,8 +119,8 @@ const summarizeStatements = (
 };
 
 const compareStatementsForFeed = (
-	left: PublicScpStatementObservation,
-	right: PublicScpStatementObservation
+	left: PublicScpGraphStatement,
+	right: PublicScpGraphStatement
 ): number => {
 	const slotComparison = compareLedgerSequences(
 		right.slotIndex,
@@ -143,7 +143,7 @@ const shortenHash = (hash: string): string =>
 	hash.length > 18 ? `${hash.slice(0, 12)}...${hash.slice(-6)}` : hash;
 
 const getStatementTransactionSet = (
-	statement: PublicScpStatementObservation
+	statement: PublicScpGraphStatement
 ): SelectedTransactionSet => ({
 	slotIndex: statement.slotIndex,
 	txSetHash: statement.values[0]?.txSetHash ?? null

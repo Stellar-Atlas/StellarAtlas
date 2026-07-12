@@ -13,6 +13,9 @@ describe('parseScpSlotEvidenceList', () => {
 			kind: 'commit_observed',
 			organizationId: 'org-a'
 		});
+		expect(parsed?.[0]?.events[0]?.statement).not.toHaveProperty(
+			'statementXdr'
+		);
 		expect(
 			parseScpSlotEvidenceList([
 				{ ...slotEvidence(), events: [{ broken: true }] }

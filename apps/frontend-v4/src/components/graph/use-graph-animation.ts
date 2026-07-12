@@ -30,7 +30,7 @@ import {
 	type ActiveWave,
 	type WaveMeshPool
 } from './graph-wave-animation';
-import type { PublicScpStatementObservation } from '../../api/types';
+import type { PublicScpGraphStatement } from '../../api/types';
 
 interface UseGraphAnimationOptions {
 	activeWavesRef: RefObject<Map<number, ActiveWave>>;
@@ -181,10 +181,7 @@ export const useGraphAnimation = ({
 	]);
 
 	const animateStatementPacket = useCallback(
-		(
-			statement: PublicScpStatementObservation,
-			path: StatementFlowPath
-		): void => {
+		(statement: PublicScpGraphStatement, path: StatementFlowPath): void => {
 			const THREE = threeRef.current;
 			const wavePool = wavePoolRef.current;
 			if (!THREE || !wavePool) return;

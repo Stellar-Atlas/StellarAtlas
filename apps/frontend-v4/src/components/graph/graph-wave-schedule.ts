@@ -8,12 +8,12 @@ import {
 	type LedgerPlaybackFrame,
 	type StatementFlowPath
 } from './scp-flow-paths';
-import type { PublicScpStatementObservation } from '../../api/types';
+import type { PublicScpGraphStatement } from '../../api/types';
 
 export interface StatementWaveScheduleEntry {
 	readonly delayMs: number;
 	readonly flowPath: StatementFlowPath;
-	readonly statement: PublicScpStatementObservation;
+	readonly statement: PublicScpGraphStatement;
 }
 
 interface BuildStatementWaveScheduleOptions {
@@ -62,7 +62,7 @@ export const buildStatementWaveSchedule = ({
 				entry
 			): entry is {
 				flowPath: StatementFlowPath;
-				statement: PublicScpStatementObservation;
+				statement: PublicScpGraphStatement;
 			} => entry !== null
 		);
 

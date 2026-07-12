@@ -25,6 +25,22 @@ export interface ScpLatestObservedLedger {
 	source: ScpStatementWriter;
 }
 
+export interface ScpStatementAnimationValue {
+	readonly closeTime: string;
+	readonly txSetHash: string;
+}
+
+export interface ScpStatementAnimationObservation {
+	readonly nodeId: string;
+	readonly observedAt: Date;
+	readonly observedFromPeer: string;
+	readonly quorumSetHash: string;
+	readonly slotIndex: string;
+	readonly statementHash: string;
+	readonly statementType: CrawlerScpStatementObservation['statementType'];
+	readonly values: readonly ScpStatementAnimationValue[];
+}
+
 export interface ScpStatementProjectionPageFilter {
 	afterId: number;
 	limit: number;
@@ -55,6 +71,9 @@ export interface ScpStatementObservationRepository {
 		writer: ScpStatementWriter
 	): Promise<CrawlerScpStatementObservation[]>;
 	findLatestObservedLedger(): Promise<ScpLatestObservedLedger | null>;
+	findLatestAnimationSlots(
+		limit: number
+	): Promise<ScpStatementAnimationObservation[]>;
 	findProjectionEventPage(
 		filter: ScpStatementProjectionEventPageFilter
 	): Promise<ScpStatementProjectionEventPage>;

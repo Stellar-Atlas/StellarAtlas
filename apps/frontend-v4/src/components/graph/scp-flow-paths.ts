@@ -1,7 +1,4 @@
-import type {
-	PublicNetwork,
-	PublicScpStatementObservation
-} from '../../api/types';
+import type { PublicNetwork, PublicScpGraphStatement } from '../../api/types';
 import { getHighestLedgerSequence } from '../../domain/ledger-sequence';
 import { getNodeLabel } from '../../domain/network';
 import type { Graph3DLink, Graph3DNode } from './model-3d';
@@ -15,18 +12,18 @@ export interface LedgerPlaybackFrame {
 	animationBudgetMs?: number;
 	playbackDurationMs?: number;
 	slotIndex: string;
-	statements: readonly PublicScpStatementObservation[];
+	statements: readonly PublicScpGraphStatement[];
 }
 
 export interface StatementFlowPath {
 	label: string;
-	statement: PublicScpStatementObservation;
+	statement: PublicScpGraphStatement;
 	source: Graph3DNode;
 	target: Graph3DNode;
 }
 
 export const getStatementColor = (
-	statementType: PublicScpStatementObservation['statementType']
+	statementType: PublicScpGraphStatement['statementType']
 ): string => {
 	if (statementType === 'nominate') return '#f7cf4d';
 	if (statementType === 'prepare') return '#58a6ff';
@@ -35,26 +32,26 @@ export const getStatementColor = (
 };
 
 export const compareStatementsByObservation = (
-	left: PublicScpStatementObservation,
-	right: PublicScpStatementObservation
+	left: PublicScpGraphStatement,
+	right: PublicScpGraphStatement
 ): number =>
 	new Date(left.observedAt).getTime() - new Date(right.observedAt).getTime() ||
 	left.statementHash.localeCompare(right.statementHash);
 
 export const selectLedgerAnimationStatements = (
-	statements: readonly PublicScpStatementObservation[]
-): readonly PublicScpStatementObservation[] => {
+	statements: readonly PublicScpGraphStatement[]
+): readonly PublicScpGraphStatement[] => {
 	return statements.toSorted(compareStatementsByObservation);
 };
 
 export const getLatestSlotIndex = (
-	statements: readonly PublicScpStatementObservation[]
+	statements: readonly PublicScpGraphStatement[]
 ): string | null =>
 	getHighestLedgerSequence(statements.map((statement) => statement.slotIndex));
 
 export const getDisplayLedger = (
 	network: PublicNetwork,
-	statements: readonly PublicScpStatementObservation[],
+	statements: readonly PublicScpGraphStatement[],
 	latestLedger: string | null
 ): PublicNetwork['latestLedger'] => {
 	const highest = getHighestLedgerSequence([
@@ -66,7 +63,7 @@ export const getDisplayLedger = (
 };
 
 const findStatementFallbackLink = (
-	statement: PublicScpStatementObservation,
+	statement: PublicScpGraphStatement,
 	links: readonly Graph3DLink[],
 	nodesById: ReadonlyMap<string, Graph3DNode>
 ): Graph3DLink | null => {
@@ -86,7 +83,7 @@ const findStatementFallbackLink = (
 };
 
 export const getStatementFlowPath = (
-	statement: PublicScpStatementObservation,
+	statement: PublicScpGraphStatement,
 	links: readonly Graph3DLink[],
 	nodesById: ReadonlyMap<string, Graph3DNode>
 ): StatementFlowPath | null => {
