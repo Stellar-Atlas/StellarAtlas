@@ -130,8 +130,13 @@ export class BackfillFullHistoryOperations {
 		const sources = candidate.proof.sources;
 		const decoded = await this.decoder.decode(candidate, networkPassphrase);
 		return this.backfillRepository.storeOperations(
-			composeCheckpointWrite(batch, sources, decoded, networkPassphrase),
-			this.decoder.version
+			composeCheckpointWrite(
+				batch,
+				sources,
+				decoded,
+				networkPassphrase,
+				this.decoder
+			)
 		);
 	}
 }
@@ -140,7 +145,8 @@ function composeCheckpointWrite(
 	batch: FullHistoryOperationBackfillBatch,
 	sources: FullHistoryCheckpointWrite['sources'],
 	decoded: Awaited<ReturnType<FullHistoryCheckpointDecoder['decode']>>,
-	networkPassphrase: string
+	networkPassphrase: string,
+	decoder: FullHistoryCheckpointDecoder
 ): FullHistoryCheckpointWrite {
 	return {
 		archiveUrlIdentity: batch.archiveUrlIdentity,
@@ -151,7 +157,10 @@ function composeCheckpointWrite(
 		lastLedger: batch.lastLedger,
 		ledgers: decoded.ledgers,
 		networkPassphrase,
+		operationDecoderVersion: decoder.operationDecoderVersion,
 		operations: decoded.operations,
+		operationResultDecoderVersion: decoder.operationResultDecoderVersion,
+		operationResults: decoded.operationResults,
 		proofEvaluatedAt: batch.proofEvaluatedAt,
 		proofId: batch.proofId,
 		proofVersion: batch.proofVersion,

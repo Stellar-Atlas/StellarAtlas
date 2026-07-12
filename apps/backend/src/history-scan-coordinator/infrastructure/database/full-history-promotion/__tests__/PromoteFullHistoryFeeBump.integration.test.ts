@@ -110,5 +110,26 @@ describe('PromoteFullHistoryCheckpoint fee-bump persistence', () => {
 				ledger: '59699270'
 			}
 		]);
+		const operationResults = await dataSource.query<
+			Array<{
+				readonly factScope: string;
+				readonly operationResultCode: number | null;
+				readonly operationSpecificResultCode: number | null;
+				readonly outcome: string;
+			}>
+		>(`
+			select "outcome", "operation_result_code" as "operationResultCode",
+				"operation_specific_result_code" as "operationSpecificResultCode",
+				"fact_scope" as "factScope"
+			from "full_history_operation_result"
+		`);
+		expect(operationResults).toEqual([
+			{
+				factScope: 'transaction_result_xdr',
+				operationResultCode: 0,
+				operationSpecificResultCode: 0,
+				outcome: 'succeeded'
+			}
+		]);
 	});
 });

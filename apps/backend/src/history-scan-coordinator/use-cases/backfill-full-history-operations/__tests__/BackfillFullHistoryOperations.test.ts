@@ -22,6 +22,7 @@ const networkPassphrase = 'Operation scheduler fixture network';
 const emptyDecoded: FullHistoryDecodedCheckpoint = {
 	ledgers: [],
 	operations: [],
+	operationResults: [],
 	results: [],
 	transactions: []
 };
@@ -157,6 +158,8 @@ class CandidateFixtureRepository implements FullHistoryCheckpointCandidateReposi
 }
 
 class GatedDecoder implements FullHistoryCheckpointDecoder {
+	readonly operationDecoderVersion = 'worker-operation-test-v1';
+	readonly operationResultDecoderVersion = 'worker-result-test-v1';
 	readonly version = 'worker-test-v1';
 	readonly started: number[] = [];
 	peakActive = 0;
@@ -180,6 +183,8 @@ class GatedDecoder implements FullHistoryCheckpointDecoder {
 }
 
 class SelectiveDecoder implements FullHistoryCheckpointDecoder {
+	readonly operationDecoderVersion = 'worker-operation-test-v1';
+	readonly operationResultDecoderVersion = 'worker-result-test-v1';
 	readonly version = 'worker-test-v1';
 
 	constructor(

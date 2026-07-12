@@ -60,6 +60,20 @@ describe('StellarFullHistoryCheckpointDecoder', () => {
 		expect(decoded.operations[0]!.transactionHash.toHex()).toBe(
 			decoded.transactions[0]!.transactionHash.toHex()
 		);
+		expect(decoded.operationResults).toEqual([
+			expect.objectContaining({
+				factScope: 'transaction_result_xdr',
+				ledgerSequence: '556808',
+				operationIndex: 0,
+				operationResultCode: 0,
+				operationSpecificResultCode: 0,
+				outcome: 'succeeded',
+				transactionIndex: 0
+			})
+		]);
+		expect(decoded.operationResults[0]!.transactionHash.toHex()).toBe(
+			decoded.transactions[0]!.transactionHash.toHex()
+		);
 		expect(decoded.results).toEqual([
 			expect.objectContaining({
 				feeCharged: '100',
@@ -107,6 +121,16 @@ describe('StellarFullHistoryCheckpointDecoder', () => {
 		expect(decoded.operations[0]!.transactionHash.toHex()).toBe(
 			decoded.transactions[0]!.transactionHash.toHex()
 		);
+		expect(decoded.operationResults).toEqual([
+			expect.objectContaining({
+				factScope: 'transaction_result_xdr',
+				operationIndex: 0,
+				operationResultCode: 0,
+				operationSpecificResultCode: 0,
+				outcome: 'succeeded',
+				transactionIndex: 0
+			})
+		]);
 		expect(decoded.results).toEqual([
 			expect.objectContaining({
 				feeCharged: '55289',

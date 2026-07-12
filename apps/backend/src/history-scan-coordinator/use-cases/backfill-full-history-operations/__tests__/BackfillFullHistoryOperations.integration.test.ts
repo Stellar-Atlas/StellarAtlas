@@ -14,6 +14,7 @@ import {
 import { TypeOrmFullHistoryOperationBackfillRepository } from '../../../infrastructure/database/full-history-operation-backfill/TypeOrmFullHistoryOperationBackfillRepository.js';
 import { insertBatch } from '../../../infrastructure/database/full-history/FullHistoryCanonicalBatchStore.js';
 import { storeCanonicalBaseFacts } from '../../../infrastructure/database/full-history/FullHistoryCanonicalFactStore.js';
+import { storeCanonicalOperations } from '../../../infrastructure/database/full-history/FullHistoryCanonicalOperationStore.js';
 import { fullHistoryEntities } from '../../../infrastructure/database/full-history/__tests__/FullHistoryCanonicalFixture.js';
 import { TypeOrmFullHistoryCheckpointCandidateRepository } from '../../../infrastructure/database/full-history-promotion/TypeOrmFullHistoryCheckpointCandidateRepository.js';
 import {
@@ -115,6 +116,14 @@ describe('BackfillFullHistoryOperations', () => {
 			 set "evaluatedAt" = $1 where id = $2`,
 			[feeBump.input.proofEvaluatedAt, feeBump.proofId]
 		);
+		await dataSource.transaction((manager) =>
+			storeCanonicalOperations(
+				manager,
+				feeBump.input,
+				hashNetworkPassphrase(publicNetworkPassphrase),
+				decoder.operationDecoderVersion
+			)
+		);
 
 		await installSlowCoverageTrigger();
 		try {
@@ -125,7 +134,7 @@ describe('BackfillFullHistoryOperations', () => {
 				});
 			let timeoutError: unknown;
 			try {
-				await timeoutRepository.storeOperations(classic.input, decoder.version);
+				await timeoutRepository.storeOperations(classic.input);
 			} catch (error) {
 				timeoutError = error;
 			}
@@ -144,8 +153,8 @@ describe('BackfillFullHistoryOperations', () => {
 		const crashingRepository: FullHistoryOperationBackfillRepository = {
 			findUnindexedBatches: (networkPassphrase, limit) =>
 				repository.findUnindexedBatches(networkPassphrase, limit),
-			storeOperations: async (input, operationDecoderVersion) => {
-				await repository.storeOperations(input, operationDecoderVersion);
+			storeOperations: async (input) => {
+				await repository.storeOperations(input);
 				throw new Error('simulated process crash after commit');
 			}
 		};
@@ -181,7 +190,7 @@ describe('BackfillFullHistoryOperations', () => {
 		});
 
 		await expect(
-			repository.storeOperations(feeBump.input, decoder.version)
+			repository.storeOperations(feeBump.input)
 		).resolves.toMatchObject({
 			batchId: feeBump.input.batchId,
 			operationCount: 1,
@@ -211,20 +220,53 @@ describe('BackfillFullHistoryOperations', () => {
 			{
 				batchId: empty.input.batchId,
 				operationCount: 0,
-				operationDecoderVersion: decoder.version,
+				operationDecoderVersion: decoder.operationDecoderVersion,
 				transactionCount: 0
 			},
 			{
 				batchId: classic.input.batchId,
 				operationCount: 1,
-				operationDecoderVersion: decoder.version,
+				operationDecoderVersion: decoder.operationDecoderVersion,
 				transactionCount: 1
 			},
 			{
 				batchId: feeBump.input.batchId,
 				operationCount: 1,
-				operationDecoderVersion: decoder.version,
+				operationDecoderVersion: decoder.operationDecoderVersion,
 				transactionCount: 1
+			}
+		]);
+		await expect(operationResultRows()).resolves.toEqual([
+			{
+				batchId: classic.input.batchId,
+				factScope: 'transaction_result_xdr',
+				operationResultCode: 0,
+				operationSpecificResultCode: 0,
+				outcome: 'succeeded'
+			},
+			{
+				batchId: feeBump.input.batchId,
+				factScope: 'transaction_result_xdr',
+				operationResultCode: 0,
+				operationSpecificResultCode: 0,
+				outcome: 'succeeded'
+			}
+		]);
+		await expect(operationResultCoverageRows()).resolves.toEqual([
+			{
+				batchId: empty.input.batchId,
+				operationCount: 0,
+				resultDecoderVersion: decoder.operationResultDecoderVersion
+			},
+			{
+				batchId: classic.input.batchId,
+				operationCount: 1,
+				resultDecoderVersion: decoder.operationResultDecoderVersion
+			},
+			{
+				batchId: feeBump.input.batchId,
+				operationCount: 1,
+				resultDecoderVersion: decoder.operationResultDecoderVersion
 			}
 		]);
 		expect(await immutableRows()).toEqual(immutableBefore);
@@ -274,7 +316,10 @@ describe('BackfillFullHistoryOperations', () => {
 			lastLedger: decoded.ledgers.at(-1)!.ledgerSequence,
 			ledgers: decoded.ledgers,
 			networkPassphrase: publicNetworkPassphrase,
+			operationDecoderVersion: decoder.operationDecoderVersion,
 			operations: decoded.operations,
+			operationResultDecoderVersion: decoder.operationResultDecoderVersion,
+			operationResults: decoded.operationResults,
 			proofEvaluatedAt: candidate.proof.evaluatedAt,
 			proofId: candidate.proof.id,
 			proofVersion: candidate.proof.version,
@@ -400,6 +445,51 @@ describe('BackfillFullHistoryOperations', () => {
 				coverage."operation_decoder_version" as "operationDecoderVersion",
 				coverage."transaction_count" as "transactionCount"
 			from "full_history_operation_batch_coverage" coverage
+			join "full_history_ingestion_batch" batch
+				on batch.id = coverage."batch_id"
+			order by batch."last_ledger"
+		`);
+	}
+
+	async function operationResultRows() {
+		return dataSource.query<
+			Array<{
+				readonly batchId: string;
+				readonly factScope: string;
+				readonly operationResultCode: number | null;
+				readonly operationSpecificResultCode: number | null;
+				readonly outcome: string;
+			}>
+		>(`
+			select operation."batch_id" as "batchId", result."outcome",
+				result."operation_result_code" as "operationResultCode",
+				result."operation_specific_result_code"
+					as "operationSpecificResultCode",
+				result."fact_scope" as "factScope"
+			from "full_history_operation_result" result
+			join "full_history_operation" operation
+				on operation."network_passphrase_hash" =
+					result."network_passphrase_hash"
+				and operation."transaction_hash" = result."transaction_hash"
+				and operation."operation_index" = result."operation_index"
+			join "full_history_ingestion_batch" batch
+				on batch.id = operation."batch_id"
+			order by batch."last_ledger"
+		`);
+	}
+
+	async function operationResultCoverageRows() {
+		return dataSource.query<
+			Array<{
+				readonly batchId: string;
+				readonly operationCount: number;
+				readonly resultDecoderVersion: string;
+			}>
+		>(`
+			select coverage."batch_id" as "batchId",
+				coverage."operation_count" as "operationCount",
+				coverage."result_decoder_version" as "resultDecoderVersion"
+			from "full_history_operation_result_batch_coverage" coverage
 			join "full_history_ingestion_batch" batch
 				on batch.id = coverage."batch_id"
 			order by batch."last_ledger"

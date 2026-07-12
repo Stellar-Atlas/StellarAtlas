@@ -14,6 +14,10 @@ import {
 	type FullHistoryOperationInput,
 	validateFullHistoryOperations
 } from './FullHistoryCanonicalOperation.js';
+import {
+	type FullHistoryOperationResultInput,
+	validateFullHistoryOperationResults
+} from './FullHistoryCanonicalOperationResult.js';
 
 export const FULL_HISTORY_REGULAR_CHECKPOINT_LEDGER_COUNT = 64;
 export const FULL_HISTORY_GENESIS_CHECKPOINT_LEDGER_COUNT = 63;
@@ -75,7 +79,10 @@ export interface FullHistoryCheckpointWrite {
 	readonly lastLedger: FullHistoryLedgerSequence;
 	readonly ledgers: readonly FullHistoryLedgerInput[];
 	readonly networkPassphrase: string;
+	readonly operationDecoderVersion: string;
 	readonly operations: readonly FullHistoryOperationInput[];
+	readonly operationResultDecoderVersion: string;
+	readonly operationResults: readonly FullHistoryOperationResultInput[];
 	readonly proofEvaluatedAt: Date;
 	readonly proofId: number;
 	readonly proofVersion: number;
@@ -91,6 +98,16 @@ export function validateFullHistoryCheckpointWrite(
 	assertBoundedText(input.networkPassphrase, 'networkPassphrase', 1_024);
 	assertBoundedText(input.archiveUrlIdentity, 'archiveUrlIdentity', 2_048);
 	assertBoundedText(input.decoderVersion, 'decoderVersion', 128);
+	assertBoundedText(
+		input.operationDecoderVersion,
+		'operationDecoderVersion',
+		128
+	);
+	assertBoundedText(
+		input.operationResultDecoderVersion,
+		'operationResultDecoderVersion',
+		128
+	);
 	assertInteger(input.proofId, 'proofId', 1);
 	assertInteger(input.proofVersion, 'proofVersion', 1, 32_767);
 	assertValidDate(input.proofEvaluatedAt, 'proofEvaluatedAt');
@@ -101,6 +118,7 @@ export function validateFullHistoryCheckpointWrite(
 	validateLedgerRange(input);
 	validateTransactions(input);
 	validateFullHistoryOperations(input);
+	validateFullHistoryOperationResults(input);
 }
 
 function validateSources(sources: FullHistoryCheckpointSources): void {

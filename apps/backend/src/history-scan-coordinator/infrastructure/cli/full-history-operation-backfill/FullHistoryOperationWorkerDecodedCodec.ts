@@ -8,6 +8,12 @@ import {
 	isFullHistoryOperationType,
 	type FullHistoryOperationSourceOrigin
 } from '../../../domain/full-history/FullHistoryCanonicalOperation.js';
+import {
+	FULL_HISTORY_OPERATION_RESULT_FACT_SCOPE,
+	isFullHistoryOperationResultCode,
+	type FullHistoryOperationOutcome,
+	type FullHistoryOperationResultCode
+} from '../../../domain/full-history/FullHistoryCanonicalOperationResult.js';
 import type { FullHistoryDecodedCheckpoint } from '../../../domain/full-history-promotion/FullHistoryCheckpointDecoder.js';
 import {
 	fullHistoryLedgerSequence,
@@ -42,6 +48,16 @@ export interface WireDecodedCheckpoint {
 		readonly operationType: string;
 		readonly sourceAccount: string;
 		readonly sourceAccountOrigin: string;
+		readonly transactionHash: string;
+		readonly transactionIndex: number;
+	}[];
+	readonly operationResults: readonly {
+		readonly factScope: string;
+		readonly ledgerSequence: string;
+		readonly operationIndex: number;
+		readonly operationResultCode: number | null;
+		readonly operationSpecificResultCode: number | null;
+		readonly outcome: string;
 		readonly transactionHash: string;
 		readonly transactionIndex: number;
 	}[];
@@ -90,6 +106,16 @@ export function serializeFullHistoryOperationWorkerDecodedCheckpoint(
 			sourceAccountOrigin: operation.sourceAccountOrigin,
 			transactionHash: operation.transactionHash.toHex(),
 			transactionIndex: operation.transactionIndex
+		})),
+		operationResults: decoded.operationResults.map((result) => ({
+			factScope: result.factScope,
+			ledgerSequence: result.ledgerSequence,
+			operationIndex: result.operationIndex,
+			operationResultCode: result.operationResultCode,
+			operationSpecificResultCode: result.operationSpecificResultCode,
+			outcome: result.outcome,
+			transactionHash: result.transactionHash.toHex(),
+			transactionIndex: result.transactionIndex
 		})),
 		results: decoded.results.map((result) => ({
 			feeCharged: result.feeCharged,
@@ -215,6 +241,49 @@ export function parseFullHistoryOperationWorkerDecodedCheckpoint(
 				)
 			};
 		}),
+		operationResults: readWorkerArray(
+			decoded.operationResults,
+			'decoded.operationResults',
+			FULL_HISTORY_MAX_OPERATIONS_PER_CHECKPOINT
+		).map((value, index) => {
+			const result = readWorkerRecord(value, `operationResults[${index}]`);
+			return {
+				factScope: readOperationResultFactScope(
+					result.factScope,
+					`operationResults[${index}].factScope`
+				),
+				ledgerSequence: readLedgerSequence(
+					result.ledgerSequence,
+					`operationResults[${index}].ledgerSequence`
+				),
+				operationIndex: readWorkerInteger(
+					result.operationIndex,
+					`operationResults[${index}].operationIndex`,
+					0
+				),
+				operationResultCode: readOperationResultCode(
+					result.operationResultCode,
+					`operationResults[${index}].operationResultCode`
+				),
+				operationSpecificResultCode: readNullableInt32(
+					result.operationSpecificResultCode,
+					`operationResults[${index}].operationSpecificResultCode`
+				),
+				outcome: readOperationOutcome(
+					result.outcome,
+					`operationResults[${index}].outcome`
+				),
+				transactionHash: readWorkerHash(
+					result.transactionHash,
+					`operationResults[${index}].transactionHash`
+				),
+				transactionIndex: readWorkerInteger(
+					result.transactionIndex,
+					`operationResults[${index}].transactionIndex`,
+					0
+				)
+			};
+		}),
 		results: readWorkerArray(
 			decoded.results,
 			'decoded.results',
@@ -329,6 +398,41 @@ function readFactScope(value: unknown, field: string) {
 		throw new TypeError(`${field} is unsupported`);
 	}
 	return FULL_HISTORY_OPERATION_FACT_SCOPE;
+}
+
+function readOperationResultFactScope(value: unknown, field: string) {
+	if (value !== FULL_HISTORY_OPERATION_RESULT_FACT_SCOPE) {
+		throw new TypeError(`${field} is unsupported`);
+	}
+	return FULL_HISTORY_OPERATION_RESULT_FACT_SCOPE;
+}
+
+function readOperationResultCode(
+	value: unknown,
+	field: string
+): FullHistoryOperationResultCode | null {
+	if (value === null) return null;
+	const parsed = readWorkerInteger(value, field, -6, 0);
+	if (!isFullHistoryOperationResultCode(parsed)) {
+		throw new TypeError(`${field} is unsupported`);
+	}
+	return parsed;
+}
+
+function readNullableInt32(value: unknown, field: string): number | null {
+	return value === null
+		? null
+		: readWorkerInteger(value, field, -0x8000_0000, 0x7fff_ffff);
+}
+
+function readOperationOutcome(
+	value: unknown,
+	field: string
+): FullHistoryOperationOutcome {
+	if (value !== 'failed' && value !== 'not_applied' && value !== 'succeeded') {
+		throw new TypeError(`${field} is unsupported`);
+	}
+	return value;
 }
 
 function readSourceOrigin(

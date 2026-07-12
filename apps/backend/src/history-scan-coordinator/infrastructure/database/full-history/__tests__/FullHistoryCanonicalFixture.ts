@@ -9,6 +9,7 @@ import {
 	FULL_HISTORY_OPERATION_FACT_SCOPE,
 	type FullHistoryOperationType
 } from '../../../../domain/full-history/FullHistoryCanonicalOperation.js';
+import { FULL_HISTORY_OPERATION_RESULT_FACT_SCOPE } from '../../../../domain/full-history/FullHistoryCanonicalOperationResult.js';
 import {
 	fullHistoryLedgerSequence,
 	fullHistoryUint64,
@@ -17,10 +18,12 @@ import {
 import { FullHistoryCanonicalSchemaMigration1784860000000 } from '../../migrations/1784860000000-FullHistoryCanonicalSchemaMigration.js';
 import { FullHistoryOperationFactsMigration1784960000000 } from '../../migrations/1784960000000-FullHistoryOperationFactsMigration.js';
 import { FullHistoryOperationBackfillMigration1784970000000 } from '../../migrations/1784970000000-FullHistoryOperationBackfillMigration.js';
+import { FullHistoryOperationResultMigration1785010000000 } from '../../migrations/1785010000000-FullHistoryOperationResultMigration.js';
 import { HistoryArchiveCheckpointProofMigration1784420000000 } from '../../migrations/1784420000000-HistoryArchiveCheckpointProofMigration.js';
 import { FullHistoryIngestionBatch } from '../entities/FullHistoryIngestionBatch.js';
 import { FullHistoryLedger } from '../entities/FullHistoryLedger.js';
 import { FullHistoryOperation } from '../entities/FullHistoryOperation.js';
+import { FullHistoryOperationResult } from '../entities/FullHistoryOperationResult.js';
 import { FullHistoryTransaction } from '../entities/FullHistoryTransaction.js';
 import { FullHistoryTransactionResult } from '../entities/FullHistoryTransactionResult.js';
 import { FullHistoryWatermark } from '../entities/FullHistoryWatermark.js';
@@ -29,6 +32,7 @@ export const fullHistoryEntities = [
 	FullHistoryIngestionBatch,
 	FullHistoryLedger,
 	FullHistoryOperation,
+	FullHistoryOperationResult,
 	FullHistoryTransaction,
 	FullHistoryTransactionResult,
 	FullHistoryWatermark
@@ -82,6 +86,9 @@ export async function installFullHistoryCanonicalSchema(
 		);
 		await new FullHistoryOperationFactsMigration1784960000000().up(queryRunner);
 		await new FullHistoryOperationBackfillMigration1784970000000().up(
+			queryRunner
+		);
+		await new FullHistoryOperationResultMigration1785010000000().up(
 			queryRunner
 		);
 		await queryRunner.commitTransaction();
@@ -166,6 +173,7 @@ export async function seedFullHistoryCheckpoint(
 		lastLedger: fullHistoryLedgerSequence(BigInt(checkpointLedger)),
 		ledgers,
 		networkPassphrase,
+		operationDecoderVersion: 'fixture-operation-decoder/1',
 		operations: [
 			{
 				factScope: FULL_HISTORY_OPERATION_FACT_SCOPE,
@@ -177,6 +185,19 @@ export async function seedFullHistoryCheckpoint(
 					options.operationSourceAccount === undefined
 						? 'transaction'
 						: 'operation',
+				transactionHash,
+				transactionIndex: 0
+			}
+		],
+		operationResultDecoderVersion: 'fixture-operation-result-decoder/1',
+		operationResults: [
+			{
+				factScope: FULL_HISTORY_OPERATION_RESULT_FACT_SCOPE,
+				ledgerSequence: fullHistoryLedgerSequence(BigInt(firstLedger)),
+				operationIndex: 0,
+				operationResultCode: 0,
+				operationSpecificResultCode: 0,
+				outcome: 'succeeded',
 				transactionHash,
 				transactionIndex: 0
 			}

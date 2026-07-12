@@ -47,6 +47,9 @@ const operationTypeBySdkType = {
 	setTrustLineFlags: 'set_trust_line_flags'
 } satisfies Readonly<Record<OperationType, FullHistoryOperationType>>;
 
+export const STELLAR_FULL_HISTORY_OPERATION_DECODER_VERSION =
+	'stellar-sdk-16/archive-xdr-v2-operation-facts';
+
 export function decodeStellarFullHistoryOperations(
 	sdkTransaction: FeeBumpTransaction | Transaction,
 	canonicalTransaction: FullHistoryTransactionInput

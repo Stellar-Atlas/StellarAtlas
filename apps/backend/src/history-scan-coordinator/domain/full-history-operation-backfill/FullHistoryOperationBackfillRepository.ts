@@ -13,7 +13,6 @@ export interface FullHistoryOperationBackfillRepository {
 		limit: number
 	): Promise<readonly FullHistoryOperationBackfillBatch[]>;
 	storeOperations(
-		input: FullHistoryCheckpointWrite,
-		operationDecoderVersion: string
+		input: FullHistoryCheckpointWrite
 	): Promise<FullHistoryOperationBackfillReceipt>;
 }

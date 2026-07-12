@@ -17,6 +17,7 @@ import {
 
 export const FULL_HISTORY_OPERATION_WORKER_MAX_OLD_GENERATION_MB = 2_048;
 export const FULL_HISTORY_OPERATION_WORKER_TASK_TIMEOUT_MS = 30 * 60 * 1_000;
+const stellarDecoderProvenance = new StellarFullHistoryCheckpointDecoder();
 
 export interface FullHistoryOperationWorkerMetrics {
 	readonly activeWorkers: number;
@@ -53,7 +54,11 @@ export class FullHistoryOperationDecodeWorkerError extends Error {
 }
 
 export class WorkerThreadFullHistoryCheckpointDecoder implements FullHistoryCheckpointDecoder {
-	readonly version = new StellarFullHistoryCheckpointDecoder().version;
+	readonly version = stellarDecoderProvenance.version;
+	readonly operationDecoderVersion =
+		stellarDecoderProvenance.operationDecoderVersion;
+	readonly operationResultDecoderVersion =
+		stellarDecoderProvenance.operationResultDecoderVersion;
 	private activeWorkers = 0;
 	private completedTasks = 0;
 	private failedTasks = 0;

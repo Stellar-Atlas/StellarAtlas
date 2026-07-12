@@ -5,6 +5,7 @@ import { FullHistoryHash } from '../../../../domain/full-history/FullHistoryCano
 import { FullHistoryCanonicalSchemaMigration1784860000000 } from '../../migrations/1784860000000-FullHistoryCanonicalSchemaMigration.js';
 import { FullHistoryOperationFactsMigration1784960000000 } from '../../migrations/1784960000000-FullHistoryOperationFactsMigration.js';
 import { FullHistoryOperationBackfillMigration1784970000000 } from '../../migrations/1784970000000-FullHistoryOperationBackfillMigration.js';
+import { FullHistoryOperationResultMigration1785010000000 } from '../../migrations/1785010000000-FullHistoryOperationResultMigration.js';
 import { ParsedLedgerHeaderMigration1784000000000 } from '../../migrations/1784000000000-ParsedLedgerHeaderMigration.js';
 import { HistoryArchiveCheckpointProofMigration1784420000000 } from '../../migrations/1784420000000-HistoryArchiveCheckpointProofMigration.js';
 import { ParsedTransactionIndexMigration1784600000000 } from '../../migrations/1784600000000-ParsedTransactionIndexMigration.js';
@@ -51,6 +52,7 @@ export async function installPromotionSchema(
 		await new FullHistoryCanonicalSchemaMigration1784860000000().up(runner);
 		await new FullHistoryOperationFactsMigration1784960000000().up(runner);
 		await new FullHistoryOperationBackfillMigration1784970000000().up(runner);
+		await new FullHistoryOperationResultMigration1785010000000().up(runner);
 		await runner.commitTransaction();
 	} catch (error) {
 		await runner.rollbackTransaction();

@@ -27,6 +27,10 @@ import {
 	assertCanonicalOperations,
 	storeCanonicalOperations
 } from '../full-history/FullHistoryCanonicalOperationStore.js';
+import {
+	assertCanonicalOperationResults,
+	storeCanonicalOperationResults
+} from '../full-history/FullHistoryCanonicalOperationResultStore.js';
 import { assertOperationBackfillBaseFacts } from './FullHistoryOperationBackfillBaseFactValidator.js';
 
 interface BackfillBatchRow {
@@ -49,8 +53,13 @@ interface BackfillBatchRow {
 	readonly transactionsObjectRemoteId: string;
 }
 
-interface CoverageRow {
+interface BatchIdentityRow {
 	readonly batchId: string;
+}
+
+interface CoverageStateRow {
+	readonly operationDecoderVersion: string | null;
+	readonly resultDecoderVersion: string | null;
 }
 
 export interface FullHistoryOperationBackfillTransactionBounds {
@@ -119,8 +128,13 @@ export class TypeOrmFullHistoryOperationBackfillRepository implements FullHistor
 				from "full_history_ingestion_batch" batch
 				left join "full_history_operation_batch_coverage" coverage
 					on coverage."batch_id" = batch.id
+				left join "full_history_operation_result_batch_coverage" result_coverage
+					on result_coverage."batch_id" = batch.id
 				where batch."network_passphrase_hash" = $1
-					and coverage."batch_id" is null
+					and (
+						coverage."batch_id" is null
+						or result_coverage."batch_id" is null
+					)
 				order by batch."last_ledger" desc, batch.id
 				limit $2
 			`,
@@ -130,11 +144,9 @@ export class TypeOrmFullHistoryOperationBackfillRepository implements FullHistor
 	}
 
 	async storeOperations(
-		input: FullHistoryCheckpointWrite,
-		operationDecoderVersion: string
+		input: FullHistoryCheckpointWrite
 	): Promise<FullHistoryOperationBackfillReceipt> {
 		validateFullHistoryCheckpointWrite(input);
-		assertBoundedText(operationDecoderVersion, 'operationDecoderVersion', 128);
 		const networkHash = hashNetworkPassphrase(input.networkPassphrase);
 		return this.dataSource.transaction(async (manager) => {
 			await setTransactionBounds(manager, this.transactionBounds);
@@ -148,16 +160,40 @@ export class TypeOrmFullHistoryOperationBackfillRepository implements FullHistor
 			}
 			assertBatchMatches(stored, input, networkHash);
 			await assertOperationBackfillBaseFacts(manager, input, networkHash);
-			const replayed = await hasCoverage(manager, input.batchId);
-			if (!replayed) {
+			const coverage = await readCoverageState(manager, input.batchId);
+			const replayed =
+				coverage.operationDecoderVersion !== null &&
+				coverage.resultDecoderVersion !== null;
+			let storedOperationDecoderVersion = coverage.operationDecoderVersion;
+			if (storedOperationDecoderVersion === null) {
 				await storeCanonicalOperations(
 					manager,
 					input,
 					networkHash,
-					operationDecoderVersion
+					input.operationDecoderVersion
 				);
+				storedOperationDecoderVersion = input.operationDecoderVersion;
 			}
-			await assertCanonicalOperations(manager, input, operationDecoderVersion);
+			await assertCanonicalOperations(
+				manager,
+				input,
+				storedOperationDecoderVersion
+			);
+			let storedResultDecoderVersion = coverage.resultDecoderVersion;
+			if (storedResultDecoderVersion === null) {
+				await storeCanonicalOperationResults(
+					manager,
+					input,
+					networkHash,
+					input.operationResultDecoderVersion
+				);
+				storedResultDecoderVersion = input.operationResultDecoderVersion;
+			}
+			await assertCanonicalOperationResults(
+				manager,
+				input,
+				storedResultDecoderVersion
+			);
 			return {
 				batchId: input.batchId,
 				operationCount: input.operations.length,
@@ -226,7 +262,7 @@ async function lockBatch(
 	batchId: string,
 	networkHash: FullHistoryHash
 ): Promise<void> {
-	const rows = await manager.query<CoverageRow[]>(
+	const rows = await manager.query<BatchIdentityRow[]>(
 		`
 			select id as "batchId" from "full_history_ingestion_batch"
 			where id = $1 and "network_passphrase_hash" = $2
@@ -242,17 +278,26 @@ async function lockBatch(
 	}
 }
 
-async function hasCoverage(
+async function readCoverageState(
 	manager: EntityManager,
 	batchId: string
-): Promise<boolean> {
-	const rows = await manager.query<CoverageRow[]>(
-		`select "batch_id" as "batchId"
-		 from "full_history_operation_batch_coverage"
-		 where "batch_id" = $1`,
+): Promise<CoverageStateRow> {
+	const rows = await manager.query<CoverageStateRow[]>(
+		`select
+			(select "operation_decoder_version"
+			 from "full_history_operation_batch_coverage"
+			 where "batch_id" = $1) as "operationDecoderVersion",
+			(select "result_decoder_version"
+			 from "full_history_operation_result_batch_coverage"
+			 where "batch_id" = $1) as "resultDecoderVersion"`,
 		[batchId]
 	);
-	return rows.length === 1;
+	return (
+		rows[0] ?? {
+			operationDecoderVersion: null,
+			resultDecoderVersion: null
+		}
+	);
 }
 
 async function setTransactionBounds(

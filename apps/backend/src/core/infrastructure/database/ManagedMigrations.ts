@@ -23,6 +23,7 @@ import { ScpLiveCanonicalTailMigration1784800000000 } from '@network-scan/infras
 import { ScpAnimationSlotIndexMigration1784980000000 } from '@network-scan/infrastructure/database/migrations/1784980000000-ScpAnimationSlotIndexMigration.js';
 import { NodeReadPathIndexesMigration1784990000000 } from '@network-scan/infrastructure/database/migrations/1784990000000-NodeReadPathIndexesMigration.js';
 import { HistoryArchiveObjectEventSummaryMigration1785000000000 } from '@history-scan-coordinator/infrastructure/database/migrations/1785000000000-HistoryArchiveObjectEventSummaryMigration.js';
+import { FullHistoryOperationResultMigration1785010000000 } from '@history-scan-coordinator/infrastructure/database/migrations/1785010000000-FullHistoryOperationResultMigration.js';
 
 // The production database was imported with a partial legacy migration ledger.
 // Explicit registration prevents TypeORM from replaying pre-baseline migrations.
@@ -51,5 +52,6 @@ export const managedMigrations = [
 	FullHistoryOperationBackfillMigration1784970000000,
 	ScpAnimationSlotIndexMigration1784980000000,
 	NodeReadPathIndexesMigration1784990000000,
-	HistoryArchiveObjectEventSummaryMigration1785000000000
+	HistoryArchiveObjectEventSummaryMigration1785000000000,
+	FullHistoryOperationResultMigration1785010000000
 ] as const;

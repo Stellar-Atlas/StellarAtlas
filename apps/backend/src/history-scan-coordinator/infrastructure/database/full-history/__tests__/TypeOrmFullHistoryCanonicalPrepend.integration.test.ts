@@ -88,6 +88,7 @@ describe('TypeOrmFullHistoryCanonicalRepository historical prepend', () => {
 			lastBatchId: current.batchId,
 			nextLedger: '192'
 		});
+		await expect(operationResultCount(previous.batchId)).resolves.toBe(1);
 		await expect(repository.prependCheckpoint(previous)).resolves.toMatchObject(
 			{
 				firstLedger: '64',
@@ -180,6 +181,21 @@ describe('TypeOrmFullHistoryCanonicalRepository historical prepend', () => {
 			 from "full_history_ingestion_batch" where id = $1`,
 			[batchId]
 		)) as Array<{ readonly count: number }>;
+		return rows[0]?.count ?? -1;
+	}
+
+	async function operationResultCount(batchId: string): Promise<number> {
+		const rows = await dataSource.query<Array<{ readonly count: number }>>(
+			`select count(*)::integer as count
+			 from "full_history_operation_result" result
+			 join "full_history_operation" operation
+				on operation."network_passphrase_hash" =
+					result."network_passphrase_hash"
+				and operation."transaction_hash" = result."transaction_hash"
+				and operation."operation_index" = result."operation_index"
+			 where operation."batch_id" = $1`,
+			[batchId]
+		);
 		return rows[0]?.count ?? -1;
 	}
 });

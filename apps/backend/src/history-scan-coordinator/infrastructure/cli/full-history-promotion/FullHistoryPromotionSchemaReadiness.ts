@@ -14,6 +14,10 @@ const requiredRelations = [
 	'full_history_ledger',
 	'full_history_transaction',
 	'full_history_transaction_result',
+	'full_history_operation',
+	'full_history_operation_batch_coverage',
+	'full_history_operation_result',
+	'full_history_operation_result_batch_coverage',
 	'full_history_promotion_runtime'
 ] as const;
 

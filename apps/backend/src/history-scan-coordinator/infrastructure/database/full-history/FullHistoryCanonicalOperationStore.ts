@@ -38,7 +38,7 @@ export async function storeCanonicalOperations(
 	manager: EntityManager,
 	input: FullHistoryCheckpointWrite,
 	networkHash: FullHistoryHash,
-	operationDecoderVersion = input.decoderVersion
+	operationDecoderVersion = input.operationDecoderVersion
 ): Promise<void> {
 	assertBoundedText(operationDecoderVersion, 'operationDecoderVersion', 128);
 	for (const operations of chunkFullHistoryValues(
@@ -58,7 +58,7 @@ export async function storeCanonicalOperations(
 export async function assertCanonicalOperations(
 	manager: EntityManager,
 	input: FullHistoryCheckpointWrite,
-	operationDecoderVersion = input.decoderVersion
+	operationDecoderVersion = input.operationDecoderVersion
 ): Promise<void> {
 	assertBoundedText(operationDecoderVersion, 'operationDecoderVersion', 128);
 	const rows = await readOperations(manager, input.batchId);
