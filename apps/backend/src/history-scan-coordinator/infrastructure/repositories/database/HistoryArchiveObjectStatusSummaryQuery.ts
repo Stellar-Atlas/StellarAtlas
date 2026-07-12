@@ -280,7 +280,7 @@ export const activeObjectCountSql = `
 `;
 
 export const sourceCountSql = `
-	select count(*)::int as "sourceCount"
+	select count(distinct "archiveUrl")::int as "sourceCount"
 	from history_archive_state_snapshot
 `;
 
@@ -297,21 +297,60 @@ export const failureCountSql = `
 `;
 
 export const sourceStatusSummarySql = `
-	with root_object as (
+	with source_aliases as materialized (
+		select "archiveUrl", "archiveUrlIdentity"
+		from history_archive_state_snapshot
+	), current_state as (
+		select distinct on ("archiveUrl")
+			"archiveUrl",
+			"archiveUrlIdentity",
+			"stateUrl",
+			status,
+			"observedAt",
+			source,
+			"currentLedger"
+		from history_archive_state_snapshot
+		order by
+			"archiveUrl",
+			"observedAt" desc,
+			("archiveUrlIdentity" = "archiveUrl") desc,
+			"archiveUrlIdentity"
+	), root_object_by_identity as (
 		select distinct on ("archiveUrlIdentity")
 			"archiveUrlIdentity",
 			status as "rootObjectStatus",
-			"failureChannel" as "rootFailureChannel"
+			"failureChannel" as "rootFailureChannel",
+			"updatedAt"
 		from history_archive_object_queue
 		where "objectType" = 'history-archive-state'
 		order by "archiveUrlIdentity", "updatedAt" desc
-	),
-	active_objects as (
+	), root_object as (
+		select distinct on (aliases."archiveUrl")
+			aliases."archiveUrl",
+			root."rootObjectStatus",
+			root."rootFailureChannel"
+		from source_aliases aliases
+		join root_object_by_identity root
+			on root."archiveUrlIdentity" = aliases."archiveUrlIdentity"
+		order by
+			aliases."archiveUrl",
+			root."updatedAt" desc,
+			(root."archiveUrlIdentity" = aliases."archiveUrl") desc,
+			root."archiveUrlIdentity"
+	), active_objects_by_identity as (
 		select "archiveUrlIdentity", count(*)::int as "activeObjectChecks"
 		from history_archive_object_queue
 		where status = 'scanning'
 		group by "archiveUrlIdentity"
-	), failure_counts as (
+	), active_objects as (
+		select
+			aliases."archiveUrl",
+			sum(active."activeObjectChecks") as "activeObjectChecks"
+		from source_aliases aliases
+		join active_objects_by_identity active
+			on active."archiveUrlIdentity" = aliases."archiveUrlIdentity"
+		group by aliases."archiveUrl"
+	), failure_counts_by_identity as (
 		select
 			"archiveUrlIdentity",
 			count(*) filter (where "failureChannel" = 'archive_evidence')::bigint
@@ -323,6 +362,36 @@ export const sourceStatusSummarySql = `
 		from history_archive_object_queue
 		where status = 'failed'
 		group by "archiveUrlIdentity"
+	), failure_counts as (
+		select
+			aliases."archiveUrl",
+			sum(failures."archiveEvidenceFailures")
+				as "archiveEvidenceFailures",
+			sum(failures."scannerIssueFailures") as "scannerIssueFailures",
+			sum(failures."unclassifiedFailures") as "unclassifiedFailures"
+		from source_aliases aliases
+		join failure_counts_by_identity failures
+			on failures."archiveUrlIdentity" = aliases."archiveUrlIdentity"
+		group by aliases."archiveUrl"
+	), checkpoint_proof as (
+		select distinct on (aliases."archiveUrl")
+			aliases."archiveUrl",
+			proof."latestCheckpointLedger",
+			proof."totalCheckpointProofs",
+			proof."pendingCheckpointProofs",
+			proof."verifiedCheckpointProofs",
+			proof."mismatchCheckpointProofs",
+			proof."notEvaluableCheckpointProofs",
+			proof."objectCompleteCheckpointProofs"
+		from source_aliases aliases
+		join history_archive_checkpoint_proof_rollup proof
+			on proof."archiveUrlIdentity" = aliases."archiveUrlIdentity"
+		order by
+			aliases."archiveUrl",
+			proof."latestCheckpointLedger" desc nulls last,
+			proof."totalCheckpointProofs" desc,
+			(proof."archiveUrlIdentity" = aliases."archiveUrl") desc,
+			proof."archiveUrlIdentity"
 	)
 	select
 		state."archiveUrl",
@@ -357,15 +426,15 @@ export const sourceStatusSummarySql = `
 			as "objectCompleteCheckpointProofs",
 		root_object."rootObjectStatus",
 		root_object."rootFailureChannel"
-	from history_archive_state_snapshot state
+	from current_state state
 	left join root_object
-		on root_object."archiveUrlIdentity" = state."archiveUrlIdentity"
-	left join history_archive_checkpoint_proof_rollup proof
-		on proof."archiveUrlIdentity" = state."archiveUrlIdentity"
+		on root_object."archiveUrl" = state."archiveUrl"
+	left join checkpoint_proof proof
+		on proof."archiveUrl" = state."archiveUrl"
 	left join active_objects active
-		on active."archiveUrlIdentity" = state."archiveUrlIdentity"
+		on active."archiveUrl" = state."archiveUrl"
 	left join failure_counts
-		on failure_counts."archiveUrlIdentity" = state."archiveUrlIdentity"
+		on failure_counts."archiveUrl" = state."archiveUrl"
 	order by
 		state.status asc,
 		coalesce(state."currentLedger", -1) desc,
