@@ -1,9 +1,10 @@
 import { AppDataSource, databaseMigrationsEnabled } from '../AppDataSource.js';
+import { managedMigrations } from '../ManagedMigrations.js';
 
 describe('AppDataSource migration startup policy', () => {
 	it('uses the explicit post-baseline migration registry', () => {
 		const migrations = AppDataSource.options.migrations ?? [];
-		expect(migrations).toHaveLength(12);
+		expect(migrations).toEqual([...managedMigrations]);
 		expect(
 			migrations.every((migration) => typeof migration === 'function')
 		).toBe(true);

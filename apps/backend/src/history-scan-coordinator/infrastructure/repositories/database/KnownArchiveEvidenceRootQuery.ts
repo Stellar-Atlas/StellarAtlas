@@ -51,13 +51,35 @@ export async function findKnownArchiveEvidenceRoots(
 ): Promise<readonly Omit<KnownArchiveRootReadModel, 'scannerOwnedState'>[]> {
 	if (roots.length === 0) return [];
 
-	const rows = (await manager.query(knownArchiveEvidenceRootSql, [
+	const value: unknown = await manager.query(knownArchiveEvidenceRootSql, [
 		roots.map((root) => root.archiveUrl),
 		roots.map((root) => root.archiveUrlIdentity),
 		snapshotAt
-	])) as readonly RootRow[];
+	]);
+	const rows = requireRootRows(value);
 
 	return rows.map(mapRootRow);
+}
+
+function requireRootRows(value: unknown): readonly RootRow[] {
+	if (!Array.isArray(value)) {
+		throw new Error('Known archive evidence root query did not return rows');
+	}
+	const values: unknown[] = value;
+	const rows: RootRow[] = [];
+	for (const item of values) {
+		if (!isRootRow(item)) {
+			throw new Error(
+				'Known archive evidence root query returned an invalid row'
+			);
+		}
+		rows.push(item);
+	}
+	return rows;
+}
+
+function isRootRow(value: unknown): value is RootRow {
+	return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
 function mapRootRow(
@@ -163,36 +185,6 @@ export const knownArchiveEvidenceRootSql = `
 		from unnest($1::text[], $2::text[])
 			as root("archiveUrl", "archiveUrlIdentity")
 	),
-	object_counts as (
-		select
-			archive_object."archiveUrlIdentity",
-			count(*) as "totalObjects",
-			count(*) filter (where archive_object.status = 'pending')
-				as "pendingObjects",
-			count(*) filter (where archive_object.status = 'scanning')
-				as "activeObjects",
-			count(*) filter (where archive_object.status = 'verified')
-				as "verifiedObjects",
-			count(*) filter (
-				where archive_object.status = 'failed'
-					and archive_object."failureChannel" = 'archive_evidence'
-			) as "remoteFailureObjects",
-			count(*) filter (
-				where archive_object.status = 'failed'
-					and archive_object."failureChannel" = 'scanner_issue'
-			) as "workerIssueObjects",
-			count(*) filter (where archive_object."objectType" = 'bucket')
-				as "bucketObjects",
-			count(*) filter (
-				where archive_object."objectType" = 'bucket'
-					and archive_object.status = 'verified'
-			) as "verifiedBucketObjects",
-			max(archive_object."createdAt") as "latestObjectAt"
-		from history_archive_object_queue archive_object
-		where archive_object."archiveUrlIdentity" = any($2::text[])
-			and archive_object."createdAt" <= $3::timestamptz
-		group by archive_object."archiveUrlIdentity"
-	),
 	checkpoint_counts as (
 		select
 			proof."archiveUrlIdentity",
@@ -213,15 +205,37 @@ export const knownArchiveEvidenceRootSql = `
 	select
 		root."archiveUrl",
 		root."archiveUrlIdentity",
-		coalesce(objects."totalObjects", 0) as "totalObjects",
-		coalesce(objects."pendingObjects", 0) as "pendingObjects",
-		coalesce(objects."activeObjects", 0) as "activeObjects",
-		coalesce(objects."verifiedObjects", 0) as "verifiedObjects",
-		coalesce(objects."remoteFailureObjects", 0) as "remoteFailureObjects",
-		coalesce(objects."workerIssueObjects", 0) as "workerIssueObjects",
-		coalesce(objects."bucketObjects", 0) as "bucketObjects",
-		coalesce(objects."verifiedBucketObjects", 0) as "verifiedBucketObjects",
-		objects."latestObjectAt",
+		case when summary_progress."complete" is true then
+			coalesce(summary."totalObjects", 0) - future_objects."totalObjects"
+		else snapshot_objects."totalObjects" end as "totalObjects",
+		case when summary_progress."complete" is true then
+			coalesce(summary."pendingObjects", 0) - future_objects."pendingObjects"
+		else snapshot_objects."pendingObjects" end as "pendingObjects",
+		case when summary_progress."complete" is true then
+			coalesce(summary."activeObjects", 0) - future_objects."activeObjects"
+		else snapshot_objects."activeObjects" end as "activeObjects",
+		case when summary_progress."complete" is true then
+			coalesce(summary."verifiedObjects", 0) - future_objects."verifiedObjects"
+		else snapshot_objects."verifiedObjects" end as "verifiedObjects",
+		case when summary_progress."complete" is true then
+			coalesce(summary."remoteFailureObjects", 0)
+				- future_objects."remoteFailureObjects"
+		else snapshot_objects."remoteFailureObjects"
+		end as "remoteFailureObjects",
+		case when summary_progress."complete" is true then
+			coalesce(summary."workerIssueObjects", 0)
+				- future_objects."workerIssueObjects"
+		else snapshot_objects."workerIssueObjects"
+		end as "workerIssueObjects",
+		case when summary_progress."complete" is true then
+			coalesce(summary."bucketObjects", 0) - future_objects."bucketObjects"
+		else snapshot_objects."bucketObjects" end as "bucketObjects",
+		case when summary_progress."complete" is true then
+			coalesce(summary."verifiedBucketObjects", 0)
+				- future_objects."verifiedBucketObjects"
+		else snapshot_objects."verifiedBucketObjects"
+		end as "verifiedBucketObjects",
+		latest_object."latestObjectAt",
 		coalesce(checkpoints."totalCheckpoints", 0) as "totalCheckpoints",
 		coalesce(checkpoints."verifiedCheckpoints", 0) as "verifiedCheckpoints",
 		coalesce(checkpoints."mismatchedCheckpoints", 0)
@@ -230,9 +244,75 @@ export const knownArchiveEvidenceRootSql = `
 		coalesce(checkpoints."notEvaluableCheckpoints", 0)
 			as "notEvaluableCheckpoints"
 	from requested_roots root
-	left join object_counts objects
-		on objects."archiveUrlIdentity" = root."archiveUrlIdentity"
+	left join history_archive_evidence_root_summary summary
+		on summary."archiveUrlIdentity" = root."archiveUrlIdentity"
+	left join history_archive_evidence_root_summary_progress summary_progress
+		on summary_progress.id = 1
 	left join checkpoint_counts checkpoints
 		on checkpoints."archiveUrlIdentity" = root."archiveUrlIdentity"
+	cross join lateral (
+		select
+			count(*) as "totalObjects",
+			count(*) filter (where archive_object.status = 'pending')
+				as "pendingObjects",
+			count(*) filter (where archive_object.status = 'scanning')
+				as "activeObjects",
+			count(*) filter (where archive_object.status = 'verified')
+				as "verifiedObjects",
+			count(*) filter (
+				where archive_object.status = 'failed'
+					and archive_object."failureChannel" = 'archive_evidence'
+			) as "remoteFailureObjects",
+			count(*) filter (
+				where archive_object.status = 'failed'
+					and archive_object."failureChannel" = 'scanner_issue'
+			) as "workerIssueObjects",
+			count(*) filter (where archive_object."objectType" = 'bucket')
+				as "bucketObjects",
+			count(*) filter (
+				where archive_object."objectType" = 'bucket'
+					and archive_object.status = 'verified'
+			) as "verifiedBucketObjects"
+		from history_archive_object_queue archive_object
+		where summary_progress."complete" is true
+			and archive_object."archiveUrlIdentity" = root."archiveUrlIdentity"
+			and archive_object."createdAt" > $3::timestamptz
+	) future_objects
+	cross join lateral (
+		select
+			count(*) as "totalObjects",
+			count(*) filter (where archive_object.status = 'pending')
+				as "pendingObjects",
+			count(*) filter (where archive_object.status = 'scanning')
+				as "activeObjects",
+			count(*) filter (where archive_object.status = 'verified')
+				as "verifiedObjects",
+			count(*) filter (
+				where archive_object.status = 'failed'
+					and archive_object."failureChannel" = 'archive_evidence'
+			) as "remoteFailureObjects",
+			count(*) filter (
+				where archive_object.status = 'failed'
+					and archive_object."failureChannel" = 'scanner_issue'
+			) as "workerIssueObjects",
+			count(*) filter (where archive_object."objectType" = 'bucket')
+				as "bucketObjects",
+			count(*) filter (
+				where archive_object."objectType" = 'bucket'
+					and archive_object.status = 'verified'
+			) as "verifiedBucketObjects"
+		from history_archive_object_queue archive_object
+		where summary_progress."complete" is not true
+			and archive_object."archiveUrlIdentity" = root."archiveUrlIdentity"
+			and archive_object."createdAt" <= $3::timestamptz
+	) snapshot_objects
+	left join lateral (
+		select archive_object."createdAt" as "latestObjectAt"
+		from history_archive_object_queue archive_object
+		where archive_object."archiveUrlIdentity" = root."archiveUrlIdentity"
+			and archive_object."createdAt" <= $3::timestamptz
+		order by archive_object."createdAt" desc
+		limit 1
+	) latest_object on true
 	order by root."archiveUrlIdentity" asc
 `;

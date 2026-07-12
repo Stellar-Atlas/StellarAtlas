@@ -4,6 +4,7 @@ import { HistoryArchiveObject } from '../../../../domain/history-archive-object/
 import { HistoryArchiveObjectEvent } from '../../../../domain/history-archive-object/HistoryArchiveObjectEvent.js';
 import { HistoryArchiveStateSnapshot } from '../../../../domain/history-archive-state/HistoryArchiveStateSnapshot.js';
 import { createArchiveEvidenceCursorCodec } from '../../../../use-cases/get-known-archive-evidence/ArchiveEvidenceCursorCodec.js';
+import { HistoryArchiveEvidenceRootSummaryMigration1784950000000 } from '../../../database/migrations/1784950000000-HistoryArchiveEvidenceRootSummaryMigration.js';
 
 export const evidenceRootA = 'https://history-a.example.com';
 export const evidenceRootB = 'https://history-b.example.com';
@@ -34,6 +35,15 @@ export async function createKnownEvidenceDataSource(
 			"blockedUntil" timestamptz not null
 		)
 	`);
+	const migrationRunner = dataSource.createQueryRunner();
+	await migrationRunner.connect();
+	try {
+		await new HistoryArchiveEvidenceRootSummaryMigration1784950000000().up(
+			migrationRunner
+		);
+	} finally {
+		await migrationRunner.release();
+	}
 	return dataSource;
 }
 

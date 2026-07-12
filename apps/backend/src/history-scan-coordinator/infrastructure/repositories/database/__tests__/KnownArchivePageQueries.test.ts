@@ -48,15 +48,14 @@ describe('known archive page queries', () => {
 				archiveUrlIdentity: 'https://second.example.com'
 			}
 		];
-		const query = jest.fn().mockResolvedValue(
+		const manager = mock<EntityManager>();
+		manager.query.mockResolvedValue(
 			roots.map((requestedRoot) => ({
 				...emptyCounts,
 				...requestedRoot,
 				latestObjectAt: null
 			}))
 		);
-		const manager = { query } as unknown as EntityManager;
-
 		const result = await findKnownArchiveEvidenceRoots(
 			manager,
 			roots,
@@ -67,21 +66,47 @@ describe('known archive page queries', () => {
 		expect(result.map((item) => item.archiveUrlIdentity)).toEqual(
 			roots.map((item) => item.archiveUrlIdentity)
 		);
-		expect(query).toHaveBeenCalledWith(knownArchiveEvidenceRootSql, [
+		expect(manager.query).toHaveBeenCalledWith(knownArchiveEvidenceRootSql, [
 			roots.map((item) => item.archiveUrl),
 			roots.map((item) => item.archiveUrlIdentity),
 			snapshotAt
 		]);
 		expect(knownArchiveEvidenceRootSql).toContain('from requested_roots root');
-		expect(knownArchiveEvidenceRootSql).toContain('left join object_counts');
+		expect(knownArchiveEvidenceRootSql).toContain(
+			'left join history_archive_evidence_root_summary summary'
+		);
+		expect(knownArchiveEvidenceRootSql).toContain(
+			'archive_object."createdAt" > $3::timestamptz'
+		);
+		expect(knownArchiveEvidenceRootSql).toContain(
+			'summary_progress."complete" is not true'
+		);
+	});
+
+	it('rejects root counts that exceed the safe JavaScript integer range', async () => {
+		const manager = mock<EntityManager>();
+		manager.query.mockResolvedValue([
+			{
+				archiveUrl: root,
+				archiveUrlIdentity: root,
+				totalObjects: '9007199254740992'
+			}
+		]);
+
+		await expect(
+			findKnownArchiveEvidenceRoots(
+				manager,
+				[{ archiveUrl: root, archiveUrlIdentity: root }],
+				snapshotAt
+			)
+		).rejects.toThrow('totalObjects');
 	});
 
 	it('uses an exact filtered count and a limit-plus-one object page', async () => {
-		const query = jest
-			.fn()
+		const manager = mock<EntityManager>();
+		manager.query
 			.mockResolvedValueOnce([{ objectCount: '42' }])
 			.mockResolvedValueOnce([]);
-		const manager = { query } as unknown as EntityManager;
 
 		const result = await findKnownArchiveObjectPage(manager, [root], {
 			before: cursor,
@@ -96,31 +121,31 @@ describe('known archive page queries', () => {
 		});
 
 		expect(result).toEqual({ objects: [], total: 42 });
-		expect(query).toHaveBeenNthCalledWith(1, knownArchiveObjectCountSql, [
-			[root],
-			root,
-			'bucket',
-			'failed',
-			snapshotAt
-		]);
-		expect(query).toHaveBeenNthCalledWith(2, knownArchiveObjectPageSql, [
-			[root],
-			root,
-			'bucket',
-			'failed',
-			snapshotAt,
-			cursor.at,
-			cursor.remoteId,
-			26,
+		expect(manager.query).toHaveBeenNthCalledWith(
 			1,
-			24,
-			2
-		]);
+			knownArchiveObjectCountSql,
+			[[root], root, 'bucket', 'failed', snapshotAt]
+		);
+		expect(manager.query).toHaveBeenNthCalledWith(
+			2,
+			knownArchiveObjectPageSql,
+			[
+				[root],
+				root,
+				'bucket',
+				'failed',
+				snapshotAt,
+				cursor.at,
+				cursor.remoteId,
+				26,
+				1,
+				24,
+				2
+			]
+		);
 		expect(knownArchiveObjectPageSql).toContain('end as "delayReasonCode"');
 		expect(knownArchiveObjectPageSql).toContain('end as "delayReasonUntil"');
-		expect(knownArchiveObjectPageSql).toContain(
-			'page_keys as materialized'
-		);
+		expect(knownArchiveObjectPageSql).toContain('page_keys as materialized');
 		expect(knownArchiveObjectPageSql).toContain(
 			'join history_archive_object_queue archive_object'
 		);
@@ -129,11 +154,10 @@ describe('known archive page queries', () => {
 	});
 
 	it('counts and pages remote failures separately from infrastructure failures', async () => {
-		const query = jest
-			.fn()
+		const manager = mock<EntityManager>();
+		manager.query
 			.mockResolvedValueOnce([{ failureCount: '7' }])
 			.mockResolvedValueOnce([]);
-		const manager = { query } as unknown as EntityManager;
 		const page = {
 			before: cursor,
 			filters: { archiveUrlIdentity: root, objectType: 'ledger' as const },
@@ -150,12 +174,12 @@ describe('known archive page queries', () => {
 		);
 
 		expect(result).toEqual({ failures: [], total: 7 });
-		expect(query).toHaveBeenNthCalledWith(
+		expect(manager.query).toHaveBeenNthCalledWith(
 			1,
 			knownArchiveFailureCountSql('remote'),
 			[[root], root, 'ledger', snapshotAt]
 		);
-		expect(query).toHaveBeenNthCalledWith(
+		expect(manager.query).toHaveBeenNthCalledWith(
 			2,
 			knownArchiveFailurePageSql('remote'),
 			[[root], root, 'ledger', snapshotAt, cursor.at, cursor.remoteId, 11]
