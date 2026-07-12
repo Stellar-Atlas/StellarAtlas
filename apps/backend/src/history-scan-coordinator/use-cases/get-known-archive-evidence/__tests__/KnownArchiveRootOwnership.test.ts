@@ -32,7 +32,7 @@ describe('KnownArchiveRootOwnership', () => {
 
 	it('resolves validators and same-domain known nodes in one stored-node query', async () => {
 		const nodeRepository = mock<NodeRepository>();
-		nodeRepository.findAllKnown.mockResolvedValue([
+		nodeRepository.findKnownByPublicKeysOrHomeDomain.mockResolvedValue([
 			createNode(keyA, 'https://history-a.example.com', 'org.example'),
 			createNode(keyB, 'https://history-b.example.com/', null),
 			createNode(keyC, 'https://history-a.example.com/', 'other.example'),
@@ -52,7 +52,10 @@ describe('KnownArchiveRootOwnership', () => {
 			nodeRepository
 		);
 
-		expect(nodeRepository.findAllKnown).toHaveBeenCalledTimes(1);
+		expect(
+			nodeRepository.findKnownByPublicKeysOrHomeDomain
+		).toHaveBeenCalledWith([keyC, keyA, keyB], 'org.example');
+		expect(nodeRepository.findAllKnown).not.toHaveBeenCalled();
 		expect(ownership.nodePublicKeys).toEqual(
 			[keyA, keyB, keyC, keyD].toSorted()
 		);

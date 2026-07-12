@@ -14,6 +14,10 @@ export interface NodeRepository {
 	findActive(): Promise<Node[]>;
 	findActiveByPublicKey(publicKeys: string[]): Promise<Node[]>;
 	findAllKnown(): Promise<Node[]>;
+	findKnownByPublicKeysOrHomeDomain(
+		publicKeys: string[],
+		homeDomain: string | null
+	): Promise<Node[]>;
 	findAllKnownIdentities(): Promise<KnownNodeIdentity[]>;
 	findActiveByPublicKeyAtTimePoint(
 		publicKey: PublicKey,

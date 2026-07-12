@@ -77,7 +77,12 @@ export async function getKnownOrganizationArchiveOwnership(
 	const organizationHomeDomain = normalizeHomeDomain(
 		knownOrganization.organization.homeDomain
 	);
-	const nodes = (await nodeRepository.findAllKnown()).filter(
+	const nodes = (
+		await nodeRepository.findKnownByPublicKeysOrHomeDomain(
+			[...validatorPublicKeys],
+			organizationHomeDomain
+		)
+	).filter(
 		(node) =>
 			validatorPublicKeys.has(node.publicKey.value) ||
 			(organizationHomeDomain !== null &&

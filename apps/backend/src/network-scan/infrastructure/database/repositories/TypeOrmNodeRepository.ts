@@ -154,6 +154,31 @@ export class TypeOrmNodeRepository implements NodeRepository {
 			.getMany();
 	}
 
+	async findKnownByPublicKeysOrHomeDomain(
+		publicKeys: string[],
+		homeDomain: string | null
+	): Promise<Node[]> {
+		if (publicKeys.length === 0 && homeDomain === null) return [];
+
+		const predicates: string[] = [];
+		const parameters: Record<string, string | string[]> = {};
+		if (publicKeys.length > 0) {
+			predicates.push('node."publicKeyValue" in (:...publicKeys)');
+			parameters.publicKeys = [...new Set(publicKeys)];
+		}
+		if (homeDomain !== null) {
+			predicates.push(
+				'rtrim(lower(btrim(snapshots."homeDomain")), \'.\') = :homeDomain'
+			);
+			parameters.homeDomain = homeDomain;
+		}
+
+		return await this.getNodesBaseQuery()
+			.where(`(${predicates.join(' or ')})`, parameters)
+			.orderBy('node."publicKeyValue"', 'ASC')
+			.getMany();
+	}
+
 	async findAllKnownIdentities(): Promise<KnownNodeIdentity[]> {
 		const rows = (await this.baseNodeRepository.manager.query(
 			`select node."publicKeyValue" as "publicKey",
@@ -174,9 +199,7 @@ export class TypeOrmNodeRepository implements NodeRepository {
 			publicKey: row.publicKey,
 			dateDiscovered: new Date(row.dateDiscovered),
 			lastMeasurementAt:
-				row.lastMeasurementAt === null
-					? null
-					: new Date(row.lastMeasurementAt)
+				row.lastMeasurementAt === null ? null : new Date(row.lastMeasurementAt)
 		}));
 	}
 

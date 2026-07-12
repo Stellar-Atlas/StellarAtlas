@@ -121,6 +121,25 @@ describe('test queries', function () {
 		).toBeInstanceOf(Node);
 	});
 
+	test('finds only known nodes owned by public key or home domain', async () => {
+		const time = new Date('2020-01-01T00:00:00.000Z');
+		const domainNode = createDummyNode('localhost', 3000, time);
+		const validatorNode = createDummyNode('localhost', 3001, time);
+		const unrelatedNode = createDummyNode('localhost', 3002, time);
+		domainNode.updateHomeDomain('ORG.EXAMPLE.', time);
+		unrelatedNode.updateHomeDomain('other.example', time);
+		await nodeRepository.save([domainNode, validatorNode, unrelatedNode], time);
+
+		const fetchedNodes = await nodeRepository.findKnownByPublicKeysOrHomeDomain(
+			[validatorNode.publicKey.value],
+			'org.example'
+		);
+
+		expect(fetchedNodes.map((node) => node.publicKey.value)).toEqual(
+			[domainNode.publicKey.value, validatorNode.publicKey.value].toSorted()
+		);
+	});
+
 	test('findLatestActiveByPublicKey', async function () {
 		const { node, node2, archivedNode } = await setupFindLatestActive();
 
