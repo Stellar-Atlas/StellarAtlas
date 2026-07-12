@@ -14,7 +14,9 @@ export async function createCanonicalFrontierTestSchema(
 		create table if not exists "full_history_promotion_runtime" (
 			"network_passphrase_hash" bytea primary key,
 			state text not null,
-			"checkpoint_ledger" bigint
+			"checkpoint_ledger" bigint,
+			"last_outcome" text,
+			"last_error_code" text
 		)
 	`);
 	await dataSource.query(`

@@ -6,7 +6,14 @@ export const canonicalRuntimeTargetCtes = `
 		select "network_passphrase_hash", "checkpoint_ledger"::integer
 			as checkpoint_ledger, 'forward'::text as target_lane
 		from "full_history_promotion_runtime"
-		where state in ('promoting', 'waiting-for-proof')
+		where (
+			state in ('promoting', 'waiting-for-proof')
+			or (
+				state = 'failed'
+				and "last_outcome" = 'proof-pending'
+				and "last_error_code" = 'promotion-invalid-source-evidence'
+			)
+		)
 			and "checkpoint_ledger" is not null
 	), historical_runtime_target as materialized (
 		select ranked."network_passphrase_hash", ranked.checkpoint_ledger,
