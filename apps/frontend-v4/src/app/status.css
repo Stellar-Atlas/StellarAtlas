@@ -3,6 +3,10 @@
 	gap: 16px;
 }
 
+.status-dashboard > .stats-grid {
+	grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
 .status-panel-grid {
 	display: grid;
 	gap: 16px;

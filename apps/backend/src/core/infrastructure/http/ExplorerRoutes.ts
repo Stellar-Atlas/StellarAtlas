@@ -1,7 +1,10 @@
 import express from 'express';
 import Kernel from '../Kernel.js';
 import type { Config } from '../../config/Config.js';
-import { blockchainExplorerRouter } from '@network-scan/infrastructure/http/BlockchainExplorerRouter.js';
+import {
+	blockchainExplorerRouter,
+	createExplorerTransactionLookupHandler
+} from '@network-scan/infrastructure/http/BlockchainExplorerRouter.js';
 import { horizonExplorerRouter } from '@network-scan/infrastructure/http/HorizonExplorerRouter.js';
 import { GetExplorerLocalReadModel } from '@network-scan/use-cases/get-explorer-local-read-model/GetExplorerLocalReadModel.js';
 import { GetExplorerLocalTransactions } from '@network-scan/use-cases/get-explorer-local-transactions/GetExplorerLocalTransactions.js';
@@ -11,6 +14,16 @@ export function mountExplorerRoutes(
 	kernel: Kernel,
 	config: Config
 ): void {
+	const getExplorerLocalTransactions = kernel.container.get(
+		GetExplorerLocalTransactions
+	);
+	api.get(
+		'/v1/transactions/:hash',
+		createExplorerTransactionLookupHandler({
+			getExplorerLocalTransactions,
+			horizonUrl: config.horizonUrl.value
+		})
+	);
 	api.use(
 		'/v1',
 		horizonExplorerRouter({
@@ -24,9 +37,7 @@ export function mountExplorerRoutes(
 			getExplorerLocalReadModel: kernel.container.get(
 				GetExplorerLocalReadModel
 			),
-			getExplorerLocalTransactions: kernel.container.get(
-				GetExplorerLocalTransactions
-			),
+			getExplorerLocalTransactions,
 			horizonUrl: config.horizonUrl.value,
 			rpcUrl: config.rpcUrl?.value
 		})

@@ -74,7 +74,7 @@ function TransactionLookupResultView({
 				<span>
 					{transaction.source === 'horizon'
 						? 'Stellar public API'
-						: transaction.source}
+						: 'StellarAtlas canonical history'}
 				</span>
 			</div>
 			<dl>

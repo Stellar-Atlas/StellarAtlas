@@ -15,32 +15,84 @@ import {
 describe('known archive evidence', () => {
 	it('keeps remote failure precedence over worker issues', () => {
 		const evidence = createEvidence({
-			remoteFailureObjects: 1,
-			workerIssueObjects: 2
+			objects: { remoteFailureObjects: 1, workerIssueObjects: 2 }
+		});
+
+		expect(assessKnownArchiveEvidence(evidence)).toBe('remote_failure');
+	});
+
+	it('treats checkpoint mismatches as remote evidence, not infrastructure evidence', () => {
+		const evidence = createEvidence({
+			checkpoints: { mismatchedCheckpoints: 1 },
+			objects: { workerIssueObjects: 1 }
 		});
 
 		expect(assessKnownArchiveEvidence(evidence)).toBe('remote_failure');
 	});
 
 	it('classifies infrastructure evidence independently', () => {
-		const evidence = createEvidence({ workerIssueObjects: 1 });
+		const evidence = createEvidence({ objects: { workerIssueObjects: 1 } });
 
 		expect(assessKnownArchiveEvidence(evidence)).toBe('scanner_issue');
 	});
 
 	it('uses current object work for checking and waiting states', () => {
 		expect(
-			assessKnownArchiveEvidence(createEvidence({ activeObjects: 1 }))
+			assessKnownArchiveEvidence(
+				createEvidence({ objects: { activeObjects: 1 } })
+			)
 		).toBe('checking');
 		expect(
-			assessKnownArchiveEvidence(createEvidence({ pendingObjects: 1 }))
+			assessKnownArchiveEvidence(
+				createEvidence({ objects: { pendingObjects: 1 } })
+			)
 		).toBe('waiting');
 	});
 
-	it('marks only a complete current object set as verified', () => {
-		const evidence = createEvidence({ totalObjects: 3, verifiedObjects: 3 });
+	it('uses pending checkpoint proofs as a waiting state', () => {
+		const evidence = createEvidence({
+			checkpoints: {
+				pendingCheckpoints: 1,
+				totalCheckpoints: 2,
+				verifiedCheckpoints: 1
+			}
+		});
+
+		expect(assessKnownArchiveEvidence(evidence)).toBe('waiting');
+	});
+
+	it('marks evidence verified only when every checkpoint proof is verified', () => {
+		const evidence = createEvidence({
+			checkpoints: { totalCheckpoints: 3, verifiedCheckpoints: 3 }
+		});
 
 		expect(assessKnownArchiveEvidence(evidence)).toBe('verified');
+	});
+
+	it.each([
+		{
+			checkpoints: {},
+			label: 'there are no checkpoint proofs'
+		},
+		{
+			checkpoints: { totalCheckpoints: 3, verifiedCheckpoints: 2 },
+			label: 'not every checkpoint proof is verified'
+		},
+		{
+			checkpoints: {
+				notEvaluableCheckpoints: 1,
+				totalCheckpoints: 3,
+				verifiedCheckpoints: 3
+			},
+			label: 'a checkpoint proof is not evaluable'
+		}
+	])('does not claim verified when $label', ({ checkpoints }) => {
+		const evidence = createEvidence({
+			checkpoints,
+			objects: { totalObjects: 3, verifiedObjects: 3 }
+		});
+
+		expect(assessKnownArchiveEvidence(evidence)).toBe('unknown');
 	});
 
 	it('uses only an exact backend-proven verified-copy object URL', () => {
@@ -62,7 +114,9 @@ describe('known archive evidence', () => {
 	});
 
 	it('adapts one archive-root response without inventing aggregate counts', () => {
-		const source = createEvidence({ totalObjects: 4, verifiedObjects: 3 });
+		const source = createEvidence({
+			objects: { totalObjects: 4, verifiedObjects: 3 }
+		});
 		const root = {
 			archiveUrl: 'https://history.example/archive',
 			archiveUrlIdentity: 'https://history.example/archive',
@@ -105,8 +159,17 @@ function createVerifiedCopy(objectUrl: string): PublicKnownArchiveVerifiedCopy {
 	};
 }
 
+type EvidenceOverrides = {
+	readonly checkpoints?: Partial<
+		PublicKnownNodeArchiveEvidence['totals']['checkpoints']
+	>;
+	readonly objects?: Partial<
+		PublicKnownNodeArchiveEvidence['totals']['objects']
+	>;
+};
+
 function createEvidence(
-	overrides: Partial<PublicKnownNodeArchiveEvidence['totals']['objects']>
+	overrides: EvidenceOverrides = {}
 ): PublicKnownNodeArchiveEvidence {
 	const objects = {
 		activeObjects: 0,
@@ -117,7 +180,7 @@ function createEvidence(
 		verifiedBucketObjects: 0,
 		verifiedObjects: 0,
 		workerIssueObjects: 0,
-		...overrides
+		...overrides.objects
 	};
 	const page = {
 		hasMore: false,
@@ -168,7 +231,8 @@ function createEvidence(
 				notEvaluableCheckpoints: 0,
 				pendingCheckpoints: 0,
 				totalCheckpoints: 0,
-				verifiedCheckpoints: 0
+				verifiedCheckpoints: 0,
+				...overrides.checkpoints
 			},
 			nodes: 1,
 			objects

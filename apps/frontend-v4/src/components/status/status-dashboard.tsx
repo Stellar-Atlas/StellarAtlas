@@ -6,6 +6,7 @@ import type {
 	PublicHistoryArchiveObjectQueue,
 	PublicHistoryArchiveStatusSummary,
 	PublicConfiguredServiceStatus,
+	PublicFullHistoryStatus,
 	PublicDataQualityStatus,
 	PublicStatusLevel,
 	PublicScanLogStatus,
@@ -45,6 +46,7 @@ export interface StatusDashboardProps {
 	readonly archiveSummary: PublicHistoryArchiveStatusSummary;
 	readonly dataQuality: PublicDataQualityStatus;
 	readonly frontend: PublicConfiguredServiceStatus;
+	readonly fullHistory: PublicFullHistoryStatus;
 	readonly scanLogs: PublicScanLogStatus;
 	readonly scanLogsAvailable: boolean;
 	readonly workers: PublicWorkerStatus;
@@ -59,6 +61,7 @@ export function StatusDashboard({
 	archiveObjectsAvailable,
 	archiveSummary,
 	dataQuality,
+	fullHistory,
 	scanLogs,
 	scanLogsAvailable,
 	workers
@@ -167,6 +170,7 @@ export function StatusDashboard({
 							status={api.status}
 							value={statusLabel(api.status)}
 						/>
+						<CanonicalHistoryStatusRow fullHistory={fullHistory} />
 						<StatusRow
 							detail={`Age ${formatDuration(dataQuality.dataFreshness.networkScan.ageMs)}`}
 							label="Network scan"
@@ -222,6 +226,79 @@ export function StatusDashboard({
 			</div>
 		</div>
 	);
+}
+
+function CanonicalHistoryStatusRow({
+	fullHistory
+}: {
+	readonly fullHistory: PublicFullHistoryStatus;
+}): React.JSX.Element {
+	const coverage = fullHistory.canonicalCoverage;
+	if (coverage === null) {
+		return (
+			<StatusRow
+				detail="No proof-gated checkpoint has been promoted into the local index."
+				label="Canonical history"
+				status="unavailable"
+				value="Not indexed"
+			/>
+		);
+	}
+	const promotion = fullHistory.canonicalPromotion;
+	const promotionStatus: PublicStatusLevel =
+		promotion !== null &&
+		['promoting', 'running', 'waiting-for-proof'].includes(promotion.state)
+			? 'ok'
+			: 'unavailable';
+	const promotionLabel = describeCanonicalPromotion(fullHistory);
+	return (
+		<StatusRow
+			detail={`${formatInteger(coverage.ledgerCount)} ledgers from ${formatInteger(coverage.archiveSourceCount)} archive source; ${formatInteger(coverage.transactionCount)} transactions with matching results; ${promotionLabel}`}
+			label="Canonical history"
+			pillText={canonicalPromotionPill(fullHistory)}
+			status={promotionStatus}
+			value={`${formatInteger(Number(coverage.firstLedger))} - ${formatInteger(Number(coverage.lastLedger))}`}
+		/>
+	);
+}
+
+function describeCanonicalPromotion(
+	fullHistory: PublicFullHistoryStatus
+): string {
+	const promotion = fullHistory.canonicalPromotion;
+	if (promotion === null) return 'continuous promotion has not started';
+	if (promotion.state === 'waiting-for-proof') {
+		const checkpoint =
+			promotion.checkpointLedger === null
+				? 'the first verified checkpoint'
+				: `verified checkpoint ${formatInteger(Number(promotion.checkpointLedger))}`;
+		return `waiting for ${checkpoint}; heartbeat ${formatDateTime(promotion.heartbeatAt)}`;
+	}
+	if (promotion.state === 'promoting') {
+		const checkpoint =
+			promotion.checkpointLedger === null
+				? 'next checkpoint'
+				: `checkpoint ${formatInteger(Number(promotion.checkpointLedger))}`;
+		return `promoting ${checkpoint}; heartbeat ${formatDateTime(promotion.heartbeatAt)}`;
+	}
+	if (promotion.state === 'running') {
+		return `continuous promotion active; heartbeat ${formatDateTime(promotion.heartbeatAt)}`;
+	}
+	if (promotion.state === 'failed') {
+		return `continuous promotion stopped after ${promotion.lastErrorCode ?? 'an internal failure'}`;
+	}
+	return `continuous promotion ${promotion.state}; last heartbeat ${formatDateTime(promotion.heartbeatAt)}`;
+}
+
+function canonicalPromotionPill(fullHistory: PublicFullHistoryStatus): string {
+	const state = fullHistory.canonicalPromotion?.state;
+	if (state === 'waiting-for-proof') return 'Waiting for proof';
+	if (state === 'promoting') return 'Promoting';
+	if (state === 'running') return 'Active';
+	if (state === 'failed') return 'Promotion failed';
+	if (state === 'stale') return 'Heartbeat stale';
+	if (state === 'stopped') return 'Stopped';
+	return 'Not started';
 }
 
 function ArchiveEvidenceDeferredPanel({

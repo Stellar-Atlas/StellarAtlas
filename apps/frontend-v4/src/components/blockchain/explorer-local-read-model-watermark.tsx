@@ -17,20 +17,30 @@ export function ExplorerLocalReadModelWatermark({
 
 	const headers = result.readModel.parsedLedgerHeaders;
 	const indexes = result.readModel.indexes;
+	const canonical = result.readModel.transactions.canonicalCoverage;
 	return (
 		<div className="explorer-local-watermark">
 			<div>
-				<strong>Sparse parsed-header watermark</strong>
+				<strong>
+					{canonical === null
+						? 'Sparse parsed-header watermark'
+						: 'Canonical transaction range'}
+				</strong>
 				<span>
-					{formatLedger(headers.earliestParsedLedger)} to{' '}
-					{formatLedger(headers.latestParsedLedger)}
+					{formatLedger(canonical?.firstLedger ?? headers.earliestParsedLedger)}{' '}
+					to {formatLedger(canonical?.lastLedger ?? headers.latestParsedLedger)}
 				</span>
 			</div>
 			<div>
-				<strong>{headers.parsedLedgerCount.toLocaleString()}</strong>
+				<strong>
+					{(
+						canonical?.ledgerCount ?? headers.parsedLedgerCount
+					).toLocaleString()}
+				</strong>
 				<span>
-					parsed headers observed across {headers.sourceArchiveCount} archive
-					roots
+					{canonical === null
+						? `parsed headers observed across ${headers.sourceArchiveCount} archive roots`
+						: `proof-gated ledgers from ${canonical.archiveSourceCount} archive source`}
 				</span>
 			</div>
 			<div>
@@ -39,7 +49,9 @@ export function ExplorerLocalReadModelWatermark({
 			</div>
 			<div>
 				<strong>Transaction source</strong>
-				<span>{formatTransactionSource(result.readModel.transactions.source)}</span>
+				<span>
+					{formatTransactionSource(result.readModel.transactions.source)}
+				</span>
 			</div>
 		</div>
 	);
@@ -78,5 +90,5 @@ function formatTransactionSource(
 	source: PublicExplorerLocalReadModel['transactions']['source']
 ): string {
 	if (source === 'horizon_fallback') return 'Stellar public API';
-	return source;
+	return 'StellarAtlas canonical history';
 }

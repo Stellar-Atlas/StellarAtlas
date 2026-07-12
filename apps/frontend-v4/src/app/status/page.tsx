@@ -3,6 +3,7 @@ import {
 	fetchApiStatus,
 	fetchDataQualityStatus,
 	fetchFrontendStatus,
+	fetchFullHistoryStatus,
 	fetchWorkerStatus
 } from '@api/client';
 import { fetchHistoryArchiveObjectStatusSummary } from '@api/archive-scans-client';
@@ -13,6 +14,7 @@ import type {
 	PublicHistoryArchiveObjectEvents,
 	PublicHistoryArchiveObjectQueue,
 	PublicHistoryArchiveStatusSummary,
+	PublicFullHistoryStatus,
 	PublicScanLogStatus,
 	PublicWorkerStatus
 } from '@api/types';
@@ -29,7 +31,7 @@ async function StatusRouteContent(): Promise<React.JSX.Element> {
 	const generatedAt = new Date().toISOString();
 	const archiveEvents = buildEmptyArchiveEvents(generatedAt);
 	const scanLogs = buildEmptyScanLogs(generatedAt);
-	const [api, dataQuality, workers, frontend, archiveSummary] =
+	const [api, dataQuality, workers, frontend, fullHistory, archiveSummary] =
 		await Promise.all([
 			fetchOptional(
 				fetchApiStatus(headlineFetchOptions),
@@ -46,6 +48,10 @@ async function StatusRouteContent(): Promise<React.JSX.Element> {
 			fetchOptional(
 				fetchFrontendStatus(headlineFetchOptions),
 				buildUnavailableFrontend(generatedAt)
+			),
+			fetchOptional(
+				fetchFullHistoryStatus(headlineFetchOptions),
+				buildUnavailableFullHistory(generatedAt)
 			),
 			fetchOptional(
 				fetchHistoryArchiveObjectStatusSummary(headlineFetchOptions),
@@ -70,12 +76,34 @@ async function StatusRouteContent(): Promise<React.JSX.Element> {
 				archiveSummary={archiveSummary.value}
 				dataQuality={dataQuality.value}
 				frontend={frontend.value}
+				fullHistory={fullHistory.value}
 				scanLogs={scanLogs}
 				scanLogsAvailable={false}
 				workers={workers.value}
 			/>
 		</main>
 	);
+}
+
+function buildUnavailableFullHistory(
+	generatedAt: string
+): PublicFullHistoryStatus {
+	return {
+		canonicalCoverage: null,
+		canonicalPromotion: null,
+		earliestParsedLedger: null,
+		generatedAt,
+		latestObservedAt: null,
+		latestParsedLedger: null,
+		localAssetIndexReady: false,
+		localContractIndexReady: false,
+		localOperationIndexReady: false,
+		localTransactionIndexReady: false,
+		mode: 'archive_header_parser',
+		parsedLedgerCount: null,
+		sourceArchiveCount: null,
+		status: 'unavailable'
+	};
 }
 
 async function fetchOptional<T>(

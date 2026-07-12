@@ -81,6 +81,11 @@ export interface ExplorerLocalReadModelResult {
 	readonly status: ExplorerActionStatus;
 }
 
+export interface ExplorerInitialDataResult {
+	readonly readModel: ExplorerLocalReadModelResult;
+	readonly transactions: ExplorerTransactionsResult;
+}
+
 export async function getHistoryArchiveScanLogs(
 	historyUrl: string
 ): Promise<PublicHistoryArchiveScanLogEntry[]> {
@@ -252,6 +257,16 @@ export async function getExplorerLocalReadModel(): Promise<ExplorerLocalReadMode
 			status: 'unavailable'
 		};
 	}
+}
+
+export async function getExplorerInitialData(
+	limit = 20
+): Promise<ExplorerInitialDataResult> {
+	const [readModel, transactions] = await Promise.all([
+		getExplorerLocalReadModel(),
+		getExplorerRecentTransactions(limit)
+	]);
+	return { readModel, transactions };
 }
 
 export async function searchExplorerOperations(

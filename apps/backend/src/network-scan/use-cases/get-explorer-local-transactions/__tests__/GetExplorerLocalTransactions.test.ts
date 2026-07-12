@@ -1,93 +1,151 @@
+import { mock } from 'jest-mock-extended';
+import type { FullHistoryCanonicalRepository } from '@history-scan-coordinator/domain/full-history/FullHistoryCanonicalRepository.js';
+import {
+	fullHistoryLedgerSequence,
+	fullHistoryUint64,
+	FullHistoryHash
+} from '@history-scan-coordinator/domain/full-history/FullHistoryCanonicalTypes.js';
 import { GetExplorerLocalTransactions } from '../GetExplorerLocalTransactions.js';
-import type { ParsedTransactionResultRepository } from '@history-scan-coordinator/domain/parsed-history/ParsedTransactionResultRepository.js';
+
+const networkPassphrase = 'Explorer canonical network';
+const transactionHash = 'ab'.repeat(32);
 
 describe('GetExplorerLocalTransactions', () => {
-	it('maps recent parsed transaction rows into local explorer evidence', async () => {
-		const repository = createRepository([
-			{
-				envelopeObservedAt: new Date('2026-07-07T19:32:00.000Z'),
-				envelopeSourceArchiveUrl: 'https://archive-a.example',
-				headerObservedAt: new Date('2026-07-07T19:31:00.000Z'),
-				headerSourceArchiveUrl: 'https://archive-b.example',
-				ledgerHeaderHash: 'ledger-header-hash',
-				ledgerSequence: 63355967,
-				protocolVersion: 27,
-				resultObservedAt: new Date('2026-07-07T19:33:00.000Z'),
-				resultSourceArchiveUrl: 'https://archive-c.example',
-				transactionHash: 'a'.repeat(64),
-				transactionIndex: 4,
-				transactionResultHash: 'transaction-result-hash',
-				transactionSetHash: 'transaction-set-hash'
-			}
-		]);
+	it('maps bounded canonical recent transactions without claiming later indexes', async () => {
+		const repository = mock<FullHistoryCanonicalRepository>();
+		repository.findRecentTransactions.mockResolvedValue({
+			records: [canonicalTransaction()],
+			truncated: true
+		});
+		repository.getCoverage.mockResolvedValue(canonicalCoverage());
 
-		await expect(
-			new GetExplorerLocalTransactions(repository).execute(5)
-		).resolves.toMatchObject({
+		const result = await new GetExplorerLocalTransactions(repository, {
+			networkPassphrase
+		}).execute(5);
+
+		expect(result).toMatchObject({
+			canonicalCoverage: {
+				firstLedger: '63386240',
+				lastLedger: '63386303',
+				rangeKind: 'contiguous_bounded',
+				transactionCount: 26158,
+				transactionResultCount: 26158
+			},
 			count: 1,
 			limit: 5,
 			readModel: {
 				assetIndexReady: false,
 				contractIndexReady: false,
-				envelopeJoinReady: true,
-				ledgerHeaderJoinReady: true,
+				evidenceSelection: 'proof_gated_canonical_transaction_and_result',
 				operationIndexReady: false,
-				parsedTransactionResultsReady: true
+				transactionIndexReady: true
 			},
 			records: [
 				{
-					joins: {
-						envelopeAvailable: true,
-						ledgerHeaderAvailable: true
-					},
-					ledger: '63355967',
-					ledgerHeaderHash: 'ledger-header-hash',
-					localEvidence: {
-						envelopeObservedAt: '2026-07-07T19:32:00.000Z',
-						envelopeSourceArchiveUrl: 'https://archive-a.example',
-						ledgerHeaderObservedAt: '2026-07-07T19:31:00.000Z',
-						ledgerHeaderSourceArchiveUrl: 'https://archive-b.example',
-						resultObservedAt: '2026-07-07T19:33:00.000Z',
-						resultSourceArchiveUrl: 'https://archive-c.example'
-					},
-					protocolVersion: 27,
-					transactionHash: 'a'.repeat(64),
-					transactionIndex: 4,
-					transactionResultHash: 'transaction-result-hash',
-					transactionSetHash: 'transaction-set-hash'
+					createdAt: '2026-07-08T16:09:36.000Z',
+					feeCharged: '100',
+					hash: transactionHash,
+					ledger: '63386303',
+					operationCount: 2,
+					source: 'postgres_canonical',
+					sourceAccount: `G${'A'.repeat(55)}`,
+					successful: true
 				}
 			],
-			source: 'parsed_history_postgres'
+			source: 'postgres_canonical',
+			truncated: true
 		});
-		expect(repository.findRecentWithLedgerContext).toHaveBeenCalledWith(5);
+		expect(repository.findRecentTransactions).toHaveBeenCalledWith(
+			networkPassphrase,
+			5
+		);
+		expect(repository.getCoverage).toHaveBeenCalledWith(networkPassphrase);
 	});
 
-	it('keeps join readiness false when no parsed transaction rows exist', async () => {
-		const repository = createRepository([]);
+	it('returns an empty bounded result when canonical coverage is absent', async () => {
+		const repository = mock<FullHistoryCanonicalRepository>();
+		repository.findRecentTransactions.mockResolvedValue({
+			records: [],
+			truncated: false
+		});
+		repository.getCoverage.mockResolvedValue(null);
 
 		await expect(
-			new GetExplorerLocalTransactions(repository).execute(10)
+			new GetExplorerLocalTransactions(repository, {
+				networkPassphrase
+			}).execute(10)
 		).resolves.toMatchObject({
+			canonicalCoverage: null,
 			count: 0,
-			limit: 10,
-			readModel: {
-				envelopeJoinReady: false,
-				ledgerHeaderJoinReady: false,
-				parsedTransactionResultsReady: false
-			},
-			records: []
+			readModel: { transactionIndexReady: false },
+			records: [],
+			truncated: false
 		});
+	});
+
+	it('finds a canonical transaction by its normalized hash', async () => {
+		const repository = mock<FullHistoryCanonicalRepository>();
+		repository.findTransaction.mockResolvedValue(canonicalTransaction());
+		const useCase = new GetExplorerLocalTransactions(repository, {
+			networkPassphrase
+		});
+
+		await expect(useCase.findByHash(transactionHash)).resolves.toMatchObject({
+			hash: transactionHash,
+			ledger: '63386303',
+			source: 'postgres_canonical'
+		});
+		const calledHash = repository.findTransaction.mock.calls[0]?.[1];
+		expect(calledHash?.toHex()).toBe(transactionHash);
+	});
+
+	it('rejects canonical rows without a matching coverage watermark', async () => {
+		const repository = mock<FullHistoryCanonicalRepository>();
+		repository.findRecentTransactions.mockResolvedValue({
+			records: [canonicalTransaction()],
+			truncated: false
+		});
+		repository.getCoverage.mockResolvedValue(null);
+
+		await expect(
+			new GetExplorerLocalTransactions(repository, {
+				networkPassphrase
+			}).execute(5)
+		).rejects.toThrow(
+			'Canonical transactions exist without canonical coverage'
+		);
 	});
 });
 
-function createRepository(
-	rows: Awaited<
-		ReturnType<ParsedTransactionResultRepository['findRecentWithLedgerContext']>
-	>
-): ParsedTransactionResultRepository {
+function canonicalTransaction() {
 	return {
-		findByTransactionHash: jest.fn(),
-		findRecentWithLedgerContext: jest.fn().mockResolvedValue(rows),
-		saveBatch: jest.fn()
+		closedAt: new Date('2026-07-08T16:09:36.000Z'),
+		envelopeType: 'tx' as const,
+		feeBid: fullHistoryUint64(100n, 'feeBid'),
+		feeCharged: fullHistoryUint64(100n, 'feeCharged'),
+		ledgerSequence: fullHistoryLedgerSequence(63386303n, 'ledgerSequence'),
+		operationCount: 2,
+		operationResultCount: 2,
+		resultCode: 0,
+		sourceAccount: `G${'A'.repeat(55)}`,
+		sourceAccountSequence: fullHistoryUint64(42n, 'sourceAccountSequence'),
+		successful: true,
+		transactionHash: FullHistoryHash.fromHex(transactionHash),
+		transactionIndex: 7
+	};
+}
+
+function canonicalCoverage() {
+	return {
+		archiveSourceCount: 1,
+		batchCount: 1,
+		firstLedger: fullHistoryLedgerSequence(63386240n, 'firstLedger'),
+		lastLedger: fullHistoryLedgerSequence(63386303n, 'lastLedger'),
+		latestLedgerClosedAt: new Date('2026-07-08T16:09:36.000Z'),
+		ledgerCount: 64,
+		nextLedger: fullHistoryUint64(63386304n, 'nextLedger'),
+		transactionCount: 26158,
+		transactionResultCount: 26158,
+		updatedAt: new Date('2026-07-12T03:19:10.000Z')
 	};
 }

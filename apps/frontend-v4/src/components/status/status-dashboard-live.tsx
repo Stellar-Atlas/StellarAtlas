@@ -31,6 +31,7 @@ export function StatusDashboardLive(
 						message.payload.archiveSummary ?? current.archiveSummary,
 					dataQuality: message.payload.dataQuality ?? current.dataQuality,
 					frontend: message.payload.frontend ?? current.frontend,
+					fullHistory: message.payload.fullHistory ?? current.fullHistory,
 					scanLogs: message.payload.scanLogs ?? current.scanLogs,
 					scanLogsAvailable:
 						message.payload.scanLogs !== undefined || current.scanLogsAvailable,

@@ -102,7 +102,7 @@ export interface ExplorerSearchDTO {
 		| 'not_found'
 		| 'transaction'
 		| 'unknown';
-	readonly source: 'horizon' | 'rpc';
+	readonly source: 'horizon' | 'postgres_canonical' | 'rpc';
 }
 
 interface HorizonLedgerRecord {

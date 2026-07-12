@@ -27,7 +27,7 @@ export interface BlockchainExplorerRouterConfig {
 	>;
 	readonly getExplorerLocalTransactions: Pick<
 		GetExplorerLocalTransactions,
-		'execute'
+		'execute' | 'findByHash'
 	>;
 	readonly horizonUrl: string;
 	readonly rpcUrl?: string;
@@ -80,6 +80,22 @@ export const blockchainExplorerRouter = (
 
 		setCacheHeader(res);
 		try {
+			if (
+				(type === 'transaction' || type === 'auto') &&
+				isTransactionHash(query)
+			) {
+				const local = await config.getExplorerLocalTransactions.findByHash(
+					query.toLowerCase()
+				);
+				if (local !== null) {
+					return res.status(200).json({
+						query,
+						result: local,
+						resultType: 'transaction',
+						source: 'postgres_canonical'
+					});
+				}
+			}
 			return res
 				.status(200)
 				.json(
@@ -102,29 +118,23 @@ export const blockchainExplorerRouter = (
 
 		setCacheHeader(res);
 		try {
+			const local = await config.getExplorerLocalTransactions.execute(limit);
 			return res
 				.status(200)
-				.json(await fetchRecentTransactions(config.horizonUrl, limit));
+				.json(
+					local.records.length > 0
+						? local
+						: await fetchRecentTransactions(config.horizonUrl, limit)
+				);
 		} catch {
 			return res.status(502).json({ error: 'Transaction feed unavailable' });
 		}
 	});
 
-	router.get('/transactions/:hash', async (req, res) => {
-		const hash = req.params.hash.trim().toLowerCase();
-		if (!isTransactionHash(hash))
-			return res.status(400).json({ error: 'Invalid transaction hash' });
-
-		setCacheHeader(res);
-		try {
-			const transaction = await fetchTransactionByHash(config.horizonUrl, hash);
-			if (!transaction)
-				return res.status(404).json({ error: 'Transaction not found' });
-			return res.status(200).json(transaction);
-		} catch {
-			return res.status(502).json({ error: 'Transaction lookup unavailable' });
-		}
-	});
+	router.get(
+		'/transactions/:hash',
+		createExplorerTransactionLookupHandler(config)
+	);
 
 	router.get('/transactions/:hash/operations', async (req, res) => {
 		const hash = req.params.hash.trim().toLowerCase();
@@ -231,6 +241,33 @@ export const blockchainExplorerRouter = (
 
 	return router;
 };
+
+export function createExplorerTransactionLookupHandler(
+	config: Pick<
+		BlockchainExplorerRouterConfig,
+		'getExplorerLocalTransactions' | 'horizonUrl'
+	>
+): express.RequestHandler {
+	return async (req, res) => {
+		const hash = req.params.hash.trim().toLowerCase();
+		if (!isTransactionHash(hash)) {
+			return res.status(400).json({ error: 'Invalid transaction hash' });
+		}
+
+		setCacheHeader(res);
+		try {
+			const local = await config.getExplorerLocalTransactions.findByHash(hash);
+			const transaction =
+				local ?? (await fetchTransactionByHash(config.horizonUrl, hash));
+			if (transaction === null) {
+				return res.status(404).json({ error: 'Transaction not found' });
+			}
+			return res.status(200).json(transaction);
+		} catch {
+			return res.status(502).json({ error: 'Transaction lookup unavailable' });
+		}
+	};
+}
 
 function readOperationFilters(
 	req: express.Request

@@ -7,7 +7,7 @@ export function formatTransactionSource(
 	source: PublicTransactionLookup['source']
 ): string {
 	if (source === 'horizon') return 'Stellar public API';
-	return source;
+	return 'StellarAtlas canonical history';
 }
 
 export function formatDate(value: string): string {
@@ -17,6 +17,7 @@ export function formatDate(value: string): string {
 
 export function formatExplorerSource(source: string): string {
 	if (source === 'horizon') return 'Stellar public API';
+	if (source === 'postgres_canonical') return 'StellarAtlas canonical history';
 	if (source === 'local') return 'StellarAtlas local index';
 	if (source === 'rpc') return 'Soroban RPC';
 	return source.replaceAll('_', ' ');

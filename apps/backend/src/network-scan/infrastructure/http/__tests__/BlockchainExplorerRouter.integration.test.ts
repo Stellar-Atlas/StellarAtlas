@@ -1,79 +1,115 @@
 import express from 'express';
 import request from 'supertest';
-import { blockchainExplorerRouter } from '../BlockchainExplorerRouter.js';
+import type { ExplorerLocalReadModelDTO } from '../../../use-cases/get-explorer-local-read-model/GetExplorerLocalReadModel.js';
+import type { ExplorerLocalTransactionsDTO } from '../../../use-cases/get-explorer-local-transactions/GetExplorerLocalTransactions.js';
+import type { ExplorerCanonicalTransactionDTO } from '../../../use-cases/get-explorer-local-transactions/ExplorerCanonicalTransaction.js';
+import {
+	blockchainExplorerRouter,
+	createExplorerTransactionLookupHandler
+} from '../BlockchainExplorerRouter.js';
 
-const createApp = () => {
+interface BuildTestAppOptions {
+	readonly localFeed?: ExplorerLocalTransactionsDTO;
+	readonly localTransaction?: ExplorerCanonicalTransactionDTO | null;
+}
+
+const canonicalHash = 'a'.repeat(64);
+const canonicalTransaction: ExplorerCanonicalTransactionDTO = {
+	createdAt: '2026-07-08T16:09:36.000Z',
+	feeCharged: '100',
+	hash: canonicalHash,
+	ledger: '63386303',
+	operationCount: 3,
+	source: 'postgres_canonical',
+	sourceAccount: `G${'A'.repeat(55)}`,
+	successful: true
+};
+
+const canonicalCoverage = {
+	archiveSourceCount: 1,
+	batchCount: 1,
+	firstLedger: '63386240',
+	lastLedger: '63386303',
+	latestLedgerClosedAt: '2026-07-08T16:09:36.000Z',
+	ledgerCount: 64,
+	nextLedger: '63386304',
+	rangeKind: 'contiguous_bounded' as const,
+	transactionCount: 26158,
+	transactionResultCount: 26158,
+	updatedAt: '2026-07-12T03:19:10.000Z'
+};
+
+const canonicalFeed = (
+	records: readonly ExplorerCanonicalTransactionDTO[] = [canonicalTransaction]
+): ExplorerLocalTransactionsDTO => ({
+	canonicalCoverage: records.length > 0 ? canonicalCoverage : null,
+	count: records.length,
+	generatedAt: '2026-07-12T04:00:00.000Z',
+	limit: 20,
+	readModel: {
+		assetIndexReady: false,
+		contractIndexReady: false,
+		evidenceSelection: 'proof_gated_canonical_transaction_and_result',
+		operationIndexReady: false,
+		transactionIndexReady: records.length > 0
+	},
+	records,
+	source: 'postgres_canonical',
+	truncated: records.length > 0
+});
+
+const localReadModel = (): ExplorerLocalReadModelDTO => ({
+	generatedAt: '2026-07-12T04:00:00.000Z',
+	indexes: {
+		assetIndexReady: false,
+		contractIndexReady: false,
+		operationIndexReady: false,
+		transactionIndexReady: true
+	},
+	parsedLedgerHeaders: {
+		earliestParsedLedger: '64',
+		latestObservedAt: '2026-07-06T00:00:00.000Z',
+		latestParsedLedger: '128',
+		latestParsedLedgerHash: 'hash-128',
+		parsedLedgerCount: 2,
+		sourceArchiveCount: 1
+	},
+	source: 'parsed_ledger_header_repository',
+	transactions: {
+		canonicalCoverage,
+		localCoverage: true,
+		message:
+			'Transactions are available from the bounded proof-gated canonical range.',
+		source: 'postgres_canonical'
+	}
+});
+
+const buildTestApp = (options: BuildTestAppOptions = {}) => {
 	const app = express();
+	const getExplorerLocalTransactions = {
+		execute: async (limit: number) => ({
+			...(options.localFeed ?? canonicalFeed()),
+			limit
+		}),
+		findByHash: async () =>
+			options.localTransaction === undefined
+				? canonicalTransaction
+				: options.localTransaction
+	};
+	app.get(
+		'/v1/transactions/:hash',
+		createExplorerTransactionLookupHandler({
+			getExplorerLocalTransactions,
+			horizonUrl: 'https://horizon.example'
+		})
+	);
 	app.use(
 		'/v1/explorer',
 		blockchainExplorerRouter({
 			getExplorerLocalReadModel: {
-				execute: async () => ({
-					generatedAt: '2026-07-06T00:00:00.000Z',
-					indexes: {
-						assetIndexReady: false,
-						contractIndexReady: false,
-						operationIndexReady: false,
-						transactionIndexReady: false
-					},
-					parsedLedgerHeaders: {
-						earliestParsedLedger: '64',
-						latestObservedAt: '2026-07-06T00:00:00.000Z',
-						latestParsedLedger: '128',
-						latestParsedLedgerHash: 'hash-128',
-						parsedLedgerCount: 2,
-						sourceArchiveCount: 1
-					},
-					source: 'parsed_ledger_header_repository',
-					transactions: {
-						localCoverage: false,
-						message:
-							'Transactions remain Horizon fallback; no StellarAtlas local transaction index is available yet.',
-						source: 'horizon_fallback'
-					}
-				})
+				execute: async () => localReadModel()
 			},
-			getExplorerLocalTransactions: {
-				execute: async (limit: number) => ({
-					count: 1,
-					generatedAt: '2026-07-06T00:00:00.000Z',
-					limit,
-					readModel: {
-						assetIndexReady: false,
-						contractIndexReady: false,
-						envelopeJoinReady: true,
-						evidenceSelection:
-							'parsed_transaction_result_joined_to_parsed_ledger_header_and_envelope',
-						ledgerHeaderJoinReady: true,
-						operationIndexReady: false,
-						parsedTransactionResultsReady: true
-					},
-					records: [
-						{
-							joins: {
-								envelopeAvailable: true,
-								ledgerHeaderAvailable: true
-							},
-							ledger: '63355967',
-							ledgerHeaderHash: 'ledger-header-hash',
-							localEvidence: {
-								envelopeObservedAt: '2026-07-06T00:00:00.000Z',
-								envelopeSourceArchiveUrl: 'https://archive-a.example',
-								ledgerHeaderObservedAt: '2026-07-06T00:00:00.000Z',
-								ledgerHeaderSourceArchiveUrl: 'https://archive-a.example',
-								resultObservedAt: '2026-07-06T00:00:00.000Z',
-								resultSourceArchiveUrl: 'https://archive-a.example'
-							},
-							protocolVersion: 27,
-							transactionHash: 'a'.repeat(64),
-							transactionIndex: 4,
-							transactionResultHash: 'transaction-result-hash',
-							transactionSetHash: 'transaction-set-hash'
-						}
-					],
-					source: 'parsed_history_postgres'
-				})
-			},
+			getExplorerLocalTransactions,
 			horizonUrl: 'https://horizon.example'
 		})
 	);
@@ -101,7 +137,7 @@ describe('BlockchainExplorerRouter.integration', () => {
 			)
 		);
 
-		await request(createApp())
+		await request(buildTestApp())
 			.get('/v1/explorer/search?query=63335066&type=ledger')
 			.expect(200)
 			.expect('Cache-Control', 'public, max-age=20')
@@ -119,54 +155,65 @@ describe('BlockchainExplorerRouter.integration', () => {
 			});
 	});
 
-	it('returns local parsed-header read model state without transaction coverage', async () => {
-		await request(createApp())
+	it('returns bounded canonical transaction readiness without later indexes', async () => {
+		await request(buildTestApp())
 			.get('/v1/explorer/local-read-model')
 			.expect(200)
 			.expect('Cache-Control', 'public, max-age=20')
 			.expect((response) => {
 				expect(response.body).toMatchObject({
-					indexes: { transactionIndexReady: false },
+					indexes: {
+						assetIndexReady: false,
+						contractIndexReady: false,
+						operationIndexReady: false,
+						transactionIndexReady: true
+					},
 					parsedLedgerHeaders: {
 						latestParsedLedger: '128',
 						latestParsedLedgerHash: 'hash-128'
 					},
 					source: 'parsed_ledger_header_repository',
 					transactions: {
-						localCoverage: false,
-						source: 'horizon_fallback'
+						canonicalCoverage: {
+							firstLedger: '63386240',
+							lastLedger: '63386303'
+						},
+						localCoverage: true,
+						source: 'postgres_canonical'
 					}
 				});
 			});
 	});
 
-	it('returns local parsed transaction evidence', async () => {
+	it('returns local canonical transaction rows', async () => {
 		const fetchSpy = jest.spyOn(global, 'fetch');
 
-		await request(createApp())
+		await request(buildTestApp())
 			.get('/v1/explorer/local-transactions?limit=2')
 			.expect(200)
 			.expect('Cache-Control', 'public, max-age=20')
 			.expect((response) => {
 				expect(response.body).toMatchObject({
+					canonicalCoverage: {
+						firstLedger: '63386240',
+						lastLedger: '63386303'
+					},
 					count: 1,
 					limit: 2,
 					readModel: {
-						envelopeJoinReady: true,
-						ledgerHeaderJoinReady: true,
-						parsedTransactionResultsReady: true
+						assetIndexReady: false,
+						contractIndexReady: false,
+						operationIndexReady: false,
+						transactionIndexReady: true
 					},
 					records: [
 						{
-							joins: {
-								envelopeAvailable: true,
-								ledgerHeaderAvailable: true
-							},
-							ledger: '63355967',
-							transactionHash: 'a'.repeat(64)
+							hash: canonicalHash,
+							ledger: '63386303',
+							source: 'postgres_canonical'
 						}
 					],
-					source: 'parsed_history_postgres'
+					source: 'postgres_canonical'
 				});
 			});
 
@@ -176,7 +223,7 @@ describe('BlockchainExplorerRouter.integration', () => {
 	it('rejects unbounded local transaction limits before any lookup', async () => {
 		const fetchSpy = jest.spyOn(global, 'fetch');
 
-		await request(createApp())
+		await request(buildTestApp())
 			.get('/v1/explorer/local-transactions?limit=500')
 			.expect(400)
 			.expect((response) => {
@@ -191,7 +238,7 @@ describe('BlockchainExplorerRouter.integration', () => {
 	it('rejects invalid account operation filters before Horizon lookup', async () => {
 		const fetchSpy = jest.spyOn(global, 'fetch');
 
-		await request(createApp())
+		await request(buildTestApp())
 			.get('/v1/explorer/operations?accountId=not-an-account')
 			.expect(400)
 			.expect((response) => {
@@ -201,56 +248,138 @@ describe('BlockchainExplorerRouter.integration', () => {
 		expect(fetchSpy).not.toHaveBeenCalled();
 	});
 
-	it('returns a bounded recent transaction feed', async () => {
+	it('prefers the bounded canonical recent transaction feed', async () => {
+		const fetchSpy = jest.spyOn(global, 'fetch');
+
+		await request(buildTestApp())
+			.get('/v1/explorer/transactions?limit=10')
+			.expect(200)
+			.expect((response) => {
+				expect(response.body).toMatchObject({
+					limit: 10,
+					source: 'postgres_canonical',
+					truncated: true,
+					records: [
+						{
+							hash: canonicalHash,
+							ledger: '63386303',
+							source: 'postgres_canonical'
+						}
+					]
+				});
+			});
+
+		expect(fetchSpy).not.toHaveBeenCalled();
+	});
+
+	it('uses Horizon for the recent feed only when no canonical row exists', async () => {
+		const app = buildTestApp({ localFeed: canonicalFeed([]) });
 		jest.spyOn(global, 'fetch').mockResolvedValue(
 			new Response(
 				JSON.stringify({
 					_embedded: {
 						records: [
 							{
-								created_at: '2026-07-05T05:11:31Z',
+								created_at: '2026-07-12T05:11:31Z',
 								fee_charged: '100',
-								hash: 'a'.repeat(64),
-								ledger: 63335066,
-								operation_count: 3,
-								source_account: `G${'A'.repeat(55)}`,
+								hash: 'b'.repeat(64),
+								ledger: 63400000,
+								operation_count: 1,
+								source_account: `G${'B'.repeat(55)}`,
 								successful: true
 							}
 						]
-					},
-					_links: {
-						next: {
-							href: 'https://horizon.example/transactions?cursor=next'
-						}
 					}
 				}),
 				{ status: 200 }
 			)
 		);
 
-		await request(createApp())
+		await request(app)
 			.get('/v1/explorer/transactions?limit=10')
 			.expect(200)
 			.expect((response) => {
 				expect(response.body).toMatchObject({
-					limit: 10,
 					source: 'horizon',
-					truncated: true,
-					records: [
-						{
-							hash: 'a'.repeat(64),
-							ledger: '63335066',
-							source: 'horizon'
-						}
-					]
+					records: [{ hash: 'b'.repeat(64), source: 'horizon' }]
 				});
+			});
+	});
+
+	it('prefers canonical hash lookup on explorer and legacy routes', async () => {
+		const fetchSpy = jest.spyOn(global, 'fetch');
+
+		for (const path of [
+			`/v1/explorer/transactions/${canonicalHash}`,
+			`/v1/transactions/${canonicalHash}`
+		]) {
+			await request(buildTestApp())
+				.get(path)
+				.expect(200)
+				.expect((response) => {
+					expect(response.body).toMatchObject({
+						hash: canonicalHash,
+						ledger: '63386303',
+						source: 'postgres_canonical'
+					});
+				});
+		}
+
+		expect(fetchSpy).not.toHaveBeenCalled();
+	});
+
+	it('prefers canonical transaction search before an external lookup', async () => {
+		const fetchSpy = jest.spyOn(global, 'fetch');
+
+		await request(buildTestApp())
+			.get(`/v1/explorer/search?query=${canonicalHash}&type=transaction`)
+			.expect(200)
+			.expect((response) => {
+				expect(response.body).toMatchObject({
+					query: canonicalHash,
+					resultType: 'transaction',
+					source: 'postgres_canonical',
+					result: {
+						hash: canonicalHash,
+						ledger: '63386303',
+						source: 'postgres_canonical'
+					}
+				});
+			});
+
+		expect(fetchSpy).not.toHaveBeenCalled();
+	});
+
+	it('falls back to Horizon when a transaction hash is outside local coverage', async () => {
+		const app = buildTestApp({ localTransaction: null });
+		const hash = 'c'.repeat(64);
+		jest.spyOn(global, 'fetch').mockResolvedValue(
+			new Response(
+				JSON.stringify({
+					created_at: '2026-07-12T05:11:31Z',
+					fee_charged: '100',
+					hash,
+					ledger: 63400000,
+					operation_count: 1,
+					source_account: `G${'C'.repeat(55)}`,
+					successful: true
+				}),
+				{ status: 200 }
+			)
+		);
+
+		await request(app)
+			.get(`/v1/explorer/transactions/${hash}`)
+			.expect(200)
+			.expect((response) => {
+				expect(response.body).toMatchObject({ hash, source: 'horizon' });
 			});
 	});
 
 	it('rejects unbounded transaction feed limits', async () => {
 		const fetchSpy = jest.spyOn(global, 'fetch');
 
-		await request(createApp())
+		await request(buildTestApp())
 			.get('/v1/explorer/transactions?limit=500')
 			.expect(400)
 			.expect((response) => {
@@ -284,7 +413,7 @@ describe('BlockchainExplorerRouter.integration', () => {
 			)
 		);
 
-		await request(createApp())
+		await request(buildTestApp())
 			.get(`/v1/explorer/transactions/${transactionHash}/operations`)
 			.expect(200)
 			.expect((response) => {
@@ -307,7 +436,7 @@ describe('BlockchainExplorerRouter.integration', () => {
 	it('rejects invalid transaction operation hashes before Horizon lookup', async () => {
 		const fetchSpy = jest.spyOn(global, 'fetch');
 
-		await request(createApp())
+		await request(buildTestApp())
 			.get('/v1/explorer/transactions/not-a-hash/operations')
 			.expect(400)
 			.expect((response) => {
@@ -322,7 +451,7 @@ describe('BlockchainExplorerRouter.integration', () => {
 			.spyOn(global, 'fetch')
 			.mockResolvedValue(new Response('{}', { status: 404 }));
 
-		await request(createApp())
+		await request(buildTestApp())
 			.get(`/v1/explorer/transactions/${'c'.repeat(64)}/operations`)
 			.expect(404)
 			.expect((response) => {
@@ -331,7 +460,7 @@ describe('BlockchainExplorerRouter.integration', () => {
 	});
 
 	it('reports contract lookup as unconfigured until RPC is wired', async () => {
-		await request(createApp())
+		await request(buildTestApp())
 			.get(`/v1/explorer/contracts/${contractId}`)
 			.expect(200)
 			.expect((response) => {

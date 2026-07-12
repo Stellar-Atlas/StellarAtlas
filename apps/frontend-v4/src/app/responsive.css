@@ -10,6 +10,10 @@
 		grid-template-columns: repeat(2, minmax(0, 1fr));
 	}
 
+	.status-dashboard > .stats-grid {
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+	}
+
 	.table-controls {
 		inline-size: 100%;
 	}
@@ -45,6 +49,10 @@
 	.stats-grid,
 	.content-grid,
 	.detail-grid {
+		grid-template-columns: 1fr;
+	}
+
+	.status-dashboard > .stats-grid {
 		grid-template-columns: 1fr;
 	}
 

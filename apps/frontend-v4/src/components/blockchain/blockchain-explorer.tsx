@@ -1,20 +1,15 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useTransition } from 'react';
 import {
 	getExplorerRecentTransactions,
-	getExplorerLocalReadModel,
+	getExplorerInitialData,
 	getExplorerTransactionOperations,
 	lookupExplorerContract,
 	searchExplorer,
 	searchExplorerAssets,
 	searchExplorerOperations,
-	type ExplorerAssetsResult,
-	type ExplorerContractResult,
-	type ExplorerLocalReadModelResult,
-	type ExplorerOperationsResult,
-	type ExplorerSearchResult,
-	type ExplorerTransactionsResult
+	type ExplorerSearchResult
 } from '../../app/actions/network-data';
 import type {
 	PublicExplorerOperationFilters,
@@ -30,82 +25,50 @@ import {
 	toDateInputValue
 } from './blockchain-explorer-results';
 import { ExplorerLocalReadModelWatermark } from './explorer-local-read-model-watermark';
-
-const searchTypeOptions: readonly PublicExplorerSearchType[] = [
-	'auto',
-	'transaction',
-	'account',
-	'ledger',
-	'asset',
-	'contract'
-];
-
-const initialSearch: ExplorerSearchResult = {
-	message: null,
-	observedAt: null,
-	search: null,
-	status: 'invalid'
-};
-
-const initialOperations: ExplorerOperationsResult = {
-	message: null,
-	observedAt: null,
-	operations: null,
-	status: 'invalid'
-};
-
-const initialAssets: ExplorerAssetsResult = {
-	assets: null,
-	message: null,
-	observedAt: null,
-	status: 'invalid'
-};
-
-const initialContract: ExplorerContractResult = {
-	contract: null,
-	message: null,
-	observedAt: null,
-	status: 'invalid'
-};
-
-const initialTransactions: ExplorerTransactionsResult = {
-	message: null,
-	status: 'invalid',
-	transactions: null
-};
-
-const initialLocalReadModel: ExplorerLocalReadModelResult = {
-	message: null,
-	readModel: null,
-	status: 'invalid'
-};
+import {
+	explorerSearchTypes,
+	initialExplorerAssets,
+	initialExplorerContract,
+	initialExplorerOperations,
+	initialExplorerReadModel,
+	initialExplorerSearch,
+	initialExplorerTransactions
+} from './blockchain-explorer-state';
 
 export function BlockchainExplorer(): React.JSX.Element {
 	const [searchQuery, setSearchQuery] = useState('');
 	const [searchType, setSearchType] =
 		useState<PublicExplorerSearchType>('auto');
-	const [searchResult, setSearchResult] = useState(initialSearch);
+	const [searchResult, setSearchResult] = useState(initialExplorerSearch);
 	const [operationFilters, setOperationFilters] =
 		useState<PublicExplorerOperationFilters>({});
-	const [operationResult, setOperationResult] = useState(initialOperations);
+	const [operationResult, setOperationResult] = useState(
+		initialExplorerOperations
+	);
 	const [assetCode, setAssetCode] = useState('');
 	const [assetIssuer, setAssetIssuer] = useState('');
-	const [assetResult, setAssetResult] = useState(initialAssets);
+	const [assetResult, setAssetResult] = useState(initialExplorerAssets);
 	const [contractId, setContractId] = useState('');
-	const [contractResult, setContractResult] = useState(initialContract);
-	const [transactionFeed, setTransactionFeed] = useState(initialTransactions);
-	const [localReadModel, setLocalReadModel] = useState(initialLocalReadModel);
-	const [transactionOperations, setTransactionOperations] =
-		useState(initialOperations);
+	const [contractResult, setContractResult] = useState(initialExplorerContract);
+	const [transactionFeed, setTransactionFeed] = useState(
+		initialExplorerTransactions
+	);
+	const [localReadModel, setLocalReadModel] = useState(
+		initialExplorerReadModel
+	);
+	const [transactionOperations, setTransactionOperations] = useState(
+		initialExplorerOperations
+	);
 	const [loading, setLoading] = useState<string | null>(null);
 	const [transactionOperationsLoading, setTransactionOperationsLoading] =
 		useState(false);
 	const [transactionFeedLoading, setTransactionFeedLoading] = useState(false);
+	const [, startTransition] = useTransition();
 	const indexReadiness = localReadModel.readModel?.indexes;
 	const operationIndexReady = Boolean(indexReadiness?.operationIndexReady);
 	const assetIndexReady = Boolean(indexReadiness?.assetIndexReady);
 	const contractIndexReady = Boolean(indexReadiness?.contractIndexReady);
-	const availableSearchTypes = searchTypeOptions.filter(
+	const availableSearchTypes = explorerSearchTypes.filter(
 		(type) =>
 			(type !== 'asset' || assetIndexReady) &&
 			(type !== 'contract' || contractIndexReady)
@@ -116,27 +79,42 @@ export function BlockchainExplorer(): React.JSX.Element {
 		type: PublicExplorerSearchType
 	): void => {
 		setLoading('search');
-		void searchExplorer(query, type)
-			.then((result) => {
+		startTransition(async () => {
+			try {
+				const result = await searchExplorer(query, type);
 				setSearchResult(result);
 				const transactionHash = getTransactionHashFromSearch(result);
-				if (transactionHash) loadTransactionOperations(transactionHash);
-			})
-			.finally(() => setLoading(null));
+				if (transactionHash && operationIndexReady) {
+					loadTransactionOperations(transactionHash);
+				} else {
+					setTransactionOperations(initialExplorerOperations);
+				}
+			} finally {
+				setLoading(null);
+			}
+		});
 	};
 
 	const loadTransactionOperations = (hash: string): void => {
 		setTransactionOperationsLoading(true);
-		void getExplorerTransactionOperations(hash)
-			.then(setTransactionOperations)
-			.finally(() => setTransactionOperationsLoading(false));
+		startTransition(async () => {
+			try {
+				setTransactionOperations(await getExplorerTransactionOperations(hash));
+			} finally {
+				setTransactionOperationsLoading(false);
+			}
+		});
 	};
 
 	const loadRecentTransactions = (): void => {
 		setTransactionFeedLoading(true);
-		void getExplorerRecentTransactions(20)
-			.then(setTransactionFeed)
-			.finally(() => setTransactionFeedLoading(false));
+		startTransition(async () => {
+			try {
+				setTransactionFeed(await getExplorerRecentTransactions(20));
+			} finally {
+				setTransactionFeedLoading(false);
+			}
+		});
 	};
 
 	const inspectTransaction = (hash: string): void => {
@@ -146,8 +124,16 @@ export function BlockchainExplorer(): React.JSX.Element {
 	};
 
 	useEffect(() => {
-		void getExplorerLocalReadModel().then(setLocalReadModel);
-		loadRecentTransactions();
+		setTransactionFeedLoading(true);
+		startTransition(async () => {
+			try {
+				const initialData = await getExplorerInitialData(20);
+				setLocalReadModel(initialData.readModel);
+				setTransactionFeed(initialData.transactions);
+			} finally {
+				setTransactionFeedLoading(false);
+			}
+		});
 	}, []);
 
 	const submitSearch = (event: React.FormEvent<HTMLFormElement>): void => {
@@ -158,25 +144,37 @@ export function BlockchainExplorer(): React.JSX.Element {
 	const submitOperations = (event: React.FormEvent<HTMLFormElement>): void => {
 		event.preventDefault();
 		setLoading('operations');
-		void searchExplorerOperations(operationFilters)
-			.then(setOperationResult)
-			.finally(() => setLoading(null));
+		startTransition(async () => {
+			try {
+				setOperationResult(await searchExplorerOperations(operationFilters));
+			} finally {
+				setLoading(null);
+			}
+		});
 	};
 
 	const submitAssets = (event: React.FormEvent<HTMLFormElement>): void => {
 		event.preventDefault();
 		setLoading('assets');
-		void searchExplorerAssets(assetCode, assetIssuer)
-			.then(setAssetResult)
-			.finally(() => setLoading(null));
+		startTransition(async () => {
+			try {
+				setAssetResult(await searchExplorerAssets(assetCode, assetIssuer));
+			} finally {
+				setLoading(null);
+			}
+		});
 	};
 
 	const submitContract = (event: React.FormEvent<HTMLFormElement>): void => {
 		event.preventDefault();
 		setLoading('contract');
-		void lookupExplorerContract(contractId)
-			.then(setContractResult)
-			.finally(() => setLoading(null));
+		startTransition(async () => {
+			try {
+				setContractResult(await lookupExplorerContract(contractId));
+			} finally {
+				setLoading(null);
+			}
+		});
 	};
 
 	return (
@@ -240,7 +238,11 @@ export function BlockchainExplorer(): React.JSX.Element {
 				<div className="panel-heading explorer-feed-heading">
 					<div>
 						<strong>Recent transactions</strong>
-						<span>Current transaction sample from the Stellar public network</span>
+						<span>
+							{transactionFeed.transactions?.source === 'postgres_canonical'
+								? 'Proof-gated transactions from StellarAtlas canonical history'
+								: 'Current transaction sample from the Stellar public network'}
+						</span>
 					</div>
 					<button
 						disabled={transactionFeedLoading}

@@ -1,103 +1,96 @@
 import 'reflect-metadata';
 import { inject, injectable } from 'inversify';
-import type { ParsedTransactionResultRepository } from '@history-scan-coordinator/domain/parsed-history/ParsedTransactionResultRepository.js';
+import type { NetworkConfig } from '@core/config/Config.js';
+import type { FullHistoryCanonicalRepository } from '@history-scan-coordinator/domain/full-history/FullHistoryCanonicalRepository.js';
+import { FullHistoryHash } from '@history-scan-coordinator/domain/full-history/FullHistoryCanonicalTypes.js';
 import { TYPES } from '@history-scan-coordinator/infrastructure/di/di-types.js';
-
-export interface ExplorerLocalTransactionDTO {
-	readonly joins: {
-		readonly envelopeAvailable: boolean;
-		readonly ledgerHeaderAvailable: boolean;
-	};
-	readonly ledger: string;
-	readonly ledgerHeaderHash: string | null;
-	readonly localEvidence: {
-		readonly envelopeObservedAt: string | null;
-		readonly envelopeSourceArchiveUrl: string | null;
-		readonly ledgerHeaderObservedAt: string | null;
-		readonly ledgerHeaderSourceArchiveUrl: string | null;
-		readonly resultObservedAt: string;
-		readonly resultSourceArchiveUrl: string;
-	};
-	readonly protocolVersion: number | null;
-	readonly transactionHash: string;
-	readonly transactionIndex: number;
-	readonly transactionResultHash: string;
-	readonly transactionSetHash: string | null;
-}
+import { NETWORK_TYPES } from '../../infrastructure/di/di-types.js';
+import {
+	mapExplorerCanonicalCoverage,
+	mapExplorerCanonicalTransaction,
+	type ExplorerCanonicalCoverageDTO,
+	type ExplorerCanonicalTransactionDTO
+} from './ExplorerCanonicalTransaction.js';
 
 export interface ExplorerLocalTransactionsDTO {
+	readonly canonicalCoverage: ExplorerCanonicalCoverageDTO | null;
 	readonly count: number;
 	readonly generatedAt: string;
 	readonly limit: number;
 	readonly readModel: {
 		readonly assetIndexReady: false;
 		readonly contractIndexReady: false;
-		readonly envelopeJoinReady: boolean;
-		readonly evidenceSelection: 'parsed_transaction_result_joined_to_parsed_ledger_header_and_envelope';
-		readonly ledgerHeaderJoinReady: boolean;
+		readonly evidenceSelection: 'proof_gated_canonical_transaction_and_result';
 		readonly operationIndexReady: false;
-		readonly parsedTransactionResultsReady: boolean;
+		readonly transactionIndexReady: boolean;
 	};
-	readonly records: readonly ExplorerLocalTransactionDTO[];
-	readonly source: 'parsed_history_postgres';
+	readonly records: readonly ExplorerCanonicalTransactionDTO[];
+	readonly source: 'postgres_canonical';
+	readonly truncated: boolean;
 }
 
 @injectable()
 export class GetExplorerLocalTransactions {
 	constructor(
-		@inject(TYPES.ParsedTransactionResultRepository)
-		private readonly parsedTransactions: ParsedTransactionResultRepository
+		@inject(TYPES.FullHistoryCanonicalRepository)
+		private readonly canonicalHistory: FullHistoryCanonicalRepository,
+		@inject(NETWORK_TYPES.NetworkConfig)
+		private readonly networkConfig: Pick<NetworkConfig, 'networkPassphrase'>
 	) {}
 
 	async execute(limit: number): Promise<ExplorerLocalTransactionsDTO> {
-		const rows =
-			await this.parsedTransactions.findRecentWithLedgerContext(limit);
-		const records = rows.map((row) => ({
-			joins: {
-				envelopeAvailable: row.envelopeObservedAt !== null,
-				ledgerHeaderAvailable: row.headerObservedAt !== null
-			},
-			ledger: row.ledgerSequence.toString(),
-			ledgerHeaderHash: row.ledgerHeaderHash,
-			localEvidence: {
-				envelopeObservedAt: toIsoOrNull(row.envelopeObservedAt),
-				envelopeSourceArchiveUrl: row.envelopeSourceArchiveUrl,
-				ledgerHeaderObservedAt: toIsoOrNull(row.headerObservedAt),
-				ledgerHeaderSourceArchiveUrl: row.headerSourceArchiveUrl,
-				resultObservedAt: row.resultObservedAt.toISOString(),
-				resultSourceArchiveUrl: row.resultSourceArchiveUrl
-			},
-			protocolVersion: row.protocolVersion,
-			transactionHash: row.transactionHash,
-			transactionIndex: row.transactionIndex,
-			transactionResultHash: row.transactionResultHash,
-			transactionSetHash: row.transactionSetHash
-		}));
+		const [recent, coverage] = await Promise.all([
+			this.canonicalHistory.findRecentTransactions(
+				this.networkConfig.networkPassphrase,
+				limit
+			),
+			this.canonicalHistory.getCoverage(this.networkConfig.networkPassphrase)
+		]);
+		if (coverage === null && recent.records.length > 0) {
+			throw new Error(
+				'Canonical transactions exist without canonical coverage'
+			);
+		}
 
+		const records = recent.records.map(mapExplorerCanonicalTransaction);
 		return {
+			canonicalCoverage:
+				coverage === null ? null : mapExplorerCanonicalCoverage(coverage),
 			count: records.length,
 			generatedAt: new Date().toISOString(),
 			limit,
 			readModel: {
 				assetIndexReady: false,
 				contractIndexReady: false,
-				envelopeJoinReady: records.some(
-					(record) => record.joins.envelopeAvailable
-				),
-				evidenceSelection:
-					'parsed_transaction_result_joined_to_parsed_ledger_header_and_envelope',
-				ledgerHeaderJoinReady: records.some(
-					(record) => record.joins.ledgerHeaderAvailable
-				),
+				evidenceSelection: 'proof_gated_canonical_transaction_and_result',
 				operationIndexReady: false,
-				parsedTransactionResultsReady: records.length > 0
+				transactionIndexReady: canonicalTransactionsReady(coverage)
 			},
 			records,
-			source: 'parsed_history_postgres'
+			source: 'postgres_canonical',
+			truncated: recent.truncated
 		};
+	}
+
+	async findByHash(
+		transactionHash: string
+	): Promise<ExplorerCanonicalTransactionDTO | null> {
+		const transaction = await this.canonicalHistory.findTransaction(
+			this.networkConfig.networkPassphrase,
+			FullHistoryHash.fromHex(transactionHash)
+		);
+		return transaction === null
+			? null
+			: mapExplorerCanonicalTransaction(transaction);
 	}
 }
 
-function toIsoOrNull(value: Date | null): string | null {
-	return value === null ? null : value.toISOString();
+function canonicalTransactionsReady(
+	coverage: Awaited<ReturnType<FullHistoryCanonicalRepository['getCoverage']>>
+): boolean {
+	return (
+		coverage !== null &&
+		coverage.transactionCount > 0 &&
+		coverage.transactionCount === coverage.transactionResultCount
+	);
 }

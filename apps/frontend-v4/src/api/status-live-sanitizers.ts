@@ -4,6 +4,7 @@ type SanitizedField =
 	| 'archiveSummary'
 	| 'dataQuality'
 	| 'frontend'
+	| 'fullHistory'
 	| 'scanLogs';
 
 export function sanitizeStatusLiveField(
@@ -28,7 +29,60 @@ export function sanitizeStatusLiveField(
 			'url'
 		]);
 	}
+	if (field === 'fullHistory') return sanitizeFullHistory(value);
 	return sanitizeScanLogs(value);
+}
+
+function sanitizeFullHistory(value: unknown): Record<string, unknown> {
+	const source = record(value);
+	return {
+		...pick(source, [
+			'earliestParsedLedger',
+			'generatedAt',
+			'latestObservedAt',
+			'latestParsedLedger',
+			'localAssetIndexReady',
+			'localContractIndexReady',
+			'localOperationIndexReady',
+			'localTransactionIndexReady',
+			'mode',
+			'parsedLedgerCount',
+			'sourceArchiveCount',
+			'status'
+		]),
+		canonicalCoverage:
+			source.canonicalCoverage === null
+				? null
+				: pick(source.canonicalCoverage, [
+						'archiveSourceCount',
+						'batchCount',
+						'firstLedger',
+						'lastLedger',
+						'latestLedgerClosedAt',
+						'ledgerCount',
+						'nextLedger',
+						'rangeKind',
+						'source',
+						'transactionCount',
+						'transactionResultCount',
+						'updatedAt'
+					]),
+		canonicalPromotion:
+			source.canonicalPromotion === null
+				? null
+				: pick(source.canonicalPromotion, [
+						'checkpointLedger',
+						'heartbeatAt',
+						'lastAttemptAt',
+						'lastErrorCode',
+						'lastFailureAt',
+						'lastOutcome',
+						'lastSuccessAt',
+						'nextLedger',
+						'startedAt',
+						'state'
+					])
+	};
 }
 
 function sanitizeArchiveSummary(value: unknown): Record<string, unknown> {

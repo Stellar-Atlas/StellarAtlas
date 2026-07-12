@@ -133,7 +133,7 @@ export function RecentTransactionsView({
 		<div className="explorer-transaction-feed">
 			<ExplorerState
 				tone="neutral"
-				text={`Transaction sample observed ${formatDate(result.transactions.generatedAt)} from the Stellar public API.`}
+				text={`Transaction sample observed ${formatDate(result.transactions.generatedAt)} from ${formatTransactionSource(result.transactions.source)}.`}
 			/>
 			{result.transactions.truncated ? (
 				<ExplorerState

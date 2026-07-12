@@ -495,7 +495,7 @@
 		"/v1/explorer/local-read-model": {
 			"get": {
 				"summary": "Get local explorer read-model coverage",
-				"description": "Reports StellarAtlas-owned parsed ledger-header coverage and explicitly marks transaction, asset, operation, and contract indexes as not ready until local full-history ETL is complete.",
+				"description": "Reports the exact proof-gated canonical ledger and transaction range stored by StellarAtlas, plus readiness for transaction, operation, asset, and contract indexes.",
 				"tags": ["Explorer"],
 				"operationId": "getExplorerLocalReadModel",
 				"responses": {
@@ -515,8 +515,8 @@
 		},
 		"/v1/explorer/local-transactions": {
 			"get": {
-				"summary": "Get recent locally parsed transactions",
-				"description": "Returns bounded recent transaction-result rows persisted by the archive parser, with parsed ledger-header and envelope join evidence when present. This proves local ETL progress without using Horizon.",
+				"summary": "Get recent canonical transactions",
+				"description": "Returns bounded transaction and matching result rows from StellarAtlas proof-gated canonical checkpoints. The response includes the exact bounded canonical coverage and does not use Horizon.",
 				"tags": ["Explorer"],
 				"operationId": "getExplorerLocalTransactions",
 				"parameters": [
@@ -545,8 +545,8 @@
 		},
 		"/v1/explorer/search": {
 			"get": {
-				"summary": "Search the Horizon-backed explorer helpers",
-				"description": "Searches transaction hashes, account IDs, ledger sequences, asset queries, and contract IDs using the currently configured Horizon/RPC helper paths.",
+				"summary": "Search explorer data",
+				"description": "Searches proof-gated canonical transactions first. Account, ledger, asset, operation, and contract queries use their configured helper only while the corresponding StellarAtlas local index is not ready.",
 				"tags": ["Explorer"],
 				"operationId": "searchExplorer",
 				"parameters": [
@@ -590,7 +590,7 @@
 		"/v1/explorer/transactions": {
 			"get": {
 				"summary": "Get recent transactions",
-				"description": "Returns a bounded recent transaction feed from configured Horizon.",
+				"description": "Returns a bounded recent feed from StellarAtlas proof-gated canonical history. The configured Horizon source is used only when no canonical transaction rows exist.",
 				"tags": ["Explorer"],
 				"operationId": "getExplorerRecentTransactions",
 				"parameters": [
@@ -618,7 +618,7 @@
 		"/v1/explorer/transactions/{hash}": {
 			"get": {
 				"summary": "Look up an explorer transaction",
-				"description": "Explorer namespace alias for Horizon-backed transaction lookup.",
+				"description": "Looks up a transaction in StellarAtlas proof-gated canonical history first, then uses the configured Horizon source only when the local canonical index has no matching row.",
 				"tags": ["Explorer"],
 				"operationId": "getExplorerTransactionByHash",
 				"parameters": [
@@ -846,8 +846,8 @@
 		},
 		"/v1/status/full-history": {
 			"get": {
-				"summary": "Get full-history parser status",
-				"description": "Returns persisted full-history parser readiness from archive-derived parsed ledger headers.",
+				"summary": "Get canonical full-history status",
+				"description": "Returns proof-gated canonical history coverage, continuous promotion runtime, and local explorer index readiness.",
 				"tags": ["Status", "Explorer"],
 				"operationId": "getFullHistoryStatus",
 				"responses": {
@@ -971,7 +971,7 @@
 		"/v1/transactions/{hash}": {
 			"get": {
 				"summary": "Look up a transaction by hash",
-				"description": "Returns lean public transaction facts from the configured Horizon source. This is a lookup boundary, not the full-history graph API.",
+				"description": "Returns lean transaction facts from StellarAtlas proof-gated canonical history first. The configured Horizon source is used only when the local canonical index has no matching row.",
 				"tags": ["Explorer"],
 				"operationId": "getTransactionByHash",
 				"parameters": [
@@ -1006,7 +1006,7 @@
 						}
 					},
 					"404": {
-						"description": "Transaction not found in configured Horizon",
+						"description": "Transaction not found",
 						"content": {
 							"application/json": {
 								"schema": { "$ref": "#/components/schemas/ErrorResponse" }
@@ -8685,7 +8685,7 @@
 					"operationCount": { "type": "integer", "minimum": 0 },
 					"source": {
 						"type": "string",
-						"enum": ["horizon"]
+						"enum": ["horizon", "postgres_canonical"]
 					},
 					"sourceAccount": { "type": "string" },
 					"successful": { "type": "boolean" }
@@ -8741,8 +8741,40 @@
 						"type": "array",
 						"items": { "$ref": "#/components/schemas/TransactionLookup" }
 					},
-					"source": { "type": "string", "enum": ["horizon"] },
+					"source": {
+						"type": "string",
+						"enum": ["horizon", "postgres_canonical"]
+					},
 					"truncated": { "type": "boolean" }
+				}
+			},
+			"ExplorerCanonicalCoverage": {
+				"type": "object",
+				"required": [
+					"archiveSourceCount",
+					"batchCount",
+					"firstLedger",
+					"lastLedger",
+					"latestLedgerClosedAt",
+					"ledgerCount",
+					"nextLedger",
+					"rangeKind",
+					"transactionCount",
+					"transactionResultCount",
+					"updatedAt"
+				],
+				"properties": {
+					"archiveSourceCount": { "type": "integer", "minimum": 1 },
+					"batchCount": { "type": "integer", "minimum": 1 },
+					"firstLedger": { "type": "string", "pattern": "^[0-9]+$" },
+					"lastLedger": { "type": "string", "pattern": "^[0-9]+$" },
+					"latestLedgerClosedAt": { "type": "string", "format": "date-time" },
+					"ledgerCount": { "type": "integer", "minimum": 1 },
+					"nextLedger": { "type": "string", "pattern": "^[0-9]+$" },
+					"rangeKind": { "type": "string", "enum": ["contiguous_bounded"] },
+					"transactionCount": { "type": "integer", "minimum": 0 },
+					"transactionResultCount": { "type": "integer", "minimum": 0 },
+					"updatedAt": { "type": "string", "format": "date-time" }
 				}
 			},
 			"ExplorerLocalReadModel": {
@@ -8768,7 +8800,7 @@
 							"assetIndexReady": { "type": "boolean", "enum": [false] },
 							"contractIndexReady": { "type": "boolean", "enum": [false] },
 							"operationIndexReady": { "type": "boolean", "enum": [false] },
-							"transactionIndexReady": { "type": "boolean", "enum": [false] }
+							"transactionIndexReady": { "type": "boolean" }
 						}
 					},
 					"parsedLedgerHeaders": {
@@ -8799,15 +8831,32 @@
 					},
 					"source": {
 						"type": "string",
-						"enum": ["parsed_ledger_header_repository"]
+						"enum": [
+							"full_history_canonical_repository",
+							"parsed_ledger_header_repository"
+						]
 					},
 					"transactions": {
 						"type": "object",
-						"required": ["localCoverage", "message", "source"],
+						"required": [
+							"canonicalCoverage",
+							"localCoverage",
+							"message",
+							"source"
+						],
 						"properties": {
-							"localCoverage": { "type": "boolean", "enum": [false] },
+							"canonicalCoverage": {
+								"nullable": true,
+								"allOf": [
+									{ "$ref": "#/components/schemas/ExplorerCanonicalCoverage" }
+								]
+							},
+							"localCoverage": { "type": "boolean" },
 							"message": { "type": "string" },
-							"source": { "type": "string", "enum": ["horizon_fallback"] }
+							"source": {
+								"type": "string",
+								"enum": ["horizon_fallback", "postgres_canonical"]
+							}
 						}
 					}
 				}
@@ -8815,14 +8864,22 @@
 			"ExplorerLocalTransactions": {
 				"type": "object",
 				"required": [
+					"canonicalCoverage",
 					"count",
 					"generatedAt",
 					"limit",
 					"readModel",
 					"records",
-					"source"
+					"source",
+					"truncated"
 				],
 				"properties": {
+					"canonicalCoverage": {
+						"nullable": true,
+						"allOf": [
+							{ "$ref": "#/components/schemas/ExplorerCanonicalCoverage" }
+						]
+					},
 					"count": { "type": "integer", "minimum": 0 },
 					"generatedAt": { "type": "string", "format": "date-time" },
 					"limit": { "type": "integer", "minimum": 1, "maximum": 50 },
@@ -8831,37 +8888,32 @@
 						"required": [
 							"assetIndexReady",
 							"contractIndexReady",
-							"envelopeJoinReady",
 							"evidenceSelection",
-							"ledgerHeaderJoinReady",
 							"operationIndexReady",
-							"parsedTransactionResultsReady"
+							"transactionIndexReady"
 						],
 						"properties": {
 							"assetIndexReady": { "type": "boolean", "enum": [false] },
 							"contractIndexReady": { "type": "boolean", "enum": [false] },
-							"envelopeJoinReady": { "type": "boolean" },
 							"evidenceSelection": {
 								"type": "string",
-								"enum": [
-									"parsed_transaction_result_joined_to_parsed_ledger_header_and_envelope"
-								]
+								"enum": ["proof_gated_canonical_transaction_and_result"]
 							},
-							"ledgerHeaderJoinReady": { "type": "boolean" },
 							"operationIndexReady": { "type": "boolean", "enum": [false] },
-							"parsedTransactionResultsReady": { "type": "boolean" }
+							"transactionIndexReady": { "type": "boolean" }
 						}
 					},
 					"records": {
 						"type": "array",
 						"items": {
-							"$ref": "#/components/schemas/ExplorerLocalTransaction"
+							"$ref": "#/components/schemas/TransactionLookup"
 						}
 					},
 					"source": {
 						"type": "string",
-						"enum": ["parsed_history_postgres"]
-					}
+						"enum": ["postgres_canonical"]
+					},
+					"truncated": { "type": "boolean" }
 				}
 			},
 			"ExplorerLocalTransaction": {
@@ -9130,12 +9182,118 @@
 							"unknown"
 						]
 					},
-					"source": { "type": "string", "enum": ["horizon", "rpc"] }
+					"source": {
+						"type": "string",
+						"enum": ["horizon", "postgres_canonical", "rpc"]
+					}
+				}
+			},
+			"CanonicalFullHistoryCoverage": {
+				"type": "object",
+				"required": [
+					"archiveSourceCount",
+					"source",
+					"rangeKind",
+					"batchCount",
+					"ledgerCount",
+					"transactionCount",
+					"transactionResultCount",
+					"firstLedger",
+					"lastLedger",
+					"nextLedger",
+					"latestLedgerClosedAt",
+					"updatedAt"
+				],
+				"properties": {
+					"archiveSourceCount": { "type": "integer", "minimum": 1 },
+					"source": { "type": "string", "enum": ["postgres_canonical"] },
+					"rangeKind": { "type": "string", "enum": ["contiguous_bounded"] },
+					"batchCount": { "type": "integer", "minimum": 1 },
+					"ledgerCount": { "type": "integer", "minimum": 1 },
+					"transactionCount": { "type": "integer", "minimum": 0 },
+					"transactionResultCount": { "type": "integer", "minimum": 0 },
+					"firstLedger": { "type": "string", "pattern": "^[0-9]+$" },
+					"lastLedger": { "type": "string", "pattern": "^[0-9]+$" },
+					"nextLedger": { "type": "string", "pattern": "^[0-9]+$" },
+					"latestLedgerClosedAt": { "type": "string", "format": "date-time" },
+					"updatedAt": { "type": "string", "format": "date-time" }
+				}
+			},
+			"CanonicalFullHistoryPromotion": {
+				"type": "object",
+				"required": [
+					"checkpointLedger",
+					"heartbeatAt",
+					"lastAttemptAt",
+					"lastErrorCode",
+					"lastFailureAt",
+					"lastOutcome",
+					"lastSuccessAt",
+					"nextLedger",
+					"startedAt",
+					"state"
+				],
+				"properties": {
+					"checkpointLedger": {
+						"type": "string",
+						"pattern": "^[0-9]+$",
+						"nullable": true
+					},
+					"heartbeatAt": { "type": "string", "format": "date-time" },
+					"lastAttemptAt": {
+						"type": "string",
+						"format": "date-time",
+						"nullable": true
+					},
+					"lastErrorCode": {
+						"type": "string",
+						"maxLength": 64,
+						"nullable": true
+					},
+					"lastFailureAt": {
+						"type": "string",
+						"format": "date-time",
+						"nullable": true
+					},
+					"lastOutcome": {
+						"type": "string",
+						"enum": [
+							"bootstrap-required",
+							"proof-pending",
+							"promoted",
+							"replayed"
+						],
+						"nullable": true
+					},
+					"lastSuccessAt": {
+						"type": "string",
+						"format": "date-time",
+						"nullable": true
+					},
+					"nextLedger": {
+						"type": "string",
+						"pattern": "^[0-9]+$",
+						"nullable": true
+					},
+					"startedAt": { "type": "string", "format": "date-time" },
+					"state": {
+						"type": "string",
+						"enum": [
+							"failed",
+							"promoting",
+							"running",
+							"stale",
+							"stopped",
+							"waiting-for-proof"
+						]
+					}
 				}
 			},
 			"FullHistoryStatus": {
 				"type": "object",
 				"required": [
+					"canonicalCoverage",
+					"canonicalPromotion",
 					"generatedAt",
 					"status",
 					"mode",
@@ -9150,6 +9308,18 @@
 					"localContractIndexReady"
 				],
 				"properties": {
+					"canonicalCoverage": {
+						"nullable": true,
+						"allOf": [
+							{ "$ref": "#/components/schemas/CanonicalFullHistoryCoverage" }
+						]
+					},
+					"canonicalPromotion": {
+						"nullable": true,
+						"allOf": [
+							{ "$ref": "#/components/schemas/CanonicalFullHistoryPromotion" }
+						]
+					},
 					"generatedAt": { "type": "string", "format": "date-time" },
 					"status": {
 						"type": "string",
@@ -9157,9 +9327,13 @@
 					},
 					"mode": {
 						"type": "string",
-						"enum": ["archive_header_parser"]
+						"enum": ["archive_header_parser", "canonical_checkpoint_index"]
 					},
-					"parsedLedgerCount": { "type": "integer", "minimum": 0 },
+					"parsedLedgerCount": {
+						"type": "integer",
+						"minimum": 0,
+						"nullable": true
+					},
 					"earliestParsedLedger": { "type": "string", "nullable": true },
 					"latestParsedLedger": { "type": "string", "nullable": true },
 					"latestObservedAt": {
@@ -9167,7 +9341,11 @@
 						"format": "date-time",
 						"nullable": true
 					},
-					"sourceArchiveCount": { "type": "integer", "minimum": 0 },
+					"sourceArchiveCount": {
+						"type": "integer",
+						"minimum": 0,
+						"nullable": true
+					},
 					"localTransactionIndexReady": { "type": "boolean" },
 					"localOperationIndexReady": { "type": "boolean" },
 					"localAssetIndexReady": { "type": "boolean" },

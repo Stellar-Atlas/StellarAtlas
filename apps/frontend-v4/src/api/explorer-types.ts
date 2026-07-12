@@ -4,7 +4,7 @@ export interface PublicExplorerLocalReadModel {
 		readonly assetIndexReady: false;
 		readonly contractIndexReady: false;
 		readonly operationIndexReady: false;
-		readonly transactionIndexReady: false;
+		readonly transactionIndexReady: boolean;
 	};
 	readonly parsedLedgerHeaders: {
 		readonly earliestParsedLedger: string | null;
@@ -14,10 +14,27 @@ export interface PublicExplorerLocalReadModel {
 		readonly parsedLedgerCount: number;
 		readonly sourceArchiveCount: number;
 	};
-	readonly source: 'parsed_ledger_header_repository';
+	readonly source:
+		| 'full_history_canonical_repository'
+		| 'parsed_ledger_header_repository';
 	readonly transactions: {
-		readonly localCoverage: false;
+		readonly canonicalCoverage: PublicExplorerCanonicalCoverage | null;
+		readonly localCoverage: boolean;
 		readonly message: string;
-		readonly source: 'horizon_fallback';
+		readonly source: 'horizon_fallback' | 'postgres_canonical';
 	};
+}
+
+export interface PublicExplorerCanonicalCoverage {
+	readonly archiveSourceCount: number;
+	readonly batchCount: number;
+	readonly firstLedger: string;
+	readonly lastLedger: string;
+	readonly latestLedgerClosedAt: string;
+	readonly ledgerCount: number;
+	readonly nextLedger: string;
+	readonly rangeKind: 'contiguous_bounded';
+	readonly transactionCount: number;
+	readonly transactionResultCount: number;
+	readonly updatedAt: string;
 }

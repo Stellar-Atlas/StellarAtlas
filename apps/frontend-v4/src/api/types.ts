@@ -41,14 +41,14 @@ export interface PublicLedgerTransaction {
 
 export interface PublicTransactionLookup extends PublicLedgerTransaction {
 	readonly ledger: string;
-	readonly source: 'horizon';
+	readonly source: 'horizon' | 'postgres_canonical';
 }
 
 export interface PublicRecentTransactions {
 	readonly generatedAt: string;
 	readonly limit: number;
 	readonly records: readonly PublicTransactionLookup[];
-	readonly source: 'horizon';
+	readonly source: 'horizon' | 'postgres_canonical';
 	readonly truncated: boolean;
 }
 
@@ -68,7 +68,7 @@ export interface PublicLatestLedger {
 	readonly source?: 'horizon_fallback' | 'network_scan' | 'scp_live_collector';
 }
 
-export type PublicExplorerSource = 'horizon' | 'rpc';
+export type PublicExplorerSource = 'horizon' | 'postgres_canonical' | 'rpc';
 export type PublicExplorerSearchType =
 	'account' | 'asset' | 'auto' | 'contract' | 'ledger' | 'transaction';
 
@@ -331,6 +331,8 @@ export interface PublicConfiguredServiceStatus {
 }
 
 export interface PublicFullHistoryStatus {
+	readonly canonicalCoverage: PublicCanonicalFullHistoryCoverage | null;
+	readonly canonicalPromotion: PublicCanonicalFullHistoryPromotion | null;
 	readonly earliestParsedLedger: string | null;
 	readonly generatedAt: string;
 	readonly latestObservedAt: string | null;
@@ -339,10 +341,45 @@ export interface PublicFullHistoryStatus {
 	readonly localContractIndexReady: boolean;
 	readonly localOperationIndexReady: boolean;
 	readonly localTransactionIndexReady: boolean;
-	readonly mode: 'archive_header_parser';
-	readonly parsedLedgerCount: number;
-	readonly sourceArchiveCount: number;
+	readonly mode: 'archive_header_parser' | 'canonical_checkpoint_index';
+	readonly parsedLedgerCount: number | null;
+	readonly sourceArchiveCount: number | null;
 	readonly status: PublicStatusLevel;
+}
+
+export interface PublicCanonicalFullHistoryPromotion {
+	readonly checkpointLedger: string | null;
+	readonly heartbeatAt: string;
+	readonly lastAttemptAt: string | null;
+	readonly lastErrorCode: string | null;
+	readonly lastFailureAt: string | null;
+	readonly lastOutcome:
+		'bootstrap-required' | 'proof-pending' | 'promoted' | 'replayed' | null;
+	readonly lastSuccessAt: string | null;
+	readonly nextLedger: string | null;
+	readonly startedAt: string;
+	readonly state:
+		| 'failed'
+		| 'promoting'
+		| 'running'
+		| 'stale'
+		| 'stopped'
+		| 'waiting-for-proof';
+}
+
+export interface PublicCanonicalFullHistoryCoverage {
+	readonly archiveSourceCount: number;
+	readonly batchCount: number;
+	readonly firstLedger: string;
+	readonly lastLedger: string;
+	readonly latestLedgerClosedAt: string;
+	readonly ledgerCount: number;
+	readonly nextLedger: string;
+	readonly rangeKind: 'contiguous_bounded';
+	readonly source: 'postgres_canonical';
+	readonly transactionCount: number;
+	readonly transactionResultCount: number;
+	readonly updatedAt: string;
 }
 
 export interface PublicFailoverStatus {

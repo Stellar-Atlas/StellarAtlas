@@ -79,8 +79,10 @@ export function assessKnownArchiveEvidence(
 		return 'waiting';
 	}
 	if (
-		objects.totalObjects > 0 &&
-		objects.verifiedObjects === objects.totalObjects &&
+		checkpoints.totalCheckpoints > 0 &&
+		checkpoints.verifiedCheckpoints === checkpoints.totalCheckpoints &&
+		checkpoints.pendingCheckpoints === 0 &&
+		checkpoints.mismatchedCheckpoints === 0 &&
 		checkpoints.notEvaluableCheckpoints === 0
 	) {
 		return 'verified';

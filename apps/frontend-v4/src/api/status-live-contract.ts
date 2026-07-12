@@ -4,11 +4,32 @@ import type {
 	PublicDataQualityStatus,
 	PublicHistoryArchiveObjectEvents,
 	PublicHistoryArchiveStatusSummary,
+	PublicFullHistoryStatus,
 	PublicScanLogStatus,
 	PublicWorkerStatus
 } from './types';
 import { sanitizeStatusLiveField } from './status-live-sanitizers';
 import { parseWorkerStatusDTO } from './worker-status-parser';
+import {
+	arrayOf,
+	boolean,
+	dateTime,
+	isRecord,
+	literal,
+	matches,
+	nonEmptyString,
+	nonNegativeInteger,
+	nullable,
+	number,
+	oneOf,
+	oneOfType,
+	positiveInteger,
+	statusLevel,
+	string,
+	type StatusLiveValidator,
+	unsignedIntegerString,
+	uuid
+} from './status-live-validator-primitives';
 
 export interface StatusLiveSnapshot {
 	readonly api: PublicApiStatus;
@@ -16,6 +37,7 @@ export interface StatusLiveSnapshot {
 	readonly archiveSummary: PublicHistoryArchiveStatusSummary;
 	readonly dataQuality: PublicDataQualityStatus;
 	readonly frontend: PublicConfiguredServiceStatus;
+	readonly fullHistory: PublicFullHistoryStatus;
 	readonly generatedAt: string;
 	readonly scanLogs: PublicScanLogStatus;
 	readonly workers: PublicWorkerStatus;
@@ -31,6 +53,7 @@ const patchFields = new Set([
 	'archiveSummary',
 	'dataQuality',
 	'frontend',
+	'fullHistory',
 	'generatedAt',
 	'scanLogs',
 	'workers'
@@ -41,11 +64,10 @@ const snapshotFields = [
 	'archiveSummary',
 	'dataQuality',
 	'frontend',
+	'fullHistory',
 	'scanLogs',
 	'workers'
 ] as const;
-
-type Validator = (value: unknown) => boolean;
 
 export function parseStatusLivePayload(
 	value: unknown,
@@ -77,8 +99,65 @@ export function parseStatusLivePayload(
 	return parsed as StatusLivePatch | StatusLiveSnapshot;
 }
 
+const validateCanonicalCoverage = matches({
+	archiveSourceCount: nonNegativeInteger,
+	batchCount: nonNegativeInteger,
+	firstLedger: unsignedIntegerString,
+	lastLedger: unsignedIntegerString,
+	latestLedgerClosedAt: dateTime,
+	ledgerCount: nonNegativeInteger,
+	nextLedger: unsignedIntegerString,
+	rangeKind: literal('contiguous_bounded'),
+	source: literal('postgres_canonical'),
+	transactionCount: nonNegativeInteger,
+	transactionResultCount: nonNegativeInteger,
+	updatedAt: dateTime
+});
+
+const validateCanonicalPromotion = matches({
+	checkpointLedger: nullable(unsignedIntegerString),
+	heartbeatAt: dateTime,
+	lastAttemptAt: nullable(dateTime),
+	lastErrorCode: nullable(string),
+	lastFailureAt: nullable(dateTime),
+	lastOutcome: nullable(
+		oneOf('bootstrap-required', 'proof-pending', 'promoted', 'replayed')
+	),
+	lastSuccessAt: nullable(dateTime),
+	nextLedger: nullable(unsignedIntegerString),
+	startedAt: dateTime,
+	state: oneOf(
+		'failed',
+		'promoting',
+		'running',
+		'stale',
+		'stopped',
+		'waiting-for-proof'
+	)
+});
+
+const validateFullHistory = matches({
+	canonicalCoverage: nullable(validateCanonicalCoverage),
+	canonicalPromotion: nullable(validateCanonicalPromotion),
+	earliestParsedLedger: nullable(unsignedIntegerString),
+	generatedAt: dateTime,
+	latestObservedAt: nullable(dateTime),
+	latestParsedLedger: nullable(unsignedIntegerString),
+	localAssetIndexReady: boolean,
+	localContractIndexReady: boolean,
+	localOperationIndexReady: boolean,
+	localTransactionIndexReady: boolean,
+	mode: oneOf('archive_header_parser', 'canonical_checkpoint_index'),
+	parsedLedgerCount: nullable(nonNegativeInteger),
+	sourceArchiveCount: nullable(nonNegativeInteger),
+	status: statusLevel
+});
+
 const fieldValidators: Readonly<
-	Record<Exclude<(typeof snapshotFields)[number], 'workers'>, Validator>
+	Record<
+		Exclude<(typeof snapshotFields)[number], 'workers'>,
+		StatusLiveValidator
+	>
 > = {
 	api: matches({
 		generatedAt: dateTime,
@@ -104,6 +183,7 @@ const fieldValidators: Readonly<
 		status: statusLevel,
 		url: nullable(string)
 	}),
+	fullHistory: validateFullHistory,
 	scanLogs: validateScanLogs
 };
 
@@ -412,88 +492,3 @@ const validateNetworkScanLog = matches({
 	status: oneOf('ok', 'incomplete'),
 	time: dateTime
 });
-
-function matches(
-	required: Readonly<Record<string, Validator>>,
-	optional: Readonly<Record<string, Validator>> = {}
-): Validator {
-	return (value) => {
-		if (!isRecord(value)) return false;
-		for (const [field, validator] of Object.entries(required)) {
-			if (!Object.hasOwn(value, field) || !validator(value[field]))
-				return false;
-		}
-		for (const [field, validator] of Object.entries(optional)) {
-			if (Object.hasOwn(value, field) && !validator(value[field])) return false;
-		}
-		return true;
-	};
-}
-
-function arrayOf(validator: Validator, limit: number): Validator {
-	return (value) =>
-		Array.isArray(value) &&
-		value.length <= limit &&
-		value.every((entry) => validator(entry));
-}
-
-function nullable(validator: Validator): Validator {
-	return (value) => value === null || validator(value);
-}
-
-function oneOf(...values: readonly unknown[]): Validator {
-	return (value) => values.includes(value);
-}
-
-function oneOfType(...validators: readonly Validator[]): Validator {
-	return (value) => validators.some((validator) => validator(value));
-}
-
-function literal(expected: unknown): Validator {
-	return (value) => value === expected;
-}
-
-function boolean(value: unknown): value is boolean {
-	return typeof value === 'boolean';
-}
-
-function string(value: unknown): value is string {
-	return typeof value === 'string';
-}
-
-function nonEmptyString(value: unknown): value is string {
-	return typeof value === 'string' && value.length > 0;
-}
-
-function number(value: unknown): value is number {
-	return typeof value === 'number' && Number.isFinite(value);
-}
-
-function positiveInteger(value: unknown): value is number {
-	return Number.isSafeInteger(value) && Number(value) > 0;
-}
-
-function nonNegativeInteger(value: unknown): value is number {
-	return Number.isSafeInteger(value) && Number(value) >= 0;
-}
-
-function dateTime(value: unknown): value is string {
-	return typeof value === 'string' && !Number.isNaN(Date.parse(value));
-}
-
-function statusLevel(value: unknown): boolean {
-	return value === 'ok' || value === 'degraded' || value === 'unavailable';
-}
-
-function uuid(value: unknown): boolean {
-	return (
-		typeof value === 'string' &&
-		/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
-			value
-		)
-	);
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-	return typeof value === 'object' && value !== null && !Array.isArray(value);
-}
