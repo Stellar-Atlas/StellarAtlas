@@ -48,12 +48,12 @@ export class GetHistoryArchiveObjectJob {
 
 	async execute(): Promise<Result<HistoryArchiveObjectJobDTO | null, Error>> {
 		try {
-			await this.transitionReconciler.executeIfDue();
+			this.reconcileInBackground();
 			const staleObjects = await this.objectRepository.releaseStaleObjects(
 				getStaleObjectCutoff()
 			);
 			for (const staleObject of staleObjects) {
-				await this.refreshProof(staleObject);
+				this.refreshProofInBackground(staleObject);
 				await this.eventRecorder.recordDurably(staleObject, {
 					claimAttempt: staleObject.attempts,
 					eventType: 'released'
@@ -62,7 +62,6 @@ export class GetHistoryArchiveObjectJob {
 			const object =
 				await this.objectRepository.claimNextObject(supportedObjectTypes);
 			if (object === null) return ok(null);
-			await this.refreshProof(object);
 			await this.eventRecorder.record(object, {
 				claimAttempt: object.attempts,
 				eventType: 'claimed'
@@ -88,9 +87,28 @@ export class GetHistoryArchiveObjectJob {
 		}
 	}
 
+	private reconcileInBackground(): void {
+		void this.transitionReconciler.executeIfDue().catch((error: unknown) => {
+			this.logger.error('Failed to reconcile archive object background work', {
+				app: 'history-scan-coordinator',
+				errorMessage: mapUnknownToError(error).message
+			});
+		});
+	}
+
 	private async refreshProof(object: HistoryArchiveObject): Promise<void> {
 		if (object.checkpointLedger === null && object.bucketHash === null) return;
 		await this.checkpointProofRepository.refreshForObject(object);
+	}
+
+	private refreshProofInBackground(object: HistoryArchiveObject): void {
+		void this.refreshProof(object).catch((error: unknown) => {
+			this.logger.error('Failed to refresh claimed archive proof', {
+				app: 'history-scan-coordinator',
+				errorMessage: mapUnknownToError(error).message,
+				remoteId: object.remoteId
+			});
+		});
 	}
 }
 

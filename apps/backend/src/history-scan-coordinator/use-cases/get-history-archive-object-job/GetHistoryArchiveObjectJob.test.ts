@@ -20,6 +20,7 @@ describe('GetHistoryArchiveObjectJob', () => {
 		const eventRecorder = mock<HistoryArchiveObjectEventRecorder>();
 		const transitionReconciler =
 			mock<ReconcileHistoryArchiveObjectTransitions>();
+		transitionReconciler.executeIfDue.mockResolvedValue();
 		const useCase = new GetHistoryArchiveObjectJob(
 			objectRepository,
 			proofRepository,
@@ -33,10 +34,7 @@ describe('GetHistoryArchiveObjectJob', () => {
 			remoteId: claimed.remoteId
 		});
 		expect(proofRepository.refreshForObject).toHaveBeenNthCalledWith(1, stale);
-		expect(proofRepository.refreshForObject).toHaveBeenNthCalledWith(
-			2,
-			claimed
-		);
+		expect(proofRepository.refreshForObject).toHaveBeenCalledTimes(1);
 		expect(eventRecorder.recordDurably).toHaveBeenCalledWith(stale, {
 			claimAttempt: 1,
 			eventType: 'released'
@@ -46,6 +44,50 @@ describe('GetHistoryArchiveObjectJob', () => {
 			eventType: 'claimed'
 		});
 		expect(transitionReconciler.executeIfDue).toHaveBeenCalledTimes(1);
+	});
+
+	it('does not block a claim while reconciliation is still running', async () => {
+		const objectRepository = mock<HistoryArchiveObjectRepository>();
+		objectRepository.releaseStaleObjects.mockResolvedValue([]);
+		objectRepository.claimNextObject.mockResolvedValue(null);
+		const transitionReconciler =
+			mock<ReconcileHistoryArchiveObjectTransitions>();
+		transitionReconciler.executeIfDue.mockReturnValue(new Promise(() => {}));
+		const useCase = new GetHistoryArchiveObjectJob(
+			objectRepository,
+			mock<HistoryArchiveCheckpointProofRepository>(),
+			mock<HistoryArchiveObjectEventRecorder>(),
+			transitionReconciler,
+			mock<Logger>()
+		);
+
+		await expect(useCase.execute()).resolves.toMatchObject({
+			value: null
+		});
+		expect(objectRepository.claimNextObject).toHaveBeenCalledTimes(1);
+	});
+
+	it('does not recompute proof state when merely claiming a job', async () => {
+		const claimed = checkpointObject(255, 'scanning');
+		const objectRepository = mock<HistoryArchiveObjectRepository>();
+		objectRepository.releaseStaleObjects.mockResolvedValue([]);
+		objectRepository.claimNextObject.mockResolvedValue(claimed);
+		const proofRepository = mock<HistoryArchiveCheckpointProofRepository>();
+		const transitionReconciler =
+			mock<ReconcileHistoryArchiveObjectTransitions>();
+		transitionReconciler.executeIfDue.mockResolvedValue();
+		const useCase = new GetHistoryArchiveObjectJob(
+			objectRepository,
+			proofRepository,
+			mock<HistoryArchiveObjectEventRecorder>(),
+			transitionReconciler,
+			mock<Logger>()
+		);
+
+		await expect(useCase.execute()).resolves.toMatchObject({
+			value: expect.objectContaining({ remoteId: claimed.remoteId })
+		});
+		expect(proofRepository.refreshForObject).not.toHaveBeenCalled();
 	});
 });
 
