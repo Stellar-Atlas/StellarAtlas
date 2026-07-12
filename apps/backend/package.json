@@ -16,7 +16,7 @@
 		"backfill-organization-toml-evidence": "node lib/network-scan/infrastructure/cli/backfill-organization-toml-evidence.js",
 		"migrations": "node lib/core/infrastructure/cli/database-migrations.js",
 		"migrations:apply": "node lib/core/infrastructure/cli/database-migrations.js --apply",
-		"start-api": "node lib/core/infrastructure/http/api.js",
+		"start-api": "node lib/core/infrastructure/http/api-cluster.js",
 		"refresh-api-docs-comparison": "node lib/cross-check/infrastructure/cli/refresh-api-docs-comparison-snapshot.js",
 		"refresh-radar-network-comparison": "node lib/cross-check/infrastructure/cli/refresh-radar-network-comparison-snapshot.js",
 		"promote-full-history-checkpoint": "node lib/history-scan-coordinator/infrastructure/cli/full-history-promotion/promote-full-history-checkpoint.js",
