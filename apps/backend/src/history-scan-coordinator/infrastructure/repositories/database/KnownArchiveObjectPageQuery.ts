@@ -72,6 +72,20 @@ const objectFilterSql = `
 	and archive_object."createdAt" <= $5::timestamptz
 `;
 
+const objectCandidateFilterSql = `
+	archive_object."archiveUrlIdentity" = requested_root."archiveUrlIdentity"
+	and ($3::text is null or archive_object."objectType" = $3::text)
+	and ($4::text is null or archive_object.status = $4::text)
+	and archive_object."createdAt" <= $5::timestamptz
+	and (
+		$6::timestamptz is null
+		or (
+			archive_object."createdAt",
+			archive_object."remoteId"
+		) < ($6::timestamptz, $7::uuid)
+	)
+`;
+
 export const knownArchiveObjectCountSql = `
 	select count(*) as "objectCount"
 	from history_archive_object_queue archive_object
@@ -80,6 +94,26 @@ export const knownArchiveObjectCountSql = `
 
 export const knownArchiveObjectPageSql = `
 	with
+	requested_roots as materialized (
+		select distinct identity as "archiveUrlIdentity"
+		from unnest($1::text[]) requested(identity)
+		where $2::text is null or identity = $2::text
+	),
+	page_keys as materialized (
+		select candidate."createdAt", candidate."remoteId"
+		from requested_roots requested_root
+		cross join lateral (
+			select archive_object."createdAt", archive_object."remoteId"
+			from history_archive_object_queue archive_object
+			where ${objectCandidateFilterSql}
+			order by
+				archive_object."createdAt" desc,
+				archive_object."remoteId" desc
+			limit $8
+		) candidate
+		order by candidate."createdAt" desc, candidate."remoteId" desc
+		limit $8
+	),
 	active_total as (
 		select count(*)::int as active_count
 		from history_archive_object_queue
@@ -148,7 +182,9 @@ export const knownArchiveObjectPageSql = `
 				then archive_object."nextAttemptAt"
 			else null
 		end as "delayReasonUntil"
-	from history_archive_object_queue archive_object
+	from page_keys page_key
+	join history_archive_object_queue archive_object
+		on archive_object."remoteId" = page_key."remoteId"
 	cross join active_total
 	left join active_archive
 		on active_archive."archiveUrlIdentity" =
@@ -157,16 +193,7 @@ export const knownArchiveObjectPageSql = `
 		on active_host."hostIdentity" = archive_object."hostIdentity"
 	left join host_throttle
 		on host_throttle."hostIdentity" = archive_object."hostIdentity"
-	where ${objectFilterSql}
-		and (
-			$6::timestamptz is null
-			or (
-				archive_object."createdAt",
-				archive_object."remoteId"
-			) < ($6::timestamptz, $7::uuid)
-		)
 	order by
-		archive_object."createdAt" desc,
-		archive_object."remoteId" desc
-	limit $8
+		page_key."createdAt" desc,
+		page_key."remoteId" desc
 `;

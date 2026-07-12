@@ -118,6 +118,12 @@ describe('known archive page queries', () => {
 		]);
 		expect(knownArchiveObjectPageSql).toContain('end as "delayReasonCode"');
 		expect(knownArchiveObjectPageSql).toContain('end as "delayReasonUntil"');
+		expect(knownArchiveObjectPageSql).toContain(
+			'page_keys as materialized'
+		);
+		expect(knownArchiveObjectPageSql).toContain(
+			'join history_archive_object_queue archive_object'
+		);
 		expect(knownArchiveObjectPageSql).toContain("then 'host-backoff'");
 		expect(knownArchiveObjectPageSql).toContain("then 'missing-dependency'");
 	});
