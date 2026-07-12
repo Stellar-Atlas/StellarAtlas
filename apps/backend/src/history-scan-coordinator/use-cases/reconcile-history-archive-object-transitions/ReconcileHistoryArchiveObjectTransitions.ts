@@ -27,7 +27,6 @@ export class ReconcileHistoryArchiveObjectTransitions {
 
 		await this.objectRepository.tryWithTransitionReconciliationLock(
 			async () => {
-				await this.objectRepository.reconcileExecutionDisposition();
 				const checkpoints =
 					await this.objectRepository.findVerifiedCheckpointsNeedingReconciliation(
 						reconciliationBatchSize
@@ -54,6 +53,14 @@ export class ReconcileHistoryArchiveObjectTransitions {
 					} catch (error) {
 						this.logFailure(error, object, 'transition');
 					}
+				}
+				try {
+					await this.objectRepository.reconcileExecutionDisposition();
+				} catch (error) {
+					this.logger.error('Failed to reconcile archive execution frontier', {
+						app: 'history-scan-coordinator',
+						errorMessage: error instanceof Error ? error.message : String(error)
+					});
 				}
 			}
 		);
