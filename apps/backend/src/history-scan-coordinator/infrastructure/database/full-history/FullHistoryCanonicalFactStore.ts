@@ -56,6 +56,16 @@ export async function storeCanonicalFacts(
 	input: FullHistoryCheckpointWrite,
 	networkHash: FullHistoryHash
 ): Promise<void> {
+	await storeCanonicalBaseFacts(manager, input, networkHash);
+	await storeCanonicalOperations(manager, input, networkHash);
+	await assertCanonicalOperations(manager, input);
+}
+
+export async function storeCanonicalBaseFacts(
+	manager: EntityManager,
+	input: FullHistoryCheckpointWrite,
+	networkHash: FullHistoryHash
+): Promise<void> {
 	await insertLedgers(manager, input, networkHash);
 	for (const chunk of chunkFullHistoryValues(
 		input.transactions,
@@ -63,17 +73,25 @@ export async function storeCanonicalFacts(
 	)) {
 		await insertTransactions(manager, input.batchId, networkHash, chunk);
 	}
-	await storeCanonicalOperations(manager, input, networkHash);
 	for (const chunk of chunkFullHistoryValues(
 		input.results,
 		transactionChunkSize
 	)) {
 		await insertResults(manager, input.batchId, networkHash, chunk);
 	}
-	await assertCanonicalFacts(manager, input, networkHash);
+	await assertCanonicalBaseFacts(manager, input, networkHash);
 }
 
 export async function assertCanonicalFacts(
+	manager: EntityManager,
+	input: FullHistoryCheckpointWrite,
+	networkHash: FullHistoryHash
+): Promise<void> {
+	await assertCanonicalBaseFacts(manager, input, networkHash);
+	await assertCanonicalOperations(manager, input);
+}
+
+export async function assertCanonicalBaseFacts(
 	manager: EntityManager,
 	input: FullHistoryCheckpointWrite,
 	networkHash: FullHistoryHash
@@ -91,8 +109,6 @@ export async function assertCanonicalFacts(
 			'Canonical rows differ from the immutable checkpoint batch'
 		);
 	}
-	await assertCanonicalOperations(manager, input);
-
 	const wrongNetworkRows = (await manager.query(
 		`
 			select count(*)::integer as count

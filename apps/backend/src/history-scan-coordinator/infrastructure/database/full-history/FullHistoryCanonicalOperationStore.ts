@@ -3,6 +3,7 @@ import type { FullHistoryCheckpointWrite } from '../../../domain/full-history/Fu
 import type { FullHistoryOperationInput } from '../../../domain/full-history/FullHistoryCanonicalOperation.js';
 import { FullHistoryCanonicalError } from '../../../domain/full-history/FullHistoryCanonicalError.js';
 import {
+	assertBoundedText,
 	FullHistoryHash,
 	type FullHistoryLedgerSequence
 } from '../../../domain/full-history/FullHistoryCanonicalTypes.js';
@@ -29,37 +30,42 @@ interface OperationCoverageRow {
 	readonly firstLedger: FullHistoryLedgerSequence;
 	readonly lastLedger: FullHistoryLedgerSequence;
 	readonly operationCount: number;
+	readonly operationDecoderVersion: string;
 	readonly transactionCount: number;
 }
 
 export async function storeCanonicalOperations(
 	manager: EntityManager,
 	input: FullHistoryCheckpointWrite,
-	networkHash: FullHistoryHash
+	networkHash: FullHistoryHash,
+	operationDecoderVersion = input.decoderVersion
 ): Promise<void> {
+	assertBoundedText(operationDecoderVersion, 'operationDecoderVersion', 128);
 	for (const operations of chunkFullHistoryValues(
 		input.operations,
 		operationChunkSize
 	)) {
-		await insertOperations(
-			manager,
-			input.batchId,
-			networkHash,
-			operations
-		);
+		await insertOperations(manager, input.batchId, networkHash, operations);
 	}
-	await insertOperationCoverage(manager, input, networkHash);
+	await insertOperationCoverage(
+		manager,
+		input,
+		networkHash,
+		operationDecoderVersion
+	);
 }
 
 export async function assertCanonicalOperations(
 	manager: EntityManager,
-	input: FullHistoryCheckpointWrite
+	input: FullHistoryCheckpointWrite,
+	operationDecoderVersion = input.decoderVersion
 ): Promise<void> {
+	assertBoundedText(operationDecoderVersion, 'operationDecoderVersion', 128);
 	const rows = await readOperations(manager, input.batchId);
 	const coverageRows = await readOperationCoverage(manager, input.batchId);
 	if (
 		!operationsMatch(rows, input.operations) ||
-		!operationCoverageMatches(coverageRows, input)
+		!operationCoverageMatches(coverageRows, input, operationDecoderVersion)
 	) {
 		throw new FullHistoryCanonicalError(
 			'canonical-row-conflict',
@@ -71,15 +77,16 @@ export async function assertCanonicalOperations(
 async function insertOperationCoverage(
 	manager: EntityManager,
 	input: FullHistoryCheckpointWrite,
-	networkHash: FullHistoryHash
+	networkHash: FullHistoryHash,
+	operationDecoderVersion: string
 ): Promise<void> {
 	await manager.query(
 		`
 			insert into "full_history_operation_batch_coverage" (
 				"batch_id", "network_passphrase_hash", "first_ledger",
 				"last_ledger", "transaction_count", "operation_count",
-				"fact_scope"
-			) values ($1, $2, $3, $4, $5, $6, $7)
+				"fact_scope", "operation_decoder_version"
+			) values ($1, $2, $3, $4, $5, $6, $7, $8)
 			on conflict do nothing
 		`,
 		[
@@ -89,7 +96,8 @@ async function insertOperationCoverage(
 			input.lastLedger,
 			input.transactions.length,
 			input.operations.length,
-			'operation_body_and_envelope'
+			'operation_body_and_envelope',
+			operationDecoderVersion
 		]
 	);
 }
@@ -161,6 +169,7 @@ async function readOperationCoverage(
 				"last_ledger"::text as "lastLedger",
 				"transaction_count" as "transactionCount",
 				"operation_count" as "operationCount",
+				"operation_decoder_version" as "operationDecoderVersion",
 				"fact_scope" as "factScope"
 			from "full_history_operation_batch_coverage"
 			where "batch_id" = $1
@@ -197,7 +206,8 @@ function operationsMatch(
 
 function operationCoverageMatches(
 	rows: readonly OperationCoverageRow[],
-	input: FullHistoryCheckpointWrite
+	input: FullHistoryCheckpointWrite,
+	operationDecoderVersion: string
 ): boolean {
 	const row = rows[0];
 	return (
@@ -207,6 +217,7 @@ function operationCoverageMatches(
 		row.lastLedger === input.lastLedger &&
 		row.transactionCount === input.transactions.length &&
 		row.operationCount === input.operations.length &&
+		row.operationDecoderVersion === operationDecoderVersion &&
 		row.factScope === 'operation_body_and_envelope'
 	);
 }

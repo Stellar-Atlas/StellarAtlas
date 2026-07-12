@@ -56,7 +56,7 @@ export async function findCanonicalOperations(
 				batch."checkpoint_ledger"::text as "checkpointLedger",
 				batch."checkpoint_proof_id" as "checkpointProofId",
 				ledger."closed_at" as "closedAt",
-				batch."decoder_version" as "decoderVersion",
+				coverage."operation_decoder_version" as "decoderVersion",
 				operation."fact_scope" as "factScope",
 				operation."ledger_sequence"::text as "ledgerSequence",
 				operation."operation_index" as "operationIndex",
@@ -76,6 +76,10 @@ export async function findCanonicalOperations(
 				on ledger."network_passphrase_hash" =
 					operation."network_passphrase_hash"
 				and ledger."ledger_sequence" = operation."ledger_sequence"
+			join "full_history_operation_batch_coverage" coverage
+				on coverage."batch_id" = operation."batch_id"
+				and coverage."network_passphrase_hash" =
+					operation."network_passphrase_hash"
 			where operation."network_passphrase_hash" = $1
 				and ($2::text is null or operation."operation_type" = $2)
 				and ($3::bigint is null or operation."ledger_sequence" >= $3)
@@ -180,7 +184,11 @@ function validateQuery(query: FullHistoryOperationQuery): void {
 		query.lastLedger === undefined
 			? undefined
 			: fullHistoryLedgerSequence(query.lastLedger, 'lastLedger');
-	if (first !== undefined && last !== undefined && BigInt(first) > BigInt(last)) {
+	if (
+		first !== undefined &&
+		last !== undefined &&
+		BigInt(first) > BigInt(last)
+	) {
 		throw new RangeError('firstLedger must not exceed lastLedger');
 	}
 }
@@ -228,7 +236,8 @@ function readSourceOrigin(value: string): FullHistoryOperationSourceOrigin {
 }
 
 function readDate(value: Date | string): Date {
-	const date = value instanceof Date ? new Date(value.getTime()) : new Date(value);
+	const date =
+		value instanceof Date ? new Date(value.getTime()) : new Date(value);
 	if (Number.isNaN(date.getTime())) {
 		throw new TypeError('PostgreSQL returned an invalid operation timestamp');
 	}

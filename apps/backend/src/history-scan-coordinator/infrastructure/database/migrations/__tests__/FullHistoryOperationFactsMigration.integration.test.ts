@@ -11,6 +11,7 @@ import {
 } from '../../full-history/__tests__/FullHistoryCanonicalFixture.js';
 import { FullHistoryCanonicalSchemaMigration1784860000000 } from '../1784860000000-FullHistoryCanonicalSchemaMigration.js';
 import { FullHistoryOperationFactsMigration1784960000000 } from '../1784960000000-FullHistoryOperationFactsMigration.js';
+import { FullHistoryOperationBackfillMigration1784970000000 } from '../1784970000000-FullHistoryOperationBackfillMigration.js';
 
 jest.setTimeout(60_000);
 
@@ -63,9 +64,9 @@ describe('FullHistoryOperationFactsMigration1784960000000', () => {
 			'transaction_hash',
 			'transaction_index'
 		]);
-		expect(columns.some((column) => /xdr|result|effect|event/i.test(column))).toBe(
-			false
-		);
+		expect(
+			columns.some((column) => /xdr|result|effect|event/i.test(column))
+		).toBe(false);
 		await expect(operationCoverageColumns()).resolves.toEqual([
 			'batch_id',
 			'fact_scope',
@@ -75,6 +76,14 @@ describe('FullHistoryOperationFactsMigration1784960000000', () => {
 			'operation_count',
 			'transaction_count'
 		]);
+		const backfillMigration =
+			new FullHistoryOperationBackfillMigration1784970000000();
+		const upgrade = dataSource.createQueryRunner();
+		await upgrade.connect();
+		await upgrade.startTransaction();
+		await backfillMigration.up(upgrade);
+		await upgrade.commitTransaction();
+		await upgrade.release();
 
 		const input = await seedFullHistoryCheckpoint(dataSource, {
 			batchNumber: 1_496
@@ -101,6 +110,7 @@ describe('FullHistoryOperationFactsMigration1784960000000', () => {
 		const teardown = dataSource.createQueryRunner();
 		await teardown.connect();
 		await teardown.startTransaction();
+		await backfillMigration.down(teardown);
 		await migration.down(teardown);
 		await teardown.commitTransaction();
 		await teardown.release();

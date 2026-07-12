@@ -16,6 +16,7 @@ import {
 } from '../../../../domain/full-history/FullHistoryCanonicalTypes.js';
 import { FullHistoryCanonicalSchemaMigration1784860000000 } from '../../migrations/1784860000000-FullHistoryCanonicalSchemaMigration.js';
 import { FullHistoryOperationFactsMigration1784960000000 } from '../../migrations/1784960000000-FullHistoryOperationFactsMigration.js';
+import { FullHistoryOperationBackfillMigration1784970000000 } from '../../migrations/1784970000000-FullHistoryOperationBackfillMigration.js';
 import { HistoryArchiveCheckpointProofMigration1784420000000 } from '../../migrations/1784420000000-HistoryArchiveCheckpointProofMigration.js';
 import { FullHistoryIngestionBatch } from '../entities/FullHistoryIngestionBatch.js';
 import { FullHistoryLedger } from '../entities/FullHistoryLedger.js';
@@ -80,6 +81,9 @@ export async function installFullHistoryCanonicalSchema(
 			queryRunner
 		);
 		await new FullHistoryOperationFactsMigration1784960000000().up(queryRunner);
+		await new FullHistoryOperationBackfillMigration1784970000000().up(
+			queryRunner
+		);
 		await queryRunner.commitTransaction();
 	} catch (error) {
 		await queryRunner.rollbackTransaction();
