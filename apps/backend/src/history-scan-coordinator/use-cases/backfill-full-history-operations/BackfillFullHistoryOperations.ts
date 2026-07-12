@@ -1,6 +1,7 @@
 import type { FullHistoryCheckpointWrite } from '../../domain/full-history/FullHistoryCanonicalBatch.js';
 import {
 	assertOperationBackfillCandidateProvenance,
+	validateFullHistoryOperationBackfillCpuWorkerCount,
 	validateFullHistoryOperationBackfillLimit,
 	type FullHistoryOperationBackfillBatch
 } from '../../domain/full-history-operation-backfill/FullHistoryOperationBackfill.js';
@@ -13,13 +14,16 @@ import type { FullHistoryCheckpointDecoder } from '../../domain/full-history-pro
 
 export interface BackfillFullHistoryOperationsInput {
 	readonly batchLimit: number;
+	readonly cpuWorkerCount: number;
 	readonly networkPassphrase: string;
 }
 
 export interface BackfillFullHistoryOperationsResult {
 	readonly batchLimit: number;
 	readonly completedBatches: number;
+	readonly cpuWorkers: number;
 	readonly operationFacts: number;
+	readonly peakActiveBatches: number;
 	readonly receipts: readonly FullHistoryOperationBackfillReceipt[];
 	readonly selectedBatches: number;
 	readonly status: 'completed' | 'idle';
@@ -36,24 +40,76 @@ export class BackfillFullHistoryOperations {
 		input: BackfillFullHistoryOperationsInput
 	): Promise<BackfillFullHistoryOperationsResult> {
 		validateFullHistoryOperationBackfillLimit(input.batchLimit);
+		validateFullHistoryOperationBackfillCpuWorkerCount(input.cpuWorkerCount);
 		const batches = await this.backfillRepository.findUnindexedBatches(
 			input.networkPassphrase,
 			input.batchLimit
 		);
-		const receipts: FullHistoryOperationBackfillReceipt[] = [];
-		for (const batch of batches) {
-			receipts.push(await this.backfillBatch(batch, input.networkPassphrase));
-		}
+		const execution = await this.backfillBatches(
+			batches,
+			input.networkPassphrase,
+			input.cpuWorkerCount
+		);
+		const receipts = execution.receipts;
 		return {
 			batchLimit: input.batchLimit,
 			completedBatches: receipts.length,
+			cpuWorkers: input.cpuWorkerCount,
 			operationFacts: receipts.reduce(
 				(total, receipt) => total + receipt.operationCount,
 				0
 			),
+			peakActiveBatches: execution.peakActiveBatches,
 			receipts,
 			selectedBatches: batches.length,
 			status: batches.length === 0 ? 'idle' : 'completed'
+		};
+	}
+
+	private async backfillBatches(
+		batches: readonly FullHistoryOperationBackfillBatch[],
+		networkPassphrase: string,
+		cpuWorkerCount: number
+	): Promise<{
+		readonly peakActiveBatches: number;
+		readonly receipts: readonly FullHistoryOperationBackfillReceipt[];
+	}> {
+		const receipts = new Map<number, FullHistoryOperationBackfillReceipt>();
+		let activeBatches = 0;
+		let nextBatchIndex = 0;
+		let peakActiveBatches = 0;
+		let firstFailure: { readonly error: unknown } | undefined;
+
+		const runSlot = async (): Promise<void> => {
+			while (firstFailure === undefined) {
+				const batchIndex = nextBatchIndex;
+				const batch = batches[batchIndex];
+				if (batch === undefined) return;
+				nextBatchIndex += 1;
+				activeBatches += 1;
+				peakActiveBatches = Math.max(peakActiveBatches, activeBatches);
+				try {
+					receipts.set(
+						batchIndex,
+						await this.backfillBatch(batch, networkPassphrase)
+					);
+				} catch (error) {
+					firstFailure ??= { error };
+				} finally {
+					activeBatches -= 1;
+				}
+			}
+		};
+
+		await Promise.all(
+			Array.from({ length: Math.min(cpuWorkerCount, batches.length) }, runSlot)
+		);
+		if (firstFailure !== undefined) throw firstFailure.error;
+		return {
+			peakActiveBatches,
+			receipts: [...receipts.entries()]
+				.toSorted(([left], [right]) => left - right)
+				.map(([, receipt]) => receipt)
 		};
 	}
 
@@ -71,14 +127,10 @@ export class BackfillFullHistoryOperations {
 			candidate,
 			networkPassphrase
 		);
+		const sources = candidate.proof.sources;
 		const decoded = await this.decoder.decode(candidate, networkPassphrase);
 		return this.backfillRepository.storeOperations(
-			composeCheckpointWrite(
-				batch,
-				candidate.proof.sources,
-				decoded,
-				networkPassphrase
-			),
+			composeCheckpointWrite(batch, sources, decoded, networkPassphrase),
 			this.decoder.version
 		);
 	}

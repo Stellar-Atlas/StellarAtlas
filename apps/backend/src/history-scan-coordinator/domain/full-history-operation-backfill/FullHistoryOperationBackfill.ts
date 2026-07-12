@@ -3,6 +3,8 @@ import type { FullHistoryCheckpointCandidate } from '../full-history-promotion/F
 import type { FullHistoryLedgerSequence } from '../full-history/FullHistoryCanonicalTypes.js';
 
 export const FULL_HISTORY_OPERATION_BACKFILL_BATCH_LIMIT_MAX = 8;
+export const FULL_HISTORY_OPERATION_BACKFILL_CPU_WORKERS_DEFAULT = 2;
+export const FULL_HISTORY_OPERATION_BACKFILL_CPU_WORKERS_MAX = 4;
 
 export interface FullHistoryOperationBackfillBatch {
 	readonly archiveUrlIdentity: string;
@@ -18,7 +20,9 @@ export interface FullHistoryOperationBackfillBatch {
 }
 
 export type FullHistoryOperationBackfillErrorReason =
-	'immutable-provenance-mismatch' | 'invalid-batch-limit';
+	| 'immutable-provenance-mismatch'
+	| 'invalid-batch-limit'
+	| 'invalid-cpu-worker-count';
 
 export class FullHistoryOperationBackfillError extends Error {
 	constructor(
@@ -39,6 +43,21 @@ export function validateFullHistoryOperationBackfillLimit(limit: number): void {
 		throw new FullHistoryOperationBackfillError(
 			'invalid-batch-limit',
 			`batchLimit must be between 1 and ${FULL_HISTORY_OPERATION_BACKFILL_BATCH_LIMIT_MAX}`
+		);
+	}
+}
+
+export function validateFullHistoryOperationBackfillCpuWorkerCount(
+	workerCount: number
+): void {
+	if (
+		!Number.isSafeInteger(workerCount) ||
+		workerCount < 1 ||
+		workerCount > FULL_HISTORY_OPERATION_BACKFILL_CPU_WORKERS_MAX
+	) {
+		throw new FullHistoryOperationBackfillError(
+			'invalid-cpu-worker-count',
+			`cpuWorkerCount must be between 1 and ${FULL_HISTORY_OPERATION_BACKFILL_CPU_WORKERS_MAX}`
 		);
 	}
 }

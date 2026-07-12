@@ -7,6 +7,10 @@ import type { FullHistoryCheckpointWrite } from '../../../domain/full-history/Fu
 import type { FullHistoryOperationBackfillRepository } from '../../../domain/full-history-operation-backfill/FullHistoryOperationBackfillRepository.js';
 import { deterministicFullHistoryBatchId } from '../../../domain/full-history-promotion/DeterministicFullHistoryBatchId.js';
 import { hashNetworkPassphrase } from '../../../domain/full-history/FullHistoryCanonicalTypes.js';
+import {
+	acquireFullHistoryOperationBackfillLeadership,
+	type FullHistoryOperationBackfillLeadershipLease
+} from '../../../infrastructure/cli/full-history-operation-backfill/FullHistoryOperationBackfillLeadership.js';
 import { TypeOrmFullHistoryOperationBackfillRepository } from '../../../infrastructure/database/full-history-operation-backfill/TypeOrmFullHistoryOperationBackfillRepository.js';
 import { insertBatch } from '../../../infrastructure/database/full-history/FullHistoryCanonicalBatchStore.js';
 import { storeCanonicalBaseFacts } from '../../../infrastructure/database/full-history/FullHistoryCanonicalFactStore.js';
@@ -64,7 +68,29 @@ describe('BackfillFullHistoryOperations', () => {
 		if (postgres !== undefined) await postgres.stop();
 	});
 
-	it('resumes after a post-commit crash and covers classic, fee-bump, and empty batches exactly once', async () => {
+	it('admits one database-wide leader and hands off after release', async () => {
+		const leases: FullHistoryOperationBackfillLeadershipLease[] = [];
+		try {
+			const leader =
+				await acquireFullHistoryOperationBackfillLeadership(dataSource);
+			leases.push(leader);
+			const contender =
+				await acquireFullHistoryOperationBackfillLeadership(dataSource);
+			leases.push(contender);
+			expect(leader.acquired).toBe(true);
+			expect(contender.acquired).toBe(false);
+
+			await leader.release();
+			const successor =
+				await acquireFullHistoryOperationBackfillLeadership(dataSource);
+			leases.push(successor);
+			expect(successor.acquired).toBe(true);
+		} finally {
+			for (const lease of leases) await lease.release();
+		}
+	});
+
+	it('rolls back timed-out progress, resumes after a crash, and covers every batch once', async () => {
 		const classic = await seedLegacyBatch(201, {
 			transaction: readClassicArchiveTransactionFixture()
 		});
@@ -89,6 +115,31 @@ describe('BackfillFullHistoryOperations', () => {
 			 set "evaluatedAt" = $1 where id = $2`,
 			[feeBump.input.proofEvaluatedAt, feeBump.proofId]
 		);
+
+		await installSlowCoverageTrigger();
+		try {
+			const timeoutRepository =
+				new TypeOrmFullHistoryOperationBackfillRepository(dataSource, {
+					lockTimeoutMs: 2_000,
+					statementTimeoutMs: 250
+				});
+			let timeoutError: unknown;
+			try {
+				await timeoutRepository.storeOperations(classic.input, decoder.version);
+			} catch (error) {
+				timeoutError = error;
+			}
+			expect(timeoutError).toMatchObject({
+				code: '57014',
+				where: expect.stringContaining('pg_sleep')
+			});
+		} finally {
+			await removeSlowCoverageTrigger();
+		}
+		await expect(batchProgress(classic.input.batchId)).resolves.toEqual({
+			coverageCount: 0,
+			operationCount: 0
+		});
 
 		const crashingRepository: FullHistoryOperationBackfillRepository = {
 			findUnindexedBatches: (networkPassphrase, limit) =>
@@ -121,7 +172,9 @@ describe('BackfillFullHistoryOperations', () => {
 		await expect(restarted.execute(runInput(1))).resolves.toEqual({
 			batchLimit: 1,
 			completedBatches: 0,
+			cpuWorkers: 2,
 			operationFacts: 0,
+			peakActiveBatches: 0,
 			receipts: [],
 			selectedBatches: 0,
 			status: 'idle'
@@ -238,7 +291,11 @@ describe('BackfillFullHistoryOperations', () => {
 	}
 
 	function runInput(batchLimit: number) {
-		return { batchLimit, networkPassphrase: publicNetworkPassphrase };
+		return {
+			batchLimit,
+			cpuWorkerCount: 2,
+			networkPassphrase: publicNetworkPassphrase
+		};
 	}
 
 	async function coverageCount(): Promise<number> {
@@ -247,6 +304,55 @@ describe('BackfillFullHistoryOperations', () => {
 			 from "full_history_operation_batch_coverage"`
 		);
 		return rows[0]?.count ?? -1;
+	}
+
+	async function batchProgress(batchId: string): Promise<{
+		readonly coverageCount: number;
+		readonly operationCount: number;
+	}> {
+		const rows = await dataSource.query<
+			Array<{
+				readonly coverageCount: number;
+				readonly operationCount: number;
+			}>
+		>(
+			`select
+				(select count(*)::integer
+				 from "full_history_operation_batch_coverage"
+				 where "batch_id" = $1) as "coverageCount",
+				(select count(*)::integer from "full_history_operation"
+				 where "batch_id" = $1) as "operationCount"`,
+			[batchId]
+		);
+		return rows[0] ?? { coverageCount: -1, operationCount: -1 };
+	}
+
+	async function installSlowCoverageTrigger(): Promise<void> {
+		await dataSource.query(`
+			create function full_history_operation_backfill_test_timeout()
+			returns trigger language plpgsql as $function$
+			begin
+				perform pg_sleep(1);
+				return new;
+			end
+			$function$
+		`);
+		await dataSource.query(`
+			create trigger full_history_operation_backfill_test_timeout
+			before insert on "full_history_operation_batch_coverage"
+			for each row execute function
+				full_history_operation_backfill_test_timeout()
+		`);
+	}
+
+	async function removeSlowCoverageTrigger(): Promise<void> {
+		await dataSource.query(`
+			drop trigger if exists full_history_operation_backfill_test_timeout
+			on "full_history_operation_batch_coverage"
+		`);
+		await dataSource.query(`
+			drop function if exists full_history_operation_backfill_test_timeout()
+		`);
 	}
 
 	async function immutableRows(): Promise<ImmutableRowSnapshot[]> {

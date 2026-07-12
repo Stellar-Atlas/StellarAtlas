@@ -23,11 +23,11 @@ import {
 	assertBatchMatches,
 	findBatch
 } from '../full-history/FullHistoryCanonicalBatchStore.js';
-import { assertCanonicalBaseFacts } from '../full-history/FullHistoryCanonicalFactStore.js';
 import {
 	assertCanonicalOperations,
 	storeCanonicalOperations
 } from '../full-history/FullHistoryCanonicalOperationStore.js';
+import { assertOperationBackfillBaseFacts } from './FullHistoryOperationBackfillBaseFactValidator.js';
 
 interface BackfillBatchRow {
 	readonly archiveUrlIdentity: string;
@@ -53,8 +53,39 @@ interface CoverageRow {
 	readonly batchId: string;
 }
 
+export interface FullHistoryOperationBackfillTransactionBounds {
+	readonly lockTimeoutMs: number;
+	readonly statementTimeoutMs: number;
+}
+
+const defaultTransactionBounds: FullHistoryOperationBackfillTransactionBounds =
+	{
+		lockTimeoutMs: 2_000,
+		statementTimeoutMs: 30_000
+	};
+
 export class TypeOrmFullHistoryOperationBackfillRepository implements FullHistoryOperationBackfillRepository {
-	constructor(private readonly dataSource: DataSource) {}
+	private readonly transactionBounds: FullHistoryOperationBackfillTransactionBounds;
+
+	constructor(
+		private readonly dataSource: DataSource,
+		transactionBounds: FullHistoryOperationBackfillTransactionBounds = defaultTransactionBounds
+	) {
+		this.transactionBounds = {
+			lockTimeoutMs: assertInteger(
+				transactionBounds.lockTimeoutMs,
+				'lockTimeoutMs',
+				1,
+				60_000
+			),
+			statementTimeoutMs: assertInteger(
+				transactionBounds.statementTimeoutMs,
+				'statementTimeoutMs',
+				1,
+				30 * 60_000
+			)
+		};
+	}
 
 	async findUnindexedBatches(
 		networkPassphrase: string,
@@ -106,7 +137,7 @@ export class TypeOrmFullHistoryOperationBackfillRepository implements FullHistor
 		assertBoundedText(operationDecoderVersion, 'operationDecoderVersion', 128);
 		const networkHash = hashNetworkPassphrase(input.networkPassphrase);
 		return this.dataSource.transaction(async (manager) => {
-			await setTransactionBounds(manager);
+			await setTransactionBounds(manager, this.transactionBounds);
 			await lockBatch(manager, input.batchId, networkHash);
 			const stored = await findBatch(manager, input.batchId);
 			if (stored === null) {
@@ -116,7 +147,7 @@ export class TypeOrmFullHistoryOperationBackfillRepository implements FullHistor
 				);
 			}
 			assertBatchMatches(stored, input, networkHash);
-			await assertCanonicalBaseFacts(manager, input, networkHash);
+			await assertOperationBackfillBaseFacts(manager, input, networkHash);
 			const replayed = await hasCoverage(manager, input.batchId);
 			if (!replayed) {
 				await storeCanonicalOperations(
@@ -224,9 +255,13 @@ async function hasCoverage(
 	return rows.length === 1;
 }
 
-async function setTransactionBounds(manager: EntityManager): Promise<void> {
-	await manager.query(`
-		set local lock_timeout = '2s';
-		set local statement_timeout = '30s'
-	`);
+async function setTransactionBounds(
+	manager: EntityManager,
+	bounds: FullHistoryOperationBackfillTransactionBounds
+): Promise<void> {
+	await manager.query(
+		`select set_config('lock_timeout', $1, true),
+			set_config('statement_timeout', $2, true)`,
+		[`${bounds.lockTimeoutMs}ms`, `${bounds.statementTimeoutMs}ms`]
+	);
 }
