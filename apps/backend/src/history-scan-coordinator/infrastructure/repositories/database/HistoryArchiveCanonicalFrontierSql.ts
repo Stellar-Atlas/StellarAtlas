@@ -1,3 +1,4 @@
+import { canonicalBucketHasStrictSourceProofSql } from './HistoryArchiveCanonicalBucketProofSql.js';
 const canonicalRuntimeTargetCtes = `
 	forward_runtime_target as materialized (
 		select "network_passphrase_hash", "checkpoint_ledger"::integer
@@ -170,13 +171,39 @@ export const materializeCanonicalFrontierDependenciesSql = `
 			and candidate."objectKey" = 'bucket:' || target."bucketHash"
 			and candidate."bucketHash" = target."bucketHash"
 			and candidate."dependencyReady" is distinct from true
+			and not (
+				candidate.status = 'verified'
+				and not coalesce((
+					${canonicalBucketHasStrictSourceProofSql}
+				), false)
+			)
+		returning candidate.id
+	), reopened_legacy_buckets as (
+		update "history_archive_object_queue" candidate
+		set status = 'pending', "workerStage" = null,
+			"bytesDownloaded" = null, "nextAttemptAt" = null,
+			"refreshAfter" = null, "dependencyReady" = true,
+			"executionDisposition" = 'deferred',
+			"executionReason" = 'canonical-proof-revalidation',
+			"executionDispositionAt" = now(), "verifiedAt" = null,
+			"updatedAt" = now()
+		from hashes target
+		where candidate."archiveUrlIdentity" = target."archiveUrlIdentity"
+			and candidate."objectType" = 'bucket'
+			and candidate."objectKey" = 'bucket:' || target."bucketHash"
+			and candidate."bucketHash" = target."bucketHash"
+			and candidate.status = 'verified'
+			and not coalesce((
+				${canonicalBucketHasStrictSourceProofSql}
+			), false)
 		returning candidate.id
 	)
 	select
 		(select count(*)::integer from inserted) as inserted,
 		(select count(*)::integer from marked) as marked,
 		(select count(*)::integer from activated_categories) +
-			(select count(*)::integer from activated_buckets) as activated
+			(select count(*)::integer from activated_buckets) +
+			(select count(*)::integer from reopened_legacy_buckets) as activated
 `;
 
 export const admitCanonicalFrontierSql = `

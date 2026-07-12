@@ -182,6 +182,42 @@ describe('canonical full-history archive frontier', () => {
 		});
 	});
 
+	it('revalidates legacy bucket rows that lack source-specific proof facts', async () => {
+		await seedArchive(0);
+		await seedRuntime();
+		await dataSource.query(`
+			update "history_archive_object_queue"
+			set status = 'verified', "verifiedAt" = now()
+			where "objectType" in (
+				'ledger', 'transactions', 'results', 'scp', 'bucket'
+			)
+		`);
+
+		const result = await repository.reconcileExecutionDisposition();
+		const [bucket] = (await dataSource.query(
+			`select status, "verifiedAt", "dependencyReady",
+				"executionDisposition", "executionReason"
+			 from "history_archive_object_queue"
+			 where "objectType" = 'bucket' and "bucketHash" = $1`,
+			[bucketHash]
+		)) as readonly {
+			readonly dependencyReady: boolean;
+			readonly executionDisposition: string | null;
+			readonly executionReason: string | null;
+			readonly status: string;
+			readonly verifiedAt: Date | null;
+		}[];
+
+		expect(result.admittedObjects).toBe(1);
+		expect(bucket).toEqual({
+			dependencyReady: true,
+			executionDisposition: 'executable',
+			executionReason: 'canonical-frontier-reserve',
+			status: 'pending',
+			verifiedAt: null
+		});
+	});
+
 	it('reserves the archive source closest to a strict proof first', async () => {
 		await seedArchive(0);
 		await seedArchive(1);
