@@ -26,6 +26,7 @@ describe('FullHistoryRouter.integration', () => {
 				canonicalCoverage: null,
 				canonicalPromotion: null,
 				generatedAt: '2026-07-05T15:00:00.000Z',
+				historicalBackfill: null,
 				status: 'ok',
 				mode: 'archive_header_parser',
 				parsedLedgerCount: 100,

@@ -335,6 +335,7 @@ export interface PublicFullHistoryStatus {
 	readonly canonicalPromotion: PublicCanonicalFullHistoryPromotion | null;
 	readonly earliestParsedLedger: string | null;
 	readonly generatedAt: string;
+	readonly historicalBackfill: PublicHistoricalFullHistoryBackfill | null;
 	readonly latestObservedAt: string | null;
 	readonly latestParsedLedger: string | null;
 	readonly localAssetIndexReady: boolean;
@@ -345,6 +346,19 @@ export interface PublicFullHistoryStatus {
 	readonly parsedLedgerCount: number | null;
 	readonly sourceArchiveCount: number | null;
 	readonly status: PublicStatusLevel;
+}
+
+export interface PublicHistoricalFullHistoryBackfill {
+	readonly completedCheckpoints: number;
+	readonly failedJobs: number;
+	readonly latestCompletedAt: string | null;
+	readonly latestErrorCode: string | null;
+	readonly nextCheckpointLedger: string | null;
+	readonly pendingJobs: number;
+	readonly runningJobs: number;
+	readonly state:
+		'complete' | 'failed' | 'idle' | 'queued' | 'running' | 'waiting-for-proof';
+	readonly updatedAt: string | null;
 }
 
 export interface PublicCanonicalFullHistoryPromotion {

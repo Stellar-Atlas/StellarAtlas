@@ -171,6 +171,7 @@ export function StatusDashboard({
 							value={statusLabel(api.status)}
 						/>
 						<CanonicalHistoryStatusRow fullHistory={fullHistory} />
+						<HistoricalBackfillStatusRow fullHistory={fullHistory} />
 						<StatusRow
 							detail={`Age ${formatDuration(dataQuality.dataFreshness.networkScan.ageMs)}`}
 							label="Network scan"
@@ -226,6 +227,56 @@ export function StatusDashboard({
 			</div>
 		</div>
 	);
+}
+
+function HistoricalBackfillStatusRow({
+	fullHistory
+}: {
+	readonly fullHistory: PublicFullHistoryStatus;
+}): React.JSX.Element | null {
+	const backfill = fullHistory.historicalBackfill;
+	if (backfill === null) return null;
+	const checkpoint =
+		backfill.nextCheckpointLedger === null
+			? null
+			: formatInteger(Number(backfill.nextCheckpointLedger));
+	const status: PublicStatusLevel =
+		backfill.state === 'failed' ? 'degraded' : 'ok';
+	const value =
+		backfill.state === 'complete'
+			? 'Full history indexed'
+			: backfill.state === 'running'
+				? `Processing ${checkpoint ?? 'checkpoint'}`
+				: backfill.state === 'waiting-for-proof'
+					? `Waiting for proof ${checkpoint ?? ''}`.trim()
+					: backfill.state === 'queued'
+						? `Queued ${checkpoint ?? 'checkpoint'}`
+						: backfill.state === 'failed'
+							? 'Backfill needs attention'
+							: `Ready for ${checkpoint ?? 'next checkpoint'}`;
+	const checkpointLabel =
+		backfill.completedCheckpoints === 1 ? 'checkpoint' : 'checkpoints';
+	const detail = `${formatInteger(backfill.completedCheckpoints)} historical ${checkpointLabel} added; ${formatInteger(backfill.runningJobs)} active, ${formatInteger(backfill.pendingJobs)} queued${backfill.latestErrorCode === null ? '' : `; last outcome ${backfill.latestErrorCode}`}`;
+	return (
+		<StatusRow
+			detail={detail}
+			label="Historical index backfill"
+			pillText={historicalBackfillPill(backfill.state)}
+			status={status}
+			value={value}
+		/>
+	);
+}
+
+function historicalBackfillPill(
+	state: NonNullable<PublicFullHistoryStatus['historicalBackfill']>['state']
+): string {
+	if (state === 'idle') return 'Ready';
+	if (state === 'waiting-for-proof') return 'Waiting for proof';
+	if (state === 'complete') return 'Complete';
+	if (state === 'running') return 'Active';
+	if (state === 'queued') return 'Queued';
+	return 'Needs attention';
 }
 
 function CanonicalHistoryStatusRow({

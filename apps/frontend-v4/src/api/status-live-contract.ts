@@ -136,11 +136,31 @@ const validateCanonicalPromotion = matches({
 	)
 });
 
+const validateHistoricalBackfill = matches({
+	completedCheckpoints: nonNegativeInteger,
+	failedJobs: nonNegativeInteger,
+	latestCompletedAt: nullable(dateTime),
+	latestErrorCode: nullable(string),
+	nextCheckpointLedger: nullable(unsignedIntegerString),
+	pendingJobs: nonNegativeInteger,
+	runningJobs: nonNegativeInteger,
+	state: oneOf(
+		'complete',
+		'failed',
+		'idle',
+		'queued',
+		'running',
+		'waiting-for-proof'
+	),
+	updatedAt: nullable(dateTime)
+});
+
 const validateFullHistory = matches({
 	canonicalCoverage: nullable(validateCanonicalCoverage),
 	canonicalPromotion: nullable(validateCanonicalPromotion),
 	earliestParsedLedger: nullable(unsignedIntegerString),
 	generatedAt: dateTime,
+	historicalBackfill: nullable(validateHistoricalBackfill),
 	latestObservedAt: nullable(dateTime),
 	latestParsedLedger: nullable(unsignedIntegerString),
 	localAssetIndexReady: boolean,

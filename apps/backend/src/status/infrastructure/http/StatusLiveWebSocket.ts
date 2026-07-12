@@ -230,10 +230,11 @@ export function attachStatusLiveWebSocket(
 export async function collectFastStatusPatch(
 	config: StatusLiveWebSocketConfig
 ): Promise<StatusLivePatch> {
-	const [api, dataQuality, frontend, workers] = await Promise.all([
+	const [api, dataQuality, frontend, fullHistory, workers] = await Promise.all([
 		readResult(config.getApiStatus.execute()),
 		readResult(config.getDataQualityStatus.execute()),
 		readResult(config.getFrontendStatus.execute()),
+		readResult(config.getFullHistoryStatus.executeFullHistory()),
 		readResult(config.getWorkerStatus.execute())
 	]);
 
@@ -241,6 +242,7 @@ export async function collectFastStatusPatch(
 		api,
 		dataQuality,
 		frontend,
+		fullHistory,
 		generatedAt: new Date().toISOString(),
 		workers
 	};

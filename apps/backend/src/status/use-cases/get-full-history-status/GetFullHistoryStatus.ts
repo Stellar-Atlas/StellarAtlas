@@ -18,6 +18,10 @@ import type {
 } from '@history-scan-coordinator/domain/parsed-history/ParsedLedgerHeaderRepository.js';
 import { TYPES as HISTORY_TYPES } from '@history-scan-coordinator/infrastructure/di/di-types.js';
 import type { StatusLevel } from '../../domain/StatusTypes.js';
+import {
+	readHistoricalFullHistoryBackfillStatus,
+	type HistoricalFullHistoryBackfillDTO
+} from './HistoricalFullHistoryBackfillStatus.js';
 
 export interface FullHistoryStatusDTO {
 	readonly canonicalCoverage: CanonicalFullHistoryCoverageDTO | null;
@@ -31,6 +35,7 @@ export interface FullHistoryStatusDTO {
 	readonly localOperationIndexReady: boolean;
 	readonly localTransactionIndexReady: boolean;
 	readonly mode: 'archive_header_parser' | 'canonical_checkpoint_index';
+	readonly historicalBackfill: HistoricalFullHistoryBackfillDTO | null;
 	readonly parsedLedgerCount: number | null;
 	readonly sourceArchiveCount: number | null;
 	readonly status: StatusLevel;
@@ -168,8 +173,14 @@ export class GetFullHistoryStatus {
 					this.config.networkConfig.networkPassphrase
 				)
 			]);
-			if (canonical !== null)
-				return ok(mapCanonicalStatus(canonical, promotion));
+			if (canonical !== null) {
+				const historicalBackfill =
+					await readHistoricalFullHistoryBackfillStatus(
+						this.dataSource,
+						this.config.networkConfig.networkPassphrase
+					);
+				return ok(mapCanonicalStatus(canonical, promotion, historicalBackfill));
+			}
 			return ok(
 				this.mapParsedHeaders(
 					await this.parsedLedgerHeaders.getWatermark(),
@@ -198,7 +209,14 @@ export class GetFullHistoryStatus {
 							await this.parsedLedgerHeaders.getWatermark(),
 							promotion
 						)
-					: mapCanonicalStatus(canonical, promotion);
+					: mapCanonicalStatus(
+							canonical,
+							promotion,
+							await readHistoricalFullHistoryBackfillStatus(
+								this.dataSource,
+								this.config.networkConfig.networkPassphrase
+							)
+						);
 			return ok({ ...status, queue });
 		} catch (error) {
 			return err(mapUnknownToError(error));
@@ -332,6 +350,7 @@ export class GetFullHistoryStatus {
 		return {
 			canonicalCoverage: null,
 			canonicalPromotion: mapCanonicalPromotion(promotion),
+			historicalBackfill: null,
 			generatedAt: new Date().toISOString(),
 			status: parsedLedgerCount > 0 ? 'ok' : 'unavailable',
 			mode: 'archive_header_parser',
@@ -350,13 +369,15 @@ export class GetFullHistoryStatus {
 
 function mapCanonicalStatus(
 	coverage: FullHistoryCanonicalCoverageView,
-	promotion: FullHistoryPromotionRuntimeView | null
+	promotion: FullHistoryPromotionRuntimeView | null,
+	historicalBackfill: HistoricalFullHistoryBackfillDTO | null
 ): FullHistoryStatusDTO {
 	return {
 		canonicalCoverage: mapCanonicalCoverage(coverage),
 		canonicalPromotion: mapCanonicalPromotion(promotion),
 		earliestParsedLedger: null,
 		generatedAt: new Date().toISOString(),
+		historicalBackfill,
 		latestObservedAt: null,
 		latestParsedLedger: null,
 		localAssetIndexReady: false,

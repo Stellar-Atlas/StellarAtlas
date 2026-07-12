@@ -61,6 +61,7 @@ describe('GetFullHistoryStatus', () => {
 			canonicalCoverage: null,
 			canonicalPromotion: null,
 			generatedAt: '2026-07-06T12:00:00.000Z',
+			historicalBackfill: null,
 			status: 'ok',
 			mode: 'archive_header_parser',
 			parsedLedgerCount: 2,
@@ -111,6 +112,18 @@ describe('GetFullHistoryStatus', () => {
 			startedAt: new Date('2026-07-06T11:50:00.000Z'),
 			state: 'waiting-for-proof'
 		});
+		dataSourceMock.query.mockResolvedValueOnce([
+			{
+				completedCheckpoints: '1',
+				failedJobs: '0',
+				firstLedger: '63386240',
+				latestCompletedAt: new Date('2026-07-06T11:59:20.000Z'),
+				latestErrorCode: 'proof-pending',
+				pendingJobs: '1',
+				runningJobs: '0',
+				updatedAt: new Date('2026-07-06T11:59:50.000Z')
+			}
+		]);
 
 		const result = await getFullHistoryStatus.executeFullHistory();
 
@@ -135,6 +148,17 @@ describe('GetFullHistoryStatus', () => {
 				lastOutcome: 'proof-pending',
 				nextLedger: '63386368',
 				state: 'waiting-for-proof'
+			},
+			historicalBackfill: {
+				completedCheckpoints: 1,
+				failedJobs: 0,
+				latestCompletedAt: '2026-07-06T11:59:20.000Z',
+				latestErrorCode: 'proof-pending',
+				nextCheckpointLedger: '63386239',
+				pendingJobs: 1,
+				runningJobs: 0,
+				state: 'waiting-for-proof',
+				updatedAt: '2026-07-06T11:59:50.000Z'
 			},
 			localAssetIndexReady: false,
 			localContractIndexReady: false,

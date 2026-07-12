@@ -93,6 +93,7 @@ function buildUnavailableFullHistory(
 		canonicalPromotion: null,
 		earliestParsedLedger: null,
 		generatedAt,
+		historicalBackfill: null,
 		latestObservedAt: null,
 		latestParsedLedger: null,
 		localAssetIndexReady: false,

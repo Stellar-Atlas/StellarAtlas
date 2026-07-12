@@ -73,6 +73,17 @@ export function createStatusLivePayload(): Record<string, unknown> {
 			},
 			earliestParsedLedger: '1',
 			generatedAt,
+			historicalBackfill: {
+				completedCheckpoints: 1,
+				failedJobs: 0,
+				latestCompletedAt: generatedAt,
+				latestErrorCode: null,
+				nextCheckpointLedger: '63386175',
+				pendingJobs: 0,
+				runningJobs: 0,
+				state: 'idle',
+				updatedAt: generatedAt
+			},
 			latestObservedAt: generatedAt,
 			latestParsedLedger: '63386367',
 			localAssetIndexReady: false,
