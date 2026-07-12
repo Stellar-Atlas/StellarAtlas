@@ -60,14 +60,9 @@ const archiveSummaryIntervalMs = 30_000;
 const scanLogIntervalMs = 30_000;
 const archiveEventLimit = 100;
 const scanLogLimit = 25;
-const fastStatusDeadlineMs = 2_000;
-const archiveEventDeadlineMs = 4_000;
-const archiveSummaryDeadlineMs = 10_000;
-const scanLogDeadlineMs = 10_000;
 
 interface BoundedSingleFlightWriterConfig<T> {
 	readonly collect: () => Promise<T>;
-	readonly deadlineMs: number;
 	readonly onError: (error: unknown) => void;
 	readonly onValue: (value: T) => void;
 }
@@ -84,23 +79,15 @@ export function createBoundedSingleFlightWriter<T>(
 		write(): boolean {
 			if (running) return false;
 			running = true;
-			let deadlineReached = false;
 			const collection = Promise.resolve().then(config.collect);
-			const deadline = setTimeout(() => {
-				deadlineReached = true;
-				config.onError(
-					new Error(`Status collection exceeded ${config.deadlineMs}ms`)
-				);
-			}, config.deadlineMs);
 			void collection
 				.then((value) => {
-					if (!deadlineReached) config.onValue(value);
+					config.onValue(value);
 				})
 				.catch((error: unknown) => {
-					if (!deadlineReached) config.onError(error);
+					config.onError(error);
 				})
 				.finally(() => {
-					clearTimeout(deadline);
 					running = false;
 				});
 			return true;
@@ -129,7 +116,6 @@ export function attachStatusLiveWebSocket(
 
 	const fastWriter = createBoundedSingleFlightWriter({
 		collect: () => collectFastStatusPatch(config),
-		deadlineMs: fastStatusDeadlineMs,
 		onError: (error) => {
 			config.logger?.error('Status WebSocket snapshot unavailable', {
 				error: errorMessage(error)
@@ -143,7 +129,6 @@ export function attachStatusLiveWebSocket(
 	});
 	const archiveEventWriter = createBoundedSingleFlightWriter({
 		collect: () => collectArchiveEventsPatch(config),
-		deadlineMs: archiveEventDeadlineMs,
 		onError: (error) => {
 			config.logger?.error('Status WebSocket archive events unavailable', {
 				error: errorMessage(error)
@@ -153,7 +138,6 @@ export function attachStatusLiveWebSocket(
 	});
 	const archiveSummaryWriter = createBoundedSingleFlightWriter({
 		collect: () => collectArchiveSummaryPatch(config),
-		deadlineMs: archiveSummaryDeadlineMs,
 		onError: (error) => {
 			config.logger?.error('Status WebSocket archive summary unavailable', {
 				error: errorMessage(error)
@@ -163,7 +147,6 @@ export function attachStatusLiveWebSocket(
 	});
 	const scanLogWriter = createBoundedSingleFlightWriter({
 		collect: () => collectScanLogPatch(config),
-		deadlineMs: scanLogDeadlineMs,
 		onError: (error) => {
 			config.logger?.error('Status WebSocket scan logs unavailable', {
 				error: errorMessage(error)

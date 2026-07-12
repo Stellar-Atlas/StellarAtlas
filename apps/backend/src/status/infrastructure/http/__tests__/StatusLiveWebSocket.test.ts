@@ -37,8 +37,7 @@ describe('StatusLiveWebSocket patch collection', () => {
 		expect(patch).toMatchObject({ scanLogs: null });
 	});
 
-	it('does not overlap a lane and recovers after its deadline', async () => {
-		jest.useFakeTimers();
+	it('does not overlap a lane and publishes when collection completes', async () => {
 		const first = deferred<number>();
 		const collect = jest
 			.fn<Promise<number>, []>()
@@ -48,31 +47,22 @@ describe('StatusLiveWebSocket patch collection', () => {
 		const onValue = jest.fn();
 		const writer = createBoundedSingleFlightWriter({
 			collect,
-			deadlineMs: 10,
 			onError,
 			onValue
 		});
 
-		try {
-			expect(writer.write()).toBe(true);
-			expect(writer.write()).toBe(false);
-			await Promise.resolve();
-			expect(collect).toHaveBeenCalledTimes(1);
-			await jest.advanceTimersByTimeAsync(11);
-			expect(onError).toHaveBeenCalledWith(
-				expect.objectContaining({ message: 'Status collection exceeded 10ms' })
-			);
-			expect(writer.write()).toBe(false);
-			first.resolve(1);
-			await jest.advanceTimersByTimeAsync(0);
-			expect(onValue).not.toHaveBeenCalledWith(1);
-			expect(writer.write()).toBe(true);
-			await jest.advanceTimersByTimeAsync(0);
-			expect(collect).toHaveBeenCalledTimes(2);
-			expect(onValue).toHaveBeenCalledWith(2);
-		} finally {
-			jest.useRealTimers();
-		}
+		expect(writer.write()).toBe(true);
+		expect(writer.write()).toBe(false);
+		await Promise.resolve();
+		expect(collect).toHaveBeenCalledTimes(1);
+		expect(onError).not.toHaveBeenCalled();
+		first.resolve(1);
+		await new Promise((resolve) => setImmediate(resolve));
+		expect(onValue).toHaveBeenCalledWith(1);
+		expect(writer.write()).toBe(true);
+		await new Promise((resolve) => setImmediate(resolve));
+		expect(collect).toHaveBeenCalledTimes(2);
+		expect(onValue).toHaveBeenCalledWith(2);
 	});
 });
 
