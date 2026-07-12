@@ -66,7 +66,11 @@ export const getOrganizationTags = (
 	}
 
 	if (organization.tomlState !== 'Ok') {
-		tags.push({ label: organization.tomlState, tone: 'neutral' });
+		tags.push({
+			label: formatOrganizationTomlState(organization.tomlState),
+			title: `stellar.toml state: ${organization.tomlState}`,
+			tone: 'warning'
+		});
 	}
 
 	if (
@@ -79,6 +83,31 @@ export const getOrganizationTags = (
 
 	return tags;
 };
+
+const organizationTomlStateLabels: Readonly<Record<string, string>> = {
+	ConnectionRefused: 'metadata connection refused',
+	ConnectionResetByPeer: 'metadata connection reset',
+	ConnectionTimeout: 'metadata connection timed out',
+	DNSLookupFailed: 'metadata DNS lookup failed',
+	EmptyValidatorsField: 'metadata lists no validators',
+	Forbidden: 'metadata access forbidden',
+	HostnameResolutionFailed: 'metadata host lookup failed',
+	HostUnreachable: 'metadata host unreachable',
+	NotFound: 'stellar.toml not found',
+	ParsingError: 'stellar.toml could not be parsed',
+	RequestTimeout: 'metadata request timed out',
+	ServerError: 'metadata server error',
+	SocketClosedPrematurely: 'metadata connection closed',
+	SocketTimeout: 'metadata socket timed out',
+	Unknown: 'metadata not checked',
+	UnspecifiedError: 'metadata fetch failed',
+	UnsupportedVersion: 'unsupported stellar.toml version',
+	ValidatorNotSEP20Linked: 'validators not linked in metadata'
+};
+
+export function formatOrganizationTomlState(state: string): string {
+	return organizationTomlStateLabels[state] ?? 'metadata fetch issue';
+}
 
 export const getActiveValidators = (nodes: PublicNode[]): PublicNode[] =>
 	nodes.filter((node) => node.isValidator);
