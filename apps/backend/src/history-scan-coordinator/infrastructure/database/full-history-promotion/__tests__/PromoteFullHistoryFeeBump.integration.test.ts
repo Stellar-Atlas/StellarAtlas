@@ -74,6 +74,26 @@ describe('PromoteFullHistoryCheckpoint fee-bump persistence', () => {
 			successful: true,
 			transactionIndex: 0
 		});
+		await expect(
+			canonicalRepository.findOperations(publicNetworkPassphrase, {
+				limit: 10,
+				transactionHash: feeBump.transactionHash
+			})
+		).resolves.toMatchObject({
+			records: [
+				{
+					factScope: 'operation_body_and_envelope',
+					operationIndex: 0,
+					operationType: 'invoke_host_function',
+					outcomeAvailable: false,
+					sourceAccount:
+						'GA2DUR2ZXDJM6CYREPP45E6UPZZP2765YUC65FCBJRV3AIY7ZPFXEGL3',
+					sourceAccountOrigin: 'transaction',
+					transactionIndex: 0
+				}
+			],
+			truncated: false
+		});
 		const rows = (await dataSource.query(
 			`select "ledger_sequence" as ledger, "transaction_index" as index,
 				encode("transaction_hash", 'hex') as hash

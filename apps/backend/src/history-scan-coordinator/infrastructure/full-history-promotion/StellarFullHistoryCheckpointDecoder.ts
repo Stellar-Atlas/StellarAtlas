@@ -17,6 +17,7 @@ import {
 	fullHistoryUint64,
 	FullHistoryHash
 } from '../../domain/full-history/FullHistoryCanonicalTypes.js';
+import type { FullHistoryOperationInput } from '../../domain/full-history/FullHistoryCanonicalOperation.js';
 import type {
 	FullHistoryCandidateEnvelope,
 	FullHistoryCandidateLedger,
@@ -28,6 +29,7 @@ import type {
 	FullHistoryDecodedCheckpoint
 } from '../../domain/full-history-promotion/FullHistoryCheckpointDecoder.js';
 import { FullHistoryPromotionError } from '../../domain/full-history-promotion/FullHistoryPromotionError.js';
+import { decodeStellarFullHistoryOperations } from './StellarFullHistoryOperationDecoder.js';
 
 const maximumXdrBytes = 1_048_576;
 const maximumCheckpointXdrBytes = 64 * 1_048_576;
@@ -44,7 +46,7 @@ interface DecodedResult {
 }
 
 export class StellarFullHistoryCheckpointDecoder implements FullHistoryCheckpointDecoder {
-	readonly version = 'stellar-sdk-16/archive-xdr-v1';
+	readonly version = 'stellar-sdk-16/archive-xdr-v2-operation-facts';
 
 	async decode(
 		candidate: FullHistoryCheckpointCandidate,
@@ -76,6 +78,7 @@ export class StellarFullHistoryCheckpointDecoder implements FullHistoryCheckpoin
 		validateRowIndexes(results, ledgersBySequence, 'Result');
 
 		let decodedBytes = 0;
+		const operations: FullHistoryOperationInput[] = [];
 		const transactions: FullHistoryTransactionInput[] = [];
 		const decodedResults: FullHistoryTransactionResultInput[] = [];
 		const resultPairs = new Map<string, xdr.TransactionResultPair[]>();
@@ -131,10 +134,17 @@ export class StellarFullHistoryCheckpointDecoder implements FullHistoryCheckpoin
 				resultBytes,
 				envelope.decoded.sdkTransaction
 			);
-			transactions.push({
+			const canonicalTransaction: FullHistoryTransactionInput = {
 				...envelope.decoded.transaction,
 				transactionIndex: result.transactionIndex
-			});
+			};
+			transactions.push(canonicalTransaction);
+			operations.push(
+				...decodeStellarFullHistoryOperations(
+					envelope.decoded.sdkTransaction,
+					canonicalTransaction
+				)
+			);
 			decodedResults.push(decodedResult.canonical);
 			resultPairs.set(result.ledgerSequence, [
 				...(resultPairs.get(result.ledgerSequence) ?? []),
@@ -157,7 +167,7 @@ export class StellarFullHistoryCheckpointDecoder implements FullHistoryCheckpoin
 				transactionCount: transactionCounts.get(ledger.ledgerSequence) ?? 0
 			})
 		);
-		return { ledgers, results: decodedResults, transactions };
+		return { ledgers, operations, results: decodedResults, transactions };
 	}
 }
 

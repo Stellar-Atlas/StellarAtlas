@@ -1,5 +1,6 @@
 import { mock } from 'jest-mock-extended';
 import type { FullHistoryCanonicalRepository } from '@history-scan-coordinator/domain/full-history/FullHistoryCanonicalRepository.js';
+import { FULL_HISTORY_OPERATION_FACT_SCOPE } from '@history-scan-coordinator/domain/full-history/FullHistoryCanonicalOperation.js';
 import {
 	fullHistoryLedgerSequence,
 	fullHistoryUint64,
@@ -113,6 +114,80 @@ describe('GetExplorerLocalTransactions', () => {
 			}).execute(5)
 		).rejects.toThrow(
 			'Canonical transactions exist without canonical coverage'
+		);
+	});
+
+	it('maps proof provenance while keeping operation outcomes unavailable', async () => {
+		const repository = mock<FullHistoryCanonicalRepository>();
+		repository.findOperations.mockResolvedValue({
+			coverage: {
+				canonicalBatches: 28,
+				complete: false,
+				firstIndexedLedger: fullHistoryLedgerSequence(63386303n),
+				indexedBatches: 1,
+				lastIndexedLedger: fullHistoryLedgerSequence(63386366n)
+			},
+			records: [
+				{
+					archiveUrlIdentity: 'archive.example',
+					batchId: '00000000-0000-4000-8000-000000000001',
+					checkpointLedger: fullHistoryLedgerSequence(63386303n),
+					checkpointProofId: 41,
+					closedAt: new Date('2026-07-08T16:09:36.000Z'),
+					decoderVersion: 'stellar-sdk-16/archive-xdr-v2-operation-facts',
+					factScope: FULL_HISTORY_OPERATION_FACT_SCOPE,
+					ledgerSequence: fullHistoryLedgerSequence(63386303n),
+					operationIndex: 1,
+					operationType: 'payment',
+					outcomeAvailable: false,
+					proofEvaluatedAt: new Date('2026-07-08T16:10:00.000Z'),
+					proofVersion: 5,
+					sourceAccount: `G${'A'.repeat(55)}`,
+					sourceAccountOrigin: 'transaction',
+					transactionHash: FullHistoryHash.fromHex(transactionHash),
+					transactionIndex: 7
+				}
+			],
+			truncated: false
+		});
+		const query = {
+			limit: 20,
+			operationType: 'payment' as const,
+			transactionHash: FullHistoryHash.fromHex(transactionHash)
+		};
+
+		const result = await new GetExplorerLocalTransactions(repository, {
+			networkPassphrase
+		}).findOperations(query);
+
+		expect(result).toMatchObject({
+			coverage: {
+				canonicalBatches: 28,
+				complete: false,
+				indexedBatches: 1
+			},
+			factBoundary: {
+				includes: 'operation_type_and_effective_source',
+				outcomes: 'unavailable_without_ledger_close_meta'
+			},
+			records: [
+				{
+					evidence: {
+						archiveSource: 'archive.example',
+						checkpointProofId: 41,
+						proofVersion: 5
+					},
+					factScope: 'operation_body_and_envelope',
+					outcomeAvailable: false,
+					source: 'postgres_canonical',
+					type: 'payment'
+				}
+			]
+		});
+		expect(result.records[0]).not.toHaveProperty('successful');
+		expect(repository.findOperations).toHaveBeenCalledWith(
+			networkPassphrase,
+			query
 		);
 	});
 });

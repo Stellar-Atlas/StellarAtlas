@@ -3,6 +3,7 @@ import type { DataSource, QueryRunner } from 'typeorm';
 import type { FullHistoryPromotionTarget } from '../../../../domain/full-history-promotion/FullHistoryCheckpointCandidate.js';
 import { FullHistoryHash } from '../../../../domain/full-history/FullHistoryCanonicalTypes.js';
 import { FullHistoryCanonicalSchemaMigration1784860000000 } from '../../migrations/1784860000000-FullHistoryCanonicalSchemaMigration.js';
+import { FullHistoryOperationFactsMigration1784960000000 } from '../../migrations/1784960000000-FullHistoryOperationFactsMigration.js';
 import { ParsedLedgerHeaderMigration1784000000000 } from '../../migrations/1784000000000-ParsedLedgerHeaderMigration.js';
 import { HistoryArchiveCheckpointProofMigration1784420000000 } from '../../migrations/1784420000000-HistoryArchiveCheckpointProofMigration.js';
 import { ParsedTransactionIndexMigration1784600000000 } from '../../migrations/1784600000000-ParsedTransactionIndexMigration.js';
@@ -47,6 +48,7 @@ export async function installPromotionSchema(
 		await new ParsedHistoryObservationMigration1784850000000().up(runner);
 		await createSourceObjectTable(runner);
 		await new FullHistoryCanonicalSchemaMigration1784860000000().up(runner);
+		await new FullHistoryOperationFactsMigration1784960000000().up(runner);
 		await runner.commitTransaction();
 	} catch (error) {
 		await runner.rollbackTransaction();

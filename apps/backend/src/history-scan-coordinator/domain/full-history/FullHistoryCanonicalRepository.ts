@@ -7,6 +7,10 @@ import type {
 	FullHistoryLedgerSequence,
 	FullHistoryUint64String
 } from './FullHistoryCanonicalTypes.js';
+import type {
+	FullHistoryOperationPage,
+	FullHistoryOperationQuery
+} from './FullHistoryCanonicalOperation.js';
 
 export const FULL_HISTORY_RECENT_TRANSACTION_LIMIT_MAX = 50;
 
@@ -84,6 +88,10 @@ export interface FullHistoryCanonicalRepository {
 		networkPassphrase: string,
 		limit: number
 	): Promise<FullHistoryRecentTransactionsView>;
+	findOperations(
+		networkPassphrase: string,
+		query: FullHistoryOperationQuery
+	): Promise<FullHistoryOperationPage>;
 	findTransaction(
 		networkPassphrase: string,
 		transactionHash: FullHistoryHash

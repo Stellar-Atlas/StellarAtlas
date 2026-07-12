@@ -17,6 +17,7 @@ import {
 	fetchTransactionByHash
 } from './HorizonLedgerClient.js';
 import { fetchExplorerTransactionOperations } from './ExplorerTransactionOperationClient.js';
+import { createExplorerLocalOperationHandler } from './ExplorerLocalOperationHandler.js';
 import type { GetExplorerLocalReadModel } from '../../use-cases/get-explorer-local-read-model/GetExplorerLocalReadModel.js';
 import type { GetExplorerLocalTransactions } from '../../use-cases/get-explorer-local-transactions/GetExplorerLocalTransactions.js';
 
@@ -27,7 +28,7 @@ export interface BlockchainExplorerRouterConfig {
 	>;
 	readonly getExplorerLocalTransactions: Pick<
 		GetExplorerLocalTransactions,
-		'execute' | 'findByHash'
+		'execute' | 'findByHash' | 'findOperations'
 	>;
 	readonly horizonUrl: string;
 	readonly rpcUrl?: string;
@@ -71,6 +72,11 @@ export const blockchainExplorerRouter = (
 				.json({ error: 'Explorer local transactions unavailable' });
 		}
 	});
+
+	router.get(
+		'/local-operations',
+		createExplorerLocalOperationHandler(config.getExplorerLocalTransactions)
+	);
 
 	router.get('/search', async (req, res) => {
 		const query = readQueryString(req.query.query);

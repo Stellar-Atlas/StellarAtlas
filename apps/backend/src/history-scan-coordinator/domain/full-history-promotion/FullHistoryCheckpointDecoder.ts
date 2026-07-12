@@ -3,10 +3,12 @@ import type {
 	FullHistoryTransactionInput,
 	FullHistoryTransactionResultInput
 } from '../full-history/FullHistoryCanonicalBatch.js';
+import type { FullHistoryOperationInput } from '../full-history/FullHistoryCanonicalOperation.js';
 import type { FullHistoryCheckpointCandidate } from './FullHistoryCheckpointCandidate.js';
 
 export interface FullHistoryDecodedCheckpoint {
 	readonly ledgers: readonly FullHistoryLedgerInput[];
+	readonly operations: readonly FullHistoryOperationInput[];
 	readonly results: readonly FullHistoryTransactionResultInput[];
 	readonly transactions: readonly FullHistoryTransactionInput[];
 }

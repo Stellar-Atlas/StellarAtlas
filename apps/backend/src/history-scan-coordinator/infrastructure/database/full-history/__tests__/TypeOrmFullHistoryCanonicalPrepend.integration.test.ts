@@ -66,6 +66,22 @@ describe('TypeOrmFullHistoryCanonicalRepository historical prepend', () => {
 			nextLedger: '192',
 			replayed: false
 		});
+		await expect(
+			repository.findOperations(networkPassphrase, {
+				limit: 10,
+				transactionHash: previous.transactions[0]!.transactionHash
+			})
+		).resolves.toMatchObject({
+			records: [
+				{
+					batchId: previous.batchId,
+					ledgerSequence: '64',
+					operationType: 'payment',
+					outcomeAvailable: false
+				}
+			],
+			truncated: false
+		});
 		await expect(frontier(networkPassphrase)).resolves.toEqual({
 			firstBatchId: previous.batchId,
 			firstLedger: '64',

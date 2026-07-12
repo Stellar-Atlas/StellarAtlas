@@ -165,6 +165,72 @@ describe('TypeOrmFullHistoryCanonicalRepository', () => {
 		]);
 	});
 
+	it('filters proof-linked operation facts without exposing execution outcomes', async () => {
+		const networkPassphrase = 'Canonical operation query network';
+		const genesis = await seedFullHistoryCheckpoint(dataSource, {
+			batchNumber: 71,
+			networkPassphrase,
+			operationType: 'payment'
+		});
+		const regular = await seedFullHistoryCheckpoint(dataSource, {
+			batchNumber: 72,
+			checkpointLedger: 127,
+			networkPassphrase,
+			operationType: 'create_account'
+		});
+		await repository.writeCheckpoint(genesis);
+		await repository.writeCheckpoint(regular);
+
+		const page = await repository.findOperations(networkPassphrase, {
+			firstLedger: fullHistoryLedgerSequence('64'),
+			lastLedger: fullHistoryLedgerSequence('127'),
+			limit: 10,
+			operationType: 'create_account',
+			sourceAccount: regular.operations[0]!.sourceAccount,
+			transactionHash: regular.transactions[0]!.transactionHash
+		});
+		expect(page).toMatchObject({
+			coverage: {
+				canonicalBatches: 2,
+				complete: true,
+				firstIndexedLedger: '1',
+				indexedBatches: 2,
+				lastIndexedLedger: '127'
+			},
+			records: [
+				{
+					archiveUrlIdentity: regular.archiveUrlIdentity,
+					batchId: regular.batchId,
+					checkpointLedger: '127',
+					checkpointProofId: regular.proofId,
+					factScope: 'operation_body_and_envelope',
+					ledgerSequence: '64',
+					operationIndex: 0,
+					operationType: 'create_account',
+					outcomeAvailable: false,
+					proofVersion: 5,
+					sourceAccountOrigin: 'transaction',
+					transactionIndex: 0
+				}
+			],
+			truncated: false
+		});
+		expect(page.records[0]!.transactionHash.toHex()).toBe(
+			regular.transactions[0]!.transactionHash.toHex()
+		);
+		expect(page.records[0]).not.toHaveProperty('successful');
+		expect(page.records[0]).not.toHaveProperty('resultCode');
+		expect(page.records[0]).not.toHaveProperty('effects');
+		expect(page.records[0]).not.toHaveProperty('events');
+
+		await expect(
+			repository.findOperations(networkPassphrase, { limit: 1 })
+		).resolves.toMatchObject({
+			records: [{ ledgerSequence: '64' }],
+			truncated: true
+		});
+	});
+
 	it('returns empty canonical reads for a network without coverage', async () => {
 		await expect(
 			repository.getCoverage('Canonical network without coverage')
@@ -216,6 +282,21 @@ describe('TypeOrmFullHistoryCanonicalRepository', () => {
 				['forged', input.batchId]
 			)
 		).rejects.toThrow(/immutable/);
+	});
+
+	it('rejects an idempotent batch replay when an operation fact changes', async () => {
+		const input = await seedFullHistoryCheckpoint(dataSource, {
+			batchNumber: 73
+		});
+		await repository.writeCheckpoint(input);
+		await expect(
+			repository.writeCheckpoint({
+				...input,
+				operations: [
+					{ ...input.operations[0]!, operationType: 'manage_data' }
+				]
+			})
+		).rejects.toMatchObject({ reason: 'canonical-row-conflict' });
 	});
 
 	it('advances from genesis through a regular 64-ledger checkpoint', async () => {

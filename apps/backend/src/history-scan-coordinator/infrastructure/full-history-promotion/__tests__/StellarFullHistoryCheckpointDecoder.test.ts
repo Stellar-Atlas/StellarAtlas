@@ -45,6 +45,21 @@ describe('StellarFullHistoryCheckpointDecoder', () => {
 		expect(decoded.transactions[0]!.transactionHash.toHex()).toBe(
 			'06261feeb7a3f0e56883b4f585e61f787ce3436949fe6305e7ed676de69140a2'
 		);
+		expect(decoded.operations).toEqual([
+			expect.objectContaining({
+				factScope: 'operation_body_and_envelope',
+				ledgerSequence: '556808',
+				operationIndex: 0,
+				operationType: 'create_account',
+				sourceAccount:
+					'GD6WU64OEP5C4LRBH6NK3MHYIA2ADN6K6II6EXPNVUR3ERBXT4AN4ACD',
+				sourceAccountOrigin: 'operation',
+				transactionIndex: 0
+			})
+		]);
+		expect(decoded.operations[0]!.transactionHash.toHex()).toBe(
+			decoded.transactions[0]!.transactionHash.toHex()
+		);
 		expect(decoded.results).toEqual([
 			expect.objectContaining({
 				feeCharged: '100',
@@ -77,6 +92,20 @@ describe('StellarFullHistoryCheckpointDecoder', () => {
 		]);
 		expect(decoded.transactions[0]!.transactionHash.toHex()).toBe(
 			'c08806d61690a168bbd0159bd6ece44a34b57ca15b36ff52f2d5668adcd85901'
+		);
+		expect(decoded.operations).toEqual([
+			expect.objectContaining({
+				factScope: 'operation_body_and_envelope',
+				operationIndex: 0,
+				operationType: 'invoke_host_function',
+				sourceAccount:
+					'GA2DUR2ZXDJM6CYREPP45E6UPZZP2765YUC65FCBJRV3AIY7ZPFXEGL3',
+				sourceAccountOrigin: 'transaction',
+				transactionIndex: 0
+			})
+		]);
+		expect(decoded.operations[0]!.transactionHash.toHex()).toBe(
+			decoded.transactions[0]!.transactionHash.toHex()
 		);
 		expect(decoded.results).toEqual([
 			expect.objectContaining({
@@ -139,6 +168,12 @@ describe('StellarFullHistoryCheckpointDecoder', () => {
 		]);
 		expect(decoded.transactions.map((row) => row.transactionIndex)).toEqual([
 			0, 1
+		]);
+		expect(
+			decoded.operations.map((row) => [row.operationType, row.transactionIndex])
+		).toEqual([
+			['invoke_host_function', 0],
+			['create_account', 1]
 		]);
 	});
 

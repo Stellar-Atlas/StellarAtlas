@@ -2,9 +2,14 @@ import 'reflect-metadata';
 import { inject, injectable } from 'inversify';
 import type { NetworkConfig } from '@core/config/Config.js';
 import type { FullHistoryCanonicalRepository } from '@history-scan-coordinator/domain/full-history/FullHistoryCanonicalRepository.js';
+import type { FullHistoryOperationQuery } from '@history-scan-coordinator/domain/full-history/FullHistoryCanonicalOperation.js';
 import { FullHistoryHash } from '@history-scan-coordinator/domain/full-history/FullHistoryCanonicalTypes.js';
 import { TYPES } from '@history-scan-coordinator/infrastructure/di/di-types.js';
 import { NETWORK_TYPES } from '../../infrastructure/di/di-types.js';
+import {
+	mapExplorerCanonicalOperations,
+	type ExplorerLocalOperationsDTO
+} from './ExplorerCanonicalOperation.js';
 import {
 	mapExplorerCanonicalCoverage,
 	mapExplorerCanonicalTransaction,
@@ -82,6 +87,16 @@ export class GetExplorerLocalTransactions {
 		return transaction === null
 			? null
 			: mapExplorerCanonicalTransaction(transaction);
+	}
+
+	async findOperations(
+		query: FullHistoryOperationQuery
+	): Promise<ExplorerLocalOperationsDTO> {
+		const page = await this.canonicalHistory.findOperations(
+			this.networkConfig.networkPassphrase,
+			query
+		);
+		return mapExplorerCanonicalOperations(page, query);
 	}
 }
 

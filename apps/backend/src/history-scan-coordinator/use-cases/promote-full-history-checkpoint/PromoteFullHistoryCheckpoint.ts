@@ -43,6 +43,7 @@ export class PromoteFullHistoryCheckpoint {
 			lastLedger: lastLedger.ledgerSequence,
 			ledgers: decoded.ledgers,
 			networkPassphrase: candidate.proof.networkPassphrase,
+			operations: decoded.operations,
 			proofEvaluatedAt: candidate.proof.evaluatedAt,
 			proofId: candidate.proof.id,
 			proofVersion: candidate.proof.version,

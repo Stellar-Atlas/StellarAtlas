@@ -10,6 +10,10 @@ import {
 	type FullHistoryLedgerSequence,
 	type FullHistoryUint64String
 } from './FullHistoryCanonicalTypes.js';
+import {
+	type FullHistoryOperationInput,
+	validateFullHistoryOperations
+} from './FullHistoryCanonicalOperation.js';
 
 export const FULL_HISTORY_REGULAR_CHECKPOINT_LEDGER_COUNT = 64;
 export const FULL_HISTORY_GENESIS_CHECKPOINT_LEDGER_COUNT = 63;
@@ -71,6 +75,7 @@ export interface FullHistoryCheckpointWrite {
 	readonly lastLedger: FullHistoryLedgerSequence;
 	readonly ledgers: readonly FullHistoryLedgerInput[];
 	readonly networkPassphrase: string;
+	readonly operations: readonly FullHistoryOperationInput[];
 	readonly proofEvaluatedAt: Date;
 	readonly proofId: number;
 	readonly proofVersion: number;
@@ -95,6 +100,7 @@ export function validateFullHistoryCheckpointWrite(
 	validateSources(input.sources);
 	validateLedgerRange(input);
 	validateTransactions(input);
+	validateFullHistoryOperations(input);
 }
 
 function validateSources(sources: FullHistoryCheckpointSources): void {

@@ -16,6 +16,7 @@ import { HistoryArchiveProofReserveIndexMigration1784920000000 } from '@history-
 import { FullHistoryPromotionRuntimeMigration1784930000000 } from '@history-scan-coordinator/infrastructure/database/migrations/1784930000000-FullHistoryPromotionRuntimeMigration.js';
 import { FullHistoryHistoricalBackfillMigration1784940000000 } from '@history-scan-coordinator/infrastructure/database/migrations/1784940000000-FullHistoryHistoricalBackfillMigration.js';
 import { HistoryArchiveEvidenceRootSummaryMigration1784950000000 } from '@history-scan-coordinator/infrastructure/database/migrations/1784950000000-HistoryArchiveEvidenceRootSummaryMigration.js';
+import { FullHistoryOperationFactsMigration1784960000000 } from '@history-scan-coordinator/infrastructure/database/migrations/1784960000000-FullHistoryOperationFactsMigration.js';
 import { OrganizationTomlEvidenceMigration1784795000000 } from '@network-scan/infrastructure/database/migrations/1784795000000-OrganizationTomlEvidenceMigration.js';
 import { ScpLiveCanonicalTailMigration1784800000000 } from '@network-scan/infrastructure/database/migrations/1784800000000-ScpLiveCanonicalTailMigration.js';
 
@@ -41,5 +42,6 @@ export const managedMigrations = [
 	HistoryArchiveProofReserveIndexMigration1784920000000,
 	FullHistoryPromotionRuntimeMigration1784930000000,
 	FullHistoryHistoricalBackfillMigration1784940000000,
-	HistoryArchiveEvidenceRootSummaryMigration1784950000000
+	HistoryArchiveEvidenceRootSummaryMigration1784950000000,
+	FullHistoryOperationFactsMigration1784960000000
 ] as const;

@@ -2,6 +2,7 @@ import express from 'express';
 import request from 'supertest';
 import type { ExplorerLocalReadModelDTO } from '../../../use-cases/get-explorer-local-read-model/GetExplorerLocalReadModel.js';
 import type { ExplorerLocalTransactionsDTO } from '../../../use-cases/get-explorer-local-transactions/GetExplorerLocalTransactions.js';
+import type { ExplorerLocalOperationsDTO } from '../../../use-cases/get-explorer-local-transactions/ExplorerCanonicalOperation.js';
 import type { ExplorerCanonicalTransactionDTO } from '../../../use-cases/get-explorer-local-transactions/ExplorerCanonicalTransaction.js';
 import {
 	blockchainExplorerRouter,
@@ -94,7 +95,20 @@ const buildTestApp = (options: BuildTestAppOptions = {}) => {
 		findByHash: async () =>
 			options.localTransaction === undefined
 				? canonicalTransaction
-				: options.localTransaction
+				: options.localTransaction,
+		findOperations: async (): Promise<ExplorerLocalOperationsDTO> => ({
+			count: 0,
+			factBoundary: {
+				includes: 'operation_type_and_effective_source',
+				outcomes: 'unavailable_without_ledger_close_meta'
+			},
+			filters: {},
+			generatedAt: '2026-07-12T04:00:00.000Z',
+			limit: 50,
+			records: [],
+			source: 'postgres_canonical',
+			truncated: false
+		})
 	};
 	app.get(
 		'/v1/transactions/:hash',

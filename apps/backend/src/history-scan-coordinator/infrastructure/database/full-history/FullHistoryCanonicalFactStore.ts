@@ -7,6 +7,14 @@ import type {
 } from '../../../domain/full-history/FullHistoryCanonicalBatch.js';
 import { FullHistoryCanonicalError } from '../../../domain/full-history/FullHistoryCanonicalError.js';
 import { FullHistoryHash } from '../../../domain/full-history/FullHistoryCanonicalTypes.js';
+import {
+	assertCanonicalOperations,
+	storeCanonicalOperations
+} from './FullHistoryCanonicalOperationStore.js';
+import {
+	buildFullHistorySqlValues,
+	chunkFullHistoryValues
+} from './FullHistorySqlValues.js';
 
 const transactionChunkSize = 500;
 
@@ -49,10 +57,17 @@ export async function storeCanonicalFacts(
 	networkHash: FullHistoryHash
 ): Promise<void> {
 	await insertLedgers(manager, input, networkHash);
-	for (const chunk of chunks(input.transactions, transactionChunkSize)) {
+	for (const chunk of chunkFullHistoryValues(
+		input.transactions,
+		transactionChunkSize
+	)) {
 		await insertTransactions(manager, input.batchId, networkHash, chunk);
 	}
-	for (const chunk of chunks(input.results, transactionChunkSize)) {
+	await storeCanonicalOperations(manager, input, networkHash);
+	for (const chunk of chunkFullHistoryValues(
+		input.results,
+		transactionChunkSize
+	)) {
 		await insertResults(manager, input.batchId, networkHash, chunk);
 	}
 	await assertCanonicalFacts(manager, input, networkHash);
@@ -76,6 +91,7 @@ export async function assertCanonicalFacts(
 			'Canonical rows differ from the immutable checkpoint batch'
 		);
 	}
+	await assertCanonicalOperations(manager, input);
 
 	const wrongNetworkRows = (await manager.query(
 		`
@@ -111,7 +127,7 @@ async function insertLedgers(
 		ledger.closedAt,
 		ledger.transactionCount
 	]);
-	const insert = buildValues(values);
+	const insert = buildFullHistorySqlValues(values);
 	await manager.query(
 		`
 			insert into "full_history_ledger" (
@@ -133,7 +149,7 @@ async function insertTransactions(
 	transactions: readonly FullHistoryTransactionInput[]
 ): Promise<void> {
 	if (transactions.length === 0) return;
-	const insert = buildValues(
+	const insert = buildFullHistorySqlValues(
 		transactions.map((transaction) => [
 			networkHash.toBuffer(),
 			transaction.transactionHash.toBuffer(),
@@ -168,7 +184,7 @@ async function insertResults(
 	results: readonly FullHistoryTransactionResultInput[]
 ): Promise<void> {
 	if (results.length === 0) return;
-	const insert = buildValues(
+	const insert = buildFullHistorySqlValues(
 		results.map((result) => [
 			networkHash.toBuffer(),
 			result.transactionHash.toBuffer(),
@@ -332,23 +348,4 @@ function resultsMatch(
 			);
 		})
 	);
-}
-
-function buildValues(rows: readonly (readonly unknown[])[]): {
-	readonly parameters: unknown[];
-	readonly placeholders: string;
-} {
-	const parameters: unknown[] = [];
-	const placeholders = rows.map(
-		(row) => `(${row.map((value) => `$${parameters.push(value)}`).join(', ')})`
-	);
-	return { parameters, placeholders: placeholders.join(',\n') };
-}
-
-function chunks<Value>(values: readonly Value[], size: number): Value[][] {
-	const output: Value[][] = [];
-	for (let offset = 0; offset < values.length; offset += size) {
-		output.push(values.slice(offset, offset + size));
-	}
-	return output;
 }

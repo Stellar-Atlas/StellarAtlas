@@ -12,6 +12,10 @@ import type {
 	FullHistoryWatermarkView,
 	FullHistoryWriteReceipt
 } from '../../../domain/full-history/FullHistoryCanonicalRepository.js';
+import type {
+	FullHistoryOperationPage,
+	FullHistoryOperationQuery
+} from '../../../domain/full-history/FullHistoryCanonicalOperation.js';
 import {
 	FullHistoryHash,
 	fullHistoryLedgerSequence,
@@ -39,6 +43,7 @@ import { FullHistoryLedger } from './entities/FullHistoryLedger.js';
 import { FullHistoryTransaction } from './entities/FullHistoryTransaction.js';
 import { FullHistoryTransactionResult } from './entities/FullHistoryTransactionResult.js';
 import { FullHistoryWatermark } from './entities/FullHistoryWatermark.js';
+import { findCanonicalOperations } from './FullHistoryCanonicalOperationQuery.js';
 
 interface FullHistoryCoverageRow {
 	readonly archiveSourceCount: number | string;
@@ -71,6 +76,17 @@ interface FullHistoryRecentTransactionRow {
 
 export class TypeOrmFullHistoryCanonicalRepository implements FullHistoryCanonicalRepository {
 	constructor(private readonly dataSource: DataSource) {}
+
+	async findOperations(
+		networkPassphrase: string,
+		query: FullHistoryOperationQuery
+	): Promise<FullHistoryOperationPage> {
+		return findCanonicalOperations(
+			this.dataSource,
+			hashNetworkPassphrase(networkPassphrase),
+			query
+		);
+	}
 
 	async prependCheckpoint(
 		input: FullHistoryCheckpointWrite
