@@ -97,7 +97,15 @@ function operationCoverage(complete: boolean) {
 		canonicalBatches: complete ? 1 : 0,
 		complete,
 		firstIndexedLedger: complete ? fullHistoryLedgerSequence(63386240n) : null,
+		firstOutcomeIndexedLedger: complete
+			? fullHistoryLedgerSequence(63386240n)
+			: null,
 		indexedBatches: complete ? 1 : 0,
-		lastIndexedLedger: complete ? fullHistoryLedgerSequence(63386303n) : null
+		lastIndexedLedger: complete ? fullHistoryLedgerSequence(63386303n) : null,
+		lastOutcomeIndexedLedger: complete
+			? fullHistoryLedgerSequence(63386303n)
+			: null,
+		outcomeIndexedBatches: complete ? 1 : 0,
+		outcomesComplete: complete
 	};
 }

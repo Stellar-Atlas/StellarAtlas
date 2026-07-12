@@ -120,15 +120,19 @@ describe('GetExplorerLocalTransactions', () => {
 		);
 	});
 
-	it('maps proof provenance while keeping operation outcomes unavailable', async () => {
+	it('maps proof provenance and transaction result XDR outcomes', async () => {
 		const repository = mock<FullHistoryCanonicalRepository>();
 		repository.findOperations.mockResolvedValue({
 			coverage: {
 				canonicalBatches: 28,
 				complete: false,
 				firstIndexedLedger: fullHistoryLedgerSequence(63386303n),
+				firstOutcomeIndexedLedger: fullHistoryLedgerSequence(63386303n),
 				indexedBatches: 1,
-				lastIndexedLedger: fullHistoryLedgerSequence(63386366n)
+				lastIndexedLedger: fullHistoryLedgerSequence(63386366n),
+				lastOutcomeIndexedLedger: fullHistoryLedgerSequence(63386366n),
+				outcomeIndexedBatches: 1,
+				outcomesComplete: false
 			},
 			records: [
 				{
@@ -142,7 +146,13 @@ describe('GetExplorerLocalTransactions', () => {
 					ledgerSequence: fullHistoryLedgerSequence(63386303n),
 					operationIndex: 1,
 					operationType: 'payment',
-					outcomeAvailable: false,
+					operationResultCode: 0,
+					operationSpecificResultCode: 0,
+					outcome: 'succeeded',
+					outcomeAvailable: true,
+					outcomeDecoderVersion:
+						'stellar-sdk-16/transaction-result-xdr-v1-operation-results',
+					outcomeFactScope: 'transaction_result_xdr',
 					proofEvaluatedAt: new Date('2026-07-08T16:10:00.000Z'),
 					proofVersion: 5,
 					sourceAccount: `G${'A'.repeat(55)}`,
@@ -171,7 +181,7 @@ describe('GetExplorerLocalTransactions', () => {
 			},
 			factBoundary: {
 				includes: 'operation_type_and_effective_source',
-				outcomes: 'unavailable_without_ledger_close_meta'
+				outcomes: 'transaction_result_xdr_when_indexed'
 			},
 			records: [
 				{
@@ -181,12 +191,21 @@ describe('GetExplorerLocalTransactions', () => {
 						proofVersion: 5
 					},
 					factScope: 'operation_body_and_envelope',
-					outcomeAvailable: false,
+					operationResultCode: 0,
+					operationSpecificResultCode: 0,
+					outcome: 'succeeded',
+					outcomeAvailable: true,
+					outcomeEvidence: {
+						decoderVersion:
+							'stellar-sdk-16/transaction-result-xdr-v1-operation-results',
+						factScope: 'transaction_result_xdr'
+					},
 					source: 'postgres_canonical',
 					type: 'payment'
 				}
 			]
 		});
+		expect(result.records[0]).not.toHaveProperty('effects');
 		expect(result.records[0]).not.toHaveProperty('successful');
 		expect(repository.findOperations).toHaveBeenCalledWith(
 			networkPassphrase,
@@ -233,7 +252,15 @@ function operationCoverage(complete: boolean) {
 		canonicalBatches: complete ? 1 : 0,
 		complete,
 		firstIndexedLedger: complete ? fullHistoryLedgerSequence(63386240n) : null,
+		firstOutcomeIndexedLedger: complete
+			? fullHistoryLedgerSequence(63386240n)
+			: null,
 		indexedBatches: complete ? 1 : 0,
-		lastIndexedLedger: complete ? fullHistoryLedgerSequence(63386303n) : null
+		lastIndexedLedger: complete ? fullHistoryLedgerSequence(63386303n) : null,
+		lastOutcomeIndexedLedger: complete
+			? fullHistoryLedgerSequence(63386303n)
+			: null,
+		outcomeIndexedBatches: complete ? 1 : 0,
+		outcomesComplete: complete
 	};
 }

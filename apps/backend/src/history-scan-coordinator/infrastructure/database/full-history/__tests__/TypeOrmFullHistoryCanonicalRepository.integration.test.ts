@@ -165,7 +165,7 @@ describe('TypeOrmFullHistoryCanonicalRepository', () => {
 		]);
 	});
 
-	it('filters proof-linked operation facts without exposing execution outcomes', async () => {
+	it('filters proof-linked operation facts with transaction result outcomes', async () => {
 		const networkPassphrase = 'Canonical operation query network';
 		const genesis = await seedFullHistoryCheckpoint(dataSource, {
 			batchNumber: 71,
@@ -196,8 +196,12 @@ describe('TypeOrmFullHistoryCanonicalRepository', () => {
 				canonicalBatches: 2,
 				complete: true,
 				firstIndexedLedger: '1',
+				firstOutcomeIndexedLedger: '1',
 				indexedBatches: 2,
-				lastIndexedLedger: '127'
+				lastIndexedLedger: '127',
+				lastOutcomeIndexedLedger: '127',
+				outcomeIndexedBatches: 2,
+				outcomesComplete: true
 			},
 			records: [
 				{
@@ -209,7 +213,12 @@ describe('TypeOrmFullHistoryCanonicalRepository', () => {
 					ledgerSequence: '64',
 					operationIndex: 0,
 					operationType: 'create_account',
-					outcomeAvailable: false,
+					operationResultCode: 0,
+					operationSpecificResultCode: 0,
+					outcome: 'succeeded',
+					outcomeAvailable: true,
+					outcomeDecoderVersion: 'fixture-operation-result-decoder/1',
+					outcomeFactScope: 'transaction_result_xdr',
 					proofVersion: 5,
 					sourceAccountOrigin: 'transaction',
 					transactionIndex: 0
@@ -221,7 +230,6 @@ describe('TypeOrmFullHistoryCanonicalRepository', () => {
 			regular.transactions[0]!.transactionHash.toHex()
 		);
 		expect(page.records[0]).not.toHaveProperty('successful');
-		expect(page.records[0]).not.toHaveProperty('resultCode');
 		expect(page.records[0]).not.toHaveProperty('effects');
 		expect(page.records[0]).not.toHaveProperty('events');
 		await expect(
@@ -229,7 +237,9 @@ describe('TypeOrmFullHistoryCanonicalRepository', () => {
 		).resolves.toMatchObject({
 			canonicalBatches: 2,
 			complete: true,
-			indexedBatches: 2
+			indexedBatches: 2,
+			outcomeIndexedBatches: 2,
+			outcomesComplete: true
 		});
 
 		await expect(

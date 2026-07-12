@@ -1,0 +1,38 @@
+.explorer-table.operations .explorer-table-row {
+	grid-template-columns:
+		minmax(120px, 0.7fr) minmax(90px, 0.45fr) minmax(150px, 0.8fr)
+		minmax(160px, 1fr) minmax(120px, 0.7fr);
+}
+
+.operation-cell {
+	display: grid;
+	gap: 2px;
+}
+
+.operation-cell small {
+	color: var(--muted);
+	font-size: 0.74rem;
+}
+
+.operation-outcome {
+	font-weight: 700;
+}
+
+.operation-outcome.failed {
+	color: var(--red);
+}
+
+.operation-outcome.neutral {
+	color: var(--muted);
+}
+
+.operation-outcome.succeeded {
+	color: var(--green);
+}
+
+@media (max-width: 720px) {
+	.explorer-table.operations .explorer-table-row {
+		align-items: start;
+		grid-template-columns: 1fr;
+	}
+}

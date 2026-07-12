@@ -7,7 +7,6 @@ import type {
 	PublicExplorerAssets,
 	PublicExplorerContract,
 	PublicExplorerLedger,
-	PublicExplorerOperation,
 	PublicRecentTransactions,
 	PublicTransactionLookup
 } from '@api/types';
@@ -26,6 +25,7 @@ import {
 	formatTransactionSource,
 	writeClipboardText
 } from './blockchain-explorer-format';
+import { ExplorerOperationTable } from './explorer-operation-table';
 
 export function SearchResultView({
 	result
@@ -54,7 +54,7 @@ export function SearchResultView({
 	) : isTransaction(result.search.result) ? (
 		<TransactionCard transaction={result.search.result} />
 	) : (
-		<OperationTable operations={[result.search.result]} />
+		<ExplorerOperationTable operations={[result.search.result]} />
 	);
 	return (
 		<>
@@ -81,7 +81,7 @@ export function OperationsView({
 					text="Result set is capped. Narrow the filters for a smaller result set."
 				/>
 			) : null}
-			<OperationTable operations={result.operations.records} />
+			<ExplorerOperationTable operations={result.operations.records} />
 		</>
 	);
 }
@@ -348,29 +348,6 @@ function TransactionCard({
 				value={transaction.successful ? 'Successful' : 'Failed'}
 			/>
 		</dl>
-	);
-}
-
-function OperationTable({
-	operations
-}: {
-	readonly operations: readonly PublicExplorerOperation[];
-}): React.JSX.Element {
-	if (operations.length === 0)
-		return <ExplorerState tone="neutral" text="No operations returned." />;
-	return (
-		<div className="explorer-table">
-			{operations.slice(0, 50).map((operation) => (
-				<div className="explorer-table-row" key={operation.id}>
-					<strong>{operation.type}</strong>
-					<span>{formatExplorerSource(operation.source)}</span>
-					<span>{formatDate(operation.createdAt)}</span>
-					<span>{operation.ledger ?? 'ledger unknown'}</span>
-					<span>{operation.sourceAccount ?? 'source unknown'}</span>
-					<span>{operation.transactionHash ?? 'transaction unknown'}</span>
-				</div>
-			))}
-		</div>
 	);
 }
 

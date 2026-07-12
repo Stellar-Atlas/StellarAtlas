@@ -8,6 +8,11 @@ import {
 	type FullHistoryHash,
 	type FullHistoryLedgerSequence
 } from './FullHistoryCanonicalTypes.js';
+import type {
+	FullHistoryOperationOutcome,
+	FullHistoryOperationResultCode,
+	FullHistoryOperationResultFactScope
+} from './FullHistoryCanonicalOperationResult.js';
 
 export const FULL_HISTORY_OPERATION_FACT_SCOPE =
 	'operation_body_and_envelope' as const;
@@ -72,17 +77,40 @@ export interface FullHistoryOperationQuery {
 	readonly transactionHash?: FullHistoryHash;
 }
 
-export interface FullHistoryOperationView extends FullHistoryOperationInput {
+interface FullHistoryOperationViewBase extends FullHistoryOperationInput {
 	readonly archiveUrlIdentity: string;
 	readonly batchId: string;
 	readonly checkpointLedger: FullHistoryLedgerSequence;
 	readonly checkpointProofId: number;
 	readonly closedAt: Date;
 	readonly decoderVersion: string;
-	readonly outcomeAvailable: false;
 	readonly proofEvaluatedAt: Date;
 	readonly proofVersion: number;
 }
+
+export interface FullHistoryOperationOutcomeAvailable {
+	readonly outcome: FullHistoryOperationOutcome;
+	readonly outcomeAvailable: true;
+	readonly outcomeDecoderVersion: string;
+	readonly outcomeFactScope: FullHistoryOperationResultFactScope;
+	readonly operationResultCode: FullHistoryOperationResultCode | null;
+	readonly operationSpecificResultCode: number | null;
+}
+
+export interface FullHistoryOperationOutcomeUnavailable {
+	readonly outcome: null;
+	readonly outcomeAvailable: false;
+	readonly outcomeDecoderVersion: null;
+	readonly outcomeFactScope: null;
+	readonly operationResultCode: null;
+	readonly operationSpecificResultCode: null;
+}
+
+export type FullHistoryOperationView = FullHistoryOperationViewBase &
+	(
+		| FullHistoryOperationOutcomeAvailable
+		| FullHistoryOperationOutcomeUnavailable
+	);
 
 export interface FullHistoryOperationPage {
 	readonly coverage: FullHistoryOperationCoverage;
@@ -94,8 +122,12 @@ export interface FullHistoryOperationCoverage {
 	readonly canonicalBatches: number;
 	readonly complete: boolean;
 	readonly firstIndexedLedger: FullHistoryLedgerSequence | null;
+	readonly firstOutcomeIndexedLedger: FullHistoryLedgerSequence | null;
 	readonly indexedBatches: number;
 	readonly lastIndexedLedger: FullHistoryLedgerSequence | null;
+	readonly lastOutcomeIndexedLedger: FullHistoryLedgerSequence | null;
+	readonly outcomeIndexedBatches: number;
+	readonly outcomesComplete: boolean;
 }
 
 const operationTypes = new Set<string>(FULL_HISTORY_OPERATION_TYPES);

@@ -11,6 +11,7 @@ import './graph-live-feed.css';
 import './graph-detail-panels.css';
 import './graph-interactions.css';
 import './blockchain-explorer.css';
+import './explorer-operation-table.css';
 import './status.css';
 import './responsive.css';
 import { AppShell } from '../components/layout/app-shell';

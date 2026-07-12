@@ -34,12 +34,13 @@ describe('ExplorerLocalOperationHandler', () => {
 					},
 					factBoundary: {
 						includes: 'operation_type_and_effective_source',
-						outcomes: 'unavailable_without_ledger_close_meta'
+						outcomes: 'transaction_result_xdr_when_indexed'
 					},
 					records: [
 						{
 							factScope: 'operation_body_and_envelope',
-							outcomeAvailable: false,
+							outcome: 'succeeded',
+							outcomeAvailable: true,
 							source: 'postgres_canonical',
 							type: 'payment'
 						}
@@ -111,12 +112,16 @@ function operationPage(
 			canonicalBatches: 28,
 			complete: false,
 			firstIndexedLedger: '64',
+			firstOutcomeIndexedLedger: '64',
 			indexedBatches: 1,
-			lastIndexedLedger: '127'
+			lastIndexedLedger: '127',
+			lastOutcomeIndexedLedger: '127',
+			outcomeIndexedBatches: 1,
+			outcomesComplete: false
 		},
 		factBoundary: {
 			includes: 'operation_type_and_effective_source',
-			outcomes: 'unavailable_without_ledger_close_meta'
+			outcomes: 'transaction_result_xdr_when_indexed'
 		},
 		filters: {
 			firstLedger: query.firstLedger,
@@ -142,7 +147,15 @@ function operationPage(
 				factScope: 'operation_body_and_envelope',
 				ledger: '64',
 				operationIndex: 0,
-				outcomeAvailable: false,
+				operationResultCode: 0,
+				operationSpecificResultCode: 0,
+				outcome: 'succeeded',
+				outcomeAvailable: true,
+				outcomeEvidence: {
+					decoderVersion:
+						'stellar-sdk-16/transaction-result-xdr-v1-operation-results',
+					factScope: 'transaction_result_xdr'
+				},
 				source: 'postgres_canonical',
 				sourceAccount,
 				sourceAccountOrigin: 'transaction',

@@ -134,7 +134,7 @@ interface PublicExplorerOperationBase {
 	readonly type: string;
 }
 
-export interface PublicCanonicalExplorerOperation extends PublicExplorerOperationBase {
+interface PublicCanonicalExplorerOperationBase extends PublicExplorerOperationBase {
 	readonly evidence: {
 		readonly archiveSource: string;
 		readonly batchId: string;
@@ -146,11 +146,36 @@ export interface PublicCanonicalExplorerOperation extends PublicExplorerOperatio
 	};
 	readonly factScope: 'operation_body_and_envelope';
 	readonly operationIndex: number;
-	readonly outcomeAvailable: false;
 	readonly source: 'postgres_canonical';
 	readonly sourceAccountOrigin: 'operation' | 'transaction';
 	readonly transactionIndex: number;
 }
+
+interface PublicCanonicalExplorerOperationOutcomeAvailable {
+	readonly operationResultCode: -6 | -5 | -4 | -3 | -2 | -1 | 0 | null;
+	readonly operationSpecificResultCode: number | null;
+	readonly outcome: 'failed' | 'not_applied' | 'succeeded';
+	readonly outcomeAvailable: true;
+	readonly outcomeEvidence: {
+		readonly decoderVersion: string;
+		readonly factScope: 'transaction_result_xdr';
+	};
+}
+
+interface PublicCanonicalExplorerOperationOutcomeUnavailable {
+	readonly operationResultCode: null;
+	readonly operationSpecificResultCode: null;
+	readonly outcome: null;
+	readonly outcomeAvailable: false;
+	readonly outcomeEvidence: null;
+}
+
+export type PublicCanonicalExplorerOperation =
+	PublicCanonicalExplorerOperationBase &
+		(
+			| PublicCanonicalExplorerOperationOutcomeAvailable
+			| PublicCanonicalExplorerOperationOutcomeUnavailable
+		);
 
 export interface PublicHorizonExplorerOperation extends PublicExplorerOperationBase {
 	readonly source: 'horizon';
@@ -178,12 +203,16 @@ export interface PublicExplorerOperations {
 		readonly canonicalBatches: number;
 		readonly complete: boolean;
 		readonly firstIndexedLedger: string | null;
+		readonly firstOutcomeIndexedLedger: string | null;
 		readonly indexedBatches: number;
 		readonly lastIndexedLedger: string | null;
+		readonly lastOutcomeIndexedLedger: string | null;
+		readonly outcomeIndexedBatches: number;
+		readonly outcomesComplete: boolean;
 	};
 	readonly factBoundary?: {
 		readonly includes: 'operation_type_and_effective_source';
-		readonly outcomes: 'unavailable_without_ledger_close_meta';
+		readonly outcomes: 'transaction_result_xdr_when_indexed';
 	};
 	readonly filters: PublicExplorerOperationFilters;
 	readonly generatedAt?: string;

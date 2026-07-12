@@ -85,7 +85,9 @@ describe('PromoteFullHistoryCheckpoint fee-bump persistence', () => {
 					factScope: 'operation_body_and_envelope',
 					operationIndex: 0,
 					operationType: 'invoke_host_function',
-					outcomeAvailable: false,
+					outcome: 'succeeded',
+					outcomeAvailable: true,
+					outcomeFactScope: 'transaction_result_xdr',
 					sourceAccount:
 						'GA2DUR2ZXDJM6CYREPP45E6UPZZP2765YUC65FCBJRV3AIY7ZPFXEGL3',
 					sourceAccountOrigin: 'transaction',

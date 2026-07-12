@@ -77,7 +77,9 @@ describe('TypeOrmFullHistoryCanonicalRepository historical prepend', () => {
 					batchId: previous.batchId,
 					ledgerSequence: '64',
 					operationType: 'payment',
-					outcomeAvailable: false
+					outcome: 'succeeded',
+					outcomeAvailable: true,
+					outcomeFactScope: 'transaction_result_xdr'
 				}
 			],
 			truncated: false

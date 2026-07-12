@@ -5,11 +5,18 @@ import {
 	isFullHistoryOperationSourceAccount,
 	isFullHistoryOperationType,
 	type FullHistoryOperationCoverage,
+	type FullHistoryOperationOutcomeAvailable,
+	type FullHistoryOperationOutcomeUnavailable,
 	type FullHistoryOperationPage,
 	type FullHistoryOperationQuery,
 	type FullHistoryOperationSourceOrigin,
 	type FullHistoryOperationView
 } from '../../../domain/full-history/FullHistoryCanonicalOperation.js';
+import {
+	FULL_HISTORY_OPERATION_RESULT_FACT_SCOPE,
+	isFullHistoryOperationResultCode,
+	type FullHistoryOperationOutcome
+} from '../../../domain/full-history/FullHistoryCanonicalOperationResult.js';
 import {
 	fullHistoryLedgerSequence,
 	FullHistoryHash
@@ -25,7 +32,12 @@ interface FullHistoryOperationRow {
 	readonly factScope: string;
 	readonly ledgerSequence: string;
 	readonly operationIndex: number;
+	readonly operationResultCode: number | null;
+	readonly operationSpecificResultCode: number | null;
 	readonly operationType: string;
+	readonly outcome: string | null;
+	readonly outcomeDecoderVersion: string | null;
+	readonly outcomeFactScope: string | null;
 	readonly proofEvaluatedAt: Date | string;
 	readonly proofVersion: number;
 	readonly sourceAccount: string;
@@ -39,6 +51,9 @@ interface FullHistoryOperationCoverageRow {
 	readonly firstIndexedLedger: string | null;
 	readonly indexedBatches: string;
 	readonly lastIndexedLedger: string | null;
+	readonly firstOutcomeIndexedLedger: string | null;
+	readonly lastOutcomeIndexedLedger: string | null;
+	readonly outcomeIndexedBatches: string;
 }
 
 export async function findCanonicalOperations(
@@ -60,7 +75,14 @@ export async function findCanonicalOperations(
 				operation."fact_scope" as "factScope",
 				operation."ledger_sequence"::text as "ledgerSequence",
 				operation."operation_index" as "operationIndex",
+				result."operation_result_code" as "operationResultCode",
+				result."operation_specific_result_code" as
+					"operationSpecificResultCode",
 				operation."operation_type" as "operationType",
+				result."outcome" as "outcome",
+				result_coverage."result_decoder_version" as
+					"outcomeDecoderVersion",
+				result."fact_scope" as "outcomeFactScope",
 				batch."proof_evaluated_at" as "proofEvaluatedAt",
 				batch."proof_version" as "proofVersion",
 				operation."source_account" as "sourceAccount",
@@ -79,6 +101,15 @@ export async function findCanonicalOperations(
 			join "full_history_operation_batch_coverage" coverage
 				on coverage."batch_id" = operation."batch_id"
 				and coverage."network_passphrase_hash" =
+					operation."network_passphrase_hash"
+			left join "full_history_operation_result" result
+				on result."network_passphrase_hash" =
+					operation."network_passphrase_hash"
+				and result."transaction_hash" = operation."transaction_hash"
+				and result."operation_index" = operation."operation_index"
+			left join "full_history_operation_result_batch_coverage" result_coverage
+				on result_coverage."batch_id" = operation."batch_id"
+				and result_coverage."network_passphrase_hash" =
 					operation."network_passphrase_hash"
 			where operation."network_passphrase_hash" = $1
 				and ($2::text is null or operation."operation_type" = $2)
@@ -120,12 +151,21 @@ export async function getCanonicalOperationCoverage(
 		`
 			select count(batch.id)::text as "canonicalBatches",
 				count(coverage."batch_id")::text as "indexedBatches",
+				count(result_coverage."batch_id")::text as "outcomeIndexedBatches",
 				min(coverage."first_ledger")::text as "firstIndexedLedger",
-				max(coverage."last_ledger")::text as "lastIndexedLedger"
+				max(coverage."last_ledger")::text as "lastIndexedLedger",
+				min(result_coverage."first_ledger")::text as
+					"firstOutcomeIndexedLedger",
+				max(result_coverage."last_ledger")::text as
+					"lastOutcomeIndexedLedger"
 			from "full_history_ingestion_batch" batch
 			left join "full_history_operation_batch_coverage" coverage
 				on coverage."batch_id" = batch.id
 				and coverage."network_passphrase_hash" =
+					batch."network_passphrase_hash"
+			left join "full_history_operation_result_batch_coverage" result_coverage
+				on result_coverage."batch_id" = batch.id
+				and result_coverage."network_passphrase_hash" =
 					batch."network_passphrase_hash"
 			where batch."network_passphrase_hash" = $1
 		`,
@@ -137,6 +177,10 @@ export async function getCanonicalOperationCoverage(
 	}
 	const canonicalBatches = readCount(row.canonicalBatches, 'canonicalBatches');
 	const indexedBatches = readCount(row.indexedBatches, 'indexedBatches');
+	const outcomeIndexedBatches = readCount(
+		row.outcomeIndexedBatches,
+		'outcomeIndexedBatches'
+	);
 	return {
 		canonicalBatches,
 		complete: canonicalBatches > 0 && indexedBatches === canonicalBatches,
@@ -144,11 +188,22 @@ export async function getCanonicalOperationCoverage(
 			row.firstIndexedLedger,
 			'firstIndexedLedger'
 		),
+		firstOutcomeIndexedLedger: readOptionalLedger(
+			row.firstOutcomeIndexedLedger,
+			'firstOutcomeIndexedLedger'
+		),
 		indexedBatches,
 		lastIndexedLedger: readOptionalLedger(
 			row.lastIndexedLedger,
 			'lastIndexedLedger'
-		)
+		),
+		lastOutcomeIndexedLedger: readOptionalLedger(
+			row.lastOutcomeIndexedLedger,
+			'lastOutcomeIndexedLedger'
+		),
+		outcomeIndexedBatches,
+		outcomesComplete:
+			canonicalBatches > 0 && outcomeIndexedBatches === canonicalBatches
 	};
 }
 
@@ -244,7 +299,7 @@ function mapOperationRow(
 		),
 		operationIndex: row.operationIndex,
 		operationType: row.operationType,
-		outcomeAvailable: false,
+		...mapOperationOutcome(row),
 		proofEvaluatedAt: readDate(row.proofEvaluatedAt),
 		proofVersion: row.proofVersion,
 		sourceAccount: row.sourceAccount,
@@ -252,6 +307,80 @@ function mapOperationRow(
 		transactionHash: FullHistoryHash.fromBytes(row.transactionHash),
 		transactionIndex: row.transactionIndex
 	};
+}
+
+function mapOperationOutcome(
+	row: FullHistoryOperationRow
+):
+	| FullHistoryOperationOutcomeAvailable
+	| FullHistoryOperationOutcomeUnavailable {
+	if (row.outcome === null) {
+		if (
+			row.outcomeDecoderVersion !== null ||
+			row.outcomeFactScope !== null ||
+			row.operationResultCode !== null ||
+			row.operationSpecificResultCode !== null
+		) {
+			throw new Error('PostgreSQL returned incomplete operation outcome facts');
+		}
+		return {
+			outcome: null,
+			outcomeAvailable: false,
+			outcomeDecoderVersion: null,
+			outcomeFactScope: null,
+			operationResultCode: null,
+			operationSpecificResultCode: null
+		};
+	}
+
+	const outcome = readOutcome(row.outcome);
+	if (
+		row.outcomeDecoderVersion === null ||
+		row.outcomeFactScope !== FULL_HISTORY_OPERATION_RESULT_FACT_SCOPE ||
+		(row.operationResultCode !== null &&
+			!isFullHistoryOperationResultCode(row.operationResultCode)) ||
+		!outcomeMatchesCodes(
+			outcome,
+			row.operationResultCode,
+			row.operationSpecificResultCode
+		)
+	) {
+		throw new Error('PostgreSQL returned invalid operation outcome facts');
+	}
+	return {
+		outcome,
+		outcomeAvailable: true,
+		outcomeDecoderVersion: row.outcomeDecoderVersion,
+		outcomeFactScope: FULL_HISTORY_OPERATION_RESULT_FACT_SCOPE,
+		operationResultCode: row.operationResultCode,
+		operationSpecificResultCode: row.operationSpecificResultCode
+	};
+}
+
+function readOutcome(value: string): FullHistoryOperationOutcome {
+	if (value === 'failed' || value === 'not_applied' || value === 'succeeded') {
+		return value;
+	}
+	throw new Error('PostgreSQL returned an unsupported operation outcome');
+}
+
+function outcomeMatchesCodes(
+	outcome: FullHistoryOperationOutcome,
+	resultCode: number | null,
+	specificResultCode: number | null
+): boolean {
+	if (outcome === 'not_applied') {
+		return resultCode === null && specificResultCode === null;
+	}
+	if (outcome === 'succeeded') {
+		return resultCode === 0 && specificResultCode === 0;
+	}
+	return (
+		(resultCode !== null && resultCode < 0 && specificResultCode === null) ||
+		(resultCode === 0 &&
+			specificResultCode !== null &&
+			specificResultCode !== 0)
+	);
 }
 
 function readSourceOrigin(value: string): FullHistoryOperationSourceOrigin {

@@ -9205,7 +9205,34 @@
 					"id": { "type": "string" },
 					"ledger": { "type": "string", "nullable": true },
 					"operationIndex": { "type": "integer", "minimum": 0 },
-					"outcomeAvailable": { "type": "boolean", "enum": [false] },
+					"operationResultCode": {
+						"type": "integer",
+						"nullable": true,
+						"minimum": -6,
+						"maximum": 0
+					},
+					"operationSpecificResultCode": {
+						"type": "integer",
+						"nullable": true
+					},
+					"outcome": {
+						"type": "string",
+						"nullable": true,
+						"enum": ["failed", "not_applied", "succeeded"]
+					},
+					"outcomeAvailable": { "type": "boolean" },
+					"outcomeEvidence": {
+						"type": "object",
+						"nullable": true,
+						"required": ["decoderVersion", "factScope"],
+						"properties": {
+							"decoderVersion": { "type": "string" },
+							"factScope": {
+								"type": "string",
+								"enum": ["transaction_result_xdr"]
+							}
+						}
+					},
 					"source": {
 						"type": "string",
 						"enum": ["horizon", "postgres_canonical"]
@@ -9233,8 +9260,12 @@
 							"canonicalBatches",
 							"complete",
 							"firstIndexedLedger",
+							"firstOutcomeIndexedLedger",
 							"indexedBatches",
-							"lastIndexedLedger"
+							"lastIndexedLedger",
+							"lastOutcomeIndexedLedger",
+							"outcomeIndexedBatches",
+							"outcomesComplete"
 						],
 						"properties": {
 							"canonicalBatches": { "type": "integer", "minimum": 0 },
@@ -9243,11 +9274,24 @@
 								"type": "string",
 								"nullable": true
 							},
+							"firstOutcomeIndexedLedger": {
+								"type": "string",
+								"nullable": true
+							},
 							"indexedBatches": { "type": "integer", "minimum": 0 },
 							"lastIndexedLedger": {
 								"type": "string",
 								"nullable": true
-							}
+							},
+							"lastOutcomeIndexedLedger": {
+								"type": "string",
+								"nullable": true
+							},
+							"outcomeIndexedBatches": {
+								"type": "integer",
+								"minimum": 0
+							},
+							"outcomesComplete": { "type": "boolean" }
 						}
 					},
 					"factBoundary": {
@@ -9260,7 +9304,7 @@
 							},
 							"outcomes": {
 								"type": "string",
-								"enum": ["unavailable_without_ledger_close_meta"]
+								"enum": ["transaction_result_xdr_when_indexed"]
 							}
 						}
 					},
