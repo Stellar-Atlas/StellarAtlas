@@ -30,7 +30,7 @@ describe('TypeOrmFullHistoryPromotionFrontierRepository', () => {
 		]);
 		expect(dataSource.query).toHaveBeenCalledWith(
 			expect.stringMatching(
-				/proof\.status = 'verified'[\s\S]+proof\."ledgerFactCount"[\s\S]+proof\."resultsObjectRemoteId" is not null/
+				/proof\.status = 'verified'[\s\S]+proof\."ledgerFactCount"[\s\S]+required\.representation[\s\S]+verificationFacts/
 			),
 			[63386367, 'Public network', '00000000-0000-8000-8000-000000000001', 8]
 		);

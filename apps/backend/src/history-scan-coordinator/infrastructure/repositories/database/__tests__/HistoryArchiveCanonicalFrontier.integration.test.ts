@@ -8,9 +8,12 @@ import { HistoryArchiveObjectClaimCursorMigration1784780000000 } from '../../../
 import { TypeOrmHistoryArchiveObjectRepository } from '../TypeOrmHistoryArchiveObjectRepository.js';
 import { createCanonicalFrontierTestSchema } from './HistoryArchiveCanonicalFrontierTestSchema.js';
 import {
+	createCanonicalCheckpointFacts,
+	createCanonicalObject as object,
 	createBucketMissingProof,
 	createCheckpoint,
-	createRoot
+	createRoot,
+	readCanonicalRows
 } from './HistoryArchiveObjectExecutionTestFixtures.js';
 import {
 	admitCanonicalFrontierSql,
@@ -24,7 +27,6 @@ import {
 const networkPassphrase = 'Canonical frontier fixture network';
 const targetCheckpoint = 1_000_063;
 const bucketHash = 'ab'.repeat(32);
-
 jest.setTimeout(60_000);
 
 describe('canonical full-history archive frontier', () => {
@@ -82,7 +84,7 @@ describe('canonical full-history archive frontier', () => {
 		await seedRuntime();
 
 		const first = await repository.reconcileExecutionDisposition();
-		const canonical = await readCanonicalRows();
+		const canonical = await readCanonicalRows(dataSource);
 		const [counts] = (await dataSource.query(`
 			select
 				count(*) filter (
@@ -116,7 +118,7 @@ describe('canonical full-history archive frontier', () => {
 			where "executionReason" = 'canonical-frontier-reserve'
 		`);
 		const second = await repository.reconcileExecutionDisposition();
-		const nextCanonical = await readCanonicalRows('pending');
+		const nextCanonical = await readCanonicalRows(dataSource, 'pending');
 
 		expect(second.admittedObjects).toBe(rootCount);
 		expect(nextCanonical).toHaveLength(rootCount);
@@ -130,7 +132,7 @@ describe('canonical full-history archive frontier', () => {
 		await seedRuntime();
 
 		const result = await repository.reconcileExecutionDisposition();
-		const canonical = await readCanonicalRows();
+		const canonical = await readCanonicalRows(dataSource);
 
 		expect(result.admittedObjects).toBe(0);
 		expect(canonical).toHaveLength(0);
@@ -216,6 +218,71 @@ describe('canonical full-history archive frontier', () => {
 			status: 'pending',
 			verifiedAt: null
 		});
+	});
+
+	it('revalidates a legacy checkpoint before canonical promotion', async () => {
+		await seedArchive(0);
+		await seedRuntime();
+		await dataSource.query(`
+			update "history_archive_object_queue"
+			set "verificationFacts" = jsonb_set(
+				"verificationFacts" - 'content',
+				'{checkpointHistoryArchiveState,stellarHistoryUrl}',
+				'"https://wrong.example/history"'::jsonb
+			)
+			where "objectType" = 'checkpoint-state'
+				and "checkpointLedger" = ${targetCheckpoint}
+		`);
+
+		const result = await repository.reconcileExecutionDisposition();
+		const [checkpoint] = (await dataSource.query(`
+			select status, "verifiedAt", "executionReason"
+			from "history_archive_object_queue"
+			where "objectType" = 'checkpoint-state'
+				and "checkpointLedger" = ${targetCheckpoint}
+		`)) as readonly {
+			readonly executionReason: string | null;
+			readonly status: string;
+			readonly verifiedAt: Date | null;
+		}[];
+
+		expect(result.admittedObjects).toBe(1);
+		expect(checkpoint).toEqual({
+			executionReason: 'canonical-frontier-reserve',
+			status: 'pending',
+			verifiedAt: null
+		});
+	});
+
+	it('derives a guarded legacy checkpoint digest without redownloading', async () => {
+		await seedArchive(0);
+		await seedRuntime();
+		await dataSource.query(`
+			update "history_archive_object_queue"
+			set "verificationFacts" = "verificationFacts" - 'content',
+				"verifiedAt" = '2026-01-02T00:00:00.000Z'
+			where "objectType" = 'checkpoint-state'
+				and "checkpointLedger" = ${targetCheckpoint}
+		`);
+
+		await repository.reconcileExecutionDisposition();
+		const [checkpoint] = (await dataSource.query(`
+			select status, "verifiedAt",
+				"verificationFacts"->'content'->>'digest' as digest
+			from "history_archive_object_queue"
+			where "objectType" = 'checkpoint-state'
+				and "checkpointLedger" = ${targetCheckpoint}
+		`)) as readonly {
+			readonly digest: string | null;
+			readonly status: string;
+			readonly verifiedAt: Date;
+		}[];
+
+		expect(checkpoint?.digest).toMatch(/^[0-9a-f]{64}$/);
+		expect(checkpoint?.status).toBe('verified');
+		expect(checkpoint?.verifiedAt.toISOString()).toBe(
+			'2026-01-02T00:00:00.000Z'
+		);
 	});
 
 	it('reserves the archive source closest to a strict proof first', async () => {
@@ -351,7 +418,17 @@ describe('canonical full-history archive frontier', () => {
 			targetCheckpoint,
 			'verified'
 		);
-		checkpoint.verificationFacts = checkpointFacts();
+		const checkpointVerificationFacts = createCanonicalCheckpointFacts(
+			bucketHash,
+			checkpoint.objectUrl,
+			targetCheckpoint
+		);
+		checkpoint.verificationFacts = checkpointVerificationFacts;
+		checkpoint.bytesDownloaded = Buffer.byteLength(
+			JSON.stringify(
+				checkpointVerificationFacts.checkpointHistoryArchiveState.stellarHistory
+			)
+		);
 		const predecessorCheckpoint = object(
 			index,
 			'checkpoint-state',
@@ -419,56 +496,4 @@ describe('canonical full-history archive frontier', () => {
 			]
 		);
 	}
-
-	async function readCanonicalRows(status?: string): Promise<
-		readonly {
-			readonly checkpointLedger: number;
-		}[]
-	> {
-		return (await dataSource.query(
-			`select "checkpointLedger"
-			 from "history_archive_object_queue"
-			 where "executionReason" = 'canonical-frontier-reserve'
-				and ($1::text is null or status = $1)
-			 order by "archiveUrlIdentity"`,
-			[status ?? null]
-		)) as readonly { readonly checkpointLedger: number }[];
-	}
 });
-
-function object(
-	index: number,
-	objectType: HistoryArchiveObject['objectType'],
-	objectKey: string,
-	checkpointLedger: number | null,
-	status: HistoryArchiveObject['status'] = 'pending',
-	objectOrder = 10
-): HistoryArchiveObject {
-	const archiveUrl = `https://canonical-${index}.example/history`;
-	const item = new HistoryArchiveObject({
-		archiveUrl,
-		archiveUrlIdentity: archiveUrl,
-		checkpointLedger,
-		dependencyReady: objectType === 'history-archive-state',
-		executionDisposition: 'deferred',
-		hostIdentity: `canonical-${index}.example`,
-		objectKey,
-		objectOrder,
-		objectType,
-		objectUrl: `${archiveUrl}/${objectKey}`,
-		status
-	});
-	item.executionReason = 'legacy-planning-intent';
-	return item;
-}
-
-function checkpointFacts(): HistoryArchiveObject['verificationFacts'] {
-	return {
-		checkpointHistoryArchiveState: {
-			stellarHistory: {
-				currentBuckets: [{ curr: bucketHash, snap: '0'.repeat(64) }],
-				hotArchiveBuckets: []
-			}
-		}
-	} as HistoryArchiveObject['verificationFacts'];
-}

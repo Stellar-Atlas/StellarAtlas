@@ -9,6 +9,7 @@ import type {
 	FullHistoryPromotionFrontier,
 	FullHistoryPromotionFrontierRepository
 } from '../../../domain/full-history-promotion/FullHistoryPromotionFrontierRepository.js';
+import { fullHistoryStrictProofSourceDigestsSql } from '../full-history/FullHistoryStrictProofSourceSql.js';
 
 interface PromotionTargetRow {
 	readonly archiveUrlIdentity: string;
@@ -79,7 +80,7 @@ function checkpointForNextLedger(nextLedger: FullHistoryUint64String): number {
 	return Number(checkpoint);
 }
 
-const promotionTargetSql = `
+export const promotionTargetSql = `
 	select proof."archiveUrlIdentity"
 	from "history_archive_checkpoint_proof" proof
 	where proof."checkpointLedger" = $1
@@ -103,6 +104,7 @@ const promotionTargetSql = `
 		and proof."transactionsObjectRemoteId" is not null
 		and proof."resultsObjectRemoteId" is not null
 		and proof.details ->> 'networkPassphrase' = $2
+		and ${fullHistoryStrictProofSourceDigestsSql}
 	order by
 		case when proof."archiveUrlIdentity" = (
 			select batch."archive_url_identity"

@@ -1,5 +1,6 @@
 import { HistoryArchiveCheckpointProof } from '../../../../domain/history-archive-checkpoint-proof/HistoryArchiveCheckpointProof.js';
 import { HistoryArchiveObject } from '../../../../domain/history-archive-object/HistoryArchiveObject.js';
+import type { DataSource } from 'typeorm';
 
 export function createRoot(index: number): HistoryArchiveObject {
 	return createObject(index, {
@@ -68,6 +69,74 @@ export function createBucketMissingProof(
 	proof.details = null;
 	proof.evaluatedAt = new Date();
 	return proof;
+}
+
+export function createCanonicalCheckpointFacts(
+	bucketHash: string,
+	stellarHistoryUrl: string,
+	checkpointLedger: number
+) {
+	return {
+		checkpointHistoryArchiveState: {
+			observedAt: '2026-01-01T00:00:00.000Z',
+			stellarHistory: {
+				currentBuckets: [{ curr: bucketHash, snap: '0'.repeat(64) }],
+				hotArchiveBuckets: []
+			},
+			stellarHistoryUrl
+		},
+		checkpointHistoryArchiveStateFact: {
+			bucketListHash: 'ef'.repeat(32),
+			checkpointLedger,
+			observedAt: '2026-01-01T00:00:00.000Z',
+			stellarHistoryUrl
+		},
+		content: {
+			algorithm: 'sha256',
+			digest: 'cd'.repeat(32),
+			representation: 'canonical-json'
+		}
+	} satisfies HistoryArchiveObject['verificationFacts'];
+}
+
+export function createCanonicalObject(
+	index: number,
+	objectType: HistoryArchiveObject['objectType'],
+	objectKey: string,
+	checkpointLedger: number | null,
+	status: HistoryArchiveObject['status'] = 'pending',
+	objectOrder = 10
+): HistoryArchiveObject {
+	const archiveUrl = `https://canonical-${index}.example/history`;
+	const item = new HistoryArchiveObject({
+		archiveUrl,
+		archiveUrlIdentity: archiveUrl,
+		checkpointLedger,
+		dependencyReady: objectType === 'history-archive-state',
+		executionDisposition: 'deferred',
+		hostIdentity: `canonical-${index}.example`,
+		objectKey,
+		objectOrder,
+		objectType,
+		objectUrl: `${archiveUrl}/${objectKey}`,
+		status
+	});
+	item.executionReason = 'legacy-planning-intent';
+	return item;
+}
+
+export async function readCanonicalRows(
+	dataSource: DataSource,
+	status?: string
+): Promise<readonly { readonly checkpointLedger: number }[]> {
+	return dataSource.query<{ readonly checkpointLedger: number }[]>(
+		`select "checkpointLedger"
+		 from "history_archive_object_queue"
+		 where "executionReason" = 'canonical-frontier-reserve'
+			and ($1::text is null or status = $1)
+		 order by "archiveUrlIdentity"`,
+		[status ?? null]
+	);
 }
 
 export function createObject(

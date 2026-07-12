@@ -1,3 +1,5 @@
+import { fullHistoryStrictProofSourceDigestsSql } from '../full-history/FullHistoryStrictProofSourceSql.js';
+
 export const historicalBackfillJobProjection = `
 	id, "network_passphrase_hash" as "networkPassphraseHash",
 	"first_checkpoint_ledger"::text as "firstCheckpointLedger",
@@ -90,6 +92,7 @@ export const strictHistoricalBackfillProofTargetsSql = `
 		and proof."transactionsObjectRemoteId" is not null
 		and proof."resultsObjectRemoteId" is not null
 		and proof.details ->> 'networkPassphrase' = $2
+		and ${fullHistoryStrictProofSourceDigestsSql}
 	order by proof."evaluatedAt" desc, proof."archiveUrlIdentity"
 	limit $3
 `;

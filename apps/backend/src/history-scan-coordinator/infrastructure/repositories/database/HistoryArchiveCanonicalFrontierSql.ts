@@ -1,6 +1,7 @@
 import { canonicalBucketHasStrictSourceProofSql } from './HistoryArchiveCanonicalBucketProofSql.js';
 import { canonicalCategoryTargetsCteSql } from './HistoryArchiveCanonicalCategorySql.js';
-const canonicalRuntimeTargetCtes = `
+import { canonicalCheckpointHasStrictContentDigestSql } from './HistoryArchiveCanonicalCheckpointProofSql.js';
+export const canonicalRuntimeTargetCtes = `
 	forward_runtime_target as materialized (
 		select "network_passphrase_hash", "checkpoint_ledger"::integer
 			as checkpoint_ledger, 'forward'::text as target_lane
@@ -103,7 +104,26 @@ export const materializeCanonicalFrontierDependenciesSql = `
 		from checkpoints target
 		where checkpoint.id = target.id
 			and checkpoint."dependenciesMaterializedAt" is null
+			and coalesce((
+				${canonicalCheckpointHasStrictContentDigestSql('checkpoint')}
+			), false)
 		returning checkpoint.id
+	), reopened_legacy_checkpoints as (
+		update "history_archive_object_queue" candidate
+		set status = 'pending', "workerStage" = null,
+			"bytesDownloaded" = null, "nextAttemptAt" = null,
+			"refreshAfter" = null, "dependencyReady" = true,
+			"executionDisposition" = 'deferred',
+			"executionReason" = 'canonical-proof-revalidation',
+			"executionDispositionAt" = now(), "verifiedAt" = null,
+			"dependenciesMaterializedAt" = now(),
+			"updatedAt" = now()
+		from checkpoints target
+		where candidate.id = target.id
+			and not coalesce((
+				${canonicalCheckpointHasStrictContentDigestSql('candidate')}
+			), false)
+		returning candidate.id
 	), activated_categories as (
 		update "history_archive_object_queue" candidate
 		set "dependencyReady" = true
@@ -154,6 +174,7 @@ export const materializeCanonicalFrontierDependenciesSql = `
 		(select count(*)::integer from inserted) as inserted,
 		(select count(*)::integer from marked) as marked,
 		(select count(*)::integer from inserted_categories) +
+			(select count(*)::integer from reopened_legacy_checkpoints) +
 			(select count(*)::integer from activated_categories) +
 			(select count(*)::integer from activated_buckets) +
 			(select count(*)::integer from reopened_legacy_buckets) as activated
@@ -186,7 +207,14 @@ export const admitCanonicalFrontierSql = `
 			and checkpoint."objectKey" = 'checkpoint-state:' ||
 				lpad(to_hex(target.checkpoint_ledger), 8, '0')
 			and checkpoint."checkpointLedger" = target.checkpoint_ledger
-			and checkpoint.status = 'verified'
+			and (
+				checkpoint.status = 'verified'
+				or (
+					checkpoint.status = 'pending'
+					and checkpoint."executionReason" =
+						'canonical-proof-revalidation'
+				)
+			)
 		left join "history_archive_checkpoint_proof" proof
 			on proof."archiveUrlIdentity" = state."archiveUrlIdentity"
 			and proof."checkpointLedger" = target.checkpoint_ledger
@@ -200,6 +228,12 @@ export const admitCanonicalFrontierSql = `
 		from network_roots network_root
 		cross join lateral (
 			values
+				(
+					'checkpoint-state', network_root.checkpoint_ledger,
+					'checkpoint-state:' || lpad(
+						to_hex(network_root.checkpoint_ledger), 8, '0'
+					), -1
+				),
 				(
 					'ledger', network_root.checkpoint_ledger - 64,
 					'ledger:' || lpad(
