@@ -78,6 +78,31 @@ describe('Crawler', () => {
 		expect(crawler).toBeInstanceOf(Crawler);
 	});
 
+	it('stops an active crawl without waiting for queued peer work', async () => {
+		const { crawler, crawl, networkObserver } = setupSUT();
+		networkObserver.startObservation.mockResolvedValue(1);
+		networkObserver.stop.mockResolvedValue(mock<Observation>());
+		networkObserver.connectToNode.mockImplementation(() => undefined);
+
+		const execution = crawler.startCrawl(crawl);
+		await Promise.resolve();
+		await crawler.stop();
+
+		await expect(execution).resolves.toEqual({
+			closedLedgers: [],
+			latestClosedLedger: {
+				closeTime: new Date(0),
+				localCloseTime: new Date(0),
+				sequence: BigInt(0),
+				value: ''
+			},
+			peers: new Map(),
+			scpStatementObservations: []
+		});
+		expect(networkObserver.stop).toHaveBeenCalledTimes(1);
+		expect(crawl.state).toBe(CrawlProcessState.IDLE);
+	});
+
 	it('should return error if no active top tier connections and no node addresses to crawl', async () => {
 		const {
 			crawler,

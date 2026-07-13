@@ -101,7 +101,8 @@ export class CollectScpLive {
 					bootstrapNodeAddressesOrError.value,
 					cursor.latestLedger,
 					cursor.latestLedgerCloseTime,
-					(observation) => persistence.add(observation)
+					(observation) =>
+						this.shuttingDown ? undefined : persistence.add(observation)
 				);
 				await persistence.flush();
 				flushed = true;
@@ -143,12 +144,21 @@ export class CollectScpLive {
 	async shutDown(timeoutMs: number): Promise<CollectScpLiveShutdownResult> {
 		this.shuttingDown = true;
 		const deadlineMs = Date.now() + Math.max(0, timeoutMs);
+		await this.settlesSuccessfullyBefore(
+			this.crawlerService.stop(),
+			deadlineMs,
+			'active SCP crawl'
+		);
 		const persistence = this.activePersistence;
 		persistence?.close();
 		const canonicalDrained =
 			persistence === null
 				? true
-				: await this.settlesSuccessfullyBefore(persistence.flush(), deadlineMs);
+				: await this.settlesSuccessfullyBefore(
+						persistence.flush(),
+						deadlineMs,
+						'canonical SCP persistence'
+					);
 		if (!canonicalDrained) {
 			this.projector.shutdown();
 			return { canonicalDrained: false, projectionDrained: false };
@@ -188,7 +198,8 @@ export class CollectScpLive {
 
 	private async settlesSuccessfullyBefore(
 		operation: Promise<void>,
-		deadlineMs: number
+		deadlineMs: number,
+		operationName: string
 	): Promise<boolean> {
 		const remainingMs = Math.max(0, deadlineMs - Date.now());
 		if (remainingMs === 0) return false;
@@ -198,7 +209,7 @@ export class CollectScpLive {
 				operation.then(
 					() => true,
 					(error: unknown) => {
-						this.logger.error('Could not drain canonical SCP persistence', {
+						this.logger.error(`Could not stop ${operationName}`, {
 							errorMessage: mapUnknownToError(error).message
 						});
 						return false;

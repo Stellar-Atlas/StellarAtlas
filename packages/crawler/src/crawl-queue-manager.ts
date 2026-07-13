@@ -29,6 +29,10 @@ export class CrawlQueueManager {
 		return this.crawlQueue.length();
 	}
 
+	public cancelPendingTasks(): void {
+		this.crawlQueue.kill();
+	}
+
 	private performCrawlQueueTask(
 		crawlQueueTask: CrawlTask,
 		crawlQueueTaskDone: AsyncResultCallback<void>

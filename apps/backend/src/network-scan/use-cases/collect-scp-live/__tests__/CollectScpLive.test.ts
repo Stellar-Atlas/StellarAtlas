@@ -220,11 +220,15 @@ describe('CollectScpLive', () => {
 	it('owns and drains the active persistence buffer and projector on shutdown', async () => {
 		const sut = setupSUT();
 		const observation = createObservation('11');
+		let onObservation:
+			| ((observation: CrawlerScpStatementObservation) => Promise<void> | void)
+			| undefined;
 		const postgres = deferred<CrawlerScpStatementObservation[]>();
 		const crawl = deferred<Result<CrawlResult, Error>>();
 		sut.observationRepository.saveMany.mockReturnValue(postgres.promise);
 		sut.crawlerService.crawl.mockImplementation(async (...args) => {
-			void Promise.resolve(args[5]?.(observation)).catch(() => undefined);
+			onObservation = args[5];
+			void Promise.resolve(onObservation?.(observation)).catch(() => undefined);
 			return crawl.promise;
 		});
 
@@ -233,6 +237,8 @@ describe('CollectScpLive', () => {
 			() => sut.observationRepository.saveMany.mock.calls.length === 1
 		);
 		const shutdown = sut.collectScpLive.shutDown(5_000);
+		expect(sut.crawlerService.stop).toHaveBeenCalledTimes(1);
+		expect(onObservation?.(createObservation('12'))).toBeUndefined();
 		let shutdownSettled = false;
 		void shutdown.then(() => {
 			shutdownSettled = true;
@@ -247,6 +253,7 @@ describe('CollectScpLive', () => {
 			projectionDrained: true
 		});
 		await execution;
+		expect(sut.observationRepository.saveMany).toHaveBeenCalledTimes(1);
 		expect(sut.liveStore.saveMany).toHaveBeenCalledWith([observation]);
 	});
 });
@@ -257,6 +264,7 @@ function setupSUT() {
 	const networkRepository = mock<NetworkRepository>();
 	const scanRepository = mock<ScanRepository>();
 	const crawlerService = mock<CrawlerService>();
+	crawlerService.stop.mockResolvedValue(undefined);
 	const observationRepository = mock<ScpStatementObservationRepository>();
 	const liveStore = mock<ScpStatementLiveStore>();
 	const logger = mock<Logger>();

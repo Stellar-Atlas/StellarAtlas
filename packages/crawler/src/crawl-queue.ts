@@ -5,6 +5,7 @@ export interface CrawlQueue {
 	push(crawlTask: CrawlTask, error: () => void): void;
 	onDrain(callback: () => void): void;
 	activeTasks(): CrawlTask[];
+	kill(): void;
 	length(): number;
 	initialize(
 		performTask: (task: CrawlTask, done: AsyncResultCallback<void>) => void
@@ -48,5 +49,9 @@ export class AsyncCrawlQueue implements CrawlQueue {
 
 	activeTasks(): CrawlTask[] {
 		return this.crawlQueue.workersList().map((worker) => worker.data);
+	}
+
+	kill(): void {
+		this.crawlQueue.kill();
 	}
 }

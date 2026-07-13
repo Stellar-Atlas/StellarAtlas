@@ -31,6 +31,10 @@ export class CrawlerService {
 		private crawlFactory: CrawlFactory
 	) {}
 
+	async stop(): Promise<void> {
+		await this.crawler.stop();
+	}
+
 	async crawl(
 		networkQuorumSet: NetworkQuorumSetConfiguration,
 		nodes: Node[],

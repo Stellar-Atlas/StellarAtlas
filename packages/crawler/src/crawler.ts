@@ -25,6 +25,11 @@ export interface Ledger {
  */
 export class Crawler {
 	private _crawl: Crawl | null = null;
+	private activeCompletion: {
+		reject: (reason?: Error) => void;
+		resolve: (value: CrawlResult | PromiseLike<CrawlResult>) => void;
+	} | null = null;
+	private stopRequested = false;
 
 	constructor(
 		private config: CrawlerConfiguration,
@@ -44,9 +49,21 @@ export class Crawler {
 				return reject(new Error('Crawl process already running'));
 			}
 			this.crawl = crawl;
+			this.activeCompletion = { reject, resolve };
+			this.stopRequested = false;
 
 			this.syncTopTierAndCrawl(resolve, reject);
 		});
+	}
+
+	async stop(): Promise<void> {
+		const completion = this.activeCompletion;
+		if (completion === null || !this.isCrawlRunning()) return;
+		this.stopRequested = true;
+		this.crawl.state = CrawlProcessState.STOPPING;
+		this.crawlQueueManager.cancelPendingTasks();
+		await this.networkObserver.stop();
+		this.finish(completion.resolve, completion.reject);
 	}
 
 	private isCrawlRunning() {
@@ -83,6 +100,7 @@ export class Crawler {
 		reject: (reason?: Error) => void
 	) {
 		const nrOfActiveTopTierConnections = await this.startTopTierSync();
+		if (this.stopRequested) return;
 		this.startCrawlProcess(resolve, reject, nrOfActiveTopTierConnections);
 	}
 
@@ -102,6 +120,8 @@ export class Crawler {
 			this.logger.warn(
 				'No nodes to crawl and top tier connections closed, crawl failed'
 			);
+			this.activeCompletion = null;
+			this.crawl.state = CrawlProcessState.IDLE;
 			reject(new Error('No nodes to crawl and top tier connections failed'));
 			return;
 		}
@@ -155,6 +175,8 @@ export class Crawler {
 		resolve: (value: CrawlResult | PromiseLike<CrawlResult>) => void,
 		reject: (error: Error) => void
 	): void {
+		if (this.activeCompletion === null) return;
+		this.activeCompletion = null;
 		this.crawlLogger.stop();
 		this.maxCrawlTimeManager.clearTimer();
 		this.crawl.state = CrawlProcessState.IDLE;
