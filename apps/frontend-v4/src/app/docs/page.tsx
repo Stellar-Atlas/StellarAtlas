@@ -107,19 +107,6 @@ const endpointGroups: EndpointGroup[] = [
 	},
 	{
 		description:
-			'Persisted external comparison evidence for API drift review.',
-		endpoints: [
-			'/v1/cross-check/sources',
-			'/v1/cross-check/validators',
-			'/v1/cross-check/organizations',
-			'/v1/cross-check/archives',
-			'/v1/cross-check/api-docs/latest',
-			'/v1/cross-check/api-docs/snapshots'
-		],
-		title: 'Cross-source review'
-	},
-	{
-		description:
 			'Notification subscription management for network, node, and organization events.',
 		endpoints: [
 			'POST /v1/subscription',
@@ -146,8 +133,8 @@ export default function DocsPage(): React.JSX.Element {
 				</a>
 				<code>/v1</code>
 				<p className="muted-inline">
-					This page lists public read surfaces. Authenticated coordinator,
-					worker, and backfill routes remain in Swagger for operators.
+					This page and Swagger list public read surfaces. Authenticated
+					coordinator, worker, and backfill routes are intentionally excluded.
 				</p>
 				<div className="endpoint-grid">
 					{endpointGroups.map((group) => (

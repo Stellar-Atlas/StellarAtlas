@@ -115,11 +115,13 @@ import { GetTopTierHistory } from '@fbas/use-cases/get-top-tier-history/GetTopTi
 import { frontendV4ProxyMiddleware } from './FrontendV4Proxy.js';
 import { mountExplorerRoutes } from './ExplorerRoutes.js';
 import { swaggerDocsOptions } from './SwaggerDocsOptions.js';
+import { createPublicOpenApiDocument } from './PublicOpenApiDocument.js';
 
 let server: Server;
 const serverSockets = new Set<Socket>();
 let shutdownStarted = false;
 const api = express();
+const publicOpenApiDocument = createPublicOpenApiDocument(swaggerDocument);
 api.use(corsMiddleware);
 api.use('/v1/history-scan', bodyParser.json({ limit: '2mb' }));
 api.use(bodyParser.json());
@@ -158,7 +160,7 @@ const listen = async () => {
 	api.use(
 		'/docs',
 		swaggerUi.serve,
-		swaggerUi.setup(swaggerDocument, swaggerDocsOptions)
+		swaggerUi.setup(publicOpenApiDocument, swaggerDocsOptions)
 	);
 
 	api.use(
