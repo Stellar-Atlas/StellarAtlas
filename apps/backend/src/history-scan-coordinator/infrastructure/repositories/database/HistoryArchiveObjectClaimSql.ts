@@ -221,7 +221,11 @@ export const historyArchiveObjectClaimSelectionSql = `
 				when claim_slot.slot % 4 = 0 then 1
 				when root_pool."hasPending" then 0
 				else 1
-			end as "claimClassPriority"
+			end as "claimClassPriority",
+			case
+				when claim_slot.slot % 4 = 1 then root_pool.priority
+				else 0
+			end as "claimPriority"
 		from root_pool
 		cross join claim_slot
 		cross join class_state
@@ -244,8 +248,9 @@ export const historyArchiveObjectClaimSelectionSql = `
 		join "history_archive_object_queue" root on root.id = root_choice_pool.id
 		order by
 			root_choice_pool."claimClassPriority",
-			root_choice_pool.priority,
+			root_choice_pool."claimPriority",
 			root_choice_pool."lastClaimedAt" asc nulls first,
+			root_choice_pool.priority,
 			root_choice_pool.id
 		for update of root skip locked
 		limit 1
@@ -329,16 +334,23 @@ export const historyArchiveObjectClaimFinalizeSql = `
 			and ${candidateDependencyReadySql}
 			and candidate."objectType" = any($1)
 		order by
-			case candidate."executionReason"
-				when 'canonical-frontier-reserve' then 0
-				when 'proof-completion-reserve' then 1
-				else 2
+			case when $3::integer % 4 = 1 then case candidate."executionReason"
+					when 'canonical-frontier-reserve' then 0
+					when 'proof-completion-reserve' then 1
+					else 2
+				end
+				else 0
 			end,
 			case when candidate.status = 'failed' then coalesce(
 				candidate."nextAttemptAt",
 				candidate."updatedAt" + interval '1 hour'
 			) end asc nulls last,
 			candidate."lastClaimedAt" asc nulls first,
+			case candidate."executionReason"
+				when 'canonical-frontier-reserve' then 0
+				when 'proof-completion-reserve' then 1
+				else 2
+			end,
 			candidate."objectOrder",
 			case when candidate.status = 'pending'
 				then candidate."checkpointLedger" end desc nulls last,

@@ -58,32 +58,31 @@ export class TypeOrmKnownArchiveEvidenceRepository implements KnownArchiveEviden
 			query.objectPage,
 			rootRows
 		);
-		const [remoteFailures, workerIssues] = await Promise.all([
-			findKnownArchiveFailurePage(
-				manager,
-				archiveUrlIdentities,
-				remoteFailurePage,
-				'remote'
-			),
-			findKnownArchiveFailurePage(
-				manager,
-				archiveUrlIdentities,
-				workerIssuePage,
-				'infrastructure'
-			)
-		]);
-		const [objectPage, eventPage] = await Promise.all([
-			findKnownArchiveObjectPage(
-				manager,
-				archiveUrlIdentities,
-				objectPageRequest
-			),
-			findKnownArchiveObjectEventPage(
-				manager,
-				archiveUrlIdentities,
-				query.eventPage
-			)
-		]);
+		const [remoteFailures, workerIssues, objectPage, eventPage] =
+			await Promise.all([
+				findKnownArchiveFailurePage(
+					manager,
+					archiveUrlIdentities,
+					remoteFailurePage,
+					'remote'
+				),
+				findKnownArchiveFailurePage(
+					manager,
+					archiveUrlIdentities,
+					workerIssuePage,
+					'infrastructure'
+				),
+				findKnownArchiveObjectPage(
+					manager,
+					archiveUrlIdentities,
+					objectPageRequest
+				),
+				findKnownArchiveObjectEventPage(
+					manager,
+					archiveUrlIdentities,
+					query.eventPage
+				)
+			]);
 		const pageRemoteFailures = remoteFailures.failures.slice(
 			0,
 			query.remoteFailures.limit

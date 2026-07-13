@@ -157,6 +157,37 @@ describe('history archive object claim concurrency', () => {
 		await expectActiveCaps(consumerCount);
 	});
 
+	it('bounds normal-root wait while priority work remains replenished', async () => {
+		const priorityRootCount = 24;
+		const normalRootCount = 24;
+		const objects = Array.from(
+			{ length: priorityRootCount + normalRootCount },
+			(_, index) => {
+				const candidate = checkpoint(index, 'pending');
+				candidate.executionReason =
+					index < priorityRootCount
+						? 'canonical-frontier-reserve'
+						: 'planned-frontier';
+				return [root(index), candidate];
+			}
+		).flat();
+		await save(...objects);
+
+		const claimedRoots = new Set<string>();
+		for (let burst = 0; burst < 3; burst += 1) {
+			const claims = claimsOnly(await claimBurst(consumerCount));
+			claims.forEach((claim) => claimedRoots.add(claim.archiveUrlIdentity));
+			await requeueActiveClaims();
+		}
+
+		const normalRoots = Array.from({ length: normalRootCount }, (_, offset) =>
+			archiveUrlFor(priorityRootCount + offset, priorityRootCount + offset)
+		);
+		expect(normalRoots.every((rootUrl) => claimedRoots.has(rootUrl))).toBe(
+			true
+		);
+	});
+
 	async function claimBurst(
 		count: number
 	): Promise<readonly (HistoryArchiveObject | null)[]> {
@@ -199,6 +230,26 @@ describe('history archive object claim concurrency', () => {
 
 	async function save(...objects: HistoryArchiveObject[]): Promise<void> {
 		await dataSource.getRepository(HistoryArchiveObject).save(objects);
+	}
+
+	async function requeueActiveClaims(): Promise<void> {
+		await dataSource.transaction(async (manager) => {
+			await manager.query(`
+				update "history_archive_object_queue"
+				set status = 'pending',
+					"claimedAt" = null,
+					"workerStage" = null,
+					"updatedAt" = now()
+				where status = 'scanning'
+			`);
+			await manager.query(`
+				update "history_archive_object_claim_slot"
+				set "objectRemoteId" = null,
+					"claimedAt" = null,
+					"updatedAt" = now()
+				where "objectRemoteId" is not null
+			`);
+		});
 	}
 });
 

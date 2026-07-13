@@ -46,6 +46,12 @@ describe('HistoryArchiveObjectClaimSql', () => {
 			"when 'proof-completion-reserve' then 1"
 		);
 		expect(historyArchiveObjectClaimSelectionSql).toContain(
+			'when claim_slot.slot % 4 = 1 then root_pool.priority'
+		);
+		expect(historyArchiveObjectClaimFinalizeSql).toContain(
+			'case when $3::integer % 4 = 1 then case candidate."executionReason"'
+		);
+		expect(historyArchiveObjectClaimSelectionSql).toContain(
 			'for update of root skip locked'
 		);
 		expect(historyArchiveObjectClaimSelectionSql).not.toContain('limit 512');
@@ -176,7 +182,9 @@ describe('HistoryArchiveObjectListQuery', () => {
 		expect(querySource).toContain(
 			"when archive_object.status not in ('pending', 'failed')"
 		);
-		expect(querySource).toContain('when not coalesce(');
+		expect(querySource).toContain(
+			"when archive_object.status = 'pending' and not coalesce("
+		);
 		expect(querySource).toContain(
 			"historyArchiveObjectDependencySatisfiedSql('archive_object')"
 		);

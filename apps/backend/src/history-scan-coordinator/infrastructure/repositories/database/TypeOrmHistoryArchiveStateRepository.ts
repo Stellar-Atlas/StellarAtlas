@@ -13,28 +13,6 @@ import type { ArchiveMetadataDTO } from 'history-scanner-dto';
 import { injectable } from 'inversify';
 import type { Repository } from 'typeorm';
 
-const upsertConflictPaths: readonly (keyof HistoryArchiveStateSnapshot)[] = [
-	'archiveUrlIdentity'
-];
-const availableUpsertColumns: readonly (keyof HistoryArchiveStateSnapshot)[] = [
-	'archiveUrl',
-	'stateUrl',
-	'status',
-	'observedAt',
-	'source',
-	'version',
-	'server',
-	'currentLedger',
-	'networkPassphrase',
-	'currentBuckets',
-	'hotArchiveBuckets',
-	'rawState',
-	'errorType',
-	'errorMessage',
-	'httpStatus',
-	'updatedAt'
-];
-
 @injectable()
 export class TypeOrmHistoryArchiveStateRepository implements HistoryArchiveStateRepository {
 	constructor(
@@ -75,13 +53,70 @@ export class TypeOrmHistoryArchiveStateRepository implements HistoryArchiveState
 			source
 		);
 
-		await this.repository
-			.createQueryBuilder()
-			.insert()
-			.into(HistoryArchiveStateSnapshot)
-			.values(snapshot)
-			.orUpdate([...availableUpsertColumns], [...upsertConflictPaths])
-			.execute();
+		await this.repository.manager.query(
+			`
+				insert into "history_archive_state_snapshot" (
+					"archiveUrl",
+					"archiveUrlIdentity",
+					"stateUrl",
+					"status",
+					"observedAt",
+					"source",
+					"version",
+					"server",
+					"currentLedger",
+					"networkPassphrase",
+					"currentBuckets",
+					"hotArchiveBuckets",
+					"rawState",
+					"errorType",
+					"errorMessage",
+					"httpStatus"
+				)
+				values (
+					$1, $2, $3, $4, $5, $6, $7, $8, $9, $10,
+					$11::jsonb, $12::jsonb, $13::jsonb, $14, $15, $16
+				)
+				on conflict ("archiveUrlIdentity") do update set
+					"archiveUrl" = excluded."archiveUrl",
+					"stateUrl" = excluded."stateUrl",
+					"status" = excluded."status",
+					"observedAt" = excluded."observedAt",
+					"source" = excluded."source",
+					"version" = excluded."version",
+					"server" = excluded."server",
+					"currentLedger" = excluded."currentLedger",
+					"networkPassphrase" = excluded."networkPassphrase",
+					"currentBuckets" = excluded."currentBuckets",
+					"hotArchiveBuckets" = excluded."hotArchiveBuckets",
+					"rawState" = excluded."rawState",
+					"errorType" = excluded."errorType",
+					"errorMessage" = excluded."errorMessage",
+					"httpStatus" = excluded."httpStatus",
+					"updatedAt" = now()
+				where "history_archive_state_snapshot"."status" != 'available'
+					or "history_archive_state_snapshot"."observedAt" <
+						excluded."observedAt"
+			`,
+			[
+				snapshot.archiveUrl,
+				snapshot.archiveUrlIdentity,
+				snapshot.stateUrl,
+				snapshot.status,
+				snapshot.observedAt,
+				snapshot.source,
+				snapshot.version,
+				snapshot.server,
+				snapshot.currentLedger,
+				snapshot.networkPassphrase,
+				toJsonParameter(snapshot.currentBuckets),
+				toJsonParameter(snapshot.hotArchiveBuckets),
+				toJsonParameter(snapshot.rawState),
+				snapshot.errorType,
+				snapshot.errorMessage,
+				snapshot.httpStatus
+			]
+		);
 		await this.markRootObjectCaptured(
 			normalizedArchiveUrl,
 			archiveUrlIdentity,
@@ -157,6 +192,10 @@ export class TypeOrmHistoryArchiveStateRepository implements HistoryArchiveState
 						else excluded."httpStatus"
 					end,
 					"updatedAt" = now()
+				where
+					"history_archive_state_snapshot"."latestFailureObservedAt" is null
+					or "history_archive_state_snapshot"."latestFailureObservedAt" <
+						excluded."latestFailureObservedAt"
 			`,
 			[
 				normalizedArchiveUrl,
@@ -243,4 +282,12 @@ export class TypeOrmHistoryArchiveStateRepository implements HistoryArchiveState
 			})
 			.execute();
 	}
+}
+
+function toJsonParameter(value: unknown): string | null {
+	if (value === null) return null;
+	const json = JSON.stringify(value);
+	if (json === undefined)
+		throw new Error('Archive state JSON is not serializable');
+	return json;
 }

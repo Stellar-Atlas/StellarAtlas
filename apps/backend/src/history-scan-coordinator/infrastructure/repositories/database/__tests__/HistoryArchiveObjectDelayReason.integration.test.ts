@@ -108,6 +108,36 @@ describe('history archive object delay reasons in disposable PostgreSQL', () => 
 		await expectReasonInBoth(active, 'object-already-active', null);
 	});
 
+	it('does not replace failed-object evidence with a dependency delay', async () => {
+		const failed = categoryObject(
+			'https://failed-dependency.example/archive',
+			'ledger',
+			'failed'
+		);
+		failed.dependencyReady = false;
+		await saveHistoryArchiveObjects(dataSource, failed);
+
+		const queue = await repository.findByArchiveUrl(failed.archiveUrl, 10);
+		const page = await findKnownArchiveObjectPage(
+			dataSource.manager,
+			[failed.archiveUrlIdentity],
+			{
+				before: null,
+				filters: {
+					archiveUrlIdentity: failed.archiveUrlIdentity,
+					objectType: failed.objectType,
+					status: failed.status
+				},
+				limit: 10,
+				snapshotAt: new Date(Date.now() + 1_000),
+				snapshotTotal: null
+			}
+		);
+
+		expect(queue.objects[0]?.delayReason).toBeNull();
+		expect(page.objects[0]?.delayReason).toBeNull();
+	});
+
 	async function expectReasonInBoth(
 		target: HistoryArchiveObject,
 		code: NonNullable<HistoryArchiveObject['delayReason']>['code'],

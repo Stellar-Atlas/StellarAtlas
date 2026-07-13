@@ -26,7 +26,7 @@ describe('GetKnownOrganizationArchiveEvidence', () => {
 				}
 			} as never)
 		);
-		nodeRepository.findAllKnown.mockResolvedValue([
+		nodeRepository.findKnownByPublicKeysOrHomeDomain.mockResolvedValue([
 			createNode(keyA, 'https://history.example.com/'),
 			createNode(keyB, 'https://HISTORY.example.com')
 		]);
@@ -44,6 +44,10 @@ describe('GetKnownOrganizationArchiveEvidence', () => {
 		expect(result.isOk()).toBe(true);
 		if (result.isErr()) return;
 		expect(result.value?.organizationId).toBe('org-id');
+		expect(
+			nodeRepository.findKnownByPublicKeysOrHomeDomain
+		).toHaveBeenCalledWith([keyA, keyB], 'org.example');
+		expect(nodeRepository.findAllKnown).not.toHaveBeenCalled();
 		expect(getKnownArchiveEvidence.execute).toHaveBeenCalledWith({
 			nodePublicKeys: [keyA, keyB].toSorted(),
 			options: { failureLimit: 10 },

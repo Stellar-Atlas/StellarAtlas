@@ -134,7 +134,7 @@ function historyArchiveObjectListSql(): string {
 					then 'host-backoff'
 				when archive_object."nextAttemptAt" > now()
 					then 'retry-window'
-				when not coalesce(
+				when archive_object.status = 'pending' and not coalesce(
 					${historyArchiveObjectDependencySatisfiedSql('archive_object')},
 					false
 				)
