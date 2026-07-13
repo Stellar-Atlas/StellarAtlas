@@ -8,6 +8,7 @@ import {
 	historyArchiveThroughputSampleCap,
 	historyArchiveThroughputWindowMinutes
 } from '@history-scan-coordinator/domain/history-archive-object/HistoryArchiveObjectPlanningPolicy.js';
+import { requeueStaleHistoryArchiveStateObjects } from './HistoryArchiveObjectStateRefreshQuery.js';
 
 const planChunkSize = 200;
 const promotionLockName = 'history_archive_object_plan_promotion';
@@ -39,7 +40,12 @@ export async function planHistoryArchiveObjects(
 		])) as readonly unknown[];
 		planned += rows.length;
 	}
-	return planned;
+
+	const refreshed = await requeueStaleHistoryArchiveStateObjects(
+		repository.manager,
+		objects
+	);
+	return planned + refreshed;
 }
 
 export async function promoteHistoryArchiveObjectPlans(

@@ -292,6 +292,8 @@ describe('ArchiveScanRouter.integration', () => {
 			await request(app)
 				.get('/archive-scans/workers')
 				.expect(200)
+				.expect('Deprecation', 'true')
+				.expect('Link', '</v1/archive-scans/objects>; rel="successor-version"')
 				.expect('Cache-Control', 'public, max-age=10')
 				.expect((response) => {
 					expect(response.body).toMatchObject({

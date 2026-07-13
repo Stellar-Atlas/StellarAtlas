@@ -66,9 +66,33 @@ export class TypeOrmHistoryArchiveObjectEventRepository implements HistoryArchiv
 			});
 		}
 
-		const [events, count] = await query.getManyAndCount();
+		const [events, count] = await Promise.all([
+			query.getMany(),
+			this.findMaintainedEventCount(options.archiveUrlIdentity)
+		]);
 
 		return { count, events, limit };
+	}
+
+	private async findMaintainedEventCount(
+		archiveUrlIdentity: string | undefined
+	): Promise<number> {
+		const rows: unknown = await this.repository.manager.query(
+			`
+				select coalesce(sum("eventCount"), 0)::text as count
+				from history_archive_object_event_summary
+				where $1::text is null or "archiveUrlIdentity" = $1::text
+			`,
+			[archiveUrlIdentity ?? null]
+		);
+		if (!Array.isArray(rows) || !isCountRow(rows[0])) {
+			throw new Error('History archive event summary count is invalid');
+		}
+		const count = Number(rows[0].count);
+		if (!Number.isSafeInteger(count) || count < 0) {
+			throw new Error('History archive event summary count is invalid');
+		}
+		return count;
 	}
 }
 
@@ -103,4 +127,13 @@ function normalizeLimit(limit: number): number {
 	if (!Number.isSafeInteger(limit) || limit < 1) return defaultEventLimit;
 
 	return Math.min(limit, maxEventLimit);
+}
+
+function isCountRow(value: unknown): value is { readonly count: string } {
+	return (
+		typeof value === 'object' &&
+		value !== null &&
+		'count' in value &&
+		typeof value.count === 'string'
+	);
 }

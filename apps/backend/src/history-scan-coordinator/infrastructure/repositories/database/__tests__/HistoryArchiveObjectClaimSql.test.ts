@@ -172,8 +172,10 @@ describe('HistoryArchiveObjectListQuery', () => {
 		expect(querySource).toContain("'planning-deferred'");
 	});
 
-	it('keeps delay reasons off failed and verified terminal rows', () => {
-		expect(querySource).toContain("when archive_object.status <> 'pending'");
+	it('keeps delay reasons off verified rows while explaining retry blockers', () => {
+		expect(querySource).toContain(
+			"when archive_object.status not in ('pending', 'failed')"
+		);
 		expect(querySource).toContain('when not coalesce(');
 		expect(querySource).toContain(
 			"historyArchiveObjectDependencySatisfiedSql('archive_object')"

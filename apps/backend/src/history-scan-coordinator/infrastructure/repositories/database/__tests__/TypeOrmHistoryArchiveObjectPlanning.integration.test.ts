@@ -104,7 +104,53 @@ describe('history archive producer watermarks in disposable PostgreSQL', () => {
 			watermark: 48
 		});
 	});
+
+	it('requeues only root state objects whose refresh window is due', async () => {
+		const dueUrl = 'https://refresh-due.example/history';
+		const freshUrl = 'https://refresh-fresh.example/history';
+		const due = rootObject(dueUrl, 'verified');
+		const fresh = rootObject(freshUrl, 'verified');
+		due.refreshAfter = new Date(Date.now() - 60_000);
+		due.verifiedAt = new Date(Date.now() - 10 * 60_000);
+		fresh.refreshAfter = new Date(Date.now() + 60_000);
+		fresh.verifiedAt = new Date();
+		await dataSource.getRepository(HistoryArchiveObject).save([due, fresh]);
+
+		await expect(
+			repository.planObjects([rootObject(dueUrl), rootObject(freshUrl)])
+		).resolves.toBe(1);
+
+		await expect(
+			dataSource.getRepository(HistoryArchiveObject).findOneByOrFail({
+				archiveUrlIdentity: dueUrl,
+				objectKey: 'root',
+				objectType: 'history-archive-state'
+			})
+		).resolves.toMatchObject({ status: 'pending', verifiedAt: null });
+		await expect(
+			dataSource.getRepository(HistoryArchiveObject).findOneByOrFail({
+				archiveUrlIdentity: freshUrl,
+				objectKey: 'root',
+				objectType: 'history-archive-state'
+			})
+		).resolves.toMatchObject({ status: 'verified' });
+	});
 });
+
+function rootObject(
+	archiveUrl: string,
+	status: HistoryArchiveObject['status'] = 'pending'
+): HistoryArchiveObject {
+	return new HistoryArchiveObject({
+		archiveUrl,
+		archiveUrlIdentity: archiveUrl,
+		objectKey: 'root',
+		objectOrder: 0,
+		objectType: 'history-archive-state',
+		objectUrl: `${archiveUrl}/.well-known/stellar-history.json`,
+		status
+	});
+}
 
 function createProductionPlans(
 	rootCount: number

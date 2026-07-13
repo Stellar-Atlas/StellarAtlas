@@ -101,6 +101,7 @@ export const ArchiveScanRouterWrapper = (
 	});
 
 	archiveScanRouter.get('/workers', async function (_req, res) {
+		markHistoricalRangeResponse(res);
 		res.setHeader(
 			'Cache-Control',
 			'public, max-age=' + archiveScanCacheMaxAgeSeconds

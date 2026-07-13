@@ -179,7 +179,7 @@ export const knownArchiveObjectPageSql = `
 		case
 			when archive_object.status = 'scanning'
 				then 'object-already-active'
-			when archive_object.status <> 'pending'
+			when archive_object.status not in ('pending', 'failed')
 				then null
 			when coalesce(
 				archive_object."executionDisposition",
@@ -207,7 +207,7 @@ export const knownArchiveObjectPageSql = `
 			else null
 		end as "delayReasonCode",
 		case
-			when archive_object.status <> 'pending'
+			when archive_object.status not in ('pending', 'failed')
 				then null
 			when coalesce(
 				archive_object."executionDisposition",

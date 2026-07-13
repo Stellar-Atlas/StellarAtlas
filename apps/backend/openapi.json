@@ -4611,6 +4611,7 @@
 				"description": "Authenticates a community scanner with its one-time API key and updates its heartbeat timestamp.",
 				"tags": ["Community scanner operators"],
 				"operationId": "sendCommunityScannerHeartbeat",
+				"security": [{ "bearerAuth": [] }],
 				"parameters": [
 					{
 						"name": "id",
@@ -4666,6 +4667,7 @@
 				"description": "Authenticates a community scanner, refreshes its heartbeat, enforces scanner claim admission controls, atomically marks one pending history archive scan job as taken, and attributes the claim to that scanner.",
 				"tags": ["Community scanner operators"],
 				"operationId": "getCommunityScannerJob",
+				"security": [{ "bearerAuth": [] }],
 				"parameters": [
 					{
 						"name": "id",
@@ -4739,6 +4741,7 @@
 				"description": "Authenticates a community scanner, refreshes its scanner heartbeat, and updates a taken scan job only when that scanner owns the claim.",
 				"tags": ["Community scanner operators"],
 				"operationId": "touchCommunityScannerJob",
+				"security": [{ "bearerAuth": [] }],
 				"parameters": [
 					{
 						"name": "id",
@@ -4782,6 +4785,7 @@
 				"description": "Authenticates a community scanner, validates that the scan job is active and owned by that scanner, stores the scan result with attribution, marks the job done, and updates scanner completion metrics.",
 				"tags": ["Community scanner operators"],
 				"operationId": "registerCommunityScannerScan",
+				"security": [{ "bearerAuth": [] }],
 				"parameters": [
 					{
 						"name": "id",
@@ -6830,6 +6834,18 @@
 		}
 	},
 	"components": {
+		"securitySchemes": {
+			"basicAuth": {
+				"type": "http",
+				"scheme": "basic",
+				"description": "StellarAtlas archive scanner worker credentials"
+			},
+			"bearerAuth": {
+				"type": "http",
+				"scheme": "bearer",
+				"description": "Community scanner API key returned by registration"
+			}
+		},
 		"parameters": {
 			"ArchiveEvidenceArchiveUrl": {
 				"name": "archiveUrl",

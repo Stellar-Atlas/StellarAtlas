@@ -24,6 +24,18 @@ describe('terminal history archive object events in disposable PostgreSQL', () =
 			url: postgres.url
 		});
 		await dataSource.initialize();
+		await dataSource.query(`
+			create table history_archive_object_event_summary (
+				"archiveUrlIdentity" text not null,
+				"objectType" text not null,
+				"eventType" text not null,
+				"evidenceClass" text not null,
+				"eventCount" bigint not null,
+				primary key (
+					"archiveUrlIdentity", "objectType", "eventType", "evidenceClass"
+				)
+			)
+		`);
 	});
 
 	afterAll(async () => {
@@ -62,5 +74,40 @@ describe('terminal history archive object events in disposable PostgreSQL', () =
 				objectRemoteId: object.remoteId
 			});
 		expect(count).toBe(1);
+	});
+
+	it('reads recent events with a maintained summary count', async () => {
+		const repository = new TypeOrmHistoryArchiveObjectEventRepository(
+			dataSource.getRepository(HistoryArchiveObjectEvent)
+		);
+		const object = new HistoryArchiveObject({
+			archiveUrl: 'https://recent.example/archive',
+			archiveUrlIdentity: 'https://recent.example/archive',
+			objectKey: 'transactions:000000bf',
+			objectOrder: 30,
+			objectType: 'transactions',
+			objectUrl: 'https://recent.example/archive/transactions-000000bf.xdr.gz',
+			status: 'verified'
+		});
+		await repository.appendFromObject(object, { eventType: 'claimed' });
+		await repository.appendFromObject(object, { eventType: 'verified' });
+		await dataSource.query(
+			`insert into history_archive_object_event_summary (
+				"archiveUrlIdentity", "objectType", "eventType", "evidenceClass",
+				"eventCount"
+			) values
+				($1, 'transactions', 'claimed', '', 1),
+				($1, 'transactions', 'verified', '', 1)`,
+			['https://recent.example/archive']
+		);
+
+		const page = await repository.findRecent({
+			archiveUrlIdentity: 'https://recent.example/archive',
+			limit: 1
+		});
+
+		expect(page.count).toBe(2);
+		expect(page.events).toHaveLength(1);
+		expect(page.limit).toBe(1);
 	});
 });

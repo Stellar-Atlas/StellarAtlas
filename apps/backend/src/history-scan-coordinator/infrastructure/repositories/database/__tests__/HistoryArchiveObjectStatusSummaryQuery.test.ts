@@ -7,6 +7,13 @@ import { checkpointCoverageSql } from '../HistoryArchiveObjectCheckpointCoverage
 
 describe('HistoryArchiveObjectStatusSummaryQuery', () => {
 	it('keeps headline queue reads on selective indexed shapes', () => {
+		const currentHealthSql = [
+			activeObjectCountSql,
+			failureCountSql,
+			sourceStatusSummarySql,
+			checkpointCoverageSql
+		].join('\n');
+
 		expect(normalize(activeObjectCountSql)).toContain(
 			"from history_archive_object_queue where status = 'scanning'"
 		);
@@ -35,6 +42,9 @@ describe('HistoryArchiveObjectStatusSummaryQuery', () => {
 		expect(checkpointCoverageSql).toContain('active_checkpoints as');
 		expect(normalize(checkpointCoverageSql)).toContain(
 			'status = \'scanning\' and "checkpointLedger" is not null'
+		);
+		expect(currentHealthSql).not.toMatch(
+			/history_archive_scan_v2|history_archive_scan_job|history_archive_scan_evidence/
 		);
 	});
 });
