@@ -189,6 +189,9 @@ describe('canonical immediate predecessor checkpoint frontier', () => {
 
 		expect(admission?.count).toBe(targetRootCount);
 		expect(reserved).toHaveLength(targetRootCount);
+		expect(new Set(reserved.map((row) => row.archiveUrlIdentity)).size).toBe(
+			targetRootCount
+		);
 		expect(forwardRootReservation).toMatchObject({
 			checkpointLedger: targetCheckpoint,
 			objectKey: checkpointKey(targetCheckpoint),
