@@ -21,6 +21,7 @@ polkit.addRule(function(action, subject) {
     "stellaratlas-frontend-v4.service",
     "stellaratlas-frontend-v4-staging.service",
     "stellaratlas-frontend-legacy.service",
+    "stellaratlas-meilisearch-network.service",
     "stellaratlas-network-scanner.service",
     "stellaratlas-scp-live-scanner.service",
     "stellaratlas-users.service",

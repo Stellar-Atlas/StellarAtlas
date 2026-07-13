@@ -64,9 +64,7 @@ export class ConfigMock implements Config {
 	userServicePassword = 'pass';
 	userServiceUsername = 'user';
 	frontendBaseUrl = 'https://stellaratlas.io';
-	meilisearchApiKey?: string;
-	meilisearchHost?: string;
-	meilisearchNetworkIndex = 'test_network_entities';
-	meilisearchScpStatementIndex = 'test_scp_statements';
+	meilisearchNetwork = { indexName: 'test_network_entities', writable: true };
+	meilisearchScp = { indexName: 'test_scp_statements' };
 	networkScanLoopIntervalMs = 1000;
 }

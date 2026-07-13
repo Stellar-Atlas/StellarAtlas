@@ -399,12 +399,7 @@ const listen = async () => {
 			networkScanRepository: kernel.container.get<NetworkScanRepository>(
 				NETWORK_TYPES.NetworkScanRepository
 			),
-			searchConfig: {
-				apiKey: config.meilisearchApiKey,
-				host: config.meilisearchHost,
-				indexName: config.meilisearchNetworkIndex,
-				writable: process.env.API_SEARCH_PROJECTION_WRITER !== 'false'
-			}
+			searchConfig: config.meilisearchNetwork
 		})
 	);
 

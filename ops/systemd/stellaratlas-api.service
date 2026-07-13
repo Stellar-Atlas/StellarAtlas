@@ -1,8 +1,8 @@
 [Unit]
 Description=StellarAtlas API
 Documentation=https://github.com/Stellar-Atlas/StellarAtlas
-Wants=network-online.target
-After=network-online.target
+Wants=network-online.target stellaratlas-meilisearch-network.service
+After=network-online.target stellaratlas-meilisearch-network.service
 PartOf=stellaratlas.target
 Conflicts=stellaratlas.service
 
@@ -16,6 +16,7 @@ Environment=DATABASE_SSL=false
 Environment=HOME=/home/observe
 Environment=PATH=/home/observe/.nvm/versions/node/v26.4.0/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 EnvironmentFile=-/etc/stellaratlas/stellaratlas.env
+EnvironmentFile=-/etc/stellaratlas/meilisearch-network.env
 ExecStart=/usr/bin/env pnpm start:api
 Restart=always
 RestartSec=5

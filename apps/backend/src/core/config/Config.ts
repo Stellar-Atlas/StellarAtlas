@@ -5,10 +5,11 @@ import { Url } from '../domain/Url.js';
 import { CrawlerConfiguration } from 'crawler';
 import { resolveAppEnvPath } from 'shared/lib/env/resolve-app-env-path.js';
 import { parseOptionalUrl } from './parseOptionalUrl.js';
-import {
-	defaultMeilisearchNetworkIndex,
-	defaultMeilisearchScpStatementIndex
-} from './SearchConfigDefaults.js';
+import { parseMeilisearchRuntimeConfig } from './MeilisearchRuntimeConfig.js';
+import type {
+	MeilisearchNetworkWorkloadConfig,
+	MeilisearchWorkloadConfig
+} from './MeilisearchRuntimeConfig.js';
 
 config({
 	path: resolveAppEnvPath(import.meta.url, 'backend'),
@@ -67,10 +68,8 @@ export interface Config {
 	userServiceUsername?: string;
 	userServicePassword?: string;
 	logLevel?: string;
-	meilisearchApiKey?: string;
-	meilisearchHost?: string;
-	meilisearchNetworkIndex: string;
-	meilisearchScpStatementIndex: string;
+	meilisearchNetwork: MeilisearchNetworkWorkloadConfig;
+	meilisearchScp: MeilisearchWorkloadConfig;
 	networkScanLoopIntervalMs?: number;
 	historyScanAPIPassword?: string;
 	historyScanAPIUsername?: string;
@@ -109,10 +108,8 @@ export class DefaultConfig implements Config {
 	historyMaxFileMs?: number;
 	historySlowArchiveMaxLedgers?: number;
 	logLevel = 'info';
-	meilisearchApiKey?: string;
-	meilisearchHost?: string;
-	meilisearchNetworkIndex = defaultMeilisearchNetworkIndex;
-	meilisearchScpStatementIndex = defaultMeilisearchScpStatementIndex;
+	meilisearchNetwork = parseMeilisearchRuntimeConfig({}).network;
+	meilisearchScp = parseMeilisearchRuntimeConfig({}).scp;
 	networkScanLoopIntervalMs?: number;
 	historyScanAPIUsername?: string;
 	historyScanAPIPassword?: string;
@@ -289,30 +286,9 @@ export function getConfigFromEnv(): Result<Config, Error> {
 	const logLevel = process.env.LOG_LEVEL;
 	if (isString(logLevel)) config.logLevel = logLevel;
 
-	const meilisearchHost = process.env.MEILISEARCH_HOST;
-	if (isString(meilisearchHost) && meilisearchHost.trim().length > 0)
-		config.meilisearchHost = meilisearchHost.trim();
-
-	const meilisearchApiKey = process.env.MEILISEARCH_API_KEY;
-	if (isString(meilisearchApiKey) && meilisearchApiKey.trim().length > 0)
-		config.meilisearchApiKey = meilisearchApiKey.trim();
-
-	const meilisearchNetworkIndex = process.env.MEILISEARCH_NETWORK_INDEX;
-	if (
-		isString(meilisearchNetworkIndex) &&
-		meilisearchNetworkIndex.trim().length > 0
-	)
-		config.meilisearchNetworkIndex = meilisearchNetworkIndex.trim();
-
-	const meilisearchScpStatementIndex =
-		process.env.MEILISEARCH_SCP_STATEMENT_INDEX;
-	if (
-		isString(meilisearchScpStatementIndex) &&
-		meilisearchScpStatementIndex.trim().length > 0
-	) {
-		config.meilisearchScpStatementIndex =
-			meilisearchScpStatementIndex.trim();
-	}
+	const meilisearch = parseMeilisearchRuntimeConfig(process.env);
+	config.meilisearchNetwork = meilisearch.network;
+	config.meilisearchScp = meilisearch.scp;
 
 	let notificationsEnabled = parseBoolean(process.env.NOTIFICATIONS_ENABLED);
 	if (notificationsEnabled === undefined) {

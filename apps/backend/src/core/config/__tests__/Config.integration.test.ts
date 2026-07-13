@@ -55,7 +55,7 @@ describe('Config', function () {
 			expect(config.isOk()).toBe(true);
 			if (!config.isOk()) throw config.error;
 
-			expect(config.value.meilisearchNetworkIndex).toBe(
+			expect(config.value.meilisearchNetwork.indexName).toBe(
 				defaultMeilisearchNetworkIndex
 			);
 		});
@@ -67,7 +67,9 @@ describe('Config', function () {
 			expect(config.isOk()).toBe(true);
 			if (!config.isOk()) throw config.error;
 
-			expect(config.value.meilisearchNetworkIndex).toBe('custom_network_index');
+			expect(config.value.meilisearchNetwork.indexName).toBe(
+				'custom_network_index'
+			);
 		});
 	});
 
@@ -89,7 +91,7 @@ describe('Config', function () {
 			expect(config.isOk()).toBe(true);
 			if (!config.isOk()) throw config.error;
 
-			expect(config.value.meilisearchScpStatementIndex).toBe(
+			expect(config.value.meilisearchScp.indexName).toBe(
 				defaultMeilisearchScpStatementIndex
 			);
 		});
@@ -101,9 +103,51 @@ describe('Config', function () {
 			expect(config.isOk()).toBe(true);
 			if (!config.isOk()) throw config.error;
 
-			expect(config.value.meilisearchScpStatementIndex).toBe(
-				'custom_scp_index'
-			);
+			expect(config.value.meilisearchScp.indexName).toBe('custom_scp_index');
+		});
+	});
+
+	describe('meilisearch workload connections', function () {
+		const variableNames = [
+			'MEILISEARCH_API_KEY',
+			'MEILISEARCH_HOST',
+			'MEILISEARCH_NETWORK_API_KEY',
+			'MEILISEARCH_NETWORK_HOST',
+			'MEILISEARCH_SCP_API_KEY',
+			'MEILISEARCH_SCP_HOST'
+		] as const;
+		const originals = new Map(
+			variableNames.map((name) => [name, process.env[name]] as const)
+		);
+
+		afterEach(() => {
+			for (const name of variableNames) {
+				const value = originals.get(name);
+				if (value === undefined) delete process.env[name];
+				else process.env[name] = value;
+			}
+		});
+
+		test('keeps network and SCP connection overrides independent', function () {
+			process.env.MEILISEARCH_API_KEY = 'legacy-key';
+			process.env.MEILISEARCH_HOST = 'http://127.0.0.1:7700';
+			process.env.MEILISEARCH_NETWORK_API_KEY = 'network-key';
+			process.env.MEILISEARCH_NETWORK_HOST = 'http://127.0.0.1:7701';
+			process.env.MEILISEARCH_SCP_API_KEY = 'scp-key';
+			process.env.MEILISEARCH_SCP_HOST = 'http://127.0.0.1:7702';
+
+			const config = getConfigFromEnv();
+			expect(config.isOk()).toBe(true);
+			if (!config.isOk()) throw config.error;
+
+			expect(config.value.meilisearchNetwork).toMatchObject({
+				apiKey: 'network-key',
+				host: 'http://127.0.0.1:7701'
+			});
+			expect(config.value.meilisearchScp).toMatchObject({
+				apiKey: 'scp-key',
+				host: 'http://127.0.0.1:7702'
+			});
 		});
 	});
 

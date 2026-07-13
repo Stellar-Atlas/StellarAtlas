@@ -358,11 +358,7 @@ function loadDomain(container: Container, config: Config) {
 		.toDynamicValue(() => {
 			const logger = container.get<Logger>('Logger');
 			return new MeilisearchScpStatementLiveStore(
-				{
-					apiKey: config.meilisearchApiKey,
-					host: config.meilisearchHost,
-					indexName: config.meilisearchScpStatementIndex
-				},
+				config.meilisearchScp,
 				logger
 			);
 		})

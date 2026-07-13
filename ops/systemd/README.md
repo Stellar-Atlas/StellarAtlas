@@ -15,12 +15,78 @@ truth; systemd consumes root-owned regular-file copies installed under
   from `.next-staging` on `127.0.0.1:3114`.
 - `stellaratlas-frontend-legacy.service` starts the existing legacy frontend
   build without rebuilding it.
+- `stellaratlas-meilisearch-network.service` serves the rebuildable network
+  inventory search projection on `127.0.0.1:7701`.
 - `stellaratlas-network-scanner.service` runs the network scanner.
 - `stellaratlas-scp-live-scanner.service` continuously indexes live SCP
   observations into the live search read model.
 - `stellaratlas-history-scanner@.service` runs the bounded history object
   scanner with 24 total object worker processes and one scanner loop per worker.
 - `stellaratlas-users.service` runs the user/mail service.
+
+## Isolated network search
+
+Network inventory search and live SCP search use independent connection
+settings. Each workload-specific value falls back to the legacy setting when
+its override is empty or absent:
+
+| Workload | Host | API key | Index |
+| --- | --- | --- | --- |
+| Network inventory | `MEILISEARCH_NETWORK_HOST` | `MEILISEARCH_NETWORK_API_KEY` | `MEILISEARCH_NETWORK_INDEX` |
+| Live SCP | `MEILISEARCH_SCP_HOST` | `MEILISEARCH_SCP_API_KEY` | `MEILISEARCH_SCP_STATEMENT_INDEX` |
+| Legacy fallback | `MEILISEARCH_HOST` | `MEILISEARCH_API_KEY` | n/a |
+
+The dedicated network service uses port `7701` and the rebuildable data path
+`/home/observe/stellarbeat-data/meilisearch/network`. It is intentionally
+separate from the existing SCP instance on port `7700`; activation does not
+copy, delete, or migrate that instance or either index. The network index starts
+empty and is rebuilt from canonical Postgres inventory by the API projection
+writer. Search continues from Postgres while the new projection is absent,
+stale, rebuilding, or unavailable.
+
+This VM has no separate FAST mount attached. The current storage target is the
+51 TiB `/home/observe/stellarbeat-data` virtiofs array, so the dedicated network
+index uses that array now rather than the VM root disk. A future distinct FAST
+mount can override `MEILI_DB_PATH`, `MEILI_DUMP_DIR`, and `MEILI_SNAPSHOT_DIR`
+through the private env file before service start; its absence does not block
+the current deployment.
+
+`setup-systemd.sh` creates `/etc/stellaratlas/meilisearch-network.env` when it
+is absent, using a generated 256-bit key for both the Meilisearch master key and
+the network projection client. It never prints the key. Later installer runs
+preserve the file contents verbatim while enforcing `root:observe` ownership and
+mode `0640`. The same installer creates `data`, `dumps`, and `snapshots` under
+the array path as `observe:observe` mode `0700`. The `--verify` command remains
+read-only; provisioning happens only during an explicit privileged install.
+
+The generated private env file has this shape:
+
+```text
+MEILI_MASTER_KEY=<network-instance-master-key>
+MEILISEARCH_NETWORK_HOST=http://127.0.0.1:7701
+MEILISEARCH_NETWORK_API_KEY=<network-instance-master-key>
+```
+
+The unit caps indexing at two threads and 2 GiB, the process at four CPU cores
+and 4 GiB, and the search queue at 256 requests. Change those caps only after
+observing sustained network-index workload; this instance does not carry SCP
+traffic.
+
+Safe activation order after the generated env metadata has been verified:
+
+```bash
+sudo ./setup-systemd.sh
+systemctl start stellaratlas-meilisearch-network.service
+node scripts/wait-for-url.mjs http://127.0.0.1:7701/health 90
+systemctl restart stellaratlas-api.service
+node scripts/wait-for-url.mjs http://127.0.0.1:3000/v1/status 90
+```
+
+Verify network autocomplete/search and live SCP independently before treating
+the isolation as deployed. Rollback is configuration-only: stop the dedicated
+unit, remove its workload-specific variables from the API environment, and
+restart only the API. Leave both Meilisearch data directories intact; Postgres
+fallback restores network search while SCP remains on its legacy connection.
 
 ## Boot contract
 

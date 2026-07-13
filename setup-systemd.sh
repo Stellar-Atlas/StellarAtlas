@@ -6,6 +6,15 @@ SYSTEMD_SOURCE_DIR="$REPO_ROOT/ops/systemd"
 SYSTEMD_UNIT_DIR="/etc/systemd/system"
 POLKIT_RULE_DIR="/etc/polkit-1/rules.d"
 EXPECTED_REPO_ROOT="/home/observe/stellarbeat-data/Observer"
+NETWORK_MEILI_ENV_DIR="/etc/stellaratlas"
+NETWORK_MEILI_ENV_FILE="$NETWORK_MEILI_ENV_DIR/meilisearch-network.env"
+NETWORK_MEILI_DATA_ROOT="/home/observe/stellarbeat-data/meilisearch/network"
+NETWORK_MEILI_RUNTIME_DIRS=(
+	"$NETWORK_MEILI_DATA_ROOT"
+	"$NETWORK_MEILI_DATA_ROOT/data"
+	"$NETWORK_MEILI_DATA_ROOT/dumps"
+	"$NETWORK_MEILI_DATA_ROOT/snapshots"
+)
 
 INSTALL_UNIT_NAMES=(
 	stellaratlas.target
@@ -13,6 +22,7 @@ INSTALL_UNIT_NAMES=(
 	stellaratlas-frontend-v4.service
 	stellaratlas-frontend-v4-staging.service
 	stellaratlas-frontend-legacy.service
+	stellaratlas-meilisearch-network.service
 	stellaratlas-network-scanner.service
 	stellaratlas-scp-live-scanner.service
 	stellaratlas-users.service
@@ -95,6 +105,84 @@ verify_installed_polkit_rule() {
 		die "installed polkit rule does not authorize non-root service management"
 }
 
+verify_network_meilisearch_runtime() {
+	local directory
+
+	[[ -f "$NETWORK_MEILI_ENV_FILE" ]] ||
+		die "network Meilisearch env is missing: $NETWORK_MEILI_ENV_FILE"
+	[[ ! -L "$NETWORK_MEILI_ENV_FILE" ]] ||
+		die "network Meilisearch env must not be a symlink"
+	[[ "$(stat -c '%U:%G:%a' "$NETWORK_MEILI_ENV_FILE")" == \
+		"root:observe:640" ]] ||
+		die "network Meilisearch env must be root:observe mode 0640"
+	grep -Eq '^MEILI_MASTER_KEY=.{16,}$' "$NETWORK_MEILI_ENV_FILE" ||
+		die "network Meilisearch env has no usable master key"
+	grep -Eq '^MEILISEARCH_NETWORK_HOST=.+$' "$NETWORK_MEILI_ENV_FILE" ||
+		die "network Meilisearch env has no network host"
+	grep -Eq '^MEILISEARCH_NETWORK_API_KEY=.{16,}$' \
+		"$NETWORK_MEILI_ENV_FILE" ||
+		die "network Meilisearch env has no usable API key"
+
+	for directory in "${NETWORK_MEILI_RUNTIME_DIRS[@]}"; do
+		[[ -d "$directory" ]] ||
+			die "network Meilisearch runtime directory is missing: $directory"
+		[[ ! -L "$directory" ]] ||
+			die "network Meilisearch runtime directory must not be a symlink"
+		[[ "$(stat -c '%U:%G:%a' "$directory")" == "observe:observe:700" ]] ||
+			die "network Meilisearch runtime directory must be observe:observe mode 0700"
+	done
+}
+
+provision_network_meilisearch_runtime() {
+	local directory
+	local master_key
+	local staged
+
+	install -d -o root -g root -m 0755 "$NETWORK_MEILI_ENV_DIR"
+	[[ ! -L "$NETWORK_MEILI_ENV_FILE" ]] ||
+		die "network Meilisearch env must not be a symlink"
+
+	if [[ ! -e "$NETWORK_MEILI_ENV_FILE" ]]; then
+		command -v openssl >/dev/null || die "openssl is required"
+		master_key="$(openssl rand -hex 32)"
+		[[ "$master_key" =~ ^[[:xdigit:]]{64}$ ]] ||
+			die "failed to generate network Meilisearch credentials"
+		staged="$(
+			mktemp --tmpdir="$NETWORK_MEILI_ENV_DIR" \
+				'.meilisearch-network.env.XXXXXX'
+		)"
+		if ! {
+			printf 'MEILI_MASTER_KEY=%s\n' "$master_key"
+			printf 'MEILISEARCH_NETWORK_HOST=http://127.0.0.1:7701\n'
+			printf 'MEILISEARCH_NETWORK_API_KEY=%s\n' "$master_key"
+		} >"$staged"; then
+			rm -f "$staged"
+			die "failed to write network Meilisearch credentials"
+		fi
+		master_key=''
+		if ! chown root:observe "$staged" || ! chmod 0640 "$staged"; then
+			rm -f "$staged"
+			die "failed to secure network Meilisearch credentials"
+		fi
+		if ! ln "$staged" "$NETWORK_MEILI_ENV_FILE" 2>/dev/null; then
+			[[ -f "$NETWORK_MEILI_ENV_FILE" && ! -L "$NETWORK_MEILI_ENV_FILE" ]] || {
+				rm -f "$staged"
+				die "failed to install network Meilisearch credentials"
+			}
+		fi
+		rm -f "$staged"
+	fi
+
+	[[ -f "$NETWORK_MEILI_ENV_FILE" ]] ||
+		die "network Meilisearch env must be a regular file"
+	chown root:observe "$NETWORK_MEILI_ENV_FILE"
+	chmod 0640 "$NETWORK_MEILI_ENV_FILE"
+	for directory in "${NETWORK_MEILI_RUNTIME_DIRS[@]}"; do
+		install -d -o observe -g observe -m 0700 "$directory"
+	done
+	verify_network_meilisearch_runtime
+}
+
 verify_installed_units() {
 	local file_name
 	local legacy_unit="$SYSTEMD_UNIT_DIR/stellaratlas.service"
@@ -108,6 +196,7 @@ verify_installed_units() {
 	done
 
 	verify_installed_polkit_rule
+	verify_network_meilisearch_runtime
 
 	[[ -L "$legacy_unit" ]] || die "legacy stellaratlas.service is not masked"
 	[[ "$(readlink "$legacy_unit")" == "/dev/null" ]] ||
@@ -205,6 +294,7 @@ main() {
 		die "repository must be at $EXPECTED_REPO_ROOT"
 
 	verify_source_units
+	provision_network_meilisearch_runtime
 	install_units
 	mask_legacy_unit
 	systemctl daemon-reload
@@ -230,6 +320,7 @@ Production:
   systemctl status stellaratlas.target
   # Restart only a changed component during normal deploys. Restarting the
   # target also stops the public ingress proxy and causes avoidable downtime.
+  systemctl restart stellaratlas-meilisearch-network.service
   systemctl restart stellaratlas-api.service
   systemctl restart stellaratlas-frontend-v4.service
   systemctl restart stellaratlas-network-scanner.service
