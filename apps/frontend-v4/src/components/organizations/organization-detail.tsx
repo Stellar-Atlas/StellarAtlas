@@ -1,14 +1,11 @@
+import { Fragment } from 'react';
 import Link from 'next/link';
 import type {
 	PublicNetwork,
 	PublicNode,
 	PublicOrganization
 } from '../../api/types';
-import {
-	getNodeLabel,
-	getOrganizationLabel,
-	getOrganizationTags
-} from '../../domain/network';
+import { getNodeLabel, getOrganizationTags } from '../../domain/network';
 import {
 	formatNode30DayValidating,
 	formatOrganization24HourAvailability,
@@ -29,19 +26,19 @@ export function OrganizationDetail({
 	network,
 	organization
 }: OrganizationDetailProps): React.JSX.Element {
-	const validators = organization.validators
-		.map(
-			(publicKey): PublicNode | null =>
-				network.nodes.find((node) => node.publicKey === publicKey) ?? null
-		)
-		.filter((node): node is PublicNode => node !== null);
+	const validators = getOrganizationValidatorRows(
+		network.nodes,
+		organization.validators
+	);
 	const availability24Hours =
 		formatOrganization24HourAvailability(organization);
 	const availability30Days = formatOrganization30DayAvailability(organization);
 
 	return (
 		<section className="detail-grid">
-			{archiveEvidence}
+			<Fragment key={`archive-evidence:${organization.id}`}>
+				{archiveEvidence}
+			</Fragment>
 			<article className="panel detail-panel">
 				<div className="panel-heading">
 					<h2>Organization status</h2>
@@ -97,25 +94,53 @@ export function OrganizationDetail({
 					<h2>Validators</h2>
 				</div>
 				<div className="table">
-					{validators.map((node) => (
-						<div className="row compact" key={node.publicKey}>
+					{validators.map(({ node, publicKey }) => (
+						<div className="row compact" key={publicKey}>
 							<div>
-								<Link href={`/nodes/${encodeURIComponent(node.publicKey)}`}>
-									<strong>{getNodeLabel(node)}</strong>
+								<Link href={`/nodes/${encodeURIComponent(publicKey)}`}>
+									<strong>
+										{node ? getNodeLabel(node) : publicKey.slice(0, 12)}
+									</strong>
 								</Link>
-								<small>{node.versionStr ?? node.publicKey}</small>
+								<small>{node?.versionStr ?? publicKey}</small>
 							</div>
 							<div className="metric">
 								<strong>
-									{node.isValidating ? 'Validating' : 'Not validating'}
+									{node === null
+										? 'Snapshot unavailable'
+										: node.isValidating
+											? 'Validating'
+											: 'Not validating'}
 								</strong>
-								<small>{formatNode30DayValidating(node).value}</small>
+								<small>
+									{node
+										? formatNode30DayValidating(node).value
+										: 'No current node record'}
+								</small>
 							</div>
 						</div>
 					))}
+					{validators.length === 0 ? (
+						<p className="muted-copy">
+							No validator public keys are reported for this organization.
+						</p>
+					) : null}
 				</div>
 			</article>
 			<OrganizationTomlEvidence organization={organization} />
 		</section>
 	);
+}
+
+export function getOrganizationValidatorRows(
+	nodes: readonly PublicNode[],
+	publicKeys: readonly string[]
+): readonly {
+	readonly node: PublicNode | null;
+	readonly publicKey: string;
+}[] {
+	return publicKeys.map((publicKey) => ({
+		node: nodes.find((node) => node.publicKey === publicKey) ?? null,
+		publicKey
+	}));
 }

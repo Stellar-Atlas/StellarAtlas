@@ -66,17 +66,19 @@ export const fetchJson = async <Payload>(
 	options: FetchOptions = {}
 ): Promise<Payload> => {
 	const timedFetch = buildTimedFetchInit(options);
-	const response = await fetch(buildApiUrl(path, options), timedFetch.init)
-		.finally(timedFetch.cancel);
+	try {
+		const response = await fetch(buildApiUrl(path, options), timedFetch.init);
+		if (!response.ok) {
+			throw new ApiClientError({
+				message: `API request returned HTTP ${response.status}`,
+				statusCode: response.status
+			});
+		}
 
-	if (!response.ok) {
-		throw new ApiClientError({
-			message: `API request returned HTTP ${response.status}`,
-			statusCode: response.status
-		});
+		return (await response.json()) as Payload;
+	} finally {
+		timedFetch.cancel();
 	}
-
-	return response.json() as Promise<Payload>;
 };
 
 export const fetchNullableJson = async <Payload>(
@@ -84,18 +86,20 @@ export const fetchNullableJson = async <Payload>(
 	options: FetchOptions = {}
 ): Promise<Payload | null> => {
 	const timedFetch = buildTimedFetchInit(options);
-	const response = await fetch(buildApiUrl(path, options), timedFetch.init)
-		.finally(timedFetch.cancel);
+	try {
+		const response = await fetch(buildApiUrl(path, options), timedFetch.init);
+		if (response.status === 204) return null;
+		if (!response.ok) {
+			throw new ApiClientError({
+				message: `API request returned HTTP ${response.status}`,
+				statusCode: response.status
+			});
+		}
 
-	if (response.status === 204) return null;
-	if (!response.ok) {
-		throw new ApiClientError({
-			message: `API request returned HTTP ${response.status}`,
-			statusCode: response.status
-		});
+		return (await response.json()) as Payload;
+	} finally {
+		timedFetch.cancel();
 	}
-
-	return response.json() as Promise<Payload>;
 };
 
 const buildApiUrl = (path: string, options: FetchOptions = {}): string => {

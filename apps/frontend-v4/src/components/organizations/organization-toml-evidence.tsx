@@ -56,21 +56,21 @@ export function OrganizationTomlEvidence({
 									? 'Authoritative certificate-verified content'
 									: 'Legacy retained content; provenance unavailable'
 					}
-					label="Last persisted success"
+					label="Last successful fetch"
 					observedAt={stellarToml?.observedAt ?? undefined}
 					value={stellarToml === null ? 'Not recorded' : 'Stored'}
 					warnings={stellarToml?.warnings ?? []}
 				/>
 				<EvidenceFact
 					detail={latestFailure?.state ?? 'No failed attempt retained'}
-					label="Retained failure"
+					label="Latest failed fetch"
 					observedAt={latestFailure?.observedAt}
 					value={latestFailure === null ? 'None' : 'Failed'}
 					warnings={latestFailure?.warnings ?? []}
 				/>
 				<EvidenceFact
 					detail={latestInsecureAttempt?.state ?? 'No TLS fallback retained'}
-					label="Retained TLS fallback"
+					label="Latest TLS fallback"
 					observedAt={latestInsecureAttempt?.observedAt}
 					value={latestInsecureAttempt === null ? 'None' : 'Quarantined'}
 					warnings={latestInsecureAttempt?.warnings ?? []}
@@ -78,8 +78,14 @@ export function OrganizationTomlEvidence({
 			</div>
 			{latestAttemptFailed && stellarToml !== null ? (
 				<p className="toml-evidence-notice warning">
-					The latest fetch failed. The document below is retained from the last
-					successful fetch.
+					The latest fetch failed. Last-known-good content from the most recent
+					successful fetch remains available below.
+				</p>
+			) : null}
+			{latestAttemptFailed && stellarToml === null ? (
+				<p className="toml-evidence-notice warning">
+					The latest fetch failed, and no last-known-good stellar.toml document
+					is available.
 				</p>
 			) : null}
 			{latestAttemptQuarantined ? (
@@ -104,7 +110,7 @@ export function OrganizationTomlEvidence({
 			) : null}
 			<details className="metadata-document">
 				<summary>
-					<span>Last persisted stellar.toml</span>
+					<span>Last-known-good stellar.toml</span>
 					<a href={tomlUrl} rel="noopener noreferrer" target="_blank">
 						{tomlUrl}
 					</a>

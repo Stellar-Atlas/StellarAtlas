@@ -1,3 +1,4 @@
+import { Fragment } from 'react';
 import Link from 'next/link';
 import type {
 	PublicKnownNode,
@@ -37,7 +38,9 @@ export function NodeDetail({
 	if (node === null) {
 		return (
 			<section className="detail-grid">
-				{archiveEvidence}
+				<Fragment key={`archive-evidence:${knownNode.publicKey}`}>
+					{archiveEvidence}
+				</Fragment>
 				<article className="panel detail-panel">
 					<div className="panel-heading">
 						<h2>Known public key</h2>
@@ -82,7 +85,9 @@ export function NodeDetail({
 
 	return (
 		<section className="detail-grid">
-			{archiveEvidence}
+			<Fragment key={`archive-evidence:${knownNode.publicKey}`}>
+				{archiveEvidence}
+			</Fragment>
 			<article className="panel detail-panel">
 				<div className="panel-heading">
 					<h2>Node status</h2>

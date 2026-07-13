@@ -1,3 +1,6 @@
+'use client';
+
+import { useState } from 'react';
 import type {
 	ArchiveWorkerOutcomeDTO,
 	ArchiveWorkerStatusRowDTO,
@@ -6,6 +9,12 @@ import type {
 import { formatArchiveObjectTypeLabel } from '@domain/history-archive';
 import { formatDateTime, formatInteger } from '@format/formatters';
 import { StatusPill } from './status-ui';
+import {
+	getStatusTablePage,
+	StatusTablePagination
+} from './status-table-pagination';
+
+const WORKER_PAGE_SIZE = 8;
 
 export function ArchiveWorkerStatusTable({
 	workers
@@ -14,6 +23,12 @@ export function ArchiveWorkerStatusTable({
 }): React.JSX.Element {
 	const archive = workers.archiveWorkers;
 	const aggregateOnly = archive.telemetryMode === 'aggregate-only';
+	const [page, setPage] = useState(0);
+	const workerPage = getStatusTablePage(
+		archive.workers,
+		page,
+		WORKER_PAGE_SIZE
+	);
 	return (
 		<section className="panel detail-panel status-worker-panel">
 			<div className="panel-heading">
@@ -41,7 +56,7 @@ export function ArchiveWorkerStatusTable({
 					</thead>
 					<tbody>
 						{archive.workers.length > 0 ? (
-							archive.workers.map((worker) => (
+							workerPage.rows.map((worker) => (
 								<ArchiveWorkerRow key={worker.workerId} worker={worker} />
 							))
 						) : (
@@ -56,6 +71,13 @@ export function ArchiveWorkerStatusTable({
 					</tbody>
 				</table>
 			</div>
+			<StatusTablePagination
+				label="Archive worker pages"
+				onPageChange={setPage}
+				page={workerPage.page}
+				pageSize={WORKER_PAGE_SIZE}
+				totalRows={archive.workers.length}
+			/>
 		</section>
 	);
 }

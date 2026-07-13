@@ -9,10 +9,9 @@ import type {
 import type { PublicHistoryArchiveRepairPlan } from './archive-repair-types';
 import { fetchJson, type FetchOptions } from './client';
 import { frontendCacheTags } from './cache-policy';
-import {
-	buildArchiveEvidencePath,
-	type KnownArchiveEvidenceQuery
-} from './known-network-client';
+import type { KnownArchiveEvidenceQuery } from './known-archive-evidence-query';
+import { parseHistoryArchiveEvidence } from './history-archive-evidence-parser';
+import { buildHistoryArchiveEvidencePath } from './history-archive-evidence-path';
 
 export const fetchHistoryArchiveObjectEvents = (
 	limit: number,
@@ -80,13 +79,10 @@ export const fetchHistoryArchiveObjectEvidenceForArchive = (
 	query: KnownArchiveEvidenceQuery = {},
 	options?: FetchOptions
 ): Promise<PublicHistoryArchiveEvidence> =>
-	fetchJson<PublicHistoryArchiveEvidence>(
-		buildArchiveEvidencePath(
-			`/v1/archive-scans/${encodeURIComponent(historyUrl)}/object-evidence`,
-			query
-		),
+	fetchJson<unknown>(
+		buildHistoryArchiveEvidencePath(historyUrl, query),
 		withHistoryScanTags(options)
-	);
+	).then(parseHistoryArchiveEvidence);
 
 export const fetchHistoryArchiveRepairPlanForArchive = (
 	historyUrl: string,

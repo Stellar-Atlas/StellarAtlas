@@ -1,3 +1,6 @@
+'use client';
+
+import { useState } from 'react';
 import type {
 	PublicHistoryArchiveObjectEvents,
 	PublicHistoryArchiveStatusSummary
@@ -16,6 +19,10 @@ import { formatDateTime, formatInteger } from '@format/formatters';
 import { ArchiveHealthPill } from './status-ui';
 import { CheckpointProofGuide } from './checkpoint-proof-guide';
 import type { ArchiveSourceFindingPresentation } from './status-dashboard-headlines';
+import {
+	getStatusTablePage,
+	StatusTablePagination
+} from './status-table-pagination';
 
 interface StatusArchiveEvidenceTablesProps {
 	readonly events: PublicHistoryArchiveObjectEvents;
@@ -81,6 +88,7 @@ function RecentFailureEvidence({
 	readonly available: boolean;
 	readonly events: readonly ArchiveEvent[];
 }): React.JSX.Element | null {
+	const [page, setPage] = useState(0);
 	if (!available) {
 		return (
 			<div className="archive-priority-block">
@@ -94,7 +102,11 @@ function RecentFailureEvidence({
 		.toSorted(compareFailureEvents);
 	if (failedEvents.length === 0) return null;
 
-	const visibleEvents = failedEvents.slice(0, RECENT_FAILURE_LIMIT);
+	const failurePage = getStatusTablePage(
+		failedEvents,
+		page,
+		RECENT_FAILURE_PAGE_SIZE
+	);
 	const remoteFailures = failedEvents.filter(
 		(event) => getArchiveFailureState(event.evidenceClass) === 'remote_failure'
 	).length;
@@ -108,7 +120,7 @@ function RecentFailureEvidence({
 				<strong>Recent failure evidence</strong>
 				<span>
 					{formatInteger(remoteFailures)} remote, {formatInteger(scannerIssues)}{' '}
-					scanner; showing {formatInteger(visibleEvents.length)} of{' '}
+					scanner; showing {formatInteger(failurePage.rows.length)} of{' '}
 					{formatInteger(failedEvents.length)}
 				</span>
 			</div>
@@ -124,7 +136,7 @@ function RecentFailureEvidence({
 						</tr>
 					</thead>
 					<tbody>
-						{visibleEvents.map((event, index) => (
+						{failurePage.rows.map((event, index) => (
 							<FailureEventRow
 								event={event}
 								key={`${event.remoteId}:${event.createdAt}:${index}`}
@@ -133,6 +145,13 @@ function RecentFailureEvidence({
 					</tbody>
 				</table>
 			</div>
+			<StatusTablePagination
+				label="Recent archive failure pages"
+				onPageChange={setPage}
+				page={failurePage.page}
+				pageSize={RECENT_FAILURE_PAGE_SIZE}
+				totalRows={failedEvents.length}
+			/>
 		</div>
 	);
 }
@@ -166,6 +185,12 @@ function ArchiveSourcesDetail({
 }): React.JSX.Element {
 	const sources = summary.sources.toSorted(compareArchiveSources);
 	const failingSources = sources.filter(isFailingSource).length;
+	const [page, setPage] = useState(0);
+	const sourcePage = getStatusTablePage(
+		sources,
+		page,
+		ARCHIVE_SOURCE_PAGE_SIZE
+	);
 
 	return (
 		<details className="metadata-document">
@@ -190,7 +215,7 @@ function ArchiveSourcesDetail({
 					</thead>
 					<tbody>
 						{sources.length > 0 ? (
-							sources.map((source) => (
+							sourcePage.rows.map((source) => (
 								<ArchiveSourceRow
 									key={source.archiveUrlIdentity}
 									source={source}
@@ -204,6 +229,13 @@ function ArchiveSourcesDetail({
 					</tbody>
 				</table>
 			</div>
+			<StatusTablePagination
+				label="Archive source pages"
+				onPageChange={setPage}
+				page={sourcePage.page}
+				pageSize={ARCHIVE_SOURCE_PAGE_SIZE}
+				totalRows={sources.length}
+			/>
 		</details>
 	);
 }
@@ -411,4 +443,5 @@ export function formatArchiveSourceLabel(value: string): string {
 	}
 }
 
-const RECENT_FAILURE_LIMIT = 5;
+const ARCHIVE_SOURCE_PAGE_SIZE = 10;
+const RECENT_FAILURE_PAGE_SIZE = 5;

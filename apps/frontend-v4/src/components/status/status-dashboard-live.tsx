@@ -13,33 +13,33 @@ export function StatusDashboardLive(
 		setDashboardProps(props);
 	}, [props]);
 
-	useEffect(
-		() =>
-			subscribeToStatusStream((message) => {
-				if (message.type === 'error') return;
-				setDashboardProps((current) => ({
-					...current,
-					api: message.payload.api ?? current.api,
-					archiveEvents: message.payload.archiveEvents ?? current.archiveEvents,
-					archiveEventsAvailable:
-						message.payload.archiveEvents !== undefined ||
-						current.archiveEventsAvailable,
-					archiveEvidenceAvailable:
-						message.payload.archiveSummary !== undefined ||
-						current.archiveEvidenceAvailable,
-					archiveSummary:
-						message.payload.archiveSummary ?? current.archiveSummary,
-					dataQuality: message.payload.dataQuality ?? current.dataQuality,
-					frontend: message.payload.frontend ?? current.frontend,
-					fullHistory: message.payload.fullHistory ?? current.fullHistory,
-					scanLogs: message.payload.scanLogs ?? current.scanLogs,
-					scanLogsAvailable:
-						message.payload.scanLogs !== undefined || current.scanLogsAvailable,
-					workers: message.payload.workers ?? current.workers
-				}));
-			}),
-		[]
-	);
+	useEffect(() => {
+		const unsubscribe = subscribeToStatusStream((message) => {
+			if (message.type === 'error') return;
+			setDashboardProps((current) => ({
+				...current,
+				api: message.payload.api ?? current.api,
+				archiveEvents: message.payload.archiveEvents ?? current.archiveEvents,
+				archiveEventsAvailable:
+					message.payload.archiveEvents !== undefined ||
+					current.archiveEventsAvailable,
+				archiveEvidenceAvailable:
+					message.payload.archiveSummary !== undefined ||
+					current.archiveEvidenceAvailable,
+				archiveSummary:
+					message.payload.archiveSummary ?? current.archiveSummary,
+				dataQuality: message.payload.dataQuality ?? current.dataQuality,
+				frontend: message.payload.frontend ?? current.frontend,
+				fullHistory: message.payload.fullHistory ?? current.fullHistory,
+				scanLogs: message.payload.scanLogs ?? current.scanLogs,
+				scanLogsAvailable:
+					message.payload.scanLogs !== undefined || current.scanLogsAvailable,
+				workers: message.payload.workers ?? current.workers
+			}));
+		});
+
+		return () => unsubscribe();
+	}, []);
 
 	return <StatusDashboard {...dashboardProps} />;
 }

@@ -8,6 +8,10 @@ import type {
 } from '@api/types';
 import { formatDateTime, formatInteger } from '@format/formatters';
 import { StatusPill } from './status-ui';
+import {
+	getStatusTablePage,
+	StatusTablePagination
+} from './status-table-pagination';
 
 type ScanLogFilter = 'attention' | 'all';
 
@@ -19,9 +23,15 @@ export function RecentScanLogs({
 	readonly scanLogs: PublicScanLogStatus;
 }): React.JSX.Element {
 	const [filter, setFilter] = useState<ScanLogFilter>('all');
+	const [page, setPage] = useState(0);
 	const networkScans = useMemo(
 		() => filterNetworkScans(scanLogs.networkScans, filter),
 		[filter, scanLogs.networkScans]
+	);
+	const scanPage = getStatusTablePage(
+		networkScans,
+		page,
+		NETWORK_SCAN_PAGE_SIZE
 	);
 
 	return (
@@ -46,7 +56,10 @@ export function RecentScanLogs({
 							aria-pressed={filter === candidate.value}
 							className={filter === candidate.value ? 'active' : ''}
 							key={candidate.value}
-							onClick={() => setFilter(candidate.value)}
+							onClick={() => {
+								setFilter(candidate.value);
+								setPage(0);
+							}}
 							type="button"
 						>
 							{candidate.label}
@@ -63,8 +76,17 @@ export function RecentScanLogs({
 			<NetworkScanTable
 				available={available}
 				filter={filter}
-				scans={networkScans}
+				scans={scanPage.rows}
 			/>
+			{available ? (
+				<StatusTablePagination
+					label="Network scan pages"
+					onPageChange={setPage}
+					page={scanPage.page}
+					pageSize={NETWORK_SCAN_PAGE_SIZE}
+					totalRows={networkScans.length}
+				/>
+			) : null}
 		</section>
 	);
 }
@@ -217,3 +239,4 @@ const scanLogFilters: readonly {
 ];
 
 const NETWORK_SCAN_COLUMN_COUNT = 8;
+const NETWORK_SCAN_PAGE_SIZE = 10;

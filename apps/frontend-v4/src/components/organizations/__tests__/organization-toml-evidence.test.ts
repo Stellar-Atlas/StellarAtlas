@@ -31,10 +31,31 @@ describe('OrganizationTomlEvidence', () => {
 		);
 
 		expect(html).toContain('Latest fetch attempt');
-		expect(html).toContain('Retained failure');
+		expect(html).toContain('Latest failed fetch');
+		expect(html).toContain('Last successful fetch');
 		expect(html).toContain('The latest fetch failed.');
+		expect(html).toContain('Last-known-good content');
 		expect(html).toContain('VERSION=&quot;2.0.0&quot;');
 		expect(html).toContain('Authoritative certificate-verified content');
+	});
+
+	it('states when a failed latest attempt has no last-known-good document', () => {
+		const html = render(
+			createOrganization({
+				stellarToml: null,
+				tomlLatestAttempt: {
+					observedAt: '2026-07-10T12:00:00.000Z',
+					result: 'failure',
+					state: 'ParsingError',
+					warnings: []
+				}
+			})
+		);
+
+		expect(html).toContain('no last-known-good stellar.toml document');
+		expect(html).toContain(
+			'No successful stellar.toml document has been persisted'
+		);
 	});
 
 	it('reports an insecure successful retry as TLS evidence', () => {

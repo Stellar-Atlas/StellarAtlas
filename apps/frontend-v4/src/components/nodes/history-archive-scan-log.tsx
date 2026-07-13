@@ -46,6 +46,7 @@ export function HistoryArchiveScanLog({
 	logs
 }: HistoryArchiveScanLogProps): React.JSX.Element {
 	const [filter, setFilter] = useState<ScanLogFilter>('attention');
+	const [page, setPage] = useState(0);
 	const dedupedLogs = useMemo(() => dedupeScanLogs(logs), [logs]);
 	const hiddenDuplicateCount = logs.length - dedupedLogs.length;
 	const filteredLogs = useMemo(
@@ -78,155 +79,215 @@ export function HistoryArchiveScanLog({
 	).length;
 	const activeCount = dedupedLogs.filter(scanLogIsActive).length;
 	const completedCount = dedupedLogs.length - activeCount;
+	const pageCount = Math.max(
+		1,
+		Math.ceil(filteredLogs.length / RANGE_PAGE_SIZE)
+	);
+	const safePage = Math.min(page, pageCount - 1);
+	const visibleLogs = filteredLogs.slice(
+		safePage * RANGE_PAGE_SIZE,
+		(safePage + 1) * RANGE_PAGE_SIZE
+	);
+	const selectFilter = (nextFilter: ScanLogFilter): void => {
+		setFilter(nextFilter);
+		setPage(0);
+	};
 
 	if (dedupedLogs.length === 0) {
 		return (
-			<p className="muted-copy">No archive scan jobs are available yet.</p>
+			<details className="metadata-document legacy-range-evidence">
+				<summary>
+					<span>Historical range-scan evidence</span>
+					<span className="muted-inline">0 retained rows</span>
+				</summary>
+				<p className="muted-copy">
+					No historical range-scan rows are available.
+				</p>
+			</details>
 		);
 	}
 
 	return (
-		<div className="archive-scan-log">
-			<div className="archive-scan-log-toolbar">
-				<div>
-					<strong>{formatInteger(dedupedLogs.length)}</strong>
-					<span> unique scan rows</span>
-					<span className="muted-inline">
-						{' '}
-						/ {formatInteger(activeCount)} active /{' '}
-						{formatInteger(completedCount)} completed /{' '}
-						{formatInteger(archiveErrorCount)} archive errors /{' '}
-						{formatInteger(workerIssueCount)} worker issues /{' '}
-						{formatInteger(cleanCompletedRunCount)} clean runs
-					</span>
-					{hiddenDuplicateCount > 0 ? (
+		<details className="metadata-document legacy-range-evidence">
+			<summary>
+				<span>Historical range-scan evidence</span>
+				<span className="muted-inline">
+					{formatInteger(dedupedLogs.length)} retained rows
+				</span>
+			</summary>
+			<p className="muted-copy">
+				These legacy range rows are retained for historical review only. They do
+				not represent current archive health, object work, or scanner runtime.
+			</p>
+			<div className="archive-scan-log">
+				<div className="archive-scan-log-toolbar">
+					<div>
+						<strong>{formatInteger(dedupedLogs.length)}</strong>
+						<span> unique scan rows</span>
 						<span className="muted-inline">
 							{' '}
-							/ {formatInteger(hiddenDuplicateCount)} duplicate active rows
-							hidden
+							/ {formatInteger(activeCount)} active /{' '}
+							{formatInteger(completedCount)} completed /{' '}
+							{formatInteger(archiveErrorCount)} archive errors /{' '}
+							{formatInteger(workerIssueCount)} worker issues /{' '}
+							{formatInteger(cleanCompletedRunCount)} clean runs
 						</span>
-					) : null}
+						{hiddenDuplicateCount > 0 ? (
+							<span className="muted-inline">
+								{' '}
+								/ {formatInteger(hiddenDuplicateCount)} duplicate active rows
+								hidden
+							</span>
+						) : null}
+					</div>
+					<div
+						className="segmented"
+						aria-label="Archive scan log filter"
+						style={segmentedControlStyle}
+					>
+						<button
+							aria-pressed={filter === 'attention'}
+							className={filter === 'attention' ? 'active' : ''}
+							onClick={() => selectFilter('attention')}
+							type="button"
+						>
+							Attention
+						</button>
+						<button
+							aria-pressed={filter === 'active'}
+							className={filter === 'active' ? 'active' : ''}
+							onClick={() => selectFilter('active')}
+							type="button"
+						>
+							Queue
+						</button>
+						<button
+							aria-pressed={filter === 'completed'}
+							className={filter === 'completed' ? 'active' : ''}
+							onClick={() => selectFilter('completed')}
+							type="button"
+						>
+							Evidence
+						</button>
+						<button
+							aria-pressed={filter === 'archive-errors'}
+							className={filter === 'archive-errors' ? 'active' : ''}
+							onClick={() => selectFilter('archive-errors')}
+							type="button"
+						>
+							Archive errors
+						</button>
+						<button
+							aria-pressed={filter === 'worker-issues'}
+							className={filter === 'worker-issues' ? 'active' : ''}
+							onClick={() => selectFilter('worker-issues')}
+							type="button"
+						>
+							Worker issues
+						</button>
+						<button
+							aria-pressed={filter === 'all'}
+							className={filter === 'all' ? 'active' : ''}
+							onClick={() => selectFilter('all')}
+							type="button"
+						>
+							All
+						</button>
+					</div>
 				</div>
-				<div
-					className="segmented"
-					aria-label="Archive scan log filter"
-					style={segmentedControlStyle}
-				>
-					<button
-						className={filter === 'attention' ? 'active' : ''}
-						onClick={() => setFilter('attention')}
-						type="button"
-					>
-						Attention
-					</button>
-					<button
-						className={filter === 'active' ? 'active' : ''}
-						onClick={() => setFilter('active')}
-						type="button"
-					>
-						Queue
-					</button>
-					<button
-						className={filter === 'completed' ? 'active' : ''}
-						onClick={() => setFilter('completed')}
-						type="button"
-					>
-						Evidence
-					</button>
-					<button
-						className={filter === 'archive-errors' ? 'active' : ''}
-						onClick={() => setFilter('archive-errors')}
-						type="button"
-					>
-						Archive errors
-					</button>
-					<button
-						className={filter === 'worker-issues' ? 'active' : ''}
-						onClick={() => setFilter('worker-issues')}
-						type="button"
-					>
-						Worker issues
-					</button>
-					<button
-						className={filter === 'all' ? 'active' : ''}
-						onClick={() => setFilter('all')}
-						type="button"
-					>
-						All
-					</button>
-				</div>
-			</div>
-			{filteredLogs.length === 0 ? (
-				<p className="muted-copy">{getEmptyFilterMessage(filter)}</p>
-			) : (
-				<ul className="archive-scan-log-list">
-					{filteredLogs.map((entry, index) => {
-						const isActive = scanLogIsActive(entry);
-						const archiveErrors = getArchiveVerificationErrors(entry.errors);
-						const workerIssues = getWorkerIssues(entry.errors);
-						const hasArchiveErrors = archiveErrors.length > 0;
-						const hasWorkerIssues =
-							workerIssues.length > 0 ||
-							(entry.errors.length === 0 && entry.hasWorkerIssue === true);
-						const row = getRowPresentation(
-							entry,
-							hasArchiveErrors,
-							hasWorkerIssues
-						);
-						const concurrencyMetric = getConcurrencyMetric(entry);
-						const primaryProgressMetric = getPrimaryProgressMetric(entry);
-						const secondaryProgressMetric = getSecondaryProgressMetric(entry);
-						const rangeMetric = getRangeMetric(entry);
+				{filteredLogs.length === 0 ? (
+					<p className="muted-copy">{getEmptyFilterMessage(filter)}</p>
+				) : (
+					<ul className="archive-scan-log-list">
+						{visibleLogs.map((entry, index) => {
+							const isActive = scanLogIsActive(entry);
+							const archiveErrors = getArchiveVerificationErrors(entry.errors);
+							const workerIssues = getWorkerIssues(entry.errors);
+							const hasArchiveErrors = archiveErrors.length > 0;
+							const hasWorkerIssues =
+								workerIssues.length > 0 ||
+								(entry.errors.length === 0 && entry.hasWorkerIssue === true);
+							const row = getRowPresentation(
+								entry,
+								hasArchiveErrors,
+								hasWorkerIssues
+							);
+							const concurrencyMetric = getConcurrencyMetric(entry);
+							const primaryProgressMetric = getPrimaryProgressMetric(entry);
+							const secondaryProgressMetric = getSecondaryProgressMetric(entry);
+							const rangeMetric = getRangeMetric(entry);
 
-						return (
-							<li
-								className={row.tone}
-								key={getScanLogRenderKey(entry, index)}
-								style={archiveScanLogItemStyle}
-							>
-								<div className="archive-scan-log-row">
-									<div>
-										<strong>{row.title}</strong>
-										<span>{formatRowTimestamp(entry)}</span>
+							return (
+								<li
+									className={row.tone}
+									key={getScanLogRenderKey(entry, index)}
+									style={archiveScanLogItemStyle}
+								>
+									<div className="archive-scan-log-row">
+										<div>
+											<strong>{row.title}</strong>
+											<span>{formatRowTimestamp(entry)}</span>
+										</div>
+										<span className={getRowTagClassName(row.tone)}>
+											{row.tag}
+										</span>
 									</div>
-									<span className={getRowTagClassName(row.tone)}>
-										{row.tag}
-									</span>
-								</div>
-								<dl className="archive-scan-log-metrics">
-									<div>
-										<dt>{primaryProgressMetric.label}</dt>
-										<dd>{primaryProgressMetric.value}</dd>
-									</div>
-									<div>
-										<dt>{secondaryProgressMetric.label}</dt>
-										<dd>{secondaryProgressMetric.value}</dd>
-									</div>
-									<div>
-										<dt>{rangeMetric.label}</dt>
-										<dd>{rangeMetric.value}</dd>
-									</div>
-									<div>
-										<dt>{concurrencyMetric.label}</dt>
-										<dd>{concurrencyMetric.value}</dd>
-									</div>
-									<div>
-										<dt>Duration</dt>
-										<dd>{formatDuration(entry)}</dd>
-									</div>
-								</dl>
-								<ScanLogDetails
-									archiveErrors={archiveErrors}
-									entry={entry}
-									isActive={isActive}
-									workerIssues={workerIssues}
-								/>
-							</li>
-						);
-					})}
-				</ul>
-			)}
-		</div>
+									<dl className="archive-scan-log-metrics">
+										<div>
+											<dt>{primaryProgressMetric.label}</dt>
+											<dd>{primaryProgressMetric.value}</dd>
+										</div>
+										<div>
+											<dt>{secondaryProgressMetric.label}</dt>
+											<dd>{secondaryProgressMetric.value}</dd>
+										</div>
+										<div>
+											<dt>{rangeMetric.label}</dt>
+											<dd>{rangeMetric.value}</dd>
+										</div>
+										<div>
+											<dt>{concurrencyMetric.label}</dt>
+											<dd>{concurrencyMetric.value}</dd>
+										</div>
+										<div>
+											<dt>Duration</dt>
+											<dd>{formatDuration(entry)}</dd>
+										</div>
+									</dl>
+									<ScanLogDetails
+										archiveErrors={archiveErrors}
+										entry={entry}
+										isActive={isActive}
+										workerIssues={workerIssues}
+									/>
+								</li>
+							);
+						})}
+					</ul>
+				)}
+				{filteredLogs.length > RANGE_PAGE_SIZE ? (
+					<div className="table-pagination">
+						<button
+							disabled={safePage === 0}
+							onClick={() => setPage(safePage - 1)}
+							type="button"
+						>
+							Previous
+						</button>
+						<span>
+							Page {formatInteger(safePage + 1)} of {formatInteger(pageCount)}
+						</span>
+						<button
+							disabled={safePage >= pageCount - 1}
+							onClick={() => setPage(safePage + 1)}
+							type="button"
+						>
+							Next
+						</button>
+					</div>
+				) : null}
+			</div>
+		</details>
 	);
 }
 
@@ -417,3 +478,5 @@ const getRowTagClassName = (rowTone: string): string => {
 
 	return 'tag good';
 };
+
+const RANGE_PAGE_SIZE = 10;

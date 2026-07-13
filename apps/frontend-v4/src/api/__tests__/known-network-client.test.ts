@@ -1,6 +1,6 @@
 /// <reference types="jest" />
 
-import { buildArchiveEvidencePath } from '../known-network-client';
+import { buildArchiveEvidencePath } from '../known-archive-evidence-query';
 import {
 	buildKnownNodesPath,
 	buildKnownOrganizationsPath

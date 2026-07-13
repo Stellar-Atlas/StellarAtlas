@@ -43,6 +43,30 @@ describe('ArchiveWorkerStatusTable', () => {
 		);
 		expect(markup).not.toContain('0 / 24 fresh');
 	});
+
+	it('keeps the live worker registry compact and paginated', () => {
+		const status = createStatus();
+		const worker = status.archiveWorkers.workers[0];
+		if (worker === undefined) throw new Error('Expected worker fixture');
+		const markup = renderToStaticMarkup(
+			createElement(ArchiveWorkerStatusTable, {
+				workers: {
+					...status,
+					archiveWorkers: {
+						...status.archiveWorkers,
+						workers: Array.from({ length: 9 }, (_, index) => ({
+							...worker,
+							workerId: `object-host-${index.toString()}-0`
+						}))
+					}
+				}
+			})
+		);
+
+		expect(markup).toContain('1-8 of 9');
+		expect(markup).toContain('object-host-7-0');
+		expect(markup).not.toContain('object-host-8-0');
+	});
 });
 
 function createStatus(): WorkerStatusDTO {
