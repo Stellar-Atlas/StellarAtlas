@@ -52,6 +52,7 @@ export interface FullHistoryLedgerView {
 	readonly closedAt: Date;
 	readonly ledgerHash: FullHistoryHash;
 	readonly ledgerSequence: FullHistoryLedgerSequence;
+	readonly operationCount: number;
 	readonly previousLedgerHash: FullHistoryHash;
 	readonly protocolVersion: number;
 	readonly transactionCount: number;

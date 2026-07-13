@@ -90,7 +90,7 @@ export interface PublicExplorerLedger {
 	readonly operationCount: number;
 	readonly protocolVersion: number;
 	readonly sequence: string;
-	readonly source: 'horizon';
+	readonly source: 'horizon' | 'postgres_canonical';
 	readonly transactionCount: number | null;
 }
 

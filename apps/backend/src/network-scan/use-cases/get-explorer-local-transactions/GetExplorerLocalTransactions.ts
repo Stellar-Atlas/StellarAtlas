@@ -3,7 +3,10 @@ import { inject, injectable } from 'inversify';
 import type { NetworkConfig } from '@core/config/Config.js';
 import type { FullHistoryCanonicalRepository } from '@history-scan-coordinator/domain/full-history/FullHistoryCanonicalRepository.js';
 import type { FullHistoryOperationQuery } from '@history-scan-coordinator/domain/full-history/FullHistoryCanonicalOperation.js';
-import { FullHistoryHash } from '@history-scan-coordinator/domain/full-history/FullHistoryCanonicalTypes.js';
+import {
+	fullHistoryLedgerSequence,
+	FullHistoryHash
+} from '@history-scan-coordinator/domain/full-history/FullHistoryCanonicalTypes.js';
 import { TYPES } from '@history-scan-coordinator/infrastructure/di/di-types.js';
 import { NETWORK_TYPES } from '../../infrastructure/di/di-types.js';
 import {
@@ -16,6 +19,10 @@ import {
 	type ExplorerCanonicalCoverageDTO,
 	type ExplorerCanonicalTransactionDTO
 } from './ExplorerCanonicalTransaction.js';
+import {
+	mapExplorerCanonicalLedger,
+	type ExplorerCanonicalLedgerDTO
+} from './ExplorerCanonicalLedger.js';
 
 export interface ExplorerLocalTransactionsDTO {
 	readonly canonicalCoverage: ExplorerCanonicalCoverageDTO | null;
@@ -90,6 +97,16 @@ export class GetExplorerLocalTransactions {
 		return transaction === null
 			? null
 			: mapExplorerCanonicalTransaction(transaction);
+	}
+
+	async findLedger(
+		ledgerSequence: string
+	): Promise<ExplorerCanonicalLedgerDTO | null> {
+		const ledger = await this.canonicalHistory.findLedger(
+			this.networkConfig.networkPassphrase,
+			fullHistoryLedgerSequence(ledgerSequence)
+		);
+		return ledger === null ? null : mapExplorerCanonicalLedger(ledger);
 	}
 
 	async findOperations(

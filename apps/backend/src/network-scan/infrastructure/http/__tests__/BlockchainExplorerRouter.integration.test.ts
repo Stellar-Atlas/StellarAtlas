@@ -3,6 +3,7 @@ import {
 	buildTestApp,
 	canonicalFeed,
 	canonicalHash,
+	canonicalLedger,
 	canonicalOperation
 } from './BlockchainExplorerRouterTestFixture.js';
 
@@ -13,7 +14,26 @@ describe('BlockchainExplorerRouter.integration', () => {
 		jest.restoreAllMocks();
 	});
 
-	it('returns a Horizon-backed ledger search result', async () => {
+	it('prefers a canonical ledger search result', async () => {
+		const fetchSpy = jest.spyOn(global, 'fetch');
+
+		await request(buildTestApp())
+			.get(`/v1/explorer/search?query=${canonicalLedger.sequence}&type=ledger`)
+			.expect(200)
+			.expect('Cache-Control', 'public, max-age=20')
+			.expect((response) => {
+				expect(response.body).toMatchObject({
+					query: canonicalLedger.sequence,
+					resultType: 'ledger',
+					source: 'postgres_canonical',
+					result: canonicalLedger
+				});
+			});
+
+		expect(fetchSpy).not.toHaveBeenCalled();
+	});
+
+	it('uses Horizon for ledger search only outside canonical coverage', async () => {
 		jest.spyOn(global, 'fetch').mockResolvedValue(
 			new Response(
 				JSON.stringify({
@@ -27,7 +47,7 @@ describe('BlockchainExplorerRouter.integration', () => {
 			)
 		);
 
-		await request(buildTestApp())
+		await request(buildTestApp({ localLedger: null }))
 			.get('/v1/explorer/search?query=63335066&type=ledger')
 			.expect(200)
 			.expect('Cache-Control', 'public, max-age=20')
@@ -43,6 +63,19 @@ describe('BlockchainExplorerRouter.integration', () => {
 					}
 				});
 			});
+	});
+
+	it('prefers canonical ledger detail without an external request', async () => {
+		const fetchSpy = jest.spyOn(global, 'fetch');
+
+		await request(buildTestApp())
+			.get(`/v1/explorer/ledgers/${canonicalLedger.sequence}`)
+			.expect(200)
+			.expect((response) => {
+				expect(response.body).toEqual(canonicalLedger);
+			});
+
+		expect(fetchSpy).not.toHaveBeenCalled();
 	});
 
 	it('returns bounded canonical transaction readiness without later indexes', async () => {

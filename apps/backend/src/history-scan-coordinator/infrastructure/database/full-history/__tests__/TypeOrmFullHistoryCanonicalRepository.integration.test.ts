@@ -63,6 +63,7 @@ describe('TypeOrmFullHistoryCanonicalRepository', () => {
 		expect(ledger).toEqual(
 			expect.objectContaining({
 				ledgerSequence: '1',
+				operationCount: input.transactions[0]!.operationCount,
 				protocolVersion: 27,
 				transactionCount: 1
 			})

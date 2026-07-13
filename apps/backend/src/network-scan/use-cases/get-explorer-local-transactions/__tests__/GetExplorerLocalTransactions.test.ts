@@ -102,6 +102,39 @@ describe('GetExplorerLocalTransactions', () => {
 		expect(calledHash?.toHex()).toBe(transactionHash);
 	});
 
+	it('maps a canonical ledger by its sequence', async () => {
+		const repository = mock<FullHistoryCanonicalRepository>();
+		repository.findLedger.mockResolvedValue({
+			bucketListHash: FullHistoryHash.fromHex('11'.repeat(32)),
+			closedAt: new Date('2026-07-08T16:09:36.000Z'),
+			ledgerHash: FullHistoryHash.fromHex('22'.repeat(32)),
+			ledgerSequence: fullHistoryLedgerSequence(63386303n),
+			operationCount: 27,
+			previousLedgerHash: FullHistoryHash.fromHex('33'.repeat(32)),
+			protocolVersion: 27,
+			transactionCount: 11,
+			transactionResultHash: FullHistoryHash.fromHex('44'.repeat(32)),
+			transactionSetHash: FullHistoryHash.fromHex('55'.repeat(32))
+		});
+		const useCase = new GetExplorerLocalTransactions(repository, {
+			networkPassphrase
+		});
+
+		await expect(useCase.findLedger('63386303')).resolves.toEqual({
+			closedAt: '2026-07-08T16:09:36.000Z',
+			hash: '22'.repeat(32),
+			operationCount: 27,
+			protocolVersion: 27,
+			sequence: '63386303',
+			source: 'postgres_canonical',
+			transactionCount: 11
+		});
+		expect(repository.findLedger).toHaveBeenCalledWith(
+			networkPassphrase,
+			'63386303'
+		);
+	});
+
 	it('rejects canonical rows without a matching coverage watermark', async () => {
 		const repository = mock<FullHistoryCanonicalRepository>();
 		repository.findRecentTransactions.mockResolvedValue({

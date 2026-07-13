@@ -3,6 +3,7 @@ import type { ExplorerLocalReadModelDTO } from '../../../use-cases/get-explorer-
 import type { ExplorerLocalTransactionsDTO } from '../../../use-cases/get-explorer-local-transactions/GetExplorerLocalTransactions.js';
 import type { ExplorerLocalOperationsDTO } from '../../../use-cases/get-explorer-local-transactions/ExplorerCanonicalOperation.js';
 import type { ExplorerCanonicalTransactionDTO } from '../../../use-cases/get-explorer-local-transactions/ExplorerCanonicalTransaction.js';
+import type { ExplorerCanonicalLedgerDTO } from '../../../use-cases/get-explorer-local-transactions/ExplorerCanonicalLedger.js';
 import {
 	blockchainExplorerRouter,
 	createExplorerTransactionLookupHandler
@@ -10,12 +11,23 @@ import {
 
 interface BuildTestAppOptions {
 	readonly localFeed?: ExplorerLocalTransactionsDTO;
+	readonly localLedger?: ExplorerCanonicalLedgerDTO | null;
 	readonly localTransaction?: ExplorerCanonicalTransactionDTO | null;
 }
 
 export const canonicalHash = 'a'.repeat(64);
 export const canonicalSourceAccount =
 	'GCNDNEWL4WBR7DHE3VOVCKVMBB67JMZV3LBXUHPOVEPABEIBVVP5KPIC';
+
+export const canonicalLedger: ExplorerCanonicalLedgerDTO = {
+	closedAt: '2026-07-08T16:09:36.000Z',
+	hash: 'd'.repeat(64),
+	operationCount: 27,
+	protocolVersion: 27,
+	sequence: '63386303',
+	source: 'postgres_canonical',
+	transactionCount: 11
+};
 
 const canonicalTransaction: ExplorerCanonicalTransactionDTO = {
 	createdAt: '2026-07-08T16:09:36.000Z',
@@ -105,6 +117,8 @@ export function buildTestApp(options: BuildTestAppOptions = {}) {
 			options.localTransaction === undefined
 				? canonicalTransaction
 				: options.localTransaction,
+		findLedger: async () =>
+			options.localLedger === undefined ? canonicalLedger : options.localLedger,
 		findOperations: async (): Promise<ExplorerLocalOperationsDTO> => ({
 			count: 1,
 			coverage: {

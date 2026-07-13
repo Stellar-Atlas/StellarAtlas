@@ -27,7 +27,7 @@ export interface BlockchainExplorerRouterConfig {
 	>;
 	readonly getExplorerLocalTransactions: Pick<
 		GetExplorerLocalTransactions,
-		'execute' | 'findByHash' | 'findOperations'
+		'execute' | 'findByHash' | 'findLedger' | 'findOperations'
 	>;
 	readonly horizonUrl: string;
 	readonly rpcUrl?: string;
@@ -96,6 +96,18 @@ export const blockchainExplorerRouter = (
 						query,
 						result: local,
 						resultType: 'transaction',
+						source: 'postgres_canonical'
+					});
+				}
+			}
+			if ((type === 'ledger' || type === 'auto') && isLedgerSequence(query)) {
+				const local =
+					await config.getExplorerLocalTransactions.findLedger(query);
+				if (local !== null) {
+					return res.status(200).json({
+						query,
+						result: local,
+						resultType: 'ledger',
 						source: 'postgres_canonical'
 					});
 				}
@@ -178,7 +190,9 @@ export const blockchainExplorerRouter = (
 
 		setCacheHeader(res);
 		try {
-			const ledger = await fetchExplorerLedger(config.horizonUrl, sequence);
+			const ledger =
+				(await config.getExplorerLocalTransactions.findLedger(sequence)) ??
+				(await fetchExplorerLedger(config.horizonUrl, sequence));
 			if (!ledger) return res.status(404).json({ error: 'Ledger not found' });
 			return res.status(200).json(ledger);
 		} catch {

@@ -229,12 +229,19 @@ export class TypeOrmFullHistoryCanonicalRepository implements FullHistoryCanonic
 		networkPassphrase: string,
 		ledgerSequence: FullHistoryLedgerSequence
 	): Promise<FullHistoryLedgerView | null> {
-		const ledger = await this.dataSource
-			.getRepository(FullHistoryLedger)
-			.findOneBy({
+		const networkPassphraseHash = hashNetworkPassphrase(networkPassphrase);
+		const [ledger, operationCount] = await Promise.all([
+			this.dataSource.getRepository(FullHistoryLedger).findOneBy({
 				ledgerSequence,
-				networkPassphraseHash: hashNetworkPassphrase(networkPassphrase)
-			});
+				networkPassphraseHash
+			}),
+			this.dataSource
+				.getRepository(FullHistoryTransaction)
+				.sum('operationCount', {
+					ledgerSequence,
+					networkPassphraseHash
+				})
+		]);
 		return ledger === null
 			? null
 			: {
@@ -242,6 +249,7 @@ export class TypeOrmFullHistoryCanonicalRepository implements FullHistoryCanonic
 					closedAt: new Date(ledger.closedAt),
 					ledgerHash: ledger.ledgerHash,
 					ledgerSequence: ledger.ledgerSequence,
+					operationCount: operationCount ?? 0,
 					previousLedgerHash: ledger.previousLedgerHash,
 					protocolVersion: ledger.protocolVersion,
 					transactionCount: ledger.transactionCount,
