@@ -379,29 +379,27 @@ const listen = async () => {
 		})
 	);
 
-	api.use(
-		'/v1',
-		networkRouter({
-			getNetwork: kernel.container.get(GetNetwork),
-			getKnownArchiveEvidence: kernel.container.get(GetKnownArchiveEvidence),
-			getKnownNodes: kernel.container.get(GetKnownNodes),
-			getKnownOrganizations: kernel.container.get(GetKnownOrganizations),
-			getMeasurementAggregations: kernel.container.get(
-				GetMeasurementAggregations
-			),
-			getMeasurementsFactory: kernel.container.get(GetMeasurementsFactory),
-			getLatestNodeSnapshots: kernel.container.get(GetLatestNodeSnapshots),
-			getLatestOrganizationSnapshots: kernel.container.get(
-				GetLatestOrganizationSnapshots
-			),
-			getScpStatements: kernel.container.get(GetScpStatements),
-			logger: kernel.container.get<Logger>('Logger'),
-			networkScanRepository: kernel.container.get<NetworkScanRepository>(
-				NETWORK_TYPES.NetworkScanRepository
-			),
-			searchConfig: config.meilisearchNetwork
-		})
-	);
+	const networkRoutes = networkRouter({
+		getNetwork: kernel.container.get(GetNetwork),
+		getKnownArchiveEvidence: kernel.container.get(GetKnownArchiveEvidence),
+		getKnownNodes: kernel.container.get(GetKnownNodes),
+		getKnownOrganizations: kernel.container.get(GetKnownOrganizations),
+		getMeasurementAggregations: kernel.container.get(
+			GetMeasurementAggregations
+		),
+		getMeasurementsFactory: kernel.container.get(GetMeasurementsFactory),
+		getLatestNodeSnapshots: kernel.container.get(GetLatestNodeSnapshots),
+		getLatestOrganizationSnapshots: kernel.container.get(
+			GetLatestOrganizationSnapshots
+		),
+		getScpStatements: kernel.container.get(GetScpStatements),
+		logger: kernel.container.get<Logger>('Logger'),
+		networkScanRepository: kernel.container.get<NetworkScanRepository>(
+			NETWORK_TYPES.NetworkScanRepository
+		),
+		searchConfig: config.meilisearchNetwork
+	});
+	api.use('/v1', networkRoutes);
 
 	server = api.listen(config.apiPort, () => {
 		console.log('api listening on port: ' + config.apiPort);
@@ -433,6 +431,7 @@ const listen = async () => {
 	const shutdown = (signal: NodeJS.Signals): void => {
 		if (shutdownStarted) return;
 		shutdownStarted = true;
+		networkRoutes.stopNetworkSearchProjection();
 		console.log(`${signal} signal received: closing HTTP server`);
 		void stop(kernel.container.get(DataSource)).catch((error: unknown) => {
 			console.error('API shutdown failed', error);

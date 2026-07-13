@@ -149,6 +149,27 @@ describe('Config', function () {
 				host: 'http://127.0.0.1:7702'
 			});
 		});
+
+		test('does not route the generic connection to network search', function () {
+			process.env.MEILISEARCH_API_KEY = 'generic-key';
+			process.env.MEILISEARCH_HOST = 'http://127.0.0.1:7700';
+			delete process.env.MEILISEARCH_NETWORK_API_KEY;
+			delete process.env.MEILISEARCH_NETWORK_HOST;
+
+			const config = getConfigFromEnv();
+			expect(config.isOk()).toBe(true);
+			if (!config.isOk()) throw config.error;
+
+			expect(config.value.meilisearchNetwork).toMatchObject({
+				writable: false
+			});
+			expect(config.value.meilisearchNetwork.apiKey).toBeUndefined();
+			expect(config.value.meilisearchNetwork.host).toBeUndefined();
+			expect(config.value.meilisearchScp).toMatchObject({
+				apiKey: 'generic-key',
+				host: 'http://127.0.0.1:7700'
+			});
+		});
 	});
 
 	describe('parseNetworkConfig', function () {

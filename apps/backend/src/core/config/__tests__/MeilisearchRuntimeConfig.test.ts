@@ -5,17 +5,17 @@ import {
 } from '../SearchConfigDefaults.js';
 
 describe('parseMeilisearchRuntimeConfig', () => {
-	it('uses the legacy connection for both workloads when overrides are absent', () => {
+	it('keeps the generic connection for SCP and disables network search', () => {
 		const config = parseMeilisearchRuntimeConfig({
 			MEILISEARCH_API_KEY: 'legacy-key',
 			MEILISEARCH_HOST: 'http://127.0.0.1:7700'
 		});
 
 		expect(config.network).toEqual({
-			apiKey: 'legacy-key',
-			host: 'http://127.0.0.1:7700',
+			apiKey: undefined,
+			host: undefined,
 			indexName: defaultMeilisearchNetworkIndex,
-			writable: true
+			writable: false
 		});
 		expect(config.scp).toEqual({
 			apiKey: 'legacy-key',
@@ -44,7 +44,7 @@ describe('parseMeilisearchRuntimeConfig', () => {
 		});
 	});
 
-	it('falls back each missing workload value independently', () => {
+	it('never borrows a generic key for the dedicated network host', () => {
 		const config = parseMeilisearchRuntimeConfig({
 			MEILISEARCH_API_KEY: ' legacy-key ',
 			MEILISEARCH_HOST: ' http://127.0.0.1:7700 ',
@@ -55,18 +55,35 @@ describe('parseMeilisearchRuntimeConfig', () => {
 		});
 
 		expect(config.network).toMatchObject({
-			apiKey: 'legacy-key',
-			host: 'http://127.0.0.1:7701'
+			host: 'http://127.0.0.1:7701',
+			writable: true
 		});
+		expect(config.network.apiKey).toBeUndefined();
 		expect(config.scp).toMatchObject({
 			apiKey: 'scp-key',
 			host: 'http://127.0.0.1:7700'
 		});
 	});
 
+	it('does not enable network search from a key or index alone', () => {
+		const config = parseMeilisearchRuntimeConfig({
+			MEILISEARCH_HOST: 'http://127.0.0.1:7700',
+			MEILISEARCH_NETWORK_API_KEY: 'network-key',
+			MEILISEARCH_NETWORK_INDEX: 'network_v4'
+		});
+
+		expect(config.network).toEqual({
+			apiKey: undefined,
+			host: undefined,
+			indexName: 'network_v4',
+			writable: false
+		});
+	});
+
 	it('can disable only the network projection writer', () => {
 		const config = parseMeilisearchRuntimeConfig({
-			API_SEARCH_PROJECTION_WRITER: 'false'
+			API_SEARCH_PROJECTION_WRITER: 'false',
+			MEILISEARCH_NETWORK_HOST: 'http://127.0.0.1:7701'
 		});
 
 		expect(config.network.writable).toBe(false);

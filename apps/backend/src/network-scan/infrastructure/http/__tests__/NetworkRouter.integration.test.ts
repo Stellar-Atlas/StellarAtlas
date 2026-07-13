@@ -8,10 +8,12 @@ import { createDummyNetworkV1 } from '@network-scan/services/__fixtures__/create
 import { createDummyNodeV1 } from '@network-scan/services/__fixtures__/createDummyNodeV1.js';
 import { createDummyOrganizationV1 } from '@network-scan/services/__fixtures__/createDummyOrganizationV1.js';
 import { NetworkSearchService } from '../../search/NetworkSearchService.js';
+import { networkSearchProjectionRefreshIntervalMs } from '../../search/NetworkSearchProjectionRefresher.js';
 import type { NetworkSearchResponse } from '../../search/NetworkSearchTypes.js';
 
 describe('NetworkRouter.integration', () => {
 	afterEach(() => {
+		jest.useRealTimers();
 		jest.restoreAllMocks();
 	});
 
@@ -164,6 +166,44 @@ describe('NetworkRouter.integration', () => {
 		expect(config.getNetwork.execute).not.toHaveBeenCalled();
 		expect(config.getKnownNodes.executeAll).not.toHaveBeenCalled();
 		expect(refreshProjection).not.toHaveBeenCalled();
+	});
+
+	it('autonomously refreshes projection only on the designated API writer', async () => {
+		jest.useFakeTimers();
+		const refreshProjection = jest
+			.spyOn(NetworkSearchService.prototype, 'refreshProjection')
+			.mockImplementation(() => undefined);
+		const network = createDummyNetworkV1([], []);
+		const writerConfig = mockDeep<NetworkRouterConfig>();
+		writerConfig.searchConfig = {
+			host: 'http://127.0.0.1:7701',
+			indexName: 'test_network_entities',
+			writable: true
+		};
+		configureSearchInventory(writerConfig, network, [], []);
+		const readerConfig = mockDeep<NetworkRouterConfig>();
+		readerConfig.searchConfig = {
+			host: 'http://127.0.0.1:7701',
+			indexName: 'test_network_entities',
+			writable: false
+		};
+		configureSearchInventory(readerConfig, network, [], []);
+
+		const writerRouter = networkRouter(writerConfig);
+		const readerRouter = networkRouter(readerConfig);
+		await jest.advanceTimersByTimeAsync(0);
+
+		expect(writerConfig.getNetwork.execute).toHaveBeenCalledTimes(1);
+		expect(refreshProjection).toHaveBeenCalledTimes(1);
+		expect(readerConfig.getNetwork.execute).not.toHaveBeenCalled();
+
+		writerRouter.stopNetworkSearchProjection();
+		readerRouter.stopNetworkSearchProjection();
+		await jest.advanceTimersByTimeAsync(
+			networkSearchProjectionRefreshIntervalMs * 2
+		);
+		expect(writerConfig.getNetwork.execute).toHaveBeenCalledTimes(1);
+		expect(refreshProjection).toHaveBeenCalledTimes(1);
 	});
 
 	it('should expose node-only search through a fixed route', async () => {

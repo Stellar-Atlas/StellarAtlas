@@ -140,7 +140,7 @@ export class NetworkSearchService {
 					this.indexReady = true;
 					validatedState = existingState;
 				} else {
-					this.startSyncIndex();
+					void this.startSyncIndex();
 					return memorySearch(
 						snapshot,
 						request,
@@ -153,7 +153,7 @@ export class NetworkSearchService {
 					);
 				}
 			} catch {
-				this.startSyncIndex();
+				void this.startSyncIndex();
 				return memorySearch(
 					snapshot,
 					request,
@@ -175,7 +175,7 @@ export class NetworkSearchService {
 				));
 			if (!stateMatchesSnapshot(state, snapshot)) {
 				this.indexReady = false;
-				this.startSyncIndex();
+				void this.startSyncIndex();
 				return memorySearch(
 					snapshot,
 					request,
@@ -238,9 +238,16 @@ export class NetworkSearchService {
 		}
 	}
 
-	refreshProjection(inventory: NetworkSearchInventory): void {
-		this.refreshSnapshot(inventory);
-		this.startSyncIndex();
+	async refreshProjection(inventory: NetworkSearchInventory): Promise<void> {
+		const targetCursor = this.refreshSnapshot(inventory).canonicalCursor;
+		await this.startSyncIndex();
+		if (
+			this.snapshot?.canonicalCursor === targetCursor &&
+			!this.indexReady &&
+			Date.now() >= this.nextSyncAttemptAtMs
+		) {
+			await this.startSyncIndex();
+		}
 	}
 
 	private async queryIndex(
@@ -311,7 +318,6 @@ export class NetworkSearchService {
 		this.snapshot = snapshot;
 		this.indexReady = false;
 		if (Date.now() >= this.nextSyncAttemptAtMs) this.syncFailed = false;
-		this.syncPromise = undefined;
 		return snapshot;
 	}
 
@@ -322,7 +328,7 @@ export class NetworkSearchService {
 	): void {
 		this.indexReady = false;
 		this.syncFailed = true;
-		this.startSyncIndex();
+		void this.startSyncIndex();
 		this.logger?.error('Network search Meilisearch unavailable', {
 			error: errorMessage(error),
 			indexName: this.indexName,
@@ -369,9 +375,8 @@ export class NetworkSearchService {
 		return syncPromise;
 	}
 
-	private startSyncIndex(): void {
-		if (!this.writable) return;
-		void this.syncIndex();
+	private startSyncIndex(): Promise<void> {
+		return this.writable ? this.syncIndex() : Promise.resolve();
 	}
 
 	private async writeIndex(snapshot: NetworkSearchSnapshot): Promise<void> {

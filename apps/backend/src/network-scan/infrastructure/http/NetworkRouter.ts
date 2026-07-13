@@ -15,6 +15,7 @@ import { GetScpStatements } from '../../use-cases/get-scp-statements/GetScpState
 import { handleScpStatementsRequest } from './handleScpStatementsRequest.js';
 import { NetworkSearchService } from '../search/NetworkSearchService.js';
 import { NetworkSearchInventoryLoader } from '../search/NetworkSearchInventoryLoader.js';
+import { NetworkSearchProjectionRefresher } from '../search/NetworkSearchProjectionRefresher.js';
 import { networkSearchMaxOffset } from '../search/NetworkSearchQuery.js';
 import { getSharedScpStatementLiveHub } from './ScpStatementLiveHub.js';
 import { createScpStatementSseSubscriber } from './ScpStatementSseSubscriber.js';
@@ -47,6 +48,10 @@ export interface NetworkRouterConfig {
 	searchConfig: NetworkSearchConfig;
 }
 
+export interface NetworkRouter extends Router {
+	stopNetworkSearchProjection(): void;
+}
+
 const isSearchEntityType = (
 	value: string | undefined
 ): value is NetworkSearchEntityType =>
@@ -64,7 +69,7 @@ const isSearchScope = (value: string | undefined): value is KnownNodeScope =>
 	value === 'archived' ||
 	value === 'all-known';
 
-const networkRouterWrapper = (config: NetworkRouterConfig): Router => {
+const networkRouterWrapper = (config: NetworkRouterConfig): NetworkRouter => {
 	const networkRouter = express.Router();
 	const liveNetworkIntervalMs = 5_000;
 	const currentNetworkCacheMaxAgeSeconds = 10;
@@ -78,6 +83,17 @@ const networkRouterWrapper = (config: NetworkRouterConfig): Router => {
 		getKnownOrganizations: config.getKnownOrganizations,
 		getNetwork: config.getNetwork
 	});
+	const networkSearchProjection = new NetworkSearchProjectionRefresher(
+		networkSearchInventory,
+		networkSearch,
+		config.logger,
+		{
+			enabled:
+				config.searchConfig.writable !== false &&
+				(config.searchConfig.host?.length ?? 0) > 0
+		}
+	);
+	networkSearchProjection.start();
 	const scpStatementLiveHub = getSharedScpStatementLiveHub(
 		config.getScpStatements,
 		config.logger
@@ -237,22 +253,6 @@ const networkRouterWrapper = (config: NetworkRouterConfig): Router => {
 			canonicalNetworkTime
 		);
 		if (indexedPayload !== null) {
-			if (config.searchConfig.writable !== false) {
-				setImmediate(() => {
-					void networkSearchInventory
-						.load()
-						.then((inventoryOrError) => {
-							if (inventoryOrError.isOk() && inventoryOrError.value !== null) {
-								networkSearch.refreshProjection(inventoryOrError.value);
-							}
-						})
-						.catch((error: unknown) => {
-							config.logger?.warn('Network search projection refresh failed', {
-								error: error instanceof Error ? error.message : String(error)
-							});
-						});
-				});
-			}
 			return res.status(200).send(indexedPayload);
 		}
 
@@ -486,7 +486,9 @@ const networkRouterWrapper = (config: NetworkRouterConfig): Router => {
 		}
 	);
 
-	return networkRouter;
+	return Object.assign(networkRouter, {
+		stopNetworkSearchProjection: (): void => networkSearchProjection.stop()
+	});
 };
 
 export { networkRouterWrapper as networkRouter };

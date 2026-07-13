@@ -30,16 +30,20 @@ export const parseMeilisearchRuntimeConfig = (
 ): MeilisearchRuntimeConfig => {
 	const legacyApiKey = optionalValue(environment.MEILISEARCH_API_KEY);
 	const legacyHost = optionalValue(environment.MEILISEARCH_HOST);
+	const networkHost = optionalValue(environment.MEILISEARCH_NETWORK_HOST);
 
 	return {
 		network: {
-			apiKey:
-				optionalValue(environment.MEILISEARCH_NETWORK_API_KEY) ?? legacyApiKey,
-			host: optionalValue(environment.MEILISEARCH_NETWORK_HOST) ?? legacyHost,
+			apiKey: networkHost
+				? optionalValue(environment.MEILISEARCH_NETWORK_API_KEY)
+				: undefined,
+			host: networkHost,
 			indexName:
 				optionalValue(environment.MEILISEARCH_NETWORK_INDEX) ??
 				defaultMeilisearchNetworkIndex,
-			writable: environment.API_SEARCH_PROJECTION_WRITER !== 'false'
+			writable:
+				networkHost !== undefined &&
+				environment.API_SEARCH_PROJECTION_WRITER !== 'false'
 		},
 		scp: {
 			apiKey:
