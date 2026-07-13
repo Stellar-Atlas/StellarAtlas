@@ -46,7 +46,7 @@ const sortableAttributes = [
 ] as const;
 const liveFreshnessMs = 2 * 60 * 1_000;
 const liveRetentionMs = 5 * 60 * 1_000;
-const retentionCleanupIntervalMs = 30_000;
+const retentionCleanupIntervalMs = liveRetentionMs;
 const pendingDocumentTaskPollIntervalMs = 5_000;
 const taskPollIntervalMs = 50;
 const settingsTaskTimeoutMs = 60_000;
@@ -155,6 +155,7 @@ export class MeilisearchScpStatementLiveStore implements ScpStatementLiveStore {
 	private nextIndexSetupAttemptAtMs = 0;
 	private pendingDocumentTaskCheckedAtMs = 0;
 	private pendingDocumentTaskUid: number | undefined;
+	private pendingRetentionCleanupTaskUid: number | undefined;
 	private retentionCleanupPromise: Promise<void> | undefined;
 
 	constructor(
@@ -386,17 +387,46 @@ export class MeilisearchScpStatementLiveStore implements ScpStatementLiveStore {
 			return;
 		}
 		this.lastRetentionCleanupAtMs = nowMs;
+		if (await this.hasPendingRetentionCleanupTask()) return;
 		const cutoffMs = nowMs - liveRetentionMs;
 
 		try {
-			await this.index.deleteDocuments({
+			const cleanupTask = await this.index.deleteDocuments({
 				filter: `observedAtMs < ${cutoffMs}`
 			});
+			this.pendingRetentionCleanupTaskUid = cleanupTask.taskUid;
 		} catch (error) {
 			this.logger?.error('Could not queue live SCP retention cleanup', {
 				cutoffMs,
-				error
+				error: errorMessage(error)
 			});
+		}
+	}
+
+	private async hasPendingRetentionCleanupTask(): Promise<boolean> {
+		if (!this.index || this.pendingRetentionCleanupTaskUid === undefined) {
+			return false;
+		}
+		const taskUid = this.pendingRetentionCleanupTaskUid;
+		try {
+			const task = await this.index.tasks.getTask(taskUid);
+			if (task.status === 'enqueued' || task.status === 'processing') {
+				return true;
+			}
+			this.pendingRetentionCleanupTaskUid = undefined;
+			if (task.status !== 'succeeded') {
+				this.logger?.error(
+					'Live SCP Meilisearch retention cleanup task did not succeed',
+					{ status: task.status, taskUid }
+				);
+			}
+			return false;
+		} catch (error) {
+			this.logger?.error(
+				'Could not read live SCP Meilisearch retention cleanup task',
+				{ error: errorMessage(error), taskUid }
+			);
+			return true;
 		}
 	}
 
