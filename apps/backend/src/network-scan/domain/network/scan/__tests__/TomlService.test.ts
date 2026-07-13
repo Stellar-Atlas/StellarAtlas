@@ -1,6 +1,7 @@
 import valueValidator from 'validator';
 
 import {
+	isPublicTomlAddress,
 	publicTomlAddressLookup,
 	TomlFetchError,
 	TomlService
@@ -237,6 +238,29 @@ describe('tomlService', () => {
 			await expect(lookup).rejects.toMatchObject({
 				code: 'TOML_PRIVATE_ADDRESS'
 			});
+		});
+
+		it('allows public IPv4 and IPv4-mapped addresses', () => {
+			expect(isPublicTomlAddress('104.18.7.25')).toBe(true);
+			expect(isPublicTomlAddress('::ffff:104.18.7.25')).toBe(true);
+		});
+
+		it('rejects private IPv4 and IPv4-mapped addresses', () => {
+			expect(isPublicTomlAddress('127.0.0.1')).toBe(false);
+			expect(isPublicTomlAddress('::ffff:127.0.0.1')).toBe(false);
+		});
+
+		it('preserves the fetch failure cause in the public error message', async () => {
+			httpService.get.mockResolvedValue(
+				err(new HttpError('connection refused', 'ECONNREFUSED'))
+			);
+
+			const result = await tomlService.fetchToml('my-domain.com');
+
+			expect(result.isErr()).toBe(true);
+			if (result.isOk()) return;
+			expect(result.error.message).toContain('connection refused');
+			expect(result.error.cause).toMatchObject({ code: 'ECONNREFUSED' });
 		});
 
 		it('revalidates redirects and rejects private-address targets', async () => {

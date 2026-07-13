@@ -59,15 +59,14 @@ interface TomlFileFetchError {
 	warnings: TomlFetchWarning[];
 }
 
-export class TomlFetchError {
-	public message: string;
+export class TomlFetchError extends CustomError {
 	constructor(
 		public domain: string,
 		public cause: HttpError | TomlParseError,
 		public readonly tomlText: string | null = null,
 		public readonly warnings: TomlFetchWarning[] = []
 	) {
-		this.message = 'Fetch toml failed for ' + domain;
+		super('Fetch toml failed for ' + domain, TomlFetchError.name, cause);
 	}
 }
 
@@ -337,7 +336,6 @@ function createBlockedTomlAddressList(): BlockList {
 	for (const [address, prefix] of [
 		['::', 128],
 		['::1', 128],
-		['::ffff:0:0', 96],
 		['100::', 64],
 		['2001:2::', 48],
 		['2001:db8::', 32],
