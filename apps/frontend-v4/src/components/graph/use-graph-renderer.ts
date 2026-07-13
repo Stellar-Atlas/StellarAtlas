@@ -15,6 +15,7 @@ import {
 } from './graph-camera';
 import {
 	createGraphNodeObject,
+	getGraphLinkArrowLength,
 	getGraphLinkColor,
 	getGraphLinkWidth
 } from './graph-node-object';
@@ -24,7 +25,7 @@ import {
 	type ActiveWave,
 	type WaveMeshPool
 } from './graph-wave-animation';
-import { getGraphLinkKey, type GraphLinkLike } from './graph-link-utils';
+import type { GraphLinkLike } from './graph-link-utils';
 import type { GraphVisualState } from './graph-visual-state';
 import type { Graph3DLink, Graph3DNode, Graph3DOrganization } from './model-3d';
 
@@ -38,7 +39,6 @@ export type GraphRendererStatus = 'loading' | 'ready' | 'error';
 interface UseGraphRendererOptions {
 	activeWavesRef: RefObject<Map<number, ActiveWave>>;
 	containerRef: RefObject<HTMLDivElement | null>;
-	flowLinkColorsRef: RefObject<Map<string, string>>;
 	graphDataRef: RefObject<GraphRenderData>;
 	graphRef: RefObject<ForceGraph3DInstance | null>;
 	nodesByIdRef: RefObject<Map<string, Graph3DNode>>;
@@ -63,7 +63,6 @@ const hasWebGLSupport = (): boolean => {
 export const useGraphRenderer = ({
 	activeWavesRef,
 	containerRef,
-	flowLinkColorsRef,
 	graphDataRef,
 	graphRef,
 	nodesByIdRef,
@@ -128,45 +127,30 @@ export const useGraphRenderer = ({
 							? createGraphNodeObject(graphNode, visualStateRef.current)
 							: new THREE.Group();
 					})
-					.linkColor(
-						(link) =>
-							flowLinkColorsRef.current.get(
-								getGraphLinkKey(link as GraphLinkLike)
-							) ??
-							getGraphLinkColor(
-								link as GraphLinkLike,
-								nodesByIdRef.current,
-								visualStateRef.current
-							)
+					.linkColor((link) =>
+						getGraphLinkColor(
+							link as GraphLinkLike,
+							nodesByIdRef.current,
+							visualStateRef.current
+						)
 					)
 					.linkLabel((link) => (link as GraphLinkLike).label ?? '')
 					.linkOpacity(0.38)
 					.linkWidth((link) =>
-						flowLinkColorsRef.current.has(
-							getGraphLinkKey(link as GraphLinkLike)
+						getGraphLinkWidth(
+							link as GraphLinkLike,
+							nodesByIdRef.current,
+							visualStateRef.current
 						)
-							? 3.7
-							: getGraphLinkWidth(
-									link as GraphLinkLike,
-									nodesByIdRef.current,
-									visualStateRef.current
-								)
 					)
+					.linkDirectionalArrowLength((link) =>
+						getGraphLinkArrowLength(
+							link as GraphLinkLike,
+							visualStateRef.current
+						)
+					)
+					.linkDirectionalArrowRelPos(0.82)
 					.linkDirectionalParticles(0)
-					.linkDirectionalParticleColor(
-						(link) =>
-							flowLinkColorsRef.current.get(
-								getGraphLinkKey(link as GraphLinkLike)
-							) ?? '#58a6ff'
-					)
-					.linkDirectionalParticleSpeed(0.024)
-					.linkDirectionalParticleWidth((link) =>
-						flowLinkColorsRef.current.has(
-							getGraphLinkKey(link as GraphLinkLike)
-						)
-							? 3.4
-							: 0
-					)
 					.showNavInfo(false)
 					.enableNodeDrag(false)
 					.lights([

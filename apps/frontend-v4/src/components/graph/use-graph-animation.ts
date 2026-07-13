@@ -9,13 +9,9 @@ import {
 import type { ForceGraph3DInstance } from '3d-force-graph';
 import type { GraphVisualState } from './graph-visual-state';
 import type { Graph3DNode } from './model-3d';
-import type { GraphRenderData } from './use-graph-renderer';
 import {
-	getExistingFlowLinkKeys,
-	getStatementColor,
 	ledgerPlaybackDurationMs,
-	type LedgerPlaybackFrame,
-	type StatementFlowPath
+	type LedgerPlaybackFrame
 } from './scp-flow-paths';
 import { buildStatementWaveSchedule } from './graph-wave-schedule';
 import {
@@ -23,14 +19,18 @@ import {
 	mergePlaybackQueue
 } from './graph-playback-queue';
 import {
-	hideAllWaveSlots,
-	launchWaveSlot,
-	maxWaveInstances,
 	updateWaveMeshPool,
 	type ActiveWave,
 	type WaveMeshPool
 } from './graph-wave-animation';
-import type { PublicScpGraphStatement } from '../../api/types';
+import {
+	activateStatementFlowPath,
+	activeStatementLifetimeMs,
+	animateStatementPacket,
+	clearGraphAnimationEffects,
+	getStatementLaunchDeadlineMs,
+	removeTrackedTimeout
+} from './graph-animation-effects';
 
 interface UseGraphAnimationOptions {
 	activeWavesRef: RefObject<Map<number, ActiveWave>>;
@@ -39,8 +39,6 @@ interface UseGraphAnimationOptions {
 	animationTimeoutsRef: RefObject<number[]>;
 	animationsEnabled: boolean;
 	animationsEnabledRef: RefObject<boolean>;
-	flowLinkColorsRef: RefObject<Map<string, string>>;
-	graphDataRef: RefObject<GraphRenderData>;
 	graphRef: RefObject<ForceGraph3DInstance | null>;
 	nextWaveIndexRef: RefObject<number>;
 	nodeActivityRef: RefObject<Map<string, number>>;
@@ -63,8 +61,6 @@ export const useGraphAnimation = ({
 	animationTimeoutsRef,
 	animationsEnabled,
 	animationsEnabledRef,
-	flowLinkColorsRef,
-	graphDataRef,
 	graphRef,
 	nextWaveIndexRef,
 	nodeActivityRef,
@@ -84,59 +80,12 @@ export const useGraphAnimation = ({
 	const activeLedgerRef = useRef<LedgerPlaybackFrame | null>(null);
 	const playbackQueueRef = useRef<LedgerPlaybackFrame[]>([]);
 	const playbackStartedAtRef = useRef(0);
+	const pausedPlaybackElapsedMsRef = useRef<number | null>(null);
 	const playbackFinishTimeoutRef = useRef<number | null>(null);
+	const pendingStatementHashesRef = useRef<Set<string>>(new Set());
 	const completedSlotSignaturesRef = useRef<Map<string, string>>(new Map());
 	const completedSlotOrderRef = useRef<string[]>([]);
 	const advancePlaybackRef = useRef<() => void>(() => undefined);
-
-	const activateFlowPath = useCallback(
-		(path: StatementFlowPath): void => {
-			const graph = graphRef.current;
-			if (!graph) return;
-			const color = getStatementColor(path.statement.statementType);
-
-			for (const key of getExistingFlowLinkKeys(
-				path,
-				graphDataRef.current.links
-			)) {
-				flowLinkColorsRef.current.set(key, color);
-				const timeout = window.setTimeout(() => {
-					if (flowLinkColorsRef.current.get(key) === color) {
-						flowLinkColorsRef.current.delete(key);
-						graph.refresh();
-					}
-				}, 1_250);
-				activityTimeoutsRef.current.push(timeout);
-			}
-
-			for (const nodeId of [path.source.id, path.target.id]) {
-				nodeActivityRef.current.set(
-					nodeId,
-					Math.min(1, (nodeActivityRef.current.get(nodeId) ?? 0) + 0.38)
-				);
-				const timeout = window.setTimeout(() => {
-					const nextWeight = Math.max(
-						0,
-						(nodeActivityRef.current.get(nodeId) ?? 0) - 0.38
-					);
-					if (nextWeight === 0) nodeActivityRef.current.delete(nodeId);
-					else nodeActivityRef.current.set(nodeId, nextWeight);
-					refreshGraphVisuals();
-				}, 1_650);
-				activityTimeoutsRef.current.push(timeout);
-			}
-
-			refreshGraphVisuals();
-		},
-		[
-			activityTimeoutsRef,
-			flowLinkColorsRef,
-			graphDataRef,
-			graphRef,
-			nodeActivityRef,
-			refreshGraphVisuals
-		]
-	);
 
 	const updateWaveAnimations = useCallback(
 		(now: number): void => {
@@ -180,96 +129,34 @@ export const useGraphAnimation = ({
 		waveAnimationFrameRef
 	]);
 
-	const animateStatementPacket = useCallback(
-		(statement: PublicScpGraphStatement, path: StatementFlowPath): void => {
-			const THREE = threeRef.current;
-			const wavePool = wavePoolRef.current;
-			if (!THREE || !wavePool) return;
-
-			const color = getStatementColor(statement.statementType);
-			const source = new THREE.Vector3(
-				path.source.x ?? 0,
-				path.source.y ?? 0,
-				path.source.z ?? 0
-			);
-			const target = new THREE.Vector3(
-				path.target.x ?? 0,
-				path.target.y ?? 0,
-				path.target.z ?? 0
-			);
-			const midpoint = new THREE.Vector3()
-				.addVectors(source, target)
-				.multiplyScalar(0.5);
-			const distance = source.distanceTo(target);
-			const lift = Math.min(90, Math.max(22, distance * 0.08));
-			midpoint.y += lift;
-
-			const durationMs =
-				statement.statementType === 'nominate'
-					? 1_020
-					: statement.statementType === 'prepare'
-						? 880
-						: 760;
-			const index = nextWaveIndexRef.current % maxWaveInstances;
-			nextWaveIndexRef.current += 1;
-			const startedAt = performance.now();
-			launchWaveSlot(wavePool, index, {
-				color,
-				durationMs,
-				midpoint,
-				source,
-				startedAt,
-				target
+	const clearAnimationEffects = useCallback(
+		(preserveAnimatedStatements = false): void => {
+			clearGraphAnimationEffects({
+				activeWavesRef,
+				activityTimeoutsRef,
+				animatedStatementHashesRef,
+				animationTimeoutsRef,
+				nodeActivityRef,
+				pendingStatementHashes: pendingStatementHashesRef.current,
+				preserveAnimatedStatements,
+				refreshGraphVisuals,
+				setActiveStatementHashes,
+				waveAnimationFrameRef,
+				wavePoolRef
 			});
-			activeWavesRef.current.set(index, {
-				durationMs,
-				index,
-				startedAt
-			});
-			scheduleWaveAnimation();
 		},
 		[
 			activeWavesRef,
-			nextWaveIndexRef,
-			scheduleWaveAnimation,
-			threeRef,
+			activityTimeoutsRef,
+			animatedStatementHashesRef,
+			animationTimeoutsRef,
+			nodeActivityRef,
+			refreshGraphVisuals,
+			setActiveStatementHashes,
+			waveAnimationFrameRef,
 			wavePoolRef
 		]
 	);
-
-	const clearAnimationEffects = useCallback((): void => {
-		for (const timeout of animationTimeoutsRef.current) {
-			window.clearTimeout(timeout);
-		}
-		for (const timeout of activityTimeoutsRef.current) {
-			window.clearTimeout(timeout);
-		}
-		animationTimeoutsRef.current = [];
-		activityTimeoutsRef.current = [];
-		animatedStatementHashesRef.current = new Set();
-		setActiveStatementHashes(new Set<string>());
-		flowLinkColorsRef.current = new Map();
-		nodeActivityRef.current = new Map();
-		activeWavesRef.current.clear();
-		if (waveAnimationFrameRef.current !== null) {
-			window.cancelAnimationFrame(waveAnimationFrameRef.current);
-			waveAnimationFrameRef.current = null;
-		}
-
-		if (wavePoolRef.current) hideAllWaveSlots(wavePoolRef.current);
-		refreshGraphVisuals();
-	}, [
-		activeWavesRef,
-		activityTimeoutsRef,
-		animatedStatementHashesRef,
-		animationTimeoutsRef,
-		flowLinkColorsRef,
-		nodeActivityRef,
-		refreshGraphVisuals,
-		setActiveStatementHashes,
-		waveAnimationFrameRef,
-		wavePoolRef
-	]);
 
 	const clearPlaybackFinishTimeout = useCallback((): void => {
 		if (playbackFinishTimeoutRef.current === null) return;
@@ -304,80 +191,150 @@ export const useGraphAnimation = ({
 			}
 
 			const elapsedMs = performance.now() - playbackStartedAtRef.current;
-			const playbackDurationMs =
-				ledger.playbackDurationMs ?? ledgerPlaybackDurationMs;
-			const latestLaunchMs = playbackDurationMs - 1_700;
+			if (elapsedMs > getStatementLaunchDeadlineMs(ledger)) return;
 
 			const schedule = buildStatementWaveSchedule({
 				animatedStatementHashes: animatedStatementHashesRef.current,
 				elapsedMs,
-				graphData: graphDataRef.current,
 				ledger,
 				nodesById: nodesByIdRef.current
 			});
 			for (const { delayMs, flowPath, statement } of schedule) {
 				animatedStatementHashesRef.current.add(statement.statementHash);
-				const timeout = window.setTimeout(() => {
-					activateFlowPath(flowPath);
-					animateStatementPacket(statement, flowPath);
+				pendingStatementHashesRef.current.add(statement.statementHash);
+				let timeout = 0;
+				timeout = window.setTimeout(() => {
+					removeTrackedTimeout(animationTimeoutsRef.current, timeout);
+					pendingStatementHashesRef.current.delete(statement.statementHash);
+					const activeLedger = activeLedgerRef.current;
+					if (
+						!animationsEnabledRef.current ||
+						activeLedger?.slotIndex !== ledger.slotIndex
+					) {
+						animatedStatementHashesRef.current.delete(statement.statementHash);
+						return;
+					}
+					const launchElapsedMs =
+						performance.now() - playbackStartedAtRef.current;
+					if (launchElapsedMs > getStatementLaunchDeadlineMs(activeLedger)) {
+						return;
+					}
+					activateStatementFlowPath({
+						activityTimeoutsRef,
+						nodeActivityRef,
+						path: flowPath,
+						refreshGraphVisuals
+					});
+					animateStatementPacket({
+						activeWavesRef,
+						nextWaveIndexRef,
+						path: flowPath,
+						scheduleWaveAnimation,
+						statement,
+						threeRef,
+						wavePoolRef
+					});
 					setActiveStatementHashes((current) => {
 						const next = new Set(current);
 						next.add(statement.statementHash);
 						return next;
 					});
-					const clearActiveStatement = window.setTimeout(() => {
+					let clearActiveStatement = 0;
+					clearActiveStatement = window.setTimeout(() => {
+						removeTrackedTimeout(
+							activityTimeoutsRef.current,
+							clearActiveStatement
+						);
 						setActiveStatementHashes((current) => {
 							if (!current.has(statement.statementHash)) return current;
 							const next = new Set(current);
 							next.delete(statement.statementHash);
 							return next;
 						});
-					}, 1_700);
+					}, activeStatementLifetimeMs);
 					activityTimeoutsRef.current.push(clearActiveStatement);
 				}, delayMs);
 				animationTimeoutsRef.current.push(timeout);
 			}
 		},
 		[
-			activateFlowPath,
+			activeWavesRef,
 			activityTimeoutsRef,
 			animatedStatementHashesRef,
-			animateStatementPacket,
 			animationTimeoutsRef,
 			animationsEnabledRef,
-			graphDataRef,
-			graphRef,
+			nextWaveIndexRef,
+			nodeActivityRef,
 			nodesByIdRef,
-			setActiveStatementHashes
+			refreshGraphVisuals,
+			scheduleWaveAnimation,
+			setActiveStatementHashes,
+			threeRef,
+			wavePoolRef
 		]
+	);
+
+	const completeLedgerPlayback = useCallback(
+		(slotIndex: string): void => {
+			const activeLedger = activeLedgerRef.current;
+			if (
+				!animationsEnabledRef.current ||
+				activeLedger?.slotIndex !== slotIndex
+			) {
+				return;
+			}
+			markSlotCompleted(activeLedger);
+			activeLedgerRef.current = null;
+			pausedPlaybackElapsedMsRef.current = null;
+			setActivePlaybackSlotIndex(null);
+			clearAnimationEffects();
+			scheduleWaveAnimation();
+		},
+		[
+			animationsEnabledRef,
+			clearAnimationEffects,
+			markSlotCompleted,
+			scheduleWaveAnimation,
+			setActivePlaybackSlotIndex
+		]
+	);
+
+	const schedulePlaybackFinish = useCallback(
+		(ledger: LedgerPlaybackFrame, elapsedMs: number): void => {
+			clearPlaybackFinishTimeout();
+			const remainingMs = Math.max(
+				0,
+				(ledger.playbackDurationMs ?? ledgerPlaybackDurationMs) - elapsedMs
+			);
+			if (remainingMs === 0) {
+				completeLedgerPlayback(ledger.slotIndex);
+				return;
+			}
+			playbackFinishTimeoutRef.current = window.setTimeout(() => {
+				playbackFinishTimeoutRef.current = null;
+				completeLedgerPlayback(ledger.slotIndex);
+			}, remainingMs);
+		},
+		[clearPlaybackFinishTimeout, completeLedgerPlayback]
 	);
 
 	const startLedgerPlayback = useCallback(
 		(ledger: LedgerPlaybackFrame): void => {
-			clearPlaybackFinishTimeout();
 			clearAnimationEffects();
 			activeLedgerRef.current = ledger;
+			pausedPlaybackElapsedMsRef.current = null;
 			setActivePlaybackSlotIndex(ledger.slotIndex);
 			playbackStartedAtRef.current = performance.now();
 			graphRef.current?.resumeAnimation();
 			scheduleWaveAnimation();
 			scheduleLedgerStatements(ledger);
-			playbackFinishTimeoutRef.current = window.setTimeout(() => {
-				const activeLedger = activeLedgerRef.current;
-				if (activeLedger) markSlotCompleted(activeLedger);
-				activeLedgerRef.current = null;
-				setActivePlaybackSlotIndex(null);
-				clearAnimationEffects();
-				scheduleWaveAnimation();
-				advancePlaybackRef.current();
-			}, ledger.playbackDurationMs ?? ledgerPlaybackDurationMs);
+			schedulePlaybackFinish(ledger, 0);
 		},
 		[
 			clearAnimationEffects,
-			clearPlaybackFinishTimeout,
 			graphRef,
-			markSlotCompleted,
 			scheduleLedgerStatements,
+			schedulePlaybackFinish,
 			scheduleWaveAnimation,
 			setActivePlaybackSlotIndex
 		]
@@ -396,6 +353,28 @@ export const useGraphAnimation = ({
 		if (nextLedger) startLedgerPlayback(nextLedger);
 	}, [animationsEnabledRef, graphRef, startLedgerPlayback]);
 
+	const pausePlayback = useCallback((): void => {
+		const activeLedger = activeLedgerRef.current;
+		if (activeLedger) {
+			pausedPlaybackElapsedMsRef.current = Math.min(
+				activeLedger.playbackDurationMs ?? ledgerPlaybackDurationMs,
+				Math.max(0, performance.now() - playbackStartedAtRef.current)
+			);
+		} else playbackQueueRef.current = [];
+		clearPlaybackFinishTimeout();
+		clearAnimationEffects(true);
+	}, [clearAnimationEffects, clearPlaybackFinishTimeout]);
+
+	const resumePlayback = useCallback((): void => {
+		const activeLedger = activeLedgerRef.current;
+		const elapsedMs = pausedPlaybackElapsedMsRef.current;
+		if (!activeLedger || elapsedMs === null) return;
+		playbackStartedAtRef.current = performance.now() - elapsedMs;
+		pausedPlaybackElapsedMsRef.current = null;
+		scheduleLedgerStatements(activeLedger);
+		schedulePlaybackFinish(activeLedger, elapsedMs);
+	}, [scheduleLedgerStatements, schedulePlaybackFinish]);
+
 	useEffect(() => {
 		advancePlaybackRef.current = advancePlayback;
 	}, [advancePlayback]);
@@ -412,26 +391,22 @@ export const useGraphAnimation = ({
 		animationsEnabledRef.current = animationsEnabled;
 		if (animationsEnabled) {
 			graphRef.current?.resumeAnimation();
+			resumePlayback();
 			scheduleWaveAnimation();
 			advancePlayback();
 			return;
 		}
 
 		graphRef.current?.pauseAnimation();
-		clearPlaybackFinishTimeout();
-		activeLedgerRef.current = null;
-		setActivePlaybackSlotIndex(null);
-		playbackQueueRef.current = [];
-		clearAnimationEffects();
+		pausePlayback();
 	}, [
 		advancePlayback,
 		animationsEnabled,
 		animationsEnabledRef,
-		clearAnimationEffects,
-		clearPlaybackFinishTimeout,
 		graphRef,
-		scheduleWaveAnimation,
-		setActivePlaybackSlotIndex
+		pausePlayback,
+		resumePlayback,
+		scheduleWaveAnimation
 	]);
 
 	useEffect(() => {
@@ -446,11 +421,12 @@ export const useGraphAnimation = ({
 			);
 			if (updatedActiveLedger) {
 				activeLedgerRef.current = updatedActiveLedger;
-				scheduleLedgerStatements(updatedActiveLedger);
+				if (animationsEnabled) scheduleLedgerStatements(updatedActiveLedger);
 			}
 		}
 
-		if (!animationsEnabled || !playbackBoundarySlotIndex) {
+		if (!animationsEnabled) return;
+		if (!playbackBoundarySlotIndex) {
 			playbackQueueRef.current = [];
 			return;
 		}

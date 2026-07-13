@@ -37,7 +37,10 @@ function isNodeEmphasized(
 	);
 }
 
-function createLabelTexture(label: string, organization: string): THREE.CanvasTexture {
+function createLabelTexture(
+	label: string,
+	organization: string
+): THREE.CanvasTexture {
 	const canvas = document.createElement('canvas');
 	const context = canvas.getContext('2d');
 	if (!context) return new THREE.CanvasTexture(canvas);
@@ -48,7 +51,8 @@ function createLabelTexture(label: string, organization: string): THREE.CanvasTe
 	const titleMetrics = context.measureText(label);
 	context.font = `700 ${subtitleSize}px Inter, Arial, sans-serif`;
 	const subtitleMetrics = context.measureText(organization);
-	canvas.width = Math.ceil(Math.max(titleMetrics.width, subtitleMetrics.width)) + 30;
+	canvas.width =
+		Math.ceil(Math.max(titleMetrics.width, subtitleMetrics.width)) + 30;
 	canvas.height = 48;
 
 	context.font = `800 ${titleSize}px Inter, Arial, sans-serif`;
@@ -92,7 +96,8 @@ export function createGraphNodeObject(
 	const group = new THREE.Group();
 	const emphasized = isNodeEmphasized(node, visualState);
 	const activityWeight = visualState.activeNodeWeights.get(node.id) ?? 0;
-	const radius = getNodeRadius(node) * (emphasized ? 1.22 + activityWeight * 0.18 : 1);
+	const radius =
+		getNodeRadius(node) * (emphasized ? 1.22 + activityWeight * 0.18 : 1);
 	const opacity = getNodeOpacity(node, visualState);
 	const baseColor = new THREE.Color(node.color);
 	const material = new THREE.MeshPhysicalMaterial({
@@ -127,7 +132,10 @@ export function createGraphNodeObject(
 		group.add(halo);
 	}
 
-	if (emphasized || (node.kind === 'validator' && node.isInTransitiveQuorumSet)) {
+	if (
+		emphasized ||
+		(node.kind === 'validator' && node.isInTransitiveQuorumSet)
+	) {
 		group.add(createNodeLabel(node, radius));
 	}
 
@@ -135,11 +143,7 @@ export function createGraphNodeObject(
 }
 
 type GraphLinkEndpoint =
-	| Graph3DNode
-	| number
-	| string
-	| { id?: number | string }
-	| undefined;
+	Graph3DNode | number | string | { id?: number | string } | undefined;
 
 interface GraphLinkLike {
 	color?: string;
@@ -228,4 +232,16 @@ export function getGraphLinkWidth(
 		targetNode?.groupId === focusedOrganizationId
 		? 1.15
 		: 0.14;
+}
+
+export function getGraphLinkArrowLength(
+	link: GraphLinkLike,
+	visualState: GraphVisualState
+): number {
+	const inspectedNodeId =
+		visualState.selectedNodeId ?? visualState.hoveredNodeId;
+	if (!inspectedNodeId) return 0;
+	const sourceId = getEndpointId(link.source);
+	const targetId = getEndpointId(link.target);
+	return sourceId === inspectedNodeId || targetId === inspectedNodeId ? 2.6 : 0;
 }

@@ -69,13 +69,13 @@ const fragmentShader = `
 
 	float waveBand(float offset, float width) {
 		float phase = fract(vWaveUv.x * uBandCount - uTime * 1.15 + offset);
-		return smoothstep(width, 0.0, abs(phase - 0.5));
+		return 1.0 - smoothstep(0.0, width, abs(phase - 0.5));
 	}
 
 	void main() {
 		if (vProgress >= 1.0) discard;
 		float verticalFade = smoothstep(0.0, 0.42, vWaveUv.y) *
-			smoothstep(1.0, 0.58, vWaveUv.y);
+			(1.0 - smoothstep(0.58, 1.0, vWaveUv.y));
 		float lifecycleFade =
 			smoothstep(0.0, 0.08, vProgress) *
 			(1.0 - smoothstep(0.78, 1.0, vProgress));

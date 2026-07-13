@@ -1,5 +1,4 @@
 import type { Graph3DNode } from './model-3d';
-import type { GraphRenderData } from './use-graph-renderer';
 import {
 	compareStatementsByObservation,
 	getStatementFlowPath,
@@ -19,17 +18,16 @@ export interface StatementWaveScheduleEntry {
 interface BuildStatementWaveScheduleOptions {
 	readonly animatedStatementHashes: ReadonlySet<string>;
 	readonly elapsedMs: number;
-	readonly graphData: GraphRenderData;
 	readonly ledger: LedgerPlaybackFrame;
 	readonly nodesById: ReadonlyMap<string, Graph3DNode>;
 }
 
 const activeStatementLifetimeMs = 1_700;
+export const statementLaunchSafetyMarginMs = 120;
 
 export const buildStatementWaveSchedule = ({
 	animatedStatementHashes,
 	elapsedMs,
-	graphData,
 	ledger,
 	nodesById
 }: BuildStatementWaveScheduleOptions): readonly StatementWaveScheduleEntry[] => {
@@ -42,7 +40,10 @@ export const buildStatementWaveSchedule = ({
 
 	const animationBudgetMs =
 		ledger.animationBudgetMs ?? ledgerCloseAnimationBudgetMs;
-	const scheduleWindowMs = Math.min(animationBudgetMs, latestLaunchMs);
+	const scheduleWindowMs = Math.max(
+		0,
+		Math.min(animationBudgetMs, latestLaunchMs) - statementLaunchSafetyMarginMs
+	);
 	const remainingWindowMs = Math.max(0, scheduleWindowMs - elapsedMs);
 	const candidates = ledger.statements
 		.filter(
@@ -50,11 +51,7 @@ export const buildStatementWaveSchedule = ({
 		)
 		.toSorted(compareStatementsByObservation)
 		.map((statement) => {
-			const flowPath = getStatementFlowPath(
-				statement,
-				graphData.links,
-				nodesById
-			);
+			const flowPath = getStatementFlowPath(statement, nodesById);
 			return flowPath ? { flowPath, statement } : null;
 		})
 		.filter(

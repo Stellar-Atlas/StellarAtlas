@@ -1,6 +1,10 @@
 import type { BaseQuorumSet } from 'shared';
 import type { LinkObject, NodeObject } from '3d-force-graph';
-import type { PublicNetwork, PublicNode, PublicOrganization } from '../../api/types';
+import type {
+	PublicNetwork,
+	PublicNode,
+	PublicOrganization
+} from '../../api/types';
 import {
 	getNodeLabel,
 	getOrganizationForNode,
@@ -30,6 +34,7 @@ export interface Graph3DLink extends LinkObject<Graph3DNode> {
 
 export interface Graph3DOrganization {
 	color: string;
+	groupKind: 'home-domain' | 'organization' | 'unaffiliated';
 	id: string;
 	inTransitiveQuorumSet: boolean;
 	name: string;
@@ -46,7 +51,16 @@ export interface Graph3DModel {
 	organizations: Graph3DOrganization[];
 }
 
-const COLORS = ['#58a6ff', '#5dd39e', '#ff9d42', '#c084fc', '#ff6874', '#f7cf4d', '#48d6d2', '#a7b0bd'];
+const COLORS = [
+	'#58a6ff',
+	'#5dd39e',
+	'#ff9d42',
+	'#c084fc',
+	'#ff6874',
+	'#f7cf4d',
+	'#48d6d2',
+	'#a7b0bd'
+];
 const goldenAngle = Math.PI * (3 - Math.sqrt(5));
 
 const hashText = (text: string): number =>
@@ -56,7 +70,9 @@ const hashText = (text: string): number =>
 	);
 
 const getColor = (id: string, index: number): string =>
-	COLORS[hashText(id) % COLORS.length] ?? COLORS[index % COLORS.length] ?? '#58a6ff';
+	COLORS[hashText(id) % COLORS.length] ??
+	COLORS[index % COLORS.length] ??
+	'#58a6ff';
 
 const collectValidators = (
 	quorumSet: BaseQuorumSet | null,
@@ -64,7 +80,8 @@ const collectValidators = (
 ): void => {
 	if (!quorumSet) return;
 	for (const validator of quorumSet.validators) validators.add(validator);
-	for (const innerSet of quorumSet.innerQuorumSets) collectValidators(innerSet, validators);
+	for (const innerSet of quorumSet.innerQuorumSets)
+		collectValidators(innerSet, validators);
 };
 
 const getClusterCenter = (
@@ -72,7 +89,7 @@ const getClusterCenter = (
 	count: number,
 	inTransitiveQuorumSet: boolean
 ): { x: number; y: number; z: number } => {
-	const y = 1 - (((index + 0.5) / Math.max(count, 1)) * 2);
+	const y = 1 - ((index + 0.5) / Math.max(count, 1)) * 2;
 	const radiusAtY = Math.sqrt(1 - y * y);
 	const theta = goldenAngle * index;
 	const radius = inTransitiveQuorumSet ? 390 : 640;
@@ -83,7 +100,10 @@ const getClusterCenter = (
 	};
 };
 
-const getMemberOffset = (index: number, count: number): { x: number; y: number; z: number } => {
+const getMemberOffset = (
+	index: number,
+	count: number
+): { x: number; y: number; z: number } => {
 	const ringSize = Math.min(count, 10);
 	const ringIndex = index % Math.max(ringSize, 1);
 	const ring = Math.floor(index / Math.max(ringSize, 1));
@@ -103,6 +123,7 @@ const groupNodes = (
 ): Map<string, PublicNode[]> => {
 	const groups = new Map<string, PublicNode[]>();
 	for (const node of network.nodes) {
+		if (!node.isValidator && !node.active) continue;
 		if (validatorsOnly && !node.isValidator) continue;
 		const key = getNodeGroupId(node);
 		groups.set(key, [...(groups.get(key) ?? []), node]);
@@ -129,29 +150,33 @@ const buildValidatorNodes = (
 	const transitiveValidators = new Set(network.transitiveQuorumSet);
 	return Array.from(groupNodes(network, true).entries()).flatMap(
 		([groupId, nodes], groupIndex) => {
-			const organization = organizations.find((candidate) => candidate.id === groupId);
+			const organization = organizations.find(
+				(candidate) => candidate.id === groupId
+			);
 			const color = organization?.color ?? getColor(groupId, groupIndex);
-			const center = organization ?? getClusterCenter(groupIndex, organizations.length, false);
-		const groupName = organization?.name ?? getFallbackGroupName(nodes);
+			const center =
+				organization ??
+				getClusterCenter(groupIndex, organizations.length, false);
+			const groupName = organization?.name ?? getFallbackGroupName(nodes);
 
-		return nodes.map((node, nodeIndex) => {
-			const offset = getMemberOffset(nodeIndex, nodes.length);
-			return {
-				id: node.publicKey,
-				color,
-				detail: node.homeDomain ?? node.host ?? node.publicKey.slice(0, 12),
-				groupId,
-				groupName,
-				isInTransitiveQuorumSet: transitiveValidators.has(node.publicKey),
-				kind: 'validator',
-				node,
-				size: node.isValidating ? 8 : 6,
-				x: center.x + offset.x,
-				y: center.y + offset.y,
-				z: center.z + offset.z,
-				fx: center.x + offset.x,
-				fy: center.y + offset.y,
-				fz: center.z + offset.z
+			return nodes.map((node, nodeIndex) => {
+				const offset = getMemberOffset(nodeIndex, nodes.length);
+				return {
+					id: node.publicKey,
+					color,
+					detail: node.homeDomain ?? node.host ?? node.publicKey.slice(0, 12),
+					groupId,
+					groupName,
+					isInTransitiveQuorumSet: transitiveValidators.has(node.publicKey),
+					kind: 'validator',
+					node,
+					size: node.isValidating ? 8 : 6,
+					x: center.x + offset.x,
+					y: center.y + offset.y,
+					z: center.z + offset.z,
+					fx: center.x + offset.x,
+					fy: center.y + offset.y,
+					fz: center.z + offset.z
 				};
 			});
 		}
@@ -162,7 +187,9 @@ const buildOuterNodes = (
 	network: PublicNetwork,
 	organizations: readonly Graph3DOrganization[]
 ): Graph3DNode[] => {
-	const outerNodes = network.nodes.filter((node) => !node.isValidator);
+	const outerNodes = network.nodes.filter(
+		(node) => node.active && !node.isValidator
+	);
 	const organizationMap = new Map(
 		network.organizations.map((organization) => [organization.id, organization])
 	);
@@ -176,7 +203,9 @@ const buildOuterNodes = (
 		const positionY = y * radius * 0.8;
 		const z = Math.sin(theta) * radiusAtY * radius;
 		const groupId = getNodeGroupId(node);
-		const organization = organizations.find((candidate) => candidate.id === groupId);
+		const organization = organizations.find(
+			(candidate) => candidate.id === groupId
+		);
 		const sourceOrganization = organizationMap.get(groupId);
 		return {
 			id: node.publicKey,
@@ -185,7 +214,8 @@ const buildOuterNodes = (
 			groupId,
 			groupName: sourceOrganization
 				? getOrganizationLabel(sourceOrganization)
-				: node.homeDomain ?? (node.active ? 'Listener nodes' : 'Unavailable nodes'),
+				: (node.homeDomain ??
+					(node.active ? 'Listener nodes' : 'Unavailable nodes')),
 			isInTransitiveQuorumSet: false,
 			kind: node.active ? 'listener' : 'offline',
 			node,
@@ -202,22 +232,41 @@ const buildOuterNodes = (
 
 const buildOrganizations = (network: PublicNetwork): Graph3DOrganization[] => {
 	const groupedNodes = groupNodes(network);
-	const organizationMap = new Map(network.organizations.map((organization) => [organization.id, organization]));
+	const organizationMap = new Map(
+		network.organizations.map((organization) => [organization.id, organization])
+	);
 	const transitiveValidators = new Set(network.transitiveQuorumSet);
 	const entries = Array.from(groupedNodes.entries()).sort((left, right) => {
-		const leftInTransitive = left[1].some((node) => transitiveValidators.has(node.publicKey));
-		const rightInTransitive = right[1].some((node) => transitiveValidators.has(node.publicKey));
-		if (leftInTransitive !== rightInTransitive) return leftInTransitive ? -1 : 1;
+		const leftInTransitive = left[1].some((node) =>
+			transitiveValidators.has(node.publicKey)
+		);
+		const rightInTransitive = right[1].some((node) =>
+			transitiveValidators.has(node.publicKey)
+		);
+		if (leftInTransitive !== rightInTransitive)
+			return leftInTransitive ? -1 : 1;
 		return right[1].length - left[1].length;
 	});
 
 	return entries.map(([id, nodes], index) => {
-		const inTransitiveQuorumSet = nodes.some((node) => transitiveValidators.has(node.publicKey));
-		const center = getClusterCenter(index, entries.length, inTransitiveQuorumSet);
-		const organization: PublicOrganization | undefined = organizationMap.get(id);
+		const inTransitiveQuorumSet = nodes.some((node) =>
+			transitiveValidators.has(node.publicKey)
+		);
+		const center = getClusterCenter(
+			index,
+			entries.length,
+			inTransitiveQuorumSet
+		);
+		const organization: PublicOrganization | undefined =
+			organizationMap.get(id);
 		return {
 			...center,
 			color: getColor(id, index),
+			groupKind: organization
+				? 'organization'
+				: id === 'unaffiliated'
+					? 'unaffiliated'
+					: 'home-domain',
 			id,
 			inTransitiveQuorumSet,
 			name: organization
@@ -256,17 +305,18 @@ const buildLinks = (nodes: PublicNode[]): Graph3DLink[] => {
 			});
 		}
 	}
-	return links.slice(0, 2200);
+	return links;
 };
 
 export const buildGraph3DModel = (network: PublicNetwork): Graph3DModel => {
 	const organizations = buildOrganizations(network);
+	const nodes = [
+		...buildValidatorNodes(network, organizations),
+		...buildOuterNodes(network, organizations)
+	];
 	return {
-		links: buildLinks(network.nodes),
-		nodes: [
-			...buildValidatorNodes(network, organizations),
-			...buildOuterNodes(network, organizations)
-		],
+		links: buildLinks(nodes.map(({ node }) => node)),
+		nodes,
 		organizations
 	};
 };
@@ -276,5 +326,7 @@ export const getNodeOrganizationName = (
 	node: PublicNode
 ): string => {
 	const organization = getOrganizationForNode(network, node);
-	return organization ? getOrganizationLabel(organization) : 'Unaffiliated nodes';
+	return organization
+		? getOrganizationLabel(organization)
+		: 'Unaffiliated nodes';
 };

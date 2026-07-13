@@ -71,13 +71,14 @@ export function GraphSummaryPanel({
 			</button>
 			<ScpAnalysisPanel network={liveNetwork} />
 			<div className="organization-rail">
-				<h2>Organizations</h2>
+				<h2>Organizations and node groups</h2>
 				{activeOrganization && (
 					<div className="selected-organization-card">
 						<span style={{ backgroundColor: activeOrganization.color }} />
 						<div>
 							<strong>{activeOrganization.name}</strong>
 							<small>
+								{formatGroupKind(activeOrganization.groupKind)} /{' '}
 								{activeOrganization.validatorCount} validators /{' '}
 								{activeOrganization.nodeCount} nodes
 								{activeOrganization.inTransitiveQuorumSet ? ' / top tier' : ''}
@@ -104,6 +105,7 @@ export function GraphSummaryPanel({
 							<span style={{ backgroundColor: organization.color }} />
 							<strong>{organization.name}</strong>
 							<small>
+								{formatGroupKind(organization.groupKind)} /{' '}
 								{organization.validatorCount} validators /{' '}
 								{organization.nodeCount} nodes
 								{organization.inTransitiveQuorumSet ? ' / top tier' : ''}
@@ -114,4 +116,10 @@ export function GraphSummaryPanel({
 			</div>
 		</section>
 	);
+}
+
+function formatGroupKind(groupKind: Graph3DOrganization['groupKind']): string {
+	if (groupKind === 'organization') return 'organization';
+	if (groupKind === 'home-domain') return 'home-domain group';
+	return 'unaffiliated group';
 }

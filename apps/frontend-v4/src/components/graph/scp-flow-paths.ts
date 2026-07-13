@@ -1,8 +1,7 @@
 import type { PublicNetwork, PublicScpGraphStatement } from '../../api/types';
 import { getHighestLedgerSequence } from '../../domain/ledger-sequence';
 import { getNodeLabel } from '../../domain/network';
-import type { Graph3DLink, Graph3DNode } from './model-3d';
-import { getEndpointId, getGraphLinkKey } from './graph-link-utils';
+import type { Graph3DNode } from './model-3d';
 
 export const maxActiveFeedStatements = 8;
 export const ledgerPlaybackDurationMs = 5_000;
@@ -17,6 +16,7 @@ export interface LedgerPlaybackFrame {
 
 export interface StatementFlowPath {
 	label: string;
+	observedPeer: Graph3DNode | null;
 	statement: PublicScpGraphStatement;
 	source: Graph3DNode;
 	target: Graph3DNode;
@@ -62,79 +62,37 @@ export const getDisplayLedger = (
 	return highest ?? network.latestLedger.toString();
 };
 
-const findStatementFallbackLink = (
-	statement: PublicScpGraphStatement,
-	links: readonly Graph3DLink[],
-	nodesById: ReadonlyMap<string, Graph3DNode>
-): Graph3DLink | null => {
-	const outgoing = links.find(
-		(link) =>
-			getEndpointId(link.source) === statement.nodeId &&
-			nodesById.has(getEndpointId(link.target) ?? '')
-	);
-	if (outgoing) return outgoing;
-
-	const incoming = links.find(
-		(link) =>
-			getEndpointId(link.target) === statement.nodeId &&
-			nodesById.has(getEndpointId(link.source) ?? '')
-	);
-	return incoming ?? null;
-};
-
 export const getStatementFlowPath = (
 	statement: PublicScpGraphStatement,
-	links: readonly Graph3DLink[],
 	nodesById: ReadonlyMap<string, Graph3DNode>
 ): StatementFlowPath | null => {
 	const signer = nodesById.get(statement.nodeId);
 	const observedPeer = nodesById.get(statement.observedFromPeer);
+	if (!signer) return null;
 	if (signer && observedPeer && signer.id !== observedPeer.id) {
 		return {
-			label: `${statement.statementType} observed through ${getNodeLabel(observedPeer.node)}`,
-			statement,
-			source: signer,
-			target: observedPeer
-		};
-	}
-
-	const fallbackLink = findStatementFallbackLink(statement, links, nodesById);
-	if (!fallbackLink) {
-		if (!signer) return null;
-		return {
-			label: `${statement.statementType} observed`,
+			label: `${statement.statementType} signed by ${getNodeLabel(signer.node)}; observed through ${getNodeLabel(observedPeer.node)}; relay path unknown`,
+			observedPeer,
 			statement,
 			source: signer,
 			target: signer
 		};
 	}
 
-	const sourceId = getEndpointId(fallbackLink.source);
-	const targetId = getEndpointId(fallbackLink.target);
-	if (!sourceId || !targetId) return null;
-	const source = nodesById.get(sourceId);
-	const target = nodesById.get(targetId);
-	if (!source || !target) return null;
-
+	if (observedPeer) {
+		return {
+			label: `${statement.statementType} observed directly from signer`,
+			observedPeer,
+			statement,
+			source: signer,
+			target: signer
+		};
+	}
 	return {
-		label: fallbackLink.label,
+		label: `${statement.statementType} observed; relay peer unavailable`,
+		observedPeer: null,
 		statement,
-		source,
-		target
+		source: signer,
+		target: signer
 	};
 };
-
-export const getExistingFlowLinkKeys = (
-	path: StatementFlowPath,
-	links: readonly Graph3DLink[]
-): string[] =>
-	links
-		.filter((link) => {
-			const sourceId = getEndpointId(link.source);
-			const targetId = getEndpointId(link.target);
-			return (
-				(sourceId === path.source.id && targetId === path.target.id) ||
-				(sourceId === path.target.id && targetId === path.source.id)
-			);
-		})
-		.map(getGraphLinkKey);

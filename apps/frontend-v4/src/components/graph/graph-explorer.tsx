@@ -64,7 +64,6 @@ export function GraphExplorer({
 	const waveAnimationFrameRef = useRef<number | null>(null);
 	const wavePoolRef = useRef<WaveMeshPool | null>(null);
 	const nodeActivityRef = useRef<Map<string, number>>(new Map());
-	const flowLinkColorsRef = useRef<Map<string, string>>(new Map());
 	const {
 		latestLedger,
 		latestLedgerClosedAt,
@@ -173,7 +172,12 @@ export function GraphExplorer({
 	const refreshGraphVisuals = useCallback((): void => {
 		visualStateRef.current = {
 			...visualStateRef.current,
-			activeNodeWeights: new Map(nodeActivityRef.current)
+			activeNodeWeights: new Map(
+				Array.from(nodeActivityRef.current, ([nodeId, weight]) => [
+					nodeId,
+					Math.min(1, weight)
+				])
+			)
 		};
 		graphRef.current?.refresh();
 	}, []);
@@ -185,8 +189,6 @@ export function GraphExplorer({
 		animationTimeoutsRef,
 		animationsEnabled,
 		animationsEnabledRef,
-		flowLinkColorsRef,
-		graphDataRef,
 		graphRef,
 		nextWaveIndexRef,
 		nodeActivityRef,
@@ -238,7 +240,6 @@ export function GraphExplorer({
 	useGraphRenderer({
 		activeWavesRef,
 		containerRef,
-		flowLinkColorsRef,
 		graphDataRef,
 		graphRef,
 		nodesByIdRef,
