@@ -5,7 +5,12 @@ import { GetArchiveScanQueue } from '@history-scan-coordinator/use-cases/get-arc
 import type { StatusLevel } from '../../domain/StatusTypes.js';
 
 export interface ArchiveQueueStatusDTO {
+	readonly deprecated: true;
+	readonly drivesPlatformStatus: false;
+	readonly drivesRuntimeHealth: false;
 	readonly generatedAt: string;
+	readonly historical: true;
+	readonly source: 'legacy_range_scan';
 	readonly status: StatusLevel;
 	readonly pendingJobs: number;
 	readonly activeJobs: number;
@@ -27,7 +32,12 @@ export class GetArchiveQueueStatus {
 
 		const queue = queueResult.value;
 		return ok({
+			deprecated: true,
+			drivesPlatformStatus: false,
+			drivesRuntimeHealth: false,
 			generatedAt: queue.generatedAt,
+			historical: true,
+			source: 'legacy_range_scan',
 			status: queue.staleJobs > 0 ? 'degraded' : 'ok',
 			pendingJobs: queue.pendingJobs,
 			activeJobs: queue.activeJobs,

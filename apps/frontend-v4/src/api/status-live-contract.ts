@@ -339,8 +339,13 @@ function validateDataQuality(value: unknown): boolean {
 	return matches({
 		archiveQueue: matches({
 			activeJobs: nonNegativeInteger,
+			deprecated: literal(true),
+			drivesPlatformStatus: literal(false),
+			drivesRuntimeHealth: literal(false),
 			generatedAt: dateTime,
+			historical: literal(true),
 			pendingJobs: nonNegativeInteger,
+			source: literal('legacy_range_scan'),
 			staleJobAgeMs: nonNegativeInteger,
 			staleJobs: nonNegativeInteger,
 			status: statusLevel,

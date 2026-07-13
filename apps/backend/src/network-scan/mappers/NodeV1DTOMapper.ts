@@ -47,7 +47,8 @@ export class NodeV1DTOMapper {
 			overLoaded: measurement?.isOverLoaded ?? false,
 			index: measurement?.index ? measurement.index / 100 : 0,
 			activeInScp: measurement?.isActiveInScp ?? false,
-			historyArchiveHasError: measurement?.historyArchiveHasError ?? false,
+			// Range-scan verification errors are available only from historical APIs.
+			historyArchiveHasError: false,
 			isValidator: node.isValidator(),
 			statistics: {
 				has24HourStats: !!measurement24HourAverage,

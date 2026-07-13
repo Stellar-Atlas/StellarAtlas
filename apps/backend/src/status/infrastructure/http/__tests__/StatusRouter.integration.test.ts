@@ -135,7 +135,12 @@ describe('StatusRouter.integration', () => {
 					}
 				},
 				archiveQueue: {
+					deprecated: true,
+					drivesPlatformStatus: false,
+					drivesRuntimeHealth: false,
 					generatedAt: '2026-07-03T12:00:00.000Z',
+					historical: true,
+					source: 'legacy_range_scan',
 					status: 'ok',
 					pendingJobs: 0,
 					activeJobs: 0,
@@ -177,7 +182,11 @@ describe('StatusRouter.integration', () => {
 			.expect('Cache-Control', 'public, max-age=10')
 			.expect((response) => {
 				expect(response.body.status).toBe('ok');
-				expect(response.body.archiveQueue).toBeDefined();
+				expect(response.body.archiveQueue).toMatchObject({
+					drivesPlatformStatus: false,
+					historical: true,
+					source: 'legacy_range_scan'
+				});
 			});
 	});
 
@@ -248,7 +257,12 @@ describe('StatusRouter.integration', () => {
 					}
 				},
 				archiveQueue: {
+					deprecated: true,
+					drivesPlatformStatus: false,
+					drivesRuntimeHealth: false,
 					generatedAt: '2026-07-03T12:00:00.000Z',
+					historical: true,
+					source: 'legacy_range_scan',
 					status: 'ok',
 					pendingJobs: 0,
 					activeJobs: 0,
@@ -410,7 +424,12 @@ describe('StatusRouter.integration', () => {
 		);
 		getArchiveQueueStatus.execute.mockResolvedValue(
 			ok({
+				deprecated: true,
+				drivesPlatformStatus: false,
+				drivesRuntimeHealth: false,
 				generatedAt: '2026-07-03T12:00:00.000Z',
+				historical: true,
+				source: 'legacy_range_scan',
 				status: 'degraded',
 				pendingJobs: 1,
 				activeJobs: 0,
@@ -466,6 +485,11 @@ describe('StatusRouter.integration', () => {
 			.expect(200)
 			.expect((response) => {
 				expect(response.body.status).toBe('degraded');
+				expect(response.body).toMatchObject({
+					drivesPlatformStatus: false,
+					historical: true,
+					source: 'legacy_range_scan'
+				});
 			});
 	});
 

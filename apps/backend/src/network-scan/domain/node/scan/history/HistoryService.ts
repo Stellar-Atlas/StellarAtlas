@@ -18,6 +18,12 @@ export class FetchHistoryError extends CustomError {
 	}
 }
 
+export interface HistoricalRangeScanErrorEvidence {
+	readonly archiveUrls: ReadonlySet<string>;
+	readonly historical: true;
+	readonly source: 'legacy_range_scan';
+}
+
 @injectable()
 export class HistoryService {
 	constructor(
@@ -86,7 +92,8 @@ export class HistoryService {
 				stateUrl: stellarHistoryUrl,
 				status: 'invalid',
 				errorType: 'invalid_shape',
-				errorMessage: 'History archive state response did not match expected shape',
+				errorMessage:
+					'History archive state response did not match expected shape',
 				httpStatus: response.value.status,
 				observedAt: new Date(),
 				source: 'network-scan'
@@ -95,7 +102,9 @@ export class HistoryService {
 			return err(
 				new FetchHistoryError(
 					stellarHistoryUrl,
-					new Error('History archive state response did not match expected shape')
+					new Error(
+						'History archive state response did not match expected shape'
+					)
 				)
 			);
 		}
@@ -125,17 +134,19 @@ export class HistoryService {
 		return stellarHistoryResult.value + 100 >= Number(latestLedger); //allow for a margin of 100 ledgers to account for delay in archiving
 	}
 
-	async getHistoryUrlsWithScanErrors(
+	async getHistoricalRangeScanErrors(
 		historyUrls: string[]
-	): Promise<Result<Set<string>, Error>> {
-		const scanResult = await this.historyArchiveScanService.findLatestScans();
+	): Promise<Result<HistoricalRangeScanErrorEvidence, Error>> {
+		const scanResult =
+			await this.historyArchiveScanService.findLatestHistoricalRangeScans();
 		if (scanResult.isErr()) return err(scanResult.error);
 		const scansWithErrors = new Set(
 			scanResult.value
 				.filter(hasArchiveVerificationError)
 				.map((scan) => scan.url)
 		);
-		this.logger.info('History archive errors', {
+		this.logger.info('Historical range archive errors', {
+			source: 'legacy_range_scan',
 			urls: Array.from(scansWithErrors)
 		});
 
@@ -152,7 +163,11 @@ export class HistoryService {
 			}
 		});
 
-		return ok(historyUrlsWithErrors);
+		return ok({
+			archiveUrls: historyUrlsWithErrors,
+			historical: true,
+			source: 'legacy_range_scan'
+		});
 	}
 
 	async scheduleScans(historyUrls: string[]): Promise<void> {

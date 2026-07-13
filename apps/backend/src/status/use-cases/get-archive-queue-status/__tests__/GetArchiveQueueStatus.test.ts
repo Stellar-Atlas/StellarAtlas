@@ -28,7 +28,12 @@ describe('GetArchiveQueueStatus', () => {
 
 		expect(result.isOk()).toBe(true);
 		expect(result._unsafeUnwrap()).toEqual({
+			deprecated: true,
+			drivesPlatformStatus: false,
+			drivesRuntimeHealth: false,
 			generatedAt: '2026-07-03T12:00:00.000Z',
+			historical: true,
+			source: 'legacy_range_scan',
 			status: 'ok',
 			pendingJobs: 2,
 			activeJobs: 1,

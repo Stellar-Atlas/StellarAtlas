@@ -27,7 +27,9 @@ export class HistoryScanCoordinatorScanService implements HistoryArchiveScanServ
 		});
 	}
 
-	async findLatestScans(): Promise<Result<HistoryArchiveScan[], Error>> {
+	async findLatestHistoricalRangeScans(): Promise<
+		Result<HistoryArchiveScan[], Error>
+	> {
 		try {
 			const scans = await this.historyArchiveScanRepository.findLatest();
 			const finishedScans = scans.filter((scan) => scan.endDate !== undefined);

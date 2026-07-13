@@ -207,8 +207,13 @@ function buildUnavailableDataQuality(
 	return {
 		archiveQueue: {
 			activeJobs: 0,
+			deprecated: true,
+			drivesPlatformStatus: false,
+			drivesRuntimeHealth: false,
 			generatedAt,
+			historical: true,
 			pendingJobs: 0,
+			source: 'legacy_range_scan',
 			staleJobAgeMs: 0,
 			staleJobs: 0,
 			status: 'unavailable',

@@ -1,5 +1,5 @@
-import { Result } from 'neverthrow';
-import { HistoryArchiveScan } from 'shared';
+import type { Result } from 'neverthrow';
+import type { HistoryArchiveScan } from 'shared';
 
 export interface HistoryArchiveSchedulingResult {
 	readonly discoveredArchiveUrlCount: number;
@@ -9,7 +9,9 @@ export interface HistoryArchiveSchedulingResult {
 }
 
 export interface HistoryArchiveScanService {
-	findLatestScans(): Promise<Result<HistoryArchiveScan[], Error>>;
+	findLatestHistoricalRangeScans(): Promise<
+		Result<HistoryArchiveScan[], Error>
+	>;
 	scheduleScans(
 		historyArchiveUrls: string[]
 	): Promise<Result<HistoryArchiveSchedulingResult, Error>>;

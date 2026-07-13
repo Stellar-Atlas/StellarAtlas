@@ -22,11 +22,6 @@ export class NodeScannerHistoryArchiveStep {
 				nodeScan.latestLedger
 			)
 		);
-		nodeScan.updateHistoryArchiveVerificationStatus(
-			await this.historyArchiveStatusFinder.getNodesWithHistoryArchiveVerificationErrors(
-				nodeScan.getHistoryArchiveUrls()
-			)
-		);
 
 		const historyArchiveUrls = Array.from(
 			nodeScan.getHistoryArchiveUrls().values()

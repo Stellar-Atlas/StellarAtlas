@@ -197,8 +197,13 @@ function sanitizeDataQuality(value: unknown): Record<string, unknown> {
 		...pick(source, ['generatedAt', 'status']),
 		archiveQueue: pick(source.archiveQueue, [
 			'activeJobs',
+			'deprecated',
+			'drivesPlatformStatus',
+			'drivesRuntimeHealth',
 			'generatedAt',
+			'historical',
 			'pendingJobs',
+			'source',
 			'staleJobAgeMs',
 			'staleJobs',
 			'status',

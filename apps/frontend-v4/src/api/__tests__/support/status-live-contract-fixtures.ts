@@ -168,8 +168,13 @@ function createDataQuality() {
 	return {
 		archiveQueue: {
 			activeJobs: 20,
+			deprecated: true,
+			drivesPlatformStatus: false,
+			drivesRuntimeHealth: false,
 			generatedAt,
+			historical: true,
 			pendingJobs: 100,
+			source: 'legacy_range_scan',
 			staleJobAgeMs: 120_000,
 			staleJobs: 0,
 			status: 'ok',

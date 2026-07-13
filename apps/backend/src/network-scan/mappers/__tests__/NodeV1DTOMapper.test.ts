@@ -58,7 +58,7 @@ describe('NodeV1DTOMapper', () => {
 			organizationId: organizationId.value,
 			index: 1,
 			isValidator: true,
-			historyArchiveHasError: true,
+			historyArchiveHasError: false,
 			historyUrl: 'myUrl',
 			activeInScp: true,
 			connectivityError: true,
@@ -160,6 +160,14 @@ describe('NodeV1DTOMapper', () => {
 			organizationId.value
 		);
 		expect(parsedNode).toEqual(nodeV1DTO);
+	});
+
+	test('does not expose historical range errors as current node health', () => {
+		expect(nodeMeasurement.historyArchiveHasError).toBe(true);
+
+		const parsedNode = new NodeV1DTOMapper().toNodeV1DTO(time, node);
+
+		expect(parsedNode.historyArchiveHasError).toBe(false);
 	});
 
 	test('toNodeSnapshotV1DTO', () => {

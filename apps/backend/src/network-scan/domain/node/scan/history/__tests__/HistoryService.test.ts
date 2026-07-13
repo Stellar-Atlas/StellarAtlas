@@ -122,7 +122,8 @@ test('fetchStellarHistory records unreachable state fetches', async () => {
 	expect(historyArchiveStateRepository.saveFailure).toHaveBeenCalledWith(
 		expect.objectContaining({
 			archiveUrl: 'https://stellar.sui.li/history',
-			stateUrl: 'https://stellar.sui.li/history/.well-known/stellar-history.json',
+			stateUrl:
+				'https://stellar.sui.li/history/.well-known/stellar-history.json',
 			status: 'unreachable',
 			errorType: 'ECONNREFUSED',
 			source: 'network-scan'
@@ -130,7 +131,7 @@ test('fetchStellarHistory records unreachable state fetches', async () => {
 	);
 });
 
-it('should return urls with historyErrors', async function () {
+it('should expose range-scan errors only as historical evidence', async function () {
 	const historyService = createHistoryService();
 	const urlWithError = 'https://gap.co/'; //trailing slash should be removed when comparing with scan
 
@@ -138,7 +139,7 @@ it('should return urls with historyErrors', async function () {
 
 	const unknownUrl = 'https://unknown.co';
 
-	historyArchiveScanService.findLatestScans.mockReturnValue(
+	historyArchiveScanService.findLatestHistoricalRangeScans.mockReturnValue(
 		new Promise((resolve) => {
 			resolve(
 				ok([
@@ -191,7 +192,7 @@ it('should return urls with historyErrors', async function () {
 		})
 	);
 
-	const result = await historyService.getHistoryUrlsWithScanErrors([
+	const result = await historyService.getHistoricalRangeScanErrors([
 		urlWithError,
 		urlWithoutError,
 		'https://connection-issue.co',
@@ -199,8 +200,12 @@ it('should return urls with historyErrors', async function () {
 	]);
 	if (result.isErr()) throw result.error;
 
-	expect(result.value.size).toEqual(1);
-	expect(result.value.has(urlWithError)).toBeTruthy();
+	expect(result.value).toMatchObject({
+		historical: true,
+		source: 'legacy_range_scan'
+	});
+	expect(result.value.archiveUrls.size).toEqual(1);
+	expect(result.value.archiveUrls.has(urlWithError)).toBeTruthy();
 });
 
 function createHistoryService(): HistoryService {

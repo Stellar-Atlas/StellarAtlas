@@ -40,24 +40,4 @@ export class HistoryArchiveStatusFinder {
 
 		return upToDateNodes;
 	}
-
-	async getNodesWithHistoryArchiveVerificationErrors(
-		publicKeyToHistoryArchiveMap: Map<string, string>
-	): Promise<Set<string>> {
-		const nodesWithHistoryArchiveVerificationErrors = new Set<string>();
-		const historyUrlsWithErrors =
-			await this.historyService.getHistoryUrlsWithScanErrors(
-				Array.from(publicKeyToHistoryArchiveMap.values())
-			);
-
-		if (historyUrlsWithErrors.isErr())
-			return nodesWithHistoryArchiveVerificationErrors;
-
-		publicKeyToHistoryArchiveMap.forEach((historyArchiveUrl, publicKey) => {
-			if (historyUrlsWithErrors.value.has(historyArchiveUrl))
-				nodesWithHistoryArchiveVerificationErrors.add(publicKey);
-		});
-
-		return nodesWithHistoryArchiveVerificationErrors;
-	}
 }

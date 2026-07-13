@@ -205,7 +205,12 @@ function rollups() {
 
 function archiveQueue() {
 	return {
+		deprecated: true as const,
+		drivesPlatformStatus: false as const,
+		drivesRuntimeHealth: false as const,
 		generatedAt: '2026-07-03T12:00:00.000Z',
+		historical: true as const,
+		source: 'legacy_range_scan' as const,
 		status: 'ok' as const,
 		pendingJobs: 0,
 		activeJobs: 0,

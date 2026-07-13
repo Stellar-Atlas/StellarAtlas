@@ -116,7 +116,12 @@ describe('GetStatus', () => {
 		);
 		getArchiveQueueStatusMock.execute.mockResolvedValue(
 			ok({
+				deprecated: true,
+				drivesPlatformStatus: false,
+				drivesRuntimeHealth: false,
 				generatedAt: '2026-07-03T12:00:00.000Z',
+				historical: true,
+				source: 'legacy_range_scan',
 				status: 'ok',
 				pendingJobs: 0,
 				activeJobs: 0,
@@ -169,7 +174,12 @@ describe('GetStatus', () => {
 			dataFreshness: { status: 'ok' },
 			scans: { status: 'ok' },
 			rollups: { status: 'ok' },
-			archiveQueue: { status: 'ok' },
+			archiveQueue: {
+				drivesPlatformStatus: false,
+				historical: true,
+				source: 'legacy_range_scan',
+				status: 'ok'
+			},
 			workers: { status: 'ok' }
 		});
 	});
@@ -177,7 +187,12 @@ describe('GetStatus', () => {
 	it('does not roll the legacy range queue into platform status', async () => {
 		getArchiveQueueStatusMock.execute.mockResolvedValue(
 			ok({
+				deprecated: true,
+				drivesPlatformStatus: false,
+				drivesRuntimeHealth: false,
 				generatedAt: '2026-07-03T12:00:00.000Z',
+				historical: true,
+				source: 'legacy_range_scan',
 				status: 'degraded',
 				pendingJobs: 0,
 				activeJobs: 0,

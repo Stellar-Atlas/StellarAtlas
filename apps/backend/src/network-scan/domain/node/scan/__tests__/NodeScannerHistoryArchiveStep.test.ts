@@ -43,23 +43,16 @@ describe('NodeScannerHistoryArchiveStep', () => {
 		historyArchiveStatusFinder.getNodesWithUpToDateHistoryArchives.mockResolvedValue(
 			upToDateArchives
 		);
-		const verificationErrors = new Set(['b']);
-		historyArchiveStatusFinder.getNodesWithHistoryArchiveVerificationErrors.mockResolvedValue(
-			verificationErrors
-		);
 		await historyArchiveStep.execute(nodeScan);
 		expect(
 			historyArchiveStatusFinder.getNodesWithUpToDateHistoryArchives
-		).toHaveBeenCalled();
-		expect(
-			historyArchiveStatusFinder.getNodesWithHistoryArchiveVerificationErrors
 		).toHaveBeenCalled();
 		expect(nodeScan.updateHistoryArchiveUpToDateStatus).toHaveBeenCalledWith(
 			upToDateArchives
 		);
 		expect(
-			nodeScan.updateHistoryArchiveVerificationStatus
-		).toHaveBeenCalledWith(verificationErrors);
+			historyArchiveScanService.findLatestHistoricalRangeScans
+		).not.toHaveBeenCalled();
 	});
 
 	it('should schedule new archive scans', async () => {

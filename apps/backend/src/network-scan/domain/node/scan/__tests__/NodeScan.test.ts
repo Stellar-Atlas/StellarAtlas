@@ -220,30 +220,6 @@ describe('NodeScan', () => {
 		expect(activeNode.latestMeasurement()?.isFullValidator).toEqual(true);
 	});
 
-	test('updateHistoryArchiveVerificationStatus', () => {
-		const scanTime = new Date('2020-01-03T00:00:00.000Z');
-		activeNode.updateDetails(
-			NodeDetails.create({
-				historyUrl: 'history url',
-				host: 'host',
-				alias: 'alias',
-				name: 'name'
-			}),
-			scanTime
-		);
-		activeNode.addMeasurement(new NodeMeasurement(scanTime, activeNode));
-
-		const nodeScan = new NodeScan(scanTime, [activeNode, missingNode]);
-		const historyArchiveVerificationStatus = new Map<string, boolean>();
-		historyArchiveVerificationStatus.set(activeNode.publicKey.value, true);
-		nodeScan.updateHistoryArchiveVerificationStatus(
-			new Set([activeNode.publicKey.value])
-		);
-		expect(activeNode.latestMeasurement()?.historyArchiveHasError).toEqual(
-			true
-		);
-	});
-
 	test('getModifiedIPs', () => {
 		const scanTime = new Date('2020-01-03T00:00:00.000Z');
 		activeNode.updateIpPort('new ip', 1234, scanTime);

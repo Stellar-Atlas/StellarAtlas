@@ -25,10 +25,46 @@ const organizationLabel = (organization: OrganizationV1): string =>
 	organization.id;
 
 const nodeArchiveStatus = (
-	node: NodeV1
+	node: NodeV1,
+	archiveStatusByNodePublicKey: ReadonlyMap<
+		string,
+		NetworkSearchDocument['archiveStatus']
+	>
 ): NetworkSearchDocument['archiveStatus'] => {
 	if (!node.historyUrl) return 'unknown';
-	return node.historyArchiveHasError ? 'error' : 'ok';
+	return archiveStatusByNodePublicKey.get(node.publicKey) ?? 'unknown';
+};
+
+const currentArchiveEvidenceStatus = (
+	root: NetworkSearchInventory['archiveRoots'][number]
+): NetworkSearchDocument['archiveStatus'] => {
+	if (
+		root.checkpoints.mismatchedCheckpoints > 0 ||
+		root.objects.remoteFailureObjects > 0
+	)
+		return 'error';
+	if (root.checkpoints.verifiedCheckpoints > 0) return 'ok';
+	return 'unknown';
+};
+
+const buildArchiveStatusByNodePublicKey = (
+	roots: NetworkSearchInventory['archiveRoots']
+): ReadonlyMap<string, NetworkSearchDocument['archiveStatus']> => {
+	const statuses = new Map<string, NetworkSearchDocument['archiveStatus']>();
+	for (const root of roots) {
+		const status = currentArchiveEvidenceStatus(root);
+		for (const publicKey of root.nodePublicKeys) {
+			const existing = statuses.get(publicKey);
+			if (
+				existing === undefined ||
+				status === 'error' ||
+				(existing === 'unknown' && status === 'ok')
+			) {
+				statuses.set(publicKey, status);
+			}
+		}
+	}
+	return statuses;
 };
 
 const joinSearchText = (...parts: (string | undefined)[]): string =>
@@ -59,6 +95,10 @@ const nodeDocument = (
 	knownNode: KnownNodeListItemDTO,
 	organizationsById: ReadonlyMap<string, OrganizationV1>,
 	topTierPublicKeys: ReadonlySet<string>,
+	archiveStatusByNodePublicKey: ReadonlyMap<
+		string,
+		NetworkSearchDocument['archiveStatus']
+	>,
 	canonicalCursor: string
 ): NetworkSearchDocument => {
 	const node = knownNode.node;
@@ -75,7 +115,9 @@ const nodeDocument = (
 
 	return {
 		active: knownNode.current && (node?.active ?? false),
-		archiveStatus: node ? nodeArchiveStatus(node) : 'unknown',
+		archiveStatus: node
+			? nodeArchiveStatus(node, archiveStatusByNodePublicKey)
+			: 'unknown',
 		canonicalCursor,
 		content: joinSearchText(
 			label,
@@ -183,7 +225,7 @@ const archiveRootDocument = (
 	const host = new URL(root.archiveUrl).host;
 	return {
 		active: root.objects.activeObjects > 0,
-		archiveStatus: failures > 0 ? 'error' : verified > 0 ? 'ok' : 'unknown',
+		archiveStatus: currentArchiveEvidenceStatus(root),
 		canonicalCursor,
 		content: joinSearchText(
 			host,
@@ -236,6 +278,9 @@ export const buildNetworkSearchSnapshot = (
 		organizations.map(({ organization }) => [organization.id, organization])
 	);
 	const topTierPublicKeys = new Set(inventory.network.transitiveQuorumSet);
+	const archiveStatusByNodePublicKey = buildArchiveStatusByNodePublicKey(
+		inventory.archiveRoots
+	);
 
 	return {
 		canonicalCursor,
@@ -252,6 +297,7 @@ export const buildNetworkSearchSnapshot = (
 					node,
 					organizationsById,
 					topTierPublicKeys,
+					archiveStatusByNodePublicKey,
 					canonicalCursor
 				)
 			)

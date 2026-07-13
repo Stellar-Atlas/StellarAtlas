@@ -327,8 +327,13 @@ export interface PublicRollupStatus {
 
 export interface PublicArchiveQueueStatus {
 	readonly activeJobs: number;
+	readonly deprecated: true;
+	readonly drivesPlatformStatus: false;
+	readonly drivesRuntimeHealth: false;
 	readonly generatedAt: string;
+	readonly historical: true;
 	readonly pendingJobs: number;
+	readonly source: 'legacy_range_scan';
 	readonly staleJobAgeMs: number;
 	readonly staleJobs: number;
 	readonly status: PublicStatusLevel;

@@ -187,21 +187,6 @@ export class NodeScan {
 			});
 	}
 
-	updateHistoryArchiveVerificationStatus(
-		nodesWithHistoryArchiveVerificationErrors: Set<string>
-	) {
-		this.nodes
-			.filter((node) =>
-				nodesWithHistoryArchiveVerificationErrors.has(node.publicKey.value)
-			)
-			.forEach((node) => {
-				const measurement = node.latestMeasurement();
-				if (!measurement) throw new Error('Measurement not found');
-				measurement.historyArchiveHasError =
-					nodesWithHistoryArchiveVerificationErrors.has(node.publicKey.value);
-			});
-	}
-
 	public getModifiedIPs(): string[] {
 		return this.nodes
 			.filter(
