@@ -85,6 +85,7 @@ export const useGraphAnimation = ({
 	const pendingStatementHashesRef = useRef<Set<string>>(new Set());
 	const completedSlotSignaturesRef = useRef<Map<string, string>>(new Map());
 	const completedSlotOrderRef = useRef<string[]>([]);
+	const latestStartedSlotIndexRef = useRef<string | null>(null);
 	const advancePlaybackRef = useRef<() => void>(() => undefined);
 
 	const updateWaveAnimations = useCallback(
@@ -322,6 +323,7 @@ export const useGraphAnimation = ({
 		(ledger: LedgerPlaybackFrame): void => {
 			clearAnimationEffects();
 			activeLedgerRef.current = ledger;
+			latestStartedSlotIndexRef.current = ledger.slotIndex;
 			pausedPlaybackElapsedMsRef.current = null;
 			setActivePlaybackSlotIndex(ledger.slotIndex);
 			playbackStartedAtRef.current = performance.now();
@@ -435,7 +437,8 @@ export const useGraphAnimation = ({
 			activeSlotIndex: activeLedgerRef.current?.slotIndex ?? null,
 			boundarySlotIndex: playbackBoundarySlotIndex,
 			completedSignatures: completedSlotSignaturesRef.current,
-			ledgers: playbackLedgers
+			ledgers: playbackLedgers,
+			minimumExclusiveSlotIndex: latestStartedSlotIndexRef.current
 		});
 		playbackQueueRef.current = queueResult.queue;
 		advancePlayback();

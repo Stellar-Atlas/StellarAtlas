@@ -154,6 +154,41 @@ describe('graph ledger playback pause and resume', () => {
 		expect(playbackSlots).not.toContain('102');
 	});
 
+	it('never rewinds when a later feed update contains older or changed slots', () => {
+		const playbackSlots: Array<string | null> = [];
+		let options = createOptions({
+			boundarySlotIndex: '113',
+			ledgers: [createLedger('110'), createLedger('111'), createLedger('112')],
+			playbackSlots
+		});
+		const render = (): void => {
+			hookHarness.render(() => useGraphAnimation(options));
+		};
+
+		render();
+		expect(playbackSlots).toEqual(['110']);
+
+		options = {
+			...options,
+			playbackBoundarySlotIndex: '114',
+			playbackLedgers: [
+				createLedger('97', 2),
+				createLedger('109', 2),
+				createLedger('110', 2),
+				createLedger('111'),
+				createLedger('112'),
+				createLedger('113')
+			]
+		};
+		render();
+		clock.advanceBy(5_000);
+
+		expect(playbackSlots.at(-1)).toBe('111');
+		expect(playbackSlots).not.toContain('97');
+		expect(playbackSlots).not.toContain('109');
+		expect(playbackSlots.filter((slot) => slot === '110')).toHaveLength(1);
+	});
+
 	it('clears a queued window when pausing before the renderer can start it', () => {
 		const playbackSlots: Array<string | null> = [];
 		let options = createOptions({
