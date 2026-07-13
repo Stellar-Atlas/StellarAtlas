@@ -23,6 +23,12 @@ import {
 	readHistoricalFullHistoryBackfillStatus,
 	type HistoricalFullHistoryBackfillDTO
 } from './HistoricalFullHistoryBackfillStatus.js';
+import {
+	mapCanonicalCoverage,
+	type CanonicalFullHistoryCoverageDTO
+} from '@history-scan-coordinator/use-cases/get-full-history-canonical-coverage/FullHistoryCanonicalCoverageDTO.js';
+
+export type { CanonicalFullHistoryCoverageDTO } from '@history-scan-coordinator/use-cases/get-full-history-canonical-coverage/FullHistoryCanonicalCoverageDTO.js';
 
 export interface FullHistoryStatusDTO {
 	readonly canonicalCoverage: CanonicalFullHistoryCoverageDTO | null;
@@ -60,21 +66,6 @@ export interface CanonicalFullHistoryPromotionDTO {
 		| 'stale'
 		| 'stopped'
 		| 'waiting-for-proof';
-}
-
-export interface CanonicalFullHistoryCoverageDTO {
-	readonly archiveSourceCount: number;
-	readonly batchCount: number;
-	readonly firstLedger: string;
-	readonly lastLedger: string;
-	readonly latestLedgerClosedAt: string;
-	readonly ledgerCount: number;
-	readonly nextLedger: string;
-	readonly rangeKind: 'contiguous_bounded';
-	readonly source: 'postgres_canonical';
-	readonly transactionCount: number;
-	readonly transactionResultCount: number;
-	readonly updatedAt: string;
 }
 
 export interface IngestionStatusDTO extends FullHistoryStatusDTO {
@@ -433,26 +424,6 @@ function mapCanonicalPromotion(
 		nextLedger: runtime.nextLedger,
 		startedAt: runtime.startedAt.toISOString(),
 		state
-	};
-}
-
-function mapCanonicalCoverage(
-	coverage: FullHistoryCanonicalCoverageView | null
-): CanonicalFullHistoryCoverageDTO | null {
-	if (coverage === null) return null;
-	return {
-		archiveSourceCount: coverage.archiveSourceCount,
-		batchCount: coverage.batchCount,
-		firstLedger: coverage.firstLedger,
-		lastLedger: coverage.lastLedger,
-		latestLedgerClosedAt: coverage.latestLedgerClosedAt.toISOString(),
-		ledgerCount: coverage.ledgerCount,
-		nextLedger: coverage.nextLedger,
-		rangeKind: 'contiguous_bounded',
-		source: 'postgres_canonical',
-		transactionCount: coverage.transactionCount,
-		transactionResultCount: coverage.transactionResultCount,
-		updatedAt: coverage.updatedAt.toISOString()
 	};
 }
 

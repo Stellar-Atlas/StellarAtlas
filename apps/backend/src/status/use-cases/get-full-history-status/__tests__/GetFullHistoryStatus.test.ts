@@ -6,7 +6,8 @@ import type { FullHistoryPromotionRuntimeRepository } from '@history-scan-coordi
 import type { Config } from '@core/config/Config.js';
 import {
 	fullHistoryLedgerSequence,
-	fullHistoryUint64
+	fullHistoryUint64,
+	FullHistoryHash
 } from '@history-scan-coordinator/domain/full-history/FullHistoryCanonicalTypes.js';
 import { GetFullHistoryStatus } from '../GetFullHistoryStatus.js';
 
@@ -103,6 +104,7 @@ describe('GetFullHistoryStatus', () => {
 			batchCount: 2,
 			firstLedger: fullHistoryLedgerSequence(63386240n, 'firstLedger'),
 			lastLedger: fullHistoryLedgerSequence(63386367n, 'lastLedger'),
+			latestEvidence: canonicalLatestEvidence(),
 			latestLedgerClosedAt: new Date('2026-07-06T11:58:30.000Z'),
 			ledgerCount: 128,
 			nextLedger: fullHistoryUint64(63386368n, 'nextLedger'),
@@ -151,6 +153,40 @@ describe('GetFullHistoryStatus', () => {
 				batchCount: 2,
 				firstLedger: '63386240',
 				lastLedger: '63386367',
+				latestEvidence: {
+					archiveUrlIdentity: 'archive.example/v2',
+					batchId: '00000000-0000-4000-8000-000000000001',
+					checkpointLedger: '63386367',
+					checkpointProofId: 41,
+					decoderVersion: 'canonical-decoder/1',
+					firstLedger: '63386304',
+					ingestedAt: '2026-07-06T11:59:30.000Z',
+					lastLedger: '63386367',
+					proofEvaluatedAt: '2026-07-06T11:59:00.000Z',
+					proofVersion: 5,
+					sourceObjects: {
+						checkpointState: {
+							algorithm: 'sha256',
+							contentDigest: '11'.repeat(32),
+							representation: 'canonical-json'
+						},
+						ledger: {
+							algorithm: 'sha256',
+							contentDigest: '22'.repeat(32),
+							representation: 'uncompressed-xdr'
+						},
+						results: {
+							algorithm: 'sha256',
+							contentDigest: '33'.repeat(32),
+							representation: 'uncompressed-xdr'
+						},
+						transactions: {
+							algorithm: 'sha256',
+							contentDigest: '44'.repeat(32),
+							representation: 'uncompressed-xdr'
+						}
+					}
+				},
 				latestLedgerClosedAt: '2026-07-06T11:58:30.000Z',
 				ledgerCount: 128,
 				nextLedger: '63386368',
@@ -184,6 +220,31 @@ describe('GetFullHistoryStatus', () => {
 			status: 'ok'
 		});
 	});
+
+	function canonicalLatestEvidence() {
+		const sourceObject = (seed: string, suffix: string) => ({
+			contentDigest: FullHistoryHash.fromHex(seed.repeat(32)),
+			objectRemoteId: `00000000-0000-4000-8000-${suffix.padStart(12, '0')}`
+		});
+		return {
+			archiveUrlIdentity: 'https://archive.example/v2?Token=secret',
+			batchId: '00000000-0000-4000-8000-000000000001',
+			checkpointLedger: fullHistoryLedgerSequence(63386367n),
+			checkpointProofId: 41,
+			decoderVersion: 'canonical-decoder/1',
+			firstLedger: fullHistoryLedgerSequence(63386304n),
+			ingestedAt: new Date('2026-07-06T11:59:30.000Z'),
+			lastLedger: fullHistoryLedgerSequence(63386367n),
+			proofEvaluatedAt: new Date('2026-07-06T11:59:00.000Z'),
+			proofVersion: 5,
+			sourceObjects: {
+				checkpointState: sourceObject('11', '2'),
+				ledger: sourceObject('22', '3'),
+				results: sourceObject('33', '5'),
+				transactions: sourceObject('44', '4')
+			}
+		};
+	}
 
 	it('should keep header-only status unavailable when no headers are parsed', async () => {
 		parsedLedgerHeadersMock.getWatermark.mockResolvedValue({

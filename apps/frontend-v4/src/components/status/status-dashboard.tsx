@@ -302,9 +302,14 @@ function CanonicalHistoryStatusRow({
 			? 'ok'
 			: 'unavailable';
 	const promotionLabel = describeCanonicalPromotion(fullHistory);
+	const evidence = coverage.latestEvidence;
+	const evidenceDetail =
+		evidence === null
+			? 'latest proof details loading'
+			: `latest checkpoint ${formatInteger(Number(evidence.checkpointLedger))} selected by proof ${evidence.checkpointProofId} v${evidence.proofVersion} from ${evidence.archiveUrlIdentity}`;
 	return (
 		<StatusRow
-				detail={`${formatInteger(coverage.ledgerCount)} proof-gated ledgers; ${formatInteger(coverage.transactionCount)} transactions with matching results; ${formatCanonicalEvidenceSelection(coverage.archiveSourceCount)}; ${promotionLabel}`}
+			detail={`${formatInteger(coverage.ledgerCount)} proof-gated ledgers; ${formatInteger(coverage.transactionCount)} transactions with matching results; ${evidenceDetail}; ${formatCanonicalEvidenceSelection(coverage.archiveSourceCount)}; ${promotionLabel}`}
 			label="Canonical history"
 			pillText={canonicalPromotionPill(fullHistory)}
 			status={promotionStatus}

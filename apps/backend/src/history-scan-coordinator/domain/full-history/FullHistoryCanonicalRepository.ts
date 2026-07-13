@@ -34,11 +34,36 @@ export interface FullHistoryWatermarkView {
 	readonly updatedAt: Date;
 }
 
+export interface FullHistoryCanonicalSourceObjectView {
+	readonly contentDigest: FullHistoryHash;
+	readonly objectRemoteId: string;
+}
+
+export interface FullHistoryCanonicalLatestEvidenceView {
+	readonly archiveUrlIdentity: string;
+	readonly batchId: string;
+	readonly checkpointLedger: FullHistoryLedgerSequence;
+	readonly checkpointProofId: number;
+	readonly decoderVersion: string;
+	readonly firstLedger: FullHistoryLedgerSequence;
+	readonly ingestedAt: Date;
+	readonly lastLedger: FullHistoryLedgerSequence;
+	readonly proofEvaluatedAt: Date;
+	readonly proofVersion: number;
+	readonly sourceObjects: {
+		readonly checkpointState: FullHistoryCanonicalSourceObjectView;
+		readonly ledger: FullHistoryCanonicalSourceObjectView;
+		readonly results: FullHistoryCanonicalSourceObjectView;
+		readonly transactions: FullHistoryCanonicalSourceObjectView;
+	};
+}
+
 export interface FullHistoryCanonicalCoverageView {
 	readonly archiveSourceCount: number;
 	readonly batchCount: number;
 	readonly firstLedger: FullHistoryLedgerSequence;
 	readonly lastLedger: FullHistoryLedgerSequence;
+	readonly latestEvidence: FullHistoryCanonicalLatestEvidenceView;
 	readonly latestLedgerClosedAt: Date;
 	readonly ledgerCount: number;
 	readonly nextLedger: FullHistoryUint64String;

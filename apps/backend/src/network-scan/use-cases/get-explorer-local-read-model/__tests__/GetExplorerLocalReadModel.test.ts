@@ -3,7 +3,8 @@ import type { FullHistoryCanonicalRepository } from '@history-scan-coordinator/d
 import type { ParsedLedgerHeaderRepository } from '@history-scan-coordinator/domain/parsed-history/ParsedLedgerHeaderRepository.js';
 import {
 	fullHistoryLedgerSequence,
-	fullHistoryUint64
+	fullHistoryUint64,
+	FullHistoryHash
 } from '@history-scan-coordinator/domain/full-history/FullHistoryCanonicalTypes.js';
 import { GetExplorerLocalReadModel } from '../GetExplorerLocalReadModel.js';
 
@@ -18,6 +19,7 @@ describe('GetExplorerLocalReadModel', () => {
 			batchCount: 1,
 			firstLedger: fullHistoryLedgerSequence(63386240n, 'firstLedger'),
 			lastLedger: fullHistoryLedgerSequence(63386303n, 'lastLedger'),
+			latestEvidence: canonicalLatestEvidence(),
 			latestLedgerClosedAt: new Date('2026-07-08T16:09:36.000Z'),
 			ledgerCount: 64,
 			nextLedger: fullHistoryUint64(63386304n, 'nextLedger'),
@@ -42,6 +44,10 @@ describe('GetExplorerLocalReadModel', () => {
 				canonicalCoverage: {
 					firstLedger: '63386240',
 					lastLedger: '63386303',
+					latestEvidence: {
+						batchId: '00000000-0000-4000-8000-000000000001',
+						checkpointProofId: 41
+					},
 					transactionCount: 26158
 				},
 				localCoverage: true,
@@ -90,6 +96,31 @@ function parsedRepository(): ParsedLedgerHeaderRepository {
 		sourceArchiveCount: 1
 	});
 	return repository;
+}
+
+function canonicalLatestEvidence() {
+	const sourceObject = (seed: string, suffix: string) => ({
+		contentDigest: FullHistoryHash.fromHex(seed.repeat(32)),
+		objectRemoteId: `00000000-0000-4000-8000-${suffix.padStart(12, '0')}`
+	});
+	return {
+		archiveUrlIdentity: 'archive.example',
+		batchId: '00000000-0000-4000-8000-000000000001',
+		checkpointLedger: fullHistoryLedgerSequence(63386303n),
+		checkpointProofId: 41,
+		decoderVersion: 'canonical-decoder/1',
+		firstLedger: fullHistoryLedgerSequence(63386240n),
+		ingestedAt: new Date('2026-07-08T16:11:00.000Z'),
+		lastLedger: fullHistoryLedgerSequence(63386303n),
+		proofEvaluatedAt: new Date('2026-07-08T16:10:00.000Z'),
+		proofVersion: 5,
+		sourceObjects: {
+			checkpointState: sourceObject('11', '2'),
+			ledger: sourceObject('22', '3'),
+			results: sourceObject('33', '5'),
+			transactions: sourceObject('44', '4')
+		}
+	};
 }
 
 function operationCoverage(complete: boolean) {

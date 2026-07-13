@@ -1,5 +1,6 @@
 import {
 	getHistoryArchiveUrlIdentity,
+	getPublicHistoryArchiveUrlIdentity,
 	parseHistoryArchiveUrl,
 	uniqueHistoryArchiveUrls
 } from '../ArchiveUrlIdentity.js';
@@ -61,5 +62,26 @@ describe('ArchiveUrlIdentity', () => {
 				'https://history.example.com/archive/case?Token=abc'
 			)
 		).not.toBe('https://history.example.com/Archive/Case?Token=AbC');
+	});
+
+	it('removes credentials and query data from public identities', () => {
+		expect(
+			getPublicHistoryArchiveUrlIdentity(
+				'https://history.example.com/Archive/Case?Token=secret#ignored'
+			)
+		).toBe('[redacted]');
+		expect(
+			getPublicHistoryArchiveUrlIdentity(
+				'https://history.example.com/Archive/Case?Token=secret'
+			)
+		).toBe('history.example.com/Archive/Case');
+		expect(
+			getPublicHistoryArchiveUrlIdentity('history.example.com/v2?Token=secret')
+		).toBe('history.example.com/v2');
+		expect(
+			getPublicHistoryArchiveUrlIdentity(
+				'https://operator:secret@history.example.com/archive'
+			)
+		).toBe('[redacted]');
 	});
 });

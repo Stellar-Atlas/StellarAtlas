@@ -9,6 +9,7 @@ import type {
 	PublicWorkerStatus
 } from './types';
 import { sanitizeStatusLiveField } from './status-live-sanitizers';
+import { validateFullHistoryStatus } from './full-history-status-contract';
 import { parseWorkerStatusDTO } from './worker-status-parser';
 import {
 	arrayOf,
@@ -99,78 +100,6 @@ export function parseStatusLivePayload(
 	return parsed as StatusLivePatch | StatusLiveSnapshot;
 }
 
-const validateCanonicalCoverage = matches({
-	archiveSourceCount: nonNegativeInteger,
-	batchCount: nonNegativeInteger,
-	firstLedger: unsignedIntegerString,
-	lastLedger: unsignedIntegerString,
-	latestLedgerClosedAt: dateTime,
-	ledgerCount: nonNegativeInteger,
-	nextLedger: unsignedIntegerString,
-	rangeKind: literal('contiguous_bounded'),
-	source: literal('postgres_canonical'),
-	transactionCount: nonNegativeInteger,
-	transactionResultCount: nonNegativeInteger,
-	updatedAt: dateTime
-});
-
-const validateCanonicalPromotion = matches({
-	checkpointLedger: nullable(unsignedIntegerString),
-	heartbeatAt: dateTime,
-	lastAttemptAt: nullable(dateTime),
-	lastErrorCode: nullable(string),
-	lastFailureAt: nullable(dateTime),
-	lastOutcome: nullable(
-		oneOf('bootstrap-required', 'proof-pending', 'promoted', 'replayed')
-	),
-	lastSuccessAt: nullable(dateTime),
-	nextLedger: nullable(unsignedIntegerString),
-	startedAt: dateTime,
-	state: oneOf(
-		'failed',
-		'promoting',
-		'running',
-		'stale',
-		'stopped',
-		'waiting-for-proof'
-	)
-});
-
-const validateHistoricalBackfill = matches({
-	failedJobs: nonNegativeInteger,
-	latestErrorCode: nullable(string),
-	nextCheckpointLedger: nullable(unsignedIntegerString),
-	pendingJobs: nonNegativeInteger,
-	runningJobs: nonNegativeInteger,
-	state: oneOf(
-		'complete',
-		'failed',
-		'idle',
-		'queued',
-		'running',
-		'waiting-for-proof'
-	),
-	updatedAt: nullable(dateTime)
-});
-
-const validateFullHistory = matches({
-	canonicalCoverage: nullable(validateCanonicalCoverage),
-	canonicalPromotion: nullable(validateCanonicalPromotion),
-	earliestParsedLedger: nullable(unsignedIntegerString),
-	generatedAt: dateTime,
-	historicalBackfill: nullable(validateHistoricalBackfill),
-	latestObservedAt: nullable(dateTime),
-	latestParsedLedger: nullable(unsignedIntegerString),
-	localAssetIndexReady: boolean,
-	localContractIndexReady: boolean,
-	localOperationIndexReady: boolean,
-	localTransactionIndexReady: boolean,
-	mode: oneOf('archive_header_parser', 'canonical_checkpoint_index'),
-	parsedLedgerCount: nullable(nonNegativeInteger),
-	sourceArchiveCount: nullable(nonNegativeInteger),
-	status: statusLevel
-});
-
 const fieldValidators: Readonly<
 	Record<
 		Exclude<(typeof snapshotFields)[number], 'workers'>,
@@ -201,7 +130,7 @@ const fieldValidators: Readonly<
 		status: statusLevel,
 		url: nullable(string)
 	}),
-	fullHistory: validateFullHistory,
+	fullHistory: validateFullHistoryStatus,
 	scanLogs: validateScanLogs
 };
 

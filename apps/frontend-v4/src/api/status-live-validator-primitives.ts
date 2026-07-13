@@ -28,9 +28,7 @@ export function arrayOf(
 		value.every((entry) => validator(entry));
 }
 
-export function nullable(
-	validator: StatusLiveValidator
-): StatusLiveValidator {
+export function nullable(validator: StatusLiveValidator): StatusLiveValidator {
 	return (value) => value === null || validator(value);
 }
 
@@ -80,6 +78,10 @@ export function dateTime(value: unknown): value is string {
 	return typeof value === 'string' && !Number.isNaN(Date.parse(value));
 }
 
+export function lowercaseSha256(value: unknown): value is string {
+	return typeof value === 'string' && /^[0-9a-f]{64}$/.test(value);
+}
+
 export function statusLevel(value: unknown): boolean {
 	return value === 'ok' || value === 'degraded' || value === 'unavailable';
 }
@@ -93,8 +95,6 @@ export function uuid(value: unknown): boolean {
 	);
 }
 
-export function isRecord(
-	value: unknown
-): value is Record<string, unknown> {
+export function isRecord(value: unknown): value is Record<string, unknown> {
 	return typeof value === 'object' && value !== null && !Array.isArray(value);
 }

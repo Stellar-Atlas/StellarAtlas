@@ -22,6 +22,50 @@ describe('status WebSocket contract', () => {
 			freshWorkers: 20,
 			telemetryMode: 'aggregate-only'
 		});
+		expect(
+			message.payload.fullHistory.canonicalCoverage?.latestEvidence
+		).toMatchObject({
+			batchId: '00000000-0000-4000-8000-000000000001',
+			checkpointProofId: 41,
+			sourceObjects: {
+				transactions: { contentDigest: '44'.repeat(32) }
+			}
+		});
+	});
+
+	it('rejects non-canonical source digests', () => {
+		const payload = createStatusLivePayload();
+		const fullHistory = asRecord(payload.fullHistory);
+		const coverage = asRecord(fullHistory.canonicalCoverage);
+		const evidence = asRecord(coverage.latestEvidence);
+		const sourceObjects = asRecord(evidence.sourceObjects);
+		const ledger = asRecord(sourceObjects.ledger);
+		ledger.contentDigest = 'AA'.repeat(32);
+
+		expect(parseStatusLiveMessage({ payload, type: 'status' })).toBeNull();
+	});
+
+	it('accepts the previous API contract without inventing provenance', () => {
+		const payload = createStatusLivePayload();
+		const fullHistory = asRecord(payload.fullHistory);
+		const coverage = asRecord(fullHistory.canonicalCoverage);
+		delete coverage.latestEvidence;
+
+		const message = parseStatusLiveMessage({ payload, type: 'status' });
+		expect(message?.type).toBe('status');
+		if (message?.type !== 'status') return;
+		expect(
+			message.payload.fullHistory.canonicalCoverage?.latestEvidence
+		).toBeNull();
+	});
+
+	it('rejects incoherent canonical coverage', () => {
+		const payload = createStatusLivePayload();
+		const fullHistory = asRecord(payload.fullHistory);
+		const coverage = asRecord(fullHistory.canonicalCoverage);
+		coverage.nextLedger = '63386369';
+
+		expect(parseStatusLiveMessage({ payload, type: 'status' })).toBeNull();
 	});
 
 	it.each([

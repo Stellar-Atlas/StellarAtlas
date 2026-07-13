@@ -122,20 +122,74 @@ describe('TypeOrmFullHistoryCanonicalRepository', () => {
 			checkpointLedger: 127,
 			networkPassphrase
 		});
+		const otherNetwork = await seedFullHistoryCheckpoint(dataSource, {
+			batchNumber: 7,
+			networkPassphrase: 'Canonical isolated coverage network'
+		});
 		await repository.writeCheckpoint(genesis);
 		await repository.writeCheckpoint(regular);
+		await repository.writeCheckpoint(otherNetwork);
 
-		await expect(repository.getCoverage(networkPassphrase)).resolves.toEqual({
+		const coverage = await repository.getCoverage(networkPassphrase);
+		expect(coverage).toEqual({
 			archiveSourceCount: 2,
 			batchCount: 2,
 			firstLedger: '1',
 			lastLedger: '127',
+			latestEvidence: {
+				archiveUrlIdentity: regular.archiveUrlIdentity,
+				batchId: regular.batchId,
+				checkpointLedger: regular.checkpointLedger,
+				checkpointProofId: regular.proofId,
+				decoderVersion: regular.decoderVersion,
+				firstLedger: regular.firstLedger,
+				ingestedAt: expect.any(Date),
+				lastLedger: regular.lastLedger,
+				proofEvaluatedAt: regular.proofEvaluatedAt,
+				proofVersion: regular.proofVersion,
+				sourceObjects: {
+					checkpointState: {
+						contentDigest: regular.sources.checkpointState.contentDigest,
+						objectRemoteId: regular.sources.checkpointState.remoteId
+					},
+					ledger: {
+						contentDigest: regular.sources.ledger.contentDigest,
+						objectRemoteId: regular.sources.ledger.remoteId
+					},
+					results: {
+						contentDigest: regular.sources.results.contentDigest,
+						objectRemoteId: regular.sources.results.remoteId
+					},
+					transactions: {
+						contentDigest: regular.sources.transactions.contentDigest,
+						objectRemoteId: regular.sources.transactions.remoteId
+					}
+				}
+			},
 			latestLedgerClosedAt: regular.ledgers.at(-1)!.closedAt,
 			ledgerCount: 127,
 			nextLedger: '128',
 			transactionCount: 2,
 			transactionResultCount: 2,
 			updatedAt: expect.any(Date)
+		});
+		for (const objectType of [
+			'checkpointState',
+			'ledger',
+			'results',
+			'transactions'
+		] as const) {
+			expect(
+				coverage?.latestEvidence.sourceObjects[objectType].contentDigest.toHex()
+			).toBe(regular.sources[objectType].contentDigest.toHex());
+		}
+		await expect(
+			repository.getCoverage(otherNetwork.networkPassphrase)
+		).resolves.toMatchObject({
+			latestEvidence: {
+				batchId: otherNetwork.batchId,
+				checkpointProofId: otherNetwork.proofId
+			}
 		});
 
 		const firstPage = await repository.findRecentTransactions(

@@ -50,6 +50,24 @@ export function createStatusLivePayload(): Record<string, unknown> {
 				batchCount: 2,
 				firstLedger: '63386240',
 				lastLedger: '63386367',
+				latestEvidence: {
+					archiveUrlIdentity: 'archive.example',
+					batchId: '00000000-0000-4000-8000-000000000001',
+					checkpointLedger: '63386367',
+					checkpointProofId: 41,
+					decoderVersion: 'canonical-decoder/1',
+					firstLedger: '63386304',
+					ingestedAt: generatedAt,
+					lastLedger: '63386367',
+					proofEvaluatedAt: generatedAt,
+					proofVersion: 5,
+					sourceObjects: {
+						checkpointState: sourceObject('11', '2', 'canonical-json'),
+						ledger: sourceObject('22', '3', 'uncompressed-xdr'),
+						results: sourceObject('33', '5', 'uncompressed-xdr'),
+						transactions: sourceObject('44', '4', 'uncompressed-xdr')
+					}
+				},
 				latestLedgerClosedAt: generatedAt,
 				ledgerCount: 128,
 				nextLedger: '63386368',
@@ -96,6 +114,19 @@ export function createStatusLivePayload(): Record<string, unknown> {
 		generatedAt,
 		scanLogs: createScanLogs(),
 		workers: createLegacyWorkers()
+	};
+}
+
+function sourceObject(
+	seed: string,
+	suffix: string,
+	representation: 'canonical-json' | 'uncompressed-xdr'
+) {
+	return {
+		algorithm: 'sha256',
+		contentDigest: seed.repeat(32),
+		objectRemoteId: `00000000-0000-4000-8000-${suffix.padStart(12, '0')}`,
+		representation
 	};
 }
 

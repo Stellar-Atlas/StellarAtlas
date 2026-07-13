@@ -29,6 +29,13 @@ describe('GetExplorerLocalTransactions', () => {
 			canonicalCoverage: {
 				firstLedger: '63386240',
 				lastLedger: '63386303',
+				latestEvidence: {
+					batchId: '00000000-0000-4000-8000-000000000001',
+					checkpointLedger: '63386303',
+					sourceObjects: {
+						transactions: { contentDigest: '44'.repeat(32) }
+					}
+				},
 				rangeKind: 'contiguous_bounded',
 				transactionCount: 26158,
 				transactionResultCount: 26158
@@ -271,12 +278,38 @@ function canonicalCoverage() {
 		batchCount: 1,
 		firstLedger: fullHistoryLedgerSequence(63386240n, 'firstLedger'),
 		lastLedger: fullHistoryLedgerSequence(63386303n, 'lastLedger'),
+		latestEvidence: canonicalLatestEvidence(),
 		latestLedgerClosedAt: new Date('2026-07-08T16:09:36.000Z'),
 		ledgerCount: 64,
 		nextLedger: fullHistoryUint64(63386304n, 'nextLedger'),
 		transactionCount: 26158,
 		transactionResultCount: 26158,
 		updatedAt: new Date('2026-07-12T03:19:10.000Z')
+	};
+}
+
+function canonicalLatestEvidence() {
+	const sourceObject = (seed: string, suffix: string) => ({
+		contentDigest: FullHistoryHash.fromHex(seed.repeat(32)),
+		objectRemoteId: `00000000-0000-4000-8000-${suffix.padStart(12, '0')}`
+	});
+	return {
+		archiveUrlIdentity: 'archive.example',
+		batchId: '00000000-0000-4000-8000-000000000001',
+		checkpointLedger: fullHistoryLedgerSequence(63386303n),
+		checkpointProofId: 41,
+		decoderVersion: 'canonical-decoder/1',
+		firstLedger: fullHistoryLedgerSequence(63386240n),
+		ingestedAt: new Date('2026-07-08T16:11:00.000Z'),
+		lastLedger: fullHistoryLedgerSequence(63386303n),
+		proofEvaluatedAt: new Date('2026-07-08T16:10:00.000Z'),
+		proofVersion: 5,
+		sourceObjects: {
+			checkpointState: sourceObject('11', '2'),
+			ledger: sourceObject('22', '3'),
+			results: sourceObject('33', '5'),
+			transactions: sourceObject('44', '4')
+		}
 	};
 }
 

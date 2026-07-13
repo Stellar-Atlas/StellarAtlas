@@ -34,6 +34,7 @@ import type {
 	PublicWorkerStatus
 } from './types';
 import { frontendCacheTags } from './cache-policy';
+import { parseFullHistoryStatus } from './full-history-status-contract';
 import { parseWorkerStatusDTO } from './worker-status-parser';
 import {
 	buildKnownNodesPath,
@@ -44,12 +45,14 @@ import {
 	buildFetchInit,
 	fetchJson,
 	fetchNullableJson,
+	fetchValidatedJson,
 	getApiBaseUrl,
 	type FetchOptions
 } from './http-client';
 export {
 	ApiClientError,
 	fetchJson,
+	fetchValidatedJson,
 	getApiBaseUrl,
 	type FetchOptions
 } from './http-client';
@@ -472,8 +475,9 @@ export const fetchRpcStatus = (
 export const fetchFullHistoryStatus = (
 	options?: FetchOptions
 ): Promise<PublicFullHistoryStatus> =>
-	fetchJson<PublicFullHistoryStatus>(
+	fetchValidatedJson(
 		'/v1/status/full-history',
+		parseFullHistoryStatus,
 		withTags(options, [frontendCacheTags.status])
 	);
 

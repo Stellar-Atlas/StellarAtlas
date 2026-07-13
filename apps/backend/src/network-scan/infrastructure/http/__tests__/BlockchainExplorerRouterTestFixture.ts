@@ -78,14 +78,46 @@ const canonicalCoverage = {
 	batchCount: 1,
 	firstLedger: '63386240',
 	lastLedger: '63386303',
+	latestEvidence: {
+		archiveUrlIdentity: 'archive.example',
+		batchId: '00000000-0000-4000-8000-000000000001',
+		checkpointLedger: '63386303',
+		checkpointProofId: 41,
+		decoderVersion: 'canonical-decoder/1',
+		firstLedger: '63386240',
+		ingestedAt: '2026-07-08T16:11:00.000Z',
+		lastLedger: '63386303',
+		proofEvaluatedAt: '2026-07-08T16:10:00.000Z',
+		proofVersion: 5,
+		sourceObjects: {
+			checkpointState: sourceObjectEvidence('11', '2', 'canonical-json'),
+			ledger: sourceObjectEvidence('22', '3', 'uncompressed-xdr'),
+			results: sourceObjectEvidence('33', '5', 'uncompressed-xdr'),
+			transactions: sourceObjectEvidence('44', '4', 'uncompressed-xdr')
+		}
+	},
 	latestLedgerClosedAt: '2026-07-08T16:09:36.000Z',
 	ledgerCount: 64,
 	nextLedger: '63386304',
 	rangeKind: 'contiguous_bounded' as const,
+	source: 'postgres_canonical' as const,
 	transactionCount: 26158,
 	transactionResultCount: 26158,
 	updatedAt: '2026-07-12T03:19:10.000Z'
 };
+
+function sourceObjectEvidence(
+	seed: string,
+	suffix: string,
+	representation: 'canonical-json' | 'uncompressed-xdr'
+) {
+	return {
+		algorithm: 'sha256' as const,
+		contentDigest: seed.repeat(32),
+		objectRemoteId: `00000000-0000-4000-8000-${suffix.padStart(12, '0')}`,
+		representation
+	};
+}
 
 export const canonicalFeed = (
 	records: readonly ExplorerCanonicalTransactionDTO[] = [canonicalTransaction]

@@ -2,20 +2,12 @@ import type {
 	FullHistoryCanonicalCoverageView,
 	FullHistoryTransactionView
 } from '@history-scan-coordinator/domain/full-history/FullHistoryCanonicalRepository.js';
+import {
+	mapCanonicalCoverage,
+	type CanonicalFullHistoryCoverageDTO
+} from '@history-scan-coordinator/use-cases/get-full-history-canonical-coverage/FullHistoryCanonicalCoverageDTO.js';
 
-export interface ExplorerCanonicalCoverageDTO {
-	readonly archiveSourceCount: number;
-	readonly batchCount: number;
-	readonly firstLedger: string;
-	readonly lastLedger: string;
-	readonly latestLedgerClosedAt: string;
-	readonly ledgerCount: number;
-	readonly nextLedger: string;
-	readonly rangeKind: 'contiguous_bounded';
-	readonly transactionCount: number;
-	readonly transactionResultCount: number;
-	readonly updatedAt: string;
-}
+export type ExplorerCanonicalCoverageDTO = CanonicalFullHistoryCoverageDTO;
 
 export interface ExplorerCanonicalTransactionDTO {
 	readonly createdAt: string;
@@ -31,19 +23,7 @@ export interface ExplorerCanonicalTransactionDTO {
 export function mapExplorerCanonicalCoverage(
 	coverage: FullHistoryCanonicalCoverageView
 ): ExplorerCanonicalCoverageDTO {
-	return {
-		archiveSourceCount: coverage.archiveSourceCount,
-		batchCount: coverage.batchCount,
-		firstLedger: coverage.firstLedger,
-		lastLedger: coverage.lastLedger,
-		latestLedgerClosedAt: coverage.latestLedgerClosedAt.toISOString(),
-		ledgerCount: coverage.ledgerCount,
-		nextLedger: coverage.nextLedger,
-		rangeKind: 'contiguous_bounded',
-		transactionCount: coverage.transactionCount,
-		transactionResultCount: coverage.transactionResultCount,
-		updatedAt: coverage.updatedAt.toISOString()
-	};
+	return mapCanonicalCoverage(coverage);
 }
 
 export function mapExplorerCanonicalTransaction(

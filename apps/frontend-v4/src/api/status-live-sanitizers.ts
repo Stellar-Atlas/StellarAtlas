@@ -1,3 +1,5 @@
+import { sanitizeCanonicalFullHistoryCoverage } from './canonical-history-contract';
+
 type SanitizedField =
 	| 'api'
 	| 'archiveEvents'
@@ -29,11 +31,13 @@ export function sanitizeStatusLiveField(
 			'url'
 		]);
 	}
-	if (field === 'fullHistory') return sanitizeFullHistory(value);
+	if (field === 'fullHistory') return sanitizeFullHistoryStatus(value);
 	return sanitizeScanLogs(value);
 }
 
-function sanitizeFullHistory(value: unknown): Record<string, unknown> {
+export function sanitizeFullHistoryStatus(
+	value: unknown
+): Record<string, unknown> {
 	const source = record(value);
 	return {
 		...pick(source, [
@@ -53,20 +57,7 @@ function sanitizeFullHistory(value: unknown): Record<string, unknown> {
 		canonicalCoverage:
 			source.canonicalCoverage === null
 				? null
-				: pick(source.canonicalCoverage, [
-						'archiveSourceCount',
-						'batchCount',
-						'firstLedger',
-						'lastLedger',
-						'latestLedgerClosedAt',
-						'ledgerCount',
-						'nextLedger',
-						'rangeKind',
-						'source',
-						'transactionCount',
-						'transactionResultCount',
-						'updatedAt'
-					]),
+				: sanitizeCanonicalFullHistoryCoverage(source.canonicalCoverage),
 		canonicalPromotion:
 			source.canonicalPromotion === null
 				? null

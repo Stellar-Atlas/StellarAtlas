@@ -48,19 +48,7 @@ import {
 	findCanonicalOperations,
 	getCanonicalOperationCoverage
 } from './FullHistoryCanonicalOperationQuery.js';
-
-interface FullHistoryCoverageRow {
-	readonly archiveSourceCount: number | string;
-	readonly batchCount: number | string;
-	readonly firstLedger: string;
-	readonly lastLedger: string;
-	readonly latestLedgerClosedAt: Date | string;
-	readonly ledgerCount: number | string;
-	readonly nextLedger: string;
-	readonly transactionCount: number | string;
-	readonly transactionResultCount: number | string;
-	readonly updatedAt: Date | string;
-}
+import { getCanonicalCoverage } from './FullHistoryCanonicalCoverageQuery.js';
 
 interface FullHistoryRecentTransactionRow {
 	readonly closedAt: Date | string;
@@ -78,7 +66,16 @@ interface FullHistoryRecentTransactionRow {
 	readonly transactionIndex: number;
 }
 
+interface CachedCoverage {
+	readonly expiresAt: number;
+	readonly pending: Promise<FullHistoryCanonicalCoverageView | null>;
+}
+
+const coverageCacheTtlMs = 10_000;
+
 export class TypeOrmFullHistoryCanonicalRepository implements FullHistoryCanonicalRepository {
+	private readonly coverageCache = new Map<string, CachedCoverage>();
+
 	constructor(private readonly dataSource: DataSource) {}
 
 	async findOperations(
@@ -104,7 +101,9 @@ export class TypeOrmFullHistoryCanonicalRepository implements FullHistoryCanonic
 	async prependCheckpoint(
 		input: FullHistoryCheckpointWrite
 	): Promise<FullHistoryPrependReceipt> {
-		return prependCanonicalCheckpoint(this.dataSource, input);
+		const receipt = await prependCanonicalCheckpoint(this.dataSource, input);
+		this.invalidateCoverage(input.networkPassphrase);
+		return receipt;
 	}
 
 	async writeCheckpoint(
@@ -114,7 +113,7 @@ export class TypeOrmFullHistoryCanonicalRepository implements FullHistoryCanonic
 		const networkHash = hashNetworkPassphrase(input.networkPassphrase);
 
 		try {
-			return await this.dataSource.transaction(async (manager) => {
+			const receipt = await this.dataSource.transaction(async (manager) => {
 				await setTransactionBounds(manager);
 				await lockNetwork(manager, networkHash);
 				const watermark = await lockWatermark(manager, networkHash);
@@ -141,6 +140,8 @@ export class TypeOrmFullHistoryCanonicalRepository implements FullHistoryCanonic
 				);
 				return { batchId: input.batchId, nextLedger, replayed: false };
 			});
+			this.invalidateCoverage(input.networkPassphrase);
+			return receipt;
 		} catch (error) {
 			if (error instanceof FullHistoryCanonicalError) throw error;
 			if (isProofConstraintError(error)) {
@@ -173,56 +174,26 @@ export class TypeOrmFullHistoryCanonicalRepository implements FullHistoryCanonic
 		networkPassphrase: string
 	): Promise<FullHistoryCanonicalCoverageView | null> {
 		const networkHash = hashNetworkPassphrase(networkPassphrase);
-		const rows = await this.dataSource.query<FullHistoryCoverageRow[]>(
-			`
-				select
-					count(distinct batch."archive_url_identity")::text as "archiveSourceCount",
-					count(batch.id)::text as "batchCount",
-					min(batch."first_ledger")::text as "firstLedger",
-					max(batch."last_ledger")::text as "lastLedger",
-					latest_ledger."closed_at" as "latestLedgerClosedAt",
-					sum(batch."ledger_count")::text as "ledgerCount",
-					watermark."next_ledger"::text as "nextLedger",
-					sum(batch."transaction_count")::text as "transactionCount",
-					sum(batch."result_count")::text as "transactionResultCount",
-					watermark."updated_at" as "updatedAt"
-				from "full_history_watermark" watermark
-				join "full_history_ingestion_batch" batch
-					on batch."network_passphrase_hash" =
-						watermark."network_passphrase_hash"
-				join "full_history_ledger" latest_ledger
-					on latest_ledger."network_passphrase_hash" =
-						watermark."network_passphrase_hash"
-					and latest_ledger."ledger_sequence" =
-						watermark."next_ledger" - 1
-				where watermark."network_passphrase_hash" = $1
-				group by
-					watermark."next_ledger", watermark."updated_at",
-					latest_ledger."closed_at"
-			`,
-			[networkHash.toBuffer()]
-		);
-		const row = rows[0];
-		if (row === undefined) return null;
+		const cacheKey = networkHash.toHex();
+		const cached = this.coverageCache.get(cacheKey);
+		if (cached !== undefined && cached.expiresAt > Date.now()) {
+			return cached.pending;
+		}
+		const pending = getCanonicalCoverage(this.dataSource, networkHash);
+		const entry = { expiresAt: Date.now() + coverageCacheTtlMs, pending };
+		this.coverageCache.set(cacheKey, entry);
+		try {
+			return await pending;
+		} catch (error) {
+			if (this.coverageCache.get(cacheKey) === entry) {
+				this.coverageCache.delete(cacheKey);
+			}
+			throw error;
+		}
+	}
 
-		return {
-			archiveSourceCount: toSafeCount(
-				row.archiveSourceCount,
-				'archiveSourceCount'
-			),
-			batchCount: toSafeCount(row.batchCount, 'batchCount'),
-			firstLedger: fullHistoryLedgerSequence(row.firstLedger, 'firstLedger'),
-			lastLedger: fullHistoryLedgerSequence(row.lastLedger, 'lastLedger'),
-			latestLedgerClosedAt: toDate(row.latestLedgerClosedAt),
-			ledgerCount: toSafeCount(row.ledgerCount, 'ledgerCount'),
-			nextLedger: fullHistoryUint64(row.nextLedger, 'nextLedger'),
-			transactionCount: toSafeCount(row.transactionCount, 'transactionCount'),
-			transactionResultCount: toSafeCount(
-				row.transactionResultCount,
-				'transactionResultCount'
-			),
-			updatedAt: toDate(row.updatedAt)
-		};
+	private invalidateCoverage(networkPassphrase: string): void {
+		this.coverageCache.delete(hashNetworkPassphrase(networkPassphrase).toHex());
 	}
 
 	async findLedger(
@@ -416,14 +387,6 @@ function toDate(value: Date | string): Date {
 		);
 	}
 	return date;
-}
-
-function toSafeCount(value: number | string, field: string): number {
-	const parsed = typeof value === 'number' ? value : Number(value);
-	if (!Number.isSafeInteger(parsed) || parsed < 0) {
-		throw new RangeError(`${field} is outside the safe count range`);
-	}
-	return parsed;
 }
 
 async function setTransactionBounds(manager: EntityManager): Promise<void> {

@@ -59,6 +59,13 @@ describe('TypeOrmFullHistoryCanonicalRepository historical prepend', () => {
 			})
 		);
 		await repository.writeCheckpoint(current);
+		await expect(
+			repository.getCoverage(networkPassphrase)
+		).resolves.toMatchObject({
+			firstLedger: '128',
+			latestEvidence: { batchId: current.batchId, lastLedger: '191' },
+			lastLedger: '191'
+		});
 
 		await expect(repository.prependCheckpoint(previous)).resolves.toEqual({
 			batchId: previous.batchId,
@@ -89,6 +96,13 @@ describe('TypeOrmFullHistoryCanonicalRepository historical prepend', () => {
 			firstLedger: '64',
 			lastBatchId: current.batchId,
 			nextLedger: '192'
+		});
+		await expect(
+			repository.getCoverage(networkPassphrase)
+		).resolves.toMatchObject({
+			firstLedger: '64',
+			latestEvidence: { batchId: current.batchId, lastLedger: '191' },
+			lastLedger: '191'
 		});
 		await expect(operationResultCount(previous.batchId)).resolves.toBe(1);
 		await expect(repository.prependCheckpoint(previous)).resolves.toMatchObject(

@@ -1,3 +1,5 @@
+import type { PublicCanonicalFullHistoryCoverage } from './canonical-history-types';
+
 export interface PublicExplorerLocalReadModel {
 	readonly generatedAt: string;
 	readonly indexes: {
@@ -24,16 +26,5 @@ export interface PublicExplorerLocalReadModel {
 	};
 }
 
-export interface PublicExplorerCanonicalCoverage {
-	readonly archiveSourceCount: number;
-	readonly batchCount: number;
-	readonly firstLedger: string;
-	readonly lastLedger: string;
-	readonly latestLedgerClosedAt: string;
-	readonly ledgerCount: number;
-	readonly nextLedger: string;
-	readonly rangeKind: 'contiguous_bounded';
-	readonly transactionCount: number;
-	readonly transactionResultCount: number;
-	readonly updatedAt: string;
-}
+export type PublicExplorerCanonicalCoverage =
+	PublicCanonicalFullHistoryCoverage;

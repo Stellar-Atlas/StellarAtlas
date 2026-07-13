@@ -8834,6 +8834,99 @@
 					"truncated": { "type": "boolean" }
 				}
 			},
+			"CanonicalJsonSourceObjectEvidence": {
+				"type": "object",
+				"required": [
+					"algorithm",
+					"contentDigest",
+					"objectRemoteId",
+					"representation"
+				],
+				"properties": {
+					"algorithm": { "type": "string", "enum": ["sha256"] },
+					"contentDigest": {
+						"type": "string",
+						"pattern": "^[0-9a-f]{64}$"
+					},
+					"objectRemoteId": { "type": "string", "format": "uuid" },
+					"representation": {
+						"type": "string",
+						"enum": ["canonical-json"]
+					}
+				}
+			},
+			"CanonicalXdrSourceObjectEvidence": {
+				"type": "object",
+				"required": [
+					"algorithm",
+					"contentDigest",
+					"objectRemoteId",
+					"representation"
+				],
+				"properties": {
+					"algorithm": { "type": "string", "enum": ["sha256"] },
+					"contentDigest": {
+						"type": "string",
+						"pattern": "^[0-9a-f]{64}$"
+					},
+					"objectRemoteId": { "type": "string", "format": "uuid" },
+					"representation": {
+						"type": "string",
+						"enum": ["uncompressed-xdr"]
+					}
+				}
+			},
+			"CanonicalLatestEvidence": {
+				"type": "object",
+				"required": [
+					"archiveUrlIdentity",
+					"batchId",
+					"checkpointLedger",
+					"checkpointProofId",
+					"decoderVersion",
+					"firstLedger",
+					"ingestedAt",
+					"lastLedger",
+					"proofEvaluatedAt",
+					"proofVersion",
+					"sourceObjects"
+				],
+				"properties": {
+					"archiveUrlIdentity": { "type": "string", "minLength": 1 },
+					"batchId": { "type": "string", "format": "uuid" },
+					"checkpointLedger": { "type": "string", "pattern": "^[0-9]+$" },
+					"checkpointProofId": { "type": "integer", "minimum": 1 },
+					"decoderVersion": { "type": "string", "minLength": 1 },
+					"firstLedger": { "type": "string", "pattern": "^[0-9]+$" },
+					"ingestedAt": { "type": "string", "format": "date-time" },
+					"lastLedger": { "type": "string", "pattern": "^[0-9]+$" },
+					"proofEvaluatedAt": { "type": "string", "format": "date-time" },
+					"proofVersion": { "type": "integer", "minimum": 1 },
+					"sourceObjects": {
+						"type": "object",
+						"required": [
+							"checkpointState",
+							"ledger",
+							"results",
+							"transactions"
+						],
+						"properties": {
+							"checkpointState": {
+								"$ref": "#/components/schemas/CanonicalJsonSourceObjectEvidence"
+							},
+							"ledger": {
+								"$ref": "#/components/schemas/CanonicalXdrSourceObjectEvidence"
+							},
+							"results": {
+								"$ref": "#/components/schemas/CanonicalXdrSourceObjectEvidence"
+							},
+							"transactions": {
+								"$ref": "#/components/schemas/CanonicalXdrSourceObjectEvidence"
+							}
+						}
+					}
+				}
+			},
 			"ExplorerCanonicalCoverage": {
 				"type": "object",
 				"required": [
@@ -8841,10 +8934,12 @@
 					"batchCount",
 					"firstLedger",
 					"lastLedger",
+					"latestEvidence",
 					"latestLedgerClosedAt",
 					"ledgerCount",
 					"nextLedger",
 					"rangeKind",
+					"source",
 					"transactionCount",
 					"transactionResultCount",
 					"updatedAt"
@@ -8854,10 +8949,14 @@
 					"batchCount": { "type": "integer", "minimum": 1 },
 					"firstLedger": { "type": "string", "pattern": "^[0-9]+$" },
 					"lastLedger": { "type": "string", "pattern": "^[0-9]+$" },
+					"latestEvidence": {
+						"$ref": "#/components/schemas/CanonicalLatestEvidence"
+					},
 					"latestLedgerClosedAt": { "type": "string", "format": "date-time" },
 					"ledgerCount": { "type": "integer", "minimum": 1 },
 					"nextLedger": { "type": "string", "pattern": "^[0-9]+$" },
 					"rangeKind": { "type": "string", "enum": ["contiguous_bounded"] },
+					"source": { "type": "string", "enum": ["postgres_canonical"] },
 					"transactionCount": { "type": "integer", "minimum": 0 },
 					"transactionResultCount": { "type": "integer", "minimum": 0 },
 					"updatedAt": { "type": "string", "format": "date-time" }
@@ -9411,6 +9510,7 @@
 					"transactionResultCount",
 					"firstLedger",
 					"lastLedger",
+					"latestEvidence",
 					"nextLedger",
 					"latestLedgerClosedAt",
 					"updatedAt"
@@ -9425,6 +9525,9 @@
 					"transactionResultCount": { "type": "integer", "minimum": 0 },
 					"firstLedger": { "type": "string", "pattern": "^[0-9]+$" },
 					"lastLedger": { "type": "string", "pattern": "^[0-9]+$" },
+					"latestEvidence": {
+						"$ref": "#/components/schemas/CanonicalLatestEvidence"
+					},
 					"nextLedger": { "type": "string", "pattern": "^[0-9]+$" },
 					"latestLedgerClosedAt": { "type": "string", "format": "date-time" },
 					"updatedAt": { "type": "string", "format": "date-time" }

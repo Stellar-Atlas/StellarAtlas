@@ -81,6 +81,18 @@ export const fetchJson = async <Payload>(
 	}
 };
 
+export const fetchValidatedJson = async <Payload>(
+	path: string,
+	parser: (value: unknown) => Payload | null,
+	options: FetchOptions = {}
+): Promise<Payload> => {
+	const parsed = parser(await fetchJson<unknown>(path, options));
+	if (parsed === null) {
+		throw new ApiClientError({ message: 'API returned an invalid response' });
+	}
+	return parsed;
+};
+
 export const fetchNullableJson = async <Payload>(
 	path: string,
 	options: FetchOptions = {}

@@ -7,7 +7,9 @@ import type {
 	ScpStatementObservationV1
 } from 'shared';
 import type { PublicHistoryArchiveScanLogError } from './archive-evidence-types';
+import type { PublicCanonicalFullHistoryCoverage } from './canonical-history-types';
 export type * from './archive-evidence-types';
+export type * from './canonical-history-types';
 export type * from './known-network-types';
 export type * from './search-types';
 export type * from './worker-status-types';
@@ -463,21 +465,6 @@ export interface PublicCanonicalFullHistoryPromotion {
 		| 'stale'
 		| 'stopped'
 		| 'waiting-for-proof';
-}
-
-export interface PublicCanonicalFullHistoryCoverage {
-	readonly archiveSourceCount: number;
-	readonly batchCount: number;
-	readonly firstLedger: string;
-	readonly lastLedger: string;
-	readonly latestLedgerClosedAt: string;
-	readonly ledgerCount: number;
-	readonly nextLedger: string;
-	readonly rangeKind: 'contiguous_bounded';
-	readonly source: 'postgres_canonical';
-	readonly transactionCount: number;
-	readonly transactionResultCount: number;
-	readonly updatedAt: string;
 }
 
 export interface PublicFailoverStatus {

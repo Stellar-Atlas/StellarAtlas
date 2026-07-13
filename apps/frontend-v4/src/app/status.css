@@ -70,6 +70,8 @@
 .status-row small {
 	color: var(--muted);
 	margin-block-start: 4px;
+	overflow: visible;
+	white-space: normal;
 }
 
 .status-row-value {

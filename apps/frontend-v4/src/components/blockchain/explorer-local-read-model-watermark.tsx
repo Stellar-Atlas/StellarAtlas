@@ -19,6 +19,7 @@ export function ExplorerLocalReadModelWatermark({
 	const headers = result.readModel.parsedLedgerHeaders;
 	const indexes = result.readModel.indexes;
 	const canonical = result.readModel.transactions.canonicalCoverage;
+	const evidence = canonical?.latestEvidence ?? null;
 	return (
 		<div className="explorer-local-watermark">
 			<div>
@@ -30,18 +31,25 @@ export function ExplorerLocalReadModelWatermark({
 				<span>
 					{formatLedger(canonical?.firstLedger ?? headers.earliestParsedLedger)}{' '}
 					to {formatLedger(canonical?.lastLedger ?? headers.latestParsedLedger)}
+					{canonical === null
+						? ''
+						: `; ${canonical.ledgerCount.toLocaleString()} proof-gated ledgers`}
 				</span>
 			</div>
 			<div>
 				<strong>
-					{(
-						canonical?.ledgerCount ?? headers.parsedLedgerCount
-					).toLocaleString()}
+					{canonical === null
+						? headers.parsedLedgerCount.toLocaleString()
+						: evidence === null
+							? 'Latest proof details loading'
+							: `Checkpoint ${Number(evidence.checkpointLedger).toLocaleString()}`}
 				</strong>
 				<span>
 					{canonical === null
 						? `parsed headers observed across ${headers.sourceArchiveCount} archive roots`
-						: formatCanonicalEvidenceSelection(canonical.archiveSourceCount)}
+						: evidence === null
+							? formatCanonicalEvidenceSelection(canonical.archiveSourceCount)
+							: `proof ${evidence.checkpointProofId} v${evidence.proofVersion} from ${evidence.archiveUrlIdentity}; ${formatCanonicalEvidenceSelection(canonical.archiveSourceCount)}`}
 				</span>
 			</div>
 			<div>
