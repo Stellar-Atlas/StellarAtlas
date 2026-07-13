@@ -111,30 +111,30 @@ describe('FullHistoryOperationBackfillCli', () => {
 		const configured = createDependencies();
 		configured.execute.mockResolvedValue({
 			accountReferenceFacts: 0,
-			batchLimit: 8,
+			batchLimit: 24,
 			completedBatches: 0,
-			cpuWorkers: 4,
+			cpuWorkers: 12,
 			operationFacts: 0,
 			peakActiveBatches: 0,
 			receipts: [],
 			selectedBatches: 0,
 			status: 'idle',
-			workerMetrics: workerMetrics({ workerCapacity: 4 })
+			workerMetrics: workerMetrics({ workerCapacity: 12 })
 		});
 
 		await expect(
 			runFullHistoryOperationBackfillCli(
 				{
 					...confirmedEnvironment,
-					FULL_HISTORY_OPERATION_BACKFILL_BATCHES: '8',
-					FULL_HISTORY_OPERATION_BACKFILL_CPU_WORKERS: '4'
+					FULL_HISTORY_OPERATION_BACKFILL_BATCHES: '24',
+					FULL_HISTORY_OPERATION_BACKFILL_CPU_WORKERS: '12'
 				},
 				configured
 			)
 		).resolves.toBe(0);
 		expect(configured.execute).toHaveBeenCalledWith(configured.dataSource, {
-			batchLimit: 8,
-			cpuWorkerCount: 4,
+			batchLimit: 24,
+			cpuWorkerCount: 12,
 			networkPassphrase: 'CLI fixture network'
 		});
 
@@ -143,7 +143,7 @@ describe('FullHistoryOperationBackfillCli', () => {
 			runFullHistoryOperationBackfillCli(
 				{
 					...confirmedEnvironment,
-					FULL_HISTORY_OPERATION_BACKFILL_CPU_WORKERS: '5'
+					FULL_HISTORY_OPERATION_BACKFILL_CPU_WORKERS: '13'
 				},
 				excessive
 			)
@@ -175,12 +175,57 @@ describe('FullHistoryOperationBackfillCli', () => {
 			runFullHistoryOperationBackfillCli(
 				{
 					...confirmedEnvironment,
-					FULL_HISTORY_OPERATION_BACKFILL_BATCHES: '9'
+					FULL_HISTORY_OPERATION_BACKFILL_BATCHES: '25'
 				},
 				dependencies
 			)
 		).resolves.toBe(64);
 		expect(dependencies.createDataSource).not.toHaveBeenCalled();
+	});
+
+	it('keeps multi-batch output bounded while retaining durable batch identities', async () => {
+		const dependencies = createDependencies();
+		const receipts = Array.from({ length: 24 }, (_, index) => ({
+			accountReferenceCount: 2,
+			batchId: `00000000-0000-4000-8000-${index.toString().padStart(12, '0')}`,
+			operationCount: 1,
+			replayed: false
+		}));
+		dependencies.execute.mockResolvedValue({
+			accountReferenceFacts: 48,
+			batchLimit: 24,
+			completedBatches: 24,
+			cpuWorkers: 12,
+			operationFacts: 24,
+			peakActiveBatches: 12,
+			receipts,
+			selectedBatches: 24,
+			status: 'completed',
+			workerMetrics: workerMetrics({
+				completedTasks: 24,
+				peakActiveWorkers: 12,
+				workerCapacity: 12
+			})
+		});
+
+		await expect(
+			runFullHistoryOperationBackfillCli(
+				{
+					...confirmedEnvironment,
+					FULL_HISTORY_OPERATION_BACKFILL_BATCHES: '24',
+					FULL_HISTORY_OPERATION_BACKFILL_CPU_WORKERS: '12'
+				},
+				dependencies
+			)
+		).resolves.toBe(0);
+		const output = String(
+			dependencies.stdout.write.mock.calls.at(-1)?.[0] ?? ''
+		);
+		expect(Buffer.byteLength(output)).toBeLessThanOrEqual(4_097);
+		expect(output).toContain('"completedBatches":24');
+		expect(output).toContain(receipts[23]!.batchId);
+		expect(output).not.toContain('"receipts"');
+		expect(output).not.toContain('output-bound-exceeded');
 	});
 });
 

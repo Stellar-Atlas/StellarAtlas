@@ -91,7 +91,7 @@ export async function runFullHistoryOperationBackfillCli(
 			return 0;
 		}
 		const result = await dependencies.execute(dataSource, config);
-		writeEvent(dependencies.stdout, result);
+		writeEvent(dependencies.stdout, compactExecutionResult(result));
 		return 0;
 	} catch (error) {
 		writeEvent(dependencies.stderr, {
@@ -108,6 +108,18 @@ export async function runFullHistoryOperationBackfillCli(
 			await dataSource.destroy().catch(() => undefined);
 		}
 	}
+}
+
+function compactExecutionResult(
+	result: FullHistoryOperationBackfillExecutionResult
+): Omit<FullHistoryOperationBackfillExecutionResult, 'receipts'> & {
+	readonly completedBatchIds: readonly string[];
+} {
+	const { receipts, ...summary } = result;
+	return {
+		...summary,
+		completedBatchIds: receipts.map((receipt) => receipt.batchId)
+	};
 }
 
 export function parseFullHistoryOperationBackfillCliConfig(

@@ -2,9 +2,9 @@ import type { FullHistoryCheckpointSources } from '../full-history/FullHistoryCa
 import type { FullHistoryCheckpointCandidate } from '../full-history-promotion/FullHistoryCheckpointCandidate.js';
 import type { FullHistoryLedgerSequence } from '../full-history/FullHistoryCanonicalTypes.js';
 
-export const FULL_HISTORY_OPERATION_BACKFILL_BATCH_LIMIT_MAX = 8;
+export const FULL_HISTORY_OPERATION_BACKFILL_BATCH_LIMIT_MAX = 24;
 export const FULL_HISTORY_OPERATION_BACKFILL_CPU_WORKERS_DEFAULT = 2;
-export const FULL_HISTORY_OPERATION_BACKFILL_CPU_WORKERS_MAX = 4;
+export const FULL_HISTORY_OPERATION_BACKFILL_CPU_WORKERS_MAX = 12;
 
 export interface FullHistoryOperationBackfillBatch {
 	readonly archiveUrlIdentity: string;
