@@ -38,16 +38,22 @@ export function GraphSummaryPanel({
 			<p className="eyebrow">{liveNetwork.name}</p>
 			<h1>Network topology</h1>
 			<div className="summary-grid">
-				<strong>
-					{formatInteger(liveNetwork.statistics.nrOfConnectableNodes)}
-				</strong>
-				<span>connectable</span>
-				<strong>
-					{formatInteger(liveNetwork.statistics.nrOfActiveValidators)}
-				</strong>
-				<span>validators</span>
-				<strong>{formatInteger(liveNetwork.organizations.length)}</strong>
-				<span>organizations</span>
+				<div>
+					<strong>
+						{formatInteger(liveNetwork.statistics.nrOfConnectableNodes)}
+					</strong>
+					<span>connectable</span>
+				</div>
+				<div>
+					<strong>
+						{formatInteger(liveNetwork.statistics.nrOfActiveValidators)}
+					</strong>
+					<span>validators</span>
+				</div>
+				<div>
+					<strong>{formatInteger(liveNetwork.organizations.length)}</strong>
+					<span>organizations</span>
+				</div>
 			</div>
 			<button
 				className={showAllConnectable ? 'graph-toggle active' : 'graph-toggle'}
