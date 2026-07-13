@@ -205,6 +205,16 @@
 	font-weight: 800;
 }
 
+.known-evidence-warning {
+	color: var(--state-warning-ink) !important;
+}
+
+.archive-state-documents {
+	display: grid;
+	gap: 8px;
+	margin-block-start: 10px;
+}
+
 .evidence-status {
 	text-transform: capitalize;
 }

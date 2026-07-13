@@ -12,13 +12,13 @@ import {
 import { formatDateTime, formatInteger } from '@format/formatters';
 import {
 	ArchiveSourceLink,
+	ArchiveStateSummary,
 	EmptyEvidenceRow,
 	EvidenceTableRegion,
 	ExternalEvidenceLink,
 	ObjectIdentity,
 	ObjectSource,
 	VerifiedCopyLinks,
-	formatArchiveState,
 	formatBytes,
 	formatEvidenceClass,
 	formatEventType,
@@ -28,6 +28,7 @@ import {
 	formatWorkerStage,
 	sanitizeEvidenceMessage
 } from './known-archive-evidence-table-parts';
+import { HistoryArchiveStateDocument } from './history-archive-state-document';
 
 export function RemoteFailureTable({
 	page
@@ -299,60 +300,73 @@ export function ArchiveRootSummaryTable({
 	if (roots.length === 0)
 		return <EmptyEvidenceRow text="No archive sources are known." />;
 	return (
-		<EvidenceTableRegion label="Archive source summary">
-			<table className="known-evidence-table root-summary-table">
-				<thead>
-					<tr>
-						<th>Archive source</th>
-						<th>Nodes</th>
-						<th>State</th>
-						<th>Files</th>
-						<th>Remote failures</th>
-						<th>Worker issues</th>
-						<th>Checkpoint file consistency</th>
-					</tr>
-				</thead>
-				<tbody>
-					{roots.map((root) => (
-						<tr key={root.archiveUrlIdentity}>
-							<td data-label="Archive source">
-								<ArchiveSourceLink archiveUrl={root.archiveUrl}>
-									{formatArchiveRoot(root.archiveUrl)}
-								</ArchiveSourceLink>
-							</td>
-							<td data-label="Nodes">
-								{formatInteger(root.nodePublicKeys.length)}
-							</td>
-							<td data-label="State">{formatArchiveState(root)}</td>
-							<td data-label="Files">
-								{formatInteger(root.objects.verifiedObjects)} /{' '}
-								{formatInteger(root.objects.totalObjects)} verified
-							</td>
-							<td
-								data-label="Remote failures"
-								className={
-									root.objects.remoteFailureObjects > 0
-										? 'known-evidence-error'
-										: ''
-								}
-							>
-								{formatInteger(root.objects.remoteFailureObjects)}
-							</td>
-							<td data-label="Worker issues">
-								{formatInteger(root.objects.workerIssueObjects)}
-							</td>
-							<td data-label="Checkpoint file consistency">
-								<strong>
-									{formatInteger(root.checkpoints.verifiedCheckpoints)} /{' '}
-									{formatInteger(root.checkpoints.totalCheckpoints)} passed
-								</strong>
-								<small>{formatCheckpointWork(root)}</small>
-							</td>
+		<>
+			<EvidenceTableRegion label="Archive source summary">
+				<table className="known-evidence-table root-summary-table">
+					<thead>
+						<tr>
+							<th>Archive source</th>
+							<th>Nodes</th>
+							<th>State</th>
+							<th>Files</th>
+							<th>Remote failures</th>
+							<th>Worker issues</th>
+							<th>Checkpoint file consistency</th>
 						</tr>
-					))}
-				</tbody>
-			</table>
-		</EvidenceTableRegion>
+					</thead>
+					<tbody>
+						{roots.map((root) => (
+							<tr key={root.archiveUrlIdentity}>
+								<td data-label="Archive source">
+									<ArchiveSourceLink archiveUrl={root.archiveUrl}>
+										{formatArchiveRoot(root.archiveUrl)}
+									</ArchiveSourceLink>
+								</td>
+								<td data-label="Nodes">
+									{formatInteger(root.nodePublicKeys.length)}
+								</td>
+								<td data-label="State">
+									<ArchiveStateSummary root={root} />
+								</td>
+								<td data-label="Files">
+									{formatInteger(root.objects.verifiedObjects)} /{' '}
+									{formatInteger(root.objects.totalObjects)} verified
+								</td>
+								<td
+									data-label="Remote failures"
+									className={
+										root.objects.remoteFailureObjects > 0
+											? 'known-evidence-error'
+											: ''
+									}
+								>
+									{formatInteger(root.objects.remoteFailureObjects)}
+								</td>
+								<td data-label="Worker issues">
+									{formatInteger(root.objects.workerIssueObjects)}
+								</td>
+								<td data-label="Checkpoint file consistency">
+									<strong>
+										{formatInteger(root.checkpoints.verifiedCheckpoints)} /{' '}
+										{formatInteger(root.checkpoints.totalCheckpoints)} passed
+									</strong>
+									<small>{formatCheckpointWork(root)}</small>
+								</td>
+							</tr>
+						))}
+					</tbody>
+				</table>
+			</EvidenceTableRegion>
+			<div className="archive-state-documents">
+				{roots.map((root) => (
+					<HistoryArchiveStateDocument
+						archiveState={root.scannerOwnedState}
+						archiveUrl={root.archiveUrl}
+						key={root.archiveUrlIdentity}
+					/>
+				))}
+			</div>
+		</>
 	);
 }
 

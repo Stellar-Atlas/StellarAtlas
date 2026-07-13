@@ -21,6 +21,23 @@ describe('status drilldown availability', () => {
 		expect(html).not.toContain('No network scans');
 	});
 
+	it('never renders deprecated archive range rows in the current status log', () => {
+		const scanLogs = emptyScanLogs();
+		const html = renderToStaticMarkup(
+			<RecentScanLogs
+				available
+				scanLogs={{
+					...scanLogs,
+					archiveScans: [deprecatedArchiveScan()]
+				}}
+			/>
+		);
+
+		expect(html).toContain('Network scans');
+		expect(html).not.toContain('legacy-range.example');
+		expect(html).not.toContain('0 - 63,378,495');
+	});
+
 	it('does not render unfetched archive events as zero activity', () => {
 		const html = renderToStaticMarkup(
 			<StatusArchiveEvidenceTables
@@ -145,5 +162,24 @@ function emptyArchiveSummary(): PublicHistoryArchiveStatusSummary {
 		sources: [],
 		sourcesTruncated: false,
 		unclassifiedFailures: 0
+	};
+}
+
+function deprecatedArchiveScan(): PublicScanLogStatus['archiveScans'][number] {
+	return {
+		concurrency: 24,
+		durationMs: 60_000,
+		endDate: generatedAt,
+		errorCount: 0,
+		errors: [],
+		fromLedger: 0,
+		hasArchiveVerificationError: false,
+		hasWorkerIssue: false,
+		latestScannedLedger: 63_378_495,
+		latestVerifiedLedger: 63_378_495,
+		scanStatus: 'ok',
+		startDate: '2026-07-10T23:59:00.000Z',
+		toLedger: 63_378_495,
+		url: 'https://legacy-range.example/history'
 	};
 }

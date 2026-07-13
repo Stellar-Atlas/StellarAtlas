@@ -164,7 +164,7 @@ export function formatObjectStatusDetail(
 		return 'deferred by scanner planning';
 	}
 	if (object.delayReason?.code === 'legacy-deferred') {
-		return 'legacy row awaiting scanner planning metadata';
+		return 'waiting for scanner planning details';
 	}
 	if (object.delayReason) {
 		const label = object.delayReason.code.replaceAll('-', ' ');
@@ -190,12 +190,27 @@ export function formatWorkerStage(value: string | null): string {
 	return value === null ? 'Not reported' : formatMachineLabel(value);
 }
 
-export function formatArchiveState(
-	root: PublicKnownArchiveRootEvidence
-): string {
+export function ArchiveStateSummary({
+	root
+}: {
+	readonly root: PublicKnownArchiveRootEvidence;
+}): React.JSX.Element {
 	const state = root.scannerOwnedState;
-	if (state === null) return 'Not captured';
-	return `${state.status}; ${formatDateTime(state.observedAt)}`;
+	if (state === null) return <span>Not captured</span>;
+	const successfulAt = state.metadata?.observedAt ?? state.observedAt;
+
+	return (
+		<>
+			<strong>{formatMachineLabel(state.status)}</strong>
+			<small>Last stored state {formatDateTime(successfulAt)}</small>
+			{state.latestFailure ? (
+				<small className="known-evidence-warning">
+					Latest refresh failed {formatDateTime(state.latestFailure.observedAt)}
+					: {formatMachineLabel(state.latestFailure.type)}
+				</small>
+			) : null}
+		</>
+	);
 }
 
 export function formatBytes(value: number | null): string {

@@ -120,14 +120,32 @@ describe('known archive evidence UI', () => {
 		).toBe('deferred by scanner planning');
 	});
 
-	it('identifies legacy deferred rows as missing scanner-planning metadata', () => {
-		expect(
-			formatObjectStatusDetail(
-				createObject({
-					delayReason: { code: 'legacy-deferred', until: null }
-				})
-			)
-		).toBe('legacy row awaiting scanner planning metadata');
+	it('describes migrated deferred rows without legacy implementation language', () => {
+		const detail = formatObjectStatusDetail(
+			createObject({
+				delayReason: { code: 'legacy-deferred', until: null }
+			})
+		);
+
+		expect(detail).toBe('waiting for scanner planning details');
+		expect(detail).not.toContain('legacy');
+	});
+
+	it('shows retained state separately from a later failed refresh', () => {
+		const evidence = createEvidence();
+		const root = evidence.roots[0];
+		if (root === undefined) throw new Error('Expected archive root');
+		const markup = renderToStaticMarkup(
+			createElement(ArchiveRootSummaryTable, {
+				roots: [{ ...root, scannerOwnedState: createArchiveState() }]
+			})
+		);
+
+		expect(markup).toContain('Last stored state');
+		expect(markup).toContain('Latest refresh failed');
+		expect(markup).toContain('History archive state');
+		expect(markup).toContain('State current ledger');
+		expect(markup).toContain('63,378,495');
 	});
 
 	it('shows when a timed delay expires', () => {
@@ -325,5 +343,35 @@ function createEvent(object: PublicHistoryArchiveObject) {
 		remoteId: 'event-1',
 		verificationFacts: object.verificationFacts,
 		workerStage: object.workerStage
+	};
+}
+
+function createArchiveState() {
+	const archiveUrl = 'https://archive.example/history';
+	return {
+		archiveUrl,
+		archiveUrlIdentity: 'history-root',
+		failure: null,
+		latestFailure: {
+			httpStatus: 503,
+			message: 'Remote state refresh returned HTTP 503',
+			observedAt: '2026-07-10T00:05:00.000Z',
+			source: 'network-scan' as const,
+			type: 'http-status'
+		},
+		metadata: {
+			observedAt: '2026-07-10T00:00:00.000Z',
+			stellarHistory: {
+				currentBuckets: [],
+				currentLedger: 63_378_495,
+				server: 'stellar-core 23.0.0',
+				version: 1
+			},
+			stellarHistoryUrl: `${archiveUrl}/.well-known/stellar-history.json`
+		},
+		observedAt: '2026-07-10T00:00:00.000Z',
+		source: 'network-scan' as const,
+		stateUrl: `${archiveUrl}/.well-known/stellar-history.json`,
+		status: 'available' as const
 	};
 }
