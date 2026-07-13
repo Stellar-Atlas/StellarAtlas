@@ -236,21 +236,23 @@ const networkRouterWrapper = (config: NetworkRouterConfig): Router => {
 			searchRequest,
 			canonicalNetworkTime
 		);
-		if (indexedPayload !== null && config.searchConfig.writable !== false) {
-			setImmediate(() => {
-				void networkSearchInventory
-					.load()
-					.then((inventoryOrError) => {
-						if (inventoryOrError.isOk() && inventoryOrError.value !== null) {
-							networkSearch.refreshProjection(inventoryOrError.value);
-						}
-					})
-					.catch((error: unknown) => {
-						config.logger?.warn('Network search projection refresh failed', {
-							error: error instanceof Error ? error.message : String(error)
+		if (indexedPayload !== null) {
+			if (config.searchConfig.writable !== false) {
+				setImmediate(() => {
+					void networkSearchInventory
+						.load()
+						.then((inventoryOrError) => {
+							if (inventoryOrError.isOk() && inventoryOrError.value !== null) {
+								networkSearch.refreshProjection(inventoryOrError.value);
+							}
+						})
+						.catch((error: unknown) => {
+							config.logger?.warn('Network search projection refresh failed', {
+								error: error instanceof Error ? error.message : String(error)
+							});
 						});
-					});
-			});
+				});
+			}
 			return res.status(200).send(indexedPayload);
 		}
 

@@ -7,8 +7,14 @@ import type { NetworkRouterConfig } from '../NetworkRouter.js';
 import { createDummyNetworkV1 } from '@network-scan/services/__fixtures__/createDummyNetworkV1.js';
 import { createDummyNodeV1 } from '@network-scan/services/__fixtures__/createDummyNodeV1.js';
 import { createDummyOrganizationV1 } from '@network-scan/services/__fixtures__/createDummyOrganizationV1.js';
+import { NetworkSearchService } from '../../search/NetworkSearchService.js';
+import type { NetworkSearchResponse } from '../../search/NetworkSearchTypes.js';
 
 describe('NetworkRouter.integration', () => {
+	afterEach(() => {
+		jest.restoreAllMocks();
+	});
+
 	it('should expose current network snapshots with frontend-aligned cache age', async () => {
 		const config = mockDeep<NetworkRouterConfig>();
 		config.searchConfig = { indexName: 'test_network_entities' };
@@ -66,6 +72,98 @@ describe('NetworkRouter.integration', () => {
 				]);
 				expect(response.body.source).toBe('postgres_canonical');
 			});
+	});
+
+	it('returns a valid indexed search payload from a read-only API worker', async () => {
+		const indexedNetworkTime = '2026-07-11T00:00:00.000Z';
+		const indexedPayload: NetworkSearchResponse = {
+			estimatedTotalHits: 1,
+			facets: {
+				active: [],
+				archiveStatus: [],
+				countryCode: [],
+				entityType: [{ count: 1, value: 'node' }],
+				fullValidator: [],
+				scope: [{ count: 1, value: 'current-validator' }],
+				topTier: [],
+				validating: [],
+				validator: []
+			},
+			hits: [
+				{
+					detail: 'stellar.org',
+					entityId: 'GA_READ_ONLY_INDEXED',
+					entityType: 'node',
+					freshness: 'fresh',
+					href: '/nodes/GA_READ_ONLY_INDEXED',
+					id: 'node:GA_READ_ONLY_INDEXED',
+					label: 'Read-only indexed validator',
+					observedAt: indexedNetworkTime,
+					recordState: 'current',
+					scope: 'current-validator',
+					source: 'meilisearch'
+				}
+			],
+			indexedNetworkTime,
+			pagination: {
+				hasMore: false,
+				limit: 8,
+				offset: 0,
+				total: 1,
+				totalIsExact: false
+			},
+			query: 'indexed',
+			readModel: {
+				canonicalCursor: 'indexed-cursor',
+				fallbackReason: null,
+				freshness: 'fresh',
+				observedAt: indexedNetworkTime,
+				schemaVersion: 'v1',
+				source: 'meilisearch'
+			},
+			scope: 'all-known',
+			source: 'meilisearch'
+		};
+		const searchIndexed = jest
+			.spyOn(NetworkSearchService.prototype, 'searchIndexed')
+			.mockResolvedValue(indexedPayload);
+		const refreshProjection = jest.spyOn(
+			NetworkSearchService.prototype,
+			'refreshProjection'
+		);
+		const fallbackNode = createDummyNodeV1('GA_CANONICAL_FALLBACK');
+		const config = mockDeep<NetworkRouterConfig>();
+		config.searchConfig = {
+			indexName: 'test_network_entities',
+			writable: false
+		};
+		config.networkScanRepository.findLatestSuccessfulScanTime.mockResolvedValue(
+			new Date(indexedNetworkTime)
+		);
+		configureSearchInventory(
+			config,
+			createDummyNetworkV1([fallbackNode], []),
+			[fallbackNode],
+			[]
+		);
+
+		const app = express();
+		app.use('/network', networkRouter(config));
+
+		await request(app)
+			.get('/network/search?q=indexed')
+			.expect(200)
+			.expect((response) => {
+				expect(response.body).toEqual(indexedPayload);
+			});
+
+		expect(searchIndexed).toHaveBeenCalledWith(
+			expect.objectContaining({ query: 'indexed' }),
+			new Date(indexedNetworkTime)
+		);
+		expect(config.getNetwork.execute).not.toHaveBeenCalled();
+		expect(config.getKnownNodes.executeAll).not.toHaveBeenCalled();
+		expect(refreshProjection).not.toHaveBeenCalled();
 	});
 
 	it('should expose node-only search through a fixed route', async () => {
