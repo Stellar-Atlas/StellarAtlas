@@ -5,7 +5,7 @@
 	"type": "module",
 	"description": "Crawl the stellar network",
 	"scripts": {
-		"build": "tsc --declaration && pnpm -w rewrite:aliases packages/crawler",
+		"build": "tsc --build tsconfig.json --force && pnpm -w rewrite:aliases packages/crawler",
 		"examples:crawl": "pnpm run build; NODE_PATH=node_modules node examples/crawl"
 	},
 	"main": "lib/index.js",
