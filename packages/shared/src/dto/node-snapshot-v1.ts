@@ -1,5 +1,5 @@
-import { JSONSchemaType } from 'ajv';
-import { NodeV1 } from './node-v1.js';
+import type { JSONSchemaType } from 'ajv';
+import type { NodeV1 } from './node-v1.js';
 
 export interface NodeSnapshotV1 {
 	startDate: string;

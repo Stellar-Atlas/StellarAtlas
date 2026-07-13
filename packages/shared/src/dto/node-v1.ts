@@ -1,5 +1,5 @@
-import { BaseQuorumSet } from '../quorum-set.js';
-import { JSONSchemaType } from 'ajv';
+import type { BaseQuorumSet } from '../quorum-set.js';
+import type { JSONSchemaType } from 'ajv';
 import { nullable } from './helper/nullable.js';
 
 export interface NodeGeoDataV1 {

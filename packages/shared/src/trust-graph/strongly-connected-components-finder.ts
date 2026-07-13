@@ -1,4 +1,5 @@
-import { TrustGraph, Vertex, VertexKey } from './trust-graph.js';
+import { TrustGraph, Vertex } from './trust-graph.js';
+import type { VertexKey } from './trust-graph.js';
 
 type Time = number;
 export type StronglyConnectedComponent = Set<VertexKey>;

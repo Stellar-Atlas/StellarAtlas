@@ -1,4 +1,4 @@
-import { JSONSchemaType } from 'ajv';
+import type { JSONSchemaType } from 'ajv';
 import { nullable } from './helper/nullable.js';
 
 export const ORGANIZATION_TOML_STATES_V1 = [

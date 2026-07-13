@@ -1,4 +1,4 @@
-import { NetworkStatisticsV1 } from './dto/network-v1.js';
+import type { NetworkStatisticsV1 } from './dto/network-v1.js';
 import PropertyMapper from './PropertyMapper.js';
 
 export default class NetworkStatistics {

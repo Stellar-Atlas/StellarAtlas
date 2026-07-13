@@ -1,4 +1,4 @@
-import { JSONSchemaType } from 'ajv';
+import type { JSONSchemaType } from 'ajv';
 import { nullable } from './helper/nullable.js';
 import {
 	HistoryArchivePublicVerificationFactsV1Schema,

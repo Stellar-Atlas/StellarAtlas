@@ -1,4 +1,4 @@
-import { JSONSchemaType } from 'ajv';
+import type { JSONSchemaType } from 'ajv';
 import { nullable } from './helper/nullable.js';
 
 export interface HistoryArchiveScanV1 {
@@ -44,33 +44,34 @@ export interface HistoryStateBucketV1 {
 	};
 }
 
-export const HistoryStateBucketV1Schema: JSONSchemaType<HistoryStateBucketV1> = {
-	type: 'object',
-	properties: {
-		curr: {
-			type: 'string'
-		},
-		snap: {
-			type: 'string'
-		},
-		next: {
-			type: 'object',
-			properties: {
-				state: {
-					type: 'number'
-				},
-				output: {
-					type: 'string',
-					nullable: true
-				}
+export const HistoryStateBucketV1Schema: JSONSchemaType<HistoryStateBucketV1> =
+	{
+		type: 'object',
+		properties: {
+			curr: {
+				type: 'string'
 			},
-			required: ['state'],
-			additionalProperties: false
-		}
-	},
-	required: ['curr', 'snap', 'next'],
-	additionalProperties: false
-};
+			snap: {
+				type: 'string'
+			},
+			next: {
+				type: 'object',
+				properties: {
+					state: {
+						type: 'number'
+					},
+					output: {
+						type: 'string',
+						nullable: true
+					}
+				},
+				required: ['state'],
+				additionalProperties: false
+			}
+		},
+		required: ['curr', 'snap', 'next'],
+		additionalProperties: false
+	};
 
 export const HistoryArchiveStateV1Schema: JSONSchemaType<HistoryArchiveStateV1> =
 	{

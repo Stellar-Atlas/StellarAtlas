@@ -1,4 +1,4 @@
-import { JSONSchemaType } from 'ajv';
+import type { JSONSchemaType } from 'ajv';
 import { HistoryArchiveObjectV1Schema } from './history-archive-object-v1.js';
 import { HistoryArchiveObjectEventV1Schema } from './history-archive-object-event-v1.js';
 import { nullable } from './helper/nullable.js';

@@ -1,5 +1,4 @@
 import {
-	BaseQuorumSet,
 	Node,
 	Organization,
 	QuorumSet,
@@ -7,11 +6,12 @@ import {
 	TrustGraph,
 	TrustGraphBuilder
 } from './index.js';
+import type { BaseQuorumSet } from './quorum-set.js';
 import NetworkStatistics from './network-statistics.js';
 import { isNumber, isString } from './typeguards.js';
-import { NodeV1 } from './dto/node-v1.js';
-import { NetworkV1 } from './dto/network-v1.js';
-import { OrganizationV1 } from './dto/organization-v1.js';
+import type { NodeV1 } from './dto/node-v1.js';
+import type { NetworkV1 } from './dto/network-v1.js';
+import type { OrganizationV1 } from './dto/organization-v1.js';
 
 export type OrganizationId = string;
 export type PublicKey = string;

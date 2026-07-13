@@ -1,4 +1,4 @@
-import { JSONSchemaType } from 'ajv';
+import type { JSONSchemaType } from 'ajv';
 import {
 	HistoryArchiveStateV1Schema,
 	type HistoryArchiveMetadataV1
@@ -6,14 +6,10 @@ import {
 import { nullable } from './helper/nullable.js';
 
 export type HistoryArchiveStateStatusV1 =
-	| 'available'
-	| 'invalid'
-	| 'unreachable';
+	'available' | 'invalid' | 'unreachable';
 
 export type HistoryArchiveStateSourceV1 =
-	| 'backfill'
-	| 'history-scanner'
-	| 'network-scan';
+	'backfill' | 'history-scanner' | 'network-scan';
 
 export interface HistoryArchiveStateFailureV1 {
 	readonly message: string;
@@ -21,8 +17,7 @@ export interface HistoryArchiveStateFailureV1 {
 	readonly httpStatus: number | null;
 }
 
-export interface HistoryArchiveStateLatestFailureV1
-	extends HistoryArchiveStateFailureV1 {
+export interface HistoryArchiveStateLatestFailureV1 extends HistoryArchiveStateFailureV1 {
 	readonly observedAt: string;
 	readonly source: HistoryArchiveStateSourceV1;
 }
@@ -82,7 +77,6 @@ const HistoryArchiveStateLatestFailureV1Schema: JSONSchemaType<HistoryArchiveSta
 		required: ['message', 'type', 'httpStatus', 'observedAt', 'source'],
 		additionalProperties: false
 	};
-
 
 const HistoryArchiveMetadataV1Schema: JSONSchemaType<HistoryArchiveMetadataV1> =
 	{

@@ -1,5 +1,5 @@
 import { Organization } from './organization.js';
-import { OrganizationSnapshotV1 } from './dto/organization-snapshot-v1.js';
+import type { OrganizationSnapshotV1 } from './dto/organization-snapshot-v1.js';
 
 export class OrganizationSnapShot {
 	public startDate: Date;

@@ -1,6 +1,6 @@
-import { OrganizationId, PublicKey } from './network.js';
+import type { OrganizationId, PublicKey } from './network.js';
 import PropertyMapper from './PropertyMapper.js';
-import {
+import type {
 	OrganizationStellarTomlV1,
 	OrganizationTomlAttemptV1,
 	OrganizationTomlFailureV1,

@@ -198,6 +198,19 @@ export default {
 			rootDir: 'packages/node-connector'
 		}),
 		project({
+			testPathIgnorePatterns: ['<rootDir>/node_modules/'],
+			preset: 'ts-jest',
+			displayName: 'frontend-v4',
+			rootDir: 'apps/frontend-v4',
+			moduleNameMapper: {
+				'^@(api|app|components|domain|format)/(.*)$': '<rootDir>/src/$1/$2'
+			},
+			testMatch: [
+				'<rootDir>/src/**/__tests__/**/*.test.ts',
+				'<rootDir>/src/**/__tests__/**/*.test.tsx'
+			]
+		}),
+		project({
 			moduleFileExtensions: ['js', 'jsx', 'json', 'vue', 'ts', 'tsx'],
 			preset: 'ts-jest',
 			displayName: 'frontend',

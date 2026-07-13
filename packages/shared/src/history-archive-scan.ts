@@ -1,4 +1,4 @@
-import {
+import type {
 	HistoryArchiveScanErrorV1,
 	HistoryArchiveMetadataV1,
 	HistoryArchiveScanV1

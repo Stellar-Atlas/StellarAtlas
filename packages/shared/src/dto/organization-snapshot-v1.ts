@@ -1,5 +1,5 @@
-import { JSONSchemaType } from 'ajv';
-import { OrganizationV1 } from './organization-v1.js';
+import type { JSONSchemaType } from 'ajv';
+import type { OrganizationV1 } from './organization-v1.js';
 
 export interface OrganizationSnapshotV1 {
 	startDate: string;

@@ -1,4 +1,4 @@
-import { JSONSchemaType } from 'ajv';
+import type { JSONSchemaType } from 'ajv';
 import {
 	HistoryArchiveObjectEventPageV1Schema,
 	type HistoryArchiveObjectEventPageV1,

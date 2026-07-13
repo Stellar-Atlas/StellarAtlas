@@ -1,4 +1,4 @@
-import { NodeGeoDataV1 } from './dto/node-v1.js';
+import type { NodeGeoDataV1 } from './dto/node-v1.js';
 
 export class NodeGeoData {
 	public countryCode: string | null = null;

@@ -1,7 +1,7 @@
 import { NodeGeoData } from './node-geo-data.js';
 import { NodeStatistics } from './node-statistics.js';
 import { QuorumSet } from './quorum-set.js';
-import { NodeV1 } from './dto/node-v1.js';
+import type { NodeV1 } from './dto/node-v1.js';
 import PropertyMapper from './PropertyMapper.js';
 
 export class Node {

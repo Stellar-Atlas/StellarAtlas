@@ -1,8 +1,6 @@
-import { PublicKey } from '../network.js';
-import {
-	StronglyConnectedComponent,
-	StronglyConnectedComponentsFinder
-} from './strongly-connected-components-finder.js';
+import type { PublicKey } from '../network.js';
+import { StronglyConnectedComponentsFinder } from './strongly-connected-components-finder.js';
+import type { StronglyConnectedComponent } from './strongly-connected-components-finder.js';
 import { NetworkTransitiveQuorumSetFinder } from './network-transitive-quorum-set-finder.js';
 
 export type VertexKey = string;

@@ -1,5 +1,5 @@
 import { Node } from './node.js';
-import { NodeSnapshotV1 } from './dto/node-snapshot-v1.js';
+import type { NodeSnapshotV1 } from './dto/node-snapshot-v1.js';
 
 export class NodeSnapShot {
 	public startDate: Date;
