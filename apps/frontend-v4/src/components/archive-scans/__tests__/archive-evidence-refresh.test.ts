@@ -72,6 +72,7 @@ describe('archive evidence refresh', () => {
 
 	it('does not replace a page while cursor navigation is loading', () => {
 		expect(shouldRefreshFirstArchiveEvidencePage('loading', 0)).toBe(false);
+		expect(shouldRefreshFirstArchiveEvidencePage('ready', 0, true)).toBe(false);
 		expect(shouldRefreshFirstArchiveEvidencePage('ready', 0)).toBe(true);
 		expect(shouldRefreshFirstArchiveEvidencePage('ready', 1)).toBe(false);
 	});

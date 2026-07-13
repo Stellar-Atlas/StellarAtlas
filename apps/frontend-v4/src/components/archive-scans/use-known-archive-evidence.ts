@@ -205,6 +205,10 @@ export function useKnownArchiveEvidence(
 					)
 				);
 				callbacks?.onError?.();
+			} finally {
+				if (controllers.current[key] === controller) {
+					controllers.current[key] = null;
+				}
 			}
 		}
 	};
@@ -319,7 +323,8 @@ export function useKnownArchiveEvidence(
 			(tab === 'failures' || tab === 'repair') &&
 			shouldRefreshFirstArchiveEvidencePage(
 				failureState.phase,
-				failureData?.remote.index
+				failureData?.remote.index,
+				controllers.current.failures !== null
 			) &&
 			failureData?.worker.index === 0
 		) {
@@ -328,13 +333,18 @@ export function useKnownArchiveEvidence(
 			(tab === 'work' || tab === 'verified') &&
 			shouldRefreshFirstArchiveEvidencePage(
 				objectState.phase,
-				objectData?.index
+				objectData?.index,
+				controllers.current.objects !== null
 			)
 		) {
 			loadObjects(objectQuery.current, null, false);
 		} else if (
 			tab === 'activity' &&
-			shouldRefreshFirstArchiveEvidencePage(eventState.phase, eventData?.index)
+			shouldRefreshFirstArchiveEvidencePage(
+				eventState.phase,
+				eventData?.index,
+				controllers.current.activity !== null
+			)
 		) {
 			loadEvents(eventQuery.current, null, false);
 		}
@@ -351,10 +361,7 @@ export function useKnownArchiveEvidence(
 	const selectTab = (nextTab: KnownArchiveEvidenceTab): void => {
 		setTab(nextTab);
 		if (
-			shouldLoadInitialActivityPage(
-				nextTab,
-				eventData?.pages[0]?.page.limit
-			)
+			shouldLoadInitialActivityPage(nextTab, eventData?.pages[0]?.page.limit)
 		) {
 			loadEvents(eventQuery.current, null, false);
 			return;
