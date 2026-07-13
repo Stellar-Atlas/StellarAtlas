@@ -62,6 +62,11 @@ export function useKnownArchiveEvidence(
 	const [, startTransition] = useTransition();
 	const generation = useRef(0);
 	const refreshLatest = useRef<() => Promise<void>>(async () => undefined);
+	const requestRevisions = useRef<Record<ArchiveEvidenceViewKey, number>>({
+		activity: 0,
+		failures: 0,
+		objects: 0
+	});
 	const controllers = useRef<
 		Record<ArchiveEvidenceViewKey, AbortController | null>
 	>({
@@ -138,6 +143,7 @@ export function useKnownArchiveEvidence(
 		}
 	): void => {
 		controllers.current[key]?.abort();
+		requestRevisions.current[key] += 1;
 		const controller = new AbortController();
 		controllers.current[key] = controller;
 		const requestGeneration = ++generation.current;
@@ -304,7 +310,28 @@ export function useKnownArchiveEvidence(
 	const failureData = visibleArchiveEvidenceData(failureState);
 	const objectData = visibleArchiveEvidenceData(objectState);
 	const eventData = visibleArchiveEvidenceData(eventState);
+	const refreshView = useRef({
+		eventIndex: eventData?.index,
+		eventPhase: eventState.phase,
+		failurePhase: failureState.phase,
+		failureRemoteIndex: failureData?.remote.index,
+		failureWorkerIndex: failureData?.worker.index,
+		objectIndex: objectData?.index,
+		objectPhase: objectState.phase,
+		tab
+	});
+	refreshView.current = {
+		eventIndex: eventData?.index,
+		eventPhase: eventState.phase,
+		failurePhase: failureState.phase,
+		failureRemoteIndex: failureData?.remote.index,
+		failureWorkerIndex: failureData?.worker.index,
+		objectIndex: objectData?.index,
+		objectPhase: objectState.phase,
+		tab
+	};
 	refreshLatest.current = async (): Promise<void> => {
+		const startedRevisions = { ...requestRevisions.current };
 		const requestGeneration = ++generation.current;
 		const result = await loadKnownArchiveAggregate({
 			requestGeneration,
@@ -319,31 +346,35 @@ export function useKnownArchiveEvidence(
 		setLiveEvidence((current) =>
 			mergeArchiveEvidenceAggregate(current, result.data)
 		);
+		const currentView = refreshView.current;
 		if (
-			(tab === 'failures' || tab === 'repair') &&
+			(currentView.tab === 'failures' || currentView.tab === 'repair') &&
 			shouldRefreshFirstArchiveEvidencePage(
-				failureState.phase,
-				failureData?.remote.index,
-				controllers.current.failures !== null
+				currentView.failurePhase,
+				currentView.failureRemoteIndex,
+				controllers.current.failures !== null,
+				startedRevisions.failures === requestRevisions.current.failures
 			) &&
-			failureData?.worker.index === 0
+			currentView.failureWorkerIndex === 0
 		) {
 			loadFailures(failureQuery.current, null, null, 'both');
 		} else if (
-			(tab === 'work' || tab === 'verified') &&
+			(currentView.tab === 'work' || currentView.tab === 'verified') &&
 			shouldRefreshFirstArchiveEvidencePage(
-				objectState.phase,
-				objectData?.index,
-				controllers.current.objects !== null
+				currentView.objectPhase,
+				currentView.objectIndex,
+				controllers.current.objects !== null,
+				startedRevisions.objects === requestRevisions.current.objects
 			)
 		) {
 			loadObjects(objectQuery.current, null, false);
 		} else if (
-			tab === 'activity' &&
+			currentView.tab === 'activity' &&
 			shouldRefreshFirstArchiveEvidencePage(
-				eventState.phase,
-				eventData?.index,
-				controllers.current.activity !== null
+				currentView.eventPhase,
+				currentView.eventIndex,
+				controllers.current.activity !== null,
+				startedRevisions.activity === requestRevisions.current.activity
 			)
 		) {
 			loadEvents(eventQuery.current, null, false);

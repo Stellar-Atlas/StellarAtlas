@@ -14,9 +14,15 @@ export function mergeArchiveEvidenceAggregate<
 export function shouldRefreshFirstArchiveEvidencePage(
 	phase: 'error' | 'loading' | 'ready',
 	pageIndex: number | undefined,
-	requestActive = false
+	requestActive = false,
+	requestUnchanged = true
 ): boolean {
-	return !requestActive && phase !== 'loading' && pageIndex === 0;
+	return (
+		requestUnchanged &&
+		!requestActive &&
+		phase !== 'loading' &&
+		pageIndex === 0
+	);
 }
 
 export function startBoundedArchiveEvidenceRefresh(
