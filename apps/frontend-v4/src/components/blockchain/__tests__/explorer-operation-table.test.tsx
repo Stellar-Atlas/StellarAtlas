@@ -15,6 +15,8 @@ describe('explorer operation outcomes', () => {
 		expect(html).toContain('result code 0');
 		expect(html).not.toContain('effects');
 		expect(html).not.toContain('state changes');
+		expect(html).toContain('destination');
+		expect(html).toContain('GAADDITIONAL');
 	});
 
 	it('labels an uncovered operation outcome as not indexed', () => {
@@ -38,12 +40,49 @@ describe('explorer operation outcomes', () => {
 			'Transaction result XDR has not been indexed for this batch'
 		);
 	});
+
+	it('labels account participants as unavailable when coverage is incomplete', () => {
+		const operation = canonicalOperation();
+		const html = renderToStaticMarkup(
+			<ExplorerOperationTable
+				operations={[
+					{
+						...operation,
+						accountReferences: [],
+						evidence: {
+							...operation.evidence,
+							accountReferenceDecoderVersion: null
+						}
+					}
+				]}
+			/>
+		);
+
+		expect(html).toContain('Participants not indexed');
+		expect(html).toContain(
+			'Envelope account participants have not been indexed for this batch'
+		);
+	});
 });
 
 function canonicalOperation(): PublicCanonicalExplorerOperation {
 	return {
+		accountReferences: [
+			{
+				accountId: `G${'A'.repeat(55)}`,
+				baseAccountId: `G${'A'.repeat(55)}`,
+				role: 'effective_source'
+			},
+			{
+				accountId: `GAADDITIONAL${'B'.repeat(44)}`,
+				baseAccountId: `GAADDITIONAL${'B'.repeat(44)}`,
+				role: 'destination'
+			}
+		],
 		createdAt: '2026-07-12T12:00:00.000Z',
 		evidence: {
+			accountReferenceDecoderVersion:
+				'stellar-sdk-16/archive-xdr-v1-operation-account-references',
 			archiveSource: 'archive.example',
 			batchId: '00000000-0000-4000-8000-000000000001',
 			checkpointLedger: '63386303',

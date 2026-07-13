@@ -8,8 +8,10 @@ import type {
 } from 'shared';
 import type { PublicHistoryArchiveScanLogError } from './archive-evidence-types';
 import type { PublicCanonicalFullHistoryCoverage } from './canonical-history-types';
+import type { PublicExplorerOperation } from './explorer-operation-types';
 export type * from './archive-evidence-types';
 export type * from './canonical-history-types';
+export type * from './explorer-operation-types';
 export type * from './known-network-types';
 export type * from './search-types';
 export type * from './worker-status-types';
@@ -124,103 +126,6 @@ export interface PublicExplorerAsset {
 export interface PublicExplorerAssets {
 	readonly assets: readonly PublicExplorerAsset[];
 	readonly source: 'horizon';
-	readonly truncated: boolean;
-}
-
-interface PublicExplorerOperationBase {
-	readonly createdAt: string;
-	readonly id: string;
-	readonly ledger: string | null;
-	readonly sourceAccount: string | null;
-	readonly transactionHash: string | null;
-	readonly type: string;
-}
-
-interface PublicCanonicalExplorerOperationBase extends PublicExplorerOperationBase {
-	readonly evidence: {
-		readonly archiveSource: string;
-		readonly batchId: string;
-		readonly checkpointLedger: string;
-		readonly checkpointProofId: number;
-		readonly decoderVersion: string;
-		readonly proofEvaluatedAt: string;
-		readonly proofVersion: number;
-	};
-	readonly factScope: 'operation_body_and_envelope';
-	readonly operationIndex: number;
-	readonly source: 'postgres_canonical';
-	readonly sourceAccountOrigin: 'operation' | 'transaction';
-	readonly transactionIndex: number;
-}
-
-interface PublicCanonicalExplorerOperationOutcomeAvailable {
-	readonly operationResultCode: -6 | -5 | -4 | -3 | -2 | -1 | 0 | null;
-	readonly operationSpecificResultCode: number | null;
-	readonly outcome: 'failed' | 'not_applied' | 'succeeded';
-	readonly outcomeAvailable: true;
-	readonly outcomeEvidence: {
-		readonly decoderVersion: string;
-		readonly factScope: 'transaction_result_xdr';
-	};
-}
-
-interface PublicCanonicalExplorerOperationOutcomeUnavailable {
-	readonly operationResultCode: null;
-	readonly operationSpecificResultCode: null;
-	readonly outcome: null;
-	readonly outcomeAvailable: false;
-	readonly outcomeEvidence: null;
-}
-
-export type PublicCanonicalExplorerOperation =
-	PublicCanonicalExplorerOperationBase &
-		(
-			| PublicCanonicalExplorerOperationOutcomeAvailable
-			| PublicCanonicalExplorerOperationOutcomeUnavailable
-		);
-
-export interface PublicHorizonExplorerOperation extends PublicExplorerOperationBase {
-	readonly source: 'horizon';
-	readonly successful: boolean | null;
-	readonly typeNumber: number | null;
-}
-
-export type PublicExplorerOperation =
-	PublicCanonicalExplorerOperation | PublicHorizonExplorerOperation;
-
-export interface PublicExplorerOperationFilters {
-	readonly accountId?: string;
-	readonly firstLedger?: string;
-	readonly from?: string;
-	readonly ledger?: string;
-	readonly lastLedger?: string;
-	readonly operationType?: string;
-	readonly to?: string;
-	readonly transactionHash?: string;
-}
-
-export interface PublicExplorerOperations {
-	readonly count?: number;
-	readonly coverage?: {
-		readonly canonicalBatches: number;
-		readonly complete: boolean;
-		readonly firstIndexedLedger: string | null;
-		readonly firstOutcomeIndexedLedger: string | null;
-		readonly indexedBatches: number;
-		readonly lastIndexedLedger: string | null;
-		readonly lastOutcomeIndexedLedger: string | null;
-		readonly outcomeIndexedBatches: number;
-		readonly outcomesComplete: boolean;
-	};
-	readonly factBoundary?: {
-		readonly includes: 'operation_type_and_effective_source';
-		readonly outcomes: 'transaction_result_xdr_when_indexed';
-	};
-	readonly filters: PublicExplorerOperationFilters;
-	readonly generatedAt?: string;
-	readonly limit?: number;
-	readonly records: readonly PublicExplorerOperation[];
-	readonly source: 'horizon' | 'postgres_canonical';
 	readonly truncated: boolean;
 }
 
