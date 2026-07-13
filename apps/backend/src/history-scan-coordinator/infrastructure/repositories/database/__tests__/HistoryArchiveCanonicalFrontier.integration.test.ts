@@ -318,7 +318,7 @@ describe('canonical full-history archive frontier', () => {
 		]);
 	});
 
-	it('claims canonical proof work before older ordinary frontier work', async () => {
+	it('claims canonical proof work on a reserved proof-priority slot', async () => {
 		const ordinaryRoot = object(
 			0,
 			'history-archive-state',
@@ -350,14 +350,25 @@ describe('canonical full-history archive frontier', () => {
 		canonical.dependencyReady = true;
 		canonical.executionDisposition = 'executable';
 		canonical.executionReason = 'canonical-frontier-reserve';
+		const occupied = object(
+			2,
+			'checkpoint-state',
+			'checkpoint-state:0000007f',
+			127,
+			'scanning'
+		);
 
 		await dataSource
 			.getRepository(HistoryArchiveObject)
-			.save([ordinaryRoot, ordinary, canonicalRoot, canonical]);
-		await dataSource.query(`
+			.save([ordinaryRoot, ordinary, canonicalRoot, canonical, occupied]);
+		await dataSource.query(
+			`
 			update "history_archive_object_claim_slot"
-			set "objectRemoteId" = null, "claimedAt" = null
-		`);
+			set "objectRemoteId" = case when slot = 0 then $1::uuid else null end,
+				"claimedAt" = case when slot = 0 then now() else null end
+		`,
+			[occupied.remoteId]
+		);
 
 		const claimed = await repository.claimNextObject([
 			'checkpoint-state',

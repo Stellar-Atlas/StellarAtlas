@@ -194,7 +194,7 @@ export const materializeCanonicalFrontierDependenciesSql = `
 `;
 
 export const admitCanonicalFrontierSql = `
-	with ${canonicalRuntimeTargetCtes}, network_roots as materialized (
+	with ${canonicalRuntimeTargetCtes}, runtime_archive_roots as materialized (
 		select state."archiveUrlIdentity", target.checkpoint_ledger,
 			target.target_lane,
 			root."lastClaimedAt",
@@ -214,12 +214,39 @@ export const admitCanonicalFrontierSql = `
 			on root."archiveUrlIdentity" = state."archiveUrlIdentity"
 			and root."objectType" = 'history-archive-state'
 			and root."objectKey" = 'root'
+		left join "history_archive_checkpoint_proof" proof
+			on proof."archiveUrlIdentity" = state."archiveUrlIdentity"
+			and proof."checkpointLedger" = target.checkpoint_ledger
+	), pending_target_checkpoint_objects as materialized (
+		select runtime_root."archiveUrlIdentity",
+			runtime_root."lastClaimedAt", runtime_root.proof_progress,
+			runtime_root.target_lane,
+			'checkpoint-state'::text as object_type,
+			runtime_root.checkpoint_ledger as object_checkpoint_ledger,
+			checkpoint."objectKey" as object_key, -2 as object_priority
+		from runtime_archive_roots runtime_root
 		join "history_archive_object_queue" checkpoint
-			on checkpoint."archiveUrlIdentity" = state."archiveUrlIdentity"
+			on checkpoint."archiveUrlIdentity" =
+				runtime_root."archiveUrlIdentity"
 			and checkpoint."objectType" = 'checkpoint-state'
 			and checkpoint."objectKey" = 'checkpoint-state:' ||
-				lpad(to_hex(target.checkpoint_ledger), 8, '0')
-			and checkpoint."checkpointLedger" = target.checkpoint_ledger
+				lpad(to_hex(runtime_root.checkpoint_ledger), 8, '0')
+			and checkpoint."checkpointLedger" =
+				runtime_root.checkpoint_ledger
+			and checkpoint.status = 'pending'
+			and checkpoint."executionReason" is distinct from
+				'canonical-proof-revalidation'
+	), network_roots as materialized (
+		select runtime_root.*
+		from runtime_archive_roots runtime_root
+		join "history_archive_object_queue" checkpoint
+			on checkpoint."archiveUrlIdentity" =
+				runtime_root."archiveUrlIdentity"
+			and checkpoint."objectType" = 'checkpoint-state'
+			and checkpoint."objectKey" = 'checkpoint-state:' ||
+				lpad(to_hex(runtime_root.checkpoint_ledger), 8, '0')
+			and checkpoint."checkpointLedger" =
+				runtime_root.checkpoint_ledger
 			and (
 				checkpoint.status = 'verified'
 				or (
@@ -228,9 +255,6 @@ export const admitCanonicalFrontierSql = `
 						'canonical-proof-revalidation'
 				)
 			)
-		left join "history_archive_checkpoint_proof" proof
-			on proof."archiveUrlIdentity" = state."archiveUrlIdentity"
-			and proof."checkpointLedger" = target.checkpoint_ledger
 	), ${canonicalCategoryAdmissionCteSql}, bucket_objects as materialized (
 		select network_root."archiveUrlIdentity",
 			network_root."lastClaimedAt", network_root.proof_progress,
@@ -245,6 +269,8 @@ export const admitCanonicalFrontierSql = `
 				network_root."archiveUrlIdentity"
 			and dependency."checkpointLedger" = network_root.checkpoint_ledger
 	), desired_objects as materialized (
+		select * from pending_target_checkpoint_objects
+		union all
 		select * from category_objects
 		union all
 		select * from bucket_objects
@@ -346,7 +372,12 @@ export const admitCanonicalFrontierSql = `
 		where protected."archiveUrlIdentity" is null
 			and candidate."executionReason" is distinct from
 				'canonical-frontier-reserve'
-		order by candidate.id, desired.object_priority, desired.target_lane
+		order by candidate.id, desired.object_priority,
+			case desired.target_lane
+				when 'forward' then 0
+				when 'historical' then 1
+				else 2
+			end
 	), root_ranked as materialized (
 		select candidates.*,
 			row_number() over (
