@@ -3,8 +3,14 @@ import { mock } from 'jest-mock-extended';
 import type { ExceptionLogger } from '@core/services/ExceptionLogger.js';
 import NodeMeasurement from '@network-scan/domain/node/NodeMeasurement.js';
 import { createDummyNode } from '@network-scan/domain/node/__fixtures__/createDummyNode.js';
-import type { NodeRepository } from '@network-scan/domain/node/NodeRepository.js';
+import type {
+	KnownNodePage,
+	NodeRepository
+} from '@network-scan/domain/node/NodeRepository.js';
+import Organization from '@network-scan/domain/organization/Organization.js';
+import { OrganizationId } from '@network-scan/domain/organization/OrganizationId.js';
 import type { OrganizationRepository } from '@network-scan/domain/organization/OrganizationRepository.js';
+import { OrganizationValidators } from '@network-scan/domain/organization/OrganizationValidators.js';
 import { NodeDTOService } from '@network-scan/services/NodeDTOService.js';
 import { createDummyNodeV1 } from '@network-scan/services/__fixtures__/createDummyNodeV1.js';
 import { GetKnownNodes } from '../GetKnownNodes.js';
@@ -26,19 +32,32 @@ describe('GetKnownNodes', () => {
 		const organizationRepository = mock<OrganizationRepository>();
 		const nodeDTOService = mock<NodeDTOService>();
 		const exceptionLogger = mock<ExceptionLogger>();
-		nodeRepository.findAllKnown.mockResolvedValue([activeNode, archivedNode]);
-		nodeRepository.findAllKnownIdentities.mockResolvedValue([
-			{
-				publicKey: activeNode.publicKey.value,
-				dateDiscovered: start,
-				lastMeasurementAt: start
-			},
-			{
-				publicKey: archivedNode.publicKey.value,
-				dateDiscovered: start,
-				lastMeasurementAt: null
-			}
-		]);
+		nodeRepository.findKnownPage.mockResolvedValue({
+			items: [
+				{
+					identity: {
+						publicKey: activeNode.publicKey.value,
+						dateDiscovered: start,
+						lastMeasurementAt: start
+					},
+					node: activeNode
+				},
+				{
+					identity: {
+						publicKey: archivedNode.publicKey.value,
+						dateDiscovered: start,
+						lastMeasurementAt: null
+					},
+					node: archivedNode
+				}
+			],
+			scopeTotals: knownNodeScopeTotals({
+				'all-known': 2,
+				archived: 1,
+				'current-validator': 1
+			}),
+			total: 2
+		});
 		organizationRepository.findAllKnown.mockResolvedValue([]);
 		nodeDTOService.getNodeDTOs.mockResolvedValue(ok([activeDto, archivedDto]));
 
@@ -93,26 +112,46 @@ describe('GetKnownNodes', () => {
 			[activeNode, archivedNode],
 			[]
 		);
+		expect(nodeRepository.findKnownPage).toHaveBeenCalledWith({
+			limit: 100,
+			offset: 0,
+			organizationPublicKeys: [],
+			query: '',
+			scope: 'all-known'
+		});
+		expect(nodeRepository.findAllKnown).not.toHaveBeenCalled();
+		expect(nodeRepository.findAllKnownIdentities).not.toHaveBeenCalled();
 	});
 
 	it('filters and paginates explicit node scopes with exact totals', async () => {
 		const start = new Date('2020-01-01T00:00:00.000Z');
-		const validator = createDummyNode('127.0.0.1', 11625, start);
 		const listener = createDummyNode('127.0.0.2', 11625, start);
-		const validatorDto = createDummyNodeV1(validator.publicKey.value);
 		const listenerDto = createDummyNodeV1(listener.publicKey.value);
-		validatorDto.isValidator = true;
 		listenerDto.isValidator = false;
 		const nodeRepository = mock<NodeRepository>();
 		const organizationRepository = mock<OrganizationRepository>();
 		const nodeDTOService = mock<NodeDTOService>();
 		const exceptionLogger = mock<ExceptionLogger>();
-		nodeRepository.findAllKnown.mockResolvedValue([validator, listener]);
-		nodeRepository.findAllKnownIdentities.mockResolvedValue([]);
+		nodeRepository.findKnownPage.mockResolvedValue({
+			items: [
+				{
+					identity: {
+						publicKey: listener.publicKey.value,
+						dateDiscovered: start,
+						lastMeasurementAt: null
+					},
+					node: listener
+				}
+			],
+			scopeTotals: knownNodeScopeTotals({
+				'all-known': 2,
+				'current-validator': 1,
+				listener: 1
+			}),
+			total: 1
+		});
 		organizationRepository.findAllKnown.mockResolvedValue([]);
-		nodeDTOService.getNodeDTOs.mockResolvedValue(
-			ok([validatorDto, listenerDto])
-		);
+		nodeDTOService.getNodeDTOs.mockResolvedValue(ok([listenerDto]));
 
 		const result = await new GetKnownNodes(
 			nodeRepository,
@@ -139,6 +178,11 @@ describe('GetKnownNodes', () => {
 				scope: 'listener'
 			})
 		]);
+		expect(nodeDTOService.getNodeDTOs).toHaveBeenCalledWith(
+			expect.any(Date),
+			[listener],
+			[]
+		);
 	});
 
 	it('returns public-key-only records for known nodes without snapshots', async () => {
@@ -148,14 +192,23 @@ describe('GetKnownNodes', () => {
 		const organizationRepository = mock<OrganizationRepository>();
 		const nodeDTOService = mock<NodeDTOService>();
 		const exceptionLogger = mock<ExceptionLogger>();
-		nodeRepository.findAllKnown.mockResolvedValue([]);
-		nodeRepository.findAllKnownIdentities.mockResolvedValue([
-			{
-				publicKey: 'GA_SHELL_NODE',
-				dateDiscovered: discoveredAt,
-				lastMeasurementAt: measuredAt
-			}
-		]);
+		nodeRepository.findKnownPage.mockResolvedValue({
+			items: [
+				{
+					identity: {
+						publicKey: 'GA_SHELL_NODE',
+						dateDiscovered: discoveredAt,
+						lastMeasurementAt: measuredAt
+					},
+					node: null
+				}
+			],
+			scopeTotals: knownNodeScopeTotals({
+				'all-known': 1,
+				'public-key-only': 1
+			}),
+			total: 1
+		});
 		organizationRepository.findAllKnown.mockResolvedValue([]);
 		nodeDTOService.getNodeDTOs.mockResolvedValue(ok([]));
 
@@ -185,16 +238,108 @@ describe('GetKnownNodes', () => {
 				}
 			]
 		});
+		expect(nodeDTOService.getNodeDTOs).not.toHaveBeenCalled();
+	});
+
+	it('passes organization-id matches into repository-native filtering', async () => {
+		const start = new Date('2020-01-01T00:00:00.000Z');
+		const node = createDummyNode('127.0.0.1', 11625, start);
+		const organizationId = OrganizationId.create(
+			'org.example',
+			'ORG-EXAMPLE'
+		);
+		if (organizationId.isErr()) throw organizationId.error;
+		const organization = Organization.create(
+			organizationId.value,
+			'org.example',
+			start
+		);
+		organization.updateValidators(
+			new OrganizationValidators([node.publicKey]),
+			start
+		);
+		const nodeRepository = mock<NodeRepository>();
+		const organizationRepository = mock<OrganizationRepository>();
+		const nodeDTOService = mock<NodeDTOService>();
+		const exceptionLogger = mock<ExceptionLogger>();
+		organizationRepository.findAllKnown.mockResolvedValue([organization]);
+		nodeRepository.findKnownPage.mockResolvedValue({
+			items: [],
+			scopeTotals: knownNodeScopeTotals({ 'all-known': 1, listener: 1 }),
+			total: 0
+		});
+
+		const result = await new GetKnownNodes(
+			nodeRepository,
+			organizationRepository,
+			nodeDTOService,
+			exceptionLogger
+		).execute({ limit: 25, offset: 0, query: 'org-ex', scope: 'all-known' });
+
+		expect(result.isOk()).toBe(true);
+		expect(nodeRepository.findKnownPage).toHaveBeenCalledWith({
+			limit: 25,
+			offset: 0,
+			organizationPublicKeys: [node.publicKey.value],
+			query: 'org-ex',
+			scope: 'all-known'
+		});
+	});
+
+	it('keeps full hydration only for explicit inventory projection reads', async () => {
+		const start = new Date('2020-01-01T00:00:00.000Z');
+		const node = createDummyNode('127.0.0.1', 11625, start);
+		const nodeDto = createDummyNodeV1(node.publicKey.value);
+		const nodeRepository = mock<NodeRepository>();
+		const organizationRepository = mock<OrganizationRepository>();
+		const nodeDTOService = mock<NodeDTOService>();
+		const exceptionLogger = mock<ExceptionLogger>();
+		nodeRepository.findAllKnown.mockResolvedValue([node]);
+		nodeRepository.findAllKnownIdentities.mockResolvedValue([
+			{
+				publicKey: node.publicKey.value,
+				dateDiscovered: start,
+				lastMeasurementAt: null
+			}
+		]);
+		organizationRepository.findAllKnown.mockResolvedValue([]);
+		nodeDTOService.getNodeDTOs.mockResolvedValue(ok([nodeDto]));
+
+		const result = await new GetKnownNodes(
+			nodeRepository,
+			organizationRepository,
+			nodeDTOService,
+			exceptionLogger
+		).executeAll();
+
+		expect(result.isOk()).toBe(true);
+		expect(nodeRepository.findKnownPage).not.toHaveBeenCalled();
+		expect(nodeRepository.findAllKnown).toHaveBeenCalledTimes(1);
+		expect(nodeRepository.findAllKnownIdentities).toHaveBeenCalledTimes(1);
 	});
 
 	it('returns errors from the DTO service', async () => {
+		const start = new Date('2020-01-01T00:00:00.000Z');
+		const node = createDummyNode('127.0.0.1', 11625, start);
 		const nodeRepository = mock<NodeRepository>();
 		const organizationRepository = mock<OrganizationRepository>();
 		const nodeDTOService = mock<NodeDTOService>();
 		const exceptionLogger = mock<ExceptionLogger>();
 		const error = new Error('mapping failed');
-		nodeRepository.findAllKnown.mockResolvedValue([]);
-		nodeRepository.findAllKnownIdentities.mockResolvedValue([]);
+		nodeRepository.findKnownPage.mockResolvedValue({
+			items: [
+				{
+					identity: {
+						publicKey: node.publicKey.value,
+						dateDiscovered: start,
+						lastMeasurementAt: null
+					},
+					node
+				}
+			],
+			scopeTotals: knownNodeScopeTotals({ 'all-known': 1, listener: 1 }),
+			total: 1
+		});
 		organizationRepository.findAllKnown.mockResolvedValue([]);
 		nodeDTOService.getNodeDTOs.mockResolvedValue(err(error));
 
@@ -209,3 +354,16 @@ describe('GetKnownNodes', () => {
 		expect(exceptionLogger.captureException).toHaveBeenCalledWith(error);
 	});
 });
+
+function knownNodeScopeTotals(
+	overrides: Partial<KnownNodePage['scopeTotals']> = {}
+): KnownNodePage['scopeTotals'] {
+	return {
+		'all-known': 0,
+		archived: 0,
+		'current-validator': 0,
+		listener: 0,
+		'public-key-only': 0,
+		...overrides
+	};
+}

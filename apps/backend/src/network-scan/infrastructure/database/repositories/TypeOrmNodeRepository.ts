@@ -3,6 +3,8 @@ import { EntityManager, Equal, Repository, SelectQueryBuilder } from 'typeorm';
 import Node from '@network-scan/domain/node/Node.js';
 import type {
 	KnownNodeIdentity,
+	KnownNodePage,
+	KnownNodePageRequest,
 	NodeRepository
 } from '@network-scan/domain/node/NodeRepository.js';
 import PublicKey from '@network-scan/domain/node/PublicKey.js';
@@ -12,6 +14,7 @@ import { CustomError } from '@core/errors/CustomError.js';
 import { mapUnknownToError } from '@core/utilities/mapUnknownToError.js';
 import NodeSnapShot from '@network-scan/domain/node/NodeSnapShot.js';
 import { normalizeHistoryArchiveRootUrl } from 'shared';
+import { selectKnownNodePage } from './KnownNodePageQuery.js';
 
 export class NodePersistenceError extends CustomError {
 	constructor(publicKey: string, cause: Error) {
@@ -153,6 +156,39 @@ export class TypeOrmNodeRepository implements NodeRepository {
 		return await this.getNodesBaseQuery()
 			.orderBy('node."publicKeyValue"', 'ASC')
 			.getMany();
+	}
+
+	async findKnownPage(request: KnownNodePageRequest): Promise<KnownNodePage> {
+		const selection = await selectKnownNodePage(
+			this.baseNodeRepository.manager,
+			request
+		);
+		const publicKeys = selection.items
+			.filter((item) => item.hasSnapshot)
+			.map((item) => item.identity.publicKey);
+		const nodes =
+			publicKeys.length === 0
+				? []
+				: await this.getNodesBaseQuery()
+						.where('node."publicKeyValue" in (:...publicKeys)', { publicKeys })
+						.getMany();
+		const nodesByPublicKey = new Map(
+			nodes.map((node) => [node.publicKey.value, node])
+		);
+
+		return {
+			items: selection.items.map((item) => {
+				const node = nodesByPublicKey.get(item.identity.publicKey) ?? null;
+				if (item.hasSnapshot && node === null) {
+					throw new Error(
+						`Missing paged known node ${item.identity.publicKey}`
+					);
+				}
+				return { identity: item.identity, node };
+			}),
+			scopeTotals: selection.scopeTotals,
+			total: selection.total
+		};
 	}
 
 	async findKnownByPublicKeysOrHomeDomain(

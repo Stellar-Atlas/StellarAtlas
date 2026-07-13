@@ -4,6 +4,7 @@ import type { ExceptionLogger } from '@core/services/ExceptionLogger.js';
 import { mapUnknownToError } from '@core/utilities/mapUnknownToError.js';
 import type { NodeRepository } from '@network-scan/domain/node/NodeRepository.js';
 import type { OrganizationRepository } from '@network-scan/domain/organization/OrganizationRepository.js';
+import type Organization from '@network-scan/domain/organization/Organization.js';
 import { NETWORK_TYPES } from '@network-scan/infrastructure/di/di-types.js';
 import { NodeDTOService } from '@network-scan/services/NodeDTOService.js';
 import type {
@@ -21,6 +22,7 @@ import {
 	type KnownNetworkPageRequest,
 	type KnownNodeScope
 } from '../known-network-scope/KnownNetworkScope.js';
+import type { NodeV1 } from 'shared';
 
 @injectable()
 export class GetKnownNodes {
@@ -38,32 +40,69 @@ export class GetKnownNodes {
 	async execute(
 		request: KnownNetworkPageRequest<KnownNodeScope> = defaultKnownNodesRequest
 	): Promise<Result<KnownNodesDTO, Error>> {
-		const inventoryOrError = await this.executeAll();
-		if (inventoryOrError.isErr()) return err(inventoryOrError.error);
+		const generatedAt = new Date();
 
-		const inventory = inventoryOrError.value;
-		const scopedNodes =
-			request.scope === 'all-known'
-				? inventory.nodes
-				: inventory.nodes.filter((node) => node.scope === request.scope);
-		const matchingNodes = filterKnownNodes(scopedNodes, request.query);
-		const nodes = matchingNodes.slice(
-			request.offset,
-			request.offset + request.limit
-		);
+		try {
+			const organizations = await this.organizationRepository.findAllKnown();
+			const page = await this.nodeRepository.findKnownPage({
+				...request,
+				organizationPublicKeys: matchingOrganizationPublicKeys(
+					organizations,
+					request.query
+				)
+			});
+			const snapshotNodes = page.items.flatMap((item) =>
+				item.node === null ? [] : [item.node]
+			);
+			const nodeDtosByPublicKey = new Map<string, NodeV1>();
+			if (snapshotNodes.length > 0) {
+				const nodeDtosOrError = await this.nodeDTOService.getNodeDTOs(
+					generatedAt,
+					snapshotNodes,
+					organizations
+				);
+				if (nodeDtosOrError.isErr()) {
+					this.exceptionLogger.captureException(nodeDtosOrError.error);
+					return err(nodeDtosOrError.error);
+				}
+				for (const node of nodeDtosOrError.value) {
+					nodeDtosByPublicKey.set(node.publicKey, node);
+				}
+			}
+			const nodes = page.items.map((item) => {
+				if (item.node === null) {
+					return toKnownNodeListItemDTO(
+						toPublicKeyOnlyKnownNodeDTO(item.identity)
+					);
+				}
+				const nodeDto = nodeDtosByPublicKey.get(item.identity.publicKey);
+				if (nodeDto === undefined) {
+					throw new Error(
+						`Missing paged known node DTO for ${item.identity.publicKey}`
+					);
+				}
+				return toKnownNodeListItemDTO(toKnownNodeDTO(item.node, nodeDto));
+			});
 
-		return ok({
-			...inventory,
-			count: matchingNodes.length,
-			nodes,
-			page: {
-				hasMore: request.offset + nodes.length < matchingNodes.length,
-				limit: request.limit,
-				offset: request.offset,
-				total: matchingNodes.length
-			},
-			scope: request.scope
-		});
+			return ok({
+				generatedAt: generatedAt.toISOString(),
+				count: page.total,
+				nodes,
+				page: {
+					hasMore: request.offset + nodes.length < page.total,
+					limit: request.limit,
+					offset: request.offset,
+					total: page.total
+				},
+				scope: request.scope,
+				scopeTotals: page.scopeTotals,
+				source: 'postgres_canonical'
+			});
+		} catch (error) {
+			const mappedError = mapUnknownToError(error);
+			this.exceptionLogger.captureException(mappedError);
+			return err(mappedError);
+		}
 	}
 
 	async executeAll(): Promise<Result<KnownNodesInventoryDTO, Error>> {
@@ -122,23 +161,20 @@ export class GetKnownNodes {
 	}
 }
 
-function filterKnownNodes(
-	nodes: KnownNodesInventoryDTO['nodes'],
+function matchingOrganizationPublicKeys(
+	organizations: readonly Organization[],
 	query: string
-): KnownNodesInventoryDTO['nodes'] {
+): string[] {
 	const needle = query.trim().toLowerCase();
-	if (needle.length === 0) return nodes;
-	return nodes.filter((knownNode) => {
-		const node = knownNode.node;
-		return [
-			knownNode.publicKey,
-			node?.name,
-			node?.homeDomain,
-			node?.host,
-			node?.ip,
-			node?.organizationId
-		].some((value) => value?.toLowerCase().includes(needle));
-	});
+	if (needle.length === 0) return [];
+
+	return organizations
+		.filter((organization) =>
+			organization.organizationId.value.toLowerCase().includes(needle)
+		)
+		.flatMap((organization) =>
+			organization.validators.value.map((validator) => validator.value)
+		);
 }
 
 function countScopes(

@@ -7,6 +7,32 @@ export interface KnownNodeIdentity {
 	lastMeasurementAt: Date | null;
 }
 
+export type KnownNodeRepositoryScope =
+	| 'current-validator'
+	| 'listener'
+	| 'public-key-only'
+	| 'archived'
+	| 'all-known';
+
+export interface KnownNodePageRequest {
+	readonly limit: number;
+	readonly offset: number;
+	readonly organizationPublicKeys: readonly string[];
+	readonly query: string;
+	readonly scope: KnownNodeRepositoryScope;
+}
+
+export interface KnownNodePageItem {
+	readonly identity: KnownNodeIdentity;
+	readonly node: Node | null;
+}
+
+export interface KnownNodePage {
+	readonly items: KnownNodePageItem[];
+	readonly scopeTotals: Record<KnownNodeRepositoryScope, number>;
+	readonly total: number;
+}
+
 //active means that the node is not archived. i.e. snapshot endDate = SNAPSHOT_MAX_END_DATE
 export interface NodeRepository {
 	save(nodes: Node[], from: Date): Promise<Node[]>;
@@ -14,6 +40,7 @@ export interface NodeRepository {
 	findActive(): Promise<Node[]>;
 	findActiveByPublicKey(publicKeys: string[]): Promise<Node[]>;
 	findAllKnown(): Promise<Node[]>;
+	findKnownPage(request: KnownNodePageRequest): Promise<KnownNodePage>;
 	findKnownByPublicKeysOrHomeDomain(
 		publicKeys: string[],
 		homeDomain: string | null
