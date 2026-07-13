@@ -99,13 +99,27 @@ describe('BackfillFullHistoryOperations', () => {
 			transaction: readFeeBumpEtlFixture()
 		});
 		const empty = await seedLegacyBatch(203, { checkpointLedger: 63 });
+		const fixtures = [classic, feeBump, empty];
+		const selectedBatch = (
+			await repository.findUnindexedBatches(publicNetworkPassphrase, 1)
+		)[0];
+		const selected = fixtures.find(
+			(fixture) => fixture.input.batchId === selectedBatch?.batchId
+		);
+		if (selected === undefined) throw new Error('Expected one selected batch');
+		const timeoutFixture = [classic, feeBump].find(
+			(fixture) => fixture.input.batchId !== selected.input.batchId
+		);
+		if (timeoutFixture === undefined) {
+			throw new Error('Expected a separate timeout batch');
+		}
 		const immutableBefore = await immutableRows();
 
 		await dataSource.query(
 			`update "history_archive_checkpoint_proof"
-			 set "evaluatedAt" = "evaluatedAt" + interval '1 millisecond'
+			 set "proofVersion" = "proofVersion" + 1
 			 where id = $1`,
-			[feeBump.proofId]
+			[selected.proofId]
 		);
 		await expect(normalUseCase().execute(runInput(1))).rejects.toMatchObject({
 			reason: 'immutable-provenance-mismatch'
@@ -113,13 +127,13 @@ describe('BackfillFullHistoryOperations', () => {
 		await expect(coverageCount()).resolves.toBe(0);
 		await dataSource.query(
 			`update "history_archive_checkpoint_proof"
-			 set "evaluatedAt" = $1 where id = $2`,
-			[feeBump.input.proofEvaluatedAt, feeBump.proofId]
+			 set "proofVersion" = $1 where id = $2`,
+			[selected.input.proofVersion, selected.proofId]
 		);
 		await dataSource.transaction((manager) =>
 			storeCanonicalOperations(
 				manager,
-				feeBump.input,
+				selected.input,
 				hashNetworkPassphrase(publicNetworkPassphrase),
 				decoder.operationDecoderVersion
 			)
@@ -134,7 +148,7 @@ describe('BackfillFullHistoryOperations', () => {
 				});
 			let timeoutError: unknown;
 			try {
-				await timeoutRepository.storeOperations(classic.input);
+				await timeoutRepository.storeOperations(timeoutFixture.input);
 			} catch (error) {
 				timeoutError = error;
 			}
@@ -145,7 +159,7 @@ describe('BackfillFullHistoryOperations', () => {
 		} finally {
 			await removeSlowCoverageTrigger();
 		}
-		await expect(batchProgress(classic.input.batchId)).resolves.toEqual({
+		await expect(batchProgress(timeoutFixture.input.batchId)).resolves.toEqual({
 			coverageCount: 0,
 			operationCount: 0
 		});
@@ -190,9 +204,9 @@ describe('BackfillFullHistoryOperations', () => {
 		});
 
 		await expect(
-			repository.storeOperations(feeBump.input)
+			repository.storeOperations(selected.input)
 		).resolves.toMatchObject({
-			batchId: feeBump.input.batchId,
+			batchId: selected.input.batchId,
 			operationCount: 1,
 			replayed: true
 		});

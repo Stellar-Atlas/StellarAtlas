@@ -768,7 +768,7 @@
 		"/v1/explorer/operations": {
 			"get": {
 				"summary": "Search operations",
-				"description": "Returns bounded proof-gated canonical operation facts filtered by ledger, account, operation type, transaction hash, or close-time range. Execution outcomes remain unavailable until LedgerCloseMeta ingestion is active.",
+				"description": "Returns bounded proof-gated canonical operation facts filtered by ledger, account, operation type, transaction hash, or close-time range. Execution outcomes are included when the canonical batch has matching transaction-result XDR coverage; richer effects, events, and ledger-entry changes require LedgerCloseMeta ingestion.",
 				"tags": ["Explorer"],
 				"operationId": "getExplorerOperations",
 				"parameters": [

@@ -15,6 +15,7 @@ export interface HistoricalFullHistoryBackfillDTO {
 interface HistoricalBackfillRow {
 	readonly firstLedger: number | string;
 	readonly jobState: 'failed' | 'leased' | 'pending' | null;
+	readonly leaseActive: boolean | null;
 	readonly latestErrorCode: string | null;
 	readonly updatedAt: Date | string | null;
 }
@@ -29,11 +30,14 @@ export async function readHistoricalFullHistoryBackfillStatus(
 			select
 				watermark."first_ledger"::text as "firstLedger",
 				job.state as "jobState",
+				job."leaseActive" as "leaseActive",
 				job."last_error_code" as "latestErrorCode",
 				job."updated_at" as "updatedAt"
 			from "full_history_watermark" watermark
 			left join lateral (
-				select candidate.state, candidate."last_error_code",
+				select candidate.state,
+					candidate."lease_expires_at" > now() as "leaseActive",
+					candidate."last_error_code",
 					candidate."updated_at"
 				from "full_history_historical_backfill_job" candidate
 				where candidate."network_passphrase_hash" =
@@ -57,8 +61,13 @@ function mapHistoricalBackfill(
 ): HistoricalFullHistoryBackfillDTO {
 	const firstLedger = BigInt(row.firstLedger);
 	const failedJobs = row.jobState === 'failed' ? 1 : 0;
-	const pendingJobs = row.jobState === 'pending' ? 1 : 0;
-	const runningJobs = row.jobState === 'leased' ? 1 : 0;
+	const runningJobs =
+		row.jobState === 'leased' && row.leaseActive === true ? 1 : 0;
+	const pendingJobs =
+		row.jobState === 'pending' ||
+		(row.jobState === 'leased' && row.leaseActive !== true)
+			? 1
+			: 0;
 	const state: HistoricalFullHistoryBackfillDTO['state'] =
 		firstLedger === 1n
 			? 'complete'

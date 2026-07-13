@@ -5,6 +5,7 @@ import { FullHistoryCanonicalError } from '../../../domain/full-history/FullHist
 import {
 	assertBoundedText,
 	FullHistoryHash,
+	hashNetworkPassphrase,
 	type FullHistoryLedgerSequence
 } from '../../../domain/full-history/FullHistoryCanonicalTypes.js';
 import {
@@ -58,10 +59,14 @@ export async function assertCanonicalOperationResults(
 	resultDecoderVersion = input.operationResultDecoderVersion
 ): Promise<void> {
 	assertBoundedText(resultDecoderVersion, 'resultDecoderVersion', 128);
-	const rows = await readOperationResults(manager, input.batchId);
+	const resultsMatch = await storedOperationResultsMatch(
+		manager,
+		hashNetworkPassphrase(input.networkPassphrase),
+		input.operationResults
+	);
 	const coverage = await readOperationResultCoverage(manager, input.batchId);
 	if (
-		!operationResultsMatch(rows, input.operationResults) ||
+		!resultsMatch ||
 		!operationResultCoverageMatches(coverage, input, resultDecoderVersion)
 	) {
 		throw new FullHistoryCanonicalError(
@@ -128,10 +133,33 @@ async function insertOperationResultCoverage(
 	);
 }
 
-async function readOperationResults(
+async function storedOperationResultsMatch(
 	manager: EntityManager,
-	batchId: string
+	networkHash: FullHistoryHash,
+	expected: readonly FullHistoryOperationResultInput[]
+): Promise<boolean> {
+	for (const chunk of chunkFullHistoryValues(
+		expected,
+		operationResultChunkSize
+	)) {
+		const rows = await readOperationResultChunk(manager, networkHash, chunk);
+		if (!operationResultsMatch(rows, chunk)) return false;
+	}
+	return true;
+}
+
+async function readOperationResultChunk(
+	manager: EntityManager,
+	networkHash: FullHistoryHash,
+	expected: readonly FullHistoryOperationResultInput[]
 ): Promise<OperationResultRow[]> {
+	const identities = buildFullHistorySqlValues(
+		expected.map((result) => [
+			networkHash.toBuffer(),
+			result.transactionHash.toBuffer(),
+			result.operationIndex
+		])
+	);
 	return manager.query(
 		`
 			select result."transaction_hash" as "transactionHash",
@@ -141,16 +169,12 @@ async function readOperationResults(
 					as "operationSpecificResultCode",
 				result."fact_scope" as "factScope"
 			from "full_history_operation_result" result
-			join "full_history_operation" operation
-				on operation."network_passphrase_hash" =
-					result."network_passphrase_hash"
-				and operation."transaction_hash" = result."transaction_hash"
-				and operation."operation_index" = result."operation_index"
-			where operation."batch_id" = $1
-			order by operation."ledger_sequence", operation."transaction_index",
-				operation."operation_index"
+			where (
+				result."network_passphrase_hash", result."transaction_hash",
+				result."operation_index"
+			) in (${identities.placeholders})
 		`,
-		[batchId]
+		identities.parameters
 	);
 }
 

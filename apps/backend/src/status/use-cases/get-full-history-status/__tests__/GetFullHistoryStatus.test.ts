@@ -24,6 +24,17 @@ describe('GetFullHistoryStatus', () => {
 		parsedLedgerHeadersMock = mock<ParsedLedgerHeaderRepository>();
 		canonicalHistoryMock = mock<FullHistoryCanonicalRepository>();
 		canonicalHistoryMock.getCoverage.mockResolvedValue(null);
+		canonicalHistoryMock.getOperationCoverage.mockResolvedValue({
+			canonicalBatches: 0,
+			complete: false,
+			firstIndexedLedger: null,
+			firstOutcomeIndexedLedger: null,
+			indexedBatches: 0,
+			lastIndexedLedger: null,
+			lastOutcomeIndexedLedger: null,
+			outcomeIndexedBatches: 0,
+			outcomesComplete: false
+		});
 		canonicalPromotionMock = mock<FullHistoryPromotionRuntimeRepository>();
 		canonicalPromotionMock.find.mockResolvedValue(null);
 		configMock = mock<Config>();
@@ -99,6 +110,17 @@ describe('GetFullHistoryStatus', () => {
 			transactionResultCount: 52000,
 			updatedAt: new Date('2026-07-06T11:59:30.000Z')
 		});
+		canonicalHistoryMock.getOperationCoverage.mockResolvedValue({
+			canonicalBatches: 2,
+			complete: true,
+			firstIndexedLedger: fullHistoryLedgerSequence(63386240n),
+			firstOutcomeIndexedLedger: fullHistoryLedgerSequence(63386240n),
+			indexedBatches: 2,
+			lastIndexedLedger: fullHistoryLedgerSequence(63386367n),
+			lastOutcomeIndexedLedger: fullHistoryLedgerSequence(63386367n),
+			outcomeIndexedBatches: 2,
+			outcomesComplete: true
+		});
 		canonicalPromotionMock.find.mockResolvedValue({
 			checkpointLedger: 63386431,
 			heartbeatAt: new Date('2026-07-06T11:59:55.000Z'),
@@ -156,7 +178,7 @@ describe('GetFullHistoryStatus', () => {
 			},
 			localAssetIndexReady: false,
 			localContractIndexReady: false,
-			localOperationIndexReady: false,
+			localOperationIndexReady: true,
 			localTransactionIndexReady: true,
 			mode: 'canonical_checkpoint_index',
 			status: 'ok'

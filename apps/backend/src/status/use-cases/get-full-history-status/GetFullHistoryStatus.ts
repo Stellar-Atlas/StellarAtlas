@@ -8,6 +8,7 @@ import type {
 	FullHistoryCanonicalCoverageView,
 	FullHistoryCanonicalRepository
 } from '@history-scan-coordinator/domain/full-history/FullHistoryCanonicalRepository.js';
+import type { FullHistoryOperationCoverage } from '@history-scan-coordinator/domain/full-history/FullHistoryCanonicalOperation.js';
 import type {
 	FullHistoryPromotionRuntimeRepository,
 	FullHistoryPromotionRuntimeView
@@ -165,8 +166,11 @@ export class GetFullHistoryStatus {
 
 	async executeFullHistory(): Promise<Result<FullHistoryStatusDTO, Error>> {
 		try {
-			const [canonical, promotion] = await Promise.all([
+			const [canonical, operationCoverage, promotion] = await Promise.all([
 				this.canonicalHistory.getCoverage(
+					this.config.networkConfig.networkPassphrase
+				),
+				this.canonicalHistory.getOperationCoverage(
 					this.config.networkConfig.networkPassphrase
 				),
 				this.canonicalPromotion.find(
@@ -179,7 +183,14 @@ export class GetFullHistoryStatus {
 						this.dataSource,
 						this.config.networkConfig.networkPassphrase
 					);
-				return ok(mapCanonicalStatus(canonical, promotion, historicalBackfill));
+				return ok(
+					mapCanonicalStatus(
+						canonical,
+						operationCoverage,
+						promotion,
+						historicalBackfill
+					)
+				);
 			}
 			return ok(
 				this.mapParsedHeaders(
@@ -194,15 +205,19 @@ export class GetFullHistoryStatus {
 
 	async executeIngestion(): Promise<Result<IngestionStatusDTO, Error>> {
 		try {
-			const [canonical, promotion, queue] = await Promise.all([
-				this.canonicalHistory.getCoverage(
-					this.config.networkConfig.networkPassphrase
-				),
-				this.canonicalPromotion.find(
-					this.config.networkConfig.networkPassphrase
-				),
-				this.readQueueSummary()
-			]);
+			const [canonical, operationCoverage, promotion, queue] =
+				await Promise.all([
+					this.canonicalHistory.getCoverage(
+						this.config.networkConfig.networkPassphrase
+					),
+					this.canonicalHistory.getOperationCoverage(
+						this.config.networkConfig.networkPassphrase
+					),
+					this.canonicalPromotion.find(
+						this.config.networkConfig.networkPassphrase
+					),
+					this.readQueueSummary()
+				]);
 			const status =
 				canonical === null
 					? this.mapParsedHeaders(
@@ -211,6 +226,7 @@ export class GetFullHistoryStatus {
 						)
 					: mapCanonicalStatus(
 							canonical,
+							operationCoverage,
 							promotion,
 							await readHistoricalFullHistoryBackfillStatus(
 								this.dataSource,
@@ -369,6 +385,7 @@ export class GetFullHistoryStatus {
 
 function mapCanonicalStatus(
 	coverage: FullHistoryCanonicalCoverageView,
+	operationCoverage: FullHistoryOperationCoverage,
 	promotion: FullHistoryPromotionRuntimeView | null,
 	historicalBackfill: HistoricalFullHistoryBackfillDTO | null
 ): FullHistoryStatusDTO {
@@ -382,7 +399,8 @@ function mapCanonicalStatus(
 		latestParsedLedger: null,
 		localAssetIndexReady: false,
 		localContractIndexReady: false,
-		localOperationIndexReady: false,
+		localOperationIndexReady:
+			operationCoverage.complete && operationCoverage.outcomesComplete,
 		localTransactionIndexReady:
 			coverage.transactionCount > 0 &&
 			coverage.transactionCount === coverage.transactionResultCount,

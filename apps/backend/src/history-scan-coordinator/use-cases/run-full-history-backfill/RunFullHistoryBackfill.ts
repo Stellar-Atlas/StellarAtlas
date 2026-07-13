@@ -11,6 +11,7 @@ import { nextHistoricalBackfillCheckpoint } from '../../domain/full-history-back
 import type { FullHistoryPromotionTarget } from '../../domain/full-history-promotion/FullHistoryCheckpointCandidate.js';
 import { FullHistoryPromotionError } from '../../domain/full-history-promotion/FullHistoryPromotionError.js';
 import { assertInteger } from '../../domain/full-history/FullHistoryCanonicalTypes.js';
+import { runWithFullHistoryBackfillLease } from './FullHistoryBackfillLeaseKeeper.js';
 
 export interface FullHistoryHistoricalCheckpointPromoter {
 	promote(
@@ -100,7 +101,11 @@ export class RunFullHistoryBackfill {
 				);
 			}
 
-			const rejected = await this.promoteFromTargets(targets);
+			const rejected = await this.promoteFromTargets(
+				targets,
+				owner,
+				leaseDurationMs
+			);
 			if (rejected !== null) {
 				return this.retryAfterEvidenceRejection(
 					owner,
@@ -111,20 +116,23 @@ export class RunFullHistoryBackfill {
 				);
 			}
 			processedCheckpoints += 1;
-			if (step < job.range.checkpointCount - 1) {
-				await this.repository.renew(owner, leaseDurationMs);
-			}
 		}
 		throw new Error('Historical job exceeded its bounded checkpoint range');
 	}
 
 	private async promoteFromTargets(
-		targets: readonly FullHistoryPromotionTarget[]
+		targets: readonly FullHistoryPromotionTarget[],
+		owner: OwnedFullHistoryHistoricalBackfillInput,
+		leaseDurationMs: number
 	): Promise<FullHistoryPromotionError | null> {
 		let rejected: FullHistoryPromotionError | null = null;
 		for (const target of targets) {
 			try {
-				await this.promoter.promote(target);
+				await runWithFullHistoryBackfillLease({
+					leaseDurationMs,
+					renew: () => this.repository.renew(owner, leaseDurationMs),
+					work: () => this.promoter.promote(target)
+				});
 				return null;
 			} catch (error) {
 				if (!(error instanceof FullHistoryPromotionError)) throw error;
