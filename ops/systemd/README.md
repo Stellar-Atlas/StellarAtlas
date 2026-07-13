@@ -124,19 +124,31 @@ systemctl restart stellaratlas-frontend-v4.service
 Use `systemctl restart stellaratlas.target` only when an explicit full-stack
 maintenance window allows the public origin to stop.
 
-Production frontend deploy:
+Production frontend deploy uses only `.next-slot-a` and `.next-slot-b`. The
+staging build command refuses if staging is still running, repoints
+`.next-staging` to the slot not used by production, invalidates its old
+`BUILD_ID`, and builds there. Promotion stops if production is still running or
+the staging slot has no complete `BUILD_ID`, then atomically repoints
+`.next-production`.
 
 ```bash
-pnpm build:frontend-v4
-systemctl restart stellaratlas-frontend-v4.service
+systemctl stop stellaratlas-frontend-v4-staging.service
+pnpm build:frontend-v4:staging
+systemctl start stellaratlas-frontend-v4-staging.service
+systemctl status stellaratlas-frontend-v4-staging.service --no-pager
+# Verify staging on 127.0.0.1:3114 before promotion.
+systemctl stop stellaratlas-frontend-v4.service
+pnpm --filter frontend-v4 run release:promote-staging
+systemctl start stellaratlas-frontend-v4.service
 systemctl status stellaratlas-frontend-v4.service --no-pager
 ```
 
-Staging frontend deploy:
+To refresh staging without promoting it:
 
 ```bash
+systemctl stop stellaratlas-frontend-v4-staging.service
 pnpm build:frontend-v4:staging
-systemctl restart stellaratlas-frontend-v4-staging.service
+systemctl start stellaratlas-frontend-v4-staging.service
 systemctl status stellaratlas-frontend-v4-staging.service --no-pager
 ```
 
