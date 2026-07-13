@@ -16,7 +16,6 @@ import {
 import { HistoryArchiveWorkerStatusRow } from '../../database/entities/HistoryArchiveWorkerStatusRow.js';
 
 export const historyArchiveWorkerRegistryMaxRows = 128;
-export const historyArchiveWorkerRegistryRetentionMs = 24 * 60 * 60 * 1000;
 export const historyArchiveWorkerRegistryLockTimeoutMs = 2_000;
 export const historyArchiveWorkerRegistryStatementTimeoutMs = 5_000;
 
@@ -83,10 +82,14 @@ export const historyArchiveWorkerStatusUpsertSql = `
 `;
 
 export const historyArchiveWorkerStatusPruneSql = `
-	with ranked as (
+	with ranked as materialized (
 		select
 			"id",
 			"heartbeatAt",
+			"processStartedAt",
+			"processGeneration",
+			"processId",
+			"sequence",
 			row_number() over (
 				order by
 					"heartbeatAt" desc,
@@ -100,6 +103,11 @@ export const historyArchiveWorkerStatusPruneSql = `
 	delete from "history_archive_worker_status" as registry
 	using ranked
 	where registry."id" = ranked."id"
+		and registry."heartbeatAt" = ranked."heartbeatAt"
+		and registry."processStartedAt" = ranked."processStartedAt"
+		and registry."processGeneration" = ranked."processGeneration"
+		and registry."processId" = ranked."processId"
+		and registry."sequence" = ranked."sequence"
 		and (ranked."heartbeatAt" < $1 or ranked.ordinal > $2)
 `;
 
@@ -162,7 +170,6 @@ export class TypeOrmHistoryArchiveWorkerStatusRepository implements HistoryArchi
 		const currentObject = report.currentObject;
 		await this.repository.manager.transaction(async (manager) => {
 			await setWorkerRegistryTimeouts(manager);
-			await manager.query(historyArchiveWorkerStatusRegistryLockSql);
 			await manager.query(historyArchiveWorkerStatusUpsertSql, [
 				report.workerId,
 				report.processId,
@@ -179,13 +186,6 @@ export class TypeOrmHistoryArchiveWorkerStatusRepository implements HistoryArchi
 				heartbeatAt,
 				encodeHistoryArchiveWorkerOutcome(report.lastOutcome),
 				report.lastOutcomeAt === null ? null : new Date(report.lastOutcomeAt)
-			]);
-
-			await manager.query(historyArchiveWorkerStatusPruneSql, [
-				new Date(
-					heartbeatAt.getTime() - historyArchiveWorkerRegistryRetentionMs
-				),
-				historyArchiveWorkerRegistryMaxRows
 			]);
 		});
 	}

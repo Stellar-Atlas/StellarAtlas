@@ -3,7 +3,6 @@ import type { EntityManager, Repository } from 'typeorm';
 import { HistoryArchiveWorkerStatusRow } from '../../../database/entities/HistoryArchiveWorkerStatusRow.js';
 import {
 	historyArchiveWorkerRegistryMaxRows,
-	historyArchiveWorkerRegistryRetentionMs,
 	historyArchiveWorkerRegistryLockTimeoutMs,
 	historyArchiveWorkerRegistryStatementTimeoutMs,
 	historyArchiveWorkerStatusFindRecentSql,
@@ -15,7 +14,7 @@ import {
 } from '../TypeOrmHistoryArchiveWorkerStatusRepository.js';
 
 describe('TypeOrmHistoryArchiveWorkerStatusRepository', () => {
-	it('upserts and prunes worker rows in one transaction', async () => {
+	it('upserts worker rows without serializing heartbeat writers', async () => {
 		const query = jest.fn().mockResolvedValue([]);
 		const repository = createRepository(query);
 		const heartbeatAt = new Date('2026-07-10T12:00:00.000Z');
@@ -32,10 +31,6 @@ describe('TypeOrmHistoryArchiveWorkerStatusRepository', () => {
 		);
 		expect(query).toHaveBeenNthCalledWith(
 			2,
-			historyArchiveWorkerStatusRegistryLockSql
-		);
-		expect(query).toHaveBeenNthCalledWith(
-			3,
 			historyArchiveWorkerStatusUpsertSql,
 			expect.arrayContaining([
 				'object-host-0-0',
@@ -58,16 +53,7 @@ describe('TypeOrmHistoryArchiveWorkerStatusRepository', () => {
 		expect(historyArchiveWorkerStatusUpsertSql).toContain(
 			'registry."processGeneration" < excluded."processGeneration"'
 		);
-		expect(query).toHaveBeenNthCalledWith(
-			4,
-			historyArchiveWorkerStatusPruneSql,
-			[
-				new Date(
-					heartbeatAt.getTime() - historyArchiveWorkerRegistryRetentionMs
-				),
-				historyArchiveWorkerRegistryMaxRows
-			]
-		);
+		expect(query).toHaveBeenCalledTimes(2);
 	});
 
 	it('maps compact database rows into typed worker state', async () => {
@@ -142,6 +128,18 @@ describe('TypeOrmHistoryArchiveWorkerStatusRepository', () => {
 		);
 		expect(historyArchiveWorkerStatusFindRecentSql).toContain(
 			'"sequence" desc'
+		);
+		expect(historyArchiveWorkerStatusPruneSql).toContain(
+			'registry."processStartedAt" = ranked."processStartedAt"'
+		);
+		expect(historyArchiveWorkerStatusPruneSql).toContain(
+			'registry."processGeneration" = ranked."processGeneration"'
+		);
+		expect(historyArchiveWorkerStatusPruneSql).toContain(
+			'registry."processId" = ranked."processId"'
+		);
+		expect(historyArchiveWorkerStatusPruneSql).toContain(
+			'registry."sequence" = ranked."sequence"'
 		);
 	});
 });

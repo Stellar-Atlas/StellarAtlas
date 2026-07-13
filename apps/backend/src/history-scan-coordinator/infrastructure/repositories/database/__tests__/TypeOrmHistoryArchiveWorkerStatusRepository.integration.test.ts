@@ -7,7 +7,6 @@ import {
 import { HistoryArchiveWorkerStatusRow } from '../../../database/entities/HistoryArchiveWorkerStatusRow.js';
 import { HistoryArchiveWorkerStatusMigration1784790000000 } from '../../../database/migrations/1784790000000-HistoryArchiveWorkerStatusMigration.js';
 import {
-	historyArchiveWorkerRegistryLockTimeoutMs,
 	historyArchiveWorkerStatusRegistryLockSql,
 	TypeOrmHistoryArchiveWorkerStatusRepository
 } from '../TypeOrmHistoryArchiveWorkerStatusRepository.js';
@@ -127,7 +126,7 @@ describe('TypeOrmHistoryArchiveWorkerStatusRepository ordering', () => {
 		await expect(countRows()).resolves.toBe(0);
 	});
 
-	it('enforces the registry cap atomically across concurrent reporters', async () => {
+	it('caps concurrent reporter rows during registry reads', async () => {
 		const heartbeatAt = new Date('2026-07-10T12:00:00.000Z');
 		await Promise.all(
 			Array.from({ length: 160 }, (_, index) =>
@@ -141,28 +140,78 @@ describe('TypeOrmHistoryArchiveWorkerStatusRepository ordering', () => {
 			)
 		);
 
-		await expect(countRows()).resolves.toBe(128);
+		await expect(countRows()).resolves.toBe(160);
 		await expect(readRows()).resolves.toHaveLength(128);
+		await expect(countRows()).resolves.toBe(128);
 	});
 
-	it('bounds advisory-lock contention and accepts the retry after release', async () => {
+	it('does not serialize worker reports behind registry maintenance', async () => {
 		const blocker = dataSource.createQueryRunner();
 		await blocker.connect();
 		await blocker.startTransaction();
 		await blocker.query(historyArchiveWorkerStatusRegistryLockSql);
-		const startedAt = Date.now();
 
 		try {
 			await expect(
 				repository.report(createReport(), new Date())
-			).rejects.toThrow(/lock timeout/i);
-			expect(Date.now() - startedAt).toBeLessThan(
-				historyArchiveWorkerRegistryLockTimeoutMs + 4_000
-			);
-			await blocker.rollbackTransaction();
-			await expect(
-				repository.report(createReport(), new Date())
 			).resolves.toBeUndefined();
+			await expect(
+				repository.findRecent({
+					limit: 128,
+					observedAfter: new Date('2026-07-10T11:45:00.000Z'),
+					pruneBefore: new Date('2026-07-09T12:00:00.000Z')
+				})
+			).rejects.toThrow(/lock timeout/i);
+			await blocker.rollbackTransaction();
+			await expect(readRows()).resolves.toHaveLength(1);
+		} finally {
+			if (blocker.isTransactionActive) await blocker.rollbackTransaction();
+			await blocker.release();
+		}
+	});
+
+	it('preserves a newer same-time report while maintenance is waiting', async () => {
+		const heartbeatAt = new Date('2026-07-10T12:00:00.000Z');
+		const targetWorkerId = 'object-host-128-0';
+		await Promise.all(
+			Array.from({ length: 129 }, (_, index) =>
+				repository.report(
+					createReport({
+						processId: indexedUuid(index),
+						sequence: 1,
+						workerId: `object-host-${index.toString().padStart(3, '0')}-0`
+					}),
+					heartbeatAt
+				)
+			)
+		);
+
+		const blocker = dataSource.createQueryRunner();
+		await blocker.connect();
+		await blocker.startTransaction();
+		await blocker.query(
+			`select "id" from "history_archive_worker_status"
+			 where "workerId" = $1 for update`,
+			[targetWorkerId]
+		);
+
+		const maintenance = readRows();
+		try {
+			await waitForPruneToWaitOnRowLock(dataSource);
+			await blocker.query(
+				`update "history_archive_worker_status"
+				 set "sequence" = 2 where "workerId" = $1`,
+				[targetWorkerId]
+			);
+			await blocker.commitTransaction();
+			await expect(maintenance).resolves.toEqual(
+				expect.arrayContaining([
+					expect.objectContaining({ sequence: 2, workerId: targetWorkerId })
+				])
+			);
+			await expect(countRows()).resolves.toBe(129);
+			await expect(readRows()).resolves.toHaveLength(128);
+			await expect(countRows()).resolves.toBe(128);
 		} finally {
 			if (blocker.isTransactionActive) await blocker.rollbackTransaction();
 			await blocker.release();
@@ -211,4 +260,22 @@ function createReport(
 
 function indexedUuid(index: number): string {
 	return `00000000-0000-4000-8000-${index.toString(16).padStart(12, '0')}`;
+}
+
+async function waitForPruneToWaitOnRowLock(
+	dataSource: DataSource
+): Promise<void> {
+	for (let attempt = 0; attempt < 100; attempt += 1) {
+		const [row] = (await dataSource.query(`
+			select count(*)::int as count
+			from pg_stat_activity
+			where datname = current_database()
+				and wait_event_type = 'Lock'
+				and query like '%delete from "history_archive_worker_status" as registry%'
+		`)) as readonly { readonly count: number }[];
+		if ((row?.count ?? 0) > 0) return;
+		await new Promise<void>((resolve) => setTimeout(resolve, 10));
+	}
+
+	throw new Error('Registry maintenance did not wait on the locked worker row');
 }
