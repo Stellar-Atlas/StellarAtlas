@@ -11,6 +11,7 @@ import {
 } from '@domain/known-archive-evidence';
 import { formatDateTime, formatInteger } from '@format/formatters';
 import {
+	ArchiveSourceLink,
 	EmptyEvidenceRow,
 	EvidenceTableRegion,
 	ExternalEvidenceLink,
@@ -219,9 +220,9 @@ export function ArchiveActivityTable({
 								<small>{event.objectKey}</small>
 							</td>
 							<td data-label="Archive source">
-								<ExternalEvidenceLink href={event.objectUrl}>
+								<ArchiveSourceLink archiveUrl={event.archiveUrl}>
 									{formatArchiveRoot(event.archiveUrl)}
-								</ExternalEvidenceLink>
+								</ArchiveSourceLink>
 							</td>
 							<td data-label="Stage">{formatWorkerStage(event.workerStage)}</td>
 							<td data-label="Time">{formatDateTime(event.createdAt)}</td>
@@ -315,9 +316,9 @@ export function ArchiveRootSummaryTable({
 					{roots.map((root) => (
 						<tr key={root.archiveUrlIdentity}>
 							<td data-label="Archive source">
-								<ExternalEvidenceLink href={root.archiveUrl}>
+								<ArchiveSourceLink archiveUrl={root.archiveUrl}>
 									{formatArchiveRoot(root.archiveUrl)}
-								</ExternalEvidenceLink>
+								</ArchiveSourceLink>
 							</td>
 							<td data-label="Nodes">
 								{formatInteger(root.nodePublicKeys.length)}

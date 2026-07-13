@@ -6,9 +6,15 @@ import type {
 	PublicHistoryArchiveObject,
 	PublicKnownNodeArchiveEvidence
 } from '../../../api/archive-evidence-types';
+import { getArchiveScanDetailPath } from '../../../domain/archive-scan-routes';
 import { KnownArchiveEvidence } from '../known-archive-evidence';
-import { RepairDownloadTable } from '../known-archive-evidence-tables';
 import {
+	ArchiveActivityTable,
+	ArchiveRootSummaryTable,
+	RepairDownloadTable
+} from '../known-archive-evidence-tables';
+import {
+	ObjectSource,
 	VerifiedCopyLinks,
 	formatEventType,
 	formatObjectStatusDetail
@@ -74,6 +80,34 @@ describe('known archive evidence UI', () => {
 		expect(markup).toContain('Not a verified replacement');
 		expect(markup).toContain('Verified organization replacements');
 		expect(markup).toContain('Download verified file from');
+	});
+
+	it('routes archive-source labels to StellarAtlas archive detail', () => {
+		const evidence = createEvidence();
+		const object = evidence.objectPage.objects[0];
+		if (object === undefined) throw new Error('Expected archive object');
+		const archivePath = getArchiveScanDetailPath(object.archiveUrl);
+		const sourceMarkup = renderToStaticMarkup(
+			createElement(ObjectSource, { object })
+		);
+		const summaryMarkup = renderToStaticMarkup(
+			createElement(ArchiveRootSummaryTable, { roots: evidence.roots })
+		);
+		const activityMarkup = renderToStaticMarkup(
+			createElement(ArchiveActivityTable, {
+				page: {
+					...evidence.eventPage,
+					events: [createEvent(object)]
+				}
+			})
+		);
+
+		for (const markup of [sourceMarkup, summaryMarkup, activityMarkup]) {
+			expect(markup).toContain(`href="${archivePath}"`);
+			expect(markup).not.toContain(`href="${object.archiveUrl}"`);
+			expect(markup).not.toContain(`href="${object.objectUrl}"`);
+			expect(markup).not.toContain('target="_blank"');
+		}
 	});
 
 	it('maps planning-deferred delay reasons to scanner-planning copy', () => {
@@ -268,5 +302,28 @@ function createObject(
 		verifiedAt: null,
 		workerStage: null,
 		...overrides
+	};
+}
+
+function createEvent(object: PublicHistoryArchiveObject) {
+	return {
+		archiveUrl: object.archiveUrl,
+		archiveUrlIdentity: object.archiveUrlIdentity,
+		bucketHash: object.bucketHash,
+		bytesDownloaded: object.bytesDownloaded,
+		checkpointLedger: object.checkpointLedger,
+		claimAttempt: object.attempts,
+		createdAt: object.updatedAt,
+		error: object.error,
+		eventType: 'failed' as const,
+		evidenceClass: 'archive-object' as const,
+		nextAttemptAt: object.nextAttemptAt,
+		objectKey: object.objectKey,
+		objectRemoteId: object.remoteId,
+		objectType: object.objectType,
+		objectUrl: object.objectUrl,
+		remoteId: 'event-1',
+		verificationFacts: object.verificationFacts,
+		workerStage: object.workerStage
 	};
 }

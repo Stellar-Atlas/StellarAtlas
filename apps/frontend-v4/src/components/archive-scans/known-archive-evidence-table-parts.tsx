@@ -1,8 +1,10 @@
+import Link from 'next/link';
 import type {
 	PublicHistoryArchiveObject,
 	PublicKnownArchiveRemoteFailure,
 	PublicKnownArchiveRootEvidence
 } from '@api/archive-evidence-types';
+import { getArchiveScanDetailPath } from '@domain/archive-scan-routes';
 import {
 	formatArchiveObjectType,
 	formatArchiveRoot,
@@ -33,10 +35,22 @@ export function ObjectSource({
 	readonly object: PublicHistoryArchiveObject;
 }): React.JSX.Element {
 	return (
-		<ExternalEvidenceLink href={object.objectUrl}>
+		<ArchiveSourceLink archiveUrl={object.archiveUrl}>
 			{formatArchiveRoot(object.archiveUrl)}
-		</ExternalEvidenceLink>
+		</ArchiveSourceLink>
 	);
+}
+
+export function ArchiveSourceLink({
+	archiveUrl,
+	children
+}: {
+	readonly archiveUrl: unknown;
+	readonly children: React.ReactNode;
+}): React.JSX.Element {
+	const url = getHttpUrl(archiveUrl);
+	if (url === null) return <span>{children}</span>;
+	return <Link href={getArchiveScanDetailPath(url)}>{children}</Link>;
 }
 
 export function VerifiedCopyLinks({
