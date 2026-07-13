@@ -1,5 +1,6 @@
 import { DataSource } from 'typeorm';
 import { AppDataSource } from '@core/infrastructure/database/AppDataSource.js';
+import { fullHistoryCanonicalEntities } from '../../database/full-history/FullHistoryCanonicalEntityRegistry.js';
 import { TypeOrmFullHistoryCanonicalRepository } from '../../database/full-history/TypeOrmFullHistoryCanonicalRepository.js';
 import { TypeOrmFullHistoryCheckpointCandidateRepository } from '../../database/full-history-promotion/TypeOrmFullHistoryCheckpointCandidateRepository.js';
 import { TypeOrmFullHistoryPromotionFrontierRepository } from '../../database/full-history-promotion/TypeOrmFullHistoryPromotionFrontierRepository.js';
@@ -17,6 +18,7 @@ export function createFullHistoryPromotionDataSource(): DataSource {
 	}
 	return new DataSource({
 		...options,
+		entities: [...fullHistoryCanonicalEntities],
 		migrationsRun: false,
 		poolSize: 2,
 		synchronize: false

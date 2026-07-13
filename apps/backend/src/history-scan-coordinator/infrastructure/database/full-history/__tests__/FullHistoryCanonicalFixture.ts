@@ -25,23 +25,9 @@ import { FullHistoryOperationBackfillMigration1784970000000 } from '../../migrat
 import { FullHistoryOperationResultMigration1785010000000 } from '../../migrations/1785010000000-FullHistoryOperationResultMigration.js';
 import { FullHistoryOperationAccountReferenceMigration1785040000000 } from '../../migrations/1785040000000-FullHistoryOperationAccountReferenceMigration.js';
 import { HistoryArchiveCheckpointProofMigration1784420000000 } from '../../migrations/1784420000000-HistoryArchiveCheckpointProofMigration.js';
-import { FullHistoryIngestionBatch } from '../entities/FullHistoryIngestionBatch.js';
-import { FullHistoryLedger } from '../entities/FullHistoryLedger.js';
-import { FullHistoryOperation } from '../entities/FullHistoryOperation.js';
-import { FullHistoryOperationResult } from '../entities/FullHistoryOperationResult.js';
-import { FullHistoryTransaction } from '../entities/FullHistoryTransaction.js';
-import { FullHistoryTransactionResult } from '../entities/FullHistoryTransactionResult.js';
-import { FullHistoryWatermark } from '../entities/FullHistoryWatermark.js';
+import { fullHistoryCanonicalEntities } from '../FullHistoryCanonicalEntityRegistry.js';
 
-export const fullHistoryEntities = [
-	FullHistoryIngestionBatch,
-	FullHistoryLedger,
-	FullHistoryOperation,
-	FullHistoryOperationResult,
-	FullHistoryTransaction,
-	FullHistoryTransactionResult,
-	FullHistoryWatermark
-];
+export const fullHistoryEntities = [...fullHistoryCanonicalEntities];
 
 interface CheckpointFixtureOptions {
 	readonly batchNumber: number;

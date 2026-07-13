@@ -182,7 +182,8 @@ function roleMatchesOperation(
 	operation: FullHistoryOperationInput
 ): boolean {
 	if (role === 'effective_source') return true;
-	const allowedTypes = operationTypesByRole[role];
+	const allowedTypes: readonly FullHistoryOperationInput['operationType'][] =
+		operationTypesByRole[role];
 	return allowedTypes.includes(operation.operationType);
 }
 
