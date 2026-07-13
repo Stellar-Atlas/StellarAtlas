@@ -22,6 +22,7 @@ import type {
 import { TypeOrmKnownArchiveEvidenceRepository } from '../../repositories/database/TypeOrmKnownArchiveEvidenceRepository.js';
 import { GetKnownArchiveEvidence } from '../../../use-cases/get-known-archive-evidence/GetKnownArchiveEvidence.js';
 import { GetHistoryArchiveEvidence } from '../../../use-cases/get-history-archive-evidence/GetHistoryArchiveEvidence.js';
+import type { NodeRepository } from '@network-scan/domain/node/NodeRepository.js';
 import { createArchiveEvidenceCursorCodec } from '../../../use-cases/get-known-archive-evidence/ArchiveEvidenceCursorCodec.js';
 import { archiveEvidenceRouter } from '../ArchiveEvidenceRouter.js';
 import { PublicArchiveEvidenceAdmission } from '../PublicArchiveEvidenceRequest.js';
@@ -88,13 +89,16 @@ describe('public archive evidence concurrency', () => {
 				nodeEnv: 'test'
 			})
 		);
+		const nodeRepository = mock<NodeRepository>();
+		nodeRepository.findKnownByHistoryUrl.mockResolvedValue([]);
 		const app = express();
 		app.use(
 			'/v2/archive-scans',
 			archiveEvidenceRouter({
 				admission: new PublicArchiveEvidenceAdmission(4, 1_000),
 				getHistoryArchiveEvidence: new GetHistoryArchiveEvidence(
-					getKnownEvidence
+					getKnownEvidence,
+					nodeRepository
 				)
 			})
 		);

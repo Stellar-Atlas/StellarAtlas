@@ -18,6 +18,7 @@ export interface NodeRepository {
 		publicKeys: string[],
 		homeDomain: string | null
 	): Promise<Node[]>;
+	findKnownByHistoryUrl(historyUrl: string): Promise<Node[]>;
 	findAllKnownIdentities(): Promise<KnownNodeIdentity[]>;
 	findKnownIdentityByPublicKey(
 		publicKey: string

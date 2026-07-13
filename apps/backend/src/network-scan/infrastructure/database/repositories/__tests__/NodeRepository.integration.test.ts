@@ -5,6 +5,7 @@ import type { NodeRepository } from '@network-scan/domain/node/NodeRepository.js
 import { ConfigMock } from '@core/config/__mocks__/configMock.js';
 import { NETWORK_TYPES } from '@network-scan/infrastructure/di/di-types.js';
 import NodeMeasurement from '@network-scan/domain/node/NodeMeasurement.js';
+import NodeDetails from '@network-scan/domain/node/NodeDetails.js';
 import { createDummyNode } from '@network-scan/domain/node/__fixtures__/createDummyNode.js';
 import { TestUtils } from '@core/utilities/TestUtils.js';
 import { DataSource } from 'typeorm';
@@ -137,6 +138,34 @@ describe('test queries', function () {
 
 		expect(fetchedNodes.map((node) => node.publicKey.value)).toEqual(
 			[domainNode.publicKey.value, validatorNode.publicKey.value].toSorted()
+		);
+	});
+
+	test('finds known nodes by normalized history archive URL', async () => {
+		const time = new Date('2020-01-01T00:00:00.000Z');
+		const firstNode = createDummyNode('localhost', 3000, time);
+		const secondNode = createDummyNode('localhost', 3001, time);
+		const unrelatedNode = createDummyNode('localhost', 3002, time);
+		firstNode.updateDetails(
+			createNodeDetails('https://history.example.com/'),
+			time
+		);
+		secondNode.updateDetails(
+			createNodeDetails('https://HISTORY.example.com'),
+			time
+		);
+		unrelatedNode.updateDetails(
+			createNodeDetails('https://other.example.com'),
+			time
+		);
+		await nodeRepository.save([firstNode, secondNode, unrelatedNode], time);
+
+		const fetchedNodes = await nodeRepository.findKnownByHistoryUrl(
+			'https://history.example.com'
+		);
+
+		expect(fetchedNodes.map((node) => node.publicKey.value)).toEqual(
+			[firstNode.publicKey.value, secondNode.publicKey.value].toSorted()
 		);
 	});
 
@@ -292,3 +321,12 @@ describe('test queries', function () {
 		).toBeUndefined();
 	});
 });
+
+function createNodeDetails(historyUrl: string): NodeDetails {
+	return NodeDetails.create({
+		alias: null,
+		historyUrl,
+		host: null,
+		name: null
+	});
+}

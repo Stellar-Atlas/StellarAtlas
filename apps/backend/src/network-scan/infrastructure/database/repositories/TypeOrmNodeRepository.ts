@@ -11,6 +11,7 @@ import { Snapshot } from '@core/domain/Snapshot.js';
 import { CustomError } from '@core/errors/CustomError.js';
 import { mapUnknownToError } from '@core/utilities/mapUnknownToError.js';
 import NodeSnapShot from '@network-scan/domain/node/NodeSnapShot.js';
+import { normalizeHistoryArchiveRootUrl } from 'shared';
 
 export class NodePersistenceError extends CustomError {
 	constructor(publicKey: string, cause: Error) {
@@ -177,6 +178,25 @@ export class TypeOrmNodeRepository implements NodeRepository {
 			.where(`(${predicates.join(' or ')})`, parameters)
 			.orderBy('node."publicKeyValue"', 'ASC')
 			.getMany();
+	}
+
+	async findKnownByHistoryUrl(historyUrl: string): Promise<Node[]> {
+		const normalizedHistoryUrl = normalizeHistoryArchiveRootUrl(historyUrl);
+		if (normalizedHistoryUrl === null) return [];
+
+		const candidates = await this.getNodesBaseQuery()
+			.where(
+				'lower(rtrim(node_details."historyUrl", \'/\')) = lower(:historyUrl)',
+				{ historyUrl: normalizedHistoryUrl }
+			)
+			.orderBy('node."publicKeyValue"', 'ASC')
+			.getMany();
+
+		return candidates.filter(
+			(node) =>
+				normalizeHistoryArchiveRootUrl(node.details?.historyUrl ?? '') ===
+				normalizedHistoryUrl
+		);
 	}
 
 	async findAllKnownIdentities(): Promise<KnownNodeIdentity[]> {
