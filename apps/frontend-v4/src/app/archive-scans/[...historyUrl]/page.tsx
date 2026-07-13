@@ -30,10 +30,10 @@ async function ArchiveSourceEvidenceRoute({
 		historyUrl,
 		{
 			copyLimit: archiveEvidenceCopyLimit,
-			eventLimit: archiveEvidencePageLimit,
+			eventLimit: 0,
 			failureLimit: archiveEvidencePageLimit,
-			objectLimit: archiveEvidencePageLimit,
-			objectStatus: 'pending',
+			objectLimit: 0,
+			objectStatus: 'failed',
 			workerIssueLimit: archiveEvidencePageLimit
 		},
 		liveArchiveFetchOptions

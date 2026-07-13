@@ -350,6 +350,15 @@ export function useKnownArchiveEvidence(
 
 	const selectTab = (nextTab: KnownArchiveEvidenceTab): void => {
 		setTab(nextTab);
+		if (
+			shouldLoadInitialActivityPage(
+				nextTab,
+				eventData?.pages[0]?.page.limit
+			)
+		) {
+			loadEvents(eventQuery.current, null, false);
+			return;
+		}
 		const query = objectQuery.current;
 		const nextQuery = getObjectQueryForTab(nextTab, query);
 		if (nextQuery !== null) loadObjects(nextQuery, null, false);
@@ -406,4 +415,11 @@ export function getObjectQueryForTab(
 		return { ...query, status: 'pending' };
 	}
 	return null;
+}
+
+export function shouldLoadInitialActivityPage(
+	tab: KnownArchiveEvidenceTab,
+	pageLimit: number | undefined
+): boolean {
+	return tab === 'activity' && pageLimit === 0;
 }

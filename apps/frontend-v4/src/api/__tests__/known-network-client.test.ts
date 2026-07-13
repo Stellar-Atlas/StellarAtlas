@@ -59,6 +59,22 @@ describe('known archive evidence client', () => {
 			)
 		).toBe('/v1/known/organizations/org/archive-evidence');
 	});
+
+	it('preserves zero limits used to omit unrelated projections', () => {
+		const path = buildArchiveEvidencePath(
+			'/v1/known/nodes/GNODE/archive-evidence',
+			{
+				eventLimit: 0,
+				failureLimit: 0,
+				objectLimit: 0,
+				workerIssueLimit: 0
+			}
+		);
+
+		expect(path).toBe(
+			'/v1/known/nodes/GNODE/archive-evidence?eventLimit=0&failureLimit=0&objectLimit=0&workerIssueLimit=0'
+		);
+	});
 });
 
 describe('known inventory query', () => {

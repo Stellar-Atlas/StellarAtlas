@@ -14,9 +14,9 @@ import { OrganizationArchiveEvidence } from './organization-archive-evidence';
 
 const initialEvidenceQuery = {
 	copyLimit: archiveEvidenceCopyLimit,
-	eventLimit: archiveEvidencePageLimit,
+	eventLimit: 0,
 	failureLimit: archiveEvidencePageLimit,
-	objectLimit: archiveEvidencePageLimit,
+	objectLimit: 0,
 	objectStatus: 'failed',
 	workerIssueLimit: archiveEvidencePageLimit
 } as const satisfies KnownArchiveEvidenceQuery;

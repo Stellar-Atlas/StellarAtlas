@@ -121,6 +121,10 @@ export function normalizeArchiveEvidencePages(
 		)
 	};
 	const snapshotAt = now;
+	const eventLimit = normalizePageLimit(options.eventLimit);
+	const failureLimit = normalizePageLimit(options.failureLimit);
+	const objectLimit = normalizePageLimit(options.objectLimit);
+	const workerIssueLimit = normalizePageLimit(options.workerIssueLimit);
 
 	return {
 		copyLimit: normalizeLimit(
@@ -132,31 +136,31 @@ export function normalizeArchiveEvidencePages(
 		eventPage: {
 			before: toPosition(decoded.events),
 			filters: eventFilters,
-			limit: normalizePageLimit(options.eventLimit),
+			limit: eventLimit,
 			snapshotAt,
-			snapshotTotal: null
+			snapshotTotal: omittedTotal(eventLimit)
 		},
 		objectPage: {
 			before: toPosition(decoded.objects),
 			filters: objectFilters,
-			limit: normalizePageLimit(options.objectLimit),
+			limit: objectLimit,
 			snapshotAt,
-			snapshotTotal: null
+			snapshotTotal: omittedTotal(objectLimit)
 		},
 		remoteFailures: {
 			before: toPosition(decoded.remoteFailures),
 			filters: failureFilters,
-			limit: normalizePageLimit(options.failureLimit),
+			limit: failureLimit,
 			snapshotAt,
-			snapshotTotal: null
+			snapshotTotal: omittedTotal(failureLimit)
 		},
 		snapshotAt,
 		workerIssues: {
 			before: toPosition(decoded.workerIssues),
 			filters: failureFilters,
-			limit: normalizePageLimit(options.workerIssueLimit),
+			limit: workerIssueLimit,
 			snapshotAt,
-			snapshotTotal: null
+			snapshotTotal: omittedTotal(workerIssueLimit)
 		}
 	};
 }
@@ -212,11 +216,16 @@ function toPosition(
 }
 
 function normalizePageLimit(value: number | undefined): number {
+	if (value === 0) return 0;
 	return normalizeLimit(
 		value,
 		defaultArchiveEvidencePageLimit,
 		maxArchiveEvidencePageLimit
 	);
+}
+
+function omittedTotal(limit: number): number | null {
+	return limit === 0 ? 0 : null;
 }
 
 function normalizeLimit(

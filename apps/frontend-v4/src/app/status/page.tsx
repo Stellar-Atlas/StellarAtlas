@@ -24,7 +24,7 @@ import { StatusDashboardLive } from '@components/status/status-dashboard-live';
 
 export const revalidate = 0;
 export const dynamic = 'force-dynamic';
-const headlineFetchOptions = { cache: 'no-store', timeoutMs: 3_500 } as const;
+const headlineFetchOptions = { cache: 'no-store' } as const;
 
 async function StatusRouteContent(): Promise<React.JSX.Element> {
 	const emptyArchiveObjects = buildEmptyArchiveQueue();

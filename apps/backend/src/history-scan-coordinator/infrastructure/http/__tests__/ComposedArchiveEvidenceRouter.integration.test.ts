@@ -34,13 +34,34 @@ describe('composed archive evidence V2 router', () => {
 		);
 	});
 
+	it('accepts zero limits as omitted projections', async () => {
+		const getHistoryArchiveEvidence = mock<GetHistoryArchiveEvidence>();
+		getHistoryArchiveEvidence.execute.mockResolvedValue(ok(createEvidence()));
+		const app = createApp(getHistoryArchiveEvidence);
+
+		await request(app)
+			.get(
+				'/archive-scans/https%3A%2F%2Fhistory.example.com/object-evidence?eventLimit=0&failureLimit=0&objectLimit=0&workerIssueLimit=0'
+			)
+			.expect(200);
+		expect(getHistoryArchiveEvidence.execute).toHaveBeenCalledWith(
+			'https://history.example.com',
+			expect.objectContaining({
+				eventLimit: 0,
+				failureLimit: 0,
+				objectLimit: 0,
+				workerIssueLimit: 0
+			})
+		);
+	});
+
 	it('uses one normalized 400 error contract', async () => {
 		const getHistoryArchiveEvidence = mock<GetHistoryArchiveEvidence>();
 		const app = createApp(getHistoryArchiveEvidence);
 
 		await request(app)
 			.get(
-				'/archive-scans/https%3A%2F%2Fhistory.example.com/object-evidence?objectLimit=0'
+				'/archive-scans/https%3A%2F%2Fhistory.example.com/object-evidence?objectLimit=-1'
 			)
 			.expect(400)
 			.expect({

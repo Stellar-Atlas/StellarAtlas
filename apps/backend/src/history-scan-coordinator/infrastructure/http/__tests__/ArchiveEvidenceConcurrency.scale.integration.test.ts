@@ -13,6 +13,7 @@ import { HistoryArchiveCheckpointProof } from '../../../domain/history-archive-c
 import { HistoryArchiveStateSnapshot } from '../../../domain/history-archive-state/HistoryArchiveStateSnapshot.js';
 import { HistoryArchiveObjectHostThrottleMigration1784410000000 } from '../../database/migrations/1784410000000-HistoryArchiveObjectHostThrottleMigration.js';
 import { HistoryArchiveEvidenceRootSummaryMigration1784950000000 } from '../../database/migrations/1784950000000-HistoryArchiveEvidenceRootSummaryMigration.js';
+import { HistoryArchiveObjectEventSummaryMigration1785000000000 } from '../../database/migrations/1785000000000-HistoryArchiveObjectEventSummaryMigration.js';
 import type {
 	KnownArchiveEvidenceQuery,
 	KnownArchiveEvidenceReadModel,
@@ -60,6 +61,9 @@ describe('public archive evidence concurrency', () => {
 			await new HistoryArchiveEvidenceRootSummaryMigration1784950000000().up(
 				summaryRunner
 			);
+			await new HistoryArchiveObjectEventSummaryMigration1785000000000().up(
+				summaryRunner
+			);
 		} finally {
 			await summaryRunner.release();
 		}
@@ -71,13 +75,14 @@ describe('public archive evidence concurrency', () => {
 	});
 
 	it('bounds DB-using work across concurrent public requests', async () => {
+		const exceptionLogger = mock<ExceptionLogger>();
 		const repository = new TrackingEvidenceRepository(
 			dataSource,
 			new TypeOrmKnownArchiveEvidenceRepository(dataSource)
 		);
 		const getKnownEvidence = new GetKnownArchiveEvidence(
 			repository,
-			mock<ExceptionLogger>(),
+			exceptionLogger,
 			createArchiveEvidenceCursorCodec({
 				encodedKeys: `scale:${Buffer.alloc(32, 5).toString('base64url')}`,
 				nodeEnv: 'test'
@@ -104,6 +109,7 @@ describe('public archive evidence concurrency', () => {
 		const statuses = responses.map((response) => response.status);
 		const poolTotalCount = requirePoolTotalCount(dataSource.driver);
 
+		expect(exceptionLogger.captureException).not.toHaveBeenCalled();
 		expect(
 			statuses.filter((status) => status !== 200 && status !== 429)
 		).toEqual([]);

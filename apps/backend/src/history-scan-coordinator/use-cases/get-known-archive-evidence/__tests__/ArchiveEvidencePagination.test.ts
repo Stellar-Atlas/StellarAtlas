@@ -203,6 +203,31 @@ describe('ArchiveEvidencePagination', () => {
 		expect(pages.remoteFailures.limit).toBe(250);
 		expect(pages.workerIssues.limit).toBe(250);
 	});
+
+	it('omits zero-limit projections without disabling copy sampling', () => {
+		const pages = normalizeArchiveEvidencePages(
+			{
+				copyLimit: 0,
+				eventLimit: 0,
+				failureLimit: 0,
+				objectLimit: 0,
+				workerIssueLimit: 0
+			},
+			codec
+		);
+
+		expect(pages.copyLimit).toBe(3);
+		expect(pages.eventPage).toMatchObject({ limit: 0, snapshotTotal: 0 });
+		expect(pages.objectPage).toMatchObject({ limit: 0, snapshotTotal: 0 });
+		expect(pages.remoteFailures).toMatchObject({
+			limit: 0,
+			snapshotTotal: 0
+		});
+		expect(pages.workerIssues).toMatchObject({
+			limit: 0,
+			snapshotTotal: 0
+		});
+	});
 });
 
 function objectCursor(

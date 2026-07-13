@@ -25,6 +25,7 @@ const document = openApiDocument as unknown as {
 				readonly schema: {
 					readonly default?: number;
 					readonly maximum?: number;
+					readonly minimum?: number;
 				};
 			}
 		>;
@@ -83,10 +84,10 @@ describe('archive evidence OpenAPI contract', () => {
 	it('publishes bounded defaults and all composed page fields', () => {
 		expect(
 			document.components.parameters.ArchiveEvidenceObjectLimit?.schema
-		).toMatchObject({ default: 25, maximum: 250 });
+		).toMatchObject({ default: 25, maximum: 250, minimum: 0 });
 		expect(
 			document.components.parameters.ArchiveEvidenceCopyLimit?.schema
-		).toMatchObject({ default: 3, maximum: 10 });
+		).toMatchObject({ default: 3, maximum: 10, minimum: 1 });
 		expect(
 			document.components.schemas.HistoryArchiveEvidenceV2?.required
 		).toEqual(

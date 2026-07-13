@@ -64,10 +64,10 @@ export async function loadKnownArchiveAggregate(request: {
 	try {
 		const evidence = await fetchEvidence(subject, {
 			copyLimit: 1,
-			eventLimit: 1,
-			failureLimit: 1,
-			objectLimit: 1,
-			workerIssueLimit: 1
+			eventLimit: 0,
+			failureLimit: 0,
+			objectLimit: 0,
+			workerIssueLimit: 0
 		});
 		if (evidence === null) {
 			return actionFailure(
@@ -108,9 +108,11 @@ export async function loadKnownArchiveFailurePages(
 		(context) => ({
 			archiveUrl: context.query.archiveUrl ?? undefined,
 			copyLimit: archiveEvidenceCopyLimit,
+			eventLimit: 0,
 			failureCursor: readCursor(request.failureCursor),
 			failureLimit: archiveEvidencePageLimit,
 			failureObjectType: context.query.objectType ?? undefined,
+			objectLimit: 0,
 			workerIssueCursor: readCursor(request.workerIssueCursor),
 			workerIssueLimit: archiveEvidencePageLimit
 		}),
@@ -129,10 +131,13 @@ export async function loadKnownArchiveObjectPage(
 		() => readObjectContext(request),
 		(context) => ({
 			archiveUrl: context.query.archiveUrl ?? undefined,
+			eventLimit: 0,
+			failureLimit: 0,
 			objectCursor: readCursor(request.cursor),
 			objectLimit: archiveEvidencePageLimit,
 			objectStatus: context.query.status,
-			objectType: context.query.objectType ?? undefined
+			objectType: context.query.objectType ?? undefined,
+			workerIssueLimit: 0
 		}),
 		(evidence) => evidence.objectPage,
 		request
@@ -149,7 +154,10 @@ export async function loadKnownArchiveEventPage(
 			eventCursor: readCursor(request.cursor),
 			eventEvidenceClass: context.query.evidenceClass ?? undefined,
 			eventLimit: archiveEvidencePageLimit,
-			eventObjectType: context.query.objectType ?? undefined
+			eventObjectType: context.query.objectType ?? undefined,
+			failureLimit: 0,
+			objectLimit: 0,
+			workerIssueLimit: 0
 		}),
 		(evidence) => evidence.eventPage,
 		request
@@ -275,7 +283,7 @@ function fetchEvidence(
 	subject: ArchiveEvidenceSubject,
 	query: KnownArchiveEvidenceQuery
 ): Promise<KnownArchiveEvidence | null> {
-	const options = { cache: 'no-store', timeoutMs: 12000 } as const;
+	const options = { cache: 'no-store' } as const;
 	if (subject.kind === 'node') {
 		return fetchKnownNodeArchiveEvidence(subject.id, query, options);
 	}

@@ -30,7 +30,7 @@ export function archiveEvidencePageValidators(): ValidationChain[] {
 		query('archiveUrl')
 			.optional()
 			.isURL({ protocols: ['http', 'https'], require_protocol: true }),
-		limitValidator('copyLimit', maxArchiveEvidenceCopyLimit),
+		limitValidator('copyLimit', 1, maxArchiveEvidenceCopyLimit),
 		cursorValidator('eventCursor'),
 		query('eventEvidenceClass')
 			.optional()
@@ -39,22 +39,22 @@ export function archiveEvidencePageValidators(): ValidationChain[] {
 				'worker-infrastructure',
 				'coordinator-infrastructure'
 			]),
-		limitValidator('eventLimit', maxArchiveEvidencePageLimit),
+		limitValidator('eventLimit', 0, maxArchiveEvidencePageLimit),
 		query('eventObjectType').optional().isIn(objectTypes),
 		query('eventType')
 			.optional()
 			.isIn(['claimed', 'heartbeat', 'verified', 'failed', 'released']),
 		cursorValidator('failureCursor'),
-		limitValidator('failureLimit', maxArchiveEvidencePageLimit),
+		limitValidator('failureLimit', 0, maxArchiveEvidencePageLimit),
 		query('failureObjectType').optional().isIn(objectTypes),
 		cursorValidator('objectCursor'),
-		limitValidator('objectLimit', maxArchiveEvidencePageLimit),
+		limitValidator('objectLimit', 0, maxArchiveEvidencePageLimit),
 		query('objectStatus')
 			.optional()
 			.isIn(['pending', 'scanning', 'verified', 'failed']),
 		query('objectType').optional().isIn(objectTypes),
 		cursorValidator('workerIssueCursor'),
-		limitValidator('workerIssueLimit', maxArchiveEvidencePageLimit)
+		limitValidator('workerIssueLimit', 0, maxArchiveEvidencePageLimit)
 	];
 }
 
@@ -88,8 +88,8 @@ export function isArchiveEvidenceClientError(error: Error): boolean {
 	);
 }
 
-function limitValidator(name: string, max: number): ValidationChain {
-	return query(name).optional().isInt({ min: 1, max });
+function limitValidator(name: string, min: number, max: number): ValidationChain {
+	return query(name).optional().isInt({ min, max });
 }
 
 function cursorValidator(name: string): ValidationChain {
