@@ -13,6 +13,7 @@ import type {
 	FullHistoryOperationResultCode,
 	FullHistoryOperationResultFactScope
 } from './FullHistoryCanonicalOperationResult.js';
+import type { FullHistoryOperationAccountReferenceView } from './FullHistoryCanonicalOperationAccountReference.js';
 
 export const FULL_HISTORY_OPERATION_FACT_SCOPE =
 	'operation_body_and_envelope' as const;
@@ -67,17 +68,19 @@ export interface FullHistoryOperationInput {
 }
 
 export interface FullHistoryOperationQuery {
+	readonly accountId?: string;
 	readonly closedAtFrom?: Date;
 	readonly closedAtTo?: Date;
 	readonly firstLedger?: FullHistoryLedgerSequence;
 	readonly lastLedger?: FullHistoryLedgerSequence;
 	readonly limit: number;
 	readonly operationType?: FullHistoryOperationType;
-	readonly sourceAccount?: string;
 	readonly transactionHash?: FullHistoryHash;
 }
 
 interface FullHistoryOperationViewBase extends FullHistoryOperationInput {
+	readonly accountReferenceDecoderVersion: string | null;
+	readonly accountReferences: readonly FullHistoryOperationAccountReferenceView[];
 	readonly archiveUrlIdentity: string;
 	readonly batchId: string;
 	readonly checkpointLedger: FullHistoryLedgerSequence;
@@ -119,14 +122,19 @@ export interface FullHistoryOperationPage {
 }
 
 export interface FullHistoryOperationCoverage {
+	readonly accountReferenceIndexedBatches: number;
+	readonly accountReferencesComplete: boolean;
 	readonly canonicalBatches: number;
 	readonly complete: boolean;
+	readonly firstAccountReferenceIndexedLedger: FullHistoryLedgerSequence | null;
 	readonly firstIndexedLedger: FullHistoryLedgerSequence | null;
 	readonly firstOutcomeIndexedLedger: FullHistoryLedgerSequence | null;
 	readonly indexedBatches: number;
+	readonly lastAccountReferenceIndexedLedger: FullHistoryLedgerSequence | null;
 	readonly lastIndexedLedger: FullHistoryLedgerSequence | null;
 	readonly lastOutcomeIndexedLedger: FullHistoryLedgerSequence | null;
 	readonly outcomeIndexedBatches: number;
+	readonly operationFactsComplete: boolean;
 	readonly outcomesComplete: boolean;
 }
 

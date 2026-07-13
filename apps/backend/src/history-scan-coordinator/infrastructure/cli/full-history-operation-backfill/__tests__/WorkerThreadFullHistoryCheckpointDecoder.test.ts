@@ -17,6 +17,7 @@ import {
 
 const emptyDecoded: FullHistoryDecodedCheckpoint = {
 	ledgers: [],
+	operationAccountReferences: [],
 	operations: [],
 	operationResults: [],
 	results: [],

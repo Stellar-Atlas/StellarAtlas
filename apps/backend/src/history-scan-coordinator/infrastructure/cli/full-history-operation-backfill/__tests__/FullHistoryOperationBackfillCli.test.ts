@@ -46,6 +46,7 @@ describe('FullHistoryOperationBackfillCli', () => {
 	it('runs one bounded invocation and emits its durable outcome', async () => {
 		const dependencies = createDependencies();
 		dependencies.execute.mockResolvedValue({
+			accountReferenceFacts: 48,
 			batchLimit: 8,
 			completedBatches: 1,
 			cpuWorkers: 2,
@@ -53,6 +54,7 @@ describe('FullHistoryOperationBackfillCli', () => {
 			peakActiveBatches: 1,
 			receipts: [
 				{
+					accountReferenceCount: 48,
 					batchId: '00000000-0000-4000-8000-000000000001',
 					operationCount: 24,
 					replayed: false
@@ -80,6 +82,9 @@ describe('FullHistoryOperationBackfillCli', () => {
 		expect(dependencies.stdout.write).toHaveBeenCalledWith(
 			expect.stringContaining('"operationFacts":24')
 		);
+		expect(dependencies.stdout.write).toHaveBeenCalledWith(
+			expect.stringContaining('"accountReferenceFacts":48')
+		);
 		expect(dependencies.dataSource.destroy).toHaveBeenCalled();
 	});
 
@@ -105,6 +110,7 @@ describe('FullHistoryOperationBackfillCli', () => {
 	it('uses an explicit bounded CPU cap and refuses values above the hard maximum', async () => {
 		const configured = createDependencies();
 		configured.execute.mockResolvedValue({
+			accountReferenceFacts: 0,
 			batchLimit: 8,
 			completedBatches: 0,
 			cpuWorkers: 4,

@@ -164,18 +164,33 @@ describe('GetExplorerLocalTransactions', () => {
 		const repository = mock<FullHistoryCanonicalRepository>();
 		repository.findOperations.mockResolvedValue({
 			coverage: {
+				accountReferenceIndexedBatches: 1,
+				accountReferencesComplete: false,
 				canonicalBatches: 28,
 				complete: false,
+				firstAccountReferenceIndexedLedger:
+					fullHistoryLedgerSequence(63386303n),
 				firstIndexedLedger: fullHistoryLedgerSequence(63386303n),
 				firstOutcomeIndexedLedger: fullHistoryLedgerSequence(63386303n),
 				indexedBatches: 1,
+				lastAccountReferenceIndexedLedger: fullHistoryLedgerSequence(63386366n),
 				lastIndexedLedger: fullHistoryLedgerSequence(63386366n),
 				lastOutcomeIndexedLedger: fullHistoryLedgerSequence(63386366n),
 				outcomeIndexedBatches: 1,
+				operationFactsComplete: false,
 				outcomesComplete: false
 			},
 			records: [
 				{
+					accountReferenceDecoderVersion:
+						'stellar-sdk-16/archive-xdr-v1-operation-account-references',
+					accountReferences: [
+						{
+							accountId: `G${'A'.repeat(55)}`,
+							baseAccountId: `G${'A'.repeat(55)}`,
+							role: 'effective_source'
+						}
+					],
 					archiveUrlIdentity: 'archive.example',
 					batchId: '00000000-0000-4000-8000-000000000001',
 					checkpointLedger: fullHistoryLedgerSequence(63386303n),
@@ -220,12 +235,22 @@ describe('GetExplorerLocalTransactions', () => {
 				indexedBatches: 1
 			},
 			factBoundary: {
-				includes: 'operation_type_and_effective_source',
+				excludes: 'state_effects_soroban_auth_signers_and_asset_issuers',
+				includes:
+					'operation_type_effective_source_and_explicit_envelope_account_references',
 				outcomes: 'transaction_result_xdr_when_indexed'
 			},
 			records: [
 				{
+					accountReferences: [
+						{
+							accountId: `G${'A'.repeat(55)}`,
+							role: 'effective_source'
+						}
+					],
 					evidence: {
+						accountReferenceDecoderVersion:
+							'stellar-sdk-16/archive-xdr-v1-operation-account-references',
 						archiveSource: 'archive.example',
 						checkpointProofId: 41,
 						proofVersion: 5
@@ -315,18 +340,27 @@ function canonicalLatestEvidence() {
 
 function operationCoverage(complete: boolean) {
 	return {
+		accountReferenceIndexedBatches: complete ? 1 : 0,
+		accountReferencesComplete: complete,
 		canonicalBatches: complete ? 1 : 0,
 		complete,
+		firstAccountReferenceIndexedLedger: complete
+			? fullHistoryLedgerSequence(63386240n)
+			: null,
 		firstIndexedLedger: complete ? fullHistoryLedgerSequence(63386240n) : null,
 		firstOutcomeIndexedLedger: complete
 			? fullHistoryLedgerSequence(63386240n)
 			: null,
 		indexedBatches: complete ? 1 : 0,
+		lastAccountReferenceIndexedLedger: complete
+			? fullHistoryLedgerSequence(63386303n)
+			: null,
 		lastIndexedLedger: complete ? fullHistoryLedgerSequence(63386303n) : null,
 		lastOutcomeIndexedLedger: complete
 			? fullHistoryLedgerSequence(63386303n)
 			: null,
 		outcomeIndexedBatches: complete ? 1 : 0,
+		operationFactsComplete: complete,
 		outcomesComplete: complete
 	};
 }

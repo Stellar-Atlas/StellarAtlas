@@ -647,7 +647,7 @@
 		"/v1/explorer/transactions/{hash}/operations": {
 			"get": {
 				"summary": "Get operations for a transaction",
-				"description": "Returns proof-gated canonical operation facts when the transaction is in local canonical coverage, otherwise uses the configured Horizon source.",
+				"description": "Returns proof-gated canonical operation-envelope facts and normalized envelope account participants when the transaction is in local canonical coverage, otherwise uses the configured Horizon source. Canonical rows exclude state-derived accounts, effects, Soroban authorization, signers, and asset issuers.",
 				"tags": ["Explorer"],
 				"operationId": "getExplorerTransactionOperations",
 				"parameters": [
@@ -768,7 +768,7 @@
 		"/v1/explorer/operations": {
 			"get": {
 				"summary": "Search operations",
-				"description": "Returns bounded proof-gated canonical operation facts filtered by ledger, account, operation type, transaction hash, or close-time range. Execution outcomes are included when the canonical batch has matching transaction-result XDR coverage; richer effects, events, and ledger-entry changes require LedgerCloseMeta ingestion.",
+				"description": "Returns bounded proof-gated canonical operation-envelope facts filtered by ledger, account participant, operation type, transaction hash, or close-time range. G-address filters match the base key of G and muxed M references; M-address filters match the exact muxed identity. Participants come only from operation source/body XDR. State-derived accounts, effects, Soroban authorization, signers, and asset issuers are excluded. Execution outcomes are included when the canonical batch has matching transaction-result XDR coverage.",
 				"tags": ["Explorer"],
 				"operationId": "getExplorerOperations",
 				"parameters": [
@@ -776,6 +776,7 @@
 						"name": "accountId",
 						"in": "query",
 						"required": false,
+						"description": "Canonical envelope participant. G matches the base key of G and M references; M matches the exact muxed identity. Queries are unavailable until account-reference coverage is complete.",
 						"schema": { "type": "string" }
 					},
 					{
@@ -8984,7 +8985,10 @@
 						"properties": {
 							"assetIndexReady": { "type": "boolean", "enum": [false] },
 							"contractIndexReady": { "type": "boolean", "enum": [false] },
-							"operationIndexReady": { "type": "boolean" },
+							"operationIndexReady": {
+								"type": "boolean",
+								"description": "True only when canonical operation facts and envelope account-reference coverage are complete."
+							},
 							"transactionIndexReady": { "type": "boolean" }
 						}
 					},
@@ -9084,7 +9088,10 @@
 								"type": "string",
 								"enum": ["proof_gated_canonical_transaction_and_result"]
 							},
-							"operationIndexReady": { "type": "boolean" },
+							"operationIndexReady": {
+								"type": "boolean",
+								"description": "True only when canonical operation facts and envelope account-reference coverage are complete."
+							},
 							"transactionIndexReady": { "type": "boolean" }
 						}
 					},
@@ -9276,6 +9283,34 @@
 					"transactionHash": { "type": "string" }
 				}
 			},
+			"ExplorerOperationAccountReference": {
+				"type": "object",
+				"required": ["accountId", "baseAccountId", "role"],
+				"properties": {
+					"accountId": {
+						"type": "string",
+						"description": "Exact G or M identity represented by operation envelope XDR."
+					},
+					"baseAccountId": {
+						"type": "string",
+						"description": "Underlying G identity used for base-account matching."
+					},
+					"role": {
+						"type": "string",
+						"enum": [
+							"claimant",
+							"clawback_source",
+							"destination",
+							"effective_source",
+							"inflation_destination",
+							"offer_seller",
+							"sponsored_account",
+							"sponsorship_account",
+							"trustor"
+						]
+					}
+				}
+			},
 			"ExplorerOperation": {
 				"type": "object",
 				"required": [
@@ -9288,10 +9323,18 @@
 					"type"
 				],
 				"properties": {
+					"accountReferences": {
+						"type": "array",
+						"description": "Proof-gated source/body XDR participants on postgres_canonical rows; absent on Horizon fallback rows. Excludes state/effects, Soroban auth, signers, and asset issuers.",
+						"items": {
+							"$ref": "#/components/schemas/ExplorerOperationAccountReference"
+						}
+					},
 					"createdAt": { "type": "string", "format": "date-time" },
 					"evidence": {
 						"type": "object",
 						"required": [
+							"accountReferenceDecoderVersion",
 							"archiveSource",
 							"batchId",
 							"checkpointLedger",
@@ -9301,6 +9344,10 @@
 							"proofVersion"
 						],
 						"properties": {
+							"accountReferenceDecoderVersion": {
+								"type": "string",
+								"nullable": true
+							},
 							"archiveSource": { "type": "string" },
 							"batchId": { "type": "string", "format": "uuid" },
 							"checkpointLedger": { "type": "string" },
@@ -9372,19 +9419,33 @@
 					"coverage": {
 						"type": "object",
 						"required": [
+							"accountReferenceIndexedBatches",
+							"accountReferencesComplete",
 							"canonicalBatches",
 							"complete",
+							"firstAccountReferenceIndexedLedger",
 							"firstIndexedLedger",
 							"firstOutcomeIndexedLedger",
 							"indexedBatches",
+							"lastAccountReferenceIndexedLedger",
 							"lastIndexedLedger",
 							"lastOutcomeIndexedLedger",
 							"outcomeIndexedBatches",
+							"operationFactsComplete",
 							"outcomesComplete"
 						],
 						"properties": {
+							"accountReferenceIndexedBatches": {
+								"type": "integer",
+								"minimum": 0
+							},
+							"accountReferencesComplete": { "type": "boolean" },
 							"canonicalBatches": { "type": "integer", "minimum": 0 },
 							"complete": { "type": "boolean" },
+							"firstAccountReferenceIndexedLedger": {
+								"type": "string",
+								"nullable": true
+							},
 							"firstIndexedLedger": {
 								"type": "string",
 								"nullable": true
@@ -9394,6 +9455,10 @@
 								"nullable": true
 							},
 							"indexedBatches": { "type": "integer", "minimum": 0 },
+							"lastAccountReferenceIndexedLedger": {
+								"type": "string",
+								"nullable": true
+							},
 							"lastIndexedLedger": {
 								"type": "string",
 								"nullable": true
@@ -9406,16 +9471,23 @@
 								"type": "integer",
 								"minimum": 0
 							},
+							"operationFactsComplete": { "type": "boolean" },
 							"outcomesComplete": { "type": "boolean" }
 						}
 					},
 					"factBoundary": {
 						"type": "object",
-						"required": ["includes", "outcomes"],
+						"required": ["excludes", "includes", "outcomes"],
 						"properties": {
+							"excludes": {
+								"type": "string",
+								"enum": ["state_effects_soroban_auth_signers_and_asset_issuers"]
+							},
 							"includes": {
 								"type": "string",
-								"enum": ["operation_type_and_effective_source"]
+								"enum": [
+									"operation_type_effective_source_and_explicit_envelope_account_references"
+								]
 							},
 							"outcomes": {
 								"type": "string",

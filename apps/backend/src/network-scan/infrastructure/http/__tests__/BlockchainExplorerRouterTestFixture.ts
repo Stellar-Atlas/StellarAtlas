@@ -42,8 +42,17 @@ const canonicalTransaction: ExplorerCanonicalTransactionDTO = {
 
 export const canonicalOperation: ExplorerLocalOperationsDTO['records'][number] =
 	{
+		accountReferences: [
+			{
+				accountId: canonicalSourceAccount,
+				baseAccountId: canonicalSourceAccount,
+				role: 'effective_source'
+			}
+		],
 		createdAt: '2026-07-08T16:09:36.000Z',
 		evidence: {
+			accountReferenceDecoderVersion:
+				'stellar-sdk-16/archive-xdr-v1-operation-account-references',
 			archiveSource: 'archive.example',
 			batchId: '00000000-0000-4000-8000-000000000001',
 			checkpointLedger: '63386303',
@@ -154,18 +163,25 @@ export function buildTestApp(options: BuildTestAppOptions = {}) {
 		findOperations: async (): Promise<ExplorerLocalOperationsDTO> => ({
 			count: 1,
 			coverage: {
+				accountReferenceIndexedBatches: 1,
+				accountReferencesComplete: true,
 				canonicalBatches: 1,
 				complete: true,
+				firstAccountReferenceIndexedLedger: '63386240',
 				firstIndexedLedger: '63386240',
 				firstOutcomeIndexedLedger: '63386240',
 				indexedBatches: 1,
+				lastAccountReferenceIndexedLedger: '63386303',
 				lastIndexedLedger: '63386303',
 				lastOutcomeIndexedLedger: '63386303',
 				outcomeIndexedBatches: 1,
+				operationFactsComplete: true,
 				outcomesComplete: true
 			},
 			factBoundary: {
-				includes: 'operation_type_and_effective_source',
+				excludes: 'state_effects_soroban_auth_signers_and_asset_issuers',
+				includes:
+					'operation_type_effective_source_and_explicit_envelope_account_references',
 				outcomes: 'transaction_result_xdr_when_indexed'
 			},
 			filters: {},

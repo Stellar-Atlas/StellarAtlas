@@ -55,6 +55,8 @@ export class FullHistoryOperationDecodeWorkerError extends Error {
 
 export class WorkerThreadFullHistoryCheckpointDecoder implements FullHistoryCheckpointDecoder {
 	readonly version = stellarDecoderProvenance.version;
+	readonly operationAccountReferenceDecoderVersion =
+		stellarDecoderProvenance.operationAccountReferenceDecoderVersion;
 	readonly operationDecoderVersion =
 		stellarDecoderProvenance.operationDecoderVersion;
 	readonly operationResultDecoderVersion =

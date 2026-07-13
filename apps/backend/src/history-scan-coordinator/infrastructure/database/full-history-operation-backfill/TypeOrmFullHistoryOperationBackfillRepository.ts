@@ -28,6 +28,10 @@ import {
 	storeCanonicalOperations
 } from '../full-history/FullHistoryCanonicalOperationStore.js';
 import {
+	assertCanonicalOperationAccountReferences,
+	storeCanonicalOperationAccountReferences
+} from '../full-history/FullHistoryCanonicalOperationAccountReferenceStore.js';
+import {
 	assertCanonicalOperationResults,
 	storeCanonicalOperationResults
 } from '../full-history/FullHistoryCanonicalOperationResultStore.js';
@@ -58,6 +62,7 @@ interface BatchIdentityRow {
 }
 
 interface CoverageStateRow {
+	readonly accountReferenceDecoderVersion: string | null;
 	readonly operationDecoderVersion: string | null;
 	readonly resultDecoderVersion: string | null;
 }
@@ -130,10 +135,15 @@ export class TypeOrmFullHistoryOperationBackfillRepository implements FullHistor
 					on coverage."batch_id" = batch.id
 				left join "full_history_operation_result_batch_coverage" result_coverage
 					on result_coverage."batch_id" = batch.id
+				left join
+					"full_history_operation_account_reference_batch_coverage"
+						reference_coverage
+					on reference_coverage."batch_id" = batch.id
 				where batch."network_passphrase_hash" = $1
 					and (
 						coverage."batch_id" is null
 						or result_coverage."batch_id" is null
+						or reference_coverage."batch_id" is null
 					)
 				order by batch."last_ledger" desc, batch.id
 				limit $2
@@ -163,6 +173,7 @@ export class TypeOrmFullHistoryOperationBackfillRepository implements FullHistor
 			const coverage = await readCoverageState(manager, input.batchId);
 			const replayed =
 				coverage.operationDecoderVersion !== null &&
+				coverage.accountReferenceDecoderVersion !== null &&
 				coverage.resultDecoderVersion !== null;
 			let storedOperationDecoderVersion = coverage.operationDecoderVersion;
 			if (storedOperationDecoderVersion === null) {
@@ -178,6 +189,23 @@ export class TypeOrmFullHistoryOperationBackfillRepository implements FullHistor
 				manager,
 				input,
 				storedOperationDecoderVersion
+			);
+			let storedAccountReferenceDecoderVersion =
+				coverage.accountReferenceDecoderVersion;
+			if (storedAccountReferenceDecoderVersion === null) {
+				await storeCanonicalOperationAccountReferences(
+					manager,
+					input,
+					networkHash,
+					input.operationAccountReferenceDecoderVersion
+				);
+				storedAccountReferenceDecoderVersion =
+					input.operationAccountReferenceDecoderVersion;
+			}
+			await assertCanonicalOperationAccountReferences(
+				manager,
+				input,
+				storedAccountReferenceDecoderVersion
 			);
 			let storedResultDecoderVersion = coverage.resultDecoderVersion;
 			if (storedResultDecoderVersion === null) {
@@ -195,6 +223,7 @@ export class TypeOrmFullHistoryOperationBackfillRepository implements FullHistor
 				storedResultDecoderVersion
 			);
 			return {
+				accountReferenceCount: input.operationAccountReferences.length,
 				batchId: input.batchId,
 				operationCount: input.operations.length,
 				replayed
@@ -284,6 +313,9 @@ async function readCoverageState(
 ): Promise<CoverageStateRow> {
 	const rows = await manager.query<CoverageStateRow[]>(
 		`select
+			(select "reference_decoder_version"
+			 from "full_history_operation_account_reference_batch_coverage"
+			 where "batch_id" = $1) as "accountReferenceDecoderVersion",
 			(select "operation_decoder_version"
 			 from "full_history_operation_batch_coverage"
 			 where "batch_id" = $1) as "operationDecoderVersion",
@@ -294,6 +326,7 @@ async function readCoverageState(
 	);
 	return (
 		rows[0] ?? {
+			accountReferenceDecoderVersion: null,
 			operationDecoderVersion: null,
 			resultDecoderVersion: null
 		}

@@ -26,14 +26,19 @@ describe('GetFullHistoryStatus', () => {
 		canonicalHistoryMock = mock<FullHistoryCanonicalRepository>();
 		canonicalHistoryMock.getCoverage.mockResolvedValue(null);
 		canonicalHistoryMock.getOperationCoverage.mockResolvedValue({
+			accountReferenceIndexedBatches: 0,
+			accountReferencesComplete: false,
 			canonicalBatches: 0,
 			complete: false,
+			firstAccountReferenceIndexedLedger: null,
 			firstIndexedLedger: null,
 			firstOutcomeIndexedLedger: null,
 			indexedBatches: 0,
+			lastAccountReferenceIndexedLedger: null,
 			lastIndexedLedger: null,
 			lastOutcomeIndexedLedger: null,
 			outcomeIndexedBatches: 0,
+			operationFactsComplete: false,
 			outcomesComplete: false
 		});
 		canonicalPromotionMock = mock<FullHistoryPromotionRuntimeRepository>();
@@ -113,14 +118,19 @@ describe('GetFullHistoryStatus', () => {
 			updatedAt: new Date('2026-07-06T11:59:30.000Z')
 		});
 		canonicalHistoryMock.getOperationCoverage.mockResolvedValue({
+			accountReferenceIndexedBatches: 2,
+			accountReferencesComplete: true,
 			canonicalBatches: 2,
 			complete: true,
+			firstAccountReferenceIndexedLedger: fullHistoryLedgerSequence(63386240n),
 			firstIndexedLedger: fullHistoryLedgerSequence(63386240n),
 			firstOutcomeIndexedLedger: fullHistoryLedgerSequence(63386240n),
 			indexedBatches: 2,
+			lastAccountReferenceIndexedLedger: fullHistoryLedgerSequence(63386367n),
 			lastIndexedLedger: fullHistoryLedgerSequence(63386367n),
 			lastOutcomeIndexedLedger: fullHistoryLedgerSequence(63386367n),
 			outcomeIndexedBatches: 2,
+			operationFactsComplete: true,
 			outcomesComplete: true
 		});
 		canonicalPromotionMock.find.mockResolvedValue({

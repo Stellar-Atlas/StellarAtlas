@@ -20,7 +20,7 @@ describe('ExplorerLocalOperationHandler', () => {
 
 		await request(app)
 			.get(
-				`/operations?operationType=payment&firstLedger=64&lastLedger=127&transactionHash=${transactionHash}&sourceAccount=${sourceAccount}&from=2026-07-12T11%3A00%3A00.000Z&to=2026-07-12T12%3A00%3A00.000Z&limit=25`
+				`/operations?operationType=payment&firstLedger=64&lastLedger=127&transactionHash=${transactionHash}&accountId=${sourceAccount}&from=2026-07-12T11%3A00%3A00.000Z&to=2026-07-12T12%3A00%3A00.000Z&limit=25`
 			)
 			.expect(200)
 			.expect('Cache-Control', 'public, max-age=20')
@@ -28,12 +28,16 @@ describe('ExplorerLocalOperationHandler', () => {
 				expect(response.body).toMatchObject({
 					count: 1,
 					coverage: {
+						accountReferenceIndexedBatches: 1,
+						accountReferencesComplete: false,
 						canonicalBatches: 28,
 						complete: false,
 						indexedBatches: 1
 					},
 					factBoundary: {
-						includes: 'operation_type_and_effective_source',
+						excludes: 'state_effects_soroban_auth_signers_and_asset_issuers',
+						includes:
+							'operation_type_effective_source_and_explicit_envelope_account_references',
 						outcomes: 'transaction_result_xdr_when_indexed'
 					},
 					records: [
@@ -60,7 +64,7 @@ describe('ExplorerLocalOperationHandler', () => {
 			lastLedger: '127',
 			limit: 25,
 			operationType: 'payment',
-			sourceAccount
+			accountId: sourceAccount
 		});
 		expect(query?.transactionHash?.toHex()).toBe(transactionHash);
 		expect(fetchSpy).not.toHaveBeenCalled();
@@ -109,33 +113,49 @@ function operationPage(
 	return {
 		count: 1,
 		coverage: {
+			accountReferenceIndexedBatches: 1,
+			accountReferencesComplete: false,
 			canonicalBatches: 28,
 			complete: false,
+			firstAccountReferenceIndexedLedger: '64',
 			firstIndexedLedger: '64',
 			firstOutcomeIndexedLedger: '64',
 			indexedBatches: 1,
+			lastAccountReferenceIndexedLedger: '127',
 			lastIndexedLedger: '127',
 			lastOutcomeIndexedLedger: '127',
 			outcomeIndexedBatches: 1,
+			operationFactsComplete: false,
 			outcomesComplete: false
 		},
 		factBoundary: {
-			includes: 'operation_type_and_effective_source',
+			excludes: 'state_effects_soroban_auth_signers_and_asset_issuers',
+			includes:
+				'operation_type_effective_source_and_explicit_envelope_account_references',
 			outcomes: 'transaction_result_xdr_when_indexed'
 		},
 		filters: {
+			accountId: query.accountId,
 			firstLedger: query.firstLedger,
 			lastLedger: query.lastLedger,
 			operationType: query.operationType,
-			sourceAccount: query.sourceAccount,
 			transactionHash: query.transactionHash?.toHex()
 		},
 		generatedAt: '2026-07-12T12:00:00.000Z',
 		limit: query.limit,
 		records: [
 			{
+				accountReferences: [
+					{
+						accountId: sourceAccount,
+						baseAccountId: sourceAccount,
+						role: 'effective_source'
+					}
+				],
 				createdAt: '2026-07-12T11:59:00.000Z',
 				evidence: {
+					accountReferenceDecoderVersion:
+						'stellar-sdk-16/archive-xdr-v1-operation-account-references',
 					archiveSource: 'archive.example',
 					batchId: '00000000-0000-4000-8000-000000000001',
 					checkpointLedger: '127',

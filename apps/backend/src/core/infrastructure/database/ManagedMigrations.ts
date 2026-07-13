@@ -26,6 +26,7 @@ import { HistoryArchiveObjectEventSummaryMigration1785000000000 } from '@history
 import { FullHistoryOperationResultMigration1785010000000 } from '@history-scan-coordinator/infrastructure/database/migrations/1785010000000-FullHistoryOperationResultMigration.js';
 import { HistoryArchiveObjectEventRecentIndexMigration1785020000000 } from '@history-scan-coordinator/infrastructure/database/migrations/1785020000000-HistoryArchiveObjectEventRecentIndexMigration.js';
 import { FullHistoryBatchReadIndexesMigration1785030000000 } from '@history-scan-coordinator/infrastructure/database/migrations/1785030000000-FullHistoryBatchReadIndexesMigration.js';
+import { FullHistoryOperationAccountReferenceMigration1785040000000 } from '@history-scan-coordinator/infrastructure/database/migrations/1785040000000-FullHistoryOperationAccountReferenceMigration.js';
 
 // The production database was imported with a partial legacy migration ledger.
 // Explicit registration prevents TypeORM from replaying pre-baseline migrations.
@@ -57,5 +58,6 @@ export const managedMigrations = [
 	HistoryArchiveObjectEventSummaryMigration1785000000000,
 	FullHistoryOperationResultMigration1785010000000,
 	HistoryArchiveObjectEventRecentIndexMigration1785020000000,
-	FullHistoryBatchReadIndexesMigration1785030000000
+	FullHistoryBatchReadIndexesMigration1785030000000,
+	FullHistoryOperationAccountReferenceMigration1785040000000
 ] as const;

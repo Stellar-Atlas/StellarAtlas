@@ -30,6 +30,15 @@ describe('full-history promotion schema readiness', () => {
 		expect(before.missingSchemaObjects).toContain(
 			'relation:full_history_ingestion_batch'
 		);
+		expect(before.missingSchemaObjects).toEqual(
+			expect.arrayContaining([
+				'relation:full_history_operation_account_reference',
+				'relation:full_history_operation_account_reference_batch_coverage',
+				'column:full_history_operation_account_reference_batch_coverage.reference_decoder_version',
+				'trigger:full_history_operation_account_reference.trg_reject_full_history_operation_account_reference_mutation',
+				'trigger:full_history_operation_account_reference_batch_coverage.trg_reject_full_history_operation_account_ref_cov_mutation'
+			])
+		);
 
 		await installPromotionSchema(dataSource);
 		await expect(

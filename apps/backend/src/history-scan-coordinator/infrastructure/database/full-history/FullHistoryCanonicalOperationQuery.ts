@@ -4,7 +4,6 @@ import {
 	FULL_HISTORY_OPERATION_QUERY_LIMIT_MAX,
 	isFullHistoryOperationSourceAccount,
 	isFullHistoryOperationType,
-	type FullHistoryOperationCoverage,
 	type FullHistoryOperationOutcomeAvailable,
 	type FullHistoryOperationOutcomeUnavailable,
 	type FullHistoryOperationPage,
@@ -12,6 +11,12 @@ import {
 	type FullHistoryOperationSourceOrigin,
 	type FullHistoryOperationView
 } from '../../../domain/full-history/FullHistoryCanonicalOperation.js';
+import {
+	fullHistoryBaseAccountId,
+	FullHistoryOperationAccountReferenceCoverageError,
+	isFullHistoryOperationAccountReferenceRole,
+	type FullHistoryOperationAccountReferenceView
+} from '../../../domain/full-history/FullHistoryCanonicalOperationAccountReference.js';
 import {
 	FULL_HISTORY_OPERATION_RESULT_FACT_SCOPE,
 	isFullHistoryOperationResultCode,
@@ -21,8 +26,13 @@ import {
 	fullHistoryLedgerSequence,
 	FullHistoryHash
 } from '../../../domain/full-history/FullHistoryCanonicalTypes.js';
+import { getCanonicalOperationCoverage } from './FullHistoryCanonicalOperationCoverageQuery.js';
+
+export { getCanonicalOperationCoverage } from './FullHistoryCanonicalOperationCoverageQuery.js';
 
 interface FullHistoryOperationRow {
+	readonly accountReferenceDecoderVersion: string | null;
+	readonly accountReferences: unknown;
 	readonly archiveUrlIdentity: string;
 	readonly batchId: string;
 	readonly checkpointLedger: string;
@@ -46,16 +56,6 @@ interface FullHistoryOperationRow {
 	readonly transactionIndex: number;
 }
 
-interface FullHistoryOperationCoverageRow {
-	readonly canonicalBatches: string;
-	readonly firstIndexedLedger: string | null;
-	readonly indexedBatches: string;
-	readonly lastIndexedLedger: string | null;
-	readonly firstOutcomeIndexedLedger: string | null;
-	readonly lastOutcomeIndexedLedger: string | null;
-	readonly outcomeIndexedBatches: string;
-}
-
 export async function findCanonicalOperations(
 	dataSource: DataSource,
 	networkHash: FullHistoryHash,
@@ -63,9 +63,15 @@ export async function findCanonicalOperations(
 ): Promise<FullHistoryOperationPage> {
 	validateQuery(query);
 	const coverage = await getCanonicalOperationCoverage(dataSource, networkHash);
+	if (query.accountId !== undefined && !coverage.accountReferencesComplete) {
+		throw new FullHistoryOperationAccountReferenceCoverageError();
+	}
 	const rows = await dataSource.query<FullHistoryOperationRow[]>(
 		`
 			select
+				account_reference."accountReferences",
+				reference_coverage."reference_decoder_version" as
+					"accountReferenceDecoderVersion",
 				batch."archive_url_identity" as "archiveUrlIdentity",
 				operation."batch_id" as "batchId",
 				batch."checkpoint_ledger"::text as "checkpointLedger",
@@ -111,12 +117,52 @@ export async function findCanonicalOperations(
 				on result_coverage."batch_id" = operation."batch_id"
 				and result_coverage."network_passphrase_hash" =
 					operation."network_passphrase_hash"
+			left join
+				"full_history_operation_account_reference_batch_coverage"
+					reference_coverage
+				on reference_coverage."batch_id" = operation."batch_id"
+				and reference_coverage."network_passphrase_hash" =
+					operation."network_passphrase_hash"
+			left join lateral (
+				select coalesce(
+					jsonb_agg(
+						jsonb_build_object(
+							'accountId', reference."account_id",
+							'baseAccountId', reference."base_account_id",
+							'role', reference."role"
+						)
+						order by reference."role", reference."account_id"
+					),
+					'[]'::jsonb
+				) as "accountReferences"
+				from "full_history_operation_account_reference" reference
+				where reference."network_passphrase_hash" =
+					operation."network_passphrase_hash"
+					and reference."transaction_hash" =
+						operation."transaction_hash"
+					and reference."operation_index" = operation."operation_index"
+			) account_reference on true
 			where operation."network_passphrase_hash" = $1
 				and ($2::text is null or operation."operation_type" = $2)
 				and ($3::bigint is null or operation."ledger_sequence" >= $3)
 				and ($4::bigint is null or operation."ledger_sequence" <= $4)
 					and ($5::bytea is null or operation."transaction_hash" = $5)
-					and ($6::text is null or operation."source_account" = $6)
+					and ($6::text is null or exists (
+						select 1
+						from "full_history_operation_account_reference" filter_reference
+						where filter_reference."network_passphrase_hash" =
+							operation."network_passphrase_hash"
+							and filter_reference."transaction_hash" =
+								operation."transaction_hash"
+							and filter_reference."operation_index" =
+								operation."operation_index"
+							and (
+								(left($6, 1) = 'M'
+									and filter_reference."account_id" = $6)
+								or (left($6, 1) = 'G'
+									and filter_reference."base_account_id" = $6)
+							)
+					))
 					and ($7::timestamptz is null or ledger."closed_at" >= $7)
 					and ($8::timestamptz is null or ledger."closed_at" <= $8)
 			order by operation."ledger_sequence" desc,
@@ -130,7 +176,7 @@ export async function findCanonicalOperations(
 			query.firstLedger ?? null,
 			query.lastLedger ?? null,
 			query.transactionHash?.toBuffer() ?? null,
-			query.sourceAccount ?? null,
+			query.accountId ?? null,
 			query.closedAtFrom ?? null,
 			query.closedAtTo ?? null,
 			query.limit + 1
@@ -140,70 +186,6 @@ export async function findCanonicalOperations(
 		coverage,
 		records: rows.slice(0, query.limit).map(mapOperationRow),
 		truncated: rows.length > query.limit
-	};
-}
-
-export async function getCanonicalOperationCoverage(
-	dataSource: DataSource,
-	networkHash: FullHistoryHash
-): Promise<FullHistoryOperationCoverage> {
-	const rows = await dataSource.query<FullHistoryOperationCoverageRow[]>(
-		`
-			select count(batch.id)::text as "canonicalBatches",
-				count(coverage."batch_id")::text as "indexedBatches",
-				count(result_coverage."batch_id")::text as "outcomeIndexedBatches",
-				min(coverage."first_ledger")::text as "firstIndexedLedger",
-				max(coverage."last_ledger")::text as "lastIndexedLedger",
-				min(result_coverage."first_ledger")::text as
-					"firstOutcomeIndexedLedger",
-				max(result_coverage."last_ledger")::text as
-					"lastOutcomeIndexedLedger"
-			from "full_history_ingestion_batch" batch
-			left join "full_history_operation_batch_coverage" coverage
-				on coverage."batch_id" = batch.id
-				and coverage."network_passphrase_hash" =
-					batch."network_passphrase_hash"
-			left join "full_history_operation_result_batch_coverage" result_coverage
-				on result_coverage."batch_id" = batch.id
-				and result_coverage."network_passphrase_hash" =
-					batch."network_passphrase_hash"
-			where batch."network_passphrase_hash" = $1
-		`,
-		[networkHash.toBuffer()]
-	);
-	const row = rows[0];
-	if (row === undefined) {
-		throw new Error('PostgreSQL did not return operation coverage');
-	}
-	const canonicalBatches = readCount(row.canonicalBatches, 'canonicalBatches');
-	const indexedBatches = readCount(row.indexedBatches, 'indexedBatches');
-	const outcomeIndexedBatches = readCount(
-		row.outcomeIndexedBatches,
-		'outcomeIndexedBatches'
-	);
-	return {
-		canonicalBatches,
-		complete: canonicalBatches > 0 && indexedBatches === canonicalBatches,
-		firstIndexedLedger: readOptionalLedger(
-			row.firstIndexedLedger,
-			'firstIndexedLedger'
-		),
-		firstOutcomeIndexedLedger: readOptionalLedger(
-			row.firstOutcomeIndexedLedger,
-			'firstOutcomeIndexedLedger'
-		),
-		indexedBatches,
-		lastIndexedLedger: readOptionalLedger(
-			row.lastIndexedLedger,
-			'lastIndexedLedger'
-		),
-		lastOutcomeIndexedLedger: readOptionalLedger(
-			row.lastOutcomeIndexedLedger,
-			'lastOutcomeIndexedLedger'
-		),
-		outcomeIndexedBatches,
-		outcomesComplete:
-			canonicalBatches > 0 && outcomeIndexedBatches === canonicalBatches
 	};
 }
 
@@ -224,10 +206,10 @@ function validateQuery(query: FullHistoryOperationQuery): void {
 		throw new Error('operationType is unsupported');
 	}
 	if (
-		query.sourceAccount !== undefined &&
-		!isFullHistoryOperationSourceAccount(query.sourceAccount)
+		query.accountId !== undefined &&
+		!isFullHistoryOperationSourceAccount(query.accountId)
 	) {
-		throw new Error('sourceAccount must be a valid Stellar StrKey');
+		throw new Error('accountId must be a valid Stellar StrKey');
 	}
 	if (
 		query.transactionHash !== undefined &&
@@ -282,7 +264,18 @@ function mapOperationRow(
 		throw new Error('PostgreSQL returned an unsupported operation fact scope');
 	}
 	const sourceAccountOrigin = readSourceOrigin(row.sourceAccountOrigin);
+	const accountReferences = readAccountReferences(row.accountReferences);
+	if (
+		(row.accountReferenceDecoderVersion === null) !==
+		(accountReferences.length === 0)
+	) {
+		throw new Error(
+			'PostgreSQL returned incomplete operation account-reference facts'
+		);
+	}
 	return {
+		accountReferenceDecoderVersion: row.accountReferenceDecoderVersion,
+		accountReferences,
 		archiveUrlIdentity: row.archiveUrlIdentity,
 		batchId: row.batchId,
 		checkpointLedger: fullHistoryLedgerSequence(
@@ -397,17 +390,35 @@ function readDate(value: Date | string): Date {
 	return date;
 }
 
-function readCount(value: string, field: string): number {
-	const count = Number(value);
-	if (!Number.isSafeInteger(count) || count < 0) {
-		throw new TypeError(`PostgreSQL returned an invalid ${field}`);
+function readAccountReferences(
+	value: unknown
+): readonly FullHistoryOperationAccountReferenceView[] {
+	if (!Array.isArray(value)) {
+		throw new TypeError(
+			'PostgreSQL returned invalid operation account references'
+		);
 	}
-	return count;
-}
-
-function readOptionalLedger(
-	value: string | null,
-	field: string
-): ReturnType<typeof fullHistoryLedgerSequence> | null {
-	return value === null ? null : fullHistoryLedgerSequence(value, field);
+	return value.map((item) => {
+		if (typeof item !== 'object' || item === null) {
+			throw new TypeError(
+				'PostgreSQL returned an invalid operation account reference'
+			);
+		}
+		const candidate = item as Record<string, unknown>;
+		const accountId = candidate.accountId;
+		const baseAccountId = candidate.baseAccountId;
+		const role = candidate.role;
+		if (
+			typeof accountId !== 'string' ||
+			typeof baseAccountId !== 'string' ||
+			typeof role !== 'string' ||
+			!isFullHistoryOperationAccountReferenceRole(role) ||
+			fullHistoryBaseAccountId(accountId) !== baseAccountId
+		) {
+			throw new TypeError(
+				'PostgreSQL returned an invalid operation account reference'
+			);
+		}
+		return { accountId, baseAccountId, role };
+	});
 }

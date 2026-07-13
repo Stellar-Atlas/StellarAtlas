@@ -28,6 +28,7 @@ import {
 	readFeeBumpEtlFixture
 } from '../../../infrastructure/full-history-promotion/__tests__/RealStellarXdrFixtures.js';
 import { BackfillFullHistoryOperations } from '../BackfillFullHistoryOperations.js';
+import { FullHistoryOperationBackfillPostgresAssertions } from './FullHistoryOperationBackfillPostgresAssertions.js';
 
 jest.setTimeout(120_000);
 
@@ -36,13 +37,9 @@ interface LegacyBatchFixture {
 	readonly proofId: number;
 }
 
-interface ImmutableRowSnapshot {
-	readonly identity: string;
-	readonly xmin: string;
-}
-
 describe('BackfillFullHistoryOperations', () => {
 	let candidateRepository: TypeOrmFullHistoryCheckpointCandidateRepository;
+	let database: FullHistoryOperationBackfillPostgresAssertions;
 	let dataSource: DataSource;
 	let decoder: StellarFullHistoryCheckpointDecoder;
 	let postgres: DisposablePostgres;
@@ -57,6 +54,7 @@ describe('BackfillFullHistoryOperations', () => {
 		});
 		await dataSource.initialize();
 		await installPromotionSchema(dataSource);
+		database = new FullHistoryOperationBackfillPostgresAssertions(dataSource);
 		candidateRepository = new TypeOrmFullHistoryCheckpointCandidateRepository(
 			dataSource
 		);
@@ -113,7 +111,7 @@ describe('BackfillFullHistoryOperations', () => {
 		if (timeoutFixture === undefined) {
 			throw new Error('Expected a separate timeout batch');
 		}
-		const immutableBefore = await immutableRows();
+		const immutableBefore = await database.immutableRows();
 
 		await dataSource.query(
 			`update "history_archive_checkpoint_proof"
@@ -124,7 +122,7 @@ describe('BackfillFullHistoryOperations', () => {
 		await expect(normalUseCase().execute(runInput(1))).rejects.toMatchObject({
 			reason: 'immutable-provenance-mismatch'
 		});
-		await expect(coverageCount()).resolves.toBe(0);
+		await expect(database.coverageCount()).resolves.toBe(0);
 		await dataSource.query(
 			`update "history_archive_checkpoint_proof"
 			 set "proofVersion" = $1 where id = $2`,
@@ -139,7 +137,7 @@ describe('BackfillFullHistoryOperations', () => {
 			)
 		);
 
-		await installSlowCoverageTrigger();
+		await database.installSlowReferenceCoverageTrigger();
 		try {
 			const timeoutRepository =
 				new TypeOrmFullHistoryOperationBackfillRepository(dataSource, {
@@ -157,9 +155,13 @@ describe('BackfillFullHistoryOperations', () => {
 				where: expect.stringContaining('pg_sleep')
 			});
 		} finally {
-			await removeSlowCoverageTrigger();
+			await database.removeSlowReferenceCoverageTrigger();
 		}
-		await expect(batchProgress(timeoutFixture.input.batchId)).resolves.toEqual({
+		await expect(
+			database.batchProgress(timeoutFixture.input.batchId)
+		).resolves.toEqual({
+			accountReferenceCount: 0,
+			accountReferenceCoverageCount: 0,
 			coverageCount: 0,
 			operationCount: 0
 		});
@@ -179,20 +181,26 @@ describe('BackfillFullHistoryOperations', () => {
 				decoder
 			).execute(runInput(1))
 		).rejects.toThrow('simulated process crash after commit');
-		await expect(coverageCount()).resolves.toBe(1);
+		await expect(database.coverageCount()).resolves.toBe(1);
 
 		const restarted = normalUseCase();
-		await expect(restarted.execute(runInput(1))).resolves.toMatchObject({
+		const resumed = await restarted.execute(runInput(1));
+		expect(resumed).toMatchObject({
 			completedBatches: 1,
 			operationFacts: 1,
 			status: 'completed'
 		});
+		expect(resumed.accountReferenceFacts).toBe(
+			resumed.receipts[0]!.accountReferenceCount
+		);
 		await expect(restarted.execute(runInput(1))).resolves.toMatchObject({
+			accountReferenceFacts: 0,
 			completedBatches: 1,
 			operationFacts: 0,
 			status: 'completed'
 		});
 		await expect(restarted.execute(runInput(1))).resolves.toEqual({
+			accountReferenceFacts: 0,
 			batchLimit: 1,
 			completedBatches: 0,
 			cpuWorkers: 2,
@@ -206,11 +214,12 @@ describe('BackfillFullHistoryOperations', () => {
 		await expect(
 			repository.storeOperations(selected.input)
 		).resolves.toMatchObject({
+			accountReferenceCount: selected.input.operationAccountReferences.length,
 			batchId: selected.input.batchId,
 			operationCount: 1,
 			replayed: true
 		});
-		expect(await operationRows()).toEqual([
+		expect(await database.operationRows()).toEqual([
 			{
 				batchId: classic.input.batchId,
 				operationType: 'create_account',
@@ -230,7 +239,7 @@ describe('BackfillFullHistoryOperations', () => {
 					'c08806d61690a168bbd0159bd6ece44a34b57ca15b36ff52f2d5668adcd85901'
 			}
 		]);
-		await expect(coverageRows()).resolves.toEqual([
+		await expect(database.operationCoverageRows()).resolves.toEqual([
 			{
 				batchId: empty.input.batchId,
 				operationCount: 0,
@@ -250,7 +259,23 @@ describe('BackfillFullHistoryOperations', () => {
 				transactionCount: 1
 			}
 		]);
-		await expect(operationResultRows()).resolves.toEqual([
+		await expect(
+			database.operationAccountReferenceCoverageRows()
+		).resolves.toEqual(
+			[empty, classic, feeBump].map((fixture) => ({
+				accountReferenceCount: fixture.input.operationAccountReferences.length,
+				batchId: fixture.input.batchId,
+				operationCount: fixture.input.operations.length,
+				referenceDecoderVersion: decoder.operationAccountReferenceDecoderVersion
+			}))
+		);
+		await expect(database.operationAccountReferenceCounts()).resolves.toEqual(
+			[classic, feeBump].map((fixture) => ({
+				batchId: fixture.input.batchId,
+				count: fixture.input.operationAccountReferences.length
+			}))
+		);
+		await expect(database.operationResultRows()).resolves.toEqual([
 			{
 				batchId: classic.input.batchId,
 				factScope: 'transaction_result_xdr',
@@ -266,7 +291,7 @@ describe('BackfillFullHistoryOperations', () => {
 				outcome: 'succeeded'
 			}
 		]);
-		await expect(operationResultCoverageRows()).resolves.toEqual([
+		await expect(database.operationResultCoverageRows()).resolves.toEqual([
 			{
 				batchId: empty.input.batchId,
 				operationCount: 0,
@@ -283,7 +308,7 @@ describe('BackfillFullHistoryOperations', () => {
 				resultDecoderVersion: decoder.operationResultDecoderVersion
 			}
 		]);
-		expect(await immutableRows()).toEqual(immutableBefore);
+		expect(await database.immutableRows()).toEqual(immutableBefore);
 		await expect(normalUseCase().execute(runInput(9))).rejects.toMatchObject({
 			reason: 'invalid-batch-limit'
 		});
@@ -330,6 +355,9 @@ describe('BackfillFullHistoryOperations', () => {
 			lastLedger: decoded.ledgers.at(-1)!.ledgerSequence,
 			ledgers: decoded.ledgers,
 			networkPassphrase: publicNetworkPassphrase,
+			operationAccountReferenceDecoderVersion:
+				decoder.operationAccountReferenceDecoderVersion,
+			operationAccountReferences: decoded.operationAccountReferences,
 			operationDecoderVersion: decoder.operationDecoderVersion,
 			operations: decoded.operations,
 			operationResultDecoderVersion: decoder.operationResultDecoderVersion,
@@ -355,158 +383,5 @@ describe('BackfillFullHistoryOperations', () => {
 			cpuWorkerCount: 2,
 			networkPassphrase: publicNetworkPassphrase
 		};
-	}
-
-	async function coverageCount(): Promise<number> {
-		const rows = await dataSource.query<Array<{ readonly count: number }>>(
-			`select count(*)::integer as count
-			 from "full_history_operation_batch_coverage"`
-		);
-		return rows[0]?.count ?? -1;
-	}
-
-	async function batchProgress(batchId: string): Promise<{
-		readonly coverageCount: number;
-		readonly operationCount: number;
-	}> {
-		const rows = await dataSource.query<
-			Array<{
-				readonly coverageCount: number;
-				readonly operationCount: number;
-			}>
-		>(
-			`select
-				(select count(*)::integer
-				 from "full_history_operation_batch_coverage"
-				 where "batch_id" = $1) as "coverageCount",
-				(select count(*)::integer from "full_history_operation"
-				 where "batch_id" = $1) as "operationCount"`,
-			[batchId]
-		);
-		return rows[0] ?? { coverageCount: -1, operationCount: -1 };
-	}
-
-	async function installSlowCoverageTrigger(): Promise<void> {
-		await dataSource.query(`
-			create function full_history_operation_backfill_test_timeout()
-			returns trigger language plpgsql as $function$
-			begin
-				perform pg_sleep(1);
-				return new;
-			end
-			$function$
-		`);
-		await dataSource.query(`
-			create trigger full_history_operation_backfill_test_timeout
-			before insert on "full_history_operation_batch_coverage"
-			for each row execute function
-				full_history_operation_backfill_test_timeout()
-		`);
-	}
-
-	async function removeSlowCoverageTrigger(): Promise<void> {
-		await dataSource.query(`
-			drop trigger if exists full_history_operation_backfill_test_timeout
-			on "full_history_operation_batch_coverage"
-		`);
-		await dataSource.query(`
-			drop function if exists full_history_operation_backfill_test_timeout()
-		`);
-	}
-
-	async function immutableRows(): Promise<ImmutableRowSnapshot[]> {
-		return dataSource.query<ImmutableRowSnapshot[]>(`
-			select 'batch:' || id::text as identity, xmin::text as xmin
-			from "full_history_ingestion_batch"
-			union all
-			select 'transaction:' || encode("transaction_hash", 'hex'),
-				xmin::text as xmin
-			from "full_history_transaction"
-			order by identity
-		`);
-	}
-
-	async function operationRows() {
-		return dataSource.query<
-			Array<{
-				readonly batchId: string;
-				readonly operationType: string;
-				readonly sourceAccount: string;
-				readonly sourceAccountOrigin: string;
-				readonly transactionHash: string;
-			}>
-		>(`
-			select "batch_id" as "batchId", "operation_type" as "operationType",
-				"source_account" as "sourceAccount",
-				"source_account_origin" as "sourceAccountOrigin",
-				encode("transaction_hash", 'hex') as "transactionHash"
-			from "full_history_operation"
-			order by "operation_type"
-		`);
-	}
-
-	async function coverageRows() {
-		return dataSource.query<
-			Array<{
-				readonly batchId: string;
-				readonly operationCount: number;
-				readonly operationDecoderVersion: string;
-				readonly transactionCount: number;
-			}>
-		>(`
-			select coverage."batch_id" as "batchId",
-				coverage."operation_count" as "operationCount",
-				coverage."operation_decoder_version" as "operationDecoderVersion",
-				coverage."transaction_count" as "transactionCount"
-			from "full_history_operation_batch_coverage" coverage
-			join "full_history_ingestion_batch" batch
-				on batch.id = coverage."batch_id"
-			order by batch."last_ledger"
-		`);
-	}
-
-	async function operationResultRows() {
-		return dataSource.query<
-			Array<{
-				readonly batchId: string;
-				readonly factScope: string;
-				readonly operationResultCode: number | null;
-				readonly operationSpecificResultCode: number | null;
-				readonly outcome: string;
-			}>
-		>(`
-			select operation."batch_id" as "batchId", result."outcome",
-				result."operation_result_code" as "operationResultCode",
-				result."operation_specific_result_code"
-					as "operationSpecificResultCode",
-				result."fact_scope" as "factScope"
-			from "full_history_operation_result" result
-			join "full_history_operation" operation
-				on operation."network_passphrase_hash" =
-					result."network_passphrase_hash"
-				and operation."transaction_hash" = result."transaction_hash"
-				and operation."operation_index" = result."operation_index"
-			join "full_history_ingestion_batch" batch
-				on batch.id = operation."batch_id"
-			order by batch."last_ledger"
-		`);
-	}
-
-	async function operationResultCoverageRows() {
-		return dataSource.query<
-			Array<{
-				readonly batchId: string;
-				readonly operationCount: number;
-				readonly resultDecoderVersion: string;
-			}>
-		>(`
-			select coverage."batch_id" as "batchId",
-				coverage."operation_count" as "operationCount",
-				coverage."result_decoder_version" as "resultDecoderVersion"
-			from "full_history_operation_result_batch_coverage" coverage
-			join "full_history_ingestion_batch" batch
-				on batch.id = coverage."batch_id"
-			order by batch."last_ledger"
-		`);
 	}
 });

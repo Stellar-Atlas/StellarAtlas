@@ -58,7 +58,9 @@ describe('FullHistoryCanonicalOperationResultStore', () => {
 				: []
 		);
 
-		await expect(assertCanonicalOperationResults(manager, input)).rejects.toEqual(
+		await expect(
+			assertCanonicalOperationResults(manager, input)
+		).rejects.toEqual(
 			expect.objectContaining<Partial<FullHistoryCanonicalError>>({
 				reason: 'canonical-row-conflict'
 			})
@@ -80,7 +82,9 @@ describe('FullHistoryCanonicalOperationResultStore', () => {
 			}
 		);
 
-		await expect(assertCanonicalOperationResults(manager, input)).rejects.toEqual(
+		await expect(
+			assertCanonicalOperationResults(manager, input)
+		).rejects.toEqual(
 			expect.objectContaining<Partial<FullHistoryCanonicalError>>({
 				reason: 'canonical-row-conflict'
 			})
@@ -113,7 +117,9 @@ describe('FullHistoryCanonicalOperationResultStore', () => {
 			}
 		);
 
-		await expect(assertCanonicalOperationResults(manager, input)).rejects.toEqual(
+		await expect(
+			assertCanonicalOperationResults(manager, input)
+		).rejects.toEqual(
 			expect.objectContaining<Partial<FullHistoryCanonicalError>>({
 				reason: 'canonical-row-conflict'
 			})
@@ -135,6 +141,8 @@ function checkpointWriteWithOperationResults(
 		lastLedger: fullHistoryLedgerSequence('63'),
 		ledgers: [],
 		networkPassphrase: 'Operation outcome chunk fixture network',
+		operationAccountReferenceDecoderVersion: 'fixture-reference-decoder/1',
+		operationAccountReferences: [],
 		operationDecoderVersion: 'fixture-operation-decoder/1',
 		operations: [],
 		operationResultDecoderVersion: 'fixture-result-decoder/1',

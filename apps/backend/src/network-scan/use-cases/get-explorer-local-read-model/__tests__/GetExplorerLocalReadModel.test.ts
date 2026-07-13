@@ -14,19 +14,7 @@ describe('GetExplorerLocalReadModel', () => {
 	it('reports complete canonical transaction and operation coverage', async () => {
 		const parsed = parsedRepository();
 		const canonical = mock<FullHistoryCanonicalRepository>();
-		canonical.getCoverage.mockResolvedValue({
-			archiveSourceCount: 1,
-			batchCount: 1,
-			firstLedger: fullHistoryLedgerSequence(63386240n, 'firstLedger'),
-			lastLedger: fullHistoryLedgerSequence(63386303n, 'lastLedger'),
-			latestEvidence: canonicalLatestEvidence(),
-			latestLedgerClosedAt: new Date('2026-07-08T16:09:36.000Z'),
-			ledgerCount: 64,
-			nextLedger: fullHistoryUint64(63386304n, 'nextLedger'),
-			transactionCount: 26158,
-			transactionResultCount: 26158,
-			updatedAt: new Date('2026-07-12T03:19:10.000Z')
-		});
+		canonical.getCoverage.mockResolvedValue(canonicalCoverage());
 		canonical.getOperationCoverage.mockResolvedValue(operationCoverage(true));
 
 		const result = await new GetExplorerLocalReadModel(parsed, canonical, {
@@ -57,6 +45,26 @@ describe('GetExplorerLocalReadModel', () => {
 		expect(canonical.getCoverage).toHaveBeenCalledWith(networkPassphrase);
 		expect(parsed.getWatermark).not.toHaveBeenCalled();
 		expect(result.source).toBe('full_history_canonical_repository');
+	});
+
+	it('keeps operation readiness false until account-reference coverage is complete', async () => {
+		const parsed = parsedRepository();
+		const canonical = mock<FullHistoryCanonicalRepository>();
+		canonical.getCoverage.mockResolvedValue(canonicalCoverage());
+		canonical.getOperationCoverage.mockResolvedValue(
+			operationCoverage(true, false)
+		);
+
+		await expect(
+			new GetExplorerLocalReadModel(parsed, canonical, {
+				networkPassphrase
+			}).execute()
+		).resolves.toMatchObject({
+			indexes: {
+				operationIndexReady: false,
+				transactionIndexReady: true
+			}
+		});
 	});
 
 	it('retains Horizon fallback when no canonical range exists', async () => {
@@ -123,20 +131,53 @@ function canonicalLatestEvidence() {
 	};
 }
 
-function operationCoverage(complete: boolean) {
+function canonicalCoverage() {
 	return {
-		canonicalBatches: complete ? 1 : 0,
+		archiveSourceCount: 1,
+		batchCount: 1,
+		firstLedger: fullHistoryLedgerSequence(63386240n, 'firstLedger'),
+		lastLedger: fullHistoryLedgerSequence(63386303n, 'lastLedger'),
+		latestEvidence: canonicalLatestEvidence(),
+		latestLedgerClosedAt: new Date('2026-07-08T16:09:36.000Z'),
+		ledgerCount: 64,
+		nextLedger: fullHistoryUint64(63386304n, 'nextLedger'),
+		transactionCount: 26158,
+		transactionResultCount: 26158,
+		updatedAt: new Date('2026-07-12T03:19:10.000Z')
+	};
+}
+
+function operationCoverage(
+	operationFactsComplete: boolean,
+	accountReferencesComplete = operationFactsComplete
+) {
+	const complete = operationFactsComplete && accountReferencesComplete;
+	return {
+		accountReferenceIndexedBatches: accountReferencesComplete ? 1 : 0,
+		accountReferencesComplete,
+		canonicalBatches: operationFactsComplete ? 1 : 0,
 		complete,
-		firstIndexedLedger: complete ? fullHistoryLedgerSequence(63386240n) : null,
-		firstOutcomeIndexedLedger: complete
+		firstAccountReferenceIndexedLedger: accountReferencesComplete
 			? fullHistoryLedgerSequence(63386240n)
 			: null,
-		indexedBatches: complete ? 1 : 0,
-		lastIndexedLedger: complete ? fullHistoryLedgerSequence(63386303n) : null,
-		lastOutcomeIndexedLedger: complete
+		firstIndexedLedger: operationFactsComplete
+			? fullHistoryLedgerSequence(63386240n)
+			: null,
+		firstOutcomeIndexedLedger: operationFactsComplete
+			? fullHistoryLedgerSequence(63386240n)
+			: null,
+		indexedBatches: operationFactsComplete ? 1 : 0,
+		lastAccountReferenceIndexedLedger: accountReferencesComplete
 			? fullHistoryLedgerSequence(63386303n)
 			: null,
-		outcomeIndexedBatches: complete ? 1 : 0,
-		outcomesComplete: complete
+		lastIndexedLedger: operationFactsComplete
+			? fullHistoryLedgerSequence(63386303n)
+			: null,
+		lastOutcomeIndexedLedger: operationFactsComplete
+			? fullHistoryLedgerSequence(63386303n)
+			: null,
+		outcomeIndexedBatches: operationFactsComplete ? 1 : 0,
+		operationFactsComplete,
+		outcomesComplete: operationFactsComplete
 	};
 }

@@ -12,6 +12,10 @@ import {
 	storeCanonicalOperations
 } from './FullHistoryCanonicalOperationStore.js';
 import {
+	assertCanonicalOperationAccountReferences,
+	storeCanonicalOperationAccountReferences
+} from './FullHistoryCanonicalOperationAccountReferenceStore.js';
+import {
 	assertCanonicalOperationResults,
 	storeCanonicalOperationResults
 } from './FullHistoryCanonicalOperationResultStore.js';
@@ -63,6 +67,8 @@ export async function storeCanonicalFacts(
 	await storeCanonicalBaseFacts(manager, input, networkHash);
 	await storeCanonicalOperations(manager, input, networkHash);
 	await assertCanonicalOperations(manager, input);
+	await storeCanonicalOperationAccountReferences(manager, input, networkHash);
+	await assertCanonicalOperationAccountReferences(manager, input);
 	await storeCanonicalOperationResults(manager, input, networkHash);
 	await assertCanonicalOperationResults(manager, input);
 }
@@ -95,6 +101,7 @@ export async function assertCanonicalFacts(
 ): Promise<void> {
 	await assertCanonicalBaseFacts(manager, input, networkHash);
 	await assertCanonicalOperations(manager, input);
+	await assertCanonicalOperationAccountReferences(manager, input);
 	await assertCanonicalOperationResults(manager, input);
 }
 

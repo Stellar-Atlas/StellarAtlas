@@ -28,6 +28,11 @@ import {
 	readWorkerRecord,
 	readWorkerString
 } from './FullHistoryOperationWorkerValueParser.js';
+import {
+	parseOperationAccountReferences,
+	serializeOperationAccountReferences,
+	type WireOperationAccountReference
+} from './FullHistoryOperationWorkerAccountReferenceCodec.js';
 
 export interface WireDecodedCheckpoint {
 	readonly ledgers: readonly {
@@ -41,6 +46,7 @@ export interface WireDecodedCheckpoint {
 		readonly transactionResultHash: string;
 		readonly transactionSetHash: string;
 	}[];
+	readonly operationAccountReferences: readonly WireOperationAccountReference[];
 	readonly operations: readonly {
 		readonly factScope: string;
 		readonly ledgerSequence: string;
@@ -97,6 +103,9 @@ export function serializeFullHistoryOperationWorkerDecodedCheckpoint(
 			transactionResultHash: ledger.transactionResultHash.toHex(),
 			transactionSetHash: ledger.transactionSetHash.toHex()
 		})),
+		operationAccountReferences: serializeOperationAccountReferences(
+			decoded.operationAccountReferences
+		),
 		operations: decoded.operations.map((operation) => ({
 			factScope: operation.factScope,
 			ledgerSequence: operation.ledgerSequence,
@@ -189,6 +198,9 @@ export function parseFullHistoryOperationWorkerDecodedCheckpoint(
 					)
 				};
 			}
+		),
+		operationAccountReferences: parseOperationAccountReferences(
+			decoded.operationAccountReferences
 		),
 		operations: readWorkerArray(
 			decoded.operations,

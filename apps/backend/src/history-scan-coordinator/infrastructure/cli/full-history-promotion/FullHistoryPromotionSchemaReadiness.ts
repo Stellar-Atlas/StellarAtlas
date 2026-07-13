@@ -16,6 +16,8 @@ const requiredRelations = [
 	'full_history_transaction_result',
 	'full_history_operation',
 	'full_history_operation_batch_coverage',
+	'full_history_operation_account_reference',
+	'full_history_operation_account_reference_batch_coverage',
 	'full_history_operation_result',
 	'full_history_operation_result_batch_coverage',
 	'full_history_promotion_runtime'
@@ -33,7 +35,11 @@ const requiredColumns = [
 	['parsed_transaction_envelope_observation', 'sourceObjectRemoteId'],
 	['parsed_transaction_result_observation', 'sourceObjectRemoteId'],
 	['full_history_ingestion_batch', 'checkpoint_proof_id'],
-	['full_history_ingestion_batch', 'network_passphrase_hash']
+	['full_history_ingestion_batch', 'network_passphrase_hash'],
+	[
+		'full_history_operation_account_reference_batch_coverage',
+		'reference_decoder_version'
+	]
 ] as const;
 
 const requiredTriggers = [
@@ -42,6 +48,14 @@ const requiredTriggers = [
 		'trg_validate_full_history_batch_provenance'
 	],
 	['full_history_ingestion_batch', 'trg_reject_full_history_batch_mutation'],
+	[
+		'full_history_operation_account_reference',
+		'trg_reject_full_history_operation_account_reference_mutation'
+	],
+	[
+		'full_history_operation_account_reference_batch_coverage',
+		'trg_reject_full_history_operation_account_ref_cov_mutation'
+	],
 	['full_history_watermark', 'trg_validate_full_history_watermark_advance']
 ] as const;
 

@@ -18,6 +18,7 @@ import {
 	FullHistoryHash
 } from '../../domain/full-history/FullHistoryCanonicalTypes.js';
 import type { FullHistoryOperationInput } from '../../domain/full-history/FullHistoryCanonicalOperation.js';
+import type { FullHistoryOperationAccountReferenceInput } from '../../domain/full-history/FullHistoryCanonicalOperationAccountReference.js';
 import type { FullHistoryOperationResultInput } from '../../domain/full-history/FullHistoryCanonicalOperationResult.js';
 import type {
 	FullHistoryCandidateEnvelope,
@@ -34,6 +35,10 @@ import {
 	decodeStellarFullHistoryOperations,
 	STELLAR_FULL_HISTORY_OPERATION_DECODER_VERSION
 } from './StellarFullHistoryOperationDecoder.js';
+import {
+	decodeStellarFullHistoryOperationAccountReferences,
+	STELLAR_FULL_HISTORY_OPERATION_ACCOUNT_REFERENCE_DECODER_VERSION
+} from './StellarFullHistoryOperationAccountReferenceDecoder.js';
 import {
 	decodeStellarFullHistoryOperationResults,
 	STELLAR_FULL_HISTORY_OPERATION_RESULT_DECODER_VERSION
@@ -54,7 +59,10 @@ interface DecodedResult {
 }
 
 export class StellarFullHistoryCheckpointDecoder implements FullHistoryCheckpointDecoder {
-	readonly version = 'stellar-sdk-16/archive-xdr-v3-operation-results';
+	readonly version =
+		'stellar-sdk-16/archive-xdr-v4-operation-account-references';
+	readonly operationAccountReferenceDecoderVersion =
+		STELLAR_FULL_HISTORY_OPERATION_ACCOUNT_REFERENCE_DECODER_VERSION;
 	readonly operationDecoderVersion =
 		STELLAR_FULL_HISTORY_OPERATION_DECODER_VERSION;
 	readonly operationResultDecoderVersion =
@@ -90,6 +98,8 @@ export class StellarFullHistoryCheckpointDecoder implements FullHistoryCheckpoin
 		validateRowIndexes(results, ledgersBySequence, 'Result');
 
 		let decodedBytes = 0;
+		const operationAccountReferences: FullHistoryOperationAccountReferenceInput[] =
+			[];
 		const operations: FullHistoryOperationInput[] = [];
 		const operationResults: FullHistoryOperationResultInput[] = [];
 		const transactions: FullHistoryTransactionInput[] = [];
@@ -152,10 +162,16 @@ export class StellarFullHistoryCheckpointDecoder implements FullHistoryCheckpoin
 				transactionIndex: result.transactionIndex
 			};
 			transactions.push(canonicalTransaction);
-			operations.push(
-				...decodeStellarFullHistoryOperations(
+			const decodedOperations = decodeStellarFullHistoryOperations(
+				envelope.decoded.sdkTransaction,
+				canonicalTransaction
+			);
+			operations.push(...decodedOperations);
+			operationAccountReferences.push(
+				...decodeStellarFullHistoryOperationAccountReferences(
 					envelope.decoded.sdkTransaction,
-					canonicalTransaction
+					canonicalTransaction,
+					decodedOperations
 				)
 			);
 			operationResults.push(
@@ -188,6 +204,7 @@ export class StellarFullHistoryCheckpointDecoder implements FullHistoryCheckpoin
 		);
 		return {
 			ledgers,
+			operationAccountReferences,
 			operations,
 			operationResults,
 			results: decodedResults,

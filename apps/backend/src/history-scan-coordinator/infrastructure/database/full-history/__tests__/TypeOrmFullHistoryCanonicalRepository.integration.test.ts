@@ -243,23 +243,37 @@ describe('TypeOrmFullHistoryCanonicalRepository', () => {
 			lastLedger: fullHistoryLedgerSequence('127'),
 			limit: 10,
 			operationType: 'create_account',
-			sourceAccount: regular.operations[0]!.sourceAccount,
+			accountId: regular.operations[0]!.sourceAccount,
 			transactionHash: regular.transactions[0]!.transactionHash
 		});
 		expect(page).toMatchObject({
 			coverage: {
+				accountReferenceIndexedBatches: 2,
+				accountReferencesComplete: true,
 				canonicalBatches: 2,
 				complete: true,
+				firstAccountReferenceIndexedLedger: '1',
 				firstIndexedLedger: '1',
 				firstOutcomeIndexedLedger: '1',
 				indexedBatches: 2,
 				lastIndexedLedger: '127',
+				lastAccountReferenceIndexedLedger: '127',
 				lastOutcomeIndexedLedger: '127',
 				outcomeIndexedBatches: 2,
+				operationFactsComplete: true,
 				outcomesComplete: true
 			},
 			records: [
 				{
+					accountReferenceDecoderVersion:
+						'fixture-operation-account-reference-decoder/1',
+					accountReferences: [
+						{
+							accountId: regular.operations[0]!.sourceAccount,
+							baseAccountId: regular.operations[0]!.sourceAccount,
+							role: 'effective_source'
+						}
+					],
 					archiveUrlIdentity: regular.archiveUrlIdentity,
 					batchId: regular.batchId,
 					checkpointLedger: '127',
@@ -290,10 +304,13 @@ describe('TypeOrmFullHistoryCanonicalRepository', () => {
 		await expect(
 			repository.getOperationCoverage(networkPassphrase)
 		).resolves.toMatchObject({
+			accountReferenceIndexedBatches: 2,
+			accountReferencesComplete: true,
 			canonicalBatches: 2,
 			complete: true,
 			indexedBatches: 2,
 			outcomeIndexedBatches: 2,
+			operationFactsComplete: true,
 			outcomesComplete: true
 		});
 

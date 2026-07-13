@@ -45,6 +45,9 @@ export class PrependFullHistoryCheckpoint {
 			lastLedger: lastLedger.ledgerSequence,
 			ledgers: decoded.ledgers,
 			networkPassphrase: candidate.proof.networkPassphrase,
+			operationAccountReferenceDecoderVersion:
+				this.decoder.operationAccountReferenceDecoderVersion,
+			operationAccountReferences: decoded.operationAccountReferences,
 			operationDecoderVersion: this.decoder.operationDecoderVersion,
 			operations: decoded.operations,
 			operationResultDecoderVersion: this.decoder.operationResultDecoderVersion,

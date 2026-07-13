@@ -43,9 +43,9 @@ function readOperationQuery(
 	const firstLedger = readAliasedString(req.query.firstLedger, exactLedger);
 	const lastLedger = readAliasedString(req.query.lastLedger, exactLedger);
 	const operationType = readOptionalString(req.query.operationType);
-	const sourceAccount = readAliasedString(
-		req.query.sourceAccount,
-		readOptionalString(req.query.accountId)
+	const accountId = readAliasedString(
+		req.query.accountId,
+		readOptionalString(req.query.sourceAccount)
 	);
 	const transactionHash = readOptionalString(req.query.transactionHash);
 	const closedAtFrom = readDate(req.query.from);
@@ -55,7 +55,7 @@ function readOperationQuery(
 		limit === null ||
 		firstLedger === false ||
 		lastLedger === false ||
-		sourceAccount === false ||
+		accountId === false ||
 		closedAtFrom === false ||
 		closedAtTo === false ||
 		(closedAtFrom !== undefined &&
@@ -63,8 +63,8 @@ function readOperationQuery(
 			closedAtFrom.getTime() > closedAtTo.getTime()) ||
 		(operationType !== undefined &&
 			!isFullHistoryOperationType(operationType)) ||
-		(sourceAccount !== undefined &&
-			!isFullHistoryOperationSourceAccount(sourceAccount)) ||
+		(accountId !== undefined &&
+			!isFullHistoryOperationSourceAccount(accountId)) ||
 		(transactionHash !== undefined && !isTransactionHash(transactionHash))
 	) {
 		return null;
@@ -81,13 +81,13 @@ function readOperationQuery(
 	}
 
 	return {
+		...(accountId === undefined ? {} : { accountId }),
 		...(closedAtFrom === undefined ? {} : { closedAtFrom }),
 		...(closedAtTo === undefined ? {} : { closedAtTo }),
 		...(first === null ? {} : { firstLedger: first }),
 		...(last === null ? {} : { lastLedger: last }),
 		limit,
 		...(operationType === undefined ? {} : { operationType }),
-		...(sourceAccount === undefined ? {} : { sourceAccount }),
 		...(transactionHash === undefined
 			? {}
 			: { transactionHash: FullHistoryHash.fromHex(transactionHash) })

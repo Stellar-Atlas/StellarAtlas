@@ -19,6 +19,7 @@ export interface BackfillFullHistoryOperationsInput {
 }
 
 export interface BackfillFullHistoryOperationsResult {
+	readonly accountReferenceFacts: number;
 	readonly batchLimit: number;
 	readonly completedBatches: number;
 	readonly cpuWorkers: number;
@@ -52,6 +53,10 @@ export class BackfillFullHistoryOperations {
 		);
 		const receipts = execution.receipts;
 		return {
+			accountReferenceFacts: receipts.reduce(
+				(total, receipt) => total + receipt.accountReferenceCount,
+				0
+			),
 			batchLimit: input.batchLimit,
 			completedBatches: receipts.length,
 			cpuWorkers: input.cpuWorkerCount,
@@ -157,6 +162,9 @@ function composeCheckpointWrite(
 		lastLedger: batch.lastLedger,
 		ledgers: decoded.ledgers,
 		networkPassphrase,
+		operationAccountReferenceDecoderVersion:
+			decoder.operationAccountReferenceDecoderVersion,
+		operationAccountReferences: decoded.operationAccountReferences,
 		operationDecoderVersion: decoder.operationDecoderVersion,
 		operations: decoded.operations,
 		operationResultDecoderVersion: decoder.operationResultDecoderVersion,

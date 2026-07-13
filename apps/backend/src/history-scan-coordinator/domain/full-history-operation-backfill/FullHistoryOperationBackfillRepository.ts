@@ -2,6 +2,7 @@ import type { FullHistoryCheckpointWrite } from '../full-history/FullHistoryCano
 import type { FullHistoryOperationBackfillBatch } from './FullHistoryOperationBackfill.js';
 
 export interface FullHistoryOperationBackfillReceipt {
+	readonly accountReferenceCount: number;
 	readonly batchId: string;
 	readonly operationCount: number;
 	readonly replayed: boolean;

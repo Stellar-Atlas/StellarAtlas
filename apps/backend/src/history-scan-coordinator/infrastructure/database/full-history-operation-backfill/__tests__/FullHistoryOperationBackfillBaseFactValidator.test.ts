@@ -63,6 +63,8 @@ function emptyCheckpointWrite(): FullHistoryCheckpointWrite {
 		lastLedger: fullHistoryLedgerSequence('63'),
 		ledgers: [],
 		networkPassphrase: 'Base fact validator fixture network',
+		operationAccountReferenceDecoderVersion: 'fixture-reference-decoder/1',
+		operationAccountReferences: [],
 		operationDecoderVersion: 'fixture-operation-decoder/1',
 		operations: [],
 		operationResultDecoderVersion: 'fixture-result-decoder/1',

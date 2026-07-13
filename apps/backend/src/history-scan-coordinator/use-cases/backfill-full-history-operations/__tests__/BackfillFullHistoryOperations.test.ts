@@ -24,6 +24,7 @@ import { BackfillFullHistoryOperations } from '../BackfillFullHistoryOperations.
 const networkPassphrase = 'Operation scheduler fixture network';
 const emptyDecoded: FullHistoryDecodedCheckpoint = {
 	ledgers: [],
+	operationAccountReferences: [],
 	operations: [],
 	operationResults: [],
 	results: [],
@@ -38,9 +39,7 @@ describe('BackfillFullHistoryOperations bounded scheduler', () => {
 			...candidate,
 			proof: {
 				...candidate.proof,
-				evaluatedAt: new Date(
-					candidate.proof.evaluatedAt.getTime() + 60_000
-				)
+				evaluatedAt: new Date(candidate.proof.evaluatedAt.getTime() + 60_000)
 			}
 		};
 
@@ -126,6 +125,7 @@ describe('BackfillFullHistoryOperations bounded scheduler', () => {
 		);
 
 		await expect(useCase.execute(runInput(3, 2))).resolves.toMatchObject({
+			accountReferenceFacts: 0,
 			completedBatches: 2,
 			operationFacts: 0,
 			selectedBatches: 2,
@@ -183,6 +183,8 @@ class CandidateFixtureRepository implements FullHistoryCheckpointCandidateReposi
 }
 
 class GatedDecoder implements FullHistoryCheckpointDecoder {
+	readonly operationAccountReferenceDecoderVersion =
+		'worker-account-reference-test-v1';
 	readonly operationDecoderVersion = 'worker-operation-test-v1';
 	readonly operationResultDecoderVersion = 'worker-result-test-v1';
 	readonly version = 'worker-test-v1';
@@ -208,6 +210,8 @@ class GatedDecoder implements FullHistoryCheckpointDecoder {
 }
 
 class SelectiveDecoder implements FullHistoryCheckpointDecoder {
+	readonly operationAccountReferenceDecoderVersion =
+		'worker-account-reference-test-v1';
 	readonly operationDecoderVersion = 'worker-operation-test-v1';
 	readonly operationResultDecoderVersion = 'worker-result-test-v1';
 	readonly version = 'worker-test-v1';
@@ -263,6 +267,7 @@ class ResumableBackfillRepository implements FullHistoryOperationBackfillReposit
 		const replayed = this.covered.has(input.batchId);
 		this.covered.add(input.batchId);
 		return {
+			accountReferenceCount: input.operations.length,
 			batchId: input.batchId,
 			operationCount: input.operations.length,
 			replayed

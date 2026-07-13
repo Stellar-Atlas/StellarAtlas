@@ -105,6 +105,9 @@ describe('TypeOrmFullHistoryCanonicalRepository historical prepend', () => {
 			lastLedger: '191'
 		});
 		await expect(operationResultCount(previous.batchId)).resolves.toBe(1);
+		await expect(
+			operationAccountReferenceCount(previous.batchId)
+		).resolves.toBe(previous.operationAccountReferences.length);
 		await expect(repository.prependCheckpoint(previous)).resolves.toMatchObject(
 			{
 				firstLedger: '64',
@@ -112,6 +115,37 @@ describe('TypeOrmFullHistoryCanonicalRepository historical prepend', () => {
 				replayed: true
 			}
 		);
+	});
+
+	it('rolls back the historical batch and frontier when reference coverage fails', async () => {
+		const networkPassphrase = 'Canonical historical reference rollback network';
+		const previous = await seedFullHistoryCheckpoint(dataSource, {
+			batchNumber: 1_031,
+			checkpointLedger: 127,
+			networkPassphrase
+		});
+		const current = linkAfter(
+			previous,
+			await seedFullHistoryCheckpoint(dataSource, {
+				batchNumber: 1_032,
+				checkpointLedger: 191,
+				networkPassphrase
+			})
+		);
+		await repository.writeCheckpoint(current);
+		const frontierBefore = await frontier(networkPassphrase);
+
+		await installRejectingReferenceCoverageTrigger();
+		try {
+			await expect(repository.prependCheckpoint(previous)).rejects.toThrow(
+				/account-reference prepend test failure/
+			);
+		} finally {
+			await removeRejectingReferenceCoverageTrigger();
+		}
+
+		await expect(batchCount(previous.batchId)).resolves.toBe(0);
+		await expect(frontier(networkPassphrase)).resolves.toEqual(frontierBefore);
 	});
 
 	it('rejects a boundary mismatch and rolls back every historical row', async () => {
@@ -213,6 +247,46 @@ describe('TypeOrmFullHistoryCanonicalRepository historical prepend', () => {
 			[batchId]
 		);
 		return rows[0]?.count ?? -1;
+	}
+
+	async function operationAccountReferenceCount(
+		batchId: string
+	): Promise<number> {
+		const rows = await dataSource.query<Array<{ readonly count: number }>>(
+			`select count(*)::integer as count
+			 from "full_history_operation_account_reference" reference
+			 join "full_history_operation" operation
+				on operation."network_passphrase_hash" =
+					reference."network_passphrase_hash"
+				and operation."transaction_hash" = reference."transaction_hash"
+				and operation."operation_index" = reference."operation_index"
+			 where operation."batch_id" = $1`,
+			[batchId]
+		);
+		return rows[0]?.count ?? -1;
+	}
+
+	async function installRejectingReferenceCoverageTrigger(): Promise<void> {
+		await dataSource.query(`
+			create function reject_operation_reference_prepend_test()
+			returns trigger language plpgsql as $function$
+			begin
+				raise exception 'account-reference prepend test failure';
+			end
+			$function$;
+			create trigger reject_operation_reference_prepend_test
+			before insert on
+				"full_history_operation_account_reference_batch_coverage"
+			for each row execute function reject_operation_reference_prepend_test()
+		`);
+	}
+
+	async function removeRejectingReferenceCoverageTrigger(): Promise<void> {
+		await dataSource.query(`
+			drop trigger if exists reject_operation_reference_prepend_test on
+				"full_history_operation_account_reference_batch_coverage";
+			drop function if exists reject_operation_reference_prepend_test()
+		`);
 	}
 });
 

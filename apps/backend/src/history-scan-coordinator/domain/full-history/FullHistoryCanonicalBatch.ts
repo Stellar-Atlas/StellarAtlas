@@ -15,6 +15,10 @@ import {
 	validateFullHistoryOperations
 } from './FullHistoryCanonicalOperation.js';
 import {
+	type FullHistoryOperationAccountReferenceInput,
+	validateFullHistoryOperationAccountReferences
+} from './FullHistoryCanonicalOperationAccountReference.js';
+import {
 	type FullHistoryOperationResultInput,
 	validateFullHistoryOperationResults
 } from './FullHistoryCanonicalOperationResult.js';
@@ -79,6 +83,8 @@ export interface FullHistoryCheckpointWrite {
 	readonly lastLedger: FullHistoryLedgerSequence;
 	readonly ledgers: readonly FullHistoryLedgerInput[];
 	readonly networkPassphrase: string;
+	readonly operationAccountReferenceDecoderVersion: string;
+	readonly operationAccountReferences: readonly FullHistoryOperationAccountReferenceInput[];
 	readonly operationDecoderVersion: string;
 	readonly operations: readonly FullHistoryOperationInput[];
 	readonly operationResultDecoderVersion: string;
@@ -99,6 +105,11 @@ export function validateFullHistoryCheckpointWrite(
 	assertBoundedText(input.archiveUrlIdentity, 'archiveUrlIdentity', 2_048);
 	assertBoundedText(input.decoderVersion, 'decoderVersion', 128);
 	assertBoundedText(
+		input.operationAccountReferenceDecoderVersion,
+		'operationAccountReferenceDecoderVersion',
+		128
+	);
+	assertBoundedText(
 		input.operationDecoderVersion,
 		'operationDecoderVersion',
 		128
@@ -118,6 +129,7 @@ export function validateFullHistoryCheckpointWrite(
 	validateLedgerRange(input);
 	validateTransactions(input);
 	validateFullHistoryOperations(input);
+	validateFullHistoryOperationAccountReferences(input);
 	validateFullHistoryOperationResults(input);
 }
 

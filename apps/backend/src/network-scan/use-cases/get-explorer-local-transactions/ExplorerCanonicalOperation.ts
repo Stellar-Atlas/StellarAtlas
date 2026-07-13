@@ -3,6 +3,7 @@ import type {
 	FullHistoryOperationQuery,
 	FullHistoryOperationView
 } from '@history-scan-coordinator/domain/full-history/FullHistoryCanonicalOperation.js';
+import type { FullHistoryOperationAccountReferenceRole } from '@history-scan-coordinator/domain/full-history/FullHistoryCanonicalOperationAccountReference.js';
 import type {
 	FullHistoryOperationOutcome,
 	FullHistoryOperationResultCode
@@ -11,6 +12,7 @@ import type {
 interface ExplorerCanonicalOperationBaseDTO {
 	readonly createdAt: string;
 	readonly evidence: {
+		readonly accountReferenceDecoderVersion: string | null;
 		readonly archiveSource: string;
 		readonly batchId: string;
 		readonly checkpointLedger: string;
@@ -20,6 +22,11 @@ interface ExplorerCanonicalOperationBaseDTO {
 		readonly proofVersion: number;
 	};
 	readonly factScope: 'operation_body_and_envelope';
+	readonly accountReferences: readonly {
+		readonly accountId: string;
+		readonly baseAccountId: string;
+		readonly role: FullHistoryOperationAccountReferenceRole;
+	}[];
 	readonly id: string;
 	readonly ledger: string;
 	readonly operationIndex: number;
@@ -59,18 +66,24 @@ export type ExplorerCanonicalOperationDTO = ExplorerCanonicalOperationBaseDTO &
 export interface ExplorerLocalOperationsDTO {
 	readonly count: number;
 	readonly coverage: {
+		readonly accountReferenceIndexedBatches: number;
+		readonly accountReferencesComplete: boolean;
 		readonly canonicalBatches: number;
 		readonly complete: boolean;
+		readonly firstAccountReferenceIndexedLedger: string | null;
 		readonly firstIndexedLedger: string | null;
 		readonly firstOutcomeIndexedLedger: string | null;
 		readonly indexedBatches: number;
+		readonly lastAccountReferenceIndexedLedger: string | null;
 		readonly lastIndexedLedger: string | null;
 		readonly lastOutcomeIndexedLedger: string | null;
 		readonly outcomeIndexedBatches: number;
+		readonly operationFactsComplete: boolean;
 		readonly outcomesComplete: boolean;
 	};
 	readonly factBoundary: {
-		readonly includes: 'operation_type_and_effective_source';
+		readonly excludes: 'state_effects_soroban_auth_signers_and_asset_issuers';
+		readonly includes: 'operation_type_effective_source_and_explicit_envelope_account_references';
 		readonly outcomes: 'transaction_result_xdr_when_indexed';
 	};
 	readonly filters: {
@@ -97,24 +110,32 @@ export function mapExplorerCanonicalOperations(
 	return {
 		count: page.records.length,
 		coverage: {
+			accountReferenceIndexedBatches:
+				page.coverage.accountReferenceIndexedBatches,
+			accountReferencesComplete: page.coverage.accountReferencesComplete,
 			canonicalBatches: page.coverage.canonicalBatches,
 			complete: page.coverage.complete,
+			firstAccountReferenceIndexedLedger:
+				page.coverage.firstAccountReferenceIndexedLedger,
 			firstIndexedLedger: page.coverage.firstIndexedLedger,
 			firstOutcomeIndexedLedger: page.coverage.firstOutcomeIndexedLedger,
 			indexedBatches: page.coverage.indexedBatches,
+			lastAccountReferenceIndexedLedger:
+				page.coverage.lastAccountReferenceIndexedLedger,
 			lastIndexedLedger: page.coverage.lastIndexedLedger,
 			lastOutcomeIndexedLedger: page.coverage.lastOutcomeIndexedLedger,
 			outcomeIndexedBatches: page.coverage.outcomeIndexedBatches,
+			operationFactsComplete: page.coverage.operationFactsComplete,
 			outcomesComplete: page.coverage.outcomesComplete
 		},
 		factBoundary: {
-			includes: 'operation_type_and_effective_source',
+			excludes: 'state_effects_soroban_auth_signers_and_asset_issuers',
+			includes:
+				'operation_type_effective_source_and_explicit_envelope_account_references',
 			outcomes: 'transaction_result_xdr_when_indexed'
 		},
 		filters: {
-			...(query.sourceAccount === undefined
-				? {}
-				: { accountId: query.sourceAccount }),
+			...(query.accountId === undefined ? {} : { accountId: query.accountId }),
 			...(query.closedAtFrom === undefined
 				? {}
 				: { from: query.closedAtFrom.toISOString() }),
@@ -151,8 +172,12 @@ function mapExplorerCanonicalOperation(
 ): ExplorerCanonicalOperationDTO {
 	const transactionHash = operation.transactionHash.toHex();
 	const base: ExplorerCanonicalOperationBaseDTO = {
+		accountReferences: operation.accountReferences.map((reference) => ({
+			...reference
+		})),
 		createdAt: operation.closedAt.toISOString(),
 		evidence: {
+			accountReferenceDecoderVersion: operation.accountReferenceDecoderVersion,
 			archiveSource: operation.archiveUrlIdentity,
 			batchId: operation.batchId,
 			checkpointLedger: operation.checkpointLedger,

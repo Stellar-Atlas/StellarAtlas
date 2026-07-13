@@ -9,6 +9,10 @@ import {
 	FULL_HISTORY_OPERATION_FACT_SCOPE,
 	type FullHistoryOperationType
 } from '../../../../domain/full-history/FullHistoryCanonicalOperation.js';
+import {
+	fullHistoryOperationAccountReference,
+	type FullHistoryOperationAccountReferenceRole
+} from '../../../../domain/full-history/FullHistoryCanonicalOperationAccountReference.js';
 import { FULL_HISTORY_OPERATION_RESULT_FACT_SCOPE } from '../../../../domain/full-history/FullHistoryCanonicalOperationResult.js';
 import {
 	fullHistoryLedgerSequence,
@@ -19,6 +23,7 @@ import { FullHistoryCanonicalSchemaMigration1784860000000 } from '../../migratio
 import { FullHistoryOperationFactsMigration1784960000000 } from '../../migrations/1784960000000-FullHistoryOperationFactsMigration.js';
 import { FullHistoryOperationBackfillMigration1784970000000 } from '../../migrations/1784970000000-FullHistoryOperationBackfillMigration.js';
 import { FullHistoryOperationResultMigration1785010000000 } from '../../migrations/1785010000000-FullHistoryOperationResultMigration.js';
+import { FullHistoryOperationAccountReferenceMigration1785040000000 } from '../../migrations/1785040000000-FullHistoryOperationAccountReferenceMigration.js';
 import { HistoryArchiveCheckpointProofMigration1784420000000 } from '../../migrations/1784420000000-HistoryArchiveCheckpointProofMigration.js';
 import { FullHistoryIngestionBatch } from '../entities/FullHistoryIngestionBatch.js';
 import { FullHistoryLedger } from '../entities/FullHistoryLedger.js';
@@ -44,6 +49,13 @@ interface CheckpointFixtureOptions {
 	readonly decoderVersion?: string;
 	readonly envelopeType?: FullHistoryEnvelopeType;
 	readonly feeBid?: string;
+	readonly explicitOperationAccountReferences?: readonly {
+		readonly accountId: string;
+		readonly role: Exclude<
+			FullHistoryOperationAccountReferenceRole,
+			'effective_source'
+		>;
+	}[];
 	readonly networkPassphrase?: string;
 	readonly operationSourceAccount?: string;
 	readonly operationType?: FullHistoryOperationType;
@@ -89,6 +101,9 @@ export async function installFullHistoryCanonicalSchema(
 			queryRunner
 		);
 		await new FullHistoryOperationResultMigration1785010000000().up(
+			queryRunner
+		);
+		await new FullHistoryOperationAccountReferenceMigration1785040000000().up(
 			queryRunner
 		);
 		await queryRunner.commitTransaction();
@@ -163,6 +178,19 @@ export async function seedFullHistoryCheckpoint(
 	const sourceAccount = StrKey.encodeEd25519PublicKey(
 		Buffer.alloc(32, (options.batchNumber % 254) + 1)
 	);
+	const operation = {
+		factScope: FULL_HISTORY_OPERATION_FACT_SCOPE,
+		ledgerSequence: fullHistoryLedgerSequence(BigInt(firstLedger)),
+		operationIndex: 0,
+		operationType: options.operationType ?? 'payment',
+		sourceAccount: options.operationSourceAccount ?? sourceAccount,
+		sourceAccountOrigin:
+			options.operationSourceAccount === undefined
+				? ('transaction' as const)
+				: ('operation' as const),
+		transactionHash,
+		transactionIndex: 0
+	};
 
 	return {
 		archiveUrlIdentity,
@@ -173,22 +201,24 @@ export async function seedFullHistoryCheckpoint(
 		lastLedger: fullHistoryLedgerSequence(BigInt(checkpointLedger)),
 		ledgers,
 		networkPassphrase,
-		operationDecoderVersion: 'fixture-operation-decoder/1',
-		operations: [
-			{
-				factScope: FULL_HISTORY_OPERATION_FACT_SCOPE,
-				ledgerSequence: fullHistoryLedgerSequence(BigInt(firstLedger)),
-				operationIndex: 0,
-				operationType: options.operationType ?? 'payment',
-				sourceAccount: options.operationSourceAccount ?? sourceAccount,
-				sourceAccountOrigin:
-					options.operationSourceAccount === undefined
-						? 'transaction'
-						: 'operation',
-				transactionHash,
-				transactionIndex: 0
-			}
+		operationAccountReferenceDecoderVersion:
+			'fixture-operation-account-reference-decoder/1',
+		operationAccountReferences: [
+			fullHistoryOperationAccountReference(
+				operation,
+				'effective_source',
+				operation.sourceAccount
+			),
+			...(options.explicitOperationAccountReferences ?? []).map((reference) =>
+				fullHistoryOperationAccountReference(
+					operation,
+					reference.role,
+					reference.accountId
+				)
+			)
 		],
+		operationDecoderVersion: 'fixture-operation-decoder/1',
+		operations: [operation],
 		operationResultDecoderVersion: 'fixture-operation-result-decoder/1',
 		operationResults: [
 			{
