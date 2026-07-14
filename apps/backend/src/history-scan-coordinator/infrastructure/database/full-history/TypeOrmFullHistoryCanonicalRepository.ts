@@ -1,5 +1,9 @@
 import type { DataSource, EntityManager } from 'typeorm';
 import type { FullHistoryCheckpointWrite } from '../../../domain/full-history/FullHistoryCanonicalBatch.js';
+import type {
+	FullHistoryLedgerRangeQuery,
+	FullHistoryLedgerRangeView
+} from '../../../domain/full-history/FullHistoryCanonicalLedger.js';
 import { FullHistoryCanonicalError } from '../../../domain/full-history/FullHistoryCanonicalError.js';
 import { FULL_HISTORY_RECENT_TRANSACTION_LIMIT_MAX } from '../../../domain/full-history/FullHistoryCanonicalRepository.js';
 import type {
@@ -49,6 +53,7 @@ import {
 	getCanonicalOperationCoverage
 } from './FullHistoryCanonicalOperationQuery.js';
 import { getCanonicalCoverage } from './FullHistoryCanonicalCoverageQuery.js';
+import { findCanonicalLedgerRange } from './FullHistoryCanonicalLedgerQuery.js';
 
 interface FullHistoryRecentTransactionRow {
 	readonly closedAt: Date | string;
@@ -227,6 +232,17 @@ export class TypeOrmFullHistoryCanonicalRepository implements FullHistoryCanonic
 					transactionResultHash: ledger.transactionResultHash,
 					transactionSetHash: ledger.transactionSetHash
 				};
+	}
+
+	async findLedgerRange(
+		networkPassphrase: string,
+		query: FullHistoryLedgerRangeQuery
+	): Promise<FullHistoryLedgerRangeView> {
+		return findCanonicalLedgerRange(
+			this.dataSource,
+			hashNetworkPassphrase(networkPassphrase),
+			query
+		);
 	}
 
 	async findRecentTransactions(

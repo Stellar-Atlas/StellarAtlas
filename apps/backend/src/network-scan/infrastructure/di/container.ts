@@ -122,6 +122,7 @@ import type { ScpStatementObservationRepository } from '../../domain/scp/ScpStat
 import { TypeOrmScpStatementObservationRepository } from '../database/repositories/TypeOrmScpStatementObservationRepository.js';
 import { GetScpStatements } from '../../use-cases/get-scp-statements/GetScpStatements.js';
 import { GetExplorerLocalReadModel } from '../../use-cases/get-explorer-local-read-model/GetExplorerLocalReadModel.js';
+import { GetExplorerLocalLedgers } from '../../use-cases/get-explorer-local-ledgers/GetExplorerLocalLedgers.js';
 import { GetExplorerLocalTransactions } from '../../use-cases/get-explorer-local-transactions/GetExplorerLocalTransactions.js';
 import { GetLatestObservedLedger } from '../../use-cases/get-latest-observed-ledger/GetLatestObservedLedger.js';
 import type { ScpStatementLiveStore } from '../../domain/scp/ScpStatementLiveStore.js';
@@ -404,6 +405,7 @@ function loadUseCases(container: Container) {
 	container.bind(GetScpStatements).toSelf().inSingletonScope();
 	container.bind(GetLatestObservedLedger).toSelf();
 	container.bind(GetExplorerLocalReadModel).toSelf();
+	container.bind(GetExplorerLocalLedgers).toSelf();
 	container.bind(GetExplorerLocalTransactions).toSelf();
 	container.bind(CollectScpLive).toSelf();
 	container.bind(CollectScpLiveLooped).toSelf();

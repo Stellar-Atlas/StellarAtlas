@@ -543,6 +543,102 @@
 				}
 			}
 		},
+		"/v1/explorer/local-ledgers": {
+			"get": {
+				"summary": "Get a canonical local ledger range",
+				"description": "Returns an inclusive ascending range of at most 100 proof-gated canonical ledgers from PostgreSQL. The entire requested range must be inside current contiguous canonical coverage; this endpoint never uses Horizon or another external fallback.",
+				"tags": ["Explorer"],
+				"operationId": "getExplorerLocalLedgerRange",
+				"parameters": [
+					{
+						"name": "firstLedger",
+						"in": "query",
+						"required": true,
+						"schema": { "type": "string", "pattern": "^[0-9]+$" }
+					},
+					{
+						"name": "lastLedger",
+						"in": "query",
+						"required": true,
+						"schema": { "type": "string", "pattern": "^[0-9]+$" }
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "Complete canonical ledger range",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/ExplorerLocalLedgerRange"
+								}
+							}
+						}
+					},
+					"400": { "description": "Invalid or unbounded ledger range" },
+					"502": { "description": "Canonical ledger range query failed" },
+					"503": {
+						"description": "Requested range is unavailable in current canonical coverage",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/ExplorerLocalLedgerUnavailable"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/v1/explorer/local-ledgers/{sequence}": {
+			"get": {
+				"summary": "Look up a canonical local ledger",
+				"description": "Looks up one proof-gated canonical ledger by sequence without an external fallback. A miss is not-found only inside declared canonical coverage; sequences outside partial coverage are unavailable.",
+				"tags": ["Explorer"],
+				"operationId": "getExplorerLocalLedgerBySequence",
+				"parameters": [
+					{
+						"name": "sequence",
+						"in": "path",
+						"required": true,
+						"schema": { "type": "string", "pattern": "^[0-9]+$" }
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "Canonical ledger lookup result",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/ExplorerLocalLedgerLookup"
+								}
+							}
+						}
+					},
+					"400": { "description": "Invalid canonical ledger sequence" },
+					"404": {
+						"description": "Ledger absent inside current canonical coverage",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/ExplorerLocalLedgerNotFound"
+								}
+							}
+						}
+					},
+					"502": { "description": "Canonical ledger lookup failed" },
+					"503": {
+						"description": "Ledger sequence is unavailable in current canonical coverage",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/ExplorerLocalLedgerUnavailable"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
 		"/v1/explorer/search": {
 			"get": {
 				"summary": "Search explorer data",
@@ -9106,6 +9202,227 @@
 						"enum": ["postgres_canonical"]
 					},
 					"truncated": { "type": "boolean" }
+				}
+			},
+			"ExplorerCanonicalLedgerEvidence": {
+				"type": "object",
+				"required": [
+					"archiveSource",
+					"batchId",
+					"checkpointLedger",
+					"checkpointProofId",
+					"decoderVersion",
+					"proofVersion",
+					"sourceObject"
+				],
+				"properties": {
+					"archiveSource": { "type": "string", "minLength": 1 },
+					"batchId": { "type": "string", "format": "uuid" },
+					"checkpointLedger": {
+						"type": "string",
+						"pattern": "^[0-9]+$"
+					},
+					"checkpointProofId": { "type": "integer", "minimum": 1 },
+					"decoderVersion": { "type": "string", "minLength": 1 },
+					"proofVersion": { "type": "integer", "minimum": 1 },
+					"sourceObject": {
+						"$ref": "#/components/schemas/CanonicalXdrSourceObjectEvidence"
+					}
+				}
+			},
+			"ExplorerCanonicalLedgerFreshness": {
+				"type": "object",
+				"required": ["ingestedAt", "proofEvaluatedAt"],
+				"properties": {
+					"ingestedAt": { "type": "string", "format": "date-time" },
+					"proofEvaluatedAt": {
+						"type": "string",
+						"format": "date-time"
+					}
+				}
+			},
+			"ExplorerCanonicalLedger": {
+				"type": "object",
+				"required": [
+					"bucketListHash",
+					"closedAt",
+					"evidence",
+					"freshness",
+					"hash",
+					"operationCount",
+					"previousLedgerHash",
+					"protocolVersion",
+					"sequence",
+					"source",
+					"transactionCount",
+					"transactionResultHash",
+					"transactionSetHash"
+				],
+				"properties": {
+					"bucketListHash": {
+						"type": "string",
+						"pattern": "^[0-9a-f]{64}$"
+					},
+					"closedAt": { "type": "string", "format": "date-time" },
+					"evidence": {
+						"$ref": "#/components/schemas/ExplorerCanonicalLedgerEvidence"
+					},
+					"freshness": {
+						"$ref": "#/components/schemas/ExplorerCanonicalLedgerFreshness"
+					},
+					"hash": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+					"operationCount": { "type": "integer", "minimum": 0 },
+					"previousLedgerHash": {
+						"type": "string",
+						"pattern": "^[0-9a-f]{64}$"
+					},
+					"protocolVersion": { "type": "integer", "minimum": 1 },
+					"sequence": { "type": "string", "pattern": "^[0-9]+$" },
+					"source": {
+						"type": "string",
+						"enum": ["postgres_canonical"]
+					},
+					"transactionCount": { "type": "integer", "minimum": 0 },
+					"transactionResultHash": {
+						"type": "string",
+						"pattern": "^[0-9a-f]{64}$"
+					},
+					"transactionSetHash": {
+						"type": "string",
+						"pattern": "^[0-9a-f]{64}$"
+					}
+				}
+			},
+			"ExplorerLocalLedgerRequestedRange": {
+				"type": "object",
+				"required": ["firstLedger", "lastLedger"],
+				"properties": {
+					"firstLedger": { "type": "string", "pattern": "^[0-9]+$" },
+					"lastLedger": { "type": "string", "pattern": "^[0-9]+$" }
+				}
+			},
+			"ExplorerLocalLedgerLookup": {
+				"type": "object",
+				"required": [
+					"canonicalCoverage",
+					"generatedAt",
+					"ledger",
+					"requestedRange",
+					"source",
+					"status"
+				],
+				"properties": {
+					"canonicalCoverage": {
+						"$ref": "#/components/schemas/ExplorerCanonicalCoverage"
+					},
+					"generatedAt": { "type": "string", "format": "date-time" },
+					"ledger": {
+						"$ref": "#/components/schemas/ExplorerCanonicalLedger"
+					},
+					"requestedRange": {
+						"$ref": "#/components/schemas/ExplorerLocalLedgerRequestedRange"
+					},
+					"source": {
+						"type": "string",
+						"enum": ["postgres_canonical"]
+					},
+					"status": { "type": "string", "enum": ["available"] }
+				}
+			},
+			"ExplorerLocalLedgerRange": {
+				"type": "object",
+				"required": [
+					"canonicalCoverage",
+					"count",
+					"generatedAt",
+					"records",
+					"requestedRange",
+					"source",
+					"status"
+				],
+				"properties": {
+					"canonicalCoverage": {
+						"$ref": "#/components/schemas/ExplorerCanonicalCoverage"
+					},
+					"count": { "type": "integer", "minimum": 1, "maximum": 100 },
+					"generatedAt": { "type": "string", "format": "date-time" },
+					"records": {
+						"type": "array",
+						"minItems": 1,
+						"maxItems": 100,
+						"items": {
+							"$ref": "#/components/schemas/ExplorerCanonicalLedger"
+						}
+					},
+					"requestedRange": {
+						"$ref": "#/components/schemas/ExplorerLocalLedgerRequestedRange"
+					},
+					"source": {
+						"type": "string",
+						"enum": ["postgres_canonical"]
+					},
+					"status": { "type": "string", "enum": ["available"] }
+				}
+			},
+			"ExplorerLocalLedgerNotFound": {
+				"type": "object",
+				"required": [
+					"canonicalCoverage",
+					"generatedAt",
+					"reason",
+					"requestedRange",
+					"source",
+					"status"
+				],
+				"properties": {
+					"canonicalCoverage": {
+						"$ref": "#/components/schemas/ExplorerCanonicalCoverage"
+					},
+					"generatedAt": { "type": "string", "format": "date-time" },
+					"reason": {
+						"type": "string",
+						"enum": ["ledger_absent_within_canonical_coverage"]
+					},
+					"requestedRange": {
+						"$ref": "#/components/schemas/ExplorerLocalLedgerRequestedRange"
+					},
+					"source": {
+						"type": "string",
+						"enum": ["postgres_canonical"]
+					},
+					"status": { "type": "string", "enum": ["not_found"] }
+				}
+			},
+			"ExplorerLocalLedgerUnavailable": {
+				"type": "object",
+				"required": [
+					"canonicalCoverage",
+					"generatedAt",
+					"reason",
+					"requestedRange",
+					"source",
+					"status"
+				],
+				"properties": {
+					"canonicalCoverage": {
+						"nullable": true,
+						"allOf": [
+							{ "$ref": "#/components/schemas/ExplorerCanonicalCoverage" }
+						]
+					},
+					"generatedAt": { "type": "string", "format": "date-time" },
+					"reason": {
+						"type": "string",
+						"enum": ["canonical_coverage_empty", "outside_canonical_coverage"]
+					},
+					"requestedRange": {
+						"$ref": "#/components/schemas/ExplorerLocalLedgerRequestedRange"
+					},
+					"source": {
+						"type": "string",
+						"enum": ["postgres_canonical"]
+					},
+					"status": { "type": "string", "enum": ["unavailable"] }
 				}
 			},
 			"ExplorerLocalTransaction": {

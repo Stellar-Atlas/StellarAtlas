@@ -8,12 +8,19 @@ import type {
 	FullHistoryUint64String
 } from './FullHistoryCanonicalTypes.js';
 import type {
+	FullHistoryLedgerRangeQuery,
+	FullHistoryLedgerRangeView,
+	FullHistoryLedgerView
+} from './FullHistoryCanonicalLedger.js';
+import type {
 	FullHistoryOperationCoverage,
 	FullHistoryOperationPage,
 	FullHistoryOperationQuery
 } from './FullHistoryCanonicalOperation.js';
 
 export const FULL_HISTORY_RECENT_TRANSACTION_LIMIT_MAX = 50;
+
+export type { FullHistoryLedgerView } from './FullHistoryCanonicalLedger.js';
 
 export interface FullHistoryWriteReceipt {
 	readonly batchId: string;
@@ -72,19 +79,6 @@ export interface FullHistoryCanonicalCoverageView {
 	readonly updatedAt: Date;
 }
 
-export interface FullHistoryLedgerView {
-	readonly bucketListHash: FullHistoryHash;
-	readonly closedAt: Date;
-	readonly ledgerHash: FullHistoryHash;
-	readonly ledgerSequence: FullHistoryLedgerSequence;
-	readonly operationCount: number;
-	readonly previousLedgerHash: FullHistoryHash;
-	readonly protocolVersion: number;
-	readonly transactionCount: number;
-	readonly transactionResultHash: FullHistoryHash;
-	readonly transactionSetHash: FullHistoryHash;
-}
-
 export interface FullHistoryTransactionView {
 	readonly closedAt: Date;
 	readonly envelopeType: FullHistoryEnvelopeType;
@@ -111,6 +105,10 @@ export interface FullHistoryCanonicalRepository {
 		networkPassphrase: string,
 		ledgerSequence: FullHistoryLedgerSequence
 	): Promise<FullHistoryLedgerView | null>;
+	findLedgerRange(
+		networkPassphrase: string,
+		query: FullHistoryLedgerRangeQuery
+	): Promise<FullHistoryLedgerRangeView>;
 	findRecentTransactions(
 		networkPassphrase: string,
 		limit: number
