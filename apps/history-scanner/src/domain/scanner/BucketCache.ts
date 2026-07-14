@@ -15,12 +15,16 @@ interface CacheEntry {
 }
 
 export class BucketCacheFailure extends Error {
+	readonly failureChannel: 'archive_evidence' | 'scanner_issue';
+
 	constructor(
-		readonly failureChannel: 'archive_evidence' | 'scanner_issue',
+		readonly kind: 'cache-storage' | 'content-verification' | 'source-stream',
 		readonly failure: Error
 	) {
 		super(failure.message, { cause: failure });
 		this.name = 'BucketCacheFailure';
+		this.failureChannel =
+			kind === 'cache-storage' ? 'scanner_issue' : 'archive_evidence';
 	}
 }
 
@@ -80,7 +84,10 @@ export class BucketCache {
 			if (verifyResult.isErr()) {
 				await rm(temporaryPath, { force: true });
 				return err(
-					new BucketCacheFailure('archive_evidence', verifyResult.error)
+					new BucketCacheFailure(
+						sourceError === null ? 'content-verification' : 'source-stream',
+						sourceError ?? verifyResult.error
+					)
 				);
 			}
 
@@ -92,7 +99,7 @@ export class BucketCache {
 			await rm(temporaryPath, { force: true }).catch(() => undefined);
 			return err(
 				new BucketCacheFailure(
-					sourceError === null ? 'scanner_issue' : 'archive_evidence',
+					sourceError === null ? 'cache-storage' : 'source-stream',
 					sourceError ?? mapUnknownToError(error)
 				)
 			);

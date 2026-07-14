@@ -87,6 +87,28 @@ describe('GetHistoryArchiveRepairPlan', () => {
 		expect(result.value.actions).toEqual([]);
 	});
 
+	it('does not turn an aborted bucket download into a replacement action', async () => {
+		const objectRepository = mock<HistoryArchiveObjectRepository>();
+		const proofRepository = mock<HistoryArchiveCheckpointProofRepository>();
+		const useCase = new GetHistoryArchiveRepairPlan(
+			objectRepository,
+			proofRepository,
+			mock<ExceptionLogger>()
+		);
+		objectRepository.getSummary.mockResolvedValue(createSummary());
+		objectRepository.findActionableByArchiveUrl.mockResolvedValue([
+			createAbortedBucketFailure()
+		]);
+		proofRepository.findActionableByArchiveUrlIdentity.mockResolvedValue([]);
+
+		const result = await useCase.execute({ limit: 25, url: archiveUrl });
+
+		expect(result.isOk()).toBe(true);
+		if (result.isErr()) return;
+		expect(result.value.actions).toEqual([]);
+		expect(objectRepository.findBucketObjectsByHash).not.toHaveBeenCalled();
+	});
+
 	it('rejects invalid archive URLs before hitting repositories', async () => {
 		const objectRepository = mock<HistoryArchiveObjectRepository>();
 		const proofRepository = mock<HistoryArchiveCheckpointProofRepository>();
@@ -118,6 +140,15 @@ function createWorkerFailure(): HistoryArchiveObject {
 	object.errorType = 'WORKER_EACCES';
 	object.errorMessage = 'Worker could not create cache directory';
 	object.nextAttemptAt = new Date('2026-07-07T18:05:00.000Z');
+	return object;
+}
+
+function createAbortedBucketFailure(): HistoryArchiveObject {
+	const object = createObject('bucket', `bucket:${bucketHash}`, 'failed');
+	object.bucketHash = bucketHash;
+	object.errorType = 'bucket_verification_failed';
+	object.errorMessage = 'aborted';
+	object.httpStatus = 200;
 	return object;
 }
 

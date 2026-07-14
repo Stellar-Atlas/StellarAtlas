@@ -66,10 +66,14 @@ export class GetHistoryArchiveRepairPlan {
 					limit
 				)
 			]);
-			const candidateSources =
-				await this.getBucketSourceCandidates(objectFailures);
+			const repairableObjectFailures = objectFailures.filter(
+				isRepairableObjectFailure
+			);
+			const candidateSources = await this.getBucketSourceCandidates(
+				repairableObjectFailures
+			);
 			const actions = [
-				...objectFailures.flatMap((object) =>
+				...repairableObjectFailures.flatMap((object) =>
 					toObjectAction(object, candidateSources)
 				),
 				...checkpointFailures.flatMap(toCheckpointAction)
@@ -181,6 +185,34 @@ function toObjectAction(
 			summary: getObjectActionSummary(object, kind)
 		}
 	];
+}
+
+function isRepairableObjectFailure(object: HistoryArchiveObject): boolean {
+	const failureClass = getObjectFailureClass(object);
+	if (failureClass === 'not-found') return true;
+	if (
+		failureClass === 'auth' ||
+		failureClass === 'http' ||
+		failureClass === 'rate-limit' ||
+		failureClass === 'timeout' ||
+		failureClass === 'transport' ||
+		failureClass === 'worker' ||
+		failureClass === 'coordinator'
+	) {
+		return false;
+	}
+
+	const errorType = (object.errorType ?? '').trim().toLowerCase();
+	const errorMessage = (object.errorMessage ?? '').trim().toLowerCase();
+	if (errorMessage.includes('abort')) return false;
+	return (
+		errorType.includes('hash') ||
+		errorType.includes('mismatch') ||
+		errorType === 'bucket_verification_failed' ||
+		errorType === 'category_content_invalid' ||
+		errorType === 'invalid_checkpoint_state' ||
+		errorType === 'invalid_history_archive_state'
+	);
 }
 
 function toCheckpointAction(

@@ -309,8 +309,17 @@ export class VerifyArchiveObjects {
 			(streamToVerify) => this.verifyBucketHash(streamToVerify, job.bucketHash!)
 		);
 		if (verifyResult.isErr()) {
+			if (verifyResult.error.kind === 'source-stream') {
+				return err(
+					archiveEvidenceFailure({
+						error: verifyResult.error,
+						errorType: 'archive_transport_error',
+						httpStatus: response.value.status
+					})
+				);
+			}
 			return err(
-				verifyResult.error.failureChannel === 'archive_evidence'
+				verifyResult.error.kind === 'content-verification'
 					? archiveEvidenceFailure({
 							error: verifyResult.error,
 							errorType: 'bucket_verification_failed',

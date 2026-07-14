@@ -1,6 +1,7 @@
 import 'reflect-metadata';
+import { Readable } from 'node:stream';
 import { mock, type MockProxy } from 'jest-mock-extended';
-import { ok } from 'neverthrow';
+import { err, ok } from 'neverthrow';
 import type { ExceptionLogger } from 'exception-logger';
 import type { HttpService } from 'http-helper';
 import type { JobMonitor } from 'job-monitor';
@@ -10,7 +11,10 @@ import type {
 	HistoryArchiveObjectJobDTO,
 	ScanCoordinatorService
 } from '../../../domain/scan/ScanCoordinatorService.js';
-import { BucketCache } from '../../../domain/scanner/BucketCache.js';
+import {
+	BucketCache,
+	BucketCacheFailure
+} from '../../../domain/scanner/BucketCache.js';
 import { HistoryArchiveStateValidator } from '../../../domain/history-archive/HistoryArchiveStateValidator.js';
 import { VerifyArchiveObjects } from '../VerifyArchiveObjects.js';
 
@@ -19,11 +23,15 @@ type TestableVerifyArchiveObjects = VerifyArchiveObjects & {
 };
 
 describe('VerifyArchiveObjects', () => {
+	let bucketCache: MockProxy<BucketCache>;
+	let httpService: MockProxy<HttpService>;
 	let scanCoordinator: MockProxy<ScanCoordinatorService>;
 	let statusReporter: MockProxy<HistoryArchiveWorkerStatusReporter>;
 	let verifier: TestableVerifyArchiveObjects;
 
 	beforeEach(() => {
+		bucketCache = mock<BucketCache>();
+		httpService = mock<HttpService>();
 		scanCoordinator = mock<ScanCoordinatorService>();
 		scanCoordinator.touchHistoryArchiveObject.mockResolvedValue(ok(undefined));
 		scanCoordinator.failHistoryArchiveObject.mockResolvedValue(ok(undefined));
@@ -39,15 +47,52 @@ describe('VerifyArchiveObjects', () => {
 		verifier = new VerifyArchiveObjects(
 			scanCoordinator,
 			statusReporter,
-			mock<HttpService>(),
+			httpService,
 			mock<HistoryArchiveStateValidator>(),
-			mock<BucketCache>(),
+			bucketCache,
 			mock<ExceptionLogger>(),
 			jobMonitor,
 			1,
 			1,
 			mock<Logger>()
 		) as unknown as TestableVerifyArchiveObjects;
+	});
+
+	it('reports a response-stream abort as transport evidence', async () => {
+		httpService.get.mockResolvedValue(
+			ok({
+				data: Readable.from(Buffer.from('partial bucket')),
+				headers: {},
+				status: 200,
+				statusText: 'OK'
+			})
+		);
+		bucketCache.verifyAndStore.mockResolvedValue(
+			err(new BucketCacheFailure('source-stream', new Error('aborted')))
+		);
+
+		await verifier.verifyObject(
+			createObjectJob({
+				bucketHash:
+					'4eae73efaa0ce061441dfe43ffc61c0ed24fcbc59e5ee512d1b60e8da2509655',
+				objectKey:
+					'bucket:4eae73efaa0ce061441dfe43ffc61c0ed24fcbc59e5ee512d1b60e8da2509655',
+				objectType: 'bucket',
+				objectUrl:
+					'https://archive.example/bucket/4e/ae/73/bucket-4eae73efaa0ce061441dfe43ffc61c0ed24fcbc59e5ee512d1b60e8da2509655.xdr.gz'
+			})
+		);
+		await flushPromises();
+
+		expect(scanCoordinator.failHistoryArchiveObject).toHaveBeenCalledWith(
+			'object-1',
+			expect.objectContaining({
+				errorMessage: 'aborted',
+				errorType: 'archive_transport_error',
+				failureChannel: 'archive_evidence',
+				httpStatus: 200
+			})
+		);
 	});
 
 	it('reports a worker outcome without sending a redundant object heartbeat', async () => {
