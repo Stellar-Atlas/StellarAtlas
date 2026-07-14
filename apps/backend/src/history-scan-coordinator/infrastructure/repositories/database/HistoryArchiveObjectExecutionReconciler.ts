@@ -217,21 +217,31 @@ const pressureSql = `
 	with outstanding as (
 		select 1
 		from (
-			select id
-			from "history_archive_object_queue"
-			where status = 'scanning'
+			select candidate.id
+			from "history_archive_object_queue" candidate
+			where candidate.status = 'scanning'
 			union all
-			select id
-			from "history_archive_object_queue"
-			where "executionDisposition" = 'executable'
-				and "dependencyReady" = true
+			select candidate.id
+			from "history_archive_object_queue" candidate
+			where candidate."executionDisposition" = 'executable'
+				and candidate."dependencyReady" = true
 				and (
-					status = 'pending'
+					candidate."transitionEffectsRequiredAt" is null
+					or candidate."transitionEffectsCompletedAt" is not null
+				)
+				and not exists (
+					select 1
+					from "history_archive_object_host_throttle" throttle
+					where throttle."hostIdentity" = candidate."hostIdentity"
+						and throttle."blockedUntil" > now()
+				)
+				and (
+					candidate.status = 'pending'
 					or (
-						status = 'failed'
+						candidate.status = 'failed'
 						and coalesce(
-							"nextAttemptAt",
-							"updatedAt" + interval '1 hour'
+							candidate."nextAttemptAt",
+							candidate."updatedAt" + interval '1 hour'
 						) <= now()
 					)
 				)
@@ -298,6 +308,12 @@ export const admitProofCompletionReserveSql = `
 			on candidate."archiveUrlIdentity" = dependency."archiveUrlIdentity"
 			and candidate."bucketHash" = dependency."bucketHash"
 		where candidate."objectType" = 'bucket'
+			and not exists (
+				select 1
+				from "history_archive_object_host_throttle" throttle
+				where throttle."hostIdentity" = candidate."hostIdentity"
+					and throttle."blockedUntil" > now()
+			)
 			and (
 				candidate."transitionEffectsRequiredAt" is null
 				or candidate."transitionEffectsCompletedAt" is not null

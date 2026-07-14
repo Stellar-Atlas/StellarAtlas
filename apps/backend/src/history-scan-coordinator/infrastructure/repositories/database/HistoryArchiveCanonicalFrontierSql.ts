@@ -214,6 +214,12 @@ export const admitCanonicalFrontierSql = `
 			on root."archiveUrlIdentity" = state."archiveUrlIdentity"
 			and root."objectType" = 'history-archive-state'
 			and root."objectKey" = 'root'
+			and not exists (
+				select 1
+				from "history_archive_object_host_throttle" throttle
+				where throttle."hostIdentity" = root."hostIdentity"
+					and throttle."blockedUntil" > now()
+			)
 		left join "history_archive_checkpoint_proof" proof
 			on proof."archiveUrlIdentity" = state."archiveUrlIdentity"
 			and proof."checkpointLedger" = target.checkpoint_ledger
@@ -303,6 +309,16 @@ export const admitCanonicalFrontierSql = `
 		where protected.status = 'failed'
 			and protected."executionDisposition" = 'executable'
 			and protected."dependencyReady" = true
+			and (
+				protected."transitionEffectsRequiredAt" is null
+				or protected."transitionEffectsCompletedAt" is not null
+			)
+			and not exists (
+				select 1
+				from "history_archive_object_host_throttle" throttle
+				where throttle."hostIdentity" = protected."hostIdentity"
+					and throttle."blockedUntil" > now()
+			)
 			and coalesce(
 				protected."nextAttemptAt",
 				protected."updatedAt" + interval '1 hour'
@@ -317,17 +333,38 @@ export const admitCanonicalFrontierSql = `
 		from (
 			select id from "history_archive_object_queue" where status = 'scanning'
 			union all
-			select id from "history_archive_object_queue"
-			where status = 'pending'
-				and "executionDisposition" = 'executable'
-				and "dependencyReady" = true
+			select candidate.id from "history_archive_object_queue" candidate
+			where candidate.status = 'pending'
+				and candidate."executionDisposition" = 'executable'
+				and candidate."dependencyReady" = true
+				and (
+					candidate."transitionEffectsRequiredAt" is null
+					or candidate."transitionEffectsCompletedAt" is not null
+				)
+				and not exists (
+					select 1
+					from "history_archive_object_host_throttle" throttle
+					where throttle."hostIdentity" = candidate."hostIdentity"
+						and throttle."blockedUntil" > now()
+				)
 			union all
-			select id from "history_archive_object_queue"
-			where status = 'failed'
-				and "executionDisposition" = 'executable'
-				and "dependencyReady" = true
+			select candidate.id from "history_archive_object_queue" candidate
+			where candidate.status = 'failed'
+				and candidate."executionDisposition" = 'executable'
+				and candidate."dependencyReady" = true
+				and (
+					candidate."transitionEffectsRequiredAt" is null
+					or candidate."transitionEffectsCompletedAt" is not null
+				)
+				and not exists (
+					select 1
+					from "history_archive_object_host_throttle" throttle
+					where throttle."hostIdentity" = candidate."hostIdentity"
+						and throttle."blockedUntil" > now()
+				)
 				and coalesce(
-					"nextAttemptAt", "updatedAt" + interval '1 hour'
+					candidate."nextAttemptAt",
+					candidate."updatedAt" + interval '1 hour'
 				) <= now()
 		) runnable
 	), candidates as materialized (

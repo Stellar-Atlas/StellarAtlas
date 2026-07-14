@@ -27,6 +27,12 @@ export const historyArchiveObjectFrontierSql = `
 		from "history_archive_object_queue" root
 		where root."objectType" = 'history-archive-state'
 			and root."objectKey" = 'root'
+			and not exists (
+				select 1
+				from "history_archive_object_host_throttle" throttle
+				where throttle."hostIdentity" = root."hostIdentity"
+					and throttle."blockedUntil" > now()
+			)
 	), root_capacity as materialized (
 		select roots.*, greatest(
 			$2::integer - (
@@ -38,6 +44,10 @@ export const historyArchiveObjectFrontierSql = `
 						or (
 							active."executionDisposition" = 'executable'
 							and active."dependencyReady" = true
+							and (
+								active."transitionEffectsRequiredAt" is null
+								or active."transitionEffectsCompletedAt" is not null
+							)
 							and (
 								active.status = 'pending'
 								or (

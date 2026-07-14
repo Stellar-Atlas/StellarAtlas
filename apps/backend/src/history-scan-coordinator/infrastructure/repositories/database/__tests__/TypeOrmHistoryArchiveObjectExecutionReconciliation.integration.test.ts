@@ -315,4 +315,84 @@ describe('history archive execution reconciliation in disposable PostgreSQL', ()
 			total: 228
 		});
 	});
+
+	it('does not let throttled retries consume worker capacity', async () => {
+		const throttledRoots = Array.from({ length: 6 }, (_, index) =>
+			createRoot(index)
+		);
+		const availableRoots = Array.from({ length: 48 }, (_, index) =>
+			createRoot(index + throttledRoots.length)
+		);
+		const throttledRetries = throttledRoots.flatMap((_, rootIndex) =>
+			Array.from({ length: 8 }, (_, retryIndex) => {
+				const retry = createObject(rootIndex, {
+					checkpointLedger: 900_031 - retryIndex * 64,
+					objectKey: `results:retry-${rootIndex}-${retryIndex}`,
+					objectOrder: 40,
+					objectType: 'results',
+					status: 'failed'
+				});
+				retry.dependencyReady = true;
+				retry.executionDisposition = 'executable';
+				retry.nextAttemptAt = new Date(Date.now() - 60_000);
+				return retry;
+			})
+		);
+		const availableCheckpoints = availableRoots.map((_, index) =>
+			createCheckpoint(index + throttledRoots.length, 1_000_063)
+		);
+		await dataSource
+			.getRepository(HistoryArchiveObject)
+			.save([
+				...throttledRoots,
+				...availableRoots,
+				...throttledRetries,
+				...availableCheckpoints
+			]);
+		await dataSource.query(
+			`insert into "history_archive_object_host_throttle" (
+				"hostIdentity", "archiveUrlIdentity", "failureClass",
+				"evidenceClass", "errorType", "blockedUntil", "lastFailureAt"
+			)
+			select root."hostIdentity", root."archiveUrlIdentity", 'rate-limit',
+				'archive-object', 'HTTP_429', now() + interval '1 hour', now()
+			from "history_archive_object_queue" root
+			where root."archiveUrlIdentity" = any($1::text[])
+				and root."objectType" = 'history-archive-state'`,
+			[throttledRoots.map(({ archiveUrlIdentity }) => archiveUrlIdentity)]
+		);
+
+		const result = await repository.reconcileExecutionDisposition();
+		const [counts] = (await dataSource.query(`
+			select
+				count(*) filter (
+					where candidate.status = 'pending'
+						and candidate."executionDisposition" = 'executable'
+						and throttle."hostIdentity" is null
+				)::integer as "availableExecutable",
+				count(*) filter (
+					where candidate.status = 'pending'
+						and candidate."executionDisposition" = 'executable'
+						and throttle."hostIdentity" is not null
+				)::integer as "throttledExecutable"
+			from "history_archive_object_queue" candidate
+			left join "history_archive_object_host_throttle" throttle
+				on throttle."hostIdentity" = candidate."hostIdentity"
+				and throttle."blockedUntil" > now()
+		`)) as readonly {
+			readonly availableExecutable: number;
+			readonly throttledExecutable: number;
+		}[];
+
+		expect(result).toMatchObject({
+			admittedObjects: 48,
+			availableSlots: 48,
+			outstandingObjects: 0,
+			watermark: 48
+		});
+		expect(counts).toEqual({
+			availableExecutable: 48,
+			throttledExecutable: 0
+		});
+	});
 });
