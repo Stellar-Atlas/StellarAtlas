@@ -4,7 +4,11 @@ import {
 	runFullHistoryOperationBackfillCli,
 	type FullHistoryOperationBackfillCliDependencies
 } from '../FullHistoryOperationBackfillCli.js';
-import { FullHistoryOperationBackfillExecutionError } from '../FullHistoryOperationBackfillComposition.js';
+import {
+	createFullHistoryOperationBackfillDataSource,
+	FULL_HISTORY_OPERATION_BACKFILL_POOL_SIZE,
+	FullHistoryOperationBackfillExecutionError
+} from '../FullHistoryOperationBackfillComposition.js';
 import type { FullHistoryOperationWorkerMetrics } from '../WorkerThreadFullHistoryCheckpointDecoder.js';
 
 const confirmedEnvironment = {
@@ -14,6 +18,15 @@ const confirmedEnvironment = {
 };
 
 describe('FullHistoryOperationBackfillCli', () => {
+	it('reserves database connections for leadership and every CPU worker', () => {
+		const dataSource = createFullHistoryOperationBackfillDataSource();
+
+		expect(FULL_HISTORY_OPERATION_BACKFILL_POOL_SIZE).toBe(14);
+		expect(dataSource.options.poolSize).toBe(14);
+		expect(dataSource.options.migrationsRun).toBe(false);
+		expect(dataSource.options.synchronize).toBe(false);
+	});
+
 	it('refuses execution without explicit operator confirmation', async () => {
 		const dependencies = createDependencies();
 

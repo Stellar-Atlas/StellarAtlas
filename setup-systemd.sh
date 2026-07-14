@@ -29,6 +29,7 @@ INSTALL_UNIT_NAMES=(
 	stellaratlas-history-scanner@.service
 	stellaratlas-full-history-promotion.service
 	stellaratlas-full-history-backfill.service
+	stellaratlas-full-history-operation-backfill.service
 	stellaratlas-horizon.service
 	stellaratlas-stellar-rpc.service
 )
@@ -302,6 +303,7 @@ main() {
 	systemctl enable --now stellaratlas.target
 	systemctl start stellaratlas-full-history-promotion.service
 	systemctl start stellaratlas-full-history-backfill.service
+	systemctl start stellaratlas-full-history-operation-backfill.service
 	verify_installed_units
 	systemctl is-active --quiet stellaratlas.target ||
 		die "stellaratlas.target is not active"
@@ -309,12 +311,14 @@ main() {
 		die "stellaratlas-full-history-promotion.service is not active"
 	systemctl is-active --quiet stellaratlas-full-history-backfill.service ||
 		die "stellaratlas-full-history-backfill.service is not active"
+	systemctl is-active --quiet stellaratlas-full-history-operation-backfill.service ||
+		die "stellaratlas-full-history-operation-backfill.service is not active"
 
 	cat <<'EOF'
 Installed boot-safe local copies of the split StellarAtlas units.
 The obsolete stellaratlas.service is masked. An already-active target was not
-restarted; canonical promotion and bounded historical backfill were started
-explicitly.
+restarted; canonical promotion, historical backfill, and operation catch-up
+were started explicitly.
 
 Production:
   systemctl status stellaratlas.target
@@ -328,6 +332,7 @@ Production:
   systemctl restart stellaratlas-history-scanner@1.service
   systemctl restart stellaratlas-full-history-promotion.service
   systemctl restart stellaratlas-full-history-backfill.service
+  systemctl restart stellaratlas-full-history-operation-backfill.service
 
 Local full-history services, after binaries/config/DB exist:
   systemctl start stellaratlas-horizon.service

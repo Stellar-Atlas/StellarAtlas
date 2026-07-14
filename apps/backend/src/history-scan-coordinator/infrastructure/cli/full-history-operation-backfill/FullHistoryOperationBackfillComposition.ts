@@ -6,7 +6,10 @@ import {
 	type BackfillFullHistoryOperationsInput,
 	type BackfillFullHistoryOperationsResult
 } from '../../../use-cases/backfill-full-history-operations/BackfillFullHistoryOperations.js';
-import { FULL_HISTORY_OPERATION_BACKFILL_CPU_WORKERS_DEFAULT } from '../../../domain/full-history-operation-backfill/FullHistoryOperationBackfill.js';
+import {
+	FULL_HISTORY_OPERATION_BACKFILL_CPU_WORKERS_DEFAULT,
+	FULL_HISTORY_OPERATION_BACKFILL_CPU_WORKERS_MAX
+} from '../../../domain/full-history-operation-backfill/FullHistoryOperationBackfill.js';
 import { createFullHistoryPromotionDataSource } from '../full-history-promotion/FullHistoryPromotionComposition.js';
 import { checkFullHistoryPromotionSchemaReadiness } from '../full-history-promotion/FullHistoryPromotionSchemaReadiness.js';
 import {
@@ -24,6 +27,9 @@ export interface FullHistoryOperationBackfillExecutionResult extends BackfillFul
 	readonly workerMetrics: FullHistoryOperationWorkerMetrics;
 }
 
+export const FULL_HISTORY_OPERATION_BACKFILL_POOL_SIZE =
+	FULL_HISTORY_OPERATION_BACKFILL_CPU_WORKERS_MAX + 2;
+
 export class FullHistoryOperationBackfillExecutionError extends Error {
 	constructor(
 		readonly workerMetrics: FullHistoryOperationWorkerMetrics,
@@ -40,7 +46,10 @@ export class FullHistoryOperationBackfillExecutionError extends Error {
 }
 
 export function createFullHistoryOperationBackfillDataSource(): DataSource {
-	return createFullHistoryPromotionDataSource();
+	// One connection holds the advisory lock while workers load and store batches.
+	return createFullHistoryPromotionDataSource(
+		FULL_HISTORY_OPERATION_BACKFILL_POOL_SIZE
+	);
 }
 
 export function composeFullHistoryOperationBackfill(

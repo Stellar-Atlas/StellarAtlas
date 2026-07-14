@@ -1,0 +1,39 @@
+[Unit]
+Description=StellarAtlas continuous full-history operation and account-reference backfill
+Documentation=https://github.com/Stellar-Atlas/StellarAtlas
+Wants=stellaratlas-api.service stellaratlas-full-history-promotion.service
+After=stellaratlas-api.service stellaratlas-full-history-promotion.service
+PartOf=stellaratlas.target
+Conflicts=stellaratlas.service
+
+[Service]
+Type=simple
+User=observe
+Group=observe
+WorkingDirectory=/home/observe/stellarbeat-data/Observer
+Environment=NODE_ENV=production
+Environment=HOME=/home/observe
+Environment=PATH=/home/observe/.nvm/versions/node/v26.4.0/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+Environment=FULL_HISTORY_CONTINUOUS_OPERATION_BACKFILL_ENABLED=true
+Environment="FULL_HISTORY_NETWORK_PASSPHRASE=Public Global Stellar Network ; September 2015"
+Environment=FULL_HISTORY_OPERATION_BACKFILL_BATCHES=12
+Environment=FULL_HISTORY_OPERATION_BACKFILL_CPU_WORKERS=12
+Environment=FULL_HISTORY_OPERATION_BACKFILL_SUCCESS_DELAY_MS=250
+Environment=FULL_HISTORY_OPERATION_BACKFILL_IDLE_BACKOFF_MS=15000
+Environment=FULL_HISTORY_OPERATION_BACKFILL_LOCK_BACKOFF_MS=30000
+Environment=FULL_HISTORY_OPERATION_BACKFILL_ERROR_BACKOFF_MS=30000
+Environment=FULL_HISTORY_OPERATION_BACKFILL_HEARTBEAT_MS=60000
+EnvironmentFile=-/etc/stellaratlas/stellaratlas.env
+ExecStartPre=/usr/bin/env node scripts/wait-for-url.mjs http://127.0.0.1:3000/v1/status 90
+ExecStart=/usr/bin/env pnpm start:full-history-operation-backfill
+Restart=always
+RestartSec=15
+TimeoutStopSec=3900
+KillSignal=SIGTERM
+CPUQuota=1200%
+MemoryMax=32G
+TasksMax=32
+NoNewPrivileges=true
+
+[Install]
+WantedBy=stellaratlas.target

@@ -22,6 +22,9 @@ truth; systemd consumes root-owned regular-file copies installed under
   observations into the live search read model.
 - `stellaratlas-history-scanner@.service` runs the bounded history object
   scanner with 24 total object worker processes and one scanner loop per worker.
+- `stellaratlas-full-history-operation-backfill.service` continuously catches up
+  operation, operation-result, and account-reference facts for canonical
+  batches.
 - `stellaratlas-users.service` runs the user/mail service.
 
 ## Isolated network search
@@ -108,6 +111,41 @@ runtime behavior must change. The installer reloads systemd and starts the
 target only when it is inactive; it does not restart an active production
 target.
 
+## Full-history operation catch-up
+
+`stellaratlas-full-history-operation-backfill.service` is the autonomous
+consumer for canonical batches created by the promotion runtime. Starting the
+dedicated unit is sufficient authorization; it does not use the one-shot
+`FULL_HISTORY_OPERATION_BACKFILL_OPERATOR_CONFIRM` guard.
+
+Each cycle selects at most 12 batches by default and uses 12 total decoder
+worker threads. `FULL_HISTORY_OPERATION_BACKFILL_BATCHES` can be set from 1 to
+24, while `FULL_HISTORY_OPERATION_BACKFILL_CPU_WORKERS` is hard-capped at 12.
+The batch window does not create a worker pool per batch: active batches and
+decoder workers share the same total worker cap. The unit also applies process
+caps of 12 CPU cores, 32 GiB, and 32 tasks.
+
+Every cycle acquires the existing operation-backfill Postgres advisory lock,
+runs one bounded invocation, and releases the lock before backing off. Lock
+contention, idle work, and failures use separate bounded delays. JSON journal
+events are capped at 4 KiB and include selected/completed batch counts, durable
+batch IDs, operation/account-reference counts, active-worker peaks, failures,
+and worker memory high-water marks. A one-minute heartbeat remains active while
+a long decoder cycle runs.
+
+On `SIGTERM`, the runtime interrupts its current backoff immediately. If a cycle
+is active, it stops scheduling new cycles, lets that bounded invocation finish,
+releases the advisory lock, and closes its Postgres pool. The unit's 65-minute
+stop timeout allows the default single wave of 12 worker tasks to reach the
+worker and database timeout boundaries cleanly.
+
+Inspect the runtime without changing production state:
+
+```bash
+systemctl status stellaratlas-full-history-operation-backfill.service --no-pager
+journalctl -u stellaratlas-full-history-operation-backfill.service -n 100 --no-pager
+```
+
 ## Optional full-history services
 
 These units are installed by `setup-systemd.sh` but are intentionally not part
@@ -173,10 +211,11 @@ systemd, enables the split target, and starts it if needed.
 
 Production split units use `PartOf=stellaratlas.target`, so target restarts
 propagate to the API, frontend, public ingress, network scanner, SCP collector,
-users service, and `history-scanner@1` without reviving the old monolithic unit.
-That behavior is for boot recovery and deliberate full-stack maintenance only.
-Do not restart the target during a normal component deploy: stopping the legacy
-frontend also removes the public `8080` Cloudflare origin.
+users service, `history-scanner@1`, and full-history promotion/backfill runtimes
+without reviving the old monolithic unit. That behavior is for boot recovery
+and deliberate full-stack maintenance only. Do not restart the target during a
+normal component deploy: stopping the legacy frontend also removes the public
+`8080` Cloudflare origin.
 
 After changing a unit template, install the new copies, then restart only the
 units whose definitions or runtime code changed:

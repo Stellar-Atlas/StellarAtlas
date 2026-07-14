@@ -55,6 +55,7 @@
 		"run:full-history-backfill": "pnpm --filter backend run run-full-history-backfill",
 		"start:full-history-backfill": "pnpm --filter backend run run-continuous-full-history-backfill",
 		"backfill:full-history-operations": "pnpm --filter backend run backfill-full-history-operations",
+		"start:full-history-operation-backfill": "pnpm --filter backend run run-continuous-full-history-operation-backfill",
 		"start:users": "pnpm --filter users run start",
 		"start:all": "node start-all.cjs"
 	},

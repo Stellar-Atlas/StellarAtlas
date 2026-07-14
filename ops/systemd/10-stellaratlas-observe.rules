@@ -28,6 +28,7 @@ polkit.addRule(function(action, subject) {
     "stellaratlas-history-scanner@1.service",
     "stellaratlas-full-history-promotion.service",
     "stellaratlas-full-history-backfill.service",
+    "stellaratlas-full-history-operation-backfill.service",
     "stellaratlas-horizon.service",
     "stellaratlas-stellar-rpc.service"
   ];
