@@ -1,6 +1,7 @@
 import { toHistoryArchiveCheckpointProofRefreshParams } from '../HistoryArchiveCheckpointProofSqlInputs.js';
 import { historyArchiveCheckpointProofRefreshSql } from '../HistoryArchiveCheckpointProofRefreshSql.js';
 import { markBucketProofDependentsDirtySql } from '../HistoryArchiveCheckpointProofDirtyWrite.js';
+import { historyArchiveImmediateBucketProofRefreshLimit } from '../HistoryArchiveCheckpointProofTargetSql.js';
 
 describe('HistoryArchiveCheckpointProofSqlInputs', () => {
 	it('maps missing optional proof refresh target fields to null', () => {
@@ -30,7 +31,10 @@ describe('HistoryArchiveCheckpointProofSqlInputs', () => {
 		expect(historyArchiveCheckpointProofRefreshSql).toContain(
 			'"history_archive_checkpoint_bucket_dependency"'
 		);
-		expect(historyArchiveCheckpointProofRefreshSql).toContain('limit 24');
+		expect(historyArchiveImmediateBucketProofRefreshLimit).toBe(1);
+		expect(historyArchiveCheckpointProofRefreshSql).toContain(
+			`limit ${historyArchiveImmediateBucketProofRefreshLimit}`
+		);
 		expect(historyArchiveCheckpointProofRefreshSql).toContain(
 			'$2::integer + 64'
 		);

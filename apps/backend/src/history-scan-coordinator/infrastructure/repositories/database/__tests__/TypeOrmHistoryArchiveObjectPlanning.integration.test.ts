@@ -105,6 +105,47 @@ describe('history archive producer watermarks in disposable PostgreSQL', () => {
 		});
 	});
 
+	it('replaces capacity held by work on a throttled host', async () => {
+		const blocked = Array.from({ length: 48 }, (_, index) =>
+			rootObject(`https://blocked.example/archive-${index}`, 'failed')
+		);
+		await dataSource.getRepository(HistoryArchiveObject).save(blocked);
+		await dataSource.query(`
+			update "history_archive_object_queue"
+			set "dependencyReady" = true,
+				"executionDisposition" = 'executable',
+				"executionReason" = 'retry-preserved',
+				"nextAttemptAt" = now() - interval '1 minute'
+			where "hostIdentity" = 'blocked.example'
+		`);
+		await dataSource.query(`
+			insert into "history_archive_object_host_throttle" (
+				"hostIdentity", "archiveUrlIdentity", "failureClass",
+				"evidenceClass", "errorType", "blockedUntil", "lastFailureAt"
+			) values (
+				'blocked.example', 'https://blocked.example/archive-0',
+				'transport', 'archive-object', 'archive_transport_error',
+				now() + interval '1 hour', now()
+			)
+		`);
+		await repository.planObjects(createProductionPlans(48));
+
+		await expect(repository.promotePlannedObjects()).resolves.toMatchObject({
+			availableSlots: 48,
+			outstandingObjects: 0,
+			promotedObjects: 48,
+			watermark: 48
+		});
+
+		const [counts] = (await dataSource.query(`
+			select count(*)::integer as count
+			from "history_archive_object_queue"
+			where "hostIdentity" <> 'blocked.example'
+				and "executionDisposition" = 'executable'
+		`)) as readonly { readonly count: number }[];
+		expect(counts?.count).toBe(48);
+	});
+
 	it('requeues only root state objects whose refresh window is due', async () => {
 		const dueUrl = 'https://refresh-due.example/history';
 		const freshUrl = 'https://refresh-fresh.example/history';

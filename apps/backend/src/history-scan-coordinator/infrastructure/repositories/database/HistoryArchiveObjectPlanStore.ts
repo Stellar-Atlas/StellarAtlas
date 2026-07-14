@@ -156,6 +156,17 @@ const queuePressureSql = `
 					"executionDisposition" = 'executable'
 					and "dependencyReady" = true
 					and (
+						"transitionEffectsRequiredAt" is null
+						or "transitionEffectsCompletedAt" is not null
+					)
+					and not exists (
+						select 1
+						from "history_archive_object_host_throttle" throttle
+						where throttle."hostIdentity" =
+							"history_archive_object_queue"."hostIdentity"
+							and throttle."blockedUntil" > now()
+					)
+					and (
 						status = 'pending'
 						or (
 							status = 'failed'
