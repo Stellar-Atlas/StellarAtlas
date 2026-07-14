@@ -6,6 +6,7 @@ import {
 import { FullHistoryCanonicalError } from '../../../../domain/full-history/FullHistoryCanonicalError.js';
 import type { FullHistoryUint64String } from '../../../../domain/full-history/FullHistoryCanonicalTypes.js';
 import { TypeOrmFullHistoryCanonicalRepository } from '../TypeOrmFullHistoryCanonicalRepository.js';
+import { createFullHistoryBatchProofExactTimestampFunctionSql } from '../../migrations/FullHistoryCanonicalSchemaSql.js';
 import {
 	fixtureHash,
 	fullHistoryEntities,
@@ -31,6 +32,9 @@ describe('full-history canonical repository adversarial writes', () => {
 		});
 		await dataSource.initialize();
 		await installFullHistoryCanonicalSchema(dataSource);
+		await dataSource.query(
+			createFullHistoryBatchProofExactTimestampFunctionSql
+		);
 		repository = new TypeOrmFullHistoryCanonicalRepository(dataSource);
 	});
 
@@ -146,6 +150,58 @@ describe('full-history canonical repository adversarial writes', () => {
 			/canonical unsigned decimal/
 		);
 		expect(await countBatchRows(input.batchId)).toEqual([0, 0, 0, 0]);
+	});
+
+	it('preserves database proof microseconds without accepting a different millisecond', async () => {
+		const precise = await seedFullHistoryCheckpoint(dataSource, {
+			batchNumber: 61,
+			networkPassphrase: 'Canonical timestamp precision network'
+		});
+		await dataSource.query(
+			`update "history_archive_checkpoint_proof"
+			 set "evaluatedAt" = "evaluatedAt" + interval '0.000766 seconds'
+			 where id = $1`,
+			[precise.proofId]
+		);
+
+		await expect(repository.writeCheckpoint(precise)).resolves.toMatchObject({
+			batchId: precise.batchId,
+			replayed: false
+		});
+		const timestamps = (await dataSource.query(
+			`select
+				to_char(batch."proof_evaluated_at" at time zone 'UTC',
+					'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') as batch_timestamp,
+				to_char(proof."evaluatedAt" at time zone 'UTC',
+					'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') as proof_timestamp
+			 from "full_history_ingestion_batch" batch
+			 join "history_archive_checkpoint_proof" proof
+				on proof.id = batch."checkpoint_proof_id"
+			 where batch.id = $1`,
+			[precise.batchId]
+		)) as Array<{
+			readonly batch_timestamp: string;
+			readonly proof_timestamp: string;
+		}>;
+		expect(timestamps).toHaveLength(1);
+		expect(timestamps[0]?.batch_timestamp).toBe(
+			timestamps[0]?.proof_timestamp
+		);
+
+		const changed = await seedFullHistoryCheckpoint(dataSource, {
+			batchNumber: 62,
+			networkPassphrase: 'Canonical changed timestamp network'
+		});
+		await dataSource.query(
+			`update "history_archive_checkpoint_proof"
+			 set "evaluatedAt" = "evaluatedAt" + interval '0.001 seconds'
+			 where id = $1`,
+			[changed.proofId]
+		);
+		await expect(repository.writeCheckpoint(changed)).rejects.toMatchObject({
+			reason: 'invalid-proof-provenance'
+		});
+		expect(await countBatchRows(changed.batchId)).toEqual([0, 0, 0, 0]);
 	});
 
 	async function countBatchRows(batchId: string): Promise<number[]> {

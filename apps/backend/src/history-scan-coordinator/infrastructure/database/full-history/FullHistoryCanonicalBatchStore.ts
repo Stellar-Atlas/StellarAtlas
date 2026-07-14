@@ -26,6 +26,10 @@ interface HistoricalFrontierRow {
 	readonly nextLedger: string;
 }
 
+interface ExactProofTimestampRow {
+	readonly exactProofEvaluatedAt: string;
+}
+
 export async function findBatch(
 	manager: EntityManager,
 	batchId: string
@@ -66,6 +70,7 @@ export async function insertBatch(
 	input: FullHistoryCheckpointWrite,
 	networkHash: FullHistoryHash
 ): Promise<void> {
+	const exactProofEvaluatedAt = await readExactProofEvaluatedAt(manager, input);
 	await manager.query(
 		`
 			insert into "full_history_ingestion_batch" (
@@ -88,7 +93,7 @@ export async function insertBatch(
 			networkHash.toBuffer(),
 			input.proofId,
 			input.proofVersion,
-			input.proofEvaluatedAt,
+			exactProofEvaluatedAt,
 			input.archiveUrlIdentity,
 			input.checkpointLedger,
 			input.firstLedger,
@@ -107,6 +112,33 @@ export async function insertBatch(
 			input.results.length
 		]
 	);
+}
+
+async function readExactProofEvaluatedAt(
+	manager: EntityManager,
+	input: FullHistoryCheckpointWrite
+): Promise<string> {
+	const rows = (await manager.query(
+		`
+			select to_char(
+				proof."evaluatedAt" at time zone 'UTC',
+				'YYYY-MM-DD"T"HH24:MI:SS.US"Z"'
+			) as "exactProofEvaluatedAt"
+			from "history_archive_checkpoint_proof" proof
+			where proof.id = $1
+				and date_trunc('milliseconds', proof."evaluatedAt") =
+					$2::timestamptz
+		`,
+		[input.proofId, input.proofEvaluatedAt]
+	)) as ExactProofTimestampRow[];
+	const row = rows[0];
+	if (rows.length !== 1 || row === undefined) {
+		throw new FullHistoryCanonicalError(
+			'invalid-proof-provenance',
+			'Checkpoint proof timestamp does not match immutable proof evidence'
+		);
+	}
+	return row.exactProofEvaluatedAt;
 }
 
 export function assertBatchMatches(
