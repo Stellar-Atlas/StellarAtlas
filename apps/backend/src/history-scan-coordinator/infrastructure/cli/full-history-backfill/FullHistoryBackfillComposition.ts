@@ -2,12 +2,12 @@ import type { DataSource } from 'typeorm';
 import { TypeOrmFullHistoryCanonicalRepository } from '../../database/full-history/TypeOrmFullHistoryCanonicalRepository.js';
 import { TypeOrmFullHistoryHistoricalBackfillRepository } from '../../database/full-history-backfill/TypeOrmFullHistoryHistoricalBackfillRepository.js';
 import { TypeOrmFullHistoryCheckpointCandidateRepository } from '../../database/full-history-promotion/TypeOrmFullHistoryCheckpointCandidateRepository.js';
-import { StellarFullHistoryCheckpointDecoder } from '../../full-history-promotion/StellarFullHistoryCheckpointDecoder.js';
 import { PrependFullHistoryCheckpoint } from '../../../use-cases/prepend-full-history-checkpoint/PrependFullHistoryCheckpoint.js';
 import { RunFullHistoryBackfill } from '../../../use-cases/run-full-history-backfill/RunFullHistoryBackfill.js';
 import { ScheduleFullHistoryBackfill } from '../../../use-cases/schedule-full-history-backfill/ScheduleFullHistoryBackfill.js';
 import { createFullHistoryPromotionDataSource } from '../full-history-promotion/FullHistoryPromotionComposition.js';
 import { checkFullHistoryPromotionSchemaReadiness } from '../full-history-promotion/FullHistoryPromotionSchemaReadiness.js';
+import { WorkerThreadFullHistoryCheckpointDecoder } from '../full-history-operation-backfill/WorkerThreadFullHistoryCheckpointDecoder.js';
 
 export interface FullHistoryBackfillSchemaReadiness {
 	readonly missingSchemaObjects: readonly string[];
@@ -16,7 +16,8 @@ export interface FullHistoryBackfillSchemaReadiness {
 }
 
 export function createFullHistoryBackfillDataSource(): DataSource {
-	return createFullHistoryPromotionDataSource();
+	// Canonical work may occupy two connections; keep one available for leases.
+	return createFullHistoryPromotionDataSource(3);
 }
 
 export function composeFullHistoryBackfill(dataSource: DataSource): {
@@ -34,7 +35,7 @@ export function composeFullHistoryBackfill(dataSource: DataSource): {
 			backfillRepository,
 			new PrependFullHistoryCheckpoint(
 				new TypeOrmFullHistoryCheckpointCandidateRepository(dataSource),
-				new StellarFullHistoryCheckpointDecoder(),
+				new WorkerThreadFullHistoryCheckpointDecoder(1),
 				canonicalRepository
 			)
 		),

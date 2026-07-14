@@ -5,11 +5,11 @@ import { TypeOrmFullHistoryCanonicalRepository } from '../../database/full-histo
 import { TypeOrmFullHistoryCheckpointCandidateRepository } from '../../database/full-history-promotion/TypeOrmFullHistoryCheckpointCandidateRepository.js';
 import { TypeOrmFullHistoryPromotionFrontierRepository } from '../../database/full-history-promotion/TypeOrmFullHistoryPromotionFrontierRepository.js';
 import { TypeOrmFullHistoryPromotionRuntimeRepository } from '../../database/full-history-promotion/TypeOrmFullHistoryPromotionRuntimeRepository.js';
-import { StellarFullHistoryCheckpointDecoder } from '../../full-history-promotion/StellarFullHistoryCheckpointDecoder.js';
 import { PromoteNextFullHistoryCheckpoint } from '../../../use-cases/promote-next-full-history-checkpoint/PromoteNextFullHistoryCheckpoint.js';
 import { PromoteFullHistoryCheckpoint } from '../../../use-cases/promote-full-history-checkpoint/PromoteFullHistoryCheckpoint.js';
+import { WorkerThreadFullHistoryCheckpointDecoder } from '../full-history-operation-backfill/WorkerThreadFullHistoryCheckpointDecoder.js';
 
-export function createFullHistoryPromotionDataSource(): DataSource {
+export function createFullHistoryPromotionDataSource(poolSize = 2): DataSource {
 	const options = AppDataSource.options;
 	if (options.type !== 'postgres') {
 		throw new Error(
@@ -20,7 +20,7 @@ export function createFullHistoryPromotionDataSource(): DataSource {
 		...options,
 		entities: [...fullHistoryCanonicalEntities],
 		migrationsRun: false,
-		poolSize: 2,
+		poolSize,
 		synchronize: false
 	});
 }
@@ -30,7 +30,7 @@ export function composeFullHistoryCheckpointPromoter(
 ): PromoteFullHistoryCheckpoint {
 	return new PromoteFullHistoryCheckpoint(
 		new TypeOrmFullHistoryCheckpointCandidateRepository(dataSource),
-		new StellarFullHistoryCheckpointDecoder(),
+		new WorkerThreadFullHistoryCheckpointDecoder(1),
 		new TypeOrmFullHistoryCanonicalRepository(dataSource)
 	);
 }
@@ -48,7 +48,7 @@ export function composeNextFullHistoryCheckpointPromoter(
 		),
 		new PromoteFullHistoryCheckpoint(
 			new TypeOrmFullHistoryCheckpointCandidateRepository(dataSource),
-			new StellarFullHistoryCheckpointDecoder(),
+			new WorkerThreadFullHistoryCheckpointDecoder(1),
 			canonicalRepository
 		)
 	);

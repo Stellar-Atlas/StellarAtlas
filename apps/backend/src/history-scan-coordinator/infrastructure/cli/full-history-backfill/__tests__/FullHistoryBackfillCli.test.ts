@@ -4,6 +4,7 @@ import {
 	runFullHistoryBackfillCli,
 	type FullHistoryBackfillCliDependencies
 } from '../FullHistoryBackfillCli.js';
+import { createFullHistoryBackfillDataSource } from '../FullHistoryBackfillComposition.js';
 
 const confirmedEnvironment = {
 	FULL_HISTORY_BACKFILL_OPERATOR_CONFIRM: 'run-one-bounded-backfill-invocation',
@@ -11,6 +12,14 @@ const confirmedEnvironment = {
 };
 
 describe('FullHistoryBackfillCli', () => {
+	it('reserves a database connection for lease renewal', () => {
+		const dataSource = createFullHistoryBackfillDataSource();
+
+		expect(dataSource.options.migrationsRun).toBe(false);
+		expect(dataSource.options.poolSize).toBe(3);
+		expect(dataSource.options.synchronize).toBe(false);
+	});
+
 	it('refuses execution without explicit operator confirmation', async () => {
 		const dependencies = createDependencies();
 		await expect(runFullHistoryBackfillCli({}, dependencies)).resolves.toBe(64);
