@@ -87,6 +87,60 @@ describe('GetHistoryArchiveRepairPlan', () => {
 		expect(result.value.actions).toEqual([]);
 	});
 
+	it('preserves a checkpoint ledger mismatch in the repair plan', async () => {
+		const objectRepository = mock<HistoryArchiveObjectRepository>();
+		const proofRepository = mock<HistoryArchiveCheckpointProofRepository>();
+		const useCase = new GetHistoryArchiveRepairPlan(
+			objectRepository,
+			proofRepository,
+			mock<ExceptionLogger>()
+		);
+		objectRepository.getSummary.mockResolvedValue(createSummary());
+		objectRepository.findActionableByArchiveUrl.mockResolvedValue([]);
+		proofRepository.findActionableByArchiveUrlIdentity.mockResolvedValue([
+			Object.assign(createCheckpointProof(), {
+				failureKind: 'checkpoint-ledger-mismatch'
+			})
+		]);
+
+		const result = await useCase.execute({ limit: 25, url: archiveUrl });
+
+		expect(result._unsafeUnwrap().actions).toEqual([
+			expect.objectContaining({
+				reason: 'checkpoint-ledger-mismatch',
+				summary: 'Checkpoint state file does not declare checkpoint 63355999.'
+			})
+		]);
+	});
+
+	it('preserves a checkpoint-state object ledger mismatch in the repair plan', async () => {
+		const objectRepository = mock<HistoryArchiveObjectRepository>();
+		const proofRepository = mock<HistoryArchiveCheckpointProofRepository>();
+		const useCase = new GetHistoryArchiveRepairPlan(
+			objectRepository,
+			proofRepository,
+			mock<ExceptionLogger>()
+		);
+		objectRepository.getSummary.mockResolvedValue(createSummary());
+		objectRepository.findActionableByArchiveUrl.mockResolvedValue([
+			createCheckpointLedgerMismatch()
+		]);
+		proofRepository.findActionableByArchiveUrlIdentity.mockResolvedValue([]);
+
+		const result = await useCase.execute({ limit: 25, url: archiveUrl });
+
+		expect(result._unsafeUnwrap().actions).toEqual([
+			expect.objectContaining({
+				evidence: [
+					expect.objectContaining({ observedCheckpointLedger: 63355935 })
+				],
+				kind: 'replace-archive-file',
+				reason: 'checkpoint-ledger-mismatch',
+				summary: 'Checkpoint state file does not declare checkpoint 63355999.'
+			})
+		]);
+	});
+
 	it('does not turn an aborted bucket download into a replacement action', async () => {
 		const objectRepository = mock<HistoryArchiveObjectRepository>();
 		const proofRepository = mock<HistoryArchiveCheckpointProofRepository>();
@@ -149,6 +203,26 @@ function createAbortedBucketFailure(): HistoryArchiveObject {
 	object.errorType = 'bucket_verification_failed';
 	object.errorMessage = 'aborted';
 	object.httpStatus = 200;
+	return object;
+}
+
+function createCheckpointLedgerMismatch(): HistoryArchiveObject {
+	const object = createObject(
+		'checkpoint-state',
+		'checkpoint-state:03c1dcbf',
+		'failed'
+	);
+	object.checkpointLedger = 63355999;
+	object.errorType = 'checkpoint_state_ledger_mismatch';
+	object.errorMessage = 'Checkpoint state declares ledger 63355935';
+	object.verificationFacts = {
+		checkpointHistoryArchiveStateFact: {
+			bucketListHash: bucketHash,
+			checkpointLedger: 63355935,
+			observedAt: '2026-07-07T18:00:00.000Z',
+			stellarHistoryUrl: object.objectUrl
+		}
+	};
 	return object;
 }
 

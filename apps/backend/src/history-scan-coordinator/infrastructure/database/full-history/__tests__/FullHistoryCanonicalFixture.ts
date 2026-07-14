@@ -220,7 +220,7 @@ export async function seedFullHistoryCheckpoint(
 		],
 		proofEvaluatedAt,
 		proofId,
-		proofVersion: 5,
+		proofVersion: 6,
 		results: [
 			{
 				feeCharged: fullHistoryUint64('100'),
@@ -337,7 +337,7 @@ async function insertProof(
 				"transactionsObjectRemoteId", "resultsObjectRemoteId",
 				"scpObjectRemoteId", "failureKind", "details", "evaluatedAt"
 			) values (
-				$1, $2, $3, $4, 5, $5, $5, $5, $5, $5, $5, $5,
+				$1, $2, $3, $4, 6, $5, $5, $5, $5, $5, $5, $5,
 				$15, $15, $15, 1, $6, 0, $7, $8, $8, $9, $10, $11, $12,
 				null, null, $13::jsonb, $14
 			) returning id
@@ -355,7 +355,11 @@ async function insertProof(
 			input.sources.ledger.remoteId,
 			input.sources.transactions.remoteId,
 			input.sources.results.remoteId,
-			JSON.stringify({ networkPassphrase: input.networkPassphrase }),
+			JSON.stringify({
+				checkpointStateLedgerFactPresent: true,
+				checkpointStateLedgerMatches: true,
+				networkPassphrase: input.networkPassphrase
+			}),
 			input.proofEvaluatedAt,
 			ledgerFactCount
 		]

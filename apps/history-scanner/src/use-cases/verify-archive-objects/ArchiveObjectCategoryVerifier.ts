@@ -27,9 +27,9 @@ import {
 import {
 	archiveEvidenceFailure,
 	getRetryAfterSecondsFromHttpError,
-	ScannerIssueError,
 	scannerIssueFailure
 } from './ArchiveObjectFailure.js';
+import { classifyCategoryVerificationFailure } from './ArchiveObjectCategoryFailureClassifier.js';
 
 type ProgressReporter = (
 	remoteId: string,
@@ -93,8 +93,38 @@ export class ArchiveObjectCategoryVerifier {
 				httpStatus: response.value.status
 			});
 		}
-
 		const observedAt = new Date().toISOString();
+		if (job.checkpointLedger === null) {
+			return err(
+				scannerIssueFailure({
+					error: new Error(
+						'Checkpoint-state job is missing its checkpoint ledger'
+					),
+					errorType: 'worker_setup_failure'
+				})
+			);
+		}
+		if (bucketListHashResult.value.ledger !== job.checkpointLedger) {
+			return err(
+				archiveEvidenceFailure({
+					error: new Error(
+						`Checkpoint state declares ledger ${bucketListHashResult.value.ledger}; expected ${job.checkpointLedger}`
+					),
+					errorType: 'checkpoint_state_ledger_mismatch',
+					httpStatus: response.value.status,
+					verificationFacts: {
+						checkpointHistoryArchiveStateFact: {
+							bucketListHash: bucketListHashResult.value.hash,
+							checkpointLedger: bucketListHashResult.value.ledger,
+							observedAt,
+							stellarHistoryUrl: job.objectUrl
+						},
+						content: canonicalJsonContentDigest(validation.value)
+					}
+				})
+			);
+		}
+
 		const checkpointHistoryArchiveState = {
 			observedAt,
 			stellarHistory: validation.value,
@@ -157,16 +187,14 @@ export class ArchiveObjectCategoryVerifier {
 		}
 
 		let bytesDownloaded = 0;
-		const countedStream = response.value.data.pipe(
-			new ByteCounter((bytes) => {
-				bytesDownloaded += bytes;
-				this.reportProgress(
-					job.remoteId,
-					workerStages.downloading,
-					bytesDownloaded
-				);
-			})
-		);
+		const byteCounter = new ByteCounter((bytes) => {
+			bytesDownloaded += bytes;
+			this.reportProgress(
+				job.remoteId,
+				workerStages.downloading,
+				bytesDownloaded
+			);
+		});
 		let pool: HasherPool;
 		try {
 			pool = new HasherPool(Math.max(Math.floor(this.hasherWorkerCount), 1));
@@ -186,7 +214,6 @@ export class ArchiveObjectCategoryVerifier {
 
 		const categoryVerificationData = createCategoryVerificationData();
 		const contentDigest = new XdrContentDigestTransform();
-		let processedEntries = 0;
 		let verificationResult: Result<
 			HistoryArchiveObjectProgressDTO,
 			HistoryArchiveObjectFailureDTO
@@ -200,13 +227,14 @@ export class ArchiveObjectCategoryVerifier {
 				parsedHistorySink
 			);
 			await pipeline([
-				countedStream,
+				response.value.data,
+				byteCounter,
 				createGunzip(),
 				contentDigest,
 				new XdrStreamReader(),
 				processor
 			]);
-			processedEntries = processor.processedEntries;
+			const processedEntries = processor.processedEntries;
 			await parsedHistorySink?.flush();
 			this.reportProgress(job.remoteId, workerStages.verified, bytesDownloaded);
 			verificationResult = ok({
@@ -260,22 +288,6 @@ export class ArchiveObjectCategoryVerifier {
 	private mapLocalError(error: unknown): HistoryArchiveObjectFailureDTO {
 		return scannerIssueFailure({ error, errorType: 'worker_setup_failure' });
 	}
-}
-
-export function classifyCategoryVerificationFailure(
-	error: unknown,
-	httpStatus: number
-): HistoryArchiveObjectFailureDTO {
-	return error instanceof ScannerIssueError
-		? scannerIssueFailure({
-				error,
-				errorType: 'category_scanner_failure'
-			})
-		: archiveEvidenceFailure({
-				error,
-				errorType: 'category_content_invalid',
-				httpStatus
-			});
 }
 
 class ByteCounter extends Transform {

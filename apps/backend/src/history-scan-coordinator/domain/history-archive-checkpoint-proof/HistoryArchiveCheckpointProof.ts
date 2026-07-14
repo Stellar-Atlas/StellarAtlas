@@ -7,6 +7,8 @@ import {
 	UpdateDateColumn
 } from 'typeorm';
 
+export const CURRENT_HISTORY_ARCHIVE_CHECKPOINT_PROOF_VERSION = 6;
+
 export type HistoryArchiveCheckpointProofStatus =
 	'pending' | 'verified' | 'mismatch' | 'not-evaluable';
 
@@ -14,6 +16,7 @@ export type HistoryArchiveCheckpointProofFailureKind =
 	| 'object-incomplete'
 	| 'object-failed'
 	| 'proof-facts-incomplete'
+	| 'checkpoint-ledger-mismatch'
 	| 'checkpoint-bucket-list-mismatch'
 	| 'transaction-hash-mismatch'
 	| 'result-hash-mismatch'

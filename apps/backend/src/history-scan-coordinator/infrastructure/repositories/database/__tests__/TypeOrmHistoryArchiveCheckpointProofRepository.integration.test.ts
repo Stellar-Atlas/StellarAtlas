@@ -56,7 +56,7 @@ describe('TypeOrmHistoryArchiveCheckpointProofRepository disposable PostgreSQL',
 			ledgerFactCount: 64,
 			previousLedgersMatch: true,
 			proofFactsComplete: true,
-			proofVersion: 5,
+			proofVersion: 6,
 			resultFactCount: 64,
 			resultsMatch: true,
 			status: 'verified',
@@ -64,10 +64,39 @@ describe('TypeOrmHistoryArchiveCheckpointProofRepository disposable PostgreSQL',
 			transactionsMatch: true
 		});
 		expect(proof?.details).toMatchObject({
+			checkpointStateLedgerFactPresent: true,
+			checkpointStateLedgerMatches: true,
 			expectedLedgerCount: 64,
 			expectsScp: true,
 			maxProtocolVersion: 22,
 			networkPassphrase: publicNetworkPassphrase
+		});
+	});
+
+	it('rejects a checkpoint-state fact bound to another checkpoint', async () => {
+		await dataSource.query(
+			`update history_archive_object_queue
+			 set "verificationFacts" = jsonb_set(
+				"verificationFacts",
+				'{checkpointHistoryArchiveStateFact,checkpointLedger}',
+				to_jsonb(($2 + 64)::integer)
+			 )
+			 where "archiveUrlIdentity" = $1
+				and "objectType" = 'checkpoint-state'
+				and "checkpointLedger" = $2`,
+			[archiveUrl, checkpointLedger]
+		);
+
+		const proof = await refreshAndLoad();
+		expect(proof).toMatchObject({
+			failureKind: 'checkpoint-ledger-mismatch',
+			proofFactsComplete: false,
+			proofVersion: 6,
+			status: 'mismatch'
+		});
+		expect(proof?.details).toMatchObject({
+			checkpointStateLedgerFactPresent: true,
+			checkpointStateLedgerMatches: false
 		});
 	});
 

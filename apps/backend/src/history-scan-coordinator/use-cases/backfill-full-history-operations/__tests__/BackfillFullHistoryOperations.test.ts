@@ -52,6 +52,54 @@ describe('BackfillFullHistoryOperations bounded scheduler', () => {
 		).not.toThrow();
 	});
 
+	it('accepts a stronger proof over the same immutable source objects', () => {
+		const batch = { ...createBatches(1)[0]!, proofVersion: 5 };
+		const candidate = candidateForBatch(batch);
+
+		expect(() =>
+			assertOperationBackfillCandidateProvenance(
+				batch,
+				{
+					...candidate,
+					proof: { ...candidate.proof, version: 6 }
+				},
+				networkPassphrase
+			)
+		).not.toThrow();
+	});
+
+	it('rejects an unrecognized proof-version upgrade', () => {
+		const batch = { ...createBatches(1)[0]!, proofVersion: 5 };
+		const candidate = candidateForBatch(batch);
+
+		expect(() =>
+			assertOperationBackfillCandidateProvenance(
+				batch,
+				{
+					...candidate,
+					proof: { ...candidate.proof, version: 7 }
+				},
+				networkPassphrase
+			)
+		).toThrow('immutable canonical provenance');
+	});
+
+	it('rejects a proof older than the immutable batch provenance', () => {
+		const batch = { ...createBatches(1)[0]!, proofVersion: 2 };
+		const candidate = candidateForBatch(batch);
+
+		expect(() =>
+			assertOperationBackfillCandidateProvenance(
+				batch,
+				{
+					...candidate,
+					proof: { ...candidate.proof, version: 1 }
+				},
+				networkPassphrase
+			)
+		).toThrow('immutable canonical provenance');
+	});
+
 	it('never loads or decodes more batches than the total CPU worker cap', async () => {
 		const batches = createBatches(4);
 		const candidates = new CandidateFixtureRepository(batches);

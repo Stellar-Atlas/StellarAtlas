@@ -2,6 +2,11 @@ import type { FullHistoryCheckpointSources } from '../full-history/FullHistoryCa
 import type { FullHistoryCheckpointCandidate } from '../full-history-promotion/FullHistoryCheckpointCandidate.js';
 import type { FullHistoryLedgerSequence } from '../full-history/FullHistoryCanonicalTypes.js';
 
+const checkpointLedgerBindingUpgrade = {
+	from: 5,
+	to: 6
+} as const;
+
 export const FULL_HISTORY_OPERATION_BACKFILL_BATCH_LIMIT_MAX = 24;
 export const FULL_HISTORY_OPERATION_BACKFILL_CPU_WORKERS_DEFAULT = 2;
 export const FULL_HISTORY_OPERATION_BACKFILL_CPU_WORKERS_MAX = 12;
@@ -73,7 +78,7 @@ export function assertOperationBackfillCandidateProvenance(
 		proof.checkpointLedger !== batch.checkpointLedger ||
 		proof.id !== batch.proofId ||
 		proof.networkPassphrase !== networkPassphrase ||
-		proof.version !== batch.proofVersion ||
+		!proofVersionsMatch(batch.proofVersion, proof.version) ||
 		!sourcesMatch(proof.sources, batch.sources)
 	) {
 		throw new FullHistoryOperationBackfillError(
@@ -81,6 +86,17 @@ export function assertOperationBackfillCandidateProvenance(
 			'Checkpoint candidate no longer matches immutable canonical provenance'
 		);
 	}
+}
+
+function proofVersionsMatch(
+	batchVersion: number,
+	currentVersion: number
+): boolean {
+	return (
+		currentVersion === batchVersion ||
+		(batchVersion === checkpointLedgerBindingUpgrade.from &&
+			currentVersion === checkpointLedgerBindingUpgrade.to)
+	);
 }
 
 function sourcesMatch(

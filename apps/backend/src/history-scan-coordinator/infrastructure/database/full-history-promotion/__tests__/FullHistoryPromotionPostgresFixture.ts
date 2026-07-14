@@ -224,14 +224,18 @@ async function insertProof(
 			"evaluatedAt", "checkpointStateObjectRemoteId", "ledgerObjectRemoteId",
 			"transactionsObjectRemoteId", "resultsObjectRemoteId"
 		) values (
-			$1, $1, $2, 'verified', 5, true, true, true, true, true, true, true,
+			$1, $1, $2, 'verified', 6, true, true, true, true, true, true, true,
 			$3, $3, $3, null, $4::jsonb, $5, $6, $7, $8, $9
 		) returning id`,
 		[
 			input.archiveUrlIdentity,
 			input.checkpointLedger,
 			count,
-			JSON.stringify({ networkPassphrase: input.networkPassphrase }),
+			JSON.stringify({
+				checkpointStateLedgerFactPresent: true,
+				checkpointStateLedgerMatches: true,
+				networkPassphrase: input.networkPassphrase
+			}),
 			new Date('2026-07-11T03:00:00.000Z'),
 			input.sourceIds.checkpointState,
 			input.sourceIds.ledger,

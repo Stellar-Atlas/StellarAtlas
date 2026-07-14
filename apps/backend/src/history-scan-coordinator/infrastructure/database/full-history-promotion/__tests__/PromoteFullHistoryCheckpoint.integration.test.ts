@@ -143,6 +143,26 @@ describe('PromoteFullHistoryCheckpoint with exact Postgres evidence', () => {
 		});
 	});
 
+	it('rejects a proof without checkpoint-state ledger binding', async () => {
+		const seeded = await seedPromotionCandidate(dataSource, {
+			networkPassphrase: 'Promotion ledger-binding fixture network',
+			seed: 110
+		});
+		await dataSource.query(
+			`update "history_archive_checkpoint_proof"
+			 set details = details - 'checkpointStateLedgerMatches'
+			 where id = $1`,
+			[seeded.proofId]
+		);
+
+		await expect(promoter.promote(seeded.target)).rejects.toMatchObject({
+			reason: 'invalid-proof'
+		});
+		await expect(canonicalCounts(seeded.proofId)).resolves.toMatchObject({
+			batches: 0
+		});
+	});
+
 	it('rejects missing exact-object observations despite unrelated decoys', async () => {
 		const seeded = await seedPromotionCandidate(dataSource, {
 			networkPassphrase: 'Promotion exact observation network',

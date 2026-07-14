@@ -37,7 +37,7 @@ export const historyArchiveCheckpointProofUpsertSql = `
 		"archiveUrlIdentity",
 		"checkpointLedger",
 		status,
-		5,
+		6,
 		required_objects_complete,
 		proof_facts_complete,
 		checkpoint_bucket_list_matches,
@@ -64,9 +64,11 @@ export const historyArchiveCheckpointProofUpsertSql = `
 			'expectedLedgerCount', expected_ledger_count,
 			'ledgerRawFactCount', ledger_raw_fact_count,
 			'transactionRawFactCount', transaction_raw_fact_count,
-				'resultRawFactCount', result_raw_fact_count,
-				'predecessorMissing', predecessor_missing,
-				'predecessorBoundaryValid', predecessor_boundary_valid,
+			'resultRawFactCount', result_raw_fact_count,
+			'predecessorMissing', predecessor_missing,
+			'predecessorBoundaryValid', predecessor_boundary_valid,
+			'checkpointStateLedgerFactPresent', has_checkpoint_ledger_fact,
+			'checkpointStateLedgerMatches', checkpoint_ledger_matches,
 			'scpEntryCount', scp_entry_count,
 			'hasActiveObject', has_active,
 			'hasFailedObject', has_failed,
@@ -117,4 +119,6 @@ export const historyArchiveCheckpointProofUpsertSql = `
 		details = excluded.details,
 		"evaluatedAt" = excluded."evaluatedAt",
 		"updatedAt" = now()
+	where excluded."proofVersion" >=
+		"history_archive_checkpoint_proof"."proofVersion"
 `;

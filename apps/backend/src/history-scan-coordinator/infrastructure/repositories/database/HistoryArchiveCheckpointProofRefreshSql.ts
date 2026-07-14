@@ -80,6 +80,12 @@ export const historyArchiveCheckpointProofRefreshSql = `
 		select
 			object."archiveUrlIdentity",
 			object."checkpointLedger",
+			case
+				when object."verificationFacts"#>>
+					'{checkpointHistoryArchiveStateFact,checkpointLedger}' ~ '^[0-9]+$'
+				then (object."verificationFacts"#>>
+					'{checkpointHistoryArchiveStateFact,checkpointLedger}')::bigint
+			end as payload_checkpoint_ledger,
 			object."verificationFacts"#>>
 				'{checkpointHistoryArchiveStateFact,bucketListHash}' as bucket_list_hash,
 			coalesce(
@@ -212,6 +218,10 @@ export const historyArchiveCheckpointProofRefreshSql = `
 			max(state.network_passphrase) as network_passphrase,
 			max(ledger.protocol_version) as max_protocol_version,
 			bool_or(state.source_matches) as checkpoint_source_matches,
+			bool_or(state.payload_checkpoint_ledger is not null)
+				as has_checkpoint_ledger_fact,
+			bool_or(state.payload_checkpoint_ledger = ledger."checkpointLedger")
+				as checkpoint_ledger_matches,
 			max(ledger.bucket_list_hash) filter (
 				where ledger.ledger = ledger."checkpointLedger")
 				as ledger_bucket_list_hash,
@@ -334,6 +344,10 @@ export const historyArchiveCheckpointProofRefreshSql = `
 			chain.max_protocol_version, chain.ledger_bucket_list_hash,
 			coalesce(chain.checkpoint_source_matches, false)
 				as checkpoint_source_matches,
+			coalesce(chain.has_checkpoint_ledger_fact, false)
+				as has_checkpoint_ledger_fact,
+			coalesce(chain.checkpoint_ledger_matches, false)
+				as checkpoint_ledger_matches,
 			coalesce(chain.checkpoint_bucket_matches, false) as checkpoint_bucket_matches,
 			coalesce(chain.has_checkpoint_bucket_fact, false) as has_checkpoint_bucket_fact,
 			coalesce(chain.transactions_match, false) as transactions_match,
@@ -371,6 +385,8 @@ export const historyArchiveCheckpointProofRefreshSql = `
 			greatest(coalesce(bucket.expected_bucket_count, 0)
 				- coalesce(bucket.verified_bucket_count, 0), 0) as missing_bucket_count,
 			proof_rollup.checkpoint_source_matches,
+			proof_rollup.has_checkpoint_ledger_fact,
+			proof_rollup.checkpoint_ledger_matches,
 			proof_rollup.checkpoint_bucket_list_hash,
 			proof_rollup.ledger_bucket_list_hash,
 			proof_rollup.predecessor_missing,
@@ -394,6 +410,8 @@ export const historyArchiveCheckpointProofRefreshSql = `
 				and coalesce(proof_rollup.results_exact, false)
 				and ${scpExpectationKnownSql}
 				and proof_rollup.checkpoint_source_matches
+				and proof_rollup.has_checkpoint_ledger_fact
+				and proof_rollup.checkpoint_ledger_matches
 				and coalesce(proof_rollup.checkpoint_boundary_valid, false)
 				and proof_rollup.has_checkpoint_bucket_fact
 				and proof_rollup.predecessor_boundary_valid
@@ -424,6 +442,8 @@ export const historyArchiveCheckpointProofRefreshSql = `
 			when has_failed then 'not-evaluable'
 			when not required_objects_complete or has_active then 'pending'
 			when predecessor_missing then 'pending'
+			when has_checkpoint_ledger_fact and not checkpoint_ledger_matches
+				then 'mismatch'
 			when not proof_facts_complete then 'not-evaluable'
 			when not (checkpoint_bucket_list_matches and transactions_match
 				and results_match and previous_ledgers_match) then 'mismatch'
@@ -433,6 +453,8 @@ export const historyArchiveCheckpointProofRefreshSql = `
 			when has_failed then 'object-failed'
 			when not required_objects_complete or has_active then 'object-incomplete'
 			when predecessor_missing then 'predecessor-missing'
+			when has_checkpoint_ledger_fact and not checkpoint_ledger_matches
+				then 'checkpoint-ledger-mismatch'
 			when not proof_facts_complete then 'proof-facts-incomplete'
 			when not checkpoint_bucket_list_matches
 				then 'checkpoint-bucket-list-mismatch'

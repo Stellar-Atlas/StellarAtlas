@@ -8,13 +8,17 @@ export function archiveEvidenceFailure(input: {
 	readonly errorType: string;
 	readonly httpStatus?: number | null;
 	readonly retryAfterSeconds?: number | null;
+	readonly verificationFacts?: object | null;
 }): HistoryArchiveObjectFailureDTO {
 	return {
 		errorMessage: mapUnknownToError(input.error).message,
 		errorType: input.errorType,
 		failureChannel: 'archive_evidence',
 		httpStatus: input.httpStatus ?? null,
-		retryAfterSeconds: input.retryAfterSeconds ?? null
+		retryAfterSeconds: input.retryAfterSeconds ?? null,
+		...(input.verificationFacts === undefined
+			? {}
+			: { verificationFacts: input.verificationFacts })
 	};
 }
 

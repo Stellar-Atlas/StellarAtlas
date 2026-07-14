@@ -129,6 +129,17 @@ export function parseArchiveObjectFailure(
 		});
 		return null;
 	}
+	if (
+		body.verificationFacts !== undefined &&
+		body.verificationFacts !== null &&
+		(typeof body.verificationFacts !== 'object' ||
+			Array.isArray(body.verificationFacts))
+	) {
+		res
+			.status(400)
+			.json({ error: 'verificationFacts must be an object or null' });
+		return null;
+	}
 
 	return {
 		claimAttempt,
@@ -137,7 +148,10 @@ export function parseArchiveObjectFailure(
 		failureChannel: body.failureChannel,
 		httpStatus: body.httpStatus === undefined ? null : body.httpStatus,
 		retryAfterSeconds:
-			body.retryAfterSeconds === undefined ? null : body.retryAfterSeconds
+			body.retryAfterSeconds === undefined ? null : body.retryAfterSeconds,
+		...(body.verificationFacts === undefined
+			? {}
+			: { verificationFacts: body.verificationFacts })
 	};
 }
 

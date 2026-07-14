@@ -1,4 +1,5 @@
 import 'reflect-metadata';
+import { Readable } from 'node:stream';
 import { mock } from 'jest-mock-extended';
 import { err, ok } from 'neverthrow';
 import { HttpError, type HttpService } from 'http-helper';
@@ -10,9 +11,9 @@ import { HistoryArchiveStateValidator } from '../../../domain/history-archive/Hi
 import { ArchiveXdrError } from '../../../domain/scanner/hash-worker.js';
 import { ScannerIssueError } from '../../../domain/scanner/ScannerIssueError.js';
 import {
-	ArchiveObjectCategoryVerifier,
-	classifyCategoryVerificationFailure
+	ArchiveObjectCategoryVerifier
 } from '../ArchiveObjectCategoryVerifier.js';
+import { classifyCategoryVerificationFailure } from '../ArchiveObjectCategoryFailureClassifier.js';
 
 describe('ArchiveObjectCategoryVerifier', () => {
 	it('preserves HTTP status on category fetch failures', async () => {
@@ -69,6 +70,7 @@ describe('ArchiveObjectCategoryVerifier', () => {
 
 		const result = await verifier.verifyCheckpointState(
 			createObjectJob({
+				checkpointLedger: 127,
 				objectKey: 'checkpoint-state:0000007f',
 				objectType: 'checkpoint-state',
 				objectUrl:
@@ -100,6 +102,42 @@ describe('ArchiveObjectCategoryVerifier', () => {
 		});
 	});
 
+	it('rejects checkpoint state that declares a different checkpoint ledger', async () => {
+		const httpService = mock<HttpService>();
+		httpService.get.mockResolvedValue(
+			ok({
+				data: createHistoryArchiveState(),
+				headers: {},
+				status: 200,
+				statusText: 'OK'
+			})
+		);
+		const verifier = new ArchiveObjectCategoryVerifier(
+			httpService,
+			mock<ScanCoordinatorService>(),
+			new HistoryArchiveStateValidator(mock<Logger>()),
+			mock<ExceptionLogger>(),
+			1,
+			() => undefined
+		);
+
+		const result = await verifier.verifyCheckpointState(
+			createObjectJob({ objectType: 'checkpoint-state' })
+		);
+
+		expect(result._unsafeUnwrapErr()).toMatchObject({
+			errorType: 'checkpoint_state_ledger_mismatch',
+			failureChannel: 'archive_evidence',
+			httpStatus: 200,
+			verificationFacts: {
+				checkpointHistoryArchiveStateFact: {
+					checkpointLedger: 127,
+					stellarHistoryUrl: expect.any(String)
+				}
+			}
+		});
+	});
+
 	it('classifies malformed remote XDR separately from worker failures', () => {
 		expect(
 			classifyCategoryVerificationFailure(
@@ -120,6 +158,93 @@ describe('ArchiveObjectCategoryVerifier', () => {
 			errorType: 'category_scanner_failure',
 			failureChannel: 'scanner_issue',
 			httpStatus: null
+		});
+		expect(
+			classifyCategoryVerificationFailure(
+				Object.assign(new Error('premature close'), {
+					code: 'ERR_STREAM_PREMATURE_CLOSE'
+				}),
+				200
+			)
+		).toMatchObject({
+			errorType: 'archive_transport_error',
+			failureChannel: 'archive_evidence',
+			httpStatus: 200
+		});
+		expect(
+			classifyCategoryVerificationFailure(
+				new Error('outer', {
+					cause: Object.assign(new Error('reset'), { code: 'ECONNRESET' })
+				}),
+				200
+			)
+		).toMatchObject({ errorType: 'archive_transport_error' });
+		expect(
+			classifyCategoryVerificationFailure(new Error('unknown pipeline error'), 200)
+		).toMatchObject({
+			errorType: 'category_pipeline_failure',
+			failureChannel: 'scanner_issue',
+			httpStatus: null
+		});
+	});
+
+	it('classifies a mid-stream source reset as transport evidence', async () => {
+		const reset = Object.assign(new Error('remote stream reset'), {
+			code: 'ECONNRESET'
+		});
+		const stream = Readable.from(
+			(async function* () {
+				yield Buffer.from([0x1f, 0x8b]);
+				throw reset;
+			})()
+		);
+		const httpService = mock<HttpService>();
+		httpService.get.mockResolvedValue(
+			ok({ data: stream, headers: {}, status: 200, statusText: 'OK' })
+		);
+		const verifier = new ArchiveObjectCategoryVerifier(
+			httpService,
+			mock<ScanCoordinatorService>(),
+			mock<HistoryArchiveStateValidator>(),
+			mock<ExceptionLogger>(),
+			1,
+			() => undefined
+		);
+
+		const result = await verifier.verifyCategoryObject(createObjectJob());
+
+		expect(result._unsafeUnwrapErr()).toMatchObject({
+			errorType: 'archive_transport_error',
+			failureChannel: 'archive_evidence',
+			httpStatus: 200
+		});
+	});
+
+	it('classifies a complete malformed gzip response as content evidence', async () => {
+		const httpService = mock<HttpService>();
+		httpService.get.mockResolvedValue(
+			ok({
+				data: Readable.from([Buffer.from('not-a-gzip-stream')]),
+				headers: {},
+				status: 200,
+				statusText: 'OK'
+			})
+		);
+		const verifier = new ArchiveObjectCategoryVerifier(
+			httpService,
+			mock<ScanCoordinatorService>(),
+			mock<HistoryArchiveStateValidator>(),
+			mock<ExceptionLogger>(),
+			1,
+			() => undefined
+		);
+
+		const result = await verifier.verifyCategoryObject(createObjectJob());
+
+		expect(result._unsafeUnwrapErr()).toMatchObject({
+			errorType: 'category_content_invalid',
+			failureChannel: 'archive_evidence',
+			httpStatus: 200
 		});
 	});
 });

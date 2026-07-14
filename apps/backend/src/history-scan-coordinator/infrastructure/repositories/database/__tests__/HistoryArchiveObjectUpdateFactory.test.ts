@@ -46,4 +46,24 @@ describe('HistoryArchiveObjectUpdateFactory', () => {
 			workerStage: 'failed'
 		});
 	});
+
+	it('persists structured evidence supplied with a failed object', () => {
+		const verificationFacts = {
+			checkpointHistoryArchiveStateFact: {
+				bucketListHash: 'hash',
+				checkpointLedger: 191,
+				observedAt: '2026-07-14T00:00:00.000Z',
+				stellarHistoryUrl: 'https://archive.example/history.json'
+			}
+		};
+		const update = createFailedUpdate({
+			claimAttempt: 1,
+			errorMessage: 'checkpoint mismatch',
+			errorType: 'checkpoint_state_ledger_mismatch',
+			failureChannel: 'archive_evidence',
+			verificationFacts
+		});
+
+		expect(update).toMatchObject({ verificationFacts });
+	});
 });

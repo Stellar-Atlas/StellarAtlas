@@ -22,6 +22,7 @@ export type HistoryArchiveRepairReasonV1 =
 	| 'archive-object-failed'
 	| 'bucket-hash-mismatch'
 	| 'bucket-missing'
+	| 'checkpoint-ledger-mismatch'
 	| 'checkpoint-bucket-list-mismatch'
 	| 'history-archive-state-missing'
 	| 'http-error'
@@ -42,12 +43,15 @@ export interface HistoryArchiveRepairObjectEvidenceV1 {
 	readonly bucketHash: string | null;
 	readonly checkpointLedger: number | null;
 	readonly evidenceClass: HistoryArchiveObjectEvidenceClassV1;
+	readonly errorMessage: string | null;
+	readonly errorType: string | null;
 	readonly failureClass: HistoryArchiveObjectFailureClassV1;
 	readonly httpStatus: number | null;
 	readonly nextAttemptAt: string | null;
 	readonly objectKey: string;
 	readonly objectType: HistoryArchiveObjectTypeV1;
 	readonly objectUrl: string;
+	readonly observedCheckpointLedger: number | null;
 	readonly remoteId: string;
 	readonly status: HistoryArchiveObjectStatusV1;
 	readonly updatedAt: string;

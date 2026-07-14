@@ -50,6 +50,7 @@ export interface HistoryArchiveObjectFailureDTO {
 	readonly failureChannel: HistoryArchiveObjectFailureChannelDTO;
 	readonly httpStatus?: number | null;
 	readonly retryAfterSeconds?: number | null;
+	readonly verificationFacts?: object | null;
 }
 
 export interface ScanCoordinatorService {

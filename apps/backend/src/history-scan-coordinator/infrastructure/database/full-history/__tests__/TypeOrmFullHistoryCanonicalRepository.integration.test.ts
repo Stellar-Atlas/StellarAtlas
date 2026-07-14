@@ -111,6 +111,22 @@ describe('TypeOrmFullHistoryCanonicalRepository', () => {
 		).rejects.toThrow(/fk_full_history_result_transaction/i);
 	});
 
+	it('rejects canonical insertion from a pre-binding proof version', async () => {
+		const input = await seedFullHistoryCheckpoint(dataSource, {
+			batchNumber: 74,
+			networkPassphrase: 'Canonical proof-version gate network'
+		});
+		await dataSource.query(
+			`update "history_archive_checkpoint_proof"
+			 set "proofVersion" = 5 where id = $1`,
+			[input.proofId]
+		);
+
+		await expect(
+			repository.writeCheckpoint({ ...input, proofVersion: 5 })
+		).rejects.toMatchObject({ reason: 'invalid-proof-provenance' });
+	});
+
 	it('returns aggregate coverage and a bounded recent transaction page', async () => {
 		const networkPassphrase = 'Canonical bounded read network';
 		const genesis = await seedFullHistoryCheckpoint(dataSource, {
@@ -288,7 +304,7 @@ describe('TypeOrmFullHistoryCanonicalRepository', () => {
 					outcomeAvailable: true,
 					outcomeDecoderVersion: 'fixture-operation-result-decoder/1',
 					outcomeFactScope: 'transaction_result_xdr',
-					proofVersion: 5,
+					proofVersion: 6,
 					sourceAccountOrigin: 'transaction',
 					transactionIndex: 0
 				}

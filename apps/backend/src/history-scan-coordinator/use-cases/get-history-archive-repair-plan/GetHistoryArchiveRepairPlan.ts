@@ -236,9 +236,19 @@ function toCheckpointAction(
 			knownGoodSources: [],
 			reason,
 			severity: 'error',
-			summary: `Checkpoint ${proof.checkpointLedger} has a hash mismatch across archive files.`
+			summary: getCheckpointActionSummary(proof.checkpointLedger, reason)
 		}
 	];
+}
+
+function getCheckpointActionSummary(
+	checkpointLedger: number,
+	reason: HistoryArchiveRepairReasonV1
+): string {
+	if (reason === 'checkpoint-ledger-mismatch') {
+		return `Checkpoint state file does not declare checkpoint ${checkpointLedger}.`;
+	}
+	return `Checkpoint ${checkpointLedger} has a hash mismatch across archive files.`;
 }
 
 function getObjectActionKind(
@@ -255,6 +265,9 @@ function getObjectActionKind(
 function getObjectRepairReason(
 	object: HistoryArchiveObject
 ): HistoryArchiveRepairReasonV1 {
+	if (object.errorType === 'checkpoint_state_ledger_mismatch') {
+		return 'checkpoint-ledger-mismatch';
+	}
 	const failureClass = getObjectFailureClass(object);
 	if (
 		object.objectType === 'history-archive-state' &&
@@ -278,6 +291,9 @@ function getObjectRepairReason(
 function getCheckpointRepairReason(
 	failureKind: string | null
 ): HistoryArchiveRepairReasonV1 {
+	if (failureKind === 'checkpoint-ledger-mismatch') {
+		return 'checkpoint-ledger-mismatch';
+	}
 	if (failureKind === 'checkpoint-bucket-list-mismatch') {
 		return 'checkpoint-bucket-list-mismatch';
 	}
@@ -302,6 +318,9 @@ function getObjectActionSummary(
 	object: HistoryArchiveObject,
 	kind: HistoryArchiveRepairActionKindV1
 ): string {
+	if (object.errorType === 'checkpoint_state_ledger_mismatch') {
+		return `Checkpoint state file does not declare checkpoint ${object.checkpointLedger ?? 'unknown'}.`;
+	}
 	if (kind === 'restore-history-archive-state') {
 		return 'Restore or republish the archive root history archive state file.';
 	}
@@ -321,12 +340,17 @@ function toObjectEvidence(
 		bucketHash: object.bucketHash,
 		checkpointLedger: object.checkpointLedger,
 		evidenceClass: getObjectEvidenceClass(object),
+		errorMessage: object.errorMessage,
+		errorType: object.errorType,
 		failureClass: getObjectFailureClass(object),
 		httpStatus: object.httpStatus,
 		nextAttemptAt: object.nextAttemptAt?.toISOString() ?? null,
 		objectKey: object.objectKey,
 		objectType: object.objectType,
 		objectUrl: object.objectUrl,
+		observedCheckpointLedger:
+			object.verificationFacts?.checkpointHistoryArchiveStateFact
+				?.checkpointLedger ?? null,
 		remoteId: object.remoteId,
 		status: object.status,
 		updatedAt: requireDate(object.updatedAt).toISOString()

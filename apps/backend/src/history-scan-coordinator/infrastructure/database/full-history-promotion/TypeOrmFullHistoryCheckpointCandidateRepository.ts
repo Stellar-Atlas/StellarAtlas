@@ -8,6 +8,7 @@ import type {
 import type { FullHistoryCheckpointCandidateRepository } from '../../../domain/full-history-promotion/FullHistoryCheckpointCandidateRepository.js';
 import { FullHistoryPromotionError } from '../../../domain/full-history-promotion/FullHistoryPromotionError.js';
 import { FULL_HISTORY_MAX_TRANSACTIONS_PER_CHECKPOINT } from '../../../domain/full-history/FullHistoryCanonicalBatch.js';
+import { CURRENT_HISTORY_ARCHIVE_CHECKPOINT_PROOF_VERSION } from '../../../domain/history-archive-checkpoint-proof/HistoryArchiveCheckpointProof.js';
 import {
 	assertBoundedText,
 	assertInteger,
@@ -234,6 +235,8 @@ function validateProof(
 		);
 	}
 	if (
+		proof.proofVersion < CURRENT_HISTORY_ARCHIVE_CHECKPOINT_PROOF_VERSION ||
+		!hasCheckpointLedgerBinding(proof.details) ||
 		proof.status !== 'verified' ||
 		proof.failureKind !== null ||
 		!proof.requiredObjectsComplete ||
@@ -252,6 +255,15 @@ function validateProof(
 			'Checkpoint proof is not strictly verified'
 		);
 	}
+}
+
+function hasCheckpointLedgerBinding(details: unknown): boolean {
+	if (typeof details !== 'object' || details === null) return false;
+	const record = details as Record<string, unknown>;
+	return (
+		record.checkpointStateLedgerFactPresent === true &&
+		record.checkpointStateLedgerMatches === true
+	);
 }
 
 function readProofSourceIds(

@@ -283,6 +283,7 @@ function composeFullHistoryBatchProofFunctionSql(
 			from "history_archive_checkpoint_proof" proof
 			where proof."id" = new."checkpoint_proof_id"
 				and proof."status" = 'verified'
+				and proof."proofVersion" >= 6
 				and proof."failureKind" is null
 				and proof."requiredObjectsComplete"
 				and proof."proofFactsComplete"
@@ -295,6 +296,8 @@ function composeFullHistoryBatchProofFunctionSql(
 				and proof."transactionFactCount" = new."ledger_count"
 				and proof."resultFactCount" = new."ledger_count"
 				and proof."proofVersion" = new."proof_version"
+				and proof.details ->> 'checkpointStateLedgerFactPresent' = 'true'
+				and proof.details ->> 'checkpointStateLedgerMatches' = 'true'
 				and ${proofTimestampPredicate}
 				and proof."archiveUrlIdentity" = new."archive_url_identity"
 				and proof."checkpointLedger"::bigint = new."checkpoint_ledger"

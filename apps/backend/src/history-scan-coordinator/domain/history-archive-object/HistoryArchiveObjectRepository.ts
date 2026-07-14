@@ -48,6 +48,7 @@ export interface HistoryArchiveObjectFailure {
 	readonly httpStatus?: number | null;
 	readonly nextAttemptAt?: Date | null;
 	readonly retryAfterSeconds?: number | null;
+	readonly verificationFacts?: HistoryArchiveObjectVerificationFacts | null;
 }
 
 export interface HistoryArchiveObjectHostFailure {

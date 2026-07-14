@@ -5,6 +5,7 @@ import {
 } from '@test-support/DisposablePostgres.js';
 import type { FullHistoryCheckpointWrite } from '../../../domain/full-history/FullHistoryCanonicalBatch.js';
 import type { FullHistoryOperationBackfillRepository } from '../../../domain/full-history-operation-backfill/FullHistoryOperationBackfillRepository.js';
+import { FULL_HISTORY_OPERATION_BACKFILL_BATCH_LIMIT_MAX } from '../../../domain/full-history-operation-backfill/FullHistoryOperationBackfill.js';
 import { deterministicFullHistoryBatchId } from '../../../domain/full-history-promotion/DeterministicFullHistoryBatchId.js';
 import { hashNetworkPassphrase } from '../../../domain/full-history/FullHistoryCanonicalTypes.js';
 import {
@@ -309,9 +310,11 @@ describe('BackfillFullHistoryOperations', () => {
 			}
 		]);
 		expect(await database.immutableRows()).toEqual(immutableBefore);
-		await expect(normalUseCase().execute(runInput(9))).rejects.toMatchObject({
-			reason: 'invalid-batch-limit'
-		});
+		await expect(
+			normalUseCase().execute(
+				runInput(FULL_HISTORY_OPERATION_BACKFILL_BATCH_LIMIT_MAX + 1)
+			)
+		).rejects.toMatchObject({ reason: 'invalid-batch-limit' });
 	});
 
 	function normalUseCase(): BackfillFullHistoryOperations {

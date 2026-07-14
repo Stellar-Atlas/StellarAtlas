@@ -85,6 +85,7 @@ export const promotionTargetSql = `
 	from "history_archive_checkpoint_proof" proof
 	where proof."checkpointLedger" = $1
 		and proof.status = 'verified'
+		and proof."proofVersion" >= 6
 		and proof."failureKind" is null
 		and proof."requiredObjectsComplete"
 		and proof."proofFactsComplete"
@@ -103,6 +104,8 @@ export const promotionTargetSql = `
 		and proof."ledgerObjectRemoteId" is not null
 		and proof."transactionsObjectRemoteId" is not null
 		and proof."resultsObjectRemoteId" is not null
+		and proof.details ->> 'checkpointStateLedgerFactPresent' = 'true'
+		and proof.details ->> 'checkpointStateLedgerMatches' = 'true'
 		and proof.details ->> 'networkPassphrase' = $2
 		and ${fullHistoryStrictProofSourceDigestsSql}
 	order by

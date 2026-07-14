@@ -43,6 +43,32 @@ describe('parseArchiveObjectFailure', () => {
 			error: 'failureChannel is invalid'
 		});
 	});
+
+	it('accepts structured failure verification facts without inventing them', () => {
+		const response = createResponse();
+		const result = parseArchiveObjectFailure(
+			{
+				body: {
+					claimAttempt: 2,
+					errorMessage: 'checkpoint mismatch',
+					errorType: 'checkpoint_state_ledger_mismatch',
+					failureChannel: 'archive_evidence',
+					verificationFacts: {
+						checkpointHistoryArchiveStateFact: {
+							checkpointLedger: 191
+						}
+					}
+				}
+			} as unknown as express.Request,
+			response.value
+		);
+
+		expect(result).toMatchObject({
+			verificationFacts: {
+				checkpointHistoryArchiveStateFact: { checkpointLedger: 191 }
+			}
+		});
+	});
 });
 
 function createResponse() {

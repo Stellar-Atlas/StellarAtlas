@@ -56,7 +56,10 @@ export function createFailedUpdate(
 		transitionEffectsCompletedAt: null,
 		transitionEffectsRequiredAt: () => 'now()',
 		updatedAt: () => 'now()',
-		workerStage: 'failed'
+		workerStage: 'failed',
+		...(failure.verificationFacts === undefined
+			? {}
+			: { verificationFacts: failure.verificationFacts })
 	};
 }
 
