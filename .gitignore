@@ -16,6 +16,7 @@ api.log
 *.log
 history-bucket-cache/
 **/history-bucket-cache/
+apps/full-history-etl/bin/
 
 # Claude Code related files
 .claude/

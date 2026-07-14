@@ -1,0 +1,15 @@
+StellarAtlas full-history ETL
+
+The dataset selection and selected field semantics in this module are adapted
+from stellar-etl, Copyright 2020 Stellar Development Foundation, licensed
+under the Apache License, Version 2.0. The upstream source is available at:
+
+    https://github.com/stellar/stellar-etl
+
+Transaction binding and ledger-entry change pairing are adapted from
+github.com/stellar/go-stellar-sdk, Copyright 2020 Stellar Development
+Foundation, under the Apache License, Version 2.0.
+
+The test fixture internal/testdata/FCD285FF--53312000.xdr.zstd is distributed
+with github.com/stellar/go-stellar-sdk, Copyright 2020 Stellar Development
+Foundation, under the Apache License, Version 2.0.

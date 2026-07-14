@@ -25,6 +25,7 @@
 		"run-continuous-full-history-backfill": "node lib/history-scan-coordinator/infrastructure/cli/full-history-backfill/run-continuous-full-history-backfill.js",
 		"backfill-full-history-operations": "node lib/history-scan-coordinator/infrastructure/cli/full-history-operation-backfill/backfill-full-history-operations.js",
 		"run-continuous-full-history-operation-backfill": "node lib/history-scan-coordinator/infrastructure/cli/full-history-operation-backfill/run-continuous-full-history-operation-backfill.js",
+		"run-continuous-full-history-ledger-close-meta": "node lib/history-scan-coordinator/infrastructure/cli/full-history-ledger-close-meta/run-continuous-full-history-ledger-close-meta.js",
 		"retrieve-home-domain": "node lib/network-scan/infrastructure/cli/retrieve-home-domain.js"
 	},
 	"author": "pieterjan84@github",

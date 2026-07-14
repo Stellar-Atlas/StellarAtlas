@@ -1,0 +1,49 @@
+[Unit]
+Description=StellarAtlas LedgerCloseMeta replay and projection ingestion
+Documentation=https://github.com/Stellar-Atlas/StellarAtlas
+Wants=network-online.target stellaratlas-api.service
+After=network-online.target stellaratlas-api.service
+RequiresMountsFor=/home/observe/stellarbeat-data
+ConditionFileIsExecutable=/home/observe/stellarbeat-data/Observer/apps/full-history-etl/bin/stellaratlas-full-history-etl
+PartOf=stellaratlas.target
+Conflicts=stellaratlas.service
+
+[Service]
+Type=simple
+User=observe
+Group=observe
+WorkingDirectory=/home/observe/stellarbeat-data/Observer
+UMask=0077
+Environment=NODE_ENV=production
+Environment=HOME=/home/observe
+Environment=PATH=/home/observe/.nvm/versions/node/v26.4.0/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+Environment=FULL_HISTORY_LEDGER_CLOSE_META_ENABLED=true
+Environment="FULL_HISTORY_NETWORK_PASSPHRASE=Public Global Stellar Network ; September 2015"
+Environment=FULL_HISTORY_BULK_ROOT=/home/observe/stellarbeat-data
+Environment=FULL_HISTORY_LEDGER_CLOSE_META_TYPED_ROOT=/home/observe/stellarbeat-data/full-history/typed
+Environment=FULL_HISTORY_LEDGER_CLOSE_META_TEMP_ROOT=/dev/shm/stellaratlas-full-history-etl
+Environment=FULL_HISTORY_LEDGER_CLOSE_META_EXECUTABLE=/home/observe/stellarbeat-data/Observer/apps/full-history-etl/bin/stellaratlas-full-history-etl
+Environment=FULL_HISTORY_LEDGER_CLOSE_META_FETCH_CONCURRENCY=12
+Environment=FULL_HISTORY_LEDGER_CLOSE_META_PROCESSING_CONCURRENCY=8
+Environment=FULL_HISTORY_LEDGER_CLOSE_META_SHARD_LEDGERS=1024
+Environment=FULL_HISTORY_LEDGER_CLOSE_META_CYCLE_LEDGERS=8192
+Environment=FULL_HISTORY_LEDGER_CLOSE_META_INGRESS_BYTES_PER_SECOND=187500000
+Environment=FULL_HISTORY_LEDGER_CLOSE_META_INGRESS_BURST_BYTES=18750000
+Environment=FULL_HISTORY_LEDGER_CLOSE_META_MINIMUM_FREE_BYTES=5497558138880
+EnvironmentFile=-/etc/stellaratlas/stellaratlas.env
+ExecStartPre=/usr/bin/test -x /home/observe/stellarbeat-data/Observer/apps/full-history-etl/bin/stellaratlas-full-history-etl
+ExecStartPre=/usr/bin/env node scripts/wait-for-url.mjs http://127.0.0.1:3000/v1/status 90
+ExecStart=/usr/bin/env pnpm start:full-history-ledger-close-meta
+Restart=always
+RestartSec=30
+TimeoutStopSec=900
+KillSignal=SIGTERM
+LimitNOFILE=65536
+LimitCORE=0
+TasksMax=256
+MemoryMax=96G
+MemorySwapMax=0
+NoNewPrivileges=true
+
+[Install]
+WantedBy=stellaratlas.target

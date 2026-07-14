@@ -15,6 +15,7 @@
 		"build:network-scanner": "pnpm --filter backend run build",
 		"build:scp-live-scanner": "pnpm --filter backend run build",
 		"build:history-scanner": "pnpm --filter history-scanner run build",
+		"build:full-history-etl": "node scripts/build-full-history-etl.mjs",
 		"build:users": "pnpm --filter users run build",
 		"build:frontend-v4": "pnpm --filter frontend-v4 run build:production",
 		"build:frontend-v4:production": "pnpm --filter frontend-v4 run build:production",
@@ -56,6 +57,7 @@
 		"start:full-history-backfill": "pnpm --filter backend run run-continuous-full-history-backfill",
 		"backfill:full-history-operations": "pnpm --filter backend run backfill-full-history-operations",
 		"start:full-history-operation-backfill": "pnpm --filter backend run run-continuous-full-history-operation-backfill",
+		"start:full-history-ledger-close-meta": "pnpm --filter backend run run-continuous-full-history-ledger-close-meta",
 		"start:users": "pnpm --filter users run start",
 		"start:all": "node start-all.cjs"
 	},

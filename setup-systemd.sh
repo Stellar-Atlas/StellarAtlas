@@ -9,6 +9,8 @@ EXPECTED_REPO_ROOT="/home/observe/stellarbeat-data/Observer"
 NETWORK_MEILI_ENV_DIR="/etc/stellaratlas"
 NETWORK_MEILI_ENV_FILE="$NETWORK_MEILI_ENV_DIR/meilisearch-network.env"
 NETWORK_MEILI_DATA_ROOT="/home/observe/stellarbeat-data/meilisearch/network"
+FULL_HISTORY_LEDGER_CLOSE_META_EXECUTABLE="$EXPECTED_REPO_ROOT/apps/full-history-etl/bin/stellaratlas-full-history-etl"
+FULL_HISTORY_LEDGER_CLOSE_META_ACTIVATION="not evaluated"
 NETWORK_MEILI_RUNTIME_DIRS=(
 	"$NETWORK_MEILI_DATA_ROOT"
 	"$NETWORK_MEILI_DATA_ROOT/data"
@@ -30,6 +32,7 @@ INSTALL_UNIT_NAMES=(
 	stellaratlas-full-history-promotion.service
 	stellaratlas-full-history-backfill.service
 	stellaratlas-full-history-operation-backfill.service
+	stellaratlas-full-history-ledger-close-meta.service
 	stellaratlas-horizon.service
 	stellaratlas-stellar-rpc.service
 )
@@ -60,6 +63,7 @@ EOF
 verify_source_units() {
 	local file_name
 	local -a unit_paths=()
+	local ledger_close_meta_unit="$SYSTEMD_SOURCE_DIR/stellaratlas-full-history-ledger-close-meta.service"
 
 	command -v systemd-analyze >/dev/null || die "systemd-analyze is required"
 
@@ -76,6 +80,26 @@ verify_source_units() {
 		"RequiresMountsFor=$EXPECTED_REPO_ROOT" \
 		"$SYSTEMD_SOURCE_DIR/stellaratlas.target" ||
 		die "stellaratlas.target must require the repository mount"
+	grep -Fqx \
+		"RequiresMountsFor=/home/observe/stellarbeat-data" \
+		"$ledger_close_meta_unit" ||
+		die "LedgerCloseMeta ingestion must require the bulk mount"
+	grep -Fqx \
+		"ConditionFileIsExecutable=$FULL_HISTORY_LEDGER_CLOSE_META_EXECUTABLE" \
+		"$ledger_close_meta_unit" ||
+		die "LedgerCloseMeta ingestion must be gated by its executable"
+	grep -Fqx "MemorySwapMax=0" "$ledger_close_meta_unit" ||
+		die "LedgerCloseMeta ingestion must not use swap"
+	grep -Fqx "MemoryMax=96G" "$ledger_close_meta_unit" ||
+		die "LedgerCloseMeta ingestion memory envelope must match its 96G cgroup"
+	grep -Fqx "LimitCORE=0" "$ledger_close_meta_unit" ||
+		die "LedgerCloseMeta ingestion must disable core dumps"
+	grep -Fqx "UMask=0077" "$ledger_close_meta_unit" ||
+		die "LedgerCloseMeta ingestion must use umask 0077"
+	grep -Fq \
+		'"stellaratlas-full-history-ledger-close-meta.service"' \
+		"$SYSTEMD_SOURCE_DIR/10-stellaratlas-observe.rules" ||
+		die "observe must be authorized to manage LedgerCloseMeta ingestion"
 
 	printf 'Verified %d tracked systemd unit templates.\n' "${#unit_paths[@]}"
 }
@@ -263,6 +287,35 @@ mask_legacy_unit() {
 	ln -sT /dev/null "$SYSTEMD_UNIT_DIR/stellaratlas.service"
 }
 
+ledger_close_meta_executable_is_ready() {
+	[[ -f "$FULL_HISTORY_LEDGER_CLOSE_META_EXECUTABLE" ]] || return 1
+	[[ ! -L "$FULL_HISTORY_LEDGER_CLOSE_META_EXECUTABLE" ]] || return 1
+	[[ -x "$FULL_HISTORY_LEDGER_CLOSE_META_EXECUTABLE" ]] || return 1
+	[[ "$(stat -c '%U:%G' "$FULL_HISTORY_LEDGER_CLOSE_META_EXECUTABLE")" == \
+		"observe:observe" ]]
+}
+
+activate_ledger_close_meta_if_ready() {
+	if systemctl is-active --quiet \
+		stellaratlas-full-history-ledger-close-meta.service; then
+		FULL_HISTORY_LEDGER_CLOSE_META_ACTIVATION="already active; not restarted"
+		return
+	fi
+
+	# Privileged installation never compiles application code. The executable
+	# must be built and owned by observe before this service may be started.
+	if ! ledger_close_meta_executable_is_ready; then
+		FULL_HISTORY_LEDGER_CLOSE_META_ACTIVATION="installed but not started; prebuild the observe-owned executable"
+		return
+	fi
+
+	systemctl start stellaratlas-full-history-ledger-close-meta.service
+	systemctl is-active --quiet \
+		stellaratlas-full-history-ledger-close-meta.service ||
+		die "stellaratlas-full-history-ledger-close-meta.service is not active"
+	FULL_HISTORY_LEDGER_CLOSE_META_ACTIVATION="started from the prebuilt observe-owned executable"
+}
+
 main() {
 	case "${1:-}" in
 	--verify)
@@ -304,6 +357,7 @@ main() {
 	systemctl start stellaratlas-full-history-promotion.service
 	systemctl start stellaratlas-full-history-backfill.service
 	systemctl start stellaratlas-full-history-operation-backfill.service
+	activate_ledger_close_meta_if_ready
 	verify_installed_units
 	systemctl is-active --quiet stellaratlas.target ||
 		die "stellaratlas.target is not active"
@@ -319,6 +373,10 @@ Installed boot-safe local copies of the split StellarAtlas units.
 The obsolete stellaratlas.service is masked. An already-active target was not
 restarted; canonical promotion, historical backfill, and operation catch-up
 were started explicitly.
+EOF
+	printf 'LedgerCloseMeta ingestion: %s.\n\n' \
+		"$FULL_HISTORY_LEDGER_CLOSE_META_ACTIVATION"
+	cat <<'EOF'
 
 Production:
   systemctl status stellaratlas.target
@@ -333,6 +391,7 @@ Production:
   systemctl restart stellaratlas-full-history-promotion.service
   systemctl restart stellaratlas-full-history-backfill.service
   systemctl restart stellaratlas-full-history-operation-backfill.service
+  systemctl restart stellaratlas-full-history-ledger-close-meta.service
 
 Local full-history services, after binaries/config/DB exist:
   systemctl start stellaratlas-horizon.service
