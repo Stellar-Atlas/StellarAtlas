@@ -85,6 +85,10 @@
 .status-row-value span {
 	font-weight: 800;
 	max-inline-size: 280px;
+	overflow: visible;
+	overflow-wrap: anywhere;
+	text-overflow: clip;
+	white-space: normal;
 }
 
 .status-pill {
