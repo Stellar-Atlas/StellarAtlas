@@ -4,7 +4,13 @@ import {
 	type DisposablePostgres
 } from '@test-support/DisposablePostgres.js';
 import { fullHistoryLedgerSequence } from '../../../../domain/full-history/FullHistoryCanonicalTypes.js';
+import { TypeOrmFullHistoryOperationBackfillRepository } from '../../full-history-operation-backfill/TypeOrmFullHistoryOperationBackfillRepository.js';
 import { TypeOrmFullHistoryCanonicalRepository } from '../TypeOrmFullHistoryCanonicalRepository.js';
+import {
+	emptyFullHistoryCanonicalProjectionCounts,
+	expectedFullHistoryCanonicalProjectionCounts,
+	fullHistoryCanonicalProjectionCounts
+} from './FullHistoryCanonicalProjectionAssertions.js';
 import {
 	fullHistoryEntities,
 	installFullHistoryCanonicalSchema,
@@ -15,6 +21,7 @@ jest.setTimeout(60_000);
 
 describe('TypeOrmFullHistoryCanonicalRepository', () => {
 	let dataSource: DataSource;
+	let operationBackfill: TypeOrmFullHistoryOperationBackfillRepository;
 	let postgres: DisposablePostgres;
 	let repository: TypeOrmFullHistoryCanonicalRepository;
 
@@ -30,6 +37,9 @@ describe('TypeOrmFullHistoryCanonicalRepository', () => {
 		await dataSource.initialize();
 		await installFullHistoryCanonicalSchema(dataSource);
 		repository = new TypeOrmFullHistoryCanonicalRepository(dataSource);
+		operationBackfill = new TypeOrmFullHistoryOperationBackfillRepository(
+			dataSource
+		);
 	});
 
 	afterAll(async () => {
@@ -88,6 +98,9 @@ describe('TypeOrmFullHistoryCanonicalRepository', () => {
 			results: 1,
 			transactions: 1
 		});
+		await expect(
+			fullHistoryCanonicalProjectionCounts(dataSource, input.batchId)
+		).resolves.toEqual(emptyFullHistoryCanonicalProjectionCounts);
 		const lengths = (await dataSource.query(
 			`
 				select min(octet_length("ledger_hash"))::integer as minimum,
@@ -251,6 +264,14 @@ describe('TypeOrmFullHistoryCanonicalRepository', () => {
 		});
 		await repository.writeCheckpoint(genesis);
 		await repository.writeCheckpoint(regular);
+		await expect(
+			fullHistoryCanonicalProjectionCounts(dataSource, regular.batchId)
+		).resolves.toEqual(emptyFullHistoryCanonicalProjectionCounts);
+		await operationBackfill.storeOperations(genesis);
+		await operationBackfill.storeOperations(regular);
+		await expect(
+			fullHistoryCanonicalProjectionCounts(dataSource, regular.batchId)
+		).resolves.toEqual(expectedFullHistoryCanonicalProjectionCounts(regular));
 
 		const page = await repository.findOperations(networkPassphrase, {
 			closedAtFrom: regular.ledgers[0]!.closedAt,
@@ -391,7 +412,7 @@ describe('TypeOrmFullHistoryCanonicalRepository', () => {
 		).rejects.toThrow(/immutable/);
 	});
 
-	it('rejects an idempotent batch replay when an operation fact changes', async () => {
+	it('replays immutable base facts without persisting changed projections', async () => {
 		const input = await seedFullHistoryCheckpoint(dataSource, {
 			batchNumber: 73
 		});
@@ -401,7 +422,10 @@ describe('TypeOrmFullHistoryCanonicalRepository', () => {
 				...input,
 				operations: [{ ...input.operations[0]!, operationType: 'manage_data' }]
 			})
-		).rejects.toMatchObject({ reason: 'canonical-row-conflict' });
+		).resolves.toMatchObject({ replayed: true });
+		await expect(
+			fullHistoryCanonicalProjectionCounts(dataSource, input.batchId)
+		).resolves.toEqual(emptyFullHistoryCanonicalProjectionCounts);
 	});
 
 	it('advances from genesis through a regular 64-ledger checkpoint', async () => {

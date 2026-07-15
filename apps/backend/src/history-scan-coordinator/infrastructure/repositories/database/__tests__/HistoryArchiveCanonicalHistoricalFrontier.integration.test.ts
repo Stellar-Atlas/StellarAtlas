@@ -133,7 +133,7 @@ describe('bidirectional canonical archive frontier', () => {
 
 		const [admission] = (await dataSource.query(
 			admitCanonicalFrontierSql,
-			[24, 24, 2]
+			[24, 2]
 		)) as readonly { readonly count: number }[];
 		const reservations = (await dataSource.query(
 			`select "checkpointLedger", count(*)::integer as count

@@ -8,18 +8,6 @@ import type {
 import { FullHistoryCanonicalError } from '../../../domain/full-history/FullHistoryCanonicalError.js';
 import { FullHistoryHash } from '../../../domain/full-history/FullHistoryCanonicalTypes.js';
 import {
-	assertCanonicalOperations,
-	storeCanonicalOperations
-} from './FullHistoryCanonicalOperationStore.js';
-import {
-	assertCanonicalOperationAccountReferences,
-	storeCanonicalOperationAccountReferences
-} from './FullHistoryCanonicalOperationAccountReferenceStore.js';
-import {
-	assertCanonicalOperationResults,
-	storeCanonicalOperationResults
-} from './FullHistoryCanonicalOperationResultStore.js';
-import {
 	buildFullHistorySqlValues,
 	chunkFullHistoryValues
 } from './FullHistorySqlValues.js';
@@ -65,12 +53,6 @@ export async function storeCanonicalFacts(
 	networkHash: FullHistoryHash
 ): Promise<void> {
 	await storeCanonicalBaseFacts(manager, input, networkHash);
-	await storeCanonicalOperations(manager, input, networkHash);
-	await assertCanonicalOperations(manager, input);
-	await storeCanonicalOperationAccountReferences(manager, input, networkHash);
-	await assertCanonicalOperationAccountReferences(manager, input);
-	await storeCanonicalOperationResults(manager, input, networkHash);
-	await assertCanonicalOperationResults(manager, input);
 }
 
 export async function storeCanonicalBaseFacts(
@@ -100,9 +82,6 @@ export async function assertCanonicalFacts(
 	networkHash: FullHistoryHash
 ): Promise<void> {
 	await assertCanonicalBaseFacts(manager, input, networkHash);
-	await assertCanonicalOperations(manager, input);
-	await assertCanonicalOperationAccountReferences(manager, input);
-	await assertCanonicalOperationResults(manager, input);
 }
 
 export async function assertCanonicalBaseFacts(

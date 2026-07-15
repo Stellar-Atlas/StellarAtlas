@@ -37,12 +37,12 @@ import {
 	assertWritableWatermark,
 	findBatch,
 	insertBatch,
-	lockWatermark
+	readWatermark
 } from './FullHistoryCanonicalBatchStore.js';
 import { prependCanonicalCheckpoint } from './FullHistoryCanonicalPrependStore.js';
 import {
-	assertCanonicalFacts,
-	storeCanonicalFacts
+	assertCanonicalBaseFacts,
+	storeCanonicalBaseFacts
 } from './FullHistoryCanonicalFactStore.js';
 import { FullHistoryLedger } from './entities/FullHistoryLedger.js';
 import { FullHistoryTransaction } from './entities/FullHistoryTransaction.js';
@@ -120,12 +120,12 @@ export class TypeOrmFullHistoryCanonicalRepository implements FullHistoryCanonic
 		try {
 			const receipt = await this.dataSource.transaction(async (manager) => {
 				await setTransactionBounds(manager);
-				await lockNetwork(manager, networkHash);
-				const watermark = await lockWatermark(manager, networkHash);
+				await lockForwardFrontier(manager, networkHash);
+				const watermark = await readWatermark(manager, networkHash);
 				const existing = await findBatch(manager, input.batchId);
 				if (existing !== null) {
 					assertBatchMatches(existing, input, networkHash);
-					await assertCanonicalFacts(manager, input, networkHash);
+					await assertCanonicalBaseFacts(manager, input, networkHash);
 					return {
 						batchId: input.batchId,
 						nextLedger: assertReplayWatermark(watermark, input),
@@ -136,7 +136,7 @@ export class TypeOrmFullHistoryCanonicalRepository implements FullHistoryCanonic
 				assertWritableWatermark(watermark, input);
 				await assertNoCompetingBatch(manager, input, networkHash);
 				await insertBatch(manager, input, networkHash);
-				await storeCanonicalFacts(manager, input, networkHash);
+				await storeCanonicalBaseFacts(manager, input, networkHash);
 				const nextLedger = await advanceWatermark(
 					manager,
 					input,
@@ -412,7 +412,7 @@ async function setTransactionBounds(manager: EntityManager): Promise<void> {
 	`);
 }
 
-async function lockNetwork(
+async function lockForwardFrontier(
 	manager: EntityManager,
 	networkHash: FullHistoryHash
 ): Promise<void> {

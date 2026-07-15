@@ -182,22 +182,16 @@ export function assertBatchMatches(
 	}
 }
 
-export async function lockWatermark(
+export async function readWatermark(
 	manager: EntityManager,
 	networkHash: FullHistoryHash
 ): Promise<FullHistoryWatermark | null> {
-	const rows = await manager
+	return manager
 		.getRepository(FullHistoryWatermark)
-		.createQueryBuilder('watermark')
-		.setLock('pessimistic_write')
-		.where('watermark.network_passphrase_hash = :networkHash', {
-			networkHash: networkHash.toBuffer()
-		})
-		.getMany();
-	return rows[0] ?? null;
+		.findOneBy({ networkPassphraseHash: networkHash });
 }
 
-export async function lockHistoricalFrontier(
+export async function readHistoricalFrontier(
 	manager: EntityManager,
 	networkHash: FullHistoryHash
 ): Promise<LockedFullHistoryHistoricalFrontier | null> {
@@ -209,7 +203,6 @@ export async function lockHistoricalFrontier(
 				"next_ledger"::text as "nextLedger"
 			from "full_history_watermark"
 			where "network_passphrase_hash" = $1
-			for update
 		`,
 		[networkHash.toBuffer()]
 	)) as HistoricalFrontierRow[];
@@ -335,25 +328,21 @@ export async function prependWatermark(
 			set "first_ledger" = $1, "first_batch_id" = $2,
 				"updated_at" = now()
 			where "network_passphrase_hash" = $3
-				and "first_ledger" = $4 and "next_ledger" = $5
-				and "last_batch_id" = $6
+				and "first_ledger" = $4 and "first_batch_id" = $5
 		`,
 		[
 			input.firstLedger,
 			input.batchId,
 			networkHash.toBuffer(),
 			current.firstLedger,
-			current.nextLedger,
-			current.lastBatchId
+			current.firstBatchId
 		]
 	);
-	const updated = await lockHistoricalFrontier(manager, networkHash);
+	const updated = await readHistoricalFrontier(manager, networkHash);
 	if (
 		updated === null ||
 		updated.firstLedger !== input.firstLedger ||
-		updated.firstBatchId !== input.batchId ||
-		updated.nextLedger !== current.nextLedger ||
-		updated.lastBatchId !== current.lastBatchId
+		updated.firstBatchId !== input.batchId
 	) {
 		throw new FullHistoryCanonicalError(
 			'watermark-gap',

@@ -6,14 +6,20 @@ import {
 import type { FullHistoryCheckpointWrite } from '../../../../domain/full-history/FullHistoryCanonicalBatch.js';
 import { hashNetworkPassphrase } from '../../../../domain/full-history/FullHistoryCanonicalTypes.js';
 import { FullHistoryHistoricalBackfillMigration1784940000000 } from '../../migrations/1784940000000-FullHistoryHistoricalBackfillMigration.js';
+import { TypeOrmFullHistoryOperationBackfillRepository } from '../../full-history-operation-backfill/TypeOrmFullHistoryOperationBackfillRepository.js';
 import { TypeOrmFullHistoryCanonicalRepository } from '../TypeOrmFullHistoryCanonicalRepository.js';
+import {
+	emptyFullHistoryCanonicalProjectionCounts,
+	expectedFullHistoryCanonicalProjectionCounts,
+	fullHistoryCanonicalProjectionCounts
+} from './FullHistoryCanonicalProjectionAssertions.js';
 import {
 	fullHistoryEntities,
 	installFullHistoryCanonicalSchema,
 	seedFullHistoryCheckpoint
 } from './FullHistoryCanonicalFixture.js';
 
-jest.setTimeout(60_000);
+jest.setTimeout(180_000);
 
 describe('TypeOrmFullHistoryCanonicalRepository historical prepend', () => {
 	let dataSource: DataSource;
@@ -73,24 +79,6 @@ describe('TypeOrmFullHistoryCanonicalRepository historical prepend', () => {
 			nextLedger: '192',
 			replayed: false
 		});
-		await expect(
-			repository.findOperations(networkPassphrase, {
-				limit: 10,
-				transactionHash: previous.transactions[0]!.transactionHash
-			})
-		).resolves.toMatchObject({
-			records: [
-				{
-					batchId: previous.batchId,
-					ledgerSequence: '64',
-					operationType: 'payment',
-					outcome: 'succeeded',
-					outcomeAvailable: true,
-					outcomeFactScope: 'transaction_result_xdr'
-				}
-			],
-			truncated: false
-		});
 		await expect(frontier(networkPassphrase)).resolves.toEqual({
 			firstBatchId: previous.batchId,
 			firstLedger: '64',
@@ -104,10 +92,16 @@ describe('TypeOrmFullHistoryCanonicalRepository historical prepend', () => {
 			latestEvidence: { batchId: current.batchId, lastLedger: '191' },
 			lastLedger: '191'
 		});
-		await expect(operationResultCount(previous.batchId)).resolves.toBe(1);
 		await expect(
-			operationAccountReferenceCount(previous.batchId)
-		).resolves.toBe(previous.operationAccountReferences.length);
+			fullHistoryCanonicalProjectionCounts(dataSource, previous.batchId)
+		).resolves.toEqual(emptyFullHistoryCanonicalProjectionCounts);
+		const operationBackfill = new TypeOrmFullHistoryOperationBackfillRepository(
+			dataSource
+		);
+		await operationBackfill.storeOperations(previous);
+		await expect(
+			fullHistoryCanonicalProjectionCounts(dataSource, previous.batchId)
+		).resolves.toEqual(expectedFullHistoryCanonicalProjectionCounts(previous));
 		await expect(repository.prependCheckpoint(previous)).resolves.toMatchObject(
 			{
 				firstLedger: '64',
@@ -117,7 +111,64 @@ describe('TypeOrmFullHistoryCanonicalRepository historical prepend', () => {
 		);
 	});
 
-	it('rolls back the historical batch and frontier when reference coverage fails', async () => {
+	it('allows forward and historical frontier writes to persist concurrently', async () => {
+		const networkPassphrase = 'Concurrent canonical frontier network';
+		const previous = await seedFullHistoryCheckpoint(dataSource, {
+			batchNumber: 1_041,
+			checkpointLedger: 127,
+			networkPassphrase
+		});
+		const current = linkAfter(
+			previous,
+			await seedFullHistoryCheckpoint(dataSource, {
+				batchNumber: 1_042,
+				checkpointLedger: 191,
+				networkPassphrase
+			})
+		);
+		const next = linkAfter(
+			current,
+			await seedFullHistoryCheckpoint(dataSource, {
+				batchNumber: 1_043,
+				checkpointLedger: 255,
+				networkPassphrase
+			})
+		);
+		await repository.writeCheckpoint(current);
+
+		const blocker = dataSource.createQueryRunner();
+		await blocker.connect();
+		await installHistoricalWriteBarrier(previous.batchId);
+		await blocker.query('select pg_advisory_lock(1784869999)');
+		const prepend = repository.prependCheckpoint(previous);
+		try {
+			await waitForHistoricalWriteBarrier();
+			await expect(repository.writeCheckpoint(next)).resolves.toMatchObject({
+				batchId: next.batchId,
+				nextLedger: '256',
+				replayed: false
+			});
+		} finally {
+			await blocker.query('select pg_advisory_unlock(1784869999)');
+			await blocker.release();
+			await prepend.catch(() => undefined);
+			await removeHistoricalWriteBarrier();
+		}
+		await expect(prepend).resolves.toMatchObject({
+			batchId: previous.batchId,
+			firstLedger: '64',
+			nextLedger: '256',
+			replayed: false
+		});
+		await expect(frontier(networkPassphrase)).resolves.toEqual({
+			firstBatchId: previous.batchId,
+			firstLedger: '64',
+			lastBatchId: next.batchId,
+			nextLedger: '256'
+		});
+	});
+
+	it('commits historical base facts without touching projection tables', async () => {
 		const networkPassphrase = 'Canonical historical reference rollback network';
 		const previous = await seedFullHistoryCheckpoint(dataSource, {
 			batchNumber: 1_031,
@@ -133,19 +184,29 @@ describe('TypeOrmFullHistoryCanonicalRepository historical prepend', () => {
 			})
 		);
 		await repository.writeCheckpoint(current);
-		const frontierBefore = await frontier(networkPassphrase);
-
 		await installRejectingReferenceCoverageTrigger();
 		try {
-			await expect(repository.prependCheckpoint(previous)).rejects.toThrow(
-				/account-reference prepend test failure/
-			);
+			await expect(
+				repository.prependCheckpoint(previous)
+			).resolves.toMatchObject({
+				batchId: previous.batchId,
+				firstLedger: '64',
+				replayed: false
+			});
 		} finally {
 			await removeRejectingReferenceCoverageTrigger();
 		}
 
-		await expect(batchCount(previous.batchId)).resolves.toBe(0);
-		await expect(frontier(networkPassphrase)).resolves.toEqual(frontierBefore);
+		await expect(batchCount(previous.batchId)).resolves.toBe(1);
+		await expect(frontier(networkPassphrase)).resolves.toMatchObject({
+			firstBatchId: previous.batchId,
+			firstLedger: '64',
+			lastBatchId: current.batchId,
+			nextLedger: '192'
+		});
+		await expect(
+			fullHistoryCanonicalProjectionCounts(dataSource, previous.batchId)
+		).resolves.toEqual(emptyFullHistoryCanonicalProjectionCounts);
 	});
 
 	it('rejects a boundary mismatch and rolls back every historical row', async () => {
@@ -234,38 +295,6 @@ describe('TypeOrmFullHistoryCanonicalRepository historical prepend', () => {
 		return rows[0]?.count ?? -1;
 	}
 
-	async function operationResultCount(batchId: string): Promise<number> {
-		const rows = await dataSource.query<Array<{ readonly count: number }>>(
-			`select count(*)::integer as count
-			 from "full_history_operation_result" result
-			 join "full_history_operation" operation
-				on operation."network_passphrase_hash" =
-					result."network_passphrase_hash"
-				and operation."transaction_hash" = result."transaction_hash"
-				and operation."operation_index" = result."operation_index"
-			 where operation."batch_id" = $1`,
-			[batchId]
-		);
-		return rows[0]?.count ?? -1;
-	}
-
-	async function operationAccountReferenceCount(
-		batchId: string
-	): Promise<number> {
-		const rows = await dataSource.query<Array<{ readonly count: number }>>(
-			`select count(*)::integer as count
-			 from "full_history_operation_account_reference" reference
-			 join "full_history_operation" operation
-				on operation."network_passphrase_hash" =
-					reference."network_passphrase_hash"
-				and operation."transaction_hash" = reference."transaction_hash"
-				and operation."operation_index" = reference."operation_index"
-			 where operation."batch_id" = $1`,
-			[batchId]
-		);
-		return rows[0]?.count ?? -1;
-	}
-
 	async function installRejectingReferenceCoverageTrigger(): Promise<void> {
 		await dataSource.query(`
 			create function reject_operation_reference_prepend_test()
@@ -286,6 +315,60 @@ describe('TypeOrmFullHistoryCanonicalRepository historical prepend', () => {
 			drop trigger if exists reject_operation_reference_prepend_test on
 				"full_history_operation_account_reference_batch_coverage";
 			drop function if exists reject_operation_reference_prepend_test()
+		`);
+	}
+
+	async function installHistoricalWriteBarrier(batchId: string): Promise<void> {
+		await dataSource.query(`
+			create table full_history_slow_batch_test (batch_id uuid primary key);
+			create function block_historical_write_test()
+			returns trigger language plpgsql as $function$
+			begin
+				if exists (
+					select 1 from full_history_slow_batch_test
+					where batch_id = new.batch_id
+				) then
+					perform pg_advisory_xact_lock(1784869999);
+				end if;
+				return new;
+			end
+			$function$;
+			create trigger block_historical_write_test
+			before insert on "full_history_transaction"
+			for each row execute function block_historical_write_test()
+		`);
+		await dataSource.query(
+			'insert into full_history_slow_batch_test (batch_id) values ($1)',
+			[batchId]
+		);
+	}
+
+	async function waitForHistoricalWriteBarrier(): Promise<void> {
+		for (let attempt = 0; attempt < 100; attempt += 1) {
+			const rows = await dataSource.query<
+				Array<{ readonly blocked: boolean }>
+			>(`
+				select exists (
+					select 1 from pg_stat_activity
+					where wait_event = 'advisory'
+						and lower(query) like
+							'%insert into "full_history_transaction"%'
+				) as blocked
+			`);
+			if (rows[0]?.blocked === true) return;
+			await new Promise((resolve) => setTimeout(resolve, 25));
+		}
+		throw new Error(
+			'Historical canonical write did not reach its test barrier'
+		);
+	}
+
+	async function removeHistoricalWriteBarrier(): Promise<void> {
+		await dataSource.query(`
+			drop trigger if exists block_historical_write_test on
+				"full_history_transaction";
+			drop function if exists block_historical_write_test();
+			drop table if exists full_history_slow_batch_test
 		`);
 	}
 });

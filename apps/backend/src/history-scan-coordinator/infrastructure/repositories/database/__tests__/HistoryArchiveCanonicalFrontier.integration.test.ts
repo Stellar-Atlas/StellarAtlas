@@ -306,7 +306,7 @@ describe('canonical full-history archive frontier', () => {
 			.save([slower, closer]);
 		await dataSource.query(materializeCanonicalFrontierDependenciesSql);
 
-		await dataSource.query(admitCanonicalFrontierSql, [1, 48, 2]);
+		await dataSource.query(admitCanonicalFrontierSql, [1, 2]);
 		const rows = (await dataSource.query(`
 			select "archiveUrlIdentity"
 			from "history_archive_object_queue"

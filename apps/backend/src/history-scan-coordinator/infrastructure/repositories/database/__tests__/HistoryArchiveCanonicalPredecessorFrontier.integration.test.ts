@@ -115,7 +115,7 @@ describe('canonical immediate predecessor checkpoint frontier', () => {
 
 		const [admission] = await dataSource.query<AdmissionRow[]>(
 			admitCanonicalFrontierSql,
-			[targetRootCount, targetRootCount, 1]
+			[targetRootCount, 1]
 		);
 		const reserved = await readCanonicalReservations();
 		const categoryReservations = await dataSource.query<CountRow[]>(`
@@ -180,7 +180,7 @@ describe('canonical immediate predecessor checkpoint frontier', () => {
 		await dataSource.query(materializeCanonicalFrontierDependenciesSql);
 		const [admission] = await dataSource.query<AdmissionRow[]>(
 			admitCanonicalFrontierSql,
-			[targetRootCount, targetRootCount, 1]
+			[targetRootCount, 1]
 		);
 		const reserved = await readCanonicalReservations();
 		const forwardRootReservation = reserved.find(
@@ -212,11 +212,11 @@ describe('canonical immediate predecessor checkpoint frontier', () => {
 
 		const [firstAdmission] = await dataSource.query<AdmissionRow[]>(
 			admitCanonicalFrontierSql,
-			[targetRootCount, targetRootCount, 1]
+			[targetRootCount, 1]
 		);
 		const [secondAdmission] = await dataSource.query<AdmissionRow[]>(
 			admitCanonicalFrontierSql,
-			[targetRootCount, targetRootCount, 1]
+			[targetRootCount, 1]
 		);
 
 		expect(secondRows).toHaveLength(targetRootCount);
@@ -231,7 +231,6 @@ describe('canonical immediate predecessor checkpoint frontier', () => {
 	it('does not admit older same-root or other-network backlog', async () => {
 		await dataSource.query(materializeCanonicalFrontierDependenciesSql);
 		await dataSource.query(admitCanonicalFrontierSql, [
-			targetRootCount,
 			targetRootCount,
 			1
 		]);

@@ -15,12 +15,12 @@ import {
 	assertWritablePrependFrontier,
 	findBatch,
 	insertBatch,
-	lockHistoricalFrontier,
+	readHistoricalFrontier,
 	prependWatermark
 } from './FullHistoryCanonicalBatchStore.js';
 import {
-	assertCanonicalFacts,
-	storeCanonicalFacts
+	assertCanonicalBaseFacts,
+	storeCanonicalBaseFacts
 } from './FullHistoryCanonicalFactStore.js';
 
 export async function prependCanonicalCheckpoint(
@@ -33,12 +33,12 @@ export async function prependCanonicalCheckpoint(
 	try {
 		return await dataSource.transaction(async (manager) => {
 			await setTransactionBounds(manager);
-			await lockNetwork(manager, networkHash);
-			const frontier = await lockHistoricalFrontier(manager, networkHash);
+			await lockHistoricalFrontier(manager, networkHash);
+			const frontier = await readHistoricalFrontier(manager, networkHash);
 			const existing = await findBatch(manager, input.batchId);
 			if (existing !== null) {
 				assertBatchMatches(existing, input, networkHash);
-				await assertCanonicalFacts(manager, input, networkHash);
+				await assertCanonicalBaseFacts(manager, input, networkHash);
 				const replay = assertPrependReplayFrontier(frontier, input);
 				return {
 					batchId: input.batchId,
@@ -52,7 +52,7 @@ export async function prependCanonicalCheckpoint(
 			await assertPrependLedgerBoundary(manager, input, networkHash, frontier);
 			await assertNoCompetingBatch(manager, input, networkHash);
 			await insertBatch(manager, input, networkHash);
-			await storeCanonicalFacts(manager, input, networkHash);
+			await storeCanonicalBaseFacts(manager, input, networkHash);
 			const updated = await prependWatermark(
 				manager,
 				input,
@@ -85,12 +85,12 @@ async function setTransactionBounds(manager: EntityManager): Promise<void> {
 	`);
 }
 
-async function lockNetwork(
+async function lockHistoricalFrontier(
 	manager: EntityManager,
 	networkHash: FullHistoryHash
 ): Promise<void> {
 	await manager.query(
-		'select pg_advisory_xact_lock(hashtextextended($1, 178486))',
+		'select pg_advisory_xact_lock(hashtextextended($1, 178487))',
 		[networkHash.toHex()]
 	);
 }

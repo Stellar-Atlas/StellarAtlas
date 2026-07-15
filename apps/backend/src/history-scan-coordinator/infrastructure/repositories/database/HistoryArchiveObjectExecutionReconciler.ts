@@ -5,7 +5,6 @@ import {
 	calculateHistoryArchivePlanningPressure,
 	historyArchiveConsumerCount,
 	historyArchiveMaximumWatermark,
-	historyArchiveMinimumWatermark,
 	historyArchivePerHostConcurrency,
 	historyArchivePerRootFrontier,
 	historyArchiveThroughputSampleCap,
@@ -56,11 +55,7 @@ export async function reconcileHistoryArchiveObjectExecution(
 		]);
 		const [canonicalAdmission] = (await manager.query(
 			admitCanonicalFrontierSql,
-			[
-				historyArchiveConsumerCount,
-				historyArchiveMinimumWatermark,
-				historyArchivePerHostConcurrency
-			]
+			[historyArchiveConsumerCount, historyArchivePerHostConcurrency]
 		)) as readonly { readonly count: number | string }[];
 		const canonicalAdmittedObjects = Number(canonicalAdmission?.count ?? 0);
 		const [counts] = (await manager.query(pressureSql, [
@@ -204,10 +199,16 @@ const rebalanceRunnableFrontierSql = `
 		left join active_roots active
 			on active."archiveUrlIdentity" = ranked."archiveUrlIdentity"
 		where candidate.id = ranked.id
-			and ranked.root_rank > greatest(
-				$1::integer - coalesce(active.active_count, 0),
-				0
-			)
+			and ranked.root_rank > case
+				when ranked."executionReason" in (
+					'canonical-frontier-reserve',
+					'proof-completion-reserve'
+				) then $1::integer
+				else greatest(
+					$1::integer - coalesce(active.active_count, 0),
+					0
+				)
+			end
 		returning candidate.id
 	)
 	select count(*)::integer as count from demoted
