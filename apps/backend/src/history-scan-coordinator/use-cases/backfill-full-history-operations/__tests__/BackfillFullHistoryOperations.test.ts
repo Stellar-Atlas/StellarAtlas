@@ -127,6 +127,73 @@ describe('BackfillFullHistoryOperations bounded scheduler', () => {
 		expect(repository.covered.size).toBe(4);
 	});
 
+	it('bounds database reads independently while filling the CPU worker pool', async () => {
+		const batches = createBatches(4);
+		const candidateGate = deferred<void>();
+		const candidates = new CandidateFixtureRepository(
+			batches,
+			candidateGate.promise
+		);
+		const decoder = new GatedDecoder();
+		const repository = new ResumableBackfillRepository(batches);
+		const execution = new BackfillFullHistoryOperations(
+			repository,
+			candidates,
+			decoder
+		).execute({
+			batchLimit: 4,
+			cpuWorkerCount: 4,
+			databaseWorkerCount: 2,
+			networkPassphrase
+		});
+
+		await waitFor(() => candidates.peakActive === 2);
+		expect(candidates.loaded).toHaveLength(2);
+		candidateGate.resolve();
+		await waitFor(() => decoder.started.length === 4);
+		expect(candidates.peakActive).toBe(2);
+		expect(decoder.peakActive).toBe(4);
+		decoder.release();
+
+		await expect(execution).resolves.toMatchObject({
+			completedBatches: 4,
+			cpuWorkers: 4,
+			databaseWorkers: 2
+		});
+	});
+
+	it('never exceeds the database cap across read and write handoffs', async () => {
+		const batches = createBatches(48);
+		const databaseActivity = new DatabaseActivityProbe();
+		const candidates = new CandidateFixtureRepository(
+			batches,
+			Promise.resolve(),
+			databaseActivity
+		);
+		const repository = new ResumableBackfillRepository(
+			batches,
+			undefined,
+			databaseActivity
+		);
+
+		await expect(
+			new BackfillFullHistoryOperations(
+				repository,
+				candidates,
+				new SelectiveDecoder('', Promise.resolve())
+			).execute({
+				batchLimit: 24,
+				cpuWorkerCount: 12,
+				databaseWorkerCount: 2,
+				networkPassphrase
+			})
+		).resolves.toMatchObject({
+			completedBatches: 24,
+			databaseWorkers: 2
+		});
+		expect(databaseActivity.peakActive).toBe(2);
+	});
+
 	it('drains active work after a statement timeout, stops admission, and resumes uncovered batches without an automatic retry', async () => {
 		const batches = createBatches(3);
 		const candidates = new CandidateFixtureRepository(batches);
@@ -206,12 +273,18 @@ describe('BackfillFullHistoryOperations bounded scheduler', () => {
 
 class CandidateFixtureRepository implements FullHistoryCheckpointCandidateRepository {
 	readonly loaded: number[] = [];
+	peakActive = 0;
+	private active = 0;
 	private readonly byCheckpoint: ReadonlyMap<
 		number,
 		FullHistoryCheckpointCandidate
 	>;
 
-	constructor(batches: readonly FullHistoryOperationBackfillBatch[]) {
+	constructor(
+		batches: readonly FullHistoryOperationBackfillBatch[],
+		private readonly loadGate: Promise<void> = Promise.resolve(),
+		private readonly databaseActivity?: DatabaseActivityProbe
+	) {
 		this.byCheckpoint = new Map(
 			batches.map((batch) => [
 				Number(batch.checkpointLedger),
@@ -223,10 +296,22 @@ class CandidateFixtureRepository implements FullHistoryCheckpointCandidateReposi
 	async load(
 		target: FullHistoryPromotionTarget
 	): Promise<FullHistoryCheckpointCandidate> {
+		this.databaseActivity?.enter();
 		this.loaded.push(target.checkpointLedger);
-		const candidate = this.byCheckpoint.get(target.checkpointLedger);
-		if (candidate === undefined) throw new Error('Missing fixture candidate');
-		return candidate;
+		this.active += 1;
+		this.peakActive = Math.max(this.peakActive, this.active);
+		try {
+			await this.loadGate;
+			if (this.databaseActivity !== undefined) {
+				await new Promise<void>((resolve) => setImmediate(resolve));
+			}
+			const candidate = this.byCheckpoint.get(target.checkpointLedger);
+			if (candidate === undefined) throw new Error('Missing fixture candidate');
+			return candidate;
+		} finally {
+			this.active -= 1;
+			this.databaseActivity?.exit();
+		}
 	}
 }
 
@@ -286,7 +371,8 @@ class ResumableBackfillRepository implements FullHistoryOperationBackfillReposit
 
 	constructor(
 		private readonly batches: readonly FullHistoryOperationBackfillBatch[],
-		private readonly timeoutBatchId?: string
+		private readonly timeoutBatchId?: string,
+		private readonly databaseActivity?: DatabaseActivityProbe
 	) {
 		this.timeoutPending = timeoutBatchId !== undefined;
 	}
@@ -304,26 +390,48 @@ class ResumableBackfillRepository implements FullHistoryOperationBackfillReposit
 		readonly batchId: string;
 		readonly operations: readonly unknown[];
 	}): Promise<FullHistoryOperationBackfillReceipt> {
-		this.attemptCounts.set(
-			input.batchId,
-			(this.attemptCounts.get(input.batchId) ?? 0) + 1
-		);
-		if (this.timeoutPending && input.batchId === this.timeoutBatchId) {
-			this.timeoutPending = false;
-			throw new Error('canceling statement due to statement timeout');
+		this.databaseActivity?.enter();
+		try {
+			if (this.databaseActivity !== undefined) {
+				await new Promise<void>((resolve) => setImmediate(resolve));
+			}
+			this.attemptCounts.set(
+				input.batchId,
+				(this.attemptCounts.get(input.batchId) ?? 0) + 1
+			);
+			if (this.timeoutPending && input.batchId === this.timeoutBatchId) {
+				this.timeoutPending = false;
+				throw new Error('canceling statement due to statement timeout');
+			}
+			const replayed = this.covered.has(input.batchId);
+			this.covered.add(input.batchId);
+			return {
+				accountReferenceCount: input.operations.length,
+				batchId: input.batchId,
+				operationCount: input.operations.length,
+				replayed
+			};
+		} finally {
+			this.databaseActivity?.exit();
 		}
-		const replayed = this.covered.has(input.batchId);
-		this.covered.add(input.batchId);
-		return {
-			accountReferenceCount: input.operations.length,
-			batchId: input.batchId,
-			operationCount: input.operations.length,
-			replayed
-		};
 	}
 
 	attempts(batchId: string): number {
 		return this.attemptCounts.get(batchId) ?? 0;
+	}
+}
+
+class DatabaseActivityProbe {
+	active = 0;
+	peakActive = 0;
+
+	enter(): void {
+		this.active += 1;
+		this.peakActive = Math.max(this.peakActive, this.active);
+	}
+
+	exit(): void {
+		this.active -= 1;
 	}
 }
 
@@ -380,7 +488,12 @@ function source(seed: number) {
 }
 
 function runInput(batchLimit: number, cpuWorkerCount: number) {
-	return { batchLimit, cpuWorkerCount, networkPassphrase };
+	return {
+		batchLimit,
+		cpuWorkerCount,
+		databaseWorkerCount: 2,
+		networkPassphrase
+	};
 }
 
 function deferred<T>(): {

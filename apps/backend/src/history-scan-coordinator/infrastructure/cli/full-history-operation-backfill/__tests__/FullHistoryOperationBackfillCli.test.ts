@@ -18,7 +18,7 @@ const confirmedEnvironment = {
 };
 
 describe('FullHistoryOperationBackfillCli', () => {
-	it('reserves database connections for leadership and every CPU worker', () => {
+	it('keeps a bounded pool for leadership and pipelined database work', () => {
 		const dataSource = createFullHistoryOperationBackfillDataSource();
 
 		expect(FULL_HISTORY_OPERATION_BACKFILL_POOL_SIZE).toBe(14);
@@ -63,6 +63,7 @@ describe('FullHistoryOperationBackfillCli', () => {
 			batchLimit: 8,
 			completedBatches: 1,
 			cpuWorkers: 2,
+			databaseWorkers: 2,
 			operationFacts: 24,
 			peakActiveBatches: 1,
 			receipts: [
@@ -90,6 +91,7 @@ describe('FullHistoryOperationBackfillCli', () => {
 		expect(dependencies.execute).toHaveBeenCalledWith(dependencies.dataSource, {
 			batchLimit: 8,
 			cpuWorkerCount: 2,
+			databaseWorkerCount: 2,
 			networkPassphrase: 'CLI fixture network'
 		});
 		expect(dependencies.stdout.write).toHaveBeenCalledWith(
@@ -127,6 +129,7 @@ describe('FullHistoryOperationBackfillCli', () => {
 			batchLimit: 24,
 			completedBatches: 0,
 			cpuWorkers: 12,
+			databaseWorkers: 2,
 			operationFacts: 0,
 			peakActiveBatches: 0,
 			receipts: [],
@@ -148,6 +151,7 @@ describe('FullHistoryOperationBackfillCli', () => {
 		expect(configured.execute).toHaveBeenCalledWith(configured.dataSource, {
 			batchLimit: 24,
 			cpuWorkerCount: 12,
+			databaseWorkerCount: 2,
 			networkPassphrase: 'CLI fixture network'
 		});
 
@@ -209,6 +213,7 @@ describe('FullHistoryOperationBackfillCli', () => {
 			batchLimit: 24,
 			completedBatches: 24,
 			cpuWorkers: 12,
+			databaseWorkers: 2,
 			operationFacts: 24,
 			peakActiveBatches: 12,
 			receipts,

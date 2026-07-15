@@ -2,6 +2,7 @@ import type { FullHistoryCheckpointWrite } from '../../domain/full-history/FullH
 import {
 	assertOperationBackfillCandidateProvenance,
 	validateFullHistoryOperationBackfillCpuWorkerCount,
+	validateFullHistoryOperationBackfillDatabaseWorkerCount,
 	validateFullHistoryOperationBackfillLimit,
 	type FullHistoryOperationBackfillBatch
 } from '../../domain/full-history-operation-backfill/FullHistoryOperationBackfill.js';
@@ -15,6 +16,7 @@ import type { FullHistoryCheckpointDecoder } from '../../domain/full-history-pro
 export interface BackfillFullHistoryOperationsInput {
 	readonly batchLimit: number;
 	readonly cpuWorkerCount: number;
+	readonly databaseWorkerCount: number;
 	readonly networkPassphrase: string;
 }
 
@@ -23,6 +25,7 @@ export interface BackfillFullHistoryOperationsResult {
 	readonly batchLimit: number;
 	readonly completedBatches: number;
 	readonly cpuWorkers: number;
+	readonly databaseWorkers: number;
 	readonly operationFacts: number;
 	readonly peakActiveBatches: number;
 	readonly receipts: readonly FullHistoryOperationBackfillReceipt[];
@@ -42,6 +45,9 @@ export class BackfillFullHistoryOperations {
 	): Promise<BackfillFullHistoryOperationsResult> {
 		validateFullHistoryOperationBackfillLimit(input.batchLimit);
 		validateFullHistoryOperationBackfillCpuWorkerCount(input.cpuWorkerCount);
+		validateFullHistoryOperationBackfillDatabaseWorkerCount(
+			input.databaseWorkerCount
+		);
 		const batches = await this.backfillRepository.findUnindexedBatches(
 			input.networkPassphrase,
 			input.batchLimit
@@ -49,7 +55,8 @@ export class BackfillFullHistoryOperations {
 		const execution = await this.backfillBatches(
 			batches,
 			input.networkPassphrase,
-			input.cpuWorkerCount
+			input.cpuWorkerCount,
+			input.databaseWorkerCount
 		);
 		const receipts = execution.receipts;
 		return {
@@ -60,6 +67,7 @@ export class BackfillFullHistoryOperations {
 			batchLimit: input.batchLimit,
 			completedBatches: receipts.length,
 			cpuWorkers: input.cpuWorkerCount,
+			databaseWorkers: input.databaseWorkerCount,
 			operationFacts: receipts.reduce(
 				(total, receipt) => total + receipt.operationCount,
 				0
@@ -74,7 +82,8 @@ export class BackfillFullHistoryOperations {
 	private async backfillBatches(
 		batches: readonly FullHistoryOperationBackfillBatch[],
 		networkPassphrase: string,
-		cpuWorkerCount: number
+		cpuWorkerCount: number,
+		databaseWorkerCount: number
 	): Promise<{
 		readonly peakActiveBatches: number;
 		readonly receipts: readonly FullHistoryOperationBackfillReceipt[];
@@ -83,6 +92,7 @@ export class BackfillFullHistoryOperations {
 		let activeBatches = 0;
 		let nextBatchIndex = 0;
 		let peakActiveBatches = 0;
+		const databaseGate = new AsyncConcurrencyGate(databaseWorkerCount);
 		let firstFailure: { readonly error: unknown } | undefined;
 
 		const runSlot = async (): Promise<void> => {
@@ -96,7 +106,7 @@ export class BackfillFullHistoryOperations {
 				try {
 					receipts.set(
 						batchIndex,
-						await this.backfillBatch(batch, networkPassphrase)
+						await this.backfillBatch(batch, networkPassphrase, databaseGate)
 					);
 				} catch (error) {
 					firstFailure ??= { error };
@@ -120,13 +130,16 @@ export class BackfillFullHistoryOperations {
 
 	private async backfillBatch(
 		batch: FullHistoryOperationBackfillBatch,
-		networkPassphrase: string
+		networkPassphrase: string,
+		databaseGate: AsyncConcurrencyGate
 	): Promise<FullHistoryOperationBackfillReceipt> {
-		const candidate = await this.candidateRepository.load({
-			archiveUrlIdentity: batch.archiveUrlIdentity,
-			checkpointLedger: Number(batch.checkpointLedger),
-			networkPassphrase
-		});
+		const candidate = await databaseGate.run(() =>
+			this.candidateRepository.load({
+				archiveUrlIdentity: batch.archiveUrlIdentity,
+				checkpointLedger: Number(batch.checkpointLedger),
+				networkPassphrase
+			})
+		);
 		assertOperationBackfillCandidateProvenance(
 			batch,
 			candidate,
@@ -134,15 +147,50 @@ export class BackfillFullHistoryOperations {
 		);
 		const sources = candidate.proof.sources;
 		const decoded = await this.decoder.decode(candidate, networkPassphrase);
-		return this.backfillRepository.storeOperations(
-			composeCheckpointWrite(
-				batch,
-				sources,
-				decoded,
-				networkPassphrase,
-				this.decoder
+		return databaseGate.run(() =>
+			this.backfillRepository.storeOperations(
+				composeCheckpointWrite(
+					batch,
+					sources,
+					decoded,
+					networkPassphrase,
+					this.decoder
+				)
 			)
 		);
+	}
+}
+
+class AsyncConcurrencyGate {
+	private active = 0;
+	private readonly waiters: Array<() => void> = [];
+
+	constructor(private readonly capacity: number) {}
+
+	async run<T>(operation: () => Promise<T>): Promise<T> {
+		await this.acquire();
+		try {
+			return await operation();
+		} finally {
+			this.release();
+		}
+	}
+
+	private async acquire(): Promise<void> {
+		if (this.active < this.capacity) {
+			this.active += 1;
+			return;
+		}
+		await new Promise<void>((resolve) => this.waiters.push(resolve));
+	}
+
+	private release(): void {
+		const next = this.waiters.shift();
+		if (next !== undefined) {
+			next();
+			return;
+		}
+		this.active -= 1;
 	}
 }
 

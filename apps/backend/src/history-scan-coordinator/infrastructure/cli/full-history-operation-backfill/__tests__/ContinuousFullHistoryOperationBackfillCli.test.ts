@@ -21,6 +21,7 @@ describe('continuous full-history operation backfill CLI', () => {
 		).toMatchObject({
 			batchLimit: 12,
 			cpuWorkerCount: 12,
+			databaseWorkerCount: 2,
 			errorBackoffMs: 30_000,
 			idleBackoffMs: 15_000,
 			leadershipBackoffMs: 30_000,
@@ -40,6 +41,12 @@ describe('continuous full-history operation backfill CLI', () => {
 				FULL_HISTORY_OPERATION_BACKFILL_CPU_WORKERS: '13'
 			})
 		).toThrow('between 1 and 12');
+		expect(() =>
+			parseContinuousFullHistoryOperationBackfillConfig({
+				...enabledEnvironment,
+				FULL_HISTORY_OPERATION_BACKFILL_DATABASE_WORKERS: '5'
+			})
+		).toThrow('between 1 and 4');
 		expect(() =>
 			parseContinuousFullHistoryOperationBackfillConfig({
 				...enabledEnvironment,
@@ -76,6 +83,7 @@ describe('continuous full-history operation backfill CLI', () => {
 		expect(execute).toHaveBeenCalledWith(dataSource, {
 			batchLimit: 12,
 			cpuWorkerCount: 12,
+			databaseWorkerCount: 2,
 			networkPassphrase: 'Continuous operation fixture network'
 		});
 	});
@@ -259,6 +267,7 @@ function executionResult(status: 'completed' | 'idle') {
 		batchLimit: 12,
 		completedBatches: 0,
 		cpuWorkers: 12,
+		databaseWorkers: 2,
 		operationFacts: 0,
 		peakActiveBatches: 0,
 		receipts: [],

@@ -89,20 +89,28 @@ limit $2
 
 export const fullHistoryObservedTransactionBoundsSql = `
 	select
-		(select count(*)::bigint
-		from "parsed_transaction_envelope_observation" observation
-		where observation."sourceObjectRemoteId" = $1) as "envelopeCount",
-		(select coalesce(sum(octet_length(envelope."envelopeXdr")), 0)::bigint
+		envelope."envelopeCount",
+		envelope."envelopeBytes",
+		result."resultCount",
+		result."resultBytes"
+	from (
+		select
+			count(*)::bigint as "envelopeCount",
+			coalesce(sum(octet_length(envelope."envelopeXdr")), 0)::bigint
+				as "envelopeBytes"
 		from "parsed_transaction_envelope_observation" observation
 		join "parsed_transaction_envelope" envelope
 			on envelope.id = observation."parsedTransactionEnvelopeId"
-		where observation."sourceObjectRemoteId" = $1) as "envelopeBytes",
-		(select count(*)::bigint
-		from "parsed_transaction_result_observation" observation
-		where observation."sourceObjectRemoteId" = $2) as "resultCount",
-		(select coalesce(sum(octet_length(result."resultXdr")), 0)::bigint
+		where observation."sourceObjectRemoteId" = $1
+	) envelope
+	cross join (
+		select
+			count(*)::bigint as "resultCount",
+			coalesce(sum(octet_length(result."resultXdr")), 0)::bigint
+				as "resultBytes"
 		from "parsed_transaction_result_observation" observation
 		join "parsed_transaction_result" result
 			on result.id = observation."parsedTransactionResultId"
-		where observation."sourceObjectRemoteId" = $2) as "resultBytes"
+		where observation."sourceObjectRemoteId" = $2
+	) result
 `;

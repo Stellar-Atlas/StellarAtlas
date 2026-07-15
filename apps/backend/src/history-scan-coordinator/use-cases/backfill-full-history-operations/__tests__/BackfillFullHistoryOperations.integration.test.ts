@@ -205,6 +205,7 @@ describe('BackfillFullHistoryOperations', () => {
 			batchLimit: 1,
 			completedBatches: 0,
 			cpuWorkers: 2,
+			databaseWorkers: 2,
 			operationFacts: 0,
 			peakActiveBatches: 0,
 			receipts: [],
@@ -384,6 +385,7 @@ describe('BackfillFullHistoryOperations', () => {
 		return {
 			batchLimit,
 			cpuWorkerCount: 2,
+			databaseWorkerCount: 2,
 			networkPassphrase: publicNetworkPassphrase
 		};
 	}

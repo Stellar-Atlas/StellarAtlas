@@ -10,6 +10,8 @@ const checkpointLedgerBindingUpgrade = {
 export const FULL_HISTORY_OPERATION_BACKFILL_BATCH_LIMIT_MAX = 24;
 export const FULL_HISTORY_OPERATION_BACKFILL_CPU_WORKERS_DEFAULT = 2;
 export const FULL_HISTORY_OPERATION_BACKFILL_CPU_WORKERS_MAX = 12;
+export const FULL_HISTORY_OPERATION_BACKFILL_DATABASE_WORKERS_DEFAULT = 2;
+export const FULL_HISTORY_OPERATION_BACKFILL_DATABASE_WORKERS_MAX = 4;
 
 export interface FullHistoryOperationBackfillBatch {
 	readonly archiveUrlIdentity: string;
@@ -27,7 +29,8 @@ export interface FullHistoryOperationBackfillBatch {
 export type FullHistoryOperationBackfillErrorReason =
 	| 'immutable-provenance-mismatch'
 	| 'invalid-batch-limit'
-	| 'invalid-cpu-worker-count';
+	| 'invalid-cpu-worker-count'
+	| 'invalid-database-worker-count';
 
 export class FullHistoryOperationBackfillError extends Error {
 	constructor(
@@ -63,6 +66,21 @@ export function validateFullHistoryOperationBackfillCpuWorkerCount(
 		throw new FullHistoryOperationBackfillError(
 			'invalid-cpu-worker-count',
 			`cpuWorkerCount must be between 1 and ${FULL_HISTORY_OPERATION_BACKFILL_CPU_WORKERS_MAX}`
+		);
+	}
+}
+
+export function validateFullHistoryOperationBackfillDatabaseWorkerCount(
+	workerCount: number
+): void {
+	if (
+		!Number.isSafeInteger(workerCount) ||
+		workerCount < 1 ||
+		workerCount > FULL_HISTORY_OPERATION_BACKFILL_DATABASE_WORKERS_MAX
+	) {
+		throw new FullHistoryOperationBackfillError(
+			'invalid-database-worker-count',
+			`databaseWorkerCount must be between 1 and ${FULL_HISTORY_OPERATION_BACKFILL_DATABASE_WORKERS_MAX}`
 		);
 	}
 }

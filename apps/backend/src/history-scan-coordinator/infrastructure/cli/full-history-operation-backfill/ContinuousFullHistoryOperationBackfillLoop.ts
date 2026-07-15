@@ -4,6 +4,7 @@ import type { FullHistoryOperationWorkerMetrics } from './WorkerThreadFullHistor
 export interface ContinuousFullHistoryOperationBackfillLoopConfig {
 	readonly batchLimit: number;
 	readonly cpuWorkerCount: number;
+	readonly databaseWorkerCount: number;
 	readonly errorBackoffMs: number;
 	readonly heartbeatIntervalMs: number;
 	readonly idleBackoffMs: number;
@@ -43,6 +44,7 @@ export type ContinuousFullHistoryOperationBackfillLoopEvent =
 			readonly at: string;
 			readonly batchLimit: number;
 			readonly cpuWorkers: number;
+			readonly databaseWorkers: number;
 			readonly cycle: number;
 			readonly event: 'heartbeat';
 			readonly lastOutcome: LoopOutcome | null;
@@ -65,6 +67,7 @@ export type ContinuousFullHistoryOperationBackfillLoopEvent =
 			readonly completedBatchIds: readonly string[];
 			readonly completedBatches: number;
 			readonly cpuWorkers: number;
+			readonly databaseWorkers: number;
 			readonly cycle: number;
 			readonly durationMs: number;
 			readonly event: 'cycle-outcome';
@@ -119,6 +122,7 @@ export async function runContinuousFullHistoryOperationBackfillLoop(
 			at: new Date(dependencies.now()).toISOString(),
 			batchLimit: config.batchLimit,
 			cpuWorkers: config.cpuWorkerCount,
+			databaseWorkers: config.databaseWorkerCount,
 			cycle,
 			event: 'heartbeat',
 			lastOutcome,
@@ -217,6 +221,7 @@ function executionEvent(
 		completedBatchIds: execution.receipts.map((receipt) => receipt.batchId),
 		completedBatches: execution.completedBatches,
 		cpuWorkers: execution.cpuWorkers,
+		databaseWorkers: execution.databaseWorkers,
 		cycle,
 		durationMs: elapsedMilliseconds(startedAt, finishedAt),
 		event: 'cycle-outcome',

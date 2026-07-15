@@ -2,7 +2,9 @@ import type { DataSource } from 'typeorm';
 import {
 	FULL_HISTORY_OPERATION_BACKFILL_BATCH_LIMIT_MAX,
 	FULL_HISTORY_OPERATION_BACKFILL_CPU_WORKERS_DEFAULT,
-	FULL_HISTORY_OPERATION_BACKFILL_CPU_WORKERS_MAX
+	FULL_HISTORY_OPERATION_BACKFILL_CPU_WORKERS_MAX,
+	FULL_HISTORY_OPERATION_BACKFILL_DATABASE_WORKERS_DEFAULT,
+	FULL_HISTORY_OPERATION_BACKFILL_DATABASE_WORKERS_MAX
 } from '../../../domain/full-history-operation-backfill/FullHistoryOperationBackfill.js';
 import {
 	checkFullHistoryOperationBackfillReadiness,
@@ -27,6 +29,7 @@ interface WritableOutput {
 interface FullHistoryOperationBackfillCliConfig {
 	readonly batchLimit: number;
 	readonly cpuWorkerCount: number;
+	readonly databaseWorkerCount: number;
 	readonly networkPassphrase: string;
 }
 
@@ -146,6 +149,9 @@ export function parseFullHistoryOperationBackfillCliConfig(
 		cpuWorkerCount: readCpuWorkerCount(
 			environment.FULL_HISTORY_OPERATION_BACKFILL_CPU_WORKERS
 		),
+		databaseWorkerCount: readDatabaseWorkerCount(
+			environment.FULL_HISTORY_OPERATION_BACKFILL_DATABASE_WORKERS
+		),
 		networkPassphrase
 	};
 }
@@ -183,6 +189,28 @@ function readCpuWorkerCount(value: string | undefined): number {
 	) {
 		throw new Error(
 			`Operation-backfill CPU worker count must be between 1 and ${FULL_HISTORY_OPERATION_BACKFILL_CPU_WORKERS_MAX}`
+		);
+	}
+	return parsed;
+}
+
+function readDatabaseWorkerCount(value: string | undefined): number {
+	if (value === undefined) {
+		return FULL_HISTORY_OPERATION_BACKFILL_DATABASE_WORKERS_DEFAULT;
+	}
+	if (!/^[0-9]+$/.test(value)) {
+		throw new Error(
+			'Operation-backfill database worker count is not an integer'
+		);
+	}
+	const parsed = Number(value);
+	if (
+		!Number.isSafeInteger(parsed) ||
+		parsed < 1 ||
+		parsed > FULL_HISTORY_OPERATION_BACKFILL_DATABASE_WORKERS_MAX
+	) {
+		throw new Error(
+			`Operation-backfill database worker count must be between 1 and ${FULL_HISTORY_OPERATION_BACKFILL_DATABASE_WORKERS_MAX}`
 		);
 	}
 	return parsed;

@@ -1,7 +1,9 @@
 import type { DataSource } from 'typeorm';
 import {
 	FULL_HISTORY_OPERATION_BACKFILL_BATCH_LIMIT_MAX,
-	FULL_HISTORY_OPERATION_BACKFILL_CPU_WORKERS_MAX
+	FULL_HISTORY_OPERATION_BACKFILL_CPU_WORKERS_MAX,
+	FULL_HISTORY_OPERATION_BACKFILL_DATABASE_WORKERS_DEFAULT,
+	FULL_HISTORY_OPERATION_BACKFILL_DATABASE_WORKERS_MAX
 } from '../../../domain/full-history-operation-backfill/FullHistoryOperationBackfill.js';
 import {
 	checkFullHistoryOperationBackfillReadiness,
@@ -110,6 +112,7 @@ export function createContinuousFullHistoryOperationBackfillCycleExecutor(
 				execution: await dependencies.execute(dataSource, {
 					batchLimit: config.batchLimit,
 					cpuWorkerCount: config.cpuWorkerCount,
+					databaseWorkerCount: config.databaseWorkerCount,
 					networkPassphrase: config.networkPassphrase
 				}),
 				status: 'executed'
@@ -163,6 +166,7 @@ export async function runContinuousFullHistoryOperationBackfillCli(
 			writeEvent(dependencies.stdout, {
 				batchLimit: config.batchLimit,
 				cpuWorkers: config.cpuWorkerCount,
+				databaseWorkers: config.databaseWorkerCount,
 				event: 'runtime',
 				status: 'started'
 			});
@@ -221,6 +225,12 @@ export function parseContinuousFullHistoryOperationBackfillConfig(
 			FULL_HISTORY_OPERATION_BACKFILL_CPU_WORKERS_MAX,
 			1,
 			FULL_HISTORY_OPERATION_BACKFILL_CPU_WORKERS_MAX
+		),
+		databaseWorkerCount: readInteger(
+			environment.FULL_HISTORY_OPERATION_BACKFILL_DATABASE_WORKERS,
+			FULL_HISTORY_OPERATION_BACKFILL_DATABASE_WORKERS_DEFAULT,
+			1,
+			FULL_HISTORY_OPERATION_BACKFILL_DATABASE_WORKERS_MAX
 		),
 		errorBackoffMs: readInteger(
 			environment.FULL_HISTORY_OPERATION_BACKFILL_ERROR_BACKOFF_MS,

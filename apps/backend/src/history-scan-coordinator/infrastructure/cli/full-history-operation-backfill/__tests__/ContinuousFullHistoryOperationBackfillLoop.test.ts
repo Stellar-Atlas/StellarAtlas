@@ -9,6 +9,7 @@ import {
 const config: ContinuousFullHistoryOperationBackfillLoopConfig = {
 	batchLimit: 12,
 	cpuWorkerCount: 12,
+	databaseWorkerCount: 2,
 	errorBackoffMs: 30_000,
 	heartbeatIntervalMs: 60_000,
 	idleBackoffMs: 15_000,
@@ -66,6 +67,7 @@ describe('continuous full-history operation backfill loop', () => {
 		expect(completed).toMatchObject({
 			completedBatches: 12,
 			cpuWorkers: 12,
+			databaseWorkers: 2,
 			peakActiveBatches: 12,
 			selectedWindowFull: true
 		});
@@ -185,6 +187,7 @@ function executed(
 			batchLimit: 12,
 			completedBatches,
 			cpuWorkers: 12,
+			databaseWorkers: 2,
 			operationFacts: completedBatches,
 			peakActiveBatches: completedBatches,
 			receipts: Array.from({ length: completedBatches }, (_, index) => ({
