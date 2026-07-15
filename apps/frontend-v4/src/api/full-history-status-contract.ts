@@ -2,6 +2,7 @@ import type { PublicFullHistoryStatus } from './types';
 import { validateCanonicalFullHistoryCoverage } from './canonical-history-contract';
 import { sanitizeFullHistoryStatus } from './status-live-sanitizers';
 import {
+	arrayOf,
 	boolean,
 	dateTime,
 	literal,
@@ -14,6 +15,35 @@ import {
 	type StatusLiveValidator,
 	unsignedIntegerString
 } from './status-live-validator-primitives';
+
+const validateLedgerCloseMetaOutput = matches({
+	batchCount: nonNegativeInteger,
+	dataset: oneOf(
+		'contract-events',
+		'ledger-close-meta',
+		'ledger-entry-changes',
+		'ledgers',
+		'operations',
+		'transaction-meta',
+		'transaction-results',
+		'transactions'
+	),
+	outputBytes: unsignedIntegerString,
+	recordCount: unsignedIntegerString,
+	schemaVersions: arrayOf(string, 4)
+});
+
+const validateLedgerCloseMetaCoverage = matches({
+	batchCount: nonNegativeInteger,
+	firstAvailableLedger: unsignedIntegerString,
+	firstLedger: nullable(unsignedIntegerString),
+	lastLedger: nullable(unsignedIntegerString),
+	ledgerCount: unsignedIntegerString,
+	nextLedger: unsignedIntegerString,
+	outputs: arrayOf(validateLedgerCloseMetaOutput, 8),
+	sourceCount: nonNegativeInteger,
+	updatedAt: dateTime
+});
 
 const validateCanonicalPromotion = matches({
 	checkpointLedger: nullable(unsignedIntegerString),
@@ -54,23 +84,28 @@ const validateHistoricalBackfill = matches({
 	updatedAt: nullable(dateTime)
 });
 
-export const validateFullHistoryStatus: StatusLiveValidator = matches({
-	canonicalCoverage: nullable(validateCanonicalFullHistoryCoverage),
-	canonicalPromotion: nullable(validateCanonicalPromotion),
-	earliestParsedLedger: nullable(unsignedIntegerString),
-	generatedAt: dateTime,
-	historicalBackfill: nullable(validateHistoricalBackfill),
-	latestObservedAt: nullable(dateTime),
-	latestParsedLedger: nullable(unsignedIntegerString),
-	localAssetIndexReady: boolean,
-	localContractIndexReady: boolean,
-	localOperationIndexReady: boolean,
-	localTransactionIndexReady: boolean,
-	mode: oneOf('archive_header_parser', 'canonical_checkpoint_index'),
-	parsedLedgerCount: nullable(nonNegativeInteger),
-	sourceArchiveCount: nullable(nonNegativeInteger),
-	status: statusLevel
-});
+export const validateFullHistoryStatus: StatusLiveValidator = matches(
+	{
+		canonicalCoverage: nullable(validateCanonicalFullHistoryCoverage),
+		canonicalPromotion: nullable(validateCanonicalPromotion),
+		earliestParsedLedger: nullable(unsignedIntegerString),
+		generatedAt: dateTime,
+		historicalBackfill: nullable(validateHistoricalBackfill),
+		latestObservedAt: nullable(dateTime),
+		latestParsedLedger: nullable(unsignedIntegerString),
+		localAssetIndexReady: boolean,
+		localContractIndexReady: boolean,
+		localOperationIndexReady: boolean,
+		localTransactionIndexReady: boolean,
+		mode: oneOf('archive_header_parser', 'canonical_checkpoint_index'),
+		parsedLedgerCount: nullable(nonNegativeInteger),
+		sourceArchiveCount: nullable(nonNegativeInteger),
+		status: statusLevel
+	},
+	{
+		ledgerCloseMeta: nullable(validateLedgerCloseMetaCoverage)
+	}
+);
 
 export function parseFullHistoryStatus(
 	value: unknown

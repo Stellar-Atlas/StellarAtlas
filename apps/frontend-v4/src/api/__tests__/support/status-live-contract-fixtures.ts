@@ -100,6 +100,25 @@ export function createStatusLivePayload(): Record<string, unknown> {
 				state: 'idle',
 				updatedAt: generatedAt
 			},
+			ledgerCloseMeta: {
+				batchCount: 2,
+				firstAvailableLedger: '3',
+				firstLedger: '3',
+				lastLedger: '130',
+				ledgerCount: '128',
+				nextLedger: '131',
+				outputs: [
+					{
+						batchCount: 2,
+						dataset: 'transactions',
+						outputBytes: '4096',
+						recordCount: '250',
+						schemaVersions: ['3']
+					}
+				],
+				sourceCount: 1,
+				updatedAt: generatedAt
+			},
 			latestObservedAt: generatedAt,
 			latestParsedLedger: '63386367',
 			localAssetIndexReady: false,

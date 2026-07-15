@@ -22,6 +22,7 @@ describe('GetFullHistoryStatus', () => {
 	beforeEach(() => {
 		jest.useFakeTimers().setSystemTime(new Date('2026-07-06T12:00:00.000Z'));
 		dataSourceMock = mock<DataSource>();
+		dataSourceMock.query.mockResolvedValue([]);
 		parsedLedgerHeadersMock = mock<ParsedLedgerHeaderRepository>();
 		canonicalHistoryMock = mock<FullHistoryCanonicalRepository>();
 		canonicalHistoryMock.getCoverage.mockResolvedValue(null);
@@ -85,6 +86,7 @@ describe('GetFullHistoryStatus', () => {
 			earliestParsedLedger: '1',
 			latestParsedLedger: '128',
 			latestObservedAt: '2026-07-06T11:59:00.000Z',
+			ledgerCloseMeta: null,
 			sourceArchiveCount: 1,
 			localTransactionIndexReady: false,
 			localOperationIndexReady: false,
@@ -92,7 +94,7 @@ describe('GetFullHistoryStatus', () => {
 			localContractIndexReady: false
 		});
 		expect(parsedLedgerHeadersMock.getWatermark).toHaveBeenCalledTimes(1);
-		expect(dataSourceMock.query).not.toHaveBeenCalled();
+		expect(dataSourceMock.query).toHaveBeenCalledTimes(2);
 	});
 
 	it('reports the exact bounded canonical range without claiming later indexes', async () => {
@@ -146,14 +148,17 @@ describe('GetFullHistoryStatus', () => {
 			startedAt: new Date('2026-07-06T11:50:00.000Z'),
 			state: 'waiting-for-proof'
 		});
-		dataSourceMock.query.mockResolvedValueOnce([
-			{
-				firstLedger: '63386240',
-				jobState: 'pending',
-				latestErrorCode: 'proof-pending',
-				updatedAt: new Date('2026-07-06T11:59:50.000Z')
-			}
-		]);
+		dataSourceMock.query
+			.mockResolvedValueOnce([])
+			.mockResolvedValueOnce([])
+			.mockResolvedValueOnce([
+				{
+					firstLedger: '63386240',
+					jobState: 'pending',
+					latestErrorCode: 'proof-pending',
+					updatedAt: new Date('2026-07-06T11:59:50.000Z')
+				}
+			]);
 
 		const result = await getFullHistoryStatus.executeFullHistory();
 
@@ -314,7 +319,7 @@ describe('GetFullHistoryStatus', () => {
 			}
 		});
 		expect(parsedLedgerHeadersMock.getWatermark).toHaveBeenCalledTimes(1);
-		expect(dataSourceMock.query).toHaveBeenCalledTimes(1);
+		expect(dataSourceMock.query).toHaveBeenCalledTimes(3);
 		expect(dataSourceMock.query.mock.calls[0]?.[0]).toContain(
 			'history_archive_scan_job_queue'
 		);

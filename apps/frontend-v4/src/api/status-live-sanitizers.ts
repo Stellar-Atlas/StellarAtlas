@@ -73,6 +73,10 @@ export function sanitizeFullHistoryStatus(
 						'startedAt',
 						'state'
 					]),
+		ledgerCloseMeta:
+			source.ledgerCloseMeta === null || source.ledgerCloseMeta === undefined
+				? null
+				: sanitizeLedgerCloseMetaCoverage(source.ledgerCloseMeta),
 		historicalBackfill:
 			source.historicalBackfill === null
 				? null
@@ -85,6 +89,33 @@ export function sanitizeFullHistoryStatus(
 						'state',
 						'updatedAt'
 					])
+	};
+}
+
+function sanitizeLedgerCloseMetaCoverage(
+	value: unknown
+): Record<string, unknown> {
+	const source = record(value);
+	return {
+		...pick(source, [
+			'batchCount',
+			'firstAvailableLedger',
+			'firstLedger',
+			'lastLedger',
+			'ledgerCount',
+			'nextLedger',
+			'sourceCount',
+			'updatedAt'
+		]),
+		outputs: array(source.outputs).map((output) =>
+			pick(output, [
+				'batchCount',
+				'dataset',
+				'outputBytes',
+				'recordCount',
+				'schemaVersions'
+			])
+		)
 	};
 }
 

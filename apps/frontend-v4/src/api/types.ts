@@ -331,6 +331,7 @@ export interface PublicFullHistoryStatus {
 	readonly historicalBackfill: PublicHistoricalFullHistoryBackfill | null;
 	readonly latestObservedAt: string | null;
 	readonly latestParsedLedger: string | null;
+	readonly ledgerCloseMeta: PublicFullHistoryLedgerCloseMetaCoverage | null;
 	readonly localAssetIndexReady: boolean;
 	readonly localContractIndexReady: boolean;
 	readonly localOperationIndexReady: boolean;
@@ -339,6 +340,34 @@ export interface PublicFullHistoryStatus {
 	readonly parsedLedgerCount: number | null;
 	readonly sourceArchiveCount: number | null;
 	readonly status: PublicStatusLevel;
+}
+
+export interface PublicFullHistoryLedgerCloseMetaCoverage {
+	readonly batchCount: number;
+	readonly firstAvailableLedger: string;
+	readonly firstLedger: string | null;
+	readonly lastLedger: string | null;
+	readonly ledgerCount: string;
+	readonly nextLedger: string;
+	readonly outputs: readonly PublicFullHistoryLedgerCloseMetaOutputCoverage[];
+	readonly sourceCount: number;
+	readonly updatedAt: string;
+}
+
+export interface PublicFullHistoryLedgerCloseMetaOutputCoverage {
+	readonly batchCount: number;
+	readonly dataset:
+		| 'contract-events'
+		| 'ledger-close-meta'
+		| 'ledger-entry-changes'
+		| 'ledgers'
+		| 'operations'
+		| 'transaction-meta'
+		| 'transaction-results'
+		| 'transactions';
+	readonly outputBytes: string;
+	readonly recordCount: string;
+	readonly schemaVersions: readonly string[];
 }
 
 export interface PublicHistoricalFullHistoryBackfill {

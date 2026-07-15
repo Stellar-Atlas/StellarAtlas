@@ -96,6 +96,7 @@ function buildUnavailableFullHistory(
 		historicalBackfill: null,
 		latestObservedAt: null,
 		latestParsedLedger: null,
+		ledgerCloseMeta: null,
 		localAssetIndexReady: false,
 		localContractIndexReady: false,
 		localOperationIndexReady: false,

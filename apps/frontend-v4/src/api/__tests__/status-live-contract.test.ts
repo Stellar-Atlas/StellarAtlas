@@ -31,6 +31,22 @@ describe('status WebSocket contract', () => {
 				transactions: { contentDigest: '44'.repeat(32) }
 			}
 		});
+		expect(message.payload.fullHistory.ledgerCloseMeta).toMatchObject({
+			batchCount: 2,
+			lastLedger: '130',
+			nextLedger: '131'
+		});
+	});
+
+	it('accepts a rolling-deploy snapshot without decoded history coverage', () => {
+		const payload = createStatusLivePayload();
+		const fullHistory = asRecord(payload.fullHistory);
+		delete fullHistory.ledgerCloseMeta;
+
+		const message = parseStatusLiveMessage({ payload, type: 'status' });
+		expect(message?.type).toBe('status');
+		if (message?.type !== 'status') return;
+		expect(message.payload.fullHistory.ledgerCloseMeta).toBeNull();
 	});
 
 	it('rejects non-canonical source digests', () => {

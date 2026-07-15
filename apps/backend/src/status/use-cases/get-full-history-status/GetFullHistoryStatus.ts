@@ -24,6 +24,10 @@ import {
 	type HistoricalFullHistoryBackfillDTO
 } from './HistoricalFullHistoryBackfillStatus.js';
 import {
+	readFullHistoryLedgerCloseMetaCoverage,
+	type FullHistoryLedgerCloseMetaCoverageDTO
+} from './FullHistoryLedgerCloseMetaCoverage.js';
+import {
 	mapCanonicalCoverage,
 	type CanonicalFullHistoryCoverageDTO
 } from '@history-scan-coordinator/use-cases/get-full-history-canonical-coverage/FullHistoryCanonicalCoverageDTO.js';
@@ -37,6 +41,7 @@ export interface FullHistoryStatusDTO {
 	readonly generatedAt: string;
 	readonly latestObservedAt: string | null;
 	readonly latestParsedLedger: string | null;
+	readonly ledgerCloseMeta: FullHistoryLedgerCloseMetaCoverageDTO | null;
 	readonly localAssetIndexReady: boolean;
 	readonly localContractIndexReady: boolean;
 	readonly localOperationIndexReady: boolean;
@@ -157,7 +162,8 @@ export class GetFullHistoryStatus {
 
 	async executeFullHistory(): Promise<Result<FullHistoryStatusDTO, Error>> {
 		try {
-			const [canonical, operationCoverage, promotion] = await Promise.all([
+			const [canonical, operationCoverage, promotion, ledgerCloseMeta] =
+				await Promise.all([
 				this.canonicalHistory.getCoverage(
 					this.config.networkConfig.networkPassphrase
 				),
@@ -165,6 +171,10 @@ export class GetFullHistoryStatus {
 					this.config.networkConfig.networkPassphrase
 				),
 				this.canonicalPromotion.find(
+					this.config.networkConfig.networkPassphrase
+				),
+				readFullHistoryLedgerCloseMetaCoverage(
+					this.dataSource,
 					this.config.networkConfig.networkPassphrase
 				)
 			]);
@@ -179,14 +189,16 @@ export class GetFullHistoryStatus {
 						canonical,
 						operationCoverage,
 						promotion,
-						historicalBackfill
+						historicalBackfill,
+						ledgerCloseMeta
 					)
 				);
 			}
 			return ok(
 				this.mapParsedHeaders(
 					await this.parsedLedgerHeaders.getWatermark(),
-					promotion
+					promotion,
+					ledgerCloseMeta
 				)
 			);
 		} catch (error) {
@@ -196,7 +208,7 @@ export class GetFullHistoryStatus {
 
 	async executeIngestion(): Promise<Result<IngestionStatusDTO, Error>> {
 		try {
-			const [canonical, operationCoverage, promotion, queue] =
+			const [canonical, operationCoverage, promotion, queue, ledgerCloseMeta] =
 				await Promise.all([
 					this.canonicalHistory.getCoverage(
 						this.config.networkConfig.networkPassphrase
@@ -207,13 +219,18 @@ export class GetFullHistoryStatus {
 					this.canonicalPromotion.find(
 						this.config.networkConfig.networkPassphrase
 					),
-					this.readQueueSummary()
+					this.readQueueSummary(),
+					readFullHistoryLedgerCloseMetaCoverage(
+						this.dataSource,
+						this.config.networkConfig.networkPassphrase
+					)
 				]);
 			const status =
 				canonical === null
 					? this.mapParsedHeaders(
 							await this.parsedLedgerHeaders.getWatermark(),
-							promotion
+							promotion,
+							ledgerCloseMeta
 						)
 					: mapCanonicalStatus(
 							canonical,
@@ -222,7 +239,8 @@ export class GetFullHistoryStatus {
 							await readHistoricalFullHistoryBackfillStatus(
 								this.dataSource,
 								this.config.networkConfig.networkPassphrase
-							)
+							),
+							ledgerCloseMeta
 						);
 			return ok({ ...status, queue });
 		} catch (error) {
@@ -351,7 +369,8 @@ export class GetFullHistoryStatus {
 
 	private mapParsedHeaders(
 		row: ParsedLedgerHeaderWatermark,
-		promotion: FullHistoryPromotionRuntimeView | null
+		promotion: FullHistoryPromotionRuntimeView | null,
+		ledgerCloseMeta: FullHistoryLedgerCloseMetaCoverageDTO | null
 	): FullHistoryStatusDTO {
 		const parsedLedgerCount = row.parsedLedgerCount;
 		return {
@@ -365,6 +384,7 @@ export class GetFullHistoryStatus {
 			earliestParsedLedger: toNullableString(row.earliestLedgerSequence),
 			latestParsedLedger: toNullableString(row.latestLedgerSequence),
 			latestObservedAt: toIso(row.latestObservedAt),
+			ledgerCloseMeta,
 			sourceArchiveCount: row.sourceArchiveCount,
 			localTransactionIndexReady: false,
 			localOperationIndexReady: false,
@@ -378,7 +398,8 @@ function mapCanonicalStatus(
 	coverage: FullHistoryCanonicalCoverageView,
 	operationCoverage: FullHistoryOperationCoverage,
 	promotion: FullHistoryPromotionRuntimeView | null,
-	historicalBackfill: HistoricalFullHistoryBackfillDTO | null
+	historicalBackfill: HistoricalFullHistoryBackfillDTO | null,
+	ledgerCloseMeta: FullHistoryLedgerCloseMetaCoverageDTO | null
 ): FullHistoryStatusDTO {
 	return {
 		canonicalCoverage: mapCanonicalCoverage(coverage),
@@ -388,6 +409,7 @@ function mapCanonicalStatus(
 		historicalBackfill,
 		latestObservedAt: null,
 		latestParsedLedger: null,
+		ledgerCloseMeta,
 		localAssetIndexReady: false,
 		localContractIndexReady: false,
 		localOperationIndexReady:
