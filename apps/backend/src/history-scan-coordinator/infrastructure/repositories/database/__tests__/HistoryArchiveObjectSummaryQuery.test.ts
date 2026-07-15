@@ -16,16 +16,20 @@ import {
 } from '../HistoryArchiveObjectTypeSummaryReadQuery.js';
 
 describe('HistoryArchiveObjectSummaryQuery SQL', () => {
-	it('registers the type-summary migration after the prior managed migration', () => {
-		expect(managedMigrations.at(-3)).toBe(
+	it('keeps the three archive summary migrations in dependency order', () => {
+		const typeSummaryIndex = managedMigrations.indexOf(
 			HistoryArchiveObjectTypeSummaryMigration1785080000000
 		);
-		expect(managedMigrations.at(-2)).toBe(
+		const globalBucketIndex = managedMigrations.indexOf(
 			HistoryArchiveGlobalBucketHashIndexMigration1785090000000
 		);
-		expect(managedMigrations.at(-1)).toBe(
+		const referenceSummaryIndex = managedMigrations.indexOf(
 			HistoryArchiveBucketReferenceSummaryMigration1785100000000
 		);
+
+		expect(typeSummaryIndex).toBeGreaterThanOrEqual(0);
+		expect(globalBucketIndex).toBeGreaterThan(typeSummaryIndex);
+		expect(referenceSummaryIndex).toBeGreaterThan(globalBucketIndex);
 	});
 
 	it('requires all three rollup completion signals', () => {

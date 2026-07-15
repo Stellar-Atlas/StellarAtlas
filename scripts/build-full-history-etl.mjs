@@ -6,28 +6,40 @@ import { fileURLToPath } from 'node:url';
 
 const repositoryRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const sourceRoot = join(repositoryRoot, 'apps', 'full-history-etl');
-const outputPath =
-	process.env.FULL_HISTORY_LEDGER_CLOSE_META_EXECUTABLE ??
-	join(sourceRoot, 'bin', 'stellaratlas-full-history-etl');
-const temporaryPath = `${outputPath}.${process.pid}.tmp`;
+const builds = [
+	{
+		command: './cmd/full-history-etl',
+		output:
+			process.env.FULL_HISTORY_LEDGER_CLOSE_META_EXECUTABLE ??
+			join(sourceRoot, 'bin', 'stellaratlas-full-history-etl')
+	},
+	{
+		command: './cmd/full-history-state-export',
+		output:
+			process.env.FULL_HISTORY_STATE_EXPORT_EXECUTABLE ??
+			join(sourceRoot, 'bin', 'stellaratlas-full-history-state-export')
+	}
+];
 const goBinary =
-	process.env.GO_BIN ??
-	'/home/observe/.local/toolchains/go1.26.5/bin/go';
+	process.env.GO_BIN ?? '/home/observe/.local/toolchains/go1.26.5/bin/go';
 
 await access(goBinary, constants.X_OK);
-await mkdir(dirname(outputPath), { mode: 0o755, recursive: true });
-try {
-	await run(goBinary, [
-		'build',
-		'-trimpath',
-		'-o',
-		temporaryPath,
-		'./cmd/full-history-etl'
-	]);
-	await chmod(temporaryPath, 0o755);
-	await rename(temporaryPath, outputPath);
-} finally {
-	await rm(temporaryPath, { force: true });
+for (const build of builds) {
+	const temporaryPath = `${build.output}.${process.pid}.tmp`;
+	await mkdir(dirname(build.output), { mode: 0o755, recursive: true });
+	try {
+		await run(goBinary, [
+			'build',
+			'-trimpath',
+			'-o',
+			temporaryPath,
+			build.command
+		]);
+		await chmod(temporaryPath, 0o755);
+		await rename(temporaryPath, build.output);
+	} finally {
+		await rm(temporaryPath, { force: true });
+	}
 }
 
 function run(executable, args) {

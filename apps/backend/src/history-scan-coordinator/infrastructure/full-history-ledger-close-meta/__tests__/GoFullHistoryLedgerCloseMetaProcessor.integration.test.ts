@@ -1,12 +1,13 @@
 import { readFile, readdir, rm } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import { tmpdir } from 'node:os';
 import {
 	fullHistoryLedgerCloseMetaRange,
 	fullHistoryLedgerCloseMetaSha256Digest
 } from '../../../domain/full-history-ledger-close-meta/FullHistoryLedgerCloseMetaBatch.js';
 import { GoFullHistoryLedgerCloseMetaProcessor } from '../GoFullHistoryLedgerCloseMetaProcessor.js';
+import { runGoFullHistoryStateExport } from '../../full-history-state-import/GoFullHistoryStateExportProcess.js';
 
 const executablePath = process.env.FULL_HISTORY_ETL_TEST_BINARY;
 const describeWithBinary =
@@ -60,6 +61,37 @@ describeWithBinary('GoFullHistoryLedgerCloseMetaProcessor', () => {
 		]);
 		expect(replay).toEqual(first);
 		expect(first.sourceDisposition).toBe('discarded-after-processing');
+		for (const dataset of [
+			'account-state-changes',
+			'trustline-state-changes'
+		] as const) {
+			const output = first.outputs.find((candidate) => candidate.dataset === dataset);
+			expect(output).toBeDefined();
+			if (output === undefined) throw new Error(`Missing ${dataset} fixture output`);
+			let consumed = 0n;
+			await expect(
+				runGoFullHistoryStateExport({
+					args: [
+						'--dataset',
+						dataset,
+						'--input',
+						join(typedOutputRoot, output.storageKey)
+					],
+					consumeRow: () => {
+						consumed += 1n;
+						return Promise.resolve();
+					},
+					dataset,
+					executablePath: join(
+						dirname(executablePath!),
+						'stellaratlas-full-history-state-export'
+					),
+					signal: new AbortController().signal,
+					timeoutMilliseconds: 120_000
+				})
+			).resolves.toBe(BigInt(output.recordCount));
+			expect(consumed).toBe(BigInt(output.recordCount));
+		}
 		expect(await readdir(temporaryInputRoot)).toEqual([]);
 	});
 

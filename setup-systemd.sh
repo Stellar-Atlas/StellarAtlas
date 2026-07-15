@@ -10,6 +10,7 @@ NETWORK_MEILI_ENV_DIR="/etc/stellaratlas"
 NETWORK_MEILI_ENV_FILE="$NETWORK_MEILI_ENV_DIR/meilisearch-network.env"
 NETWORK_MEILI_DATA_ROOT="/home/observe/stellarbeat-data/meilisearch/network"
 FULL_HISTORY_LEDGER_CLOSE_META_EXECUTABLE="$EXPECTED_REPO_ROOT/apps/full-history-etl/bin/stellaratlas-full-history-etl"
+FULL_HISTORY_STATE_EXPORT_EXECUTABLE="$EXPECTED_REPO_ROOT/apps/full-history-etl/bin/stellaratlas-full-history-state-export"
 NETWORK_MEILI_RUNTIME_DIRS=(
 	"$NETWORK_MEILI_DATA_ROOT"
 	"$NETWORK_MEILI_DATA_ROOT/data"
@@ -32,6 +33,7 @@ INSTALL_UNIT_NAMES=(
 	stellaratlas-full-history-backfill.service
 	stellaratlas-full-history-operation-backfill.service
 	stellaratlas-full-history-ledger-close-meta.service
+	stellaratlas-full-history-state-import.service
 	stellaratlas-horizon.service
 	stellaratlas-stellar-rpc.service
 )
@@ -63,6 +65,7 @@ verify_source_units() {
 	local file_name
 	local -a unit_paths=()
 	local ledger_close_meta_unit="$SYSTEMD_SOURCE_DIR/stellaratlas-full-history-ledger-close-meta.service"
+	local state_import_unit="$SYSTEMD_SOURCE_DIR/stellaratlas-full-history-state-import.service"
 
 	command -v systemd-analyze >/dev/null || die "systemd-analyze is required"
 
@@ -119,6 +122,28 @@ verify_source_units() {
 		'"stellaratlas-full-history-ledger-close-meta.service"' \
 		"$SYSTEMD_SOURCE_DIR/10-stellaratlas-observe.rules" ||
 		die "observe must be authorized to manage LedgerCloseMeta ingestion"
+	grep -Fqx \
+		"ConditionFileIsExecutable=$FULL_HISTORY_STATE_EXPORT_EXECUTABLE" \
+		"$state_import_unit" ||
+		die "State import must be gated by its exporter executable"
+	grep -Fqx "Environment=FULL_HISTORY_STATE_IMPORT_WORKERS=4" \
+		"$state_import_unit" ||
+		die "State import must use four bounded workers"
+	grep -Fqx "MemorySwapMax=0" "$state_import_unit" ||
+		die "State import must not use swap"
+	grep -Fqx "MemoryMax=32G" "$state_import_unit" ||
+		die "State import must use a 32G memory ceiling"
+	grep -Fqx "CPUQuota=800%" "$state_import_unit" ||
+		die "State import must use a bounded CPU quota"
+	grep -Fqx "Restart=on-failure" "$state_import_unit" ||
+		die "State import must restart automatically"
+	grep -Fq "stellaratlas-full-history-state-import.service" \
+		"$SYSTEMD_SOURCE_DIR/stellaratlas.target" ||
+		die "State import must start with the production target"
+	grep -Fq \
+		'"stellaratlas-full-history-state-import.service"' \
+		"$SYSTEMD_SOURCE_DIR/10-stellaratlas-observe.rules" ||
+		die "observe must be authorized to manage state import"
 
 	printf 'Verified %d tracked systemd unit templates.\n' "${#unit_paths[@]}"
 }
@@ -262,6 +287,8 @@ verify_installed_units() {
 		die "stellaratlas-full-history-backfill.service is not enabled"
 	systemctl is-enabled --quiet stellaratlas-full-history-ledger-close-meta.service ||
 		die "stellaratlas-full-history-ledger-close-meta.service is not enabled"
+	systemctl is-enabled --quiet stellaratlas-full-history-state-import.service ||
+		die "stellaratlas-full-history-state-import.service is not enabled"
 
 	printf 'Verified installed boot-safe systemd unit copies.\n'
 }
@@ -346,11 +373,13 @@ main() {
 	systemctl daemon-reload
 	systemctl enable stellaratlas-full-history-backfill.service
 	systemctl enable stellaratlas-full-history-ledger-close-meta.service
+	systemctl enable stellaratlas-full-history-state-import.service
 	systemctl enable --now stellaratlas.target
 	systemctl start stellaratlas-full-history-promotion.service
 	systemctl start stellaratlas-full-history-backfill.service
 	systemctl start stellaratlas-full-history-operation-backfill.service
 	systemctl start stellaratlas-full-history-ledger-close-meta.service
+	systemctl start stellaratlas-full-history-state-import.service
 	verify_installed_units
 	systemctl is-active --quiet stellaratlas.target ||
 		die "stellaratlas.target is not active"
@@ -362,12 +391,14 @@ main() {
 		die "stellaratlas-full-history-operation-backfill.service is not active"
 	systemctl is-active --quiet stellaratlas-full-history-ledger-close-meta.service ||
 		die "stellaratlas-full-history-ledger-close-meta.service is not active"
+	systemctl is-active --quiet stellaratlas-full-history-state-import.service ||
+		die "stellaratlas-full-history-state-import.service is not active"
 
 	cat <<'EOF'
 Installed boot-safe local copies of the split StellarAtlas units.
 The obsolete stellaratlas.service is masked. An already-active target was not
-restarted; canonical promotion, historical backfill, operation catch-up, and
-LedgerCloseMeta ingestion were started explicitly.
+restarted; canonical promotion, historical backfill, operation catch-up,
+LedgerCloseMeta ingestion, and typed state import were started explicitly.
 EOF
 	cat <<'EOF'
 
@@ -389,6 +420,7 @@ Production:
   systemctl restart stellaratlas-full-history-backfill.service
   systemctl restart stellaratlas-full-history-operation-backfill.service
   systemctl restart stellaratlas-full-history-ledger-close-meta.service
+  systemctl restart stellaratlas-full-history-state-import.service
 
 Local full-history services, after binaries/config/DB exist:
   systemctl start stellaratlas-horizon.service

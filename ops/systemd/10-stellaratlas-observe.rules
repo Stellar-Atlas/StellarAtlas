@@ -30,6 +30,7 @@ polkit.addRule(function(action, subject) {
     "stellaratlas-full-history-backfill.service",
     "stellaratlas-full-history-operation-backfill.service",
     "stellaratlas-full-history-ledger-close-meta.service",
+    "stellaratlas-full-history-state-import.service",
     "stellaratlas-horizon.service",
     "stellaratlas-stellar-rpc.service"
   ];

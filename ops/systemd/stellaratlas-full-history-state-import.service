@@ -1,0 +1,53 @@
+[Unit]
+Description=StellarAtlas typed full-history state import
+Documentation=https://github.com/Stellar-Atlas/StellarAtlas
+Wants=network-online.target stellaratlas-full-history-ledger-close-meta.service
+After=network-online.target stellaratlas-full-history-ledger-close-meta.service
+RequiresMountsFor=/home/observe/stellarbeat-data/full-history/typed
+ConditionFileIsExecutable=/home/observe/stellarbeat-data/Observer/apps/full-history-etl/bin/stellaratlas-full-history-state-export
+PartOf=stellaratlas.target
+Conflicts=stellaratlas.service
+
+[Service]
+Type=simple
+User=observe
+Group=observe
+WorkingDirectory=/home/observe/stellarbeat-data/Observer
+UMask=0077
+Environment=NODE_ENV=production
+Environment=HOME=/home/observe
+Environment=PATH=/home/observe/.nvm/versions/node/v26.4.0/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+Environment=FULL_HISTORY_STATE_IMPORT_ENABLED=true
+Environment=FULL_HISTORY_STATE_IMPORT_STORAGE_ROOT=/home/observe/stellarbeat-data/full-history/typed
+Environment=FULL_HISTORY_STATE_EXPORT_EXECUTABLE=/home/observe/stellarbeat-data/Observer/apps/full-history-etl/bin/stellaratlas-full-history-state-export
+Environment=FULL_HISTORY_STATE_IMPORT_WORKERS=4
+Environment=FULL_HISTORY_STATE_IMPORT_INSERT_ROWS=250
+Environment=FULL_HISTORY_STATE_IMPORT_LEASE_MS=600000
+Environment=FULL_HISTORY_STATE_EXPORT_TIMEOUT_MS=1800000
+Environment=FULL_HISTORY_STATE_IMPORT_IDLE_POLL_MS=15000
+Environment=FULL_HISTORY_STATE_IMPORT_ERROR_BACKOFF_MS=30000
+EnvironmentFile=-/etc/stellaratlas/stellaratlas.env
+ExecStartPre=/usr/bin/test -x /home/observe/stellarbeat-data/Observer/apps/full-history-etl/bin/stellaratlas-full-history-state-export
+ExecStartPre=/usr/bin/test -d /home/observe/stellarbeat-data/full-history/typed
+ExecStartPre=/usr/bin/test -r /home/observe/stellarbeat-data/full-history/typed
+ExecStartPre=/usr/bin/test -x /home/observe/stellarbeat-data/full-history/typed
+ExecStart=/usr/bin/env pnpm start:full-history-state-import
+Restart=on-failure
+RestartSec=15s
+RestartSteps=5
+RestartMaxDelaySec=5min
+TimeoutStopSec=120
+KillSignal=SIGTERM
+CPUQuota=800%
+CPUWeight=50
+IOWeight=50
+Nice=5
+LimitNOFILE=8192
+LimitCORE=0
+TasksMax=64
+MemoryMax=32G
+MemorySwapMax=0
+NoNewPrivileges=true
+
+[Install]
+WantedBy=stellaratlas.target

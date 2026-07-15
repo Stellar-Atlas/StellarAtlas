@@ -2,7 +2,7 @@
 Description=StellarAtlas production services
 Documentation=https://github.com/Stellar-Atlas/StellarAtlas
 RequiresMountsFor=/home/observe/stellarbeat-data/Observer
-Wants=network-online.target stellaratlas-meilisearch-network.service stellaratlas-api.service stellaratlas-frontend-v4.service stellaratlas-frontend-legacy.service stellaratlas-network-scanner.service stellaratlas-scp-live-scanner.service stellaratlas-users.service stellaratlas-history-scanner@1.service stellaratlas-full-history-promotion.service stellaratlas-full-history-operation-backfill.service stellaratlas-full-history-ledger-close-meta.service
+Wants=network-online.target stellaratlas-meilisearch-network.service stellaratlas-api.service stellaratlas-frontend-v4.service stellaratlas-frontend-legacy.service stellaratlas-network-scanner.service stellaratlas-scp-live-scanner.service stellaratlas-users.service stellaratlas-history-scanner@1.service stellaratlas-full-history-promotion.service stellaratlas-full-history-operation-backfill.service stellaratlas-full-history-ledger-close-meta.service stellaratlas-full-history-state-import.service
 After=network-online.target
 Conflicts=stellaratlas.service
 
