@@ -36,6 +36,16 @@ describe('status WebSocket contract', () => {
 			lastLedger: '130',
 			nextLedger: '131'
 		});
+		expect(
+			message.payload.fullHistory.ledgerCloseMeta?.outputs.map(
+				(output) => output.dataset
+			)
+		).toEqual(
+			expect.arrayContaining([
+				'account-state-changes',
+				'trustline-state-changes'
+			])
+		);
 	});
 
 	it('accepts a rolling-deploy snapshot without decoded history coverage', () => {
@@ -47,6 +57,35 @@ describe('status WebSocket contract', () => {
 		expect(message?.type).toBe('status');
 		if (message?.type !== 'status') return;
 		expect(message.payload.fullHistory.ledgerCloseMeta).toBeNull();
+	});
+
+	it('accepts the legacy eight-dataset LedgerCloseMeta summary', () => {
+		const payload = createStatusLivePayload();
+		const fullHistory = asRecord(payload.fullHistory);
+		const coverage = asRecord(fullHistory.ledgerCloseMeta);
+		coverage.outputs = [
+			'ledger-close-meta',
+			'ledgers',
+			'transactions',
+			'operations',
+			'transaction-results',
+			'transaction-meta',
+			'contract-events',
+			'ledger-entry-changes'
+		].map((dataset) => ({
+			batchCount: 2,
+			dataset,
+			outputBytes: '4096',
+			recordCount: '128',
+			schemaVersions: ['legacy']
+		}));
+
+		const message = parseStatusLiveMessage({ payload, type: 'status' });
+		expect(message?.type).toBe('status');
+		if (message?.type !== 'status') return;
+		expect(message.payload.fullHistory.ledgerCloseMeta?.outputs).toHaveLength(
+			8
+		);
 	});
 
 	it('rejects non-canonical source digests', () => {

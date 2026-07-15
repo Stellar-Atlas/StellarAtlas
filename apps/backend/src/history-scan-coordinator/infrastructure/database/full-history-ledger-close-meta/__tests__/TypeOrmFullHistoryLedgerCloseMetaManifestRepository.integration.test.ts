@@ -23,6 +23,8 @@ import {
 import { StellarLedgerCloseMetaBatchDecoder } from '../../../full-history-ledger-close-meta/StellarLedgerCloseMetaBatchDecoder.js';
 import { ledgerCloseMetaBatchFixture } from '../../../full-history-ledger-close-meta/__tests__/LedgerCloseMetaBatchTestFixture.js';
 import { FullHistoryLedgerCloseMetaRetentionMigration1785070000000 } from '../../migrations/1785070000000-FullHistoryLedgerCloseMetaRetentionMigration.js';
+import { FullHistoryLedgerCloseMetaCompleteProjectionMigration1785110000000 } from '../../migrations/1785110000000-FullHistoryLedgerCloseMetaCompleteProjectionMigration.js';
+import { FullHistoryLedgerCloseMetaStateProjectionMigration1785120000000 } from '../../migrations/1785120000000-FullHistoryLedgerCloseMetaStateProjectionMigration.js';
 import { TypeOrmFullHistoryLedgerCloseMetaManifestRepository } from '../TypeOrmFullHistoryLedgerCloseMetaManifestRepository.js';
 
 jest.setTimeout(60_000);
@@ -44,6 +46,12 @@ describe('TypeOrmFullHistoryLedgerCloseMetaManifestRepository', () => {
 		await runner.connect();
 		await runner.startTransaction();
 		await new FullHistoryLedgerCloseMetaRetentionMigration1785070000000().up(
+			runner
+		);
+		await new FullHistoryLedgerCloseMetaCompleteProjectionMigration1785110000000().up(
+			runner
+		);
+		await new FullHistoryLedgerCloseMetaStateProjectionMigration1785120000000().up(
 			runner
 		);
 		await runner.commitTransaction();
@@ -92,7 +100,7 @@ describe('TypeOrmFullHistoryLedgerCloseMetaManifestRepository', () => {
 				watermarkVersion: 1
 			})
 		);
-		await expect(repository.readStoredBytes()).resolves.toBe(400n);
+		await expect(repository.readStoredBytes()).resolves.toBe(500n);
 	});
 
 	it('stores a near-tip gap without overstating contiguous coverage', async () => {
@@ -174,7 +182,8 @@ describe('TypeOrmFullHistoryLedgerCloseMetaManifestRepository', () => {
 							: 'typed-projection',
 					recordCount:
 						dataset === 'ledger-close-meta' || dataset === 'ledgers' ? 64 : 0,
-					schemaVersion: FULL_HISTORY_LEDGER_CLOSE_META_SCHEMA_VERSIONS[dataset],
+					schemaVersion:
+						FULL_HISTORY_LEDGER_CLOSE_META_SCHEMA_VERSIONS[dataset],
 					sha256: digest(seed + 1),
 					storageKey: `typed/${source.sourceId}/${sequence}/${dataset}`
 				})),

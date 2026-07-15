@@ -109,11 +109,29 @@ export function createStatusLivePayload(): Record<string, unknown> {
 				nextLedger: '131',
 				outputs: [
 					{
+						batchCount: 1,
+						dataset: 'account-state-changes',
+						outputBytes: '2048',
+						recordCount: '125',
+						schemaVersions: [
+							'stellar-atlas.full-history.account-state-changes.v1'
+						]
+					},
+					{
 						batchCount: 2,
 						dataset: 'transactions',
 						outputBytes: '4096',
 						recordCount: '250',
 						schemaVersions: ['3']
+					},
+					{
+						batchCount: 1,
+						dataset: 'trustline-state-changes',
+						outputBytes: '1024',
+						recordCount: '75',
+						schemaVersions: [
+							'stellar-atlas.full-history.trustline-state-changes.v1'
+						]
 					}
 				],
 				sourceCount: 1,

@@ -16,12 +16,13 @@ type changeCounts struct {
 }
 
 type changeContext struct {
-	reason            string
-	ledgerSequence    int64
-	operationIndex    int64
-	hasOperationIndex bool
-	upgradeIndex      int64
-	hasUpgradeIndex   bool
+	reason             string
+	ledgerSequence     int64
+	closedAtUnixMillis int64
+	operationIndex     int64
+	hasOperationIndex  bool
+	upgradeIndex       int64
+	hasUpgradeIndex    bool
 }
 
 func (p *Processor) writeTransactionChanges(transaction *ledgerTransaction, transactionHash string) (changeCounts, error) {
@@ -106,13 +107,18 @@ func (p *Processor) writeMetaV2Groups(
 }
 
 func (p *Processor) writeUpgradeChanges(meta xdr.LedgerCloseMeta) error {
+	closedAt, err := unixMillis(uint64(meta.LedgerCloseTime()))
+	if err != nil {
+		return err
+	}
 	changeIndex := int64(0)
 	for index, upgrade := range meta.UpgradesProcessing() {
-		_, err := p.writeChangeGroup(nil, "", &changeIndex, upgrade.Changes, changeContext{
-			reason:          "upgrade",
-			ledgerSequence:  int64(meta.LedgerSequence()),
-			upgradeIndex:    int64(index + 1),
-			hasUpgradeIndex: true,
+		_, err = p.writeChangeGroup(nil, "", &changeIndex, upgrade.Changes, changeContext{
+			reason:             "upgrade",
+			ledgerSequence:     int64(meta.LedgerSequence()),
+			closedAtUnixMillis: closedAt,
+			upgradeIndex:       int64(index + 1),
+			hasUpgradeIndex:    true,
 		})
 		if err != nil {
 			return fmt.Errorf("upgrade %d changes: %w", index+1, err)
@@ -132,19 +138,21 @@ func (p *Processor) writeChangeGroup(
 	if err != nil {
 		return 0, err
 	}
+	sequence := context.ledgerSequence
+	transactionIndex := int64(0)
+	closedAtUnixMillis := context.closedAtUnixMillis
+	if transaction != nil {
+		sequence = int64(transaction.Ledger.LedgerSequence())
+		transactionIndex = int64(transaction.Index)
+		closedAtUnixMillis, err = unixMillis(uint64(transaction.Ledger.LedgerCloseTime()))
+		if err != nil {
+			return 0, err
+		}
+	} else if sequence == 0 {
+		return 0, fmt.Errorf("upgrade change is missing ledger sequence context")
+	}
 	for _, change := range changes {
 		*changeIndex = *changeIndex + 1
-		sequence := int64(0)
-		transactionIndex := int64(0)
-		if transaction != nil {
-			sequence = int64(transaction.Ledger.LedgerSequence())
-			transactionIndex = int64(transaction.Index)
-		} else {
-			sequence = context.ledgerSequence
-		}
-		if sequence == 0 && transaction == nil {
-			return 0, fmt.Errorf("upgrade change is missing ledger sequence context")
-		}
 		key, err := change.ledgerKey()
 		if err != nil {
 			return 0, fmt.Errorf("derive ledger key: %w", err)
@@ -187,6 +195,9 @@ func (p *Processor) writeChangeGroup(
 			return 0, err
 		}
 		if err := p.outputs.LedgerEntryChanges.Write(row); err != nil {
+			return 0, err
+		}
+		if err := p.writeStateChangeProjection(change, row, closedAtUnixMillis); err != nil {
 			return 0, err
 		}
 	}

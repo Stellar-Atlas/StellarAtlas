@@ -1,14 +1,18 @@
-import { createHash, randomBytes, randomUUID } from 'node:crypto';
+import { randomBytes, randomUUID } from 'node:crypto';
 import { DataSource, type EntityManager } from 'typeorm';
 import {
 	startDisposablePostgres,
 	type DisposablePostgres
 } from '@test-support/DisposablePostgres.js';
-import {
-	FULL_HISTORY_LEDGER_CLOSE_META_DATASETS, FULL_HISTORY_LEDGER_CLOSE_META_SCHEMA_VERSIONS,
-	type FullHistoryLedgerCloseMetaDataset
-} from '../../../../domain/full-history-ledger-close-meta/FullHistoryLedgerCloseMetaProcessing.js';
+import { FULL_HISTORY_LEDGER_CLOSE_META_CORE_DATASETS } from '../../../../domain/full-history-ledger-close-meta/FullHistoryLedgerCloseMetaProcessing.js';
 import { FullHistoryLedgerCloseMetaRetentionMigration1785070000000 } from '../1785070000000-FullHistoryLedgerCloseMetaRetentionMigration.js';
+import {
+	ledgerHash,
+	legacySchemaVersions,
+	type BatchFixture,
+	type DatasetFixtureOptions,
+	type SourceFixture
+} from './FullHistoryLedgerCloseMetaRetentionMigrationFixtures.js';
 jest.setTimeout(60_000);
 describe('FullHistoryLedgerCloseMetaRetentionMigration1785070000000', () => {
 	let dataSource: DataSource;
@@ -432,7 +436,7 @@ describe('FullHistoryLedgerCloseMetaRetentionMigration1785070000000', () => {
 		seed: number,
 		options: DatasetFixtureOptions = {}
 	): Promise<void> {
-		for (const dataset of FULL_HISTORY_LEDGER_CLOSE_META_DATASETS) {
+		for (const dataset of FULL_HISTORY_LEDGER_CLOSE_META_CORE_DATASETS) {
 			if (dataset === options.skip) continue;
 			const canonical = dataset === 'ledger-close-meta';
 			const misrepresented = dataset === options.misrepresent;
@@ -450,7 +454,7 @@ describe('FullHistoryLedgerCloseMetaRetentionMigration1785070000000', () => {
 						? 'application/x-stellar-ledger-close-meta-batch+xdr+zstd'
 						: 'application/vnd.apache.parquet',
 					canonical ? 'lossless-replay' : 'typed-projection',
-					FULL_HISTORY_LEDGER_CLOSE_META_SCHEMA_VERSIONS[dataset],
+					legacySchemaVersions[dataset],
 					dataset === 'ledger-close-meta' || dataset === 'ledgers'
 						? ledgerCount
 						: dataset === 'transactions' ||
@@ -475,25 +479,3 @@ describe('FullHistoryLedgerCloseMetaRetentionMigration1785070000000', () => {
 		return rows.map((row) => row.columnName);
 	}
 });
-
-interface SourceFixture {
-	readonly configDigest: Buffer;
-	readonly id: string;
-	readonly networkHash: Buffer;
-}
-interface BatchFixture {
-	readonly batchId: string;
-	readonly endLedger: number;
-	readonly firstPreviousLedgerHash?: Buffer;
-	readonly misrepresent?: FullHistoryLedgerCloseMetaDataset;
-	readonly seed: number;
-	readonly sourceHashGapAt?: number;
-	readonly startLedger: number;
-}
-interface DatasetFixtureOptions {
-	readonly misrepresent?: FullHistoryLedgerCloseMetaDataset;
-	readonly skip?: FullHistoryLedgerCloseMetaDataset;
-}
-function ledgerHash(sequence: number): Buffer {
-	return createHash('sha256').update(`fixture-ledger:${sequence}`).digest();
-}

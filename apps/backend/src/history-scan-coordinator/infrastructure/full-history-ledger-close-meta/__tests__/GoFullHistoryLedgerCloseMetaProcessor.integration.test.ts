@@ -47,6 +47,7 @@ describeWithBinary('GoFullHistoryLedgerCloseMetaProcessor', () => {
 		);
 
 		expect(first.outputs.map((output) => output.dataset).sort()).toEqual([
+			'account-state-changes',
 			'contract-events',
 			'ledger-close-meta',
 			'ledger-entry-changes',
@@ -54,7 +55,8 @@ describeWithBinary('GoFullHistoryLedgerCloseMetaProcessor', () => {
 			'operations',
 			'transaction-meta',
 			'transaction-results',
-			'transactions'
+			'transactions',
+			'trustline-state-changes'
 		]);
 		expect(replay).toEqual(first);
 		expect(first.sourceDisposition).toBe('discarded-after-processing');

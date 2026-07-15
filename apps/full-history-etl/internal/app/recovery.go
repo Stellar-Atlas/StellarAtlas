@@ -73,7 +73,7 @@ func validateRecoveredManifest(
 	storageDirectory, publishPath string,
 ) error {
 	expected := newManifest(config, evidence, nil)
-	if manifest.ManifestVersion != manifestVersion {
+	if !isSupportedManifestVersion(manifest.ManifestVersion) {
 		return fmt.Errorf("unsupported manifest version %q", manifest.ManifestVersion)
 	}
 	createdAt, err := time.Parse(time.RFC3339Nano, manifest.CreatedAt)
@@ -104,7 +104,11 @@ func validateRecoveredManifest(
 	if !reflect.DeepEqual(manifest.Format, expected.Format) {
 		return fmt.Errorf("typed output format does not match this transformer")
 	}
-	if !reflect.DeepEqual(manifest.Unsupported, expected.Unsupported) {
+	expectedUnsupported, err := unsupportedDatasetsForVersion(manifest.ManifestVersion)
+	if err != nil {
+		return err
+	}
+	if !reflect.DeepEqual(manifest.Unsupported, expectedUnsupported) {
 		return fmt.Errorf("unsupported dataset declaration does not match this transformer")
 	}
 	return validateRecoveredOutputs(manifest, storageDirectory, publishPath)
@@ -191,7 +195,10 @@ func validateRecoveredSources(manifest Manifest) error {
 }
 
 func validateRecoveredOutputs(manifest Manifest, storageDirectory, publishPath string) error {
-	specifications := output.Specifications()
+	specifications, err := outputSpecificationsForVersion(manifest.ManifestVersion)
+	if err != nil {
+		return err
+	}
 	if len(manifest.Outputs) != len(specifications) {
 		return fmt.Errorf("manifest has %d outputs, expected %d", len(manifest.Outputs), len(specifications))
 	}

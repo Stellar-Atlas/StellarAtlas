@@ -19,6 +19,7 @@ import {
 const validateLedgerCloseMetaOutput = matches({
 	batchCount: nonNegativeInteger,
 	dataset: oneOf(
+		'account-state-changes',
 		'contract-events',
 		'ledger-close-meta',
 		'ledger-entry-changes',
@@ -26,7 +27,8 @@ const validateLedgerCloseMetaOutput = matches({
 		'operations',
 		'transaction-meta',
 		'transaction-results',
-		'transactions'
+		'transactions',
+		'trustline-state-changes'
 	),
 	outputBytes: unsignedIntegerString,
 	recordCount: unsignedIntegerString,
@@ -40,7 +42,7 @@ const validateLedgerCloseMetaCoverage = matches({
 	lastLedger: nullable(unsignedIntegerString),
 	ledgerCount: unsignedIntegerString,
 	nextLedger: unsignedIntegerString,
-	outputs: arrayOf(validateLedgerCloseMetaOutput, 8),
+	outputs: arrayOf(validateLedgerCloseMetaOutput, 10),
 	sourceCount: nonNegativeInteger,
 	updatedAt: dateTime
 });

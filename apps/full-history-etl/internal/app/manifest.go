@@ -18,7 +18,7 @@ import (
 
 const (
 	manifestFilename = "manifest.json"
-	manifestVersion  = "stellar-atlas.full-history-etl.manifest.v7"
+	manifestVersion  = manifestVersionV8
 	inputMediaType   = "application/x-stellar-ledger-close-meta-batch+xdr+zstd"
 	maxManifestBytes = 4 << 20
 )
@@ -118,26 +118,8 @@ func newManifest(config Config, evidence ShardEvidence, descriptors []output.Des
 			MaxLedgers:            config.MaxLedgers,
 			MaxRows:               config.MaxRows,
 		},
-		Outputs: descriptors,
-		Unsupported: []string{
-			"ledger-close-upgrades-and-extension-values",
-			"transaction-envelope-details",
-			"operation-result-details",
-			"effects",
-			"accounts",
-			"assets",
-			"trustlines",
-			"offers",
-			"liquidity-pools",
-			"contracts",
-			"contract-data-values",
-			"contract-code-values",
-			"operation-type-details",
-			"transaction-meta-values",
-			"ttl-entries",
-			"config-settings",
-			"restored-keys",
-		},
+		Outputs:     descriptors,
+		Unsupported: append([]string{}, unsupportedV8...),
 	}
 }
 

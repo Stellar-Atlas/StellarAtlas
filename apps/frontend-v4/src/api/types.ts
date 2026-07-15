@@ -357,6 +357,7 @@ export interface PublicFullHistoryLedgerCloseMetaCoverage {
 export interface PublicFullHistoryLedgerCloseMetaOutputCoverage {
 	readonly batchCount: number;
 	readonly dataset:
+		| 'account-state-changes'
 		| 'contract-events'
 		| 'ledger-close-meta'
 		| 'ledger-entry-changes'
@@ -364,7 +365,8 @@ export interface PublicFullHistoryLedgerCloseMetaOutputCoverage {
 		| 'operations'
 		| 'transaction-meta'
 		| 'transaction-results'
-		| 'transactions';
+		| 'transactions'
+		| 'trustline-state-changes';
 	readonly outputBytes: string;
 	readonly recordCount: string;
 	readonly schemaVersions: readonly string[];

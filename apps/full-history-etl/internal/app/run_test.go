@@ -32,19 +32,28 @@ func TestRunPublishesTypedParquetAndRecoversExactReplay(t *testing.T) {
 	}
 
 	wantCounts := map[string]uint64{
-		"ledger-close-meta":    1,
-		"ledgers":              1,
-		"transactions":         163,
-		"transaction-results":  163,
-		"transaction-meta":     163,
-		"operations":           234,
-		"contract-events":      21,
-		"ledger-entry-changes": 879,
+		"ledger-close-meta":       1,
+		"ledgers":                 1,
+		"transactions":            163,
+		"transaction-results":     163,
+		"transaction-meta":        163,
+		"operations":              234,
+		"contract-events":         21,
+		"ledger-entry-changes":    879,
+		"account-state-changes":   501,
+		"trustline-state-changes": 187,
+	}
+	wantOutputOrder := []string{
+		"ledger-close-meta", "ledgers", "transactions", "operations", "transaction-results",
+		"transaction-meta", "contract-events", "ledger-entry-changes", "account-state-changes", "trustline-state-changes",
 	}
 	if len(receipt.Outputs) != len(wantCounts) {
 		t.Fatalf("got %d outputs, expected %d", len(receipt.Outputs), len(wantCounts))
 	}
-	for _, descriptor := range receipt.Outputs {
+	for index, descriptor := range receipt.Outputs {
+		if descriptor.Dataset != wantOutputOrder[index] {
+			t.Fatalf("output %d is %q, expected %q", index, descriptor.Dataset, wantOutputOrder[index])
+		}
 		wantCount, supported := wantCounts[descriptor.Dataset]
 		if !supported {
 			t.Fatalf("unexpected dataset %q", descriptor.Dataset)
@@ -113,7 +122,7 @@ func TestRunPublishesTypedParquetAndRecoversExactReplay(t *testing.T) {
 	if err := json.Unmarshal(manifestBytes, &manifest); err != nil {
 		t.Fatalf("decode manifest: %v", err)
 	}
-	if manifest.ManifestVersion != "stellar-atlas.full-history-etl.manifest.v7" {
+	if manifest.ManifestVersion != "stellar-atlas.full-history-etl.manifest.v8" {
 		t.Fatalf("unexpected manifest version: %s", manifest.ManifestVersion)
 	}
 	for _, descriptor := range manifest.Outputs {
@@ -126,12 +135,37 @@ func TestRunPublishesTypedParquetAndRecoversExactReplay(t *testing.T) {
 			if descriptor.SchemaVersion != "stellar-atlas.full-history.ledger-entry-changes.v3" {
 				t.Fatalf("ledger entry change projection is not schema v3: %s", descriptor.SchemaVersion)
 			}
+		case "account-state-changes":
+			if descriptor.SchemaVersion != "stellar-atlas.full-history.account-state-changes.v1" {
+				t.Fatalf("account state change projection is not schema v1: %s", descriptor.SchemaVersion)
+			}
+		case "trustline-state-changes":
+			if descriptor.SchemaVersion != "stellar-atlas.full-history.trustline-state-changes.v1" {
+				t.Fatalf("trustline state change projection is not schema v1: %s", descriptor.SchemaVersion)
+			}
 		}
 	}
-	for _, unsupported := range manifest.Unsupported {
-		if unsupported == "contract-event-topics-and-data" || unsupported == "ledger-entry-keys-and-values" {
-			t.Fatalf("complete typed projection remains marked unsupported: %s", unsupported)
-		}
+	wantUnsupported := []string{
+		"ledger-close-upgrades-and-extension-values",
+		"transaction-envelope-details",
+		"operation-result-details",
+		"effects",
+		"account-current-state-and-signers",
+		"assets",
+		"trustline-current-state",
+		"offers",
+		"liquidity-pools",
+		"contracts",
+		"contract-data-values",
+		"contract-code-values",
+		"operation-type-details",
+		"transaction-meta-values",
+		"ttl-entries",
+		"config-settings",
+		"restored-keys",
+	}
+	if !reflect.DeepEqual(manifest.Unsupported, wantUnsupported) {
+		t.Fatalf("unexpected unsupported datasets: %v", manifest.Unsupported)
 	}
 	if !reflect.DeepEqual(manifest.Outputs, receipt.Outputs) || !reflect.DeepEqual(manifest.SourceObjects, receipt.SourceObjects) || manifest.Range != receipt.Range {
 		t.Fatalf("receipt does not map directly to stored manifest")
@@ -144,9 +178,6 @@ func TestRunPublishesTypedParquetAndRecoversExactReplay(t *testing.T) {
 		if !bytes.Contains(encoded, []byte(`"sourceObjects"`)) || bytes.Contains(encoded, []byte(`"sources"`)) {
 			t.Fatalf("%s does not use the sourceObjects JSON contract", name)
 		}
-	}
-	if !reflect.DeepEqual(manifest.Unsupported, newManifest(fixtureConfig(root, outputDirectory), ShardEvidence{}, nil).Unsupported) {
-		t.Fatalf("unexpected unsupported datasets: %v", manifest.Unsupported)
 	}
 	assertPublishedFileSet(t, outputDirectory, len(wantCounts)+1)
 

@@ -6,11 +6,33 @@ import {
 } from '../../domain/full-history-ledger-close-meta/FullHistoryLedgerCloseMetaBatch.js';
 import {
 	FULL_HISTORY_LEDGER_CLOSE_META_DATASETS,
-	FULL_HISTORY_LEDGER_CLOSE_META_SCHEMA_VERSIONS,
 	isValidFullHistoryLedgerCloseMetaOutputSet,
 	type FullHistoryLedgerCloseMetaDataset,
 	type FullHistoryLedgerCloseMetaDatasetOutput
 } from '../../domain/full-history-ledger-close-meta/FullHistoryLedgerCloseMetaProcessing.js';
+import {
+	assertLedgerCloseMetaManifestProjection,
+	expectedUnsupportedLedgerCloseMetaDatasets,
+	goFullHistoryLedgerCloseMetaManifestVersion,
+	type GoFullHistoryLedgerCloseMetaManifestVersion
+} from './GoFullHistoryLedgerCloseMetaManifestContract.js';
+import {
+	boundedString,
+	exactObjectValue,
+	exactString,
+	exactStringArray,
+	parseManifestCreatedAt,
+	parseManifestFormat,
+	parseManifestLimits,
+	safeInteger,
+	type GoFullHistoryLedgerCloseMetaFormat,
+	type GoFullHistoryLedgerCloseMetaLimits
+} from './GoFullHistoryLedgerCloseMetaManifestMetadata.js';
+
+export type {
+	GoFullHistoryLedgerCloseMetaFormat,
+	GoFullHistoryLedgerCloseMetaLimits
+} from './GoFullHistoryLedgerCloseMetaManifestMetadata.js';
 
 export interface GoFullHistoryLedgerCloseMetaReceipt extends GoFullHistoryLedgerCloseMetaCore {
 	readonly manifestSha256: FullHistoryLedgerCloseMetaSha256Digest;
@@ -18,8 +40,10 @@ export interface GoFullHistoryLedgerCloseMetaReceipt extends GoFullHistoryLedger
 }
 
 export interface GoFullHistoryLedgerCloseMetaManifest extends GoFullHistoryLedgerCloseMetaCore {
+	readonly createdAt: string;
 	readonly format: GoFullHistoryLedgerCloseMetaFormat;
-	readonly manifestVersion: string;
+	readonly limits: GoFullHistoryLedgerCloseMetaLimits;
+	readonly manifestVersion: GoFullHistoryLedgerCloseMetaManifestVersion;
 	readonly unsupportedDatasets: readonly string[];
 }
 
@@ -29,16 +53,6 @@ export interface GoFullHistoryLedgerCloseMetaCore {
 	readonly outputs: readonly FullHistoryLedgerCloseMetaDatasetOutput[];
 	readonly range: FullHistoryLedgerCloseMetaRange;
 	readonly sourceObjects: readonly GoFullHistoryLedgerCloseMetaSourceObjectEvidence[];
-}
-
-export interface GoFullHistoryLedgerCloseMetaFormat {
-	readonly canonicalLedgerCloseMetaEncoding: 'xdr+zstd';
-	readonly name: 'stellar-atlas-full-history-shard';
-	readonly parquetCompression: 'zstd';
-	readonly parquetWriter: 'github.com/xitongsys/parquet-go@v1.6.2';
-	readonly partitionColumns: readonly ['ledger_sequence'];
-	readonly stellarSdk: 'github.com/stellar/go-stellar-sdk@v0.6.0';
-	readonly stellarXdrCommit: '68fa1ac55692f68ad2a2ca549d0a283273554439';
 }
 
 export interface GoFullHistoryLedgerCloseMetaSourceObjectEvidence {
@@ -60,42 +74,59 @@ export interface GoFullHistoryLedgerCloseMetaNetwork {
 const datasets = new Set<FullHistoryLedgerCloseMetaDataset>([
 	...FULL_HISTORY_LEDGER_CLOSE_META_DATASETS
 ]);
-const legacyManifestVersion =
-	'stellar-atlas.full-history-etl.manifest.v6' as const;
-const currentManifestVersion =
-	'stellar-atlas.full-history-etl.manifest.v7' as const;
 const expectedInputMediaType =
 	'application/x-stellar-ledger-close-meta-batch+xdr+zstd' as const;
-const currentUnsupportedDatasets = [
-	'ledger-close-upgrades-and-extension-values',
-	'transaction-envelope-details',
-	'operation-result-details',
-	'effects',
-	'accounts',
-	'assets',
-	'trustlines',
-	'offers',
-	'liquidity-pools',
-	'contracts',
-	'contract-data-values',
-	'contract-code-values',
-	'operation-type-details',
-	'transaction-meta-values',
-	'ttl-entries',
-	'config-settings',
-	'restored-keys'
+const maximumSourceObjects = 1_024;
+const receiptKeys = [
+	'manifestSha256',
+	'manifestStorageKey',
+	'network',
+	'range',
+	'inputMediaType',
+	'sourceObjects',
+	'outputs'
 ] as const;
-const legacyUnsupportedDatasets = [
-	...currentUnsupportedDatasets.slice(0, 12),
-	'contract-event-topics-and-data',
-	'ledger-entry-keys-and-values',
-	...currentUnsupportedDatasets.slice(12)
+const manifestKeys = [
+	'manifestVersion',
+	'createdAt',
+	'network',
+	'range',
+	'inputMediaType',
+	'sourceObjects',
+	'format',
+	'limits',
+	'outputs',
+	'unsupportedDatasets'
+] as const;
+const networkKeys = ['name', 'networkIdSha256'] as const;
+const rangeKeys = ['startLedger', 'endLedger', 'ledgerCount'] as const;
+const sourceObjectKeys = [
+	'objectKey',
+	'startLedger',
+	'endLedger',
+	'ledgerCount',
+	'compressedByteCount',
+	'compressedSha256',
+	'firstPreviousLedgerHash',
+	'lastLedgerHash',
+	'xdrByteCount',
+	'xdrSha256'
+] as const;
+const outputKeys = [
+	'byteCount',
+	'dataset',
+	'mediaType',
+	'recordCount',
+	'representation',
+	'schemaVersion',
+	'sha256',
+	'storageKey'
 ] as const;
 
 export function parseGoFullHistoryLedgerCloseMetaReceipt(
 	value: unknown
 ): GoFullHistoryLedgerCloseMetaReceipt {
-	const row = objectValue(value, 'processing receipt');
+	const row = exactObjectValue(value, 'processing receipt', receiptKeys);
 	return Object.freeze({
 		...parseCore(row),
 		manifestSha256: digestValue(row.manifestSha256, 'manifestSha256'),
@@ -110,63 +141,26 @@ export function parseGoFullHistoryLedgerCloseMetaReceipt(
 export function parseGoFullHistoryLedgerCloseMetaManifest(
 	value: unknown
 ): GoFullHistoryLedgerCloseMetaManifest {
-	const row = objectValue(value, 'processing manifest');
+	const row = exactObjectValue(value, 'processing manifest', manifestKeys);
 	const core = parseCore(row);
-	const manifestVersion = parseManifestVersion(row.manifestVersion);
-	assertManifestProjectionSchemas(manifestVersion, core.outputs);
+	const limits = parseManifestLimits(row.limits);
+	assertManifestLimits(core, limits);
+	const manifestVersion = goFullHistoryLedgerCloseMetaManifestVersion(
+		row.manifestVersion
+	);
+	assertLedgerCloseMetaManifestProjection(manifestVersion, core.outputs);
 	return Object.freeze({
 		...core,
-		format: parseFormat(row.format),
+		createdAt: parseManifestCreatedAt(row.createdAt),
+		format: parseManifestFormat(row.format),
+		limits,
 		manifestVersion,
 		unsupportedDatasets: exactStringArray(
 			row.unsupportedDatasets,
 			'unsupportedDatasets',
-			manifestVersion === legacyManifestVersion
-				? legacyUnsupportedDatasets
-				: currentUnsupportedDatasets
+			expectedUnsupportedLedgerCloseMetaDatasets(manifestVersion)
 		)
 	});
-}
-
-function parseManifestVersion(
-	value: unknown
-): typeof legacyManifestVersion | typeof currentManifestVersion {
-	if (value === legacyManifestVersion || value === currentManifestVersion) {
-		return value;
-	}
-	throw new TypeError('manifestVersion is not compatible with this service');
-}
-
-function assertManifestProjectionSchemas(
-	manifestVersion: typeof legacyManifestVersion | typeof currentManifestVersion,
-	outputs: readonly FullHistoryLedgerCloseMetaDatasetOutput[]
-): void {
-	const expected =
-		manifestVersion === legacyManifestVersion
-			? {
-					'contract-events':
-						'stellar-atlas.full-history.contract-events.v2',
-					'ledger-entry-changes':
-						'stellar-atlas.full-history.ledger-entry-changes.v2'
-				}
-			: {
-					'contract-events':
-						FULL_HISTORY_LEDGER_CLOSE_META_SCHEMA_VERSIONS['contract-events'],
-					'ledger-entry-changes':
-						FULL_HISTORY_LEDGER_CLOSE_META_SCHEMA_VERSIONS[
-							'ledger-entry-changes'
-						]
-				};
-	for (const dataset of ['contract-events', 'ledger-entry-changes'] as const) {
-		if (
-			outputs.find((output) => output.dataset === dataset)?.schemaVersion !==
-			expected[dataset]
-		) {
-			throw new TypeError(
-				`${dataset} schema is not compatible with ${manifestVersion}`
-			);
-		}
-	}
 }
 
 export function processingManifestIdentity(
@@ -186,16 +180,20 @@ export function processingManifestIdentity(
 function parseCore(
 	row: Readonly<Record<string, unknown>>
 ): GoFullHistoryLedgerCloseMetaCore {
-	const networkRow = objectValue(row.network, 'network');
+	const networkRow = exactObjectValue(row.network, 'network', networkKeys);
 	const range = parseRange(row.range, 'range');
 	const outputsValue = row.outputs;
 	if (!Array.isArray(outputsValue) || outputsValue.length === 0) {
 		throw new TypeError('LedgerCloseMeta manifest has no typed outputs');
 	}
 	const sourceValues = row.sourceObjects;
-	if (!Array.isArray(sourceValues) || sourceValues.length === 0) {
+	if (
+		!Array.isArray(sourceValues) ||
+		sourceValues.length === 0 ||
+		sourceValues.length > maximumSourceObjects
+	) {
 		throw new TypeError(
-			'LedgerCloseMeta manifest has no source-object evidence'
+			`LedgerCloseMeta manifest must have 1-${maximumSourceObjects} source-object evidence rows`
 		);
 	}
 	const sourceObjects = Object.freeze(sourceValues.map(parseSourceObject));
@@ -223,82 +221,31 @@ function parseCore(
 	});
 }
 
-function parseFormat(value: unknown): GoFullHistoryLedgerCloseMetaFormat {
-	const row = objectValue(value, 'format');
-	return Object.freeze({
-		canonicalLedgerCloseMetaEncoding: exactString(
-			row.canonicalLedgerCloseMetaEncoding,
-			'format.canonicalLedgerCloseMetaEncoding',
-			'xdr+zstd'
-		),
-		name: exactString(
-			row.name,
-			'format.name',
-			'stellar-atlas-full-history-shard'
-		),
-		parquetCompression: exactString(
-			row.parquetCompression,
-			'format.parquetCompression',
-			'zstd'
-		),
-		parquetWriter: exactString(
-			row.parquetWriter,
-			'format.parquetWriter',
-			'github.com/xitongsys/parquet-go@v1.6.2'
-		),
-		partitionColumns: exactStringArray(
-			row.partitionColumns,
-			'format.partitionColumns',
-			['ledger_sequence'] as const
-		),
-		stellarSdk: exactString(
-			row.stellarSdk,
-			'format.stellarSdk',
-			'github.com/stellar/go-stellar-sdk@v0.6.0'
-		),
-		stellarXdrCommit: exactString(
-			row.stellarXdrCommit,
-			'format.stellarXdrCommit',
-			'68fa1ac55692f68ad2a2ca549d0a283273554439'
-		)
-	});
-}
-
 function parseSourceObject(
 	value: unknown,
 	index: number
 ): GoFullHistoryLedgerCloseMetaSourceObjectEvidence {
-	const row = objectValue(value, `sourceObjects[${index}]`);
+	const field = `sourceObjects[${index}]`;
+	const row = exactObjectValue(value, field, sourceObjectKeys);
 	return Object.freeze({
 		compressedByteCount: safeInteger(
 			row.compressedByteCount,
-			`sourceObjects[${index}].compressedByteCount`,
+			`${field}.compressedByteCount`,
 			1
 		),
 		compressedSha256: digestValue(
 			row.compressedSha256,
-			`sourceObjects[${index}].compressedSha256`
+			`${field}.compressedSha256`
 		),
 		firstPreviousLedgerHash: digestValue(
 			row.firstPreviousLedgerHash,
-			`sourceObjects[${index}].firstPreviousLedgerHash`
+			`${field}.firstPreviousLedgerHash`
 		),
-		lastLedgerHash: digestValue(
-			row.lastLedgerHash,
-			`sourceObjects[${index}].lastLedgerHash`
-		),
-		objectKey: boundedString(
-			row.objectKey,
-			`sourceObjects[${index}].objectKey`,
-			2_048
-		),
-		range: parseRange(row, `sourceObjects[${index}]`),
-		xdrByteCount: safeInteger(
-			row.xdrByteCount,
-			`sourceObjects[${index}].xdrByteCount`,
-			1
-		),
-		xdrSha256: digestValue(row.xdrSha256, `sourceObjects[${index}].xdrSha256`)
+		lastLedgerHash: digestValue(row.lastLedgerHash, `${field}.lastLedgerHash`),
+		objectKey: boundedString(row.objectKey, `${field}.objectKey`, 1_024),
+		range: parseRangeRow(row, field),
+		xdrByteCount: safeInteger(row.xdrByteCount, `${field}.xdrByteCount`, 1),
+		xdrSha256: digestValue(row.xdrSha256, `${field}.xdrSha256`)
 	});
 }
 
@@ -306,35 +253,28 @@ function parseOutput(
 	value: unknown,
 	index: number
 ): FullHistoryLedgerCloseMetaDatasetOutput {
-	const row = objectValue(value, `outputs[${index}]`);
-	const dataset = boundedString(row.dataset, `outputs[${index}].dataset`, 64);
+	const field = `outputs[${index}]`;
+	const row = exactObjectValue(value, field, outputKeys);
+	const dataset = boundedString(row.dataset, `${field}.dataset`, 64);
 	if (!datasets.has(dataset as FullHistoryLedgerCloseMetaDataset)) {
 		throw new TypeError(`Unsupported LedgerCloseMeta dataset ${dataset}`);
 	}
 	return Object.freeze({
-		byteCount: safeInteger(row.byteCount, `outputs[${index}].byteCount`, 1),
+		byteCount: safeInteger(row.byteCount, `${field}.byteCount`, 1),
 		dataset: dataset as FullHistoryLedgerCloseMetaDataset,
-		mediaType: boundedString(row.mediaType, `outputs[${index}].mediaType`, 128),
-		recordCount: safeInteger(
-			row.recordCount,
-			`outputs[${index}].recordCount`,
-			0
-		),
+		mediaType: boundedString(row.mediaType, `${field}.mediaType`, 128),
+		recordCount: safeInteger(row.recordCount, `${field}.recordCount`, 0),
 		representation: representationValue(
 			row.representation,
-			`outputs[${index}].representation`
+			`${field}.representation`
 		),
 		schemaVersion: boundedString(
 			row.schemaVersion,
-			`outputs[${index}].schemaVersion`,
+			`${field}.schemaVersion`,
 			64
 		),
-		sha256: digestValue(row.sha256, `outputs[${index}].sha256`),
-		storageKey: boundedString(
-			row.storageKey,
-			`outputs[${index}].storageKey`,
-			2_048
-		)
+		sha256: digestValue(row.sha256, `${field}.sha256`),
+		storageKey: boundedString(row.storageKey, `${field}.storageKey`, 2_048)
 	});
 }
 
@@ -342,7 +282,14 @@ function parseRange(
 	value: unknown,
 	field: string
 ): FullHistoryLedgerCloseMetaRange {
-	const row = objectValue(value, field);
+	const row = exactObjectValue(value, field, rangeKeys);
+	return parseRangeRow(row, field);
+}
+
+function parseRangeRow(
+	row: Readonly<Record<string, unknown>>,
+	field: string
+): FullHistoryLedgerCloseMetaRange {
 	const startLedger = safeInteger(row.startLedger, `${field}.startLedger`, 1);
 	const endLedger = safeInteger(row.endLedger, `${field}.endLedger`, 1);
 	const range = fullHistoryLedgerCloseMetaRange(startLedger, endLedger);
@@ -359,10 +306,12 @@ function assertSourceCoverage(
 	range: FullHistoryLedgerCloseMetaRange,
 	sources: readonly GoFullHistoryLedgerCloseMetaSourceObjectEvidence[]
 ): void {
+	const objectKeys = new Set<string>();
 	let nextLedger: number = range.startSequence;
 	let previousLedgerHash: FullHistoryLedgerCloseMetaSha256Digest | null = null;
 	for (const source of sources) {
 		if (
+			objectKeys.has(source.objectKey) ||
 			source.range.startSequence !== nextLedger ||
 			(previousLedgerHash !== null &&
 				source.firstPreviousLedgerHash !== previousLedgerHash)
@@ -371,6 +320,7 @@ function assertSourceCoverage(
 				'LedgerCloseMeta source-object evidence is not contiguous by ledger sequence and chain hash'
 			);
 		}
+		objectKeys.add(source.objectKey);
 		nextLedger = source.range.endSequence + 1;
 		previousLedgerHash = source.lastLedgerHash;
 	}
@@ -378,6 +328,49 @@ function assertSourceCoverage(
 		throw new TypeError(
 			'LedgerCloseMeta source objects do not cover the shard'
 		);
+	}
+}
+
+function assertManifestLimits(
+	core: GoFullHistoryLedgerCloseMetaCore,
+	limits: GoFullHistoryLedgerCloseMetaLimits
+): void {
+	if (core.range.ledgerCount > limits.maxLedgers) {
+		throw new TypeError('LedgerCloseMeta range exceeds limits.maxLedgers');
+	}
+	assertAggregateLimit(
+		core.sourceObjects.map((source) => source.compressedByteCount),
+		limits.maxCompressedBytes,
+		'compressed source bytes'
+	);
+	assertAggregateLimit(
+		core.sourceObjects.map((source) => source.xdrByteCount),
+		limits.maxUncompressedBytes,
+		'uncompressed source bytes'
+	);
+	assertAggregateLimit(
+		core.outputs.map((output) => output.byteCount),
+		limits.maxOutputBytes,
+		'output bytes'
+	);
+	assertAggregateLimit(
+		core.outputs.map((output) => output.recordCount),
+		limits.maxRows,
+		'output rows'
+	);
+}
+
+function assertAggregateLimit(
+	values: readonly number[],
+	limit: number,
+	field: string
+): void {
+	let total = 0;
+	for (const value of values) {
+		if (value > limit - total) {
+			throw new TypeError(`LedgerCloseMeta ${field} exceed recorded limits`);
+		}
+		total += value;
 	}
 }
 
@@ -398,54 +391,4 @@ function digestValue(
 	if (typeof value !== 'string')
 		throw new TypeError(`${field} must be a string`);
 	return fullHistoryLedgerCloseMetaSha256Digest(value);
-}
-
-function boundedString(value: unknown, field: string, maximum: number): string {
-	if (typeof value !== 'string' || value.length < 1 || value.length > maximum) {
-		throw new TypeError(`${field} must be a non-empty bounded string`);
-	}
-	return value;
-}
-
-function exactString<const Expected extends string>(
-	value: unknown,
-	field: string,
-	expected: Expected
-): Expected {
-	if (value !== expected) {
-		throw new TypeError(`${field} is not compatible with this service`);
-	}
-	return expected;
-}
-
-function exactStringArray<const Expected extends readonly string[]>(
-	value: unknown,
-	field: string,
-	expected: Expected
-): Expected {
-	if (
-		!Array.isArray(value) ||
-		value.length !== expected.length ||
-		value.some((item, index) => item !== expected[index])
-	) {
-		throw new TypeError(`${field} is not compatible with this service`);
-	}
-	return expected;
-}
-
-function safeInteger(value: unknown, field: string, minimum: number): number {
-	if (!Number.isSafeInteger(value) || (value as number) < minimum) {
-		throw new TypeError(`${field} must be a safe integer >= ${minimum}`);
-	}
-	return value as number;
-}
-
-function objectValue(
-	value: unknown,
-	field: string
-): Readonly<Record<string, unknown>> {
-	if (typeof value !== 'object' || value === null || Array.isArray(value)) {
-		throw new TypeError(`${field} must be an object`);
-	}
-	return value as Readonly<Record<string, unknown>>;
 }

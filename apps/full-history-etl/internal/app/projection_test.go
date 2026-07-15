@@ -50,6 +50,7 @@ func TestCompleteEventAndLedgerEntryChangeProjections(t *testing.T) {
 	if withPre == 0 || withPost == 0 {
 		t.Fatalf("fixture did not exercise both pre and post entry evidence: pre=%d post=%d", withPre, withPost)
 	}
+	assertStateChangeProjections(t, root, receipt, changes)
 
 	replayed, err := Run(context.Background(), config)
 	if err != nil {

@@ -50,6 +50,8 @@ var specifications = [...]Specification{
 	{Dataset: "transaction-meta", Filename: "transaction-meta.parquet", MediaType: ParquetMediaType, Representation: TypedProjectionRepresentation, SchemaVersion: "stellar-atlas.full-history.transaction-meta.v2"},
 	{Dataset: "contract-events", Filename: "contract-events.parquet", MediaType: ParquetMediaType, Representation: TypedProjectionRepresentation, SchemaVersion: "stellar-atlas.full-history.contract-events.v3"},
 	{Dataset: "ledger-entry-changes", Filename: "ledger-entry-changes.parquet", MediaType: ParquetMediaType, Representation: TypedProjectionRepresentation, SchemaVersion: "stellar-atlas.full-history.ledger-entry-changes.v3"},
+	{Dataset: "account-state-changes", Filename: "account-state-changes.parquet", MediaType: ParquetMediaType, Representation: TypedProjectionRepresentation, SchemaVersion: "stellar-atlas.full-history.account-state-changes.v1"},
+	{Dataset: "trustline-state-changes", Filename: "trustline-state-changes.parquet", MediaType: ParquetMediaType, Representation: TypedProjectionRepresentation, SchemaVersion: "stellar-atlas.full-history.trustline-state-changes.v1"},
 }
 
 func Specifications() []Specification {
@@ -63,14 +65,16 @@ func Specifications() []Specification {
 }
 
 type Collection struct {
-	LedgerCloseMeta    *LedgerCloseMetaSink
-	Ledgers            *Sink[model.Ledger]
-	Transactions       *Sink[model.Transaction]
-	Operations         *Sink[model.Operation]
-	TransactionResults *Sink[model.TransactionResult]
-	TransactionMeta    *Sink[model.TransactionMeta]
-	ContractEvents     *Sink[model.ContractEvent]
-	LedgerEntryChanges *Sink[model.LedgerEntryChange]
+	LedgerCloseMeta       *LedgerCloseMetaSink
+	Ledgers               *Sink[model.Ledger]
+	Transactions          *Sink[model.Transaction]
+	Operations            *Sink[model.Operation]
+	TransactionResults    *Sink[model.TransactionResult]
+	TransactionMeta       *Sink[model.TransactionMeta]
+	ContractEvents        *Sink[model.ContractEvent]
+	LedgerEntryChanges    *Sink[model.LedgerEntryChange]
+	AccountStateChanges   *Sink[model.AccountStateChange]
+	TrustlineStateChanges *Sink[model.TrustlineStateChange]
 
 	sinks []lifecycle
 }
@@ -150,6 +154,14 @@ func OpenCollection(directory string, maxBytes int64, startLedger, endLedger uin
 		return nil, err
 	}
 	collection.sinks = append(collection.sinks, collection.LedgerEntryChanges)
+	if collection.AccountStateChanges, err = newSink[model.AccountStateChange](directory, budget, specifications[7]); err != nil {
+		return nil, err
+	}
+	collection.sinks = append(collection.sinks, collection.AccountStateChanges)
+	if collection.TrustlineStateChanges, err = newSink[model.TrustlineStateChange](directory, budget, specifications[8]); err != nil {
+		return nil, err
+	}
+	collection.sinks = append(collection.sinks, collection.TrustlineStateChanges)
 	return collection, nil
 }
 

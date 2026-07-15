@@ -6,14 +6,17 @@ import {
 } from '@test-support/DisposablePostgres.js';
 import {
 	FULL_HISTORY_LEDGER_CLOSE_META_CORE_DATASETS,
-	FULL_HISTORY_LEDGER_CLOSE_META_SCHEMA_VERSIONS
+	FULL_HISTORY_LEDGER_CLOSE_META_DATASETS,
+	FULL_HISTORY_LEDGER_CLOSE_META_SCHEMA_VERSIONS,
+	type FullHistoryLedgerCloseMetaDataset
 } from '../../../../domain/full-history-ledger-close-meta/FullHistoryLedgerCloseMetaProcessing.js';
 import { FullHistoryLedgerCloseMetaRetentionMigration1785070000000 } from '../1785070000000-FullHistoryLedgerCloseMetaRetentionMigration.js';
 import { FullHistoryLedgerCloseMetaCompleteProjectionMigration1785110000000 } from '../1785110000000-FullHistoryLedgerCloseMetaCompleteProjectionMigration.js';
+import { FullHistoryLedgerCloseMetaStateProjectionMigration1785120000000 } from '../1785120000000-FullHistoryLedgerCloseMetaStateProjectionMigration.js';
 
 jest.setTimeout(60_000);
 
-describe('FullHistoryLedgerCloseMetaCompleteProjectionMigration1785110000000', () => {
+describe('FullHistoryLedgerCloseMetaStateProjectionMigration1785120000000', () => {
 	let dataSource: DataSource;
 	let postgres: DisposablePostgres;
 
@@ -25,6 +28,17 @@ describe('FullHistoryLedgerCloseMetaCompleteProjectionMigration1785110000000', (
 			new FullHistoryLedgerCloseMetaRetentionMigration1785070000000(),
 			'up'
 		);
+		await runMigration(
+			new FullHistoryLedgerCloseMetaCompleteProjectionMigration1785110000000(),
+			'up'
+		);
+	});
+
+	beforeEach(async () => {
+		await dataSource.query(
+			'truncate table "full_history_ledger_close_meta_source" cascade'
+		);
+		await runMigration(stateProjectionMigration, 'down');
 	});
 
 	afterAll(async () => {
@@ -32,56 +46,148 @@ describe('FullHistoryLedgerCloseMetaCompleteProjectionMigration1785110000000', (
 		if (postgres !== undefined) await postgres.stop();
 	});
 
-	it('preserves v2 rows and accepts complete v3 projection rows', async () => {
-		const migration =
-			new FullHistoryLedgerCloseMetaCompleteProjectionMigration1785110000000();
-		await runMigration(migration, 'down');
+	it('preserves durable v6 rows while enabling coherent v7 and v8 rows', async () => {
 		const source = await seedSource();
-		await insertBatch(source, 3, legacyProjectionSchemas);
-
-		await runMigration(migration, 'up');
+		await insertBatch(
+			source,
+			3,
+			FULL_HISTORY_LEDGER_CLOSE_META_CORE_DATASETS,
+			legacyProjectionSchemas
+		);
+		await runMigration(stateProjectionMigration, 'up');
 		await insertBatch(
 			source,
 			67,
-			FULL_HISTORY_LEDGER_CLOSE_META_SCHEMA_VERSIONS
+			FULL_HISTORY_LEDGER_CLOSE_META_CORE_DATASETS,
+			completeProjectionSchemas
+		);
+		await insertBatch(
+			source,
+			131,
+			FULL_HISTORY_LEDGER_CLOSE_META_DATASETS,
+			completeProjectionSchemas
 		);
 
-		const versions = await dataSource.query<
-			Array<{ readonly count: string; readonly schemaVersion: string }>
+		const projections = await dataSource.query<
+			Array<{
+				readonly dataset: string;
+				readonly schemaVersion: string;
+				readonly startLedger: string;
+			}>
 		>(`
-			select count(*)::text as "count", "schema_version" as "schemaVersion"
-			from "full_history_ledger_close_meta_dataset"
-			where "dataset" in ('contract-events', 'ledger-entry-changes')
-			group by "schema_version" order by "schema_version"
+			select dataset."dataset", dataset."schema_version" as "schemaVersion",
+				batch."start_ledger"::text as "startLedger"
+			from "full_history_ledger_close_meta_batch" batch
+			join "full_history_ledger_close_meta_dataset" dataset
+				on dataset."batch_id" = batch."id"
+			where batch."start_ledger" = 3 and dataset."dataset" in (
+				'contract-events', 'ledger-entry-changes'
+			)
+			order by dataset."dataset"
 		`);
-		expect(versions).toEqual([
+		expect(projections).toEqual([
 			{
-				count: '1',
-				schemaVersion: 'stellar-atlas.full-history.contract-events.v2'
+				dataset: 'contract-events',
+				schemaVersion: 'stellar-atlas.full-history.contract-events.v2',
+				startLedger: '3'
 			},
 			{
-				count: '1',
-				schemaVersion: 'stellar-atlas.full-history.contract-events.v3'
-			},
-			{
-				count: '1',
-				schemaVersion: 'stellar-atlas.full-history.ledger-entry-changes.v2'
-			},
-			{
-				count: '1',
-				schemaVersion: 'stellar-atlas.full-history.ledger-entry-changes.v3'
+				dataset: 'ledger-entry-changes',
+				schemaVersion: 'stellar-atlas.full-history.ledger-entry-changes.v2',
+				startLedger: '3'
 			}
 		]);
+	});
 
-		await expect(runMigration(migration, 'down')).rejects.toThrow(
-			/cannot downgrade/i
+	it('downgrades cleanly when no state rows exist', async () => {
+		const source = await seedSource();
+		await runMigration(stateProjectionMigration, 'up');
+		await insertBatch(
+			source,
+			3,
+			FULL_HISTORY_LEDGER_CLOSE_META_CORE_DATASETS,
+			completeProjectionSchemas
+		);
+
+		await expect(
+			runMigration(stateProjectionMigration, 'down')
+		).resolves.toBeUndefined();
+		await insertBatch(
+			source,
+			67,
+			FULL_HISTORY_LEDGER_CLOSE_META_CORE_DATASETS,
+			legacyProjectionSchemas
 		);
 	});
+
+	it('rejects mixed v2 and v3 eight-dataset projections', async () => {
+		const source = await seedSource();
+		await runMigration(stateProjectionMigration, 'up');
+
+		await expect(
+			insertBatch(
+				source,
+				3,
+				FULL_HISTORY_LEDGER_CLOSE_META_CORE_DATASETS,
+				mixedProjectionSchemas
+			)
+		).rejects.toThrow(/exact durable output set/i);
+	});
+
+	it('rejects ten-dataset state sets paired with v2 projections', async () => {
+		const source = await seedSource();
+		await runMigration(stateProjectionMigration, 'up');
+
+		await expect(
+			insertBatch(
+				source,
+				3,
+				FULL_HISTORY_LEDGER_CLOSE_META_DATASETS,
+				legacyProjectionSchemas
+			)
+		).rejects.toThrow(/exact durable output set/i);
+	});
+
+	it('blocks downgrade while durable state rows exist', async () => {
+		const source = await seedSource();
+		await runMigration(stateProjectionMigration, 'up');
+		await insertBatch(
+			source,
+			3,
+			FULL_HISTORY_LEDGER_CLOSE_META_DATASETS,
+			completeProjectionSchemas
+		);
+
+		await expect(
+			runMigration(stateProjectionMigration, 'down')
+		).rejects.toThrow(/cannot downgrade/i);
+	});
+
+	it('rejects incomplete state projection sets', async () => {
+		const source = await seedSource();
+		await runMigration(stateProjectionMigration, 'up');
+
+		await expect(
+			insertBatch(
+				source,
+				3,
+				[
+					...FULL_HISTORY_LEDGER_CLOSE_META_CORE_DATASETS,
+					'account-state-changes'
+				],
+				completeProjectionSchemas
+			)
+		).rejects.toThrow(/exact durable output set/i);
+	});
+
+	const stateProjectionMigration =
+		new FullHistoryLedgerCloseMetaStateProjectionMigration1785120000000();
 
 	async function runMigration(
 		migration:
 			| FullHistoryLedgerCloseMetaRetentionMigration1785070000000
-			| FullHistoryLedgerCloseMetaCompleteProjectionMigration1785110000000,
+			| FullHistoryLedgerCloseMetaCompleteProjectionMigration1785110000000
+			| FullHistoryLedgerCloseMetaStateProjectionMigration1785120000000,
 		direction: 'down' | 'up'
 	): Promise<void> {
 		const runner = dataSource.createQueryRunner();
@@ -123,7 +229,8 @@ describe('FullHistoryLedgerCloseMetaCompleteProjectionMigration1785110000000', (
 	async function insertBatch(
 		source: SourceFixture,
 		startLedger: number,
-		schemas: Readonly<Record<FullHistoryLedgerCloseMetaDataset, string>>
+		datasets: readonly FullHistoryLedgerCloseMetaDataset[],
+		schemas: DatasetSchemaVersions
 	): Promise<void> {
 		const endLedger = startLedger + 63;
 		const batchId = randomUUID();
@@ -155,7 +262,7 @@ describe('FullHistoryLedgerCloseMetaCompleteProjectionMigration1785110000000', (
 				startLedger,
 				endLedger
 			);
-			await insertDatasets(manager, source, batchId, schemas);
+			await insertDatasets(manager, source, batchId, datasets, schemas);
 		});
 	}
 
@@ -192,9 +299,10 @@ describe('FullHistoryLedgerCloseMetaCompleteProjectionMigration1785110000000', (
 		manager: EntityManager,
 		source: SourceFixture,
 		batchId: string,
-		schemas: Readonly<Record<CoreDataset, string>>
+		datasets: readonly FullHistoryLedgerCloseMetaDataset[],
+		schemas: DatasetSchemaVersions
 	): Promise<void> {
-		for (const dataset of FULL_HISTORY_LEDGER_CLOSE_META_CORE_DATASETS) {
+		for (const dataset of datasets) {
 			const canonical = dataset === 'ledger-close-meta';
 			await manager.query(
 				`insert into "full_history_ledger_close_meta_dataset" (
@@ -226,14 +334,23 @@ interface SourceFixture {
 	readonly networkHash: Buffer;
 }
 
+type DatasetSchemaVersions = Readonly<
+	Record<FullHistoryLedgerCloseMetaDataset, string>
+>;
+
+const completeProjectionSchemas: DatasetSchemaVersions =
+	FULL_HISTORY_LEDGER_CLOSE_META_SCHEMA_VERSIONS;
+
 const legacyProjectionSchemas = {
-	...FULL_HISTORY_LEDGER_CLOSE_META_SCHEMA_VERSIONS,
+	...completeProjectionSchemas,
 	'contract-events': 'stellar-atlas.full-history.contract-events.v2',
 	'ledger-entry-changes': 'stellar-atlas.full-history.ledger-entry-changes.v2'
-} satisfies Readonly<Record<CoreDataset, string>>;
+} satisfies DatasetSchemaVersions;
 
-type CoreDataset =
-	(typeof FULL_HISTORY_LEDGER_CLOSE_META_CORE_DATASETS)[number];
+const mixedProjectionSchemas = {
+	...completeProjectionSchemas,
+	'contract-events': 'stellar-atlas.full-history.contract-events.v2'
+} satisfies DatasetSchemaVersions;
 
 function ledgerHash(sequence: number): Buffer {
 	return createHash('sha256').update(`ledger:${sequence}`).digest();

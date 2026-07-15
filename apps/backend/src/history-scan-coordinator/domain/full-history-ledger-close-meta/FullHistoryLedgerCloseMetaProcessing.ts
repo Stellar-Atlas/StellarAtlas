@@ -9,7 +9,7 @@ import type { FullHistoryLedgerCloseMetaSourceObject } from './FullHistoryLedger
 export const FULL_HISTORY_LEDGER_CLOSE_META_SOURCE_DISPOSITION =
 	'discarded-after-processing' as const;
 
-export const FULL_HISTORY_LEDGER_CLOSE_META_DATASETS = [
+export const FULL_HISTORY_LEDGER_CLOSE_META_CORE_DATASETS = [
 	'ledger-close-meta',
 	'ledgers',
 	'transactions',
@@ -20,6 +20,12 @@ export const FULL_HISTORY_LEDGER_CLOSE_META_DATASETS = [
 	'ledger-entry-changes'
 ] as const;
 
+export const FULL_HISTORY_LEDGER_CLOSE_META_DATASETS = [
+	...FULL_HISTORY_LEDGER_CLOSE_META_CORE_DATASETS,
+	'account-state-changes',
+	'trustline-state-changes'
+] as const;
+
 export type FullHistoryLedgerCloseMetaDataset =
 	(typeof FULL_HISTORY_LEDGER_CLOSE_META_DATASETS)[number];
 
@@ -28,29 +34,39 @@ export const FULL_HISTORY_LEDGER_CLOSE_META_CANONICAL_MEDIA_TYPE =
 export const FULL_HISTORY_LEDGER_CLOSE_META_PARQUET_MEDIA_TYPE =
 	'application/vnd.apache.parquet';
 
+const LEGACY_CONTRACT_EVENT_SCHEMA_VERSION =
+	'stellar-atlas.full-history.contract-events.v2';
+const LEGACY_LEDGER_ENTRY_CHANGE_SCHEMA_VERSION =
+	'stellar-atlas.full-history.ledger-entry-changes.v2';
+
 export const FULL_HISTORY_LEDGER_CLOSE_META_SCHEMA_VERSIONS = {
+	'account-state-changes':
+		'stellar-atlas.full-history.account-state-changes.v1',
 	'contract-events': 'stellar-atlas.full-history.contract-events.v3',
-	'ledger-close-meta':
-		'stellar-atlas.full-history.ledger-close-meta-batch.v1',
-	'ledger-entry-changes':
-		'stellar-atlas.full-history.ledger-entry-changes.v3',
+	'ledger-close-meta': 'stellar-atlas.full-history.ledger-close-meta-batch.v1',
+	'ledger-entry-changes': 'stellar-atlas.full-history.ledger-entry-changes.v3',
 	ledgers: 'stellar-atlas.full-history.ledgers.v2',
 	operations: 'stellar-atlas.full-history.operations.v2',
 	'transaction-meta': 'stellar-atlas.full-history.transaction-meta.v2',
 	'transaction-results': 'stellar-atlas.full-history.transaction-results.v2',
-	transactions: 'stellar-atlas.full-history.transactions.v2'
+	transactions: 'stellar-atlas.full-history.transactions.v2',
+	'trustline-state-changes':
+		'stellar-atlas.full-history.trustline-state-changes.v1'
 } as const satisfies Record<FullHistoryLedgerCloseMetaDataset, string>;
 
 export const FULL_HISTORY_LEDGER_CLOSE_META_SUPPORTED_SCHEMA_VERSIONS = {
+	'account-state-changes': [
+		FULL_HISTORY_LEDGER_CLOSE_META_SCHEMA_VERSIONS['account-state-changes']
+	],
 	'contract-events': [
-		'stellar-atlas.full-history.contract-events.v2',
+		LEGACY_CONTRACT_EVENT_SCHEMA_VERSION,
 		FULL_HISTORY_LEDGER_CLOSE_META_SCHEMA_VERSIONS['contract-events']
 	],
 	'ledger-close-meta': [
 		FULL_HISTORY_LEDGER_CLOSE_META_SCHEMA_VERSIONS['ledger-close-meta']
 	],
 	'ledger-entry-changes': [
-		'stellar-atlas.full-history.ledger-entry-changes.v2',
+		LEGACY_LEDGER_ENTRY_CHANGE_SCHEMA_VERSION,
 		FULL_HISTORY_LEDGER_CLOSE_META_SCHEMA_VERSIONS['ledger-entry-changes']
 	],
 	ledgers: [FULL_HISTORY_LEDGER_CLOSE_META_SCHEMA_VERSIONS.ledgers],
@@ -61,7 +77,10 @@ export const FULL_HISTORY_LEDGER_CLOSE_META_SUPPORTED_SCHEMA_VERSIONS = {
 	'transaction-results': [
 		FULL_HISTORY_LEDGER_CLOSE_META_SCHEMA_VERSIONS['transaction-results']
 	],
-	transactions: [FULL_HISTORY_LEDGER_CLOSE_META_SCHEMA_VERSIONS.transactions]
+	transactions: [FULL_HISTORY_LEDGER_CLOSE_META_SCHEMA_VERSIONS.transactions],
+	'trustline-state-changes': [
+		FULL_HISTORY_LEDGER_CLOSE_META_SCHEMA_VERSIONS['trustline-state-changes']
+	]
 } as const satisfies Record<
 	FullHistoryLedgerCloseMetaDataset,
 	readonly string[]
@@ -151,15 +170,30 @@ export function isValidFullHistoryLedgerCloseMetaOutputSet(
 	range: FullHistoryLedgerCloseMetaRange,
 	outputList: readonly FullHistoryLedgerCloseMetaDatasetOutput[]
 ): boolean {
-	if (outputList.length !== FULL_HISTORY_LEDGER_CLOSE_META_DATASETS.length) {
+	const outputDatasets = new Set(outputList.map((output) => output.dataset));
+	const hasCoreSet =
+		outputList.length === FULL_HISTORY_LEDGER_CLOSE_META_CORE_DATASETS.length &&
+		FULL_HISTORY_LEDGER_CLOSE_META_CORE_DATASETS.every((dataset) =>
+			outputDatasets.has(dataset)
+		);
+	const hasStateProjectionSet =
+		outputList.length === FULL_HISTORY_LEDGER_CLOSE_META_DATASETS.length &&
+		FULL_HISTORY_LEDGER_CLOSE_META_DATASETS.every((dataset) =>
+			outputDatasets.has(dataset)
+		);
+	if (
+		outputDatasets.size !== outputList.length ||
+		(!hasCoreSet && !hasStateProjectionSet)
+	) {
 		return false;
 	}
 	const outputs = new Map(outputList.map((output) => [output.dataset, output]));
 	if (
-		FULL_HISTORY_LEDGER_CLOSE_META_DATASETS.some(
+		FULL_HISTORY_LEDGER_CLOSE_META_CORE_DATASETS.some(
 			(dataset) => !outputs.has(dataset)
 		) ||
-		outputList.some((output) => !isValidOutput(output))
+		outputList.some((output) => !isValidOutput(output)) ||
+		!hasCoherentProjectionSchemas(outputs, hasStateProjectionSet)
 	) {
 		return false;
 	}
@@ -174,6 +208,31 @@ export function isValidFullHistoryLedgerCloseMetaOutputSet(
 			transactions.recordCount &&
 		outputs.get('transaction-meta')?.recordCount === transactions.recordCount
 	);
+}
+
+function hasCoherentProjectionSchemas(
+	outputs: ReadonlyMap<
+		FullHistoryLedgerCloseMetaDataset,
+		FullHistoryLedgerCloseMetaDatasetOutput
+	>,
+	hasStateProjections: boolean
+): boolean {
+	const contractEventSchema = outputs.get('contract-events')?.schemaVersion;
+	const ledgerEntryChangeSchema = outputs.get(
+		'ledger-entry-changes'
+	)?.schemaVersion;
+	const isLegacyProjection =
+		contractEventSchema === LEGACY_CONTRACT_EVENT_SCHEMA_VERSION &&
+		ledgerEntryChangeSchema === LEGACY_LEDGER_ENTRY_CHANGE_SCHEMA_VERSION;
+	const isCompleteProjection =
+		contractEventSchema ===
+			FULL_HISTORY_LEDGER_CLOSE_META_SCHEMA_VERSIONS['contract-events'] &&
+		ledgerEntryChangeSchema ===
+			FULL_HISTORY_LEDGER_CLOSE_META_SCHEMA_VERSIONS['ledger-entry-changes'];
+
+	return hasStateProjections
+		? isCompleteProjection
+		: isLegacyProjection || isCompleteProjection;
 }
 
 function isValidSourceCoverage(

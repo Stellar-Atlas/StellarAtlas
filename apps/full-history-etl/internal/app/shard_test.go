@@ -44,14 +44,16 @@ func TestRunMultiInputShardAndExactReplay(t *testing.T) {
 		}
 	}
 	wantCounts := map[string]uint64{
-		"ledger-close-meta":    2,
-		"ledgers":              2,
-		"transactions":         326,
-		"transaction-results":  326,
-		"transaction-meta":     326,
-		"operations":           468,
-		"contract-events":      42,
-		"ledger-entry-changes": 1758,
+		"ledger-close-meta":       2,
+		"ledgers":                 2,
+		"transactions":            326,
+		"transaction-results":     326,
+		"transaction-meta":        326,
+		"operations":              468,
+		"contract-events":         42,
+		"ledger-entry-changes":    1758,
+		"account-state-changes":   1002,
+		"trustline-state-changes": 374,
 	}
 	for _, descriptor := range receipt.Outputs {
 		if descriptor.RecordCount != wantCounts[descriptor.Dataset] {

@@ -4,45 +4,31 @@ export const legacyFullHistoryLedgerCloseMetaDatasetContractPredicateSql =
 export const fullHistoryLedgerCloseMetaDatasetContractPredicateSql =
 	composeFullHistoryLedgerCloseMetaDatasetContractPredicateSql(true);
 
+export const fullHistoryLedgerCloseMetaStateProjectionDatasetContractPredicateSql = `
+	(${fullHistoryLedgerCloseMetaDatasetContractPredicateSql})
+	or ("media_type" = 'application/vnd.apache.parquet'
+		and "representation" = 'typed-projection'
+		and (
+			("dataset" = 'account-state-changes'
+				and "schema_version" = 'stellar-atlas.full-history.account-state-changes.v1')
+			or ("dataset" = 'trustline-state-changes'
+				and "schema_version" = 'stellar-atlas.full-history.trustline-state-changes.v1')
+		)
+	)`;
+
+export const restoreFullHistoryLedgerCloseMetaCoreDatasetSetSql =
+	composeFullHistoryLedgerCloseMetaDatasetSetFunctionSql(false, true);
+
+export const enableFullHistoryLedgerCloseMetaStateDatasetSetSql =
+	composeFullHistoryLedgerCloseMetaDatasetSetFunctionSql(true, true);
+
 export const createFullHistoryLedgerCloseMetaDatasetContractSql = `
 	alter table "full_history_ledger_close_meta_dataset"
 		add constraint "chk_full_history_lcm_dataset_contract" check (
 			${fullHistoryLedgerCloseMetaDatasetContractPredicateSql}
 		);
 
-	create function assert_full_history_lcm_batch_dataset_set(target uuid)
-	returns void language plpgsql as $$
-	declare
-		batch_ledgers integer;
-		dataset_count bigint;
-		canonical_records bigint;
-		ledger_records bigint;
-		transaction_records bigint;
-		result_records bigint;
-		meta_records bigint;
-	begin
-		select "ledger_count" into strict batch_ledgers
-		from "full_history_ledger_close_meta_batch" where "id" = target;
-		select count(*),
-			max("record_count") filter (where "dataset" = 'ledger-close-meta'),
-			max("record_count") filter (where "dataset" = 'ledgers'),
-			max("record_count") filter (where "dataset" = 'transactions'),
-			max("record_count") filter (where "dataset" = 'transaction-results'),
-			max("record_count") filter (where "dataset" = 'transaction-meta')
-		into dataset_count, canonical_records, ledger_records,
-			transaction_records, result_records, meta_records
-		from "full_history_ledger_close_meta_dataset"
-		where "batch_id" = target;
-		if dataset_count <> 8
-			or canonical_records <> batch_ledgers
-			or ledger_records <> batch_ledgers
-			or transaction_records is null
-			or result_records <> transaction_records
-			or meta_records <> transaction_records then
-			raise exception 'full-history LedgerCloseMeta batch must have its exact durable output set';
-		end if;
-	end
-	$$;
+	${composeFullHistoryLedgerCloseMetaDatasetSetFunctionSql(false, false)}
 
 	create function validate_full_history_lcm_batch_dataset_set()
 	returns trigger language plpgsql as $$
@@ -110,4 +96,83 @@ function composeFullHistoryLedgerCloseMetaDatasetContractPredicateSql(
 					and "schema_version" in ${ledgerEntryChangeVersions})
 			)
 		)`;
+}
+
+function composeFullHistoryLedgerCloseMetaDatasetSetFunctionSql(
+	acceptStateProjection: boolean,
+	replace: boolean
+): string {
+	const validDatasetSet = acceptStateProjection
+		? `((dataset_count = 8 and core_dataset_count = 8
+				and state_dataset_count = 0
+				and ((legacy_projection_count = 2 and complete_projection_count = 0)
+					or (legacy_projection_count = 0 and complete_projection_count = 2)))
+			or (dataset_count = 10 and core_dataset_count = 8
+				and state_dataset_count = 2
+				and legacy_projection_count = 0
+				and complete_projection_count = 2))`
+		: `(dataset_count = 8 and core_dataset_count = 8
+			and state_dataset_count = 0
+			and ((legacy_projection_count = 2 and complete_projection_count = 0)
+				or (legacy_projection_count = 0 and complete_projection_count = 2)))`;
+	return `
+	create ${replace ? 'or replace ' : ''}function assert_full_history_lcm_batch_dataset_set(target uuid)
+	returns void language plpgsql as $$
+	declare
+		batch_ledgers integer;
+		dataset_count bigint;
+		core_dataset_count bigint;
+		state_dataset_count bigint;
+		legacy_projection_count bigint;
+		complete_projection_count bigint;
+		canonical_records bigint;
+		ledger_records bigint;
+		transaction_records bigint;
+		result_records bigint;
+		meta_records bigint;
+	begin
+		select "ledger_count" into strict batch_ledgers
+		from "full_history_ledger_close_meta_batch" where "id" = target;
+		select count(*),
+			count(*) filter (where "dataset" in (
+				'ledger-close-meta', 'ledgers', 'transactions', 'operations',
+				'transaction-results', 'transaction-meta', 'contract-events',
+				'ledger-entry-changes'
+			)),
+			count(*) filter (where "dataset" in (
+				'account-state-changes', 'trustline-state-changes'
+			)),
+			count(*) filter (where
+				("dataset" = 'contract-events'
+					and "schema_version" = 'stellar-atlas.full-history.contract-events.v2')
+				or ("dataset" = 'ledger-entry-changes'
+					and "schema_version" = 'stellar-atlas.full-history.ledger-entry-changes.v2')
+			),
+			count(*) filter (where
+				("dataset" = 'contract-events'
+					and "schema_version" = 'stellar-atlas.full-history.contract-events.v3')
+				or ("dataset" = 'ledger-entry-changes'
+					and "schema_version" = 'stellar-atlas.full-history.ledger-entry-changes.v3')
+			),
+			max("record_count") filter (where "dataset" = 'ledger-close-meta'),
+			max("record_count") filter (where "dataset" = 'ledgers'),
+			max("record_count") filter (where "dataset" = 'transactions'),
+			max("record_count") filter (where "dataset" = 'transaction-results'),
+			max("record_count") filter (where "dataset" = 'transaction-meta')
+		into dataset_count, core_dataset_count, state_dataset_count,
+			legacy_projection_count, complete_projection_count,
+			canonical_records, ledger_records, transaction_records,
+			result_records, meta_records
+		from "full_history_ledger_close_meta_dataset"
+		where "batch_id" = target;
+		if not ${validDatasetSet}
+			or canonical_records <> batch_ledgers
+			or ledger_records <> batch_ledgers
+			or transaction_records is null
+			or result_records <> transaction_records
+			or meta_records <> transaction_records then
+			raise exception 'full-history LedgerCloseMeta batch must have its exact durable output set';
+		end if;
+	end
+	$$;`;
 }
