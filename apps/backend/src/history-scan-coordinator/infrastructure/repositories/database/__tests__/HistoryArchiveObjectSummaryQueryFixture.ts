@@ -1,6 +1,7 @@
 import type { DataSource, MigrationInterface } from 'typeorm';
 import { HistoryArchiveObjectBucketHashIndexMigration1784890000000 } from '../../../database/migrations/1784890000000-HistoryArchiveObjectBucketHashIndexMigration.js';
 import { HistoryArchiveObjectTypeSummaryMigration1785080000000 } from '../../../database/migrations/1785080000000-HistoryArchiveObjectTypeSummaryMigration.js';
+import { HistoryArchiveGlobalBucketHashIndexMigration1785090000000 } from '../../../database/migrations/1785090000000-HistoryArchiveGlobalBucketHashIndexMigration.js';
 
 export const archiveA = 'https://archive-a.example/history';
 export const archiveB = 'https://archive-b.example/history';
@@ -20,6 +21,10 @@ export async function resetObjectSummaryFixture(
 	await runMigration(
 		dataSource,
 		new HistoryArchiveObjectTypeSummaryMigration1785080000000()
+	);
+	await runMigration(
+		dataSource,
+		new HistoryArchiveGlobalBucketHashIndexMigration1785090000000()
 	);
 }
 

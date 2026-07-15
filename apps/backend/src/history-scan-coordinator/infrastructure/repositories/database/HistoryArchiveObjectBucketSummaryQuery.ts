@@ -19,6 +19,8 @@ type UniqueBucketHashRow = {
 
 export const archiveObjectBucketHashIndexName =
 	'idx_history_archive_object_bucket_hash';
+export const archiveObjectGlobalBucketHashIndexName =
+	'idx_history_archive_object_bucket_hash_global';
 export const archiveObjectUniqueBucketHashStatementTimeoutMs = 10_000;
 
 export class HistoryArchiveUniqueBucketHashSummaryUnavailableError extends Error {
@@ -59,16 +61,20 @@ export async function getExactUniqueBucketHashCount(
 ): Promise<number> {
 	try {
 		return await manager.transaction(async (transactionManager) => {
+			const requiredIndex =
+				archiveUrlIdentity === null
+					? archiveObjectGlobalBucketHashIndexName
+					: archiveObjectBucketHashIndexName;
 			const [indexRow] = (await transactionManager.query(
 				uniqueBucketHashReadSettingsSql,
 				[
-					archiveObjectBucketHashIndexName,
+					requiredIndex,
 					`${archiveObjectUniqueBucketHashStatementTimeoutMs}ms`
 				]
 			)) as readonly BucketHashIndexRow[];
 			if (
 				(indexRow?.bucketHashIndex ?? indexRow?.buckethashindex) !==
-					archiveObjectBucketHashIndexName ||
+					requiredIndex ||
 				(indexRow?.bucketHashIndexReady ?? indexRow?.buckethashindexready) !==
 					true
 			) {
@@ -98,7 +104,8 @@ export async function getExactUniqueBucketHashCount(
 }
 
 // Cross-archive hash distinctness is not derivable from the type rollup. Keep
-// this exact read on the covering partial index and cap its wall-clock work.
+// this exact read on the appropriate hash-ordered partial index and cap its
+// wall-clock work.
 export const uniqueBucketHashReadSettingsSql = `
 	select
 		to_regclass($1::text)::text as "bucketHashIndex",
@@ -116,16 +123,24 @@ export const uniqueBucketHashReadSettingsSql = `
 `;
 
 export const uniqueBucketHashGlobalSql = `
-	select count(distinct "bucketHash") as "uniqueBucketHashes"
-	from history_archive_object_queue
-	where "objectType" = 'bucket'
-		and "bucketHash" is not null
+	select count(*) as "uniqueBucketHashes"
+	from (
+		select "bucketHash"
+		from history_archive_object_queue
+		where "objectType" = 'bucket'
+			and "bucketHash" is not null
+		group by "bucketHash"
+	) unique_bucket_hashes
 `;
 
 export const uniqueBucketHashArchiveSql = `
-	select count(distinct "bucketHash") as "uniqueBucketHashes"
-	from history_archive_object_queue
-	where "archiveUrlIdentity" = $1::text
-		and "objectType" = 'bucket'
-		and "bucketHash" is not null
+	select count(*) as "uniqueBucketHashes"
+	from (
+		select "bucketHash"
+		from history_archive_object_queue
+		where "archiveUrlIdentity" = $1::text
+			and "objectType" = 'bucket'
+			and "bucketHash" is not null
+		group by "bucketHash"
+	) unique_bucket_hashes
 `;

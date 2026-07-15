@@ -1,7 +1,9 @@
 import { managedMigrations } from '@core/infrastructure/database/ManagedMigrations.js';
 import { HistoryArchiveObjectTypeSummaryMigration1785080000000 } from '../../../database/migrations/1785080000000-HistoryArchiveObjectTypeSummaryMigration.js';
+import { HistoryArchiveGlobalBucketHashIndexMigration1785090000000 } from '../../../database/migrations/1785090000000-HistoryArchiveGlobalBucketHashIndexMigration.js';
 import {
 	archiveObjectBucketHashIndexName,
+	archiveObjectGlobalBucketHashIndexName,
 	uniqueBucketHashArchiveSql,
 	uniqueBucketHashGlobalSql,
 	uniqueBucketHashReadSettingsSql
@@ -14,8 +16,11 @@ import {
 
 describe('HistoryArchiveObjectSummaryQuery SQL', () => {
 	it('registers the type-summary migration after the prior managed migration', () => {
-		expect(managedMigrations.at(-1)).toBe(
+		expect(managedMigrations.at(-2)).toBe(
 			HistoryArchiveObjectTypeSummaryMigration1785080000000
+		);
+		expect(managedMigrations.at(-1)).toBe(
+			HistoryArchiveGlobalBucketHashIndexMigration1785090000000
 		);
 	});
 
@@ -54,8 +59,11 @@ describe('HistoryArchiveObjectSummaryQuery SQL', () => {
 		expect(archiveObjectBucketHashIndexName).toBe(
 			'idx_history_archive_object_bucket_hash'
 		);
+		expect(archiveObjectGlobalBucketHashIndexName).toBe(
+			'idx_history_archive_object_bucket_hash_global'
+		);
 		for (const sql of [uniqueBucketHashGlobalSql, uniqueBucketHashArchiveSql]) {
-			expect(sql).toContain('count(distinct "bucketHash")');
+			expect(sql).toContain('group by "bucketHash"');
 			expect(sql).toContain('"objectType" = \'bucket\'');
 			expect(sql).toContain('"bucketHash" is not null');
 		}

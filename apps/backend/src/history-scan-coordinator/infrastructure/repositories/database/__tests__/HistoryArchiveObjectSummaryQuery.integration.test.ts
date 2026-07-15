@@ -7,6 +7,7 @@ import { getHistoryArchiveObjectSummary } from '../HistoryArchiveObjectSummaryQu
 import { HistoryArchiveObjectTypeSummaryUnavailableError } from '../HistoryArchiveObjectTypeSummaryReadQuery.js';
 import {
 	archiveObjectBucketHashIndexName,
+	archiveObjectGlobalBucketHashIndexName,
 	HistoryArchiveUniqueBucketHashSummaryUnavailableError
 } from '../HistoryArchiveObjectBucketSummaryQuery.js';
 import {
@@ -227,11 +228,26 @@ describe('HistoryArchiveObjectSummaryQuery with PostgreSQL', () => {
 		await expectUnavailable('unavailable');
 	});
 
-	it('fails before distinct counting when the covering index is unavailable', async () => {
-		await dataSource.query(`drop index "${archiveObjectBucketHashIndexName}"`);
+	it('fails before global counting when its hash index is unavailable', async () => {
+		await dataSource.query(
+			`drop index "${archiveObjectGlobalBucketHashIndexName}"`
+		);
 
 		await expect(
 			getHistoryArchiveObjectSummary(dataSource.manager)
+		).rejects.toBeInstanceOf(
+			HistoryArchiveUniqueBucketHashSummaryUnavailableError
+		);
+	});
+
+	it('fails before archive counting when its source index is unavailable', async () => {
+		await dataSource.query(`drop index "${archiveObjectBucketHashIndexName}"`);
+
+		await expect(
+			getHistoryArchiveObjectSummary(dataSource.manager, {
+				archiveUrl: archiveA,
+				archiveUrlIdentity: archiveA
+			})
 		).rejects.toBeInstanceOf(
 			HistoryArchiveUniqueBucketHashSummaryUnavailableError
 		);

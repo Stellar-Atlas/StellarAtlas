@@ -5,6 +5,7 @@ import {
 } from '@test-support/DisposablePostgres.js';
 import {
 	archiveObjectBucketHashIndexName,
+	archiveObjectGlobalBucketHashIndexName,
 	archiveObjectUniqueBucketHashStatementTimeoutMs,
 	getExactUniqueBucketHashCount,
 	uniqueBucketHashGlobalSql,
@@ -58,7 +59,7 @@ describe('HistoryArchiveObjectSummaryQuery scale plans', () => {
 		let uniquePlan: QueryPlan;
 		try {
 			await runner.query(uniqueBucketHashReadSettingsSql, [
-				archiveObjectBucketHashIndexName,
+				archiveObjectGlobalBucketHashIndexName,
 				`${archiveObjectUniqueBucketHashStatementTimeoutMs}ms`
 			]);
 			uniquePlan = await explainRunner(runner, uniqueBucketHashGlobalSql);
@@ -72,7 +73,7 @@ describe('HistoryArchiveObjectSummaryQuery scale plans', () => {
 		);
 		expect(queueAccesses).toEqual([
 			expect.objectContaining({
-				indexName: archiveObjectBucketHashIndexName,
+				indexName: archiveObjectGlobalBucketHashIndexName,
 				nodeType: 'Index Only Scan'
 			})
 		]);
@@ -83,6 +84,7 @@ describe('HistoryArchiveObjectSummaryQuery scale plans', () => {
 					access.nodeType === 'Bitmap Heap Scan'
 			)
 		).toBe(false);
+		expect(readNodeTypes(uniquePlan)).not.toContain('Sort');
 		await expect(
 			getExactUniqueBucketHashCount(dataSource.manager, null)
 		).resolves.toBe(uniqueBucketHashes);
@@ -109,6 +111,11 @@ async function createScaleFixture(dataSource: DataSource): Promise<void> {
 			"archiveUrlIdentity", "bucketHash"
 		)
 		include (status, "executionDisposition", "dependencyReady")
+		where "objectType" = 'bucket' and "bucketHash" is not null
+	`);
+	await dataSource.query(`
+		create index "${archiveObjectGlobalBucketHashIndexName}"
+		on history_archive_object_queue ("bucketHash")
 		where "objectType" = 'bucket' and "bucketHash" is not null
 	`);
 	await dataSource.query(`
@@ -272,6 +279,14 @@ function readRelationAccesses(plan: QueryPlan): readonly RelationAccess[] {
 		}
 	});
 	return accesses;
+}
+
+function readNodeTypes(plan: QueryPlan): readonly string[] {
+	const nodeTypes: string[] = [];
+	visitPlan(plan.Plan, (node) => {
+		if (node['Node Type'] !== undefined) nodeTypes.push(node['Node Type']);
+	});
+	return nodeTypes;
 }
 
 function visitPlan(
