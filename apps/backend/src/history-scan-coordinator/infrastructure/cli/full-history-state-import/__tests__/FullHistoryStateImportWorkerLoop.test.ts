@@ -12,9 +12,12 @@ describe('runFullHistoryStateImportWorkerLoop', () => {
 			execute: () => {
 				controller.abort();
 				return Promise.resolve({
-					batchId: '00000000-0000-4000-8000-000000000001',
-					dataset: 'account-state-changes',
-					recordCount: 42n
+					kind: 'state-import' as const,
+					receipt: {
+						batchId: '00000000-0000-4000-8000-000000000001',
+						dataset: 'account-state-changes' as const,
+						recordCount: 42n
+					}
 				});
 			},
 			formatError: String,
@@ -30,6 +33,42 @@ describe('runFullHistoryStateImportWorkerLoop', () => {
 				dataset: 'account-state-changes',
 				recordCount: '42',
 				status: 'complete'
+			})
+		]);
+	});
+
+	it('emits canonical proof coverage distinctly from imported staging rows', async () => {
+		const controller = new AbortController();
+		const events: FullHistoryStateImportWorkerEvent[] = [];
+		await runFullHistoryStateImportWorkerLoop(config(), {
+			emit: (event) => events.push(event),
+			execute: () => {
+				controller.abort();
+				return Promise.resolve({
+					kind: 'canonical-coverage' as const,
+					receipt: {
+						batchId: '00000000-0000-4000-8000-000000000002',
+						canonicalBatchCount: 2,
+						ledgerCount: 128,
+						minimumProofVersion: 6,
+						status: 'complete' as const
+					}
+				});
+			},
+			formatError: String,
+			now: () => 2_000,
+			signal: controller.signal,
+			wait: () => Promise.resolve(),
+			workerIndex: 3
+		});
+		expect(events).toEqual([
+			expect.objectContaining({
+				canonicalBatchCount: 2,
+				event: 'canonical-coverage',
+				ledgerCount: 128,
+				minimumProofVersion: 6,
+				status: 'complete',
+				worker: 3
 			})
 		]);
 	});

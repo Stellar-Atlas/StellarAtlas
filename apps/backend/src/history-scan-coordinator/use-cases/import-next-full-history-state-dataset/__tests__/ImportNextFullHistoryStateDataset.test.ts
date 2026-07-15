@@ -9,6 +9,10 @@ import type {
 	FullHistoryStateImportRepository
 } from '../../../domain/full-history-state-import/FullHistoryStateImport.js';
 import {
+	FullHistoryStateRowSetHasher,
+	type FullHistoryStateRowEvidence
+} from '../../../domain/full-history-state-import/FullHistoryStateRowEvidence.js';
+import {
 	ImportNextFullHistoryStateDataset,
 	type FullHistoryStateExporter
 } from '../ImportNextFullHistoryStateDataset.js';
@@ -35,7 +39,7 @@ describe('ImportNextFullHistoryStateDataset', () => {
 				for (let index = 1; index <= 3; index += 1) {
 					await consumeRow(accountRow(index));
 				}
-				return 3n;
+				return { recordCount: 3n, sourceSha256: claim.sourceSha256 };
 			}
 		};
 		const useCase = new ImportNextFullHistoryStateDataset(
@@ -44,15 +48,18 @@ describe('ImportNextFullHistoryStateDataset', () => {
 			config(root, 2)
 		);
 
+		const rowSetSha256 = expectedRowSetDigest(3);
 		await expect(
 			useCase.execute(new AbortController().signal)
 		).resolves.toEqual({
 			batchId: claim.batchId,
 			dataset: 'account-state-changes',
-			recordCount: 3n
+			recordCount: 3n,
+			rowSetSha256
 		});
 		expect(repository.accountBatchSizes).toEqual([2, 1]);
 		expect(repository.completed).toBe(3n);
+		expect(repository.completedDigest).toBe(rowSetSha256);
 		expect(repository.failed).toBeNull();
 		expect(repository.renewals).toBeGreaterThanOrEqual(1);
 	});
@@ -61,7 +68,12 @@ describe('ImportNextFullHistoryStateDataset', () => {
 		const claim = accountClaim(digest(Buffer.from('different')), 0n);
 		const repository = new RecordingRepository(claim);
 		const exporter: FullHistoryStateExporter = {
-			export: jest.fn(() => Promise.resolve(0n))
+			export: jest.fn(() =>
+				Promise.resolve({
+					recordCount: 0n,
+					sourceSha256: claim.sourceSha256
+				})
+			)
 		};
 		const useCase = new ImportNextFullHistoryStateDataset(
 			repository,
@@ -74,6 +86,28 @@ describe('ImportNextFullHistoryStateDataset', () => {
 		);
 		expect(exporter.export).not.toHaveBeenCalled();
 		expect(repository.failed?.message).toContain('digest');
+	});
+
+	it('refuses an exporter digest that differs from the claimed manifest', async () => {
+		const claim = accountClaim(digest(bytes), 0n);
+		const repository = new RecordingRepository(claim);
+		const useCase = new ImportNextFullHistoryStateDataset(
+			repository,
+			{
+				export: () =>
+					Promise.resolve({
+						recordCount: 0n,
+						sourceSha256: digest(Buffer.from('unexpected'))
+					})
+			},
+			config(root, 2)
+		);
+
+		await expect(useCase.execute(new AbortController().signal)).rejects.toThrow(
+			'source digest'
+		);
+		expect(repository.completed).toBeNull();
+		expect(repository.failed?.message).toContain('source digest');
 	});
 
 	it('returns idle only after registering newly published datasets', async () => {
@@ -93,6 +127,7 @@ describe('ImportNextFullHistoryStateDataset', () => {
 class RecordingRepository implements FullHistoryStateImportRepository {
 	readonly accountBatchSizes: number[] = [];
 	completed: bigint | null = null;
+	completedDigest: string | null = null;
 	failed: Error | null = null;
 	registrations = 0;
 	renewals = 0;
@@ -105,9 +140,11 @@ class RecordingRepository implements FullHistoryStateImportRepository {
 
 	complete(
 		_claim: FullHistoryStateImportClaim,
-		recordCount: bigint
+		recordCount: bigint,
+		rowSetSha256: string
 	): Promise<void> {
 		this.completed = recordCount;
+		this.completedDigest = rowSetSha256;
 		return Promise.resolve();
 	}
 
@@ -128,7 +165,7 @@ class RecordingRepository implements FullHistoryStateImportRepository {
 
 	storeAccountRows(
 		_claim: FullHistoryStateImportClaim,
-		rows: readonly FullHistoryAccountStateChange[]
+		rows: readonly FullHistoryStateRowEvidence<FullHistoryAccountStateChange>[]
 	): Promise<void> {
 		this.accountBatchSizes.push(rows.length);
 		return Promise.resolve();
@@ -139,11 +176,20 @@ class RecordingRepository implements FullHistoryStateImportRepository {
 	}
 }
 
+function expectedRowSetDigest(rowCount: number): string {
+	const hasher = new FullHistoryStateRowSetHasher();
+	for (let index = 1; index <= rowCount; index += 1) {
+		hasher.append(accountRow(index));
+	}
+	return hasher.finish();
+}
+
 function accountClaim(
 	sourceSha256: ReturnType<typeof fullHistoryLedgerCloseMetaSha256Digest>,
 	expectedRecordCount: bigint
 ): FullHistoryStateImportClaim {
 	return Object.freeze({
+		attemptCount: 1,
 		batchId: randomUUID(),
 		dataset: 'account-state-changes',
 		endLedger: 66,

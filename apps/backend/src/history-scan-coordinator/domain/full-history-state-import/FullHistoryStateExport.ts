@@ -71,6 +71,7 @@ export type FullHistoryStateChange =
 
 export interface FullHistoryStateExportHeader {
 	readonly dataset: FullHistoryStateDataset;
+	readonly sourceSha256: string;
 	readonly type: 'header';
 	readonly version: typeof FULL_HISTORY_STATE_EXPORT_VERSION;
 }

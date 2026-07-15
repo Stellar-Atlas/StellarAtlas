@@ -85,13 +85,30 @@ describe('full-history state-import operational contract', () => {
 				emit: (event) => events.push(event),
 				execute: async () => {
 					cycle += 1;
-					return cycle === 1
-						? {
+					if (cycle === 1) {
+						return {
+							kind: 'state-import' as const,
+							receipt: {
 								batchId,
 								dataset: 'trustline-state-changes',
-								recordCount: 9n
+								recordCount: 9n,
+								rowSetSha256: 'a'.repeat(64)
 							}
-						: null;
+						};
+					}
+					if (cycle === 2) {
+						return {
+							kind: 'canonical-coverage' as const,
+							receipt: {
+								batchId,
+								canonicalBatchCount: 2,
+								ledgerCount: 64,
+								minimumProofVersion: 6,
+								status: 'complete' as const
+							}
+						};
+					}
+					return null;
 				},
 				formatError: String,
 				now: () => 1_000,
@@ -108,6 +125,17 @@ describe('full-history state-import operational contract', () => {
 				durationMs: 0,
 				event: 'state-import',
 				recordCount: '9',
+				status: 'complete',
+				worker: 3
+			},
+			{
+				at: '1970-01-01T00:00:01.000Z',
+				batchId,
+				canonicalBatchCount: 2,
+				durationMs: 0,
+				event: 'canonical-coverage',
+				ledgerCount: 64,
+				minimumProofVersion: 6,
 				status: 'complete',
 				worker: 3
 			},

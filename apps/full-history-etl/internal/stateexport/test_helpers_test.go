@@ -3,7 +3,10 @@ package stateexport_test
 import (
 	"bufio"
 	"bytes"
+	"crypto/sha256"
 	"encoding/json"
+	"fmt"
+	"os"
 	"path/filepath"
 	"testing"
 
@@ -13,11 +16,12 @@ import (
 )
 
 type decodedEnvelope struct {
-	Type        string                     `json:"type"`
-	Version     string                     `json:"version"`
-	Dataset     string                     `json:"dataset"`
-	Value       map[string]json.RawMessage `json:"value"`
-	RecordCount string                     `json:"recordCount"`
+	Type         string                     `json:"type"`
+	Version      string                     `json:"version"`
+	Dataset      string                     `json:"dataset"`
+	SourceSHA256 string                     `json:"sourceSha256"`
+	Value        map[string]json.RawMessage `json:"value"`
+	RecordCount  string                     `json:"recordCount"`
 }
 
 func writeParquet[T any](t *testing.T, name string, rows []T) string {
@@ -77,4 +81,13 @@ func assertRawJSON(t *testing.T, values map[string]json.RawMessage, field, expec
 	if got := string(values[field]); got != expected {
 		t.Fatalf("%s is %s, expected %s", field, got, expected)
 	}
+}
+
+func fileSHA256(t *testing.T, path string) string {
+	t.Helper()
+	contents, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read digest fixture: %v", err)
+	}
+	return fmt.Sprintf("%x", sha256.Sum256(contents))
 }

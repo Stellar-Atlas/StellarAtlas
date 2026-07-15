@@ -4,8 +4,10 @@ import type {
 	FullHistoryTrustlineStateChange
 } from './FullHistoryStateExport.js';
 import type { FullHistoryLedgerCloseMetaSha256Digest } from '../full-history-ledger-close-meta/FullHistoryLedgerCloseMetaBatch.js';
+import type { FullHistoryStateRowEvidence } from './FullHistoryStateRowEvidence.js';
 
 export interface FullHistoryStateImportClaim {
+	readonly attemptCount: number;
 	readonly batchId: string;
 	readonly dataset: FullHistoryStateDataset;
 	readonly endLedger: number;
@@ -23,7 +25,8 @@ export interface FullHistoryStateImportRepository {
 	): Promise<FullHistoryStateImportClaim | null>;
 	complete(
 		claim: FullHistoryStateImportClaim,
-		exportedRecordCount: bigint
+		exportedRecordCount: bigint,
+		rowSetSha256: FullHistoryLedgerCloseMetaSha256Digest
 	): Promise<void>;
 	fail(claim: FullHistoryStateImportClaim, error: Error): Promise<void>;
 	registerPendingImports(): Promise<number>;
@@ -33,11 +36,11 @@ export interface FullHistoryStateImportRepository {
 	): Promise<void>;
 	storeAccountRows(
 		claim: FullHistoryStateImportClaim,
-		rows: readonly FullHistoryAccountStateChange[]
+		rows: readonly FullHistoryStateRowEvidence<FullHistoryAccountStateChange>[]
 	): Promise<void>;
 	storeTrustlineRows(
 		claim: FullHistoryStateImportClaim,
-		rows: readonly FullHistoryTrustlineStateChange[]
+		rows: readonly FullHistoryStateRowEvidence<FullHistoryTrustlineStateChange>[]
 	): Promise<void>;
 }
 
@@ -45,4 +48,5 @@ export interface FullHistoryStateImportReceipt {
 	readonly batchId: string;
 	readonly dataset: FullHistoryStateDataset;
 	readonly recordCount: bigint;
+	readonly rowSetSha256: FullHistoryLedgerCloseMetaSha256Digest;
 }

@@ -1,25 +1,52 @@
+export interface FullHistoryBackfillLeaseTerminal {
+	run<Result>(transition: () => Promise<Result>): Promise<Result>;
+}
+
 export async function runWithFullHistoryBackfillLease<Result>(input: {
 	readonly leaseDurationMs: number;
 	readonly renew: () => Promise<unknown>;
-	readonly work: () => Promise<Result>;
+	readonly work: (
+		leaseSignal: AbortSignal,
+		terminal: FullHistoryBackfillLeaseTerminal
+	) => Promise<Result>;
 }): Promise<Result> {
 	await input.renew();
-	const controller = new AbortController();
+	const renewalController = new AbortController();
+	const workController = new AbortController();
 	const renewal = maintainLease(
 		input.leaseDurationMs,
 		input.renew,
-		controller.signal
+		renewalController.signal
 	).then<LeaseRenewalResult, LeaseRenewalResult>(
 		() => ({ status: 'stopped' }),
-		(error: unknown) => ({ error, status: 'failed' })
+		(error: unknown) => {
+			workController.abort(error);
+			return { error, status: 'failed' };
+		}
 	);
+	let terminalStarted = false;
+	const terminal: FullHistoryBackfillLeaseTerminal = {
+		run: async <TerminalResult>(
+			transition: () => Promise<TerminalResult>
+		): Promise<TerminalResult> => {
+			if (terminalStarted) {
+				throw new Error(
+					'Full-history lease terminal transition already started'
+				);
+			}
+			terminalStarted = true;
+			renewalController.abort();
+			throwIfLeaseRenewalFailed(await renewal);
+			return transition();
+		}
+	};
 	try {
-		const result = await input.work();
-		controller.abort();
+		const result = await input.work(workController.signal, terminal);
+		renewalController.abort();
 		throwIfLeaseRenewalFailed(await renewal);
 		return result;
 	} catch (workError) {
-		controller.abort();
+		renewalController.abort();
 		throwIfLeaseRenewalFailed(await renewal);
 		throw workError;
 	}

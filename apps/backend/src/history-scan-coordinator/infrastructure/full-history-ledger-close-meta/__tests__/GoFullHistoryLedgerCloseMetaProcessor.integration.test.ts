@@ -65,9 +65,12 @@ describeWithBinary('GoFullHistoryLedgerCloseMetaProcessor', () => {
 			'account-state-changes',
 			'trustline-state-changes'
 		] as const) {
-			const output = first.outputs.find((candidate) => candidate.dataset === dataset);
+			const output = first.outputs.find(
+				(candidate) => candidate.dataset === dataset
+			);
 			expect(output).toBeDefined();
-			if (output === undefined) throw new Error(`Missing ${dataset} fixture output`);
+			if (output === undefined)
+				throw new Error(`Missing ${dataset} fixture output`);
 			let consumed = 0n;
 			await expect(
 				runGoFullHistoryStateExport({
@@ -86,10 +89,14 @@ describeWithBinary('GoFullHistoryLedgerCloseMetaProcessor', () => {
 						dirname(executablePath!),
 						'stellaratlas-full-history-state-export'
 					),
+					expectedSourceSha256: output.sha256,
 					signal: new AbortController().signal,
 					timeoutMilliseconds: 120_000
 				})
-			).resolves.toBe(BigInt(output.recordCount));
+			).resolves.toEqual({
+				recordCount: BigInt(output.recordCount),
+				sourceSha256: output.sha256
+			});
 			expect(consumed).toBe(BigInt(output.recordCount));
 		}
 		expect(await readdir(temporaryInputRoot)).toEqual([]);

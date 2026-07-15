@@ -1,11 +1,4 @@
-import { createHash } from 'node:crypto';
-import { createReadStream } from 'node:fs';
-import { realpath, stat } from 'node:fs/promises';
-import { resolve, sep } from 'node:path';
-import {
-	fullHistoryLedgerCloseMetaSha256Digest,
-	type FullHistoryLedgerCloseMetaSha256Digest
-} from '../../domain/full-history-ledger-close-meta/FullHistoryLedgerCloseMetaBatch.js';
+import type { FullHistoryLedgerCloseMetaSha256Digest } from '../../domain/full-history-ledger-close-meta/FullHistoryLedgerCloseMetaBatch.js';
 import type {
 	FullHistoryAccountStateChange,
 	FullHistoryStateChange,
@@ -16,7 +9,15 @@ import type {
 	FullHistoryStateImportReceipt,
 	FullHistoryStateImportRepository
 } from '../../domain/full-history-state-import/FullHistoryStateImport.js';
-import { runWithFullHistoryBackfillLease } from '../run-full-history-backfill/FullHistoryBackfillLeaseKeeper.js';
+import {
+	FullHistoryStateRowSetHasher,
+	type FullHistoryStateRowEvidence
+} from '../../domain/full-history-state-import/FullHistoryStateRowEvidence.js';
+import {
+	runWithFullHistoryBackfillLease,
+	type FullHistoryBackfillLeaseTerminal
+} from '../run-full-history-backfill/FullHistoryBackfillLeaseKeeper.js';
+import { verifiedFullHistoryDatasetPath } from '../full-history-dataset/VerifiedFullHistoryDatasetPath.js';
 
 export interface FullHistoryStateExporter {
 	export(input: {
@@ -24,7 +25,10 @@ export interface FullHistoryStateExporter {
 		readonly consumeRow: (row: FullHistoryStateChange) => Promise<void>;
 		readonly inputPath: string;
 		readonly signal: AbortSignal;
-	}): Promise<bigint>;
+	}): Promise<{
+		readonly recordCount: bigint;
+		readonly sourceSha256: FullHistoryLedgerCloseMetaSha256Digest;
+	}>;
 }
 
 export interface ImportNextFullHistoryStateDatasetConfig {
@@ -66,7 +70,12 @@ export class ImportNextFullHistoryStateDataset {
 						claim,
 						this.config.leaseDurationMilliseconds
 					),
-				work: () => this.importClaim(claim, signal)
+				work: (leaseSignal, terminal) =>
+					this.importClaim(
+						claim,
+						AbortSignal.any([signal, leaseSignal]),
+						terminal
+					)
 			});
 		} catch (error) {
 			const failure = asError(error);
@@ -77,16 +86,20 @@ export class ImportNextFullHistoryStateDataset {
 
 	private async importClaim(
 		claim: FullHistoryStateImportClaim,
-		signal: AbortSignal
+		signal: AbortSignal,
+		terminal: FullHistoryBackfillLeaseTerminal
 	): Promise<FullHistoryStateImportReceipt> {
-		const inputPath = await verifiedInputPath(
+		const inputPath = await verifiedFullHistoryDatasetPath(
 			this.config.storageRoot,
 			claim.storageKey,
 			claim.sourceSha256,
 			signal
 		);
-		const accounts: FullHistoryAccountStateChange[] = [];
-		const trustlines: FullHistoryTrustlineStateChange[] = [];
+		const accounts: FullHistoryStateRowEvidence<FullHistoryAccountStateChange>[] =
+			[];
+		const trustlines: FullHistoryStateRowEvidence<FullHistoryTrustlineStateChange>[] =
+			[];
+		const rowSetHasher = new FullHistoryStateRowSetHasher();
 		let observedRows = 0n;
 		const consumeRow = async (row: FullHistoryStateChange): Promise<void> => {
 			observedRows += 1n;
@@ -97,7 +110,7 @@ export class ImportNextFullHistoryStateDataset {
 				if (!isAccountStateChange(row)) {
 					throw new TypeError('Account state import received a trustline row');
 				}
-				accounts.push(row);
+				accounts.push(rowSetHasher.append(row));
 				if (accounts.length >= this.config.insertBatchSize) {
 					await this.repository.storeAccountRows(claim, accounts.splice(0));
 				}
@@ -106,17 +119,23 @@ export class ImportNextFullHistoryStateDataset {
 			if (!isTrustlineStateChange(row)) {
 				throw new TypeError('Trustline state import received an account row');
 			}
-			trustlines.push(row);
+			trustlines.push(rowSetHasher.append(row));
 			if (trustlines.length >= this.config.insertBatchSize) {
 				await this.repository.storeTrustlineRows(claim, trustlines.splice(0));
 			}
 		};
-		const exportedRows = await this.exporter.export({
+		const exportResult = await this.exporter.export({
 			claim,
 			consumeRow,
 			inputPath,
 			signal
 		});
+		if (exportResult.sourceSha256 !== claim.sourceSha256) {
+			throw new Error(
+				'State exporter source digest does not match its manifest'
+			);
+		}
+		const exportedRows = exportResult.recordCount;
 		if (accounts.length > 0) {
 			await this.repository.storeAccountRows(claim, accounts);
 		}
@@ -131,41 +150,17 @@ export class ImportNextFullHistoryStateDataset {
 				'State exporter record count does not match its manifest'
 			);
 		}
-		await this.repository.complete(claim, exportedRows);
+		const rowSetSha256 = rowSetHasher.finish();
+		await terminal.run(() =>
+			this.repository.complete(claim, exportedRows, rowSetSha256)
+		);
 		return Object.freeze({
 			batchId: claim.batchId,
 			dataset: claim.dataset,
-			recordCount: exportedRows
+			recordCount: exportedRows,
+			rowSetSha256
 		});
 	}
-}
-
-async function verifiedInputPath(
-	storageRoot: string,
-	storageKey: string,
-	expectedDigest: FullHistoryLedgerCloseMetaSha256Digest,
-	signal: AbortSignal
-): Promise<string> {
-	if (signal.aborted) throw asError(signal.reason);
-	const root = await realpath(storageRoot);
-	const candidate = resolve(root, storageKey);
-	if (!candidate.startsWith(`${root}${sep}`)) {
-		throw new TypeError('State import path escapes its storage root');
-	}
-	const actual = await realpath(candidate);
-	if (!actual.startsWith(`${root}${sep}`)) {
-		throw new TypeError('State import file resolves outside its storage root');
-	}
-	const info = await stat(actual);
-	if (!info.isFile()) throw new TypeError('State import source is not a file');
-	const hash = createHash('sha256');
-	for await (const chunk of createReadStream(actual, { signal }))
-		hash.update(chunk);
-	const digest = fullHistoryLedgerCloseMetaSha256Digest(hash.digest('hex'));
-	if (digest !== expectedDigest) {
-		throw new Error('State import source digest does not match its manifest');
-	}
-	return actual;
 }
 
 function isAccountStateChange(

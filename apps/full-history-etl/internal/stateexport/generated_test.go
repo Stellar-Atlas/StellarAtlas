@@ -40,6 +40,9 @@ func TestAccountExportPreservesBinaryAndJSONTypes(t *testing.T) {
 	if records[0].Type != "header" || records[0].Version != stateexport.Version || records[0].Dataset != "account-state-changes" {
 		t.Fatalf("unexpected header: %+v", records[0])
 	}
+	if records[0].SourceSHA256 != fileSHA256(t, path) {
+		t.Fatalf("header source digest %q does not match its input", records[0].SourceSHA256)
+	}
 	if records[1].Type != "row" || records[1].Dataset != records[0].Dataset {
 		t.Fatalf("unexpected row envelope: %+v", records[1])
 	}

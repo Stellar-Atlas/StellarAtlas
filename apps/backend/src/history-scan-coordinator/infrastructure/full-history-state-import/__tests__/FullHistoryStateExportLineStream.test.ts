@@ -1,7 +1,9 @@
 import { consumeFullHistoryStateExport } from '../FullHistoryStateExportLineStream.js';
 
+const sourceSha256 = 'd'.repeat(64);
 const header = JSON.stringify({
 	dataset: 'account-state-changes',
+	sourceSha256,
 	type: 'header',
 	version: 'stellar-atlas.full-history-state-export.v1'
 });
@@ -23,9 +25,10 @@ describe('consumeFullHistoryStateExport', () => {
 			consumeFullHistoryStateExport(
 				asChunks(chunks),
 				'account-state-changes',
+				sourceSha256,
 				() => Promise.resolve()
 			)
-		).resolves.toBe(0n);
+		).resolves.toEqual({ recordCount: 0n, sourceSha256 });
 	});
 
 	it('accepts a final completion line without a trailing newline', async () => {
@@ -33,9 +36,10 @@ describe('consumeFullHistoryStateExport', () => {
 			consumeFullHistoryStateExport(
 				asChunks([Buffer.from(`${header}\n${complete}`)]),
 				'account-state-changes',
+				sourceSha256,
 				() => Promise.resolve()
 			)
-		).resolves.toBe(0n);
+		).resolves.toEqual({ recordCount: 0n, sourceSha256 });
 	});
 
 	it('rejects invalid UTF-8 and lines larger than the protocol bound', async () => {
@@ -43,6 +47,7 @@ describe('consumeFullHistoryStateExport', () => {
 			consumeFullHistoryStateExport(
 				asChunks([Buffer.from([0xff, 0x0a])]),
 				'account-state-changes',
+				sourceSha256,
 				() => Promise.resolve()
 			)
 		).rejects.toThrow();
@@ -50,6 +55,7 @@ describe('consumeFullHistoryStateExport', () => {
 			consumeFullHistoryStateExport(
 				asChunks([Buffer.alloc((1 << 20) + 1, 0x61)]),
 				'account-state-changes',
+				sourceSha256,
 				() => Promise.resolve()
 			)
 		).rejects.toThrow('byte limit');

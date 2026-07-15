@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import type { DataSource, EntityManager } from 'typeorm';
 import {
 	fullHistoryLedgerCloseMetaSequence,
@@ -11,13 +12,16 @@ import type {
 	FullHistoryStateImportClaim,
 	FullHistoryStateImportRepository
 } from '../../../domain/full-history-state-import/FullHistoryStateImport.js';
+import type { FullHistoryStateRowEvidence } from '../../../domain/full-history-state-import/FullHistoryStateRowEvidence.js';
 import { assertUuid } from '../../../domain/full-history/FullHistoryCanonicalTypes.js';
 import {
 	accountStateInsertQuery,
+	stateRowDigestVerificationQuery,
 	trustlineStateInsertQuery
 } from './FullHistoryStateImportRowSql.js';
 
 interface ClaimRow {
+	readonly attemptCount: number;
 	readonly batchId: string;
 	readonly dataset: string;
 	readonly endLedger: string;
@@ -33,9 +37,22 @@ interface CountRow {
 }
 
 interface ImportControlRow {
+	readonly active: boolean;
+	readonly attemptCount: number;
 	readonly expectedRecordCount: string;
 	readonly leaseOwner: string | null;
 	readonly status: string;
+}
+
+interface ActiveClaimRow {
+	readonly active: boolean;
+}
+
+interface DigestRow {
+	readonly changeIndex: string;
+	readonly ledgerSequence: string;
+	readonly rowSha256: Uint8Array;
+	readonly transactionIndex: string;
 }
 
 interface IdentityRow {
@@ -128,7 +145,8 @@ export class TypeOrmFullHistoryStateImportRepository implements FullHistoryState
 					returning control.*
 				)
 				select claimed."batch_id" as "batchId",
-					claimed."dataset", batch."start_ledger"::text as "startLedger",
+					claimed."attempt_count" as "attemptCount", claimed."dataset",
+					batch."start_ledger"::text as "startLedger",
 					batch."end_ledger"::text as "endLedger",
 					claimed."expected_record_count"::text as "expectedRecordCount",
 					claimed."lease_owner"::text as "leaseOwner",
@@ -145,20 +163,57 @@ export class TypeOrmFullHistoryStateImportRepository implements FullHistoryState
 
 	async storeAccountRows(
 		claim: FullHistoryStateImportClaim,
-		rows: readonly FullHistoryAccountStateChange[]
+		rows: readonly FullHistoryStateRowEvidence<FullHistoryAccountStateChange>[]
 	): Promise<void> {
 		assertClaimDataset(claim, 'account-state-changes');
-		const query = accountStateInsertQuery(claim.batchId, rows);
-		await this.dataSource.query(query.sql, [...query.parameters]);
+		await this.storeRows(
+			claim,
+			'full_history_lcm_account_state_change',
+			accountStateInsertQuery(claim.batchId, rows),
+			rows
+		);
 	}
 
 	async storeTrustlineRows(
 		claim: FullHistoryStateImportClaim,
-		rows: readonly FullHistoryTrustlineStateChange[]
+		rows: readonly FullHistoryStateRowEvidence<FullHistoryTrustlineStateChange>[]
 	): Promise<void> {
 		assertClaimDataset(claim, 'trustline-state-changes');
-		const query = trustlineStateInsertQuery(claim.batchId, rows);
-		await this.dataSource.query(query.sql, [...query.parameters]);
+		await this.storeRows(
+			claim,
+			'full_history_lcm_trustline_state_change',
+			trustlineStateInsertQuery(claim.batchId, rows),
+			rows
+		);
+	}
+
+	private async storeRows(
+		claim: FullHistoryStateImportClaim,
+		table:
+			| 'full_history_lcm_account_state_change'
+			| 'full_history_lcm_trustline_state_change',
+		insert: { readonly parameters: readonly unknown[]; readonly sql: string },
+		rows: readonly FullHistoryStateRowEvidence[]
+	): Promise<void> {
+		await this.dataSource.transaction(async (manager) => {
+			await setTransactionBounds(manager);
+			await assertActiveClaim(manager, claim);
+			await manager.query(insert.sql, [...insert.parameters]);
+			const verification = stateRowDigestVerificationQuery(
+				table,
+				claim.batchId,
+				rows
+			);
+			const matches = exactlyOne(
+				await manager.query<CountRow[]>(verification.sql, [
+					...verification.parameters
+				]),
+				'state row digest verification'
+			);
+			if (BigInt(matches.count) !== BigInt(rows.length)) {
+				throw new Error('Stored state rows differ from exported row evidence');
+			}
+		});
 	}
 
 	async renewLease(
@@ -171,10 +226,12 @@ export class TypeOrmFullHistoryStateImportRepository implements FullHistoryState
 			with renewed as (
 				update "full_history_lcm_state_import"
 				set "lease_expires_at" = clock_timestamp()
-					+ ($4 * interval '1 millisecond'),
+					+ ($5 * interval '1 millisecond'),
 					"updated_at" = clock_timestamp()
 				where "batch_id" = $1 and "dataset" = $2
 					and "status" = 'importing' and "lease_owner" = $3
+					and "attempt_count" = $4
+					and "lease_expires_at" > clock_timestamp()
 				returning "batch_id"
 			)
 			select "batch_id" as "batchId" from renewed
@@ -183,6 +240,7 @@ export class TypeOrmFullHistoryStateImportRepository implements FullHistoryState
 				claim.batchId,
 				claim.dataset,
 				claim.leaseOwner,
+				claim.attemptCount,
 				leaseDurationMilliseconds
 			]
 		);
@@ -191,15 +249,18 @@ export class TypeOrmFullHistoryStateImportRepository implements FullHistoryState
 
 	async complete(
 		claim: FullHistoryStateImportClaim,
-		exportedRecordCount: bigint
+		exportedRecordCount: bigint,
+		rowSetSha256: ReturnType<typeof fullHistoryLedgerCloseMetaSha256Digest>
 	): Promise<void> {
 		await this.dataSource.transaction(async (manager) => {
 			await setTransactionBounds(manager, 120_000);
 			const control = exactlyOne(
 				await manager.query<ImportControlRow[]>(
 					`
-					select "expected_record_count"::text as "expectedRecordCount",
-						"lease_owner"::text as "leaseOwner", "status"
+					select "attempt_count" as "attemptCount",
+						"expected_record_count"::text as "expectedRecordCount",
+						"lease_owner"::text as "leaseOwner", "status",
+						("lease_expires_at" > clock_timestamp()) as "active"
 					from "full_history_lcm_state_import"
 					where "batch_id" = $1 and "dataset" = $2 for update
 				`,
@@ -210,70 +271,147 @@ export class TypeOrmFullHistoryStateImportRepository implements FullHistoryState
 			const expected = BigInt(control.expectedRecordCount);
 			if (
 				control.status !== 'importing' ||
+				!control.active ||
 				control.leaseOwner !== claim.leaseOwner ||
+				control.attemptCount !== claim.attemptCount ||
 				expected !== claim.expectedRecordCount ||
 				exportedRecordCount !== expected
 			) {
 				throw new Error('State import completion does not match its lease');
 			}
-			const count = await countStoredRows(manager, claim);
-			if (count !== expected) {
+			const stored = await calculateStoredRowSetEvidence(manager, claim);
+			if (stored.count !== expected || stored.rowSetSha256 !== rowSetSha256) {
 				throw new Error(
-					'State import stored count does not match its manifest'
+					'State import stored row set does not match its exported evidence'
 				);
 			}
-			await manager.query(
+			const completed = await manager.query<IdentityRow[]>(
 				`
+				with completed as (
 				update "full_history_lcm_state_import"
-				set "status" = 'complete', "imported_record_count" = $4,
+				set "status" = 'complete', "imported_record_count" = $5,
+					"imported_row_set_sha256" = $6,
 					"lease_owner" = null, "lease_expires_at" = null,
 					"completed_at" = clock_timestamp(),
 					"updated_at" = clock_timestamp(), "error_text" = null
 				where "batch_id" = $1 and "dataset" = $2
 					and "status" = 'importing' and "lease_owner" = $3
+					and "attempt_count" = $4
+					and "lease_expires_at" > clock_timestamp()
+				returning "batch_id"
+				)
+				select "batch_id" as "batchId" from completed
 			`,
-				[claim.batchId, claim.dataset, claim.leaseOwner, count.toString()]
+				[
+					claim.batchId,
+					claim.dataset,
+					claim.leaseOwner,
+					claim.attemptCount,
+					stored.count.toString(),
+					Buffer.from(rowSetSha256, 'hex')
+				]
 			);
+			if (completed.length !== 1) {
+				throw new Error('State import completion lost its lease');
+			}
 		});
 	}
 
 	async fail(claim: FullHistoryStateImportClaim, error: Error): Promise<void> {
 		const message =
 			error.message.trim().slice(0, 65_535) || 'State import failed';
-		await this.dataSource.query(
+		const rows = await this.dataSource.query<IdentityRow[]>(
 			`
-			update "full_history_lcm_state_import"
-			set "status" = 'failed', "lease_owner" = null,
-				"lease_expires_at" = null, "completed_at" = null,
-				"updated_at" = clock_timestamp(), "error_text" = $4,
-				"next_attempt_at" = clock_timestamp() + (
-					least(3600, power(2, least("attempt_count", 10)))
-					* interval '1 second'
-				)
-			where "batch_id" = $1 and "dataset" = $2
-				and "status" = 'importing' and "lease_owner" = $3
+			with failed as (
+				update "full_history_lcm_state_import"
+				set "status" = 'failed', "lease_owner" = null,
+					"lease_expires_at" = null, "completed_at" = null,
+					"updated_at" = clock_timestamp(), "error_text" = $5,
+					"next_attempt_at" = clock_timestamp() + (
+						least(3600, power(2, least("attempt_count", 10)))
+						* interval '1 second'
+					)
+				where "batch_id" = $1 and "dataset" = $2
+					and "status" = 'importing' and "lease_owner" = $3
+					and "attempt_count" = $4
+					and "lease_expires_at" > clock_timestamp()
+				returning "batch_id"
+			)
+			select "batch_id" as "batchId" from failed
 		`,
-			[claim.batchId, claim.dataset, claim.leaseOwner, message]
+			[
+				claim.batchId,
+				claim.dataset,
+				claim.leaseOwner,
+				claim.attemptCount,
+				message
+			]
 		);
+		if (rows.length !== 1) throw new Error('State import lease was lost');
 	}
 }
 
-async function countStoredRows(
+async function calculateStoredRowSetEvidence(
 	manager: EntityManager,
 	claim: FullHistoryStateImportClaim
-): Promise<bigint> {
+): Promise<{
+	readonly count: bigint;
+	readonly rowSetSha256: ReturnType<
+		typeof fullHistoryLedgerCloseMetaSha256Digest
+	>;
+}> {
 	const table =
 		claim.dataset === 'account-state-changes'
 			? 'full_history_lcm_account_state_change'
 			: 'full_history_lcm_trustline_state_change';
+	const hash = createHash('sha256');
+	let count = 0n;
+	let cursor: [string, string, string] = ['0', '0', '0'];
+	for (;;) {
+		const rows = await manager.query<DigestRow[]>(
+			`select "ledger_sequence"::text as "ledgerSequence",
+				"transaction_index"::text as "transactionIndex",
+				"change_index"::text as "changeIndex",
+				"row_sha256" as "rowSha256"
+			 from "${table}"
+			 where "batch_id" = $1
+				and ("ledger_sequence", "transaction_index", "change_index")
+					> ($2::bigint, $3::bigint, $4::bigint)
+			 order by "ledger_sequence", "transaction_index", "change_index"
+			 limit 10000`,
+			[claim.batchId, ...cursor]
+		);
+		for (const row of rows) hash.update(Buffer.from(row.rowSha256));
+		count += BigInt(rows.length);
+		if (rows.length < 10_000) break;
+		const last = rows.at(-1);
+		if (last === undefined) throw new Error('State digest page was empty');
+		cursor = [last.ledgerSequence, last.transactionIndex, last.changeIndex];
+	}
+	return {
+		count,
+		rowSetSha256: fullHistoryLedgerCloseMetaSha256Digest(hash.digest('hex'))
+	};
+}
+
+async function assertActiveClaim(
+	manager: EntityManager,
+	claim: FullHistoryStateImportClaim
+): Promise<void> {
 	const row = exactlyOne(
-		await manager.query<CountRow[]>(
-			`select count(*)::text as "count" from "${table}" where "batch_id" = $1`,
-			[claim.batchId]
+		await manager.query<ActiveClaimRow[]>(
+			`select ("status" = 'importing' and "lease_owner" = $3
+				and "attempt_count" = $4
+				and "lease_expires_at" > clock_timestamp()) as "active"
+			 from "full_history_lcm_state_import"
+			 where "batch_id" = $1 and "dataset" = $2
+			 for share`,
+			[claim.batchId, claim.dataset, claim.leaseOwner, claim.attemptCount]
 		),
-		'state import count'
+		'state import lease'
 	);
-	return BigInt(row.count);
+	if (!row.active)
+		throw new Error('State import lease was lost before row write');
 }
 
 function mapClaim(row: ClaimRow): FullHistoryStateImportClaim {
@@ -281,6 +419,7 @@ function mapClaim(row: ClaimRow): FullHistoryStateImportClaim {
 		throw new TypeError('Unknown state import dataset');
 	}
 	return Object.freeze({
+		attemptCount: validAttemptCount(row.attemptCount),
 		batchId: assertUuid(row.batchId, 'batchId'),
 		dataset: row.dataset as (typeof stateDatasets)[number],
 		endLedger: fullHistoryLedgerCloseMetaSequence(Number(row.endLedger)),
@@ -292,6 +431,13 @@ function mapClaim(row: ClaimRow): FullHistoryStateImportClaim {
 		startLedger: fullHistoryLedgerCloseMetaSequence(Number(row.startLedger)),
 		storageKey: validStorageKey(row.storageKey)
 	});
+}
+
+function validAttemptCount(value: number): number {
+	if (!Number.isSafeInteger(value) || value < 1) {
+		throw new TypeError('State import attempt count is invalid');
+	}
+	return value;
 }
 
 function validStorageKey(value: string): string {

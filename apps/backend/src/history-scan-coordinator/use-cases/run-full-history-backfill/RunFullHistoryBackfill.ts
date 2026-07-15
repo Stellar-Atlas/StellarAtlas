@@ -131,7 +131,7 @@ export class RunFullHistoryBackfill {
 				await runWithFullHistoryBackfillLease({
 					leaseDurationMs,
 					renew: () => this.repository.renew(owner, leaseDurationMs),
-					work: () => this.promoter.promote(target)
+					work: (_leaseSignal) => this.promoter.promote(target)
 				});
 				return null;
 			} catch (error) {

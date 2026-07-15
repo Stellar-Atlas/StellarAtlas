@@ -1,7 +1,9 @@
 import type {
 	FullHistoryAccountStateChange,
+	FullHistoryStateChange,
 	FullHistoryTrustlineStateChange
 } from '../../../domain/full-history-state-import/FullHistoryStateExport.js';
+import type { FullHistoryStateRowEvidence } from '../../../domain/full-history-state-import/FullHistoryStateRowEvidence.js';
 
 export interface FullHistoryStateInsertQuery {
 	readonly parameters: readonly unknown[];
@@ -10,6 +12,7 @@ export interface FullHistoryStateInsertQuery {
 
 const accountColumns = [
 	'batch_id',
+	'row_sha256',
 	'ledger_sequence',
 	'transaction_index',
 	'change_index',
@@ -50,6 +53,7 @@ const accountColumns = [
 
 const trustlineColumns = [
 	'batch_id',
+	'row_sha256',
 	'ledger_sequence',
 	'transaction_index',
 	'change_index',
@@ -81,19 +85,19 @@ const trustlineColumns = [
 
 export function accountStateInsertQuery(
 	batchId: string,
-	rows: readonly FullHistoryAccountStateChange[]
+	rows: readonly FullHistoryStateRowEvidence<FullHistoryAccountStateChange>[]
 ): FullHistoryStateInsertQuery {
 	return buildInsert(
 		'full_history_lcm_account_state_change',
 		accountColumns,
 		rows.map((row) => accountValues(batchId, row)),
-		new Set([34, 35, 36])
+		new Set([35, 36, 37])
 	);
 }
 
 export function trustlineStateInsertQuery(
 	batchId: string,
-	rows: readonly FullHistoryTrustlineStateChange[]
+	rows: readonly FullHistoryStateRowEvidence<FullHistoryTrustlineStateChange>[]
 ): FullHistoryStateInsertQuery {
 	return buildInsert(
 		'full_history_lcm_trustline_state_change',
@@ -105,10 +109,12 @@ export function trustlineStateInsertQuery(
 
 function accountValues(
 	batchId: string,
-	row: FullHistoryAccountStateChange
+	evidence: FullHistoryStateRowEvidence<FullHistoryAccountStateChange>
 ): readonly unknown[] {
+	const row = evidence.row;
 	return [
 		batchId,
+		Buffer.from(evidence.rowSha256, 'hex'),
 		row.ledgerSequence,
 		row.transactionIndex,
 		row.changeIndex,
@@ -150,10 +156,12 @@ function accountValues(
 
 function trustlineValues(
 	batchId: string,
-	row: FullHistoryTrustlineStateChange
+	evidence: FullHistoryStateRowEvidence<FullHistoryTrustlineStateChange>
 ): readonly unknown[] {
+	const row = evidence.row;
 	return [
 		batchId,
+		Buffer.from(evidence.rowSha256, 'hex'),
 		row.ledgerSequence,
 		row.transactionIndex,
 		row.changeIndex,
@@ -184,6 +192,48 @@ function trustlineValues(
 		row.liquidityPoolUseCount,
 		row.flags
 	];
+}
+
+export function stateRowDigestVerificationQuery(
+	table:
+		| 'full_history_lcm_account_state_change'
+		| 'full_history_lcm_trustline_state_change',
+	batchId: string,
+	rows: readonly FullHistoryStateRowEvidence[]
+): FullHistoryStateInsertQuery {
+	if (rows.length === 0 || rows.length > 500) {
+		throw new TypeError(
+			'State digest verification batch must contain 1 to 500 rows'
+		);
+	}
+	const parameters: unknown[] = [batchId];
+	const values = rows.map(({ row, rowSha256 }) => {
+		const valuesWithCasts = [
+			[row.ledgerSequence, 'bigint'],
+			[row.transactionIndex, 'bigint'],
+			[row.changeIndex, 'bigint'],
+			[Buffer.from(rowSha256, 'hex'), 'bytea']
+		] as const;
+		const placeholders = valuesWithCasts.map(([value, cast]) => {
+			parameters.push(value);
+			return `$${parameters.length}::${cast}`;
+		});
+		return `(${placeholders.join(', ')})`;
+	});
+	return {
+		parameters,
+		sql: `with expected (ledger_sequence, transaction_index, change_index, row_sha256) as (
+			values ${values.join(', ')}
+		)
+		select count(*)::text as "count"
+		from expected
+			join "${table}" actual
+				on actual."batch_id" = $1
+				and actual."ledger_sequence" = expected.ledger_sequence
+				and actual."transaction_index" = expected.transaction_index
+				and actual."change_index" = expected.change_index
+				and actual."row_sha256" = expected.row_sha256`
+	};
 }
 
 function buildInsert(

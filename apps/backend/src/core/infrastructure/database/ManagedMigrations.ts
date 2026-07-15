@@ -36,6 +36,7 @@ import { HistoryArchiveBucketReferenceSummaryMigration1785100000000 } from '@his
 import { FullHistoryLedgerCloseMetaCompleteProjectionMigration1785110000000 } from '@history-scan-coordinator/infrastructure/database/migrations/1785110000000-FullHistoryLedgerCloseMetaCompleteProjectionMigration.js';
 import { FullHistoryLedgerCloseMetaStateProjectionMigration1785120000000 } from '@history-scan-coordinator/infrastructure/database/migrations/1785120000000-FullHistoryLedgerCloseMetaStateProjectionMigration.js';
 import { FullHistoryLedgerCloseMetaStateImportMigration1785130000000 } from '@history-scan-coordinator/infrastructure/database/migrations/1785130000000-FullHistoryLedgerCloseMetaStateImportMigration.js';
+import { FullHistoryLedgerCloseMetaCanonicalCoverageMigration1785140000000 } from '@history-scan-coordinator/infrastructure/database/migrations/1785140000000-FullHistoryLedgerCloseMetaCanonicalCoverageMigration.js';
 
 // The production database was imported with a partial legacy migration ledger.
 // Explicit registration prevents TypeORM from replaying pre-baseline migrations.
@@ -77,5 +78,6 @@ export const managedMigrations = [
 	HistoryArchiveBucketReferenceSummaryMigration1785100000000,
 	FullHistoryLedgerCloseMetaCompleteProjectionMigration1785110000000,
 	FullHistoryLedgerCloseMetaStateProjectionMigration1785120000000,
-	FullHistoryLedgerCloseMetaStateImportMigration1785130000000
+	FullHistoryLedgerCloseMetaStateImportMigration1785130000000,
+	FullHistoryLedgerCloseMetaCanonicalCoverageMigration1785140000000
 ] as const;

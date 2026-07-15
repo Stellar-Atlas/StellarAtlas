@@ -20,7 +20,7 @@ func ParseConfig(args []string, stderr io.Writer) (Config, error) {
 	flags.SetOutput(stderr)
 	var inputPath, datasetName string
 	flags.StringVar(&inputPath, "input", "", "published state-change Parquet file")
-	flags.StringVar(&datasetName, "dataset", "", "account-state-changes or trustline-state-changes")
+	flags.StringVar(&datasetName, "dataset", "", "account-state-changes, ledgers, or trustline-state-changes")
 	if err := flags.Parse(args); err != nil {
 		return Config{}, err
 	}

@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"os"
 	"reflect"
 	"strconv"
 
@@ -32,7 +31,7 @@ func Export(ctx context.Context, config Config, output io.Writer) (recordCount u
 	}
 
 	files := newParquetFileGroup(config.InputPath)
-	input, err := files.open()
+	input, sourceSHA256, err := files.open(ctx)
 	if err != nil {
 		return 0, fmt.Errorf("open %s parquet: %w", config.Dataset, err)
 	}
@@ -44,12 +43,26 @@ func Export(ctx context.Context, config Config, output io.Writer) (recordCount u
 
 	switch config.Dataset {
 	case AccountStateChanges:
-		return exportTyped(ctx, input, output, config.Dataset, makeAccountValue)
+		recordCount, resultErr = exportTyped(ctx, input, output, config.Dataset, sourceSHA256, makeAccountValue)
+	case Ledgers:
+		recordCount, resultErr = exportTyped(ctx, input, output, config.Dataset, sourceSHA256, makeLedgerValue)
 	case TrustlineStateChanges:
-		return exportTyped(ctx, input, output, config.Dataset, makeTrustlineValue)
+		recordCount, resultErr = exportTyped(ctx, input, output, config.Dataset, sourceSHA256, makeTrustlineValue)
 	default:
 		return 0, fmt.Errorf("unsupported dataset %q", config.Dataset)
 	}
+	if resultErr != nil {
+		return recordCount, resultErr
+	}
+	if err := files.verifyUnchanged(ctx); err != nil {
+		return recordCount, fmt.Errorf("verify %s parquet source: %w", config.Dataset, err)
+	}
+	if err := writeLine(output, complete{
+		Type: "complete", Dataset: config.Dataset, RecordCount: strconv.FormatUint(recordCount, 10),
+	}); err != nil {
+		return recordCount, fmt.Errorf("write completion: %w", err)
+	}
+	return recordCount, nil
 }
 
 func exportTyped[Source, Value any](
@@ -57,6 +70,7 @@ func exportTyped[Source, Value any](
 	input source.ParquetFile,
 	output io.Writer,
 	dataset Dataset,
+	sourceSHA256 string,
 	convert func(Source) (Value, error),
 ) (recordCount uint64, resultErr error) {
 	if err := validateParquetSchema[Source](input); err != nil {
@@ -75,7 +89,9 @@ func exportTyped[Source, Value any](
 	if err := ctx.Err(); err != nil {
 		return 0, fmt.Errorf("export %s: %w", dataset, err)
 	}
-	if err := writeLine(output, header{Type: "header", Version: Version, Dataset: dataset}); err != nil {
+	if err := writeLine(output, header{
+		Type: "header", Version: Version, Dataset: dataset, SourceSHA256: sourceSHA256,
+	}); err != nil {
 		return 0, fmt.Errorf("write header: %w", err)
 	}
 	for remaining := rows; remaining > 0; {
@@ -110,11 +126,6 @@ func exportTyped[Source, Value any](
 	}
 	if err := ctx.Err(); err != nil {
 		return recordCount, fmt.Errorf("export %s: %w", dataset, err)
-	}
-	if err := writeLine(output, complete{
-		Type: "complete", Dataset: dataset, RecordCount: strconv.FormatUint(recordCount, 10),
-	}); err != nil {
-		return recordCount, fmt.Errorf("write completion: %w", err)
 	}
 	return recordCount, nil
 }
@@ -183,82 +194,3 @@ func minInt64(left int64, right int) int64 {
 	}
 	return int64(right)
 }
-
-type parquetFileGroup struct {
-	path  string
-	files map[*parquetLocalFile]struct{}
-}
-
-type parquetLocalFile struct {
-	group  *parquetFileGroup
-	file   *os.File
-	closed bool
-}
-
-func newParquetFileGroup(path string) *parquetFileGroup {
-	return &parquetFileGroup{path: path, files: make(map[*parquetLocalFile]struct{})}
-}
-
-func (g *parquetFileGroup) open() (*parquetLocalFile, error) {
-	file, err := os.Open(g.path)
-	if err != nil {
-		return nil, err
-	}
-	info, err := file.Stat()
-	if err != nil {
-		return nil, errors.Join(err, file.Close())
-	}
-	if !info.Mode().IsRegular() {
-		return nil, errors.Join(fmt.Errorf("input is not a regular file"), file.Close())
-	}
-	wrapped := &parquetLocalFile{group: g, file: file}
-	g.files[wrapped] = struct{}{}
-	return wrapped, nil
-}
-
-func (g *parquetFileGroup) closeAll() error {
-	var closeErrors []error
-	for file := range g.files {
-		if err := file.Close(); err != nil {
-			closeErrors = append(closeErrors, err)
-		}
-	}
-	if err := errors.Join(closeErrors...); err != nil {
-		return fmt.Errorf("close parquet input: %w", err)
-	}
-	return nil
-}
-
-func (f *parquetLocalFile) Open(name string) (source.ParquetFile, error) {
-	if name != "" {
-		return nil, fmt.Errorf("external parquet file references are not supported")
-	}
-	return f.group.open()
-}
-
-func (f *parquetLocalFile) Create(string) (source.ParquetFile, error) {
-	return nil, fmt.Errorf("parquet input is read-only")
-}
-
-func (f *parquetLocalFile) Seek(offset int64, whence int) (int64, error) {
-	return f.file.Seek(offset, whence)
-}
-
-func (f *parquetLocalFile) Read(data []byte) (int, error) {
-	return f.file.Read(data)
-}
-
-func (f *parquetLocalFile) Write([]byte) (int, error) {
-	return 0, fmt.Errorf("parquet input is read-only")
-}
-
-func (f *parquetLocalFile) Close() error {
-	if f.closed {
-		return nil
-	}
-	f.closed = true
-	delete(f.group.files, f)
-	return f.file.Close()
-}
-
-var _ source.ParquetFile = (*parquetLocalFile)(nil)

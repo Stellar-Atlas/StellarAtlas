@@ -25,7 +25,7 @@ type absentEvidence struct {
 	inflation bool
 }
 
-func TestRealManifestV8StateExports(t *testing.T) {
+func TestRealManifestV8Exports(t *testing.T) {
 	root := t.TempDir()
 	outputDirectory := filepath.Join(root, "network=pubnet", "range=53312000-53312000")
 	receipt, err := app.Run(context.Background(), app.Config{
@@ -47,6 +47,33 @@ func TestRealManifestV8StateExports(t *testing.T) {
 	for _, descriptor := range receipt.Outputs {
 		paths[descriptor.Dataset] = filepath.Join(root, filepath.FromSlash(descriptor.StorageKey))
 	}
+	t.Run(string(stateexport.Ledgers), func(t *testing.T) {
+		var output bytes.Buffer
+		count, err := stateexport.Export(context.Background(), stateexport.Config{
+			Dataset: stateexport.Ledgers, InputPath: paths[string(stateexport.Ledgers)],
+		}, &output)
+		if err != nil {
+			t.Fatalf("export generated ledger parquet: %v", err)
+		}
+		if count != 1 {
+			t.Fatalf("exported %d ledger rows, expected 1", count)
+		}
+		records := decodeLines(t, output.Bytes(), stateexport.MaxNDJSONLineBytes)
+		if len(records) != 3 {
+			t.Fatalf("got %d ledger envelopes, expected 3", len(records))
+		}
+		assertV8EnvelopeBounds(t, records, stateexport.Ledgers, paths[string(stateexport.Ledgers)], 1)
+		value := records[1].Value
+		if records[1].Type != "row" || records[1].Dataset != string(stateexport.Ledgers) || len(value) != 9 {
+			t.Fatalf("invalid ledger row envelope: type=%q dataset=%q fields=%d", records[1].Type, records[1].Dataset, len(value))
+		}
+		assertDecimalFields(t, value, []string{"ledgerSequence", "closedAtUnixMillis", "transactionCount"})
+		assertInt32s(t, value, []string{"protocolVersion"})
+		assertLowercaseHashFields(t, value, []string{
+			"ledgerHash", "previousLedgerHash", "transactionSetHash", "transactionResultSetHash", "bucketListHash",
+		})
+		assertRawJSON(t, value, "ledgerSequence", `"53312000"`)
+	})
 	tests := []struct {
 		dataset stateexport.Dataset
 		rows    int
@@ -69,7 +96,7 @@ func TestRealManifestV8StateExports(t *testing.T) {
 			if len(records) != test.rows+2 {
 				t.Fatalf("got %d envelopes, expected %d", len(records), test.rows+2)
 			}
-			assertV8EnvelopeBounds(t, records, test.dataset, test.rows)
+			assertV8EnvelopeBounds(t, records, test.dataset, paths[string(test.dataset)], test.rows)
 			for index, record := range records[1 : len(records)-1] {
 				if record.Type != "row" || record.Dataset != string(test.dataset) || len(record.Value) != test.fields {
 					t.Fatalf("row %d has an invalid envelope or field count: type=%q dataset=%q fields=%d", index, record.Type, record.Dataset, len(record.Value))
@@ -109,11 +136,14 @@ func assertManifestV8(t *testing.T, path string) {
 	}
 }
 
-func assertV8EnvelopeBounds(t *testing.T, records []decodedEnvelope, dataset stateexport.Dataset, rows int) {
+func assertV8EnvelopeBounds(t *testing.T, records []decodedEnvelope, dataset stateexport.Dataset, path string, rows int) {
 	t.Helper()
 	header, completion := records[0], records[len(records)-1]
 	if header.Type != "header" || header.Version != stateexport.Version || header.Dataset != string(dataset) {
 		t.Fatalf("unexpected first envelope: %+v", header)
+	}
+	if header.SourceSHA256 != fileSHA256(t, path) {
+		t.Fatalf("header source digest %q does not match %s", header.SourceSHA256, path)
 	}
 	if completion.Type != "complete" || completion.Dataset != string(dataset) || completion.RecordCount != strconv.Itoa(rows) {
 		t.Fatalf("unexpected last envelope: %+v", completion)

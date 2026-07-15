@@ -1,4 +1,15 @@
 import type { FullHistoryStateImportReceipt } from '../../../domain/full-history-state-import/FullHistoryStateImport.js';
+import type { FullHistoryStateCanonicalCoverageReceipt } from '../../../domain/full-history-state-import/FullHistoryLedgerProjection.js';
+
+export type FullHistoryStateWorkerReceipt =
+	| {
+			readonly kind: 'state-import';
+			readonly receipt: FullHistoryStateImportReceipt;
+	  }
+	| {
+			readonly kind: 'canonical-coverage';
+			readonly receipt: FullHistoryStateCanonicalCoverageReceipt;
+	  };
 
 export interface FullHistoryStateImportWorkerLoopConfig {
 	readonly errorBackoffMilliseconds: number;
@@ -14,6 +25,17 @@ export type FullHistoryStateImportWorkerEvent =
 			readonly event: 'state-import';
 			readonly recordCount: string;
 			readonly status: 'complete';
+			readonly worker: number;
+	  }
+	| {
+			readonly at: string;
+			readonly batchId: string;
+			readonly canonicalBatchCount: number;
+			readonly durationMs: number;
+			readonly event: 'canonical-coverage';
+			readonly ledgerCount: number;
+			readonly minimumProofVersion: number;
+			readonly status: 'complete' | 'mismatch';
 			readonly worker: number;
 	  }
 	| {
@@ -36,7 +58,7 @@ export interface FullHistoryStateImportWorkerLoopDependencies {
 	readonly emit: (event: FullHistoryStateImportWorkerEvent) => void;
 	readonly execute: (
 		signal: AbortSignal
-	) => Promise<FullHistoryStateImportReceipt | null>;
+	) => Promise<FullHistoryStateWorkerReceipt | null>;
 	readonly formatError: (error: unknown) => string;
 	readonly now: () => number;
 	readonly signal: AbortSignal;
@@ -50,9 +72,9 @@ export async function runFullHistoryStateImportWorkerLoop(
 ): Promise<void> {
 	while (!dependencies.signal.aborted) {
 		const startedAt = dependencies.now();
-		let receipt: FullHistoryStateImportReceipt | null;
+		let result: FullHistoryStateWorkerReceipt | null;
 		try {
-			receipt = await dependencies.execute(dependencies.signal);
+			result = await dependencies.execute(dependencies.signal);
 		} catch (error) {
 			if (dependencies.signal.aborted) return;
 			dependencies.emit({
@@ -70,7 +92,7 @@ export async function runFullHistoryStateImportWorkerLoop(
 			continue;
 		}
 
-		if (receipt === null) {
+		if (result === null) {
 			dependencies.emit({
 				at: new Date(dependencies.now()).toISOString(),
 				event: 'worker-cycle',
@@ -82,14 +104,29 @@ export async function runFullHistoryStateImportWorkerLoop(
 			continue;
 		}
 
+		const durationMs = Math.max(0, dependencies.now() - startedAt);
+		if (result.kind === 'state-import') {
+			dependencies.emit({
+				at: new Date(dependencies.now()).toISOString(),
+				batchId: result.receipt.batchId,
+				dataset: result.receipt.dataset,
+				durationMs,
+				event: 'state-import',
+				recordCount: result.receipt.recordCount.toString(),
+				status: 'complete',
+				worker: dependencies.workerIndex
+			});
+			continue;
+		}
 		dependencies.emit({
 			at: new Date(dependencies.now()).toISOString(),
-			batchId: receipt.batchId,
-			dataset: receipt.dataset,
-			durationMs: Math.max(0, dependencies.now() - startedAt),
-			event: 'state-import',
-			recordCount: receipt.recordCount.toString(),
-			status: 'complete',
+			batchId: result.receipt.batchId,
+			canonicalBatchCount: result.receipt.canonicalBatchCount,
+			durationMs,
+			event: 'canonical-coverage',
+			ledgerCount: result.receipt.ledgerCount,
+			minimumProofVersion: result.receipt.minimumProofVersion,
+			status: result.receipt.status,
 			worker: dependencies.workerIndex
 		});
 	}

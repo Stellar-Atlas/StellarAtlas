@@ -3,6 +3,7 @@ package stateexport
 import (
 	"encoding/base64"
 	"fmt"
+	"math"
 	"strconv"
 	"unicode/utf8"
 
@@ -15,6 +16,7 @@ type Dataset string
 
 const (
 	AccountStateChanges   Dataset = "account-state-changes"
+	Ledgers               Dataset = "ledgers"
 	TrustlineStateChanges Dataset = "trustline-state-changes"
 )
 
@@ -28,7 +30,7 @@ func ParseDataset(value string) (Dataset, error) {
 
 func (d Dataset) Validate() error {
 	switch d {
-	case AccountStateChanges, TrustlineStateChanges:
+	case AccountStateChanges, Ledgers, TrustlineStateChanges:
 		return nil
 	default:
 		return fmt.Errorf("unsupported dataset %q", d)
@@ -36,9 +38,10 @@ func (d Dataset) Validate() error {
 }
 
 type header struct {
-	Type    string  `json:"type"`
-	Version string  `json:"version"`
-	Dataset Dataset `json:"dataset"`
+	Type         string  `json:"type"`
+	Version      string  `json:"version"`
+	Dataset      Dataset `json:"dataset"`
+	SourceSHA256 string  `json:"sourceSha256"`
 }
 
 type rowEnvelope[T any] struct {
@@ -110,6 +113,18 @@ type trustlineValue struct {
 	LiquidityPoolID       string `json:"liquidityPoolId"`
 	LiquidityPoolUseCount int32  `json:"liquidityPoolUseCount"`
 	SellingLiabilities    string `json:"sellingLiabilities"`
+}
+
+type ledgerValue struct {
+	LedgerSequence           string `json:"ledgerSequence"`
+	LedgerHash               string `json:"ledgerHash"`
+	PreviousLedgerHash       string `json:"previousLedgerHash"`
+	TransactionSetHash       string `json:"transactionSetHash"`
+	TransactionResultSetHash string `json:"transactionResultSetHash"`
+	BucketListHash           string `json:"bucketListHash"`
+	ProtocolVersion          int32  `json:"protocolVersion"`
+	ClosedAtUnixMillis       string `json:"closedAtUnixMillis"`
+	TransactionCount         string `json:"transactionCount"`
 }
 
 type provenanceSource struct {
@@ -201,6 +216,47 @@ func makeTrustlineValue(row model.TrustlineStateChange) (trustlineValue, error) 
 		Limit: decimal(row.Limit), LiquidityPoolID: row.LiquidityPoolID,
 		LiquidityPoolUseCount: row.LiquidityPoolUseCount, SellingLiabilities: decimal(row.SellingLiabilities),
 	}, nil
+}
+
+func makeLedgerValue(row model.Ledger) (ledgerValue, error) {
+	if err := validateLowerHexHashes(
+		textField{"ledgerHash", row.LedgerHash},
+		textField{"previousLedgerHash", row.PreviousLedgerHash},
+		textField{"transactionSetHash", row.TransactionSetHash},
+		textField{"transactionResultSetHash", row.TransactionResultSetHash},
+		textField{"bucketListHash", row.BucketListHash},
+	); err != nil {
+		return ledgerValue{}, err
+	}
+	if row.ProtocolVersion < 0 || row.ProtocolVersion > math.MaxInt32 {
+		return ledgerValue{}, fmt.Errorf("protocolVersion %d is outside the non-negative int32 range", row.ProtocolVersion)
+	}
+	return ledgerValue{
+		LedgerSequence:           decimal(row.LedgerSequence),
+		LedgerHash:               row.LedgerHash,
+		PreviousLedgerHash:       row.PreviousLedgerHash,
+		TransactionSetHash:       row.TransactionSetHash,
+		TransactionResultSetHash: row.TransactionResultSetHash,
+		BucketListHash:           row.BucketListHash,
+		ProtocolVersion:          int32(row.ProtocolVersion),
+		ClosedAtUnixMillis:       decimal(row.ClosedAtUnixMillis),
+		TransactionCount:         decimal(row.TransactionCount),
+	}, nil
+}
+
+func validateLowerHexHashes(fields ...textField) error {
+	for _, field := range fields {
+		if len(field.value) != 64 {
+			return fmt.Errorf("%s must be exactly 64 lowercase hexadecimal characters", field.name)
+		}
+		for index := range field.value {
+			character := field.value[index]
+			if (character < '0' || character > '9') && (character < 'a' || character > 'f') {
+				return fmt.Errorf("%s must be exactly 64 lowercase hexadecimal characters", field.name)
+			}
+		}
+	}
+	return nil
 }
 
 func makeProvenance(row provenanceSource) (provenance, error) {

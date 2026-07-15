@@ -3,11 +3,18 @@ import { access, realpath, stat } from 'node:fs/promises';
 import type { DataSource } from 'typeorm';
 
 const requiredRelations = [
+	'history_archive_checkpoint_proof',
+	'history_archive_object_queue',
 	'full_history_ledger_close_meta_batch',
 	'full_history_ledger_close_meta_dataset',
 	'full_history_lcm_state_import',
 	'full_history_lcm_account_state_change',
-	'full_history_lcm_trustline_state_change'
+	'full_history_lcm_trustline_state_change',
+	'full_history_lcm_state_canonical_coverage',
+	'full_history_lcm_ledger_projection',
+	'full_history_lcm_state_canonical_batch_link',
+	'full_history_ingestion_batch',
+	'full_history_ledger'
 ] as const;
 
 const requiredColumns = [
@@ -30,6 +37,7 @@ const requiredColumns = [
 		'source_sha256',
 		'expected_record_count',
 		'imported_record_count',
+		'imported_row_set_sha256',
 		'status',
 		'lease_owner',
 		'lease_expires_at',
@@ -42,6 +50,7 @@ const requiredColumns = [
 	]),
 	...relationColumns('full_history_lcm_account_state_change', [
 		'batch_id',
+		'row_sha256',
 		'ledger_sequence',
 		'transaction_index',
 		'change_index',
@@ -81,6 +90,7 @@ const requiredColumns = [
 	]),
 	...relationColumns('full_history_lcm_trustline_state_change', [
 		'batch_id',
+		'row_sha256',
 		'ledger_sequence',
 		'transaction_index',
 		'change_index',
@@ -108,6 +118,41 @@ const requiredColumns = [
 		'selling_liabilities',
 		'liquidity_pool_use_count',
 		'flags'
+	]),
+	...relationColumns('full_history_lcm_state_canonical_coverage', [
+		'batch_id',
+		'network_passphrase_hash',
+		'ledger_source_path',
+		'ledger_source_sha256',
+		'expected_ledger_count',
+		'matched_ledger_count',
+		'status',
+		'lease_owner',
+		'lease_expires_at',
+		'attempt_count',
+		'next_attempt_at',
+		'completed_at',
+		'minimum_proof_version',
+		'latest_proof_evaluated_at',
+		'failure_kind',
+		'error_text'
+	]),
+	...relationColumns('full_history_lcm_ledger_projection', [
+		'batch_id',
+		'ledger_sequence',
+		'ledger_hash',
+		'previous_ledger_hash',
+		'transaction_set_hash',
+		'transaction_result_hash',
+		'bucket_list_hash',
+		'protocol_version',
+		'closed_at',
+		'transaction_count'
+	]),
+	...relationColumns('full_history_lcm_state_canonical_batch_link', [
+		'lcm_batch_id',
+		'canonical_batch_id',
+		'network_passphrase_hash'
 	])
 ] as const;
 
@@ -120,6 +165,7 @@ const requiredConstraints = [
 	'chk_full_history_lcm_state_import_status',
 	'chk_full_history_lcm_state_import_timestamps',
 	'chk_full_history_lcm_state_import_lifecycle',
+	'chk_full_history_lcm_state_import_row_set',
 	'pk_full_history_lcm_account_state_change',
 	'fk_full_history_lcm_account_state_change_batch',
 	'chk_full_history_lcm_account_change_identity',
@@ -129,6 +175,7 @@ const requiredConstraints = [
 	'chk_full_history_lcm_account_change_numbers',
 	'chk_full_history_lcm_account_change_sequence',
 	'chk_full_history_lcm_account_change_signers',
+	'chk_full_history_lcm_account_change_row_sha256',
 	'pk_full_history_lcm_trustline_state_change',
 	'fk_full_history_lcm_trustline_state_change_batch',
 	'chk_full_history_lcm_trustline_change_identity',
@@ -136,25 +183,64 @@ const requiredConstraints = [
 	'chk_full_history_lcm_trustline_change_hashes',
 	'chk_full_history_lcm_trustline_change_text',
 	'chk_full_history_lcm_trustline_change_asset',
-	'chk_full_history_lcm_trustline_change_numbers'
+	'chk_full_history_lcm_trustline_change_numbers',
+	'chk_full_history_lcm_trustline_change_row_sha256',
+	'pk_full_history_lcm_state_canonical_coverage',
+	'uq_full_history_lcm_state_coverage_identity',
+	'fk_full_history_lcm_state_coverage_batch',
+	'chk_full_history_lcm_state_coverage_source',
+	'chk_full_history_lcm_state_coverage_counts',
+	'chk_full_history_lcm_state_coverage_status',
+	'chk_full_history_lcm_state_coverage_lifecycle',
+	'chk_full_history_lcm_state_coverage_timestamps',
+	'pk_full_history_lcm_ledger_projection',
+	'fk_full_history_lcm_ledger_projection_batch',
+	'chk_full_history_lcm_ledger_projection_hashes',
+	'chk_full_history_lcm_ledger_projection_values',
+	'pk_full_history_lcm_state_canonical_batch_link',
+	'fk_full_history_lcm_state_link_coverage',
+	'fk_full_history_lcm_state_link_canonical',
+	'chk_full_history_lcm_state_link_hash'
 ] as const;
 
 const requiredTriggers = [
+	'full_history_ingestion_batch.trg_validate_full_history_batch_provenance',
 	'full_history_lcm_state_import.trg_reject_full_history_lcm_completed_import_mutation',
 	'full_history_lcm_account_state_change.trg_validate_full_history_lcm_account_change_range',
+	'full_history_lcm_account_state_change.trg_validate_full_history_lcm_account_change_import',
 	'full_history_lcm_account_state_change.trg_reject_full_history_lcm_account_change_mutation',
 	'full_history_lcm_trustline_state_change.trg_validate_full_history_lcm_trustline_change_range',
-	'full_history_lcm_trustline_state_change.trg_reject_full_history_lcm_trustline_change_mutation'
+	'full_history_lcm_trustline_state_change.trg_validate_full_history_lcm_trustline_change_import',
+	'full_history_lcm_trustline_state_change.trg_reject_full_history_lcm_trustline_change_mutation',
+	'full_history_lcm_state_canonical_coverage.trg_validate_full_history_lcm_coverage_identity',
+	'full_history_lcm_state_canonical_coverage.trg_guard_full_history_lcm_canonical_coverage',
+	'full_history_lcm_ledger_projection.trg_validate_full_history_lcm_ledger_projection_range',
+	'full_history_lcm_ledger_projection.trg_validate_full_history_lcm_ledger_projection_insert',
+	'full_history_lcm_ledger_projection.trg_reject_full_history_lcm_ledger_projection_mutation',
+	'full_history_lcm_state_canonical_batch_link.trg_reject_full_history_lcm_state_link_mutation',
+	'full_history_lcm_state_canonical_batch_link.trg_validate_full_history_lcm_state_link_insert',
+	'full_history_ledger.trg_validate_full_history_canonical_ledger_batch_range',
+	'full_history_ledger.trg_reject_full_history_canonical_ledger_mutation'
 ] as const;
 
 const requiredFunctions = [
+	'validate_full_history_batch_provenance()',
 	'validate_full_history_lcm_state_change_batch_range()',
+	'validate_full_history_lcm_state_evidence_insert()',
 	'reject_full_history_lcm_completed_import_mutation()',
-	'reject_full_history_lcm_state_evidence_mutation()'
+	'reject_full_history_lcm_state_evidence_mutation()',
+	'validate_full_history_lcm_coverage_identity()',
+	'validate_full_history_lcm_ledger_projection_range()',
+	'validate_full_history_lcm_canonical_evidence_insert()',
+	'guard_full_history_lcm_canonical_coverage()',
+	'reject_full_history_lcm_canonical_evidence_mutation()',
+	'validate_full_history_canonical_ledger_batch_range()',
+	'reject_full_history_canonical_ledger_mutation()'
 ] as const;
 
 const requiredIndexes = [
-	'full_history_lcm_state_import.idx_full_history_lcm_state_import_claim'
+	'full_history_lcm_state_import.idx_full_history_lcm_state_import_claim',
+	'full_history_lcm_state_canonical_coverage.idx_full_history_lcm_state_coverage_claim'
 ] as const;
 
 interface NameRow {

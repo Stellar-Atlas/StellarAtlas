@@ -1,7 +1,9 @@
 import { runGoFullHistoryStateExport } from '../GoFullHistoryStateExportProcess.js';
 
+const sourceSha256 = 'e'.repeat(64);
 const header = JSON.stringify({
 	dataset: 'account-state-changes',
+	sourceSha256,
 	type: 'header',
 	version: 'stellar-atlas.full-history-state-export.v1'
 });
@@ -23,10 +25,11 @@ describe('runGoFullHistoryStateExport', () => {
 				consumeRow: () => Promise.resolve(),
 				dataset: 'account-state-changes',
 				executablePath: process.execPath,
+				expectedSourceSha256: sourceSha256,
 				signal: abort.signal,
 				timeoutMilliseconds: 5_000
 			})
-		).resolves.toBe(0n);
+		).resolves.toEqual({ recordCount: 0n, sourceSha256 });
 	});
 
 	it('reports bounded child stderr on a nonzero exit', async () => {
@@ -37,6 +40,7 @@ describe('runGoFullHistoryStateExport', () => {
 				consumeRow: () => Promise.resolve(),
 				dataset: 'account-state-changes',
 				executablePath: process.execPath,
+				expectedSourceSha256: sourceSha256,
 				signal: abort.signal,
 				timeoutMilliseconds: 5_000
 			})
@@ -52,6 +56,7 @@ describe('runGoFullHistoryStateExport', () => {
 				consumeRow: () => Promise.resolve(),
 				dataset: 'account-state-changes',
 				executablePath: process.execPath,
+				expectedSourceSha256: sourceSha256,
 				signal: abort.signal,
 				timeoutMilliseconds: 5_000
 			})

@@ -5,14 +5,19 @@ import {
 } from '../FullHistoryStateExportProtocol.js';
 
 const version = 'stellar-atlas.full-history-state-export.v1';
+const sourceSha256 = 'c'.repeat(64);
 
 describe('FullHistoryStateExportProtocol', () => {
 	it('streams a lossless account projection and checks the completion count', () => {
-		const session = new FullHistoryStateExportSession('account-state-changes');
+		const session = new FullHistoryStateExportSession(
+			'account-state-changes',
+			sourceSha256
+		);
 		expect(
 			session.acceptLine(
 				JSON.stringify({
 					dataset: 'account-state-changes',
+					sourceSha256,
 					type: 'header',
 					version
 				})
@@ -41,7 +46,7 @@ describe('FullHistoryStateExportProtocol', () => {
 				})
 			)
 		).toBeNull();
-		expect(session.finish()).toBe(1n);
+		expect(session.finish()).toEqual({ recordCount: 1n, sourceSha256 });
 	});
 
 	it('parses credit trustline identity without losing bigint precision', () => {
@@ -51,7 +56,8 @@ describe('FullHistoryStateExportProtocol', () => {
 				type: 'row',
 				value: trustlineValue()
 			}),
-			'trustline-state-changes'
+			'trustline-state-changes',
+			sourceSha256
 		);
 		expect(event).toMatchObject({
 			type: 'row',
@@ -65,10 +71,14 @@ describe('FullHistoryStateExportProtocol', () => {
 	});
 
 	it('rejects count drift, schema drift, and incomplete streams', () => {
-		const session = new FullHistoryStateExportSession('account-state-changes');
+		const session = new FullHistoryStateExportSession(
+			'account-state-changes',
+			sourceSha256
+		);
 		session.acceptLine(
 			JSON.stringify({
 				dataset: 'account-state-changes',
+				sourceSha256,
 				type: 'header',
 				version
 			})
@@ -88,19 +98,52 @@ describe('FullHistoryStateExportProtocol', () => {
 				JSON.stringify({
 					dataset: 'account-state-changes',
 					extra: true,
+					sourceSha256,
 					type: 'header',
 					version
 				}),
-				'account-state-changes'
+				'account-state-changes',
+				sourceSha256
 			)
 		).toThrow('unexpected field set');
+		expect(() =>
+			parseFullHistoryStateExportLine(
+				JSON.stringify({
+					dataset: 'account-state-changes',
+					sourceSha256: 'C'.repeat(64),
+					type: 'header',
+					version
+				}),
+				'account-state-changes',
+				sourceSha256
+			)
+		).toThrow('sourceSha256');
+	});
+
+	it('rejects a valid but unexpected source digest before rows', () => {
+		const session = new FullHistoryStateExportSession(
+			'account-state-changes',
+			sourceSha256
+		);
+		expect(() =>
+			session.acceptLine(
+				JSON.stringify({
+					dataset: 'account-state-changes',
+					sourceSha256: 'f'.repeat(64),
+					type: 'header',
+					version
+				})
+			)
+		).toThrow('does not match its manifest');
+		expect(() => session.finish()).toThrow('closed before');
 	});
 
 	it('rejects oversized lines and incoherent signer arrays', () => {
 		expect(() =>
 			parseFullHistoryStateExportLine(
 				'x'.repeat(FULL_HISTORY_STATE_EXPORT_MAXIMUM_LINE_BYTES + 1),
-				'account-state-changes'
+				'account-state-changes',
+				sourceSha256
 			)
 		).toThrow('invalid NDJSON line');
 		expect(() =>
@@ -113,7 +156,8 @@ describe('FullHistoryStateExportProtocol', () => {
 						signerCount: '1'
 					}
 				}),
-				'account-state-changes'
+				'account-state-changes',
+				sourceSha256
 			)
 		).toThrow('signer arrays');
 	});
