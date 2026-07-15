@@ -332,6 +332,7 @@ export interface PublicFullHistoryStatus {
 	readonly latestObservedAt: string | null;
 	readonly latestParsedLedger: string | null;
 	readonly ledgerCloseMeta: PublicFullHistoryLedgerCloseMetaCoverage | null;
+	readonly ledgerCloseMetaState: PublicFullHistoryLedgerCloseMetaStateStatus;
 	readonly localAssetIndexReady: boolean;
 	readonly localContractIndexReady: boolean;
 	readonly localOperationIndexReady: boolean;
@@ -340,6 +341,52 @@ export interface PublicFullHistoryStatus {
 	readonly parsedLedgerCount: number | null;
 	readonly sourceArchiveCount: number | null;
 	readonly status: PublicStatusLevel;
+}
+
+export type PublicFullHistoryStateDataset =
+	'account-state-changes' | 'trustline-state-changes';
+
+export interface PublicFullHistoryLedgerCloseMetaStateStatus {
+	readonly canonicalLinkage: PublicFullHistoryCanonicalStateLinkageStatus;
+	readonly imports: PublicFullHistoryStateImportStatus;
+}
+
+export interface PublicFullHistoryStateImportStatus {
+	readonly datasets: readonly PublicFullHistoryStateImportDatasetStatus[];
+	readonly latestCompletedAt: string | null;
+	readonly latestUpdatedAt: string | null;
+	readonly lifecycle: PublicFullHistoryStateImportLifecycle;
+}
+
+export interface PublicFullHistoryStateImportDatasetStatus {
+	readonly dataset: PublicFullHistoryStateDataset;
+	readonly latestCompletedAt: string | null;
+	readonly latestUpdatedAt: string | null;
+	readonly lifecycle: PublicFullHistoryStateImportLifecycle;
+}
+
+export interface PublicFullHistoryStateImportLifecycle {
+	readonly complete: number;
+	readonly failed: number;
+	readonly importing: number;
+	readonly pending: number;
+	readonly total: number;
+}
+
+export interface PublicFullHistoryCanonicalStateLinkageStatus {
+	readonly expectedLedgerCount: string;
+	readonly latestCompletedAt: string | null;
+	readonly latestUpdatedAt: string | null;
+	readonly lifecycle: PublicFullHistoryCanonicalStateLinkageLifecycle;
+	readonly matchedLedgerCount: string;
+}
+
+export interface PublicFullHistoryCanonicalStateLinkageLifecycle {
+	readonly checking: number;
+	readonly complete: number;
+	readonly failed: number;
+	readonly pending: number;
+	readonly total: number;
 }
 
 export interface PublicFullHistoryLedgerCloseMetaCoverage {

@@ -46,6 +46,15 @@ describe('status WebSocket contract', () => {
 				'trustline-state-changes'
 			])
 		);
+		expect(message.payload.fullHistory.ledgerCloseMetaState).toMatchObject({
+			canonicalLinkage: {
+				expectedLedgerCount: '128',
+				matchedLedgerCount: '128'
+			},
+			imports: {
+				lifecycle: { complete: 4, total: 4 }
+			}
+		});
 	});
 
 	it('accepts a rolling-deploy snapshot without decoded history coverage', () => {
@@ -57,6 +66,66 @@ describe('status WebSocket contract', () => {
 		expect(message?.type).toBe('status');
 		if (message?.type !== 'status') return;
 		expect(message.payload.fullHistory.ledgerCloseMeta).toBeNull();
+	});
+
+	it('defaults missing state-import status during a rolling deployment', () => {
+		const payload = createStatusLivePayload();
+		const fullHistory = asRecord(payload.fullHistory);
+		delete fullHistory.ledgerCloseMetaState;
+
+		const message = parseStatusLiveMessage({ payload, type: 'status' });
+		expect(message?.type).toBe('status');
+		if (message?.type !== 'status') return;
+		expect(message.payload.fullHistory.ledgerCloseMetaState).toMatchObject({
+			canonicalLinkage: {
+				expectedLedgerCount: '0',
+				matchedLedgerCount: '0'
+			},
+			imports: { lifecycle: { total: 0 } }
+		});
+	});
+
+	it('rejects incoherent state-import and canonical-linkage counts', () => {
+		const payload = createStatusLivePayload();
+		const fullHistory = asRecord(payload.fullHistory);
+		const state = asRecord(fullHistory.ledgerCloseMetaState);
+		const imports = asRecord(state.imports);
+		const lifecycle = asRecord(imports.lifecycle);
+		lifecycle.total = 5;
+
+		expect(parseStatusLiveMessage({ payload, type: 'status' })).toBeNull();
+
+		const linkagePayload = createStatusLivePayload();
+		const linkageHistory = asRecord(linkagePayload.fullHistory);
+		const linkageState = asRecord(linkageHistory.ledgerCloseMetaState);
+		const linkage = asRecord(linkageState.canonicalLinkage);
+		linkage.matchedLedgerCount = '129';
+
+		expect(
+			parseStatusLiveMessage({ payload: linkagePayload, type: 'status' })
+		).toBeNull();
+	});
+
+	it('rejects mismatched import categories and incomplete terminal linkage', () => {
+		const payload = createStatusLivePayload();
+		const fullHistory = asRecord(payload.fullHistory);
+		const state = asRecord(fullHistory.ledgerCloseMetaState);
+		const imports = asRecord(state.imports);
+		const lifecycle = asRecord(imports.lifecycle);
+		lifecycle.complete = 3;
+		lifecycle.pending = 1;
+
+		expect(parseStatusLiveMessage({ payload, type: 'status' })).toBeNull();
+
+		const linkagePayload = createStatusLivePayload();
+		const linkageHistory = asRecord(linkagePayload.fullHistory);
+		const linkageState = asRecord(linkageHistory.ledgerCloseMetaState);
+		const linkage = asRecord(linkageState.canonicalLinkage);
+		linkage.matchedLedgerCount = '96';
+
+		expect(
+			parseStatusLiveMessage({ payload: linkagePayload, type: 'status' })
+		).toBeNull();
 	});
 
 	it('accepts the legacy eight-dataset LedgerCloseMeta summary', () => {

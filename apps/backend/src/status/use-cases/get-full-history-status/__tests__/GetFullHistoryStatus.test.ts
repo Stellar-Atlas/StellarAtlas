@@ -10,6 +10,11 @@ import {
 	FullHistoryHash
 } from '@history-scan-coordinator/domain/full-history/FullHistoryCanonicalTypes.js';
 import { GetFullHistoryStatus } from '../GetFullHistoryStatus.js';
+import {
+	emptyLedgerCloseMetaState,
+	mixedCanonicalLinkageRows,
+	mixedStateImportRows
+} from '../__fixtures__/FullHistoryStatusTestFixtures.js';
 
 describe('GetFullHistoryStatus', () => {
 	let dataSourceMock: MockProxy<DataSource>;
@@ -87,6 +92,7 @@ describe('GetFullHistoryStatus', () => {
 			latestParsedLedger: '128',
 			latestObservedAt: '2026-07-06T11:59:00.000Z',
 			ledgerCloseMeta: null,
+			ledgerCloseMetaState: emptyLedgerCloseMetaState,
 			sourceArchiveCount: 1,
 			localTransactionIndexReady: false,
 			localOperationIndexReady: false,
@@ -94,10 +100,10 @@ describe('GetFullHistoryStatus', () => {
 			localContractIndexReady: false
 		});
 		expect(parsedLedgerHeadersMock.getWatermark).toHaveBeenCalledTimes(1);
-		expect(dataSourceMock.query).toHaveBeenCalledTimes(2);
+		expect(dataSourceMock.query).toHaveBeenCalledTimes(4);
 	});
 
-	it('reports the exact bounded canonical range without claiming later indexes', async () => {
+	it('keeps waiting and failed state work informational when canonical history is available', async () => {
 		parsedLedgerHeadersMock.getWatermark.mockResolvedValue({
 			earliestLedgerSequence: 1,
 			latestLedgerHeaderHash: 'hash',
@@ -151,6 +157,8 @@ describe('GetFullHistoryStatus', () => {
 		dataSourceMock.query
 			.mockResolvedValueOnce([])
 			.mockResolvedValueOnce([])
+			.mockResolvedValueOnce([...mixedStateImportRows])
+			.mockResolvedValueOnce([...mixedCanonicalLinkageRows])
 			.mockResolvedValueOnce([
 				{
 					firstLedger: '63386240',
@@ -226,6 +234,28 @@ describe('GetFullHistoryStatus', () => {
 				runningJobs: 0,
 				state: 'waiting-for-proof',
 				updatedAt: '2026-07-06T11:59:50.000Z'
+			},
+			ledgerCloseMetaState: {
+				canonicalLinkage: {
+					expectedLedgerCount: '256',
+					lifecycle: {
+						checking: 1,
+						complete: 1,
+						failed: 1,
+						pending: 1,
+						total: 4
+					},
+					matchedLedgerCount: '96'
+				},
+				imports: {
+					lifecycle: {
+						complete: 1,
+						failed: 1,
+						importing: 0,
+						pending: 1,
+						total: 3
+					}
+				}
 			},
 			localAssetIndexReady: false,
 			localContractIndexReady: false,
@@ -319,7 +349,7 @@ describe('GetFullHistoryStatus', () => {
 			}
 		});
 		expect(parsedLedgerHeadersMock.getWatermark).toHaveBeenCalledTimes(1);
-		expect(dataSourceMock.query).toHaveBeenCalledTimes(3);
+		expect(dataSourceMock.query).toHaveBeenCalledTimes(5);
 		expect(dataSourceMock.query.mock.calls[0]?.[0]).toContain(
 			'history_archive_scan_job_queue'
 		);

@@ -21,6 +21,7 @@ import type {
 import { PageHeading } from '@components/layout/page-heading';
 import { RouteLoadingPanel } from '@components/layout/route-fallbacks';
 import { StatusDashboardLive } from '@components/status/status-dashboard-live';
+import { createEmptyFullHistoryLedgerCloseMetaStateStatus } from '@api/full-history-state-status';
 
 export const revalidate = 0;
 export const dynamic = 'force-dynamic';
@@ -97,6 +98,7 @@ function buildUnavailableFullHistory(
 		latestObservedAt: null,
 		latestParsedLedger: null,
 		ledgerCloseMeta: null,
+		ledgerCloseMetaState: createEmptyFullHistoryLedgerCloseMetaStateStatus(),
 		localAssetIndexReady: false,
 		localContractIndexReady: false,
 		localOperationIndexReady: false,

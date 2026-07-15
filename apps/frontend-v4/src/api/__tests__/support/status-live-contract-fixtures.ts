@@ -137,6 +137,58 @@ export function createStatusLivePayload(): Record<string, unknown> {
 				sourceCount: 1,
 				updatedAt: generatedAt
 			},
+			ledgerCloseMetaState: {
+				canonicalLinkage: {
+					expectedLedgerCount: '128',
+					latestCompletedAt: generatedAt,
+					latestUpdatedAt: generatedAt,
+					lifecycle: {
+						checking: 0,
+						complete: 2,
+						failed: 0,
+						pending: 0,
+						total: 2
+					},
+					matchedLedgerCount: '128'
+				},
+				imports: {
+					datasets: [
+						{
+							dataset: 'account-state-changes',
+							latestCompletedAt: generatedAt,
+							latestUpdatedAt: generatedAt,
+							lifecycle: {
+								complete: 2,
+								failed: 0,
+								importing: 0,
+								pending: 0,
+								total: 2
+							}
+						},
+						{
+							dataset: 'trustline-state-changes',
+							latestCompletedAt: generatedAt,
+							latestUpdatedAt: generatedAt,
+							lifecycle: {
+								complete: 2,
+								failed: 0,
+								importing: 0,
+								pending: 0,
+								total: 2
+							}
+						}
+					],
+					latestCompletedAt: generatedAt,
+					latestUpdatedAt: generatedAt,
+					lifecycle: {
+						complete: 4,
+						failed: 0,
+						importing: 0,
+						pending: 0,
+						total: 4
+					}
+				}
+			},
 			latestObservedAt: generatedAt,
 			latestParsedLedger: '63386367',
 			localAssetIndexReady: false,

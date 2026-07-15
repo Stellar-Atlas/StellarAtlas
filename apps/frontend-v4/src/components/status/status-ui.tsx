@@ -49,12 +49,14 @@ export function StatusRow({
 	label,
 	pillText,
 	status,
+	tone,
 	value
 }: {
 	readonly detail: string;
 	readonly label: string;
 	readonly pillText?: string;
 	readonly status: PublicStatusLevel;
+	readonly tone?: StatusPillTone;
 	readonly value: string;
 }): React.JSX.Element {
 	return (
@@ -65,7 +67,7 @@ export function StatusRow({
 			</div>
 			<div className="status-row-value">
 				<span>{value}</span>
-				<StatusPill status={status} text={pillText} />
+				<StatusPill status={status} text={pillText} tone={tone} />
 			</div>
 		</div>
 	);
@@ -73,17 +75,21 @@ export function StatusRow({
 
 export function StatusPill({
 	status,
-	text
+	text,
+	tone
 }: {
 	readonly status: PublicStatusLevel;
 	readonly text?: string;
+	readonly tone?: StatusPillTone;
 }): React.JSX.Element {
 	return (
-		<span className={`status-pill ${statusTone(status)}`}>
+		<span className={`status-pill ${tone ?? statusTone(status)}`}>
 			{text ?? statusLabel(status)}
 		</span>
 	);
 }
+
+export type StatusPillTone = 'danger' | 'good' | 'neutral' | 'warning';
 
 export function statusTone(
 	status: PublicStatusLevel

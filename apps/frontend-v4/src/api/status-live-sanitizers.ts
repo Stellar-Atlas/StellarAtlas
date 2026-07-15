@@ -1,4 +1,8 @@
 import { sanitizeCanonicalFullHistoryCoverage } from './canonical-history-contract';
+import {
+	createEmptyFullHistoryLedgerCloseMetaStateStatus,
+	sanitizeFullHistoryLedgerCloseMetaStateStatus
+} from './full-history-state-status';
 
 type SanitizedField =
 	| 'api'
@@ -77,6 +81,12 @@ export function sanitizeFullHistoryStatus(
 			source.ledgerCloseMeta === null || source.ledgerCloseMeta === undefined
 				? null
 				: sanitizeLedgerCloseMetaCoverage(source.ledgerCloseMeta),
+		ledgerCloseMetaState:
+			source.ledgerCloseMetaState === undefined
+				? createEmptyFullHistoryLedgerCloseMetaStateStatus()
+				: sanitizeFullHistoryLedgerCloseMetaStateStatus(
+						source.ledgerCloseMetaState
+					),
 		historicalBackfill:
 			source.historicalBackfill === null
 				? null

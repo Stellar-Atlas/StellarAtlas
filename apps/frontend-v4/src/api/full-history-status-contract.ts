@@ -1,6 +1,7 @@
 import type { PublicFullHistoryStatus } from './types';
 import { validateCanonicalFullHistoryCoverage } from './canonical-history-contract';
 import { sanitizeFullHistoryStatus } from './status-live-sanitizers';
+import { validateFullHistoryLedgerCloseMetaStateStatus } from './full-history-state-status';
 import {
 	arrayOf,
 	boolean,
@@ -105,7 +106,8 @@ export const validateFullHistoryStatus: StatusLiveValidator = matches(
 		status: statusLevel
 	},
 	{
-		ledgerCloseMeta: nullable(validateLedgerCloseMetaCoverage)
+		ledgerCloseMeta: nullable(validateLedgerCloseMetaCoverage),
+		ledgerCloseMetaState: validateFullHistoryLedgerCloseMetaStateStatus
 	}
 );
 

@@ -24,6 +24,7 @@ import { StatusArchiveEvidenceTables } from './archive-status-tables';
 import { ArchiveWorkerStatusTable } from './archive-worker-status-table';
 import { RecentScanLogs } from './recent-scan-logs';
 import { LedgerCloseMetaStatusRow } from './ledger-close-meta-status-row';
+import { LedgerCloseMetaStateStatusRows } from './ledger-close-meta-state-status-rows';
 import {
 	buildStatusHeadlineCards,
 	combineStatusLevels,
@@ -174,6 +175,7 @@ export function StatusDashboard({
 						/>
 						<CanonicalHistoryStatusRow fullHistory={fullHistory} />
 						<LedgerCloseMetaStatusRow fullHistory={fullHistory} />
+						<LedgerCloseMetaStateStatusRows fullHistory={fullHistory} />
 						<HistoricalBackfillStatusRow fullHistory={fullHistory} />
 						<StatusRow
 							detail={`Age ${formatDuration(dataQuality.dataFreshness.networkScan.ageMs)}`}

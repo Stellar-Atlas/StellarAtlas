@@ -9,14 +9,11 @@ import {
 } from '../StatusLiveWebSocket.js';
 
 describe('StatusLiveWebSocket patch collection', () => {
-	it('streams canonical runtime while keeping scan-log drilldown out of the fast patch', async () => {
+	it('keeps full-history aggregates and scan logs out of the fast patch', async () => {
 		const config = mockDeep<StatusLiveWebSocketConfig>();
 		config.getApiStatus.execute.mockReturnValue(ok(null as never));
 		config.getDataQualityStatus.execute.mockResolvedValue(ok(null as never));
 		config.getFrontendStatus.execute.mockReturnValue(ok(null as never));
-		config.getFullHistoryStatus.executeFullHistory.mockResolvedValue(
-			ok(null as never)
-		);
 		config.getWorkerStatus.execute.mockResolvedValue(ok(null as never));
 
 		const patch = await collectFastStatusPatch(config);
@@ -25,10 +22,13 @@ describe('StatusLiveWebSocket patch collection', () => {
 			api: null,
 			dataQuality: null,
 			frontend: null,
-			fullHistory: null,
 			workers: null
 		});
+		expect(patch).not.toHaveProperty('fullHistory');
 		expect(patch).not.toHaveProperty('scanLogs');
+		expect(
+			config.getFullHistoryStatus.executeFullHistory
+		).not.toHaveBeenCalled();
 		expect(config.getScanLogStatus.execute).not.toHaveBeenCalled();
 	});
 

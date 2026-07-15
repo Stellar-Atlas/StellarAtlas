@@ -114,6 +114,12 @@
 	color: #9e3037;
 }
 
+.status-pill.neutral {
+	background: var(--surface-subtle);
+	border-color: var(--border);
+	color: var(--muted);
+}
+
 .status-current-jobs {
 	display: grid;
 }

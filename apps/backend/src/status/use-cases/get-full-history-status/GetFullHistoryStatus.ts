@@ -18,7 +18,6 @@ import type {
 	ParsedLedgerHeaderWatermark
 } from '@history-scan-coordinator/domain/parsed-history/ParsedLedgerHeaderRepository.js';
 import { TYPES as HISTORY_TYPES } from '@history-scan-coordinator/infrastructure/di/di-types.js';
-import type { StatusLevel } from '../../domain/StatusTypes.js';
 import {
 	readHistoricalFullHistoryBackfillStatus,
 	type HistoricalFullHistoryBackfillDTO
@@ -27,107 +26,33 @@ import {
 	readFullHistoryLedgerCloseMetaCoverage,
 	type FullHistoryLedgerCloseMetaCoverageDTO
 } from './FullHistoryLedgerCloseMetaCoverage.js';
+import { mapCanonicalCoverage } from '@history-scan-coordinator/use-cases/get-full-history-canonical-coverage/FullHistoryCanonicalCoverageDTO.js';
 import {
-	mapCanonicalCoverage,
-	type CanonicalFullHistoryCoverageDTO
-} from '@history-scan-coordinator/use-cases/get-full-history-canonical-coverage/FullHistoryCanonicalCoverageDTO.js';
+	readFullHistoryLedgerCloseMetaStateStatus,
+	type FullHistoryLedgerCloseMetaStateStatusDTO
+} from './FullHistoryLedgerCloseMetaStateStatus.js';
+import type {
+	CanonicalFullHistoryPromotionDTO,
+	FullHistoryStatusDTO,
+	IndexingJobDTO,
+	IndexingJobsDTO,
+	IndexingRangeDTO,
+	IndexingRangesDTO,
+	IngestionStatusDTO,
+	LedgerIngestionStatusDTO
+} from './FullHistoryStatusDTO.js';
 
-export type { CanonicalFullHistoryCoverageDTO } from '@history-scan-coordinator/use-cases/get-full-history-canonical-coverage/FullHistoryCanonicalCoverageDTO.js';
-
-export interface FullHistoryStatusDTO {
-	readonly canonicalCoverage: CanonicalFullHistoryCoverageDTO | null;
-	readonly canonicalPromotion: CanonicalFullHistoryPromotionDTO | null;
-	readonly earliestParsedLedger: string | null;
-	readonly generatedAt: string;
-	readonly latestObservedAt: string | null;
-	readonly latestParsedLedger: string | null;
-	readonly ledgerCloseMeta: FullHistoryLedgerCloseMetaCoverageDTO | null;
-	readonly localAssetIndexReady: boolean;
-	readonly localContractIndexReady: boolean;
-	readonly localOperationIndexReady: boolean;
-	readonly localTransactionIndexReady: boolean;
-	readonly mode: 'archive_header_parser' | 'canonical_checkpoint_index';
-	readonly historicalBackfill: HistoricalFullHistoryBackfillDTO | null;
-	readonly parsedLedgerCount: number | null;
-	readonly sourceArchiveCount: number | null;
-	readonly status: StatusLevel;
-}
-
-export interface CanonicalFullHistoryPromotionDTO {
-	readonly checkpointLedger: string | null;
-	readonly heartbeatAt: string;
-	readonly lastAttemptAt: string | null;
-	readonly lastErrorCode: string | null;
-	readonly lastFailureAt: string | null;
-	readonly lastOutcome:
-		'bootstrap-required' | 'proof-pending' | 'promoted' | 'replayed' | null;
-	readonly lastSuccessAt: string | null;
-	readonly nextLedger: string | null;
-	readonly startedAt: string;
-	readonly state:
-		| 'failed'
-		| 'promoting'
-		| 'running'
-		| 'stale'
-		| 'stopped'
-		| 'waiting-for-proof';
-}
-
-export interface IngestionStatusDTO extends FullHistoryStatusDTO {
-	readonly queue: {
-		readonly doneJobs: number;
-		readonly pendingJobs: number;
-		readonly takenJobs: number;
-		readonly latestJobUpdateAt: string | null;
-	};
-}
-
-export interface IndexingJobDTO {
-	readonly concurrency: number | null;
-	readonly fromLedger: string | null;
-	readonly latestScannedLedger: string;
-	readonly remoteId: string;
-	readonly status: 'DONE' | 'PENDING' | 'TAKEN';
-	readonly toLedger: string | null;
-	readonly updatedAt: string | null;
-	readonly url: string;
-}
-
-export interface IndexingJobsDTO {
-	readonly generatedAt: string;
-	readonly jobs: readonly IndexingJobDTO[];
-	readonly limit: number;
-	readonly summary: IngestionStatusDTO['queue'];
-}
-
-export interface IndexingRangeDTO {
-	readonly archiveUrl: string;
-	readonly earliestParsedLedger: string;
-	readonly latestObservedAt: string;
-	readonly latestParsedLedger: string;
-	readonly parsedLedgerCount: number;
-}
-
-export interface IndexingRangesDTO {
-	readonly generatedAt: string;
-	readonly limit: number;
-	readonly ranges: readonly IndexingRangeDTO[];
-}
-
-export interface LedgerIngestionStatusDTO {
-	readonly generatedAt: string;
-	readonly header: {
-		readonly bucketListHash: string;
-		readonly ledgerHeaderHash: string;
-		readonly protocolVersion: number;
-		readonly sourceArchiveUrl: string;
-		readonly transactionResultHash: string;
-		readonly transactionSetHash: string;
-	} | null;
-	readonly ledger: string;
-	readonly parsedHeaderAvailable: boolean;
-	readonly status: 'parsed' | 'unparsed';
-}
+export type {
+	CanonicalFullHistoryCoverageDTO,
+	CanonicalFullHistoryPromotionDTO,
+	FullHistoryStatusDTO,
+	IndexingJobDTO,
+	IndexingJobsDTO,
+	IndexingRangeDTO,
+	IndexingRangesDTO,
+	IngestionStatusDTO,
+	LedgerIngestionStatusDTO
+} from './FullHistoryStatusDTO.js';
 
 interface QueueSummaryRow {
 	readonly doneJobs: string | number | null;
@@ -162,8 +87,13 @@ export class GetFullHistoryStatus {
 
 	async executeFullHistory(): Promise<Result<FullHistoryStatusDTO, Error>> {
 		try {
-			const [canonical, operationCoverage, promotion, ledgerCloseMeta] =
-				await Promise.all([
+			const [
+				canonical,
+				operationCoverage,
+				promotion,
+				ledgerCloseMeta,
+				ledgerCloseMetaState
+			] = await Promise.all([
 				this.canonicalHistory.getCoverage(
 					this.config.networkConfig.networkPassphrase
 				),
@@ -174,6 +104,10 @@ export class GetFullHistoryStatus {
 					this.config.networkConfig.networkPassphrase
 				),
 				readFullHistoryLedgerCloseMetaCoverage(
+					this.dataSource,
+					this.config.networkConfig.networkPassphrase
+				),
+				readFullHistoryLedgerCloseMetaStateStatus(
 					this.dataSource,
 					this.config.networkConfig.networkPassphrase
 				)
@@ -190,7 +124,8 @@ export class GetFullHistoryStatus {
 						operationCoverage,
 						promotion,
 						historicalBackfill,
-						ledgerCloseMeta
+						ledgerCloseMeta,
+						ledgerCloseMetaState
 					)
 				);
 			}
@@ -198,7 +133,8 @@ export class GetFullHistoryStatus {
 				this.mapParsedHeaders(
 					await this.parsedLedgerHeaders.getWatermark(),
 					promotion,
-					ledgerCloseMeta
+					ledgerCloseMeta,
+					ledgerCloseMetaState
 				)
 			);
 		} catch (error) {
@@ -208,29 +144,40 @@ export class GetFullHistoryStatus {
 
 	async executeIngestion(): Promise<Result<IngestionStatusDTO, Error>> {
 		try {
-			const [canonical, operationCoverage, promotion, queue, ledgerCloseMeta] =
-				await Promise.all([
-					this.canonicalHistory.getCoverage(
-						this.config.networkConfig.networkPassphrase
-					),
-					this.canonicalHistory.getOperationCoverage(
-						this.config.networkConfig.networkPassphrase
-					),
-					this.canonicalPromotion.find(
-						this.config.networkConfig.networkPassphrase
-					),
-					this.readQueueSummary(),
-					readFullHistoryLedgerCloseMetaCoverage(
-						this.dataSource,
-						this.config.networkConfig.networkPassphrase
-					)
-				]);
+			const [
+				canonical,
+				operationCoverage,
+				promotion,
+				queue,
+				ledgerCloseMeta,
+				ledgerCloseMetaState
+			] = await Promise.all([
+				this.canonicalHistory.getCoverage(
+					this.config.networkConfig.networkPassphrase
+				),
+				this.canonicalHistory.getOperationCoverage(
+					this.config.networkConfig.networkPassphrase
+				),
+				this.canonicalPromotion.find(
+					this.config.networkConfig.networkPassphrase
+				),
+				this.readQueueSummary(),
+				readFullHistoryLedgerCloseMetaCoverage(
+					this.dataSource,
+					this.config.networkConfig.networkPassphrase
+				),
+				readFullHistoryLedgerCloseMetaStateStatus(
+					this.dataSource,
+					this.config.networkConfig.networkPassphrase
+				)
+			]);
 			const status =
 				canonical === null
 					? this.mapParsedHeaders(
 							await this.parsedLedgerHeaders.getWatermark(),
 							promotion,
-							ledgerCloseMeta
+							ledgerCloseMeta,
+							ledgerCloseMetaState
 						)
 					: mapCanonicalStatus(
 							canonical,
@@ -240,7 +187,8 @@ export class GetFullHistoryStatus {
 								this.dataSource,
 								this.config.networkConfig.networkPassphrase
 							),
-							ledgerCloseMeta
+							ledgerCloseMeta,
+							ledgerCloseMetaState
 						);
 			return ok({ ...status, queue });
 		} catch (error) {
@@ -370,7 +318,8 @@ export class GetFullHistoryStatus {
 	private mapParsedHeaders(
 		row: ParsedLedgerHeaderWatermark,
 		promotion: FullHistoryPromotionRuntimeView | null,
-		ledgerCloseMeta: FullHistoryLedgerCloseMetaCoverageDTO | null
+		ledgerCloseMeta: FullHistoryLedgerCloseMetaCoverageDTO | null,
+		ledgerCloseMetaState: FullHistoryLedgerCloseMetaStateStatusDTO
 	): FullHistoryStatusDTO {
 		const parsedLedgerCount = row.parsedLedgerCount;
 		return {
@@ -385,6 +334,7 @@ export class GetFullHistoryStatus {
 			latestParsedLedger: toNullableString(row.latestLedgerSequence),
 			latestObservedAt: toIso(row.latestObservedAt),
 			ledgerCloseMeta,
+			ledgerCloseMetaState,
 			sourceArchiveCount: row.sourceArchiveCount,
 			localTransactionIndexReady: false,
 			localOperationIndexReady: false,
@@ -399,7 +349,8 @@ function mapCanonicalStatus(
 	operationCoverage: FullHistoryOperationCoverage,
 	promotion: FullHistoryPromotionRuntimeView | null,
 	historicalBackfill: HistoricalFullHistoryBackfillDTO | null,
-	ledgerCloseMeta: FullHistoryLedgerCloseMetaCoverageDTO | null
+	ledgerCloseMeta: FullHistoryLedgerCloseMetaCoverageDTO | null,
+	ledgerCloseMetaState: FullHistoryLedgerCloseMetaStateStatusDTO
 ): FullHistoryStatusDTO {
 	return {
 		canonicalCoverage: mapCanonicalCoverage(coverage),
@@ -410,6 +361,7 @@ function mapCanonicalStatus(
 		latestObservedAt: null,
 		latestParsedLedger: null,
 		ledgerCloseMeta,
+		ledgerCloseMetaState,
 		localAssetIndexReady: false,
 		localContractIndexReady: false,
 		localOperationIndexReady:
