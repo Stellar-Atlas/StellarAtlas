@@ -54,18 +54,12 @@ export class GetHistoryArchiveObjectJob {
 			);
 			for (const staleObject of staleObjects) {
 				this.refreshProofInBackground(staleObject);
-				await this.eventRecorder.recordDurably(staleObject, {
-					claimAttempt: staleObject.attempts,
-					eventType: 'released'
-				});
+				this.recordReleaseInBackground(staleObject);
 			}
 			const object =
 				await this.objectRepository.claimNextObject(supportedObjectTypes);
 			if (object === null) return ok(null);
-			await this.eventRecorder.record(object, {
-				claimAttempt: object.attempts,
-				eventType: 'claimed'
-			});
+			this.recordClaimInBackground(object);
 
 			return ok({
 				archiveUrl: object.archiveUrl,
@@ -108,6 +102,41 @@ export class GetHistoryArchiveObjectJob {
 				errorMessage: mapUnknownToError(error).message,
 				remoteId: object.remoteId
 			});
+		});
+	}
+
+	private recordClaimInBackground(object: HistoryArchiveObject): void {
+		void Promise.resolve(
+			this.eventRecorder.record(object, {
+				claimAttempt: object.attempts,
+				eventType: 'claimed'
+			})
+		).catch((error: unknown) => {
+			this.logBackgroundEventError(object, 'claimed', error);
+		});
+	}
+
+	private recordReleaseInBackground(object: HistoryArchiveObject): void {
+		void Promise.resolve(
+			this.eventRecorder.recordDurably(object, {
+				claimAttempt: object.attempts,
+				eventType: 'released'
+			})
+		).catch((error: unknown) => {
+			this.logBackgroundEventError(object, 'released', error);
+		});
+	}
+
+	private logBackgroundEventError(
+		object: HistoryArchiveObject,
+		eventType: 'claimed' | 'released',
+		error: unknown
+	): void {
+		this.logger.error('Failed to record archive object background event', {
+			app: 'history-scan-coordinator',
+			errorMessage: mapUnknownToError(error).message,
+			eventType,
+			remoteId: object.remoteId
 		});
 	}
 }

@@ -28,6 +28,7 @@ describe('history archive object claim concurrency', () => {
 			await createObjectRepositoryDataSource(postgres.url));
 		secondDataSource = new DataSource({
 			entities: [HistoryArchiveObject],
+			extra: { max: consumerCount },
 			logging: false,
 			synchronize: false,
 			type: 'postgres',
@@ -186,6 +187,40 @@ describe('history archive object claim concurrency', () => {
 		expect(normalRoots.every((rootUrl) => claimedRoots.has(rootUrl))).toBe(
 			true
 		);
+	});
+
+	it('settles contended claim bursts within the scanner request budget', async () => {
+		const lockRunner = dataSource.createQueryRunner();
+		await lockRunner.connect();
+		await lockRunner.startTransaction();
+		try {
+			await lockRunner.query(`
+				select pg_advisory_xact_lock(
+					hashtextextended('history_archive_object_claim_gate', 104729)
+				)
+			`);
+			const attempts = await Promise.all(
+				Array.from({ length: consumerCount }, async () => {
+					const startedAt = performance.now();
+					const object = await secondary.claimNextObject(['checkpoint-state']);
+					return {
+						durationMs: performance.now() - startedAt,
+						object
+					};
+				})
+			);
+			const durations = attempts
+				.map(({ durationMs }) => durationMs)
+				.sort((left, right) => left - right);
+			const p95 = durations[Math.ceil(durations.length * 0.95) - 1] ?? 0;
+
+			expect(attempts.every(({ object }) => object === null)).toBe(true);
+			expect(p95).toBeLessThan(500);
+			expect(durations.at(-1) ?? 0).toBeLessThan(1_500);
+		} finally {
+			await lockRunner.rollbackTransaction();
+			await lockRunner.release();
+		}
 	});
 
 	async function claimBurst(

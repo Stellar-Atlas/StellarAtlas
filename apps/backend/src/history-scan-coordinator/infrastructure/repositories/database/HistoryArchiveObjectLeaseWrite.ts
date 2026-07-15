@@ -7,6 +7,7 @@ import {
 	extractRows,
 	type RawObjectQueryResult
 } from './HistoryArchiveObjectRowMapper.js';
+import { hasPostgresSqlState } from './PostgresError.js';
 
 export async function markHistoryArchiveObjectVerified(
 	repository: Repository<HistoryArchiveObject>,
@@ -64,13 +65,21 @@ export async function releaseStaleHistoryArchiveObjects(
 	before: Date,
 	limit: number
 ): Promise<readonly HistoryArchiveObject[]> {
-	const rows = extractRows(
-		(await repository.manager.query(releaseStaleSql, [
-			before,
-			normalizeLimit(limit)
-		])) as RawObjectQueryResult
-	);
-	return rows.map(createObjectFromRow);
+	try {
+		return await repository.manager.transaction(async (manager) => {
+			await manager.query(staleReleaseSettingsSql);
+			const rows = extractRows(
+				(await manager.query(releaseStaleSql, [
+					before,
+					normalizeLimit(limit)
+				])) as RawObjectQueryResult
+			);
+			return rows.map(createObjectFromRow);
+		});
+	} catch (error) {
+		if (hasPostgresSqlState(error, '55P03')) return [];
+		throw error;
+	}
 }
 
 export async function markHistoryArchiveTransitionEffectsCompleted(
@@ -111,6 +120,11 @@ function normalizeLimit(limit: number): number {
 	if (!Number.isSafeInteger(limit) || limit < 1) return 24;
 	return Math.min(limit, 240);
 }
+
+const staleReleaseSettingsSql = `
+	set local lock_timeout = '250ms';
+	set local statement_timeout = '1500ms'
+`;
 
 const releaseStaleSql = `
 	with candidates as (

@@ -18,6 +18,7 @@ import {
 	extractRows,
 	type RawObjectQueryResult
 } from './HistoryArchiveObjectRowMapper.js';
+import { hasPostgresSqlState } from './PostgresError.js';
 
 export type HistoryArchiveObjectClaimAttempt =
 	| { readonly outcome: 'claimed'; readonly object: HistoryArchiveObject }
@@ -36,7 +37,8 @@ type ClaimSelection =
 
 const transactionSettingsSql = `
 	set local jit = off;
-	set local lock_timeout = '5s'
+	set local lock_timeout = '250ms';
+	set local statement_timeout = '1500ms'
 `;
 
 export async function claimHistoryArchiveObject(
@@ -66,60 +68,67 @@ async function runClaimAttempt(
 	supportedTypes: readonly HistoryArchiveObjectType[],
 	exclusiveGate: boolean
 ): Promise<HistoryArchiveObjectClaimAttempt> {
-	return await repository.manager.transaction(async (manager) => {
-		await manager.query(transactionSettingsSql);
-		if (exclusiveGate) {
-			await manager.query(historyArchiveObjectClaimFallbackLockSql);
-		}
-		const cleanup = requireResultRow(
-			(await manager.query(historyArchiveObjectClaimCleanupSql, [
-				exclusiveGate
-			])) as unknown,
-			'cleanup'
-		);
-		if (!requireBoolean(cleanup.locked, 'cleanup.locked')) {
-			return { outcome: 'contended' };
-		}
-		const adoption = requireResultRow(
-			(await manager.query(historyArchiveObjectClaimAdoptionSql, [
-				historyArchiveConsumerCount
-			])) as unknown,
-			'adoption'
-		);
-		if (
-			!requireBoolean(adoption.locked, 'adoption.locked') ||
-			requireCount(
-				adoption.untrackedObjects ?? adoption.untrackedobjects,
-				'adoption.untrackedObjects'
-			) !==
+	try {
+		return await repository.manager.transaction(async (manager) => {
+			await manager.query(transactionSettingsSql);
+			if (exclusiveGate) {
+				await manager.query(historyArchiveObjectClaimFallbackLockSql);
+			}
+			const cleanup = requireResultRow(
+				(await manager.query(historyArchiveObjectClaimCleanupSql, [
+					exclusiveGate
+				])) as unknown,
+				'cleanup'
+			);
+			if (!requireBoolean(cleanup.locked, 'cleanup.locked')) {
+				return { outcome: 'contended' };
+			}
+			const adoption = requireResultRow(
+				(await manager.query(historyArchiveObjectClaimAdoptionSql, [
+					historyArchiveConsumerCount
+				])) as unknown,
+				'adoption'
+			);
+			if (
+				!requireBoolean(adoption.locked, 'adoption.locked') ||
 				requireCount(
-					adoption.adoptedObjects ?? adoption.adoptedobjects,
-					'adoption.adoptedObjects'
-				)
-		) {
+					adoption.untrackedObjects ?? adoption.untrackedobjects,
+					'adoption.untrackedObjects'
+				) !==
+					requireCount(
+						adoption.adoptedObjects ?? adoption.adoptedobjects,
+						'adoption.adoptedObjects'
+					)
+			) {
+				return { outcome: 'contended' };
+			}
+
+			const selection = await selectClaim(manager, supportedTypes);
+			if (selection.outcome !== 'selected') return selection;
+
+			const rows = extractRows(
+				(await manager.query(historyArchiveObjectClaimFinalizeSql, [
+					[...supportedTypes],
+					historyArchivePerRootFrontier,
+					selection.slot,
+					historyArchivePerHostConcurrency,
+					selection.rootId,
+					selection.archiveUrlIdentity,
+					selection.hostIdentity,
+					selection.claimClass
+				])) as RawObjectQueryResult
+			);
+			const row = rows[0];
+			return row === undefined
+				? { outcome: 'contended' }
+				: { object: createObjectFromRow(row), outcome: 'claimed' };
+		});
+	} catch (error) {
+		if (hasPostgresSqlState(error, '55P03')) {
 			return { outcome: 'contended' };
 		}
-
-		const selection = await selectClaim(manager, supportedTypes);
-		if (selection.outcome !== 'selected') return selection;
-
-		const rows = extractRows(
-			(await manager.query(historyArchiveObjectClaimFinalizeSql, [
-				[...supportedTypes],
-				historyArchivePerRootFrontier,
-				selection.slot,
-				historyArchivePerHostConcurrency,
-				selection.rootId,
-				selection.archiveUrlIdentity,
-				selection.hostIdentity,
-				selection.claimClass
-			])) as RawObjectQueryResult
-		);
-		const row = rows[0];
-		return row === undefined
-			? { outcome: 'contended' }
-			: { object: createObjectFromRow(row), outcome: 'claimed' };
-	});
+		throw error;
+	}
 }
 
 async function selectClaim(

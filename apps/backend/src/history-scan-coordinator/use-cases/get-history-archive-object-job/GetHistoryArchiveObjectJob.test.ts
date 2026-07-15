@@ -89,6 +89,36 @@ describe('GetHistoryArchiveObjectJob', () => {
 		});
 		expect(proofRepository.refreshForObject).not.toHaveBeenCalled();
 	});
+
+	it('returns a committed claim without waiting for event persistence', async () => {
+		const claimed = checkpointObject(319, 'scanning');
+		const objectRepository = mock<HistoryArchiveObjectRepository>();
+		objectRepository.releaseStaleObjects.mockResolvedValue([]);
+		objectRepository.claimNextObject.mockResolvedValue(claimed);
+		const eventRecorder = mock<HistoryArchiveObjectEventRecorder>();
+		let completeEvent: (() => void) | undefined;
+		eventRecorder.record.mockReturnValue(
+			new Promise<void>((resolve) => {
+				completeEvent = resolve;
+			})
+		);
+		const transitionReconciler =
+			mock<ReconcileHistoryArchiveObjectTransitions>();
+		transitionReconciler.executeIfDue.mockResolvedValue();
+		const useCase = new GetHistoryArchiveObjectJob(
+			objectRepository,
+			mock<HistoryArchiveCheckpointProofRepository>(),
+			eventRecorder,
+			transitionReconciler,
+			mock<Logger>()
+		);
+
+		await expect(useCase.execute()).resolves.toMatchObject({
+			value: expect.objectContaining({ remoteId: claimed.remoteId })
+		});
+		expect(eventRecorder.record).toHaveBeenCalledTimes(1);
+		completeEvent?.();
+	});
 });
 
 function checkpointObject(
