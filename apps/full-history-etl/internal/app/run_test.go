@@ -113,8 +113,25 @@ func TestRunPublishesTypedParquetAndRecoversExactReplay(t *testing.T) {
 	if err := json.Unmarshal(manifestBytes, &manifest); err != nil {
 		t.Fatalf("decode manifest: %v", err)
 	}
-	if manifest.ManifestVersion != "stellar-atlas.full-history-etl.manifest.v6" {
+	if manifest.ManifestVersion != "stellar-atlas.full-history-etl.manifest.v7" {
 		t.Fatalf("unexpected manifest version: %s", manifest.ManifestVersion)
+	}
+	for _, descriptor := range manifest.Outputs {
+		switch descriptor.Dataset {
+		case "contract-events":
+			if descriptor.SchemaVersion != "stellar-atlas.full-history.contract-events.v3" {
+				t.Fatalf("contract event projection is not schema v3: %s", descriptor.SchemaVersion)
+			}
+		case "ledger-entry-changes":
+			if descriptor.SchemaVersion != "stellar-atlas.full-history.ledger-entry-changes.v3" {
+				t.Fatalf("ledger entry change projection is not schema v3: %s", descriptor.SchemaVersion)
+			}
+		}
+	}
+	for _, unsupported := range manifest.Unsupported {
+		if unsupported == "contract-event-topics-and-data" || unsupported == "ledger-entry-keys-and-values" {
+			t.Fatalf("complete typed projection remains marked unsupported: %s", unsupported)
+		}
 	}
 	if !reflect.DeepEqual(manifest.Outputs, receipt.Outputs) || !reflect.DeepEqual(manifest.SourceObjects, receipt.SourceObjects) || manifest.Range != receipt.Range {
 		t.Fatalf("receipt does not map directly to stored manifest")

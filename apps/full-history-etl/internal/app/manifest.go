@@ -18,7 +18,7 @@ import (
 
 const (
 	manifestFilename = "manifest.json"
-	manifestVersion  = "stellar-atlas.full-history-etl.manifest.v6"
+	manifestVersion  = "stellar-atlas.full-history-etl.manifest.v7"
 	inputMediaType   = "application/x-stellar-ledger-close-meta-batch+xdr+zstd"
 	maxManifestBytes = 4 << 20
 )
@@ -132,8 +132,6 @@ func newManifest(config Config, evidence ShardEvidence, descriptors []output.Des
 			"contracts",
 			"contract-data-values",
 			"contract-code-values",
-			"contract-event-topics-and-data",
-			"ledger-entry-keys-and-values",
 			"operation-type-details",
 			"transaction-meta-values",
 			"ttl-entries",

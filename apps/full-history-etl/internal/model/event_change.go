@@ -13,9 +13,17 @@ type ContractEvent struct {
 	StageString              string `parquet:"name=stage_string, type=BYTE_ARRAY, convertedtype=UTF8, encoding=PLAIN_DICTIONARY"`
 	HasStage                 bool   `parquet:"name=has_stage, type=BOOLEAN"`
 	InSuccessfulContractCall bool   `parquet:"name=in_successful_contract_call, type=BOOLEAN"`
+	ExtensionVersion         int32  `parquet:"name=extension_version, type=INT32"`
 	ContractID               string `parquet:"name=contract_id, type=BYTE_ARRAY, convertedtype=UTF8"`
+	HasContractID            bool   `parquet:"name=has_contract_id, type=BOOLEAN"`
 	EventType                int32  `parquet:"name=event_type, type=INT32"`
 	EventTypeString          string `parquet:"name=event_type_string, type=BYTE_ARRAY, convertedtype=UTF8, encoding=PLAIN_DICTIONARY"`
+	BodyVersion              int32  `parquet:"name=body_version, type=INT32"`
+	TopicCount               int64  `parquet:"name=topic_count, type=INT64, convertedtype=UINT_64"`
+	TopicsXDR                string `parquet:"name=topics_xdr, type=BYTE_ARRAY"`
+	DataType                 int32  `parquet:"name=data_type, type=INT32"`
+	DataTypeString           string `parquet:"name=data_type_string, type=BYTE_ARRAY, convertedtype=UTF8, encoding=PLAIN_DICTIONARY"`
+	DataXDR                  string `parquet:"name=data_xdr, type=BYTE_ARRAY"`
 }
 
 // LedgerEntryChange is the SDK-normalized pre/post form of an XDR change pair.
@@ -34,4 +42,9 @@ type LedgerEntryChange struct {
 	ChangeType        int32  `parquet:"name=change_type, type=INT32"`
 	ChangeTypeString  string `parquet:"name=change_type_string, type=BYTE_ARRAY, convertedtype=UTF8, encoding=PLAIN_DICTIONARY"`
 	LedgerKeySHA256   string `parquet:"name=ledger_key_sha256, type=BYTE_ARRAY, convertedtype=UTF8"`
+	LedgerKeyXDR      string `parquet:"name=ledger_key_xdr, type=BYTE_ARRAY"`
+	HasPreEntry       bool   `parquet:"name=has_pre_entry, type=BOOLEAN"`
+	PreEntryXDR       string `parquet:"name=pre_entry_xdr, type=BYTE_ARRAY"`
+	HasPostEntry      bool   `parquet:"name=has_post_entry, type=BOOLEAN"`
+	PostEntryXDR      string `parquet:"name=post_entry_xdr, type=BYTE_ARRAY"`
 }

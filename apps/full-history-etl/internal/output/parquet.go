@@ -48,8 +48,8 @@ var specifications = [...]Specification{
 	{Dataset: "operations", Filename: "operations.parquet", MediaType: ParquetMediaType, Representation: TypedProjectionRepresentation, SchemaVersion: "stellar-atlas.full-history.operations.v2"},
 	{Dataset: "transaction-results", Filename: "transaction-results.parquet", MediaType: ParquetMediaType, Representation: TypedProjectionRepresentation, SchemaVersion: "stellar-atlas.full-history.transaction-results.v2"},
 	{Dataset: "transaction-meta", Filename: "transaction-meta.parquet", MediaType: ParquetMediaType, Representation: TypedProjectionRepresentation, SchemaVersion: "stellar-atlas.full-history.transaction-meta.v2"},
-	{Dataset: "contract-events", Filename: "contract-events.parquet", MediaType: ParquetMediaType, Representation: TypedProjectionRepresentation, SchemaVersion: "stellar-atlas.full-history.contract-events.v2"},
-	{Dataset: "ledger-entry-changes", Filename: "ledger-entry-changes.parquet", MediaType: ParquetMediaType, Representation: TypedProjectionRepresentation, SchemaVersion: "stellar-atlas.full-history.ledger-entry-changes.v2"},
+	{Dataset: "contract-events", Filename: "contract-events.parquet", MediaType: ParquetMediaType, Representation: TypedProjectionRepresentation, SchemaVersion: "stellar-atlas.full-history.contract-events.v3"},
+	{Dataset: "ledger-entry-changes", Filename: "ledger-entry-changes.parquet", MediaType: ParquetMediaType, Representation: TypedProjectionRepresentation, SchemaVersion: "stellar-atlas.full-history.ledger-entry-changes.v3"},
 }
 
 func Specifications() []Specification {

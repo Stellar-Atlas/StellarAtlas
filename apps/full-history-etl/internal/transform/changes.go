@@ -154,6 +154,14 @@ func (p *Processor) writeChangeGroup(
 			return 0, fmt.Errorf("encode ledger key: %w", err)
 		}
 		keyHash := sha256.Sum256(keyBytes)
+		preEntryBytes, err := marshalLedgerEntry(change.Pre)
+		if err != nil {
+			return 0, fmt.Errorf("encode pre-change ledger entry: %w", err)
+		}
+		postEntryBytes, err := marshalLedgerEntry(change.Post)
+		if err != nil {
+			return 0, fmt.Errorf("encode post-change ledger entry: %w", err)
+		}
 		row := model.LedgerEntryChange{
 			LedgerSequence:    sequence,
 			TransactionIndex:  transactionIndex,
@@ -169,6 +177,11 @@ func (p *Processor) writeChangeGroup(
 			ChangeType:        int32(change.ChangeType),
 			ChangeTypeString:  change.ChangeType.String(),
 			LedgerKeySHA256:   hex.EncodeToString(keyHash[:]),
+			LedgerKeyXDR:      string(keyBytes),
+			HasPreEntry:       change.Pre != nil,
+			PreEntryXDR:       string(preEntryBytes),
+			HasPostEntry:      change.Post != nil,
+			PostEntryXDR:      string(postEntryBytes),
 		}
 		if err := p.claim("ledger-entry-changes", 1); err != nil {
 			return 0, err
@@ -178,6 +191,13 @@ func (p *Processor) writeChangeGroup(
 		}
 	}
 	return int64(len(changes)), nil
+}
+
+func marshalLedgerEntry(entry *xdr.LedgerEntry) ([]byte, error) {
+	if entry == nil {
+		return []byte{}, nil
+	}
+	return entry.MarshalBinary()
 }
 
 func operationContext(index int) changeContext {

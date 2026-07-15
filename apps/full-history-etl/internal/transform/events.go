@@ -55,11 +55,20 @@ func (p *Processor) writeEvent(
 	inSuccessfulContractCall bool,
 	event xdr.ContractEvent,
 ) error {
-	_, ok := event.Body.GetV0()
+	body, ok := event.Body.GetV0()
 	if !ok {
 		return fmt.Errorf("contract event %d has unsupported body version %d", eventIndex, event.Body.V)
 	}
+	topicsXDR, err := xdr.ScVec(body.Topics).MarshalBinary()
+	if err != nil {
+		return fmt.Errorf("encode contract event %d topics: %w", eventIndex, err)
+	}
+	dataXDR, err := body.Data.MarshalBinary()
+	if err != nil {
+		return fmt.Errorf("encode contract event %d data: %w", eventIndex, err)
+	}
 	contractID := ""
+	hasContractID := event.ContractId != nil
 	if event.ContractId != nil {
 		raw := *event.ContractId
 		encodedContractID, err := strkey.Encode(strkey.VersionByteContract, raw[:])
@@ -80,9 +89,17 @@ func (p *Processor) writeEvent(
 		StageString:              stageString,
 		HasStage:                 hasStage,
 		InSuccessfulContractCall: inSuccessfulContractCall,
+		ExtensionVersion:         event.Ext.V,
 		ContractID:               contractID,
+		HasContractID:            hasContractID,
 		EventType:                int32(event.Type),
 		EventTypeString:          event.Type.String(),
+		BodyVersion:              event.Body.V,
+		TopicCount:               int64(len(body.Topics)),
+		TopicsXDR:                string(topicsXDR),
+		DataType:                 int32(body.Data.Type),
+		DataTypeString:           body.Data.Type.String(),
+		DataXDR:                  string(dataXDR),
 	}
 	if err := p.claim("contract-events", 1); err != nil {
 		return err
