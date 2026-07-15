@@ -40,6 +40,7 @@ const transactionSettingsSql = `
 	set local lock_timeout = '250ms';
 	set local statement_timeout = '1500ms'
 `;
+const postFallbackRetryDelaysMs = [0, 5, 10, 20, 40] as const;
 
 export async function claimHistoryArchiveObject(
 	repository: Repository<HistoryArchiveObject>,
@@ -53,14 +54,31 @@ export async function claimHistoryArchiveObject(
 
 export async function claimWithBoundedContentionFallback(
 	fastClaim: () => Promise<HistoryArchiveObjectClaimAttempt>,
-	fallbackClaim: () => Promise<HistoryArchiveObjectClaimAttempt>
+	fallbackClaim: () => Promise<HistoryArchiveObjectClaimAttempt>,
+	waitForRetry: (milliseconds: number) => Promise<void> = waitForClaimRetry
 ): Promise<HistoryArchiveObject | null> {
 	const fast = await fastClaim();
 	if (fast.outcome === 'claimed') return fast.object;
 	if (fast.outcome !== 'contended') return null;
+	const retry = await fastClaim();
+	if (retry.outcome === 'claimed') return retry.object;
+	if (retry.outcome !== 'contended') return null;
 
 	const fallback = await fallbackClaim();
-	return fallback.outcome === 'claimed' ? fallback.object : null;
+	if (fallback.outcome === 'claimed') return fallback.object;
+	if (fallback.outcome !== 'contended') return null;
+
+	for (const delayMs of postFallbackRetryDelaysMs) {
+		if (delayMs > 0) await waitForRetry(delayMs);
+		const finalFast = await fastClaim();
+		if (finalFast.outcome === 'claimed') return finalFast.object;
+		if (finalFast.outcome !== 'contended') return null;
+	}
+	return null;
+}
+
+async function waitForClaimRetry(milliseconds: number): Promise<void> {
+	await new Promise<void>((resolve) => setTimeout(resolve, milliseconds));
 }
 
 async function runClaimAttempt(
