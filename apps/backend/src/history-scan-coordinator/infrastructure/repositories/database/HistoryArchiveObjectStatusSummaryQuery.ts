@@ -50,17 +50,10 @@ type SourceRow = {
 	readonly verifiedcheckpointproofs?: NumericValue;
 };
 
-type ActiveRow = {
+type EvidenceHealthRow = {
+	readonly ready?: boolean;
 	readonly activeObjectChecks?: NumericValue;
 	readonly activeobjectchecks?: NumericValue;
-};
-
-type SourceCountRow = {
-	readonly sourceCount?: NumericValue;
-	readonly sourcecount?: NumericValue;
-};
-
-type FailureCountRow = {
 	readonly archiveEvidenceFailures?: NumericValue;
 	readonly archiveevidencefailures?: NumericValue;
 	readonly scannerIssueFailures?: NumericValue;
@@ -69,67 +62,83 @@ type FailureCountRow = {
 	readonly unclassifiedfailures?: NumericValue;
 };
 
+type SourceCountRow = {
+	readonly sourceCount?: NumericValue;
+	readonly sourcecount?: NumericValue;
+};
+
 export const historyArchiveStatusSourceLimit = 256;
 
 export async function getHistoryArchiveObjectStatusSummary(
 	manager: EntityManager,
 	generatedAt = new Date()
 ): Promise<HistoryArchiveStatusSummaryV1> {
-	const [
-		checkpointCoverage,
-		sources,
-		activeObjectChecks,
-		sourceCount,
-		failureCounts
-	] = await Promise.all([
-		getCheckpointCoverage(manager, null),
-		getStatusSourceSummaries(manager),
-		getActiveObjectCount(manager),
-		getSourceCount(manager),
-		getFailureCounts(manager)
-	]);
+	const [checkpointCoverage, sources, evidenceHealth, sourceCount] =
+		await Promise.all([
+			getCheckpointCoverage(manager, null),
+			getStatusSourceSummaries(manager),
+			getEvidenceHealth(manager),
+			getSourceCount(manager)
+		]);
 
 	return {
-		activeObjectChecks,
-		archiveEvidenceFailures: failureCounts.archiveEvidenceFailures,
+		activeObjectChecks: evidenceHealth.activeObjectChecks,
+		archiveEvidenceFailures: evidenceHealth.archiveEvidenceFailures,
 		checkpointCoverage,
 		generatedAt: generatedAt.toISOString(),
 		sourceCount,
 		sourceLimit: historyArchiveStatusSourceLimit,
-		scannerIssueFailures: failureCounts.scannerIssueFailures,
+		scannerIssueFailures: evidenceHealth.scannerIssueFailures,
 		sources,
 		sourcesTruncated: sourceCount > sources.length,
-		unclassifiedFailures: failureCounts.unclassifiedFailures
+		unclassifiedFailures: evidenceHealth.unclassifiedFailures
 	};
 }
 
-async function getFailureCounts(
+async function getEvidenceHealth(
 	manager: EntityManager
-): Promise<RequiredFailureCounts> {
+): Promise<EvidenceHealth> {
 	const [row] = (await manager.query(
-		failureCountSql
-	)) as readonly FailureCountRow[];
+		evidenceHealthSql
+	)) as readonly EvidenceHealthRow[];
+	if (row?.ready !== true) {
+		throw new Error('Archive evidence root summary is not ready');
+	}
 	return {
-		archiveEvidenceFailures: failureCountField(row, 'archiveEvidenceFailures'),
-		scannerIssueFailures: failureCountField(row, 'scannerIssueFailures'),
-		unclassifiedFailures: failureCountField(row, 'unclassifiedFailures')
+		activeObjectChecks: evidenceHealthField(row, 'activeObjectChecks'),
+		archiveEvidenceFailures: evidenceHealthField(
+			row,
+			'archiveEvidenceFailures'
+		),
+		scannerIssueFailures: evidenceHealthField(row, 'scannerIssueFailures'),
+		unclassifiedFailures: evidenceHealthField(row, 'unclassifiedFailures')
 	};
 }
 
-type RequiredFailureCounts = Pick<
+type EvidenceHealth = Pick<
 	HistoryArchiveStatusSummaryV1,
-	'archiveEvidenceFailures' | 'scannerIssueFailures' | 'unclassifiedFailures'
+	| 'activeObjectChecks'
+	| 'archiveEvidenceFailures'
+	| 'scannerIssueFailures'
+	| 'unclassifiedFailures'
 >;
 
-function failureCountField(
-	row: FailureCountRow | undefined,
-	field: keyof FailureCountRow
+type EvidenceHealthNumericField = Exclude<keyof EvidenceHealthRow, 'ready'>;
+
+function evidenceHealthField(
+	row: EvidenceHealthRow,
+	field: EvidenceHealthNumericField
 ): number {
-	return requireNumber(row?.[field] ?? row?.[lowercaseFailure(field)], field);
+	return requireNumber(
+		row[field] ?? row[lowercaseEvidenceHealth(field)],
+		field
+	);
 }
 
-function lowercaseFailure(field: keyof FailureCountRow): keyof FailureCountRow {
-	return field.toLowerCase() as keyof FailureCountRow;
+function lowercaseEvidenceHealth(
+	field: EvidenceHealthNumericField
+): EvidenceHealthNumericField {
+	return field.toLowerCase() as EvidenceHealthNumericField;
 }
 
 async function getStatusSourceSummaries(
@@ -146,16 +155,6 @@ async function getSourceCount(manager: EntityManager): Promise<number> {
 		sourceCountSql
 	)) as readonly SourceCountRow[];
 	return requireNumber(row?.sourceCount ?? row?.sourcecount, 'sourceCount');
-}
-
-async function getActiveObjectCount(manager: EntityManager): Promise<number> {
-	const [row] = (await manager.query(
-		activeObjectCountSql
-	)) as readonly ActiveRow[];
-	return requireNumber(
-		row?.activeObjectChecks ?? row?.activeobjectchecks,
-		'activeObjectChecks'
-	);
 }
 
 function mapSourceRow(row: SourceRow): HistoryArchiveStatusSourceV1 {
@@ -273,27 +272,34 @@ function lowercase(field: keyof SourceRow): keyof SourceRow {
 	return field.toLowerCase() as keyof SourceRow;
 }
 
-export const activeObjectCountSql = `
-	select count(*)::int as "activeObjectChecks"
-	from history_archive_object_queue
-	where status = 'scanning'
-`;
-
 export const sourceCountSql = `
 	select count(distinct "archiveUrl")::int as "sourceCount"
 	from history_archive_state_snapshot
 `;
 
-export const failureCountSql = `
+export const evidenceHealthSql = `
 	select
-		count(*) filter (where "failureChannel" = 'archive_evidence')::bigint
+		progress."complete" as ready,
+		coalesce(sum(summary."activeObjects"), 0)::bigint
+			as "activeObjectChecks",
+		coalesce(sum(summary."remoteFailureObjects"), 0)::bigint
 			as "archiveEvidenceFailures",
-		count(*) filter (where "failureChannel" = 'scanner_issue')::bigint
+		coalesce(sum(summary."workerIssueObjects"), 0)::bigint
 			as "scannerIssueFailures",
-		count(*) filter (where "failureChannel" is null)::bigint
+		coalesce(sum(
+			summary."totalObjects"
+			- summary."pendingObjects"
+			- summary."activeObjects"
+			- summary."verifiedObjects"
+			- summary."remoteFailureObjects"
+			- summary."workerIssueObjects"
+		), 0)::bigint
 			as "unclassifiedFailures"
-	from history_archive_object_queue
-	where status = 'failed'
+	from history_archive_evidence_root_summary_progress progress
+	left join history_archive_evidence_root_summary summary
+		on progress."complete"
+	where progress.id = 1
+	group by progress."complete"
 `;
 
 export const sourceStatusSummarySql = `
@@ -337,41 +343,26 @@ export const sourceStatusSummarySql = `
 			root."updatedAt" desc,
 			(root."archiveUrlIdentity" = aliases."archiveUrl") desc,
 			root."archiveUrlIdentity"
-	), active_objects_by_identity as (
-		select "archiveUrlIdentity", count(*)::int as "activeObjectChecks"
-		from history_archive_object_queue
-		where status = 'scanning'
-		group by "archiveUrlIdentity"
-	), active_objects as (
+	), object_health as (
 		select
 			aliases."archiveUrl",
-			sum(active."activeObjectChecks") as "activeObjectChecks"
-		from source_aliases aliases
-		join active_objects_by_identity active
-			on active."archiveUrlIdentity" = aliases."archiveUrlIdentity"
-		group by aliases."archiveUrl"
-	), failure_counts_by_identity as (
-		select
-			"archiveUrlIdentity",
-			count(*) filter (where "failureChannel" = 'archive_evidence')::bigint
+			coalesce(sum(summary."activeObjects"), 0)
+				as "activeObjectChecks",
+			coalesce(sum(summary."remoteFailureObjects"), 0)
 				as "archiveEvidenceFailures",
-			count(*) filter (where "failureChannel" = 'scanner_issue')::bigint
+			coalesce(sum(summary."workerIssueObjects"), 0)
 				as "scannerIssueFailures",
-			count(*) filter (where "failureChannel" is null)::bigint
-				as "unclassifiedFailures"
-		from history_archive_object_queue
-		where status = 'failed'
-		group by "archiveUrlIdentity"
-	), failure_counts as (
-		select
-			aliases."archiveUrl",
-			sum(failures."archiveEvidenceFailures")
-				as "archiveEvidenceFailures",
-			sum(failures."scannerIssueFailures") as "scannerIssueFailures",
-			sum(failures."unclassifiedFailures") as "unclassifiedFailures"
+			coalesce(sum(
+				summary."totalObjects"
+				- summary."pendingObjects"
+				- summary."activeObjects"
+				- summary."verifiedObjects"
+				- summary."remoteFailureObjects"
+				- summary."workerIssueObjects"
+			), 0) as "unclassifiedFailures"
 		from source_aliases aliases
-		join failure_counts_by_identity failures
-			on failures."archiveUrlIdentity" = aliases."archiveUrlIdentity"
+		left join history_archive_evidence_root_summary summary
+			on summary."archiveUrlIdentity" = aliases."archiveUrlIdentity"
 		group by aliases."archiveUrl"
 	), checkpoint_proof as (
 		select distinct on (aliases."archiveUrl")
@@ -409,12 +400,12 @@ export const sourceStatusSummarySql = `
 			) - 1
 		end as "latestCheckpointLedger",
 		proof."latestCheckpointLedger" as "latestDiscoveredCheckpointLedger",
-		coalesce(active."activeObjectChecks", 0) as "activeObjectChecks",
-		coalesce(failure_counts."archiveEvidenceFailures", 0)
+		coalesce(object_health."activeObjectChecks", 0) as "activeObjectChecks",
+		coalesce(object_health."archiveEvidenceFailures", 0)
 			as "archiveEvidenceFailures",
-		coalesce(failure_counts."scannerIssueFailures", 0)
+		coalesce(object_health."scannerIssueFailures", 0)
 			as "scannerIssueFailures",
-		coalesce(failure_counts."unclassifiedFailures", 0)
+		coalesce(object_health."unclassifiedFailures", 0)
 			as "unclassifiedFailures",
 		coalesce(proof."totalCheckpointProofs", 0) as "totalCheckpointProofs",
 		coalesce(proof."pendingCheckpointProofs", 0) as "pendingCheckpointProofs",
@@ -431,10 +422,8 @@ export const sourceStatusSummarySql = `
 		on root_object."archiveUrl" = state."archiveUrl"
 	left join checkpoint_proof proof
 		on proof."archiveUrl" = state."archiveUrl"
-	left join active_objects active
-		on active."archiveUrl" = state."archiveUrl"
-	left join failure_counts
-		on failure_counts."archiveUrl" = state."archiveUrl"
+	left join object_health
+		on object_health."archiveUrl" = state."archiveUrl"
 	order by
 		state.status asc,
 		coalesce(state."currentLedger", -1) desc,

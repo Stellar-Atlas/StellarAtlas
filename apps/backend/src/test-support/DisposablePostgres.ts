@@ -12,7 +12,7 @@ const postgresBinDirectory =
 export interface DisposablePostgres {
 	readonly dataDirectory: string;
 	readonly url: string;
-	restart(): Promise<void>;
+	restart(controlTimeoutSeconds?: number): Promise<void>;
 	stop(): Promise<void>;
 }
 
@@ -53,15 +53,16 @@ export async function startDisposablePostgres(): Promise<DisposablePostgres> {
 	return {
 		dataDirectory: directory,
 		url: `postgresql://postgres@127.0.0.1:${port}/postgres`,
-		async restart() {
+		async restart(controlTimeoutSeconds = 20) {
 			if (stopped) throw new Error('Disposable PostgreSQL is stopped');
+			assertControlTimeout(controlTimeoutSeconds);
 			await execFileAsync(pgCtl, [
 				'-D',
 				directory,
 				'-m',
 				'immediate',
 				'-t',
-				'20',
+				controlTimeoutSeconds.toString(),
 				'-w',
 				'stop'
 			]);
@@ -73,7 +74,7 @@ export async function startDisposablePostgres(): Promise<DisposablePostgres> {
 				'-o',
 				`-F -h 127.0.0.1 -k ${directory} -p ${port} -c allow_system_table_mods=on`,
 				'-t',
-				'20',
+				controlTimeoutSeconds.toString(),
 				'-w',
 				'start'
 			]);
@@ -97,6 +98,12 @@ export async function startDisposablePostgres(): Promise<DisposablePostgres> {
 			}
 		}
 	};
+}
+
+function assertControlTimeout(value: number): void {
+	if (!Number.isInteger(value) || value < 1 || value > 600) {
+		throw new Error('Disposable PostgreSQL control timeout must be 1-600 seconds');
+	}
 }
 
 async function reservePort(): Promise<number> {

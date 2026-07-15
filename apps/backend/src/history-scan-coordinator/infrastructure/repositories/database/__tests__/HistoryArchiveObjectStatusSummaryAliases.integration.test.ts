@@ -4,6 +4,10 @@ import {
 	type DisposablePostgres
 } from '@test-support/DisposablePostgres.js';
 import { getHistoryArchiveObjectStatusSummary } from '../HistoryArchiveObjectStatusSummaryQuery.js';
+import {
+	createEvidenceSummarySchema,
+	populateEvidenceSummary
+} from './HistoryArchiveObjectStatusSummaryScaleFixture.js';
 
 jest.setTimeout(60_000);
 
@@ -63,6 +67,25 @@ describe('history archive status summary aliases', () => {
 		expect(summary.scannerIssueFailures).toBe(1);
 		expect(summary.unclassifiedFailures).toBe(1);
 	});
+
+	it('rejects an incomplete evidence rollup instead of returning partial totals', async () => {
+		await dataSource.query(`
+			update history_archive_evidence_root_summary_progress
+			set "complete" = false
+			where id = 1
+		`);
+		try {
+			await expect(
+				getHistoryArchiveObjectStatusSummary(dataSource.manager)
+			).rejects.toThrow('Archive evidence root summary is not ready');
+		} finally {
+			await dataSource.query(`
+				update history_archive_evidence_root_summary_progress
+				set "complete" = true
+				where id = 1
+			`);
+		}
+	});
 });
 
 const duplicateRoot = 'https://history.example/ArchiveA';
@@ -107,6 +130,7 @@ async function createSchema(dataSource: DataSource): Promise<void> {
 			"latestCheckpointLedger" integer
 		)
 	`);
+	await createEvidenceSummarySchema(dataSource);
 }
 
 async function createFixture(dataSource: DataSource): Promise<void> {
@@ -188,6 +212,7 @@ async function createFixture(dataSource: DataSource): Promise<void> {
 		`,
 		[legacyIdentity, duplicateRoot]
 	);
+	await populateEvidenceSummary(dataSource);
 }
 
 async function insertState(

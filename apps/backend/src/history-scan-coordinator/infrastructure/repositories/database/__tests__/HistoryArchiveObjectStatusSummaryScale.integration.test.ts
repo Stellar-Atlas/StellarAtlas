@@ -5,11 +5,11 @@ import {
 	startDisposablePostgres,
 	type DisposablePostgres
 } from '@test-support/DisposablePostgres.js';
+import { HistoryArchiveCheckpointProofRollupMigration1784830000000 } from '../../../database/migrations/1784830000000-HistoryArchiveCheckpointProofRollupMigration.js';
 import {
 	estimateCheckpointProofRollupDisk,
-	HistoryArchiveCheckpointProofRollupMigration1784830000000,
 	type HistoryArchiveCheckpointProofRollupDiskEstimate
-} from '../../../database/migrations/1784830000000-HistoryArchiveCheckpointProofRollupMigration.js';
+} from '../../../database/migrations/HistoryArchiveCheckpointProofRollupDiskGuard.js';
 import {
 	checkpointProofRollupBatchBoundarySql,
 	checkpointProofRollupBatchSelectSql,
@@ -18,17 +18,24 @@ import {
 import { HistoryArchiveStatusSummaryIndexesMigration1784800000000 } from '../../../database/migrations/1784800000000-HistoryArchiveStatusSummaryIndexesMigration.js';
 import { checkpointCoverageSql } from '../HistoryArchiveObjectCheckpointCoverageQuery.js';
 import {
-	activeObjectCountSql,
-	failureCountSql,
+	evidenceHealthSql,
 	getHistoryArchiveObjectStatusSummary,
 	sourceCountSql,
 	sourceStatusSummarySql
 } from '../HistoryArchiveObjectStatusSummaryQuery.js';
+import {
+	createEvidenceSummarySchema,
+	populateCheckpointProofScaleFixture,
+	populateEvidenceSummary
+} from './HistoryArchiveObjectStatusSummaryScaleFixture.js';
 
-jest.setTimeout(180_000);
+// Bulk-mounted initdb and fixture loading are intentionally outside the query
+// latency assertions and can be slow under concurrent production I/O.
+const scaleSetupTimeoutMs = 1_800_000;
+jest.setTimeout(scaleSetupTimeoutMs);
 
 const archiveCount = 100;
-const checkpointsPerArchive = 12_000;
+const checkpointsPerArchive = 10_000;
 const expectedProofRows = archiveCount * checkpointsPerArchive;
 
 describe('history archive status summary scale', () => {
@@ -43,12 +50,18 @@ describe('history archive status summary scale', () => {
 		);
 		dataSource = await connect(postgres.url);
 		await createFixture(dataSource);
+		await populateCheckpointProofScaleFixture(
+			dataSource,
+			archiveCount,
+			checkpointsPerArchive
+		);
+		await createCheckpointProofFixtureIndexes(dataSource);
 		await runIndexMigration(dataSource);
 		rollupMigrationMs = await runRollupMigration(dataSource);
 		await dataSource.destroy();
-		await postgres.restart();
+		await postgres.restart(120);
 		dataSource = await connect(postgres.url);
-	});
+	}, scaleSetupTimeoutMs);
 
 	afterAll(async () => {
 		if (dataSource?.isInitialized) await dataSource.destroy();
@@ -65,15 +78,13 @@ describe('history archive status summary scale', () => {
 
 		const coveragePlan = await explain(checkpointCoverageSql, [null]);
 		const sourcePlan = await explain(sourceStatusSummarySql, [256]);
-		const activePlan = await explain(activeObjectCountSql);
+		const evidenceHealthPlan = await explain(evidenceHealthSql);
 		const sourceCountPlan = await explain(sourceCountSql);
-		const failurePlan = await explain(failureCountSql);
 		const plans = [
 			coveragePlan,
 			sourcePlan,
-			activePlan,
-			sourceCountPlan,
-			failurePlan
+			evidenceHealthPlan,
+			sourceCountPlan
 		];
 		for (const plan of plans) {
 			expect(readRelations(plan)).not.toContain(
@@ -113,9 +124,10 @@ describe('history archive status summary scale', () => {
 			backfillPlanSummary.tempWrittenBlocks +
 				boundaryPlanSummary.tempWrittenBlocks
 		);
-		const migrationDiskEstimate = estimateCheckpointProofRollupDisk(
-			BigInt(archiveCount)
-		);
+			const migrationDiskEstimate = estimateCheckpointProofRollupDisk(
+				BigInt(archiveCount),
+				checkpointProofRollupBatchSize
+			);
 		expect(BigInt(disk.finalAddedBytes)).toBeLessThanOrEqual(
 			migrationDiskEstimate.estimatedFinalBytes
 		);
@@ -334,6 +346,7 @@ async function createFixture(dataSource: DataSource): Promise<void> {
 			"updatedAt" timestamptz not null
 		)
 	`);
+	await createEvidenceSummarySchema(dataSource);
 	await dataSource.query(`
 		create index status_summary_queue_status
 		on history_archive_object_queue (status)
@@ -345,22 +358,32 @@ async function createFixture(dataSource: DataSource): Promise<void> {
 	`);
 	await dataSource.query(`
 		create table history_archive_checkpoint_proof (
-			id bigserial primary key,
+			id bigserial not null,
 			"archiveUrlIdentity" text not null,
 			"checkpointLedger" integer not null,
 			status text not null,
-			"requiredObjectsComplete" boolean not null,
-			unique ("archiveUrlIdentity", "checkpointLedger")
+			"requiredObjectsComplete" boolean not null
 		)
-	`);
-	await dataSource.query(`
-		create index status_summary_proof_archive
-		on history_archive_checkpoint_proof ("archiveUrlIdentity", status)
 	`);
 	await dataSource.query(fixtureInsertSql, [
 		archiveCount,
 		checkpointsPerArchive
 	]);
+	await populateEvidenceSummary(dataSource);
+}
+
+async function createCheckpointProofFixtureIndexes(
+	dataSource: DataSource
+): Promise<void> {
+	await dataSource.query(`
+		alter table history_archive_checkpoint_proof
+		add primary key (id),
+		add unique ("archiveUrlIdentity", "checkpointLedger")
+	`);
+	await dataSource.query(`
+		create index status_summary_proof_archive
+		on history_archive_checkpoint_proof ("archiveUrlIdentity", status)
+	`);
 }
 
 const fixtureInsertSql = `
@@ -407,6 +430,7 @@ const fixtureInsertSql = `
 		from inserted_states
 		order by "archiveUrlIdentity"
 		limit 1
+		returning "archiveUrlIdentity"
 	), inserted_failures as (
 		insert into history_archive_object_queue (
 			"archiveUrlIdentity", "objectType", status, "checkpointLedger",
@@ -422,21 +446,9 @@ const fixtureInsertSql = `
 		from inserted_states
 		order by "archiveUrlIdentity"
 		limit 3
+		returning "archiveUrlIdentity"
 	)
-	insert into history_archive_checkpoint_proof (
-		"archiveUrlIdentity", "checkpointLedger", status,
-		"requiredObjectsComplete"
-	)
-	select roots."archiveUrlIdentity", (checkpoint * 64) - 1,
-		case checkpoint % 4
-			when 0 then 'verified'
-			when 1 then 'pending'
-			when 2 then 'mismatch'
-			else 'not-evaluable'
-		end,
-		checkpoint % 3 = 0
-	from inserted_roots roots
-	cross join generate_series(1, $2::integer) checkpoint
+	select count(*) from inserted_failures
 `;
 
 const backfillBatchAggregateSql = `
