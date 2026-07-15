@@ -172,8 +172,25 @@ export function formatObjectStatusDetail(
 			? label
 			: `${label} until ${formatDateTime(object.delayReason.until)}`;
 	}
-	if (object.workerStage) return object.workerStage;
+	if (object.workerStage) {
+		const stage = formatWorkerStage(object.workerStage);
+		return isRedundantStatusDetail(object, stage) ? null : stage;
+	}
 	return object.error ? sanitizeEvidenceMessage(object.error.message) : null;
+}
+
+function isRedundantStatusDetail(
+	object: PublicHistoryArchiveObject,
+	stage: string
+): boolean {
+	const normalizedStage = stage.toLocaleLowerCase('en-US');
+	if (object.status === 'pending') {
+		return normalizedStage === 'pending' || normalizedStage === 'waiting';
+	}
+	if (object.status === 'scanning') {
+		return normalizedStage === 'scanning' || normalizedStage === 'checking';
+	}
+	return normalizedStage === object.status;
 }
 
 export function formatEvidenceClass(value: string): string {

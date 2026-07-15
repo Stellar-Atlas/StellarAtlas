@@ -14,6 +14,7 @@ import {
 	RepairDownloadTable
 } from '../known-archive-evidence-tables';
 import {
+	ObjectIdentity,
 	ObjectSource,
 	VerifiedCopyLinks,
 	formatEventType,
@@ -118,6 +119,26 @@ describe('known archive evidence UI', () => {
 				})
 			)
 		).toBe('deferred by scanner planning');
+	});
+
+	it('labels category files by checkpoint without repeating the file type', () => {
+		const markup = renderToStaticMarkup(
+			createElement(ObjectIdentity, {
+				object: createObject({ checkpointLedger: 63, objectType: 'ledger' })
+			})
+		);
+
+		expect(markup).toContain('<strong>Ledger</strong>');
+		expect(markup).toContain('Checkpoint 63');
+		expect(markup).not.toContain('Ledger 63');
+	});
+
+	it('does not repeat a terminal status as worker-stage detail', () => {
+		expect(
+			formatObjectStatusDetail(
+				createObject({ status: 'verified', workerStage: 'verified' })
+			)
+		).toBeNull();
 	});
 
 	it('describes migrated deferred rows without legacy implementation language', () => {

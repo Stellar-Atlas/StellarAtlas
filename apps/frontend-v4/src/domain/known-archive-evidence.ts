@@ -114,7 +114,7 @@ export function getArchiveObjectLabel(
 ): string {
 	if (object.bucketHash !== null) return shortIdentifier(object.bucketHash);
 	if (object.checkpointLedger !== null) {
-		return `Ledger ${object.checkpointLedger.toLocaleString('en-US')}`;
+		return `Checkpoint ${object.checkpointLedger.toLocaleString('en-US')}`;
 	}
 	return object.objectKey;
 }
