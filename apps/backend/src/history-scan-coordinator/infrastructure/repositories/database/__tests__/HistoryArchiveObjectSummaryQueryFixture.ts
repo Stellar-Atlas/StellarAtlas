@@ -2,6 +2,7 @@ import type { DataSource, MigrationInterface } from 'typeorm';
 import { HistoryArchiveObjectBucketHashIndexMigration1784890000000 } from '../../../database/migrations/1784890000000-HistoryArchiveObjectBucketHashIndexMigration.js';
 import { HistoryArchiveObjectTypeSummaryMigration1785080000000 } from '../../../database/migrations/1785080000000-HistoryArchiveObjectTypeSummaryMigration.js';
 import { HistoryArchiveGlobalBucketHashIndexMigration1785090000000 } from '../../../database/migrations/1785090000000-HistoryArchiveGlobalBucketHashIndexMigration.js';
+import { HistoryArchiveBucketReferenceSummaryMigration1785100000000 } from '../../../database/migrations/1785100000000-HistoryArchiveBucketReferenceSummaryMigration.js';
 
 export const archiveA = 'https://archive-a.example/history';
 export const archiveB = 'https://archive-b.example/history';
@@ -26,6 +27,10 @@ export async function resetObjectSummaryFixture(
 		dataSource,
 		new HistoryArchiveGlobalBucketHashIndexMigration1785090000000()
 	);
+	await runMigration(
+		dataSource,
+		new HistoryArchiveBucketReferenceSummaryMigration1785100000000()
+	);
 }
 
 async function dropObjectSummaryFixture(dataSource: DataSource): Promise<void> {
@@ -37,6 +42,15 @@ async function dropObjectSummaryFixture(dataSource: DataSource): Promise<void> {
 	);
 	await dataSource.query(
 		'drop table if exists history_archive_object_type_summary cascade'
+	);
+	await dataSource.query(
+		'drop table if exists history_archive_bucket_reference_summary_progress cascade'
+	);
+	await dataSource.query(
+		'drop table if exists history_archive_bucket_reference_summary cascade'
+	);
+	await dataSource.query(
+		'drop table if exists history_archive_bucket_identity_summary cascade'
 	);
 	await dataSource.query(
 		'drop table if exists history_archive_checkpoint_proof_rollup cascade'
@@ -55,6 +69,12 @@ async function dropObjectSummaryFixture(dataSource: DataSource): Promise<void> {
 	);
 	await dataSource.query(
 		'drop function if exists reset_history_archive_object_type_summary() cascade'
+	);
+	await dataSource.query(
+		'drop function if exists refresh_history_archive_bucket_reference_summary() cascade'
+	);
+	await dataSource.query(
+		'drop function if exists reset_history_archive_bucket_reference_summary() cascade'
 	);
 }
 

@@ -1,6 +1,7 @@
 import { managedMigrations } from '@core/infrastructure/database/ManagedMigrations.js';
 import { HistoryArchiveObjectTypeSummaryMigration1785080000000 } from '../../../database/migrations/1785080000000-HistoryArchiveObjectTypeSummaryMigration.js';
 import { HistoryArchiveGlobalBucketHashIndexMigration1785090000000 } from '../../../database/migrations/1785090000000-HistoryArchiveGlobalBucketHashIndexMigration.js';
+import { HistoryArchiveBucketReferenceSummaryMigration1785100000000 } from '../../../database/migrations/1785100000000-HistoryArchiveBucketReferenceSummaryMigration.js';
 import {
 	archiveObjectBucketHashIndexName,
 	archiveObjectGlobalBucketHashIndexName,
@@ -16,11 +17,14 @@ import {
 
 describe('HistoryArchiveObjectSummaryQuery SQL', () => {
 	it('registers the type-summary migration after the prior managed migration', () => {
-		expect(managedMigrations.at(-2)).toBe(
+		expect(managedMigrations.at(-3)).toBe(
 			HistoryArchiveObjectTypeSummaryMigration1785080000000
 		);
-		expect(managedMigrations.at(-1)).toBe(
+		expect(managedMigrations.at(-2)).toBe(
 			HistoryArchiveGlobalBucketHashIndexMigration1785090000000
+		);
+		expect(managedMigrations.at(-1)).toBe(
+			HistoryArchiveBucketReferenceSummaryMigration1785100000000
 		);
 	});
 
@@ -44,28 +48,27 @@ describe('HistoryArchiveObjectSummaryQuery SQL', () => {
 		);
 	});
 
-	it('isolates exact bucket distinctness on the required partial index', () => {
+	it('isolates exact bucket distinctness on compact reference summaries', () => {
 		expect(uniqueBucketHashReadSettingsSql).toContain(
 			"set_config('statement_timeout'"
 		);
+		expect(uniqueBucketHashReadSettingsSql).toContain('"complete" = true');
 		expect(uniqueBucketHashReadSettingsSql).toContain(
-			"set_config('enable_seqscan', 'off'"
+			'history_archive_bucket_reference_summary_progress'
 		);
-		expect(uniqueBucketHashReadSettingsSql).toContain(
-			"set_config('enable_bitmapscan', 'off'"
-		);
-		expect(uniqueBucketHashReadSettingsSql).toContain('indisvalid');
-		expect(uniqueBucketHashReadSettingsSql).toContain('indisready');
 		expect(archiveObjectBucketHashIndexName).toBe(
 			'idx_history_archive_object_bucket_hash'
 		);
 		expect(archiveObjectGlobalBucketHashIndexName).toBe(
 			'idx_history_archive_object_bucket_hash_global'
 		);
-		for (const sql of [uniqueBucketHashGlobalSql, uniqueBucketHashArchiveSql]) {
-			expect(sql).toContain('group by "bucketHash"');
-			expect(sql).toContain('"objectType" = \'bucket\'');
-			expect(sql).toContain('"bucketHash" is not null');
-		}
+		expect(uniqueBucketHashGlobalSql).toContain(
+			'history_archive_bucket_identity_summary'
+		);
+		expect(uniqueBucketHashArchiveSql).toContain(
+			'history_archive_bucket_reference_summary'
+		);
+		for (const sql of [uniqueBucketHashGlobalSql, uniqueBucketHashArchiveSql])
+			expect(sql).not.toContain('history_archive_object_queue');
 	});
 });

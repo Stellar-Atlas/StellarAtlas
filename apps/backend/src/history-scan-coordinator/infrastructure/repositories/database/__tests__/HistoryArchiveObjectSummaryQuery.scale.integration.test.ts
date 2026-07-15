@@ -1,4 +1,4 @@
-import { DataSource, type QueryRunner } from 'typeorm';
+import { DataSource } from 'typeorm';
 import {
 	startDisposablePostgres,
 	type DisposablePostgres
@@ -6,11 +6,10 @@ import {
 import {
 	archiveObjectBucketHashIndexName,
 	archiveObjectGlobalBucketHashIndexName,
-	archiveObjectUniqueBucketHashStatementTimeoutMs,
 	getExactUniqueBucketHashCount,
-	uniqueBucketHashGlobalSql,
-	uniqueBucketHashReadSettingsSql
+	uniqueBucketHashGlobalSql
 } from '../HistoryArchiveObjectBucketSummaryQuery.js';
+import { HistoryArchiveBucketReferenceSummaryMigration1785100000000 } from '../../../database/migrations/1785100000000-HistoryArchiveBucketReferenceSummaryMigration.js';
 import { sourceSummarySql } from '../HistoryArchiveObjectSourceSummaryQuery.js';
 import { objectTypeSummarySql } from '../HistoryArchiveObjectTypeSummaryReadQuery.js';
 
@@ -53,38 +52,14 @@ describe('HistoryArchiveObjectSummaryQuery scale plans', () => {
 			expect(relations).not.toContain('history_archive_checkpoint_proof');
 		}
 
-		const runner = dataSource.createQueryRunner();
-		await runner.connect();
-		await runner.startTransaction();
-		let uniquePlan: QueryPlan;
-		try {
-			await runner.query(uniqueBucketHashReadSettingsSql, [
-				archiveObjectGlobalBucketHashIndexName,
-				`${archiveObjectUniqueBucketHashStatementTimeoutMs}ms`
-			]);
-			uniquePlan = await explainRunner(runner, uniqueBucketHashGlobalSql);
-		} finally {
-			await runner.rollbackTransaction();
-			await runner.release();
-		}
-
-		const queueAccesses = readRelationAccesses(uniquePlan).filter(
-			(access) => access.relation === 'history_archive_object_queue'
+		const uniquePlan = await explainDataSource(
+			dataSource,
+			uniqueBucketHashGlobalSql,
+			[]
 		);
-		expect(queueAccesses).toEqual([
-			expect.objectContaining({
-				indexName: archiveObjectGlobalBucketHashIndexName,
-				nodeType: 'Index Only Scan'
-			})
-		]);
 		expect(
-			queueAccesses.some(
-				(access) =>
-					access.nodeType === 'Seq Scan' ||
-					access.nodeType === 'Bitmap Heap Scan'
-			)
-		).toBe(false);
-		expect(readNodeTypes(uniquePlan)).not.toContain('Sort');
+			readRelationAccesses(uniquePlan).map((access) => access.relation)
+		).not.toContain('history_archive_object_queue');
 		await expect(
 			getExactUniqueBucketHashCount(dataSource.manager, null)
 		).resolves.toBe(uniqueBucketHashes);
@@ -129,6 +104,12 @@ async function createScaleFixture(dataSource: DataSource): Promise<void> {
 			"remoteFailureObjects" bigint not null,
 			"scannerIssueObjects" bigint not null,
 			primary key ("archiveUrlIdentity", "objectType")
+		)
+	`);
+	await dataSource.query(`
+		create table history_archive_object_type_summary_progress (
+			id smallint primary key,
+			"complete" boolean not null
 		)
 	`);
 	await dataSource.query(`
@@ -204,6 +185,19 @@ async function createScaleFixture(dataSource: DataSource): Promise<void> {
 		from history_archive_object_queue
 		group by "archiveUrlIdentity", "objectType"
 	`);
+	await dataSource.query(`
+		insert into history_archive_object_type_summary_progress
+		values (1, true)
+	`);
+	const runner = dataSource.createQueryRunner();
+	await runner.connect();
+	try {
+		await new HistoryArchiveBucketReferenceSummaryMigration1785100000000().up(
+			runner
+		);
+	} finally {
+		await runner.release();
+	}
 	await dataSource.query('vacuum analyze history_archive_object_queue');
 	await dataSource.query('analyze history_archive_object_type_summary');
 	await dataSource.query('analyze history_archive_state_snapshot');
@@ -234,16 +228,6 @@ async function explainDataSource(
 	const value: unknown = await dataSource.query(
 		`explain (analyze, buffers, format json) ${sql}`,
 		[...parameters]
-	);
-	return parsePlan(value);
-}
-
-async function explainRunner(
-	runner: QueryRunner,
-	sql: string
-): Promise<QueryPlan> {
-	const value: unknown = await runner.query(
-		`explain (analyze, buffers, format json) ${sql}`
 	);
 	return parsePlan(value);
 }
@@ -279,14 +263,6 @@ function readRelationAccesses(plan: QueryPlan): readonly RelationAccess[] {
 		}
 	});
 	return accesses;
-}
-
-function readNodeTypes(plan: QueryPlan): readonly string[] {
-	const nodeTypes: string[] = [];
-	visitPlan(plan.Plan, (node) => {
-		if (node['Node Type'] !== undefined) nodeTypes.push(node['Node Type']);
-	});
-	return nodeTypes;
 }
 
 function visitPlan(

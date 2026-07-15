@@ -5,11 +5,8 @@ import type {
 } from 'shared';
 import { requireNumber, type NumericValue } from './ScanJobRowMapper.js';
 
-type BucketHashIndexRow = {
-	readonly bucketHashIndex?: string | null;
-	readonly buckethashindex?: string | null;
-	readonly bucketHashIndexReady?: boolean;
-	readonly buckethashindexready?: boolean;
+type BucketHashSummaryReadinessRow = {
+	readonly ready?: boolean;
 };
 
 type UniqueBucketHashRow = {
@@ -61,23 +58,11 @@ export async function getExactUniqueBucketHashCount(
 ): Promise<number> {
 	try {
 		return await manager.transaction(async (transactionManager) => {
-			const requiredIndex =
-				archiveUrlIdentity === null
-					? archiveObjectGlobalBucketHashIndexName
-					: archiveObjectBucketHashIndexName;
-			const [indexRow] = (await transactionManager.query(
+			const [readinessRow] = (await transactionManager.query(
 				uniqueBucketHashReadSettingsSql,
-				[
-					requiredIndex,
-					`${archiveObjectUniqueBucketHashStatementTimeoutMs}ms`
-				]
-			)) as readonly BucketHashIndexRow[];
-			if (
-				(indexRow?.bucketHashIndex ?? indexRow?.buckethashindex) !==
-					requiredIndex ||
-				(indexRow?.bucketHashIndexReady ?? indexRow?.buckethashindexready) !==
-					true
-			) {
+				[`${archiveObjectUniqueBucketHashStatementTimeoutMs}ms`]
+			)) as readonly BucketHashSummaryReadinessRow[];
+			if (readinessRow?.ready !== true) {
 				throw new HistoryArchiveUniqueBucketHashSummaryUnavailableError();
 			}
 
@@ -103,44 +88,29 @@ export async function getExactUniqueBucketHashCount(
 	}
 }
 
-// Cross-archive hash distinctness is not derivable from the type rollup. Keep
-// this exact read on the appropriate hash-ordered partial index and cap its
-// wall-clock work.
+// Cross-archive hash distinctness is not additive across per-type counts. The
+// trigger-maintained reference summaries preserve exact global and per-source
+// identities without scanning the live queue on a request path.
 export const uniqueBucketHashReadSettingsSql = `
 	select
-		to_regclass($1::text)::text as "bucketHashIndex",
-		coalesce((
-			select index_metadata.indisvalid and index_metadata.indisready
-			from pg_index index_metadata
-			where index_metadata.indexrelid = to_regclass($1::text)
-				and index_metadata.indrelid =
-					to_regclass('history_archive_object_queue')
-		), false) as "bucketHashIndexReady",
-		set_config('statement_timeout', $2::text, true),
-		set_config('enable_seqscan', 'off', true),
-		set_config('enable_bitmapscan', 'off', true),
+		(
+			"complete" = true
+			and "completedAt" is not null
+			and "lastBucketHash" = "cutoffBucketHash"
+		) as ready,
+		set_config('statement_timeout', $1::text, true),
 		set_config('jit', 'off', true)
+	from history_archive_bucket_reference_summary_progress
+	where id = 1
 `;
 
 export const uniqueBucketHashGlobalSql = `
 	select count(*) as "uniqueBucketHashes"
-	from (
-		select "bucketHash"
-		from history_archive_object_queue
-		where "objectType" = 'bucket'
-			and "bucketHash" is not null
-		group by "bucketHash"
-	) unique_bucket_hashes
+	from history_archive_bucket_identity_summary
 `;
 
 export const uniqueBucketHashArchiveSql = `
 	select count(*) as "uniqueBucketHashes"
-	from (
-		select "bucketHash"
-		from history_archive_object_queue
-		where "archiveUrlIdentity" = $1::text
-			and "objectType" = 'bucket'
-			and "bucketHash" is not null
-		group by "bucketHash"
-	) unique_bucket_hashes
+	from history_archive_bucket_reference_summary
+	where "archiveUrlIdentity" = $1::text
 `;

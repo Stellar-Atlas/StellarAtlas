@@ -6,8 +6,6 @@ import {
 import { getHistoryArchiveObjectSummary } from '../HistoryArchiveObjectSummaryQuery.js';
 import { HistoryArchiveObjectTypeSummaryUnavailableError } from '../HistoryArchiveObjectTypeSummaryReadQuery.js';
 import {
-	archiveObjectBucketHashIndexName,
-	archiveObjectGlobalBucketHashIndexName,
 	HistoryArchiveUniqueBucketHashSummaryUnavailableError
 } from '../HistoryArchiveObjectBucketSummaryQuery.js';
 import {
@@ -228,26 +226,13 @@ describe('HistoryArchiveObjectSummaryQuery with PostgreSQL', () => {
 		await expectUnavailable('unavailable');
 	});
 
-	it('fails before global counting when its hash index is unavailable', async () => {
+	it('fails before counting when its reference summary is unavailable', async () => {
 		await dataSource.query(
-			`drop index "${archiveObjectGlobalBucketHashIndexName}"`
+			'drop table history_archive_bucket_reference_summary_progress'
 		);
 
 		await expect(
 			getHistoryArchiveObjectSummary(dataSource.manager)
-		).rejects.toBeInstanceOf(
-			HistoryArchiveUniqueBucketHashSummaryUnavailableError
-		);
-	});
-
-	it('fails before archive counting when its source index is unavailable', async () => {
-		await dataSource.query(`drop index "${archiveObjectBucketHashIndexName}"`);
-
-		await expect(
-			getHistoryArchiveObjectSummary(dataSource.manager, {
-				archiveUrl: archiveA,
-				archiveUrlIdentity: archiveA
-			})
 		).rejects.toBeInstanceOf(
 			HistoryArchiveUniqueBucketHashSummaryUnavailableError
 		);
