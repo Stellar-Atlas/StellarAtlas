@@ -60,6 +60,10 @@ import { GetHistoryArchiveObjectSummary } from '../../use-cases/get-history-arch
 import { GetHistoryArchiveObjectStatusSummary } from '../../use-cases/get-history-archive-object-status-summary/GetHistoryArchiveObjectStatusSummary.js';
 import { GetHistoryArchiveObjectEvents } from '../../use-cases/get-history-archive-object-events/GetHistoryArchiveObjectEvents.js';
 import { GetHistoryArchiveRepairPlan } from '../../use-cases/get-history-archive-repair-plan/GetHistoryArchiveRepairPlan.js';
+import { GetHistoryArchiveRepairArtifact } from '../../use-cases/get-history-archive-repair-artifact/GetHistoryArchiveRepairArtifact.js';
+import { ResolveHistoryArchiveRepairArtifacts } from '../../use-cases/get-history-archive-repair-artifact/ResolveHistoryArchiveRepairArtifacts.js';
+import type { HistoryArchiveRepairArtifactRepository } from '../../domain/history-archive-repair-artifact/HistoryArchiveRepairArtifactRepository.js';
+import { createLocalHistoryArchiveRepairArtifactRepository } from '../repositories/filesystem/LocalHistoryArchiveRepairArtifactRepository.js';
 import { ScheduleHistoryArchiveObjects } from '../../use-cases/schedule-history-archive-objects/ScheduleHistoryArchiveObjects.js';
 import { GetHistoryArchiveObjectJob } from '../../use-cases/get-history-archive-object-job/GetHistoryArchiveObjectJob.js';
 import { TouchHistoryArchiveObject } from '../../use-cases/touch-history-archive-object/TouchHistoryArchiveObject.js';
@@ -111,6 +115,8 @@ export function load(container: Container, config: Config) {
 	container.bind(GetHistoryArchiveObjectStatusSummary).toSelf();
 	container.bind(GetHistoryArchiveObjectEvents).toSelf();
 	container.bind(GetHistoryArchiveRepairPlan).toSelf();
+	container.bind(GetHistoryArchiveRepairArtifact).toSelf();
+	container.bind(ResolveHistoryArchiveRepairArtifacts).toSelf();
 	container.bind(GetKnownArchiveEvidence).toSelf();
 	container.bind(GetKnownNodeArchiveEvidence).toSelf();
 	container.bind(GetKnownOrganizationArchiveEvidence).toSelf();
@@ -184,6 +190,13 @@ export function load(container: Container, config: Config) {
 			);
 		})
 		.inRequestScope();
+
+	container
+		.bind<HistoryArchiveRepairArtifactRepository>(
+			TYPES.HistoryArchiveRepairArtifactRepository
+		)
+		.toDynamicValue(createLocalHistoryArchiveRepairArtifactRepository)
+		.inSingletonScope();
 
 	container
 		.bind<HistoryArchiveObjectRepository>(TYPES.HistoryArchiveObjectRepository)

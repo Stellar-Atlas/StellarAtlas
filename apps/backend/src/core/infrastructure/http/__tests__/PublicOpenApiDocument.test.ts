@@ -12,6 +12,9 @@ describe('public OpenAPI document', () => {
 		expect(paths['/v1/explorer/operations']).toBeDefined();
 		expect(paths['/v1/known/nodes']).toBeDefined();
 		expect(paths['/v1/archive-scans/objects/status-summary']).toBeDefined();
+		expect(
+			paths['/v1/archive-scans/repair-artifacts/buckets/{bucketHash}']
+		).toBeDefined();
 		expect(paths['/v1/history-scan/{url}']).toMatchObject({
 			get: { tags: ['Archive verification'] }
 		});

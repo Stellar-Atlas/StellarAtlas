@@ -9,6 +9,9 @@ export const TYPES = {
 		'FullHistoryPromotionRuntimeRepository'
 	),
 	HistoryArchiveStateRepository: Symbol('HistoryArchiveStateRepository'),
+	HistoryArchiveRepairArtifactRepository: Symbol(
+		'HistoryArchiveRepairArtifactRepository'
+	),
 	HistoryArchiveObjectEventRepository: Symbol(
 		'HistoryArchiveObjectEventRepository'
 	),

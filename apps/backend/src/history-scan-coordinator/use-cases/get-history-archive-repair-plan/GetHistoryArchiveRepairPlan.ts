@@ -12,16 +12,24 @@ import {
 	classifyHistoryArchiveObjectFailure,
 	getHistoryArchiveObjectEvidenceClass
 } from '../../domain/history-archive-object/HistoryArchiveObjectRetryPolicy.js';
-import type { HistoryArchiveObjectRepository } from '../../domain/history-archive-object/HistoryArchiveObjectRepository.js';
+import type {
+	HistoryArchiveObjectRepository,
+	HistoryArchiveVerifiedBucketSource
+} from '../../domain/history-archive-object/HistoryArchiveObjectRepository.js';
 import { TYPES } from '../../infrastructure/di/di-types.js';
+import {
+	deferredRepairArtifact,
+	type HistoryArchiveRepairActionWithArtifactV1,
+	type HistoryArchiveRepairArtifactAvailabilityV1,
+	type HistoryArchiveRepairPlanResponseV1
+} from '../get-history-archive-repair-artifact/HistoryArchiveRepairArtifactContract.js';
+import { ResolveHistoryArchiveRepairArtifacts } from '../get-history-archive-repair-artifact/ResolveHistoryArchiveRepairArtifacts.js';
 import { InvalidUrlError } from '../get-latest-scan/InvalidUrlError.js';
 import type {
 	HistoryArchiveCheckpointRepairEvidenceV1,
 	HistoryArchiveRepairActionKindV1,
-	HistoryArchiveRepairActionV1,
 	HistoryArchiveRepairInfrastructureBlockV1,
 	HistoryArchiveRepairObjectEvidenceV1,
-	HistoryArchiveRepairPlanV1,
 	HistoryArchiveRepairReasonV1,
 	HistoryArchiveRepairSourceCandidateV1
 } from 'shared';
@@ -37,13 +45,14 @@ export class GetHistoryArchiveRepairPlan {
 		private readonly objectRepository: HistoryArchiveObjectRepository,
 		@inject(TYPES.HistoryArchiveCheckpointProofRepository)
 		private readonly proofRepository: HistoryArchiveCheckpointProofRepository,
+		private readonly repairArtifacts: ResolveHistoryArchiveRepairArtifacts,
 		@inject('ExceptionLogger') private readonly exceptionLogger: ExceptionLogger
 	) {}
 
 	async execute(options: {
 		readonly limit?: number;
 		readonly url: string;
-	}): Promise<Result<HistoryArchiveRepairPlanV1, Error>> {
+	}): Promise<Result<HistoryArchiveRepairPlanResponseV1, Error>> {
 		if (Url.create(options.url).isErr()) {
 			return err(new InvalidUrlError(options.url));
 		}
@@ -56,10 +65,7 @@ export class GetHistoryArchiveRepairPlan {
 		try {
 			const limit = normalizeLimit(options.limit);
 			const [summary, objectFailures, checkpointFailures] = await Promise.all([
-				this.objectRepository.getSummary({
-					archiveUrl: options.url,
-					archiveUrlIdentity
-				}),
+				this.objectRepository.getRepairPlanSummary(archiveUrlIdentity),
 				this.objectRepository.findActionableByArchiveUrl(options.url, limit),
 				this.proofRepository.findActionableByArchiveUrlIdentity(
 					archiveUrlIdentity,
@@ -69,12 +75,17 @@ export class GetHistoryArchiveRepairPlan {
 			const repairableObjectFailures = objectFailures.filter(
 				isRepairableObjectFailure
 			);
-			const candidateSources = await this.getBucketSourceCandidates(
-				repairableObjectFailures
-			);
+			const [candidateSources, repairArtifacts] = await Promise.all([
+				this.getBucketSourceCandidates(repairableObjectFailures),
+				this.repairArtifacts.execute(
+					repairableObjectFailures.flatMap((object) =>
+						object.bucketHash === null ? [] : [object.bucketHash]
+					)
+				)
+			]);
 			const actions = [
 				...repairableObjectFailures.flatMap((object) =>
-					toObjectAction(object, candidateSources)
+					toObjectAction(object, candidateSources, repairArtifacts)
 				),
 				...checkpointFailures.flatMap(toCheckpointAction)
 			].slice(0, limit);
@@ -106,8 +117,7 @@ export class GetHistoryArchiveRepairPlan {
 				limit,
 				summary: {
 					activeObjectChecks: summary.activeObjects,
-					failedCheckpointProofs:
-						summary.checkpoints.categoryConsistencyFailedCheckpoints,
+					failedCheckpointProofs: summary.failedCheckpointProofs,
 					failedObjectChecks: summary.failedObjects,
 					pendingObjectChecks: summary.pendingObjects,
 					verifiedObjectChecks: summary.verifiedObjects
@@ -126,23 +136,29 @@ export class GetHistoryArchiveRepairPlan {
 		ReadonlyMap<string, readonly HistoryArchiveRepairSourceCandidateV1[]>
 	> {
 		const bucketHashes = Array.from(
-			new Set(objects.flatMap((object) => object.bucketHash ?? []))
+			new Set(
+				objects.flatMap((object) =>
+					object.bucketHash === null ? [] : [object.bucketHash.toLowerCase()]
+				)
+			)
 		).slice(0, maxRepairPlanLimit);
-		const entries = await Promise.all(
-			bucketHashes.map(async (bucketHash) => {
-				const bucketObjects =
-					await this.objectRepository.findBucketObjectsByHash(bucketHash);
-				return [
-					bucketHash,
-					bucketObjects
-						.filter((object) => object.status === 'verified')
-						.slice(0, sourceCandidateLimit)
-						.map(toSourceCandidate)
-				] as const;
-			})
-		);
+		if (bucketHashes.length === 0) return new Map();
+		const sources =
+			await this.objectRepository.findVerifiedBucketSourcesByHashes(
+				bucketHashes,
+				sourceCandidateLimit
+			);
+		const candidates = new Map<
+			string,
+			HistoryArchiveRepairSourceCandidateV1[]
+		>();
+		for (const source of sources) {
+			const bucketSources = candidates.get(source.bucketHash) ?? [];
+			bucketSources.push(toSourceCandidate(source));
+			candidates.set(source.bucketHash, bucketSources);
+		}
 
-		return new Map(entries);
+		return candidates;
 	}
 }
 
@@ -159,15 +175,19 @@ function toObjectAction(
 	candidateSources: ReadonlyMap<
 		string,
 		readonly HistoryArchiveRepairSourceCandidateV1[]
+	>,
+	repairArtifacts: ReadonlyMap<
+		string,
+		HistoryArchiveRepairArtifactAvailabilityV1
 	>
-): readonly HistoryArchiveRepairActionV1[] {
+): readonly HistoryArchiveRepairActionWithArtifactV1[] {
 	const evidenceClass = getObjectEvidenceClass(object);
 	if (evidenceClass !== 'archive-object') return [];
 
 	const bucketSources =
 		object.bucketHash === null
 			? []
-			: (candidateSources.get(object.bucketHash) ?? []);
+			: (candidateSources.get(object.bucketHash.toLowerCase()) ?? []);
 	const reason = getObjectRepairReason(object);
 	const kind = getObjectActionKind(object);
 
@@ -181,6 +201,11 @@ function toObjectAction(
 			kind,
 			knownGoodSources: bucketSources,
 			reason,
+			repairArtifact:
+				object.bucketHash === null
+					? null
+					: (repairArtifacts.get(object.bucketHash.toLowerCase()) ??
+						deferredRepairArtifact(object.bucketHash.toLowerCase())),
 			severity: 'error',
 			summary: getObjectActionSummary(object, kind)
 		}
@@ -217,7 +242,7 @@ function isRepairableObjectFailure(object: HistoryArchiveObject): boolean {
 
 function toCheckpointAction(
 	proof: HistoryArchiveCheckpointProof
-): readonly HistoryArchiveRepairActionV1[] {
+): readonly HistoryArchiveRepairActionWithArtifactV1[] {
 	if (proof.status !== 'mismatch') return [];
 
 	const reason = getCheckpointRepairReason(proof.failureKind);
@@ -235,6 +260,7 @@ function toCheckpointAction(
 			kind: 'repair-checkpoint-proof',
 			knownGoodSources: [],
 			reason,
+			repairArtifact: null,
 			severity: 'error',
 			summary: getCheckpointActionSummary(proof.checkpointLedger, reason)
 		}
@@ -382,7 +408,7 @@ function toCheckpointEvidence(
 }
 
 function toSourceCandidate(
-	object: HistoryArchiveObject
+	object: HistoryArchiveVerifiedBucketSource
 ): HistoryArchiveRepairSourceCandidateV1 {
 	return {
 		archiveUrl: object.archiveUrl,

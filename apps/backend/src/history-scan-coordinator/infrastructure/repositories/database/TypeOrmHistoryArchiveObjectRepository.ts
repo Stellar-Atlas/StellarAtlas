@@ -47,6 +47,10 @@ import {
 } from './HistoryArchiveObjectDependencyWrite.js';
 import { reconcileHistoryArchiveObjectExecution } from './HistoryArchiveObjectExecutionReconciler.js';
 import { findVerifiedCheckpointsNeedingReconciliation } from './HistoryArchiveCheckpointReconciliationQuery.js';
+import {
+	findVerifiedHistoryArchiveBucketSources,
+	getHistoryArchiveRepairPlanSummary
+} from './HistoryArchiveRepairPlanQuery.js';
 
 const maxActiveObjectsPerArchive = historyArchivePerRootFrontier;
 const maxActiveObjectsPerHost = historyArchivePerHostConcurrency;
@@ -121,6 +125,17 @@ export class TypeOrmHistoryArchiveObjectRepository implements HistoryArchiveObje
 			.getMany();
 	}
 
+	async findVerifiedBucketSourcesByHashes(
+		bucketHashes: readonly string[],
+		limitPerHash: number
+	) {
+		return await findVerifiedHistoryArchiveBucketSources(
+			this.repository.manager,
+			bucketHashes,
+			limitPerHash
+		);
+	}
+
 	async findLatestActivityAt(): Promise<Date | null> {
 		return await findLatestHistoryArchiveObjectActivityAt(this.repository);
 	}
@@ -177,6 +192,13 @@ export class TypeOrmHistoryArchiveObjectRepository implements HistoryArchiveObje
 		limit: number
 	): Promise<HistoryArchiveObjectQueueSnapshot> {
 		return await this.getSnapshot(limit);
+	}
+
+	async getRepairPlanSummary(archiveUrlIdentity: string) {
+		return await getHistoryArchiveRepairPlanSummary(
+			this.repository.manager,
+			archiveUrlIdentity
+		);
 	}
 
 	async getSummary(

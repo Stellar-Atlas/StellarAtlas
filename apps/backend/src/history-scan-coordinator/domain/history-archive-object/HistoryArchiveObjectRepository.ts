@@ -6,6 +6,7 @@ import type {
 	HistoryArchiveObjectFailureClass
 } from './HistoryArchiveObjectRetryPolicy.js';
 import type {
+	HistoryArchiveObjectHostThrottleV1,
 	HistoryArchiveObjectSummaryV1,
 	HistoryArchiveStatusSummaryV1
 } from 'shared';
@@ -23,6 +24,23 @@ export interface HistoryArchiveObjectQueueStats {
 
 export interface HistoryArchiveObjectQueueSnapshot extends HistoryArchiveObjectQueueStats {
 	readonly objects: readonly HistoryArchiveObject[];
+}
+
+export interface HistoryArchiveRepairPlanSummary {
+	readonly activeObjects: number;
+	readonly failedCheckpointProofs: number;
+	readonly failedObjects: number;
+	readonly hostThrottles: readonly HistoryArchiveObjectHostThrottleV1[];
+	readonly pendingObjects: number;
+	readonly verifiedObjects: number;
+}
+
+export interface HistoryArchiveVerifiedBucketSource {
+	readonly archiveUrl: string;
+	readonly archiveUrlIdentity: string;
+	readonly bucketHash: string;
+	readonly objectUrl: string;
+	readonly verifiedAt: Date | null;
 }
 
 export interface HistoryArchiveObjectWorkerSnapshot {
@@ -95,6 +113,10 @@ export interface HistoryArchiveObjectRepository {
 	findBucketObjectsByHash(
 		bucketHash: string
 	): Promise<readonly HistoryArchiveObject[]>;
+	findVerifiedBucketSourcesByHashes(
+		bucketHashes: readonly string[],
+		limitPerHash: number
+	): Promise<readonly HistoryArchiveVerifiedBucketSource[]>;
 	findByRemoteId(remoteId: string): Promise<HistoryArchiveObject | null>;
 	findLatestActivityAt(): Promise<Date | null>;
 	findUnreconciledTransitions(
@@ -111,6 +133,9 @@ export interface HistoryArchiveObjectRepository {
 		limit: number
 	): Promise<readonly HistoryArchiveObject[]>;
 	getQueueSnapshot(limit: number): Promise<HistoryArchiveObjectQueueSnapshot>;
+	getRepairPlanSummary(
+		archiveUrlIdentity: string
+	): Promise<HistoryArchiveRepairPlanSummary>;
 	getSummary(options?: {
 		readonly archiveUrl?: string | null;
 		readonly archiveUrlIdentity?: string | null;

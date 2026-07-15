@@ -3,31 +3,45 @@ import type { ExceptionLogger } from '@core/services/ExceptionLogger.js';
 import { HistoryArchiveCheckpointProof } from '../../../domain/history-archive-checkpoint-proof/HistoryArchiveCheckpointProof.js';
 import type { HistoryArchiveCheckpointProofRepository } from '../../../domain/history-archive-checkpoint-proof/HistoryArchiveCheckpointProofRepository.js';
 import { HistoryArchiveObject } from '../../../domain/history-archive-object/HistoryArchiveObject.js';
-import type { HistoryArchiveObjectRepository } from '../../../domain/history-archive-object/HistoryArchiveObjectRepository.js';
+import type {
+	HistoryArchiveObjectRepository,
+	HistoryArchiveRepairPlanSummary,
+	HistoryArchiveVerifiedBucketSource
+} from '../../../domain/history-archive-object/HistoryArchiveObjectRepository.js';
+import type { HistoryArchiveRepairArtifactAvailabilityV1 } from '../../get-history-archive-repair-artifact/HistoryArchiveRepairArtifactContract.js';
+import { ResolveHistoryArchiveRepairArtifacts } from '../../get-history-archive-repair-artifact/ResolveHistoryArchiveRepairArtifacts.js';
 import { GetHistoryArchiveRepairPlan } from '../GetHistoryArchiveRepairPlan.js';
-import type { HistoryArchiveObjectSummaryV1 } from 'shared';
 
 const archiveUrl = 'https://history.example.com';
 const archiveUrlIdentity = 'https://history.example.com';
 const bucketHash =
 	'4eae73efaa0ce061441dfe43ffc61c0ed24fcbc59e5ee512d1b60e8da2509655';
+const unrelatedBucketHash = 'a'.repeat(64);
 
 describe('GetHistoryArchiveRepairPlan', () => {
 	it('separates archive repair actions from scanner infrastructure blocks', async () => {
 		const objectRepository = mock<HistoryArchiveObjectRepository>();
 		const proofRepository = mock<HistoryArchiveCheckpointProofRepository>();
+		const repairArtifacts = createArtifactResolver();
 		const useCase = new GetHistoryArchiveRepairPlan(
 			objectRepository,
 			proofRepository,
+			repairArtifacts,
 			mock<ExceptionLogger>()
 		);
-		objectRepository.getSummary.mockResolvedValue(createSummary());
+		objectRepository.getRepairPlanSummary.mockResolvedValue(createSummary());
 		objectRepository.findActionableByArchiveUrl.mockResolvedValue([
 			createBucketFailure(),
 			createWorkerFailure()
 		]);
-		objectRepository.findBucketObjectsByHash.mockResolvedValue([
-			createVerifiedBucketCopy()
+		objectRepository.findVerifiedBucketSourcesByHashes.mockResolvedValue([
+			createVerifiedBucketCopy(),
+			{
+				...createVerifiedBucketCopy(),
+				archiveUrl: 'https://unrelated-history.example.com',
+				archiveUrlIdentity: 'https://unrelated-history.example.com',
+				bucketHash: unrelatedBucketHash
+			}
 		]);
 		proofRepository.findActionableByArchiveUrlIdentity.mockResolvedValue([
 			createCheckpointProof()
@@ -43,10 +57,17 @@ describe('GetHistoryArchiveRepairPlan', () => {
 					kind: 'replace-bucket-file',
 					knownGoodSources: [
 						expect.objectContaining({
-							archiveUrl: 'https://other-history.example.com'
+							archiveUrl: 'https://other-history.example.com',
+							objectUrl: expect.stringMatching(
+								/^https:\/\/other-history\.example\.com\//
+							)
 						})
 					],
-					reason: 'bucket-hash-mismatch'
+					reason: 'bucket-hash-mismatch',
+					repairArtifact: expect.objectContaining({
+						reason: 'local-payload-missing',
+						status: 'unavailable'
+					})
 				}),
 				expect.objectContaining({
 					kind: 'repair-checkpoint-proof',
@@ -60,8 +81,42 @@ describe('GetHistoryArchiveRepairPlan', () => {
 				failureClass: 'worker'
 			})
 		]);
-		expect(objectRepository.findBucketObjectsByHash).toHaveBeenCalledWith(
-			bucketHash
+		expect(
+			objectRepository.findVerifiedBucketSourcesByHashes
+		).toHaveBeenCalledWith([bucketHash], 5);
+		expect(repairArtifacts.execute).toHaveBeenCalledWith([bucketHash]);
+		const bucketAction = result.value.actions.find(
+			(action) => action.kind === 'replace-bucket-file'
+		);
+		expect(JSON.stringify(bucketAction?.repairArtifact)).not.toContain(
+			'https://other-history.example.com'
+		);
+	});
+
+	it('offers a local download URL only for a proven retained bucket', async () => {
+		const objectRepository = mock<HistoryArchiveObjectRepository>();
+		const proofRepository = mock<HistoryArchiveCheckpointProofRepository>();
+		const useCase = new GetHistoryArchiveRepairPlan(
+			objectRepository,
+			proofRepository,
+			createArtifactResolver(createAvailableArtifact()),
+			mock<ExceptionLogger>()
+		);
+		objectRepository.getRepairPlanSummary.mockResolvedValue(createSummary());
+		objectRepository.findActionableByArchiveUrl.mockResolvedValue([
+			createBucketFailure()
+		]);
+		objectRepository.findVerifiedBucketSourcesByHashes.mockResolvedValue([]);
+		proofRepository.findActionableByArchiveUrlIdentity.mockResolvedValue([]);
+
+		const result = await useCase.execute({ limit: 25, url: archiveUrl });
+
+		expect(result._unsafeUnwrap().actions[0]?.repairArtifact).toEqual(
+			expect.objectContaining({
+				downloadUrl: `/v1/archive-scans/repair-artifacts/buckets/${bucketHash}`,
+				objectIdentity: `bucket:${bucketHash}`,
+				status: 'available'
+			})
 		);
 	});
 
@@ -71,11 +126,12 @@ describe('GetHistoryArchiveRepairPlan', () => {
 		const useCase = new GetHistoryArchiveRepairPlan(
 			objectRepository,
 			proofRepository,
+			createArtifactResolver(),
 			mock<ExceptionLogger>()
 		);
-		objectRepository.getSummary.mockResolvedValue(createSummary());
+		objectRepository.getRepairPlanSummary.mockResolvedValue(createSummary());
 		objectRepository.findActionableByArchiveUrl.mockResolvedValue([]);
-		objectRepository.findBucketObjectsByHash.mockResolvedValue([]);
+		objectRepository.findVerifiedBucketSourcesByHashes.mockResolvedValue([]);
 		proofRepository.findActionableByArchiveUrlIdentity.mockResolvedValue([
 			createIncompleteCheckpointProof()
 		]);
@@ -93,9 +149,10 @@ describe('GetHistoryArchiveRepairPlan', () => {
 		const useCase = new GetHistoryArchiveRepairPlan(
 			objectRepository,
 			proofRepository,
+			createArtifactResolver(),
 			mock<ExceptionLogger>()
 		);
-		objectRepository.getSummary.mockResolvedValue(createSummary());
+		objectRepository.getRepairPlanSummary.mockResolvedValue(createSummary());
 		objectRepository.findActionableByArchiveUrl.mockResolvedValue([]);
 		proofRepository.findActionableByArchiveUrlIdentity.mockResolvedValue([
 			Object.assign(createCheckpointProof(), {
@@ -119,9 +176,10 @@ describe('GetHistoryArchiveRepairPlan', () => {
 		const useCase = new GetHistoryArchiveRepairPlan(
 			objectRepository,
 			proofRepository,
+			createArtifactResolver(),
 			mock<ExceptionLogger>()
 		);
-		objectRepository.getSummary.mockResolvedValue(createSummary());
+		objectRepository.getRepairPlanSummary.mockResolvedValue(createSummary());
 		objectRepository.findActionableByArchiveUrl.mockResolvedValue([
 			createCheckpointLedgerMismatch()
 		]);
@@ -147,9 +205,10 @@ describe('GetHistoryArchiveRepairPlan', () => {
 		const useCase = new GetHistoryArchiveRepairPlan(
 			objectRepository,
 			proofRepository,
+			createArtifactResolver(),
 			mock<ExceptionLogger>()
 		);
-		objectRepository.getSummary.mockResolvedValue(createSummary());
+		objectRepository.getRepairPlanSummary.mockResolvedValue(createSummary());
 		objectRepository.findActionableByArchiveUrl.mockResolvedValue([
 			createAbortedBucketFailure()
 		]);
@@ -160,7 +219,9 @@ describe('GetHistoryArchiveRepairPlan', () => {
 		expect(result.isOk()).toBe(true);
 		if (result.isErr()) return;
 		expect(result.value.actions).toEqual([]);
-		expect(objectRepository.findBucketObjectsByHash).not.toHaveBeenCalled();
+		expect(
+			objectRepository.findVerifiedBucketSourcesByHashes
+		).not.toHaveBeenCalled();
 	});
 
 	it('rejects invalid archive URLs before hitting repositories', async () => {
@@ -169,13 +230,14 @@ describe('GetHistoryArchiveRepairPlan', () => {
 		const useCase = new GetHistoryArchiveRepairPlan(
 			objectRepository,
 			proofRepository,
+			createArtifactResolver(),
 			mock<ExceptionLogger>()
 		);
 
 		const result = await useCase.execute({ url: 'not-a-url' });
 
 		expect(result.isErr()).toBe(true);
-		expect(objectRepository.getSummary).not.toHaveBeenCalled();
+		expect(objectRepository.getRepairPlanSummary).not.toHaveBeenCalled();
 	});
 });
 
@@ -226,17 +288,17 @@ function createCheckpointLedgerMismatch(): HistoryArchiveObject {
 	return object;
 }
 
-function createVerifiedBucketCopy(): HistoryArchiveObject {
-	const object = createObject('bucket', `bucket:${bucketHash}`, 'verified');
-	object.archiveUrl = 'https://other-history.example.com';
-	object.archiveUrlIdentity = 'https://other-history.example.com';
-	object.objectUrl =
-		'https://other-history.example.com/bucket/4e/ae/73/bucket-' +
-		bucketHash +
-		'.xdr.gz';
-	object.bucketHash = bucketHash;
-	object.verifiedAt = new Date('2026-07-07T18:00:00.000Z');
-	return object;
+function createVerifiedBucketCopy(): HistoryArchiveVerifiedBucketSource {
+	return {
+		archiveUrl: 'https://other-history.example.com',
+		archiveUrlIdentity: 'https://other-history.example.com',
+		bucketHash,
+		objectUrl:
+			'https://other-history.example.com/bucket/4e/ae/73/bucket-' +
+			bucketHash +
+			'.xdr.gz',
+		verifiedAt: new Date('2026-07-07T18:00:00.000Z')
+	};
 }
 
 function createObject(
@@ -298,45 +360,53 @@ function createIncompleteCheckpointProof(): HistoryArchiveCheckpointProof {
 	} satisfies Partial<HistoryArchiveCheckpointProof>);
 }
 
-function createSummary(): HistoryArchiveObjectSummaryV1 {
+function createSummary(): HistoryArchiveRepairPlanSummary {
 	return {
 		activeObjects: 0,
-		archiveUrl,
-		archiveUrlIdentity,
-		buckets: {
-			activeBucketObjects: 0,
-			failedBucketObjects: 1,
-			pendingBucketObjects: 0,
-			totalBucketObjects: 2,
-			uniqueBucketHashes: 1,
-			verifiedBucketObjects: 1
-		},
-		checkpoints: {
-			activeArchiveCheckpoints: 0,
-			archiveRootsWithState: 1,
-			categoryConsistencyFailedCheckpoints: 1,
-			categoryConsistencyNotEvaluatedCheckpoints: 0,
-			categoryConsistencyPendingCheckpoints: 0,
-			categoryConsistentArchiveCheckpoints: 0,
-			completeArchiveCheckpoints: 1,
-			discoveryCompleteArchiveRoots: 0,
-			expectedArchiveCheckpoints: 1,
-			failedArchiveCheckpoints: 1,
-			latestCheckpointLedger: 63355999,
-			missingArchiveCheckpoints: 0,
-			objectCompleteArchiveCheckpoints: 1,
-			oldestCheckpointLedger: 63355999,
-			partialArchiveCheckpoints: 0,
-			totalArchiveCheckpoints: 1
-		},
+		failedCheckpointProofs: 1,
 		failedObjects: 2,
-		generatedAt: '2026-07-07T18:00:00.000Z',
 		hostThrottles: [],
-		objectTypes: [],
 		pendingObjects: 0,
-		scope: 'archive',
-		sources: [],
-		totalObjects: 3,
 		verifiedObjects: 1
+	};
+}
+
+function createArtifactResolver(
+	artifact: HistoryArchiveRepairArtifactAvailabilityV1 = createUnavailableArtifact()
+) {
+	const resolver = mock<ResolveHistoryArchiveRepairArtifacts>();
+	resolver.execute.mockResolvedValue(new Map([[bucketHash, artifact]]));
+	return resolver;
+}
+
+function createUnavailableArtifact(): HistoryArchiveRepairArtifactAvailabilityV1 {
+	return {
+		artifactType: 'bucket',
+		contentHash: {
+			algorithm: 'sha256',
+			digest: bucketHash,
+			representation: 'uncompressed-xdr'
+		},
+		objectIdentity: `bucket:${bucketHash}`,
+		reason: 'local-payload-missing',
+		retry: { afterSeconds: 60, retryable: true },
+		status: 'unavailable'
+	};
+}
+
+function createAvailableArtifact(): HistoryArchiveRepairArtifactAvailabilityV1 {
+	return {
+		artifactType: 'bucket',
+		byteLength: 128,
+		contentHash: {
+			algorithm: 'sha256',
+			digest: bucketHash,
+			representation: 'uncompressed-xdr'
+		},
+		downloadUrl: `/v1/archive-scans/repair-artifacts/buckets/${bucketHash}`,
+		mediaType: 'application/gzip',
+		objectIdentity: `bucket:${bucketHash}`,
+		provenAt: '2026-07-07T18:00:00.000Z',
+		status: 'available'
 	};
 }

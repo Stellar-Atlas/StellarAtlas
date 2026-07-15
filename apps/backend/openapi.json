@@ -3968,6 +3968,107 @@
 				}
 			}
 		},
+		"/v1/archive-scans/repair-artifacts/buckets/{bucketHash}": {
+			"get": {
+				"summary": "Download a locally proven bucket repair artifact",
+				"description": "Streams a content-addressed gzip payload only after StellarAtlas proves the locally retained bytes against the requested bucket hash over uncompressed XDR. Remote archive candidates are never proxied by this route. Missing, mismatched, invalid, busy, or oversized local payloads return structured unavailable and retry evidence.",
+				"tags": ["Archive verification"],
+				"operationId": "downloadHistoryArchiveBucketRepairArtifact",
+				"parameters": [
+					{
+						"name": "bucketHash",
+						"in": "path",
+						"description": "Exact 64-character hexadecimal Stellar bucket content hash.",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"pattern": "^[0-9a-fA-F]{64}$"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "locally retained and freshly proven bucket gzip payload",
+						"headers": {
+							"Content-Disposition": {
+								"schema": { "type": "string" }
+							},
+							"X-Stellar-Bucket-Hash": {
+								"schema": {
+									"type": "string",
+									"pattern": "^[0-9a-f]{64}$"
+								}
+							}
+						},
+						"content": {
+							"application/gzip": {
+								"schema": { "type": "string", "format": "binary" }
+							}
+						}
+					},
+					"400": {
+						"description": "Invalid object identity",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/HistoryArchiveRepairArtifactUnavailableV1"
+								}
+							}
+						}
+					},
+					"404": {
+						"description": "No local payload is retained",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/HistoryArchiveRepairArtifactUnavailableV1"
+								}
+							}
+						}
+					},
+					"409": {
+						"description": "Local payload is invalid or does not match the requested hash",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/HistoryArchiveRepairArtifactUnavailableV1"
+								}
+							}
+						}
+					},
+					"413": {
+						"description": "Local payload exceeds the bounded verifier limit",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/HistoryArchiveRepairArtifactUnavailableV1"
+								}
+							}
+						}
+					},
+					"429": {
+						"description": "Local artifact verification capacity is busy",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/HistoryArchiveRepairArtifactUnavailableV1"
+								}
+							}
+						}
+					},
+					"503": {
+						"description": "Local artifact proof is temporarily unavailable",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/HistoryArchiveRepairArtifactUnavailableV1"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
 		"/v1/archive-scans/objects/summary": {
 			"get": {
 				"summary": "Summarize history archive object coverage",
@@ -4344,6 +4445,49 @@
 						}
 					},
 					"400": { "description": "Invalid archive URL" },
+					"500": { "description": "Server error" }
+				}
+			}
+		},
+		"/v1/archive-scans/{encodedUrl}/repair-plan": {
+			"get": {
+				"summary": "Get a proof-gated history archive repair plan",
+				"description": "Returns archive repair actions, per-archive remote verified-copy evidence, local repair artifact availability, and scanner infrastructure blocks. knownGoodSources are attributed remote archive URLs only; they are not StellarAtlas-hosted downloads. A repairArtifact downloadUrl appears only after exact local payload proof.",
+				"tags": ["Archive verification"],
+				"operationId": "getHistoryArchiveRepairPlan",
+				"parameters": [
+					{
+						"name": "encodedUrl",
+						"in": "path",
+						"description": "URL of the history archive, URL encoded",
+						"required": true,
+						"schema": { "type": "string", "format": "uri" }
+					},
+					{
+						"name": "limit",
+						"in": "query",
+						"description": "Maximum number of repair actions to return.",
+						"required": false,
+						"schema": {
+							"type": "integer",
+							"minimum": 1,
+							"maximum": 500,
+							"default": 100
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "proof-gated archive repair plan",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/HistoryArchiveRepairPlanV1"
+								}
+							}
+						}
+					},
+					"400": { "description": "Invalid archive URL or limit" },
 					"500": { "description": "Server error" }
 				}
 			}
@@ -10087,6 +10231,267 @@
 						}
 					}
 				]
+			},
+			"HistoryArchiveRepairArtifactContentHashV1": {
+				"type": "object",
+				"required": ["algorithm", "digest", "representation"],
+				"properties": {
+					"algorithm": { "type": "string", "enum": ["sha256"] },
+					"digest": {
+						"type": "string",
+						"pattern": "^[0-9a-f]{64}$"
+					},
+					"representation": {
+						"type": "string",
+						"enum": ["uncompressed-xdr"]
+					}
+				}
+			},
+			"HistoryArchiveRepairArtifactAvailableV1": {
+				"type": "object",
+				"required": [
+					"artifactType",
+					"byteLength",
+					"contentHash",
+					"downloadUrl",
+					"mediaType",
+					"objectIdentity",
+					"provenAt",
+					"status"
+				],
+				"properties": {
+					"artifactType": { "type": "string", "enum": ["bucket"] },
+					"byteLength": { "type": "integer", "minimum": 1 },
+					"contentHash": {
+						"$ref": "#/components/schemas/HistoryArchiveRepairArtifactContentHashV1"
+					},
+					"downloadUrl": {
+						"type": "string",
+						"pattern": "^/v1/archive-scans/repair-artifacts/buckets/[0-9a-f]{64}$"
+					},
+					"mediaType": {
+						"type": "string",
+						"enum": ["application/gzip"]
+					},
+					"objectIdentity": {
+						"type": "string",
+						"pattern": "^bucket:[0-9a-f]{64}$"
+					},
+					"provenAt": { "type": "string", "format": "date-time" },
+					"status": { "type": "string", "enum": ["available"] }
+				}
+			},
+			"HistoryArchiveRepairArtifactUnavailableV1": {
+				"type": "object",
+				"required": [
+					"artifactType",
+					"contentHash",
+					"objectIdentity",
+					"reason",
+					"retry",
+					"status"
+				],
+				"properties": {
+					"artifactType": { "type": "string", "enum": ["bucket"] },
+					"contentHash": {
+						"nullable": true,
+						"allOf": [
+							{
+								"$ref": "#/components/schemas/HistoryArchiveRepairArtifactContentHashV1"
+							}
+						]
+					},
+					"objectIdentity": {
+						"type": "string",
+						"pattern": "^bucket:[0-9a-f]{64}$",
+						"nullable": true
+					},
+					"reason": {
+						"type": "string",
+						"enum": [
+							"content-hash-mismatch",
+							"invalid-compressed-payload",
+							"invalid-object-identity",
+							"local-payload-missing",
+							"local-payload-not-regular",
+							"local-payload-too-large",
+							"local-storage-unavailable",
+							"verification-busy",
+							"verification-deferred",
+							"verification-timeout"
+						]
+					},
+					"retry": {
+						"type": "object",
+						"required": ["afterSeconds", "retryable"],
+						"properties": {
+							"afterSeconds": {
+								"type": "integer",
+								"minimum": 1,
+								"nullable": true
+							},
+							"retryable": { "type": "boolean" }
+						}
+					},
+					"status": { "type": "string", "enum": ["unavailable"] }
+				}
+			},
+			"HistoryArchiveRepairArtifactAvailabilityV1": {
+				"oneOf": [
+					{
+						"$ref": "#/components/schemas/HistoryArchiveRepairArtifactAvailableV1"
+					},
+					{
+						"$ref": "#/components/schemas/HistoryArchiveRepairArtifactUnavailableV1"
+					}
+				]
+			},
+			"HistoryArchiveRepairSourceCandidateV1": {
+				"type": "object",
+				"description": "Attributed remote archive evidence only. objectUrl remains the remote archive URL and is never a StellarAtlas-hosted repair artifact.",
+				"required": [
+					"archiveUrl",
+					"archiveUrlIdentity",
+					"objectUrl",
+					"verifiedAt"
+				],
+				"properties": {
+					"archiveUrl": { "type": "string", "format": "uri" },
+					"archiveUrlIdentity": { "type": "string" },
+					"objectUrl": {
+						"type": "string",
+						"format": "uri",
+						"description": "Exact remote source URL observed and verified by the scanner."
+					},
+					"verifiedAt": {
+						"type": "string",
+						"format": "date-time",
+						"nullable": true
+					}
+				}
+			},
+			"HistoryArchiveRepairActionV1": {
+				"type": "object",
+				"required": [
+					"actionId",
+					"bucketHash",
+					"checkpointEvidence",
+					"checkpointLedger",
+					"evidence",
+					"kind",
+					"knownGoodSources",
+					"reason",
+					"repairArtifact",
+					"severity",
+					"summary"
+				],
+				"properties": {
+					"actionId": { "type": "string" },
+					"bucketHash": {
+						"type": "string",
+						"pattern": "^[0-9a-f]{64}$",
+						"nullable": true
+					},
+					"checkpointEvidence": {
+						"type": "array",
+						"items": { "type": "object", "additionalProperties": true }
+					},
+					"checkpointLedger": {
+						"type": "integer",
+						"minimum": 0,
+						"nullable": true
+					},
+					"evidence": {
+						"type": "array",
+						"items": { "type": "object", "additionalProperties": true }
+					},
+					"kind": {
+						"type": "string",
+						"enum": [
+							"restore-history-archive-state",
+							"replace-archive-file",
+							"replace-bucket-file",
+							"repair-checkpoint-proof",
+							"wait-for-scanner-proof"
+						]
+					},
+					"knownGoodSources": {
+						"type": "array",
+						"description": "Bounded per-archive remote evidence; never a hosted download list.",
+						"maxItems": 5,
+						"items": {
+							"$ref": "#/components/schemas/HistoryArchiveRepairSourceCandidateV1"
+						}
+					},
+					"reason": { "type": "string" },
+					"repairArtifact": {
+						"nullable": true,
+						"allOf": [
+							{
+								"$ref": "#/components/schemas/HistoryArchiveRepairArtifactAvailabilityV1"
+							}
+						]
+					},
+					"severity": {
+						"type": "string",
+						"enum": ["error", "warning", "blocked"]
+					},
+					"summary": { "type": "string" }
+				}
+			},
+			"HistoryArchiveRepairPlanV1": {
+				"type": "object",
+				"required": [
+					"actionCount",
+					"actions",
+					"archiveUrl",
+					"archiveUrlIdentity",
+					"generatedAt",
+					"infrastructureBlocks",
+					"limit",
+					"summary"
+				],
+				"properties": {
+					"actionCount": { "type": "integer", "minimum": 0 },
+					"actions": {
+						"type": "array",
+						"maxItems": 500,
+						"items": {
+							"$ref": "#/components/schemas/HistoryArchiveRepairActionV1"
+						}
+					},
+					"archiveUrl": { "type": "string", "format": "uri" },
+					"archiveUrlIdentity": { "type": "string" },
+					"generatedAt": { "type": "string", "format": "date-time" },
+					"infrastructureBlocks": {
+						"type": "array",
+						"items": { "type": "object", "additionalProperties": true }
+					},
+					"limit": { "type": "integer", "minimum": 1, "maximum": 500 },
+					"summary": {
+						"type": "object",
+						"required": [
+							"activeObjectChecks",
+							"failedCheckpointProofs",
+							"failedObjectChecks",
+							"pendingObjectChecks",
+							"verifiedObjectChecks"
+						],
+						"properties": {
+							"activeObjectChecks": { "type": "integer", "minimum": 0 },
+							"failedCheckpointProofs": {
+								"type": "integer",
+								"minimum": 0
+							},
+							"failedObjectChecks": { "type": "integer", "minimum": 0 },
+							"pendingObjectChecks": { "type": "integer", "minimum": 0 },
+							"verifiedObjectChecks": {
+								"type": "integer",
+								"minimum": 0
+							}
+						}
+					}
+				}
 			},
 			"HistoryArchiveObjectErrorV1": {
 				"type": "object",

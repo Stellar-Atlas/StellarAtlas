@@ -10,6 +10,7 @@ import { GetHistoryArchiveBucketCoverage } from '@history-scan-coordinator/use-c
 import { GetHistoryArchiveObjectEvents } from '@history-scan-coordinator/use-cases/get-history-archive-object-events/GetHistoryArchiveObjectEvents.js';
 import { GetHistoryArchiveObjects } from '@history-scan-coordinator/use-cases/get-history-archive-objects/GetHistoryArchiveObjects.js';
 import { GetHistoryArchiveObjectSummary } from '@history-scan-coordinator/use-cases/get-history-archive-object-summary/GetHistoryArchiveObjectSummary.js';
+import { GetHistoryArchiveRepairArtifact } from '@history-scan-coordinator/use-cases/get-history-archive-repair-artifact/GetHistoryArchiveRepairArtifact.js';
 import { GetHistoryArchiveRepairPlan } from '@history-scan-coordinator/use-cases/get-history-archive-repair-plan/GetHistoryArchiveRepairPlan.js';
 import { GetHistoryArchiveState } from '@history-scan-coordinator/use-cases/get-history-archive-state/GetHistoryArchiveState.js';
 import { GetHistoryArchiveEvidence } from '@history-scan-coordinator/use-cases/get-history-archive-evidence/GetHistoryArchiveEvidence.js';
@@ -89,6 +90,7 @@ function createHarness() {
 			getHistoryArchiveObjectEvents: mock<GetHistoryArchiveObjectEvents>(),
 			getHistoryArchiveObjects: mock<GetHistoryArchiveObjects>(),
 			getHistoryArchiveObjectSummary: mock<GetHistoryArchiveObjectSummary>(),
+			getHistoryArchiveRepairArtifact: mock<GetHistoryArchiveRepairArtifact>(),
 			getHistoryArchiveRepairPlan: mock<GetHistoryArchiveRepairPlan>(),
 			getHistoryArchiveState: mock<GetHistoryArchiveState>(),
 			getLatestScan,
