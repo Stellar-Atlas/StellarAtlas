@@ -18,6 +18,7 @@ export interface FullHistoryLedgerCloseMetaServiceConfig {
 	readonly idlePollMilliseconds: number;
 	readonly ingressBytesPerSecond: number;
 	readonly ingressBurstBytes: number;
+	readonly lastAvailableLedger: number | null;
 	readonly minimumFreeBytes: bigint;
 	readonly minimumFreeBasisPoints: number;
 	readonly maximumStoredBytes: bigint;
@@ -86,6 +87,27 @@ export function parseFullHistoryLedgerCloseMetaServiceConfig(
 	if (cycleLedgerCount % typedShardLedgerCount !== 0) {
 		throw new Error('cycle ledgers must contain whole typed shards');
 	}
+	const firstAvailableLedger = integer(
+		environment.FULL_HISTORY_LEDGER_CLOSE_META_FIRST_LEDGER,
+		3,
+		1,
+		0xffff_ffff,
+		'first available ledger'
+	);
+	const lastAvailableLedger = optionalInteger(
+		environment.FULL_HISTORY_LEDGER_CLOSE_META_LAST_LEDGER,
+		firstAvailableLedger,
+		0xffff_ffff,
+		'last available ledger'
+	);
+	if (
+		lastAvailableLedger !== null &&
+		(lastAvailableLedger - firstAvailableLedger + 1) %
+			typedShardLedgerCount !==
+			0
+	) {
+		throw new Error('bounded ledger range must contain whole typed shards');
+	}
 	return Object.freeze({
 		bulkRoot,
 		cycleLedgerCount,
@@ -108,13 +130,7 @@ export function parseFullHistoryLedgerCloseMetaServiceConfig(
 			maximumFetchConcurrency,
 			'fetch concurrency'
 		),
-		firstAvailableLedger: integer(
-			environment.FULL_HISTORY_LEDGER_CLOSE_META_FIRST_LEDGER,
-			3,
-			1,
-			0xffff_ffff,
-			'first available ledger'
-		),
+		firstAvailableLedger,
 		idlePollMilliseconds: integer(
 			environment.FULL_HISTORY_LEDGER_CLOSE_META_IDLE_POLL_MS,
 			30_000,
@@ -130,6 +146,7 @@ export function parseFullHistoryLedgerCloseMetaServiceConfig(
 			ingressBytesPerSecond,
 			'ingress burst bytes'
 		),
+		lastAvailableLedger,
 		minimumFreeBytes: positiveBigInt(
 			environment.FULL_HISTORY_LEDGER_CLOSE_META_MINIMUM_FREE_BYTES,
 			5n * 1_024n ** 4n,
@@ -200,6 +217,16 @@ export function parseFullHistoryLedgerCloseMetaServiceConfig(
 		typedOutputRoot,
 		typedShardLedgerCount
 	});
+}
+
+function optionalInteger(
+	value: string | undefined,
+	minimum: number,
+	maximum: number,
+	field: string
+): number | null {
+	if (value === undefined || value.trim().length === 0) return null;
+	return integer(value, minimum, minimum, maximum, field);
 }
 
 function integer(

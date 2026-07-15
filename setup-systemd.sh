@@ -10,7 +10,6 @@ NETWORK_MEILI_ENV_DIR="/etc/stellaratlas"
 NETWORK_MEILI_ENV_FILE="$NETWORK_MEILI_ENV_DIR/meilisearch-network.env"
 NETWORK_MEILI_DATA_ROOT="/home/observe/stellarbeat-data/meilisearch/network"
 FULL_HISTORY_LEDGER_CLOSE_META_EXECUTABLE="$EXPECTED_REPO_ROOT/apps/full-history-etl/bin/stellaratlas-full-history-etl"
-FULL_HISTORY_LEDGER_CLOSE_META_ACTIVATION="not evaluated"
 NETWORK_MEILI_RUNTIME_DIRS=(
 	"$NETWORK_MEILI_DATA_ROOT"
 	"$NETWORK_MEILI_DATA_ROOT/data"
@@ -90,8 +89,19 @@ verify_source_units() {
 		die "LedgerCloseMeta ingestion must be gated by its executable"
 	grep -Fqx "MemorySwapMax=0" "$ledger_close_meta_unit" ||
 		die "LedgerCloseMeta ingestion must not use swap"
-	grep -Fqx "MemoryMax=96G" "$ledger_close_meta_unit" ||
-		die "LedgerCloseMeta ingestion memory envelope must match its 96G cgroup"
+	grep -Fqx "MemoryMax=32G" "$ledger_close_meta_unit" ||
+		die "LedgerCloseMeta canary must use a 32G memory ceiling"
+	grep -Fqx "CPUQuota=500%" "$ledger_close_meta_unit" ||
+		die "LedgerCloseMeta canary must use a bounded CPU quota"
+	grep -Fqx "Restart=no" "$ledger_close_meta_unit" ||
+		die "LedgerCloseMeta canary must not restart automatically"
+	grep -Fqx "Environment=FULL_HISTORY_LEDGER_CLOSE_META_LAST_LEDGER=66" \
+		"$ledger_close_meta_unit" ||
+		die "LedgerCloseMeta canary must stop after its bounded ledger range"
+	if grep -Fq "stellaratlas-full-history-ledger-close-meta.service" \
+		"$SYSTEMD_SOURCE_DIR/stellaratlas.target"; then
+		die "LedgerCloseMeta canary must not start with the production target"
+	fi
 	grep -Fqx "LimitCORE=0" "$ledger_close_meta_unit" ||
 		die "LedgerCloseMeta ingestion must disable core dumps"
 	grep -Fqx "UMask=0077" "$ledger_close_meta_unit" ||
@@ -287,35 +297,6 @@ mask_legacy_unit() {
 	ln -sT /dev/null "$SYSTEMD_UNIT_DIR/stellaratlas.service"
 }
 
-ledger_close_meta_executable_is_ready() {
-	[[ -f "$FULL_HISTORY_LEDGER_CLOSE_META_EXECUTABLE" ]] || return 1
-	[[ ! -L "$FULL_HISTORY_LEDGER_CLOSE_META_EXECUTABLE" ]] || return 1
-	[[ -x "$FULL_HISTORY_LEDGER_CLOSE_META_EXECUTABLE" ]] || return 1
-	[[ "$(stat -c '%U:%G' "$FULL_HISTORY_LEDGER_CLOSE_META_EXECUTABLE")" == \
-		"observe:observe" ]]
-}
-
-activate_ledger_close_meta_if_ready() {
-	if systemctl is-active --quiet \
-		stellaratlas-full-history-ledger-close-meta.service; then
-		FULL_HISTORY_LEDGER_CLOSE_META_ACTIVATION="already active; not restarted"
-		return
-	fi
-
-	# Privileged installation never compiles application code. The executable
-	# must be built and owned by observe before this service may be started.
-	if ! ledger_close_meta_executable_is_ready; then
-		FULL_HISTORY_LEDGER_CLOSE_META_ACTIVATION="installed but not started; prebuild the observe-owned executable"
-		return
-	fi
-
-	systemctl start stellaratlas-full-history-ledger-close-meta.service
-	systemctl is-active --quiet \
-		stellaratlas-full-history-ledger-close-meta.service ||
-		die "stellaratlas-full-history-ledger-close-meta.service is not active"
-	FULL_HISTORY_LEDGER_CLOSE_META_ACTIVATION="started from the prebuilt observe-owned executable"
-}
-
 main() {
 	case "${1:-}" in
 	--verify)
@@ -357,7 +338,6 @@ main() {
 	systemctl start stellaratlas-full-history-promotion.service
 	systemctl start stellaratlas-full-history-backfill.service
 	systemctl start stellaratlas-full-history-operation-backfill.service
-	activate_ledger_close_meta_if_ready
 	verify_installed_units
 	systemctl is-active --quiet stellaratlas.target ||
 		die "stellaratlas.target is not active"
@@ -374,9 +354,11 @@ The obsolete stellaratlas.service is masked. An already-active target was not
 restarted; canonical promotion, historical backfill, and operation catch-up
 were started explicitly.
 EOF
-	printf 'LedgerCloseMeta ingestion: %s.\n\n' \
-		"$FULL_HISTORY_LEDGER_CLOSE_META_ACTIVATION"
 	cat <<'EOF'
+
+LedgerCloseMeta ingestion is installed as an explicit bounded canary. It is
+not part of the production target and must be started after its observe-owned
+binary and schema have been verified.
 
 Production:
   systemctl status stellaratlas.target

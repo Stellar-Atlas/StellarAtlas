@@ -5,10 +5,11 @@ describe('parseFullHistoryLedgerCloseMetaServiceConfig', () => {
 		const config = parseFullHistoryLedgerCloseMetaServiceConfig(environment());
 
 		expect(config).toEqual(
-			expect.objectContaining({
-				cycleLedgerCount: 8_192,
-				fetchConcurrency: 12,
-				ingressBytesPerSecond: 187_500_000,
+				expect.objectContaining({
+					cycleLedgerCount: 8_192,
+					fetchConcurrency: 12,
+					ingressBytesPerSecond: 187_500_000,
+					lastAvailableLedger: null,
 				processingConcurrency: 8,
 				temporaryInputRoot: '/dev/shm/stellaratlas-full-history-etl',
 				typedOutputRoot: '/home/observe/stellarbeat-data/full-history/typed',
@@ -18,6 +19,29 @@ describe('parseFullHistoryLedgerCloseMetaServiceConfig', () => {
 		expect(config.minimumFreeBytes).toBe(5n * 1_024n ** 4n);
 		expect(config.minimumFreeBasisPoints).toBe(1_000);
 		expect(config.maximumStoredBytes).toBe(40n * 1_024n ** 4n);
+	});
+
+	it('accepts an inclusive bounded range made of complete typed shards', () => {
+		const config = parseFullHistoryLedgerCloseMetaServiceConfig({
+			...environment(),
+			FULL_HISTORY_LEDGER_CLOSE_META_CYCLE_LEDGERS: '64',
+			FULL_HISTORY_LEDGER_CLOSE_META_LAST_LEDGER: '66',
+			FULL_HISTORY_LEDGER_CLOSE_META_SHARD_LEDGERS: '64'
+		});
+
+		expect(config.firstAvailableLedger).toBe(3);
+		expect(config.lastAvailableLedger).toBe(66);
+	});
+
+	it.each(['2', '65', '67'])('rejects invalid bounded last ledger %s', (last) => {
+		expect(() =>
+			parseFullHistoryLedgerCloseMetaServiceConfig({
+				...environment(),
+				FULL_HISTORY_LEDGER_CLOSE_META_CYCLE_LEDGERS: '64',
+				FULL_HISTORY_LEDGER_CLOSE_META_LAST_LEDGER: last,
+				FULL_HISTORY_LEDGER_CLOSE_META_SHARD_LEDGERS: '64'
+			})
+		).toThrow();
 	});
 
 	it.each([

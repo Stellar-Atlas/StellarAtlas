@@ -13,6 +13,7 @@ export interface ContinuousFullHistoryLedgerCloseMetaLoopConfig {
 	readonly cycleLedgerCount: number;
 	readonly errorBackoffMilliseconds: number;
 	readonly idlePollMilliseconds: number;
+	readonly lastAvailableLedger: number | null;
 	readonly typedShardLedgerCount: number;
 }
 
@@ -22,6 +23,13 @@ export type ContinuousFullHistoryLedgerCloseMetaEvent =
 			readonly event: 'ready';
 			readonly nextLedger: number;
 			readonly status: 'running';
+	  }
+	| {
+			readonly at: string;
+			readonly event: 'complete';
+			readonly lastLedger: number;
+			readonly nextLedger: number;
+			readonly status: 'completed';
 	  }
 	| {
 			readonly at: string;
@@ -85,10 +93,24 @@ export async function runContinuousFullHistoryLedgerCloseMetaLoop(
 				nextLedger = context.registeredSource.nextLedger;
 				reloadDurableState = false;
 			}
+			if (boundedReplayComplete(nextLedger, config.lastAvailableLedger)) {
+				dependencies.emit({
+					at: isoTime(dependencies.now()),
+					event: 'complete',
+					lastLedger: config.lastAvailableLedger,
+					nextLedger,
+					status: 'completed'
+				});
+				return;
+			}
 			await dependencies.ensureStorageCapacity();
-			const frontier = await dependencies.frontier.readLatestRange(
+			const sourceFrontier = await dependencies.frontier.readLatestRange(
 				context.config,
 				dependencies.signal
+			);
+			const frontier = boundedFrontier(
+				sourceFrontier,
+				config.lastAvailableLedger
 			);
 			if (
 				frontier.endSequence - nextLedger + 1 <
@@ -147,6 +169,29 @@ export async function runContinuousFullHistoryLedgerCloseMetaLoop(
 			);
 		}
 	}
+}
+
+function boundedReplayComplete(
+	nextLedger: number,
+	lastAvailableLedger: number | null
+): lastAvailableLedger is number {
+	return lastAvailableLedger !== null && nextLedger > lastAvailableLedger;
+}
+
+function boundedFrontier(
+	frontier: FullHistoryLedgerCloseMetaRange,
+	lastAvailableLedger: number | null
+): FullHistoryLedgerCloseMetaRange {
+	if (
+		lastAvailableLedger === null ||
+		frontier.endSequence <= lastAvailableLedger
+	) {
+		return frontier;
+	}
+	return fullHistoryLedgerCloseMetaRange(
+		Math.min(frontier.startSequence, lastAvailableLedger),
+		lastAvailableLedger
+	);
 }
 
 function cycleRange(

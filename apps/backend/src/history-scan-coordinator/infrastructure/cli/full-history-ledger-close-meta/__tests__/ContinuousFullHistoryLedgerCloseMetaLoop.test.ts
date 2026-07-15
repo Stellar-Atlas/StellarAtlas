@@ -98,6 +98,91 @@ describe('runContinuousFullHistoryLedgerCloseMetaLoop', () => {
 		);
 	});
 
+	it('stops successfully after the inclusive bounded range is durable', async () => {
+		const events: ContinuousFullHistoryLedgerCloseMetaEvent[] = [];
+		let frontierCalls = 0;
+		await runContinuousFullHistoryLedgerCloseMetaLoop(
+			{ ...config(), lastAvailableLedger: 6 },
+			{
+				emit: (event) => events.push(event),
+				ensureStorageCapacity: () => Promise.resolve(),
+				formatError: String,
+				frontier: {
+					readLatestRange: () => {
+						frontierCalls += 1;
+						return Promise.resolve(fullHistoryLedgerCloseMetaRange(10, 10));
+					}
+				},
+				ingestion: {
+					ingestRange: (_context, range) =>
+						Promise.resolve({
+							committedBatches: [
+								{
+									batchId: 'bounded-batch',
+									nextLedger: 7,
+									replayed: false,
+									watermarkVersion: 1
+								}
+							],
+							endLedger: range.endSequence,
+							ledgerCount: range.ledgerCount,
+							sourceObjectCount: range.ledgerCount,
+							startLedger: range.startSequence
+						}),
+					prepare: () => Promise.resolve(context(3))
+				},
+				now: () => 1_000,
+				signal: new AbortController().signal,
+				wait: () => Promise.resolve()
+			}
+		);
+
+		expect(frontierCalls).toBe(1);
+		expect(events).toEqual(
+			expect.arrayContaining([
+				expect.objectContaining({
+					event: 'processed',
+					endLedger: 6,
+					startLedger: 3
+				}),
+				expect.objectContaining({
+					event: 'complete',
+					lastLedger: 6,
+					nextLedger: 7,
+					status: 'completed'
+				})
+			])
+		);
+	});
+
+	it('does not contact the source after an already completed bounded replay', async () => {
+		const events: ContinuousFullHistoryLedgerCloseMetaEvent[] = [];
+		await runContinuousFullHistoryLedgerCloseMetaLoop(
+			{ ...config(), lastAvailableLedger: 6 },
+			{
+				emit: (event) => events.push(event),
+				ensureStorageCapacity: () => Promise.reject(new Error('unexpected')),
+				formatError: String,
+				frontier: {
+					readLatestRange: () => Promise.reject(new Error('unexpected'))
+				},
+				ingestion: {
+					ingestRange: () => Promise.reject(new Error('unexpected')),
+					prepare: () => Promise.resolve(context(7))
+				},
+				now: () => 1_000,
+				signal: new AbortController().signal,
+				wait: () => Promise.resolve()
+			}
+		);
+
+		expect(events).toEqual(
+			expect.arrayContaining([
+				expect.objectContaining({ event: 'complete', nextLedger: 7 })
+			])
+		);
+	});
+
 	it('reloads the durable watermark after a partially committed cycle fails', async () => {
 		const controller = new AbortController();
 		const ranges: Array<{ end: number; start: number }> = [];
@@ -213,6 +298,7 @@ function config() {
 		cycleLedgerCount: 4,
 		errorBackoffMilliseconds: 30,
 		idlePollMilliseconds: 20,
+		lastAvailableLedger: null,
 		typedShardLedgerCount: 2
 	};
 }

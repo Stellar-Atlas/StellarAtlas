@@ -135,6 +135,7 @@ export async function runContinuousFullHistoryLedgerCloseMetaCli(
 					cycleLedgerCount: config.cycleLedgerCount,
 					errorBackoffMilliseconds: config.errorBackoffMilliseconds,
 					idlePollMilliseconds: config.idlePollMilliseconds,
+					lastAvailableLedger: config.lastAvailableLedger,
 					typedShardLedgerCount: config.typedShardLedgerCount
 				},
 				{
