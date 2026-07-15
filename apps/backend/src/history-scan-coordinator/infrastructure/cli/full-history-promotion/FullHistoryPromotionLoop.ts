@@ -1,6 +1,15 @@
 import type { PromoteNextFullHistoryCheckpointResult } from '../../../use-cases/promote-next-full-history-checkpoint/PromoteNextFullHistoryCheckpoint.js';
+import {
+	FullHistoryCanonicalError,
+	type FullHistoryCanonicalErrorReason
+} from '../../../domain/full-history/FullHistoryCanonicalError.js';
+import {
+	FullHistoryPromotionError,
+	type FullHistoryPromotionErrorReason
+} from '../../../domain/full-history-promotion/FullHistoryPromotionError.js';
 
 export interface FullHistoryPromotionLoopConfig {
+	readonly errorBackoffMs: number;
 	readonly maximumCheckpointsPerCycle: number;
 	readonly networkPassphrase: string;
 	readonly pollIntervalMs: number;
@@ -13,13 +22,24 @@ export interface FullHistoryPromotionLoopDependencies {
 	readonly wait: (milliseconds: number) => Promise<void>;
 }
 
+export type FullHistoryPromotionLoopErrorCode =
+	| `canonical-${FullHistoryCanonicalErrorReason}`
+	| `promotion-${FullHistoryPromotionErrorReason}`
+	| 'unexpected-error';
+
 export interface FullHistoryPromotionLoopEvent {
 	readonly archiveUrlIdentity?: string;
 	readonly batchId?: string;
 	readonly checkpointLedger?: number | null;
+	readonly errorCode?: FullHistoryPromotionLoopErrorCode;
 	readonly nextLedger?: string | null;
+	readonly retryInMs?: number;
 	readonly status:
-		'bootstrap-required' | 'proof-pending' | 'promoted' | 'replayed';
+		| 'bootstrap-required'
+		| 'cycle-failed'
+		| 'proof-pending'
+		| 'promoted'
+		| 'replayed';
 }
 
 export async function runFullHistoryPromotionLoop(
@@ -27,6 +47,7 @@ export async function runFullHistoryPromotionLoop(
 	dependencies: FullHistoryPromotionLoopDependencies
 ): Promise<void> {
 	while (!dependencies.shouldStop()) {
+		let cycleFailed = false;
 		let shouldWait = false;
 		for (
 			let promoted = 0;
@@ -34,7 +55,19 @@ export async function runFullHistoryPromotionLoop(
 			!dependencies.shouldStop();
 			promoted += 1
 		) {
-			const result = await dependencies.promoteNext();
+			let result: PromoteNextFullHistoryCheckpointResult;
+			try {
+				result = await dependencies.promoteNext();
+			} catch (error) {
+				if (dependencies.shouldStop()) return;
+				cycleFailed = true;
+				dependencies.emit({
+					errorCode: fullHistoryPromotionLoopErrorCode(error),
+					retryInMs: config.errorBackoffMs,
+					status: 'cycle-failed'
+				});
+				break;
+			}
 			dependencies.emit(toEvent(result));
 			if (
 				result.status === 'bootstrap-required' ||
@@ -46,11 +79,25 @@ export async function runFullHistoryPromotionLoop(
 		}
 		if (
 			!dependencies.shouldStop() &&
-			(shouldWait || config.pollIntervalMs > 0)
+			(cycleFailed || shouldWait || config.pollIntervalMs > 0)
 		) {
-			await dependencies.wait(config.pollIntervalMs);
+			await dependencies.wait(
+				cycleFailed ? config.errorBackoffMs : config.pollIntervalMs
+			);
 		}
 	}
+}
+
+export function fullHistoryPromotionLoopErrorCode(
+	error: unknown
+): FullHistoryPromotionLoopErrorCode {
+	if (error instanceof FullHistoryPromotionError) {
+		return `promotion-${error.reason}`;
+	}
+	if (error instanceof FullHistoryCanonicalError) {
+		return `canonical-${error.reason}`;
+	}
+	return 'unexpected-error';
 }
 
 function toEvent(

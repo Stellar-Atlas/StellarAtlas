@@ -1,4 +1,5 @@
 import { fullHistoryUint64 } from '../../../../domain/full-history/FullHistoryCanonicalTypes.js';
+import { FullHistoryCanonicalError } from '../../../../domain/full-history/FullHistoryCanonicalError.js';
 import {
 	runFullHistoryPromotionLoop,
 	type FullHistoryPromotionLoopEvent
@@ -14,6 +15,7 @@ describe('continuous full-history promotion loop', () => {
 		});
 		await runFullHistoryPromotionLoop(
 			{
+				errorBackoffMs: 30_000,
 				maximumCheckpointsPerCycle: 2,
 				networkPassphrase: 'test',
 				pollIntervalMs: 1_000
@@ -41,6 +43,7 @@ describe('continuous full-history promotion loop', () => {
 		let stopped = false;
 		await runFullHistoryPromotionLoop(
 			{
+				errorBackoffMs: 30_000,
 				maximumCheckpointsPerCycle: 8,
 				networkPassphrase: 'test',
 				pollIntervalMs: 1_000
@@ -62,6 +65,75 @@ describe('continuous full-history promotion loop', () => {
 			}
 		);
 		expect(calls).toBe(1);
+	});
+
+	it('backs off after a failed cycle and continues without exposing the error', async () => {
+		const events: FullHistoryPromotionLoopEvent[] = [];
+		const waits: number[] = [];
+		let calls = 0;
+		let stopped = false;
+		await runFullHistoryPromotionLoop(
+			{
+				errorBackoffMs: 30_000,
+				maximumCheckpointsPerCycle: 1,
+				networkPassphrase: 'test',
+				pollIntervalMs: 1_000
+			},
+			{
+				emit: (event) => events.push(event),
+				promoteNext: async () => {
+					calls += 1;
+					if (calls === 1) {
+						throw new FullHistoryCanonicalError(
+							'watermark-gap',
+							'postgresql://operator:secret@database.example'
+						);
+					}
+					return promoted(calls);
+				},
+				shouldStop: () => stopped,
+				wait: async (milliseconds) => {
+					waits.push(milliseconds);
+					if (milliseconds === 1_000) stopped = true;
+				}
+			}
+		);
+
+		expect(calls).toBe(2);
+		expect(waits).toEqual([30_000, 1_000]);
+		expect(events[0]).toEqual({
+			errorCode: 'canonical-watermark-gap',
+			retryInMs: 30_000,
+			status: 'cycle-failed'
+		});
+		expect(events[1]).toMatchObject({ status: 'promoted' });
+		expect(JSON.stringify(events)).not.toContain('operator:secret');
+	});
+
+	it('does not back off or report a failure after shutdown starts', async () => {
+		const emit = jest.fn();
+		const wait = jest.fn(async () => undefined);
+		let stopped = false;
+		await runFullHistoryPromotionLoop(
+			{
+				errorBackoffMs: 30_000,
+				maximumCheckpointsPerCycle: 1,
+				networkPassphrase: 'test',
+				pollIntervalMs: 1_000
+			},
+			{
+				emit,
+				promoteNext: async () => {
+					stopped = true;
+					throw new Error('aborted');
+				},
+				shouldStop: () => stopped,
+				wait
+			}
+		);
+
+		expect(emit).not.toHaveBeenCalled();
+		expect(wait).not.toHaveBeenCalled();
 	});
 });
 

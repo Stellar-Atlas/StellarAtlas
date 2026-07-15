@@ -6,14 +6,16 @@ import {
 	createFullHistoryPromotionDataSource
 } from './FullHistoryPromotionComposition.js';
 import {
+	fullHistoryPromotionLoopErrorCode,
 	runFullHistoryPromotionLoop,
 	type FullHistoryPromotionLoopConfig,
 	type FullHistoryPromotionLoopEvent
 } from './FullHistoryPromotionLoop.js';
-import { checkFullHistoryPromotionSchemaReadiness } from './FullHistoryPromotionSchemaReadiness.js';
-import { FullHistoryCanonicalError } from '../../../domain/full-history/FullHistoryCanonicalError.js';
+import {
+	checkFullHistoryPromotionSchemaReadiness,
+	type FullHistoryPromotionSchemaReadiness
+} from './FullHistoryPromotionSchemaReadiness.js';
 import type { FullHistoryPromotionRuntimeRepository } from '../../../domain/full-history-promotion/FullHistoryPromotionRuntimeRepository.js';
-import { FullHistoryPromotionError } from '../../../domain/full-history-promotion/FullHistoryPromotionError.js';
 import type { PromoteNextFullHistoryCheckpointResult } from '../../../use-cases/promote-next-full-history-checkpoint/PromoteNextFullHistoryCheckpoint.js';
 
 const leadershipLockId = '814504230712';
@@ -27,6 +29,21 @@ interface LockRow {
 
 interface WritableOutput {
 	write(value: string): unknown;
+}
+
+export interface FullHistoryPromotionSchemaWaitEvent {
+	readonly errorCode: 'schema-migrations-pending';
+	readonly missingSchemaObjects: readonly string[];
+	readonly pendingMigrations: true;
+	readonly retryInMs: number;
+	readonly status: 'schema-not-ready';
+}
+
+interface FullHistoryPromotionSchemaWaitDependencies {
+	readonly checkReadiness: () => Promise<FullHistoryPromotionSchemaReadiness>;
+	readonly emit: (event: FullHistoryPromotionSchemaWaitEvent) => void;
+	readonly shouldStop: () => boolean;
+	readonly wait: (milliseconds: number) => Promise<void>;
 }
 
 export async function runContinuousFullHistoryPromotionCli(
@@ -53,10 +70,20 @@ export async function runContinuousFullHistoryPromotionCli(
 	let runtimeStarted = false;
 	const instanceId = randomUUID();
 	try {
-		dataSource = createFullHistoryPromotionDataSource();
-		await dataSource.initialize();
-		const readiness =
-			await checkFullHistoryPromotionSchemaReadiness(dataSource);
+		const promotionDataSource = createFullHistoryPromotionDataSource();
+		dataSource = promotionDataSource;
+		await promotionDataSource.initialize();
+		const readiness = await waitForFullHistoryPromotionSchemaReadiness(
+			config.errorBackoffMs,
+			{
+				checkReadiness: () =>
+					checkFullHistoryPromotionSchemaReadiness(promotionDataSource),
+				emit: (event) => writeEvent(stderr, event),
+				shouldStop: () => abortController.signal.aborted,
+				wait: (milliseconds) => wait(milliseconds, abortController.signal)
+			}
+		);
+		if (readiness === null) return 0;
 		if (!readiness.ready) {
 			writeEvent(stderr, {
 				missingSchemaObjects: readiness.missingSchemaObjects.slice(0, 32),
@@ -65,27 +92,28 @@ export async function runContinuousFullHistoryPromotionCli(
 			});
 			return 69;
 		}
-		lockRunner = dataSource.createQueryRunner();
+		lockRunner = promotionDataSource.createQueryRunner();
 		await lockRunner.connect();
 		if (!(await acquireLeadership(lockRunner))) {
 			writeEvent(stderr, { status: 'leadership-unavailable' });
 			return 75;
 		}
 
-		const promoter = composeNextFullHistoryCheckpointPromoter(dataSource);
+		const promoter =
+			composeNextFullHistoryCheckpointPromoter(promotionDataSource);
 		const runtimeRepository =
-			composeFullHistoryPromotionRuntimeRepository(dataSource);
+			composeFullHistoryPromotionRuntimeRepository(promotionDataSource);
 		runtime = runtimeRepository;
 		await runtimeRepository.begin(config.networkPassphrase, instanceId);
 		runtimeStarted = true;
 		await runFullHistoryPromotionLoop(config, {
 			emit: (event) => writeEvent(stdout, event),
 			promoteNext: async () => {
-				await runtimeRepository.markAttempt(
-					config.networkPassphrase,
-					instanceId
-				);
 				try {
+					await runtimeRepository.markAttempt(
+						config.networkPassphrase,
+						instanceId
+					);
 					const result = await promoter.execute(config.networkPassphrase);
 					await runtimeRepository.recordOutcome(
 						config.networkPassphrase,
@@ -94,12 +122,11 @@ export async function runContinuousFullHistoryPromotionCli(
 					);
 					return result;
 				} catch (error) {
-					runtimeFailed = true;
 					await runtimeRepository
 						.recordFailure(
 							config.networkPassphrase,
 							instanceId,
-							runtimeErrorCode(error)
+							fullHistoryPromotionLoopErrorCode(error)
 						)
 						.catch(() => undefined);
 					throw error;
@@ -116,7 +143,7 @@ export async function runContinuousFullHistoryPromotionCli(
 				.recordFailure(
 					config.networkPassphrase,
 					instanceId,
-					runtimeErrorCode(error)
+					fullHistoryPromotionLoopErrorCode(error)
 				)
 				.catch(() => undefined);
 		}
@@ -141,6 +168,26 @@ export async function runContinuousFullHistoryPromotionCli(
 	}
 }
 
+export async function waitForFullHistoryPromotionSchemaReadiness(
+	errorBackoffMs: number,
+	dependencies: FullHistoryPromotionSchemaWaitDependencies
+): Promise<FullHistoryPromotionSchemaReadiness | null> {
+	while (!dependencies.shouldStop()) {
+		const readiness = await dependencies.checkReadiness();
+		if (dependencies.shouldStop()) return null;
+		if (readiness.ready || !readiness.pendingMigrations) return readiness;
+		dependencies.emit({
+			errorCode: 'schema-migrations-pending',
+			missingSchemaObjects: readiness.missingSchemaObjects.slice(0, 32),
+			pendingMigrations: true,
+			retryInMs: errorBackoffMs,
+			status: 'schema-not-ready'
+		});
+		if (!dependencies.shouldStop()) await dependencies.wait(errorBackoffMs);
+	}
+	return null;
+}
+
 function toRuntimeOutcome(
 	result: PromoteNextFullHistoryCheckpointResult
 ): Parameters<FullHistoryPromotionRuntimeRepository['recordOutcome']>[2] {
@@ -158,16 +205,6 @@ function toRuntimeOutcome(
 	};
 }
 
-function runtimeErrorCode(error: unknown): string {
-	if (error instanceof FullHistoryPromotionError) {
-		return `promotion-${error.reason}`;
-	}
-	if (error instanceof FullHistoryCanonicalError) {
-		return `canonical-${error.reason}`;
-	}
-	return 'unexpected-error';
-}
-
 export function parseLoopConfig(
 	environment: NodeJS.ProcessEnv
 ): FullHistoryPromotionLoopConfig {
@@ -179,6 +216,12 @@ export function parseLoopConfig(
 		throw new Error(`${passphraseEnvironmentKey} is required`);
 	}
 	return {
+		errorBackoffMs: readInteger(
+			environment.FULL_HISTORY_PROMOTION_ERROR_BACKOFF_MS,
+			30_000,
+			1_000,
+			86_400_000
+		),
 		maximumCheckpointsPerCycle: readInteger(
 			environment.FULL_HISTORY_PROMOTION_BATCHES_PER_CYCLE,
 			4,
