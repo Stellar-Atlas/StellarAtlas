@@ -89,19 +89,28 @@ verify_source_units() {
 		die "LedgerCloseMeta ingestion must be gated by its executable"
 	grep -Fqx "MemorySwapMax=0" "$ledger_close_meta_unit" ||
 		die "LedgerCloseMeta ingestion must not use swap"
-	grep -Fqx "MemoryMax=32G" "$ledger_close_meta_unit" ||
-		die "LedgerCloseMeta canary must use a 32G memory ceiling"
-	grep -Fqx "CPUQuota=500%" "$ledger_close_meta_unit" ||
-		die "LedgerCloseMeta canary must use a bounded CPU quota"
-	grep -Fqx "Restart=no" "$ledger_close_meta_unit" ||
-		die "LedgerCloseMeta canary must not restart automatically"
-	grep -Fqx "Environment=FULL_HISTORY_LEDGER_CLOSE_META_LAST_LEDGER=66" \
+	grep -Fqx "MemoryMax=64G" "$ledger_close_meta_unit" ||
+		die "LedgerCloseMeta ingestion must use a 64G memory ceiling"
+	grep -Fqx "CPUQuota=800%" "$ledger_close_meta_unit" ||
+		die "LedgerCloseMeta ingestion must use a bounded CPU quota"
+	grep -Fqx "Restart=always" "$ledger_close_meta_unit" ||
+		die "LedgerCloseMeta ingestion must restart automatically"
+	grep -Fqx "Environment=FULL_HISTORY_LEDGER_CLOSE_META_FETCH_CONCURRENCY=12" \
 		"$ledger_close_meta_unit" ||
-		die "LedgerCloseMeta canary must stop after its bounded ledger range"
-	if grep -Fq "stellaratlas-full-history-ledger-close-meta.service" \
-		"$SYSTEMD_SOURCE_DIR/stellaratlas.target"; then
-		die "LedgerCloseMeta canary must not start with the production target"
+		die "LedgerCloseMeta ingestion must cap fetch concurrency at 12"
+	grep -Fqx "Environment=FULL_HISTORY_LEDGER_CLOSE_META_PROCESSING_CONCURRENCY=4" \
+		"$ledger_close_meta_unit" ||
+		die "LedgerCloseMeta ingestion must cap processing concurrency at 4"
+	grep -Fqx "Environment=FULL_HISTORY_LEDGER_CLOSE_META_INGRESS_BYTES_PER_SECOND=187500000" \
+		"$ledger_close_meta_unit" ||
+		die "LedgerCloseMeta ingestion must cap aggregate ingress at 1.5 Gbps"
+	if grep -Fq "FULL_HISTORY_LEDGER_CLOSE_META_LAST_LEDGER=" \
+		"$ledger_close_meta_unit"; then
+		die "Continuous LedgerCloseMeta ingestion must not have a terminal ledger"
 	fi
+	grep -Fq "stellaratlas-full-history-ledger-close-meta.service" \
+		"$SYSTEMD_SOURCE_DIR/stellaratlas.target" ||
+		die "LedgerCloseMeta ingestion must start with the production target"
 	grep -Fqx "LimitCORE=0" "$ledger_close_meta_unit" ||
 		die "LedgerCloseMeta ingestion must disable core dumps"
 	grep -Fqx "UMask=0077" "$ledger_close_meta_unit" ||
@@ -251,6 +260,8 @@ verify_installed_units() {
 		die "stellaratlas.target is not enabled"
 	systemctl is-enabled --quiet stellaratlas-full-history-backfill.service ||
 		die "stellaratlas-full-history-backfill.service is not enabled"
+	systemctl is-enabled --quiet stellaratlas-full-history-ledger-close-meta.service ||
+		die "stellaratlas-full-history-ledger-close-meta.service is not enabled"
 
 	printf 'Verified installed boot-safe systemd unit copies.\n'
 }
@@ -334,10 +345,12 @@ main() {
 	mask_legacy_unit
 	systemctl daemon-reload
 	systemctl enable stellaratlas-full-history-backfill.service
+	systemctl enable stellaratlas-full-history-ledger-close-meta.service
 	systemctl enable --now stellaratlas.target
 	systemctl start stellaratlas-full-history-promotion.service
 	systemctl start stellaratlas-full-history-backfill.service
 	systemctl start stellaratlas-full-history-operation-backfill.service
+	systemctl start stellaratlas-full-history-ledger-close-meta.service
 	verify_installed_units
 	systemctl is-active --quiet stellaratlas.target ||
 		die "stellaratlas.target is not active"
@@ -347,18 +360,20 @@ main() {
 		die "stellaratlas-full-history-backfill.service is not active"
 	systemctl is-active --quiet stellaratlas-full-history-operation-backfill.service ||
 		die "stellaratlas-full-history-operation-backfill.service is not active"
+	systemctl is-active --quiet stellaratlas-full-history-ledger-close-meta.service ||
+		die "stellaratlas-full-history-ledger-close-meta.service is not active"
 
 	cat <<'EOF'
 Installed boot-safe local copies of the split StellarAtlas units.
 The obsolete stellaratlas.service is masked. An already-active target was not
-restarted; canonical promotion, historical backfill, and operation catch-up
-were started explicitly.
+restarted; canonical promotion, historical backfill, operation catch-up, and
+LedgerCloseMeta ingestion were started explicitly.
 EOF
 	cat <<'EOF'
 
-LedgerCloseMeta ingestion is installed as an explicit bounded canary. It is
-not part of the production target and must be started after its observe-owned
-binary and schema have been verified.
+LedgerCloseMeta ingestion is target-managed and continuously resumes from its
+durable watermark. Aggregate ingress, fetch/process concurrency, CPU, memory,
+stored bytes, and free-space reserve are bounded by the tracked unit.
 
 Production:
   systemctl status stellaratlas.target
