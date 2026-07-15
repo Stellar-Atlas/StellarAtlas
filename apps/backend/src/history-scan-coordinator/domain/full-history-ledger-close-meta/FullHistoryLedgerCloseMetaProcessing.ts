@@ -20,17 +20,20 @@ export const FULL_HISTORY_LEDGER_CLOSE_META_DATASETS = [
 	'ledger-entry-changes'
 ] as const;
 
+export type FullHistoryLedgerCloseMetaDataset =
+	(typeof FULL_HISTORY_LEDGER_CLOSE_META_DATASETS)[number];
+
 export const FULL_HISTORY_LEDGER_CLOSE_META_CANONICAL_MEDIA_TYPE =
 	'application/x-stellar-ledger-close-meta-batch+xdr+zstd';
 export const FULL_HISTORY_LEDGER_CLOSE_META_PARQUET_MEDIA_TYPE =
 	'application/vnd.apache.parquet';
 
 export const FULL_HISTORY_LEDGER_CLOSE_META_SCHEMA_VERSIONS = {
-	'contract-events': 'stellar-atlas.full-history.contract-events.v2',
+	'contract-events': 'stellar-atlas.full-history.contract-events.v3',
 	'ledger-close-meta':
 		'stellar-atlas.full-history.ledger-close-meta-batch.v1',
 	'ledger-entry-changes':
-		'stellar-atlas.full-history.ledger-entry-changes.v2',
+		'stellar-atlas.full-history.ledger-entry-changes.v3',
 	ledgers: 'stellar-atlas.full-history.ledgers.v2',
 	operations: 'stellar-atlas.full-history.operations.v2',
 	'transaction-meta': 'stellar-atlas.full-history.transaction-meta.v2',
@@ -38,11 +41,34 @@ export const FULL_HISTORY_LEDGER_CLOSE_META_SCHEMA_VERSIONS = {
 	transactions: 'stellar-atlas.full-history.transactions.v2'
 } as const satisfies Record<FullHistoryLedgerCloseMetaDataset, string>;
 
+export const FULL_HISTORY_LEDGER_CLOSE_META_SUPPORTED_SCHEMA_VERSIONS = {
+	'contract-events': [
+		'stellar-atlas.full-history.contract-events.v2',
+		FULL_HISTORY_LEDGER_CLOSE_META_SCHEMA_VERSIONS['contract-events']
+	],
+	'ledger-close-meta': [
+		FULL_HISTORY_LEDGER_CLOSE_META_SCHEMA_VERSIONS['ledger-close-meta']
+	],
+	'ledger-entry-changes': [
+		'stellar-atlas.full-history.ledger-entry-changes.v2',
+		FULL_HISTORY_LEDGER_CLOSE_META_SCHEMA_VERSIONS['ledger-entry-changes']
+	],
+	ledgers: [FULL_HISTORY_LEDGER_CLOSE_META_SCHEMA_VERSIONS.ledgers],
+	operations: [FULL_HISTORY_LEDGER_CLOSE_META_SCHEMA_VERSIONS.operations],
+	'transaction-meta': [
+		FULL_HISTORY_LEDGER_CLOSE_META_SCHEMA_VERSIONS['transaction-meta']
+	],
+	'transaction-results': [
+		FULL_HISTORY_LEDGER_CLOSE_META_SCHEMA_VERSIONS['transaction-results']
+	],
+	transactions: [FULL_HISTORY_LEDGER_CLOSE_META_SCHEMA_VERSIONS.transactions]
+} as const satisfies Record<
+	FullHistoryLedgerCloseMetaDataset,
+	readonly string[]
+>;
+
 export type FullHistoryLedgerCloseMetaRepresentation =
 	'lossless-replay' | 'typed-projection';
-
-export type FullHistoryLedgerCloseMetaDataset =
-	(typeof FULL_HISTORY_LEDGER_CLOSE_META_DATASETS)[number];
 
 export interface FullHistoryLedgerCloseMetaProcessingRequest {
 	readonly inputs: readonly FullHistoryLedgerCloseMetaProcessingInput[];
@@ -203,8 +229,7 @@ function isValidOutput(
 		output.byteCount > 0 &&
 		Number.isSafeInteger(output.recordCount) &&
 		output.recordCount >= 0 &&
-		output.schemaVersion ===
-			FULL_HISTORY_LEDGER_CLOSE_META_SCHEMA_VERSIONS[output.dataset] &&
+		isSupportedSchemaVersion(output) &&
 		output.mediaType ===
 			(output.dataset === 'ledger-close-meta'
 				? FULL_HISTORY_LEDGER_CLOSE_META_CANONICAL_MEDIA_TYPE
@@ -219,4 +244,12 @@ function isValidOutput(
 		!output.storageKey.includes('\\') &&
 		!output.storageKey.split('/').some((part) => part === '..')
 	);
+}
+
+function isSupportedSchemaVersion(
+	output: FullHistoryLedgerCloseMetaDatasetOutput
+): boolean {
+	const versions: readonly string[] =
+		FULL_HISTORY_LEDGER_CLOSE_META_SUPPORTED_SCHEMA_VERSIONS[output.dataset];
+	return versions.includes(output.schemaVersion);
 }

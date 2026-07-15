@@ -1,21 +1,13 @@
+export const legacyFullHistoryLedgerCloseMetaDatasetContractPredicateSql =
+	composeFullHistoryLedgerCloseMetaDatasetContractPredicateSql(false);
+
+export const fullHistoryLedgerCloseMetaDatasetContractPredicateSql =
+	composeFullHistoryLedgerCloseMetaDatasetContractPredicateSql(true);
+
 export const createFullHistoryLedgerCloseMetaDatasetContractSql = `
 	alter table "full_history_ledger_close_meta_dataset"
 		add constraint "chk_full_history_lcm_dataset_contract" check (
-			("dataset" = 'ledger-close-meta'
-				and "media_type" = 'application/x-stellar-ledger-close-meta-batch+xdr+zstd'
-				and "representation" = 'lossless-replay'
-				and "schema_version" = 'stellar-atlas.full-history.ledger-close-meta-batch.v1')
-			or ("media_type" = 'application/vnd.apache.parquet'
-				and "representation" = 'typed-projection'
-				and "schema_version" = case "dataset"
-					when 'ledgers' then 'stellar-atlas.full-history.ledgers.v2'
-					when 'transactions' then 'stellar-atlas.full-history.transactions.v2'
-					when 'operations' then 'stellar-atlas.full-history.operations.v2'
-					when 'transaction-results' then 'stellar-atlas.full-history.transaction-results.v2'
-					when 'transaction-meta' then 'stellar-atlas.full-history.transaction-meta.v2'
-					when 'contract-events' then 'stellar-atlas.full-history.contract-events.v2'
-					when 'ledger-entry-changes' then 'stellar-atlas.full-history.ledger-entry-changes.v2'
-				end)
+			${fullHistoryLedgerCloseMetaDatasetContractPredicateSql}
 		);
 
 	create function assert_full_history_lcm_batch_dataset_set(target uuid)
@@ -84,3 +76,38 @@ export const dropFullHistoryLedgerCloseMetaDatasetContractSql = `
 	drop function validate_full_history_lcm_batch_dataset_set();
 	drop function assert_full_history_lcm_batch_dataset_set(uuid);
 `;
+
+function composeFullHistoryLedgerCloseMetaDatasetContractPredicateSql(
+	acceptCompleteProjectionSchemas: boolean
+): string {
+	const contractEventVersions = acceptCompleteProjectionSchemas
+		? "('stellar-atlas.full-history.contract-events.v2', 'stellar-atlas.full-history.contract-events.v3')"
+		: "('stellar-atlas.full-history.contract-events.v2')";
+	const ledgerEntryChangeVersions = acceptCompleteProjectionSchemas
+		? "('stellar-atlas.full-history.ledger-entry-changes.v2', 'stellar-atlas.full-history.ledger-entry-changes.v3')"
+		: "('stellar-atlas.full-history.ledger-entry-changes.v2')";
+	return `
+		("dataset" = 'ledger-close-meta'
+			and "media_type" = 'application/x-stellar-ledger-close-meta-batch+xdr+zstd'
+			and "representation" = 'lossless-replay'
+			and "schema_version" = 'stellar-atlas.full-history.ledger-close-meta-batch.v1')
+		or ("media_type" = 'application/vnd.apache.parquet'
+			and "representation" = 'typed-projection'
+			and (
+				("dataset" = 'ledgers'
+					and "schema_version" = 'stellar-atlas.full-history.ledgers.v2')
+				or ("dataset" = 'transactions'
+					and "schema_version" = 'stellar-atlas.full-history.transactions.v2')
+				or ("dataset" = 'operations'
+					and "schema_version" = 'stellar-atlas.full-history.operations.v2')
+				or ("dataset" = 'transaction-results'
+					and "schema_version" = 'stellar-atlas.full-history.transaction-results.v2')
+				or ("dataset" = 'transaction-meta'
+					and "schema_version" = 'stellar-atlas.full-history.transaction-meta.v2')
+				or ("dataset" = 'contract-events'
+					and "schema_version" in ${contractEventVersions})
+				or ("dataset" = 'ledger-entry-changes'
+					and "schema_version" in ${ledgerEntryChangeVersions})
+			)
+		)`;
+}

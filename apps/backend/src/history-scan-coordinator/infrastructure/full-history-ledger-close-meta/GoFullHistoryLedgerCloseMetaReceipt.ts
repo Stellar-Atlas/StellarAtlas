@@ -6,6 +6,7 @@ import {
 } from '../../domain/full-history-ledger-close-meta/FullHistoryLedgerCloseMetaBatch.js';
 import {
 	FULL_HISTORY_LEDGER_CLOSE_META_DATASETS,
+	FULL_HISTORY_LEDGER_CLOSE_META_SCHEMA_VERSIONS,
 	isValidFullHistoryLedgerCloseMetaOutputSet,
 	type FullHistoryLedgerCloseMetaDataset,
 	type FullHistoryLedgerCloseMetaDatasetOutput
@@ -59,11 +60,13 @@ export interface GoFullHistoryLedgerCloseMetaNetwork {
 const datasets = new Set<FullHistoryLedgerCloseMetaDataset>([
 	...FULL_HISTORY_LEDGER_CLOSE_META_DATASETS
 ]);
-const expectedManifestVersion =
+const legacyManifestVersion =
 	'stellar-atlas.full-history-etl.manifest.v6' as const;
+const currentManifestVersion =
+	'stellar-atlas.full-history-etl.manifest.v7' as const;
 const expectedInputMediaType =
 	'application/x-stellar-ledger-close-meta-batch+xdr+zstd' as const;
-const expectedUnsupportedDatasets = [
+const currentUnsupportedDatasets = [
 	'ledger-close-upgrades-and-extension-values',
 	'transaction-envelope-details',
 	'operation-result-details',
@@ -76,13 +79,17 @@ const expectedUnsupportedDatasets = [
 	'contracts',
 	'contract-data-values',
 	'contract-code-values',
-	'contract-event-topics-and-data',
-	'ledger-entry-keys-and-values',
 	'operation-type-details',
 	'transaction-meta-values',
 	'ttl-entries',
 	'config-settings',
 	'restored-keys'
+] as const;
+const legacyUnsupportedDatasets = [
+	...currentUnsupportedDatasets.slice(0, 12),
+	'contract-event-topics-and-data',
+	'ledger-entry-keys-and-values',
+	...currentUnsupportedDatasets.slice(12)
 ] as const;
 
 export function parseGoFullHistoryLedgerCloseMetaReceipt(
@@ -104,20 +111,62 @@ export function parseGoFullHistoryLedgerCloseMetaManifest(
 	value: unknown
 ): GoFullHistoryLedgerCloseMetaManifest {
 	const row = objectValue(value, 'processing manifest');
+	const core = parseCore(row);
+	const manifestVersion = parseManifestVersion(row.manifestVersion);
+	assertManifestProjectionSchemas(manifestVersion, core.outputs);
 	return Object.freeze({
-		...parseCore(row),
+		...core,
 		format: parseFormat(row.format),
-		manifestVersion: exactString(
-			row.manifestVersion,
-			'manifestVersion',
-			expectedManifestVersion
-		),
+		manifestVersion,
 		unsupportedDatasets: exactStringArray(
 			row.unsupportedDatasets,
 			'unsupportedDatasets',
-			expectedUnsupportedDatasets
+			manifestVersion === legacyManifestVersion
+				? legacyUnsupportedDatasets
+				: currentUnsupportedDatasets
 		)
 	});
+}
+
+function parseManifestVersion(
+	value: unknown
+): typeof legacyManifestVersion | typeof currentManifestVersion {
+	if (value === legacyManifestVersion || value === currentManifestVersion) {
+		return value;
+	}
+	throw new TypeError('manifestVersion is not compatible with this service');
+}
+
+function assertManifestProjectionSchemas(
+	manifestVersion: typeof legacyManifestVersion | typeof currentManifestVersion,
+	outputs: readonly FullHistoryLedgerCloseMetaDatasetOutput[]
+): void {
+	const expected =
+		manifestVersion === legacyManifestVersion
+			? {
+					'contract-events':
+						'stellar-atlas.full-history.contract-events.v2',
+					'ledger-entry-changes':
+						'stellar-atlas.full-history.ledger-entry-changes.v2'
+				}
+			: {
+					'contract-events':
+						FULL_HISTORY_LEDGER_CLOSE_META_SCHEMA_VERSIONS['contract-events'],
+					'ledger-entry-changes':
+						FULL_HISTORY_LEDGER_CLOSE_META_SCHEMA_VERSIONS[
+							'ledger-entry-changes'
+						]
+				};
+	for (const dataset of ['contract-events', 'ledger-entry-changes'] as const) {
+		if (
+			outputs.find((output) => output.dataset === dataset)?.schemaVersion !==
+			expected[dataset]
+		) {
+			throw new TypeError(
+				`${dataset} schema is not compatible with ${manifestVersion}`
+			);
+		}
+	}
 }
 
 export function processingManifestIdentity(

@@ -93,6 +93,20 @@ describe('GoFullHistoryLedgerCloseMetaReceipt', () => {
 			/incomplete/i
 		);
 	});
+
+	it('accepts immutable v6 manifests while requiring v7 projection schemas', () => {
+		expect(() =>
+			parseGoFullHistoryLedgerCloseMetaManifest(legacyFixture())
+		).not.toThrow();
+
+		const mismatched = fixture();
+		mismatched.outputs.find(
+			(output) => output.dataset === 'contract-events'
+		)!.schemaVersion = 'stellar-atlas.full-history.contract-events.v2';
+		expect(() =>
+			parseGoFullHistoryLedgerCloseMetaManifest(mismatched)
+		).toThrow(/not compatible/i);
+	});
 });
 
 function fixture() {
@@ -110,7 +124,7 @@ function fixture() {
 			'application/x-stellar-ledger-close-meta-batch+xdr+zstd',
 		manifestSha256: DIGEST_A,
 		manifestStorageKey: `${NETWORK_ID}/ledger-close-meta/3-4/manifest.json`,
-		manifestVersion: 'stellar-atlas.full-history-etl.manifest.v6',
+		manifestVersion: 'stellar-atlas.full-history-etl.manifest.v7',
 		network: {
 			name: 'pubnet',
 			networkIdSha256: NETWORK_ID
@@ -178,8 +192,6 @@ function fixture() {
 			'contracts',
 			'contract-data-values',
 			'contract-code-values',
-			'contract-event-topics-and-data',
-			'ledger-entry-keys-and-values',
 			'operation-type-details',
 			'transaction-meta-values',
 			'ttl-entries',
@@ -187,6 +199,27 @@ function fixture() {
 			'restored-keys'
 		]
 	};
+}
+
+function legacyFixture() {
+	const value = fixture();
+	value.manifestVersion = 'stellar-atlas.full-history-etl.manifest.v6';
+	value.outputs.find(
+		(output) => output.dataset === 'contract-events'
+	)!.schemaVersion = 'stellar-atlas.full-history.contract-events.v2';
+	value.outputs.find(
+		(output) => output.dataset === 'ledger-entry-changes'
+	)!.schemaVersion = 'stellar-atlas.full-history.ledger-entry-changes.v2';
+	const operationTypeIndex = value.unsupportedDatasets.indexOf(
+		'operation-type-details'
+	);
+	value.unsupportedDatasets.splice(
+		operationTypeIndex,
+		0,
+		'contract-event-topics-and-data',
+		'ledger-entry-keys-and-values'
+	);
+	return value;
 }
 
 const DIGEST_A = '11'.repeat(32);
@@ -205,11 +238,11 @@ const DATASETS = [
 	'ledger-entry-changes'
 ] as const;
 const SCHEMA_VERSIONS = {
-	'contract-events': 'stellar-atlas.full-history.contract-events.v2',
+	'contract-events': 'stellar-atlas.full-history.contract-events.v3',
 	'ledger-close-meta':
 		'stellar-atlas.full-history.ledger-close-meta-batch.v1',
 	'ledger-entry-changes':
-		'stellar-atlas.full-history.ledger-entry-changes.v2',
+		'stellar-atlas.full-history.ledger-entry-changes.v3',
 	ledgers: 'stellar-atlas.full-history.ledgers.v2',
 	operations: 'stellar-atlas.full-history.operations.v2',
 	'transaction-meta': 'stellar-atlas.full-history.transaction-meta.v2',
