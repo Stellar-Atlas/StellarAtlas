@@ -10,7 +10,46 @@ import { canonicalRuntimeTargetCtes } from './HistoryArchiveCanonicalRuntimeTarg
 export { canonicalRuntimeTargetCtes } from './HistoryArchiveCanonicalRuntimeTargetSql.js';
 
 export const materializeCanonicalFrontierDependenciesSql = `
-	with ${canonicalRuntimeTargetCtes}, checkpoints as materialized (
+	with ${canonicalRuntimeTargetCtes}, runtime_archive_roots as materialized (
+		select root."archiveUrl", root."archiveUrlIdentity",
+			root."hostIdentity", target.checkpoint_ledger
+		from runtime_target target
+		join "history_archive_state_snapshot" state
+			on state.status = 'available'
+			and state."networkPassphrase" is not null
+			and sha256(convert_to(state."networkPassphrase", 'UTF8')) =
+				target."network_passphrase_hash"
+		join "history_archive_object_queue" root
+			on root."archiveUrlIdentity" = state."archiveUrlIdentity"
+			and root."objectType" = 'history-archive-state'
+			and root."objectKey" = 'root'
+			and root.status = 'verified'
+	), inserted_target_checkpoints as (
+		insert into "history_archive_object_queue" (
+			"remoteId", "archiveUrl", "archiveUrlIdentity", "hostIdentity",
+			"objectType", "objectKey", "objectOrder", "objectUrl",
+			status, "checkpointLedger", "dependencyReady",
+			"executionDisposition", "executionReason",
+			"executionDispositionAt", "createdAt", "updatedAt"
+		)
+		select gen_random_uuid(), target."archiveUrl",
+			target."archiveUrlIdentity", target."hostIdentity",
+			'checkpoint-state', 'checkpoint-state:' || checkpoint_hex.hex, 10,
+			rtrim(target."archiveUrl", '/') || '/history/' ||
+				substring(checkpoint_hex.hex from 1 for 2) || '/' ||
+				substring(checkpoint_hex.hex from 3 for 2) || '/' ||
+				substring(checkpoint_hex.hex from 5 for 2) || '/' ||
+				'history-' || checkpoint_hex.hex || '.json',
+			'pending', target.checkpoint_ledger, true, 'deferred',
+			'canonical-frontier-materialization', now(), now(), now()
+		from runtime_archive_roots target
+		cross join lateral (
+			select lpad(to_hex(target.checkpoint_ledger), 8, '0') as hex
+		) checkpoint_hex
+		on conflict ("archiveUrlIdentity", "objectType", "objectKey")
+			do nothing
+		returning id
+	), checkpoints as materialized (
 		select checkpoint.*, state."networkPassphrase"
 		from runtime_target target
 		join "history_archive_state_snapshot" state
@@ -161,6 +200,7 @@ export const materializeCanonicalFrontierDependenciesSql = `
 		(select count(*)::integer from inserted) as inserted,
 		(select count(*)::integer from marked) as marked,
 		(select count(*)::integer from inserted_predecessor_checkpoints) +
+			(select count(*)::integer from inserted_target_checkpoints) +
 			(select count(*)::integer from inserted_categories) +
 			(select count(*)::integer from inserted_buckets) +
 			(select count(*)::integer from reopened_legacy_checkpoints) +

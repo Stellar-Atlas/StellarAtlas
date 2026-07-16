@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { DataSource } from 'typeorm';
 import { HistoryArchiveObject } from '../../../../domain/history-archive-object/HistoryArchiveObject.js';
 import { HistoryArchiveCheckpointProof } from '../../../../domain/history-archive-checkpoint-proof/HistoryArchiveCheckpointProof.js';
@@ -9,6 +10,7 @@ import {
 	type DisposablePostgres
 } from '@test-support/DisposablePostgres.js';
 import { checkpointObject } from './HistoryArchiveObjectRepositoryFixture.js';
+import { createCanonicalFrontierTestSchema } from './HistoryArchiveCanonicalFrontierTestSchema.js';
 
 jest.setTimeout(60_000);
 
@@ -35,6 +37,7 @@ describe('checkpoint dependency reconciliation in PostgreSQL', () => {
 			queryRunner
 		);
 		await queryRunner.release();
+		await createCanonicalFrontierTestSchema(dataSource);
 		repository = new TypeOrmHistoryArchiveObjectRepository(
 			dataSource.getRepository(HistoryArchiveObject)
 		);
@@ -47,8 +50,41 @@ describe('checkpoint dependency reconciliation in PostgreSQL', () => {
 
 	beforeEach(async () => {
 		await dataSource.query(
-			'truncate history_archive_checkpoint_proof, history_archive_object_queue restart identity cascade'
+			'truncate history_archive_checkpoint_proof, history_archive_object_queue, history_archive_state_snapshot, full_history_historical_backfill_job, full_history_watermark, full_history_promotion_runtime restart identity cascade'
 		);
+	});
+
+	it('prioritizes the active canonical runtime checkpoint', async () => {
+		const passphrase = 'Active canonical reconciliation fixture';
+		const ordinary = checkpointObject(
+			'https://ordinary.example',
+			63,
+			'verified'
+		);
+		const active = checkpointObject('https://active.example', 127, 'verified');
+		await dataSource
+			.getRepository(HistoryArchiveObject)
+			.save([ordinary, active]);
+		await dataSource
+			.getRepository(HistoryArchiveCheckpointProof)
+			.save(mismatchProof(ordinary));
+		await dataSource.query(
+			`insert into history_archive_state_snapshot (
+				"archiveUrlIdentity", status, "networkPassphrase"
+			) values ($1, 'available', $2)`,
+			[active.archiveUrlIdentity, passphrase]
+		);
+		await dataSource.query(
+			`insert into full_history_promotion_runtime (
+				"network_passphrase_hash", state, "checkpoint_ledger"
+			) values ($1, 'waiting-for-proof', $2)`,
+			[createHash('sha256').update(passphrase, 'utf8').digest(), 127]
+		);
+
+		const result =
+			await repository.findVerifiedCheckpointsNeedingReconciliation(1);
+
+		expect(result.map((object) => object.remoteId)).toEqual([active.remoteId]);
 	});
 
 	it('prioritizes stale mismatch proofs before the unmaterialized backlog', async () => {

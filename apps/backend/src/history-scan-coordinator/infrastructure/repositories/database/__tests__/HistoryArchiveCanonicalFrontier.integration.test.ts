@@ -132,6 +132,52 @@ describe('canonical full-history archive frontier', () => {
 		).toBe(true);
 	});
 
+	it('creates and reserves a missing active target checkpoint row', async () => {
+		const root = object(
+			0,
+			'history-archive-state',
+			'root',
+			null,
+			'verified',
+			0
+		);
+		await dataSource.getRepository(HistoryArchiveObject).save(root);
+		await dataSource.query(
+			`insert into "history_archive_state_snapshot" (
+				"archiveUrlIdentity", status, "networkPassphrase"
+			) values ($1, 'available', $2)`,
+			[root.archiveUrlIdentity, networkPassphrase]
+		);
+		await seedRuntime();
+
+		const result = await repository.reconcileExecutionDisposition();
+		const [checkpoint] = (await dataSource.query(
+			`select status, "checkpointLedger", "objectUrl",
+				"executionDisposition", "executionReason"
+			 from "history_archive_object_queue"
+			 where "archiveUrlIdentity" = $1
+				and "objectType" = 'checkpoint-state'
+				and "checkpointLedger" = $2`,
+			[root.archiveUrlIdentity, targetCheckpoint]
+		)) as readonly {
+			readonly checkpointLedger: number;
+			readonly executionDisposition: string;
+			readonly executionReason: string;
+			readonly objectUrl: string;
+			readonly status: string;
+		}[];
+
+		expect(result.admittedObjects).toBe(1);
+		expect(checkpoint).toEqual({
+			checkpointLedger: targetCheckpoint,
+			executionDisposition: 'executable',
+			executionReason: 'canonical-frontier-reserve',
+			objectUrl:
+				'https://canonical-0.example/history/history/00/0f/42/history-000f427f.json',
+			status: 'pending'
+		});
+	});
+
 	it('does not admit a different network into the canonical reserve', async () => {
 		await seedArchive(0, 'A different network');
 		await seedRuntime();
