@@ -81,6 +81,10 @@ async function installRuntimeConfiguration() {
 		join(repositoryRoot, 'ops', 'full-history', 'stellar-rpc-pubnet.toml'),
 		join(dataRoot, 'stellar-rpc', 'pubnet', 'config', 'rpc.toml')
 	);
+	await copyFile(
+		join(repositoryRoot, 'ops', 'full-history', 'stellar-rpc-captive-core.cfg'),
+		join(dataRoot, 'stellar-rpc', 'pubnet', 'config', 'captive-core.cfg')
+	);
 	for (const unit of [
 		'stellaratlas-horizon-postgres.service',
 		'stellaratlas-horizon.service',
@@ -122,7 +126,9 @@ async function waitForPostgres() {
 				'-h',
 				postgresRun,
 				'-p',
-				'5433'
+				'5433',
+				'-d',
+				'postgres'
 			])
 		) {
 			return;

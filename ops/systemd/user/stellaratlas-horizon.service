@@ -11,15 +11,16 @@ Environment=NETWORK=pubnet
 Environment=PORT=8000
 Environment=ADMIN_PORT=8001
 Environment=INGEST=true
+Environment=APPLY_MIGRATIONS=true
 Environment=DISABLE_TX_SUB=true
 Environment=HISTORY_RETENTION_COUNT=0
 Environment=CAPTIVE_CORE_HTTP_PORT=11626
-Environment=CAPTIVE_CORE_PEER_PORT=11625
+Environment=CAPTIVE_CORE_PEER_PORT=11725
 Environment=CAPTIVE_CORE_STORAGE_PATH=/home/observe/stellarbeat-data/horizon/captive-core/pubnet
 Environment=CAPTIVE_CORE_LOG_PATH=/home/observe/stellarbeat-data/horizon/logs/captive-core.log
 Environment=STELLAR_CORE_BINARY_PATH=/home/observe/stellarbeat-data/stellar-core/bin/stellar-core
 Environment=LD_LIBRARY_PATH=/home/observe/stellarbeat-data/stellar-core/runtime/usr/lib/x86_64-linux-gnu
-ExecStart=/home/observe/stellarbeat-data/horizon/bin/horizon serve --apply-migrations
+ExecStart=/home/observe/stellarbeat-data/horizon/bin/horizon serve
 Restart=on-failure
 RestartSec=10
 TimeoutStopSec=120
@@ -29,4 +30,3 @@ MemoryMax=32G
 
 [Install]
 WantedBy=default.target
-
