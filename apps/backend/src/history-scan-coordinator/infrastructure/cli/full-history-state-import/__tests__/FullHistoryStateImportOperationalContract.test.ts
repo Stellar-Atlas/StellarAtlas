@@ -69,7 +69,7 @@ describe('full-history state-import operational contract', () => {
 		expect(workerIndexes).toEqual([1, 2, 3, 4]);
 		expect(stderr).toEqual([]);
 		expect(stdout).toEqual([
-			'{"databasePoolSize":6,"event":"runtime","exportTimeoutMs":1800000,"insertRows":250,"leaseMs":600000,"status":"ready","storageRoot":"/home/observe/stellarbeat-data/full-history/typed","workers":4}\n',
+			'{"databasePoolSize":6,"event":"runtime","exportTimeoutMs":10800000,"insertRows":250,"leaseMs":600000,"status":"ready","storageRoot":"/home/observe/stellarbeat-data/full-history/typed","workers":4}\n',
 			'{"event":"runtime","status":"stopped"}\n'
 		]);
 	});

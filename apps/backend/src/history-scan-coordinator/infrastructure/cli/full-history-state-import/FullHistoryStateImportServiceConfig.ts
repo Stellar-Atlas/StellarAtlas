@@ -9,6 +9,8 @@ export const FULL_HISTORY_STATE_IMPORT_DEFAULT_EXECUTABLE =
 export const FULL_HISTORY_STATE_IMPORT_MAXIMUM_WORKERS = 4;
 export const FULL_HISTORY_STATE_IMPORT_MAXIMUM_EXPORT_PROCESSES = 3;
 export const FULL_HISTORY_STATE_IMPORT_MAXIMUM_DATABASE_POOL_SIZE = 6;
+export const FULL_HISTORY_STATE_IMPORT_MINIMUM_EXPORT_TIMEOUT_MS =
+	3 * 60 * 60_000;
 
 export interface FullHistoryStateImportServiceConfig {
 	readonly databasePoolSize: number;
@@ -61,12 +63,15 @@ export function parseFullHistoryStateImportServiceConfig(
 			maximumExportProcesses,
 			'FULL_HISTORY_STATE_EXPORT_PROCESSES'
 		),
-		exportTimeoutMilliseconds: readInteger(
-			environment.FULL_HISTORY_STATE_EXPORT_TIMEOUT_MS,
-			30 * 60_000,
-			1_000,
-			86_400_000,
-			'FULL_HISTORY_STATE_EXPORT_TIMEOUT_MS'
+		exportTimeoutMilliseconds: Math.max(
+			readInteger(
+				environment.FULL_HISTORY_STATE_EXPORT_TIMEOUT_MS,
+				FULL_HISTORY_STATE_IMPORT_MINIMUM_EXPORT_TIMEOUT_MS,
+				1_000,
+				86_400_000,
+				'FULL_HISTORY_STATE_EXPORT_TIMEOUT_MS'
+			),
+			FULL_HISTORY_STATE_IMPORT_MINIMUM_EXPORT_TIMEOUT_MS
 		),
 		idlePollMilliseconds: readInteger(
 			environment.FULL_HISTORY_STATE_IMPORT_IDLE_POLL_MS,

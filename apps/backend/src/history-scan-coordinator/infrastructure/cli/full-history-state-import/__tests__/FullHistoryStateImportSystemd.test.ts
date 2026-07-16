@@ -28,7 +28,7 @@ describe('full-history state-import systemd service', () => {
 			'Environment=FULL_HISTORY_STATE_IMPORT_LEASE_MS=600000'
 		);
 		expect(service).toContain(
-			'Environment=FULL_HISTORY_STATE_EXPORT_TIMEOUT_MS=1800000'
+			'Environment=FULL_HISTORY_STATE_EXPORT_TIMEOUT_MS=10800000'
 		);
 		expect(service).toContain(
 			'Environment=FULL_HISTORY_STATE_IMPORT_WORKERS=4'

@@ -8,13 +8,22 @@ describe('parseFullHistoryStateImportServiceConfig', () => {
 			executablePath:
 				'/home/observe/stellarbeat-data/Observer/apps/full-history-etl/bin/stellaratlas-full-history-state-export',
 			exportProcessCount: 3,
-			exportTimeoutMilliseconds: 1_800_000,
+			exportTimeoutMilliseconds: 10_800_000,
 			idlePollMilliseconds: 15_000,
 			insertBatchSize: 250,
 			leaseDurationMilliseconds: 600_000,
 			storageRoot: '/home/observe/stellarbeat-data/full-history/typed',
 			workerCount: 4
 		});
+	});
+
+	it('raises the legacy 30-minute unit value to the operational minimum', () => {
+		expect(
+			parseFullHistoryStateImportServiceConfig({
+				...enabled(),
+				FULL_HISTORY_STATE_EXPORT_TIMEOUT_MS: '1800000'
+			}).exportTimeoutMilliseconds
+		).toBe(10_800_000);
 	});
 
 	it('requires explicit enablement', () => {
