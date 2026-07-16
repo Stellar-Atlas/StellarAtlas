@@ -20,6 +20,46 @@ describe('organization status labels', () => {
 			'metadata fetch issue'
 		);
 	});
+
+	it('labels missing uptime history as collecting instead of low uptime', () => {
+		const tags = getOrganizationTags(
+			createOrganization({
+				has30DayStats: false,
+				hasReliableUptime: false,
+				subQuorum30DaysAvailability: 0
+			})
+		);
+
+		expect(tags.some((tag) => tag.label === 'low uptime')).toBe(false);
+	});
+
+	it('does not call measured uptime low when another policy condition fails', () => {
+		const tags = getOrganizationTags(
+			createOrganization({
+				has30DayStats: true,
+				hasReliableUptime: false,
+				subQuorum30DaysAvailability: 100,
+				validators: ['validator-1']
+			})
+		);
+
+		expect(tags.some((tag) => tag.label === 'low uptime')).toBe(false);
+	});
+
+	it('labels evaluated availability below the reliability threshold as low', () => {
+		const tags = getOrganizationTags(
+			createOrganization({
+				has30DayStats: true,
+				hasReliableUptime: false,
+				subQuorum30DaysAvailability: 98
+			})
+		);
+
+		expect(tags).toContainEqual({
+			label: 'low uptime',
+			tone: 'warning'
+		});
+	});
 });
 
 function createOrganization(

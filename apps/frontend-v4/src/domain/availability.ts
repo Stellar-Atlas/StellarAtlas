@@ -18,6 +18,15 @@ const isPartialCurrentWindow = (
 ): boolean =>
 	currentlyHealthy && value > 0 && value < minimumUsefulHistoryPercentage;
 
+export const hasEvaluatedOrganization30DayAvailability = (
+	organization: PublicOrganization
+): boolean =>
+	organization.has30DayStats &&
+	!isPartialCurrentWindow(
+		organization.subQuorum30DaysAvailability,
+		organization.subQuorumAvailable
+	);
+
 export const formatNode24HourActive = (node: PublicNode): DisplayMetric => {
 	if (!node.statistics.has24HourStats) {
 		return { tone: 'muted', value: node.active ? 'Active now' : 'Collecting' };
@@ -107,10 +116,7 @@ export const formatOrganization30DayAvailability = (
 	organization: PublicOrganization
 ): DisplayMetric => {
 	const value = organization.subQuorum30DaysAvailability;
-	if (
-		!organization.hasReliableUptime ||
-		isPartialCurrentWindow(value, organization.subQuorumAvailable)
-	) {
+	if (!hasEvaluatedOrganization30DayAvailability(organization)) {
 		return {
 			detail: organization.subQuorumAvailable
 				? 'Current subquorum is available'

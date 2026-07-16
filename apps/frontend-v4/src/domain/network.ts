@@ -3,6 +3,7 @@ import type {
 	NodeV1 as PublicNode,
 	OrganizationV1 as PublicOrganization
 } from 'shared';
+import { hasEvaluatedOrganization30DayAvailability } from './availability';
 
 export interface NodeTag {
 	label: string;
@@ -61,7 +62,10 @@ export const getOrganizationTags = (
 		tags.push({ label: 'quorum path risk', tone: 'warning' });
 	}
 
-	if (!organization.hasReliableUptime) {
+	if (
+		hasEvaluatedOrganization30DayAvailability(organization) &&
+		organization.subQuorum30DaysAvailability < 99
+	) {
 		tags.push({ label: 'low uptime', tone: 'warning' });
 	}
 
