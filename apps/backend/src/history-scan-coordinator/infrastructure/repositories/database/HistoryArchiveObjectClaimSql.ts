@@ -18,31 +18,11 @@ const failedReadySql = `candidate.status = 'failed'
 		candidate."nextAttemptAt",
 		candidate."updatedAt" + interval '1 hour'
 	) <= now()`;
-const claimableRootForCandidateSql = `exists (
-	select 1
-	from "history_archive_object_queue" root
-	where root."archiveUrlIdentity" = candidate."archiveUrlIdentity"
-		and root."objectType" = 'history-archive-state'
-		and root."objectKey" = 'root'
-		and (
-			select count(*)
-			from "history_archive_object_queue" active
-			where active."archiveUrlIdentity" = root."archiveUrlIdentity"
-				and active.status = 'scanning'
-		) < $2
-		and (
-			select count(*)
-			from "history_archive_object_queue" active
-			where active."hostIdentity" = root."hostIdentity"
-				and active.status = 'scanning'
-		) < $4
-		and not exists (
-			select 1
-			from "history_archive_object_host_throttle" throttle
-			where throttle."hostIdentity" = root."hostIdentity"
-				and throttle."blockedUntil" > now()
-		)
-)`;
+const candidatePrioritySql = `case candidate."executionReason"
+	when 'canonical-frontier-reserve' then 0
+	when 'proof-completion-reserve' then 1
+	else 2
+end`;
 
 export const historyArchiveObjectClaimFallbackLockSql = `
 	select pg_advisory_xact_lock(${claimGateKeySql})
@@ -157,27 +137,73 @@ export const historyArchiveObjectClaimSelectionSql = `
 		order by slot.slot
 	), capacity_state as materialized (
 		select exists (select 1 from free_slots) as available
+	), active_claims as materialized (
+		select active."archiveUrlIdentity", active."hostIdentity"
+		from "history_archive_object_claim_slot" occupied
+		join "history_archive_object_queue" active
+			on active."remoteId" = occupied."objectRemoteId"
+			and active.status = 'scanning'
+		where occupied."objectRemoteId" is not null
+	), active_by_archive as materialized (
+		select "archiveUrlIdentity", count(*)::integer as count
+		from active_claims
+		group by "archiveUrlIdentity"
+	), active_by_host as materialized (
+		select "hostIdentity", count(*)::integer as count
+		from active_claims
+		group by "hostIdentity"
+	), claimable_roots as materialized (
+		select
+			root.id,
+			root."archiveUrlIdentity",
+			root."hostIdentity",
+			root."lastClaimedAt"
+		from "history_archive_object_queue" root
+		cross join capacity_state
+		left join active_by_archive archive_activity
+			on archive_activity."archiveUrlIdentity" = root."archiveUrlIdentity"
+		left join active_by_host host_activity
+			on host_activity."hostIdentity" = root."hostIdentity"
+		where capacity_state.available
+			and root."objectType" = 'history-archive-state'
+			and root."objectKey" = 'root'
+			and coalesce(archive_activity.count, 0) < $2
+			and coalesce(host_activity.count, 0) < $4
+			and not exists (
+				select 1
+				from "history_archive_object_host_throttle" throttle
+				where throttle."hostIdentity" = root."hostIdentity"
+					and throttle."blockedUntil" > now()
+			)
 	), class_state as materialized (
 		select
 			case when capacity_state.available then exists (
 				select 1
-				from "history_archive_object_queue" candidate
-				where ${pendingReadySql}
-					and ${transitionReadySql}
-					and candidate."executionDisposition" = 'executable'
-					and ${candidateDependencyReadySql}
-					and candidate."objectType" = any($1)
-					and ${claimableRootForCandidateSql}
+				from claimable_roots root
+				where exists (
+					select 1
+					from "history_archive_object_queue" candidate
+					where candidate."archiveUrlIdentity" = root."archiveUrlIdentity"
+						and ${pendingReadySql}
+						and ${transitionReadySql}
+						and candidate."executionDisposition" = 'executable'
+						and ${candidateDependencyReadySql}
+						and candidate."objectType" = any($1)
+				)
 			) else false end as "hasPending",
 			case when capacity_state.available then exists (
 				select 1
-				from "history_archive_object_queue" candidate
-				where ${failedReadySql}
-					and ${transitionReadySql}
-					and candidate."executionDisposition" = 'executable'
-					and ${candidateDependencyReadySql}
-					and candidate."objectType" = any($1)
-					and ${claimableRootForCandidateSql}
+				from claimable_roots root
+				where exists (
+					select 1
+					from "history_archive_object_queue" candidate
+					where candidate."archiveUrlIdentity" = root."archiveUrlIdentity"
+						and ${failedReadySql}
+						and ${transitionReadySql}
+						and candidate."executionDisposition" = 'executable'
+						and ${candidateDependencyReadySql}
+						and candidate."objectType" = any($1)
+				)
 			) else false end as "hasFailed"
 		from capacity_state
 	), slot_pool as materialized (
@@ -213,63 +239,38 @@ export const historyArchiveObjectClaimSelectionSql = `
 		cross join class_state
 	), root_work as materialized (
 		select
-			candidate."archiveUrlIdentity",
-			min(case candidate."executionReason"
-				when 'canonical-frontier-reserve' then 0
-				when 'proof-completion-reserve' then 1
-				else 2
-			end)::integer as priority
-		from "history_archive_object_queue" candidate
-		cross join claim_class
-		where (
-			(claim_class."claimClass" = 'pending' and ${pendingReadySql})
-			or (claim_class."claimClass" = 'failed' and ${failedReadySql})
-		)
-			and ${transitionReadySql}
-			and candidate."executionDisposition" = 'executable'
-			and ${candidateDependencyReadySql}
-			and candidate."objectType" = any($1)
-		group by candidate."archiveUrlIdentity"
-	), root_pool as materialized (
-		select
 			root.id,
 			root."archiveUrlIdentity",
 			root."hostIdentity",
 			root."lastClaimedAt",
-			root_work.priority
-		from "history_archive_object_queue" root
-		join root_work
-			on root_work."archiveUrlIdentity" = root."archiveUrlIdentity"
-		where root."objectType" = 'history-archive-state'
-			and root."objectKey" = 'root'
-			and (
-				select count(*)
-				from "history_archive_object_queue" active
-				where active."archiveUrlIdentity" = root."archiveUrlIdentity"
-					and active.status = 'scanning'
-			) < $2
-			and (
-				select count(*)
-				from "history_archive_object_queue" active
-				where active."hostIdentity" = root."hostIdentity"
-					and active.status = 'scanning'
-			) < $4
-			and not exists (
-				select 1
-				from "history_archive_object_host_throttle" throttle
-				where throttle."hostIdentity" = root."hostIdentity"
-					and throttle."blockedUntil" > now()
-			)
+			candidate_work.priority
+		from claimable_roots root
+		cross join claim_class
+		join lateral (
+			select ${candidatePrioritySql}::integer as priority
+			from "history_archive_object_queue" candidate
+			where candidate."archiveUrlIdentity" = root."archiveUrlIdentity"
+				and (
+					(claim_class."claimClass" = 'pending' and ${pendingReadySql})
+					or (claim_class."claimClass" = 'failed' and ${failedReadySql})
+				)
+				and ${transitionReadySql}
+				and candidate."executionDisposition" = 'executable'
+				and ${candidateDependencyReadySql}
+				and candidate."objectType" = any($1)
+			order by ${candidatePrioritySql}, candidate.id
+			limit 1
+		) candidate_work on true
 	), root_choice_pool as materialized (
 		select
-			root_pool.*,
+			root_work.*,
 			claim_class.slot,
 			claim_class."claimClass",
 			case
-				when claim_class.slot % 4 = 1 then root_pool.priority
+				when claim_class.slot % 4 = 1 then root_work.priority
 				else 0
 			end as "claimPriority"
-		from root_pool
+		from root_work
 		cross join claim_class
 	), root_choice_state as materialized (
 		select exists (select 1 from root_choice_pool) as available

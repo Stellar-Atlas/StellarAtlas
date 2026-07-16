@@ -46,7 +46,7 @@ describe('HistoryArchiveObjectClaimSql', () => {
 			"when 'proof-completion-reserve' then 1"
 		);
 		expect(historyArchiveObjectClaimSelectionSql).toContain(
-			'when claim_class.slot % 4 = 1 then root_pool.priority'
+			'when claim_class.slot % 4 = 1 then root_work.priority'
 		);
 		expect(historyArchiveObjectClaimFinalizeSql).toContain(
 			'case when $3::integer % 4 = 1 then case candidate."executionReason"'
@@ -62,6 +62,28 @@ describe('HistoryArchiveObjectClaimSql', () => {
 			historyArchiveObjectClaimSelectionSql.indexOf('root_work as materialized')
 		);
 		expect(historyArchiveObjectClaimSelectionSql).not.toContain('limit 512');
+	});
+
+	it('bounds candidate lookup by claimable archive roots', () => {
+		expect(historyArchiveObjectClaimSelectionSql).toContain(
+			'active_claims as materialized'
+		);
+		expect(historyArchiveObjectClaimSelectionSql).toContain(
+			'active."remoteId" = occupied."objectRemoteId"'
+		);
+		expect(historyArchiveObjectClaimSelectionSql).toContain(
+			'claimable_roots as materialized'
+		);
+		expect(historyArchiveObjectClaimSelectionSql).toContain(
+			'from claimable_roots root'
+		);
+		expect(historyArchiveObjectClaimSelectionSql).toContain('join lateral (');
+		expect(historyArchiveObjectClaimSelectionSql).toContain(
+			'candidate."archiveUrlIdentity" = root."archiveUrlIdentity"'
+		);
+		expect(historyArchiveObjectClaimSelectionSql).not.toContain(
+			'group by candidate."archiveUrlIdentity"'
+		);
 	});
 
 	it('revalidates archive, host, retry, and host-backoff gates', () => {
