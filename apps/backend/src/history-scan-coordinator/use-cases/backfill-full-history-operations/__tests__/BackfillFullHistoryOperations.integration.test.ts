@@ -8,6 +8,7 @@ import type { FullHistoryOperationBackfillRepository } from '../../../domain/ful
 import { FULL_HISTORY_OPERATION_BACKFILL_BATCH_LIMIT_MAX } from '../../../domain/full-history-operation-backfill/FullHistoryOperationBackfill.js';
 import { deterministicFullHistoryBatchId } from '../../../domain/full-history-promotion/DeterministicFullHistoryBatchId.js';
 import { hashNetworkPassphrase } from '../../../domain/full-history/FullHistoryCanonicalTypes.js';
+import { CURRENT_HISTORY_ARCHIVE_CHECKPOINT_PROOF_VERSION } from '../../../domain/history-archive-checkpoint-proof/HistoryArchiveCheckpointProof.js';
 import {
 	acquireFullHistoryOperationBackfillLeadership,
 	type FullHistoryOperationBackfillLeadershipLease
@@ -345,6 +346,12 @@ describe('BackfillFullHistoryOperations', () => {
 				? {}
 				: { transaction: options.transaction })
 		});
+		await dataSource.query(
+			`update "history_archive_checkpoint_proof"
+			 set "proofVersion" = $1
+			 where id = $2`,
+			[CURRENT_HISTORY_ARCHIVE_CHECKPOINT_PROOF_VERSION, seeded.proofId]
+		);
 		const candidate = await candidateRepository.load(seeded.target);
 		const decoded = await decoder.decode(candidate, publicNetworkPassphrase);
 		const input: FullHistoryCheckpointWrite = {

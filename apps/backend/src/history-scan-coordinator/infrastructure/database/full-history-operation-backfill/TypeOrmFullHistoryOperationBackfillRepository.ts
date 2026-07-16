@@ -23,18 +23,9 @@ import {
 	assertBatchMatches,
 	findBatch
 } from '../full-history/FullHistoryCanonicalBatchStore.js';
-import {
-	assertCanonicalOperations,
-	storeCanonicalOperations
-} from '../full-history/FullHistoryCanonicalOperationStore.js';
-import {
-	assertCanonicalOperationAccountReferences,
-	storeCanonicalOperationAccountReferences
-} from '../full-history/FullHistoryCanonicalOperationAccountReferenceStore.js';
-import {
-	assertCanonicalOperationResults,
-	storeCanonicalOperationResults
-} from '../full-history/FullHistoryCanonicalOperationResultStore.js';
+import { storeCanonicalOperations } from '../full-history/FullHistoryCanonicalOperationStore.js';
+import { storeCanonicalOperationAccountReferences } from '../full-history/FullHistoryCanonicalOperationAccountReferenceStore.js';
+import { storeCanonicalOperationResults } from '../full-history/FullHistoryCanonicalOperationResultStore.js';
 import { assertOperationBackfillBaseFacts } from './FullHistoryOperationBackfillBaseFactValidator.js';
 
 interface BackfillBatchRow {
@@ -182,12 +173,6 @@ export class TypeOrmFullHistoryOperationBackfillRepository implements FullHistor
 					networkHash,
 					input.operationDecoderVersion
 				);
-			} else {
-				await assertCanonicalOperations(
-					manager,
-					input,
-					coverage.operationDecoderVersion
-				);
 			}
 			if (coverage.accountReferenceDecoderVersion === null) {
 				await storeCanonicalOperationAccountReferences(
@@ -196,12 +181,6 @@ export class TypeOrmFullHistoryOperationBackfillRepository implements FullHistor
 					networkHash,
 					input.operationAccountReferenceDecoderVersion
 				);
-			} else {
-				await assertCanonicalOperationAccountReferences(
-					manager,
-					input,
-					coverage.accountReferenceDecoderVersion
-				);
 			}
 			if (coverage.resultDecoderVersion === null) {
 				await storeCanonicalOperationResults(
@@ -209,12 +188,6 @@ export class TypeOrmFullHistoryOperationBackfillRepository implements FullHistor
 					input,
 					networkHash,
 					input.operationResultDecoderVersion
-				);
-			} else {
-				await assertCanonicalOperationResults(
-					manager,
-					input,
-					coverage.resultDecoderVersion
 				);
 			}
 			return {

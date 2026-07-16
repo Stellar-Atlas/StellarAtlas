@@ -1,4 +1,4 @@
-import { DataSource } from 'typeorm';
+import { DataSource, type Logger } from 'typeorm';
 import {
 	startDisposablePostgres,
 	type DisposablePostgres
@@ -9,6 +9,7 @@ import { TypeOrmFullHistoryOperationBackfillRepository } from '../../../infrastr
 import { insertBatch } from '../../../infrastructure/database/full-history/FullHistoryCanonicalBatchStore.js';
 import { storeCanonicalBaseFacts } from '../../../infrastructure/database/full-history/FullHistoryCanonicalFactStore.js';
 import { storeCanonicalOperations } from '../../../infrastructure/database/full-history/FullHistoryCanonicalOperationStore.js';
+import { storeCanonicalOperationResults } from '../../../infrastructure/database/full-history/FullHistoryCanonicalOperationResultStore.js';
 import {
 	fullHistoryEntities,
 	installFullHistoryCanonicalSchema,
@@ -16,16 +17,55 @@ import {
 } from '../../../infrastructure/database/full-history/__tests__/FullHistoryCanonicalFixture.js';
 import { StellarFullHistoryCheckpointDecoder } from '../../../infrastructure/full-history-promotion/StellarFullHistoryCheckpointDecoder.js';
 
+class QueryRecorder implements Logger {
+	private queries: string[] = [];
+
+	logQuery(query: string): void {
+		this.queries.push(query);
+	}
+
+	logQueryError(): void {
+		return;
+	}
+
+	logQuerySlow(): void {
+		return;
+	}
+
+	logSchemaBuild(): void {
+		return;
+	}
+
+	logMigration(): void {
+		return;
+	}
+
+	log(): void {
+		return;
+	}
+
+	normalizedQueries(): readonly string[] {
+		return this.queries.map((query) => query.replaceAll(/\s+/g, ' ').trim());
+	}
+
+	reset(): void {
+		this.queries = [];
+	}
+}
+
 jest.setTimeout(60_000);
 
 describe('full-history operation-result backfill compatibility', () => {
 	let dataSource: DataSource;
 	let postgres: DisposablePostgres;
+	const queryRecorder = new QueryRecorder();
 
 	beforeAll(async () => {
 		postgres = await startDisposablePostgres();
 		dataSource = new DataSource({
 			entities: fullHistoryEntities,
+			logger: queryRecorder,
+			logging: ['query'],
 			type: 'postgres',
 			url: postgres.url
 		});
@@ -74,6 +114,68 @@ describe('full-history operation-result backfill compatibility', () => {
 		});
 		await expect(repository.storeOperations(input)).resolves.toMatchObject({
 			replayed: true
+		});
+	});
+
+	it('writes only a missing component during partial-coverage catch-up', async () => {
+		const input = await seedFullHistoryCheckpoint(dataSource, {
+			batchNumber: 2_502,
+			networkPassphrase: 'Component-aware operation backfill network'
+		});
+		const networkHash = hashNetworkPassphrase(input.networkPassphrase);
+		await dataSource.transaction(async (manager) => {
+			await insertBatch(manager, input, networkHash);
+			await storeCanonicalBaseFacts(manager, input, networkHash);
+			await storeCanonicalOperations(manager, input, networkHash);
+			await storeCanonicalOperationResults(manager, input, networkHash);
+		});
+		queryRecorder.reset();
+
+		const repository = new TypeOrmFullHistoryOperationBackfillRepository(
+			dataSource
+		);
+		await expect(repository.storeOperations(input)).resolves.toEqual({
+			accountReferenceCount: input.operationAccountReferences.length,
+			batchId: input.batchId,
+			operationCount: input.operations.length,
+			replayed: false
+		});
+
+		const queries = queryRecorder.normalizedQueries();
+		expect(queries).toEqual(
+			expect.arrayContaining([
+				expect.stringContaining(
+					'insert into "full_history_operation_account_reference"'
+				),
+				expect.stringContaining(
+					'insert into "full_history_operation_account_reference_batch_coverage"'
+				)
+			])
+		);
+		expect(
+			queries.some((query) =>
+				query.includes('from "full_history_operation" where "batch_id"')
+			)
+		).toBe(false);
+		expect(
+			queries.some((query) =>
+				query.includes('from "full_history_operation_result" result')
+			)
+		).toBe(false);
+		expect(
+			queries.some((query) =>
+				query.includes('insert into "full_history_operation" (')
+			)
+		).toBe(false);
+		expect(
+			queries.some((query) =>
+				query.includes('insert into "full_history_operation_result" (')
+			)
+		).toBe(false);
+		await expect(coverageVersions(input.batchId)).resolves.toEqual({
+			operationDecoderVersion: input.operationDecoderVersion,
+			referenceDecoderVersion: input.operationAccountReferenceDecoderVersion,
+			resultDecoderVersion: input.operationResultDecoderVersion
 		});
 	});
 
