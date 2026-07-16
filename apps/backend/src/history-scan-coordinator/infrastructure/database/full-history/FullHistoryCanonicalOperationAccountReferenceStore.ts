@@ -12,8 +12,12 @@ import {
 	buildFullHistorySqlValues,
 	chunkFullHistoryValues
 } from './FullHistorySqlValues.js';
+import {
+	assertFullHistoryInsertedCount,
+	type FullHistoryInsertedCountRow
+} from './FullHistoryCanonicalInsertCount.js';
 
-const accountReferenceChunkSize = 500;
+const accountReferenceChunkSize = 2_000;
 
 interface AccountReferenceRow {
 	readonly accountId: string;
@@ -105,15 +109,25 @@ async function insertAccountReferences(
 			reference.factScope
 		])
 	);
-	await manager.query(
+	const rows = await manager.query<FullHistoryInsertedCountRow[]>(
 		`
-			insert into "full_history_operation_account_reference" (
-				"network_passphrase_hash", "transaction_hash", "operation_index",
-				"role", "account_id", "base_account_id", "fact_scope"
-			) values ${insert.placeholders}
-			on conflict do nothing
+			with inserted as (
+				insert into "full_history_operation_account_reference" (
+					"network_passphrase_hash", "transaction_hash",
+					"operation_index", "role", "account_id",
+					"base_account_id", "fact_scope"
+				) values ${insert.placeholders}
+				on conflict do nothing
+				returning 1
+			)
+			select count(*)::integer as "insertedCount" from inserted
 		`,
 		insert.parameters
+	);
+	assertFullHistoryInsertedCount(
+		rows,
+		references.length,
+		'operation account-reference'
 	);
 }
 
@@ -123,14 +137,20 @@ async function insertAccountReferenceCoverage(
 	networkHash: FullHistoryHash,
 	referenceDecoderVersion: string
 ): Promise<void> {
-	await manager.query(
+	const rows = await manager.query<FullHistoryInsertedCountRow[]>(
 		`
-			insert into "full_history_operation_account_reference_batch_coverage" (
-				"batch_id", "network_passphrase_hash", "first_ledger",
-				"last_ledger", "operation_count", "account_reference_count",
-				"fact_scope", "reference_decoder_version"
-			) values ($1, $2, $3, $4, $5, $6, $7, $8)
-			on conflict do nothing
+			with inserted as (
+				insert into
+					"full_history_operation_account_reference_batch_coverage" (
+						"batch_id", "network_passphrase_hash", "first_ledger",
+						"last_ledger", "operation_count",
+						"account_reference_count", "fact_scope",
+						"reference_decoder_version"
+					) values ($1, $2, $3, $4, $5, $6, $7, $8)
+				on conflict do nothing
+				returning 1
+			)
+			select count(*)::integer as "insertedCount" from inserted
 		`,
 		[
 			input.batchId,
@@ -143,6 +163,7 @@ async function insertAccountReferenceCoverage(
 			referenceDecoderVersion
 		]
 	);
+	assertFullHistoryInsertedCount(rows, 1, 'operation account-reference coverage');
 }
 
 async function readAccountReferences(

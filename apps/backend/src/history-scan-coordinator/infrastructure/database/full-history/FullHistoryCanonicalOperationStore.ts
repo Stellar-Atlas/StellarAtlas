@@ -11,8 +11,12 @@ import {
 	buildFullHistorySqlValues,
 	chunkFullHistoryValues
 } from './FullHistorySqlValues.js';
+import {
+	assertFullHistoryInsertedCount,
+	type FullHistoryInsertedCountRow
+} from './FullHistoryCanonicalInsertCount.js';
 
-const operationChunkSize = 500;
+const operationChunkSize = 2_000;
 
 interface OperationRow {
 	readonly factScope: string;
@@ -80,14 +84,18 @@ async function insertOperationCoverage(
 	networkHash: FullHistoryHash,
 	operationDecoderVersion: string
 ): Promise<void> {
-	await manager.query(
+	const rows = await manager.query<FullHistoryInsertedCountRow[]>(
 		`
-			insert into "full_history_operation_batch_coverage" (
-				"batch_id", "network_passphrase_hash", "first_ledger",
-				"last_ledger", "transaction_count", "operation_count",
-				"fact_scope", "operation_decoder_version"
-			) values ($1, $2, $3, $4, $5, $6, $7, $8)
-			on conflict do nothing
+			with inserted as (
+				insert into "full_history_operation_batch_coverage" (
+					"batch_id", "network_passphrase_hash", "first_ledger",
+					"last_ledger", "transaction_count", "operation_count",
+					"fact_scope", "operation_decoder_version"
+				) values ($1, $2, $3, $4, $5, $6, $7, $8)
+				on conflict do nothing
+				returning 1
+			)
+			select count(*)::integer as "insertedCount" from inserted
 		`,
 		[
 			input.batchId,
@@ -100,6 +108,7 @@ async function insertOperationCoverage(
 			operationDecoderVersion
 		]
 	);
+	assertFullHistoryInsertedCount(rows, 1, 'operation coverage');
 }
 
 async function insertOperations(
@@ -123,18 +132,23 @@ async function insertOperations(
 			operation.factScope
 		])
 	);
-	await manager.query(
+	const rows = await manager.query<FullHistoryInsertedCountRow[]>(
 		`
-			insert into "full_history_operation" (
-				"network_passphrase_hash", "transaction_hash", "operation_index",
-				"batch_id", "ledger_sequence", "transaction_index",
-				"operation_type", "source_account", "source_account_origin",
-				"fact_scope"
-			) values ${insert.placeholders}
-			on conflict do nothing
+			with inserted as (
+				insert into "full_history_operation" (
+					"network_passphrase_hash", "transaction_hash",
+					"operation_index", "batch_id", "ledger_sequence",
+					"transaction_index", "operation_type", "source_account",
+					"source_account_origin", "fact_scope"
+				) values ${insert.placeholders}
+				on conflict do nothing
+				returning 1
+			)
+			select count(*)::integer as "insertedCount" from inserted
 		`,
 		insert.parameters
 	);
+	assertFullHistoryInsertedCount(rows, operations.length, 'operation');
 }
 
 async function readOperations(

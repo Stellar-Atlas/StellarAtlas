@@ -75,7 +75,7 @@ export interface FullHistoryOperationBackfillTransactionBounds {
 const defaultTransactionBounds: FullHistoryOperationBackfillTransactionBounds =
 	{
 		lockTimeoutMs: 2_000,
-		statementTimeoutMs: 30_000
+		statementTimeoutMs: 5 * 60_000
 	};
 
 export class TypeOrmFullHistoryOperationBackfillRepository implements FullHistoryOperationBackfillRepository {
@@ -175,53 +175,48 @@ export class TypeOrmFullHistoryOperationBackfillRepository implements FullHistor
 				coverage.operationDecoderVersion !== null &&
 				coverage.accountReferenceDecoderVersion !== null &&
 				coverage.resultDecoderVersion !== null;
-			let storedOperationDecoderVersion = coverage.operationDecoderVersion;
-			if (storedOperationDecoderVersion === null) {
+			if (coverage.operationDecoderVersion === null) {
 				await storeCanonicalOperations(
 					manager,
 					input,
 					networkHash,
 					input.operationDecoderVersion
 				);
-				storedOperationDecoderVersion = input.operationDecoderVersion;
+			} else {
+				await assertCanonicalOperations(
+					manager,
+					input,
+					coverage.operationDecoderVersion
+				);
 			}
-			await assertCanonicalOperations(
-				manager,
-				input,
-				storedOperationDecoderVersion
-			);
-			let storedAccountReferenceDecoderVersion =
-				coverage.accountReferenceDecoderVersion;
-			if (storedAccountReferenceDecoderVersion === null) {
+			if (coverage.accountReferenceDecoderVersion === null) {
 				await storeCanonicalOperationAccountReferences(
 					manager,
 					input,
 					networkHash,
 					input.operationAccountReferenceDecoderVersion
 				);
-				storedAccountReferenceDecoderVersion =
-					input.operationAccountReferenceDecoderVersion;
+			} else {
+				await assertCanonicalOperationAccountReferences(
+					manager,
+					input,
+					coverage.accountReferenceDecoderVersion
+				);
 			}
-			await assertCanonicalOperationAccountReferences(
-				manager,
-				input,
-				storedAccountReferenceDecoderVersion
-			);
-			let storedResultDecoderVersion = coverage.resultDecoderVersion;
-			if (storedResultDecoderVersion === null) {
+			if (coverage.resultDecoderVersion === null) {
 				await storeCanonicalOperationResults(
 					manager,
 					input,
 					networkHash,
 					input.operationResultDecoderVersion
 				);
-				storedResultDecoderVersion = input.operationResultDecoderVersion;
+			} else {
+				await assertCanonicalOperationResults(
+					manager,
+					input,
+					coverage.resultDecoderVersion
+				);
 			}
-			await assertCanonicalOperationResults(
-				manager,
-				input,
-				storedResultDecoderVersion
-			);
 			return {
 				accountReferenceCount: input.operationAccountReferences.length,
 				batchId: input.batchId,

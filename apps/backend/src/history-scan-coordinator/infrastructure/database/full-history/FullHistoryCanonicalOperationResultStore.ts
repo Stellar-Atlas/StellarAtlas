@@ -12,8 +12,13 @@ import {
 	buildFullHistorySqlValues,
 	chunkFullHistoryValues
 } from './FullHistorySqlValues.js';
+import {
+	assertFullHistoryInsertedCount,
+	type FullHistoryInsertedCountRow
+} from './FullHistoryCanonicalInsertCount.js';
 
-const operationResultChunkSize = 500;
+const operationResultInsertChunkSize = 2_000;
+const operationResultReadChunkSize = 500;
 
 interface OperationResultRow {
 	readonly factScope: string;
@@ -41,7 +46,7 @@ export async function storeCanonicalOperationResults(
 	assertBoundedText(resultDecoderVersion, 'resultDecoderVersion', 128);
 	for (const results of chunkFullHistoryValues(
 		input.operationResults,
-		operationResultChunkSize
+		operationResultInsertChunkSize
 	)) {
 		await insertOperationResults(manager, networkHash, results);
 	}
@@ -93,17 +98,22 @@ async function insertOperationResults(
 			result.factScope
 		])
 	);
-	await manager.query(
+	const rows = await manager.query<FullHistoryInsertedCountRow[]>(
 		`
-			insert into "full_history_operation_result" (
-				"network_passphrase_hash", "transaction_hash", "operation_index",
-				"outcome", "operation_result_code",
-				"operation_specific_result_code", "fact_scope"
-			) values ${insert.placeholders}
-			on conflict do nothing
+			with inserted as (
+				insert into "full_history_operation_result" (
+					"network_passphrase_hash", "transaction_hash",
+					"operation_index", "outcome", "operation_result_code",
+					"operation_specific_result_code", "fact_scope"
+				) values ${insert.placeholders}
+				on conflict do nothing
+				returning 1
+			)
+			select count(*)::integer as "insertedCount" from inserted
 		`,
 		insert.parameters
 	);
+	assertFullHistoryInsertedCount(rows, results.length, 'operation result');
 }
 
 async function insertOperationResultCoverage(
@@ -112,14 +122,18 @@ async function insertOperationResultCoverage(
 	networkHash: FullHistoryHash,
 	resultDecoderVersion: string
 ): Promise<void> {
-	await manager.query(
+	const rows = await manager.query<FullHistoryInsertedCountRow[]>(
 		`
-			insert into "full_history_operation_result_batch_coverage" (
-				"batch_id", "network_passphrase_hash", "first_ledger",
-				"last_ledger", "operation_count", "fact_scope",
-				"result_decoder_version"
-			) values ($1, $2, $3, $4, $5, $6, $7)
-			on conflict do nothing
+			with inserted as (
+				insert into "full_history_operation_result_batch_coverage" (
+					"batch_id", "network_passphrase_hash", "first_ledger",
+					"last_ledger", "operation_count", "fact_scope",
+					"result_decoder_version"
+				) values ($1, $2, $3, $4, $5, $6, $7)
+				on conflict do nothing
+				returning 1
+			)
+			select count(*)::integer as "insertedCount" from inserted
 		`,
 		[
 			input.batchId,
@@ -131,6 +145,7 @@ async function insertOperationResultCoverage(
 			resultDecoderVersion
 		]
 	);
+	assertFullHistoryInsertedCount(rows, 1, 'operation-result coverage');
 }
 
 async function storedOperationResultsMatch(
@@ -140,7 +155,7 @@ async function storedOperationResultsMatch(
 ): Promise<boolean> {
 	for (const chunk of chunkFullHistoryValues(
 		expected,
-		operationResultChunkSize
+		operationResultReadChunkSize
 	)) {
 		const rows = await readOperationResultChunk(manager, networkHash, chunk);
 		if (!operationResultsMatch(rows, chunk)) return false;
