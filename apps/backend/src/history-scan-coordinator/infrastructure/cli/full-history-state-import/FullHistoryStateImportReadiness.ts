@@ -1,6 +1,7 @@
 import { constants } from 'node:fs';
 import { access, realpath, stat } from 'node:fs/promises';
 import type { DataSource } from 'typeorm';
+import { checkPostgresSchemaReadiness } from '../PostgresSchemaReadiness.js';
 
 const requiredRelations = [
 	'history_archive_checkpoint_proof',
@@ -243,10 +244,6 @@ const requiredIndexes = [
 	'full_history_lcm_state_canonical_coverage.idx_full_history_lcm_state_coverage_claim'
 ] as const;
 
-interface NameRow {
-	readonly name: string;
-}
-
 export interface FullHistoryStateImportReadiness {
 	readonly missingRuntimeObjects: readonly string[];
 	readonly missingSchemaObjects: readonly string[];
@@ -264,112 +261,21 @@ export async function checkFullHistoryStateImportReadiness(
 	paths: FullHistoryStateImportRuntimePaths
 ): Promise<FullHistoryStateImportReadiness> {
 	const runtimePromise = missingRuntimeObjects(paths);
-	const pendingMigrations = await dataSource.showMigrations();
-	const missingSchemaObjects = (
-		await Promise.all([
-			missingRelations(dataSource),
-			missingColumns(dataSource),
-			missingConstraints(dataSource),
-			missingTriggers(dataSource),
-			missingFunctions(dataSource),
-			missingIndexes(dataSource)
-		])
-	)
-		.flat()
-		.toSorted();
+	const schema = await checkPostgresSchemaReadiness(dataSource, {
+		columns: requiredColumns,
+		constraints: requiredConstraints,
+		functions: requiredFunctions,
+		indexes: requiredIndexes,
+		relations: requiredRelations,
+		triggers: requiredTriggers
+	});
 	const missingRuntime = (await runtimePromise).toSorted();
 	return Object.freeze({
 		missingRuntimeObjects: missingRuntime,
-		missingSchemaObjects,
-		pendingMigrations,
-		ready:
-			!pendingMigrations &&
-			missingSchemaObjects.length === 0 &&
-			missingRuntime.length === 0
+		missingSchemaObjects: schema.missingSchemaObjects,
+		pendingMigrations: schema.pendingMigrations,
+		ready: schema.ready && missingRuntime.length === 0
 	});
-}
-
-async function missingRelations(dataSource: DataSource): Promise<string[]> {
-	const rows = await dataSource.query<NameRow[]>(
-		`select required.name
-		from unnest($1::text[]) as required(name)
-		where to_regclass(format('%I.%I', current_schema(), required.name)) is null`,
-		[requiredRelations]
-	);
-	return rows.map((row) => `relation:${row.name}`);
-}
-
-async function missingColumns(dataSource: DataSource): Promise<string[]> {
-	const rows = await dataSource.query<NameRow[]>(
-		`select required.name
-		from unnest($1::text[]) as required(name)
-		left join information_schema.columns actual
-			on actual.table_schema = current_schema()
-			and actual.table_name = split_part(required.name, '.', 1)
-			and actual.column_name = split_part(required.name, '.', 2)
-		where actual.column_name is null`,
-		[requiredColumns]
-	);
-	return rows.map((row) => `column:${row.name}`);
-}
-
-async function missingConstraints(dataSource: DataSource): Promise<string[]> {
-	const rows = await dataSource.query<NameRow[]>(
-		`select required.name
-		from unnest($1::text[]) as required(name)
-		left join pg_constraint actual
-			on actual.conname = required.name
-			and actual.connamespace = current_schema()::regnamespace
-		where actual.oid is null`,
-		[requiredConstraints]
-	);
-	return rows.map((row) => `constraint:${row.name}`);
-}
-
-async function missingTriggers(dataSource: DataSource): Promise<string[]> {
-	const rows = await dataSource.query<NameRow[]>(
-		`select required.name
-		from unnest($1::text[]) as required(name)
-		left join pg_class relation
-			on relation.relname = split_part(required.name, '.', 1)
-			and relation.relnamespace = current_schema()::regnamespace
-		left join pg_trigger actual
-			on actual.tgrelid = relation.oid
-			and actual.tgname = split_part(required.name, '.', 2)
-			and not actual.tgisinternal
-		where actual.oid is null`,
-		[requiredTriggers]
-	);
-	return rows.map((row) => `trigger:${row.name}`);
-}
-
-async function missingFunctions(dataSource: DataSource): Promise<string[]> {
-	const rows = await dataSource.query<NameRow[]>(
-		`select required.name
-		from unnest($1::text[]) as required(name)
-		where to_regprocedure(current_schema() || '.' || required.name) is null`,
-		[requiredFunctions]
-	);
-	return rows.map((row) => `function:${row.name}`);
-}
-
-async function missingIndexes(dataSource: DataSource): Promise<string[]> {
-	const rows = await dataSource.query<NameRow[]>(
-		`select required.name
-		from unnest($1::text[]) as required(name)
-		left join pg_class relation
-			on relation.relname = split_part(required.name, '.', 1)
-			and relation.relnamespace = current_schema()::regnamespace
-		left join pg_class actual
-			on actual.relname = split_part(required.name, '.', 2)
-			and actual.relnamespace = current_schema()::regnamespace
-		left join pg_index binding
-			on binding.indrelid = relation.oid
-			and binding.indexrelid = actual.oid
-		where binding.indexrelid is null`,
-		[requiredIndexes]
-	);
-	return rows.map((row) => `index:${row.name}`);
 }
 
 async function missingRuntimeObjects(

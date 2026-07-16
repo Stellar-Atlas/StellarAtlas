@@ -13,6 +13,10 @@ import {
 	type FullHistoryLedgerCloseMetaServiceConfig
 } from './FullHistoryLedgerCloseMetaServiceConfig.js';
 import {
+	checkFullHistoryLedgerCloseMetaSchemaReadiness,
+	type FullHistoryLedgerCloseMetaSchemaReadiness
+} from './FullHistoryLedgerCloseMetaSchemaReadiness.js';
+import {
 	ensureFullHistoryLedgerCloseMetaRuntime,
 	FULL_HISTORY_LEDGER_CLOSE_META_CLEANUP_INTERVAL_MILLISECONDS,
 	removeStaleFullHistoryLedgerCloseMetaArtifacts,
@@ -32,6 +36,9 @@ export interface ContinuousFullHistoryLedgerCloseMetaCliDependencies {
 	readonly acquireLeadership: (
 		dataSource: DataSource
 	) => Promise<FullHistoryLedgerCloseMetaLeadershipLease>;
+	readonly checkReadiness: (
+		dataSource: DataSource
+	) => Promise<FullHistoryLedgerCloseMetaSchemaReadiness>;
 	readonly compose: (
 		config: FullHistoryLedgerCloseMetaServiceConfig
 	) => FullHistoryLedgerCloseMetaComposition;
@@ -56,6 +63,7 @@ export interface ContinuousFullHistoryLedgerCloseMetaCliDependencies {
 const defaultDependencies: ContinuousFullHistoryLedgerCloseMetaCliDependencies =
 	{
 		acquireLeadership: acquireFullHistoryLedgerCloseMetaLeadership,
+		checkReadiness: checkFullHistoryLedgerCloseMetaSchemaReadiness,
 		compose: composeFullHistoryLedgerCloseMetaService,
 		ensureRuntime: ensureFullHistoryLedgerCloseMetaRuntime,
 		now: Date.now,
@@ -100,17 +108,29 @@ export async function runContinuousFullHistoryLedgerCloseMetaCli(
 		composition = dependencies.compose(config);
 		const activeComposition = composition;
 		await activeComposition.dataSource.initialize();
-		await assertSchemaReady(activeComposition.dataSource);
-		leadership = await dependencies.acquireLeadership(
+		const readiness = await dependencies.checkReadiness(
 			activeComposition.dataSource
 		);
-		if (!leadership.acquired) {
+		if (!readiness.ready) {
+			writeEvent(dependencies.stderr, {
+				event: 'runtime',
+				missingSchemaObjects: readiness.missingSchemaObjects.slice(0, 32),
+				pendingMigrations: readiness.pendingMigrations,
+				status: 'schema-not-ready'
+			});
+			exitCode = 69;
+		} else {
+			leadership = await dependencies.acquireLeadership(
+				activeComposition.dataSource
+			);
+		}
+		if (readiness.ready && leadership?.acquired !== true) {
 			writeEvent(dependencies.stderr, {
 				event: 'runtime',
 				status: 'leadership-unavailable'
 			});
 			exitCode = 75;
-		} else {
+		} else if (leadership?.acquired === true) {
 			await leadership.assertHeld();
 			await dependencies.resetOwnedRuntime(config);
 			await dependencies.reconcileRuntime(config, dependencies.now());
@@ -279,33 +299,6 @@ function cycleOutputReservation(
 		shardCount *
 		BigInt(FULL_HISTORY_LEDGER_CLOSE_META_MAXIMUM_OUTPUT_BYTES_PER_SHARD)
 	);
-}
-
-async function assertSchemaReady(dataSource: DataSource): Promise<void> {
-	const rows = await dataSource.query<
-		Array<{
-			readonly batch: string | null;
-			readonly dataset: string | null;
-			readonly source: string | null;
-			readonly sourceObject: string | null;
-			readonly watermark: string | null;
-		}>
-	>(
-		`select
-			to_regclass('full_history_ledger_close_meta_source')::text as "source",
-			to_regclass('full_history_ledger_close_meta_batch')::text as "batch",
-			to_regclass('full_history_ledger_close_meta_source_object')::text as "sourceObject",
-			to_regclass('full_history_ledger_close_meta_dataset')::text as "dataset",
-			to_regclass('full_history_ledger_close_meta_watermark')::text as "watermark"`
-	);
-	const row = rows[0];
-	if (
-		rows.length !== 1 ||
-		row === undefined ||
-		Object.values(row).some((value) => value === null)
-	) {
-		throw new Error('Full-history LedgerCloseMeta schema is not ready');
-	}
 }
 
 function registerSignals(stop: () => void): () => void {

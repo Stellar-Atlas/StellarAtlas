@@ -31,6 +31,11 @@ describe('monitorFullHistoryLedgerCloseMetaRuntimeCleanup', () => {
 					assertHeld: async () => undefined,
 					release
 				}),
+				checkReadiness: async () => ({
+					missingSchemaObjects: [],
+					pendingMigrations: false,
+					ready: true
+				}),
 				compose: () =>
 					({
 						dataSource,
@@ -51,6 +56,50 @@ describe('monitorFullHistoryLedgerCloseMetaRuntimeCleanup', () => {
 		expect(exitCode).toBe(75);
 		expect(resetOwnedRuntime).not.toHaveBeenCalled();
 		expect(release).toHaveBeenCalledTimes(1);
+	});
+
+	it('fails closed before leadership when the schema contract is incomplete', async () => {
+		const acquireLeadership = jest.fn();
+		const runLoop = jest.fn(async () => undefined);
+		const stderr = { write: jest.fn() };
+		const dataSource = {
+			initialize: jest.fn(async () => undefined),
+			isInitialized: false
+		} as unknown as DataSource;
+		const exitCode = await runContinuousFullHistoryLedgerCloseMetaCli(
+			environment(),
+			{
+				acquireLeadership,
+				checkReadiness: async () => ({
+					missingSchemaObjects: [
+						'trigger:full_history_ledger_close_meta_batch.trg_validate_full_history_lcm_batch_datasets'
+					],
+					pendingMigrations: true,
+					ready: false
+				}),
+				compose: () =>
+					({
+						dataSource,
+						frontier: { destroy: jest.fn() }
+					}) as unknown as FullHistoryLedgerCloseMetaComposition,
+				ensureRuntime: async () => undefined,
+				now: () => 123_456,
+				reconcileRuntime: async () => undefined,
+				registerSignals: () => () => undefined,
+				resetOwnedRuntime: async () => undefined,
+				runLoop,
+				stderr,
+				stdout: { write: jest.fn() },
+				wait: async () => undefined
+			}
+		);
+
+		expect(exitCode).toBe(69);
+		expect(acquireLeadership).not.toHaveBeenCalled();
+		expect(runLoop).not.toHaveBeenCalled();
+		expect(stderr.write).toHaveBeenCalledWith(
+			expect.stringContaining('"status":"schema-not-ready"')
+		);
 	});
 
 	it('runs periodic cleanup and stops when the service shuts down', async () => {
