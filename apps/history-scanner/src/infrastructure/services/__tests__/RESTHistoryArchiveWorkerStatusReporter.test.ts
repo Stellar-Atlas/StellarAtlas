@@ -26,8 +26,8 @@ describe('RESTHistoryArchiveWorkerStatusReporter', () => {
 			report,
 			{
 				auth: { username: 'worker', password: 'secret' },
-				connectionTimeoutMs: 1000,
-				socketTimeoutMs: 1000
+				connectionTimeoutMs: 5000,
+				socketTimeoutMs: 5000
 			}
 		);
 	});

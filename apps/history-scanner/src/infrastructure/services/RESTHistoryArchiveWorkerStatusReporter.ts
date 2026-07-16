@@ -6,8 +6,8 @@ import type { CoordinatorAuthConfig } from '../config/CoordinatorAuthConfig.js';
 import { CoordinatorServiceError } from './CoordinatorServiceError.js';
 
 const coordinatorWriteOptions: HttpOptions = {
-	connectionTimeoutMs: 1_000,
-	socketTimeoutMs: 1_000
+	connectionTimeoutMs: 5_000,
+	socketTimeoutMs: 5_000
 };
 
 export class RESTHistoryArchiveWorkerStatusReporter implements HistoryArchiveWorkerStatusReporter {
