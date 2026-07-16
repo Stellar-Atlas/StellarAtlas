@@ -70,7 +70,7 @@ export class TypeOrmFullHistoryStateCanonicalCoverageRepository implements FullH
 					where state."batch_id" = batch."id" and state."dataset" in (
 						'account-state-changes', 'trustline-state-changes'
 					)) = 2
-				on conflict ("batch_id") do nothing
+				on conflict do nothing
 				returning "batch_id" as "batchId"
 			`);
 			const drift = await manager.query<CountRow[]>(`

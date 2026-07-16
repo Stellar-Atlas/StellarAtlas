@@ -46,7 +46,10 @@ describe('TypeOrmFullHistoryStateCanonicalCoverageRepository', () => {
 	});
 
 	it('waits for canonical proof rows, then records exact immutable coverage', async () => {
-		await expect(repository.registerPendingCoverage()).resolves.toBe(1);
+		const registrations = await Promise.all(
+			Array.from({ length: 4 }, () => repository.registerPendingCoverage())
+		);
+		expect(registrations.reduce((sum, count) => sum + count, 0)).toBe(1);
 		await expect(repository.claimNext(workerId, 30_000)).resolves.toBeNull();
 
 		await insertCanonicalRows();
