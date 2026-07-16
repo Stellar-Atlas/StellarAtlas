@@ -38,7 +38,7 @@ type ClaimSelection =
 const transactionSettingsSql = `
 	set local jit = off;
 	set local lock_timeout = '250ms';
-	set local statement_timeout = '1500ms'
+	set local statement_timeout = '5s'
 `;
 const postFallbackRetryDelaysMs = [0, 5, 10, 20, 40] as const;
 
