@@ -73,6 +73,7 @@ describe('IngestFullHistoryLedgerCloseMeta', () => {
 		expect(processor.processedShardStarts.sort((a, b) => a - b)).toEqual([
 			3, 67
 		]);
+		expect(manifest.maximumActiveCommits).toBe(1);
 	});
 
 	it('does not commit provenance when typed processing fails', async () => {
@@ -245,7 +246,9 @@ class FixtureSource implements FullHistoryLedgerCloseMetaSourcePort {
 }
 
 class FixtureManifestRepository implements FullHistoryLedgerCloseMetaManifestRepository {
+	activeCommits = 0;
 	readonly batches: FullHistoryLedgerCloseMetaProcessedBatchCommit[] = [];
+	maximumActiveCommits = 0;
 	registeredSource: FullHistoryLedgerCloseMetaRegisteredSource | null = null;
 
 	async registerSource(
@@ -262,14 +265,26 @@ class FixtureManifestRepository implements FullHistoryLedgerCloseMetaManifestRep
 		return this.registeredSource;
 	}
 
-	commitProcessedBatch(batch: FullHistoryLedgerCloseMetaProcessedBatchCommit) {
-		this.batches.push(batch);
-		return Promise.resolve({
-			batchId: randomUUID(),
-			nextLedger: batch.processing.range.endSequence + 1,
-			replayed: false,
-			watermarkVersion: this.batches.length
-		});
+	async commitProcessedBatch(
+		batch: FullHistoryLedgerCloseMetaProcessedBatchCommit
+	) {
+		this.activeCommits += 1;
+		this.maximumActiveCommits = Math.max(
+			this.maximumActiveCommits,
+			this.activeCommits
+		);
+		try {
+			await new Promise((resolve) => setTimeout(resolve, 2));
+			this.batches.push(batch);
+			return {
+				batchId: randomUUID(),
+				nextLedger: batch.processing.range.endSequence + 1,
+				replayed: false,
+				watermarkVersion: this.batches.length
+			};
+		} finally {
+			this.activeCommits -= 1;
+		}
 	}
 
 	readStoredBytes(): Promise<bigint> {

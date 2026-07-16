@@ -195,7 +195,12 @@ export class IngestFullHistoryLedgerCloseMeta {
 			);
 			for (const outcome of outcomes) {
 				if (outcome.status === 'fulfilled') {
-					commits.push(outcome.value.commit);
+					const commit = await this.#manifestRepository.commitProcessedBatch({
+						processedAt: this.#timing.now(),
+						processing: outcome.value.processing,
+						source: context.registeredSource
+					});
+					commits.push(commit);
 					sourceObjectCount += outcome.value.sourceObjectCount;
 				}
 			}
@@ -219,7 +224,7 @@ export class IngestFullHistoryLedgerCloseMeta {
 		range: FullHistoryLedgerCloseMetaRange,
 		signal: AbortSignal
 	): Promise<{
-		readonly commit: FullHistoryLedgerCloseMetaBatchCommitReceipt;
+		readonly processing: FullHistoryLedgerCloseMetaProcessingReceipt;
 		readonly sourceObjectCount: number;
 	}> {
 		const inputs = await this.#readShardInputs(context, range, signal);
@@ -239,12 +244,7 @@ export class IngestFullHistoryLedgerCloseMeta {
 		);
 		assertFullHistoryLedgerCloseMetaProcessingReceipt(processing);
 		assertProcessingMatchesInputs(range, inputs, processing);
-		const commit = await this.#manifestRepository.commitProcessedBatch({
-			processedAt: this.#timing.now(),
-			processing,
-			source: context.registeredSource
-		});
-		return { commit, sourceObjectCount: inputs.length };
+		return { processing, sourceObjectCount: inputs.length };
 	}
 
 	async #readShardInputs(
