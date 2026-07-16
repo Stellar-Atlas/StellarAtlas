@@ -25,7 +25,14 @@ import { createEmptyFullHistoryLedgerCloseMetaStateStatus } from '@api/full-hist
 
 export const revalidate = 0;
 export const dynamic = 'force-dynamic';
-const headlineFetchOptions = { cache: 'no-store' } as const;
+const headlineFetchOptions = {
+	cache: 'no-store',
+	timeoutMs: 5_000
+} as const;
+const archiveFetchOptions = {
+	cache: 'no-store',
+	timeoutMs: 8_000
+} as const;
 
 async function StatusRouteContent(): Promise<React.JSX.Element> {
 	const emptyArchiveObjects = buildEmptyArchiveQueue();
@@ -51,11 +58,11 @@ async function StatusRouteContent(): Promise<React.JSX.Element> {
 				buildUnavailableFrontend(generatedAt)
 			),
 			fetchOptional(
-				fetchFullHistoryStatus(headlineFetchOptions),
+				fetchFullHistoryStatus(archiveFetchOptions),
 				buildUnavailableFullHistory(generatedAt)
 			),
 			fetchOptional(
-				fetchHistoryArchiveObjectStatusSummary(headlineFetchOptions),
+				fetchHistoryArchiveObjectStatusSummary(archiveFetchOptions),
 				buildUnavailableArchiveStatus(generatedAt)
 			)
 		]);

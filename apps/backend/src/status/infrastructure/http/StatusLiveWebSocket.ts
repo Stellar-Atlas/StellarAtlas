@@ -231,19 +231,39 @@ export async function collectFastStatusPatch(
 	config: StatusLiveWebSocketConfig
 ): Promise<StatusLivePatch> {
 	const [api, dataQuality, frontend, workers] = await Promise.all([
-		readResult(config.getApiStatus.execute()),
-		readResult(config.getDataQualityStatus.execute()),
-		readResult(config.getFrontendStatus.execute()),
-		readResult(config.getWorkerStatus.execute())
+		readStatusField(
+			'api',
+			() => readResult(config.getApiStatus.execute()),
+			config.logger
+		),
+		readStatusField(
+			'dataQuality',
+			() => readResult(config.getDataQualityStatus.execute()),
+			config.logger
+		),
+		readStatusField(
+			'frontend',
+			() => readResult(config.getFrontendStatus.execute()),
+			config.logger
+		),
+		readStatusField(
+			'workers',
+			() => readResult(config.getWorkerStatus.execute()),
+			config.logger
+		)
 	]);
 
-	return {
-		api,
-		dataQuality,
-		frontend,
+	const patch: StatusLivePatch = {
 		generatedAt: new Date().toISOString(),
-		workers
+		...(api.available ? { api: api.value } : {}),
+		...(dataQuality.available ? { dataQuality: dataQuality.value } : {}),
+		...(frontend.available ? { frontend: frontend.value } : {}),
+		...(workers.available ? { workers: workers.value } : {})
 	};
+	if (!hasStatusValues(patch)) {
+		throw new Error('No fast status fields were available');
+	}
+	return patch;
 }
 
 export async function collectScanLogPatch(
@@ -272,15 +292,29 @@ export async function collectArchiveSummaryPatch(
 	config: StatusLiveWebSocketConfig
 ): Promise<StatusLivePatch> {
 	const [archiveSummary, fullHistory] = await Promise.all([
-		readResult(config.getHistoryArchiveObjectSummary.execute()),
-		readResult(config.getFullHistoryStatus.executeFullHistory())
+		readStatusField(
+			'archiveSummary',
+			() => readResult(config.getHistoryArchiveObjectSummary.execute()),
+			config.logger
+		),
+		readStatusField(
+			'fullHistory',
+			() => readResult(config.getFullHistoryStatus.executeFullHistory()),
+			config.logger
+		)
 	]);
 
-	return {
-		archiveSummary,
-		fullHistory,
-		generatedAt: new Date().toISOString()
+	const patch: StatusLivePatch = {
+		generatedAt: new Date().toISOString(),
+		...(archiveSummary.available
+			? { archiveSummary: archiveSummary.value }
+			: {}),
+		...(fullHistory.available ? { fullHistory: fullHistory.value } : {})
 	};
+	if (!hasStatusValues(patch)) {
+		throw new Error('No archive status fields were available');
+	}
+	return patch;
 }
 
 function stripArchiveEventFacts(
@@ -302,6 +336,30 @@ async function readResult<T>(
 	const resolved = await result;
 	if (resolved.isErr()) throw resolved.error;
 	return resolved.value;
+}
+
+type StatusFieldRead<T> =
+	| { readonly available: false }
+	| { readonly available: true; readonly value: T };
+
+async function readStatusField<T>(
+	field: keyof StatusLiveSnapshot,
+	read: () => Promise<T>,
+	logger: Logger | undefined
+): Promise<StatusFieldRead<T>> {
+	try {
+		return { available: true, value: await read() };
+	} catch (error) {
+		logger?.warn('Status WebSocket field unavailable', {
+			error: errorMessage(error),
+			field
+		});
+		return { available: false };
+	}
+}
+
+function hasStatusValues(patch: StatusLivePatch): boolean {
+	return Object.keys(patch).some((field) => field !== 'generatedAt');
 }
 
 function isWebSocketPath(request: IncomingMessage, path: string): boolean {

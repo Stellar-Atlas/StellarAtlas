@@ -1,5 +1,5 @@
 import { mockDeep } from 'jest-mock-extended';
-import { ok } from 'neverthrow';
+import { err, ok } from 'neverthrow';
 import {
 	collectFastStatusPatch,
 	collectArchiveSummaryPatch,
@@ -32,6 +32,32 @@ describe('StatusLiveWebSocket patch collection', () => {
 		expect(config.getScanLogStatus.execute).not.toHaveBeenCalled();
 	});
 
+	it('publishes healthy fast fields when one status query fails', async () => {
+		const config = mockDeep<StatusLiveWebSocketConfig>();
+		config.getApiStatus.execute.mockReturnValue(ok(null as never));
+		config.getDataQualityStatus.execute.mockResolvedValue(
+			err(new Error('database timeout'))
+		);
+		config.getFrontendStatus.execute.mockReturnValue(ok(null as never));
+		config.getWorkerStatus.execute.mockResolvedValue(ok(null as never));
+
+		const patch = await collectFastStatusPatch(config);
+
+		expect(patch).toMatchObject({
+			api: null,
+			frontend: null,
+			workers: null
+		});
+		expect(patch).not.toHaveProperty('dataQuality');
+		expect(config.logger?.warn).toHaveBeenCalledWith(
+			'Status WebSocket field unavailable',
+			{
+				error: 'database timeout',
+				field: 'dataQuality'
+			}
+		);
+	});
+
 	it('collects scan logs through their own bounded patch', async () => {
 		const config = mockDeep<StatusLiveWebSocketConfig>();
 		config.getScanLogStatus.execute.mockResolvedValue(ok(null as never));
@@ -57,6 +83,21 @@ describe('StatusLiveWebSocket patch collection', () => {
 			archiveSummary: null,
 			fullHistory: null
 		});
+	});
+
+	it('publishes archive evidence when full-history aggregation fails', async () => {
+		const config = mockDeep<StatusLiveWebSocketConfig>();
+		config.getHistoryArchiveObjectSummary.execute.mockResolvedValue(
+			ok(null as never)
+		);
+		config.getFullHistoryStatus.executeFullHistory.mockResolvedValue(
+			err(new Error('statement timeout'))
+		);
+
+		const patch = await collectArchiveSummaryPatch(config);
+
+		expect(patch).toMatchObject({ archiveSummary: null });
+		expect(patch).not.toHaveProperty('fullHistory');
 	});
 
 	it('does not overlap a lane and publishes when collection completes', async () => {
