@@ -79,6 +79,20 @@ describe('public archive object mapping', () => {
 		});
 	});
 
+	it('does not describe a content verification failure as an HTTP 200 error', () => {
+		const object = createObject();
+		object.errorMessage = 'bucket hash mismatch';
+		object.errorType = 'bucket_verification_failed';
+		object.failureChannel = 'archive_evidence';
+		object.httpStatus = 200;
+
+		expect(mapHistoryArchiveObject(object).error).toEqual({
+			httpStatus: null,
+			message: 'Remote archive verification failed',
+			type: 'bucket_verification_failed'
+		});
+	});
+
 	it('redacts non-public and raw-whitespace archive URLs', () => {
 		expect(mapPublicArchiveUrl('file:///tmp/private')).toBe('[redacted]');
 		expect(mapPublicArchiveUrl('https://user:secret@example.com/a')).toBe(

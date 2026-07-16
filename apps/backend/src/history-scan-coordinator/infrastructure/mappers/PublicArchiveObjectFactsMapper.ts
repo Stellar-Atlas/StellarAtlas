@@ -67,7 +67,9 @@ export function mapPublicArchiveError(input: {
 			type: 'scanner_issue'
 		};
 	}
-	const httpStatus = isHttpStatus(input.httpStatus) ? input.httpStatus : null;
+	const httpStatus = isErrorHttpStatus(input.httpStatus)
+		? input.httpStatus
+		: null;
 	const type =
 		input.errorType !== null && publicArchiveErrorTypes.has(input.errorType)
 			? input.errorType
@@ -265,6 +267,10 @@ function isHttpStatus(value: number | null): value is number {
 	return (
 		Number.isSafeInteger(value) && Number(value) >= 100 && Number(value) <= 599
 	);
+}
+
+function isErrorHttpStatus(value: number | null): value is number {
+	return isHttpStatus(value) && (Number(value) < 200 || Number(value) >= 400);
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
