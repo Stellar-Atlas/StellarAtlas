@@ -4,7 +4,10 @@ import type {
 } from '../../domain/full-history-state-import/FullHistoryStateExport.js';
 import { consumeFullHistoryStateExport } from './FullHistoryStateExportLineStream.js';
 import type { FullHistoryTypedExportResult } from './FullHistoryTypedExportProtocol.js';
-import { runGoFullHistoryTypedExport } from './GoFullHistoryTypedExportProcess.js';
+import {
+	runGoFullHistoryTypedExport,
+	type FullHistoryTypedExportRunner
+} from './GoFullHistoryTypedExportProcess.js';
 
 export interface GoFullHistoryStateExportRequest {
 	readonly args: readonly string[];
@@ -17,9 +20,10 @@ export interface GoFullHistoryStateExportRequest {
 }
 
 export function runGoFullHistoryStateExport(
-	request: GoFullHistoryStateExportRequest
+	request: GoFullHistoryStateExportRequest,
+	runExport: FullHistoryTypedExportRunner = runGoFullHistoryTypedExport
 ): Promise<FullHistoryTypedExportResult> {
-	return runGoFullHistoryTypedExport({
+	return runExport({
 		args: request.args,
 		consumeOutput: (output) =>
 			consumeFullHistoryStateExport(

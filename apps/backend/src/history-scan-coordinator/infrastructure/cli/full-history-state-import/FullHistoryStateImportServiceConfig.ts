@@ -7,12 +7,14 @@ export const FULL_HISTORY_STATE_IMPORT_DEFAULT_STORAGE_ROOT =
 export const FULL_HISTORY_STATE_IMPORT_DEFAULT_EXECUTABLE =
 	'/home/observe/stellarbeat-data/Observer/apps/full-history-etl/bin/stellaratlas-full-history-state-export';
 export const FULL_HISTORY_STATE_IMPORT_MAXIMUM_WORKERS = 4;
+export const FULL_HISTORY_STATE_IMPORT_MAXIMUM_EXPORT_PROCESSES = 3;
 export const FULL_HISTORY_STATE_IMPORT_MAXIMUM_DATABASE_POOL_SIZE = 6;
 
 export interface FullHistoryStateImportServiceConfig {
 	readonly databasePoolSize: number;
 	readonly errorBackoffMilliseconds: number;
 	readonly executablePath: string;
+	readonly exportProcessCount: number;
 	readonly exportTimeoutMilliseconds: number;
 	readonly idlePollMilliseconds: number;
 	readonly insertBatchSize: number;
@@ -34,6 +36,10 @@ export function parseFullHistoryStateImportServiceConfig(
 		FULL_HISTORY_STATE_IMPORT_MAXIMUM_WORKERS,
 		'FULL_HISTORY_STATE_IMPORT_WORKERS'
 	);
+	const maximumExportProcesses = Math.min(
+		workerCount,
+		FULL_HISTORY_STATE_IMPORT_MAXIMUM_EXPORT_PROCESSES
+	);
 	return Object.freeze({
 		databasePoolSize: workerCount + 2,
 		errorBackoffMilliseconds: readInteger(
@@ -47,6 +53,13 @@ export function parseFullHistoryStateImportServiceConfig(
 			environment.FULL_HISTORY_STATE_EXPORT_EXECUTABLE,
 			FULL_HISTORY_STATE_IMPORT_DEFAULT_EXECUTABLE,
 			'FULL_HISTORY_STATE_EXPORT_EXECUTABLE'
+		),
+		exportProcessCount: readInteger(
+			environment.FULL_HISTORY_STATE_EXPORT_PROCESSES,
+			maximumExportProcesses,
+			1,
+			maximumExportProcesses,
+			'FULL_HISTORY_STATE_EXPORT_PROCESSES'
 		),
 		exportTimeoutMilliseconds: readInteger(
 			environment.FULL_HISTORY_STATE_EXPORT_TIMEOUT_MS,

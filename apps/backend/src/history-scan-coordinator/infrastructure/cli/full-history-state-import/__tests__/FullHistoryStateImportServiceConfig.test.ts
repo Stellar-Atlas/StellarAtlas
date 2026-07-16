@@ -7,6 +7,7 @@ describe('parseFullHistoryStateImportServiceConfig', () => {
 			errorBackoffMilliseconds: 30_000,
 			executablePath:
 				'/home/observe/stellarbeat-data/Observer/apps/full-history-etl/bin/stellaratlas-full-history-state-export',
+			exportProcessCount: 3,
 			exportTimeoutMilliseconds: 1_800_000,
 			idlePollMilliseconds: 15_000,
 			insertBatchSize: 250,
@@ -24,6 +25,7 @@ describe('parseFullHistoryStateImportServiceConfig', () => {
 
 	it.each([
 		{ FULL_HISTORY_STATE_IMPORT_WORKERS: '5' },
+		{ FULL_HISTORY_STATE_EXPORT_PROCESSES: '4' },
 		{ FULL_HISTORY_STATE_IMPORT_INSERT_ROWS: '501' },
 		{ FULL_HISTORY_STATE_IMPORT_LEASE_MS: '9999' },
 		{ FULL_HISTORY_STATE_EXPORT_TIMEOUT_MS: '999' },

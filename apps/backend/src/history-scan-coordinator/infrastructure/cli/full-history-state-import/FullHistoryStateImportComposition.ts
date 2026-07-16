@@ -5,6 +5,7 @@ import { TypeOrmFullHistoryStateImportRepository } from '../../database/full-his
 import { TypeOrmFullHistoryStateCanonicalCoverageRepository } from '../../database/full-history-state-import/TypeOrmFullHistoryStateCanonicalCoverageRepository.js';
 import { GoFullHistoryLedgerExporter } from '../../full-history-state-import/GoFullHistoryLedgerExporter.js';
 import { GoFullHistoryStateExporter } from '../../full-history-state-import/GoFullHistoryStateExporter.js';
+import { createBoundedFullHistoryTypedExportRunner } from '../../full-history-state-import/BoundedFullHistoryTypedExportRunner.js';
 import { BindNextFullHistoryStateCoverage } from '../../../use-cases/bind-next-full-history-state-coverage/BindNextFullHistoryStateCoverage.js';
 import { ImportNextFullHistoryStateDataset } from '../../../use-cases/import-next-full-history-state-dataset/ImportNextFullHistoryStateDataset.js';
 import {
@@ -54,13 +55,19 @@ export function composeFullHistoryStateImportWorkers(
 	const repository = new TypeOrmFullHistoryStateImportRepository(dataSource);
 	const coverageRepository =
 		new TypeOrmFullHistoryStateCanonicalCoverageRepository(dataSource);
+	const runExport = createBoundedFullHistoryTypedExportRunner(
+		config.exportProcessCount,
+		config.workerCount
+	);
 	const exporter = new GoFullHistoryStateExporter(
 		config.executablePath,
-		config.exportTimeoutMilliseconds
+		config.exportTimeoutMilliseconds,
+		runExport
 	);
 	const ledgerExporter = new GoFullHistoryLedgerExporter(
 		config.executablePath,
-		config.exportTimeoutMilliseconds
+		config.exportTimeoutMilliseconds,
+		runExport
 	);
 	const workerIds = new Set<string>();
 	const workers = Array.from({ length: config.workerCount }, (_, index) => {

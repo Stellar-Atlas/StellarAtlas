@@ -15,6 +15,10 @@ export interface GoFullHistoryTypedExportRequest {
 	readonly timeoutMilliseconds: number;
 }
 
+export type FullHistoryTypedExportRunner = (
+	request: GoFullHistoryTypedExportRequest
+) => Promise<FullHistoryTypedExportResult>;
+
 export async function runGoFullHistoryTypedExport(
 	request: GoFullHistoryTypedExportRequest
 ): Promise<FullHistoryTypedExportResult> {
@@ -31,7 +35,7 @@ export async function runGoFullHistoryTypedExport(
 
 	const child = spawn(request.executablePath, [...request.args], {
 		env: {
-			GOMAXPROCS: '2',
+			GOMAXPROCS: '1',
 			GOMEMLIMIT: '4GiB',
 			LANG: 'C',
 			TZ: 'UTC'
