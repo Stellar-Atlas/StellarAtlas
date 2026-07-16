@@ -1,10 +1,11 @@
 import { canonicalBucketHasStrictSourceProofSql } from './HistoryArchiveCanonicalBucketProofSql.js';
+import { canonicalCategoryHasStrictSourceProofSql } from './HistoryArchiveCanonicalCategoryProofSql.js';
 import { canonicalBucketMaterializationCteSql } from './HistoryArchiveCanonicalBucketMaterializationSql.js';
 import {
 	canonicalCategoryAdmissionCteSql,
 	canonicalCategoryTargetsCteSql
 } from './HistoryArchiveCanonicalCategorySql.js';
-import { canonicalCheckpointHasStrictContentDigestSql } from './HistoryArchiveCanonicalCheckpointProofSql.js';
+import { canonicalCheckpointHasStrictEvidenceSql } from './HistoryArchiveCanonicalCheckpointProofSql.js';
 import { canonicalRuntimeTargetCtes } from './HistoryArchiveCanonicalRuntimeTargetSql.js';
 export { canonicalRuntimeTargetCtes } from './HistoryArchiveCanonicalRuntimeTargetSql.js';
 
@@ -66,7 +67,7 @@ export const materializeCanonicalFrontierDependenciesSql = `
 		where checkpoint.id = target.id
 			and checkpoint."dependenciesMaterializedAt" is null
 			and coalesce((
-				${canonicalCheckpointHasStrictContentDigestSql('checkpoint')}
+				${canonicalCheckpointHasStrictEvidenceSql('checkpoint')}
 			), false)
 		returning checkpoint.id
 	), reopened_legacy_checkpoints as (
@@ -82,7 +83,26 @@ export const materializeCanonicalFrontierDependenciesSql = `
 		from checkpoints target
 		where candidate.id = target.id
 			and not coalesce((
-				${canonicalCheckpointHasStrictContentDigestSql('candidate')}
+				${canonicalCheckpointHasStrictEvidenceSql('candidate')}
+			), false)
+		returning candidate.id
+	), reopened_legacy_categories as (
+		update "history_archive_object_queue" candidate
+		set status = 'pending', "workerStage" = null,
+			"bytesDownloaded" = null, "nextAttemptAt" = null,
+			"refreshAfter" = null, "dependencyReady" = true,
+			"executionDisposition" = 'deferred',
+			"executionReason" = 'canonical-proof-revalidation',
+			"executionDispositionAt" = now(), "verifiedAt" = null,
+			"updatedAt" = now()
+		from category_targets target
+		where candidate."archiveUrlIdentity" = target."archiveUrlIdentity"
+			and candidate."objectType" = target.object_type
+			and candidate."objectKey" = target.object_key
+			and candidate."checkpointLedger" = target.checkpoint_ledger
+			and candidate.status = 'verified'
+			and not coalesce((
+				${canonicalCategoryHasStrictSourceProofSql}
 			), false)
 		returning candidate.id
 	), activated_categories as (
@@ -94,6 +114,12 @@ export const materializeCanonicalFrontierDependenciesSql = `
 			and candidate."objectKey" = target.object_key
 			and candidate."checkpointLedger" = target.checkpoint_ledger
 			and candidate."dependencyReady" is distinct from true
+			and not (
+				candidate.status = 'verified'
+				and not coalesce((
+					${canonicalCategoryHasStrictSourceProofSql}
+				), false)
+			)
 		returning candidate.id
 	), activated_buckets as (
 		update "history_archive_object_queue" candidate
@@ -139,6 +165,7 @@ export const materializeCanonicalFrontierDependenciesSql = `
 			(select count(*)::integer from inserted_buckets) +
 			(select count(*)::integer from reopened_legacy_checkpoints) +
 			(select count(*)::integer from activated_categories) +
+			(select count(*)::integer from reopened_legacy_categories) +
 			(select count(*)::integer from activated_buckets) +
 			(select count(*)::integer from reopened_legacy_buckets) as activated
 `;
@@ -148,7 +175,8 @@ export const admitCanonicalFrontierSql = `
 		select state."archiveUrlIdentity", target.checkpoint_ledger,
 			target.target_lane,
 			root."lastClaimedAt",
-			case
+			case when coalesce(proof."proofFactsComplete", false)
+				then 1::numeric else 0::numeric end + case
 				when coalesce(proof."expectedBucketCount", 0) > 0
 					then coalesce(proof."verifiedBucketCount", 0)::numeric /
 						proof."expectedBucketCount"::numeric

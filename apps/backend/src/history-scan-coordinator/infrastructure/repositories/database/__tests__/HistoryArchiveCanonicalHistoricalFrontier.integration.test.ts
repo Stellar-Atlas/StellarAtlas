@@ -204,6 +204,9 @@ async function seedArchive(
 		'verified',
 		20
 	);
+	historicalLedger.verificationFacts = {
+		ledgerCategory: { sourceUrl: historicalLedger.objectUrl }
+	};
 	const historicalCategories = ['transactions', 'results', 'scp'].map(
 		(type, typeIndex) =>
 			archiveObject(
@@ -258,7 +261,12 @@ function verifiedCheckpoint(
 			stellarHistory: {
 				currentBuckets: [{ curr: bucketHash, snap: '0'.repeat(64) }],
 				hotArchiveBuckets: []
-			}
+			},
+			stellarHistoryUrl: checkpoint.objectUrl
+		},
+		checkpointHistoryArchiveStateFact: {
+			checkpointLedger,
+			stellarHistoryUrl: checkpoint.objectUrl
 		},
 		content: {
 			algorithm: 'sha256',

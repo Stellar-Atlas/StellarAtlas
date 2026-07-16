@@ -21,12 +21,10 @@ import {
 	startDisposablePostgres,
 	type DisposablePostgres
 } from '@test-support/DisposablePostgres.js';
-
 const networkPassphrase = 'Canonical frontier fixture network';
 const targetCheckpoint = 1_000_063;
 const bucketHash = 'ab'.repeat(32);
 jest.setTimeout(60_000);
-
 describe('canonical full-history archive frontier', () => {
 	let dataSource: DataSource;
 	let postgres: DisposablePostgres;
@@ -112,7 +110,16 @@ describe('canonical full-history archive frontier', () => {
 
 		await dataSource.query(`
 			update "history_archive_object_queue"
-			set status = 'verified', "verifiedAt" = now()
+			set status = 'verified', "verifiedAt" = now(),
+				"verificationFacts" = case
+					when "objectType" in (
+						'ledger', 'transactions', 'results', 'scp'
+					) then jsonb_build_object(
+						"objectType" || 'Category',
+						jsonb_build_object('sourceUrl', "objectUrl")
+					)
+					else "verificationFacts"
+				end
 			where "executionReason" = 'canonical-frontier-reserve'
 		`);
 		const second = await repository.reconcileExecutionDisposition();
@@ -141,7 +148,11 @@ describe('canonical full-history archive frontier', () => {
 		await seedRuntime();
 		await dataSource.query(`
 			update "history_archive_object_queue"
-			set status = 'verified', "verifiedAt" = now()
+			set status = 'verified', "verifiedAt" = now(),
+				"verificationFacts" = jsonb_build_object(
+					"objectType" || 'Category',
+					jsonb_build_object('sourceUrl', "objectUrl")
+				)
 			where "objectType" in ('ledger', 'transactions', 'results', 'scp')
 		`);
 
@@ -187,7 +198,14 @@ describe('canonical full-history archive frontier', () => {
 		await seedRuntime();
 		await dataSource.query(`
 			update "history_archive_object_queue"
-			set status = 'verified', "verifiedAt" = now()
+			set status = 'verified', "verifiedAt" = now(),
+				"verificationFacts" = case
+					when "objectType" = 'bucket' then "verificationFacts"
+					else jsonb_build_object(
+						"objectType" || 'Category',
+						jsonb_build_object('sourceUrl', "objectUrl")
+					)
+				end
 			where "objectType" in (
 				'ledger', 'transactions', 'results', 'scp', 'bucket'
 			)
@@ -224,7 +242,7 @@ describe('canonical full-history archive frontier', () => {
 		await dataSource.query(`
 			update "history_archive_object_queue"
 			set "verificationFacts" = jsonb_set(
-				"verificationFacts" - 'content',
+				"verificationFacts",
 				'{checkpointHistoryArchiveState,stellarHistoryUrl}',
 				'"https://wrong.example/history"'::jsonb
 			)
@@ -406,10 +424,10 @@ describe('canonical full-history archive frontier', () => {
 			targetCheckpoint
 		);
 		checkpoint.verificationFacts = checkpointVerificationFacts;
+		const stellarHistory =
+			checkpointVerificationFacts.checkpointHistoryArchiveState.stellarHistory;
 		checkpoint.bytesDownloaded = Buffer.byteLength(
-			JSON.stringify(
-				checkpointVerificationFacts.checkpointHistoryArchiveState.stellarHistory
-			)
+			JSON.stringify(stellarHistory)
 		);
 		const predecessorCheckpoint = object(
 			index,
