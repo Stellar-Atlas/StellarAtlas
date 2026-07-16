@@ -7,6 +7,11 @@ import {
 import type { FullHistoryLedgerProjection } from '../../../../domain/full-history-state-import/FullHistoryLedgerProjection.js';
 import { FullHistoryLedgerCloseMetaStateImportMigration1785130000000 } from '../../migrations/1785130000000-FullHistoryLedgerCloseMetaStateImportMigration.js';
 import { FullHistoryLedgerCloseMetaCanonicalCoverageMigration1785140000000 } from '../../migrations/1785140000000-FullHistoryLedgerCloseMetaCanonicalCoverageMigration.js';
+import { FullHistoryCurrentProofCoverageMigration1785190000000 } from '../../migrations/1785190000000-FullHistoryCurrentProofCoverageMigration.js';
+import {
+	insertCanonicalBatchFixture,
+	type CanonicalProofFixture
+} from './FullHistoryStateCanonicalCoverageFixture.js';
 import { TypeOrmFullHistoryStateCanonicalCoverageRepository } from '../TypeOrmFullHistoryStateCanonicalCoverageRepository.js';
 
 jest.setTimeout(60_000);
@@ -21,7 +26,9 @@ describe('TypeOrmFullHistoryStateCanonicalCoverageRepository', () => {
 	const canonicalSecondBatchId = randomUUID();
 	const mismatchCanonicalBatchId = randomUUID();
 	const workerId = randomUUID();
-	const networkHash = Buffer.alloc(32, 11);
+	const networkPassphrase = 'Test SDF Network ; September 2015';
+	const networkHash = createHash('sha256').update(networkPassphrase).digest();
+	let firstCanonicalFixture: CanonicalProofFixture;
 
 	beforeAll(async () => {
 		postgres = await startDisposablePostgres();
@@ -33,6 +40,9 @@ describe('TypeOrmFullHistoryStateCanonicalCoverageRepository', () => {
 		);
 		await runMigration(
 			new FullHistoryLedgerCloseMetaCanonicalCoverageMigration1785140000000()
+		);
+		await runMigration(
+			new FullHistoryCurrentProofCoverageMigration1785190000000()
 		);
 		repository = new TypeOrmFullHistoryStateCanonicalCoverageRepository(
 			dataSource
@@ -53,6 +63,33 @@ describe('TypeOrmFullHistoryStateCanonicalCoverageRepository', () => {
 		await expect(repository.claimNext(workerId, 30_000)).resolves.toBeNull();
 
 		await insertCanonicalRows();
+		await expect(repository.claimNext(workerId, 30_000)).resolves.toBeNull();
+		await dataSource.query(
+			`update "history_archive_checkpoint_proof" proof
+			 set "proofVersion" = 6, "evaluatedAt" = $3
+			 from "full_history_ingestion_batch" batch
+			 where proof.id = batch."checkpoint_proof_id"
+				and batch.id in ($1, $2)`,
+			[canonicalBatchId, canonicalSecondBatchId, proofTime]
+		);
+		await dataSource.query(
+			`update "history_archive_object_queue"
+			 set "verificationFacts" = jsonb_set(
+				"verificationFacts", '{content,digest}', to_jsonb($2::text)
+			 ) where "remoteId" = $1`,
+			[firstCanonicalFixture.ledgerRemoteId, 'f'.repeat(64)]
+		);
+		await expect(repository.claimNext(workerId, 30_000)).resolves.toBeNull();
+		await dataSource.query(
+			`update "history_archive_object_queue"
+			 set "verificationFacts" = jsonb_set(
+				"verificationFacts", '{content,digest}', to_jsonb($2::text)
+			 ) where "remoteId" = $1`,
+			[
+				firstCanonicalFixture.ledgerRemoteId,
+				firstCanonicalFixture.ledgerDigest.toString('hex')
+			]
+		);
 		const stale = await repository.claimNext(workerId, 30_000);
 		expect(stale).toEqual(
 			expect.objectContaining({
@@ -144,6 +181,38 @@ describe('TypeOrmFullHistoryStateCanonicalCoverageRepository', () => {
 	async function createParentSchema(): Promise<void> {
 		await dataSource.query(`
 			create extension if not exists pgcrypto;
+			create table "history_archive_object_queue" (
+				"remoteId" uuid primary key,
+				"archiveUrlIdentity" text not null,
+				"checkpointLedger" integer not null,
+				"objectType" text not null,
+				"status" text not null,
+				"verificationFacts" jsonb not null
+			);
+			create table "history_archive_checkpoint_proof" (
+				"id" bigserial primary key,
+				"archiveUrlIdentity" text not null,
+				"checkpointLedger" integer not null,
+				"status" text not null,
+				"proofVersion" smallint not null,
+				"requiredObjectsComplete" boolean not null,
+				"proofFactsComplete" boolean not null,
+				"checkpointBucketListMatches" boolean not null,
+				"transactionsMatch" boolean not null,
+				"resultsMatch" boolean not null,
+				"previousLedgersMatch" boolean not null,
+				"bucketsVerified" boolean not null,
+				"ledgerFactCount" integer not null,
+				"transactionFactCount" integer not null,
+				"resultFactCount" integer not null,
+				"checkpointStateObjectRemoteId" uuid not null,
+				"ledgerObjectRemoteId" uuid not null,
+				"transactionsObjectRemoteId" uuid not null,
+				"resultsObjectRemoteId" uuid not null,
+				"failureKind" text,
+				"details" jsonb not null,
+				"evaluatedAt" timestamptz not null
+			);
 			create table "full_history_ledger_close_meta_batch" (
 				"id" uuid not null, "network_passphrase_hash" bytea not null,
 				"start_ledger" bigint not null, "end_ledger" bigint not null,
@@ -158,9 +227,20 @@ describe('TypeOrmFullHistoryStateCanonicalCoverageRepository', () => {
 			);
 			create table "full_history_ingestion_batch" (
 				"id" uuid not null, "network_passphrase_hash" bytea not null,
+				"checkpoint_proof_id" bigint not null,
 				"proof_version" smallint not null,
 				"proof_evaluated_at" timestamptz not null,
+				"archive_url_identity" text not null,
+				"checkpoint_ledger" bigint not null,
 				"first_ledger" bigint not null, "last_ledger" bigint not null,
+				"checkpoint_state_object_remote_id" uuid not null,
+				"checkpoint_state_content_digest" bytea not null,
+				"ledger_object_remote_id" uuid not null,
+				"ledger_content_digest" bytea not null,
+				"transactions_object_remote_id" uuid not null,
+				"transactions_content_digest" bytea not null,
+				"results_object_remote_id" uuid not null,
+				"results_content_digest" bytea not null,
 				primary key ("id"), unique ("id", "network_passphrase_hash")
 			);
 			create table "full_history_ledger" (
@@ -190,12 +270,28 @@ describe('TypeOrmFullHistoryStateCanonicalCoverageRepository', () => {
 				Buffer.alloc(32, 14)
 			]
 		);
-		await dataSource.query(
-			`insert into "full_history_ingestion_batch" values
-			 ($1, $3, 6, $4, 1, 63),
-			 ($2, $3, 6, $4, 64, 127)`,
-			[canonicalBatchId, canonicalSecondBatchId, networkHash, proofTime]
-		);
+		firstCanonicalFixture = await insertCanonicalBatchFixture(dataSource, {
+			batchId: canonicalBatchId,
+			checkpointLedger: 63,
+			firstLedger: 1,
+			label: 'canonical-first',
+			lastLedger: 63,
+			networkHash,
+			networkPassphrase,
+			proofTime,
+			proofVersion: 5
+		});
+		await insertCanonicalBatchFixture(dataSource, {
+			batchId: canonicalSecondBatchId,
+			checkpointLedger: 127,
+			firstLedger: 64,
+			label: 'canonical-second',
+			lastLedger: 127,
+			networkHash,
+			networkPassphrase,
+			proofTime,
+			proofVersion: 5
+		});
 	}
 
 	async function insertCanonicalRows(): Promise<void> {
@@ -236,11 +332,17 @@ describe('TypeOrmFullHistoryStateCanonicalCoverageRepository', () => {
 			]
 		);
 		await insertCompleteStateImports(mismatchBatchId);
-		await dataSource.query(
-			`insert into "full_history_ingestion_batch" values
-			 ($1, $2, 6, $3, 128, 191)`,
-			[mismatchCanonicalBatchId, networkHash, proofTime]
-		);
+		await insertCanonicalBatchFixture(dataSource, {
+			batchId: mismatchCanonicalBatchId,
+			checkpointLedger: 191,
+			firstLedger: 128,
+			label: 'canonical-mismatch',
+			lastLedger: 191,
+			networkHash,
+			networkPassphrase,
+			proofTime,
+			proofVersion: 6
+		});
 		await dataSource.query(
 			`insert into "full_history_ledger" (
 				"network_passphrase_hash", "ledger_sequence", "batch_id",

@@ -1,5 +1,6 @@
 import type { EntityManager } from 'typeorm';
 import type { FullHistoryStateCanonicalCoverageClaim } from '../../../domain/full-history-state-import/FullHistoryLedgerProjection.js';
+import { fullHistoryStrictCanonicalBatchProofPredicateSql } from './FullHistoryStrictCanonicalProofSql.js';
 
 export interface FullHistoryCanonicalCoverageStats {
 	readonly canonicalBatchCount: number;
@@ -16,7 +17,7 @@ export async function readFullHistoryCanonicalCoverageStats(
 	const rows = await manager.query<FullHistoryCanonicalCoverageStats[]>(
 		`select count(*)::integer as "projectionCount",
 			count(*) filter (where canonical."ledger_sequence" is not null
-				and proof."proof_version" >= 6
+				and attestation.valid
 				and projection."ledger_hash" = canonical."ledger_hash"
 				and projection."previous_ledger_hash" = canonical."previous_ledger_hash"
 				and projection."transaction_set_hash" = canonical."transaction_set_hash"
@@ -26,16 +27,23 @@ export async function readFullHistoryCanonicalCoverageStats(
 				and projection."closed_at" = canonical."closed_at"
 				and projection."transaction_count" = canonical."transaction_count")::integer
 				as "matchingCount",
-			min(proof."proof_version") as "minimumProofVersion",
-			max(proof."proof_evaluated_at") as "latestProofEvaluatedAt",
+			min(current_proof."proofVersion") filter (where attestation.valid)
+				as "minimumProofVersion",
+			max(current_proof."evaluatedAt") filter (where attestation.valid)
+				as "latestProofEvaluatedAt",
 			count(distinct canonical."batch_id")::integer as "canonicalBatchCount"
 		 from "full_history_lcm_ledger_projection" projection
 		 left join "full_history_ledger" canonical
 			on canonical."network_passphrase_hash" = $2
 			and canonical."ledger_sequence" = projection."ledger_sequence"
-		 left join "full_history_ingestion_batch" proof
-			on proof."id" = canonical."batch_id"
-			and proof."network_passphrase_hash" = canonical."network_passphrase_hash"
+		 left join "full_history_ingestion_batch" batch
+			on batch."id" = canonical."batch_id"
+			and batch."network_passphrase_hash" = canonical."network_passphrase_hash"
+		 left join "history_archive_checkpoint_proof" current_proof
+			on current_proof.id = batch."checkpoint_proof_id"
+		 left join lateral (
+			select (${fullHistoryStrictCanonicalBatchProofPredicateSql}) as valid
+		 ) attestation on true
 		 where projection."batch_id" = $1`,
 		[claim.batchId, Buffer.from(claim.networkPassphraseHash, 'hex')]
 	);

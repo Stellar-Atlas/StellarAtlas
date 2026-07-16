@@ -18,6 +18,7 @@ import {
 	type FullHistoryCanonicalCoverageStats
 } from './FullHistoryCanonicalCoverageStats.js';
 import { assertStoredFullHistoryLedgerProjections } from './FullHistoryLedgerProjectionReplayVerifier.js';
+import { fullHistoryStrictCanonicalBatchProofPredicateSql } from './FullHistoryStrictCanonicalProofSql.js';
 
 const ledgerInsertChunkSize = 256;
 const maximumLeaseMilliseconds = 3_600_000;
@@ -123,12 +124,26 @@ export class TypeOrmFullHistoryStateCanonicalCoverageRepository implements FullH
 									and state."imported_record_count" = state."expected_record_count"
 									and octet_length(state."imported_row_set_sha256") = 32) = 2
 						and (select count(*) from "full_history_ledger" canonical
-							join "full_history_ingestion_batch" proof
-								on proof."id" = canonical."batch_id"
-								and proof."network_passphrase_hash" = canonical."network_passphrase_hash"
 							where canonical."network_passphrase_hash" = coverage."network_passphrase_hash"
 								and canonical."ledger_sequence" between lcm."start_ledger" and lcm."end_ledger"
-								and proof."proof_version" >= 6) = coverage."expected_ledger_count"
+						) = coverage."expected_ledger_count"
+						and not exists (
+							select 1
+							from (
+								select distinct canonical."batch_id"
+								from "full_history_ledger" canonical
+								where canonical."network_passphrase_hash" = coverage."network_passphrase_hash"
+									and canonical."ledger_sequence" between lcm."start_ledger" and lcm."end_ledger"
+							) canonical_source
+							join "full_history_ingestion_batch" batch
+								on batch."id" = canonical_source."batch_id"
+								and batch."network_passphrase_hash" = coverage."network_passphrase_hash"
+							join "history_archive_checkpoint_proof" current_proof
+								on current_proof.id = batch."checkpoint_proof_id"
+							where not coalesce((
+								${fullHistoryStrictCanonicalBatchProofPredicateSql}
+							), false)
+						)
 					order by coverage."next_attempt_at", lcm."start_ledger", coverage."batch_id"
 					for update of coverage skip locked limit 1
 				), claimed as (
