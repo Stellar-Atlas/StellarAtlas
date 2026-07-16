@@ -303,7 +303,11 @@ const bucketSourceFixtureSql = `
 			jsonb_build_object(
 				'bucketObject', jsonb_build_object(
 					'expectedBucketHash', lpad(to_hex(bucket_index), 64, '0'),
-					'matched', true
+					'matched', true,
+					'sourceUrl', 'https://source-' ||
+						lpad(source_index::text, 2, '0') ||
+						'.example/bucket-' ||
+						lpad(to_hex(bucket_index), 64, '0')
 				),
 				'content', jsonb_build_object(
 					'algorithm', 'sha256',

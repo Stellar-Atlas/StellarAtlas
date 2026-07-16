@@ -230,6 +230,8 @@ export const historyArchiveVerifiedBucketSourcesSql = `
 			and archive_object."verificationFacts" #>>
 				'{bucketObject,matched}' = 'true'
 			and archive_object."verificationFacts" #>>
+				'{bucketObject,sourceUrl}' = archive_object."objectUrl"
+			and archive_object."verificationFacts" #>>
 				'{content,algorithm}' = 'sha256'
 			and archive_object."verificationFacts" #>>
 				'{content,digest}' = requested."bucketHash"

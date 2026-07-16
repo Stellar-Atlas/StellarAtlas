@@ -1,56 +1,24 @@
+import type { HistoryArchiveRepairArtifactInspection } from '../../domain/history-archive-repair-artifact/HistoryArchiveRepairArtifactRepository.js';
 import type {
-	HistoryArchiveRepairArtifactInspection,
-	HistoryArchiveRepairArtifactUnavailableReason
-} from '../../domain/history-archive-repair-artifact/HistoryArchiveRepairArtifactRepository.js';
-import type {
+	HistoryArchiveRepairArtifactAvailabilityV1,
+	HistoryArchiveRepairArtifactContentHashV1,
+	HistoryArchiveRepairArtifactUnavailableV1,
+	HistoryArchiveRepairArtifactAvailableV1,
 	HistoryArchiveRepairActionV1,
 	HistoryArchiveRepairPlanV1
 } from 'shared';
 
-export interface HistoryArchiveRepairArtifactContentHashV1 {
-	readonly algorithm: 'sha256';
-	readonly digest: string;
-	readonly representation: 'uncompressed-xdr';
-}
-
-export interface HistoryArchiveRepairArtifactAvailableV1 {
-	readonly artifactType: 'bucket';
-	readonly byteLength: number;
-	readonly contentHash: HistoryArchiveRepairArtifactContentHashV1;
-	readonly downloadUrl: string;
-	readonly mediaType: 'application/gzip';
-	readonly objectIdentity: string;
-	readonly provenAt: string;
-	readonly status: 'available';
-}
-
-export interface HistoryArchiveRepairArtifactUnavailableV1 {
-	readonly artifactType: 'bucket';
-	readonly contentHash: HistoryArchiveRepairArtifactContentHashV1 | null;
-	readonly objectIdentity: string | null;
-	readonly reason: HistoryArchiveRepairArtifactUnavailableReason;
-	readonly retry: {
-		readonly afterSeconds: number | null;
-		readonly retryable: boolean;
-	};
-	readonly status: 'unavailable';
-}
-
-export type HistoryArchiveRepairArtifactAvailabilityV1 =
-	| HistoryArchiveRepairArtifactAvailableV1
-	| HistoryArchiveRepairArtifactUnavailableV1;
+export type {
+	HistoryArchiveRepairArtifactAvailabilityV1,
+	HistoryArchiveRepairArtifactAvailableV1,
+	HistoryArchiveRepairArtifactContentHashV1,
+	HistoryArchiveRepairArtifactUnavailableV1
+} from 'shared';
 
 export type HistoryArchiveRepairActionWithArtifactV1 =
-	HistoryArchiveRepairActionV1 & {
-		readonly repairArtifact: HistoryArchiveRepairArtifactAvailabilityV1 | null;
-	};
+	HistoryArchiveRepairActionV1;
 
-export type HistoryArchiveRepairPlanResponseV1 = Omit<
-	HistoryArchiveRepairPlanV1,
-	'actions'
-> & {
-	readonly actions: readonly HistoryArchiveRepairActionWithArtifactV1[];
-};
+export type HistoryArchiveRepairPlanResponseV1 = HistoryArchiveRepairPlanV1;
 
 export const repairArtifactDownloadPath =
 	'/v1/archive-scans/repair-artifacts/buckets';

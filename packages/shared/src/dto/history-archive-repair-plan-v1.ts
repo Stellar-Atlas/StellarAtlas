@@ -64,6 +64,51 @@ export interface HistoryArchiveRepairSourceCandidateV1 {
 	readonly verifiedAt: string | null;
 }
 
+export type HistoryArchiveRepairArtifactUnavailableReasonV1 =
+	| 'content-hash-mismatch'
+	| 'invalid-compressed-payload'
+	| 'invalid-object-identity'
+	| 'local-payload-missing'
+	| 'local-payload-not-regular'
+	| 'local-payload-too-large'
+	| 'local-storage-unavailable'
+	| 'verification-busy'
+	| 'verification-deferred'
+	| 'verification-timeout';
+
+export interface HistoryArchiveRepairArtifactContentHashV1 {
+	readonly algorithm: 'sha256';
+	readonly digest: string;
+	readonly representation: 'uncompressed-xdr';
+}
+
+export interface HistoryArchiveRepairArtifactAvailableV1 {
+	readonly artifactType: 'bucket';
+	readonly byteLength: number;
+	readonly contentHash: HistoryArchiveRepairArtifactContentHashV1;
+	readonly downloadUrl: string;
+	readonly mediaType: 'application/gzip';
+	readonly objectIdentity: string;
+	readonly provenAt: string;
+	readonly status: 'available';
+}
+
+export interface HistoryArchiveRepairArtifactUnavailableV1 {
+	readonly artifactType: 'bucket';
+	readonly contentHash: HistoryArchiveRepairArtifactContentHashV1 | null;
+	readonly objectIdentity: string | null;
+	readonly reason: HistoryArchiveRepairArtifactUnavailableReasonV1;
+	readonly retry: {
+		readonly afterSeconds: number | null;
+		readonly retryable: boolean;
+	};
+	readonly status: 'unavailable';
+}
+
+export type HistoryArchiveRepairArtifactAvailabilityV1 =
+	| HistoryArchiveRepairArtifactAvailableV1
+	| HistoryArchiveRepairArtifactUnavailableV1;
+
 export interface HistoryArchiveCheckpointRepairEvidenceV1 {
 	readonly bucketsVerified: boolean;
 	readonly checkpointBucketListHash: string | null;
@@ -92,6 +137,7 @@ export interface HistoryArchiveRepairActionV1 {
 	readonly kind: HistoryArchiveRepairActionKindV1;
 	readonly knownGoodSources: readonly HistoryArchiveRepairSourceCandidateV1[];
 	readonly reason: HistoryArchiveRepairReasonV1;
+	readonly repairArtifact: HistoryArchiveRepairArtifactAvailabilityV1 | null;
 	readonly severity: HistoryArchiveRepairActionSeverityV1;
 	readonly summary: string;
 	readonly checkpointEvidence: readonly HistoryArchiveCheckpointRepairEvidenceV1[];

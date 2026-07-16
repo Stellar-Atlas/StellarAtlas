@@ -190,6 +190,13 @@ function toObjectAction(
 			: (candidateSources.get(object.bucketHash.toLowerCase()) ?? []);
 	const reason = getObjectRepairReason(object);
 	const kind = getObjectActionKind(object);
+	const repairArtifact =
+		object.bucketHash === null
+			? null
+			: (repairArtifacts.get(object.bucketHash.toLowerCase()) ??
+				deferredRepairArtifact(object.bucketHash.toLowerCase()));
+	const replacementReady =
+		repairArtifact?.status === 'available' && bucketSources.length > 0;
 
 	return [
 		{
@@ -201,13 +208,11 @@ function toObjectAction(
 			kind,
 			knownGoodSources: bucketSources,
 			reason,
-			repairArtifact:
-				object.bucketHash === null
-					? null
-					: (repairArtifacts.get(object.bucketHash.toLowerCase()) ??
-						deferredRepairArtifact(object.bucketHash.toLowerCase())),
-			severity: 'error',
-			summary: getObjectActionSummary(object, kind)
+			repairArtifact,
+			severity: replacementReady ? 'error' : 'blocked',
+			summary: replacementReady
+				? getObjectActionSummary(object, kind)
+				: getBlockedObjectActionSummary(object)
 		}
 	];
 }
@@ -261,10 +266,21 @@ function toCheckpointAction(
 			knownGoodSources: [],
 			reason,
 			repairArtifact: null,
-			severity: 'error',
-			summary: getCheckpointActionSummary(proof.checkpointLedger, reason)
+			severity: 'blocked',
+			summary: `${getCheckpointActionSummary(
+				proof.checkpointLedger,
+				reason
+			)} No proof-gated replacement set is available yet.`
 		}
 	];
+}
+
+function getBlockedObjectActionSummary(object: HistoryArchiveObject): string {
+	if (object.objectType === 'bucket') {
+		return 'Bucket failure evidence is confirmed, but a source-bound local replacement artifact is not available yet.';
+	}
+	const objectLabel = getObjectTypeLabel(object.objectType);
+	return `${objectLabel.charAt(0).toUpperCase()}${objectLabel.slice(1)} evidence is confirmed, but no proof-gated replacement artifact is available yet.`;
 }
 
 function getCheckpointActionSummary(

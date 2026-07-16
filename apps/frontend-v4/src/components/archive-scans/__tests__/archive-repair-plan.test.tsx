@@ -16,6 +16,47 @@ describe('archive repair plan', () => {
 		expect(markup).toContain('verified replacement evidence table below');
 		expect(markup).not.toContain('href=');
 	});
+
+	it('links only a locally proven replacement artifact', () => {
+		const plan = createPlan();
+		const action = plan.actions[0];
+		if (action === undefined)
+			throw new Error('Repair action fixture is missing');
+		const markup = renderToStaticMarkup(
+			createElement(NodeArchiveRepairPlan, {
+				repairPlan: {
+					...plan,
+					actions: [
+						{
+							...action,
+							bucketHash: 'a'.repeat(64),
+							repairArtifact: {
+								artifactType: 'bucket',
+								byteLength: 128,
+								contentHash: {
+									algorithm: 'sha256',
+									digest: 'a'.repeat(64),
+									representation: 'uncompressed-xdr'
+								},
+								downloadUrl:
+									'/v1/archive-scans/repair-artifacts/buckets/' +
+									'a'.repeat(64),
+								mediaType: 'application/gzip',
+								objectIdentity: `bucket:${'a'.repeat(64)}`,
+								provenAt: '2026-07-11T00:00:00.000Z',
+								status: 'available'
+							}
+						}
+					]
+				}
+			})
+		);
+
+		expect(markup).toContain('Download verified bucket');
+		expect(markup).toContain(
+			`href="/v1/archive-scans/repair-artifacts/buckets/${'a'.repeat(64)}"`
+		);
+	});
 });
 
 function createPlan(): PublicHistoryArchiveRepairPlan {
@@ -58,6 +99,7 @@ function createPlan(): PublicHistoryArchiveRepairPlan {
 					}
 				],
 				reason: 'missing-object',
+				repairArtifact: null,
 				severity: 'error',
 				summary: 'Replace the transaction archive file for checkpoint 63.'
 			}

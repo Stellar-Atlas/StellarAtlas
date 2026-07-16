@@ -1,7 +1,7 @@
 import { constants, type Stats } from 'node:fs';
 import { open, realpath, type FileHandle } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
-import { isAbsolute, relative, resolve, sep } from 'node:path';
+import { dirname, isAbsolute, relative, resolve, sep } from 'node:path';
 import { Transform, type Readable, type TransformCallback } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 import { createGunzip } from 'node:zlib';
@@ -14,6 +14,7 @@ import type {
 	OpenHistoryArchiveRepairArtifactResult
 } from '../../../domain/history-archive-repair-artifact/HistoryArchiveRepairArtifactRepository.js';
 import { historyArchiveBucketHashPattern } from '../../../domain/history-archive-repair-artifact/HistoryArchiveRepairArtifactRepository.js';
+import { resolveAppEnvPath } from 'shared/lib/env/resolve-app-env-path.js';
 
 const defaultMaxCompressedBytes = 8 * 1024 ** 3;
 const defaultMaxConcurrentVerifications = 2;
@@ -134,18 +135,18 @@ export class LocalHistoryArchiveRepairArtifactRepository implements HistoryArchi
 				release();
 				return unavailable(null, 'invalid-object-identity');
 			}
-				const resolvedRoot = await realpath(this.rootDirectory);
-				handle = await open(
-					filePath,
-					constants.O_RDONLY | constants.O_NOATIME | constants.O_NOFOLLOW
-				);
-				const openedFile = await realpath(`/proc/self/fd/${handle.fd}`);
-				if (!isWithin(resolvedRoot, openedFile)) {
-					await closeHandle(handle);
-					release();
-					return unavailable(bucketHash, 'local-storage-unavailable');
-				}
-				const before = await handle.stat();
+			const resolvedRoot = await realpath(this.rootDirectory);
+			handle = await open(
+				filePath,
+				constants.O_RDONLY | constants.O_NOATIME | constants.O_NOFOLLOW
+			);
+			const openedFile = await realpath(`/proc/self/fd/${handle.fd}`);
+			if (!isWithin(resolvedRoot, openedFile)) {
+				await closeHandle(handle);
+				release();
+				return unavailable(bucketHash, 'local-storage-unavailable');
+			}
+			const before = await handle.stat();
 			if (!before.isFile()) {
 				await closeHandle(handle);
 				release();
@@ -361,6 +362,12 @@ async function closeHandle(handle: FileHandle): Promise<void> {
 export function createLocalHistoryArchiveRepairArtifactRepository(): LocalHistoryArchiveRepairArtifactRepository {
 	return new LocalHistoryArchiveRepairArtifactRepository({
 		rootDirectory:
-			process.env.HISTORY_BUCKET_CACHE_DIR ?? 'history-bucket-cache'
+			process.env.HISTORY_BUCKET_CACHE_DIR ??
+			resolve(
+				dirname(resolveAppEnvPath(import.meta.url, 'backend')),
+				'..',
+				'..',
+				'history-bucket-cache'
+			)
 	});
 }

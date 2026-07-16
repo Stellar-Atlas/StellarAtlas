@@ -59,6 +59,7 @@ function RepairActionTable({
 								<StatusPill
 									status={action.severity === 'error' ? 'degraded' : 'ok'}
 									text={formatSeverity(action.severity)}
+									tone={action.severity === 'blocked' ? 'warning' : undefined}
 								/>
 							</td>
 							<td>
@@ -69,7 +70,7 @@ function RepairActionTable({
 								<strong>{formatActionReason(action.reason)}</strong>
 								<small>{formatActionEvidence(action)}</small>
 							</td>
-							<td>{formatSourceCandidates(action.knownGoodSources)}</td>
+							<td>{formatReplacementReadiness(action)}</td>
 						</tr>
 					))}
 				</tbody>
@@ -147,9 +148,49 @@ function formatActionEvidence(
 	return 'No detailed evidence returned.';
 }
 
-function formatSourceCandidates(
-	candidates: PublicHistoryArchiveRepairPlan['actions'][number]['knownGoodSources']
+function formatReplacementReadiness(
+	action: PublicHistoryArchiveRepairPlan['actions'][number]
 ): React.JSX.Element {
+	const artifact = action.repairArtifact;
+	if (artifact?.status === 'available' && action.severity === 'blocked') {
+		return (
+			<>
+				<strong>Replacement blocked</strong>
+				<small>
+					Local bucket bytes match the expected hash, but source-bound
+					verification evidence is not complete.
+				</small>
+			</>
+		);
+	}
+	if (artifact?.status === 'available') {
+		return (
+			<>
+				<a className="primary-button" href={artifact.downloadUrl}>
+					Download verified bucket
+				</a>
+				<small>
+					SHA-256 proven {formatDateTime(artifact.provenAt)};{' '}
+					{formatInteger(action.knownGoodSources.length)} attributed source
+					records
+				</small>
+			</>
+		);
+	}
+	if (artifact?.status === 'unavailable') {
+		return (
+			<>
+				<strong>Replacement blocked</strong>
+				<small>
+					{formatArtifactReason(artifact.reason)};{' '}
+					{formatInteger(action.knownGoodSources.length)} attributed source
+					records
+				</small>
+			</>
+		);
+	}
+
+	const candidates = action.knownGoodSources;
 	if (candidates.length === 0) {
 		return (
 			<span className="muted-inline">
@@ -177,6 +218,10 @@ function formatSourceCandidates(
 			</small>
 		</>
 	);
+}
+
+function formatArtifactReason(reason: string): string {
+	return reason.replaceAll('-', ' ');
 }
 
 function formatActionKind(

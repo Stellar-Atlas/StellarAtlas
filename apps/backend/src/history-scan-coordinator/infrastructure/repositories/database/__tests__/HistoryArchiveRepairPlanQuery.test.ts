@@ -104,6 +104,9 @@ describe('HistoryArchiveRepairPlanQuery', () => {
 			'\'{bucketObject,expectedBucketHash}\' = requested."bucketHash"'
 		);
 		expect(historyArchiveVerifiedBucketSourcesSql).toContain(
+			'\'{bucketObject,sourceUrl}\' = archive_object."objectUrl"'
+		);
+		expect(historyArchiveVerifiedBucketSourcesSql).toContain(
 			'\'{content,digest}\' = requested."bucketHash"'
 		);
 		expect(historyArchiveVerifiedBucketSourcesSql).toContain(

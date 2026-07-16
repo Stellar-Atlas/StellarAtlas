@@ -67,11 +67,13 @@ describe('GetHistoryArchiveRepairPlan', () => {
 					repairArtifact: expect.objectContaining({
 						reason: 'local-payload-missing',
 						status: 'unavailable'
-					})
+					}),
+					severity: 'blocked'
 				}),
 				expect.objectContaining({
 					kind: 'repair-checkpoint-proof',
-					reason: 'transaction-hash-mismatch'
+					reason: 'transaction-hash-mismatch',
+					severity: 'blocked'
 				})
 			])
 		);
@@ -106,16 +108,21 @@ describe('GetHistoryArchiveRepairPlan', () => {
 		objectRepository.findActionableByArchiveUrl.mockResolvedValue([
 			createBucketFailure()
 		]);
-		objectRepository.findVerifiedBucketSourcesByHashes.mockResolvedValue([]);
+		objectRepository.findVerifiedBucketSourcesByHashes.mockResolvedValue([
+			createVerifiedBucketCopy()
+		]);
 		proofRepository.findActionableByArchiveUrlIdentity.mockResolvedValue([]);
 
 		const result = await useCase.execute({ limit: 25, url: archiveUrl });
 
-		expect(result._unsafeUnwrap().actions[0]?.repairArtifact).toEqual(
+		expect(result._unsafeUnwrap().actions[0]).toEqual(
 			expect.objectContaining({
-				downloadUrl: `/v1/archive-scans/repair-artifacts/buckets/${bucketHash}`,
-				objectIdentity: `bucket:${bucketHash}`,
-				status: 'available'
+				repairArtifact: expect.objectContaining({
+					downloadUrl: `/v1/archive-scans/repair-artifacts/buckets/${bucketHash}`,
+					objectIdentity: `bucket:${bucketHash}`,
+					status: 'available'
+				}),
+				severity: 'error'
 			})
 		);
 	});
@@ -165,7 +172,9 @@ describe('GetHistoryArchiveRepairPlan', () => {
 		expect(result._unsafeUnwrap().actions).toEqual([
 			expect.objectContaining({
 				reason: 'checkpoint-ledger-mismatch',
-				summary: 'Checkpoint state file does not declare checkpoint 63355999.'
+				severity: 'blocked',
+				summary:
+					'Checkpoint state file does not declare checkpoint 63355999. No proof-gated replacement set is available yet.'
 			})
 		]);
 	});
@@ -194,7 +203,9 @@ describe('GetHistoryArchiveRepairPlan', () => {
 				],
 				kind: 'replace-archive-file',
 				reason: 'checkpoint-ledger-mismatch',
-				summary: 'Checkpoint state file does not declare checkpoint 63355999.'
+				severity: 'blocked',
+				summary:
+					'Checkpoint history file evidence is confirmed, but no proof-gated replacement artifact is available yet.'
 			})
 		]);
 	});
