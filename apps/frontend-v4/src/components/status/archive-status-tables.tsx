@@ -427,10 +427,15 @@ function formatSourceState(source: ArchiveSource): string {
 }
 
 function formatFailureDetail(event: ArchiveEvent): string {
-	if (event.error === null) return 'Failure detail not recorded';
-	const status =
-		event.error.httpStatus === null ? '' : `HTTP ${event.error.httpStatus}: `;
-	return status + sanitizeArchiveEvidenceText(event.error.message);
+	return formatArchiveFailureDetail(event.error);
+}
+
+export function formatArchiveFailureDetail(
+	error: ArchiveEvent['error']
+): string {
+	return error === null
+		? 'Failure detail not recorded'
+		: sanitizeArchiveEvidenceText(error.message);
 }
 
 export function formatArchiveSourceLabel(value: string): string {
