@@ -66,6 +66,8 @@ verify_source_units() {
 	local -a unit_paths=()
 	local ledger_close_meta_unit="$SYSTEMD_SOURCE_DIR/stellaratlas-full-history-ledger-close-meta.service"
 	local state_import_unit="$SYSTEMD_SOURCE_DIR/stellaratlas-full-history-state-import.service"
+	local horizon_unit="$SYSTEMD_SOURCE_DIR/stellaratlas-horizon.service"
+	local stellar_rpc_unit="$SYSTEMD_SOURCE_DIR/stellaratlas-stellar-rpc.service"
 
 	command -v systemd-analyze >/dev/null || die "systemd-analyze is required"
 
@@ -144,6 +146,14 @@ verify_source_units() {
 		'"stellaratlas-full-history-state-import.service"' \
 		"$SYSTEMD_SOURCE_DIR/10-stellaratlas-observe.rules" ||
 		die "observe must be authorized to manage state import"
+	grep -Fqx \
+		"RequiresMountsFor=/home/observe/stellarbeat-data" \
+		"$horizon_unit" ||
+		die "Horizon must require the bulk mount"
+	grep -Fqx \
+		"RequiresMountsFor=/home/observe/stellarbeat-data" \
+		"$stellar_rpc_unit" ||
+		die "Stellar RPC must require the bulk mount"
 
 	printf 'Verified %d tracked systemd unit templates.\n' "${#unit_paths[@]}"
 }

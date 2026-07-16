@@ -4,6 +4,7 @@ Documentation=https://developers.stellar.org/docs/data/apis/horizon/admin-guide
 Wants=network-online.target postgresql.service
 After=network-online.target postgresql.service
 Conflicts=stellaratlas.service
+RequiresMountsFor=/home/observe/stellarbeat-data
 ConditionFileIsExecutable=/home/observe/stellarbeat-data/horizon/bin/horizon
 ConditionFileIsExecutable=/home/observe/stellarbeat-data/stellar-core/bin/stellar-core
 ConditionPathExists=/etc/stellaratlas/full-history.env

@@ -4,6 +4,7 @@ Documentation=https://developers.stellar.org/docs/data/apis/rpc/admin-guide
 Wants=network-online.target
 After=network-online.target
 Conflicts=stellaratlas.service
+RequiresMountsFor=/home/observe/stellarbeat-data
 ConditionFileIsExecutable=/home/observe/stellarbeat-data/stellar-rpc/bin/stellar-rpc
 ConditionPathExists=/home/observe/stellarbeat-data/stellar-rpc/pubnet/config/rpc.toml
 
