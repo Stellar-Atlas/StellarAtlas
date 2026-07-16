@@ -1,6 +1,7 @@
 import { fullHistoryUint64 } from '../../../../domain/full-history/FullHistoryCanonicalTypes.js';
 import { FullHistoryCanonicalError } from '../../../../domain/full-history/FullHistoryCanonicalError.js';
 import {
+	fullHistoryPromotionLoopErrorCode,
 	runFullHistoryPromotionLoop,
 	type FullHistoryPromotionLoopEvent
 } from '../FullHistoryPromotionLoop.js';
@@ -134,6 +135,23 @@ describe('continuous full-history promotion loop', () => {
 
 		expect(emit).not.toHaveBeenCalled();
 		expect(wait).not.toHaveBeenCalled();
+	});
+
+	it('classifies PostgreSQL advisory-lock contention without exposing details', () => {
+		expect(
+			fullHistoryPromotionLoopErrorCode({
+				driverError: {
+					code: '55P03',
+					message: 'canceling statement due to lock timeout: secret'
+				}
+			})
+		).toBe('database-lock-contention');
+		expect(fullHistoryPromotionLoopErrorCode({ code: '55P03' })).toBe(
+			'database-lock-contention'
+		);
+		expect(fullHistoryPromotionLoopErrorCode({ code: '57014' })).toBe(
+			'unexpected-error'
+		);
 	});
 });
 

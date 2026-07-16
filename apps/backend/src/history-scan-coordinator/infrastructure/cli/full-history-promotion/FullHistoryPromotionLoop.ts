@@ -25,6 +25,7 @@ export interface FullHistoryPromotionLoopDependencies {
 export type FullHistoryPromotionLoopErrorCode =
 	| `canonical-${FullHistoryCanonicalErrorReason}`
 	| `promotion-${FullHistoryPromotionErrorReason}`
+	| 'database-lock-contention'
 	| 'unexpected-error';
 
 export interface FullHistoryPromotionLoopEvent {
@@ -97,7 +98,23 @@ export function fullHistoryPromotionLoopErrorCode(
 	if (error instanceof FullHistoryCanonicalError) {
 		return `canonical-${error.reason}`;
 	}
+	if (postgresErrorCode(error) === '55P03') {
+		return 'database-lock-contention';
+	}
 	return 'unexpected-error';
+}
+
+function postgresErrorCode(error: unknown): string | null {
+	if (!isRecord(error)) return null;
+	if (typeof error.code === 'string') return error.code;
+	return isRecord(error.driverError) &&
+		typeof error.driverError.code === 'string'
+		? error.driverError.code
+		: null;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+	return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
 function toEvent(
