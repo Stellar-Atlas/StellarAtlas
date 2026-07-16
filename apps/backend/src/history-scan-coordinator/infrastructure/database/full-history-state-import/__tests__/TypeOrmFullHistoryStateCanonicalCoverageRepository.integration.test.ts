@@ -66,7 +66,8 @@ describe('TypeOrmFullHistoryStateCanonicalCoverageRepository', () => {
 		await expect(repository.claimNext(workerId, 30_000)).resolves.toBeNull();
 		await dataSource.query(
 			`update "history_archive_checkpoint_proof" proof
-			 set "proofVersion" = 6, "evaluatedAt" = $3
+			 set "proofVersion" = 6,
+				"evaluatedAt" = $3::timestamptz + interval '0.000456 seconds'
 			 from "full_history_ingestion_batch" batch
 			 where proof.id = batch."checkpoint_proof_id"
 				and batch.id in ($1, $2)`,

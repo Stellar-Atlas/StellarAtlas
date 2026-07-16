@@ -4,7 +4,7 @@ import { fullHistoryStrictCanonicalBatchProofPredicateSql } from './FullHistoryS
 
 export interface FullHistoryCanonicalCoverageStats {
 	readonly canonicalBatchCount: number;
-	readonly latestProofEvaluatedAt: Date | null;
+	readonly latestProofEvaluatedAt: string | null;
 	readonly matchingCount: number;
 	readonly minimumProofVersion: number | null;
 	readonly projectionCount: number;
@@ -29,8 +29,11 @@ export async function readFullHistoryCanonicalCoverageStats(
 				as "matchingCount",
 			min(current_proof."proofVersion") filter (where attestation.valid)
 				as "minimumProofVersion",
-			max(current_proof."evaluatedAt") filter (where attestation.valid)
-				as "latestProofEvaluatedAt",
+			to_char(
+				(max(current_proof."evaluatedAt") filter (where attestation.valid))
+					at time zone 'UTC',
+				'YYYY-MM-DD"T"HH24:MI:SS.US"Z"'
+			) as "latestProofEvaluatedAt",
 			count(distinct canonical."batch_id")::integer as "canonicalBatchCount"
 		 from "full_history_lcm_ledger_projection" projection
 		 left join "full_history_ledger" canonical
