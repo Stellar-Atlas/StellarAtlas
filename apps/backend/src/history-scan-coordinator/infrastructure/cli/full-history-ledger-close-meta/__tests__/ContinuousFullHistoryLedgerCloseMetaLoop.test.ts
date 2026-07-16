@@ -64,6 +64,7 @@ describe('runContinuousFullHistoryLedgerCloseMetaLoop', () => {
 		const controller = new AbortController();
 		const events: ContinuousFullHistoryLedgerCloseMetaEvent[] = [];
 		let frontierCalls = 0;
+		let observedDurableNextLedger: number | undefined;
 		await runContinuousFullHistoryLedgerCloseMetaLoop(config(), {
 			emit: (event) => events.push(event),
 			ensureStorageCapacity: () => Promise.resolve(),
@@ -96,14 +97,17 @@ describe('runContinuousFullHistoryLedgerCloseMetaLoop', () => {
 			},
 			now: () => 1_000,
 			priorityRangeReader: {
-				readNextRange: () =>
-					Promise.resolve(fullHistoryLedgerCloseMetaRange(100, 103))
+				readNextRange: (options) => {
+					observedDurableNextLedger = options.durableNextLedger;
+					return Promise.resolve(fullHistoryLedgerCloseMetaRange(100, 103));
+				}
 			},
 			signal: controller.signal,
 			wait: () => Promise.resolve()
 		});
 
 		expect(frontierCalls).toBe(0);
+		expect(observedDurableNextLedger).toBe(3);
 		expect(events).toEqual(
 			expect.arrayContaining([
 				expect.objectContaining({ event: 'ready', nextLedger: 3 }),

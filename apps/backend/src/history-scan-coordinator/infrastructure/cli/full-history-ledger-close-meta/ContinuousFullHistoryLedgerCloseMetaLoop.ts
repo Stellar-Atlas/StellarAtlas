@@ -121,6 +121,7 @@ export async function runContinuousFullHistoryLedgerCloseMetaLoop(
 			const priorityRange =
 				config.lastAvailableLedger === null
 					? await dependencies.priorityRangeReader.readNextRange({
+							durableNextLedger: nextLedger,
 							firstAvailableLedger:
 								context.registeredSource.firstAvailableLedger,
 							maximumLedgerCount: config.cycleLedgerCount,

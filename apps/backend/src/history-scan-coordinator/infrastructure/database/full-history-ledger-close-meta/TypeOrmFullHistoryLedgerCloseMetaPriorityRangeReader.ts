@@ -22,6 +22,7 @@ interface LedgerRangeBounds {
 }
 
 export interface FullHistoryLedgerCloseMetaPriorityRangeOptions {
+	readonly durableNextLedger: number;
 	readonly firstAvailableLedger: number;
 	readonly maximumLedgerCount: number;
 	readonly networkPassphraseHash: FullHistoryLedgerCloseMetaSha256Digest;
@@ -133,8 +134,8 @@ function latestWholeShardInGap(
 ): FullHistoryLedgerCloseMetaRange | null {
 	if (endLedger < startLedger) return null;
 	const alignmentRemainder = positiveModulo(
-		endLedger - options.firstAvailableLedger + 1,
-		options.sourceBatchLedgerCount
+		endLedger + 1 - options.durableNextLedger,
+		options.typedShardLedgerCount
 	);
 	const alignedEnd = endLedger - alignmentRemainder;
 	if (alignedEnd < startLedger) return null;
@@ -165,6 +166,7 @@ function validatePlanningOptions(
 	>
 ): void {
 	const values = [
+		['durableNextLedger', options.durableNextLedger],
 		['firstAvailableLedger', options.firstAvailableLedger],
 		['maximumLedgerCount', options.maximumLedgerCount],
 		['sourceBatchLedgerCount', options.sourceBatchLedgerCount],
@@ -181,6 +183,17 @@ function validatePlanningOptions(
 	) {
 		throw new RangeError(
 			'Priority range sizes must contain whole source batches'
+		);
+	}
+	if (
+		options.durableNextLedger < options.firstAvailableLedger ||
+		positiveModulo(
+			options.durableNextLedger - options.firstAvailableLedger,
+			options.sourceBatchLedgerCount
+		) !== 0
+	) {
+		throw new RangeError(
+			'Durable next ledger must align to the source batch lattice'
 		);
 	}
 }

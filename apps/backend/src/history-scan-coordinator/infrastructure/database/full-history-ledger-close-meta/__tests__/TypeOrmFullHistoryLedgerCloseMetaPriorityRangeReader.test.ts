@@ -29,8 +29,8 @@ describe('selectLatestPriorityRange', () => {
 			})
 		).resolves.toEqual(
 			expect.objectContaining({
-				endSequence: 63_388_991,
-				startSequence: 63_380_800
+				endSequence: 63_388_674,
+				startSequence: 63_380_483
 			})
 		);
 		expect(query).toHaveBeenCalledTimes(2);
@@ -64,9 +64,9 @@ describe('selectLatestPriorityRange', () => {
 			)
 		).toEqual(
 			expect.objectContaining({
-				endSequence: 63_388_991,
+				endSequence: 63_388_674,
 				ledgerCount: 8_192,
-				startSequence: 63_380_800
+				startSequence: 63_380_483
 			})
 		);
 	});
@@ -75,14 +75,14 @@ describe('selectLatestPriorityRange', () => {
 		expect(
 			selectLatestPriorityRange(
 				{ endSequence: 63_388_991, startSequence: 63_379_136 },
-				[{ endSequence: 63_388_991, startSequence: 63_380_800 }],
+				[{ endSequence: 63_388_674, startSequence: 63_380_483 }],
 				options()
 			)
 		).toEqual(
 			expect.objectContaining({
-				endSequence: 63_380_799,
+				endSequence: 63_380_482,
 				ledgerCount: 1_024,
-				startSequence: 63_379_776
+				startSequence: 63_379_459
 			})
 		);
 	});
@@ -92,12 +92,52 @@ describe('selectLatestPriorityRange', () => {
 			selectLatestPriorityRange(
 				{ endSequence: 63_388_991, startSequence: 63_379_136 },
 				[
-					{ endSequence: 63_388_991, startSequence: 63_380_800 },
-					{ endSequence: 63_380_799, startSequence: 63_379_776 }
+					{ endSequence: 63_388_674, startSequence: 63_380_483 },
+					{ endSequence: 63_380_482, startSequence: 63_379_459 }
 				],
 				options()
 			)
 		).toBeNull();
+	});
+
+	it('aligns near-tip shards to the durable historical watermark lattice', () => {
+		const durableNextLedger = 131;
+		const newestRange = selectLatestPriorityRange(
+			{ endSequence: 63_389_311, startSequence: 63_378_688 },
+			[],
+			{ ...options(), durableNextLedger }
+		);
+
+		expect(newestRange).toEqual(
+			expect.objectContaining({
+				endSequence: 63_388_802,
+				ledgerCount: 8_192,
+				startSequence: 63_380_611
+			})
+		);
+
+		const nextRange = selectLatestPriorityRange(
+			{ endSequence: 63_389_311, startSequence: 63_378_688 },
+			[{ endSequence: 63_388_802, startSequence: 63_380_611 }],
+			{ ...options(), durableNextLedger }
+		);
+		expect(nextRange).toEqual(
+			expect.objectContaining({
+				endSequence: 63_380_610,
+				ledgerCount: 1_024,
+				startSequence: 63_379_587
+			})
+		);
+
+		const precedingHistoricalShardEnd =
+			durableNextLedger +
+			Math.floor(
+				(nextRange!.startSequence - durableNextLedger) /
+					options().typedShardLedgerCount
+			) *
+				options().typedShardLedgerCount -
+			1;
+		expect(precedingHistoricalShardEnd).toBe(nextRange!.startSequence - 1);
 	});
 
 	it('aligns a selected range to whole source batches', () => {
@@ -106,6 +146,7 @@ describe('selectLatestPriorityRange', () => {
 				{ endSequence: 2_100, startSequence: 1_000 },
 				[],
 				{
+					durableNextLedger: 3,
 					firstAvailableLedger: 3,
 					maximumLedgerCount: 1_024,
 					sourceBatchLedgerCount: 64,
@@ -124,6 +165,7 @@ describe('selectLatestPriorityRange', () => {
 
 function options() {
 	return {
+		durableNextLedger: 3,
 		firstAvailableLedger: 3,
 		maximumLedgerCount: 8_192,
 		sourceBatchLedgerCount: 1,
