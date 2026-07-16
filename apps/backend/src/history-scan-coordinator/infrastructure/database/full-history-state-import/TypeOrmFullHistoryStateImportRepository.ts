@@ -10,6 +10,7 @@ import type {
 } from '../../../domain/full-history-state-import/FullHistoryStateExport.js';
 import type {
 	FullHistoryStateImportClaim,
+	FullHistoryStateImportClaimOrder,
 	FullHistoryStateImportRepository
 } from '../../../domain/full-history-state-import/FullHistoryStateImport.js';
 import type { FullHistoryStateRowEvidence } from '../../../domain/full-history-state-import/FullHistoryStateRowEvidence.js';
@@ -110,10 +111,12 @@ export class TypeOrmFullHistoryStateImportRepository implements FullHistoryState
 
 	async claimNext(
 		leaseOwner: string,
-		leaseDurationMilliseconds: number
+		leaseDurationMilliseconds: number,
+		claimOrder: FullHistoryStateImportClaimOrder = 'oldest-first'
 	): Promise<FullHistoryStateImportClaim | null> {
 		assertUuid(leaseOwner, 'leaseOwner');
 		assertLeaseDuration(leaseDurationMilliseconds);
+		assertClaimOrder(claimOrder);
 		const rows = await this.dataSource.transaction(async (manager) => {
 			await setTransactionBounds(manager);
 			return manager.query<ClaimRow[]>(
@@ -127,7 +130,9 @@ export class TypeOrmFullHistoryStateImportRepository implements FullHistoryState
 							and control."next_attempt_at" <= clock_timestamp())
 						or (control."status" = 'importing'
 							and control."lease_expires_at" <= clock_timestamp())
-					order by control."next_attempt_at", batch."start_ledger",
+					order by case when $3::boolean
+							and control."status" <> 'pending' then 0 else 1 end,
+						control."next_attempt_at", batch."start_ledger",
 						control."dataset", control."batch_id"
 					for update of control skip locked
 					limit 1
@@ -155,7 +160,7 @@ export class TypeOrmFullHistoryStateImportRepository implements FullHistoryState
 				from claimed join "full_history_ledger_close_meta_batch" batch
 					on batch."id" = claimed."batch_id"
 			`,
-				[leaseOwner, leaseDurationMilliseconds]
+				[leaseOwner, leaseDurationMilliseconds, claimOrder === 'recovery-first']
 			);
 		});
 		return rows.length === 0 ? null : mapClaim(exactlyOne(rows, 'state claim'));
@@ -460,6 +465,12 @@ function assertLeaseDuration(value: number): void {
 		value > maximumLeaseMilliseconds
 	) {
 		throw new TypeError('State import lease duration is outside its bounds');
+	}
+}
+
+function assertClaimOrder(value: FullHistoryStateImportClaimOrder): void {
+	if (value !== 'oldest-first' && value !== 'recovery-first') {
+		throw new TypeError('State import claim order is invalid');
 	}
 }
 

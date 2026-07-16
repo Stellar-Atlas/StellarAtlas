@@ -18,10 +18,14 @@ export interface FullHistoryStateImportClaim {
 	readonly storageKey: string;
 }
 
+export type FullHistoryStateImportClaimOrder =
+	'oldest-first' | 'recovery-first';
+
 export interface FullHistoryStateImportRepository {
 	claimNext(
 		leaseOwner: string,
-		leaseDurationMilliseconds: number
+		leaseDurationMilliseconds: number,
+		claimOrder?: FullHistoryStateImportClaimOrder
 	): Promise<FullHistoryStateImportClaim | null>;
 	complete(
 		claim: FullHistoryStateImportClaim,

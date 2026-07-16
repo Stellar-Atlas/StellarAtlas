@@ -134,6 +134,48 @@ describe('TypeOrmFullHistoryStateImportRepository', () => {
 		).resolves.toBeNull();
 	});
 
+	it('reserves recovery-first claims without blocking chronological workers', async () => {
+		const pendingBatchId = randomUUID();
+		const failedBatchId = randomUUID();
+		await insertImportDataset(dataSource, pendingBatchId, 67, 130, 'pending');
+		await insertImportDataset(dataSource, failedBatchId, 131, 194, 'failed');
+		await expect(repository.registerPendingImports()).resolves.toBe(2);
+		try {
+			await dataSource.query(
+				`update "full_history_lcm_state_import"
+				 set "created_at" = clock_timestamp() - interval '3 minutes',
+					"updated_at" = clock_timestamp(),
+					"next_attempt_at" = clock_timestamp() - interval '2 minutes'
+				 where "batch_id" = $1`,
+				[pendingBatchId]
+			);
+			await dataSource.query(
+				`update "full_history_lcm_state_import"
+				 set "status" = 'failed', "error_text" = 'retry me',
+					"created_at" = clock_timestamp() - interval '2 minutes',
+					"updated_at" = clock_timestamp(),
+					"next_attempt_at" = clock_timestamp() - interval '1 minute'
+				 where "batch_id" = $1`,
+				[failedBatchId]
+			);
+
+			const recovery = await repository.claimNext(
+				randomUUID(),
+				30_000,
+				'recovery-first'
+			);
+			const chronological = await repository.claimNext(
+				randomUUID(),
+				30_000,
+				'oldest-first'
+			);
+			expect(recovery?.batchId).toBe(failedBatchId);
+			expect(chronological?.batchId).toBe(pendingBatchId);
+		} finally {
+			await deleteImportDatasets(dataSource, [pendingBatchId, failedBatchId]);
+		}
+	});
+
 	it('fences every stale operation when the same owner reclaims a lease', async () => {
 		const retryBatchId = randomUUID();
 		await dataSource.query(
@@ -210,6 +252,47 @@ async function runEvidenceHardening(dataSource: DataSource): Promise<void> {
 	} finally {
 		await runner.release();
 	}
+}
+
+async function insertImportDataset(
+	dataSource: DataSource,
+	batchId: string,
+	startLedger: number,
+	endLedger: number,
+	label: string
+): Promise<void> {
+	await dataSource.query(
+		`insert into "full_history_ledger_close_meta_batch"
+		 ("id", "start_ledger", "end_ledger") values ($1, $2, $3)`,
+		[batchId, startLedger, endLedger]
+	);
+	await dataSource.query(
+		`insert into "full_history_ledger_close_meta_dataset" (
+			"batch_id", "dataset", "storage_key", "output_sha256", "record_count"
+		) values ($1, 'account-state-changes', $2, $3, 0)`,
+		[batchId, `typed/${label}.parquet`, Buffer.alloc(32, startLedger)]
+	);
+}
+
+async function deleteImportDatasets(
+	dataSource: DataSource,
+	batchIds: readonly string[]
+): Promise<void> {
+	await dataSource.query(
+		`delete from "full_history_lcm_state_import"
+		 where "batch_id" = any($1::uuid[])`,
+		[batchIds]
+	);
+	await dataSource.query(
+		`delete from "full_history_ledger_close_meta_dataset"
+		 where "batch_id" = any($1::uuid[])`,
+		[batchIds]
+	);
+	await dataSource.query(
+		`delete from "full_history_ledger_close_meta_batch"
+		 where "id" = any($1::uuid[])`,
+		[batchIds]
+	);
 }
 
 function accountRow(): FullHistoryAccountStateChange {

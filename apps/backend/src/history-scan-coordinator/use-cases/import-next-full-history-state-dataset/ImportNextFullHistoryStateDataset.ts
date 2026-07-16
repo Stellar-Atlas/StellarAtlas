@@ -6,6 +6,7 @@ import type {
 } from '../../domain/full-history-state-import/FullHistoryStateExport.js';
 import type {
 	FullHistoryStateImportClaim,
+	FullHistoryStateImportClaimOrder,
 	FullHistoryStateImportReceipt,
 	FullHistoryStateImportRepository
 } from '../../domain/full-history-state-import/FullHistoryStateImport.js';
@@ -32,6 +33,7 @@ export interface FullHistoryStateExporter {
 }
 
 export interface ImportNextFullHistoryStateDatasetConfig {
+	readonly claimOrder: FullHistoryStateImportClaimOrder;
 	readonly insertBatchSize: number;
 	readonly leaseDurationMilliseconds: number;
 	readonly storageRoot: string;
@@ -59,7 +61,8 @@ export class ImportNextFullHistoryStateDataset {
 		await this.repository.registerPendingImports();
 		const claim = await this.repository.claimNext(
 			this.config.workerId,
-			this.config.leaseDurationMilliseconds
+			this.config.leaseDurationMilliseconds,
+			this.config.claimOrder
 		);
 		if (claim === null) return null;
 		try {

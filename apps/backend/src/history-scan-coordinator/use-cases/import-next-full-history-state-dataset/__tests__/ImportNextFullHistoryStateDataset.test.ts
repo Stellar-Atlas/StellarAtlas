@@ -6,6 +6,7 @@ import { fullHistoryLedgerCloseMetaSha256Digest } from '../../../domain/full-his
 import type { FullHistoryAccountStateChange } from '../../../domain/full-history-state-import/FullHistoryStateExport.js';
 import type {
 	FullHistoryStateImportClaim,
+	FullHistoryStateImportClaimOrder,
 	FullHistoryStateImportRepository
 } from '../../../domain/full-history-state-import/FullHistoryStateImport.js';
 import {
@@ -61,6 +62,7 @@ describe('ImportNextFullHistoryStateDataset', () => {
 		expect(repository.completed).toBe(3n);
 		expect(repository.completedDigest).toBe(rowSetSha256);
 		expect(repository.failed).toBeNull();
+		expect(repository.claimOrders).toEqual(['oldest-first']);
 		expect(repository.renewals).toBeGreaterThanOrEqual(1);
 	});
 
@@ -126,6 +128,7 @@ describe('ImportNextFullHistoryStateDataset', () => {
 
 class RecordingRepository implements FullHistoryStateImportRepository {
 	readonly accountBatchSizes: number[] = [];
+	readonly claimOrders: FullHistoryStateImportClaimOrder[] = [];
 	completed: bigint | null = null;
 	completedDigest: string | null = null;
 	failed: Error | null = null;
@@ -134,7 +137,12 @@ class RecordingRepository implements FullHistoryStateImportRepository {
 
 	constructor(private readonly claim: FullHistoryStateImportClaim | null) {}
 
-	claimNext(): Promise<FullHistoryStateImportClaim | null> {
+	claimNext(
+		_leaseOwner: string,
+		_leaseDurationMilliseconds: number,
+		claimOrder: FullHistoryStateImportClaimOrder = 'oldest-first'
+	): Promise<FullHistoryStateImportClaim | null> {
+		this.claimOrders.push(claimOrder);
 		return Promise.resolve(this.claim);
 	}
 
@@ -203,6 +211,7 @@ function accountClaim(
 
 function config(storageRoot: string, insertBatchSize: number) {
 	return {
+		claimOrder: 'oldest-first' as const,
 		insertBatchSize,
 		leaseDurationMilliseconds: 30_000,
 		storageRoot,

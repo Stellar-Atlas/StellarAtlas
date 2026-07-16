@@ -80,6 +80,7 @@ export function composeFullHistoryStateImportWorkers(
 			repository,
 			exporter,
 			{
+				claimOrder: index === 0 ? 'recovery-first' : 'oldest-first',
 				insertBatchSize: config.insertBatchSize,
 				leaseDurationMilliseconds: config.leaseDurationMilliseconds,
 				storageRoot: config.storageRoot,
