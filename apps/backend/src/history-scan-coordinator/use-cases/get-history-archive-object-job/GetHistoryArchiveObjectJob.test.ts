@@ -67,6 +67,28 @@ describe('GetHistoryArchiveObjectJob', () => {
 		expect(objectRepository.claimNextObject).toHaveBeenCalledTimes(1);
 	});
 
+	it('runs stale release at most once during the maintenance interval', async () => {
+		const objectRepository = mock<HistoryArchiveObjectRepository>();
+		objectRepository.releaseStaleObjects.mockResolvedValue([]);
+		objectRepository.claimNextObject.mockResolvedValue(null);
+		const transitionReconciler =
+			mock<ReconcileHistoryArchiveObjectTransitions>();
+		transitionReconciler.executeIfDue.mockResolvedValue();
+		const useCase = new GetHistoryArchiveObjectJob(
+			objectRepository,
+			mock<HistoryArchiveCheckpointProofRepository>(),
+			mock<HistoryArchiveObjectEventRecorder>(),
+			transitionReconciler,
+			mock<Logger>()
+		);
+
+		await useCase.execute();
+		await useCase.execute();
+
+		expect(objectRepository.releaseStaleObjects).toHaveBeenCalledTimes(1);
+		expect(objectRepository.claimNextObject).toHaveBeenCalledTimes(2);
+	});
+
 	it('does not recompute proof state when merely claiming a job', async () => {
 		const claimed = checkpointObject(255, 'scanning');
 		const objectRepository = mock<HistoryArchiveObjectRepository>();

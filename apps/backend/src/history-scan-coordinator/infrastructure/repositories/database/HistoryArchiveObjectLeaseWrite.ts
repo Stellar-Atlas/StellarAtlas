@@ -69,7 +69,7 @@ export async function releaseStaleHistoryArchiveObjects(
 		return await repository.manager.transaction(async (manager) => {
 			await manager.query(staleReleaseSettingsSql);
 			const rows = extractRows(
-				(await manager.query(releaseStaleSql, [
+				(await manager.query(historyArchiveObjectStaleReleaseSql, [
 					before,
 					normalizeLimit(limit)
 				])) as RawObjectQueryResult
@@ -126,11 +126,18 @@ const staleReleaseSettingsSql = `
 	set local statement_timeout = '1500ms'
 `;
 
-const releaseStaleSql = `
-	with candidates as (
+export const historyArchiveObjectStaleReleaseSql = `
+	with maintenance_guard as materialized (
+		select pg_try_advisory_xact_lock(
+			hashtext('history_archive_object_stale_release')
+		) as locked
+	), candidates as (
 		select id
 		from "history_archive_object_queue"
-		where status = 'scanning' and "updatedAt" < $1
+		cross join maintenance_guard
+		where maintenance_guard.locked
+			and status = 'scanning'
+			and "updatedAt" < $1
 		order by "updatedAt", id
 		for update skip locked
 		limit $2

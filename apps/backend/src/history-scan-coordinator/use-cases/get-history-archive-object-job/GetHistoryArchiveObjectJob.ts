@@ -33,9 +33,12 @@ const supportedObjectTypes: readonly HistoryArchiveObjectType[] = [
 	'scp',
 	'bucket'
 ];
+const staleReleaseIntervalMs = 30_000;
 
 @injectable()
 export class GetHistoryArchiveObjectJob {
+	private nextStaleReleaseAt = 0;
+
 	constructor(
 		@inject(TYPES.HistoryArchiveObjectRepository)
 		private readonly objectRepository: HistoryArchiveObjectRepository,
@@ -49,9 +52,7 @@ export class GetHistoryArchiveObjectJob {
 	async execute(): Promise<Result<HistoryArchiveObjectJobDTO | null, Error>> {
 		try {
 			this.reconcileInBackground();
-			const staleObjects = await this.objectRepository.releaseStaleObjects(
-				getStaleObjectCutoff()
-			);
+			const staleObjects = await this.releaseStaleObjectsIfDue();
 			for (const staleObject of staleObjects) {
 				this.refreshProofInBackground(staleObject);
 				this.recordReleaseInBackground(staleObject);
@@ -79,6 +80,16 @@ export class GetHistoryArchiveObjectJob {
 			});
 			return err(error);
 		}
+	}
+
+	private async releaseStaleObjectsIfDue(
+		now = Date.now()
+	): Promise<readonly HistoryArchiveObject[]> {
+		if (now < this.nextStaleReleaseAt) return [];
+		this.nextStaleReleaseAt = now + staleReleaseIntervalMs;
+		return await this.objectRepository.releaseStaleObjects(
+			getStaleObjectCutoff(now)
+		);
 	}
 
 	private reconcileInBackground(): void {
@@ -141,6 +152,6 @@ export class GetHistoryArchiveObjectJob {
 	}
 }
 
-function getStaleObjectCutoff(): Date {
-	return new Date(Date.now() - 2 * 60 * 1000);
+function getStaleObjectCutoff(now = Date.now()): Date {
+	return new Date(now - 2 * 60 * 1000);
 }

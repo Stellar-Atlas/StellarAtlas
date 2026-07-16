@@ -121,7 +121,7 @@ export function load(container: Container, config: Config) {
 	container.bind(GetKnownNodeArchiveEvidence).toSelf();
 	container.bind(GetKnownOrganizationArchiveEvidence).toSelf();
 	container.bind(GetHistoryArchiveEvidence).toSelf();
-	container.bind(GetHistoryArchiveObjectJob).toSelf();
+	container.bind(GetHistoryArchiveObjectJob).toSelf().inSingletonScope();
 	container.bind(GetScannerMetrics).toSelf();
 	container.bind(BackfillArchiveMetadata).toSelf();
 	container.bind(RegisterCommunityScanner).toSelf();
