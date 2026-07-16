@@ -210,7 +210,10 @@ export class RESTScanCoordinatorService implements ScanCoordinatorService {
 
 		const response = await this.httpService.get(
 			urlResult.value,
-			this.getHttpOptions({ responseType: 'json' })
+			this.getHttpOptions({
+				...coordinatorReadOptions,
+				responseType: 'json'
+			})
 		);
 
 		if (response.isErr()) {
