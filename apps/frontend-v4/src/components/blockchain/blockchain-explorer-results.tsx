@@ -7,6 +7,7 @@ import type {
 	PublicExplorerAssets,
 	PublicExplorerContract,
 	PublicExplorerLedger,
+	PublicExplorerLocalAccountChanges,
 	PublicRecentTransactions,
 	PublicTransactionLookup
 } from '@api/types';
@@ -26,6 +27,7 @@ import {
 	writeClipboardText
 } from './blockchain-explorer-format';
 import { ExplorerOperationTable } from './explorer-operation-table';
+import { ExplorerAccountObservation } from './explorer-account-observation';
 
 export function SearchResultView({
 	result
@@ -45,8 +47,10 @@ export function SearchResultView({
 	}
 	const content = isLedger(result.search.result) ? (
 		<LedgerCard ledger={result.search.result} />
-	) : isAccount(result.search.result) ? (
-		<AccountCard account={result.search.result} />
+	) : isLocalAccountObservation(result.search.result) ? (
+		<ExplorerAccountObservation account={result.search.result} />
+	) : isLegacyAccount(result.search.result) ? (
+		<LegacyAccountCard account={result.search.result} />
 	) : isAssets(result.search.result) ? (
 		<AssetsTable assets={result.search.result.assets} />
 	) : isContract(result.search.result) ? (
@@ -279,7 +283,7 @@ function LedgerCard({
 	);
 }
 
-function AccountCard({
+function LegacyAccountCard({
 	account
 }: {
 	readonly account: PublicExplorerAccount;
@@ -302,7 +306,7 @@ function AccountCard({
 					value={account.lastModifiedLedger ?? 'Unknown'}
 				/>
 			</dl>
-			<AssetsTable assets={account.balances.map(mapBalanceAsset)} />
+			<AssetsTable assets={account.balances.map(mapLegacyBalanceAsset)} />
 		</div>
 	);
 }
@@ -424,7 +428,19 @@ function isLedger(value: unknown): value is PublicExplorerLedger {
 	);
 }
 
-function isAccount(value: unknown): value is PublicExplorerAccount {
+function isLocalAccountObservation(
+	value: unknown
+): value is PublicExplorerLocalAccountChanges {
+	return (
+		isRecord(value) &&
+		value.source === 'postgres_proof_gated_lcm_account_changes' &&
+		(value.status === 'available' ||
+			value.status === 'not_observed' ||
+			value.status === 'unavailable')
+	);
+}
+
+function isLegacyAccount(value: unknown): value is PublicExplorerAccount {
 	return isRecord(value) && 'balances' in value && 'subentryCount' in value;
 }
 
@@ -444,7 +460,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 	return typeof value === 'object' && value !== null;
 }
 
-function mapBalanceAsset(
+function mapLegacyBalanceAsset(
 	balance: PublicExplorerAccount['balances'][number]
 ): PublicExplorerAsset {
 	return {

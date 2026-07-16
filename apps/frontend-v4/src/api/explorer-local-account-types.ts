@@ -1,10 +1,10 @@
-export interface ExplorerLocalAccountSignerDTO {
+export interface PublicExplorerLocalAccountSigner {
 	readonly key: string;
 	readonly sponsor: string | null;
 	readonly weight: number;
 }
 
-export interface ExplorerLocalAccountFieldsDTO {
+export interface PublicExplorerLocalAccountFields {
 	readonly accountId: string;
 	readonly balance: string;
 	readonly buyingLiabilities: string;
@@ -18,34 +18,34 @@ export interface ExplorerLocalAccountFieldsDTO {
 	readonly sequenceLedger: string | null;
 	readonly sequenceNumber: string;
 	readonly sequenceTime: string | null;
-	readonly signers: readonly ExplorerLocalAccountSignerDTO[];
+	readonly signers: readonly PublicExplorerLocalAccountSigner[];
 	readonly sellingLiabilities: string;
 	readonly sponsoredEntryCount: string;
 	readonly sponsoringEntryCount: string;
 	readonly subentryCount: string;
 }
 
-export interface ExplorerLocalAccountCoverageRangeDTO {
+export interface PublicExplorerLocalAccountCoverageRange {
 	readonly batchId: string;
 	readonly firstLedger: string;
 	readonly lastLedger: string;
 	readonly ledgerCount: number;
 }
 
-export type ExplorerLocalAccountChangeReason =
+export type PublicExplorerLocalAccountChangeReason =
 	'fee' | 'fee_refund' | 'operation' | 'transaction' | 'upgrade';
 
-export interface ExplorerLocalAccountChangeDTO {
-	readonly accountFields: ExplorerLocalAccountFieldsDTO;
+export interface PublicExplorerLocalAccountChange {
+	readonly accountFields: PublicExplorerLocalAccountFields;
 	readonly change: {
 		readonly changeType: number;
 		readonly changeTypeString: string;
 		readonly lastModifiedLedger: string;
-		readonly reason: ExplorerLocalAccountChangeReason;
+		readonly reason: PublicExplorerLocalAccountChangeReason;
 		readonly sponsor: string | null;
 		readonly transactionHash: string | null;
 	};
-	readonly coverage: ExplorerLocalAccountCoverageRangeDTO;
+	readonly coverage: PublicExplorerLocalAccountCoverageRange;
 	readonly deleted: boolean;
 	readonly freshness: {
 		readonly batchProcessedAt: string;
@@ -84,45 +84,45 @@ export interface ExplorerLocalAccountChangeDTO {
 		'observed_post_change_state' | 'final_pre_deletion_state';
 }
 
-export interface ExplorerLocalAccountLatestCoverageDTO {
+export interface PublicExplorerLocalAccountLatestCoverage {
 	readonly evidenceSelection: 'latest_complete_canonical_lcm_batch';
 	readonly freshness: {
 		readonly canonicalCoverageCompletedAt: string;
 		readonly canonicalProofEvaluatedAt: string;
 		readonly latestCoveredLedgerClosedAt: string;
 	};
-	readonly range: ExplorerLocalAccountCoverageRangeDTO;
+	readonly range: PublicExplorerLocalAccountCoverageRange;
 }
 
-interface ExplorerLocalAccountChangesBaseDTO {
+interface PublicExplorerLocalAccountChangesBase {
 	readonly accountId: string;
 	readonly count: number;
 	readonly generatedAt: string;
 	readonly interpretation: 'historical_observations_not_current_state';
 	readonly limit: number;
-	readonly records: readonly ExplorerLocalAccountChangeDTO[];
+	readonly records: readonly PublicExplorerLocalAccountChange[];
 	readonly source: 'postgres_proof_gated_lcm_account_changes';
 	readonly truncated: boolean;
 }
 
-export interface ExplorerLocalAccountChangesAvailableDTO extends ExplorerLocalAccountChangesBaseDTO {
-	readonly coverage: ExplorerLocalAccountLatestCoverageDTO;
+export interface PublicExplorerLocalAccountChangesAvailable extends PublicExplorerLocalAccountChangesBase {
+	readonly coverage: PublicExplorerLocalAccountLatestCoverage;
 	readonly status: 'available';
 }
 
-export interface ExplorerLocalAccountChangesNotObservedDTO extends ExplorerLocalAccountChangesBaseDTO {
-	readonly coverage: ExplorerLocalAccountLatestCoverageDTO;
+export interface PublicExplorerLocalAccountChangesNotObserved extends PublicExplorerLocalAccountChangesBase {
+	readonly coverage: PublicExplorerLocalAccountLatestCoverage;
 	readonly reason: 'no_change_observed_in_complete_coverage';
 	readonly status: 'not_observed';
 }
 
-export interface ExplorerLocalAccountChangesUnavailableDTO extends ExplorerLocalAccountChangesBaseDTO {
+export interface PublicExplorerLocalAccountChangesUnavailable extends PublicExplorerLocalAccountChangesBase {
 	readonly coverage: null;
 	readonly reason: 'complete_canonical_coverage_empty';
 	readonly status: 'unavailable';
 }
 
-export type ExplorerLocalAccountChangesDTO =
-	| ExplorerLocalAccountChangesAvailableDTO
-	| ExplorerLocalAccountChangesNotObservedDTO
-	| ExplorerLocalAccountChangesUnavailableDTO;
+export type PublicExplorerLocalAccountChanges =
+	| PublicExplorerLocalAccountChangesAvailable
+	| PublicExplorerLocalAccountChangesNotObserved
+	| PublicExplorerLocalAccountChangesUnavailable;

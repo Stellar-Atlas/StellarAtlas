@@ -4,12 +4,14 @@ import type { ExplorerLocalTransactionsDTO } from '../../../use-cases/get-explor
 import type { ExplorerLocalOperationsDTO } from '../../../use-cases/get-explorer-local-transactions/ExplorerCanonicalOperation.js';
 import type { ExplorerCanonicalTransactionDTO } from '../../../use-cases/get-explorer-local-transactions/ExplorerCanonicalTransaction.js';
 import type { ExplorerCanonicalLedgerDTO } from '../../../use-cases/get-explorer-local-transactions/ExplorerCanonicalLedger.js';
+import type { ExplorerLocalAccountChangesDTO } from '../../../use-cases/get-explorer-local-account-changes/ExplorerLocalAccountChangeDTO.js';
 import {
 	blockchainExplorerRouter,
 	createExplorerTransactionLookupHandler
 } from '../BlockchainExplorerRouter.js';
 
 interface BuildTestAppOptions {
+	readonly localAccountChanges?: ExplorerLocalAccountChangesDTO;
 	readonly localFeed?: ExplorerLocalTransactionsDTO;
 	readonly localLedger?: ExplorerCanonicalLedgerDTO | null;
 	readonly localTransaction?: ExplorerCanonicalTransactionDTO | null;
@@ -18,6 +20,104 @@ interface BuildTestAppOptions {
 export const canonicalHash = 'a'.repeat(64);
 export const canonicalSourceAccount =
 	'GCNDNEWL4WBR7DHE3VOVCKVMBB67JMZV3LBXUHPOVEPABEIBVVP5KPIC';
+
+export const canonicalAccountObservation: ExplorerLocalAccountChangesDTO = {
+	accountId: canonicalSourceAccount,
+	count: 1,
+	coverage: {
+		evidenceSelection: 'latest_complete_canonical_lcm_batch',
+		freshness: {
+			canonicalCoverageCompletedAt: '2026-07-12T04:03:00.000Z',
+			canonicalProofEvaluatedAt: '2026-07-12T04:02:00.000Z',
+			latestCoveredLedgerClosedAt: '2026-07-12T04:00:00.000Z'
+		},
+		range: {
+			batchId: '00000000-0000-4000-8000-000000000002',
+			firstLedger: '63386240',
+			lastLedger: '63386303',
+			ledgerCount: 64
+		}
+	},
+	generatedAt: '2026-07-12T04:04:00.000Z',
+	interpretation: 'historical_observations_not_current_state',
+	limit: 1,
+	records: [
+		{
+			accountFields: {
+				accountId: canonicalSourceAccount,
+				balance: '1000000000',
+				buyingLiabilities: '0',
+				flags: '0',
+				highThreshold: 2,
+				homeDomain: 'example.org',
+				inflationDestination: null,
+				lowThreshold: 1,
+				masterWeight: 1,
+				mediumThreshold: 2,
+				sequenceLedger: null,
+				sequenceNumber: '123',
+				sequenceTime: null,
+				signers: [{ key: canonicalSourceAccount, sponsor: null, weight: 1 }],
+				sellingLiabilities: '0',
+				sponsoredEntryCount: '0',
+				sponsoringEntryCount: '0',
+				subentryCount: '1'
+			},
+			change: {
+				changeType: 1,
+				changeTypeString: 'state',
+				lastModifiedLedger: '63386303',
+				reason: 'operation',
+				sponsor: null,
+				transactionHash: canonicalHash
+			},
+			coverage: {
+				batchId: '00000000-0000-4000-8000-000000000002',
+				firstLedger: '63386240',
+				lastLedger: '63386303',
+				ledgerCount: 64
+			},
+			deleted: false,
+			freshness: {
+				batchProcessedAt: '2026-07-12T04:01:00.000Z',
+				canonicalCoverageCompletedAt: '2026-07-12T04:03:00.000Z',
+				canonicalProofEvaluatedAt: '2026-07-12T04:02:00.000Z',
+				datasetImportedAt: '2026-07-12T04:01:30.000Z',
+				ledgerClosedAt: '2026-07-12T04:00:00.000Z'
+			},
+			position: {
+				changeIndex: '0',
+				ledgerSequence: '63386303',
+				operationIndex: '0',
+				transactionIndex: '0',
+				upgradeIndex: null
+			},
+			provenance: {
+				batch: { id: '00000000-0000-4000-8000-000000000002' },
+				dataset: {
+					importedRowSetSha256: '1'.repeat(64),
+					name: 'account-state-changes',
+					outputSha256: '2'.repeat(64),
+					recordCount: '1',
+					schemaVersion: '1'
+				},
+				manifest: { sha256: '3'.repeat(64) },
+				proof: {
+					canonicalBatchIds: ['00000000-0000-4000-8000-000000000001'],
+					minimumVersion: 6
+				},
+				row: {
+					ledgerKeySha256: '4'.repeat(64),
+					sha256: '5'.repeat(64)
+				}
+			},
+			stateSemantics: 'observed_post_change_state'
+		}
+	],
+	source: 'postgres_proof_gated_lcm_account_changes',
+	status: 'available',
+	truncated: false
+};
 
 export const canonicalLedger: ExplorerCanonicalLedgerDTO = {
 	closedAt: '2026-07-08T16:09:36.000Z',
@@ -192,6 +292,10 @@ export function buildTestApp(options: BuildTestAppOptions = {}) {
 			truncated: false
 		})
 	};
+	const getExplorerLocalAccountChanges = {
+		execute: async () =>
+			options.localAccountChanges ?? canonicalAccountObservation
+	};
 	app.get(
 		'/v1/transactions/:hash',
 		createExplorerTransactionLookupHandler({
@@ -202,6 +306,7 @@ export function buildTestApp(options: BuildTestAppOptions = {}) {
 	app.use(
 		'/v1/explorer',
 		blockchainExplorerRouter({
+			getExplorerLocalAccountChanges,
 			getExplorerLocalReadModel: {
 				execute: async () => localReadModel()
 			},

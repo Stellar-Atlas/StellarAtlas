@@ -3,6 +3,7 @@
 import {
 	fetchHistoryArchiveScanLogs,
 	fetchExplorerAssets,
+	fetchExplorerAccountObservations,
 	fetchExplorerContract,
 	fetchExplorerOperations,
 	fetchExplorerRecentTransactions,
@@ -165,22 +166,56 @@ export async function searchExplorer(
 	}
 
 	try {
+		const search = shouldUseLocalAccountObservations(normalizedQuery, type)
+			? await buildLocalAccountSearch(normalizedQuery)
+			: await fetchExplorerSearch(normalizedQuery, type, {
+					cache: 'no-store'
+				});
 		return {
 			message: null,
 			observedAt: new Date().toISOString(),
-			search: await fetchExplorerSearch(normalizedQuery, type, {
-				cache: 'no-store'
-			}),
+			search,
 			status: 'loaded'
 		};
-	} catch {
+	} catch (error) {
+		const invalidAccount =
+			type === 'account' &&
+			error instanceof Error &&
+			'statusCode' in error &&
+			error.statusCode === 400;
 		return {
-			message: 'Explorer search unavailable',
+			message: invalidAccount
+				? 'Invalid Stellar account address'
+				: 'Explorer search unavailable',
 			observedAt: null,
 			search: null,
-			status: 'unavailable'
+			status: invalidAccount ? 'invalid' : 'unavailable'
 		};
 	}
+}
+
+const stellarAccountPattern = /^G[A-Z2-7]{55}$/;
+
+function shouldUseLocalAccountObservations(
+	query: string,
+	type: PublicExplorerSearchType
+): boolean {
+	return (
+		type === 'account' || (type === 'auto' && stellarAccountPattern.test(query))
+	);
+}
+
+async function buildLocalAccountSearch(
+	query: string
+): Promise<PublicExplorerSearch> {
+	return {
+		query,
+		result: await fetchExplorerAccountObservations(query, {
+			cache: 'no-store'
+		}),
+		resultType: 'account',
+		source: 'postgres_proof_gated_lcm_account_changes'
+	};
 }
 
 export async function getExplorerTransactionOperations(

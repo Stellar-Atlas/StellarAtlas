@@ -129,6 +129,7 @@ export function mapExplorerLocalAccountChange(
 	if (ledgerClosedAt !== unixMillisTimestamp(row.closedAtUnixMillis)) {
 		throw new TypeError('Account observation close time is inconsistent');
 	}
+	const deleted = booleanValue(row.deleted, 'deleted');
 	return {
 		accountFields: {
 			accountId,
@@ -190,7 +191,7 @@ export function mapExplorerLocalAccountChange(
 			transactionHash: nullableHash(row.transactionHash, 'transaction hash')
 		},
 		coverage: coverageRange(row, 'observation'),
-		deleted: booleanValue(row.deleted, 'deleted'),
+		deleted,
 		freshness: {
 			batchProcessedAt: isoTimestamp(row.batchProcessedAt, 'batch processing'),
 			canonicalCoverageCompletedAt: isoTimestamp(
@@ -258,7 +259,10 @@ export function mapExplorerLocalAccountChange(
 				ledgerKeySha256: hash(row.ledgerKeySha256, 'ledger key'),
 				sha256: hash(row.rowSha256, 'row')
 			}
-		}
+		},
+		stateSemantics: deleted
+			? 'final_pre_deletion_state'
+			: 'observed_post_change_state'
 	};
 }
 

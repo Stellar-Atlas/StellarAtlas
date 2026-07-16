@@ -18,9 +18,15 @@ import { fetchExplorerTransactionOperations } from './ExplorerTransactionOperati
 import { createExplorerLocalOperationHandler } from './ExplorerLocalOperationHandler.js';
 import { FullHistoryHash } from '@history-scan-coordinator/domain/full-history/FullHistoryCanonicalTypes.js';
 import type { GetExplorerLocalReadModel } from '../../use-cases/get-explorer-local-read-model/GetExplorerLocalReadModel.js';
+import type { GetExplorerLocalAccountChanges } from '../../use-cases/get-explorer-local-account-changes/GetExplorerLocalAccountChanges.js';
+import { validateExplorerLocalAccountChangesQuery } from '../../use-cases/get-explorer-local-account-changes/GetExplorerLocalAccountChanges.js';
 import type { GetExplorerLocalTransactions } from '../../use-cases/get-explorer-local-transactions/GetExplorerLocalTransactions.js';
 
 export interface BlockchainExplorerRouterConfig {
+	readonly getExplorerLocalAccountChanges: Pick<
+		GetExplorerLocalAccountChanges,
+		'execute'
+	>;
 	readonly getExplorerLocalReadModel: Pick<
 		GetExplorerLocalReadModel,
 		'execute'
@@ -123,6 +129,7 @@ export const blockchainExplorerRouter = (
 					)
 				);
 		} catch {
+			res.setHeader('Cache-Control', 'no-store');
 			return res.status(502).json({ error: 'Explorer search unavailable' });
 		}
 	});
@@ -200,6 +207,28 @@ export const blockchainExplorerRouter = (
 		}
 	});
 
+	router.get('/accounts/:accountId/observations', async (req, res) => {
+		const accountId = req.params.accountId.trim();
+		if (!isValidLocalAccountId(accountId)) {
+			res.setHeader('Cache-Control', 'no-store');
+			return res.status(400).json({ error: 'Invalid account address' });
+		}
+
+		try {
+			const result = await config.getExplorerLocalAccountChanges.execute({
+				accountId,
+				limit: 1
+			});
+			setLocalAccountCacheHeader(res, result.status);
+			return res.status(200).json(result);
+		} catch {
+			res.setHeader('Cache-Control', 'no-store');
+			return res
+				.status(502)
+				.json({ error: 'Account observation lookup unavailable' });
+		}
+	});
+
 	router.get('/accounts/:accountId', async (req, res) => {
 		const accountId = req.params.accountId.trim();
 		if (!isAccountAddress(accountId))
@@ -211,6 +240,7 @@ export const blockchainExplorerRouter = (
 			if (!account) return res.status(404).json({ error: 'Account not found' });
 			return res.status(200).json(account);
 		} catch {
+			res.setHeader('Cache-Control', 'no-store');
 			return res.status(502).json({ error: 'Account lookup unavailable' });
 		}
 	});
@@ -334,5 +364,26 @@ function setCacheHeader(res: express.Response): void {
 	res.setHeader(
 		'Cache-Control',
 		`public, max-age=${explorerCacheMaxAgeSeconds}`
+	);
+}
+
+function isValidLocalAccountId(accountId: string): boolean {
+	try {
+		validateExplorerLocalAccountChangesQuery({ accountId, limit: 1 });
+		return true;
+	} catch {
+		return false;
+	}
+}
+
+function setLocalAccountCacheHeader(
+	res: express.Response,
+	status: 'available' | 'not_observed' | 'unavailable'
+): void {
+	res.setHeader(
+		'Cache-Control',
+		status === 'unavailable'
+			? 'no-store'
+			: `public, max-age=${explorerCacheMaxAgeSeconds}`
 	);
 }

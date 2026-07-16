@@ -81,7 +81,8 @@ describe('GetExplorerLocalAccountChanges', () => {
 				manifest: { sha256: '4'.repeat(64) },
 				proof: { minimumVersion: 6 },
 				row: { sha256: '5'.repeat(64) }
-			}
+			},
+			stateSemantics: 'observed_post_change_state'
 		});
 
 		expect(dataSource.query).toHaveBeenCalledTimes(1);
@@ -90,6 +91,20 @@ describe('GetExplorerLocalAccountChanges', () => {
 		expect((parameters?.[0] as Buffer).byteLength).toBe(32);
 		expect(parameters?.[1]).toBe(accountId);
 		expect(parameters?.[2]).toBe(2);
+	});
+
+	it('labels deleted observations as final pre-deletion state', async () => {
+		dataSource.query.mockResolvedValue([
+			accountObservationRow({ deleted: true })
+		]);
+
+		const result = await useCase.execute({ accountId, limit: 1 });
+
+		if (result.status !== 'available') throw new Error('expected available');
+		expect(result.records[0]).toMatchObject({
+			deleted: true,
+			stateSemantics: 'final_pre_deletion_state'
+		});
 	});
 
 	it('reports an empty complete evidence window as not observed, not not found', async () => {

@@ -22,6 +22,9 @@ export function mountExplorerRoutes(
 	const getExplorerLocalTransactions = kernel.container.get(
 		GetExplorerLocalTransactions
 	);
+	const getExplorerLocalAccountChanges = kernel.container.get(
+		GetExplorerLocalAccountChanges
+	);
 	api.get(
 		'/v1/transactions/:hash',
 		createExplorerTransactionLookupHandler({
@@ -38,9 +41,7 @@ export function mountExplorerRoutes(
 	api.use(
 		'/v1/explorer/local-accounts',
 		explorerLocalAccountRouter({
-			getExplorerLocalAccountChanges: kernel.container.get(
-				GetExplorerLocalAccountChanges
-			),
+			getExplorerLocalAccountChanges,
 			getExplorerLocalTrustlineChanges: kernel.container.get(
 				GetExplorerLocalTrustlineChanges
 			)
@@ -56,6 +57,7 @@ export function mountExplorerRoutes(
 	api.use(
 		'/v1/explorer',
 		blockchainExplorerRouter({
+			getExplorerLocalAccountChanges,
 			getExplorerLocalReadModel: kernel.container.get(
 				GetExplorerLocalReadModel
 			),

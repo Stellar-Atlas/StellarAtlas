@@ -9,9 +9,11 @@ import type {
 import type { PublicHistoryArchiveScanLogError } from './archive-evidence-types';
 import type { PublicCanonicalFullHistoryCoverage } from './canonical-history-types';
 import type { PublicExplorerOperation } from './explorer-operation-types';
+import type { PublicExplorerLocalAccountChanges } from './explorer-local-account-types';
 export type * from './archive-evidence-types';
 export type * from './canonical-history-types';
 export type * from './explorer-operation-types';
+export type * from './explorer-local-account-types';
 export type * from './known-network-types';
 export type * from './search-types';
 export type * from './worker-status-types';
@@ -84,7 +86,11 @@ export interface PublicLatestLedger {
 	readonly source?: 'horizon_fallback' | 'network_scan' | 'scp_live_collector';
 }
 
-export type PublicExplorerSource = 'horizon' | 'postgres_canonical' | 'rpc';
+export type PublicExplorerSource =
+	| 'horizon'
+	| 'postgres_canonical'
+	| 'postgres_proof_gated_lcm_account_changes'
+	| 'rpc';
 export type PublicExplorerSearchType =
 	'account' | 'asset' | 'auto' | 'contract' | 'ledger' | 'transaction';
 
@@ -142,6 +148,7 @@ export interface PublicExplorerSearch {
 	readonly query: string;
 	readonly result:
 		| PublicExplorerAccount
+		| PublicExplorerLocalAccountChanges
 		| PublicExplorerAssets
 		| PublicExplorerContract
 		| PublicExplorerLedger

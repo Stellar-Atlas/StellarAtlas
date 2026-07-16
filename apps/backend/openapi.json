@@ -951,6 +951,37 @@
 				}
 			}
 		},
+		"/v1/explorer/accounts/{accountId}/observations": {
+			"get": {
+				"summary": "Look up proof-gated account observations",
+				"description": "Returns the newest historical account state-change observation from complete proof-gated LedgerCloseMeta coverage. This is not current account state, never falls back to Horizon, and no observed change is not proof that the account was absent.",
+				"tags": ["Explorer"],
+				"operationId": "getExplorerAccountObservations",
+				"parameters": [
+					{
+						"name": "accountId",
+						"in": "path",
+						"required": true,
+						"description": "Checksum-valid Stellar ed25519 account G-address.",
+						"schema": { "type": "string", "pattern": "^G[A-Z2-7]{55}$" }
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "Historical account observation result, including typed unavailable coverage",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/ExplorerLocalAccountChanges"
+								}
+							}
+						}
+					},
+					"400": { "description": "Invalid account address" },
+					"502": { "description": "Account observation lookup failed" }
+				}
+			}
+		},
 		"/v1/explorer/assets": {
 			"get": {
 				"summary": "Search assets",
@@ -9725,7 +9756,8 @@
 					"deleted",
 					"freshness",
 					"position",
-					"provenance"
+					"provenance",
+					"stateSemantics"
 				],
 				"properties": {
 					"accountFields": {
@@ -9838,6 +9870,10 @@
 					},
 					"provenance": {
 						"$ref": "#/components/schemas/ExplorerLocalAccountChangeProvenance"
+					},
+					"stateSemantics": {
+						"type": "string",
+						"enum": ["observed_post_change_state", "final_pre_deletion_state"]
 					}
 				}
 			},
@@ -9950,6 +9986,19 @@
 							"status": { "type": "string", "enum": ["unavailable"] },
 							"truncated": { "type": "boolean", "enum": [false] }
 						}
+					}
+				]
+			},
+			"ExplorerLocalAccountChanges": {
+				"oneOf": [
+					{
+						"$ref": "#/components/schemas/ExplorerLocalAccountChangesAvailable"
+					},
+					{
+						"$ref": "#/components/schemas/ExplorerLocalAccountChangesNotObserved"
+					},
+					{
+						"$ref": "#/components/schemas/ExplorerLocalAccountChangesUnavailable"
 					}
 				]
 			},
@@ -10741,7 +10790,10 @@
 					"operationCount": { "type": "integer", "minimum": 0 },
 					"protocolVersion": { "type": "integer" },
 					"sequence": { "type": "string" },
-					"source": { "type": "string", "enum": ["horizon"] },
+					"source": {
+						"type": "string",
+						"enum": ["horizon", "postgres_canonical"]
+					},
 					"transactionCount": {
 						"type": "integer",
 						"nullable": true,

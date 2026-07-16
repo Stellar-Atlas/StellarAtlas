@@ -6,7 +6,7 @@ import type {
 	PublicApiStatus,
 	PublicConfiguredServiceStatus,
 	PublicDataQualityStatus,
-	PublicExplorerAccount,
+	PublicExplorerLocalAccountChanges,
 	PublicExplorerAssets,
 	PublicExplorerContract,
 	PublicExplorerLedger,
@@ -35,6 +35,7 @@ import type {
 } from './types';
 import { frontendCacheTags } from './cache-policy';
 import { parseFullHistoryStatus } from './full-history-status-contract';
+import { parseExplorerLocalAccountChanges } from './explorer-local-account-contract';
 import { parseWorkerStatusDTO } from './worker-status-parser';
 import {
 	buildKnownNodesPath,
@@ -298,12 +299,13 @@ export const fetchExplorerLedger = (
 		options
 	);
 
-export const fetchExplorerAccount = (
+export const fetchExplorerAccountObservations = (
 	accountId: string,
 	options?: FetchOptions
-): Promise<PublicExplorerAccount> =>
-	fetchJson<PublicExplorerAccount>(
-		`/v1/explorer/accounts/${encodeURIComponent(accountId)}`,
+): Promise<PublicExplorerLocalAccountChanges> =>
+	fetchValidatedJson(
+		`/v1/explorer/accounts/${encodeURIComponent(accountId)}/observations`,
+		parseExplorerLocalAccountChanges,
 		options
 	);
 

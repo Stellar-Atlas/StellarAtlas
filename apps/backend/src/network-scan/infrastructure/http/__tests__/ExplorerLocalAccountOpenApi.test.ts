@@ -46,9 +46,14 @@ describe('explorer local account observation OpenAPI schema', () => {
 				'deleted',
 				'freshness',
 				'position',
-				'provenance'
+				'provenance',
+				'stateSemantics'
 			])
 		);
+		expect(observation.properties.stateSemantics.enum).toEqual([
+			'observed_post_change_state',
+			'final_pre_deletion_state'
+		]);
 		expect(provenance.required).toEqual([
 			'batch',
 			'dataset',
@@ -67,6 +72,26 @@ describe('explorer local account observation OpenAPI schema', () => {
 			schemas.ExplorerLocalAccountChangesUnavailable.allOf[1].properties.status
 				.enum
 		).toEqual(['unavailable']);
+	});
+
+	it('documents proof-gated observations without breaking primary account lookup', () => {
+		const primaryRoute =
+			openApiDocument.paths['/v1/explorer/accounts/{accountId}'].get;
+		const route =
+			openApiDocument.paths['/v1/explorer/accounts/{accountId}/observations']
+				.get;
+
+		expect(
+			primaryRoute.responses['200'].content['application/json'].schema.$ref
+		).toBe('#/components/schemas/ExplorerAccount');
+		expect(primaryRoute.responses['404']).toBeDefined();
+		expect(route.description).toContain('not current account state');
+		expect(route.description).toContain('never falls back to Horizon');
+		expect(route.responses['200'].content['application/json'].schema.$ref).toBe(
+			'#/components/schemas/ExplorerLocalAccountChanges'
+		);
+		expect(route.responses['404']).toBeUndefined();
+		expect(route.responses['503']).toBeUndefined();
 	});
 
 	it('does not expose a raw state entry XDR field', () => {
