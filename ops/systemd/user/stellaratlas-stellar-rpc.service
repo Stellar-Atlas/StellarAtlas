@@ -1,0 +1,20 @@
+[Unit]
+Description=StellarAtlas owned Stellar RPC
+
+[Service]
+Type=simple
+WorkingDirectory=/home/observe/stellarbeat-data/stellar-rpc/pubnet
+Environment=HOME=/home/observe
+Environment=LD_LIBRARY_PATH=/home/observe/stellarbeat-data/stellar-core/runtime/usr/lib/x86_64-linux-gnu
+ExecStart=/home/observe/stellarbeat-data/stellar-rpc/bin/stellar-rpc --config-path /home/observe/stellarbeat-data/stellar-rpc/pubnet/config/rpc.toml --config-strict
+Restart=on-failure
+RestartSec=10
+TimeoutStopSec=120
+KillSignal=SIGTERM
+LimitNOFILE=65536
+MemoryMax=24G
+TasksMax=512
+
+[Install]
+WantedBy=default.target
+

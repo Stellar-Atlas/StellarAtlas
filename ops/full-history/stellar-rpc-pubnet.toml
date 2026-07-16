@@ -1,0 +1,26 @@
+ADMIN_ENDPOINT = "127.0.0.1:8003"
+CAPTIVE_CORE_STORAGE_PATH = "/home/observe/stellarbeat-data/stellar-rpc/pubnet/captive-core"
+CHECKPOINT_FREQUENCY = 64
+DB_PATH = "/home/observe/stellarbeat-data/stellar-rpc/pubnet/data/stellar-rpc.sqlite"
+ENDPOINT = "127.0.0.1:8002"
+HISTORY_ARCHIVE_URLS = [
+  "https://history.stellar.org/prd/core-live/core_live_001/",
+  "https://history.stellar.org/prd/core-live/core_live_002/",
+  "https://history.stellar.org/prd/core-live/core_live_003/",
+]
+HISTORY_RETENTION_WINDOW = 120960
+INGESTION_TIMEOUT = "50m0s"
+LOG_FORMAT = "json"
+LOG_LEVEL = "info"
+MAX_HEALTHY_LEDGER_LATENCY = "30s"
+NETWORK = "pubnet"
+NETWORK_PASSPHRASE = "Public Global Stellar Network ; September 2015"
+PREFLIGHT_ENABLE_DEBUG = false
+PREFLIGHT_WORKER_COUNT = 12
+PREFLIGHT_WORKER_QUEUE_SIZE = 24
+STELLAR_CAPTIVE_CORE_HTTP_PORT = 11636
+STELLAR_CAPTIVE_CORE_HTTP_QUERY_PORT = 11638
+STELLAR_CAPTIVE_CORE_HTTP_QUERY_THREAD_POOL_SIZE = 12
+STELLAR_CORE_BINARY_PATH = "/home/observe/stellarbeat-data/stellar-core/bin/stellar-core"
+STRICT = true
+

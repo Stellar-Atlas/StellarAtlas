@@ -1,0 +1,16 @@
+[Unit]
+Description=StellarAtlas Horizon PostgreSQL
+
+[Service]
+Type=simple
+ExecStart=/usr/lib/postgresql/16/bin/postgres -D /home/observe/stellarbeat-data/horizon/postgres/27 -c config_file=/home/observe/stellarbeat-data/horizon/postgres/config/postgresql.conf
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=120
+KillSignal=SIGINT
+LimitNOFILE=65536
+MemoryMax=32G
+
+[Install]
+WantedBy=default.target
+
