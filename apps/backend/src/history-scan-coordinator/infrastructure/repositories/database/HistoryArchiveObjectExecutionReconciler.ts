@@ -15,6 +15,7 @@ import {
 	materializeCanonicalFrontierDependenciesSql
 } from './HistoryArchiveCanonicalFrontierSql.js';
 import { backfillLegacyCheckpointContentDigests } from './HistoryArchiveLegacyCheckpointDigestBackfill.js';
+import { refreshOneStaleCanonicalCheckpointProof } from './HistoryArchiveCheckpointProofVersionRefresh.js';
 import {
 	historyArchiveObjectFrontierSql,
 	seedHistoryArchiveFrontierCursorsSql
@@ -49,6 +50,7 @@ export async function reconcileHistoryArchiveObjectExecution(
 			preserveRunnableRowsSql
 		)) as readonly { readonly count: number | string }[];
 		await backfillLegacyCheckpointContentDigests(manager);
+		await refreshOneStaleCanonicalCheckpointProof(manager);
 		await manager.query(materializeCanonicalFrontierDependenciesSql);
 		await manager.query(rebalanceRunnableFrontierSql, [
 			historyArchivePerRootFrontier

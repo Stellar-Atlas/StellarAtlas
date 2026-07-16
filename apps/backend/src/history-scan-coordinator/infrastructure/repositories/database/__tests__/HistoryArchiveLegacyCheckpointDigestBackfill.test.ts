@@ -26,6 +26,12 @@ describe('legacy checkpoint content digest backfill', () => {
 		expect(
 			deriveLegacyCheckpointContentDigest({
 				...row(),
+				bytesDownloaded: null
+			})
+		).toBeNull();
+		expect(
+			deriveLegacyCheckpointContentDigest({
+				...row(),
 				objectUrl: 'https://different.example/history.json'
 			})
 		).toBeNull();

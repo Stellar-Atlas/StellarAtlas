@@ -1,9 +1,15 @@
+import { createHash } from 'node:crypto';
 import { DataSource } from 'typeorm';
 import { HistoryArchiveObject } from '../../../../domain/history-archive-object/HistoryArchiveObject.js';
-import { HistoryArchiveCheckpointProof } from '../../../../domain/history-archive-checkpoint-proof/HistoryArchiveCheckpointProof.js';
+import {
+	CURRENT_HISTORY_ARCHIVE_CHECKPOINT_PROOF_VERSION,
+	HistoryArchiveCheckpointProof
+} from '../../../../domain/history-archive-checkpoint-proof/HistoryArchiveCheckpointProof.js';
+import { publicNetworkPassphrase } from '../../../../domain/history-archive-object/HistoryArchiveObjectScpPolicy.js';
 import { HistoryArchiveObjectEventMigration1784370000000 } from '../../../database/migrations/1784370000000-HistoryArchiveObjectEventMigration.js';
 import { HistoryArchiveObjectHostThrottleMigration1784410000000 } from '../../../database/migrations/1784410000000-HistoryArchiveObjectHostThrottleMigration.js';
 import { HistoryArchiveObjectClaimCursorMigration1784780000000 } from '../../../database/migrations/1784780000000-HistoryArchiveObjectClaimCursorMigration.js';
+import { TypeOrmHistoryArchiveCheckpointProofRepository } from '../TypeOrmHistoryArchiveCheckpointProofRepository.js';
 import { TypeOrmHistoryArchiveObjectRepository } from '../TypeOrmHistoryArchiveObjectRepository.js';
 import {
 	startDisposablePostgres,
@@ -15,6 +21,12 @@ import {
 	createObject,
 	createRoot
 } from './HistoryArchiveObjectExecutionTestFixtures.js';
+import {
+	proofArchiveUrl,
+	proofCheckpointLedger,
+	refreshAndLoadProof,
+	saveProofFixture
+} from './HistoryArchiveCheckpointProofFixture.js';
 
 jest.setTimeout(60_000);
 
@@ -51,7 +63,7 @@ describe('history archive execution reconciliation in disposable PostgreSQL', ()
 
 	beforeEach(async () => {
 		await dataSource.query(
-			'truncate "history_archive_checkpoint_proof", "history_archive_object_event", "history_archive_object_queue", "history_archive_object_frontier_cursor", "history_archive_checkpoint_bucket_dependency" restart identity cascade'
+			'truncate "history_archive_checkpoint_proof", "history_archive_object_event", "history_archive_object_queue", "history_archive_object_frontier_cursor", "history_archive_checkpoint_bucket_dependency", "history_archive_state_snapshot", "full_history_historical_backfill_job", "full_history_watermark", "full_history_promotion_runtime" restart identity cascade'
 		);
 		await dataSource.query(
 			`update "history_archive_reconciliation_state"
@@ -393,6 +405,61 @@ describe('history archive execution reconciliation in disposable PostgreSQL', ()
 		expect(counts).toEqual({
 			availableExecutable: 48,
 			throttledExecutable: 0
+		});
+	});
+
+	it('refreshes stale active-target proofs without operator intervention', async () => {
+		await saveProofFixture(dataSource);
+		await refreshAndLoadProof(
+			dataSource,
+			new TypeOrmHistoryArchiveCheckpointProofRepository(dataSource)
+		);
+		await dataSource.query(
+			`update "history_archive_object_queue"
+			 set status = 'failed', "errorType" = 'http-status',
+				"failureChannel" = 'archive_evidence', "httpStatus" = 404
+			 where "archiveUrlIdentity" = $1 and "objectType" = 'scp'`,
+			[proofArchiveUrl]
+		);
+		await dataSource.query(
+			`update "history_archive_checkpoint_proof"
+			 set "proofVersion" = $1, status = 'not-evaluable',
+				"failureKind" = 'object-failed'
+			 where "archiveUrlIdentity" = $2 and "checkpointLedger" = $3`,
+			[
+				CURRENT_HISTORY_ARCHIVE_CHECKPOINT_PROOF_VERSION - 1,
+				proofArchiveUrl,
+				proofCheckpointLedger
+			]
+		);
+		const networkHash = createHash('sha256')
+			.update(publicNetworkPassphrase, 'utf8')
+			.digest();
+		await dataSource.query(
+			`insert into "history_archive_state_snapshot" (
+				"archiveUrlIdentity", status, "networkPassphrase"
+			 ) values ($1, 'available', $2)`,
+			[proofArchiveUrl, publicNetworkPassphrase]
+		);
+		await dataSource.query(
+			`insert into "full_history_promotion_runtime" (
+				"network_passphrase_hash", state, "checkpoint_ledger"
+			 ) values ($1, 'waiting-for-proof', $2)`,
+			[networkHash, proofCheckpointLedger]
+		);
+
+		await repository.reconcileExecutionDisposition();
+
+		const proof = await dataSource
+			.getRepository(HistoryArchiveCheckpointProof)
+			.findOneByOrFail({
+				archiveUrlIdentity: proofArchiveUrl,
+				checkpointLedger: proofCheckpointLedger
+			});
+		expect(proof).toMatchObject({
+			failureKind: null,
+			proofVersion: CURRENT_HISTORY_ARCHIVE_CHECKPOINT_PROOF_VERSION,
+			status: 'verified'
 		});
 	});
 });

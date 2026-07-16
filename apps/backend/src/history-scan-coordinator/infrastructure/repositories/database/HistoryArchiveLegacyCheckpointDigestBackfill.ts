@@ -4,7 +4,7 @@ import { canonicalCheckpointHasStrictContentDigestSql } from './HistoryArchiveCa
 import { canonicalRuntimeTargetCtes } from './HistoryArchiveCanonicalFrontierSql.js';
 
 interface LegacyCheckpointRow {
-	readonly bytesDownloaded: number | string;
+	readonly bytesDownloaded: number | string | null;
 	readonly checkpointLedger: number;
 	readonly objectUrl: string;
 	readonly remoteId: string;
@@ -125,7 +125,8 @@ function isLegacyCheckpointRow(value: unknown): value is LegacyCheckpointRow {
 	if (row === null) return false;
 	return (
 		(typeof row.bytesDownloaded === 'number' ||
-			typeof row.bytesDownloaded === 'string') &&
+			typeof row.bytesDownloaded === 'string' ||
+			row.bytesDownloaded === null) &&
 		Number.isSafeInteger(row.checkpointLedger) &&
 		typeof row.objectUrl === 'string' &&
 		typeof row.remoteId === 'string'
@@ -138,7 +139,8 @@ function requireUpdatedRows(value: unknown): number {
 	return value.length;
 }
 
-function readDatabaseBigint(value: number | string): bigint {
+function readDatabaseBigint(value: number | string | null): bigint {
+	if (value === null) return -1n;
 	try {
 		const parsed = BigInt(value);
 		return parsed >= 0n ? parsed : -1n;
