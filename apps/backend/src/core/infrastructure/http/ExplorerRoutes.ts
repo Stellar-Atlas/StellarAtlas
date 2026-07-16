@@ -9,6 +9,7 @@ import { horizonExplorerRouter } from '@network-scan/infrastructure/http/Horizon
 import { explorerLocalLedgerRouter } from '@network-scan/infrastructure/http/ExplorerLocalLedgerRouter.js';
 import { explorerLocalAccountRouter } from '@network-scan/infrastructure/http/ExplorerLocalAccountRouter.js';
 import { GetExplorerLocalAccountChanges } from '@network-scan/use-cases/get-explorer-local-account-changes/GetExplorerLocalAccountChanges.js';
+import { GetExplorerLocalTrustlineChanges } from '@network-scan/use-cases/get-explorer-local-trustline-changes/GetExplorerLocalTrustlineChanges.js';
 import { GetExplorerLocalLedgers } from '@network-scan/use-cases/get-explorer-local-ledgers/GetExplorerLocalLedgers.js';
 import { GetExplorerLocalReadModel } from '@network-scan/use-cases/get-explorer-local-read-model/GetExplorerLocalReadModel.js';
 import { GetExplorerLocalTransactions } from '@network-scan/use-cases/get-explorer-local-transactions/GetExplorerLocalTransactions.js';
@@ -39,6 +40,9 @@ export function mountExplorerRoutes(
 		explorerLocalAccountRouter({
 			getExplorerLocalAccountChanges: kernel.container.get(
 				GetExplorerLocalAccountChanges
+			),
+			getExplorerLocalTrustlineChanges: kernel.container.get(
+				GetExplorerLocalTrustlineChanges
 			)
 		})
 	);

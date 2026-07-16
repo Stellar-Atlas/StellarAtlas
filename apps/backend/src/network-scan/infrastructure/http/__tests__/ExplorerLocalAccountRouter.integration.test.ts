@@ -7,6 +7,7 @@ import { mock } from 'jest-mock-extended';
 import request from 'supertest';
 import type { GetExplorerLocalAccountChanges } from '../../../use-cases/get-explorer-local-account-changes/GetExplorerLocalAccountChanges.js';
 import { accountId } from '../../../use-cases/get-explorer-local-account-changes/__tests__/ExplorerLocalAccountChangeTestFixture.js';
+import type { GetExplorerLocalTrustlineChanges } from '../../../use-cases/get-explorer-local-trustline-changes/GetExplorerLocalTrustlineChanges.js';
 import { explorerLocalAccountRouter } from '../ExplorerLocalAccountRouter.js';
 
 describe('ExplorerLocalAccountRouter.integration', () => {
@@ -99,19 +100,130 @@ describe('ExplorerLocalAccountRouter.integration', () => {
 			.expect('Cache-Control', 'no-store')
 			.expect({ error: 'Local account observations unavailable' });
 	});
+
+	it('serves trustline observations with bounded defaults and 200 evidence states', async () => {
+		const accountUseCase = accountChangesUseCase();
+		const trustlineUseCase = trustlineChangesUseCase();
+		trustlineUseCase.execute.mockResolvedValueOnce({
+			...trustlineBaseResponse(),
+			count: 1,
+			coverage: latestCoverage,
+			records: [],
+			status: 'available',
+			truncated: false
+		});
+
+		await request(buildApp(accountUseCase, trustlineUseCase))
+			.get(`/v1/explorer/local-accounts/${accountId}/trustline-changes`)
+			.expect(200)
+			.expect('Cache-Control', 'public, max-age=20')
+			.expect((response) => {
+				expect(response.body).toMatchObject({
+					interpretation: 'historical_observations_not_current_state',
+					status: 'available'
+				});
+			});
+		expect(trustlineUseCase.execute).toHaveBeenCalledWith({
+			accountId,
+			limit: 1
+		});
+
+		trustlineUseCase.execute.mockResolvedValueOnce({
+			...trustlineBaseResponse(),
+			count: 0,
+			coverage: latestCoverage,
+			reason: 'no_change_observed_in_complete_coverage',
+			records: [],
+			status: 'not_observed',
+			truncated: false
+		});
+		await request(buildApp(accountUseCase, trustlineUseCase))
+			.get(
+				`/v1/explorer/local-accounts/${accountId}/trustline-changes?limit=25`
+			)
+			.expect(200)
+			.expect((response) => {
+				expect(response.body.status).toBe('not_observed');
+			});
+	});
+
+	it('maps missing trustline proof coverage to 503 and query failures to 502', async () => {
+		const accountUseCase = accountChangesUseCase();
+		const trustlineUseCase = trustlineChangesUseCase();
+		trustlineUseCase.execute.mockResolvedValueOnce({
+			...trustlineBaseResponse(),
+			count: 0,
+			coverage: null,
+			reason: 'complete_canonical_coverage_empty',
+			records: [],
+			status: 'unavailable',
+			truncated: false
+		});
+
+		await request(buildApp(accountUseCase, trustlineUseCase))
+			.get(`/v1/explorer/local-accounts/${accountId}/trustline-changes`)
+			.expect(503)
+			.expect('Cache-Control', 'no-store');
+
+		trustlineUseCase.execute.mockRejectedValueOnce(
+			new Error('relation detail')
+		);
+		await request(buildApp(accountUseCase, trustlineUseCase))
+			.get(`/v1/explorer/local-accounts/${accountId}/trustline-changes`)
+			.expect(502)
+			.expect('Cache-Control', 'no-store')
+			.expect({ error: 'Local trustline observations unavailable' });
+	});
+
+	it('rejects malformed trustline observation requests before querying', async () => {
+		const accountUseCase = accountChangesUseCase();
+		const trustlineUseCase = trustlineChangesUseCase();
+
+		for (const path of [
+			`/v1/explorer/local-accounts/${'G'.padEnd(56, 'A')}/trustline-changes`,
+			`/v1/explorer/local-accounts/${accountId}/trustline-changes?limit=0`,
+			`/v1/explorer/local-accounts/${accountId}/trustline-changes?limit=26`,
+			`/v1/explorer/local-accounts/${accountId}/trustline-changes?limit=01`
+		]) {
+			await request(buildApp(accountUseCase, trustlineUseCase))
+				.get(path)
+				.expect(400);
+		}
+		expect(trustlineUseCase.execute).not.toHaveBeenCalled();
+	});
 });
 
 function accountChangesUseCase() {
 	return mock<Pick<GetExplorerLocalAccountChanges, 'execute'>>();
 }
 
-function buildApp(useCase: ReturnType<typeof accountChangesUseCase>) {
+function trustlineChangesUseCase() {
+	return mock<Pick<GetExplorerLocalTrustlineChanges, 'execute'>>();
+}
+
+function buildApp(
+	useCase: ReturnType<typeof accountChangesUseCase>,
+	trustlineUseCase = trustlineChangesUseCase()
+) {
 	const app = express();
 	app.use(
 		'/v1/explorer/local-accounts',
-		explorerLocalAccountRouter({ getExplorerLocalAccountChanges: useCase })
+		explorerLocalAccountRouter({
+			getExplorerLocalAccountChanges: useCase,
+			getExplorerLocalTrustlineChanges: trustlineUseCase
+		})
 	);
 	return app;
+}
+
+function trustlineBaseResponse() {
+	return {
+		accountId,
+		generatedAt: '2026-07-15T14:00:00.000Z',
+		interpretation: 'historical_observations_not_current_state' as const,
+		limit: 1,
+		source: 'postgres_proof_gated_lcm_trustline_changes' as const
+	};
 }
 
 function baseResponse() {
