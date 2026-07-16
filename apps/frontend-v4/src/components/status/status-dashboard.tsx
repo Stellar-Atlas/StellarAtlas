@@ -22,6 +22,7 @@ import {
 } from '@domain/history-archive-health';
 import { StatusArchiveEvidenceTables } from './archive-status-tables';
 import { ArchiveWorkerStatusTable } from './archive-worker-status-table';
+import { resolveArchiveRuntimeActivity } from './archive-runtime-activity';
 import { RecentScanLogs } from './recent-scan-logs';
 import { LedgerCloseMetaStatusRow } from './ledger-close-meta-status-row';
 import { LedgerCloseMetaStateStatusRows } from './ledger-close-meta-state-status-rows';
@@ -79,10 +80,11 @@ export function StatusDashboard({
 		archiveEvidenceAvailable ||
 		workers.archiveWorkers.status !== 'unavailable' ||
 		workers.archiveWorkers.configuredWorkerProcesses > 0;
-	const observedActiveChecks = Math.max(
-		archiveObjectActivity.freshActiveObjects,
-		workers.archiveWorkers.activeWorkers
+	const archiveRuntimeActivity = resolveArchiveRuntimeActivity(
+		archiveObjectActivity,
+		workers.archiveWorkers
 	);
+	const observedActiveChecks = archiveRuntimeActivity.activeChecks;
 	const archiveAssessment = assessArchiveStatusHealth({
 		evidenceAvailable: archiveEvidenceAvailable,
 		observedActiveChecks,
@@ -94,24 +96,18 @@ export function StatusDashboard({
 		proofComplete:
 			archiveEvidenceAvailable &&
 			checkpointStatusProofIsComplete(archiveSummary),
-		staleChecks: Math.max(
-			archiveObjectActivity.staleActiveObjects,
-			workers.archiveWorkers.staleWorkers
-		),
+		staleChecks: archiveRuntimeActivity.staleChecks,
 		telemetryAvailable: archiveTelemetryAvailable,
 		waitingChecks: archiveAssessment.facts.waitingChecks,
 		workerStatus: workers.archiveWorkers.status
 	});
 	const archiveRuntimeHeadline = describeArchiveRuntimeHeadline({
 		activeChecks: observedActiveChecks,
-		staleChecks: Math.max(
-			archiveObjectActivity.staleActiveObjects,
-			workers.archiveWorkers.staleWorkers
-		),
+		staleChecks: archiveRuntimeActivity.staleChecks,
 		state: archiveScannerHealth
 	});
 	const archiveVerifierDetail = formatArchiveWorkerDetail(
-		archiveObjectActivity,
+		archiveRuntimeActivity,
 		workers
 	);
 	const networkMonitoringStatus = combineStatusLevels(
@@ -427,21 +423,17 @@ function summarizeArchiveObjects(
 }
 
 function formatArchiveWorkerDetail(
-	activity: ArchiveObjectSummary,
+	activity: { readonly activeChecks: number; readonly staleChecks: number },
 	workers: PublicWorkerStatus
 ): string {
 	const objectWorkers = workers.archiveWorkers;
-	const staleChecks = Math.max(
-		objectWorkers.staleWorkers,
-		activity.staleActiveObjects
-	);
 	const staleText =
-		staleChecks > 0
-			? `; ${formatInteger(staleChecks)} stale check${staleChecks === 1 ? '' : 's'} being reclaimed`
+		activity.staleChecks > 0
+			? `; ${formatInteger(activity.staleChecks)} stale check${activity.staleChecks === 1 ? '' : 's'} being reclaimed`
 			: '';
 	const activeText =
-		objectWorkers.activeWorkers > 0
-			? `${formatInteger(objectWorkers.activeWorkers)} active object check${objectWorkers.activeWorkers === 1 ? '' : 's'}`
+		activity.activeChecks > 0
+			? `${formatInteger(activity.activeChecks)} active object check${activity.activeChecks === 1 ? '' : 's'}`
 			: 'no active object checks at this instant';
 	return `${formatInteger(objectWorkers.configuredWorkerProcesses)} configured worker processes; ${activeText}${staleText}`;
 }

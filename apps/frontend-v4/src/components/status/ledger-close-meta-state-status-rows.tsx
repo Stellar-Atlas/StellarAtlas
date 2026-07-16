@@ -79,8 +79,8 @@ function CanonicalStateLinkageRow({
 		<StatusRow
 			detail={
 				empty
-					? 'No imported state batch overlaps proof-v6 canonical history yet.'
-					: `Imported account and trustline rows are prerequisites. The check compares the LedgerCloseMeta ledger header and hash projection with proof-v6 canonical ledgers: ${formatInteger(lifecycle.checking)} checking, ${formatInteger(lifecycle.pending)} queued, ${formatInteger(lifecycle.failed)} failed; latest update ${formatNullableDate(linkage.latestUpdatedAt)}. It does not compare account or trustline contents with a canonical state snapshot and is not SCP evidence.`
+					? 'No imported state batch overlaps proof-gated canonical history yet.'
+					: `Imported account and trustline rows are prerequisites. The check compares the LedgerCloseMeta ledger header and hash projection with proof-gated canonical ledgers: ${formatInteger(lifecycle.checking)} checking, ${formatInteger(lifecycle.pending)} queued, ${formatInteger(lifecycle.failed)} failed; latest update ${formatNullableDate(linkage.latestUpdatedAt)}. It does not compare account or trustline contents with a canonical state snapshot and is not SCP evidence.`
 			}
 			label="Canonical ledger linkage"
 			pillText={

@@ -28,6 +28,8 @@ describe('LedgerCloseMetaStateStatusRows', () => {
 		expect(html).toContain('3 / 4 imports complete');
 		expect(html).toContain('96 / 128 LCM ledgers matched');
 		expect(html).toContain('Needs attention');
+		expect(html).toContain('proof-gated canonical ledgers');
+		expect(html).not.toContain('proof-v6');
 		expect(html).toContain('does not compare account or trustline contents');
 		expect(html).toContain('not SCP evidence');
 	});
