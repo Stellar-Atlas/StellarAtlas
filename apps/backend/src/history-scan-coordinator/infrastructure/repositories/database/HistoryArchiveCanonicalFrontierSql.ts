@@ -310,33 +310,6 @@ export const admitCanonicalFrontierSql = `
 			and reserved."executionReason" = 'canonical-frontier-reserve'
 	), protected_roots as materialized (
 		select "archiveUrlIdentity" from canonical_roots
-		union
-		select distinct protected."archiveUrlIdentity"
-		from "history_archive_object_queue" protected
-		where protected.status = 'pending'
-			and protected."executionDisposition" = 'executable'
-			and protected."dependencyReady" = true
-			and protected."executionReason" = 'proof-completion-reserve'
-		union
-		select distinct protected."archiveUrlIdentity"
-		from "history_archive_object_queue" protected
-		where protected.status = 'failed'
-			and protected."executionDisposition" = 'executable'
-			and protected."dependencyReady" = true
-			and (
-				protected."transitionEffectsRequiredAt" is null
-				or protected."transitionEffectsCompletedAt" is not null
-			)
-			and not exists (
-				select 1
-				from "history_archive_object_host_throttle" throttle
-				where throttle."hostIdentity" = protected."hostIdentity"
-					and throttle."blockedUntil" > now()
-			)
-			and coalesce(
-				protected."nextAttemptAt",
-				protected."updatedAt" + interval '1 hour'
-			) <= now()
 	), outstanding as materialized (
 		select count(*)::integer as count
 		from (
@@ -399,17 +372,36 @@ export const admitCanonicalFrontierSql = `
 			select generic.id
 			from "history_archive_object_queue" generic
 			where generic."archiveUrlIdentity" = desired."archiveUrlIdentity"
-				and generic.status = 'pending'
 				and generic."executionDisposition" = 'executable'
 				and generic."dependencyReady" = true
+				and generic."executionReason" is distinct from
+					'canonical-frontier-reserve'
 				and (
-					generic."executionReason" is null
-					or generic."executionReason" not in (
-						'canonical-frontier-reserve',
-						'proof-completion-reserve'
+					generic.status = 'pending'
+					or (
+						generic.status = 'failed'
+						and (
+							generic."transitionEffectsRequiredAt" is null
+							or generic."transitionEffectsCompletedAt" is not null
+						)
+						and coalesce(
+							generic."nextAttemptAt",
+							generic."updatedAt" + interval '1 hour'
+						) <= now()
 					)
 				)
-			order by generic.id
+				and not exists (
+					select 1
+					from "history_archive_object_host_throttle" throttle
+					where throttle."hostIdentity" = generic."hostIdentity"
+						and throttle."blockedUntil" > now()
+				)
+			order by
+				case generic."executionReason"
+					when 'proof-completion-reserve' then 0
+					else 1
+				end,
+				generic.id
 			limit 1
 		) replaceable on true
 		where protected."archiveUrlIdentity" is null
@@ -508,7 +500,11 @@ export const admitCanonicalFrontierSql = `
 	), demoted as (
 		update "history_archive_object_queue" generic
 		set "executionDisposition" = 'deferred',
-			"executionReason" = 'frontier-waiting',
+			"executionReason" = case generic."executionReason"
+				when 'proof-completion-reserve'
+					then 'proof-completion-waiting'
+				else 'frontier-waiting'
+			end,
 			"executionDispositionAt" = now()
 		from selected
 		where generic.id = selected.selected_replaceable_id

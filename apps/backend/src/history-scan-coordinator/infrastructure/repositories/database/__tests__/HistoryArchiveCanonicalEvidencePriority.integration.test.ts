@@ -134,6 +134,62 @@ describe('canonical archive evidence priority', () => {
 		]);
 	});
 
+	it('replaces a generic proof reservation with canonical frontier work', async () => {
+		await seedArchive(0);
+		await seedRuntime();
+		await dataSource.query(materializeCanonicalFrontierDependenciesSql);
+		await dataSource.query(`
+			update "history_archive_object_queue"
+			set "executionDisposition" = 'executable',
+				"executionReason" = 'proof-completion-reserve',
+				"dependencyReady" = true
+			where "objectType" = 'ledger'
+				and "checkpointLedger" = ${targetCheckpoint}
+		`);
+
+		await dataSource.query(admitCanonicalFrontierSql, [1, 2]);
+		const [ledger] = (await dataSource.query(`
+			select "executionDisposition", "executionReason"
+			from "history_archive_object_queue"
+			where "objectType" = 'ledger'
+				and "checkpointLedger" = ${targetCheckpoint}
+		`)) as readonly ExecutionRow[];
+		const [reserved] = (await dataSource.query(`
+			select count(*)::integer as count
+			from "history_archive_object_queue"
+			where "executionReason" = 'canonical-frontier-reserve'
+		`)) as readonly { readonly count: number }[];
+
+		expect(ledger).toEqual({
+			executionDisposition: 'deferred',
+			executionReason: 'proof-completion-waiting'
+		});
+		expect(reserved?.count).toBe(1);
+	});
+
+	it('does not let an unrelated retry hide canonical frontier work', async () => {
+		await seedArchive(0);
+		await seedRuntime();
+		await dataSource.query(materializeCanonicalFrontierDependenciesSql);
+		await dataSource.query(`
+			update "history_archive_object_queue"
+			set status = 'failed', "executionDisposition" = 'executable',
+				"executionReason" = 'retry-preserved',
+				"dependencyReady" = true, "nextAttemptAt" = now() - interval '1 minute'
+			where "objectType" = 'ledger'
+				and "checkpointLedger" = ${targetCheckpoint}
+		`);
+
+		await dataSource.query(admitCanonicalFrontierSql, [1, 2]);
+		const [reserved] = (await dataSource.query(`
+			select count(*)::integer as count
+			from "history_archive_object_queue"
+			where "executionReason" = 'canonical-frontier-reserve'
+		`)) as readonly { readonly count: number }[];
+
+		expect(reserved?.count).toBe(1);
+	});
+
 	async function seedArchive(index: number): Promise<void> {
 		const root = object(
 			index,
@@ -201,4 +257,9 @@ interface RevalidationRow {
 	readonly executionReason: string | null;
 	readonly status: string;
 	readonly verifiedAt: Date | null;
+}
+
+interface ExecutionRow {
+	readonly executionDisposition: string | null;
+	readonly executionReason: string | null;
 }

@@ -3,6 +3,7 @@ import type { HistoryArchiveObject } from '@history-scan-coordinator/domain/hist
 import type { HistoryArchiveObjectExecutionReconciliationResult } from '@history-scan-coordinator/domain/history-archive-object/HistoryArchiveObjectRepository.js';
 import {
 	calculateHistoryArchivePlanningPressure,
+	historyArchiveCanonicalReserveCount,
 	historyArchiveConsumerCount,
 	historyArchiveMaximumWatermark,
 	historyArchivePerHostConcurrency,
@@ -57,7 +58,10 @@ export async function reconcileHistoryArchiveObjectExecution(
 		]);
 		const [canonicalAdmission] = (await manager.query(
 			admitCanonicalFrontierSql,
-			[historyArchiveConsumerCount, historyArchivePerHostConcurrency]
+			[
+				historyArchiveCanonicalReserveCount,
+				historyArchivePerHostConcurrency
+			]
 		)) as readonly { readonly count: number | string }[];
 		const canonicalAdmittedObjects = Number(canonicalAdmission?.count ?? 0);
 		const [counts] = (await manager.query(pressureSql, [
