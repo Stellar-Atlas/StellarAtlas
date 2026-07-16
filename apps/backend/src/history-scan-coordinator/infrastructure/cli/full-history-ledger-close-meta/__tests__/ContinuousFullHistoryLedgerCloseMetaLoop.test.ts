@@ -46,6 +46,7 @@ describe('runContinuousFullHistoryLedgerCloseMetaLoop', () => {
 				prepare: () => Promise.resolve(context(3))
 			},
 			now: () => 1_000,
+			priorityRangeReader: noPriorityRangeReader(),
 			signal: controller.signal,
 			wait: () => Promise.resolve()
 		});
@@ -55,6 +56,63 @@ describe('runContinuousFullHistoryLedgerCloseMetaLoop', () => {
 			expect.arrayContaining([
 				expect.objectContaining({ event: 'ready', nextLedger: 3 }),
 				expect.objectContaining({ event: 'processed', nextLedger: 7 })
+			])
+		);
+	});
+
+	it('fills a proof-gated near-tip gap before the genesis watermark', async () => {
+		const controller = new AbortController();
+		const events: ContinuousFullHistoryLedgerCloseMetaEvent[] = [];
+		let frontierCalls = 0;
+		await runContinuousFullHistoryLedgerCloseMetaLoop(config(), {
+			emit: (event) => events.push(event),
+			ensureStorageCapacity: () => Promise.resolve(),
+			formatError: String,
+			frontier: {
+				readLatestRange: () => {
+					frontierCalls += 1;
+					return Promise.resolve(fullHistoryLedgerCloseMetaRange(10, 10));
+				}
+			},
+			ingestion: {
+				ingestRange: (_context, range) => {
+					controller.abort();
+					return Promise.resolve({
+						committedBatches: [
+							{
+								batchId: 'tip-batch',
+								nextLedger: 3,
+								replayed: false,
+								watermarkVersion: 0
+							}
+						],
+						endLedger: range.endSequence,
+						ledgerCount: range.ledgerCount,
+						sourceObjectCount: range.ledgerCount,
+						startLedger: range.startSequence
+					});
+				},
+				prepare: () => Promise.resolve(context(3))
+			},
+			now: () => 1_000,
+			priorityRangeReader: {
+				readNextRange: () =>
+					Promise.resolve(fullHistoryLedgerCloseMetaRange(100, 103))
+			},
+			signal: controller.signal,
+			wait: () => Promise.resolve()
+		});
+
+		expect(frontierCalls).toBe(0);
+		expect(events).toEqual(
+			expect.arrayContaining([
+				expect.objectContaining({ event: 'ready', nextLedger: 3 }),
+				expect.objectContaining({
+					endLedger: 103,
+					event: 'priority-processed',
+					nextLedger: 3,
+					startLedger: 100
+				})
 			])
 		);
 	});
@@ -79,6 +137,7 @@ describe('runContinuousFullHistoryLedgerCloseMetaLoop', () => {
 				prepare: () => Promise.resolve(context(11))
 			},
 			now: () => 1_000,
+			priorityRangeReader: noPriorityRangeReader(),
 			signal: controller.signal,
 			wait: () => {
 				controller.abort();
@@ -132,6 +191,7 @@ describe('runContinuousFullHistoryLedgerCloseMetaLoop', () => {
 					prepare: () => Promise.resolve(context(3))
 				},
 				now: () => 1_000,
+				priorityRangeReader: noPriorityRangeReader(),
 				signal: new AbortController().signal,
 				wait: () => Promise.resolve()
 			}
@@ -171,6 +231,7 @@ describe('runContinuousFullHistoryLedgerCloseMetaLoop', () => {
 					prepare: () => Promise.resolve(context(7))
 				},
 				now: () => 1_000,
+				priorityRangeReader: noPriorityRangeReader(),
 				signal: new AbortController().signal,
 				wait: () => Promise.resolve()
 			}
@@ -181,6 +242,60 @@ describe('runContinuousFullHistoryLedgerCloseMetaLoop', () => {
 				expect.objectContaining({ event: 'complete', nextLedger: 7 })
 			])
 		);
+	});
+
+	it('does not select near-tip work during a bounded replay', async () => {
+		const controller = new AbortController();
+		let priorityCalls = 0;
+		const ranges: Array<{ end: number; start: number }> = [];
+		await runContinuousFullHistoryLedgerCloseMetaLoop(
+			{ ...config(), lastAvailableLedger: 6 },
+			{
+				emit: () => undefined,
+				ensureStorageCapacity: () => Promise.resolve(),
+				formatError: String,
+				frontier: {
+					readLatestRange: () =>
+						Promise.resolve(fullHistoryLedgerCloseMetaRange(10, 10))
+				},
+				ingestion: {
+					ingestRange: (_context, range) => {
+						ranges.push({
+							end: range.endSequence,
+							start: range.startSequence
+						});
+						controller.abort();
+						return Promise.resolve({
+							committedBatches: [
+								{
+									batchId: 'bounded-batch',
+									nextLedger: 7,
+									replayed: false,
+									watermarkVersion: 1
+								}
+							],
+							endLedger: range.endSequence,
+							ledgerCount: range.ledgerCount,
+							sourceObjectCount: range.ledgerCount,
+							startLedger: range.startSequence
+						});
+					},
+					prepare: () => Promise.resolve(context(3))
+				},
+				now: () => 1_000,
+				priorityRangeReader: {
+					readNextRange: () => {
+						priorityCalls += 1;
+						return Promise.resolve(fullHistoryLedgerCloseMetaRange(100, 103));
+					}
+				},
+				signal: controller.signal,
+				wait: () => Promise.resolve()
+			}
+		);
+
+		expect(priorityCalls).toBe(0);
+		expect(ranges).toEqual([{ end: 6, start: 3 }]);
 	});
 
 	it('reloads the durable watermark after a partially committed cycle fails', async () => {
@@ -228,6 +343,7 @@ describe('runContinuousFullHistoryLedgerCloseMetaLoop', () => {
 				}
 			},
 			now: () => 1_000,
+			priorityRangeReader: noPriorityRangeReader(),
 			signal: controller.signal,
 			wait: () => Promise.resolve()
 		});
@@ -281,6 +397,7 @@ describe('runContinuousFullHistoryLedgerCloseMetaLoop', () => {
 						prepare: () => Promise.resolve(context(3))
 					},
 					now: () => 1_000,
+					priorityRangeReader: noPriorityRangeReader(),
 					signal: controller.signal,
 					wait: () => {
 						controller.abort();
@@ -301,6 +418,10 @@ function config() {
 		lastAvailableLedger: null,
 		typedShardLedgerCount: 2
 	};
+}
+
+function noPriorityRangeReader() {
+	return { readNextRange: () => Promise.resolve(null) };
 }
 
 function context(

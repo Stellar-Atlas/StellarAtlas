@@ -59,8 +59,8 @@ const defaultDependencies: ContinuousFullHistoryLedgerCloseMetaCliDependencies =
 		compose: composeFullHistoryLedgerCloseMetaService,
 		ensureRuntime: ensureFullHistoryLedgerCloseMetaRuntime,
 		now: Date.now,
-	reconcileRuntime: removeStaleFullHistoryLedgerCloseMetaArtifacts,
-	resetOwnedRuntime: resetOwnedFullHistoryLedgerCloseMetaArtifacts,
+		reconcileRuntime: removeStaleFullHistoryLedgerCloseMetaArtifacts,
+		resetOwnedRuntime: resetOwnedFullHistoryLedgerCloseMetaArtifacts,
 		registerSignals,
 		runLoop: runContinuousFullHistoryLedgerCloseMetaLoop,
 		stderr: process.stderr,
@@ -148,6 +148,7 @@ export async function runContinuousFullHistoryLedgerCloseMetaCli(
 					frontier: activeComposition.frontier,
 					ingestion: activeComposition.ingestion,
 					now: dependencies.now,
+					priorityRangeReader: activeComposition.priorityRangeReader,
 					signal: abortController.signal,
 					wait: dependencies.wait
 				}

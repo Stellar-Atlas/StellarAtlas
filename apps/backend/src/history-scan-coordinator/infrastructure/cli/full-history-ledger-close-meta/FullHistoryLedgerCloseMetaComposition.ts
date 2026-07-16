@@ -6,6 +6,7 @@ import {
 	IngestFullHistoryLedgerCloseMeta
 } from '../../../use-cases/ingest-full-history-ledger-close-meta/IngestFullHistoryLedgerCloseMeta.js';
 import { TypeOrmFullHistoryLedgerCloseMetaManifestRepository } from '../../database/full-history-ledger-close-meta/TypeOrmFullHistoryLedgerCloseMetaManifestRepository.js';
+import { TypeOrmFullHistoryLedgerCloseMetaPriorityRangeReader } from '../../database/full-history-ledger-close-meta/TypeOrmFullHistoryLedgerCloseMetaPriorityRangeReader.js';
 import {
 	AnonymousHttpSep54LedgerCloseMetaSource,
 	AnonymousHttpSep54SourceError
@@ -24,6 +25,7 @@ export interface FullHistoryLedgerCloseMetaComposition {
 	readonly dataSource: DataSource;
 	readonly frontier: AnonymousS3Sep54LedgerCloseMetaFrontier;
 	readonly ingestion: IngestFullHistoryLedgerCloseMeta;
+	readonly priorityRangeReader: TypeOrmFullHistoryLedgerCloseMetaPriorityRangeReader;
 	readonly storageBudget: FullHistoryBulkStorageBudgetPort;
 }
 
@@ -102,6 +104,8 @@ export function composeFullHistoryLedgerCloseMetaService(
 			source,
 			typedShardLedgerCount: config.typedShardLedgerCount
 		}),
+		priorityRangeReader:
+			new TypeOrmFullHistoryLedgerCloseMetaPriorityRangeReader(dataSource),
 		storageBudget: new FullHistoryBulkStorageBudget({
 			maximumStoredBytes: config.maximumStoredBytes,
 			minimumFreeBasisPoints: config.minimumFreeBasisPoints,
@@ -115,7 +119,10 @@ export function composeFullHistoryLedgerCloseMetaService(
 export function assertFullHistoryLedgerCloseMetaMemoryEnvelope(
 	processingConcurrency: number
 ): void {
-	if (!Number.isSafeInteger(processingConcurrency) || processingConcurrency < 1) {
+	if (
+		!Number.isSafeInteger(processingConcurrency) ||
+		processingConcurrency < 1
+	) {
 		throw new RangeError('Processing concurrency must be a positive integer');
 	}
 	const perWorkerBytes =
@@ -126,7 +133,9 @@ export function assertFullHistoryLedgerCloseMetaMemoryEnvelope(
 	const maximumBytes =
 		processingConcurrency * perWorkerBytes +
 		fullHistoryLedgerCloseMetaServiceReserveBytes;
-	if (maximumBytes > FULL_HISTORY_LEDGER_CLOSE_META_SERVICE_MEMORY_LIMIT_BYTES) {
+	if (
+		maximumBytes > FULL_HISTORY_LEDGER_CLOSE_META_SERVICE_MEMORY_LIMIT_BYTES
+	) {
 		throw new RangeError(
 			'Full-history LedgerCloseMeta processing concurrency exceeds its service memory envelope'
 		);
