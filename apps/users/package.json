@@ -33,7 +33,7 @@
 		"pg": "^8.22.0",
 		"shared": "workspace:*",
 		"sodium-native": "^4.3.1",
-		"typeorm": "^0.3.20"
+		"typeorm": "^0.3.29"
 	},
 	"engines": {
 		"node": "26.x"
