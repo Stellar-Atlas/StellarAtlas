@@ -65,6 +65,7 @@ verify_source_units() {
 	local file_name
 	local -a unit_paths=()
 	local ledger_close_meta_unit="$SYSTEMD_SOURCE_DIR/stellaratlas-full-history-ledger-close-meta.service"
+	local operation_backfill_unit="$SYSTEMD_SOURCE_DIR/stellaratlas-full-history-operation-backfill.service"
 	local state_import_unit="$SYSTEMD_SOURCE_DIR/stellaratlas-full-history-state-import.service"
 	local horizon_unit="$SYSTEMD_SOURCE_DIR/stellaratlas-horizon.service"
 	local stellar_rpc_unit="$SYSTEMD_SOURCE_DIR/stellaratlas-stellar-rpc.service"
@@ -124,6 +125,15 @@ verify_source_units() {
 		'"stellaratlas-full-history-ledger-close-meta.service"' \
 		"$SYSTEMD_SOURCE_DIR/10-stellaratlas-observe.rules" ||
 		die "observe must be authorized to manage LedgerCloseMeta ingestion"
+	grep -Fqx "Environment=FULL_HISTORY_OPERATION_BACKFILL_CPU_WORKERS=12" \
+		"$operation_backfill_unit" ||
+		die "Operation backfill must use 12 bounded CPU workers"
+	grep -Fqx "TasksMax=128" "$operation_backfill_unit" ||
+		die "Operation backfill must reserve bounded task capacity for Node and worker threads"
+	grep -Fqx "MemorySwapMax=0" "$operation_backfill_unit" ||
+		die "Operation backfill must not use swap"
+	grep -Fqx "LimitCORE=0" "$operation_backfill_unit" ||
+		die "Operation backfill must disable core dumps"
 	grep -Fqx \
 		"ConditionFileIsExecutable=$FULL_HISTORY_STATE_EXPORT_EXECUTABLE" \
 		"$state_import_unit" ||

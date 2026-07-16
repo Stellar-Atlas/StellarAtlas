@@ -33,7 +33,9 @@ TimeoutStopSec=3900
 KillSignal=SIGTERM
 CPUQuota=1200%
 MemoryMax=32G
-TasksMax=32
+MemorySwapMax=0
+TasksMax=128
+LimitCORE=0
 NoNewPrivileges=true
 
 [Install]
