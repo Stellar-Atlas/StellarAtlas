@@ -93,6 +93,20 @@ describe('public archive object mapping', () => {
 		});
 	});
 
+	it('preserves a redirect status as remote HTTP evidence', () => {
+		const object = createObject();
+		object.errorMessage = 'redirect was not accepted';
+		object.errorType = 'archive_http_error';
+		object.failureChannel = 'archive_evidence';
+		object.httpStatus = 302;
+
+		expect(mapHistoryArchiveObject(object).error).toEqual({
+			httpStatus: 302,
+			message: 'Remote archive returned HTTP 302',
+			type: 'archive_http_error'
+		});
+	});
+
 	it('redacts non-public and raw-whitespace archive URLs', () => {
 		expect(mapPublicArchiveUrl('file:///tmp/private')).toBe('[redacted]');
 		expect(mapPublicArchiveUrl('https://user:secret@example.com/a')).toBe(

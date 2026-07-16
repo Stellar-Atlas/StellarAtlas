@@ -270,7 +270,7 @@ function isHttpStatus(value: number | null): value is number {
 }
 
 function isErrorHttpStatus(value: number | null): value is number {
-	return isHttpStatus(value) && (Number(value) < 200 || Number(value) >= 400);
+	return isHttpStatus(value) && (Number(value) < 200 || Number(value) >= 300);
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
