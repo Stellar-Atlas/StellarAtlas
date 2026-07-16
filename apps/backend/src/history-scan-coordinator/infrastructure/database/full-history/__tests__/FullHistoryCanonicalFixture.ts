@@ -220,7 +220,7 @@ export async function seedFullHistoryCheckpoint(
 		],
 		proofEvaluatedAt,
 		proofId,
-		proofVersion: 6,
+		proofVersion: 7,
 		results: [
 			{
 				feeCharged: fullHistoryUint64('100'),
@@ -337,7 +337,7 @@ async function insertProof(
 				"transactionsObjectRemoteId", "resultsObjectRemoteId",
 				"scpObjectRemoteId", "failureKind", "details", "evaluatedAt"
 			) values (
-				$1, $2, $3, $4, 6, $5, $5, $5, $5, $5, $5, $5,
+				$1, $2, $3, $4, 7, $5, $5, $5, $5, $5, $5, $5,
 				$15, $15, $15, 1, $6, 0, $7, $8, $8, $9, $10, $11, $12,
 				null, null, $13::jsonb, $14
 			) returning id

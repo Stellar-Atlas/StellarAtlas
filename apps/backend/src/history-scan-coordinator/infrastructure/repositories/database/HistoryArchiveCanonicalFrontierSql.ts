@@ -442,7 +442,9 @@ export const admitCanonicalFrontierSql = `
 		select lane_host_ranked.*,
 			row_number() over (
 				partition by "hostIdentity"
-				order by lane_host_rank, target_lane,
+				order by lane_host_rank,
+					"checkpointLedger" asc nulls last,
+					target_lane,
 					proof_progress desc,
 					"lastClaimedAt" asc nulls first,
 					"archiveUrlIdentity", object_priority, id

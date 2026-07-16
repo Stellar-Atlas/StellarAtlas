@@ -10,6 +10,7 @@ import type {
 	FullHistoryPromotionFrontierRepository
 } from '../../../domain/full-history-promotion/FullHistoryPromotionFrontierRepository.js';
 import { fullHistoryStrictProofSourceDigestsSql } from '../full-history/FullHistoryStrictProofSourceSql.js';
+import { CURRENT_HISTORY_ARCHIVE_CHECKPOINT_PROOF_VERSION } from '../../../domain/history-archive-checkpoint-proof/HistoryArchiveCheckpointProof.js';
 
 interface PromotionTargetRow {
 	readonly archiveUrlIdentity: string;
@@ -85,7 +86,7 @@ export const promotionTargetSql = `
 	from "history_archive_checkpoint_proof" proof
 	where proof."checkpointLedger" = $1
 		and proof.status = 'verified'
-		and proof."proofVersion" >= 6
+		and proof."proofVersion" >= ${CURRENT_HISTORY_ARCHIVE_CHECKPOINT_PROOF_VERSION}
 		and proof."failureKind" is null
 		and proof."requiredObjectsComplete"
 		and proof."proofFactsComplete"

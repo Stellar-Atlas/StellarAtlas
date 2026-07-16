@@ -1,11 +1,3 @@
-import { historyArchiveScpExpectationSql } from '@history-scan-coordinator/domain/history-archive-object/HistoryArchiveObjectScpPolicy.js';
-
-const expectsScpSql = historyArchiveScpExpectationSql({
-	checkpointLedgerSql: 'desired.checkpoint_ledger',
-	networkPassphraseSql: 'checkpoint."networkPassphrase"',
-	protocolVersionSql: '1'
-});
-
 export const canonicalCategoryTargetsCteSql = `
 predecessor_checkpoint_targets as materialized (
 	select checkpoint."archiveUrl", checkpoint."archiveUrlIdentity",
@@ -70,18 +62,12 @@ predecessor_checkpoint_targets as materialized (
 				'results', checkpoint."checkpointLedger",
 				'results:' || lpad(to_hex(checkpoint."checkpointLedger"), 8, '0'),
 				40, 'results', 'xdr.gz', 3
-			),
-			(
-				'scp', checkpoint."checkpointLedger",
-				'scp:' || lpad(to_hex(checkpoint."checkpointLedger"), 8, '0'),
-				45, 'scp', 'xdr.gz', 4
 			)
-	) desired(
+		) desired(
 		object_type, checkpoint_ledger, object_key, object_order,
 		category, extension, object_priority
 	)
-	where (desired.object_type <> 'scp' or ${expectsScpSql})
-		and (desired.object_priority > 0
+	where (desired.object_priority > 0
 		or (
 			checkpoint."checkpointLedger" > 63
 			and exists (
@@ -170,12 +156,8 @@ category_objects as materialized (
 				'results:' || lpad(
 					to_hex(network_root.checkpoint_ledger), 8, '0'
 				), 3
-			),
-			(
-				'scp', network_root.checkpoint_ledger,
-				'scp:' || lpad(to_hex(network_root.checkpoint_ledger), 8, '0'), 4
 			)
-	) desired(object_type, checkpoint_ledger, object_key, object_priority)
+		) desired(object_type, checkpoint_ledger, object_key, object_priority)
 	where desired.checkpoint_ledger >= 63
 		and (
 			desired.object_priority <> -2

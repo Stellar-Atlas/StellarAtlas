@@ -325,7 +325,7 @@ describe('TypeOrmFullHistoryCanonicalRepository', () => {
 					outcomeAvailable: true,
 					outcomeDecoderVersion: 'fixture-operation-result-decoder/1',
 					outcomeFactScope: 'transaction_result_xdr',
-					proofVersion: 6,
+					proofVersion: 7,
 					sourceAccountOrigin: 'transaction',
 					transactionIndex: 0
 				}

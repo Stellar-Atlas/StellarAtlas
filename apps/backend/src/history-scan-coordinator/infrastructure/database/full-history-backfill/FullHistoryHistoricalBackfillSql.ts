@@ -1,4 +1,5 @@
 import { fullHistoryStrictProofSourceDigestsSql } from '../full-history/FullHistoryStrictProofSourceSql.js';
+import { CURRENT_HISTORY_ARCHIVE_CHECKPOINT_PROOF_VERSION } from '../../../domain/history-archive-checkpoint-proof/HistoryArchiveCheckpointProof.js';
 
 export const historicalBackfillJobProjection = `
 	id, "network_passphrase_hash" as "networkPassphraseHash",
@@ -76,7 +77,7 @@ export const strictHistoricalBackfillProofTargetsSql = `
 	from "history_archive_checkpoint_proof" proof
 	where proof."checkpointLedger" = $1
 		and proof.status = 'verified'
-		and proof."proofVersion" >= 6
+		and proof."proofVersion" >= ${CURRENT_HISTORY_ARCHIVE_CHECKPOINT_PROOF_VERSION}
 		and proof."failureKind" is null
 		and proof."requiredObjectsComplete"
 		and proof."proofFactsComplete"

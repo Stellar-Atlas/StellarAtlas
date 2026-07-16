@@ -11,6 +11,7 @@ export const historyArchiveCheckpointProofFailureCtesSql = `
 			on object."archiveUrlIdentity" = target."archiveUrlIdentity"
 			and object."checkpointLedger" = target."checkpointLedger"
 		where object.status = 'failed'
+			and object."objectType" <> 'scp'
 		union all
 		select expected."archiveUrlIdentity", expected."checkpointLedger",
 			bucket."remoteId", bucket."objectType", bucket."objectKey",

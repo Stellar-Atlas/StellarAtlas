@@ -3,24 +3,9 @@ import {
 	resultsFactsJsonSql,
 	transactionsFactsJsonSql
 } from './HistoryArchiveCheckpointProofSqlInputs.js';
-import {
-	historyArchiveScpExpectationKnownSql,
-	historyArchiveScpExpectationSql
-} from '@history-scan-coordinator/domain/history-archive-object/HistoryArchiveObjectScpPolicy.js';
 import { historyArchiveCheckpointProofUpsertSql } from './HistoryArchiveCheckpointProofUpsertSql.js';
 import { historyArchiveCheckpointProofFailureCtesSql } from './HistoryArchiveCheckpointProofFailureSql.js';
 import { historyArchiveCheckpointProofTargetCtesSql } from './HistoryArchiveCheckpointProofTargetSql.js';
-
-const expectsScpSql = historyArchiveScpExpectationSql({
-	checkpointLedgerSql: 'checkpoint_rollup."checkpointLedger"',
-	networkPassphraseSql: 'proof_rollup.network_passphrase',
-	protocolVersionSql: 'proof_rollup.max_protocol_version'
-});
-const scpExpectationKnownSql = historyArchiveScpExpectationKnownSql({
-	checkpointLedgerSql: 'checkpoint_rollup."checkpointLedger"',
-	networkPassphraseSql: 'proof_rollup.network_passphrase',
-	protocolVersionSql: 'proof_rollup.max_protocol_version'
-});
 
 export const historyArchiveCheckpointProofRefreshSql = `
 	with ${historyArchiveCheckpointProofTargetCtesSql}, checkpoint_rollup as (
@@ -28,7 +13,8 @@ export const historyArchiveCheckpointProofRefreshSql = `
 			target."archiveUrlIdentity",
 			target."checkpointLedger",
 			min(object."archiveUrl") as "archiveUrl",
-			bool_or(object.status = 'scanning') as has_active,
+			bool_or(object.status = 'scanning'
+				and object."objectType" <> 'scp') as has_active,
 			bool_or(object."objectType" = 'checkpoint-state'
 				and object.status = 'verified') as has_checkpoint_state,
 			bool_or(object."objectType" = 'ledger'
@@ -364,8 +350,11 @@ export const historyArchiveCheckpointProofRefreshSql = `
 	), classified as (
 		select checkpoint_rollup.*,
 			(failure.object_failures is not null) as has_failed,
-			${expectsScpSql} as expects_scp,
-			${scpExpectationKnownSql} as scp_expectation_known,
+			checkpoint_rollup.scp_object_count > 0 as scp_present,
+			(checkpoint_rollup.has_scp
+				and coalesce(checkpoint_rollup.scp_entry_count, 0) > 0
+				and coalesce(checkpoint_rollup.scp_source_matches, false))
+				as scp_verified,
 			proof_rollup.network_passphrase, proof_rollup.max_protocol_version,
 			failure.failure_error_type, failure.failure_channel,
 			failure.failure_http_status,
@@ -399,27 +388,17 @@ export const historyArchiveCheckpointProofRefreshSql = `
 				and checkpoint_rollup.checkpoint_state_object_count = 1
 				and checkpoint_rollup.ledger_object_count = 1
 				and checkpoint_rollup.transactions_object_count = 1
-				and checkpoint_rollup.results_object_count = 1
-				and (not ${expectsScpSql} or (
-					checkpoint_rollup.has_scp
-					and checkpoint_rollup.scp_object_count = 1
-				)))
+				and checkpoint_rollup.results_object_count = 1)
 				as required_objects_complete,
 			(coalesce(proof_rollup.ledger_exact, false)
 				and coalesce(proof_rollup.transactions_exact, false)
 				and coalesce(proof_rollup.results_exact, false)
-				and ${scpExpectationKnownSql}
 				and proof_rollup.checkpoint_source_matches
 				and proof_rollup.has_checkpoint_ledger_fact
 				and proof_rollup.checkpoint_ledger_matches
 				and coalesce(proof_rollup.checkpoint_boundary_valid, false)
 				and proof_rollup.has_checkpoint_bucket_fact
-				and proof_rollup.predecessor_boundary_valid
-				and (not ${expectsScpSql}
-					or (
-						coalesce(checkpoint_rollup.scp_entry_count, 0) > 0
-						and coalesce(checkpoint_rollup.scp_source_matches, false)
-					)))
+				and proof_rollup.predecessor_boundary_valid)
 				as proof_facts_complete,
 			proof_rollup.checkpoint_bucket_matches as checkpoint_bucket_list_matches,
 			proof_rollup.transactions_match, proof_rollup.results_match,

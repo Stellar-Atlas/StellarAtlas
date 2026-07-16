@@ -230,10 +230,7 @@ describe('canonical immediate predecessor checkpoint frontier', () => {
 
 	it('does not admit older same-root or other-network backlog', async () => {
 		await dataSource.query(materializeCanonicalFrontierDependenciesSql);
-		await dataSource.query(admitCanonicalFrontierSql, [
-			targetRootCount,
-			1
-		]);
+		await dataSource.query(admitCanonicalFrontierSql, [targetRootCount, 1]);
 
 		const unrelated = await dataSource.query<UnrelatedRow[]>(
 			`select "archiveUrlIdentity", "checkpointLedger",
