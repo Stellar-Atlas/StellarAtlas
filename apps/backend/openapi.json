@@ -543,6 +543,68 @@
 				}
 			}
 		},
+		"/v1/explorer/local-accounts/{accountId}/changes": {
+			"get": {
+				"summary": "Get proof-gated local account change observations",
+				"description": "Returns a bounded newest-first list of historical account state-change observations from LedgerCloseMeta rows linked to complete canonical coverage. Each record includes its exact covered batch range and freshness timestamps. These records are observations, not current account state. An empty result is not proof that the account does not exist.",
+				"tags": ["Explorer"],
+				"operationId": "getExplorerLocalAccountChanges",
+				"parameters": [
+					{
+						"name": "accountId",
+						"in": "path",
+						"required": true,
+						"description": "Checksum-valid Stellar ed25519 account G-address.",
+						"schema": {
+							"type": "string",
+							"pattern": "^G[A-Z2-7]{55}$"
+						}
+					},
+					{
+						"name": "limit",
+						"in": "query",
+						"required": false,
+						"schema": {
+							"type": "integer",
+							"minimum": 1,
+							"maximum": 25,
+							"default": 1
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "Available observations or no observation within complete proof-gated coverage",
+						"content": {
+							"application/json": {
+								"schema": {
+									"oneOf": [
+										{
+											"$ref": "#/components/schemas/ExplorerLocalAccountChangesAvailable"
+										},
+										{
+											"$ref": "#/components/schemas/ExplorerLocalAccountChangesNotObserved"
+										}
+									]
+								}
+							}
+						}
+					},
+					"400": { "description": "Invalid account id or limit" },
+					"502": { "description": "Local account observation query failed" },
+					"503": {
+						"description": "No complete canonical LedgerCloseMeta coverage is available",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/ExplorerLocalAccountChangesUnavailable"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
 		"/v1/explorer/local-ledgers": {
 			"get": {
 				"summary": "Get a canonical local ledger range",
@@ -9347,6 +9409,487 @@
 					},
 					"truncated": { "type": "boolean" }
 				}
+			},
+			"ExplorerLocalAccountSigner": {
+				"type": "object",
+				"additionalProperties": false,
+				"required": ["key", "sponsor", "weight"],
+				"properties": {
+					"key": { "type": "string", "minLength": 1 },
+					"sponsor": { "type": "string", "nullable": true },
+					"weight": { "type": "integer", "minimum": 0, "maximum": 255 }
+				}
+			},
+			"ExplorerLocalAccountFields": {
+				"type": "object",
+				"additionalProperties": false,
+				"required": [
+					"accountId",
+					"balance",
+					"buyingLiabilities",
+					"flags",
+					"highThreshold",
+					"homeDomain",
+					"inflationDestination",
+					"lowThreshold",
+					"masterWeight",
+					"mediumThreshold",
+					"sequenceLedger",
+					"sequenceNumber",
+					"sequenceTime",
+					"signers",
+					"sellingLiabilities",
+					"sponsoredEntryCount",
+					"sponsoringEntryCount",
+					"subentryCount"
+				],
+				"properties": {
+					"accountId": {
+						"type": "string",
+						"pattern": "^G[A-Z2-7]{55}$"
+					},
+					"balance": { "type": "string", "pattern": "^-?[0-9]+$" },
+					"buyingLiabilities": {
+						"type": "string",
+						"pattern": "^[0-9]+$"
+					},
+					"flags": { "type": "string", "pattern": "^[0-9]+$" },
+					"highThreshold": {
+						"type": "integer",
+						"minimum": 0,
+						"maximum": 255
+					},
+					"homeDomain": { "type": "string", "maxLength": 32 },
+					"inflationDestination": {
+						"type": "string",
+						"nullable": true
+					},
+					"lowThreshold": {
+						"type": "integer",
+						"minimum": 0,
+						"maximum": 255
+					},
+					"masterWeight": {
+						"type": "integer",
+						"minimum": 0,
+						"maximum": 255
+					},
+					"mediumThreshold": {
+						"type": "integer",
+						"minimum": 0,
+						"maximum": 255
+					},
+					"sequenceLedger": {
+						"type": "string",
+						"pattern": "^[0-9]+$",
+						"nullable": true
+					},
+					"sequenceNumber": {
+						"type": "string",
+						"pattern": "^[0-9]+$"
+					},
+					"sequenceTime": {
+						"type": "string",
+						"pattern": "^[0-9]+$",
+						"nullable": true
+					},
+					"signers": {
+						"type": "array",
+						"items": {
+							"$ref": "#/components/schemas/ExplorerLocalAccountSigner"
+						}
+					},
+					"sellingLiabilities": {
+						"type": "string",
+						"pattern": "^[0-9]+$"
+					},
+					"sponsoredEntryCount": {
+						"type": "string",
+						"pattern": "^[0-9]+$"
+					},
+					"sponsoringEntryCount": {
+						"type": "string",
+						"pattern": "^[0-9]+$"
+					},
+					"subentryCount": {
+						"type": "string",
+						"pattern": "^[0-9]+$"
+					}
+				}
+			},
+			"ExplorerLocalAccountCoverageRange": {
+				"type": "object",
+				"additionalProperties": false,
+				"required": ["batchId", "firstLedger", "lastLedger", "ledgerCount"],
+				"properties": {
+					"batchId": { "type": "string", "format": "uuid" },
+					"firstLedger": { "type": "string", "pattern": "^[0-9]+$" },
+					"lastLedger": { "type": "string", "pattern": "^[0-9]+$" },
+					"ledgerCount": {
+						"type": "integer",
+						"minimum": 1,
+						"maximum": 1024
+					}
+				}
+			},
+			"ExplorerLocalAccountLatestCoverage": {
+				"type": "object",
+				"additionalProperties": false,
+				"required": ["evidenceSelection", "freshness", "range"],
+				"properties": {
+					"evidenceSelection": {
+						"type": "string",
+						"enum": ["latest_complete_canonical_lcm_batch"]
+					},
+					"freshness": {
+						"type": "object",
+						"additionalProperties": false,
+						"required": [
+							"canonicalCoverageCompletedAt",
+							"canonicalProofEvaluatedAt",
+							"latestCoveredLedgerClosedAt"
+						],
+						"properties": {
+							"canonicalCoverageCompletedAt": {
+								"type": "string",
+								"format": "date-time"
+							},
+							"canonicalProofEvaluatedAt": {
+								"type": "string",
+								"format": "date-time"
+							},
+							"latestCoveredLedgerClosedAt": {
+								"type": "string",
+								"format": "date-time"
+							}
+						}
+					},
+					"range": {
+						"$ref": "#/components/schemas/ExplorerLocalAccountCoverageRange"
+					}
+				}
+			},
+			"ExplorerLocalAccountChangeProvenance": {
+				"type": "object",
+				"additionalProperties": false,
+				"required": ["batch", "dataset", "manifest", "proof", "row"],
+				"properties": {
+					"batch": {
+						"type": "object",
+						"additionalProperties": false,
+						"required": ["id"],
+						"properties": {
+							"id": { "type": "string", "format": "uuid" }
+						}
+					},
+					"dataset": {
+						"type": "object",
+						"additionalProperties": false,
+						"required": [
+							"importedRowSetSha256",
+							"name",
+							"outputSha256",
+							"recordCount",
+							"schemaVersion"
+						],
+						"properties": {
+							"importedRowSetSha256": {
+								"type": "string",
+								"pattern": "^[0-9a-f]{64}$"
+							},
+							"name": {
+								"type": "string",
+								"enum": ["account-state-changes"]
+							},
+							"outputSha256": {
+								"type": "string",
+								"pattern": "^[0-9a-f]{64}$"
+							},
+							"recordCount": {
+								"type": "string",
+								"pattern": "^[0-9]+$"
+							},
+							"schemaVersion": { "type": "string", "minLength": 1 }
+						}
+					},
+					"manifest": {
+						"type": "object",
+						"additionalProperties": false,
+						"required": ["sha256"],
+						"properties": {
+							"sha256": {
+								"type": "string",
+								"pattern": "^[0-9a-f]{64}$"
+							}
+						}
+					},
+					"proof": {
+						"type": "object",
+						"additionalProperties": false,
+						"required": ["canonicalBatchIds", "minimumVersion"],
+						"properties": {
+							"canonicalBatchIds": {
+								"type": "array",
+								"minItems": 1,
+								"items": { "type": "string", "format": "uuid" }
+							},
+							"minimumVersion": { "type": "integer", "minimum": 6 }
+						}
+					},
+					"row": {
+						"type": "object",
+						"additionalProperties": false,
+						"required": ["ledgerKeySha256", "sha256"],
+						"properties": {
+							"ledgerKeySha256": {
+								"type": "string",
+								"pattern": "^[0-9a-f]{64}$"
+							},
+							"sha256": {
+								"type": "string",
+								"pattern": "^[0-9a-f]{64}$"
+							}
+						}
+					}
+				}
+			},
+			"ExplorerLocalAccountChange": {
+				"type": "object",
+				"additionalProperties": false,
+				"required": [
+					"accountFields",
+					"change",
+					"coverage",
+					"deleted",
+					"freshness",
+					"position",
+					"provenance"
+				],
+				"properties": {
+					"accountFields": {
+						"$ref": "#/components/schemas/ExplorerLocalAccountFields"
+					},
+					"change": {
+						"type": "object",
+						"additionalProperties": false,
+						"required": [
+							"changeType",
+							"changeTypeString",
+							"lastModifiedLedger",
+							"reason",
+							"sponsor",
+							"transactionHash"
+						],
+						"properties": {
+							"changeType": { "type": "integer", "minimum": 0 },
+							"changeTypeString": { "type": "string", "minLength": 1 },
+							"lastModifiedLedger": {
+								"type": "string",
+								"pattern": "^[0-9]+$"
+							},
+							"reason": {
+								"type": "string",
+								"enum": [
+									"fee",
+									"fee_refund",
+									"operation",
+									"transaction",
+									"upgrade"
+								]
+							},
+							"sponsor": { "type": "string", "nullable": true },
+							"transactionHash": {
+								"type": "string",
+								"pattern": "^[0-9a-f]{64}$",
+								"nullable": true
+							}
+						}
+					},
+					"coverage": {
+						"$ref": "#/components/schemas/ExplorerLocalAccountCoverageRange"
+					},
+					"deleted": { "type": "boolean" },
+					"freshness": {
+						"type": "object",
+						"additionalProperties": false,
+						"required": [
+							"batchProcessedAt",
+							"canonicalCoverageCompletedAt",
+							"canonicalProofEvaluatedAt",
+							"datasetImportedAt",
+							"ledgerClosedAt"
+						],
+						"properties": {
+							"batchProcessedAt": {
+								"type": "string",
+								"format": "date-time"
+							},
+							"canonicalCoverageCompletedAt": {
+								"type": "string",
+								"format": "date-time"
+							},
+							"canonicalProofEvaluatedAt": {
+								"type": "string",
+								"format": "date-time"
+							},
+							"datasetImportedAt": {
+								"type": "string",
+								"format": "date-time"
+							},
+							"ledgerClosedAt": {
+								"type": "string",
+								"format": "date-time"
+							}
+						}
+					},
+					"position": {
+						"type": "object",
+						"additionalProperties": false,
+						"required": [
+							"changeIndex",
+							"ledgerSequence",
+							"operationIndex",
+							"transactionIndex",
+							"upgradeIndex"
+						],
+						"properties": {
+							"changeIndex": { "type": "string", "pattern": "^[0-9]+$" },
+							"ledgerSequence": {
+								"type": "string",
+								"pattern": "^[0-9]+$"
+							},
+							"operationIndex": {
+								"type": "string",
+								"pattern": "^[0-9]+$",
+								"nullable": true
+							},
+							"transactionIndex": {
+								"type": "string",
+								"pattern": "^[0-9]+$"
+							},
+							"upgradeIndex": {
+								"type": "string",
+								"pattern": "^[0-9]+$",
+								"nullable": true
+							}
+						}
+					},
+					"provenance": {
+						"$ref": "#/components/schemas/ExplorerLocalAccountChangeProvenance"
+					}
+				}
+			},
+			"ExplorerLocalAccountChangesBase": {
+				"type": "object",
+				"required": [
+					"accountId",
+					"count",
+					"generatedAt",
+					"interpretation",
+					"limit",
+					"records",
+					"source",
+					"truncated"
+				],
+				"properties": {
+					"accountId": {
+						"type": "string",
+						"pattern": "^G[A-Z2-7]{55}$"
+					},
+					"count": { "type": "integer", "minimum": 0, "maximum": 25 },
+					"generatedAt": { "type": "string", "format": "date-time" },
+					"interpretation": {
+						"type": "string",
+						"enum": ["historical_observations_not_current_state"]
+					},
+					"limit": {
+						"type": "integer",
+						"minimum": 1,
+						"maximum": 25
+					},
+					"records": {
+						"type": "array",
+						"maxItems": 25,
+						"items": {
+							"$ref": "#/components/schemas/ExplorerLocalAccountChange"
+						}
+					},
+					"source": {
+						"type": "string",
+						"enum": ["postgres_proof_gated_lcm_account_changes"]
+					},
+					"truncated": { "type": "boolean" }
+				}
+			},
+			"ExplorerLocalAccountChangesAvailable": {
+				"allOf": [
+					{ "$ref": "#/components/schemas/ExplorerLocalAccountChangesBase" },
+					{
+						"type": "object",
+						"required": ["coverage", "status"],
+						"properties": {
+							"count": { "type": "integer", "minimum": 1, "maximum": 25 },
+							"coverage": {
+								"$ref": "#/components/schemas/ExplorerLocalAccountLatestCoverage"
+							},
+							"records": {
+								"type": "array",
+								"minItems": 1,
+								"maxItems": 25,
+								"items": {
+									"$ref": "#/components/schemas/ExplorerLocalAccountChange"
+								}
+							},
+							"status": { "type": "string", "enum": ["available"] }
+						}
+					}
+				]
+			},
+			"ExplorerLocalAccountChangesNotObserved": {
+				"allOf": [
+					{ "$ref": "#/components/schemas/ExplorerLocalAccountChangesBase" },
+					{
+						"type": "object",
+						"required": ["coverage", "reason", "status"],
+						"properties": {
+							"count": { "type": "integer", "enum": [0] },
+							"coverage": {
+								"$ref": "#/components/schemas/ExplorerLocalAccountLatestCoverage"
+							},
+							"reason": {
+								"type": "string",
+								"enum": ["no_change_observed_in_complete_coverage"]
+							},
+							"records": { "type": "array", "maxItems": 0 },
+							"status": { "type": "string", "enum": ["not_observed"] },
+							"truncated": { "type": "boolean", "enum": [false] }
+						}
+					}
+				]
+			},
+			"ExplorerLocalAccountChangesUnavailable": {
+				"allOf": [
+					{ "$ref": "#/components/schemas/ExplorerLocalAccountChangesBase" },
+					{
+						"type": "object",
+						"required": ["coverage", "reason", "status"],
+						"properties": {
+							"count": { "type": "integer", "enum": [0] },
+							"coverage": {
+								"type": "object",
+								"nullable": true,
+								"enum": [null]
+							},
+							"reason": {
+								"type": "string",
+								"enum": ["complete_canonical_coverage_empty"]
+							},
+							"records": { "type": "array", "maxItems": 0 },
+							"status": { "type": "string", "enum": ["unavailable"] },
+							"truncated": { "type": "boolean", "enum": [false] }
+						}
+					}
+				]
 			},
 			"ExplorerCanonicalLedgerEvidence": {
 				"type": "object",

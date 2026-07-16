@@ -7,6 +7,8 @@ import {
 } from '@network-scan/infrastructure/http/BlockchainExplorerRouter.js';
 import { horizonExplorerRouter } from '@network-scan/infrastructure/http/HorizonExplorerRouter.js';
 import { explorerLocalLedgerRouter } from '@network-scan/infrastructure/http/ExplorerLocalLedgerRouter.js';
+import { explorerLocalAccountRouter } from '@network-scan/infrastructure/http/ExplorerLocalAccountRouter.js';
+import { GetExplorerLocalAccountChanges } from '@network-scan/use-cases/get-explorer-local-account-changes/GetExplorerLocalAccountChanges.js';
 import { GetExplorerLocalLedgers } from '@network-scan/use-cases/get-explorer-local-ledgers/GetExplorerLocalLedgers.js';
 import { GetExplorerLocalReadModel } from '@network-scan/use-cases/get-explorer-local-read-model/GetExplorerLocalReadModel.js';
 import { GetExplorerLocalTransactions } from '@network-scan/use-cases/get-explorer-local-transactions/GetExplorerLocalTransactions.js';
@@ -30,6 +32,14 @@ export function mountExplorerRoutes(
 		'/v1/explorer/local-ledgers',
 		explorerLocalLedgerRouter({
 			getExplorerLocalLedgers: kernel.container.get(GetExplorerLocalLedgers)
+		})
+	);
+	api.use(
+		'/v1/explorer/local-accounts',
+		explorerLocalAccountRouter({
+			getExplorerLocalAccountChanges: kernel.container.get(
+				GetExplorerLocalAccountChanges
+			)
 		})
 	);
 	api.use(

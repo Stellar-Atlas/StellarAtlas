@@ -124,6 +124,7 @@ import { GetScpStatements } from '../../use-cases/get-scp-statements/GetScpState
 import { GetExplorerLocalReadModel } from '../../use-cases/get-explorer-local-read-model/GetExplorerLocalReadModel.js';
 import { GetExplorerLocalLedgers } from '../../use-cases/get-explorer-local-ledgers/GetExplorerLocalLedgers.js';
 import { GetExplorerLocalTransactions } from '../../use-cases/get-explorer-local-transactions/GetExplorerLocalTransactions.js';
+import { GetExplorerLocalAccountChanges } from '../../use-cases/get-explorer-local-account-changes/GetExplorerLocalAccountChanges.js';
 import { GetLatestObservedLedger } from '../../use-cases/get-latest-observed-ledger/GetLatestObservedLedger.js';
 import type { ScpStatementLiveStore } from '../../domain/scp/ScpStatementLiveStore.js';
 import { MeilisearchScpStatementLiveStore } from '../search/MeilisearchScpStatementLiveStore.js';
@@ -407,6 +408,7 @@ function loadUseCases(container: Container) {
 	container.bind(GetExplorerLocalReadModel).toSelf();
 	container.bind(GetExplorerLocalLedgers).toSelf();
 	container.bind(GetExplorerLocalTransactions).toSelf();
+	container.bind(GetExplorerLocalAccountChanges).toSelf();
 	container.bind(CollectScpLive).toSelf();
 	container.bind(CollectScpLiveLooped).toSelf();
 	container.bind(UpdateNetwork).toSelf();
