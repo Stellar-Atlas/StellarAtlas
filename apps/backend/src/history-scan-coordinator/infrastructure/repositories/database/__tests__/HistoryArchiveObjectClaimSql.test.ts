@@ -37,7 +37,7 @@ describe('HistoryArchiveObjectClaimSql', () => {
 
 	it('prioritizes claim class, proof work, and a fair bounded root', () => {
 		expect(historyArchiveObjectClaimSelectionSql).toContain(
-			'root_choice_pool."claimClassPriority"'
+			'claim_class."claimClass"'
 		);
 		expect(historyArchiveObjectClaimSelectionSql).toContain(
 			"when 'canonical-frontier-reserve' then 0"
@@ -46,13 +46,20 @@ describe('HistoryArchiveObjectClaimSql', () => {
 			"when 'proof-completion-reserve' then 1"
 		);
 		expect(historyArchiveObjectClaimSelectionSql).toContain(
-			'when claim_slot.slot % 4 = 1 then root_pool.priority'
+			'when claim_class.slot % 4 = 1 then root_pool.priority'
 		);
 		expect(historyArchiveObjectClaimFinalizeSql).toContain(
 			'case when $3::integer % 4 = 1 then case candidate."executionReason"'
 		);
 		expect(historyArchiveObjectClaimSelectionSql).toContain(
 			'for update of root skip locked'
+		);
+		expect(
+			historyArchiveObjectClaimSelectionSql.indexOf(
+				'for update of slot skip locked'
+			)
+		).toBeLessThan(
+			historyArchiveObjectClaimSelectionSql.indexOf('root_work as materialized')
 		);
 		expect(historyArchiveObjectClaimSelectionSql).not.toContain('limit 512');
 	});
@@ -80,10 +87,10 @@ describe('HistoryArchiveObjectClaimSql', () => {
 
 	it('allows failed retries only on the twelve even slots', () => {
 		expect(historyArchiveObjectClaimSelectionSql).toContain(
-			'free_slots.slot % 2 = 0 and class_state."hasFailed"'
+			'and (class_state."hasPending" or class_state."hasFailed")'
 		);
 		expect(historyArchiveObjectClaimSelectionSql).toContain(
-			'when root_pool."hasFailed" and ('
+			'when claim_slot.slot % 2 = 0 and class_state."hasFailed"'
 		);
 		expect(historyArchiveObjectClaimFinalizeSql).toContain(
 			"$8::text = 'failed'"

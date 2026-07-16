@@ -3,6 +3,7 @@ import { HistoryArchiveObject } from '../../../../domain/history-archive-object/
 import { TypeOrmHistoryArchiveObjectRepository } from '../TypeOrmHistoryArchiveObjectRepository.js';
 import {
 	createObjectRepositoryDataSource,
+	insertHistoryArchiveHostThrottle,
 	resetHistoryArchiveObjectQueue
 } from './HistoryArchiveObjectRepositoryFixture.js';
 import {
@@ -123,6 +124,21 @@ describe('history archive object claim concurrency', () => {
 		expect(claimed.filter((object) => !isRetry(object))).toHaveLength(12);
 		await expectRetrySlotsToBeEven();
 		await expectActiveCaps(consumerCount);
+	});
+
+	it('uses an even slot for pending work when retry hosts are throttled', async () => {
+		const pending = checkpoint(0, 'pending');
+		await save(root(0), pending, root(1), checkpoint(1, 'failed'));
+		await insertHistoryArchiveHostThrottle(
+			dataSource,
+			'claim-host-1.example',
+			new Date(Date.now() + 60_000)
+		);
+
+		const claim = await primary.claimNextObject(['checkpoint-state']);
+
+		expect(claim?.remoteId).toBe(pending.remoteId);
+		await expectActiveCaps(1);
 	});
 
 	it('enforces one active claim per root across two data sources', async () => {
