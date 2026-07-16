@@ -6,8 +6,12 @@ import {
 	validateExplorerLocalTrustlineChangesQuery
 } from '../GetExplorerLocalTrustlineChanges.js';
 import {
+	goExporterTrustlineAssetTypeStrings,
 	trustlineAccountId,
 	trustlineAssetIssuer,
+	trustlineBatchIdV8,
+	trustlineCanonicalBatchIdsV8,
+	trustlineLatestBatchIdV8,
 	trustlineObservationRow
 } from './ExplorerLocalTrustlineChangeTestFixture.js';
 
@@ -22,11 +26,11 @@ describe('GetExplorerLocalTrustlineChanges', () => {
 		});
 	});
 
-	it('returns newest-first bounded Alpha4 observations with string-safe evidence', async () => {
+	it('returns UUIDv8 Alpha4 observations from real Go exporter values', async () => {
 		dataSource.query.mockResolvedValue([
 			trustlineObservationRow(),
 			trustlineObservationRow({
-				batchId: '00000000-0000-4000-8000-000000000015',
+				batchId: '00000000-0000-8000-8000-000000000015',
 				changeIndex: '1',
 				lastModifiedLedger: '63390041',
 				ledgerSequence: '63390041',
@@ -45,7 +49,7 @@ describe('GetExplorerLocalTrustlineChanges', () => {
 			coverage: {
 				evidenceSelection: 'latest_complete_canonical_lcm_batch',
 				range: {
-					batchId: '00000000-0000-4000-8000-000000000014',
+					batchId: trustlineLatestBatchIdV8,
 					firstLedger: '63390080',
 					lastLedger: '63390143',
 					ledgerCount: 64
@@ -66,19 +70,24 @@ describe('GetExplorerLocalTrustlineChanges', () => {
 				transactionIndex: '9'
 			},
 			provenance: {
+				batch: { id: trustlineBatchIdV8 },
 				dataset: {
 					importedRowSetSha256: '1'.repeat(64),
 					name: 'trustline-state-changes',
 					outputSha256: '2'.repeat(64)
 				},
 				manifest: { sha256: '4'.repeat(64) },
-				proof: { minimumVersion: 6 },
+				proof: {
+					canonicalBatchIds: trustlineCanonicalBatchIdsV8,
+					minimumVersion: 6
+				},
 				row: { sha256: '5'.repeat(64) }
 			},
 			stateSemantics: 'observed_post_change_state',
 			trustlineFields: {
 				asset: {
 					assetType: 1,
+					assetTypeString: 'ASSET_TYPE_CREDIT_ALPHANUM4',
 					code: 'USD',
 					issuer: trustlineAssetIssuer,
 					kind: 'credit_alphanum4',
@@ -101,18 +110,18 @@ describe('GetExplorerLocalTrustlineChanges', () => {
 		expect(parameters?.[2]).toBe(2);
 	});
 
-	it('maps Alpha12 and liquidity-pool identities without conflating them', async () => {
+	it('normalizes Go exporter Alpha12 and pool-share labels', async () => {
 		dataSource.query.mockResolvedValue([
 			trustlineObservationRow({
 				assetCode: 'LONGASSET123',
 				assetType: 2,
-				assetTypeString: 'ASSET_TYPE_CREDIT_ALPHANUM12'
+				assetTypeString: goExporterTrustlineAssetTypeStrings.alpha12
 			}),
 			trustlineObservationRow({
 				assetCode: null,
 				assetIssuer: null,
 				assetType: 3,
-				assetTypeString: 'ASSET_TYPE_POOL_SHARE',
+				assetTypeString: goExporterTrustlineAssetTypeStrings.poolShare,
 				liquidityPoolId: 'a'.repeat(64)
 			})
 		]);

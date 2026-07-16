@@ -1,3 +1,4 @@
+import { assertUuid } from '@history-scan-coordinator/domain/full-history/FullHistoryCanonicalTypes.js';
 import type {
 	ExplorerLocalAccountChangeDTO,
 	ExplorerLocalAccountChangeReason,
@@ -399,15 +400,14 @@ function nullableHash(value: unknown, label: string): string | null {
 }
 
 function uuid(value: unknown, label: string): string {
-	if (
-		typeof value !== 'string' ||
-		!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu.test(
-			value
-		)
-	) {
+	if (typeof value !== 'string') {
 		throw new TypeError(`${label} is invalid`);
 	}
-	return value.toLowerCase();
+	try {
+		return assertUuid(value, label);
+	} catch {
+		throw new TypeError(`${label} is invalid`);
+	}
 }
 
 function uuidArray(value: unknown, label: string): readonly string[] {

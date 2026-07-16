@@ -7,6 +7,17 @@ export const trustlineAccountId = StrKey.encodeEd25519PublicKey(
 export const trustlineAssetIssuer = StrKey.encodeEd25519PublicKey(
 	Buffer.alloc(32, 18)
 );
+export const goExporterTrustlineAssetTypeStrings = {
+	alpha4: 'AssetTypeAssetTypeCreditAlphanum4',
+	alpha12: 'AssetTypeAssetTypeCreditAlphanum12',
+	poolShare: 'AssetTypeAssetTypePoolShare'
+} as const;
+export const trustlineBatchIdV8 = '00000000-0000-8000-8000-000000000011';
+export const trustlineCanonicalBatchIdsV8 = [
+	'00000000-0000-8000-8000-000000000012',
+	'00000000-0000-8000-8000-000000000013'
+] as const;
+export const trustlineLatestBatchIdV8 = '00000000-0000-8000-8000-000000000014';
 
 export function trustlineObservationRow(
 	overrides: Partial<ExplorerLocalTrustlineChangeRawRow> = {}
@@ -16,15 +27,12 @@ export function trustlineObservationRow(
 		assetCode: 'USD',
 		assetIssuer: trustlineAssetIssuer,
 		assetType: 1,
-		assetTypeString: 'ASSET_TYPE_CREDIT_ALPHANUM4',
+		assetTypeString: goExporterTrustlineAssetTypeStrings.alpha4,
 		balance: '9007199254740995',
-		batchId: '00000000-0000-4000-8000-000000000011',
+		batchId: trustlineBatchIdV8,
 		batchProcessedAt: new Date('2026-07-15T12:01:00.000Z'),
 		buyingLiabilities: '9007199254740996',
-		canonicalBatchIds: [
-			'00000000-0000-4000-8000-000000000012',
-			'00000000-0000-4000-8000-000000000013'
-		],
+		canonicalBatchIds: trustlineCanonicalBatchIdsV8,
 		canonicalCoverageCompletedAt: new Date('2026-07-15T12:03:00.000Z'),
 		canonicalProofEvaluatedAt: new Date('2026-07-15T12:02:30.000Z'),
 		changeIndex: '3',
@@ -47,7 +55,7 @@ export function trustlineObservationRow(
 		flags: '4294967295',
 		hasObservation: true,
 		lastModifiedLedger: '63390042',
-		latestBatchId: '00000000-0000-4000-8000-000000000014',
+		latestBatchId: trustlineLatestBatchIdV8,
 		latestCoverageCompletedAt: new Date('2026-07-15T13:03:00.000Z'),
 		latestFirstLedger: '63390080',
 		latestLastLedger: '63390143',

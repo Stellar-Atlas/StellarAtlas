@@ -1,3 +1,4 @@
+import { assertUuid } from '@history-scan-coordinator/domain/full-history/FullHistoryCanonicalTypes.js';
 import { StrKey } from '@stellar/stellar-sdk';
 import type {
 	ExplorerLocalTrustlineAssetDTO,
@@ -242,7 +243,7 @@ function assetIdentity(
 	row: ExplorerLocalTrustlineChangeRawRow
 ): ExplorerLocalTrustlineAssetDTO {
 	const assetType = integer(row.assetType, 'asset type', 1, 3);
-	const assetTypeString = text(row.assetTypeString, 'asset type string', false);
+	const assetTypeString = canonicalAssetTypeString(row.assetTypeString);
 	const code = nullableText(row.assetCode, 'asset code');
 	const issuer = nullableText(row.assetIssuer, 'asset issuer');
 	const liquidityPoolId = nullableHash(
@@ -272,6 +273,25 @@ function assetIdentity(
 		};
 	}
 	throw new TypeError('Trustline asset identity is invalid');
+}
+
+type CanonicalAssetTypeString =
+	ExplorerLocalTrustlineAssetDTO['assetTypeString'];
+
+function canonicalAssetTypeString(value: unknown): CanonicalAssetTypeString {
+	switch (text(value, 'asset type string', false)) {
+		case 'ASSET_TYPE_CREDIT_ALPHANUM4':
+		case 'AssetTypeAssetTypeCreditAlphanum4':
+			return 'ASSET_TYPE_CREDIT_ALPHANUM4';
+		case 'ASSET_TYPE_CREDIT_ALPHANUM12':
+		case 'AssetTypeAssetTypeCreditAlphanum12':
+			return 'ASSET_TYPE_CREDIT_ALPHANUM12';
+		case 'ASSET_TYPE_POOL_SHARE':
+		case 'AssetTypeAssetTypePoolShare':
+			return 'ASSET_TYPE_POOL_SHARE';
+		default:
+			throw new TypeError('Trustline asset type string is invalid');
+	}
 }
 
 function creditAsset(
@@ -434,15 +454,14 @@ function nullableHash(value: unknown, label: string): string | null {
 }
 
 function uuid(value: unknown, label: string): string {
-	if (
-		typeof value !== 'string' ||
-		!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu.test(
-			value
-		)
-	) {
+	if (typeof value !== 'string') {
 		throw new TypeError(`${label} is invalid`);
 	}
-	return value.toLowerCase();
+	try {
+		return assertUuid(value, label);
+	} catch {
+		throw new TypeError(`${label} is invalid`);
+	}
 }
 
 function uuidArray(value: unknown, label: string): readonly string[] {

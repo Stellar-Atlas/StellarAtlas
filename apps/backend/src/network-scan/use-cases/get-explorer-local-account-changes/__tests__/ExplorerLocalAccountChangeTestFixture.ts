@@ -2,6 +2,12 @@ import { StrKey } from '@stellar/stellar-sdk';
 import type { ExplorerLocalAccountChangeRawRow } from '../ExplorerLocalAccountChangeMapper.js';
 
 export const accountId = StrKey.encodeEd25519PublicKey(Buffer.alloc(32, 7));
+export const accountBatchIdV8 = '00000000-0000-8000-8000-000000000001';
+export const accountCanonicalBatchIdsV8 = [
+	'00000000-0000-8000-8000-000000000002',
+	'00000000-0000-8000-8000-000000000003'
+] as const;
+export const accountLatestBatchIdV8 = '00000000-0000-8000-8000-000000000004';
 
 export function accountObservationRow(
 	overrides: Partial<ExplorerLocalAccountChangeRawRow> = {}
@@ -9,13 +15,10 @@ export function accountObservationRow(
 	return {
 		accountId,
 		balance: '9876543210',
-		batchId: '00000000-0000-4000-8000-000000000001',
+		batchId: accountBatchIdV8,
 		batchProcessedAt: new Date('2026-07-15T12:01:00.000Z'),
 		buyingLiabilities: '11',
-		canonicalBatchIds: [
-			'00000000-0000-4000-8000-000000000002',
-			'00000000-0000-4000-8000-000000000003'
-		],
+		canonicalBatchIds: accountCanonicalBatchIdsV8,
 		canonicalCoverageCompletedAt: new Date('2026-07-15T12:03:00.000Z'),
 		canonicalProofEvaluatedAt: new Date('2026-07-15T12:02:30.000Z'),
 		changeIndex: '3',
@@ -40,7 +43,7 @@ export function accountObservationRow(
 		homeDomain: 'example.org',
 		inflationDestination: null,
 		lastModifiedLedger: '63390042',
-		latestBatchId: '00000000-0000-4000-8000-000000000004',
+		latestBatchId: accountLatestBatchIdV8,
 		latestCoverageCompletedAt: new Date('2026-07-15T13:03:00.000Z'),
 		latestFirstLedger: '63390080',
 		latestLastLedger: '63390143',

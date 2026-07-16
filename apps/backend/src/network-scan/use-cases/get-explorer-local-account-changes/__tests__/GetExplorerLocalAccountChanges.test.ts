@@ -6,7 +6,10 @@ import {
 	validateExplorerLocalAccountChangesQuery
 } from '../GetExplorerLocalAccountChanges.js';
 import {
+	accountBatchIdV8,
+	accountCanonicalBatchIdsV8,
 	accountId,
+	accountLatestBatchIdV8,
 	accountObservationRow
 } from './ExplorerLocalAccountChangeTestFixture.js';
 
@@ -21,11 +24,11 @@ describe('GetExplorerLocalAccountChanges', () => {
 		});
 	});
 
-	it('returns the newest bounded proof-gated observation with typed evidence', async () => {
+	it('returns UUIDv8 proof-gated observations with typed evidence', async () => {
 		dataSource.query.mockResolvedValue([
 			accountObservationRow(),
 			accountObservationRow({
-				batchId: '00000000-0000-4000-8000-000000000005',
+				batchId: '00000000-0000-8000-8000-000000000005',
 				changeIndex: '1',
 				ledgerSequence: '63390041',
 				transactionIndex: '8'
@@ -40,7 +43,7 @@ describe('GetExplorerLocalAccountChanges', () => {
 			coverage: {
 				evidenceSelection: 'latest_complete_canonical_lcm_batch',
 				range: {
-					batchId: '00000000-0000-4000-8000-000000000004',
+					batchId: accountLatestBatchIdV8,
 					firstLedger: '63390080',
 					lastLedger: '63390143',
 					ledgerCount: 64
@@ -73,13 +76,17 @@ describe('GetExplorerLocalAccountChanges', () => {
 				transactionIndex: '9'
 			},
 			provenance: {
+				batch: { id: accountBatchIdV8 },
 				dataset: {
 					importedRowSetSha256: '1'.repeat(64),
 					name: 'account-state-changes',
 					outputSha256: '2'.repeat(64)
 				},
 				manifest: { sha256: '4'.repeat(64) },
-				proof: { minimumVersion: 6 },
+				proof: {
+					canonicalBatchIds: accountCanonicalBatchIdsV8,
+					minimumVersion: 6
+				},
 				row: { sha256: '5'.repeat(64) }
 			},
 			stateSemantics: 'observed_post_change_state'
