@@ -7,21 +7,21 @@ import {
 } from './MeilisearchIndexSettings.js';
 import { buildNetworkSearchSnapshot } from './NetworkSearchDocumentBuilder.js';
 import {
-	buildFacetsFromDistribution,
-	buildMeilisearchFilter,
 	memorySearch,
-	networkSearchFacetAttributes,
-	networkSearchHitAttributes,
 	networkSearchRequiredSettings,
-	sanitizeSearchLimit,
-	sanitizeSearchOffset,
-	toSearchHit
+	sanitizeSearchLimit
 } from './NetworkSearchQuery.js';
+import {
+	networkSearchGenerationMatches,
+	queryNetworkSearchIndex
+} from './NetworkSearchIndexedQuery.js';
+import {
+	PostgresNetworkSearchCanonicalArchiveSource,
+	type NetworkSearchCanonicalArchiveSource
+} from './NetworkSearchCanonicalArchiveSource.js';
 import type {
 	NetworkSearchConfig,
-	NetworkSearchDocument,
 	NetworkSearchFallbackReason,
-	NetworkSearchFreshness,
 	NetworkSearchIndexStateDocument,
 	NetworkSearchInventory,
 	NetworkSearchReadModel,
@@ -39,7 +39,6 @@ const documentTaskTimeoutMs = 60_000;
 const searchRequestTimeoutMs = 500;
 const projectionRequestTimeoutMs = 60_000;
 const syncRetryCooldownMs = 60_000;
-const maxIndexedNetworkLagMs = 15 * 60_000;
 
 const errorMessage = (error: unknown): string =>
 	error instanceof Error ? error.message : String(error);
@@ -48,12 +47,11 @@ const readModel = (
 	snapshot: NetworkSearchSnapshot,
 	source: NetworkSearchReadModel['source'],
 	fallbackReason: NetworkSearchFallbackReason | null,
-	observedAt: string,
-	freshness: NetworkSearchFreshness = 'fresh'
+	observedAt: string
 ): NetworkSearchReadModel => ({
 	canonicalCursor: snapshot.canonicalCursor,
 	fallbackReason,
-	freshness,
+	freshness: 'fresh',
 	observedAt,
 	schemaVersion: networkSearchIndexSchemaVersion,
 	source
@@ -65,6 +63,7 @@ const stateMatchesSnapshot = (
 ): boolean =>
 	state.documentKind === 'state' &&
 	state.id === networkSearchStateDocumentId &&
+	state.canonicalArchiveRevision === snapshot.canonicalArchiveRevision &&
 	state.canonicalCursor === snapshot.canonicalCursor &&
 	state.networkTime === snapshot.networkTime;
 
@@ -73,6 +72,8 @@ const isIndexStateDocument = (
 ): boolean =>
 	state.documentKind === 'state' &&
 	state.id === networkSearchStateDocumentId &&
+	typeof state.canonicalArchiveRevision === 'string' &&
+	state.canonicalArchiveRevision.length > 0 &&
 	typeof state.canonicalCursor === 'string' &&
 	state.canonicalCursor.length > 0 &&
 	typeof state.indexedAt === 'string' &&
@@ -88,6 +89,7 @@ export class NetworkSearchService {
 	private syncFailed = false;
 	private readonly index: Index<NetworkSearchStoredDocument> | undefined;
 	private readonly indexName: string;
+	private readonly canonicalArchiveSource: NetworkSearchCanonicalArchiveSource;
 	private readonly projectionIndex:
 		Index<NetworkSearchStoredDocument> | undefined;
 	private readonly writable: boolean;
@@ -98,10 +100,14 @@ export class NetworkSearchService {
 		config: NetworkSearchConfig,
 		private logger?: Logger,
 		indexOverride?: Index<NetworkSearchStoredDocument>,
-		projectionIndexOverride?: Index<NetworkSearchStoredDocument>
+		projectionIndexOverride?: Index<NetworkSearchStoredDocument>,
+		canonicalArchiveSourceOverride?: NetworkSearchCanonicalArchiveSource
 	) {
 		this.indexName = config.indexName;
 		this.writable = config.writable !== false;
+		this.canonicalArchiveSource =
+			canonicalArchiveSourceOverride ??
+			new PostgresNetworkSearchCanonicalArchiveSource();
 		if (indexOverride) {
 			this.index = indexOverride;
 			this.projectionIndex = this.writable
@@ -206,7 +212,20 @@ export class NetworkSearchService {
 				);
 			}
 
-			return await this.queryIndex(state, request);
+			const indexed = await this.queryStableGeneration(state, request);
+			if (indexed !== null) return indexed;
+			this.indexReady = false;
+			void this.startSyncIndex();
+			return memorySearch(
+				snapshot,
+				request,
+				readModel(
+					snapshot,
+					'postgres_canonical',
+					'meilisearch_stale',
+					inventory.generatedAt
+				)
+			);
 		} catch (error) {
 			this.markIndexUnavailable(error, snapshot, request);
 			return memorySearch(
@@ -234,15 +253,38 @@ export class NetworkSearchService {
 					networkSearchStateDocumentId
 				);
 			if (!isIndexStateDocument(state)) return null;
-			const lagMs =
-				canonicalNetworkTime.getTime() - Date.parse(state.networkTime);
-			if (lagMs < 0 || lagMs > maxIndexedNetworkLagMs) return null;
-			this.indexReady = true;
-			return await this.queryIndex(
-				state,
-				request,
-				lagMs === 0 ? 'fresh' : 'stale'
-			);
+			let candidate = state;
+			for (let attempt = 0; attempt < 2; attempt += 1) {
+				if (
+					!(await this.matchesCanonicalState(
+						candidate,
+						request,
+						canonicalNetworkTime
+					))
+				) {
+					return null;
+				}
+				const response = await queryNetworkSearchIndex(
+					this.index,
+					candidate,
+					request,
+					this.indexedReadModel(candidate)
+				);
+				const confirmed = await this.readIndexState();
+				if (
+					networkSearchGenerationMatches(candidate, confirmed) &&
+					(await this.matchesCanonicalState(
+						confirmed,
+						request,
+						canonicalNetworkTime
+					))
+				) {
+					this.indexReady = true;
+					return response;
+				}
+				candidate = confirmed;
+			}
+			return null;
 		} catch (error) {
 			this.indexReady = false;
 			this.syncFailed = true;
@@ -268,57 +310,61 @@ export class NetworkSearchService {
 		}
 	}
 
-	private async queryIndex(
+	private async queryStableGeneration(
+		state: NetworkSearchIndexStateDocument,
+		request: NetworkSearchRequest
+	): Promise<NetworkSearchResponse | null> {
+		if (!this.index) throw new Error('Network search index is not configured');
+		const response = await queryNetworkSearchIndex(
+			this.index,
+			state,
+			request,
+			this.indexedReadModel(state)
+		);
+		const confirmed = await this.readIndexState();
+		return networkSearchGenerationMatches(state, confirmed) ? response : null;
+	}
+
+	private async matchesCanonicalState(
 		state: NetworkSearchIndexStateDocument,
 		request: NetworkSearchRequest,
-		freshness: NetworkSearchFreshness = 'fresh'
-	): Promise<NetworkSearchResponse> {
-		if (!this.index) throw new Error('Network search index is not configured');
-		const limit = sanitizeSearchLimit(request.limit);
-		const offset = sanitizeSearchOffset(request.offset);
-		const response = await this.index.search<NetworkSearchDocument>(
-			request.query,
-			{
-				attributesToRetrieve: [...networkSearchHitAttributes],
-				facets: [...networkSearchFacetAttributes],
-				filter: buildMeilisearchFilter(request, state.canonicalCursor),
-				limit,
-				offset
-			}
-		);
-		const total = response.estimatedTotalHits ?? response.hits.length;
-		const snapshot = {
-			canonicalCursor: state.canonicalCursor,
-			documents: [],
-			generatedAt: state.indexedAt,
-			networkTime: state.networkTime
-		} satisfies NetworkSearchSnapshot;
+		canonicalNetworkTime: Date
+	): Promise<boolean> {
+		if (Date.parse(state.networkTime) !== canonicalNetworkTime.getTime()) {
+			return false;
+		}
+		if (
+			request.canonicalCursor !== undefined &&
+			request.canonicalCursor !== state.canonicalCursor
+		) {
+			return false;
+		}
+		const canonicalArchives = await this.canonicalArchiveSource.load();
+		return canonicalArchives.revision === state.canonicalArchiveRevision;
+	}
 
+	private indexedReadModel(
+		state: NetworkSearchIndexStateDocument
+	): NetworkSearchReadModel {
 		return {
-			estimatedTotalHits: total,
-			facets: buildFacetsFromDistribution(response.facetDistribution),
-			hits: response.hits.map((hit) =>
-				toSearchHit(hit, 'meilisearch', freshness)
-			),
-			indexedNetworkTime: state.networkTime,
-			pagination: {
-				hasMore: offset + response.hits.length < total,
-				limit,
-				offset,
-				total,
-				totalIsExact: false
-			},
-			query: request.query,
-			readModel: readModel(
-				snapshot,
-				'meilisearch',
-				freshness === 'stale' ? 'meilisearch_stale' : null,
-				state.indexedAt,
-				freshness
-			),
-			scope: request.scope,
+			canonicalCursor: state.canonicalCursor,
+			fallbackReason: null,
+			freshness: 'fresh',
+			observedAt: state.indexedAt,
+			schemaVersion: networkSearchIndexSchemaVersion,
 			source: 'meilisearch'
 		};
+	}
+
+	private async readIndexState(): Promise<NetworkSearchIndexStateDocument> {
+		if (!this.index) throw new Error('Network search index is not configured');
+		const state = await this.index.getDocument<NetworkSearchIndexStateDocument>(
+			networkSearchStateDocumentId
+		);
+		if (!isIndexStateDocument(state)) {
+			throw new Error('Network search index state is invalid');
+		}
+		return state;
 	}
 
 	private refreshSnapshot(
@@ -403,6 +449,7 @@ export class NetworkSearchService {
 		const projectionIndex = this.projectionIndex;
 
 		const state: NetworkSearchIndexStateDocument = {
+			canonicalArchiveRevision: snapshot.canonicalArchiveRevision,
 			canonicalCursor: snapshot.canonicalCursor,
 			documentKind: 'state',
 			id: networkSearchStateDocumentId,

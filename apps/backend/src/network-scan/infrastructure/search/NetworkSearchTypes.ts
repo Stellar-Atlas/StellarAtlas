@@ -33,6 +33,7 @@ export interface NetworkSearchConfig {
 
 export interface NetworkSearchInventory {
 	readonly archiveRoots: KnownArchiveEvidenceV1['roots'];
+	readonly canonicalArchiveRevision: string;
 	readonly generatedAt: string;
 	readonly network: NetworkV1;
 	readonly nodes: readonly KnownNodeListItemDTO[];
@@ -75,6 +76,7 @@ export interface NetworkSearchDocument {
 }
 
 export interface NetworkSearchIndexStateDocument {
+	readonly canonicalArchiveRevision: string;
 	readonly canonicalCursor: string;
 	readonly documentKind: 'state';
 	readonly id: string;
@@ -86,6 +88,7 @@ export type NetworkSearchStoredDocument =
 	NetworkSearchDocument | NetworkSearchIndexStateDocument;
 
 export interface NetworkSearchSnapshot {
+	readonly canonicalArchiveRevision: string;
 	readonly canonicalCursor: string;
 	readonly documents: readonly NetworkSearchDocument[];
 	readonly generatedAt: string;
@@ -95,6 +98,7 @@ export interface NetworkSearchSnapshot {
 export interface NetworkSearchRequest {
 	readonly active?: boolean;
 	readonly archiveStatus?: NetworkSearchArchiveStatus;
+	readonly canonicalCursor?: string;
 	readonly countryCode?: string;
 	readonly entityType?: NetworkSearchEntityType;
 	readonly fullValidator?: boolean;

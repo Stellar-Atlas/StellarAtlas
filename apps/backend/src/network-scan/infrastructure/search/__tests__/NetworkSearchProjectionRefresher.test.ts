@@ -101,6 +101,7 @@ function createInventory(): NetworkSearchInventory {
 	const network = createDummyNetworkV1([], []);
 	return {
 		archiveRoots: [],
+		canonicalArchiveRevision: 'archive-revision',
 		generatedAt: network.time,
 		network,
 		nodes: [],

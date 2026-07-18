@@ -75,6 +75,7 @@ function createInventory(
 	network.latestLedger = '63400000';
 	return {
 		archiveRoots: [],
+		canonicalArchiveRevision: 'archive-revision',
 		generatedAt: '2026-07-13T00:00:01.000Z',
 		network,
 		nodes: [

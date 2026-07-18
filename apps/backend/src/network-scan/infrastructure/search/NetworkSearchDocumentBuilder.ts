@@ -256,6 +256,9 @@ const archiveRootDocument = (
 export const buildNetworkSearchSnapshot = (
 	inventory: NetworkSearchInventory
 ): NetworkSearchSnapshot => {
+	const archiveRoots = inventory.archiveRoots.toSorted((left, right) =>
+		left.archiveUrlIdentity.localeCompare(right.archiveUrlIdentity)
+	);
 	const nodes = inventory.nodes.toSorted((left, right) =>
 		left.publicKey.localeCompare(right.publicKey)
 	);
@@ -265,7 +268,8 @@ export const buildNetworkSearchSnapshot = (
 	const canonicalCursor = createHash('sha256')
 		.update(
 			JSON.stringify({
-				archiveRoots: inventory.archiveRoots,
+				archiveRoots,
+				canonicalArchiveRevision: inventory.canonicalArchiveRevision,
 				latestLedger: inventory.network.latestLedger,
 				networkTime: inventory.network.time,
 				nodes,
@@ -278,14 +282,14 @@ export const buildNetworkSearchSnapshot = (
 		organizations.map(({ organization }) => [organization.id, organization])
 	);
 	const topTierPublicKeys = new Set(inventory.network.transitiveQuorumSet);
-	const archiveStatusByNodePublicKey = buildArchiveStatusByNodePublicKey(
-		inventory.archiveRoots
-	);
+	const archiveStatusByNodePublicKey =
+		buildArchiveStatusByNodePublicKey(archiveRoots);
 
 	return {
+		canonicalArchiveRevision: inventory.canonicalArchiveRevision,
 		canonicalCursor,
 		documents: [
-			...inventory.archiveRoots.map((root) =>
+			...archiveRoots.map((root) =>
 				archiveRootDocument(inventory, root, canonicalCursor)
 			),
 			...organizations.map((organization) =>

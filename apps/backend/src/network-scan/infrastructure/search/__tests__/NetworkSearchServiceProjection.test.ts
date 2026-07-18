@@ -79,6 +79,7 @@ function createInventory(
 ): NetworkSearchInventory {
 	return {
 		archiveRoots: [],
+		canonicalArchiveRevision: `archive-${time}`,
 		generatedAt: time,
 		network: {
 			...createDummyNetworkV1([], []),

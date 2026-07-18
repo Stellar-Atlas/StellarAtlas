@@ -45,7 +45,7 @@ export const networkSearchRequiredSettings: RequiredMeilisearchSettings = {
 		'countryCode',
 		'isp'
 	],
-	sortableAttributes: ['label', 'networkTime', 'latestLedger']
+	sortableAttributes: ['label', 'id', 'networkTime', 'latestLedger']
 };
 
 export const networkSearchFacetAttributes: readonly NetworkSearchFacetName[] = [
@@ -222,9 +222,9 @@ export const memorySearch = (
 	request: NetworkSearchRequest,
 	readModel: NetworkSearchReadModel
 ): NetworkSearchResponse => {
-	const matching = snapshot.documents.filter((document) =>
-		matchesDocument(document, request)
-	);
+	const matching = snapshot.documents
+		.filter((document) => matchesDocument(document, request))
+		.toSorted(compareSearchDocuments);
 	const limit = sanitizeSearchLimit(request.limit);
 	const offset = sanitizeSearchOffset(request.offset);
 	const hits = matching
@@ -247,6 +247,58 @@ export const memorySearch = (
 		readModel,
 		scope: request.scope,
 		source: 'postgres_canonical'
+	};
+};
+
+const compareText = (left: string, right: string): number =>
+	left < right ? -1 : left > right ? 1 : 0;
+
+const compareSearchDocuments = (
+	left: NetworkSearchDocument,
+	right: NetworkSearchDocument
+): number =>
+	compareText(normalize(left.label), normalize(right.label)) ||
+	compareText(left.id, right.id);
+
+export interface NetworkSearchTotal {
+	readonly exact: boolean;
+	readonly value: number;
+}
+
+export const deriveSearchTotal = (
+	distribution: Record<string, Record<string, number>> | undefined,
+	estimatedTotalHits: number | undefined,
+	hitCount: number,
+	offset = 0
+): NetworkSearchTotal => {
+	const minimumTotal = offset + hitCount;
+	if (
+		distribution !== undefined &&
+		Object.prototype.hasOwnProperty.call(distribution, 'entityType')
+	) {
+		const counts = Object.values(distribution.entityType ?? {});
+		if (counts.every((count) => Number.isSafeInteger(count) && count >= 0)) {
+			const exactTotal = counts.reduce((total, count) => total + count, 0);
+			if (exactTotal < minimumTotal) {
+				return {
+					exact: false,
+					value: Math.max(estimatedTotalHits ?? 0, minimumTotal)
+				};
+			}
+			return {
+				exact: true,
+				value: exactTotal
+			};
+		}
+	}
+	return {
+		exact: false,
+		value:
+			estimatedTotalHits !== undefined &&
+			Number.isSafeInteger(estimatedTotalHits) &&
+			estimatedTotalHits >= 0
+				? Math.max(estimatedTotalHits, minimumTotal)
+				: minimumTotal
 	};
 };
 

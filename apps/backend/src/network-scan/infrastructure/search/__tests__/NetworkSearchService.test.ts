@@ -14,6 +14,7 @@ import type {
 import { createDummyNetworkV1 } from '@network-scan/services/__fixtures__/createDummyNetworkV1.js';
 import { createDummyNodeV1 } from '@network-scan/services/__fixtures__/createDummyNodeV1.js';
 import { createDummyOrganizationV1 } from '@network-scan/services/__fixtures__/createDummyOrganizationV1.js';
+import type { NetworkSearchCanonicalArchiveSource } from '../NetworkSearchCanonicalArchiveSource.js';
 
 describe('NetworkSearchService', () => {
 	it('searches current, archived, and public-key-only canonical records', async () => {
@@ -170,6 +171,7 @@ describe('NetworkSearchService', () => {
 		const inventory = createInventory([currentNode(node)], []);
 		const snapshot = buildNetworkSearchSnapshot(inventory);
 		const state: NetworkSearchIndexStateDocument = {
+			canonicalArchiveRevision: snapshot.canonicalArchiveRevision,
 			canonicalCursor: snapshot.canonicalCursor,
 			documentKind: 'state',
 			id: networkSearchStateDocumentId,
@@ -197,6 +199,7 @@ describe('NetworkSearchService', () => {
 		const inventory = createInventory([currentNode(node)], []);
 		const snapshot = buildNetworkSearchSnapshot(inventory);
 		const state: NetworkSearchIndexStateDocument = {
+			canonicalArchiveRevision: snapshot.canonicalArchiveRevision,
 			canonicalCursor: snapshot.canonicalCursor,
 			documentKind: 'state',
 			id: networkSearchStateDocumentId,
@@ -209,7 +212,9 @@ describe('NetworkSearchService', () => {
 		const service = new NetworkSearchService(
 			{ indexName: 'network_test' },
 			undefined,
-			harness.index
+			harness.index,
+			undefined,
+			canonicalArchiveSource(snapshot.canonicalArchiveRevision)
 		);
 
 		const result = await service.searchIndexed(
@@ -229,13 +234,14 @@ describe('NetworkSearchService', () => {
 		expect(harness.addDocuments).not.toHaveBeenCalled();
 	});
 
-	it('serves a bounded lagging projection as explicitly stale', async () => {
+	it('rejects any nonzero canonical network-time lag', async () => {
 		const inventory = createInventory(
 			[currentNode(createDummyNodeV1('GA'))],
 			[]
 		);
 		const snapshot = buildNetworkSearchSnapshot(inventory);
 		const state: NetworkSearchIndexStateDocument = {
+			canonicalArchiveRevision: snapshot.canonicalArchiveRevision,
 			canonicalCursor: snapshot.canonicalCursor,
 			documentKind: 'state',
 			id: networkSearchStateDocumentId,
@@ -256,15 +262,8 @@ describe('NetworkSearchService', () => {
 				request('stale'),
 				new Date(Date.parse(snapshot.networkTime) + 60_000)
 			)
-		).resolves.toMatchObject({
-			hits: [expect.objectContaining({ freshness: 'stale' })],
-			readModel: {
-				fallbackReason: 'meilisearch_stale',
-				freshness: 'stale',
-				source: 'meilisearch'
-			},
-			source: 'meilisearch'
-		});
+		).resolves.toBeNull();
+		expect(harness.search).not.toHaveBeenCalled();
 	});
 
 	it('rejects a projection beyond the bounded network-time lag', async () => {
@@ -274,6 +273,7 @@ describe('NetworkSearchService', () => {
 		);
 		const snapshot = buildNetworkSearchSnapshot(inventory);
 		const state: NetworkSearchIndexStateDocument = {
+			canonicalArchiveRevision: snapshot.canonicalArchiveRevision,
 			canonicalCursor: snapshot.canonicalCursor,
 			documentKind: 'state',
 			id: networkSearchStateDocumentId,
@@ -383,6 +383,7 @@ function createInventory(
 	network.latestLedger = '63390000';
 	return {
 		archiveRoots: [],
+		canonicalArchiveRevision: 'archive-revision',
 		generatedAt: '2026-07-11T00:00:01.000Z',
 		network,
 		nodes,
@@ -486,9 +487,13 @@ function createIndexHarness(
 		const hits = storedDocuments.filter(
 			(document) => document.documentKind === 'entity'
 		);
+		const entityTypes = hits.reduce<Record<string, number>>((counts, hit) => {
+			counts[hit.entityType] = (counts[hit.entityType] ?? 0) + 1;
+			return counts;
+		}, {});
 		return {
 			estimatedTotalHits: hits.length,
-			facetDistribution: {},
+			facetDistribution: { entityType: entityTypes },
 			hits,
 			limit: 8,
 			offset: 0,
@@ -535,6 +540,14 @@ function createIndexHarness(
 					getSettings.mock.calls.length > 0 &&
 					addDocuments.mock.calls.length === 0
 			)
+	};
+}
+
+function canonicalArchiveSource(
+	revision: string
+): NetworkSearchCanonicalArchiveSource {
+	return {
+		load: jest.fn(async () => ({ revision, roots: [] }))
 	};
 }
 
