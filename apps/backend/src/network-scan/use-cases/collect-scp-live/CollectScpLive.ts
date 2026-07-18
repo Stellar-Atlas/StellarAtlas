@@ -177,13 +177,9 @@ export class CollectScpLive {
 	}
 
 	private selectCrawlCursor(previousScan: ScanResult | null) {
-		const scannerLedger = previousScan?.networkScan.latestLedger ?? null;
-		if (
-			scannerLedger !== null &&
-			(this.latestLedger === null || scannerLedger >= this.latestLedger)
-		) {
+		if (this.latestLedger === null) {
 			return {
-				latestLedger: scannerLedger,
+				latestLedger: previousScan?.networkScan.latestLedger ?? null,
 				latestLedgerCloseTime:
 					previousScan?.networkScan.latestLedgerCloseTime ?? null
 			};

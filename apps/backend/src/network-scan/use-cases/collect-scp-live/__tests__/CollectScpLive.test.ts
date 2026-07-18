@@ -182,7 +182,7 @@ describe('CollectScpLive', () => {
 		);
 	});
 
-	it('uses a newer scanner-owned ledger before the live collector cursor', async () => {
+	it('does not skip live ledgers when the normal scanner advances', async () => {
 		const sut = setupSUT();
 		sut.crawlerService.crawl
 			.mockResolvedValueOnce(ok(createCrawlResult(11n, [11], 0)))
@@ -197,9 +197,9 @@ describe('CollectScpLive', () => {
 		sut.scanRepository.findScanDataForUpdate.mockResolvedValue(ok(scannerScan));
 		await sut.collectScpLive.execute();
 
-		expect(sut.crawlerService.crawl.mock.calls[1]?.[3]).toBe(20n);
+		expect(sut.crawlerService.crawl.mock.calls[1]?.[3]).toBe(11n);
 		expect(sut.crawlerService.crawl.mock.calls[1]?.[4]).toEqual(
-			new Date('2026-07-03T00:00:20.000Z')
+			new Date('2026-07-03T00:00:11.000Z')
 		);
 	});
 
