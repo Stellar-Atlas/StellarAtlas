@@ -87,7 +87,7 @@ describe('bounded truthful graph playback', () => {
 		);
 	});
 
-	it('drains more than one hundred ledgers continuously through a bounded queue', () => {
+	it('fast-forwards to the newest bounded ledger window when input outruns playback', () => {
 		const statements = Array.from({ length: 125 }, (_, index) =>
 			createStatement((1_000 + index).toString(), index, 'externalize')
 		);
@@ -98,25 +98,21 @@ describe('bounded truthful graph playback', () => {
 		}).filter((ledger) => ledger.statements.length > 0);
 		expect(ledgers).toHaveLength(125);
 
-		const drainedSlots: string[] = [];
-		let minimumExclusiveSlotIndex: string | null = null;
-		for (let page = 0; page < 126; page += 1) {
-			const { queue } = mergePlaybackQueue({
-				activeSlotIndex: null,
-				boundarySlotIndex: '1125',
-				completedSignatures: new Map(),
-				ledgers,
-				minimumExclusiveSlotIndex
-			});
-			expect(queue.length).toBeLessThanOrEqual(maxQueuedPlaybackLedgers);
-			if (queue.length === 0) break;
-			drainedSlots.push(...queue.map(({ slotIndex }) => slotIndex));
-			minimumExclusiveSlotIndex = queue.at(-1)?.slotIndex ?? null;
-		}
+		const { queue } = mergePlaybackQueue({
+			activeSlotIndex: null,
+			boundarySlotIndex: '1125',
+			completedSignatures: new Map(),
+			ledgers,
+			minimumExclusiveSlotIndex: null
+		});
 
-		expect(drainedSlots).toEqual(
-			Array.from({ length: 125 }, (_, index) => (1_000 + index).toString())
-		);
+		expect(queue).toHaveLength(maxQueuedPlaybackLedgers);
+		expect(queue.map(({ slotIndex }) => slotIndex)).toEqual([
+			'1121',
+			'1122',
+			'1123',
+			'1124'
+		]);
 	});
 
 	it('does not overwrite an active GPU wave slot when the pool is full', () => {

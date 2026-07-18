@@ -52,7 +52,7 @@ export const mergePlaybackQueue = ({
 		.toSorted((left, right) =>
 			compareLedgerSequences(left.slotIndex, right.slotIndex)
 		);
-	const queue = playableLedgers.slice(0, maxQueuedPlaybackLedgers);
+	const queue = playableLedgers.slice(-maxQueuedPlaybackLedgers);
 
 	return {
 		acceptedBoundarySlotIndex: boundarySlotIndex,
