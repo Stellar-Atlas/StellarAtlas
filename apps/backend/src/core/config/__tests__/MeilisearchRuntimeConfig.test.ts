@@ -5,6 +5,20 @@ import {
 } from '../SearchConfigDefaults.js';
 
 describe('parseMeilisearchRuntimeConfig', () => {
+	it('defaults SCP search to v2 and preserves an explicit index cutover', () => {
+		expect(defaultMeilisearchScpStatementIndex).toBe(
+			'stellaratlas_scp_statements_v2'
+		);
+		expect(parseMeilisearchRuntimeConfig({}).scp.indexName).toBe(
+			'stellaratlas_scp_statements_v2'
+		);
+		expect(
+			parseMeilisearchRuntimeConfig({
+				MEILISEARCH_SCP_STATEMENT_INDEX: 'stellaratlas_scp_statements_v1'
+			}).scp.indexName
+		).toBe('stellaratlas_scp_statements_v1');
+	});
+
 	it('keeps the generic connection for SCP and disables network search', () => {
 		const config = parseMeilisearchRuntimeConfig({
 			MEILISEARCH_API_KEY: 'legacy-key',

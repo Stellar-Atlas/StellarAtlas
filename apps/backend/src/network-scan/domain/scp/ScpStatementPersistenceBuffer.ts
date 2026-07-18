@@ -1,4 +1,3 @@
-import type { Logger } from '@core/services/Logger.js';
 import { mapUnknownToError } from '@core/utilities/mapUnknownToError.js';
 import type { ScpStatementObservation as CrawlerScpStatementObservation } from 'crawler';
 import type { ScpStatementObservationRepository } from './ScpStatementObservationRepository.js';
@@ -8,11 +7,6 @@ import {
 	ScpStatementPersistenceClosedError,
 	ScpStatementPersistenceTimeoutError
 } from './ScpStatementPersistenceError.js';
-
-export interface ScpStatementProjectionSink {
-	enqueue(observations: readonly CrawlerScpStatementObservation[]): void;
-}
-
 interface PendingObservation {
 	observation: CrawlerScpStatementObservation;
 	reject: (error: Error) => void;
@@ -49,8 +43,6 @@ export class ScpStatementPersistenceBuffer {
 
 	constructor(
 		private readonly repository: ScpStatementObservationRepository,
-		private readonly projector: ScpStatementProjectionSink,
-		private readonly logger: Logger,
 		options: ScpStatementPersistenceBufferOptions = {}
 	) {
 		this.batchSize =
@@ -132,17 +124,7 @@ export class ScpStatementPersistenceBuffer {
 	private async persist(batch: PendingObservation[]): Promise<void> {
 		const observations = batch.map(({ observation }) => observation);
 		try {
-			const committed = await this.saveWithTimeout(observations);
-			try {
-				this.projector.enqueue(committed);
-			} catch (error) {
-				this.logger.warn(
-					'Could not queue committed SCP statements for projection',
-					{
-						errorMessage: mapUnknownToError(error).message
-					}
-				);
-			}
+			await this.saveWithTimeout(observations);
 			for (const pending of batch) pending.resolve();
 		} catch (error) {
 			this.failure = mapUnknownToError(error);
@@ -167,7 +149,7 @@ export class ScpStatementPersistenceBuffer {
 
 	private async saveWithTimeout(
 		observations: readonly CrawlerScpStatementObservation[]
-	): Promise<CrawlerScpStatementObservation[]> {
+	): Promise<void> {
 		let timeout: ReturnType<typeof setTimeout> | undefined;
 		const timedOut = new Promise<never>((_, reject) => {
 			timeout = setTimeout(
@@ -178,7 +160,7 @@ export class ScpStatementPersistenceBuffer {
 		});
 
 		try {
-			return await Promise.race([
+			await Promise.race([
 				this.repository.saveMany(observations, 'scp_live_collector'),
 				timedOut
 			]);

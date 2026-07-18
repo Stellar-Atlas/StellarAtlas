@@ -20,6 +20,91 @@ describe('MeilisearchScpStatementLiveStore', () => {
 		expect(addDocuments).toHaveBeenCalledTimes(1);
 	});
 
+	it('writes deterministic documents without a volatile indexing timestamp', async () => {
+		jest.useFakeTimers().setSystemTime(1_000_000);
+		const { addDocuments, getTask, store } = setupStore();
+		const observation = createObservation('11');
+		getTask.mockResolvedValue(meiliTask(42, 'succeeded'));
+
+		await store.saveMany([observation]);
+		jest.advanceTimersByTime(5_000);
+		await store.reconcilePendingTask();
+		jest.setSystemTime(2_000_000);
+		await store.saveMany([observation]);
+
+		const firstDocuments = addDocuments.mock.calls[0]?.[0];
+		const secondDocuments = addDocuments.mock.calls[1]?.[0];
+		expect(firstDocuments).toEqual(secondDocuments);
+		expect(firstDocuments?.[0]).not.toHaveProperty('indexedAt');
+		expect(firstDocuments?.[0]).toMatchObject({
+			pledges: observation.pledges,
+			signature: observation.signature,
+			statementXdr: observation.statementXdr,
+			values: observation.values
+		});
+	});
+
+	it('configures only fields required by live SCP queries on the v2 schema', async () => {
+		const updateSettings = jest.fn(() => ({
+			waitTask: jest.fn(async () => ({ status: 'succeeded' }))
+		}));
+		const index = {
+			getSettings: jest.fn(async () => ({
+				filterableAttributes: [],
+				searchableAttributes: ['*'],
+				sortableAttributes: []
+			})),
+			search: jest.fn(async () => ({ hits: [] })),
+			tasks: { getTask: jest.fn() },
+			updateSettings
+		} as unknown as ConstructorParameters<
+			typeof MeilisearchScpStatementLiveStore
+		>[2];
+		const store = new MeilisearchScpStatementLiveStore(
+			{ indexName: 'stellaratlas_scp_statements_v2' },
+			undefined,
+			index
+		);
+
+		await expect(store.findLatest({ limit: 10 })).resolves.toEqual([]);
+		expect(updateSettings).toHaveBeenCalledWith({
+			filterableAttributes: [
+				'nodeId',
+				'observedAtMs',
+				'slotIndex',
+				'statementHash'
+			],
+			searchableAttributes: [],
+			sortableAttributes: ['observedAtMs', 'statementHash']
+		});
+	});
+
+	it('uses direction-aware cursor filters for stable live pages', async () => {
+		jest.spyOn(Date, 'now').mockReturnValue(1_000_000);
+		const { search, store } = setupStore();
+		const after = { observedAtMs: 900_000, statementHash: 'statement-10' };
+
+		await store.findLatest({ after, limit: 10, order: 'desc' });
+		await store.findLatest({ after, limit: 10, order: 'asc' });
+
+		expect(search).toHaveBeenNthCalledWith(
+			1,
+			'',
+			expect.objectContaining({
+				filter: expect.stringContaining('statementHash < "statement-10"'),
+				sort: ['observedAtMs:desc', 'statementHash:desc']
+			})
+		);
+		expect(search).toHaveBeenNthCalledWith(
+			2,
+			'',
+			expect.objectContaining({
+				filter: expect.stringContaining('statementHash > "statement-10"'),
+				sort: ['observedAtMs:asc', 'statementHash:asc']
+			})
+		);
+	});
+
 	it('skips live SCP document writes while the previous task is still pending', async () => {
 		const { addDocuments, store } = setupStore();
 
@@ -132,39 +217,74 @@ describe('MeilisearchScpStatementLiveStore', () => {
 		expect(addDocuments).toHaveBeenCalledTimes(1);
 	});
 
-	it('allows only one never-settling retention cleanup request', async () => {
+	it('waits for document settlement and an idle hysteresis before cleanup', async () => {
 		jest.useFakeTimers().setSystemTime(1_000_000);
-		const { deleteDocuments, store } = setupStore();
-		deleteDocuments.mockReturnValue(new Promise(() => {}));
+		const { deleteDocuments, getTask, store } = setupStore();
+		getTask.mockResolvedValue(meiliTask(42, 'succeeded'));
 
 		await store.saveMany([createObservation('11')]);
-		Reflect.set(store, 'pendingDocumentTaskUid', undefined);
-		jest.advanceTimersByTime(300_000);
-		await store.saveMany([createObservation('12')]);
+		jest.advanceTimersByTime(30_000);
+		await flushMicrotasks();
+		expect(deleteDocuments).not.toHaveBeenCalled();
 
+		await store.reconcilePendingTask();
+		jest.advanceTimersByTime(29_999);
+		await flushMicrotasks();
+		expect(deleteDocuments).not.toHaveBeenCalled();
+
+		jest.advanceTimersByTime(1);
+		await flushMicrotasks();
 		expect(deleteDocuments).toHaveBeenCalledTimes(1);
 	});
 
-	it('waits for an accepted cleanup task before enqueueing another', async () => {
+	it('coalesces settled writes and bounds cleanup to one task per cadence', async () => {
 		jest.useFakeTimers().setSystemTime(1_000_000);
 		const { deleteDocuments, getTask, store } = setupStore();
+		getTask.mockImplementation(async (uid: number) =>
+			meiliTask(uid, 'succeeded')
+		);
 
 		await store.saveMany([createObservation('11')]);
-		await flushMicrotasks();
-		Reflect.set(store, 'pendingDocumentTaskUid', undefined);
-		jest.advanceTimersByTime(300_000);
-		getTask.mockResolvedValueOnce(meiliTask(43, 'processing'));
+		jest.advanceTimersByTime(5_000);
+		await store.reconcilePendingTask();
 		await store.saveMany([createObservation('12')]);
+		jest.advanceTimersByTime(5_000);
+		await store.reconcilePendingTask();
+		jest.advanceTimersByTime(30_000);
 		await flushMicrotasks();
 		expect(deleteDocuments).toHaveBeenCalledTimes(1);
 
-		Reflect.set(store, 'pendingDocumentTaskUid', undefined);
-		jest.advanceTimersByTime(300_000);
-		getTask.mockResolvedValueOnce(meiliTask(43, 'succeeded'));
 		await store.saveMany([createObservation('13')]);
+		jest.advanceTimersByTime(5_000);
+		await store.reconcilePendingTask();
+		jest.advanceTimersByTime(294_999);
+		await flushMicrotasks();
+		expect(deleteDocuments).toHaveBeenCalledTimes(1);
+
+		jest.advanceTimersByTime(1);
+		await flushMicrotasks();
+		expect(deleteDocuments).toHaveBeenCalledTimes(2);
+	});
+
+	it('allows only one never-settling retention cleanup request', async () => {
+		jest.useFakeTimers().setSystemTime(1_000_000);
+		const { deleteDocuments, getTask, store } = setupStore();
+		getTask.mockResolvedValue(meiliTask(42, 'succeeded'));
+		deleteDocuments.mockReturnValue(new Promise(() => {}));
+
+		await store.saveMany([createObservation('11')]);
+		jest.advanceTimersByTime(5_000);
+		await store.reconcilePendingTask();
+		jest.advanceTimersByTime(30_000);
 		await flushMicrotasks();
 
-		expect(deleteDocuments).toHaveBeenCalledTimes(2);
+		await store.saveMany([createObservation('12')]);
+		jest.advanceTimersByTime(5_000);
+		await store.reconcilePendingTask();
+		jest.advanceTimersByTime(300_000);
+		await flushMicrotasks();
+
+		expect(deleteDocuments).toHaveBeenCalledTimes(1);
 	});
 });
 
@@ -185,10 +305,11 @@ function setupStore() {
 		taskUid: 43,
 		type: 'documentDeletion'
 	}));
+	const search = jest.fn(async () => ({ hits: [] }));
 	const index = {
 		addDocuments,
 		deleteDocuments,
-		search: jest.fn(),
+		search,
 		tasks: { getTask },
 		updateSettings: jest.fn()
 	} as unknown as ConstructorParameters<
@@ -201,7 +322,7 @@ function setupStore() {
 	);
 	Reflect.set(store, 'indexReady', true);
 
-	return { addDocuments, deleteDocuments, getTask, logger, store };
+	return { addDocuments, deleteDocuments, getTask, logger, search, store };
 }
 
 function createObservation(slotIndex: string): CrawlerScpStatementObservation {
@@ -211,13 +332,24 @@ function createObservation(slotIndex: string): CrawlerScpStatementObservation {
 		observedFromAddress: '127.0.0.1:11625',
 		observedFromPeer:
 			'GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF',
-		pledges: {} as CrawlerScpStatementObservation['pledges'],
+		pledges: {
+			commit: { counter: 1, value: 'value' },
+			nH: 1,
+			quorumSetHash: 'quorum-set'
+		},
 		signature: 'signature',
 		slotIndex,
 		statementHash: `statement-${slotIndex}`,
 		statementType: 'externalize',
 		statementXdr: 'xdr',
-		values: []
+		values: [
+			{
+				closeTime: '1783209600',
+				txSetHash: 'transaction-set',
+				upgradeCount: 1,
+				value: 'value'
+			}
+		]
 	};
 }
 

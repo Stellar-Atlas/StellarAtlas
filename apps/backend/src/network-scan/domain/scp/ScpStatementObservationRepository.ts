@@ -5,6 +5,7 @@ export interface ScpStatementObservationFilter {
 	after?: ScpStatementReadCursor;
 	limit: number;
 	nodeId?: string;
+	nodeIds?: readonly string[];
 	order?: ScpStatementReadOrder;
 	slotIndex?: string;
 }
@@ -72,7 +73,8 @@ export interface ScpStatementObservationRepository {
 	): Promise<CrawlerScpStatementObservation[]>;
 	findLatestObservedLedger(): Promise<ScpLatestObservedLedger | null>;
 	findLatestAnimationSlots(
-		limit: number
+		limit: number,
+		eventLimit?: number
 	): Promise<ScpStatementAnimationObservation[]>;
 	findProjectionEventPage(
 		filter: ScpStatementProjectionEventPageFilter

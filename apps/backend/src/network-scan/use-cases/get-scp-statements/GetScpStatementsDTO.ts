@@ -13,3 +13,12 @@ export interface GetScpStatementsDTO {
 	source?: ScpStatementSource;
 	slotIndex?: string;
 }
+
+export interface GetStoredScpStatementPageDTO {
+	after?: ScpStatementLiveCursor;
+	limit?: number;
+	nodeId?: string;
+	nodeIds?: readonly string[];
+	order?: ScpStatementLiveOrder;
+	slotIndex?: string;
+}

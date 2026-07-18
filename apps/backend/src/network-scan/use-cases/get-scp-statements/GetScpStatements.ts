@@ -5,6 +5,7 @@ import { NETWORK_TYPES } from '../../infrastructure/di/di-types.js';
 import type { ScpStatementObservationRepository } from '../../domain/scp/ScpStatementObservationRepository.js';
 import type {
 	GetScpStatementsDTO,
+	GetStoredScpStatementPageDTO,
 	ScpStatementSource
 } from './GetScpStatementsDTO.js';
 import { mapUnknownToError } from '@core/utilities/mapUnknownToError.js';
@@ -18,6 +19,8 @@ import { scpStatementObservationPolicy } from '../../domain/scp/ScpStatementObse
 const DEFAULT_LIMIT = 200;
 const MAX_LIMIT = 1000;
 const DEFAULT_SOURCE: ScpStatementSource = 'live';
+const DEFAULT_ANIMATION_EVENT_LIMIT = 251;
+const MAX_ANIMATION_EVENT_LIMIT = 4_001;
 
 export type ScpStatementReadSource = 'meilisearch' | 'postgres_canonical';
 export type ScpStatementReadFreshness =
@@ -53,6 +56,14 @@ export interface ScpAnimationReadResult {
 	readonly source: 'postgres_canonical';
 }
 
+export interface ScpStoredStatementPageReadResult extends ScpStatementReadResult {
+	readonly page: {
+		readonly hasMore: boolean;
+		readonly limit: number;
+		readonly nextCursor: ScpStatementLiveCursor | null;
+	};
+}
+
 type ObservationRead =
 	| { observations: ScpStatementObservationV1[]; status: 'available' }
 	| { error: Error; status: 'unavailable' };
@@ -74,11 +85,15 @@ export class GetScpStatements {
 	}
 
 	async executeLatestAnimationSlots(
-		limit: number
+		limit: number,
+		eventLimit = DEFAULT_ANIMATION_EVENT_LIMIT
 	): Promise<Result<ScpAnimationReadResult, Error>> {
 		try {
 			const observations = (
-				await this.repository.findLatestAnimationSlots(limit)
+				await this.repository.findLatestAnimationSlots(
+					limit,
+					normalizeAnimationEventLimit(eventLimit)
+				)
 			).map((observation) => ({
 				nodeId: observation.nodeId,
 				observedAt: observation.observedAt.toISOString(),
@@ -91,6 +106,40 @@ export class GetScpStatements {
 			}));
 			const metadata = toReadMetadata(observations, 'postgres_canonical');
 			return ok({ ...metadata, observations, source: 'postgres_canonical' });
+		} catch (error) {
+			return err(mapUnknownToError(error));
+		}
+	}
+
+	async executeStoredPageWithMetadata(
+		dto: GetStoredScpStatementPageDTO
+	): Promise<Result<ScpStoredStatementPageReadResult, Error>> {
+		try {
+			const limit = normalizeLimit(dto.limit);
+			const nodeIds = normalizeNodeIds(dto.nodeIds);
+			const filter = {
+				after: normalizeCursor(dto.after),
+				limit: limit + 1,
+				nodeId: dto.nodeId,
+				nodeIds,
+				order: normalizeOrder(dto.order),
+				slotIndex: dto.slotIndex
+			};
+			const stored =
+				nodeIds?.length === 0 ? [] : await this.repository.findLatest(filter);
+			const hasMore = stored.length > limit;
+			const observations = stored
+				.slice(0, limit)
+				.map((observation) => observation.toDTO());
+			const result = toReadResult(observations, 'postgres_canonical');
+			return ok({
+				...result,
+				page: {
+					hasMore,
+					limit,
+					nextCursor: hasMore ? requireLastCursor(observations) : null
+				}
+			});
 		} catch (error) {
 			return err(mapUnknownToError(error));
 		}
@@ -274,6 +323,32 @@ function normalizeLimit(limit: number | undefined): number {
 	if (limit < 1) return DEFAULT_LIMIT;
 
 	return Math.min(limit, MAX_LIMIT);
+}
+
+function normalizeAnimationEventLimit(limit: number): number {
+	if (!Number.isFinite(limit)) return DEFAULT_ANIMATION_EVENT_LIMIT;
+	return Math.min(Math.max(Math.floor(limit), 1), MAX_ANIMATION_EVENT_LIMIT);
+}
+
+function normalizeNodeIds(
+	nodeIds: readonly string[] | undefined
+): readonly string[] | undefined {
+	return nodeIds === undefined
+		? undefined
+		: [...new Set(nodeIds.filter((nodeId) => nodeId.length > 0))].toSorted();
+}
+
+function requireLastCursor(
+	observations: readonly ScpStatementObservationV1[]
+): ScpStatementLiveCursor {
+	const last = observations.at(-1);
+	if (last === undefined)
+		throw new Error('SCP statement page cursor is missing');
+	const observedAtMs = Date.parse(last.observedAt);
+	if (!Number.isFinite(observedAtMs)) {
+		throw new Error('SCP statement page cursor timestamp is invalid');
+	}
+	return { observedAtMs, statementHash: last.statementHash };
 }
 
 function normalizeCursor(

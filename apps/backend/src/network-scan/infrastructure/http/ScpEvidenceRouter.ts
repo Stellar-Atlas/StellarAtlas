@@ -1,5 +1,7 @@
 import { Router, type Request } from 'express';
 import type { GetScpEvidence } from '../../use-cases/get-scp-evidence/GetScpEvidence.js';
+import { decodeScpEvidenceCursor } from '../../use-cases/get-scp-evidence/ScpEvidenceCursor.js';
+import type { ScpStatementReadCursor } from '../../domain/scp/ScpStatementObservationRepository.js';
 import type { Result } from 'neverthrow';
 
 export function scpEvidenceRouter(getScpEvidence: GetScpEvidence): Router {
@@ -8,8 +10,7 @@ export function scpEvidenceRouter(getScpEvidence: GetScpEvidence): Router {
 		const limit = parseLimit(req.query.limit, 12, 25);
 		if (limit === null)
 			return res.status(400).json({ error: 'Invalid slot limit' });
-		const result = await getScpEvidence.getLatestSlots(limit);
-		return send(result, res);
+		return send(await getScpEvidence.getLatestSlots(limit), res);
 	});
 	router.get('/animation-backlog', async (req, res) => {
 		const limit = parseLimit(req.query.limit, 4, 25);
@@ -23,14 +24,23 @@ export function scpEvidenceRouter(getScpEvidence: GetScpEvidence): Router {
 		const limit = parseLimit(req.query.limit, 1000, 1000);
 		if (limit === null)
 			return res.status(400).json({ error: 'Invalid evidence limit' });
-		return send(await getScpEvidence.getSlot(req.params.slotIndex, limit), res);
+		const cursor = parseCursor(req.query.cursor);
+		if (!cursor.isValid)
+			return res.status(400).json({ error: 'Invalid evidence cursor' });
+		return send(
+			await getScpEvidence.getSlot(req.params.slotIndex, limit, cursor.value),
+			res
+		);
 	});
 	router.get('/validators/:nodeId', async (req, res) => {
 		const limit = parseLimit(req.query.limit, 200, 1000);
 		if (limit === null)
 			return res.status(400).json({ error: 'Invalid evidence limit' });
+		const cursor = parseCursor(req.query.cursor);
+		if (!cursor.isValid)
+			return res.status(400).json({ error: 'Invalid evidence cursor' });
 		return send(
-			await getScpEvidence.getValidator(req.params.nodeId, limit),
+			await getScpEvidence.getValidator(req.params.nodeId, limit, cursor.value),
 			res
 		);
 	});
@@ -38,12 +48,32 @@ export function scpEvidenceRouter(getScpEvidence: GetScpEvidence): Router {
 		const limit = parseLimit(req.query.limit, 500, 1000);
 		if (limit === null)
 			return res.status(400).json({ error: 'Invalid evidence limit' });
+		const cursor = parseCursor(req.query.cursor);
+		if (!cursor.isValid)
+			return res.status(400).json({ error: 'Invalid evidence cursor' });
 		return send(
-			await getScpEvidence.getOrganization(req.params.organizationId, limit),
+			await getScpEvidence.getOrganization(
+				req.params.organizationId,
+				limit,
+				cursor.value
+			),
 			res
 		);
 	});
 	return router;
+}
+
+function parseCursor(
+	value: Request['query'][string]
+):
+	| { readonly isValid: true; readonly value?: ScpStatementReadCursor }
+	| { readonly isValid: false } {
+	if (value === undefined) return { isValid: true };
+	if (typeof value !== 'string') return { isValid: false };
+	const cursor = decodeScpEvidenceCursor(value);
+	return cursor === null
+		? { isValid: false }
+		: { isValid: true, value: cursor };
 }
 
 function parseLimit(

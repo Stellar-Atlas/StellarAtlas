@@ -143,6 +143,36 @@ describe('ScpStatementLiveHub', () => {
 			getSharedScpStatementLiveHub(reader)
 		);
 	});
+
+	it('splits dense updates into cursor-safe deltas below the byte limit', async () => {
+		const statements = ['statement-a', 'statement-b', 'statement-c'].map(
+			createStatement
+		);
+		const maxDeltaBytes =
+			Buffer.byteLength(JSON.stringify([statements[0]]), 'utf8') + 1;
+		const reader = createReader(readResult(statements));
+		const onUpdate = jest.fn<void, [ScpStatementLiveUpdate]>();
+		const hub = new ScpStatementLiveHub(reader, undefined, { maxDeltaBytes });
+		const unsubscribe = hub.subscribe({ onError: jest.fn(), onUpdate });
+
+		await flushPromises();
+
+		expect(onUpdate).toHaveBeenCalledTimes(3);
+		const delivered = onUpdate.mock.calls.flatMap(
+			([update]) => update.statements
+		);
+		expect(delivered.map(({ statementHash }) => statementHash)).toEqual([
+			'statement-a',
+			'statement-b',
+			'statement-c'
+		]);
+		for (const [update] of onUpdate.mock.calls) {
+			expect(
+				Buffer.byteLength(JSON.stringify(update.statements), 'utf8')
+			).toBeLessThanOrEqual(maxDeltaBytes);
+		}
+		unsubscribe?.();
+	});
 });
 
 function createReader(result: ReturnType<typeof readResult>) {

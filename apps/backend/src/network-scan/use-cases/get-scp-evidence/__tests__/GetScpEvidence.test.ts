@@ -36,16 +36,25 @@ describe('GetScpEvidence', () => {
 				source: 'postgres_canonical'
 			})
 		);
-		getScpStatements.executeWithMetadata.mockImplementation(async (request) =>
-			ok({
-				freshness: 'fresh',
-				freshnessMs: 25,
-				observations: request.nodeId
-					? statements.filter((row) => row.nodeId === request.nodeId)
-					: statements,
-				observedAt: '2026-07-11T00:00:00.000Z',
-				source: 'postgres_canonical'
-			})
+		getScpStatements.executeStoredPageWithMetadata.mockImplementation(
+			async (request) =>
+				ok({
+					freshness: 'fresh',
+					freshnessMs: 25,
+					observations: statements.filter(
+						(row) =>
+							(request.nodeId === undefined || row.nodeId === request.nodeId) &&
+							(request.nodeIds === undefined ||
+								request.nodeIds.includes(row.nodeId))
+					),
+					observedAt: '2026-07-11T00:00:00.000Z',
+					page: {
+						hasMore: false,
+						limit: request.limit ?? 200,
+						nextCursor: null
+					},
+					source: 'postgres_canonical'
+				})
 		);
 		getKnownNodes.executeAll.mockResolvedValue(
 			ok({
@@ -69,35 +78,37 @@ describe('GetScpEvidence', () => {
 
 		expect(slots.isOk()).toBe(true);
 		if (slots.isErr()) return;
-		expect(slots.value).toHaveLength(1);
-		expect(slots.value[0]).toMatchObject({
+		expect(slots.value.slots).toHaveLength(1);
+		expect(slots.value.slots[0]).toMatchObject({
 			metadata: { source: 'postgres_canonical', freshness: 'fresh' },
 			phaseCounts: { confirm: 1 },
 			slotIndex: '20',
 			validatorCount: 1
 		});
-		expect(slots.value[0]?.events[0]).toMatchObject({
+		expect(slots.value.slots[0]?.events[0]).toMatchObject({
 			kind: 'commit_observed',
-			organizationId: null,
+			organizationId: 'org-a',
 			statement: expect.not.objectContaining({ statementXdr: 'xdr' })
 		});
 		expect(organization.isOk()).toBe(true);
 		if (organization.isOk())
 			expect(
-				organization.value
+				organization.value.slots
 					.flatMap((slot) => slot.events)
 					.every((event) => event.organizationId === 'org-a')
 			).toBe(true);
 		expect(getScpStatements.executeLatestAnimationSlots).toHaveBeenCalledWith(
-			1
+			1,
+			4_001
 		);
-		expect(getScpStatements.executeWithMetadata).toHaveBeenCalledWith(
-			expect.objectContaining({ nodeId: 'GA', source: 'stored' })
+		expect(getScpStatements.executeStoredPageWithMetadata).toHaveBeenCalledWith(
+			expect.objectContaining({ nodeIds: ['GA'], order: 'desc' })
 		);
 	});
 
 	it('returns every animation statement once in a bounded backlog', async () => {
 		const getScpStatements = mock<GetScpStatements>();
+		const getKnownNodes = mock<GetKnownNodes>();
 		const rows = [
 			statement('21', 'GA', 'confirm'),
 			statement('21', 'GB', 'externalize'),
@@ -124,10 +135,25 @@ describe('GetScpEvidence', () => {
 				source: 'postgres_canonical'
 			})
 		);
+		getKnownNodes.executeAll.mockResolvedValue(
+			ok({
+				count: 0,
+				generatedAt: '2026-07-11T00:00:00.000Z',
+				nodes: [],
+				scopeTotals: {
+					'all-known': 0,
+					archived: 0,
+					'current-validator': 0,
+					listener: 0,
+					'public-key-only': 0
+				},
+				source: 'postgres_canonical'
+			})
+		);
 
 		const result = await new GetScpEvidence(
 			getScpStatements,
-			mock<GetKnownNodes>()
+			getKnownNodes
 		).getAnimationBacklog(2);
 
 		expect(result.isOk()).toBe(true);

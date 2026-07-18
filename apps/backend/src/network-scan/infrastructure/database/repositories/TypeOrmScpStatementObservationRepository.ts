@@ -234,9 +234,9 @@ export class TypeOrmScpStatementObservationRepository implements ScpStatementObs
 		});
 	}
 
-	async findLatestAnimationSlots(limit: number) {
+	async findLatestAnimationSlots(limit: number, eventLimit?: number) {
 		return await this.withTimeouts(async (manager) =>
-			findLatestScpAnimationSlots(manager, limit)
+			findLatestScpAnimationSlots(manager, limit, eventLimit)
 		);
 	}
 
@@ -324,6 +324,7 @@ export class TypeOrmScpStatementObservationRepository implements ScpStatementObs
 		after,
 		limit,
 		nodeId,
+		nodeIds,
 		order,
 		slotIndex
 	}: ScpStatementObservationFilter): Promise<ScpStatementObservation[]> {
@@ -350,6 +351,10 @@ export class TypeOrmScpStatementObservationRepository implements ScpStatementObs
 
 			if (nodeId !== undefined) {
 				builder.andWhere('observation.nodeId = :nodeId', { nodeId });
+			}
+			if (nodeIds !== undefined) {
+				if (nodeIds.length === 0) return [];
+				builder.andWhere('observation.nodeId IN (:...nodeIds)', { nodeIds });
 			}
 
 			if (slotIndex !== undefined) {

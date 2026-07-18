@@ -1,8 +1,6 @@
 import { mock } from 'jest-mock-extended';
-import type { Logger } from '@core/services/Logger.js';
 import type { ScpStatementObservation as CrawlerScpStatementObservation } from 'crawler';
 import type { ScpStatementObservationRepository } from '../ScpStatementObservationRepository.js';
-import type { ScpStatementProjectionSink } from '../ScpStatementPersistenceBuffer.js';
 import { ScpStatementPersistenceBuffer } from '../ScpStatementPersistenceBuffer.js';
 import {
 	ScpStatementPersistenceCapacityError,
@@ -12,15 +10,13 @@ import {
 describe('ScpStatementPersistenceBuffer', () => {
 	afterEach(() => jest.useRealTimers());
 
-	it('projects only the canonical winner returned by the deferred Postgres write', async () => {
+	it('waits for the durable Postgres write without projecting returned winners', async () => {
 		const repository = mock<ScpStatementObservationRepository>();
-		const projector = mock<ScpStatementProjectionSink>();
-		const logger = mock<Logger>();
 		const attempted = createObservation(1, 'peer-a');
 		const winner = createObservation(1, 'peer-z');
 		const postgres = deferred<CrawlerScpStatementObservation[]>();
 		repository.saveMany.mockReturnValue(postgres.promise);
-		const buffer = createBuffer(repository, projector, logger);
+		const buffer = createBuffer(repository);
 
 		const committed = buffer.add(attempted);
 		await flushMicrotasks();
@@ -29,64 +25,22 @@ describe('ScpStatementPersistenceBuffer', () => {
 			[attempted],
 			'scp_live_collector'
 		);
-		expect(projector.enqueue).not.toHaveBeenCalled();
 
 		postgres.resolve([winner]);
 		await committed;
-		expect(projector.enqueue).toHaveBeenCalledWith([winner]);
-		expect(projector.enqueue).not.toHaveBeenCalledWith([attempted]);
-		expect(repository.saveMany.mock.invocationCallOrder[0]).toBeLessThan(
-			projector.enqueue.mock.invocationCallOrder[0]!
-		);
-	});
-
-	it('does not project rejected older or equal provenance from overlapping collectors', async () => {
-		const repository = mock<ScpStatementObservationRepository>();
-		const logger = mock<Logger>();
-		const firstProjector = mock<ScpStatementProjectionSink>();
-		const secondProjector = mock<ScpStatementProjectionSink>();
-		const older = createObservation(1, 'peer-z');
-		const newer = {
-			...older,
-			observedAt: new Date(older.observedAt.getTime() + 1_000),
-			observedFromPeer: 'peer-a'
-		};
-		const lowerEqual = { ...newer, observedFromPeer: 'peer-a' };
-		const winner = { ...newer, observedFromPeer: 'peer-z' };
-		const firstSave = deferred<CrawlerScpStatementObservation[]>();
-		const secondSave = deferred<CrawlerScpStatementObservation[]>();
-		repository.saveMany
-			.mockReturnValueOnce(firstSave.promise)
-			.mockReturnValueOnce(secondSave.promise);
-		const first = createBuffer(repository, firstProjector, logger);
-		const second = createBuffer(repository, secondProjector, logger);
-
-		const firstCommitted = first.add(older);
-		const secondCommitted = second.add(lowerEqual);
-		await flushMicrotasks();
-		secondSave.resolve([winner]);
-		await secondCommitted;
-		firstSave.resolve([winner]);
-		await firstCommitted;
-
-		expect(firstProjector.enqueue).toHaveBeenCalledWith([winner]);
-		expect(secondProjector.enqueue).toHaveBeenCalledWith([winner]);
-		expect(firstProjector.enqueue).not.toHaveBeenCalledWith([older]);
-		expect(secondProjector.enqueue).not.toHaveBeenCalledWith([lowerEqual]);
+		expect(repository.saveMany).toHaveBeenCalledTimes(1);
+		expect(repository.findProjectionEventPage).not.toHaveBeenCalled();
 	});
 
 	it('times out a never-settling canonical write and releases flush without projection', async () => {
 		jest.useFakeTimers();
 		const repository = mock<ScpStatementObservationRepository>();
-		const projector = mock<ScpStatementProjectionSink>();
-		const logger = mock<Logger>();
 		repository.saveMany.mockReturnValue(new Promise(() => {}));
-		const buffer = new ScpStatementPersistenceBuffer(
-			repository,
-			projector,
-			logger,
-			{ batchSize: 1, flushDelayMs: 60_000, saveTimeoutMs: 100 }
-		);
+		const buffer = new ScpStatementPersistenceBuffer(repository, {
+			batchSize: 1,
+			flushDelayMs: 60_000,
+			saveTimeoutMs: 100
+		});
 		const committed = buffer.add(createObservation(1));
 		const flushed = buffer.flush();
 
@@ -99,7 +53,6 @@ describe('ScpStatementPersistenceBuffer', () => {
 		await expect(flushed).rejects.toBeInstanceOf(
 			ScpStatementPersistenceTimeoutError
 		);
-		expect(projector.enqueue).not.toHaveBeenCalled();
 		await expect(buffer.flush()).rejects.toBeInstanceOf(
 			ScpStatementPersistenceTimeoutError
 		);
@@ -109,17 +62,12 @@ describe('ScpStatementPersistenceBuffer', () => {
 		jest.useFakeTimers();
 		const repository = mock<ScpStatementObservationRepository>();
 		repository.saveMany.mockReturnValue(new Promise(() => {}));
-		const buffer = new ScpStatementPersistenceBuffer(
-			repository,
-			mock<ScpStatementProjectionSink>(),
-			mock<Logger>(),
-			{
-				batchSize: 1,
-				flushDelayMs: 60_000,
-				maxBufferedObservations: 2,
-				saveTimeoutMs: 100
-			}
-		);
+		const buffer = new ScpStatementPersistenceBuffer(repository, {
+			batchSize: 1,
+			flushDelayMs: 60_000,
+			maxBufferedObservations: 2,
+			saveTimeoutMs: 100
+		});
 		const first = buffer.add(createObservation(1));
 		const second = buffer.add(createObservation(2));
 		const firstRejected = expect(first).rejects.toBeInstanceOf(
@@ -141,18 +89,14 @@ describe('ScpStatementPersistenceBuffer', () => {
 
 	it('persists 5,001 observations in bounded streaming batches', async () => {
 		const repository = mock<ScpStatementObservationRepository>();
-		const projector = mock<ScpStatementProjectionSink>();
-		const logger = mock<Logger>();
 		repository.saveMany.mockImplementation(async (observations) => [
 			...observations
 		]);
 		const batchSize = 250;
-		const buffer = new ScpStatementPersistenceBuffer(
-			repository,
-			projector,
-			logger,
-			{ batchSize, flushDelayMs: 60_000 }
-		);
+		const buffer = new ScpStatementPersistenceBuffer(repository, {
+			batchSize,
+			flushDelayMs: 60_000
+		});
 		const observations = Array.from({ length: 5_001 }, (_, index) =>
 			createObservation(index)
 		);
@@ -179,11 +123,9 @@ describe('ScpStatementPersistenceBuffer', () => {
 });
 
 function createBuffer(
-	repository: ScpStatementObservationRepository,
-	projector: ScpStatementProjectionSink,
-	logger: Logger
+	repository: ScpStatementObservationRepository
 ): ScpStatementPersistenceBuffer {
-	return new ScpStatementPersistenceBuffer(repository, projector, logger, {
+	return new ScpStatementPersistenceBuffer(repository, {
 		batchSize: 1,
 		flushDelayMs: 60_000
 	});

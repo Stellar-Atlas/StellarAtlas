@@ -6,6 +6,7 @@ import {
 	createScpStatementSseSubscriber,
 	type ScpStatementSseResponse
 } from '../ScpStatementSseSubscriber.js';
+import { scpStatementTransportCeilingBytes } from '../ScpStatementTransportPolicy.js';
 
 describe('ScpStatementSseSubscriber', () => {
 	it('fans one bounded hub read out to many SSE clients with metadata', async () => {
@@ -43,6 +44,7 @@ describe('ScpStatementSseSubscriber', () => {
 
 		expect(
 			subscriber.onUpdate({
+				cursor: null,
 				metadata: {
 					freshness: 'empty',
 					freshnessMs: null,
@@ -50,9 +52,34 @@ describe('ScpStatementSseSubscriber', () => {
 					source: 'postgres_canonical'
 				},
 				metadataChanged: true,
-				statements: []
+				statements: [],
+				truncated: false
 			})
 		).toBe(false);
+		expect(response.writableEnded).toBe(true);
+	});
+
+	it('does not write an event above the transport ceiling', () => {
+		const response = new FakeResponse();
+		const subscriber = createScpStatementSseSubscriber(response);
+		const oversized = createStatement();
+		oversized.statementXdr = 'x'.repeat(scpStatementTransportCeilingBytes);
+
+		expect(
+			subscriber.onUpdate({
+				cursor: null,
+				metadata: {
+					freshness: 'fresh',
+					freshnessMs: 1,
+					observedAt: oversized.observedAt,
+					source: 'postgres_canonical'
+				},
+				metadataChanged: false,
+				statements: [oversized],
+				truncated: false
+			})
+		).toBe(false);
+		expect(response.output).toBe('');
 		expect(response.writableEnded).toBe(true);
 	});
 });

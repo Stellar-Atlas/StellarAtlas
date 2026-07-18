@@ -7,10 +7,18 @@ export interface ScpStatementStreamState {
 	seenHashQueue: string[];
 }
 
+export interface BoundedScpStatementDelta {
+	readonly hasMore: boolean;
+	readonly oversizedStatementHash: string | null;
+	readonly statements: ScpStatementObservationV1[];
+}
+
 const maxSeenStatementHashes = 2_000;
 
-export const createScpStatementStreamState = (): ScpStatementStreamState => ({
-	cursor: null,
+export const createScpStatementStreamState = (
+	cursor: ScpStatementLiveCursor | null = null
+): ScpStatementStreamState => ({
+	cursor,
 	seenHashQueue: [],
 	seenHashes: new Set()
 });
@@ -53,8 +61,18 @@ export const getScpStatementReadOrder = (
 export const selectScpStatementDelta = (
 	state: ScpStatementStreamState,
 	statements: readonly ScpStatementObservationV1[]
-): ScpStatementObservationV1[] => {
+): ScpStatementObservationV1[] =>
+	selectBoundedScpStatementDelta(state, statements, Number.MAX_SAFE_INTEGER)
+		.statements;
+
+export const selectBoundedScpStatementDelta = (
+	state: ScpStatementStreamState,
+	statements: readonly ScpStatementObservationV1[],
+	maxSerializedBytes: number
+): BoundedScpStatementDelta => {
 	const delta: ScpStatementObservationV1[] = [];
+	const byteLimit = Math.max(2, Math.floor(maxSerializedBytes));
+	let serializedBytes = 2;
 	for (const statement of statements) {
 		const cursor = toScpStatementCursor(statement);
 		if (cursor === null) continue;
@@ -66,6 +84,18 @@ export const selectScpStatementDelta = (
 		}
 		if (state.seenHashes.has(statement.statementHash)) continue;
 
+		const statementBytes = Buffer.byteLength(JSON.stringify(statement), 'utf8');
+		const candidateBytes =
+			serializedBytes + statementBytes + (delta.length === 0 ? 0 : 1);
+		if (candidateBytes > byteLimit) {
+			return {
+				hasMore: true,
+				oversizedStatementHash:
+					delta.length === 0 ? statement.statementHash : null,
+				statements: delta
+			};
+		}
+		serializedBytes = candidateBytes;
 		delta.push(statement);
 		rememberScpStatementHash(state, statement.statementHash);
 		if (
@@ -75,7 +105,11 @@ export const selectScpStatementDelta = (
 			state.cursor = cursor;
 		}
 	}
-	return delta;
+	return {
+		hasMore: false,
+		oversizedStatementHash: null,
+		statements: delta
+	};
 };
 
 const rememberScpStatementHash = (

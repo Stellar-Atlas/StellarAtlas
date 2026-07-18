@@ -5,11 +5,7 @@ import type {
 	ScpStatementObservation as CrawlerScpStatementObservation,
 	StellarValueSummary
 } from 'crawler';
-import type {
-	ScpStatementPledgesV1,
-	ScpStatementObservationV1,
-	ScpStatementValueV1
-} from 'shared';
+import type { ScpStatementObservationV1, ScpStatementValueV1 } from 'shared';
 import type {
 	ScpStatementLiveCursor,
 	ScpStatementLiveFilter,
@@ -18,35 +14,26 @@ import type {
 	ScpStatementProjectionTaskOutcome,
 	ScpStatementLiveStore
 } from '../../domain/scp/ScpStatementLiveStore.js';
-import {
-	assertMeilisearchTaskSucceeded,
-	ensureMeilisearchSettings
-} from './MeilisearchIndexSettings.js';
+import { ensureMeilisearchSettings } from './MeilisearchIndexSettings.js';
 import type { NetworkSearchConfig } from './NetworkSearchTypes.js';
 import { scpStatementObservationPolicy } from '../../domain/scp/ScpStatementObservationPolicy.js';
 
 interface ScpStatementSearchDocument extends ScpStatementObservationV1 {
 	readonly id: string;
-	readonly indexedAt: string;
 	readonly observedAtMs: number;
 }
 
 const filterableAttributes = [
 	'nodeId',
 	'observedAtMs',
-	'observedFromPeer',
-	'slotIndex',
-	'statementHash',
-	'statementType'
-] as const;
-const sortableAttributes = [
-	'observedAtMs',
 	'slotIndex',
 	'statementHash'
 ] as const;
+const sortableAttributes = ['observedAtMs', 'statementHash'] as const;
 const liveFreshnessMs = 2 * 60 * 1_000;
 const liveRetentionMs = 5 * 60 * 1_000;
 const retentionCleanupIntervalMs = liveRetentionMs;
+const retentionCleanupHysteresisMs = 30_000;
 const pendingDocumentTaskPollIntervalMs = 5_000;
 const taskPollIntervalMs = 50;
 const settingsTaskTimeoutMs = 60_000;
@@ -54,6 +41,7 @@ const settingsRetryCooldownMs = 60_000;
 const documentWriteRetryCooldownMs = 60_000;
 const requiredSettings = {
 	filterableAttributes,
+	searchableAttributes: [],
 	sortableAttributes
 };
 
@@ -63,45 +51,8 @@ const mapStellarValueSummary = (
 	closeTime: value.closeTime,
 	txSetHash: value.txSetHash,
 	upgradeCount: value.upgradeCount,
-	value: ''
+	value: value.value
 });
-
-const toSlimPledges = (
-	statementType: CrawlerScpStatementObservation['statementType']
-): ScpStatementPledgesV1 => {
-	const ballot = { counter: 0, value: '' };
-	if (statementType === 'nominate') {
-		return {
-			accepted: [],
-			quorumSetHash: '',
-			votes: []
-		};
-	}
-	if (statementType === 'prepare') {
-		return {
-			ballot,
-			nC: 0,
-			nH: 0,
-			prepared: null,
-			preparedPrime: null,
-			quorumSetHash: ''
-		};
-	}
-	if (statementType === 'confirm') {
-		return {
-			ballot,
-			nCommit: 0,
-			nH: 0,
-			nPrepared: 0,
-			quorumSetHash: ''
-		};
-	}
-	return {
-		commit: ballot,
-		nH: 0,
-		quorumSetHash: ''
-	};
-};
 
 const documentId = (statementHash: string): string =>
 	createHash('sha256').update(statementHash).digest('hex');
@@ -110,18 +61,17 @@ const toDocument = (
 	observation: CrawlerScpStatementObservation
 ): ScpStatementSearchDocument => ({
 	id: documentId(observation.statementHash),
-	indexedAt: new Date().toISOString(),
 	nodeId: observation.nodeId,
 	observedAt: observation.observedAt.toISOString(),
 	observedAtMs: observation.observedAt.getTime(),
 	observedFromAddress: observation.observedFromAddress,
 	observedFromPeer: observation.observedFromPeer,
-	pledges: toSlimPledges(observation.statementType),
-	signature: '',
+	pledges: observation.pledges,
+	signature: observation.signature,
 	slotIndex: observation.slotIndex,
 	statementHash: observation.statementHash,
 	statementType: observation.statementType,
-	statementXdr: '',
+	statementXdr: observation.statementXdr,
 	values: observation.values.map(mapStellarValueSummary)
 });
 
@@ -157,6 +107,7 @@ export class MeilisearchScpStatementLiveStore implements ScpStatementLiveStore {
 	private pendingDocumentTaskUid: number | undefined;
 	private pendingRetentionCleanupTaskUid: number | undefined;
 	private retentionCleanupPromise: Promise<void> | undefined;
+	private retentionCleanupTimer: ReturnType<typeof setTimeout> | undefined;
 
 	constructor(
 		config: NetworkSearchConfig,
@@ -211,6 +162,7 @@ export class MeilisearchScpStatementLiveStore implements ScpStatementLiveStore {
 		}
 
 		const documents = observations.map(toDocument);
+		const cleanupWasScheduled = this.clearRetentionCleanupTimer();
 		try {
 			const documentTask = await this.index.addDocuments(documents, {
 				primaryKey: 'id'
@@ -218,6 +170,7 @@ export class MeilisearchScpStatementLiveStore implements ScpStatementLiveStore {
 			this.pendingDocumentTaskUid = documentTask.taskUid;
 			this.pendingDocumentTaskCheckedAtMs = Date.now();
 		} catch (error) {
+			if (cleanupWasScheduled) this.scheduleRetentionCleanup(Date.now());
 			this.nextDocumentWriteAttemptAtMs =
 				Date.now() + documentWriteRetryCooldownMs;
 			this.logger?.warn('Could not enqueue live SCP Meilisearch documents', {
@@ -230,7 +183,6 @@ export class MeilisearchScpStatementLiveStore implements ScpStatementLiveStore {
 				status: 'deferred'
 			};
 		}
-		this.queueRetentionCleanup(Date.now());
 		return { status: 'accepted', taskPending: true };
 	}
 
@@ -258,7 +210,10 @@ export class MeilisearchScpStatementLiveStore implements ScpStatementLiveStore {
 				};
 			}
 			this.pendingDocumentTaskUid = undefined;
-			if (task.status === 'succeeded') return { status: 'settled' };
+			if (task.status === 'succeeded') {
+				this.scheduleRetentionCleanup(nowMs);
+				return { status: 'settled' };
+			}
 			this.nextDocumentWriteAttemptAtMs =
 				Date.now() + documentWriteRetryCooldownMs;
 			this.logger?.warn('Live SCP Meilisearch document task did not succeed', {
@@ -355,13 +310,13 @@ export class MeilisearchScpStatementLiveStore implements ScpStatementLiveStore {
 	}
 
 	private buildFilter(
-		{ after, nodeId, slotIndex }: ScpStatementLiveFilter,
+		{ after, nodeId, order, slotIndex }: ScpStatementLiveFilter,
 		nowMs: number
 	): string | undefined {
 		const freshAfterMs = nowMs - liveFreshnessMs;
 		const filters = [
 			`observedAtMs >= ${freshAfterMs}`,
-			after ? this.buildCursorFilter(after) : undefined,
+			after ? this.buildCursorFilter(after, order) : undefined,
 			nodeId ? `nodeId = ${quoteFilterValue(nodeId)}` : undefined,
 			slotIndex ? `slotIndex = ${quoteFilterValue(slotIndex)}` : undefined
 		].filter((filter): filter is string => filter !== undefined);
@@ -369,10 +324,14 @@ export class MeilisearchScpStatementLiveStore implements ScpStatementLiveStore {
 		return filters.join(' AND ');
 	}
 
-	private buildCursorFilter(after: ScpStatementLiveCursor): string {
+	private buildCursorFilter(
+		after: ScpStatementLiveCursor,
+		order: ScpStatementLiveOrder | undefined
+	): string {
+		const comparison = order === 'asc' ? '>' : '<';
 		return `(${[
-			`observedAtMs > ${after.observedAtMs}`,
-			`(observedAtMs = ${after.observedAtMs} AND statementHash > ${quoteFilterValue(after.statementHash)})`
+			`observedAtMs ${comparison} ${after.observedAtMs}`,
+			`(observedAtMs = ${after.observedAtMs} AND statementHash ${comparison} ${quoteFilterValue(after.statementHash)})`
 		].join(' OR ')})`;
 	}
 
@@ -383,10 +342,10 @@ export class MeilisearchScpStatementLiveStore implements ScpStatementLiveStore {
 
 	private async enqueueRetentionCleanup(nowMs: number): Promise<void> {
 		if (!this.index) return;
+		if (this.pendingDocumentTaskUid !== undefined) return;
 		if (nowMs - this.lastRetentionCleanupAtMs < retentionCleanupIntervalMs) {
 			return;
 		}
-		this.lastRetentionCleanupAtMs = nowMs;
 		if (await this.hasPendingRetentionCleanupTask()) return;
 		const cutoffMs = nowMs - liveRetentionMs;
 
@@ -394,6 +353,7 @@ export class MeilisearchScpStatementLiveStore implements ScpStatementLiveStore {
 			const cleanupTask = await this.index.deleteDocuments({
 				filter: `observedAtMs < ${cutoffMs}`
 			});
+			this.lastRetentionCleanupAtMs = nowMs;
 			this.pendingRetentionCleanupTaskUid = cleanupTask.taskUid;
 		} catch (error) {
 			this.logger?.error('Could not queue live SCP retention cleanup', {
@@ -430,12 +390,36 @@ export class MeilisearchScpStatementLiveStore implements ScpStatementLiveStore {
 		}
 	}
 
-	private queueRetentionCleanup(nowMs: number): void {
-		if (this.retentionCleanupPromise !== undefined) return;
-		this.retentionCleanupPromise = this.enqueueRetentionCleanup(nowMs).finally(
-			() => {
-				this.retentionCleanupPromise = undefined;
-			}
+	private scheduleRetentionCleanup(nowMs: number): void {
+		if (
+			!this.index ||
+			this.pendingDocumentTaskUid !== undefined ||
+			this.retentionCleanupPromise !== undefined ||
+			this.retentionCleanupTimer !== undefined
+		) {
+			return;
+		}
+		const cadenceDelayMs = Math.max(
+			0,
+			this.lastRetentionCleanupAtMs + retentionCleanupIntervalMs - nowMs
 		);
+		const delayMs = Math.max(retentionCleanupHysteresisMs, cadenceDelayMs);
+		this.retentionCleanupTimer = setTimeout(() => {
+			this.retentionCleanupTimer = undefined;
+			if (this.pendingDocumentTaskUid !== undefined) return;
+			this.retentionCleanupPromise = this.enqueueRetentionCleanup(
+				Date.now()
+			).finally(() => {
+				this.retentionCleanupPromise = undefined;
+			});
+		}, delayMs);
+		this.retentionCleanupTimer.unref();
+	}
+
+	private clearRetentionCleanupTimer(): boolean {
+		if (this.retentionCleanupTimer === undefined) return false;
+		clearTimeout(this.retentionCleanupTimer);
+		this.retentionCleanupTimer = undefined;
+		return true;
 	}
 }

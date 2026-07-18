@@ -26,7 +26,7 @@ describe('CollectScpLive', () => {
 		jest.useRealTimers();
 	});
 
-	it('persists and projects a streamed observation before crawl completion', async () => {
+	it('projects a durable streamed observation only through the canonical tail', async () => {
 		jest.useFakeTimers().setSystemTime(new Date('2026-07-10T12:00:00.000Z'));
 		const sut = setupSUT();
 		const observation = createObservation('11');
@@ -34,6 +34,17 @@ describe('CollectScpLive', () => {
 		const emitted = deferred<void>();
 		const postgres = deferred<CrawlerScpStatementObservation[]>();
 		sut.observationRepository.saveMany.mockReturnValue(postgres.promise);
+		sut.observationRepository.findProjectionEventPage
+			.mockResolvedValueOnce({
+				hasMore: false,
+				nextAfterId: 0,
+				observations: []
+			})
+			.mockResolvedValueOnce({
+				hasMore: false,
+				nextAfterId: 1,
+				observations: [observation]
+			});
 		sut.crawlerService.crawl.mockImplementation(async (...args) => {
 			const listener = args[5];
 			void Promise.resolve(listener?.(observation)).catch(() => undefined);
@@ -60,6 +71,12 @@ describe('CollectScpLive', () => {
 		expect(completed).toBe(false);
 
 		postgres.resolve([observation]);
+		await flushMicrotasks();
+		expect(sut.liveStore.saveMany).not.toHaveBeenCalled();
+
+		jest.advanceTimersByTime(
+			scpStatementObservationPolicy.projectionEventTailPollIntervalMs
+		);
 		await flushMicrotasks();
 		expect(sut.liveStore.saveMany).toHaveBeenCalledWith([observation]);
 		expect(
@@ -254,7 +271,7 @@ describe('CollectScpLive', () => {
 		});
 		await execution;
 		expect(sut.observationRepository.saveMany).toHaveBeenCalledTimes(1);
-		expect(sut.liveStore.saveMany).toHaveBeenCalledWith([observation]);
+		expect(sut.liveStore.saveMany).not.toHaveBeenCalled();
 	});
 });
 

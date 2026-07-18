@@ -1,221 +1,205 @@
 import { err, ok, type Result } from 'neverthrow';
-import type { ScpStatementObservationV1, ScpStatementTypeV1 } from 'shared';
+import type { ScpStatementReadCursor } from '../../domain/scp/ScpStatementObservationRepository.js';
 import { mapUnknownToError } from '@core/utilities/mapUnknownToError.js';
 import type { GetKnownNodes } from '../get-known-nodes/GetKnownNodes.js';
 import type {
 	ScpAnimationStatement,
-	ScpStatementReadFreshness,
-	ScpStatementReadSource,
+	ScpStoredStatementPageReadResult,
 	GetScpStatements
 } from '../get-scp-statements/GetScpStatements.js';
+import {
+	buildBoundedCompactResponse,
+	type ScpCompactDeliveryPolicy
+} from './ScpCompactDelivery.js';
+import {
+	cursorForStatement,
+	encodeScpEvidenceCursor
+} from './ScpEvidenceCursor.js';
+import type {
+	ScpAnimationBacklog,
+	ScpEvidenceMetadata,
+	ScpEvidencePage,
+	ScpLatestSlots
+} from './ScpEvidenceDTO.js';
+import {
+	groupStatementsBySlot,
+	toAnimationSlotEvidence,
+	toEvidenceMetadata,
+	toSlotEvidence
+} from './ScpEvidenceMapper.js';
 
-export type ScpSemanticEventKind =
-	| 'nomination_observed'
-	| 'prepare_observed'
-	| 'commit_observed'
-	| 'externalized';
+export type {
+	ScpAnimationBacklog,
+	ScpAnimationSemanticEvent,
+	ScpCompactDeliveryMetadata,
+	ScpEvidenceMetadata,
+	ScpEvidencePage,
+	ScpEvidencePageMetadata,
+	ScpLatestSlotEvidence,
+	ScpLatestSlots,
+	ScpSemanticEvent,
+	ScpSemanticEventKind,
+	ScpSlotEvidence
+} from './ScpEvidenceDTO.js';
 
-export interface ScpSemanticEvent {
-	readonly eventId: string;
-	readonly kind: ScpSemanticEventKind;
-	readonly nodeId: string;
-	readonly observedAt: string;
-	readonly organizationId: string | null;
-	readonly quorumSetHash: string;
-	readonly slotIndex: string;
-	readonly statement: ScpStatementObservationV1;
-	readonly transactionSetHashes: readonly string[];
+export interface GetScpEvidenceOptions {
+	readonly compactByteLimit?: number;
+	readonly compactEventLimit?: number;
 }
 
-export interface ScpAnimationSemanticEvent {
-	readonly eventId: string;
-	readonly kind: ScpSemanticEventKind;
-	readonly nodeId: string;
-	readonly observedAt: string;
-	readonly organizationId: null;
-	readonly quorumSetHash: string;
-	readonly slotIndex: string;
-	readonly statement: ScpAnimationStatement;
-	readonly transactionSetHashes: readonly string[];
-}
+export const scpCompactDeliveryLimits = {
+	byteLimit: 262_144,
+	eventLimit: 512
+} as const;
 
-export interface ScpEvidenceMetadata {
-	readonly freshness: ScpStatementReadFreshness;
-	readonly freshnessMs: number | null;
-	readonly observedAt: string | null;
-	readonly source: ScpStatementReadSource;
-}
-
-export interface ScpSlotEvidence {
-	readonly events: readonly ScpSemanticEvent[];
-	readonly metadata: ScpEvidenceMetadata;
-	readonly phaseCounts: Record<ScpStatementTypeV1, number>;
-	readonly slotIndex: string;
-	readonly statementCount: number;
-	readonly validatorCount: number;
-}
-
-export interface ScpLatestSlotEvidence {
-	readonly events: readonly ScpAnimationSemanticEvent[];
-	readonly metadata: ScpEvidenceMetadata;
-	readonly phaseCounts: Record<ScpStatementTypeV1, number>;
-	readonly slotIndex: string;
-	readonly statementCount: number;
-	readonly validatorCount: number;
-}
-
-export interface ScpAnimationBacklog {
-	readonly metadata: ScpEvidenceMetadata;
-	readonly slots: readonly {
-		readonly slotIndex: string;
-		readonly statements: readonly ScpAnimationStatement[];
-	}[];
-	readonly statementCount: number;
-}
-
-const maxStatements = 1000;
+const maximumSlotCount = 25;
+const maximumStatementPageSize = 1_000;
+const minimumCompactByteLimit = 4_096;
+const compactCandidateLimit = 4_001;
 
 export class GetScpEvidence {
+	private readonly compactPolicy: ScpCompactDeliveryPolicy;
+
 	constructor(
 		private readonly getScpStatements: GetScpStatements,
-		private readonly getKnownNodes: GetKnownNodes
-	) {}
+		private readonly getKnownNodes: GetKnownNodes,
+		options: GetScpEvidenceOptions = {}
+	) {
+		this.compactPolicy = normalizeCompactPolicy(options);
+	}
 
-	async getLatestSlots(
-		limit = 12
-	): Promise<Result<readonly ScpLatestSlotEvidence[], Error>> {
-		const boundedSlots = Math.min(Math.max(Math.floor(limit), 1), 25);
-		const read =
-			await this.getScpStatements.executeLatestAnimationSlots(boundedSlots);
-		if (read.isErr()) return err(read.error);
-		const slots = groupAnimationBySlot(read.value.observations);
+	async getLatestSlots(limit = 12): Promise<Result<ScpLatestSlots, Error>> {
+		const slotLimit = boundedSlotLimit(limit);
+		const compactRead = await this.readCompactCandidates(slotLimit);
+		if (compactRead.isErr()) return err(compactRead.error);
+		const { metadata, observations, organizations } = compactRead.value;
 		return ok(
-			[...slots.entries()]
-				.toSorted(([left], [right]) => compareSequence(right, left))
-				.slice(0, boundedSlots)
-				.map(([slotIndex, statements]) =>
-					toAnimationSlotEvidence(slotIndex, statements, read.value)
-				)
+			buildBoundedCompactResponse(
+				observations,
+				this.compactPolicy,
+				cursorForStatement,
+				(statements, delivery) => ({
+					delivery,
+					slots: sortedSlots(groupStatementsBySlot(statements)).map(
+						([slotIndex, rows]) =>
+							toAnimationSlotEvidence(slotIndex, rows, metadata, organizations)
+					)
+				})
+			)
 		);
 	}
 
 	async getAnimationBacklog(
 		limit = 4
 	): Promise<Result<ScpAnimationBacklog, Error>> {
-		const boundedSlots = Math.min(Math.max(Math.floor(limit), 1), 25);
-		const read =
-			await this.getScpStatements.executeLatestAnimationSlots(boundedSlots);
-		if (read.isErr()) return err(read.error);
-		const slots = [...groupAnimationBySlot(read.value.observations).entries()]
-			.toSorted(([left], [right]) => compareSequence(right, left))
-			.slice(0, boundedSlots)
-			.map(([slotIndex, statements]) => ({ slotIndex, statements }));
-		return ok({
-			metadata: {
-				freshness: read.value.freshness,
-				freshnessMs: read.value.freshnessMs,
-				observedAt: read.value.observedAt,
-				source: read.value.source
-			},
-			slots,
-			statementCount: slots.reduce(
-				(total, slot) => total + slot.statements.length,
-				0
+		const slotLimit = boundedSlotLimit(limit);
+		const compactRead = await this.readCompactCandidates(slotLimit);
+		if (compactRead.isErr()) return err(compactRead.error);
+		const { metadata, observations } = compactRead.value;
+		return ok(
+			buildBoundedCompactResponse(
+				observations,
+				this.compactPolicy,
+				cursorForStatement,
+				(statements, delivery) => {
+					const slots = sortedSlots(groupStatementsBySlot(statements)).map(
+						([slotIndex, rows]) => ({ slotIndex, statements: rows })
+					);
+					return {
+						delivery,
+						metadata,
+						slots,
+						statementCount: delivery.eventCount
+					};
+				}
 			)
+		);
+	}
+
+	private async readCompactCandidates(slotLimit: number): Promise<
+		Result<
+			{
+				readonly metadata: ScpEvidenceMetadata;
+				readonly observations: readonly ScpAnimationStatement[];
+				readonly organizations: ReadonlyMap<string, string>;
+			},
+			Error
+		>
+	> {
+		const [read, nodeOrganizations] = await Promise.all([
+			this.getScpStatements.executeLatestAnimationSlots(
+				slotLimit,
+				compactCandidateLimit
+			),
+			this.nodeOrganizations()
+		]);
+		if (read.isErr()) return err(read.error);
+		if (nodeOrganizations.isErr()) return err(nodeOrganizations.error);
+		const organizations = nodeOrganizations.value;
+		const candidates = selectLatestSlots(read.value.observations, slotLimit);
+		return ok({
+			metadata: toEvidenceMetadata(read.value),
+			observations: prioritizeCompactRepresentatives(candidates, organizations),
+			organizations
 		});
 	}
 
 	async getSlot(
 		slotIndex: string,
-		limit = maxStatements
-	): Promise<Result<ScpSlotEvidence, Error>> {
-		const read = await this.read({ limit: boundedLimit(limit), slotIndex });
-		if (read.isErr()) return err(read.error);
-		const nodeOrganizations = await this.nodeOrganizations();
-		if (nodeOrganizations.isErr()) return err(nodeOrganizations.error);
-		return ok(
-			toSlotEvidence(
-				slotIndex,
-				read.value.observations,
-				read.value,
-				nodeOrganizations.value
-			)
-		);
+		limit = maximumStatementPageSize,
+		after?: ScpStatementReadCursor
+	): Promise<Result<ScpEvidencePage, Error>> {
+		return this.getDetailedEvidence({ after, limit, slotIndex });
 	}
 
 	async getValidator(
 		nodeId: string,
-		limit = 200
-	): Promise<Result<ScpSlotEvidence[], Error>> {
-		return this.getParticipantEvidence({ limit, nodeId });
+		limit = 200,
+		after?: ScpStatementReadCursor
+	): Promise<Result<ScpEvidencePage, Error>> {
+		return this.getDetailedEvidence({ after, limit, nodeId });
 	}
 
 	async getOrganization(
 		organizationId: string,
-		limit = 500
-	): Promise<Result<ScpSlotEvidence[], Error>> {
+		limit = 500,
+		after?: ScpStatementReadCursor
+	): Promise<Result<ScpEvidencePage, Error>> {
 		const nodeOrganizations = await this.nodeOrganizations();
 		if (nodeOrganizations.isErr()) return err(nodeOrganizations.error);
 		const nodeIds = [...nodeOrganizations.value]
 			.filter(([, candidate]) => candidate === organizationId)
 			.map(([nodeId]) => nodeId)
 			.toSorted();
-		if (nodeIds.length === 0) return ok([]);
-		const maximum = boundedLimit(limit);
-		const perNodeLimit = Math.max(1, Math.ceil(maximum / nodeIds.length));
-		const observations: ScpStatementObservationV1[] = [];
-		let metadata: ScpEvidenceMetadata = {
-			freshness: 'empty',
-			freshnessMs: null,
-			observedAt: null,
-			source: 'postgres_canonical'
-		};
-		for (const nodeId of nodeIds) {
-			const read = await this.read({ limit: perNodeLimit, nodeId });
-			if (read.isErr()) return err(read.error);
-			observations.push(...read.value.observations);
-			metadata = fresherMetadata(metadata, read.value);
+		const pageLimit = boundedPageLimit(limit);
+		if (nodeIds.length === 0) {
+			return ok(emptyEvidencePage(pageLimit));
 		}
-		const bounded = observations
-			.toSorted((left, right) =>
-				right.observedAt.localeCompare(left.observedAt)
-			)
-			.slice(0, maximum);
-		return ok(
-			[...groupBySlot(bounded)].map(([slot, rows]) =>
-				toSlotEvidence(slot, rows, metadata, nodeOrganizations.value)
-			)
-		);
+		const read = await this.getScpStatements.executeStoredPageWithMetadata({
+			after,
+			limit: pageLimit,
+			nodeIds,
+			order: 'desc'
+		});
+		if (read.isErr()) return err(read.error);
+		return ok(toEvidencePage(read.value, nodeOrganizations.value));
 	}
 
-	private async getParticipantEvidence(filter: {
+	private async getDetailedEvidence(filter: {
+		readonly after?: ScpStatementReadCursor;
 		readonly limit: number;
 		readonly nodeId?: string;
-	}): Promise<Result<ScpSlotEvidence[], Error>> {
-		const read = await this.read({
-			limit: boundedLimit(filter.limit),
-			nodeId: filter.nodeId
+		readonly slotIndex?: string;
+	}): Promise<Result<ScpEvidencePage, Error>> {
+		const read = await this.getScpStatements.executeStoredPageWithMetadata({
+			...filter,
+			limit: boundedPageLimit(filter.limit),
+			order: 'desc'
 		});
 		if (read.isErr()) return err(read.error);
 		const nodeOrganizations = await this.nodeOrganizations();
 		if (nodeOrganizations.isErr()) return err(nodeOrganizations.error);
-		return ok(
-			[...groupBySlot(read.value.observations)].map(([slot, rows]) =>
-				toSlotEvidence(slot, rows, read.value, nodeOrganizations.value)
-			)
-		);
-	}
-
-	private read(filter: {
-		readonly limit: number;
-		readonly nodeId?: string;
-		readonly slotIndex?: string;
-	}) {
-		return this.getScpStatements.executeWithMetadata({
-			...filter,
-			order: 'desc',
-			source: 'stored'
-		});
+		return ok(toEvidencePage(read.value, nodeOrganizations.value));
 	}
 
 	private async nodeOrganizations(): Promise<
@@ -240,155 +224,125 @@ export class GetScpEvidence {
 	}
 }
 
-function fresherMetadata(
-	current: ScpEvidenceMetadata,
-	candidate: ScpEvidenceMetadata
-): ScpEvidenceMetadata {
-	if (candidate.observedAt === null) return current;
-	if (
-		current.observedAt === null ||
-		candidate.observedAt > current.observedAt
-	) {
-		return {
-			freshness: candidate.freshness,
-			freshnessMs: candidate.freshnessMs,
-			observedAt: candidate.observedAt,
-			source: candidate.source
-		};
-	}
-	return current;
-}
-
-function toSlotEvidence(
-	slotIndex: string,
-	statements: readonly ScpStatementObservationV1[],
-	metadata: ScpEvidenceMetadata,
+function toEvidencePage(
+	read: ScpStoredStatementPageReadResult,
 	organizations: ReadonlyMap<string, string>
-): ScpSlotEvidence {
-	const phaseCounts = { confirm: 0, externalize: 0, nominate: 0, prepare: 0 };
-	for (const statement of statements) phaseCounts[statement.statementType] += 1;
+): ScpEvidencePage {
+	const metadata = toEvidenceMetadata(read);
 	return {
-		events: statements.map((statement) =>
-			toSemanticEvent(statement, organizations)
+		metadata,
+		page: {
+			hasMore: read.page.hasMore,
+			limit: read.page.limit,
+			nextCursor:
+				read.page.nextCursor === null
+					? null
+					: encodeScpEvidenceCursor(read.page.nextCursor)
+		},
+		slots: sortedSlots(groupStatementsBySlot(read.observations)).map(
+			([slotIndex, rows]) =>
+				toSlotEvidence(slotIndex, rows, metadata, organizations)
 		),
-		metadata: {
-			freshness: metadata.freshness,
-			freshnessMs:
-				'freshnessMs' in metadata && typeof metadata.freshnessMs === 'number'
-					? metadata.freshnessMs
-					: null,
-			observedAt: metadata.observedAt,
-			source: metadata.source
-		},
-		phaseCounts,
-		slotIndex,
-		statementCount: statements.length,
-		validatorCount: new Set(statements.map((statement) => statement.nodeId))
-			.size
+		statementCount: read.observations.length
 	};
 }
 
-function toAnimationSlotEvidence(
-	slotIndex: string,
+function emptyEvidencePage(limit: number): ScpEvidencePage {
+	return {
+		metadata: {
+			freshness: 'empty',
+			freshnessMs: null,
+			observedAt: null,
+			source: 'postgres_canonical'
+		},
+		page: { hasMore: false, limit, nextCursor: null },
+		slots: [],
+		statementCount: 0
+	};
+}
+
+function normalizeCompactPolicy(
+	options: GetScpEvidenceOptions
+): ScpCompactDeliveryPolicy {
+	return {
+		byteLimit: boundedNumber(
+			options.compactByteLimit,
+			minimumCompactByteLimit,
+			scpCompactDeliveryLimits.byteLimit
+		),
+		eventLimit: boundedNumber(
+			options.compactEventLimit,
+			1,
+			scpCompactDeliveryLimits.eventLimit
+		)
+	};
+}
+
+function boundedNumber(
+	value: number | undefined,
+	minimum: number,
+	maximum: number
+): number {
+	if (value === undefined || !Number.isFinite(value)) return maximum;
+	return Math.min(Math.max(Math.floor(value), minimum), maximum);
+}
+
+function boundedSlotLimit(limit: number): number {
+	return boundedNumber(limit, 1, maximumSlotCount);
+}
+
+function boundedPageLimit(limit: number): number {
+	return boundedNumber(limit, 1, maximumStatementPageSize);
+}
+
+function sortedSlots<T>(grouped: Map<string, T[]>): [string, T[]][] {
+	return [...grouped.entries()].toSorted(([left], [right]) =>
+		compareSequence(right, left)
+	);
+}
+
+function selectLatestSlots<T extends { readonly slotIndex: string }>(
+	statements: readonly T[],
+	limit: number
+): T[] {
+	const selectedSlots = new Set(
+		sortedSlots(groupStatementsBySlot(statements))
+			.slice(0, limit)
+			.map(([slotIndex]) => slotIndex)
+	);
+	return statements.filter(({ slotIndex }) => selectedSlots.has(slotIndex));
+}
+
+function prioritizeCompactRepresentatives(
 	statements: readonly ScpAnimationStatement[],
-	metadata: ScpEvidenceMetadata
-): ScpLatestSlotEvidence {
-	const phaseCounts = { confirm: 0, externalize: 0, nominate: 0, prepare: 0 };
-	for (const statement of statements) phaseCounts[statement.statementType] += 1;
-	return {
-		events: statements.map(toAnimationSemanticEvent),
-		metadata: {
-			freshness: metadata.freshness,
-			freshnessMs: metadata.freshnessMs,
-			observedAt: metadata.observedAt,
-			source: metadata.source
-		},
-		phaseCounts,
-		slotIndex,
-		statementCount: statements.length,
-		validatorCount: new Set(statements.map((statement) => statement.nodeId))
-			.size
-	};
-}
-
-function toAnimationSemanticEvent(
-	statement: ScpAnimationStatement
-): ScpAnimationSemanticEvent {
-	return {
-		eventId: statement.statementHash,
-		kind: semanticEventKind(statement.statementType),
-		nodeId: statement.nodeId,
-		observedAt: statement.observedAt,
-		organizationId: null,
-		quorumSetHash: statement.quorumSetHash,
-		slotIndex: statement.slotIndex,
-		statement,
-		transactionSetHashes: [
-			...new Set(
-				statement.values.map((value) => value.txSetHash).filter(Boolean)
-			)
-		]
-	};
-}
-
-function toSemanticEvent(
-	statement: ScpStatementObservationV1,
 	organizations: ReadonlyMap<string, string>
-): ScpSemanticEvent {
-	return {
-		eventId: statement.statementHash,
-		kind: semanticEventKind(statement.statementType),
-		nodeId: statement.nodeId,
-		observedAt: statement.observedAt,
-		organizationId: organizations.get(statement.nodeId) ?? null,
-		quorumSetHash: statement.pledges.quorumSetHash,
-		slotIndex: statement.slotIndex,
-		statement,
-		transactionSetHashes: [
-			...new Set(
-				statement.values.map((value) => value.txSetHash).filter(Boolean)
-			)
-		]
-	};
-}
-
-function semanticEventKind(
-	statementType: ScpStatementTypeV1
-): ScpSemanticEventKind {
-	if (statementType === 'nominate') return 'nomination_observed';
-	if (statementType === 'prepare') return 'prepare_observed';
-	if (statementType === 'confirm') return 'commit_observed';
-	return 'externalized';
-}
-
-function groupBySlot(
-	statements: readonly ScpStatementObservationV1[]
-): Map<string, ScpStatementObservationV1[]> {
-	const grouped = new Map<string, ScpStatementObservationV1[]>();
-	for (const statement of statements) {
-		const rows = grouped.get(statement.slotIndex);
-		if (rows) rows.push(statement);
-		else grouped.set(statement.slotIndex, [statement]);
+): ScpAnimationStatement[] {
+	const ordered = statements.toSorted(compareAnimationStatements);
+	const representativeByGroup = new Map<string, ScpAnimationStatement>();
+	for (const statement of ordered) {
+		const organizationId = organizations.get(statement.nodeId);
+		if (organizationId === undefined) continue;
+		const group = `${statement.slotIndex}\u0000${statement.statementType}\u0000${organizationId}`;
+		if (!representativeByGroup.has(group)) {
+			representativeByGroup.set(group, statement);
+		}
 	}
-	return grouped;
+	const representatives = [...representativeByGroup.values()];
+	const selected = new Set(representatives);
+	return [
+		...representatives,
+		...ordered.filter((statement) => !selected.has(statement))
+	];
 }
 
-function groupAnimationBySlot(
-	statements: readonly ScpAnimationStatement[]
-): Map<string, ScpAnimationStatement[]> {
-	const grouped = new Map<string, ScpAnimationStatement[]>();
-	for (const statement of statements) {
-		const rows = grouped.get(statement.slotIndex);
-		if (rows) rows.push(statement);
-		else grouped.set(statement.slotIndex, [statement]);
-	}
-	return grouped;
-}
-
-function boundedLimit(limit: number): number {
-	return Math.min(
-		Math.max(Number.isFinite(limit) ? Math.floor(limit) : 200, 1),
-		maxStatements
+function compareAnimationStatements(
+	left: ScpAnimationStatement,
+	right: ScpAnimationStatement
+): number {
+	return (
+		compareSequence(right.slotIndex, left.slotIndex) ||
+		left.observedAt.localeCompare(right.observedAt) ||
+		left.statementHash.localeCompare(right.statementHash)
 	);
 }
 

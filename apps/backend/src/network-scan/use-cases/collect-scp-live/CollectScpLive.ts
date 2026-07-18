@@ -87,9 +87,7 @@ export class CollectScpLive {
 			const previousScan = scanDataOrError.value;
 			if (this.shuttingDown) return ok(this.emptyResult());
 			const persistence = new ScpStatementPersistenceBuffer(
-				this.scpStatementObservationRepository,
-				this.projector,
-				this.logger
+				this.scpStatementObservationRepository
 			);
 			this.activePersistence = persistence;
 			let flushed = false;

@@ -1,5 +1,6 @@
 import type { Logger } from '@core/services/Logger.js';
 import type { ScpStatementLiveSubscriber } from './ScpStatementLiveHub.js';
+import { isWithinScpStatementTransportCeiling } from './ScpStatementTransportPolicy.js';
 
 export interface ScpStatementSseResponse {
 	end(): void;
@@ -14,9 +15,10 @@ export const createScpStatementSseSubscriber = (
 	const writeEvent = (event: string, data: unknown): boolean => {
 		if (response.writableEnded) return false;
 		try {
-			if (
-				response.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`)
-			) {
+			const chunk = `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`;
+			if (!isWithinScpStatementTransportCeiling(chunk)) {
+				logger?.warn('SCP SSE event exceeds transport limit', { event });
+			} else if (response.write(chunk)) {
 				return true;
 			}
 		} catch (error) {
