@@ -1,5 +1,5 @@
 import { CrawlerService } from '../CrawlerService.js';
-import { Crawler, PeerNode } from 'crawler';
+import { Crawler, CrawlCompletionMode, PeerNode } from 'crawler';
 import type { ScpStatementObservation } from 'crawler';
 import { mock } from 'jest-mock-extended';
 import { NetworkQuorumSetConfiguration } from '@network-scan/domain/network/NetworkQuorumSetConfiguration.js';
@@ -126,6 +126,27 @@ describe('CrawlerService', function () {
 		expect(result.value.scpStatementObservationCount).toBe(1);
 		expect(result.value.scpStatementObservations).toEqual([]);
 		expect(onObservation).toHaveBeenCalledWith(observation);
+	});
+
+	it('keeps only an explicitly requested live observation connected', async () => {
+		const crawler = mock<Crawler>();
+		const crawlFactory = mock<CrawlFactory>();
+		crawler.startCrawl.mockResolvedValue(createCrawlResult());
+		const crawlerService = new CrawlerService(crawler, crawlFactory);
+
+		await crawlerService.crawl(
+			createDummyNetworkQuorumSet(),
+			[createDummyNode()],
+			[createDummyNodeAddress()],
+			1n,
+			new Date(),
+			undefined,
+			{ keepObservationConnected: true }
+		);
+
+		expect(crawlFactory.createCrawl.mock.calls[0]?.[6]).toBe(
+			CrawlCompletionMode.EXPLICIT_STOP
+		);
 	});
 
 	function createDummyNetworkQuorumSet(): NetworkQuorumSetConfiguration {

@@ -1,7 +1,6 @@
 import 'reflect-metadata';
 import { err, ok, Result } from 'neverthrow';
-import { Crawler } from 'crawler';
-import { PeerNode } from 'crawler';
+import { Crawler, CrawlCompletionMode, CrawlFactory, PeerNode } from 'crawler';
 import type { CrawlResult as CrawlResultDTO } from 'crawler';
 import type { Ledger } from 'crawler';
 import type { ScpStatementObservation } from 'crawler';
@@ -13,7 +12,6 @@ import { NodeAddressDTOComposer } from './NodeAddressDTOComposer.js';
 import { mapUnknownToError } from '@core/utilities/mapUnknownToError.js';
 import { NetworkQuorumSetConfigurationMapper } from '@network-scan/domain/network/NetworkQuorumSetConfigurationMapper.js';
 import { QuorumSet } from 'shared';
-import { CrawlFactory } from 'crawler';
 import { injectable } from 'inversify';
 
 export interface CrawlResult {
@@ -22,6 +20,10 @@ export interface CrawlResult {
 	peerNodes: Map<string, PeerNode>;
 	scpStatementObservationCount: number;
 	scpStatementObservations: ScpStatementObservation[];
+}
+
+export interface CrawlOptions {
+	keepObservationConnected?: boolean;
 }
 
 @injectable()
@@ -43,7 +45,8 @@ export class CrawlerService {
 		latestLedgerCloseTime: Date | null,
 		onScpStatementObservation?: (
 			observation: ScpStatementObservation
-		) => Promise<void> | void
+		) => Promise<void> | void,
+		options: CrawlOptions = {}
 	): Promise<Result<CrawlResult, Error>> {
 		const nodeAddresses = NodeAddressDTOComposer.compose(
 			nodes,
@@ -68,7 +71,8 @@ export class CrawlerService {
 			nodeAddresses,
 			latestLedger,
 			latestLedgerCloseTime,
-			observationListener
+			observationListener,
+			options
 		);
 		if (crawlResultOrError.isErr()) return err(crawlResultOrError.error);
 
@@ -99,7 +103,8 @@ export class CrawlerService {
 		latestLedgerCloseTime: Date | null,
 		onScpStatementObservation?: (
 			observation: ScpStatementObservation
-		) => Promise<void> | void
+		) => Promise<void> | void,
+		options: CrawlOptions = {}
 	): Promise<Result<CrawlResultDTO, Error>> {
 		try {
 			const topTierNodesQuorumSet =
@@ -120,7 +125,10 @@ export class CrawlerService {
 					localCloseTime: new Date()
 				},
 				CrawlerDTOMapper.createQuorumSetDTOMap(nodes),
-				onScpStatementObservation
+				onScpStatementObservation,
+				options.keepObservationConnected === true
+					? CrawlCompletionMode.EXPLICIT_STOP
+					: CrawlCompletionMode.QUEUE_DRAINED
 			);
 			return ok(await this.crawler.startCrawl(crawl));
 		} catch (e) {

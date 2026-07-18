@@ -6,7 +6,7 @@ import pino from 'pino';
 import { mock, MockProxy } from 'jest-mock-extended';
 import { QuorumSet } from 'shared';
 import { CrawlLogger } from '../crawl-logger.js';
-import { CrawlProcessState } from '../crawl.js';
+import { CrawlCompletionMode, CrawlProcessState } from '../crawl.js';
 import { EventEmitter } from 'events';
 import { AsyncCrawlQueue } from '../crawl-queue.js';
 import { NetworkObserver } from '../network-observer/network-observer.js';
@@ -100,6 +100,77 @@ describe('Crawler', () => {
 			scpStatementObservations: []
 		});
 		expect(networkObserver.stop).toHaveBeenCalledTimes(1);
+		expect(crawl.state).toBe(CrawlProcessState.IDLE);
+	});
+
+	it('keeps a live observation connected after peer crawl work drains', async () => {
+		const {
+			crawler,
+			crawl,
+			networkObserver,
+			networkObserverEventEmitter,
+			maxCrawlTimeManager
+		} = setupSUT();
+		crawl.completionMode = CrawlCompletionMode.EXPLICIT_STOP;
+		networkObserver.startObservation.mockResolvedValue(1);
+		networkObserver.getActiveConnectionCount.mockReturnValue(1);
+		networkObserver.stop.mockResolvedValue(mock<Observation>());
+		networkObserver.connectToNode.mockImplementation((address, port) => {
+			networkObserverEventEmitter.emit('disconnect', {
+				address: `${address}:${port}`,
+				publicKey: 'A'
+			});
+		});
+
+		let settled = false;
+		const execution = crawler.startCrawl(crawl).then((result) => {
+			settled = true;
+			return result;
+		});
+		await new Promise((resolve) => setTimeout(resolve, 5));
+
+		expect(settled).toBe(false);
+		expect(networkObserver.stop).not.toHaveBeenCalled();
+		expect(maxCrawlTimeManager.setTimer).not.toHaveBeenCalled();
+		expect(crawl.state).toBe(CrawlProcessState.CRAWLING);
+
+		await crawler.stop();
+		await expect(execution).resolves.toEqual({
+			closedLedgers: [],
+			latestClosedLedger: {
+				closeTime: new Date(0),
+				localCloseTime: new Date(0),
+				sequence: 0n,
+				value: ''
+			},
+			peers: new Map(),
+			scpStatementObservations: []
+		});
+	});
+
+	it('finishes a live observation when every peer connection is lost', async () => {
+		const {
+			crawler,
+			crawl,
+			networkObserver,
+			networkObserverEventEmitter,
+			maxCrawlTimeManager
+		} = setupSUT();
+		crawl.completionMode = CrawlCompletionMode.EXPLICIT_STOP;
+		networkObserver.startObservation.mockResolvedValue(1);
+		networkObserver.getActiveConnectionCount.mockReturnValue(0);
+		networkObserver.stop.mockResolvedValue(mock<Observation>());
+		networkObserver.connectToNode.mockImplementation((address, port) => {
+			networkObserverEventEmitter.emit('disconnect', {
+				address: `${address}:${port}`,
+				publicKey: 'A'
+			});
+		});
+
+		await expect(crawler.startCrawl(crawl)).resolves.toBeDefined();
+
+		expect(networkObserver.stop).toHaveBeenCalledTimes(1);
+		expect(maxCrawlTimeManager.setTimer).not.toHaveBeenCalled();
 		expect(crawl.state).toBe(CrawlProcessState.IDLE);
 	});
 

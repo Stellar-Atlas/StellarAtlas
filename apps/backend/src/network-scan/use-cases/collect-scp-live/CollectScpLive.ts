@@ -35,6 +35,7 @@ export class CollectScpLive {
 	private latestLedger: bigint | null = null;
 	private latestLedgerCloseTime: Date | null = null;
 	private lastRetentionCleanupAtMs = 0;
+	private retentionCleanupInFlight: Promise<void> | null = null;
 	private readonly projector: ScpStatementReadModelProjector;
 
 	constructor(
@@ -69,6 +70,7 @@ export class CollectScpLive {
 				});
 			}
 			this.projector.start();
+			this.requestRetentionCleanup(new Date());
 
 			const scanDataOrError = await this.scanRepository.findScanDataForUpdate();
 			if (scanDataOrError.isErr()) return err(scanDataOrError.error);
@@ -99,8 +101,12 @@ export class CollectScpLive {
 					bootstrapNodeAddressesOrError.value,
 					cursor.latestLedger,
 					cursor.latestLedgerCloseTime,
-					(observation) =>
-						this.shuttingDown ? undefined : persistence.add(observation)
+					(observation) => {
+						if (this.shuttingDown) return undefined;
+						this.requestRetentionCleanup(new Date());
+						return persistence.add(observation);
+					},
+					{ keepObservationConnected: true }
 				);
 				await persistence.flush();
 				flushed = true;
@@ -160,6 +166,14 @@ export class CollectScpLive {
 		if (!canonicalDrained) {
 			this.projector.shutdown();
 			return { canonicalDrained: false, projectionDrained: false };
+		}
+		const cleanup = this.retentionCleanupInFlight;
+		if (cleanup !== null) {
+			await this.settlesSuccessfullyBefore(
+				cleanup,
+				deadlineMs,
+				'SCP retention cleanup'
+			);
 		}
 
 		const projectionDrained = await this.projector.drain(
@@ -285,5 +299,23 @@ export class CollectScpLive {
 				errorMessage: mapUnknownToError(error).message
 			});
 		}
+	}
+
+	private requestRetentionCleanup(now: Date): void {
+		if (
+			this.retentionCleanupInFlight !== null ||
+			now.getTime() - this.lastRetentionCleanupAtMs <
+				scpStatementObservationPolicy.cleanupIntervalMs
+		) {
+			return;
+		}
+
+		const cleanup = this.cleanUpRetainedStatements(now);
+		this.retentionCleanupInFlight = cleanup;
+		void cleanup.finally(() => {
+			if (this.retentionCleanupInFlight === cleanup) {
+				this.retentionCleanupInFlight = null;
+			}
+		});
 	}
 }

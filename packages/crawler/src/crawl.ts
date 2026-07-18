@@ -11,6 +11,11 @@ export enum CrawlProcessState {
 	STOPPING
 }
 
+export enum CrawlCompletionMode {
+	QUEUE_DRAINED = 'queue_drained',
+	EXPLICIT_STOP = 'explicit_stop'
+}
+
 export class Crawl {
 	state: CrawlProcessState = CrawlProcessState.IDLE;
 	maxCrawlTimeHit = false;
@@ -22,6 +27,7 @@ export class Crawl {
 
 	constructor(
 		public nodesToCrawl: NodeAddress[],
-		public observation: Observation
+		public observation: Observation,
+		public completionMode = CrawlCompletionMode.QUEUE_DRAINED
 	) {}
 }

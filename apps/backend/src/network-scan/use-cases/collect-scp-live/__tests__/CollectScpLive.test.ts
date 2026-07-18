@@ -106,7 +106,19 @@ describe('CollectScpLive', () => {
 
 		expect(result.isErr()).toBe(true);
 		expect(sut.liveStore.saveMany).not.toHaveBeenCalled();
-		expect(sut.observationRepository.deleteOlderThan).not.toHaveBeenCalled();
+	});
+
+	it('requests a persistent crawler observation', async () => {
+		const sut = setupSUT();
+		sut.crawlerService.crawl.mockResolvedValue(
+			ok(createCrawlResult(11n, [11], 0))
+		);
+
+		await sut.collectScpLive.execute();
+
+		expect(sut.crawlerService.crawl.mock.calls[0]?.[6]).toEqual({
+			keepObservationConnected: true
+		});
 	});
 
 	it('drains retention backlog in bounded batches', async () => {

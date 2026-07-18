@@ -40,4 +40,23 @@ describe('slots', () => {
 
 		expect(slots.getConfirmedClosedSlotIndexes()).toEqual([BigInt(1)]);
 	});
+
+	it('bounds retained slots for long-running observations', () => {
+		const trustedQuorumSet = new QuorumSet(1, ['A'], []);
+		const logger = mock<pino.Logger>();
+		const slots = new Slots(trustedQuorumSet, logger, 2);
+		for (const slotIndex of [1n, 2n, 3n]) {
+			slots
+				.getSlot(slotIndex)
+				.addExternalizeValue('A', 'test value', new Date());
+		}
+
+		expect(slots.getConfirmedClosedSlotIndexes()).toEqual([2n, 3n]);
+	});
+
+	it('rejects an empty slot retention window', () => {
+		expect(
+			() => new Slots(new QuorumSet(1, ['A'], []), mock<pino.Logger>(), 0)
+		).toThrow('At least one SCP slot must be retained');
+	});
 });

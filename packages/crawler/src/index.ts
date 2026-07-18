@@ -138,4 +138,4 @@ export type {
 	ScpStatementObservation,
 	StellarValueSummary
 } from './network-observer/scp-statement-observation.js';
-export { Crawl } from './crawl.js';
+export { Crawl, CrawlCompletionMode } from './crawl.js';

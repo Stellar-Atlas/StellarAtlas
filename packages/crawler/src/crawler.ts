@@ -1,5 +1,5 @@
 import pino from 'pino';
-import { CrawlProcessState, Crawl } from './crawl.js';
+import { CrawlCompletionMode, CrawlProcessState, Crawl } from './crawl.js';
 import type { CrawlResult } from './crawl-result.js';
 import { CrawlerConfiguration } from './crawler-configuration.js';
 import { CrawlLogger } from './crawl-logger.js';
@@ -29,6 +29,7 @@ export class Crawler {
 		reject: (reason?: Error) => void;
 		resolve: (value: CrawlResult | PromiseLike<CrawlResult>) => void;
 	} | null = null;
+	private activeStop: Promise<void> | null = null;
 	private stopRequested = false;
 
 	constructor(
@@ -50,6 +51,7 @@ export class Crawler {
 			}
 			this.crawl = crawl;
 			this.activeCompletion = { reject, resolve };
+			this.activeStop = null;
 			this.stopRequested = false;
 
 			this.syncTopTierAndCrawl(resolve, reject);
@@ -62,8 +64,7 @@ export class Crawler {
 		this.stopRequested = true;
 		this.crawl.state = CrawlProcessState.STOPPING;
 		this.crawlQueueManager.cancelPendingTasks();
-		await this.networkObserver.stop();
-		this.finish(completion.resolve, completion.reject);
+		await this.stopActiveObservation(completion.resolve, completion.reject);
 	}
 
 	private isCrawlRunning() {
@@ -83,6 +84,8 @@ export class Crawler {
 			if (!data.publicKey) {
 				this.crawl.failedConnections.push(data.address);
 			}
+
+			this.finishPersistentCrawlIfDisconnected();
 		});
 	}
 
@@ -133,10 +136,8 @@ export class Crawler {
 
 		if (nodesToCrawl.length === 0) {
 			this.logger.warn('No nodes to crawl');
-			this.networkObserver.stop().then(() => {
-				this.finish(resolve, reject);
-				this.crawl.state = CrawlProcessState.STOPPING;
-			});
+			this.crawl.state = CrawlProcessState.STOPPING;
+			void this.stopActiveObservation(resolve, reject);
 		} else nodesToCrawl.forEach((address) => this.crawlPeerNode(address));
 	}
 
@@ -150,14 +151,42 @@ export class Crawler {
 		resolve: (value: PromiseLike<CrawlResult> | CrawlResult) => void,
 		reject: (reason?: Error) => void
 	) {
-		this.startMaxCrawlTimeout(resolve, reject);
+		if (this.crawl.completionMode === CrawlCompletionMode.QUEUE_DRAINED) {
+			this.startMaxCrawlTimeout(resolve, reject);
+		}
 		this.crawlQueueManager.onDrain(() => {
+			if (this.crawl.completionMode === CrawlCompletionMode.EXPLICIT_STOP) {
+				this.logger.info(
+					{
+						activeConnections: this.networkObserver.getActiveConnectionCount()
+					},
+					'Peer crawl complete; keeping live observation connected'
+				);
+				this.finishPersistentCrawlIfDisconnected();
+				return;
+			}
 			this.logger.info('Stopping crawl process');
 			this.crawl.state = CrawlProcessState.STOPPING;
-			this.networkObserver.stop().then(() => {
-				this.finish(resolve, reject);
-			});
+			void this.stopActiveObservation(resolve, reject);
 		});
+	}
+
+	private finishPersistentCrawlIfDisconnected(): void {
+		if (
+			this.crawl.completionMode !== CrawlCompletionMode.EXPLICIT_STOP ||
+			this.crawl.crawlQueueTaskDoneCallbacks.size > 0 ||
+			this.crawlQueueManager.queueLength() > 0 ||
+			this.networkObserver.getActiveConnectionCount() > 0 ||
+			this.crawl.state !== CrawlProcessState.CRAWLING ||
+			this.activeCompletion === null
+		) {
+			return;
+		}
+
+		const completion = this.activeCompletion;
+		this.logger.warn('Live observation lost all peer connections; restarting');
+		this.crawl.state = CrawlProcessState.STOPPING;
+		void this.stopActiveObservation(completion.resolve, completion.reject);
 	}
 
 	private startMaxCrawlTimeout(
@@ -166,9 +195,26 @@ export class Crawler {
 	) {
 		this.maxCrawlTimeManager.setTimer(this.config.maxCrawlTime, () => {
 			this.logger.fatal('Max crawl time hit, closing all connections');
-			this.networkObserver.stop().then(() => this.finish(resolve, reject));
 			this.crawl.maxCrawlTimeHit = true;
+			this.crawl.state = CrawlProcessState.STOPPING;
+			void this.stopActiveObservation(resolve, reject);
 		});
+	}
+
+	private stopActiveObservation(
+		resolve: (value: CrawlResult | PromiseLike<CrawlResult>) => void,
+		reject: (error: Error) => void
+	): Promise<void> {
+		if (this.activeStop !== null) return this.activeStop;
+
+		const stopping = this.networkObserver
+			.stop()
+			.then(() => this.finish(resolve, reject));
+		const tracked = stopping.finally(() => {
+			if (this.activeStop === tracked) this.activeStop = null;
+		});
+		this.activeStop = tracked;
+		return tracked;
 	}
 
 	private finish(
@@ -200,8 +246,7 @@ export class Crawler {
 			closedLedgers:
 				this.crawl.observation.slots.getConfirmedClosedSlotIndexes(),
 			latestClosedLedger: this.crawl.observation.latestConfirmedClosedLedger,
-			scpStatementObservations:
-				this.crawl.observation.scpStatementObservations
+			scpStatementObservations: this.crawl.observation.scpStatementObservations
 		};
 	}
 

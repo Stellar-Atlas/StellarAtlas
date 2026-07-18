@@ -1,4 +1,4 @@
-import { Crawl } from './crawl.js';
+import { Crawl, CrawlCompletionMode } from './crawl.js';
 import { ObservationFactory } from './network-observer/observation-factory.js';
 import { Slots } from './network-observer/peer-event-handler/stellar-message-handlers/scp-envelope/scp-statement/externalize/slots.js';
 import type { NodeAddress } from './node-address.js';
@@ -20,7 +20,8 @@ export class CrawlFactory {
 		topTierQuorumSet: QuorumSet,
 		latestConfirmedClosedLedger: Ledger,
 		quorumSets: Map<string, QuorumSet>,
-		onScpStatementObservation?: ScpStatementObservationListener
+		onScpStatementObservation?: ScpStatementObservationListener,
+		completionMode = CrawlCompletionMode.QUEUE_DRAINED
 	): Crawl {
 		const observation = this.observationFactory.createObservation(
 			this.network,
@@ -31,6 +32,6 @@ export class CrawlFactory {
 			quorumSets,
 			onScpStatementObservation
 		);
-		return new Crawl(nodesToCrawl, observation);
+		return new Crawl(nodesToCrawl, observation, completionMode);
 	}
 }

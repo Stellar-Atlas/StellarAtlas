@@ -38,6 +38,10 @@ export class NetworkObserver extends EventEmitter {
 		this.connectionManager.connectToNode(ip, port);
 	}
 
+	public getActiveConnectionCount(): number {
+		return this.connectionManager.getNumberOfActiveConnections();
+	}
+
 	public async stop() {
 		return new Promise<Observation>((resolve) => {
 			this.observationManager.stopObservation(this.observation, () =>
