@@ -1,4 +1,7 @@
-import type { PublicScpStatementObservation } from '../types';
+import type {
+	PublicScpGraphStatement,
+	PublicScpStatementObservation
+} from '../types';
 import {
 	applyLiveScpMessage,
 	createLiveScpConsumerState
@@ -9,7 +12,7 @@ describe('live SCP consumer state', () => {
 		'retains %s metadata from a metadata-only update',
 		(freshness) => {
 			const statement = createStatement('statement-a');
-			const initial = createLiveScpConsumerState([statement]);
+			const initial = createLiveScpConsumerState([toGraphStatement(statement)]);
 
 			const next = applyLiveScpMessage(initial, {
 				freshness,
@@ -26,13 +29,15 @@ describe('live SCP consumer state', () => {
 				observedAt: freshness === 'fresh' ? '2026-07-05T00:00:00.000Z' : null,
 				source: 'postgres_canonical'
 			});
-			expect(next.statements).toEqual([statement]);
+			expect(next.statements).toEqual([toGraphStatement(statement)]);
 		}
 	);
 
 	it('merges statement deltas while updating the source metadata', () => {
 		const current = createLiveScpConsumerState([
-			createStatement('statement-a', '2026-07-05T00:00:00.000Z')
+			toGraphStatement(
+				createStatement('statement-a', '2026-07-05T00:00:00.000Z')
+			)
 		]);
 
 		const next = applyLiveScpMessage(current, {
@@ -49,6 +54,10 @@ describe('live SCP consumer state', () => {
 			'statement-b',
 			'statement-a'
 		]);
+		expect(next.statements[0]).toMatchObject({
+			quorumSetHash: 'quorum-statement-b',
+			values: [{ upgradeCount: 1, value: 'value-statement-b' }]
+		});
 	});
 });
 
@@ -62,12 +71,38 @@ function createStatement(
 		observedFromAddress: '127.0.0.1:11625',
 		observedFromPeer:
 			'GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF',
-		pledges: { accepted: [], quorumSetHash: '', votes: [] },
+		pledges: {
+			accepted: [],
+			quorumSetHash: `quorum-${statementHash}`,
+			votes: []
+		},
 		signature: '',
 		slotIndex: '63326550',
 		statementHash,
 		statementType: 'nominate',
 		statementXdr: '',
-		values: []
+		values: [
+			{
+				closeTime: observedAt,
+				txSetHash: `tx-${statementHash}`,
+				upgradeCount: 1,
+				value: `value-${statementHash}`
+			}
+		]
+	};
+}
+
+function toGraphStatement(
+	statement: PublicScpStatementObservation
+): PublicScpGraphStatement {
+	return {
+		nodeId: statement.nodeId,
+		observedAt: statement.observedAt,
+		observedFromPeer: statement.observedFromPeer,
+		quorumSetHash: statement.pledges.quorumSetHash,
+		slotIndex: statement.slotIndex,
+		statementHash: statement.statementHash,
+		statementType: statement.statementType,
+		values: statement.values
 	};
 }

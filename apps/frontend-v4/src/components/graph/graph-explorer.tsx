@@ -22,7 +22,6 @@ import { ScpLiveFeed } from './scp-live-feed';
 import {
 	compareStatementsByObservation,
 	getDisplayLedger,
-	getLatestSlotIndex,
 	maxActiveFeedStatements,
 	type LedgerPlaybackFrame
 } from './scp-flow-paths';
@@ -37,8 +36,11 @@ import {
 	type GraphRenderData,
 	type GraphRendererStatus
 } from './use-graph-renderer';
-import { buildLedgerPlaybackFrames } from './graph-ledger-playback';
-import { getNextLedgerSequence } from '../../domain/ledger-sequence';
+import {
+	buildLedgerPlaybackFrames,
+	getPlaybackBoundarySlotIndex
+} from './graph-ledger-playback';
+import { getHighestLedgerSequence } from '../../domain/ledger-sequence';
 
 interface GraphExplorerProps {
 	network: PublicNetwork;
@@ -68,6 +70,7 @@ export function GraphExplorer({
 		latestLedger,
 		latestLedgerClosedAt,
 		latestObservedScpSlotIndex,
+		liveStreamState,
 		network,
 		scpReadMetadata,
 		scpStatements
@@ -119,17 +122,32 @@ export function GraphExplorer({
 		[modelNodesById, selectedNode]
 	);
 	const playbackBoundarySlotIndex =
-		getNextLedgerSequence(latestObservedScpSlotIndex) ??
-		latestLedger ??
-		getLatestSlotIndex(scpStatements) ??
-		network.latestLedger.toString();
+		getPlaybackBoundarySlotIndex(
+			getHighestLedgerSequence([network.latestLedger, latestLedger]),
+			latestObservedScpSlotIndex
+		) ?? network.latestLedger.toString();
+	const organizationByNodeId = useMemo(
+		() =>
+			new Map(
+				network.nodes.map(
+					(node) => [node.publicKey, node.organizationId] as const
+				)
+			),
+		[network.nodes]
+	);
 	const playbackLedgers = useMemo<LedgerPlaybackFrame[]>(() => {
 		return buildLedgerPlaybackFrames({
 			boundarySlotIndex: playbackBoundarySlotIndex,
 			latestLedgerClosedAt,
+			organizationByNodeId,
 			statements: scpStatements
 		});
-	}, [latestLedgerClosedAt, playbackBoundarySlotIndex, scpStatements]);
+	}, [
+		latestLedgerClosedAt,
+		organizationByNodeId,
+		playbackBoundarySlotIndex,
+		scpStatements
+	]);
 	const activeOrganization =
 		hoveredOrganization ?? focusedOrganization ?? selectedNodeOrganization;
 	const activeStatements = useMemo(() => {
@@ -193,6 +211,7 @@ export function GraphExplorer({
 		nextWaveIndexRef,
 		nodeActivityRef,
 		nodesByIdRef,
+		organizationByNodeId,
 		playbackLedgers,
 		playbackBoundarySlotIndex,
 		refreshGraphVisuals,
@@ -333,6 +352,7 @@ export function GraphExplorer({
 					observedSlotIndex={latestObservedScpSlotIndex}
 					readMetadata={scpReadMetadata}
 					statements={scpStatements}
+					streamState={liveStreamState}
 				/>
 			</section>
 			{selectedNode && (

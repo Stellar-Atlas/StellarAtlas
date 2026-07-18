@@ -1,5 +1,6 @@
 import type {
 	PublicScpGraphStatement,
+	PublicScpStatementCursor,
 	PublicScpStatementObservation,
 	PublicScpStatementReadMetadata
 } from './types';
@@ -33,7 +34,22 @@ export interface PublicScpSlotEvidence {
 	readonly validatorCount: number;
 }
 
+export interface PublicScpCompactDeliveryMetadata {
+	readonly byteLimit: number;
+	readonly eventCount: number;
+	readonly eventLimit: number;
+	readonly nextCursor: string | null;
+	readonly serializedBytes: number;
+	readonly truncated: boolean;
+}
+
+export interface PublicScpLatestSlots {
+	readonly delivery?: PublicScpCompactDeliveryMetadata;
+	readonly slots: readonly PublicScpSlotEvidence[];
+}
+
 export interface PublicScpAnimationBacklog {
+	readonly delivery?: PublicScpCompactDeliveryMetadata;
 	readonly metadata: PublicScpStatementReadMetadata;
 	readonly slots: readonly {
 		readonly slotIndex: string;
@@ -58,15 +74,37 @@ export function parseScpSlotEvidenceList(
 		: null;
 }
 
+export function parseScpLatestSlots(
+	value: unknown
+): PublicScpLatestSlots | null {
+	if (Array.isArray(value)) {
+		const slots = parseScpSlotEvidenceList(value);
+		return slots === null ? null : { slots };
+	}
+	if (!record(value) || !Array.isArray(value.slots)) return null;
+	const slots = parseScpSlotEvidenceList(value.slots);
+	const delivery = parseCompactDelivery(value.delivery);
+	return slots === null || delivery === null ? null : { delivery, slots };
+}
+
 export function parseScpAnimationBacklog(
 	value: unknown
 ): PublicScpAnimationBacklog | null {
 	if (
 		!record(value) ||
-		!record(value.metadata) ||
-		!isMetadata(value.metadata) ||
 		!Array.isArray(value.slots) ||
 		!count(value.statementCount)
+	)
+		return null;
+	const metadata = parseMetadata(value.metadata);
+	const delivery =
+		value.delivery === undefined
+			? undefined
+			: parseCompactDelivery(value.delivery);
+	if (
+		metadata === null ||
+		delivery === null ||
+		(delivery !== undefined && delivery.eventCount !== value.statementCount)
 	)
 		return null;
 	const parsedSlots: Array<PublicScpAnimationBacklog['slots'][number] | null> =
@@ -77,7 +115,9 @@ export function parseScpAnimationBacklog(
 				!Array.isArray(slot.statements)
 			)
 				return null;
-			const statements = slot.statements.map(parseGraphStatement);
+			const statements = slot.statements.map((statement) =>
+				parseGraphStatement(statement)
+			);
 			return statements.every(
 				(statement): statement is PublicScpGraphStatement => statement !== null
 			)
@@ -94,9 +134,34 @@ export function parseScpAnimationBacklog(
 	)
 		return null;
 	return {
-		metadata: value.metadata,
+		...(delivery !== undefined ? { delivery } : {}),
+		metadata,
 		slots,
 		statementCount: value.statementCount
+	};
+}
+
+function parseCompactDelivery(
+	value: unknown
+): PublicScpCompactDeliveryMetadata | null {
+	if (
+		!record(value) ||
+		!count(value.byteLimit) ||
+		!count(value.eventCount) ||
+		!count(value.eventLimit) ||
+		(value.nextCursor !== null && !text(value.nextCursor)) ||
+		!count(value.serializedBytes) ||
+		typeof value.truncated !== 'boolean' ||
+		value.eventCount > value.eventLimit
+	)
+		return null;
+	return {
+		byteLimit: value.byteLimit,
+		eventCount: value.eventCount,
+		eventLimit: value.eventLimit,
+		nextCursor: value.nextCursor,
+		serializedBytes: value.serializedBytes,
+		truncated: value.truncated
 	};
 }
 
@@ -110,12 +175,13 @@ function parseScpSlotEvidence(value: unknown): PublicScpSlotEvidence | null {
 		return null;
 	const phaseCounts = value.phaseCounts;
 	const events = value.events.map(parseSemanticEvent);
+	const metadata = parseMetadata(value.metadata);
 	if (
 		!events.every((event): event is PublicScpSemanticEvent => event !== null) ||
 		!text(value.slotIndex) ||
 		!count(value.statementCount) ||
 		!count(value.validatorCount) ||
-		!isMetadata(value.metadata) ||
+		metadata === null ||
 		!['confirm', 'externalize', 'nominate', 'prepare'].every((phase) =>
 			count(phaseCounts[phase])
 		)
@@ -123,7 +189,7 @@ function parseScpSlotEvidence(value: unknown): PublicScpSlotEvidence | null {
 		return null;
 	return {
 		events,
-		metadata: value.metadata,
+		metadata,
 		phaseCounts: {
 			confirm: Number(phaseCounts.confirm),
 			externalize: Number(phaseCounts.externalize),
@@ -150,7 +216,7 @@ function parseSemanticEvent(value: unknown): PublicScpSemanticEvent | null {
 		!value.transactionSetHashes.every(text)
 	)
 		return null;
-	const statement = parseGraphStatement(value.statement);
+	const statement = parseGraphStatement(value.statement, value.quorumSetHash);
 	if (statement === null) return null;
 	return {
 		eventId: value.eventId,
@@ -165,7 +231,10 @@ function parseSemanticEvent(value: unknown): PublicScpSemanticEvent | null {
 	};
 }
 
-function parseGraphStatement(value: unknown): PublicScpGraphStatement | null {
+function parseGraphStatement(
+	value: unknown,
+	quorumSetHashFallback?: string
+): PublicScpGraphStatement | null {
 	if (
 		!record(value) ||
 		!text(value.nodeId) ||
@@ -177,9 +246,26 @@ function parseGraphStatement(value: unknown): PublicScpGraphStatement | null {
 		!Array.isArray(value.values)
 	)
 		return null;
+	const quorumSetHash = text(value.quorumSetHash)
+		? value.quorumSetHash
+		: quorumSetHashFallback;
+	if (quorumSetHash === undefined) return null;
 	const values = value.values.flatMap((entry) =>
-		record(entry) && text(entry.closeTime) && text(entry.txSetHash)
-			? [{ closeTime: entry.closeTime, txSetHash: entry.txSetHash }]
+		record(entry) &&
+		text(entry.closeTime) &&
+		text(entry.txSetHash) &&
+		(entry.upgradeCount === undefined || count(entry.upgradeCount)) &&
+		(entry.value === undefined || text(entry.value))
+			? [
+					{
+						closeTime: entry.closeTime,
+						txSetHash: entry.txSetHash,
+						...(entry.upgradeCount !== undefined
+							? { upgradeCount: entry.upgradeCount }
+							: {}),
+						...(entry.value !== undefined ? { value: entry.value } : {})
+					}
+				]
 			: []
 	);
 	if (values.length !== value.values.length) return null;
@@ -187,6 +273,7 @@ function parseGraphStatement(value: unknown): PublicScpGraphStatement | null {
 		nodeId: value.nodeId,
 		observedAt: value.observedAt,
 		observedFromPeer: value.observedFromPeer,
+		quorumSetHash,
 		slotIndex: value.slotIndex,
 		statementHash: value.statementHash,
 		statementType: value.statementType,
@@ -214,16 +301,44 @@ function isKind(value: unknown): value is PublicScpSemanticEventKind {
 	);
 }
 
-function isMetadata(
-	value: Record<string, unknown>
-): value is Record<string, unknown> & PublicScpStatementReadMetadata {
-	return (
-		(value.freshness === 'fresh' ||
-			value.freshness === 'stale' ||
-			value.freshness === 'empty' ||
-			value.freshness === 'unavailable') &&
-		(value.source === 'meilisearch' || value.source === 'postgres_canonical') &&
-		(value.observedAt === null || text(value.observedAt)) &&
-		(value.freshnessMs === null || count(value.freshnessMs))
-	);
+function parseMetadata(value: unknown): PublicScpStatementReadMetadata | null {
+	if (
+		!record(value) ||
+		(value.freshness !== 'fresh' &&
+			value.freshness !== 'stale' &&
+			value.freshness !== 'empty' &&
+			value.freshness !== 'unavailable') ||
+		(value.source !== 'meilisearch' && value.source !== 'postgres_canonical') ||
+		(value.observedAt !== null && !text(value.observedAt)) ||
+		(value.freshnessMs !== null && !count(value.freshnessMs)) ||
+		(value.truncated !== undefined && typeof value.truncated !== 'boolean')
+	)
+		return null;
+	const cursor = value.cursor;
+	if (
+		cursor !== undefined &&
+		cursor !== null &&
+		(!record(cursor) ||
+			!count(cursor.observedAtMs) ||
+			!text(cursor.statementHash) ||
+			cursor.statementHash.trim().length === 0)
+	)
+		return null;
+	const parsedCursor: PublicScpStatementCursor | null | undefined =
+		cursor === undefined
+			? undefined
+			: cursor === null
+				? null
+				: {
+						observedAtMs: Number(cursor.observedAtMs),
+						statementHash: String(cursor.statementHash)
+					};
+	return {
+		...(parsedCursor !== undefined ? { cursor: parsedCursor } : {}),
+		freshness: value.freshness,
+		freshnessMs: value.freshnessMs,
+		observedAt: value.observedAt,
+		source: value.source,
+		...(value.truncated !== undefined ? { truncated: value.truncated } : {})
+	};
 }

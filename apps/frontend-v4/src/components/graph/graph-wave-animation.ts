@@ -47,6 +47,23 @@ export interface ActiveWave {
 	startedAt: number;
 }
 
+export const allocateWaveSlotIndex = (
+	activeWaves: Map<number, ActiveWave>,
+	startIndex: number,
+	now: number
+): number | null => {
+	for (let offset = 0; offset < maxWaveInstances; offset += 1) {
+		const index = (startIndex + offset) % maxWaveInstances;
+		const activeWave = activeWaves.get(index);
+		if (activeWave === undefined) return index;
+		if (now - activeWave.startedAt >= activeWave.durationMs) {
+			activeWaves.delete(index);
+			return index;
+		}
+	}
+	return null;
+};
+
 interface LaunchWaveSlotOptions {
 	color: string;
 	durationMs: number;

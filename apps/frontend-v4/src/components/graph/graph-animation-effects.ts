@@ -8,9 +8,9 @@ import {
 	type StatementFlowPath
 } from './scp-flow-paths';
 import {
+	allocateWaveSlotIndex,
 	hideAllWaveSlots,
 	launchWaveSlot,
-	maxWaveInstances,
 	type ActiveWave,
 	type WaveMeshPool
 } from './graph-wave-animation';
@@ -87,6 +87,9 @@ interface AnimateStatementPacketOptions {
 	wavePoolRef: RefObject<WaveMeshPool | null>;
 }
 
+export type WaveLaunchResult =
+	'launched' | 'pool-full' | 'renderer-unavailable';
+
 export const animateStatementPacket = ({
 	activeWavesRef,
 	nextWaveIndexRef,
@@ -95,10 +98,10 @@ export const animateStatementPacket = ({
 	statement,
 	threeRef,
 	wavePoolRef
-}: AnimateStatementPacketOptions): void => {
+}: AnimateStatementPacketOptions): WaveLaunchResult => {
 	const THREE = threeRef.current;
 	const wavePool = wavePoolRef.current;
-	if (!THREE || !wavePool) return;
+	if (!THREE || !wavePool) return 'renderer-unavailable';
 
 	const color = getStatementColor(statement.statementType);
 	const source = new THREE.Vector3(
@@ -123,9 +126,14 @@ export const animateStatementPacket = ({
 			: statement.statementType === 'prepare'
 				? 880
 				: 760;
-	const index = nextWaveIndexRef.current % maxWaveInstances;
-	nextWaveIndexRef.current += 1;
 	const startedAt = performance.now();
+	const index = allocateWaveSlotIndex(
+		activeWavesRef.current,
+		nextWaveIndexRef.current,
+		startedAt
+	);
+	if (index === null) return 'pool-full';
+	nextWaveIndexRef.current = index + 1;
 	launchWaveSlot(wavePool, index, {
 		color,
 		durationMs,
@@ -136,6 +144,7 @@ export const animateStatementPacket = ({
 	});
 	activeWavesRef.current.set(index, { durationMs, index, startedAt });
 	scheduleWaveAnimation();
+	return 'launched';
 };
 
 interface ClearGraphAnimationEffectsOptions {

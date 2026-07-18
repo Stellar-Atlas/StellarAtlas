@@ -9,7 +9,11 @@ import {
 	subscribeToLatestLedger
 } from '../../api/latest-ledger-events';
 import { getHighestLedgerSequence } from '../../domain/ledger-sequence';
-import { subscribeToLiveNetworkStream } from '../../api/live-network-stream';
+import {
+	getLiveNetworkStreamState,
+	subscribeToLiveNetworkStream,
+	type LiveNetworkStreamState
+} from '../../api/live-network-stream';
 import {
 	applyLiveScpMessage,
 	createLiveScpConsumerState
@@ -22,6 +26,7 @@ interface UseGraphLiveDataResult {
 	latestLedger: string | null;
 	latestLedgerClosedAt: string | null;
 	latestObservedScpSlotIndex: string | null;
+	liveStreamState: LiveNetworkStreamState;
 	network: PublicNetwork;
 	scpReadMetadata: PublicScpStatementReadMetadata | null;
 	scpStatements: PublicScpGraphStatement[];
@@ -39,6 +44,9 @@ export const useGraphLiveData = (
 	const [latestLedgerClosedAt, setLatestLedgerClosedAt] = useState<
 		string | null
 	>(null);
+	const [liveStreamState, setLiveStreamState] = useState(
+		getLiveNetworkStreamState
+	);
 	const latestObservedScpSlotIndex = getHighestLedgerSequence(
 		scpState.statements.map((statement) => statement.slotIndex)
 	);
@@ -82,7 +90,7 @@ export const useGraphLiveData = (
 				if (message.type === 'scp') {
 					setScpState((current) => applyLiveScpMessage(current, message));
 				}
-			}),
+			}, setLiveStreamState),
 		[]
 	);
 
@@ -90,6 +98,7 @@ export const useGraphLiveData = (
 		latestLedger,
 		latestLedgerClosedAt,
 		latestObservedScpSlotIndex,
+		liveStreamState,
 		network,
 		scpReadMetadata: scpState.metadata,
 		scpStatements: scpState.statements

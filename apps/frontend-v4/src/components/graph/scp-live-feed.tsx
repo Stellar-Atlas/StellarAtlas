@@ -7,6 +7,7 @@ import type {
 	PublicScpGraphStatement,
 	PublicScpStatementReadMetadata
 } from '../../api/types';
+import type { LiveNetworkStreamState } from '../../api/live-network-stream';
 import { getLedgerTransactions } from '../../app/actions/network-data';
 import {
 	compareLedgerSequences,
@@ -28,6 +29,7 @@ interface ScpLiveFeedProps {
 	observedSlotIndex: string | null;
 	readMetadata: PublicScpStatementReadMetadata | null;
 	statements: readonly PublicScpGraphStatement[];
+	streamState: LiveNetworkStreamState;
 }
 
 interface StatementSummary {
@@ -156,7 +158,8 @@ export function ScpLiveFeed({
 	network,
 	observedSlotIndex,
 	readMetadata,
-	statements
+	statements,
+	streamState
 }: ScpLiveFeedProps): React.JSX.Element {
 	const summary = useMemo(
 		() => summarizeStatements(network, statements),
@@ -302,9 +305,9 @@ export function ScpLiveFeed({
 				<span
 					data-freshness={readMetadata?.freshness ?? 'connecting'}
 					data-source={readMetadata?.source ?? 'not_connected'}
-					title={formatScpReadMetadataTitle(readMetadata)}
+					title={formatScpReadMetadataTitle(readMetadata, streamState)}
 				>
-					{formatScpReadMetadataLabel(readMetadata)}
+					{formatScpReadMetadataLabel(readMetadata, streamState)}
 				</span>
 			</div>
 			<div className="scp-packet-legend" aria-label="SCP packet color legend">

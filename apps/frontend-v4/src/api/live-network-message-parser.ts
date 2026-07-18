@@ -1,12 +1,18 @@
 import type {
 	PublicLatestLedger,
 	PublicNetwork,
+	PublicScpStatementCursor,
 	PublicScpStatementObservation,
 	PublicScpStatementReadMetadata
 } from './types';
 import { isPublicNetwork, isRecord } from './live-network-payload-guards';
 
 export type LiveNetworkMessage =
+	| {
+			cursor?: PublicScpStatementCursor | null;
+			payload: { readonly observedAt: string };
+			type: 'heartbeat';
+	  }
 	| { payload: PublicLatestLedger; type: 'latestLedger' }
 	| { payload: PublicNetwork; type: 'network' }
 	| (PublicScpStatementReadMetadata & {
@@ -26,6 +32,7 @@ export const parseLiveNetworkMessage = (
 		const payload = parseLatestLedger(value.payload);
 		return payload === null ? null : { payload, type: 'latestLedger' };
 	}
+	if (value.type === 'heartbeat') return parseHeartbeatMessage(value);
 	if (value.type === 'scp') return parseScpMessage(value);
 	if (
 		value.type === 'error' &&
@@ -35,6 +42,27 @@ export const parseLiveNetworkMessage = (
 		return { payload: { message: value.payload.message }, type: 'error' };
 	}
 	return null;
+};
+
+const parseHeartbeatMessage = (
+	value: Record<string, unknown>
+): LiveNetworkMessage | null => {
+	const payload = isRecord(value.payload) ? value.payload : {};
+	const observedAt = [
+		payload.observedAt,
+		payload.sentAt,
+		payload.timestamp,
+		value.observedAt
+	].find(isDateString);
+	const cursorValue =
+		value.cursor !== undefined ? value.cursor : payload.cursor;
+	if (observedAt === undefined || !isOptionalScpCursor(cursorValue))
+		return null;
+	return {
+		...(cursorValue !== undefined ? { cursor: cursorValue } : {}),
+		payload: { observedAt },
+		type: 'heartbeat'
+	};
 };
 
 const parseLatestLedger = (value: unknown): PublicLatestLedger | null => {
@@ -124,11 +152,17 @@ const parseScpMetadata = (
 	}
 	if (!isNullableNonnegativeNumber(value.freshnessMs)) return null;
 	if (value.observedAt !== null && !isDateString(value.observedAt)) return null;
+	if (!isOptionalScpCursor(value.cursor)) return null;
+	if (value.truncated !== undefined && typeof value.truncated !== 'boolean') {
+		return null;
+	}
 	return {
+		...(value.cursor !== undefined ? { cursor: value.cursor } : {}),
 		freshness: value.freshness,
 		freshnessMs: value.freshnessMs,
 		observedAt: value.observedAt,
-		source: value.source
+		source: value.source,
+		...(value.truncated !== undefined ? { truncated: value.truncated } : {})
 	};
 };
 
@@ -274,6 +308,17 @@ const isOptionalNonnegativeNumber = (
 
 const isNullableNonnegativeNumber = (value: unknown): value is number | null =>
 	value === null || (isNumber(value) && value >= 0);
+
+const isOptionalScpCursor = (
+	value: unknown
+): value is PublicScpStatementCursor | null | undefined =>
+	value === undefined ||
+	value === null ||
+	(isRecord(value) &&
+		Number.isSafeInteger(value.observedAtMs) &&
+		Number(value.observedAtMs) >= 0 &&
+		typeof value.statementHash === 'string' &&
+		value.statementHash.trim().length > 0);
 
 const isDateString = (value: unknown): value is string =>
 	typeof value === 'string' && Number.isFinite(Date.parse(value));

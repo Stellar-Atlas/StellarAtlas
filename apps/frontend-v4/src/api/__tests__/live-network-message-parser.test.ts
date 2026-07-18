@@ -1,4 +1,5 @@
 import { parseLiveNetworkMessage } from '../live-network-message-parser';
+import type { PublicScpStatementObservation } from '../types';
 
 describe('parseLiveNetworkMessage', () => {
 	it.each(['fresh', 'stale', 'empty', 'unavailable'] as const)(
@@ -35,6 +36,45 @@ describe('parseLiveNetworkMessage', () => {
 			freshness: 'stale',
 			payload: [{ observedAt: 'invalid-remote-timestamp' }],
 			type: 'scp'
+		});
+	});
+
+	it('preserves cursor, truncation, quorum-set, and value evidence', () => {
+		const statement = createStatement();
+		statement.pledges.quorumSetHash = 'quorum-a';
+		statement.values = [
+			{
+				closeTime: '2026-07-05T00:00:00.000Z',
+				txSetHash: 'tx-a',
+				upgradeCount: 2,
+				value: 'raw-value-a'
+			}
+		];
+		const cursor = {
+			observedAtMs: Date.parse('2026-07-05T00:00:00.000Z'),
+			statementHash: 'statement-a'
+		};
+
+		expect(
+			parseLiveNetworkMessage({
+				cursor,
+				freshness: 'fresh',
+				freshnessMs: 1_000,
+				observedAt: '2026-07-05T00:00:00.000Z',
+				payload: [statement],
+				source: 'postgres_canonical',
+				truncated: true,
+				type: 'scp'
+			})
+		).toMatchObject({
+			cursor,
+			payload: [
+				{
+					pledges: { quorumSetHash: 'quorum-a' },
+					values: [{ upgradeCount: 2, value: 'raw-value-a' }]
+				}
+			],
+			truncated: true
 		});
 	});
 
@@ -121,7 +161,7 @@ describe('parseLiveNetworkMessage', () => {
 	});
 });
 
-function createStatement() {
+function createStatement(): PublicScpStatementObservation {
 	return {
 		nodeId: 'GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF',
 		observedAt: '2026-07-05T00:00:00.000Z',

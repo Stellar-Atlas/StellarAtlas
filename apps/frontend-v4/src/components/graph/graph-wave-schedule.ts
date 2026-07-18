@@ -8,6 +8,7 @@ import {
 	type StatementFlowPath
 } from './scp-flow-paths';
 import type { PublicScpGraphStatement } from '../../api/types';
+import { sampleLedgerAnimationStatements } from './graph-statement-sampler';
 
 export interface StatementWaveScheduleEntry {
 	readonly delayMs: number;
@@ -20,6 +21,7 @@ interface BuildStatementWaveScheduleOptions {
 	readonly elapsedMs: number;
 	readonly ledger: LedgerPlaybackFrame;
 	readonly nodesById: ReadonlyMap<string, Graph3DNode>;
+	readonly organizationByNodeId: ReadonlyMap<string, string | null>;
 }
 
 const activeStatementLifetimeMs = 1_700;
@@ -29,7 +31,8 @@ export const buildStatementWaveSchedule = ({
 	animatedStatementHashes,
 	elapsedMs,
 	ledger,
-	nodesById
+	nodesById,
+	organizationByNodeId
 }: BuildStatementWaveScheduleOptions): readonly StatementWaveScheduleEntry[] => {
 	const playbackDurationMs =
 		ledger.playbackDurationMs ?? ledgerPlaybackDurationMs;
@@ -45,7 +48,9 @@ export const buildStatementWaveSchedule = ({
 		Math.min(animationBudgetMs, latestLaunchMs) - statementLaunchSafetyMarginMs
 	);
 	const remainingWindowMs = Math.max(0, scheduleWindowMs - elapsedMs);
-	const candidates = ledger.statements
+	const candidates = sampleLedgerAnimationStatements(ledger.statements, {
+		organizationByNodeId
+	})
 		.filter(
 			(statement) => !animatedStatementHashes.has(statement.statementHash)
 		)

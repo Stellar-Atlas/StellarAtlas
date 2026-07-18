@@ -390,8 +390,8 @@ export const fetchScpEvidenceSlots = async (
 		`/v1/scp/evidence/slots?limit=${encodeURIComponent(limit.toString())}`,
 		withTags(options, [frontendCacheTags.scpStatements])
 	);
-	const { parseScpSlotEvidenceList } = await import('./scp-evidence');
-	const parsed = parseScpSlotEvidenceList(payload);
+	const { parseScpLatestSlots } = await import('./scp-evidence');
+	const parsed = parseScpLatestSlots(payload);
 	if (parsed === null)
 		throw new Error('SCP evidence response failed validation');
 	return parsed;

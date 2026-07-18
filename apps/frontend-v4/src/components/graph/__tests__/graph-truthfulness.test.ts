@@ -144,12 +144,99 @@ describe('SCP statement flow truthfulness', () => {
 			animatedStatementHashes: new Set<string>(),
 			elapsedMs: 0,
 			ledger,
-			nodesById
+			nodesById,
+			organizationByNodeId: new Map([
+				['signer', null],
+				['relay', null]
+			])
 		});
 
 		expect(schedule).toHaveLength(2);
 		expect(schedule.at(-1)?.delayMs).toBeLessThanOrEqual(
 			getStatementLaunchDeadlineMs(ledger) - statementLaunchSafetyMarginMs
+		);
+	});
+
+	it('preserves every available phase and organization pair through wave scheduling', () => {
+		const phases: PublicScpGraphStatement['statementType'][] = [
+			'nominate',
+			'prepare',
+			'confirm',
+			'externalize'
+		];
+		const organizationIds = Array.from(
+			{ length: 20 },
+			(_, index) => `organization-${index.toString().padStart(2, '0')}`
+		);
+		const statements = phases.flatMap((phase, phaseIndex) =>
+			organizationIds.flatMap((_, organizationIndex) =>
+				Array.from({ length: 4 }, (_, validatorIndex) => {
+					const index =
+						phaseIndex * organizationIds.length * 4 +
+						organizationIndex * 4 +
+						validatorIndex;
+					const nodeId = `validator-${index.toString().padStart(3, '0')}`;
+					return createScheduledStatement(nodeId, phase, index);
+				})
+			)
+		);
+		const networkNodes = statements.map((statement) =>
+			createNode(statement.nodeId, {
+				isValidator: true,
+				organizationId:
+					organizationIds[
+						Math.floor(
+							Number(statement.nodeId.slice('validator-'.length)) / 4
+						) % organizationIds.length
+					] ?? null
+			})
+		);
+		const denseModel = buildGraph3DModel(createNetwork(networkNodes));
+		const denseNodesById = new Map(
+			denseModel.nodes.map((node) => [node.id, node])
+		);
+		const organizationByNodeId = new Map(
+			networkNodes.map((node) => [node.publicKey, node.organizationId])
+		);
+		const ledger = {
+			animationBudgetMs: 3_300,
+			playbackDurationMs: 5_000,
+			slotIndex: '63380001',
+			statements
+		};
+		const schedule = buildStatementWaveSchedule({
+			animatedStatementHashes: new Set<string>(),
+			elapsedMs: 0,
+			ledger,
+			nodesById: denseNodesById,
+			organizationByNodeId
+		});
+		const reversedSchedule = buildStatementWaveSchedule({
+			animatedStatementHashes: new Set<string>(),
+			elapsedMs: 0,
+			ledger: { ...ledger, statements: statements.toReversed() },
+			nodesById: denseNodesById,
+			organizationByNodeId
+		});
+
+		expect(schedule).toHaveLength(256);
+		expect(schedule.map(({ statement }) => statement.statementHash)).toEqual(
+			reversedSchedule.map(({ statement }) => statement.statementHash)
+		);
+		const scheduledPairs = new Set(
+			schedule.map(({ statement }) =>
+				[
+					statement.statementType,
+					organizationByNodeId.get(statement.nodeId)
+				].join(':')
+			)
+		);
+		expect(scheduledPairs).toEqual(
+			new Set(
+				phases.flatMap((phase) =>
+					organizationIds.map((organizationId) => `${phase}:${organizationId}`)
+				)
+			)
 		);
 	});
 
@@ -220,9 +307,29 @@ function createStatement(observedFromPeer: string): PublicScpGraphStatement {
 		nodeId: 'signer',
 		observedAt: '2026-07-13T00:00:00.000Z',
 		observedFromPeer,
+		quorumSetHash: 'quorum-signer',
 		slotIndex: '63380000',
 		statementHash: `statement-${observedFromPeer}`,
 		statementType: 'prepare',
+		values: []
+	};
+}
+
+function createScheduledStatement(
+	nodeId: string,
+	statementType: PublicScpGraphStatement['statementType'],
+	index: number
+): PublicScpGraphStatement {
+	return {
+		nodeId,
+		observedAt: new Date(
+			Date.parse('2026-07-13T00:00:00.000Z') + index
+		).toISOString(),
+		observedFromPeer: nodeId,
+		quorumSetHash: `quorum-${nodeId}`,
+		slotIndex: '63380001',
+		statementHash: `statement-${index.toString().padStart(3, '0')}`,
+		statementType,
 		values: []
 	};
 }

@@ -1,5 +1,6 @@
 import {
 	parseScpAnimationBacklog,
+	parseScpLatestSlots,
 	parseScpSlotEvidenceList
 } from '../scp-evidence';
 
@@ -14,7 +15,11 @@ describe('parseScpSlotEvidenceList', () => {
 		});
 		expect(parsed?.[0]?.events[0]).toMatchObject({
 			kind: 'commit_observed',
-			organizationId: 'org-a'
+			organizationId: 'org-a',
+			statement: {
+				quorumSetHash: 'qset',
+				values: [{ upgradeCount: 0, value: 'value' }]
+			}
 		});
 		expect(parsed?.[0]?.events[0]?.statement).not.toHaveProperty(
 			'statementXdr'
@@ -27,25 +32,81 @@ describe('parseScpSlotEvidenceList', () => {
 	});
 });
 
+describe('parseScpLatestSlots', () => {
+	it('preserves compact delivery truncation and cursor metadata', () => {
+		const delivery = compactDelivery();
+
+		expect(
+			parseScpLatestSlots({ delivery, slots: [slotEvidence()] })
+		).toMatchObject({
+			delivery: {
+				eventCount: 1,
+				nextCursor: 'opaque-cursor',
+				truncated: true
+			},
+			slots: [{ slotIndex: '63390000' }]
+		});
+		expect(parseScpLatestSlots([slotEvidence()])).toMatchObject({
+			slots: [{ slotIndex: '63390000' }]
+		});
+	});
+});
+
 describe('parseScpAnimationBacklog', () => {
 	it('accepts complete compact slots and rejects mismatched counts', () => {
 		const evidence = slotEvidence();
-		const statement = evidence.events[0]?.statement;
+		const statement = {
+			...evidence.events[0]?.statement,
+			quorumSetHash: 'qset'
+		};
 		const payload = {
+			delivery: compactDelivery(),
 			metadata: evidence.metadata,
 			slots: [{ slotIndex: evidence.slotIndex, statements: [statement] }],
 			statementCount: 1
 		};
 
 		expect(parseScpAnimationBacklog(payload)).toMatchObject({
-			slots: [{ slotIndex: '63390000' }],
+			delivery: {
+				nextCursor: 'opaque-cursor',
+				truncated: true
+			},
+			metadata: {
+				cursor: { observedAtMs: 1, statementHash: 'statement' },
+				truncated: true
+			},
+			slots: [
+				{
+					slotIndex: '63390000',
+					statements: [
+						{
+							quorumSetHash: 'qset',
+							values: [{ upgradeCount: 0, value: 'value' }]
+						}
+					]
+				}
+			],
 			statementCount: 1
 		});
 		expect(
 			parseScpAnimationBacklog({ ...payload, statementCount: 2 })
 		).toBeNull();
+		expect(
+			parseScpAnimationBacklog({ ...payload, delivery: undefined })
+		).not.toBeNull();
 	});
 });
+
+function compactDelivery() {
+	return {
+		byteLimit: 1_000_000,
+		eventCount: 1,
+		eventLimit: 250,
+		nextCursor: 'opaque-cursor',
+		serializedBytes: 2_048,
+		truncated: true
+	};
+}
 
 function slotEvidence() {
 	const statement = {
@@ -89,10 +150,12 @@ function slotEvidence() {
 			}
 		],
 		metadata: {
+			cursor: { observedAtMs: 1, statementHash: 'statement' },
 			freshness: 'fresh',
 			freshnessMs: 10,
 			observedAt: statement.observedAt,
-			source: 'postgres_canonical'
+			source: 'postgres_canonical',
+			truncated: true
 		},
 		phaseCounts: { confirm: 1, externalize: 0, nominate: 0, prepare: 0 },
 		slotIndex: statement.slotIndex,

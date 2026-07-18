@@ -219,6 +219,25 @@ describe('graph ledger playback pause and resume', () => {
 		expect(playbackSlots).not.toContain('101');
 		expect(playbackSlots).not.toContain('102');
 	});
+
+	it('refills the bounded queue until more than one hundred ledgers play', () => {
+		const playbackSlots: Array<string | null> = [];
+		const slotIndexes = Array.from({ length: 105 }, (_, index) =>
+			(1_000 + index).toString()
+		);
+		const options = createOptions({
+			boundarySlotIndex: '1105',
+			ledgers: slotIndexes.map((slotIndex) => createLedger(slotIndex)),
+			playbackSlots
+		});
+
+		hookHarness.render(() => useGraphAnimation(options));
+		clock.advanceBy(slotIndexes.length * 5_000);
+
+		expect(
+			playbackSlots.filter((slot): slot is string => slot !== null)
+		).toEqual(slotIndexes);
+	});
 });
 
 function createOptions({
@@ -263,6 +282,9 @@ function createOptions({
 		nextWaveIndexRef: ref(0),
 		nodeActivityRef: ref(new Map<string, number>()),
 		nodesByIdRef: ref(nodesById),
+		organizationByNodeId: new Map(
+			nodes.map((node) => [node.id, node.node.organizationId])
+		),
 		playbackBoundarySlotIndex: boundarySlotIndex,
 		playbackLedgers: ledgers,
 		refreshGraphVisuals: jest.fn(),
@@ -310,6 +332,7 @@ function createStatement(
 		nodeId,
 		observedAt: `2026-07-13T00:00:0${index}.000Z`,
 		observedFromPeer: nodeId,
+		quorumSetHash: 'quorum-test',
 		slotIndex,
 		statementHash: `statement-${slotIndex}-${index}`,
 		statementType: index === 0 ? 'nominate' : 'prepare',

@@ -43,6 +43,7 @@ interface UseGraphAnimationOptions {
 	nextWaveIndexRef: RefObject<number>;
 	nodeActivityRef: RefObject<Map<string, number>>;
 	nodesByIdRef: RefObject<Map<string, Graph3DNode>>;
+	organizationByNodeId: ReadonlyMap<string, string | null>;
 	playbackBoundarySlotIndex: string | null;
 	playbackLedgers: readonly LedgerPlaybackFrame[];
 	refreshGraphVisuals: () => void;
@@ -65,6 +66,7 @@ export const useGraphAnimation = ({
 	nextWaveIndexRef,
 	nodeActivityRef,
 	nodesByIdRef,
+	organizationByNodeId,
 	playbackBoundarySlotIndex,
 	playbackLedgers,
 	refreshGraphVisuals,
@@ -79,6 +81,14 @@ export const useGraphAnimation = ({
 } => {
 	const activeLedgerRef = useRef<LedgerPlaybackFrame | null>(null);
 	const playbackQueueRef = useRef<LedgerPlaybackFrame[]>([]);
+	const playbackSourceRef = useRef({
+		boundarySlotIndex: playbackBoundarySlotIndex,
+		ledgers: playbackLedgers
+	});
+	playbackSourceRef.current = {
+		boundarySlotIndex: playbackBoundarySlotIndex,
+		ledgers: playbackLedgers
+	};
 	const playbackStartedAtRef = useRef(0);
 	const pausedPlaybackElapsedMsRef = useRef<number | null>(null);
 	const playbackFinishTimeoutRef = useRef<number | null>(null);
@@ -181,6 +191,21 @@ export const useGraphAnimation = ({
 		}
 	}, []);
 
+	const refillPlaybackQueue = useCallback((): void => {
+		const { boundarySlotIndex, ledgers } = playbackSourceRef.current;
+		if (!boundarySlotIndex) {
+			playbackQueueRef.current = [];
+			return;
+		}
+		playbackQueueRef.current = mergePlaybackQueue({
+			activeSlotIndex: activeLedgerRef.current?.slotIndex ?? null,
+			boundarySlotIndex,
+			completedSignatures: completedSlotSignaturesRef.current,
+			ledgers,
+			minimumExclusiveSlotIndex: latestStartedSlotIndexRef.current
+		}).queue;
+	}, []);
+
 	const scheduleLedgerStatements = useCallback(
 		(ledger: LedgerPlaybackFrame): void => {
 			if (
@@ -198,7 +223,8 @@ export const useGraphAnimation = ({
 				animatedStatementHashes: animatedStatementHashesRef.current,
 				elapsedMs,
 				ledger,
-				nodesById: nodesByIdRef.current
+				nodesById: nodesByIdRef.current,
+				organizationByNodeId
 			});
 			for (const { delayMs, flowPath, statement } of schedule) {
 				animatedStatementHashesRef.current.add(statement.statementHash);
@@ -220,13 +246,7 @@ export const useGraphAnimation = ({
 					if (launchElapsedMs > getStatementLaunchDeadlineMs(activeLedger)) {
 						return;
 					}
-					activateStatementFlowPath({
-						activityTimeoutsRef,
-						nodeActivityRef,
-						path: flowPath,
-						refreshGraphVisuals
-					});
-					animateStatementPacket({
+					const launchResult = animateStatementPacket({
 						activeWavesRef,
 						nextWaveIndexRef,
 						path: flowPath,
@@ -234,6 +254,16 @@ export const useGraphAnimation = ({
 						statement,
 						threeRef,
 						wavePoolRef
+					});
+					if (launchResult === 'pool-full') {
+						animatedStatementHashesRef.current.delete(statement.statementHash);
+						return;
+					}
+					activateStatementFlowPath({
+						activityTimeoutsRef,
+						nodeActivityRef,
+						path: flowPath,
+						refreshGraphVisuals
 					});
 					setActiveStatementHashes((current) => {
 						const next = new Set(current);
@@ -267,6 +297,7 @@ export const useGraphAnimation = ({
 			nextWaveIndexRef,
 			nodeActivityRef,
 			nodesByIdRef,
+			organizationByNodeId,
 			refreshGraphVisuals,
 			scheduleWaveAnimation,
 			setActiveStatementHashes,
@@ -352,8 +383,17 @@ export const useGraphAnimation = ({
 		}
 
 		const nextLedger = playbackQueueRef.current.shift();
-		if (nextLedger) startLedgerPlayback(nextLedger);
-	}, [animationsEnabledRef, graphRef, startLedgerPlayback]);
+		if (!nextLedger) {
+			refillPlaybackQueue();
+		}
+		const refilledLedger = nextLedger ?? playbackQueueRef.current.shift();
+		if (refilledLedger) startLedgerPlayback(refilledLedger);
+	}, [
+		animationsEnabledRef,
+		graphRef,
+		refillPlaybackQueue,
+		startLedgerPlayback
+	]);
 
 	const pausePlayback = useCallback((): void => {
 		const activeLedger = activeLedgerRef.current;
@@ -428,25 +468,14 @@ export const useGraphAnimation = ({
 		}
 
 		if (!animationsEnabled) return;
-		if (!playbackBoundarySlotIndex) {
-			playbackQueueRef.current = [];
-			return;
-		}
-
-		const queueResult = mergePlaybackQueue({
-			activeSlotIndex: activeLedgerRef.current?.slotIndex ?? null,
-			boundarySlotIndex: playbackBoundarySlotIndex,
-			completedSignatures: completedSlotSignaturesRef.current,
-			ledgers: playbackLedgers,
-			minimumExclusiveSlotIndex: latestStartedSlotIndexRef.current
-		});
-		playbackQueueRef.current = queueResult.queue;
+		refillPlaybackQueue();
 		advancePlayback();
 	}, [
 		advancePlayback,
 		animationsEnabled,
 		playbackBoundarySlotIndex,
 		playbackLedgers,
+		refillPlaybackQueue,
 		scheduleLedgerStatements
 	]);
 

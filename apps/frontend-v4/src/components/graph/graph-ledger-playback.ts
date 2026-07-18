@@ -1,5 +1,9 @@
 import type { PublicScpGraphStatement } from '../../api/types';
-import { compareLedgerSequences } from '../../domain/ledger-sequence';
+import {
+	compareLedgerSequences,
+	getNextLedgerSequence,
+	toLedgerSequenceText
+} from '../../domain/ledger-sequence';
 import {
 	compareStatementsByObservation,
 	ledgerCloseAnimationBudgetMs,
@@ -57,10 +61,12 @@ const boundedPlaybackDuration = (
 export const buildLedgerPlaybackFrames = ({
 	boundarySlotIndex,
 	latestLedgerClosedAt,
+	organizationByNodeId,
 	statements
 }: {
 	boundarySlotIndex: string;
 	latestLedgerClosedAt: string | null;
+	organizationByNodeId?: ReadonlyMap<string, string | null>;
 	statements: readonly PublicScpGraphStatement[];
 }): LedgerPlaybackFrame[] => {
 	const statementsBySlot = new Map<string, PublicScpGraphStatement[]>();
@@ -80,7 +86,8 @@ export const buildLedgerPlaybackFrames = ({
 			closeTimeMs: getLedgerCloseTimeMs(slotStatements),
 			slotIndex,
 			statements: selectLedgerAnimationStatements(
-				slotStatements.toSorted(compareStatementsByObservation)
+				slotStatements.toSorted(compareStatementsByObservation),
+				organizationByNodeId
 			)
 		}))
 		.filter((ledger) => ledger.statements.length > 0);
@@ -115,4 +122,17 @@ export const buildLedgerPlaybackFrames = ({
 	}
 
 	return ledgers;
+};
+
+export const getPlaybackBoundarySlotIndex = (
+	latestClosedSlotIndex: unknown,
+	latestObservedSlotIndex: unknown
+): string | null => {
+	const latestClosed = toLedgerSequenceText(latestClosedSlotIndex);
+	const observedBoundary = getNextLedgerSequence(latestObservedSlotIndex);
+	if (latestClosed === null) return observedBoundary;
+	if (observedBoundary === null) return latestClosed;
+	return compareLedgerSequences(latestClosed, observedBoundary) <= 0
+		? latestClosed
+		: observedBoundary;
 };

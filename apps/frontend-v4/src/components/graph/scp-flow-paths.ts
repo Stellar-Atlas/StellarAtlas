@@ -2,6 +2,7 @@ import type { PublicNetwork, PublicScpGraphStatement } from '../../api/types';
 import { getHighestLedgerSequence } from '../../domain/ledger-sequence';
 import { getNodeLabel } from '../../domain/network';
 import type { Graph3DNode } from './model-3d';
+import { sampleLedgerAnimationStatements } from './graph-statement-sampler';
 
 export const maxActiveFeedStatements = 8;
 export const ledgerPlaybackDurationMs = 5_000;
@@ -39,9 +40,10 @@ export const compareStatementsByObservation = (
 	left.statementHash.localeCompare(right.statementHash);
 
 export const selectLedgerAnimationStatements = (
-	statements: readonly PublicScpGraphStatement[]
+	statements: readonly PublicScpGraphStatement[],
+	organizationByNodeId?: ReadonlyMap<string, string | null>
 ): readonly PublicScpGraphStatement[] => {
-	return statements.toSorted(compareStatementsByObservation);
+	return sampleLedgerAnimationStatements(statements, { organizationByNodeId });
 };
 
 export const getLatestSlotIndex = (

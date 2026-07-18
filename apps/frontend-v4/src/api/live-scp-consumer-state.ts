@@ -1,5 +1,6 @@
 import type {
 	PublicScpGraphStatement,
+	PublicScpStatementObservation,
 	PublicScpStatementReadMetadata
 } from './types';
 import type { LiveNetworkMessage } from './live-network-message-parser';
@@ -20,12 +21,35 @@ export const applyLiveScpMessage = (
 	message: Extract<LiveNetworkMessage, { type: 'scp' }>
 ): LiveScpConsumerState => ({
 	metadata: {
+		...(message.cursor !== undefined ? { cursor: message.cursor } : {}),
 		freshness: message.freshness,
 		freshnessMs: message.freshnessMs,
 		observedAt: message.observedAt,
-		source: message.source
+		source: message.source,
+		...(message.truncated !== undefined ? { truncated: message.truncated } : {})
 	},
-	statements: mergeStatements(current.statements, message.payload)
+	statements: mergeStatements(
+		current.statements,
+		message.payload.map(toGraphStatement)
+	)
+});
+
+const toGraphStatement = (
+	statement: PublicScpStatementObservation
+): PublicScpGraphStatement => ({
+	nodeId: statement.nodeId,
+	observedAt: statement.observedAt,
+	observedFromPeer: statement.observedFromPeer,
+	quorumSetHash: statement.pledges.quorumSetHash,
+	slotIndex: statement.slotIndex,
+	statementHash: statement.statementHash,
+	statementType: statement.statementType,
+	values: statement.values.map((value) => ({
+		closeTime: value.closeTime,
+		txSetHash: value.txSetHash,
+		upgradeCount: value.upgradeCount,
+		value: value.value
+	}))
 });
 
 const mergeStatements = (

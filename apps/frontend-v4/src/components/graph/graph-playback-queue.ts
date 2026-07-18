@@ -14,7 +14,7 @@ interface MergePlaybackQueueResult {
 	queue: LedgerPlaybackFrame[];
 }
 
-const maxQueuedPlaybackLedgers = 4;
+export const maxQueuedPlaybackLedgers = 4;
 
 export const getLedgerStatementSignature = (
 	ledger: LedgerPlaybackFrame
@@ -44,17 +44,15 @@ export const mergePlaybackQueue = ({
 				ledger.statements.length > 0 &&
 				compareLedgerSequences(ledger.slotIndex, boundarySlotIndex) < 0 &&
 				(minimumExclusiveSlotIndex === null ||
-					compareLedgerSequences(
-						ledger.slotIndex,
-						minimumExclusiveSlotIndex
-					) > 0) &&
+					compareLedgerSequences(ledger.slotIndex, minimumExclusiveSlotIndex) >
+						0) &&
 				ledger.slotIndex !== activeSlotIndex &&
 				!isCompleted(ledger, completedSignatures)
 		)
 		.toSorted((left, right) =>
 			compareLedgerSequences(left.slotIndex, right.slotIndex)
 		);
-	const queue = playableLedgers.slice(-maxQueuedPlaybackLedgers);
+	const queue = playableLedgers.slice(0, maxQueuedPlaybackLedgers);
 
 	return {
 		acceptedBoundarySlotIndex: boundarySlotIndex,

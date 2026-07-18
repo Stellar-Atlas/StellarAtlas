@@ -25,27 +25,37 @@ export type PublicNodeSnapshot = NodeSnapshotV1;
 export type PublicOrganization = OrganizationV1;
 export type PublicOrganizationSnapshot = OrganizationSnapshotV1;
 export type PublicScpStatementObservation = ScpStatementObservationV1;
+export interface PublicScpStatementCursor {
+	readonly observedAtMs: number;
+	readonly statementHash: string;
+}
+export interface PublicScpGraphStatementValue {
+	readonly closeTime: string;
+	readonly txSetHash: string;
+	readonly upgradeCount?: number;
+	readonly value?: string;
+}
 export interface PublicScpGraphStatement {
 	readonly nodeId: string;
 	readonly observedAt: string;
 	readonly observedFromPeer: string;
+	readonly quorumSetHash: string;
 	readonly slotIndex: string;
 	readonly statementHash: string;
 	readonly statementType: ScpStatementObservationV1['statementType'];
-	readonly values: readonly Pick<
-		ScpStatementObservationV1['values'][number],
-		'closeTime' | 'txSetHash'
-	>[];
+	readonly values: readonly PublicScpGraphStatementValue[];
 }
 export type PublicScpStatementReadFreshness =
 	'empty' | 'fresh' | 'stale' | 'unavailable';
 export type PublicScpStatementReadSource = 'meilisearch' | 'postgres_canonical';
 
 export interface PublicScpStatementReadMetadata {
+	readonly cursor?: PublicScpStatementCursor | null;
 	readonly freshness: PublicScpStatementReadFreshness;
 	readonly freshnessMs: number | null;
 	readonly observedAt: string | null;
 	readonly source: PublicScpStatementReadSource;
+	readonly truncated?: boolean;
 }
 
 export interface PublicLedgerTransaction {
