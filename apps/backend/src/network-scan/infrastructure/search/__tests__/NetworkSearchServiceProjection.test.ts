@@ -8,6 +8,37 @@ import type {
 } from '../NetworkSearchTypes.js';
 
 describe('NetworkSearchService projection serialization', () => {
+	it('uses a dedicated projection client instead of the bounded read client', async () => {
+		const projection = createSlowIndex();
+		const readAddDocuments = jest.fn(() => {
+			throw new Error('read client must not receive projection writes');
+		});
+		const readIndex = {
+			...projection.index,
+			addDocuments: readAddDocuments
+		} as unknown as Index<NetworkSearchStoredDocument>;
+		const service = new NetworkSearchService(
+			{
+				host: 'http://127.0.0.1:7701',
+				indexName: 'network_projection_test',
+				writable: true
+			},
+			undefined,
+			readIndex,
+			projection.index
+		);
+
+		const refresh = service.refreshProjection(
+			createInventory('2026-07-13T23:00:00.000Z', '63388000')
+		);
+		await waitUntil(() => projection.pendingWrites.length === 1);
+
+		expect(readAddDocuments).not.toHaveBeenCalled();
+		expect(projection.addDocuments).toHaveBeenCalledTimes(1);
+		projection.pendingWrites[0]?.();
+		await refresh;
+	});
+
 	it('finishes the active write before starting a newer inventory write', async () => {
 		const harness = createSlowIndex();
 		const service = new NetworkSearchService(

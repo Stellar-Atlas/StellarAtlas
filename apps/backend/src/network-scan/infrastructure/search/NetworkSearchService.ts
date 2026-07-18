@@ -37,6 +37,7 @@ const taskPollIntervalMs = 50;
 const settingsTaskTimeoutMs = 60_000;
 const documentTaskTimeoutMs = 60_000;
 const searchRequestTimeoutMs = 500;
+const projectionRequestTimeoutMs = 60_000;
 const syncRetryCooldownMs = 60_000;
 const maxIndexedNetworkLagMs = 15 * 60_000;
 
@@ -87,6 +88,8 @@ export class NetworkSearchService {
 	private syncFailed = false;
 	private readonly index: Index<NetworkSearchStoredDocument> | undefined;
 	private readonly indexName: string;
+	private readonly projectionIndex:
+		Index<NetworkSearchStoredDocument> | undefined;
 	private readonly writable: boolean;
 	private nextSyncAttemptAtMs = 0;
 	private syncPromise: Promise<void> | undefined;
@@ -94,19 +97,34 @@ export class NetworkSearchService {
 	constructor(
 		config: NetworkSearchConfig,
 		private logger?: Logger,
-		indexOverride?: Index<NetworkSearchStoredDocument>
+		indexOverride?: Index<NetworkSearchStoredDocument>,
+		projectionIndexOverride?: Index<NetworkSearchStoredDocument>
 	) {
 		this.indexName = config.indexName;
 		this.writable = config.writable !== false;
 		if (indexOverride) {
 			this.index = indexOverride;
+			this.projectionIndex = this.writable
+				? (projectionIndexOverride ?? indexOverride)
+				: undefined;
 		} else if (config.host && config.host.length > 0) {
-			const client = new Meilisearch({
+			const readClient = new Meilisearch({
 				apiKey: config.apiKey,
 				host: config.host,
 				timeout: searchRequestTimeoutMs
 			});
-			this.index = client.index<NetworkSearchStoredDocument>(config.indexName);
+			this.index = readClient.index<NetworkSearchStoredDocument>(
+				config.indexName
+			);
+			if (this.writable) {
+				const projectionClient = new Meilisearch({
+					apiKey: config.apiKey,
+					host: config.host,
+					timeout: projectionRequestTimeoutMs
+				});
+				this.projectionIndex =
+					projectionClient.index<NetworkSearchStoredDocument>(config.indexName);
+			}
 		}
 	}
 
@@ -339,7 +357,7 @@ export class NetworkSearchService {
 	}
 
 	private syncIndex(): Promise<void> {
-		if (!this.index || this.indexReady || !this.snapshot) {
+		if (!this.projectionIndex || this.indexReady || !this.snapshot) {
 			return Promise.resolve();
 		}
 		if (this.syncPromise) return this.syncPromise;
@@ -380,8 +398,9 @@ export class NetworkSearchService {
 	}
 
 	private async writeIndex(snapshot: NetworkSearchSnapshot): Promise<void> {
-		if (!this.index) return;
+		if (!this.projectionIndex) return;
 		if (!this.settingsReady) await this.syncSettings();
+		const projectionIndex = this.projectionIndex;
 
 		const state: NetworkSearchIndexStateDocument = {
 			canonicalCursor: snapshot.canonicalCursor,
@@ -390,7 +409,7 @@ export class NetworkSearchService {
 			indexedAt: new Date().toISOString(),
 			networkTime: snapshot.networkTime
 		};
-		const documentTask = await this.index
+		const documentTask = await projectionIndex
 			.addDocuments([state, ...snapshot.documents], { primaryKey: 'id' })
 			.waitTask({
 				interval: taskPollIntervalMs,
@@ -399,7 +418,7 @@ export class NetworkSearchService {
 		assertMeilisearchTaskSucceeded(documentTask.status, 'document update');
 		if (this.snapshot?.canonicalCursor !== snapshot.canonicalCursor) return;
 
-		const cleanupTask = await this.index
+		const cleanupTask = await projectionIndex
 			.deleteDocuments({
 				filter: `documentKind = "entity" AND canonicalCursor != ${JSON.stringify(snapshot.canonicalCursor)}`
 			})
@@ -414,9 +433,9 @@ export class NetworkSearchService {
 	}
 
 	private async syncSettings(): Promise<void> {
-		if (!this.index || this.settingsReady) return;
+		if (!this.projectionIndex || this.settingsReady) return;
 		await ensureMeilisearchSettings(
-			this.index,
+			this.projectionIndex,
 			networkSearchRequiredSettings,
 			{
 				interval: taskPollIntervalMs,
