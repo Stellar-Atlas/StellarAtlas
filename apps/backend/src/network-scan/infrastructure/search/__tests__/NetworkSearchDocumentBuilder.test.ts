@@ -65,6 +65,34 @@ describe('NetworkSearchDocumentBuilder archive status', () => {
 			}).archiveStatus
 		).toBe('ok');
 	});
+
+	it('does not churn the search generation for mutable verifier counters', () => {
+		const node = createDummyNodeV1('GA_STABLE_ARCHIVE_SEARCH');
+		node.historyUrl = 'https://history.example.org';
+		const root = archiveRoot(node.publicKey);
+		const inventory = {
+			...createInventory(node),
+			archiveRoots: [root]
+		};
+		const changedCounters = {
+			...inventory,
+			archiveRoots: [
+				{
+					...root,
+					latestObjectAt: '2026-07-13T00:05:00.000Z',
+					objects: {
+						...root.objects,
+						totalObjects: 20,
+						verifiedObjects: 19
+					}
+				}
+			]
+		};
+
+		expect(buildNetworkSearchSnapshot(changedCounters).canonicalCursor).toBe(
+			buildNetworkSearchSnapshot(inventory).canonicalCursor
+		);
+	});
 });
 
 function createInventory(

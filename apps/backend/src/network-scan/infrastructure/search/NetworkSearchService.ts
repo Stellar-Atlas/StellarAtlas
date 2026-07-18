@@ -36,7 +36,7 @@ export const networkSearchStateDocumentId = 'network_search_state';
 const taskPollIntervalMs = 50;
 const settingsTaskTimeoutMs = 60_000;
 const documentTaskTimeoutMs = 60_000;
-const searchRequestTimeoutMs = 500;
+const searchRequestTimeoutMs = 1_500;
 const projectionRequestTimeoutMs = 60_000;
 const syncRetryCooldownMs = 60_000;
 

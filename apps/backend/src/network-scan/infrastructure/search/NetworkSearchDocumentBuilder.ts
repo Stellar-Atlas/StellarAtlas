@@ -220,34 +220,23 @@ const archiveRootDocument = (
 	root: NetworkSearchInventory['archiveRoots'][number],
 	canonicalCursor: string
 ): NetworkSearchDocument => {
-	const failures = root.objects.remoteFailureObjects;
-	const verified = root.objects.verifiedObjects;
 	const host = new URL(root.archiveUrl).host;
 	return {
-		active: root.objects.activeObjects > 0,
+		active: true,
 		archiveStatus: currentArchiveEvidenceStatus(root),
 		canonicalCursor,
-		content: joinSearchText(
-			host,
-			root.archiveUrl,
-			...root.nodePublicKeys,
-			`${verified} verified`,
-			`${failures} failures`
-		),
-		detail: `${verified} verified file checks; ${failures} remote failures`,
+		content: joinSearchText(host, root.archiveUrl, ...root.nodePublicKeys),
+		detail: root.archiveUrl,
 		documentKind: 'entity',
 		entityId: root.archiveUrlIdentity,
 		entityType: 'archive-root',
-		evidenceFailures: failures,
-		evidenceProvenance: 'postgres_canonical',
-		evidenceVerified: verified,
 		href: `/archive-scans/${encodeURIComponent(root.archiveUrl)}`,
 		id: safeDocumentId('archive', root.archiveUrlIdentity),
 		indexedAt: inventory.generatedAt,
 		label: host,
 		latestLedger: inventory.network.latestLedger,
 		networkTime: inventory.network.time,
-		observedAt: root.latestObjectAt ?? inventory.generatedAt,
+		observedAt: inventory.network.time,
 		recordState: 'current',
 		scope: 'archive-root'
 	};
@@ -265,10 +254,16 @@ export const buildNetworkSearchSnapshot = (
 	const organizations = inventory.organizations.toSorted((left, right) =>
 		left.organization.id.localeCompare(right.organization.id)
 	);
+	const archiveRootSearchState = archiveRoots.map((root) => ({
+		archiveStatus: currentArchiveEvidenceStatus(root),
+		archiveUrl: root.archiveUrl,
+		archiveUrlIdentity: root.archiveUrlIdentity,
+		nodePublicKeys: root.nodePublicKeys.toSorted()
+	}));
 	const canonicalCursor = createHash('sha256')
 		.update(
 			JSON.stringify({
-				archiveRoots,
+				archiveRoots: archiveRootSearchState,
 				canonicalArchiveRevision: inventory.canonicalArchiveRevision,
 				latestLedger: inventory.network.latestLedger,
 				networkTime: inventory.network.time,

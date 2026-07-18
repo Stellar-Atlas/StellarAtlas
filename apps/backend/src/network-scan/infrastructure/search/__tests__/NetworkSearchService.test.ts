@@ -86,7 +86,7 @@ describe('NetworkSearchService', () => {
 		expect(result.facets.scope).toEqual([{ count: 2, value: 'listener' }]);
 	});
 
-	it('searches canonical archive evidence with explicit provenance', async () => {
+	it('searches canonical archive roots without embedding mutable evidence', async () => {
 		const baseInventory = createInventory([], []);
 		const inventory: NetworkSearchInventory = {
 			...baseInventory,
@@ -128,11 +128,11 @@ describe('NetworkSearchService', () => {
 		expect(result.hits).toEqual([
 			expect.objectContaining({
 				entityType: 'archive-root',
-				evidenceFailures: 1,
-				evidenceProvenance: 'postgres_canonical',
-				evidenceVerified: 5
+				label: 'history.example.org'
 			})
 		]);
+		expect(result.hits[0]?.evidenceFailures).toBeUndefined();
+		expect(result.hits[0]?.evidenceVerified).toBeUndefined();
 	});
 
 	it('uses a synchronized Meilisearch projection with matching cursor', async () => {
