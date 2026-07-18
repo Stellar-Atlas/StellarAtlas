@@ -16,7 +16,8 @@ import {
 import { buildStatementWaveSchedule } from './graph-wave-schedule';
 import {
 	getLedgerStatementSignature,
-	mergePlaybackQueue
+	mergePlaybackQueue,
+	shouldFastForwardPlayback
 } from './graph-playback-queue';
 import {
 	updateWaveMeshPool,
@@ -455,7 +456,19 @@ export const useGraphAnimation = ({
 		const playableLedgers = playbackLedgers.filter(
 			(ledger) => ledger.statements.length > 0
 		);
-		const activeLedger = activeLedgerRef.current;
+		let activeLedger = activeLedgerRef.current;
+		if (
+			activeLedger &&
+			shouldFastForwardPlayback(activeLedger.slotIndex, playbackBoundarySlotIndex)
+		) {
+			markSlotCompleted(activeLedger);
+			activeLedgerRef.current = null;
+			latestStartedSlotIndexRef.current = null;
+			setActivePlaybackSlotIndex(null);
+			clearPlaybackFinishTimeout();
+			clearAnimationEffects();
+			activeLedger = null;
+		}
 
 		if (activeLedger) {
 			const updatedActiveLedger = playableLedgers.find(
@@ -473,6 +486,9 @@ export const useGraphAnimation = ({
 	}, [
 		advancePlayback,
 		animationsEnabled,
+		clearAnimationEffects,
+		clearPlaybackFinishTimeout,
+		markSlotCompleted,
 		playbackBoundarySlotIndex,
 		playbackLedgers,
 		refillPlaybackQueue,

@@ -1,4 +1,7 @@
-import { compareLedgerSequences } from '../../domain/ledger-sequence';
+import {
+	compareLedgerSequences,
+	toLedgerSequenceText
+} from '../../domain/ledger-sequence';
 import type { LedgerPlaybackFrame } from './scp-flow-paths';
 
 interface MergePlaybackQueueOptions {
@@ -15,6 +18,17 @@ interface MergePlaybackQueueResult {
 }
 
 export const maxQueuedPlaybackLedgers = 4;
+export const maxToleratedPlaybackLedgerLag = 2n;
+
+export const shouldFastForwardPlayback = (
+	activeSlotIndex: string,
+	boundarySlotIndex: string | null
+): boolean => {
+	const active = toLedgerSequenceText(activeSlotIndex);
+	const boundary = toLedgerSequenceText(boundarySlotIndex);
+	if (active === null || boundary === null) return false;
+	return BigInt(boundary) - BigInt(active) > maxToleratedPlaybackLedgerLag;
+};
 
 export const getLedgerStatementSignature = (
 	ledger: LedgerPlaybackFrame
@@ -52,7 +66,11 @@ export const mergePlaybackQueue = ({
 		.toSorted((left, right) =>
 			compareLedgerSequences(left.slotIndex, right.slotIndex)
 		);
-	const queue = playableLedgers.slice(-maxQueuedPlaybackLedgers);
+	const boundedQueue = playableLedgers.slice(-maxQueuedPlaybackLedgers);
+	const queue =
+		activeSlotIndex === null && minimumExclusiveSlotIndex === null
+			? boundedQueue.slice(-1)
+			: boundedQueue;
 
 	return {
 		acceptedBoundarySlotIndex: boundarySlotIndex,

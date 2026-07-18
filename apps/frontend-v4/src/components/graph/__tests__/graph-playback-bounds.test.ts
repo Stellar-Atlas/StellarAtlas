@@ -10,7 +10,8 @@ import {
 } from '../graph-ledger-playback';
 import {
 	maxQueuedPlaybackLedgers,
-	mergePlaybackQueue
+	mergePlaybackQueue,
+	shouldFastForwardPlayback
 } from '../graph-playback-queue';
 import {
 	maxLedgerAnimationStatements,
@@ -87,7 +88,7 @@ describe('bounded truthful graph playback', () => {
 		);
 	});
 
-	it('fast-forwards to the newest bounded ledger window when input outruns playback', () => {
+	it('starts cold playback from the newest completed ledger', () => {
 		const statements = Array.from({ length: 125 }, (_, index) =>
 			createStatement((1_000 + index).toString(), index, 'externalize')
 		);
@@ -106,6 +107,22 @@ describe('bounded truthful graph playback', () => {
 			minimumExclusiveSlotIndex: null
 		});
 
+		expect(queue.map(({ slotIndex }) => slotIndex)).toEqual(['1124']);
+	});
+
+	it('keeps four future ledgers queued after playback has started', () => {
+		const ledgers = Array.from({ length: 125 }, (_, index) => ({
+			slotIndex: (1_000 + index).toString(),
+			statements: [createStatement((1_000 + index).toString(), index, 'prepare')]
+		}));
+		const { queue } = mergePlaybackQueue({
+			activeSlotIndex: null,
+			boundarySlotIndex: '1125',
+			completedSignatures: new Map(),
+			ledgers,
+			minimumExclusiveSlotIndex: '1120'
+		});
+
 		expect(queue).toHaveLength(maxQueuedPlaybackLedgers);
 		expect(queue.map(({ slotIndex }) => slotIndex)).toEqual([
 			'1121',
@@ -113,6 +130,11 @@ describe('bounded truthful graph playback', () => {
 			'1123',
 			'1124'
 		]);
+	});
+
+	it('fast-forwards only when playback is more than two ledgers behind', () => {
+		expect(shouldFastForwardPlayback('1123', '1125')).toBe(false);
+		expect(shouldFastForwardPlayback('1122', '1125')).toBe(true);
 	});
 
 	it('does not overwrite an active GPU wave slot when the pool is full', () => {
