@@ -3,12 +3,10 @@ import { ok } from 'neverthrow';
 import type { ScpStatementObservationRepository } from '@network-scan/domain/scp/ScpStatementObservationRepository.js';
 import { ScpStatementObservation } from '@network-scan/domain/scp/ScpStatementObservation.js';
 import type { ScpStatementLiveStore } from '@network-scan/domain/scp/ScpStatementLiveStore.js';
-import { createDummyNodeV1 } from '@network-scan/services/__fixtures__/createDummyNodeV1.js';
-import type { GetKnownNodes } from '../../get-known-nodes/GetKnownNodes.js';
-import type { KnownNodeListItemDTO } from '../../get-known-nodes/GetKnownNodesDTO.js';
 import { GetScpStatements } from '../../get-scp-statements/GetScpStatements.js';
 import { decodeScpEvidenceCursor } from '../ScpEvidenceCursor.js';
 import { GetScpEvidence } from '../GetScpEvidence.js';
+import { knownOrganizations } from './ScpOrganizationInventoryFixture.js';
 
 describe('GetScpEvidence detailed pagination', () => {
 	it('continues a dense slot from its stable descending cursor without loss', async () => {
@@ -18,9 +16,9 @@ describe('GetScpEvidence detailed pagination', () => {
 			observation('GC', '200', 'slot-c', 1)
 		];
 		const { repository, useCase } = setup(rows, [
-			knownNode('GA', 'org-a'),
-			knownNode('GB', 'org-b'),
-			knownNode('GC', 'org-c')
+			['GA', 'org-a'],
+			['GB', 'org-b'],
+			['GC', 'org-c']
 		]);
 
 		const first = await useCase.getSlot('200', 2);
@@ -57,9 +55,9 @@ describe('GetScpEvidence detailed pagination', () => {
 			observation('GB', '201', 'org-b-2', 3)
 		];
 		const { repository, useCase } = setup(rows, [
-			knownNode('GA', 'org-shared'),
-			knownNode('GB', 'org-shared'),
-			knownNode('GC', 'org-other')
+			['GA', 'org-shared'],
+			['GB', 'org-shared'],
+			['GC', 'org-other']
 		]);
 
 		const first = await useCase.getOrganization('org-shared', 2);
@@ -99,7 +97,7 @@ describe('GetScpEvidence detailed pagination', () => {
 
 function setup(
 	rows: readonly ScpStatementObservation[],
-	knownNodes: readonly KnownNodeListItemDTO[]
+	assignments: readonly (readonly [string, string])[]
 ) {
 	const repository = mock<ScpStatementObservationRepository>();
 	repository.findLatest.mockImplementation(async (filter) =>
@@ -119,27 +117,11 @@ function setup(
 			.toSorted((left, right) => compareRows(left, right, filter.order))
 			.slice(0, filter.limit)
 	);
-	const getKnownNodes = mock<GetKnownNodes>();
-	getKnownNodes.executeAll.mockResolvedValue(
-		ok({
-			count: knownNodes.length,
-			generatedAt: '2026-07-11T00:00:00.000Z',
-			nodes: [...knownNodes],
-			scopeTotals: {
-				'all-known': knownNodes.length,
-				archived: 0,
-				'current-validator': knownNodes.length,
-				listener: 0,
-				'public-key-only': 0
-			},
-			source: 'postgres_canonical'
-		})
-	);
 	return {
 		repository,
 		useCase: new GetScpEvidence(
 			new GetScpStatements(repository, mock<ScpStatementLiveStore>()),
-			getKnownNodes
+			knownOrganizations(assignments)
 		)
 	};
 }
@@ -183,26 +165,6 @@ function observation(
 	row.statementHash = statementHash;
 	row.statementType = 'confirm';
 	return row;
-}
-
-function knownNode(
-	publicKey: string,
-	organizationId: string
-): KnownNodeListItemDTO {
-	const node = createDummyNodeV1(publicKey);
-	node.organizationId = organizationId;
-	return {
-		current: true,
-		dateDiscovered: '2026-07-11T00:00:00.000Z',
-		lastMeasurementAt: null,
-		lastSeen: null,
-		metadataState: 'snapshot',
-		node,
-		publicKey,
-		scope: 'current-validator',
-		snapshotEndDate: null,
-		snapshotStartDate: '2026-07-11T00:00:00.000Z'
-	};
 }
 
 function requireCursor(value: string | null) {

@@ -100,7 +100,7 @@ const networkRouterWrapper = (config: NetworkRouterConfig): NetworkRouter => {
 	);
 	const scpEvidence = new GetScpEvidence(
 		config.getScpStatements,
-		config.getKnownNodes
+		config.getKnownOrganizations
 	);
 
 	const getTime = (at?: unknown): Date => {

@@ -1,18 +1,16 @@
 import { mock } from 'jest-mock-extended';
 import { ok } from 'neverthrow';
-import { createDummyNodeV1 } from '@network-scan/services/__fixtures__/createDummyNodeV1.js';
-import type { GetKnownNodes } from '../../get-known-nodes/GetKnownNodes.js';
-import type { KnownNodeListItemDTO } from '../../get-known-nodes/GetKnownNodesDTO.js';
 import type {
 	ScpAnimationStatement,
 	GetScpStatements
 } from '../../get-scp-statements/GetScpStatements.js';
 import { GetScpEvidence } from '../GetScpEvidence.js';
+import { knownOrganizations } from './ScpOrganizationInventoryFixture.js';
 
 describe('GetScpEvidence compact delivery budgets', () => {
 	it('caps dense multi-slot responses by one total event budget', async () => {
 		const getScpStatements = mock<GetScpStatements>();
-		const getKnownNodes = knownNodes();
+		const getKnownOrganizations = knownOrganizations();
 		const rows = [
 			animationStatement('102', 'a'),
 			animationStatement('102', 'b'),
@@ -22,9 +20,13 @@ describe('GetScpEvidence compact delivery budgets', () => {
 		getScpStatements.executeLatestAnimationSlots.mockResolvedValue(
 			ok(animationRead(rows))
 		);
-		const useCase = new GetScpEvidence(getScpStatements, getKnownNodes, {
-			compactEventLimit: 3
-		});
+		const useCase = new GetScpEvidence(
+			getScpStatements,
+			getKnownOrganizations,
+			{
+				compactEventLimit: 3
+			}
+		);
 
 		const latest = await useCase.getLatestSlots(2);
 		const backlog = await useCase.getAnimationBacklog(2);
@@ -61,7 +63,7 @@ describe('GetScpEvidence compact delivery budgets', () => {
 		getScpStatements.executeLatestAnimationSlots.mockResolvedValue(
 			ok(animationRead(rows))
 		);
-		const useCase = new GetScpEvidence(getScpStatements, knownNodes(), {
+		const useCase = new GetScpEvidence(getScpStatements, knownOrganizations(), {
 			compactByteLimit: 4_096,
 			compactEventLimit: 10
 		});
@@ -106,7 +108,7 @@ describe('GetScpEvidence compact delivery budgets', () => {
 			.mockResolvedValueOnce(ok(animationRead(rows.toReversed())));
 		const useCase = new GetScpEvidence(
 			getScpStatements,
-			knownNodes([
+			knownOrganizations([
 				['GA', 'org-a'],
 				['GB', 'org-b']
 			])
@@ -189,50 +191,6 @@ function animationStatement(
 				txSetHash: statementHash.repeat(options.valueSize ?? 8)
 			}
 		]
-	};
-}
-
-function knownNodes(
-	organizations: readonly (readonly [string, string])[] = []
-): GetKnownNodes {
-	const getKnownNodes = mock<GetKnownNodes>();
-	getKnownNodes.executeAll.mockResolvedValue(
-		ok({
-			count: organizations.length,
-			generatedAt: '2026-07-11T00:00:00.000Z',
-			nodes: organizations.map(([nodeId, organizationId]) =>
-				knownNode(nodeId, organizationId)
-			),
-			scopeTotals: {
-				'all-known': organizations.length,
-				archived: 0,
-				'current-validator': organizations.length,
-				listener: 0,
-				'public-key-only': 0
-			},
-			source: 'postgres_canonical'
-		})
-	);
-	return getKnownNodes;
-}
-
-function knownNode(
-	publicKey: string,
-	organizationId: string
-): KnownNodeListItemDTO {
-	const node = createDummyNodeV1(publicKey);
-	node.organizationId = organizationId;
-	return {
-		current: true,
-		dateDiscovered: '2026-07-11T00:00:00.000Z',
-		lastMeasurementAt: null,
-		lastSeen: null,
-		metadataState: 'snapshot',
-		node,
-		publicKey,
-		scope: 'current-validator',
-		snapshotEndDate: null,
-		snapshotStartDate: '2026-07-11T00:00:00.000Z'
 	};
 }
 

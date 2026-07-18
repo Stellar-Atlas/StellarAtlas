@@ -1,7 +1,6 @@
 import { err, ok, type Result } from 'neverthrow';
 import type { ScpStatementReadCursor } from '../../domain/scp/ScpStatementObservationRepository.js';
-import { mapUnknownToError } from '@core/utilities/mapUnknownToError.js';
-import type { GetKnownNodes } from '../get-known-nodes/GetKnownNodes.js';
+import type { GetKnownOrganizations } from '../get-known-organizations/GetKnownOrganizations.js';
 import type {
 	ScpAnimationStatement,
 	ScpStoredStatementPageReadResult,
@@ -27,6 +26,7 @@ import {
 	toEvidenceMetadata,
 	toSlotEvidence
 } from './ScpEvidenceMapper.js';
+import { ScpOrganizationMapCache } from './ScpOrganizationMapCache.js';
 
 export type {
 	ScpAnimationBacklog,
@@ -59,13 +59,15 @@ const compactCandidateLimit = 4_001;
 
 export class GetScpEvidence {
 	private readonly compactPolicy: ScpCompactDeliveryPolicy;
+	private readonly organizationMap: ScpOrganizationMapCache;
 
 	constructor(
 		private readonly getScpStatements: GetScpStatements,
-		private readonly getKnownNodes: GetKnownNodes,
+		getKnownOrganizations: GetKnownOrganizations,
 		options: GetScpEvidenceOptions = {}
 	) {
 		this.compactPolicy = normalizeCompactPolicy(options);
+		this.organizationMap = new ScpOrganizationMapCache(getKnownOrganizations);
 	}
 
 	async getLatestSlots(limit = 12): Promise<Result<ScpLatestSlots, Error>> {
@@ -205,22 +207,7 @@ export class GetScpEvidence {
 	private async nodeOrganizations(): Promise<
 		Result<ReadonlyMap<string, string>, Error>
 	> {
-		try {
-			const inventory = await this.getKnownNodes.executeAll();
-			if (inventory.isErr()) return err(inventory.error);
-			return ok(
-				new Map(
-					inventory.value.nodes.flatMap((knownNode) => {
-						const organizationId = knownNode.node?.organizationId;
-						return organizationId
-							? [[knownNode.publicKey, organizationId] as const]
-							: [];
-					})
-				)
-			);
-		} catch (error) {
-			return err(mapUnknownToError(error));
-		}
+		return this.organizationMap.get();
 	}
 }
 

@@ -1,16 +1,17 @@
 import { mock } from 'jest-mock-extended';
 import { ok } from 'neverthrow';
 import type { ScpStatementObservationV1 } from 'shared';
-import type { GetKnownNodes } from '../../get-known-nodes/GetKnownNodes.js';
 import type { GetScpStatements } from '../../get-scp-statements/GetScpStatements.js';
 import { GetScpEvidence } from '../GetScpEvidence.js';
-import { createDummyNodeV1 } from '@network-scan/services/__fixtures__/createDummyNodeV1.js';
-import type { KnownNodeListItemDTO } from '../../get-known-nodes/GetKnownNodesDTO.js';
+import { knownOrganizations } from './ScpOrganizationInventoryFixture.js';
 
 describe('GetScpEvidence', () => {
 	it('builds bounded canonical slot events and organization participation', async () => {
 		const getScpStatements = mock<GetScpStatements>();
-		const getKnownNodes = mock<GetKnownNodes>();
+		const getKnownOrganizations = knownOrganizations([
+			['GA', 'org-a'],
+			['GB', 'org-b']
+		]);
 		const statements = [
 			statement('20', 'GA', 'confirm'),
 			statement('19', 'GB', 'externalize')
@@ -56,23 +57,7 @@ describe('GetScpEvidence', () => {
 					source: 'postgres_canonical'
 				})
 		);
-		getKnownNodes.executeAll.mockResolvedValue(
-			ok({
-				count: 2,
-				generatedAt: '2026-07-11T00:00:00.000Z',
-				nodes: [knownNode('GA', 'org-a'), knownNode('GB', 'org-b')],
-				scopeTotals: {
-					'all-known': 2,
-					archived: 0,
-					'current-validator': 2,
-					listener: 0,
-					'public-key-only': 0
-				},
-				source: 'postgres_canonical'
-			})
-		);
-
-		const useCase = new GetScpEvidence(getScpStatements, getKnownNodes);
+		const useCase = new GetScpEvidence(getScpStatements, getKnownOrganizations);
 		const slots = await useCase.getLatestSlots(1);
 		const organization = await useCase.getOrganization('org-a', 20);
 
@@ -108,7 +93,7 @@ describe('GetScpEvidence', () => {
 
 	it('returns every animation statement once in a bounded backlog', async () => {
 		const getScpStatements = mock<GetScpStatements>();
-		const getKnownNodes = mock<GetKnownNodes>();
+		const getKnownOrganizations = knownOrganizations();
 		const rows = [
 			statement('21', 'GA', 'confirm'),
 			statement('21', 'GB', 'externalize'),
@@ -135,25 +120,9 @@ describe('GetScpEvidence', () => {
 				source: 'postgres_canonical'
 			})
 		);
-		getKnownNodes.executeAll.mockResolvedValue(
-			ok({
-				count: 0,
-				generatedAt: '2026-07-11T00:00:00.000Z',
-				nodes: [],
-				scopeTotals: {
-					'all-known': 0,
-					archived: 0,
-					'current-validator': 0,
-					listener: 0,
-					'public-key-only': 0
-				},
-				source: 'postgres_canonical'
-			})
-		);
-
 		const result = await new GetScpEvidence(
 			getScpStatements,
-			getKnownNodes
+			getKnownOrganizations
 		).getAnimationBacklog(2);
 
 		expect(result.isOk()).toBe(true);
@@ -199,25 +168,5 @@ function statement(
 				value: 'value'
 			}
 		]
-	};
-}
-
-function knownNode(
-	publicKey: string,
-	organizationId: string
-): KnownNodeListItemDTO {
-	const node = createDummyNodeV1(publicKey);
-	node.organizationId = organizationId;
-	return {
-		current: true,
-		dateDiscovered: '2026-07-11T00:00:00.000Z',
-		lastMeasurementAt: null,
-		lastSeen: null,
-		metadataState: 'snapshot' as const,
-		node,
-		publicKey,
-		scope: 'current-validator' as const,
-		snapshotEndDate: null,
-		snapshotStartDate: '2026-07-11T00:00:00.000Z'
 	};
 }
