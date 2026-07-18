@@ -20,19 +20,34 @@ export const applyLiveScpMessage = (
 	current: LiveScpConsumerState,
 	message: Extract<LiveNetworkMessage, { type: 'scp' }>
 ): LiveScpConsumerState => ({
-	metadata: {
-		...(message.cursor !== undefined ? { cursor: message.cursor } : {}),
-		freshness: message.freshness,
-		freshnessMs: message.freshnessMs,
-		observedAt: message.observedAt,
-		source: message.source,
-		...(message.truncated !== undefined ? { truncated: message.truncated } : {})
-	},
+	metadata: resolveMetadata(current.metadata, message),
 	statements: mergeStatements(
 		current.statements,
 		message.payload.map(toGraphStatement)
 	)
 });
+
+const resolveMetadata = (
+	current: PublicScpStatementReadMetadata | null,
+	message: Extract<LiveNetworkMessage, { type: 'scp' }>
+): PublicScpStatementReadMetadata => {
+	const cursor = message.cursor ?? current?.cursor;
+	const truncated = message.truncated ?? current?.truncated;
+	const delivery = {
+		...(cursor !== undefined ? { cursor } : {}),
+		...(truncated !== undefined ? { truncated } : {})
+	};
+	if (message.freshness === 'empty' && current !== null) {
+		return { ...current, ...delivery };
+	}
+	return {
+		...delivery,
+		freshness: message.freshness,
+		freshnessMs: message.freshnessMs,
+		observedAt: message.observedAt,
+		source: message.source
+	};
+};
 
 const toGraphStatement = (
 	statement: PublicScpStatementObservation

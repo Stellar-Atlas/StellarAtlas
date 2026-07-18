@@ -59,6 +59,39 @@ describe('live SCP consumer state', () => {
 			values: [{ upgradeCount: 1, value: 'value-statement-b' }]
 		});
 	});
+
+	it('keeps the last meaningful metadata when a cursor poll has no new rows', () => {
+		const initial = applyLiveScpMessage(createLiveScpConsumerState([]), {
+			cursor: { observedAtMs: 1_783_209_601_000, statementHash: 'statement-a' },
+			freshness: 'fresh',
+			freshnessMs: 500,
+			observedAt: '2026-07-05T00:00:01.000Z',
+			payload: [createStatement('statement-a', '2026-07-05T00:00:01.000Z')],
+			source: 'postgres_canonical',
+			truncated: true,
+			type: 'scp'
+		});
+
+		const next = applyLiveScpMessage(initial, {
+			cursor: { observedAtMs: 1_783_209_602_000, statementHash: 'statement-b' },
+			freshness: 'empty',
+			freshnessMs: null,
+			observedAt: null,
+			payload: [],
+			source: 'meilisearch',
+			truncated: false,
+			type: 'scp'
+		});
+
+		expect(next.metadata).toEqual({
+			cursor: { observedAtMs: 1_783_209_602_000, statementHash: 'statement-b' },
+			freshness: 'fresh',
+			freshnessMs: 500,
+			observedAt: '2026-07-05T00:00:01.000Z',
+			source: 'postgres_canonical',
+			truncated: false
+		});
+	});
 });
 
 function createStatement(
