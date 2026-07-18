@@ -21,7 +21,6 @@ type CanonicalArchiveDataSource = Pick<DataSource, 'isInitialized' | 'query'>;
 interface CanonicalArchiveRow {
 	readonly archiveUrl: string;
 	readonly archiveUrlIdentity: string;
-	readonly revision: string;
 }
 
 export const networkSearchCanonicalArchiveSql = `
@@ -38,32 +37,8 @@ export const networkSearchCanonicalArchiveSql = `
 	select
 		identities."archiveUrlIdentity",
 		coalesce(state."archiveUrl", identities."archiveUrlIdentity")
-			as "archiveUrl",
-		concat_ws(chr(31),
-			coalesce(summary."totalObjects"::text, ''),
-			coalesce(summary."pendingObjects"::text, ''),
-			coalesce(summary."activeObjects"::text, ''),
-			coalesce(summary."verifiedObjects"::text, ''),
-			coalesce(summary."remoteFailureObjects"::text, ''),
-			coalesce(summary."workerIssueObjects"::text, ''),
-			coalesce(summary."bucketObjects"::text, ''),
-			coalesce(summary."verifiedBucketObjects"::text, ''),
-			coalesce(summary."updatedAt"::text, ''),
-			coalesce(proof."totalCheckpointProofs"::text, ''),
-			coalesce(proof."pendingCheckpointProofs"::text, ''),
-			coalesce(proof."verifiedCheckpointProofs"::text, ''),
-			coalesce(proof."mismatchCheckpointProofs"::text, ''),
-			coalesce(proof."notEvaluableCheckpointProofs"::text, ''),
-			coalesce(proof."updatedAt"::text, ''),
-			coalesce(state."archiveUrl", ''),
-			coalesce(state.status, ''),
-			coalesce(state."observedAt"::text, '')
-		) as revision
+			as "archiveUrl"
 	from identities
-	left join history_archive_evidence_root_summary summary
-		on summary."archiveUrlIdentity" = identities."archiveUrlIdentity"
-	left join history_archive_checkpoint_proof_rollup proof
-		on proof."archiveUrlIdentity" = identities."archiveUrlIdentity"
 	left join history_archive_state_snapshot state
 		on state."archiveUrlIdentity" = identities."archiveUrlIdentity"
 	order by identities."archiveUrlIdentity"
@@ -103,10 +78,8 @@ function parseRow(value: unknown): CanonicalArchiveRow {
 		value === null ||
 		!('archiveUrl' in value) ||
 		!('archiveUrlIdentity' in value) ||
-		!('revision' in value) ||
 		typeof value.archiveUrl !== 'string' ||
 		typeof value.archiveUrlIdentity !== 'string' ||
-		typeof value.revision !== 'string' ||
 		value.archiveUrl.length === 0 ||
 		value.archiveUrlIdentity.length === 0
 	) {
@@ -116,7 +89,6 @@ function parseRow(value: unknown): CanonicalArchiveRow {
 	}
 	return {
 		archiveUrl: value.archiveUrl,
-		archiveUrlIdentity: value.archiveUrlIdentity,
-		revision: value.revision
+		archiveUrlIdentity: value.archiveUrlIdentity
 	};
 }
