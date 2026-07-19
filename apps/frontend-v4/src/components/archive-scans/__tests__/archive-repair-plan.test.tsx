@@ -58,7 +58,7 @@ describe('archive repair plan', () => {
 			})
 		);
 
-		expect(markup).toContain('Verify and download replacement');
+		expect(markup).toContain('Verify and download');
 		expect(markup).toContain(`href="${downloadUrl}"`);
 		expect(markup).toContain('returns bytes only after their');
 	});
@@ -97,7 +97,7 @@ describe('archive repair plan', () => {
 			})
 		);
 
-		expect(markup).toContain('Download verified replacement');
+		expect(markup).toContain('Download verified file');
 		expect(markup).toContain(
 			`href="/v1/archive-scans/repair-artifacts/buckets/${'a'.repeat(64)}"`
 		);

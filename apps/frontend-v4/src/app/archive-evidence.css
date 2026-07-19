@@ -477,6 +477,13 @@
 	white-space: normal;
 }
 
+.archive-repair-table .primary-button {
+	display: inline-flex;
+	max-inline-size: 100%;
+	white-space: normal;
+	width: auto;
+}
+
 .archive-object-url,
 .archive-object-url a,
 .archive-object-hash,

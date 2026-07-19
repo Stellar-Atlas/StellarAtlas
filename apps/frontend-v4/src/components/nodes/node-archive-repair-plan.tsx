@@ -6,6 +6,7 @@ import {
 	formatArchiveObjectTypeLabel,
 	sanitizeArchiveEvidenceText
 } from '@domain/history-archive';
+import { formatArchiveRoot } from '@domain/known-archive-evidence';
 import { formatDateTime, formatInteger } from '@format/formatters';
 
 interface NodeArchiveRepairPlanProps {
@@ -193,7 +194,7 @@ function formatReplacementReadiness(
 		return (
 			<>
 				<a className="primary-button" href={artifact.downloadUrl}>
-					Download verified replacement
+					Download verified file
 				</a>
 				<small>
 					Local bytes reverified {formatDateTime(artifact.provenAt)}
@@ -206,7 +207,7 @@ function formatReplacementReadiness(
 		return (
 			<>
 				<a className="primary-button" href={artifact.downloadUrl}>
-					Verify and download replacement
+					Verify and download
 				</a>
 				<small>
 					The source proof is current as of {formatDateTime(artifact.provenAt)}.
@@ -270,7 +271,7 @@ function CandidateProof({
 	const proof = candidate.proof;
 	return (
 		<small>
-			{sanitizeArchiveEvidenceText(candidate.archiveUrlIdentity)} / checkpoint{' '}
+			{formatArchiveRoot(candidate.archiveUrl)} / checkpoint{' '}
 			{formatInteger(proof.checkpointLedger)} / proof {proof.proofId} v
 			{proof.proofVersion} / {proof.anchor.kind} ({proof.anchor.sourceCount}{' '}
 			{proof.anchor.sourceCount === 1 ? 'source' : 'sources'}) / SHA-256{' '}
