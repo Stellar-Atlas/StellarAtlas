@@ -23,6 +23,10 @@ export interface NodeRouterConfig {
 
 const nodeRouterWrapper = (config: NodeRouterConfig): Router => {
 	const nodeRouter = express.Router();
+	nodeRouter.use((_req, res, next) => {
+		res.setHeader('X-StellarAtlas-Inventory-Scope', 'current-network');
+		next();
+	});
 
 	nodeRouter.get(['/'], async (req: express.Request, res: express.Response) => {
 		res.setHeader('Cache-Control', 'public, max-age=' + 30); // cache header

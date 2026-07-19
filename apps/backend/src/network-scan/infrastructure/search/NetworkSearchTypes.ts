@@ -10,6 +10,8 @@ export type NetworkSearchEntityType = 'archive-root' | 'node' | 'organization';
 export type NetworkSearchArchiveStatus = 'error' | 'ok' | 'unknown';
 export type NetworkSearchDocumentScope =
 	KnownNodeRecordScope | 'archive-root' | 'current-organization';
+export type NetworkSearchQueryScope =
+	KnownNodeScope | 'archive-root' | 'current-organization';
 export type NetworkSearchRecordState =
 	'current' | 'historical' | 'identity-only';
 export type NetworkSearchFreshness = 'fresh' | 'stale';
@@ -106,7 +108,7 @@ export interface NetworkSearchRequest {
 	readonly offset: number;
 	readonly organizationId?: string;
 	readonly query: string;
-	readonly scope: KnownNodeScope;
+	readonly scope: NetworkSearchQueryScope;
 	readonly topTier?: boolean;
 	readonly validating?: boolean;
 	readonly validator?: boolean;
@@ -171,6 +173,6 @@ export interface NetworkSearchResponse {
 	readonly pagination: NetworkSearchPagination;
 	readonly query: string;
 	readonly readModel: NetworkSearchReadModel;
-	readonly scope: KnownNodeScope;
+	readonly scope: NetworkSearchQueryScope;
 	readonly source: 'meilisearch' | 'postgres_canonical';
 }

@@ -1,8 +1,8 @@
-import type { PublicKnownNodeScope } from './known-network-types';
 import type {
 	PublicSearchArchiveStatus,
 	PublicSearchEntityType,
-	PublicSearchFacetName
+	PublicSearchFacetName,
+	PublicSearchQueryScope
 } from './search-types';
 
 export interface SearchNetworkFilters {
@@ -12,7 +12,7 @@ export interface SearchNetworkFilters {
 	entityType?: PublicSearchEntityType;
 	fullValidator?: boolean;
 	offset?: number;
-	scope?: PublicKnownNodeScope;
+	scope?: PublicSearchQueryScope;
 	topTier?: boolean;
 	validating?: boolean;
 	validator?: boolean;

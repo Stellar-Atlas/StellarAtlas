@@ -37,10 +37,11 @@ async function NodesRouteContent({
 		organizations: network.organizations
 	};
 	return (
-		<main className="shell">
+		<main className="shell" data-inventory-scope={knownNodes.scope}>
 			<PageHeading
 				description="Browse validators, listener nodes, reported software versions, geodata, availability, and current health signals."
 				eyebrow={network.name}
+				scopeContext={{ kind: 'node-inventory', scope: knownNodes.scope }}
 				title="Nodes"
 				aside={
 					<div className="heading-metrics">

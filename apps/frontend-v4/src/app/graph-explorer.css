@@ -95,6 +95,15 @@ body:has(.graph-workspace:not(.graph-loading-workspace))
 	font-size: 1.55rem;
 }
 
+.graph-summary .scope-context {
+	color: #aebdcd;
+	margin-block-start: 6px;
+}
+
+.graph-summary .scope-context data {
+	color: #e7edf5;
+}
+
 .graph-summary * {
 	min-inline-size: 0;
 }

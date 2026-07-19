@@ -20,12 +20,9 @@ describe('NetworkRouter.integration', () => {
 	it('should expose current network snapshots with frontend-aligned cache age', async () => {
 		const config = mockDeep<NetworkRouterConfig>();
 		config.searchConfig = { indexName: 'test_network_entities' };
-		config.getNetwork.execute.mockResolvedValue(
-			ok({
-				name: 'Public Stellar Network'
-			} as never)
-		);
-
+		const network = createDummyNetworkV1();
+		network.name = 'Public Stellar Network';
+		config.getNetwork.execute.mockResolvedValue(ok(network));
 		const app = express();
 		app.use('/network', networkRouter(config));
 
@@ -35,6 +32,7 @@ describe('NetworkRouter.integration', () => {
 			.expect('Cache-Control', 'public, max-age=10')
 			.expect((response) => {
 				expect(response.body.name).toBe('Public Stellar Network');
+				expect(response.body.scope).toBe('current-network');
 			});
 	});
 
@@ -58,7 +56,6 @@ describe('NetworkRouter.integration', () => {
 			[node],
 			[organization]
 		);
-
 		const app = express();
 		app.use('/network', networkRouter(config));
 
@@ -224,7 +221,6 @@ describe('NetworkRouter.integration', () => {
 			[node],
 			[organization]
 		);
-
 		const app = express();
 		app.use('/network', networkRouter(config));
 
@@ -234,6 +230,37 @@ describe('NetworkRouter.integration', () => {
 			.expect((response) => {
 				expect(response.body.hits).toHaveLength(1);
 				expect(response.body.hits[0].entityType).toBe('node');
+			});
+	});
+
+	it('filters current organizations by the scope emitted by the index', async () => {
+		const organization = createDummyOrganizationV1();
+		organization.id = 'current-org';
+		organization.name = 'Current Organization';
+
+		const config = mockDeep<NetworkRouterConfig>();
+		config.searchConfig = { indexName: 'test_network_entities' };
+		configureSearchInventory(
+			config,
+			createDummyNetworkV1([], [organization]),
+			[],
+			[organization]
+		);
+
+		const app = express();
+		app.use('/network', networkRouter(config));
+
+		await request(app)
+			.get('/network/search/organizations?q=current&scope=current-organization')
+			.expect(200)
+			.expect((response) => {
+				expect(response.body.scope).toBe('current-organization');
+				expect(response.body.hits).toHaveLength(1);
+				expect(response.body.hits[0]).toMatchObject({
+					entityId: 'current-org',
+					entityType: 'organization',
+					scope: 'current-organization'
+				});
 			});
 	});
 
@@ -302,6 +329,7 @@ describe('NetworkRouter.integration', () => {
 		config.getKnownArchiveEvidence.execute.mockResolvedValue(
 			ok({ roots: [] } as never)
 		);
+		setCanonicalArchiveSource(config);
 
 		const app = express();
 		app.use('/network', networkRouter(config));
@@ -385,6 +413,7 @@ function configureSearchInventory(
 	nodes: ReturnType<typeof createDummyNodeV1>[],
 	organizations: ReturnType<typeof createDummyOrganizationV1>[]
 ): void {
+	setCanonicalArchiveSource(config);
 	config.getNetwork.execute.mockResolvedValue(ok(network));
 	config.getKnownNodes.executeAll.mockResolvedValue(
 		ok({
@@ -425,6 +454,19 @@ function configureSearchInventory(
 	config.getKnownArchiveEvidence.execute.mockResolvedValue(
 		ok({ roots: [] } as never)
 	);
+}
+
+function setCanonicalArchiveSource(
+	config: DeepMockProxy<NetworkRouterConfig>
+): void {
+	Object.assign(config, {
+		networkSearchCanonicalArchiveSource: {
+			load: jest.fn().mockResolvedValue({
+				revision: 'test-canonical-archive-revision',
+				roots: []
+			})
+		}
+	});
 }
 
 function knownNode(

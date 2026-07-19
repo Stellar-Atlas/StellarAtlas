@@ -6,6 +6,8 @@ export type PublicSearchDocumentScope =
 	| Exclude<PublicKnownNodeScope, 'all-known'>
 	| 'archive-root'
 	| 'current-organization';
+export type PublicSearchQueryScope =
+	PublicKnownNodeScope | 'archive-root' | 'current-organization';
 export type PublicSearchRecordState =
 	'current' | 'historical' | 'identity-only';
 export type PublicSearchFacetName =
@@ -79,6 +81,6 @@ export interface PublicSearchResponse {
 		readonly schemaVersion: string;
 		readonly source: PublicSearchSource;
 	};
-	readonly scope: PublicKnownNodeScope;
+	readonly scope: PublicSearchQueryScope;
 	readonly source: PublicSearchSource;
 }

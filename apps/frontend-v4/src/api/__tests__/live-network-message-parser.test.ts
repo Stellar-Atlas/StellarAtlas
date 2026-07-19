@@ -180,6 +180,7 @@ function createStatement(): PublicScpStatementObservation {
 
 function createNetwork() {
 	return {
+		scope: 'current-network',
 		id: 'public',
 		latestLedger: '63326550',
 		name: 'Public network',

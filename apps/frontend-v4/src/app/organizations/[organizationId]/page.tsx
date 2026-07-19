@@ -32,9 +32,8 @@ async function OrganizationDetailRouteContent({
 		fetchKnownOrganizations({ limit: 25, scope: 'all-known' }, { revalidate }),
 		fetchKnownOrganization(decodedOrganizationId, { revalidate })
 	]);
-	const organization = knownOrganization?.organization;
-
-	if (!organization) notFound();
+	if (!knownOrganization) notFound();
+	const organization = knownOrganization.organization;
 	const organizations = knownOrganizations.organizations.map(
 		(candidate) => candidate.organization
 	);
@@ -55,10 +54,14 @@ async function OrganizationDetailRouteContent({
 		</ArchiveEvidenceErrorBoundary>
 	);
 	return (
-		<main className="shell">
+		<main className="shell" data-inventory-scope={knownOrganizations.scope}>
 			<PageHeading
 				description="Explore organizations, validator sets, stored stellar.toml state, public ledger API URLs, and quorum-path availability."
 				eyebrow={network.name}
+				scopeContext={{
+					kind: 'organization-inventory',
+					scope: knownOrganizations.scope
+				}}
 				title="Organizations"
 				aside={
 					<div className="heading-metrics">
@@ -84,6 +87,10 @@ async function OrganizationDetailRouteContent({
 			<RouteModal
 				closeHref="/organizations"
 				eyebrow="Organization"
+				scopeContext={{
+					kind: 'organization-record',
+					scope: knownOrganization.scope
+				}}
 				title={organization.name ?? organization.dba ?? organization.homeDomain}
 			>
 				<OrganizationDetail

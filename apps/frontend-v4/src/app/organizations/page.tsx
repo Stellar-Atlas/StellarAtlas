@@ -35,10 +35,14 @@ async function OrganizationsRouteContent({
 	const topOrganizations = getTopOrganizations(organizations);
 
 	return (
-		<main className="shell">
+		<main className="shell" data-inventory-scope={knownOrganizations.scope}>
 			<PageHeading
 				description="Explore organizations, validator sets, stored stellar.toml state, public ledger API URLs, and quorum-path availability."
 				eyebrow={network.name}
+				scopeContext={{
+					kind: 'organization-inventory',
+					scope: knownOrganizations.scope
+				}}
 				title="Organizations"
 				aside={
 					<div className="heading-metrics">

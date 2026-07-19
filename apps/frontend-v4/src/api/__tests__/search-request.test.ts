@@ -33,4 +33,26 @@ describe('network search request', () => {
 			validator: 'true'
 		});
 	});
+
+	it('serializes organization and archive-root document scopes', () => {
+		const organizationUrl = new URL(
+			buildNetworkSearchPath('stellar', {
+				entityType: 'organization',
+				scope: 'current-organization'
+			}),
+			'https://frontend.example'
+		);
+		const archiveUrl = new URL(
+			buildNetworkSearchPath('history', {
+				entityType: 'archive-root',
+				scope: 'archive-root'
+			}),
+			'https://frontend.example'
+		);
+
+		expect(organizationUrl.searchParams.get('scope')).toBe(
+			'current-organization'
+		);
+		expect(archiveUrl.searchParams.get('scope')).toBe('archive-root');
+	});
 });

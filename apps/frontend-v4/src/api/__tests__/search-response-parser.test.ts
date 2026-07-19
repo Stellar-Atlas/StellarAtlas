@@ -183,6 +183,38 @@ describe('search response parser', () => {
 			evidenceProvenance: 'postgres_canonical'
 		});
 	});
+
+	it.each(['current-organization', 'archive-root'] as const)(
+		'accepts %s as an explicit search response scope',
+		(scope) => {
+			const parsed = parsePublicSearchResponse({
+				estimatedTotalHits: 0,
+				facets: emptyFacets(),
+				hits: [],
+				indexedNetworkTime: '2026-07-11T00:00:00.000Z',
+				pagination: {
+					hasMore: false,
+					limit: 8,
+					offset: 0,
+					total: 0,
+					totalIsExact: true
+				},
+				query: '',
+				readModel: {
+					canonicalCursor: 'cursor',
+					fallbackReason: null,
+					freshness: 'fresh',
+					observedAt: '2026-07-11T00:00:00.000Z',
+					schemaVersion: 'v1',
+					source: 'meilisearch'
+				},
+				scope,
+				source: 'meilisearch'
+			});
+
+			expect(parsed?.scope).toBe(scope);
+		}
+	);
 });
 
 function emptyFacets() {

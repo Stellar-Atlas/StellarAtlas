@@ -22,16 +22,17 @@ import { createScpStatementSseSubscriber } from './ScpStatementSseSubscriber.js'
 import type {
 	NetworkSearchArchiveStatus,
 	NetworkSearchConfig,
-	NetworkSearchEntityType
+	NetworkSearchEntityType,
+	NetworkSearchQueryScope
 } from '../search/NetworkSearchTypes.js';
 import type { Logger } from '@core/services/Logger.js';
 import { GetKnownNodes } from '../../use-cases/get-known-nodes/GetKnownNodes.js';
 import { GetKnownOrganizations } from '../../use-cases/get-known-organizations/GetKnownOrganizations.js';
-import type { KnownNodeScope } from '../../use-cases/known-network-scope/KnownNetworkScope.js';
 import type { GetKnownArchiveEvidence } from '@history-scan-coordinator/use-cases/get-known-archive-evidence/GetKnownArchiveEvidence.js';
 import { GetScpEvidence } from '../../use-cases/get-scp-evidence/GetScpEvidence.js';
 import { scpEvidenceRouter } from './ScpEvidenceRouter.js';
 import type { NetworkScanRepository } from '../../domain/network/scan/NetworkScanRepository.js';
+import type { NetworkSearchCanonicalArchiveSource } from '../search/NetworkSearchCanonicalArchiveSource.js';
 
 export interface NetworkRouterConfig {
 	getNetwork: GetNetwork;
@@ -44,14 +45,13 @@ export interface NetworkRouterConfig {
 	getKnownArchiveEvidence: GetKnownArchiveEvidence;
 	getScpStatements: GetScpStatements;
 	logger?: Logger;
+	networkSearchCanonicalArchiveSource?: NetworkSearchCanonicalArchiveSource;
 	networkScanRepository: NetworkScanRepository;
 	searchConfig: NetworkSearchConfig;
 }
-
 export interface NetworkRouter extends Router {
 	stopNetworkSearchProjection(): void;
 }
-
 const isSearchEntityType = (
 	value: string | undefined
 ): value is NetworkSearchEntityType =>
@@ -62,12 +62,16 @@ const isSearchArchiveStatus = (
 ): value is NetworkSearchArchiveStatus =>
 	value === 'error' || value === 'ok' || value === 'unknown';
 
-const isSearchScope = (value: string | undefined): value is KnownNodeScope =>
+const isSearchScope = (
+	value: string | undefined
+): value is NetworkSearchQueryScope =>
 	value === 'current-validator' ||
 	value === 'listener' ||
 	value === 'public-key-only' ||
 	value === 'archived' ||
-	value === 'all-known';
+	value === 'all-known' ||
+	value === 'archive-root' ||
+	value === 'current-organization';
 
 const networkRouterWrapper = (config: NetworkRouterConfig): NetworkRouter => {
 	const networkRouter = express.Router();
@@ -78,6 +82,7 @@ const networkRouterWrapper = (config: NetworkRouterConfig): NetworkRouter => {
 		config.logger
 	);
 	const networkSearchInventory = new NetworkSearchInventoryLoader({
+		canonicalArchiveSource: config.networkSearchCanonicalArchiveSource,
 		getKnownArchiveEvidence: config.getKnownArchiveEvidence,
 		getKnownNodes: config.getKnownNodes,
 		getKnownOrganizations: config.getKnownOrganizations,

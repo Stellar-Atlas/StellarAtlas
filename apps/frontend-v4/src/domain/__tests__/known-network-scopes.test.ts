@@ -5,11 +5,14 @@ import type {
 	PublicKnownOrganizationListItem
 } from '../../api/known-network-types';
 import {
+	currentValidatingNetworkScopeLabel,
 	defaultNodeInventoryFilter,
 	defaultOrganizationInventoryFilter,
 	matchesNodeInventoryFilter,
 	matchesOrganizationInventoryFilter,
-	nodeInventoryFilterLabels
+	nodeInventoryFilterLabels,
+	nodeRecordScopeLabels,
+	organizationRecordScopeLabels
 } from '../known-network-scopes';
 
 describe('known network scopes', () => {
@@ -19,6 +22,15 @@ describe('known network scopes', () => {
 		expect(nodeInventoryFilterLabels['public-key-only']).toBe(
 			'Public-key only'
 		);
+	});
+
+	it('uses explicit labels for network and canonical record scopes', () => {
+		expect(currentValidatingNetworkScopeLabel).toBe(
+			'Current validating network'
+		);
+		expect(nodeRecordScopeLabels.archived).toBe('Archived / inactive');
+		expect(nodeRecordScopeLabels.listener).toBe('Current listener');
+		expect(organizationRecordScopeLabels.current).toBe('Current organization');
 	});
 
 	it('uses canonical record scopes rather than inferring archived state', () => {

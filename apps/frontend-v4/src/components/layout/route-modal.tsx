@@ -3,11 +3,17 @@
 import { useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import {
+	getScopeContextDataAttributes,
+	ScopeContext,
+	type ScopeContextProps
+} from './scope-context';
 
 interface RouteModalProps {
 	readonly children: React.ReactNode;
 	readonly closeHref: string;
 	readonly eyebrow: string;
+	readonly scopeContext?: ScopeContextProps;
 	readonly title: string;
 }
 
@@ -31,6 +37,7 @@ export function RouteModal({
 	children,
 	closeHref,
 	eyebrow,
+	scopeContext,
 	title
 }: RouteModalProps): React.JSX.Element {
 	const router = useRouter();
@@ -89,6 +96,7 @@ export function RouteModal({
 				aria-labelledby={titleId}
 				aria-modal="true"
 				className="route-modal"
+				{...(scopeContext ? getScopeContextDataAttributes(scopeContext) : {})}
 				ref={dialogRef}
 				role="dialog"
 				tabIndex={-1}
@@ -97,6 +105,7 @@ export function RouteModal({
 					<div>
 						<p className="eyebrow">{eyebrow}</p>
 						<h2 id={titleId}>{title}</h2>
+						{scopeContext ? <ScopeContext {...scopeContext} /> : null}
 					</div>
 					<Link
 						aria-label="Close details"

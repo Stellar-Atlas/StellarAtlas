@@ -6,6 +6,7 @@ export const isRecord = (value: unknown): value is Record<string, unknown> =>
 export const isPublicNetwork = (value: unknown): value is PublicNetwork => {
 	if (!isRecord(value)) return false;
 	return (
+		value.scope === 'current-network' &&
 		hasStrings(value, ['id', 'latestLedger', 'name', 'passPhrase', 'time']) &&
 		isNetworkStatistics(value.statistics) &&
 		Array.isArray(value.nodes) &&

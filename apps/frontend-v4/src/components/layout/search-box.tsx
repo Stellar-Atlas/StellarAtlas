@@ -2,10 +2,10 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import type { PublicKnownNodeScope } from '../../api/known-network-types';
 import type {
 	PublicSearchFacetName,
 	PublicSearchHit,
+	PublicSearchQueryScope,
 	PublicSearchResponse
 } from '../../api/search-types';
 import {
@@ -38,9 +38,11 @@ const booleanFacetLabels: Partial<Record<PublicSearchFacetName, string>> = {
 	validator: 'Validators'
 };
 
-const scopeLabels: Record<PublicKnownNodeScope, string> = {
+const scopeLabels: Record<PublicSearchQueryScope, string> = {
 	'all-known': 'All known',
+	'archive-root': 'Archive roots',
 	archived: 'Archived / inactive',
+	'current-organization': 'Current organizations',
 	'current-validator': 'Current validators',
 	listener: 'Current listeners',
 	'public-key-only': 'Public-key only'
@@ -84,13 +86,15 @@ const getFacetLabel = (name: PublicSearchFacetName, value: string): string => {
 				: 'Organizations';
 	if (name === 'archiveStatus') return `Archive ${value}`;
 	if (name === 'countryCode') return value.toUpperCase();
-	if (name === 'scope' && isKnownNodeScope(value)) return scopeLabels[value];
+	if (name === 'scope' && isSearchScope(value)) return scopeLabels[value];
 	return booleanFacetLabels[name] ?? value;
 };
 
-const isKnownNodeScope = (value: string): value is PublicKnownNodeScope =>
+const isSearchScope = (value: string): value is PublicSearchQueryScope =>
 	value === 'all-known' ||
+	value === 'archive-root' ||
 	value === 'archived' ||
+	value === 'current-organization' ||
 	value === 'current-validator' ||
 	value === 'listener' ||
 	value === 'public-key-only';
@@ -126,7 +130,7 @@ const selectFacetOptions = (
 				name in booleanFacetLabels
 					? facet.value === 'true'
 					: name === 'scope'
-						? isKnownNodeScope(facet.value)
+						? isSearchScope(facet.value)
 						: facet.count > 0
 			)
 			.slice(0, name === 'countryCode' ? 3 : 4)
@@ -163,7 +167,7 @@ const toggleFacetFilter = (
 	else if (facet.name === 'archiveStatus' && isArchiveStatus(facet.value))
 		next.archiveStatus = facet.value;
 	else if (facet.name === 'countryCode') next.countryCode = facet.value;
-	else if (facet.name === 'scope' && isKnownNodeScope(facet.value))
+	else if (facet.name === 'scope' && isSearchScope(facet.value))
 		next.scope = facet.value;
 	else if (facet.name === 'active') next.active = facet.value === 'true';
 	else if (facet.name === 'fullValidator')
@@ -288,7 +292,7 @@ export function SearchBox(): React.JSX.Element {
 }
 
 function getSearchResultScopeLabel(hit: SearchOption): string {
-	if (hit.scope === 'current-organization') return 'Current organization';
 	if (hit.scope === 'archive-root') return 'Archive root';
+	if (hit.scope === 'current-organization') return 'Current organization';
 	return scopeLabels[hit.scope];
 }

@@ -7,6 +7,7 @@ import type {
 	Graph3DOrganization
 } from './model-3d';
 import { ScpAnalysisPanel } from './scp-analysis-panel';
+import { ScopeContext } from '../layout/scope-context';
 
 interface GraphSummaryPanelProps {
 	activeOrganization: Graph3DOrganization | null;
@@ -37,6 +38,7 @@ export function GraphSummaryPanel({
 		<section className="graph-overlay graph-summary">
 			<p className="eyebrow">{liveNetwork.name}</p>
 			<h1>Network topology</h1>
+			<ScopeContext kind="quorum" scope={liveNetwork.scope} />
 			<div className="summary-grid">
 				<div>
 					<strong>

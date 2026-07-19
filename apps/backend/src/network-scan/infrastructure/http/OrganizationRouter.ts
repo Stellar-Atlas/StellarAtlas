@@ -25,6 +25,10 @@ const organizationRouterWrapper = (
 	config: OrganizationRouterConfig
 ): Router => {
 	const organizationRouter = express.Router();
+	organizationRouter.use((_req, res, next) => {
+		res.setHeader('X-StellarAtlas-Inventory-Scope', 'current-network');
+		next();
+	});
 
 	organizationRouter.get(
 		['/'],

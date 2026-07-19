@@ -391,6 +391,7 @@ function createNetwork(nodes: NodeV1[]): NetworkV1 {
 		nodes,
 		organizations: [],
 		passPhrase: 'Public Global Stellar Network ; September 2015',
+		scope: 'current-network',
 		scc: [],
 		statistics: {
 			hasQuorumIntersection: true,

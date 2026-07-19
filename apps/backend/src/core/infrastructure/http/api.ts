@@ -117,6 +117,7 @@ import { frontendV4ProxyMiddleware } from './FrontendV4Proxy.js';
 import { mountExplorerRoutes } from './ExplorerRoutes.js';
 import { swaggerDocsOptions } from './SwaggerDocsOptions.js';
 import { createPublicOpenApiDocument } from './PublicOpenApiDocument.js';
+import { corsMiddleware } from './CorsMiddleware.js';
 
 let server: Server;
 const serverSockets = new Set<Socket>();
@@ -448,27 +449,6 @@ const listen = async () => {
 };
 
 listen();
-
-function corsMiddleware(
-	req: express.Request,
-	res: express.Response,
-	next: express.NextFunction
-): void {
-	res.header('Access-Control-Allow-Origin', '*');
-	res.header(
-		'Access-Control-Allow-Headers',
-		'Origin, X-Requested-With, Content-Type, Accept, Authorization'
-	);
-	res.header(
-		'Access-Control-Allow-Methods',
-		'GET, POST, PUT, PATCH, DELETE, OPTIONS'
-	);
-	if (req.method === 'OPTIONS') {
-		res.sendStatus(204);
-		return;
-	}
-	next();
-}
 
 function trackServerSockets(httpServer: Server): void {
 	httpServer.on('connection', (socket) => {

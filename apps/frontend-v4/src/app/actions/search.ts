@@ -1,8 +1,8 @@
 'use server';
 
-import type { PublicKnownNodeScope } from '../../api/known-network-types';
 import type {
 	PublicSearchFacets,
+	PublicSearchQueryScope,
 	PublicSearchResponse
 } from '../../api/search-types';
 import { parsePublicSearchResponse } from '../../api/search-response-parser';
@@ -37,7 +37,7 @@ const emptyFacets = (): PublicSearchFacets => ({
 
 const emptySearchResponse = (
 	query: string,
-	scope: PublicKnownNodeScope
+	scope: PublicSearchQueryScope
 ): PublicSearchResponse => ({
 	estimatedTotalHits: 0,
 	facets: emptyFacets(),

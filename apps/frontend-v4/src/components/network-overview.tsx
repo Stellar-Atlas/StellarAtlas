@@ -37,10 +37,14 @@ export function NetworkOverview({
 	);
 
 	return (
-		<main className="shell">
+		<main className="shell" data-network-scope={network.scope}>
 			<PageHeading
 				description="Live network topology, validator health, organization coverage, and observed Stellar Core versions."
 				eyebrow={network.name}
+				scopeContext={{
+					kind: 'network',
+					scope: network.scope
+				}}
 				title="Network operations"
 			/>
 

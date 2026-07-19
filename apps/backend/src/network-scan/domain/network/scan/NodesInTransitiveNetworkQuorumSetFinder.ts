@@ -12,16 +12,17 @@ export class NodesInTransitiveNetworkQuorumSetFinder {
 		nodes: Node[],
 		networkQuorumSetConfiguration: NetworkQuorumSetConfiguration
 	): Node[] {
+		const validatingNodes = nodes.filter((node) => node.isValidating());
 		const baseQuorumSet = NetworkQuorumSetConfigurationMapper.toBaseQuorumSet(
 			networkQuorumSetConfiguration
 		);
-		const quorumSetMap = this.getNodesToQuorumSetMap(nodes);
+		const quorumSetMap = this.getNodesToQuorumSetMap(validatingNodes);
 		const transitiveQuorumSet = TransitiveQuorumSetFinder.find(
 			baseQuorumSet,
 			quorumSetMap
 		);
 
-		return nodes.filter((node) =>
+		return validatingNodes.filter((node) =>
 			transitiveQuorumSet.has(node.publicKey.value)
 		);
 	}

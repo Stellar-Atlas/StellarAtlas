@@ -286,6 +286,29 @@ small,
 	max-inline-size: 760px;
 }
 
+.scope-context {
+	align-items: baseline;
+	color: var(--muted);
+	display: flex;
+	flex-wrap: wrap;
+	font-size: 0.78rem;
+	gap: 4px;
+	margin-block-start: 7px;
+}
+
+.scope-context span {
+	font-weight: 700;
+}
+
+.scope-context data {
+	color: var(--ink);
+	font-weight: 800;
+}
+
+.scope-context-separator {
+	margin-inline: 2px;
+}
+
 .heading-metrics {
 	background: var(--panel);
 	border: 1px solid var(--border);

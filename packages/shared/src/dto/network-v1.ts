@@ -31,6 +31,7 @@ export interface NetworkStatisticsV1 {
 }
 
 export interface NetworkV1 {
+	scope: 'current-network';
 	time: string;
 	latestLedger: string;
 	statistics: NetworkStatisticsV1;
@@ -52,6 +53,12 @@ export const NetworkV1Schema: JSONSchemaType<NetworkV1> = {
 	$id: 'network-v1.json',
 	$schema: 'http://json-schema.org/draft-07/schema#',
 	properties: {
+		scope: {
+			type: 'string',
+			enum: ['current-network'],
+			description:
+				'Current scanned network snapshot used for live topology and quorum analysis'
+		},
 		time: {
 			format: 'date-time',
 			type: 'string',
@@ -138,6 +145,7 @@ export const NetworkV1Schema: JSONSchemaType<NetworkV1> = {
 	},
 	type: 'object',
 	required: [
+		'scope',
 		'nodes',
 		'organizations',
 		'time',

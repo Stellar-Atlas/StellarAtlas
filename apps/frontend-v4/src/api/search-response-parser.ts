@@ -1,4 +1,3 @@
-import type { PublicKnownNodeScope } from './known-network-types';
 import type {
 	PublicSearchDocumentScope,
 	PublicSearchFacetName,
@@ -7,6 +6,7 @@ import type {
 	PublicSearchHit,
 	PublicSearchRecordState,
 	PublicSearchResultSource,
+	PublicSearchQueryScope,
 	PublicSearchResponse,
 	PublicSearchSource
 } from './search-types';
@@ -40,12 +40,14 @@ const isSource = (value: unknown): value is PublicSearchSource =>
 const isResultSource = (value: unknown): value is PublicSearchResultSource =>
 	value === 'meilisearch' || value === 'postgres_canonical';
 
-const isScope = (value: unknown): value is PublicKnownNodeScope =>
+const isScope = (value: unknown): value is PublicSearchQueryScope =>
 	value === 'current-validator' ||
 	value === 'listener' ||
 	value === 'public-key-only' ||
 	value === 'archived' ||
-	value === 'all-known';
+	value === 'all-known' ||
+	value === 'archive-root' ||
+	value === 'current-organization';
 
 const isDocumentScope = (value: unknown): value is PublicSearchDocumentScope =>
 	value === 'current-validator' ||

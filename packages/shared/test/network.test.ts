@@ -125,6 +125,7 @@ it('should detect blocked nodes on hydration and after recalculation', function 
 
 test('fromJSON', () => {
 	const networkV1: NetworkV1 = {
+		scope: 'current-network',
 		nodes: [
 			node1.toJSON(),
 			node2.toJSON(),

@@ -315,7 +315,7 @@ export function GraphExplorer({
 	};
 
 	return (
-		<main className="graph-workspace">
+		<main className="graph-workspace" data-network-scope={network.scope}>
 			<div className="graph-canvas" ref={containerRef} />
 			{graphStatus === 'error' && (
 				<section className="graph-overlay graph-runtime-status">

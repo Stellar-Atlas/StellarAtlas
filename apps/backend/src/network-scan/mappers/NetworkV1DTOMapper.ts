@@ -17,6 +17,7 @@ export class NetworkV1DTOMapper {
 		network: Network | null
 	): NetworkV1 {
 		return {
+			scope: 'current-network',
 			id: networkId,
 			name: networkName,
 			passPhrase: networkPassphrase,

@@ -1,11 +1,15 @@
 import type {
 	PublicKnownNodeListItem,
+	PublicKnownNodeRecordScope,
 	PublicKnownNodeScope,
 	PublicKnownOrganizationListItem,
+	PublicKnownOrganizationRecordScope,
 	PublicKnownOrganizationScope
 } from '../api/known-network-types';
 
 export type NodeInventoryFilter = PublicKnownNodeScope;
+
+export const currentValidatingNetworkScopeLabel = 'Current validating network';
 
 export const defaultNodeInventoryFilter: NodeInventoryFilter =
 	'current-validator';
@@ -38,6 +42,22 @@ export const organizationInventoryFilterLabels: Record<
 	'all-known': 'All known',
 	archived: 'Archived',
 	current: 'Current'
+};
+
+export const nodeRecordScopeLabels: Record<PublicKnownNodeRecordScope, string> =
+	{
+		archived: 'Archived / inactive',
+		'current-validator': 'Current validator',
+		listener: 'Current listener',
+		'public-key-only': 'Public-key only'
+	};
+
+export const organizationRecordScopeLabels: Record<
+	PublicKnownOrganizationRecordScope,
+	string
+> = {
+	archived: 'Archived organization',
+	current: 'Current organization'
 };
 
 export function isNodeInventoryFilter(

@@ -6,6 +6,7 @@ export function createDummyNetworkV1(
 	organizations: OrganizationV1[] = []
 ): NetworkV1 {
 	return {
+		scope: 'current-network',
 		time: new Date().toISOString(),
 		scc: [],
 		name: 'name',
