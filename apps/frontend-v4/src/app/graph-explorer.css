@@ -402,6 +402,10 @@ body:has(.graph-workspace:not(.graph-loading-workspace))
 		inline-size: min(300px, calc(100vw - 24px));
 	}
 
+	.summary-grid {
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+	}
+
 	.scp-observation-orbit {
 		inset-block: auto 12px;
 		inset-inline: 12px;
