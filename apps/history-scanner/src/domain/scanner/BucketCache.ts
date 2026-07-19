@@ -1,6 +1,14 @@
 import { createReadStream, createWriteStream } from 'node:fs';
 import type { Dirent } from 'node:fs';
-import { mkdir, readdir, rename, rm, stat, utimes } from 'node:fs/promises';
+import {
+	mkdir,
+	readdir,
+	rename,
+	rm,
+	stat,
+	utimes,
+	writeFile
+} from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { PassThrough, Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
@@ -29,7 +37,9 @@ export class BucketCacheFailure extends Error {
 }
 
 export class BucketCache {
-	private pruneLock: Promise<void> = Promise.resolve();
+	private maintenance: Promise<void> | null = null;
+	private static readonly maintenanceIntervalMs = 60 * 60 * 1000;
+	private static readonly staleLockMs = 2 * 60 * 60 * 1000;
 
 	constructor(
 		private readonly rootDirectory: string,
@@ -92,8 +102,8 @@ export class BucketCache {
 			}
 
 			const temporaryStats = await stat(temporaryPath);
-			await this.pruneFor(temporaryStats.size);
 			await this.moveIntoCache(temporaryPath, finalPath);
+			this.scheduleMaintenance(temporaryStats.size);
 			return ok(undefined);
 		} catch (error) {
 			await rm(temporaryPath, { force: true }).catch(() => undefined);
@@ -113,33 +123,96 @@ export class BucketCache {
 		await rename(temporaryPath, finalPath);
 	}
 
-	private async pruneFor(incomingBytes: number): Promise<void> {
-		const prune = async (): Promise<void> => {
-			const entries = await this.listCacheEntries(this.rootDirectory);
-			let totalBytes = entries.reduce((total, entry) => total + entry.size, 0);
-			if (totalBytes + incomingBytes <= this.maxBytes) return;
-
-			const entriesByAge = [...entries].sort((a, b) => a.mtimeMs - b.mtimeMs);
-			let removedFiles = 0;
-			for (const entry of entriesByAge) {
-				if (totalBytes + incomingBytes <= this.maxBytes) break;
-				await rm(entry.path, { force: true });
-				totalBytes -= entry.size;
-				removedFiles++;
-			}
-
-			if (removedFiles > 0) {
-				this.logger.info('Pruned history bucket cache', {
-					removedFiles,
-					cacheBytes: totalBytes,
-					incomingBytes,
-					maxBytes: this.maxBytes
+	private scheduleMaintenance(incomingBytes: number): void {
+		if (this.maintenance !== null) return;
+		this.maintenance = this.runMaintenance(incomingBytes)
+			.catch((error) => {
+				this.logger.warn('History bucket cache maintenance failed', {
+					error: mapUnknownToError(error).message
 				});
-			}
-		};
+			})
+			.finally(() => {
+				this.maintenance = null;
+			});
+	}
 
-		this.pruneLock = this.pruneLock.then(prune, prune);
-		await this.pruneLock;
+	private async runMaintenance(incomingBytes: number): Promise<void> {
+		await mkdir(this.rootDirectory, { recursive: true });
+		if (await this.wasRecentlyMaintained()) return;
+		if (!(await this.acquireMaintenanceLock())) return;
+
+		try {
+			if (await this.wasRecentlyMaintained()) return;
+			await this.pruneFor(incomingBytes);
+			await writeFile(this.maintenanceMarkerPath(), '', { flag: 'w' });
+		} finally {
+			await rm(this.maintenanceLockPath(), {
+				force: true,
+				recursive: true
+			});
+		}
+	}
+
+	private async wasRecentlyMaintained(): Promise<boolean> {
+		try {
+			const marker = await stat(this.maintenanceMarkerPath());
+			return Date.now() - marker.mtimeMs < BucketCache.maintenanceIntervalMs;
+		} catch {
+			return false;
+		}
+	}
+
+	private async acquireMaintenanceLock(): Promise<boolean> {
+		const lockPath = this.maintenanceLockPath();
+		try {
+			await mkdir(lockPath);
+			return true;
+		} catch (error) {
+			const mapped = mapUnknownToError(error);
+			if (!('code' in mapped) || mapped.code !== 'EEXIST') throw mapped;
+		}
+
+		try {
+			const lock = await stat(lockPath);
+			if (Date.now() - lock.mtimeMs < BucketCache.staleLockMs) return false;
+			await rm(lockPath, { force: true, recursive: true });
+			await mkdir(lockPath);
+			return true;
+		} catch {
+			return false;
+		}
+	}
+
+	private async pruneFor(incomingBytes: number): Promise<void> {
+		const entries = await this.listCacheEntries(this.rootDirectory);
+		let totalBytes = entries.reduce((total, entry) => total + entry.size, 0);
+		if (totalBytes <= this.maxBytes) return;
+
+		const entriesByAge = [...entries].sort((a, b) => a.mtimeMs - b.mtimeMs);
+		let removedFiles = 0;
+		for (const entry of entriesByAge) {
+			if (totalBytes <= this.maxBytes) break;
+			await rm(entry.path, { force: true });
+			totalBytes -= entry.size;
+			removedFiles++;
+		}
+
+		if (removedFiles > 0) {
+			this.logger.info('Pruned history bucket cache', {
+				removedFiles,
+				cacheBytes: totalBytes,
+				incomingBytes,
+				maxBytes: this.maxBytes
+			});
+		}
+	}
+
+	private maintenanceLockPath(): string {
+		return join(this.rootDirectory, '.maintenance-lock');
+	}
+
+	private maintenanceMarkerPath(): string {
+		return join(this.rootDirectory, '.maintenance-complete');
 	}
 
 	private async listCacheEntries(directory: string): Promise<CacheEntry[]> {

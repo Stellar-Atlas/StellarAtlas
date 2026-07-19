@@ -1,4 +1,4 @@
-import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { Readable } from 'node:stream';
@@ -82,5 +82,48 @@ describe('BucketCache failure channels', () => {
 			failureChannel: 'scanner_issue',
 			kind: 'cache-storage'
 		});
+	});
+
+	it('does not block a verified write on a fresh shared maintenance marker', async () => {
+		const existingHash = 'c'.repeat(64);
+		const existingDirectory = join(
+			temporaryDirectory,
+			existingHash.slice(0, 2),
+			existingHash.slice(2, 4)
+		);
+		await mkdir(existingDirectory, { recursive: true });
+		await writeFile(join(temporaryDirectory, '.maintenance-complete'), '');
+		await writeFile(
+			join(existingDirectory, `${existingHash}.xdr.gz`),
+			Buffer.alloc(64)
+		);
+
+		const cache = new BucketCache(temporaryDirectory, 1, mock<Logger>());
+		const newHash = 'd'.repeat(64);
+		const result = await cache.verifyAndStore(
+			newHash,
+			Readable.from(Buffer.from('verified bytes')),
+			async (stream) => {
+				for await (const _chunk of stream) {
+					// Consume the verification branch.
+				}
+				return ok(undefined);
+			}
+		);
+
+		expect(result.isOk()).toBe(true);
+		expect(
+			await readFile(
+				join(
+					temporaryDirectory,
+					newHash.slice(0, 2),
+					newHash.slice(2, 4),
+					`${newHash}.xdr.gz`
+				)
+			)
+		).toEqual(Buffer.from('verified bytes'));
+		expect(
+			await readFile(join(existingDirectory, `${existingHash}.xdr.gz`))
+		).toEqual(Buffer.alloc(64));
 	});
 });
