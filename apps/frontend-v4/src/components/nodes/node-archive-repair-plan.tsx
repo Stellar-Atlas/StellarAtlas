@@ -152,6 +152,7 @@ function formatReplacementReadiness(
 	action: PublicHistoryArchiveRepairPlan['actions'][number]
 ): React.JSX.Element {
 	const artifact = action.repairArtifact;
+	const candidate = action.knownGoodSources[0];
 	if (artifact?.status === 'available' && action.severity === 'blocked') {
 		return (
 			<>
@@ -167,13 +168,27 @@ function formatReplacementReadiness(
 		return (
 			<>
 				<a className="primary-button" href={artifact.downloadUrl}>
-					Download verified bucket
+					Download verified replacement
 				</a>
 				<small>
-					SHA-256 proven {formatDateTime(artifact.provenAt)};{' '}
-					{formatInteger(action.knownGoodSources.length)} attributed source
-					records
+					Local bytes reverified {formatDateTime(artifact.provenAt)}
 				</small>
+				{candidate ? <CandidateProof candidate={candidate} /> : null}
+			</>
+		);
+	}
+	if (artifact?.status === 'verify-on-download') {
+		return (
+			<>
+				<a className="primary-button" href={artifact.downloadUrl}>
+					Verify and download replacement
+				</a>
+				<small>
+					The source proof is current as of {formatDateTime(artifact.provenAt)}.
+					StellarAtlas returns bytes only after their{' '}
+					{artifact.contentHash.representation} SHA-256 matches this proof.
+				</small>
+				{candidate ? <CandidateProof candidate={candidate} /> : null}
 			</>
 		);
 	}
@@ -199,8 +214,7 @@ function formatReplacementReadiness(
 		);
 	}
 
-	const first = candidates[0];
-	if (first === undefined) {
+	if (candidate === undefined) {
 		return (
 			<span className="muted-inline">
 				No proof-gated replacement download available
@@ -210,14 +224,40 @@ function formatReplacementReadiness(
 
 	return (
 		<>
-			<strong>
-				{formatInteger(candidates.length)} candidate source records
-			</strong>
+			<strong>Proof-bound source found; download pending</strong>
 			<small>
-				Use the verified replacement evidence table below before downloading
+				StellarAtlas will not offer replacement bytes until they are locally
+				reverified
 			</small>
+			<CandidateProof candidate={candidate} />
+			{candidates.length > 1 ? (
+				<small>{formatInteger(candidates.length - 1)} alternate sources</small>
+			) : null}
 		</>
 	);
+}
+
+function CandidateProof({
+	candidate
+}: {
+	readonly candidate: PublicHistoryArchiveRepairPlan['actions'][number]['knownGoodSources'][number];
+}): React.JSX.Element {
+	const proof = candidate.proof;
+	return (
+		<small>
+			{sanitizeArchiveEvidenceText(candidate.archiveUrlIdentity)} / checkpoint{' '}
+			{formatInteger(proof.checkpointLedger)} / proof {proof.proofId} v
+			{proof.proofVersion} / {proof.anchor.kind} ({proof.anchor.sourceCount}{' '}
+			{proof.anchor.sourceCount === 1 ? 'source' : 'sources'}) / SHA-256{' '}
+			{shortDigest(proof.contentHash.digest)}
+		</small>
+	);
+}
+
+function shortDigest(value: string): string {
+	return value.length <= 20
+		? value
+		: `${value.slice(0, 12)}...${value.slice(-8)}`;
 }
 
 function formatArtifactReason(reason: string): string {

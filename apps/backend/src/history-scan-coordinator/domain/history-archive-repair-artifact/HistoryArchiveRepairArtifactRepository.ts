@@ -29,6 +29,12 @@ export interface HistoryArchiveRepairArtifactProof {
 	readonly status: 'available';
 }
 
+export interface HistoryArchiveRepairArtifactPresence {
+	readonly bucketHash: string;
+	readonly byteLength: number;
+	readonly status: 'present';
+}
+
 export interface OpenHistoryArchiveRepairArtifact extends HistoryArchiveRepairArtifactProof {
 	readonly close: () => Promise<void>;
 	readonly stream: Readable;
@@ -41,6 +47,12 @@ export type OpenHistoryArchiveRepairArtifactResult =
 	OpenHistoryArchiveRepairArtifact | HistoryArchiveRepairArtifactUnavailable;
 
 export interface HistoryArchiveRepairArtifactRepository {
+	inspectBucketPresence(
+		bucketHash: string
+	): Promise<
+		| HistoryArchiveRepairArtifactPresence
+		| HistoryArchiveRepairArtifactUnavailable
+	>;
 	inspectBucket(
 		bucketHash: string
 	): Promise<HistoryArchiveRepairArtifactInspection>;

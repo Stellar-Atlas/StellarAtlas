@@ -6,7 +6,8 @@ import { HistoryArchiveObject } from '../../../domain/history-archive-object/His
 import type {
 	HistoryArchiveObjectRepository,
 	HistoryArchiveRepairPlanSummary,
-	HistoryArchiveVerifiedBucketSource
+	HistoryArchiveVerifiedBucketSource,
+	HistoryArchiveVerifiedCheckpointObjectSource
 } from '../../../domain/history-archive-object/HistoryArchiveObjectRepository.js';
 import type { HistoryArchiveRepairArtifactAvailabilityV1 } from '../../get-history-archive-repair-artifact/HistoryArchiveRepairArtifactContract.js';
 import { ResolveHistoryArchiveRepairArtifacts } from '../../get-history-archive-repair-artifact/ResolveHistoryArchiveRepairArtifacts.js';
@@ -16,8 +17,6 @@ const archiveUrl = 'https://history.example.com';
 const archiveUrlIdentity = 'https://history.example.com';
 const bucketHash =
 	'4eae73efaa0ce061441dfe43ffc61c0ed24fcbc59e5ee512d1b60e8da2509655';
-const unrelatedBucketHash = 'a'.repeat(64);
-
 describe('GetHistoryArchiveRepairPlan', () => {
 	it('separates archive repair actions from scanner infrastructure blocks', async () => {
 		const objectRepository = mock<HistoryArchiveObjectRepository>();
@@ -30,17 +29,17 @@ describe('GetHistoryArchiveRepairPlan', () => {
 			mock<ExceptionLogger>()
 		);
 		objectRepository.getRepairPlanSummary.mockResolvedValue(createSummary());
+		const bucketFailure = createBucketFailure();
 		objectRepository.findActionableByArchiveUrl.mockResolvedValue([
-			createBucketFailure(),
+			bucketFailure,
 			createWorkerFailure()
 		]);
-		objectRepository.findVerifiedBucketSourcesByHashes.mockResolvedValue([
-			createVerifiedBucketCopy(),
+		objectRepository.findVerifiedBucketSourcesByRemoteIds.mockResolvedValue([
+			createVerifiedBucketCopy(bucketFailure.remoteId),
 			{
-				...createVerifiedBucketCopy(),
+				...createVerifiedBucketCopy(crypto.randomUUID()),
 				archiveUrl: 'https://unrelated-history.example.com',
-				archiveUrlIdentity: 'https://unrelated-history.example.com',
-				bucketHash: unrelatedBucketHash
+				archiveUrlIdentity: 'https://unrelated-history.example.com'
 			}
 		]);
 		proofRepository.findActionableByArchiveUrlIdentity.mockResolvedValue([
@@ -58,6 +57,10 @@ describe('GetHistoryArchiveRepairPlan', () => {
 					knownGoodSources: [
 						expect.objectContaining({
 							archiveUrl: 'https://other-history.example.com',
+							proof: expect.objectContaining({
+								kind: 'strict-checkpoint',
+								proofVersion: 7
+							}),
 							objectUrl: expect.stringMatching(
 								/^https:\/\/other-history\.example\.com\//
 							)
@@ -65,13 +68,16 @@ describe('GetHistoryArchiveRepairPlan', () => {
 					],
 					reason: 'bucket-hash-mismatch',
 					repairArtifact: expect.objectContaining({
-						reason: 'local-payload-missing',
-						status: 'unavailable'
+						artifactType: 'bucket',
+						status: 'verify-on-download'
 					}),
-					severity: 'blocked'
+					severity: 'error',
+					summary: expect.stringContaining(
+						'StellarAtlas checks the replacement bytes against that digest before returning the download'
+					)
 				}),
 				expect.objectContaining({
-					kind: 'repair-checkpoint-proof',
+					kind: 'wait-for-scanner-proof',
 					reason: 'transaction-hash-mismatch',
 					severity: 'blocked'
 				})
@@ -84,9 +90,14 @@ describe('GetHistoryArchiveRepairPlan', () => {
 			})
 		]);
 		expect(
-			objectRepository.findVerifiedBucketSourcesByHashes
-		).toHaveBeenCalledWith([bucketHash], 5);
-		expect(repairArtifacts.execute).toHaveBeenCalledWith([bucketHash]);
+			objectRepository.findVerifiedBucketSourcesByRemoteIds
+		).toHaveBeenCalledWith([bucketFailure.remoteId], 5);
+		expect(repairArtifacts.execute).toHaveBeenCalledWith([
+			{
+				bucketHash,
+				provenAt: new Date('2026-07-07T18:01:00.000Z')
+			}
+		]);
 		const bucketAction = result.value.actions.find(
 			(action) => action.kind === 'replace-bucket-file'
 		);
@@ -105,11 +116,12 @@ describe('GetHistoryArchiveRepairPlan', () => {
 			mock<ExceptionLogger>()
 		);
 		objectRepository.getRepairPlanSummary.mockResolvedValue(createSummary());
+		const bucketFailure = createBucketFailure();
 		objectRepository.findActionableByArchiveUrl.mockResolvedValue([
-			createBucketFailure()
+			bucketFailure
 		]);
-		objectRepository.findVerifiedBucketSourcesByHashes.mockResolvedValue([
-			createVerifiedBucketCopy()
+		objectRepository.findVerifiedBucketSourcesByRemoteIds.mockResolvedValue([
+			createVerifiedBucketCopy(bucketFailure.remoteId)
 		]);
 		proofRepository.findActionableByArchiveUrlIdentity.mockResolvedValue([]);
 
@@ -122,9 +134,68 @@ describe('GetHistoryArchiveRepairPlan', () => {
 					objectIdentity: `bucket:${bucketHash}`,
 					status: 'available'
 				}),
-				severity: 'error'
+				severity: 'error',
+				summary: expect.stringContaining(
+					'StellarAtlas checks the replacement bytes against that digest before returning the download'
+				)
 			})
 		);
+	});
+
+	it('selects a same-network object bound to a strict verified checkpoint', async () => {
+		const objectRepository = mock<HistoryArchiveObjectRepository>();
+		const proofRepository = mock<HistoryArchiveCheckpointProofRepository>();
+		const useCase = new GetHistoryArchiveRepairPlan(
+			objectRepository,
+			proofRepository,
+			createArtifactResolver(),
+			mock<ExceptionLogger>()
+		);
+		const failure = createMissingTransactionsFailure();
+		const source = createVerifiedCheckpointSource(failure.remoteId);
+		objectRepository.getRepairPlanSummary.mockResolvedValue(createSummary());
+		objectRepository.findActionableByArchiveUrl.mockResolvedValue([failure]);
+		objectRepository.findVerifiedCheckpointObjectSources.mockResolvedValue([
+			source
+		]);
+		proofRepository.findActionableByArchiveUrlIdentity.mockResolvedValue([]);
+
+		const result = await useCase.execute({ limit: 25, url: archiveUrl });
+
+		expect(result._unsafeUnwrap().actions).toEqual([
+			expect.objectContaining({
+				kind: 'replace-archive-file',
+				knownGoodSources: [
+					expect.objectContaining({
+						archiveUrlIdentity: 'https://other-history.example.com',
+						objectUrl: expect.stringContaining('/transactions/'),
+						proof: expect.objectContaining({
+							contentHash: expect.objectContaining({
+								digest: '7'.repeat(64)
+							}),
+							kind: 'strict-checkpoint',
+							proofVersion: 7
+						})
+					})
+				],
+				repairArtifact: expect.objectContaining({
+					artifactType: 'transactions',
+					contentHash: expect.objectContaining({ digest: '7'.repeat(64) }),
+					downloadUrl:
+						'/v1/archive-scans/repair-artifacts/objects/' +
+						`${failure.remoteId}/${source.candidateRemoteId}/42/7/` +
+						`${Date.parse('2026-07-07T18:01:00.000Z')}/${'7'.repeat(64)}`,
+					status: 'verify-on-download'
+				}),
+				severity: 'error',
+				summary: expect.stringContaining(
+					'StellarAtlas checks the replacement bytes against that digest before returning the download'
+				)
+			})
+		]);
+		expect(
+			objectRepository.findVerifiedCheckpointObjectSources
+		).toHaveBeenCalledWith([failure.remoteId], 5);
 	});
 
 	it('does not turn incomplete checkpoint proofs into repair actions', async () => {
@@ -138,7 +209,7 @@ describe('GetHistoryArchiveRepairPlan', () => {
 		);
 		objectRepository.getRepairPlanSummary.mockResolvedValue(createSummary());
 		objectRepository.findActionableByArchiveUrl.mockResolvedValue([]);
-		objectRepository.findVerifiedBucketSourcesByHashes.mockResolvedValue([]);
+		objectRepository.findVerifiedBucketSourcesByRemoteIds.mockResolvedValue([]);
 		proofRepository.findActionableByArchiveUrlIdentity.mockResolvedValue([
 			createIncompleteCheckpointProof()
 		]);
@@ -171,10 +242,11 @@ describe('GetHistoryArchiveRepairPlan', () => {
 
 		expect(result._unsafeUnwrap().actions).toEqual([
 			expect.objectContaining({
+				kind: 'wait-for-scanner-proof',
 				reason: 'checkpoint-ledger-mismatch',
 				severity: 'blocked',
 				summary:
-					'Checkpoint state file does not declare checkpoint 63355999. No proof-gated replacement set is available yet.'
+					'Checkpoint state file does not declare checkpoint 63355999. This aggregate mismatch does not identify one safe replacement file; use the object evidence before changing archive data.'
 			})
 		]);
 	});
@@ -192,6 +264,7 @@ describe('GetHistoryArchiveRepairPlan', () => {
 		objectRepository.findActionableByArchiveUrl.mockResolvedValue([
 			createCheckpointLedgerMismatch()
 		]);
+		objectRepository.findVerifiedCheckpointObjectSources.mockResolvedValue([]);
 		proofRepository.findActionableByArchiveUrlIdentity.mockResolvedValue([]);
 
 		const result = await useCase.execute({ limit: 25, url: archiveUrl });
@@ -202,10 +275,11 @@ describe('GetHistoryArchiveRepairPlan', () => {
 					expect.objectContaining({ observedCheckpointLedger: 63355935 })
 				],
 				kind: 'replace-archive-file',
+				knownGoodSources: [],
 				reason: 'checkpoint-ledger-mismatch',
 				severity: 'blocked',
 				summary:
-					'Checkpoint history file evidence is confirmed, but no proof-gated replacement artifact is available yet.'
+					'Checkpoint history file evidence is confirmed, but no proven-good replacement source is available yet.'
 			})
 		]);
 	});
@@ -231,7 +305,7 @@ describe('GetHistoryArchiveRepairPlan', () => {
 		if (result.isErr()) return;
 		expect(result.value.actions).toEqual([]);
 		expect(
-			objectRepository.findVerifiedBucketSourcesByHashes
+			objectRepository.findVerifiedBucketSourcesByRemoteIds
 		).not.toHaveBeenCalled();
 	});
 
@@ -299,15 +373,62 @@ function createCheckpointLedgerMismatch(): HistoryArchiveObject {
 	return object;
 }
 
-function createVerifiedBucketCopy(): HistoryArchiveVerifiedBucketSource {
+function createMissingTransactionsFailure(): HistoryArchiveObject {
+	const object = createObject(
+		'transactions',
+		'transactions:03c1dcbf',
+		'failed'
+	);
+	object.checkpointLedger = 63355999;
+	object.errorType = 'archive_http_error';
+	object.errorMessage = 'Remote transaction archive file was not found';
+	object.httpStatus = 404;
+	return object;
+}
+
+function createVerifiedBucketCopy(
+	targetRemoteId: string
+): HistoryArchiveVerifiedBucketSource {
 	return {
+		anchorKind: 'content-addressed-bucket',
 		archiveUrl: 'https://other-history.example.com',
 		archiveUrlIdentity: 'https://other-history.example.com',
 		bucketHash,
+		candidateRemoteId: crypto.randomUUID(),
+		checkpointLedger: 63355999,
+		contentDigest: bucketHash,
+		contentRepresentation: 'uncompressed-xdr',
+		corroboratingSourceCount: 1,
 		objectUrl:
 			'https://other-history.example.com/bucket/4e/ae/73/bucket-' +
 			bucketHash +
 			'.xdr.gz',
+		proofEvaluatedAt: new Date('2026-07-07T18:01:00.000Z'),
+		proofId: 41,
+		proofVersion: 7,
+		targetRemoteId,
+		verifiedAt: new Date('2026-07-07T18:00:00.000Z')
+	};
+}
+
+function createVerifiedCheckpointSource(
+	targetRemoteId: string
+): HistoryArchiveVerifiedCheckpointObjectSource {
+	return {
+		anchorKind: 'target-digest',
+		archiveUrl: 'https://other-history.example.com',
+		archiveUrlIdentity: 'https://other-history.example.com',
+		candidateRemoteId: crypto.randomUUID(),
+		checkpointLedger: 63355999,
+		contentDigest: '7'.repeat(64),
+		contentRepresentation: 'uncompressed-xdr',
+		corroboratingSourceCount: 1,
+		objectUrl:
+			'https://other-history.example.com/transactions/03/c1/dc/transactions-03c1dcbf.xdr.gz',
+		proofEvaluatedAt: new Date('2026-07-07T18:01:00.000Z'),
+		proofId: 42,
+		proofVersion: 7,
+		targetRemoteId,
 		verifiedAt: new Date('2026-07-07T18:00:00.000Z')
 	};
 }

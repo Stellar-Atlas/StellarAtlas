@@ -154,6 +154,7 @@ export type {
 	HistoryArchiveRepairArtifactContentHashV1,
 	HistoryArchiveRepairArtifactUnavailableReasonV1,
 	HistoryArchiveRepairArtifactUnavailableV1,
+	HistoryArchiveRepairArtifactVerifyOnDownloadV1,
 	HistoryArchiveRepairInfrastructureBlockV1,
 	HistoryArchiveRepairObjectEvidenceV1,
 	HistoryArchiveRepairPlanV1,

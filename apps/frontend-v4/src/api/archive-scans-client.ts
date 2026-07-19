@@ -12,6 +12,7 @@ import { frontendCacheTags } from './cache-policy';
 import type { KnownArchiveEvidenceQuery } from './known-archive-evidence-query';
 import { parseHistoryArchiveEvidence } from './history-archive-evidence-parser';
 import { buildHistoryArchiveEvidencePath } from './history-archive-evidence-path';
+import { parseHistoryArchiveRepairPlan } from './history-archive-repair-plan-parser';
 
 export const fetchHistoryArchiveObjectEvents = (
 	limit: number,
@@ -89,10 +90,10 @@ export const fetchHistoryArchiveRepairPlanForArchive = (
 	limit = 100,
 	options?: FetchOptions
 ): Promise<PublicHistoryArchiveRepairPlan> =>
-	fetchJson<PublicHistoryArchiveRepairPlan>(
+	fetchJson<unknown>(
 		`/v1/archive-scans/${encodeURIComponent(historyUrl)}/repair-plan?limit=${encodeURIComponent(limit.toString())}`,
 		withHistoryScanTags(options)
-	);
+	).then(parseHistoryArchiveRepairPlan);
 
 function withHistoryScanTags(options: FetchOptions | undefined): FetchOptions {
 	return {

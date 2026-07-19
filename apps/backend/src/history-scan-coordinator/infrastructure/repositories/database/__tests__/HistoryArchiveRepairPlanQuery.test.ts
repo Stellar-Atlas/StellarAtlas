@@ -1,13 +1,8 @@
 import type { EntityManager } from 'typeorm';
 import {
-	findVerifiedHistoryArchiveBucketSources,
 	getHistoryArchiveRepairPlanSummary,
-	historyArchiveRepairPlanSummarySql,
-	historyArchiveVerifiedBucketSourcesSql
+	historyArchiveRepairPlanSummarySql
 } from '../HistoryArchiveRepairPlanQuery.js';
-
-const bucketHash =
-	'4eae73efaa0ce061441dfe43ffc61c0ed24fcbc59e5ee512d1b60e8da2509655';
 
 describe('HistoryArchiveRepairPlanQuery', () => {
 	it('reads exact repair counts from completed rollups without touching the object queue', async () => {
@@ -63,64 +58,5 @@ describe('HistoryArchiveRepairPlanQuery', () => {
 		await expect(
 			getHistoryArchiveRepairPlanSummary(manager, 'https://history.example')
 		).rejects.toThrow('Archive repair plan evidence rollups are not ready');
-	});
-
-	it('normalizes, deduplicates, and caps one batched source query', async () => {
-		const query = jest.fn(async (): Promise<unknown[]> => [
-			{
-				archiveUrl: 'https://source.example',
-				archiveUrlIdentity: 'https://source.example',
-				bucketHash,
-				objectUrl: `https://source.example/bucket-${bucketHash}.xdr.gz`,
-				verifiedAt: '2026-07-07T18:00:00.000Z'
-			}
-		]);
-		const manager = { query } as unknown as EntityManager;
-
-		await expect(
-			findVerifiedHistoryArchiveBucketSources(
-				manager,
-				[bucketHash.toUpperCase(), bucketHash, 'not-a-hash'],
-				99
-			)
-		).resolves.toEqual([
-			expect.objectContaining({
-				archiveUrlIdentity: 'https://source.example',
-				bucketHash,
-				verifiedAt: new Date('2026-07-07T18:00:00.000Z')
-			})
-		]);
-		expect(query).toHaveBeenCalledWith(historyArchiveVerifiedBucketSourcesSql, [
-			[bucketHash],
-			5
-		]);
-		expect(historyArchiveVerifiedBucketSourcesSql).toContain(
-			'cross join lateral'
-		);
-		expect(historyArchiveVerifiedBucketSourcesSql).toContain(
-			'limit $2::integer'
-		);
-		expect(historyArchiveVerifiedBucketSourcesSql).toContain(
-			'\'{bucketObject,expectedBucketHash}\' = requested."bucketHash"'
-		);
-		expect(historyArchiveVerifiedBucketSourcesSql).toContain(
-			'\'{bucketObject,sourceUrl}\' = archive_object."objectUrl"'
-		);
-		expect(historyArchiveVerifiedBucketSourcesSql).toContain(
-			'\'{content,digest}\' = requested."bucketHash"'
-		);
-		expect(historyArchiveVerifiedBucketSourcesSql).toContain(
-			"'{content,representation}' = 'uncompressed-xdr'"
-		);
-	});
-
-	it('does not query PostgreSQL when no valid bucket hash is requested', async () => {
-		const query = jest.fn(async (): Promise<unknown[]> => []);
-		const manager = { query } as unknown as EntityManager;
-
-		await expect(
-			findVerifiedHistoryArchiveBucketSources(manager, ['invalid'], 5)
-		).resolves.toEqual([]);
-		expect(query).not.toHaveBeenCalled();
 	});
 });

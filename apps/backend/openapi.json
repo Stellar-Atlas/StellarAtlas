@@ -4224,6 +4224,111 @@
 				}
 			}
 		},
+		"/v1/archive-scans/repair-artifacts/objects/{targetRemoteId}/{candidateRemoteId}/{proofId}/{proofVersion}/{proofEvaluatedAtMs}/{contentDigest}": {
+			"get": {
+				"summary": "Verify and download a proof-bound archive object",
+				"description": "Revalidates the exact current source proof named in the path, downloads only that attributed remote object through a public-address-pinned request, independently checks canonical JSON or uncompressed XDR SHA-256, and streams bytes only on an exact digest match. Proof-bound object downloads are not cached by clients because repair proof can be revoked or reevaluated.",
+				"tags": ["Archive verification"],
+				"operationId": "downloadHistoryArchiveObjectRepairArtifact",
+				"parameters": [
+					{
+						"name": "targetRemoteId",
+						"in": "path",
+						"required": true,
+						"schema": { "type": "string", "format": "uuid" }
+					},
+					{
+						"name": "candidateRemoteId",
+						"in": "path",
+						"required": true,
+						"schema": { "type": "string", "format": "uuid" }
+					},
+					{
+						"name": "proofId",
+						"in": "path",
+						"required": true,
+						"schema": { "type": "integer", "minimum": 1 }
+					},
+					{
+						"name": "proofVersion",
+						"in": "path",
+						"required": true,
+						"schema": { "type": "integer", "minimum": 1 }
+					},
+					{
+						"name": "proofEvaluatedAtMs",
+						"in": "path",
+						"description": "Exact proof evaluation time expressed as Unix epoch milliseconds.",
+						"required": true,
+						"schema": { "type": "integer", "minimum": 1 }
+					},
+					{
+						"name": "contentDigest",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"pattern": "^[0-9a-f]{64}$"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "replacement bytes whose canonical content matches the current proof digest",
+						"headers": {
+							"X-Stellar-Content-SHA256": {
+								"schema": {
+									"type": "string",
+									"pattern": "^[0-9a-f]{64}$"
+								}
+							},
+							"X-Stellar-Content-Representation": {
+								"schema": {
+									"type": "string",
+									"enum": ["canonical-json", "uncompressed-xdr"]
+								}
+							}
+						},
+						"content": {
+							"application/gzip": {
+								"schema": { "type": "string", "format": "binary" }
+							},
+							"application/json": {
+								"schema": { "type": "object" }
+							}
+						}
+					},
+					"400": {
+						"description": "Invalid proof or object identity",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/HistoryArchiveRepairObjectArtifactUnavailableV1"
+								}
+							}
+						}
+					},
+					"409": {
+						"description": "Proof is no longer current or replacement bytes do not match it",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/HistoryArchiveRepairObjectArtifactUnavailableV1"
+								}
+							}
+						}
+					},
+					"413": { "description": "Remote object exceeds verifier limits" },
+					"429": { "description": "Bounded verification capacity is busy" },
+					"502": {
+						"description": "Attributed remote source could not be fetched"
+					},
+					"503": {
+						"description": "Verification infrastructure is temporarily unavailable"
+					}
+				}
+			}
+		},
 		"/v1/archive-scans/objects/summary": {
 			"get": {
 				"summary": "Summarize history archive object coverage",
@@ -4607,7 +4712,7 @@
 		"/v1/archive-scans/{encodedUrl}/repair-plan": {
 			"get": {
 				"summary": "Get a proof-gated history archive repair plan",
-				"description": "Returns archive repair actions, per-archive remote verified-copy evidence, local repair artifact availability, and scanner infrastructure blocks. knownGoodSources are attributed remote archive URLs only; they are not StellarAtlas-hosted downloads. A repairArtifact downloadUrl appears only after exact local payload proof.",
+				"description": "Returns archive repair actions, proof-bound source evidence, replacement artifact status, and scanner infrastructure blocks. A remote URL is only a retrieval location. status=available means retained bytes were already verified; status=verify-on-download means the source proof is current but StellarAtlas will fetch and independently hash the bytes before returning them.",
 				"tags": ["Archive verification"],
 				"operationId": "getHistoryArchiveRepairPlan",
 				"parameters": [
@@ -9268,7 +9373,7 @@
 					"objectRemoteId": { "type": "string", "format": "uuid" },
 					"representation": {
 						"type": "string",
-						"enum": ["uncompressed-xdr"]
+						"enum": ["canonical-json", "uncompressed-xdr"]
 					}
 				}
 			},
@@ -11473,37 +11578,203 @@
 					"status": { "type": "string", "enum": ["unavailable"] }
 				}
 			},
+			"HistoryArchiveRepairArtifactVerifyOnDownloadV1": {
+				"type": "object",
+				"additionalProperties": false,
+				"required": [
+					"artifactType",
+					"byteLength",
+					"contentHash",
+					"downloadUrl",
+					"mediaType",
+					"objectIdentity",
+					"provenAt",
+					"status"
+				],
+				"properties": {
+					"artifactType": {
+						"type": "string",
+						"enum": [
+							"history-archive-state",
+							"checkpoint-state",
+							"ledger",
+							"transactions",
+							"results",
+							"scp",
+							"bucket"
+						]
+					},
+					"byteLength": {
+						"type": "integer",
+						"minimum": 1,
+						"nullable": true
+					},
+					"contentHash": {
+						"$ref": "#/components/schemas/HistoryArchiveRepairArtifactContentHashV1"
+					},
+					"downloadUrl": {
+						"type": "string",
+						"pattern": "^/v1/archive-scans/repair-artifacts/(buckets/[0-9a-f]{64}|objects/[0-9a-f-]{36}/[0-9a-f-]{36}/[1-9][0-9]*/[1-9][0-9]*/[1-9][0-9]*/[0-9a-f]{64})$"
+					},
+					"mediaType": {
+						"type": "string",
+						"enum": ["application/gzip", "application/json"]
+					},
+					"objectIdentity": {
+						"type": "string",
+						"minLength": 1,
+						"maxLength": 512
+					},
+					"provenAt": { "type": "string", "format": "date-time" },
+					"status": {
+						"type": "string",
+						"enum": ["verify-on-download"]
+					}
+				}
+			},
+			"HistoryArchiveRepairObjectArtifactUnavailableV1": {
+				"type": "object",
+				"additionalProperties": false,
+				"required": ["reason", "retryAfterSeconds", "retryable", "status"],
+				"properties": {
+					"reason": {
+						"type": "string",
+						"enum": [
+							"content-hash-mismatch",
+							"invalid-compressed-payload",
+							"invalid-object-identity",
+							"proof-no-longer-valid",
+							"remote-fetch-failed",
+							"remote-payload-too-large",
+							"remote-response-invalid",
+							"staging-storage-unavailable",
+							"verification-busy",
+							"verification-timeout"
+						]
+					},
+					"retryAfterSeconds": {
+						"type": "integer",
+						"minimum": 1,
+						"nullable": true
+					},
+					"retryable": { "type": "boolean" },
+					"status": { "type": "string", "enum": ["unavailable"] }
+				}
+			},
 			"HistoryArchiveRepairArtifactAvailabilityV1": {
 				"oneOf": [
 					{
 						"$ref": "#/components/schemas/HistoryArchiveRepairArtifactAvailableV1"
 					},
 					{
+						"$ref": "#/components/schemas/HistoryArchiveRepairArtifactVerifyOnDownloadV1"
+					},
+					{
 						"$ref": "#/components/schemas/HistoryArchiveRepairArtifactUnavailableV1"
 					}
 				]
 			},
+			"HistoryArchiveRepairSourceProofV1": {
+				"type": "object",
+				"additionalProperties": false,
+				"required": [
+					"anchor",
+					"candidateObjectRemoteId",
+					"checkpointLedger",
+					"contentHash",
+					"evaluatedAt",
+					"kind",
+					"proofId",
+					"proofVersion"
+				],
+				"properties": {
+					"anchor": {
+						"type": "object",
+						"additionalProperties": false,
+						"required": ["kind", "sourceCount"],
+						"properties": {
+							"kind": {
+								"type": "string",
+								"enum": [
+									"content-addressed-bucket",
+									"multi-source",
+									"target-digest"
+								]
+							},
+							"sourceCount": {
+								"type": "integer",
+								"minimum": 1
+							}
+						}
+					},
+					"candidateObjectRemoteId": {
+						"type": "string",
+						"minLength": 1
+					},
+					"checkpointLedger": {
+						"type": "integer",
+						"minimum": 0
+					},
+					"contentHash": {
+						"type": "object",
+						"additionalProperties": false,
+						"required": ["algorithm", "digest", "representation"],
+						"properties": {
+							"algorithm": { "type": "string", "enum": ["sha256"] },
+							"digest": {
+								"type": "string",
+								"pattern": "^[0-9a-f]{64}$"
+							},
+							"representation": {
+								"type": "string",
+								"enum": ["canonical-json", "uncompressed-xdr"]
+							}
+						}
+					},
+					"evaluatedAt": { "type": "string", "format": "date-time" },
+					"kind": { "type": "string", "enum": ["strict-checkpoint"] },
+					"proofId": { "type": "string", "minLength": 1 },
+					"proofVersion": {
+						"type": "integer",
+						"minimum": 1
+					}
+				}
+			},
 			"HistoryArchiveRepairSourceCandidateV1": {
 				"type": "object",
-				"description": "Attributed remote archive evidence only. objectUrl remains the remote archive URL and is never a StellarAtlas-hosted repair artifact.",
+				"additionalProperties": false,
+				"description": "Attributed remote archive candidate with checkpoint-bound proof. archiveUrl and objectUrl are retrieval locations, never proof or StellarAtlas-hosted repair artifacts.",
 				"required": [
 					"archiveUrl",
 					"archiveUrlIdentity",
 					"objectUrl",
+					"proof",
 					"verifiedAt"
 				],
 				"properties": {
-					"archiveUrl": { "type": "string", "format": "uri" },
-					"archiveUrlIdentity": { "type": "string" },
+					"archiveUrl": {
+						"type": "string",
+						"format": "uri",
+						"description": "Remote source archive root retrieval location; the location is never proof."
+					},
+					"archiveUrlIdentity": {
+						"type": "string",
+						"minLength": 1,
+						"description": "Normalized identity of the source archive bound to this candidate."
+					},
 					"objectUrl": {
 						"type": "string",
 						"format": "uri",
-						"description": "Exact remote source URL observed and verified by the scanner."
+						"description": "Exact remote retrieval location for the candidate object. This location is never proof."
+					},
+					"proof": {
+						"$ref": "#/components/schemas/HistoryArchiveRepairSourceProofV1"
 					},
 					"verifiedAt": {
 						"type": "string",
 						"format": "date-time",
-						"nullable": true
+						"nullable": true,
+						"description": "Source object verification time; null only when no object-level timestamp was persisted."
 					}
 				}
 			},

@@ -12,16 +12,52 @@ describe('archive repair plan', () => {
 		);
 
 		expect(markup).toContain('Confirmed repair evidence');
-		expect(markup).toContain('1 candidate source records');
-		expect(markup).toContain('verified replacement evidence table below');
+		expect(markup).toContain('Proof-bound source found; download pending');
+		expect(markup).toContain('checkpoint 63 / proof 41 v7 / multi-source');
 		expect(markup).not.toContain('href=');
+	});
+
+	it('offers a proof-bound object only through verify-on-download', () => {
+		const plan = createPlan();
+		const action = requireAction(plan);
+		const source = requireSource(action);
+		const downloadUrl =
+			'/v1/archive-scans/repair-artifacts/objects/' +
+			`11111111-1111-4111-8111-111111111111/${source.proof.candidateObjectRemoteId}/` +
+			`${source.proof.proofId}/${source.proof.proofVersion}/` +
+			`${Date.parse(source.proof.evaluatedAt)}/${source.proof.contentHash.digest}`;
+		const markup = renderToStaticMarkup(
+			createElement(NodeArchiveRepairPlan, {
+				repairPlan: {
+					...plan,
+					actions: [
+						{
+							...action,
+							repairArtifact: {
+								artifactType: 'transactions',
+								byteLength: null,
+								contentHash: source.proof.contentHash,
+								downloadUrl,
+								mediaType: 'application/gzip',
+								objectIdentity: 'transactions:0000003f',
+								provenAt: source.proof.evaluatedAt,
+								status: 'verify-on-download'
+							},
+							severity: 'error'
+						}
+					]
+				}
+			})
+		);
+
+		expect(markup).toContain('Verify and download replacement');
+		expect(markup).toContain(`href="${downloadUrl}"`);
+		expect(markup).toContain('returns bytes only after their');
 	});
 
 	it('links only a locally proven replacement artifact', () => {
 		const plan = createPlan();
-		const action = plan.actions[0];
-		if (action === undefined)
-			throw new Error('Repair action fixture is missing');
+		const action = requireAction(plan);
 		const markup = renderToStaticMarkup(
 			createElement(NodeArchiveRepairPlan, {
 				repairPlan: {
@@ -45,19 +81,36 @@ describe('archive repair plan', () => {
 								objectIdentity: `bucket:${'a'.repeat(64)}`,
 								provenAt: '2026-07-11T00:00:00.000Z',
 								status: 'available'
-							}
+							},
+							severity: 'error'
 						}
 					]
 				}
 			})
 		);
 
-		expect(markup).toContain('Download verified bucket');
+		expect(markup).toContain('Download verified replacement');
 		expect(markup).toContain(
 			`href="/v1/archive-scans/repair-artifacts/buckets/${'a'.repeat(64)}"`
 		);
 	});
 });
+
+function requireAction(
+	plan: PublicHistoryArchiveRepairPlan
+): PublicHistoryArchiveRepairPlan['actions'][number] {
+	const action = plan.actions[0];
+	if (action === undefined) throw new Error('Repair action fixture is missing');
+	return action;
+}
+
+function requireSource(
+	action: PublicHistoryArchiveRepairPlan['actions'][number]
+): PublicHistoryArchiveRepairPlan['actions'][number]['knownGoodSources'][number] {
+	const source = action.knownGoodSources[0];
+	if (source === undefined) throw new Error('Repair source fixture is missing');
+	return source;
+}
 
 function createPlan(): PublicHistoryArchiveRepairPlan {
 	return {
@@ -95,12 +148,29 @@ function createPlan(): PublicHistoryArchiveRepairPlan {
 						archiveUrl: 'https://candidate.example',
 						archiveUrlIdentity: 'https://candidate.example',
 						objectUrl: 'https://candidate.example/transactions/file.xdr.gz',
+						proof: {
+							anchor: {
+								kind: 'multi-source',
+								sourceCount: 2
+							},
+							candidateObjectRemoteId: '22222222-2222-4222-8222-222222222222',
+							checkpointLedger: 63,
+							contentHash: {
+								algorithm: 'sha256',
+								digest: 'a'.repeat(64),
+								representation: 'uncompressed-xdr'
+							},
+							evaluatedAt: '2026-07-11T00:01:00.000Z',
+							kind: 'strict-checkpoint',
+							proofId: '41',
+							proofVersion: 7
+						},
 						verifiedAt: '2026-07-11T00:00:00.000Z'
 					}
 				],
 				reason: 'missing-object',
 				repairArtifact: null,
-				severity: 'error',
+				severity: 'blocked',
 				summary: 'Replace the transaction archive file for checkpoint 63.'
 			}
 		],

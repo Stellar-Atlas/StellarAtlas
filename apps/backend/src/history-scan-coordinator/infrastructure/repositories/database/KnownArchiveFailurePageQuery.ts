@@ -39,10 +39,16 @@ export async function findKnownArchiveFailurePage(
 		);
 		const countRows = requireFailureCountRows(countResult);
 		const [countRow] = countRows;
+		if ((countRow?.rollupComplete ?? countRow?.rollupcomplete) !== true) {
+			throw new Error('Archive failure evidence rollup is not ready');
+		}
 		total = requireNumber(
 			countRow?.failureCount ?? countRow?.failurecount ?? 0,
 			'failureCount'
 		);
+		if (total < 0) {
+			throw new Error('Archive failure evidence rollup is inconsistent');
+		}
 	}
 	if (total === 0) return { failures: [], total };
 
@@ -72,15 +78,75 @@ export async function findKnownArchiveFailurePage(
 type FailureCountRow = {
 	readonly failureCount?: NumericValue;
 	readonly failurecount?: NumericValue;
+	readonly rollupComplete?: boolean;
+	readonly rollupcomplete?: boolean;
 };
 
 export function knownArchiveFailureCountSql(
 	kind: KnownArchiveFailurePageKind
 ): string {
+	const rootSummaryColumn =
+		kind === 'remote' ? '"remoteFailureObjects"' : '"workerIssueObjects"';
+	const typeSummaryColumn =
+		kind === 'remote' ? '"remoteFailureObjects"' : '"scannerIssueObjects"';
+	const evidencePredicate =
+		kind === 'remote'
+			? `archive_object."failureChannel" = 'archive_evidence'`
+			: `archive_object."failureChannel" = 'scanner_issue'`;
+
 	return `
-		select count(*) as "failureCount"
-		from history_archive_object_queue archive_object
-		where ${knownArchiveFailureFilterSql(kind)}
+		with requested_roots as materialized (
+			select distinct identity as "archiveUrlIdentity"
+			from unnest($1::text[]) requested(identity)
+			where $2::text is null or identity = $2::text
+		), rollup_state as (
+			select case
+				when $3::text is null then coalesce((
+					select "complete"
+					from history_archive_evidence_root_summary_progress
+					where id = 1
+				), false)
+				else coalesce((
+					select "complete"
+					from history_archive_object_type_summary_progress
+					where id = 1
+				), false)
+			end as "rollupComplete"
+		), summary_count as (
+			select coalesce(sum(case
+				when $3::text is null
+					then coalesce(root_summary.${rootSummaryColumn}, 0)
+				else coalesce(type_summary.${typeSummaryColumn}, 0)
+			end), 0) as count
+			from requested_roots requested_root
+			left join history_archive_evidence_root_summary root_summary
+				on root_summary."archiveUrlIdentity" =
+					requested_root."archiveUrlIdentity"
+			left join history_archive_object_type_summary type_summary
+				on type_summary."archiveUrlIdentity" =
+					requested_root."archiveUrlIdentity"
+				and type_summary."objectType" = $3::text
+		), future_count as (
+			select coalesce(sum(future_objects.count), 0) as count
+			from requested_roots requested_root
+			cross join lateral (
+				select count(*) as count
+				from history_archive_object_queue archive_object
+				where archive_object."archiveUrlIdentity" =
+						requested_root."archiveUrlIdentity"
+					and ($3::text is null
+						or archive_object."objectType" = $3::text)
+					and archive_object."createdAt" > $4::timestamptz
+					and archive_object.status = 'failed'
+					and ${evidencePredicate}
+			) future_objects
+		)
+		select
+			summary_count.count - future_count.count as "failureCount",
+			rollup_state."rollupComplete"
+		from summary_count
+		cross join future_count
+		cross join rollup_state
 	`;
 }
 
@@ -115,22 +181,6 @@ export function knownArchiveFailurePageSql(
 			on archive_object."remoteId" = page_key."remoteId"
 		order by page_key."createdAt" desc, page_key."remoteId" desc
 	`;
-}
-
-function knownArchiveFailureFilterSql(
-	kind: KnownArchiveFailurePageKind
-): string {
-	const evidencePredicate =
-		kind === 'remote'
-			? `archive_object."failureChannel" = 'archive_evidence'`
-			: `archive_object."failureChannel" = 'scanner_issue'`;
-
-	return `archive_object."archiveUrlIdentity" = any($1::text[])
-		and ($2::text is null or archive_object."archiveUrlIdentity" = $2::text)
-		and ($3::text is null or archive_object."objectType" = $3::text)
-		and archive_object."createdAt" <= $4::timestamptz
-		and archive_object.status = 'failed'
-		and ${evidencePredicate}`;
 }
 
 function knownArchiveFailureCandidateFilterSql(

@@ -4,6 +4,10 @@ import { param, query, validationResult } from 'express-validator';
 import { pipeline } from 'node:stream/promises';
 import { GetHistoryArchiveRepairArtifact } from '../../use-cases/get-history-archive-repair-artifact/GetHistoryArchiveRepairArtifact.js';
 import {
+	GetHistoryArchiveRepairObjectArtifact,
+	type GetHistoryArchiveRepairObjectArtifactResult
+} from '../../use-cases/get-history-archive-repair-artifact/GetHistoryArchiveRepairObjectArtifact.js';
+import {
 	GetHistoryArchiveRepairPlan,
 	maxRepairPlanLimit
 } from '../../use-cases/get-history-archive-repair-plan/GetHistoryArchiveRepairPlan.js';
@@ -15,6 +19,7 @@ const artifactCacheMaxAgeSeconds = 31_536_000;
 
 export interface HistoryArchiveRepairHttpConfig {
 	getHistoryArchiveRepairArtifact: GetHistoryArchiveRepairArtifact;
+	getHistoryArchiveRepairObjectArtifact: GetHistoryArchiveRepairObjectArtifact;
 	getHistoryArchiveRepairPlan: GetHistoryArchiveRepairPlan;
 }
 
@@ -59,6 +64,66 @@ export function mountHistoryArchiveRepairRoutes(
 			res.setHeader(
 				'X-Stellar-Bucket-Hash',
 				result.artifact.contentHash.digest
+			);
+
+			try {
+				await pipeline(result.stream, res);
+			} catch {
+				if (!res.headersSent) {
+					return res.status(500).json({ error: 'Internal server error' });
+				}
+				res.destroy();
+			} finally {
+				await result.close();
+			}
+		}
+	);
+
+	router.get(
+		'/repair-artifacts/objects/:targetRemoteId/:candidateRemoteId/:proofId/:proofVersion/:proofEvaluatedAtMs/:contentDigest',
+		[
+			param('targetRemoteId').isUUID(),
+			param('candidateRemoteId').isUUID(),
+			param('proofId').isInt({ min: 1 }),
+			param('proofVersion').isInt({ min: 1 }),
+			param('proofEvaluatedAtMs').isInt({
+				max: Number.MAX_SAFE_INTEGER,
+				min: 1
+			}),
+			param('contentDigest').matches(/^[0-9a-f]{64}$/i)
+		],
+		async function (req: express.Request, res: express.Response) {
+			const errors = validationResult(req);
+			if (!errors.isEmpty()) {
+				return respondObjectUnavailable(res, invalidObjectProof());
+			}
+
+			const result = await config.getHistoryArchiveRepairObjectArtifact.execute(
+				{
+					candidateRemoteId: req.params.candidateRemoteId,
+					contentDigest: req.params.contentDigest,
+					proofId: req.params.proofId,
+					proofEvaluatedAtMs: Number(req.params.proofEvaluatedAtMs),
+					proofVersion: Number(req.params.proofVersion),
+					targetRemoteId: req.params.targetRemoteId
+				}
+			);
+			if (result.status === 'unavailable') {
+				return respondObjectUnavailable(res, result);
+			}
+
+			res.status(200);
+			res.setHeader('Content-Type', result.mediaType);
+			res.setHeader('Content-Length', String(result.byteLength));
+			res.setHeader(
+				'Content-Disposition',
+				`attachment; filename="${result.fileName}"`
+			);
+			res.setHeader('Cache-Control', 'no-store');
+			res.setHeader('X-Stellar-Content-SHA256', result.contentDigest);
+			res.setHeader(
+				'X-Stellar-Content-Representation',
+				result.contentRepresentation
 			);
 
 			try {
@@ -135,5 +200,48 @@ function statusForUnavailable(
 	) {
 		return 409;
 	}
+	return 503;
+}
+
+type ObjectUnavailable = Exclude<
+	GetHistoryArchiveRepairObjectArtifactResult,
+	{ readonly status: 'available' }
+>;
+
+function invalidObjectProof(): ObjectUnavailable {
+	return {
+		reason: 'proof-no-longer-valid',
+		retryAfterSeconds: null,
+		retryable: false,
+		status: 'unavailable'
+	};
+}
+
+function respondObjectUnavailable(
+	res: express.Response,
+	evidence: ObjectUnavailable
+): express.Response {
+	res.setHeader('Cache-Control', 'no-store');
+	if (evidence.retryable && evidence.retryAfterSeconds !== null) {
+		res.setHeader('Retry-After', String(evidence.retryAfterSeconds));
+	}
+	return res.status(statusForObjectUnavailable(evidence.reason)).json(evidence);
+}
+
+function statusForObjectUnavailable(
+	reason: ObjectUnavailable['reason']
+): number {
+	if (reason === 'invalid-object-identity') return 400;
+	if (reason === 'remote-payload-too-large') return 413;
+	if (reason === 'verification-busy') return 429;
+	if (
+		reason === 'content-hash-mismatch' ||
+		reason === 'invalid-compressed-payload' ||
+		reason === 'proof-no-longer-valid' ||
+		reason === 'remote-response-invalid'
+	) {
+		return 409;
+	}
+	if (reason === 'remote-fetch-failed') return 502;
 	return 503;
 }

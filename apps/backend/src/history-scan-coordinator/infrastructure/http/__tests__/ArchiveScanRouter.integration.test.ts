@@ -15,6 +15,7 @@ import { GetHistoryArchiveObjects } from '@history-scan-coordinator/use-cases/ge
 import { GetHistoryArchiveObjectSummary } from '@history-scan-coordinator/use-cases/get-history-archive-object-summary/GetHistoryArchiveObjectSummary.js';
 import { GetHistoryArchiveObjectStatusSummary } from '@history-scan-coordinator/use-cases/get-history-archive-object-status-summary/GetHistoryArchiveObjectStatusSummary.js';
 import { GetHistoryArchiveRepairArtifact } from '@history-scan-coordinator/use-cases/get-history-archive-repair-artifact/GetHistoryArchiveRepairArtifact.js';
+import { GetHistoryArchiveRepairObjectArtifact } from '@history-scan-coordinator/use-cases/get-history-archive-repair-artifact/GetHistoryArchiveRepairObjectArtifact.js';
 import { GetHistoryArchiveRepairPlan } from '@history-scan-coordinator/use-cases/get-history-archive-repair-plan/GetHistoryArchiveRepairPlan.js';
 import { GetScanLogs } from '@history-scan-coordinator/use-cases/get-scan-logs/GetScanLogs.js';
 import { InvalidUrlError } from '@history-scan-coordinator/use-cases/get-latest-scan/InvalidUrlError.js';
@@ -32,6 +33,7 @@ describe('ArchiveScanRouter.integration', () => {
 	let getHistoryArchiveObjectSummary: jest.Mocked<GetHistoryArchiveObjectSummary>;
 	let getHistoryArchiveObjectStatusSummary: jest.Mocked<GetHistoryArchiveObjectStatusSummary>;
 	let getHistoryArchiveRepairArtifact: jest.Mocked<GetHistoryArchiveRepairArtifact>;
+	let getHistoryArchiveRepairObjectArtifact: jest.Mocked<GetHistoryArchiveRepairObjectArtifact>;
 	let getHistoryArchiveRepairPlan: jest.Mocked<GetHistoryArchiveRepairPlan>;
 	let getHistoryArchiveState: jest.Mocked<GetHistoryArchiveState>;
 	let getLatestScan: jest.Mocked<GetLatestScan>;
@@ -49,6 +51,8 @@ describe('ArchiveScanRouter.integration', () => {
 		getHistoryArchiveObjectStatusSummary =
 			mock<GetHistoryArchiveObjectStatusSummary>();
 		getHistoryArchiveRepairArtifact = mock<GetHistoryArchiveRepairArtifact>();
+		getHistoryArchiveRepairObjectArtifact =
+			mock<GetHistoryArchiveRepairObjectArtifact>();
 		getHistoryArchiveRepairPlan = mock<GetHistoryArchiveRepairPlan>();
 		getHistoryArchiveState = mock<GetHistoryArchiveState>();
 		getLatestScan = mock<GetLatestScan>();
@@ -68,6 +72,7 @@ describe('ArchiveScanRouter.integration', () => {
 				getHistoryArchiveObjectSummary,
 				getHistoryArchiveObjectStatusSummary,
 				getHistoryArchiveRepairArtifact,
+				getHistoryArchiveRepairObjectArtifact,
 				getHistoryArchiveRepairPlan,
 				getHistoryArchiveState,
 				getLatestScan,

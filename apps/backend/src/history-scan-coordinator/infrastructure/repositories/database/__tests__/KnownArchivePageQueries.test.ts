@@ -160,7 +160,7 @@ describe('known archive page queries', () => {
 	it('counts and pages remote failures separately from infrastructure failures', async () => {
 		const manager = mock<EntityManager>();
 		manager.query
-			.mockResolvedValueOnce([{ failureCount: '7' }])
+			.mockResolvedValueOnce([{ failureCount: '7', rollupComplete: true }])
 			.mockResolvedValueOnce([]);
 		const page = {
 			before: cursor,
@@ -200,6 +200,43 @@ describe('known archive page queries', () => {
 		expect(knownArchiveFailurePageSql('remote')).toContain(
 			'cross join lateral'
 		);
+		expect(knownArchiveFailureCountSql('remote')).toContain(
+			'history_archive_object_type_summary'
+		);
+		expect(knownArchiveFailureCountSql('remote')).toContain(
+			'archive_object."createdAt" > $4::timestamptz'
+		);
+		expect(knownArchiveFailureCountSql('remote')).not.toContain(
+			'archive_object."createdAt" <= $4::timestamptz'
+		);
+		expect(knownArchiveFailureCountSql('infrastructure')).toContain(
+			'root_summary."workerIssueObjects"'
+		);
+		expect(knownArchiveFailureCountSql('infrastructure')).toContain(
+			'type_summary."scannerIssueObjects"'
+		);
+	});
+
+	it('fails closed when filtered failure rollups are incomplete', async () => {
+		const manager = mock<EntityManager>();
+		manager.query.mockResolvedValueOnce([
+			{ failureCount: '7', rollupComplete: false }
+		]);
+
+		await expect(
+			findKnownArchiveFailurePage(
+				manager,
+				[root],
+				{
+					before: null,
+					filters: { archiveUrlIdentity: root, objectType: 'ledger' },
+					limit: 10,
+					snapshotAt,
+					snapshotTotal: null
+				},
+				'remote'
+			)
+		).rejects.toThrow('Archive failure evidence rollup is not ready');
 	});
 
 	it('does not query pages whose aggregate total is zero', async () => {

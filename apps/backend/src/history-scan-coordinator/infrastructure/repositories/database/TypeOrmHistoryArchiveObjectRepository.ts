@@ -47,10 +47,10 @@ import {
 } from './HistoryArchiveObjectDependencyWrite.js';
 import { reconcileHistoryArchiveObjectExecution } from './HistoryArchiveObjectExecutionReconciler.js';
 import { findVerifiedCheckpointsNeedingReconciliation } from './HistoryArchiveCheckpointReconciliationQuery.js';
-import {
-	findVerifiedHistoryArchiveBucketSources,
-	getHistoryArchiveRepairPlanSummary
-} from './HistoryArchiveRepairPlanQuery.js';
+import { getHistoryArchiveRepairPlanSummary } from './HistoryArchiveRepairPlanQuery.js';
+import { findVerifiedCheckpointObjectSources } from './HistoryArchiveVerifiedCheckpointSourceQuery.js';
+import { findVerifiedBucketSources } from './HistoryArchiveVerifiedBucketSourceQuery.js';
+import { historyArchiveRepairActionableObjectSql } from './HistoryArchiveRepairActionableObjectSql.js';
 
 const maxActiveObjectsPerArchive = historyArchivePerRootFrontier;
 const maxActiveObjectsPerHost = historyArchivePerHostConcurrency;
@@ -82,6 +82,7 @@ export class TypeOrmHistoryArchiveObjectRepository implements HistoryArchiveObje
 				archiveUrlIdentity
 			})
 			.andWhere('archiveObject.status = :status', { status: 'failed' })
+			.andWhere(historyArchiveRepairActionableObjectSql('archiveObject'))
 			.orderBy('archiveObject.updatedAt', 'DESC')
 			.addOrderBy('archiveObject.objectOrder', 'ASC')
 			.addOrderBy('archiveObject.objectKey', 'ASC')
@@ -125,14 +126,25 @@ export class TypeOrmHistoryArchiveObjectRepository implements HistoryArchiveObje
 			.getMany();
 	}
 
-	async findVerifiedBucketSourcesByHashes(
-		bucketHashes: readonly string[],
-		limitPerHash: number
+	async findVerifiedBucketSourcesByRemoteIds(
+		targetRemoteIds: readonly string[],
+		limitPerObject: number
 	) {
-		return await findVerifiedHistoryArchiveBucketSources(
+		return await findVerifiedBucketSources(
 			this.repository.manager,
-			bucketHashes,
-			limitPerHash
+			targetRemoteIds,
+			limitPerObject
+		);
+	}
+
+	async findVerifiedCheckpointObjectSources(
+		targetRemoteIds: readonly string[],
+		limitPerObject: number
+	) {
+		return await findVerifiedCheckpointObjectSources(
+			this.repository.manager,
+			targetRemoteIds,
+			limitPerObject
 		);
 	}
 

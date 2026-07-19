@@ -61,7 +61,27 @@ export interface HistoryArchiveRepairSourceCandidateV1 {
 	readonly archiveUrl: string;
 	readonly archiveUrlIdentity: string;
 	readonly objectUrl: string;
+	readonly proof: HistoryArchiveRepairSourceProofV1;
 	readonly verifiedAt: string | null;
+}
+
+export interface HistoryArchiveRepairSourceProofV1 {
+	readonly anchor: {
+		readonly kind:
+			'content-addressed-bucket' | 'multi-source' | 'target-digest';
+		readonly sourceCount: number;
+	};
+	readonly candidateObjectRemoteId: string;
+	readonly checkpointLedger: number;
+	readonly contentHash: {
+		readonly algorithm: 'sha256';
+		readonly digest: string;
+		readonly representation: 'canonical-json' | 'uncompressed-xdr';
+	};
+	readonly evaluatedAt: string;
+	readonly kind: 'strict-checkpoint';
+	readonly proofId: string;
+	readonly proofVersion: number;
 }
 
 export type HistoryArchiveRepairArtifactUnavailableReasonV1 =
@@ -79,7 +99,7 @@ export type HistoryArchiveRepairArtifactUnavailableReasonV1 =
 export interface HistoryArchiveRepairArtifactContentHashV1 {
 	readonly algorithm: 'sha256';
 	readonly digest: string;
-	readonly representation: 'uncompressed-xdr';
+	readonly representation: 'canonical-json' | 'uncompressed-xdr';
 }
 
 export interface HistoryArchiveRepairArtifactAvailableV1 {
@@ -91,6 +111,17 @@ export interface HistoryArchiveRepairArtifactAvailableV1 {
 	readonly objectIdentity: string;
 	readonly provenAt: string;
 	readonly status: 'available';
+}
+
+export interface HistoryArchiveRepairArtifactVerifyOnDownloadV1 {
+	readonly artifactType: HistoryArchiveObjectTypeV1;
+	readonly byteLength: number | null;
+	readonly contentHash: HistoryArchiveRepairArtifactContentHashV1;
+	readonly downloadUrl: string;
+	readonly mediaType: 'application/gzip' | 'application/json';
+	readonly objectIdentity: string;
+	readonly provenAt: string;
+	readonly status: 'verify-on-download';
 }
 
 export interface HistoryArchiveRepairArtifactUnavailableV1 {
@@ -107,6 +138,7 @@ export interface HistoryArchiveRepairArtifactUnavailableV1 {
 
 export type HistoryArchiveRepairArtifactAvailabilityV1 =
 	| HistoryArchiveRepairArtifactAvailableV1
+	| HistoryArchiveRepairArtifactVerifyOnDownloadV1
 	| HistoryArchiveRepairArtifactUnavailableV1;
 
 export interface HistoryArchiveCheckpointRepairEvidenceV1 {

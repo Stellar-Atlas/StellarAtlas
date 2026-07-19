@@ -36,11 +36,38 @@ export interface HistoryArchiveRepairPlanSummary {
 }
 
 export interface HistoryArchiveVerifiedBucketSource {
+	readonly anchorKind: 'content-addressed-bucket';
 	readonly archiveUrl: string;
 	readonly archiveUrlIdentity: string;
 	readonly bucketHash: string;
+	readonly candidateRemoteId: string;
+	readonly checkpointLedger: number;
+	readonly contentDigest: string;
+	readonly contentRepresentation: 'uncompressed-xdr';
 	readonly objectUrl: string;
-	readonly verifiedAt: Date | null;
+	readonly proofEvaluatedAt: Date;
+	readonly proofId: number;
+	readonly proofVersion: number;
+	readonly corroboratingSourceCount: number;
+	readonly targetRemoteId: string;
+	readonly verifiedAt: Date;
+}
+
+export interface HistoryArchiveVerifiedCheckpointObjectSource {
+	readonly anchorKind: 'multi-source' | 'target-digest';
+	readonly archiveUrl: string;
+	readonly archiveUrlIdentity: string;
+	readonly candidateRemoteId: string;
+	readonly checkpointLedger: number;
+	readonly contentDigest: string;
+	readonly contentRepresentation: 'canonical-json' | 'uncompressed-xdr';
+	readonly objectUrl: string;
+	readonly proofEvaluatedAt: Date;
+	readonly proofId: number;
+	readonly proofVersion: number;
+	readonly corroboratingSourceCount: number;
+	readonly targetRemoteId: string;
+	readonly verifiedAt: Date;
 }
 
 export interface HistoryArchiveObjectWorkerSnapshot {
@@ -113,10 +140,14 @@ export interface HistoryArchiveObjectRepository {
 	findBucketObjectsByHash(
 		bucketHash: string
 	): Promise<readonly HistoryArchiveObject[]>;
-	findVerifiedBucketSourcesByHashes(
-		bucketHashes: readonly string[],
-		limitPerHash: number
+	findVerifiedBucketSourcesByRemoteIds(
+		targetRemoteIds: readonly string[],
+		limitPerObject: number
 	): Promise<readonly HistoryArchiveVerifiedBucketSource[]>;
+	findVerifiedCheckpointObjectSources(
+		targetRemoteIds: readonly string[],
+		limitPerObject: number
+	): Promise<readonly HistoryArchiveVerifiedCheckpointObjectSource[]>;
 	findByRemoteId(remoteId: string): Promise<HistoryArchiveObject | null>;
 	findLatestActivityAt(): Promise<Date | null>;
 	findUnreconciledTransitions(

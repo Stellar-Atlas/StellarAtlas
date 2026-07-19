@@ -158,8 +158,8 @@ function nullableDate(value: Date | string | null | undefined): Date | null {
 }
 
 export const knownArchiveCopyCoverageSql = `
-	with requested_failures as (
-		select source.*
+	with requested_failures as materialized (
+		select source.*, source_state."networkPassphrase"
 		from history_archive_object_queue source
 		join history_archive_state_snapshot source_state
 			on source_state."archiveUrlIdentity" = source."archiveUrlIdentity"
@@ -168,17 +168,14 @@ export const knownArchiveCopyCoverageSql = `
 		where source."remoteId" = any($1::uuid[])
 			and source."createdAt" <= $4::timestamptz
 	),
-	source_proofs as (
+	source_proofs as materialized (
 		select
 			source.*,
-			source_state."networkPassphrase",
 			coalesce(
 				verified_event."verificationFacts",
 				source."verificationFacts"
 			) as "proofFacts"
 		from requested_failures source
-		join history_archive_state_snapshot source_state
-			on source_state."archiveUrlIdentity" = source."archiveUrlIdentity"
 		left join lateral (
 			select event."verificationFacts"
 			from history_archive_object_event event
@@ -189,47 +186,75 @@ export const knownArchiveCopyCoverageSql = `
 			limit 1
 		) verified_event on true
 	),
-	copy_proofs as (
+	candidate_copies as materialized (
 		select
-			copy.*,
-			copy_state."networkPassphrase",
-			coalesce(
-				latest_event."verificationFacts",
-				copy."verificationFacts"
-			) as "proofFacts",
-			coalesce(latest_event."createdAt", copy."verifiedAt") as "proofAt"
-		from history_archive_object_queue copy
+			source."remoteId" as "sourceRemoteId",
+			source."objectType" as "sourceObjectType",
+			source."bucketHash" as "sourceBucketHash",
+			source."checkpointLedger" as "sourceCheckpointLedger",
+			source."proofFacts" as "sourceProofFacts",
+			copy."archiveUrl",
+			copy."archiveUrlIdentity",
+			copy."bucketHash",
+			copy."checkpointLedger",
+			copy."objectType",
+			copy."objectUrl",
+			copy."remoteId",
+			copy.status,
+			copy."updatedAt",
+			copy."verificationFacts",
+			copy."verifiedAt"
+		from source_proofs source
+		cross join lateral (
+			select candidate.*
+			from history_archive_object_queue candidate
+			where candidate."objectType" = source."objectType"
+				and candidate."objectKey" = source."objectKey"
+				and candidate."archiveUrlIdentity" <>
+					source."archiveUrlIdentity"
+				and candidate."createdAt" <= $4::timestamptz
+				and char_length(candidate."objectUrl") between 1 and 2048
+				and candidate."objectUrl" ~* '^https?://[^/?#[:space:]@]+'
+				and candidate."objectUrl" !~ '[[:space:][:cntrl:]]'
+		) copy
 		join history_archive_state_snapshot copy_state
 			on copy_state."archiveUrlIdentity" = copy."archiveUrlIdentity"
 			and copy_state.status = 'available'
-			and nullif(copy_state."networkPassphrase", '') is not null
+			and copy_state."networkPassphrase" =
+				source."networkPassphrase"
+	),
+	copy_proofs as (
+		select
+			candidate.*,
+			coalesce(
+				latest_event."verificationFacts",
+				candidate."verificationFacts"
+			) as "proofFacts",
+			coalesce(latest_event."createdAt", candidate."verifiedAt") as "proofAt"
+		from candidate_copies candidate
 		left join lateral (
 			select
 				event."createdAt",
 				event."eventType",
 				event."verificationFacts"
 			from history_archive_object_event event
-			where event."objectRemoteId" = copy."remoteId"
+			where event."objectRemoteId" = candidate."remoteId"
 				and event."createdAt" <= $4::timestamptz
 			order by event."createdAt" desc, event."remoteId" desc
 			limit 1
 		) latest_event on true
-		where copy."createdAt" <= $4::timestamptz
-			and char_length(copy."objectUrl") between 1 and 2048
-			and copy."objectUrl" ~* '^https?://[^/?#[:space:]@]+'
-			and copy."objectUrl" !~ '[[:space:][:cntrl:]]'
-			and (
+		where (
 				latest_event."eventType" = 'verified'
 				or (
 					latest_event."eventType" is null
-					and copy.status = 'verified'
-					and copy."updatedAt" <= $4::timestamptz
+					and candidate.status = 'verified'
+					and candidate."updatedAt" <= $4::timestamptz
 				)
 			)
 	),
 	copy_candidates as (
 		select
-			source."remoteId" as "sourceRemoteId",
+			copy."sourceRemoteId",
 			case
 				when copy."archiveUrlIdentity" = any($2::text[])
 					then 'same-organization'
@@ -240,24 +265,20 @@ export const knownArchiveCopyCoverageSql = `
 			copy."objectUrl",
 			copy."remoteId",
 			copy."proofAt" as "verifiedAt"
-		from source_proofs source
-		join copy_proofs copy
-			on copy."objectType" = source."objectType"
-			and copy."objectKey" = source."objectKey"
-			and copy."archiveUrlIdentity" <> source."archiveUrlIdentity"
-			and copy."networkPassphrase" = source."networkPassphrase"
-			and (
+		from copy_proofs copy
+		where (
 				(
-					source."objectType" = 'bucket'
-					and source."bucketHash" ~ '^[0-9a-fA-F]{64}$'
-					and lower(copy."bucketHash") = lower(source."bucketHash")
+					copy."sourceObjectType" = 'bucket'
+					and copy."sourceBucketHash" ~ '^[0-9a-fA-F]{64}$'
+					and lower(copy."bucketHash") =
+						lower(copy."sourceBucketHash")
 					and copy."proofFacts" -> 'bucketObject' ->> 'matched' = 'true'
 					and lower(
 						copy."proofFacts" -> 'bucketObject' ->> 'expectedBucketHash'
-					) = lower(source."bucketHash")
+					) = lower(copy."sourceBucketHash")
 				)
 				or (
-					source."objectType" <> 'bucket'
+					copy."sourceObjectType" <> 'bucket'
 					and copy."proofFacts" -> 'content' ->> 'algorithm' = 'sha256'
 					and copy."proofFacts" -> 'content' ->> 'digest'
 						~ '^[0-9a-fA-F]{64}$'
@@ -267,26 +288,31 @@ export const knownArchiveCopyCoverageSql = `
 					) is not null
 					and (
 						(
-							source."proofFacts" -> 'content' ->> 'algorithm' = 'sha256'
-							and source."proofFacts" -> 'content' ->> 'digest'
+							copy."sourceProofFacts" -> 'content' ->> 'algorithm' =
+								'sha256'
+							and copy."sourceProofFacts" -> 'content' ->> 'digest'
 								~ '^[0-9a-fA-F]{64}$'
 							and lower(copy."proofFacts" -> 'content' ->> 'digest') =
-								lower(source."proofFacts" -> 'content' ->> 'digest')
+								lower(
+									copy."sourceProofFacts" -> 'content' ->> 'digest'
+								)
 							and copy."proofFacts" -> 'content' ->> 'representation' =
-								source."proofFacts" -> 'content' ->> 'representation'
+								copy."sourceProofFacts" -> 'content' ->> 'representation'
 						)
 						or (
-							source."objectType" in (
+							copy."sourceObjectType" in (
 								'checkpoint-state',
 								'ledger',
 								'transactions',
 								'results'
 							)
-							and source."checkpointLedger" is not null
-							and copy."checkpointLedger" = source."checkpointLedger"
+							and copy."sourceCheckpointLedger" is not null
+							and copy."checkpointLedger" =
+								copy."sourceCheckpointLedger"
 							and not coalesce(
-								source."proofFacts" -> 'content' ->> 'algorithm' = 'sha256'
-								and source."proofFacts" -> 'content' ->> 'digest'
+								copy."sourceProofFacts" -> 'content' ->> 'algorithm' =
+									'sha256'
+								and copy."sourceProofFacts" -> 'content' ->> 'digest'
 									~ '^[0-9a-fA-F]{64}$',
 								false
 							)

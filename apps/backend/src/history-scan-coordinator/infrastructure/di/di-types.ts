@@ -12,6 +12,9 @@ export const TYPES = {
 	HistoryArchiveRepairArtifactRepository: Symbol(
 		'HistoryArchiveRepairArtifactRepository'
 	),
+	HistoryArchiveRepairObjectArtifactRepository: Symbol(
+		'HistoryArchiveRepairObjectArtifactRepository'
+	),
 	HistoryArchiveObjectEventRepository: Symbol(
 		'HistoryArchiveObjectEventRepository'
 	),

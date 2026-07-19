@@ -6,18 +6,14 @@ import {
 	type DisposablePostgres
 } from '@test-support/DisposablePostgres.js';
 import {
-	findVerifiedHistoryArchiveBucketSources,
 	getHistoryArchiveRepairPlanSummary,
-	historyArchiveRepairPlanSummarySql,
-	historyArchiveVerifiedBucketSourcesSql
+	historyArchiveRepairPlanSummarySql
 } from '../HistoryArchiveRepairPlanQuery.js';
 
 jest.setTimeout(180_000);
 
 const archiveUrlIdentity = 'https://repair-target.example';
-const bucketCount = 500;
 const irrelevantObjectCount = 1_000_000;
-const sourceLimit = 5;
 
 describe('history archive repair plan query scale', () => {
 	let dataSource: DataSource;
@@ -39,7 +35,7 @@ describe('history archive repair plan query scale', () => {
 		}
 	});
 
-	it('keeps exact counts and 500 attributed bucket probes within bounded plans', async () => {
+	it('keeps exact repair counts within a bounded rollup plan', async () => {
 		const summaryStartedAt = performance.now();
 		const summary = await getHistoryArchiveRepairPlanSummary(
 			dataSource.manager,
@@ -55,63 +51,18 @@ describe('history archive repair plan query scale', () => {
 		});
 		expect(summary.hostThrottles).toHaveLength(1);
 
-		const bucketHashes = Array.from({ length: bucketCount }, (_, index) =>
-			(index + 1).toString(16).padStart(64, '0')
-		);
-		const sourcesStartedAt = performance.now();
-		const sources = await findVerifiedHistoryArchiveBucketSources(
-			dataSource.manager,
-			bucketHashes,
-			sourceLimit
-		);
-		const sourcesMs = performance.now() - sourcesStartedAt;
-		expect(sources).toHaveLength(bucketCount * sourceLimit);
-		expect(
-			sources.every((source) => source.objectUrl.includes(source.bucketHash))
-		).toBe(true);
-		expect(
-			sources
-				.filter((source) => source.bucketHash === bucketHashes[0])
-				.map((source) => source.archiveUrlIdentity)
-		).toEqual(
-			Array.from(
-				{ length: sourceLimit },
-				(_, index) =>
-					`https://source-${String(index + 1).padStart(2, '0')}.example`
-			)
-		);
-
 		const summaryPlan = await explain(
 			dataSource,
 			historyArchiveRepairPlanSummarySql,
 			[archiveUrlIdentity]
 		);
-		const sourcePlan = await explain(
-			dataSource,
-			historyArchiveVerifiedBucketSourcesSql,
-			[bucketHashes, sourceLimit]
-		);
 		const summaryRelations = readRelations(summaryPlan);
-		const queueNodes = readRelationNodes(
-			sourcePlan,
-			'history_archive_object_queue'
-		);
 		expect(summaryRelations).not.toContain('history_archive_object_queue');
-		expect(queueNodes.length).toBeGreaterThan(0);
-		expect(queueNodes.some((node) => node['Node Type'] === 'Seq Scan')).toBe(
-			false
-		);
-		expect(
-			queueNodes.some((node) =>
-				['Index Scan', 'Bitmap Heap Scan'].includes(node['Node Type'] ?? '')
-			)
-		).toBe(true);
 		process.stdout.write(
-			`ARCHIVE_REPAIR_PLAN_SCALE ${JSON.stringify({ irrelevantObjectCount, sourcePlan: summarizePlan(sourcePlan), sourcesMs: Number(sourcesMs.toFixed(3)), summaryMs: Number(summaryMs.toFixed(3)), summaryPlan: summarizePlan(summaryPlan) })}\n`
+			`ARCHIVE_REPAIR_PLAN_SCALE ${JSON.stringify({ irrelevantObjectCount, summaryMs: Number(summaryMs.toFixed(3)), summaryPlan: summarizePlan(summaryPlan) })}\n`
 		);
 
 		expect(summaryMs).toBeLessThan(500);
-		expect(sourcesMs).toBeLessThan(5_000);
 	});
 });
 
@@ -149,17 +100,6 @@ function readRelations(plan: QueryPlan): readonly string[] {
 		}
 	});
 	return relations;
-}
-
-function readRelationNodes(
-	plan: QueryPlan,
-	relationName: string
-): readonly QueryPlanNode[] {
-	const nodes: QueryPlanNode[] = [];
-	visitPlan(plan.Plan, (node) => {
-		if (node['Relation Name'] === relationName) nodes.push(node);
-	});
-	return nodes;
 }
 
 function summarizePlan(plan: QueryPlan) {
@@ -247,7 +187,6 @@ async function createFixture(source: DataSource): Promise<void> {
 	await source.query(hostThrottleFixtureSql, [archiveUrlIdentity]);
 	await source.query(irrelevantObjectFixtureSql, [irrelevantObjectCount]);
 	await source.query(targetObjectFixtureSql, [archiveUrlIdentity]);
-	await source.query(bucketSourceFixtureSql, [bucketCount]);
 	await source.query('analyze history_archive_object_queue');
 }
 
@@ -285,38 +224,4 @@ const targetObjectFixtureSql = `
 			else 'failed'
 		end
 	from generate_series(1, 11) object_index
-`;
-
-const bucketSourceFixtureSql = `
-		insert into history_archive_object_queue (
-			"archiveUrl", "archiveUrlIdentity", "objectType", "objectKey",
-			"objectUrl", status, "verificationFacts", "verifiedAt", "updatedAt"
-		)
-	select
-		'https://source-' || lpad(source_index::text, 2, '0') || '.example',
-		'https://source-' || lpad(source_index::text, 2, '0') || '.example',
-		'bucket',
-		'bucket:' || lpad(to_hex(bucket_index), 64, '0'),
-		'https://source-' || lpad(source_index::text, 2, '0')
-			|| '.example/bucket-' || lpad(to_hex(bucket_index), 64, '0'),
-			case when source_index <= 8 then 'verified' else 'failed' end,
-			jsonb_build_object(
-				'bucketObject', jsonb_build_object(
-					'expectedBucketHash', lpad(to_hex(bucket_index), 64, '0'),
-					'matched', true,
-					'sourceUrl', 'https://source-' ||
-						lpad(source_index::text, 2, '0') ||
-						'.example/bucket-' ||
-						lpad(to_hex(bucket_index), 64, '0')
-				),
-				'content', jsonb_build_object(
-					'algorithm', 'sha256',
-					'digest', lpad(to_hex(bucket_index), 64, '0'),
-					'representation', 'uncompressed-xdr'
-				)
-			),
-			case when source_index <= 8 then now() else null end,
-		now() - source_index * interval '1 second'
-	from generate_series(1, $1::integer) bucket_index
-	cross join generate_series(1, 11) source_index
 `;

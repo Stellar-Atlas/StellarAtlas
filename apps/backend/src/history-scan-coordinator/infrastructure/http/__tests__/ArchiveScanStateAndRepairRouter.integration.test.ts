@@ -135,6 +135,80 @@ describe('ArchiveScanRouter state and repair endpoints', () => {
 		expect(close).toHaveBeenCalledTimes(1);
 	});
 
+	it('streams a remote object only after proof-bound byte verification', async () => {
+		const targetRemoteId = '11111111-1111-4111-8111-111111111111';
+		const candidateRemoteId = '22222222-2222-4222-8222-222222222222';
+		const digest = '7'.repeat(64);
+		const proofEvaluatedAtMs = Date.parse('2026-07-19T00:01:00.000Z');
+		const payload = Buffer.from('verified transaction archive bytes');
+		const close = jest.fn(async () => undefined);
+		config.getHistoryArchiveRepairObjectArtifact.execute.mockResolvedValue({
+			byteLength: payload.byteLength,
+			close,
+			contentDigest: digest,
+			contentRepresentation: 'uncompressed-xdr',
+			fileName: 'transactions-0000003f.xdr.gz',
+			mediaType: 'application/gzip',
+			objectIdentity: 'transactions:0000003f',
+			provenAt: new Date('2026-07-19T00:02:00.000Z'),
+			status: 'available',
+			stream: Readable.from(payload)
+		});
+
+		const response = await request(app)
+			.get(
+				`/archive-scans/repair-artifacts/objects/${targetRemoteId}/${candidateRemoteId}/41/7/${proofEvaluatedAtMs}/${digest}`
+			)
+			.buffer(true)
+			.parse(binaryParser)
+			.expect(200)
+			.expect('Content-Type', 'application/gzip')
+			.expect('X-Stellar-Content-SHA256', digest)
+			.expect('X-Stellar-Content-Representation', 'uncompressed-xdr')
+			.expect('Cache-Control', 'no-store');
+
+		expect(response.body).toEqual(payload);
+		expect(
+			config.getHistoryArchiveRepairObjectArtifact.execute
+		).toHaveBeenCalledWith({
+			candidateRemoteId,
+			contentDigest: digest,
+			proofId: '41',
+			proofEvaluatedAtMs,
+			proofVersion: 7,
+			targetRemoteId
+		});
+		expect(close).toHaveBeenCalledTimes(1);
+	});
+
+	it('fails closed when the object repair proof is no longer current', async () => {
+		const targetRemoteId = '11111111-1111-4111-8111-111111111111';
+		const candidateRemoteId = '22222222-2222-4222-8222-222222222222';
+		const digest = '7'.repeat(64);
+		const proofEvaluatedAtMs = Date.parse('2026-07-19T00:01:00.000Z');
+		config.getHistoryArchiveRepairObjectArtifact.execute.mockResolvedValue({
+			reason: 'proof-no-longer-valid',
+			retryAfterSeconds: null,
+			retryable: false,
+			status: 'unavailable'
+		});
+
+		await request(app)
+			.get(
+				`/archive-scans/repair-artifacts/objects/${targetRemoteId}/${candidateRemoteId}/41/7/${proofEvaluatedAtMs}/${digest}`
+			)
+			.expect(409)
+			.expect('Cache-Control', 'no-store')
+			.expect((response) => {
+				expect(response.body).toEqual({
+					reason: 'proof-no-longer-valid',
+					retryAfterSeconds: null,
+					retryable: false,
+					status: 'unavailable'
+				});
+			});
+	});
+
 	it.each([
 		['local-payload-missing', 404],
 		['content-hash-mismatch', 409]

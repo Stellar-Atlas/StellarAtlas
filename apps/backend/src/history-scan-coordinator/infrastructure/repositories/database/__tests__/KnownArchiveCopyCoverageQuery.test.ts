@@ -83,13 +83,20 @@ describe('KnownArchiveCopyCoverageQuery', () => {
 		expect(knownArchiveCopyCoverageSql).toContain('row_number() over');
 		expect(knownArchiveCopyCoverageSql).toContain('where sample_rank <= $3');
 		expect(knownArchiveCopyCoverageSql).toContain(
-			'copy."networkPassphrase" = source."networkPassphrase"'
+			'copy_state."networkPassphrase" ='
 		);
-		expect(knownArchiveCopyCoverageSql).toContain("-> 'content' ->> 'digest'");
-		expect(knownArchiveCopyCoverageSql).toContain('source."objectType" in (');
 		expect(knownArchiveCopyCoverageSql).toContain(
-			'copy."checkpointLedger" = source."checkpointLedger"'
+			'candidate."objectKey" = source."objectKey"'
 		);
+		expect(knownArchiveCopyCoverageSql).toContain(
+			'candidate_copies as materialized'
+		);
+		expect(knownArchiveCopyCoverageSql).toContain('cross join lateral');
+		expect(knownArchiveCopyCoverageSql).toContain("-> 'content' ->> 'digest'");
+		expect(knownArchiveCopyCoverageSql).toContain(
+			'copy."sourceObjectType" in ('
+		);
+		expect(knownArchiveCopyCoverageSql).toContain('copy."checkpointLedger" =');
 		expect(knownArchiveCopyCoverageSql).not.toContain(
 			"source.\"objectType\" in ('history-archive-state', 'scp')"
 		);

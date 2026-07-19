@@ -54,6 +54,25 @@ describe('LocalHistoryArchiveRepairArtifactRepository', () => {
 		});
 	});
 
+	it('checks presence cheaply but still rehashes before download', async () => {
+		const requestedHash = 'd'.repeat(64);
+		const compressed = gzipSync(Buffer.from('different bucket payload'));
+		await writeBucket(rootDirectory, requestedHash, compressed);
+		const repository = createRepository(rootDirectory);
+
+		await expect(
+			repository.inspectBucketPresence(requestedHash)
+		).resolves.toEqual({
+			bucketHash: requestedHash,
+			byteLength: compressed.byteLength,
+			status: 'present'
+		});
+		await expect(repository.openBucket(requestedHash)).resolves.toMatchObject({
+			reason: 'content-hash-mismatch',
+			status: 'unavailable'
+		});
+	});
+
 	it('returns retry evidence when the local payload is missing', async () => {
 		const bucketHash = 'b'.repeat(64);
 		const repository = createRepository(rootDirectory);

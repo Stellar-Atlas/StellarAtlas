@@ -7,6 +7,7 @@ import { pipeline } from 'node:stream/promises';
 import { createGunzip } from 'node:zlib';
 import type {
 	HistoryArchiveRepairArtifactInspection,
+	HistoryArchiveRepairArtifactPresence,
 	HistoryArchiveRepairArtifactProof,
 	HistoryArchiveRepairArtifactRepository,
 	HistoryArchiveRepairArtifactUnavailable,
@@ -33,6 +34,12 @@ type ProvenHandle = {
 	readonly handle: FileHandle;
 	readonly proof: HistoryArchiveRepairArtifactProof;
 	readonly release: () => void;
+};
+
+type PresentHandle = {
+	readonly bucketHash: string;
+	readonly handle: FileHandle;
+	readonly stats: Stats;
 };
 
 type DigestResult =
@@ -72,6 +79,22 @@ export class LocalHistoryArchiveRepairArtifactRepository implements HistoryArchi
 			options.verificationTimeoutMs,
 			defaultVerificationTimeoutMs
 		);
+	}
+
+	async inspectBucketPresence(
+		bucketHash: string
+	): Promise<
+		| HistoryArchiveRepairArtifactPresence
+		| HistoryArchiveRepairArtifactUnavailable
+	> {
+		const present = await this.openPresentHandle(bucketHash);
+		if ('status' in present) return present;
+		await closeHandle(present.handle);
+		return {
+			bucketHash: present.bucketHash,
+			byteLength: present.stats.size,
+			status: 'present'
+		};
 	}
 
 	async inspectBucket(
@@ -128,13 +151,61 @@ export class LocalHistoryArchiveRepairArtifactRepository implements HistoryArchi
 		const release = this.acquireVerification();
 		if (release === null) return unavailable(bucketHash, 'verification-busy');
 
+		const present = await this.openPresentHandle(bucketHash);
+		if ('status' in present) {
+			release();
+			return present;
+		}
+		try {
+			const digest = await this.hashUncompressed(
+				present.handle,
+				present.stats.size
+			);
+			const after = await present.handle.stat();
+			if (!sameFileVersion(present.stats, after)) {
+				await closeHandle(present.handle);
+				release();
+				return unavailable(bucketHash, 'local-storage-unavailable');
+			}
+			if (digest.status === 'failed') {
+				await closeHandle(present.handle);
+				release();
+				return unavailable(bucketHash, digest.reason);
+			}
+			if (digest.digest !== bucketHash) {
+				await closeHandle(present.handle);
+				release();
+				return unavailable(bucketHash, 'content-hash-mismatch');
+			}
+
+			return {
+				handle: present.handle,
+				proof: {
+					bucketHash,
+					byteLength: present.stats.size,
+					provenAt: new Date(),
+					status: 'available'
+				},
+				release
+			};
+		} catch (error) {
+			await closeHandle(present.handle);
+			release();
+			return unavailable(bucketHash, reasonForFileError(error));
+		}
+	}
+
+	private async openPresentHandle(
+		requestedHash: string
+	): Promise<PresentHandle | HistoryArchiveRepairArtifactUnavailable> {
+		const bucketHash = normalizeBucketHash(requestedHash);
+		if (bucketHash === null)
+			return unavailable(null, 'invalid-object-identity');
+		const filePath = this.resolveBucketPath(bucketHash);
+		if (filePath === null) return unavailable(null, 'invalid-object-identity');
+
 		let handle: FileHandle | null = null;
 		try {
-			const filePath = this.resolveBucketPath(bucketHash);
-			if (filePath === null) {
-				release();
-				return unavailable(null, 'invalid-object-identity');
-			}
 			const resolvedRoot = await realpath(this.rootDirectory);
 			handle = await open(
 				filePath,
@@ -143,52 +214,20 @@ export class LocalHistoryArchiveRepairArtifactRepository implements HistoryArchi
 			const openedFile = await realpath(`/proc/self/fd/${handle.fd}`);
 			if (!isWithin(resolvedRoot, openedFile)) {
 				await closeHandle(handle);
-				release();
 				return unavailable(bucketHash, 'local-storage-unavailable');
 			}
-			const before = await handle.stat();
-			if (!before.isFile()) {
+			const stats = await handle.stat();
+			if (!stats.isFile()) {
 				await closeHandle(handle);
-				release();
 				return unavailable(bucketHash, 'local-payload-not-regular');
 			}
-			if (before.size < 1 || before.size > this.maxCompressedBytes) {
+			if (stats.size < 1 || stats.size > this.maxCompressedBytes) {
 				await closeHandle(handle);
-				release();
 				return unavailable(bucketHash, 'local-payload-too-large');
 			}
-
-			const digest = await this.hashUncompressed(handle, before.size);
-			const after = await handle.stat();
-			if (!sameFileVersion(before, after)) {
-				await closeHandle(handle);
-				release();
-				return unavailable(bucketHash, 'local-storage-unavailable');
-			}
-			if (digest.status === 'failed') {
-				await closeHandle(handle);
-				release();
-				return unavailable(bucketHash, digest.reason);
-			}
-			if (digest.digest !== bucketHash) {
-				await closeHandle(handle);
-				release();
-				return unavailable(bucketHash, 'content-hash-mismatch');
-			}
-
-			return {
-				handle,
-				proof: {
-					bucketHash,
-					byteLength: before.size,
-					provenAt: new Date(),
-					status: 'available'
-				},
-				release
-			};
+			return { bucketHash, handle, stats };
 		} catch (error) {
 			if (handle !== null) await closeHandle(handle);
-			release();
 			return unavailable(bucketHash, reasonForFileError(error));
 		}
 	}

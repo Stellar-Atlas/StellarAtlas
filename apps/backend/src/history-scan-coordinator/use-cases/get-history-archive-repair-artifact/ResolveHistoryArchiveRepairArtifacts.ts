@@ -4,12 +4,19 @@ import type { HistoryArchiveRepairArtifactRepository } from '../../domain/histor
 import { historyArchiveBucketHashPattern } from '../../domain/history-archive-repair-artifact/HistoryArchiveRepairArtifactRepository.js';
 import { TYPES } from '../../infrastructure/di/di-types.js';
 import {
+	deferredRepairArtifact,
 	toRepairArtifactAvailability,
+	toPresentRepairArtifact,
 	type HistoryArchiveRepairArtifactAvailabilityV1
 } from './HistoryArchiveRepairArtifactContract.js';
 
-const maxArtifactProbes = 20;
-const probeConcurrency = 2;
+const maxArtifactProbes = 100;
+const probeConcurrency = 8;
+
+export interface ProvenBucketArtifactCandidate {
+	readonly bucketHash: string;
+	readonly provenAt: Date;
+}
 
 @injectable()
 export class ResolveHistoryArchiveRepairArtifacts {
@@ -19,11 +26,10 @@ export class ResolveHistoryArchiveRepairArtifacts {
 	) {}
 
 	async execute(
-		bucketHashes: readonly string[]
+		candidates: readonly ProvenBucketArtifactCandidate[]
 	): Promise<ReadonlyMap<string, HistoryArchiveRepairArtifactAvailabilityV1>> {
-		const hashes = Array.from(
-			new Set(bucketHashes.map((bucketHash) => bucketHash.trim().toLowerCase()))
-		);
+		const candidatesByHash = latestCandidatesByHash(candidates);
+		const hashes = Array.from(candidatesByHash.keys());
 		const results = new Map<
 			string,
 			HistoryArchiveRepairArtifactAvailabilityV1
@@ -40,8 +46,16 @@ export class ResolveHistoryArchiveRepairArtifacts {
 						const hash = hashes[cursor];
 						cursor++;
 						if (hash === undefined) return;
-						const inspection = await this.repository.inspectBucket(hash);
-						results.set(hash, toRepairArtifactAvailability(inspection));
+						const presence = await this.repository.inspectBucketPresence(hash);
+						const candidate = candidatesByHash.get(hash);
+						results.set(
+							hash,
+							presence.status === 'present'
+								? candidate === undefined
+									? deferredRepairArtifact(hash)
+									: toPresentRepairArtifact(presence, candidate.provenAt)
+								: toRepairArtifactAvailability(presence)
+						);
 					}
 				}
 			)
@@ -72,4 +86,19 @@ export class ResolveHistoryArchiveRepairArtifacts {
 
 		return results;
 	}
+}
+
+function latestCandidatesByHash(
+	candidates: readonly ProvenBucketArtifactCandidate[]
+): ReadonlyMap<string, ProvenBucketArtifactCandidate> {
+	const byHash = new Map<string, ProvenBucketArtifactCandidate>();
+	for (const candidate of candidates) {
+		const bucketHash = candidate.bucketHash.trim().toLowerCase();
+		if (!historyArchiveBucketHashPattern.test(bucketHash)) continue;
+		const current = byHash.get(bucketHash);
+		if (current === undefined || current.provenAt < candidate.provenAt) {
+			byHash.set(bucketHash, { bucketHash, provenAt: candidate.provenAt });
+		}
+	}
+	return byHash;
 }
