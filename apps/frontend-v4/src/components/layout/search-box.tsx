@@ -12,6 +12,10 @@ import {
 	searchNetwork,
 	type SearchNetworkFilters
 } from '../../app/actions/search';
+import {
+	searchQueryScopeLabels,
+	searchResultScopeLabels
+} from './search-scope-labels';
 
 interface SearchOption {
 	id: string;
@@ -36,16 +40,6 @@ const booleanFacetLabels: Partial<Record<PublicSearchFacetName, string>> = {
 	topTier: 'Top tier',
 	validating: 'Validating',
 	validator: 'Validators'
-};
-
-const scopeLabels: Record<PublicSearchQueryScope, string> = {
-	'all-known': 'All known',
-	'archive-root': 'Archive roots',
-	archived: 'Archived / inactive',
-	'current-organization': 'Current organizations',
-	'current-validator': 'Current validators',
-	listener: 'Current listeners',
-	'public-key-only': 'Public-key only'
 };
 
 const normalize = (value: string): string => value.trim().toLowerCase();
@@ -86,7 +80,8 @@ const getFacetLabel = (name: PublicSearchFacetName, value: string): string => {
 				: 'Organizations';
 	if (name === 'archiveStatus') return `Archive ${value}`;
 	if (name === 'countryCode') return value.toUpperCase();
-	if (name === 'scope' && isSearchScope(value)) return scopeLabels[value];
+	if (name === 'scope' && isSearchScope(value))
+		return searchQueryScopeLabels[value];
 	return booleanFacetLabels[name] ?? value;
 };
 
@@ -249,7 +244,7 @@ export function SearchBox(): React.JSX.Element {
 								? 'matches'
 								: 'estimated matches'}
 						</span>
-						<small>{scopeLabels[response.scope]}</small>
+						<small>{searchQueryScopeLabels[response.scope]}</small>
 					</div>
 					{facets.length > 0 && (
 						<div className="search-facets">
@@ -292,7 +287,5 @@ export function SearchBox(): React.JSX.Element {
 }
 
 function getSearchResultScopeLabel(hit: SearchOption): string {
-	if (hit.scope === 'archive-root') return 'Archive root';
-	if (hit.scope === 'current-organization') return 'Current organization';
-	return scopeLabels[hit.scope];
+	return searchResultScopeLabels[hit.scope];
 }
