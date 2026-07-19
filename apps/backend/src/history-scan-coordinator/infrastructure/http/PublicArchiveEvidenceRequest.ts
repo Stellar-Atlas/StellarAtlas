@@ -2,7 +2,11 @@ import type express from 'express';
 import { isIP } from 'node:net';
 
 export type ArchiveEvidenceErrorCode =
-	'internal_error' | 'invalid_request' | 'not_found' | 'rate_limited';
+	| 'internal_error'
+	| 'invalid_request'
+	| 'not_found'
+	| 'rate_limited'
+	| 'temporarily_unavailable';
 
 interface RateWindow {
 	count: number;

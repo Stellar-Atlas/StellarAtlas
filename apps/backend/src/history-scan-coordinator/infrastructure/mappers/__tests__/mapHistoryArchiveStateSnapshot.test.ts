@@ -52,7 +52,55 @@ describe('mapHistoryArchiveStateSnapshot', () => {
 			}
 		});
 	});
+
+	it('reports a failed refresh after retained successful state', () => {
+		const snapshot = createAvailableWithFailure(
+			'2026-07-09T09:00:00.000Z',
+			'2026-07-09T10:00:00.000Z'
+		);
+
+		expect(mapHistoryArchiveStateSnapshot(snapshot)).toMatchObject({
+			status: 'available',
+			latestFailure: {
+				observedAt: '2026-07-09T10:00:00.000Z'
+			}
+		});
+	});
+
+	it('reports recovery while retaining the previous failure', () => {
+		const snapshot = createAvailableWithFailure(
+			'2026-07-09T11:00:00.000Z',
+			'2026-07-09T10:00:00.000Z'
+		);
+
+		expect(mapHistoryArchiveStateSnapshot(snapshot)).toMatchObject({
+			status: 'available',
+			latestFailure: {
+				observedAt: '2026-07-09T10:00:00.000Z'
+			}
+		});
+	});
 });
+
+function createAvailableWithFailure(
+	successObservedAt: string,
+	failureObservedAt: string
+): HistoryArchiveStateSnapshot {
+	const snapshot = HistoryArchiveStateSnapshot.available(
+		'https://history.example.com',
+		'https://history.example.com',
+		{ ...createArchiveMetadata(), observedAt: successObservedAt },
+		'history-scanner'
+	);
+	Object.assign(snapshot, {
+		latestFailureHttpStatus: 503,
+		latestFailureMessage: 'HTTP 503 Service Unavailable',
+		latestFailureObservedAt: new Date(failureObservedAt),
+		latestFailureSource: 'history-scanner',
+		latestFailureType: 'archive_http_error'
+	});
+	return snapshot;
+}
 
 function createArchiveMetadata(): ArchiveMetadataDTO {
 	return {

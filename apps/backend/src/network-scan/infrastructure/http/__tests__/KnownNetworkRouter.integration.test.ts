@@ -12,6 +12,7 @@ import type {
 	KnownOrganizationArchiveEvidenceV1
 } from 'shared';
 import { InvalidArchiveEvidenceCursorError } from '@history-scan-coordinator/use-cases/get-known-archive-evidence/ArchiveEvidencePagination.js';
+import { ArchiveEvidenceReadModelUnavailableError } from '@history-scan-coordinator/domain/known-archive-evidence/ArchiveEvidenceReadModelUnavailableError.js';
 
 describe('KnownNetworkRouter.integration', () => {
 	it('exposes paginated scanner-owned archive evidence for a known node', async () => {
@@ -98,6 +99,26 @@ describe('KnownNetworkRouter.integration', () => {
 				error: {
 					code: 'invalid_request',
 					message: 'Invalid archive evidence query'
+				}
+			});
+	});
+
+	it('returns a retryable 503 while archive evidence rollups catch up', async () => {
+		const config = mockDeep<KnownNetworkRouterConfig>();
+		config.getKnownNodeArchiveEvidence.execute.mockResolvedValue(
+			err(new ArchiveEvidenceReadModelUnavailableError())
+		);
+		const app = express();
+		app.use('/known', knownNetworkRouter(config));
+
+		await request(app)
+			.get('/known/nodes/GNODE/archive-evidence')
+			.expect(503)
+			.expect('Retry-After', '5')
+			.expect({
+				error: {
+					code: 'temporarily_unavailable',
+					message: 'Archive evidence is still being prepared'
 				}
 			});
 	});

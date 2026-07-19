@@ -170,6 +170,67 @@ describe('known archive evidence UI', () => {
 		expect(markup).toContain('63,378,495');
 	});
 
+	it('labels an older failure as historical after a successful refresh', () => {
+		const evidence = createEvidence();
+		const root = evidence.roots[0];
+		if (root === undefined) throw new Error('Expected archive root');
+		const state = createArchiveState();
+		const markup = renderToStaticMarkup(
+			createElement(ArchiveRootSummaryTable, {
+				roots: [
+					{
+						...root,
+						scannerOwnedState: {
+							...state,
+							observedAt: '2026-07-10T00:10:00.000Z',
+							metadata: state.metadata && {
+								...state.metadata,
+								observedAt: '2026-07-10T00:10:00.000Z'
+							}
+						}
+					}
+				]
+			})
+		);
+
+		expect(markup).toContain('Previous refresh failure');
+		expect(markup).not.toContain('Latest refresh failed');
+	});
+
+	it('does not invent ordering for observations with the same timestamp', () => {
+		const evidence = createEvidence();
+		const root = evidence.roots[0];
+		if (root === undefined) throw new Error('Expected archive root');
+		const state = createArchiveState();
+		const failureObservedAt = state.latestFailure?.observedAt;
+		if (failureObservedAt === undefined) {
+			throw new Error('Expected retained failure evidence');
+		}
+		const markup = renderToStaticMarkup(
+			createElement(ArchiveRootSummaryTable, {
+				roots: [
+					{
+						...root,
+						scannerOwnedState: {
+							...state,
+							observedAt: failureObservedAt,
+							metadata: state.metadata && {
+								...state.metadata,
+								observedAt: failureObservedAt
+							}
+						}
+					}
+				]
+			})
+		);
+
+		expect(markup).toContain(
+			'Refresh failure at stored-state observation time'
+		);
+		expect(markup).not.toContain('Latest refresh failed');
+		expect(markup).not.toContain('Previous refresh failure');
+	});
+
 	it('shows when a timed delay expires', () => {
 		const detail = formatObjectStatusDetail(
 			createObject({

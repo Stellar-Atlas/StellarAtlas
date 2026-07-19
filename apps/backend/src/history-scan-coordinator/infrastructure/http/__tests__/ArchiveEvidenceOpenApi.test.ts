@@ -54,6 +54,8 @@ describe('archive evidence OpenAPI contract', () => {
 		expect(
 			operation?.responses['200']?.content?.['application/json']?.schema?.$ref
 		).toBe(responseSchema);
+		expect(operation?.responses['429']).toBeDefined();
+		expect(operation?.responses['503']).toBeDefined();
 
 		const parameterRefs = operation?.parameters?.flatMap((parameter) =>
 			parameter.$ref === undefined ? [] : [parameter.$ref]

@@ -259,6 +259,8 @@ async function createFixture(source: DataSource): Promise<void> {
 		);
 		create table history_archive_evidence_root_summary_progress (
 			id smallint primary key,
+			"cutoffObjectId" bigint not null,
+			"lastObjectId" bigint not null,
 			"complete" boolean not null
 		);
 		create table history_archive_object_type_summary (
@@ -270,6 +272,9 @@ async function createFixture(source: DataSource): Promise<void> {
 		);
 		create table history_archive_object_type_summary_progress (
 			id smallint primary key,
+			"cutoffObjectId" bigint not null,
+			"lastObjectId" bigint not null,
+			"completedAt" timestamptz,
 			"complete" boolean not null
 		);
 	`);
@@ -291,17 +296,21 @@ async function createFixture(source: DataSource): Promise<void> {
 		'insert into history_archive_evidence_root_summary values ($1, 1, 0)',
 		[targetRoot]
 	);
-	await source.query(
-		'insert into history_archive_evidence_root_summary_progress values (1, true)'
-	);
+	await source.query(`
+		insert into history_archive_evidence_root_summary_progress
+		select 1, coalesce(max(id), 0), coalesce(max(id), 0), true
+		from history_archive_object_queue
+	`);
 	await source.query(
 		`insert into history_archive_object_type_summary
 		 values ($1, 'transactions', 1, 0)`,
 		[targetRoot]
 	);
-	await source.query(
-		'insert into history_archive_object_type_summary_progress values (1, true)'
-	);
+	await source.query(`
+		insert into history_archive_object_type_summary_progress
+		select 1, coalesce(max(id), 0), coalesce(max(id), 0), now(), true
+		from history_archive_object_queue
+	`);
 	await source.query(
 		'analyze history_archive_object_queue; analyze history_archive_object_event'
 	);

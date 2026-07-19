@@ -4611,6 +4611,12 @@
 					"400": {
 						"description": "Invalid archive URL, filter, limit, or filter-bound cursor"
 					},
+					"429": {
+						"description": "Archive evidence request capacity exceeded"
+					},
+					"503": {
+						"description": "Archive evidence read models are still being prepared; retry after the response Retry-After interval"
+					},
 					"500": { "description": "Server error" }
 				}
 			}
@@ -6235,6 +6241,12 @@
 						"description": "Invalid archive filter, limit, or filter-bound cursor"
 					},
 					"404": { "description": "Known node not found" },
+					"429": {
+						"description": "Archive evidence request capacity exceeded"
+					},
+					"503": {
+						"description": "Archive evidence read models are still being prepared; retry after the response Retry-After interval"
+					},
 					"500": { "description": "Server error" }
 				}
 			}
@@ -6384,6 +6396,12 @@
 						"description": "Invalid archive filter, limit, or filter-bound cursor"
 					},
 					"404": { "description": "Known organization not found" },
+					"429": {
+						"description": "Archive evidence request capacity exceeded"
+					},
+					"503": {
+						"description": "Archive evidence read models are still being prepared; retry after the response Retry-After interval"
+					},
 					"500": { "description": "Server error" }
 				}
 			}

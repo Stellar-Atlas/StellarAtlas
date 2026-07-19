@@ -2,6 +2,7 @@ import { DataSource } from 'typeorm';
 import { mock } from 'jest-mock-extended';
 import { HistoryArchiveObject } from '../../../../domain/history-archive-object/HistoryArchiveObject.js';
 import type { HistoryArchiveCheckpointProofRepository } from '../../../../domain/history-archive-checkpoint-proof/HistoryArchiveCheckpointProofRepository.js';
+import type { HistoryArchiveStateRepository } from '../../../../domain/history-archive-state/HistoryArchiveStateRepository.js';
 import type { HistoryArchiveObjectEventRecorder } from '../../../../use-cases/record-history-archive-object-event/HistoryArchiveObjectEventRecorder.js';
 import { FailHistoryArchiveObject } from '../../../../use-cases/fail-history-archive-object/FailHistoryArchiveObject.js';
 import { HistoryArchiveObjectClaimCursorMigration1784780000000 } from '../../../database/migrations/1784780000000-HistoryArchiveObjectClaimCursorMigration.js';
@@ -240,7 +241,8 @@ describe('TypeOrmHistoryArchiveObjectRepository disposable PostgreSQL', () => {
 		const useCase = new FailHistoryArchiveObject(
 			repository,
 			mock<HistoryArchiveObjectEventRecorder>(),
-			mock<HistoryArchiveCheckpointProofRepository>()
+			mock<HistoryArchiveCheckpointProofRepository>(),
+			mock<HistoryArchiveStateRepository>()
 		);
 
 		const result = await useCase.execute(failed.remoteId, {
@@ -280,7 +282,8 @@ describe('TypeOrmHistoryArchiveObjectRepository disposable PostgreSQL', () => {
 			const useCase = new FailHistoryArchiveObject(
 				repository,
 				mock<HistoryArchiveObjectEventRecorder>(),
-				mock<HistoryArchiveCheckpointProofRepository>()
+				mock<HistoryArchiveCheckpointProofRepository>(),
+				mock<HistoryArchiveStateRepository>()
 			);
 
 			const result = await useCase.execute(failed.remoteId, {
@@ -400,7 +403,8 @@ describe('TypeOrmHistoryArchiveObjectRepository disposable PostgreSQL', () => {
 		const useCase = new FailHistoryArchiveObject(
 			repository,
 			mock<HistoryArchiveObjectEventRecorder>(),
-			mock<HistoryArchiveCheckpointProofRepository>()
+			mock<HistoryArchiveCheckpointProofRepository>(),
+			mock<HistoryArchiveStateRepository>()
 		);
 
 		expect(

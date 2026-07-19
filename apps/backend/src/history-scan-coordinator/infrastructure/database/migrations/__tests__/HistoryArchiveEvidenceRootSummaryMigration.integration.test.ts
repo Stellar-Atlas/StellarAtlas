@@ -29,6 +29,28 @@ describe('HistoryArchiveEvidenceRootSummaryMigration1784950000000', () => {
 			url: postgres.url
 		});
 		await dataSource.initialize();
+		await dataSource.query(`
+			create table history_archive_checkpoint_proof_rollup (
+				"archiveUrlIdentity" text primary key,
+				"totalCheckpointProofs" bigint not null default 0,
+				"pendingCheckpointProofs" bigint not null default 0,
+				"verifiedCheckpointProofs" bigint not null default 0,
+				"mismatchCheckpointProofs" bigint not null default 0,
+				"notEvaluableCheckpointProofs" bigint not null default 0
+			)
+		`);
+		await dataSource.query(`
+			create table history_archive_checkpoint_proof_rollup_progress (
+				id smallint primary key,
+				"cutoffProofId" bigint not null,
+				"lastProofId" bigint not null,
+				"complete" boolean not null
+			)
+		`);
+		await dataSource.query(`
+			insert into history_archive_checkpoint_proof_rollup_progress
+			values (1, 0, 0, true)
+		`);
 	});
 
 	afterAll(async () => {

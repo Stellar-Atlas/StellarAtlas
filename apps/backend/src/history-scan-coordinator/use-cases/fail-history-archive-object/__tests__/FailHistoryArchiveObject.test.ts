@@ -2,6 +2,7 @@ import { mock, type MockProxy } from 'jest-mock-extended';
 import type { HistoryArchiveCheckpointProofRepository } from '../../../domain/history-archive-checkpoint-proof/HistoryArchiveCheckpointProofRepository.js';
 import { HistoryArchiveObject } from '../../../domain/history-archive-object/HistoryArchiveObject.js';
 import type { HistoryArchiveObjectRepository } from '../../../domain/history-archive-object/HistoryArchiveObjectRepository.js';
+import type { HistoryArchiveStateRepository } from '../../../domain/history-archive-state/HistoryArchiveStateRepository.js';
 import type { HistoryArchiveObjectEventRecorder } from '../../record-history-archive-object-event/HistoryArchiveObjectEventRecorder.js';
 import { FailHistoryArchiveObject } from '../FailHistoryArchiveObject.js';
 
@@ -9,12 +10,14 @@ describe('FailHistoryArchiveObject', () => {
 	let eventRecorder: MockProxy<HistoryArchiveObjectEventRecorder>;
 	let checkpointProofRepository: MockProxy<HistoryArchiveCheckpointProofRepository>;
 	let objectRepository: MockProxy<HistoryArchiveObjectRepository>;
+	let stateRepository: MockProxy<HistoryArchiveStateRepository>;
 
 	beforeEach(() => {
 		jest.useFakeTimers().setSystemTime(new Date('2026-07-06T14:00:00.000Z'));
 		eventRecorder = mock<HistoryArchiveObjectEventRecorder>();
 		checkpointProofRepository = mock<HistoryArchiveCheckpointProofRepository>();
 		objectRepository = mock<HistoryArchiveObjectRepository>();
+		stateRepository = mock<HistoryArchiveStateRepository>();
 		objectRepository.markObjectFailed.mockImplementation(
 			async (remoteId, failure) => {
 				const object = await objectRepository.findByRemoteId(remoteId);
@@ -54,7 +57,8 @@ describe('FailHistoryArchiveObject', () => {
 		const useCase = new FailHistoryArchiveObject(
 			objectRepository,
 			eventRecorder,
-			checkpointProofRepository
+			checkpointProofRepository,
+			stateRepository
 		);
 		const result = await useCase.execute(archiveObject.remoteId, {
 			claimAttempt: 1,
@@ -105,7 +109,8 @@ describe('FailHistoryArchiveObject', () => {
 		const result = await new FailHistoryArchiveObject(
 			objectRepository,
 			eventRecorder,
-			checkpointProofRepository
+			checkpointProofRepository,
+			stateRepository
 		).execute('11111111-1111-4111-8111-111111111111', {
 			claimAttempt: 1,
 			errorMessage: 'missing row',
@@ -143,7 +148,8 @@ describe('FailHistoryArchiveObject', () => {
 			const result = await new FailHistoryArchiveObject(
 				objectRepository,
 				eventRecorder,
-				checkpointProofRepository
+				checkpointProofRepository,
+				stateRepository
 			).execute(archiveObject.remoteId, {
 				claimAttempt: 1,
 				errorMessage: String(_label),
@@ -160,6 +166,52 @@ describe('FailHistoryArchiveObject', () => {
 			);
 		}
 	);
+
+	it('records a remote root-state failure without replacing retained state', async () => {
+		const archiveObject = createRootObject();
+		archiveObject.status = 'failed';
+		archiveObject.attempts = 1;
+		archiveObject.errorMessage = 'History archive state is malformed';
+		archiveObject.errorType = 'invalid_history_archive_state';
+		archiveObject.failureChannel = 'archive_evidence';
+		archiveObject.httpStatus = 200;
+
+		await new FailHistoryArchiveObject(
+			objectRepository,
+			eventRecorder,
+			checkpointProofRepository,
+			stateRepository
+		).reconcilePersisted(archiveObject);
+
+		expect(stateRepository.saveFailure).toHaveBeenCalledWith({
+			archiveUrl: archiveObject.archiveUrl,
+			errorMessage: 'History archive state is malformed',
+			errorType: 'invalid_history_archive_state',
+			httpStatus: 200,
+			observedAt: new Date('2026-07-06T14:00:00.000Z'),
+			source: 'history-scanner',
+			stateUrl: archiveObject.objectUrl,
+			status: 'invalid'
+		});
+	});
+
+	it('does not report worker failures as remote archive-state evidence', async () => {
+		const archiveObject = createRootObject();
+		archiveObject.status = 'failed';
+		archiveObject.attempts = 1;
+		archiveObject.errorMessage = 'Worker could not create a local file';
+		archiveObject.errorType = 'worker_setup_failure';
+		archiveObject.failureChannel = 'scanner_issue';
+
+		await new FailHistoryArchiveObject(
+			objectRepository,
+			eventRecorder,
+			checkpointProofRepository,
+			stateRepository
+		).reconcilePersisted(archiveObject);
+
+		expect(stateRepository.saveFailure).not.toHaveBeenCalled();
+	});
 
 	it('leaves durable failure effects pending when checkpoint proof refresh fails', async () => {
 		const archiveObject = new HistoryArchiveObject({
@@ -183,7 +235,8 @@ describe('FailHistoryArchiveObject', () => {
 		const useCase = new FailHistoryArchiveObject(
 			objectRepository,
 			eventRecorder,
-			checkpointProofRepository
+			checkpointProofRepository,
+			stateRepository
 		);
 		const result = await useCase.execute(archiveObject.remoteId, {
 			claimAttempt: 1,
@@ -223,7 +276,8 @@ describe('FailHistoryArchiveObject', () => {
 		const useCase = new FailHistoryArchiveObject(
 			objectRepository,
 			eventRecorder,
-			checkpointProofRepository
+			checkpointProofRepository,
+			stateRepository
 		);
 		const result = await useCase.execute(archiveObject.remoteId, {
 			claimAttempt: 1,
@@ -265,7 +319,8 @@ describe('FailHistoryArchiveObject', () => {
 		const result = await new FailHistoryArchiveObject(
 			objectRepository,
 			eventRecorder,
-			checkpointProofRepository
+			checkpointProofRepository,
+			stateRepository
 		).execute(archiveObject.remoteId, {
 			claimAttempt: 1,
 			errorMessage: 'Different failure',
@@ -278,3 +333,16 @@ describe('FailHistoryArchiveObject', () => {
 		expect(checkpointProofRepository.refreshForObject).not.toHaveBeenCalled();
 	});
 });
+
+function createRootObject(): HistoryArchiveObject {
+	return new HistoryArchiveObject({
+		archiveUrl: 'https://history.example.com',
+		archiveUrlIdentity: 'https://history.example.com',
+		objectKey: 'root',
+		objectOrder: 0,
+		objectType: 'history-archive-state',
+		objectUrl: 'https://history.example.com/.well-known/stellar-history.json',
+		remoteId: '11111111-1111-4111-8111-111111111111',
+		status: 'scanning'
+	});
+}

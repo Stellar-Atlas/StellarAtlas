@@ -1,4 +1,5 @@
 import type { EntityManager } from 'typeorm';
+import { ArchiveEvidenceReadModelUnavailableError } from '../../../domain/known-archive-evidence/ArchiveEvidenceReadModelUnavailableError.js';
 import type { HistoryArchiveObjectEvidenceClass } from '../../../domain/history-archive-object/HistoryArchiveObjectRetryPolicy.js';
 import type {
 	KnownArchiveFailurePageRequest,
@@ -40,14 +41,18 @@ export async function findKnownArchiveFailurePage(
 		const countRows = requireFailureCountRows(countResult);
 		const [countRow] = countRows;
 		if ((countRow?.rollupComplete ?? countRow?.rollupcomplete) !== true) {
-			throw new Error('Archive failure evidence rollup is not ready');
+			throw new ArchiveEvidenceReadModelUnavailableError(
+				'Archive failure evidence rollup is not ready'
+			);
 		}
 		total = requireNumber(
 			countRow?.failureCount ?? countRow?.failurecount ?? 0,
 			'failureCount'
 		);
 		if (total < 0) {
-			throw new Error('Archive failure evidence rollup is inconsistent');
+			throw new ArchiveEvidenceReadModelUnavailableError(
+				'Archive failure evidence rollup is inconsistent'
+			);
 		}
 	}
 	if (total === 0) return { failures: [], total };
@@ -102,12 +107,13 @@ export function knownArchiveFailureCountSql(
 		), rollup_state as (
 			select case
 				when $3::text is null then coalesce((
-					select "complete"
+					select "complete" and "lastObjectId" = "cutoffObjectId"
 					from history_archive_evidence_root_summary_progress
 					where id = 1
 				), false)
 				else coalesce((
-					select "complete"
+					select "complete" and "lastObjectId" = "cutoffObjectId"
+						and "completedAt" is not null
 					from history_archive_object_type_summary_progress
 					where id = 1
 				), false)

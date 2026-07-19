@@ -10,6 +10,7 @@ import { TypeOrmHistoryArchiveCheckpointProofRepository } from '../TypeOrmHistor
 import { mock } from 'jest-mock-extended';
 import type { HistoryArchiveCheckpointProofRepository } from '../../../../domain/history-archive-checkpoint-proof/HistoryArchiveCheckpointProofRepository.js';
 import type { HistoryArchiveObjectEventRecorder } from '../../../../use-cases/record-history-archive-object-event/HistoryArchiveObjectEventRecorder.js';
+import type { HistoryArchiveStateRepository } from '../../../../domain/history-archive-state/HistoryArchiveStateRepository.js';
 import { FailHistoryArchiveObject } from '../../../../use-cases/fail-history-archive-object/FailHistoryArchiveObject.js';
 import { HistoryArchiveObjectHostThrottleMigration1784410000000 } from '../../../database/migrations/1784410000000-HistoryArchiveObjectHostThrottleMigration.js';
 import { HistoryArchiveObjectClaimCursorMigration1784780000000 } from '../../../database/migrations/1784780000000-HistoryArchiveObjectClaimCursorMigration.js';
@@ -128,7 +129,8 @@ export async function exerciseFlakyProofRefresh(
 	const useCase = new FailHistoryArchiveObject(
 		objectRepository,
 		mock<HistoryArchiveObjectEventRecorder>(),
-		flakyProofRepository
+		flakyProofRepository,
+		mock<HistoryArchiveStateRepository>()
 	);
 	const failure = {
 		claimAttempt: 1,

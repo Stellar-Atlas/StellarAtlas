@@ -14,6 +14,7 @@ import type {
 	KnownArchiveRootScope,
 	KnownArchiveVerifiedCopySetReadModel
 } from '../../domain/known-archive-evidence/KnownArchiveEvidenceRepository.js';
+import { ArchiveEvidenceReadModelUnavailableError } from '../../domain/known-archive-evidence/ArchiveEvidenceReadModelUnavailableError.js';
 import { TYPES } from '../../infrastructure/di/di-types.js';
 import { mapHistoryArchiveStateSnapshot } from '../../infrastructure/mappers/mapHistoryArchiveStateSnapshot.js';
 import { mapHistoryArchiveObject } from '../../infrastructure/mappers/mapHistoryArchiveObject.js';
@@ -30,6 +31,8 @@ import {
 	type ArchiveEvidencePageOptions
 } from './ArchiveEvidencePagination.js';
 import { ArchiveEvidenceCursorCodec } from './ArchiveEvidenceCursorCodec.js';
+
+const maxArchiveRootsPerEvidenceRequest = 256;
 
 export interface OwnedKnownArchiveRoot extends KnownArchiveRootScope {
 	readonly nodePublicKeys: readonly string[];
@@ -58,6 +61,7 @@ export class GetKnownArchiveEvidence {
 		input: GetKnownArchiveEvidenceInput
 	): Promise<Result<KnownArchiveEvidenceV1, Error>> {
 		try {
+			ensureArchiveRootScopeIsBounded(input);
 			const pages = normalizeArchiveEvidencePages(
 				input.options,
 				this.cursorCodec,
@@ -225,6 +229,23 @@ export class GetKnownArchiveEvidence {
 			}
 			return err(mappedError);
 		}
+	}
+}
+
+function ensureArchiveRootScopeIsBounded(
+	input: GetKnownArchiveEvidenceInput
+): void {
+	const archiveRoots = new Set(
+		input.roots.map((root) => root.archiveUrlIdentity)
+	);
+	const organizationRoots = new Set(input.sameOrganizationArchiveUrlIdentities);
+	if (
+		archiveRoots.size > maxArchiveRootsPerEvidenceRequest ||
+		organizationRoots.size > maxArchiveRootsPerEvidenceRequest
+	) {
+		throw new ArchiveEvidenceReadModelUnavailableError(
+			`Archive evidence scope exceeds ${maxArchiveRootsPerEvidenceRequest} roots`
+		);
 	}
 }
 

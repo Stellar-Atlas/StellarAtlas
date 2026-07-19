@@ -1,5 +1,9 @@
 import type { PublicHistoryArchiveState } from '@api/types';
 import { formatDateTime, formatInteger } from '@format/formatters';
+import {
+	archiveRefreshFailureLabel,
+	classifyArchiveRefreshFailure
+} from './archive-refresh-state';
 
 export function HistoryArchiveStateDocument({
 	archiveState = null,
@@ -21,6 +25,11 @@ export function HistoryArchiveStateDocument({
 	const state = resolvedMetadata.stellarHistory;
 	const hotArchiveBuckets = state.hotArchiveBuckets ?? [];
 	const archiveRootUrl = getArchiveRootUrl(resolvedMetadata.stellarHistoryUrl);
+	const latestFailure = archiveState?.latestFailure ?? null;
+	const failureAge =
+		archiveState === null ? null : classifyArchiveRefreshFailure(archiveState);
+	const failureLabel =
+		failureAge === null ? null : archiveRefreshFailureLabel(failureAge);
 
 	return (
 		<details className="metadata-document history-archive-state">
@@ -29,7 +38,8 @@ export function HistoryArchiveStateDocument({
 				<span className="muted-inline">{archiveRootUrl}</span>
 			</summary>
 			<p className="muted-copy">
-				History archive state observed {formatDateTime(resolvedMetadata.observedAt)}.
+				History archive state observed{' '}
+				{formatDateTime(resolvedMetadata.observedAt)}.
 			</p>
 			<dl className="details">
 				<div>
@@ -64,22 +74,28 @@ export function HistoryArchiveStateDocument({
 					<dt>Hot archive buckets</dt>
 					<dd>{formatInteger(hotArchiveBuckets.length)}</dd>
 				</div>
-				{archiveState?.latestFailure ? (
+				{latestFailure ? (
 					<>
 						<div>
-							<dt>Latest failed refresh</dt>
-							<dd>{formatDateTime(archiveState.latestFailure.observedAt)}</dd>
+							<dt>{failureLabel}</dt>
+							<dd>{formatDateTime(latestFailure.observedAt)}</dd>
 						</div>
 						<div>
 							<dt>Refresh failure</dt>
-							<dd>{archiveState.latestFailure.type}</dd>
+							<dd>{latestFailure.type}</dd>
 						</div>
 					</>
 				) : null}
 			</dl>
-			{archiveState?.latestFailure ? (
-				<p className="muted-copy">
-					Latest failed refresh: {archiveState.latestFailure.message}
+			{latestFailure ? (
+				<p
+					className={
+						failureAge === 'historical'
+							? 'muted-copy'
+							: 'known-evidence-warning'
+					}
+				>
+					{failureLabel}: {latestFailure.message}
 				</p>
 			) : null}
 			<details className="metadata-document nested-metadata-document">
@@ -101,7 +117,9 @@ function HistoryArchiveStateFailure({
 		<details className="metadata-document history-archive-state">
 			<summary>
 				<span>History archive state</span>
-				<span className="muted-inline">{getArchiveRootUrl(archiveState.stateUrl)}</span>
+				<span className="muted-inline">
+					{getArchiveRootUrl(archiveState.stateUrl)}
+				</span>
 			</summary>
 			<dl className="details">
 				<div>
@@ -119,14 +137,6 @@ function HistoryArchiveStateFailure({
 				<div>
 					<dt>Failure type</dt>
 					<dd>{archiveState.failure?.type ?? 'unknown'}</dd>
-				</div>
-				<div>
-					<dt>Latest failed refresh</dt>
-					<dd>
-						{archiveState.latestFailure
-							? formatDateTime(archiveState.latestFailure.observedAt)
-							: 'Not reported'}
-					</dd>
 				</div>
 				<div>
 					<dt>HTTP status</dt>
@@ -159,7 +169,9 @@ function MissingHistoryArchiveState({
 			<summary>
 				<span>History archive state</span>
 				<span className="muted-inline">
-					{stellarHistoryUrl === null ? 'No archive URL' : getArchiveRootUrl(stellarHistoryUrl)}
+					{stellarHistoryUrl === null
+						? 'No archive URL'
+						: getArchiveRootUrl(stellarHistoryUrl)}
 				</span>
 			</summary>
 			<p className="muted-copy">

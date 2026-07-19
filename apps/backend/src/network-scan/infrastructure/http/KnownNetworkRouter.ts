@@ -17,6 +17,7 @@ import {
 	sendArchiveEvidenceError,
 	setArchiveEvidenceCacheHeaders
 } from '@history-scan-coordinator/infrastructure/http/PublicArchiveEvidenceRequest.js';
+import { ArchiveEvidenceReadModelUnavailableError } from '@history-scan-coordinator/domain/known-archive-evidence/ArchiveEvidenceReadModelUnavailableError.js';
 import {
 	parseKnownNodesPageRequest,
 	parseKnownOrganizationsPageRequest
@@ -66,6 +67,9 @@ const knownNetworkRouterWrapper = (
 				);
 			}
 			if (result.isErr()) {
+				if (result.error instanceof ArchiveEvidenceReadModelUnavailableError) {
+					return sendUnavailableArchiveEvidence(res);
+				}
 				return sendArchiveEvidenceError(
 					res,
 					500,
@@ -115,6 +119,9 @@ const knownNetworkRouterWrapper = (
 				);
 			}
 			if (result.isErr()) {
+				if (result.error instanceof ArchiveEvidenceReadModelUnavailableError) {
+					return sendUnavailableArchiveEvidence(res);
+				}
 				return sendArchiveEvidenceError(
 					res,
 					500,
@@ -217,3 +224,15 @@ const knownNetworkRouterWrapper = (
 };
 
 export { knownNetworkRouterWrapper as knownNetworkRouter };
+
+function sendUnavailableArchiveEvidence(
+	res: express.Response
+): express.Response {
+	res.setHeader('Retry-After', '5');
+	return sendArchiveEvidenceError(
+		res,
+		503,
+		'temporarily_unavailable',
+		'Archive evidence is still being prepared'
+	);
+}

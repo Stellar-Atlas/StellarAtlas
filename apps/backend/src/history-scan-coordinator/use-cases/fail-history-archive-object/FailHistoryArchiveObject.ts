@@ -5,6 +5,8 @@ import type { HistoryArchiveCheckpointProofRepository } from '../../domain/histo
 import type { HistoryArchiveObject } from '../../domain/history-archive-object/HistoryArchiveObject.js';
 import type { HistoryArchiveObjectFailure } from '../../domain/history-archive-object/HistoryArchiveObjectRepository.js';
 import type { HistoryArchiveObjectRepository } from '../../domain/history-archive-object/HistoryArchiveObjectRepository.js';
+import type { HistoryArchiveStateRepository } from '../../domain/history-archive-state/HistoryArchiveStateRepository.js';
+import type { HistoryArchiveStateStatus } from '../../domain/history-archive-state/HistoryArchiveStateSnapshot.js';
 import {
 	getHistoryArchiveObjectRetryPolicy,
 	shouldThrottleHistoryArchiveObjectHost
@@ -20,7 +22,9 @@ export class FailHistoryArchiveObject {
 		private readonly objectRepository: HistoryArchiveObjectRepository,
 		private readonly eventRecorder: HistoryArchiveObjectEventRecorder,
 		@inject(TYPES.HistoryArchiveCheckpointProofRepository)
-		private readonly checkpointProofRepository: HistoryArchiveCheckpointProofRepository
+		private readonly checkpointProofRepository: HistoryArchiveCheckpointProofRepository,
+		@inject(TYPES.HistoryArchiveStateRepository)
+		private readonly stateRepository: HistoryArchiveStateRepository
 	) {}
 
 	async execute(
@@ -96,6 +100,19 @@ export class FailHistoryArchiveObject {
 		if (shouldRefreshCheckpointProof(object)) {
 			await this.checkpointProofRepository.refreshForObject(object);
 		}
+		if (isRemoteHistoryArchiveStateFailure(object)) {
+			await this.stateRepository.saveFailure({
+				archiveUrl: object.archiveUrl,
+				errorMessage:
+					object.errorMessage ?? 'History archive state is unavailable',
+				errorType: object.errorType ?? 'archive_state_unavailable',
+				httpStatus: object.httpStatus,
+				observedAt: object.updatedAt ?? new Date(),
+				source: 'history-scanner',
+				stateUrl: object.objectUrl,
+				status: mapHistoryArchiveStateFailureStatus(object.errorType)
+			});
+		}
 		await this.eventRecorder.recordDurably(object, {
 			claimAttempt: object.attempts,
 			eventType: 'failed',
@@ -107,6 +124,24 @@ export class FailHistoryArchiveObject {
 			'failed'
 		);
 	}
+}
+
+function isRemoteHistoryArchiveStateFailure(object: {
+	readonly failureChannel: string | null;
+	readonly objectType: string;
+}): boolean {
+	return (
+		object.objectType === 'history-archive-state' &&
+		object.failureChannel === 'archive_evidence'
+	);
+}
+
+function mapHistoryArchiveStateFailureStatus(
+	errorType: string | null
+): Exclude<HistoryArchiveStateStatus, 'available'> {
+	return errorType === 'invalid_history_archive_state'
+		? 'invalid'
+		: 'unreachable';
 }
 
 function toRetryAfterUntil(

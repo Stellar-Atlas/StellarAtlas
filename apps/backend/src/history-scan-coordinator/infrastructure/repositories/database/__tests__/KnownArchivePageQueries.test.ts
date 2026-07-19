@@ -57,7 +57,8 @@ describe('known archive page queries', () => {
 			roots.map((requestedRoot) => ({
 				...emptyCounts,
 				...requestedRoot,
-				latestObjectAt: null
+				latestObjectAt: null,
+				rollupComplete: true
 			}))
 		);
 		const result = await findKnownArchiveEvidenceRoots(
@@ -83,8 +84,37 @@ describe('known archive page queries', () => {
 			'archive_object."createdAt" > $3::timestamptz'
 		);
 		expect(knownArchiveEvidenceRootSql).toContain(
-			'summary_progress."complete" is not true'
+			'history_archive_evidence_root_summary_progress'
 		);
+		expect(knownArchiveEvidenceRootSql).toContain(
+			'history_archive_checkpoint_proof_rollup'
+		);
+		expect(knownArchiveEvidenceRootSql).toContain(
+			'proof."createdAt" > $3::timestamptz'
+		);
+		expect(knownArchiveEvidenceRootSql).toContain(
+			'archive_object."createdAt" <= $3::timestamptz'
+		);
+		expect(knownArchiveEvidenceRootSql).not.toContain('snapshot_objects');
+	});
+
+	it('fails closed while the root summary rollup is incomplete', async () => {
+		const manager = mock<EntityManager>();
+		manager.query.mockResolvedValue([
+			{
+				archiveUrl: root,
+				archiveUrlIdentity: root,
+				rollupComplete: false
+			}
+		]);
+
+		await expect(
+			findKnownArchiveEvidenceRoots(
+				manager,
+				[{ archiveUrl: root, archiveUrlIdentity: root }],
+				snapshotAt
+			)
+		).rejects.toThrow('Archive evidence root summary is not ready');
 	});
 
 	it('rejects root counts that exceed the safe JavaScript integer range', async () => {
@@ -93,6 +123,7 @@ describe('known archive page queries', () => {
 			{
 				archiveUrl: root,
 				archiveUrlIdentity: root,
+				rollupComplete: true,
 				totalObjects: '9007199254740992'
 			}
 		]);
@@ -106,10 +137,10 @@ describe('known archive page queries', () => {
 		).rejects.toThrow('totalObjects');
 	});
 
-	it('uses an exact filtered count and a limit-plus-one object page', async () => {
+	it('uses rolled-up filtered totals and a limit-plus-one object page', async () => {
 		const manager = mock<EntityManager>();
 		manager.query
-			.mockResolvedValueOnce([{ objectCount: '42' }])
+			.mockResolvedValueOnce([{ objectCount: '42', rollupComplete: true }])
 			.mockResolvedValueOnce([]);
 
 		const result = await findKnownArchiveObjectPage(manager, [root], {
@@ -155,6 +186,36 @@ describe('known archive page queries', () => {
 		);
 		expect(knownArchiveObjectPageSql).toContain("then 'host-backoff'");
 		expect(knownArchiveObjectPageSql).toContain("then 'missing-dependency'");
+		expect(knownArchiveObjectCountSql).toContain(
+			'history_archive_object_type_summary'
+		);
+		expect(knownArchiveObjectCountSql).toContain(
+			'archive_object."createdAt" > $5::timestamptz'
+		);
+		expect(knownArchiveObjectCountSql).not.toContain(
+			'archive_object."createdAt" <= $5::timestamptz'
+		);
+	});
+
+	it('fails closed when filtered object rollups are incomplete', async () => {
+		const manager = mock<EntityManager>();
+		manager.query.mockResolvedValueOnce([
+			{ objectCount: '42', rollupComplete: false }
+		]);
+
+		await expect(
+			findKnownArchiveObjectPage(manager, [root], {
+				before: null,
+				filters: {
+					archiveUrlIdentity: root,
+					objectType: 'bucket',
+					status: 'failed'
+				},
+				limit: 25,
+				snapshotAt,
+				snapshotTotal: null
+			})
+		).rejects.toThrow('Archive object evidence rollup is not ready');
 	});
 
 	it('counts and pages remote failures separately from infrastructure failures', async () => {

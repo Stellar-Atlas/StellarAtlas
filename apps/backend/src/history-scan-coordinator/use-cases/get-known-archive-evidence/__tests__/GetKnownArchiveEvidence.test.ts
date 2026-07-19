@@ -146,6 +146,35 @@ describe('GetKnownArchiveEvidence', () => {
 		expect(repository.findEvidence).not.toHaveBeenCalled();
 		expect(exceptionLogger.captureException).not.toHaveBeenCalled();
 	});
+
+	it('rejects an unbounded archive root scope before querying evidence', async () => {
+		const repository = mock<KnownArchiveEvidenceRepository>();
+		const exceptionLogger = mock<ExceptionLogger>();
+		const roots = Array.from({ length: 257 }, (_, index) => {
+			const archiveUrl = `https://history-${index}.example.com`;
+			return {
+				archiveUrl,
+				archiveUrlIdentity: archiveUrl,
+				nodePublicKeys: []
+			};
+		});
+		const result = await new GetKnownArchiveEvidence(
+			repository,
+			exceptionLogger,
+			createCursorCodec()
+		).execute({
+			nodePublicKeys: [],
+			options: {},
+			roots,
+			sameOrganizationArchiveUrlIdentities: []
+		});
+
+		expect(result.isErr()).toBe(true);
+		if (result.isOk()) return;
+		expect(result.error.message).toContain('exceeds 256 roots');
+		expect(repository.findEvidence).not.toHaveBeenCalled();
+		expect(exceptionLogger.captureException).toHaveBeenCalledWith(result.error);
+	});
 });
 
 function createObject(

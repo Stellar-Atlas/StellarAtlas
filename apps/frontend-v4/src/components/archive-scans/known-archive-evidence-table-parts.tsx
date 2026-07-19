@@ -11,6 +11,10 @@ import {
 	getHttpUrl
 } from '@domain/known-archive-evidence';
 import { formatDateTime, formatInteger } from '@format/formatters';
+import {
+	archiveRefreshFailureLabel,
+	classifyArchiveRefreshFailure
+} from './archive-refresh-state';
 
 export function ObjectIdentity({
 	object
@@ -152,15 +156,21 @@ export function ArchiveStateSummary({
 	const state = root.scannerOwnedState;
 	if (state === null) return <span>Not captured</span>;
 	const successfulAt = state.metadata?.observedAt ?? state.observedAt;
+	const failureAge = classifyArchiveRefreshFailure(state);
 
 	return (
 		<>
 			<strong>{formatMachineLabel(state.status)}</strong>
 			<small>Last stored state {formatDateTime(successfulAt)}</small>
-			{state.latestFailure ? (
-				<small className="known-evidence-warning">
-					Latest refresh failed {formatDateTime(state.latestFailure.observedAt)}
-					: {formatMachineLabel(state.latestFailure.type)}
+			{state.latestFailure && failureAge ? (
+				<small
+					className={
+						failureAge === 'historical' ? '' : 'known-evidence-warning'
+					}
+				>
+					{archiveRefreshFailureLabel(failureAge)}{' '}
+					{formatDateTime(state.latestFailure.observedAt)}:{' '}
+					{formatMachineLabel(state.latestFailure.type)}
 				</small>
 			) : null}
 		</>

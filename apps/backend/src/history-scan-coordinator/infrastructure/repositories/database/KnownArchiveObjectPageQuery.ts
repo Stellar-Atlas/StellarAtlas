@@ -1,4 +1,5 @@
 import type { EntityManager } from 'typeorm';
+import { ArchiveEvidenceReadModelUnavailableError } from '../../../domain/known-archive-evidence/ArchiveEvidenceReadModelUnavailableError.js';
 import type { KnownArchiveObjectPageRequest } from '../../../domain/known-archive-evidence/KnownArchiveEvidenceRepository.js';
 import { createObjectFromRow } from './HistoryArchiveObjectRowMapper.js';
 import { historyArchiveObjectDependencySatisfiedSql } from './HistoryArchiveObjectDependencySql.js';
@@ -11,6 +12,8 @@ const maxActiveObjectsTotal = 24;
 type CountRow = {
 	readonly objectCount?: NumericValue;
 	readonly objectcount?: NumericValue;
+	readonly rollupComplete?: boolean;
+	readonly rollupcomplete?: boolean;
 };
 
 type ObjectRow = Parameters<typeof createObjectFromRow>[0];
@@ -40,6 +43,11 @@ export async function findKnownArchiveObjectPage(
 		);
 		const countRows = requireCountRows(countResult);
 		const [countRow] = countRows;
+		if ((countRow?.rollupComplete ?? countRow?.rollupcomplete) !== true) {
+			throw new ArchiveEvidenceReadModelUnavailableError(
+				'Archive object evidence rollup is not ready'
+			);
+		}
 		total = requireNumber(
 			countRow?.objectCount ?? countRow?.objectcount ?? 0,
 			'objectCount'
@@ -101,14 +109,6 @@ function isObjectRow(value: unknown): value is ObjectRow {
 	return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
-const objectFilterSql = `
-	archive_object."archiveUrlIdentity" = any($1::text[])
-	and ($2::text is null or archive_object."archiveUrlIdentity" = $2::text)
-	and ($3::text is null or archive_object."objectType" = $3::text)
-	and ($4::text is null or archive_object.status = $4::text)
-	and archive_object."createdAt" <= $5::timestamptz
-`;
-
 const objectCandidateFilterSql = `
 	archive_object."archiveUrlIdentity" = requested_root."archiveUrlIdentity"
 	and ($3::text is null or archive_object."objectType" = $3::text)
@@ -124,10 +124,78 @@ const objectCandidateFilterSql = `
 `;
 
 export const knownArchiveObjectCountSql = `
-	select count(*) as "objectCount"
-	from history_archive_object_queue archive_object
-	where ${objectFilterSql}
+	with requested_roots as materialized (
+		select distinct identity as "archiveUrlIdentity"
+		from unnest($1::text[]) requested(identity)
+		where $2::text is null or identity = $2::text
+	), rollup_state as (
+		select case
+			when $3::text is null then coalesce((
+				select "complete" and "lastObjectId" = "cutoffObjectId"
+				from history_archive_evidence_root_summary_progress
+				where id = 1
+			), false)
+			else coalesce((
+				select "complete" and "lastObjectId" = "cutoffObjectId"
+					and "completedAt" is not null
+				from history_archive_object_type_summary_progress
+				where id = 1
+			), false)
+		end as "rollupComplete"
+	), summary_count as (
+		select coalesce(sum(case
+			when $3::text is null then ${summaryStatusCountSql('root_summary', 'activeObjects')}
+			else ${summaryStatusCountSql('type_summary', 'scanningObjects')}
+		end), 0) as count
+		from requested_roots requested_root
+		left join history_archive_evidence_root_summary root_summary
+			on root_summary."archiveUrlIdentity" =
+				requested_root."archiveUrlIdentity"
+		left join history_archive_object_type_summary type_summary
+			on type_summary."archiveUrlIdentity" =
+				requested_root."archiveUrlIdentity"
+			and type_summary."objectType" = $3::text
+	), future_count as (
+		select coalesce(sum(future_objects.count), 0) as count
+		from requested_roots requested_root
+		cross join lateral (
+			select count(*) as count
+			from history_archive_object_queue archive_object
+			where archive_object."archiveUrlIdentity" =
+					requested_root."archiveUrlIdentity"
+				and ($3::text is null
+					or archive_object."objectType" = $3::text)
+				and ($4::text is null or archive_object.status = $4::text)
+				and archive_object."createdAt" > $5::timestamptz
+		) future_objects
+	)
+	select
+		greatest(summary_count.count - future_count.count, 0) as "objectCount",
+		rollup_state."rollupComplete"
+	from summary_count
+	cross join future_count
+	cross join rollup_state
 `;
+
+function summaryStatusCountSql(
+	alias: string,
+	activeColumn: 'activeObjects' | 'scanningObjects'
+): string {
+	return `case
+		when $4::text is null then coalesce(${alias}."totalObjects", 0)
+		when $4::text = 'pending' then coalesce(${alias}."pendingObjects", 0)
+		when $4::text = 'scanning' then coalesce(${alias}."${activeColumn}", 0)
+		when $4::text = 'verified' then coalesce(${alias}."verifiedObjects", 0)
+		when $4::text = 'failed' then greatest(
+			coalesce(${alias}."totalObjects", 0)
+				- coalesce(${alias}."pendingObjects", 0)
+				- coalesce(${alias}."${activeColumn}", 0)
+				- coalesce(${alias}."verifiedObjects", 0),
+			0
+		)
+		else 0
+	end`;
+}
 
 export const knownArchiveObjectPageSql = `
 	with

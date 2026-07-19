@@ -1,11 +1,12 @@
 import express from 'express';
 import request from 'supertest';
 import { mock } from 'jest-mock-extended';
-import { ok } from 'neverthrow';
+import { err, ok } from 'neverthrow';
 import type { HistoryArchiveEvidenceV2 } from 'shared';
 import type { GetHistoryArchiveEvidence } from '../../../use-cases/get-history-archive-evidence/GetHistoryArchiveEvidence.js';
 import { archiveEvidenceRouter } from '../ArchiveEvidenceRouter.js';
 import { PublicArchiveEvidenceAdmission } from '../PublicArchiveEvidenceRequest.js';
+import { ArchiveEvidenceReadModelUnavailableError } from '../../../domain/known-archive-evidence/ArchiveEvidenceReadModelUnavailableError.js';
 
 describe('composed archive evidence V2 router', () => {
 	it('returns paged evidence with exact cache metadata', async () => {
@@ -71,6 +72,25 @@ describe('composed archive evidence V2 router', () => {
 				}
 			});
 		expect(getHistoryArchiveEvidence.execute).not.toHaveBeenCalled();
+	});
+
+	it('returns a retryable 503 while archive evidence rollups catch up', async () => {
+		const getHistoryArchiveEvidence = mock<GetHistoryArchiveEvidence>();
+		getHistoryArchiveEvidence.execute.mockResolvedValue(
+			err(new ArchiveEvidenceReadModelUnavailableError())
+		);
+		const app = createApp(getHistoryArchiveEvidence);
+
+		await request(app)
+			.get('/archive-scans/https%3A%2F%2Fhistory.example.com/object-evidence')
+			.expect(503)
+			.expect('Retry-After', '5')
+			.expect({
+				error: {
+					code: 'temporarily_unavailable',
+					message: 'Archive evidence is still being prepared'
+				}
+			});
 	});
 });
 
