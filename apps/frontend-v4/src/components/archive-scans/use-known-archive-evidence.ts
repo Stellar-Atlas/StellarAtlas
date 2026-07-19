@@ -46,6 +46,11 @@ import {
 	buildObjectView
 } from './known-archive-evidence-view-model';
 import {
+	getObjectRefreshQuery,
+	getObjectQueryForTab,
+	shouldLoadInitialActivityPage
+} from './known-archive-evidence-tab-query';
+import {
 	mergeArchiveEvidenceAggregate,
 	shouldRefreshFirstArchiveEvidencePage,
 	startBoundedArchiveEvidenceRefresh
@@ -379,7 +384,15 @@ export function useKnownArchiveEvidence(
 				startedRevisions.objects === requestRevisions.current.objects
 			)
 		) {
-			loadObjects(objectQuery.current, null, false);
+			loadObjects(
+				getObjectRefreshQuery(
+					currentView.tab,
+					objectQuery.current,
+					result.data.totals.objects
+				),
+				null,
+				false
+			);
 		} else if (
 			currentView.tab === 'activity' &&
 			shouldRefreshFirstArchiveEvidencePage(
@@ -410,7 +423,11 @@ export function useKnownArchiveEvidence(
 			return;
 		}
 		const query = objectQuery.current;
-		const nextQuery = getObjectQueryForTab(nextTab, query);
+		const nextQuery = getObjectQueryForTab(
+			nextTab,
+			query,
+			liveEvidence.totals.objects
+		);
 		if (nextQuery !== null) loadObjects(nextQuery, null, false);
 	};
 
@@ -453,27 +470,3 @@ export function useKnownArchiveEvidence(
 export type KnownArchiveEvidenceViewState = ReturnType<
 	typeof useKnownArchiveEvidence
 >;
-
-export function getObjectQueryForTab(
-	tab: KnownArchiveEvidenceTab,
-	query: ArchiveEvidenceObjectQuery
-): ArchiveEvidenceObjectQuery | null {
-	if (tab === 'verified' && query.status !== 'verified') {
-		return { ...query, status: 'verified' };
-	}
-	if (
-		tab === 'work' &&
-		query.status !== 'pending' &&
-		query.status !== 'scanning'
-	) {
-		return { ...query, status: 'pending' };
-	}
-	return null;
-}
-
-export function shouldLoadInitialActivityPage(
-	tab: KnownArchiveEvidenceTab,
-	pageLimit: number | undefined
-): boolean {
-	return tab === 'activity' && pageLimit === 0;
-}

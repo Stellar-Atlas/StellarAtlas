@@ -38,12 +38,12 @@ async function OrganizationDetailRouteContent({
 		(candidate) => candidate.organization
 	);
 	const archiveEvidence = (
-		<ArchiveEvidenceErrorBoundary title="Organization archive evidence">
+		<ArchiveEvidenceErrorBoundary title="Organization archive health">
 			<Suspense
 				fallback={
 					<ArchiveEvidenceRouteState
 						state="loading"
-						title="Organization archive evidence"
+						title="Organization archive health"
 					/>
 				}
 			>

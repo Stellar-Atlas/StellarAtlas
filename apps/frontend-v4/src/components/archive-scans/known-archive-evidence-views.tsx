@@ -29,6 +29,9 @@ export function KnownArchiveEvidenceTabContent({
 	tabId,
 	view
 }: KnownArchiveEvidenceTabContentProps): React.JSX.Element {
+	const findingCount =
+		evidence.totals.objects.remoteFailureObjects +
+		evidence.totals.objects.workerIssueObjects;
 	return (
 		<div
 			aria-labelledby={tabId}
@@ -45,6 +48,10 @@ export function KnownArchiveEvidenceTabContent({
 					onArchiveUrlChange={view.failures.changeArchiveUrl}
 					onObjectTypeChange={view.failures.changeObjectType}
 					roots={evidence.roots}
+					showArchiveSource={
+						findingCount > 0 || view.failures.archiveUrl !== null
+					}
+					showObjectType={findingCount > 1 || view.failures.objectType !== null}
 				/>
 			) : null}
 			{view.tab === 'failures' ? <FailuresView view={view} /> : null}
@@ -60,7 +67,6 @@ export function KnownArchiveEvidenceTabContent({
 			{view.tab === 'activity' ? (
 				<ActivityView evidence={evidence} view={view} />
 			) : null}
-			{view.tab === 'raw' ? <RawEvidence evidence={evidence} /> : null}
 		</div>
 	);
 }
@@ -82,6 +88,8 @@ function FailuresView({
 			/>
 		);
 	}
+	const showRemote = remotePage.total > 0 || failures.errorTarget === 'remote';
+	const showWorker = workerPage.total > 0 || failures.errorTarget === 'worker';
 
 	return (
 		<>
@@ -93,51 +101,61 @@ function FailuresView({
 					loadingText="Updating archive failure evidence."
 				/>
 			) : null}
-			<section aria-busy={failures.isLoading}>
-				<EvidenceSectionHeading
-					count={remotePage.total}
-					title="Remote archive failures"
-					tone="danger"
-				/>
-				{failures.errorTarget === 'remote' ? (
-					<RequestFeedback error={failures.error} onRetry={failures.retry} />
-				) : null}
-				<RemoteFailureTable page={remotePage} />
-				<CursorPagination
-					count={remotePage.failures.length}
-					disabled={failures.isLoading}
-					hasMore={remotePage.hasMore}
-					index={failures.remotePageIndex}
-					limit={remotePage.limit}
-					onNext={failures.nextRemote}
-					onPrevious={failures.previousRemote}
-					total={remotePage.total}
-				/>
-			</section>
-			<section
-				aria-busy={failures.isLoading}
-				className="known-evidence-worker-section"
-			>
-				<EvidenceSectionHeading
-					count={workerPage.total}
-					title="StellarAtlas worker issues"
-					tone="warning"
-				/>
-				{failures.errorTarget === 'worker' ? (
-					<RequestFeedback error={failures.error} onRetry={failures.retry} />
-				) : null}
-				<WorkerIssueTable page={workerPage} />
-				<CursorPagination
-					count={workerPage.issues.length}
-					disabled={failures.isLoading}
-					hasMore={workerPage.hasMore}
-					index={failures.workerPageIndex}
-					limit={workerPage.limit}
-					onNext={failures.nextWorker}
-					onPrevious={failures.previousWorker}
-					total={workerPage.total}
-				/>
-			</section>
+			{!showRemote && !showWorker && failures.errorTarget === null ? (
+				<p className="known-evidence-empty">
+					No remote archive failures or scanner infrastructure issues match
+					these filters.
+				</p>
+			) : null}
+			{showRemote ? (
+				<section aria-busy={failures.isLoading}>
+					<EvidenceSectionHeading
+						count={remotePage.total}
+						title="Remote archive failures"
+						tone="danger"
+					/>
+					{failures.errorTarget === 'remote' ? (
+						<RequestFeedback error={failures.error} onRetry={failures.retry} />
+					) : null}
+					<RemoteFailureTable page={remotePage} />
+					<CursorPagination
+						count={remotePage.failures.length}
+						disabled={failures.isLoading}
+						hasMore={remotePage.hasMore}
+						index={failures.remotePageIndex}
+						limit={remotePage.limit}
+						onNext={failures.nextRemote}
+						onPrevious={failures.previousRemote}
+						total={remotePage.total}
+					/>
+				</section>
+			) : null}
+			{showWorker ? (
+				<section
+					aria-busy={failures.isLoading}
+					className={showRemote ? 'known-evidence-worker-section' : undefined}
+				>
+					<EvidenceSectionHeading
+						count={workerPage.total}
+						title="StellarAtlas worker issues"
+						tone="warning"
+					/>
+					{failures.errorTarget === 'worker' ? (
+						<RequestFeedback error={failures.error} onRetry={failures.retry} />
+					) : null}
+					<WorkerIssueTable page={workerPage} />
+					<CursorPagination
+						count={workerPage.issues.length}
+						disabled={failures.isLoading}
+						hasMore={workerPage.hasMore}
+						index={failures.workerPageIndex}
+						limit={workerPage.limit}
+						onNext={failures.nextWorker}
+						onPrevious={failures.previousWorker}
+						total={workerPage.total}
+					/>
+				</section>
+			) : null}
 		</>
 	);
 }
@@ -151,9 +169,19 @@ function ObjectPageView({
 }): React.JSX.Element {
 	const objects = view.objects;
 	const page = objects.page;
+	const counts = evidence.totals.objects;
+	const statusTotal =
+		view.tab === 'verified'
+			? counts.verifiedObjects
+			: objects.status === 'scanning'
+				? counts.activeObjects
+				: counts.pendingObjects;
+	const showWorkToggle =
+		view.tab === 'work' &&
+		counts.pendingObjects + counts.activeObjects > 0;
 	return (
 		<>
-			{view.tab === 'work' ? (
+			{showWorkToggle ? (
 				<div
 					aria-label="Current work status"
 					className="segmented known-work-toggle"
@@ -164,7 +192,7 @@ function ObjectPageView({
 						onClick={() => objects.changeStatus('pending')}
 						type="button"
 					>
-						Waiting
+						Waiting {formatInteger(counts.pendingObjects)}
 					</button>
 					<button
 						aria-pressed={objects.status === 'scanning'}
@@ -172,7 +200,7 @@ function ObjectPageView({
 						onClick={() => objects.changeStatus('scanning')}
 						type="button"
 					>
-						Checking
+						Checking {formatInteger(counts.activeObjects)}
 					</button>
 				</div>
 			) : null}
@@ -183,6 +211,8 @@ function ObjectPageView({
 				onArchiveUrlChange={objects.changeArchiveUrl}
 				onObjectTypeChange={objects.changeObjectType}
 				roots={evidence.roots}
+				showArchiveSource={statusTotal > 0 || objects.archiveUrl !== null}
+				showObjectType={statusTotal > 1 || objects.objectType !== null}
 			/>
 			{page === null ? (
 				<RequestFeedback
@@ -261,23 +291,40 @@ function ActivityView({
 }): React.JSX.Element {
 	const activity = view.activity;
 	const page = activity.page;
+	const activityTotal = page?.page.total ?? evidence.eventPage.page.total;
+	const showObjectType = activityTotal > 1 || activity.objectType !== null;
+	const showEvidenceClass =
+		activityTotal > 1 || activity.evidenceClass !== null;
+	const showFilters =
+		((activityTotal > 0 || activity.archiveUrl !== null) &&
+			evidence.roots.length > 1) ||
+		showObjectType ||
+		showEvidenceClass;
 	return (
 		<>
-			<div className="known-evidence-activity-filters">
-				<EvidenceFilters
-					archiveUrl={activity.archiveUrl}
-					disabled={activity.isLoading}
-					objectType={activity.objectType}
-					onArchiveUrlChange={activity.changeArchiveUrl}
-					onObjectTypeChange={activity.changeObjectType}
-					roots={evidence.roots}
-				/>
-				<EvidenceClassFilter
-					disabled={activity.isLoading}
-					onChange={activity.changeEvidenceClass}
-					value={activity.evidenceClass}
-				/>
-			</div>
+			{showFilters ? (
+				<div className="known-evidence-activity-filters">
+					<EvidenceFilters
+						archiveUrl={activity.archiveUrl}
+						disabled={activity.isLoading}
+						objectType={activity.objectType}
+						onArchiveUrlChange={activity.changeArchiveUrl}
+						onObjectTypeChange={activity.changeObjectType}
+						roots={evidence.roots}
+						showArchiveSource={
+							activityTotal > 0 || activity.archiveUrl !== null
+						}
+						showObjectType={showObjectType}
+					/>
+					{showEvidenceClass ? (
+						<EvidenceClassFilter
+							disabled={activity.isLoading}
+							onChange={activity.changeEvidenceClass}
+							value={activity.evidenceClass}
+						/>
+					) : null}
+				</div>
+			) : null}
 			{page === null ? (
 				<RequestFeedback
 					error={activity.error}
@@ -338,22 +385,6 @@ function RequestFeedback({
 		<p className="known-evidence-request-state loading" role="status">
 			{loadingText}
 		</p>
-	);
-}
-
-function RawEvidence({
-	evidence
-}: {
-	readonly evidence: PublicKnownArchiveEvidence;
-}): React.JSX.Element {
-	return (
-		<details className="metadata-document known-evidence-raw">
-			<summary>
-				<span>Raw initial route response</span>
-				<span className="muted-inline">JSON</span>
-			</summary>
-			<pre>{JSON.stringify(evidence, null, 2)}</pre>
-		</details>
 	);
 }
 

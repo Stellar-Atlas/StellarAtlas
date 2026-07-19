@@ -1,8 +1,8 @@
 import type { EntityManager } from 'typeorm';
 import { ArchiveEvidenceReadModelUnavailableError } from '../../../domain/known-archive-evidence/ArchiveEvidenceReadModelUnavailableError.js';
 import type { KnownArchiveObjectPageRequest } from '../../../domain/known-archive-evidence/KnownArchiveEvidenceRepository.js';
+import { HistoryArchiveObject } from '../../../domain/history-archive-object/HistoryArchiveObject.js';
 import { createObjectFromRow } from './HistoryArchiveObjectRowMapper.js';
-import { historyArchiveObjectDependencySatisfiedSql } from './HistoryArchiveObjectDependencySql.js';
 import { requireNumber, type NumericValue } from './ScanJobRowMapper.js';
 
 const maxActiveObjectsPerArchive = 1;
@@ -16,6 +16,20 @@ type CountRow = {
 	readonly rollupcomplete?: boolean;
 };
 
+type ActiveObjectRow = {
+	readonly archiveUrlIdentity?: string;
+	readonly archiveurlidentity?: string;
+	readonly hostIdentity?: string;
+	readonly hostidentity?: string;
+};
+
+type HostThrottleRow = {
+	readonly blockedUntil?: Date | string;
+	readonly blockeduntil?: Date | string;
+	readonly hostIdentity?: string;
+	readonly hostidentity?: string;
+};
+
 type ObjectRow = Parameters<typeof createObjectFromRow>[0];
 
 export async function findKnownArchiveObjectPage(
@@ -23,7 +37,7 @@ export async function findKnownArchiveObjectPage(
 	archiveUrlIdentities: readonly string[],
 	page: KnownArchiveObjectPageRequest
 ): Promise<{
-	readonly objects: ReturnType<typeof createObjectFromRow>[];
+	readonly objects: HistoryArchiveObject[];
 	readonly total: number;
 }> {
 	if (archiveUrlIdentities.length === 0) return { objects: [], total: 0 };
@@ -59,14 +73,13 @@ export async function findKnownArchiveObjectPage(
 		...params,
 		page.before?.at ?? null,
 		page.before?.remoteId ?? null,
-		page.limit + 1,
-		maxActiveObjectsPerArchive,
-		maxActiveObjectsTotal,
-		maxActiveObjectsPerHost
+		page.limit + 1
 	]);
+	const objects = requireObjectRows(objectResult).map(createObjectFromRow);
+	if (objects.length > 0) await assignDelayReasons(manager, objects);
 
 	return {
-		objects: requireObjectRows(objectResult).map(createObjectFromRow),
+		objects,
 		total
 	};
 }
@@ -106,7 +119,139 @@ function isCountRow(value: unknown): value is CountRow {
 }
 
 function isObjectRow(value: unknown): value is ObjectRow {
+	return isQueryRow(value);
+}
+
+function isQueryRow(
+	value: unknown
+): value is Readonly<Record<string, unknown>> {
 	return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+async function assignDelayReasons(
+	manager: EntityManager,
+	objects: readonly HistoryArchiveObject[]
+): Promise<void> {
+	const hosts = [...new Set(objects.map((object) => object.hostIdentity))];
+	const [activeValue, throttleValue] = await Promise.all([
+		manager.query(knownArchiveObjectActiveContextSql),
+		manager.query(knownArchiveObjectHostThrottleSql, [hosts])
+	]);
+	const activeRows = requireActiveRows(activeValue);
+	const throttles = requireThrottleRows(throttleValue);
+	const activeByArchive = countBy(
+		activeRows,
+		(row) => row.archiveUrlIdentity ?? row.archiveurlidentity
+	);
+	const activeByHost = countBy(
+		activeRows,
+		(row) => row.hostIdentity ?? row.hostidentity
+	);
+	const blockedByHost = new Map(
+		throttles.map((row) => [
+			requireRowString(row.hostIdentity ?? row.hostidentity, 'hostIdentity'),
+			requireRowDate(row.blockedUntil ?? row.blockeduntil, 'blockedUntil')
+		])
+	);
+	const now = new Date();
+
+	for (const object of objects) {
+		object.delayReason = objectDelayReason(object, {
+			activeArchive: activeByArchive.get(object.archiveUrlIdentity) ?? 0,
+			activeHost: activeByHost.get(object.hostIdentity) ?? 0,
+			activeTotal: activeRows.length,
+			blockedUntil: blockedByHost.get(object.hostIdentity) ?? null,
+			now
+		});
+	}
+}
+
+function objectDelayReason(
+	object: HistoryArchiveObject,
+	context: {
+		readonly activeArchive: number;
+		readonly activeHost: number;
+		readonly activeTotal: number;
+		readonly blockedUntil: Date | null;
+		readonly now: Date;
+	}
+): HistoryArchiveObject['delayReason'] {
+	if (object.status === 'scanning') {
+		return { code: 'object-already-active', until: null };
+	}
+	if (object.status !== 'pending' && object.status !== 'failed') return null;
+	if ((object.executionDisposition ?? 'deferred') !== 'executable') {
+		return {
+			code:
+				object.executionDisposition === null
+					? 'legacy-deferred'
+					: 'planning-deferred',
+			until: null
+		};
+	}
+	if (context.blockedUntil !== null) {
+		return { code: 'host-backoff', until: context.blockedUntil.toISOString() };
+	}
+	if (
+		object.nextAttemptAt !== null &&
+		object.nextAttemptAt.getTime() > context.now.getTime()
+	) {
+		return { code: 'retry-window', until: object.nextAttemptAt.toISOString() };
+	}
+	if (object.status === 'pending' && object.dependencyReady !== true) {
+		return { code: 'missing-dependency', until: null };
+	}
+	if (context.activeTotal >= maxActiveObjectsTotal) {
+		return { code: 'global-active-cap', until: null };
+	}
+	if (context.activeArchive >= maxActiveObjectsPerArchive) {
+		return { code: 'archive-active-cap', until: null };
+	}
+	if (context.activeHost >= maxActiveObjectsPerHost) {
+		return { code: 'host-active-cap', until: null };
+	}
+	return null;
+}
+
+function requireActiveRows(value: unknown): readonly ActiveObjectRow[] {
+	return requireRows(value, 'active context');
+}
+
+function requireThrottleRows(value: unknown): readonly HostThrottleRow[] {
+	return requireRows(value, 'host throttle');
+}
+
+function requireRows<T extends object>(
+	value: unknown,
+	name: string
+): readonly T[] {
+	if (!Array.isArray(value) || value.some((row) => !isQueryRow(row))) {
+		throw new Error(`Known archive object ${name} returned invalid rows`);
+	}
+	return value as T[];
+}
+
+function countBy<T>(
+	rows: readonly T[],
+	key: (row: T) => string | undefined
+): ReadonlyMap<string, number> {
+	const counts = new Map<string, number>();
+	for (const row of rows) {
+		const value = requireRowString(key(row), 'active context identity');
+		counts.set(value, (counts.get(value) ?? 0) + 1);
+	}
+	return counts;
+}
+
+function requireRowString(value: string | undefined, field: string): string {
+	if (typeof value === 'string' && value.length > 0) return value;
+	throw new Error(`Known archive object row is missing ${field}`);
+}
+
+function requireRowDate(value: Date | string | undefined, field: string): Date {
+	const date = value instanceof Date ? value : new Date(value ?? '');
+	if (!Number.isNaN(date.getTime())) return date;
+	throw new Error(`Known archive object row has invalid ${field}`);
 }
 
 const objectCandidateFilterSql = `
@@ -198,107 +343,36 @@ function summaryStatusCountSql(
 }
 
 export const knownArchiveObjectPageSql = `
-	with
-	requested_roots as materialized (
+	with requested_roots as materialized (
 		select distinct identity as "archiveUrlIdentity"
 		from unnest($1::text[]) requested(identity)
 		where $2::text is null or identity = $2::text
-	),
-	page_keys as materialized (
-		select candidate."createdAt", candidate."remoteId"
-		from requested_roots requested_root
-		cross join lateral (
-			select archive_object."createdAt", archive_object."remoteId"
-			from history_archive_object_queue archive_object
-			where ${objectCandidateFilterSql}
-			order by
-				archive_object."createdAt" desc,
-				archive_object."remoteId" desc
-			limit $8
-		) candidate
-		order by candidate."createdAt" desc, candidate."remoteId" desc
-		limit $8
-	),
-	active_total as (
-		select count(*)::int as active_count
-		from history_archive_object_queue
-		where status = 'scanning'
-	),
-	active_archive as (
-		select "archiveUrlIdentity", count(*)::int as active_count
-		from history_archive_object_queue
-		where status = 'scanning'
-		group by "archiveUrlIdentity"
-	),
-	active_host as (
-		select "hostIdentity", count(*)::int as active_count
-		from history_archive_object_queue
-		where status = 'scanning'
-		group by "hostIdentity"
-	),
-	host_throttle as (
-		select "hostIdentity", max("blockedUntil") as "blockedUntil"
-		from history_archive_object_host_throttle
-		where "blockedUntil" > now()
-		group by "hostIdentity"
 	)
-	select
-		archive_object.*,
-		case
-			when archive_object.status = 'scanning'
-				then 'object-already-active'
-			when archive_object.status not in ('pending', 'failed')
-				then null
-			when coalesce(
-				archive_object."executionDisposition",
-				'deferred'
-			) <> 'executable' then case
-				when archive_object."executionDisposition" is null
-					then 'legacy-deferred'
-				else 'planning-deferred'
-			end
-			when host_throttle."blockedUntil" is not null
-				then 'host-backoff'
-			when archive_object."nextAttemptAt" > now()
-				then 'retry-window'
-			when archive_object.status = 'pending' and not coalesce(
-				${historyArchiveObjectDependencySatisfiedSql('archive_object')},
-				false
-			)
-				then 'missing-dependency'
-			when active_total.active_count >= $10
-				then 'global-active-cap'
-			when coalesce(active_archive.active_count, 0) >= $9
-				then 'archive-active-cap'
-			when coalesce(active_host.active_count, 0) >= $11
-				then 'host-active-cap'
-			else null
-		end as "delayReasonCode",
-		case
-			when archive_object.status not in ('pending', 'failed')
-				then null
-			when coalesce(
-				archive_object."executionDisposition",
-				'deferred'
-			) <> 'executable' then null
-			when host_throttle."blockedUntil" is not null
-				then host_throttle."blockedUntil"
-			when archive_object."nextAttemptAt" > now()
-				then archive_object."nextAttemptAt"
-			else null
-		end as "delayReasonUntil"
-	from page_keys page_key
-	join history_archive_object_queue archive_object
-		on archive_object."remoteId" = page_key."remoteId"
-	cross join active_total
-	left join active_archive
-		on active_archive."archiveUrlIdentity" =
-			archive_object."archiveUrlIdentity"
-	left join active_host
-		on active_host."hostIdentity" = archive_object."hostIdentity"
-	left join host_throttle
-		on host_throttle."hostIdentity" = archive_object."hostIdentity"
-	order by
-		page_key."createdAt" desc,
-		page_key."remoteId" desc
+	select candidate.*
+	from requested_roots requested_root
+	cross join lateral (
+		select archive_object.*
+		from history_archive_object_queue archive_object
+		where ${objectCandidateFilterSql}
+		order by
+			archive_object."createdAt" desc,
+			archive_object."remoteId" desc
+		limit $8
+	) candidate
+	order by candidate."createdAt" desc, candidate."remoteId" desc
+	limit $8
+`;
+
+export const knownArchiveObjectActiveContextSql = `
+	select "archiveUrlIdentity", "hostIdentity"
+	from history_archive_object_queue
+	where status = 'scanning'
+`;
+
+export const knownArchiveObjectHostThrottleSql = `
+	select "hostIdentity", max("blockedUntil") as "blockedUntil"
+	from history_archive_object_host_throttle
+	where "hostIdentity" = any($1::text[])
+		and "blockedUntil" > now()
+	group by "hostIdentity"
 `;

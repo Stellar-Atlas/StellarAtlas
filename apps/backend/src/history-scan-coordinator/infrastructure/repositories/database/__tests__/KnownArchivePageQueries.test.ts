@@ -1,9 +1,11 @@
-import { mock } from 'jest-mock-extended';
+import { mock, type MockProxy } from 'jest-mock-extended';
 import type { EntityManager, Repository, SelectQueryBuilder } from 'typeorm';
 import { HistoryArchiveObjectEvent } from '../../../../domain/history-archive-object/HistoryArchiveObjectEvent.js';
 import {
 	findKnownArchiveObjectPage,
+	knownArchiveObjectActiveContextSql,
 	knownArchiveObjectCountSql,
+	knownArchiveObjectHostThrottleSql,
 	knownArchiveObjectPageSql
 } from '../KnownArchiveObjectPageQuery.js';
 import {
@@ -18,6 +20,9 @@ import {
 } from '../KnownArchiveFailurePageQuery.js';
 import {
 	findKnownArchiveEvidenceRoots,
+	knownArchiveEvidenceFutureCheckpointSql,
+	knownArchiveEvidenceFutureObjectSql,
+	knownArchiveEvidenceLatestObjectSql,
 	knownArchiveEvidenceRootSql
 } from '../KnownArchiveEvidenceRootQuery.js';
 
@@ -53,14 +58,23 @@ describe('known archive page queries', () => {
 			}
 		];
 		const manager = mock<EntityManager>();
-		manager.query.mockResolvedValue(
-			roots.map((requestedRoot) => ({
-				...emptyCounts,
-				...requestedRoot,
-				latestObjectAt: null,
-				rollupComplete: true
-			}))
-		);
+		useTransactionManager(manager);
+		manager.query
+			.mockResolvedValueOnce(
+				roots.map((requestedRoot) => ({
+					...emptyCounts,
+					...requestedRoot,
+					rollupComplete: true
+				}))
+			)
+			.mockResolvedValueOnce([])
+			.mockResolvedValueOnce([])
+			.mockResolvedValueOnce(
+				roots.map((requestedRoot) => ({
+					archiveUrlIdentity: requestedRoot.archiveUrlIdentity,
+					latestObjectAt: null
+				}))
+			);
 		const result = await findKnownArchiveEvidenceRoots(
 			manager,
 			roots,
@@ -71,17 +85,35 @@ describe('known archive page queries', () => {
 		expect(result.map((item) => item.archiveUrlIdentity)).toEqual(
 			roots.map((item) => item.archiveUrlIdentity)
 		);
-		expect(manager.query).toHaveBeenCalledWith(knownArchiveEvidenceRootSql, [
-			roots.map((item) => item.archiveUrl),
-			roots.map((item) => item.archiveUrlIdentity),
-			snapshotAt
-		]);
+		expect(manager.query).toHaveBeenNthCalledWith(
+			1,
+			knownArchiveEvidenceRootSql,
+			[
+				roots.map((item) => item.archiveUrl),
+				roots.map((item) => item.archiveUrlIdentity)
+			]
+		);
+		expect(manager.query).toHaveBeenNthCalledWith(
+			2,
+			knownArchiveEvidenceFutureObjectSql,
+			[roots.map((item) => item.archiveUrlIdentity), snapshotAt]
+		);
+		expect(manager.query).toHaveBeenNthCalledWith(
+			3,
+			knownArchiveEvidenceFutureCheckpointSql,
+			[roots.map((item) => item.archiveUrlIdentity), snapshotAt]
+		);
+		expect(manager.query).toHaveBeenNthCalledWith(
+			4,
+			knownArchiveEvidenceLatestObjectSql,
+			[roots.map((item) => item.archiveUrlIdentity), snapshotAt]
+		);
 		expect(knownArchiveEvidenceRootSql).toContain('from requested_roots root');
 		expect(knownArchiveEvidenceRootSql).toContain(
 			'left join history_archive_evidence_root_summary summary'
 		);
-		expect(knownArchiveEvidenceRootSql).toContain(
-			'archive_object."createdAt" > $3::timestamptz'
+		expect(knownArchiveEvidenceFutureObjectSql).toContain(
+			'archive_object."createdAt" > $2::timestamptz'
 		);
 		expect(knownArchiveEvidenceRootSql).toContain(
 			'history_archive_evidence_root_summary_progress'
@@ -89,24 +121,29 @@ describe('known archive page queries', () => {
 		expect(knownArchiveEvidenceRootSql).toContain(
 			'history_archive_checkpoint_proof_rollup'
 		);
-		expect(knownArchiveEvidenceRootSql).toContain(
-			'proof."createdAt" > $3::timestamptz'
+		expect(knownArchiveEvidenceFutureCheckpointSql).toContain(
+			'proof."createdAt" > $2::timestamptz'
 		);
-		expect(knownArchiveEvidenceRootSql).toContain(
-			'archive_object."createdAt" <= $3::timestamptz'
+		expect(knownArchiveEvidenceLatestObjectSql).toContain(
+			'archive_object."createdAt" <= $2::timestamptz'
 		);
 		expect(knownArchiveEvidenceRootSql).not.toContain('snapshot_objects');
 	});
 
 	it('fails closed while the root summary rollup is incomplete', async () => {
 		const manager = mock<EntityManager>();
-		manager.query.mockResolvedValue([
-			{
-				archiveUrl: root,
-				archiveUrlIdentity: root,
-				rollupComplete: false
-			}
-		]);
+		useTransactionManager(manager);
+		manager.query
+			.mockResolvedValueOnce([
+				{
+					archiveUrl: root,
+					archiveUrlIdentity: root,
+					rollupComplete: false
+				}
+			])
+			.mockResolvedValueOnce([])
+			.mockResolvedValueOnce([])
+			.mockResolvedValueOnce([]);
 
 		await expect(
 			findKnownArchiveEvidenceRoots(
@@ -115,18 +152,26 @@ describe('known archive page queries', () => {
 				snapshotAt
 			)
 		).rejects.toThrow('Archive evidence root summary is not ready');
+		expect(manager.query).toHaveBeenCalledTimes(1);
 	});
 
 	it('rejects root counts that exceed the safe JavaScript integer range', async () => {
 		const manager = mock<EntityManager>();
-		manager.query.mockResolvedValue([
-			{
-				archiveUrl: root,
-				archiveUrlIdentity: root,
-				rollupComplete: true,
-				totalObjects: '9007199254740992'
-			}
-		]);
+		useTransactionManager(manager);
+		manager.query
+			.mockResolvedValueOnce([
+				{
+					archiveUrl: root,
+					archiveUrlIdentity: root,
+					rollupComplete: true,
+					totalObjects: '9007199254740992'
+				}
+			])
+			.mockResolvedValueOnce([])
+			.mockResolvedValueOnce([])
+			.mockResolvedValueOnce([
+				{ archiveUrlIdentity: root, latestObjectAt: null }
+			]);
 
 		await expect(
 			findKnownArchiveEvidenceRoots(
@@ -172,20 +217,19 @@ describe('known archive page queries', () => {
 				snapshotAt,
 				cursor.at,
 				cursor.remoteId,
-				26,
-				1,
-				24,
-				2
+				26
 			]
 		);
-		expect(knownArchiveObjectPageSql).toContain('end as "delayReasonCode"');
-		expect(knownArchiveObjectPageSql).toContain('end as "delayReasonUntil"');
-		expect(knownArchiveObjectPageSql).toContain('page_keys as materialized');
+		expect(knownArchiveObjectPageSql).toContain('select candidate.*');
 		expect(knownArchiveObjectPageSql).toContain(
-			'join history_archive_object_queue archive_object'
+			'from history_archive_object_queue archive_object'
 		);
-		expect(knownArchiveObjectPageSql).toContain("then 'host-backoff'");
-		expect(knownArchiveObjectPageSql).toContain("then 'missing-dependency'");
+		expect(knownArchiveObjectActiveContextSql).toContain(
+			"where status = 'scanning'"
+		);
+		expect(knownArchiveObjectHostThrottleSql).toContain(
+			'"hostIdentity" = any($1::text[])'
+		);
 		expect(knownArchiveObjectCountSql).toContain(
 			'history_archive_object_type_summary'
 		);
@@ -404,3 +448,9 @@ describe('known archive page queries', () => {
 		expect(repository.findBy).toHaveBeenCalledTimes(1);
 	});
 });
+
+function useTransactionManager(manager: MockProxy<EntityManager>): void {
+	manager.transaction.mockImplementation(async (_isolation, run) =>
+		run(manager)
+	);
+}

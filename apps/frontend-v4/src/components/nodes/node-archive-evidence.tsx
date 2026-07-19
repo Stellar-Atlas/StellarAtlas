@@ -17,7 +17,7 @@ export function NodeArchiveEvidence({
 		<KnownArchiveEvidence
 			evidence={evidence}
 			subject={{ id: publicKey, kind: 'node' }}
-			title="Archive evidence"
+			title="Archive health"
 		/>
 	);
 }

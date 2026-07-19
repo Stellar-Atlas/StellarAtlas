@@ -49,6 +49,10 @@ type RawObjectRow = {
 	readonly refreshafter?: Date | string | null;
 	readonly claimedAt?: Date | string | null;
 	readonly claimedat?: Date | string | null;
+	readonly dependencyReady?: boolean | null;
+	readonly dependencyready?: boolean | null;
+	readonly executionDisposition?: string | null;
+	readonly executiondisposition?: string | null;
 	readonly claimedByCommunityScannerId?: string | null;
 	readonly claimedbycommunityscannerid?: string | null;
 	readonly errorType?: string | null;
@@ -124,6 +128,15 @@ export function createObjectFromRow(row: RawObjectRow): HistoryArchiveObject {
 	object.claimedAt = toNullableDate(
 		row.claimedAt === undefined ? row.claimedat : row.claimedAt
 	);
+	object.dependencyReady =
+		row.dependencyReady === undefined
+			? (row.dependencyready ?? null)
+			: row.dependencyReady;
+	object.executionDisposition = toExecutionDisposition(
+		row.executionDisposition === undefined
+			? row.executiondisposition
+			: row.executionDisposition
+	);
 	object.claimedByCommunityScannerId =
 		row.claimedByCommunityScannerId ?? row.claimedbycommunityscannerid ?? null;
 	object.errorType = row.errorType ?? row.errortype ?? null;
@@ -170,6 +183,20 @@ function toFailureChannel(
 	if (value === null) return null;
 	if (value === 'archive_evidence' || value === 'scanner_issue') return value;
 	throw new Error('History archive object row has invalid failureChannel');
+}
+
+function toExecutionDisposition(
+	value: string | null | undefined
+): HistoryArchiveObject['executionDisposition'] {
+	if (value === null || value === undefined) return null;
+	if (
+		value === 'executable' ||
+		value === 'deferred' ||
+		value === 'superseded'
+	) {
+		return value;
+	}
+	throw new Error('History archive object row has invalid executionDisposition');
 }
 
 export function extractRows(result: RawObjectQueryResult): RawObjectRow[] {

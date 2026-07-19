@@ -43,7 +43,7 @@ async function ArchiveSourceEvidenceRoute({
 		<KnownArchiveEvidence
 			evidence={toKnownArchiveEvidence(archiveEvidence)}
 			subject={{ id: historyUrl, kind: 'archive' }}
-			title="Archive evidence"
+			title="Archive source health"
 		/>
 	);
 }
@@ -61,12 +61,12 @@ export default async function ArchiveScanDetailPage({
 				eyebrow="Archive source"
 				title={formatArchiveTitle(decodedHistoryUrl)}
 			/>
-			<ArchiveEvidenceErrorBoundary title="Archive evidence">
+			<ArchiveEvidenceErrorBoundary title="Archive source health">
 				<Suspense
 					fallback={
 						<ArchiveEvidenceRouteState
 							state="loading"
-							title="Archive evidence"
+							title="Archive source health"
 						/>
 					}
 				>

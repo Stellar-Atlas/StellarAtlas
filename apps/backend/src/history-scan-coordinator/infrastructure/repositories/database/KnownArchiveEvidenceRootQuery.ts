@@ -9,6 +9,19 @@ import type {
 	KnownArchiveRootScope
 } from '../../../domain/known-archive-evidence/KnownArchiveEvidenceRepository.js';
 import { requireNumber, type NumericValue } from './ScanJobRowMapper.js';
+import {
+	knownArchiveEvidenceFutureCheckpointSql,
+	knownArchiveEvidenceFutureObjectSql,
+	knownArchiveEvidenceLatestObjectSql,
+	knownArchiveEvidenceRootSql
+} from './KnownArchiveEvidenceRootSql.js';
+
+export {
+	knownArchiveEvidenceFutureCheckpointSql,
+	knownArchiveEvidenceFutureObjectSql,
+	knownArchiveEvidenceLatestObjectSql,
+	knownArchiveEvidenceRootSql
+} from './KnownArchiveEvidenceRootSql.js';
 
 type RootRow = {
 	readonly archiveUrl?: string;
@@ -53,20 +66,53 @@ export async function findKnownArchiveEvidenceRoots(
 	snapshotAt: Date
 ): Promise<readonly Omit<KnownArchiveRootReadModel, 'scannerOwnedState'>[]> {
 	if (roots.length === 0) return [];
+	const archiveUrls = roots.map((root) => root.archiveUrl);
+	const archiveUrlIdentities = roots.map((root) => root.archiveUrlIdentity);
 
-	const value: unknown = await manager.query(knownArchiveEvidenceRootSql, [
-		roots.map((root) => root.archiveUrl),
-		roots.map((root) => root.archiveUrlIdentity),
-		snapshotAt
-	]);
-	const rows = requireRootRows(value);
-	if (rows.some((row) => (row.rollupComplete ?? row.rollupcomplete) !== true)) {
-		throw new ArchiveEvidenceReadModelUnavailableError(
-			'Archive evidence root summary is not ready'
+	return manager.transaction('REPEATABLE READ', async (transactionManager) => {
+		const rootValue: unknown = await transactionManager.query(
+			knownArchiveEvidenceRootSql,
+			[archiveUrls, archiveUrlIdentities]
 		);
-	}
+		const rows = requireRootRows(rootValue);
+		if (
+			rows.some((row) => (row.rollupComplete ?? row.rollupcomplete) !== true)
+		) {
+			throw new ArchiveEvidenceReadModelUnavailableError(
+				'Archive evidence root summary is not ready'
+			);
+		}
+		const futureObjectValue: unknown = await transactionManager.query(
+			knownArchiveEvidenceFutureObjectSql,
+			[archiveUrlIdentities, snapshotAt]
+		);
+		const futureCheckpointValue: unknown = await transactionManager.query(
+			knownArchiveEvidenceFutureCheckpointSql,
+			[archiveUrlIdentities, snapshotAt]
+		);
+		const latestValue: unknown = await transactionManager.query(
+			knownArchiveEvidenceLatestObjectSql,
+			[archiveUrlIdentities, snapshotAt]
+		);
+		const futureObjects = indexRowsByIdentity(futureObjectValue);
+		const futureCheckpoints = indexRowsByIdentity(futureCheckpointValue);
+		const latestObjects = indexRowsByIdentity(latestValue);
+		return rows.map((row) => {
+			const identity = rootIdentity(row);
+			return mapRootRow(
+				row,
+				futureObjects.get(identity),
+				futureCheckpoints.get(identity),
+				latestObjects.get(identity)
+			);
+		});
+	});
+}
 
-	return rows.map(mapRootRow);
+function indexRowsByIdentity(value: unknown): ReadonlyMap<string, RootRow> {
+	return new Map(
+		requireRootRows(value).map((row) => [rootIdentity(row), row] as const)
+	);
 }
 
 function requireRootRows(value: unknown): readonly RootRow[] {
@@ -91,84 +137,120 @@ function isRootRow(value: unknown): value is RootRow {
 }
 
 function mapRootRow(
-	row: RootRow
+	row: RootRow,
+	futureObjects: RootRow | undefined,
+	futureCheckpoints: RootRow | undefined,
+	latestObject: RootRow | undefined
 ): Omit<KnownArchiveRootReadModel, 'scannerOwnedState'> {
 	return {
 		archiveUrl: requireString(row.archiveUrl ?? row.archiveurl, 'archiveUrl'),
-		archiveUrlIdentity: requireString(
-			row.archiveUrlIdentity ?? row.archiveurlidentity,
-			'archiveUrlIdentity'
+		archiveUrlIdentity: rootIdentity(row),
+		checkpoints: mapCheckpointCounts(row, futureCheckpoints),
+		latestObjectAt: nullableDate(
+			latestObject?.latestObjectAt ?? latestObject?.latestobjectat
 		),
-		checkpoints: mapCheckpointCounts(row),
-		latestObjectAt: nullableDate(row.latestObjectAt ?? row.latestobjectat),
-		objects: mapObjectCounts(row)
+		objects: mapObjectCounts(row, futureObjects)
 	};
 }
 
-function mapObjectCounts(row: RootRow): KnownArchiveObjectCountsV1 {
+function mapObjectCounts(
+	row: RootRow,
+	future: RootRow | undefined
+): KnownArchiveObjectCountsV1 {
 	return {
-		activeObjects: numberField(
+		activeObjects: snapshotNumberField(
 			row.activeObjects ?? row.activeobjects,
+			future?.activeObjects ?? future?.activeobjects,
 			'activeObjects'
 		),
-		bucketObjects: numberField(
+		bucketObjects: snapshotNumberField(
 			row.bucketObjects ?? row.bucketobjects,
+			future?.bucketObjects ?? future?.bucketobjects,
 			'bucketObjects'
 		),
-		pendingObjects: numberField(
+		pendingObjects: snapshotNumberField(
 			row.pendingObjects ?? row.pendingobjects,
+			future?.pendingObjects ?? future?.pendingobjects,
 			'pendingObjects'
 		),
-		remoteFailureObjects: numberField(
+		remoteFailureObjects: snapshotNumberField(
 			row.remoteFailureObjects ?? row.remotefailureobjects,
+			future?.remoteFailureObjects ?? future?.remotefailureobjects,
 			'remoteFailureObjects'
 		),
-		totalObjects: numberField(
+		totalObjects: snapshotNumberField(
 			row.totalObjects ?? row.totalobjects,
+			future?.totalObjects ?? future?.totalobjects,
 			'totalObjects'
 		),
-		verifiedBucketObjects: numberField(
+		verifiedBucketObjects: snapshotNumberField(
 			row.verifiedBucketObjects ?? row.verifiedbucketobjects,
+			future?.verifiedBucketObjects ?? future?.verifiedbucketobjects,
 			'verifiedBucketObjects'
 		),
-		verifiedObjects: numberField(
+		verifiedObjects: snapshotNumberField(
 			row.verifiedObjects ?? row.verifiedobjects,
+			future?.verifiedObjects ?? future?.verifiedobjects,
 			'verifiedObjects'
 		),
-		workerIssueObjects: numberField(
+		workerIssueObjects: snapshotNumberField(
 			row.workerIssueObjects ?? row.workerissueobjects,
+			future?.workerIssueObjects ?? future?.workerissueobjects,
 			'workerIssueObjects'
 		)
 	};
 }
 
-function mapCheckpointCounts(row: RootRow): KnownArchiveCheckpointCountsV1 {
+function mapCheckpointCounts(
+	row: RootRow,
+	future: RootRow | undefined
+): KnownArchiveCheckpointCountsV1 {
 	return {
-		mismatchedCheckpoints: numberField(
+		mismatchedCheckpoints: snapshotNumberField(
 			row.mismatchedCheckpoints ?? row.mismatchedcheckpoints,
+			future?.mismatchedCheckpoints ?? future?.mismatchedcheckpoints,
 			'mismatchedCheckpoints'
 		),
-		notEvaluableCheckpoints: numberField(
+		notEvaluableCheckpoints: snapshotNumberField(
 			row.notEvaluableCheckpoints ?? row.notevaluablecheckpoints,
+			future?.notEvaluableCheckpoints ?? future?.notevaluablecheckpoints,
 			'notEvaluableCheckpoints'
 		),
-		pendingCheckpoints: numberField(
+		pendingCheckpoints: snapshotNumberField(
 			row.pendingCheckpoints ?? row.pendingcheckpoints,
+			future?.pendingCheckpoints ?? future?.pendingcheckpoints,
 			'pendingCheckpoints'
 		),
-		totalCheckpoints: numberField(
+		totalCheckpoints: snapshotNumberField(
 			row.totalCheckpoints ?? row.totalcheckpoints,
+			future?.totalCheckpoints ?? future?.totalcheckpoints,
 			'totalCheckpoints'
 		),
-		verifiedCheckpoints: numberField(
+		verifiedCheckpoints: snapshotNumberField(
 			row.verifiedCheckpoints ?? row.verifiedcheckpoints,
+			future?.verifiedCheckpoints ?? future?.verifiedcheckpoints,
 			'verifiedCheckpoints'
 		)
 	};
 }
 
-function numberField(value: NumericValue | undefined, field: string): number {
-	return requireNumber(value ?? 0, field);
+function snapshotNumberField(
+	value: NumericValue | undefined,
+	futureValue: NumericValue | undefined,
+	field: string
+): number {
+	return Math.max(
+		requireNumber(value ?? 0, field) -
+			requireNumber(futureValue ?? 0, `future ${field}`),
+		0
+	);
+}
+
+function rootIdentity(row: RootRow): string {
+	return requireString(
+		row.archiveUrlIdentity ?? row.archiveurlidentity,
+		'archiveUrlIdentity'
+	);
 }
 
 function requireString(value: string | undefined, field: string): string {
@@ -186,162 +268,3 @@ function nullableDate(value: Date | string | null | undefined): Date | null {
 	}
 	return date;
 }
-
-export const knownArchiveEvidenceRootSql = `
-	with requested_roots as (
-		select *
-		from unnest($1::text[], $2::text[])
-			as root("archiveUrl", "archiveUrlIdentity")
-	),
-	checkpoint_counts as (
-		select
-			proof."archiveUrlIdentity",
-			proof."totalCheckpointProofs" as "totalCheckpoints",
-			proof."verifiedCheckpointProofs" as "verifiedCheckpoints",
-			proof."mismatchCheckpointProofs" as "mismatchedCheckpoints",
-			proof."pendingCheckpointProofs" as "pendingCheckpoints",
-			proof."notEvaluableCheckpointProofs" as "notEvaluableCheckpoints"
-		from history_archive_checkpoint_proof_rollup proof
-		where proof."archiveUrlIdentity" = any($2::text[])
-	), future_checkpoint_counts as (
-		select
-			proof."archiveUrlIdentity",
-			count(*) as "totalCheckpoints",
-			count(*) filter (where proof.status = 'verified')
-				as "verifiedCheckpoints",
-			count(*) filter (where proof.status = 'mismatch')
-				as "mismatchedCheckpoints",
-			count(*) filter (where proof.status = 'pending')
-				as "pendingCheckpoints",
-			count(*) filter (where proof.status = 'not-evaluable')
-				as "notEvaluableCheckpoints"
-		from history_archive_checkpoint_proof proof
-		where proof."archiveUrlIdentity" = any($2::text[])
-			and proof."createdAt" > $3::timestamptz
-		group by proof."archiveUrlIdentity"
-	),
-	summary_progress as materialized (
-		select
-			coalesce((
-				select "complete" and "lastObjectId" = "cutoffObjectId"
-				from history_archive_evidence_root_summary_progress
-				where id = 1
-			), false)
-			and coalesce((
-				select "complete" and "lastProofId" = "cutoffProofId"
-				from history_archive_checkpoint_proof_rollup_progress
-				where id = 1
-			), false) as "rollupComplete"
-	)
-	select
-		root."archiveUrl",
-		root."archiveUrlIdentity",
-		summary_progress."rollupComplete",
-		greatest(
-			coalesce(summary."totalObjects", 0) - future_objects."totalObjects",
-			0
-		) as "totalObjects",
-		greatest(
-			coalesce(summary."pendingObjects", 0) - future_objects."pendingObjects",
-			0
-		) as "pendingObjects",
-		greatest(
-			coalesce(summary."activeObjects", 0) - future_objects."activeObjects",
-			0
-		) as "activeObjects",
-		greatest(
-			coalesce(summary."verifiedObjects", 0) - future_objects."verifiedObjects",
-			0
-		) as "verifiedObjects",
-		greatest(
-			coalesce(summary."remoteFailureObjects", 0)
-				- future_objects."remoteFailureObjects",
-			0
-		) as "remoteFailureObjects",
-		greatest(
-			coalesce(summary."workerIssueObjects", 0)
-				- future_objects."workerIssueObjects",
-			0
-		) as "workerIssueObjects",
-		greatest(
-			coalesce(summary."bucketObjects", 0) - future_objects."bucketObjects",
-			0
-		) as "bucketObjects",
-		greatest(
-			coalesce(summary."verifiedBucketObjects", 0)
-				- future_objects."verifiedBucketObjects",
-			0
-		) as "verifiedBucketObjects",
-		latest_object."createdAt" as "latestObjectAt",
-		greatest(
-			coalesce(checkpoints."totalCheckpoints", 0)
-				- coalesce(future_checkpoints."totalCheckpoints", 0),
-			0
-		) as "totalCheckpoints",
-		greatest(
-			coalesce(checkpoints."verifiedCheckpoints", 0)
-				- coalesce(future_checkpoints."verifiedCheckpoints", 0),
-			0
-		) as "verifiedCheckpoints",
-		greatest(
-			coalesce(checkpoints."mismatchedCheckpoints", 0)
-				- coalesce(future_checkpoints."mismatchedCheckpoints", 0),
-			0
-		)
-			as "mismatchedCheckpoints",
-		greatest(
-			coalesce(checkpoints."pendingCheckpoints", 0)
-				- coalesce(future_checkpoints."pendingCheckpoints", 0),
-			0
-		) as "pendingCheckpoints",
-		greatest(
-			coalesce(checkpoints."notEvaluableCheckpoints", 0)
-				- coalesce(future_checkpoints."notEvaluableCheckpoints", 0),
-			0
-		)
-			as "notEvaluableCheckpoints"
-	from requested_roots root
-	cross join summary_progress
-	left join history_archive_evidence_root_summary summary
-		on summary."archiveUrlIdentity" = root."archiveUrlIdentity"
-	left join checkpoint_counts checkpoints
-		on checkpoints."archiveUrlIdentity" = root."archiveUrlIdentity"
-	left join future_checkpoint_counts future_checkpoints
-		on future_checkpoints."archiveUrlIdentity" = root."archiveUrlIdentity"
-	left join lateral (
-		select archive_object."createdAt"
-		from history_archive_object_queue archive_object
-		where archive_object."archiveUrlIdentity" = root."archiveUrlIdentity"
-			and archive_object."createdAt" <= $3::timestamptz
-		order by archive_object."createdAt" desc
-		limit 1
-	) latest_object on true
-	cross join lateral (
-		select
-			count(*) as "totalObjects",
-			count(*) filter (where archive_object.status = 'pending')
-				as "pendingObjects",
-			count(*) filter (where archive_object.status = 'scanning')
-				as "activeObjects",
-			count(*) filter (where archive_object.status = 'verified')
-				as "verifiedObjects",
-			count(*) filter (
-				where archive_object.status = 'failed'
-					and archive_object."failureChannel" = 'archive_evidence'
-			) as "remoteFailureObjects",
-			count(*) filter (
-				where archive_object.status = 'failed'
-					and archive_object."failureChannel" = 'scanner_issue'
-			) as "workerIssueObjects",
-			count(*) filter (where archive_object."objectType" = 'bucket')
-				as "bucketObjects",
-			count(*) filter (
-				where archive_object."objectType" = 'bucket'
-					and archive_object.status = 'verified'
-			) as "verifiedBucketObjects"
-		from history_archive_object_queue archive_object
-		where archive_object."archiveUrlIdentity" = root."archiveUrlIdentity"
-			and archive_object."createdAt" > $3::timestamptz
-	) future_objects
-	order by root."archiveUrlIdentity" asc
-`;

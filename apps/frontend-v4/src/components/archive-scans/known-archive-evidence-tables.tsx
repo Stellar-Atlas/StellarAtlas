@@ -17,6 +17,7 @@ import {
 	EvidenceTableRegion,
 	ObjectIdentity,
 	ObjectSource,
+	VerifiedAlternateCopies,
 	formatBytes,
 	formatEvidenceClass,
 	formatEventType,
@@ -42,7 +43,7 @@ export function RemoteFailureTable({
 					<tr>
 						<th>Failed file</th>
 						<th>Failure</th>
-						<th>Archive source</th>
+						<th>Source evidence</th>
 						<th>Observed</th>
 					</tr>
 				</thead>
@@ -55,8 +56,12 @@ export function RemoteFailureTable({
 							<td className="known-evidence-error" data-label="Failure">
 								{formatObjectError(failure.object)}
 							</td>
-							<td data-label="Archive source">
-								<ObjectSource object={failure.object} />
+							<td data-label="Source evidence">
+								<div className="failed-archive-source">
+									<span>Failed source</span>
+									<ObjectSource object={failure.object} />
+								</div>
+								<VerifiedAlternateCopies failure={failure} />
 							</td>
 							<td data-label="Observed">
 								{formatDateTime(failure.object.updatedAt)}

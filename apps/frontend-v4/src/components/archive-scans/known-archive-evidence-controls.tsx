@@ -18,6 +18,8 @@ interface EvidenceFiltersProps {
 		value: PublicHistoryArchiveObjectType | null
 	) => void;
 	readonly roots: readonly PublicKnownArchiveRootEvidence[];
+	readonly showArchiveSource?: boolean;
+	readonly showObjectType?: boolean;
 }
 
 export function EvidenceFilters({
@@ -26,36 +28,45 @@ export function EvidenceFilters({
 	objectType,
 	onArchiveUrlChange,
 	onObjectTypeChange,
-	roots
-}: EvidenceFiltersProps): React.JSX.Element {
+	roots,
+	showArchiveSource = true,
+	showObjectType = true
+}: EvidenceFiltersProps): React.JSX.Element | null {
+	const showSourceControl = showArchiveSource && roots.length > 1;
+	if (!showSourceControl && !showObjectType) return null;
+
 	return (
 		<div className="known-evidence-filters">
-			<ArchiveSourceFilter
-				disabled={disabled}
-				onChange={onArchiveUrlChange}
-				roots={roots}
-				value={archiveUrl}
-			/>
-			<label>
-				<span>File type</span>
-				<select
+			{showSourceControl ? (
+				<ArchiveSourceFilter
 					disabled={disabled}
-					onChange={(event) => {
-						const selected = archiveObjectTypes.find(
-							(candidate) => candidate === event.target.value
-						);
-						onObjectTypeChange(selected ?? null);
-					}}
-					value={objectType ?? ''}
-				>
-					<option value="">All file types</option>
-					{archiveObjectTypes.map((value) => (
-						<option key={value} value={value}>
-							{formatArchiveObjectType(value)}
-						</option>
-					))}
-				</select>
-			</label>
+					onChange={onArchiveUrlChange}
+					roots={roots}
+					value={archiveUrl}
+				/>
+			) : null}
+			{showObjectType ? (
+				<label>
+					<span>File type</span>
+					<select
+						disabled={disabled}
+						onChange={(event) => {
+							const selected = archiveObjectTypes.find(
+								(candidate) => candidate === event.target.value
+							);
+							onObjectTypeChange(selected ?? null);
+						}}
+						value={objectType ?? ''}
+					>
+						<option value="">All file types</option>
+						{archiveObjectTypes.map((value) => (
+							<option key={value} value={value}>
+								{formatArchiveObjectType(value)}
+							</option>
+						))}
+					</select>
+				</label>
+			) : null}
 		</div>
 	);
 }
@@ -84,7 +95,7 @@ export function ArchiveSourceFilter({
 				<option value="">{emptyLabel}</option>
 				{roots.map((root) => (
 					<option key={root.archiveUrlIdentity} value={root.archiveUrl}>
-						{formatArchiveRoot(root.archiveUrl)}
+						{formatArchiveSourceOption(root)}
 					</option>
 				))}
 			</select>
@@ -110,7 +121,9 @@ export function CursorPagination({
 	readonly onNext: () => void;
 	readonly onPrevious: () => void;
 	readonly total: number;
-}): React.JSX.Element {
+}): React.JSX.Element | null {
+	if (index === 0 && !hasMore) return null;
+
 	const first = count === 0 ? 0 : index * limit + 1;
 	const last = count === 0 ? 0 : first + count - 1;
 	return (
@@ -130,4 +143,11 @@ export function CursorPagination({
 			</button>
 		</div>
 	);
+}
+
+function formatArchiveSourceOption(
+	root: PublicKnownArchiveRootEvidence
+): string {
+	const nodes = new Set(root.nodePublicKeys).size;
+	return `${formatArchiveRoot(root.archiveUrl)} - ${formatInteger(nodes)} ${nodes === 1 ? 'node' : 'nodes'}`;
 }

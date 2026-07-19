@@ -9,6 +9,7 @@ import {
 	knownArchiveFailureCountSql,
 	knownArchiveFailurePageSql
 } from '../KnownArchiveFailurePageQuery.js';
+import { knownArchiveObjectPageSql } from '../KnownArchiveObjectPageQuery.js';
 
 jest.setTimeout(180_000);
 
@@ -52,6 +53,16 @@ describe('known archive failed evidence query scale', () => {
 			knownArchiveFailurePageSql('remote'),
 			[[targetRoot], targetRoot, 'transactions', snapshotAt, null, null, 2]
 		)) as readonly { readonly remoteId?: string }[];
+		const objectPageRows = (await dataSource.query(knownArchiveObjectPageSql, [
+			[targetRoot],
+			targetRoot,
+			'transactions',
+			'failed',
+			snapshotAt,
+			null,
+			null,
+			2
+		])) as readonly { readonly remoteId?: string }[];
 		const copyRows = (await dataSource.query(knownArchiveCopyCoverageSql, [
 			[sourceRemoteId],
 			[targetRoot, copyRoot],
@@ -70,6 +81,9 @@ describe('known archive failed evidence query scale', () => {
 		expect(pageRows).toEqual([
 			expect.objectContaining({ remoteId: sourceRemoteId })
 		]);
+		expect(objectPageRows).toEqual([
+			expect.objectContaining({ remoteId: sourceRemoteId })
+		]);
 		expect(copyRows).toEqual([
 			expect.objectContaining({
 				remoteId: copyRemoteId,
@@ -86,6 +100,20 @@ describe('known archive failed evidence query scale', () => {
 			knownArchiveFailurePageSql('remote'),
 			[[targetRoot], targetRoot, 'transactions', snapshotAt, null, null, 2]
 		);
+		const objectPagePlan = await explain(
+			dataSource,
+			knownArchiveObjectPageSql,
+			[
+				[targetRoot],
+				targetRoot,
+				'transactions',
+				'failed',
+				snapshotAt,
+				null,
+				null,
+				2
+			]
+		);
 		const copyPlan = await explain(dataSource, knownArchiveCopyCoverageSql, [
 			[sourceRemoteId],
 			[targetRoot, copyRoot],
@@ -99,6 +127,9 @@ describe('known archive failed evidence query scale', () => {
 		expect(hasSequentialScan(pagePlan, 'history_archive_object_queue')).toBe(
 			false
 		);
+		expect(
+			hasSequentialScan(objectPagePlan, 'history_archive_object_queue')
+		).toBe(false);
 		expect(hasSequentialScan(copyPlan, 'history_archive_object_queue')).toBe(
 			false
 		);
@@ -116,6 +147,7 @@ describe('known archive failed evidence query scale', () => {
 		);
 		expect(countPlan['Execution Time'] ?? Infinity).toBeLessThan(1_500);
 		expect(pagePlan['Execution Time'] ?? Infinity).toBeLessThan(1_500);
+		expect(objectPagePlan['Execution Time'] ?? Infinity).toBeLessThan(1_500);
 		expect(copyPlan['Execution Time'] ?? Infinity).toBeLessThan(1_500);
 		process.stdout.write(
 			`FAILED_ARCHIVE_EVIDENCE_SCALE ${JSON.stringify({
@@ -123,6 +155,7 @@ describe('known archive failed evidence query scale', () => {
 				count: summarize(countPlan),
 				irrelevantEventCount,
 				irrelevantObjectCount,
+				objectPage: summarize(objectPagePlan),
 				page: summarize(pagePlan)
 			})}\n`
 		);

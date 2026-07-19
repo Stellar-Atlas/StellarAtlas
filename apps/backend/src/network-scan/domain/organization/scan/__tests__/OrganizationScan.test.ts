@@ -100,11 +100,21 @@ describe('OrganizationScan', () => {
 			expect(result.value[0].error).toBeInstanceOf(InvalidTomlStateError);
 		});
 
-		it('keeps last-known-good TOML content after a failed attempt', () => {
-			const previousSuccessAt = new Date('2020-01-01');
-			const scanTime = new Date('2020-01-02');
+		it('keeps last-known-good TOML facts after a failed attempt', () => {
+			const previousSuccessAt = new Date('2020-01-02');
+			const scanTime = new Date('2020-01-03');
 			const organization = createOrganization('domain.com');
-			organization.updateStellarTomlText('VERSION="2.0.0"', previousSuccessAt);
+			const previousNodeScan = createNodeScan(previousSuccessAt);
+			const previousToml = createTomlInfo(previousNodeScan);
+			const previousScan = new OrganizationScan(previousSuccessAt, [
+				organization
+			]);
+			const previousResult = previousScan.updateWithTomlInfoCollection(
+				new Map([['domain.com', previousToml]]),
+				previousNodeScan
+			);
+			expect(previousResult.isOk()).toBe(true);
+
 			const organizationScan = new OrganizationScan(scanTime, [organization]);
 			const nodeScan = createNodeScan(scanTime);
 			const failedToml: OrganizationTomlInfo = {
@@ -121,7 +131,13 @@ describe('OrganizationScan', () => {
 			);
 
 			expect(result.isOk()).toBe(true);
-			expect(organization.stellarTomlText).toBe('VERSION="2.0.0"');
+			expect(organization.stellarTomlText).toBe(previousToml.stellarTomlText);
+			assertOrganization(
+				organization,
+				previousToml,
+				previousNodeScan.nodes[0],
+				previousSuccessAt
+			);
 			expect(organization.latestMeasurement()?.toTomlAttempt()).toEqual({
 				authoritative: false,
 				content: null,

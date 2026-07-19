@@ -1,5 +1,4 @@
 /// <reference types="jest" />
-
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import type {
@@ -21,9 +20,8 @@ import {
 	formatEventType,
 	formatObjectStatusDetail
 } from '../known-archive-evidence-table-parts';
-
 describe('known archive evidence UI', () => {
-	it('renders accessible tabs with the raw response label', () => {
+	it('keeps raw evidence secondary to the accessible operational tabs', () => {
 		const markup = renderToStaticMarkup(
 			createElement(KnownArchiveEvidence, {
 				evidence: createEvidence(),
@@ -35,10 +33,14 @@ describe('known archive evidence UI', () => {
 		expect(markup).toContain('role="tablist"');
 		expect(markup).toContain('aria-orientation="horizontal"');
 		expect(markup).toContain('role="tab"');
-		expect(markup).toContain('Raw response');
+		expect(markup.match(/role="tab"/g)).toHaveLength(6);
+		expect(markup).not.toContain('>Raw response</button>');
+		expect(markup).toContain('Raw initial API response');
+		expect(markup).not.toContain('&quot;generatedAt&quot;');
+		expect(markup).toContain('1 archive source across 1 node');
 	});
 
-	it('keeps legacy copy coverage out of the failure table', () => {
+	it('separates a failed source from API-proven alternate copies', () => {
 		const markup = renderToStaticMarkup(
 			createElement(RemoteFailureTable, {
 				page: createEvidence().remoteFailures
@@ -46,9 +48,17 @@ describe('known archive evidence UI', () => {
 		);
 
 		expect(markup).toContain('Failed file');
-		expect(markup).toContain('Archive source');
-		expect(markup).not.toContain('Same organization');
-		expect(markup).not.toContain('Verified replacement downloads');
+		expect(markup).toContain('Source evidence');
+		expect(markup).toContain('Failed source');
+		expect(markup).toContain('2 verified alternate copies');
+		expect(markup).toContain('Same organization (1)');
+		expect(markup).toContain('Other network source (1)');
+		expect(markup).toContain(
+			'href="https://copy.example/history/ledger/0000003f.xdr.gz"'
+		);
+		expect(markup).toContain(
+			'href="https://network-copy.example/ledger/0000003f.xdr.gz"'
+		);
 	});
 
 	it('selects a sole repair source without coupling it to failure filters', () => {
@@ -81,6 +91,7 @@ describe('known archive evidence UI', () => {
 		);
 
 		expect(markup).toContain('Select a source');
+		expect(markup).toContain('archive.example/history - 1 node');
 		expect(markup).not.toContain('All sources');
 	});
 
@@ -112,14 +123,14 @@ describe('known archive evidence UI', () => {
 		}
 	});
 
-	it('maps planning-deferred delay reasons to scanner-planning copy', () => {
+	it('maps planning-deferred delay reasons to operator-facing copy', () => {
 		expect(
 			formatObjectStatusDetail(
 				createObject({
 					delayReason: { code: 'planning-deferred', until: null }
 				})
 			)
-		).toBe('deferred by scanner planning');
+		).toBe('Queued for verification');
 	});
 
 	it('labels category files by checkpoint without repeating the file type', () => {
@@ -149,8 +160,28 @@ describe('known archive evidence UI', () => {
 			})
 		);
 
-		expect(detail).toBe('waiting for scanner planning details');
+		expect(detail).toBe('Queued for verification');
 		expect(detail).not.toContain('legacy');
+	});
+
+	it('explains scheduler capacity and retry delays without internal codes', () => {
+		expect(
+			formatObjectStatusDetail(
+				createObject({
+					delayReason: { code: 'global-active-cap', until: null }
+				})
+			)
+		).toBe('Waiting for a scanner slot');
+		expect(
+			formatObjectStatusDetail(
+				createObject({
+					delayReason: {
+						code: 'retry-window',
+						until: '2026-07-10T00:10:00.000Z'
+					}
+				})
+			)
+		).toContain('Retry scheduled until');
 	});
 
 	it('shows retained state separately from a later failed refresh', () => {
@@ -241,7 +272,7 @@ describe('known archive evidence UI', () => {
 			})
 		);
 
-		expect(detail).toContain('host backoff until');
+		expect(detail).toContain('Archive source temporarily paused until');
 		expect(detail).toContain('2026');
 	});
 
@@ -290,14 +321,32 @@ function createEvidence(): PublicKnownNodeArchiveEvidence {
 			failures: [
 				{
 					networkVerifiedCopies: {
-						copies: [],
-						count: 0,
+						copies: [
+							{
+								archiveUrl: 'https://network-copy.example',
+								archiveUrlIdentity: 'network-copy',
+								objectUrl:
+									'https://network-copy.example/ledger/0000003f.xdr.gz',
+								remoteId: 'network-copy-1',
+								verifiedAt: '2026-07-10T00:00:00.000Z'
+							}
+						],
+						count: 1,
 						sampleLimit: 10
 					},
 					object,
 					sameOrganizationVerifiedCopies: {
-						copies: [],
-						count: 0,
+						copies: [
+							{
+								archiveUrl: 'https://copy.example/history',
+								archiveUrlIdentity: 'copy-history',
+								objectUrl:
+									'https://copy.example/history/ledger/0000003f.xdr.gz',
+								remoteId: 'organization-copy-1',
+								verifiedAt: '2026-07-10T00:00:00.000Z'
+							}
+						],
+						count: 1,
 						sampleLimit: 10
 					}
 				}

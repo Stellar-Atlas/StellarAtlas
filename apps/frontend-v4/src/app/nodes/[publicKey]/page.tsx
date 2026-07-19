@@ -47,10 +47,10 @@ async function NodeDetailRouteContent({
 		? getOrganizationForNode(inventoryNetwork, node)
 		: null;
 	const archiveEvidence = (
-		<ArchiveEvidenceErrorBoundary title="Archive evidence">
+		<ArchiveEvidenceErrorBoundary title="Archive health">
 			<Suspense
 				fallback={
-					<ArchiveEvidenceRouteState state="loading" title="Archive evidence" />
+					<ArchiveEvidenceRouteState state="loading" title="Archive health" />
 				}
 			>
 				<NodeArchiveEvidenceRoute publicKey={decodedPublicKey} />

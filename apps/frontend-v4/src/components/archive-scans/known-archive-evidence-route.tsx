@@ -30,7 +30,7 @@ export async function NodeArchiveEvidenceRoute({
 }: {
 	readonly publicKey: string;
 }): Promise<React.JSX.Element> {
-	const title = 'Archive evidence';
+	const title = 'Archive health';
 	try {
 		const evidence = await fetchKnownNodeArchiveEvidence(
 			publicKey,
@@ -54,7 +54,7 @@ export async function OrganizationArchiveEvidenceRoute({
 }: {
 	readonly organizationId: string;
 }): Promise<React.JSX.Element> {
-	const title = 'Organization archive evidence';
+	const title = 'Organization archive health';
 	try {
 		const evidence = await fetchKnownOrganizationArchiveEvidence(
 			organizationId,

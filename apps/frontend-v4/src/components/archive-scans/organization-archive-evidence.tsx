@@ -12,7 +12,7 @@ export function OrganizationArchiveEvidence({
 		<KnownArchiveEvidence
 			evidence={evidence}
 			subject={{ id: organizationId, kind: 'organization' }}
-			title="Organization archive evidence"
+			title="Organization archive health"
 		/>
 	);
 }

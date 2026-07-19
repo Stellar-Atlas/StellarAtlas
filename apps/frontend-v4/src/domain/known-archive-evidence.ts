@@ -47,7 +47,7 @@ export type PublicKnownArchiveVerifiedCopy =
 	PublicKnownArchiveRemoteFailure['sameOrganizationVerifiedCopies']['copies'][number];
 
 export type KnownArchiveEvidenceTab =
-	'failures' | 'work' | 'verified' | 'repair' | 'summary' | 'activity' | 'raw';
+	'failures' | 'work' | 'verified' | 'repair' | 'summary' | 'activity';
 
 export const knownArchiveEvidenceTabs: readonly {
 	readonly label: string;
@@ -58,8 +58,7 @@ export const knownArchiveEvidenceTabs: readonly {
 	{ label: 'Verified files', value: 'verified' },
 	{ label: 'Repair / download', value: 'repair' },
 	{ label: 'Summary', value: 'summary' },
-	{ label: 'Activity', value: 'activity' },
-	{ label: 'Raw response', value: 'raw' }
+	{ label: 'Activity', value: 'activity' }
 ];
 
 export function assessKnownArchiveEvidence(

@@ -7,8 +7,10 @@ describe('HistoryArchiveObjectRowMapper', () => {
 			archiveUrlIdentity: 'https://history.example.com',
 			attempts: 2,
 			createdAt: '2026-07-09T12:00:00.000Z',
+			dependencyReady: false,
 			delayReasonCode: 'host-backoff',
 			delayReasonUntil: '2026-07-09T12:05:00.000Z',
+			executionDisposition: 'deferred',
 			hostIdentity: 'history.example.com',
 			objectKey: 'root',
 			objectOrder: 0,
@@ -23,6 +25,8 @@ describe('HistoryArchiveObjectRowMapper', () => {
 			code: 'host-backoff',
 			until: '2026-07-09T12:05:00.000Z'
 		});
+		expect(object.dependencyReady).toBe(false);
+		expect(object.executionDisposition).toBe('deferred');
 	});
 
 	it('keeps delay reason null when the row is immediately claimable', () => {

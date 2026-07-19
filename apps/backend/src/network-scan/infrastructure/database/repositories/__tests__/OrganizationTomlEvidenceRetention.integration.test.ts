@@ -2,6 +2,7 @@ import express from 'express';
 import request from 'supertest';
 import { mockDeep } from 'jest-mock-extended';
 import Organization from '@network-scan/domain/organization/Organization.js';
+import { OrganizationContactInformation } from '@network-scan/domain/organization/OrganizationContactInformation.js';
 import OrganizationMeasurement from '@network-scan/domain/organization/OrganizationMeasurement.js';
 import { createDummyOrganizationId } from '@network-scan/domain/organization/__fixtures__/createDummyOrganizationId.js';
 import { TomlState } from '@network-scan/domain/organization/scan/TomlState.js';
@@ -94,7 +95,7 @@ describe('organization TOML retention and API evidence PostgreSQL', () => {
 		});
 	});
 
-	test('quarantines insecure success and exposes retained page/API evidence', async () => {
+	test('retains facts while exposing insecure and failed API evidence', async () => {
 		const discoveredAt = new Date('2020-03-01T00:00:00.000Z');
 		const successAt = new Date('2020-03-02T00:00:00.000Z');
 		const insecureAt = new Date('2020-03-03T00:00:00.000Z');
@@ -105,6 +106,22 @@ describe('organization TOML retention and API evidence PostgreSQL', () => {
 			'success',
 			TomlState.Ok,
 			'VERSION="2.0.0"'
+		);
+		organization.updateName('Trusted Organization', successAt);
+		organization.updateDescription('Retained organization facts', successAt);
+		organization.updateUrl('https://org.example', successAt);
+		organization.updateHorizonUrl('https://horizon.org.example', successAt);
+		organization.updateContactInformation(
+			OrganizationContactInformation.create({
+				dba: 'Trusted DBA',
+				officialEmail: 'ops@org.example',
+				phoneNumber: null,
+				physicalAddress: null,
+				twitter: null,
+				github: null,
+				keybase: null
+			}),
+			successAt
 		);
 		await context.organizationRepository.save([organization], discoveredAt);
 		const insecureBody = 'VERSION="2.0.0"\n[DOCUMENTATION]\nORG_NAME="unsafe"';
@@ -158,6 +175,11 @@ describe('organization TOML retention and API evidence PostgreSQL', () => {
 			.expect(200);
 
 		expect(response.body.organization).toMatchObject({
+			name: 'Trusted Organization',
+			description: 'Retained organization facts',
+			horizonUrl: 'https://horizon.org.example',
+			officialEmail: 'ops@org.example',
+			url: 'https://org.example',
 			stellarToml: {
 				content: 'VERSION="2.0.0"',
 				observedAt: successAt.toISOString(),

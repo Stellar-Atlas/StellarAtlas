@@ -130,7 +130,7 @@ describe('history archive object delay reasons in disposable PostgreSQL', () => 
 				},
 				limit: 10,
 				snapshotAt: new Date(Date.now() + 1_000),
-				snapshotTotal: null
+				snapshotTotal: 1
 			}
 		);
 
@@ -156,7 +156,7 @@ describe('history archive object delay reasons in disposable PostgreSQL', () => 
 				},
 				limit: 10,
 				snapshotAt: new Date(Date.now() + 1_000),
-				snapshotTotal: null
+				snapshotTotal: 1
 			}
 		);
 		const expected = { code, until: until?.toISOString() ?? null };
