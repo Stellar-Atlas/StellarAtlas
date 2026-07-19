@@ -1,4 +1,3 @@
-import swaggerUi from 'swagger-ui-express';
 import express from 'express';
 import Kernel from '../Kernel.js';
 import { DataSource } from 'typeorm';
@@ -115,15 +114,13 @@ import { GetLatestFbas } from '@fbas/use-cases/get-latest-fbas/GetLatestFbas.js'
 import { GetTopTierHistory } from '@fbas/use-cases/get-top-tier-history/GetTopTierHistory.js';
 import { frontendV4ProxyMiddleware } from './FrontendV4Proxy.js';
 import { mountExplorerRoutes } from './ExplorerRoutes.js';
-import { swaggerDocsOptions } from './SwaggerDocsOptions.js';
-import { createPublicOpenApiDocument } from './PublicOpenApiDocument.js';
+import { mountOpenApiDocumentation } from './OpenApiDocumentation.js';
 import { corsMiddleware } from './CorsMiddleware.js';
 
 let server: Server;
 const serverSockets = new Set<Socket>();
 let shutdownStarted = false;
 const api = express();
-const publicOpenApiDocument = createPublicOpenApiDocument(swaggerDocument);
 api.use(corsMiddleware);
 api.use('/v1/history-scan', bodyParser.json({ limit: '2mb' }));
 api.use(bodyParser.json());
@@ -152,18 +149,11 @@ const listen = async () => {
 	const exceptionLogger =
 		kernel.container.get<ExceptionLogger>('ExceptionLogger');
 
-	api.get(
-		'/docs',
-		async (req: express.Request, res: express.Response, next) => {
-			res.set('Content-Security-Policy', "frame-src 'self'");
-			next();
-		}
-	);
-	api.use(
-		'/docs',
-		swaggerUi.serve,
-		swaggerUi.setup(publicOpenApiDocument, swaggerDocsOptions)
-	);
+	mountOpenApiDocumentation(api, {
+		document: swaggerDocument,
+		operatorPassword: config.historyScanAPIPassword,
+		operatorUserName: config.historyScanAPIUsername
+	});
 
 	api.use(
 		'/v1/subscription',

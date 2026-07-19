@@ -369,25 +369,31 @@ tr.selected-row td {
 }
 
 .endpoint-grid {
+	border-block-start: 1px solid var(--border);
 	display: grid;
-	gap: 12px;
-	grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
-.endpoint-card {
-	background: var(--surface);
-	border: 1px solid var(--border);
-	border-radius: 8px;
+.endpoint-group {
+	border-block-end: 1px solid var(--border);
+	display: grid;
+	gap: 18px;
+	grid-template-columns: repeat(auto-fit, minmax(min(100%, 24rem), 1fr));
+	padding: 18px 0;
+}
+
+.endpoint-group h2 {
+	font-size: 1rem;
+	margin: 0 0 6px;
+}
+
+.endpoint-group p {
+	color: var(--muted);
+	margin: 0;
+}
+
+.endpoint-paths {
 	display: grid;
 	gap: 8px;
-	padding: 14px;
-}
-
-.endpoint-card span {
-	color: var(--muted);
-	font-size: 0.8rem;
-	font-weight: 800;
-	text-transform: uppercase;
 }
 
 .loading-panel {
