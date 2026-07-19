@@ -70,6 +70,14 @@ export function getInitialEventQuery(
 	};
 }
 
+export function getInitialRepairArchiveUrl(
+	evidence: PublicKnownArchiveEvidence
+): string | null {
+	return evidence.roots.length === 1
+		? (evidence.roots[0]?.archiveUrl ?? null)
+		: null;
+}
+
 export function mergeFailurePages(
 	current: FailureCursorData | null,
 	response: FailurePagesResponse,

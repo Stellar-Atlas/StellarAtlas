@@ -1,7 +1,6 @@
 import Link from 'next/link';
 import type {
 	PublicHistoryArchiveObject,
-	PublicKnownArchiveRemoteFailure,
 	PublicKnownArchiveRootEvidence
 } from '@api/archive-evidence-types';
 import { getArchiveScanDetailPath } from '@domain/archive-scan-routes';
@@ -9,8 +8,7 @@ import {
 	formatArchiveObjectType,
 	formatArchiveRoot,
 	getArchiveObjectLabel,
-	getHttpUrl,
-	getVerifiedCopyObjectUrl
+	getHttpUrl
 } from '@domain/known-archive-evidence';
 import { formatDateTime, formatInteger } from '@format/formatters';
 
@@ -53,51 +51,6 @@ export function ArchiveSourceLink({
 	return <Link href={getArchiveScanDetailPath(url)}>{children}</Link>;
 }
 
-export function VerifiedCopyLinks({
-	failure,
-	relation,
-	verbose = false
-}: {
-	readonly failure: PublicKnownArchiveRemoteFailure;
-	readonly relation: 'network' | 'same-organization';
-	readonly verbose?: boolean;
-}): React.JSX.Element {
-	const set =
-		relation === 'network'
-			? failure.networkVerifiedCopies
-			: failure.sameOrganizationVerifiedCopies;
-	if (set.count === 0)
-		return <span className="muted-inline">None verified</span>;
-	return (
-		<div className="verified-copy-links">
-			{set.copies.map((copy) => {
-				const objectUrl = getVerifiedCopyObjectUrl(copy);
-				const source = formatArchiveRoot(copy.archiveUrl);
-				return (
-					<div className="verified-copy-link" key={copy.remoteId}>
-						{objectUrl === null ? (
-							<>
-								<span>{source}</span>
-								<small>No proven object URL</small>
-							</>
-						) : (
-							<a href={objectUrl} rel="noopener noreferrer" target="_blank">
-								{verbose ? 'Download verified file from ' : ''}
-								{source}
-							</a>
-						)}
-					</div>
-				);
-			})}
-			{set.count > set.copies.length ? (
-				<small>
-					+{formatInteger(set.count - set.copies.length)} more verified
-				</small>
-			) : null}
-		</div>
-	);
-}
-
 export function EvidenceTableRegion({
 	children,
 	className = '',
@@ -116,22 +69,6 @@ export function EvidenceTableRegion({
 		>
 			{children}
 		</div>
-	);
-}
-
-export function ExternalEvidenceLink({
-	children,
-	href
-}: {
-	readonly children: React.ReactNode;
-	readonly href: unknown;
-}): React.JSX.Element {
-	const url = getHttpUrl(href);
-	if (url === null) return <span>{children}</span>;
-	return (
-		<a href={url} rel="noopener noreferrer" target="_blank">
-			{children}
-		</a>
 	);
 }
 

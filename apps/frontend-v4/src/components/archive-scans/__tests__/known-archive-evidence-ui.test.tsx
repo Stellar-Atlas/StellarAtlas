@@ -8,15 +8,16 @@ import type {
 } from '../../../api/archive-evidence-types';
 import { getArchiveScanDetailPath } from '../../../domain/archive-scan-routes';
 import { KnownArchiveEvidence } from '../known-archive-evidence';
+import { ArchiveSourceFilter } from '../known-archive-evidence-controls';
+import { getInitialRepairArchiveUrl } from '../known-archive-evidence-state';
 import {
 	ArchiveActivityTable,
 	ArchiveRootSummaryTable,
-	RepairDownloadTable
+	RemoteFailureTable
 } from '../known-archive-evidence-tables';
 import {
 	ObjectIdentity,
 	ObjectSource,
-	VerifiedCopyLinks,
 	formatEventType,
 	formatObjectStatusDetail
 } from '../known-archive-evidence-table-parts';
@@ -37,50 +38,50 @@ describe('known archive evidence UI', () => {
 		expect(markup).toContain('Raw response');
 	});
 
-	it('uses the exact persisted verified-copy objectUrl and never synthesizes one', () => {
-		const validEvidence = createEvidence();
-		const invalidEvidence = createEvidence('file:///srv/private/object.xdr.gz');
-		const validFailure = validEvidence.remoteFailures.failures[0];
-		const invalidFailure = invalidEvidence.remoteFailures.failures[0];
-
-		if (validFailure === undefined || invalidFailure === undefined) {
-			throw new Error('Expected archive evidence failures');
-		}
-
-		const exactUrl =
-			validFailure.sameOrganizationVerifiedCopies.copies[0]?.objectUrl;
-		if (exactUrl === undefined) {
-			throw new Error('Expected a persisted verified-copy object URL');
-		}
-		const validMarkup = renderToStaticMarkup(
-			createElement(VerifiedCopyLinks, {
-				failure: validFailure,
-				relation: 'same-organization'
-			})
-		);
-		const invalidMarkup = renderToStaticMarkup(
-			createElement(VerifiedCopyLinks, {
-				failure: invalidFailure,
-				relation: 'same-organization'
+	it('keeps legacy copy coverage out of the failure table', () => {
+		const markup = renderToStaticMarkup(
+			createElement(RemoteFailureTable, {
+				page: createEvidence().remoteFailures
 			})
 		);
 
-		expect(validMarkup).toContain(`href="${exactUrl}"`);
-		expect(validMarkup).not.toContain('href="https://copy.example/history"');
-		expect(invalidMarkup).toContain('No proven object URL');
-		expect(invalidMarkup).not.toContain('href=');
+		expect(markup).toContain('Failed file');
+		expect(markup).toContain('Archive source');
+		expect(markup).not.toContain('Same organization');
+		expect(markup).not.toContain('Verified replacement downloads');
 	});
 
-	it('separates an unverified remote location from verified replacements', () => {
+	it('selects a sole repair source without coupling it to failure filters', () => {
+		const evidence = createEvidence();
+		const root = evidence.roots[0];
+		if (root === undefined) throw new Error('Expected an archive root');
+
+		expect(getInitialRepairArchiveUrl(evidence)).toBe(
+			'https://archive.example/history'
+		);
+		expect(
+			getInitialRepairArchiveUrl({
+				...evidence,
+				roots: [...evidence.roots, { ...root }]
+			})
+		).toBeNull();
+		expect(getInitialRepairArchiveUrl({ ...evidence, roots: [] })).toBeNull();
+	});
+
+	it('labels an unselected repair source as a required selection', () => {
 		const evidence = createEvidence();
 		const markup = renderToStaticMarkup(
-			createElement(RepairDownloadTable, { page: evidence.remoteFailures })
+			createElement(ArchiveSourceFilter, {
+				disabled: false,
+				emptyLabel: 'Select a source',
+				onChange: () => undefined,
+				roots: evidence.roots,
+				value: null
+			})
 		);
 
-		expect(markup).toContain('Unverified remote location');
-		expect(markup).toContain('Not a verified replacement');
-		expect(markup).toContain('Verified organization replacements');
-		expect(markup).toContain('Download verified file from');
+		expect(markup).toContain('Select a source');
+		expect(markup).not.toContain('All sources');
 	});
 
 	it('routes archive-source labels to StellarAtlas archive detail', () => {
@@ -191,9 +192,7 @@ describe('known archive evidence UI', () => {
 	});
 });
 
-function createEvidence(
-	copyObjectUrl = 'https://copy.example/history/bucket/aa/bb/object.xdr.gz?token=AbC'
-): PublicKnownNodeArchiveEvidence {
+function createEvidence(): PublicKnownNodeArchiveEvidence {
 	const page = {
 		hasMore: false,
 		limit: 10,
@@ -236,16 +235,8 @@ function createEvidence(
 					},
 					object,
 					sameOrganizationVerifiedCopies: {
-						copies: [
-							{
-								archiveUrl: 'https://copy.example/history',
-								archiveUrlIdentity: 'copy-history',
-								objectUrl: copyObjectUrl,
-								remoteId: 'copy-1',
-								verifiedAt: '2026-07-10T00:00:00.000Z'
-							}
-						],
-						count: 1,
+						copies: [],
+						count: 0,
 						sampleLimit: 10
 					}
 				}

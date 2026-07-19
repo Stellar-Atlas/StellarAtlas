@@ -15,10 +15,8 @@ import {
 	ArchiveStateSummary,
 	EmptyEvidenceRow,
 	EvidenceTableRegion,
-	ExternalEvidenceLink,
 	ObjectIdentity,
 	ObjectSource,
-	VerifiedCopyLinks,
 	formatBytes,
 	formatEvidenceClass,
 	formatEventType,
@@ -45,8 +43,6 @@ export function RemoteFailureTable({
 						<th>Failed file</th>
 						<th>Failure</th>
 						<th>Archive source</th>
-						<th>Same organization</th>
-						<th>Network</th>
 						<th>Observed</th>
 					</tr>
 				</thead>
@@ -61,15 +57,6 @@ export function RemoteFailureTable({
 							</td>
 							<td data-label="Archive source">
 								<ObjectSource object={failure.object} />
-							</td>
-							<td data-label="Same organization">
-								<VerifiedCopyLinks
-									failure={failure}
-									relation="same-organization"
-								/>
-							</td>
-							<td data-label="Network">
-								<VerifiedCopyLinks failure={failure} relation="network" />
 							</td>
 							<td data-label="Observed">
 								{formatDateTime(failure.object.updatedAt)}
@@ -227,63 +214,6 @@ export function ArchiveActivityTable({
 							</td>
 							<td data-label="Stage">{formatWorkerStage(event.workerStage)}</td>
 							<td data-label="Time">{formatDateTime(event.createdAt)}</td>
-						</tr>
-					))}
-				</tbody>
-			</table>
-		</EvidenceTableRegion>
-	);
-}
-
-export function RepairDownloadTable({
-	page
-}: {
-	readonly page: PublicKnownArchiveRemoteFailurePage;
-}): React.JSX.Element {
-	if (page.failures.length === 0) {
-		return <EmptyEvidenceRow text="No failed files need a replacement copy." />;
-	}
-	return (
-		<EvidenceTableRegion label="Verified replacement downloads">
-			<table className="known-evidence-table repair-download-table">
-				<caption>
-					Replacement downloads appear only when another archive source has
-					verified evidence for the same canonical file.
-				</caption>
-				<thead>
-					<tr>
-						<th>Failed file</th>
-						<th>Unverified remote location</th>
-						<th>Verified organization replacements</th>
-						<th>Verified network replacements</th>
-					</tr>
-				</thead>
-				<tbody>
-					{page.failures.map((failure) => (
-						<tr key={failure.object.remoteId}>
-							<td data-label="Failed file">
-								<ObjectIdentity object={failure.object} />
-							</td>
-							<td data-label="Unverified remote location">
-								<ExternalEvidenceLink href={failure.object.objectUrl}>
-									Inspect failed remote URL
-								</ExternalEvidenceLink>
-								<small>Not a verified replacement</small>
-							</td>
-							<td data-label="Verified organization replacements">
-								<VerifiedCopyLinks
-									failure={failure}
-									relation="same-organization"
-									verbose
-								/>
-							</td>
-							<td data-label="Verified network replacements">
-								<VerifiedCopyLinks
-									failure={failure}
-									relation="network"
-									verbose
-								/>
-							</td>
 						</tr>
 					))}
 				</tbody>

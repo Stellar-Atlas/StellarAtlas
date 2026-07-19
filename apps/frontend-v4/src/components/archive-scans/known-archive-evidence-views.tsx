@@ -2,6 +2,7 @@ import type { PublicHistoryArchiveObjectEvidenceClass } from '@api/archive-evide
 import type { PublicKnownArchiveEvidence } from '@domain/known-archive-evidence';
 import { formatInteger } from '@format/formatters';
 import {
+	ArchiveSourceFilter,
 	CursorPagination,
 	EvidenceFilters
 } from './known-archive-evidence-controls';
@@ -10,7 +11,6 @@ import {
 	ArchiveObjectPageTable,
 	ArchiveRootSummaryTable,
 	RemoteFailureTable,
-	RepairDownloadTable,
 	WorkerIssueTable
 } from './known-archive-evidence-tables';
 import { ArchiveRepairPlanPanel } from './archive-repair-plan-panel';
@@ -37,7 +37,7 @@ export function KnownArchiveEvidenceTabContent({
 			role="tabpanel"
 			tabIndex={0}
 		>
-			{view.tab === 'failures' || view.tab === 'repair' ? (
+			{view.tab === 'failures' ? (
 				<EvidenceFilters
 					archiveUrl={view.failures.archiveUrl}
 					disabled={view.failures.isLoading}
@@ -223,46 +223,32 @@ function RepairView({
 	readonly evidence: PublicKnownArchiveEvidence;
 	readonly view: KnownArchiveEvidenceViewState;
 }): React.JSX.Element {
-	const failures = view.failures;
-	const page = failures.remotePage;
-	const repairArchiveUrl =
-		failures.archiveUrl ??
-		(evidence.roots.length === 1
-			? (evidence.roots[0]?.archiveUrl ?? null)
-			: null);
-	if (page === null) {
+	const repair = view.repair;
+	if (evidence.roots.length === 0) {
 		return (
-			<RequestFeedback
-				error={failures.error}
-				isLoading={failures.isLoading}
-				loadingText="Loading verified replacement evidence."
-				onRetry={failures.retry}
-			/>
+			<p className="known-evidence-empty">
+				No archive source is available for repair inspection.
+			</p>
 		);
 	}
 	return (
-		<div aria-busy={failures.isLoading}>
-			<ArchiveRepairPlanPanel archiveUrl={repairArchiveUrl} />
-			{failures.errorTarget === 'remote' || failures.errorTarget === 'both' ? (
-				<RequestFeedback error={failures.error} onRetry={failures.retry} />
-			) : failures.isLoading ? (
-				<RequestFeedback
-					isLoading
-					loadingText="Loading the next repair page."
-				/>
+		<>
+			{evidence.roots.length > 1 ? (
+				<div className="known-evidence-filters">
+					<ArchiveSourceFilter
+						disabled={false}
+						emptyLabel="Select a source"
+						onChange={repair.changeArchiveUrl}
+						roots={evidence.roots}
+						value={repair.archiveUrl}
+					/>
+				</div>
 			) : null}
-			<RepairDownloadTable page={page} />
-			<CursorPagination
-				count={page.failures.length}
-				disabled={failures.isLoading}
-				hasMore={page.hasMore}
-				index={failures.remotePageIndex}
-				limit={page.limit}
-				onNext={failures.nextRemote}
-				onPrevious={failures.previousRemote}
-				total={page.total}
+			<ArchiveRepairPlanPanel
+				archiveUrl={repair.archiveUrl}
+				refreshToken={evidence.generatedAt}
 			/>
-		</div>
+		</>
 	);
 }
 

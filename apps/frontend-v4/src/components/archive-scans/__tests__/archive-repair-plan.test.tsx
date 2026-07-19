@@ -14,6 +14,14 @@ describe('archive repair plan', () => {
 		expect(markup).toContain('Confirmed repair evidence');
 		expect(markup).toContain('Proof-bound source found; download pending');
 		expect(markup).toContain('checkpoint 63 / proof 41 v7 / multi-source');
+		expect(markup).toContain('Failed file');
+		expect(markup).toContain('Finding');
+		expect(markup).toContain('Confirmed archive repair evidence');
+		expect(markup).toContain('data-label="Verified replacement"');
+		expect(markup).not.toContain('Replace archive file');
+		expect(markup).not.toContain(
+			'Replace the transaction archive file for checkpoint 63.'
+		);
 		expect(markup).not.toContain('href=');
 	});
 

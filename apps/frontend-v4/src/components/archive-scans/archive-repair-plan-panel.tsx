@@ -12,9 +12,11 @@ type RepairPlanState =
 	| { readonly phase: 'loaded'; readonly plan: PublicHistoryArchiveRepairPlan };
 
 export function ArchiveRepairPlanPanel({
-	archiveUrl
+	archiveUrl,
+	refreshToken
 }: {
 	readonly archiveUrl: string | null;
+	readonly refreshToken: string;
 }): React.JSX.Element {
 	const [attempt, setAttempt] = useState(0);
 	const [state, setState] = useState<RepairPlanState>({ phase: 'idle' });
@@ -25,27 +27,35 @@ export function ArchiveRepairPlanPanel({
 			return;
 		}
 		let current = true;
-		setState({ phase: 'loading' });
+		setState((value) =>
+			hasLoadedPlanForArchive(value, archiveUrl) ? value : { phase: 'loading' }
+		);
 		void loadArchiveRepairPlan(archiveUrl)
 			.then((result) => {
 				if (!current) return;
-				setState(
+				setState((value) =>
 					result.status === 'loaded'
 						? { phase: 'loaded', plan: result.plan }
-						: { message: result.message, phase: 'failed' }
+						: hasLoadedPlanForArchive(value, archiveUrl)
+							? value
+							: { message: result.message, phase: 'failed' }
 				);
 			})
 			.catch(() => {
 				if (!current) return;
-				setState({
-					message: 'Repair evidence is currently unavailable.',
-					phase: 'failed'
-				});
+				setState((value) =>
+					hasLoadedPlanForArchive(value, archiveUrl)
+						? value
+						: {
+								message: 'Repair evidence is currently unavailable.',
+								phase: 'failed'
+							}
+				);
 			});
 		return () => {
 			current = false;
 		};
-	}, [archiveUrl, attempt]);
+	}, [archiveUrl, attempt, refreshToken]);
 
 	if (archiveUrl === null) {
 		return (
@@ -68,4 +78,11 @@ export function ArchiveRepairPlanPanel({
 		);
 	}
 	return <NodeArchiveRepairPlan repairPlan={state.plan} />;
+}
+
+function hasLoadedPlanForArchive(
+	state: RepairPlanState,
+	archiveUrl: string
+): state is Extract<RepairPlanState, { readonly phase: 'loaded' }> {
+	return state.phase === 'loaded' && state.plan.archiveUrl === archiveUrl;
 }

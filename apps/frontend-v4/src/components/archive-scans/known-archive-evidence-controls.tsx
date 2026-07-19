@@ -30,21 +30,12 @@ export function EvidenceFilters({
 }: EvidenceFiltersProps): React.JSX.Element {
 	return (
 		<div className="known-evidence-filters">
-			<label>
-				<span>Archive source</span>
-				<select
-					disabled={disabled}
-					onChange={(event) => onArchiveUrlChange(event.target.value || null)}
-					value={archiveUrl ?? ''}
-				>
-					<option value="">All sources</option>
-					{roots.map((root) => (
-						<option key={root.archiveUrlIdentity} value={root.archiveUrl}>
-							{formatArchiveRoot(root.archiveUrl)}
-						</option>
-					))}
-				</select>
-			</label>
+			<ArchiveSourceFilter
+				disabled={disabled}
+				onChange={onArchiveUrlChange}
+				roots={roots}
+				value={archiveUrl}
+			/>
 			<label>
 				<span>File type</span>
 				<select
@@ -66,6 +57,38 @@ export function EvidenceFilters({
 				</select>
 			</label>
 		</div>
+	);
+}
+
+export function ArchiveSourceFilter({
+	disabled,
+	emptyLabel = 'All sources',
+	onChange,
+	roots,
+	value
+}: {
+	readonly disabled: boolean;
+	readonly emptyLabel?: string;
+	readonly onChange: (value: string | null) => void;
+	readonly roots: readonly PublicKnownArchiveRootEvidence[];
+	readonly value: string | null;
+}): React.JSX.Element {
+	return (
+		<label>
+			<span>Archive source</span>
+			<select
+				disabled={disabled}
+				onChange={(event) => onChange(event.target.value || null)}
+				value={value ?? ''}
+			>
+				<option value="">{emptyLabel}</option>
+				{roots.map((root) => (
+					<option key={root.archiveUrlIdentity} value={root.archiveUrl}>
+						{formatArchiveRoot(root.archiveUrl)}
+					</option>
+				))}
+			</select>
+		</label>
 	);
 }
 

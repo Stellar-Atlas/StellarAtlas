@@ -35,6 +35,7 @@ import {
 	getInitialEventQuery,
 	getInitialFailureQuery,
 	getInitialObjectQuery,
+	getInitialRepairArchiveUrl,
 	mergeFailurePages,
 	type ArchiveEvidenceViewKey,
 	type FailureRequestTarget
@@ -59,6 +60,9 @@ export function useKnownArchiveEvidence(
 	const [tab, setTab] = useState<KnownArchiveEvidenceTab>('failures');
 	const [liveEvidence, setLiveEvidence] =
 		useState<PublicKnownArchiveEvidence>(evidence);
+	const [repairArchiveUrl, setRepairArchiveUrl] = useState<string | null>(() =>
+		getInitialRepairArchiveUrl(evidence)
+	);
 	const [, startTransition] = useTransition();
 	const generation = useRef(0);
 	const refreshLatest = useRef<() => Promise<void>>(async () => undefined);
@@ -124,6 +128,14 @@ export function useKnownArchiveEvidence(
 		[]
 	);
 	useEffect(() => setLiveEvidence(evidence), [evidence]);
+	useEffect(() => {
+		setRepairArchiveUrl((current) =>
+			current !== null &&
+			liveEvidence.roots.some((root) => root.archiveUrl === current)
+				? current
+				: getInitialRepairArchiveUrl(liveEvidence)
+		);
+	}, [liveEvidence]);
 
 	const runRequest = <Query, CurrentData, ResponseData>(
 		key: ArchiveEvidenceViewKey,
@@ -348,7 +360,7 @@ export function useKnownArchiveEvidence(
 		);
 		const currentView = refreshView.current;
 		if (
-			(currentView.tab === 'failures' || currentView.tab === 'repair') &&
+			currentView.tab === 'failures' &&
 			shouldRefreshFirstArchiveEvidencePage(
 				currentView.failurePhase,
 				currentView.failureRemoteIndex,
@@ -428,6 +440,10 @@ export function useKnownArchiveEvidence(
 			retries,
 			() => objectQuery.current
 		),
+		repair: {
+			archiveUrl: repairArchiveUrl,
+			changeArchiveUrl: setRepairArchiveUrl
+		},
 		evidence: liveEvidence,
 		selectTab,
 		tab

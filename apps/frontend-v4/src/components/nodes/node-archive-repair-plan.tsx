@@ -42,35 +42,41 @@ function RepairActionTable({
 	readonly repairPlan: PublicHistoryArchiveRepairPlan;
 }): React.JSX.Element {
 	return (
-		<div className="responsive-table">
-			<table className="archive-object-table archive-repair-table">
+		<div
+			aria-label="Confirmed archive repair evidence"
+			className="responsive-table known-evidence-table-wrap"
+			role="region"
+			tabIndex={0}
+		>
+			<table className="archive-object-table archive-repair-table known-evidence-table">
 				<thead>
 					<tr>
 						<th>Status</th>
-						<th>Repair action</th>
-						<th>Evidence</th>
-						<th>Replacement readiness</th>
+						<th>Failed file</th>
+						<th>Finding</th>
+						<th>Verified replacement</th>
 					</tr>
 				</thead>
 				<tbody>
 					{repairPlan.actions.map((action) => (
 						<tr key={action.actionId}>
-							<td>
+							<td data-label="Status">
 								<StatusPill
 									status={action.severity === 'error' ? 'degraded' : 'ok'}
 									text={formatSeverity(action.severity)}
 									tone={action.severity === 'blocked' ? 'warning' : undefined}
 								/>
 							</td>
-							<td>
-								<strong>{formatActionKind(action.kind)}</strong>
-								<small>{action.summary}</small>
-							</td>
-							<td>
-								<strong>{formatActionReason(action.reason)}</strong>
+							<td data-label="Failed file">
+								<strong>{formatActionSubject(action)}</strong>
 								<small>{formatActionEvidence(action)}</small>
 							</td>
-							<td>{formatReplacementReadiness(action)}</td>
+							<td data-label="Finding">
+								<strong>{formatActionReason(action.reason)}</strong>
+							</td>
+							<td data-label="Verified replacement">
+								{formatReplacementReadiness(action)}
+							</td>
 						</tr>
 					))}
 				</tbody>
@@ -92,7 +98,12 @@ function InfrastructureBlockTable({
 					{formatInteger(repairPlan.infrastructureBlocks.length)} blocks
 				</span>
 			</summary>
-			<div className="responsive-table">
+			<div
+				aria-label="Scanner infrastructure blocks"
+				className="responsive-table known-evidence-table-wrap"
+				role="region"
+				tabIndex={0}
+			>
 				<table className="archive-object-table">
 					<thead>
 						<tr>
@@ -105,13 +116,15 @@ function InfrastructureBlockTable({
 					<tbody>
 						{repairPlan.infrastructureBlocks.map((block, index) => (
 							<tr key={`${block.hostIdentity}:${block.failureClass}:${index}`}>
-								<td>{block.evidenceClass}</td>
-								<td>{sanitizeArchiveEvidenceText(block.hostIdentity)}</td>
-								<td>
+								<td data-label="Evidence class">{block.evidenceClass}</td>
+								<td data-label="Host">
+									{sanitizeArchiveEvidenceText(block.hostIdentity)}
+								</td>
+								<td data-label="Failure">
 									<strong>{block.failureClass}</strong>
 									<small>{block.summary}</small>
 								</td>
-								<td>
+								<td data-label="Backoff">
 									{block.blockedUntil
 										? formatDateTime(block.blockedUntil)
 										: 'not scheduled'}
@@ -130,12 +143,11 @@ function formatActionEvidence(
 ): string {
 	const objectEvidence = action.evidence[0];
 	if (objectEvidence) {
-		const fileLabel = formatArchiveObjectTypeLabel(objectEvidence.objectType);
 		const checkpoint =
 			objectEvidence.checkpointLedger === null
-				? ''
-				: ` / checkpoint ${formatInteger(objectEvidence.checkpointLedger)}`;
-		return `${fileLabel}${checkpoint} / ${objectEvidence.objectKey}`;
+				? 'No checkpoint'
+				: `Checkpoint ${formatInteger(objectEvidence.checkpointLedger)}`;
+		return `${checkpoint} / ${objectEvidence.objectKey}`;
 	}
 
 	const checkpointEvidence = action.checkpointEvidence[0];
@@ -146,6 +158,19 @@ function formatActionEvidence(
 	}
 
 	return 'No detailed evidence returned.';
+}
+
+function formatActionSubject(
+	action: PublicHistoryArchiveRepairPlan['actions'][number]
+): string {
+	const objectEvidence = action.evidence[0];
+	if (objectEvidence) {
+		return formatArchiveObjectTypeLabel(objectEvidence.objectType);
+	}
+	if (action.checkpointEvidence.length > 0) {
+		return 'Checkpoint file consistency';
+	}
+	return 'Archive evidence';
 }
 
 function formatReplacementReadiness(
@@ -262,20 +287,6 @@ function shortDigest(value: string): string {
 
 function formatArtifactReason(reason: string): string {
 	return reason.replaceAll('-', ' ');
-}
-
-function formatActionKind(
-	kind: PublicHistoryArchiveRepairPlan['actions'][number]['kind']
-): string {
-	if (kind === 'restore-history-archive-state') {
-		return 'Restore history archive state';
-	}
-	if (kind === 'replace-bucket-file') return 'Replace bucket file';
-	if (kind === 'replace-archive-file') return 'Replace archive file';
-	if (kind === 'repair-checkpoint-proof') {
-		return 'Repair checkpoint consistency';
-	}
-	return 'Waiting for scanner proof';
 }
 
 function formatActionReason(

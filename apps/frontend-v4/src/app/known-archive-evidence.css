@@ -232,24 +232,6 @@
 	color: var(--yellow);
 }
 
-.verified-copy-links {
-	display: grid;
-	gap: 4px;
-}
-
-.verified-copy-links a {
-	overflow-wrap: anywhere;
-}
-
-.verified-copy-link {
-	display: grid;
-	gap: 2px;
-}
-
-.verified-copy-link small {
-	color: var(--muted);
-}
-
 .known-evidence-worker-section {
 	border-block-start: 4px solid var(--background);
 	display: grid;
