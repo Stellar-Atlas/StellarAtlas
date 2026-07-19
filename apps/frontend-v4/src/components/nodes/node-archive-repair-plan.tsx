@@ -75,7 +75,7 @@ function RepairActionTable({
 							<td data-label="Finding">
 								<strong>{formatActionReason(action.reason)}</strong>
 							</td>
-							<td data-label="Verified replacement">
+							<td data-label="Replacement">
 								{formatReplacementReadiness(action)}
 							</td>
 						</tr>

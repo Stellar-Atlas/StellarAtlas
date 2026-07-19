@@ -484,6 +484,10 @@
 	width: auto;
 }
 
+.archive-repair-table .status-pill {
+	justify-self: start;
+}
+
 .archive-object-url,
 .archive-object-url a,
 .archive-object-hash,

@@ -17,7 +17,7 @@ describe('archive repair plan', () => {
 		expect(markup).toContain('Failed file');
 		expect(markup).toContain('Finding');
 		expect(markup).toContain('Confirmed archive repair evidence');
-		expect(markup).toContain('data-label="Verified replacement"');
+		expect(markup).toContain('data-label="Replacement"');
 		expect(markup).not.toContain('Replace archive file');
 		expect(markup).not.toContain(
 			'Replace the transaction archive file for checkpoint 63.'
