@@ -349,6 +349,54 @@ describe('status WebSocket contract', () => {
 			restoreGlobal('WebSocket', originalWebSocket);
 		}
 	});
+
+	it('shares one status socket until the final subscriber leaves', () => {
+		const originalWindow = Object.getOwnPropertyDescriptor(
+			globalThis,
+			'window'
+		);
+		const originalWebSocket = Object.getOwnPropertyDescriptor(
+			globalThis,
+			'WebSocket'
+		);
+		const sockets: FakeWebSocket[] = [];
+		class TestWebSocket extends FakeWebSocket {
+			constructor() {
+				super();
+				sockets.push(this);
+			}
+		}
+
+		Object.defineProperty(globalThis, 'window', {
+			configurable: true,
+			value: {
+				clearTimeout,
+				location: { hostname: 'localhost', origin: 'http://localhost' },
+				setTimeout
+			}
+		});
+		Object.defineProperty(globalThis, 'WebSocket', {
+			configurable: true,
+			value: TestWebSocket
+		});
+
+		try {
+			const unsubscribeFirst = subscribeToStatusStream(() => undefined);
+			const unsubscribeSecond = subscribeToStatusStream(() => undefined);
+
+			expect(sockets).toHaveLength(1);
+			unsubscribeFirst();
+			expect(sockets[0]?.closeCalls).toBe(0);
+
+			unsubscribeSecond();
+			expect(sockets[0]?.closeCalls).toBe(1);
+			sockets[0]?.emit('close');
+			expect(sockets).toHaveLength(1);
+		} finally {
+			restoreGlobal('window', originalWindow);
+			restoreGlobal('WebSocket', originalWebSocket);
+		}
+	});
 });
 
 type FakeSocketListener = (event: { readonly data?: unknown }) => void;
@@ -357,6 +405,7 @@ class FakeWebSocket {
 	static readonly CONNECTING = 0;
 	static readonly OPEN = 1;
 	readonly listeners = new Map<string, FakeSocketListener[]>();
+	closeCalls = 0;
 	readyState = FakeWebSocket.CONNECTING;
 
 	addEventListener(type: string, listener: FakeSocketListener): void {
@@ -366,6 +415,7 @@ class FakeWebSocket {
 	}
 
 	close(): void {
+		this.closeCalls += 1;
 		this.readyState = 3;
 	}
 

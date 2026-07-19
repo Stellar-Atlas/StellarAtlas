@@ -17,6 +17,26 @@ import {
 const jest = import.meta.jest;
 
 describe('live network WebSocket ownership', () => {
+	it('shares one socket until the final subscriber leaves', () => {
+		const harness = installWebSocketHarness();
+		try {
+			const unsubscribeFirst = subscribeToLiveNetworkStream(() => undefined);
+			const unsubscribeSecond = subscribeToLiveNetworkStream(() => undefined);
+
+			expect(harness.sockets).toHaveLength(1);
+			unsubscribeFirst();
+			expect(harness.sockets[0]?.closeCalls).toBe(0);
+
+			unsubscribeSecond();
+			expect(harness.sockets[0]?.closeCalls).toBe(1);
+			harness.sockets[0]?.emit('close');
+			expect(harness.sockets).toHaveLength(1);
+			expect(getLiveNetworkStreamState().status).toBe('idle');
+		} finally {
+			harness.restore();
+		}
+	});
+
 	it('ignores a superseded socket close without opening a duplicate', () => {
 		const harness = installWebSocketHarness();
 		try {
