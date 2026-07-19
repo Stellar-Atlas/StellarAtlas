@@ -1,8 +1,9 @@
 import type { Logger } from '@core/services/Logger.js';
 import type { NetworkSearchInventoryLoader } from './NetworkSearchInventoryLoader.js';
 import type { NetworkSearchService } from './NetworkSearchService.js';
+import { networkSearchProjectionRefreshIntervalMs } from './NetworkSearchProjectionState.js';
 
-export const networkSearchProjectionRefreshIntervalMs = 60_000;
+export { networkSearchProjectionRefreshIntervalMs } from './NetworkSearchProjectionState.js';
 
 interface NetworkSearchProjectionRefresherOptions {
 	readonly enabled: boolean;

@@ -244,19 +244,7 @@ const networkRouterWrapper = (config: NetworkRouterConfig): NetworkRouter => {
 			validating,
 			validator
 		};
-		let canonicalNetworkTime: Date | undefined;
-		try {
-			canonicalNetworkTime =
-				await config.networkScanRepository.findLatestSuccessfulScanTime();
-		} catch (error: unknown) {
-			config.logger?.warn('Canonical network time read failed', {
-				error: error instanceof Error ? error.message : String(error)
-			});
-		}
-		const indexedPayload = await networkSearch.searchIndexed(
-			searchRequest,
-			canonicalNetworkTime
-		);
+		const indexedPayload = await networkSearch.searchIndexed(searchRequest);
 		if (indexedPayload !== null) {
 			return res.status(200).send(indexedPayload);
 		}

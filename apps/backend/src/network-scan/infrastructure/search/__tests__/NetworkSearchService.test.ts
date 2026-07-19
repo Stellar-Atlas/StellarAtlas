@@ -14,7 +14,6 @@ import type {
 import { createDummyNetworkV1 } from '@network-scan/services/__fixtures__/createDummyNetworkV1.js';
 import { createDummyNodeV1 } from '@network-scan/services/__fixtures__/createDummyNodeV1.js';
 import { createDummyOrganizationV1 } from '@network-scan/services/__fixtures__/createDummyOrganizationV1.js';
-import type { NetworkSearchCanonicalArchiveSource } from '../NetworkSearchCanonicalArchiveSource.js';
 
 describe('NetworkSearchService', () => {
 	it('searches current, archived, and public-key-only canonical records', async () => {
@@ -175,7 +174,7 @@ describe('NetworkSearchService', () => {
 			canonicalCursor: snapshot.canonicalCursor,
 			documentKind: 'state',
 			id: networkSearchStateDocumentId,
-			indexedAt: '2026-07-11T00:00:02.000Z',
+			indexedAt: new Date().toISOString(),
 			networkTime: snapshot.networkTime
 		};
 		const harness = createIndexHarness({
@@ -191,108 +190,6 @@ describe('NetworkSearchService', () => {
 
 		expect(result.source).toBe('meilisearch');
 		expect(harness.addDocuments).not.toHaveBeenCalled();
-	});
-
-	it('serves a persisted projection without rebuilding canonical inventory', async () => {
-		const node = createDummyNodeV1('GA_DIRECT_MEILI');
-		node.name = 'Direct indexed validator';
-		const inventory = createInventory([currentNode(node)], []);
-		const snapshot = buildNetworkSearchSnapshot(inventory);
-		const state: NetworkSearchIndexStateDocument = {
-			canonicalArchiveRevision: snapshot.canonicalArchiveRevision,
-			canonicalCursor: snapshot.canonicalCursor,
-			documentKind: 'state',
-			id: networkSearchStateDocumentId,
-			indexedAt: '2026-07-11T00:00:02.000Z',
-			networkTime: snapshot.networkTime
-		};
-		const harness = createIndexHarness({
-			initialDocuments: [state, ...snapshot.documents]
-		});
-		const service = new NetworkSearchService(
-			{ indexName: 'network_test' },
-			undefined,
-			harness.index,
-			undefined,
-			canonicalArchiveSource(snapshot.canonicalArchiveRevision)
-		);
-
-		const result = await service.searchIndexed(
-			request('direct'),
-			new Date(snapshot.networkTime)
-		);
-
-		expect(result).toMatchObject({
-			indexedNetworkTime: snapshot.networkTime,
-			source: 'meilisearch'
-		});
-		expect(result?.readModel).toMatchObject({
-			canonicalCursor: snapshot.canonicalCursor,
-			observedAt: state.indexedAt,
-			source: 'meilisearch'
-		});
-		expect(harness.addDocuments).not.toHaveBeenCalled();
-	});
-
-	it('rejects any nonzero canonical network-time lag', async () => {
-		const inventory = createInventory(
-			[currentNode(createDummyNodeV1('GA'))],
-			[]
-		);
-		const snapshot = buildNetworkSearchSnapshot(inventory);
-		const state: NetworkSearchIndexStateDocument = {
-			canonicalArchiveRevision: snapshot.canonicalArchiveRevision,
-			canonicalCursor: snapshot.canonicalCursor,
-			documentKind: 'state',
-			id: networkSearchStateDocumentId,
-			indexedAt: '2026-07-11T00:00:02.000Z',
-			networkTime: snapshot.networkTime
-		};
-		const harness = createIndexHarness({
-			initialDocuments: [state, ...snapshot.documents]
-		});
-		const service = new NetworkSearchService(
-			{ indexName: 'network_test' },
-			undefined,
-			harness.index
-		);
-
-		await expect(
-			service.searchIndexed(
-				request('stale'),
-				new Date(Date.parse(snapshot.networkTime) + 60_000)
-			)
-		).resolves.toBeNull();
-		expect(harness.search).not.toHaveBeenCalled();
-	});
-
-	it('rejects a projection beyond the bounded network-time lag', async () => {
-		const inventory = createInventory(
-			[currentNode(createDummyNodeV1('GA_TOO_OLD'))],
-			[]
-		);
-		const snapshot = buildNetworkSearchSnapshot(inventory);
-		const state: NetworkSearchIndexStateDocument = {
-			canonicalArchiveRevision: snapshot.canonicalArchiveRevision,
-			canonicalCursor: snapshot.canonicalCursor,
-			documentKind: 'state',
-			id: networkSearchStateDocumentId,
-			indexedAt: '2026-07-11T00:00:02.000Z',
-			networkTime: snapshot.networkTime
-		};
-		const harness = createIndexHarness({ initialDocuments: [state] });
-		const service = new NetworkSearchService(
-			{ indexName: 'network_test' },
-			undefined,
-			harness.index
-		);
-
-		await expect(
-			service.searchIndexed(
-				request('too old'),
-				new Date(Date.parse(snapshot.networkTime) + 16 * 60_000)
-			)
-		).resolves.toBeNull();
 	});
 
 	it('does not enqueue projection writes from a read-only API worker', async () => {
@@ -478,7 +375,13 @@ function createIndexHarness(
 				]
 			}));
 	const addDocuments = jest.fn((documents: NetworkSearchStoredDocument[]) => {
-		storedDocuments = documents;
+		const replacements = new Map(
+			documents.map((document) => [document.id, document])
+		);
+		storedDocuments = [
+			...storedDocuments.filter((document) => !replacements.has(document.id)),
+			...documents
+		];
 		return successfulTask();
 	});
 	const deleteDocuments = jest.fn(() => successfulTask());
@@ -540,14 +443,6 @@ function createIndexHarness(
 					getSettings.mock.calls.length > 0 &&
 					addDocuments.mock.calls.length === 0
 			)
-	};
-}
-
-function canonicalArchiveSource(
-	revision: string
-): NetworkSearchCanonicalArchiveSource {
-	return {
-		load: jest.fn(async () => ({ revision, roots: [] }))
 	};
 }
 

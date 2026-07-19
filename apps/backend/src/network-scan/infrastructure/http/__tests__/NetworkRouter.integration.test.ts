@@ -136,9 +136,6 @@ describe('NetworkRouter.integration', () => {
 			indexName: 'test_network_entities',
 			writable: false
 		};
-		config.networkScanRepository.findLatestSuccessfulScanTime.mockResolvedValue(
-			new Date(indexedNetworkTime)
-		);
 		configureSearchInventory(
 			config,
 			createDummyNetworkV1([fallbackNode], []),
@@ -157,9 +154,11 @@ describe('NetworkRouter.integration', () => {
 			});
 
 		expect(searchIndexed).toHaveBeenCalledWith(
-			expect.objectContaining({ query: 'indexed' }),
-			new Date(indexedNetworkTime)
+			expect.objectContaining({ query: 'indexed' })
 		);
+		expect(
+			config.networkScanRepository.findLatestSuccessfulScanTime
+		).not.toHaveBeenCalled();
 		expect(config.getNetwork.execute).not.toHaveBeenCalled();
 		expect(config.getKnownNodes.executeAll).not.toHaveBeenCalled();
 		expect(refreshProjection).not.toHaveBeenCalled();

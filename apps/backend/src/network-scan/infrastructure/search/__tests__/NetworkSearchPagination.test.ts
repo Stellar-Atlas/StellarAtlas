@@ -1,7 +1,6 @@
 import type { Index } from 'meilisearch';
 import { queryNetworkSearchIndex } from '../NetworkSearchIndexedQuery.js';
 import { NetworkSearchService } from '../NetworkSearchService.js';
-import type { NetworkSearchCanonicalArchiveSource } from '../NetworkSearchCanonicalArchiveSource.js';
 import type {
 	NetworkSearchDocument,
 	NetworkSearchIndexStateDocument,
@@ -104,15 +103,10 @@ describe('network search indexed pagination', () => {
 		const service = new NetworkSearchService(
 			{ indexName: 'network-pagination-test', writable: false },
 			undefined,
-			index,
-			undefined,
-			canonicalArchiveSource()
+			index
 		);
 
-		const response = await service.searchIndexed(
-			request(),
-			new Date(initial.networkTime)
-		);
+		const response = await service.searchIndexed(request());
 
 		expect(search).toHaveBeenCalledTimes(2);
 		expect(search.mock.calls[0]?.[1]).toEqual(
@@ -128,26 +122,24 @@ describe('network search indexed pagination', () => {
 		expect(response?.readModel.canonicalCursor).toBe('cursor-b');
 	});
 
-	it('rejects an archive-only canonical revision change', async () => {
+	it('rejects pagination against a different canonical cursor', async () => {
 		const currentState = state('cursor-a');
 		const search = jest.fn();
 		const index = {
 			getDocument: jest.fn(async () => currentState),
 			search
 		} as unknown as Index<NetworkSearchStoredDocument>;
-		const source: NetworkSearchCanonicalArchiveSource = {
-			load: jest.fn(async () => ({ revision: 'archive-b', roots: [] }))
-		};
 		const service = new NetworkSearchService(
 			{ indexName: 'network-pagination-test', writable: false },
 			undefined,
-			index,
-			undefined,
-			source
+			index
 		);
 
 		await expect(
-			service.searchIndexed(request(), new Date(currentState.networkTime))
+			service.searchIndexed({
+				...request(),
+				canonicalCursor: 'cursor-b'
+			})
 		).resolves.toBeNull();
 		expect(search).not.toHaveBeenCalled();
 	});
@@ -163,7 +155,7 @@ function state(canonicalCursor: string): NetworkSearchIndexStateDocument {
 		canonicalCursor,
 		documentKind: 'state',
 		id: 'network_search_state',
-		indexedAt: '2026-07-18T00:00:01.000Z',
+		indexedAt: new Date().toISOString(),
 		networkTime: '2026-07-18T00:00:00.000Z'
 	};
 }
@@ -176,12 +168,6 @@ function indexedReadModel(canonicalCursor: string): NetworkSearchReadModel {
 		observedAt: '2026-07-18T00:00:01.000Z',
 		schemaVersion: 'test',
 		source: 'meilisearch'
-	};
-}
-
-function canonicalArchiveSource(): NetworkSearchCanonicalArchiveSource {
-	return {
-		load: jest.fn(async () => ({ revision: 'archive-a', roots: [] }))
 	};
 }
 
