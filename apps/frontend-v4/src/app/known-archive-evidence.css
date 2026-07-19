@@ -383,6 +383,10 @@
 		padding: 6px 0;
 	}
 
+	.archive-repair-table td {
+		grid-template-columns: minmax(108px, 0.4fr) minmax(0, 1fr);
+	}
+
 	.known-evidence-table td::before {
 		color: var(--muted);
 		content: attr(data-label);
