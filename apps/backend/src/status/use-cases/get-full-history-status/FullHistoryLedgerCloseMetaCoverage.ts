@@ -70,7 +70,9 @@ export async function readFullHistoryLedgerCloseMetaCoverage(
 	};
 }
 
-function mapOutput(row: OutputRow): FullHistoryLedgerCloseMetaOutputCoverageDTO {
+function mapOutput(
+	row: OutputRow
+): FullHistoryLedgerCloseMetaOutputCoverageDTO {
 	if (!datasetNames.has(row.dataset)) {
 		throw new TypeError(`Unknown LedgerCloseMeta dataset ${row.dataset}`);
 	}
@@ -122,13 +124,13 @@ const coverageSql = `
 `;
 
 const outputSql = `
-	select dataset, count(*)::integer as "batchCount",
+	select "dataset", sum("batch_count")::text as "batchCount",
 		sum("record_count")::text as "recordCount",
 		sum("output_bytes")::text as "outputBytes",
 		array_agg(distinct "schema_version" order by "schema_version")
 			as "schemaVersions"
-	from "full_history_ledger_close_meta_dataset"
+	from "full_history_lcm_dataset_status_rollup"
 	where "network_passphrase_hash" = $1
-	group by dataset
-	order by dataset
+	group by "dataset"
+	order by "dataset"
 `;
