@@ -36,9 +36,10 @@ describe('ReconcileHistoryArchiveObjectTransitions', () => {
 		await reconciler.executeIfDue(10_000);
 		expect(repository.reconcileExecutionDisposition).toHaveBeenCalledTimes(1);
 		expect(
-			repository.reconcileExecutionDisposition.mock.invocationCallOrder[0]
+			complete.reconcilePersisted.mock.invocationCallOrder[0]
 		).toBeLessThan(
-			complete.reconcilePersisted.mock.invocationCallOrder[0] ?? Infinity
+			repository.reconcileExecutionDisposition.mock.invocationCallOrder[0] ??
+				Infinity
 		);
 
 		expect(complete.reconcilePersisted).toHaveBeenCalledWith(verified);
@@ -143,7 +144,7 @@ describe('ReconcileHistoryArchiveObjectTransitions', () => {
 		);
 	});
 
-	it('continues terminal reconciliation when execution admission fails', async () => {
+	it('keeps terminal proof effects when later execution admission fails', async () => {
 		const repository = mock<HistoryArchiveObjectRepository>();
 		const complete = mock<CompleteHistoryArchiveObject>();
 		const logger = mock<Logger>();

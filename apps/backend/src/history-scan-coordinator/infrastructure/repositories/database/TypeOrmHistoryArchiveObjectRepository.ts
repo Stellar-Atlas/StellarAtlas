@@ -172,7 +172,15 @@ export class TypeOrmHistoryArchiveObjectRepository implements HistoryArchiveObje
 			})
 			.andWhere('object.transitionEffectsCompletedAt is null')
 			.andWhere('object.transitionEffectsRequiredAt is not null')
-			.orderBy('object.transitionEffectsRequiredAt', 'ASC')
+			.orderBy(
+				`case object."executionReason"
+					when 'canonical-frontier-reserve' then 0
+					when 'proof-completion-reserve' then 1
+					else 2
+				end`,
+				'ASC'
+			)
+			.addOrderBy('object.transitionEffectsRequiredAt', 'ASC')
 			.addOrderBy('object.id', 'ASC')
 			.take(normalizeLimit(limit))
 			.getMany();
