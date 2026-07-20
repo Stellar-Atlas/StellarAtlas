@@ -5,6 +5,7 @@ import {
 	historyArchiveObjectClaimFinalizeSql,
 	historyArchiveObjectClaimSelectionSql
 } from '../HistoryArchiveObjectClaimSql.js';
+import { admitCanonicalFrontierSql } from '../HistoryArchiveCanonicalFrontierSql.js';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
@@ -62,6 +63,21 @@ describe('HistoryArchiveObjectClaimSql', () => {
 			historyArchiveObjectClaimSelectionSql.indexOf('root_work as materialized')
 		);
 		expect(historyArchiveObjectClaimSelectionSql).not.toContain('limit 512');
+	});
+
+	it('can replace generic runnable work globally for the proof frontier', () => {
+		expect(historyArchiveObjectClaimSelectionSql).toContain(
+			'when claim_class.slot % 2 = 1 then root_work.priority'
+		);
+		expect(admitCanonicalFrontierSql).toContain(
+			'generic_replacements as materialized'
+		);
+		expect(admitCanonicalFrontierSql).toContain(
+			'canonical_reservation_state as materialized'
+		);
+		expect(admitCanonicalFrontierSql).not.toContain(
+			'generic."archiveUrlIdentity" = desired."archiveUrlIdentity"'
+		);
 	});
 
 	it('bounds candidate lookup by claimable archive roots', () => {

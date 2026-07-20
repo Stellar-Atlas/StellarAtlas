@@ -6,7 +6,9 @@ import {
 	canonicalCategoryTargetsCteSql
 } from './HistoryArchiveCanonicalCategorySql.js';
 import { canonicalCheckpointHasStrictEvidenceSql } from './HistoryArchiveCanonicalCheckpointProofSql.js';
+import { canonicalFrontierReservationCtesSql } from './HistoryArchiveCanonicalReservationSql.js';
 import { canonicalRuntimeTargetCtes } from './HistoryArchiveCanonicalRuntimeTargetSql.js';
+import { historyArchiveMinimumWatermark } from '@history-scan-coordinator/domain/history-archive-object/HistoryArchiveObjectPlanningPolicy.js';
 export { canonicalRuntimeTargetCtes } from './HistoryArchiveCanonicalRuntimeTargetSql.js';
 
 export const materializeCanonicalFrontierDependenciesSql = `
@@ -355,8 +357,7 @@ export const admitCanonicalFrontierSql = `
 			candidate."hostIdentity", candidate."objectKey",
 			candidate."checkpointLedger", desired.object_priority,
 			desired.proof_progress, desired.target_lane,
-			desired."lastClaimedAt",
-			replaceable.id as replaceable_id
+			desired."lastClaimedAt"
 		from desired_objects desired
 		join "history_archive_object_queue" candidate
 			on candidate."archiveUrlIdentity" = desired."archiveUrlIdentity"
@@ -368,42 +369,6 @@ export const admitCanonicalFrontierSql = `
 			and candidate."dependencyReady" = true
 		left join protected_roots protected
 			on protected."archiveUrlIdentity" = desired."archiveUrlIdentity"
-		left join lateral (
-			select generic.id
-			from "history_archive_object_queue" generic
-			where generic."archiveUrlIdentity" = desired."archiveUrlIdentity"
-				and generic."executionDisposition" = 'executable'
-				and generic."dependencyReady" = true
-				and generic."executionReason" is distinct from
-					'canonical-frontier-reserve'
-				and (
-					generic.status = 'pending'
-					or (
-						generic.status = 'failed'
-						and (
-							generic."transitionEffectsRequiredAt" is null
-							or generic."transitionEffectsCompletedAt" is not null
-						)
-						and coalesce(
-							generic."nextAttemptAt",
-							generic."updatedAt" + interval '1 hour'
-						) <= now()
-					)
-				)
-				and not exists (
-					select 1
-					from "history_archive_object_host_throttle" throttle
-					where throttle."hostIdentity" = generic."hostIdentity"
-						and throttle."blockedUntil" > now()
-				)
-			order by
-				case generic."executionReason"
-					when 'proof-completion-reserve' then 0
-					else 1
-				end,
-				generic.id
-			limit 1
-		) replaceable on true
 		where protected."archiveUrlIdentity" is null
 			and candidate."executionReason" is distinct from
 				'canonical-frontier-reserve'
@@ -455,41 +420,19 @@ export const admitCanonicalFrontierSql = `
 			) as target_rank
 		from host_ranked
 		where host_rank <= $2::integer
-	), replacement_ranked as materialized (
-		select target_ranked.*,
-			case
-				when replaceable_id is not null and row_number() over (
-					partition by replaceable_id
-					order by case
-						when mod(reservation_root_rank, 2) = 1
-							and target_lane = 'forward' then 0
-						when mod(reservation_root_rank, 2) = 0
-							and target_lane = 'historical' then 0
-						else 1
-					end,
-						target_rank, target_lane,
-						proof_progress desc,
-						"lastClaimedAt" asc nulls first,
-						"archiveUrlIdentity", id
-				) = 1 then replaceable_id
-				else null
-			end as selected_replaceable_id
-		from target_ranked
-	), additions_ranked as materialized (
-		select replacement_ranked.*,
-			count(*) filter (where selected_replaceable_id is null) over (
-				order by target_rank, target_lane, proof_progress desc,
-					"lastClaimedAt" asc nulls first,
-					"archiveUrlIdentity", id
-			) as addition_rank
-		from replacement_ranked
-	), selected as materialized (
+	), ${canonicalFrontierReservationCtesSql}, selected as materialized (
 		select candidate.*
 		from additions_ranked candidate
 		cross join outstanding
-		where candidate.selected_replaceable_id is not null
+		cross join canonical_reservation_state reservation
+		where (
+			candidate.selected_replaceable_id is not null
 			or candidate.addition_rank <= greatest(
-				$1::integer - outstanding.count, 0
+				${historyArchiveMinimumWatermark}::integer - outstanding.count, 0
+			)
+		)
+			and candidate.candidate_replacement_rank <= greatest(
+				$1::integer - reservation.count, 0
 			)
 		order by candidate.target_rank, candidate.target_lane,
 			(candidate.selected_replaceable_id is null),

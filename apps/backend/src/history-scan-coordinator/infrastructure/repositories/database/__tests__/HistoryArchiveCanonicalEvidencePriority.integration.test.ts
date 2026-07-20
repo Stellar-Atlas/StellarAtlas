@@ -167,6 +167,51 @@ describe('canonical archive evidence priority', () => {
 		expect(reserved?.count).toBe(1);
 	});
 
+	it('replaces saturated generic work from unrelated archive sources', async () => {
+		await seedArchive(0);
+		await seedRuntime();
+		await dataSource.query(materializeCanonicalFrontierDependenciesSql);
+		const genericRows = Array.from({ length: 48 }, (_, index) => {
+			const generic = object(
+				index + 100,
+				'checkpoint-state',
+				'checkpoint-state:0000003f',
+				63
+			);
+			generic.dependencyReady = true;
+			generic.executionDisposition = 'executable';
+			generic.executionReason = 'frontier-admitted';
+			return generic;
+		});
+		await dataSource.getRepository(HistoryArchiveObject).save(genericRows);
+
+		const [admission] = (await dataSource.query(
+			admitCanonicalFrontierSql,
+			[1, 2]
+		)) as readonly { readonly count: number }[];
+		const [counts] = (await dataSource.query(`
+			select
+				count(*) filter (
+					where "executionReason" = 'canonical-frontier-reserve'
+				)::integer as canonical,
+				count(*) filter (
+					where "executionReason" = 'frontier-waiting'
+				)::integer as displaced,
+				count(*) filter (
+					where "executionReason" = 'frontier-admitted'
+						and "executionDisposition" = 'executable'
+				)::integer as generic
+			from "history_archive_object_queue"
+		`)) as readonly {
+			readonly canonical: number;
+			readonly displaced: number;
+			readonly generic: number;
+		}[];
+
+		expect(admission?.count).toBe(1);
+		expect(counts).toEqual({ canonical: 1, displaced: 1, generic: 47 });
+	});
+
 	it('does not let an unrelated retry hide canonical frontier work', async () => {
 		await seedArchive(0);
 		await seedRuntime();
