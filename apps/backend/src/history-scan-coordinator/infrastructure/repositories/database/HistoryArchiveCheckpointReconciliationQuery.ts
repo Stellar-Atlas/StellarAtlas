@@ -1,5 +1,8 @@
 import type { Repository, SelectQueryBuilder } from 'typeorm';
-import { HistoryArchiveCheckpointProof } from '@history-scan-coordinator/domain/history-archive-checkpoint-proof/HistoryArchiveCheckpointProof.js';
+import {
+	CURRENT_HISTORY_ARCHIVE_CHECKPOINT_PROOF_VERSION,
+	HistoryArchiveCheckpointProof
+} from '@history-scan-coordinator/domain/history-archive-checkpoint-proof/HistoryArchiveCheckpointProof.js';
 import type { HistoryArchiveObject } from '@history-scan-coordinator/domain/history-archive-object/HistoryArchiveObject.js';
 import { normalizeLimit } from './HistoryArchiveObjectRowMapper.js';
 import { canonicalRuntimeTargetCtes } from './HistoryArchiveCanonicalRuntimeTargetSql.js';
@@ -15,6 +18,123 @@ const reconciliationPredicateSql = `(
 		where proof."archiveUrlIdentity" = "object"."archiveUrlIdentity"
 			and proof."checkpointLedger" = "object"."checkpointLedger"
 			and proof."evaluatedAt" >= "object"."dependenciesMaterializedAt"
+	)
+)`;
+
+const runtimeProofInputsCompleteSql = `(
+	(select count(*)
+	 from history_archive_object_queue required
+	 where required."archiveUrlIdentity" = "object"."archiveUrlIdentity"
+		and required."checkpointLedger" = "object"."checkpointLedger"
+		and required."objectType" in (
+			'checkpoint-state', 'ledger', 'transactions', 'results'
+		)) = 4
+	and (select count(distinct required."objectType")
+	 from history_archive_object_queue required
+	 where required."archiveUrlIdentity" = "object"."archiveUrlIdentity"
+		and required."checkpointLedger" = "object"."checkpointLedger"
+		and required."objectType" in (
+			'checkpoint-state', 'ledger', 'transactions', 'results'
+		)
+		and required.status = 'verified') = 4
+	and ("object"."checkpointLedger" = 63 or (
+		select count(*)
+		from history_archive_object_queue predecessor
+		where predecessor."archiveUrlIdentity" = "object"."archiveUrlIdentity"
+			and predecessor."checkpointLedger" = "object"."checkpointLedger" - 64
+			and predecessor."objectType" = 'ledger'
+			and predecessor.status = 'verified'
+	) = 1)
+	and exists (
+		select 1
+		from history_archive_checkpoint_bucket_dependency dependency
+		where dependency."archiveUrlIdentity" = "object"."archiveUrlIdentity"
+			and dependency."checkpointLedger" = "object"."checkpointLedger"
+	)
+	and not exists (
+		select 1
+		from history_archive_checkpoint_bucket_dependency dependency
+		where dependency."archiveUrlIdentity" = "object"."archiveUrlIdentity"
+			and dependency."checkpointLedger" = "object"."checkpointLedger"
+			and not exists (
+				select 1
+				from history_archive_object_queue bucket
+				where bucket."archiveUrlIdentity" = dependency."archiveUrlIdentity"
+					and bucket."objectType" = 'bucket'
+					and bucket."bucketHash" = dependency."bucketHash"
+					and bucket.status = 'verified'
+					and bucket."verificationFacts"#>>'{bucketObject,matched}' = 'true'
+					and lower(bucket."verificationFacts"#>>
+						'{bucketObject,expectedBucketHash}') = dependency."bucketHash"
+					and bucket."verificationFacts"#>>'{bucketObject,sourceUrl}' =
+						bucket."objectUrl"
+			)
+	)
+)`;
+
+const runtimeProofEvidenceChangedSql = `(
+	coalesce("object"."dependenciesMaterializedAt", '-infinity'::timestamptz) >
+		runtime_proof."evaluatedAt"
+	or exists (
+		select 1
+		from history_archive_object_queue changed
+		where changed."archiveUrlIdentity" = "object"."archiveUrlIdentity"
+			and greatest(
+				coalesce(changed."verifiedAt", '-infinity'::timestamptz),
+				coalesce(changed."transitionEffectsRequiredAt",
+					'-infinity'::timestamptz),
+				changed."updatedAt"
+			) > runtime_proof."evaluatedAt"
+			and (
+				(changed."checkpointLedger" = "object"."checkpointLedger"
+					and changed."objectType" in (
+						'checkpoint-state', 'ledger', 'transactions', 'results'
+					))
+				or (changed."checkpointLedger" = "object"."checkpointLedger" - 64
+					and changed."objectType" = 'ledger')
+			)
+	)
+	or exists (
+		select 1
+		from history_archive_checkpoint_bucket_dependency dependency
+		join history_archive_object_queue changed
+			on changed."archiveUrlIdentity" = dependency."archiveUrlIdentity"
+			and changed."objectType" = 'bucket'
+			and changed."bucketHash" = dependency."bucketHash"
+		where dependency."archiveUrlIdentity" = "object"."archiveUrlIdentity"
+			and dependency."checkpointLedger" = "object"."checkpointLedger"
+			and greatest(
+				coalesce(changed."verifiedAt", '-infinity'::timestamptz),
+				coalesce(changed."transitionEffectsRequiredAt",
+					'-infinity'::timestamptz),
+				changed."updatedAt"
+			) > runtime_proof."evaluatedAt"
+	)
+	or exists (
+		select 1
+		from history_archive_checkpoint_bucket_dependency dependency
+		where dependency."archiveUrlIdentity" = "object"."archiveUrlIdentity"
+			and dependency."checkpointLedger" = "object"."checkpointLedger"
+			and dependency."createdAt" > runtime_proof."evaluatedAt"
+	)
+)`;
+
+const runtimeReconciliationPredicateSql = `(
+	${reconciliationPredicateSql}
+	or exists (
+		select 1
+		from history_archive_checkpoint_proof runtime_proof
+		where runtime_proof."archiveUrlIdentity" = "object"."archiveUrlIdentity"
+			and runtime_proof."checkpointLedger" = "object"."checkpointLedger"
+			and (
+				runtime_proof."proofVersion" <
+					${CURRENT_HISTORY_ARCHIVE_CHECKPOINT_PROOF_VERSION}
+				or (
+					runtime_proof.status in ('pending', 'not-evaluable')
+					and ${runtimeProofInputsCompleteSql}
+					and ${runtimeProofEvidenceChangedSql}
+				)
+			)
 	)
 )`;
 
@@ -102,21 +222,30 @@ async function findRuntimeTargets(
 	limit: number
 ): Promise<readonly HistoryArchiveObject[]> {
 	const rows = (await repository.manager.query(
-		`with ${canonicalRuntimeTargetCtes}
+		`with ${canonicalRuntimeTargetCtes},
+		 runtime_object as materialized (
+			select target.target_lane, candidate.*
+			from runtime_target target
+			join "history_archive_state_snapshot" state
+				on state.status = 'available'
+				and state."networkPassphrase" is not null
+				and sha256(convert_to(state."networkPassphrase", 'UTF8')) =
+					target."network_passphrase_hash"
+			cross join lateral (
+				select queued.*
+				from "history_archive_object_queue" queued
+				where queued."archiveUrlIdentity" =
+						state."archiveUrlIdentity"
+					and queued."objectType" = 'checkpoint-state'
+					and queued."checkpointLedger" = target.checkpoint_ledger
+					and queued.status = 'verified'
+				limit 1
+			) candidate
+		 )
 		 select object."remoteId" as "remoteId"
-		 from runtime_target target
-		 join "history_archive_state_snapshot" state
-			on state.status = 'available'
-			and state."networkPassphrase" is not null
-			and sha256(convert_to(state."networkPassphrase", 'UTF8')) =
-				target."network_passphrase_hash"
-		 join "history_archive_object_queue" object
-			on object."archiveUrlIdentity" = state."archiveUrlIdentity"
-			and object."objectType" = 'checkpoint-state'
-			and object."checkpointLedger" = target.checkpoint_ledger
-			and object.status = 'verified'
-		 where ${reconciliationPredicateSql}
-		 order by case target.target_lane
+		 from runtime_object object
+		 where ${runtimeReconciliationPredicateSql}
+		 order by case object.target_lane
 			when 'forward' then 0 else 1 end,
 			object.id
 		 limit $1::integer`,

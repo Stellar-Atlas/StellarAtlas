@@ -1,7 +1,10 @@
 import { createHash } from 'node:crypto';
 import { DataSource } from 'typeorm';
 import { HistoryArchiveObject } from '../../../../domain/history-archive-object/HistoryArchiveObject.js';
-import { HistoryArchiveCheckpointProof } from '../../../../domain/history-archive-checkpoint-proof/HistoryArchiveCheckpointProof.js';
+import {
+	CURRENT_HISTORY_ARCHIVE_CHECKPOINT_PROOF_VERSION,
+	HistoryArchiveCheckpointProof
+} from '../../../../domain/history-archive-checkpoint-proof/HistoryArchiveCheckpointProof.js';
 import { HistoryArchiveObjectHostThrottleMigration1784410000000 } from '../../../database/migrations/1784410000000-HistoryArchiveObjectHostThrottleMigration.js';
 import { HistoryArchiveObjectClaimCursorMigration1784780000000 } from '../../../database/migrations/1784780000000-HistoryArchiveObjectClaimCursorMigration.js';
 import { TypeOrmHistoryArchiveObjectRepository } from '../TypeOrmHistoryArchiveObjectRepository.js';
@@ -50,7 +53,7 @@ describe('checkpoint dependency reconciliation in PostgreSQL', () => {
 
 	beforeEach(async () => {
 		await dataSource.query(
-			'truncate history_archive_checkpoint_proof, history_archive_object_queue, history_archive_state_snapshot, full_history_historical_backfill_job, full_history_watermark, full_history_promotion_runtime restart identity cascade'
+			'truncate history_archive_checkpoint_proof, history_archive_object_queue, history_archive_checkpoint_bucket_dependency, history_archive_state_snapshot, full_history_historical_backfill_job, full_history_watermark, full_history_promotion_runtime restart identity cascade'
 		);
 	});
 
@@ -130,7 +133,127 @@ describe('checkpoint dependency reconciliation in PostgreSQL', () => {
 			bucketReady.remoteId
 		]);
 	});
+
+	it('prioritizes a canonical proof after its final bucket evidence changes', async () => {
+		const fixture = await saveCanonicalPendingProofFixture(
+			dataSource,
+			new Date('2026-07-18T00:00:00.000Z')
+		);
+
+		const result =
+			await repository.findVerifiedCheckpointsNeedingReconciliation(1);
+
+		expect(result.map((object) => object.remoteId)).toEqual([
+			fixture.checkpoint.remoteId
+		]);
+	});
+
+	it('does not reevaluate an unchanged current-version canonical proof', async () => {
+		await saveCanonicalPendingProofFixture(
+			dataSource,
+			new Date('2026-07-20T00:00:00.000Z')
+		);
+
+		await expect(
+			repository.findVerifiedCheckpointsNeedingReconciliation(1)
+		).resolves.toEqual([]);
+	});
 });
+
+async function saveCanonicalPendingProofFixture(
+	dataSource: DataSource,
+	proofEvaluatedAt: Date
+): Promise<{ readonly checkpoint: HistoryArchiveObject }> {
+	const archiveUrl = 'https://canonical.example';
+	const checkpointLedger = 127;
+	const passphrase = 'Canonical stale proof fixture';
+	const bucketHash = 'a'.repeat(64);
+	const checkpoint = checkpointObject(archiveUrl, checkpointLedger, 'verified');
+	checkpoint.dependenciesMaterializedAt = new Date('2026-07-17T00:00:00.000Z');
+	const required = [
+		checkpoint,
+		proofObject(archiveUrl, checkpointLedger, 'ledger'),
+		proofObject(archiveUrl, checkpointLedger, 'transactions'),
+		proofObject(archiveUrl, checkpointLedger, 'results'),
+		proofObject(archiveUrl, checkpointLedger - 64, 'ledger')
+	];
+	const bucket = new HistoryArchiveObject({
+		archiveUrl,
+		archiveUrlIdentity: archiveUrl,
+		bucketHash,
+		objectKey: `bucket:${bucketHash}`,
+		objectOrder: 50,
+		objectType: 'bucket',
+		objectUrl: `${archiveUrl}/bucket-${bucketHash}.xdr.gz`,
+		status: 'verified'
+	});
+	bucket.verificationFacts = {
+		bucketObject: {
+			expectedBucketHash: bucketHash,
+			hashAlgorithm: 'sha256',
+			matched: true,
+			sourceUrl: bucket.objectUrl
+		}
+	};
+	await dataSource
+		.getRepository(HistoryArchiveObject)
+		.save([...required, bucket]);
+	await dataSource.query(
+		`update history_archive_object_queue
+		 set "verifiedAt" = $1, "updatedAt" = $1`,
+		[new Date('2026-07-17T00:00:00.000Z')]
+	);
+	await dataSource.query(
+		`update history_archive_object_queue
+		 set "verifiedAt" = $1, "updatedAt" = $1
+		 where "remoteId" = $2`,
+		[new Date('2026-07-19T00:00:00.000Z'), bucket.remoteId]
+	);
+	await dataSource.query(
+		`insert into history_archive_checkpoint_bucket_dependency (
+			"archiveUrlIdentity", "checkpointLedger", "bucketHash", "createdAt"
+		) values ($1, $2, $3, $4)`,
+		[
+			archiveUrl,
+			checkpointLedger,
+			bucketHash,
+			new Date('2026-07-17T00:00:00.000Z')
+		]
+	);
+	await dataSource
+		.getRepository(HistoryArchiveCheckpointProof)
+		.save(pendingProof(checkpoint, proofEvaluatedAt));
+	await dataSource.query(
+		`insert into history_archive_state_snapshot (
+			"archiveUrlIdentity", status, "networkPassphrase"
+		) values ($1, 'available', $2)`,
+		[archiveUrl, passphrase]
+	);
+	await dataSource.query(
+		`insert into full_history_promotion_runtime (
+			"network_passphrase_hash", state, "checkpoint_ledger"
+		) values ($1, 'waiting-for-proof', $2)`,
+		[createHash('sha256').update(passphrase, 'utf8').digest(), checkpointLedger]
+	);
+	return { checkpoint };
+}
+
+function proofObject(
+	archiveUrl: string,
+	checkpointLedger: number,
+	objectType: 'ledger' | 'results' | 'transactions'
+): HistoryArchiveObject {
+	return new HistoryArchiveObject({
+		archiveUrl,
+		archiveUrlIdentity: archiveUrl,
+		checkpointLedger,
+		objectKey: `${objectType}:${checkpointLedger}`,
+		objectOrder: 20,
+		objectType,
+		objectUrl: `${archiveUrl}/${objectType}/${checkpointLedger}.xdr.gz`,
+		status: 'verified'
+	});
+}
 
 function mismatchProof(
 	object: HistoryArchiveObject
@@ -175,5 +298,16 @@ function bucketMissingProof(
 	proof.status = 'not-evaluable';
 	proof.previousLedgersMatch = true;
 	proof.failureKind = 'bucket-missing';
+	return proof;
+}
+
+function pendingProof(
+	object: HistoryArchiveObject,
+	evaluatedAt: Date
+): HistoryArchiveCheckpointProof {
+	const proof = bucketMissingProof(object);
+	proof.status = 'pending';
+	proof.proofVersion = CURRENT_HISTORY_ARCHIVE_CHECKPOINT_PROOF_VERSION;
+	proof.evaluatedAt = evaluatedAt;
 	return proof;
 }

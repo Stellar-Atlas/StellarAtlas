@@ -120,6 +120,12 @@ export const historyArchiveCheckpointProofUpsertSql = `
 		details = excluded.details,
 		"evaluatedAt" = excluded."evaluatedAt",
 		"updatedAt" = now()
-	where excluded."proofVersion" >=
+	where excluded."proofVersion" >
 		"history_archive_checkpoint_proof"."proofVersion"
+		or (
+			excluded."proofVersion" =
+				"history_archive_checkpoint_proof"."proofVersion"
+			and excluded."evaluatedAt" >=
+				"history_archive_checkpoint_proof"."evaluatedAt"
+		)
 `;
