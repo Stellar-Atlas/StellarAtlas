@@ -267,7 +267,7 @@ export const historyArchiveObjectClaimSelectionSql = `
 			claim_class.slot,
 			claim_class."claimClass",
 			case
-				when claim_class.slot % 4 = 1 then root_work.priority
+				when claim_class.slot % 2 = 1 then root_work.priority
 				else 0
 			end as "claimPriority"
 		from root_work
@@ -363,7 +363,7 @@ export const historyArchiveObjectClaimFinalizeSql = `
 			and ${candidateDependencyReadySql}
 			and candidate."objectType" = any($1)
 		order by
-			case when $3::integer % 4 = 1 then case candidate."executionReason"
+			case when $3::integer % 2 = 1 then case candidate."executionReason"
 					when 'canonical-frontier-reserve' then 0
 					when 'proof-completion-reserve' then 1
 					else 2

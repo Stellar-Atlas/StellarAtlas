@@ -17,6 +17,7 @@ import {
 	admitCanonicalFrontierSql,
 	materializeCanonicalFrontierDependenciesSql
 } from '../HistoryArchiveCanonicalFrontierSql.js';
+import { historyArchiveCheckpointProofTargetCtesSql } from '../HistoryArchiveCheckpointProofTargetSql.js';
 import {
 	startDisposablePostgres,
 	type DisposablePostgres
@@ -421,17 +422,44 @@ describe('canonical full-history archive frontier', () => {
 			127,
 			'scanning'
 		);
+		const occupiedSecond = object(
+			3,
+			'checkpoint-state',
+			'checkpoint-state:000000bf',
+			191,
+			'scanning'
+		);
+		const occupiedThird = object(
+			4,
+			'checkpoint-state',
+			'checkpoint-state:000000ff',
+			255,
+			'scanning'
+		);
 
 		await dataSource
 			.getRepository(HistoryArchiveObject)
-			.save([ordinaryRoot, ordinary, canonicalRoot, canonical, occupied]);
+			.save([
+				ordinaryRoot,
+				ordinary,
+				canonicalRoot,
+				canonical,
+				occupied,
+				occupiedSecond,
+				occupiedThird
+			]);
 		await dataSource.query(
 			`
 			update "history_archive_object_claim_slot"
-			set "objectRemoteId" = case when slot = 0 then $1::uuid else null end,
-				"claimedAt" = case when slot = 0 then now() else null end
-		`,
-			[occupied.remoteId]
+			set "objectRemoteId" = case slot
+					when 0 then $1::uuid
+					when 1 then $2::uuid
+					when 2 then $3::uuid
+					else null
+				end,
+				"claimedAt" = case when slot < 3 then now() else null end
+			`,
+			[occupied.remoteId, occupiedSecond.remoteId, occupiedThird.remoteId]
 		);
 
 		const claimed = await repository.claimNextObject([
@@ -443,6 +471,39 @@ describe('canonical full-history archive frontier', () => {
 			archiveUrlIdentity: canonical.archiveUrlIdentity,
 			objectKey: canonical.objectKey
 		});
+	});
+
+	it('refreshes a historical runtime proof before unrelated newer checkpoints', async () => {
+		await seedArchive(0);
+		await seedHistoricalRuntime();
+		const forwardCheckpoint = targetCheckpoint + 64;
+		await seedForwardRuntime(forwardCheckpoint);
+		await dataSource.query(materializeCanonicalFrontierDependenciesSql);
+		const newerCheckpoint = targetCheckpoint + 128;
+		const newer = object(
+			0,
+			'checkpoint-state',
+			`checkpoint-state:${newerCheckpoint.toString(16).padStart(8, '0')}`,
+			newerCheckpoint,
+			'verified'
+		);
+		await dataSource.getRepository(HistoryArchiveObject).save(newer);
+		await dataSource.query(
+			`insert into "history_archive_checkpoint_bucket_dependency" (
+				"archiveUrlIdentity", "checkpointLedger", "bucketHash"
+			) values ($1, $2, $4), ($1, $3, $4)`,
+			[newer.archiveUrlIdentity, forwardCheckpoint, newerCheckpoint, bucketHash]
+		);
+
+		const targets = (await dataSource.query(
+			`with ${historyArchiveCheckpointProofTargetCtesSql}
+			 select "checkpointLedger" from target_checkpoints`,
+			[newer.archiveUrlIdentity, null, bucketHash]
+		)) as readonly { readonly checkpointLedger: number }[];
+
+		expect(
+			targets.map(({ checkpointLedger }) => checkpointLedger).sort()
+		).toEqual([targetCheckpoint, forwardCheckpoint].sort());
 	});
 
 	async function seedArchive(
@@ -539,6 +600,38 @@ describe('canonical full-history archive frontier', () => {
 			[
 				createHash('sha256').update(networkPassphrase, 'utf8').digest(),
 				targetCheckpoint
+			]
+		);
+	}
+
+	async function seedHistoricalRuntime(): Promise<void> {
+		const networkHash = createHash('sha256')
+			.update(networkPassphrase, 'utf8')
+			.digest();
+		await dataSource.query(
+			`insert into "full_history_watermark" (
+				"network_passphrase_hash", "first_ledger"
+			) values ($1, $2)`,
+			[networkHash, targetCheckpoint + 1]
+		);
+		await dataSource.query(
+			`insert into "full_history_historical_backfill_job" (
+				id, "network_passphrase_hash", "first_checkpoint_ledger",
+				"last_checkpoint_ledger", state
+			) values ('00000000-0000-0000-0000-000000000001', $1, $2, $2,
+				'pending')`,
+			[networkHash, targetCheckpoint]
+		);
+	}
+
+	async function seedForwardRuntime(checkpointLedger: number): Promise<void> {
+		await dataSource.query(
+			`insert into "full_history_promotion_runtime" (
+				"network_passphrase_hash", state, "checkpoint_ledger"
+			) values ($1, 'waiting-for-proof', $2)`,
+			[
+				createHash('sha256').update(networkPassphrase, 'utf8').digest(),
+				checkpointLedger
 			]
 		);
 	}

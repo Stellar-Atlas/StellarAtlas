@@ -31,9 +31,15 @@ describe('HistoryArchiveCheckpointProofSqlInputs', () => {
 		expect(historyArchiveCheckpointProofRefreshSql).toContain(
 			'"history_archive_checkpoint_bucket_dependency"'
 		);
-		expect(historyArchiveImmediateBucketProofRefreshLimit).toBe(1);
+		expect(historyArchiveImmediateBucketProofRefreshLimit).toBe(2);
 		expect(historyArchiveCheckpointProofRefreshSql).toContain(
 			`limit ${historyArchiveImmediateBucketProofRefreshLimit}`
+		);
+		expect(historyArchiveCheckpointProofRefreshSql).toContain(
+			"'historical'::text as target_lane"
+		);
+		expect(historyArchiveCheckpointProofRefreshSql).toContain(
+			"when 'historical' then 1"
 		);
 		expect(historyArchiveCheckpointProofRefreshSql).toContain(
 			'$2::integer + 64'

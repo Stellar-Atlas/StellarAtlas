@@ -1,14 +1,15 @@
-export const historyArchiveImmediateBucketProofRefreshLimit = 1;
+import { canonicalRuntimeTargetCtes } from './HistoryArchiveCanonicalRuntimeTargetSql.js';
+
+export const historyArchiveImmediateBucketProofRefreshLimit = 2;
 
 export const historyArchiveCheckpointProofTargetCtesSql = `
-	bucket_requested_checkpoints as materialized (
+	${canonicalRuntimeTargetCtes}, bucket_requested_checkpoints as materialized (
 		select dependency."archiveUrlIdentity", dependency."checkpointLedger"
 		from "history_archive_checkpoint_bucket_dependency" dependency
 		left join "history_archive_state_snapshot" state
 			on state."archiveUrlIdentity" = dependency."archiveUrlIdentity"
-		left join "full_history_promotion_runtime" runtime
-			on runtime.state in ('promoting', 'waiting-for-proof')
-			and runtime."checkpoint_ledger" = dependency."checkpointLedger"
+		left join runtime_target runtime
+			on runtime.checkpoint_ledger = dependency."checkpointLedger"
 			and state."networkPassphrase" is not null
 			and sha256(convert_to(state."networkPassphrase", 'UTF8')) =
 				runtime."network_passphrase_hash"
@@ -16,7 +17,11 @@ export const historyArchiveCheckpointProofTargetCtesSql = `
 			and $3::text is not null
 			and dependency."bucketHash" = lower($3::text)
 		order by
-			case when runtime."network_passphrase_hash" is not null then 0 else 1 end,
+			case runtime.target_lane
+				when 'forward' then 0
+				when 'historical' then 1
+				else 2
+			end,
 			dependency."checkpointLedger" desc
 		limit ${historyArchiveImmediateBucketProofRefreshLimit}
 	), requested_checkpoints as (

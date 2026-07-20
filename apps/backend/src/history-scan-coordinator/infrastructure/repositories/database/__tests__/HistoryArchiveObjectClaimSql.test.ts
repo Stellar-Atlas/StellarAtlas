@@ -46,10 +46,10 @@ describe('HistoryArchiveObjectClaimSql', () => {
 			"when 'proof-completion-reserve' then 1"
 		);
 		expect(historyArchiveObjectClaimSelectionSql).toContain(
-			'when claim_class.slot % 4 = 1 then root_work.priority'
+			'when claim_class.slot % 2 = 1 then root_work.priority'
 		);
 		expect(historyArchiveObjectClaimFinalizeSql).toContain(
-			'case when $3::integer % 4 = 1 then case candidate."executionReason"'
+			'case when $3::integer % 2 = 1 then case candidate."executionReason"'
 		);
 		expect(historyArchiveObjectClaimSelectionSql).toContain(
 			'for update of root skip locked'

@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { DataSource } from 'typeorm';
 import { HistoryArchiveCheckpointProof } from '../../../../domain/history-archive-checkpoint-proof/HistoryArchiveCheckpointProof.js';
 import { HistoryArchiveObject } from '../../../../domain/history-archive-object/HistoryArchiveObject.js';
@@ -20,6 +21,8 @@ import {
 jest.setTimeout(60_000);
 
 describe('history archive proof-reserve execution', () => {
+	const historicalCheckpoint = 1_000_063;
+	const networkPassphrase = 'Historical proof reserve fixture network';
 	let dataSource: DataSource;
 	let postgres: DisposablePostgres;
 	let repository: TypeOrmHistoryArchiveObjectRepository;
@@ -52,7 +55,7 @@ describe('history archive proof-reserve execution', () => {
 
 	beforeEach(async () => {
 		await dataSource.query(
-			'truncate "history_archive_checkpoint_proof", "history_archive_object_event", "history_archive_object_queue", "history_archive_object_frontier_cursor", "history_archive_checkpoint_bucket_dependency" restart identity cascade'
+			'truncate "history_archive_checkpoint_proof", "history_archive_object_event", "history_archive_object_queue", "history_archive_object_frontier_cursor", "history_archive_checkpoint_bucket_dependency", "history_archive_state_snapshot", "full_history_historical_backfill_job", "full_history_watermark", "full_history_promotion_runtime" restart identity cascade'
 		);
 		await dataSource.query(`
 			update "history_archive_reconciliation_state"
@@ -169,7 +172,11 @@ describe('history archive proof-reserve execution', () => {
 			.save([...roots, ...buckets]);
 
 		for (let rootIndex = 0; rootIndex < rootCount; rootIndex += 1) {
-			for (let bucketIndex = 0; bucketIndex < bucketsPerRoot; bucketIndex += 1) {
+			for (
+				let bucketIndex = 0;
+				bucketIndex < bucketsPerRoot;
+				bucketIndex += 1
+			) {
 				const bucket = buckets[rootIndex * bucketsPerRoot + bucketIndex];
 				if (bucket === undefined) throw new Error('Expected bucket fixture');
 				for (
@@ -232,7 +239,84 @@ describe('history archive proof-reserve execution', () => {
 		expect(reserve).toEqual({ count: rootCount, roots: rootCount });
 		expect(waiting?.count).toBe(rootCount * (bucketsPerRoot - 1));
 	});
+
+	it('keeps the historical runtime target out of newer proof reserve work', async () => {
+		const root = createRoot(0);
+		const historicalBucket = createBucket(0, 'a'.repeat(64));
+		const newerBucket = createBucket(0, 'b'.repeat(64));
+		historicalBucket.status = 'verified';
+		newerBucket.status = 'verified';
+		await dataSource
+			.getRepository(HistoryArchiveObject)
+			.save([root, historicalBucket, newerBucket]);
+		await saveProofDependency(
+			dataSource,
+			root,
+			historicalBucket,
+			historicalCheckpoint
+		);
+		await saveProofDependency(
+			dataSource,
+			root,
+			newerBucket,
+			historicalCheckpoint + 64
+		);
+		await seedHistoricalRuntime(
+			dataSource,
+			root.archiveUrlIdentity,
+			networkPassphrase,
+			historicalCheckpoint
+		);
+
+		await repository.reconcileExecutionDisposition();
+		const refreshedHistorical = await dataSource
+			.getRepository(HistoryArchiveObject)
+			.findOneByOrFail({ remoteId: historicalBucket.remoteId });
+		const refreshedNewer = await dataSource
+			.getRepository(HistoryArchiveObject)
+			.findOneByOrFail({ remoteId: newerBucket.remoteId });
+
+		expect(refreshedHistorical.executionReason).not.toBe(
+			'proof-completion-reserve'
+		);
+		expect(refreshedNewer).toMatchObject({
+			executionDisposition: 'executable',
+			executionReason: 'proof-completion-reserve',
+			status: 'pending'
+		});
+	});
 });
+
+async function seedHistoricalRuntime(
+	dataSource: DataSource,
+	archiveUrlIdentity: string,
+	networkPassphrase: string,
+	checkpointLedger: number
+): Promise<void> {
+	const networkHash = createHash('sha256')
+		.update(networkPassphrase, 'utf8')
+		.digest();
+	await dataSource.query(
+		`insert into "history_archive_state_snapshot" (
+			"archiveUrlIdentity", status, "networkPassphrase"
+		) values ($1, 'available', $2)`,
+		[archiveUrlIdentity, networkPassphrase]
+	);
+	await dataSource.query(
+		`insert into "full_history_watermark" (
+			"network_passphrase_hash", "first_ledger"
+		) values ($1, $2)`,
+		[networkHash, checkpointLedger + 1]
+	);
+	await dataSource.query(
+		`insert into "full_history_historical_backfill_job" (
+			id, "network_passphrase_hash", "first_checkpoint_ledger",
+			"last_checkpoint_ledger", state
+		) values ('00000000-0000-0000-0000-000000000001', $1, $2, $2,
+			'pending')`,
+		[networkHash, checkpointLedger]
+	);
+}
 
 async function saveProofDependency(
 	dataSource: DataSource,

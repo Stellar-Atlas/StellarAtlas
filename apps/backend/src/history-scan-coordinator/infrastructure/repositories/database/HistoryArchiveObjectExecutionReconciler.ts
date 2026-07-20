@@ -13,6 +13,7 @@ import {
 } from '@history-scan-coordinator/domain/history-archive-object/HistoryArchiveObjectPlanningPolicy.js';
 import {
 	admitCanonicalFrontierSql,
+	canonicalRuntimeTargetCtes,
 	materializeCanonicalFrontierDependenciesSql
 } from './HistoryArchiveCanonicalFrontierSql.js';
 import { backfillLegacyCheckpointContentDigests } from './HistoryArchiveLegacyCheckpointDigestBackfill.js';
@@ -58,10 +59,7 @@ export async function reconcileHistoryArchiveObjectExecution(
 		]);
 		const [canonicalAdmission] = (await manager.query(
 			admitCanonicalFrontierSql,
-			[
-				historyArchiveCanonicalReserveCount,
-				historyArchivePerHostConcurrency
-			]
+			[historyArchiveCanonicalReserveCount, historyArchivePerHostConcurrency]
 		)) as readonly { readonly count: number | string }[];
 		const canonicalAdmittedObjects = Number(canonicalAdmission?.count ?? 0);
 		const [counts] = (await manager.query(pressureSql, [
@@ -267,17 +265,15 @@ const pressureSql = `
 `;
 
 export const admitProofCompletionReserveSql = `
-	with canonical_target_roots as materialized (
+	with ${canonicalRuntimeTargetCtes}, canonical_target_roots as materialized (
 		select state."archiveUrlIdentity",
-			runtime."checkpoint_ledger"::integer as checkpoint_ledger
-		from "full_history_promotion_runtime" runtime
+			runtime.checkpoint_ledger
+		from runtime_target runtime
 		join "history_archive_state_snapshot" state
 			on state.status = 'available'
 			and state."networkPassphrase" is not null
 			and sha256(convert_to(state."networkPassphrase", 'UTF8')) =
 				runtime."network_passphrase_hash"
-		where runtime.state in ('promoting', 'waiting-for-proof')
-			and runtime."checkpoint_ledger" is not null
 	), proof_roots as materialized (
 		select root."archiveUrlIdentity"
 		from "history_archive_object_queue" root
