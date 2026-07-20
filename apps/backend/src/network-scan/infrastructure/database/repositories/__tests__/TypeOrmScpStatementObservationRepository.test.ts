@@ -109,22 +109,20 @@ describe('TypeOrmScpStatementObservationRepository', () => {
 		);
 	});
 
-	it('bounds pool acquisition on the underlying PostgreSQL pool', () => {
+	it('does not mutate shared PostgreSQL pool options', () => {
 		const typeOrmRepository = mock<Repository<ScpStatementObservation>>();
 		const manager = mock<EntityManager>();
 		const poolOptions: { connectionTimeoutMillis?: number } = {
-			connectionTimeoutMillis: 0
+			connectionTimeoutMillis: 10_000
 		};
 		Object.defineProperty(manager, 'connection', {
 			value: { driver: { master: { options: poolOptions } } }
 		});
 		Object.defineProperty(typeOrmRepository, 'manager', { value: manager });
 
-		new TypeOrmScpStatementObservationRepository(typeOrmRepository, {
-			poolAcquireTimeoutMs: 123
-		});
+		new TypeOrmScpStatementObservationRepository(typeOrmRepository);
 
-		expect(poolOptions.connectionTimeoutMillis).toBe(123);
+		expect(poolOptions.connectionTimeoutMillis).toBe(10_000);
 	});
 
 	it('deletes expired observations with a bounded skip-locked query', async () => {

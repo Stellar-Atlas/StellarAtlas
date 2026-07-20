@@ -55,14 +55,7 @@ interface LatestObservedLedgerRow {
 
 interface ScpStatementRepositoryOptions {
 	lockTimeoutMs?: number;
-	poolAcquireTimeoutMs?: number;
 	statementTimeoutMs?: number;
-}
-
-interface PostgresPoolDriver {
-	master?: {
-		options?: { connectionTimeoutMillis?: number };
-	};
 }
 
 const observationColumns = `
@@ -82,7 +75,6 @@ const observationColumns = `
 
 export class TypeOrmScpStatementObservationRepository implements ScpStatementObservationRepository {
 	private readonly lockTimeoutMs: number;
-	private readonly poolAcquireTimeoutMs: number;
 	private readonly statementTimeoutMs: number;
 
 	constructor(
@@ -92,13 +84,9 @@ export class TypeOrmScpStatementObservationRepository implements ScpStatementObs
 		this.lockTimeoutMs =
 			options.lockTimeoutMs ??
 			scpStatementObservationPolicy.databaseLockTimeoutMs;
-		this.poolAcquireTimeoutMs =
-			options.poolAcquireTimeoutMs ??
-			scpStatementObservationPolicy.databasePoolAcquireTimeoutMs;
 		this.statementTimeoutMs =
 			options.statementTimeoutMs ??
 			scpStatementObservationPolicy.databaseStatementTimeoutMs;
-		this.configurePoolAcquisitionTimeout();
 	}
 
 	async deleteOlderThan(before: Date, limit: number): Promise<number> {
@@ -409,22 +397,6 @@ export class TypeOrmScpStatementObservationRepository implements ScpStatementObs
 			);
 			return work(manager);
 		});
-	}
-
-	private configurePoolAcquisitionTimeout(): void {
-		const driver = this.repository.manager.connection?.driver as unknown as
-			PostgresPoolDriver | undefined;
-		const options = driver?.master?.options;
-		if (options === undefined) return;
-		const current = options.connectionTimeoutMillis;
-		if (
-			current === undefined ||
-			!Number.isFinite(current) ||
-			current <= 0 ||
-			current > this.poolAcquireTimeoutMs
-		) {
-			options.connectionTimeoutMillis = this.poolAcquireTimeoutMs;
-		}
 	}
 }
 

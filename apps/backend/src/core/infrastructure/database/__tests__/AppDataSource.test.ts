@@ -1,4 +1,5 @@
 import { AppDataSource, databaseMigrationsEnabled } from '../AppDataSource.js';
+import { resolveDatabasePoolPolicy } from '../DatabasePoolPolicy.js';
 import { managedMigrations } from '../ManagedMigrations.js';
 
 describe('AppDataSource migration startup policy', () => {
@@ -13,6 +14,14 @@ describe('AppDataSource migration startup policy', () => {
 	it('wires the startup option through the fail-closed policy', () => {
 		expect(AppDataSource.options.migrationsRun).toBe(
 			databaseMigrationsEnabled(process.env.DATABASE_MIGRATIONS_RUN)
+		);
+	});
+
+	it('configures the PostgreSQL pool before initialization', () => {
+		const policy = resolveDatabasePoolPolicy();
+		expect(AppDataSource.options.poolSize).toBe(policy.poolSize);
+		expect(AppDataSource.options.connectTimeoutMS).toBe(
+			policy.connectionTimeoutMs
 		);
 	});
 

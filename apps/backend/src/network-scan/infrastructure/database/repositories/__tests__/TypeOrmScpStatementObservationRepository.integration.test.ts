@@ -18,6 +18,7 @@ describe('TypeOrmScpStatementObservationRepository.integration', () => {
 	beforeAll(async () => {
 		postgres = await startDisposablePostgres();
 		dataSource = new DataSource({
+			connectTimeoutMS: 100,
 			dropSchema: true,
 			entities: [ScpStatementObservation],
 			logging: false,
@@ -256,7 +257,7 @@ describe('TypeOrmScpStatementObservationRepository.integration', () => {
 		const second = dataSource.createQueryRunner();
 		await first.connect();
 		await second.connect();
-		const repository = createRepository({ poolAcquireTimeoutMs: 100 });
+		const repository = createRepository();
 
 		try {
 			const startedAt = Date.now();
@@ -277,7 +278,6 @@ describe('TypeOrmScpStatementObservationRepository.integration', () => {
 	function createRepository(
 		options: {
 			lockTimeoutMs?: number;
-			poolAcquireTimeoutMs?: number;
 			statementTimeoutMs?: number;
 		} = {}
 	) {

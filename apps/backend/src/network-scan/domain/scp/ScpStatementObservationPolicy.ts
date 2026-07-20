@@ -5,7 +5,6 @@ export const scpStatementObservationPolicy = {
 	cleanupBatchSize: 5_000,
 	cleanupIntervalMs: 60_000,
 	databaseLockTimeoutMs: 2_000,
-	databasePoolAcquireTimeoutMs: 2_000,
 	databaseStatementTimeoutMs: 10_000,
 	maxCleanupBatchesPerRun: 4,
 	persistenceBatchSize: 250,

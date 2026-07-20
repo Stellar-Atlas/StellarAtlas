@@ -1,6 +1,7 @@
 import { config } from 'dotenv';
 import { DataSource } from 'typeorm';
 import { resolveAppEnvPath } from 'shared/lib/env/resolve-app-env-path.js';
+import { resolveDatabasePoolPolicy } from './DatabasePoolPolicy.js';
 import { managedMigrations } from './ManagedMigrations.js';
 
 config({
@@ -40,6 +41,7 @@ function databaseSslEnabled(): boolean {
 }
 
 const useDatabaseSsl = databaseSslEnabled();
+const databasePool = resolveDatabasePoolPolicy();
 const runMigrations = databaseMigrationsEnabled(
 	process.env.DATABASE_MIGRATIONS_RUN
 );
@@ -48,6 +50,7 @@ const AppDataSource = new DataSource({
 	type: 'postgres',
 	logging: false,
 	synchronize: false,
+	connectTimeoutMS: databasePool.connectionTimeoutMs,
 	url: process.env.ACTIVE_DATABASE_URL,
 	entities: ['lib/**/entities/*.js', 'lib/**/domain/**/!(*.test)*.js'],
 	migrations: [...managedMigrations],
@@ -61,9 +64,7 @@ const AppDataSource = new DataSource({
 				}
 			}
 		: undefined,
-	poolSize: process.env.DATABASE_POOL_SIZE
-		? parseInt(process.env.DATABASE_POOL_SIZE)
-		: 10
+	poolSize: databasePool.poolSize
 });
 
 export { AppDataSource };
