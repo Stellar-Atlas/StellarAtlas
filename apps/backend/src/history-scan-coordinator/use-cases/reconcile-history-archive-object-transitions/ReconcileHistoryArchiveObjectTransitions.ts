@@ -6,7 +6,9 @@ import { TYPES } from '../../infrastructure/di/di-types.js';
 import { CompleteHistoryArchiveObject } from '../complete-history-archive-object/CompleteHistoryArchiveObject.js';
 import { FailHistoryArchiveObject } from '../fail-history-archive-object/FailHistoryArchiveObject.js';
 
-const reconciliationBatchSize = 24;
+// Re-select priority frequently so completed proof-frontier objects do not wait
+// behind a long, stale transition batch.
+const reconciliationBatchSize = 4;
 const reconciliationIntervalMs = 5_000;
 
 @injectable()
@@ -54,16 +56,20 @@ export class ReconcileHistoryArchiveObjectTransitions {
 						this.logFailure(error, checkpoint, 'checkpoint dependencies');
 					}
 				}
-				try {
-					await this.objectRepository.reconcileExecutionDisposition();
-				} catch (error) {
-					this.logger.error('Failed to reconcile archive execution frontier', {
-						app: 'history-scan-coordinator',
-						errorMessage: error instanceof Error ? error.message : String(error)
-					});
-				}
 			}
 		);
+		await this.reconcileExecutionDisposition();
+	}
+
+	private async reconcileExecutionDisposition(): Promise<void> {
+		try {
+			await this.objectRepository.reconcileExecutionDisposition();
+		} catch (error) {
+			this.logger.error('Failed to reconcile archive execution frontier', {
+				app: 'history-scan-coordinator',
+				errorMessage: error instanceof Error ? error.message : String(error)
+			});
+		}
 	}
 
 	private logFailure(

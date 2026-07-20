@@ -11,6 +11,7 @@ describe('ReconcileHistoryArchiveObjectTransitions', () => {
 		const repository = mock<HistoryArchiveObjectRepository>();
 		const complete = mock<CompleteHistoryArchiveObject>();
 		const fail = mock<FailHistoryArchiveObject>();
+		let transitionLockHeld = false;
 		const verified = terminalObject('verified', 'verified.example');
 		const failed = terminalObject('failed', 'failed.example');
 		repository.findUnreconciledTransitions.mockResolvedValue([
@@ -22,10 +23,24 @@ describe('ReconcileHistoryArchiveObjectTransitions', () => {
 		);
 		repository.tryWithTransitionReconciliationLock.mockImplementation(
 			async (work) => {
+				transitionLockHeld = true;
 				await work();
+				transitionLockHeld = false;
 				return true;
 			}
 		);
+		repository.reconcileExecutionDisposition.mockImplementation(async () => {
+			expect(transitionLockHeld).toBe(false);
+			return {
+				admittedObjects: 0,
+				availableSlots: 0,
+				cursorAdvances: 0,
+				outstandingObjects: 0,
+				preservedObjects: 0,
+				recentCompletions: 0,
+				watermark: 0
+			};
+		});
 		const reconciler = new ReconcileHistoryArchiveObjectTransitions(
 			repository,
 			complete,
@@ -44,6 +59,10 @@ describe('ReconcileHistoryArchiveObjectTransitions', () => {
 
 		expect(complete.reconcilePersisted).toHaveBeenCalledWith(verified);
 		expect(fail.reconcilePersisted).toHaveBeenCalledWith(failed);
+		expect(repository.findUnreconciledTransitions).toHaveBeenCalledWith(4);
+		expect(
+			repository.findVerifiedCheckpointsNeedingReconciliation
+		).toHaveBeenCalledWith(4);
 	});
 
 	it('continues the batch when one transition effect fails', async () => {
