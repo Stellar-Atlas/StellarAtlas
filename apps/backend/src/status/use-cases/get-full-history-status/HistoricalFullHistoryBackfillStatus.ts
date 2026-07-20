@@ -9,6 +9,7 @@ import {
 export interface HistoricalFullHistoryCheckpointProofDTO {
 	readonly checkpointLedger: string;
 	readonly expectedBucketCount: number;
+	readonly failedBucketCount: number;
 	readonly failureKind: HistoryArchiveCheckpointProofFailureKind | null;
 	readonly remainingBucketCount: number;
 	readonly status: HistoryArchiveCheckpointProofStatus;
@@ -38,6 +39,7 @@ interface HistoricalBackfillRow {
 	readonly latestErrorCode: string | null;
 	readonly proofCheckpointLedger: number | string | null;
 	readonly proofExpectedBucketCount: number | string | null;
+	readonly proofFailedBucketCount: number | string | null;
 	readonly proofFailureKind: HistoryArchiveCheckpointProofFailureKind | null;
 	readonly proofStatus: HistoryArchiveCheckpointProofStatus | null;
 	readonly proofVerifiedBucketCount: number | string | null;
@@ -61,6 +63,8 @@ export async function readHistoricalFullHistoryBackfillStatus(
 					current_proof."checkpointLedger" as "proofCheckpointLedger",
 					current_proof."expectedBucketCount" as
 						"proofExpectedBucketCount",
+					current_proof."failedBucketCount" as
+						"proofFailedBucketCount",
 					current_proof."failureKind" as "proofFailureKind",
 					current_proof.status as "proofStatus",
 					current_proof."verifiedBucketCount" as
@@ -95,7 +99,8 @@ export async function readHistoricalFullHistoryBackfillStatus(
 				) completed on true
 				left join lateral (
 					select proof."checkpointLedger"::text as "checkpointLedger",
-						proof."expectedBucketCount", proof."failureKind",
+						proof."expectedBucketCount", proof."failedBucketCount",
+						proof."failureKind",
 						proof.status, proof."verifiedBucketCount"
 					from "history_archive_state_snapshot" state
 					join "history_archive_checkpoint_proof" proof
@@ -179,6 +184,7 @@ function mapCurrentProof(
 	if (row.proofCheckpointLedger === null) return null;
 	if (
 		row.proofExpectedBucketCount === null ||
+		row.proofFailedBucketCount === null ||
 		row.proofStatus === null ||
 		row.proofVerifiedBucketCount === null
 	) {
@@ -192,14 +198,24 @@ function mapCurrentProof(
 		row.proofVerifiedBucketCount,
 		'proofVerifiedBucketCount'
 	);
+	const failedBucketCount = toCount(
+		row.proofFailedBucketCount,
+		'proofFailedBucketCount'
+	);
 	if (verifiedBucketCount > expectedBucketCount) {
 		throw new RangeError(
 			'Historical checkpoint proof verified bucket count exceeds expected count'
 		);
 	}
+	if (failedBucketCount > expectedBucketCount - verifiedBucketCount) {
+		throw new RangeError(
+			'Historical checkpoint proof failed bucket count exceeds remaining count'
+		);
+	}
 	return {
 		checkpointLedger: BigInt(row.proofCheckpointLedger).toString(),
 		expectedBucketCount,
+		failedBucketCount,
 		failureKind: row.proofFailureKind,
 		remainingBucketCount: expectedBucketCount - verifiedBucketCount,
 		status: row.proofStatus,

@@ -27,6 +27,7 @@ export type PublicHistoricalFullHistoryProofFailureKind =
 export interface PublicHistoricalFullHistoryCheckpointProof {
 	readonly checkpointLedger: string;
 	readonly expectedBucketCount: number;
+	readonly failedBucketCount: number;
 	readonly failureKind: PublicHistoricalFullHistoryProofFailureKind | null;
 	readonly remainingBucketCount: number;
 	readonly status: 'pending' | 'verified' | 'mismatch' | 'not-evaluable';

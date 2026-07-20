@@ -98,6 +98,7 @@ export function createStatusLivePayload(): Record<string, unknown> {
 					archiveUrl: 'https://must-not-leak.example',
 					checkpointLedger: '63386175',
 					expectedBucketCount: 37,
+					failedBucketCount: 0,
 					failureKind: 'bucket-missing',
 					remainingBucketCount: 9,
 					status: 'not-evaluable',

@@ -74,6 +74,7 @@ const validateCanonicalPromotion = matches({
 const validateHistoricalBackfillProofShape = matches({
 	checkpointLedger: unsignedIntegerString,
 	expectedBucketCount: nonNegativeInteger,
+	failedBucketCount: nonNegativeInteger,
 	failureKind: nullable(
 		oneOf(
 			'object-incomplete',
@@ -123,7 +124,8 @@ function validateHistoricalBackfillProof(value: unknown): boolean {
 	}
 	return (
 		Number(value.verifiedBucketCount) + Number(value.remainingBucketCount) ===
-		Number(value.expectedBucketCount)
+			Number(value.expectedBucketCount) &&
+		Number(value.failedBucketCount) <= Number(value.remainingBucketCount)
 	);
 }
 

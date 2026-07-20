@@ -61,6 +61,7 @@ describe('status WebSocket contract', () => {
 			currentProof: {
 				checkpointLedger: '63386175',
 				expectedBucketCount: 37,
+				failedBucketCount: 0,
 				remainingBucketCount: 9,
 				verifiedBucketCount: 28
 			}

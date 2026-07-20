@@ -3,7 +3,7 @@ import type { PublicHistoricalFullHistoryBackfill } from '@api/types';
 import { HistoricalBackfillStatusRow } from '../historical-backfill-status-row';
 
 describe('HistoricalBackfillStatusRow', () => {
-	it('renders completed checkpoint progress and the current remote blocker', () => {
+	it('renders incomplete bucket checks without claiming a remote failure', () => {
 		const markup = renderToStaticMarkup(
 			<HistoricalBackfillStatusRow backfill={backfill()} />
 		);
@@ -13,11 +13,11 @@ describe('HistoricalBackfillStatusRow', () => {
 		);
 		expect(markup).toContain('182 proof-gated backfill jobs completed');
 		expect(markup).toContain('best source verified 28 of 37 required buckets');
-		expect(markup).toContain(
-			'remote evidence: required bucket files are missing'
-		);
-		expect(markup).toContain('Remote evidence');
+		expect(markup).toContain('9 bucket checks still pending');
+		expect(markup).toContain('Proof checks pending');
 		expect(markup).toContain('status-pill neutral');
+		expect(markup).not.toContain('remote evidence');
+		expect(markup).not.toContain('files are missing');
 		expect(markup).not.toContain('Waiting for proof');
 		expect(markup).not.toContain('proof-pending');
 	});
@@ -61,6 +61,7 @@ function backfill(): PublicHistoricalFullHistoryBackfill {
 		currentProof: {
 			checkpointLedger: '63374591',
 			expectedBucketCount: 37,
+			failedBucketCount: 0,
 			failureKind: 'bucket-missing',
 			remainingBucketCount: 9,
 			status: 'not-evaluable',

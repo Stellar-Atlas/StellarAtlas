@@ -115,6 +115,7 @@ function sanitizeHistoricalBackfill(value: unknown): Record<string, unknown> {
 				: pick(source.currentProof, [
 						'checkpointLedger',
 						'expectedBucketCount',
+						'failedBucketCount',
 						'failureKind',
 						'remainingBucketCount',
 						'status',

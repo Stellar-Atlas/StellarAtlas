@@ -83,10 +83,16 @@ function describeProofEvidence(
 	proof: PublicHistoricalFullHistoryCheckpointProof
 ): string {
 	const bucketProgress = `best source verified ${formatInteger(proof.verifiedBucketCount)} of ${formatInteger(proof.expectedBucketCount)} required buckets`;
+	if (proof.failedBucketCount > 0) {
+		return `${bucketProgress}; ${formatInteger(proof.failedBucketCount)} bucket checks failed`;
+	}
+	if (proof.remainingBucketCount > 0) {
+		return `${bucketProgress}; ${formatInteger(proof.remainingBucketCount)} bucket checks still pending`;
+	}
 	const finding = describeProofFailure(proof.failureKind);
 	return finding === null
 		? bucketProgress
-		: `${bucketProgress}; remote evidence: ${finding}`;
+		: `${bucketProgress}; archive-source finding: ${finding}`;
 }
 
 function describeProofFailure(
@@ -96,7 +102,7 @@ function describeProofFailure(
 	const descriptions: Readonly<
 		Record<PublicHistoricalFullHistoryProofFailureKind, string>
 	> = {
-		'bucket-missing': 'required bucket files are missing',
+		'bucket-missing': 'required bucket verification is incomplete',
 		'checkpoint-bucket-list-mismatch': 'checkpoint bucket list does not match',
 		'checkpoint-ledger-mismatch': 'checkpoint ledger does not match',
 		'object-failed': 'a required archive object failed verification',
@@ -123,11 +129,23 @@ function historicalBackfillPill(
 	backfill: PublicHistoricalFullHistoryBackfill
 ): string {
 	if (backfill.state === 'idle') return 'Ready';
-	if (backfill.state === 'waiting-for-proof') return 'Remote evidence';
+	if (backfill.state === 'waiting-for-proof') {
+		return hasArchiveSourceFinding(backfill.currentProof)
+			? 'Source finding'
+			: 'Proof checks pending';
+	}
 	if (backfill.state === 'complete') return 'Complete';
 	if (backfill.state === 'running') return 'Active';
 	if (backfill.state === 'queued') return 'Queued';
 	return 'Needs attention';
+}
+
+function hasArchiveSourceFinding(
+	proof: PublicHistoricalFullHistoryCheckpointProof | null | undefined
+): boolean {
+	if (proof === null || proof === undefined) return false;
+	if (proof.failedBucketCount > 0) return true;
+	return proof.status === 'mismatch';
 }
 
 function historicalBackfillTone(

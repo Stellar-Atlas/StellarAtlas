@@ -168,6 +168,7 @@ describe('GetFullHistoryStatus', () => {
 					latestErrorCode: 'proof-pending',
 					proofCheckpointLedger: '63386239',
 					proofExpectedBucketCount: 37,
+					proofFailedBucketCount: 0,
 					proofFailureKind: 'bucket-missing',
 					proofStatus: 'not-evaluable',
 					proofVerifiedBucketCount: 28,
@@ -239,6 +240,7 @@ describe('GetFullHistoryStatus', () => {
 				currentProof: {
 					checkpointLedger: '63386239',
 					expectedBucketCount: 37,
+					failedBucketCount: 0,
 					failureKind: 'bucket-missing',
 					remainingBucketCount: 9,
 					status: 'not-evaluable',
