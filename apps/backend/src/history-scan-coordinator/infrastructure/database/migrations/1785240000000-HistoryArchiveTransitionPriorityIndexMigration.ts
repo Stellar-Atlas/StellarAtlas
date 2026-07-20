@@ -7,7 +7,7 @@ export class HistoryArchiveTransitionPriorityIndexMigration1785240000000 impleme
 	transaction = false;
 
 	async up(queryRunner: QueryRunner): Promise<void> {
-		await queryRunner.query(`set lock_timeout = '2s'`);
+		await queryRunner.query(`set lock_timeout = '2min'`);
 		await queryRunner.query(`set statement_timeout = 0`);
 		try {
 			const state = await readIndexState(queryRunner);

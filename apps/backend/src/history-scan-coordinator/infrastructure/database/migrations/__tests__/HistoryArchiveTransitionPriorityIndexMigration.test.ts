@@ -12,6 +12,7 @@ describe('HistoryArchiveTransitionPriorityIndexMigration1785240000000', () => {
 
 		expect(migration.transaction).toBe(false);
 		const sql = queries.join('\n');
+		expect(sql).toContain("set lock_timeout = '2min'");
 		expect(sql).toContain('set statement_timeout = 0');
 		expect(sql).toContain('create index concurrently');
 		expect(sql).toContain('"idx_history_archive_object_transition_priority"');
