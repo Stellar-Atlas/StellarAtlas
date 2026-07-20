@@ -52,6 +52,7 @@ const statusLevels = new Set<PublicStatusLevel>([
 	'degraded',
 	'unavailable'
 ]);
+const archiveWorkerSlotCount = 24;
 
 const perWorkerNumericFields = [
 	'activeWorkers',
@@ -113,7 +114,7 @@ function parsePerWorkerArchive(
 		typeof value.startupGraceActive !== 'boolean' ||
 		!isNullableDateTime(value.lastHeartbeatAt) ||
 		!Array.isArray(value.workers) ||
-		value.workers.length > 128 ||
+		value.workers.length > archiveWorkerSlotCount ||
 		(value.telemetryMode !== undefined && value.telemetryMode !== 'per-worker')
 	) {
 		return null;
@@ -125,6 +126,7 @@ function parsePerWorkerArchive(
 		if (worker === null) return null;
 		workers.push(worker);
 	}
+	workers.sort((left, right) => left.slotIndex - right.slotIndex);
 
 	return {
 		...numbers,
@@ -172,6 +174,8 @@ function parseWorkerRow(value: unknown): ArchiveWorkerStatusRowDTO | null {
 	if (currentObject === undefined) return null;
 	if (
 		!isNullableNonNegativeInteger(value.bytesDownloaded) ||
+		(value.bytesTotal !== undefined &&
+			!isNullableNonNegativeInteger(value.bytesTotal)) ||
 		!isNullablePositiveInteger(value.claimAttempt) ||
 		!isNonNegativeInteger(value.heartbeatAgeMs) ||
 		!isDateTime(value.lastHeartbeatAt) ||
@@ -181,6 +185,7 @@ function parseWorkerRow(value: unknown): ArchiveWorkerStatusRowDTO | null {
 		!isNonNegativeInteger(value.processGeneration) ||
 		!isUuid(value.processId) ||
 		!isDateTime(value.processStartedAt) ||
+		!isWorkerSlotIndex(value.slotIndex) ||
 		!isStage(value.stage) ||
 		typeof value.status !== 'string' ||
 		!rowStates.has(value.status as 'active' | 'idle' | 'stale') ||
@@ -193,6 +198,7 @@ function parseWorkerRow(value: unknown): ArchiveWorkerStatusRowDTO | null {
 
 	return {
 		bytesDownloaded: value.bytesDownloaded,
+		bytesTotal: value.bytesTotal ?? null,
 		claimAttempt: value.claimAttempt,
 		currentObject,
 		heartbeatAgeMs: value.heartbeatAgeMs,
@@ -203,6 +209,7 @@ function parseWorkerRow(value: unknown): ArchiveWorkerStatusRowDTO | null {
 		processGeneration: value.processGeneration,
 		processId: value.processId,
 		processStartedAt: value.processStartedAt,
+		slotIndex: value.slotIndex,
 		stage: value.stage,
 		status: value.status as 'active' | 'idle' | 'stale',
 		workerId: value.workerId
@@ -298,6 +305,10 @@ function isPositiveInteger(value: unknown): value is number {
 
 function isNonNegativeInteger(value: unknown): value is number {
 	return Number.isSafeInteger(value) && Number(value) >= 0;
+}
+
+function isWorkerSlotIndex(value: unknown): value is number {
+	return isNonNegativeInteger(value) && value < archiveWorkerSlotCount;
 }
 
 function isNullablePositiveInteger(value: unknown): value is number | null {

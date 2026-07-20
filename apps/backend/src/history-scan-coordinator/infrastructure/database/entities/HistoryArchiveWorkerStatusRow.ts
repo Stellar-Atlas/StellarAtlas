@@ -10,6 +10,9 @@ export class HistoryArchiveWorkerStatusRow extends CoreEntity {
 	@Column('varchar', { length: 96 })
 	public workerId!: string;
 
+	@Column('smallint')
+	public slotIndex!: number;
+
 	@Column('uuid')
 	public processId!: string;
 
@@ -39,6 +42,9 @@ export class HistoryArchiveWorkerStatusRow extends CoreEntity {
 
 	@Column('bigint', { nullable: true })
 	public bytesDownloaded!: number | null;
+
+	@Column('bigint', { nullable: true })
+	public bytesTotal!: number | null;
 
 	@Column('integer', { nullable: true })
 	public claimAttempt!: number | null;

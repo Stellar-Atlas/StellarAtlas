@@ -41,6 +41,7 @@ export interface ArchiveWorkerStatusDTO {
 
 export interface ArchiveWorkerRowDTO {
 	readonly bytesDownloaded: number | null;
+	readonly bytesTotal: number | null;
 	readonly claimAttempt: number | null;
 	readonly currentObject: HistoryArchiveWorkerStatus['currentObject'];
 	readonly heartbeatAgeMs: number;
@@ -51,6 +52,7 @@ export interface ArchiveWorkerRowDTO {
 	readonly processGeneration: number;
 	readonly processId: string;
 	readonly processStartedAt: string;
+	readonly slotIndex: number;
 	readonly stage: HistoryArchiveWorkerStatus['stage'];
 	readonly status: 'active' | 'idle' | 'stale';
 	readonly workerId: string;
@@ -141,7 +143,11 @@ export class GetWorkerStatus {
 		generatedAt: Date,
 		staleCutoff: Date
 	): ArchiveWorkerStatusDTO {
-		const workers = rows
+		const configuredWorkerProcesses = readConfiguredObjectWorkerProcesses(
+			process.env
+		);
+		const slotRows = selectLatestWorkerSlots(rows, configuredWorkerProcesses);
+		const workers = slotRows
 			.map((row) => this.mapArchiveWorker(row, generatedAt, staleCutoff))
 			.sort(compareArchiveWorkers);
 		const registeredActiveWorkers = workers.filter(
@@ -154,9 +160,6 @@ export class GetWorkerStatus {
 			(worker) => worker.status === 'stale'
 		).length;
 		const freshWorkers = registeredActiveWorkers + idleWorkers;
-		const configuredWorkerProcesses = readConfiguredObjectWorkerProcesses(
-			process.env
-		);
 		const missingWorkers = Math.max(
 			configuredWorkerProcesses - freshWorkers,
 			0
@@ -170,7 +173,7 @@ export class GetWorkerStatus {
 			queueSnapshot.staleObjects
 		);
 		const startupGraceActive = this.isStartupGraceActive(
-			rows,
+			slotRows,
 			freshWorkers,
 			missingWorkers,
 			generatedAt,
@@ -191,7 +194,7 @@ export class GetWorkerStatus {
 			configuredWorkerProcesses,
 			freshWorkers,
 			idleWorkers,
-			lastHeartbeatAt: getLatestHeartbeat(rows),
+			lastHeartbeatAt: getLatestHeartbeat(slotRows),
 			missingWorkers,
 			queueActiveWorkers: queueSnapshot.activeObjects,
 			queueStaleWorkers: queueSnapshot.staleObjects,
@@ -217,6 +220,7 @@ export class GetWorkerStatus {
 		const stale = row.heartbeatAt < staleCutoff;
 		return {
 			bytesDownloaded: row.bytesDownloaded,
+			bytesTotal: row.bytesTotal,
 			claimAttempt: row.claimAttempt,
 			currentObject:
 				row.currentObject === null
@@ -236,6 +240,7 @@ export class GetWorkerStatus {
 			processGeneration: row.processGeneration,
 			processId: row.processId,
 			processStartedAt: row.processStartedAt.toISOString(),
+			slotIndex: row.slotIndex,
 			stage: row.stage,
 			status: stale ? 'stale' : row.currentObject === null ? 'idle' : 'active',
 			workerId: row.workerId
@@ -301,12 +306,48 @@ function compareArchiveWorkers(
 	left: ArchiveWorkerRowDTO,
 	right: ArchiveWorkerRowDTO
 ): number {
+	const slotDifference = left.slotIndex - right.slotIndex;
+	if (slotDifference !== 0) return slotDifference;
 	const statusRank = { active: 0, idle: 1, stale: 2 } as const;
 	const difference = statusRank[left.status] - statusRank[right.status];
 	if (difference !== 0) return difference;
 	const ageDifference = left.heartbeatAgeMs - right.heartbeatAgeMs;
 	if (ageDifference !== 0) return ageDifference;
 	return left.workerId.localeCompare(right.workerId);
+}
+
+function selectLatestWorkerSlots(
+	rows: readonly HistoryArchiveWorkerStatus[],
+	configuredWorkerProcesses: number
+): HistoryArchiveWorkerStatus[] {
+	const rowsBySlot = new Map<number, HistoryArchiveWorkerStatus>();
+	for (const row of rows) {
+		if (row.slotIndex >= configuredWorkerProcesses) continue;
+		const current = rowsBySlot.get(row.slotIndex);
+		if (current === undefined || isNewerWorkerReport(row, current)) {
+			rowsBySlot.set(row.slotIndex, row);
+		}
+	}
+	return Array.from(rowsBySlot.values());
+}
+
+function isNewerWorkerReport(
+	candidate: HistoryArchiveWorkerStatus,
+	current: HistoryArchiveWorkerStatus
+): boolean {
+	const heartbeatDifference =
+		candidate.heartbeatAt.getTime() - current.heartbeatAt.getTime();
+	if (heartbeatDifference !== 0) return heartbeatDifference > 0;
+	const startDifference =
+		candidate.processStartedAt.getTime() - current.processStartedAt.getTime();
+	if (startDifference !== 0) return startDifference > 0;
+	if (candidate.processGeneration !== current.processGeneration) {
+		return candidate.processGeneration > current.processGeneration;
+	}
+	if (candidate.processId !== current.processId) {
+		return candidate.processId > current.processId;
+	}
+	return candidate.sequence > current.sequence;
 }
 
 function getLatestHeartbeat(

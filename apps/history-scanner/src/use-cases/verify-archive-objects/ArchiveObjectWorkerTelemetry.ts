@@ -3,10 +3,11 @@ import { hostname } from 'node:os';
 import type { ExceptionLogger } from 'exception-logger';
 import type { Logger } from 'logger';
 import { mapUnknownToError } from 'shared';
-import type {
-	HistoryArchiveWorkerOutcomeDTO,
-	HistoryArchiveWorkerReportDTO,
-	HistoryArchiveWorkerStageDTO
+import {
+	historyArchiveWorkerSlotCount,
+	type HistoryArchiveWorkerOutcomeDTO,
+	type HistoryArchiveWorkerReportDTO,
+	type HistoryArchiveWorkerStageDTO
 } from 'history-scanner-dto';
 import type {
 	HistoryArchiveObjectFailureDTO,
@@ -18,6 +19,7 @@ import type { HistoryArchiveWorkerReportSink } from './CoalescingHistoryArchiveW
 interface ActiveObjectProgress {
 	readonly archiveUrl: string;
 	bytesDownloaded: number | null;
+	bytesTotal: number | null;
 	readonly claimAttempt: number;
 	readonly objectType: HistoryArchiveObjectJobDTO['objectType'];
 	readonly remoteId: string;
@@ -35,6 +37,7 @@ export interface HistoryArchiveWorkerProcessIdentity {
 	readonly processGeneration: number;
 	readonly processId: string;
 	readonly processStartedAt: string;
+	readonly slotIndex: number | null;
 	readonly workerIdPrefix: string;
 }
 
@@ -70,6 +73,7 @@ export class ArchiveObjectWorkerTelemetry {
 		const progress: ActiveObjectProgress = {
 			archiveUrl: job.archiveUrl,
 			bytesDownloaded: null,
+			bytesTotal: null,
 			claimAttempt: job.claimAttempt,
 			objectType: job.objectType,
 			remoteId: job.remoteId,
@@ -88,12 +92,14 @@ export class ArchiveObjectWorkerTelemetry {
 	updateProgress(
 		remoteId: string,
 		workerStage: HistoryArchiveWorkerStageDTO,
-		bytesDownloaded: number | null
+		bytesDownloaded: number | null,
+		bytesTotal: number | null
 	): void {
 		const progress = this.activeObjects.get(remoteId);
 		if (progress === undefined) return;
 		progress.workerStage = workerStage;
 		progress.bytesDownloaded = bytesDownloaded;
+		progress.bytesTotal = bytesTotal;
 		this.statusReporter.enqueue(this.createReport(progress.slot, progress));
 	}
 
@@ -218,6 +224,7 @@ export class ArchiveObjectWorkerTelemetry {
 		this.reportSequences.set(slot, sequence);
 		return {
 			bytesDownloaded: progress?.bytesDownloaded ?? null,
+			bytesTotal: progress?.bytesTotal ?? null,
 			claimAttempt: progress?.claimAttempt ?? null,
 			currentObject:
 				progress === null
@@ -234,6 +241,7 @@ export class ArchiveObjectWorkerTelemetry {
 			processId: this.identity.processId,
 			processStartedAt: this.identity.processStartedAt,
 			sequence,
+			slotIndex: this.identity.slotIndex ?? slot,
 			stage: progress?.workerStage ?? 'idle',
 			workerId: `${this.identity.workerIdPrefix}-${slot.toString()}`
 		};
@@ -248,7 +256,7 @@ export function createHistoryArchiveWorkerProcessIdentity(
 	processId = randomUUID()
 ): HistoryArchiveWorkerProcessIdentity {
 	const hostHash = createHash('sha256').update(host).digest('hex').slice(0, 10);
-	const configuredProcessIndex = readProcessIndex(
+	const configuredProcessIndex = readWorkerSlotIndex(
 		env.HISTORY_OBJECT_WORKER_INDEX
 	);
 	const processGeneration =
@@ -260,6 +268,7 @@ export function createHistoryArchiveWorkerProcessIdentity(
 		processGeneration,
 		processId,
 		processStartedAt: processStartedAt.toISOString(),
+		slotIndex: configuredProcessIndex,
 		workerIdPrefix: `object-${hostHash}-${processSlot.toString()}`
 	};
 }
@@ -276,4 +285,9 @@ function readProcessIndex(value: string | undefined): number | null {
 	if (value === undefined || value.trim() === '') return null;
 	const parsed = Number(value);
 	return Number.isSafeInteger(parsed) && parsed >= 0 ? parsed : null;
+}
+
+function readWorkerSlotIndex(value: string | undefined): number | null {
+	const index = readProcessIndex(value);
+	return index !== null && index < historyArchiveWorkerSlotCount ? index : null;
 }

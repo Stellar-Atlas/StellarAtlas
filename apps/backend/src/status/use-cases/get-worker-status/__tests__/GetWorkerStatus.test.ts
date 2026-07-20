@@ -112,6 +112,7 @@ describe('GetWorkerStatus', () => {
 			createWorkerStatus({ workerId: 'worker-fresh' }),
 			createWorkerStatus({
 				heartbeatAt: new Date('2026-07-03T11:55:00.000Z'),
+				slotIndex: 1,
 				workerId: 'worker-old'
 			})
 		]);
@@ -218,9 +219,29 @@ describe('GetWorkerStatus', () => {
 		expect(status.workers[0]).toMatchObject({
 			pid: 4123,
 			processGeneration: 2,
-			processId: '164f7788-9edb-4bb5-81c1-b928d85a21a5'
+			processId: '164f7788-9edb-4bb5-81c1-b928d85a21a5',
+			slotIndex: 0
 		});
 		expect(status.telemetryMode).toBe('per-worker');
+	});
+
+	it('orders worker rows by numeric slot before runtime state', async () => {
+		workerRepository.findRecent.mockResolvedValue([
+			createWorkerStatus({ slotIndex: 10, workerId: 'worker-slot-10' }),
+			createWorkerStatus({
+				currentObject: null,
+				bytesDownloaded: null,
+				bytesTotal: null,
+				claimAttempt: null,
+				slotIndex: 2,
+				stage: 'idle',
+				workerId: 'worker-slot-2'
+			})
+		]);
+
+		const status = (await useCase.execute())._unsafeUnwrap().archiveWorkers;
+
+		expect(status.workers.map((worker) => worker.slotIndex)).toEqual([2, 10]);
 	});
 
 	it('redacts archive source paths, queries, fragments, and credentials', async () => {
@@ -239,6 +260,7 @@ describe('GetWorkerStatus', () => {
 					source: '/srv/private/history/file.xdr',
 					type: 'ledger'
 				},
+				slotIndex: 1,
 				workerId: 'object-host-1-0'
 			})
 		]);
@@ -248,6 +270,26 @@ describe('GetWorkerStatus', () => {
 		expect(
 			status.workers.map((worker) => worker.currentObject?.source)
 		).toEqual(['https://archive.example', 'redacted']);
+	});
+
+	it('keeps only the newest registration for each configured slot', async () => {
+		workerRepository.findRecent.mockResolvedValue([
+			createWorkerStatus({
+				heartbeatAt: new Date('2026-07-03T11:58:00.000Z'),
+				slotIndex: 3,
+				workerId: 'worker-old-host'
+			}),
+			createWorkerStatus({ slotIndex: 3, workerId: 'worker-current-host' }),
+			createWorkerStatus({ slotIndex: 23, workerId: 'worker-slot-23' })
+		]);
+
+		const status = (await useCase.execute())._unsafeUnwrap().archiveWorkers;
+
+		expect(status.workers.map((worker) => worker.workerId)).toEqual([
+			'worker-current-host',
+			'worker-slot-23'
+		]);
+		expect(status.registeredWorkers).toBe(2);
 	});
 
 	it('passes through repository errors', async () => {
@@ -270,11 +312,13 @@ function createWorkers(
 			...(options.currentObject === null
 				? {
 						bytesDownloaded: null,
+						bytesTotal: null,
 						claimAttempt: null,
 						currentObject: null,
 						stage: 'idle' as const
 					}
 				: {}),
+			slotIndex: index,
 			workerId: `object-host-${index.toString()}-0`
 		})
 	);
@@ -285,6 +329,7 @@ function createWorkerStatus(
 ): HistoryArchiveWorkerStatus {
 	return {
 		bytesDownloaded: 1024,
+		bytesTotal: 4096,
 		claimAttempt: 3,
 		currentObject: {
 			remoteId: '82a309de-a5df-457b-9412-f267ed5e7388',
@@ -299,6 +344,7 @@ function createWorkerStatus(
 		processId: '164f7788-9edb-4bb5-81c1-b928d85a21a5',
 		processStartedAt: new Date('2026-07-03T11:00:00.000Z'),
 		sequence: 9,
+		slotIndex: 0,
 		stage: 'downloading_bucket',
 		workerId: 'object-host-0-0',
 		...overrides

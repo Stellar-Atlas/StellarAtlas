@@ -27,6 +27,7 @@ describe('ReportHistoryArchiveWorkerStatus', () => {
 function createReport() {
 	return {
 		bytesDownloaded: null,
+		bytesTotal: null,
 		claimAttempt: null,
 		currentObject: null,
 		lastOutcome: 'none' as const,
@@ -36,6 +37,7 @@ function createReport() {
 		processId: '164f7788-9edb-4bb5-81c1-b928d85a21a5',
 		processStartedAt: '2026-07-10T11:00:00.000Z',
 		sequence: 1,
+		slotIndex: 0,
 		stage: 'idle' as const,
 		workerId: 'object-host-0-0'
 	};

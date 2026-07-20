@@ -248,6 +248,25 @@
 	margin-block-start: 4px;
 }
 
+.status-worker-missing td {
+	color: var(--muted);
+}
+
+.status-worker-progress {
+	display: grid;
+	gap: 4px;
+}
+
+.status-worker-progress progress {
+	accent-color: #24733a;
+	block-size: 8px;
+	inline-size: 100%;
+}
+
+.status-worker-progress progress:not([value]) {
+	accent-color: #41666f;
+}
+
 .status-worker-remote-id {
 	font-family: var(--font-mono);
 	overflow: hidden;

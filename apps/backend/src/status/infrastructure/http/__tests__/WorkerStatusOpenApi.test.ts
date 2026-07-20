@@ -52,14 +52,16 @@ describe('worker status OpenAPI contract', () => {
 		expect(
 			document.components.schemas.ArchiveWorkerStatusDTO?.properties?.workers
 				?.maxItems
-		).toBe(128);
+		).toBe(24);
 		expect(
 			document.components.schemas.ArchiveWorkerStatusRowDTO?.required
 		).toEqual(
 			expect.arrayContaining([
+				'bytesTotal',
 				'currentObject',
 				'heartbeatAgeMs',
 				'processGeneration',
+				'slotIndex',
 				'stage'
 			])
 		);
@@ -76,6 +78,11 @@ describe('worker status OpenAPI contract', () => {
 	it('documents deterministic report ordering fields', () => {
 		expect(
 			document.components.schemas.HistoryArchiveWorkerReportDTO?.required
-		).toEqual(expect.arrayContaining(['processGeneration', 'sequence']));
+		).toEqual(
+			expect.arrayContaining(['processGeneration', 'sequence', 'slotIndex'])
+		);
+		expect(
+			document.components.schemas.HistoryArchiveWorkerReportDTO?.required
+		).not.toContain('bytesTotal');
 	});
 });

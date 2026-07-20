@@ -13,6 +13,7 @@ export interface HistoryArchiveWorkerCurrentObject {
 
 export interface HistoryArchiveWorkerStatus {
 	readonly bytesDownloaded: number | null;
+	readonly bytesTotal: number | null;
 	readonly claimAttempt: number | null;
 	readonly currentObject: HistoryArchiveWorkerCurrentObject | null;
 	readonly heartbeatAt: Date;
@@ -23,6 +24,7 @@ export interface HistoryArchiveWorkerStatus {
 	readonly processId: string;
 	readonly processStartedAt: Date;
 	readonly sequence: number;
+	readonly slotIndex: number;
 	readonly stage: HistoryArchiveWorkerStageDTO;
 	readonly workerId: string;
 }

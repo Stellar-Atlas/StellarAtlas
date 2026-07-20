@@ -6,12 +6,70 @@ describe('worker status parsing', () => {
 		const parsed = parseWorkerStatusDTO(createWorkerStatus());
 
 		expect(parsed?.archiveWorkers.workers[0]).toMatchObject({
+			bytesTotal: 16384,
 			claimAttempt: 3,
 			pid: 4123,
 			processGeneration: 2,
+			slotIndex: 17,
 			stage: 'downloading_bucket',
 			workerId: 'object-host-17-0'
 		});
+	});
+
+	it('normalizes an omitted transfer total and sorts numeric slots', () => {
+		const status = createWorkerStatus();
+		const worker = status.archiveWorkers.workers[0];
+		if (worker === undefined) throw new Error('worker fixture must exist');
+		const parsed = parseWorkerStatusDTO({
+			...status,
+			archiveWorkers: {
+				...status.archiveWorkers,
+				workers: [
+					{ ...worker, slotIndex: 10, workerId: 'worker-10' },
+					{
+						...worker,
+						bytesTotal: undefined,
+						slotIndex: 2,
+						workerId: 'worker-2'
+					}
+				]
+			}
+		});
+
+		expect(
+			parsed?.archiveWorkers.workers.map((row) => [
+				row.slotIndex,
+				row.bytesTotal
+			])
+		).toEqual([
+			[2, null],
+			[10, 16384]
+		]);
+	});
+
+	it('rejects out-of-range slots and invalid transfer totals', () => {
+		const status = createWorkerStatus();
+		const worker = status.archiveWorkers.workers[0];
+		if (worker === undefined) throw new Error('worker fixture must exist');
+
+		expect(
+			parseWorkerStatusDTO({
+				...status,
+				archiveWorkers: {
+					...status.archiveWorkers,
+					workers: [{ ...worker, slotIndex: 24 }]
+				}
+			})
+		).toBeNull();
+		expect(
+			parseWorkerStatusDTO({
+				...status,
+				archiveWorkers: {
+					...status.archiveWorkers,
+					workers: [{ ...worker, bytesTotal: -1 }]
+				}
+			})
+		).toBeNull();
 	});
 
 	it('preserves legacy aggregate activity during mixed rollout', () => {
@@ -149,6 +207,7 @@ function createWorkerStatus() {
 			workers: [
 				{
 					bytesDownloaded: 8192,
+					bytesTotal: 16384,
 					claimAttempt: 3,
 					currentObject: {
 						remoteId: '82a309de-a5df-457b-9412-f267ed5e7388',
@@ -163,6 +222,7 @@ function createWorkerStatus() {
 					processGeneration: 2,
 					processId: '164f7788-9edb-4bb5-81c1-b928d85a21a5',
 					processStartedAt: '2026-07-10T12:00:00.000Z',
+					slotIndex: 17,
 					stage: 'downloading_bucket',
 					status: 'active',
 					workerId: 'object-host-17-0'

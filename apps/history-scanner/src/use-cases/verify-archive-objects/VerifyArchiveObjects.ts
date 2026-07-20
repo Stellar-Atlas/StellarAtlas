@@ -29,6 +29,7 @@ import {
 import { CoalescingHistoryArchiveWorkerReporter } from './CoalescingHistoryArchiveWorkerReporter.js';
 import type { VerifyArchiveObjectsDTO } from './VerifyArchiveObjectsDTO.js';
 import { canonicalJsonContentDigest } from './ArchiveObjectContentDigest.js';
+import { readArchiveObjectContentLength } from './ArchiveObjectHttpContentLength.js';
 import {
 	archiveEvidenceFailure,
 	getRetryAfterSecondsFromHttpError,
@@ -79,11 +80,12 @@ export class VerifyArchiveObjects {
 			this.historyArchiveStateValidator,
 			this.exceptionLogger,
 			this.hasherWorkerCount,
-			(remoteId, workerStage, bytesDownloaded) =>
+			(remoteId, workerStage, bytesDownloaded, bytesTotal) =>
 				this.workerTelemetry.updateProgress(
 					remoteId,
 					workerStage,
-					bytesDownloaded
+					bytesDownloaded,
+					bytesTotal
 				)
 		);
 	}
@@ -206,6 +208,7 @@ export class VerifyArchiveObjects {
 		this.workerTelemetry.updateProgress(
 			job.remoteId,
 			'fetching_history_archive_state',
+			null,
 			null
 		);
 		const urlResult = Url.create(job.objectUrl);
@@ -242,7 +245,8 @@ export class VerifyArchiveObjects {
 		this.workerTelemetry.updateProgress(
 			job.remoteId,
 			'verified_history_archive_state',
-			bytesDownloaded
+			bytesDownloaded,
+			null
 		);
 		return ok({
 			archiveMetadata: {
@@ -272,7 +276,12 @@ export class VerifyArchiveObjects {
 			});
 		}
 
-		this.workerTelemetry.updateProgress(job.remoteId, 'fetching_bucket', 0);
+		this.workerTelemetry.updateProgress(
+			job.remoteId,
+			'fetching_bucket',
+			0,
+			null
+		);
 		const urlResult = Url.create(job.objectUrl);
 		if (urlResult.isErr()) return err(this.mapLocalError(urlResult.error));
 
@@ -290,6 +299,13 @@ export class VerifyArchiveObjects {
 				httpStatus: response.value.status
 			});
 		}
+		const bytesTotal = readArchiveObjectContentLength(response.value.headers);
+		this.workerTelemetry.updateProgress(
+			job.remoteId,
+			'downloading_bucket',
+			0,
+			bytesTotal
+		);
 
 		let bytesDownloaded = 0;
 		const countedStream = this.createCountingStream(
@@ -299,7 +315,8 @@ export class VerifyArchiveObjects {
 				this.workerTelemetry.updateProgress(
 					job.remoteId,
 					'downloading_bucket',
-					bytesDownloaded
+					bytesDownloaded,
+					bytesTotal
 				);
 			}
 		);
@@ -336,7 +353,8 @@ export class VerifyArchiveObjects {
 		this.workerTelemetry.updateProgress(
 			job.remoteId,
 			'verified_bucket',
-			bytesDownloaded
+			bytesDownloaded,
+			bytesTotal
 		);
 		return ok({
 			bytesDownloaded,

@@ -1,6 +1,5 @@
 'use client';
 
-import { useState } from 'react';
 import type {
 	ArchiveWorkerOutcomeDTO,
 	ArchiveWorkerStatusRowDTO,
@@ -9,12 +8,8 @@ import type {
 import { formatArchiveObjectTypeLabel } from '@domain/history-archive';
 import { formatDateTime, formatInteger } from '@format/formatters';
 import { StatusPill } from './status-ui';
-import {
-	getStatusTablePage,
-	StatusTablePagination
-} from './status-table-pagination';
 
-const WORKER_PAGE_SIZE = 8;
+const MAX_ARCHIVE_WORKER_SLOTS = 24;
 
 export function ArchiveWorkerStatusTable({
 	workers
@@ -23,11 +18,9 @@ export function ArchiveWorkerStatusTable({
 }): React.JSX.Element {
 	const archive = workers.archiveWorkers;
 	const aggregateOnly = archive.telemetryMode === 'aggregate-only';
-	const [page, setPage] = useState(0);
-	const workerPage = getStatusTablePage(
+	const workerSlots = createWorkerSlots(
 		archive.workers,
-		page,
-		WORKER_PAGE_SIZE
+		archive.configuredWorkerProcesses
 	);
 	return (
 		<section className="panel detail-panel status-worker-panel">
@@ -46,7 +39,7 @@ export function ArchiveWorkerStatusTable({
 				<table className="status-worker-table">
 					<thead>
 						<tr>
-							<th>Worker / process</th>
+							<th>Slot / process</th>
 							<th>Current file</th>
 							<th>Stage</th>
 							<th>Progress</th>
@@ -55,10 +48,17 @@ export function ArchiveWorkerStatusTable({
 						</tr>
 					</thead>
 					<tbody>
-						{archive.workers.length > 0 ? (
-							workerPage.rows.map((worker) => (
-								<ArchiveWorkerRow key={worker.workerId} worker={worker} />
-							))
+						{!aggregateOnly && workerSlots.length > 0 ? (
+							workerSlots.map(({ slotIndex, worker }) =>
+								worker === null ? (
+									<MissingArchiveWorkerRow
+										key={slotIndex}
+										slotIndex={slotIndex}
+									/>
+								) : (
+									<ArchiveWorkerRow key={slotIndex} worker={worker} />
+								)
+							)
 						) : (
 							<tr>
 								<td colSpan={6}>
@@ -71,14 +71,48 @@ export function ArchiveWorkerStatusTable({
 					</tbody>
 				</table>
 			</div>
-			<StatusTablePagination
-				label="Archive worker pages"
-				onPageChange={setPage}
-				page={workerPage.page}
-				pageSize={WORKER_PAGE_SIZE}
-				totalRows={archive.workers.length}
-			/>
 		</section>
+	);
+}
+
+function createWorkerSlots(
+	workers: readonly ArchiveWorkerStatusRowDTO[],
+	configuredWorkerProcesses: number
+): readonly {
+	readonly slotIndex: number;
+	readonly worker: ArchiveWorkerStatusRowDTO | null;
+}[] {
+	const configuredSlots = Math.min(
+		MAX_ARCHIVE_WORKER_SLOTS,
+		Math.max(0, configuredWorkerProcesses)
+	);
+	const workersBySlot = new Map<number, ArchiveWorkerStatusRowDTO>();
+	for (const worker of workers) {
+		if (
+			worker.slotIndex < configuredSlots &&
+			!workersBySlot.has(worker.slotIndex)
+		) {
+			workersBySlot.set(worker.slotIndex, worker);
+		}
+	}
+	return Array.from({ length: configuredSlots }, (_, slotIndex) => ({
+		slotIndex,
+		worker: workersBySlot.get(slotIndex) ?? null
+	}));
+}
+
+function MissingArchiveWorkerRow({
+	slotIndex
+}: {
+	readonly slotIndex: number;
+}): React.JSX.Element {
+	return (
+		<tr className="status-worker-missing">
+			<td>
+				<strong>Slot {formatInteger(slotIndex)}</strong>
+			</td>
+			<td colSpan={5}>No recent worker registration.</td>
+		</tr>
 	);
 }
 
@@ -90,7 +124,8 @@ function ArchiveWorkerRow({
 	return (
 		<tr>
 			<td>
-				<strong>{worker.workerId}</strong>
+				<strong>Slot {formatInteger(worker.slotIndex)}</strong>
+				<small>{worker.workerId}</small>
 				<small>
 					PID {formatInteger(worker.pid)} / {shortIdentity(worker.processId)} /
 					gen {formatInteger(worker.processGeneration)}
@@ -104,14 +139,7 @@ function ArchiveWorkerRow({
 				<small>{formatStage(worker.stage)}</small>
 			</td>
 			<td>
-				{worker.bytesDownloaded === null
-					? 'No byte count'
-					: formatBytes(worker.bytesDownloaded)}
-				<small>
-					{worker.claimAttempt === null
-						? 'No active claim'
-						: `Attempt ${formatInteger(worker.claimAttempt)}`}
-				</small>
+				<ArchiveWorkerProgress worker={worker} />
 			</td>
 			<td>
 				{formatAge(worker.heartbeatAgeMs)} ago
@@ -126,6 +154,53 @@ function ArchiveWorkerRow({
 				</small>
 			</td>
 		</tr>
+	);
+}
+
+function ArchiveWorkerProgress({
+	worker
+}: {
+	readonly worker: ArchiveWorkerStatusRowDTO;
+}): React.JSX.Element {
+	const attempt =
+		worker.claimAttempt === null
+			? 'No active claim'
+			: `Attempt ${formatInteger(worker.claimAttempt)}`;
+	if (worker.currentObject === null) {
+		return (
+			<>
+				No active transfer
+				<small>{attempt}</small>
+			</>
+		);
+	}
+
+	const downloaded = worker.bytesDownloaded ?? 0;
+	const label = `Transfer progress for slot ${formatInteger(worker.slotIndex)}`;
+	if (worker.bytesTotal === null) {
+		return (
+			<div className="status-worker-progress">
+				<progress aria-label={label} />
+				<span>
+					{worker.bytesDownloaded === null
+						? 'Waiting for bytes'
+						: `${formatBytes(worker.bytesDownloaded)} transferred`}
+				</span>
+				<small>{attempt}</small>
+			</div>
+		);
+	}
+
+	const progressMax = Math.max(worker.bytesTotal, 1);
+	const progressValue = Math.min(downloaded, worker.bytesTotal);
+	return (
+		<div className="status-worker-progress">
+			<progress aria-label={label} max={progressMax} value={progressValue} />
+			<span>
+				{formatBytes(downloaded)} / {formatBytes(worker.bytesTotal)}
+			</span>
+			<small>{attempt}</small>
+		</div>
 	);
 }
 

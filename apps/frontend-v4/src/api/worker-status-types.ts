@@ -30,6 +30,7 @@ export type ArchiveWorkerOutcomeDTO =
 
 export interface ArchiveWorkerStatusRowDTO {
 	readonly bytesDownloaded: number | null;
+	readonly bytesTotal: number | null;
 	readonly claimAttempt: number | null;
 	readonly currentObject: {
 		readonly remoteId: string;
@@ -44,6 +45,7 @@ export interface ArchiveWorkerStatusRowDTO {
 	readonly processGeneration: number;
 	readonly processId: string;
 	readonly processStartedAt: string;
+	readonly slotIndex: number;
 	readonly stage: ArchiveWorkerStageDTO;
 	readonly status: 'active' | 'idle' | 'stale';
 	readonly workerId: string;

@@ -1,6 +1,9 @@
 import { injectable } from 'inversify';
 import type { EntityManager, Repository } from 'typeorm';
-import type { HistoryArchiveWorkerReportDTO } from 'history-scanner-dto';
+import {
+	historyArchiveWorkerSlotCount,
+	type HistoryArchiveWorkerReportDTO
+} from 'history-scanner-dto';
 import type {
 	HistoryArchiveWorkerStatus,
 	HistoryArchiveWorkerStatusRepository
@@ -32,6 +35,7 @@ export const historyArchiveWorkerStatusRegistryLockSql = `
 export const historyArchiveWorkerStatusUpsertSql = `
 	insert into "history_archive_worker_status" as registry (
 		"workerId",
+		"slotIndex",
 		"processId",
 		"pid",
 		"processGeneration",
@@ -42,12 +46,14 @@ export const historyArchiveWorkerStatusUpsertSql = `
 		"objectSource",
 		"stageCode",
 		"bytesDownloaded",
+		"bytesTotal",
 		"claimAttempt",
 		"heartbeatAt",
 		"lastOutcomeCode",
 		"lastOutcomeAt"
-	) values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
+	) values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
 	on conflict ("workerId") do update set
+		"slotIndex" = excluded."slotIndex",
 		"processId" = excluded."processId",
 		"pid" = excluded."pid",
 		"processGeneration" = excluded."processGeneration",
@@ -58,6 +64,7 @@ export const historyArchiveWorkerStatusUpsertSql = `
 		"objectSource" = excluded."objectSource",
 		"stageCode" = excluded."stageCode",
 		"bytesDownloaded" = excluded."bytesDownloaded",
+		"bytesTotal" = excluded."bytesTotal",
 		"claimAttempt" = excluded."claimAttempt",
 		"heartbeatAt" = excluded."heartbeatAt",
 		"lastOutcomeCode" = excluded."lastOutcomeCode",
@@ -114,6 +121,7 @@ export const historyArchiveWorkerStatusPruneSql = `
 export const historyArchiveWorkerStatusFindRecentSql = `
 	select
 		"workerId",
+		"slotIndex",
 		"processId",
 		"pid",
 		"processGeneration",
@@ -124,6 +132,7 @@ export const historyArchiveWorkerStatusFindRecentSql = `
 		"objectSource",
 		"stageCode",
 		"bytesDownloaded",
+		"bytesTotal",
 		"claimAttempt",
 		"heartbeatAt",
 		"lastOutcomeCode",
@@ -131,6 +140,7 @@ export const historyArchiveWorkerStatusFindRecentSql = `
 	from "history_archive_worker_status"
 	where "heartbeatAt" >= $1
 	order by
+		"slotIndex" asc,
 		"heartbeatAt" desc,
 		"processStartedAt" desc,
 		"processGeneration" desc,
@@ -141,6 +151,7 @@ export const historyArchiveWorkerStatusFindRecentSql = `
 
 interface HistoryArchiveWorkerStatusRawRow {
 	readonly bytesDownloaded: number | string | null;
+	readonly bytesTotal: number | string | null;
 	readonly claimAttempt: number | null;
 	readonly heartbeatAt: Date | string;
 	readonly lastOutcomeAt: Date | string | null;
@@ -153,6 +164,7 @@ interface HistoryArchiveWorkerStatusRawRow {
 	readonly processId: string;
 	readonly processStartedAt: Date | string;
 	readonly sequence: number | string;
+	readonly slotIndex: number;
 	readonly stageCode: number;
 	readonly workerId: string;
 }
@@ -172,6 +184,7 @@ export class TypeOrmHistoryArchiveWorkerStatusRepository implements HistoryArchi
 			await setWorkerRegistryTimeouts(manager);
 			await manager.query(historyArchiveWorkerStatusUpsertSql, [
 				report.workerId,
+				report.slotIndex,
 				report.processId,
 				report.pid,
 				report.processGeneration,
@@ -182,6 +195,7 @@ export class TypeOrmHistoryArchiveWorkerStatusRepository implements HistoryArchi
 				currentObject?.source ?? null,
 				encodeHistoryArchiveWorkerStage(report.stage),
 				report.bytesDownloaded,
+				report.bytesTotal ?? null,
 				report.claimAttempt,
 				heartbeatAt,
 				encodeHistoryArchiveWorkerOutcome(report.lastOutcome),
@@ -237,7 +251,8 @@ function mapRow(
 				};
 
 	return {
-		bytesDownloaded: toSafeNumber(row.bytesDownloaded),
+		bytesDownloaded: toSafeByteCount(row.bytesDownloaded, 'downloaded bytes'),
+		bytesTotal: toSafeByteCount(row.bytesTotal, 'total bytes'),
 		claimAttempt: row.claimAttempt,
 		currentObject,
 		heartbeatAt: toDate(row.heartbeatAt),
@@ -249,6 +264,7 @@ function mapRow(
 		processId: row.processId,
 		processStartedAt: toDate(row.processStartedAt),
 		sequence: toPositiveSafeNumber(row.sequence, 'sequence'),
+		slotIndex: toWorkerSlotIndex(row.slotIndex),
 		stage: decodeHistoryArchiveWorkerStage(row.stageCode),
 		workerId: row.workerId
 	};
@@ -271,14 +287,28 @@ function toDate(value: Date | string): Date {
 	return date;
 }
 
-function toSafeNumber(value: number | string | null): number | null {
+function toSafeByteCount(
+	value: number | string | null,
+	field: string
+): number | null {
 	if (value === null) return null;
 	const number = Number(value);
 	if (!Number.isSafeInteger(number) || number < 0) {
-		throw new Error('Invalid history archive worker byte count');
+		throw new Error(`Invalid history archive worker ${field}`);
 	}
 
 	return number;
+}
+
+function toWorkerSlotIndex(value: number): number {
+	if (
+		!Number.isSafeInteger(value) ||
+		value < 0 ||
+		value >= historyArchiveWorkerSlotCount
+	) {
+		throw new Error('Invalid history archive worker slot index');
+	}
+	return value;
 }
 
 function toPositiveSafeNumber(value: number | string, field: string): number {

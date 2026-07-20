@@ -32,6 +32,7 @@ describe('ArchiveObjectWorkerTelemetry', () => {
 				processGeneration: 2,
 				processId: '164f7788-9edb-4bb5-81c1-b928d85a21a5',
 				processStartedAt: '2026-07-10T12:00:00.000Z',
+				slotIndex: 4,
 				workerIdPrefix: 'object-host-4'
 			},
 			() => new Date('2026-07-10T12:05:00.000Z')
@@ -51,7 +52,8 @@ describe('ArchiveObjectWorkerTelemetry', () => {
 		telemetry.updateProgress(
 			'82a309de-a5df-457b-9412-f267ed5e7388',
 			'downloading_bucket',
-			2048
+			2048,
+			8192
 		);
 
 		const first = telemetry.heartbeatObject(
@@ -65,7 +67,9 @@ describe('ArchiveObjectWorkerTelemetry', () => {
 		expect(statusReporter.enqueue).toHaveBeenLastCalledWith(
 			expect.objectContaining({
 				bytesDownloaded: 2048,
+				bytesTotal: 8192,
 				claimAttempt: 3,
+				slotIndex: 4,
 				stage: 'downloading_bucket',
 				workerId: 'object-host-4-0'
 			})
@@ -103,6 +107,7 @@ describe('ArchiveObjectWorkerTelemetry', () => {
 			pid: 9001,
 			processGeneration: 3,
 			processId: '2c1e2d99-2025-4a04-bb28-647636f848a1',
+			slotIndex: 7,
 			workerIdPrefix: expect.stringMatching(/^object-[0-9a-f]{10}-7$/)
 		});
 		expect(identity.workerIdPrefix).not.toContain('private-hostname');

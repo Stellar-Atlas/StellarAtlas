@@ -50,6 +50,7 @@ describe('RESTHistoryArchiveWorkerStatusReporter', () => {
 function createReport() {
 	return {
 		bytesDownloaded: 1024,
+		bytesTotal: 4096,
 		claimAttempt: 3,
 		currentObject: {
 			remoteId: '82a309de-a5df-457b-9412-f267ed5e7388',
@@ -63,6 +64,7 @@ function createReport() {
 		processId: '164f7788-9edb-4bb5-81c1-b928d85a21a5',
 		processStartedAt: '2026-07-10T12:00:00.000Z',
 		sequence: 1,
+		slotIndex: 4,
 		stage: 'downloading_bucket' as const,
 		workerId: 'object-host-4-0'
 	};

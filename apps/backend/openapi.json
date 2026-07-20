@@ -13308,6 +13308,7 @@
 					"processId",
 					"processStartedAt",
 					"sequence",
+					"slotIndex",
 					"stage",
 					"workerId"
 				],
@@ -13316,6 +13317,12 @@
 						"type": "integer",
 						"minimum": 0,
 						"nullable": true
+					},
+					"bytesTotal": {
+						"type": "integer",
+						"minimum": 0,
+						"nullable": true,
+						"description": "Compressed transfer size from a valid HTTP Content-Length header when available."
 					},
 					"claimAttempt": {
 						"type": "integer",
@@ -13372,6 +13379,11 @@
 						"format": "date-time"
 					},
 					"sequence": { "type": "integer", "minimum": 1 },
+					"slotIndex": {
+						"type": "integer",
+						"minimum": 0,
+						"maximum": 23
+					},
 					"stage": {
 						"type": "string",
 						"enum": [
@@ -13500,6 +13512,7 @@
 				"additionalProperties": false,
 				"required": [
 					"bytesDownloaded",
+					"bytesTotal",
 					"claimAttempt",
 					"currentObject",
 					"heartbeatAgeMs",
@@ -13510,6 +13523,7 @@
 					"processGeneration",
 					"processId",
 					"processStartedAt",
+					"slotIndex",
 					"stage",
 					"status",
 					"workerId"
@@ -13519,6 +13533,12 @@
 						"type": "integer",
 						"minimum": 0,
 						"nullable": true
+					},
+					"bytesTotal": {
+						"type": "integer",
+						"minimum": 0,
+						"nullable": true,
+						"description": "Compressed transfer size when reported by the archive server."
 					},
 					"claimAttempt": {
 						"type": "integer",
@@ -13552,6 +13572,11 @@
 					"processGeneration": { "type": "integer", "minimum": 0 },
 					"processId": { "type": "string", "format": "uuid" },
 					"processStartedAt": { "type": "string", "format": "date-time" },
+					"slotIndex": {
+						"type": "integer",
+						"minimum": 0,
+						"maximum": 23
+					},
 					"stage": {
 						"type": "string",
 						"enum": [
@@ -13636,7 +13661,7 @@
 					"totalTakenJobs": { "type": "integer", "minimum": 0 },
 					"workers": {
 						"type": "array",
-						"maxItems": 128,
+						"maxItems": 24,
 						"items": {
 							"$ref": "#/components/schemas/ArchiveWorkerStatusRowDTO"
 						}

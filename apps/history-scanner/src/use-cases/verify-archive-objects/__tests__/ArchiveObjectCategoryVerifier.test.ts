@@ -10,9 +10,7 @@ import type { ScanCoordinatorService } from '../../../domain/scan/ScanCoordinato
 import { HistoryArchiveStateValidator } from '../../../domain/history-archive/HistoryArchiveStateValidator.js';
 import { ArchiveXdrError } from '../../../domain/scanner/hash-worker.js';
 import { ScannerIssueError } from '../../../domain/scanner/ScannerIssueError.js';
-import {
-	ArchiveObjectCategoryVerifier
-} from '../ArchiveObjectCategoryVerifier.js';
+import { ArchiveObjectCategoryVerifier } from '../ArchiveObjectCategoryVerifier.js';
 import { classifyCategoryVerificationFailure } from '../ArchiveObjectCategoryFailureClassifier.js';
 
 describe('ArchiveObjectCategoryVerifier', () => {
@@ -180,7 +178,10 @@ describe('ArchiveObjectCategoryVerifier', () => {
 			)
 		).toMatchObject({ errorType: 'archive_transport_error' });
 		expect(
-			classifyCategoryVerificationFailure(new Error('unknown pipeline error'), 200)
+			classifyCategoryVerificationFailure(
+				new Error('unknown pipeline error'),
+				200
+			)
 		).toMatchObject({
 			errorType: 'category_pipeline_failure',
 			failureChannel: 'scanner_issue',
@@ -222,10 +223,11 @@ describe('ArchiveObjectCategoryVerifier', () => {
 
 	it('classifies a complete malformed gzip response as content evidence', async () => {
 		const httpService = mock<HttpService>();
+		const reportProgress = jest.fn();
 		httpService.get.mockResolvedValue(
 			ok({
 				data: Readable.from([Buffer.from('not-a-gzip-stream')]),
-				headers: {},
+				headers: { 'Content-Length': '17' },
 				status: 200,
 				statusText: 'OK'
 			})
@@ -236,7 +238,7 @@ describe('ArchiveObjectCategoryVerifier', () => {
 			mock<HistoryArchiveStateValidator>(),
 			mock<ExceptionLogger>(),
 			1,
-			() => undefined
+			reportProgress
 		);
 
 		const result = await verifier.verifyCategoryObject(createObjectJob());
@@ -246,6 +248,12 @@ describe('ArchiveObjectCategoryVerifier', () => {
 			failureChannel: 'archive_evidence',
 			httpStatus: 200
 		});
+		expect(reportProgress).toHaveBeenCalledWith(
+			'object-1',
+			'downloading_ledger',
+			0,
+			17
+		);
 	});
 });
 

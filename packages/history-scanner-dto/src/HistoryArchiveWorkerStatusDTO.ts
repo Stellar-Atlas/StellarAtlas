@@ -49,6 +49,8 @@ export const historyArchiveWorkerOutcomes = [
 export type HistoryArchiveWorkerOutcomeDTO =
 	(typeof historyArchiveWorkerOutcomes)[number];
 
+export const historyArchiveWorkerSlotCount = 24;
+
 export interface HistoryArchiveWorkerObjectDTO {
 	readonly remoteId: string;
 	readonly source: string;
@@ -57,6 +59,7 @@ export interface HistoryArchiveWorkerObjectDTO {
 
 export interface HistoryArchiveWorkerReportDTO {
 	readonly bytesDownloaded: number | null;
+	readonly bytesTotal?: number | null;
 	readonly claimAttempt: number | null;
 	readonly currentObject: HistoryArchiveWorkerObjectDTO | null;
 	readonly lastOutcome: HistoryArchiveWorkerOutcomeDTO;
@@ -66,6 +69,7 @@ export interface HistoryArchiveWorkerReportDTO {
 	readonly processId: string;
 	readonly processStartedAt: string;
 	readonly sequence: number;
+	readonly slotIndex: number;
 	readonly stage: HistoryArchiveWorkerStageDTO;
 	readonly workerId: string;
 }
@@ -81,6 +85,7 @@ export function isHistoryArchiveWorkerReportDTO(
 	if (
 		!hasOnlyKeys(value, [
 			'bytesDownloaded',
+			'bytesTotal',
 			'claimAttempt',
 			'currentObject',
 			'lastOutcome',
@@ -90,6 +95,7 @@ export function isHistoryArchiveWorkerReportDTO(
 			'processId',
 			'processStartedAt',
 			'sequence',
+			'slotIndex',
 			'stage',
 			'workerId'
 		])
@@ -101,11 +107,13 @@ export function isHistoryArchiveWorkerReportDTO(
 	if (!isPositiveInteger(value.pid)) return false;
 	if (!isNonNegativeInteger(value.processGeneration)) return false;
 	if (!isPositiveInteger(value.sequence)) return false;
+	if (!isWorkerSlotIndex(value.slotIndex)) return false;
 	if (!isDateTime(value.processStartedAt)) return false;
 	if (!isWorkerStage(value.stage) || !isWorkerOutcome(value.lastOutcome)) {
 		return false;
 	}
 	if (!isNullableNonNegativeInteger(value.bytesDownloaded)) return false;
+	if (!isOptionalNullableNonNegativeInteger(value.bytesTotal)) return false;
 	if (!isNullablePositiveInteger(value.claimAttempt)) return false;
 	if (!isNullableDateTime(value.lastOutcomeAt)) return false;
 	if (!isCurrentObject(value.currentObject)) return false;
@@ -117,6 +125,7 @@ export function isHistoryArchiveWorkerReportDTO(
 		return (
 			value.stage === 'idle' &&
 			value.bytesDownloaded === null &&
+			(value.bytesTotal === undefined || value.bytesTotal === null) &&
 			value.claimAttempt === null
 		);
 	}
@@ -186,6 +195,16 @@ function isNullablePositiveInteger(value: unknown): value is number | null {
 
 function isNullableNonNegativeInteger(value: unknown): value is number | null {
 	return value === null || isNonNegativeInteger(value);
+}
+
+function isOptionalNullableNonNegativeInteger(
+	value: unknown
+): value is number | null | undefined {
+	return value === undefined || isNullableNonNegativeInteger(value);
+}
+
+function isWorkerSlotIndex(value: unknown): value is number {
+	return isNonNegativeInteger(value) && value < historyArchiveWorkerSlotCount;
 }
 
 function isNonNegativeInteger(value: unknown): value is number {

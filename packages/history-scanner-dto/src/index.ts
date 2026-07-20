@@ -37,6 +37,7 @@ export {
 } from './HistoryArchiveObjectFailureDTO.js';
 export {
 	historyArchiveObjectTypes,
+	historyArchiveWorkerSlotCount,
 	historyArchiveWorkerOutcomes,
 	historyArchiveWorkerStages,
 	isHistoryArchiveWorkerReportDTO,

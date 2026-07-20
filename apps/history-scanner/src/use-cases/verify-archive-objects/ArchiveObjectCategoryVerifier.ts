@@ -30,11 +30,13 @@ import {
 	scannerIssueFailure
 } from './ArchiveObjectFailure.js';
 import { classifyCategoryVerificationFailure } from './ArchiveObjectCategoryFailureClassifier.js';
+import { readArchiveObjectContentLength } from './ArchiveObjectHttpContentLength.js';
 
 type ProgressReporter = (
 	remoteId: string,
 	workerStage: HistoryArchiveWorkerStageDTO,
-	bytesDownloaded: number | null
+	bytesDownloaded: number | null,
+	bytesTotal: number | null
 ) => void;
 
 export class ArchiveObjectCategoryVerifier {
@@ -52,7 +54,7 @@ export class ArchiveObjectCategoryVerifier {
 	): Promise<
 		Result<HistoryArchiveObjectProgressDTO, HistoryArchiveObjectFailureDTO>
 	> {
-		this.reportProgress(job.remoteId, 'fetching_checkpoint_state', null);
+		this.reportProgress(job.remoteId, 'fetching_checkpoint_state', null, null);
 		const urlResult = Url.create(job.objectUrl);
 		if (urlResult.isErr()) return err(this.mapLocalError(urlResult.error));
 
@@ -133,7 +135,8 @@ export class ArchiveObjectCategoryVerifier {
 		this.reportProgress(
 			job.remoteId,
 			'verified_checkpoint_state',
-			bytesDownloaded
+			bytesDownloaded,
+			null
 		);
 		return ok({
 			bytesDownloaded,
@@ -167,7 +170,7 @@ export class ArchiveObjectCategoryVerifier {
 			});
 		}
 
-		this.reportProgress(job.remoteId, workerStages.fetching, 0);
+		this.reportProgress(job.remoteId, workerStages.fetching, 0, null);
 		const urlResult = Url.create(job.objectUrl);
 		if (urlResult.isErr()) return err(this.mapLocalError(urlResult.error));
 
@@ -185,6 +188,8 @@ export class ArchiveObjectCategoryVerifier {
 				httpStatus: response.value.status
 			});
 		}
+		const bytesTotal = readArchiveObjectContentLength(response.value.headers);
+		this.reportProgress(job.remoteId, workerStages.downloading, 0, bytesTotal);
 
 		let bytesDownloaded = 0;
 		const byteCounter = new ByteCounter((bytes) => {
@@ -192,7 +197,8 @@ export class ArchiveObjectCategoryVerifier {
 			this.reportProgress(
 				job.remoteId,
 				workerStages.downloading,
-				bytesDownloaded
+				bytesDownloaded,
+				bytesTotal
 			);
 		});
 		let pool: HasherPool;
@@ -236,7 +242,12 @@ export class ArchiveObjectCategoryVerifier {
 			]);
 			const processedEntries = processor.processedEntries;
 			await parsedHistorySink?.flush();
-			this.reportProgress(job.remoteId, workerStages.verified, bytesDownloaded);
+			this.reportProgress(
+				job.remoteId,
+				workerStages.verified,
+				bytesDownloaded,
+				bytesTotal
+			);
 			verificationResult = ok({
 				bytesDownloaded,
 				verificationFacts: {

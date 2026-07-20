@@ -6,6 +6,7 @@ import {
 } from '@test-support/DisposablePostgres.js';
 import { HistoryArchiveWorkerStatusRow } from '../../../database/entities/HistoryArchiveWorkerStatusRow.js';
 import { HistoryArchiveWorkerStatusMigration1784790000000 } from '../../../database/migrations/1784790000000-HistoryArchiveWorkerStatusMigration.js';
+import { HistoryArchiveWorkerProgressMigration1785210000000 } from '../../../database/migrations/1785210000000-HistoryArchiveWorkerProgressMigration.js';
 import {
 	historyArchiveWorkerStatusRegistryLockSql,
 	TypeOrmHistoryArchiveWorkerStatusRepository
@@ -29,6 +30,7 @@ describe('TypeOrmHistoryArchiveWorkerStatusRepository ordering', () => {
 		await dataSource.initialize();
 		const runner = dataSource.createQueryRunner();
 		await new HistoryArchiveWorkerStatusMigration1784790000000().up(runner);
+		await new HistoryArchiveWorkerProgressMigration1785210000000().up(runner);
 		await runner.release();
 		repository = new TypeOrmHistoryArchiveWorkerStatusRepository(
 			dataSource.getRepository(HistoryArchiveWorkerStatusRow)
@@ -62,6 +64,7 @@ describe('TypeOrmHistoryArchiveWorkerStatusRepository ordering', () => {
 		await repository.report(
 			createReport({
 				bytesDownloaded: null,
+				bytesTotal: null,
 				claimAttempt: null,
 				currentObject: null,
 				processGeneration: 1,
@@ -133,6 +136,7 @@ describe('TypeOrmHistoryArchiveWorkerStatusRepository ordering', () => {
 				repository.report(
 					createReport({
 						processId: indexedUuid(index),
+						slotIndex: index % 24,
 						workerId: `object-host-${index.toString()}-0`
 					}),
 					heartbeatAt
@@ -179,6 +183,7 @@ describe('TypeOrmHistoryArchiveWorkerStatusRepository ordering', () => {
 					createReport({
 						processId: indexedUuid(index),
 						sequence: 1,
+						slotIndex: index % 24,
 						workerId: `object-host-${index.toString().padStart(3, '0')}-0`
 					}),
 					heartbeatAt
@@ -239,6 +244,7 @@ function createReport(
 ): HistoryArchiveWorkerReportDTO {
 	return {
 		bytesDownloaded: 1024,
+		bytesTotal: 4096,
 		claimAttempt: 3,
 		currentObject: {
 			remoteId: '82a309de-a5df-457b-9412-f267ed5e7388',
@@ -252,6 +258,7 @@ function createReport(
 		processId: '164f7788-9edb-4bb5-81c1-b928d85a21a5',
 		processStartedAt: '2026-07-10T11:00:00.000Z',
 		sequence: 1,
+		slotIndex: 0,
 		stage: 'downloading_bucket',
 		workerId: 'object-host-0-0',
 		...overrides
