@@ -12,10 +12,17 @@ describe('readHistoricalFullHistoryBackfillStatus', () => {
 	it('reports the next adjacent checkpoint after a completed prepend', async () => {
 		dataSource.query.mockResolvedValue([
 			{
+				completedCheckpoints: 182,
+				completedJobs: 182,
 				firstLedger: '63386176',
 				jobState: null,
 				leaseActive: null,
 				latestErrorCode: null,
+				proofCheckpointLedger: null,
+				proofExpectedBucketCount: null,
+				proofFailureKind: null,
+				proofStatus: null,
+				proofVerifiedBucketCount: null,
 				updatedAt: null
 			}
 		]);
@@ -23,6 +30,9 @@ describe('readHistoricalFullHistoryBackfillStatus', () => {
 		await expect(
 			readHistoricalFullHistoryBackfillStatus(dataSource, 'Public network')
 		).resolves.toEqual({
+			completedCheckpoints: 182,
+			completedJobs: 182,
+			currentProof: null,
 			failedJobs: 0,
 			latestErrorCode: null,
 			nextCheckpointLedger: '63386175',
@@ -34,13 +44,20 @@ describe('readHistoricalFullHistoryBackfillStatus', () => {
 		expect(dataSource.query).toHaveBeenCalledTimes(1);
 	});
 
-	it('reports proof waiting as active backfill state, not platform failure', async () => {
+	it('reports completed progress and the best current proof blocker', async () => {
 		dataSource.query.mockResolvedValue([
 			{
-				firstLedger: '63385472',
+				completedCheckpoints: '182',
+				completedJobs: '182',
+				firstLedger: '63374592',
 				jobState: 'pending',
 				leaseActive: null,
 				latestErrorCode: 'proof-pending',
+				proofCheckpointLedger: '63374591',
+				proofExpectedBucketCount: 37,
+				proofFailureKind: 'bucket-missing',
+				proofStatus: 'not-evaluable',
+				proofVerifiedBucketCount: 28,
 				updatedAt: '2026-07-12T10:00:05.000Z'
 			}
 		]);
@@ -51,8 +68,18 @@ describe('readHistoricalFullHistoryBackfillStatus', () => {
 		);
 
 		expect(result).toMatchObject({
+			completedCheckpoints: 182,
+			completedJobs: 182,
+			currentProof: {
+				checkpointLedger: '63374591',
+				expectedBucketCount: 37,
+				failureKind: 'bucket-missing',
+				remainingBucketCount: 9,
+				status: 'not-evaluable',
+				verifiedBucketCount: 28
+			},
 			failedJobs: 0,
-			nextCheckpointLedger: '63385471',
+			nextCheckpointLedger: '63374591',
 			pendingJobs: 1,
 			state: 'waiting-for-proof'
 		});
@@ -61,10 +88,17 @@ describe('readHistoricalFullHistoryBackfillStatus', () => {
 	it('reports only an unexpired lease as running', async () => {
 		dataSource.query.mockResolvedValue([
 			{
+				completedCheckpoints: 1,
+				completedJobs: 1,
 				firstLedger: '63385472',
 				jobState: 'leased',
 				leaseActive: true,
 				latestErrorCode: null,
+				proofCheckpointLedger: null,
+				proofExpectedBucketCount: null,
+				proofFailureKind: null,
+				proofStatus: null,
+				proofVerifiedBucketCount: null,
 				updatedAt: '2026-07-12T10:00:05.000Z'
 			}
 		]);
@@ -81,10 +115,17 @@ describe('readHistoricalFullHistoryBackfillStatus', () => {
 	it('reports an expired lease as reclaimable queued work', async () => {
 		dataSource.query.mockResolvedValue([
 			{
+				completedCheckpoints: 1,
+				completedJobs: 1,
 				firstLedger: '63385472',
 				jobState: 'leased',
 				leaseActive: false,
 				latestErrorCode: null,
+				proofCheckpointLedger: null,
+				proofExpectedBucketCount: null,
+				proofFailureKind: null,
+				proofStatus: null,
+				proofVerifiedBucketCount: null,
 				updatedAt: '2026-07-12T10:00:05.000Z'
 			}
 		]);

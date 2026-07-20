@@ -10,10 +10,12 @@ import type { PublicHistoryArchiveScanLogError } from './archive-evidence-types'
 import type { PublicCanonicalFullHistoryCoverage } from './canonical-history-types';
 import type { PublicExplorerOperation } from './explorer-operation-types';
 import type { PublicExplorerLocalAccountChanges } from './explorer-local-account-types';
+import type { PublicHistoricalFullHistoryBackfill } from './historical-backfill-types';
 export type * from './archive-evidence-types';
 export type * from './canonical-history-types';
 export type * from './explorer-operation-types';
 export type * from './explorer-local-account-types';
+export type * from './historical-backfill-types';
 export type * from './known-network-types';
 export type * from './search-types';
 export type * from './worker-status-types';
@@ -434,17 +436,6 @@ export interface PublicFullHistoryLedgerCloseMetaOutputCoverage {
 	readonly outputBytes: string;
 	readonly recordCount: string;
 	readonly schemaVersions: readonly string[];
-}
-
-export interface PublicHistoricalFullHistoryBackfill {
-	readonly failedJobs: number;
-	readonly latestErrorCode: string | null;
-	readonly nextCheckpointLedger: string | null;
-	readonly pendingJobs: number;
-	readonly runningJobs: number;
-	readonly state:
-		'complete' | 'failed' | 'idle' | 'queued' | 'running' | 'waiting-for-proof';
-	readonly updatedAt: string | null;
 }
 
 export interface PublicCanonicalFullHistoryPromotion {

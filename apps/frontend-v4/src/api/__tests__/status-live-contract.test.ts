@@ -55,6 +55,45 @@ describe('status WebSocket contract', () => {
 				lifecycle: { complete: 4, total: 4 }
 			}
 		});
+		expect(message.payload.fullHistory.historicalBackfill).toMatchObject({
+			completedCheckpoints: 182,
+			completedJobs: 182,
+			currentProof: {
+				checkpointLedger: '63386175',
+				expectedBucketCount: 37,
+				remainingBucketCount: 9,
+				verifiedBucketCount: 28
+			}
+		});
+		expect(
+			message.payload.fullHistory.historicalBackfill?.currentProof
+		).not.toHaveProperty('archiveUrl');
+	});
+
+	it('accepts historical backfill status before the progress extension', () => {
+		const payload = createStatusLivePayload();
+		const fullHistory = asRecord(payload.fullHistory);
+		const backfill = asRecord(fullHistory.historicalBackfill);
+		delete backfill.completedCheckpoints;
+		delete backfill.completedJobs;
+		delete backfill.currentProof;
+
+		const message = parseStatusLiveMessage({ payload, type: 'status' });
+		expect(message?.type).toBe('status');
+		if (message?.type !== 'status') return;
+		expect(
+			message.payload.fullHistory.historicalBackfill?.completedJobs
+		).toBeUndefined();
+	});
+
+	it('rejects incoherent historical proof progress', () => {
+		const payload = createStatusLivePayload();
+		const fullHistory = asRecord(payload.fullHistory);
+		const backfill = asRecord(fullHistory.historicalBackfill);
+		const proof = asRecord(backfill.currentProof);
+		proof.remainingBucketCount = 8;
+
+		expect(parseStatusLiveMessage({ payload, type: 'status' })).toBeNull();
 	});
 
 	it('accepts a rolling-deploy snapshot without decoded history coverage', () => {

@@ -6,6 +6,7 @@ import {
 	arrayOf,
 	boolean,
 	dateTime,
+	isRecord,
 	literal,
 	matches,
 	nonNegativeInteger,
@@ -70,22 +71,83 @@ const validateCanonicalPromotion = matches({
 	)
 });
 
-const validateHistoricalBackfill = matches({
-	failedJobs: nonNegativeInteger,
-	latestErrorCode: nullable(string),
-	nextCheckpointLedger: nullable(unsignedIntegerString),
-	pendingJobs: nonNegativeInteger,
-	runningJobs: nonNegativeInteger,
-	state: oneOf(
-		'complete',
-		'failed',
-		'idle',
-		'queued',
-		'running',
-		'waiting-for-proof'
+const validateHistoricalBackfillProofShape = matches({
+	checkpointLedger: unsignedIntegerString,
+	expectedBucketCount: nonNegativeInteger,
+	failureKind: nullable(
+		oneOf(
+			'object-incomplete',
+			'object-failed',
+			'proof-facts-incomplete',
+			'checkpoint-ledger-mismatch',
+			'checkpoint-bucket-list-mismatch',
+			'transaction-hash-mismatch',
+			'result-hash-mismatch',
+			'predecessor-missing',
+			'previous-ledger-hash-mismatch',
+			'bucket-missing'
+		)
 	),
-	updatedAt: nullable(dateTime)
+	remainingBucketCount: nonNegativeInteger,
+	status: oneOf('pending', 'verified', 'mismatch', 'not-evaluable'),
+	verifiedBucketCount: nonNegativeInteger
 });
+
+const validateHistoricalBackfillShape = matches(
+	{
+		failedJobs: nonNegativeInteger,
+		latestErrorCode: nullable(string),
+		nextCheckpointLedger: nullable(unsignedIntegerString),
+		pendingJobs: nonNegativeInteger,
+		runningJobs: nonNegativeInteger,
+		state: oneOf(
+			'complete',
+			'failed',
+			'idle',
+			'queued',
+			'running',
+			'waiting-for-proof'
+		),
+		updatedAt: nullable(dateTime)
+	},
+	{
+		completedCheckpoints: nonNegativeInteger,
+		completedJobs: nonNegativeInteger,
+		currentProof: nullable(validateHistoricalBackfillProof)
+	}
+);
+
+function validateHistoricalBackfillProof(value: unknown): boolean {
+	if (!validateHistoricalBackfillProofShape(value) || !isRecord(value)) {
+		return false;
+	}
+	return (
+		Number(value.verifiedBucketCount) + Number(value.remainingBucketCount) ===
+		Number(value.expectedBucketCount)
+	);
+}
+
+function validateHistoricalBackfill(value: unknown): boolean {
+	if (!validateHistoricalBackfillShape(value) || !isRecord(value)) return false;
+	const extensionFields = [
+		'completedCheckpoints',
+		'completedJobs',
+		'currentProof'
+	] as const;
+	const extensionFieldCount = extensionFields.filter((field) =>
+		Object.hasOwn(value, field)
+	).length;
+	if (extensionFieldCount === 0) return true;
+	if (extensionFieldCount !== extensionFields.length) return false;
+	if (Number(value.completedCheckpoints) < Number(value.completedJobs)) {
+		return false;
+	}
+	if (value.currentProof === null) return true;
+	return (
+		isRecord(value.currentProof) &&
+		value.currentProof.checkpointLedger === value.nextCheckpointLedger
+	);
+}
 
 export const validateFullHistoryStatus: StatusLiveValidator = matches(
 	{

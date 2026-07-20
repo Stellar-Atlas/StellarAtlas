@@ -90,14 +90,35 @@ export function sanitizeFullHistoryStatus(
 		historicalBackfill:
 			source.historicalBackfill === null
 				? null
-				: pick(source.historicalBackfill, [
-						'failedJobs',
-						'latestErrorCode',
-						'nextCheckpointLedger',
-						'pendingJobs',
-						'runningJobs',
-						'state',
-						'updatedAt'
+				: sanitizeHistoricalBackfill(source.historicalBackfill)
+	};
+}
+
+function sanitizeHistoricalBackfill(value: unknown): Record<string, unknown> {
+	const source = record(value);
+	const sanitized = pick(source, [
+		'failedJobs',
+		'latestErrorCode',
+		'nextCheckpointLedger',
+		'pendingJobs',
+		'runningJobs',
+		'state',
+		'updatedAt'
+	]);
+	if (!Object.hasOwn(source, 'completedJobs')) return sanitized;
+	return {
+		...sanitized,
+		...pick(source, ['completedCheckpoints', 'completedJobs']),
+		currentProof:
+			source.currentProof === null
+				? null
+				: pick(source.currentProof, [
+						'checkpointLedger',
+						'expectedBucketCount',
+						'failureKind',
+						'remainingBucketCount',
+						'status',
+						'verifiedBucketCount'
 					])
 	};
 }

@@ -92,6 +92,17 @@ export function createStatusLivePayload(): Record<string, unknown> {
 			earliestParsedLedger: '1',
 			generatedAt,
 			historicalBackfill: {
+				completedCheckpoints: 182,
+				completedJobs: 182,
+				currentProof: {
+					archiveUrl: 'https://must-not-leak.example',
+					checkpointLedger: '63386175',
+					expectedBucketCount: 37,
+					failureKind: 'bucket-missing',
+					remainingBucketCount: 9,
+					status: 'not-evaluable',
+					verifiedBucketCount: 28
+				},
 				failedJobs: 0,
 				latestErrorCode: null,
 				nextCheckpointLedger: '63386175',

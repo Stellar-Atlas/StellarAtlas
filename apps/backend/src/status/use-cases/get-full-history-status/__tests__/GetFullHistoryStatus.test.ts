@@ -161,9 +161,16 @@ describe('GetFullHistoryStatus', () => {
 			.mockResolvedValueOnce([...mixedCanonicalLinkageRows])
 			.mockResolvedValueOnce([
 				{
+					completedCheckpoints: 182,
+					completedJobs: 182,
 					firstLedger: '63386240',
 					jobState: 'pending',
 					latestErrorCode: 'proof-pending',
+					proofCheckpointLedger: '63386239',
+					proofExpectedBucketCount: 37,
+					proofFailureKind: 'bucket-missing',
+					proofStatus: 'not-evaluable',
+					proofVerifiedBucketCount: 28,
 					updatedAt: new Date('2026-07-06T11:59:50.000Z')
 				}
 			]);
@@ -227,6 +234,16 @@ describe('GetFullHistoryStatus', () => {
 				state: 'waiting-for-proof'
 			},
 			historicalBackfill: {
+				completedCheckpoints: 182,
+				completedJobs: 182,
+				currentProof: {
+					checkpointLedger: '63386239',
+					expectedBucketCount: 37,
+					failureKind: 'bucket-missing',
+					remainingBucketCount: 9,
+					status: 'not-evaluable',
+					verifiedBucketCount: 28
+				},
 				failedJobs: 0,
 				latestErrorCode: 'proof-pending',
 				nextCheckpointLedger: '63386239',
