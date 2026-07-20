@@ -18,9 +18,11 @@ type StatusLiveListener = (message: StatusLiveMessage) => void;
 
 const statusWebSocketPath = '/v1/status/ws';
 const reconnectDelayMs = 1_500;
+const staleStreamTimeoutMs = 15_000;
 const listeners = new Set<StatusLiveListener>();
 let reconnectTimeout: number | null = null;
 let socket: WebSocket | null = null;
+let staleStreamTimeout: number | null = null;
 
 export function parseStatusLiveMessage(
 	value: unknown
@@ -63,6 +65,12 @@ const clearReconnectTimeout = (): void => {
 	reconnectTimeout = null;
 };
 
+const clearStaleStreamTimeout = (): void => {
+	if (staleStreamTimeout === null) return;
+	window.clearTimeout(staleStreamTimeout);
+	staleStreamTimeout = null;
+};
+
 const notify = (message: StatusLiveMessage): void => {
 	for (const listener of listeners) listener(message);
 };
@@ -70,6 +78,7 @@ const notify = (message: StatusLiveMessage): void => {
 const closeSocket = (): void => {
 	const currentSocket = socket;
 	socket = null;
+	clearStaleStreamTimeout();
 	currentSocket?.close();
 };
 
@@ -79,6 +88,17 @@ const scheduleReconnect = (): void => {
 		reconnectTimeout = null;
 		connectStatusStream();
 	}, reconnectDelayMs);
+};
+
+const armStaleStreamTimeout = (candidate: WebSocket): void => {
+	clearStaleStreamTimeout();
+	staleStreamTimeout = window.setTimeout(() => {
+		staleStreamTimeout = null;
+		if (socket !== candidate || listeners.size === 0) return;
+		socket = null;
+		candidate.close();
+		scheduleReconnect();
+	}, staleStreamTimeoutMs);
 };
 
 const connectStatusStream = (): void => {
@@ -94,8 +114,14 @@ const connectStatusStream = (): void => {
 	clearReconnectTimeout();
 	const candidate = new WebSocket(buildBrowserRealtimeUrl(statusWebSocketPath));
 	socket = candidate;
+	armStaleStreamTimeout(candidate);
+	candidate.addEventListener('open', () => {
+		if (socket !== candidate) return;
+		armStaleStreamTimeout(candidate);
+	});
 	candidate.addEventListener('message', (event) => {
 		if (socket !== candidate) return;
+		armStaleStreamTimeout(candidate);
 		try {
 			const message = parseStatusLiveMessage(JSON.parse(event.data as string));
 			if (message !== null) {
@@ -115,6 +141,7 @@ const connectStatusStream = (): void => {
 	});
 	candidate.addEventListener('close', () => {
 		if (socket !== candidate) return;
+		clearStaleStreamTimeout();
 		socket = null;
 		scheduleReconnect();
 	});
