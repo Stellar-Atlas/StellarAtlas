@@ -212,6 +212,35 @@ describe('canonical archive evidence priority', () => {
 		expect(counts).toEqual({ canonical: 1, displaced: 1, generic: 47 });
 	});
 
+	it('does not wait behind an existing target row being updated', async () => {
+		await seedArchive(0);
+		await seedRuntime();
+		await dataSource.query(materializeCanonicalFrontierDependenciesSql);
+		const locker = dataSource.createQueryRunner();
+		const materializer = dataSource.createQueryRunner();
+		await locker.connect();
+		await materializer.connect();
+		await locker.startTransaction();
+		await materializer.startTransaction();
+		try {
+			await locker.query(`
+				delete from "history_archive_object_queue"
+				where "objectType" = 'transactions'
+					and "checkpointLedger" = ${targetCheckpoint}
+			`);
+			await materializer.query(`set local lock_timeout = '500ms'`);
+
+			await expect(
+				materializer.query(materializeCanonicalFrontierDependenciesSql)
+			).resolves.toBeDefined();
+		} finally {
+			await materializer.rollbackTransaction();
+			await locker.rollbackTransaction();
+			await materializer.release();
+			await locker.release();
+		}
+	});
+
 	it('does not let an unrelated retry hide canonical frontier work', async () => {
 		await seedArchive(0);
 		await seedRuntime();

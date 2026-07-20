@@ -24,6 +24,13 @@ bucket_targets as materialized (
 		'pending', null, target."bucketHash", true, 'deferred',
 		'canonical-frontier-materialization', now(), now(), now()
 	from bucket_targets target
+	where not exists (
+		select 1
+		from "history_archive_object_queue" existing
+		where existing."archiveUrlIdentity" = target."archiveUrlIdentity"
+			and existing."objectType" = 'bucket'
+			and existing."objectKey" = 'bucket:' || target."bucketHash"
+	)
 	on conflict ("archiveUrlIdentity", "objectType", "objectKey")
 		do nothing
 	returning id

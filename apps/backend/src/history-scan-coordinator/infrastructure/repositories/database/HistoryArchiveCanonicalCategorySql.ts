@@ -29,6 +29,13 @@ predecessor_checkpoint_targets as materialized (
 	cross join lateral (
 		select lpad(to_hex(target.checkpoint_ledger), 8, '0') as hex
 	) checkpoint_hex
+	where not exists (
+		select 1
+		from "history_archive_object_queue" existing
+		where existing."archiveUrlIdentity" = target."archiveUrlIdentity"
+			and existing."objectType" = 'checkpoint-state'
+			and existing."objectKey" = target.object_key
+	)
 	on conflict ("archiveUrlIdentity", "objectType", "objectKey")
 		do nothing
 	returning id
@@ -105,6 +112,13 @@ predecessor_checkpoint_targets as materialized (
 	cross join lateral (
 		select lpad(to_hex(target.checkpoint_ledger), 8, '0') as hex
 	) checkpoint_hex
+	where not exists (
+		select 1
+		from "history_archive_object_queue" existing
+		where existing."archiveUrlIdentity" = target."archiveUrlIdentity"
+			and existing."objectType" = target.object_type
+			and existing."objectKey" = target.object_key
+	)
 	on conflict ("archiveUrlIdentity", "objectType", "objectKey")
 		do nothing
 	returning id
