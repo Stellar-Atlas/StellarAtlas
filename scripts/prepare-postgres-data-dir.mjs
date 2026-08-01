@@ -75,9 +75,10 @@ async function removeStaleArtifact(path, kind) {
 }
 
 function assertSafeSocketPath(expectedDataDirectory, candidateSocketPath) {
+	const postgresRoot = resolve(expectedDataDirectory, '..');
 	const socketName = basename(candidateSocketPath);
 	if (
-		!candidateSocketPath.startsWith(`${expectedDataDirectory}${sep}`) ||
+		!candidateSocketPath.startsWith(`${postgresRoot}${sep}`) ||
 		!/^\.s\.PGSQL\.[1-9][0-9]*$/.test(socketName)
 	) {
 		throw new Error('PostgreSQL socket path is outside the expected data tree');
