@@ -5,6 +5,8 @@ import type { ExplorerLocalOperationsDTO } from '../../../use-cases/get-explorer
 import type { ExplorerCanonicalTransactionDTO } from '../../../use-cases/get-explorer-local-transactions/ExplorerCanonicalTransaction.js';
 import type { ExplorerCanonicalLedgerDTO } from '../../../use-cases/get-explorer-local-transactions/ExplorerCanonicalLedger.js';
 import type { ExplorerLocalAccountChangesDTO } from '../../../use-cases/get-explorer-local-account-changes/ExplorerLocalAccountChangeDTO.js';
+import { GetExplorerRecentTransactions } from '../../../use-cases/get-explorer-recent-transactions/GetExplorerRecentTransactions.js';
+import { fetchRecentTransactions } from '../HorizonLedgerClient.js';
 import {
 	blockchainExplorerRouter,
 	createExplorerTransactionLookupHandler
@@ -15,6 +17,8 @@ interface BuildTestAppOptions {
 	readonly localFeed?: ExplorerLocalTransactionsDTO;
 	readonly localLedger?: ExplorerCanonicalLedgerDTO | null;
 	readonly localTransaction?: ExplorerCanonicalTransactionDTO | null;
+	readonly freshnessWindowMs?: number;
+	readonly now?: Date;
 }
 
 export const canonicalHash = 'a'.repeat(64);
@@ -296,6 +300,13 @@ export function buildTestApp(options: BuildTestAppOptions = {}) {
 		execute: async () =>
 			options.localAccountChanges ?? canonicalAccountObservation
 	};
+	const getExplorerRecentTransactions = new GetExplorerRecentTransactions({
+		fetchLiveTransactions: (limit) =>
+			fetchRecentTransactions('https://horizon.example', limit),
+		freshnessWindowMs: options.freshnessWindowMs ?? 5 * 60 * 1_000,
+		getLocalTransactions: getExplorerLocalTransactions,
+		now: () => new Date(options.now ?? '2026-07-08T16:10:00.000Z')
+	});
 	app.get(
 		'/v1/transactions/:hash',
 		createExplorerTransactionLookupHandler({
@@ -311,6 +322,7 @@ export function buildTestApp(options: BuildTestAppOptions = {}) {
 				execute: async () => localReadModel()
 			},
 			getExplorerLocalTransactions,
+			getExplorerRecentTransactions,
 			horizonUrl: 'https://horizon.example'
 		})
 	);

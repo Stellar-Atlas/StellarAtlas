@@ -199,7 +199,7 @@ describe('BlockchainExplorerRouter.integration', () => {
 		expect(fetchSpy).not.toHaveBeenCalled();
 	});
 
-	it('prefers the bounded canonical recent transaction feed', async () => {
+	it('uses local recent transactions while canonical coverage meets the SLO', async () => {
 		const fetchSpy = jest.spyOn(global, 'fetch');
 
 		await request(buildTestApp())
@@ -207,24 +207,31 @@ describe('BlockchainExplorerRouter.integration', () => {
 			.expect(200)
 			.expect((response) => {
 				expect(response.body).toMatchObject({
+					dataThrough: '2026-07-08T16:09:36.000Z',
+					freshness: 'fresh',
+					freshnessThresholdMs: 300000,
 					limit: 10,
-					source: 'postgres_canonical',
+					selectionReason: 'local_history_current',
+					source: 'local_history',
 					truncated: true,
 					records: [
 						{
 							hash: canonicalHash,
-							ledger: '63386303',
-							source: 'postgres_canonical'
+							ledger: '63386303'
 						}
 					]
 				});
+				expect(response.body.records[0]).not.toHaveProperty('source');
 			});
 
 		expect(fetchSpy).not.toHaveBeenCalled();
 	});
 
-	it('uses Horizon for the recent feed only when no canonical row exists', async () => {
-		const app = buildTestApp({ localFeed: canonicalFeed([]) });
+	it('uses live network rows when local transaction history is empty', async () => {
+		const app = buildTestApp({
+			localFeed: canonicalFeed([]),
+			now: new Date('2026-07-12T05:12:00.000Z')
+		});
 		jest.spyOn(global, 'fetch').mockResolvedValue(
 			new Response(
 				JSON.stringify({
@@ -251,9 +258,13 @@ describe('BlockchainExplorerRouter.integration', () => {
 			.expect(200)
 			.expect((response) => {
 				expect(response.body).toMatchObject({
-					source: 'horizon',
-					records: [{ hash: 'b'.repeat(64), source: 'horizon' }]
+					dataThrough: '2026-07-12T05:11:31.000Z',
+					freshness: 'fresh',
+					selectionReason: 'local_history_empty',
+					source: 'live_network',
+					records: [{ hash: 'b'.repeat(64) }]
 				});
+				expect(response.body.records[0]).not.toHaveProperty('source');
 			});
 	});
 

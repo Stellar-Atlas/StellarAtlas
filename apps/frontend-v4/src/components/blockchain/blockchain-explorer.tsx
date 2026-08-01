@@ -24,7 +24,6 @@ import {
 	SearchResultView,
 	toDateInputValue
 } from './blockchain-explorer-results';
-import { ExplorerLocalReadModelWatermark } from './explorer-local-read-model-watermark';
 import {
 	explorerSearchTypes,
 	initialExplorerAssets,
@@ -179,8 +178,6 @@ export function BlockchainExplorer(): React.JSX.Element {
 
 	return (
 		<section className="blockchain-explorer-workspace">
-			<ExplorerLocalReadModelWatermark result={localReadModel} />
-
 			<section className="explorer-panel explorer-primary">
 				<div className="panel-heading">
 					<div>
@@ -237,12 +234,8 @@ export function BlockchainExplorer(): React.JSX.Element {
 			<section className="explorer-panel explorer-feed-panel">
 				<div className="panel-heading explorer-feed-heading">
 					<div>
-						<strong>Latest indexed transactions</strong>
-						<span>
-							{transactionFeed.transactions?.source === 'postgres_canonical'
-								? 'Latest proof-gated rows in StellarAtlas canonical history'
-								: 'Current transaction sample from the Stellar public network'}
-						</span>
+						<strong>Live transactions</strong>
+						<span>Recent network activity</span>
 					</div>
 					<button
 						disabled={transactionFeedLoading}
@@ -261,12 +254,12 @@ export function BlockchainExplorer(): React.JSX.Element {
 			<section className="explorer-grid">
 				<section className="explorer-panel">
 					<div className="panel-heading">
-						<div>
-							<strong>Operations</strong>
-							<span>
-								{operationIndexReady
-									? 'Local operation index available'
-									: 'Local operation index is not available yet'}
+					<div>
+						<strong>Operations</strong>
+						<span>
+							{operationIndexReady
+								? 'Filter operations by ledger, address, type, and time'
+								: 'Operation search is temporarily unavailable'}
 							</span>
 						</div>
 					</div>
@@ -346,8 +339,7 @@ export function BlockchainExplorer(): React.JSX.Element {
 					</form>
 					{operationIndexReady ? null : (
 						<p className="explorer-state neutral">
-							Operation filters require the decoded operation index. Transaction
-							hash lookup remains available above.
+							Transaction hash lookup remains available above.
 						</p>
 					)}
 					<OperationsView result={operationResult} />
@@ -356,11 +348,11 @@ export function BlockchainExplorer(): React.JSX.Element {
 				<section className="explorer-panel">
 					<div className="panel-heading">
 						<div>
-							<strong>Assets</strong>
-							<span>
-								{assetIndexReady
-									? 'Local asset index available'
-									: 'Local asset index is not available yet'}
+						<strong>Assets</strong>
+						<span>
+							{assetIndexReady
+								? 'Search by asset code and issuer'
+								: 'Asset search is temporarily unavailable'}
 							</span>
 						</div>
 					</div>
@@ -386,7 +378,7 @@ export function BlockchainExplorer(): React.JSX.Element {
 					</form>
 					{assetIndexReady ? null : (
 						<p className="explorer-state neutral">
-							Asset search requires the local decoded asset index.
+							Asset details will appear when search is available.
 						</p>
 					)}
 					<AssetsView result={assetResult} />
@@ -395,11 +387,11 @@ export function BlockchainExplorer(): React.JSX.Element {
 				<section className="explorer-panel">
 					<div className="panel-heading">
 						<div>
-							<strong>Contracts</strong>
-							<span>
-								{contractIndexReady
-									? 'Local contract index available'
-									: 'Local contract index is not available yet'}
+						<strong>Contracts</strong>
+						<span>
+							{contractIndexReady
+								? 'Look up a Soroban contract'
+								: 'Contract search is temporarily unavailable'}
 							</span>
 						</div>
 					</div>
@@ -419,7 +411,7 @@ export function BlockchainExplorer(): React.JSX.Element {
 					</form>
 					{contractIndexReady ? null : (
 						<p className="explorer-state neutral">
-							Contract search requires the local decoded contract index.
+							Contract details will appear when search is available.
 						</p>
 					)}
 					<ContractView result={contractResult} />

@@ -6,6 +6,7 @@ import { CrawlerConfiguration } from 'crawler';
 import { resolveAppEnvPath } from 'shared/lib/env/resolve-app-env-path.js';
 import { parseOptionalUrl } from './parseOptionalUrl.js';
 import { parseMeilisearchRuntimeConfig } from './MeilisearchRuntimeConfig.js';
+import { parseExplorerTransactionFreshnessWindowMs } from './ExplorerConfig.js';
 import type {
 	MeilisearchNetworkWorkloadConfig,
 	MeilisearchWorkloadConfig
@@ -46,6 +47,7 @@ export interface Config {
 	sentryDSN: string | undefined;
 	ipStackAccessKey: string;
 	horizonUrl: Url;
+	explorerTransactionFreshnessWindowMs: number;
 	rpcUrl?: Url;
 	failoverFrontendBaseUrl?: Url;
 	failoverApiBaseUrl?: Url;
@@ -108,6 +110,7 @@ export class DefaultConfig implements Config {
 	historyMaxFileMs?: number;
 	historySlowArchiveMaxLedgers?: number;
 	logLevel = 'info';
+	explorerTransactionFreshnessWindowMs = 5 * 60 * 1_000;
 	meilisearchNetwork = parseMeilisearchRuntimeConfig({}).network;
 	meilisearchScp = parseMeilisearchRuntimeConfig({}).scp;
 	networkScanLoopIntervalMs?: number;
@@ -222,6 +225,11 @@ export function getConfigFromEnv(): Result<Config, Error> {
 		ipStackAccessKey,
 		crawlerConfig
 	);
+	const explorerFreshnessWindow = parseExplorerTransactionFreshnessWindowMs(
+		process.env.EXPLORER_TRANSACTION_FRESHNESS_WINDOW_MS
+	);
+	if (explorerFreshnessWindow.isErr()) return err(explorerFreshnessWindow.error);
+	config.explorerTransactionFreshnessWindowMs = explorerFreshnessWindow.value;
 
 	const env = process.env.NODE_ENV;
 	if (isString(env)) config.nodeEnv = env;

@@ -145,6 +145,13 @@ export {
 	KnownOrganizationArchiveEvidenceV1Schema
 } from './dto/known-archive-evidence-v1.js';
 export type {
+	ExplorerRecentTransactionV1,
+	ExplorerRecentTransactionsV1,
+	ExplorerTransactionFeedFreshnessV1,
+	ExplorerTransactionFeedSelectionReasonV1,
+	ExplorerTransactionFeedSourceV1
+} from './dto/explorer-recent-transactions-v1.js';
+export type {
 	HistoryArchiveCheckpointRepairEvidenceV1,
 	HistoryArchiveRepairActionKindV1,
 	HistoryArchiveRepairActionSeverityV1,

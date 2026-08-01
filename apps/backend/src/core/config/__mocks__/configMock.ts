@@ -9,6 +9,7 @@ export class ConfigMock implements Config {
 	enableDeadManSwitch = false;
 	enableSentry = false;
 	horizonUrl: Url = { value: 'url' };
+	explorerTransactionFreshnessWindowMs = 5 * 60 * 1_000;
 	rpcUrl: Url | undefined;
 	failoverFrontendBaseUrl: Url | undefined;
 	failoverApiBaseUrl: Url | undefined;

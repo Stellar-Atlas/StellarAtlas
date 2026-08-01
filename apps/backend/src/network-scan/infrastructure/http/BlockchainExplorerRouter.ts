@@ -10,10 +10,7 @@ import {
 	isTransactionHash,
 	type ExplorerSearchType
 } from './BlockchainExplorerClient.js';
-import {
-	fetchRecentTransactions,
-	fetchTransactionByHash
-} from './HorizonLedgerClient.js';
+import { fetchTransactionByHash } from './HorizonLedgerClient.js';
 import { fetchExplorerTransactionOperations } from './ExplorerTransactionOperationClient.js';
 import { createExplorerLocalOperationHandler } from './ExplorerLocalOperationHandler.js';
 import { FullHistoryHash } from '@history-scan-coordinator/domain/full-history/FullHistoryCanonicalTypes.js';
@@ -21,6 +18,7 @@ import type { GetExplorerLocalReadModel } from '../../use-cases/get-explorer-loc
 import type { GetExplorerLocalAccountChanges } from '../../use-cases/get-explorer-local-account-changes/GetExplorerLocalAccountChanges.js';
 import { validateExplorerLocalAccountChangesQuery } from '../../use-cases/get-explorer-local-account-changes/GetExplorerLocalAccountChanges.js';
 import type { GetExplorerLocalTransactions } from '../../use-cases/get-explorer-local-transactions/GetExplorerLocalTransactions.js';
+import type { GetExplorerRecentTransactions } from '../../use-cases/get-explorer-recent-transactions/GetExplorerRecentTransactions.js';
 
 export interface BlockchainExplorerRouterConfig {
 	readonly getExplorerLocalAccountChanges: Pick<
@@ -34,6 +32,10 @@ export interface BlockchainExplorerRouterConfig {
 	readonly getExplorerLocalTransactions: Pick<
 		GetExplorerLocalTransactions,
 		'execute' | 'findByHash' | 'findLedger' | 'findOperations'
+	>;
+	readonly getExplorerRecentTransactions: Pick<
+		GetExplorerRecentTransactions,
+		'execute'
 	>;
 	readonly horizonUrl: string;
 	readonly rpcUrl?: string;
@@ -141,14 +143,9 @@ export const blockchainExplorerRouter = (
 
 		setCacheHeader(res);
 		try {
-			const local = await config.getExplorerLocalTransactions.execute(limit);
 			return res
 				.status(200)
-				.json(
-					local.records.length > 0
-						? local
-						: await fetchRecentTransactions(config.horizonUrl, limit)
-				);
+				.json(await config.getExplorerRecentTransactions.execute(limit));
 		} catch {
 			return res.status(502).json({ error: 'Transaction feed unavailable' });
 		}

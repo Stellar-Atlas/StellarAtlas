@@ -810,7 +810,7 @@
 		"/v1/explorer/transactions": {
 			"get": {
 				"summary": "Get recent transactions",
-				"description": "Returns a bounded recent feed from StellarAtlas proof-gated canonical history. The configured Horizon source is used only when no canonical transaction rows exist.",
+				"description": "Returns a bounded recent transaction feed. Local history is selected only while its latest covered ledger is inside the configured freshness window. Otherwise live network data is selected; if that refresh fails, older local history is returned and explicitly marked stale.",
 				"tags": ["Explorer"],
 				"operationId": "getExplorerRecentTransactions",
 				"parameters": [
@@ -9336,19 +9336,73 @@
 					"truncated": { "type": "boolean" }
 				}
 			},
+			"RecentTransaction": {
+				"type": "object",
+				"required": [
+					"createdAt",
+					"feeCharged",
+					"hash",
+					"ledger",
+					"operationCount",
+					"sourceAccount",
+					"successful"
+				],
+				"properties": {
+					"createdAt": { "type": "string", "format": "date-time" },
+					"feeCharged": { "type": "string" },
+					"hash": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+					"ledger": { "type": "string", "pattern": "^(0|[1-9][0-9]*)$" },
+					"operationCount": { "type": "integer", "minimum": 0 },
+					"sourceAccount": { "type": "string" },
+					"successful": { "type": "boolean" }
+				}
+			},
 			"RecentTransactions": {
 				"type": "object",
-				"required": ["generatedAt", "limit", "records", "source", "truncated"],
+				"required": [
+					"dataThrough",
+					"freshness",
+					"freshnessThresholdMs",
+					"generatedAt",
+					"limit",
+					"records",
+					"selectionReason",
+					"source",
+					"truncated"
+				],
 				"properties": {
+					"dataThrough": {
+						"type": "string",
+						"format": "date-time",
+						"nullable": true
+					},
+					"freshness": {
+						"type": "string",
+						"enum": ["fresh", "stale", "unknown"]
+					},
+					"freshnessThresholdMs": {
+						"type": "integer",
+						"minimum": 1
+					},
 					"generatedAt": { "type": "string", "format": "date-time" },
 					"limit": { "type": "integer", "minimum": 1, "maximum": 50 },
 					"records": {
 						"type": "array",
-						"items": { "$ref": "#/components/schemas/TransactionLookup" }
+						"items": { "$ref": "#/components/schemas/RecentTransaction" },
+						"maxItems": 50
+					},
+					"selectionReason": {
+						"type": "string",
+						"enum": [
+							"local_history_current",
+							"local_history_empty",
+							"local_history_behind",
+							"live_network_unavailable"
+						]
 					},
 					"source": {
 						"type": "string",
-						"enum": ["horizon", "postgres_canonical"]
+						"enum": ["local_history", "live_network"]
 					},
 					"truncated": { "type": "boolean" }
 				}

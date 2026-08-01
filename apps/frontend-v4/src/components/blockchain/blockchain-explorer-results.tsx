@@ -26,6 +26,7 @@ import {
 	formatTransactionSource,
 	writeClipboardText
 } from './blockchain-explorer-format';
+import { ExplorerTransactionFeedStatus } from './explorer-transaction-feed-status';
 import { ExplorerOperationTable } from './explorer-operation-table';
 import { ExplorerAccountObservation } from './explorer-account-observation';
 
@@ -135,10 +136,7 @@ export function RecentTransactionsView({
 
 	return (
 		<div className="explorer-transaction-feed">
-			<ExplorerState
-				tone="neutral"
-				text={`Loaded ${formatDate(result.transactions.generatedAt)} from ${formatTransactionSource(result.transactions.source)}. Each row shows its ledger close time.`}
-			/>
+			<ExplorerTransactionFeedStatus transactions={result.transactions} />
 			{result.transactions.truncated ? (
 				<ExplorerState
 					tone="neutral"

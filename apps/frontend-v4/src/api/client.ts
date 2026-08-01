@@ -36,6 +36,7 @@ import type {
 import { frontendCacheTags } from './cache-policy';
 import { parseFullHistoryStatus } from './full-history-status-contract';
 import { parseExplorerLocalAccountChanges } from './explorer-local-account-contract';
+import { parseExplorerRecentTransactions } from './explorer-transaction-contract';
 import { parseWorkerStatusDTO } from './worker-status-parser';
 import {
 	buildKnownNodesPath,
@@ -285,8 +286,9 @@ export const fetchExplorerRecentTransactions = (
 	limit: number,
 	options?: FetchOptions
 ): Promise<PublicRecentTransactions> =>
-	fetchJson<PublicRecentTransactions>(
+	fetchValidatedJson<PublicRecentTransactions>(
 		`/v1/explorer/transactions?limit=${encodeURIComponent(limit.toString())}`,
+		parseExplorerRecentTransactions,
 		options
 	);
 

@@ -4,7 +4,8 @@ import type {
 	NodeV1,
 	OrganizationSnapshotV1,
 	OrganizationV1,
-	ScpStatementObservationV1
+	ScpStatementObservationV1,
+	ExplorerRecentTransactionsV1
 } from 'shared';
 import type { PublicHistoryArchiveScanLogError } from './archive-evidence-types';
 import type { PublicCanonicalFullHistoryCoverage } from './canonical-history-types';
@@ -74,13 +75,7 @@ export interface PublicTransactionLookup extends PublicLedgerTransaction {
 	readonly source: 'horizon' | 'postgres_canonical';
 }
 
-export interface PublicRecentTransactions {
-	readonly generatedAt: string;
-	readonly limit: number;
-	readonly records: readonly PublicTransactionLookup[];
-	readonly source: 'horizon' | 'postgres_canonical';
-	readonly truncated: boolean;
-}
+export type PublicRecentTransactions = ExplorerRecentTransactionsV1;
 
 export interface PublicLedgerTransactions {
 	readonly ledger: string;

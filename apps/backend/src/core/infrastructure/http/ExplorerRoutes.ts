@@ -13,6 +13,8 @@ import { GetExplorerLocalTrustlineChanges } from '@network-scan/use-cases/get-ex
 import { GetExplorerLocalLedgers } from '@network-scan/use-cases/get-explorer-local-ledgers/GetExplorerLocalLedgers.js';
 import { GetExplorerLocalReadModel } from '@network-scan/use-cases/get-explorer-local-read-model/GetExplorerLocalReadModel.js';
 import { GetExplorerLocalTransactions } from '@network-scan/use-cases/get-explorer-local-transactions/GetExplorerLocalTransactions.js';
+import { GetExplorerRecentTransactions } from '@network-scan/use-cases/get-explorer-recent-transactions/GetExplorerRecentTransactions.js';
+import { fetchRecentTransactions } from '@network-scan/infrastructure/http/HorizonLedgerClient.js';
 
 export function mountExplorerRoutes(
 	api: express.Express,
@@ -22,6 +24,13 @@ export function mountExplorerRoutes(
 	const getExplorerLocalTransactions = kernel.container.get(
 		GetExplorerLocalTransactions
 	);
+	const getExplorerRecentTransactions = new GetExplorerRecentTransactions({
+		fetchLiveTransactions: (limit) =>
+			fetchRecentTransactions(config.horizonUrl.value, limit),
+		freshnessWindowMs: config.explorerTransactionFreshnessWindowMs,
+		getLocalTransactions: getExplorerLocalTransactions,
+		now: () => new Date()
+	});
 	const getExplorerLocalAccountChanges = kernel.container.get(
 		GetExplorerLocalAccountChanges
 	);
@@ -62,6 +71,7 @@ export function mountExplorerRoutes(
 				GetExplorerLocalReadModel
 			),
 			getExplorerLocalTransactions,
+			getExplorerRecentTransactions,
 			horizonUrl: config.horizonUrl.value,
 			rpcUrl: config.rpcUrl?.value
 		})
