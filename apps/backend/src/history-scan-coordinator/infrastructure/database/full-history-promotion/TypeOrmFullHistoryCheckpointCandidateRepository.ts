@@ -246,15 +246,31 @@ function validateProof(
 		!proof.resultsMatch ||
 		!proof.previousLedgersMatch ||
 		!proof.bucketsVerified ||
-		proof.ledgerFactCount !== expectedLedgerCount ||
-		proof.transactionFactCount !== expectedLedgerCount ||
-		proof.resultFactCount !== expectedLedgerCount
+		!hasCurrentProofFactCoverage(proof, expectedLedgerCount)
 	) {
 		throw promotionError(
 			'invalid-proof',
 			'Checkpoint proof is not strictly verified'
 		);
 	}
+}
+
+function hasCurrentProofFactCoverage(
+	proof: ProofRow,
+	expectedLedgerCount: number
+): boolean {
+	return (
+		proof.ledgerFactCount === expectedLedgerCount &&
+		isCategoryFactCount(proof.transactionFactCount, expectedLedgerCount) &&
+		isCategoryFactCount(proof.resultFactCount, expectedLedgerCount)
+	);
+}
+
+function isCategoryFactCount(
+	value: number,
+	expectedLedgerCount: number
+): boolean {
+	return Number.isInteger(value) && value >= 0 && value <= expectedLedgerCount;
 }
 
 function hasCheckpointLedgerBinding(details: unknown): boolean {

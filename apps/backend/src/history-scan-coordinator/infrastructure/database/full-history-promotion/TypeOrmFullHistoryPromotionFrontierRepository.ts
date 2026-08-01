@@ -9,6 +9,7 @@ import type {
 	FullHistoryPromotionFrontier,
 	FullHistoryPromotionFrontierRepository
 } from '../../../domain/full-history-promotion/FullHistoryPromotionFrontierRepository.js';
+import { currentProofFactCoverageSql } from '../full-history/FullHistoryProofFactCoverageSql.js';
 import { fullHistoryStrictProofSourceDigestsSql } from '../full-history/FullHistoryStrictProofSourceSql.js';
 import { CURRENT_HISTORY_ARCHIVE_CHECKPOINT_PROOF_VERSION } from '../../../domain/history-archive-checkpoint-proof/HistoryArchiveCheckpointProof.js';
 
@@ -90,12 +91,10 @@ export const promotionTargetSql = `
 		and proof."failureKind" is null
 		and proof."requiredObjectsComplete"
 		and proof."proofFactsComplete"
-		and proof."ledgerFactCount" = case
-			when proof."checkpointLedger" = 63 then 63 else 64 end
-		and proof."transactionFactCount" = case
-			when proof."checkpointLedger" = 63 then 63 else 64 end
-		and proof."resultFactCount" = case
-			when proof."checkpointLedger" = 63 then 63 else 64 end
+		and ${currentProofFactCoverageSql(
+			'proof',
+			'case when proof."checkpointLedger" = 63 then 63 else 64 end'
+		)}
 		and proof."checkpointBucketListMatches"
 		and proof."transactionsMatch"
 		and proof."resultsMatch"

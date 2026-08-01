@@ -1,3 +1,8 @@
+import {
+	compatibleProofFactCoverageSql,
+	legacyExactProofFactCoverageSql
+} from '../full-history/FullHistoryProofFactCoverageSql.js';
+
 export const createFullHistoryIngestionBatchSql = `
 	create table "full_history_ingestion_batch" (
 		"id" uuid not null,
@@ -270,7 +275,8 @@ export const createFullHistoryVerifiedSourceFunctionSql = `
 `;
 
 function composeFullHistoryBatchProofFunctionSql(
-	proofTimestampPredicate: string
+	proofTimestampPredicate: string,
+	proofFactCoveragePredicate: string
 ): string {
 	return `
 	create or replace function validate_full_history_batch_provenance()
@@ -292,9 +298,7 @@ function composeFullHistoryBatchProofFunctionSql(
 				and proof."resultsMatch"
 				and proof."previousLedgersMatch"
 				and proof."bucketsVerified"
-				and proof."ledgerFactCount" = new."ledger_count"
-				and proof."transactionFactCount" = new."ledger_count"
-				and proof."resultFactCount" = new."ledger_count"
+				and ${proofFactCoveragePredicate}
 				and proof."proofVersion" = new."proof_version"
 				and proof.details ->> 'checkpointStateLedgerFactPresent' = 'true'
 				and proof.details ->> 'checkpointStateLedgerMatches' = 'true'
@@ -343,12 +347,20 @@ function composeFullHistoryBatchProofFunctionSql(
 export const createFullHistoryBatchProofFunctionSql =
 	composeFullHistoryBatchProofFunctionSql(
 		`date_trunc('milliseconds', proof."evaluatedAt") =
-			new."proof_evaluated_at"`
+			new."proof_evaluated_at"`,
+		legacyExactProofFactCoverageSql('proof', 'new."ledger_count"')
 	);
 
 export const createFullHistoryBatchProofExactTimestampFunctionSql =
 	composeFullHistoryBatchProofFunctionSql(
-		'proof."evaluatedAt" = new."proof_evaluated_at"'
+		'proof."evaluatedAt" = new."proof_evaluated_at"',
+		legacyExactProofFactCoverageSql('proof', 'new."ledger_count"')
+	);
+
+export const createFullHistoryBatchProofCurrentFunctionSql =
+	composeFullHistoryBatchProofFunctionSql(
+		'proof."evaluatedAt" = new."proof_evaluated_at"',
+		compatibleProofFactCoverageSql('proof', 'new."ledger_count"')
 	);
 
 export const createFullHistoryBatchProofTriggerSql = `

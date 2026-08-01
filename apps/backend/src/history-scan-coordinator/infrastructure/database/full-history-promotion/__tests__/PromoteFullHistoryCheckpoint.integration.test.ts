@@ -111,6 +111,45 @@ describe('PromoteFullHistoryCheckpoint with exact Postgres evidence', () => {
 		});
 	});
 
+	it('promotes a current proof with an omitted zero-transaction category frame', async () => {
+		const seeded = await seedPromotionCandidate(dataSource, {
+			networkPassphrase: 'Promotion zero-transaction frame fixture network',
+			resultFactCount: 62,
+			seed: 112,
+			transactionFactCount: 62
+		});
+
+		await expect(promoter.promote(seeded.target)).resolves.toMatchObject({
+			nextLedger: '64',
+			replayed: false
+		});
+		expect(await canonicalCounts(seeded.proofId)).toEqual({
+			batches: 1,
+			ledgers: 63,
+			results: 0,
+			transactions: 0
+		});
+	});
+
+	it('rejects a proof whose mandatory ledger-header count is incomplete', async () => {
+		const seeded = await seedPromotionCandidate(dataSource, {
+			networkPassphrase: 'Promotion missing ledger header fixture network',
+			resultFactCount: 62,
+			seed: 113,
+			transactionFactCount: 62
+		});
+		await dataSource.query(
+			`update "history_archive_checkpoint_proof"
+			 set "ledgerFactCount" = 62 where id = $1`,
+			[seeded.proofId]
+		);
+
+		await expect(promoter.promote(seeded.target)).rejects.toMatchObject({
+			reason: 'invalid-proof'
+		});
+		expect(await canonicalCounts(seeded.proofId)).toMatchObject({ batches: 0 });
+	});
+
 	it('rejects non-verified proof and a different requested network', async () => {
 		const pending = await seedPromotionCandidate(dataSource, {
 			networkPassphrase: 'Promotion pending proof network',

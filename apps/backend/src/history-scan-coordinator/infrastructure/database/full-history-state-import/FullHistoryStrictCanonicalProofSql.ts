@@ -1,7 +1,10 @@
+import { compatibleProofFactCoverageSql } from '../full-history/FullHistoryProofFactCoverageSql.js';
+
 export const FULL_HISTORY_STATE_COVERAGE_MINIMUM_PROOF_VERSION = 6;
 
-// Version 6 added the checkpoint-state ledger binding. Version 7 only made
-// SCP evidence optional, so an already-verified version 6 proof remains valid.
+// Versions 6 and 7 required one category frame per ledger. Version 8 still
+// requires every ledger header but can prove omitted frames for ledgers whose
+// header commits to the protocol-correct zero-transaction hashes.
 export const fullHistoryStrictCanonicalBatchProofPredicateSql = `
 	current_proof.id = batch."checkpoint_proof_id"
 	and current_proof."archiveUrlIdentity" = batch."archive_url_identity"
@@ -17,12 +20,10 @@ export const fullHistoryStrictCanonicalBatchProofPredicateSql = `
 	and current_proof."resultsMatch"
 	and current_proof."previousLedgersMatch"
 	and current_proof."bucketsVerified"
-	and current_proof."ledgerFactCount" = case
-		when batch."checkpoint_ledger" = 63 then 63 else 64 end
-	and current_proof."transactionFactCount" = case
-		when batch."checkpoint_ledger" = 63 then 63 else 64 end
-	and current_proof."resultFactCount" = case
-		when batch."checkpoint_ledger" = 63 then 63 else 64 end
+	and ${compatibleProofFactCoverageSql(
+		'current_proof',
+		'case when batch."checkpoint_ledger" = 63 then 63 else 64 end'
+	)}
 	and current_proof.details ->> 'checkpointStateLedgerFactPresent' = 'true'
 	and current_proof.details ->> 'checkpointStateLedgerMatches' = 'true'
 	and sha256(convert_to(

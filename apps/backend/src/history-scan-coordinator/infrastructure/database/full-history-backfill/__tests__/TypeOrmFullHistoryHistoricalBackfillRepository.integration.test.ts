@@ -261,6 +261,31 @@ describe('TypeOrmFullHistoryHistoricalBackfillRepository', () => {
 		});
 	});
 
+	it('selects proof-v8 checkpoints with zero-transaction frame omissions', async () => {
+		const candidate = await seedFullHistoryCheckpoint(dataSource, {
+			batchNumber: 931,
+			checkpointLedger: 255,
+			networkPassphrase
+		});
+		await dataSource.query(
+			`update "history_archive_checkpoint_proof"
+			 set "proofVersion" = 8, "transactionFactCount" = 63,
+				"resultFactCount" = 63
+			 where id = $1`,
+			[candidate.proofId]
+		);
+
+		await expect(
+			repository.findStrictProofTargets(networkPassphrase, 255, 8)
+		).resolves.toEqual([
+			{
+				archiveUrlIdentity: candidate.archiveUrlIdentity,
+				checkpointLedger: 255,
+				networkPassphrase
+			}
+		]);
+	});
+
 	async function scheduleAdjacent(batch: number) {
 		return repository.schedule({
 			id: `00000000-0000-4000-8000-${batch.toString().padStart(12, '0')}`,

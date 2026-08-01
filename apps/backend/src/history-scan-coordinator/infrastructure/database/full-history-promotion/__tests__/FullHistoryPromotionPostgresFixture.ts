@@ -2,12 +2,14 @@ import { createHash } from 'node:crypto';
 import type { DataSource, QueryRunner } from 'typeorm';
 import type { FullHistoryPromotionTarget } from '../../../../domain/full-history-promotion/FullHistoryCheckpointCandidate.js';
 import { FullHistoryHash } from '../../../../domain/full-history/FullHistoryCanonicalTypes.js';
+import { CURRENT_HISTORY_ARCHIVE_CHECKPOINT_PROOF_VERSION } from '../../../../domain/history-archive-checkpoint-proof/HistoryArchiveCheckpointProof.js';
 import { FullHistoryCanonicalSchemaMigration1784860000000 } from '../../migrations/1784860000000-FullHistoryCanonicalSchemaMigration.js';
 import { FullHistoryOperationFactsMigration1784960000000 } from '../../migrations/1784960000000-FullHistoryOperationFactsMigration.js';
 import { FullHistoryOperationBackfillMigration1784970000000 } from '../../migrations/1784970000000-FullHistoryOperationBackfillMigration.js';
 import { FullHistoryOperationResultMigration1785010000000 } from '../../migrations/1785010000000-FullHistoryOperationResultMigration.js';
 import { FullHistoryOperationAccountReferenceMigration1785040000000 } from '../../migrations/1785040000000-FullHistoryOperationAccountReferenceMigration.js';
 import { FullHistoryPromotionRuntimeMigration1784930000000 } from '../../migrations/1784930000000-FullHistoryPromotionRuntimeMigration.js';
+import { FullHistoryZeroTransactionProofPromotionMigration1785260000000 } from '../../migrations/1785260000000-FullHistoryZeroTransactionProofPromotionMigration.js';
 import { ParsedLedgerHeaderMigration1784000000000 } from '../../migrations/1784000000000-ParsedLedgerHeaderMigration.js';
 import { HistoryArchiveCheckpointProofMigration1784420000000 } from '../../migrations/1784420000000-HistoryArchiveCheckpointProofMigration.js';
 import { ParsedTransactionIndexMigration1784600000000 } from '../../migrations/1784600000000-ParsedTransactionIndexMigration.js';
@@ -34,8 +36,10 @@ export interface SeededPromotionCandidate {
 interface SeedOptions {
 	readonly checkpointLedger?: number;
 	readonly networkPassphrase: string;
+	readonly resultFactCount?: number;
 	readonly seed: number;
 	readonly transaction?: RealTransactionFixture;
+	readonly transactionFactCount?: number;
 }
 
 export async function installPromotionSchema(
@@ -52,6 +56,9 @@ export async function installPromotionSchema(
 		await new ParsedHistoryObservationMigration1784850000000().up(runner);
 		await createSourceObjectTable(runner);
 		await new FullHistoryCanonicalSchemaMigration1784860000000().up(runner);
+		await new FullHistoryZeroTransactionProofPromotionMigration1785260000000().up(
+			runner
+		);
 		await new FullHistoryPromotionRuntimeMigration1784930000000().up(runner);
 		await new FullHistoryOperationFactsMigration1784960000000().up(runner);
 		await new FullHistoryOperationBackfillMigration1784970000000().up(runner);
@@ -113,6 +120,8 @@ export async function seedPromotionCandidate(
 		archiveUrlIdentity,
 		checkpointLedger,
 		networkPassphrase: options.networkPassphrase,
+		resultFactCount: options.resultFactCount,
+		transactionFactCount: options.transactionFactCount,
 		sourceIds
 	});
 	const exactFirstClosedAt = new Date(
@@ -210,10 +219,14 @@ async function insertProof(
 		readonly archiveUrlIdentity: string;
 		readonly checkpointLedger: number;
 		readonly networkPassphrase: string;
+		readonly resultFactCount?: number;
 		readonly sourceIds: SeededPromotionCandidate['sourceIds'];
+		readonly transactionFactCount?: number;
 	}
 ): Promise<number> {
 	const count = input.checkpointLedger === 63 ? 63 : 64;
+	const transactionFactCount = input.transactionFactCount ?? count;
+	const resultFactCount = input.resultFactCount ?? count;
 	const rows = (await dataSource.query(
 		`insert into "history_archive_checkpoint_proof" (
 			"archiveUrl", "archiveUrlIdentity", "checkpointLedger", "status",
@@ -224,13 +237,16 @@ async function insertProof(
 			"evaluatedAt", "checkpointStateObjectRemoteId", "ledgerObjectRemoteId",
 			"transactionsObjectRemoteId", "resultsObjectRemoteId"
 		) values (
-			$1, $1, $2, 'verified', 6, true, true, true, true, true, true, true,
-			$3, $3, $3, null, $4::jsonb, $5, $6, $7, $8, $9
+			$1, $1, $2, 'verified', $3, true, true, true, true, true, true, true,
+			$4, $5, $6, null, $7::jsonb, $8, $9, $10, $11, $12
 		) returning id`,
 		[
 			input.archiveUrlIdentity,
 			input.checkpointLedger,
+			CURRENT_HISTORY_ARCHIVE_CHECKPOINT_PROOF_VERSION,
 			count,
+			transactionFactCount,
+			resultFactCount,
 			JSON.stringify({
 				checkpointStateLedgerFactPresent: true,
 				checkpointStateLedgerMatches: true,
