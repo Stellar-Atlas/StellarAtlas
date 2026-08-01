@@ -2,27 +2,28 @@ import {
 	historyArchiveObjectClaimAdoptionSql,
 	historyArchiveObjectClaimCleanupSql,
 	historyArchiveObjectClaimFallbackLockSql,
-	historyArchiveObjectClaimFinalizeSql,
-	historyArchiveObjectClaimSelectionSql
+	historyArchiveObjectClaimSql
 } from '../HistoryArchiveObjectClaimSql.js';
 import { admitCanonicalFrontierSql } from '../HistoryArchiveCanonicalFrontierSql.js';
+import { historyArchiveObjectFrontierSql } from '../HistoryArchiveObjectFrontierSql.js';
+import { historyArchiveReadyPressureSql } from '../HistoryArchiveObjectReadyQueue.js';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
 
 describe('HistoryArchiveObjectClaimSql', () => {
-	it('selects durable slots under a concurrent shared claim gate', () => {
+	it('claims from the compact ready queue under durable slot locks', () => {
 		expect(historyArchiveObjectClaimCleanupSql).toContain(
 			'update "history_archive_object_claim_slot" slot'
 		);
-		expect(historyArchiveObjectClaimSelectionSql).toContain(
+		expect(historyArchiveObjectClaimSql).toContain(
+			'from "history_archive_object_ready" ready'
+		);
+		expect(historyArchiveObjectClaimSql).toContain(
 			'for update of slot skip locked'
 		);
-		expect(historyArchiveObjectClaimSelectionSql).toContain(
-			'for update of root skip locked'
-		);
-		expect(historyArchiveObjectClaimSelectionSql).not.toContain(
-			'for update of slot, root'
+		expect(historyArchiveObjectClaimSql).toContain(
+			'for update of ready, candidate, root skip locked'
 		);
 		expect(historyArchiveObjectClaimCleanupSql).toContain(
 			'pg_try_advisory_xact_lock_shared'
@@ -36,39 +37,8 @@ describe('HistoryArchiveObjectClaimSql', () => {
 		expect(historyArchiveObjectClaimFallbackLockSql).not.toContain('try');
 	});
 
-	it('prioritizes claim class, proof work, and a fair bounded root', () => {
-		expect(historyArchiveObjectClaimSelectionSql).toContain(
-			'claim_class."claimClass"'
-		);
-		expect(historyArchiveObjectClaimSelectionSql).toContain(
-			"when 'canonical-frontier-reserve' then 0"
-		);
-		expect(historyArchiveObjectClaimSelectionSql).toContain(
-			"when 'proof-completion-reserve' then 1"
-		);
-		expect(historyArchiveObjectClaimSelectionSql).toContain(
-			'when claim_class.slot % 2 = 1 then root_work.priority'
-		);
-		expect(historyArchiveObjectClaimFinalizeSql).toContain(
-			'case when $3::integer % 2 = 1 then case candidate."executionReason"'
-		);
-		expect(historyArchiveObjectClaimSelectionSql).toContain(
-			'for update of root skip locked'
-		);
-		expect(
-			historyArchiveObjectClaimSelectionSql.indexOf(
-				'for update of slot skip locked'
-			)
-		).toBeLessThan(
-			historyArchiveObjectClaimSelectionSql.indexOf('root_work as materialized')
-		);
-		expect(historyArchiveObjectClaimSelectionSql).not.toContain('limit 512');
-	});
-
-	it('can replace generic runnable work globally for the proof frontier', () => {
-		expect(historyArchiveObjectClaimSelectionSql).toContain(
-			'when claim_class.slot % 2 = 1 then root_work.priority'
-		);
+	it('keeps proof work ahead of generic work', () => {
+		expect(historyArchiveObjectClaimSql).toContain('ready.priority');
 		expect(admitCanonicalFrontierSql).toContain(
 			'generic_replacements as materialized'
 		);
@@ -80,124 +50,114 @@ describe('HistoryArchiveObjectClaimSql', () => {
 		);
 	});
 
-	it('bounds candidate lookup by claimable archive roots', () => {
-		expect(historyArchiveObjectClaimSelectionSql).toContain(
+	it('revalidates root, host, retry, and dependency gates at claim time', () => {
+		expect(historyArchiveObjectClaimSql).toContain(
 			'active_claims as materialized'
 		);
-		expect(historyArchiveObjectClaimSelectionSql).toContain(
+		expect(historyArchiveObjectClaimSql).toContain(
 			'active."remoteId" = occupied."objectRemoteId"'
 		);
-		expect(historyArchiveObjectClaimSelectionSql).toContain(
-			'claimable_roots as materialized'
+		expect(historyArchiveObjectClaimSql).toContain(
+			'coalesce(archive_activity.count, 0) < $2'
 		);
-		expect(historyArchiveObjectClaimSelectionSql).toContain(
-			'from claimable_roots root'
+		expect(historyArchiveObjectClaimSql).toContain(
+			'coalesce(host_activity.count, 0) < $4'
 		);
-		expect(historyArchiveObjectClaimSelectionSql).toContain('join lateral (');
-		expect(historyArchiveObjectClaimSelectionSql).toContain(
-			'candidate."archiveUrlIdentity" = root."archiveUrlIdentity"'
+		expect(historyArchiveObjectClaimSql).toContain(
+			'from "history_archive_object_host_throttle" throttle'
 		);
-		expect(historyArchiveObjectClaimSelectionSql).not.toContain(
-			'group by candidate."archiveUrlIdentity"'
+		expect(historyArchiveObjectClaimSql).toContain(
+			'candidate."dependencyReady" = true'
+		);
+		expect(historyArchiveObjectClaimSql).not.toContain('jsonb_array_elements');
+	});
+
+	it('keeps canonical reservations focused on proof convergence', () => {
+		const stableSourceOrder =
+			'order by proof_progress desc,\n\t\t\t\t\t"lastClaimedAt" asc nulls first,\n\t\t\t\t\t"archiveUrlIdentity", object_priority, id';
+		expect(admitCanonicalFrontierSql).toContain(stableSourceOrder);
+	});
+
+	it('caps per-root capacity probes instead of counting every queued row', () => {
+		expect(historyArchiveObjectFrontierSql).toContain(
+			'cross join lateral (\n\t\t\tselect count(*)::integer as count'
+		);
+		expect(historyArchiveObjectFrontierSql).toContain('bounded_runnable');
+		expect(historyArchiveObjectFrontierSql).not.toContain(
+			'$2::integer - (\n\t\t\t\tselect count(*)::integer'
 		);
 	});
 
-	it('revalidates archive, host, retry, and host-backoff gates', () => {
-		expect(historyArchiveObjectClaimSelectionSql).toContain('slot.slot < $3');
-		expect(historyArchiveObjectClaimFinalizeSql).toContain(
-			"and active.status = 'scanning'"
+	it('only wraps a frontier cursor after its descending probe is exhausted', () => {
+		expect(historyArchiveObjectFrontierSql).toContain(
+			'and continued_candidate.id is null'
 		);
-		expect(historyArchiveObjectClaimFinalizeSql).toContain(') < $2');
-		expect(historyArchiveObjectClaimFinalizeSql).toContain(') < $4');
-		expect(historyArchiveObjectClaimFinalizeSql).toContain(
-			'from "history_archive_object_host_throttle" throttle'
+		expect(historyArchiveObjectFrontierSql).not.toContain(
+			'order by sought.phase'
 		);
-		expect(historyArchiveObjectClaimFinalizeSql).toContain(
-			'throttle."blockedUntil" > now()'
+	});
+
+	it('rotates one file-type cursor per source within the admission limit', () => {
+		expect(historyArchiveObjectFrontierSql).toContain(
+			'root_attempts as materialized'
 		);
-		expect(historyArchiveObjectClaimFinalizeSql).toContain(
-			'candidate."nextAttemptAt",'
+		expect(historyArchiveObjectFrontierSql).toContain(
+			'order by cursor."updatedAt" asc'
 		);
-		expect(historyArchiveObjectClaimFinalizeSql).toContain(
-			'candidate."updatedAt" + interval \'1 hour\''
+		expect(historyArchiveObjectFrontierSql).toContain(
+			'limit greatest($1::integer, 1)'
+		);
+		expect(historyArchiveObjectFrontierSql).toContain(
+			'when candidate.id is null then false'
 		);
 	});
 
 	it('allows failed retries only on the twelve even slots', () => {
-		expect(historyArchiveObjectClaimSelectionSql).toContain(
-			'and (class_state."hasPending" or class_state."hasFailed")'
-		);
-		expect(historyArchiveObjectClaimSelectionSql).toContain(
-			'when claim_slot.slot % 2 = 0 and class_state."hasFailed"'
-		);
-		expect(historyArchiveObjectClaimFinalizeSql).toContain(
-			"$8::text = 'failed'"
-		);
-		expect(historyArchiveObjectClaimFinalizeSql).toContain(
-			'$3::integer % 2 = 0'
-		);
-		expect(historyArchiveObjectClaimFinalizeSql).not.toContain(
-			'coalesce(pending_candidate.id, failed_candidate.id)'
+		expect(historyArchiveObjectClaimSql).toContain(
+			"free_slot.slot % 2 = 0 and candidate.status = 'failed'"
 		);
 	});
 
 	it('updates durable root and object cursors', () => {
-		expect(historyArchiveObjectClaimFinalizeSql).toContain(
-			'"lastClaimedAt" = now()'
-		);
-		expect(historyArchiveObjectClaimFinalizeSql).toContain(
-			'root_cursor_update as'
-		);
-	});
-
-	it('claims only materialized dependency-ready rows', () => {
-		expect(historyArchiveObjectClaimSelectionSql).toContain(
-			'candidate."dependencyReady" = true'
-		);
-		expect(historyArchiveObjectClaimFinalizeSql).toContain(
-			'candidate."dependencyReady" = true'
-		);
-		expect(historyArchiveObjectClaimSelectionSql).not.toContain(
-			'jsonb_array_elements'
-		);
+		expect(historyArchiveObjectClaimSql).toContain('"lastClaimedAt" = now()');
+		expect(historyArchiveObjectClaimSql).toContain('root_cursor_update as');
 	});
 
 	it('resets transient worker and error state when claiming an object', () => {
-		expect(historyArchiveObjectClaimFinalizeSql).toContain(
+		expect(historyArchiveObjectClaimSql).toContain(
 			'attempts = candidate.attempts + 1'
 		);
-		expect(historyArchiveObjectClaimFinalizeSql).toContain(
-			'"lastClaimedAt" = now()'
-		);
-		expect(historyArchiveObjectClaimFinalizeSql).toContain(
-			'"bytesDownloaded" = null'
-		);
-		expect(historyArchiveObjectClaimFinalizeSql).toContain(
+		expect(historyArchiveObjectClaimSql).toContain('"bytesDownloaded" = null');
+		expect(historyArchiveObjectClaimSql).toContain(
 			'"workerStage" = \'claimed\''
 		);
-		expect(historyArchiveObjectClaimFinalizeSql).toContain(
-			'"errorType" = null'
-		);
-		expect(historyArchiveObjectClaimFinalizeSql).toContain(
-			'"errorMessage" = null'
-		);
-		expect(historyArchiveObjectClaimFinalizeSql).toContain(
-			'"httpStatus" = null'
-		);
-		expect(historyArchiveObjectClaimFinalizeSql).toContain(
-			'"nextAttemptAt" = null'
-		);
-		expect(historyArchiveObjectClaimFinalizeSql).toContain(
+		expect(historyArchiveObjectClaimSql).toContain('"errorType" = null');
+		expect(historyArchiveObjectClaimSql).toContain('"errorMessage" = null');
+		expect(historyArchiveObjectClaimSql).toContain('"httpStatus" = null');
+		expect(historyArchiveObjectClaimSql).toContain('"nextAttemptAt" = null');
+		expect(historyArchiveObjectClaimSql).toContain(
 			'"verificationFacts" = null'
 		);
 	});
 
 	it('does not overwrite terminal transition work before reconciliation', () => {
-		expect(historyArchiveObjectClaimSelectionSql).toContain(
+		expect(historyArchiveObjectClaimSql).toContain(
 			'candidate."transitionEffectsRequiredAt" is null'
 		);
-		expect(historyArchiveObjectClaimFinalizeSql).toContain(
+		expect(historyArchiveObjectClaimSql).toContain(
 			'candidate."transitionEffectsCompletedAt" is not null'
+		);
+	});
+
+	it('computes worker pressure only from slots and the compact ready queue', () => {
+		expect(historyArchiveReadyPressureSql).toContain(
+			'from "history_archive_object_claim_slot" slot'
+		);
+		expect(historyArchiveReadyPressureSql).toContain(
+			'from "history_archive_object_ready"'
+		);
+		expect(historyArchiveReadyPressureSql).not.toContain(
+			'candidate."executionDisposition"'
 		);
 	});
 });

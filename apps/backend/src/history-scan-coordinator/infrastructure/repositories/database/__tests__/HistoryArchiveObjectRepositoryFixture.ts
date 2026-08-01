@@ -2,7 +2,9 @@ import { DataSource } from 'typeorm';
 import { HistoryArchiveObject } from '../../../../domain/history-archive-object/HistoryArchiveObject.js';
 import { HistoryArchiveObjectHostThrottleMigration1784410000000 } from '../../../database/migrations/1784410000000-HistoryArchiveObjectHostThrottleMigration.js';
 import { HistoryArchiveObjectClaimCursorMigration1784780000000 } from '../../../database/migrations/1784780000000-HistoryArchiveObjectClaimCursorMigration.js';
+import { HistoryArchiveReadyQueueMigration1785270000000 } from '../../../database/migrations/1785270000000-HistoryArchiveReadyQueueMigration.js';
 import { TypeOrmHistoryArchiveObjectRepository } from '../TypeOrmHistoryArchiveObjectRepository.js';
+import { enqueueHistoryArchiveReadyObjects } from '../HistoryArchiveObjectReadyQueue.js';
 
 export async function createObjectRepositoryDataSource(url: string): Promise<{
 	readonly dataSource: DataSource;
@@ -24,6 +26,14 @@ export async function createObjectRepositoryDataSource(url: string): Promise<{
 	await new HistoryArchiveObjectClaimCursorMigration1784780000000().up(
 		queryRunner
 	);
+	await queryRunner.startTransaction();
+	try {
+		await new HistoryArchiveReadyQueueMigration1785270000000().up(queryRunner);
+		await queryRunner.commitTransaction();
+	} catch (error) {
+		await queryRunner.rollbackTransaction();
+		throw error;
+	}
 	await queryRunner.release();
 	return {
 		dataSource,
@@ -38,6 +48,10 @@ export async function saveHistoryArchiveObjects(
 	...objects: HistoryArchiveObject[]
 ): Promise<void> {
 	await dataSource.getRepository(HistoryArchiveObject).save(objects);
+	await enqueueHistoryArchiveReadyObjects(
+		dataSource.manager,
+		objects.map((object) => object.remoteId)
+	);
 }
 
 export async function insertHistoryArchiveHostThrottle(
@@ -147,7 +161,9 @@ export async function resetHistoryArchiveObjectQueue(
 		'truncate table history_archive_object_plan restart identity cascade'
 	);
 	await dataSource.query(`
-		update history_archive_object_claim_slot
+		insert into history_archive_object_claim_slot (slot)
+		select generate_series(0, 23)::smallint
+		on conflict (slot) do update
 		set "objectRemoteId" = null, "claimedAt" = null, "updatedAt" = now()
 	`);
 }

@@ -7,6 +7,7 @@ import type { HistoryArchiveObjectEventRecorder } from '../../../../use-cases/re
 import { FailHistoryArchiveObject } from '../../../../use-cases/fail-history-archive-object/FailHistoryArchiveObject.js';
 import { HistoryArchiveObjectClaimCursorMigration1784780000000 } from '../../../database/migrations/1784780000000-HistoryArchiveObjectClaimCursorMigration.js';
 import { TypeOrmHistoryArchiveObjectRepository } from '../TypeOrmHistoryArchiveObjectRepository.js';
+import { synchronizeHistoryArchiveReadyQueue } from '../HistoryArchiveObjectReadyQueue.js';
 import {
 	startDisposablePostgres,
 	type DisposablePostgres
@@ -66,6 +67,18 @@ describe('TypeOrmHistoryArchiveObjectRepository disposable PostgreSQL', () => {
 		);
 	});
 
+	it('bootstraps an empty durable ready queue on the first idle claim', async () => {
+		const root = rootObject('https://bootstrap.example/archive');
+		await dataSource.getRepository(HistoryArchiveObject).save(root);
+		await expect(
+			dataSource.query('select * from history_archive_object_ready')
+		).resolves.toEqual([]);
+
+		const claimed = await repository.claimNextObject(['history-archive-state']);
+
+		expect(claimed?.remoteId).toBe(root.remoteId);
+	});
+
 	it('rotates equivalent object keys using the persistent object cursor', async () => {
 		const archiveUrl = 'https://keys.example/archive';
 		await save(
@@ -83,6 +96,25 @@ describe('TypeOrmHistoryArchiveObjectRepository disposable PostgreSQL', () => {
 		expect(new Set([first.objectKey, second?.objectKey])).toEqual(
 			new Set(['checkpoint-state:0000007f', 'checkpoint-state:000000bf'])
 		);
+	});
+
+	it('queues the next archive object immediately after verification', async () => {
+		const archiveUrl = 'https://verified-next.example/archive';
+		await save(
+			rootObject(archiveUrl, 'verified'),
+			checkpointObject(archiveUrl, 127),
+			checkpointObject(archiveUrl, 191)
+		);
+
+		const first = await repository.claimNextObject(['checkpoint-state']);
+		if (first === null) throw new Error('Expected the first checkpoint claim');
+		await repository.markObjectVerified(first.remoteId, {
+			claimAttempt: first.attempts
+		});
+		const second = await repository.claimNextObject(['checkpoint-state']);
+
+		expect(second?.remoteId).toBeDefined();
+		expect(second?.remoteId).not.toBe(first.remoteId);
 	});
 
 	it('enforces the per-archive active cap', async () => {
@@ -141,6 +173,7 @@ describe('TypeOrmHistoryArchiveObjectRepository disposable PostgreSQL', () => {
 		await dataSource.query(
 			'update history_archive_object_queue set "nextAttemptAt" = now() - interval \'1 second\''
 		);
+		await synchronizeHistoryArchiveReadyQueue(dataSource.manager, 24);
 
 		expect(
 			(await repository.claimNextObject(['history-archive-state']))?.remoteId
@@ -157,11 +190,10 @@ describe('TypeOrmHistoryArchiveObjectRepository disposable PostgreSQL', () => {
 		await expect(
 			repository.claimNextObject(['history-archive-state'])
 		).resolves.toBeNull();
-		await dataSource.query(
-			`update history_archive_object_queue
-			 set "transitionEffectsCompletedAt" = now()
-			 where "remoteId" = $1`,
-			[object.remoteId]
+		await repository.markTransitionEffectsCompleted(
+			object.remoteId,
+			object.attempts,
+			'failed'
 		);
 
 		expect(
@@ -333,6 +365,23 @@ describe('TypeOrmHistoryArchiveObjectRepository disposable PostgreSQL', () => {
 		).toBe(pending.remoteId);
 	});
 
+	it('wakes the stored object when a plan observes the same identity with a new UUID', async () => {
+		const archiveUrl = 'https://identity-enqueue.example/archive';
+		const stored = checkpointObject(archiveUrl, 127);
+		stored.dependencyReady = false;
+		await save(rootObject(archiveUrl, 'verified'), stored);
+
+		const observed = checkpointObject(archiveUrl, 127);
+		observed.dependencyReady = true;
+		expect(observed.remoteId).not.toBe(stored.remoteId);
+
+		await repository.planObjects([observed]);
+
+		expect(
+			(await repository.claimNextObject(['checkpoint-state']))?.remoteId
+		).toBe(stored.remoteId);
+	});
+
 	it('treats null legacy pending disposition as deferred without mutating it', async () => {
 		const deferred = rootObject('https://legacy-deferred.example/archive');
 		deferred.executionDisposition = null;
@@ -381,7 +430,23 @@ describe('TypeOrmHistoryArchiveObjectRepository disposable PostgreSQL', () => {
 			}
 		};
 		await save(checkpoint);
-		await repository.materializeCheckpointDependencies(checkpoint.remoteId);
+		expect(
+			await repository.materializeCheckpointDependencies(checkpoint.remoteId)
+		).toBe(1);
+		await expect(
+			dataSource.query(
+				`select "dependencyReady" from history_archive_object_queue
+				 where "remoteId" = $1`,
+				[bucket.remoteId]
+			)
+		).resolves.toMatchObject([{ dependencyReady: true }]);
+		await expect(
+			dataSource.query(
+				`select "objectRemoteId" from history_archive_object_ready
+				 where "archiveUrlIdentity" = $1`,
+				[archiveUrl]
+			)
+		).resolves.toMatchObject([{ objectRemoteId: bucket.remoteId }]);
 
 		expect((await repository.claimNextObject(['bucket']))?.remoteId).toBe(
 			bucket.remoteId

@@ -9,6 +9,12 @@ import {
 	historyArchiveThroughputWindowMinutes
 } from '@history-scan-coordinator/domain/history-archive-object/HistoryArchiveObjectPlanningPolicy.js';
 import { requeueStaleHistoryArchiveStateObjects } from './HistoryArchiveObjectStateRefreshQuery.js';
+import {
+	enqueueHistoryArchiveReadyArchives,
+	historyArchiveReadyPressureSql,
+	historyArchiveReadyRootActivityCtesSql,
+	synchronizeHistoryArchiveReadyQueue
+} from './HistoryArchiveObjectReadyQueue.js';
 
 const planChunkSize = 200;
 const promotionLockName = 'history_archive_object_plan_promotion';
@@ -17,34 +23,36 @@ export async function planHistoryArchiveObjects(
 	repository: Repository<HistoryArchiveObject>,
 	objects: readonly HistoryArchiveObject[]
 ): Promise<number> {
-	let planned = 0;
-	for (let offset = 0; offset < objects.length; offset += planChunkSize) {
-		const values = objects
-			.slice(offset, offset + planChunkSize)
-			.map((object) => ({
-				archiveUrl: object.archiveUrl,
-				archiveUrlIdentity: object.archiveUrlIdentity,
-				bucketHash: object.bucketHash,
-				checkpointLedger: object.checkpointLedger,
-				dependencyReady: object.dependencyReady === true,
-				hostIdentity: object.hostIdentity,
-				objectKey: object.objectKey,
-				objectOrder: object.objectOrder,
-				objectType: object.objectType,
-				objectUrl: object.objectUrl,
-				remoteId: object.remoteId,
-				status: object.status
-			}));
-		const rows = (await repository.manager.query(planObjectsSql, [
-			JSON.stringify(values)
-		])) as readonly unknown[];
-		planned += rows.length;
-	}
-
 	const refreshed = await requeueStaleHistoryArchiveStateObjects(
 		repository.manager,
 		objects
 	);
+	let planned = 0;
+	for (let offset = 0; offset < objects.length; offset += planChunkSize) {
+		const chunk = objects.slice(offset, offset + planChunkSize);
+		const values = chunk.map((object) => ({
+			archiveUrl: object.archiveUrl,
+			archiveUrlIdentity: object.archiveUrlIdentity,
+			bucketHash: object.bucketHash,
+			checkpointLedger: object.checkpointLedger,
+			dependencyReady: object.dependencyReady === true,
+			hostIdentity: object.hostIdentity,
+			objectKey: object.objectKey,
+			objectOrder: object.objectOrder,
+			objectType: object.objectType,
+			objectUrl: object.objectUrl,
+			remoteId: object.remoteId,
+			status: object.status
+		}));
+		const rows = (await repository.manager.query(planObjectsSql, [
+			JSON.stringify(values)
+		])) as readonly unknown[];
+		await enqueueHistoryArchiveReadyArchives(
+			repository.manager,
+			chunk.map((object) => object.archiveUrlIdentity)
+		);
+		planned += rows.length;
+	}
 	return planned + refreshed;
 }
 
@@ -58,8 +66,7 @@ export async function promoteHistoryArchiveObjectPlans(
 		)) as readonly { readonly locked?: boolean }[];
 		if (lock?.locked !== true) return emptyPromotionResult();
 
-		const [counts] = (await manager.query(queuePressureSql, [
-			historyArchiveMaximumWatermark + 1,
+		const [counts] = (await manager.query(historyArchiveReadyPressureSql, [
 			historyArchiveThroughputSampleCap,
 			historyArchiveThroughputWindowMinutes
 		])) as readonly {
@@ -78,6 +85,10 @@ export async function promoteHistoryArchiveObjectPlans(
 			pressure.availableSlots,
 			historyArchivePerRootFrontier
 		])) as readonly { readonly promotedObjects: number | string }[];
+		await synchronizeHistoryArchiveReadyQueue(
+			manager,
+			historyArchiveMaximumWatermark
+		);
 
 		return {
 			...pressure,
@@ -145,74 +156,8 @@ const planObjectsSql = `
 	returning id
 `;
 
-const queuePressureSql = `
-	with outstanding as (
-		select 1
-		from "history_archive_object_queue"
-		where status in ('pending', 'scanning', 'failed')
-			and (
-				status = 'scanning'
-				or (
-					"executionDisposition" = 'executable'
-					and "dependencyReady" = true
-					and (
-						"transitionEffectsRequiredAt" is null
-						or "transitionEffectsCompletedAt" is not null
-					)
-					and not exists (
-						select 1
-						from "history_archive_object_host_throttle" throttle
-						where throttle."hostIdentity" =
-							"history_archive_object_queue"."hostIdentity"
-							and throttle."blockedUntil" > now()
-					)
-					and (
-						status = 'pending'
-						or (
-							status = 'failed'
-							and coalesce(
-								"nextAttemptAt",
-								"updatedAt" + interval '1 hour'
-							) <= now()
-						)
-					)
-				)
-			)
-		limit $1
-	), recent_events as (
-		select 1
-		from "history_archive_object_event"
-		where "eventType" = 'verified'
-			and "createdAt" >=
-			now() - make_interval(mins => $3::integer)
-		limit $2
-	)
-	select
-		(select count(*)::integer from outstanding) as "outstandingObjects",
-		(select count(*)::integer from recent_events) as "recentCompletions"
-`;
-
 const promotePlansSql = `
-	with active_by_root as (
-		select "archiveUrlIdentity", count(*)::integer as active_count
-		from "history_archive_object_queue"
-		where status = 'scanning'
-			or (
-				status = 'pending'
-				and "executionDisposition" = 'executable'
-				and "dependencyReady" = true
-			)
-			or (
-				status = 'failed'
-				and "executionDisposition" = 'executable'
-				and "dependencyReady" = true
-				and coalesce(
-					"nextAttemptAt",
-					"updatedAt" + interval '1 hour'
-				) <= now()
-			)
-		group by "archiveUrlIdentity"
-	), ranked as (
+	with ${historyArchiveReadyRootActivityCtesSql}, ranked as (
 		select
 			plan.*,
 			coalesce(active.active_count, 0) as active_count,

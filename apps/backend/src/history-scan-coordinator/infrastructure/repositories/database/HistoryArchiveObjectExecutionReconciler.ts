@@ -22,6 +22,10 @@ import {
 	historyArchiveObjectFrontierSql,
 	seedHistoryArchiveFrontierCursorsSql
 } from './HistoryArchiveObjectFrontierSql.js';
+import {
+	historyArchiveReadyPressureSql,
+	synchronizeHistoryArchiveReadyQueue
+} from './HistoryArchiveObjectReadyQueue.js';
 import { hasPostgresSqlState } from './PostgresError.js';
 
 const reconciliationLockName = 'history_archive_execution_reconciliation';
@@ -49,22 +53,19 @@ export async function reconcileHistoryArchiveObjectExecution(
 		)) as readonly { readonly locked?: boolean }[];
 		if (lock?.locked !== true) return emptyResult();
 
-		const [preserved] = (await manager.query(
-			preserveRunnableRowsSql
-		)) as readonly { readonly count: number | string }[];
 		await backfillLegacyCheckpointContentDigests(manager);
 		await refreshOneStaleCanonicalCheckpointProof(manager);
 		await manager.query(materializeCanonicalFrontierDependenciesSql);
-		await manager.query(rebalanceRunnableFrontierSql, [
-			historyArchivePerRootFrontier
-		]);
 		const [canonicalAdmission] = (await manager.query(
 			admitCanonicalFrontierSql,
 			[historyArchiveCanonicalReserveCount, historyArchivePerHostConcurrency]
 		)) as readonly { readonly count: number | string }[];
 		const canonicalAdmittedObjects = Number(canonicalAdmission?.count ?? 0);
-		const [counts] = (await manager.query(pressureSql, [
-			historyArchiveMaximumWatermark + 1,
+		const readyState = await synchronizeHistoryArchiveReadyQueue(
+			manager,
+			historyArchiveMaximumWatermark
+		);
+		const [counts] = (await manager.query(historyArchiveReadyPressureSql, [
 			historyArchiveThroughputSampleCap,
 			historyArchiveThroughputWindowMinutes
 		])) as readonly PressureRow[];
@@ -79,7 +80,7 @@ export async function reconcileHistoryArchiveObjectExecution(
 				...pressure,
 				admittedObjects: canonicalAdmittedObjects,
 				cursorAdvances: 0,
-				preservedObjects: Number(preserved?.count ?? 0)
+				preservedObjects: readyState.readyObjects
 			};
 		}
 
@@ -108,13 +109,17 @@ export async function reconcileHistoryArchiveObjectExecution(
 			canonicalAdmittedObjects +
 			proofAdmittedObjects +
 			Number(admission?.admittedObjects ?? 0);
+		await synchronizeHistoryArchiveReadyQueue(
+			manager,
+			historyArchiveMaximumWatermark
+		);
 		await recordAdmissions(manager, admittedObjects);
 
 		return {
 			...pressure,
 			admittedObjects,
 			cursorAdvances: Number(admission?.cursorAdvances ?? 0),
-			preservedObjects: Number(preserved?.count ?? 0)
+			preservedObjects: readyState.readyObjects
 		};
 	});
 }
@@ -174,125 +179,6 @@ function emptyResult(): HistoryArchiveObjectExecutionReconciliationResult {
 		watermark: 0
 	};
 }
-
-const preserveRunnableRowsSql = `
-	with preserved as (
-		update "history_archive_object_queue"
-		set "executionDisposition" = 'executable',
-			"executionReason" = case
-				when status = 'scanning' then 'in-flight-preserved'
-				else 'retry-preserved'
-			end,
-			"executionDispositionAt" = now(),
-			"dependencyReady" = true
-		where status in ('scanning', 'failed')
-			and "executionDisposition" is distinct from 'executable'
-		returning id
-	)
-	select count(*)::integer as count from preserved
-`;
-
-const rebalanceRunnableFrontierSql = `
-	with active_roots as materialized (
-		select "archiveUrlIdentity", count(*)::integer as active_count
-		from "history_archive_object_queue"
-		where status = 'scanning'
-		group by "archiveUrlIdentity"
-	), ranked_pending as materialized (
-		select candidate.id, candidate."archiveUrlIdentity",
-			candidate."executionReason",
-			row_number() over (
-				partition by candidate."archiveUrlIdentity"
-				order by
-					case candidate."executionReason"
-						when 'canonical-frontier-reserve' then 0
-						when 'proof-completion-reserve' then 1
-						else 2
-					end,
-					candidate."objectOrder",
-					candidate."checkpointLedger" desc nulls last,
-					candidate."objectKey",
-					candidate.id
-			) as root_rank
-		from "history_archive_object_queue" candidate
-		where candidate."executionDisposition" = 'executable'
-			and candidate."dependencyReady" = true
-			and candidate.status = 'pending'
-	), demoted as (
-		update "history_archive_object_queue" candidate
-		set "executionDisposition" = 'deferred',
-			"executionReason" = case
-				when ranked."executionReason" = 'canonical-frontier-reserve'
-					then 'canonical-frontier-waiting'
-				when ranked."executionReason" = 'proof-completion-reserve'
-					then 'proof-completion-waiting'
-				else 'frontier-waiting'
-			end,
-			"executionDispositionAt" = now()
-		from ranked_pending ranked
-		left join active_roots active
-			on active."archiveUrlIdentity" = ranked."archiveUrlIdentity"
-		where candidate.id = ranked.id
-			and ranked.root_rank > case
-				when ranked."executionReason" in (
-					'canonical-frontier-reserve',
-					'proof-completion-reserve'
-				) then $1::integer
-				else greatest(
-					$1::integer - coalesce(active.active_count, 0),
-					0
-				)
-			end
-		returning candidate.id
-	)
-	select count(*)::integer as count from demoted
-`;
-
-const pressureSql = `
-	with outstanding as (
-		select 1
-		from (
-			select candidate.id
-			from "history_archive_object_queue" candidate
-			where candidate.status = 'scanning'
-			union all
-			select candidate.id
-			from "history_archive_object_queue" candidate
-			where candidate."executionDisposition" = 'executable'
-				and candidate."dependencyReady" = true
-				and (
-					candidate."transitionEffectsRequiredAt" is null
-					or candidate."transitionEffectsCompletedAt" is not null
-				)
-				and not exists (
-					select 1
-					from "history_archive_object_host_throttle" throttle
-					where throttle."hostIdentity" = candidate."hostIdentity"
-						and throttle."blockedUntil" > now()
-				)
-				and (
-					candidate.status = 'pending'
-					or (
-						candidate.status = 'failed'
-						and coalesce(
-							candidate."nextAttemptAt",
-							candidate."updatedAt" + interval '1 hour'
-						) <= now()
-					)
-				)
-		) runnable
-		limit $1
-	), recent_events as (
-		select 1
-		from "history_archive_object_event"
-		where "eventType" = 'verified'
-			and "createdAt" >= now() - make_interval(mins => $3::integer)
-		limit $2
-	)
-	select
-		(select count(*)::integer from outstanding) as "outstandingObjects",
-		(select count(*)::integer from recent_events) as "recentCompletions"
-`;
 
 export const admitProofCompletionReserveSql = `
 	with ${canonicalRuntimeTargetCtes}, canonical_target_roots as materialized (

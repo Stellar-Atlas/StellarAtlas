@@ -1,28 +1,5 @@
-import { historyArchiveObjectDependencySatisfiedSql } from './HistoryArchiveObjectDependencySql.js';
-
-const candidateDependencyReadySql =
-	historyArchiveObjectDependencySatisfiedSql('candidate');
 const claimGateKeySql =
 	"hashtextextended('history_archive_object_claim_gate', 104729)";
-const transitionReadySql = `(
-	candidate."transitionEffectsRequiredAt" is null
-	or candidate."transitionEffectsCompletedAt" is not null
-)`;
-const pendingReadySql = `candidate.status = 'pending'
-	and (
-		candidate."nextAttemptAt" is null
-		or candidate."nextAttemptAt" <= now()
-	)`;
-const failedReadySql = `candidate.status = 'failed'
-	and coalesce(
-		candidate."nextAttemptAt",
-		candidate."updatedAt" + interval '1 hour'
-	) <= now()`;
-const candidatePrioritySql = `case candidate."executionReason"
-	when 'canonical-frontier-reserve' then 0
-	when 'proof-completion-reserve' then 1
-	else 2
-end`;
 
 export const historyArchiveObjectClaimFallbackLockSql = `
 	select pg_advisory_xact_lock(${claimGateKeySql})
@@ -50,8 +27,7 @@ export const historyArchiveObjectClaimCleanupSql = `
 			)
 		returning slot.slot
 	)
-	select
-		claim_gate.locked,
+	select claim_gate.locked,
 		(select count(*)::integer from cleaned_slots) as "cleanedSlots"
 	from claim_gate
 `;
@@ -77,8 +53,7 @@ export const historyArchiveObjectClaimAdoptionSql = `
 		end as locked
 		from adoption_state
 	), untracked_active as materialized (
-		select
-			active."remoteId",
+		select active."remoteId",
 			row_number() over (
 				order by active."claimedAt" nulls first, active.id
 			) as position
@@ -106,8 +81,7 @@ export const historyArchiveObjectClaimAdoptionSql = `
 		for update of slot skip locked
 		limit $1
 	), adoption_slots as materialized (
-		select
-			available_slots.slot,
+		select available_slots.slot,
 			row_number() over (order by available_slots.slot) as position
 		from available_slots
 	), adopted_slots as (
@@ -121,29 +95,38 @@ export const historyArchiveObjectClaimAdoptionSql = `
 		where slot.slot = adoption_slots.slot
 		returning slot.slot
 	)
-	select
-		adoption_guard.locked,
+	select adoption_guard.locked,
 		(select count(*)::integer from untracked_active) as "untrackedObjects",
 		(select count(*)::integer from adopted_slots) as "adoptedObjects"
 	from adoption_guard
 `;
 
-export const historyArchiveObjectClaimSelectionSql = `
-	with free_slots as materialized (
+const pendingReadySql = `candidate.status = 'pending'
+	and (
+		candidate."nextAttemptAt" is null
+		or candidate."nextAttemptAt" <= now()
+	)`;
+const failedReadySql = `candidate.status = 'failed'
+	and coalesce(
+		candidate."nextAttemptAt",
+		candidate."updatedAt" + interval '1 hour'
+	) <= now()`;
+
+export const historyArchiveObjectClaimSql = `
+	with free_slot as materialized (
 		select slot.slot
 		from "history_archive_object_claim_slot" slot
 		where slot."objectRemoteId" is null
 			and slot.slot < $3
 		order by slot.slot
-	), capacity_state as materialized (
-		select exists (select 1 from free_slots) as available
+		for update of slot skip locked
+		limit 1
 	), active_claims as materialized (
 		select active."archiveUrlIdentity", active."hostIdentity"
 		from "history_archive_object_claim_slot" occupied
 		join "history_archive_object_queue" active
 			on active."remoteId" = occupied."objectRemoteId"
 			and active.status = 'scanning'
-		where occupied."objectRemoteId" is not null
 	), active_by_archive as materialized (
 		select "archiveUrlIdentity", count(*)::integer as count
 		from active_claims
@@ -152,241 +135,63 @@ export const historyArchiveObjectClaimSelectionSql = `
 		select "hostIdentity", count(*)::integer as count
 		from active_claims
 		group by "hostIdentity"
-	), claimable_roots as materialized (
-		select
-			root.id,
-			root."archiveUrlIdentity",
-			root."hostIdentity",
-			root."lastClaimedAt"
-		from "history_archive_object_queue" root
-		cross join capacity_state
-		left join active_by_archive archive_activity
-			on archive_activity."archiveUrlIdentity" = root."archiveUrlIdentity"
-		left join active_by_host host_activity
-			on host_activity."hostIdentity" = root."hostIdentity"
-		where capacity_state.available
+	), selected as materialized (
+		select candidate.id, candidate."remoteId", candidate."archiveUrlIdentity",
+			candidate."hostIdentity", candidate."objectType", root.id as root_id,
+			free_slot.slot, ready.priority
+		from "history_archive_object_ready" ready
+		join "history_archive_object_queue" candidate
+			on candidate."remoteId" = ready."objectRemoteId"
+		join "history_archive_object_queue" root
+			on root."archiveUrlIdentity" = candidate."archiveUrlIdentity"
 			and root."objectType" = 'history-archive-state'
 			and root."objectKey" = 'root'
+		cross join free_slot
+		left join active_by_archive archive_activity
+			on archive_activity."archiveUrlIdentity" =
+				candidate."archiveUrlIdentity"
+		left join active_by_host host_activity
+			on host_activity."hostIdentity" = candidate."hostIdentity"
+		where ready."availableAt" <= now()
+			and candidate."objectType" = any($1)
+			and (
+				${pendingReadySql}
+				or (free_slot.slot % 2 = 0 and ${failedReadySql})
+			)
+			and candidate."executionDisposition" = 'executable'
+			and candidate."dependencyReady" = true
+			and (
+				candidate."transitionEffectsRequiredAt" is null
+				or candidate."transitionEffectsCompletedAt" is not null
+			)
 			and coalesce(archive_activity.count, 0) < $2
 			and coalesce(host_activity.count, 0) < $4
 			and not exists (
 				select 1
 				from "history_archive_object_host_throttle" throttle
-				where throttle."hostIdentity" = root."hostIdentity"
+				where throttle."hostIdentity" = candidate."hostIdentity"
 					and throttle."blockedUntil" > now()
 			)
-	), class_state as materialized (
-		select
-			case when capacity_state.available then exists (
-				select 1
-				from claimable_roots root
-				where exists (
-					select 1
-					from "history_archive_object_queue" candidate
-					where candidate."archiveUrlIdentity" = root."archiveUrlIdentity"
-						and ${pendingReadySql}
-						and ${transitionReadySql}
-						and candidate."executionDisposition" = 'executable'
-						and ${candidateDependencyReadySql}
-						and candidate."objectType" = any($1)
-				)
-			) else false end as "hasPending",
-			case when capacity_state.available then exists (
-				select 1
-				from claimable_roots root
-				where exists (
-					select 1
-					from "history_archive_object_queue" candidate
-					where candidate."archiveUrlIdentity" = root."archiveUrlIdentity"
-						and ${failedReadySql}
-						and ${transitionReadySql}
-						and candidate."executionDisposition" = 'executable'
-						and ${candidateDependencyReadySql}
-						and candidate."objectType" = any($1)
-				)
-			) else false end as "hasFailed"
-		from capacity_state
-	), slot_pool as materialized (
-		select free_slots.slot
-		from free_slots
-		cross join class_state
-		where (
-			free_slots.slot % 2 = 0
-			and (class_state."hasPending" or class_state."hasFailed")
-		) or (
-			free_slots.slot % 2 = 1
-			and class_state."hasPending"
-		)
-	), slot_pool_state as materialized (
-		select exists (select 1 from slot_pool) as available
-	), claim_slot as materialized (
-		select slot.slot
-		from "history_archive_object_claim_slot" slot
-		join slot_pool on slot_pool.slot = slot.slot
-		where slot."objectRemoteId" is null
-		order by slot.slot
-		for update of slot skip locked
-		limit 1
-	), claim_class as materialized (
-		select
-			claim_slot.slot,
-			case
-				when claim_slot.slot % 2 = 0 and class_state."hasFailed"
-					then 'failed'
-				else 'pending'
-			end as "claimClass"
-		from claim_slot
-		cross join class_state
-	), root_work as materialized (
-		select
-			root.id,
-			root."archiveUrlIdentity",
-			root."hostIdentity",
-			root."lastClaimedAt",
-			candidate_work.priority
-		from claimable_roots root
-		cross join claim_class
-		join lateral (
-			select ${candidatePrioritySql}::integer as priority
-			from "history_archive_object_queue" candidate
-			where candidate."archiveUrlIdentity" = root."archiveUrlIdentity"
-				and (
-					(claim_class."claimClass" = 'pending' and ${pendingReadySql})
-					or (claim_class."claimClass" = 'failed' and ${failedReadySql})
-				)
-				and ${transitionReadySql}
-				and candidate."executionDisposition" = 'executable'
-				and ${candidateDependencyReadySql}
-				and candidate."objectType" = any($1)
-			order by ${candidatePrioritySql}, candidate.id
-			limit 1
-		) candidate_work on true
-	), root_choice_pool as materialized (
-		select
-			root_work.*,
-			claim_class.slot,
-			claim_class."claimClass",
-			case
-				when claim_class.slot % 2 = 1 then root_work.priority
-				else 0
-			end as "claimPriority"
-		from root_work
-		cross join claim_class
-	), root_choice_state as materialized (
-		select exists (select 1 from root_choice_pool) as available
-	), claim_root as materialized (
-		select root_choice_pool.*
-		from root_choice_pool
-		join "history_archive_object_queue" root on root.id = root_choice_pool.id
 		order by
-			root_choice_pool."claimPriority",
-			root_choice_pool."lastClaimedAt" asc nulls first,
-			root_choice_pool.priority,
-			root_choice_pool.id
-		for update of root skip locked
-		limit 1
-	), host_lock as materialized (
-		select
-			claim_root.*,
-			pg_try_advisory_xact_lock(
-				hashtextextended(claim_root."hostIdentity", 104729)
-			) as locked
-		from claim_root
-	)
-	select
-		case
-			when claim_slot.slot is null and slot_pool_state.available then 'contended'
-			when claim_slot.slot is null then 'idle'
-			when host_lock.id is null and root_choice_state.available then 'contended'
-			when host_lock.id is null then 'contended'
-			when not host_lock.locked then 'contended'
-			else 'selected'
-		end as outcome,
-		host_lock.slot as slot,
-		host_lock.id as "rootId",
-		host_lock."archiveUrlIdentity" as "archiveUrlIdentity",
-		host_lock."hostIdentity" as "hostIdentity",
-		host_lock."claimClass" as "claimClass"
-	from slot_pool_state
-	left join claim_slot on true
-	left join root_choice_state on true
-	left join host_lock on true
-`;
-
-export const historyArchiveObjectClaimFinalizeSql = `
-	with selected_slot as materialized (
-		select slot.slot
-		from "history_archive_object_claim_slot" slot
-		where slot.slot = $3 and slot."objectRemoteId" is null
-	), selected_root as materialized (
-		select root.id, root."archiveUrlIdentity", root."hostIdentity"
-		from "history_archive_object_queue" root
-		cross join selected_slot
-		where root.id = $5
-			and root."archiveUrlIdentity" = $6
-			and root."hostIdentity" = $7
-			and root."objectType" = 'history-archive-state'
-			and root."objectKey" = 'root'
-			and (
-				select count(*)
-				from "history_archive_object_queue" active
-				where active."archiveUrlIdentity" = root."archiveUrlIdentity"
-					and active.status = 'scanning'
-			) < $2
-			and (
-				select count(*)
-				from "history_archive_object_queue" active
-				where active."hostIdentity" = root."hostIdentity"
-					and active.status = 'scanning'
-			) < $4
-			and not exists (
-				select 1
-				from "history_archive_object_host_throttle" throttle
-				where throttle."hostIdentity" = root."hostIdentity"
-					and throttle."blockedUntil" > now()
-			)
-	), selected_candidate as materialized (
-		select candidate.id
-		from "history_archive_object_queue" candidate
-		join selected_root root
-			on root."archiveUrlIdentity" = candidate."archiveUrlIdentity"
-		where (
-				($8::text = 'pending' and ${pendingReadySql})
-				or (
-					$8::text = 'failed'
-					and $3::integer % 2 = 0
-					and ${failedReadySql}
-				)
-			)
-			and ${transitionReadySql}
-			and candidate."executionDisposition" = 'executable'
-			and ${candidateDependencyReadySql}
-			and candidate."objectType" = any($1)
-		order by
-			case when $3::integer % 2 = 1 then case candidate."executionReason"
-					when 'canonical-frontier-reserve' then 0
-					when 'proof-completion-reserve' then 1
-					else 2
-				end
-				else 0
+			case
+				when free_slot.slot % 2 = 0 and candidate.status = 'failed' then 0
+				else 1
 			end,
-			case when candidate.status = 'failed' then coalesce(
-				candidate."nextAttemptAt",
-				candidate."updatedAt" + interval '1 hour'
-			) end asc nulls last,
+			ready.priority,
+			root."lastClaimedAt" asc nulls first,
 			candidate."lastClaimedAt" asc nulls first,
-			case candidate."executionReason"
-				when 'canonical-frontier-reserve' then 0
-				when 'proof-completion-reserve' then 1
-				else 2
-			end,
 			candidate."objectOrder",
-			case when candidate.status = 'pending'
-				then candidate."checkpointLedger" end desc nulls last,
+			candidate."checkpointLedger" desc nulls last,
 			candidate."objectKey",
 			candidate.id
-		for update of candidate skip locked
+		for update of ready, candidate, root skip locked
 		limit 1
+	), host_gate as materialized (
+		select selected.*,
+			pg_try_advisory_xact_lock(
+				hashtextextended(selected."hostIdentity", 104729)
+			) as locked
+		from selected
 	), claimed as (
 		update "history_archive_object_queue" candidate
 		set status = 'scanning',
@@ -404,18 +209,24 @@ export const historyArchiveObjectClaimFinalizeSql = `
 			"transitionEffectsCompletedAt" = null,
 			"transitionEffectsRequiredAt" = null,
 			"updatedAt" = now()
-		from selected_candidate
-		where candidate.id = selected_candidate.id
+		from host_gate
+		where host_gate.locked
+			and candidate.id = host_gate.id
 		returning candidate.*
 	), occupied_slot as (
 		update "history_archive_object_claim_slot" slot
 		set "objectRemoteId" = claimed."remoteId",
 			"claimedAt" = now(),
 			"updatedAt" = now()
-		from claimed
-		where slot.slot = $3
+		from claimed, host_gate
+		where slot.slot = host_gate.slot
 			and slot."objectRemoteId" is null
 		returning slot.slot
+	), removed_ready as (
+		delete from "history_archive_object_ready" ready
+		using claimed
+		where ready."objectRemoteId" = claimed."remoteId"
+		returning ready."objectRemoteId"
 	), root_cursor_update as (
 		update "history_archive_object_queue" root
 		set "lastClaimedAt" = claimed."lastClaimedAt"
@@ -425,34 +236,21 @@ export const historyArchiveObjectClaimFinalizeSql = `
 			and root."objectType" = 'history-archive-state'
 			and root."objectKey" = 'root'
 		returning root.id
+	), committed_claim as materialized (
+		select claimed.*
+		from claimed
+		cross join occupied_slot
+		cross join removed_ready
+		left join root_cursor_update on true
 	)
 	select
-		claimed."remoteId" as "remoteId",
-		claimed."archiveUrl" as "archiveUrl",
-		claimed."archiveUrlIdentity" as "archiveUrlIdentity",
-		claimed."hostIdentity" as "hostIdentity",
-		claimed."objectType" as "objectType",
-		claimed."objectKey" as "objectKey",
-		claimed."objectOrder" as "objectOrder",
-		claimed."objectUrl" as "objectUrl",
-		claimed.status as status,
-		claimed."workerStage" as "workerStage",
-		claimed."checkpointLedger" as "checkpointLedger",
-		claimed."bucketHash" as "bucketHash",
-		claimed."bytesDownloaded" as "bytesDownloaded",
-		claimed.attempts as attempts,
-		claimed."nextAttemptAt" as "nextAttemptAt",
-		claimed."refreshAfter" as "refreshAfter",
-		claimed."claimedAt" as "claimedAt",
-		claimed."claimedByCommunityScannerId" as "claimedByCommunityScannerId",
-		claimed."errorType" as "errorType",
-		claimed."errorMessage" as "errorMessage",
-		claimed."httpStatus" as "httpStatus",
-		claimed."verificationFacts" as "verificationFacts",
-		claimed."verifiedAt" as "verifiedAt",
-		claimed."createdAt" as "createdAt",
-		claimed."updatedAt" as "updatedAt"
-	from claimed
-	cross join occupied_slot
-	left join root_cursor_update on true
+		case
+			when committed_claim.id is not null then 'claimed'
+			when host_gate.id is not null then 'contended'
+			else 'idle'
+		end as outcome,
+		committed_claim.*
+	from (select 1) anchor
+	left join host_gate on true
+	left join committed_claim on true
 `;

@@ -408,24 +408,18 @@ export class TypeOrmHistoryArchiveObjectRepository implements HistoryArchiveObje
 const workerSnapshotSql = `
 	with scanning as (
 		select
-			count(*)::int as "totalScanningObjects",
-			count(*) filter (where "updatedAt" >= $1)::int as "activeObjects",
-			count(*) filter (where "updatedAt" < $1)::int as "staleObjects"
-		from "history_archive_object_queue"
-		where status = 'scanning'
+			count(object.id)::int as "totalScanningObjects",
+			count(object.id) filter (where object."updatedAt" >= $1)::int
+				as "activeObjects",
+			count(object.id) filter (where object."updatedAt" < $1)::int
+				as "staleObjects"
+		from "history_archive_object_claim_slot" slot
+		left join "history_archive_object_queue" object
+			on object."remoteId" = slot."objectRemoteId"
+			and object.status = 'scanning'
 	), pending as (
 		select exists (
-			select 1 from "history_archive_object_queue"
-			where status in ('pending', 'failed')
-				and "executionDisposition" = 'executable'
-				and "dependencyReady" = true
-				and (
-					status = 'pending'
-					or coalesce(
-						"nextAttemptAt",
-						"updatedAt" + interval '1 hour'
-					) <= now()
-				)
+			select 1 from "history_archive_object_ready"
 			limit 1
 		) as "hasPendingObjects"
 	)

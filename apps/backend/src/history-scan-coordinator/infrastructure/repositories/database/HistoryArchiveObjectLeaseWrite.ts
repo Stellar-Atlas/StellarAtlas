@@ -8,6 +8,7 @@ import {
 	type RawObjectQueryResult
 } from './HistoryArchiveObjectRowMapper.js';
 import { hasPostgresSqlState } from './PostgresError.js';
+import { enqueueHistoryArchiveReadyObjects } from './HistoryArchiveObjectReadyQueue.js';
 
 export async function markHistoryArchiveObjectVerified(
 	repository: Repository<HistoryArchiveObject>,
@@ -28,6 +29,7 @@ export async function markHistoryArchiveObjectVerified(
 		if ((result.affected ?? 0) === 0) return false;
 
 		await clearClaimSlot(manager.query.bind(manager), remoteId);
+		await enqueueHistoryArchiveReadyObjects(manager, [remoteId]);
 		return true;
 	});
 }
@@ -56,6 +58,7 @@ export async function releaseHistoryArchiveObject(
 		if ((result.affected ?? 0) === 0) return false;
 
 		await clearClaimSlot(manager.query.bind(manager), remoteId);
+		await enqueueHistoryArchiveReadyObjects(manager, [remoteId]);
 		return true;
 	});
 }
@@ -74,7 +77,12 @@ export async function releaseStaleHistoryArchiveObjects(
 					normalizeLimit(limit)
 				])) as RawObjectQueryResult
 			);
-			return rows.map(createObjectFromRow);
+			const objects = rows.map(createObjectFromRow);
+			await enqueueHistoryArchiveReadyObjects(
+				manager,
+				objects.map((object) => object.remoteId)
+			);
+			return objects;
 		});
 	} catch (error) {
 		if (hasPostgresSqlState(error, '55P03')) return [];
@@ -88,20 +96,24 @@ export async function markHistoryArchiveTransitionEffectsCompleted(
 	claimAttempt: number,
 	status: 'failed' | 'verified'
 ): Promise<boolean> {
-	const result = await repository
-		.createQueryBuilder()
-		.update(HistoryArchiveObject)
-		.set({
-			transitionEffectsCompletedAt: () => 'now()',
-			updatedAt: () => 'now()'
-		})
-		.where('"remoteId" = :remoteId', { remoteId })
-		.andWhere('status = :status', { status })
-		.andWhere('attempts = :claimAttempt', { claimAttempt })
-		.andWhere('"transitionEffectsRequiredAt" is not null')
-		.andWhere('"transitionEffectsCompletedAt" is null')
-		.execute();
-	return (result.affected ?? 0) > 0;
+	return await repository.manager.transaction(async (manager) => {
+		const result = await manager
+			.createQueryBuilder()
+			.update(HistoryArchiveObject)
+			.set({
+				transitionEffectsCompletedAt: () => 'now()',
+				updatedAt: () => 'now()'
+			})
+			.where('"remoteId" = :remoteId', { remoteId })
+			.andWhere('status = :status', { status })
+			.andWhere('attempts = :claimAttempt', { claimAttempt })
+			.andWhere('"transitionEffectsRequiredAt" is not null')
+			.andWhere('"transitionEffectsCompletedAt" is null')
+			.execute();
+		if ((result.affected ?? 0) === 0) return false;
+		await enqueueHistoryArchiveReadyObjects(manager, [remoteId]);
+		return true;
+	});
 }
 
 async function clearClaimSlot(

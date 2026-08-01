@@ -1,5 +1,6 @@
 import type { Repository } from 'typeorm';
 import type { HistoryArchiveObject } from '@history-scan-coordinator/domain/history-archive-object/HistoryArchiveObject.js';
+import { enqueueHistoryArchiveReadyObjects } from './HistoryArchiveObjectReadyQueue.js';
 
 export async function materializeHistoryArchiveCheckpointDependencies(
 	repository: Repository<HistoryArchiveObject>,
@@ -9,7 +10,9 @@ export async function materializeHistoryArchiveCheckpointDependencies(
 		const inserted = (await manager.query(materializeDependenciesSql, [
 			remoteId
 		])) as readonly unknown[];
-		await manager.query(activateCheckpointDependenciesSql, [remoteId]);
+		await manager.query(activateCheckpointCategoryDependenciesSql, [remoteId]);
+		await manager.query(activateCheckpointBucketDependenciesSql, [remoteId]);
+		await enqueueHistoryArchiveReadyObjects(manager, [remoteId]);
 		return inserted.length;
 	});
 }
@@ -81,37 +84,44 @@ const materializeDependenciesSql = `
 	select "bucketHash" from inserted
 `;
 
-const activateCheckpointDependenciesSql = `
+const checkpointIdentitySql = `
+	select "archiveUrlIdentity", "checkpointLedger"
+	from "history_archive_object_queue"
+	where "remoteId" = $1::uuid
+		and "objectType" = 'checkpoint-state'
+		and status = 'verified'
+`;
+
+const activateCheckpointCategoryDependenciesSql = `
 	with checkpoint as (
-		select "archiveUrlIdentity", "checkpointLedger"
-		from "history_archive_object_queue"
-		where "remoteId" = $1::uuid
-			and "objectType" = 'checkpoint-state'
-			and status = 'verified'
+		${checkpointIdentitySql}
 	)
 	update "history_archive_object_queue" candidate
 	set "dependencyReady" = true
 	from checkpoint
 	where candidate."archiveUrlIdentity" = checkpoint."archiveUrlIdentity"
 		and candidate."dependencyReady" is distinct from true
-		and (
-			(
-				candidate."objectType" in ('ledger', 'transactions', 'results', 'scp')
-				and candidate."checkpointLedger" = checkpoint."checkpointLedger"
-			)
-			or (
-				candidate."objectType" = 'bucket'
-				and exists (
-					select 1
-					from "history_archive_checkpoint_bucket_dependency" dependency
-					where dependency."archiveUrlIdentity" =
-						checkpoint."archiveUrlIdentity"
-						and dependency."checkpointLedger" =
-							checkpoint."checkpointLedger"
-						and dependency."bucketHash" = candidate."bucketHash"
-				)
-			)
-		)
+		and candidate."objectType" in ('ledger', 'transactions', 'results', 'scp')
+		and candidate."checkpointLedger" = checkpoint."checkpointLedger"
+`;
+
+const activateCheckpointBucketDependenciesSql = `
+	with checkpoint as (
+		${checkpointIdentitySql}
+	), dependencies as materialized (
+		select dependency."archiveUrlIdentity", dependency."bucketHash"
+		from checkpoint
+		join "history_archive_checkpoint_bucket_dependency" dependency
+			on dependency."archiveUrlIdentity" = checkpoint."archiveUrlIdentity"
+			and dependency."checkpointLedger" = checkpoint."checkpointLedger"
+	)
+	update "history_archive_object_queue" candidate
+	set "dependencyReady" = true
+	from dependencies dependency
+	where candidate."archiveUrlIdentity" = dependency."archiveUrlIdentity"
+		and candidate."objectType" = 'bucket'
+		and candidate."bucketHash" = dependency."bucketHash"
+		and candidate."dependencyReady" is distinct from true
 `;
 
 const reconcileReadinessSql = `

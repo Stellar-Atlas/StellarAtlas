@@ -5,12 +5,13 @@ import { HistoryArchiveObjectEvent } from '../../../../domain/history-archive-ob
 import { HistoryArchiveObjectHostThrottleMigration1784410000000 } from '../../../database/migrations/1784410000000-HistoryArchiveObjectHostThrottleMigration.js';
 import { HistoryArchiveObjectClaimCursorMigration1784780000000 } from '../../../database/migrations/1784780000000-HistoryArchiveObjectClaimCursorMigration.js';
 import { HistoryArchiveSchedulerOnlineIndexesMigration1784810000000 } from '../../../database/migrations/1784810000000-HistoryArchiveSchedulerOnlineIndexesMigration.js';
+import { HistoryArchiveReadyQueueMigration1785270000000 } from '../../../database/migrations/1785270000000-HistoryArchiveReadyQueueMigration.js';
 import {
 	historyArchiveObjectClaimAdoptionSql,
 	historyArchiveObjectClaimCleanupSql,
-	historyArchiveObjectClaimFinalizeSql,
-	historyArchiveObjectClaimSelectionSql
+	historyArchiveObjectClaimSql
 } from '../HistoryArchiveObjectClaimSql.js';
+import { synchronizeHistoryArchiveReadyQueue } from '../HistoryArchiveObjectReadyQueue.js';
 import { TypeOrmHistoryArchiveObjectRepository } from '../TypeOrmHistoryArchiveObjectRepository.js';
 import {
 	startDisposablePostgres,
@@ -50,6 +51,7 @@ describeScale('history archive claim scale', () => {
 		await new HistoryArchiveObjectClaimCursorMigration1784780000000().up(
 			queryRunner
 		);
+		await new HistoryArchiveReadyQueueMigration1785270000000().up(queryRunner);
 		await seedQueue(dataSource);
 		const indexStartedAt = performance.now();
 		await new HistoryArchiveSchedulerOnlineIndexesMigration1784810000000().up(
@@ -67,6 +69,7 @@ describeScale('history archive claim scale', () => {
 		repository = new TypeOrmHistoryArchiveObjectRepository(
 			dataSource.getRepository(HistoryArchiveObject)
 		);
+		await synchronizeHistoryArchiveReadyQueue(dataSource.manager, 240);
 	});
 
 	afterAll(async () => {
@@ -188,35 +191,10 @@ async function seedQueue(dataSource: DataSource): Promise<void> {
 }
 
 async function explainClaim(dataSource: DataSource): Promise<unknown> {
-	const [root] = (await dataSource.query(`
-		select id, "archiveUrlIdentity", "hostIdentity"
-		from history_archive_object_queue
-		where "objectType" = 'history-archive-state'
-		order by id
-		limit 1
-	`)) as readonly {
-		readonly archiveUrlIdentity: string;
-		readonly hostIdentity: string;
-		readonly id: number;
-	}[];
-	if (root === undefined) throw new Error('Expected a scale root');
 	const statements: readonly (readonly [string, readonly unknown[]])[] = [
 		[historyArchiveObjectClaimCleanupSql, [false]],
 		[historyArchiveObjectClaimAdoptionSql, [24]],
-		[historyArchiveObjectClaimSelectionSql, [['checkpoint-state'], 1, 24, 2]],
-		[
-			historyArchiveObjectClaimFinalizeSql,
-			[
-				['checkpoint-state'],
-				1,
-				0,
-				2,
-				root.id,
-				root.archiveUrlIdentity,
-				root.hostIdentity,
-				'pending'
-			]
-		]
+		[historyArchiveObjectClaimSql, [['checkpoint-state'], 1, 24, 2]]
 	];
 	const plans: unknown[] = [];
 	for (const [sql, parameters] of statements) {

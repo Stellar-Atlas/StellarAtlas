@@ -1,4 +1,4 @@
-import type { EntityManager, Repository } from 'typeorm';
+import type { Repository } from 'typeorm';
 import { HistoryArchiveObject } from '@history-scan-coordinator/domain/history-archive-object/HistoryArchiveObject.js';
 import type { HistoryArchiveObjectType } from '@history-scan-coordinator/domain/history-archive-object/HistoryArchiveObject.js';
 import {
@@ -10,8 +10,7 @@ import {
 	historyArchiveObjectClaimAdoptionSql,
 	historyArchiveObjectClaimCleanupSql,
 	historyArchiveObjectClaimFallbackLockSql,
-	historyArchiveObjectClaimFinalizeSql,
-	historyArchiveObjectClaimSelectionSql
+	historyArchiveObjectClaimSql
 } from './HistoryArchiveObjectClaimSql.js';
 import {
 	createObjectFromRow,
@@ -19,26 +18,16 @@ import {
 	type RawObjectQueryResult
 } from './HistoryArchiveObjectRowMapper.js';
 import { hasPostgresSqlState } from './PostgresError.js';
+import { bootstrapHistoryArchiveReadyQueueIfEmpty } from './HistoryArchiveObjectReadyQueue.js';
 
 export type HistoryArchiveObjectClaimAttempt =
 	| { readonly outcome: 'claimed'; readonly object: HistoryArchiveObject }
 	| { readonly outcome: 'contended' | 'idle' };
 
-type ClaimSelection =
-	| { readonly outcome: 'contended' | 'idle' }
-	| {
-			readonly outcome: 'selected';
-			readonly slot: number;
-			readonly rootId: number | string;
-			readonly archiveUrlIdentity: string;
-			readonly hostIdentity: string;
-			readonly claimClass: 'failed' | 'pending';
-	  };
-
 const transactionSettingsSql = `
 	set local jit = off;
 	set local lock_timeout = '250ms';
-	set local statement_timeout = '5s'
+	set local statement_timeout = '1s'
 `;
 const postFallbackRetryDelaysMs = [0, 5, 10, 20, 40] as const;
 
@@ -46,6 +35,16 @@ export async function claimHistoryArchiveObject(
 	repository: Repository<HistoryArchiveObject>,
 	supportedTypes: readonly HistoryArchiveObjectType[]
 ): Promise<HistoryArchiveObject | null> {
+	const claimed = await claimWithBoundedContentionFallback(
+		() => runClaimAttempt(repository, supportedTypes, false),
+		() => runClaimAttempt(repository, supportedTypes, true)
+	);
+	if (claimed !== null) return claimed;
+	const scheduled = await bootstrapHistoryArchiveReadyQueueIfEmpty(
+		repository.manager,
+		historyArchiveConsumerCount
+	);
+	if (scheduled === 0) return null;
 	return await claimWithBoundedContentionFallback(
 		() => runClaimAttempt(repository, supportedTypes, false),
 		() => runClaimAttempt(repository, supportedTypes, true)
@@ -121,74 +120,39 @@ async function runClaimAttempt(
 				return { outcome: 'contended' };
 			}
 
-			const selection = await selectClaim(manager, supportedTypes);
-			if (selection.outcome !== 'selected') return selection;
-
-			const rows = extractRows(
-				(await manager.query(historyArchiveObjectClaimFinalizeSql, [
-					[...supportedTypes],
-					historyArchivePerRootFrontier,
-					selection.slot,
-					historyArchivePerHostConcurrency,
-					selection.rootId,
-					selection.archiveUrlIdentity,
-					selection.hostIdentity,
-					selection.claimClass
-				])) as RawObjectQueryResult
-			);
-			const row = rows[0];
-			return row === undefined
-				? { outcome: 'contended' }
-				: { object: createObjectFromRow(row), outcome: 'claimed' };
+			const result = (await manager.query(historyArchiveObjectClaimSql, [
+				[...supportedTypes],
+				historyArchivePerRootFrontier,
+				historyArchiveConsumerCount,
+				historyArchivePerHostConcurrency
+			])) as RawObjectQueryResult;
+			const rawRow = extractUnknownRows(result)[0];
+			if (!isRecord(rawRow)) {
+				throw new Error('History archive ready claim returned no outcome');
+			}
+			if (rawRow.outcome === 'idle' || rawRow.outcome === 'contended') {
+				return { outcome: rawRow.outcome };
+			}
+			if (rawRow.outcome !== 'claimed') {
+				throw new Error('History archive ready claim returned invalid outcome');
+			}
+			const row = extractRows(result)[0];
+			if (row === undefined) {
+				throw new Error(
+					'History archive ready claim omitted the claimed object'
+				);
+			}
+			return { object: createObjectFromRow(row), outcome: 'claimed' };
 		});
 	} catch (error) {
-		if (hasPostgresSqlState(error, '55P03')) {
+		if (
+			hasPostgresSqlState(error, '55P03') ||
+			hasPostgresSqlState(error, '57014')
+		) {
 			return { outcome: 'contended' };
 		}
 		throw error;
 	}
-}
-
-async function selectClaim(
-	manager: EntityManager,
-	supportedTypes: readonly HistoryArchiveObjectType[]
-): Promise<ClaimSelection> {
-	const result = (await manager.query(historyArchiveObjectClaimSelectionSql, [
-		[...supportedTypes],
-		historyArchivePerRootFrontier,
-		historyArchiveConsumerCount,
-		historyArchivePerHostConcurrency
-	])) as unknown;
-	const row = extractUnknownRows(result)[0];
-	if (!isRecord(row)) {
-		throw new Error('History archive claim selection returned no outcome');
-	}
-
-	const outcome = row.outcome;
-	if (outcome === 'contended' || outcome === 'idle') return { outcome };
-	if (outcome !== 'selected') {
-		throw new Error(
-			'History archive claim selection returned an invalid outcome'
-		);
-	}
-
-	return {
-		archiveUrlIdentity: requireString(
-			row.archiveUrlIdentity ?? row.archiveurlidentity,
-			'archiveUrlIdentity'
-		),
-		claimClass: requireClaimClass(
-			row.claimClass ?? row.claimclass,
-			'claimClass'
-		),
-		hostIdentity: requireString(
-			row.hostIdentity ?? row.hostidentity,
-			'hostIdentity'
-		),
-		outcome,
-		rootId: requireInteger(row.rootId ?? row.rootid, 'rootId'),
-		slot: Number(requireInteger(row.slot, 'slot'))
-	};
 }
 
 function requireResultRow(
@@ -229,24 +193,10 @@ function requireInteger(value: unknown, field: string): number | string {
 }
 
 function requireCount(value: unknown, field: string): number {
-	const integer = requireInteger(value, field);
-	return Number(integer);
+	return Number(requireInteger(value, field));
 }
 
 function requireBoolean(value: unknown, field: string): boolean {
 	if (typeof value === 'boolean') return value;
-	throw new Error(`History archive claim selection has invalid ${field}`);
-}
-
-function requireString(value: unknown, field: string): string {
-	if (typeof value === 'string' && value.length > 0) return value;
-	throw new Error(`History archive claim selection has invalid ${field}`);
-}
-
-function requireClaimClass(
-	value: unknown,
-	field: string
-): 'failed' | 'pending' {
-	if (value === 'failed' || value === 'pending') return value;
 	throw new Error(`History archive claim selection has invalid ${field}`);
 }

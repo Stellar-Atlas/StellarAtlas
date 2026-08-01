@@ -35,34 +35,66 @@ export const historyArchiveObjectFrontierSql = `
 			)
 	), root_capacity as materialized (
 		select roots.*, greatest(
-			$2::integer - (
-				select count(*)::integer
-				from "history_archive_object_queue" active
-				where active."archiveUrlIdentity" = roots."archiveUrlIdentity"
-					and (
-						active.status = 'scanning'
-						or (
-							active."executionDisposition" = 'executable'
+			$2::integer - runnable.count, 0
+		) as capacity
+		from roots
+		cross join lateral (
+			select count(*)::integer as count
+			from (
+				select 1
+				from (
+					(
+						select 1
+						from "history_archive_object_queue" active
+						where active."archiveUrlIdentity" =
+							roots."archiveUrlIdentity"
+							and active.status = 'scanning'
+						limit $2
+					)
+					union all
+					(
+						select 1
+						from "history_archive_object_queue" active
+						where active."archiveUrlIdentity" =
+							roots."archiveUrlIdentity"
+							and active.status = 'pending'
+							and active."executionDisposition" = 'executable'
 							and active."dependencyReady" = true
 							and (
 								active."transitionEffectsRequiredAt" is null
 								or active."transitionEffectsCompletedAt" is not null
 							)
-							and (
-								active.status = 'pending'
-								or (
-									active.status = 'failed'
-									and coalesce(
-										active."nextAttemptAt",
-										active."updatedAt" + interval '1 hour'
-									) <= now()
-								)
-							)
-						)
+						limit $2
 					)
-			), 0
-		) as capacity
-		from roots
+					union all
+					(
+						select 1
+						from "history_archive_object_queue" active
+						where active."archiveUrlIdentity" =
+							roots."archiveUrlIdentity"
+							and active.status = 'failed'
+							and active."executionDisposition" = 'executable'
+							and active."dependencyReady" = true
+							and (
+								active."transitionEffectsRequiredAt" is null
+								or active."transitionEffectsCompletedAt" is not null
+							)
+							and coalesce(
+								active."nextAttemptAt",
+								active."updatedAt" + interval '1 hour'
+							) <= now()
+						limit $2
+					)
+				) runnable_candidates
+				limit $2
+			) bounded_runnable
+		) runnable
+	), root_attempts as materialized (
+		select root.*
+		from root_capacity root
+		where root.capacity > 0
+		order by root."lastClaimedAt" asc nulls first, root.id
+		limit greatest($1::integer, 1)
 	), probes as materialized (
 		select
 			root.id as root_id,
@@ -71,7 +103,10 @@ export const historyArchiveObjectFrontierSql = `
 			cursor."objectType",
 			candidate.id,
 			candidate."objectKey",
-			${dependencyReadySql} as dependency_ready,
+			case
+				when candidate.id is null then false
+				else ${dependencyReadySql}
+			end as dependency_ready,
 			case cursor."objectType"
 				when 'history-archive-state' then 0
 				when 'checkpoint-state' then 1
@@ -81,91 +116,128 @@ export const historyArchiveObjectFrontierSql = `
 				when 'results' then 5
 				else 6
 			end as type_order
-		from root_capacity root
-		join "history_archive_object_frontier_cursor" cursor
-			on cursor."archiveUrlIdentity" = root."archiveUrlIdentity"
-		join lateral (
-			select sought.*
-			from (
-				(
-					select candidate.id, candidate."archiveUrlIdentity",
-						candidate."objectType", candidate."objectKey",
-						candidate."checkpointLedger", candidate."bucketHash", 0 as phase
-					from "history_archive_object_queue" candidate
-					where cursor."objectKey" is null
-						and candidate."archiveUrlIdentity" =
-							cursor."archiveUrlIdentity"
-						and candidate."objectType" = cursor."objectType"
-						and candidate.status = 'pending'
-						and (
-							candidate."executionDisposition" is null
-							or candidate."executionDisposition" = 'deferred'
-						)
-						and (
-							candidate."executionReason" is null
-							or candidate."executionReason" not in (
-								'canonical-frontier-waiting',
-								'proof-completion-waiting'
-							)
-						)
-					order by candidate."objectKey" desc
-					limit 1
-				)
-				union all
-				(
-					select candidate.id, candidate."archiveUrlIdentity",
-						candidate."objectType", candidate."objectKey",
-						candidate."checkpointLedger", candidate."bucketHash", 0 as phase
-					from "history_archive_object_queue" candidate
-					where cursor."objectKey" is not null
-						and candidate."archiveUrlIdentity" =
-							cursor."archiveUrlIdentity"
-						and candidate."objectType" = cursor."objectType"
-						and candidate.status = 'pending'
-						and (
-							candidate."executionDisposition" is null
-							or candidate."executionDisposition" = 'deferred'
-						)
-						and (
-							candidate."executionReason" is null
-							or candidate."executionReason" not in (
-								'canonical-frontier-waiting',
-								'proof-completion-waiting'
-							)
-						)
-						and candidate."objectKey" < cursor."objectKey"
-					order by candidate."objectKey" desc
-					limit 1
-				)
-				union all
-				(
-					select candidate.id, candidate."archiveUrlIdentity",
-						candidate."objectType", candidate."objectKey",
-						candidate."checkpointLedger", candidate."bucketHash", 1 as phase
-					from "history_archive_object_queue" candidate
-					where cursor."objectKey" is not null
-						and candidate."archiveUrlIdentity" =
-							cursor."archiveUrlIdentity"
-						and candidate."objectType" = cursor."objectType"
-						and candidate.status = 'pending'
-						and (
-							candidate."executionDisposition" is null
-							or candidate."executionDisposition" = 'deferred'
-						)
-						and (
-							candidate."executionReason" is null
-							or candidate."executionReason" not in (
-								'canonical-frontier-waiting',
-								'proof-completion-waiting'
-							)
-						)
-					order by candidate."objectKey" desc
-					limit 1
-				)
-			) sought
-			order by sought.phase
+		from root_attempts root
+		cross join lateral (
+			select cursor.*
+			from "history_archive_object_frontier_cursor" cursor
+			where cursor."archiveUrlIdentity" = root."archiveUrlIdentity"
+			order by cursor."updatedAt" asc,
+				case cursor."objectType"
+					when 'history-archive-state' then 0
+					when 'checkpoint-state' then 1
+					when 'bucket' then 2
+					when 'ledger' then 3
+					when 'transactions' then 4
+					when 'results' then 5
+					else 6
+				end
 			limit 1
-		) candidate on true
+		) cursor
+		left join lateral (
+			select candidate.id, candidate."archiveUrlIdentity",
+				candidate."objectType", candidate."objectKey",
+				candidate."checkpointLedger", candidate."bucketHash"
+			from "history_archive_object_queue" candidate
+			where cursor."objectKey" is null
+				and candidate."archiveUrlIdentity" = cursor."archiveUrlIdentity"
+				and candidate."objectType" = cursor."objectType"
+				and candidate.status = 'pending'
+				and (
+					candidate."executionDisposition" is null
+					or candidate."executionDisposition" = 'deferred'
+				)
+				and (
+					candidate."executionReason" is null
+					or candidate."executionReason" not in (
+						'canonical-frontier-waiting',
+						'proof-completion-waiting'
+					)
+				)
+			order by candidate."objectKey" desc
+			limit 1
+		) initial_candidate on true
+		left join lateral (
+			select candidate.id, candidate."archiveUrlIdentity",
+				candidate."objectType", candidate."objectKey",
+				candidate."checkpointLedger", candidate."bucketHash"
+			from "history_archive_object_queue" candidate
+			where cursor."objectKey" is not null
+				and candidate."archiveUrlIdentity" = cursor."archiveUrlIdentity"
+				and candidate."objectType" = cursor."objectType"
+				and candidate.status = 'pending'
+				and (
+					candidate."executionDisposition" is null
+					or candidate."executionDisposition" = 'deferred'
+				)
+				and (
+					candidate."executionReason" is null
+					or candidate."executionReason" not in (
+						'canonical-frontier-waiting',
+						'proof-completion-waiting'
+					)
+				)
+				and candidate."objectKey" < cursor."objectKey"
+			order by candidate."objectKey" desc
+			limit 1
+		) continued_candidate on true
+		left join lateral (
+			select candidate.id, candidate."archiveUrlIdentity",
+				candidate."objectType", candidate."objectKey",
+				candidate."checkpointLedger", candidate."bucketHash"
+			from "history_archive_object_queue" candidate
+			where cursor."objectKey" is not null
+				and initial_candidate.id is null
+				and continued_candidate.id is null
+				and candidate."archiveUrlIdentity" = cursor."archiveUrlIdentity"
+				and candidate."objectType" = cursor."objectType"
+				and candidate.status = 'pending'
+				and (
+					candidate."executionDisposition" is null
+					or candidate."executionDisposition" = 'deferred'
+				)
+				and (
+					candidate."executionReason" is null
+					or candidate."executionReason" not in (
+						'canonical-frontier-waiting',
+						'proof-completion-waiting'
+					)
+				)
+			order by candidate."objectKey" desc
+			limit 1
+		) wrapped_candidate on true
+		cross join lateral (
+			select
+				coalesce(
+					initial_candidate.id,
+					continued_candidate.id,
+					wrapped_candidate.id
+				) as id,
+				coalesce(
+					initial_candidate."archiveUrlIdentity",
+					continued_candidate."archiveUrlIdentity",
+					wrapped_candidate."archiveUrlIdentity"
+				) as "archiveUrlIdentity",
+				coalesce(
+					initial_candidate."objectType",
+					continued_candidate."objectType",
+					wrapped_candidate."objectType"
+				) as "objectType",
+				coalesce(
+					initial_candidate."objectKey",
+					continued_candidate."objectKey",
+					wrapped_candidate."objectKey"
+				) as "objectKey",
+				coalesce(
+					initial_candidate."checkpointLedger",
+					continued_candidate."checkpointLedger",
+					wrapped_candidate."checkpointLedger"
+				) as "checkpointLedger",
+				coalesce(
+					initial_candidate."bucketHash",
+					continued_candidate."bucketHash",
+					wrapped_candidate."bucketHash"
+				) as "bucketHash"
+		) candidate
 	), eligible as materialized (
 		select probes.*, row_number() over (
 			partition by root_id order by type_order, "objectKey", id
