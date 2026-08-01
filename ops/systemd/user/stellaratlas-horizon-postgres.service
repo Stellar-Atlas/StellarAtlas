@@ -1,8 +1,11 @@
 [Unit]
 Description=StellarAtlas Horizon PostgreSQL
+StartLimitIntervalSec=60
+StartLimitBurst=6
 
 [Service]
 Type=simple
+ExecStartPre=/home/observe/.nvm/versions/node/v26.4.0/bin/node /home/observe/stellarbeat-data/Observer/scripts/prepare-postgres-data-dir.mjs /home/observe/stellarbeat-data/horizon/postgres/27
 ExecStart=/usr/lib/postgresql/16/bin/postgres -D /home/observe/stellarbeat-data/horizon/postgres/27 -c config_file=/home/observe/stellarbeat-data/horizon/postgres/config/postgresql.conf
 Restart=on-failure
 RestartSec=5
@@ -13,4 +16,3 @@ MemoryMax=32G
 
 [Install]
 WantedBy=default.target
-

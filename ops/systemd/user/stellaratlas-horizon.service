@@ -2,6 +2,8 @@
 Description=StellarAtlas owned Horizon API
 Requires=stellaratlas-horizon-postgres.service
 After=stellaratlas-horizon-postgres.service
+StartLimitIntervalSec=120
+StartLimitBurst=6
 
 [Service]
 Type=simple
