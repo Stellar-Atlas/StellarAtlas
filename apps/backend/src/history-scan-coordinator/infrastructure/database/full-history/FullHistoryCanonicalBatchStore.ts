@@ -128,6 +128,7 @@ async function readExactProofEvaluatedAt(
 			where proof.id = $1
 				and date_trunc('milliseconds', proof."evaluatedAt") =
 					$2::timestamptz
+			for share
 		`,
 		[input.proofId, input.proofEvaluatedAt]
 	)) as ExactProofTimestampRow[];

@@ -127,7 +127,58 @@ export const historyArchiveCheckpointProofUpsertSql = `
 		or (
 			excluded."proofVersion" =
 				"history_archive_checkpoint_proof"."proofVersion"
-			and excluded."evaluatedAt" >=
-				"history_archive_checkpoint_proof"."evaluatedAt"
+			and row(
+				excluded."archiveUrl",
+				excluded.status,
+				excluded."requiredObjectsComplete",
+				excluded."proofFactsComplete",
+				excluded."checkpointBucketListMatches",
+				excluded."transactionsMatch",
+				excluded."resultsMatch",
+				excluded."previousLedgersMatch",
+				excluded."bucketsVerified",
+				excluded."ledgerFactCount",
+				excluded."transactionFactCount",
+				excluded."resultFactCount",
+				excluded."expectedBucketCount",
+				excluded."verifiedBucketCount",
+				excluded."failedBucketCount",
+				excluded."missingBucketCount",
+				excluded."checkpointBucketListHash",
+				excluded."ledgerBucketListHash",
+				excluded."checkpointStateObjectRemoteId",
+				excluded."ledgerObjectRemoteId",
+				excluded."transactionsObjectRemoteId",
+				excluded."resultsObjectRemoteId",
+				excluded."scpObjectRemoteId",
+				excluded."failureKind",
+				excluded.details
+			) is distinct from row(
+				"history_archive_checkpoint_proof"."archiveUrl",
+				"history_archive_checkpoint_proof".status,
+				"history_archive_checkpoint_proof"."requiredObjectsComplete",
+				"history_archive_checkpoint_proof"."proofFactsComplete",
+				"history_archive_checkpoint_proof"."checkpointBucketListMatches",
+				"history_archive_checkpoint_proof"."transactionsMatch",
+				"history_archive_checkpoint_proof"."resultsMatch",
+				"history_archive_checkpoint_proof"."previousLedgersMatch",
+				"history_archive_checkpoint_proof"."bucketsVerified",
+				"history_archive_checkpoint_proof"."ledgerFactCount",
+				"history_archive_checkpoint_proof"."transactionFactCount",
+				"history_archive_checkpoint_proof"."resultFactCount",
+				"history_archive_checkpoint_proof"."expectedBucketCount",
+				"history_archive_checkpoint_proof"."verifiedBucketCount",
+				"history_archive_checkpoint_proof"."failedBucketCount",
+				"history_archive_checkpoint_proof"."missingBucketCount",
+				"history_archive_checkpoint_proof"."checkpointBucketListHash",
+				"history_archive_checkpoint_proof"."ledgerBucketListHash",
+				"history_archive_checkpoint_proof"."checkpointStateObjectRemoteId",
+				"history_archive_checkpoint_proof"."ledgerObjectRemoteId",
+				"history_archive_checkpoint_proof"."transactionsObjectRemoteId",
+				"history_archive_checkpoint_proof"."resultsObjectRemoteId",
+				"history_archive_checkpoint_proof"."scpObjectRemoteId",
+				"history_archive_checkpoint_proof"."failureKind",
+				"history_archive_checkpoint_proof".details
+			)
 		)
 `;

@@ -93,7 +93,7 @@ export class TypeOrmFullHistoryCheckpointCandidateRepository implements FullHist
 					await manager.query(`
 						set transaction read only;
 						set local lock_timeout = '2s';
-						set local statement_timeout = '30s'
+						set local statement_timeout = '5min'
 					`);
 					return loadCandidate(manager, target);
 				}
