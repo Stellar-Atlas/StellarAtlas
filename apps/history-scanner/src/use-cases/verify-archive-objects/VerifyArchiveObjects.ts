@@ -31,6 +31,10 @@ import type { VerifyArchiveObjectsDTO } from './VerifyArchiveObjectsDTO.js';
 import { canonicalJsonContentDigest } from './ArchiveObjectContentDigest.js';
 import { readArchiveObjectContentLength } from './ArchiveObjectHttpContentLength.js';
 import {
+	type HistoryArchiveDownloadPermit,
+	ProcessHistoryArchiveDownloadPermit
+} from '../../infrastructure/services/HistoryArchiveDownloadPermit.js';
+import {
 	archiveEvidenceFailure,
 	getRetryAfterSecondsFromHttpError,
 	scannerIssueFailure
@@ -41,6 +45,7 @@ const maximumPendingWorkerReports = 24;
 @injectable()
 export class VerifyArchiveObjects {
 	private readonly categoryVerifier: ArchiveObjectCategoryVerifier;
+	private readonly downloadPermit: HistoryArchiveDownloadPermit;
 	private readonly workerTelemetry: ArchiveObjectWorkerTelemetry;
 
 	constructor(
@@ -63,6 +68,7 @@ export class VerifyArchiveObjects {
 		@inject('Logger')
 		private readonly logger: Logger
 	) {
+		this.downloadPermit = new ProcessHistoryArchiveDownloadPermit();
 		const coalescingStatusReporter = new CoalescingHistoryArchiveWorkerReporter(
 			workerStatusReporter,
 			this.exceptionLogger,
@@ -86,7 +92,8 @@ export class VerifyArchiveObjects {
 					workerStage,
 					bytesDownloaded,
 					bytesTotal
-				)
+				),
+			this.downloadPermit
 		);
 	}
 
@@ -214,11 +221,14 @@ export class VerifyArchiveObjects {
 		const urlResult = Url.create(job.objectUrl);
 		if (urlResult.isErr()) return err(this.mapLocalError(urlResult.error));
 
-		const response = await this.httpService.get(urlResult.value, {
-			responseType: 'json',
-			connectionTimeoutMs: 5_000,
-			socketTimeoutMs: 10_000
-		});
+		const releaseDownloadPermit = await this.downloadPermit.acquire();
+		const response = await this.httpService
+			.get(urlResult.value, {
+				responseType: 'json',
+				connectionTimeoutMs: 5_000,
+				socketTimeoutMs: 10_000
+			})
+			.finally(releaseDownloadPermit);
 		if (response.isErr()) return err(this.mapHttpError(response.error));
 
 		const state = response.value.data;
@@ -285,94 +295,100 @@ export class VerifyArchiveObjects {
 		const urlResult = Url.create(job.objectUrl);
 		if (urlResult.isErr()) return err(this.mapLocalError(urlResult.error));
 
-		const response = await this.httpService.get(urlResult.value, {
-			responseType: 'stream',
-			connectionTimeoutMs: 10_000,
-			socketTimeoutMs: 60_000
-		});
-		if (response.isErr()) return err(this.mapHttpError(response.error));
-		if (!this.isReadable(response.value.data)) {
-			return err({
-				errorMessage: 'Bucket response must be a readable stream',
-				errorType: 'invalid_bucket_response',
-				failureChannel: 'scanner_issue',
-				httpStatus: response.value.status
+		const releaseDownloadPermit = await this.downloadPermit.acquire();
+		try {
+			const response = await this.httpService.get(urlResult.value, {
+				responseType: 'stream',
+				connectionTimeoutMs: 10_000,
+				socketTimeoutMs: 60_000
 			});
-		}
-		const bytesTotal = readArchiveObjectContentLength(response.value.headers);
-		this.workerTelemetry.updateProgress(
-			job.remoteId,
-			'downloading_bucket',
-			0,
-			bytesTotal
-		);
+			if (response.isErr()) return err(this.mapHttpError(response.error));
+			if (!this.isReadable(response.value.data)) {
+				return err({
+					errorMessage: 'Bucket response must be a readable stream',
+					errorType: 'invalid_bucket_response',
+					failureChannel: 'scanner_issue',
+					httpStatus: response.value.status
+				});
+			}
+			const bytesTotal = readArchiveObjectContentLength(response.value.headers);
+			this.workerTelemetry.updateProgress(
+				job.remoteId,
+				'downloading_bucket',
+				0,
+				bytesTotal
+			);
 
-		let bytesDownloaded = 0;
-		const countedStream = this.createCountingStream(
-			response.value.data,
-			(bytes) => {
-				bytesDownloaded += bytes;
-				this.workerTelemetry.updateProgress(
-					job.remoteId,
-					'downloading_bucket',
-					bytesDownloaded,
-					bytesTotal
-				);
-			}
-		);
-		const verifyResult = await this.bucketCache.verifyAndStore(
-			job.bucketHash.toLowerCase(),
-			countedStream,
-			(streamToVerify) => this.verifyBucketHash(streamToVerify, job.bucketHash!)
-		);
-		if (verifyResult.isErr()) {
-			if (verifyResult.error.kind === 'source-stream') {
-				return err(
-					archiveEvidenceFailure({
-						error: verifyResult.error,
-						errorType: 'archive_transport_error',
-						httpStatus: response.value.status
-					})
-				);
-			}
-			return err(
-				verifyResult.error.kind === 'content-verification'
-					? archiveEvidenceFailure({
+			let bytesDownloaded = 0;
+			const countedStream = this.createCountingStream(
+				response.value.data,
+				(bytes) => {
+					bytesDownloaded += bytes;
+					this.workerTelemetry.updateProgress(
+						job.remoteId,
+						'downloading_bucket',
+						bytesDownloaded,
+						bytesTotal
+					);
+				}
+			);
+			const verifyResult = await this.bucketCache.verifyAndStore(
+				job.bucketHash.toLowerCase(),
+				countedStream,
+				(streamToVerify) =>
+					this.verifyBucketHash(streamToVerify, job.bucketHash!)
+			);
+			if (verifyResult.isErr()) {
+				if (verifyResult.error.kind === 'source-stream') {
+					return err(
+						archiveEvidenceFailure({
 							error: verifyResult.error,
-							errorType: 'bucket_verification_failed',
+							errorType: 'archive_transport_error',
 							httpStatus: response.value.status
 						})
-					: scannerIssueFailure({
-							error: verifyResult.error,
-							errorType: 'bucket_cache_failure',
-							httpStatus: null
-						})
-			);
-		}
-
-		this.workerTelemetry.updateProgress(
-			job.remoteId,
-			'verified_bucket',
-			bytesDownloaded,
-			bytesTotal
-		);
-		return ok({
-			bytesDownloaded,
-			verificationFacts: {
-				bucketObject: {
-					expectedBucketHash: job.bucketHash.toLowerCase(),
-					hashAlgorithm: 'sha256',
-					matched: true,
-					sourceUrl: job.objectUrl
-				},
-				content: {
-					algorithm: 'sha256',
-					digest: job.bucketHash.toLowerCase(),
-					representation: 'uncompressed-xdr'
+					);
 				}
-			},
-			workerStage: 'verified'
-		});
+				return err(
+					verifyResult.error.kind === 'content-verification'
+						? archiveEvidenceFailure({
+								error: verifyResult.error,
+								errorType: 'bucket_verification_failed',
+								httpStatus: response.value.status
+							})
+						: scannerIssueFailure({
+								error: verifyResult.error,
+								errorType: 'bucket_cache_failure',
+								httpStatus: null
+							})
+				);
+			}
+
+			this.workerTelemetry.updateProgress(
+				job.remoteId,
+				'verified_bucket',
+				bytesDownloaded,
+				bytesTotal
+			);
+			return ok({
+				bytesDownloaded,
+				verificationFacts: {
+					bucketObject: {
+						expectedBucketHash: job.bucketHash.toLowerCase(),
+						hashAlgorithm: 'sha256',
+						matched: true,
+						sourceUrl: job.objectUrl
+					},
+					content: {
+						algorithm: 'sha256',
+						digest: job.bucketHash.toLowerCase(),
+						representation: 'uncompressed-xdr'
+					}
+				},
+				workerStage: 'verified'
+			});
+		} finally {
+			releaseDownloadPermit();
+		}
 	}
 
 	private async verifyBucketHash(

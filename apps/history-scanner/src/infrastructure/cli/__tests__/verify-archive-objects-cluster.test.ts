@@ -4,11 +4,12 @@ import {
 } from '../HistoryArchiveObjectClusterSupervisor.js';
 
 describe('verify-archive-objects-cluster', () => {
-	it('defaults to 24 object worker processes on the production CPU class', () => {
+	it('defaults to 24 object workers with eight download lanes', () => {
 		const plan = createHistoryArchiveObjectClusterPlan({}, 48);
 
 		expect(plan).toEqual({
-			perProcessHasherWorkers: 1,
+			maximumActiveDownloads: 8,
+			perProcessHasherWorkers: 3,
 			processCount: 24,
 			totalHasherWorkers: 24
 		});
@@ -24,7 +25,8 @@ describe('verify-archive-objects-cluster', () => {
 		);
 
 		expect(plan).toEqual({
-			perProcessHasherWorkers: 2,
+			maximumActiveDownloads: 4,
+			perProcessHasherWorkers: 6,
 			processCount: 12,
 			totalHasherWorkers: 24
 		});

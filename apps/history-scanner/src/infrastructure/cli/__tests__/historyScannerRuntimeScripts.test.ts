@@ -49,10 +49,12 @@ describe('history scanner runtime scripts', () => {
 		);
 
 		expect(service).toContain('Environment=HISTORY_OBJECT_WORKER_PROCESSES=24');
-		expect(service).toContain('Environment=HISTORY_SCAN_WORKERS=1');
 		expect(service).toContain(
-			'These are total object workers; each worker claims one archive object at a time.'
+			'Environment=HISTORY_OBJECT_DOWNLOAD_CONCURRENCY=8'
 		);
+		expect(service).toContain('Environment=HISTORY_HASHER_WORKERS=24');
+		expect(service).toContain('Environment=HISTORY_SCAN_WORKERS=1');
+		expect(service).toContain('no more than eight may stream remote');
 		expect(service).toContain('ExecStart=/usr/bin/env pnpm start:scan-history');
 		expect(service).not.toContain('verify-archives.js');
 		expect(service).not.toContain('verify-archives-cluster.js');

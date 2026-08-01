@@ -2,10 +2,12 @@ import { availableParallelism } from 'node:os';
 
 const defaultObjectWorkerProcesses = 24;
 const defaultTotalHasherWorkers = 24;
+const defaultMaximumActiveDownloads = 8;
 const maxObjectHasherWorkers = 24;
 const maxObjectWorkerProcesses = 24;
 
 export interface HistoryArchiveObjectClusterPlan {
+	readonly maximumActiveDownloads: number;
 	readonly perProcessHasherWorkers: number;
 	readonly processCount: number;
 	readonly totalHasherWorkers: number;
@@ -73,10 +75,20 @@ export function createHistoryArchiveObjectClusterPlan(
 		Math.min(defaultTotalHasherWorkers, Math.max(cpuCount - 1, 1)),
 		maxObjectHasherWorkers
 	);
+	const maximumActiveDownloads = readBoundedPositiveInteger(
+		env,
+		'HISTORY_OBJECT_DOWNLOAD_CONCURRENCY',
+		Math.min(
+			defaultMaximumActiveDownloads,
+			Math.max(Math.floor(processCount / 3), 1)
+		),
+		Math.max(Math.floor(processCount / 3), 1)
+	);
 
 	return {
+		maximumActiveDownloads,
 		perProcessHasherWorkers: Math.max(
-			Math.floor(totalHasherWorkers / processCount),
+			Math.floor(totalHasherWorkers / maximumActiveDownloads),
 			1
 		),
 		processCount,

@@ -4,6 +4,7 @@ import {
 	createHistoryArchiveObjectClusterPlan,
 	HistoryArchiveObjectClusterSupervisor
 } from './HistoryArchiveObjectClusterSupervisor.js';
+import { HistoryArchiveDownloadPermitCoordinator } from '../services/HistoryArchiveDownloadPermit.js';
 import {
 	isMainModule,
 	parseVerifyArchiveObjectsCliOptions,
@@ -31,14 +32,21 @@ export async function runHistoryArchiveObjectCluster(
 
 	const plan = createHistoryArchiveObjectClusterPlan(env);
 	let shuttingDown = false;
+	const downloadPermits = new HistoryArchiveDownloadPermitCoordinator(
+		plan.maximumActiveDownloads
+	);
 	const supervisor = new HistoryArchiveObjectClusterSupervisor(
 		plan,
 		env,
 		(workerEnv) => cluster.fork(workerEnv)
 	);
+	cluster.on('message', (worker, message: unknown) => {
+		downloadPermits.handleMessage(worker, message);
+	});
 	supervisor.start();
 
 	cluster.on('exit', (worker) => {
+		downloadPermits.removeWorker(worker.id);
 		if (shuttingDown) return;
 		supervisor.replace(worker.id);
 	});

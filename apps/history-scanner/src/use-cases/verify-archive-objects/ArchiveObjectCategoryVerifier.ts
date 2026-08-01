@@ -31,6 +31,7 @@ import {
 } from './ArchiveObjectFailure.js';
 import { classifyCategoryVerificationFailure } from './ArchiveObjectCategoryFailureClassifier.js';
 import { readArchiveObjectContentLength } from './ArchiveObjectHttpContentLength.js';
+import type { HistoryArchiveDownloadPermit } from '../../infrastructure/services/HistoryArchiveDownloadPermit.js';
 
 type ProgressReporter = (
 	remoteId: string,
@@ -46,7 +47,8 @@ export class ArchiveObjectCategoryVerifier {
 		private readonly historyArchiveStateValidator: HistoryArchiveStateValidator,
 		private readonly exceptionLogger: ExceptionLogger,
 		private readonly hasherWorkerCount: number,
-		private readonly reportProgress: ProgressReporter
+		private readonly reportProgress: ProgressReporter,
+		private readonly downloadPermit: HistoryArchiveDownloadPermit
 	) {}
 
 	async verifyCheckpointState(
@@ -58,11 +60,14 @@ export class ArchiveObjectCategoryVerifier {
 		const urlResult = Url.create(job.objectUrl);
 		if (urlResult.isErr()) return err(this.mapLocalError(urlResult.error));
 
-		const response = await this.httpService.get(urlResult.value, {
-			responseType: 'json',
-			connectionTimeoutMs: 5_000,
-			socketTimeoutMs: 10_000
-		});
+		const releaseDownloadPermit = await this.downloadPermit.acquire();
+		const response = await this.httpService
+			.get(urlResult.value, {
+				responseType: 'json',
+				connectionTimeoutMs: 5_000,
+				socketTimeoutMs: 10_000
+			})
+			.finally(releaseDownloadPermit);
 		if (response.isErr()) return err(this.mapHttpError(response.error));
 
 		const state = response.value.data;
@@ -174,13 +179,18 @@ export class ArchiveObjectCategoryVerifier {
 		const urlResult = Url.create(job.objectUrl);
 		if (urlResult.isErr()) return err(this.mapLocalError(urlResult.error));
 
+		const releaseDownloadPermit = await this.downloadPermit.acquire();
 		const response = await this.httpService.get(urlResult.value, {
 			responseType: 'stream',
 			connectionTimeoutMs: 10_000,
 			socketTimeoutMs: 60_000
 		});
-		if (response.isErr()) return err(this.mapHttpError(response.error));
+		if (response.isErr()) {
+			releaseDownloadPermit();
+			return err(this.mapHttpError(response.error));
+		}
 		if (!isReadable(response.value.data)) {
+			releaseDownloadPermit();
 			return err({
 				errorMessage: `${job.objectType} response must be a readable stream`,
 				errorType: 'invalid_category_response',
@@ -205,6 +215,7 @@ export class ArchiveObjectCategoryVerifier {
 		try {
 			pool = new HasherPool(Math.max(Math.floor(this.hasherWorkerCount), 1));
 		} catch (error) {
+			releaseDownloadPermit();
 			return err(
 				scannerIssueFailure({ error, errorType: 'worker_pool_setup_failure' })
 			);
@@ -240,6 +251,7 @@ export class ArchiveObjectCategoryVerifier {
 				new XdrStreamReader(),
 				processor
 			]);
+			releaseDownloadPermit();
 			const processedEntries = processor.processedEntries;
 			await parsedHistorySink?.flush();
 			this.reportProgress(
@@ -265,6 +277,8 @@ export class ArchiveObjectCategoryVerifier {
 			verificationResult = err(
 				classifyCategoryVerificationFailure(error, response.value.status)
 			);
+		} finally {
+			releaseDownloadPermit();
 		}
 		try {
 			await pool.workerpool.terminate(true);
