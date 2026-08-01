@@ -35,6 +35,7 @@ docs/issue-tracking/
 docs/agents/
 docs/*.md
 docs/ops/archive-evidence-cursor-keys.md
+!docs/architecture.md
 !docs/network-scan-runbook.md
 .serena
 .fallow
