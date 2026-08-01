@@ -2,6 +2,7 @@
 
 import { renderToStaticMarkup } from 'react-dom/server';
 import type { PublicRecentTransactions } from '@api/types';
+import { RecentTransactionsView } from '../blockchain-explorer-results';
 import { ExplorerTransactionFeedStatus } from '../explorer-transaction-feed-status';
 
 describe('ExplorerTransactionFeedStatus', () => {
@@ -51,6 +52,22 @@ describe('ExplorerTransactionFeedStatus', () => {
 		expect(html).toContain('Transaction updates are temporarily unavailable');
 		expect(html).not.toMatch(implementationCopy);
 	});
+
+	it('describes live rows without claiming they came from an index', () => {
+		const html = renderToStaticMarkup(
+			<RecentTransactionsView
+				onInspect={() => undefined}
+				result={{
+					message: null,
+					status: 'loaded',
+					transactions: feed({ records: [transaction()], truncated: true })
+				}}
+			/>
+		);
+
+		expect(html).toContain('Showing the latest 1 transactions.');
+		expect(html).not.toMatch(/indexed rows|returned by this query/iu);
+	});
 });
 
 const implementationCopy =
@@ -76,5 +93,17 @@ function feed(
 		source: 'local_history',
 		truncated: false,
 		...overrides
+	};
+}
+
+function transaction(): PublicRecentTransactions['records'][number] {
+	return {
+		createdAt: '2026-08-01T11:59:30.000Z',
+		feeCharged: '100',
+		hash: 'a'.repeat(64),
+		ledger: '123',
+		operationCount: 1,
+		sourceAccount: `G${'A'.repeat(55)}`,
+		successful: true
 	};
 }

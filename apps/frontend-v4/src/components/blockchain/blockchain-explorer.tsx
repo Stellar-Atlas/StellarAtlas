@@ -182,9 +182,7 @@ export function BlockchainExplorer(): React.JSX.Element {
 				<div className="panel-heading">
 					<div>
 						<strong>Search</strong>
-						<span>
-							Search results identify their data source and observation time.
-						</span>
+						<span>Search transactions, accounts, and ledgers</span>
 					</div>
 				</div>
 				<form className="explorer-search-form" onSubmit={submitSearch}>

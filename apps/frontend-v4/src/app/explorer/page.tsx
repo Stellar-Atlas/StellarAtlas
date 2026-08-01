@@ -5,7 +5,7 @@ export default function ExplorerPage(): React.JSX.Element {
 	return (
 		<main className="shell">
 			<PageHeading
-				description="Inspect proof-gated ledger, transaction, and operation history. Asset and contract tools appear as their local indexes become available."
+				description="Search Stellar network activity by transaction hash, account, or ledger."
 				eyebrow="Blockchain Explorer"
 				title="Explorer"
 			/>

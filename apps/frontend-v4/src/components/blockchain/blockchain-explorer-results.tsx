@@ -140,7 +140,7 @@ export function RecentTransactionsView({
 			{result.transactions.truncated ? (
 				<ExplorerState
 					tone="neutral"
-					text={`Showing ${result.transactions.records.length} latest indexed rows returned by this query.`}
+					text={`Showing the latest ${result.transactions.records.length} transactions.`}
 				/>
 			) : null}
 			<TransactionFeedRows
