@@ -1,5 +1,5 @@
 import { createGunzip } from 'node:zlib';
-import { Transform, type Readable } from 'node:stream';
+import type { Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 import { err, ok, type Result } from 'neverthrow';
 import { Url, isHttpError, type HttpService } from 'http-helper';
@@ -31,6 +31,7 @@ import {
 } from './ArchiveObjectFailure.js';
 import { classifyCategoryVerificationFailure } from './ArchiveObjectCategoryFailureClassifier.js';
 import { readArchiveObjectContentLength } from './ArchiveObjectHttpContentLength.js';
+import { createArchiveObjectDownloadCounter } from './ArchiveObjectDownloadCounter.js';
 import type { HistoryArchiveDownloadPermit } from '../../infrastructure/services/HistoryArchiveDownloadPermit.js';
 
 type ProgressReporter = (
@@ -40,6 +41,13 @@ type ProgressReporter = (
 	bytesTotal: number | null
 ) => void;
 
+type ProgressFlusher = (
+	remoteId: string,
+	workerStage: HistoryArchiveWorkerStageDTO,
+	bytesDownloaded: number | null,
+	bytesTotal: number | null
+) => Promise<void>;
+
 export class ArchiveObjectCategoryVerifier {
 	constructor(
 		private readonly httpService: HttpService,
@@ -48,6 +56,7 @@ export class ArchiveObjectCategoryVerifier {
 		private readonly exceptionLogger: ExceptionLogger,
 		private readonly hasherWorkerCount: number,
 		private readonly reportProgress: ProgressReporter,
+		private readonly flushProgress: ProgressFlusher,
 		private readonly downloadPermit: HistoryArchiveDownloadPermit
 	) {}
 
@@ -202,15 +211,26 @@ export class ArchiveObjectCategoryVerifier {
 		this.reportProgress(job.remoteId, workerStages.downloading, 0, bytesTotal);
 
 		let bytesDownloaded = 0;
-		const byteCounter = new ByteCounter((bytes) => {
-			bytesDownloaded += bytes;
-			this.reportProgress(
-				job.remoteId,
-				workerStages.downloading,
-				bytesDownloaded,
-				bytesTotal
-			);
-		});
+		const byteCounter = createArchiveObjectDownloadCounter(
+			(bytes) => {
+				bytesDownloaded += bytes;
+				this.reportProgress(
+					job.remoteId,
+					workerStages.downloading,
+					bytesDownloaded,
+					bytesTotal
+				);
+			},
+			async () => {
+				await this.flushProgress(
+					job.remoteId,
+					'claimed',
+					bytesDownloaded,
+					bytesTotal
+				);
+				releaseDownloadPermit();
+			}
+		);
 		let pool: HasherPool;
 		try {
 			pool = new HasherPool(Math.max(Math.floor(this.hasherWorkerCount), 1));
@@ -253,13 +273,13 @@ export class ArchiveObjectCategoryVerifier {
 			]);
 			releaseDownloadPermit();
 			const processedEntries = processor.processedEntries;
-			await parsedHistorySink?.flush();
 			this.reportProgress(
 				job.remoteId,
 				workerStages.verified,
 				bytesDownloaded,
 				bytesTotal
 			);
+			await parsedHistorySink?.flush();
 			verificationResult = ok({
 				bytesDownloaded,
 				verificationFacts: {
@@ -312,17 +332,6 @@ export class ArchiveObjectCategoryVerifier {
 
 	private mapLocalError(error: unknown): HistoryArchiveObjectFailureDTO {
 		return scannerIssueFailure({ error, errorType: 'worker_setup_failure' });
-	}
-}
-
-class ByteCounter extends Transform {
-	constructor(onBytes: (bytes: number) => void) {
-		super({
-			transform(chunk: Buffer, _encoding, callback) {
-				onBytes(chunk.length);
-				callback(null, chunk);
-			}
-		});
 	}
 }
 

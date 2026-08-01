@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { Transform, type Readable } from 'node:stream';
+import type { Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 import { createGunzip } from 'node:zlib';
 import { inject, injectable } from 'inversify';
@@ -30,6 +30,7 @@ import { CoalescingHistoryArchiveWorkerReporter } from './CoalescingHistoryArchi
 import type { VerifyArchiveObjectsDTO } from './VerifyArchiveObjectsDTO.js';
 import { canonicalJsonContentDigest } from './ArchiveObjectContentDigest.js';
 import { readArchiveObjectContentLength } from './ArchiveObjectHttpContentLength.js';
+import { createArchiveObjectDownloadCounter } from './ArchiveObjectDownloadCounter.js';
 import {
 	type HistoryArchiveDownloadPermit,
 	ProcessHistoryArchiveDownloadPermit
@@ -88,6 +89,13 @@ export class VerifyArchiveObjects {
 			this.hasherWorkerCount,
 			(remoteId, workerStage, bytesDownloaded, bytesTotal) =>
 				this.workerTelemetry.updateProgress(
+					remoteId,
+					workerStage,
+					bytesDownloaded,
+					bytesTotal
+				),
+			(remoteId, workerStage, bytesDownloaded, bytesTotal) =>
+				this.workerTelemetry.updateProgressAndFlush(
 					remoteId,
 					workerStage,
 					bytesDownloaded,
@@ -320,8 +328,7 @@ export class VerifyArchiveObjects {
 			);
 
 			let bytesDownloaded = 0;
-			const countedStream = this.createCountingStream(
-				response.value.data,
+			const counter = createArchiveObjectDownloadCounter(
 				(bytes) => {
 					bytesDownloaded += bytes;
 					this.workerTelemetry.updateProgress(
@@ -330,8 +337,19 @@ export class VerifyArchiveObjects {
 						bytesDownloaded,
 						bytesTotal
 					);
+				},
+				async () => {
+					await this.workerTelemetry.updateProgressAndFlush(
+						job.remoteId,
+						'claimed',
+						bytesDownloaded,
+						bytesTotal
+					);
+					releaseDownloadPermit();
 				}
 			);
+			response.value.data.on('error', (error) => counter.destroy(error));
+			const countedStream = response.value.data.pipe(counter);
 			const verifyResult = await this.bucketCache.verifyAndStore(
 				job.bucketHash.toLowerCase(),
 				countedStream,
@@ -406,20 +424,6 @@ export class VerifyArchiveObjects {
 		} catch (error) {
 			return err(mapUnknownToError(error));
 		}
-	}
-
-	private createCountingStream(
-		source: Readable,
-		onBytes: (bytes: number) => void
-	): Readable {
-		const counter = new Transform({
-			transform(chunk: Buffer, _encoding, callback) {
-				onBytes(chunk.length);
-				callback(null, chunk);
-			}
-		});
-		source.on('error', (error) => counter.destroy(error));
-		return source.pipe(counter);
 	}
 
 	private async failObject(

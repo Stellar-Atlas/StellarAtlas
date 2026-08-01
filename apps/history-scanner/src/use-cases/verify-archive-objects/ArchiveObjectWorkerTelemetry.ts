@@ -103,6 +103,21 @@ export class ArchiveObjectWorkerTelemetry {
 		this.statusReporter.enqueue(this.createReport(progress.slot, progress));
 	}
 
+	async updateProgressAndFlush(
+		remoteId: string,
+		workerStage: HistoryArchiveWorkerStageDTO,
+		bytesDownloaded: number | null,
+		bytesTotal: number | null
+	): Promise<void> {
+		this.updateProgress(
+			remoteId,
+			workerStage,
+			bytesDownloaded,
+			bytesTotal
+		);
+		await this.statusReporter.flush();
+	}
+
 	async finishObject(
 		remoteId: string,
 		outcome: HistoryArchiveWorkerOutcomeDTO

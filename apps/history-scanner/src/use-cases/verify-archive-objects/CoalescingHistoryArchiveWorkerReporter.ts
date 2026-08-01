@@ -5,10 +5,12 @@ import type { HistoryArchiveWorkerStatusReporter } from '../../domain/scan/Histo
 
 export interface HistoryArchiveWorkerReportSink {
 	enqueue(report: HistoryArchiveWorkerReportDTO): void;
+	flush(): Promise<void>;
 }
 
 export class CoalescingHistoryArchiveWorkerReporter implements HistoryArchiveWorkerReportSink {
 	private inFlight = false;
+	private readonly flushWaiters: Array<() => void> = [];
 	private readonly pending = new Map<string, HistoryArchiveWorkerReportDTO>();
 
 	constructor(
@@ -37,11 +39,19 @@ export class CoalescingHistoryArchiveWorkerReporter implements HistoryArchiveWor
 		this.pump();
 	}
 
+	async flush(): Promise<void> {
+		if (!this.inFlight && this.pending.size === 0) return;
+		await new Promise<void>((resolve) => this.flushWaiters.push(resolve));
+	}
+
 	private pump(): void {
 		if (this.inFlight) return;
 		const next = this.pending.entries().next().value as
 			[string, HistoryArchiveWorkerReportDTO] | undefined;
-		if (next === undefined) return;
+		if (next === undefined) {
+			this.resolveFlushWaiters();
+			return;
+		}
 
 		const [workerId, report] = next;
 		this.pending.delete(workerId);
@@ -58,5 +68,10 @@ export class CoalescingHistoryArchiveWorkerReporter implements HistoryArchiveWor
 				this.inFlight = false;
 				this.pump();
 			});
+	}
+
+	private resolveFlushWaiters(): void {
+		if (this.inFlight || this.pending.size > 0) return;
+		for (const resolve of this.flushWaiters.splice(0)) resolve();
 	}
 }

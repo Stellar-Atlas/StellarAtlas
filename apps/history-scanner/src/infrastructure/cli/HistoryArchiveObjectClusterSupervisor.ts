@@ -88,7 +88,7 @@ export function createHistoryArchiveObjectClusterPlan(
 	return {
 		maximumActiveDownloads,
 		perProcessHasherWorkers: Math.max(
-			Math.floor(totalHasherWorkers / maximumActiveDownloads),
+			Math.floor(totalHasherWorkers / processCount),
 			1
 		),
 		processCount,

@@ -4,18 +4,18 @@ import {
 } from '../HistoryArchiveObjectClusterSupervisor.js';
 
 describe('verify-archive-objects-cluster', () => {
-	it('defaults to 24 object workers with eight download lanes', () => {
+	it('keeps download and hasher concurrency independently bounded', () => {
 		const plan = createHistoryArchiveObjectClusterPlan({}, 48);
 
 		expect(plan).toEqual({
 			maximumActiveDownloads: 8,
-			perProcessHasherWorkers: 3,
+			perProcessHasherWorkers: 1,
 			processCount: 24,
 			totalHasherWorkers: 24
 		});
 	});
 
-	it('divides total hasher workers across bounded lower object worker process counts', () => {
+	it('divides total hasher workers across object worker processes', () => {
 		const plan = createHistoryArchiveObjectClusterPlan(
 			{
 				HISTORY_HASHER_WORKERS: '24',
@@ -26,7 +26,7 @@ describe('verify-archive-objects-cluster', () => {
 
 		expect(plan).toEqual({
 			maximumActiveDownloads: 4,
-			perProcessHasherWorkers: 6,
+			perProcessHasherWorkers: 2,
 			processCount: 12,
 			totalHasherWorkers: 24
 		});
