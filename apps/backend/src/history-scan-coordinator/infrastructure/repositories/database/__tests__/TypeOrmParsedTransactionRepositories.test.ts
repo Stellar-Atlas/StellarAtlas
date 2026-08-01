@@ -9,9 +9,10 @@ import { TypeOrmParsedTransactionEnvelopeRepository } from '../TypeOrmParsedTran
 import { TypeOrmParsedTransactionResultRepository } from '../TypeOrmParsedTransactionResultRepository.js';
 
 describe('TypeOrmParsedTransactionEnvelopeRepository', () => {
-	it('should atomically upsert an envelope and its exact object observation', async () => {
+	it('should atomically persist an immutable envelope and its object observation', async () => {
 		const harness = createTransactionHarness([
 			{
+				envelopeXdr: 'AAAA-envelope',
 				id: 12,
 				ledgerSequence: '63355967',
 				transactionIndex: 4,
@@ -40,13 +41,16 @@ describe('TypeOrmParsedTransactionEnvelopeRepository', () => {
 
 		expect(harness.query).toHaveBeenNthCalledWith(
 			1,
-			expect.stringContaining(
-				'where excluded."envelopeXdr" = stored."envelopeXdr"'
-			),
+			expect.stringContaining('do nothing'),
 			expect.arrayContaining(['AAAA-envelope', 'transaction-set-hash'])
 		);
 		expect(harness.query).toHaveBeenNthCalledWith(
 			2,
+			expect.stringContaining('join "parsed_transaction_envelope" stored'),
+			expect.arrayContaining(['AAAA-envelope', 'transaction-set-hash'])
+		);
+		expect(harness.query).toHaveBeenNthCalledWith(
+			3,
 			expect.stringContaining('parsed_transaction_envelope_observation'),
 			expect.arrayContaining([12, 'job-a'])
 		);
@@ -83,7 +87,7 @@ describe('TypeOrmParsedTransactionEnvelopeRepository', () => {
 			name: 'ParsedTransactionConflictError',
 			reason: 'stored-value-conflict'
 		});
-		expect(harness.query).toHaveBeenCalledTimes(1);
+		expect(harness.query).toHaveBeenCalledTimes(2);
 	});
 
 	it('should reject duplicate and out-of-range envelope rows before SQL', async () => {
@@ -118,7 +122,7 @@ describe('TypeOrmParsedTransactionEnvelopeRepository', () => {
 
 	it('should find an envelope by ledger transaction identity', async () => {
 		const repository = {
-			find: jest.fn().mockResolvedValueOnce([
+			query: jest.fn().mockResolvedValueOnce([
 				{
 					envelopeXdr: 'AAAA-envelope',
 					lastSourceArchiveUrl: 'https://archive-a.example',
@@ -145,6 +149,10 @@ describe('TypeOrmParsedTransactionEnvelopeRepository', () => {
 			transactionIndex: 4,
 			transactionSetHash: 'transaction-set-hash'
 		});
+		expect(repository.query).toHaveBeenCalledWith(
+			expect.stringContaining('parsed_transaction_envelope_observation'),
+			[63355967, 'transaction-set-hash', 4]
+		);
 	});
 
 	it('should read envelopes through the exact source-object association', async () => {
@@ -181,12 +189,14 @@ describe('TypeOrmParsedTransactionEnvelopeRepository', () => {
 });
 
 describe('TypeOrmParsedTransactionResultRepository', () => {
-	it('should atomically upsert a result and its exact object observation', async () => {
+	it('should atomically persist an immutable result and its object observation', async () => {
 		const harness = createTransactionHarness([
 			{
 				id: 19,
 				ledgerSequence: '63355967',
+				resultXdr: 'AAAA-result',
 				transactionIndex: 4,
+				transactionHash: 'transaction-hash',
 				transactionResultHash: 'transaction-result-hash'
 			}
 		]);
@@ -213,13 +223,16 @@ describe('TypeOrmParsedTransactionResultRepository', () => {
 
 		expect(harness.query).toHaveBeenNthCalledWith(
 			1,
-			expect.stringContaining(
-				'where excluded."transactionHash" = stored."transactionHash"'
-			),
+			expect.stringContaining('do nothing'),
 			expect.arrayContaining(['AAAA-result', 'transaction-hash'])
 		);
 		expect(harness.query).toHaveBeenNthCalledWith(
 			2,
+			expect.stringContaining('join "parsed_transaction_result" stored'),
+			expect.arrayContaining(['AAAA-result', 'transaction-hash'])
+		);
+		expect(harness.query).toHaveBeenNthCalledWith(
+			3,
 			expect.stringContaining('parsed_transaction_result_observation'),
 			expect.arrayContaining([19, 'job-a'])
 		);
@@ -255,12 +268,12 @@ describe('TypeOrmParsedTransactionResultRepository', () => {
 			name: 'ParsedTransactionConflictError',
 			reason: 'stored-value-conflict'
 		});
-		expect(harness.query).toHaveBeenCalledTimes(1);
+		expect(harness.query).toHaveBeenCalledTimes(2);
 	});
 
 	it('should find a result by transaction hash', async () => {
 		const repository = {
-			find: jest.fn().mockResolvedValueOnce([
+			query: jest.fn().mockResolvedValueOnce([
 				{
 					lastSourceArchiveUrl: 'https://archive-a.example',
 					ledgerSequence: 63355967,
@@ -285,6 +298,10 @@ describe('TypeOrmParsedTransactionResultRepository', () => {
 			transactionIndex: 4,
 			transactionResultHash: 'transaction-result-hash'
 		});
+		expect(repository.query).toHaveBeenCalledWith(
+			expect.stringContaining('parsed_transaction_result_observation'),
+			['transaction-hash']
+		);
 	});
 
 	it('should read results through the exact source-object association', async () => {
@@ -378,6 +395,7 @@ function createTransactionHarness(returnedRows: readonly object[]): {
 } {
 	const query = jest
 		.fn()
+		.mockResolvedValueOnce([])
 		.mockResolvedValueOnce(returnedRows)
 		.mockResolvedValueOnce([]);
 	const transactionManager = { query } as unknown as EntityManager;

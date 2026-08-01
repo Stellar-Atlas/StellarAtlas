@@ -91,6 +91,7 @@ async function writeObservations(
 			values ${placeholders.join(',\n')}
 			on conflict (${conflictColumns}) do update set
 				"observedAt" = greatest(stored."observedAt", excluded."observedAt")
+			where excluded."observedAt" > stored."observedAt"
 		`,
 		parameters
 	);

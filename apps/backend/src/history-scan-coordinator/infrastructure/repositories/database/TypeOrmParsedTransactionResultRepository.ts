@@ -45,28 +45,49 @@ export class TypeOrmParsedTransactionResultRepository implements ParsedTransacti
 	async findByTransactionHash(
 		transactionHash: string
 	): Promise<ParsedTransactionResultDetails | null> {
-		const rows = await this.repository.find({
-			order: { lastSeenAt: 'DESC' },
-			select: {
-				lastSourceArchiveUrl: true,
-				ledgerSequence: true,
-				resultXdr: true,
-				transactionHash: true,
-				transactionIndex: true,
-				transactionResultHash: true
-			},
-			take: 1,
-			where: { transactionHash }
-		});
+		const rows = (await this.repository.query(
+			`
+				select
+					result."ledgerSequence",
+					result."resultXdr",
+					result."transactionHash",
+					result."transactionIndex",
+					result."transactionResultHash",
+					coalesce(latest_source."archiveUrl", result."lastSourceArchiveUrl")
+						as "lastSourceArchiveUrl"
+				from parsed_transaction_result result
+				left join lateral (
+					select source."archiveUrl", observation."observedAt"
+					from parsed_transaction_result_observation observation
+					left join history_archive_object_queue source
+						on source."remoteId" = case
+							when observation."sourceObjectRemoteId" ~
+								'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$'
+							then observation."sourceObjectRemoteId"::uuid
+							else null
+						end
+					where observation."parsedTransactionResultId" = result.id
+					order by observation."observedAt" desc, observation.id desc
+					limit 1
+				) latest_source on true
+				where result."transactionHash" = $1
+				order by coalesce(latest_source."observedAt", result."lastSeenAt") desc,
+					result.id desc
+				limit 1
+			`,
+			[transactionHash]
+		)) as (ParsedTransactionResultRow & {
+			readonly lastSourceArchiveUrl: string;
+		})[];
 		const row = rows[0];
 		if (row === undefined) return null;
 
 		return {
 			lastSourceArchiveUrl: row.lastSourceArchiveUrl,
-			ledgerSequence: row.ledgerSequence,
+			ledgerSequence: toParsedLedgerSequence(row.ledgerSequence),
 			resultXdr: row.resultXdr,
 			transactionHash: row.transactionHash,
-			transactionIndex: row.transactionIndex,
+			transactionIndex: toParsedTransactionIndex(row.transactionIndex),
 			transactionResultHash: row.transactionResultHash
 		};
 	}
@@ -104,8 +125,10 @@ export class TypeOrmParsedTransactionResultRepository implements ParsedTransacti
 					tx_result."transactionIndex" as "transactionIndex",
 					tx_result."transactionHash" as "transactionHash",
 					tx_result."transactionResultHash" as "transactionResultHash",
-					tx_result."lastSourceArchiveUrl" as "resultSourceArchiveUrl",
-					tx_result."lastSeenAt" as "resultObservedAt",
+					coalesce(result_source."archiveUrl", tx_result."lastSourceArchiveUrl")
+						as "resultSourceArchiveUrl",
+					coalesce(result_source."observedAt", tx_result."lastSeenAt")
+						as "resultObservedAt",
 					header."ledgerHeaderHash" as "ledgerHeaderHash",
 					header."transactionSetHash" as "transactionSetHash",
 					header."protocolVersion" as "protocolVersion",
@@ -114,6 +137,20 @@ export class TypeOrmParsedTransactionResultRepository implements ParsedTransacti
 					envelope."lastSourceArchiveUrl" as "envelopeSourceArchiveUrl",
 					envelope."lastSeenAt" as "envelopeObservedAt"
 				from parsed_transaction_result tx_result
+				left join lateral (
+					select source."archiveUrl", observation."observedAt"
+					from parsed_transaction_result_observation observation
+					left join history_archive_object_queue source
+						on source."remoteId" = case
+							when observation."sourceObjectRemoteId" ~
+								'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$'
+							then observation."sourceObjectRemoteId"::uuid
+							else null
+						end
+					where observation."parsedTransactionResultId" = tx_result.id
+					order by observation."observedAt" desc, observation.id desc
+					limit 1
+				) result_source on true
 				left join lateral (
 					select
 						"ledgerHeaderHash",
@@ -129,18 +166,39 @@ export class TypeOrmParsedTransactionResultRepository implements ParsedTransacti
 					limit 1
 				) header on true
 				left join lateral (
-					select "lastSourceArchiveUrl", "lastSeenAt"
+					select
+						coalesce(envelope_source."archiveUrl", envelope_row."lastSourceArchiveUrl")
+							as "lastSourceArchiveUrl",
+						coalesce(envelope_source."observedAt", envelope_row."lastSeenAt")
+							as "lastSeenAt"
 					from parsed_transaction_envelope envelope_row
+					left join lateral (
+						select source."archiveUrl", observation."observedAt"
+						from parsed_transaction_envelope_observation observation
+						left join history_archive_object_queue source
+							on source."remoteId" = case
+								when observation."sourceObjectRemoteId" ~
+									'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$'
+								then observation."sourceObjectRemoteId"::uuid
+								else null
+							end
+						where observation."parsedTransactionEnvelopeId" = envelope_row.id
+						order by observation."observedAt" desc, observation.id desc
+						limit 1
+					) envelope_source on true
 					where envelope_row."ledgerSequence" = tx_result."ledgerSequence"
 						and envelope_row."transactionSetHash" = header."transactionSetHash"
 						and envelope_row."transactionIndex" = tx_result."transactionIndex"
-					order by envelope_row."lastSeenAt" desc, envelope_row.id desc
+					order by coalesce(
+						envelope_source."observedAt",
+						envelope_row."lastSeenAt"
+					) desc, envelope_row.id desc
 					limit 1
 				) envelope on true
 				order by
 					tx_result."ledgerSequence" desc,
 					tx_result."transactionIndex" desc,
-					tx_result."lastSeenAt" desc
+					coalesce(result_source."observedAt", tx_result."lastSeenAt") desc
 				limit $1
 			`,
 			[limit]

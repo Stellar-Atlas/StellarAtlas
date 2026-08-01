@@ -253,10 +253,15 @@ export class CoordinatorParsedHistorySink implements ParsedHistorySink {
 			}
 
 			const delay = this.retryDelaysMs[attempt];
-			if (delay !== undefined) await asyncSleep(delay);
+			if (delay !== undefined) await asyncSleep(this.jitter(delay));
 		}
 
 		return lastError;
+	}
+
+	private jitter(delayMs: number): number {
+		const spread = Math.max(1, Math.floor(delayMs / 4));
+		return delayMs + Math.floor(Math.random() * spread);
 	}
 
 	private throwRegistrationFailure(error: Error | null): void {
