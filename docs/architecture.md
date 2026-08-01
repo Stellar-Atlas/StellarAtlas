@@ -15,19 +15,22 @@ deployments restart only the component whose build changed. The target is not a
 deployment command because restarting it would interrupt unrelated services and
 public ingress.
 
-Postgres is the durable source of truth for network observations, archive
-evidence, checkpoint proofs, canonical decoded history, and imported state.
-Meilisearch and frontend caches are rebuildable read models. Large immutable
-LedgerCloseMeta batches are stored on the bulk data mount and imported into
-typed Postgres tables.
+Atlas application Postgres is the durable source of truth for network
+observations, archive evidence, checkpoint proofs, canonical decoded history,
+and imported Atlas state. Users Postgres, Horizon Postgres and captive-Core
+storage, and Stellar RPC storage are separate service authorities. Large
+immutable LedgerCloseMeta batches on the bulk data mount are reconstruction
+inputs for typed Atlas tables. Network/SCP Meilisearch indexes, graph stores,
+frontend caches, and ramdisk caches are rebuildable read models.
 
 ## Build Boundaries
 
 | Build target | Owns | Does not build |
 | --- | --- | --- |
 | `apps/frontend-v4` | Production and staging Next.js frontend | API, scanners, ETL, legacy frontend |
-| `apps/frontend` | Legacy Vite frontend | Frontend v4, API, scanners, ETL |
+| `apps/frontend` | Legacy Vue/Vite bundle and Express public ingress that proxies API docs, API routes, and frontend-v4 routes during migration | Backend API implementation, frontend v4 build, scanners, ETL |
 | `apps/backend` | API and backend CLIs for network/SCP scanning, archive coordination, canonical promotion, backfill, and state import | Frontends, standalone history scanner, Go ETL binaries |
+| `apps/users` | User, session, mail, and notification-account service | Public API, frontends, scanners, ETL |
 | `apps/history-scanner` | Standalone archive object fetch and verification workers | API, frontends, Go ETL binaries |
 | `apps/full-history-etl` | Go LedgerCloseMeta decoder and state exporter binaries | TypeScript services and frontends |
 | `packages/shared` | Shared DTOs and domain contracts | Deployable processes |
@@ -47,7 +50,7 @@ frontends or the standalone history scanner.
 | --- | --- | --- | --- | --- |
 | Frontend v4 | `stellaratlas-frontend-v4.service` | `apps/frontend-v4` | Primary web application | `127.0.0.1:3104` |
 | Frontend v4 staging | `stellaratlas-frontend-v4-staging.service` | `apps/frontend-v4` using `.next-staging` | Temporary production-mode verification build; shares the production API and data services | `127.0.0.1:3114` |
-| Legacy frontend | `stellaratlas-frontend-legacy.service` | `apps/frontend` | Legacy routes retained during migration | Internal frontend port |
+| Public ingress and legacy frontend | `stellaratlas-frontend-legacy.service` | `apps/frontend` Express server plus legacy Vue bundle | Serve legacy routes and proxy API docs, API paths, and migrated routes to frontend v4 | Configured ingress port |
 | Public API | `stellaratlas-api.service` | Backend API cluster | Public REST, WebSocket status streams, worker coordination, and OpenAPI | `127.0.0.1:3000` |
 | Users service | `stellaratlas-users.service` | `apps/users` | User and notification account functions | Internal |
 
@@ -81,19 +84,23 @@ while evidence remains specific to each archive source that was checked.
 | LedgerCloseMeta ingestion | `stellaratlas-full-history-ledger-close-meta.service` | Backend coordinator plus Go ETL | Fetch/replay LedgerCloseMeta and produce immutable typed datasets | Bulk typed batches and ingestion manifests |
 | Operation backfill | `stellaratlas-full-history-operation-backfill.service` | Backend operation backfill CLI | Populate operation and account-reference projections | Typed Postgres tables |
 | State import | `stellaratlas-full-history-state-import.service` | Backend importer plus Go state exporter | Import account and trustline changes from typed batches | Typed state/import tables |
-| Horizon | `stellaratlas-horizon.service` | Horizon binary and captive Stellar Core | Horizon-compatible history API | Separate Horizon database and captive-core storage |
-| Stellar RPC | `stellaratlas-stellar-rpc.service` | Stellar RPC binary | Soroban RPC API | RPC database/storage configured by `rpc.toml` |
+| Horizon | System `stellaratlas-horizon.service`, or user `stellaratlas-horizon.service` plus `stellaratlas-horizon-postgres.service` | Horizon binary, captive Stellar Core, and the dedicated Postgres layout when user units are selected | Horizon-compatible history API | Separate Horizon database and captive-core storage |
+| Stellar RPC | System or user `stellaratlas-stellar-rpc.service` | Stellar RPC binary | Soroban RPC API | RPC database/storage configured by `rpc.toml` |
 
-Horizon and Stellar RPC units are conditional. Their presence in the repository
-does not mean the services are deployed; required binaries, databases, and
-configuration must exist before systemd can start them.
+Horizon and Stellar RPC units are conditional, and the system and user layouts
+are alternatives rather than duplicate stacks. Unit presence does not mean the
+services are deployed; required binaries, databases, and configuration must
+exist before systemd can start them.
 
 ### Search And Read Models
 
 | Service | Systemd unit | Responsibility | Source of truth |
 | --- | --- | --- | --- |
-| Network Meilisearch | `stellaratlas-meilisearch-network.service` | Fast node and organization autocomplete/faceted lookup | Rebuilt from Postgres network data |
+| Network Meilisearch | `stellaratlas-meilisearch-network.service` | Node and organization autocomplete/faceted lookup | Rebuilt from Atlas Postgres network data |
+| SCP Meilisearch workload | Separately configured host/key; no dedicated tracked unit | SCP observation and playback indexes when enabled | Rebuilt from Atlas Postgres SCP data |
 | Frontend server actions and WebSockets | Part of frontend v4 and API | Aggregate server-side reads and stream changing status/SCP data to clients | API and Postgres |
+| API docs comparison refresh | `stellaratlas-api-docs-comparison-refresh.service` and `.timer` | Refresh the bounded external API-docs comparison read model | External docs plus persisted backend comparison state |
+| RADAR network comparison refresh | `stellaratlas-radar-network-comparison-refresh.service` and `.timer` | Refresh the bounded RADAR network comparison read model | External RADAR response plus persisted backend comparison state |
 
 Explorer transaction, operation, asset, account, contract, and ledger views are
 read models over canonical proof-gated history and typed LedgerCloseMeta data.
@@ -137,8 +144,13 @@ public history sources / LedgerCloseMeta source
   -> immutable typed batches on bulk storage
   -> typed Postgres import and canonical linkage
   -> search/read-model indexes
-  -> Explorer, Horizon-compatible, and RPC-facing products
+  -> Explorer and Atlas compatibility/read products
 ```
+
+Owned Horizon and Stellar RPC do not read Atlas typed tables directly. They
+retain their own protocol ingestion, databases, and captive-Core/RPC storage;
+Atlas may expose or route those APIs only after their independent readiness is
+proven.
 
 Canonical archive promotion and LedgerCloseMeta ingestion are complementary:
 archive proofs establish source integrity and provenance, while LedgerCloseMeta
