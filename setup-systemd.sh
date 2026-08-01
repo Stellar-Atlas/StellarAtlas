@@ -58,6 +58,8 @@ usage() {
 	cat <<'EOF'
 Usage:
   sudo ./setup-systemd.sh       Install and activate the boot-safe unit copies.
+  sudo ./setup-systemd.sh --install-postgresql-profile
+                                Install only the primary PostgreSQL tuning profile.
   ./setup-systemd.sh --verify   Validate tracked unit templates without changes.
   ./setup-systemd.sh --verify-installed
                                 Verify the installed boot contract without changes.
@@ -406,6 +408,20 @@ main() {
 			die "--verify-installed accepts no additional arguments"
 		verify_source_units
 		verify_installed_units
+		return
+		;;
+	--install-postgresql-profile)
+		[[ "$#" -eq 1 ]] ||
+			die "--install-postgresql-profile accepts no additional arguments"
+		[[ "$EUID" -eq 0 ]] || die "run profile installation with sudo"
+		[[ "$REPO_ROOT" == "$EXPECTED_REPO_ROOT" ]] ||
+			die "repository must be at $EXPECTED_REPO_ROOT"
+		[[ -f "$POSTGRESQL_TUNING_SOURCE" ]] ||
+			die "missing PostgreSQL tuning profile: $POSTGRESQL_TUNING_SOURCE"
+		validate_postgresql_tuning_source
+		install_regular_file "$POSTGRESQL_TUNING_SOURCE" "$POSTGRESQL_TUNING_TARGET"
+		verify_regular_copy "$POSTGRESQL_TUNING_SOURCE" "$POSTGRESQL_TUNING_TARGET"
+		printf 'Installed primary PostgreSQL tuning profile.\n'
 		return
 		;;
 	--help | -h)
