@@ -10,6 +10,7 @@ NETWORK_MEILI_ENV_DIR="/etc/stellaratlas"
 NETWORK_MEILI_ENV_FILE="$NETWORK_MEILI_ENV_DIR/meilisearch-network.env"
 POSTGRESQL_TUNING_SOURCE="$REPO_ROOT/ops/postgresql/stellaratlas-main.conf"
 POSTGRESQL_TUNING_TARGET="/etc/postgresql/16/main/conf.d/stellaratlas-main.conf"
+POSTGRESQL_BINARY="/usr/lib/postgresql/16/bin/postgres"
 NETWORK_MEILI_DATA_ROOT="/home/observe/stellarbeat-data/meilisearch/network"
 FULL_HISTORY_LEDGER_CLOSE_META_EXECUTABLE="$EXPECTED_REPO_ROOT/apps/full-history-etl/bin/stellaratlas-full-history-etl"
 FULL_HISTORY_STATE_EXPORT_EXECUTABLE="$EXPECTED_REPO_ROOT/apps/full-history-etl/bin/stellaratlas-full-history-state-export"
@@ -75,6 +76,7 @@ verify_source_units() {
 	command -v systemd-analyze >/dev/null || die "systemd-analyze is required"
 	[[ -f "$POSTGRESQL_TUNING_SOURCE" ]] ||
 		die "missing PostgreSQL tuning profile: $POSTGRESQL_TUNING_SOURCE"
+	validate_postgresql_tuning_source
 
 	for file_name in "${VERIFY_UNIT_NAMES[@]}"; do
 		[[ -f "$SYSTEMD_SOURCE_DIR/$file_name" ]] ||
@@ -173,6 +175,30 @@ verify_source_units() {
 		die "observe must be authorized to manage the primary PostgreSQL service"
 
 	printf 'Verified %d tracked systemd unit templates.\n' "${#unit_paths[@]}"
+}
+
+validate_postgresql_tuning_source() {
+	local validation_dir
+	local -a postgres_command=("$POSTGRESQL_BINARY")
+
+	[[ -x "$POSTGRESQL_BINARY" ]] ||
+		die "PostgreSQL 16 binary is missing: $POSTGRESQL_BINARY"
+	if [[ "$EUID" -eq 0 ]]; then
+		command -v runuser >/dev/null || die "runuser is required"
+		validation_dir="$(runuser -u postgres -- mktemp -d)"
+		postgres_command=(runuser -u postgres -- "$POSTGRESQL_BINARY")
+	else
+		validation_dir="$(mktemp -d)"
+	fi
+
+	if ! "${postgres_command[@]}" \
+		-D "$validation_dir" \
+		--config-file="$POSTGRESQL_TUNING_SOURCE" \
+		-C shared_buffers >/dev/null; then
+		rmdir "$validation_dir" || true
+		die "PostgreSQL rejected the tuning profile"
+	fi
+	rmdir "$validation_dir" || die "failed to remove PostgreSQL validation dir"
 }
 
 verify_regular_copy() {
