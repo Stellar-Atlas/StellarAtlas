@@ -66,13 +66,9 @@ export function assessKnownArchiveEvidence(
 ): ArchiveHealthState {
 	if (evidence === null) return 'unknown';
 	const { checkpoints, objects } = evidence.totals;
-	if (
-		objects.remoteFailureObjects > 0 ||
-		checkpoints.mismatchedCheckpoints > 0
-	) {
-		return 'remote_failure';
-	}
+	if (checkpoints.mismatchedCheckpoints > 0) return 'integrity_failure';
 	if (objects.workerIssueObjects > 0) return 'scanner_issue';
+	if (objects.remoteFailureObjects > 0) return 'remote_retry';
 	if (objects.activeObjects > 0) return 'checking';
 	if (objects.pendingObjects > 0 || checkpoints.pendingCheckpoints > 0) {
 		return 'waiting';

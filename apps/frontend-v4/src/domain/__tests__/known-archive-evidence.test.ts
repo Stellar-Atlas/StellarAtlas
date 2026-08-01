@@ -13,21 +13,21 @@ import {
 } from '../known-archive-evidence';
 
 describe('known archive evidence', () => {
-	it('keeps remote failure precedence over worker issues', () => {
+	it('keeps worker issues separate from simultaneous remote retries', () => {
 		const evidence = createEvidence({
 			objects: { remoteFailureObjects: 1, workerIssueObjects: 2 }
 		});
 
-		expect(assessKnownArchiveEvidence(evidence)).toBe('remote_failure');
+		expect(assessKnownArchiveEvidence(evidence)).toBe('scanner_issue');
 	});
 
-	it('treats checkpoint mismatches as remote evidence, not infrastructure evidence', () => {
+	it('treats checkpoint mismatches as integrity evidence', () => {
 		const evidence = createEvidence({
 			checkpoints: { mismatchedCheckpoints: 1 },
 			objects: { workerIssueObjects: 1 }
 		});
 
-		expect(assessKnownArchiveEvidence(evidence)).toBe('remote_failure');
+		expect(assessKnownArchiveEvidence(evidence)).toBe('integrity_failure');
 	});
 
 	it('classifies infrastructure evidence independently', () => {

@@ -8,7 +8,8 @@ export const archiveHealthVocabulary = [
 	'verified',
 	'checking',
 	'waiting',
-	'remote_failure',
+	'integrity_failure',
+	'remote_retry',
 	'scanner_issue',
 	'unknown'
 ] as const;
@@ -79,9 +80,18 @@ export function assessArchiveHealth({
 		observedActiveChecks,
 		scannerIssue
 	);
-	if (hasRemoteFailure(facts)) return { facts, state: 'remote_failure' };
+	if (facts.checkpointMismatches > 0) {
+		return { facts, state: 'integrity_failure' };
+	}
 	if (facts.scannerIssues > 0) return { facts, state: 'scanner_issue' };
 	if (facts.unclassifiedFailures > 0) return { facts, state: 'unknown' };
+	if (
+		facts.failedEvidenceRows > 0 ||
+		facts.failingArchiveSources > 0 ||
+		facts.remoteHostFailures > 0
+	) {
+		return { facts, state: 'remote_retry' };
+	}
 	if (checkpointProofIsComplete(summary)) return { facts, state: 'verified' };
 	if (facts.activeChecks > 0) return { facts, state: 'checking' };
 	if (facts.waitingChecks > 0) return { facts, state: 'waiting' };
@@ -106,7 +116,9 @@ export function assessArchiveStatusHealth({
 		observedActiveChecks,
 		scannerIssue
 	);
-	if (hasRemoteFailure(facts)) return { facts, state: 'remote_failure' };
+	if (facts.checkpointMismatches > 0) {
+		return { facts, state: 'integrity_failure' };
+	}
 	if (facts.scannerIssues > 0) return { facts, state: 'scanner_issue' };
 	if (facts.unclassifiedFailures > 0) return { facts, state: 'unknown' };
 	if (checkpointStatusProofIsComplete(summary)) {
@@ -172,8 +184,8 @@ export function checkpointStatusProofIsComplete(
 
 export function getArchiveFailureState(
 	evidenceClass: ArchiveEvidenceClass | null
-): Extract<ArchiveHealthState, 'remote_failure' | 'scanner_issue' | 'unknown'> {
-	if (evidenceClass === 'archive-object') return 'remote_failure';
+): Extract<ArchiveHealthState, 'remote_retry' | 'scanner_issue' | 'unknown'> {
+	if (evidenceClass === 'archive-object') return 'remote_retry';
 	if (
 		evidenceClass === 'worker-infrastructure' ||
 		evidenceClass === 'coordinator-infrastructure'
@@ -184,7 +196,8 @@ export function getArchiveFailureState(
 }
 
 export function archiveHealthLabel(state: ArchiveHealthState): string {
-	if (state === 'remote_failure') return 'Source finding';
+	if (state === 'integrity_failure') return 'Integrity mismatch';
+	if (state === 'remote_retry') return 'Remote retry';
 	if (state === 'scanner_issue') return 'Scanner issue';
 	return state.charAt(0).toUpperCase() + state.slice(1);
 }
@@ -193,7 +206,7 @@ export function archiveHealthTone(
 	state: ArchiveHealthState
 ): ArchiveHealthTone {
 	if (state === 'verified') return 'good';
-	if (state === 'remote_failure') return 'warning';
+	if (state === 'integrity_failure') return 'danger';
 	return 'warning';
 }
 
@@ -209,7 +222,7 @@ function getArchiveHealthFacts(
 	).length;
 	const remoteHostFailures = summary.hostThrottles.filter(
 		(throttle) =>
-			getArchiveFailureState(throttle.evidenceClass) === 'remote_failure'
+			getArchiveFailureState(throttle.evidenceClass) === 'remote_retry'
 	).length;
 	const sourceActiveChecks = summary.sources.reduce(
 		(total, source) => total + source.activeObjects,
@@ -311,8 +324,9 @@ function getArchiveStatusHealthFacts(
 			checkpoints.categoryConsistentArchiveCheckpoints
 		),
 		remoteHostFailures: 0,
-		scannerIssues:
-			Math.max(0, summary.scannerIssueFailures) + (scannerIssue ? 1 : 0),
+		// Persisted worker failures remain visible in source drilldowns, but only a
+		// current status-read failure is allowed to mark the runtime unhealthy.
+		scannerIssues: scannerIssue ? 1 : 0,
 		unclassifiedFailures: Math.max(0, summary.unclassifiedFailures),
 		waitingChecks: Math.max(
 			0,
@@ -328,14 +342,7 @@ function getArchiveStatusHealthFacts(
 function isFailingStatusSource(
 	source: PublicHistoryArchiveStatusSummary['sources'][number]
 ): boolean {
-	return (
-		source.mismatchCheckpointProofs > 0 ||
-		source.archiveEvidenceFailures > 0 ||
-		(source.rootObjectStatus === 'failed' &&
-			source.rootFailureChannel === 'archive_evidence') ||
-		source.stateStatus === 'invalid' ||
-		source.stateStatus === 'unreachable'
-	);
+	return source.mismatchCheckpointProofs > 0;
 }
 
 function isFailingArchiveSource(
@@ -346,15 +353,6 @@ function isFailingArchiveSource(
 		source.rootObjectStatus === 'failed' ||
 		source.stateStatus === 'invalid' ||
 		source.stateStatus === 'unreachable'
-	);
-}
-
-function hasRemoteFailure(facts: ArchiveHealthFacts): boolean {
-	return (
-		facts.checkpointMismatches > 0 ||
-		facts.failedEvidenceRows > 0 ||
-		facts.failingArchiveSources > 0 ||
-		facts.remoteHostFailures > 0
 	);
 }
 

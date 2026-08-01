@@ -46,7 +46,7 @@ export function StatusArchiveEvidenceTables({
 		<section className="panel detail-panel archive-panel">
 			<div className="panel-heading">
 				<div>
-					<h2>Archive source findings</h2>
+					<h2>Archive verification evidence</h2>
 					<span className="muted-inline">
 						External history archive data; updated{' '}
 						{formatDateTime(summary.generatedAt)}
@@ -108,7 +108,7 @@ function RecentFailureEvidence({
 		RECENT_FAILURE_PAGE_SIZE
 	);
 	const remoteFailures = failedEvents.filter(
-		(event) => getArchiveFailureState(event.evidenceClass) === 'remote_failure'
+		(event) => getArchiveFailureState(event.evidenceClass) === 'remote_retry'
 	).length;
 	const scannerIssues = failedEvents.filter(
 		(event) => getArchiveFailureState(event.evidenceClass) === 'scanner_issue'
@@ -117,10 +117,11 @@ function RecentFailureEvidence({
 	return (
 		<div className="archive-priority-block">
 			<div className="archive-table-caption">
-				<strong>Recent failure evidence</strong>
+				<strong>Recent unresolved file checks</strong>
 				<span>
-					{formatInteger(remoteFailures)} remote, {formatInteger(scannerIssues)}{' '}
-					scanner; showing {formatInteger(failurePage.rows.length)} of{' '}
+					{formatInteger(remoteFailures)} remote retries,{' '}
+					{formatInteger(scannerIssues)} scanner issues; showing{' '}
+					{formatInteger(failurePage.rows.length)} of{' '}
 					{formatInteger(failedEvents.length)}
 				</span>
 			</div>
@@ -128,10 +129,10 @@ function RecentFailureEvidence({
 				<table className="archive-summary-table">
 					<thead>
 						<tr>
-							<th>Evidence class</th>
+							<th>Check type</th>
 							<th>Archive source</th>
 							<th>Archive file</th>
-							<th>Failure</th>
+							<th>Observed result</th>
 							<th>Observed</th>
 						</tr>
 					</thead>
@@ -165,7 +166,10 @@ function FailureEventRow({
 	return (
 		<tr>
 			<td>
-				<ArchiveHealthPill state={state} />
+				<ArchiveHealthPill
+					state={state}
+					text={state === 'remote_retry' ? 'Remote retry' : undefined}
+				/>
 			</td>
 			<td>{formatArchiveSourceLabel(event.archiveUrl)}</td>
 			<td>
@@ -184,7 +188,13 @@ function ArchiveSourcesDetail({
 	readonly summary: PublicHistoryArchiveStatusSummary;
 }): React.JSX.Element {
 	const sources = summary.sources.toSorted(compareArchiveSources);
-	const failingSources = sources.filter(isFailingSource).length;
+	const mismatchSources = sources.filter(hasIntegrityMismatch).length;
+	const sourcesWithCoverage = sources.filter(
+		(source) => source.verifiedCheckpointProofs > 0
+	).length;
+	const sourcesAwaitingRetry = sources.filter(
+		(source) => source.archiveEvidenceFailures > 0
+	).length;
 	const [page, setPage] = useState(0);
 	const sourcePage = getStatusTablePage(
 		sources,
@@ -197,9 +207,10 @@ function ArchiveSourcesDetail({
 			<summary>
 				<span>Archive sources</span>
 				<span className="muted-inline">
-					{formatInteger(failingSources)} with findings in{' '}
-					{formatInteger(sources.length)} shown /{' '}
-					{formatInteger(summary.sourceCount)} captured
+					{formatInteger(sourcesWithCoverage)} / {formatInteger(sources.length)}{' '}
+					with verified coverage; {formatInteger(mismatchSources)} confirmed
+					mismatches; {formatInteger(sourcesAwaitingRetry)} awaiting remote
+					retries
 				</span>
 			</summary>
 			<div className="responsive-table">
@@ -207,10 +218,11 @@ function ArchiveSourcesDetail({
 					<thead>
 						<tr>
 							<th>Archive source</th>
-							<th>Failure evidence</th>
+							<th>Integrity proof</th>
+							<th>Remote availability</th>
 							<th>Root state</th>
-							<th>Proven checkpoints</th>
-							<th>Current work</th>
+							<th>Checkpoint coverage</th>
+							<th>Proof work</th>
 						</tr>
 					</thead>
 					<tbody>
@@ -223,7 +235,7 @@ function ArchiveSourcesDetail({
 							))
 						) : (
 							<tr>
-								<td colSpan={5}>No archive sources captured.</td>
+								<td colSpan={6}>No archive sources captured.</td>
 							</tr>
 						)}
 					</tbody>
@@ -251,15 +263,17 @@ function ArchiveSourceRow({
 				<strong>{formatArchiveSourceLabel(source.archiveUrl)}</strong>
 				<small>{formatDateTime(source.observedAt)}</small>
 			</td>
-			<td>{formatSourceFailure(source)}</td>
+			<td>{formatSourceIntegrity(source)}</td>
+			<td>{formatRemoteAvailability(source)}</td>
 			<td>{formatSourceState(source)}</td>
-			<td>{formatInteger(source.verifiedCheckpointProofs)}</td>
+			<td>{formatCheckpointCoverage(source)}</td>
 			<td>
-				{formatInteger(source.activeObjectChecks)} checking /{' '}
-				{formatInteger(
-					source.pendingCheckpointProofs + source.notEvaluableCheckpointProofs
-				)}{' '}
-				waiting
+				{formatInteger(source.activeObjectChecks)} active;{' '}
+				{formatInteger(source.pendingCheckpointProofs)} waiting for files;{' '}
+				{formatInteger(source.notEvaluableCheckpointProofs)} incomplete
+				{source.scannerIssueFailures > 0
+					? `; ${formatInteger(source.scannerIssueFailures)} scanner-side checks awaiting retry`
+					: ''}
 			</td>
 		</tr>
 	);
@@ -365,7 +379,7 @@ function compareFailureEvents(left: ArchiveEvent, right: ArchiveEvent): number {
 }
 
 function failureStateOrder(state: ArchiveHealthState): number {
-	if (state === 'remote_failure') return 0;
+	if (state === 'remote_retry') return 0;
 	if (state === 'scanner_issue') return 1;
 	return 2;
 }
@@ -374,56 +388,70 @@ function compareArchiveSources(
 	left: ArchiveSource,
 	right: ArchiveSource
 ): number {
-	const failureOrder =
-		Number(isFailingSource(right)) - Number(isFailingSource(left));
-	if (failureOrder !== 0) return failureOrder;
-	return right.mismatchCheckpointProofs - left.mismatchCheckpointProofs;
+	const mismatchOrder =
+		right.mismatchCheckpointProofs - left.mismatchCheckpointProofs;
+	if (mismatchOrder !== 0) return mismatchOrder;
+	const coverageOrder =
+		right.verifiedCheckpointProofs - left.verifiedCheckpointProofs;
+	if (coverageOrder !== 0) return coverageOrder;
+	return left.archiveUrl.localeCompare(right.archiveUrl);
 }
 
-function isFailingSource(source: ArchiveSource): boolean {
-	return (
-		source.mismatchCheckpointProofs > 0 ||
-		source.archiveEvidenceFailures > 0 ||
-		source.scannerIssueFailures > 0 ||
-		source.unclassifiedFailures > 0 ||
-		source.stateStatus === 'invalid' ||
-		source.stateStatus === 'unreachable'
-	);
+function hasIntegrityMismatch(source: ArchiveSource): boolean {
+	return source.mismatchCheckpointProofs > 0;
 }
 
-function formatSourceFailure(source: ArchiveSource): string {
+function formatSourceIntegrity(source: ArchiveSource): string {
 	if (source.mismatchCheckpointProofs > 0) {
-		return `${formatInteger(source.mismatchCheckpointProofs)} proof mismatches`;
-	}
-	if (source.archiveEvidenceFailures > 0) {
-		return `${formatInteger(source.archiveEvidenceFailures)} remote archive failures`;
-	}
-	if (source.scannerIssueFailures > 0) {
-		return `${formatInteger(source.scannerIssueFailures)} scanner issues`;
+		return `${formatInteger(source.mismatchCheckpointProofs)} confirmed mismatches`;
 	}
 	if (source.unclassifiedFailures > 0) {
-		return `${formatInteger(source.unclassifiedFailures)} unclassified legacy failures`;
+		return 'Not evaluated for legacy evidence';
+	}
+	return 'No confirmed mismatch';
+}
+
+function formatRemoteAvailability(source: ArchiveSource): string {
+	if (source.archiveEvidenceFailures > 0) {
+		return `${formatInteger(source.archiveEvidenceFailures)} file checks awaiting retry`;
 	}
 	if (
 		source.rootObjectStatus === 'failed' &&
 		source.rootFailureChannel === 'archive_evidence'
 	) {
-		return 'Remote root check failed';
+		return 'Root file check awaiting retry';
+	}
+	if (source.stateStatus === 'unreachable')
+		return 'Source currently unreachable';
+	return 'No unresolved remote checks';
+}
+
+function formatCheckpointCoverage(source: ArchiveSource): string {
+	if (source.totalCheckpointProofs === 0) return 'No proof rows discovered yet';
+	return `${formatInteger(source.verifiedCheckpointProofs)} / ${formatInteger(source.totalCheckpointProofs)} verified`;
+}
+
+function formatSourceState(source: ArchiveSource): string {
+	if (
+		source.rootObjectStatus === 'failed' &&
+		source.rootFailureChannel === 'archive_evidence'
+	) {
+		return 'State captured previously; latest root check awaiting retry';
 	}
 	if (
 		source.rootObjectStatus === 'failed' &&
 		source.rootFailureChannel === 'scanner_issue'
 	) {
-		return 'Root scanner issue';
+		return 'State captured previously; latest root check had a scanner issue';
 	}
-	if (source.stateStatus === 'invalid') return 'State file invalid';
-	if (source.stateStatus === 'unreachable') return 'Source unreachable';
-	return 'None observed';
-}
-
-function formatSourceState(source: ArchiveSource): string {
-	const rootState = source.rootObjectStatus ?? 'not queued';
-	return `${source.stateStatus}; root ${rootState}`;
+	if (source.rootObjectStatus === 'verified')
+		return 'Latest root state verified';
+	if (source.rootObjectStatus === 'scanning')
+		return 'Checking latest root state';
+	if (source.rootObjectStatus === 'pending') return 'Latest root check queued';
+	return source.stateStatus === 'available'
+		? 'State captured; root check not queued'
+		: 'No current root state captured';
 }
 
 function formatFailureDetail(event: ArchiveEvent): string {

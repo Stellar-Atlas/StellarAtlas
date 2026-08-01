@@ -20,7 +20,8 @@ describe('history archive health', () => {
 			'verified',
 			'checking',
 			'waiting',
-			'remote_failure',
+			'integrity_failure',
+			'remote_retry',
 			'scanner_issue',
 			'unknown'
 		]);
@@ -46,11 +47,11 @@ describe('history archive health', () => {
 			summary
 		});
 
-		expect(result.state).toBe('remote_failure');
-		expect(archiveHealthTone(result.state)).toBe('warning');
+		expect(result.state).toBe('integrity_failure');
+		expect(archiveHealthTone(result.state)).toBe('danger');
 	});
 
-	it('makes remote evidence beat a simultaneous scanner issue', () => {
+	it('keeps scanner issues separate from simultaneous remote retries', () => {
 		const summary = createSummary({
 			activeObjects: 1,
 			failedObjects: 1,
@@ -64,7 +65,7 @@ describe('history archive health', () => {
 			summary
 		});
 
-		expect(result.state).toBe('remote_failure');
+		expect(result.state).toBe('scanner_issue');
 		expect(result.facts.scannerIssues).toBe(2);
 	});
 
@@ -163,7 +164,7 @@ describe('history archive health', () => {
 	});
 
 	it('maps event evidence classes without conflating remote and scanner failures', () => {
-		expect(getArchiveFailureState('archive-object')).toBe('remote_failure');
+		expect(getArchiveFailureState('archive-object')).toBe('remote_retry');
 		expect(getArchiveFailureState('worker-infrastructure')).toBe(
 			'scanner_issue'
 		);
@@ -198,11 +199,11 @@ describe('history archive health', () => {
 		expect(
 			assessArchiveStatusHealth({ evidenceAvailable: true, summary: mismatch })
 				.state
-		).toBe('remote_failure');
+		).toBe('integrity_failure');
 		expect(checkpointStatusProofIsComplete(waiting)).toBe(false);
 	});
 
-	it('keeps remote, scanner, and legacy failure channels distinct', () => {
+	it('keeps persisted retry history separate from current scanner health', () => {
 		const remoteAndScanner = createStatusSummary({
 			archiveEvidenceFailures: 1,
 			scannerIssueFailures: 2
@@ -215,10 +216,17 @@ describe('history archive health', () => {
 				evidenceAvailable: true,
 				summary: remoteAndScanner
 			}).state
-		).toBe('remote_failure');
+		).toBe('unknown');
 		expect(
 			assessArchiveStatusHealth({ evidenceAvailable: true, summary: scanner })
 				.state
+		).toBe('unknown');
+		expect(
+			assessArchiveStatusHealth({
+				evidenceAvailable: true,
+				scannerIssue: true,
+				summary: scanner
+			}).state
 		).toBe('scanner_issue');
 		expect(
 			assessArchiveStatusHealth({ evidenceAvailable: true, summary: legacy })

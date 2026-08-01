@@ -96,7 +96,7 @@ export function buildStatusHeadlineCards({
 		{
 			detail: archiveFinding.detail,
 			key: 'archive-finding',
-			label: 'Archive source findings',
+			label: 'Archive integrity',
 			tone: archiveFinding.tone,
 			value: archiveFinding.value
 		}
@@ -108,13 +108,16 @@ export function describeArchiveSourceFinding(
 	sourceCount: number
 ): ArchiveSourceFindingPresentation {
 	const facts = health.facts;
-	if (health.state === 'remote_failure') {
+	if (facts.checkpointMismatches > 0) {
 		return {
 			detail:
-				'External archive-source evidence; this does not indicate StellarAtlas service degradation. Review affected sources below.',
-			pillText: 'Source finding',
-			tone: undefined,
-			value: formatRemoteFinding(health)
+				'Completed checkpoint validation found files that do not agree by hash. Review the confirmed integrity evidence below.',
+			pillText: 'Integrity mismatch',
+			tone: 'warning',
+			value: formatFindingCount(
+				facts.checkpointMismatches,
+				'confirmed checkpoint mismatch'
+			)
 		};
 	}
 	if (health.state === 'scanner_issue') {
@@ -126,12 +129,30 @@ export function describeArchiveSourceFinding(
 			value: 'Evidence collection issue'
 		};
 	}
+	if (facts.failedEvidenceRows > 0 || facts.scannerIssues > 0) {
+		const retryDetails = [
+			facts.failedEvidenceRows > 0
+				? formatFindingCount(facts.failedEvidenceRows, 'remote file check')
+				: null,
+			facts.scannerIssues > 0
+				? formatFindingCount(facts.scannerIssues, 'scanner-side check')
+				: null
+		]
+			.filter((detail): detail is string => detail !== null)
+			.join(' and ');
+		return {
+			detail: `${formatFindingCount(facts.provenCheckpointProofs, 'checkpoint proof')} verified across ${formatSourceCount(sourceCount)}; ${retryDetails} awaiting retry.`,
+			pillText: 'Remote checks pending',
+			tone: undefined,
+			value: 'No confirmed integrity mismatches'
+		};
+	}
 	if (health.state === 'verified') {
 		return {
-			detail: `${formatSourceCount(sourceCount)} checked; no current remote archive failures observed.`,
+			detail: `${formatSourceCount(sourceCount)} checked; completed proofs have no confirmed integrity mismatches.`,
 			pillText: 'Sources verified',
 			tone: 'good',
-			value: 'No current source findings'
+			value: 'No confirmed integrity mismatches'
 		};
 	}
 	if (health.state === 'checking') {
@@ -159,24 +180,6 @@ export function describeArchiveSourceFinding(
 	};
 }
 
-function formatRemoteFinding(health: ArchiveHealthAssessment): string {
-	const facts = health.facts;
-	if (facts.failingArchiveSources > 0) {
-		const count = facts.failingArchiveSources;
-		return `${formatInteger(count)} archive ${count === 1 ? 'source' : 'sources'} with findings`;
-	}
-	if (facts.checkpointMismatches > 0) {
-		return formatFindingCount(facts.checkpointMismatches, 'checkpoint finding');
-	}
-	if (facts.failedEvidenceRows > 0) {
-		return formatFindingCount(facts.failedEvidenceRows, 'archive file failure');
-	}
-	return formatFindingCount(
-		Math.max(1, facts.remoteHostFailures),
-		'remote archive finding'
-	);
-}
-
 function formatFindingCount(count: number, label: string): string {
 	return `${formatInteger(count)} ${label}${count === 1 ? '' : 's'}`;
 }
@@ -201,6 +204,7 @@ function serviceTone(
 
 function archiveRuntimeTone(state: ArchiveHealthState): HeadlineTone {
 	if (state === 'verified') return 'good';
-	if (state === 'scanner_issue' || state === 'remote_failure') return 'warning';
+	if (state === 'integrity_failure') return 'danger';
+	if (state === 'scanner_issue' || state === 'remote_retry') return 'warning';
 	return undefined;
 }

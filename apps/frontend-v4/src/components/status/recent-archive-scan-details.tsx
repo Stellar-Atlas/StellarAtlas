@@ -104,7 +104,7 @@ function ErrorList({
 }
 
 function archiveScanState(scan: PublicArchiveScanLogEntry): ArchiveHealthState {
-	if (scan.scanStatus === 'archive_error') return 'remote_failure';
+	if (scan.scanStatus === 'archive_error') return 'remote_retry';
 	if (scan.scanStatus === 'worker_issue') return 'scanner_issue';
 	return 'unknown';
 }
