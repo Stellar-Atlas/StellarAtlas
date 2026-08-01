@@ -8,7 +8,7 @@ import { FailHistoryArchiveObject } from '../fail-history-archive-object/FailHis
 
 // Re-select priority frequently so completed proof-frontier objects do not wait
 // behind a long, stale transition batch.
-const reconciliationBatchSize = 4;
+const reconciliationBatchSize = 24;
 const reconciliationIntervalMs = 5_000;
 
 @injectable()

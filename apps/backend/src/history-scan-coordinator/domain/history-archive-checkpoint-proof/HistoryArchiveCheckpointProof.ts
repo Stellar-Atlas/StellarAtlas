@@ -7,7 +7,7 @@ import {
 	UpdateDateColumn
 } from 'typeorm';
 
-export const CURRENT_HISTORY_ARCHIVE_CHECKPOINT_PROOF_VERSION = 7;
+export const CURRENT_HISTORY_ARCHIVE_CHECKPOINT_PROOF_VERSION = 8;
 
 export type HistoryArchiveCheckpointProofStatus =
 	'pending' | 'verified' | 'mismatch' | 'not-evaluable';

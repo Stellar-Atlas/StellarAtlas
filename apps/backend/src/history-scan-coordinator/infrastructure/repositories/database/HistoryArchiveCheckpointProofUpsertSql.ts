@@ -1,3 +1,5 @@
+import { CURRENT_HISTORY_ARCHIVE_CHECKPOINT_PROOF_VERSION } from '../../../domain/history-archive-checkpoint-proof/HistoryArchiveCheckpointProof.js';
+
 export const historyArchiveCheckpointProofUpsertSql = `
 	insert into "history_archive_checkpoint_proof" (
 		"archiveUrl",
@@ -37,7 +39,7 @@ export const historyArchiveCheckpointProofUpsertSql = `
 		"archiveUrlIdentity",
 		"checkpointLedger",
 		status,
-		7,
+		${CURRENT_HISTORY_ARCHIVE_CHECKPOINT_PROOF_VERSION},
 		required_objects_complete,
 		proof_facts_complete,
 		checkpoint_bucket_list_matches,

@@ -6,6 +6,10 @@ import {
 import { historyArchiveCheckpointProofUpsertSql } from './HistoryArchiveCheckpointProofUpsertSql.js';
 import { historyArchiveCheckpointProofFailureCtesSql } from './HistoryArchiveCheckpointProofFailureSql.js';
 import { historyArchiveCheckpointProofTargetCtesSql } from './HistoryArchiveCheckpointProofTargetSql.js';
+import {
+	emptyTransactionResultSetMatchesSql,
+	emptyTransactionSetMatchesSql
+} from './HistoryArchiveEmptyCategoryProofSql.js';
 
 export const historyArchiveCheckpointProofRefreshSql = `
 	with ${historyArchiveCheckpointProofTargetCtesSql}, checkpoint_rollup as (
@@ -215,10 +219,17 @@ export const historyArchiveCheckpointProofRefreshSql = `
 				and ledger.bucket_list_hash = state.bucket_list_hash)
 				as checkpoint_bucket_matches,
 			bool_or(state.bucket_list_hash is not null) as has_checkpoint_bucket_fact,
-			bool_and(coalesce(ledger.transaction_set_hash = transactions.hash, false))
-				as transactions_match,
-			bool_and(coalesce(ledger.transaction_result_hash = results.hash, false))
-				as results_match,
+			bool_and(case
+				when transactions.hash is not null then
+					ledger.transaction_set_hash = transactions.hash
+				else ${emptyTransactionSetMatchesSql('ledger')}
+					and ${emptyTransactionResultSetMatchesSql('ledger')}
+			end) as transactions_match,
+			bool_and(case
+				when results.hash is not null then
+					ledger.transaction_result_hash = results.hash
+				else ${emptyTransactionResultSetMatchesSql('ledger')}
+			end) as results_match,
 			bool_and(case
 				when ledger.ledger = ledger.first_expected_ledger then
 					ledger."checkpointLedger" = 63 or (
@@ -279,24 +290,18 @@ export const historyArchiveCheckpointProofRefreshSql = `
 				and validation.first_ledger = range.first_expected_ledger
 				and validation.last_ledger = range.last_expected_ledger
 			) filter (where validation."objectType" = 'ledger') as ledger_exact,
-			bool_or(validation.entry_count = range.expected_ledger_count
+			bool_or(validation.entry_count = validation.raw_fact_count
 				and validation.source_matches
-				and validation.raw_fact_count = range.expected_ledger_count
-				and validation.fact_count = range.expected_ledger_count
-				and validation.distinct_ledger_count = range.expected_ledger_count
-				and validation.in_range_count = range.expected_ledger_count
-				and validation.first_ledger = range.first_expected_ledger
-				and validation.last_ledger = range.last_expected_ledger
+				and validation.fact_count = validation.raw_fact_count
+				and validation.distinct_ledger_count = validation.raw_fact_count
+				and validation.in_range_count = validation.raw_fact_count
 			) filter (where validation."objectType" = 'transactions')
 				as transactions_exact,
-			bool_or(validation.entry_count = range.expected_ledger_count
+			bool_or(validation.entry_count = validation.raw_fact_count
 				and validation.source_matches
-				and validation.raw_fact_count = range.expected_ledger_count
-				and validation.fact_count = range.expected_ledger_count
-				and validation.distinct_ledger_count = range.expected_ledger_count
-				and validation.in_range_count = range.expected_ledger_count
-				and validation.first_ledger = range.first_expected_ledger
-				and validation.last_ledger = range.last_expected_ledger
+				and validation.fact_count = validation.raw_fact_count
+				and validation.distinct_ledger_count = validation.raw_fact_count
+				and validation.in_range_count = validation.raw_fact_count
 			) filter (where validation."objectType" = 'results') as results_exact
 		from expected_checkpoint_ranges range
 		left join category_validation validation

@@ -9,7 +9,7 @@ describe('strict full-history source digest SQL', () => {
 			strictHistoricalBackfillProofTargetsSql
 		]) {
 			expect(sql).toContain(fullHistoryStrictProofSourceDigestsSql);
-			expect(sql).toContain('proof."proofVersion" >= 7');
+			expect(sql).toContain('proof."proofVersion" >= 8');
 			expect(sql).toContain(
 				"proof.details ->> 'checkpointStateLedgerMatches' = 'true'"
 			);

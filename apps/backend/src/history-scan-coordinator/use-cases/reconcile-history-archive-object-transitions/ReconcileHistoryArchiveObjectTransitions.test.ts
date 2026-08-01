@@ -59,10 +59,10 @@ describe('ReconcileHistoryArchiveObjectTransitions', () => {
 
 		expect(complete.reconcilePersisted).toHaveBeenCalledWith(verified);
 		expect(fail.reconcilePersisted).toHaveBeenCalledWith(failed);
-		expect(repository.findUnreconciledTransitions).toHaveBeenCalledWith(4);
+		expect(repository.findUnreconciledTransitions).toHaveBeenCalledWith(24);
 		expect(
 			repository.findVerifiedCheckpointsNeedingReconciliation
-		).toHaveBeenCalledWith(4);
+		).toHaveBeenCalledWith(24);
 	});
 
 	it('continues the batch when one transition effect fails', async () => {

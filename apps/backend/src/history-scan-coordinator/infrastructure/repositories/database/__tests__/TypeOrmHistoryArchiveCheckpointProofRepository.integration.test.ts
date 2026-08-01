@@ -56,7 +56,7 @@ describe('TypeOrmHistoryArchiveCheckpointProofRepository disposable PostgreSQL',
 			ledgerFactCount: 64,
 			previousLedgersMatch: true,
 			proofFactsComplete: true,
-			proofVersion: 7,
+			proofVersion: 8,
 			resultFactCount: 64,
 			resultsMatch: true,
 			status: 'verified',
@@ -93,7 +93,7 @@ describe('TypeOrmHistoryArchiveCheckpointProofRepository disposable PostgreSQL',
 		expect(proof).toMatchObject({
 			failureKind: 'checkpoint-ledger-mismatch',
 			proofFactsComplete: false,
-			proofVersion: 7,
+			proofVersion: 8,
 			status: 'mismatch'
 		});
 		expect(proof?.details).toMatchObject({

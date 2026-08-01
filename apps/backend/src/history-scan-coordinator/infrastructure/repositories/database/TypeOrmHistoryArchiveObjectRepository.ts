@@ -51,6 +51,7 @@ import { getHistoryArchiveRepairPlanSummary } from './HistoryArchiveRepairPlanQu
 import { findVerifiedCheckpointObjectSources } from './HistoryArchiveVerifiedCheckpointSourceQuery.js';
 import { findVerifiedBucketSources } from './HistoryArchiveVerifiedBucketSourceQuery.js';
 import { historyArchiveRepairActionableObjectSql } from './HistoryArchiveRepairActionableObjectSql.js';
+import { findPrioritizedHistoryArchiveObjectTransitions } from './HistoryArchiveObjectTransitionQuery.js';
 
 const maxActiveObjectsPerArchive = historyArchivePerRootFrontier;
 const maxActiveObjectsPerHost = historyArchivePerHostConcurrency;
@@ -165,25 +166,10 @@ export class TypeOrmHistoryArchiveObjectRepository implements HistoryArchiveObje
 	async findUnreconciledTransitions(
 		limit: number
 	): Promise<readonly HistoryArchiveObject[]> {
-		return await this.repository
-			.createQueryBuilder('object')
-			.where('object.status in (:...statuses)', {
-				statuses: ['verified', 'failed']
-			})
-			.andWhere('object.transitionEffectsCompletedAt is null')
-			.andWhere('object.transitionEffectsRequiredAt is not null')
-			.orderBy(
-				`case object."executionReason"
-					when 'canonical-frontier-reserve' then 0
-					when 'proof-completion-reserve' then 1
-					else 2
-				end`,
-				'ASC'
-			)
-			.addOrderBy('object.transitionEffectsRequiredAt', 'ASC')
-			.addOrderBy('object.id', 'ASC')
-			.take(normalizeLimit(limit))
-			.getMany();
+		return await findPrioritizedHistoryArchiveObjectTransitions(
+			this.repository,
+			limit
+		);
 	}
 
 	async findVerifiedCheckpointsNeedingReconciliation(
