@@ -17,7 +17,7 @@ import {
 
 jest.setTimeout(90_000);
 
-describe('archive proof for omitted empty ledgers', () => {
+describe('archive proof for zero-transaction ledger category frames', () => {
 	let dataSource: DataSource;
 	let postgres: DisposablePostgres;
 	let repository: TypeOrmHistoryArchiveCheckpointProofRepository;
@@ -39,14 +39,14 @@ describe('archive proof for omitted empty ledgers', () => {
 		await saveProofFixture(dataSource);
 	});
 
-	it('proves categories that omit a protocol-26 zero-transaction ledger', async () => {
-		const emptyLedger = proofCheckpointLedger - 1;
+	it('proves absent category frames for a protocol-26 zero-transaction ledger', async () => {
+		const zeroTransactionLedger = proofCheckpointLedger - 1;
 		const previousLedgerHeaderHash = Buffer.alloc(32, 7).toString('base64');
 		await mutateProofFacts(dataSource, 'ledger', (facts) =>
 			facts.map((fact) =>
-				fact.ledger === emptyLedger - 1
+				fact.ledger === zeroTransactionLedger - 1
 					? { ...fact, ledgerHeaderHash: previousLedgerHeaderHash }
-					: fact.ledger === emptyLedger
+					: fact.ledger === zeroTransactionLedger
 						? {
 								...fact,
 								previousLedgerHeaderHash,
@@ -62,7 +62,7 @@ describe('archive proof for omitted empty ledgers', () => {
 		);
 		for (const objectType of ['transactions', 'results'] as const) {
 			await mutateProofFacts(dataSource, objectType, (facts) =>
-				facts.filter((fact) => fact.ledger !== emptyLedger)
+				facts.filter((fact) => fact.ledger !== zeroTransactionLedger)
 			);
 			await setCategoryEntryCount(objectType, 63);
 		}
@@ -84,13 +84,13 @@ describe('archive proof for omitted empty ledgers', () => {
 	});
 
 	it('rejects an omitted transaction frame when results are not empty', async () => {
-		const emptyLedger = proofCheckpointLedger - 1;
+		const zeroTransactionLedger = proofCheckpointLedger - 1;
 		const previousLedgerHeaderHash = Buffer.alloc(32, 9).toString('base64');
 		await mutateProofFacts(dataSource, 'ledger', (facts) =>
 			facts.map((fact) =>
-				fact.ledger === emptyLedger - 1
+				fact.ledger === zeroTransactionLedger - 1
 					? { ...fact, ledgerHeaderHash: previousLedgerHeaderHash }
-					: fact.ledger === emptyLedger
+					: fact.ledger === zeroTransactionLedger
 						? {
 								...fact,
 								previousLedgerHeaderHash,
@@ -103,7 +103,7 @@ describe('archive proof for omitted empty ledgers', () => {
 			)
 		);
 		await mutateProofFacts(dataSource, 'transactions', (facts) =>
-			facts.filter((fact) => fact.ledger !== emptyLedger)
+			facts.filter((fact) => fact.ledger !== zeroTransactionLedger)
 		);
 		await setCategoryEntryCount('transactions', 63);
 
@@ -117,6 +117,32 @@ describe('archive proof for omitted empty ledgers', () => {
 			failureKind: 'transaction-hash-mismatch',
 			status: 'mismatch',
 			transactionsMatch: false
+		});
+	});
+
+	it('rejects a missing ledger header even when both category frames are absent', async () => {
+		const missingLedger = proofCheckpointLedger - 1;
+		await mutateProofFacts(dataSource, 'ledger', (facts) =>
+			facts.filter((fact) => fact.ledger !== missingLedger)
+		);
+		for (const objectType of ['transactions', 'results'] as const) {
+			await mutateProofFacts(dataSource, objectType, (facts) =>
+				facts.filter((fact) => fact.ledger !== missingLedger)
+			);
+			await setCategoryEntryCount(objectType, 63);
+		}
+
+		const proof = await refreshAndLoadProof(
+			dataSource,
+			repository,
+			proofCheckpointLedger
+		);
+
+		expect(proof).toMatchObject({
+			failureKind: 'proof-facts-incomplete',
+			ledgerFactCount: 63,
+			proofFactsComplete: false,
+			status: 'not-evaluable'
 		});
 	});
 
