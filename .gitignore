@@ -2,7 +2,10 @@ build_log.log
 external-reference
 deploy
 node_modules
-.vscode/
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+!.vscode/tasks.json
 .env
 lib/
 dist/
@@ -33,3 +36,5 @@ docs/agents/
 docs/*.md
 docs/ops/archive-evidence-cursor-keys.md
 !docs/network-scan-runbook.md
+.serena
+.fallow

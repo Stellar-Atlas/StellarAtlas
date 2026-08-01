@@ -30,7 +30,7 @@ export class ConfigMock implements Config {
 		syncingTimeoutMS: 1000,
 		quorumSetRequestTimeoutMS: 1000,
 		blackList: new Set<string>(),
-		maxOpenConnections: 25,
+		maxOpenConnections: 50,
 		maxCrawlTime: 900000,
 		nodeConfig: {
 			network: 'test',

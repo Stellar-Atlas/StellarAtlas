@@ -1,0 +1,7 @@
+{
+	"entry": ["src/index.{ts,tsx,js,jsx}", "src/main.{ts,tsx,js,jsx}"],
+	"ignorePatterns": ["apps/full-history-etl"],
+	"workspaces": {
+		"patterns": ["apps/*", "!apps/frontend-v3", "packages/*"]
+	}
+}

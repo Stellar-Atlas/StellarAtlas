@@ -1,0 +1,39 @@
+{
+	"js/ts.experimental.useTsgo": false,
+	"js/ts.tsc.autoDetect": "build",
+	"js/ts.tsdk.path": "node_modules/typescript/lib",
+	"js/ts.tsdk.promptToUseWorkspaceVersion": true,
+	"js/ts.tsserver.automaticTypeAcquisition.enabled": false,
+	"js/ts.tsserver.experimental.enableProjectDiagnostics": true,
+	"js/ts.tsserver.maxMemory": 4096,
+	"js/ts.validate.enabled": true,
+	"eslint.enable": true,
+	"eslint.quiet": false,
+	"eslint.run": "onType",
+	"eslint.validate": [
+		"javascript",
+		"javascriptreact",
+		"typescript",
+		"typescriptreact",
+		"vue"
+	],
+	"eslint.workingDirectories": [
+		{
+			"directory": "."
+		}
+	],
+	"files.watcherExclude": {
+		"**/.next*/**": true,
+		"**/.pnpm-store/**": true,
+		"**/dist/**": true,
+		"**/lib/**": true,
+		"**/node_modules/**": true
+	},
+	"search.exclude": {
+		"**/.next*/**": true,
+		"**/.pnpm-store/**": true,
+		"**/dist/**": true,
+		"**/lib/**": true,
+		"**/node_modules/**": true
+	}
+}

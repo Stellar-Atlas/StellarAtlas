@@ -1,0 +1,12 @@
+{
+	"recommendations": [
+		"dbaeumer.vscode-eslint",
+		"esbenp.prettier-vscode",
+		"fallow-rs.fallow-vscode",
+		"vue.volar"
+	],
+	"unwantedRecommendations": [
+		"rvest.vs-code-prettier-eslint",
+		"typescriptteam.native-preview"
+	]
+}

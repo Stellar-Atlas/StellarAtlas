@@ -3,7 +3,7 @@ import pluginVue from 'eslint-plugin-vue';
 import skipFormatting from '@vue/eslint-config-prettier/skip-formatting';
 import vueTsEslintConfig from '@vue/eslint-config-typescript';
 
-const tsFiles = ['**/*.ts', '**/*.vue', '**/*.js', '**/*.cjs'];
+const tsFiles = ['**/*.{cjs,cts,js,jsx,mjs,mts,ts,tsx,vue}'];
 
 const customTypescriptConfig = {
 	files: tsFiles,
@@ -23,7 +23,22 @@ const customTypescriptConfig = {
 };
 
 export default [
-	{ ignores: ['**/lib/*', '**/dist/*', 'node_modules'] }, // global ignores
+	{
+		ignores: [
+			'.codex/**',
+			'**/.fallow/**',
+			'**/.next*/**',
+			'**/dist/**',
+			'**/history-bucket-cache/**',
+			'**/lib/**',
+			'**/local-ops/**',
+			'**/server-lib/**',
+			'apps/frontend-v3/**',
+			'coverage/**',
+			'external-reference/**',
+			'node_modules/**'
+		]
+	},
 	eslintJs.configs.recommended,
 	...pluginVue.configs['flat/vue2-recommended'],
 	...vueTsEslintConfig(),
