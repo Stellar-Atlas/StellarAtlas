@@ -102,7 +102,7 @@ async function getEvidenceHealth(
 		evidenceHealthSql
 	)) as readonly EvidenceHealthRow[];
 	if (row?.ready !== true) {
-		throw new Error('Archive evidence root summary is not ready');
+		throw new Error('Archive evidence summaries are not ready');
 	}
 	return {
 		activeObjectChecks: evidenceHealthField(row, 'activeObjectChecks'),
@@ -278,8 +278,21 @@ export const sourceCountSql = `
 `;
 
 export const evidenceHealthSql = `
+	with rollup_readiness as materialized (
+		select
+			coalesce((
+				select "complete" and "lastObjectId" = "cutoffObjectId"
+				from history_archive_evidence_root_summary_progress
+				where id = 1
+			), false)
+			and coalesce((
+				select "complete" and "lastProofId" = "cutoffProofId"
+				from history_archive_checkpoint_proof_rollup_progress
+				where id = 1
+			), false) as ready
+	)
 	select
-		progress."complete" as ready,
+		rollup_readiness.ready,
 		coalesce(sum(summary."activeObjects"), 0)::bigint
 			as "activeObjectChecks",
 		coalesce(sum(summary."remoteFailureObjects"), 0)::bigint
@@ -295,11 +308,10 @@ export const evidenceHealthSql = `
 			- summary."workerIssueObjects"
 		), 0)::bigint
 			as "unclassifiedFailures"
-	from history_archive_evidence_root_summary_progress progress
+	from rollup_readiness
 	left join history_archive_evidence_root_summary summary
-		on progress."complete"
-	where progress.id = 1
-	group by progress."complete"
+		on rollup_readiness.ready
+	group by rollup_readiness.ready
 `;
 
 export const sourceStatusSummarySql = `

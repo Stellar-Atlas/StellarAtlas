@@ -10,7 +10,7 @@ describe('parseFullHistoryStateImportServiceConfig', () => {
 			exportProcessCount: 3,
 			exportTimeoutMilliseconds: 10_800_000,
 			idlePollMilliseconds: 15_000,
-			insertBatchSize: 250,
+			insertBatchSize: 100,
 			leaseDurationMilliseconds: 600_000,
 			storageRoot: '/home/observe/stellarbeat-data/full-history/typed',
 			workerCount: 4

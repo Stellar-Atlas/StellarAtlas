@@ -11,6 +11,7 @@ export const FULL_HISTORY_STATE_IMPORT_MAXIMUM_EXPORT_PROCESSES = 3;
 export const FULL_HISTORY_STATE_IMPORT_MAXIMUM_DATABASE_POOL_SIZE = 6;
 export const FULL_HISTORY_STATE_IMPORT_MINIMUM_EXPORT_TIMEOUT_MS =
 	3 * 60 * 60_000;
+const maximumInsertBatchSize = 100;
 
 export interface FullHistoryStateImportServiceConfig {
 	readonly databasePoolSize: number;
@@ -80,12 +81,15 @@ export function parseFullHistoryStateImportServiceConfig(
 			300_000,
 			'FULL_HISTORY_STATE_IMPORT_IDLE_POLL_MS'
 		),
-		insertBatchSize: readInteger(
-			environment.FULL_HISTORY_STATE_IMPORT_INSERT_ROWS,
-			250,
-			1,
-			500,
-			'FULL_HISTORY_STATE_IMPORT_INSERT_ROWS'
+		insertBatchSize: Math.min(
+			readInteger(
+				environment.FULL_HISTORY_STATE_IMPORT_INSERT_ROWS,
+				maximumInsertBatchSize,
+				1,
+				500,
+				'FULL_HISTORY_STATE_IMPORT_INSERT_ROWS'
+			),
+			maximumInsertBatchSize
 		),
 		leaseDurationMilliseconds: readInteger(
 			environment.FULL_HISTORY_STATE_IMPORT_LEASE_MS,

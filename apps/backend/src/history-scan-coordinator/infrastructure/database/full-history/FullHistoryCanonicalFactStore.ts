@@ -12,7 +12,8 @@ import {
 	chunkFullHistoryValues
 } from './FullHistorySqlValues.js';
 
-const transactionChunkSize = 500;
+// Keep each indexed insert comfortably below the production statement timeout.
+const transactionChunkSize = 100;
 
 interface LedgerRow {
 	readonly bucketListHash: Buffer;

@@ -214,29 +214,59 @@ export const checkpointProofRollupTriggerFunctionSql = `
 			);
 		end if;
 
-		if tg_op in ('DELETE', 'UPDATE') then
-			insert into history_archive_checkpoint_proof_rollup_state (
-				"archiveUrlIdentity", "changeVersion", "backfillComplete"
-			) values (old."archiveUrlIdentity", 1, progress_complete)
-			on conflict ("archiveUrlIdentity") do update set
-				"changeVersion" =
-					history_archive_checkpoint_proof_rollup_state."changeVersion" + 1,
-				"updatedAt" = now()
-			returning "backfillComplete" into old_complete;
+		if progress_complete then
+			old_complete := tg_op in ('DELETE', 'UPDATE');
+			new_complete := tg_op in ('INSERT', 'UPDATE');
+		else
+			if tg_op in ('DELETE', 'UPDATE') then
+				insert into history_archive_checkpoint_proof_rollup_state (
+					"archiveUrlIdentity", "changeVersion", "backfillComplete"
+				) values (old."archiveUrlIdentity", 1, false)
+				on conflict ("archiveUrlIdentity") do update set
+					"changeVersion" =
+						history_archive_checkpoint_proof_rollup_state."changeVersion" + 1,
+					"updatedAt" = now()
+				returning "backfillComplete" into old_complete;
+			end if;
+
+			if tg_op = 'UPDATE'
+				and old."archiveUrlIdentity" = new."archiveUrlIdentity" then
+				new_complete := old_complete;
+			elsif tg_op in ('INSERT', 'UPDATE') then
+				insert into history_archive_checkpoint_proof_rollup_state (
+					"archiveUrlIdentity", "changeVersion", "backfillComplete"
+				) values (new."archiveUrlIdentity", 1, false)
+				on conflict ("archiveUrlIdentity") do update set
+					"changeVersion" =
+						history_archive_checkpoint_proof_rollup_state."changeVersion" + 1,
+					"updatedAt" = now()
+				returning "backfillComplete" into new_complete;
+			end if;
 		end if;
 
 		if tg_op = 'UPDATE'
-			and old."archiveUrlIdentity" = new."archiveUrlIdentity" then
-			new_complete := old_complete;
-		elsif tg_op in ('INSERT', 'UPDATE') then
-			insert into history_archive_checkpoint_proof_rollup_state (
-				"archiveUrlIdentity", "changeVersion", "backfillComplete"
-			) values (new."archiveUrlIdentity", 1, progress_complete)
-			on conflict ("archiveUrlIdentity") do update set
-				"changeVersion" =
-					history_archive_checkpoint_proof_rollup_state."changeVersion" + 1,
+			and old_complete and new_complete
+			and old."archiveUrlIdentity" = new."archiveUrlIdentity"
+			and old."checkpointLedger" = new."checkpointLedger" then
+			update history_archive_checkpoint_proof_rollup set
+				"pendingCheckpointProofs" = "pendingCheckpointProofs"
+					- (old.status = 'pending')::integer
+					+ (new.status = 'pending')::integer,
+				"verifiedCheckpointProofs" = "verifiedCheckpointProofs"
+					- (old.status = 'verified')::integer
+					+ (new.status = 'verified')::integer,
+				"mismatchCheckpointProofs" = "mismatchCheckpointProofs"
+					- (old.status = 'mismatch')::integer
+					+ (new.status = 'mismatch')::integer,
+				"notEvaluableCheckpointProofs" = "notEvaluableCheckpointProofs"
+					- (old.status = 'not-evaluable')::integer
+					+ (new.status = 'not-evaluable')::integer,
+				"objectCompleteCheckpointProofs" = "objectCompleteCheckpointProofs"
+					- old."requiredObjectsComplete"::integer
+					+ new."requiredObjectsComplete"::integer,
 				"updatedAt" = now()
-			returning "backfillComplete" into new_complete;
+			where "archiveUrlIdentity" = new."archiveUrlIdentity";
+			return new;
 		end if;
 
 		if tg_op in ('DELETE', 'UPDATE') and old_complete then
@@ -319,4 +349,27 @@ export const checkpointProofRollupTriggerFunctionSql = `
 		return case when tg_op = 'DELETE' then old else new end;
 	end;
 	$function$
+`;
+
+export const checkpointProofRollupTriggersSql = `
+	create trigger "trg_history_archive_checkpoint_proof_rollup_write"
+	after insert or delete
+	on history_archive_checkpoint_proof
+	for each row execute function
+		refresh_history_archive_checkpoint_proof_rollup();
+
+	create trigger "trg_history_archive_checkpoint_proof_rollup_update"
+	after update of
+		"archiveUrlIdentity", "checkpointLedger", status,
+		"requiredObjectsComplete"
+	on history_archive_checkpoint_proof
+	for each row
+	when (
+		old."archiveUrlIdentity" is distinct from new."archiveUrlIdentity"
+		or old."checkpointLedger" is distinct from new."checkpointLedger"
+		or old.status is distinct from new.status
+		or old."requiredObjectsComplete" is distinct from
+			new."requiredObjectsComplete"
+	)
+	execute function refresh_history_archive_checkpoint_proof_rollup()
 `;

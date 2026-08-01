@@ -16,6 +16,11 @@ describe('HistoryArchiveObjectStatusSummaryQuery', () => {
 			'from history_archive_evidence_root_summary_progress'
 		);
 		expect(evidenceHealthSql).toContain(
+			'from history_archive_checkpoint_proof_rollup_progress'
+		);
+		expect(evidenceHealthSql).toContain('"lastProofId" = "cutoffProofId"');
+		expect(evidenceHealthSql).toContain('"lastObjectId" = "cutoffObjectId"');
+		expect(evidenceHealthSql).toContain(
 			'left join history_archive_evidence_root_summary summary'
 		);
 		expect(normalize(sourceStatusSummarySql)).toContain(

@@ -10,9 +10,12 @@ import {
 	checkpointProofRollupIdentityLockSql,
 	checkpointProofRollupLockTimeoutMs,
 	checkpointProofRollupPendingStateSql,
-	checkpointProofRollupStatementTimeoutMs,
-	checkpointProofRollupTriggerFunctionSql
+	checkpointProofRollupStatementTimeoutMs
 } from './HistoryArchiveCheckpointProofRollupSql.js';
+import {
+	legacyCheckpointProofRollupTriggerFunctionSql,
+	legacyCheckpointProofRollupTriggerSql
+} from './HistoryArchiveCheckpointProofLegacyTriggerSql.js';
 
 type ProgressRow = {
 	readonly complete?: boolean;
@@ -74,7 +77,7 @@ async function initializeCheckpointProofRollup(
 			drop trigger if exists "trg_history_archive_checkpoint_proof_rollup"
 			on history_archive_checkpoint_proof
 		`);
-		await queryRunner.query(checkpointProofRollupTriggerFunctionSql);
+		await queryRunner.query(legacyCheckpointProofRollupTriggerFunctionSql);
 		const [progress] = (await queryRunner.query(`
 			select id from history_archive_checkpoint_proof_rollup_progress
 			where id = 1
@@ -96,13 +99,7 @@ async function initializeCheckpointProofRollup(
 			`);
 		}
 
-		await queryRunner.query(`
-			create trigger "trg_history_archive_checkpoint_proof_rollup"
-			after insert or update or delete
-			on history_archive_checkpoint_proof
-			for each row execute function
-				refresh_history_archive_checkpoint_proof_rollup()
-		`);
+		await queryRunner.query(legacyCheckpointProofRollupTriggerSql);
 		await queryRunner.commitTransaction();
 	} catch (error) {
 		await rollback(queryRunner);

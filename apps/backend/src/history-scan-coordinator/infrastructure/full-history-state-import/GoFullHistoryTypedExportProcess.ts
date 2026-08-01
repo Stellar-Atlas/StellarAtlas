@@ -47,6 +47,7 @@ export async function runGoFullHistoryTypedExport(
 	let stderrBytes = 0;
 	let terminalFailure: Error | null = null;
 	let outputFailure: Error | null = null;
+	let stoppedForOutputFailure = false;
 	let terminationTimer: NodeJS.Timeout | null = null;
 	let closed = false;
 
@@ -101,6 +102,7 @@ export async function runGoFullHistoryTypedExport(
 			error,
 			`${request.label} output was rejected`
 		);
+		stoppedForOutputFailure = true;
 		stopChild();
 	});
 
@@ -110,6 +112,10 @@ export async function runGoFullHistoryTypedExport(
 		if (terminalFailure !== null) {
 			await consumption.catch(() => undefined);
 			throw terminalFailure;
+		}
+		if (stoppedForOutputFailure && outputFailure !== null) {
+			await consumption.catch(() => undefined);
+			throw outputFailure;
 		}
 		if (result.code !== 0) {
 			await consumption.catch(() => undefined);
