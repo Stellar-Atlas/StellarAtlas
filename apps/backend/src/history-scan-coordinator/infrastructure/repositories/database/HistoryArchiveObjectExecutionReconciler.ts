@@ -22,6 +22,7 @@ import {
 	historyArchiveObjectFrontierSql,
 	seedHistoryArchiveFrontierCursorsSql
 } from './HistoryArchiveObjectFrontierSql.js';
+import { hasPostgresSqlState } from './PostgresError.js';
 
 const reconciliationLockName = 'history_archive_execution_reconciliation';
 
@@ -98,11 +99,10 @@ export async function reconcileHistoryArchiveObjectExecution(
 
 		let admission: AdmissionRow | undefined;
 		if (frontierSlots > 0) {
-			await manager.query(seedHistoryArchiveFrontierCursorsSql);
-			[admission] = (await manager.query(historyArchiveObjectFrontierSql, [
-				frontierSlots,
-				historyArchivePerRootFrontier
-			])) as readonly AdmissionRow[];
+			admission = await admitGenericHistoryArchiveFrontier(
+				manager,
+				frontierSlots
+			);
 		}
 		const admittedObjects =
 			canonicalAdmittedObjects +
@@ -117,6 +117,36 @@ export async function reconcileHistoryArchiveObjectExecution(
 			preservedObjects: Number(preserved?.count ?? 0)
 		};
 	});
+}
+
+const genericFrontierSavepoint = 'history_archive_generic_frontier';
+
+export async function admitGenericHistoryArchiveFrontier(
+	manager: Repository<HistoryArchiveObject>['manager'],
+	frontierSlots: number
+): Promise<AdmissionRow | undefined> {
+	await manager.query(`savepoint ${genericFrontierSavepoint}`);
+	try {
+		await manager.query(`set local statement_timeout = '5s'`);
+		await manager.query(seedHistoryArchiveFrontierCursorsSql);
+		const [admission] = (await manager.query(historyArchiveObjectFrontierSql, [
+			frontierSlots,
+			historyArchivePerRootFrontier
+		])) as readonly AdmissionRow[];
+		await manager.query(`release savepoint ${genericFrontierSavepoint}`);
+		await manager.query(`set local statement_timeout = '30s'`);
+		return admission;
+	} catch (error) {
+		await manager.query(`rollback to savepoint ${genericFrontierSavepoint}`);
+		await manager.query(`release savepoint ${genericFrontierSavepoint}`);
+		if (
+			hasPostgresSqlState(error, '57014') ||
+			hasPostgresSqlState(error, '55P03')
+		) {
+			return undefined;
+		}
+		throw error;
+	}
 }
 
 async function recordAdmissions(
