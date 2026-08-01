@@ -32,7 +32,8 @@ polkit.addRule(function(action, subject) {
     "stellaratlas-full-history-ledger-close-meta.service",
     "stellaratlas-full-history-state-import.service",
     "stellaratlas-horizon.service",
-    "stellaratlas-stellar-rpc.service"
+    "stellaratlas-stellar-rpc.service",
+    "postgresql@16-main.service"
   ];
   var verbs = [
     "start",

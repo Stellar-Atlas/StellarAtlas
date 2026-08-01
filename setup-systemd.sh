@@ -8,6 +8,8 @@ POLKIT_RULE_DIR="/etc/polkit-1/rules.d"
 EXPECTED_REPO_ROOT="/home/observe/stellarbeat-data/Observer"
 NETWORK_MEILI_ENV_DIR="/etc/stellaratlas"
 NETWORK_MEILI_ENV_FILE="$NETWORK_MEILI_ENV_DIR/meilisearch-network.env"
+POSTGRESQL_TUNING_SOURCE="$REPO_ROOT/ops/postgresql/stellaratlas-main.conf"
+POSTGRESQL_TUNING_TARGET="/etc/postgresql/16/main/conf.d/stellaratlas-main.conf"
 NETWORK_MEILI_DATA_ROOT="/home/observe/stellarbeat-data/meilisearch/network"
 FULL_HISTORY_LEDGER_CLOSE_META_EXECUTABLE="$EXPECTED_REPO_ROOT/apps/full-history-etl/bin/stellaratlas-full-history-etl"
 FULL_HISTORY_STATE_EXPORT_EXECUTABLE="$EXPECTED_REPO_ROOT/apps/full-history-etl/bin/stellaratlas-full-history-state-export"
@@ -71,6 +73,8 @@ verify_source_units() {
 	local stellar_rpc_unit="$SYSTEMD_SOURCE_DIR/stellaratlas-stellar-rpc.service"
 
 	command -v systemd-analyze >/dev/null || die "systemd-analyze is required"
+	[[ -f "$POSTGRESQL_TUNING_SOURCE" ]] ||
+		die "missing PostgreSQL tuning profile: $POSTGRESQL_TUNING_SOURCE"
 
 	for file_name in "${VERIFY_UNIT_NAMES[@]}"; do
 		[[ -f "$SYSTEMD_SOURCE_DIR/$file_name" ]] ||
@@ -164,6 +168,9 @@ verify_source_units() {
 		"RequiresMountsFor=/home/observe/stellarbeat-data" \
 		"$stellar_rpc_unit" ||
 		die "Stellar RPC must require the bulk mount"
+	grep -Fq '"postgresql@16-main.service"' \
+		"$SYSTEMD_SOURCE_DIR/10-stellaratlas-observe.rules" ||
+		die "observe must be authorized to manage the primary PostgreSQL service"
 
 	printf 'Verified %d tracked systemd unit templates.\n' "${#unit_paths[@]}"
 }
@@ -184,14 +191,17 @@ verify_installed_polkit_rule() {
 		verify_regular_copy \
 			"$SYSTEMD_SOURCE_DIR/10-stellaratlas-observe.rules" \
 			"$POLKIT_RULE_DIR/10-stellaratlas-observe.rules"
-		return
+	else
+		# The protected polkit directory is intentionally unreadable by observe.
+		# A no-prompt reset of an active target proves the installed rule authorizes
+		# the operator without interrupting any service.
+		systemctl --no-ask-password reset-failed stellaratlas.target >/dev/null ||
+			die "installed polkit rule does not authorize non-root service management"
 	fi
 
-	# The protected polkit directory is intentionally unreadable by observe.
-	# A no-prompt reset of an active target proves the installed rule authorizes
-	# the operator without interrupting any service.
-	systemctl --no-ask-password reset-failed stellaratlas.target >/dev/null ||
-		die "installed polkit rule does not authorize non-root service management"
+	verify_regular_copy \
+		"$POSTGRESQL_TUNING_SOURCE" \
+		"$POSTGRESQL_TUNING_TARGET"
 }
 
 verify_network_meilisearch_runtime() {
@@ -347,6 +357,9 @@ install_units() {
 	install_regular_file \
 		"$SYSTEMD_SOURCE_DIR/10-stellaratlas-observe.rules" \
 		"$POLKIT_RULE_DIR/10-stellaratlas-observe.rules"
+	install_regular_file \
+		"$POSTGRESQL_TUNING_SOURCE" \
+		"$POSTGRESQL_TUNING_TARGET"
 }
 
 mask_legacy_unit() {
