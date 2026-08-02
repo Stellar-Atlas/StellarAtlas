@@ -6,6 +6,10 @@ import type {
 	PublicStatusLevel,
 	WorkerStatusDTO
 } from './types';
+import {
+	historyArchiveWorkerSlotLimit,
+	historyArchiveWorkerTelemetryLimit
+} from 'history-scanner-dto';
 
 const stages = new Set<ArchiveWorkerStageDTO>([
 	'idle',
@@ -53,7 +57,8 @@ const statusLevels = new Set<PublicStatusLevel>([
 	'degraded',
 	'unavailable'
 ]);
-const archiveWorkerSlotCount = 24;
+const archiveWorkerSlotCount = historyArchiveWorkerSlotLimit;
+const archiveWorkerTelemetryLimit = historyArchiveWorkerTelemetryLimit;
 
 const perWorkerNumericFields = [
 	'activeWorkers',
@@ -115,7 +120,7 @@ function parsePerWorkerArchive(
 		typeof value.startupGraceActive !== 'boolean' ||
 		!isNullableDateTime(value.lastHeartbeatAt) ||
 		!Array.isArray(value.workers) ||
-		value.workers.length > archiveWorkerSlotCount ||
+		value.workers.length > archiveWorkerTelemetryLimit ||
 		(value.telemetryMode !== undefined && value.telemetryMode !== 'per-worker')
 	) {
 		return null;

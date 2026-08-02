@@ -4,6 +4,7 @@ import { inject, injectable } from 'inversify';
 import { err, ok, Result } from 'neverthrow';
 import {
 	calculateHistoryArchiveObjectWorkerProcesses,
+	historyArchiveWorkerTelemetryLimit,
 	historyArchiveWorkerSlotLimit
 } from 'history-scanner-dto';
 import { GetScannerMetrics } from '@history-scan-coordinator/use-cases/GetScannerMetrics.js';
@@ -20,7 +21,7 @@ const archiveObjectWorkerStaleAgeMs = 2 * 60 * 1000;
 const archiveObjectWorkerPublicRetentionMs = 15 * 60 * 1000;
 const archiveObjectWorkerStorageRetentionMs = 24 * 60 * 60 * 1000;
 const archiveObjectWorkerStartupGraceMs = 2 * 60 * 1000;
-const archiveObjectWorkerRowLimit = 128;
+const archiveObjectWorkerRowLimit = historyArchiveWorkerTelemetryLimit;
 const defaultConfiguredObjectWorkers =
 	calculateHistoryArchiveObjectWorkerProcesses(availableParallelism());
 const maxConfiguredObjectWorkers = historyArchiveWorkerSlotLimit - 1;

@@ -51,5 +51,6 @@ export {
 export {
 	calculateHistoryArchiveObjectWorkerProcesses,
 	historyArchiveDownloadConcurrency,
+	historyArchiveWorkerTelemetryLimit,
 	historyArchiveWorkerSlotLimit
 } from './HistoryArchiveWorkerCapacity.js';

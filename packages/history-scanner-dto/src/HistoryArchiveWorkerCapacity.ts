@@ -1,4 +1,5 @@
 export const historyArchiveDownloadConcurrency = 8;
+export const historyArchiveWorkerTelemetryLimit = 128;
 export const historyArchiveWorkerSlotLimit = 32_768;
 
 const reservedLogicalProcessors = 4;

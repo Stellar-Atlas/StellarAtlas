@@ -18,6 +18,7 @@
 		"3d-force-graph": "1.80.0",
 		"ajv": "^8.20.0",
 		"ajv-formats": "^3.0.1",
+		"history-scanner-dto": "workspace:*",
 		"next": "16.3.0-canary.106",
 		"react": "19.2.7",
 		"react-dom": "19.2.7",

@@ -499,6 +499,9 @@ importers:
       ajv-formats:
         specifier: ^3.0.1
         version: 3.0.1(ajv@8.20.0)
+      history-scanner-dto:
+        specifier: workspace:*
+        version: link:../../packages/history-scanner-dto
       next:
         specifier: 16.3.0-canary.106
         version: 16.3.0-canary.106(@babel/core@7.29.7)(@types/node@26.0.1)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(sass@1.101.0)

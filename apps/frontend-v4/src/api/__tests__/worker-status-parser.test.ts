@@ -1,3 +1,4 @@
+import { historyArchiveWorkerSlotLimit } from 'history-scanner-dto';
 import { parseStatusLiveMessage } from '../status-live-stream';
 import { parseWorkerStatusDTO } from '../worker-status-parser';
 
@@ -57,7 +58,7 @@ describe('worker status parsing', () => {
 				...status,
 				archiveWorkers: {
 					...status.archiveWorkers,
-					workers: [{ ...worker, slotIndex: 24 }]
+					workers: [{ ...worker, slotIndex: historyArchiveWorkerSlotLimit }]
 				}
 			})
 		).toBeNull();

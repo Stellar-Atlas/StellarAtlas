@@ -1,5 +1,6 @@
 'use client';
 
+import { historyArchiveWorkerTelemetryLimit } from 'history-scanner-dto';
 import type {
 	ArchiveWorkerOutcomeDTO,
 	ArchiveWorkerStatusRowDTO,
@@ -10,7 +11,7 @@ import { formatDateTime, formatInteger } from '@format/formatters';
 import { getArchiveDownloadActivity } from './archive-download-activity';
 import { StatusPill } from './status-ui';
 
-const MAX_ARCHIVE_WORKER_SLOTS = 24;
+const MAX_ARCHIVE_WORKER_SLOTS = historyArchiveWorkerTelemetryLimit;
 
 export function ArchiveWorkerStatusTable({
 	workers
