@@ -14,19 +14,19 @@ const enabledEnvironment = {
 };
 
 describe('continuous full-history backfill CLI', () => {
-	it('requires explicit enablement and refuses a checkpoint count above one', () => {
+	it('requires explicit enablement and bounds checkpoint prefetch', () => {
 		expect(() => parseContinuousFullHistoryBackfillConfig({})).toThrow(
 			'FULL_HISTORY_CONTINUOUS_BACKFILL_ENABLED must equal true'
 		);
 		expect(() =>
 			parseContinuousFullHistoryBackfillConfig({
 				...enabledEnvironment,
-				FULL_HISTORY_BACKFILL_CHECKPOINTS: '2'
-			})
-		).toThrow('must process one checkpoint at a time');
+					FULL_HISTORY_BACKFILL_CHECKPOINTS: '9'
+				})
+		).toThrow('must be between 1 and 8');
 	});
 
-	it('schedules exactly one checkpoint before each worker invocation', async () => {
+	it('schedules the configured checkpoint window before each worker invocation', async () => {
 		const schedule = jest.fn(async () => ({
 			status: 'canonical-unavailable' as const
 		}));
@@ -36,7 +36,10 @@ describe('continuous full-history backfill CLI', () => {
 				run: { execute: run },
 				schedule: { execute: schedule }
 			},
-			parseContinuousFullHistoryBackfillConfig(enabledEnvironment),
+			parseContinuousFullHistoryBackfillConfig({
+				...enabledEnvironment,
+				FULL_HISTORY_BACKFILL_CHECKPOINTS: '4'
+			}),
 			'00000000-0000-4000-8000-000000000099'
 		);
 
@@ -45,7 +48,7 @@ describe('continuous full-history backfill CLI', () => {
 			schedule: { status: 'canonical-unavailable' }
 		});
 		expect(schedule).toHaveBeenCalledWith(
-			expect.objectContaining({ checkpointCount: 1 })
+			expect.objectContaining({ checkpointCount: 4 })
 		);
 		expect(run).toHaveBeenCalledTimes(1);
 		expect(schedule.mock.invocationCallOrder[0] ?? 0).toBeLessThan(

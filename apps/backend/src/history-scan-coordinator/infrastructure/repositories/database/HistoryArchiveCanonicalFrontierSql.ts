@@ -15,7 +15,7 @@ export const materializeCanonicalFrontierDependenciesSql = `
 	with ${canonicalRuntimeTargetCtes}, runtime_archive_roots as materialized (
 		select root."archiveUrl", root."archiveUrlIdentity",
 			root."hostIdentity", target.checkpoint_ledger
-		from runtime_target target
+		from dependency_target target
 		join "history_archive_state_snapshot" state
 			on state.status = 'available'
 			and state."networkPassphrase" is not null
@@ -61,7 +61,7 @@ export const materializeCanonicalFrontierDependenciesSql = `
 		returning id
 	), checkpoints as materialized (
 		select checkpoint.*, state."networkPassphrase"
-		from runtime_target target
+		from dependency_target target
 		join "history_archive_state_snapshot" state
 			on state.status = 'available'
 			and state."networkPassphrase" is not null

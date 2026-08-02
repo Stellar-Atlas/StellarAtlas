@@ -142,7 +142,7 @@ export function runBoundedGoFullHistoryProcess(
 function spawnFullHistoryEtl(executablePath: string, args: readonly string[]) {
 	return spawn(executablePath, args, {
 		env: {
-			GOMAXPROCS: '4',
+			GOMAXPROCS: '2',
 			GOMEMLIMIT: '6GiB',
 			LANG: 'C',
 			TZ: 'UTC'

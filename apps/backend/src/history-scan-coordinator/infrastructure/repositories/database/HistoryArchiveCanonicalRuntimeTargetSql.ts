@@ -12,11 +12,12 @@ export const canonicalRuntimeTargetCtes = `
 			)
 		)
 			and "checkpoint_ledger" is not null
-	), historical_runtime_target as materialized (
-		select ranked."network_passphrase_hash", ranked.checkpoint_ledger,
-			'historical'::text as target_lane
+	), historical_runtime_job as materialized (
+		select ranked.*
 		from (
 			select job."network_passphrase_hash",
+				job."first_checkpoint_ledger"::integer
+					as first_checkpoint_ledger,
 				(watermark."first_ledger" - 1)::integer as checkpoint_ledger,
 				row_number() over (
 					partition by job."network_passphrase_hash"
@@ -35,6 +36,19 @@ export const canonicalRuntimeTargetCtes = `
 					and job."last_checkpoint_ledger"
 		) ranked
 		where ranked.target_rank = 1
+	), historical_runtime_target as materialized (
+		select job."network_passphrase_hash", job.checkpoint_ledger,
+			'historical'::text as target_lane
+		from historical_runtime_job job
+	), historical_prefetch_target as materialized (
+		select job."network_passphrase_hash", checkpoint.checkpoint_ledger::integer,
+			'historical-prefetch'::text as target_lane
+		from historical_runtime_job job
+		cross join lateral generate_series(
+			job.checkpoint_ledger - 64,
+			job."first_checkpoint_ledger",
+			-64
+		) checkpoint(checkpoint_ledger)
 	), runtime_target as materialized (
 		select "network_passphrase_hash", checkpoint_ledger, target_lane
 		from forward_runtime_target
@@ -48,5 +62,18 @@ export const canonicalRuntimeTargetCtes = `
 				historical."network_passphrase_hash"
 				and forward.checkpoint_ledger = historical.checkpoint_ledger
 		)
+	), dependency_target as materialized (
+		select "network_passphrase_hash", checkpoint_ledger, target_lane
+		from runtime_target
+		union all
+		select prefetch."network_passphrase_hash", prefetch.checkpoint_ledger,
+			prefetch.target_lane
+		from historical_prefetch_target prefetch
+		where not exists (
+			select 1 from runtime_target active
+			where active."network_passphrase_hash" =
+				prefetch."network_passphrase_hash"
+				and active.checkpoint_ledger = prefetch.checkpoint_ledger
+		)
 	)
-`;
+	`;

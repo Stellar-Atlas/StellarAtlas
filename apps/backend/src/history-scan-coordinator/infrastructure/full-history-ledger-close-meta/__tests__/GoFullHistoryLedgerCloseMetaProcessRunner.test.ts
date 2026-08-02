@@ -47,7 +47,7 @@ describe('runBoundedGoFullHistoryProcess', () => {
 			['transform'],
 			expect.objectContaining({
 				env: {
-					GOMAXPROCS: '4',
+					GOMAXPROCS: '2',
 					GOMEMLIMIT: '6GiB',
 					LANG: 'C',
 					TZ: 'UTC'

@@ -33,7 +33,7 @@ interface LockRow {
 }
 
 export interface ContinuousFullHistoryBackfillConfig extends ContinuousFullHistoryBackfillLoopConfig {
-	readonly checkpointCount: 1;
+	readonly checkpointCount: number;
 	readonly leaseDurationMs: number;
 	readonly maxAttempts: number;
 	readonly maximumProofTargets: number;
@@ -202,14 +202,6 @@ export function parseContinuousFullHistoryBackfillConfig(
 	if (environment[enabledEnvironmentKey] !== 'true') {
 		throw new Error(`${enabledEnvironmentKey} must equal true`);
 	}
-	if (
-		environment.FULL_HISTORY_BACKFILL_CHECKPOINTS !== undefined &&
-		environment.FULL_HISTORY_BACKFILL_CHECKPOINTS !== '1'
-	) {
-		throw new Error(
-			'Continuous backfill must process one checkpoint at a time'
-		);
-	}
 	const networkPassphrase = environment.FULL_HISTORY_NETWORK_PASSPHRASE;
 	if (
 		typeof networkPassphrase !== 'string' ||
@@ -225,7 +217,12 @@ export function parseContinuousFullHistoryBackfillConfig(
 		86_400_000
 	);
 	return {
-		checkpointCount: 1,
+		checkpointCount: readInteger(
+			environment.FULL_HISTORY_BACKFILL_CHECKPOINTS,
+			1,
+			1,
+			8
+		),
 		errorBackoffMs: readInteger(
 			environment.FULL_HISTORY_BACKFILL_ERROR_BACKOFF_MS,
 			30_000,

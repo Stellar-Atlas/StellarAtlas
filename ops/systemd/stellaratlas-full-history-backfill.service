@@ -16,7 +16,7 @@ Environment=HOME=/home/observe
 Environment=PATH=/home/observe/.nvm/versions/node/v26.4.0/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 Environment=FULL_HISTORY_CONTINUOUS_BACKFILL_ENABLED=true
 Environment="FULL_HISTORY_NETWORK_PASSPHRASE=Public Global Stellar Network ; September 2015"
-Environment=FULL_HISTORY_BACKFILL_CHECKPOINTS=1
+Environment=FULL_HISTORY_BACKFILL_CHECKPOINTS=4
 Environment=FULL_HISTORY_BACKFILL_SUCCESS_DELAY_MS=250
 Environment=FULL_HISTORY_BACKFILL_IDLE_BACKOFF_MS=15000
 Environment=FULL_HISTORY_BACKFILL_PROOF_PENDING_BACKOFF_MS=30000
