@@ -2,9 +2,10 @@
 
 ## Runtime services
 
-These templates split the production app into independently managed services
-that all run as `observe`, not root. `ops/systemd` is the tracked source of
-truth; systemd consumes root-owned regular-file copies installed under
+These templates split the production app into independently managed services.
+The VM-facing services run as `observe`; storage-heavy services run as
+`admins` on the bare-metal host. `ops/systemd` is the tracked source of truth;
+systemd consumes root-owned regular-file copies installed under
 `/etc/systemd/system`.
 
 - `stellaratlas.target` starts the production service set.
@@ -27,6 +28,34 @@ truth; systemd consumes root-owned regular-file copies installed under
   batches.
 - `stellaratlas-users.service` runs the user/mail service.
 
+## Host-native storage runtime
+
+The VM keeps the public API, frontends, network scanner, SCP collector, and
+users service. PostgreSQL, archive verification, full-history ingestion,
+Horizon, Stellar RPC, and network Meilisearch run on the bare-metal host so
+their database and object I/O reaches the XFS array directly instead of through
+VirtioFS.
+
+The host exposes those services to the VM on `192.168.1.153`. That address is
+owned by the host's `bridge0`; the VM tap is attached to the same bridge, so
+VM-to-host service traffic remains inside the machine. The host's physical
+management address is not used for runtime traffic.
+
+`setup-host-systemd.sh` installs and verifies the host units without copying,
+deleting, or rebuilding data. It does not store private environment files in
+Git. `/etc/stellaratlas/meilisearch-network.env` remains an operator-owned
+secret file.
+
+```bash
+sudo /mnt/bulk/stellarbeat-data/Observer/setup-host-systemd.sh --install
+sudo /mnt/bulk/stellarbeat-data/Observer/setup-host-systemd.sh --verify
+```
+
+The VM marker `/etc/stellaratlas/host-native-runtime` activates condition
+guards on every migrated VM unit. `setup-systemd.sh` installs those guards and
+refuses to leave a duplicate VM writer active. The VM PostgreSQL service also
+remains masked while the host owns the shared database directory.
+
 ## Isolated network search
 
 Network inventory search and live SCP search use independent connection
@@ -39,20 +68,12 @@ its override is empty or absent:
 | Live SCP | `MEILISEARCH_SCP_HOST` | `MEILISEARCH_SCP_API_KEY` | `MEILISEARCH_SCP_STATEMENT_INDEX` |
 | Legacy fallback | `MEILISEARCH_HOST` | `MEILISEARCH_API_KEY` | n/a |
 
-The dedicated network service uses port `7701` and the rebuildable data path
-`/home/observe/stellarbeat-data/meilisearch/network`. It is intentionally
-separate from the existing SCP instance on port `7700`; activation does not
-copy, delete, or migrate that instance or either index. The network index starts
-empty and is rebuilt from canonical Postgres inventory by the API projection
-writer. Search continues from Postgres while the new projection is absent,
-stale, rebuilding, or unavailable.
-
-This VM has no separate FAST mount attached. The current storage target is the
-51 TiB `/home/observe/stellarbeat-data` virtiofs array, so the dedicated network
-index uses that array now rather than the VM root disk. A future distinct FAST
-mount can override `MEILI_DB_PATH`, `MEILI_DUMP_DIR`, and `MEILI_SNAPSHOT_DIR`
-through the private env file before service start; its absence does not block
-the current deployment.
+The dedicated network service uses `192.168.1.153:7701` and the host-native
+rebuildable data path `/mnt/bulk/stellarbeat-data/meilisearch/network`. It is
+separate from the SCP instance on port `7700`. The cutover reuses the same
+underlying index directory in place; it does not copy or delete either index.
+Search continues from Postgres while the projection is absent, stale,
+rebuilding, or unavailable.
 
 `setup-systemd.sh` creates `/etc/stellaratlas/meilisearch-network.env` when it
 is absent, using a generated 256-bit key for both the Meilisearch master key and
@@ -66,21 +87,20 @@ The generated private env file has this shape:
 
 ```text
 MEILI_MASTER_KEY=<network-instance-master-key>
-MEILISEARCH_NETWORK_HOST=http://127.0.0.1:7701
+MEILISEARCH_NETWORK_HOST=http://192.168.1.153:7701
 MEILISEARCH_NETWORK_API_KEY=<network-instance-master-key>
 ```
 
-The unit caps indexing at two threads and 2 GiB, the process at four CPU cores
-and 4 GiB, and the search queue at 256 requests. Change those caps only after
-observing sustained network-index workload; this instance does not carry SCP
-traffic.
+The host unit caps indexing at four threads and 4 GiB, the process at eight CPU
+cores and 8 GiB, and the search queue at 256 requests. This instance does not
+carry SCP traffic.
 
 Safe activation order after the generated env metadata has been verified:
 
 ```bash
-sudo ./setup-systemd.sh
+sudo /mnt/bulk/stellarbeat-data/Observer/setup-host-systemd.sh --install
 systemctl start stellaratlas-meilisearch-network.service
-node scripts/wait-for-url.mjs http://127.0.0.1:7701/health 90
+node scripts/wait-for-url.mjs http://192.168.1.153:7701/health 90
 systemctl restart stellaratlas-api.service
 node scripts/wait-for-url.mjs http://127.0.0.1:3000/v1/status 90
 ```
@@ -146,50 +166,24 @@ systemctl status stellaratlas-full-history-operation-backfill.service --no-pager
 journalctl -u stellaratlas-full-history-operation-backfill.service -n 100 --no-pager
 ```
 
-## Optional full-history services
+## Owned full-history APIs
 
-These units are installed by `setup-systemd.sh` but are intentionally not part
-of `stellaratlas.target` yet:
+Horizon and Stellar RPC run on the host against their existing persisted state:
 
-- `stellaratlas-horizon.service` runs the local Horizon binary from
-  `/home/observe/stellarbeat-data/horizon/bin/horizon`.
-- `stellaratlas-stellar-rpc.service` runs the local Stellar RPC binary from
-  `/home/observe/stellarbeat-data/stellar-rpc/bin/stellar-rpc`.
+- Horizon API: `http://192.168.1.153:18000`
+- Stellar RPC: `http://192.168.1.153:8002`
+- Horizon PostgreSQL: host-local Unix socket on port `5433`
 
-They use `ConditionPath...` guards and will not start unless the required
-binary/config files exist. Do not add them to `stellaratlas.target` until the
-local Horizon and RPC endpoints are proven healthy on loopback.
+Horizon uses port `18000` because another host workload owns `8000`. Horizon
+PostgreSQL uses a peer-authentication map from host user `admins` to database
+role `observe`; no database password is embedded in a unit or committed file.
+RPC keeps its SQLite and captive-core state under
+`/mnt/bulk/stellarbeat-data/stellar-rpc/pubnet`.
 
-Current prerequisites:
-
-- install `stellar-core` at
-  `/home/observe/stellarbeat-data/stellar-core/bin/stellar-core`;
-- create a separate Horizon Postgres database and put `DATABASE_URL=...` in
-  `/etc/stellaratlas/full-history.env`;
-- keep Horizon storage under
-  `/home/observe/stellarbeat-data/horizon/captive-core/pubnet`;
-- install `stellar-rpc` at
-  `/home/observe/stellarbeat-data/stellar-rpc/bin/stellar-rpc`;
-- create `/home/observe/stellarbeat-data/stellar-rpc/pubnet/config/rpc.toml`.
-
-Safe activation order:
-
-```bash
-systemctl daemon-reload
-systemctl start stellaratlas-horizon.service
-systemctl status stellaratlas-horizon.service --no-pager --lines=80
-curl -fsS http://127.0.0.1:8000 | jq .
-systemctl start stellaratlas-stellar-rpc.service
-systemctl status stellaratlas-stellar-rpc.service --no-pager --lines=80
-```
-
-Only after local services catch up and pass API checks should
-`/etc/stellaratlas/stellaratlas.env` move Atlas from public Horizon to loopback:
-
-```bash
-HORIZON_URL=http://127.0.0.1:8000
-STELLAR_RPC_URL=http://127.0.0.1:8002
-```
+The services are enabled for autonomous restart, but public StellarAtlas
+configuration must continue using external fallbacks until each owned service
+is caught up to the current ledger and passes its native health check. Their
+being active is not sufficient evidence of readiness.
 
 `10-stellaratlas-observe.rules` lets the `observe` user start, stop, restart,
 reload, try-restart, and reset only the listed StellarAtlas units without an

@@ -1,0 +1,22 @@
+[Unit]
+Description=StellarAtlas Horizon PostgreSQL on host-native storage
+After=local-fs.target
+RequiresMountsFor=/mnt/bulk/stellarbeat-data/horizon/postgres/27
+StartLimitIntervalSec=60
+StartLimitBurst=6
+
+[Service]
+Type=simple
+User=admins
+Group=admins
+ExecStartPre=/home/admins/.nvm/versions/node/v26.5.1/bin/node /mnt/bulk/stellarbeat-data/Observer/scripts/prepare-postgres-data-dir.mjs /mnt/bulk/stellarbeat-data/horizon/postgres/27 /mnt/bulk/stellarbeat-data/horizon/postgres/run/.s.PGSQL.5433
+ExecStart=/usr/lib/postgresql/16/bin/postgres -D /mnt/bulk/stellarbeat-data/horizon/postgres/27 -c config_file=/etc/postgresql/16/stellaratlas-horizon/postgresql.conf
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=120
+KillSignal=SIGINT
+LimitNOFILE=65536
+MemoryMax=32G
+
+[Install]
+WantedBy=multi-user.target

@@ -11,7 +11,6 @@ const resolvedSocketPath = resolve(socketPath);
 assertSafeSocketPath(resolvedDataDirectory, resolvedSocketPath);
 
 if (await hasExpectedPostgres(resolvedDataDirectory)) process.exit(0);
-if (await hasExpectedPostgres(resolvedDataDirectory)) process.exit(0);
 
 const artifacts = [
 	{ kind: 'pid', path: resolve(resolvedDataDirectory, 'postmaster.pid') },

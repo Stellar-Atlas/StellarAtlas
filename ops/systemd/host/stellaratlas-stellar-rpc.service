@@ -1,0 +1,28 @@
+[Unit]
+Description=StellarAtlas owned Stellar RPC on host-native storage
+After=local-fs.target
+RequiresMountsFor=/mnt/bulk/stellarbeat-data/stellar-rpc/pubnet
+StartLimitIntervalSec=120
+StartLimitBurst=6
+
+[Service]
+Type=simple
+User=admins
+Group=admins
+WorkingDirectory=/mnt/bulk/stellarbeat-data/stellar-rpc/pubnet
+Environment=HOME=/home/admins
+Environment=LD_LIBRARY_PATH=/mnt/bulk/stellarbeat-data/stellar-core/runtime/usr/lib/x86_64-linux-gnu
+ExecStart=/mnt/bulk/stellarbeat-data/stellar-rpc/bin/stellar-rpc --config-path /etc/stellaratlas/stellar-rpc.toml --config-strict
+Restart=on-failure
+RestartSec=10
+TimeoutStopSec=120
+KillSignal=SIGTERM
+LimitNOFILE=65536
+MemoryMax=24G
+TasksMax=512
+CPUWeight=25
+IOWeight=25
+Nice=5
+
+[Install]
+WantedBy=multi-user.target

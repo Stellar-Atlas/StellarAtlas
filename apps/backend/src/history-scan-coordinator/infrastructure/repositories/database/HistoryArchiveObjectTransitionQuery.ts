@@ -12,9 +12,18 @@ export async function findPrioritizedHistoryArchiveObjectTransitions(
 	limit: number
 ): Promise<readonly HistoryArchiveObject[]> {
 	const safeLimit = normalizeLimit(limit);
-	const rows = (await repository.manager.query(prioritizedTransitionsSql, [
+	const runtimeRows = (await repository.manager.query(runtimeTransitionsSql, [
 		safeLimit
 	])) as readonly TransitionTargetRow[];
+	const remaining = safeLimit - runtimeRows.length;
+	const genericRows =
+		remaining <= 0
+			? []
+			: ((await repository.manager.query(genericTransitionsSql, [
+					remaining,
+					runtimeRows.map((row) => row.remoteId)
+				])) as readonly TransitionTargetRow[]);
+	const rows = [...runtimeRows, ...genericRows];
 	if (rows.length === 0) return [];
 
 	const objects = await repository
@@ -38,7 +47,7 @@ const terminalTransitionPredicateSql = `
 	and object."transitionEffectsCompletedAt" is null
 `;
 
-const prioritizedTransitionsSql = `
+const runtimeTransitionsSql = `
 	with ${canonicalRuntimeTargetCtes}, runtime_roots as materialized (
 		select state."archiveUrlIdentity", target.checkpoint_ledger,
 			target.target_lane
@@ -93,33 +102,25 @@ const prioritizedTransitionsSql = `
 		where ${terminalTransitionPredicateSql}
 		group by object."remoteId", object.id, object."executionReason",
 			object."transitionEffectsRequiredAt"
-	), generic_candidates as materialized (
-		select object."remoteId", object.id,
-			case object."executionReason"
-				when 'canonical-frontier-reserve' then 0
-				when 'proof-completion-reserve' then 1
-				else 2
-			end as reason_priority,
-			object."transitionEffectsRequiredAt" as required_at
-		from "history_archive_object_queue" object
-		where ${terminalTransitionPredicateSql}
-			and not exists (
-				select 1 from runtime_candidates runtime
-				where runtime.id = object.id
-			)
-		order by reason_priority, required_at, object.id
-		limit $1::integer
-	), prioritized as (
-		select runtime."remoteId", runtime.id, 0 as target_priority,
-			runtime.lane_priority, runtime.reason_priority, runtime.required_at
-		from runtime_candidates runtime
-		union all
-		select generic."remoteId", generic.id, 1 as target_priority,
-			2 as lane_priority, generic.reason_priority, generic.required_at
-		from generic_candidates generic
 	)
 	select "remoteId"
-	from prioritized
-	order by target_priority, lane_priority, reason_priority, required_at, id
+	from runtime_candidates
+	order by lane_priority, reason_priority, required_at, id
+	limit $1::integer
+`;
+
+const genericTransitionsSql = `
+	select object."remoteId"
+	from "history_archive_object_queue" object
+	where ${terminalTransitionPredicateSql}
+		and not (object."remoteId" = any($2::uuid[]))
+	order by
+		case object."executionReason"
+			when 'canonical-frontier-reserve' then 0
+			when 'proof-completion-reserve' then 1
+			else 2
+		end,
+		object."transitionEffectsRequiredAt",
+		object.id
 	limit $1::integer
 `;

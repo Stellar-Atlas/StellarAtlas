@@ -1,0 +1,23 @@
+[Unit]
+Description=StellarAtlas PostgreSQL on host-native storage
+After=local-fs.target network-online.target
+Wants=network-online.target
+RequiresMountsFor=/mnt/bulk/stellarbeat-data/postgresql/16/main
+
+[Service]
+Type=simple
+# Numeric ownership matches the existing database files on the shared array.
+User=110
+Group=111
+RuntimeDirectory=stellaratlas-postgresql
+RuntimeDirectoryMode=0750
+ExecStart=/usr/lib/postgresql/16/bin/postgres -D /mnt/bulk/stellarbeat-data/postgresql/16/main -c config_file=/etc/postgresql/16/stellaratlas/postgresql.conf
+KillSignal=SIGINT
+TimeoutStopSec=infinity
+Restart=on-failure
+RestartSec=5
+OOMScoreAdjust=-900
+LimitNOFILE=1048576
+
+[Install]
+WantedBy=multi-user.target

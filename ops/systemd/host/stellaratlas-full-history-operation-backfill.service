@@ -1,0 +1,40 @@
+[Unit]
+Description=StellarAtlas operation and account-reference backfill on host-native storage
+After=network-online.target stellaratlas-postgresql.service
+Wants=network-online.target
+Requires=stellaratlas-postgresql.service
+
+[Service]
+Type=simple
+User=admins
+Group=admins
+WorkingDirectory=/mnt/bulk/stellarbeat-data/Observer
+Environment=NODE_ENV=production
+Environment=HOME=/home/admins
+Environment=PATH=/home/admins/.nvm/versions/node/v26.5.1/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+Environment=FULL_HISTORY_CONTINUOUS_OPERATION_BACKFILL_ENABLED=true
+Environment="FULL_HISTORY_NETWORK_PASSPHRASE=Public Global Stellar Network ; September 2015"
+Environment=FULL_HISTORY_OPERATION_BACKFILL_BATCHES=12
+Environment=FULL_HISTORY_OPERATION_BACKFILL_CPU_WORKERS=12
+Environment=FULL_HISTORY_OPERATION_BACKFILL_DATABASE_WORKERS=2
+Environment=FULL_HISTORY_OPERATION_BACKFILL_SUCCESS_DELAY_MS=250
+Environment=FULL_HISTORY_OPERATION_BACKFILL_IDLE_BACKOFF_MS=15000
+Environment=FULL_HISTORY_OPERATION_BACKFILL_LOCK_BACKOFF_MS=30000
+Environment=FULL_HISTORY_OPERATION_BACKFILL_ERROR_BACKOFF_MS=30000
+Environment=FULL_HISTORY_OPERATION_BACKFILL_HEARTBEAT_MS=60000
+EnvironmentFile=-/etc/stellaratlas/stellaratlas.env
+ExecStartPre=/usr/bin/env node scripts/wait-for-url.mjs http://192.168.1.221:3000/v1/status 90
+ExecStart=/usr/bin/env pnpm start:full-history-operation-backfill
+Restart=always
+RestartSec=15
+TimeoutStopSec=3900
+KillSignal=SIGTERM
+CPUQuota=1200%
+MemoryMax=32G
+MemorySwapMax=0
+TasksMax=128
+LimitCORE=0
+NoNewPrivileges=true
+
+[Install]
+WantedBy=multi-user.target

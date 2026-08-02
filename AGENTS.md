@@ -81,9 +81,14 @@ Use the port from `browseros-display status`. Do not assume `9200`.
 
 ## Current Strategic Direction
 
-- For roadmap-scale work, use the `$stellaratlas-orchestrator` skill and
-  `docs/goal.md` to coordinate subagents, ownership, verification, and endpoint
-  backlog.
+- For roadmap-scale work, use the `$stellaratlas-orchestrator` skill. When
+  Serena is available, start at `mem:core`; then read the compact
+  `docs/goal.md`, the canonical active issue tracker, and only the relevant
+  phase plan.
+- Keep `docs/goal.md` below 100 lines or 5 KiB. It owns only the current
+  objective, active acceptance gate, and next safe action. Do not append
+  completed-agent rows, endpoint inventories, commit/test transcripts,
+  screenshots, or session history.
 - Make archive scanner evidence trustworthy and operator-friendly.
 - Scan all validators, prioritizing full archivers and whole-archive coverage.
 - Keep archive worker concurrency bounded: 24 network fetch threads and 24

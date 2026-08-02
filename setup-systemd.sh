@@ -11,6 +11,8 @@ NETWORK_MEILI_ENV_FILE="$NETWORK_MEILI_ENV_DIR/meilisearch-network.env"
 POSTGRESQL_TUNING_SOURCE="$REPO_ROOT/ops/postgresql/stellaratlas-main.conf"
 POSTGRESQL_TUNING_TARGET="/etc/postgresql/16/main/conf.d/stellaratlas-main.conf"
 POSTGRESQL_BINARY="/usr/lib/postgresql/16/bin/postgres"
+HOST_NATIVE_RUNTIME_MARKER="/etc/stellaratlas/host-native-runtime"
+HOST_NATIVE_GUARD_SOURCE="$SYSTEMD_SOURCE_DIR/host/vm-host-native-runtime.conf"
 NETWORK_MEILI_DATA_ROOT="/home/observe/stellarbeat-data/meilisearch/network"
 FULL_HISTORY_LEDGER_CLOSE_META_EXECUTABLE="$EXPECTED_REPO_ROOT/apps/full-history-etl/bin/stellaratlas-full-history-etl"
 FULL_HISTORY_STATE_EXPORT_EXECUTABLE="$EXPECTED_REPO_ROOT/apps/full-history-etl/bin/stellaratlas-full-history-state-export"
@@ -49,6 +51,32 @@ VERIFY_UNIT_NAMES=(
 	stellaratlas-radar-network-comparison-refresh.timer
 )
 
+HOST_NATIVE_GUARD_UNIT_NAMES=(
+	postgresql@16-main.service
+	stellaratlas-meilisearch-network.service
+	stellaratlas-history-scanner@.service
+	stellaratlas-full-history-promotion.service
+	stellaratlas-full-history-backfill.service
+	stellaratlas-full-history-operation-backfill.service
+	stellaratlas-full-history-ledger-close-meta.service
+	stellaratlas-full-history-state-import.service
+	stellaratlas-horizon.service
+	stellaratlas-stellar-rpc.service
+)
+
+HOST_NATIVE_VM_RUNTIME_UNITS=(
+	postgresql@16-main.service
+	stellaratlas-meilisearch-network.service
+	stellaratlas-history-scanner@1.service
+	stellaratlas-full-history-promotion.service
+	stellaratlas-full-history-backfill.service
+	stellaratlas-full-history-operation-backfill.service
+	stellaratlas-full-history-ledger-close-meta.service
+	stellaratlas-full-history-state-import.service
+	stellaratlas-horizon.service
+	stellaratlas-stellar-rpc.service
+)
+
 die() {
 	printf 'setup-systemd: %s\n' "$*" >&2
 	exit 1
@@ -78,6 +106,8 @@ verify_source_units() {
 	command -v systemd-analyze >/dev/null || die "systemd-analyze is required"
 	[[ -f "$POSTGRESQL_TUNING_SOURCE" ]] ||
 		die "missing PostgreSQL tuning profile: $POSTGRESQL_TUNING_SOURCE"
+	[[ -f "$HOST_NATIVE_GUARD_SOURCE" ]] ||
+		die "missing host-native runtime guard: $HOST_NATIVE_GUARD_SOURCE"
 	validate_postgresql_tuning_source
 
 	for file_name in "${VERIFY_UNIT_NAMES[@]}"; do
@@ -341,14 +371,33 @@ verify_installed_units() {
 		die "loaded stellaratlas.target does not require the repository mount"
 	systemctl is-enabled --quiet stellaratlas.target ||
 		die "stellaratlas.target is not enabled"
-	systemctl is-enabled --quiet stellaratlas-full-history-backfill.service ||
-		die "stellaratlas-full-history-backfill.service is not enabled"
-	systemctl is-enabled --quiet stellaratlas-full-history-ledger-close-meta.service ||
-		die "stellaratlas-full-history-ledger-close-meta.service is not enabled"
-	systemctl is-enabled --quiet stellaratlas-full-history-state-import.service ||
-		die "stellaratlas-full-history-state-import.service is not enabled"
+	if [[ -e "$HOST_NATIVE_RUNTIME_MARKER" ]]; then
+		verify_host_native_guards
+	else
+		systemctl is-enabled --quiet stellaratlas-full-history-backfill.service ||
+			die "stellaratlas-full-history-backfill.service is not enabled"
+		systemctl is-enabled --quiet stellaratlas-full-history-ledger-close-meta.service ||
+			die "stellaratlas-full-history-ledger-close-meta.service is not enabled"
+		systemctl is-enabled --quiet stellaratlas-full-history-state-import.service ||
+			die "stellaratlas-full-history-state-import.service is not enabled"
+	fi
 
 	printf 'Verified installed boot-safe systemd unit copies.\n'
+}
+
+verify_host_native_guards() {
+	local unit
+	local drop_in
+
+	for unit in "${HOST_NATIVE_GUARD_UNIT_NAMES[@]}"; do
+		drop_in="$SYSTEMD_UNIT_DIR/$unit.d/host-native-runtime.conf"
+		verify_regular_copy "$HOST_NATIVE_GUARD_SOURCE" "$drop_in"
+	done
+	for unit in "${HOST_NATIVE_VM_RUNTIME_UNITS[@]}"; do
+		if systemctl is-active --quiet "$unit"; then
+			die "host-native VM unit is unexpectedly active: $unit"
+		fi
+	done
 }
 
 install_regular_file() {
@@ -375,6 +424,7 @@ install_regular_file() {
 
 install_units() {
 	local file_name
+	local unit
 
 	for file_name in "${INSTALL_UNIT_NAMES[@]}"; do
 		install_regular_file \
@@ -388,6 +438,11 @@ install_units() {
 	install_regular_file \
 		"$POSTGRESQL_TUNING_SOURCE" \
 		"$POSTGRESQL_TUNING_TARGET"
+	for unit in "${HOST_NATIVE_GUARD_UNIT_NAMES[@]}"; do
+		install_regular_file \
+			"$HOST_NATIVE_GUARD_SOURCE" \
+			"$SYSTEMD_UNIT_DIR/$unit.d/host-native-runtime.conf"
+	done
 }
 
 mask_legacy_unit() {
@@ -446,35 +501,60 @@ main() {
 	install_units
 	mask_legacy_unit
 	systemctl daemon-reload
-	systemctl enable stellaratlas-full-history-backfill.service
-	systemctl enable stellaratlas-full-history-ledger-close-meta.service
-	systemctl enable stellaratlas-full-history-state-import.service
+	if [[ -e "$HOST_NATIVE_RUNTIME_MARKER" ]]; then
+		systemctl disable --now "${HOST_NATIVE_VM_RUNTIME_UNITS[@]}" \
+			>/dev/null 2>&1 || true
+	else
+		systemctl enable stellaratlas-full-history-backfill.service
+		systemctl enable stellaratlas-full-history-ledger-close-meta.service
+		systemctl enable stellaratlas-full-history-state-import.service
+	fi
 	systemctl enable --now stellaratlas.target
-	systemctl start stellaratlas-full-history-promotion.service
-	systemctl start stellaratlas-full-history-backfill.service
-	systemctl start stellaratlas-full-history-operation-backfill.service
-	systemctl start stellaratlas-full-history-ledger-close-meta.service
-	systemctl start stellaratlas-full-history-state-import.service
+	if [[ ! -e "$HOST_NATIVE_RUNTIME_MARKER" ]]; then
+		systemctl start stellaratlas-full-history-promotion.service
+		systemctl start stellaratlas-full-history-backfill.service
+		systemctl start stellaratlas-full-history-operation-backfill.service
+		systemctl start stellaratlas-full-history-ledger-close-meta.service
+		systemctl start stellaratlas-full-history-state-import.service
+	fi
 	verify_installed_units
 	systemctl is-active --quiet stellaratlas.target ||
 		die "stellaratlas.target is not active"
-	systemctl is-active --quiet stellaratlas-full-history-promotion.service ||
-		die "stellaratlas-full-history-promotion.service is not active"
-	systemctl is-active --quiet stellaratlas-full-history-backfill.service ||
-		die "stellaratlas-full-history-backfill.service is not active"
-	systemctl is-active --quiet stellaratlas-full-history-operation-backfill.service ||
-		die "stellaratlas-full-history-operation-backfill.service is not active"
-	systemctl is-active --quiet stellaratlas-full-history-ledger-close-meta.service ||
-		die "stellaratlas-full-history-ledger-close-meta.service is not active"
-	systemctl is-active --quiet stellaratlas-full-history-state-import.service ||
-		die "stellaratlas-full-history-state-import.service is not active"
+	if [[ ! -e "$HOST_NATIVE_RUNTIME_MARKER" ]]; then
+		systemctl is-active --quiet stellaratlas-full-history-promotion.service ||
+			die "stellaratlas-full-history-promotion.service is not active"
+		systemctl is-active --quiet stellaratlas-full-history-backfill.service ||
+			die "stellaratlas-full-history-backfill.service is not active"
+		systemctl is-active --quiet stellaratlas-full-history-operation-backfill.service ||
+			die "stellaratlas-full-history-operation-backfill.service is not active"
+		systemctl is-active --quiet stellaratlas-full-history-ledger-close-meta.service ||
+			die "stellaratlas-full-history-ledger-close-meta.service is not active"
+		systemctl is-active --quiet stellaratlas-full-history-state-import.service ||
+			die "stellaratlas-full-history-state-import.service is not active"
+	fi
 
-	cat <<'EOF'
+	if [[ -e "$HOST_NATIVE_RUNTIME_MARKER" ]]; then
+		cat <<'EOF'
+Installed boot-safe VM service copies in host-native runtime mode.
+The VM keeps the public API, frontend, network scanner, SCP collector, and
+users service. PostgreSQL, archive verification, full-history ingestion,
+Horizon, Stellar RPC, and Meilisearch are guarded against starting in the VM.
+
+Host-native runtime:
+  sudo /mnt/bulk/stellarbeat-data/Observer/setup-host-systemd.sh --verify
+  systemctl status stellaratlas-postgresql.service
+  systemctl status stellaratlas-history-scanner.service
+  systemctl status stellaratlas-horizon.service
+  systemctl status stellaratlas-stellar-rpc.service
+EOF
+	else
+		cat <<'EOF'
 Installed boot-safe local copies of the split StellarAtlas units.
 The obsolete stellaratlas.service is masked. An already-active target was not
 restarted; canonical promotion, historical backfill, operation catch-up,
 LedgerCloseMeta ingestion, and typed state import were started explicitly.
 EOF
+	fi
 	cat <<'EOF'
 
 LedgerCloseMeta ingestion is target-managed and continuously resumes from its
@@ -485,23 +565,10 @@ Production:
   systemctl status stellaratlas.target
   # Restart only a changed component during normal deploys. Restarting the
   # target also stops the public ingress proxy and causes avoidable downtime.
-  systemctl restart stellaratlas-meilisearch-network.service
   systemctl restart stellaratlas-api.service
   systemctl restart stellaratlas-frontend-v4.service
   systemctl restart stellaratlas-network-scanner.service
   systemctl restart stellaratlas-scp-live-scanner.service
-  systemctl restart stellaratlas-history-scanner@1.service
-  systemctl restart stellaratlas-full-history-promotion.service
-  systemctl restart stellaratlas-full-history-backfill.service
-  systemctl restart stellaratlas-full-history-operation-backfill.service
-  systemctl restart stellaratlas-full-history-ledger-close-meta.service
-  systemctl restart stellaratlas-full-history-state-import.service
-
-Owned full-history APIs use the dedicated user-service layout:
-  node scripts/setup-user-full-history-services.mjs --start
-  systemctl --user status stellaratlas-horizon-postgres.service
-  systemctl --user status stellaratlas-horizon.service
-  systemctl --user status stellaratlas-stellar-rpc.service
 
 Staging frontend:
   pnpm build:frontend-v4:staging

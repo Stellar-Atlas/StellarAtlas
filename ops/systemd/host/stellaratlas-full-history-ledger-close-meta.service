@@ -1,0 +1,58 @@
+[Unit]
+Description=StellarAtlas LedgerCloseMeta ingestion on host-native storage
+After=network-online.target stellaratlas-postgresql.service
+Wants=network-online.target
+Requires=stellaratlas-postgresql.service
+RequiresMountsFor=/mnt/bulk/stellarbeat-data
+ConditionFileIsExecutable=/mnt/bulk/stellarbeat-data/Observer/apps/full-history-etl/bin/stellaratlas-full-history-etl
+
+[Service]
+Type=simple
+User=admins
+Group=admins
+WorkingDirectory=/mnt/bulk/stellarbeat-data/Observer
+UMask=0077
+Environment=NODE_ENV=production
+Environment=HOME=/home/admins
+Environment=PATH=/home/admins/.nvm/versions/node/v26.5.1/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+Environment=FULL_HISTORY_LEDGER_CLOSE_META_ENABLED=true
+Environment="FULL_HISTORY_NETWORK_PASSPHRASE=Public Global Stellar Network ; September 2015"
+Environment=FULL_HISTORY_BULK_ROOT=/mnt/bulk/stellarbeat-data
+Environment=FULL_HISTORY_LEDGER_CLOSE_META_TYPED_ROOT=/mnt/bulk/stellarbeat-data/full-history/typed
+Environment=FULL_HISTORY_LEDGER_CLOSE_META_TEMP_ROOT=/dev/shm/stellaratlas-full-history-etl
+Environment=FULL_HISTORY_LEDGER_CLOSE_META_EXECUTABLE=/mnt/bulk/stellarbeat-data/Observer/apps/full-history-etl/bin/stellaratlas-full-history-etl
+Environment=FULL_HISTORY_LEDGER_CLOSE_META_FIRST_LEDGER=3
+Environment=FULL_HISTORY_LEDGER_CLOSE_META_FETCH_CONCURRENCY=12
+Environment=FULL_HISTORY_LEDGER_CLOSE_META_PROCESSING_CONCURRENCY=4
+Environment=FULL_HISTORY_LEDGER_CLOSE_META_SHARD_LEDGERS=1024
+Environment=FULL_HISTORY_LEDGER_CLOSE_META_CYCLE_LEDGERS=8192
+Environment=FULL_HISTORY_LEDGER_CLOSE_META_INGRESS_BYTES_PER_SECOND=187500000
+Environment=FULL_HISTORY_LEDGER_CLOSE_META_INGRESS_BURST_BYTES=18750000
+Environment=FULL_HISTORY_LEDGER_CLOSE_META_MINIMUM_FREE_BYTES=5497558138880
+Environment=FULL_HISTORY_LEDGER_CLOSE_META_MINIMUM_FREE_BASIS_POINTS=1000
+Environment=FULL_HISTORY_LEDGER_CLOSE_META_MAXIMUM_STORED_BYTES=43980465111040
+Environment=FULL_HISTORY_LEDGER_CLOSE_META_REQUEST_TIMEOUT_MS=60000
+Environment=FULL_HISTORY_LEDGER_CLOSE_META_PROCESS_TIMEOUT_MS=3600000
+Environment=FULL_HISTORY_LEDGER_CLOSE_META_ERROR_BACKOFF_MS=30000
+Environment=FULL_HISTORY_LEDGER_CLOSE_META_IDLE_POLL_MS=30000
+EnvironmentFile=-/etc/stellaratlas/stellaratlas.env
+ExecStartPre=/usr/bin/test -x /mnt/bulk/stellarbeat-data/Observer/apps/full-history-etl/bin/stellaratlas-full-history-etl
+ExecStartPre=/usr/bin/env node scripts/wait-for-url.mjs http://192.168.1.221:3000/v1/status 90
+ExecStart=/usr/bin/env pnpm start:full-history-ledger-close-meta
+Restart=always
+RestartSec=15
+TimeoutStopSec=120
+KillSignal=SIGTERM
+CPUQuota=800%
+CPUWeight=50
+IOWeight=50
+Nice=5
+LimitNOFILE=16384
+LimitCORE=0
+TasksMax=128
+MemoryMax=64G
+MemorySwapMax=0
+NoNewPrivileges=true
+
+[Install]
+WantedBy=multi-user.target
