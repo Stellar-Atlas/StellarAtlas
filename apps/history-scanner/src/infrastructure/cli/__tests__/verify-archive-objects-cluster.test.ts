@@ -10,8 +10,8 @@ describe('verify-archive-objects-cluster', () => {
 		expect(plan).toEqual({
 			maximumActiveDownloads: 8,
 			perProcessHasherWorkers: 1,
-			processCount: 24,
-			totalHasherWorkers: 24
+			processCount: 40,
+			totalHasherWorkers: 40
 		});
 	});
 
@@ -25,7 +25,7 @@ describe('verify-archive-objects-cluster', () => {
 		);
 
 		expect(plan).toEqual({
-			maximumActiveDownloads: 4,
+			maximumActiveDownloads: 8,
 			perProcessHasherWorkers: 2,
 			processCount: 12,
 			totalHasherWorkers: 24
@@ -35,19 +35,21 @@ describe('verify-archive-objects-cluster', () => {
 	it('rejects unbounded object worker process counts', () => {
 		expect(() =>
 			createHistoryArchiveObjectClusterPlan(
-				{ HISTORY_OBJECT_WORKER_PROCESSES: '25' },
+				{ HISTORY_OBJECT_WORKER_PROCESSES: '32768' },
 				48
 			)
-		).toThrow('HISTORY_OBJECT_WORKER_PROCESSES must be between 1 and 24');
+		).toThrow(
+			'HISTORY_OBJECT_WORKER_PROCESSES must be between 1 and 32767'
+		);
 	});
 
 	it('rejects unbounded object hasher worker counts', () => {
 		expect(() =>
 			createHistoryArchiveObjectClusterPlan(
-				{ HISTORY_HASHER_WORKERS: '25' },
+				{ HISTORY_HASHER_WORKERS: '32768' },
 				48
 			)
-		).toThrow('HISTORY_HASHER_WORKERS must be between 1 and 24');
+		).toThrow('HISTORY_HASHER_WORKERS must be between 1 and 32767');
 	});
 
 	it('replaces an exited nonzero worker with the same stable index', () => {

@@ -77,8 +77,7 @@ import { ReleaseHistoryArchiveObject } from '../../use-cases/release-history-arc
 import { HistoryArchiveObjectEventRecorder } from '../../use-cases/record-history-archive-object-event/HistoryArchiveObjectEventRecorder.js';
 import { ReportHistoryArchiveWorkerStatus } from '../../use-cases/report-history-archive-worker-status/ReportHistoryArchiveWorkerStatus.js';
 import type { HistoryArchiveWorkerStatusRepository } from '../../domain/history-archive-worker/HistoryArchiveWorkerStatus.js';
-import { HistoryArchiveWorkerStatusRow } from '../database/entities/HistoryArchiveWorkerStatusRow.js';
-import { TypeOrmHistoryArchiveWorkerStatusRepository } from '../repositories/database/TypeOrmHistoryArchiveWorkerStatusRepository.js';
+import { InMemoryHistoryArchiveWorkerStatusRepository } from '../repositories/memory/InMemoryHistoryArchiveWorkerStatusRepository.js';
 import type { KnownArchiveEvidenceRepository } from '../../domain/known-archive-evidence/KnownArchiveEvidenceRepository.js';
 import { TypeOrmKnownArchiveEvidenceRepository } from '../repositories/database/TypeOrmKnownArchiveEvidenceRepository.js';
 import { GetKnownArchiveEvidence } from '../../use-cases/get-known-archive-evidence/GetKnownArchiveEvidence.js';
@@ -242,12 +241,8 @@ export function load(container: Container, config: Config) {
 		.bind<HistoryArchiveWorkerStatusRepository>(
 			TYPES.HistoryArchiveWorkerStatusRepository
 		)
-		.toDynamicValue(() => {
-			return new TypeOrmHistoryArchiveWorkerStatusRepository(
-				dataSource.getRepository(HistoryArchiveWorkerStatusRow)
-			);
-		})
-		.inRequestScope();
+		.to(InMemoryHistoryArchiveWorkerStatusRepository)
+		.inSingletonScope();
 
 	container
 		.bind<KnownArchiveEvidenceRepository>(TYPES.KnownArchiveEvidenceRepository)

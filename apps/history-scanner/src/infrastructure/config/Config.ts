@@ -3,6 +3,7 @@ import { err, ok, Result } from 'neverthrow';
 import { availableParallelism } from 'node:os';
 import { dirname, resolve } from 'node:path';
 import { resolveAppEnvPath } from 'shared/lib/env/resolve-app-env-path.js';
+import { historyArchiveWorkerSlotLimit } from 'history-scanner-dto';
 import {
 	type CoordinatorAuthConfig,
 	isCoordinatorAuthMode
@@ -61,7 +62,7 @@ const defaultConfig = {
 	historyBucketCacheMaxBytes: 10 * 1024 * 1024 * 1024 * 1024
 };
 
-const maxHistoryHasherWorkers = 24;
+const maxHistoryHasherWorkers = historyArchiveWorkerSlotLimit - 1;
 const maxHistoryParallelRequests = 24;
 const maxHistoryScanWorkers = 24;
 

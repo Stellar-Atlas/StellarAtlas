@@ -186,7 +186,9 @@ export class CompleteHistoryArchiveObject {
 					});
 
 		return [
-			...buildHistoryArchiveObjectsFromState(snapshot),
+			...buildHistoryArchiveObjectsFromState(snapshot, {
+				rootStatus: 'verified'
+			}),
 			...olderCheckpointObjects
 		];
 	}

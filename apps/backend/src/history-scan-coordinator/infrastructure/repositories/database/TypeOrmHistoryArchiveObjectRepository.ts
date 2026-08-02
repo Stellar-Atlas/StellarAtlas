@@ -22,7 +22,6 @@ import {
 	normalizeLimit,
 	statusRankSql
 } from './HistoryArchiveObjectRowMapper.js';
-import { createActiveUpdate } from './HistoryArchiveObjectUpdateFactory.js';
 import { findOldestCheckpointLedgers } from './HistoryArchiveObjectCheckpointQuery.js';
 import { claimHistoryArchiveObject } from './HistoryArchiveObjectClaimRunner.js';
 import { getHistoryArchiveObjectSummary } from './HistoryArchiveObjectSummaryQuery.js';
@@ -39,7 +38,8 @@ import {
 	markHistoryArchiveObjectVerified,
 	markHistoryArchiveTransitionEffectsCompleted,
 	releaseHistoryArchiveObject,
-	releaseStaleHistoryArchiveObjects
+	releaseStaleHistoryArchiveObjects,
+	touchHistoryArchiveObjectClaim
 } from './HistoryArchiveObjectLeaseWrite.js';
 import {
 	materializeHistoryArchiveCheckpointDependencies,
@@ -58,7 +58,6 @@ const maxActiveObjectsPerHost = historyArchivePerHostConcurrency;
 const maxActiveObjectsTotal = historyArchiveConsumerCount;
 const transitionReconciliationLockName =
 	'history_archive_object_transition_reconciliation';
-const asynchronousProgressCommitSql = 'set local synchronous_commit = off';
 
 @injectable()
 export class TypeOrmHistoryArchiveObjectRepository implements HistoryArchiveObjectRepository {
@@ -246,17 +245,11 @@ export class TypeOrmHistoryArchiveObjectRepository implements HistoryArchiveObje
 		progress?: HistoryArchiveObjectProgressUpdate
 	): Promise<boolean> {
 		if (progress === undefined) return false;
-		if (progress.verificationFacts !== undefined) {
-			return await updateActiveObject(this.repository, remoteId, progress);
-		}
-		return await this.repository.manager.transaction(async (manager) => {
-			await manager.query(asynchronousProgressCommitSql);
-			return await updateActiveObject(
-				manager.getRepository(HistoryArchiveObject),
-				remoteId,
-				progress
-			);
-		});
+		return await touchHistoryArchiveObjectClaim(
+			this.repository,
+			remoteId,
+			progress.claimAttempt
+		);
 	}
 
 	async markObjectFailed(
@@ -406,31 +399,13 @@ export class TypeOrmHistoryArchiveObjectRepository implements HistoryArchiveObje
 	}
 }
 
-async function updateActiveObject(
-	repository: Repository<HistoryArchiveObject>,
-	remoteId: string,
-	progress: HistoryArchiveObjectProgressUpdate
-): Promise<boolean> {
-	const result = await repository
-		.createQueryBuilder()
-		.update(HistoryArchiveObject)
-		.set(createActiveUpdate(progress))
-		.where('"remoteId" = :remoteId', { remoteId })
-		.andWhere('status = :status', { status: 'scanning' })
-		.andWhere('attempts = :claimAttempt', {
-			claimAttempt: progress.claimAttempt
-		})
-		.execute();
-	return (result.affected ?? 0) > 0;
-}
-
 const workerSnapshotSql = `
 	with scanning as (
 		select
 			count(object.id)::int as "totalScanningObjects",
-			count(object.id) filter (where object."updatedAt" >= $1)::int
+			count(object.id) filter (where slot."updatedAt" >= $1)::int
 				as "activeObjects",
-			count(object.id) filter (where object."updatedAt" < $1)::int
+			count(object.id) filter (where slot."updatedAt" < $1)::int
 				as "staleObjects"
 		from "history_archive_object_claim_slot" slot
 		left join "history_archive_object_queue" object

@@ -30,11 +30,33 @@ const transactionSettingsSql = `
 	set local statement_timeout = '1s'
 `;
 const postFallbackRetryDelaysMs = [0, 5, 10, 20, 40] as const;
+let claimSlotCapacityReady: Promise<void> | undefined;
+
+async function ensureClaimSlotCapacity(
+	repository: Repository<HistoryArchiveObject>
+): Promise<void> {
+	claimSlotCapacityReady ??= repository.manager
+		.query(
+			`
+				insert into "history_archive_object_claim_slot" ("slot")
+				select generate_series(0, $1 - 1)::smallint
+				on conflict ("slot") do nothing
+			`,
+			[historyArchiveConsumerCount]
+		)
+		.then(() => undefined)
+		.catch((error: unknown) => {
+			claimSlotCapacityReady = undefined;
+			throw error;
+		});
+	await claimSlotCapacityReady;
+}
 
 export async function claimHistoryArchiveObject(
 	repository: Repository<HistoryArchiveObject>,
 	supportedTypes: readonly HistoryArchiveObjectType[]
 ): Promise<HistoryArchiveObject | null> {
+	await ensureClaimSlotCapacity(repository);
 	const claimed = await claimWithBoundedContentionFallback(
 		() => runClaimAttempt(repository, supportedTypes, false),
 		() => runClaimAttempt(repository, supportedTypes, true)

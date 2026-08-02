@@ -1,7 +1,7 @@
 import { injectable } from 'inversify';
 import type { EntityManager, Repository } from 'typeorm';
 import {
-	historyArchiveWorkerSlotCount,
+	historyArchiveWorkerSlotLimit,
 	type HistoryArchiveWorkerReportDTO
 } from 'history-scanner-dto';
 import type {
@@ -305,7 +305,7 @@ function toWorkerSlotIndex(value: number): number {
 	if (
 		!Number.isSafeInteger(value) ||
 		value < 0 ||
-		value >= historyArchiveWorkerSlotCount
+		value >= historyArchiveWorkerSlotLimit
 	) {
 		throw new Error('Invalid history archive worker slot index');
 	}

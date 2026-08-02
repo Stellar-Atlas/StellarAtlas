@@ -5,7 +5,6 @@ import type { HistoryArchiveObjectRepository } from '../../domain/history-archiv
 import type { HistoryArchiveCheckpointProofRepository } from '../../domain/history-archive-checkpoint-proof/HistoryArchiveCheckpointProofRepository.js';
 import { TYPES } from '../../infrastructure/di/di-types.js';
 import { mapUnknownToError } from '@core/utilities/mapUnknownToError.js';
-import { HistoryArchiveObjectEventRecorder } from '../record-history-archive-object-event/HistoryArchiveObjectEventRecorder.js';
 
 @injectable()
 export class ReleaseHistoryArchiveObject {
@@ -13,8 +12,7 @@ export class ReleaseHistoryArchiveObject {
 		@inject(TYPES.HistoryArchiveObjectRepository)
 		private readonly objectRepository: HistoryArchiveObjectRepository,
 		@inject(TYPES.HistoryArchiveCheckpointProofRepository)
-		private readonly checkpointProofRepository: HistoryArchiveCheckpointProofRepository,
-		private readonly eventRecorder: HistoryArchiveObjectEventRecorder
+		private readonly checkpointProofRepository: HistoryArchiveCheckpointProofRepository
 	) {}
 
 	async execute(
@@ -32,10 +30,6 @@ export class ReleaseHistoryArchiveObject {
 					if (object.checkpointLedger !== null || object.bucketHash !== null) {
 						await this.checkpointProofRepository.refreshForObject(object);
 					}
-					await this.eventRecorder.record(object, {
-						claimAttempt,
-						eventType: 'released'
-					});
 				}
 			}
 

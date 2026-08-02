@@ -4,7 +4,7 @@ import type { ExceptionLogger } from 'exception-logger';
 import type { Logger } from 'logger';
 import { mapUnknownToError } from 'shared';
 import {
-	historyArchiveWorkerSlotCount,
+	historyArchiveWorkerSlotLimit,
 	type HistoryArchiveWorkerOutcomeDTO,
 	type HistoryArchiveWorkerReportDTO,
 	type HistoryArchiveWorkerStageDTO
@@ -304,5 +304,5 @@ function readProcessIndex(value: string | undefined): number | null {
 
 function readWorkerSlotIndex(value: string | undefined): number | null {
 	const index = readProcessIndex(value);
-	return index !== null && index < historyArchiveWorkerSlotCount ? index : null;
+	return index !== null && index < historyArchiveWorkerSlotLimit ? index : null;
 }

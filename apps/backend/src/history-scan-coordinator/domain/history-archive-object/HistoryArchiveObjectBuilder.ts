@@ -51,15 +51,22 @@ export function buildHistoryArchiveObjectsFromState(
 
 	const checkpointLedger = getCheckpointLedger(snapshot.rawState.currentLedger);
 	if (checkpointLedger !== null) {
-		objects.push(
-			createCheckpointObject(
+		for (const scheduledCheckpoint of new Set([
+			checkpointLedger,
+			checkpointFrequency - 1
+		])) {
+			const checkpointObject = createCheckpointObject(
 				snapshot,
 				archiveUrl,
-				checkpointLedger,
+				scheduledCheckpoint,
 				'checkpoint-state',
 				options.rootStatus === 'verified'
-			)
-		);
+			);
+			if (scheduledCheckpoint === checkpointFrequency - 1) {
+				checkpointObject.executionReason = 'canonical-frontier-reserve';
+			}
+			objects.push(checkpointObject);
+		}
 	}
 
 	return dedupeObjects(objects);

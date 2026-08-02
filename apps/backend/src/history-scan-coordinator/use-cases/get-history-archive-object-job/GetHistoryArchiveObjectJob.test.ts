@@ -3,7 +3,6 @@ import type { Logger } from 'logger';
 import type { HistoryArchiveCheckpointProofRepository } from '../../domain/history-archive-checkpoint-proof/HistoryArchiveCheckpointProofRepository.js';
 import { HistoryArchiveObject } from '../../domain/history-archive-object/HistoryArchiveObject.js';
 import type { HistoryArchiveObjectRepository } from '../../domain/history-archive-object/HistoryArchiveObjectRepository.js';
-import type { HistoryArchiveObjectEventRecorder } from '../record-history-archive-object-event/HistoryArchiveObjectEventRecorder.js';
 import type { ReconcileHistoryArchiveObjectTransitions } from '../reconcile-history-archive-object-transitions/ReconcileHistoryArchiveObjectTransitions.js';
 import { GetHistoryArchiveObjectJob } from './GetHistoryArchiveObjectJob.js';
 
@@ -17,14 +16,12 @@ describe('GetHistoryArchiveObjectJob', () => {
 		objectRepository.releaseStaleObjects.mockResolvedValue([stale]);
 		objectRepository.claimNextObject.mockResolvedValue(claimed);
 		const proofRepository = mock<HistoryArchiveCheckpointProofRepository>();
-		const eventRecorder = mock<HistoryArchiveObjectEventRecorder>();
 		const transitionReconciler =
 			mock<ReconcileHistoryArchiveObjectTransitions>();
 		transitionReconciler.executeIfDue.mockResolvedValue();
 		const useCase = new GetHistoryArchiveObjectJob(
 			objectRepository,
 			proofRepository,
-			eventRecorder,
 			transitionReconciler,
 			mock<Logger>()
 		);
@@ -35,14 +32,6 @@ describe('GetHistoryArchiveObjectJob', () => {
 		});
 		expect(proofRepository.refreshForObject).toHaveBeenNthCalledWith(1, stale);
 		expect(proofRepository.refreshForObject).toHaveBeenCalledTimes(1);
-		expect(eventRecorder.recordDurably).toHaveBeenCalledWith(stale, {
-			claimAttempt: 1,
-			eventType: 'released'
-		});
-		expect(eventRecorder.record).toHaveBeenCalledWith(claimed, {
-			claimAttempt: 2,
-			eventType: 'claimed'
-		});
 		expect(transitionReconciler.executeIfDue).toHaveBeenCalledTimes(1);
 	});
 
@@ -56,7 +45,6 @@ describe('GetHistoryArchiveObjectJob', () => {
 		const useCase = new GetHistoryArchiveObjectJob(
 			objectRepository,
 			mock<HistoryArchiveCheckpointProofRepository>(),
-			mock<HistoryArchiveObjectEventRecorder>(),
 			transitionReconciler,
 			mock<Logger>()
 		);
@@ -77,7 +65,6 @@ describe('GetHistoryArchiveObjectJob', () => {
 		const useCase = new GetHistoryArchiveObjectJob(
 			objectRepository,
 			mock<HistoryArchiveCheckpointProofRepository>(),
-			mock<HistoryArchiveObjectEventRecorder>(),
 			transitionReconciler,
 			mock<Logger>()
 		);
@@ -101,7 +88,6 @@ describe('GetHistoryArchiveObjectJob', () => {
 		const useCase = new GetHistoryArchiveObjectJob(
 			objectRepository,
 			proofRepository,
-			mock<HistoryArchiveObjectEventRecorder>(),
 			transitionReconciler,
 			mock<Logger>()
 		);
@@ -112,35 +98,6 @@ describe('GetHistoryArchiveObjectJob', () => {
 		expect(proofRepository.refreshForObject).not.toHaveBeenCalled();
 	});
 
-	it('returns a committed claim without waiting for event persistence', async () => {
-		const claimed = checkpointObject(319, 'scanning');
-		const objectRepository = mock<HistoryArchiveObjectRepository>();
-		objectRepository.releaseStaleObjects.mockResolvedValue([]);
-		objectRepository.claimNextObject.mockResolvedValue(claimed);
-		const eventRecorder = mock<HistoryArchiveObjectEventRecorder>();
-		let completeEvent: (() => void) | undefined;
-		eventRecorder.record.mockReturnValue(
-			new Promise<void>((resolve) => {
-				completeEvent = resolve;
-			})
-		);
-		const transitionReconciler =
-			mock<ReconcileHistoryArchiveObjectTransitions>();
-		transitionReconciler.executeIfDue.mockResolvedValue();
-		const useCase = new GetHistoryArchiveObjectJob(
-			objectRepository,
-			mock<HistoryArchiveCheckpointProofRepository>(),
-			eventRecorder,
-			transitionReconciler,
-			mock<Logger>()
-		);
-
-		await expect(useCase.execute()).resolves.toMatchObject({
-			value: expect.objectContaining({ remoteId: claimed.remoteId })
-		});
-		expect(eventRecorder.record).toHaveBeenCalledTimes(1);
-		completeEvent?.();
-	});
 });
 
 function checkpointObject(

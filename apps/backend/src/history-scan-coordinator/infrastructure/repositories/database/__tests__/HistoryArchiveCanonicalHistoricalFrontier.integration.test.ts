@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto';
 import { DataSource } from 'typeorm';
+import { historyArchiveConsumerCount } from '@history-scan-coordinator/domain/history-archive-object/HistoryArchiveObjectPlanningPolicy.js';
 import { HistoryArchiveCheckpointProof } from '../../../../domain/history-archive-checkpoint-proof/HistoryArchiveCheckpointProof.js';
 import { HistoryArchiveObject } from '../../../../domain/history-archive-object/HistoryArchiveObject.js';
 import { HistoryArchiveObjectEventMigration1784370000000 } from '../../../database/migrations/1784370000000-HistoryArchiveObjectEventMigration.js';
@@ -161,7 +162,9 @@ describe('bidirectional canonical archive frontier', () => {
 			{ checkpointLedger: forwardCheckpoint, count: 12 }
 		]);
 		expect(perHost.every((row) => row.count <= 2)).toBe(true);
-		expect(runnable?.count).toBeLessThanOrEqual(24);
+		expect(runnable?.count).toBeLessThanOrEqual(
+			historyArchiveConsumerCount
+		);
 	});
 });
 

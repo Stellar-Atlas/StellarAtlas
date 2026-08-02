@@ -10,7 +10,6 @@ import type { HistoryArchiveObjectRepository } from '../../domain/history-archiv
 import type { HistoryArchiveCheckpointProofRepository } from '../../domain/history-archive-checkpoint-proof/HistoryArchiveCheckpointProofRepository.js';
 import { TYPES } from '../../infrastructure/di/di-types.js';
 import { mapUnknownToError } from '@core/utilities/mapUnknownToError.js';
-import { HistoryArchiveObjectEventRecorder } from '../record-history-archive-object-event/HistoryArchiveObjectEventRecorder.js';
 import { ReconcileHistoryArchiveObjectTransitions } from '../reconcile-history-archive-object-transitions/ReconcileHistoryArchiveObjectTransitions.js';
 
 export interface HistoryArchiveObjectJobDTO {
@@ -44,7 +43,6 @@ export class GetHistoryArchiveObjectJob {
 		private readonly objectRepository: HistoryArchiveObjectRepository,
 		@inject(TYPES.HistoryArchiveCheckpointProofRepository)
 		private readonly checkpointProofRepository: HistoryArchiveCheckpointProofRepository,
-		private readonly eventRecorder: HistoryArchiveObjectEventRecorder,
 		private readonly transitionReconciler: ReconcileHistoryArchiveObjectTransitions,
 		@inject('Logger') private readonly logger: Logger
 	) {}
@@ -55,12 +53,10 @@ export class GetHistoryArchiveObjectJob {
 			const staleObjects = await this.releaseStaleObjectsIfDue();
 			for (const staleObject of staleObjects) {
 				this.refreshProofInBackground(staleObject);
-				this.recordReleaseInBackground(staleObject);
 			}
 			const object =
 				await this.objectRepository.claimNextObject(supportedObjectTypes);
 			if (object === null) return ok(null);
-			this.recordClaimInBackground(object);
 
 			return ok({
 				archiveUrl: object.archiveUrl,
@@ -116,40 +112,6 @@ export class GetHistoryArchiveObjectJob {
 		});
 	}
 
-	private recordClaimInBackground(object: HistoryArchiveObject): void {
-		void Promise.resolve(
-			this.eventRecorder.record(object, {
-				claimAttempt: object.attempts,
-				eventType: 'claimed'
-			})
-		).catch((error: unknown) => {
-			this.logBackgroundEventError(object, 'claimed', error);
-		});
-	}
-
-	private recordReleaseInBackground(object: HistoryArchiveObject): void {
-		void Promise.resolve(
-			this.eventRecorder.recordDurably(object, {
-				claimAttempt: object.attempts,
-				eventType: 'released'
-			})
-		).catch((error: unknown) => {
-			this.logBackgroundEventError(object, 'released', error);
-		});
-	}
-
-	private logBackgroundEventError(
-		object: HistoryArchiveObject,
-		eventType: 'claimed' | 'released',
-		error: unknown
-	): void {
-		this.logger.error('Failed to record archive object background event', {
-			app: 'history-scan-coordinator',
-			errorMessage: mapUnknownToError(error).message,
-			eventType,
-			remoteId: object.remoteId
-		});
-	}
 }
 
 function getStaleObjectCutoff(now = Date.now()): Date {

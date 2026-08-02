@@ -74,7 +74,7 @@ describe('Config', () => {
 				historyBucketCacheMaxBytes: 10 * 1024 * 1024 * 1024 * 1024
 			});
 			expect(result.value.historyHasherWorkers).toBeGreaterThanOrEqual(1);
-			expect(result.value.historyHasherWorkers).toBeLessThanOrEqual(24);
+			expect(result.value.historyHasherWorkers).toBeLessThanOrEqual(32_767);
 		});
 
 		test('should require SENTRY_DSN when ENABLE_SENTRY is true', () => {
@@ -120,13 +120,13 @@ describe('Config', () => {
 		});
 
 		test('should validate HISTORY_HASHER_WORKERS maximum', () => {
-			process.env.HISTORY_HASHER_WORKERS = '25';
+			process.env.HISTORY_HASHER_WORKERS = '32768';
 
 			const result = getConfigFromEnv();
 			expect(result.isErr()).toBe(true);
 			if (!result.isErr()) throw new Error('Expected error');
 			expect(result.error.message).toContain(
-				'HISTORY_HASHER_WORKERS must be between 1 and 24'
+				'HISTORY_HASHER_WORKERS must be between 1 and 32767'
 			);
 		});
 

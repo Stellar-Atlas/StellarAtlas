@@ -48,11 +48,11 @@ describe('history scanner runtime scripts', () => {
 			'ops/systemd/stellaratlas-history-scanner@.service'
 		);
 
-		expect(service).toContain('Environment=HISTORY_OBJECT_WORKER_PROCESSES=24');
+		expect(service).not.toContain('Environment=HISTORY_OBJECT_WORKER_PROCESSES=');
 		expect(service).toContain(
 			'Environment=HISTORY_OBJECT_DOWNLOAD_CONCURRENCY=8'
 		);
-		expect(service).toContain('Environment=HISTORY_HASHER_WORKERS=24');
+		expect(service).not.toContain('Environment=HISTORY_HASHER_WORKERS=');
 		expect(service).toContain('Environment=HISTORY_SCAN_WORKERS=1');
 		expect(service).toContain('no more than eight may stream remote');
 		expect(service).toContain('ExecStart=/usr/bin/env pnpm start:scan-history');

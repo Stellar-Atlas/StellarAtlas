@@ -50,7 +50,7 @@ export const historyArchiveWorkerOutcomes = [
 export type HistoryArchiveWorkerOutcomeDTO =
 	(typeof historyArchiveWorkerOutcomes)[number];
 
-export const historyArchiveWorkerSlotCount = 24;
+import { historyArchiveWorkerSlotLimit } from './HistoryArchiveWorkerCapacity.js';
 
 export interface HistoryArchiveWorkerObjectDTO {
 	readonly remoteId: string;
@@ -73,6 +73,23 @@ export interface HistoryArchiveWorkerReportDTO {
 	readonly slotIndex: number;
 	readonly stage: HistoryArchiveWorkerStageDTO;
 	readonly workerId: string;
+}
+
+const workerStatusMessageType = 'history-archive-worker-status';
+
+export interface HistoryArchiveWorkerStatusIpcMessageDTO {
+	readonly heartbeatAt: string;
+	readonly report: HistoryArchiveWorkerReportDTO;
+	readonly type: typeof workerStatusMessageType;
+}
+
+export function isHistoryArchiveWorkerStatusIpcMessageDTO(
+	value: unknown
+): value is HistoryArchiveWorkerStatusIpcMessageDTO {
+	if (!isRecord(value)) return false;
+	if (value.type !== workerStatusMessageType) return false;
+	if (!isDateTime(value.heartbeatAt)) return false;
+	return isHistoryArchiveWorkerReportDTO(value.report);
 }
 
 const uuidPattern =
@@ -205,7 +222,7 @@ function isOptionalNullableNonNegativeInteger(
 }
 
 function isWorkerSlotIndex(value: unknown): value is number {
-	return isNonNegativeInteger(value) && value < historyArchiveWorkerSlotCount;
+	return isNonNegativeInteger(value) && value < historyArchiveWorkerSlotLimit;
 }
 
 function isNonNegativeInteger(value: unknown): value is number {

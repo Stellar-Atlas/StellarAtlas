@@ -1,10 +1,11 @@
 import { availableParallelism } from 'node:os';
+import {
+	calculateHistoryArchiveObjectWorkerProcesses,
+	historyArchiveDownloadConcurrency,
+	historyArchiveWorkerSlotLimit
+} from 'history-scanner-dto';
 
-const defaultObjectWorkerProcesses = 24;
-const defaultTotalHasherWorkers = 24;
-const defaultMaximumActiveDownloads = 8;
-const maxObjectHasherWorkers = 24;
-const maxObjectWorkerProcesses = 24;
+const maximumConfiguredWorkerProcesses = historyArchiveWorkerSlotLimit - 1;
 
 export interface HistoryArchiveObjectClusterPlan {
 	readonly maximumActiveDownloads: number;
@@ -66,23 +67,21 @@ export function createHistoryArchiveObjectClusterPlan(
 	const processCount = readBoundedPositiveInteger(
 		env,
 		'HISTORY_OBJECT_WORKER_PROCESSES',
-		Math.min(defaultObjectWorkerProcesses, Math.max(cpuCount - 1, 1)),
-		maxObjectWorkerProcesses
+		calculateHistoryArchiveObjectWorkerProcesses(cpuCount),
+		maximumConfiguredWorkerProcesses
 	);
-	const totalHasherWorkers = readBoundedPositiveInteger(
+	const configuredHasherWorkers = readBoundedPositiveInteger(
 		env,
 		'HISTORY_HASHER_WORKERS',
-		Math.min(defaultTotalHasherWorkers, Math.max(cpuCount - 1, 1)),
-		maxObjectHasherWorkers
+		processCount,
+		maximumConfiguredWorkerProcesses
 	);
+	const totalHasherWorkers = Math.max(configuredHasherWorkers, processCount);
 	const maximumActiveDownloads = readBoundedPositiveInteger(
 		env,
 		'HISTORY_OBJECT_DOWNLOAD_CONCURRENCY',
-		Math.min(
-			defaultMaximumActiveDownloads,
-			Math.max(Math.floor(processCount / 3), 1)
-		),
-		Math.max(Math.floor(processCount / 3), 1)
+		Math.min(historyArchiveDownloadConcurrency, processCount),
+		Math.min(historyArchiveDownloadConcurrency, processCount)
 	);
 
 	return {

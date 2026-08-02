@@ -34,6 +34,30 @@ export async function markHistoryArchiveObjectVerified(
 	});
 }
 
+export async function touchHistoryArchiveObjectClaim(
+	repository: Repository<HistoryArchiveObject>,
+	remoteId: string,
+	claimAttempt: number
+): Promise<boolean> {
+	const rows = (await repository.manager.query(
+		`
+			update "history_archive_object_claim_slot" slot
+			set "updatedAt" = now()
+			where slot."objectRemoteId" = $1::uuid
+				and exists (
+					select 1
+					from "history_archive_object_queue" object
+					where object."remoteId" = $1::uuid
+						and object.status = 'scanning'
+						and object.attempts = $2
+				)
+			returning slot.slot
+		`,
+		[remoteId, claimAttempt]
+	)) as readonly unknown[];
+	return rows.length > 0;
+}
+
 export async function releaseHistoryArchiveObject(
 	repository: Repository<HistoryArchiveObject>,
 	remoteId: string,
@@ -144,14 +168,16 @@ export const historyArchiveObjectStaleReleaseSql = `
 			hashtext('history_archive_object_stale_release')
 		) as locked
 	), candidates as (
-		select id
-		from "history_archive_object_queue"
+		select object.id
+		from "history_archive_object_claim_slot" slot
+		join "history_archive_object_queue" object
+			on object."remoteId" = slot."objectRemoteId"
+			and object.status = 'scanning'
 		cross join maintenance_guard
 		where maintenance_guard.locked
-			and status = 'scanning'
-			and "updatedAt" < $1
-		order by "updatedAt", id
-		for update skip locked
+			and slot."updatedAt" < $1
+		order by slot."updatedAt", object.id
+		for update of slot, object skip locked
 		limit $2
 	), released as (
 		update "history_archive_object_queue" object

@@ -1,6 +1,11 @@
 import 'reflect-metadata';
+import { availableParallelism } from 'node:os';
 import { inject, injectable } from 'inversify';
 import { err, ok, Result } from 'neverthrow';
+import {
+	calculateHistoryArchiveObjectWorkerProcesses,
+	historyArchiveWorkerSlotLimit
+} from 'history-scanner-dto';
 import { GetScannerMetrics } from '@history-scan-coordinator/use-cases/GetScannerMetrics.js';
 import { TYPES as HISTORY_TYPES } from '@history-scan-coordinator/infrastructure/di/di-types.js';
 import type { HistoryArchiveObjectRepository } from '@history-scan-coordinator/domain/history-archive-object/HistoryArchiveObjectRepository.js';
@@ -16,8 +21,9 @@ const archiveObjectWorkerPublicRetentionMs = 15 * 60 * 1000;
 const archiveObjectWorkerStorageRetentionMs = 24 * 60 * 60 * 1000;
 const archiveObjectWorkerStartupGraceMs = 2 * 60 * 1000;
 const archiveObjectWorkerRowLimit = 128;
-const defaultConfiguredObjectWorkers = 24;
-const maxConfiguredObjectWorkers = 24;
+const defaultConfiguredObjectWorkers =
+	calculateHistoryArchiveObjectWorkerProcesses(availableParallelism());
+const maxConfiguredObjectWorkers = historyArchiveWorkerSlotLimit - 1;
 
 export interface ArchiveWorkerStatusDTO {
 	readonly status: StatusLevel;

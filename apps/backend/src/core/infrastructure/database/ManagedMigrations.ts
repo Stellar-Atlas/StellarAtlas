@@ -53,6 +53,8 @@ import { HistoryArchiveReadyQueueMigration1785270000000 } from '@history-scan-co
 import { HistoryArchiveReadyQueueIndexesMigration1785280000000 } from '@history-scan-coordinator/infrastructure/database/migrations/1785280000000-HistoryArchiveReadyQueueIndexesMigration.js';
 import { HistoryArchiveCheckpointProofSteadyStateMigration1785290000000 } from '@history-scan-coordinator/infrastructure/database/migrations/1785290000000-HistoryArchiveCheckpointProofSteadyStateMigration.js';
 import { HistoryArchiveWorkerDownloadWaitStageMigration1785300000000 } from '@history-scan-coordinator/infrastructure/database/migrations/1785300000000-HistoryArchiveWorkerDownloadWaitStageMigration.js';
+import { HistoryArchiveDuplicateIdentityIndexMigration1785310000000 } from '@history-scan-coordinator/infrastructure/database/migrations/1785310000000-HistoryArchiveDuplicateIdentityIndexMigration.js';
+import { HistoryArchiveGenesisCheckpointSchedulingMigration1785320000000 } from '@history-scan-coordinator/infrastructure/database/migrations/1785320000000-HistoryArchiveGenesisCheckpointSchedulingMigration.js';
 
 // The production database was imported with a partial legacy migration ledger.
 // Explicit registration prevents TypeORM from replaying pre-baseline migrations.
@@ -111,5 +113,7 @@ export const managedMigrations = [
 	HistoryArchiveReadyQueueMigration1785270000000,
 	HistoryArchiveReadyQueueIndexesMigration1785280000000,
 	HistoryArchiveCheckpointProofSteadyStateMigration1785290000000,
-	HistoryArchiveWorkerDownloadWaitStageMigration1785300000000
+	HistoryArchiveWorkerDownloadWaitStageMigration1785300000000,
+	HistoryArchiveDuplicateIdentityIndexMigration1785310000000,
+	HistoryArchiveGenesisCheckpointSchedulingMigration1785320000000
 ] as const;

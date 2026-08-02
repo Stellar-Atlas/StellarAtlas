@@ -1,4 +1,5 @@
 import { DataSource } from 'typeorm';
+import { historyArchiveConsumerCount } from '@history-scan-coordinator/domain/history-archive-object/HistoryArchiveObjectPlanningPolicy.js';
 import { mock } from 'jest-mock-extended';
 import { HistoryArchiveObject } from '../../../../domain/history-archive-object/HistoryArchiveObject.js';
 import type { HistoryArchiveCheckpointProofRepository } from '../../../../domain/history-archive-checkpoint-proof/HistoryArchiveCheckpointProofRepository.js';
@@ -527,7 +528,7 @@ describe('TypeOrmHistoryArchiveObjectRepository disposable PostgreSQL', () => {
 		expect(claimedIds.length).toBeGreaterThan(0);
 		expect(new Set(claimedIds).size).toBe(claimedIds.length);
 		expect(count).toBe(claimedIds.length);
-		expect(count).toBeLessThanOrEqual(24);
+		expect(count).toBeLessThanOrEqual(historyArchiveConsumerCount);
 	});
 
 	async function save(...objects: HistoryArchiveObject[]): Promise<void> {

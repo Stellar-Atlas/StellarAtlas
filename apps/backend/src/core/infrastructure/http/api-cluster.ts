@@ -7,6 +7,7 @@ import {
 	parseApiWorkerCount,
 	shouldRestartApiWorker
 } from './ApiClusterPolicy.js';
+import { isHistoryArchiveWorkerStatusIpcMessageDTO } from 'history-scanner-dto';
 
 const shutdownTimeoutMs = 30_000;
 type ShutdownSignal = 'SIGINT' | 'SIGTERM';
@@ -49,6 +50,18 @@ function runPrimary(): void {
 		liveWorkerIds.add(worker.id);
 		projectionWriterByWorkerId.set(worker.id, projectionWriter);
 	};
+
+	cluster.on('message', (source, message: unknown) => {
+		if (!isHistoryArchiveWorkerStatusIpcMessageDTO(message)) return;
+		for (const worker of Object.values(cluster.workers ?? {})) {
+			if (worker === undefined || worker.id === source.id) continue;
+			try {
+				worker.send(message);
+			} catch {
+				// A concurrently exiting worker will be replaced by the supervisor.
+			}
+		}
+	});
 
 	const finishShutdownIfDrained = (): void => {
 		if (!shutdownStarted || liveWorkerIds.size > 0) return;

@@ -37,13 +37,19 @@ export {
 } from './HistoryArchiveObjectFailureDTO.js';
 export {
 	historyArchiveObjectTypes,
-	historyArchiveWorkerSlotCount,
 	historyArchiveWorkerOutcomes,
 	historyArchiveWorkerStages,
 	isHistoryArchiveWorkerReportDTO,
+	isHistoryArchiveWorkerStatusIpcMessageDTO,
 	type HistoryArchiveObjectTypeDTO,
 	type HistoryArchiveWorkerObjectDTO,
 	type HistoryArchiveWorkerOutcomeDTO,
 	type HistoryArchiveWorkerReportDTO,
+	type HistoryArchiveWorkerStatusIpcMessageDTO,
 	type HistoryArchiveWorkerStageDTO
 } from './HistoryArchiveWorkerStatusDTO.js';
+export {
+	calculateHistoryArchiveObjectWorkerProcesses,
+	historyArchiveDownloadConcurrency,
+	historyArchiveWorkerSlotLimit
+} from './HistoryArchiveWorkerCapacity.js';
