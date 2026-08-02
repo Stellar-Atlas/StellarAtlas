@@ -246,20 +246,16 @@ export class TypeOrmHistoryArchiveObjectRepository implements HistoryArchiveObje
 		progress?: HistoryArchiveObjectProgressUpdate
 	): Promise<boolean> {
 		if (progress === undefined) return false;
+		if (progress.verificationFacts !== undefined) {
+			return await updateActiveObject(this.repository, remoteId, progress);
+		}
 		return await this.repository.manager.transaction(async (manager) => {
 			await manager.query(asynchronousProgressCommitSql);
-			const result = await manager
-				.getRepository(HistoryArchiveObject)
-				.createQueryBuilder()
-				.update(HistoryArchiveObject)
-				.set(createActiveUpdate(progress))
-				.where('"remoteId" = :remoteId', { remoteId })
-				.andWhere('status = :status', { status: 'scanning' })
-				.andWhere('attempts = :claimAttempt', {
-					claimAttempt: progress.claimAttempt
-				})
-				.execute();
-			return (result.affected ?? 0) > 0;
+			return await updateActiveObject(
+				manager.getRepository(HistoryArchiveObject),
+				remoteId,
+				progress
+			);
 		});
 	}
 
@@ -408,6 +404,24 @@ export class TypeOrmHistoryArchiveObjectRepository implements HistoryArchiveObje
 			maxActiveObjectsTotal
 		});
 	}
+}
+
+async function updateActiveObject(
+	repository: Repository<HistoryArchiveObject>,
+	remoteId: string,
+	progress: HistoryArchiveObjectProgressUpdate
+): Promise<boolean> {
+	const result = await repository
+		.createQueryBuilder()
+		.update(HistoryArchiveObject)
+		.set(createActiveUpdate(progress))
+		.where('"remoteId" = :remoteId', { remoteId })
+		.andWhere('status = :status', { status: 'scanning' })
+		.andWhere('attempts = :claimAttempt', {
+			claimAttempt: progress.claimAttempt
+		})
+		.execute();
+	return (result.affected ?? 0) > 0;
 }
 
 const workerSnapshotSql = `
