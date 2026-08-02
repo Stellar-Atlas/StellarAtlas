@@ -3,11 +3,11 @@ module github.com/Stellar-Atlas/StellarAtlas/apps/full-history-etl
 go 1.26.5
 
 require (
-	github.com/klauspost/compress v1.17.6
+	github.com/klauspost/compress v1.18.7
 	github.com/stellar/go-stellar-sdk v0.6.0
 	github.com/xitongsys/parquet-go v1.6.2
 	github.com/xitongsys/parquet-go-source v0.0.0-20240122235623-d6294584ab18
-	golang.org/x/sys v0.42.0
+	golang.org/x/sys v0.44.0
 )
 
 require (
