@@ -131,12 +131,12 @@ export function buildCheckpointSiblingObjectsFromState(
 	}
 
 	for (const bucketHash of getBucketHashes(snapshot.rawState.currentBuckets)) {
-		objects.push(createBucketObject(snapshot, archiveUrl, bucketHash));
+		objects.push(createBucketObject(snapshot, archiveUrl, checkpointLedger, bucketHash));
 	}
 	for (const bucketHash of getBucketHashes(
 		snapshot.rawState.hotArchiveBuckets ?? []
 	)) {
-		objects.push(createBucketObject(snapshot, archiveUrl, bucketHash));
+		objects.push(createBucketObject(snapshot, archiveUrl, checkpointLedger, bucketHash));
 	}
 
 	return dedupeObjects(objects);
@@ -240,6 +240,7 @@ function createCheckpointObject(
 function createBucketObject(
 	snapshot: HistoryArchiveStateSnapshot,
 	archiveUrl: string,
+	checkpointLedger: number,
 	bucketHash: string
 ): HistoryArchiveObject {
 	const normalizedHash = bucketHash.toLowerCase();
@@ -248,6 +249,7 @@ function createBucketObject(
 		archiveUrl,
 		archiveUrlIdentity: snapshot.archiveUrlIdentity,
 		bucketHash: normalizedHash,
+		checkpointLedger,
 		dependencyReady: true,
 		objectKey: `bucket:${normalizedHash}`,
 		objectOrder: objectOrderByType.bucket,
