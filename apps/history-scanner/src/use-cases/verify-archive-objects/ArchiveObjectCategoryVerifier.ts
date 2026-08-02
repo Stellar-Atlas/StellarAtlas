@@ -65,11 +65,12 @@ export class ArchiveObjectCategoryVerifier {
 	): Promise<
 		Result<HistoryArchiveObjectProgressDTO, HistoryArchiveObjectFailureDTO>
 	> {
-		this.reportProgress(job.remoteId, 'fetching_checkpoint_state', null, null);
 		const urlResult = Url.create(job.objectUrl);
 		if (urlResult.isErr()) return err(this.mapLocalError(urlResult.error));
 
+		this.reportProgress(job.remoteId, 'waiting_for_download_slot', null, null);
 		const releaseDownloadPermit = await this.downloadPermit.acquire();
+		this.reportProgress(job.remoteId, 'fetching_checkpoint_state', null, null);
 		const response = await this.httpService
 			.get(urlResult.value, {
 				responseType: 'json',
@@ -184,11 +185,12 @@ export class ArchiveObjectCategoryVerifier {
 			});
 		}
 
-		this.reportProgress(job.remoteId, workerStages.fetching, 0, null);
 		const urlResult = Url.create(job.objectUrl);
 		if (urlResult.isErr()) return err(this.mapLocalError(urlResult.error));
 
+		this.reportProgress(job.remoteId, 'waiting_for_download_slot', 0, null);
 		const releaseDownloadPermit = await this.downloadPermit.acquire();
+		this.reportProgress(job.remoteId, workerStages.fetching, 0, null);
 		const response = await this.httpService.get(urlResult.value, {
 			responseType: 'stream',
 			connectionTimeoutMs: 10_000,

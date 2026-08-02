@@ -21,6 +21,7 @@ import {
 	checkpointStatusProofIsComplete
 } from '@domain/history-archive-health';
 import { StatusArchiveEvidenceTables } from './archive-status-tables';
+import { getArchiveDownloadActivity } from './archive-download-activity';
 import { ArchiveWorkerStatusTable } from './archive-worker-status-table';
 import { resolveArchiveRuntimeActivity } from './archive-runtime-activity';
 import { RecentScanLogs } from './recent-scan-logs';
@@ -381,6 +382,7 @@ function formatArchiveWorkerDetail(
 	workers: PublicWorkerStatus
 ): string {
 	const objectWorkers = workers.archiveWorkers;
+	const downloadActivity = getArchiveDownloadActivity(objectWorkers.workers);
 	const staleText =
 		activity.staleChecks > 0
 			? `; ${formatInteger(activity.staleChecks)} stale check${activity.staleChecks === 1 ? '' : 's'} being reclaimed`
@@ -389,7 +391,11 @@ function formatArchiveWorkerDetail(
 		activity.activeChecks > 0
 			? `${formatInteger(activity.activeChecks)} active object check${activity.activeChecks === 1 ? '' : 's'}`
 			: 'no active object checks at this instant';
-	return `${formatInteger(objectWorkers.configuredWorkerProcesses)} configured worker processes; ${activeText}${staleText}`;
+	const downloadText =
+		objectWorkers.telemetryMode === 'per-worker'
+			? `; ${formatInteger(downloadActivity.activeDownloads)} network download${downloadActivity.activeDownloads === 1 ? '' : 's'} active; ${formatInteger(downloadActivity.waitingForDownloadSlots)} waiting for a download slot`
+			: '';
+	return `${formatInteger(objectWorkers.configuredWorkerProcesses)} configured worker processes; ${activeText}${downloadText}${staleText}`;
 }
 
 function formatNullableDate(value: string | null): string {

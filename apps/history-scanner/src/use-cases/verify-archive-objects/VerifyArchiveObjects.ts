@@ -220,16 +220,22 @@ export class VerifyArchiveObjects {
 	): Promise<
 		Result<HistoryArchiveObjectCompletionDTO, HistoryArchiveObjectFailureDTO>
 	> {
+		const urlResult = Url.create(job.objectUrl);
+		if (urlResult.isErr()) return err(this.mapLocalError(urlResult.error));
+
+		this.workerTelemetry.updateProgress(
+			job.remoteId,
+			'waiting_for_download_slot',
+			null,
+			null
+		);
+		const releaseDownloadPermit = await this.downloadPermit.acquire();
 		this.workerTelemetry.updateProgress(
 			job.remoteId,
 			'fetching_history_archive_state',
 			null,
 			null
 		);
-		const urlResult = Url.create(job.objectUrl);
-		if (urlResult.isErr()) return err(this.mapLocalError(urlResult.error));
-
-		const releaseDownloadPermit = await this.downloadPermit.acquire();
 		const response = await this.httpService
 			.get(urlResult.value, {
 				responseType: 'json',
@@ -294,16 +300,22 @@ export class VerifyArchiveObjects {
 			});
 		}
 
+		const urlResult = Url.create(job.objectUrl);
+		if (urlResult.isErr()) return err(this.mapLocalError(urlResult.error));
+
+		this.workerTelemetry.updateProgress(
+			job.remoteId,
+			'waiting_for_download_slot',
+			0,
+			null
+		);
+		const releaseDownloadPermit = await this.downloadPermit.acquire();
 		this.workerTelemetry.updateProgress(
 			job.remoteId,
 			'fetching_bucket',
 			0,
 			null
 		);
-		const urlResult = Url.create(job.objectUrl);
-		if (urlResult.isErr()) return err(this.mapLocalError(urlResult.error));
-
-		const releaseDownloadPermit = await this.downloadPermit.acquire();
 		try {
 			const response = await this.httpService.get(urlResult.value, {
 				responseType: 'stream',

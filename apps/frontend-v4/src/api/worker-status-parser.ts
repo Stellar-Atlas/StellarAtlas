@@ -28,7 +28,8 @@ const stages = new Set<ArchiveWorkerStageDTO>([
 	'verified_scp',
 	'fetching_bucket',
 	'downloading_bucket',
-	'verified_bucket'
+	'verified_bucket',
+	'waiting_for_download_slot'
 ]);
 const outcomes = new Set<ArchiveWorkerOutcomeDTO>([
 	'none',

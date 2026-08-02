@@ -13461,7 +13461,8 @@
 							"verified_scp",
 							"fetching_bucket",
 							"downloading_bucket",
-							"verified_bucket"
+							"verified_bucket",
+							"waiting_for_download_slot"
 						]
 					},
 					"workerId": { "type": "string", "maxLength": 96 }
@@ -13654,7 +13655,8 @@
 							"verified_scp",
 							"fetching_bucket",
 							"downloading_bucket",
-							"verified_bucket"
+							"verified_bucket",
+							"waiting_for_download_slot"
 						]
 					},
 					"status": {

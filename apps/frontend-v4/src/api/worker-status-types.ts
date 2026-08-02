@@ -23,7 +23,8 @@ export type ArchiveWorkerStageDTO =
 	| 'verified_scp'
 	| 'fetching_bucket'
 	| 'downloading_bucket'
-	| 'verified_bucket';
+	| 'verified_bucket'
+	| 'waiting_for_download_slot';
 
 export type ArchiveWorkerOutcomeDTO =
 	'none' | 'verified' | 'archive_error' | 'worker_issue' | 'released';

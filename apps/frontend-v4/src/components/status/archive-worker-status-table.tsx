@@ -7,6 +7,7 @@ import type {
 } from '@api/types';
 import { formatArchiveObjectTypeLabel } from '@domain/history-archive';
 import { formatDateTime, formatInteger } from '@format/formatters';
+import { getArchiveDownloadActivity } from './archive-download-activity';
 import { StatusPill } from './status-ui';
 
 const MAX_ARCHIVE_WORKER_SLOTS = 24;
@@ -22,6 +23,7 @@ export function ArchiveWorkerStatusTable({
 		archive.workers,
 		archive.configuredWorkerProcesses
 	);
+	const downloadActivity = getArchiveDownloadActivity(archive.workers);
 	return (
 		<section className="panel detail-panel status-worker-panel">
 			<div className="panel-heading">
@@ -30,7 +32,7 @@ export function ArchiveWorkerStatusTable({
 					<span className="muted-inline">
 						{aggregateOnly
 							? `${formatInteger(archive.activeWorkers)} / ${formatInteger(archive.configuredWorkerProcesses)} active (aggregate telemetry)`
-							: `${formatInteger(archive.freshWorkers)} / ${formatInteger(archive.configuredWorkerProcesses)} fresh${archive.startupGraceActive ? ' during startup' : ''}`}
+							: `${formatInteger(archive.freshWorkers)} / ${formatInteger(archive.configuredWorkerProcesses)} fresh; ${formatInteger(downloadActivity.activeDownloads)} downloading; ${formatInteger(downloadActivity.waitingForDownloadSlots)} waiting for a slot${archive.startupGraceActive ? ' during startup' : ''}`}
 					</span>
 				</div>
 				<StatusPill status={archive.status} />
@@ -170,6 +172,14 @@ function ArchiveWorkerProgress({
 		return (
 			<>
 				No active transfer
+				<small>{attempt}</small>
+			</>
+		);
+	}
+	if (worker.stage === 'waiting_for_download_slot') {
+		return (
+			<>
+				Waiting for download slot
 				<small>{attempt}</small>
 			</>
 		);
