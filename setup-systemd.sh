@@ -497,9 +497,11 @@ Production:
   systemctl restart stellaratlas-full-history-ledger-close-meta.service
   systemctl restart stellaratlas-full-history-state-import.service
 
-Local full-history services, after binaries/config/DB exist:
-  systemctl start stellaratlas-horizon.service
-  systemctl start stellaratlas-stellar-rpc.service
+Owned full-history APIs use the dedicated user-service layout:
+  node scripts/setup-user-full-history-services.mjs --start
+  systemctl --user status stellaratlas-horizon-postgres.service
+  systemctl --user status stellaratlas-horizon.service
+  systemctl --user status stellaratlas-stellar-rpc.service
 
 Staging frontend:
   pnpm build:frontend-v4:staging

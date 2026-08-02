@@ -16,7 +16,7 @@ WorkingDirectory=/home/observe/stellarbeat-data/stellar-rpc/pubnet
 Environment=HOME=/home/observe
 Environment=PATH=/home/observe/stellarbeat-data/stellar-rpc/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 EnvironmentFile=-/etc/stellaratlas/full-history.env
-ExecStart=/usr/bin/env stellar-rpc --config /home/observe/stellarbeat-data/stellar-rpc/pubnet/config/rpc.toml
+ExecStart=/usr/bin/env stellar-rpc --config-path /home/observe/stellarbeat-data/stellar-rpc/pubnet/config/rpc.toml --config-strict
 Restart=always
 RestartSec=10
 TimeoutStopSec=90
