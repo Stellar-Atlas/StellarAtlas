@@ -29,6 +29,7 @@ export class ReconcileHistoryArchiveObjectTransitions {
 
 		await this.objectRepository.tryWithTransitionReconciliationLock(
 			async () => {
+				await this.objectRepository.promotePlannedObjects();
 				const objects = await this.objectRepository.findUnreconciledTransitions(
 					reconciliationBatchSize
 				);
@@ -43,7 +44,6 @@ export class ReconcileHistoryArchiveObjectTransitions {
 						this.logFailure(error, object, 'transition');
 					}
 				}
-				await this.objectRepository.promotePlannedObjects();
 				const checkpoints =
 					await this.objectRepository.findVerifiedCheckpointsNeedingReconciliation(
 						reconciliationBatchSize
