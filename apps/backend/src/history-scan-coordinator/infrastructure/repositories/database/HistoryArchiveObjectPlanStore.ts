@@ -78,7 +78,14 @@ export async function promoteHistoryArchiveObjectPlans(
 			outstandingObjects: Number(counts?.outstandingObjects ?? 0),
 			recentCompletions: Number(counts?.recentCompletions ?? 0)
 		});
-		if (pressure.availableSlots === 0) {
+		const maximumWatermarkHeadroom = Math.max(
+			0,
+			historyArchiveMaximumWatermark - pressure.outstandingObjects
+		);
+		if (
+			pressure.availableSlots === 0 &&
+			maximumWatermarkHeadroom === 0
+		) {
 			return { ...pressure, promotedObjects: 0 };
 		}
 
@@ -86,10 +93,7 @@ export async function promoteHistoryArchiveObjectPlans(
 			pressure.availableSlots,
 			historyArchivePerRootFrontier,
 			genesisCheckpointLedger,
-			Math.max(
-				0,
-				historyArchiveMaximumWatermark - pressure.outstandingObjects
-			)
+			maximumWatermarkHeadroom
 		])) as readonly { readonly promotedObjects: number | string }[];
 		await synchronizeHistoryArchiveReadyQueue(
 			manager,
