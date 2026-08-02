@@ -17,6 +17,11 @@ export const canonicalFrontierReservationCtesSql = `
 			and generic."dependencyReady" = true
 			and generic."executionReason" is distinct from
 				'canonical-frontier-reserve'
+			and not exists (
+				select 1
+				from target_ranked canonical_candidate
+				where canonical_candidate.id = generic.id
+			)
 			and (
 				generic."transitionEffectsRequiredAt" is null
 				or generic."transitionEffectsCompletedAt" is not null
@@ -27,11 +32,14 @@ export const canonicalFrontierReservationCtesSql = `
 	), candidate_replacement_ranked as materialized (
 		select target_ranked.*,
 			row_number() over (
-				order by target_rank, target_lane, proof_progress desc,
+				order by coalesce(reservation.count, 0) + target_rank,
+					target_ranked.target_lane, proof_progress desc,
 					"lastClaimedAt" asc nulls first,
 					"archiveUrlIdentity", id
 			) as candidate_replacement_rank
 		from target_ranked
+		left join canonical_lane_reservation_state reservation
+			on reservation.target_lane = target_ranked.target_lane
 	), replacement_ranked as materialized (
 		select candidate.*, replacement.id as selected_replaceable_id
 		from candidate_replacement_ranked candidate

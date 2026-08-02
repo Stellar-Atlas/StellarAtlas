@@ -7,6 +7,7 @@ import {
 } from './HistoryArchiveCanonicalCategorySql.js';
 import { canonicalCheckpointHasStrictEvidenceSql } from './HistoryArchiveCanonicalCheckpointProofSql.js';
 import { canonicalFrontierReservationCtesSql } from './HistoryArchiveCanonicalReservationSql.js';
+import { canonicalLaneReservationCtesSql } from './HistoryArchiveCanonicalLaneSql.js';
 import { canonicalRuntimeTargetCtes } from './HistoryArchiveCanonicalRuntimeTargetSql.js';
 import { historyArchiveMinimumWatermark } from '@history-scan-coordinator/domain/history-archive-object/HistoryArchiveObjectPlanningPolicy.js';
 export { canonicalRuntimeTargetCtes } from './HistoryArchiveCanonicalRuntimeTargetSql.js';
@@ -308,7 +309,7 @@ export const admitCanonicalFrontierSql = `
 		select * from category_objects
 		union all
 		select * from bucket_objects
-	), canonical_roots as materialized (
+	), ${canonicalLaneReservationCtesSql}, canonical_roots as materialized (
 		select distinct desired."archiveUrlIdentity"
 		from desired_objects desired
 		join "history_archive_object_queue" reserved
