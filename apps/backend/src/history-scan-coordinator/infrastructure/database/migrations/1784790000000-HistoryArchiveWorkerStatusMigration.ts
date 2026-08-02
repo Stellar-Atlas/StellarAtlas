@@ -2,7 +2,7 @@ import { MigrationInterface, QueryRunner } from 'typeorm';
 
 const objectTypeCodeMax = 7;
 const workerOutcomeCodeMax = 4;
-const workerStageCodeMax = 20;
+const workerStageCodeMax = 21;
 
 export class HistoryArchiveWorkerStatusMigration1784790000000 implements MigrationInterface {
 	name = 'HistoryArchiveWorkerStatusMigration1784790000000';
