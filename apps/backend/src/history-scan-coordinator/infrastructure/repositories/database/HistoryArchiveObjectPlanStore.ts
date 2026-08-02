@@ -85,7 +85,11 @@ export async function promoteHistoryArchiveObjectPlans(
 		const [result] = (await manager.query(promotePlansSql, [
 			pressure.availableSlots,
 			historyArchivePerRootFrontier,
-			genesisCheckpointLedger
+			genesisCheckpointLedger,
+			Math.max(
+				0,
+				historyArchiveMaximumWatermark - pressure.outstandingObjects
+			)
 		])) as readonly { readonly promotedObjects: number | string }[];
 		await synchronizeHistoryArchiveReadyQueue(
 			manager,
@@ -188,7 +192,21 @@ const promotePlansSql = `
 			root_created_at,
 			"archiveUrlIdentity",
 			id
-		limit $1
+		limit greatest(
+			$1::integer,
+			least(
+				$4::integer,
+				(
+					select count(*)::integer
+					from ranked critical
+					where critical.proof_priority = 0
+						and critical.root_rank <= greatest(
+							$2 - critical.active_count,
+							0
+						)
+				)
+			)
+		)
 	), inserted as (
 		insert into "history_archive_object_queue" (
 			"remoteId", "archiveUrl", "archiveUrlIdentity", "hostIdentity",
@@ -202,7 +220,12 @@ const promotePlansSql = `
 			plan."hostIdentity", plan."objectType", plan."objectKey",
 			plan."objectOrder", plan."objectUrl", plan.status,
 			plan."checkpointLedger", plan."bucketHash", plan."dependencyReady",
-			'executable', 'planned-frontier', now(),
+			'executable',
+			case when plan."checkpointLedger" = $3::integer
+				then 'canonical-frontier-reserve'
+				else 'planned-frontier'
+			end,
+			now(),
 			now(), now()
 		from "history_archive_object_plan" plan
 		join selected on selected.id = plan.id
