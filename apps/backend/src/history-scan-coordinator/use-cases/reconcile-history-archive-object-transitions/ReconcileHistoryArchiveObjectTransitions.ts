@@ -43,6 +43,7 @@ export class ReconcileHistoryArchiveObjectTransitions {
 						this.logFailure(error, object, 'transition');
 					}
 				}
+				await this.objectRepository.promotePlannedObjects();
 				const checkpoints =
 					await this.objectRepository.findVerifiedCheckpointsNeedingReconciliation(
 						reconciliationBatchSize
@@ -56,7 +57,6 @@ export class ReconcileHistoryArchiveObjectTransitions {
 						this.logFailure(error, checkpoint, 'checkpoint dependencies');
 					}
 				}
-				await this.objectRepository.promotePlannedObjects();
 			}
 		);
 		await this.reconcileExecutionDisposition();
