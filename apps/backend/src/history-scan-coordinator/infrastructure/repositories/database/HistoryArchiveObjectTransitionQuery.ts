@@ -78,6 +78,11 @@ const runtimeTransitionsSql = `
 		) desired(object_type, object_key)
 		where root.checkpoint_ledger >= 63
 		union all
+		select distinct state."archiveUrlIdentity", 'genesis'::text,
+			'checkpoint-state'::text, 'checkpoint-state:0000003f'::text
+		from "history_archive_state_snapshot" state
+		where state.status = 'available'
+		union all
 		select root."archiveUrlIdentity", root.target_lane,
 			'bucket'::text, 'bucket:' || dependency."bucketHash"
 		from runtime_roots root
@@ -86,7 +91,13 @@ const runtimeTransitionsSql = `
 			and dependency."checkpointLedger" = root.checkpoint_ledger
 	), runtime_candidates as materialized (
 		select object."remoteId", object.id,
-			min(case target.target_lane when 'forward' then 0 else 1 end)
+			min(
+				case target.target_lane
+					when 'genesis' then 0
+					when 'forward' then 1
+					else 2
+				end
+			)
 				as lane_priority,
 			case object."executionReason"
 				when 'canonical-frontier-reserve' then 0
