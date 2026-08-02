@@ -458,14 +458,6 @@ export class RESTScanCoordinatorService implements ScanCoordinatorService {
 
 		if (response.isErr()) {
 			if (
-				action === 'heartbeat' &&
-				isHttpError(response.error) &&
-				response.error.response?.status === 404
-			) {
-				return ok(undefined);
-			}
-			if (
-				action === 'release' &&
 				isHttpError(response.error) &&
 				response.error.response?.status === 404
 			) {
@@ -474,21 +466,9 @@ export class RESTScanCoordinatorService implements ScanCoordinatorService {
 			return err(new CoordinatorServiceError(errorMessage, response.error));
 		}
 
-		if (
-			response.value.status === 404 &&
-			(action === 'heartbeat' || action === 'release')
-		) {
-			return ok(undefined);
-		}
-
-		if (response.value.status !== 204 && response.value.status !== 404) {
+		if (response.value.status === 404) return ok(undefined);
+		if (response.value.status !== 204) {
 			return err(new CoordinatorServiceError(errorMessage));
-		}
-
-		if (response.value.status === 404) {
-			return err(
-				new CoordinatorServiceError('History archive object job not found')
-			);
 		}
 
 		return ok(undefined);

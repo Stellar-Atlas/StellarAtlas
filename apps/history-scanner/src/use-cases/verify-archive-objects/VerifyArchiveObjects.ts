@@ -31,6 +31,7 @@ import type { VerifyArchiveObjectsDTO } from './VerifyArchiveObjectsDTO.js';
 import { canonicalJsonContentDigest } from './ArchiveObjectContentDigest.js';
 import { readArchiveObjectContentLength } from './ArchiveObjectHttpContentLength.js';
 import { createArchiveObjectDownloadCounter } from './ArchiveObjectDownloadCounter.js';
+import { retryArchiveObjectTerminalUpdate } from './ArchiveObjectTerminalUpdate.js';
 import {
 	type HistoryArchiveDownloadPermit,
 	ProcessHistoryArchiveDownloadPermit
@@ -157,30 +158,31 @@ export class VerifyArchiveObjects {
 		this.workerTelemetry.startObject(slot, job);
 		await this.checkIn('in_progress');
 		let outcome: HistoryArchiveWorkerOutcomeDTO = 'worker_issue';
-
 		try {
 			const result = await this.performObjectVerification(job);
 			if (result.isErr()) {
-				const failResult = await this.failObject(job, result.error);
-				if (failResult.isErr()) {
-					await this.checkIn('error');
-					throw failResult.error;
-				}
+				await retryArchiveObjectTerminalUpdate(
+					() => this.failObject(job, result.error),
+					(error) => this.exceptionLogger.captureException(error)
+				);
+				this.logger.warn('History archive object failed verification', {
+					errorMessage: result.error.errorMessage,
+					errorType: result.error.errorType,
+					httpStatus: result.error.httpStatus ?? null,
+					remoteId: job.remoteId
+				});
 				outcome = mapFailureToWorkerOutcome(result.error);
 				await this.checkIn('error');
 				return;
 			}
-
-			const completionResult =
-				await this.scanCoordinator.completeHistoryArchiveObject(job.remoteId, {
-					...result.value,
-					claimAttempt: job.claimAttempt
-				});
-			if (completionResult.isErr()) {
-				this.exceptionLogger.captureException(completionResult.error);
-				await this.checkIn('error');
-				throw completionResult.error;
-			}
+			await retryArchiveObjectTerminalUpdate(
+				() =>
+					this.scanCoordinator.completeHistoryArchiveObject(job.remoteId, {
+						...result.value,
+						claimAttempt: job.claimAttempt
+					}),
+				(error) => this.exceptionLogger.captureException(error)
+			);
 			outcome = 'verified';
 			await this.checkIn('ok');
 		} finally {
@@ -438,22 +440,13 @@ export class VerifyArchiveObjects {
 		}
 	}
 
-	private async failObject(
+	private failObject(
 		job: HistoryArchiveObjectJobDTO,
 		failure: HistoryArchiveObjectFailureDTO
 	): Promise<Result<void, Error>> {
-		const result = await this.scanCoordinator.failHistoryArchiveObject(
-			job.remoteId,
-			{ ...failure, claimAttempt: job.claimAttempt }
-		);
-		if (result.isErr()) this.exceptionLogger.captureException(result.error);
-		this.logger.warn('History archive object failed verification', {
-			errorMessage: failure.errorMessage,
-			errorType: failure.errorType,
-			httpStatus: failure.httpStatus ?? null,
-			remoteId: job.remoteId
+		return this.scanCoordinator.failHistoryArchiveObject(job.remoteId, {
+			...failure, claimAttempt: job.claimAttempt
 		});
-		return result;
 	}
 
 	private mapHttpError(error: unknown): HistoryArchiveObjectFailureDTO {
