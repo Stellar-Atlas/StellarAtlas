@@ -25,7 +25,8 @@ export const historyArchiveWorkerRegistryStatementTimeoutMs = 5_000;
 export const historyArchiveWorkerStatusTimeoutSql = `
 	select
 		set_config('lock_timeout', $1::text, true),
-		set_config('statement_timeout', $2::text, true)
+		set_config('statement_timeout', $2::text, true),
+		set_config('synchronous_commit', 'off', true)
 `;
 
 export const historyArchiveWorkerStatusRegistryLockSql = `

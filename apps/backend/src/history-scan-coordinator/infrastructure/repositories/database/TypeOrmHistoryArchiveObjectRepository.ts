@@ -58,6 +58,7 @@ const maxActiveObjectsPerHost = historyArchivePerHostConcurrency;
 const maxActiveObjectsTotal = historyArchiveConsumerCount;
 const transitionReconciliationLockName =
 	'history_archive_object_transition_reconciliation';
+const asynchronousProgressCommitSql = 'set local synchronous_commit = off';
 
 @injectable()
 export class TypeOrmHistoryArchiveObjectRepository implements HistoryArchiveObjectRepository {
@@ -245,17 +246,21 @@ export class TypeOrmHistoryArchiveObjectRepository implements HistoryArchiveObje
 		progress?: HistoryArchiveObjectProgressUpdate
 	): Promise<boolean> {
 		if (progress === undefined) return false;
-		const result = await this.repository
-			.createQueryBuilder()
-			.update(HistoryArchiveObject)
-			.set(createActiveUpdate(progress))
-			.where('"remoteId" = :remoteId', { remoteId })
-			.andWhere('status = :status', { status: 'scanning' })
-			.andWhere('attempts = :claimAttempt', {
-				claimAttempt: progress.claimAttempt
-			})
-			.execute();
-		return (result.affected ?? 0) > 0;
+		return await this.repository.manager.transaction(async (manager) => {
+			await manager.query(asynchronousProgressCommitSql);
+			const result = await manager
+				.getRepository(HistoryArchiveObject)
+				.createQueryBuilder()
+				.update(HistoryArchiveObject)
+				.set(createActiveUpdate(progress))
+				.where('"remoteId" = :remoteId', { remoteId })
+				.andWhere('status = :status', { status: 'scanning' })
+				.andWhere('attempts = :claimAttempt', {
+					claimAttempt: progress.claimAttempt
+				})
+				.execute();
+			return (result.affected ?? 0) > 0;
+		});
 	}
 
 	async markObjectFailed(
