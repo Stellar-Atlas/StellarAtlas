@@ -49,6 +49,7 @@ export {
 	type HistoryArchiveWorkerStageDTO
 } from './HistoryArchiveWorkerStatusDTO.js';
 export {
+	calculateHistoryArchiveObjectCoordinatorProcesses,
 	calculateHistoryArchiveObjectWorkerProcesses,
 	historyArchiveDownloadConcurrency,
 	historyArchiveWorkerTelemetryLimit,

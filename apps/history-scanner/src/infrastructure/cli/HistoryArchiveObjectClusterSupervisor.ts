@@ -1,6 +1,7 @@
 import { availableParallelism } from 'node:os';
 import {
 	calculateHistoryArchiveObjectWorkerProcesses,
+	calculateHistoryArchiveObjectCoordinatorProcesses,
 	historyArchiveDownloadConcurrency,
 	historyArchiveWorkerSlotLimit
 } from 'history-scanner-dto';
@@ -67,13 +68,13 @@ export function createHistoryArchiveObjectClusterPlan(
 	const processCount = readBoundedPositiveInteger(
 		env,
 		'HISTORY_OBJECT_WORKER_PROCESSES',
-		calculateHistoryArchiveObjectWorkerProcesses(cpuCount),
+		calculateHistoryArchiveObjectCoordinatorProcesses(cpuCount),
 		maximumConfiguredWorkerProcesses
 	);
 	const configuredHasherWorkers = readBoundedPositiveInteger(
 		env,
 		'HISTORY_HASHER_WORKERS',
-		processCount,
+		calculateHistoryArchiveObjectWorkerProcesses(cpuCount),
 		maximumConfiguredWorkerProcesses
 	);
 	const totalHasherWorkers = Math.max(configuredHasherWorkers, processCount);

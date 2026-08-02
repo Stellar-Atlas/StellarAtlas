@@ -1,8 +1,8 @@
 import { availableParallelism } from 'node:os';
-import { calculateHistoryArchiveObjectWorkerProcesses } from 'history-scanner-dto';
+import { calculateHistoryArchiveObjectCoordinatorProcesses } from 'history-scanner-dto';
 
 export const historyArchiveConsumerCount =
-	calculateHistoryArchiveObjectWorkerProcesses(availableParallelism());
+	calculateHistoryArchiveObjectCoordinatorProcesses(availableParallelism());
 export const historyArchiveCanonicalReserveCount =
 	Math.floor(historyArchiveConsumerCount / 2);
 export const historyArchivePerHostConcurrency = 2;

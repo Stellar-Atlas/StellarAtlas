@@ -19,3 +19,12 @@ export function calculateHistoryArchiveObjectWorkerProcesses(
 	if (usableCpuCount < workerSchedulingQuantum) return usableCpuCount;
 	return Math.floor(usableCpuCount / workerSchedulingQuantum) * workerSchedulingQuantum;
 }
+
+export function calculateHistoryArchiveObjectCoordinatorProcesses(
+	cpuCount: number
+): number {
+	return Math.min(
+		historyArchiveDownloadConcurrency,
+		calculateHistoryArchiveObjectWorkerProcesses(cpuCount)
+	);
+}

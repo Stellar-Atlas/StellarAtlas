@@ -3,7 +3,7 @@ import { availableParallelism } from 'node:os';
 import { inject, injectable } from 'inversify';
 import { err, ok, Result } from 'neverthrow';
 import {
-	calculateHistoryArchiveObjectWorkerProcesses,
+	calculateHistoryArchiveObjectCoordinatorProcesses,
 	historyArchiveWorkerTelemetryLimit,
 	historyArchiveWorkerSlotLimit
 } from 'history-scanner-dto';
@@ -23,7 +23,7 @@ const archiveObjectWorkerStorageRetentionMs = 24 * 60 * 60 * 1000;
 const archiveObjectWorkerStartupGraceMs = 2 * 60 * 1000;
 const archiveObjectWorkerRowLimit = historyArchiveWorkerTelemetryLimit;
 const defaultConfiguredObjectWorkers =
-	calculateHistoryArchiveObjectWorkerProcesses(availableParallelism());
+	calculateHistoryArchiveObjectCoordinatorProcesses(availableParallelism());
 const maxConfiguredObjectWorkers = historyArchiveWorkerSlotLimit - 1;
 
 export interface ArchiveWorkerStatusDTO {
