@@ -17,10 +17,10 @@ describe('LedgerCloseMeta systemd service', () => {
 			'FULL_HISTORY_LEDGER_CLOSE_META_LAST_LEDGER='
 		);
 		expect(service).toContain(
-			'Environment=FULL_HISTORY_LEDGER_CLOSE_META_FETCH_CONCURRENCY=12'
+			'Environment=FULL_HISTORY_LEDGER_CLOSE_META_FETCH_CONCURRENCY=24'
 		);
 		expect(service).toContain(
-			'Environment=FULL_HISTORY_LEDGER_CLOSE_META_PROCESSING_CONCURRENCY=4'
+			'Environment=FULL_HISTORY_LEDGER_CLOSE_META_PROCESSING_CONCURRENCY=8'
 		);
 		expect(service).toContain(
 			'Environment=FULL_HISTORY_LEDGER_CLOSE_META_INGRESS_BYTES_PER_SECOND=187500000'

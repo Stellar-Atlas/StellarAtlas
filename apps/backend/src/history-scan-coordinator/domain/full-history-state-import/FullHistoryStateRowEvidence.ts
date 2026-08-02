@@ -59,6 +59,7 @@ export function fullHistoryStateRowSha256(
 interface FullHistoryStatePosition {
 	readonly changeIndex: bigint;
 	readonly ledgerSequence: bigint;
+	readonly phase: bigint;
 	readonly transactionIndex: bigint;
 }
 
@@ -66,6 +67,7 @@ function positionOf(row: FullHistoryStateChange): FullHistoryStatePosition {
 	return {
 		changeIndex: BigInt(row.changeIndex),
 		ledgerSequence: BigInt(row.ledgerSequence),
+		phase: row.reason === 'upgrade' ? 1n : 0n,
 		transactionIndex: BigInt(row.transactionIndex)
 	};
 }
@@ -76,6 +78,7 @@ function comparePosition(
 ): number {
 	for (const key of [
 		'ledgerSequence',
+		'phase',
 		'transactionIndex',
 		'changeIndex'
 	] as const) {

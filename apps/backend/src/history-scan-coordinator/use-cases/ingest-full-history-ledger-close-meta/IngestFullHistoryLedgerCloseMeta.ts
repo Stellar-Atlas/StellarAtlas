@@ -27,7 +27,7 @@ import {
 	parseSep54LedgerCloseMetaConfig
 } from '../../infrastructure/full-history-ledger-close-meta/Sep54LedgerCloseMetaObjectKey.js';
 
-export const FULL_HISTORY_LEDGER_CLOSE_META_FETCH_CONCURRENCY_MAX = 12;
+export const FULL_HISTORY_LEDGER_CLOSE_META_FETCH_CONCURRENCY_MAX = 24;
 export const FULL_HISTORY_LEDGER_CLOSE_META_PROCESSING_CONCURRENCY_MAX = 8;
 export const FULL_HISTORY_LEDGER_CLOSE_META_RANGE_LEDGER_LIMIT = 65_536;
 export const FULL_HISTORY_LEDGER_CLOSE_META_SHARD_COMPRESSED_BYTES_LIMIT =

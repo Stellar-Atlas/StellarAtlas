@@ -1,7 +1,7 @@
 import { dirname, relative, resolve, sep } from 'node:path';
 
 const maximumIngressBytesPerSecond = 187_500_000;
-const maximumFetchConcurrency = 12;
+const maximumFetchConcurrency = 24;
 const maximumProcessingConcurrency = 8;
 const minimumTypedShardLedgers = 64;
 const maximumTypedShardLedgers = 1_024;

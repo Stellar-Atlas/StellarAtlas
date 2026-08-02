@@ -118,8 +118,8 @@ describe('IngestFullHistoryLedgerCloseMeta', () => {
 	});
 
 	it('rejects concurrency and shard sizes above their ETL lane caps', () => {
-		expect(() => createIngestion({ fetchConcurrency: 13 })).toThrow(
-			/between 1 and 12/
+		expect(() => createIngestion({ fetchConcurrency: 25 })).toThrow(
+			/between 1 and 24/
 		);
 		expect(() => createIngestion({ processingConcurrency: 9 })).toThrow(
 			/between 1 and 8/

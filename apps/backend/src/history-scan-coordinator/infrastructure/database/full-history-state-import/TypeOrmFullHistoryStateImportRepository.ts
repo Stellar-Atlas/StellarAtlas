@@ -52,6 +52,7 @@ interface ActiveClaimRow {
 interface DigestRow {
 	readonly changeIndex: string;
 	readonly ledgerSequence: string;
+	readonly reason: string;
 	readonly rowSha256: Uint8Array;
 	readonly transactionIndex: string;
 }
@@ -371,18 +372,23 @@ async function calculateStoredRowSetEvidence(
 			: 'full_history_lcm_trustline_state_change';
 	const hash = createHash('sha256');
 	let count = 0n;
-	let cursor: [string, string, string] = ['0', '0', '0'];
+	let cursor: [string, string, string, string] = ['0', '0', '0', '0'];
 	for (;;) {
 		const rows = await manager.query<DigestRow[]>(
 			`select "ledger_sequence"::text as "ledgerSequence",
 				"transaction_index"::text as "transactionIndex",
 				"change_index"::text as "changeIndex",
+				"reason",
 				"row_sha256" as "rowSha256"
 			 from "${table}"
 			 where "batch_id" = $1
-				and ("ledger_sequence", "transaction_index", "change_index")
-					> ($2::bigint, $3::bigint, $4::bigint)
-			 order by "ledger_sequence", "transaction_index", "change_index"
+				and ("ledger_sequence",
+					case when "reason" = 'upgrade' then 1 else 0 end,
+					"transaction_index", "change_index")
+					> ($2::bigint, $3::integer, $4::bigint, $5::bigint)
+			 order by "ledger_sequence",
+				case when "reason" = 'upgrade' then 1 else 0 end,
+				"transaction_index", "change_index"
 			 limit 10000`,
 			[claim.batchId, ...cursor]
 		);
@@ -391,7 +397,12 @@ async function calculateStoredRowSetEvidence(
 		if (rows.length < 10_000) break;
 		const last = rows.at(-1);
 		if (last === undefined) throw new Error('State digest page was empty');
-		cursor = [last.ledgerSequence, last.transactionIndex, last.changeIndex];
+		cursor = [
+			last.ledgerSequence,
+			last.reason === 'upgrade' ? '1' : '0',
+			last.transactionIndex,
+			last.changeIndex
+		];
 	}
 	return {
 		count,
@@ -409,8 +420,7 @@ async function assertActiveClaim(
 				and "attempt_count" = $4
 				and "lease_expires_at" > clock_timestamp()) as "active"
 			 from "full_history_lcm_state_import"
-			 where "batch_id" = $1 and "dataset" = $2
-			 for share`,
+			 where "batch_id" = $1 and "dataset" = $2`,
 			[claim.batchId, claim.dataset, claim.leaseOwner, claim.attemptCount]
 		),
 		'state import lease'

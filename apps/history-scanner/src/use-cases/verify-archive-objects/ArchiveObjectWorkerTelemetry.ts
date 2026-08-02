@@ -41,8 +41,8 @@ export interface HistoryArchiveWorkerProcessIdentity {
 	readonly workerIdPrefix: string;
 }
 
-const initialHeartbeatDelayMs = 2 * 1000;
-const heartbeatIntervalMs = 5 * 1000;
+const initialHeartbeatDelayMs = 5 * 1000;
+const heartbeatIntervalMs = 15 * 1000;
 const heartbeatJitterMs = 2 * 1000;
 
 export class ArchiveObjectWorkerTelemetry {
