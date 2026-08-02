@@ -17,6 +17,7 @@ import {
 } from './HistoryArchiveObjectReadyQueue.js';
 
 const planChunkSize = 200;
+const genesisCheckpointLedger = 63;
 const promotionLockName = 'history_archive_object_plan_promotion';
 
 export async function planHistoryArchiveObjects(
@@ -83,7 +84,8 @@ export async function promoteHistoryArchiveObjectPlans(
 
 		const [result] = (await manager.query(promotePlansSql, [
 			pressure.availableSlots,
-			historyArchivePerRootFrontier
+			historyArchivePerRootFrontier,
+			genesisCheckpointLedger
 		])) as readonly { readonly promotedObjects: number | string }[];
 		await synchronizeHistoryArchiveReadyQueue(
 			manager,
@@ -161,9 +163,14 @@ const promotePlansSql = `
 		select
 			plan.*,
 			coalesce(active.active_count, 0) as active_count,
+			case when plan."checkpointLedger" = $3::integer then 0 else 1 end
+				as proof_priority,
 			row_number() over (
 				partition by plan."archiveUrlIdentity"
-				order by plan."createdAt", plan.id
+				order by
+					case when plan."checkpointLedger" = $3::integer then 0 else 1 end,
+					plan."createdAt",
+					plan.id
 			) as root_rank,
 			min(plan."createdAt") over (
 				partition by plan."archiveUrlIdentity"
@@ -175,7 +182,12 @@ const promotePlansSql = `
 		select id
 		from ranked
 		where root_rank <= greatest($2 - active_count, 0)
-		order by root_rank, root_created_at, "archiveUrlIdentity", id
+		order by
+			proof_priority,
+			root_rank,
+			root_created_at,
+			"archiveUrlIdentity",
+			id
 		limit $1
 	), inserted as (
 		insert into "history_archive_object_queue" (
