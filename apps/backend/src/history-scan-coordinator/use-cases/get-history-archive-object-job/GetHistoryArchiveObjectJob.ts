@@ -10,7 +10,6 @@ import type { HistoryArchiveObjectRepository } from '../../domain/history-archiv
 import type { HistoryArchiveCheckpointProofRepository } from '../../domain/history-archive-checkpoint-proof/HistoryArchiveCheckpointProofRepository.js';
 import { TYPES } from '../../infrastructure/di/di-types.js';
 import { mapUnknownToError } from '@core/utilities/mapUnknownToError.js';
-import { ReconcileHistoryArchiveObjectTransitions } from '../reconcile-history-archive-object-transitions/ReconcileHistoryArchiveObjectTransitions.js';
 
 export interface HistoryArchiveObjectJobDTO {
 	readonly archiveUrl: string;
@@ -43,13 +42,11 @@ export class GetHistoryArchiveObjectJob {
 		private readonly objectRepository: HistoryArchiveObjectRepository,
 		@inject(TYPES.HistoryArchiveCheckpointProofRepository)
 		private readonly checkpointProofRepository: HistoryArchiveCheckpointProofRepository,
-		private readonly transitionReconciler: ReconcileHistoryArchiveObjectTransitions,
 		@inject('Logger') private readonly logger: Logger
 	) {}
 
 	async execute(): Promise<Result<HistoryArchiveObjectJobDTO | null, Error>> {
 		try {
-			this.reconcileInBackground();
 			const staleObjects = await this.releaseStaleObjectsIfDue();
 			for (const staleObject of staleObjects) {
 				this.refreshProofInBackground(staleObject);
@@ -86,15 +83,6 @@ export class GetHistoryArchiveObjectJob {
 		return await this.objectRepository.releaseStaleObjects(
 			getStaleObjectCutoff(now)
 		);
-	}
-
-	private reconcileInBackground(): void {
-		void this.transitionReconciler.executeIfDue().catch((error: unknown) => {
-			this.logger.error('Failed to reconcile archive object background work', {
-				app: 'history-scan-coordinator',
-				errorMessage: mapUnknownToError(error).message
-			});
-		});
 	}
 
 	private async refreshProof(object: HistoryArchiveObject): Promise<void> {

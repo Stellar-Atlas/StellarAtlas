@@ -3,7 +3,6 @@ import type { Logger } from 'logger';
 import type { HistoryArchiveCheckpointProofRepository } from '../../domain/history-archive-checkpoint-proof/HistoryArchiveCheckpointProofRepository.js';
 import { HistoryArchiveObject } from '../../domain/history-archive-object/HistoryArchiveObject.js';
 import type { HistoryArchiveObjectRepository } from '../../domain/history-archive-object/HistoryArchiveObjectRepository.js';
-import type { ReconcileHistoryArchiveObjectTransitions } from '../reconcile-history-archive-object-transitions/ReconcileHistoryArchiveObjectTransitions.js';
 import { GetHistoryArchiveObjectJob } from './GetHistoryArchiveObjectJob.js';
 
 describe('GetHistoryArchiveObjectJob', () => {
@@ -16,13 +15,9 @@ describe('GetHistoryArchiveObjectJob', () => {
 		objectRepository.releaseStaleObjects.mockResolvedValue([stale]);
 		objectRepository.claimNextObject.mockResolvedValue(claimed);
 		const proofRepository = mock<HistoryArchiveCheckpointProofRepository>();
-		const transitionReconciler =
-			mock<ReconcileHistoryArchiveObjectTransitions>();
-		transitionReconciler.executeIfDue.mockResolvedValue();
 		const useCase = new GetHistoryArchiveObjectJob(
 			objectRepository,
 			proofRepository,
-			transitionReconciler,
 			mock<Logger>()
 		);
 
@@ -32,40 +27,15 @@ describe('GetHistoryArchiveObjectJob', () => {
 		});
 		expect(proofRepository.refreshForObject).toHaveBeenNthCalledWith(1, stale);
 		expect(proofRepository.refreshForObject).toHaveBeenCalledTimes(1);
-		expect(transitionReconciler.executeIfDue).toHaveBeenCalledTimes(1);
-	});
-
-	it('does not block a claim while reconciliation is still running', async () => {
-		const objectRepository = mock<HistoryArchiveObjectRepository>();
-		objectRepository.releaseStaleObjects.mockResolvedValue([]);
-		objectRepository.claimNextObject.mockResolvedValue(null);
-		const transitionReconciler =
-			mock<ReconcileHistoryArchiveObjectTransitions>();
-		transitionReconciler.executeIfDue.mockReturnValue(new Promise(() => {}));
-		const useCase = new GetHistoryArchiveObjectJob(
-			objectRepository,
-			mock<HistoryArchiveCheckpointProofRepository>(),
-			transitionReconciler,
-			mock<Logger>()
-		);
-
-		await expect(useCase.execute()).resolves.toMatchObject({
-			value: null
-		});
-		expect(objectRepository.claimNextObject).toHaveBeenCalledTimes(1);
 	});
 
 	it('runs stale release at most once during the maintenance interval', async () => {
 		const objectRepository = mock<HistoryArchiveObjectRepository>();
 		objectRepository.releaseStaleObjects.mockResolvedValue([]);
 		objectRepository.claimNextObject.mockResolvedValue(null);
-		const transitionReconciler =
-			mock<ReconcileHistoryArchiveObjectTransitions>();
-		transitionReconciler.executeIfDue.mockResolvedValue();
 		const useCase = new GetHistoryArchiveObjectJob(
 			objectRepository,
 			mock<HistoryArchiveCheckpointProofRepository>(),
-			transitionReconciler,
 			mock<Logger>()
 		);
 
@@ -82,13 +52,9 @@ describe('GetHistoryArchiveObjectJob', () => {
 		objectRepository.releaseStaleObjects.mockResolvedValue([]);
 		objectRepository.claimNextObject.mockResolvedValue(claimed);
 		const proofRepository = mock<HistoryArchiveCheckpointProofRepository>();
-		const transitionReconciler =
-			mock<ReconcileHistoryArchiveObjectTransitions>();
-		transitionReconciler.executeIfDue.mockResolvedValue();
 		const useCase = new GetHistoryArchiveObjectJob(
 			objectRepository,
 			proofRepository,
-			transitionReconciler,
 			mock<Logger>()
 		);
 
@@ -97,7 +63,6 @@ describe('GetHistoryArchiveObjectJob', () => {
 		});
 		expect(proofRepository.refreshForObject).not.toHaveBeenCalled();
 	});
-
 });
 
 function checkpointObject(

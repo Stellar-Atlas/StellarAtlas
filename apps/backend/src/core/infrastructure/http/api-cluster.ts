@@ -45,6 +45,7 @@ function runPrimary(): void {
 	const forkWorker = (projectionWriter: boolean): void => {
 		if (shutdownStarted) return;
 		const worker = cluster.fork({
+			API_HISTORY_MAINTENANCE_WRITER: projectionWriter ? 'true' : 'false',
 			API_SEARCH_PROJECTION_WRITER: projectionWriter ? 'true' : 'false'
 		});
 		liveWorkerIds.add(worker.id);
