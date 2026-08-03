@@ -52,6 +52,8 @@ verify_prerequisites() {
 	[[ "$EUID" -eq 0 ]] || die "run this installer as root on the bare-metal host"
 	[[ -d /mnt/bulk/stellarbeat-data ]] ||
 		die "/mnt/bulk/stellarbeat-data is not mounted"
+	mountpoint --quiet /mnt/stellaratlas-pgwal ||
+		die "/mnt/stellaratlas-pgwal is not mounted"
 	getent passwd admins >/dev/null || die "host user admins is missing"
 	getent group admins >/dev/null || die "host group admins is missing"
 	require_executable /usr/lib/postgresql/16/bin/postgres

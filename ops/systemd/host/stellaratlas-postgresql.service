@@ -2,7 +2,7 @@
 Description=StellarAtlas PostgreSQL on host-native storage
 After=local-fs.target network-online.target
 Wants=network-online.target
-RequiresMountsFor=/mnt/bulk/stellarbeat-data/postgresql/16/main /mnt/fast/stellarbeat-data/postgresql-wal/16/main
+RequiresMountsFor=/mnt/bulk/stellarbeat-data/postgresql/16/main /mnt/stellaratlas-pgwal
 
 [Service]
 Type=simple
