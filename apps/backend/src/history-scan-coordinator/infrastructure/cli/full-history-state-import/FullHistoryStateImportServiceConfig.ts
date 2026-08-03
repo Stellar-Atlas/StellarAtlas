@@ -11,7 +11,7 @@ export const FULL_HISTORY_STATE_IMPORT_MAXIMUM_EXPORT_PROCESSES = 3;
 export const FULL_HISTORY_STATE_IMPORT_MAXIMUM_DATABASE_POOL_SIZE = 6;
 export const FULL_HISTORY_STATE_IMPORT_MINIMUM_EXPORT_TIMEOUT_MS =
 	3 * 60 * 60_000;
-const maximumInsertBatchSize = 100;
+const maximumInsertBatchSize = 500;
 
 export interface FullHistoryStateImportServiceConfig {
 	readonly databasePoolSize: number;

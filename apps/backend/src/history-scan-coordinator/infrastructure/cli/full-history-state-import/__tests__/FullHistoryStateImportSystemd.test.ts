@@ -22,7 +22,7 @@ describe('full-history state-import systemd service', () => {
 			'Environment=FULL_HISTORY_STATE_EXPORT_EXECUTABLE=' + executable
 		);
 		expect(service).toContain(
-			'Environment=FULL_HISTORY_STATE_IMPORT_INSERT_ROWS=100'
+			'Environment=FULL_HISTORY_STATE_IMPORT_INSERT_ROWS=500'
 		);
 		expect(service).toContain(
 			'Environment=FULL_HISTORY_STATE_IMPORT_LEASE_MS=600000'

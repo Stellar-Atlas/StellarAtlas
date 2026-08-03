@@ -19,7 +19,7 @@ Environment=FULL_HISTORY_STATE_IMPORT_ENABLED=true
 Environment=FULL_HISTORY_STATE_IMPORT_STORAGE_ROOT=/mnt/bulk/stellarbeat-data/full-history/typed
 Environment=FULL_HISTORY_STATE_EXPORT_EXECUTABLE=/mnt/bulk/stellarbeat-data/Observer/apps/full-history-etl/bin/stellaratlas-full-history-state-export
 Environment=FULL_HISTORY_STATE_IMPORT_WORKERS=4
-Environment=FULL_HISTORY_STATE_IMPORT_INSERT_ROWS=100
+Environment=FULL_HISTORY_STATE_IMPORT_INSERT_ROWS=500
 Environment=FULL_HISTORY_STATE_IMPORT_LEASE_MS=600000
 Environment=FULL_HISTORY_STATE_EXPORT_TIMEOUT_MS=10800000
 Environment=FULL_HISTORY_STATE_IMPORT_IDLE_POLL_MS=15000
