@@ -31,11 +31,19 @@ export interface BindNextFullHistoryStateCoverageConfig {
 }
 
 export class BindNextFullHistoryStateCoverage {
+	private readonly registerPending: () => Promise<void>;
+
 	constructor(
 		private readonly repository: FullHistoryStateCanonicalCoverageRepository,
 		private readonly exporter: FullHistoryLedgerExporter,
-		private readonly config: BindNextFullHistoryStateCoverageConfig
+		private readonly config: BindNextFullHistoryStateCoverageConfig,
+		registerPending?: () => Promise<void>
 	) {
+		this.registerPending =
+			registerPending ??
+			(async () => {
+				await repository.registerPendingCoverage();
+			});
 		if (
 			!Number.isInteger(config.insertBatchSize) ||
 			config.insertBatchSize < 1 ||
@@ -48,7 +56,7 @@ export class BindNextFullHistoryStateCoverage {
 	async execute(
 		signal: AbortSignal
 	): Promise<FullHistoryStateCanonicalCoverageReceipt | null> {
-		await this.repository.registerPendingCoverage();
+		await this.registerPending();
 		const claim = await this.repository.claimNext(
 			this.config.workerId,
 			this.config.leaseDurationMilliseconds

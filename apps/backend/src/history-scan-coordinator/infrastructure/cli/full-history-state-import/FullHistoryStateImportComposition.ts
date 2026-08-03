@@ -3,6 +3,7 @@ import { DataSource } from 'typeorm';
 import { AppDataSource } from '@core/infrastructure/database/AppDataSource.js';
 import { TypeOrmFullHistoryStateImportRepository } from '../../database/full-history-state-import/TypeOrmFullHistoryStateImportRepository.js';
 import { TypeOrmFullHistoryStateCanonicalCoverageRepository } from '../../database/full-history-state-import/TypeOrmFullHistoryStateCanonicalCoverageRepository.js';
+import { FullHistoryStateRegistrationCoordinator } from './FullHistoryStateRegistrationCoordinator.js';
 import { GoFullHistoryLedgerExporter } from '../../full-history-state-import/GoFullHistoryLedgerExporter.js';
 import { GoFullHistoryStateExporter } from '../../full-history-state-import/GoFullHistoryStateExporter.js';
 import { createBoundedFullHistoryTypedExportRunner } from '../../full-history-state-import/BoundedFullHistoryTypedExportRunner.js';
@@ -55,6 +56,14 @@ export function composeFullHistoryStateImportWorkers(
 	const repository = new TypeOrmFullHistoryStateImportRepository(dataSource);
 	const coverageRepository =
 		new TypeOrmFullHistoryStateCanonicalCoverageRepository(dataSource);
+	const registration = new FullHistoryStateRegistrationCoordinator(
+		{
+			registerCoverage: () => coverageRepository.registerPendingCoverage(),
+			registerImports: () => repository.registerPendingImports()
+		},
+		60_000
+	);
+	const registerPending = () => registration.refresh();
 	const runExport = createBoundedFullHistoryTypedExportRunner(
 		config.exportProcessCount,
 		config.workerCount
@@ -90,7 +99,8 @@ export function composeFullHistoryStateImportWorkers(
 				leaseDurationMilliseconds: config.leaseDurationMilliseconds,
 				storageRoot: config.storageRoot,
 				workerId
-			}
+			},
+			registerPending
 		);
 		const coverage = new BindNextFullHistoryStateCoverage(
 			coverageRepository,
@@ -100,7 +110,8 @@ export function composeFullHistoryStateImportWorkers(
 				leaseDurationMilliseconds: config.leaseDurationMilliseconds,
 				storageRoot: config.storageRoot,
 				workerId
-			}
+			},
+			registerPending
 		);
 		let coverageFirst = index % 2 === 0;
 		return Object.freeze({

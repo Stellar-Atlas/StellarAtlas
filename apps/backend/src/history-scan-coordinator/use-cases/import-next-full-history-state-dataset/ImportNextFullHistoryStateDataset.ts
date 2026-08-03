@@ -41,11 +41,19 @@ export interface ImportNextFullHistoryStateDatasetConfig {
 }
 
 export class ImportNextFullHistoryStateDataset {
+	private readonly registerPending: () => Promise<void>;
+
 	constructor(
 		private readonly repository: FullHistoryStateImportRepository,
 		private readonly exporter: FullHistoryStateExporter,
-		private readonly config: ImportNextFullHistoryStateDatasetConfig
+		private readonly config: ImportNextFullHistoryStateDatasetConfig,
+		registerPending?: () => Promise<void>
 	) {
+		this.registerPending =
+			registerPending ??
+			(async () => {
+				await repository.registerPendingImports();
+			});
 		if (
 			!Number.isInteger(config.insertBatchSize) ||
 			config.insertBatchSize < 1 ||
@@ -58,7 +66,7 @@ export class ImportNextFullHistoryStateDataset {
 	async execute(
 		signal: AbortSignal
 	): Promise<FullHistoryStateImportReceipt | null> {
-		await this.repository.registerPendingImports();
+		await this.registerPending();
 		const claim = await this.repository.claimNext(
 			this.config.workerId,
 			this.config.leaseDurationMilliseconds,
