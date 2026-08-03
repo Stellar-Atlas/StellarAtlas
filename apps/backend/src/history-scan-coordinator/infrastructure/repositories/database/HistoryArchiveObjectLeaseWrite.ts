@@ -43,10 +43,12 @@ export async function touchHistoryArchiveObjectClaim(
 	remoteId: string,
 	claimAttempt: number
 ): Promise<boolean> {
-	const rows = (await repository.manager.query(
-		historyArchiveObjectHeartbeatSql,
-		[remoteId, claimAttempt]
-	)) as readonly unknown[];
+	const rows = extractRows(
+		(await repository.manager.query(historyArchiveObjectHeartbeatSql, [
+			remoteId,
+			claimAttempt
+		])) as RawObjectQueryResult
+	);
 	return rows.length > 0;
 }
 
