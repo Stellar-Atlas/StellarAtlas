@@ -13,7 +13,7 @@ const apiPathPattern = /^\/v1(?:\/|$)/;
 const assetPathPattern = /^\/(assets|css|js|img|fonts)\/.+/;
 const legacyPathPattern = /^\/legacy(?:\/|$)/;
 const modernCompatibilityPathPattern = /^\/new-ui(?:\/|$)/;
-const modernStaticPathPattern = /^\/_next(?:\/|$)/;
+const modernFrontendPathPattern = /^\/(?:_next|archive-scans)(?:\/|$)/;
 const workerPathPattern = /^\/.*\.worker\.js$/;
 const hopByHopHeaders = new Set([
   "connection",
@@ -160,7 +160,7 @@ function shouldProxyFrontendV4(path: string): boolean {
   if (path === "/favicon.ico" || path.endsWith(".png")) return false;
 
   return (
-    path === "/" || modernStaticPathPattern.test(path) || !path.includes(".")
+    path === "/" || modernFrontendPathPattern.test(path) || !path.includes(".")
   );
 }
 
