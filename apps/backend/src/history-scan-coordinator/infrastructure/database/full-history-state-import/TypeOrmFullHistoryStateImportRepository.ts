@@ -20,6 +20,11 @@ import {
 	stateRowDigestVerificationQuery,
 	trustlineStateInsertQuery
 } from './FullHistoryStateImportRowSql.js';
+import {
+	assertFullHistoryStateImportClaimOrder,
+	assertFullHistoryStateImportLeaseDuration,
+	setFullHistoryStateImportTransactionBounds
+} from './FullHistoryStateImportRepositoryBounds.js';
 
 interface ClaimRow {
 	readonly attemptCount: number;
@@ -61,7 +66,6 @@ interface IdentityRow {
 	readonly batchId: string;
 }
 
-const maximumLeaseMilliseconds = 30 * 60_000;
 const stateDatasets = [
 	'account-state-changes',
 	'trustline-state-changes'
@@ -72,7 +76,7 @@ export class TypeOrmFullHistoryStateImportRepository implements FullHistoryState
 
 	async registerPendingImports(): Promise<number> {
 		return this.dataSource.transaction(async (manager) => {
-			await setTransactionBounds(manager);
+			await setFullHistoryStateImportTransactionBounds(manager);
 			const inserted = await manager.query<IdentityRow[]>(
 				`
 				insert into "full_history_lcm_state_import" (
@@ -116,10 +120,10 @@ export class TypeOrmFullHistoryStateImportRepository implements FullHistoryState
 		claimOrder: FullHistoryStateImportClaimOrder = 'oldest-first'
 	): Promise<FullHistoryStateImportClaim | null> {
 		assertUuid(leaseOwner, 'leaseOwner');
-		assertLeaseDuration(leaseDurationMilliseconds);
-		assertClaimOrder(claimOrder);
+		assertFullHistoryStateImportLeaseDuration(leaseDurationMilliseconds);
+		assertFullHistoryStateImportClaimOrder(claimOrder);
 		const rows = await this.dataSource.transaction(async (manager) => {
-			await setTransactionBounds(manager);
+			await setFullHistoryStateImportTransactionBounds(manager);
 			return manager.query<ClaimRow[]>(
 				`
 				with candidate as (
@@ -133,7 +137,9 @@ export class TypeOrmFullHistoryStateImportRepository implements FullHistoryState
 							and control."lease_expires_at" <= clock_timestamp())
 					order by case when $3::boolean
 							and control."status" <> 'pending' then 0 else 1 end,
-						control."next_attempt_at", batch."start_ledger",
+						case when $4::boolean then batch."start_ledger" end desc,
+						case when not $4::boolean then control."next_attempt_at" end,
+						case when not $4::boolean then batch."start_ledger" end,
 						control."dataset", control."batch_id"
 					for update of control skip locked
 					limit 1
@@ -161,7 +167,12 @@ export class TypeOrmFullHistoryStateImportRepository implements FullHistoryState
 				from claimed join "full_history_ledger_close_meta_batch" batch
 					on batch."id" = claimed."batch_id"
 			`,
-				[leaseOwner, leaseDurationMilliseconds, claimOrder === 'recovery-first']
+				[
+					leaseOwner,
+					leaseDurationMilliseconds,
+					claimOrder === 'recovery-first',
+					claimOrder === 'newest-first'
+				]
 			);
 		});
 		return rows.length === 0 ? null : mapClaim(exactlyOne(rows, 'state claim'));
@@ -202,7 +213,7 @@ export class TypeOrmFullHistoryStateImportRepository implements FullHistoryState
 		rows: readonly FullHistoryStateRowEvidence[]
 	): Promise<void> {
 		await this.dataSource.transaction(async (manager) => {
-			await setTransactionBounds(manager);
+			await setFullHistoryStateImportTransactionBounds(manager);
 			await assertActiveClaim(manager, claim);
 			await manager.query(insert.sql, [...insert.parameters]);
 			const verification = stateRowDigestVerificationQuery(
@@ -226,7 +237,7 @@ export class TypeOrmFullHistoryStateImportRepository implements FullHistoryState
 		claim: FullHistoryStateImportClaim,
 		leaseDurationMilliseconds: number
 	): Promise<void> {
-		assertLeaseDuration(leaseDurationMilliseconds);
+		assertFullHistoryStateImportLeaseDuration(leaseDurationMilliseconds);
 		const rows = await this.dataSource.query<IdentityRow[]>(
 			`
 			with renewed as (
@@ -259,7 +270,7 @@ export class TypeOrmFullHistoryStateImportRepository implements FullHistoryState
 		rowSetSha256: ReturnType<typeof fullHistoryLedgerCloseMetaSha256Digest>
 	): Promise<void> {
 		await this.dataSource.transaction(async (manager) => {
-			await setTransactionBounds(manager, 120_000);
+			await setFullHistoryStateImportTransactionBounds(manager, 120_000);
 			const control = exactlyOne(
 				await manager.query<ImportControlRow[]>(
 					`
@@ -468,39 +479,12 @@ function validStorageKey(value: string): string {
 	return value;
 }
 
-function assertLeaseDuration(value: number): void {
-	if (
-		!Number.isInteger(value) ||
-		value < 10_000 ||
-		value > maximumLeaseMilliseconds
-	) {
-		throw new TypeError('State import lease duration is outside its bounds');
-	}
-}
-
-function assertClaimOrder(value: FullHistoryStateImportClaimOrder): void {
-	if (value !== 'oldest-first' && value !== 'recovery-first') {
-		throw new TypeError('State import claim order is invalid');
-	}
-}
-
 function assertClaimDataset(
 	claim: FullHistoryStateImportClaim,
 	expected: FullHistoryStateImportClaim['dataset']
 ): void {
 	if (claim.dataset !== expected)
 		throw new TypeError('State import dataset mismatch');
-}
-
-async function setTransactionBounds(
-	manager: EntityManager,
-	statementTimeoutMilliseconds = 30_000
-): Promise<void> {
-	await manager.query(
-		`select set_config('lock_timeout', '2000ms', true),
-			set_config('statement_timeout', $1, true)`,
-		[`${statementTimeoutMilliseconds}ms`]
-	);
 }
 
 function exactlyOne<T>(rows: readonly T[], name: string): T {

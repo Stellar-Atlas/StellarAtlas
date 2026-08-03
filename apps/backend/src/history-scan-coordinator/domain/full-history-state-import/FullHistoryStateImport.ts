@@ -19,7 +19,7 @@ export interface FullHistoryStateImportClaim {
 }
 
 export type FullHistoryStateImportClaimOrder =
-	'oldest-first' | 'recovery-first';
+	'newest-first' | 'oldest-first' | 'recovery-first';
 
 export interface FullHistoryStateImportRepository {
 	claimNext(

@@ -134,12 +134,14 @@ describe('TypeOrmFullHistoryStateImportRepository', () => {
 		).resolves.toBeNull();
 	});
 
-	it('reserves recovery-first claims without blocking chronological workers', async () => {
+	it('reserves recovery and newest claims without blocking chronological workers', async () => {
 		const pendingBatchId = randomUUID();
+		const newestBatchId = randomUUID();
 		const failedBatchId = randomUUID();
 		await insertImportDataset(dataSource, pendingBatchId, 67, 130, 'pending');
 		await insertImportDataset(dataSource, failedBatchId, 131, 194, 'failed');
-		await expect(repository.registerPendingImports()).resolves.toBe(2);
+		await insertImportDataset(dataSource, newestBatchId, 195, 258, 'pending');
+		await expect(repository.registerPendingImports()).resolves.toBe(3);
 		try {
 			await dataSource.query(
 				`update "full_history_lcm_state_import"
@@ -169,10 +171,20 @@ describe('TypeOrmFullHistoryStateImportRepository', () => {
 				30_000,
 				'oldest-first'
 			);
+			const newest = await repository.claimNext(
+				randomUUID(),
+				30_000,
+				'newest-first'
+			);
 			expect(recovery?.batchId).toBe(failedBatchId);
 			expect(chronological?.batchId).toBe(pendingBatchId);
+			expect(newest?.batchId).toBe(newestBatchId);
 		} finally {
-			await deleteImportDatasets(dataSource, [pendingBatchId, failedBatchId]);
+			await deleteImportDatasets(dataSource, [
+				pendingBatchId,
+				failedBatchId,
+				newestBatchId
+			]);
 		}
 	});
 

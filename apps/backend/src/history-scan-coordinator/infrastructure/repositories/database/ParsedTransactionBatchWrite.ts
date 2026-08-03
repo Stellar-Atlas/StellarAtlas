@@ -10,6 +10,7 @@ import {
 	type ParsedTransactionIdentity
 } from '../../../domain/parsed-history/ParsedTransactionConflictError.js';
 import { recordTransactionObservations } from './ParsedHistoryObservationWrite.js';
+import { lockParsedHistoryCategoryWrites } from './ParsedHistoryCategoryWriteLock.js';
 
 const maximumBatchSize = 1_000;
 const maximumLedgerSequence = 0xffff_ffff;
@@ -43,6 +44,7 @@ export async function saveParsedTransactionEnvelopeBatch(
 	const selection = buildEnvelopeSelection(records);
 
 	await manager.transaction(async (transaction) => {
+		await lockParsedHistoryCategoryWrites(transaction, identities);
 		await transaction.query(
 			`
 					insert into "parsed_transaction_envelope" (
@@ -85,6 +87,7 @@ export async function saveParsedTransactionResultBatch(
 	const selection = buildResultSelection(records);
 
 	await manager.transaction(async (transaction) => {
+		await lockParsedHistoryCategoryWrites(transaction, identities);
 		await transaction.query(
 			`
 					insert into "parsed_transaction_result" (
