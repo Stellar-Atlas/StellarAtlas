@@ -58,6 +58,20 @@ export function composeFullHistoryStateImportWorkers(
 		new TypeOrmFullHistoryStateCanonicalCoverageRepository(dataSource);
 	const registration = new FullHistoryStateRegistrationCoordinator(
 		{
+			reportFailure: (task, error) => {
+				process.stderr.write(
+					`${JSON.stringify({
+						at: new Date().toISOString(),
+						event: 'state-registration',
+						message:
+							error instanceof Error
+								? error.message.slice(0, 2_000)
+								: 'Unknown registration failure',
+						status: 'failed',
+						task
+					})}\n`
+				);
+			},
 			registerCoverage: () => coverageRepository.registerPendingCoverage(),
 			registerImports: () => repository.registerPendingImports()
 		},

@@ -1,4 +1,8 @@
 export interface FullHistoryStateRegistrationTasks {
+	readonly reportFailure?: (
+		task: 'coverage' | 'imports',
+		error: unknown
+	) => void;
 	readonly registerCoverage: () => Promise<number>;
 	readonly registerImports: () => Promise<number>;
 }
@@ -36,8 +40,23 @@ export class FullHistoryStateRegistrationCoordinator {
 	}
 
 	private async runRefresh(): Promise<void> {
+		await this.runTask('imports', this.tasks.registerImports);
+		await this.runTask('coverage', this.tasks.registerCoverage);
 		this.nextRefreshAt = this.now() + this.refreshIntervalMilliseconds;
-		await this.tasks.registerImports();
-		await this.tasks.registerCoverage();
+	}
+
+	private async runTask(
+		name: 'coverage' | 'imports',
+		task: () => Promise<number>
+	): Promise<void> {
+		try {
+			await task();
+		} catch (error) {
+			try {
+				this.tasks.reportFailure?.(name, error);
+			} catch {
+				// Registration and its reporting must never block durable claims.
+			}
+		}
 	}
 }
