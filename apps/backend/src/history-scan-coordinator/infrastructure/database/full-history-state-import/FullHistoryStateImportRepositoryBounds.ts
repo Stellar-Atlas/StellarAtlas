@@ -7,7 +7,7 @@ export function assertFullHistoryStateImportClaimOrder(
 	value: FullHistoryStateImportClaimOrder
 ): void {
 	if (
-		value !== 'newest-first' &&
+		value !== 'canonical-first' &&
 		value !== 'oldest-first' &&
 		value !== 'recovery-first'
 	) {
@@ -34,4 +34,24 @@ export async function setFullHistoryStateImportTransactionBounds(
 			set_config('statement_timeout', $1, true)`,
 		[`${statementTimeoutMilliseconds}ms`]
 	);
+}
+
+export function validFullHistoryStateImportAttemptCount(value: number): number {
+	if (!Number.isSafeInteger(value) || value < 1) {
+		throw new TypeError('State import attempt count is invalid');
+	}
+	return value;
+}
+
+export function validFullHistoryStateImportStorageKey(value: string): string {
+	if (
+		value.length === 0 ||
+		value.length > 2_048 ||
+		value.startsWith('/') ||
+		value.includes('\\') ||
+		value.split('/').some((part) => part.length === 0 || part === '..')
+	) {
+		throw new TypeError('State import storage key is invalid');
+	}
+	return value;
 }

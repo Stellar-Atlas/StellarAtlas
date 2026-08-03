@@ -84,7 +84,7 @@ export function composeFullHistoryStateImportWorkers(
 					index === 0
 						? 'recovery-first'
 						: index === 1
-							? 'newest-first'
+							? 'canonical-first'
 							: 'oldest-first',
 				insertBatchSize: config.insertBatchSize,
 				leaseDurationMilliseconds: config.leaseDurationMilliseconds,

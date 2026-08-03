@@ -134,7 +134,7 @@ describe('TypeOrmFullHistoryStateImportRepository', () => {
 		).resolves.toBeNull();
 	});
 
-	it('reserves recovery and newest claims without blocking chronological workers', async () => {
+	it('reserves recovery and canonical claims without blocking chronological workers', async () => {
 		const pendingBatchId = randomUUID();
 		const newestBatchId = randomUUID();
 		const failedBatchId = randomUUID();
@@ -171,14 +171,14 @@ describe('TypeOrmFullHistoryStateImportRepository', () => {
 				30_000,
 				'oldest-first'
 			);
-			const newest = await repository.claimNext(
+			const canonicalPriority = await repository.claimNext(
 				randomUUID(),
 				30_000,
-				'newest-first'
+				'canonical-first'
 			);
 			expect(recovery?.batchId).toBe(failedBatchId);
 			expect(chronological?.batchId).toBe(pendingBatchId);
-			expect(newest?.batchId).toBe(newestBatchId);
+			expect(canonicalPriority?.batchId).toBe(newestBatchId);
 		} finally {
 			await deleteImportDatasets(dataSource, [
 				pendingBatchId,

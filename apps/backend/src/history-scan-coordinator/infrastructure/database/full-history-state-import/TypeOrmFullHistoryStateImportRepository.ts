@@ -23,7 +23,9 @@ import {
 import {
 	assertFullHistoryStateImportClaimOrder,
 	assertFullHistoryStateImportLeaseDuration,
-	setFullHistoryStateImportTransactionBounds
+	setFullHistoryStateImportTransactionBounds,
+	validFullHistoryStateImportAttemptCount,
+	validFullHistoryStateImportStorageKey
 } from './FullHistoryStateImportRepositoryBounds.js';
 
 interface ClaimRow {
@@ -137,6 +139,18 @@ export class TypeOrmFullHistoryStateImportRepository implements FullHistoryState
 							and control."lease_expires_at" <= clock_timestamp())
 					order by case when $3::boolean
 							and control."status" <> 'pending' then 0 else 1 end,
+						case when $4::boolean
+								and exists (
+									select 1 from "full_history_ledger" canonical
+									where canonical."network_passphrase_hash" = batch."network_passphrase_hash"
+										and canonical."ledger_sequence" = batch."start_ledger"
+								)
+								and exists (
+									select 1 from "full_history_ledger" canonical
+									where canonical."network_passphrase_hash" = batch."network_passphrase_hash"
+										and canonical."ledger_sequence" = batch."end_ledger"
+								)
+							then 0 else 1 end,
 						case when $4::boolean then batch."start_ledger" end desc,
 						case when not $4::boolean then control."next_attempt_at" end,
 						case when not $4::boolean then batch."start_ledger" end,
@@ -171,7 +185,7 @@ export class TypeOrmFullHistoryStateImportRepository implements FullHistoryState
 					leaseOwner,
 					leaseDurationMilliseconds,
 					claimOrder === 'recovery-first',
-					claimOrder === 'newest-first'
+					claimOrder === 'canonical-first'
 				]
 			);
 		});
@@ -445,7 +459,7 @@ function mapClaim(row: ClaimRow): FullHistoryStateImportClaim {
 		throw new TypeError('Unknown state import dataset');
 	}
 	return Object.freeze({
-		attemptCount: validAttemptCount(row.attemptCount),
+		attemptCount: validFullHistoryStateImportAttemptCount(row.attemptCount),
 		batchId: assertUuid(row.batchId, 'batchId'),
 		dataset: row.dataset as (typeof stateDatasets)[number],
 		endLedger: fullHistoryLedgerCloseMetaSequence(Number(row.endLedger)),
@@ -455,28 +469,8 @@ function mapClaim(row: ClaimRow): FullHistoryStateImportClaim {
 			Buffer.from(row.sourceSha256).toString('hex')
 		),
 		startLedger: fullHistoryLedgerCloseMetaSequence(Number(row.startLedger)),
-		storageKey: validStorageKey(row.storageKey)
+		storageKey: validFullHistoryStateImportStorageKey(row.storageKey)
 	});
-}
-
-function validAttemptCount(value: number): number {
-	if (!Number.isSafeInteger(value) || value < 1) {
-		throw new TypeError('State import attempt count is invalid');
-	}
-	return value;
-}
-
-function validStorageKey(value: string): string {
-	if (
-		value.length === 0 ||
-		value.length > 2_048 ||
-		value.startsWith('/') ||
-		value.includes('\\') ||
-		value.split('/').some((part) => part.length === 0 || part === '..')
-	) {
-		throw new TypeError('State import storage key is invalid');
-	}
-	return value;
 }
 
 function assertClaimDataset(
