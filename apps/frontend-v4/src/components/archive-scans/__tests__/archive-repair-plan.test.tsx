@@ -19,7 +19,7 @@ describe('archive repair plan', () => {
 		expect(markup).toContain('Confirmed archive repair evidence');
 		expect(markup).toContain('data-label="Replacement"');
 		expect(markup).not.toContain('Replace archive file');
-		expect(markup).not.toContain(
+		expect(markup).toContain(
 			'Replace the transaction archive file for checkpoint 63.'
 		);
 		expect(markup).not.toContain('href=');
@@ -101,6 +101,9 @@ describe('archive repair plan', () => {
 		expect(markup).toContain(
 			`href="/v1/archive-scans/repair-artifacts/buckets/${'a'.repeat(64)}"`
 		);
+		expect(markup).toContain('transactions/file.xdr.gz');
+		expect(markup).toContain('Keep the existing object as a backup.');
+		expect(markup).toContain('eligible for recheck after');
 	});
 });
 
@@ -140,7 +143,7 @@ function createPlan(): PublicHistoryArchiveRepairPlan {
 						errorType: null,
 						failureClass: 'not-found',
 						httpStatus: 404,
-						nextAttemptAt: null,
+						nextAttemptAt: '2026-07-11T00:05:00.000Z',
 						objectKey: 'transactions:0000003f',
 						objectType: 'transactions',
 						objectUrl: 'https://failed.example/transactions/file.xdr.gz',

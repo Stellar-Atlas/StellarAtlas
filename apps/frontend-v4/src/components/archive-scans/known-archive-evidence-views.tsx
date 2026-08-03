@@ -274,10 +274,7 @@ function RepairView({
 					/>
 				</div>
 			) : null}
-			<ArchiveRepairPlanPanel
-				archiveUrl={repair.archiveUrl}
-				refreshToken={evidence.generatedAt}
-			/>
+			<ArchiveRepairPlanPanel archiveUrl={repair.archiveUrl} />
 		</>
 	);
 }

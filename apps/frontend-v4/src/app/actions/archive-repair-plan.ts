@@ -26,9 +26,9 @@ export async function loadArchiveRepairPlan(
 
 	try {
 		return {
-			plan: await fetchHistoryArchiveRepairPlanForArchive(archiveUrl, 100, {
+			plan: await fetchHistoryArchiveRepairPlanForArchive(archiveUrl, 10, {
 				cache: 'no-store',
-				timeoutMs: 12_000
+				timeoutMs: 20_000
 			}),
 			status: 'loaded'
 		};

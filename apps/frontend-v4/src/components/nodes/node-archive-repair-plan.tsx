@@ -74,6 +74,7 @@ function RepairActionTable({
 							</td>
 							<td data-label="Finding">
 								<strong>{formatActionReason(action.reason)}</strong>
+								<RepairActionGuidance action={action} />
 							</td>
 							<td data-label="Replacement">
 								{formatReplacementReadiness(action)}
@@ -84,6 +85,60 @@ function RepairActionTable({
 			</table>
 		</div>
 	);
+}
+
+function RepairActionGuidance({
+	action
+}: {
+	readonly action: PublicHistoryArchiveRepairPlan['actions'][number];
+}): React.JSX.Element {
+	const evidence = action.evidence[0];
+	const nextAttemptAt = evidence?.nextAttemptAt;
+	return (
+		<details className="archive-repair-guidance">
+			<summary>Repair instructions</summary>
+			{evidence ? (
+				<dl>
+					<dt>Target path</dt>
+					<dd>
+						<code>{getArchiveRelativePath(evidence)}</code>
+					</dd>
+					<dt>Placement</dt>
+					<dd>
+						Keep the existing object as a backup. Publish the verified bytes at
+						the same path using the archive backend&apos;s atomic promotion method,
+						preserving its access permissions and content headers.
+					</dd>
+				</dl>
+			) : null}
+			<p>{action.summary}</p>
+			{nextAttemptAt ? (
+				<small>
+					The scanner will automatically make this file eligible for recheck
+					after {formatDateTime(nextAttemptAt)}.
+				</small>
+			) : null}
+		</details>
+	);
+}
+
+function getArchiveRelativePath(
+	evidence: PublicHistoryArchiveRepairPlan['actions'][number]['evidence'][number]
+): string {
+	try {
+		const archive = new URL(evidence.archiveUrl);
+		const object = new URL(evidence.objectUrl);
+		const archivePath = archive.pathname.replace(/\/+$/, '');
+		if (
+			archive.origin === object.origin &&
+			object.pathname.startsWith(`${archivePath}/`)
+		) {
+			return object.pathname.slice(archivePath.length + 1);
+		}
+	} catch {
+		return evidence.objectKey;
+	}
+	return evidence.objectUrl;
 }
 
 function InfrastructureBlockTable({

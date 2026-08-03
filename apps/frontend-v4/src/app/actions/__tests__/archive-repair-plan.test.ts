@@ -14,7 +14,7 @@ describe('archive repair plan action', () => {
 			archiveUrlIdentity: 'https://history.example.com',
 			generatedAt: '2026-07-11T00:00:00.000Z',
 			infrastructureBlocks: [],
-			limit: 100,
+			limit: 10,
 			summary: {
 				activeObjectChecks: 0,
 				failedCheckpointProofs: 0,
@@ -43,7 +43,7 @@ describe('archive repair plan action', () => {
 				loadArchiveRepairPlan('https://history.example.com')
 			).resolves.toEqual({ plan, status: 'loaded' });
 			expect(fetchCalls[0]?.[0]).toBe(
-				'http://api.test/v1/archive-scans/https%3A%2F%2Fhistory.example.com/repair-plan?limit=100'
+				'http://api.test/v1/archive-scans/https%3A%2F%2Fhistory.example.com/repair-plan?limit=10'
 			);
 			expect(fetchCalls[0]?.[1]).toEqual(
 				expect.objectContaining({ cache: 'no-store' })

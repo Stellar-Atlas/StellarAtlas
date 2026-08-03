@@ -12,11 +12,9 @@ type RepairPlanState =
 	| { readonly phase: 'loaded'; readonly plan: PublicHistoryArchiveRepairPlan };
 
 export function ArchiveRepairPlanPanel({
-	archiveUrl,
-	refreshToken
+	archiveUrl
 }: {
 	readonly archiveUrl: string | null;
-	readonly refreshToken: string;
 }): React.JSX.Element {
 	const [attempt, setAttempt] = useState(0);
 	const [state, setState] = useState<RepairPlanState>({ phase: 'idle' });
@@ -55,7 +53,7 @@ export function ArchiveRepairPlanPanel({
 		return () => {
 			current = false;
 		};
-	}, [archiveUrl, attempt, refreshToken]);
+	}, [archiveUrl, attempt]);
 
 	if (archiveUrl === null) {
 		return (
