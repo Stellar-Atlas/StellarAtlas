@@ -65,6 +65,18 @@ export async function findVerifiedCheckpointsNeedingReconciliation(
 		return [...runtimeTargets, ...mismatches];
 	}
 
+	const satisfiedBucketProofs = await findSatisfiedBucketProofs(
+		repository,
+		safeLimit - runtimeTargets.length - mismatches.length,
+		[...runtimeTargets, ...mismatches]
+	);
+	if (
+		runtimeTargets.length + mismatches.length + satisfiedBucketProofs.length >=
+		safeLimit
+	) {
+		return [...runtimeTargets, ...mismatches, ...satisfiedBucketProofs];
+	}
+
 	const proofReadyQuery = withReconciliationPredicate(
 		baseCheckpointQuery(repository)
 			.innerJoin(
@@ -81,26 +93,49 @@ export async function findVerifiedCheckpointsNeedingReconciliation(
 			.andWhere('candidateProof.requiredObjectsComplete = true')
 			.andWhere('candidateProof.proofFactsComplete = true')
 	);
-	excludeObjects(proofReadyQuery, [...runtimeTargets, ...mismatches]);
+	excludeObjects(proofReadyQuery, [
+		...runtimeTargets,
+		...mismatches,
+		...satisfiedBucketProofs
+	]);
 	const proofReady = await proofReadyQuery
 		.orderBy('object.id', 'ASC')
-		.take(safeLimit - runtimeTargets.length - mismatches.length)
+		.take(
+			safeLimit -
+				runtimeTargets.length -
+				mismatches.length -
+				satisfiedBucketProofs.length
+		)
 		.getMany();
 	if (
-		runtimeTargets.length + mismatches.length + proofReady.length >=
+		runtimeTargets.length +
+			mismatches.length +
+			satisfiedBucketProofs.length +
+			proofReady.length >=
 		safeLimit
 	) {
-		return [...runtimeTargets, ...mismatches, ...proofReady];
+		return [
+			...runtimeTargets,
+			...mismatches,
+			...satisfiedBucketProofs,
+			...proofReady
+		];
 	}
 
 	const remaining = withReconciliationPredicate(
 		baseCheckpointQuery(repository)
 	);
-	excludeObjects(remaining, [...runtimeTargets, ...mismatches, ...proofReady]);
+	excludeObjects(remaining, [
+		...runtimeTargets,
+		...mismatches,
+		...satisfiedBucketProofs,
+		...proofReady
+	]);
 
 	return [
 		...runtimeTargets,
 		...mismatches,
+		...satisfiedBucketProofs,
 		...proofReady,
 		...(await remaining
 			.orderBy('object.id', 'ASC')
@@ -108,10 +143,24 @@ export async function findVerifiedCheckpointsNeedingReconciliation(
 				safeLimit -
 					runtimeTargets.length -
 					mismatches.length -
+					satisfiedBucketProofs.length -
 					proofReady.length
 			)
 			.getMany())
 	];
+}
+
+async function findSatisfiedBucketProofs(
+	repository: Repository<HistoryArchiveObject>,
+	limit: number,
+	excluded: readonly HistoryArchiveObject[]
+): Promise<readonly HistoryArchiveObject[]> {
+	if (limit <= 0) return [];
+	const rows = (await repository.manager.query(satisfiedBucketProofsSql, [
+		limit,
+		excluded.map((object) => object.remoteId)
+	])) as readonly RuntimeTargetRow[];
+	return await loadCheckpointObjects(repository, rows);
 }
 
 async function findRuntimeTargets(
@@ -148,8 +197,14 @@ async function findRuntimeTargets(
 		 limit $1::integer`,
 		[limit]
 	)) as readonly RuntimeTargetRow[];
-	if (rows.length === 0) return [];
+	return await loadCheckpointObjects(repository, rows);
+}
 
+async function loadCheckpointObjects(
+	repository: Repository<HistoryArchiveObject>,
+	rows: readonly RuntimeTargetRow[]
+): Promise<readonly HistoryArchiveObject[]> {
+	if (rows.length === 0) return [];
 	const objects = await baseCheckpointQuery(repository)
 		.andWhere('object.remoteId in (:...runtimeTargetIds)', {
 			runtimeTargetIds: rows.map((row) => row.remoteId)
@@ -163,6 +218,58 @@ async function findRuntimeTargets(
 		return object === undefined ? [] : [object];
 	});
 }
+
+const satisfiedBucketProofsSql = `
+	with proof_candidates as materialized (
+		select distinct on (proof."archiveUrlIdentity")
+			proof."archiveUrlIdentity", proof."checkpointLedger"
+		from history_archive_checkpoint_proof proof
+		where proof.status = 'not-evaluable'
+			and proof."failureKind" = 'bucket-missing'
+			and proof."requiredObjectsComplete" = true
+			and proof."proofFactsComplete" = true
+		order by proof."archiveUrlIdentity", proof."checkpointLedger" desc
+	), satisfied as materialized (
+		select candidate.*
+		from proof_candidates candidate
+		where exists (
+			select 1
+			from "history_archive_checkpoint_bucket_dependency" expected
+			where expected."archiveUrlIdentity" = candidate."archiveUrlIdentity"
+				and expected."checkpointLedger" = candidate."checkpointLedger"
+		)
+		and not exists (
+			select 1
+			from "history_archive_checkpoint_bucket_dependency" expected
+			where expected."archiveUrlIdentity" = candidate."archiveUrlIdentity"
+				and expected."checkpointLedger" = candidate."checkpointLedger"
+				and not exists (
+					select 1
+					from "history_archive_object_queue" bucket
+					where bucket."archiveUrlIdentity" = expected."archiveUrlIdentity"
+						and bucket."objectType" = 'bucket'
+						and bucket."bucketHash" = expected."bucketHash"
+						and bucket.status = 'verified'
+						and bucket."verificationFacts"#>>
+							'{bucketObject,matched}' = 'true'
+						and lower(bucket."verificationFacts"#>>
+							'{bucketObject,expectedBucketHash}') = expected."bucketHash"
+						and bucket."verificationFacts"#>>
+							'{bucketObject,sourceUrl}' = bucket."objectUrl"
+				)
+		)
+	)
+	select object."remoteId"
+	from satisfied
+	join "history_archive_object_queue" object
+		on object."archiveUrlIdentity" = satisfied."archiveUrlIdentity"
+		and object."checkpointLedger" = satisfied."checkpointLedger"
+		and object."objectType" = 'checkpoint-state'
+		and object.status = 'verified'
+	where not (object."remoteId" = any($2::uuid[]))
+	order by object.id
+	limit $1::integer
+`;
 
 function withReconciliationPredicate(
 	query: SelectQueryBuilder<HistoryArchiveObject>
