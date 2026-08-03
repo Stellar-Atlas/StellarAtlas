@@ -30,9 +30,10 @@ export async function markHistoryArchiveObjectFailed(
 		if ((result.affected ?? 0) === 0) return false;
 		await manager.query(
 			`update "history_archive_object_claim_slot"
-			 set "objectRemoteId" = null, "claimedAt" = null, "updatedAt" = now()
-			 where "objectRemoteId" = $1::uuid`,
-			[remoteId]
+			 set "objectRemoteId" = null, "claimAttempt" = null,
+			     "claimedAt" = null, "updatedAt" = now()
+			 where "objectRemoteId" = $1::uuid and "claimAttempt" = $2`,
+			[remoteId, failure.claimAttempt]
 		);
 
 		if (hostFailure !== undefined) {

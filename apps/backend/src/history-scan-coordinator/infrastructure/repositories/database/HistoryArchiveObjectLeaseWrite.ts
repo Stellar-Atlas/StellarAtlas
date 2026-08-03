@@ -28,7 +28,11 @@ export async function markHistoryArchiveObjectVerified(
 			.execute();
 		if ((result.affected ?? 0) === 0) return false;
 
-		await clearClaimSlot(manager.query.bind(manager), remoteId);
+		await clearClaimSlot(
+			manager.query.bind(manager),
+			remoteId,
+			progress.claimAttempt
+		);
 		await enqueueHistoryArchiveReadyObjects(manager, [remoteId]);
 		return true;
 	});
@@ -43,13 +47,7 @@ export async function touchHistoryArchiveObjectClaim(
 		historyArchiveObjectHeartbeatSql,
 		[remoteId, claimAttempt]
 	)) as readonly unknown[];
-	if (rows.length > 0) return true;
-
-	const [claim] = (await repository.manager.query(
-		historyArchiveObjectClaimExistsSql,
-		[remoteId, claimAttempt]
-	)) as readonly { readonly active?: boolean }[];
-	return claim?.active === true;
+	return rows.length > 0;
 }
 
 export async function releaseHistoryArchiveObject(
@@ -75,7 +73,7 @@ export async function releaseHistoryArchiveObject(
 			.execute();
 		if ((result.affected ?? 0) === 0) return false;
 
-		await clearClaimSlot(manager.query.bind(manager), remoteId);
+		await clearClaimSlot(manager.query.bind(manager), remoteId, claimAttempt);
 		await enqueueHistoryArchiveReadyObjects(manager, [remoteId]);
 		return true;
 	});
@@ -136,13 +134,15 @@ export async function markHistoryArchiveTransitionEffectsCompleted(
 
 async function clearClaimSlot(
 	query: (sql: string, parameters?: unknown[]) => Promise<unknown>,
-	remoteId: string
+	remoteId: string,
+	claimAttempt: number
 ): Promise<void> {
 	await query(
 		`update "history_archive_object_claim_slot"
-		 set "objectRemoteId" = null, "claimedAt" = null, "updatedAt" = now()
-		 where "objectRemoteId" = $1::uuid`,
-		[remoteId]
+		 set "objectRemoteId" = null, "claimAttempt" = null,
+		     "claimedAt" = null, "updatedAt" = now()
+		 where "objectRemoteId" = $1::uuid and "claimAttempt" = $2`,
+		[remoteId, claimAttempt]
 	);
 }
 
@@ -157,36 +157,10 @@ const staleReleaseSettingsSql = `
 `;
 
 const historyArchiveObjectHeartbeatSql = `
-	with candidate as materialized (
-		select slot.slot
-		from "history_archive_object_claim_slot" slot
-		where slot."objectRemoteId" = $1::uuid
-			and exists (
-				select 1
-				from "history_archive_object_queue" object
-				where object."remoteId" = $1::uuid
-					and object.status = 'scanning'
-					and object.attempts = $2
-			)
-		for update of slot skip locked
-	)
-	update "history_archive_object_claim_slot" slot
+	update "history_archive_object_claim_slot"
 	set "updatedAt" = now()
-	from candidate
-	where slot.slot = candidate.slot
-	returning slot.slot
-`;
-
-const historyArchiveObjectClaimExistsSql = `
-	select exists (
-		select 1
-		from "history_archive_object_claim_slot" slot
-		join "history_archive_object_queue" object
-			on object."remoteId" = slot."objectRemoteId"
-		where slot."objectRemoteId" = $1::uuid
-			and object.status = 'scanning'
-			and object.attempts = $2
-	) as active
+	where "objectRemoteId" = $1::uuid and "claimAttempt" = $2
+	returning slot
 `;
 
 export const historyArchiveObjectStaleReleaseSql = `
@@ -200,6 +174,7 @@ export const historyArchiveObjectStaleReleaseSql = `
 		join "history_archive_object_queue" object
 			on object."remoteId" = slot."objectRemoteId"
 			and object.status = 'scanning'
+			and object.attempts = slot."claimAttempt"
 		cross join maintenance_guard
 		where maintenance_guard.locked
 			and slot."updatedAt" < $1
@@ -219,6 +194,7 @@ export const historyArchiveObjectStaleReleaseSql = `
 	), freed as (
 		update "history_archive_object_claim_slot" slot
 		set "objectRemoteId" = null,
+			"claimAttempt" = null,
 			"claimedAt" = null,
 			"updatedAt" = now()
 		from released

@@ -41,8 +41,8 @@ export interface HistoryArchiveWorkerProcessIdentity {
 	readonly workerIdPrefix: string;
 }
 
-const initialHeartbeatDelayMs = 5 * 1000;
-const heartbeatIntervalMs = 15 * 1000;
+const initialHeartbeatDelayMs = 30 * 1000;
+const heartbeatIntervalMs = 30 * 1000;
 const heartbeatJitterMs = 2 * 1000;
 
 export class ArchiveObjectWorkerTelemetry {
@@ -109,12 +109,7 @@ export class ArchiveObjectWorkerTelemetry {
 		bytesDownloaded: number | null,
 		bytesTotal: number | null
 	): Promise<void> {
-		this.updateProgress(
-			remoteId,
-			workerStage,
-			bytesDownloaded,
-			bytesTotal
-		);
+		this.updateProgress(remoteId, workerStage, bytesDownloaded, bytesTotal);
 		await this.statusReporter.flush();
 	}
 
@@ -158,9 +153,7 @@ export class ArchiveObjectWorkerTelemetry {
 			const touchResult = await this.scanCoordinator.touchHistoryArchiveObject(
 				remoteId,
 				{
-					bytesDownloaded: progress.bytesDownloaded,
-					claimAttempt: progress.claimAttempt,
-					workerStage: progress.workerStage
+					claimAttempt: progress.claimAttempt
 				}
 			);
 			if (touchResult.isErr()) {

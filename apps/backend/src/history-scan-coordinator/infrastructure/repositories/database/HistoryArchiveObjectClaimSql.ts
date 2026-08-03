@@ -14,6 +14,7 @@ export const historyArchiveObjectClaimCleanupSql = `
 	), cleaned_slots as (
 		update "history_archive_object_claim_slot" slot
 		set "objectRemoteId" = null,
+			"claimAttempt" = null,
 			"claimedAt" = null,
 			"updatedAt" = now()
 		from claim_gate
@@ -24,6 +25,7 @@ export const historyArchiveObjectClaimCleanupSql = `
 				from "history_archive_object_queue" active
 				where active."remoteId" = slot."objectRemoteId"
 					and active.status = 'scanning'
+					and active.attempts = slot."claimAttempt"
 			)
 		returning slot.slot
 	)
@@ -53,7 +55,7 @@ export const historyArchiveObjectClaimAdoptionSql = `
 		end as locked
 		from adoption_state
 	), untracked_active as materialized (
-		select active."remoteId",
+		select active."remoteId", active.attempts,
 			row_number() over (
 				order by active."claimedAt" nulls first, active.id
 			) as position
@@ -87,6 +89,7 @@ export const historyArchiveObjectClaimAdoptionSql = `
 	), adopted_slots as (
 		update "history_archive_object_claim_slot" slot
 		set "objectRemoteId" = untracked_active."remoteId",
+			"claimAttempt" = untracked_active.attempts,
 			"claimedAt" = now(),
 			"updatedAt" = now()
 		from untracked_active
@@ -127,6 +130,7 @@ export const historyArchiveObjectClaimSql = `
 		join "history_archive_object_queue" active
 			on active."remoteId" = occupied."objectRemoteId"
 			and active.status = 'scanning'
+			and active.attempts = occupied."claimAttempt"
 	), active_by_archive as materialized (
 		select "archiveUrlIdentity", count(*)::integer as count
 		from active_claims
@@ -212,6 +216,7 @@ export const historyArchiveObjectClaimSql = `
 	), occupied_slot as (
 		update "history_archive_object_claim_slot" slot
 		set "objectRemoteId" = claimed."remoteId",
+			"claimAttempt" = claimed.attempts,
 			"claimedAt" = now(),
 			"updatedAt" = now()
 		from claimed, host_gate

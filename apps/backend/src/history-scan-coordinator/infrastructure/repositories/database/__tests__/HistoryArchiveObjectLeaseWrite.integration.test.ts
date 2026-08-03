@@ -33,14 +33,14 @@ describe('HistoryArchiveObjectLeaseWrite integration', () => {
 		const remoteId = '00000000-0000-4000-8000-000000000001';
 		await dataSource.query(
 			`insert into history_archive_object_queue (
-				"remoteId", status, "updatedAt"
-			) values ($1, 'scanning', '2026-01-01T00:00:00.000Z')`,
+				"remoteId", status, attempts, "updatedAt"
+			) values ($1, 'scanning', 1, '2026-01-01T00:00:00.000Z')`,
 			[remoteId]
 		);
 		await dataSource.query(
 			`insert into history_archive_object_claim_slot (
-				slot, "objectRemoteId", "updatedAt"
-			) values (0, $1, now())`,
+				slot, "objectRemoteId", "claimAttempt", "updatedAt"
+			) values (0, $1, 1, now())`,
 			[remoteId]
 		);
 
@@ -64,6 +64,7 @@ async function createSchema(dataSource: DataSource): Promise<void> {
 			id bigserial primary key,
 			"remoteId" uuid not null unique,
 			status text not null,
+			attempts integer not null,
 			"claimedAt" timestamptz,
 			"claimedByCommunityScannerId" uuid,
 			"workerStage" text,
@@ -74,6 +75,7 @@ async function createSchema(dataSource: DataSource): Promise<void> {
 		create table history_archive_object_claim_slot (
 			slot integer primary key,
 			"objectRemoteId" uuid,
+			"claimAttempt" integer,
 			"claimedAt" timestamptz,
 			"updatedAt" timestamptz not null
 		)
