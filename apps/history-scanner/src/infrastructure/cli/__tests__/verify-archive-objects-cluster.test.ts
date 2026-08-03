@@ -65,18 +65,18 @@ describe('verify-archive-objects-cluster', () => {
 		);
 
 		supervisor.start();
-		expect(forks).toHaveLength(24);
+		expect(forks).toHaveLength(40);
 		expect(forks[17]).toMatchObject({
 			HISTORY_OBJECT_WORKER_GENERATION: '0',
 			HISTORY_OBJECT_WORKER_INDEX: '17'
 		});
 
 		expect(supervisor.replace(117)).toBe(true);
-		expect(forks).toHaveLength(25);
-		expect(forks[24]).toMatchObject({
+		expect(forks).toHaveLength(41);
+		expect(forks[40]).toMatchObject({
 			HISTORY_OBJECT_WORKER_GENERATION: '1',
 			HISTORY_OBJECT_WORKER_INDEX: '17'
 		});
-		expect(forks[24]?.HISTORY_OBJECT_WORKER_INDEX).not.toBe('0');
+		expect(forks[40]?.HISTORY_OBJECT_WORKER_INDEX).not.toBe('0');
 	});
 });

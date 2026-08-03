@@ -135,31 +135,39 @@ export class VerifyArchiveObjects {
 	}
 
 	private async claimAndVerifyObject(slot: number): Promise<void> {
-		const jobResult = await this.scanCoordinator.getHistoryArchiveObjectJob();
-		if (jobResult.isErr()) {
-			this.exceptionLogger.captureException(jobResult.error);
-			await this.waitBeforeRetry();
-			return;
-		}
+		const releaseDownloadPermit = await this.downloadPermit.acquire();
+		try {
+			const jobResult = await this.scanCoordinator.getHistoryArchiveObjectJob();
+			if (jobResult.isErr()) {
+				this.exceptionLogger.captureException(jobResult.error);
+				await this.waitBeforeRetry();
+				return;
+			}
 
-		if (jobResult.value === null) {
-			this.workerTelemetry.reportIdle(slot);
-			await this.waitBeforeRetry();
-			return;
-		}
+			if (jobResult.value === null) {
+				this.workerTelemetry.reportIdle(slot);
+				await this.waitBeforeRetry();
+				return;
+			}
 
-		await this.verifyObject(jobResult.value, slot);
+			await this.verifyObject(jobResult.value, slot, releaseDownloadPermit);
+		} finally {
+			releaseDownloadPermit();
+		}
 	}
 
 	private async verifyObject(
 		job: HistoryArchiveObjectJobDTO,
-		slot = 0
+		slot: number,
+		releaseDownloadPermit: () => void
 	): Promise<void> {
 		this.workerTelemetry.startObject(slot, job);
 		await this.checkIn('in_progress');
 		let outcome: HistoryArchiveWorkerOutcomeDTO = 'worker_issue';
 		try {
-			const result = await this.performObjectVerification(job);
+			const result = await this.performObjectVerification(
+				job, releaseDownloadPermit
+			);
 			if (result.isErr()) {
 				await retryArchiveObjectTerminalUpdate(
 					() => this.failObject(job, result.error),
@@ -191,22 +199,23 @@ export class VerifyArchiveObjects {
 	}
 
 	private async performObjectVerification(
-		job: HistoryArchiveObjectJobDTO
+		job: HistoryArchiveObjectJobDTO,
+		releaseDownloadPermit: () => void
 	): Promise<
 		Result<HistoryArchiveObjectCompletionDTO, HistoryArchiveObjectFailureDTO>
 	> {
 		switch (job.objectType) {
 			case 'history-archive-state':
-				return this.verifyHistoryArchiveState(job);
+				return this.verifyHistoryArchiveState(job, releaseDownloadPermit);
 			case 'checkpoint-state':
-				return this.categoryVerifier.verifyCheckpointState(job);
+				return this.categoryVerifier.verifyCheckpointState(job, releaseDownloadPermit);
 			case 'ledger':
 			case 'transactions':
 			case 'results':
 			case 'scp':
-				return this.categoryVerifier.verifyCategoryObject(job);
+				return this.categoryVerifier.verifyCategoryObject(job, releaseDownloadPermit);
 			case 'bucket':
-				return this.verifyBucket(job);
+				return this.verifyBucket(job, releaseDownloadPermit);
 			default:
 				return err({
 					errorMessage: `Unsupported history archive object type: ${job.objectType}`,
@@ -218,20 +227,14 @@ export class VerifyArchiveObjects {
 	}
 
 	private async verifyHistoryArchiveState(
-		job: HistoryArchiveObjectJobDTO
+		job: HistoryArchiveObjectJobDTO,
+		releaseDownloadPermit: () => void
 	): Promise<
 		Result<HistoryArchiveObjectCompletionDTO, HistoryArchiveObjectFailureDTO>
 	> {
 		const urlResult = Url.create(job.objectUrl);
 		if (urlResult.isErr()) return err(this.mapLocalError(urlResult.error));
 
-		this.workerTelemetry.updateProgress(
-			job.remoteId,
-			'waiting_for_download_slot',
-			null,
-			null
-		);
-		const releaseDownloadPermit = await this.downloadPermit.acquire();
 		this.workerTelemetry.updateProgress(
 			job.remoteId,
 			'fetching_history_archive_state',
@@ -289,7 +292,8 @@ export class VerifyArchiveObjects {
 	}
 
 	private async verifyBucket(
-		job: HistoryArchiveObjectJobDTO
+		job: HistoryArchiveObjectJobDTO,
+		releaseDownloadPermit: () => void
 	): Promise<
 		Result<HistoryArchiveObjectProgressDTO, HistoryArchiveObjectFailureDTO>
 	> {
@@ -305,13 +309,6 @@ export class VerifyArchiveObjects {
 		const urlResult = Url.create(job.objectUrl);
 		if (urlResult.isErr()) return err(this.mapLocalError(urlResult.error));
 
-		this.workerTelemetry.updateProgress(
-			job.remoteId,
-			'waiting_for_download_slot',
-			0,
-			null
-		);
-		const releaseDownloadPermit = await this.downloadPermit.acquire();
 		this.workerTelemetry.updateProgress(
 			job.remoteId,
 			'fetching_bucket',

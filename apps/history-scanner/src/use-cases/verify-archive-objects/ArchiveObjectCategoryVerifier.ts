@@ -61,15 +61,15 @@ export class ArchiveObjectCategoryVerifier {
 	) {}
 
 	async verifyCheckpointState(
-		job: HistoryArchiveObjectJobDTO
+		job: HistoryArchiveObjectJobDTO,
+		releaseDownloadPermit?: () => void
 	): Promise<
 		Result<HistoryArchiveObjectProgressDTO, HistoryArchiveObjectFailureDTO>
 	> {
 		const urlResult = Url.create(job.objectUrl);
 		if (urlResult.isErr()) return err(this.mapLocalError(urlResult.error));
 
-		this.reportProgress(job.remoteId, 'waiting_for_download_slot', null, null);
-		const releaseDownloadPermit = await this.downloadPermit.acquire();
+		releaseDownloadPermit ??= await this.downloadPermit.acquire();
 		this.reportProgress(job.remoteId, 'fetching_checkpoint_state', null, null);
 		const response = await this.httpService
 			.get(urlResult.value, {
@@ -170,7 +170,8 @@ export class ArchiveObjectCategoryVerifier {
 	}
 
 	async verifyCategoryObject(
-		job: HistoryArchiveObjectJobDTO
+		job: HistoryArchiveObjectJobDTO,
+		releaseDownloadPermit?: () => void
 	): Promise<
 		Result<HistoryArchiveObjectProgressDTO, HistoryArchiveObjectFailureDTO>
 	> {
@@ -188,8 +189,7 @@ export class ArchiveObjectCategoryVerifier {
 		const urlResult = Url.create(job.objectUrl);
 		if (urlResult.isErr()) return err(this.mapLocalError(urlResult.error));
 
-		this.reportProgress(job.remoteId, 'waiting_for_download_slot', 0, null);
-		const releaseDownloadPermit = await this.downloadPermit.acquire();
+		releaseDownloadPermit ??= await this.downloadPermit.acquire();
 		this.reportProgress(job.remoteId, workerStages.fetching, 0, null);
 		const response = await this.httpService.get(urlResult.value, {
 			responseType: 'stream',

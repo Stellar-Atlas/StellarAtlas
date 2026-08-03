@@ -12,7 +12,6 @@ import {
 } from './verify-archive-objects-runner.js';
 
 const startupJitterStepMs = 100;
-const maxStartupJitterMs = 2_500;
 const shutdownTimeoutMs = 30_000;
 
 export {
@@ -77,10 +76,7 @@ async function waitForWorkerStartupJitter(
 	);
 	if (workerIndex === undefined) return;
 
-	const delayMs = Math.min(
-		workerIndex * startupJitterStepMs,
-		maxStartupJitterMs
-	);
+	const delayMs = workerIndex * startupJitterStepMs;
 	if (delayMs === 0) return;
 	await new Promise((resolve) => setTimeout(resolve, delayMs));
 }
