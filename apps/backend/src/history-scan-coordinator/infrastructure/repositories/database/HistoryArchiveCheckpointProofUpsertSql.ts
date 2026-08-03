@@ -65,6 +65,7 @@ export const historyArchiveCheckpointProofUpsertSql = `
 		jsonb_build_object(
 			'expectedLedgerCount', expected_ledger_count,
 			'ledgerRawFactCount', ledger_raw_fact_count,
+			'ledgerHeaderHashesVerified', ledger_header_hashes_verified,
 			'transactionRawFactCount', transaction_raw_fact_count,
 			'resultRawFactCount', result_raw_fact_count,
 			'predecessorMissing', predecessor_missing,
@@ -72,7 +73,9 @@ export const historyArchiveCheckpointProofUpsertSql = `
 			'checkpointStateLedgerFactPresent', has_checkpoint_ledger_fact,
 			'checkpointStateLedgerMatches', checkpoint_ledger_matches,
 			'scpEntryCount', scp_entry_count,
-			'scpOptional', true,
+			'scpExpectationKnown', scp_expectation_known,
+			'scpExpected', scp_expected,
+			'scpOptional', scp_expectation_known and not scp_expected,
 			'scpPresent', scp_present,
 			'scpVerified', scp_verified,
 			'hasActiveObject', has_active,

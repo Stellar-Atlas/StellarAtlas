@@ -24,6 +24,17 @@ it('should decode the true close time from a real ledger archive fixture', () =>
 	});
 });
 
+it('rejects a ledger entry whose embedded hash does not match its header', () => {
+	const frame = Buffer.from(
+		firstXdrFrame(path.join(fixturesDir, 'ledger.xdr.gz'))
+	);
+	frame[0] ^= 0xff;
+
+	expect(() => processLedgerHeaderHistoryEntryXDR(frame)).toThrow(
+		'Ledger header history entry hash does not match its header XDR'
+	);
+});
+
 it('should extract transaction envelope records from a real archive fixture', () => {
 	const result = processTransactionHistoryEntryXDR(
 		firstXdrFrame(path.join(fixturesDir, 'transactions.xdr.gz'))

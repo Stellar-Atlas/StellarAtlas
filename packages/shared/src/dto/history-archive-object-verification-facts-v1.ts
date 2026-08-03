@@ -39,6 +39,7 @@ export interface HistoryArchiveObjectVerificationFactsV1 {
 	readonly content?: HistoryArchiveContentDigestFactV1;
 	readonly ledgerCategory?: {
 		readonly entryCount: number;
+		readonly headerHashesVerified?: true;
 		readonly ledgers: readonly HistoryArchiveLedgerCategoryFactV1[];
 		readonly sourceUrl?: string;
 	};

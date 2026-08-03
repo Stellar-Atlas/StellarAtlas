@@ -417,6 +417,7 @@ function createCategoryVerificationFacts(
 		return {
 			ledgerCategory: {
 				entryCount,
+				headerHashesVerified: true,
 				ledgers: Array.from(data.expectedHashesPerLedger.entries())
 					.map(([ledger, expectedHashes]) => ({
 						bucketListHash: expectedHashes.bucketListHash,

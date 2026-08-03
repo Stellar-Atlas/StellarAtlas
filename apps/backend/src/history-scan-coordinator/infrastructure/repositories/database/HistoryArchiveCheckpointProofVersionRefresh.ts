@@ -15,6 +15,28 @@ export async function refreshOneStaleCanonicalCheckpointProof(
 		CURRENT_HISTORY_ARCHIVE_CHECKPOINT_PROOF_VERSION
 	])) as readonly StaleCanonicalProofRow[];
 	if (target === undefined) return false;
+	const [scheduled] = (await manager.query(
+		`with scheduled as (
+		 update "history_archive_object_queue"
+		 set status = 'pending', "nextAttemptAt" = now(),
+		     "dependencyReady" = true,
+		     "executionDisposition" = 'executable',
+		     "executionReason" = 'proof-version-refresh',
+		     "executionDispositionAt" = now(), "updatedAt" = now()
+		 where "archiveUrlIdentity" = $1
+		   and "checkpointLedger" = $2
+		   and "objectType" = 'ledger'
+		   and status = 'verified'
+		   and coalesce(
+		     "verificationFacts"#>>'{ledgerCategory,headerHashesVerified}',
+		     'false'
+		   ) <> 'true'
+		 returning 1
+		)
+		select count(*)::integer as count from scheduled`,
+		[target.archiveUrlIdentity, target.checkpointLedger]
+	)) as readonly { readonly count: number }[];
+	if ((scheduled?.count ?? 0) > 0) return true;
 
 	await manager.query(historyArchiveCheckpointProofRefreshSql, [
 		target.archiveUrlIdentity,

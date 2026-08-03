@@ -77,6 +77,14 @@ export function processLedgerHeaderHistoryEntryXDR(
 			Buffer.from(ledgerHeaderHistoryEntryXDR)
 		)
 	);
+	const computedLedgerHeaderHash = hash(
+		ledgerHeaderHistoryEntry.header().toXDR()
+	);
+	if (!computedLedgerHeaderHash.equals(ledgerHeaderHistoryEntry.hash())) {
+		throw new ArchiveXdrError(
+			'Ledger header history entry hash does not match its header XDR'
+		);
+	}
 	return {
 		closedAt: closeTimeToIso(
 			ledgerHeaderHistoryEntry.header().scpValue().closeTime()
@@ -95,7 +103,7 @@ export function processLedgerHeaderHistoryEntryXDR(
 			.header()
 			.previousLedgerHash()
 			.toString('base64'),
-		ledgerHeaderHash: ledgerHeaderHistoryEntry.hash().toString('base64'),
+		ledgerHeaderHash: computedLedgerHeaderHash.toString('base64'),
 		bucketListHash: ledgerHeaderHistoryEntry
 			.header()
 			.bucketListHash()

@@ -1,9 +1,14 @@
+import { createHash } from 'node:crypto';
 import { DataSource } from 'typeorm';
 import { mock } from 'jest-mock-extended';
-import { HistoryArchiveCheckpointProof } from '../../../../domain/history-archive-checkpoint-proof/HistoryArchiveCheckpointProof.js';
+import {
+	CURRENT_HISTORY_ARCHIVE_CHECKPOINT_PROOF_VERSION,
+	HistoryArchiveCheckpointProof
+} from '../../../../domain/history-archive-checkpoint-proof/HistoryArchiveCheckpointProof.js';
 import { HistoryArchiveObject } from '../../../../domain/history-archive-object/HistoryArchiveObject.js';
 import { publicNetworkPassphrase } from '../../../../domain/history-archive-object/HistoryArchiveObjectScpPolicy.js';
 import { TypeOrmHistoryArchiveCheckpointProofRepository } from '../TypeOrmHistoryArchiveCheckpointProofRepository.js';
+import { refreshOneStaleCanonicalCheckpointProof } from '../HistoryArchiveCheckpointProofVersionRefresh.js';
 import {
 	createProofDataSource,
 	createLedgerFact as ledgerFact,
@@ -56,7 +61,7 @@ describe('TypeOrmHistoryArchiveCheckpointProofRepository disposable PostgreSQL',
 			ledgerFactCount: 64,
 			previousLedgersMatch: true,
 			proofFactsComplete: true,
-			proofVersion: 8,
+			proofVersion: 9,
 			resultFactCount: 64,
 			resultsMatch: true,
 			status: 'verified',
@@ -67,11 +72,132 @@ describe('TypeOrmHistoryArchiveCheckpointProofRepository disposable PostgreSQL',
 			checkpointStateLedgerFactPresent: true,
 			checkpointStateLedgerMatches: true,
 			expectedLedgerCount: 64,
-			scpOptional: true,
+			scpOptional: false,
 			scpPresent: true,
 			scpVerified: true,
 			maxProtocolVersion: 22,
 			networkPassphrase: publicNetworkPassphrase
+		});
+	});
+
+	it('requires ledger hashes recomputed from the archived header XDR', async () => {
+		await dataSource.query(
+			`update history_archive_object_queue
+			 set "verificationFacts" = "verificationFacts" #- '{ledgerCategory,headerHashesVerified}'
+			 where "archiveUrlIdentity" = $1 and "objectType" = 'ledger'
+			   and "checkpointLedger" = $2`,
+			[archiveUrl, checkpointLedger]
+		);
+
+		const proof = await refreshAndLoad();
+		expect(proof).toMatchObject({
+			failureKind: 'proof-facts-incomplete',
+			proofFactsComplete: false,
+			status: 'not-evaluable'
+		});
+		expect(proof?.details).toMatchObject({
+			ledgerHeaderHashesVerified: false
+		});
+	});
+
+	it('rechecks legacy ledger facts before upgrading proof semantics', async () => {
+		await refreshAndLoad();
+		await dataSource.query(
+			'truncate table history_archive_state_snapshot, full_history_promotion_runtime restart identity cascade'
+		);
+		await dataSource.query(
+			`update history_archive_object_queue
+			 set "verificationFacts" = "verificationFacts" #- '{ledgerCategory,headerHashesVerified}'
+			 where "archiveUrlIdentity" = $1 and "objectType" = 'ledger'
+			   and "checkpointLedger" = $2`,
+			[archiveUrl, checkpointLedger]
+		);
+		await dataSource.query(
+			`update history_archive_checkpoint_proof
+			 set "proofVersion" = $1
+			 where "archiveUrlIdentity" = $2 and "checkpointLedger" = $3`,
+			[
+				CURRENT_HISTORY_ARCHIVE_CHECKPOINT_PROOF_VERSION - 1,
+				archiveUrl,
+				checkpointLedger
+			]
+		);
+		await dataSource.query(
+			`insert into history_archive_state_snapshot (
+				"archiveUrlIdentity", status, "networkPassphrase"
+			 ) values ($1, 'available', $2)`,
+			[archiveUrl, publicNetworkPassphrase]
+		);
+		await dataSource.query(
+			`insert into full_history_promotion_runtime (
+				"network_passphrase_hash", state, "checkpoint_ledger"
+			 ) values ($1, 'waiting-for-proof', $2)`,
+			[
+				createHash('sha256').update(publicNetworkPassphrase, 'utf8').digest(),
+				checkpointLedger
+			]
+		);
+
+		await expect(
+			refreshOneStaleCanonicalCheckpointProof(dataSource.manager)
+		).resolves.toBe(true);
+		expect(
+			await dataSource.getRepository(HistoryArchiveObject).findOneByOrFail({
+				archiveUrlIdentity: archiveUrl,
+				checkpointLedger,
+				objectType: 'ledger'
+			})
+		).toMatchObject({ status: 'pending' });
+		expect(
+			await dataSource
+				.getRepository(HistoryArchiveCheckpointProof)
+				.findOneByOrFail({
+					archiveUrlIdentity: archiveUrl,
+					checkpointLedger
+				})
+		).toMatchObject({
+			proofVersion: CURRENT_HISTORY_ARCHIVE_CHECKPOINT_PROOF_VERSION - 1
+		});
+
+		await dataSource.query(
+			`update history_archive_object_queue
+			 set status = 'verified',
+			     "verificationFacts" = jsonb_set(
+			       "verificationFacts",
+			       '{ledgerCategory,headerHashesVerified}',
+			       'true'::jsonb,
+			       true
+			     )
+			 where "archiveUrlIdentity" = $1 and "objectType" = 'ledger'
+			   and "checkpointLedger" = $2`,
+			[archiveUrl, checkpointLedger]
+		);
+		expect(
+			await dataSource.getRepository(HistoryArchiveObject).findOneByOrFail({
+				archiveUrlIdentity: archiveUrl,
+				checkpointLedger,
+				objectType: 'ledger'
+			})
+		).toMatchObject({
+			status: 'verified',
+			verificationFacts: {
+				ledgerCategory: { headerHashesVerified: true }
+			}
+		});
+
+		await expect(
+			refreshOneStaleCanonicalCheckpointProof(dataSource.manager)
+		).resolves.toBe(true);
+		expect(
+			await dataSource
+				.getRepository(HistoryArchiveCheckpointProof)
+				.findOneByOrFail({
+					archiveUrlIdentity: archiveUrl,
+					checkpointLedger
+				})
+		).toMatchObject({
+			proofVersion: CURRENT_HISTORY_ARCHIVE_CHECKPOINT_PROOF_VERSION,
+			status: 'verified'
 		});
 	});
 
@@ -93,7 +219,7 @@ describe('TypeOrmHistoryArchiveCheckpointProofRepository disposable PostgreSQL',
 		expect(proof).toMatchObject({
 			failureKind: 'checkpoint-ledger-mismatch',
 			proofFactsComplete: false,
-			proofVersion: 8,
+			proofVersion: 9,
 			status: 'mismatch'
 		});
 		expect(proof?.details).toMatchObject({
@@ -122,6 +248,43 @@ describe('TypeOrmHistoryArchiveCheckpointProofRepository disposable PostgreSQL',
 			expectedLedgerCount: 63,
 			predecessorBoundaryValid: true,
 			predecessorMissing: false
+		});
+	});
+
+	it('treats early public-network SCP history as optional', async () => {
+		await dataSource.query(
+			'truncate table history_archive_checkpoint_proof, history_archive_object_queue, history_archive_checkpoint_bucket_dependency restart identity cascade'
+		);
+		await saveFixture(dataSource, { checkpointLedger: 63 });
+		await deleteObject('scp');
+
+		const proof = await refreshAndLoad(63);
+		expect(proof).toMatchObject({
+			proofFactsComplete: true,
+			requiredObjectsComplete: true,
+			status: 'verified'
+		});
+		expect(proof?.details).toMatchObject({
+			scpExpectationKnown: true,
+			scpExpected: false,
+			scpOptional: true,
+			scpPresent: false,
+			scpVerified: false
+		});
+	});
+
+	it('verifies a checkpoint with no declared bucket dependencies', async () => {
+		await dataSource.query(
+			'truncate table history_archive_checkpoint_proof, history_archive_object_queue, history_archive_checkpoint_bucket_dependency restart identity cascade'
+		);
+		await saveFixture(dataSource, { bucketHashes: [] });
+
+		const proof = await refreshAndLoad();
+		expect(proof).toMatchObject({
+			bucketsVerified: true,
+			expectedBucketCount: 0,
+			status: 'verified',
+			verifiedBucketCount: 0
 		});
 	});
 
@@ -186,23 +349,25 @@ describe('TypeOrmHistoryArchiveCheckpointProofRepository disposable PostgreSQL',
 		});
 	});
 
-	it('keeps optional SCP absence out of the required checkpoint proof', async () => {
+	it('requires SCP evidence at checkpoints where SCP history is expected', async () => {
 		await deleteObject('scp');
 
 		const proof = await refreshAndLoad();
 		expect(proof).toMatchObject({
-			failureKind: null,
-			requiredObjectsComplete: true,
-			status: 'verified'
+			failureKind: 'object-incomplete',
+			requiredObjectsComplete: false,
+			status: 'pending'
 		});
 		expect(proof?.details).toMatchObject({
-			scpOptional: true,
+			scpExpectationKnown: true,
+			scpExpected: true,
+			scpOptional: false,
 			scpPresent: false,
 			scpVerified: false
 		});
 	});
 
-	it('reports optional SCP facts without making them proof requirements', async () => {
+	it('rejects an expected SCP file with no history entries', async () => {
 		await dataSource.query(
 			`update history_archive_object_queue
 			 set "verificationFacts" = jsonb_set(
@@ -214,12 +379,14 @@ describe('TypeOrmHistoryArchiveCheckpointProofRepository disposable PostgreSQL',
 
 		const proof = await refreshAndLoad();
 		expect(proof).toMatchObject({
-			failureKind: null,
-			proofFactsComplete: true,
-			status: 'verified'
+			failureKind: 'proof-facts-incomplete',
+			proofFactsComplete: false,
+			status: 'not-evaluable'
 		});
 		expect(proof?.details).toMatchObject({
-			scpOptional: true,
+			scpExpectationKnown: true,
+			scpExpected: true,
+			scpOptional: false,
 			scpPresent: true,
 			scpVerified: false
 		});
@@ -263,7 +430,7 @@ describe('TypeOrmHistoryArchiveCheckpointProofRepository disposable PostgreSQL',
 		});
 	});
 
-	it('does not require SCP protocol facts for the archive consistency proof', async () => {
+	it('waits for protocol facts before deciding early private-network SCP policy', async () => {
 		const earlyCheckpointLedger = 127;
 		await dataSource.query(
 			'truncate table history_archive_checkpoint_proof, history_archive_object_queue, history_archive_checkpoint_bucket_dependency restart identity cascade'
@@ -276,14 +443,18 @@ describe('TypeOrmHistoryArchiveCheckpointProofRepository disposable PostgreSQL',
 
 		const proof = await refreshAndLoad(earlyCheckpointLedger);
 		expect(proof).toMatchObject({
-			failureKind: null,
-			proofFactsComplete: true,
-			status: 'verified'
+			failureKind: 'proof-facts-incomplete',
+			proofFactsComplete: false,
+			status: 'not-evaluable'
 		});
-		expect(proof?.details).toMatchObject({ scpOptional: true });
+		expect(proof?.details).toMatchObject({
+			scpExpectationKnown: false,
+			scpExpected: false,
+			scpOptional: false
+		});
 	});
 
-	it('does not let an optional SCP 404 invalidate required archive evidence', async () => {
+	it('does not verify a checkpoint whose expected SCP file returned 404', async () => {
 		await dataSource.query(
 			`update history_archive_object_queue
 			 set status = 'failed',
@@ -297,14 +468,16 @@ describe('TypeOrmHistoryArchiveCheckpointProofRepository disposable PostgreSQL',
 
 		const proof = await refreshAndLoad();
 		expect(proof).toMatchObject({
-			failureKind: null,
-			requiredObjectsComplete: true,
-			status: 'verified'
+			failureKind: 'object-incomplete',
+			requiredObjectsComplete: false,
+			status: 'pending'
 		});
 		expect(proof?.details).toMatchObject({
 			failureChannels: [],
 			hasFailedObject: false,
-			scpOptional: true,
+			scpExpectationKnown: true,
+			scpExpected: true,
+			scpOptional: false,
 			scpPresent: true,
 			scpVerified: false
 		});
@@ -502,7 +675,8 @@ describe('TypeOrmHistoryArchiveCheckpointProofRepository disposable PostgreSQL',
 		} = await exerciseFlakyProofRefresh(dataSource, repository);
 		expect(failedObject).toMatchObject({ attempts: 1, status: 'scanning' });
 		const firstResult = await useCase.execute(failedObject.remoteId, failure);
-		expect(firstResult._unsafeUnwrap()).toBe(true);
+		if (firstResult.isErr()) throw firstResult.error;
+		expect(firstResult.value).toBe(true);
 		const persistedFailure = await objectRepository.findByRemoteId(
 			failedObject.remoteId
 		);

@@ -10,6 +10,22 @@ import {
 	emptyTransactionResultSetMatchesSql,
 	emptyTransactionSetMatchesSql
 } from './HistoryArchiveEmptyCategoryProofSql.js';
+import {
+	historyArchiveScpExpectationKnownSql,
+	historyArchiveScpExpectationSql
+} from '../../../domain/history-archive-object/HistoryArchiveObjectScpPolicy.js';
+
+const scpExpectationInput = {
+	checkpointLedgerSql: 'checkpoint_rollup."checkpointLedger"',
+	networkPassphraseSql: 'proof_rollup.network_passphrase',
+	protocolVersionSql: 'proof_rollup.max_protocol_version'
+};
+const scpExpectationKnownSql =
+	historyArchiveScpExpectationKnownSql(scpExpectationInput);
+const scpExpectedSql = historyArchiveScpExpectationSql(scpExpectationInput);
+const scpVerifiedSql = `(checkpoint_rollup.has_scp
+	and coalesce(checkpoint_rollup.scp_entry_count, 0) > 0
+	and coalesce(checkpoint_rollup.scp_source_matches, false))`;
 
 export const historyArchiveCheckpointProofRefreshSql = `
 	with ${historyArchiveCheckpointProofTargetCtesSql}, checkpoint_rollup as (
@@ -123,6 +139,9 @@ export const historyArchiveCheckpointProofRefreshSql = `
 				then (object."verificationFacts"#>>
 					(array[object."objectType" || 'Category', 'entryCount']))::integer
 			end as entry_count,
+			case when object."objectType" = 'ledger' then
+				object."verificationFacts"#>>'{ledgerCategory,headerHashesVerified}' = 'true'
+			else true end as ledger_header_hashes_verified,
 			(object."verificationFacts"#>>
 				(array[object."objectType" || 'Category', 'sourceUrl'])
 					= object."objectUrl") as source_matches
@@ -139,6 +158,8 @@ export const historyArchiveCheckpointProofRefreshSql = `
 			source."objectType",
 			source.entry_count,
 			bool_and(source.source_matches) as source_matches,
+			bool_and(source.ledger_header_hashes_verified)
+				as ledger_header_hashes_verified,
 			jsonb_array_length(source.facts) as raw_fact_count,
 			count(fact.value)::bigint as fact_count,
 			count(distinct (fact.value->>'ledger')::bigint)::bigint
@@ -290,6 +311,9 @@ export const historyArchiveCheckpointProofRefreshSql = `
 				and validation.first_ledger = range.first_expected_ledger
 				and validation.last_ledger = range.last_expected_ledger
 			) filter (where validation."objectType" = 'ledger') as ledger_exact,
+			bool_or(validation.ledger_header_hashes_verified)
+				filter (where validation."objectType" = 'ledger')
+				as ledger_header_hashes_verified,
 			bool_or(validation.entry_count = validation.raw_fact_count
 				and validation.source_matches
 				and validation.fact_count = validation.raw_fact_count
@@ -356,10 +380,9 @@ export const historyArchiveCheckpointProofRefreshSql = `
 		select checkpoint_rollup.*,
 			(failure.object_failures is not null) as has_failed,
 			checkpoint_rollup.scp_object_count > 0 as scp_present,
-			(checkpoint_rollup.has_scp
-				and coalesce(checkpoint_rollup.scp_entry_count, 0) > 0
-				and coalesce(checkpoint_rollup.scp_source_matches, false))
-				as scp_verified,
+			(${scpExpectationKnownSql}) as scp_expectation_known,
+			(${scpExpectedSql}) as scp_expected,
+			${scpVerifiedSql} as scp_verified,
 			proof_rollup.network_passphrase, proof_rollup.max_protocol_version,
 			failure.failure_error_type, failure.failure_channel,
 			failure.failure_http_status,
@@ -373,6 +396,8 @@ export const historyArchiveCheckpointProofRefreshSql = `
 			coalesce(proof_rollup.ledger_fact_count, 0) as ledger_fact_count,
 			coalesce(proof_rollup.transaction_fact_count, 0) as transaction_fact_count,
 			coalesce(proof_rollup.result_fact_count, 0) as result_fact_count,
+			coalesce(proof_rollup.ledger_header_hashes_verified, false)
+				as ledger_header_hashes_verified,
 			coalesce(bucket.expected_bucket_count, 0) as expected_bucket_count,
 			coalesce(bucket.verified_bucket_count, 0) as verified_bucket_count,
 			coalesce(bucket.failed_bucket_count, 0) as failed_bucket_count,
@@ -393,9 +418,14 @@ export const historyArchiveCheckpointProofRefreshSql = `
 				and checkpoint_rollup.checkpoint_state_object_count = 1
 				and checkpoint_rollup.ledger_object_count = 1
 				and checkpoint_rollup.transactions_object_count = 1
-				and checkpoint_rollup.results_object_count = 1)
+				and checkpoint_rollup.results_object_count = 1
+				and (not (${scpExpectedSql}) or (
+					checkpoint_rollup.scp_object_count = 1
+					and checkpoint_rollup.has_scp
+				)))
 				as required_objects_complete,
 			(coalesce(proof_rollup.ledger_exact, false)
+				and coalesce(proof_rollup.ledger_header_hashes_verified, false)
 				and coalesce(proof_rollup.transactions_exact, false)
 				and coalesce(proof_rollup.results_exact, false)
 				and proof_rollup.checkpoint_source_matches
@@ -403,13 +433,15 @@ export const historyArchiveCheckpointProofRefreshSql = `
 				and proof_rollup.checkpoint_ledger_matches
 				and coalesce(proof_rollup.checkpoint_boundary_valid, false)
 				and proof_rollup.has_checkpoint_bucket_fact
-				and proof_rollup.predecessor_boundary_valid)
+				and proof_rollup.predecessor_boundary_valid
+				and (${scpExpectationKnownSql})
+				and (not (${scpExpectedSql}) or ${scpVerifiedSql}))
 				as proof_facts_complete,
 			proof_rollup.checkpoint_bucket_matches as checkpoint_bucket_list_matches,
 			proof_rollup.transactions_match, proof_rollup.results_match,
 			proof_rollup.previous_ledgers_match,
-			(coalesce(bucket.expected_bucket_count, 0) > 0
-				and bucket.expected_bucket_count = bucket.verified_bucket_count
+			(coalesce(bucket.expected_bucket_count, 0) =
+					coalesce(bucket.verified_bucket_count, 0)
 				and coalesce(bucket.failed_bucket_count, 0) = 0) as buckets_verified
 		from checkpoint_rollup
 		join proof_rollup

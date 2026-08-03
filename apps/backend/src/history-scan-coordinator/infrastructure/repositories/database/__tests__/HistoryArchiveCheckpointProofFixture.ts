@@ -14,6 +14,9 @@ import type { HistoryArchiveStateRepository } from '../../../../domain/history-a
 import { FailHistoryArchiveObject } from '../../../../use-cases/fail-history-archive-object/FailHistoryArchiveObject.js';
 import { HistoryArchiveObjectHostThrottleMigration1784410000000 } from '../../../database/migrations/1784410000000-HistoryArchiveObjectHostThrottleMigration.js';
 import { HistoryArchiveObjectClaimCursorMigration1784780000000 } from '../../../database/migrations/1784780000000-HistoryArchiveObjectClaimCursorMigration.js';
+import { HistoryArchiveReadyQueueMigration1785270000000 } from '../../../database/migrations/1785270000000-HistoryArchiveReadyQueueMigration.js';
+import { HistoryArchiveClaimLeaseMigration1785340000000 } from '../../../database/migrations/1785340000000-HistoryArchiveClaimLeaseMigration.js';
+import { HistoryArchiveRepairActionIndexMigration1785370000000 } from '../../../database/migrations/1785370000000-HistoryArchiveRepairActionIndexMigration.js';
 import { createCanonicalFrontierTestSchema } from './HistoryArchiveCanonicalFrontierTestSchema.js';
 
 export const proofArchiveUrl = 'https://proof.example/archive';
@@ -38,6 +41,11 @@ export async function createProofDataSource(url: string): Promise<{
 		queryRunner
 	);
 	await new HistoryArchiveObjectClaimCursorMigration1784780000000().up(
+		queryRunner
+	);
+	await new HistoryArchiveReadyQueueMigration1785270000000().up(queryRunner);
+	await new HistoryArchiveClaimLeaseMigration1785340000000().up(queryRunner);
+	await new HistoryArchiveRepairActionIndexMigration1785370000000().up(
 		queryRunner
 	);
 	await queryRunner.release();
@@ -180,6 +188,7 @@ export async function saveDuplicateProofLedger(
 export async function saveProofFixture(
 	dataSource: DataSource,
 	options: {
+		readonly bucketHashes?: readonly string[];
 		readonly checkpointLedger?: number;
 		readonly networkPassphrase?: string;
 		readonly protocolVersion?: number | null;
@@ -194,6 +203,7 @@ export async function saveProofFixture(
 	const previousLedger = targetFirstLedger - 1;
 	const protocolVersion =
 		options.protocolVersion === undefined ? 22 : options.protocolVersion;
+	const bucketHashes = options.bucketHashes ?? [proofBucketHash];
 	const ledgerFacts = Array.from({ length: expectedLedgerCount }, (_, index) =>
 		createLedgerFact(
 			targetFirstLedger + index,
@@ -208,13 +218,11 @@ export async function saveProofFixture(
 			checkpointHistoryArchiveState: {
 				observedAt: '2026-07-10T00:00:00.000Z',
 				stellarHistory: {
-					currentBuckets: [
-						{
-							curr: proofBucketHash,
-							next: { state: 0 },
-							snap: '0'.repeat(64)
-						}
-					],
+					currentBuckets: bucketHashes.map((bucketHash) => ({
+						curr: bucketHash,
+						next: { state: 0 },
+						snap: '0'.repeat(64)
+					})),
 					currentLedger: targetCheckpointLedger,
 					networkPassphrase:
 						options.networkPassphrase ?? publicNetworkPassphrase,
@@ -237,28 +245,35 @@ export async function saveProofFixture(
 			}
 		}
 	);
-	const bucket = new HistoryArchiveObject({
-		archiveUrl: proofArchiveUrl,
-		archiveUrlIdentity: proofArchiveUrl,
-		bucketHash: proofBucketHash,
-		objectKey: `bucket:${proofBucketHash}`,
-		objectOrder: 50,
-		objectType: 'bucket',
-		objectUrl: `${proofArchiveUrl}/bucket-${proofBucketHash}.xdr.gz`,
-		status: 'verified'
+	const buckets = bucketHashes.map((bucketHash) => {
+		const bucket = new HistoryArchiveObject({
+			archiveUrl: proofArchiveUrl,
+			archiveUrlIdentity: proofArchiveUrl,
+			bucketHash,
+			objectKey: `bucket:${bucketHash}`,
+			objectOrder: 50,
+			objectType: 'bucket',
+			objectUrl: `${proofArchiveUrl}/bucket-${bucketHash}.xdr.gz`,
+			status: 'verified'
+		});
+		bucket.verificationFacts = {
+			bucketObject: {
+				expectedBucketHash: bucketHash,
+				hashAlgorithm: 'sha256',
+				matched: true,
+				sourceUrl: bucket.objectUrl
+			}
+		};
+		return bucket;
 	});
-	bucket.verificationFacts = {
-		bucketObject: {
-			expectedBucketHash: proofBucketHash,
-			hashAlgorithm: 'sha256',
-			matched: true,
-			sourceUrl: bucket.objectUrl
-		}
-	};
 	const objects = [
 		checkpoint,
 		createProofObject('ledger', targetCheckpointLedger, {
-			ledgerCategory: { entryCount: expectedLedgerCount, ledgers: ledgerFacts }
+			ledgerCategory: {
+				entryCount: expectedLedgerCount,
+				headerHashesVerified: true,
+				ledgers: ledgerFacts
+			}
 		}),
 		...(genesisCheckpoint
 			? []
@@ -266,6 +281,7 @@ export async function saveProofFixture(
 					createProofObject('ledger', previousCheckpointLedger, {
 						ledgerCategory: {
 							entryCount: 1,
+							headerHashesVerified: true,
 							ledgers: [
 								createLedgerFact(
 									previousLedger,
@@ -297,7 +313,7 @@ export async function saveProofFixture(
 		createProofObject('scp', targetCheckpointLedger, {
 			scpCategory: { entryCount: 1 }
 		}),
-		bucket
+		...buckets
 	];
 	const objectRepository = dataSource.getRepository(HistoryArchiveObject);
 	await objectRepository.save(objects);
