@@ -141,7 +141,7 @@ export function isHistoryArchiveWorkerReportDTO(
 
 	if (value.currentObject === null) {
 		return (
-			value.stage === 'idle' &&
+			(value.stage === 'idle' || value.stage === 'waiting_for_download_slot') &&
 			value.bytesDownloaded === null &&
 			(value.bytesTotal === undefined || value.bytesTotal === null) &&
 			value.claimAttempt === null

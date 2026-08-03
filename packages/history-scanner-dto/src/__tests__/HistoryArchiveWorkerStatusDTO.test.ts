@@ -1,7 +1,7 @@
 import { isHistoryArchiveWorkerReportDTO } from '../HistoryArchiveWorkerStatusDTO.js';
 
 describe('HistoryArchiveWorkerStatusDTO', () => {
-	it('accepts compact active and idle worker reports', () => {
+	it('accepts compact active, idle, and capacity-waiting worker reports', () => {
 		expect(isHistoryArchiveWorkerReportDTO(createReport())).toBe(true);
 		expect(
 			isHistoryArchiveWorkerReportDTO({
@@ -13,6 +13,16 @@ describe('HistoryArchiveWorkerStatusDTO', () => {
 				lastOutcome: 'verified',
 				lastOutcomeAt: '2026-07-10T12:01:00.000Z',
 				stage: 'idle'
+			})
+		).toBe(true);
+		expect(
+			isHistoryArchiveWorkerReportDTO({
+				...createReport(),
+				bytesDownloaded: null,
+				bytesTotal: null,
+				claimAttempt: null,
+				currentObject: null,
+				stage: 'waiting_for_download_slot'
 			})
 		).toBe(true);
 	});

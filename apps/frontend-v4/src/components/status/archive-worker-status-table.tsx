@@ -219,7 +219,11 @@ function formatCurrentObject(
 	worker: ArchiveWorkerStatusRowDTO
 ): React.JSX.Element | string {
 	const object = worker.currentObject;
-	if (object === null) return 'Idle';
+	if (object === null) {
+		return worker.stage === 'waiting_for_download_slot'
+			? 'Waiting for network capacity'
+			: 'Idle';
+	}
 	return (
 		<>
 			<strong>{formatArchiveObjectTypeLabel(object.type)}</strong>

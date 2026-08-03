@@ -135,14 +135,27 @@ export class VerifyArchiveObjects {
 	}
 
 	private async claimAndVerifyObject(slot: number): Promise<void> {
+		this.workerTelemetry.startWaitingForDownloadSlot(slot);
+		let releaseDownloadPermit: (() => void) | null = null;
+		try {
+			releaseDownloadPermit = await this.downloadPermit.acquire();
+		} catch (error) {
+			this.workerTelemetry.reportIdle(slot);
+			throw error;
+		}
+		this.workerTelemetry.stopWaitingForDownloadSlot(slot);
+
 		const jobResult = await this.scanCoordinator.getHistoryArchiveObjectJob();
 		if (jobResult.isErr()) {
+			releaseDownloadPermit();
+			this.workerTelemetry.reportIdle(slot);
 			this.exceptionLogger.captureException(jobResult.error);
 			await this.waitBeforeRetry();
 			return;
 		}
 
 		if (jobResult.value === null) {
+			releaseDownloadPermit();
 			this.workerTelemetry.reportIdle(slot);
 			await this.waitBeforeRetry();
 			return;
@@ -150,32 +163,7 @@ export class VerifyArchiveObjects {
 
 		const job = jobResult.value;
 		this.workerTelemetry.startObject(slot, job);
-		await this.workerTelemetry.updateProgressAndFlush(
-			job.remoteId,
-			'waiting_for_download_slot',
-			null,
-			null
-		);
 		await this.checkIn('in_progress');
-
-		let releaseDownloadPermit: (() => void) | null = null;
-		try {
-			releaseDownloadPermit = await this.downloadPermit.acquire();
-		} catch (error) {
-			const releaseResult =
-				await this.scanCoordinator.releaseHistoryArchiveObject(
-					job.remoteId,
-					job.claimAttempt
-				);
-			if (releaseResult.isErr()) {
-				this.exceptionLogger.captureException(releaseResult.error);
-			}
-			await this.workerTelemetry.finishObject(
-				job.remoteId,
-				releaseResult.isOk() ? 'released' : 'worker_issue'
-			);
-			throw error;
-		}
 
 		try {
 			await this.verifyObject(job, releaseDownloadPermit);

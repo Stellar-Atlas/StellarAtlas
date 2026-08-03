@@ -52,6 +52,10 @@ export class ArchiveObjectWorkerTelemetry {
 		string,
 		ReturnType<typeof setTimeout>
 	>();
+	private readonly waitingHeartbeatTimers = new Map<
+		number,
+		ReturnType<typeof setTimeout>
+	>();
 	private readonly outcomes = new Map<number, WorkerOutcomeState>();
 	private readonly reportSequences = new Map<number, number>();
 	private readonly stoppingObjects = new Set<string>();
@@ -66,7 +70,20 @@ export class ArchiveObjectWorkerTelemetry {
 	) {}
 
 	reportIdle(slot: number): void {
-		this.statusReporter.enqueue(this.createReport(slot, null));
+		this.stopWaitingForDownloadSlot(slot);
+		this.statusReporter.enqueue(this.createReport(slot, null, 'idle'));
+	}
+
+	startWaitingForDownloadSlot(slot: number): void {
+		this.stopWaitingForDownloadSlot(slot);
+		this.reportWaitingForDownloadSlot(slot);
+		this.scheduleWaitingHeartbeat(slot, heartbeatIntervalMs);
+	}
+
+	stopWaitingForDownloadSlot(slot: number): void {
+		const timer = this.waitingHeartbeatTimers.get(slot);
+		if (timer !== undefined) clearTimeout(timer);
+		this.waitingHeartbeatTimers.delete(slot);
 	}
 
 	startObject(slot: number, job: HistoryArchiveObjectJobDTO): void {
@@ -217,6 +234,21 @@ export class ArchiveObjectWorkerTelemetry {
 		this.heartbeatTimers.set(remoteId, timer);
 	}
 
+	private reportWaitingForDownloadSlot(slot: number): void {
+		this.statusReporter.enqueue(
+			this.createReport(slot, null, 'waiting_for_download_slot')
+		);
+	}
+
+	private scheduleWaitingHeartbeat(slot: number, delayMs: number): void {
+		const timer = setTimeout(() => {
+			if (!this.waitingHeartbeatTimers.has(slot)) return;
+			this.reportWaitingForDownloadSlot(slot);
+			this.scheduleWaitingHeartbeat(slot, heartbeatIntervalMs);
+		}, delayMs);
+		this.waitingHeartbeatTimers.set(slot, timer);
+	}
+
 	private stopHeartbeat(remoteId: string): void {
 		const timer = this.heartbeatTimers.get(remoteId);
 		if (timer !== undefined) clearTimeout(timer);
@@ -225,7 +257,8 @@ export class ArchiveObjectWorkerTelemetry {
 
 	private createReport(
 		slot: number,
-		progress: ActiveObjectProgress | null
+		progress: ActiveObjectProgress | null,
+		inactiveStage: 'idle' | 'waiting_for_download_slot' = 'idle'
 	): HistoryArchiveWorkerReportDTO {
 		const outcome = this.outcomes.get(slot) ?? { at: null, outcome: 'none' };
 		const sequence = (this.reportSequences.get(slot) ?? 0) + 1;
@@ -250,7 +283,7 @@ export class ArchiveObjectWorkerTelemetry {
 			processStartedAt: this.identity.processStartedAt,
 			sequence,
 			slotIndex: this.identity.slotIndex ?? slot,
-			stage: progress?.workerStage ?? 'idle',
+			stage: progress?.workerStage ?? inactiveStage,
 			workerId: `${this.identity.workerIdPrefix}-${slot.toString()}`
 		};
 	}
