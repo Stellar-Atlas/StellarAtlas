@@ -151,6 +151,15 @@ export class TypeOrmFullHistoryStateImportRepository implements FullHistoryState
 										and canonical."ledger_sequence" = batch."end_ledger"
 								)
 							then 0 else 1 end,
+						case when $4::boolean
+								and exists (
+									select 1
+									from "full_history_lcm_state_import" sibling
+									where sibling."batch_id" = control."batch_id"
+										and sibling."dataset" <> control."dataset"
+										and sibling."status" = 'complete'
+								)
+							then 0 else 1 end,
 						case when $4::boolean then batch."start_ledger" end desc,
 						case when not $4::boolean then control."next_attempt_at" end,
 						case when not $4::boolean then batch."start_ledger" end,

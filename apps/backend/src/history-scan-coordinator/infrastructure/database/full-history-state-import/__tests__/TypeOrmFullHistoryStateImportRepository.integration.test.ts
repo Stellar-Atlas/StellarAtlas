@@ -188,6 +188,43 @@ describe('TypeOrmFullHistoryStateImportRepository', () => {
 		}
 	});
 
+	it('finishes a partially imported batch before chasing a newer batch', async () => {
+		const partialBatchId = randomUUID();
+		const newerBatchId = randomUUID();
+		await insertImportDataset(dataSource, partialBatchId, 259, 322, 'partial');
+		await dataSource.query(
+			`insert into "full_history_ledger_close_meta_dataset" (
+				"batch_id", "dataset", "storage_key", "output_sha256", "record_count"
+			) values ($1, 'trustline-state-changes', $2, $3, 0)`,
+			[partialBatchId, 'typed/partial-trustline.parquet', Buffer.alloc(32, 3)]
+		);
+		await insertImportDataset(dataSource, newerBatchId, 323, 386, 'newer');
+		await expect(repository.registerPendingImports()).resolves.toBe(3);
+		try {
+			await dataSource.query(
+				`update "full_history_lcm_state_import"
+				 set "status" = 'complete', "imported_record_count" = 0,
+					"imported_row_set_sha256" = decode(
+						'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855',
+						'hex'
+					), "completed_at" = clock_timestamp(),
+					"updated_at" = clock_timestamp()
+				 where "batch_id" = $1 and "dataset" = 'account-state-changes'`,
+				[partialBatchId]
+			);
+
+			const claim = await repository.claimNext(
+				randomUUID(),
+				30_000,
+				'canonical-first'
+			);
+			expect(claim?.batchId).toBe(partialBatchId);
+			expect(claim?.dataset).toBe('trustline-state-changes');
+		} finally {
+			await deleteImportDatasets(dataSource, [partialBatchId, newerBatchId]);
+		}
+	});
+
 	it('fences every stale operation when the same owner reclaims a lease', async () => {
 		const retryBatchId = randomUUID();
 		await dataSource.query(
