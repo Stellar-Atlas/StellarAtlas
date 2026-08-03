@@ -9,10 +9,10 @@ interface ArchiveObjectSample {
 }
 
 interface ArchiveWorkerSnapshot {
-	readonly activeWorkers: number;
 	readonly lastHeartbeatAt: string | null;
+	readonly queueActiveWorkers: number;
+	readonly queueStaleWorkers: number;
 	readonly registeredWorkers: number;
-	readonly staleWorkers: number;
 }
 
 export function resolveArchiveRuntimeActivity(
@@ -23,8 +23,8 @@ export function resolveArchiveRuntimeActivity(
 		workers.registeredWorkers > 0 || workers.lastHeartbeatAt !== null;
 	if (hasLiveWorkerSnapshot) {
 		return {
-			activeChecks: workers.activeWorkers,
-			staleChecks: workers.staleWorkers
+			activeChecks: workers.queueActiveWorkers,
+			staleChecks: workers.queueStaleWorkers
 		};
 	}
 

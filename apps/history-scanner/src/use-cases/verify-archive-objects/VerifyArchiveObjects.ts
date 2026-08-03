@@ -135,22 +135,50 @@ export class VerifyArchiveObjects {
 	}
 
 	private async claimAndVerifyObject(slot: number): Promise<void> {
-		const releaseDownloadPermit = await this.downloadPermit.acquire();
+		const jobResult = await this.scanCoordinator.getHistoryArchiveObjectJob();
+		if (jobResult.isErr()) {
+			this.exceptionLogger.captureException(jobResult.error);
+			await this.waitBeforeRetry();
+			return;
+		}
+
+		if (jobResult.value === null) {
+			this.workerTelemetry.reportIdle(slot);
+			await this.waitBeforeRetry();
+			return;
+		}
+
+		const job = jobResult.value;
+		this.workerTelemetry.startObject(slot, job);
+		await this.workerTelemetry.updateProgressAndFlush(
+			job.remoteId,
+			'waiting_for_download_slot',
+			null,
+			null
+		);
+		await this.checkIn('in_progress');
+
+		let releaseDownloadPermit: (() => void) | null = null;
 		try {
-			const jobResult = await this.scanCoordinator.getHistoryArchiveObjectJob();
-			if (jobResult.isErr()) {
-				this.exceptionLogger.captureException(jobResult.error);
-				await this.waitBeforeRetry();
-				return;
+			releaseDownloadPermit = await this.downloadPermit.acquire();
+		} catch (error) {
+			const releaseResult =
+				await this.scanCoordinator.releaseHistoryArchiveObject(
+					job.remoteId,
+					job.claimAttempt
+				);
+			if (releaseResult.isErr()) {
+				this.exceptionLogger.captureException(releaseResult.error);
 			}
+			await this.workerTelemetry.finishObject(
+				job.remoteId,
+				releaseResult.isOk() ? 'released' : 'worker_issue'
+			);
+			throw error;
+		}
 
-			if (jobResult.value === null) {
-				this.workerTelemetry.reportIdle(slot);
-				await this.waitBeforeRetry();
-				return;
-			}
-
-			await this.verifyObject(jobResult.value, slot, releaseDownloadPermit);
+		try {
+			await this.verifyObject(job, releaseDownloadPermit);
 		} finally {
 			releaseDownloadPermit();
 		}
@@ -158,15 +186,13 @@ export class VerifyArchiveObjects {
 
 	private async verifyObject(
 		job: HistoryArchiveObjectJobDTO,
-		slot: number,
 		releaseDownloadPermit: () => void
 	): Promise<void> {
-		this.workerTelemetry.startObject(slot, job);
-		await this.checkIn('in_progress');
 		let outcome: HistoryArchiveWorkerOutcomeDTO = 'worker_issue';
 		try {
 			const result = await this.performObjectVerification(
-				job, releaseDownloadPermit
+				job,
+				releaseDownloadPermit
 			);
 			if (result.isErr()) {
 				await retryArchiveObjectTerminalUpdate(
