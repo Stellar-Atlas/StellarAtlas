@@ -145,30 +145,37 @@ export class VerifyArchiveObjects {
 		}
 		this.workerTelemetry.stopWaitingForDownloadSlot(slot);
 
-		const jobResult = await this.scanCoordinator.getHistoryArchiveObjectJob();
-		if (jobResult.isErr()) {
+		let permitReleased = false;
+		const releasePermit = (): void => {
+			if (permitReleased || releaseDownloadPermit === null) return;
+			permitReleased = true;
 			releaseDownloadPermit();
-			this.workerTelemetry.reportIdle(slot);
-			this.exceptionLogger.captureException(jobResult.error);
-			await this.waitBeforeRetry();
-			return;
-		}
-
-		if (jobResult.value === null) {
-			releaseDownloadPermit();
-			this.workerTelemetry.reportIdle(slot);
-			await this.waitBeforeRetry();
-			return;
-		}
-
-		const job = jobResult.value;
-		this.workerTelemetry.startObject(slot, job);
-		await this.checkIn('in_progress');
+		};
 
 		try {
-			await this.verifyObject(job, releaseDownloadPermit);
+			const jobResult =
+				await this.scanCoordinator.getHistoryArchiveObjectJob();
+			if (jobResult.isErr()) {
+				releasePermit();
+				this.workerTelemetry.reportIdle(slot);
+				this.exceptionLogger.captureException(jobResult.error);
+				await this.waitBeforeRetry();
+				return;
+			}
+
+			if (jobResult.value === null) {
+				releasePermit();
+				this.workerTelemetry.reportIdle(slot);
+				await this.waitBeforeRetry();
+				return;
+			}
+
+			const job = jobResult.value;
+			this.workerTelemetry.startObject(slot, job);
+			await this.checkIn('in_progress');
+			await this.verifyObject(job, releasePermit);
 		} finally {
-			releaseDownloadPermit();
+			releasePermit();
 		}
 	}
 

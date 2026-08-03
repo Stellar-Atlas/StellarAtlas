@@ -6,6 +6,7 @@ import type { ExceptionLogger } from 'exception-logger';
 import type { HttpService } from 'http-helper';
 import type { JobMonitor } from 'job-monitor';
 import type { Logger } from 'logger';
+import type { HistoryArchiveDownloadPermit } from '../../../infrastructure/services/HistoryArchiveDownloadPermit.js';
 import type { HistoryArchiveWorkerStatusReporter } from '../../../domain/scan/HistoryArchiveWorkerStatusReporter.js';
 import type {
 	HistoryArchiveObjectJobDTO,
@@ -18,7 +19,9 @@ import {
 import { HistoryArchiveStateValidator } from '../../../domain/history-archive/HistoryArchiveStateValidator.js';
 import { VerifyArchiveObjects } from '../VerifyArchiveObjects.js';
 
-type TestableVerifyArchiveObjects = VerifyArchiveObjects & {
+type TestableVerifyArchiveObjects = {
+	claimAndVerifyObject(slot: number): Promise<void>;
+	downloadPermit: HistoryArchiveDownloadPermit;
 	verifyObject(job: HistoryArchiveObjectJobDTO): Promise<void>;
 };
 
@@ -56,6 +59,24 @@ describe('VerifyArchiveObjects', () => {
 			1,
 			mock<Logger>()
 		) as unknown as TestableVerifyArchiveObjects;
+	});
+
+	it('releases the download permit when the coordinator claim rejects', async () => {
+		const downloadPermit = mock<HistoryArchiveDownloadPermit>();
+		const releasePermit = jest.fn();
+		downloadPermit.acquire.mockResolvedValue(releasePermit);
+		verifier.downloadPermit = downloadPermit;
+		scanCoordinator.getHistoryArchiveObjectJob.mockRejectedValue(
+			new Error('coordinator unavailable')
+		);
+
+		await expect(verifier.claimAndVerifyObject(0)).rejects.toThrow(
+			'coordinator unavailable'
+		);
+
+		expect(releasePermit).toHaveBeenCalledTimes(1);
+		expect(scanCoordinator.completeHistoryArchiveObject).not.toHaveBeenCalled();
+		expect(scanCoordinator.failHistoryArchiveObject).not.toHaveBeenCalled();
 	});
 
 	it('reports a response-stream abort as transport evidence', async () => {
