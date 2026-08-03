@@ -137,15 +137,11 @@ export const historyArchiveObjectClaimSql = `
 		group by "hostIdentity"
 	), selected as materialized (
 		select candidate.id, candidate."remoteId", candidate."archiveUrlIdentity",
-			candidate."hostIdentity", candidate."objectType", root.id as root_id,
-			free_slot.slot, ready.priority
+			candidate."hostIdentity", candidate."objectType", free_slot.slot,
+			ready.priority
 		from "history_archive_object_ready" ready
 		join "history_archive_object_queue" candidate
 			on candidate."remoteId" = ready."objectRemoteId"
-		join "history_archive_object_queue" root
-			on root."archiveUrlIdentity" = candidate."archiveUrlIdentity"
-			and root."objectType" = 'history-archive-state'
-			and root."objectKey" = 'root'
 		cross join free_slot
 		left join active_by_archive archive_activity
 			on archive_activity."archiveUrlIdentity" =
@@ -178,13 +174,13 @@ export const historyArchiveObjectClaimSql = `
 				else 1
 			end,
 			ready.priority,
-			root."lastClaimedAt" asc nulls first,
+			ready."createdAt",
 			candidate."lastClaimedAt" asc nulls first,
 			candidate."objectOrder",
 			candidate."checkpointLedger" desc nulls last,
 			candidate."objectKey",
 			candidate.id
-		for update of ready, candidate, root skip locked
+		for update of ready, candidate skip locked
 		limit 1
 	), host_gate as materialized (
 		select selected.*,
@@ -227,21 +223,11 @@ export const historyArchiveObjectClaimSql = `
 		using claimed
 		where ready."objectRemoteId" = claimed."remoteId"
 		returning ready."objectRemoteId"
-	), root_cursor_update as (
-		update "history_archive_object_queue" root
-		set "lastClaimedAt" = claimed."lastClaimedAt"
-		from claimed
-		where root."archiveUrlIdentity" = claimed."archiveUrlIdentity"
-			and claimed."objectType" <> 'history-archive-state'
-			and root."objectType" = 'history-archive-state'
-			and root."objectKey" = 'root'
-		returning root.id
 	), committed_claim as materialized (
 		select claimed.*
 		from claimed
 		cross join occupied_slot
 		cross join removed_ready
-		left join root_cursor_update on true
 	)
 	select
 		case

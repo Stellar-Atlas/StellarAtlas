@@ -89,9 +89,7 @@ async function writeObservations(
 		`
 			insert into ${quoteIdentifier(write.table)} as stored (${quotedColumns})
 			values ${placeholders.join(',\n')}
-			on conflict (${conflictColumns}) do update set
-				"observedAt" = greatest(stored."observedAt", excluded."observedAt")
-			where excluded."observedAt" > stored."observedAt"
+			on conflict (${conflictColumns}) do nothing
 		`,
 		parameters
 	);

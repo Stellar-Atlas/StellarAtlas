@@ -98,7 +98,7 @@ const refillReadyObjectsSql = `
 		order by priority, "lastClaimedAt" asc nulls first, root_id
 		limit $1::integer
 	), inserted as (
-		insert into "history_archive_object_ready" (
+		insert into "history_archive_object_ready" as stored (
 			"objectRemoteId", "archiveUrlIdentity", priority, "availableAt",
 			"createdAt", "updatedAt"
 		)
@@ -110,6 +110,9 @@ const refillReadyObjectsSql = `
 			priority = excluded.priority,
 			"availableAt" = excluded."availableAt",
 			"updatedAt" = now()
+		where stored."objectRemoteId" is distinct from excluded."objectRemoteId"
+			or stored.priority is distinct from excluded.priority
+			or stored."availableAt" is distinct from excluded."availableAt"
 		returning "objectRemoteId"
 	)
 	select count(*)::integer as count from inserted
@@ -125,8 +128,12 @@ const bootstrapLockSql = `
 		hashtext('history_archive_object_ready_bootstrap')
 	) as locked,
 	exists (
-		select 1 from "history_archive_object_ready" limit 1
-	) as "hasReady"
+		select 1
+		from "history_archive_object_claim_slot" slot
+		where slot.slot < $1::integer
+			and slot."objectRemoteId" is null
+		limit 1
+	) as "hasFreeSlot"
 `;
 
 export async function synchronizeHistoryArchiveReadyQueue(
@@ -177,17 +184,19 @@ export async function bootstrapHistoryArchiveReadyQueueIfEmpty(
 ): Promise<number> {
 	try {
 		return await manager.transaction(async (transaction) => {
+			const boundedLimit = normalizeLimit(limit);
 			await transaction.query(`
 				set local lock_timeout = '250ms';
 				set local statement_timeout = '2s';
 				set local jit = off
 			`);
 			const [guard] = (await transaction.query(
-				bootstrapLockSql
+				bootstrapLockSql,
+				[boundedLimit]
 			)) as readonly BootstrapGuardRow[];
-			if (guard?.locked !== true || guard.hasReady === true) return 0;
+			if (guard?.locked !== true || guard.hasFreeSlot !== true) return 0;
 			const [scheduled] = (await transaction.query(refillReadyObjectsSql, [
-				normalizeLimit(limit)
+				boundedLimit
 			])) as readonly CountRow[];
 			return toCount(scheduled?.count);
 		});
@@ -263,6 +272,9 @@ const enqueueReadyObjectsSql = `
 			priority = excluded.priority,
 			"availableAt" = excluded."availableAt",
 			"updatedAt" = now()
+		where stored."objectRemoteId" is distinct from excluded."objectRemoteId"
+			or stored.priority is distinct from excluded.priority
+			or stored."availableAt" is distinct from excluded."availableAt"
 		returning "objectRemoteId"
 	)
 	select count(*)::integer as count from inserted
@@ -313,7 +325,7 @@ interface CountRow {
 }
 
 interface BootstrapGuardRow {
-	readonly hasReady?: boolean;
+	readonly hasFreeSlot?: boolean;
 	readonly locked?: boolean;
 }
 
