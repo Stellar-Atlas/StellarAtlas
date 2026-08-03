@@ -9,6 +9,7 @@ import { canonicalCheckpointHasStrictEvidenceSql } from './HistoryArchiveCanonic
 import { canonicalFrontierReservationCtesSql } from './HistoryArchiveCanonicalReservationSql.js';
 import { canonicalLaneReservationCtesSql } from './HistoryArchiveCanonicalLaneSql.js';
 import { canonicalRuntimeTargetCtes } from './HistoryArchiveCanonicalRuntimeTargetSql.js';
+import { historyArchiveOutstandingReadyCountCtesSql } from './HistoryArchiveObjectReadyQueue.js';
 import { historyArchiveMinimumWatermark } from '@history-scan-coordinator/domain/history-archive-object/HistoryArchiveObjectPlanningPolicy.js';
 export { canonicalRuntimeTargetCtes } from './HistoryArchiveCanonicalRuntimeTargetSql.js';
 
@@ -321,45 +322,9 @@ export const admitCanonicalFrontierSql = `
 			and reserved."executionReason" = 'canonical-frontier-reserve'
 	), protected_roots as materialized (
 		select "archiveUrlIdentity" from canonical_roots
-	), outstanding as materialized (
-		select count(*)::integer as count
-		from (
-			select id from "history_archive_object_queue" where status = 'scanning'
-			union all
-			select candidate.id from "history_archive_object_queue" candidate
-			where candidate.status = 'pending'
-				and candidate."executionDisposition" = 'executable'
-				and candidate."dependencyReady" = true
-				and (
-					candidate."transitionEffectsRequiredAt" is null
-					or candidate."transitionEffectsCompletedAt" is not null
-				)
-				and not exists (
-					select 1
-					from "history_archive_object_host_throttle" throttle
-					where throttle."hostIdentity" = candidate."hostIdentity"
-						and throttle."blockedUntil" > now()
-				)
-			union all
-			select candidate.id from "history_archive_object_queue" candidate
-			where candidate.status = 'failed'
-				and candidate."executionDisposition" = 'executable'
-				and candidate."dependencyReady" = true
-				and (
-					candidate."transitionEffectsRequiredAt" is null
-					or candidate."transitionEffectsCompletedAt" is not null
-				)
-				and not exists (
-					select 1
-					from "history_archive_object_host_throttle" throttle
-					where throttle."hostIdentity" = candidate."hostIdentity"
-						and throttle."blockedUntil" > now()
-				)
-				and coalesce(
-					candidate."nextAttemptAt",
-					candidate."updatedAt" + interval '1 hour'
-				) <= now()
-		) runnable
+	), ${historyArchiveOutstandingReadyCountCtesSql}, outstanding as materialized (
+		select (active.count + ready.count)::integer as count
+		from active, ready
 	), candidates as materialized (
 		select distinct on (candidate.id)
 			candidate.id, candidate."archiveUrlIdentity",
