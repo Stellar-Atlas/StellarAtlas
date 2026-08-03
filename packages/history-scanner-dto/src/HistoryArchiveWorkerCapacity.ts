@@ -23,8 +23,5 @@ export function calculateHistoryArchiveObjectWorkerProcesses(
 export function calculateHistoryArchiveObjectCoordinatorProcesses(
 	cpuCount: number
 ): number {
-	return Math.min(
-		historyArchiveDownloadConcurrency,
-		calculateHistoryArchiveObjectWorkerProcesses(cpuCount)
-	);
+	return calculateHistoryArchiveObjectWorkerProcesses(cpuCount);
 }

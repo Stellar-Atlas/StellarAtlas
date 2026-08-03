@@ -9,8 +9,8 @@ describe('verify-archive-objects-cluster', () => {
 
 		expect(plan).toEqual({
 			maximumActiveDownloads: 8,
-			perProcessHasherWorkers: 5,
-			processCount: 8,
+			perProcessHasherWorkers: 1,
+			processCount: 40,
 			totalHasherWorkers: 40
 		});
 	});
