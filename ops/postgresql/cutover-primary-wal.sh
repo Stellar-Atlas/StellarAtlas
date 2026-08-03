@@ -47,7 +47,9 @@ stop_writers() {
 }
 
 start_writers() {
-	systemctl start "${writer_units[@]}"
+	# Several writers wait for the VM API in ExecStartPre. Queue their starts so
+	# an independently restarting API cannot make a successful WAL switch fail.
+	systemctl start --no-block "${writer_units[@]}"
 }
 
 wait_for_postgres() {
