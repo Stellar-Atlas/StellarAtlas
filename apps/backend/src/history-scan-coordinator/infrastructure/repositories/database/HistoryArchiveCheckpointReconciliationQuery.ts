@@ -40,7 +40,11 @@ export async function findVerifiedCheckpointsNeedingReconciliation(
 	limit: number
 ): Promise<readonly HistoryArchiveObject[]> {
 	const safeLimit = normalizeLimit(limit);
-	const runtimeTargets = await findRuntimeTargets(repository, safeLimit);
+	const runtimeTargetLimit = safeLimit - Math.ceil(safeLimit / 3);
+	const runtimeTargets = await findRuntimeTargets(
+		repository,
+		runtimeTargetLimit
+	);
 	if (runtimeTargets.length >= safeLimit) return runtimeTargets;
 
 	const mismatches = await baseCheckpointQuery(repository)

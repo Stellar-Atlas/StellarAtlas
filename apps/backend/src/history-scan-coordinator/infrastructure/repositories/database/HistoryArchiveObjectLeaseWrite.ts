@@ -40,22 +40,16 @@ export async function touchHistoryArchiveObjectClaim(
 	claimAttempt: number
 ): Promise<boolean> {
 	const rows = (await repository.manager.query(
-		`
-			update "history_archive_object_claim_slot" slot
-			set "updatedAt" = now()
-			where slot."objectRemoteId" = $1::uuid
-				and exists (
-					select 1
-					from "history_archive_object_queue" object
-					where object."remoteId" = $1::uuid
-						and object.status = 'scanning'
-						and object.attempts = $2
-				)
-			returning slot.slot
-		`,
+		historyArchiveObjectHeartbeatSql,
 		[remoteId, claimAttempt]
 	)) as readonly unknown[];
-	return rows.length > 0;
+	if (rows.length > 0) return true;
+
+	const [claim] = (await repository.manager.query(
+		historyArchiveObjectClaimExistsSql,
+		[remoteId, claimAttempt]
+	)) as readonly { readonly active?: boolean }[];
+	return claim?.active === true;
 }
 
 export async function releaseHistoryArchiveObject(
@@ -160,6 +154,39 @@ function normalizeLimit(limit: number): number {
 const staleReleaseSettingsSql = `
 	set local lock_timeout = '250ms';
 	set local statement_timeout = '1500ms'
+`;
+
+const historyArchiveObjectHeartbeatSql = `
+	with candidate as materialized (
+		select slot.slot
+		from "history_archive_object_claim_slot" slot
+		where slot."objectRemoteId" = $1::uuid
+			and exists (
+				select 1
+				from "history_archive_object_queue" object
+				where object."remoteId" = $1::uuid
+					and object.status = 'scanning'
+					and object.attempts = $2
+			)
+		for update of slot skip locked
+	)
+	update "history_archive_object_claim_slot" slot
+	set "updatedAt" = now()
+	from candidate
+	where slot.slot = candidate.slot
+	returning slot.slot
+`;
+
+const historyArchiveObjectClaimExistsSql = `
+	select exists (
+		select 1
+		from "history_archive_object_claim_slot" slot
+		join "history_archive_object_queue" object
+			on object."remoteId" = slot."objectRemoteId"
+		where slot."objectRemoteId" = $1::uuid
+			and object.status = 'scanning'
+			and object.attempts = $2
+	) as active
 `;
 
 export const historyArchiveObjectStaleReleaseSql = `
