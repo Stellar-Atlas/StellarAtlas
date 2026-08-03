@@ -27,6 +27,10 @@ import {
 	validFullHistoryStateImportAttemptCount,
 	validFullHistoryStateImportStorageKey
 } from './FullHistoryStateImportRepositoryBounds.js';
+import {
+	failFullHistoryStateImportClaim,
+	releaseFullHistoryStateImportClaim
+} from './FullHistoryStateImportTerminalSql.js';
 
 interface ClaimRow {
 	readonly attemptCount: number;
@@ -358,36 +362,11 @@ export class TypeOrmFullHistoryStateImportRepository implements FullHistoryState
 	}
 
 	async fail(claim: FullHistoryStateImportClaim, error: Error): Promise<void> {
-		const message =
-			error.message.trim().slice(0, 65_535) || 'State import failed';
-		const rows = await this.dataSource.query<IdentityRow[]>(
-			`
-			with failed as (
-				update "full_history_lcm_state_import"
-				set "status" = 'failed', "lease_owner" = null,
-					"lease_expires_at" = null, "completed_at" = null,
-					"updated_at" = clock_timestamp(), "error_text" = $5,
-					"next_attempt_at" = clock_timestamp() + (
-						least(3600, power(2, least("attempt_count", 10)))
-						* interval '1 second'
-					)
-				where "batch_id" = $1 and "dataset" = $2
-					and "status" = 'importing' and "lease_owner" = $3
-					and "attempt_count" = $4
-					and "lease_expires_at" > clock_timestamp()
-				returning "batch_id"
-			)
-			select "batch_id" as "batchId" from failed
-		`,
-			[
-				claim.batchId,
-				claim.dataset,
-				claim.leaseOwner,
-				claim.attemptCount,
-				message
-			]
-		);
-		if (rows.length !== 1) throw new Error('State import lease was lost');
+		await failFullHistoryStateImportClaim(this.dataSource, claim, error);
+	}
+
+	async release(claim: FullHistoryStateImportClaim): Promise<void> {
+		await releaseFullHistoryStateImportClaim(this.dataSource, claim);
 	}
 }
 

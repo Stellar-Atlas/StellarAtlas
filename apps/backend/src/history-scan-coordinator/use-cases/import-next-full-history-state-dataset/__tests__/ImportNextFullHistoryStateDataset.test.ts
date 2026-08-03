@@ -133,6 +133,7 @@ class RecordingRepository implements FullHistoryStateImportRepository {
 	completedDigest: string | null = null;
 	failed: Error | null = null;
 	registrations = 0;
+	releases = 0;
 	renewals = 0;
 
 	constructor(private readonly claim: FullHistoryStateImportClaim | null) {}
@@ -164,6 +165,11 @@ class RecordingRepository implements FullHistoryStateImportRepository {
 	registerPendingImports(): Promise<number> {
 		this.registrations += 1;
 		return Promise.resolve(1);
+	}
+
+	release(): Promise<void> {
+		this.releases += 1;
+		return Promise.resolve();
 	}
 
 	renewLease(): Promise<void> {

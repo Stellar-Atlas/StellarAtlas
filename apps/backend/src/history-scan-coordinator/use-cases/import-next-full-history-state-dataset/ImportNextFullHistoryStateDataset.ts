@@ -90,7 +90,11 @@ export class ImportNextFullHistoryStateDataset {
 			});
 		} catch (error) {
 			const failure = asError(error);
-			await this.repository.fail(claim, failure);
+			if (signal.aborted) {
+				await this.repository.release(claim);
+			} else {
+				await this.repository.fail(claim, failure);
+			}
 			throw failure;
 		}
 	}

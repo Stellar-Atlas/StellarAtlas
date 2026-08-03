@@ -33,6 +33,7 @@ export interface FullHistoryStateImportRepository {
 		rowSetSha256: FullHistoryLedgerCloseMetaSha256Digest
 	): Promise<void>;
 	fail(claim: FullHistoryStateImportClaim, error: Error): Promise<void>;
+	release(claim: FullHistoryStateImportClaim): Promise<void>;
 	registerPendingImports(): Promise<number>;
 	renewLease(
 		claim: FullHistoryStateImportClaim,
