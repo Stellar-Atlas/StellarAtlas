@@ -289,7 +289,18 @@ export const historyArchiveReadyPressureSql = `
 			and object.status = 'scanning'
 	), ready as (
 		select count(*)::integer as count
-		from "history_archive_object_ready"
+		from "history_archive_object_ready" ready_object
+		join "history_archive_object_queue" candidate
+			on candidate."remoteId" = ready_object."objectRemoteId"
+		where ready_object."availableAt" <= now()
+			and candidate."executionDisposition" = 'executable'
+			and candidate."dependencyReady" = true
+			and not exists (
+				select 1
+				from "history_archive_object_host_throttle" throttle
+				where throttle."hostIdentity" = candidate."hostIdentity"
+					and throttle."blockedUntil" > now()
+			)
 	), recent_events as (
 		select 1
 		from "history_archive_object_event"
