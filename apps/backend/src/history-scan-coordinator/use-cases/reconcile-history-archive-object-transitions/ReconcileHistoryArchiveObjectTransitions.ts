@@ -27,6 +27,7 @@ export class ReconcileHistoryArchiveObjectTransitions {
 		if (now < this.nextRunAt) return;
 		this.nextRunAt = now + reconciliationIntervalMs;
 
+		await this.reconcileExecutionDisposition();
 		await this.objectRepository.tryWithTransitionReconciliationLock(
 			async () => {
 				await this.objectRepository.promotePlannedObjects();
@@ -59,7 +60,6 @@ export class ReconcileHistoryArchiveObjectTransitions {
 				}
 			}
 		);
-		await this.reconcileExecutionDisposition();
 	}
 
 	private async reconcileExecutionDisposition(): Promise<void> {
