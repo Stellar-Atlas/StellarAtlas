@@ -75,7 +75,7 @@ export const historyArchiveCheckpointProofUpsertSql = `
 			'scpEntryCount', scp_entry_count,
 			'scpExpectationKnown', scp_expectation_known,
 			'scpExpected', scp_expected,
-			'scpOptional', scp_expectation_known and not scp_expected,
+			'scpOptional', true,
 			'scpPresent', scp_present,
 			'scpVerified', scp_verified,
 			'hasActiveObject', has_active,

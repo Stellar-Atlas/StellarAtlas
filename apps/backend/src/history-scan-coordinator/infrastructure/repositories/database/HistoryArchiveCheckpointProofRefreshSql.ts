@@ -418,11 +418,7 @@ export const historyArchiveCheckpointProofRefreshSql = `
 				and checkpoint_rollup.checkpoint_state_object_count = 1
 				and checkpoint_rollup.ledger_object_count = 1
 				and checkpoint_rollup.transactions_object_count = 1
-				and checkpoint_rollup.results_object_count = 1
-				and (not (${scpExpectedSql}) or (
-					checkpoint_rollup.scp_object_count = 1
-					and checkpoint_rollup.has_scp
-				)))
+				and checkpoint_rollup.results_object_count = 1)
 				as required_objects_complete,
 			(coalesce(proof_rollup.ledger_exact, false)
 				and coalesce(proof_rollup.ledger_header_hashes_verified, false)
@@ -433,9 +429,7 @@ export const historyArchiveCheckpointProofRefreshSql = `
 				and proof_rollup.checkpoint_ledger_matches
 				and coalesce(proof_rollup.checkpoint_boundary_valid, false)
 				and proof_rollup.has_checkpoint_bucket_fact
-				and proof_rollup.predecessor_boundary_valid
-				and (${scpExpectationKnownSql})
-				and (not (${scpExpectedSql}) or ${scpVerifiedSql}))
+				and proof_rollup.predecessor_boundary_valid)
 				as proof_facts_complete,
 			proof_rollup.checkpoint_bucket_matches as checkpoint_bucket_list_matches,
 			proof_rollup.transactions_match, proof_rollup.results_match,
