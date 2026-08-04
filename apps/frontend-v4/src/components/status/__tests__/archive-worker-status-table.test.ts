@@ -1,9 +1,32 @@
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import type { WorkerStatusDTO } from '@api/types';
+import { getArchiveDownloadActivity } from '../archive-download-activity';
 import { ArchiveWorkerStatusTable } from '../archive-worker-status-table';
 
 describe('ArchiveWorkerStatusTable', () => {
+	it('counts only stages that still hold a network permit', () => {
+		const worker = createStatus().archiveWorkers.workers[0]!;
+		const processingWorker: typeof worker = {
+			...worker,
+			stage: 'verifying_bucket'
+		};
+		const waitingWorker: typeof worker = {
+			...worker,
+			currentObject: null,
+			stage: 'waiting_for_download_slot',
+			status: 'idle'
+		};
+
+		expect(getArchiveDownloadActivity([worker])).toEqual({
+			activeDownloads: 1,
+			waitingForDownloadSlots: 0
+		});
+		expect(
+			getArchiveDownloadActivity([processingWorker, waitingWorker])
+		).toEqual({ activeDownloads: 0, waitingForDownloadSlots: 1 });
+	});
+
 	it('renders worker progress without exposing archive URL paths', () => {
 		const markup = renderToStaticMarkup(
 			createElement(ArchiveWorkerStatusTable, { workers: createStatus() })

@@ -269,16 +269,7 @@ export class ArchiveObjectCategoryVerifier {
 				urlResult.value,
 				category,
 				categoryVerificationData,
-				parsedHistorySink,
-				() => {
-					activeWorkerStage = workerStages.processing;
-					this.reportProgress(
-						job.remoteId,
-						activeWorkerStage,
-						bytesDownloaded,
-						bytesTotal
-					);
-				}
+				parsedHistorySink
 			);
 			await pipeline([
 				response.value.data,

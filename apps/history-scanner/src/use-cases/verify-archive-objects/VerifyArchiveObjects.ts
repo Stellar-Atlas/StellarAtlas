@@ -385,6 +385,7 @@ export class VerifyArchiveObjects {
 					);
 				},
 				async () => {
+					activeWorkerStage = 'verifying_bucket';
 					await this.workerTelemetry.updateProgressAndFlush(
 						job.remoteId,
 						activeWorkerStage,
@@ -396,13 +397,6 @@ export class VerifyArchiveObjects {
 			);
 			response.value.data.on('error', (error) => counter.destroy(error));
 			const countedStream = response.value.data.pipe(counter);
-			activeWorkerStage = 'verifying_bucket';
-			this.workerTelemetry.updateProgress(
-				job.remoteId,
-				activeWorkerStage,
-				bytesDownloaded,
-				bytesTotal
-			);
 			const verifyResult = await this.bucketCache.verifyAndStore(
 				job.bucketHash.toLowerCase(),
 				countedStream,

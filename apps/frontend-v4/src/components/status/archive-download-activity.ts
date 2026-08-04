@@ -8,19 +8,14 @@ const permitHoldingStages = new Set<ArchiveWorkerStageDTO>([
 	'fetching_checkpoint_state',
 	'fetching_ledger',
 	'downloading_ledger',
-	'processing_ledger',
 	'fetching_transactions',
 	'downloading_transactions',
-	'processing_transactions',
 	'fetching_results',
 	'downloading_results',
-	'processing_results',
 	'fetching_scp',
 	'downloading_scp',
-	'processing_scp',
 	'fetching_bucket',
-	'downloading_bucket',
-	'verifying_bucket'
+	'downloading_bucket'
 ]);
 
 interface ArchiveDownloadActivity {
