@@ -112,17 +112,6 @@ export class TypeOrmFullHistoryStateCanonicalCoverageRepository implements FullH
 							and coverage."next_attempt_at" <= clock_timestamp())
 						or (coverage."status" = 'checking'
 							and coverage."lease_expires_at" <= clock_timestamp()))
-						and (select count(*) from "full_history_lcm_state_import" state
-								join "full_history_ledger_close_meta_dataset" dataset
-									on dataset."batch_id" = state."batch_id"
-									and dataset."dataset" = state."dataset"
-									and dataset."storage_key" = state."source_path"
-									and dataset."output_sha256" = state."source_sha256"
-									and dataset."record_count" = state."expected_record_count"
-								where state."batch_id" = coverage."batch_id"
-									and state."status" = 'complete'
-									and state."imported_record_count" = state."expected_record_count"
-									and octet_length(state."imported_row_set_sha256") = 32) = 2
 						and (select count(*) from "full_history_ledger" canonical
 							where canonical."network_passphrase_hash" = coverage."network_passphrase_hash"
 								and canonical."ledger_sequence" between lcm."start_ledger" and lcm."end_ledger"

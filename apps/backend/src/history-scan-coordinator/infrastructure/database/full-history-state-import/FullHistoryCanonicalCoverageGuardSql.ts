@@ -1,29 +1,6 @@
 import { fullHistoryStrictCanonicalBatchProofPredicateSql } from './FullHistoryStrictCanonicalProofSql.js';
 
-export const createFullHistoryCanonicalCoverageGuardFunctionSql = `
-	create or replace function guard_full_history_lcm_canonical_coverage()
-	returns trigger language plpgsql as $$
-	declare
-		projection_count integer;
-		matching_count integer;
-		minimum_version smallint;
-		latest_evaluation timestamptz;
-		state_import_count integer;
-		account_expected bigint;
-		trustline_expected bigint;
-		account_count bigint;
-		trustline_count bigint;
-	begin
-		if tg_op = 'DELETE' then
-			raise exception 'full-history LCM canonical coverage cannot be deleted';
-		end if;
-		if tg_op = 'UPDATE' and old."status" in ('complete', 'failed') then
-			raise exception 'terminal full-history LCM canonical coverage is immutable';
-		end if;
-		if new."status" <> 'complete' then
-			return new;
-		end if;
-
+const requireCompletedStateImportsSql = `
 		select count(*),
 			max("expected_record_count") filter (
 				where control."dataset" = 'account-state-changes'
@@ -56,6 +33,36 @@ export const createFullHistoryCanonicalCoverageGuardFunctionSql = `
 			or trustline_count <> trustline_expected then
 			raise exception 'typed state row counts changed after import completion';
 		end if;
+`;
+
+function buildCanonicalCoverageGuardFunctionSql(
+	stateImportValidationSql: string
+): string {
+	return `
+	create or replace function guard_full_history_lcm_canonical_coverage()
+	returns trigger language plpgsql as $$
+	declare
+		projection_count integer;
+		matching_count integer;
+		minimum_version smallint;
+		latest_evaluation timestamptz;
+		state_import_count integer;
+		account_expected bigint;
+		trustline_expected bigint;
+		account_count bigint;
+		trustline_count bigint;
+	begin
+		if tg_op = 'DELETE' then
+			raise exception 'full-history LCM canonical coverage cannot be deleted';
+		end if;
+		if tg_op = 'UPDATE' and old."status" in ('complete', 'failed') then
+			raise exception 'terminal full-history LCM canonical coverage is immutable';
+		end if;
+		if new."status" <> 'complete' then
+			return new;
+		end if;
+
+		${stateImportValidationSql}
 
 		select count(*), count(*) filter (where
 			canonical."ledger_sequence" is not null
@@ -121,3 +128,10 @@ export const createFullHistoryCanonicalCoverageGuardFunctionSql = `
 	end
 	$$
 `;
+}
+
+export const createFullHistoryCanonicalCoverageGuardFunctionSql =
+	buildCanonicalCoverageGuardFunctionSql(requireCompletedStateImportsSql);
+
+export const createFullHistoryCanonicalCoverageGuardFunctionWithoutStateImportsSql =
+	buildCanonicalCoverageGuardFunctionSql('');

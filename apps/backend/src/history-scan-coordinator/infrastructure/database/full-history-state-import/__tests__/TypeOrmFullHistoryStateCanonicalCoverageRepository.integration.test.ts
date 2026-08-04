@@ -4,10 +4,12 @@ import {
 	startDisposablePostgres,
 	type DisposablePostgres
 } from '@test-support/DisposablePostgres.js';
+import { CURRENT_HISTORY_ARCHIVE_CHECKPOINT_PROOF_VERSION } from '../../../../domain/history-archive-checkpoint-proof/HistoryArchiveCheckpointProof.js';
 import type { FullHistoryLedgerProjection } from '../../../../domain/full-history-state-import/FullHistoryLedgerProjection.js';
 import { FullHistoryLedgerCloseMetaStateImportMigration1785130000000 } from '../../migrations/1785130000000-FullHistoryLedgerCloseMetaStateImportMigration.js';
 import { FullHistoryLedgerCloseMetaCanonicalCoverageMigration1785140000000 } from '../../migrations/1785140000000-FullHistoryLedgerCloseMetaCanonicalCoverageMigration.js';
 import { FullHistoryCurrentProofCoverageMigration1785190000000 } from '../../migrations/1785190000000-FullHistoryCurrentProofCoverageMigration.js';
+import { FullHistoryCanonicalCoverageDecouplingMigration1785390000000 } from '../../migrations/1785390000000-FullHistoryCanonicalCoverageDecouplingMigration.js';
 import {
 	insertCanonicalBatchFixture,
 	type CanonicalProofFixture
@@ -44,10 +46,12 @@ describe('TypeOrmFullHistoryStateCanonicalCoverageRepository', () => {
 		await runMigration(
 			new FullHistoryCurrentProofCoverageMigration1785190000000()
 		);
+		await runMigration(
+			new FullHistoryCanonicalCoverageDecouplingMigration1785390000000()
+		);
 		repository = new TypeOrmFullHistoryStateCanonicalCoverageRepository(
 			dataSource
 		);
-		await insertCompleteStateImports(batchId);
 	});
 
 	afterAll(async () => {
@@ -55,7 +59,7 @@ describe('TypeOrmFullHistoryStateCanonicalCoverageRepository', () => {
 		if (postgres !== undefined) await postgres.stop();
 	});
 
-	it('waits for canonical proof rows, then records exact immutable coverage', async () => {
+	it('links canonical proof rows without state-import prerequisites', async () => {
 		const registrations = await Promise.all(
 			Array.from({ length: 4 }, () => repository.registerPendingCoverage())
 		);
@@ -67,14 +71,19 @@ describe('TypeOrmFullHistoryStateCanonicalCoverageRepository', () => {
 		await dataSource.query(
 			`update "history_archive_checkpoint_proof" proof
 			 set "proofVersion" = case
-					when proof."checkpointLedger" = 63 then 6 else 8 end,
+					when proof."checkpointLedger" = 63 then 6 else $4 end,
 				"transactionFactCount" = 63,
 				"resultFactCount" = 63,
 				"evaluatedAt" = $3::timestamptz + interval '0.000456 seconds'
 			 from "full_history_ingestion_batch" batch
 			 where proof.id = batch."checkpoint_proof_id"
 				and batch.id in ($1, $2)`,
-			[canonicalBatchId, canonicalSecondBatchId, proofTime]
+			[
+				canonicalBatchId,
+				canonicalSecondBatchId,
+				proofTime,
+				CURRENT_HISTORY_ARCHIVE_CHECKPOINT_PROOF_VERSION
+			]
 		);
 		await dataSource.query(
 			`update "history_archive_object_queue"
@@ -335,7 +344,6 @@ describe('TypeOrmFullHistoryStateCanonicalCoverageRepository', () => {
 				Buffer.alloc(32, 17)
 			]
 		);
-		await insertCompleteStateImports(mismatchBatchId);
 		await insertCanonicalBatchFixture(dataSource, {
 			batchId: mismatchCanonicalBatchId,
 			checkpointLedger: 191,
@@ -364,25 +372,6 @@ describe('TypeOrmFullHistoryStateCanonicalCoverageRepository', () => {
 				$4::timestamptz + sequence * interval '5 seconds', 0
 			 from generate_series(65, 128) sequence`,
 			[networkHash, canonicalSecondBatchId, mismatchCanonicalBatchId, proofTime]
-		);
-	}
-
-	async function insertCompleteStateImports(
-		targetBatchId: string
-	): Promise<void> {
-		await dataSource.query(
-			`insert into "full_history_lcm_state_import" (
-				"batch_id", "dataset", "source_path", "source_sha256",
-				"expected_record_count", "imported_record_count",
-				"imported_row_set_sha256", "status", "completed_at"
-			) select dataset."batch_id", dataset."dataset", dataset."storage_key",
-				dataset."output_sha256", dataset."record_count", dataset."record_count",
-				digest('', 'sha256'), 'complete', clock_timestamp()
-			 from "full_history_ledger_close_meta_dataset" dataset
-			 where dataset."batch_id" = $1 and dataset."dataset" in (
-				'account-state-changes', 'trustline-state-changes'
-			)`,
-			[targetBatchId]
 		);
 	}
 
