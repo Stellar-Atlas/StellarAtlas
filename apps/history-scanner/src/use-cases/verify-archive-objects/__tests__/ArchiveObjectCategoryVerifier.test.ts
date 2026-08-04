@@ -13,6 +13,9 @@ import { ScannerIssueError } from '../../../domain/scanner/ScannerIssueError.js'
 import { ArchiveObjectCategoryVerifier } from '../ArchiveObjectCategoryVerifier.js';
 import { classifyCategoryVerificationFailure } from '../ArchiveObjectCategoryFailureClassifier.js';
 
+const flushProgress = async () => undefined;
+const downloadPermit = { acquire: async () => () => undefined };
+
 describe('ArchiveObjectCategoryVerifier', () => {
 	it('preserves HTTP status on category fetch failures', async () => {
 		const httpService = mock<HttpService>();
@@ -32,7 +35,9 @@ describe('ArchiveObjectCategoryVerifier', () => {
 			mock<HistoryArchiveStateValidator>(),
 			mock<ExceptionLogger>(),
 			1,
-			() => undefined
+			() => undefined,
+			flushProgress,
+			downloadPermit
 		);
 
 		const result = await verifier.verifyCategoryObject(createObjectJob());
@@ -63,7 +68,9 @@ describe('ArchiveObjectCategoryVerifier', () => {
 			new HistoryArchiveStateValidator(mock<Logger>()),
 			mock<ExceptionLogger>(),
 			1,
-			() => undefined
+			() => undefined,
+			flushProgress,
+			downloadPermit
 		);
 
 		const result = await verifier.verifyCheckpointState(
@@ -116,7 +123,9 @@ describe('ArchiveObjectCategoryVerifier', () => {
 			new HistoryArchiveStateValidator(mock<Logger>()),
 			mock<ExceptionLogger>(),
 			1,
-			() => undefined
+			() => undefined,
+			flushProgress,
+			downloadPermit
 		);
 
 		const result = await verifier.verifyCheckpointState(
@@ -209,7 +218,9 @@ describe('ArchiveObjectCategoryVerifier', () => {
 			mock<HistoryArchiveStateValidator>(),
 			mock<ExceptionLogger>(),
 			1,
-			() => undefined
+			() => undefined,
+			flushProgress,
+			downloadPermit
 		);
 
 		const result = await verifier.verifyCategoryObject(createObjectJob());
@@ -238,7 +249,9 @@ describe('ArchiveObjectCategoryVerifier', () => {
 			mock<HistoryArchiveStateValidator>(),
 			mock<ExceptionLogger>(),
 			1,
-			reportProgress
+			reportProgress,
+			flushProgress,
+			downloadPermit
 		);
 
 		const result = await verifier.verifyCategoryObject(createObjectJob());

@@ -22,7 +22,13 @@ import { VerifyArchiveObjects } from '../VerifyArchiveObjects.js';
 type TestableVerifyArchiveObjects = {
 	claimAndVerifyObject(slot: number): Promise<void>;
 	downloadPermit: HistoryArchiveDownloadPermit;
-	verifyObject(job: HistoryArchiveObjectJobDTO): Promise<void>;
+	workerTelemetry: {
+		startObject(slot: number, job: HistoryArchiveObjectJobDTO): void;
+	};
+	verifyObject(
+		job: HistoryArchiveObjectJobDTO,
+		releaseDownloadPermit: () => void
+	): Promise<void>;
 };
 
 describe('VerifyArchiveObjects', () => {
@@ -101,7 +107,8 @@ describe('VerifyArchiveObjects', () => {
 				objectType: 'bucket',
 				objectUrl:
 					'https://archive.example/bucket/4e/ae/73/bucket-4eae73efaa0ce061441dfe43ffc61c0ed24fcbc59e5ee512d1b60e8da2509655.xdr.gz'
-			})
+			}),
+			() => undefined
 		);
 		await flushPromises();
 
@@ -117,8 +124,11 @@ describe('VerifyArchiveObjects', () => {
 	});
 
 	it('reports a worker outcome without sending a redundant object heartbeat', async () => {
+		const job = createObjectJob({ objectType: 'bucket', bucketHash: null });
+		verifier.workerTelemetry.startObject(0, job);
 		await verifier.verifyObject(
-			createObjectJob({ objectType: 'bucket', bucketHash: null })
+			job,
+			() => undefined
 		);
 		await flushPromises();
 
@@ -143,11 +153,14 @@ describe('VerifyArchiveObjects', () => {
 		statusReporter.report.mockImplementation(
 			() => new Promise(() => undefined)
 		);
+		const job = createObjectJob({ objectType: 'bucket', bucketHash: null });
+		verifier.workerTelemetry.startObject(0, job);
 
 		const result = await Promise.race([
 			verifier
 				.verifyObject(
-					createObjectJob({ objectType: 'bucket', bucketHash: null })
+					job,
+					() => undefined
 				)
 				.then(() => 'completed' as const),
 			new Promise<'timed-out'>((resolve) =>

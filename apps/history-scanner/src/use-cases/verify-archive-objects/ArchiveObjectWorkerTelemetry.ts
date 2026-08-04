@@ -120,6 +120,17 @@ export class ArchiveObjectWorkerTelemetry {
 		this.statusReporter.enqueue(this.createReport(progress.slot, progress));
 	}
 
+	setStage(remoteId: string, workerStage: HistoryArchiveWorkerStageDTO): void {
+		const progress = this.activeObjects.get(remoteId);
+		if (progress === undefined) return;
+		this.updateProgress(
+			remoteId,
+			workerStage,
+			progress.bytesDownloaded,
+			progress.bytesTotal
+		);
+	}
+
 	async updateProgressAndFlush(
 		remoteId: string,
 		workerStage: HistoryArchiveWorkerStageDTO,

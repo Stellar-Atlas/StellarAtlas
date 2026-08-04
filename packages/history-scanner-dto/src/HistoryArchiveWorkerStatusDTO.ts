@@ -33,7 +33,14 @@ export const historyArchiveWorkerStages = [
 	'fetching_bucket',
 	'downloading_bucket',
 	'verified_bucket',
-	'waiting_for_download_slot'
+	'waiting_for_download_slot',
+	'processing_ledger',
+	'processing_transactions',
+	'processing_results',
+	'processing_scp',
+	'verifying_bucket',
+	'persisting_parsed_history',
+	'recording_archive_evidence'
 ] as const;
 
 export type HistoryArchiveWorkerStageDTO =

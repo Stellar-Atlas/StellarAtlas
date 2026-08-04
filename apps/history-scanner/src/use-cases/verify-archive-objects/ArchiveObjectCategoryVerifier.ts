@@ -1,8 +1,7 @@
 import { createGunzip } from 'node:zlib';
-import type { Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 import { err, ok, type Result } from 'neverthrow';
-import { Url, isHttpError, type HttpService } from 'http-helper';
+import { Url, type HttpService } from 'http-helper';
 import type { ExceptionLogger } from 'exception-logger';
 import { type HistoryArchiveObjectVerificationFactsV1 } from 'shared';
 import type { HistoryArchiveWorkerStageDTO } from 'history-scanner-dto';
@@ -26,12 +25,17 @@ import {
 } from './ArchiveObjectContentDigest.js';
 import {
 	archiveEvidenceFailure,
-	getRetryAfterSecondsFromHttpError,
 	scannerIssueFailure
 } from './ArchiveObjectFailure.js';
 import { classifyCategoryVerificationFailure } from './ArchiveObjectCategoryFailureClassifier.js';
 import { readArchiveObjectContentLength } from './ArchiveObjectHttpContentLength.js';
 import { createArchiveObjectDownloadCounter } from './ArchiveObjectDownloadCounter.js';
+import { getCategoryWorkerStages } from './ArchiveObjectCategoryWorkerStages.js';
+import {
+	isReadableArchiveObject,
+	mapArchiveObjectHttpError,
+	mapArchiveObjectLocalError
+} from './ArchiveObjectWorkerHelpers.js';
 import type { HistoryArchiveDownloadPermit } from '../../infrastructure/services/HistoryArchiveDownloadPermit.js';
 
 type ProgressReporter = (
@@ -67,7 +71,7 @@ export class ArchiveObjectCategoryVerifier {
 		Result<HistoryArchiveObjectProgressDTO, HistoryArchiveObjectFailureDTO>
 	> {
 		const urlResult = Url.create(job.objectUrl);
-		if (urlResult.isErr()) return err(this.mapLocalError(urlResult.error));
+		if (urlResult.isErr()) return err(mapArchiveObjectLocalError(urlResult.error));
 
 		releaseDownloadPermit ??= await this.downloadPermit.acquire();
 		this.reportProgress(job.remoteId, 'fetching_checkpoint_state', null, null);
@@ -78,7 +82,7 @@ export class ArchiveObjectCategoryVerifier {
 				socketTimeoutMs: 10_000
 			})
 			.finally(releaseDownloadPermit);
-		if (response.isErr()) return err(this.mapHttpError(response.error));
+		if (response.isErr()) return err(mapArchiveObjectHttpError(response.error));
 
 		const state = response.value.data;
 		if (!isRecord(state)) {
@@ -187,7 +191,7 @@ export class ArchiveObjectCategoryVerifier {
 		}
 
 		const urlResult = Url.create(job.objectUrl);
-		if (urlResult.isErr()) return err(this.mapLocalError(urlResult.error));
+		if (urlResult.isErr()) return err(mapArchiveObjectLocalError(urlResult.error));
 
 		releaseDownloadPermit ??= await this.downloadPermit.acquire();
 		this.reportProgress(job.remoteId, workerStages.fetching, 0, null);
@@ -198,9 +202,9 @@ export class ArchiveObjectCategoryVerifier {
 		});
 		if (response.isErr()) {
 			releaseDownloadPermit();
-			return err(this.mapHttpError(response.error));
+			return err(mapArchiveObjectHttpError(response.error));
 		}
-		if (!isReadable(response.value.data)) {
+		if (!isReadableArchiveObject(response.value.data)) {
 			releaseDownloadPermit();
 			return err({
 				errorMessage: `${job.objectType} response must be a readable stream`,
@@ -213,20 +217,22 @@ export class ArchiveObjectCategoryVerifier {
 		this.reportProgress(job.remoteId, workerStages.downloading, 0, bytesTotal);
 
 		let bytesDownloaded = 0;
+		let activeWorkerStage = workerStages.downloading;
 		const byteCounter = createArchiveObjectDownloadCounter(
 			(bytes) => {
 				bytesDownloaded += bytes;
 				this.reportProgress(
 					job.remoteId,
-					workerStages.downloading,
+					activeWorkerStage,
 					bytesDownloaded,
 					bytesTotal
 				);
 			},
 			async () => {
+				activeWorkerStage = workerStages.processing;
 				await this.flushProgress(
 					job.remoteId,
-					'claimed',
+					activeWorkerStage,
 					bytesDownloaded,
 					bytesTotal
 				);
@@ -263,7 +269,16 @@ export class ArchiveObjectCategoryVerifier {
 				urlResult.value,
 				category,
 				categoryVerificationData,
-				parsedHistorySink
+				parsedHistorySink,
+				() => {
+					activeWorkerStage = workerStages.processing;
+					this.reportProgress(
+						job.remoteId,
+						activeWorkerStage,
+						bytesDownloaded,
+						bytesTotal
+					);
+				}
 			);
 			await pipeline([
 				response.value.data,
@@ -275,13 +290,21 @@ export class ArchiveObjectCategoryVerifier {
 			]);
 			releaseDownloadPermit();
 			const processedEntries = processor.processedEntries;
+			if (parsedHistorySink !== undefined) {
+				this.reportProgress(
+					job.remoteId,
+					'persisting_parsed_history',
+					bytesDownloaded,
+					bytesTotal
+				);
+				await parsedHistorySink.flush();
+			}
 			this.reportProgress(
 				job.remoteId,
 				workerStages.verified,
 				bytesDownloaded,
 				bytesTotal
 			);
-			await parsedHistorySink?.flush();
 			verificationResult = ok({
 				bytesDownloaded,
 				verificationFacts: {
@@ -317,24 +340,6 @@ export class ArchiveObjectCategoryVerifier {
 		return verificationResult;
 	}
 
-	private mapHttpError(error: unknown): HistoryArchiveObjectFailureDTO {
-		if (isHttpError(error)) {
-			return archiveEvidenceFailure({
-				error,
-				errorType: error.response
-					? 'archive_http_error'
-					: 'archive_transport_error',
-				httpStatus: error.response?.status ?? null,
-				retryAfterSeconds: getRetryAfterSecondsFromHttpError(error)
-			});
-		}
-
-		return scannerIssueFailure({ error, errorType: 'http_client_failure' });
-	}
-
-	private mapLocalError(error: unknown): HistoryArchiveObjectFailureDTO {
-		return scannerIssueFailure({ error, errorType: 'worker_setup_failure' });
-	}
 }
 
 function getCategory(objectType: string): Category | null {
@@ -352,42 +357,6 @@ function getCategory(objectType: string): Category | null {
 	}
 }
 
-function getCategoryWorkerStages(
-	objectType: HistoryArchiveObjectJobDTO['objectType']
-): {
-	readonly downloading: HistoryArchiveWorkerStageDTO;
-	readonly fetching: HistoryArchiveWorkerStageDTO;
-	readonly verified: HistoryArchiveWorkerStageDTO;
-} | null {
-	switch (objectType) {
-		case 'ledger':
-			return {
-				downloading: 'downloading_ledger',
-				fetching: 'fetching_ledger',
-				verified: 'verified_ledger'
-			};
-		case 'transactions':
-			return {
-				downloading: 'downloading_transactions',
-				fetching: 'fetching_transactions',
-				verified: 'verified_transactions'
-			};
-		case 'results':
-			return {
-				downloading: 'downloading_results',
-				fetching: 'fetching_results',
-				verified: 'verified_results'
-			};
-		case 'scp':
-			return {
-				downloading: 'downloading_scp',
-				fetching: 'fetching_scp',
-				verified: 'verified_scp'
-			};
-		default:
-			return null;
-	}
-}
 
 function shouldPersistParsedHistory(category: Category): boolean {
 	return (
@@ -468,13 +437,4 @@ function mapHashFacts(
 
 function isRecord(value: unknown): value is Record<string, unknown> {
 	return typeof value === 'object' && value !== null && !Array.isArray(value);
-}
-
-function isReadable(value: unknown): value is Readable {
-	return (
-		typeof value === 'object' &&
-		value !== null &&
-		'pipe' in value &&
-		typeof value.pipe === 'function'
-	);
 }

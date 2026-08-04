@@ -13436,7 +13436,7 @@
 					"slotIndex": {
 						"type": "integer",
 						"minimum": 0,
-						"maximum": 23
+						"maximum": 32767
 					},
 					"stage": {
 						"type": "string",
@@ -13449,19 +13449,26 @@
 							"verified_checkpoint_state",
 							"fetching_ledger",
 							"downloading_ledger",
+							"processing_ledger",
 							"verified_ledger",
 							"fetching_transactions",
 							"downloading_transactions",
+							"processing_transactions",
 							"verified_transactions",
 							"fetching_results",
 							"downloading_results",
+							"processing_results",
 							"verified_results",
 							"fetching_scp",
 							"downloading_scp",
+							"processing_scp",
 							"verified_scp",
 							"fetching_bucket",
 							"downloading_bucket",
+							"verifying_bucket",
 							"verified_bucket",
+							"persisting_parsed_history",
+							"recording_archive_evidence",
 							"waiting_for_download_slot"
 						]
 					},
@@ -13630,7 +13637,7 @@
 					"slotIndex": {
 						"type": "integer",
 						"minimum": 0,
-						"maximum": 23
+						"maximum": 32767
 					},
 					"stage": {
 						"type": "string",
@@ -13643,19 +13650,26 @@
 							"verified_checkpoint_state",
 							"fetching_ledger",
 							"downloading_ledger",
+							"processing_ledger",
 							"verified_ledger",
 							"fetching_transactions",
 							"downloading_transactions",
+							"processing_transactions",
 							"verified_transactions",
 							"fetching_results",
 							"downloading_results",
+							"processing_results",
 							"verified_results",
 							"fetching_scp",
 							"downloading_scp",
+							"processing_scp",
 							"verified_scp",
 							"fetching_bucket",
 							"downloading_bucket",
+							"verifying_bucket",
 							"verified_bucket",
+							"persisting_parsed_history",
+							"recording_archive_evidence",
 							"waiting_for_download_slot"
 						]
 					},
@@ -13717,7 +13731,7 @@
 					"totalTakenJobs": { "type": "integer", "minimum": 0 },
 					"workers": {
 						"type": "array",
-						"maxItems": 24,
+						"maxItems": 128,
 						"items": {
 							"$ref": "#/components/schemas/ArchiveWorkerStatusRowDTO"
 						}

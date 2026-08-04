@@ -1,4 +1,7 @@
-import { isHistoryArchiveWorkerReportDTO } from '../HistoryArchiveWorkerStatusDTO.js';
+import {
+	historyArchiveWorkerStages,
+	isHistoryArchiveWorkerReportDTO
+} from '../HistoryArchiveWorkerStatusDTO.js';
 
 describe('HistoryArchiveWorkerStatusDTO', () => {
 	it('accepts compact active, idle, and capacity-waiting worker reports', () => {
@@ -32,10 +35,45 @@ describe('HistoryArchiveWorkerStatusDTO', () => {
 		expect(isHistoryArchiveWorkerReportDTO(withoutBytesTotal)).toBe(true);
 		expect(
 			isHistoryArchiveWorkerReportDTO({ ...createReport(), slotIndex: 24 })
+		).toBe(true);
+		expect(
+			isHistoryArchiveWorkerReportDTO({ ...createReport(), slotIndex: 32_768 })
 		).toBe(false);
 		expect(
 			isHistoryArchiveWorkerReportDTO({ ...createReport(), bytesTotal: -1 })
 		).toBe(false);
+	});
+
+	it('preserves persisted stage codes while accepting processing stages', () => {
+		expect(historyArchiveWorkerStages.slice(0, 22)).toEqual([
+			'idle',
+			'claimed',
+			'fetching_history_archive_state',
+			'verified_history_archive_state',
+			'fetching_checkpoint_state',
+			'verified_checkpoint_state',
+			'fetching_ledger',
+			'downloading_ledger',
+			'verified_ledger',
+			'fetching_transactions',
+			'downloading_transactions',
+			'verified_transactions',
+			'fetching_results',
+			'downloading_results',
+			'verified_results',
+			'fetching_scp',
+			'downloading_scp',
+			'verified_scp',
+			'fetching_bucket',
+			'downloading_bucket',
+			'verified_bucket',
+			'waiting_for_download_slot'
+		]);
+		for (const stage of historyArchiveWorkerStages.slice(22)) {
+			expect(
+				isHistoryArchiveWorkerReportDTO({ ...createReport(), stage })
+			).toBe(true);
+		}
 	});
 
 	it('rejects free-form stages and archive failure details', () => {

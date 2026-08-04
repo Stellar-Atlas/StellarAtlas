@@ -52,7 +52,7 @@ describe('worker status OpenAPI contract', () => {
 		expect(
 			document.components.schemas.ArchiveWorkerStatusDTO?.properties?.workers
 				?.maxItems
-		).toBe(24);
+		).toBe(128);
 		expect(
 			document.components.schemas.ArchiveWorkerStatusRowDTO?.required
 		).toEqual(

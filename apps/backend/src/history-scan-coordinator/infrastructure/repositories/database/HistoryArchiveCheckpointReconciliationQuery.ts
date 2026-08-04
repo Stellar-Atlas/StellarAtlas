@@ -33,6 +33,27 @@ const runtimeReconciliationPredicateSql = `(
 					${CURRENT_HISTORY_ARCHIVE_CHECKPOINT_PROOF_VERSION}
 			)
 	)
+	or exists (
+		select 1
+		from history_archive_checkpoint_proof runtime_proof
+		join history_archive_checkpoint_bucket_dependency dependency
+			on dependency."archiveUrlIdentity" =
+				runtime_proof."archiveUrlIdentity"
+			and dependency."checkpointLedger" =
+				runtime_proof."checkpointLedger"
+		join history_archive_object_queue bucket
+			on bucket."archiveUrlIdentity" = dependency."archiveUrlIdentity"
+			and bucket."objectType" = 'bucket'
+			and bucket."bucketHash" = dependency."bucketHash"
+			and bucket.status = 'verified'
+		where runtime_proof."archiveUrlIdentity" =
+			"object"."archiveUrlIdentity"
+			and runtime_proof."checkpointLedger" = "object"."checkpointLedger"
+			and greatest(
+				coalesce(bucket."verifiedAt", '-infinity'::timestamptz),
+				bucket."updatedAt"
+			) > runtime_proof."evaluatedAt"
+	)
 )`;
 
 export async function findVerifiedCheckpointsNeedingReconciliation(
@@ -40,7 +61,10 @@ export async function findVerifiedCheckpointsNeedingReconciliation(
 	limit: number
 ): Promise<readonly HistoryArchiveObject[]> {
 	const safeLimit = normalizeLimit(limit);
-	const runtimeTargetLimit = safeLimit - Math.ceil(safeLimit / 3);
+	const runtimeTargetLimit = Math.max(
+		1,
+		safeLimit - Math.ceil(safeLimit / 3)
+	);
 	const runtimeTargets = await findRuntimeTargets(
 		repository,
 		runtimeTargetLimit

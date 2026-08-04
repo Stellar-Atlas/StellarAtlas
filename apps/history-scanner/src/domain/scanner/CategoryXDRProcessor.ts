@@ -15,13 +15,15 @@ import { ScannerIssueError } from './ScannerIssueError.js';
 
 export class CategoryXDRProcessor extends Writable {
 	public processedEntries = 0;
+	private processingStarted = false;
 
 	constructor(
 		public pool: HasherPool,
 		public url: Url,
 		public category: Category,
 		public categoryVerificationData: CategoryVerificationData,
-		private readonly parsedHistorySink: ParsedHistorySink = noopParsedHistorySink
+		private readonly parsedHistorySink: ParsedHistorySink = noopParsedHistorySink,
+		private readonly onProcessingStarted: () => void = () => undefined
 	) {
 		super();
 	}
@@ -31,6 +33,10 @@ export class CategoryXDRProcessor extends Writable {
 		_encoding: string,
 		callback: (error?: Error | null) => void
 	): void {
+		if (!this.processingStarted) {
+			this.processingStarted = true;
+			this.onProcessingStarted();
+		}
 		void this.processXdr(xdr).then(
 			() => {
 				this.processedEntries += 1;

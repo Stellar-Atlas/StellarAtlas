@@ -1,15 +1,14 @@
-import { createHash } from 'node:crypto';
-import type { Readable } from 'node:stream';
-import { pipeline } from 'node:stream/promises';
-import { createGunzip } from 'node:zlib';
 import { inject, injectable } from 'inversify';
 import { err, ok, type Result } from 'neverthrow';
-import { Url, isHttpError, type HttpService } from 'http-helper';
+import { Url, type HttpService } from 'http-helper';
 import type { ExceptionLogger } from 'exception-logger';
 import type { JobMonitor } from 'job-monitor';
 import type { Logger } from 'logger';
 import { asyncSleep, mapUnknownToError } from 'shared';
-import type { HistoryArchiveWorkerOutcomeDTO } from 'history-scanner-dto';
+import type {
+	HistoryArchiveWorkerOutcomeDTO,
+	HistoryArchiveWorkerStageDTO
+} from 'history-scanner-dto';
 import { HistoryArchiveStateValidator } from '../../domain/history-archive/HistoryArchiveStateValidator.js';
 import { BucketCache } from '../../domain/scanner/BucketCache.js';
 import type {
@@ -33,12 +32,17 @@ import { readArchiveObjectContentLength } from './ArchiveObjectHttpContentLength
 import { createArchiveObjectDownloadCounter } from './ArchiveObjectDownloadCounter.js';
 import { retryArchiveObjectTerminalUpdate } from './ArchiveObjectTerminalUpdate.js';
 import {
+	isReadableArchiveObject,
+	mapArchiveObjectHttpError,
+	mapArchiveObjectLocalError,
+	verifyBucketHash
+} from './ArchiveObjectWorkerHelpers.js';
+import {
 	type HistoryArchiveDownloadPermit,
 	ProcessHistoryArchiveDownloadPermit
 } from '../../infrastructure/services/HistoryArchiveDownloadPermit.js';
 import {
 	archiveEvidenceFailure,
-	getRetryAfterSecondsFromHttpError,
 	scannerIssueFailure
 } from './ArchiveObjectFailure.js';
 
@@ -190,6 +194,10 @@ export class VerifyArchiveObjects {
 				releaseDownloadPermit
 			);
 			if (result.isErr()) {
+				this.workerTelemetry.setStage(
+					job.remoteId,
+					'recording_archive_evidence'
+				);
 				await retryArchiveObjectTerminalUpdate(
 					() => this.failObject(job, result.error),
 					(error) => this.exceptionLogger.captureException(error)
@@ -204,6 +212,10 @@ export class VerifyArchiveObjects {
 				await this.checkIn('error');
 				return;
 			}
+			this.workerTelemetry.setStage(
+				job.remoteId,
+				'recording_archive_evidence'
+			);
 			await retryArchiveObjectTerminalUpdate(
 				() =>
 					this.scanCoordinator.completeHistoryArchiveObject(job.remoteId, {
@@ -254,7 +266,7 @@ export class VerifyArchiveObjects {
 		Result<HistoryArchiveObjectCompletionDTO, HistoryArchiveObjectFailureDTO>
 	> {
 		const urlResult = Url.create(job.objectUrl);
-		if (urlResult.isErr()) return err(this.mapLocalError(urlResult.error));
+		if (urlResult.isErr()) return err(mapArchiveObjectLocalError(urlResult.error));
 
 		this.workerTelemetry.updateProgress(
 			job.remoteId,
@@ -269,7 +281,7 @@ export class VerifyArchiveObjects {
 				socketTimeoutMs: 10_000
 			})
 			.finally(releaseDownloadPermit);
-		if (response.isErr()) return err(this.mapHttpError(response.error));
+		if (response.isErr()) return err(mapArchiveObjectHttpError(response.error));
 
 		const state = response.value.data;
 		if (!this.isRecord(state)) {
@@ -328,7 +340,7 @@ export class VerifyArchiveObjects {
 		}
 
 		const urlResult = Url.create(job.objectUrl);
-		if (urlResult.isErr()) return err(this.mapLocalError(urlResult.error));
+		if (urlResult.isErr()) return err(mapArchiveObjectLocalError(urlResult.error));
 
 		this.workerTelemetry.updateProgress(
 			job.remoteId,
@@ -342,8 +354,8 @@ export class VerifyArchiveObjects {
 				connectionTimeoutMs: 10_000,
 				socketTimeoutMs: 60_000
 			});
-			if (response.isErr()) return err(this.mapHttpError(response.error));
-			if (!this.isReadable(response.value.data)) {
+			if (response.isErr()) return err(mapArchiveObjectHttpError(response.error));
+			if (!isReadableArchiveObject(response.value.data)) {
 				return err({
 					errorMessage: 'Bucket response must be a readable stream',
 					errorType: 'invalid_bucket_response',
@@ -352,9 +364,11 @@ export class VerifyArchiveObjects {
 				});
 			}
 			const bytesTotal = readArchiveObjectContentLength(response.value.headers);
+			let activeWorkerStage: HistoryArchiveWorkerStageDTO =
+				'downloading_bucket';
 			this.workerTelemetry.updateProgress(
 				job.remoteId,
-				'downloading_bucket',
+				activeWorkerStage,
 				0,
 				bytesTotal
 			);
@@ -365,7 +379,7 @@ export class VerifyArchiveObjects {
 					bytesDownloaded += bytes;
 					this.workerTelemetry.updateProgress(
 						job.remoteId,
-						'downloading_bucket',
+						activeWorkerStage,
 						bytesDownloaded,
 						bytesTotal
 					);
@@ -373,7 +387,7 @@ export class VerifyArchiveObjects {
 				async () => {
 					await this.workerTelemetry.updateProgressAndFlush(
 						job.remoteId,
-						'claimed',
+						activeWorkerStage,
 						bytesDownloaded,
 						bytesTotal
 					);
@@ -382,11 +396,18 @@ export class VerifyArchiveObjects {
 			);
 			response.value.data.on('error', (error) => counter.destroy(error));
 			const countedStream = response.value.data.pipe(counter);
+			activeWorkerStage = 'verifying_bucket';
+			this.workerTelemetry.updateProgress(
+				job.remoteId,
+				activeWorkerStage,
+				bytesDownloaded,
+				bytesTotal
+			);
 			const verifyResult = await this.bucketCache.verifyAndStore(
 				job.bucketHash.toLowerCase(),
 				countedStream,
 				(streamToVerify) =>
-					this.verifyBucketHash(streamToVerify, job.bucketHash!)
+					verifyBucketHash(streamToVerify, job.bucketHash!)
 			);
 			if (verifyResult.isErr()) {
 				if (verifyResult.error.kind === 'source-stream') {
@@ -441,23 +462,6 @@ export class VerifyArchiveObjects {
 		}
 	}
 
-	private async verifyBucketHash(
-		readStream: Readable,
-		expectedHash: string
-	): Promise<Result<void, Error>> {
-		const zlib = createGunzip();
-		const hasher = createHash('sha256');
-
-		try {
-			await pipeline(readStream, zlib, hasher);
-			const digest = hasher.digest('hex');
-			if (digest === expectedHash.toLowerCase()) return ok(undefined);
-			return err(new Error('Wrong bucket hash'));
-		} catch (error) {
-			return err(mapUnknownToError(error));
-		}
-	}
-
 	private failObject(
 		job: HistoryArchiveObjectJobDTO,
 		failure: HistoryArchiveObjectFailureDTO
@@ -465,25 +469,6 @@ export class VerifyArchiveObjects {
 		return this.scanCoordinator.failHistoryArchiveObject(job.remoteId, {
 			...failure, claimAttempt: job.claimAttempt
 		});
-	}
-
-	private mapHttpError(error: unknown): HistoryArchiveObjectFailureDTO {
-		if (isHttpError(error)) {
-			return archiveEvidenceFailure({
-				error,
-				errorType: error.response
-					? 'archive_http_error'
-					: 'archive_transport_error',
-				httpStatus: error.response?.status ?? null,
-				retryAfterSeconds: getRetryAfterSecondsFromHttpError(error)
-			});
-		}
-
-		return scannerIssueFailure({ error, errorType: 'http_client_failure' });
-	}
-
-	private mapLocalError(error: unknown): HistoryArchiveObjectFailureDTO {
-		return scannerIssueFailure({ error, errorType: 'worker_setup_failure' });
 	}
 
 	private async checkIn(status: 'in_progress' | 'error' | 'ok') {
@@ -506,12 +491,4 @@ export class VerifyArchiveObjects {
 		return typeof value === 'object' && value !== null && !Array.isArray(value);
 	}
 
-	private isReadable(value: unknown): value is Readable {
-		return (
-			typeof value === 'object' &&
-			value !== null &&
-			'pipe' in value &&
-			typeof value.pipe === 'function'
-		);
-	}
 }

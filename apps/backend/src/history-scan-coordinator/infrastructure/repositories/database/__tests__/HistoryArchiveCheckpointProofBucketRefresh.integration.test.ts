@@ -14,6 +14,7 @@ import {
 	startDisposablePostgres,
 	type DisposablePostgres
 } from '@test-support/DisposablePostgres.js';
+import { historyArchiveImmediateBucketProofRefreshLimit } from '../HistoryArchiveCheckpointProofTargetSql.js';
 
 const dependentCheckpointCount = 31;
 
@@ -106,12 +107,14 @@ describe('bounded bucket checkpoint proof refresh', () => {
 		const proofCount = await dataSource
 			.getRepository(HistoryArchiveCheckpointProof)
 			.countBy({ archiveUrlIdentity: proofArchiveUrl });
-		const [refreshed] = await dataSource
+		const refreshed = await dataSource
 			.getRepository(HistoryArchiveCheckpointProof)
 			.findBy({ archiveUrlIdentity: proofArchiveUrl });
 
 		expect(dirty?.count).toBe(dependentCheckpointCount);
-		expect(proofCount).toBe(1);
-		expect(refreshed?.checkpointLedger).toBe(canonicalCheckpointLedger);
+		expect(proofCount).toBe(historyArchiveImmediateBucketProofRefreshLimit);
+		expect(refreshed.map((proof) => proof.checkpointLedger)).toContain(
+			canonicalCheckpointLedger
+		);
 	});
 });
