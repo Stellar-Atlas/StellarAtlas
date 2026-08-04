@@ -5,13 +5,35 @@ export const canonicalFrontierReservationCtesSql = `
 		where reserved."executionDisposition" = 'executable'
 			and reserved."executionReason" = 'canonical-frontier-reserve'
 			and reserved.status in ('pending', 'scanning')
+	), stale_canonical_replacements as materialized (
+		select reserved.id,
+			row_number() over (
+				order by reserved."lastClaimedAt" desc nulls last,
+					reserved."updatedAt", reserved.id
+			) as replacement_rank
+		from "history_archive_object_queue" reserved
+		where reserved.status = 'pending'
+			and reserved."executionDisposition" = 'executable'
+			and reserved."executionReason" = 'canonical-frontier-reserve'
+			and not exists (
+				select 1
+				from current_canonical_reservations current_reservation
+				where current_reservation.id = reserved.id
+			)
+		order by reserved."lastClaimedAt" desc nulls last,
+			reserved."updatedAt", reserved.id
+		limit $1::integer
+	), stale_canonical_replacement_state as materialized (
+		select count(*)::integer as count
+		from stale_canonical_replacements
 	), generic_replacements as materialized (
 		select generic.id,
-			row_number() over (
+			stale.count + row_number() over (
 				order by generic."lastClaimedAt" desc nulls last,
 					generic."updatedAt", generic.id
 			) as replacement_rank
 		from "history_archive_object_queue" generic
+		cross join stale_canonical_replacement_state stale
 		where generic.status = 'pending'
 			and generic."executionDisposition" = 'executable'
 			and generic."dependencyReady" = true
@@ -29,6 +51,15 @@ export const canonicalFrontierReservationCtesSql = `
 		order by generic."lastClaimedAt" desc nulls last,
 			generic."updatedAt", generic.id
 		limit $1::integer
+	), replacement_candidates as materialized (
+		select id, replacement_rank from stale_canonical_replacements
+		union all
+		select id, replacement_rank from generic_replacements
+	), canonical_candidate_capacity as materialized (
+		select greatest($1::integer - reservation.count, 0) + stale.count
+			as count
+		from canonical_reservation_state reservation
+		cross join stale_canonical_replacement_state stale
 	), candidate_replacement_ranked as materialized (
 		select target_ranked.*,
 			row_number() over (
@@ -43,7 +74,7 @@ export const canonicalFrontierReservationCtesSql = `
 	), replacement_ranked as materialized (
 		select candidate.*, replacement.id as selected_replaceable_id
 		from candidate_replacement_ranked candidate
-		left join generic_replacements replacement
+		left join replacement_candidates replacement
 			on replacement.replacement_rank =
 				candidate.candidate_replacement_rank
 	), additions_ranked as materialized (

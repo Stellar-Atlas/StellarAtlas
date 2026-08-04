@@ -4,6 +4,17 @@ export async function createCanonicalFrontierTestSchema(
 	dataSource: DataSource
 ): Promise<void> {
 	await dataSource.query(`
+		create table if not exists "history_archive_object_ready" (
+			"objectRemoteId" uuid primary key references
+				"history_archive_object_queue" ("remoteId") on delete cascade,
+			"archiveUrlIdentity" text not null unique,
+			priority smallint not null check (priority between 0 and 2),
+			"availableAt" timestamptz not null default now(),
+			"createdAt" timestamptz not null default now(),
+			"updatedAt" timestamptz not null default now()
+		)
+	`);
+	await dataSource.query(`
 		create table if not exists "history_archive_state_snapshot" (
 			"archiveUrlIdentity" text primary key,
 			status text not null,

@@ -398,16 +398,14 @@ export const admitCanonicalFrontierSql = `
 		select candidate.*
 		from additions_ranked candidate
 		cross join outstanding
-		cross join canonical_reservation_state reservation
+		cross join canonical_candidate_capacity capacity
 		where (
 			candidate.selected_replaceable_id is not null
 			or candidate.addition_rank <= greatest(
 				${historyArchiveMinimumWatermark}::integer - outstanding.count, 0
 			)
 		)
-			and candidate.candidate_replacement_rank <= greatest(
-				$1::integer - reservation.count, 0
-			)
+			and candidate.candidate_replacement_rank <= capacity.count
 		order by candidate.target_rank, candidate.target_lane,
 			(candidate.selected_replaceable_id is null),
 			candidate.proof_progress desc,

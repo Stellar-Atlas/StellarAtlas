@@ -165,6 +165,26 @@ describe('bidirectional canonical archive frontier', () => {
 		expect(runnable?.count).toBeLessThanOrEqual(
 			historyArchiveConsumerCount
 		);
+
+		await dataSource.query(
+			`update "full_history_historical_backfill_job"
+			 set state = 'completed'`
+		);
+		const [forwardOnlyAdmission] = (await dataSource.query(
+			admitCanonicalFrontierSql,
+			[24, 2]
+		)) as readonly { readonly count: number }[];
+		const forwardOnlyReservations = (await dataSource.query(
+			`select "checkpointLedger", count(*)::integer as count
+			 from "history_archive_object_queue"
+			 where "executionReason" = 'canonical-frontier-reserve'
+			 group by "checkpointLedger" order by "checkpointLedger"`
+		)) as readonly CheckpointCount[];
+
+		expect(forwardOnlyAdmission?.count).toBe(12);
+		expect(forwardOnlyReservations).toEqual([
+			{ checkpointLedger: forwardCheckpoint, count: 24 }
+		]);
 	});
 });
 
