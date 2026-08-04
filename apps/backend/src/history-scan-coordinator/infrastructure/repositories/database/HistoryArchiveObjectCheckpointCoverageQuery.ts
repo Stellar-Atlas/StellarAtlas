@@ -1,5 +1,6 @@
 import type { EntityManager } from 'typeorm';
 import type { HistoryArchiveCheckpointCoverageV1 } from 'shared';
+import { CURRENT_HISTORY_ARCHIVE_CHECKPOINT_PROOF_VERSION } from '../../../domain/history-archive-checkpoint-proof/HistoryArchiveCheckpointProof.js';
 import { requireNumber, type NumericValue } from './ScanJobRowMapper.js';
 
 type CheckpointCoverageRow = {
@@ -127,6 +128,12 @@ export const checkpointCoverageSql = `
 		select *
 		from history_archive_checkpoint_proof_rollup
 		where ${archiveFilterSql}
+	), selected_current_rollup as (
+		select *
+		from history_archive_checkpoint_proof_version_rollup
+		where ${archiveFilterSql}
+			and "proofVersion" =
+				${CURRENT_HISTORY_ARCHIVE_CHECKPOINT_PROOF_VERSION}
 	), active_checkpoints as (
 		select "archiveUrlIdentity", "checkpointLedger"
 		from history_archive_object_queue
@@ -171,18 +178,43 @@ export const checkpointCoverageSql = `
 			min("oldestCheckpointLedger") as "oldestCheckpointLedger",
 			max("latestCheckpointLedger") as "latestCheckpointLedger"
 		from selected_rollup
+	), current_proof_summary as (
+		select
+			coalesce(sum("totalCheckpointProofs"), 0)
+				as "currentTotalCheckpointProofs",
+			coalesce(sum("mismatchCheckpointProofs"), 0)
+				as "currentMismatchCheckpointProofs",
+			coalesce(sum("objectCompleteCheckpointProofs"), 0)
+				as "currentObjectCompleteCheckpointProofs",
+			coalesce(sum("verifiedCheckpointProofs"), 0)
+				as "currentVerifiedCheckpointProofs",
+			coalesce(sum("notEvaluableCheckpointProofs"), 0)
+				as "currentNotEvaluableCheckpointProofs",
+			coalesce(sum("pendingCheckpointProofs"), 0)
+				as "currentPendingCheckpointProofs"
+		from selected_current_rollup
 	)
 	select
 		"totalArchiveCheckpoints",
 		"activeArchiveCheckpoints",
-		"failedArchiveCheckpoints",
-		"completeArchiveCheckpoints",
-		"objectCompleteArchiveCheckpoints",
-		"categoryConsistentArchiveCheckpoints",
-		"categoryConsistencyFailedCheckpoints",
-		"categoryConsistencyNotEvaluatedCheckpoints",
-		"categoryConsistencyPendingCheckpoints",
-		"partialArchiveCheckpoints",
+		"currentMismatchCheckpointProofs" as "failedArchiveCheckpoints",
+		"currentObjectCompleteCheckpointProofs" as "completeArchiveCheckpoints",
+		"currentObjectCompleteCheckpointProofs"
+			as "objectCompleteArchiveCheckpoints",
+		"currentVerifiedCheckpointProofs"
+			as "categoryConsistentArchiveCheckpoints",
+		"currentMismatchCheckpointProofs"
+			as "categoryConsistencyFailedCheckpoints",
+		"currentNotEvaluableCheckpointProofs" + greatest(
+			"totalArchiveCheckpoints" - "currentTotalCheckpointProofs",
+			0
+		) as "categoryConsistencyNotEvaluatedCheckpoints",
+		"currentPendingCheckpointProofs"
+			as "categoryConsistencyPendingCheckpoints",
+		"currentPendingCheckpointProofs" + greatest(
+			"totalArchiveCheckpoints" - "currentTotalCheckpointProofs",
+			0
+		) as "partialArchiveCheckpoints",
 		"oldestCheckpointLedger",
 		"latestCheckpointLedger",
 		coalesce((select count(*) from root_coverage), 0)
@@ -214,4 +246,5 @@ export const checkpointCoverageSql = `
 			0
 		) as "discoveryCompleteArchiveRoots"
 	from proof_summary
+	cross join current_proof_summary
 `;

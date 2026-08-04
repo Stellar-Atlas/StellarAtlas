@@ -23,10 +23,10 @@ export function CheckpointProofGuide(): React.JSX.Element {
 				</span>
 			</div>
 			<div>
-				<strong>Proof facts incomplete</strong>
+				<strong>Needs current proof</strong>
 				<span>
-					The files are present, but one or more required hash or continuity facts
-					have not been recorded, so the row cannot pass or fail yet.
+					The checkpoint has not completed the current hash and continuity rules.
+					It may have incomplete facts or only an older proof attestation.
 				</span>
 			</div>
 		</div>

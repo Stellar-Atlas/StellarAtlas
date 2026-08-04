@@ -62,6 +62,7 @@ import { HistoryArchiveEventSummaryMaintenanceMigration1785360000000 } from '@hi
 import { HistoryArchiveRepairActionIndexMigration1785370000000 } from '@history-scan-coordinator/infrastructure/database/migrations/1785370000000-HistoryArchiveRepairActionIndexMigration.js';
 import { FullHistoryStateStatementValidationMigration1785380000000 } from '@history-scan-coordinator/infrastructure/database/migrations/1785380000000-FullHistoryStateStatementValidationMigration.js';
 import { FullHistoryCanonicalCoverageDecouplingMigration1785390000000 } from '@history-scan-coordinator/infrastructure/database/migrations/1785390000000-FullHistoryCanonicalCoverageDecouplingMigration.js';
+import { HistoryArchiveCheckpointProofVersionRollupMigration1785400000000 } from '@history-scan-coordinator/infrastructure/database/migrations/1785400000000-HistoryArchiveCheckpointProofVersionRollupMigration.js';
 
 // The production database was imported with a partial legacy migration ledger.
 // Explicit registration prevents TypeORM from replaying pre-baseline migrations.
@@ -129,5 +130,6 @@ export const managedMigrations = [
 	HistoryArchiveEventSummaryMaintenanceMigration1785360000000,
 	HistoryArchiveRepairActionIndexMigration1785370000000,
 	FullHistoryStateStatementValidationMigration1785380000000,
-	FullHistoryCanonicalCoverageDecouplingMigration1785390000000
+	FullHistoryCanonicalCoverageDecouplingMigration1785390000000,
+	HistoryArchiveCheckpointProofVersionRollupMigration1785400000000
 ] as const;

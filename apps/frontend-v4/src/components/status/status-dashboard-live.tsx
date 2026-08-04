@@ -4,6 +4,19 @@ import { useEffect, useState } from 'react';
 import { subscribeToStatusStream } from '@api/status-live-stream';
 import { StatusDashboard, type StatusDashboardProps } from './status-dashboard';
 
+function selectFreshArchiveSummary(
+	current: StatusDashboardProps['archiveSummary'],
+	incoming: StatusDashboardProps['archiveSummary'] | undefined
+): StatusDashboardProps['archiveSummary'] {
+	if (incoming === undefined) return current;
+	const currentTime = Date.parse(current.generatedAt);
+	const incomingTime = Date.parse(incoming.generatedAt);
+	if (!Number.isFinite(incomingTime)) return current;
+	return !Number.isFinite(currentTime) || incomingTime >= currentTime
+		? incoming
+		: current;
+}
+
 export function StatusDashboardLive(
 	props: StatusDashboardProps
 ): React.JSX.Element {
@@ -26,8 +39,10 @@ export function StatusDashboardLive(
 				archiveEvidenceAvailable:
 					message.payload.archiveSummary !== undefined ||
 					current.archiveEvidenceAvailable,
-				archiveSummary:
-					message.payload.archiveSummary ?? current.archiveSummary,
+				archiveSummary: selectFreshArchiveSummary(
+					current.archiveSummary,
+					message.payload.archiveSummary
+				),
 				dataQuality: message.payload.dataQuality ?? current.dataQuality,
 				frontend: message.payload.frontend ?? current.frontend,
 				fullHistory: message.payload.fullHistory ?? current.fullHistory,

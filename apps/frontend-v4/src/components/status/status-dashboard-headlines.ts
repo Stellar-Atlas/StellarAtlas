@@ -141,7 +141,7 @@ export function describeArchiveSourceFinding(
 			.filter((detail): detail is string => detail !== null)
 			.join(' and ');
 		return {
-			detail: `${formatFindingCount(facts.provenCheckpointProofs, 'checkpoint proof')} verified across ${formatSourceCount(sourceCount)}; ${retryDetails} awaiting retry.`,
+			detail: `${formatFindingCount(facts.provenCheckpointProofs, 'current checkpoint proof')} verified across ${formatSourceCount(sourceCount)}; ${retryDetails} awaiting retry.`,
 			pillText: 'Remote checks pending',
 			tone: undefined,
 			value: 'No confirmed integrity mismatches'

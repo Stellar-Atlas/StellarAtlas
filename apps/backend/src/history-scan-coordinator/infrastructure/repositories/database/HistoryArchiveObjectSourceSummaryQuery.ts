@@ -1,5 +1,6 @@
 import type { EntityManager } from 'typeorm';
 import type { HistoryArchiveSourceSummaryV1 } from 'shared';
+import { CURRENT_HISTORY_ARCHIVE_CHECKPOINT_PROOF_VERSION } from '../../../domain/history-archive-checkpoint-proof/HistoryArchiveCheckpointProof.js';
 import { requireNumber, type NumericValue } from './ScanJobRowMapper.js';
 
 type SourceSummaryRow = {
@@ -237,12 +238,19 @@ export const sourceSummarySql = `
 		group by "archiveUrlIdentity"
 	), checkpoint_bounds as (
 		select
-			"archiveUrlIdentity",
-			"latestCheckpointLedger" as "latestDiscoveredCheckpointLedger",
-			"objectCompleteCheckpointProofs" as "objectCompleteCheckpoints",
-			"verifiedCheckpointProofs" as "verifiedCheckpoints"
-		from history_archive_checkpoint_proof_rollup
-		where ${archiveFilterSql}
+			proof."archiveUrlIdentity",
+			proof."latestCheckpointLedger"
+				as "latestDiscoveredCheckpointLedger",
+			coalesce(current_proof."objectCompleteCheckpointProofs", 0)
+				as "objectCompleteCheckpoints",
+			coalesce(current_proof."verifiedCheckpointProofs", 0)
+				as "verifiedCheckpoints"
+		from history_archive_checkpoint_proof_rollup proof
+		left join history_archive_checkpoint_proof_version_rollup current_proof
+			on current_proof."archiveUrlIdentity" = proof."archiveUrlIdentity"
+			and current_proof."proofVersion" =
+				${CURRENT_HISTORY_ARCHIVE_CHECKPOINT_PROOF_VERSION}
+		where ($1::text is null or proof."archiveUrlIdentity" = $1::text)
 	)
 	select
 		state."archiveUrl",

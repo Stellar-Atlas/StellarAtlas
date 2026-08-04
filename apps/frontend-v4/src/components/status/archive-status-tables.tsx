@@ -291,8 +291,8 @@ function CheckpointProofDetail({
 				<span>Checkpoint proof detail</span>
 				<span className="muted-inline">
 					{formatInteger(checkpoints.categoryConsistentArchiveCheckpoints)} of{' '}
-					{formatInteger(checkpoints.totalArchiveCheckpoints)} tracked checks
-					verified
+					{formatInteger(checkpoints.totalArchiveCheckpoints)} tracked checkpoints
+					verified under the current proof
 				</span>
 			</summary>
 			<div className="responsive-table">
@@ -301,10 +301,10 @@ function CheckpointProofDetail({
 						<tr>
 							<th>Confirmed mismatch</th>
 							<th>Waiting for required files</th>
-							<th>Evidence incomplete</th>
+							<th>Needs current proof</th>
 							<th>File set complete</th>
-							<th>Verified proofs</th>
-							<th>Tracked checks</th>
+							<th>Current proof verified</th>
+							<th>Tracked checkpoints</th>
 						</tr>
 					</thead>
 					<tbody>

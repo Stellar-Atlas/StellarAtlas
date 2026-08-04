@@ -3,6 +3,7 @@ import type {
 	HistoryArchiveStatusSourceV1,
 	HistoryArchiveStatusSummaryV1
 } from 'shared';
+import { CURRENT_HISTORY_ARCHIVE_CHECKPOINT_PROOF_VERSION } from '../../../domain/history-archive-checkpoint-proof/HistoryArchiveCheckpointProof.js';
 import { requireNumber, type NumericValue } from './ScanJobRowMapper.js';
 import { getCheckpointCoverage } from './HistoryArchiveObjectCheckpointCoverageQuery.js';
 
@@ -381,14 +382,27 @@ export const sourceStatusSummarySql = `
 			aliases."archiveUrl",
 			proof."latestCheckpointLedger",
 			proof."totalCheckpointProofs",
-			proof."pendingCheckpointProofs",
-			proof."verifiedCheckpointProofs",
-			proof."mismatchCheckpointProofs",
-			proof."notEvaluableCheckpointProofs",
-			proof."objectCompleteCheckpointProofs"
+			coalesce(current_proof."pendingCheckpointProofs", 0)
+				as "pendingCheckpointProofs",
+			coalesce(current_proof."verifiedCheckpointProofs", 0)
+				as "verifiedCheckpointProofs",
+			coalesce(current_proof."mismatchCheckpointProofs", 0)
+				as "mismatchCheckpointProofs",
+			coalesce(current_proof."notEvaluableCheckpointProofs", 0)
+				+ greatest(
+					proof."totalCheckpointProofs"
+						- coalesce(current_proof."totalCheckpointProofs", 0),
+					0
+				) as "notEvaluableCheckpointProofs",
+			coalesce(current_proof."objectCompleteCheckpointProofs", 0)
+				as "objectCompleteCheckpointProofs"
 		from source_aliases aliases
 		join history_archive_checkpoint_proof_rollup proof
 			on proof."archiveUrlIdentity" = aliases."archiveUrlIdentity"
+		left join history_archive_checkpoint_proof_version_rollup current_proof
+			on current_proof."archiveUrlIdentity" = proof."archiveUrlIdentity"
+			and current_proof."proofVersion" =
+				${CURRENT_HISTORY_ARCHIVE_CHECKPOINT_PROOF_VERSION}
 		order by
 			aliases."archiveUrl",
 			proof."latestCheckpointLedger" desc nulls last,

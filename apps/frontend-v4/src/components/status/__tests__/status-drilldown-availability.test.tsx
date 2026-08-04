@@ -112,7 +112,7 @@ describe('status drilldown availability', () => {
 			/>
 		);
 
-		expect(html).toContain('0 of 76,318 tracked checks verified');
+		expect(html).toContain('verified under the current proof');
 		expect(html).toContain('Confirmed mismatch');
 		expect(html).not.toContain('75,314,129');
 	});
