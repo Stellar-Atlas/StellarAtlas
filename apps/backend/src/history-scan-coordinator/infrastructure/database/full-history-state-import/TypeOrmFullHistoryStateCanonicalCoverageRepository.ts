@@ -108,6 +108,14 @@ export class TypeOrmFullHistoryStateCanonicalCoverageRepository implements FullH
 					from "full_history_lcm_state_canonical_coverage" coverage
 					join "full_history_ledger_close_meta_batch" lcm
 						on lcm."id" = coverage."batch_id"
+					join "full_history_ledger" canonical_first
+						on canonical_first."network_passphrase_hash" =
+							coverage."network_passphrase_hash"
+						and canonical_first."ledger_sequence" = lcm."start_ledger"
+					join "full_history_ledger" canonical_last
+						on canonical_last."network_passphrase_hash" =
+							coverage."network_passphrase_hash"
+						and canonical_last."ledger_sequence" = lcm."end_ledger"
 					where ((coverage."status" = 'pending'
 							and coverage."next_attempt_at" <= clock_timestamp())
 						or (coverage."status" = 'checking'
