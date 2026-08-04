@@ -111,12 +111,6 @@ export function toObjectRepairAction(
 	>
 ): readonly HistoryArchiveRepairActionV1[] {
 	if (getObjectEvidenceClass(object) !== 'archive-object') return [];
-	if (
-		object.objectType === 'history-archive-state' &&
-		remoteCandidates.length === 0
-	) {
-		return [];
-	}
 
 	const kind = getObjectActionKind(object);
 	const repairArtifact = getRepairArtifact(
