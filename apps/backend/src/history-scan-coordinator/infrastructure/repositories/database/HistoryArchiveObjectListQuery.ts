@@ -64,7 +64,7 @@ function historyArchiveObjectListSql(): string {
 			union all
 			${statusCandidateSql('failed')}
 			union all
-			${statusCandidateSql('pending')}
+			${pendingCandidateSql()}
 			union all
 			${deferredCandidateSql()}
 			union all
@@ -197,11 +197,22 @@ function deferredCandidateSql(): string {
 					from history_archive_object_queue archive_object
 					where $4::text is null
 						and archive_object.status = 'pending'
-						and coalesce(
-							archive_object."executionDisposition",
-							'deferred'
-						) <> 'executable'
-					order by archive_object.id desc
+						and (
+							archive_object."executionDisposition" is null
+							or archive_object."executionDisposition" = 'deferred'
+						)
+						and (
+							archive_object."executionReason" is null
+							or archive_object."executionReason" not in (
+								'canonical-frontier-waiting',
+								'proof-completion-waiting'
+							)
+						)
+					order by
+						archive_object."archiveUrlIdentity",
+						archive_object."objectType",
+						archive_object."objectKey" desc,
+						archive_object.id
 					limit $5
 				)
 				union all
@@ -226,13 +237,55 @@ function deferredCandidateSql(): string {
 	`;
 }
 
+function pendingCandidateSql(): string {
+	return `
+		(
+			select pending.*
+			from (
+				(
+					select archive_object.*
+					from history_archive_object_queue archive_object
+					where $4::text is null
+						and archive_object.status = 'pending'
+						and archive_object."executionDisposition" = 'executable'
+						and archive_object."dependencyReady" = true
+					order by
+						archive_object."archiveUrlIdentity",
+						archive_object.status,
+						archive_object."nextAttemptAt",
+						archive_object."lastClaimedAt" nulls first,
+						archive_object."objectOrder",
+						archive_object."checkpointLedger" desc,
+						archive_object."objectKey",
+						archive_object.id
+					limit $5
+				)
+				union all
+				(
+					select archive_object.*
+					from history_archive_object_queue archive_object
+					where $4::text is not null
+						and archive_object."archiveUrlIdentity" = $4::text
+						and archive_object.status = 'pending'
+						and archive_object."executionDisposition" = 'executable'
+					order by
+						archive_object."objectOrder",
+						archive_object."objectKey",
+						archive_object."updatedAt" desc
+					limit $5
+				)
+			) pending
+			limit $5
+		)
+	`;
+}
+
 function statusCandidateSql(status: string): string {
 	return `
 		(
 			select archive_object.*
 			from history_archive_object_queue archive_object
 			where archive_object.status = '${status}'
-				${status === 'pending' ? `and archive_object."executionDisposition" = 'executable'` : ''}
 				and (
 					$4::text is null
 					or archive_object."archiveUrlIdentity" = $4::text
