@@ -1,6 +1,7 @@
 import { constants } from 'node:fs';
 import { access, mkdir, mkdtemp, rm, utimes } from 'node:fs/promises';
 import { join } from 'node:path';
+import { claimFullHistoryLedgerCloseMetaTransientDirectory } from '../../../full-history-ledger-close-meta/FullHistoryLedgerCloseMetaTransientOwnership.js';
 import { parseFullHistoryLedgerCloseMetaServiceConfig } from '../FullHistoryLedgerCloseMetaServiceConfig.js';
 import {
 	ensureFullHistoryLedgerCloseMetaRuntime,
@@ -32,13 +33,22 @@ describe('FullHistoryLedgerCloseMetaRuntime', () => {
 				config.temporaryInputRoot,
 				'ledger-close-meta-current'
 			);
+			const activeStaleTransient = join(
+				config.temporaryInputRoot,
+				'ledger-close-meta-active'
+			);
 			const unrelated = join(config.temporaryInputRoot, 'unrelated');
 			await Promise.all([
 				mkdir(staleTransient),
 				mkdir(currentTransient),
+				mkdir(activeStaleTransient),
 				mkdir(unrelated)
 			]);
+			await claimFullHistoryLedgerCloseMetaTransientDirectory(
+				activeStaleTransient
+			);
 			await utimes(staleTransient, 0, 0);
+			await utimes(activeStaleTransient, 0, 0);
 
 			const publicationRoot = join(
 				config.typedOutputRoot,
@@ -61,6 +71,9 @@ describe('FullHistoryLedgerCloseMetaRuntime', () => {
 			});
 			await expect(
 				access(currentTransient, constants.F_OK)
+			).resolves.toBeUndefined();
+			await expect(
+				access(activeStaleTransient, constants.F_OK)
 			).resolves.toBeUndefined();
 			await expect(access(unrelated, constants.F_OK)).resolves.toBeUndefined();
 			await expect(access(published, constants.F_OK)).resolves.toBeUndefined();
@@ -94,6 +107,7 @@ describe('FullHistoryLedgerCloseMetaRuntime', () => {
 			const staging = join(publicationRoot, '.64-127.tmp-recent');
 			const published = join(publicationRoot, '64-127');
 			await mkdir(transient);
+			await claimFullHistoryLedgerCloseMetaTransientDirectory(transient);
 			await mkdir(staging, { recursive: true });
 			await mkdir(published);
 

@@ -9,6 +9,7 @@ import {
 	statfs
 } from 'node:fs/promises';
 import { join, relative, sep } from 'node:path';
+import { isFullHistoryLedgerCloseMetaTransientDirectoryActive } from '../../full-history-ledger-close-meta/FullHistoryLedgerCloseMetaTransientOwnership.js';
 import type { FullHistoryLedgerCloseMetaServiceConfig } from './FullHistoryLedgerCloseMetaServiceConfig.js';
 
 const sharedMemoryRoot = '/dev/shm';
@@ -57,7 +58,9 @@ export async function removeStaleFullHistoryLedgerCloseMetaArtifacts(
 		FULL_HISTORY_LEDGER_CLOSE_META_CLEANUP_INTERVAL_MILLISECONDS;
 	await removeOwnedDirectories(
 		config,
-		(_path, info) => info.mtimeMs <= staleBefore
+		async (path, info) =>
+			info.mtimeMs <= staleBefore &&
+			!(await isFullHistoryLedgerCloseMetaTransientDirectoryActive(path))
 	);
 }
 
@@ -69,7 +72,10 @@ export async function resetOwnedFullHistoryLedgerCloseMetaArtifacts(
 
 async function removeOwnedDirectories(
 	config: FullHistoryLedgerCloseMetaServiceConfig,
-	shouldRemove: (path: string, info: Awaited<ReturnType<typeof lstat>>) => boolean
+	shouldRemove: (
+		path: string,
+		info: Awaited<ReturnType<typeof lstat>>
+	) => boolean | Promise<boolean>
 ): Promise<void> {
 	await removeMatchingDirectories(
 		config.temporaryInputRoot,
@@ -94,7 +100,10 @@ async function removeOwnedDirectories(
 async function removeMatchingDirectories(
 	root: string,
 	pattern: RegExp,
-	shouldRemove: (path: string, info: Awaited<ReturnType<typeof lstat>>) => boolean
+	shouldRemove: (
+		path: string,
+		info: Awaited<ReturnType<typeof lstat>>
+	) => boolean | Promise<boolean>
 ): Promise<void> {
 	for (const entry of await safeDirectories(root)) {
 		if (!pattern.test(entry.name)) continue;
@@ -103,7 +112,7 @@ async function removeMatchingDirectories(
 		if (
 			info.isDirectory() &&
 			!info.isSymbolicLink() &&
-			shouldRemove(path, info)
+			(await shouldRemove(path, info))
 		) {
 			await rm(path, { force: true, recursive: true });
 		}

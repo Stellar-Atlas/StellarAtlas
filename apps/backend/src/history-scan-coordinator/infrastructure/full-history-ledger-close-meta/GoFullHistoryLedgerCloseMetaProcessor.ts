@@ -8,6 +8,7 @@ import type {
 } from '../../domain/full-history-ledger-close-meta/FullHistoryLedgerCloseMetaProcessing.js';
 import { BoundedAsyncTaskPool } from './BoundedAsyncTaskPool.js';
 import type { FullHistoryPublishedOutputRecorder } from './FullHistoryPublishedOutputInventory.js';
+import { claimFullHistoryLedgerCloseMetaTransientDirectory } from './FullHistoryLedgerCloseMetaTransientOwnership.js';
 import { runBoundedGoFullHistoryProcess } from './GoFullHistoryLedgerCloseMetaProcessRunner.js';
 import { verifyGoFullHistoryLedgerCloseMetaPublication } from './GoFullHistoryLedgerCloseMetaPublicationVerifier.js';
 import { parseGoFullHistoryLedgerCloseMetaReceipt } from './GoFullHistoryLedgerCloseMetaReceipt.js';
@@ -85,6 +86,9 @@ export class GoFullHistoryLedgerCloseMetaProcessor implements FullHistoryLedgerC
 		const outputPath = this.#outputPath(request, range);
 		const outputExistedBeforeRun = await directoryExists(outputPath);
 		try {
+			await claimFullHistoryLedgerCloseMetaTransientDirectory(
+				temporaryDirectory
+			);
 			const inputPaths = await writeTransientInputs(
 				temporaryDirectory,
 				request
