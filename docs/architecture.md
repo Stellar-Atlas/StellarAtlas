@@ -17,11 +17,12 @@ public ingress.
 
 Atlas application Postgres is the durable source of truth for network
 observations, archive evidence, checkpoint proofs, canonical decoded history,
-and imported Atlas state. Users Postgres, Horizon Postgres and captive-Core
-storage, and Stellar RPC storage are separate service authorities. Large
-immutable LedgerCloseMeta batches on the bulk data mount are reconstruction
-inputs for typed Atlas tables. Network/SCP Meilisearch indexes, graph stores,
-frontend caches, and ramdisk caches are rebuildable read models.
+and full-history manifests. Users Postgres, Horizon Postgres and captive-Core
+storage, and Stellar RPC storage are separate service authorities. Lossless and
+typed immutable LedgerCloseMeta batches on the bulk data mount are the durable
+history lake; imported history tables are query projections that can be rebuilt
+from those batches. Network/SCP Meilisearch indexes, graph stores, frontend
+caches, and ramdisk caches are rebuildable read models.
 
 ## Build Boundaries
 
@@ -156,6 +157,23 @@ Canonical archive promotion and LedgerCloseMeta ingestion are complementary:
 archive proofs establish source integrity and provenance, while LedgerCloseMeta
 contains the detailed transaction metadata, operations, events, and ledger-entry
 changes needed by the Explorer and state indexes.
+
+### Full-History Data Authorities
+
+| Data | Authority | Rebuild path |
+| --- | --- | --- |
+| Archive integrity and source provenance | Source-specific object evidence, checkpoint proofs, and canonical promotion rows in Atlas Postgres | Recheck retained or remote archive objects and recompute checkpoint proofs |
+| Lossless ledger replay input | Immutable `ledger-close-meta` batches and their checksummed manifests on bulk storage | Refetch a source range and verify its source identity, range, byte count, and digest before commit |
+| Typed historical lake | Checksummed immutable Parquet datasets referenced by the LedgerCloseMeta manifest | Replay the lossless LedgerCloseMeta input through the versioned Go transforms |
+| Proof-gated canonical ledgers, transactions, and results | Canonical Atlas Postgres facts linked to current archive proofs and ingestion provenance | Re-promote verified checkpoint batches from archive evidence |
+| Imported account/trustline history and future typed query tables | Rebuildable Postgres projections over typed immutable batches | Re-import a manifest dataset and verify its exact row count and row-set digest |
+| Current state, Explorer indexes, search, and graph projections | Rebuildable read models; never raw-history authorities | Replay origin-contiguous typed history from the latest verified materialization point |
+| Horizon and Stellar RPC state | Their dedicated protocol databases and captive-Core/RPC storage | Reingest through the corresponding protocol service; Atlas typed tables are not a drop-in database replacement |
+
+No query projection may be the only retained copy of information required to
+replay history, regenerate a proof, or build a later read model. A read model is
+ready only when its manifest coverage and proof provenance cover the range it
+claims to serve.
 
 ## Startup And Deployment Rules
 
