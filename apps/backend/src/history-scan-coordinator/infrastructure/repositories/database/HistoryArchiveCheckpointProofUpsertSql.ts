@@ -201,6 +201,5 @@ export const historyArchiveCheckpointProofUpsertSql = `
 				"history_archive_checkpoint_proof"."failureKind",
 				"history_archive_checkpoint_proof".details
 			)
-			)
 		)
 `;
