@@ -37,6 +37,44 @@ describe('CompleteHistoryArchiveObject', () => {
 		);
 	});
 
+	it('acknowledges completion only after durable transition effects finish', async () => {
+		const archiveObject = createBucketObject();
+		archiveObject.attempts = 1;
+		objectRepository.findByRemoteId.mockResolvedValue(archiveObject);
+		objectRepository.withTransitionEffectsLock.mockImplementation(
+			async (_remoteId, _claimAttempt, work) => await work()
+		);
+		const useCase = new CompleteHistoryArchiveObject(
+			objectRepository,
+			stateRepository,
+			eventRecorder,
+			checkpointProofRepository
+		);
+
+		const result = await useCase.executeAndReconcile(archiveObject.remoteId, {
+			claimAttempt: 1
+		});
+
+		expect(result._unsafeUnwrap()).toBe(true);
+		expect(objectRepository.withTransitionEffectsLock).toHaveBeenCalledWith(
+			archiveObject.remoteId,
+			1,
+			expect.any(Function)
+		);
+		expect(checkpointProofRepository.refreshForObject).toHaveBeenCalledWith(
+			archiveObject
+		);
+		expect(eventRecorder.recordDurably).toHaveBeenCalledWith(archiveObject, {
+			claimAttempt: 1,
+			eventType: 'verified'
+		});
+		expect(objectRepository.markTransitionEffectsCompleted).toHaveBeenCalledWith(
+			archiveObject.remoteId,
+			1,
+			'verified'
+		);
+	});
+
 	it('schedules only root and checkpoint-state discovery objects from verified root state', async () => {
 		const archiveObject = createRootObject();
 		objectRepository.findByRemoteId.mockResolvedValue(archiveObject);

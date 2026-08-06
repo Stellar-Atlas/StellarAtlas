@@ -17,6 +17,10 @@ import {
 	BucketCacheFailure
 } from '../../../domain/scanner/BucketCache.js';
 import { HistoryArchiveStateValidator } from '../../../domain/history-archive/HistoryArchiveStateValidator.js';
+import type {
+	HistoryArchiveObjectJobDelivery,
+	HistoryArchiveObjectJobSource
+} from '../HistoryArchiveObjectJobDelivery.js';
 import { VerifyArchiveObjects } from '../VerifyArchiveObjects.js';
 
 type TestableVerifyArchiveObjects = {
@@ -27,13 +31,15 @@ type TestableVerifyArchiveObjects = {
 	};
 	verifyObject(
 		job: HistoryArchiveObjectJobDTO,
-		releaseDownloadPermit: () => void
+		releaseDownloadPermit: () => void,
+		delivery: HistoryArchiveObjectJobDelivery
 	): Promise<void>;
 };
 
 describe('VerifyArchiveObjects', () => {
 	let bucketCache: MockProxy<BucketCache>;
 	let httpService: MockProxy<HttpService>;
+	let jobSource: MockProxy<HistoryArchiveObjectJobSource>;
 	let scanCoordinator: MockProxy<ScanCoordinatorService>;
 	let statusReporter: MockProxy<HistoryArchiveWorkerStatusReporter>;
 	let verifier: TestableVerifyArchiveObjects;
@@ -41,6 +47,8 @@ describe('VerifyArchiveObjects', () => {
 	beforeEach(() => {
 		bucketCache = mock<BucketCache>();
 		httpService = mock<HttpService>();
+		jobSource = mock<HistoryArchiveObjectJobSource>({ kind: 'legacy-http' });
+		jobSource.close.mockResolvedValue(undefined);
 		scanCoordinator = mock<ScanCoordinatorService>();
 		scanCoordinator.touchHistoryArchiveObject.mockResolvedValue(ok(undefined));
 		scanCoordinator.failHistoryArchiveObject.mockResolvedValue(ok(undefined));
@@ -55,6 +63,7 @@ describe('VerifyArchiveObjects', () => {
 
 		verifier = new VerifyArchiveObjects(
 			scanCoordinator,
+			jobSource,
 			statusReporter,
 			httpService,
 			mock<HistoryArchiveStateValidator>(),
@@ -72,7 +81,7 @@ describe('VerifyArchiveObjects', () => {
 		const releasePermit = jest.fn();
 		downloadPermit.acquire.mockResolvedValue(releasePermit);
 		verifier.downloadPermit = downloadPermit;
-		scanCoordinator.getHistoryArchiveObjectJob.mockRejectedValue(
+		jobSource.next.mockRejectedValue(
 			new Error('coordinator unavailable')
 		);
 
@@ -98,8 +107,7 @@ describe('VerifyArchiveObjects', () => {
 			err(new BucketCacheFailure('source-stream', new Error('aborted')))
 		);
 
-		await verifier.verifyObject(
-			createObjectJob({
+		const job = createObjectJob({
 				bucketHash:
 					'4eae73efaa0ce061441dfe43ffc61c0ed24fcbc59e5ee512d1b60e8da2509655',
 				objectKey:
@@ -107,9 +115,10 @@ describe('VerifyArchiveObjects', () => {
 				objectType: 'bucket',
 				objectUrl:
 					'https://archive.example/bucket/4e/ae/73/bucket-4eae73efaa0ce061441dfe43ffc61c0ed24fcbc59e5ee512d1b60e8da2509655.xdr.gz'
-			}),
-			() => undefined
-		);
+			});
+		const delivery = createObjectDelivery(job, 'broker');
+
+		await verifier.verifyObject(job, () => undefined, delivery);
 		await flushPromises();
 
 		expect(scanCoordinator.failHistoryArchiveObject).toHaveBeenCalledWith(
@@ -117,10 +126,14 @@ describe('VerifyArchiveObjects', () => {
 			expect.objectContaining({
 				errorMessage: 'aborted',
 				errorType: 'archive_transport_error',
-				failureChannel: 'archive_evidence',
-				httpStatus: 200
+				failureChannel: 'archive_availability',
+				httpStatus: 200,
+				executionId: 'execution-1',
+				scheduler: 'broker'
 			})
 		);
+		expect(delivery.acknowledge).toHaveBeenCalledTimes(1);
+		expect(delivery.retry).not.toHaveBeenCalled();
 	});
 
 	it('reports a worker outcome without sending a redundant object heartbeat', async () => {
@@ -128,7 +141,8 @@ describe('VerifyArchiveObjects', () => {
 		verifier.workerTelemetry.startObject(0, job);
 		await verifier.verifyObject(
 			job,
-			() => undefined
+			() => undefined,
+			createObjectDelivery(job)
 		);
 		await flushPromises();
 
@@ -160,7 +174,8 @@ describe('VerifyArchiveObjects', () => {
 			verifier
 				.verifyObject(
 					job,
-					() => undefined
+					() => undefined,
+					createObjectDelivery(job)
 				)
 				.then(() => 'completed' as const),
 			new Promise<'timed-out'>((resolve) =>
@@ -188,6 +203,20 @@ function createObjectJob(
 		remoteId: 'object-1',
 		...overrides
 	};
+}
+
+function createObjectDelivery(
+	job: HistoryArchiveObjectJobDTO,
+	source: HistoryArchiveObjectJobDelivery['source'] = 'legacy'
+): MockProxy<HistoryArchiveObjectJobDelivery> {
+	const delivery = mock<HistoryArchiveObjectJobDelivery>({
+		executionId: 'execution-1',
+		job,
+		source
+	});
+	delivery.acknowledge.mockResolvedValue(undefined);
+	delivery.retry.mockResolvedValue(undefined);
+	return delivery;
 }
 
 async function flushPromises(): Promise<void> {

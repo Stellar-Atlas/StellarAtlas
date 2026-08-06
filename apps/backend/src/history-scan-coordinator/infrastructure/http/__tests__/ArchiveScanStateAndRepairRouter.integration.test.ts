@@ -98,6 +98,58 @@ describe('ArchiveScanRouter state and repair endpoints', () => {
 		expect(config.getHistoryArchiveRepairPlan.execute).not.toHaveBeenCalled();
 	});
 
+	it('returns the typed decision for an object-addressed recheck', async () => {
+		const remoteId = '11111111-1111-4111-8111-111111111111';
+		config.requestHistoryArchiveObjectRecheck.execute.mockResolvedValue(
+			ok({
+				eligibleAt: '2026-07-07T18:00:00.000Z',
+				hostBackoffUntil: null,
+				reason: 'eligible-remote-failure',
+				remoteId,
+				state: 'queued'
+			})
+		);
+
+		await request(app)
+			.post(`/archive-scans/objects/${remoteId}/recheck`)
+			.send({ minimumEvidenceUpdatedAt: '2026-07-07T17:00:00.000Z' })
+			.expect(200)
+			.expect('Cache-Control', 'no-store')
+			.expect((response) => {
+				expect(response.body).toEqual({
+					eligibleAt: '2026-07-07T18:00:00.000Z',
+					hostBackoffUntil: null,
+					reason: 'eligible-remote-failure',
+					remoteId,
+					state: 'queued'
+				});
+			});
+		expect(
+			config.requestHistoryArchiveObjectRecheck.execute
+		).toHaveBeenCalledWith(remoteId, new Date('2026-07-07T17:00:00.000Z'));
+	});
+
+	it('rejects invalid and missing object identifiers distinctly', async () => {
+		await request(app)
+			.post('/archive-scans/objects/not-a-uuid/recheck')
+			.send({ minimumEvidenceUpdatedAt: '2026-07-07T17:00:00.000Z' })
+			.expect(400)
+			.expect({ error: 'invalid-recheck-request', remoteId: 'not-a-uuid' });
+		expect(
+			config.requestHistoryArchiveObjectRecheck.execute
+		).not.toHaveBeenCalled();
+
+		const remoteId = '22222222-2222-4222-8222-222222222222';
+		config.requestHistoryArchiveObjectRecheck.execute.mockResolvedValue(
+			ok(null)
+		);
+		await request(app)
+			.post(`/archive-scans/objects/${remoteId}/recheck`)
+			.send({ minimumEvidenceUpdatedAt: '2026-07-07T17:00:00.000Z' })
+			.expect(404)
+			.expect({ error: 'archive-object-not-found', remoteId });
+	});
+
 	it('streams only an exact locally proven repair artifact', async () => {
 		const payload = Buffer.from('proven compressed bucket bytes');
 		const close = jest.fn(async () => undefined);

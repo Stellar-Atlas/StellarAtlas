@@ -15,18 +15,46 @@ export async function markHistoryArchiveObjectVerified(
 	remoteId: string,
 	progress: HistoryArchiveObjectProgressUpdate
 ): Promise<boolean> {
+	if (progress.scheduler === 'broker' && progress.executionId === undefined)
+		return false;
 	return await repository.manager.transaction(async (manager) => {
-		const result = await manager
+		const update = {
+			...createVerifiedUpdate(progress),
+			...(progress.scheduler === 'broker'
+				? { attempts: progress.claimAttempt }
+				: {})
+		};
+		const query = manager
 			.createQueryBuilder()
 			.update(HistoryArchiveObject)
-			.set(createVerifiedUpdate(progress))
-			.where('"remoteId" = :remoteId', { remoteId })
-			.andWhere('status = :status', { status: 'scanning' })
-			.andWhere('attempts = :claimAttempt', {
-				claimAttempt: progress.claimAttempt
-			})
-			.execute();
+			.set(update)
+			.where('"remoteId" = :remoteId', { remoteId });
+		if (progress.scheduler === 'broker') {
+			query.andWhere(
+				`exists (
+					select 1 from "history_archive_object_ready" ready
+					where ready."objectRemoteId" = :remoteId
+						and ready."dispatchToken" = :executionId
+						and ready."claimAttempt" = :claimAttempt
+				)
+				and (attempts < :claimAttempt
+				  or (attempts = :claimAttempt and status <> :verifiedStatus))`,
+				{
+					claimAttempt: progress.claimAttempt,
+					executionId: progress.executionId,
+					verifiedStatus: 'verified'
+				}
+			);
+		} else {
+			query
+				.andWhere('status = :status', { status: 'scanning' })
+				.andWhere('attempts = :claimAttempt', {
+					claimAttempt: progress.claimAttempt
+				});
+		}
+		const result = await query.execute();
 		if ((result.affected ?? 0) === 0) return false;
+		if (progress.scheduler === 'broker') return true;
 
 		await clearClaimSlot(
 			manager.query.bind(manager),

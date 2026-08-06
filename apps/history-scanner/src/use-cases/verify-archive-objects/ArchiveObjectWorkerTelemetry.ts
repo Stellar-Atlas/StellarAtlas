@@ -11,10 +11,10 @@ import {
 } from 'history-scanner-dto';
 import type {
 	HistoryArchiveObjectFailureDTO,
-	HistoryArchiveObjectJobDTO,
-	ScanCoordinatorService
+	HistoryArchiveObjectJobDTO
 } from '../../domain/scan/ScanCoordinatorService.js';
 import type { HistoryArchiveWorkerReportSink } from './CoalescingHistoryArchiveWorkerReporter.js';
+import type { HistoryArchiveObjectJobLease } from './HistoryArchiveObjectJobDelivery.js';
 
 interface ActiveObjectProgress {
 	readonly archiveUrl: string;
@@ -47,6 +47,10 @@ const heartbeatJitterMs = 2 * 1000;
 
 export class ArchiveObjectWorkerTelemetry {
 	private readonly activeObjects = new Map<string, ActiveObjectProgress>();
+	private readonly activeLeases = new Map<
+		string,
+		HistoryArchiveObjectJobLease
+	>();
 	private readonly heartbeatsInFlight = new Map<string, Promise<void>>();
 	private readonly heartbeatTimers = new Map<
 		string,
@@ -61,7 +65,6 @@ export class ArchiveObjectWorkerTelemetry {
 	private readonly stoppingObjects = new Set<string>();
 
 	constructor(
-		private readonly scanCoordinator: ScanCoordinatorService,
 		private readonly statusReporter: HistoryArchiveWorkerReportSink,
 		private readonly exceptionLogger: ExceptionLogger,
 		private readonly logger: Logger,
@@ -86,7 +89,11 @@ export class ArchiveObjectWorkerTelemetry {
 		this.waitingHeartbeatTimers.delete(slot);
 	}
 
-	startObject(slot: number, job: HistoryArchiveObjectJobDTO): void {
+	startObject(
+		slot: number,
+		job: HistoryArchiveObjectJobDTO,
+		lease: HistoryArchiveObjectJobLease
+	): void {
 		const progress: ActiveObjectProgress = {
 			archiveUrl: job.archiveUrl,
 			bytesDownloaded: null,
@@ -99,6 +106,7 @@ export class ArchiveObjectWorkerTelemetry {
 		};
 		this.stoppingObjects.delete(job.remoteId);
 		this.activeObjects.set(job.remoteId, progress);
+		this.activeLeases.set(job.remoteId, lease);
 		this.statusReporter.enqueue(this.createReport(slot, progress));
 		this.scheduleHeartbeat(
 			job.remoteId,
@@ -150,6 +158,7 @@ export class ArchiveObjectWorkerTelemetry {
 		this.stoppingObjects.add(remoteId);
 		this.stopHeartbeat(remoteId);
 		this.activeObjects.delete(remoteId);
+		this.activeLeases.delete(remoteId);
 		await this.heartbeatsInFlight.get(remoteId);
 		this.outcomes.set(progress.slot, {
 			at: this.now().toISOString(),
@@ -178,15 +187,7 @@ export class ArchiveObjectWorkerTelemetry {
 	): Promise<void> {
 		try {
 			this.statusReporter.enqueue(this.createReport(progress.slot, progress));
-			const touchResult = await this.scanCoordinator.touchHistoryArchiveObject(
-				remoteId,
-				{
-					claimAttempt: progress.claimAttempt
-				}
-			);
-			if (touchResult.isErr()) {
-				this.exceptionLogger.captureException(touchResult.error);
-			}
+			await this.activeLeases.get(remoteId)?.heartbeat();
 		} catch (error) {
 			this.exceptionLogger.captureException(mapUnknownToError(error));
 		}
@@ -201,16 +202,13 @@ export class ArchiveObjectWorkerTelemetry {
 
 		await Promise.all(
 			activeObjects.map(async (progress) => {
-				const result = await this.scanCoordinator.releaseHistoryArchiveObject(
-					progress.remoteId,
-					progress.claimAttempt
-				);
-				if (result.isOk()) {
+				try {
+					await this.activeLeases.get(progress.remoteId)?.release();
 					await this.finishObject(progress.remoteId, 'released');
 					return;
+				} catch (error) {
+					this.exceptionLogger.captureException(mapUnknownToError(error));
 				}
-
-				this.exceptionLogger.captureException(result.error);
 				this.logger.warn(
 					'Failed to release active history archive object job',
 					{ remoteId: progress.remoteId }

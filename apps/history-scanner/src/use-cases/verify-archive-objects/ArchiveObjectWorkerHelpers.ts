@@ -7,7 +7,7 @@ import { err, ok, type Result } from 'neverthrow';
 import { mapUnknownToError } from 'shared';
 import type { HistoryArchiveObjectFailureDTO } from '../../domain/scan/ScanCoordinatorService.js';
 import {
-	archiveEvidenceFailure,
+	archiveAvailabilityFailure,
 	getRetryAfterSecondsFromHttpError,
 	scannerIssueFailure
 } from './ArchiveObjectFailure.js';
@@ -25,7 +25,7 @@ export function mapArchiveObjectHttpError(
 	error: unknown
 ): HistoryArchiveObjectFailureDTO {
 	if (isHttpError(error)) {
-		return archiveEvidenceFailure({
+		return archiveAvailabilityFailure({
 			error,
 			errorType: error.response
 				? 'archive_http_error'

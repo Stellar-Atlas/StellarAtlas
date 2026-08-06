@@ -38,6 +38,7 @@ function createSummary() {
 			categoryConsistencyPendingCheckpoints: 1,
 			categoryConsistentArchiveCheckpoints: 3,
 			completeArchiveCheckpoints: 3,
+			durableVerifiedArchiveCheckpoints: 3,
 			discoveryCompleteArchiveRoots: 1,
 			expectedArchiveCheckpoints: 4,
 			failedArchiveCheckpoints: 0,
@@ -59,6 +60,7 @@ function createSummary() {
 				archiveUrl: 'https://archive.example',
 				archiveUrlIdentity: 'https://archive.example',
 				currentLedger: 255,
+				durableVerifiedCheckpointProofs: 3,
 				latestCheckpointLedger: 255,
 				latestDiscoveredCheckpointLedger: 255,
 				mismatchCheckpointProofs: 0,
@@ -78,6 +80,12 @@ function createSummary() {
 			}
 		],
 		sourcesTruncated: false,
+		transitionReconciliation: {
+			oldestPendingAgeMs: null,
+			oldestPendingAt: null,
+			pendingTerminalEffects: 0,
+			status: 'caught-up'
+		},
 		unclassifiedFailures: 0
 	};
 }

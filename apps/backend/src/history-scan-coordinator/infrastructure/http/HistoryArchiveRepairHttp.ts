@@ -1,6 +1,6 @@
 import type express from 'express';
 import type { Router } from 'express';
-import { param, query, validationResult } from 'express-validator';
+import { body, param, query, validationResult } from 'express-validator';
 import { pipeline } from 'node:stream/promises';
 import { GetHistoryArchiveRepairArtifact } from '../../use-cases/get-history-archive-repair-artifact/GetHistoryArchiveRepairArtifact.js';
 import {
@@ -13,6 +13,11 @@ import {
 } from '../../use-cases/get-history-archive-repair-plan/GetHistoryArchiveRepairPlan.js';
 import { InvalidUrlError } from '../../use-cases/get-latest-scan/InvalidUrlError.js';
 import type { HistoryArchiveRepairArtifactUnavailableV1 } from '../../use-cases/get-history-archive-repair-artifact/HistoryArchiveRepairArtifactContract.js';
+import { RequestHistoryArchiveObjectRecheck } from '../../use-cases/request-history-archive-object-recheck/RequestHistoryArchiveObjectRecheck.js';
+import type {
+	HistoryArchiveObjectRecheckErrorV1,
+	HistoryArchiveObjectRecheckResponseV1
+} from 'shared';
 
 const planCacheMaxAgeSeconds = 10;
 const artifactCacheMaxAgeSeconds = 31_536_000;
@@ -21,6 +26,7 @@ export interface HistoryArchiveRepairHttpConfig {
 	getHistoryArchiveRepairArtifact: GetHistoryArchiveRepairArtifact;
 	getHistoryArchiveRepairObjectArtifact: GetHistoryArchiveRepairObjectArtifact;
 	getHistoryArchiveRepairPlan: GetHistoryArchiveRepairPlan;
+	requestHistoryArchiveObjectRecheck: RequestHistoryArchiveObjectRecheck;
 }
 
 export function mountHistoryArchiveRepairRoutes(
@@ -139,6 +145,44 @@ export function mountHistoryArchiveRepairRoutes(
 		}
 	);
 
+	router.post(
+		'/objects/:remoteId/recheck',
+		[
+			param('remoteId').isUUID(),
+			body('minimumEvidenceUpdatedAt').isISO8601({
+				strict: true,
+				strictSeparator: true
+			})
+		],
+		async function (req: express.Request, res: express.Response) {
+			res.setHeader('Cache-Control', 'no-store');
+			const errors = validationResult(req);
+			if (!errors.isEmpty()) {
+				return res.status(400).json({
+					error: 'invalid-recheck-request',
+					remoteId: req.params.remoteId
+				} satisfies HistoryArchiveObjectRecheckErrorV1);
+			}
+
+			const result = await config.requestHistoryArchiveObjectRecheck.execute(
+				req.params.remoteId,
+				new Date(req.body.minimumEvidenceUpdatedAt as string)
+			);
+			if (result.isErr()) {
+				return res.status(500).json({ error: 'Internal server error' });
+			}
+			if (result.value === null) {
+				return res.status(404).json({
+					error: 'archive-object-not-found',
+					remoteId: req.params.remoteId
+				} satisfies HistoryArchiveObjectRecheckErrorV1);
+			}
+
+			setRecheckRetryAfter(res, result.value);
+			return res.status(200).json(result.value);
+		}
+	);
+
 	router.get(
 		'/:encodedUrl/repair-plan',
 		[
@@ -173,6 +217,25 @@ export function mountHistoryArchiveRepairRoutes(
 			return res.status(200).json(planOrError.value);
 		}
 	);
+}
+
+function setRecheckRetryAfter(
+	res: express.Response,
+	result: HistoryArchiveObjectRecheckResponseV1
+): void {
+	const retryAt = result.hostBackoffUntil ?? result.eligibleAt;
+	if (
+		(result.state !== 'blocked' && result.state !== 'not-yet-eligible') ||
+		retryAt === null
+	) {
+		return;
+	}
+	const retryAfterSeconds = Math.ceil(
+		(Date.parse(retryAt) - Date.now()) / 1_000
+	);
+	if (retryAfterSeconds > 0) {
+		res.setHeader('Retry-After', String(retryAfterSeconds));
+	}
 }
 
 function respondUnavailable(

@@ -14,6 +14,7 @@ import type {
 	HistoryArchiveObjectProgressUpdate,
 	HistoryArchiveObjectQueueSnapshot,
 	HistoryArchiveObjectQueueStats,
+	HistoryArchiveObjectRecheckDecision,
 	HistoryArchiveObjectRepository,
 	HistoryArchiveObjectWorkerSnapshot
 } from '@history-scan-coordinator/domain/history-archive-object/HistoryArchiveObjectRepository.js';
@@ -52,6 +53,8 @@ import { findVerifiedCheckpointObjectSources } from './HistoryArchiveVerifiedChe
 import { findVerifiedBucketSources } from './HistoryArchiveVerifiedBucketSourceQuery.js';
 import { historyArchiveRepairActionableObjectSql } from './HistoryArchiveRepairActionableObjectSql.js';
 import { findPrioritizedHistoryArchiveObjectTransitions } from './HistoryArchiveObjectTransitionQuery.js';
+import { requestHistoryArchiveObjectRecheck } from './HistoryArchiveObjectRecheckWrite.js';
+import { completeHistoryArchiveBrokerDelivery } from './HistoryArchiveObjectReadyQueue.js';
 
 const maxActiveObjectsPerArchive = historyArchivePerRootFrontier;
 const maxActiveObjectsPerHost = historyArchivePerHostConcurrency;
@@ -62,6 +65,15 @@ const transitionReconciliationLockName =
 @injectable()
 export class TypeOrmHistoryArchiveObjectRepository implements HistoryArchiveObjectRepository {
 	constructor(private readonly repository: Repository<HistoryArchiveObject>) {}
+
+	async completeBrokerDelivery(
+		remoteId: string,
+		executionId: string
+	): Promise<boolean> {
+		return await this.repository.manager.transaction(async (manager) =>
+			completeHistoryArchiveBrokerDelivery(manager, remoteId, executionId)
+		);
+	}
 
 	async claimNextObject(
 		supportedTypes: readonly HistoryArchiveObjectType[]
@@ -290,6 +302,33 @@ export class TypeOrmHistoryArchiveObjectRepository implements HistoryArchiveObje
 		);
 	}
 
+	async withTransitionEffectsLock(
+		remoteId: string,
+		claimAttempt: number,
+		work: () => Promise<void>
+	): Promise<void> {
+		const queryRunner = this.repository.manager.connection.createQueryRunner();
+		const lockIdentity = `${remoteId}:${claimAttempt}`;
+
+		try {
+			await queryRunner.connect();
+			await queryRunner.query(
+				'select pg_advisory_lock(hashtextextended($1::text, 8193))',
+				[lockIdentity]
+			);
+			try {
+				await work();
+			} finally {
+				await queryRunner.query(
+					'select pg_advisory_unlock(hashtextextended($1::text, 8193))',
+					[lockIdentity]
+				);
+			}
+		} finally {
+			await queryRunner.release();
+		}
+	}
+
 	async materializeCheckpointDependencies(remoteId: string): Promise<number> {
 		return await materializeHistoryArchiveCheckpointDependencies(
 			this.repository,
@@ -312,8 +351,13 @@ export class TypeOrmHistoryArchiveObjectRepository implements HistoryArchiveObje
 		);
 	}
 
-	async reconcileExecutionDisposition() {
-		return await reconcileHistoryArchiveObjectExecution(this.repository);
+	async reconcileExecutionDisposition(options?: {
+		readonly admitLegacyObjects?: boolean;
+	}) {
+		return await reconcileHistoryArchiveObjectExecution(
+			this.repository,
+			options
+		);
 	}
 
 	async tryWithTransitionReconciliationLock(
@@ -361,6 +405,17 @@ export class TypeOrmHistoryArchiveObjectRepository implements HistoryArchiveObje
 			this.repository,
 			before,
 			limit
+		);
+	}
+
+	async requestObjectRecheck(
+		remoteId: string,
+		minimumEvidenceUpdatedAt?: Date
+	): Promise<HistoryArchiveObjectRecheckDecision | null> {
+		return await requestHistoryArchiveObjectRecheck(
+			this.repository,
+			remoteId,
+			minimumEvidenceUpdatedAt
 		);
 	}
 

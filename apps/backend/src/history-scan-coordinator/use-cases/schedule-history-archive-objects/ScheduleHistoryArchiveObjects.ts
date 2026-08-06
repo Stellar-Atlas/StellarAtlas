@@ -9,6 +9,7 @@ import {
 } from '../../domain/history-archive-object/HistoryArchiveObjectBuilder.js';
 import type { HistoryArchiveObjectRepository } from '../../domain/history-archive-object/HistoryArchiveObjectRepository.js';
 import type { HistoryArchiveStateRepository } from '../../domain/history-archive-state/HistoryArchiveStateRepository.js';
+import { usesHistoryArchiveBrokerScheduler } from '../../infrastructure/HistoryArchiveSchedulerMode.js';
 import { TYPES } from '../../infrastructure/di/di-types.js';
 import { ReconcileHistoryArchiveObjectTransitions } from '../reconcile-history-archive-object-transitions/ReconcileHistoryArchiveObjectTransitions.js';
 
@@ -35,8 +36,11 @@ export class ScheduleHistoryArchiveObjects {
 	): Promise<Result<ScheduleHistoryArchiveObjectsResult, Error>> {
 		try {
 			await this.transitionReconciler.executeIfDue();
-			const reconciliation =
-				await this.objectRepository.reconcileExecutionDisposition();
+			const admittedLegacyObjects = usesHistoryArchiveBrokerScheduler()
+				? 0
+				: (
+						await this.objectRepository.reconcileExecutionDisposition()
+					).admittedObjects;
 			await this.objectRepository.reconcileDependencyReadiness(240);
 			const rootObjects = historyArchiveUrls
 				.map(buildRootHistoryArchiveObject)
@@ -51,7 +55,7 @@ export class ScheduleHistoryArchiveObjects {
 
 			this.logger.info('Scheduled history archive object checks', {
 				app: 'history-scan-coordinator',
-				admittedLegacyObjects: reconciliation.admittedObjects,
+				admittedLegacyObjects,
 				discoveredArchiveUrlCount: historyArchiveUrls.length,
 				outstandingObjects: promotion.outstandingObjects,
 				promotedObjects: promotion.promotedObjects,

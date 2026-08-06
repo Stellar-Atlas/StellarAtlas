@@ -70,6 +70,50 @@ export class CompleteHistoryArchiveObject {
 		}
 	}
 
+	async executeAndReconcile(
+		remoteId: string,
+		request: CompleteHistoryArchiveObjectRequest
+	): Promise<Result<boolean, Error>> {
+		const result = await this.execute(remoteId, request);
+		if (result.isErr() || !result.value) return result;
+
+		try {
+			await this.reconcileClaimAttempt(remoteId, request.claimAttempt);
+			if (request.scheduler === 'broker') {
+				if (request.executionId === undefined)
+					throw new Error('Broker completion requires executionId');
+				await this.objectRepository.completeBrokerDelivery(
+					remoteId,
+					request.executionId
+				);
+			}
+			return result;
+		} catch (error) {
+			return err(mapUnknownToError(error));
+		}
+	}
+
+	async reconcileClaimAttempt(
+		remoteId: string,
+		claimAttempt: number
+	): Promise<void> {
+		await this.objectRepository.withTransitionEffectsLock(
+			remoteId,
+			claimAttempt,
+			async () => {
+				const persisted = await this.objectRepository.findByRemoteId(remoteId);
+				if (
+					persisted === null ||
+					persisted.status !== 'verified' ||
+					persisted.attempts !== claimAttempt
+				) {
+					return;
+				}
+				await this.reconcilePersisted(persisted);
+			}
+		);
+	}
+
 	async reconcilePersisted(object: HistoryArchiveObject): Promise<void> {
 		if (object.status !== 'verified') return;
 		if (object.transitionEffectsCompletedAt !== null) return;

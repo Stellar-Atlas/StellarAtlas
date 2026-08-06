@@ -13,6 +13,7 @@ Group=observe
 WorkingDirectory=/home/observe/stellarbeat-data/Observer
 Environment=NODE_ENV=production
 Environment=DATABASE_SSL=false
+Environment=HISTORY_ARCHIVE_SCHEDULER_MODE=broker
 Environment=HOME=/home/observe
 Environment=PATH=/home/observe/.nvm/versions/node/v26.4.0/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 EnvironmentFile=-/etc/stellaratlas/stellaratlas.env

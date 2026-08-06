@@ -115,6 +115,7 @@ describe('HistoryArchiveObjectSummaryQuery with PostgreSQL', () => {
 			categoryConsistencyPendingCheckpoints: 1,
 			categoryConsistentArchiveCheckpoints: 1,
 			completeArchiveCheckpoints: 2,
+			durableVerifiedArchiveCheckpoints: 1,
 			discoveryCompleteArchiveRoots: 2,
 			expectedArchiveCheckpoints: 3,
 			failedArchiveCheckpoints: 1,

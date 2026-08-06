@@ -302,7 +302,7 @@ export const historyArchiveVerifiedCheckpointSourceSql = `
 				proof.id as "proofId",
 				proof."proofVersion"
 		from candidate_objects candidate
-		join history_archive_checkpoint_proof proof
+		join history_archive_verified_checkpoint_proof_attestation proof
 			on proof."archiveUrlIdentity" =
 				candidate."archiveUrlIdentity"
 			and proof."checkpointLedger" = candidate."checkpointLedger"

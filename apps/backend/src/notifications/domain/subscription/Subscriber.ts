@@ -68,7 +68,7 @@ export class Subscriber extends CoreEntity {
 	}
 
 	publishNotificationAbout(
-		events: Event<EventData, EventSourceId>[],
+		events: readonly Event<EventData, EventSourceId>[],
 		time: Date = new Date()
 	): Notification | null {
 		const publishedEvents: Event<EventData, EventSourceId>[] = [];

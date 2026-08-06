@@ -458,6 +458,7 @@ export class RESTScanCoordinatorService implements ScanCoordinatorService {
 
 		if (response.isErr()) {
 			if (
+				action === 'release' &&
 				isHttpError(response.error) &&
 				response.error.response?.status === 404
 			) {
@@ -466,7 +467,9 @@ export class RESTScanCoordinatorService implements ScanCoordinatorService {
 			return err(new CoordinatorServiceError(errorMessage, response.error));
 		}
 
-		if (response.value.status === 404) return ok(undefined);
+		if (response.value.status === 404 && action === 'release') {
+			return ok(undefined);
+		}
 		if (response.value.status !== 204) {
 			return err(new CoordinatorServiceError(errorMessage));
 		}

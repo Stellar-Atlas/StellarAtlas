@@ -15,6 +15,7 @@ import {
 	createBucket,
 	createBucketMissingProof,
 	createCheckpoint,
+	createObject,
 	createRoot
 } from './HistoryArchiveObjectExecutionTestFixtures.js';
 
@@ -71,6 +72,48 @@ describe('history archive proof-reserve execution', () => {
 	afterAll(async () => {
 		if (dataSource?.isInitialized) await dataSource.destroy();
 		if (postgres !== undefined) await postgres.stop();
+	});
+
+	it('prioritizes ledger revalidation needed to complete proof facts', async () => {
+		const root = createRoot(0);
+		const checkpointLedger = 1_000_063;
+		const ledger = createObject(0, {
+			checkpointLedger,
+			objectKey: 'ledger:000f423f',
+			objectOrder: 1,
+			objectType: 'ledger',
+			status: 'verified'
+		});
+		ledger.verificationFacts = {
+			ledgerCategory: {
+				entryCount: 64,
+				ledgers: [],
+				sourceUrl: ledger.objectUrl
+			}
+		};
+		const proof = createBucketMissingProof(root.archiveUrl, checkpointLedger);
+		proof.proofFactsComplete = false;
+		proof.failureKind = 'proof-facts-incomplete';
+		proof.details = { ledgerHeaderHashesVerified: false };
+		proof.ledgerObjectRemoteId = ledger.remoteId;
+		proof.bucketsVerified = true;
+		proof.missingBucketCount = 0;
+
+		await dataSource
+			.getRepository(HistoryArchiveObject)
+			.save([root, ledger]);
+		await dataSource.getRepository(HistoryArchiveCheckpointProof).save(proof);
+
+		await repository.reconcileExecutionDisposition();
+		const revalidation = await dataSource
+			.getRepository(HistoryArchiveObject)
+			.findOneBy({ remoteId: ledger.remoteId });
+
+		expect(revalidation).toMatchObject({
+			executionDisposition: 'executable',
+			executionReason: 'proof-completion-reserve',
+			status: 'pending'
+		});
 	});
 
 	it('prioritizes a bucket that can complete a checkpoint proof', async () => {

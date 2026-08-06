@@ -134,8 +134,21 @@ export const historyArchiveCheckpointProofUpsertSql = `
 				"history_archive_checkpoint_proof"."evaluatedAt"
 			and (
 				(
-					"history_archive_checkpoint_proof".status <> 'verified'
-					and row(
+					"history_archive_checkpoint_proof".status in (
+						'pending', 'not-evaluable'
+					)
+					and excluded.status <> 'pending'
+				)
+				or (
+					"history_archive_checkpoint_proof".status = 'mismatch'
+					and excluded.status in ('mismatch', 'verified')
+				)
+				or (
+					"history_archive_checkpoint_proof".status = 'verified'
+					and excluded.status in ('verified', 'mismatch')
+				)
+			)
+			and row(
 				excluded."archiveUrl",
 				excluded.status,
 				excluded."requiredObjectsComplete",
@@ -187,12 +200,7 @@ export const historyArchiveCheckpointProofUpsertSql = `
 				"history_archive_checkpoint_proof"."scpObjectRemoteId",
 				"history_archive_checkpoint_proof"."failureKind",
 				"history_archive_checkpoint_proof".details
-					)
-				)
-				or (
-					"history_archive_checkpoint_proof".status = 'verified'
-					and excluded.status = 'verified'
-				)
+			)
 			)
 		)
 `;

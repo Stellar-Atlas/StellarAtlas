@@ -39,6 +39,39 @@ describe('RESTScanCoordinatorService archive object claims', () => {
 			}
 		);
 	});
+
+	it('does not treat a missing terminal object update as committed', async () => {
+		const httpService = mock<HttpService>();
+		const service = new RESTScanCoordinatorService(
+			httpService,
+			'http://coordinator.example',
+			{
+				password: 'secret',
+				type: 'internal',
+				username: 'scanner'
+			}
+		);
+		httpService.post.mockResolvedValue(
+			ok({
+				data: undefined,
+				headers: {},
+				status: 404,
+				statusText: 'Not Found'
+			})
+		);
+
+		const result = await service.failHistoryArchiveObject('object-1', {
+			claimAttempt: 2,
+			errorMessage: 'HTTP 503 Service Unavailable',
+			errorType: 'archive_http_error',
+			executionId: 'execution-1',
+			failureChannel: 'archive_availability',
+			httpStatus: 503,
+			scheduler: 'broker'
+		});
+
+		expect(result.isErr()).toBe(true);
+	});
 });
 
 function archiveObjectJob() {

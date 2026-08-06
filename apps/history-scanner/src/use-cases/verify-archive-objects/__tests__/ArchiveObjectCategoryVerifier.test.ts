@@ -46,7 +46,7 @@ describe('ArchiveObjectCategoryVerifier', () => {
 		if (result.isErr()) {
 			expect(result.error).toMatchObject({
 				errorType: 'archive_http_error',
-				failureChannel: 'archive_evidence',
+				failureChannel: 'archive_availability',
 				httpStatus: 403
 			});
 		}
@@ -175,7 +175,7 @@ describe('ArchiveObjectCategoryVerifier', () => {
 			)
 		).toMatchObject({
 			errorType: 'archive_transport_error',
-			failureChannel: 'archive_evidence',
+			failureChannel: 'archive_availability',
 			httpStatus: 200
 		});
 		expect(
@@ -227,7 +227,7 @@ describe('ArchiveObjectCategoryVerifier', () => {
 
 		expect(result._unsafeUnwrapErr()).toMatchObject({
 			errorType: 'archive_transport_error',
-			failureChannel: 'archive_evidence',
+			failureChannel: 'archive_availability',
 			httpStatus: 200
 		});
 	});

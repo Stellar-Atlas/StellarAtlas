@@ -131,6 +131,10 @@ export class Subscription extends CoreEntity {
 		event: Event<EventData, EventSourceId>,
 		eventNotificationState: EventNotificationState
 	): boolean {
+		if (this.isNewArchiveIntegrityObservation(event, eventNotificationState)) {
+			return false;
+		}
+
 		return (
 			event.time.getTime() <=
 			eventNotificationState.latestSendTime.getTime() +
@@ -142,6 +146,17 @@ export class Subscription extends CoreEntity {
 		return this.eventNotificationStates.filter(
 			(latestNotification) =>
 				latestNotification.latestSendTime.getTime() === time.getTime()
+		);
+	}
+
+	private isNewArchiveIntegrityObservation(
+		event: Event<EventData, EventSourceId>,
+		eventNotificationState: EventNotificationState
+	): boolean {
+		return (
+			event.type === EventType.HistoryArchiveErrorDetected &&
+			typeof event.data.evidenceId === 'string' &&
+			event.time.getTime() > eventNotificationState.latestSendTime.getTime()
 		);
 	}
 }

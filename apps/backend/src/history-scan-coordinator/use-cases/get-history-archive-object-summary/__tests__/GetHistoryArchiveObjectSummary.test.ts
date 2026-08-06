@@ -84,6 +84,7 @@ function createSummary(options: {
 			categoryConsistencyPendingCheckpoints: 0,
 			categoryConsistentArchiveCheckpoints: 0,
 			completeArchiveCheckpoints: 0,
+			durableVerifiedArchiveCheckpoints: 0,
 			discoveryCompleteArchiveRoots: 0,
 			expectedArchiveCheckpoints: 0,
 			failedArchiveCheckpoints: 0,

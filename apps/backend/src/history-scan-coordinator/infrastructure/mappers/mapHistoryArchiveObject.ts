@@ -10,6 +10,7 @@ import {
 	mapPublicVerificationFacts,
 	mapPublicWorkerStage
 } from './PublicArchiveObjectFactsMapper.js';
+import { requireDate, toPublicNumber } from './mapHistoryArchiveBucketCoverage.js';
 
 export function mapHistoryArchiveObjectQueue(
 	snapshot: HistoryArchiveObjectQueueSnapshot,
@@ -50,17 +51,4 @@ export function mapHistoryArchiveObject(
 		verifiedAt: object.verifiedAt?.toISOString() ?? null,
 		workerStage: mapPublicWorkerStage(object.workerStage)
 	};
-}
-
-function requireDate(value: Date | undefined): Date {
-	if (value instanceof Date) return value;
-	return new Date(0);
-}
-
-function toPublicNumber(value: number | string | null): number | null {
-	if (value === null) return null;
-	if (typeof value === 'number') return value;
-
-	const parsed = Number(value);
-	return Number.isSafeInteger(parsed) && parsed >= 0 ? parsed : null;
 }

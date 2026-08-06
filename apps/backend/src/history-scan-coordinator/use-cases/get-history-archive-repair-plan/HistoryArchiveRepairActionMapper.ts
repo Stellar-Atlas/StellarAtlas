@@ -22,6 +22,8 @@ import type {
 	HistoryArchiveRepairReasonV1,
 	HistoryArchiveRepairSourceCandidateV1
 } from 'shared';
+import { sanitizePublicInfrastructureText } from '../../infrastructure/mappers/PublicScanErrorMapper.js';
+import { createHistoryArchiveRepairManifest } from './HistoryArchiveRepairManifestMapper.js';
 
 const maxKnownGoodSources = 5;
 
@@ -76,10 +78,10 @@ export function isRepairableObjectFailure(
 	object: HistoryArchiveObject
 ): boolean {
 	const failureClass = getObjectFailureClass(object);
-	if (failureClass === 'not-found') return true;
 	if (
 		failureClass === 'auth' ||
 		failureClass === 'http' ||
+		failureClass === 'not-found' ||
 		failureClass === 'rate-limit' ||
 		failureClass === 'timeout' ||
 		failureClass === 'transport' ||
@@ -110,7 +112,12 @@ export function toObjectRepairAction(
 		HistoryArchiveRepairArtifactAvailabilityV1
 	>
 ): readonly HistoryArchiveRepairActionV1[] {
-	if (getObjectEvidenceClass(object) !== 'archive-object') return [];
+	if (
+		!isRepairableObjectFailure(object) ||
+		getObjectEvidenceClass(object) !== 'archive-object'
+	) {
+		return [];
+	}
 
 	const kind = getObjectActionKind(object);
 	const repairArtifact = getRepairArtifact(
@@ -123,15 +130,24 @@ export function toObjectRepairAction(
 		(repairArtifact?.status === 'available' ||
 			repairArtifact?.status === 'verify-on-download');
 
+	const actionId = `${kind}:${object.remoteId}`;
+	const evidence = toObjectEvidence(object);
 	return [
 		{
-			actionId: `${kind}:${object.remoteId}`,
+			actionId,
 			bucketHash: object.bucketHash,
 			checkpointEvidence: [],
 			checkpointLedger: object.checkpointLedger,
-			evidence: [toObjectEvidence(object)],
+			evidence: [evidence],
 			kind,
 			knownGoodSources: remoteCandidates,
+			repairManifest: createHistoryArchiveRepairManifest({
+				actionId,
+				artifact: repairArtifact,
+				evidence,
+				object,
+				source: remoteCandidates[0]
+			}),
 			reason: getObjectRepairReason(object),
 			repairArtifact,
 			severity: replacementReady ? 'error' : 'blocked',
@@ -195,6 +211,7 @@ export function toCheckpointRepairAction(
 			evidence: [],
 			kind: 'wait-for-scanner-proof',
 			knownGoodSources: [],
+			repairManifest: null,
 			reason,
 			repairArtifact: null,
 			severity: 'blocked',
@@ -406,7 +423,10 @@ function toObjectEvidence(
 		bucketHash: object.bucketHash,
 		checkpointLedger: object.checkpointLedger,
 		evidenceClass: getObjectEvidenceClass(object),
-		errorMessage: object.errorMessage,
+		errorMessage:
+			object.errorMessage === null
+				? null
+				: sanitizePublicInfrastructureText(object.errorMessage),
 		errorType: object.errorType,
 		failureClass: getObjectFailureClass(object),
 		httpStatus: object.httpStatus,

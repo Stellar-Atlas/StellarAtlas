@@ -2,7 +2,7 @@ import type express from 'express';
 import { parseArchiveObjectFailure } from '../ArchiveObjectJobRequestParsers.js';
 
 describe('parseArchiveObjectFailure', () => {
-	it.each(['archive_evidence', 'scanner_issue'] as const)(
+	it.each(['archive_evidence', 'archive_availability', 'scanner_issue'] as const)(
 		'accepts the typed %s channel',
 		(failureChannel) => {
 			const response = createResponse();

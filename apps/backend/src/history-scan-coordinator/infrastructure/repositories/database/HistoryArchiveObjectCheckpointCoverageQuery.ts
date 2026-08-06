@@ -18,6 +18,8 @@ type CheckpointCoverageRow = {
 	readonly categoryconsistentarchivecheckpoints?: NumericValue;
 	readonly completeArchiveCheckpoints?: NumericValue;
 	readonly completearchivecheckpoints?: NumericValue;
+	readonly durableVerifiedArchiveCheckpoints?: NumericValue;
+	readonly durableverifiedarchivecheckpoints?: NumericValue;
 	readonly discoveryCompleteArchiveRoots?: NumericValue;
 	readonly discoverycompletearchiveroots?: NumericValue;
 	readonly expectedArchiveCheckpoints?: NumericValue;
@@ -66,6 +68,10 @@ export async function getCheckpointCoverage(
 			'categoryConsistentArchiveCheckpoints'
 		),
 		completeArchiveCheckpoints: numberField(row, 'completeArchiveCheckpoints'),
+		durableVerifiedArchiveCheckpoints: numberField(
+			row,
+			'durableVerifiedArchiveCheckpoints'
+		),
 		discoveryCompleteArchiveRoots: numberField(
 			row,
 			'discoveryCompleteArchiveRoots'
@@ -193,6 +199,11 @@ export const checkpointCoverageSql = `
 			coalesce(sum("pendingCheckpointProofs"), 0)
 				as "currentPendingCheckpointProofs"
 		from selected_current_rollup
+	), durable_proof_summary as (
+		select coalesce(sum("durableVerifiedCheckpointProofs"), 0)
+			as "durableVerifiedArchiveCheckpoints"
+		from history_archive_checkpoint_proof_attestation_rollup
+		where ${archiveFilterSql}
 	)
 	select
 		"totalArchiveCheckpoints",
@@ -201,6 +212,7 @@ export const checkpointCoverageSql = `
 		"currentObjectCompleteCheckpointProofs" as "completeArchiveCheckpoints",
 		"currentObjectCompleteCheckpointProofs"
 			as "objectCompleteArchiveCheckpoints",
+		"durableVerifiedArchiveCheckpoints",
 		"currentVerifiedCheckpointProofs"
 			as "categoryConsistentArchiveCheckpoints",
 		"currentMismatchCheckpointProofs"
@@ -247,4 +259,5 @@ export const checkpointCoverageSql = `
 		) as "discoveryCompleteArchiveRoots"
 	from proof_summary
 	cross join current_proof_summary
+	cross join durable_proof_summary
 `;

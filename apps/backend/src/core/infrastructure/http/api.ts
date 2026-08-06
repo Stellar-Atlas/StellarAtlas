@@ -64,6 +64,7 @@ import { GetHistoryArchiveObjectSummary } from '@history-scan-coordinator/use-ca
 import { GetHistoryArchiveObjectStatusSummary } from '@history-scan-coordinator/use-cases/get-history-archive-object-status-summary/GetHistoryArchiveObjectStatusSummary.js';
 import { GetHistoryArchiveObjectEvents } from '@history-scan-coordinator/use-cases/get-history-archive-object-events/GetHistoryArchiveObjectEvents.js';
 import { GetHistoryArchiveRepairPlan } from '@history-scan-coordinator/use-cases/get-history-archive-repair-plan/GetHistoryArchiveRepairPlan.js';
+import { RequestHistoryArchiveObjectRecheck } from '@history-scan-coordinator/use-cases/request-history-archive-object-recheck/RequestHistoryArchiveObjectRecheck.js';
 import { GetHistoryArchiveRepairArtifact } from '@history-scan-coordinator/use-cases/get-history-archive-repair-artifact/GetHistoryArchiveRepairArtifact.js';
 import { GetHistoryArchiveRepairObjectArtifact } from '@history-scan-coordinator/use-cases/get-history-archive-repair-artifact/GetHistoryArchiveRepairObjectArtifact.js';
 import { GetHistoryArchiveEvidence } from '@history-scan-coordinator/use-cases/get-history-archive-evidence/GetHistoryArchiveEvidence.js';
@@ -204,6 +205,9 @@ const listen = async () => {
 			),
 			getHistoryArchiveRepairPlan: kernel.container.get(
 				GetHistoryArchiveRepairPlan
+			),
+			requestHistoryArchiveObjectRecheck: kernel.container.get(
+				RequestHistoryArchiveObjectRecheck
 			),
 			getHistoryArchiveState: kernel.container.get(GetHistoryArchiveState),
 			getLatestScan: kernel.container.get(GetLatestScan),

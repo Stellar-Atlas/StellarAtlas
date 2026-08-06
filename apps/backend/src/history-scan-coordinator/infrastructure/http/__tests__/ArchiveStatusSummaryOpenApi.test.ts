@@ -49,9 +49,14 @@ describe('archive status summary OpenAPI contract', () => {
 				'checkpointCoverage',
 				'sourceCount',
 				'sources',
-				'sourcesTruncated'
+				'sourcesTruncated',
+				'transitionReconciliation'
 			])
 		);
+		expect(
+			document.components.schemas.HistoryArchiveStatusSummaryV1?.properties
+				?.transitionReconciliation?.$ref
+		).toBe('#/components/schemas/HistoryArchiveTransitionReconciliationV1');
 		expect(
 			document.components.schemas.HistoryArchiveStatusSummaryV1?.properties
 				?.sources?.maxItems

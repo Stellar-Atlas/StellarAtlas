@@ -110,9 +110,12 @@ const refillReadyObjectsSql = `
 			priority = excluded.priority,
 			"availableAt" = excluded."availableAt",
 			"updatedAt" = now()
-		where stored."objectRemoteId" is distinct from excluded."objectRemoteId"
-			or stored.priority is distinct from excluded.priority
-			or stored."availableAt" is distinct from excluded."availableAt"
+		where stored."dispatchToken" is null
+			and (
+				stored."objectRemoteId" is distinct from excluded."objectRemoteId"
+				or stored.priority is distinct from excluded.priority
+				or stored."availableAt" is distinct from excluded."availableAt"
+			)
 		returning "objectRemoteId"
 	)
 	select count(*)::integer as count from inserted
@@ -176,6 +179,23 @@ export async function enqueueHistoryArchiveReadyArchives(
 		[],
 		[...new Set(archiveUrlIdentities)]
 	);
+}
+
+export async function completeHistoryArchiveBrokerDelivery(
+	manager: EntityManager,
+	remoteId: string,
+	executionId: string
+): Promise<boolean> {
+	const removed = (await manager.query(
+		`delete from "history_archive_object_ready"
+		 where "objectRemoteId" = $1::uuid
+		   and "dispatchToken" = $2::uuid
+		 returning "objectRemoteId"`,
+		[remoteId, executionId]
+	)) as readonly unknown[];
+	if (removed.length === 0) return false;
+	await enqueueHistoryArchiveReadyObjects(manager, [remoteId]);
+	return true;
 }
 
 export async function bootstrapHistoryArchiveReadyQueueIfEmpty(
@@ -272,9 +292,12 @@ const enqueueReadyObjectsSql = `
 			priority = excluded.priority,
 			"availableAt" = excluded."availableAt",
 			"updatedAt" = now()
-		where stored."objectRemoteId" is distinct from excluded."objectRemoteId"
-			or stored.priority is distinct from excluded.priority
-			or stored."availableAt" is distinct from excluded."availableAt"
+		where stored."dispatchToken" is null
+			and (
+				stored."objectRemoteId" is distinct from excluded."objectRemoteId"
+				or stored.priority is distinct from excluded.priority
+				or stored."availableAt" is distinct from excluded."availableAt"
+			)
 		returning "objectRemoteId"
 	)
 	select count(*)::integer as count from inserted
@@ -334,7 +357,7 @@ interface BootstrapGuardRow {
 
 function normalizeLimit(limit: number): number {
 	if (!Number.isSafeInteger(limit) || limit < 1) return 24;
-	return Math.min(limit, 240);
+	return Math.min(limit, 4_096);
 }
 
 function toCount(value: number | string | undefined): number {

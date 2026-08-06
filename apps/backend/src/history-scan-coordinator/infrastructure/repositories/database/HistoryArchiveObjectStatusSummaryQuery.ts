@@ -6,6 +6,7 @@ import type {
 import { CURRENT_HISTORY_ARCHIVE_CHECKPOINT_PROOF_VERSION } from '../../../domain/history-archive-checkpoint-proof/HistoryArchiveCheckpointProof.js';
 import { requireNumber, type NumericValue } from './ScanJobRowMapper.js';
 import { getCheckpointCoverage } from './HistoryArchiveObjectCheckpointCoverageQuery.js';
+import { getHistoryArchiveTransitionReconciliation } from './HistoryArchiveTransitionReconciliationQuery.js';
 
 type SourceRow = {
 	readonly activeObjectChecks?: NumericValue;
@@ -18,6 +19,8 @@ type SourceRow = {
 	readonly archiveurlidentity?: string;
 	readonly currentLedger?: NumericValue | null;
 	readonly currentledger?: NumericValue | null;
+	readonly durableVerifiedCheckpointProofs?: NumericValue;
+	readonly durableverifiedcheckpointproofs?: NumericValue;
 	readonly latestCheckpointLedger?: NumericValue | null;
 	readonly latestcheckpointledger?: NumericValue | null;
 	readonly latestDiscoveredCheckpointLedger?: NumericValue | null;
@@ -74,12 +77,19 @@ export async function getHistoryArchiveObjectStatusSummary(
 	manager: EntityManager,
 	generatedAt = new Date()
 ): Promise<HistoryArchiveStatusSummaryV1> {
-	const [checkpointCoverage, sources, evidenceHealth, sourceCount] =
+	const [
+		checkpointCoverage,
+		sources,
+		evidenceHealth,
+		sourceCount,
+		transitionReconciliation
+	] =
 		await Promise.all([
 			getCheckpointCoverage(manager, null),
 			getStatusSourceSummaries(manager),
 			getEvidenceHealth(manager),
-			getSourceCount(manager)
+			getSourceCount(manager),
+			getHistoryArchiveTransitionReconciliation(manager, generatedAt)
 		]);
 
 	return {
@@ -92,6 +102,7 @@ export async function getHistoryArchiveObjectStatusSummary(
 		scannerIssueFailures: evidenceHealth.scannerIssueFailures,
 		sources,
 		sourcesTruncated: sourceCount > sources.length,
+		transitionReconciliation,
 		unclassifiedFailures: evidenceHealth.unclassifiedFailures
 	};
 }
@@ -168,6 +179,10 @@ function mapSourceRow(row: SourceRow): HistoryArchiveStatusSourceV1 {
 			'archiveUrlIdentity'
 		),
 		currentLedger: nullableNumber(row.currentLedger ?? row.currentledger),
+		durableVerifiedCheckpointProofs: numberField(
+			row,
+			'durableVerifiedCheckpointProofs'
+		),
 		latestCheckpointLedger: nullableNumber(
 			row.latestCheckpointLedger ?? row.latestcheckpointledger
 		),
@@ -243,7 +258,13 @@ function failureChannel(
 	value: string | null | undefined
 ): HistoryArchiveStatusSourceV1['rootFailureChannel'] {
 	if (value === null || value === undefined) return null;
-	if (value === 'archive_evidence' || value === 'scanner_issue') return value;
+	if (
+		value === 'archive_evidence' ||
+		value === 'archive_availability' ||
+		value === 'scanner_issue'
+	) {
+		return value;
+	}
 	throw new Error('Archive status source row has invalid failure channel');
 }
 
@@ -386,6 +407,8 @@ export const sourceStatusSummarySql = `
 				as "pendingCheckpointProofs",
 			coalesce(current_proof."verifiedCheckpointProofs", 0)
 				as "verifiedCheckpointProofs",
+			coalesce(durable_proof."durableVerifiedCheckpointProofs", 0)
+				as "durableVerifiedCheckpointProofs",
 			coalesce(current_proof."mismatchCheckpointProofs", 0)
 				as "mismatchCheckpointProofs",
 			coalesce(current_proof."notEvaluableCheckpointProofs", 0)
@@ -403,6 +426,8 @@ export const sourceStatusSummarySql = `
 			on current_proof."archiveUrlIdentity" = proof."archiveUrlIdentity"
 			and current_proof."proofVersion" =
 				${CURRENT_HISTORY_ARCHIVE_CHECKPOINT_PROOF_VERSION}
+		left join history_archive_checkpoint_proof_attestation_rollup durable_proof
+			on durable_proof."archiveUrlIdentity" = proof."archiveUrlIdentity"
 		order by
 			aliases."archiveUrl",
 			proof."latestCheckpointLedger" desc nulls last,
@@ -436,6 +461,8 @@ export const sourceStatusSummarySql = `
 		coalesce(proof."totalCheckpointProofs", 0) as "totalCheckpointProofs",
 		coalesce(proof."pendingCheckpointProofs", 0) as "pendingCheckpointProofs",
 		coalesce(proof."verifiedCheckpointProofs", 0) as "verifiedCheckpointProofs",
+		coalesce(proof."durableVerifiedCheckpointProofs", 0)
+			as "durableVerifiedCheckpointProofs",
 		coalesce(proof."mismatchCheckpointProofs", 0) as "mismatchCheckpointProofs",
 		coalesce(proof."notEvaluableCheckpointProofs", 0)
 			as "notEvaluableCheckpointProofs",

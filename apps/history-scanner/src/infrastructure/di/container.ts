@@ -18,6 +18,9 @@ import { CategoryVerificationService } from '../../domain/scanner/CategoryVerifi
 import { Config } from '../config/Config.js';
 import { AxiosHttpService, HttpQueue, type HttpService } from 'http-helper';
 import type { ScanCoordinatorService } from '../../domain/scan/ScanCoordinatorService.js';
+import type { HistoryArchiveObjectJobSource } from '../../use-cases/verify-archive-objects/HistoryArchiveObjectJobDelivery.js';
+import { RESTHistoryArchiveObjectJobSource } from '../services/RESTHistoryArchiveObjectJobSource.js';
+import { NatsHistoryArchiveObjectJobSource } from '../services/NatsHistoryArchiveObjectJobSource.js';
 import { RESTScanCoordinatorService } from '../services/RESTScanCoordinatorService.js';
 import {
 	type JobMonitor,
@@ -108,6 +111,25 @@ export function load(container: Container, config: Config) {
 				config.coordinatorAuth
 			);
 		});
+	container
+		.bind<HistoryArchiveObjectJobSource>(
+			TYPES.HistoryArchiveObjectJobSource
+		)
+		.toDynamicValue(() => {
+			if (config.historyArchiveObjectJobSource === 'nats') {
+				return new NatsHistoryArchiveObjectJobSource({
+					consumer: config.natsArchiveJobConsumer,
+					name: `stellaratlas-history-scanner-${process.pid.toString()}`,
+					servers: config.natsServers,
+					stream: config.natsArchiveJobStream,
+					token: config.natsToken
+				});
+			}
+			return new RESTHistoryArchiveObjectJobSource(
+				container.get<ScanCoordinatorService>(TYPES.ScanCoordinatorService)
+			);
+		})
+		.inSingletonScope();
 	container
 		.bind<HistoryArchiveWorkerStatusReporter>(
 			TYPES.HistoryArchiveWorkerStatusReporter

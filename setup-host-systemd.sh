@@ -8,9 +8,15 @@ PRIMARY_CONFIG_SOURCE="$REPO_ROOT/ops/postgresql/host"
 PRIMARY_CONFIG_TARGET=/etc/postgresql/16/stellaratlas
 HORIZON_CONFIG_TARGET=/etc/postgresql/16/stellaratlas-horizon
 STELLARATLAS_CONFIG_TARGET=/etc/stellaratlas
+NATS_CONFIG_SOURCE="$REPO_ROOT/ops/nats/stellaratlas.conf"
+NATS_CONFIG_TARGET="$STELLARATLAS_CONFIG_TARGET/nats.conf"
+NATS_ENV_TARGET="$STELLARATLAS_CONFIG_TARGET/nats.env"
+NATS_STATE_DIR=/var/lib/stellaratlas/nats
 
 UNITS=(
 	stellaratlas-postgresql.service
+	stellaratlas-nats.service
+	stellaratlas-history-archive-dispatcher.service
 	stellaratlas-history-scanner.service
 	stellaratlas-full-history-promotion.service
 	stellaratlas-full-history-backfill.service
@@ -60,6 +66,8 @@ verify_prerequisites() {
 	require_executable /home/admins/.nvm/versions/node/v26.5.1/bin/node
 	require_executable /home/admins/.nvm/versions/node/v26.5.1/bin/pnpm
 	require_executable /home/admins/.local/bin/meilisearch
+	require_executable /usr/sbin/nats-server
+	require_executable /usr/bin/openssl
 	require_executable /mnt/bulk/stellarbeat-data/horizon/bin/horizon
 	require_executable /mnt/bulk/stellarbeat-data/stellar-rpc/bin/stellar-rpc
 	require_executable /mnt/bulk/stellarbeat-data/stellar-core/bin/stellar-core
@@ -79,6 +87,7 @@ verify_prerequisites() {
 	require_file "$PRIMARY_CONFIG_SOURCE/horizon-pg_hba.conf"
 	require_file "$PRIMARY_CONFIG_SOURCE/horizon-pg_ident.conf"
 	require_file "$REPO_ROOT/ops/postgresql/stellaratlas-main.conf"
+	require_file "$NATS_CONFIG_SOURCE"
 	require_file "$REPO_ROOT/ops/stellar-rpc/pubnet-host.toml"
 
 	systemd-analyze verify "${UNITS[@]/#/$UNIT_SOURCE/}"
@@ -91,6 +100,16 @@ install_runtime() {
 		"$PRIMARY_CONFIG_TARGET/conf.d" \
 		"$HORIZON_CONFIG_TARGET" \
 		"$STELLARATLAS_CONFIG_TARGET"
+	install -d -o admins -g admins -m 0750 "$NATS_STATE_DIR"
+	if [[ ! -s "$NATS_ENV_TARGET" ]]; then
+		printf 'NATS_TOKEN=%s\n' "$(openssl rand -hex 32)" >"$NATS_ENV_TARGET"
+	fi
+	chown root:admins "$NATS_ENV_TARGET"
+	chmod 0640 "$NATS_ENV_TARGET"
+	grep -Eq '^NATS_TOKEN=[0-9a-f]{64}$' "$NATS_ENV_TARGET" ||
+		die "host NATS token is missing or invalid"
+	install -o root -g admins -m 0640 \
+		"$NATS_CONFIG_SOURCE" "$NATS_CONFIG_TARGET"
 	install -o root -g 111 -m 0640 \
 		"$PRIMARY_CONFIG_SOURCE/postgresql.conf" \
 		"$PRIMARY_CONFIG_TARGET/postgresql.conf"
@@ -121,6 +140,8 @@ install_runtime() {
 			"$UNIT_SOURCE/$unit" "$UNIT_TARGET/$unit"
 	done
 
+	systemctl disable --now nats-server.service 2>/dev/null || true
+	systemctl mask nats-server.service
 	systemctl daemon-reload
 	systemctl enable "${UNITS[@]}"
 	printf 'Installed and enabled %d host-native StellarAtlas services.\n' \
@@ -142,6 +163,11 @@ verify_installed() {
 		"$PRIMARY_CONFIG_TARGET/pg_ident.conf" '0:111:640'
 	verify_copy "$REPO_ROOT/ops/postgresql/stellaratlas-main.conf" \
 		"$PRIMARY_CONFIG_TARGET/conf.d/stellaratlas-main.conf" '0:111:640'
+	verify_copy "$NATS_CONFIG_SOURCE" "$NATS_CONFIG_TARGET" '0:1000:640'
+	[[ "$(stat -c '%u:%g:%a' "$NATS_ENV_TARGET")" == '0:1000:640' ]] ||
+		die "installed ownership or mode is wrong: $NATS_ENV_TARGET"
+	grep -Eq '^NATS_TOKEN=[0-9a-f]{64}$' "$NATS_ENV_TARGET" ||
+		die "host NATS token is missing or invalid"
 	verify_copy "$PRIMARY_CONFIG_SOURCE/horizon-postgresql.conf" \
 		"$HORIZON_CONFIG_TARGET/postgresql.conf" '0:1000:640'
 	verify_copy "$PRIMARY_CONFIG_SOURCE/horizon-pg_hba.conf" \

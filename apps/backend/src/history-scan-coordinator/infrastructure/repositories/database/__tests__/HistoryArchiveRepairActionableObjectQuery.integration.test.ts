@@ -39,7 +39,7 @@ describe('history archive actionable object query', () => {
 		await dataSource.getRepository(HistoryArchiveObject).clear();
 	});
 
-	it('filters infrastructure and transient failures before applying the limit', async () => {
+	it('excludes infrastructure, transport, and remote availability failures', async () => {
 		const worker = failure('ledger', 'worker', 1);
 		worker.failureChannel = 'scanner_issue';
 		worker.errorType = 'WORKER_EACCES';
@@ -50,15 +50,24 @@ describe('history archive actionable object query', () => {
 		missing.failureChannel = 'archive_evidence';
 		missing.errorType = 'archive_http_error';
 		missing.httpStatus = 404;
+		const forbidden = failure('ledger', 'forbidden', 4);
+		forbidden.failureChannel = 'archive_evidence';
+		forbidden.errorType = 'archive_http_error';
+		forbidden.httpStatus = 403;
+		const rateLimited = failure('results', 'rate-limited', 5);
+		rateLimited.failureChannel = 'archive_evidence';
+		rateLimited.errorType = 'too_many_requests';
+		rateLimited.httpStatus = 429;
+		const timedOut = failure('bucket', 'timed-out', 6);
+		timedOut.failureChannel = 'archive_evidence';
+		timedOut.errorType = 'ETIMEDOUT';
 		await dataSource
 			.getRepository(HistoryArchiveObject)
-			.save([worker, transport, missing]);
+			.save([worker, transport, missing, forbidden, rateLimited, timedOut]);
 
 		await expect(
 			repository.findActionableByArchiveUrl(archiveUrl, 1)
-		).resolves.toEqual([
-			expect.objectContaining({ remoteId: missing.remoteId })
-		]);
+		).resolves.toEqual([]);
 	});
 
 	it('keeps archive hash failures but excludes aborted work', async () => {

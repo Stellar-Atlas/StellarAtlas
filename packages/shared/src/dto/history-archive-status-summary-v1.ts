@@ -11,6 +11,7 @@ export interface HistoryArchiveStatusSourceV1 {
 	readonly archiveUrl: string;
 	readonly archiveUrlIdentity: string;
 	readonly currentLedger: number | null;
+	readonly durableVerifiedCheckpointProofs: number;
 	readonly latestCheckpointLedger: number | null;
 	readonly latestDiscoveredCheckpointLedger: number | null;
 	readonly mismatchCheckpointProofs: number;
@@ -20,7 +21,11 @@ export interface HistoryArchiveStatusSourceV1 {
 	readonly pendingCheckpointProofs: number;
 	readonly rootObjectStatus:
 		'pending' | 'scanning' | 'verified' | 'failed' | null;
-	readonly rootFailureChannel: 'archive_evidence' | 'scanner_issue' | null;
+	readonly rootFailureChannel:
+		| 'archive_evidence'
+		| 'archive_availability'
+		| 'scanner_issue'
+		| null;
 	readonly scannerIssueFailures: number;
 	readonly source: 'backfill' | 'history-scanner' | 'network-scan';
 	readonly stateStatus: 'available' | 'invalid' | 'unreachable';
@@ -28,6 +33,13 @@ export interface HistoryArchiveStatusSourceV1 {
 	readonly totalCheckpointProofs: number;
 	readonly unclassifiedFailures: number;
 	readonly verifiedCheckpointProofs: number;
+}
+
+export interface HistoryArchiveTransitionReconciliationV1 {
+	readonly oldestPendingAgeMs: number | null;
+	readonly oldestPendingAt: string | null;
+	readonly pendingTerminalEffects: number;
+	readonly status: 'caught-up' | 'reconciling' | 'stalled';
 }
 
 export interface HistoryArchiveStatusSummaryV1 {
@@ -40,6 +52,7 @@ export interface HistoryArchiveStatusSummaryV1 {
 	readonly scannerIssueFailures: number;
 	readonly sources: readonly HistoryArchiveStatusSourceV1[];
 	readonly sourcesTruncated: boolean;
+	readonly transitionReconciliation: HistoryArchiveTransitionReconciliationV1;
 	readonly unclassifiedFailures: number;
 }
 
@@ -52,6 +65,7 @@ const HistoryArchiveStatusSourceV1Schema: JSONSchemaType<HistoryArchiveStatusSou
 			archiveUrl: { type: 'string' },
 			archiveUrlIdentity: { type: 'string' },
 			currentLedger: nullable({ type: 'number' }),
+			durableVerifiedCheckpointProofs: { type: 'number' },
 			latestCheckpointLedger: nullable({ type: 'number' }),
 			latestDiscoveredCheckpointLedger: nullable({ type: 'number' }),
 			mismatchCheckpointProofs: { type: 'number' },
@@ -75,6 +89,7 @@ const HistoryArchiveStatusSourceV1Schema: JSONSchemaType<HistoryArchiveStatusSou
 				type: 'string',
 				enum: [
 					'archive_evidence',
+					'archive_availability',
 					'scanner_issue',
 					null
 				] as unknown as NonNullable<
@@ -101,6 +116,7 @@ const HistoryArchiveStatusSourceV1Schema: JSONSchemaType<HistoryArchiveStatusSou
 			'archiveUrl',
 			'archiveUrlIdentity',
 			'currentLedger',
+			'durableVerifiedCheckpointProofs',
 			'latestCheckpointLedger',
 			'latestDiscoveredCheckpointLedger',
 			'mismatchCheckpointProofs',
@@ -117,6 +133,27 @@ const HistoryArchiveStatusSourceV1Schema: JSONSchemaType<HistoryArchiveStatusSou
 			'totalCheckpointProofs',
 			'unclassifiedFailures',
 			'verifiedCheckpointProofs'
+		],
+		additionalProperties: false
+	};
+
+const HistoryArchiveTransitionReconciliationV1Schema: JSONSchemaType<HistoryArchiveTransitionReconciliationV1> =
+	{
+		type: 'object',
+		properties: {
+			oldestPendingAgeMs: nullable({ type: 'number', minimum: 0 }),
+			oldestPendingAt: nullable({ type: 'string', format: 'date-time' }),
+			pendingTerminalEffects: { type: 'number', minimum: 0 },
+			status: {
+				type: 'string',
+				enum: ['caught-up', 'reconciling', 'stalled']
+			}
+		},
+		required: [
+			'oldestPendingAgeMs',
+			'oldestPendingAt',
+			'pendingTerminalEffects',
+			'status'
 		],
 		additionalProperties: false
 	};
@@ -140,6 +177,8 @@ export const HistoryArchiveStatusSummaryV1Schema: JSONSchemaType<HistoryArchiveS
 				items: HistoryArchiveStatusSourceV1Schema
 			},
 			sourcesTruncated: { type: 'boolean' },
+			transitionReconciliation:
+				HistoryArchiveTransitionReconciliationV1Schema,
 			unclassifiedFailures: { type: 'number' }
 		},
 		required: [
@@ -152,6 +191,7 @@ export const HistoryArchiveStatusSummaryV1Schema: JSONSchemaType<HistoryArchiveS
 			'scannerIssueFailures',
 			'sources',
 			'sourcesTruncated',
+			'transitionReconciliation',
 			'unclassifiedFailures'
 		],
 		additionalProperties: false

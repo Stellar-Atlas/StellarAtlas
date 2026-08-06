@@ -1,5 +1,6 @@
 export const historyArchiveObjectFailureChannels = [
 	'archive_evidence',
+	'archive_availability',
 	'scanner_issue'
 ] as const;
 

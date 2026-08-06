@@ -27,6 +27,10 @@ import {
 } from './ArchiveObjectWorkerTelemetry.js';
 import { CoalescingHistoryArchiveWorkerReporter } from './CoalescingHistoryArchiveWorkerReporter.js';
 import type { VerifyArchiveObjectsDTO } from './VerifyArchiveObjectsDTO.js';
+import type {
+	HistoryArchiveObjectJobDelivery,
+	HistoryArchiveObjectJobSource
+} from './HistoryArchiveObjectJobDelivery.js';
 import { canonicalJsonContentDigest } from './ArchiveObjectContentDigest.js';
 import { readArchiveObjectContentLength } from './ArchiveObjectHttpContentLength.js';
 import { createArchiveObjectDownloadCounter } from './ArchiveObjectDownloadCounter.js';
@@ -42,9 +46,11 @@ import {
 	ProcessHistoryArchiveDownloadPermit
 } from '../../infrastructure/services/HistoryArchiveDownloadPermit.js';
 import {
+	archiveAvailabilityFailure,
 	archiveEvidenceFailure,
 	scannerIssueFailure
 } from './ArchiveObjectFailure.js';
+import { logArchiveObjectFailure } from './ArchiveObjectFailureLogger.js';
 
 const maximumPendingWorkerReports = 24;
 
@@ -57,6 +63,8 @@ export class VerifyArchiveObjects {
 	constructor(
 		@inject(TYPES.ScanCoordinatorService)
 		private readonly scanCoordinator: ScanCoordinatorService,
+		@inject(TYPES.HistoryArchiveObjectJobSource)
+		private readonly jobSource: HistoryArchiveObjectJobSource,
 		@inject(TYPES.HistoryArchiveWorkerStatusReporter)
 		workerStatusReporter: HistoryArchiveWorkerStatusReporter,
 		@inject(TYPES.HttpService)
@@ -81,7 +89,6 @@ export class VerifyArchiveObjects {
 			maximumPendingWorkerReports
 		);
 		this.workerTelemetry = new ArchiveObjectWorkerTelemetry(
-			this.scanCoordinator,
 			coalescingStatusReporter,
 			this.exceptionLogger,
 			this.logger
@@ -121,6 +128,7 @@ export class VerifyArchiveObjects {
 
 	async releaseActiveObjectJobs(): Promise<void> {
 		await this.workerTelemetry.releaseActiveObjectJobs();
+		await this.jobSource.close();
 	}
 
 	private async runWorkerLoop(
@@ -157,27 +165,28 @@ export class VerifyArchiveObjects {
 		};
 
 		try {
-			const jobResult =
-				await this.scanCoordinator.getHistoryArchiveObjectJob();
-			if (jobResult.isErr()) {
-				releasePermit();
+			let delivery: HistoryArchiveObjectJobDelivery | null;
+			try {
+				delivery = await this.jobSource.next();
+			} catch (error) {
 				this.workerTelemetry.reportIdle(slot);
-				this.exceptionLogger.captureException(jobResult.error);
-				await this.waitBeforeRetry();
+				throw error;
+			}
+			if (delivery === null) {
+				this.workerTelemetry.reportIdle(slot);
+				if (this.jobSource.kind === 'legacy-http') await this.waitBeforeRetry();
 				return;
 			}
 
-			if (jobResult.value === null) {
-				releasePermit();
-				this.workerTelemetry.reportIdle(slot);
-				await this.waitBeforeRetry();
-				return;
-			}
-
-			const job = jobResult.value;
-			this.workerTelemetry.startObject(slot, job);
+			const job = delivery.job;
+			this.workerTelemetry.startObject(slot, job, delivery);
 			await this.checkIn('in_progress');
-			await this.verifyObject(job, releasePermit);
+			try {
+				await this.verifyObject(job, releasePermit, delivery);
+			} catch (error) {
+				await delivery.retry(30_000);
+				throw error;
+			}
 		} finally {
 			releasePermit();
 		}
@@ -185,7 +194,8 @@ export class VerifyArchiveObjects {
 
 	private async verifyObject(
 		job: HistoryArchiveObjectJobDTO,
-		releaseDownloadPermit: () => void
+		releaseDownloadPermit: () => void,
+		delivery: HistoryArchiveObjectJobDelivery
 	): Promise<void> {
 		let outcome: HistoryArchiveWorkerOutcomeDTO = 'worker_issue';
 		try {
@@ -194,22 +204,27 @@ export class VerifyArchiveObjects {
 				releaseDownloadPermit
 			);
 			if (result.isErr()) {
+				outcome = mapFailureToWorkerOutcome(result.error);
 				this.workerTelemetry.setStage(
 					job.remoteId,
 					'recording_archive_evidence'
 				);
 				await retryArchiveObjectTerminalUpdate(
-					() => this.failObject(job, result.error),
+					() =>
+						this.scanCoordinator.failHistoryArchiveObject(job.remoteId, {
+							...result.error,
+							claimAttempt: job.claimAttempt,
+							executionId: delivery.executionId,
+							scheduler:
+								delivery.source === 'broker' ? 'broker' : 'legacy'
+						}),
 					(error) => this.exceptionLogger.captureException(error)
 				);
-				this.logger.warn('History archive object failed verification', {
-					errorMessage: result.error.errorMessage,
-					errorType: result.error.errorType,
-					httpStatus: result.error.httpStatus ?? null,
-					remoteId: job.remoteId
-				});
-				outcome = mapFailureToWorkerOutcome(result.error);
-				await this.checkIn('error');
+				await delivery.acknowledge();
+				logArchiveObjectFailure(this.logger, job.remoteId, result.error);
+				await this.checkIn(
+					result.error.failureChannel === 'scanner_issue' ? 'error' : 'ok'
+				);
 				return;
 			}
 			this.workerTelemetry.setStage(
@@ -220,10 +235,14 @@ export class VerifyArchiveObjects {
 				() =>
 					this.scanCoordinator.completeHistoryArchiveObject(job.remoteId, {
 						...result.value,
-						claimAttempt: job.claimAttempt
+						claimAttempt: job.claimAttempt,
+						executionId: delivery.executionId,
+						scheduler:
+							delivery.source === 'broker' ? 'broker' : 'legacy'
 					}),
 				(error) => this.exceptionLogger.captureException(error)
 			);
+			await delivery.acknowledge();
 			outcome = 'verified';
 			await this.checkIn('ok');
 		} finally {
@@ -406,7 +425,7 @@ export class VerifyArchiveObjects {
 			if (verifyResult.isErr()) {
 				if (verifyResult.error.kind === 'source-stream') {
 					return err(
-						archiveEvidenceFailure({
+						archiveAvailabilityFailure({
 							error: verifyResult.error,
 							errorType: 'archive_transport_error',
 							httpStatus: response.value.status
@@ -454,15 +473,6 @@ export class VerifyArchiveObjects {
 		} finally {
 			releaseDownloadPermit();
 		}
-	}
-
-	private failObject(
-		job: HistoryArchiveObjectJobDTO,
-		failure: HistoryArchiveObjectFailureDTO
-	): Promise<Result<void, Error>> {
-		return this.scanCoordinator.failHistoryArchiveObject(job.remoteId, {
-			...failure, claimAttempt: job.claimAttempt
-		});
 	}
 
 	private async checkIn(status: 'in_progress' | 'error' | 'ok') {

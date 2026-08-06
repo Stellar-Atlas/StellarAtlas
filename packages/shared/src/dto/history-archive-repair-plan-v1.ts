@@ -141,6 +141,92 @@ export type HistoryArchiveRepairArtifactAvailabilityV1 =
 	| HistoryArchiveRepairArtifactVerifyOnDownloadV1
 	| HistoryArchiveRepairArtifactUnavailableV1;
 
+export type HistoryArchiveRepairManifestStatusV1 =
+	| 'ready'
+	| 'awaiting-verified-replacement';
+
+export type HistoryArchiveRepairManifestStepKindV1 =
+	| 'backup-current-file'
+	| 'stage-replacement'
+	| 'verify-staged-content'
+	| 'atomic-replace'
+	| 'preserve-metadata'
+	| 'request-recheck';
+
+export interface HistoryArchiveRepairManifestReplacementV1 {
+	readonly artifact:
+		| HistoryArchiveRepairArtifactAvailableV1
+		| HistoryArchiveRepairArtifactVerifyOnDownloadV1;
+	readonly source: HistoryArchiveRepairSourceCandidateV1;
+}
+
+export type HistoryArchiveRepairManifestStepV1 =
+	| {
+			readonly backupSuffix: string;
+			readonly kind: 'backup-current-file';
+			readonly order: 1;
+			readonly required: true;
+	  }
+	| {
+			readonly input: 'replacement-download-url';
+			readonly kind: 'stage-replacement';
+			readonly order: 2;
+			readonly required: true;
+			readonly stagingLocation: 'same-filesystem-temporary-file';
+	  }
+	| {
+			readonly expectedContentHash: HistoryArchiveRepairArtifactContentHashV1;
+			readonly kind: 'verify-staged-content';
+			readonly order: 3;
+			readonly required: true;
+	  }
+	| {
+			readonly kind: 'atomic-replace';
+			readonly order: 4;
+			readonly required: true;
+			readonly requiresSameFilesystem: true;
+	  }
+	| {
+			readonly kind: 'preserve-metadata';
+			readonly order: 5;
+			readonly preserve: readonly ['owner', 'mode', 'acl'];
+			readonly required: true;
+	  }
+	| {
+			readonly kind: 'request-recheck';
+			readonly order: 6;
+			readonly required: true;
+			readonly resolutionCondition:
+				| 'same-object-verified-after-original-evidence';
+	  };
+
+export interface HistoryArchiveRepairManifestV1 {
+	readonly actionId: string;
+	readonly evidence: HistoryArchiveRepairObjectEvidenceV1;
+	readonly generatedAt: string;
+	readonly recheck: {
+		readonly endpoint: string;
+		readonly minimumEvidenceUpdatedAt: string;
+		readonly resolutionCondition:
+			| 'same-object-verified-after-original-evidence';
+		readonly targetRemoteId: string;
+	};
+	readonly replacement: HistoryArchiveRepairManifestReplacementV1 | null;
+	readonly schemaVersion: 1;
+	readonly status: HistoryArchiveRepairManifestStatusV1;
+	readonly steps: readonly HistoryArchiveRepairManifestStepV1[];
+	readonly target: {
+		readonly archiveUrl: string;
+		readonly archiveUrlIdentity: string;
+		readonly bucketHash: string | null;
+		readonly checkpointLedger: number | null;
+		readonly objectKey: string;
+		readonly objectType: HistoryArchiveObjectTypeV1;
+		readonly objectUrl: string;
+		readonly operatorTargetPathRequired: true;
+	};
+}
+
 export interface HistoryArchiveCheckpointRepairEvidenceV1 {
 	readonly bucketsVerified: boolean;
 	readonly checkpointBucketListHash: string | null;
@@ -168,6 +254,8 @@ export interface HistoryArchiveRepairActionV1 {
 	readonly evidence: readonly HistoryArchiveRepairObjectEvidenceV1[];
 	readonly kind: HistoryArchiveRepairActionKindV1;
 	readonly knownGoodSources: readonly HistoryArchiveRepairSourceCandidateV1[];
+	/** Non-null only for confirmed object-integrity failures. */
+	readonly repairManifest: HistoryArchiveRepairManifestV1 | null;
 	readonly reason: HistoryArchiveRepairReasonV1;
 	readonly repairArtifact: HistoryArchiveRepairArtifactAvailabilityV1 | null;
 	readonly severity: HistoryArchiveRepairActionSeverityV1;

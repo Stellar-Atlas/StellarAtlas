@@ -34,6 +34,10 @@ const document = openApiDocument as unknown as {
 					readonly description?: string;
 					readonly responses: Readonly<Record<string, Response>>;
 				};
+				readonly post?: {
+					readonly description?: string;
+					readonly responses: Readonly<Record<string, Response>>;
+				};
 			}
 		>
 	>;
@@ -53,11 +57,25 @@ describe('archive repair OpenAPI contract', () => {
 
 		const action = document.components.schemas.HistoryArchiveRepairActionV1;
 		expect(action?.required).toEqual(
-			expect.arrayContaining(['knownGoodSources', 'repairArtifact'])
+			expect.arrayContaining([
+				'knownGoodSources',
+				'repairArtifact',
+				'repairManifest'
+			])
 		);
 		expect(action?.properties?.knownGoodSources?.maxItems).toBe(5);
 		expect(action?.properties?.repairArtifact?.allOf?.[0]?.$ref).toBe(
 			'#/components/schemas/HistoryArchiveRepairArtifactAvailabilityV1'
+		);
+		expect(action?.properties?.repairManifest?.allOf?.[0]?.$ref).toBe(
+			'#/components/schemas/HistoryArchiveRepairManifestV1'
+		);
+		const manifest = document.components.schemas.HistoryArchiveRepairManifestV1;
+		expect(manifest?.description).toContain(
+			'HTTP and transport failures never produce one'
+		);
+		expect(manifest?.required).toEqual(
+			expect.arrayContaining(['evidence', 'replacement', 'recheck', 'steps'])
 		);
 		const candidate =
 			document.components.schemas.HistoryArchiveRepairSourceCandidateV1;
@@ -202,6 +220,47 @@ describe('archive repair OpenAPI contract', () => {
 			operation?.responses['409']?.content?.['application/json']?.schema?.$ref
 		).toBe(
 			'#/components/schemas/HistoryArchiveRepairObjectArtifactUnavailableV1'
+		);
+	});
+
+	it('documents the object-addressed bounded recheck decision', () => {
+		const operation =
+			document.paths['/v1/archive-scans/objects/{remoteId}/recheck']?.post;
+		expect(operation?.description).toContain('exact failed archive-integrity');
+		expect(operation?.description).toContain('never reset or queued');
+		expect(operation?.requestBody?.required).toBe(true);
+		expect(
+			operation?.requestBody?.content?.['application/json']?.schema?.required
+		).toContain('minimumEvidenceUpdatedAt');
+		expect(
+			operation?.responses['200']?.content?.['application/json']?.schema?.$ref
+		).toBe('#/components/schemas/HistoryArchiveObjectRecheckResponseV1');
+
+		const response =
+			document.components.schemas.HistoryArchiveObjectRecheckResponseV1;
+		expect(response?.additionalProperties).toBe(false);
+		expect(response?.required).toEqual(
+			expect.arrayContaining([
+				'eligibleAt',
+				'hostBackoffUntil',
+				'reason',
+				'remoteId',
+				'state'
+			])
+		);
+		expect(response?.properties?.state?.enum).toEqual([
+			'queued',
+			'already-queued',
+			'not-yet-eligible',
+			'blocked'
+		]);
+		expect(response?.properties?.reason?.enum).toEqual(
+			expect.arrayContaining([
+				'evidence-revision-changed',
+				'host-backoff',
+				'non-remote-evidence-failure',
+				'verified-object'
+			])
 		);
 	});
 });

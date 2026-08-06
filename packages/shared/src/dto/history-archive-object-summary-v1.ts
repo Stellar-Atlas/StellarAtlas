@@ -38,6 +38,7 @@ export interface HistoryArchiveCheckpointCoverageV1 {
 	readonly categoryConsistencyPendingCheckpoints: number;
 	readonly categoryConsistentArchiveCheckpoints: number;
 	readonly completeArchiveCheckpoints: number;
+	readonly durableVerifiedArchiveCheckpoints: number;
 	readonly discoveryCompleteArchiveRoots: number;
 	readonly expectedArchiveCheckpoints: number;
 	readonly failedArchiveCheckpoints: number;
@@ -213,6 +214,7 @@ export const HistoryArchiveCheckpointCoverageV1Schema: JSONSchemaType<HistoryArc
 			categoryConsistencyPendingCheckpoints: { type: 'number' },
 			categoryConsistentArchiveCheckpoints: { type: 'number' },
 			completeArchiveCheckpoints: { type: 'number' },
+			durableVerifiedArchiveCheckpoints: { type: 'number' },
 			discoveryCompleteArchiveRoots: { type: 'number' },
 			expectedArchiveCheckpoints: { type: 'number' },
 			failedArchiveCheckpoints: { type: 'number' },
@@ -231,6 +233,7 @@ export const HistoryArchiveCheckpointCoverageV1Schema: JSONSchemaType<HistoryArc
 			'categoryConsistencyPendingCheckpoints',
 			'categoryConsistentArchiveCheckpoints',
 			'completeArchiveCheckpoints',
+			'durableVerifiedArchiveCheckpoints',
 			'discoveryCompleteArchiveRoots',
 			'expectedArchiveCheckpoints',
 			'failedArchiveCheckpoints',

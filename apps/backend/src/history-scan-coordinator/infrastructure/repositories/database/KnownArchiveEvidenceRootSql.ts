@@ -29,7 +29,8 @@ export const knownArchiveEvidenceRootSql = `
 		coalesce(summary."bucketObjects", 0) as "bucketObjects",
 		coalesce(summary."verifiedBucketObjects", 0) as "verifiedBucketObjects",
 		coalesce(proof."totalCheckpointProofs", 0) as "totalCheckpoints",
-		coalesce(proof."verifiedCheckpointProofs", 0) as "verifiedCheckpoints",
+		coalesce(durable_proof."durableVerifiedCheckpointProofs", 0)
+			as "verifiedCheckpoints",
 		coalesce(proof."mismatchCheckpointProofs", 0)
 			as "mismatchedCheckpoints",
 		coalesce(proof."pendingCheckpointProofs", 0) as "pendingCheckpoints",
@@ -41,6 +42,8 @@ export const knownArchiveEvidenceRootSql = `
 		on summary."archiveUrlIdentity" = root."archiveUrlIdentity"
 	left join history_archive_checkpoint_proof_rollup proof
 		on proof."archiveUrlIdentity" = root."archiveUrlIdentity"
+	left join history_archive_checkpoint_proof_attestation_rollup durable_proof
+		on durable_proof."archiveUrlIdentity" = root."archiveUrlIdentity"
 	order by root."archiveUrlIdentity" asc
 `;
 

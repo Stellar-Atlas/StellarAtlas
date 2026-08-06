@@ -41,7 +41,8 @@ interface AdmissionRow {
 }
 
 export async function reconcileHistoryArchiveObjectExecution(
-	repository: Repository<HistoryArchiveObject>
+	repository: Repository<HistoryArchiveObject>,
+	options: { readonly admitLegacyObjects?: boolean } = {}
 ): Promise<HistoryArchiveObjectExecutionReconciliationResult> {
 	return await repository.manager.transaction(async (manager) => {
 		await manager.query(`set local lock_timeout = '500ms'`);
@@ -56,6 +57,7 @@ export async function reconcileHistoryArchiveObjectExecution(
 		await backfillLegacyCheckpointContentDigests(manager);
 		await refreshOneStaleCanonicalCheckpointProof(manager);
 		await manager.query(materializeCanonicalFrontierDependenciesSql);
+		if (options.admitLegacyObjects === false) return emptyResult();
 		const [canonicalAdmission] = (await manager.query(
 			admitCanonicalFrontierSql,
 			[historyArchiveCanonicalReserveCount, historyArchivePerHostConcurrency]
@@ -195,6 +197,55 @@ export const admitProofCompletionReserveSql = `
 		from "history_archive_object_queue" root
 		where root."objectType" = 'history-archive-state'
 			and root."objectKey" = 'root'
+	), existing_reserve as materialized (
+		select candidate.id, candidate.status,
+			row_number() over (
+				partition by candidate."archiveUrlIdentity"
+				order by (candidate.status = 'scanning') desc,
+					candidate."lastClaimedAt" desc nulls last,
+					candidate.id
+			) as root_rank
+		from "history_archive_object_queue" candidate
+		where candidate."executionReason" = 'proof-completion-reserve'
+			and candidate."executionDisposition" = 'executable'
+			and candidate."dependencyReady" = true
+			and candidate.status in ('pending', 'scanning')
+	), demoted_excess_reserve as (
+		update "history_archive_object_queue" candidate
+		set "executionDisposition" = 'deferred',
+			"executionReason" = 'proof-completion-waiting',
+			"executionDispositionAt" = now()
+		from existing_reserve reserved
+		where candidate.id = reserved.id
+			and reserved.root_rank > 1
+			and reserved.status = 'pending'
+		returning candidate.id
+	), proof_fact_candidates as materialized (
+		select newest."archiveUrlIdentity", newest."checkpointLedger",
+			newest."ledgerObjectRemoteId"
+		from proof_roots root
+		join lateral (
+			select proof."archiveUrlIdentity", proof."checkpointLedger",
+				proof."ledgerObjectRemoteId"
+			from "history_archive_checkpoint_proof" proof
+			where proof."archiveUrlIdentity" = root."archiveUrlIdentity"
+				and proof.status = 'not-evaluable'
+				and proof."failureKind" = 'proof-facts-incomplete'
+				and proof."requiredObjectsComplete" = true
+				and coalesce(
+					proof.details->>'ledgerHeaderHashesVerified',
+					'false'
+				) <> 'true'
+				and not exists (
+					select 1
+					from canonical_target_roots canonical
+					where canonical."archiveUrlIdentity" =
+						proof."archiveUrlIdentity"
+						and canonical.checkpoint_ledger = proof."checkpointLedger"
+				)
+			order by proof."checkpointLedger" desc
+			limit 1
+		) newest on true
 	), proof_candidates as materialized (
 		select newest."archiveUrlIdentity", newest."checkpointLedger"
 		from proof_roots root
@@ -216,9 +267,45 @@ export const admitProofCompletionReserveSql = `
 			order by proof."checkpointLedger" desc
 			limit 1
 		) newest on true
-	), eligible as materialized (
+	), proof_fact_eligible as materialized (
 		select candidate.id, candidate."archiveUrlIdentity",
-			candidate."objectKey", max(proof."checkpointLedger") as checkpoint_ledger
+			candidate."objectKey", proof."checkpointLedger" as checkpoint_ledger,
+			0 as priority
+		from proof_fact_candidates proof
+		join "history_archive_object_queue" candidate
+			on candidate."remoteId" = proof."ledgerObjectRemoteId"
+		where candidate."objectType" = 'ledger'
+			and candidate.status = 'verified'
+			and coalesce(
+				candidate."verificationFacts"#>>
+					'{ledgerCategory,headerHashesVerified}',
+				'false'
+			) <> 'true'
+			and not exists (
+				select 1
+				from "history_archive_object_host_throttle" throttle
+				where throttle."hostIdentity" = candidate."hostIdentity"
+					and throttle."blockedUntil" > now()
+			)
+			and (
+				candidate."transitionEffectsRequiredAt" is null
+				or candidate."transitionEffectsCompletedAt" is not null
+			)
+			and candidate."executionReason" is distinct from
+				'proof-completion-reserve'
+			and not exists (
+				select 1
+				from "history_archive_object_queue" reserved
+				where reserved."archiveUrlIdentity" = candidate."archiveUrlIdentity"
+					and reserved."executionReason" = 'proof-completion-reserve'
+					and reserved."executionDisposition" = 'executable'
+					and reserved."dependencyReady" = true
+					and reserved.status in ('pending', 'scanning')
+			)
+	), bucket_eligible as materialized (
+		select candidate.id, candidate."archiveUrlIdentity",
+			candidate."objectKey", max(proof."checkpointLedger") as checkpoint_ledger,
+			1 as priority
 		from proof_candidates proof
 		join "history_archive_checkpoint_bucket_dependency" dependency
 			on proof."archiveUrlIdentity" = dependency."archiveUrlIdentity"
@@ -268,18 +355,23 @@ export const admitProofCompletionReserveSql = `
 			)
 		group by candidate.id, candidate."archiveUrlIdentity",
 			candidate."objectKey"
+	), eligible as materialized (
+		select * from proof_fact_eligible
+		union all
+		select * from bucket_eligible
 	), ranked as materialized (
-		select eligible.id,
+		select eligible.id, eligible.priority,
 			row_number() over (
 				partition by eligible."archiveUrlIdentity"
-				order by eligible.checkpoint_ledger desc, eligible."objectKey"
+				order by eligible.priority, eligible.checkpoint_ledger desc,
+					eligible."objectKey"
 			) as root_rank
 		from eligible
 	), selected as materialized (
 		select id
 		from ranked
 		where root_rank = 1
-		order by root_rank, id
+		order by priority, id
 		limit $1::integer
 	), admitted as (
 		update "history_archive_object_queue" candidate

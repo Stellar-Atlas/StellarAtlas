@@ -10,6 +10,7 @@ import {
 import { HistoryArchiveObject } from '../../../../domain/history-archive-object/HistoryArchiveObject.js';
 import { HistoryArchiveObjectEvent } from '../../../../domain/history-archive-object/HistoryArchiveObjectEvent.js';
 import { HistoryArchiveStateSnapshot } from '../../../../domain/history-archive-state/HistoryArchiveStateSnapshot.js';
+import { HistoryArchiveCheckpointProofAttestationMigration1785420000000 } from '../../../database/migrations/1785420000000-HistoryArchiveCheckpointProofAttestationMigration.js';
 import { findVerifiedCheckpointObjectSources } from '../HistoryArchiveVerifiedCheckpointSourceQuery.js';
 
 jest.setTimeout(60_000);
@@ -55,6 +56,14 @@ describe('verified checkpoint replacement source query', () => {
 				primary key ("archiveUrlIdentity", "checkpointLedger", "bucketHash")
 			)
 		`);
+		const queryRunner = dataSource.createQueryRunner();
+		try {
+			await new HistoryArchiveCheckpointProofAttestationMigration1785420000000().up(
+				queryRunner
+			);
+		} finally {
+			await queryRunner.release();
+		}
 	});
 
 	afterAll(async () => {
@@ -64,7 +73,7 @@ describe('verified checkpoint replacement source query', () => {
 
 	beforeEach(async () => {
 		await dataSource.query(
-			'truncate history_archive_checkpoint_bucket_dependency, history_archive_object_event, history_archive_checkpoint_proof, history_archive_object_queue, history_archive_state_snapshot restart identity cascade'
+			'truncate history_archive_checkpoint_proof_attestation_invalidation, history_archive_checkpoint_proof_attestation, history_archive_checkpoint_bucket_dependency, history_archive_object_event, history_archive_checkpoint_proof, history_archive_object_queue, history_archive_state_snapshot restart identity cascade'
 		);
 	});
 
@@ -108,6 +117,9 @@ describe('verified checkpoint replacement source query', () => {
 			}),
 			proof(crossNetworkRoot, crossNetworkInputs)
 		]);
+		await dataSource.query(
+			`update history_archive_checkpoint_proof set status = 'pending'`
+		);
 
 		const result = await findVerifiedCheckpointObjectSources(
 			dataSource.manager,
@@ -133,6 +145,22 @@ describe('verified checkpoint replacement source query', () => {
 				})
 			])
 		);
+
+		await dataSource.query(
+			`insert into history_archive_checkpoint_proof_attestation_invalidation
+				("attestationId", reason, evidence)
+			 select id, 'invalidated-test-proof', '{}'::jsonb
+			 from history_archive_checkpoint_proof_attestation
+			 where "archiveUrlIdentity" = any($1::text[])`,
+			[[validRoot, corroboratingRoot]]
+		);
+		const invalidated = await findVerifiedCheckpointObjectSources(
+			dataSource.manager,
+			[source.remoteId],
+			5,
+			publicResolver
+		);
+		expect(invalidated).toEqual([]);
 	});
 
 	it('requires identical content when the failed source has prior verified evidence', async () => {

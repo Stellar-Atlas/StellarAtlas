@@ -28,6 +28,7 @@
 		"inversify": "^6.0.2",
 		"job-monitor": "workspace:*",
 		"logger": "workspace:*",
+		"nats": "2.29.3",
 		"neverthrow": "^8.2.0",
 		"shared": "workspace:*",
 		"validator": "^13.15.35",

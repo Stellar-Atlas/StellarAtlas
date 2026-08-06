@@ -181,7 +181,13 @@ function toFailureChannel(
 	value: string | null
 ): HistoryArchiveObjectFailureChannelDTO | null {
 	if (value === null) return null;
-	if (value === 'archive_evidence' || value === 'scanner_issue') return value;
+	if (
+		value === 'archive_evidence' ||
+		value === 'archive_availability' ||
+		value === 'scanner_issue'
+	) {
+		return value;
+	}
 	throw new Error('History archive object row has invalid failureChannel');
 }
 

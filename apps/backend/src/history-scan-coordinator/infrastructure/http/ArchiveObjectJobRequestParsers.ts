@@ -9,6 +9,37 @@ import type {
 	HistoryArchiveObjectProgressUpdate
 } from '../../domain/history-archive-object/HistoryArchiveObjectRepository.js';
 
+interface SchedulerFields {
+	readonly executionId?: string;
+	readonly scheduler?: 'broker' | 'legacy';
+}
+
+const uuidPattern =
+	/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+function parseSchedulerFields(
+	body: Record<string, unknown>,
+	res: express.Response
+): SchedulerFields | null {
+	if (body.scheduler === undefined && body.executionId === undefined) return {};
+	if (body.scheduler !== 'broker' && body.scheduler !== 'legacy') {
+		res.status(400).json({ error: 'scheduler must be broker or legacy' });
+		return null;
+	}
+	if (body.scheduler === 'broker') {
+		if (typeof body.executionId !== 'string' || !uuidPattern.test(body.executionId)) {
+			res.status(400).json({ error: 'broker executionId must be a UUID' });
+			return null;
+		}
+		return { executionId: body.executionId, scheduler: 'broker' };
+	}
+	if (body.executionId !== undefined) {
+		res.status(400).json({ error: 'legacy updates must not include executionId' });
+		return null;
+	}
+	return { scheduler: 'legacy' };
+}
+
 export function parseArchiveObjectProgress(
 	req: express.Request,
 	res: express.Response
@@ -20,13 +51,15 @@ export function parseArchiveObjectProgress(
 	}
 	const claimAttempt = parseClaimAttempt(body, res);
 	if (claimAttempt === null) return null;
+	const schedulerFields = parseSchedulerFields(body, res);
+	if (schedulerFields === null) return null;
 
 	const progress: {
 		bytesDownloaded?: number | null;
 		claimAttempt: number;
 		verificationFacts?: object | null;
 		workerStage?: string | null;
-	} = { claimAttempt };
+	} & SchedulerFields = { claimAttempt, ...schedulerFields };
 	if ('bytesDownloaded' in body) {
 		const bytesDownloaded = body.bytesDownloaded;
 		if (
@@ -96,6 +129,8 @@ export function parseArchiveObjectFailure(
 	}
 	const claimAttempt = parseClaimAttempt(body, res);
 	if (claimAttempt === null) return null;
+	const schedulerFields = parseSchedulerFields(body, res);
+	if (schedulerFields === null) return null;
 	if (typeof body.errorType !== 'string' || body.errorType.length === 0) {
 		res.status(400).json({ error: 'errorType is required' });
 		return null;
@@ -143,6 +178,7 @@ export function parseArchiveObjectFailure(
 
 	return {
 		claimAttempt,
+		...schedulerFields,
 		errorMessage: body.errorMessage,
 		errorType: body.errorType,
 		failureChannel: body.failureChannel,

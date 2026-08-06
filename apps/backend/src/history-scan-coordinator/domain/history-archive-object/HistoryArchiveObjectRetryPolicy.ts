@@ -151,7 +151,12 @@ export function getHistoryArchiveObjectEvidenceClass(
 	failureClass: HistoryArchiveObjectFailureClass,
 	failureChannel: HistoryArchiveObjectFailureChannelDTO
 ): HistoryArchiveObjectEvidenceClass {
-	if (failureChannel === 'archive_evidence') return 'archive-object';
+	if (
+		failureChannel === 'archive_evidence' ||
+		failureChannel === 'archive_availability'
+	) {
+		return 'archive-object';
+	}
 	if (failureClass === 'worker') return 'worker-infrastructure';
 	if (failureClass === 'coordinator') return 'coordinator-infrastructure';
 	return 'worker-infrastructure';

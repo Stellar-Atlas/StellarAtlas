@@ -42,7 +42,7 @@ describe('bounded bucket checkpoint proof refresh', () => {
 		if (postgres !== undefined) await postgres.stop();
 	});
 
-	it('marks every dependent checkpoint dirty but refreshes only the highest-priority proof immediately', async () => {
+	it('refreshes bounded priority proofs without rewriting every dependent checkpoint', async () => {
 		const canonicalCheckpointLedger = proofCheckpointLedger + 5 * 64;
 		const checkpointRepository = dataSource.getRepository(HistoryArchiveObject);
 		const existing = await checkpointRepository.findOneByOrFail({
@@ -111,7 +111,7 @@ describe('bounded bucket checkpoint proof refresh', () => {
 			.getRepository(HistoryArchiveCheckpointProof)
 			.findBy({ archiveUrlIdentity: proofArchiveUrl });
 
-		expect(dirty?.count).toBe(dependentCheckpointCount);
+		expect(dirty?.count).toBe(0);
 		expect(proofCount).toBe(historyArchiveImmediateBucketProofRefreshLimit);
 		expect(refreshed.map((proof) => proof.checkpointLedger)).toContain(
 			canonicalCheckpointLedger

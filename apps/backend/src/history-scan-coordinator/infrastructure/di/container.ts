@@ -62,6 +62,7 @@ import { GetHistoryArchiveObjectEvents } from '../../use-cases/get-history-archi
 import { GetHistoryArchiveRepairPlan } from '../../use-cases/get-history-archive-repair-plan/GetHistoryArchiveRepairPlan.js';
 import { GetHistoryArchiveRepairArtifact } from '../../use-cases/get-history-archive-repair-artifact/GetHistoryArchiveRepairArtifact.js';
 import { GetHistoryArchiveRepairObjectArtifact } from '../../use-cases/get-history-archive-repair-artifact/GetHistoryArchiveRepairObjectArtifact.js';
+import { RequestHistoryArchiveObjectRecheck } from '../../use-cases/request-history-archive-object-recheck/RequestHistoryArchiveObjectRecheck.js';
 import { ResolveHistoryArchiveRepairArtifacts } from '../../use-cases/get-history-archive-repair-artifact/ResolveHistoryArchiveRepairArtifacts.js';
 import type { HistoryArchiveRepairArtifactRepository } from '../../domain/history-archive-repair-artifact/HistoryArchiveRepairArtifactRepository.js';
 import type { HistoryArchiveRepairObjectArtifactRepository } from '../../domain/history-archive-repair-artifact/HistoryArchiveRepairObjectArtifactRepository.js';
@@ -119,6 +120,7 @@ export function load(container: Container, config: Config) {
 	container.bind(GetHistoryArchiveRepairPlan).toSelf();
 	container.bind(GetHistoryArchiveRepairArtifact).toSelf();
 	container.bind(GetHistoryArchiveRepairObjectArtifact).toSelf();
+	container.bind(RequestHistoryArchiveObjectRecheck).toSelf();
 	container.bind(ResolveHistoryArchiveRepairArtifacts).toSelf();
 	container.bind(GetKnownArchiveEvidence).toSelf();
 	container.bind(GetKnownNodeArchiveEvidence).toSelf();

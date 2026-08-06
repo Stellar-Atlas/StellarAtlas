@@ -4123,6 +4123,80 @@
 				}
 			}
 		},
+		"/v1/archive-scans/objects/{remoteId}/recheck": {
+			"post": {
+				"summary": "Queue one failed archive object for recheck",
+				"description": "Idempotently admits the exact failed archive-integrity object from a repair manifest into the bounded archive ready queue. The required evidence timestamp prevents a stale manifest from rechecking a different failure observation. Verified, active, deferred, dependency-blocked, transition-pending, availability-only, and scanner-infrastructure failures are never reset or queued.",
+				"tags": ["Archive verification"],
+				"operationId": "requestHistoryArchiveObjectRecheck",
+				"parameters": [
+					{
+						"name": "remoteId",
+						"in": "path",
+						"description": "Exact remote identifier of a persisted archive evidence object.",
+						"required": true,
+						"schema": { "type": "string", "format": "uuid" }
+					}
+				],
+				"requestBody": {
+					"required": true,
+					"content": {
+						"application/json": {
+							"schema": {
+								"type": "object",
+								"additionalProperties": false,
+								"required": ["minimumEvidenceUpdatedAt"],
+								"properties": {
+									"minimumEvidenceUpdatedAt": {
+										"type": "string",
+										"format": "date-time"
+									}
+								}
+							}
+						}
+					}
+				},
+				"responses": {
+					"200": {
+						"description": "Current queue, eligibility, or block decision for the object",
+						"headers": {
+							"Retry-After": {
+								"description": "Seconds until the reported retry window or host backoff expires, when known.",
+								"schema": { "type": "integer", "minimum": 1 }
+							}
+						},
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/HistoryArchiveObjectRecheckResponseV1"
+								}
+							}
+						}
+					},
+					"400": {
+						"description": "Invalid object identifier or evidence revision",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/HistoryArchiveObjectRecheckErrorV1"
+								}
+							}
+						}
+					},
+					"404": {
+						"description": "No archive evidence object has this remote identifier",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/HistoryArchiveObjectRecheckErrorV1"
+								}
+							}
+						}
+					},
+					"500": { "description": "Server error" }
+				}
+			}
+		},
 		"/v1/archive-scans/repair-artifacts/buckets/{bucketHash}": {
 			"get": {
 				"summary": "Download a locally proven bucket repair artifact",
@@ -11850,6 +11924,150 @@
 					}
 				}
 			},
+			"HistoryArchiveRepairManifestStepV1": {
+				"oneOf": [
+					{
+						"type": "object",
+						"additionalProperties": false,
+						"required": ["backupSuffix", "kind", "order", "required"],
+						"properties": {
+							"backupSuffix": { "type": "string" },
+							"kind": { "type": "string", "enum": ["backup-current-file"] },
+							"order": { "type": "integer", "enum": [1] },
+							"required": { "type": "boolean", "enum": [true] }
+						}
+					},
+					{
+						"type": "object",
+						"additionalProperties": false,
+						"required": ["input", "kind", "order", "required", "stagingLocation"],
+						"properties": {
+							"input": { "type": "string", "enum": ["replacement-download-url"] },
+							"kind": { "type": "string", "enum": ["stage-replacement"] },
+							"order": { "type": "integer", "enum": [2] },
+							"required": { "type": "boolean", "enum": [true] },
+							"stagingLocation": { "type": "string", "enum": ["same-filesystem-temporary-file"] }
+						}
+					},
+					{
+						"type": "object",
+						"additionalProperties": false,
+						"required": ["expectedContentHash", "kind", "order", "required"],
+						"properties": {
+							"expectedContentHash": {
+								"type": "object",
+								"additionalProperties": false,
+								"required": ["algorithm", "digest", "representation"],
+								"properties": {
+									"algorithm": { "type": "string", "enum": ["sha256"] },
+									"digest": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+									"representation": { "type": "string", "enum": ["canonical-json", "uncompressed-xdr"] }
+								}
+							},
+							"kind": { "type": "string", "enum": ["verify-staged-content"] },
+							"order": { "type": "integer", "enum": [3] },
+							"required": { "type": "boolean", "enum": [true] }
+						}
+					},
+					{
+						"type": "object",
+						"additionalProperties": false,
+						"required": ["kind", "order", "required", "requiresSameFilesystem"],
+						"properties": {
+							"kind": { "type": "string", "enum": ["atomic-replace"] },
+							"order": { "type": "integer", "enum": [4] },
+							"required": { "type": "boolean", "enum": [true] },
+							"requiresSameFilesystem": { "type": "boolean", "enum": [true] }
+						}
+					},
+					{
+						"type": "object",
+						"additionalProperties": false,
+						"required": ["kind", "order", "preserve", "required"],
+						"properties": {
+							"kind": { "type": "string", "enum": ["preserve-metadata"] },
+							"order": { "type": "integer", "enum": [5] },
+							"preserve": {
+								"type": "array",
+								"minItems": 3,
+								"maxItems": 3,
+								"items": { "type": "string", "enum": ["owner", "mode", "acl"] }
+							},
+							"required": { "type": "boolean", "enum": [true] }
+						}
+					},
+					{
+						"type": "object",
+						"additionalProperties": false,
+						"required": ["kind", "order", "required", "resolutionCondition"],
+						"properties": {
+							"kind": { "type": "string", "enum": ["request-recheck"] },
+							"order": { "type": "integer", "enum": [6] },
+							"required": { "type": "boolean", "enum": [true] },
+							"resolutionCondition": { "type": "string", "enum": ["same-object-verified-after-original-evidence"] }
+						}
+					}
+				]
+			},
+			"HistoryArchiveRepairManifestV1": {
+				"type": "object",
+				"additionalProperties": false,
+				"description": "Deterministic operator repair manifest. It is emitted only for confirmed object-integrity evidence; HTTP and transport failures never produce one.",
+				"required": ["actionId", "evidence", "generatedAt", "recheck", "replacement", "schemaVersion", "status", "steps", "target"],
+				"properties": {
+					"actionId": { "type": "string" },
+					"evidence": { "type": "object", "additionalProperties": true },
+					"generatedAt": { "type": "string", "format": "date-time" },
+					"recheck": {
+						"type": "object",
+						"additionalProperties": false,
+						"required": ["endpoint", "minimumEvidenceUpdatedAt", "resolutionCondition", "targetRemoteId"],
+						"properties": {
+							"endpoint": { "type": "string" },
+							"minimumEvidenceUpdatedAt": { "type": "string", "format": "date-time" },
+							"resolutionCondition": { "type": "string", "enum": ["same-object-verified-after-original-evidence"] },
+							"targetRemoteId": { "type": "string", "format": "uuid" }
+						}
+					},
+					"replacement": {
+						"type": "object",
+						"nullable": true,
+						"additionalProperties": false,
+						"required": ["artifact", "source"],
+						"properties": {
+							"artifact": {
+								"oneOf": [
+									{ "$ref": "#/components/schemas/HistoryArchiveRepairArtifactAvailableV1" },
+									{ "$ref": "#/components/schemas/HistoryArchiveRepairArtifactVerifyOnDownloadV1" }
+								]
+							},
+							"source": { "$ref": "#/components/schemas/HistoryArchiveRepairSourceCandidateV1" }
+						}
+					},
+					"schemaVersion": { "type": "integer", "enum": [1] },
+					"status": { "type": "string", "enum": ["ready", "awaiting-verified-replacement"] },
+					"steps": {
+						"type": "array",
+						"maxItems": 6,
+						"items": { "$ref": "#/components/schemas/HistoryArchiveRepairManifestStepV1" }
+					},
+					"target": {
+						"type": "object",
+						"additionalProperties": false,
+						"required": ["archiveUrl", "archiveUrlIdentity", "bucketHash", "checkpointLedger", "objectKey", "objectType", "objectUrl", "operatorTargetPathRequired"],
+						"properties": {
+							"archiveUrl": { "type": "string", "format": "uri" },
+							"archiveUrlIdentity": { "type": "string" },
+							"bucketHash": { "type": "string", "pattern": "^[0-9a-f]{64}$", "nullable": true },
+							"checkpointLedger": { "type": "integer", "minimum": 0, "nullable": true },
+							"objectKey": { "type": "string" },
+							"objectType": { "type": "string", "enum": ["history-archive-state", "checkpoint-state", "ledger", "transactions", "results", "scp", "bucket"] },
+							"objectUrl": { "type": "string", "format": "uri" },
+							"operatorTargetPathRequired": { "type": "boolean", "enum": [true] }
+						}
+					}
+				}
+			},
 			"HistoryArchiveRepairActionV1": {
 				"type": "object",
 				"required": [
@@ -11862,6 +12080,7 @@
 					"knownGoodSources",
 					"reason",
 					"repairArtifact",
+					"repairManifest",
 					"severity",
 					"summary"
 				],
@@ -11909,6 +12128,14 @@
 						"allOf": [
 							{
 								"$ref": "#/components/schemas/HistoryArchiveRepairArtifactAvailabilityV1"
+							}
+						]
+					},
+					"repairManifest": {
+						"nullable": true,
+						"allOf": [
+							{
+								"$ref": "#/components/schemas/HistoryArchiveRepairManifestV1"
 							}
 						]
 					},
@@ -11971,6 +12198,64 @@
 							}
 						}
 					}
+				}
+			},
+			"HistoryArchiveObjectRecheckResponseV1": {
+				"type": "object",
+				"additionalProperties": false,
+				"required": [
+					"eligibleAt",
+					"hostBackoffUntil",
+					"reason",
+					"remoteId",
+					"state"
+				],
+				"properties": {
+					"eligibleAt": {
+						"description": "Effective retry eligibility time, including the legacy one-hour fallback when nextAttemptAt is absent.",
+						"type": "string",
+						"format": "date-time",
+						"nullable": true
+					},
+					"hostBackoffUntil": {
+						"type": "string",
+						"format": "date-time",
+						"nullable": true
+					},
+					"reason": {
+						"type": "string",
+						"enum": [
+							"already-in-ready-queue",
+							"archive-work-already-queued",
+							"dependency-not-ready",
+							"evidence-revision-changed",
+							"eligible-remote-failure",
+							"host-backoff",
+							"non-remote-evidence-failure",
+							"object-not-executable",
+							"object-not-failed",
+							"retry-window",
+							"transition-effects-pending",
+							"verified-object"
+						]
+					},
+					"remoteId": { "type": "string", "format": "uuid" },
+					"state": {
+						"type": "string",
+						"enum": ["queued", "already-queued", "not-yet-eligible", "blocked"]
+					}
+				}
+			},
+			"HistoryArchiveObjectRecheckErrorV1": {
+				"type": "object",
+				"additionalProperties": false,
+				"required": ["error", "remoteId"],
+				"properties": {
+					"error": {
+						"type": "string",
+						"enum": ["archive-object-not-found", "invalid-recheck-request"]
+					},
+					"remoteId": { "type": "string" }
 				}
 			},
 			"HistoryArchiveObjectErrorV1": {
@@ -12344,6 +12629,7 @@
 					"categoryConsistencyPendingCheckpoints",
 					"categoryConsistentArchiveCheckpoints",
 					"completeArchiveCheckpoints",
+					"durableVerifiedArchiveCheckpoints",
 					"discoveryCompleteArchiveRoots",
 					"expectedArchiveCheckpoints",
 					"failedArchiveCheckpoints",
@@ -12374,6 +12660,10 @@
 						"minimum": 0
 					},
 					"completeArchiveCheckpoints": {
+						"type": "integer",
+						"minimum": 0
+					},
+					"durableVerifiedArchiveCheckpoints": {
 						"type": "integer",
 						"minimum": 0
 					},
@@ -12588,6 +12878,7 @@
 					"archiveUrl",
 					"archiveUrlIdentity",
 					"currentLedger",
+					"durableVerifiedCheckpointProofs",
 					"latestCheckpointLedger",
 					"latestDiscoveredCheckpointLedger",
 					"mismatchCheckpointProofs",
@@ -12610,6 +12901,10 @@
 						"type": "integer",
 						"minimum": 0,
 						"nullable": true
+					},
+					"durableVerifiedCheckpointProofs": {
+						"type": "integer",
+						"minimum": 0
 					},
 					"latestCheckpointLedger": {
 						"type": "integer",
@@ -12644,6 +12939,18 @@
 					"verifiedCheckpointProofs": { "type": "integer", "minimum": 0 }
 				}
 			},
+			"HistoryArchiveTransitionReconciliationV1": {
+				"type": "object",
+				"additionalProperties": false,
+				"description": "Durable terminal-effect reconciliation state. Transient byte and stage progress remains in memory and is not written as heartbeat telemetry.",
+				"required": ["oldestPendingAgeMs", "oldestPendingAt", "pendingTerminalEffects", "status"],
+				"properties": {
+					"oldestPendingAgeMs": { "type": "integer", "minimum": 0, "nullable": true },
+					"oldestPendingAt": { "type": "string", "format": "date-time", "nullable": true },
+					"pendingTerminalEffects": { "type": "integer", "minimum": 0 },
+					"status": { "type": "string", "enum": ["caught-up", "reconciling", "stalled"] }
+				}
+			},
 			"HistoryArchiveStatusSummaryV1": {
 				"type": "object",
 				"additionalProperties": false,
@@ -12654,7 +12961,8 @@
 					"sourceCount",
 					"sourceLimit",
 					"sources",
-					"sourcesTruncated"
+					"sourcesTruncated",
+					"transitionReconciliation"
 				],
 				"properties": {
 					"activeObjectChecks": { "type": "integer", "minimum": 0 },
@@ -12671,7 +12979,10 @@
 							"$ref": "#/components/schemas/HistoryArchiveStatusSourceV1"
 						}
 					},
-					"sourcesTruncated": { "type": "boolean" }
+					"sourcesTruncated": { "type": "boolean" },
+					"transitionReconciliation": {
+						"$ref": "#/components/schemas/HistoryArchiveTransitionReconciliationV1"
+					}
 				}
 			},
 			"HistoryArchiveObjectEventV1": {

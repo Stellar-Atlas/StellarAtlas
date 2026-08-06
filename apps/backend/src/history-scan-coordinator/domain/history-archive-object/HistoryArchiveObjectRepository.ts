@@ -6,6 +6,7 @@ import type {
 	HistoryArchiveObjectFailureClass
 } from './HistoryArchiveObjectRetryPolicy.js';
 import type {
+	HistoryArchiveObjectRecheckBlockedReasonV1,
 	HistoryArchiveObjectHostThrottleV1,
 	HistoryArchiveObjectSummaryV1,
 	HistoryArchiveStatusSummaryV1
@@ -83,6 +84,8 @@ export interface HistoryArchiveObjectProgressUpdate {
 	readonly claimAttempt: number;
 	readonly verificationFacts?: HistoryArchiveObjectVerificationFacts | null;
 	readonly workerStage?: string | null;
+	readonly executionId?: string;
+	readonly scheduler?: 'broker' | 'legacy';
 }
 
 export interface HistoryArchiveObjectFailure {
@@ -94,6 +97,8 @@ export interface HistoryArchiveObjectFailure {
 	readonly nextAttemptAt?: Date | null;
 	readonly retryAfterSeconds?: number | null;
 	readonly verificationFacts?: HistoryArchiveObjectVerificationFacts | null;
+	readonly executionId?: string;
+	readonly scheduler?: 'broker' | 'legacy';
 }
 
 export interface HistoryArchiveObjectHostFailure {
@@ -125,7 +130,32 @@ export interface HistoryArchiveObjectExecutionReconciliationResult {
 	readonly watermark: number;
 }
 
+interface HistoryArchiveObjectRecheckDecisionBase {
+	readonly blockedUntil: Date | null;
+	readonly eligibleAt: Date | null;
+	readonly remoteId: string;
+}
+
+export type HistoryArchiveObjectRecheckDecision =
+	| (HistoryArchiveObjectRecheckDecisionBase & {
+			readonly reason: 'eligible-remote-failure';
+			readonly state: 'queued';
+	  })
+	| (HistoryArchiveObjectRecheckDecisionBase & {
+			readonly reason: 'already-in-ready-queue';
+			readonly state: 'already-queued';
+	  })
+	| (HistoryArchiveObjectRecheckDecisionBase & {
+			readonly reason: 'retry-window';
+			readonly state: 'not-yet-eligible';
+	  })
+	| (HistoryArchiveObjectRecheckDecisionBase & {
+			readonly reason: HistoryArchiveObjectRecheckBlockedReasonV1;
+			readonly state: 'blocked';
+	  });
+
 export interface HistoryArchiveObjectRepository {
+	completeBrokerDelivery(remoteId: string, executionId: string): Promise<boolean>;
 	claimNextObject(
 		supportedTypes: readonly HistoryArchiveObjectType[]
 	): Promise<HistoryArchiveObject | null>;
@@ -193,11 +223,18 @@ export interface HistoryArchiveObjectRepository {
 		claimAttempt: number,
 		status: 'failed' | 'verified'
 	): Promise<boolean>;
+	withTransitionEffectsLock(
+		remoteId: string,
+		claimAttempt: number,
+		work: () => Promise<void>
+	): Promise<void>;
 	materializeCheckpointDependencies(remoteId: string): Promise<number>;
 	planObjects(objects: readonly HistoryArchiveObject[]): Promise<number>;
 	promotePlannedObjects(): Promise<HistoryArchiveObjectPlanPromotionResult>;
 	reconcileDependencyReadiness(limit: number): Promise<number>;
-	reconcileExecutionDisposition(): Promise<HistoryArchiveObjectExecutionReconciliationResult>;
+	reconcileExecutionDisposition(options?: {
+		readonly admitLegacyObjects?: boolean;
+	}): Promise<HistoryArchiveObjectExecutionReconciliationResult>;
 	tryWithTransitionReconciliationLock(
 		work: () => Promise<void>
 	): Promise<boolean>;
@@ -206,4 +243,8 @@ export interface HistoryArchiveObjectRepository {
 		before: Date,
 		limit?: number
 	): Promise<readonly HistoryArchiveObject[]>;
+	requestObjectRecheck(
+		remoteId: string,
+		minimumEvidenceUpdatedAt?: Date
+	): Promise<HistoryArchiveObjectRecheckDecision | null>;
 }

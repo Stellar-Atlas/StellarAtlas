@@ -19,6 +19,7 @@ import type { SubscriberRepository } from '../../domain/subscription/SubscriberR
 import { Notification } from '../../domain/subscription/Notification.js';
 import { mapUnknownToError } from '@core/utilities/mapUnknownToError.js';
 import { NetworkDTOService } from '@network-scan/services/NetworkDTOService.js';
+import { NotifyHistoryArchiveIntegrityFailures } from '../notify-history-archive-integrity/NotifyHistoryArchiveIntegrityFailures.js';
 
 @injectable()
 export class Notify {
@@ -29,11 +30,13 @@ export class Notify {
 		protected SubscriberRepository: SubscriberRepository,
 		protected notifier: Notifier,
 		@inject('Logger') protected logger: Logger,
-		@inject('ExceptionLogger') protected exceptionLogger: ExceptionLogger
+		@inject('ExceptionLogger') protected exceptionLogger: ExceptionLogger,
+		protected notifyHistoryArchiveIntegrityFailures: NotifyHistoryArchiveIntegrityFailures
 	) {}
 
 	async execute(notifyDTO: NotifyDTO): Promise<Result<void, NotifyError>> {
 		try {
+			await this.notifyArchiveIntegrityFailures();
 			const networksOrError = await this.getLatestNetworks(
 				notifyDTO.networkUpdateTime
 			);
@@ -103,6 +106,15 @@ export class Notify {
 			this.exceptionLogger.captureException(error);
 			return err(error);
 		}
+	}
+
+	protected async notifyArchiveIntegrityFailures(): Promise<void> {
+		const result = await this.notifyHistoryArchiveIntegrityFailures.execute();
+		if (result.isOk()) return;
+		this.exceptionLogger.captureException(result.error);
+		this.logger.warn('Archive integrity notification generation failed', {
+			cause: result.error.message
+		});
 	}
 
 	protected async getLatestNetworks(

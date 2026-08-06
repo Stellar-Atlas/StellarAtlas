@@ -92,6 +92,7 @@ export {
 export {
 	type HistoryArchiveStatusSourceV1,
 	type HistoryArchiveStatusSummaryV1,
+	type HistoryArchiveTransitionReconciliationV1,
 	HistoryArchiveStatusSummaryV1Schema
 } from './dto/history-archive-status-summary-v1.js';
 export {
@@ -162,12 +163,24 @@ export type {
 	HistoryArchiveRepairArtifactUnavailableReasonV1,
 	HistoryArchiveRepairArtifactUnavailableV1,
 	HistoryArchiveRepairArtifactVerifyOnDownloadV1,
+	HistoryArchiveRepairManifestReplacementV1,
+	HistoryArchiveRepairManifestStatusV1,
+	HistoryArchiveRepairManifestStepKindV1,
+	HistoryArchiveRepairManifestStepV1,
+	HistoryArchiveRepairManifestV1,
 	HistoryArchiveRepairInfrastructureBlockV1,
 	HistoryArchiveRepairObjectEvidenceV1,
 	HistoryArchiveRepairPlanV1,
 	HistoryArchiveRepairReasonV1,
 	HistoryArchiveRepairSourceCandidateV1
 } from './dto/history-archive-repair-plan-v1.js';
+export type {
+	HistoryArchiveObjectRecheckBlockedReasonV1,
+	HistoryArchiveObjectRecheckErrorV1,
+	HistoryArchiveObjectRecheckReasonV1,
+	HistoryArchiveObjectRecheckResponseV1,
+	HistoryArchiveObjectRecheckStateV1
+} from './dto/history-archive-object-recheck-v1.js';
 export type {
 	ScpBallotV1,
 	ScpNominationV1,

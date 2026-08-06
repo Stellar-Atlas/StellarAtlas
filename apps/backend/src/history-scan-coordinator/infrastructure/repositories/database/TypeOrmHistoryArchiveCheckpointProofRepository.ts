@@ -8,7 +8,6 @@ import type {
 } from '@history-scan-coordinator/domain/history-archive-checkpoint-proof/HistoryArchiveCheckpointProofRepository.js';
 import { historyArchiveCheckpointProofRefreshSql } from './HistoryArchiveCheckpointProofRefreshSql.js';
 import { toHistoryArchiveCheckpointProofRefreshParams } from './HistoryArchiveCheckpointProofSqlInputs.js';
-import { markBucketProofDependentsDirtySql } from './HistoryArchiveCheckpointProofDirtyWrite.js';
 
 @injectable()
 export class TypeOrmHistoryArchiveCheckpointProofRepository implements HistoryArchiveCheckpointProofRepository {
@@ -39,13 +38,6 @@ export class TypeOrmHistoryArchiveCheckpointProofRepository implements HistoryAr
 		if (target.checkpointLedger == null && target.bucketHash == null) {
 			return;
 		}
-		if (target.bucketHash != null) {
-			await this.dataSource.manager.query(markBucketProofDependentsDirtySql, [
-				target.archiveUrlIdentity,
-				target.bucketHash
-			]);
-		}
-
 		await this.dataSource.transaction(async (manager) => {
 			await manager.query(`set local lock_timeout = '2s'`);
 			await manager.query(`set local statement_timeout = '30s'`);

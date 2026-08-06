@@ -46,10 +46,10 @@ function mapBucketCopy(
 			object.errorMessage === null
 				? null
 				: {
-						httpStatus: object.httpStatus,
-						message: sanitizePublicInfrastructureText(object.errorMessage),
-						type: object.errorType ?? 'error'
-					},
+					httpStatus: object.httpStatus,
+					message: sanitizePublicInfrastructureText(object.errorMessage),
+					type: object.errorType ?? 'error'
+				},
 		nextAttemptAt: object.nextAttemptAt?.toISOString() ?? null,
 		objectKey: object.objectKey,
 		objectUrl: object.objectUrl,
@@ -86,12 +86,12 @@ function countStatus(
 	return copies.filter((copy) => copy.status === status).length;
 }
 
-function requireDate(value: Date | undefined): Date {
+export function requireDate(value: Date | undefined): Date {
 	if (value instanceof Date) return value;
 	return new Date(0);
 }
 
-function toPublicNumber(value: number | string | null): number | null {
+export function toPublicNumber(value: number | string | null): number | null {
 	if (value === null) return null;
 	if (typeof value === 'number') return value;
 

@@ -121,17 +121,6 @@ export const historyArchiveObjectFrontierSql = `
 			select cursor.*
 			from "history_archive_object_frontier_cursor" cursor
 			where cursor."archiveUrlIdentity" = root."archiveUrlIdentity"
-			order by cursor."updatedAt" asc,
-				case cursor."objectType"
-					when 'history-archive-state' then 0
-					when 'checkpoint-state' then 1
-					when 'bucket' then 2
-					when 'ledger' then 3
-					when 'transactions' then 4
-					when 'results' then 5
-					else 6
-				end
-			limit 1
 		) cursor
 		left join lateral (
 			select candidate.id, candidate."archiveUrlIdentity",
@@ -288,6 +277,7 @@ export const historyArchiveObjectFrontierSql = `
 			from roots root where root.id = probes.root_id
 		)
 			and cursor."objectType" = probes."objectType"
+			and probes.id is not null
 		returning cursor."archiveUrlIdentity"
 	)
 	select

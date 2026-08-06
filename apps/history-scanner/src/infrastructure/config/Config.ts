@@ -32,6 +32,11 @@ export interface Config {
 	historyScanRangeSize: number;
 	historyBucketCacheDir: string;
 	historyBucketCacheMaxBytes: number;
+	historyArchiveObjectJobSource: 'nats' | 'legacy-http';
+	natsArchiveJobConsumer: string;
+	natsArchiveJobStream: string;
+	natsServers: readonly string[];
+	natsToken: string | undefined;
 }
 
 // Simple boolean parser to replace 'yn'
@@ -59,7 +64,11 @@ const defaultConfig = {
 		'..',
 		'history-bucket-cache'
 	),
-	historyBucketCacheMaxBytes: 10 * 1024 * 1024 * 1024 * 1024
+	historyBucketCacheMaxBytes: 10 * 1024 * 1024 * 1024 * 1024,
+	historyArchiveObjectJobSource: 'legacy-http' as const,
+	natsArchiveJobConsumer: 'stellaratlas-history-object-workers',
+	natsArchiveJobStream: 'STELLARATLAS_HISTORY_OBJECTS',
+	natsServers: ['nats://127.0.0.1:4222'] as const
 };
 
 const maxHistoryHasherWorkers = historyArchiveWorkerSlotLimit - 1;
@@ -197,6 +206,36 @@ export function getConfigFromEnv(): Result<Config, Error> {
 	if (historyBucketCacheMaxBytesResult.isErr())
 		return err(historyBucketCacheMaxBytesResult.error);
 
+	const historyArchiveObjectJobSource =
+		process.env.HISTORY_ARCHIVE_OBJECT_JOB_SOURCE ??
+		defaultConfig.historyArchiveObjectJobSource;
+	if (
+		historyArchiveObjectJobSource !== 'nats' &&
+		historyArchiveObjectJobSource !== 'legacy-http'
+	) {
+		return err(
+			new Error(
+				'HISTORY_ARCHIVE_OBJECT_JOB_SOURCE must be nats or legacy-http'
+			)
+		);
+	}
+	const natsServers = (
+		process.env.NATS_SERVERS ?? defaultConfig.natsServers.join(',')
+	)
+		.split(',')
+		.map((server) => server.trim())
+		.filter((server) => server.length > 0);
+	if (natsServers.length === 0)
+		return err(new Error('NATS_SERVERS must contain at least one server'));
+	const natsToken = process.env.NATS_TOKEN?.trim();
+	if (historyArchiveObjectJobSource === 'nats' && !natsToken) {
+		return err(
+			new Error(
+				'NATS_TOKEN is required when HISTORY_ARCHIVE_OBJECT_JOB_SOURCE is nats'
+			)
+		);
+	}
+
 	const historyScanWorkers = historyScanWorkersResult.value ?? 1;
 	const historyMaxRequests =
 		historyMaxRequestsResult.value ?? defaultConfig.historyMaxRequests;
@@ -232,7 +271,16 @@ export function getConfigFromEnv(): Result<Config, Error> {
 			defaultConfig.historyBucketCacheDir,
 		historyBucketCacheMaxBytes:
 			historyBucketCacheMaxBytesResult.value ??
-			defaultConfig.historyBucketCacheMaxBytes
+			defaultConfig.historyBucketCacheMaxBytes,
+		historyArchiveObjectJobSource,
+		natsArchiveJobConsumer:
+			process.env.NATS_ARCHIVE_JOB_CONSUMER ??
+			defaultConfig.natsArchiveJobConsumer,
+		natsArchiveJobStream:
+			process.env.NATS_ARCHIVE_JOB_STREAM ??
+			defaultConfig.natsArchiveJobStream,
+		natsServers,
+		natsToken
 	});
 }
 

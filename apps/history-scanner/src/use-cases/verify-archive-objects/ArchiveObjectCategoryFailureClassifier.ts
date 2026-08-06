@@ -1,6 +1,7 @@
 import type { HistoryArchiveObjectFailureDTO } from '../../domain/scan/ScanCoordinatorService.js';
 import { isArchiveXdrError } from '../../domain/scanner/hash-worker.js';
 import {
+	archiveAvailabilityFailure,
 	archiveEvidenceFailure,
 	ScannerIssueError,
 	scannerIssueFailure
@@ -43,7 +44,7 @@ export function classifyCategoryVerificationFailure(
 		});
 	}
 	if (hasErrorCode(error, transportErrorCodes)) {
-		return archiveEvidenceFailure({
+		return archiveAvailabilityFailure({
 			error,
 			errorType: 'archive_transport_error',
 			httpStatus

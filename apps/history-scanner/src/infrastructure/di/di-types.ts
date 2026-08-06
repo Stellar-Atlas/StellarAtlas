@@ -4,6 +4,7 @@ export const TYPES = {
 	CheckPointFrequency: Symbol('CheckPointFrequency'),
 	ScanScheduler: Symbol('ScanScheduler'),
 	ScanCoordinatorService: Symbol('ScanCoordinatorService'),
+	HistoryArchiveObjectJobSource: Symbol('HistoryArchiveObjectJobSource'),
 	HistoryArchiveWorkerStatusReporter: Symbol(
 		'HistoryArchiveWorkerStatusReporter'
 	),

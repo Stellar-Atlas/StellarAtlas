@@ -151,7 +151,7 @@ describe('GetHistoryArchiveRepairPlan', () => {
 			createArtifactResolver(),
 			mock<ExceptionLogger>()
 		);
-		const failure = createMissingTransactionsFailure();
+		const failure = createCorruptTransactionsFailure();
 		const source = createVerifiedCheckpointSource(failure.remoteId);
 		objectRepository.getRepairPlanSummary.mockResolvedValue(createSummary());
 		objectRepository.findActionableByArchiveUrl.mockResolvedValue([failure]);
@@ -373,16 +373,16 @@ function createCheckpointLedgerMismatch(): HistoryArchiveObject {
 	return object;
 }
 
-function createMissingTransactionsFailure(): HistoryArchiveObject {
+function createCorruptTransactionsFailure(): HistoryArchiveObject {
 	const object = createObject(
 		'transactions',
 		'transactions:03c1dcbf',
 		'failed'
 	);
 	object.checkpointLedger = 63355999;
-	object.errorType = 'archive_http_error';
-	object.errorMessage = 'Remote transaction archive file was not found';
-	object.httpStatus = 404;
+	object.errorType = 'transaction_hash_mismatch';
+	object.errorMessage = 'Transaction category content did not match checkpoint proof';
+	object.httpStatus = null;
 	return object;
 }
 

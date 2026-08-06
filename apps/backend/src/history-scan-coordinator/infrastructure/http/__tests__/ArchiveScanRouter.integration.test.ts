@@ -17,6 +17,7 @@ import { GetHistoryArchiveObjectStatusSummary } from '@history-scan-coordinator/
 import { GetHistoryArchiveRepairArtifact } from '@history-scan-coordinator/use-cases/get-history-archive-repair-artifact/GetHistoryArchiveRepairArtifact.js';
 import { GetHistoryArchiveRepairObjectArtifact } from '@history-scan-coordinator/use-cases/get-history-archive-repair-artifact/GetHistoryArchiveRepairObjectArtifact.js';
 import { GetHistoryArchiveRepairPlan } from '@history-scan-coordinator/use-cases/get-history-archive-repair-plan/GetHistoryArchiveRepairPlan.js';
+import { RequestHistoryArchiveObjectRecheck } from '@history-scan-coordinator/use-cases/request-history-archive-object-recheck/RequestHistoryArchiveObjectRecheck.js';
 import { GetScanLogs } from '@history-scan-coordinator/use-cases/get-scan-logs/GetScanLogs.js';
 import { InvalidUrlError } from '@history-scan-coordinator/use-cases/get-latest-scan/InvalidUrlError.js';
 import { HistoryArchiveScan } from 'shared';
@@ -35,6 +36,7 @@ describe('ArchiveScanRouter.integration', () => {
 	let getHistoryArchiveRepairArtifact: jest.Mocked<GetHistoryArchiveRepairArtifact>;
 	let getHistoryArchiveRepairObjectArtifact: jest.Mocked<GetHistoryArchiveRepairObjectArtifact>;
 	let getHistoryArchiveRepairPlan: jest.Mocked<GetHistoryArchiveRepairPlan>;
+	let requestHistoryArchiveObjectRecheck: jest.Mocked<RequestHistoryArchiveObjectRecheck>;
 	let getHistoryArchiveState: jest.Mocked<GetHistoryArchiveState>;
 	let getLatestScan: jest.Mocked<GetLatestScan>;
 	let getScanEvidence: jest.Mocked<GetScanEvidence>;
@@ -54,6 +56,8 @@ describe('ArchiveScanRouter.integration', () => {
 		getHistoryArchiveRepairObjectArtifact =
 			mock<GetHistoryArchiveRepairObjectArtifact>();
 		getHistoryArchiveRepairPlan = mock<GetHistoryArchiveRepairPlan>();
+		requestHistoryArchiveObjectRecheck =
+			mock<RequestHistoryArchiveObjectRecheck>();
 		getHistoryArchiveState = mock<GetHistoryArchiveState>();
 		getLatestScan = mock<GetLatestScan>();
 		getScanEvidence = mock<GetScanEvidence>();
@@ -74,6 +78,7 @@ describe('ArchiveScanRouter.integration', () => {
 				getHistoryArchiveRepairArtifact,
 				getHistoryArchiveRepairObjectArtifact,
 				getHistoryArchiveRepairPlan,
+				requestHistoryArchiveObjectRecheck,
 				getHistoryArchiveState,
 				getLatestScan,
 				getScanEvidence,

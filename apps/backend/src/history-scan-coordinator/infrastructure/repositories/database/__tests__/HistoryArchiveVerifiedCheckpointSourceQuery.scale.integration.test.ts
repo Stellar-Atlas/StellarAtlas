@@ -4,6 +4,7 @@ import {
 	startDisposablePostgres,
 	type DisposablePostgres
 } from '@test-support/DisposablePostgres.js';
+import { HistoryArchiveCheckpointProofAttestationMigration1785420000000 } from '../../../database/migrations/1785420000000-HistoryArchiveCheckpointProofAttestationMigration.js';
 import { historyArchiveVerifiedCheckpointSourceSql } from '../HistoryArchiveVerifiedCheckpointSourceQuery.js';
 
 jest.setTimeout(180_000);
@@ -157,6 +158,14 @@ function visit(
 
 async function createFixture(source: DataSource): Promise<void> {
 	await source.query(schemaSql);
+	const queryRunner = source.createQueryRunner();
+	try {
+		await new HistoryArchiveCheckpointProofAttestationMigration1785420000000().up(
+			queryRunner
+		);
+	} finally {
+		await queryRunner.release();
+	}
 	await source.query(irrelevantObjectsSql, [irrelevantObjectCount]);
 	await source.query(targetObjectSql, [targetRemoteId, targetRoot]);
 	await insertProvenSource(source, {
@@ -169,6 +178,9 @@ async function createFixture(source: DataSource): Promise<void> {
 		candidateRemoteId: secondRemoteId,
 		idPrefix: '66666666-6666-4666-8666-0000000000'
 	});
+	await source.query(
+		`update history_archive_checkpoint_proof set status = 'pending'`
+	);
 	await source.query(
 		`insert into history_archive_state_snapshot values
 			($1, 'available', 'Public Global Stellar Network ; September 2015'),
@@ -257,6 +269,7 @@ const schemaSql = `
 	);
 	create table history_archive_checkpoint_proof (
 		id serial primary key,
+		"archiveUrl" text not null default 'https://fixture.invalid',
 		"archiveUrlIdentity" text not null,
 		"checkpointLedger" integer not null,
 		status text not null,

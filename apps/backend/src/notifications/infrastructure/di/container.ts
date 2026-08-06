@@ -29,8 +29,10 @@ import type { SubscriberRepository } from '../../domain/subscription/SubscriberR
 import { TypeOrmSubscriberRepository } from '../database/repositories/TypeOrmSubscriberRepository.js';
 import { Subscriber } from '../../domain/subscription/Subscriber.js';
 import { RequestUnsubscribeLink } from '../../use-cases/request-unsubscribe-link/RequestUnsubscribeLink.js';
+import { NotifyHistoryArchiveIntegrityFailures } from '../../use-cases/notify-history-archive-integrity/NotifyHistoryArchiveIntegrityFailures.js';
 import { setupLocalSMTPContainer } from '@core/infrastructure/di/LocalSMTPContainer.js';
 import type { SMTPConfig } from '@core/services/LocalSMTPUserService.js';
+import { HistoryArchiveIntegrityNotificationRunLock } from '../database/HistoryArchiveIntegrityNotificationRunLock.js';
 
 export function load(container: Container, config: Config) {
 	const dataSource = container.get(DataSource);
@@ -90,6 +92,11 @@ export function load(container: Container, config: Config) {
 		});
 	}
 	container.bind(Notify).toSelf();
+	container
+		.bind(HistoryArchiveIntegrityNotificationRunLock)
+		.toDynamicValue(() => new HistoryArchiveIntegrityNotificationRunLock(dataSource))
+		.inSingletonScope();
+	container.bind(NotifyHistoryArchiveIntegrityFailures).toSelf();
 	container.bind(UnmuteNotification).toSelf();
 	container.bind(Subscribe).toSelf();
 	container.bind(Unsubscribe).toSelf();

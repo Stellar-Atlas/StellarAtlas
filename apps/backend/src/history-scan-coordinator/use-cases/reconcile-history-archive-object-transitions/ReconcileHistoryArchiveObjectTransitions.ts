@@ -2,6 +2,7 @@ import 'reflect-metadata';
 import { inject, injectable } from 'inversify';
 import type { Logger } from 'logger';
 import type { HistoryArchiveObjectRepository } from '../../domain/history-archive-object/HistoryArchiveObjectRepository.js';
+import { usesHistoryArchiveBrokerScheduler } from '../../infrastructure/HistoryArchiveSchedulerMode.js';
 import { TYPES } from '../../infrastructure/di/di-types.js';
 import { CompleteHistoryArchiveObject } from '../complete-history-archive-object/CompleteHistoryArchiveObject.js';
 import { FailHistoryArchiveObject } from '../fail-history-archive-object/FailHistoryArchiveObject.js';
@@ -27,7 +28,6 @@ export class ReconcileHistoryArchiveObjectTransitions {
 		if (now < this.nextRunAt) return;
 		this.nextRunAt = now + reconciliationIntervalMs;
 
-		await this.reconcileExecutionDisposition();
 		await this.objectRepository.tryWithTransitionReconciliationLock(
 			async () => {
 				await this.objectRepository.promotePlannedObjects();
@@ -37,9 +37,15 @@ export class ReconcileHistoryArchiveObjectTransitions {
 				for (const object of objects) {
 					try {
 						if (object.status === 'verified') {
-							await this.completeObject.reconcilePersisted(object);
+							await this.completeObject.reconcileClaimAttempt(
+								object.remoteId,
+								object.attempts
+							);
 						} else if (object.status === 'failed') {
-							await this.failObject.reconcilePersisted(object);
+							await this.failObject.reconcileClaimAttempt(
+								object.remoteId,
+								object.attempts
+							);
 						}
 					} catch (error) {
 						this.logFailure(error, object, 'transition');
@@ -60,11 +66,14 @@ export class ReconcileHistoryArchiveObjectTransitions {
 				}
 			}
 		);
+		await this.reconcileExecutionDisposition();
 	}
 
 	private async reconcileExecutionDisposition(): Promise<void> {
 		try {
-			await this.objectRepository.reconcileExecutionDisposition();
+			await this.objectRepository.reconcileExecutionDisposition({
+				admitLegacyObjects: !usesHistoryArchiveBrokerScheduler()
+			});
 		} catch (error) {
 			this.logger.error('Failed to reconcile archive execution frontier', {
 				app: 'history-scan-coordinator',

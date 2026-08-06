@@ -37,6 +37,82 @@ describe('FailHistoryArchiveObject', () => {
 		jest.useRealTimers();
 	});
 
+	it('acknowledges failure only after durable transition effects finish', async () => {
+		const archiveObject = createRootObject();
+		archiveObject.attempts = 1;
+		objectRepository.findByRemoteId.mockResolvedValue(archiveObject);
+		objectRepository.withTransitionEffectsLock.mockImplementation(
+			async (_remoteId, _claimAttempt, work) => await work()
+		);
+		const useCase = new FailHistoryArchiveObject(
+			objectRepository,
+			eventRecorder,
+			checkpointProofRepository,
+			stateRepository
+		);
+
+		const result = await useCase.executeAndReconcile(archiveObject.remoteId, {
+			claimAttempt: 1,
+			errorMessage: 'History archive state is malformed',
+			errorType: 'invalid_history_archive_state',
+			failureChannel: 'archive_evidence',
+			httpStatus: 200
+		});
+
+		expect(result._unsafeUnwrap()).toBe(true);
+		expect(objectRepository.withTransitionEffectsLock).toHaveBeenCalledWith(
+			archiveObject.remoteId,
+			1,
+			expect.any(Function)
+		);
+		expect(eventRecorder.recordDurably).toHaveBeenCalledWith(archiveObject, {
+			claimAttempt: 1,
+			eventType: 'failed',
+			evidenceClass: 'archive-object'
+		});
+		expect(objectRepository.markTransitionEffectsCompleted).toHaveBeenCalledWith(
+			archiveObject.remoteId,
+			1,
+			'failed'
+		);
+	});
+
+	it('releases a broker delivery only after durable failure effects finish', async () => {
+		const archiveObject = createRootObject();
+		archiveObject.attempts = 1;
+		objectRepository.findByRemoteId.mockResolvedValue(archiveObject);
+		objectRepository.withTransitionEffectsLock.mockImplementation(
+			async (_remoteId, _claimAttempt, work) => await work()
+		);
+		const useCase = new FailHistoryArchiveObject(
+			objectRepository,
+			eventRecorder,
+			checkpointProofRepository,
+			stateRepository
+		);
+
+		const result = await useCase.executeAndReconcile(archiveObject.remoteId, {
+			claimAttempt: 1,
+			errorMessage: 'HTTP 503 Service Unavailable',
+			errorType: 'archive_http_error',
+			executionId: 'execution-1',
+			failureChannel: 'archive_availability',
+			httpStatus: 503,
+			scheduler: 'broker'
+		});
+
+		expect(result._unsafeUnwrap()).toBe(true);
+		expect(objectRepository.completeBrokerDelivery).toHaveBeenCalledWith(
+			archiveObject.remoteId,
+			'execution-1'
+		);
+		expect(
+			objectRepository.completeBrokerDelivery.mock.invocationCallOrder[0]
+		).toBeGreaterThan(
+			objectRepository.markTransitionEffectsCompleted.mock.invocationCallOrder[0]
+		);
+	});
+
 	it('stores retry timing from the object type and failure evidence', async () => {
 		const archiveObject = new HistoryArchiveObject({
 			archiveUrl: 'https://history.example.com',
@@ -64,7 +140,7 @@ describe('FailHistoryArchiveObject', () => {
 			claimAttempt: 1,
 			errorMessage: 'HTTP 403 Forbidden',
 			errorType: 'archive_http_error',
-			failureChannel: 'archive_evidence',
+			failureChannel: 'archive_availability',
 			httpStatus: 403
 		});
 
@@ -78,7 +154,7 @@ describe('FailHistoryArchiveObject', () => {
 				claimAttempt: 1,
 				errorMessage: 'HTTP 403 Forbidden',
 				errorType: 'archive_http_error',
-				failureChannel: 'archive_evidence',
+				failureChannel: 'archive_availability',
 				httpStatus: 403,
 				nextAttemptAt: new Date('2026-07-06T14:16:00.000Z')
 			},
@@ -124,7 +200,6 @@ describe('FailHistoryArchiveObject', () => {
 	});
 
 	it.each([
-		['object-specific 404', 'archive_http_error', 404, 'archive_evidence'],
 		['wrong hash', 'category_verification_failed', null, 'archive_evidence'],
 		['worker failure', 'worker_setup_failed', null, 'scanner_issue'],
 		['coordinator failure', 'coordinator_claim_failed', null, 'scanner_issue']

@@ -1,5 +1,8 @@
 import { Subscriber } from '../Subscriber.js';
-import { ValidatorXUpdatesNotValidatingEvent } from '../../event/Event.js';
+import {
+	HistoryArchiveIntegrityFailureDetectedEvent,
+	ValidatorXUpdatesNotValidatingEvent
+} from '../../event/Event.js';
 import { Subscription } from '../Subscription.js';
 import {
 	NetworkId,
@@ -235,4 +238,37 @@ describe('CoolOffPeriod handling', function () {
 
 		expect(subscriber.publishNotificationAbout([event])).toBeNull();
 	});
+
+	it('notifies again only when archive integrity evidence is newer', () => {
+		const firstObservation = new Date('2026-08-05T00:00:00.000Z');
+		const sameObservation = new HistoryArchiveIntegrityFailureDetectedEvent(
+			firstObservation,
+			publicKey,
+			archiveIntegrityData('first-observation')
+		);
+		expect(subscriber.publishNotificationAbout([sameObservation])).not.toBeNull();
+		expect(subscriber.publishNotificationAbout([sameObservation])).toBeNull();
+
+		const recheckObservation = new HistoryArchiveIntegrityFailureDetectedEvent(
+			new Date(firstObservation.getTime() + 1),
+			publicKey,
+			archiveIntegrityData('recheck-observation')
+		);
+		expect(subscriber.publishNotificationAbout([recheckObservation])).not.toBeNull();
+	});
 });
+
+function archiveIntegrityData(evidenceId: string) {
+	return {
+		actionId: `replace-bucket-file:${evidenceId}`,
+		archiveUrl: 'https://history.example.org',
+		bucketHash: 'a'.repeat(64),
+		checkpointLedger: 63,
+		evidenceId,
+		evidenceObservedAt: '2026-08-05T00:00:00.000Z',
+		failureCode: 'bucket_hash_mismatch',
+		objectKey: 'bucket-a',
+		objectType: 'bucket',
+		repairPlanPath: '/v1/archive-scans/history.example.org/repair-plan'
+	};
+}

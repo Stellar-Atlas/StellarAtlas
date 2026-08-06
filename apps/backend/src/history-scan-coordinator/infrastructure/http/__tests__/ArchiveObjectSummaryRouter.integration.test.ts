@@ -21,6 +21,7 @@ import { GetHistoryArchiveObjectStatusSummary } from '@history-scan-coordinator/
 import { GetHistoryArchiveRepairArtifact } from '@history-scan-coordinator/use-cases/get-history-archive-repair-artifact/GetHistoryArchiveRepairArtifact.js';
 import { GetHistoryArchiveRepairObjectArtifact } from '@history-scan-coordinator/use-cases/get-history-archive-repair-artifact/GetHistoryArchiveRepairObjectArtifact.js';
 import { GetHistoryArchiveRepairPlan } from '@history-scan-coordinator/use-cases/get-history-archive-repair-plan/GetHistoryArchiveRepairPlan.js';
+import { RequestHistoryArchiveObjectRecheck } from '@history-scan-coordinator/use-cases/request-history-archive-object-recheck/RequestHistoryArchiveObjectRecheck.js';
 import { GetHistoryArchiveState } from '@history-scan-coordinator/use-cases/get-history-archive-state/GetHistoryArchiveState.js';
 import { GetLatestScan } from '@history-scan-coordinator/use-cases/get-latest-scan/GetLatestScan.js';
 import { GetScanEvidence } from '@history-scan-coordinator/use-cases/get-scan-evidence/GetScanEvidence.js';
@@ -219,6 +220,8 @@ function createHarness() {
 			getHistoryArchiveRepairObjectArtifact:
 				mock<GetHistoryArchiveRepairObjectArtifact>(),
 			getHistoryArchiveRepairPlan: mock<GetHistoryArchiveRepairPlan>(),
+			requestHistoryArchiveObjectRecheck:
+				mock<RequestHistoryArchiveObjectRecheck>(),
 			getHistoryArchiveState,
 			getLatestScan: mock<GetLatestScan>(),
 			getScanEvidence: mock<GetScanEvidence>(),
@@ -248,6 +251,7 @@ function createStatusSummary(): HistoryArchiveStatusSummaryV1 {
 			categoryConsistencyPendingCheckpoints: 1,
 			categoryConsistentArchiveCheckpoints: 3,
 			completeArchiveCheckpoints: 3,
+			durableVerifiedArchiveCheckpoints: 3,
 			discoveryCompleteArchiveRoots: 1,
 			expectedArchiveCheckpoints: 4,
 			failedArchiveCheckpoints: 0,
@@ -269,6 +273,7 @@ function createStatusSummary(): HistoryArchiveStatusSummaryV1 {
 				archiveUrl: 'https://history.example.com',
 				archiveUrlIdentity: 'https://history.example.com',
 				currentLedger: 255,
+				durableVerifiedCheckpointProofs: 3,
 				latestCheckpointLedger: 255,
 				latestDiscoveredCheckpointLedger: 255,
 				mismatchCheckpointProofs: 0,
@@ -401,6 +406,7 @@ function createObjectSummary(
 			categoryConsistencyPendingCheckpoints: 1,
 			categoryConsistentArchiveCheckpoints: 0,
 			completeArchiveCheckpoints: 1,
+			durableVerifiedArchiveCheckpoints: 0,
 			discoveryCompleteArchiveRoots: 0,
 			expectedArchiveCheckpoints: 4,
 			failedArchiveCheckpoints: 1,

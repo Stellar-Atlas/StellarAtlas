@@ -35,6 +35,8 @@ export interface HistoryArchiveObjectJobDTO {
 export interface HistoryArchiveObjectProgressDTO {
 	readonly bytesDownloaded?: number | null;
 	readonly claimAttempt?: number;
+	readonly executionId?: string;
+	readonly scheduler?: 'broker' | 'legacy';
 	readonly verificationFacts?: object | null;
 	readonly workerStage?: string | null;
 }
@@ -45,11 +47,13 @@ export interface HistoryArchiveObjectCompletionDTO extends HistoryArchiveObjectP
 
 export interface HistoryArchiveObjectFailureDTO {
 	readonly claimAttempt?: number;
+	readonly executionId?: string;
 	readonly errorMessage: string;
 	readonly errorType: string;
 	readonly failureChannel: HistoryArchiveObjectFailureChannelDTO;
 	readonly httpStatus?: number | null;
 	readonly retryAfterSeconds?: number | null;
+	readonly scheduler?: 'broker' | 'legacy';
 	readonly verificationFacts?: object | null;
 }
 

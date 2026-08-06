@@ -197,7 +197,7 @@ export const HistoryScanRouterWrapper = (
 				const completion = parseArchiveObjectCompletion(req, res);
 				if (completion === null) return;
 
-				const result = await config.completeHistoryArchiveObject.execute(
+				const result = await config.completeHistoryArchiveObject.executeAndReconcile(
 					req.params.remoteId,
 					completion
 				);
@@ -236,7 +236,7 @@ export const HistoryScanRouterWrapper = (
 				const failure = parseArchiveObjectFailure(req, res);
 				if (failure === null) return;
 
-				const result = await config.failHistoryArchiveObject.execute(
+				const result = await config.failHistoryArchiveObject.executeAndReconcile(
 					req.params.remoteId,
 					failure
 				);

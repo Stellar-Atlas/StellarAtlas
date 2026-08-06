@@ -1,8 +1,8 @@
 [Unit]
 Description=StellarAtlas history scanner on host-native storage
-After=network-online.target stellaratlas-postgresql.service
+After=network-online.target stellaratlas-postgresql.service stellaratlas-nats.service stellaratlas-history-archive-dispatcher.service
 Wants=network-online.target
-Requires=stellaratlas-postgresql.service
+Requires=stellaratlas-postgresql.service stellaratlas-nats.service stellaratlas-history-archive-dispatcher.service
 RequiresMountsFor=/mnt/bulk/stellarbeat-data/Observer/history-bucket-cache
 
 [Service]
@@ -13,6 +13,10 @@ WorkingDirectory=/mnt/bulk/stellarbeat-data/Observer
 Environment=NODE_ENV=production
 Environment=HOME=/home/admins
 Environment=PATH=/home/admins/.nvm/versions/node/v26.5.1/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+EnvironmentFile=-/etc/stellaratlas/stellaratlas.env
+EnvironmentFile=/etc/stellaratlas/nats.env
+Environment=HISTORY_ARCHIVE_OBJECT_JOB_SOURCE=nats
+Environment=NATS_SERVERS=nats://127.0.0.1:4222
 Environment=HISTORY_OBJECT_DOWNLOAD_CONCURRENCY=8
 Environment=HISTORY_SCAN_WORKERS=1
 Environment=HISTORY_BUCKET_CACHE_DIR=/mnt/bulk/stellarbeat-data/Observer/history-bucket-cache

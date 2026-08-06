@@ -51,18 +51,18 @@ describe('HistoryArchiveObjectRetryPolicy', () => {
 	);
 
 	it.each([
-		['http', 'archive_evidence', 'archive-object'],
-		['auth', 'archive_evidence', 'archive-object'],
-		['not-found', 'archive_evidence', 'archive-object'],
-		['rate-limit', 'archive_evidence', 'archive-object'],
-		['timeout', 'archive_evidence', 'archive-object'],
-		['transport', 'archive_evidence', 'archive-object'],
+		['http', 'archive_availability', 'archive-object'],
+		['auth', 'archive_availability', 'archive-object'],
+		['not-found', 'archive_availability', 'archive-object'],
+		['rate-limit', 'archive_availability', 'archive-object'],
+		['timeout', 'archive_availability', 'archive-object'],
+		['transport', 'archive_availability', 'archive-object'],
 		['unknown', 'archive_evidence', 'archive-object'],
 		['worker', 'scanner_issue', 'worker-infrastructure'],
 		['coordinator', 'scanner_issue', 'coordinator-infrastructure']
 	] satisfies readonly (readonly [
 		HistoryArchiveObjectFailureClass,
-		'archive_evidence' | 'scanner_issue',
+		'archive_evidence' | 'archive_availability' | 'scanner_issue',
 		ReturnType<typeof getHistoryArchiveObjectEvidenceClass>
 	])[])(
 		'maps %s failures to %s evidence',
@@ -79,7 +79,7 @@ describe('HistoryArchiveObjectRetryPolicy', () => {
 		const result = getHistoryArchiveObjectRetryPolicy({
 			currentRetryCount: 3,
 			errorType: 'TYPE_TIMEOUT',
-			failureChannel: 'archive_evidence',
+			failureChannel: 'archive_availability',
 			httpStatus: null,
 			now,
 			objectType: 'ledger'
@@ -141,7 +141,7 @@ describe('HistoryArchiveObjectRetryPolicy', () => {
 			getHistoryArchiveObjectRetryPolicy({
 				currentRetryCount: 0,
 				errorType: 'worker_error',
-				failureChannel: 'archive_evidence',
+				failureChannel: 'archive_availability',
 				now: new Date('2026-07-06T15:00:00.000Z'),
 				objectType: 'bucket'
 			})

@@ -243,13 +243,15 @@ export const sourceSummarySql = `
 				as "latestDiscoveredCheckpointLedger",
 			coalesce(current_proof."objectCompleteCheckpointProofs", 0)
 				as "objectCompleteCheckpoints",
-			coalesce(current_proof."verifiedCheckpointProofs", 0)
+			coalesce(durable_proof."durableVerifiedCheckpointProofs", 0)
 				as "verifiedCheckpoints"
 		from history_archive_checkpoint_proof_rollup proof
 		left join history_archive_checkpoint_proof_version_rollup current_proof
 			on current_proof."archiveUrlIdentity" = proof."archiveUrlIdentity"
 			and current_proof."proofVersion" =
 				${CURRENT_HISTORY_ARCHIVE_CHECKPOINT_PROOF_VERSION}
+		left join history_archive_checkpoint_proof_attestation_rollup durable_proof
+			on durable_proof."archiveUrlIdentity" = proof."archiveUrlIdentity"
 		where ($1::text is null or proof."archiveUrlIdentity" = $1::text)
 	)
 	select

@@ -22,6 +22,22 @@ export function archiveEvidenceFailure(input: {
 	};
 }
 
+
+export function archiveAvailabilityFailure(input: {
+	readonly error: unknown;
+	readonly errorType: string;
+	readonly httpStatus?: number | null;
+	readonly retryAfterSeconds?: number | null;
+}): HistoryArchiveObjectFailureDTO {
+	return {
+		errorMessage: mapUnknownToError(input.error).message,
+		errorType: input.errorType,
+		failureChannel: 'archive_availability',
+		httpStatus: input.httpStatus ?? null,
+		retryAfterSeconds: input.retryAfterSeconds ?? null
+	};
+}
+
 export function getRetryAfterSecondsFromHttpError(
 	error: HttpError,
 	now = new Date()

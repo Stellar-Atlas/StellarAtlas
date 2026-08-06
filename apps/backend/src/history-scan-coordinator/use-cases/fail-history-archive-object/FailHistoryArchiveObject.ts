@@ -47,7 +47,7 @@ export class FailHistoryArchiveObject {
 			});
 
 			const hostFailure =
-				failure.failureChannel === 'archive_evidence' &&
+				failure.failureChannel === 'archive_availability' &&
 				shouldThrottleHistoryArchiveObjectHost({
 					errorType: failure.errorType,
 					failureClass: retryPolicy.failureClass,
@@ -84,6 +84,50 @@ export class FailHistoryArchiveObject {
 		} catch (e) {
 			return err(mapUnknownToError(e));
 		}
+	}
+
+	async executeAndReconcile(
+		remoteId: string,
+		failure: HistoryArchiveObjectFailure
+	): Promise<Result<boolean, Error>> {
+		const result = await this.execute(remoteId, failure);
+		if (result.isErr() || !result.value) return result;
+
+		try {
+			await this.reconcileClaimAttempt(remoteId, failure.claimAttempt);
+			if (failure.scheduler === 'broker') {
+				if (failure.executionId === undefined)
+					throw new Error('Broker failure requires executionId');
+				await this.objectRepository.completeBrokerDelivery(
+					remoteId,
+					failure.executionId
+				);
+			}
+			return result;
+		} catch (error) {
+			return err(mapUnknownToError(error));
+		}
+	}
+
+	async reconcileClaimAttempt(
+		remoteId: string,
+		claimAttempt: number
+	): Promise<void> {
+		await this.objectRepository.withTransitionEffectsLock(
+			remoteId,
+			claimAttempt,
+			async () => {
+				const persisted = await this.objectRepository.findByRemoteId(remoteId);
+				if (
+					persisted === null ||
+					persisted.status !== 'failed' ||
+					persisted.attempts !== claimAttempt
+				) {
+					return;
+				}
+				await this.reconcilePersisted(persisted);
+			}
+		);
 	}
 
 	async reconcilePersisted(object: HistoryArchiveObject): Promise<void> {
@@ -132,7 +176,8 @@ function isRemoteHistoryArchiveStateFailure(object: {
 }): boolean {
 	return (
 		object.objectType === 'history-archive-state' &&
-		object.failureChannel === 'archive_evidence'
+		(object.failureChannel === 'archive_evidence' ||
+			object.failureChannel === 'archive_availability')
 	);
 }
 

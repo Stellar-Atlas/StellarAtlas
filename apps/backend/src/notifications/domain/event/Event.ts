@@ -16,6 +16,19 @@ export interface MultipleUpdatesEventData extends EventData {
 	numberOfUpdates: number;
 }
 
+export interface HistoryArchiveIntegrityFailureEventData extends EventData {
+	actionId: string;
+	archiveUrl: string;
+	bucketHash: string | null;
+	checkpointLedger: number | null;
+	evidenceId: string;
+	evidenceObservedAt: string;
+	failureCode: string;
+	objectKey: string;
+	objectType: string;
+	repairPlanPath: string;
+}
+
 export enum EventType {
 	NodeXUpdatesInactive = 'NodeXUpdatesInactive',
 	NodeXUpdatesConnectivityError = 'NodeXUpdatesConnectivityError',
@@ -101,6 +114,16 @@ export class FullValidatorXUpdatesHistoryArchiveOutOfDateEvent extends Event<
 
 export class HistoryArchiveErrorDetectedEvent extends Event<
 	EventData,
+	PublicKey
+> {
+	get type(): EventType {
+		return EventType.HistoryArchiveErrorDetected;
+	}
+}
+
+/** A current, confirmed archive-content failure with a stable evidence cursor. */
+export class HistoryArchiveIntegrityFailureDetectedEvent extends Event<
+	HistoryArchiveIntegrityFailureEventData,
 	PublicKey
 > {
 	get type(): EventType {

@@ -95,14 +95,16 @@ export async function promoteHistoryArchiveObjectPlans(
 			genesisCheckpointLedger,
 			maximumWatermarkHeadroom
 		])) as readonly { readonly promotedObjects: number | string }[];
-		await synchronizeHistoryArchiveReadyQueue(
-			manager,
-			historyArchiveMaximumWatermark
-		);
+		const promotedObjects = Number(result?.promotedObjects ?? 0);
+		if (promotedObjects > 0)
+			await synchronizeHistoryArchiveReadyQueue(
+				manager,
+				historyArchiveMaximumWatermark
+			);
 
 		return {
 			...pressure,
-			promotedObjects: Number(result?.promotedObjects ?? 0)
+			promotedObjects
 		};
 	});
 }

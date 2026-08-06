@@ -53,6 +53,7 @@
 		"start:scan-network": "pnpm --filter backend run scan-network",
 		"start:scan-scp-live": "pnpm --filter backend run scan-scp-live",
 		"start:scan-history": "pnpm --filter history-scanner run scan-history",
+		"start:history-archive-broker-dispatcher": "pnpm --filter backend run run-history-archive-broker-dispatcher",
 		"promote:full-history-checkpoint": "pnpm --filter backend run promote-full-history-checkpoint",
 		"start:full-history-promotion": "pnpm --filter backend run run-full-history-promotion",
 		"run:full-history-backfill": "pnpm --filter backend run run-full-history-backfill",
