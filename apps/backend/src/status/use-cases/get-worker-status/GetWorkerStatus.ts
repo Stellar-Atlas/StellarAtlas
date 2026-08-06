@@ -14,6 +14,7 @@ import type {
 	HistoryArchiveWorkerStatus,
 	HistoryArchiveWorkerStatusRepository
 } from '@history-scan-coordinator/domain/history-archive-worker/HistoryArchiveWorkerStatus.js';
+import { usesHistoryArchiveBrokerScheduler } from '@history-scan-coordinator/infrastructure/HistoryArchiveSchedulerMode.js';
 import { mapUnknownToError } from '@core/utilities/mapUnknownToError.js';
 import { getWorstStatus, type StatusLevel } from '../../domain/StatusTypes.js';
 
@@ -167,17 +168,24 @@ export class GetWorkerStatus {
 			(worker) => worker.status === 'stale'
 		).length;
 		const freshWorkers = registeredActiveWorkers + idleWorkers;
+		const brokerSchedulerActive = usesHistoryArchiveBrokerScheduler();
+		const queueActiveWorkers = brokerSchedulerActive
+			? 0
+			: queueSnapshot.activeObjects;
+		const queueStaleWorkers = brokerSchedulerActive
+			? 0
+			: queueSnapshot.staleObjects;
 		const missingWorkers = Math.max(
 			configuredWorkerProcesses - freshWorkers,
 			0
 		);
 		const activeWorkers = Math.max(
 			registeredActiveWorkers,
-			queueSnapshot.activeObjects
+			queueActiveWorkers
 		);
 		const staleWorkers = Math.max(
 			registryStaleWorkers,
-			queueSnapshot.staleObjects
+			queueStaleWorkers
 		);
 		const startupGraceActive = this.isStartupGraceActive(
 			slotRows,
@@ -187,7 +195,7 @@ export class GetWorkerStatus {
 			staleCutoff
 		);
 		const hasRuntimeSignal =
-			freshWorkers > 0 || queueSnapshot.activeObjects > 0;
+			freshWorkers > 0 || queueActiveWorkers > 0;
 		const status: StatusLevel =
 			missingWorkers === 0 && staleWorkers === 0
 				? 'ok'
@@ -203,8 +211,8 @@ export class GetWorkerStatus {
 			idleWorkers,
 			lastHeartbeatAt: getLatestHeartbeat(slotRows),
 			missingWorkers,
-			queueActiveWorkers: queueSnapshot.activeObjects,
-			queueStaleWorkers: queueSnapshot.staleObjects,
+			queueActiveWorkers,
+			queueStaleWorkers,
 			registeredWorkers: workers.length,
 			startupGraceActive,
 			startupGraceMs: archiveObjectWorkerStartupGraceMs,
@@ -212,7 +220,7 @@ export class GetWorkerStatus {
 			telemetryMode: 'per-worker',
 			totalTakenJobs: Math.max(
 				workers.filter((worker) => worker.currentObject !== null).length,
-				queueSnapshot.totalScanningObjects
+				brokerSchedulerActive ? 0 : queueSnapshot.totalScanningObjects
 			),
 			staleJobAgeMs: archiveObjectWorkerStaleAgeMs,
 			workers
