@@ -17,7 +17,7 @@ import {
 	type FullHistoryInsertedCountRow
 } from './FullHistoryCanonicalInsertCount.js';
 
-const accountReferenceChunkSize = 2_000;
+export const fullHistoryOperationAccountReferenceChunkSize = 500;
 
 interface AccountReferenceRow {
 	readonly accountId: string;
@@ -50,11 +50,15 @@ export async function storeCanonicalOperationAccountReferences(
 	);
 	for (const references of chunkFullHistoryValues(
 		input.operationAccountReferences,
-		accountReferenceChunkSize
+		fullHistoryOperationAccountReferenceChunkSize
 	)) {
-		await insertAccountReferences(manager, networkHash, references);
+		await storeCanonicalOperationAccountReferenceChunk(
+			manager,
+			networkHash,
+			references
+		);
 	}
-	await insertAccountReferenceCoverage(
+	await storeCanonicalOperationAccountReferenceCoverage(
 		manager,
 		input,
 		networkHash,
@@ -92,7 +96,7 @@ export async function assertCanonicalOperationAccountReferences(
 	}
 }
 
-async function insertAccountReferences(
+export async function storeCanonicalOperationAccountReferenceChunk(
 	manager: EntityManager,
 	networkHash: FullHistoryHash,
 	references: readonly FullHistoryOperationAccountReferenceInput[]
@@ -131,7 +135,7 @@ async function insertAccountReferences(
 	);
 }
 
-async function insertAccountReferenceCoverage(
+export async function storeCanonicalOperationAccountReferenceCoverage(
 	manager: EntityManager,
 	input: FullHistoryCheckpointWrite,
 	networkHash: FullHistoryHash,

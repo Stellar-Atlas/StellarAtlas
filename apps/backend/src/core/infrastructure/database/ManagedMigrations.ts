@@ -63,6 +63,10 @@ import { HistoryArchiveRepairActionIndexMigration1785370000000 } from '@history-
 import { FullHistoryStateStatementValidationMigration1785380000000 } from '@history-scan-coordinator/infrastructure/database/migrations/1785380000000-FullHistoryStateStatementValidationMigration.js';
 import { FullHistoryCanonicalCoverageDecouplingMigration1785390000000 } from '@history-scan-coordinator/infrastructure/database/migrations/1785390000000-FullHistoryCanonicalCoverageDecouplingMigration.js';
 import { HistoryArchiveCheckpointProofVersionRollupMigration1785400000000 } from '@history-scan-coordinator/infrastructure/database/migrations/1785400000000-HistoryArchiveCheckpointProofVersionRollupMigration.js';
+import { FullHistoryOperationProjectionProgressMigration1785410000000 } from '@history-scan-coordinator/infrastructure/database/migrations/1785410000000-FullHistoryOperationProjectionProgressMigration.js';
+import { HistoryArchiveCheckpointProofAttestationMigration1785420000000 } from '@history-scan-coordinator/infrastructure/database/migrations/1785420000000-HistoryArchiveCheckpointProofAttestationMigration.js';
+import { HistoryArchiveAvailabilityFailureChannelMigration1785430000000 } from '@history-scan-coordinator/infrastructure/database/migrations/1785430000000-HistoryArchiveAvailabilityFailureChannelMigration.js';
+import { HistoryArchiveBrokerFrontierMigration1785440000000 } from '@history-scan-coordinator/infrastructure/database/migrations/1785440000000-HistoryArchiveBrokerFrontierMigration.js';
 
 // The production database was imported with a partial legacy migration ledger.
 // Explicit registration prevents TypeORM from replaying pre-baseline migrations.
@@ -131,5 +135,9 @@ export const managedMigrations = [
 	HistoryArchiveRepairActionIndexMigration1785370000000,
 	FullHistoryStateStatementValidationMigration1785380000000,
 	FullHistoryCanonicalCoverageDecouplingMigration1785390000000,
-	HistoryArchiveCheckpointProofVersionRollupMigration1785400000000
+	HistoryArchiveCheckpointProofVersionRollupMigration1785400000000,
+	FullHistoryOperationProjectionProgressMigration1785410000000,
+	HistoryArchiveCheckpointProofAttestationMigration1785420000000,
+	HistoryArchiveAvailabilityFailureChannelMigration1785430000000,
+	HistoryArchiveBrokerFrontierMigration1785440000000
 ] as const;

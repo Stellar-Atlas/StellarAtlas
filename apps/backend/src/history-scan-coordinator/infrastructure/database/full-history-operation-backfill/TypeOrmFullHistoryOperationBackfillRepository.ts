@@ -24,9 +24,18 @@ import {
 	findBatch
 } from '../full-history/FullHistoryCanonicalBatchStore.js';
 import { storeCanonicalOperations } from '../full-history/FullHistoryCanonicalOperationStore.js';
-import { storeCanonicalOperationAccountReferences } from '../full-history/FullHistoryCanonicalOperationAccountReferenceStore.js';
+import {
+	fullHistoryOperationAccountReferenceChunkSize,
+	storeCanonicalOperationAccountReferenceChunk,
+	storeCanonicalOperationAccountReferenceCoverage
+} from '../full-history/FullHistoryCanonicalOperationAccountReferenceStore.js';
 import { storeCanonicalOperationResults } from '../full-history/FullHistoryCanonicalOperationResultStore.js';
 import { assertOperationBackfillBaseFacts } from './FullHistoryOperationBackfillBaseFactValidator.js';
+import {
+	advanceOperationAccountReferenceProgress,
+	deleteOperationAccountReferenceProgress,
+	lockOperationAccountReferenceProgress
+} from './FullHistoryOperationProjectionProgressStore.js';
 
 interface BackfillBatchRow {
 	readonly archiveUrlIdentity: string;
@@ -149,23 +158,50 @@ export class TypeOrmFullHistoryOperationBackfillRepository implements FullHistor
 	): Promise<FullHistoryOperationBackfillReceipt> {
 		validateFullHistoryCheckpointWrite(input);
 		const networkHash = hashNetworkPassphrase(input.networkPassphrase);
+		const coverage = await this.readValidatedCoverage(input, networkHash);
+		const replayed =
+			coverage.operationDecoderVersion !== null &&
+			coverage.accountReferenceDecoderVersion !== null &&
+			coverage.resultDecoderVersion !== null;
+
+		if (coverage.operationDecoderVersion === null) {
+			await this.storeOperationProjection(input, networkHash);
+		}
+		if (coverage.accountReferenceDecoderVersion === null) {
+			await this.storeAccountReferenceProjection(input, networkHash);
+		}
+		if (coverage.resultDecoderVersion === null) {
+			await this.storeResultProjection(input, networkHash);
+		}
+
+		return {
+			accountReferenceCount: input.operationAccountReferences.length,
+			batchId: input.batchId,
+			operationCount: input.operations.length,
+			replayed
+		};
+	}
+
+	private async readValidatedCoverage(
+		input: FullHistoryCheckpointWrite,
+		networkHash: FullHistoryHash
+	): Promise<CoverageStateRow> {
 		return this.dataSource.transaction(async (manager) => {
 			await setTransactionBounds(manager, this.transactionBounds);
-			await lockBatch(manager, input.batchId, networkHash);
-			const stored = await findBatch(manager, input.batchId);
-			if (stored === null) {
-				throw new FullHistoryCanonicalError(
-					'canonical-row-conflict',
-					'Operation backfill batch no longer exists'
-				);
-			}
-			assertBatchMatches(stored, input, networkHash);
+			await assertStoredBatch(manager, input, networkHash);
 			await assertOperationBackfillBaseFacts(manager, input, networkHash);
+			return readCoverageState(manager, input.batchId);
+		});
+	}
+
+	private async storeOperationProjection(
+		input: FullHistoryCheckpointWrite,
+		networkHash: FullHistoryHash
+	): Promise<void> {
+		await this.dataSource.transaction(async (manager) => {
+			await setTransactionBounds(manager, this.transactionBounds);
+			await assertStoredBatch(manager, input, networkHash);
 			const coverage = await readCoverageState(manager, input.batchId);
-			const replayed =
-				coverage.operationDecoderVersion !== null &&
-				coverage.accountReferenceDecoderVersion !== null &&
-				coverage.resultDecoderVersion !== null;
 			if (coverage.operationDecoderVersion === null) {
 				await storeCanonicalOperations(
 					manager,
@@ -174,14 +210,83 @@ export class TypeOrmFullHistoryOperationBackfillRepository implements FullHistor
 					input.operationDecoderVersion
 				);
 			}
-			if (coverage.accountReferenceDecoderVersion === null) {
-				await storeCanonicalOperationAccountReferences(
+		});
+	}
+
+	private async storeAccountReferenceProjection(
+		input: FullHistoryCheckpointWrite,
+		networkHash: FullHistoryHash
+	): Promise<void> {
+		while (!(await this.storeNextAccountReferenceChunk(input, networkHash))) {
+			// Each iteration commits one durable chunk and its resume cursor.
+		}
+	}
+
+	private async storeNextAccountReferenceChunk(
+		input: FullHistoryCheckpointWrite,
+		networkHash: FullHistoryHash
+	): Promise<boolean> {
+		return this.dataSource.transaction(async (manager) => {
+			await setTransactionBounds(manager, this.transactionBounds);
+			await assertStoredBatch(manager, input, networkHash);
+			const coverage = await readCoverageState(manager, input.batchId);
+			if (coverage.accountReferenceDecoderVersion !== null) {
+				await deleteOperationAccountReferenceProgress(
+					manager,
+					input.batchId
+				);
+				return true;
+			}
+
+			const progress = await lockOperationAccountReferenceProgress(
+				manager,
+				input
+			);
+			if (progress.nextOffset === progress.expectedCount) {
+				await storeCanonicalOperationAccountReferenceCoverage(
 					manager,
 					input,
 					networkHash,
 					input.operationAccountReferenceDecoderVersion
 				);
+				await deleteOperationAccountReferenceProgress(
+					manager,
+					input.batchId
+				);
+				return true;
 			}
+
+			const nextOffset = Math.min(
+				progress.nextOffset +
+					fullHistoryOperationAccountReferenceChunkSize,
+				progress.expectedCount
+			);
+			await storeCanonicalOperationAccountReferenceChunk(
+				manager,
+				networkHash,
+				input.operationAccountReferences.slice(
+					progress.nextOffset,
+					nextOffset
+				)
+			);
+			await advanceOperationAccountReferenceProgress(
+				manager,
+				input.batchId,
+				progress.nextOffset,
+				nextOffset
+			);
+			return false;
+		});
+	}
+
+	private async storeResultProjection(
+		input: FullHistoryCheckpointWrite,
+		networkHash: FullHistoryHash
+	): Promise<void> {
+		await this.dataSource.transaction(async (manager) => {
+			await setTransactionBounds(manager, this.transactionBounds);
+			await assertStoredBatch(manager, input, networkHash);
+			const coverage = await readCoverageState(manager, input.batchId);
 			if (coverage.resultDecoderVersion === null) {
 				await storeCanonicalOperationResults(
 					manager,
@@ -190,14 +295,24 @@ export class TypeOrmFullHistoryOperationBackfillRepository implements FullHistor
 					input.operationResultDecoderVersion
 				);
 			}
-			return {
-				accountReferenceCount: input.operationAccountReferences.length,
-				batchId: input.batchId,
-				operationCount: input.operations.length,
-				replayed
-			};
 		});
 	}
+}
+
+async function assertStoredBatch(
+	manager: EntityManager,
+	input: FullHistoryCheckpointWrite,
+	networkHash: FullHistoryHash
+): Promise<void> {
+	await lockBatch(manager, input.batchId, networkHash);
+	const stored = await findBatch(manager, input.batchId);
+	if (stored === null) {
+		throw new FullHistoryCanonicalError(
+			'canonical-row-conflict',
+			'Operation backfill batch no longer exists'
+		);
+	}
+	assertBatchMatches(stored, input, networkHash);
 }
 
 function mapBatch(row: BackfillBatchRow): FullHistoryOperationBackfillBatch {
