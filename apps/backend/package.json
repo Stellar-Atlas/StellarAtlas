@@ -6,7 +6,7 @@
 	"description": "Backend & api",
 	"scripts": {
 		"prebuild": "pnpm --filter shared build && pnpm --filter history-scanner-dto build",
-		"build": "tsc --build tsconfig.json && pnpm -w rewrite:aliases apps/backend && pnpm post-build",
+		"build": "tsc --build tsconfig.json --force && pnpm -w rewrite:aliases apps/backend && pnpm post-build",
 		"post-build": "cp -R src/notifications/infrastructure/templates lib/notifications/infrastructure/templates",
 		"heroku-postbuild": "pnpm run build",
 		"build-and-scan-network": "pnpm run build; node lib/network-scan/infrastructure/cli/scan-network.js",
