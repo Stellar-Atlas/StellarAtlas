@@ -28,6 +28,7 @@ export async function requestPinnedRepairObject(
 			const outgoing = request(
 				url,
 				{
+					agent: false,
 					headers: {
 						Accept: 'application/octet-stream',
 						'User-Agent': 'StellarAtlas archive repair verifier'
@@ -42,11 +43,16 @@ export async function requestPinnedRepairObject(
 			outgoing.end();
 		}
 	);
-	return {
-		body: response,
-		contentLength: parseContentLength(response.headers['content-length']),
-		status: response.statusCode ?? 0
-	};
+	try {
+		return {
+			body: response,
+			contentLength: parseContentLength(response.headers['content-length']),
+			status: response.statusCode ?? 0
+		};
+	} catch (error) {
+		response.destroy(error instanceof Error ? error : undefined);
+		throw error;
+	}
 }
 
 function pinnedLookup(addresses: readonly string[]): LookupFunction {

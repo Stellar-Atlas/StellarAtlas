@@ -8,6 +8,7 @@ import type {
 	PublicKnownNetworkPage,
 	PublicKnownNodeListItem
 } from '../../api/known-network-types';
+import type { PublicSearchArchiveStatusFilter } from '../../api/search-types';
 import {
 	getNodeLabel,
 	getNodeTags,
@@ -28,6 +29,7 @@ import {
 } from '../../domain/known-network-scopes';
 
 interface NodeTableProps {
+	archiveStatus?: PublicSearchArchiveStatusFilter;
 	network: NetworkV1;
 	nodes: readonly PublicKnownNodeListItem[];
 	page: PublicKnownNetworkPage;
@@ -43,6 +45,7 @@ const getKnownNodeLabel = (knownNode: PublicKnownNodeListItem): string =>
 		: knownNode.publicKey.slice(0, 12);
 
 export function NodeTable({
+	archiveStatus,
 	network,
 	nodes,
 	page,
@@ -58,11 +61,15 @@ export function NodeTable({
 	const navigate = (
 		nextScope: NodeInventoryFilter,
 		nextQuery: string,
-		nextPage: number
+		nextPage: number,
+		nextArchiveStatus = archiveStatus
 	): void => {
 		const params = new URLSearchParams();
 		params.set('scope', nextScope);
 		if (nextQuery.trim()) params.set('q', nextQuery.trim());
+		if (nextScope === 'current-validator' && nextArchiveStatus) {
+			params.set('archiveStatus', nextArchiveStatus);
+		}
 		if (nextPage > 1) params.set('page', nextPage.toString());
 		router.push(`/nodes?${params.toString()}`);
 	};
@@ -91,7 +98,14 @@ export function NodeTable({
 						aria-label="Node inventory scope"
 						onChange={(event) => {
 							const value = event.currentTarget.value;
-							if (isNodeInventoryFilter(value)) navigate(value, input, 1);
+							if (isNodeInventoryFilter(value)) {
+								navigate(
+									value,
+									input,
+									1,
+									value === 'current-validator' ? archiveStatus : undefined
+								);
+							}
 						}}
 						value={scope}
 					>
@@ -100,6 +114,22 @@ export function NodeTable({
 								{nodeInventoryFilterLabels[option]}
 							</option>
 						))}
+					</select>
+					<select
+						aria-label="Archive evidence status"
+						onChange={(event) => {
+							const value = parseArchiveStatus(event.currentTarget.value);
+							navigate('current-validator', input, 1, value);
+						}}
+						value={archiveStatus ?? ''}
+					>
+						<option value="">All archive states</option>
+						<option value="issue">Archive issues</option>
+						<option value="error">Archive errors</option>
+						<option value="unreachable">Unreachable archives</option>
+						<option value="scanner-issue">Scanner issues</option>
+						<option value="ok">No current archive issue</option>
+						<option value="unknown">Unknown archive state</option>
 					</select>
 				</div>
 			</div>
@@ -223,6 +253,19 @@ export function NodeTable({
 			</div>
 		</section>
 	);
+}
+
+function parseArchiveStatus(
+	value: string
+): PublicSearchArchiveStatusFilter | undefined {
+	return value === 'error' ||
+		value === 'issue' ||
+		value === 'ok' ||
+		value === 'scanner-issue' ||
+		value === 'unknown' ||
+		value === 'unreachable'
+		? value
+		: undefined;
 }
 
 function formatVisibleRange(

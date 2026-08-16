@@ -39,18 +39,13 @@ export interface HistoryArchiveRepairSourceUrlResolution {
 export function createHistoryArchiveRepairSourceUrlPolicy(
 	resolver: HistoryArchiveRepairHostResolver = resolveHostname
 ): HistoryArchiveRepairSourceUrlPolicy {
-	const resolutions = new Map<string, Promise<readonly string[]>>();
 	return {
 		async requireObjectUrl(objectUrl, archiveUrl, archiveUrlIdentity) {
-			return (
-				await resolveObjectUrl(
-					objectUrl,
-					archiveUrl,
-					archiveUrlIdentity,
-					resolver,
-					resolutions
-				)
-			).url;
+			return validateObjectUrl(
+				objectUrl,
+				archiveUrl,
+				archiveUrlIdentity
+			).toString();
 		},
 		async resolveObjectUrl(objectUrl, archiveUrl, archiveUrlIdentity) {
 			return await resolveObjectUrl(
@@ -58,7 +53,7 @@ export function createHistoryArchiveRepairSourceUrlPolicy(
 				archiveUrl,
 				archiveUrlIdentity,
 				resolver,
-				resolutions
+				new Map()
 			);
 		}
 	};
@@ -71,6 +66,20 @@ async function resolveObjectUrl(
 	resolver: HistoryArchiveRepairHostResolver,
 	resolutions: Map<string, Promise<readonly string[]>>
 ): Promise<HistoryArchiveRepairSourceUrlResolution> {
+	const object = validateObjectUrl(objectUrl, archiveUrl, archiveUrlIdentity);
+	const addresses = await requirePublicResolution(
+		object.hostname,
+		resolver,
+		resolutions
+	);
+	return { addresses, url: object.toString() };
+}
+
+function validateObjectUrl(
+	objectUrl: string | undefined,
+	archiveUrl: string | undefined,
+	archiveUrlIdentity: string | undefined
+): URL {
 	const object = parsePublicUrl(objectUrl, 'objectUrl');
 	const archive = parsePublicUrl(archiveUrl, 'archiveUrl');
 	requireArchiveIdentity(archiveUrl, archiveUrlIdentity);
@@ -80,12 +89,7 @@ async function resolveObjectUrl(
 		);
 	}
 	requireArchivePath(object, archive);
-	const addresses = await requirePublicResolution(
-		object.hostname,
-		resolver,
-		resolutions
-	);
-	return { addresses, url: object.toString() };
+	return object;
 }
 
 function requireArchiveIdentity(
@@ -121,7 +125,7 @@ function parsePublicUrl(value: string | undefined, field: string): URL {
 		value.length === 0 ||
 		value.length > maximumUrlLength ||
 		value.trim() !== value ||
-		/[\u0000-\u0020\u007f]/.test(value)
+		hasDisallowedUrlCharacter(value)
 	) {
 		throw new Error(`Verified repair source row has invalid ${field}`);
 	}
@@ -143,6 +147,14 @@ function parsePublicUrl(value: string | undefined, field: string): URL {
 		throw new Error(`Verified repair source row has invalid ${field}`);
 	}
 	return parsed;
+}
+
+function hasDisallowedUrlCharacter(value: string): boolean {
+	for (let index = 0; index < value.length; index++) {
+		const code = value.charCodeAt(index);
+		if (code <= 0x20 || code === 0x7f) return true;
+	}
+	return false;
 }
 
 async function requirePublicResolution(
@@ -196,7 +208,7 @@ async function resolveHostname(hostname: string): Promise<readonly string[]> {
 
 function isPublicHostnameSyntax(value: string): boolean {
 	const hostname = stripIpv6Brackets(value).toLowerCase();
-	if (isIP(hostname) !== 0) return true;
+	if (isIP(hostname) !== 0) return isPublicIp(hostname);
 	if (
 		hostname.length > 253 ||
 		!hostname.includes('.') ||

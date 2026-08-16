@@ -1,5 +1,5 @@
 import { constants, type Stats } from 'node:fs';
-import { open, realpath, type FileHandle } from 'node:fs/promises';
+import { open, realpath, stat, type FileHandle } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
 import { dirname, isAbsolute, relative, resolve, sep } from 'node:path';
 import { Transform, type Readable, type TransformCallback } from 'node:stream';
@@ -15,11 +15,12 @@ import type {
 	OpenHistoryArchiveRepairArtifactResult
 } from '../../../domain/history-archive-repair-artifact/HistoryArchiveRepairArtifactRepository.js';
 import { historyArchiveBucketHashPattern } from '../../../domain/history-archive-repair-artifact/HistoryArchiveRepairArtifactRepository.js';
+import type { HistoryArchiveRepairArtifactWorkPermit } from '../../../domain/history-archive-repair-artifact/HistoryArchiveRepairArtifactWorkPermit.js';
 import { resolveAppEnvPath } from 'shared/lib/env/resolve-app-env-path.js';
 
-const defaultMaxCompressedBytes = 8 * 1024 ** 3;
+const defaultMaxCompressedBytes = 2 * 1024 ** 3;
 const defaultMaxConcurrentVerifications = 2;
-const defaultMaxUncompressedBytes = 64 * 1024 ** 3;
+const defaultMaxUncompressedBytes = 8 * 1024 ** 3;
 const defaultVerificationTimeoutMs = 5 * 60_000;
 
 export interface LocalHistoryArchiveRepairArtifactRepositoryOptions {
@@ -28,12 +29,13 @@ export interface LocalHistoryArchiveRepairArtifactRepositoryOptions {
 	readonly maxUncompressedBytes?: number;
 	readonly rootDirectory: string;
 	readonly verificationTimeoutMs?: number;
+	readonly workPermit: HistoryArchiveRepairArtifactWorkPermit;
 }
 
 type ProvenHandle = {
 	readonly handle: FileHandle;
 	readonly proof: HistoryArchiveRepairArtifactProof;
-	readonly release: () => void;
+	readonly release: () => Promise<void>;
 };
 
 type PresentHandle = {
@@ -59,6 +61,7 @@ export class LocalHistoryArchiveRepairArtifactRepository implements HistoryArchi
 	private readonly maxUncompressedBytes: number;
 	private readonly rootDirectory: string;
 	private readonly verificationTimeoutMs: number;
+	private readonly workPermit: HistoryArchiveRepairArtifactWorkPermit;
 	private activeVerifications = 0;
 
 	constructor(options: LocalHistoryArchiveRepairArtifactRepositoryOptions) {
@@ -79,6 +82,7 @@ export class LocalHistoryArchiveRepairArtifactRepository implements HistoryArchi
 			options.verificationTimeoutMs,
 			defaultVerificationTimeoutMs
 		);
+		this.workPermit = options.workPermit;
 	}
 
 	async inspectBucketPresence(
@@ -103,7 +107,7 @@ export class LocalHistoryArchiveRepairArtifactRepository implements HistoryArchi
 		const proven = await this.openProvenHandle(bucketHash);
 		if ('status' in proven) return proven;
 		await closeHandle(proven.handle);
-		proven.release();
+		await proven.release();
 		return proven.proof;
 	}
 
@@ -122,7 +126,7 @@ export class LocalHistoryArchiveRepairArtifactRepository implements HistoryArchi
 			});
 		} catch {
 			await closeHandle(proven.handle);
-			proven.release();
+			await proven.release();
 			return unavailable(proven.proof.bucketHash, 'local-storage-unavailable');
 		}
 
@@ -134,7 +138,7 @@ export class LocalHistoryArchiveRepairArtifactRepository implements HistoryArchi
 				closed = true;
 				stream.destroy();
 				await closeHandle(proven.handle);
-				proven.release();
+				await proven.release();
 			},
 			stream
 		};
@@ -148,12 +152,25 @@ export class LocalHistoryArchiveRepairArtifactRepository implements HistoryArchi
 			return unavailable(null, 'invalid-object-identity');
 		}
 
-		const release = this.acquireVerification();
-		if (release === null) return unavailable(bucketHash, 'verification-busy');
+		const globalLease = await this.workPermit.tryAcquire();
+		if (globalLease === null)
+			return unavailable(bucketHash, 'verification-busy');
+		const releaseProcessSlot = this.acquireVerification();
+		if (releaseProcessSlot === null) {
+			await globalLease.release();
+			return unavailable(bucketHash, 'verification-busy');
+		}
+		let released = false;
+		const release = async (): Promise<void> => {
+			if (released) return;
+			released = true;
+			releaseProcessSlot();
+			await globalLease.release();
+		};
 
 		const present = await this.openPresentHandle(bucketHash);
 		if ('status' in present) {
-			release();
+			await release();
 			return present;
 		}
 		try {
@@ -164,17 +181,17 @@ export class LocalHistoryArchiveRepairArtifactRepository implements HistoryArchi
 			const after = await present.handle.stat();
 			if (!sameFileVersion(present.stats, after)) {
 				await closeHandle(present.handle);
-				release();
+				await release();
 				return unavailable(bucketHash, 'local-storage-unavailable');
 			}
 			if (digest.status === 'failed') {
 				await closeHandle(present.handle);
-				release();
+				await release();
 				return unavailable(bucketHash, digest.reason);
 			}
 			if (digest.digest !== bucketHash) {
 				await closeHandle(present.handle);
-				release();
+				await release();
 				return unavailable(bucketHash, 'content-hash-mismatch');
 			}
 
@@ -190,7 +207,7 @@ export class LocalHistoryArchiveRepairArtifactRepository implements HistoryArchi
 			};
 		} catch (error) {
 			await closeHandle(present.handle);
-			release();
+			await release();
 			return unavailable(bucketHash, reasonForFileError(error));
 		}
 	}
@@ -207,16 +224,18 @@ export class LocalHistoryArchiveRepairArtifactRepository implements HistoryArchi
 		let handle: FileHandle | null = null;
 		try {
 			const resolvedRoot = await realpath(this.rootDirectory);
-			handle = await open(
-				filePath,
-				constants.O_RDONLY | constants.O_NOATIME | constants.O_NOFOLLOW
-			);
-			const openedFile = await realpath(`/proc/self/fd/${handle.fd}`);
+			handle = await open(filePath, safeReadOnlyFlags());
+			const openedFile = await resolveOpenedFilePath(handle, filePath);
 			if (!isWithin(resolvedRoot, openedFile)) {
 				await closeHandle(handle);
 				return unavailable(bucketHash, 'local-storage-unavailable');
 			}
 			const stats = await handle.stat();
+			const resolvedStats = await stat(openedFile);
+			if (!sameFileIdentity(stats, resolvedStats)) {
+				await closeHandle(handle);
+				return unavailable(bucketHash, 'local-storage-unavailable');
+			}
 			if (!stats.isFile()) {
 				await closeHandle(handle);
 				return unavailable(bucketHash, 'local-payload-not-regular');
@@ -368,6 +387,28 @@ function sameFileVersion(before: Stats, after: Stats): boolean {
 	);
 }
 
+function sameFileIdentity(opened: Stats, resolved: Stats): boolean {
+	return opened.dev === resolved.dev && opened.ino === resolved.ino;
+}
+
+function safeReadOnlyFlags(): number {
+	return (
+		constants.O_RDONLY |
+		(constants.O_NOATIME ?? 0) |
+		(constants.O_NOFOLLOW ?? 0)
+	);
+}
+
+async function resolveOpenedFilePath(
+	handle: FileHandle,
+	requestedPath: string
+): Promise<string> {
+	if (process.platform === 'linux') {
+		return realpath(`/proc/self/fd/${handle.fd}`);
+	}
+	return realpath(requestedPath);
+}
+
 function reasonForFileError(
 	error: unknown
 ): HistoryArchiveRepairArtifactUnavailableReason {
@@ -398,7 +439,9 @@ async function closeHandle(handle: FileHandle): Promise<void> {
 	await handle.close().catch(() => undefined);
 }
 
-export function createLocalHistoryArchiveRepairArtifactRepository(): LocalHistoryArchiveRepairArtifactRepository {
+export function createLocalHistoryArchiveRepairArtifactRepository(
+	workPermit: HistoryArchiveRepairArtifactWorkPermit
+): LocalHistoryArchiveRepairArtifactRepository {
 	return new LocalHistoryArchiveRepairArtifactRepository({
 		rootDirectory:
 			process.env.HISTORY_BUCKET_CACHE_DIR ??
@@ -407,6 +450,7 @@ export function createLocalHistoryArchiveRepairArtifactRepository(): LocalHistor
 				'..',
 				'..',
 				'history-bucket-cache'
-			)
+			),
+		workPermit
 	});
 }

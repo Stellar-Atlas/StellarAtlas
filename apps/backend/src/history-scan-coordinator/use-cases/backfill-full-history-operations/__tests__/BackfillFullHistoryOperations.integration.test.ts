@@ -162,10 +162,11 @@ describe('BackfillFullHistoryOperations', () => {
 		await expect(
 			database.batchProgress(timeoutFixture.input.batchId)
 		).resolves.toEqual({
-			accountReferenceCount: 0,
+			accountReferenceCount:
+				timeoutFixture.input.operationAccountReferences.length,
 			accountReferenceCoverageCount: 0,
-			coverageCount: 0,
-			operationCount: 0
+			coverageCount: 1,
+			operationCount: timeoutFixture.input.operations.length
 		});
 
 		const crashingRepository: FullHistoryOperationBackfillRepository = {
@@ -183,7 +184,7 @@ describe('BackfillFullHistoryOperations', () => {
 				decoder
 			).execute(runInput(1))
 		).rejects.toThrow('simulated process crash after commit');
-		await expect(database.coverageCount()).resolves.toBe(1);
+		await expect(database.coverageCount()).resolves.toBe(2);
 
 		const restarted = normalUseCase();
 		const resumed = await restarted.execute(runInput(1));

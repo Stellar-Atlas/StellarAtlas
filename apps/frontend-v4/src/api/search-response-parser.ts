@@ -1,4 +1,5 @@
 import type {
+	PublicSearchArchiveStatus,
 	PublicSearchDocumentScope,
 	PublicSearchFacetName,
 	PublicSearchFacets,
@@ -39,6 +40,13 @@ const isSource = (value: unknown): value is PublicSearchSource =>
 
 const isResultSource = (value: unknown): value is PublicSearchResultSource =>
 	value === 'meilisearch' || value === 'postgres_canonical';
+
+const isArchiveStatus = (value: unknown): value is PublicSearchArchiveStatus =>
+	value === 'error' ||
+	value === 'ok' ||
+	value === 'scanner-issue' ||
+	value === 'unknown' ||
+	value === 'unreachable';
 
 const isScope = (value: unknown): value is PublicSearchQueryScope =>
 	value === 'current-validator' ||
@@ -90,6 +98,8 @@ function parseHit(value: unknown): PublicSearchHit | null {
 		return null;
 	}
 	if (
+		(value.archiveStatus !== undefined &&
+			!isArchiveStatus(value.archiveStatus)) ||
 		(value.evidenceFailures !== undefined &&
 			!isNonNegativeInteger(value.evidenceFailures)) ||
 		(value.evidenceVerified !== undefined &&
@@ -106,6 +116,7 @@ function parseHit(value: unknown): PublicSearchHit | null {
 	}
 
 	return {
+		archiveStatus: value.archiveStatus,
 		detail: value.detail,
 		entityId: value.entityId,
 		entityType: value.entityType,

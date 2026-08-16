@@ -4,7 +4,28 @@ import { HistoryArchiveObject } from '../../domain/history-archive-object/Histor
 import type { HistoryArchiveObjectRepository } from '../../domain/history-archive-object/HistoryArchiveObjectRepository.js';
 import type { CompleteHistoryArchiveObject } from '../complete-history-archive-object/CompleteHistoryArchiveObject.js';
 import type { FailHistoryArchiveObject } from '../fail-history-archive-object/FailHistoryArchiveObject.js';
-import { ReconcileHistoryArchiveObjectTransitions } from './ReconcileHistoryArchiveObjectTransitions.js';
+import {
+	parseHistoryArchiveTransitionReconciliationBatchSize,
+	ReconcileHistoryArchiveObjectTransitions
+} from './ReconcileHistoryArchiveObjectTransitions.js';
+
+describe('archive transition reconciliation batch configuration', () => {
+	it('keeps the conservative default and caps operator increases', () => {
+		expect(
+			parseHistoryArchiveTransitionReconciliationBatchSize(undefined)
+		).toBe(24);
+		expect(parseHistoryArchiveTransitionReconciliationBatchSize('48')).toBe(48);
+		expect(parseHistoryArchiveTransitionReconciliationBatchSize('192')).toBe(
+			192
+		);
+		expect(parseHistoryArchiveTransitionReconciliationBatchSize('500')).toBe(
+			192
+		);
+		expect(
+			parseHistoryArchiveTransitionReconciliationBatchSize('invalid')
+		).toBe(24);
+	});
+});
 
 describe('ReconcileHistoryArchiveObjectTransitions', () => {
 	it('reconciles verified and failed transitions under the distributed lock', async () => {
@@ -229,6 +250,60 @@ describe('ReconcileHistoryArchiveObjectTransitions', () => {
 		expect(
 			repository.tryWithTransitionReconciliationLock
 		).toHaveBeenCalledTimes(2);
+	});
+
+	it('can reconcile transitions without duplicating a caller-owned promotion', async () => {
+		const repository = mock<HistoryArchiveObjectRepository>();
+		repository.findUnreconciledTransitions.mockResolvedValue([]);
+		repository.findVerifiedCheckpointsNeedingReconciliation.mockResolvedValue(
+			[]
+		);
+		repository.tryWithTransitionReconciliationLock.mockImplementation(
+			async (work) => {
+				await work();
+				return true;
+			}
+		);
+		const reconciler = new ReconcileHistoryArchiveObjectTransitions(
+			repository,
+			mock<CompleteHistoryArchiveObject>(),
+			mock<FailHistoryArchiveObject>(),
+			mock<Logger>()
+		);
+
+		await reconciler.executeIfDue(10_000, {
+			promotePlannedObjects: false
+		});
+
+		expect(repository.promotePlannedObjects).not.toHaveBeenCalled();
+		expect(repository.findUnreconciledTransitions).toHaveBeenCalledWith(24);
+	});
+
+	it('suppresses only generic execution admission in broker mode', async () => {
+		const previousMode = process.env.HISTORY_ARCHIVE_SCHEDULER_MODE;
+		process.env.HISTORY_ARCHIVE_SCHEDULER_MODE = 'broker';
+		try {
+			const repository = mock<HistoryArchiveObjectRepository>();
+			repository.tryWithTransitionReconciliationLock.mockResolvedValue(false);
+			const reconciler = new ReconcileHistoryArchiveObjectTransitions(
+				repository,
+				mock<CompleteHistoryArchiveObject>(),
+				mock<FailHistoryArchiveObject>(),
+				mock<Logger>()
+			);
+
+			await reconciler.executeIfDue(10_000);
+
+			expect(repository.reconcileExecutionDisposition).toHaveBeenCalledWith({
+				admitGenericObjects: false
+			});
+		} finally {
+			if (previousMode === undefined) {
+				delete process.env.HISTORY_ARCHIVE_SCHEDULER_MODE;
+			} else {
+				process.env.HISTORY_ARCHIVE_SCHEDULER_MODE = previousMode;
+			}
+		}
 	});
 });
 

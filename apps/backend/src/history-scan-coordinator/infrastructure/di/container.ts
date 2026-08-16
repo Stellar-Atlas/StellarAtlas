@@ -68,6 +68,7 @@ import type { HistoryArchiveRepairArtifactRepository } from '../../domain/histor
 import type { HistoryArchiveRepairObjectArtifactRepository } from '../../domain/history-archive-repair-artifact/HistoryArchiveRepairObjectArtifactRepository.js';
 import { createLocalHistoryArchiveRepairArtifactRepository } from '../repositories/filesystem/LocalHistoryArchiveRepairArtifactRepository.js';
 import { createRemoteHistoryArchiveRepairObjectArtifactRepository } from '../repositories/filesystem/RemoteHistoryArchiveRepairObjectArtifactRepository.js';
+import { PostgresHistoryArchiveRepairArtifactWorkPermit } from '../repositories/database/PostgresHistoryArchiveRepairArtifactWorkPermit.js';
 import { ScheduleHistoryArchiveObjects } from '../../use-cases/schedule-history-archive-objects/ScheduleHistoryArchiveObjects.js';
 import { GetHistoryArchiveObjectJob } from '../../use-cases/get-history-archive-object-job/GetHistoryArchiveObjectJob.js';
 import { TouchHistoryArchiveObject } from '../../use-cases/touch-history-archive-object/TouchHistoryArchiveObject.js';
@@ -96,6 +97,8 @@ import { TypeOrmFullHistoryPromotionRuntimeRepository } from '../database/full-h
 
 export function load(container: Container, config: Config) {
 	const dataSource = container.get(DataSource);
+	const repairArtifactWorkPermit =
+		new PostgresHistoryArchiveRepairArtifactWorkPermit(dataSource);
 	container
 		.bind<ArchiveEvidenceCursorCodec>(TYPES.ArchiveEvidenceCursorCodec)
 		.toConstantValue(
@@ -200,14 +203,22 @@ export function load(container: Container, config: Config) {
 		.bind<HistoryArchiveRepairArtifactRepository>(
 			TYPES.HistoryArchiveRepairArtifactRepository
 		)
-		.toDynamicValue(createLocalHistoryArchiveRepairArtifactRepository)
+		.toDynamicValue(() =>
+			createLocalHistoryArchiveRepairArtifactRepository(
+				repairArtifactWorkPermit
+			)
+		)
 		.inSingletonScope();
 
 	container
 		.bind<HistoryArchiveRepairObjectArtifactRepository>(
 			TYPES.HistoryArchiveRepairObjectArtifactRepository
 		)
-		.toDynamicValue(createRemoteHistoryArchiveRepairObjectArtifactRepository)
+		.toDynamicValue(() =>
+			createRemoteHistoryArchiveRepairObjectArtifactRepository(
+				repairArtifactWorkPermit
+			)
+		)
 		.inSingletonScope();
 
 	container

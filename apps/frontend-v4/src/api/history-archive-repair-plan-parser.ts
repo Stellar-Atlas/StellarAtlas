@@ -2,6 +2,7 @@ import Ajv, { type JSONSchemaType } from 'ajv';
 import addFormats from 'ajv-formats';
 import type { PublicHistoryArchiveRepairPlan } from './archive-repair-types';
 import { repairArtifactSchema } from './history-archive-repair-artifact-schema';
+import { createRepairManifestSchema } from './history-archive-repair-manifest-schema';
 
 type RepairAction = PublicHistoryArchiveRepairPlan['actions'][number];
 type RepairCheckpointEvidence = RepairAction['checkpointEvidence'][number];
@@ -215,6 +216,11 @@ const checkpointEvidenceSchema: JSONSchemaType<RepairCheckpointEvidence> = {
 	additionalProperties: false
 };
 
+const manifestSchema = createRepairManifestSchema({
+	objectEvidenceSchema,
+	sourceSchema
+});
+
 const actionSchema: JSONSchemaType<RepairAction> = {
 	type: 'object',
 	properties: {
@@ -236,7 +242,8 @@ const actionSchema: JSONSchemaType<RepairAction> = {
 				'wait-for-scanner-proof'
 			]
 		},
-		knownGoodSources: { type: 'array', maxItems: 5, items: sourceSchema },
+		knownGoodSources: { type: 'array', maxItems: 3, items: sourceSchema },
+		repairManifest: manifestSchema,
 		reason: {
 			type: 'string',
 			enum: [
@@ -275,6 +282,7 @@ const actionSchema: JSONSchemaType<RepairAction> = {
 		'evidence',
 		'kind',
 		'knownGoodSources',
+		'repairManifest',
 		'reason',
 		'repairArtifact',
 		'severity',
@@ -332,7 +340,7 @@ const repairPlanSchema: JSONSchemaType<PublicHistoryArchiveRepairPlan> = {
 	type: 'object',
 	properties: {
 		actionCount: { type: 'integer', minimum: 0 },
-		actions: { type: 'array', maxItems: 500, items: actionSchema },
+		actions: { type: 'array', maxItems: 50, items: actionSchema },
 		archiveUrl: { type: 'string', format: 'uri' },
 		archiveUrlIdentity: { type: 'string', minLength: 1 },
 		generatedAt: { type: 'string', format: 'date-time' },
@@ -340,7 +348,7 @@ const repairPlanSchema: JSONSchemaType<PublicHistoryArchiveRepairPlan> = {
 			type: 'array',
 			items: infrastructureBlockSchema
 		},
-		limit: { type: 'integer', minimum: 1, maximum: 500 },
+		limit: { type: 'integer', minimum: 1, maximum: 50 },
 		summary: {
 			type: 'object',
 			properties: {

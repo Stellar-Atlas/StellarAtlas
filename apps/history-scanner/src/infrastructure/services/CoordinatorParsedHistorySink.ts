@@ -2,6 +2,9 @@ import {
 	ParsedLedgerHeaderBatchDTO,
 	ParsedTransactionEnvelopeBatchDTO,
 	ParsedTransactionResultBatchDTO,
+	parsedHistoryBatchPayloadLimitBytes,
+	parsedHistoryMaximumBatchRecords,
+	parsedHistoryRequestBodyLimitBytes,
 	type ParsedLedgerHeaderDTO,
 	type ParsedTransactionEnvelopeDTO,
 	type ParsedTransactionResultDTO
@@ -20,22 +23,52 @@ import { asyncSleep } from 'shared';
 import { ScannerIssueError } from '../../domain/scanner/ScannerIssueError.js';
 import { ParsedHistoryRegistrationConflictError } from './ParsedHistoryRegistrationConflictError.js';
 
+export interface CoordinatorParsedHistorySinkOptions {
+	readonly maxPayloadBytes?: number;
+	readonly maxRecordsPerBatch?: number;
+	readonly retryDelaysMs?: readonly number[];
+}
+
+interface BufferedBatch<RecordType extends object> {
+	readonly records: RecordType[];
+	readonly emptyPayloadBytes: number;
+	payloadBytes: number;
+}
+
 export class CoordinatorParsedHistorySink implements ParsedHistorySink {
-	private readonly headers: ParsedLedgerHeaderDTO[] = [];
-	private readonly envelopes: ParsedTransactionEnvelopeDTO[] = [];
-	private readonly results: ParsedTransactionResultDTO[] = [];
 	private static readonly defaultRetryDelaysMs = [250, 500, 1000, 2000];
-	private static readonly defaultMaxPayloadBytes = 80_000;
+	private readonly headers: BufferedBatch<ParsedLedgerHeaderDTO>;
+	private readonly envelopes: BufferedBatch<ParsedTransactionEnvelopeDTO>;
+	private readonly results: BufferedBatch<ParsedTransactionResultDTO>;
+	private readonly maxPayloadBytes: number;
+	private readonly maxRecordsPerBatch: number;
+	private readonly retryDelaysMs: readonly number[];
 
 	constructor(
 		private readonly coordinator: ScanCoordinatorService,
 		private readonly sourceArchiveUrl: string,
 		private readonly scanJobRemoteId: string,
 		private readonly exceptionLogger: ExceptionLogger,
-		private readonly batchSize = 50,
-		private readonly retryDelaysMs: readonly number[] = CoordinatorParsedHistorySink.defaultRetryDelaysMs,
-		private readonly maxPayloadBytes = CoordinatorParsedHistorySink.defaultMaxPayloadBytes
-	) {}
+		options: CoordinatorParsedHistorySinkOptions = {}
+	) {
+		this.maxPayloadBytes =
+			options.maxPayloadBytes ?? parsedHistoryBatchPayloadLimitBytes;
+		this.maxRecordsPerBatch =
+			options.maxRecordsPerBatch ?? parsedHistoryMaximumBatchRecords;
+		this.retryDelaysMs =
+			options.retryDelaysMs ??
+			CoordinatorParsedHistorySink.defaultRetryDelaysMs;
+		this.assertOptions();
+		this.headers = this.createBuffer((records) =>
+			this.createHeaderBatch(records)
+		);
+		this.envelopes = this.createBuffer((records) =>
+			this.createEnvelopeBatch(records)
+		);
+		this.results = this.createBuffer((records) =>
+			this.createResultBatch(records)
+		);
+	}
 
 	async emit(record: ParsedHistoryRecord): Promise<void> {
 		if (record.recordType === 'ledger-header') {
@@ -58,125 +91,71 @@ export class CoordinatorParsedHistorySink implements ParsedHistorySink {
 	}
 
 	private async flushHeaders(): Promise<void> {
-		if (this.headers.length === 0) return;
+		if (this.headers.records.length === 0) return;
 
-		const batch = new ParsedLedgerHeaderBatchDTO(
-			this.sourceArchiveUrl,
-			this.scanJobRemoteId,
-			new Date(),
-			this.headers.splice(0, this.headers.length)
-		);
+		const batch = this.createHeaderBatch(this.drain(this.headers));
+		this.assertPayloadBound(batch);
 		const result = await this.registerHeadersWithRetry(batch);
 		this.throwRegistrationFailure(result);
 	}
 
 	private async flushEnvelopes(): Promise<void> {
-		if (this.envelopes.length === 0) return;
+		if (this.envelopes.records.length === 0) return;
 
-		const batch = new ParsedTransactionEnvelopeBatchDTO(
-			this.sourceArchiveUrl,
-			this.scanJobRemoteId,
-			new Date(),
-			this.envelopes.splice(0, this.envelopes.length)
-		);
+		const batch = this.createEnvelopeBatch(this.drain(this.envelopes));
+		this.assertPayloadBound(batch);
 		const result = await this.registerEnvelopesWithRetry(batch);
 		this.throwRegistrationFailure(result);
 	}
 
 	private async flushResults(): Promise<void> {
-		if (this.results.length === 0) return;
+		if (this.results.records.length === 0) return;
 
-		const batch = new ParsedTransactionResultBatchDTO(
-			this.sourceArchiveUrl,
-			this.scanJobRemoteId,
-			new Date(),
-			this.results.splice(0, this.results.length)
-		);
+		const batch = this.createResultBatch(this.drain(this.results));
+		this.assertPayloadBound(batch);
 		const result = await this.registerResultsWithRetry(batch);
 		this.throwRegistrationFailure(result);
 	}
 
 	private async appendHeader(record: ParsedLedgerHeaderDTO): Promise<void> {
-		if (
-			this.shouldFlushBeforeAppend(this.headers, record, (records) =>
-				this.createHeaderBatch(records)
-			)
-		) {
-			await this.flushHeaders();
-		}
-
-		this.headers.push(record);
-		if (
-			this.shouldFlushAfterAppend(this.headers, (records) =>
-				this.createHeaderBatch(records)
-			)
-		) {
-			await this.flushHeaders();
-		}
+		await this.append(this.headers, record, () => this.flushHeaders());
 	}
 
 	private async appendEnvelope(
 		record: ParsedTransactionEnvelopeDTO
 	): Promise<void> {
-		if (
-			this.shouldFlushBeforeAppend(this.envelopes, record, (records) =>
-				this.createEnvelopeBatch(records)
-			)
-		) {
-			await this.flushEnvelopes();
-		}
-
-		this.envelopes.push(record);
-		if (
-			this.shouldFlushAfterAppend(this.envelopes, (records) =>
-				this.createEnvelopeBatch(records)
-			)
-		) {
-			await this.flushEnvelopes();
-		}
+		await this.append(this.envelopes, record, () => this.flushEnvelopes());
 	}
 
 	private async appendResult(
 		record: ParsedTransactionResultDTO
 	): Promise<void> {
-		if (
-			this.shouldFlushBeforeAppend(this.results, record, (records) =>
-				this.createResultBatch(records)
-			)
-		) {
-			await this.flushResults();
-		}
-
-		this.results.push(record);
-		if (
-			this.shouldFlushAfterAppend(this.results, (records) =>
-				this.createResultBatch(records)
-			)
-		) {
-			await this.flushResults();
-		}
+		await this.append(this.results, record, () => this.flushResults());
 	}
 
-	private shouldFlushBeforeAppend<Record>(
-		records: readonly Record[],
-		nextRecord: Record,
-		createBatch: (records: readonly Record[]) => object
-	): boolean {
-		return (
-			records.length > 0 &&
-			this.payloadSize(createBatch([...records, nextRecord])) >
-				this.maxPayloadBytes
-		);
-	}
+	private async append<RecordType extends object>(
+		buffer: BufferedBatch<RecordType>,
+		record: RecordType,
+		flush: () => Promise<void>
+	): Promise<void> {
+		const recordBytes = this.payloadSize(record);
+		if (buffer.emptyPayloadBytes + recordBytes > this.maxPayloadBytes) {
+			throw new ScannerIssueError(
+				'Parsed history record exceeds the configured payload limit'
+			);
+		}
 
-	private shouldFlushAfterAppend<Record>(
-		records: readonly Record[],
-		createBatch: (records: readonly Record[]) => object
-	): boolean {
-		return (
-			records.length >= this.batchSize ||
-			this.payloadSize(createBatch(records)) > this.maxPayloadBytes
-		);
+		const separatorBytes = buffer.records.length === 0 ? 0 : 1;
+		if (
+			buffer.records.length > 0 &&
+			buffer.payloadBytes + separatorBytes + recordBytes > this.maxPayloadBytes
+		) {
+			await flush();
+		}
+
+		buffer.payloadBytes += (buffer.records.length === 0 ? 0 : 1) + recordBytes;
+		buffer.records.push(record);
+		if (buffer.records.length >= this.maxRecordsPerBatch) await flush();
 	}
 
 	private createHeaderBatch(
@@ -210,6 +189,51 @@ export class CoordinatorParsedHistorySink implements ParsedHistorySink {
 			new Date(),
 			[...records]
 		);
+	}
+
+	private createBuffer<RecordType extends object>(
+		createBatch: (records: readonly RecordType[]) => object
+	): BufferedBatch<RecordType> {
+		const emptyPayloadBytes = this.payloadSize(createBatch([]));
+		return { emptyPayloadBytes, payloadBytes: emptyPayloadBytes, records: [] };
+	}
+
+	private drain<RecordType extends object>(
+		buffer: BufferedBatch<RecordType>
+	): RecordType[] {
+		const records = buffer.records.splice(0, buffer.records.length);
+		buffer.payloadBytes = buffer.emptyPayloadBytes;
+		return records;
+	}
+
+	private assertPayloadBound(batch: object): void {
+		if (this.payloadSize(batch) <= this.maxPayloadBytes) return;
+		throw new ScannerIssueError(
+			'Parsed history batch exceeds the configured payload limit'
+		);
+	}
+
+	private assertOptions(): void {
+		assertIntegerInRange(
+			this.maxRecordsPerBatch,
+			1,
+			parsedHistoryMaximumBatchRecords,
+			'maxRecordsPerBatch'
+		);
+		assertIntegerInRange(
+			this.maxPayloadBytes,
+			1,
+			parsedHistoryRequestBodyLimitBytes,
+			'maxPayloadBytes'
+		);
+		for (const retryDelayMs of this.retryDelaysMs) {
+			assertIntegerInRange(
+				retryDelayMs,
+				0,
+				Number.MAX_SAFE_INTEGER,
+				'retryDelayMs'
+			);
+		}
 	}
 
 	private payloadSize(payload: object): number {
@@ -305,5 +329,16 @@ export class CoordinatorParsedHistorySink implements ParsedHistorySink {
 			transactionIndex: record.transactionIndex,
 			transactionResultHash: record.transactionResultHash
 		};
+	}
+}
+
+function assertIntegerInRange(
+	value: number,
+	minimum: number,
+	maximum: number,
+	name: string
+): void {
+	if (!Number.isSafeInteger(value) || value < minimum || value > maximum) {
+		throw new RangeError(`${name} must be between ${minimum} and ${maximum}`);
 	}
 }

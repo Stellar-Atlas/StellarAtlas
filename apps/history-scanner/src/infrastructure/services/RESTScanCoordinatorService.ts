@@ -41,6 +41,10 @@ const coordinatorWriteOptions: HttpOptions = {
 	socketTimeoutMs: 30_000
 };
 
+function isMissingArchiveObjectJobResponse(data: unknown): boolean {
+	return isObject(data) && data.error === 'Archive object job not found';
+}
+
 @injectable()
 export class RESTScanCoordinatorService implements ScanCoordinatorService {
 	constructor(
@@ -443,6 +447,8 @@ export class RESTScanCoordinatorService implements ScanCoordinatorService {
 		data: Record<string, unknown>,
 		errorMessage: string
 	): Promise<Result<void, Error>> {
+		const isTerminalUpdate =
+			action === 'complete' || action === 'fail' || action === 'release';
 		const urlResult = this.createUrl(
 			this.getHistoryArchiveObjectJobPath(remoteId, action)
 		);
@@ -458,16 +464,21 @@ export class RESTScanCoordinatorService implements ScanCoordinatorService {
 
 		if (response.isErr()) {
 			if (
-				action === 'release' &&
+				isTerminalUpdate &&
 				isHttpError(response.error) &&
-				response.error.response?.status === 404
+				response.error.response?.status === 404 &&
+				isMissingArchiveObjectJobResponse(response.error.response.data)
 			) {
 				return ok(undefined);
 			}
 			return err(new CoordinatorServiceError(errorMessage, response.error));
 		}
 
-		if (response.value.status === 404 && action === 'release') {
+		if (
+			response.value.status === 404 &&
+			isTerminalUpdate &&
+			isMissingArchiveObjectJobResponse(response.value.data)
+		) {
 			return ok(undefined);
 		}
 		if (response.value.status !== 204) {

@@ -3,9 +3,8 @@ import { availableParallelism } from 'node:os';
 import { inject, injectable } from 'inversify';
 import { err, ok, Result } from 'neverthrow';
 import {
-	calculateHistoryArchiveObjectCoordinatorProcesses,
 	historyArchiveWorkerTelemetryLimit,
-	historyArchiveWorkerSlotLimit
+	resolveHistoryArchiveObjectWorkerCapacity
 } from 'history-scanner-dto';
 import { GetScannerMetrics } from '@history-scan-coordinator/use-cases/GetScannerMetrics.js';
 import { TYPES as HISTORY_TYPES } from '@history-scan-coordinator/infrastructure/di/di-types.js';
@@ -23,9 +22,6 @@ const archiveObjectWorkerPublicRetentionMs = 15 * 60 * 1000;
 const archiveObjectWorkerStorageRetentionMs = 24 * 60 * 60 * 1000;
 const archiveObjectWorkerStartupGraceMs = 2 * 60 * 1000;
 const archiveObjectWorkerRowLimit = historyArchiveWorkerTelemetryLimit;
-const defaultConfiguredObjectWorkers =
-	calculateHistoryArchiveObjectCoordinatorProcesses(availableParallelism());
-const maxConfiguredObjectWorkers = historyArchiveWorkerSlotLimit - 1;
 
 export interface ArchiveWorkerStatusDTO {
 	readonly status: StatusLevel;
@@ -179,14 +175,8 @@ export class GetWorkerStatus {
 			configuredWorkerProcesses - freshWorkers,
 			0
 		);
-		const activeWorkers = Math.max(
-			registeredActiveWorkers,
-			queueActiveWorkers
-		);
-		const staleWorkers = Math.max(
-			registryStaleWorkers,
-			queueStaleWorkers
-		);
+		const activeWorkers = Math.max(registeredActiveWorkers, queueActiveWorkers);
+		const staleWorkers = Math.max(registryStaleWorkers, queueStaleWorkers);
 		const startupGraceActive = this.isStartupGraceActive(
 			slotRows,
 			freshWorkers,
@@ -194,8 +184,7 @@ export class GetWorkerStatus {
 			generatedAt,
 			staleCutoff
 		);
-		const hasRuntimeSignal =
-			freshWorkers > 0 || queueActiveWorkers > 0;
+		const hasRuntimeSignal = freshWorkers > 0 || queueActiveWorkers > 0;
 		const status: StatusLevel =
 			missingWorkers === 0 && staleWorkers === 0
 				? 'ok'
@@ -376,19 +365,6 @@ function getLatestHeartbeat(
 }
 
 function readConfiguredObjectWorkerProcesses(env: NodeJS.ProcessEnv): number {
-	const rawValue = env.HISTORY_OBJECT_WORKER_PROCESSES;
-	if (rawValue === undefined || rawValue.trim() === '') {
-		return defaultConfiguredObjectWorkers;
-	}
-
-	const parsed = Number(rawValue);
-	if (
-		!Number.isInteger(parsed) ||
-		parsed < 1 ||
-		parsed > maxConfiguredObjectWorkers
-	) {
-		return defaultConfiguredObjectWorkers;
-	}
-
-	return parsed;
+	return resolveHistoryArchiveObjectWorkerCapacity(env, availableParallelism())
+		.consumerCount;
 }

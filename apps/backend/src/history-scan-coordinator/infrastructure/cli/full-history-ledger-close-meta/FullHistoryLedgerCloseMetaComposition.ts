@@ -14,14 +14,21 @@ import {
 import { AnonymousS3Sep54LedgerCloseMetaFrontier } from '../../full-history-ledger-close-meta/AnonymousS3Sep54LedgerCloseMetaFrontier.js';
 import { AggregateIngressByteRateLimiter } from '../../full-history-ledger-close-meta/AggregateIngressByteRateLimiter.js';
 import {
+	LocalFullHistoryLedgerCloseMetaAdmission,
+	unrestrictedFullHistoryLedgerCloseMetaAdmission,
+	type FullHistoryLedgerCloseMetaAdmissionPort
+} from '../../full-history-ledger-close-meta/FullHistoryLedgerCloseMetaAdmission.js';
+import {
 	FullHistoryBulkStorageBudget,
 	type FullHistoryBulkStorageBudgetPort
 } from '../../full-history-ledger-close-meta/FullHistoryBulkStorageBudget.js';
 import { GoFullHistoryLedgerCloseMetaProcessor } from '../../full-history-ledger-close-meta/GoFullHistoryLedgerCloseMetaProcessor.js';
 import { FullHistoryPublishedOutputInventory } from '../../full-history-ledger-close-meta/FullHistoryPublishedOutputInventory.js';
+import { typeOrmFullHistoryLedgerCloseMetaDatabasePool } from '../../full-history-ledger-close-meta/TypeOrmFullHistoryLedgerCloseMetaDatabasePool.js';
 import type { FullHistoryLedgerCloseMetaServiceConfig } from './FullHistoryLedgerCloseMetaServiceConfig.js';
 
 export interface FullHistoryLedgerCloseMetaComposition {
+	readonly admission: FullHistoryLedgerCloseMetaAdmissionPort;
 	readonly dataSource: DataSource;
 	readonly frontier: AnonymousS3Sep54LedgerCloseMetaFrontier;
 	readonly ingestion: IngestFullHistoryLedgerCloseMeta;
@@ -42,7 +49,7 @@ export function composeFullHistoryLedgerCloseMetaService(
 	config: FullHistoryLedgerCloseMetaServiceConfig
 ): FullHistoryLedgerCloseMetaComposition {
 	assertFullHistoryLedgerCloseMetaMemoryEnvelope(config.processingConcurrency);
-	const dataSource = createDataSource();
+	const dataSource = createFullHistoryLedgerCloseMetaDataSource(config);
 	const repository = new TypeOrmFullHistoryLedgerCloseMetaManifestRepository(
 		dataSource
 	);
@@ -84,6 +91,24 @@ export function composeFullHistoryLedgerCloseMetaService(
 		typedOutputRoot: config.typedOutputRoot
 	});
 	return Object.freeze({
+		admission: config.admissionEnabled
+			? new LocalFullHistoryLedgerCloseMetaAdmission({
+					databasePool:
+						typeOrmFullHistoryLedgerCloseMetaDatabasePool(dataSource),
+					maximumDatabaseConnectionBasisPoints:
+						config.admissionMaximumDatabaseConnectionBasisPoints,
+					maximumDatabaseProbeMilliseconds:
+						config.admissionMaximumDatabaseProbeMilliseconds,
+					maximumIoFullPressureBasisPoints:
+						config.admissionMaximumIoFullPressureBasisPoints,
+					maximumIoSomePressureBasisPoints:
+						config.admissionMaximumIoSomePressureBasisPoints,
+					maximumMd0InflightRequests:
+						config.admissionMaximumMd0InflightRequests,
+					recoveryHealthySamplesRequired:
+						config.admissionRecoveryHealthySamplesRequired
+				})
+			: unrestrictedFullHistoryLedgerCloseMetaAdmission,
 		dataSource,
 		frontier: new AnonymousS3Sep54LedgerCloseMetaFrontier({
 			bucket: config.s3Bucket,
@@ -142,14 +167,29 @@ export function assertFullHistoryLedgerCloseMetaMemoryEnvelope(
 	}
 }
 
-function createDataSource(): DataSource {
+export function createFullHistoryLedgerCloseMetaDataSource(
+	config: Pick<
+		FullHistoryLedgerCloseMetaServiceConfig,
+		'admissionEnabled' | 'admissionMaximumDatabaseProbeMilliseconds'
+	>
+): DataSource {
 	const options = AppDataSource.options;
 	if (options.type !== 'postgres') {
 		throw new Error('Full-history LedgerCloseMeta ETL requires PostgreSQL');
 	}
+	const admissionConnectionTimeout = config.admissionEnabled
+		? config.admissionMaximumDatabaseProbeMilliseconds
+		: options.connectTimeoutMS;
 	return new DataSource({
 		...options,
+		connectTimeoutMS: admissionConnectionTimeout,
 		entities: [],
+		extra: config.admissionEnabled
+			? {
+					...options.extra,
+					connectionTimeoutMillis: admissionConnectionTimeout
+				}
+			: options.extra,
 		migrationsRun: false,
 		poolSize: 4,
 		synchronize: false

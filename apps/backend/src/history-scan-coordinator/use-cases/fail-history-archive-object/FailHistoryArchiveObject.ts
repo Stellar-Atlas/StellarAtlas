@@ -1,8 +1,8 @@
 import 'reflect-metadata';
 import { inject, injectable } from 'inversify';
 import { err, ok, Result } from 'neverthrow';
-import type { HistoryArchiveCheckpointProofRepository } from '../../domain/history-archive-checkpoint-proof/HistoryArchiveCheckpointProofRepository.js';
 import type { HistoryArchiveObject } from '../../domain/history-archive-object/HistoryArchiveObject.js';
+import type { HistoryArchiveCheckpointProofRepository } from '../../domain/history-archive-checkpoint-proof/HistoryArchiveCheckpointProofRepository.js';
 import type { HistoryArchiveObjectFailure } from '../../domain/history-archive-object/HistoryArchiveObjectRepository.js';
 import type { HistoryArchiveObjectRepository } from '../../domain/history-archive-object/HistoryArchiveObjectRepository.js';
 import type { HistoryArchiveStateRepository } from '../../domain/history-archive-state/HistoryArchiveStateRepository.js';
@@ -22,7 +22,7 @@ export class FailHistoryArchiveObject {
 		private readonly objectRepository: HistoryArchiveObjectRepository,
 		private readonly eventRecorder: HistoryArchiveObjectEventRecorder,
 		@inject(TYPES.HistoryArchiveCheckpointProofRepository)
-		private readonly checkpointProofRepository: HistoryArchiveCheckpointProofRepository,
+		_checkpointProofRepository: HistoryArchiveCheckpointProofRepository,
 		@inject(TYPES.HistoryArchiveStateRepository)
 		private readonly stateRepository: HistoryArchiveStateRepository
 	) {}
@@ -141,9 +141,6 @@ export class FailHistoryArchiveObject {
 			now: new Date(),
 			objectType: object.objectType
 		});
-		if (shouldRefreshCheckpointProof(object)) {
-			await this.checkpointProofRepository.refreshForObject(object);
-		}
 		if (isRemoteHistoryArchiveStateFailure(object)) {
 			await this.stateRepository.saveFailure({
 				archiveUrl: object.archiveUrl,
@@ -218,11 +215,4 @@ function isAcceptedFailureReplay(
 		object.failureChannel === failure.failureChannel &&
 		object.httpStatus === (failure.httpStatus ?? null)
 	);
-}
-
-function shouldRefreshCheckpointProof(object: {
-	readonly bucketHash: string | null;
-	readonly checkpointLedger: number | null;
-}): boolean {
-	return object.checkpointLedger !== null || object.bucketHash !== null;
 }

@@ -1,6 +1,7 @@
-import type { Repository } from 'typeorm';
+import type { EntityManager, Repository } from 'typeorm';
 import type { HistoryArchiveObject } from '@history-scan-coordinator/domain/history-archive-object/HistoryArchiveObject.js';
 import type { HistoryArchiveObjectPlanPromotionResult } from '@history-scan-coordinator/domain/history-archive-object/HistoryArchiveObjectRepository.js';
+import { getHistoryArchiveBrokerMaximumPriority } from '@history-scan-coordinator/domain/history-archive-object/HistoryArchiveBrokerPriority.js';
 import {
 	calculateHistoryArchivePlanningPressure,
 	historyArchiveMaximumWatermark,
@@ -11,7 +12,7 @@ import {
 import { requeueStaleHistoryArchiveStateObjects } from './HistoryArchiveObjectStateRefreshQuery.js';
 import {
 	enqueueHistoryArchiveReadyArchives,
-	historyArchiveReadyPressureSql,
+	buildHistoryArchiveReadyPressureSql,
 	historyArchiveReadyRootActivityCtesSql,
 	synchronizeHistoryArchiveReadyQueue
 } from './HistoryArchiveObjectReadyQueue.js';
@@ -19,6 +20,15 @@ import {
 const planChunkSize = 200;
 const genesisCheckpointLedger = 63;
 const promotionLockName = 'history_archive_object_plan_promotion';
+const promotionRootIndexName = 'idx_history_archive_object_plan_root_created';
+const promotionPriorityIndexName =
+	'idx_history_archive_object_plan_root_priority_created';
+
+export function isHistoryArchivePlanPromotionEnabled(
+	env: NodeJS.ProcessEnv = process.env
+): boolean {
+	return env.HISTORY_ARCHIVE_PLAN_PROMOTION_ENABLED !== 'false';
+}
 
 export async function planHistoryArchiveObjects(
 	repository: Repository<HistoryArchiveObject>,
@@ -60,17 +70,21 @@ export async function planHistoryArchiveObjects(
 export async function promoteHistoryArchiveObjectPlans(
 	repository: Repository<HistoryArchiveObject>
 ): Promise<HistoryArchiveObjectPlanPromotionResult> {
+	if (!isHistoryArchivePlanPromotionEnabled()) return emptyPromotionResult();
+	const maximumPriority = getHistoryArchiveBrokerMaximumPriority();
+
 	return await repository.manager.transaction(async (manager) => {
 		const [lock] = (await manager.query(
 			'select pg_try_advisory_xact_lock(hashtext($1)) as locked',
 			[promotionLockName]
 		)) as readonly { readonly locked?: boolean }[];
 		if (lock?.locked !== true) return emptyPromotionResult();
+		await assertPromotionIndexesReady(manager);
 
-		const [counts] = (await manager.query(historyArchiveReadyPressureSql, [
-			historyArchiveThroughputSampleCap,
-			historyArchiveThroughputWindowMinutes
-		])) as readonly {
+		const [counts] = (await manager.query(
+			buildHistoryArchiveReadyPressureSql(maximumPriority),
+			[historyArchiveThroughputSampleCap, historyArchiveThroughputWindowMinutes]
+		)) as readonly {
 			readonly outstandingObjects: number | string;
 			readonly recentCompletions: number | string;
 		}[];
@@ -82,18 +96,16 @@ export async function promoteHistoryArchiveObjectPlans(
 			0,
 			historyArchiveMaximumWatermark - pressure.outstandingObjects
 		);
-		if (
-			pressure.availableSlots === 0 &&
-			maximumWatermarkHeadroom === 0
-		) {
+		if (pressure.availableSlots === 0 && maximumWatermarkHeadroom === 0) {
 			return { ...pressure, promotedObjects: 0 };
 		}
 
-		const [result] = (await manager.query(promotePlansSql, [
+		const [result] = (await manager.query(historyArchivePlanPromotionSql, [
 			pressure.availableSlots,
 			historyArchivePerRootFrontier,
 			genesisCheckpointLedger,
-			maximumWatermarkHeadroom
+			maximumWatermarkHeadroom,
+			maximumPriority
 		])) as readonly { readonly promotedObjects: number | string }[];
 		const promotedObjects = Number(result?.promotedObjects ?? 0);
 		if (promotedObjects > 0)
@@ -107,6 +119,29 @@ export async function promoteHistoryArchiveObjectPlans(
 			promotedObjects
 		};
 	});
+}
+
+async function assertPromotionIndexesReady(
+	manager: EntityManager
+): Promise<void> {
+	const [state] = (await manager.query(
+		`
+			select count(*) = 2 as ready
+			from pg_index
+			where indexrelid = any(array[
+				to_regclass($1),
+				to_regclass($2)
+			])
+				and indisvalid
+				and indisready
+		`,
+		[promotionRootIndexName, promotionPriorityIndexName]
+	)) as readonly { readonly ready?: boolean }[];
+	if (state?.ready !== true) {
+		throw new Error(
+			'History archive plan promotion requires valid bounded-plan indexes'
+		);
+	}
 }
 
 function emptyPromotionResult(): HistoryArchiveObjectPlanPromotionResult {
@@ -168,30 +203,62 @@ const planObjectsSql = `
 	returning id
 `;
 
-const promotePlansSql = `
-	with ${historyArchiveReadyRootActivityCtesSql}, ranked as (
-		select
-			plan.*,
-			coalesce(active.active_count, 0) as active_count,
-			case when plan."checkpointLedger" = $3::integer then 0 else 1 end
-				as proof_priority,
-			row_number() over (
-				partition by plan."archiveUrlIdentity"
+export const historyArchivePlanPromotionSql = `
+	with recursive ${historyArchiveReadyRootActivityCtesSql}, plan_roots as (
+		(
+			select plan."archiveUrlIdentity", plan."createdAt" as root_created_at
+			from "history_archive_object_plan" plan
+			order by plan."archiveUrlIdentity", plan."createdAt", plan.id
+			limit 1
+		)
+		union all
+		select next_root."archiveUrlIdentity", next_root.root_created_at
+		from plan_roots previous_root
+		cross join lateral (
+			select plan."archiveUrlIdentity", plan."createdAt" as root_created_at
+			from "history_archive_object_plan" plan
+			where plan."archiveUrlIdentity" > previous_root."archiveUrlIdentity"
+			order by plan."archiveUrlIdentity", plan."createdAt", plan.id
+			limit 1
+		) next_root
+	), roots_with_capacity as (
+		select root."archiveUrlIdentity", root.root_created_at,
+			greatest(
+				$2::integer - coalesce(active.active_count, 0),
+				0
+			) as capacity
+		from plan_roots root
+		left join active_by_root active
+			on active."archiveUrlIdentity" = root."archiveUrlIdentity"
+		where coalesce(active.active_count, 0) < $2::integer
+	), candidates as materialized (
+		select candidate.id, candidate.proof_priority, candidate.root_rank,
+			root.root_created_at, root."archiveUrlIdentity"
+		from roots_with_capacity root
+		cross join lateral (
+			select prioritized.id, prioritized.proof_priority,
+				row_number() over (
+					order by prioritized.proof_priority,
+						prioritized."createdAt", prioritized.id
+				) as root_rank
+			from (
+				select plan.id, plan."createdAt",
+					case when plan."checkpointLedger" = $3::integer then 0 else 1 end
+						as proof_priority
+				from "history_archive_object_plan" plan
+				where plan."archiveUrlIdentity" = root."archiveUrlIdentity"
+					and case when plan."checkpointLedger" = $3::integer
+						then 0 else 2 end <= $5::smallint
 				order by
-					case when plan."checkpointLedger" = $3::integer then 0 else 1 end,
+					(plan."checkpointLedger" is distinct from $3::integer),
 					plan."createdAt",
 					plan.id
-			) as root_rank,
-			min(plan."createdAt") over (
-				partition by plan."archiveUrlIdentity"
-			) as root_created_at
-		from "history_archive_object_plan" plan
-		left join active_by_root active
-			on active."archiveUrlIdentity" = plan."archiveUrlIdentity"
+				limit root.capacity
+			) prioritized
+	) candidate
 	), selected as (
 		select id
-		from ranked
-		where root_rank <= greatest($2 - active_count, 0)
+		from candidates
 		order by
 			proof_priority,
 			root_rank,
@@ -201,18 +268,14 @@ const promotePlansSql = `
 		limit greatest(
 			$1::integer,
 			least(
-				$4::integer,
-				(
-					select count(*)::integer
-					from ranked critical
-					where critical.proof_priority = 0
-						and critical.root_rank <= greatest(
-							$2 - critical.active_count,
-							0
-						)
+					$4::integer,
+					(
+						select count(*)::integer
+						from candidates critical
+						where critical.proof_priority = 0
+					)
 				)
 			)
-		)
 	), inserted as (
 		insert into "history_archive_object_queue" (
 			"remoteId", "archiveUrl", "archiveUrlIdentity", "hostIdentity",

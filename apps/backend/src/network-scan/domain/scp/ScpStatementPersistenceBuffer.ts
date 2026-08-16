@@ -5,7 +5,8 @@ import { scpStatementObservationPolicy } from './ScpStatementObservationPolicy.j
 import {
 	ScpStatementPersistenceCapacityError,
 	ScpStatementPersistenceClosedError,
-	ScpStatementPersistenceTimeoutError
+	ScpStatementPersistenceFatalError,
+	isRetryableScpStatementPersistenceError
 } from './ScpStatementPersistenceError.js';
 interface PendingObservation {
 	observation: CrawlerScpStatementObservation;
@@ -17,7 +18,18 @@ interface ScpStatementPersistenceBufferOptions {
 	batchSize?: number;
 	flushDelayMs?: number;
 	maxBufferedObservations?: number;
-	saveTimeoutMs?: number;
+	onRetry?: (retry: ScpStatementPersistenceRetry) => void;
+	random?: () => number;
+	retryInitialDelayMs?: number;
+	retryJitterRatio?: number;
+	retryMaxDelayMs?: number;
+}
+
+interface ScpStatementPersistenceRetry {
+	attempt: number;
+	batchSize: number;
+	delayMs: number;
+	error: Error;
 }
 
 export class ScpStatementPersistenceBuffer {
@@ -35,7 +47,12 @@ export class ScpStatementPersistenceBuffer {
 	private pending: PendingObservation[] = [];
 	private persisting = false;
 	private readonly maxBufferedObservations: number;
-	private readonly saveTimeoutMs: number;
+	private readonly onRetry:
+		((retry: ScpStatementPersistenceRetry) => void) | undefined;
+	private readonly random: () => number;
+	private readonly retryInitialDelayMs: number;
+	private readonly retryJitterRatio: number;
+	private readonly retryMaxDelayMs: number;
 	private readonly accepted = new WeakMap<
 		CrawlerScpStatementObservation,
 		Promise<void>
@@ -53,9 +70,24 @@ export class ScpStatementPersistenceBuffer {
 		this.maxBufferedObservations =
 			options.maxBufferedObservations ??
 			scpStatementObservationPolicy.persistenceMaxBufferedObservations;
-		this.saveTimeoutMs =
-			options.saveTimeoutMs ??
-			scpStatementObservationPolicy.persistenceSaveTimeoutMs;
+		this.onRetry = options.onRetry;
+		this.random = options.random ?? Math.random;
+		this.retryInitialDelayMs =
+			options.retryInitialDelayMs ??
+			scpStatementObservationPolicy.persistenceRetryInitialDelayMs;
+		this.retryJitterRatio = Math.min(
+			1,
+			Math.max(
+				0,
+				options.retryJitterRatio ??
+					scpStatementObservationPolicy.persistenceRetryJitterRatio
+			)
+		);
+		this.retryMaxDelayMs = Math.max(
+			this.retryInitialDelayMs,
+			options.retryMaxDelayMs ??
+				scpStatementObservationPolicy.persistenceRetryMaxDelayMs
+		);
 	}
 
 	add(observation: CrawlerScpStatementObservation): Promise<void> {
@@ -123,15 +155,31 @@ export class ScpStatementPersistenceBuffer {
 
 	private async persist(batch: PendingObservation[]): Promise<void> {
 		const observations = batch.map(({ observation }) => observation);
+		let retryAttempt = 0;
 		try {
-			await this.saveWithTimeout(observations);
-			for (const pending of batch) pending.resolve();
-		} catch (error) {
-			this.failure = mapUnknownToError(error);
-			for (const pending of batch) pending.reject(this.failure);
-			for (const pending of this.pending.splice(0)) {
-				pending.reject(this.failure);
+			while (true) {
+				try {
+					await this.repository.saveMany(observations, 'scp_live_collector');
+					break;
+				} catch (error) {
+					const failure = mapUnknownToError(error);
+					if (!isRetryableScpStatementPersistenceError(error)) {
+						this.fail(batch, new ScpStatementPersistenceFatalError(failure));
+						return;
+					}
+
+					const delayMs = this.retryDelayMs(retryAttempt);
+					retryAttempt += 1;
+					this.notifyRetry({
+						attempt: retryAttempt,
+						batchSize: observations.length,
+						delayMs,
+						error: failure
+					});
+					await sleep(delayMs);
+				}
 			}
+			for (const pending of batch) pending.resolve();
 		} finally {
 			this.persisting = false;
 			this.activeBatchSize = 0;
@@ -147,26 +195,35 @@ export class ScpStatementPersistenceBuffer {
 		}
 	}
 
-	private async saveWithTimeout(
-		observations: readonly CrawlerScpStatementObservation[]
-	): Promise<void> {
-		let timeout: ReturnType<typeof setTimeout> | undefined;
-		const timedOut = new Promise<never>((_, reject) => {
-			timeout = setTimeout(
-				() =>
-					reject(new ScpStatementPersistenceTimeoutError(this.saveTimeoutMs)),
-				this.saveTimeoutMs
-			);
-		});
-
-		try {
-			await Promise.race([
-				this.repository.saveMany(observations, 'scp_live_collector'),
-				timedOut
-			]);
-		} finally {
-			if (timeout !== undefined) clearTimeout(timeout);
+	private fail(batch: PendingObservation[], failure: Error): void {
+		this.failure = failure;
+		for (const pending of batch) pending.reject(failure);
+		for (const pending of this.pending.splice(0)) {
+			pending.reject(failure);
 		}
+	}
+
+	private notifyRetry(retry: ScpStatementPersistenceRetry): void {
+		try {
+			this.onRetry?.(retry);
+		} catch {
+			// Persistence must not fail because an observability callback failed.
+		}
+	}
+
+	private retryDelayMs(attempt: number): number {
+		const exponent = Math.min(30, Math.max(0, attempt));
+		const baseDelayMs = Math.min(
+			this.retryMaxDelayMs,
+			this.retryInitialDelayMs * 2 ** exponent
+		);
+		const boundedRandom = Math.min(1, Math.max(0, this.random()));
+		const jitterMultiplier =
+			1 - this.retryJitterRatio + 2 * this.retryJitterRatio * boundedRandom;
+		return Math.min(
+			this.retryMaxDelayMs,
+			Math.max(0, Math.round(baseDelayMs * jitterMultiplier))
+		);
 	}
 
 	private finishDrain(): void {
@@ -196,4 +253,8 @@ export class ScpStatementPersistenceBuffer {
 	private get bufferedObservationCount(): number {
 		return this.activeBatchSize + this.pending.length;
 	}
+}
+
+function sleep(delayMs: number): Promise<void> {
+	return new Promise((resolve) => setTimeout(resolve, delayMs));
 }

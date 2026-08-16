@@ -14,15 +14,15 @@ import { InvalidUrlError } from '../get-latest-scan/InvalidUrlError.js';
 import {
 	createRemoteReplacementCandidates,
 	isArchiveObjectEvidence,
-	isRepairableObjectFailure,
 	toCheckpointRepairAction,
 	toObjectRepairAction,
 	toRepairInfrastructureBlock
 } from './HistoryArchiveRepairActionMapper.js';
+import { isRepairCandidateObjectFailure } from './HistoryArchiveRepairEligibility.js';
 
-const defaultRepairLimit = 100;
-export const maxRepairPlanLimit = 500;
-const sourceCandidateLimit = 5;
+const defaultRepairLimit = 25;
+export const maxRepairPlanLimit = 50;
+const sourceCandidateLimit = 3;
 
 @injectable()
 export class GetHistoryArchiveRepairPlan {
@@ -59,7 +59,7 @@ export class GetHistoryArchiveRepairPlan {
 				)
 			]);
 			const repairableObjectFailures = objectFailures.filter(
-				isRepairableObjectFailure
+				isRepairCandidateObjectFailure
 			);
 			const bucketObjectIds = repairableObjectFailures.flatMap((object) =>
 				object.bucketHash === null ? [] : [object.remoteId]

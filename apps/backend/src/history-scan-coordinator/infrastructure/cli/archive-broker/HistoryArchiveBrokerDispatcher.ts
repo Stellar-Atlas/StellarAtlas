@@ -15,6 +15,7 @@ import {
 import type { Logger } from 'logger';
 import type { HistoryArchiveBrokerConfig } from './HistoryArchiveBrokerConfig.js';
 import {
+	compareHistoryArchiveBrokerJobs,
 	HistoryArchiveBrokerFrontierRepository,
 	type HistoryArchiveBrokerJob
 } from '../../repositories/database/HistoryArchiveBrokerFrontierRepository.js';
@@ -30,6 +31,72 @@ function isNotFound(error: unknown): boolean {
 
 function wait(delayMs: number): Promise<void> {
 	return new Promise((resolve) => setTimeout(resolve, delayMs));
+}
+
+function assertPublishableBrokerJob(job: HistoryArchiveBrokerJob): void {
+	if (job.priority !== 0 && job.priority !== 1 && job.priority !== 2)
+		throw new Error('Invalid archive broker publish priority');
+	if (!Number.isSafeInteger(job.selectedOrdinal) || job.selectedOrdinal < 1)
+		throw new Error('Invalid archive broker selected ordinal');
+}
+
+export async function publishHistoryArchiveBrokerJobs(
+	jetStream: Pick<JetStreamClient, 'publish'>,
+	repository: Pick<HistoryArchiveBrokerFrontierRepository, 'markPublished'>,
+	subject: string,
+	jobs: readonly HistoryArchiveBrokerJob[]
+): Promise<void> {
+	for (const job of jobs) assertPublishableBrokerJob(job);
+	const ordered = [...jobs].sort(compareHistoryArchiveBrokerJobs);
+	let classStart = 0;
+	while (classStart < ordered.length) {
+		const priority = ordered[classStart]!.priority;
+		let classEnd = classStart + 1;
+		while (
+			classEnd < ordered.length &&
+			ordered[classEnd]!.priority === priority
+		) {
+			classEnd++;
+		}
+		const priorityClass = ordered.slice(classStart, classEnd);
+		const results = await Promise.allSettled(
+			priorityClass.map(async (job) => {
+				await jetStream.publish(
+					subject,
+					Buffer.from(
+						JSON.stringify({ executionId: job.executionId, job: job.job })
+					),
+					{ msgID: job.executionId, timeout: 5_000 }
+				);
+				return job.executionId;
+			})
+		);
+		const published = results.flatMap((result) =>
+			result.status === 'fulfilled' ? [result.value] : []
+		);
+		await repository.markPublished(published);
+		const failed = results.find((result) => result.status === 'rejected');
+		if (failed?.status === 'rejected') throw failed.reason;
+		classStart = classEnd;
+	}
+}
+
+export async function replayPublishedHistoryArchiveBrokerJobs(
+	jetStream: Pick<JetStreamClient, 'publish'>,
+	repository: Pick<
+		HistoryArchiveBrokerFrontierRepository,
+		'findPublishedJobs' | 'markPublished'
+	>,
+	subject: string,
+	highWatermark: number,
+	maximumPriority: HistoryArchiveBrokerJob['priority']
+): Promise<void> {
+	await publishHistoryArchiveBrokerJobs(
+		jetStream,
+		repository,
+		subject,
+		await repository.findPublishedJobs(highWatermark, maximumPriority)
+	);
 }
 
 export class HistoryArchiveBrokerDispatcher {
@@ -58,7 +125,8 @@ export class HistoryArchiveBrokerDispatcher {
 				await this.refreshFrontierIfDue();
 				const jobs = await this.repository.reserveJobs(
 					Math.min(capacity, this.config.batchSize),
-					this.config.maximumPerHost
+					this.config.maximumPerHost,
+					this.config.maximumPriority
 				);
 				if (jobs.length === 0) {
 					await wait(this.config.pollIntervalMs);
@@ -87,9 +155,7 @@ export class HistoryArchiveBrokerDispatcher {
 		const connection = await connect({
 			name: 'stellaratlas-history-archive-dispatcher',
 			servers: [...this.config.servers],
-			...(this.config.token === undefined
-				? {}
-				: { token: this.config.token })
+			...(this.config.token === undefined ? {} : { token: this.config.token })
 		});
 		try {
 			const jetStream = connection.jetstream();
@@ -97,17 +163,18 @@ export class HistoryArchiveBrokerDispatcher {
 			this.connection = connection;
 			this.jetStream = jetStream;
 			this.manager = manager;
-			const streamCreated = await this.ensureStream(manager);
+			await this.ensureStream(manager);
 			await this.ensureConsumer(manager);
-			if (streamCreated) {
-				await this.publish(
-					await this.repository.findPublishedJobs(this.config.highWatermark)
-				);
-			}
+			await replayPublishedHistoryArchiveBrokerJobs(
+				jetStream,
+				this.repository,
+				this.config.subject,
+				this.config.highWatermark,
+				this.config.maximumPriority
+			);
 			await this.repository.ensureFrontier();
 			this.nextFrontierRefreshAt =
-				Date.now() +
-				HistoryArchiveBrokerDispatcher.frontierRefreshIntervalMs;
+				Date.now() + HistoryArchiveBrokerDispatcher.frontierRefreshIntervalMs;
 		} catch (error) {
 			this.connection = null;
 			this.jetStream = null;
@@ -184,33 +251,26 @@ export class HistoryArchiveBrokerDispatcher {
 		await this.repository.ensureFrontier();
 	}
 
-	private async publish(jobs: readonly HistoryArchiveBrokerJob[]): Promise<void> {
-		const jetStream = this.requireJetStream();
-		const results = await Promise.allSettled(
-			jobs.map(async (job) => {
-				await jetStream.publish(
-					this.config.subject,
-					Buffer.from(JSON.stringify(job)),
-					{ msgID: job.executionId, timeout: 5_000 }
-				);
-				return job.executionId;
-			})
+	private async publish(
+		jobs: readonly HistoryArchiveBrokerJob[]
+	): Promise<void> {
+		await publishHistoryArchiveBrokerJobs(
+			this.requireJetStream(),
+			this.repository,
+			this.config.subject,
+			jobs
 		);
-		const published = results.flatMap((result) =>
-			result.status === 'fulfilled' ? [result.value] : []
-		);
-		await this.repository.markPublished(published);
-		const failed = results.find((result) => result.status === 'rejected');
-		if (failed?.status === 'rejected') throw failed.reason;
 	}
 
 	private requireJetStream(): JetStreamClient {
-		if (this.jetStream === null) throw new Error('Archive broker is not initialized');
+		if (this.jetStream === null)
+			throw new Error('Archive broker is not initialized');
 		return this.jetStream;
 	}
 
 	private requireManager(): JetStreamManager {
-		if (this.manager === null) throw new Error('Archive broker is not initialized');
+		if (this.manager === null)
+			throw new Error('Archive broker is not initialized');
 		return this.manager;
 	}
 }

@@ -1,5 +1,6 @@
 import type express from 'express';
-import type { Router } from 'express';
+import type { RequestHandler, Router } from 'express';
+import basicAuth from 'express-basic-auth';
 import { body, param, query, validationResult } from 'express-validator';
 import { pipeline } from 'node:stream/promises';
 import { GetHistoryArchiveRepairArtifact } from '../../use-cases/get-history-archive-repair-artifact/GetHistoryArchiveRepairArtifact.js';
@@ -20,23 +21,30 @@ import type {
 } from 'shared';
 
 const planCacheMaxAgeSeconds = 10;
-const artifactCacheMaxAgeSeconds = 31_536_000;
+const artifactStreamTimeoutMs = 5 * 60_000;
 
 export interface HistoryArchiveRepairHttpConfig {
 	getHistoryArchiveRepairArtifact: GetHistoryArchiveRepairArtifact;
 	getHistoryArchiveRepairObjectArtifact: GetHistoryArchiveRepairObjectArtifact;
 	getHistoryArchiveRepairPlan: GetHistoryArchiveRepairPlan;
 	requestHistoryArchiveObjectRecheck: RequestHistoryArchiveObjectRecheck;
+	operatorPassword?: string;
+	operatorUserName?: string;
 }
 
 export function mountHistoryArchiveRepairRoutes(
 	router: Router,
 	config: HistoryArchiveRepairHttpConfig
 ): void {
+	const operatorAuth = createOperatorAuth(config);
 	router.get(
 		'/repair-artifacts/buckets/:bucketHash',
+		operatorAuth,
 		[param('bucketHash').matches(/^[0-9a-f]{64}$/i)],
-		async function (req: express.Request, res: express.Response) {
+		asyncRequestHandler(async function (
+			req: express.Request,
+			res: express.Response
+		) {
 			const errors = validationResult(req);
 			if (!errors.isEmpty()) {
 				return respondUnavailable(res, {
@@ -63,17 +71,16 @@ export function mountHistoryArchiveRepairRoutes(
 				'Content-Disposition',
 				`attachment; filename="${result.fileName}"`
 			);
-			res.setHeader(
-				'Cache-Control',
-				`public, max-age=${artifactCacheMaxAgeSeconds}, immutable`
-			);
+			res.setHeader('Cache-Control', 'private, no-store');
 			res.setHeader(
 				'X-Stellar-Bucket-Hash',
 				result.artifact.contentHash.digest
 			);
 
 			try {
-				await pipeline(result.stream, res);
+				await pipeline(result.stream, res, {
+					signal: AbortSignal.timeout(artifactStreamTimeoutMs)
+				});
 			} catch {
 				if (!res.headersSent) {
 					return res.status(500).json({ error: 'Internal server error' });
@@ -82,13 +89,19 @@ export function mountHistoryArchiveRepairRoutes(
 			} finally {
 				await result.close();
 			}
-		}
+		})
 	);
 
 	router.get(
-		'/repair-artifacts/objects/:targetRemoteId/:candidateRemoteId/:proofId/:proofVersion/:proofEvaluatedAtMs/:contentDigest',
+		'/repair-artifacts/objects/:targetRemoteId/:targetEvidenceUpdatedAtMs/:targetFailureKind/:candidateRemoteId/:proofId/:proofVersion/:proofEvaluatedAtMs/:contentDigest',
+		operatorAuth,
 		[
 			param('targetRemoteId').isUUID(),
+			param('targetEvidenceUpdatedAtMs').isInt({
+				max: Number.MAX_SAFE_INTEGER,
+				min: 1
+			}),
+			param('targetFailureKind').isIn(['integrity', 'missing']),
 			param('candidateRemoteId').isUUID(),
 			param('proofId').isInt({ min: 1 }),
 			param('proofVersion').isInt({ min: 1 }),
@@ -98,7 +111,10 @@ export function mountHistoryArchiveRepairRoutes(
 			}),
 			param('contentDigest').matches(/^[0-9a-f]{64}$/i)
 		],
-		async function (req: express.Request, res: express.Response) {
+		asyncRequestHandler(async function (
+			req: express.Request,
+			res: express.Response
+		) {
 			const errors = validationResult(req);
 			if (!errors.isEmpty()) {
 				return respondObjectUnavailable(res, invalidObjectProof());
@@ -111,6 +127,11 @@ export function mountHistoryArchiveRepairRoutes(
 					proofId: req.params.proofId,
 					proofEvaluatedAtMs: Number(req.params.proofEvaluatedAtMs),
 					proofVersion: Number(req.params.proofVersion),
+					targetEvidenceUpdatedAtMs: Number(
+						req.params.targetEvidenceUpdatedAtMs
+					),
+					targetFailureKind: req.params.targetFailureKind as
+						'integrity' | 'missing',
 					targetRemoteId: req.params.targetRemoteId
 				}
 			);
@@ -126,14 +147,16 @@ export function mountHistoryArchiveRepairRoutes(
 				`attachment; filename="${result.fileName}"`
 			);
 			res.setHeader('Cache-Control', 'no-store');
-			res.setHeader('X-Stellar-Content-SHA256', result.contentDigest);
+			res.setHeader('X-Stellar-Proof-Content-SHA256', result.contentDigest);
 			res.setHeader(
 				'X-Stellar-Content-Representation',
 				result.contentRepresentation
 			);
 
 			try {
-				await pipeline(result.stream, res);
+				await pipeline(result.stream, res, {
+					signal: AbortSignal.timeout(artifactStreamTimeoutMs)
+				});
 			} catch {
 				if (!res.headersSent) {
 					return res.status(500).json({ error: 'Internal server error' });
@@ -142,11 +165,12 @@ export function mountHistoryArchiveRepairRoutes(
 			} finally {
 				await result.close();
 			}
-		}
+		})
 	);
 
 	router.post(
 		'/objects/:remoteId/recheck',
+		operatorAuth,
 		[
 			param('remoteId').isUUID(),
 			body('minimumEvidenceUpdatedAt').isISO8601({
@@ -154,7 +178,10 @@ export function mountHistoryArchiveRepairRoutes(
 				strictSeparator: true
 			})
 		],
-		async function (req: express.Request, res: express.Response) {
+		asyncRequestHandler(async function (
+			req: express.Request,
+			res: express.Response
+		) {
 			res.setHeader('Cache-Control', 'no-store');
 			const errors = validationResult(req);
 			if (!errors.isEmpty()) {
@@ -180,7 +207,7 @@ export function mountHistoryArchiveRepairRoutes(
 
 			setRecheckRetryAfter(res, result.value);
 			return res.status(200).json(result.value);
-		}
+		})
 	);
 
 	router.get(
@@ -189,7 +216,10 @@ export function mountHistoryArchiveRepairRoutes(
 			param('encodedUrl').isURL(),
 			query('limit').optional().isInt({ min: 1, max: maxRepairPlanLimit })
 		],
-		async function (req: express.Request, res: express.Response) {
+		asyncRequestHandler(async function (
+			req: express.Request,
+			res: express.Response
+		) {
 			res.setHeader(
 				'Cache-Control',
 				'public, max-age=' + planCacheMaxAgeSeconds
@@ -215,8 +245,38 @@ export function mountHistoryArchiveRepairRoutes(
 			}
 
 			return res.status(200).json(planOrError.value);
-		}
+		})
 	);
+}
+
+type AsyncRequestHandler = (
+	req: express.Request,
+	res: express.Response,
+	next: express.NextFunction
+) => Promise<unknown>;
+
+function asyncRequestHandler(handler: AsyncRequestHandler): RequestHandler {
+	return (req, res, next) => {
+		void handler(req, res, next).catch((error: unknown) => {
+			if (res.headersSent) {
+				res.destroy(error instanceof Error ? error : undefined);
+				return;
+			}
+			next(error);
+		});
+	};
+}
+
+function createOperatorAuth(
+	config: HistoryArchiveRepairHttpConfig
+): RequestHandler {
+	if (!config.operatorUserName || !config.operatorPassword) {
+		return (_req, res) => res.status(404).end();
+	}
+	return basicAuth({
+		challenge: true,
+		users: { [config.operatorUserName]: config.operatorPassword }
+	});
 }
 
 function setRecheckRetryAfter(

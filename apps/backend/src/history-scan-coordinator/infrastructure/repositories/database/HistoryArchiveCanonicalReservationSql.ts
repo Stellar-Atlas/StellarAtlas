@@ -1,10 +1,7 @@
 export const canonicalFrontierReservationCtesSql = `
 	canonical_reservation_state as materialized (
 		select count(*)::integer as count
-		from "history_archive_object_queue" reserved
-		where reserved."executionDisposition" = 'executable'
-			and reserved."executionReason" = 'canonical-frontier-reserve'
-			and reserved.status in ('pending', 'scanning')
+		from current_canonical_reservations
 	), stale_canonical_replacements as materialized (
 		select reserved.id,
 			row_number() over (
@@ -15,6 +12,15 @@ export const canonicalFrontierReservationCtesSql = `
 		where reserved.status = 'pending'
 			and reserved."executionDisposition" = 'executable'
 			and reserved."executionReason" = 'canonical-frontier-reserve'
+			and not exists (
+				select 1
+				from "history_archive_object_ready" ready
+				where ready."objectRemoteId" = reserved."remoteId"
+					and (
+						ready."dispatchToken" is not null
+						or ready."publishedAt" is not null
+					)
+			)
 			and not exists (
 				select 1
 				from current_canonical_reservations current_reservation
@@ -41,6 +47,15 @@ export const canonicalFrontierReservationCtesSql = `
 				'canonical-frontier-reserve'
 			and not exists (
 				select 1
+				from "history_archive_object_ready" ready
+				where ready."objectRemoteId" = generic."remoteId"
+					and (
+						ready."dispatchToken" is not null
+						or ready."publishedAt" is not null
+					)
+			)
+			and not exists (
+				select 1
 				from target_ranked canonical_candidate
 				where canonical_candidate.id = generic.id
 			)
@@ -56,10 +71,8 @@ export const canonicalFrontierReservationCtesSql = `
 		union all
 		select id, replacement_rank from generic_replacements
 	), canonical_candidate_capacity as materialized (
-		select greatest($1::integer - reservation.count, 0) + stale.count
-			as count
+		select greatest($1::integer - reservation.count, 0) as count
 		from canonical_reservation_state reservation
-		cross join stale_canonical_replacement_state stale
 	), candidate_replacement_ranked as materialized (
 		select target_ranked.*,
 			row_number() over (

@@ -97,6 +97,7 @@ const errorMessage = (error: unknown): string =>
 	error instanceof Error ? error.message : String(error);
 
 export class MeilisearchScpStatementLiveStore implements ScpStatementLiveStore {
+	private documentWriteInFlight = false;
 	private indexReady = false;
 	private readonly index: Index<ScpStatementSearchDocument> | undefined;
 	private indexSetupPromise: Promise<void> | undefined;
@@ -106,8 +107,10 @@ export class MeilisearchScpStatementLiveStore implements ScpStatementLiveStore {
 	private pendingDocumentTaskCheckedAtMs = 0;
 	private pendingDocumentTaskUid: number | undefined;
 	private pendingRetentionCleanupTaskUid: number | undefined;
+	private retentionCleanupDue = false;
 	private retentionCleanupPromise: Promise<void> | undefined;
 	private retentionCleanupTimer: ReturnType<typeof setTimeout> | undefined;
+	private saveManyInFlight = false;
 
 	constructor(
 		config: NetworkSearchConfig,
@@ -131,6 +134,29 @@ export class MeilisearchScpStatementLiveStore implements ScpStatementLiveStore {
 	): Promise<ScpStatementProjectionOutcome> {
 		if (observations.length === 0) return { status: 'accepted' };
 		if (!this.index) {
+			return { reason: 'index-unavailable', status: 'deferred' };
+		}
+		if (this.saveManyInFlight) {
+			return {
+				reason: 'document-enqueue-in-flight',
+				retryAfterMs: pendingDocumentTaskPollIntervalMs,
+				status: 'deferred'
+			};
+		}
+
+		this.saveManyInFlight = true;
+		try {
+			return await this.saveManySerially(observations);
+		} finally {
+			this.saveManyInFlight = false;
+		}
+	}
+
+	private async saveManySerially(
+		observations: readonly CrawlerScpStatementObservation[]
+	): Promise<ScpStatementProjectionOutcome> {
+		const index = this.index;
+		if (!index) {
 			return { reason: 'index-unavailable', status: 'deferred' };
 		}
 		const nowMs = Date.now();
@@ -160,17 +186,41 @@ export class MeilisearchScpStatementLiveStore implements ScpStatementLiveStore {
 				status: 'deferred'
 			};
 		}
+		this.requestRetentionCleanup(Date.now());
+		if (this.retentionCleanupPromise !== undefined) {
+			return {
+				reason: 'retention-cleanup-enqueue',
+				retryAfterMs: pendingDocumentTaskPollIntervalMs,
+				status: 'deferred'
+			};
+		}
+		if (await this.hasPendingRetentionCleanupTask()) {
+			return {
+				reason: 'retention-cleanup-task-pending',
+				retryAfterMs: pendingDocumentTaskPollIntervalMs,
+				status: 'deferred'
+			};
+		}
+		if (
+			this.retentionCleanupPromise !== undefined ||
+			this.pendingRetentionCleanupTaskUid !== undefined
+		) {
+			return {
+				reason: 'retention-cleanup-task-pending',
+				retryAfterMs: pendingDocumentTaskPollIntervalMs,
+				status: 'deferred'
+			};
+		}
 
 		const documents = observations.map(toDocument);
-		const cleanupWasScheduled = this.clearRetentionCleanupTimer();
+		this.documentWriteInFlight = true;
 		try {
-			const documentTask = await this.index.addDocuments(documents, {
+			const documentTask = await index.addDocuments(documents, {
 				primaryKey: 'id'
 			});
 			this.pendingDocumentTaskUid = documentTask.taskUid;
 			this.pendingDocumentTaskCheckedAtMs = Date.now();
 		} catch (error) {
-			if (cleanupWasScheduled) this.scheduleRetentionCleanup(Date.now());
 			this.nextDocumentWriteAttemptAtMs =
 				Date.now() + documentWriteRetryCooldownMs;
 			this.logger?.warn('Could not enqueue live SCP Meilisearch documents', {
@@ -182,6 +232,9 @@ export class MeilisearchScpStatementLiveStore implements ScpStatementLiveStore {
 				retryAfterMs: documentWriteRetryCooldownMs,
 				status: 'deferred'
 			};
+		} finally {
+			this.documentWriteInFlight = false;
+			this.requestRetentionCleanup(Date.now());
 		}
 		return { status: 'accepted', taskPending: true };
 	}
@@ -192,6 +245,7 @@ export class MeilisearchScpStatementLiveStore implements ScpStatementLiveStore {
 		if (!this.index || this.pendingDocumentTaskUid === undefined) {
 			return { status: 'settled' };
 		}
+		const taskUid = this.pendingDocumentTaskUid;
 		const elapsedMs = nowMs - this.pendingDocumentTaskCheckedAtMs;
 		if (elapsedMs < pendingDocumentTaskPollIntervalMs) {
 			return {
@@ -202,7 +256,9 @@ export class MeilisearchScpStatementLiveStore implements ScpStatementLiveStore {
 
 		this.pendingDocumentTaskCheckedAtMs = nowMs;
 		try {
-			const task = await this.index.tasks.getTask(this.pendingDocumentTaskUid);
+			const task = await this.index.tasks.getTask(taskUid);
+			const staleOutcome = this.outcomeForStaleDocumentTask(taskUid);
+			if (staleOutcome !== undefined) return staleOutcome;
 			if (task.status === 'enqueued' || task.status === 'processing') {
 				return {
 					retryAfterMs: pendingDocumentTaskPollIntervalMs,
@@ -211,9 +267,11 @@ export class MeilisearchScpStatementLiveStore implements ScpStatementLiveStore {
 			}
 			this.pendingDocumentTaskUid = undefined;
 			if (task.status === 'succeeded') {
+				this.requestRetentionCleanup(nowMs);
 				this.scheduleRetentionCleanup(nowMs);
 				return { status: 'settled' };
 			}
+			this.requestRetentionCleanup(nowMs);
 			this.nextDocumentWriteAttemptAtMs =
 				Date.now() + documentWriteRetryCooldownMs;
 			this.logger?.warn('Live SCP Meilisearch document task did not succeed', {
@@ -227,18 +285,32 @@ export class MeilisearchScpStatementLiveStore implements ScpStatementLiveStore {
 				status: 'failed'
 			};
 		} catch (error) {
+			const staleOutcome = this.outcomeForStaleDocumentTask(taskUid);
+			if (staleOutcome !== undefined) return staleOutcome;
 			this.nextDocumentWriteAttemptAtMs =
 				Date.now() + documentWriteRetryCooldownMs;
 			this.logger?.warn('Could not read live SCP Meilisearch document task', {
 				cooldownMs: documentWriteRetryCooldownMs,
 				error: errorMessage(error),
-				taskUid: this.pendingDocumentTaskUid
+				taskUid
 			});
 			return {
 				retryAfterMs: documentWriteRetryCooldownMs,
 				status: 'pending'
 			};
 		}
+	}
+
+	private outcomeForStaleDocumentTask(
+		taskUid: number
+	): ScpStatementProjectionTaskOutcome | undefined {
+		if (this.pendingDocumentTaskUid === taskUid) return undefined;
+		return this.pendingDocumentTaskUid === undefined
+			? { status: 'settled' }
+			: {
+					retryAfterMs: pendingDocumentTaskPollIntervalMs,
+					status: 'pending'
+				};
 	}
 
 	async findLatest({
@@ -393,7 +465,7 @@ export class MeilisearchScpStatementLiveStore implements ScpStatementLiveStore {
 	private scheduleRetentionCleanup(nowMs: number): void {
 		if (
 			!this.index ||
-			this.pendingDocumentTaskUid !== undefined ||
+			this.retentionCleanupDue ||
 			this.retentionCleanupPromise !== undefined ||
 			this.retentionCleanupTimer !== undefined
 		) {
@@ -406,20 +478,30 @@ export class MeilisearchScpStatementLiveStore implements ScpStatementLiveStore {
 		const delayMs = Math.max(retentionCleanupHysteresisMs, cadenceDelayMs);
 		this.retentionCleanupTimer = setTimeout(() => {
 			this.retentionCleanupTimer = undefined;
-			if (this.pendingDocumentTaskUid !== undefined) return;
-			this.retentionCleanupPromise = this.enqueueRetentionCleanup(
-				Date.now()
-			).finally(() => {
-				this.retentionCleanupPromise = undefined;
-			});
+			this.retentionCleanupDue = true;
+			this.requestRetentionCleanup(Date.now());
 		}, delayMs);
 		this.retentionCleanupTimer.unref();
 	}
 
-	private clearRetentionCleanupTimer(): boolean {
-		if (this.retentionCleanupTimer === undefined) return false;
-		clearTimeout(this.retentionCleanupTimer);
-		this.retentionCleanupTimer = undefined;
-		return true;
+	private requestRetentionCleanup(nowMs: number): void {
+		if (
+			!this.index ||
+			!this.retentionCleanupDue ||
+			this.documentWriteInFlight ||
+			this.pendingDocumentTaskUid !== undefined ||
+			this.retentionCleanupPromise !== undefined
+		) {
+			return;
+		}
+
+		const cleanup = this.enqueueRetentionCleanup(nowMs);
+		this.retentionCleanupPromise = cleanup;
+		void cleanup.finally(() => {
+			if (this.retentionCleanupPromise !== cleanup) return;
+			this.retentionCleanupPromise = undefined;
+			this.retentionCleanupDue = false;
+			this.scheduleRetentionCleanup(Date.now());
+		});
 	}
 }

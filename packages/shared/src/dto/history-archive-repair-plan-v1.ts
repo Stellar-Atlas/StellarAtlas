@@ -142,8 +142,7 @@ export type HistoryArchiveRepairArtifactAvailabilityV1 =
 	| HistoryArchiveRepairArtifactUnavailableV1;
 
 export type HistoryArchiveRepairManifestStatusV1 =
-	| 'ready'
-	| 'awaiting-verified-replacement';
+	'ready' | 'awaiting-verified-replacement';
 
 export type HistoryArchiveRepairManifestStepKindV1 =
 	| 'backup-current-file'
@@ -165,7 +164,8 @@ export type HistoryArchiveRepairManifestStepV1 =
 			readonly backupSuffix: string;
 			readonly kind: 'backup-current-file';
 			readonly order: 1;
-			readonly required: true;
+			/** False only when the observed target is missing; an unexpected file still stops repair. */
+			readonly required: boolean;
 	  }
 	| {
 			readonly input: 'replacement-download-url';
@@ -181,23 +181,22 @@ export type HistoryArchiveRepairManifestStepV1 =
 			readonly required: true;
 	  }
 	| {
-			readonly kind: 'atomic-replace';
-			readonly order: 4;
-			readonly required: true;
-			readonly requiresSameFilesystem: true;
-	  }
-	| {
 			readonly kind: 'preserve-metadata';
-			readonly order: 5;
+			readonly order: 4;
 			readonly preserve: readonly ['owner', 'mode', 'acl'];
 			readonly required: true;
+	  }
+	| {
+			readonly kind: 'atomic-replace';
+			readonly order: 5;
+			readonly required: true;
+			readonly requiresSameFilesystem: true;
 	  }
 	| {
 			readonly kind: 'request-recheck';
 			readonly order: 6;
 			readonly required: true;
-			readonly resolutionCondition:
-				| 'same-object-verified-after-original-evidence';
+			readonly resolutionCondition: 'same-object-verified-after-original-evidence';
 	  };
 
 export interface HistoryArchiveRepairManifestV1 {
@@ -207,8 +206,7 @@ export interface HistoryArchiveRepairManifestV1 {
 	readonly recheck: {
 		readonly endpoint: string;
 		readonly minimumEvidenceUpdatedAt: string;
-		readonly resolutionCondition:
-			| 'same-object-verified-after-original-evidence';
+		readonly resolutionCondition: 'same-object-verified-after-original-evidence';
 		readonly targetRemoteId: string;
 	};
 	readonly replacement: HistoryArchiveRepairManifestReplacementV1 | null;
@@ -254,7 +252,7 @@ export interface HistoryArchiveRepairActionV1 {
 	readonly evidence: readonly HistoryArchiveRepairObjectEvidenceV1[];
 	readonly kind: HistoryArchiveRepairActionKindV1;
 	readonly knownGoodSources: readonly HistoryArchiveRepairSourceCandidateV1[];
-	/** Non-null only for confirmed object-integrity failures. */
+	/** Non-null for recognized integrity evidence or proof-gated missing 404/410 evidence. */
 	readonly repairManifest: HistoryArchiveRepairManifestV1 | null;
 	readonly reason: HistoryArchiveRepairReasonV1;
 	readonly repairArtifact: HistoryArchiveRepairArtifactAvailabilityV1 | null;

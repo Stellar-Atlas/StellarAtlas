@@ -268,6 +268,7 @@ function createSummary(
 			categoryConsistentArchiveCheckpoints: 0,
 			completeArchiveCheckpoints: 0,
 			discoveryCompleteArchiveRoots: 0,
+			durableVerifiedArchiveCheckpoints: 0,
 			expectedArchiveCheckpoints: 0,
 			failedArchiveCheckpoints: 0,
 			latestCheckpointLedger: null,
@@ -340,7 +341,9 @@ function createStatusSummary(overrides: {
 		oldestCheckpointLedger: null,
 		partialArchiveCheckpoints: 0,
 		totalArchiveCheckpoints: 0,
-		...overrides.checkpointCoverage
+		...overrides.checkpointCoverage,
+		durableVerifiedArchiveCheckpoints:
+			overrides.checkpointCoverage?.durableVerifiedArchiveCheckpoints ?? 0
 	};
 	return {
 		activeObjectChecks: overrides.activeObjectChecks ?? 0,
@@ -352,6 +355,12 @@ function createStatusSummary(overrides: {
 		scannerIssueFailures: overrides.scannerIssueFailures ?? 0,
 		sources: [],
 		sourcesTruncated: false,
+		transitionReconciliation: {
+			oldestPendingAgeMs: null,
+			oldestPendingAt: null,
+			pendingTerminalEffects: 0,
+			status: 'caught-up'
+		},
 		unclassifiedFailures: overrides.unclassifiedFailures ?? 0
 	};
 }

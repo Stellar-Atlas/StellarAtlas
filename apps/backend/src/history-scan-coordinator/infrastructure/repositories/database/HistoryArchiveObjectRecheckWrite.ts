@@ -2,6 +2,10 @@ import type { EntityManager, Repository } from 'typeorm';
 import type { HistoryArchiveObjectRecheckBlockedReasonV1 } from 'shared';
 import type { HistoryArchiveObject } from '../../../domain/history-archive-object/HistoryArchiveObject.js';
 import type { HistoryArchiveObjectRecheckDecision } from '../../../domain/history-archive-object/HistoryArchiveObjectRepository.js';
+import {
+	isHistoryArchiveProofGatedMissingFailure,
+	isHistoryArchiveRepairableIntegrityFailure
+} from '../../../domain/history-archive-object/HistoryArchiveRepairCandidateFailure.js';
 
 interface RecheckTargetRow {
 	readonly archiveUrlIdentity: string;
@@ -9,8 +13,11 @@ interface RecheckTargetRow {
 	readonly eligibleAt: Date | string;
 	readonly evidenceUpdatedAt: Date | string;
 	readonly executionDisposition: string | null;
+	readonly errorMessage: string | null;
+	readonly errorType: string | null;
 	readonly failureChannel: string | null;
 	readonly hostIdentity: string;
+	readonly httpStatus: number | null;
 	readonly remoteId: string;
 	readonly requestedAt: Date | string;
 	readonly status: string;
@@ -34,6 +41,9 @@ const selectTargetSql = `
 		object."failureChannel",
 		object."dependencyReady",
 		object."executionDisposition",
+		object."errorMessage",
+		object."errorType",
+		object."httpStatus",
 		object."updatedAt" as "evidenceUpdatedAt",
 		coalesce(
 			object."nextAttemptAt",
@@ -161,8 +171,21 @@ function getIneligibleReason(
 ): HistoryArchiveObjectRecheckBlockedReasonV1 | null {
 	if (target.status === 'verified') return 'verified-object';
 	if (target.status !== 'failed') return 'object-not-failed';
-	if (target.failureChannel !== 'archive_evidence') {
-		return 'non-remote-evidence-failure';
+	const failureChannel = target.failureChannel ?? 'archive_evidence';
+	const repairCandidateLane =
+		((failureChannel === 'archive_availability' ||
+			failureChannel === 'archive_evidence') &&
+			isHistoryArchiveProofGatedMissingFailure(target)) ||
+		(failureChannel === 'archive_evidence' &&
+			isHistoryArchiveRepairableIntegrityFailure(target));
+	if (!repairCandidateLane) {
+		if (
+			failureChannel !== 'archive_availability' &&
+			failureChannel !== 'archive_evidence'
+		) {
+			return 'non-remote-evidence-failure';
+		}
+		return 'non-repair-candidate-failure';
 	}
 	if (target.executionDisposition !== 'executable') {
 		return 'object-not-executable';

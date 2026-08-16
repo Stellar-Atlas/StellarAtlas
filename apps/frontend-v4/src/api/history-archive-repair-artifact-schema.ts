@@ -80,6 +80,7 @@ const artifactAvailableSchema: JSONSchemaType<RepairArtifactAvailable> = {
 const proofBoundObjectPath =
 	'^/v1/archive-scans/repair-artifacts/objects/' +
 	'[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}/' +
+	'[1-9][0-9]*/(integrity|missing)/' +
 	'[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}/' +
 	'[1-9][0-9]*/[1-9][0-9]*/[1-9][0-9]*/[0-9a-f]{64}$';
 
@@ -184,4 +185,8 @@ export const repairArtifactSchema = {
 		artifactUnavailableSchema,
 		{ type: 'null', nullable: true }
 	]
+} as const;
+
+export const repairManifestArtifactSchema = {
+	oneOf: [artifactAvailableSchema, artifactVerifyOnDownloadSchema]
 } as const;

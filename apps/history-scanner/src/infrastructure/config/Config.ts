@@ -8,6 +8,7 @@ import {
 	type CoordinatorAuthConfig,
 	isCoordinatorAuthMode
 } from './CoordinatorAuthConfig.js';
+import type { HistoryArchiveIoPressureAdmissionConfig } from '../services/LinuxIoPressureAdmission.js';
 
 const envPath = resolveAppEnvPath(import.meta.url, 'history-scanner');
 
@@ -37,6 +38,7 @@ export interface Config {
 	natsArchiveJobStream: string;
 	natsServers: readonly string[];
 	natsToken: string | undefined;
+	historyArchiveIoPressureAdmission: HistoryArchiveIoPressureAdmissionConfig;
 }
 
 // Simple boolean parser to replace 'yn'
@@ -68,7 +70,15 @@ const defaultConfig = {
 	historyArchiveObjectJobSource: 'legacy-http' as const,
 	natsArchiveJobConsumer: 'stellaratlas-history-object-workers',
 	natsArchiveJobStream: 'STELLARATLAS_HISTORY_OBJECTS',
-	natsServers: ['nats://127.0.0.1:4222'] as const
+	natsServers: ['nats://127.0.0.1:4222'] as const,
+	historyArchiveIoPressureAdmission: {
+		enabled: false,
+		fullAvg10Maximum: 5,
+		healthySamplesRequired: 1,
+		md0InflightMaximum: null,
+		retryIntervalMs: 10_000,
+		someAvg10Maximum: 25
+	}
 };
 
 const maxHistoryHasherWorkers = historyArchiveWorkerSlotLimit - 1;
@@ -135,6 +145,95 @@ function parseOptionalPositiveNumber(
 	}
 
 	return ok(parsed);
+}
+
+function parseIoPressureAdmissionConfig(
+	jobSource: Config['historyArchiveObjectJobSource']
+): Result<HistoryArchiveIoPressureAdmissionConfig, Error> {
+	const defaults = defaultConfig.historyArchiveIoPressureAdmission;
+	if (jobSource !== 'nats') return ok(defaults);
+
+	const enabledName = 'HISTORY_ARCHIVE_IO_PRESSURE_ADMISSION_ENABLED';
+	const enabledValue = process.env[enabledName];
+	const enabled =
+		enabledValue === undefined ? defaults.enabled : parseBoolean(enabledValue);
+	if (enabled === undefined) {
+		return err(new Error(`${enabledName} must be true or false`));
+	}
+
+	const fullResult = parseOptionalBoundedNumber(
+		'HISTORY_ARCHIVE_IO_PRESSURE_FULL_AVG10_MAX',
+		0,
+		100
+	);
+	if (fullResult.isErr()) return err(fullResult.error);
+	const someResult = parseOptionalBoundedNumber(
+		'HISTORY_ARCHIVE_IO_PRESSURE_SOME_AVG10_MAX',
+		0,
+		100
+	);
+	if (someResult.isErr()) return err(someResult.error);
+	const retryResult = parseOptionalBoundedInteger(
+		'HISTORY_ARCHIVE_IO_PRESSURE_RETRY_MS',
+		1_000,
+		60_000
+	);
+	if (retryResult.isErr()) return err(retryResult.error);
+	const healthySamplesResult = parseOptionalBoundedInteger(
+		'HISTORY_ARCHIVE_IO_PRESSURE_HEALTHY_SAMPLES_REQUIRED',
+		1,
+		60
+	);
+	if (healthySamplesResult.isErr()) return err(healthySamplesResult.error);
+	const md0InflightResult = parseOptionalBoundedInteger(
+		'HISTORY_ARCHIVE_IO_PRESSURE_MD0_INFLIGHT_MAX',
+		0,
+		1_000_000
+	);
+	if (md0InflightResult.isErr()) return err(md0InflightResult.error);
+
+	return ok({
+		enabled,
+		fullAvg10Maximum: fullResult.value ?? defaults.fullAvg10Maximum,
+		healthySamplesRequired:
+			healthySamplesResult.value ?? defaults.healthySamplesRequired,
+		md0InflightMaximum: md0InflightResult.value ?? defaults.md0InflightMaximum,
+		retryIntervalMs: retryResult.value ?? defaults.retryIntervalMs,
+		someAvg10Maximum: someResult.value ?? defaults.someAvg10Maximum
+	});
+}
+
+function parseOptionalBoundedNumber(
+	name: string,
+	minimum: number,
+	maximum: number
+): Result<number | undefined, Error> {
+	const value = process.env[name];
+	if (value === undefined) return ok(undefined);
+	const normalized = value.trim();
+	if (!/^(?:\d+(?:\.\d+)?|\.\d+)$/.test(normalized))
+		return err(new Error(`${name} must be between ${minimum} and ${maximum}`));
+
+	const parsed = Number(normalized);
+	if (!Number.isFinite(parsed) || parsed < minimum || parsed > maximum) {
+		return err(new Error(`${name} must be between ${minimum} and ${maximum}`));
+	}
+	return ok(parsed);
+}
+
+function parseOptionalBoundedInteger(
+	name: string,
+	minimum: number,
+	maximum: number
+): Result<number | undefined, Error> {
+	const result = parseOptionalBoundedNumber(name, minimum, maximum);
+	if (result.isErr() || result.value === undefined) return result;
+	if (!Number.isInteger(result.value)) {
+		return err(
+			new Error(`${name} must be an integer between ${minimum} and ${maximum}`)
+		);
+	}
+	return result;
 }
 
 export function getConfigFromEnv(): Result<Config, Error> {
@@ -214,9 +313,7 @@ export function getConfigFromEnv(): Result<Config, Error> {
 		historyArchiveObjectJobSource !== 'legacy-http'
 	) {
 		return err(
-			new Error(
-				'HISTORY_ARCHIVE_OBJECT_JOB_SOURCE must be nats or legacy-http'
-			)
+			new Error('HISTORY_ARCHIVE_OBJECT_JOB_SOURCE must be nats or legacy-http')
 		);
 	}
 	const natsServers = (
@@ -235,6 +332,11 @@ export function getConfigFromEnv(): Result<Config, Error> {
 			)
 		);
 	}
+	const ioPressureAdmissionResult = parseIoPressureAdmissionConfig(
+		historyArchiveObjectJobSource
+	);
+	if (ioPressureAdmissionResult.isErr())
+		return err(ioPressureAdmissionResult.error);
 
 	const historyScanWorkers = historyScanWorkersResult.value ?? 1;
 	const historyMaxRequests =
@@ -277,10 +379,10 @@ export function getConfigFromEnv(): Result<Config, Error> {
 			process.env.NATS_ARCHIVE_JOB_CONSUMER ??
 			defaultConfig.natsArchiveJobConsumer,
 		natsArchiveJobStream:
-			process.env.NATS_ARCHIVE_JOB_STREAM ??
-			defaultConfig.natsArchiveJobStream,
+			process.env.NATS_ARCHIVE_JOB_STREAM ?? defaultConfig.natsArchiveJobStream,
 		natsServers,
-		natsToken
+		natsToken,
+		historyArchiveIoPressureAdmission: ioPressureAdmissionResult.value
 	});
 }
 

@@ -1,6 +1,6 @@
 import { err, ok, Result } from 'neverthrow';
+import { parsedHistoryMaximumBatchRecords } from './ParsedHistoryBatchLimits.js';
 
-const maximumBatchSize = 1_000;
 const maximumLedgerSequence = 0xffff_ffff;
 const maximumProtocolVersion = 0x7fff_ffff;
 
@@ -51,7 +51,7 @@ export class ParsedLedgerHeaderBatchDTO {
 			typeof json.observedAt !== 'string' ||
 			Number.isNaN(new Date(json.observedAt).getTime()) ||
 			!Array.isArray(json.headers) ||
-			json.headers.length > maximumBatchSize ||
+			json.headers.length > parsedHistoryMaximumBatchRecords ||
 			!json.headers.every((header) => this.isValidHeader(header))
 		) {
 			return false;

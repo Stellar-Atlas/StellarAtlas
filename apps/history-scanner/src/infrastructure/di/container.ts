@@ -21,6 +21,8 @@ import type { ScanCoordinatorService } from '../../domain/scan/ScanCoordinatorSe
 import type { HistoryArchiveObjectJobSource } from '../../use-cases/verify-archive-objects/HistoryArchiveObjectJobDelivery.js';
 import { RESTHistoryArchiveObjectJobSource } from '../services/RESTHistoryArchiveObjectJobSource.js';
 import { NatsHistoryArchiveObjectJobSource } from '../services/NatsHistoryArchiveObjectJobSource.js';
+import { AdmissionControlledHistoryArchiveObjectJobSource } from '../services/AdmissionControlledHistoryArchiveObjectJobSource.js';
+import { LinuxIoPressureAdmission } from '../services/LinuxIoPressureAdmission.js';
 import { RESTScanCoordinatorService } from '../services/RESTScanCoordinatorService.js';
 import {
 	type JobMonitor,
@@ -112,18 +114,24 @@ export function load(container: Container, config: Config) {
 			);
 		});
 	container
-		.bind<HistoryArchiveObjectJobSource>(
-			TYPES.HistoryArchiveObjectJobSource
-		)
+		.bind<HistoryArchiveObjectJobSource>(TYPES.HistoryArchiveObjectJobSource)
 		.toDynamicValue(() => {
 			if (config.historyArchiveObjectJobSource === 'nats') {
-				return new NatsHistoryArchiveObjectJobSource({
+				const source = new NatsHistoryArchiveObjectJobSource({
 					consumer: config.natsArchiveJobConsumer,
 					name: `stellaratlas-history-scanner-${process.pid.toString()}`,
 					servers: config.natsServers,
 					stream: config.natsArchiveJobStream,
 					token: config.natsToken
 				});
+				if (!config.historyArchiveIoPressureAdmission.enabled) return source;
+				return new AdmissionControlledHistoryArchiveObjectJobSource(
+					source,
+					new LinuxIoPressureAdmission(
+						config.historyArchiveIoPressureAdmission,
+						container.get<Logger>('Logger')
+					)
+				);
 			}
 			return new RESTHistoryArchiveObjectJobSource(
 				container.get<ScanCoordinatorService>(TYPES.ScanCoordinatorService)

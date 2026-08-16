@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import type { PublicHistoryArchiveRepairPlan } from '@api/archive-repair-types';
 import { loadArchiveRepairPlan } from '@app/actions/archive-repair-plan';
 import { NodeArchiveRepairPlan } from '@components/nodes/node-archive-repair-plan';
+import { ArchivistWholeArchiveOption } from '@components/nodes/node-archive-repair-workflow';
 
 type RepairPlanState =
 	| { readonly phase: 'idle' }
@@ -57,25 +58,49 @@ export function ArchiveRepairPlanPanel({
 
 	if (archiveUrl === null) {
 		return (
-			<p className="muted-inline">
-				Select one archive source to inspect its repair evidence.
-			</p>
+			<RepairPlanFallback>
+				<p className="muted-inline">
+					Select one archive source to inspect its repair evidence.
+				</p>
+			</RepairPlanFallback>
 		);
 	}
 	if (state.phase === 'idle' || state.phase === 'loading') {
-		return <p role="status">Loading confirmed repair evidence.</p>;
+		return (
+			<RepairPlanFallback>
+				<p role="status">Loading confirmed repair evidence.</p>
+			</RepairPlanFallback>
+		);
 	}
 	if (state.phase === 'failed') {
 		return (
-			<div className="route-evidence-state unavailable">
-				<p role="alert">{state.message}</p>
-				<button onClick={() => setAttempt((value) => value + 1)} type="button">
-					Retry
-				</button>
-			</div>
+			<RepairPlanFallback>
+				<div className="route-evidence-state unavailable">
+					<p role="alert">{state.message}</p>
+					<button
+						onClick={() => setAttempt((value) => value + 1)}
+						type="button"
+					>
+						Retry
+					</button>
+				</div>
+			</RepairPlanFallback>
 		);
 	}
 	return <NodeArchiveRepairPlan repairPlan={state.plan} />;
+}
+
+function RepairPlanFallback({
+	children
+}: {
+	readonly children: React.ReactNode;
+}): React.JSX.Element {
+	return (
+		<div className="archive-repair-plan">
+			{children}
+			<ArchivistWholeArchiveOption />
+		</div>
+	);
 }
 
 function hasLoadedPlanForArchive(

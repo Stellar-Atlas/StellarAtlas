@@ -47,6 +47,7 @@ import { RegisterParsedTransactionEnvelopes } from '@history-scan-coordinator/us
 import { RegisterParsedTransactionResults } from '@history-scan-coordinator/use-cases/register-parsed-transaction-results/RegisterParsedTransactionResults.js';
 import { BackfillArchiveMetadata } from '@history-scan-coordinator/use-cases/backfill-archive-metadata/BackfillArchiveMetadata.js';
 import { historyScanRouter } from '@history-scan-coordinator/infrastructure/http/HistoryScanRouter.js';
+import { mountParsedHistoryRequestBodyParser } from '@history-scan-coordinator/infrastructure/http/ParsedHistoryRequestBodyParser.js';
 import { archiveScanRouter } from '@history-scan-coordinator/infrastructure/http/ArchiveScanRouter.js';
 import { archiveEvidenceRouter } from '@history-scan-coordinator/infrastructure/http/ArchiveEvidenceRouter.js';
 import { communityScannerRouter } from '@history-scan-coordinator/infrastructure/http/CommunityScannerRouter.js';
@@ -80,7 +81,10 @@ import { ReportHistoryArchiveWorkerStatus } from '@history-scan-coordinator/use-
 import { GetScannerMetrics } from '@history-scan-coordinator/use-cases/GetScannerMetrics.js';
 import { RegisterCommunityScanner } from '@history-scan-coordinator/use-cases/RegisterCommunityScanner.js';
 import { SendScannerHeartbeat } from '@history-scan-coordinator/use-cases/SendScannerHeartbeat.js';
-import { startHistoryArchiveMaintenanceLoop } from '@history-scan-coordinator/use-cases/reconcile-history-archive-object-transitions/HistoryArchiveMaintenanceLoop.js';
+import {
+	parseHistoryArchiveMaintenanceIntervalMs,
+	startHistoryArchiveMaintenanceLoop
+} from '@history-scan-coordinator/use-cases/reconcile-history-archive-object-transitions/HistoryArchiveMaintenanceLoop.js';
 import { ReconcileHistoryArchiveObjectTransitions } from '@history-scan-coordinator/use-cases/reconcile-history-archive-object-transitions/ReconcileHistoryArchiveObjectTransitions.js';
 import { statusRouter } from '@status/infrastructure/http/StatusRouter.js';
 import { attachStatusLiveWebSocket } from '@status/infrastructure/http/StatusLiveWebSocket.js';
@@ -126,6 +130,7 @@ const serverSockets = new Set<Socket>();
 let shutdownStarted = false;
 const api = express();
 api.use(corsMiddleware);
+mountParsedHistoryRequestBodyParser(api);
 api.use('/v1/history-scan', bodyParser.json({ limit: '2mb' }));
 api.use(bodyParser.json());
 api.use(frontendV4ProxyMiddleware);
@@ -153,10 +158,14 @@ const listen = async () => {
 	const exceptionLogger =
 		kernel.container.get<ExceptionLogger>('ExceptionLogger');
 	const stopHistoryArchiveMaintenance =
-		process.env.API_HISTORY_MAINTENANCE_WRITER === 'true'
+		process.env.API_HISTORY_MAINTENANCE_WRITER === 'true' &&
+		process.env.API_HISTORY_MAINTENANCE_ENABLED !== 'false'
 			? startHistoryArchiveMaintenanceLoop(
 					kernel.container.get(ReconcileHistoryArchiveObjectTransitions),
-					kernel.container.get<Logger>('Logger')
+					kernel.container.get<Logger>('Logger'),
+					parseHistoryArchiveMaintenanceIntervalMs(
+						process.env.API_HISTORY_MAINTENANCE_INTERVAL_MS
+					)
 				)
 			: () => undefined;
 
@@ -181,6 +190,8 @@ const listen = async () => {
 	api.use(
 		'/v1/archive-scans',
 		archiveScanRouter({
+			operatorPassword: config.historyScanAPIPassword,
+			operatorUserName: config.historyScanAPIUsername,
 			getArchiveScans: kernel.container.get(GetArchiveScans),
 			getArchiveScanQueue: kernel.container.get(GetArchiveScanQueue),
 			getArchiveScanWorkers: kernel.container.get(GetArchiveScanWorkers),

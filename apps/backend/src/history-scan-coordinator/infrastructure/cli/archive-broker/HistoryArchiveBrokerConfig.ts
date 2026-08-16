@@ -1,8 +1,17 @@
+import {
+	getHistoryArchiveBrokerMaximumPriority,
+	parseHistoryArchiveBrokerMaximumPriority,
+	type HistoryArchiveBrokerPriority
+} from '@history-scan-coordinator/domain/history-archive-object/HistoryArchiveBrokerPriority.js';
+
+export { parseHistoryArchiveBrokerMaximumPriority };
+
 export interface HistoryArchiveBrokerConfig {
 	readonly batchSize: number;
 	readonly consumer: string;
 	readonly highWatermark: number;
 	readonly maximumPerHost: number;
+	readonly maximumPriority: HistoryArchiveBrokerPriority;
 	readonly pollIntervalMs: number;
 	readonly servers: readonly string[];
 	readonly stream: string;
@@ -46,6 +55,7 @@ export function getHistoryArchiveBrokerConfig(): HistoryArchiveBrokerConfig {
 			'HISTORY_ARCHIVE_MAX_ACTIVE_PER_HOST',
 			2
 		),
+		maximumPriority: getHistoryArchiveBrokerMaximumPriority(),
 		pollIntervalMs: readPositiveInteger(
 			'HISTORY_ARCHIVE_BROKER_POLL_INTERVAL_MS',
 			2_000
@@ -54,7 +64,8 @@ export function getHistoryArchiveBrokerConfig(): HistoryArchiveBrokerConfig {
 		stream:
 			process.env.NATS_ARCHIVE_JOB_STREAM ?? 'STELLARATLAS_HISTORY_OBJECTS',
 		subject:
-			process.env.NATS_ARCHIVE_JOB_SUBJECT ?? 'stellaratlas.history.object.verify',
+			process.env.NATS_ARCHIVE_JOB_SUBJECT ??
+			'stellaratlas.history.object.verify',
 		token
 	};
 }

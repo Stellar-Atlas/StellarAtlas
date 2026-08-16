@@ -31,6 +31,7 @@ import {
 	readFullHistoryLedgerCloseMetaStateStatus,
 	type FullHistoryLedgerCloseMetaStateStatusDTO
 } from './FullHistoryLedgerCloseMetaStateStatus.js';
+import type { StatusLevel } from '../../domain/StatusTypes.js';
 import type {
 	CanonicalFullHistoryPromotionDTO,
 	FullHistoryStatusDTO,
@@ -71,6 +72,9 @@ interface JobRow {
 	readonly updatedAt: Date | string | null;
 	readonly url: string;
 }
+
+export const canonicalFullHistoryStaleAfterMs = 60 * 60 * 1000;
+export const canonicalPromotionStaleAfterMs = 120_000;
 
 @injectable()
 export class GetFullHistoryStatus {
@@ -372,8 +376,31 @@ function mapCanonicalStatus(
 		mode: 'canonical_checkpoint_index',
 		parsedLedgerCount: null,
 		sourceArchiveCount: null,
-		status: 'ok'
+		status: canonicalFullHistoryStatus(coverage, promotion)
 	};
+}
+
+function canonicalFullHistoryStatus(
+	coverage: FullHistoryCanonicalCoverageView,
+	promotion: FullHistoryPromotionRuntimeView | null,
+	nowMs = Date.now()
+): StatusLevel {
+	if (
+		promotion === null ||
+		promotion.state === 'failed' ||
+		promotion.state === 'stopped' ||
+		nowMs - promotion.heartbeatAt.valueOf() > canonicalPromotionStaleAfterMs
+	) {
+		return 'degraded';
+	}
+
+	const latestLedgerAgeMs = Math.max(
+		0,
+		nowMs - coverage.latestLedgerClosedAt.valueOf()
+	);
+	return latestLedgerAgeMs > canonicalFullHistoryStaleAfterMs
+		? 'degraded'
+		: 'ok';
 }
 
 function mapCanonicalPromotion(
@@ -382,7 +409,7 @@ function mapCanonicalPromotion(
 	if (runtime === null) return null;
 	const heartbeatAgeMs = Date.now() - runtime.heartbeatAt.valueOf();
 	const state =
-		heartbeatAgeMs > 120_000 &&
+		heartbeatAgeMs > canonicalPromotionStaleAfterMs &&
 		runtime.state !== 'failed' &&
 		runtime.state !== 'stopped'
 			? 'stale'

@@ -1,4 +1,13 @@
 import type { EntityManager } from 'typeorm';
+import {
+	getHistoryArchiveBrokerMaximumPriority,
+	type HistoryArchiveBrokerPriority
+} from '../../../domain/history-archive-object/HistoryArchiveBrokerPriority.js';
+import {
+	canonicalRuntimeArchiveRootsCteSql,
+	canonicalRuntimePriorityCtesSql,
+	historyArchiveEffectivePrioritySql
+} from './HistoryArchiveCanonicalRuntimePrioritySql.js';
 import { hasPostgresSqlState } from './PostgresError.js';
 
 export interface HistoryArchiveReadyQueueSyncResult {
@@ -7,15 +16,21 @@ export interface HistoryArchiveReadyQueueSyncResult {
 	readonly scheduledObjects: number;
 }
 
-const schedulableObjectSql = `
-	candidate."executionDisposition" = 'executable'
-	and candidate."dependencyReady" = true
+export function historyArchiveSchedulableObjectSql(
+	objectAlias: string
+): string {
+	return `
+	${objectAlias}."executionDisposition" = 'executable'
+	and ${objectAlias}."dependencyReady" = true
 	and (
-		candidate."transitionEffectsRequiredAt" is null
-		or candidate."transitionEffectsCompletedAt" is not null
+		${objectAlias}."transitionEffectsRequiredAt" is null
+		or ${objectAlias}."transitionEffectsCompletedAt" is not null
 	)
-	and candidate.status in ('pending', 'failed')
+	and ${objectAlias}.status in ('pending', 'failed')
 `;
+}
+
+const schedulableObjectSql = historyArchiveSchedulableObjectSql('candidate');
 
 const readyAtSql = `case
 	when candidate.status = 'failed' then coalesce(
@@ -28,7 +43,9 @@ end`;
 const cleanupReadyObjectsSql = `
 	with removed as (
 		delete from "history_archive_object_ready" ready
-		where not exists (
+		where ready."dispatchToken" is null
+			and ready."publishedAt" is null
+			and not exists (
 			select 1
 			from "history_archive_object_queue" candidate
 			where candidate."remoteId" = ready."objectRemoteId"
@@ -40,7 +57,7 @@ const cleanupReadyObjectsSql = `
 `;
 
 const refillReadyObjectsSql = `
-	with roots as materialized (
+	with ${canonicalRuntimePriorityCtesSql}, roots as materialized (
 		select root.id, root."archiveUrlIdentity", root."lastClaimedAt"
 		from "history_archive_object_queue" root
 		where root."objectType" = 'history-archive-state'
@@ -62,11 +79,7 @@ const refillReadyObjectsSql = `
 	), candidates as materialized (
 		select root.id as root_id, root."lastClaimedAt",
 			root."archiveUrlIdentity", candidate."remoteId",
-			case candidate."executionReason"
-				when 'canonical-frontier-reserve' then 0
-				when 'proof-completion-reserve' then 1
-				else 2
-			end::smallint as priority,
+			${historyArchiveEffectivePrioritySql('candidate')} as priority,
 			${readyAtSql} as "availableAt"
 		from roots root
 		join lateral (
@@ -74,17 +87,15 @@ const refillReadyObjectsSql = `
 				candidate.status, candidate."nextAttemptAt", candidate."updatedAt",
 				candidate."lastClaimedAt",
 				candidate."objectOrder", candidate."checkpointLedger",
-				candidate."objectKey", candidate.id
+				candidate."objectKey", candidate."objectType",
+				candidate."bucketHash", candidate."archiveUrlIdentity",
+				candidate.id
 			from "history_archive_object_queue" candidate
 			where candidate."archiveUrlIdentity" = root."archiveUrlIdentity"
 				and ${schedulableObjectSql}
 			order by
 				(${readyAtSql}) > now(),
-				case candidate."executionReason"
-					when 'canonical-frontier-reserve' then 0
-					when 'proof-completion-reserve' then 1
-					else 2
-				end,
+				${historyArchiveEffectivePrioritySql('candidate')},
 				candidate."lastClaimedAt" asc nulls first,
 				candidate."objectOrder",
 				candidate."checkpointLedger" desc nulls last,
@@ -105,20 +116,54 @@ const refillReadyObjectsSql = `
 		select "remoteId", "archiveUrlIdentity", priority, "availableAt",
 			now(), now()
 		from selected
-		on conflict ("archiveUrlIdentity") do update
-		set "objectRemoteId" = excluded."objectRemoteId",
-			priority = excluded.priority,
-			"availableAt" = excluded."availableAt",
-			"updatedAt" = now()
-		where stored."dispatchToken" is null
-			and (
-				stored."objectRemoteId" is distinct from excluded."objectRemoteId"
-				or stored.priority is distinct from excluded.priority
-				or stored."availableAt" is distinct from excluded."availableAt"
-			)
+		on conflict do nothing
 		returning "objectRemoteId"
+	), updated as (
+		update "history_archive_object_ready" stored
+		set "objectRemoteId" = selected."remoteId",
+			priority = selected.priority,
+			"availableAt" = selected."availableAt",
+			"updatedAt" = now()
+		from selected
+		where stored."archiveUrlIdentity" = selected."archiveUrlIdentity"
+			and stored."dispatchToken" is null
+			and stored."publishedAt" is null
+			and (
+				(
+					stored.priority = selected.priority
+					and (
+						stored."objectRemoteId" = selected."remoteId"
+						or not exists (
+							select 1
+							from "history_archive_object_ready" existing
+							where existing."objectRemoteId" = selected."remoteId"
+						)
+					)
+				)
+				or (
+					stored.priority is distinct from selected.priority
+					and stored."objectRemoteId" = selected."remoteId"
+					and not exists (
+						select 1
+						from "history_archive_object_ready" target_lane
+						where target_lane."archiveUrlIdentity" =
+							selected."archiveUrlIdentity"
+							and target_lane.priority = selected.priority
+					)
+				)
+			)
+			and (
+				stored."objectRemoteId" is distinct from selected."remoteId"
+				or stored.priority is distinct from selected.priority
+				or stored."availableAt" is distinct from selected."availableAt"
+			)
+		returning stored."objectRemoteId"
+	), changed as (
+		select "objectRemoteId" from inserted
+		union all
+		select "objectRemoteId" from updated
 	)
-	select count(*)::integer as count from inserted
+	select count(*)::integer as count from changed
 `;
 
 const readyObjectCountSql = `
@@ -210,10 +255,9 @@ export async function bootstrapHistoryArchiveReadyQueueIfEmpty(
 				set local statement_timeout = '2s';
 				set local jit = off
 			`);
-			const [guard] = (await transaction.query(
-				bootstrapLockSql,
-				[boundedLimit]
-			)) as readonly BootstrapGuardRow[];
+			const [guard] = (await transaction.query(bootstrapLockSql, [
+				boundedLimit
+			])) as readonly BootstrapGuardRow[];
 			if (guard?.locked !== true || guard.hasFreeSlot !== true) return 0;
 			const [scheduled] = (await transaction.query(refillReadyObjectsSql, [
 				boundedLimit
@@ -244,7 +288,7 @@ async function enqueueReadyRoots(
 }
 
 const enqueueReadyObjectsSql = `
-	with roots as materialized (
+	with ${canonicalRuntimePriorityCtesSql}, roots as materialized (
 		select source."archiveUrlIdentity"
 		from "history_archive_object_queue" source
 		where source."remoteId" = any($1::uuid[])
@@ -253,11 +297,7 @@ const enqueueReadyObjectsSql = `
 		from unnest($2::text[]) requested("archiveUrlIdentity")
 	), candidates as materialized (
 		select root."archiveUrlIdentity", candidate."remoteId",
-			case candidate."executionReason"
-				when 'canonical-frontier-reserve' then 0
-				when 'proof-completion-reserve' then 1
-				else 2
-			end::smallint as priority,
+			${historyArchiveEffectivePrioritySql('candidate')} as priority,
 			${readyAtSql} as "availableAt"
 		from roots root
 		join lateral (
@@ -265,13 +305,15 @@ const enqueueReadyObjectsSql = `
 			from "history_archive_object_queue" candidate
 			where candidate."archiveUrlIdentity" = root."archiveUrlIdentity"
 				and ${schedulableObjectSql}
+				and not exists (
+					select 1
+					from "history_archive_object_host_throttle" throttle
+					where throttle."hostIdentity" = candidate."hostIdentity"
+						and throttle."blockedUntil" > now()
+				)
 			order by
 				(${readyAtSql}) > now(),
-				case candidate."executionReason"
-					when 'canonical-frontier-reserve' then 0
-					when 'proof-completion-reserve' then 1
-					else 2
-				end,
+				${historyArchiveEffectivePrioritySql('candidate')},
 				candidate."lastClaimedAt" asc nulls first,
 				candidate."objectOrder",
 				candidate."checkpointLedger" desc nulls last,
@@ -287,36 +329,99 @@ const enqueueReadyObjectsSql = `
 		select "remoteId", "archiveUrlIdentity", priority, "availableAt",
 			now(), now()
 		from candidates
-		on conflict ("archiveUrlIdentity") do update
-		set "objectRemoteId" = excluded."objectRemoteId",
-			priority = excluded.priority,
-			"availableAt" = excluded."availableAt",
-			"updatedAt" = now()
-		where stored."dispatchToken" is null
-			and (
-				stored."objectRemoteId" is distinct from excluded."objectRemoteId"
-				or stored.priority is distinct from excluded.priority
-				or stored."availableAt" is distinct from excluded."availableAt"
-			)
+		on conflict do nothing
 		returning "objectRemoteId"
+	), updated as (
+		update "history_archive_object_ready" stored
+		set "objectRemoteId" = candidates."remoteId",
+			priority = candidates.priority,
+			"availableAt" = candidates."availableAt",
+			"updatedAt" = now()
+		from candidates
+		where stored."archiveUrlIdentity" = candidates."archiveUrlIdentity"
+			and stored."dispatchToken" is null
+			and stored."publishedAt" is null
+			and (
+				(
+					stored.priority = candidates.priority
+					and (
+						stored."objectRemoteId" = candidates."remoteId"
+						or not exists (
+							select 1
+							from "history_archive_object_ready" existing
+							where existing."objectRemoteId" = candidates."remoteId"
+						)
+					)
+				)
+				or (
+					stored.priority is distinct from candidates.priority
+					and stored."objectRemoteId" = candidates."remoteId"
+					and not exists (
+						select 1
+						from "history_archive_object_ready" target_lane
+						where target_lane."archiveUrlIdentity" =
+							candidates."archiveUrlIdentity"
+							and target_lane.priority = candidates.priority
+					)
+				)
+			)
+			and (
+				stored."objectRemoteId" is distinct from candidates."remoteId"
+				or stored.priority is distinct from candidates.priority
+				or stored."availableAt" is distinct from candidates."availableAt"
+			)
+		returning stored."objectRemoteId"
+	), changed as (
+		select "objectRemoteId" from inserted
+		union all
+		select "objectRemoteId" from updated
 	)
-	select count(*)::integer as count from inserted
+	select count(*)::integer as count from changed
 `;
 
-export const historyArchiveOutstandingReadyCountCtesSql = `
+export function buildHistoryArchiveOutstandingReadyCountCtesSql(
+	maximumPriority: HistoryArchiveBrokerPriority = getHistoryArchiveBrokerMaximumPriority(),
+	runtimeTargetCtesAvailable = false
+): string {
+	return `
+	${runtimeTargetCtesAvailable ? canonicalRuntimeArchiveRootsCteSql : canonicalRuntimePriorityCtesSql},
 	active as (
 		select count(*)::integer as count
 		from "history_archive_object_claim_slot" slot
 		where slot."objectRemoteId" is not null
 	), ready as (
 		select count(*)::integer as count
-		from "history_archive_object_ready"
-		where "availableAt" <= now()
+		from "history_archive_object_ready" queued
+		join "history_archive_object_queue" object
+			on object."remoteId" = queued."objectRemoteId"
+		where queued."publishedAt" is not null
+			or queued."dispatchToken" is not null
+			or (
+				queued."availableAt" <= now()
+				and (
+					${historyArchiveSchedulableObjectSql('object')}
+					and ${historyArchiveEffectivePrioritySql('object')} <=
+						${maximumPriority}::smallint
+					and not exists (
+						select 1
+						from "history_archive_object_host_throttle" throttle
+						where throttle."hostIdentity" = object."hostIdentity"
+							and throttle."blockedUntil" > now()
+					)
+				)
+			)
 	)
 `;
+}
 
-export const historyArchiveReadyPressureSql = `
-	with ${historyArchiveOutstandingReadyCountCtesSql}, recent_events as (
+export const historyArchiveOutstandingReadyCountCtesSql =
+	buildHistoryArchiveOutstandingReadyCountCtesSql();
+
+export function buildHistoryArchiveReadyPressureSql(
+	maximumPriority: HistoryArchiveBrokerPriority = getHistoryArchiveBrokerMaximumPriority()
+): string {
+	return `
+	with ${buildHistoryArchiveOutstandingReadyCountCtesSql(maximumPriority)}, recent_events as (
 		select 1
 		from "history_archive_object_event"
 		where "eventType" = 'verified'
@@ -328,6 +433,10 @@ export const historyArchiveReadyPressureSql = `
 		(select count(*)::integer from recent_events) as "recentCompletions"
 	from active, ready
 `;
+}
+
+export const historyArchiveReadyPressureSql =
+	buildHistoryArchiveReadyPressureSql();
 
 export const historyArchiveReadyRootActivityCtesSql = `
 	active_objects as materialized (

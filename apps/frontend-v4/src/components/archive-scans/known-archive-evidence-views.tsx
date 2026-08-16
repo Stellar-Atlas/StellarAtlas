@@ -59,7 +59,7 @@ export function KnownArchiveEvidenceTabContent({
 				<ObjectPageView evidence={evidence} view={view} />
 			) : null}
 			{view.tab === 'repair' ? (
-				<RepairView evidence={evidence} view={view} />
+				<RepairView repair={view.repair} roots={evidence.roots} />
 			) : null}
 			{view.tab === 'summary' ? (
 				<ArchiveRootSummaryTable roots={evidence.roots} />
@@ -177,8 +177,7 @@ function ObjectPageView({
 				? counts.activeObjects
 				: counts.pendingObjects;
 	const showWorkToggle =
-		view.tab === 'work' &&
-		counts.pendingObjects + counts.activeObjects > 0;
+		view.tab === 'work' && counts.pendingObjects + counts.activeObjects > 0;
 	return (
 		<>
 			{showWorkToggle ? (
@@ -246,15 +245,14 @@ function ObjectPageView({
 	);
 }
 
-function RepairView({
-	evidence,
-	view
+export function RepairView({
+	repair,
+	roots
 }: {
-	readonly evidence: PublicKnownArchiveEvidence;
-	readonly view: KnownArchiveEvidenceViewState;
+	readonly repair: KnownArchiveEvidenceViewState['repair'];
+	readonly roots: PublicKnownArchiveEvidence['roots'];
 }): React.JSX.Element {
-	const repair = view.repair;
-	if (evidence.roots.length === 0) {
+	if (roots.length === 0) {
 		return (
 			<p className="known-evidence-empty">
 				No archive source is available for repair inspection.
@@ -263,13 +261,13 @@ function RepairView({
 	}
 	return (
 		<>
-			{evidence.roots.length > 1 ? (
+			{roots.length > 1 ? (
 				<div className="known-evidence-filters">
 					<ArchiveSourceFilter
 						disabled={false}
 						emptyLabel="Select a source"
 						onChange={repair.changeArchiveUrl}
-						roots={evidence.roots}
+						roots={roots}
 						value={repair.archiveUrl}
 					/>
 				</div>

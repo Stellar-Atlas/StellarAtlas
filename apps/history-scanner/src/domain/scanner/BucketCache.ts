@@ -1,9 +1,10 @@
 import { createReadStream, createWriteStream } from 'node:fs';
 import type { Dirent } from 'node:fs';
+import { randomUUID } from 'node:crypto';
 import {
 	mkdir,
+	link,
 	readdir,
-	rename,
 	rm,
 	stat,
 	utimes,
@@ -69,7 +70,10 @@ export class BucketCache {
 		verify: (stream: Readable) => Promise<Result<void, Error>>
 	): Promise<Result<void, BucketCacheFailure>> {
 		const finalPath = this.getBucketPath(hash);
-		const temporaryPath = `${finalPath}.${process.pid}.${Date.now()}.tmp`;
+		if (await this.hasCachedFile(finalPath)) {
+			return this.verifySourceWithoutRewritingCache(source, verify);
+		}
+		const temporaryPath = `${finalPath}.${process.pid}.${randomUUID()}.tmp`;
 
 		let sourceError: Error | null = null;
 		try {
@@ -120,7 +124,52 @@ export class BucketCache {
 		temporaryPath: string,
 		finalPath: string
 	): Promise<void> {
-		await rename(temporaryPath, finalPath);
+		try {
+			// A bucket path is its verified content hash. A hard link publishes the
+			// first verified writer atomically without replacing an identical cache
+			// entry produced concurrently by another worker process.
+			await link(temporaryPath, finalPath);
+		} catch (error) {
+			if (!hasErrorCode(error, 'EEXIST')) throw mapUnknownToError(error);
+		} finally {
+			await rm(temporaryPath, { force: true });
+		}
+	}
+
+	private async hasCachedFile(filePath: string): Promise<boolean> {
+		try {
+			return (await stat(filePath)).isFile();
+		} catch {
+			return false;
+		}
+	}
+
+	private async verifySourceWithoutRewritingCache(
+		source: Readable,
+		verify: (stream: Readable) => Promise<Result<void, Error>>
+	): Promise<Result<void, BucketCacheFailure>> {
+		let sourceError: Error | null = null;
+		source.on('error', (error) => {
+			sourceError = mapUnknownToError(error);
+		});
+
+		try {
+			const verifyResult = await verify(source);
+			if (verifyResult.isOk()) return ok(undefined);
+			return err(
+				new BucketCacheFailure(
+					sourceError === null ? 'content-verification' : 'source-stream',
+					sourceError ?? verifyResult.error
+				)
+			);
+		} catch (error) {
+			return err(
+				new BucketCacheFailure(
+					sourceError === null ? 'content-verification' : 'source-stream',
+					sourceError ?? mapUnknownToError(error)
+				)
+			);
+		}
 	}
 
 	private scheduleMaintenance(incomingBytes: number): void {
@@ -248,4 +297,13 @@ export class BucketCache {
 			`${hash}.xdr.gz`
 		);
 	}
+}
+
+function hasErrorCode(error: unknown, expected: string): boolean {
+	return (
+		typeof error === 'object' &&
+		error !== null &&
+		'code' in error &&
+		error.code === expected
+	);
 }

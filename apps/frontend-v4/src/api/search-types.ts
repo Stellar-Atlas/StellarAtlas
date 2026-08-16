@@ -1,7 +1,10 @@
 import type { PublicKnownNodeScope } from './known-network-types';
 
 export type PublicSearchEntityType = 'archive-root' | 'node' | 'organization';
-export type PublicSearchArchiveStatus = 'error' | 'ok' | 'unknown';
+export type PublicSearchArchiveStatus =
+	'error' | 'ok' | 'scanner-issue' | 'unknown' | 'unreachable';
+export type PublicSearchArchiveStatusFilter =
+	PublicSearchArchiveStatus | 'issue';
 export type PublicSearchDocumentScope =
 	| Exclude<PublicKnownNodeScope, 'all-known'>
 	| 'archive-root'
@@ -24,6 +27,7 @@ export type PublicSearchResultSource = 'meilisearch' | 'postgres_canonical';
 export type PublicSearchSource = PublicSearchResultSource | 'unavailable';
 
 export interface PublicSearchHit {
+	readonly archiveStatus?: PublicSearchArchiveStatus;
 	readonly detail: string;
 	readonly entityId: string;
 	readonly entityType: PublicSearchEntityType;

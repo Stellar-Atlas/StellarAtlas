@@ -9,6 +9,7 @@ import {
 	historyArchiveObjectHostFailureUpsertSql,
 	toHistoryArchiveObjectHostFailureSqlParams
 } from './HistoryArchiveObjectHostThrottleSql.js';
+import { enqueueHistoryArchiveCheckpointProofRefreshes } from './HistoryArchiveCheckpointProofRefreshQueue.js';
 
 export async function markHistoryArchiveObjectFailed(
 	repository: Repository<HistoryArchiveObject>,
@@ -70,6 +71,7 @@ export async function markHistoryArchiveObjectFailed(
 				...toHistoryArchiveObjectHostFailureSqlParams(hostFailure)
 			]);
 		}
+		await enqueueHistoryArchiveCheckpointProofRefreshes(manager, [remoteId]);
 
 		return true;
 	});

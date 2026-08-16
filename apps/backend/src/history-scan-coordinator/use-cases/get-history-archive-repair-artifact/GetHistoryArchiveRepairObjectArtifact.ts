@@ -7,12 +7,17 @@ import type {
 } from '../../domain/history-archive-repair-artifact/HistoryArchiveRepairObjectArtifactRepository.js';
 import type { HistoryArchiveObjectRepository } from '../../domain/history-archive-object/HistoryArchiveObjectRepository.js';
 import { TYPES } from '../../infrastructure/di/di-types.js';
-import { isRepairableObjectFailure } from '../get-history-archive-repair-plan/HistoryArchiveRepairActionMapper.js';
+import {
+	isRepairCandidateObjectFailure,
+	isProofGatedMissingObjectFailure,
+	isRepairableObjectFailure,
+	isStrictVerifiedRepairSource
+} from '../get-history-archive-repair-plan/HistoryArchiveRepairEligibility.js';
 
 const uuidPattern =
 	/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const digestPattern = /^[0-9a-f]{64}$/;
-const sourceLimit = 5;
+const sourceLimit = 3;
 
 export type HistoryArchiveRepairObjectDownloadUnavailableReason =
 	HistoryArchiveRepairObjectArtifactUnavailableReason | 'proof-no-longer-valid';
@@ -33,6 +38,8 @@ export interface GetHistoryArchiveRepairObjectArtifactInput {
 	readonly proofEvaluatedAtMs: number;
 	readonly proofVersion: number;
 	readonly targetRemoteId: string;
+	readonly targetEvidenceUpdatedAtMs: number;
+	readonly targetFailureKind: 'integrity' | 'missing';
 }
 
 @injectable()
@@ -56,7 +63,10 @@ export class GetHistoryArchiveRepairObjectArtifact {
 		if (
 			target === null ||
 			target.status !== 'failed' ||
-			!isRepairableObjectFailure(target)
+			!isRepairCandidateObjectFailure(target) ||
+			!(target.updatedAt instanceof Date) ||
+			target.updatedAt.getTime() !== normalized.targetEvidenceUpdatedAtMs ||
+			getTargetFailureKind(target) !== normalized.targetFailureKind
 		) {
 			return staleProof();
 		}
@@ -73,6 +83,7 @@ export class GetHistoryArchiveRepairObjectArtifact {
 					);
 		const source = sources.find(
 			(candidate) =>
+				isStrictVerifiedRepairSource(target, candidate) &&
 				candidate.targetRemoteId === target.remoteId &&
 				candidate.candidateRemoteId === normalized.candidateRemoteId &&
 				candidate.proofId.toString() === normalized.proofId &&
@@ -106,11 +117,23 @@ function normalizeInput(
 		input.proofEvaluatedAtMs < 1 ||
 		!Number.isSafeInteger(input.proofVersion) ||
 		input.proofVersion < 1 ||
+		!Number.isSafeInteger(input.targetEvidenceUpdatedAtMs) ||
+		input.targetEvidenceUpdatedAtMs < 1 ||
+		(input.targetFailureKind !== 'integrity' &&
+			input.targetFailureKind !== 'missing') ||
 		!digestPattern.test(contentDigest)
 	) {
 		return null;
 	}
 	return { ...input, contentDigest };
+}
+
+function getTargetFailureKind(
+	target: Parameters<typeof isRepairCandidateObjectFailure>[0]
+): 'integrity' | 'missing' | null {
+	if (isProofGatedMissingObjectFailure(target)) return 'missing';
+	if (isRepairableObjectFailure(target)) return 'integrity';
+	return null;
 }
 
 function staleProof(): GetHistoryArchiveRepairObjectArtifactResult {

@@ -9,8 +9,15 @@ import type {
 	IngestFullHistoryLedgerCloseMeta
 } from '../../../use-cases/ingest-full-history-ledger-close-meta/IngestFullHistoryLedgerCloseMeta.js';
 import type { TypeOrmFullHistoryLedgerCloseMetaPriorityRangeReader } from '../../database/full-history-ledger-close-meta/TypeOrmFullHistoryLedgerCloseMetaPriorityRangeReader.js';
+import type {
+	FullHistoryLedgerCloseMetaAdmissionDecision,
+	FullHistoryLedgerCloseMetaAdmissionReason,
+	FullHistoryLedgerCloseMetaAdmissionSnapshot
+} from '../../full-history-ledger-close-meta/FullHistoryLedgerCloseMetaAdmission.js';
 
 export interface ContinuousFullHistoryLedgerCloseMetaLoopConfig {
+	readonly admissionRetryMilliseconds: number;
+	readonly cycleCooldownMilliseconds: number;
 	readonly cycleLedgerCount: number;
 	readonly errorBackoffMilliseconds: number;
 	readonly idlePollMilliseconds: number;
@@ -19,6 +26,13 @@ export interface ContinuousFullHistoryLedgerCloseMetaLoopConfig {
 }
 
 export type ContinuousFullHistoryLedgerCloseMetaEvent =
+	| {
+			readonly at: string;
+			readonly event: 'admission-deferred';
+			readonly reasons: readonly FullHistoryLedgerCloseMetaAdmissionReason[];
+			readonly retryInMilliseconds: number;
+			readonly snapshot: FullHistoryLedgerCloseMetaAdmissionSnapshot;
+	  }
 	| {
 			readonly at: string;
 			readonly event: 'ready';
@@ -67,6 +81,7 @@ export type ContinuousFullHistoryLedgerCloseMetaEvent =
 	  };
 
 export interface ContinuousFullHistoryLedgerCloseMetaLoopDependencies {
+	readonly admitCycle: () => Promise<FullHistoryLedgerCloseMetaAdmissionDecision>;
 	readonly emit: (event: ContinuousFullHistoryLedgerCloseMetaEvent) => void;
 	readonly ensureStorageCapacity: () => Promise<void>;
 	readonly formatError: (error: unknown) => string;
@@ -91,29 +106,41 @@ export async function runContinuousFullHistoryLedgerCloseMetaLoop(
 	config: ContinuousFullHistoryLedgerCloseMetaLoopConfig,
 	dependencies: ContinuousFullHistoryLedgerCloseMetaLoopDependencies
 ): Promise<void> {
-	let context = await dependencies.ingestion.prepare(dependencies.signal);
-	let nextLedger = context.registeredSource.nextLedger;
-	let reloadDurableState = false;
-	dependencies.emit({
-		at: isoTime(dependencies.now()),
-		event: 'ready',
-		nextLedger,
-		status: 'running'
-	});
+	let context: FullHistoryLedgerCloseMetaIngestionContext | null = null;
+	let nextLedger: number | null = null;
+	let readyEmitted = false;
+	let reloadDurableState = true;
 
 	while (!dependencies.signal.aborted) {
 		try {
 			if (reloadDurableState) {
+				if (!(await admitCycle(config, dependencies))) continue;
 				context = await dependencies.ingestion.prepare(dependencies.signal);
 				nextLedger = context.registeredSource.nextLedger;
 				reloadDurableState = false;
+				if (!readyEmitted) {
+					dependencies.emit({
+						at: isoTime(dependencies.now()),
+						event: 'ready',
+						nextLedger,
+						status: 'running'
+					});
+					readyEmitted = true;
+				}
 			}
-			if (boundedReplayComplete(nextLedger, config.lastAvailableLedger)) {
+			if (context === null || nextLedger === null) {
+				throw new Error('LedgerCloseMeta durable state is unavailable');
+			}
+			const cycleContext = context;
+			const durableNextLedger = nextLedger;
+			if (
+				boundedReplayComplete(durableNextLedger, config.lastAvailableLedger)
+			) {
 				dependencies.emit({
 					at: isoTime(dependencies.now()),
 					event: 'complete',
 					lastLedger: config.lastAvailableLedger,
-					nextLedger,
+					nextLedger: durableNextLedger,
 					status: 'completed'
 				});
 				return;
@@ -121,41 +148,48 @@ export async function runContinuousFullHistoryLedgerCloseMetaLoop(
 			const priorityRange =
 				config.lastAvailableLedger === null
 					? await dependencies.priorityRangeReader.readNextRange({
-							durableNextLedger: nextLedger,
+							durableNextLedger,
 							firstAvailableLedger:
-								context.registeredSource.firstAvailableLedger,
+								cycleContext.registeredSource.firstAvailableLedger,
 							maximumLedgerCount: config.cycleLedgerCount,
 							networkPassphraseHash:
-								context.registeredSource.networkPassphraseHash,
-							sourceBatchLedgerCount: context.config.ledgersPerBatch,
+								cycleContext.registeredSource.networkPassphraseHash,
+							sourceBatchLedgerCount: cycleContext.config.ledgersPerBatch,
 							typedShardLedgerCount: config.typedShardLedgerCount
 						})
 					: null;
 			if (priorityRange !== null) {
-				await dependencies.ensureStorageCapacity();
-				const startedAt = dependencies.now();
-				const receipt = await dependencies.ingestion.ingestRange(
-					context,
-					priorityRange,
-					dependencies.signal
-				);
-				nextLedger = observedDurableNextLedger(nextLedger, receipt, false);
-				const finishedAt = dependencies.now();
-				dependencies.emit({
-					at: isoTime(finishedAt),
-					durationMilliseconds: Math.max(0, finishedAt - startedAt),
-					endLedger: receipt.endLedger,
-					event: 'priority-processed',
-					nextLedger,
-					sourceObjectCount: receipt.sourceObjectCount,
-					startLedger: receipt.startLedger,
-					typedShardCount: receipt.committedBatches.length
+				if (!(await admitCycle(config, dependencies))) continue;
+				await runAdmittedAttempt(config, dependencies, async () => {
+					await dependencies.ensureStorageCapacity();
+					const startedAt = dependencies.now();
+					const receipt = await dependencies.ingestion.ingestRange(
+						cycleContext,
+						priorityRange,
+						dependencies.signal
+					);
+					const observedNextLedger = observedDurableNextLedger(
+						durableNextLedger,
+						receipt,
+						false
+					);
+					nextLedger = observedNextLedger;
+					const finishedAt = dependencies.now();
+					dependencies.emit({
+						at: isoTime(finishedAt),
+						durationMilliseconds: Math.max(0, finishedAt - startedAt),
+						endLedger: receipt.endLedger,
+						event: 'priority-processed',
+						nextLedger: observedNextLedger,
+						sourceObjectCount: receipt.sourceObjectCount,
+						startLedger: receipt.startLedger,
+						typedShardCount: receipt.committedBatches.length
+					});
 				});
 				continue;
 			}
-			await dependencies.ensureStorageCapacity();
 			const sourceFrontier = await dependencies.frontier.readLatestRange(
-				context.config,
+				cycleContext.config,
 				dependencies.signal
 			);
 			const frontier = boundedFrontier(
@@ -163,13 +197,13 @@ export async function runContinuousFullHistoryLedgerCloseMetaLoop(
 				config.lastAvailableLedger
 			);
 			if (
-				frontier.endSequence - nextLedger + 1 <
+				frontier.endSequence - durableNextLedger + 1 <
 				config.typedShardLedgerCount
 			) {
 				dependencies.emit(
 					idleEvent(
 						dependencies,
-						nextLedger,
+						durableNextLedger,
 						frontier,
 						config.idlePollMilliseconds
 					)
@@ -181,28 +215,37 @@ export async function runContinuousFullHistoryLedgerCloseMetaLoop(
 				continue;
 			}
 			const range = cycleRange(
-				nextLedger,
+				durableNextLedger,
 				frontier,
 				config.cycleLedgerCount,
 				config.typedShardLedgerCount
 			);
-			const startedAt = dependencies.now();
-			const receipt = await dependencies.ingestion.ingestRange(
-				context,
-				range,
-				dependencies.signal
-			);
-			nextLedger = observedDurableNextLedger(nextLedger, receipt, true);
-			const finishedAt = dependencies.now();
-			dependencies.emit({
-				at: isoTime(finishedAt),
-				durationMilliseconds: Math.max(0, finishedAt - startedAt),
-				endLedger: receipt.endLedger,
-				event: 'processed',
-				nextLedger,
-				sourceObjectCount: receipt.sourceObjectCount,
-				startLedger: receipt.startLedger,
-				typedShardCount: receipt.committedBatches.length
+			if (!(await admitCycle(config, dependencies))) continue;
+			await runAdmittedAttempt(config, dependencies, async () => {
+				await dependencies.ensureStorageCapacity();
+				const startedAt = dependencies.now();
+				const receipt = await dependencies.ingestion.ingestRange(
+					cycleContext,
+					range,
+					dependencies.signal
+				);
+				const observedNextLedger = observedDurableNextLedger(
+					durableNextLedger,
+					receipt,
+					true
+				);
+				nextLedger = observedNextLedger;
+				const finishedAt = dependencies.now();
+				dependencies.emit({
+					at: isoTime(finishedAt),
+					durationMilliseconds: Math.max(0, finishedAt - startedAt),
+					endLedger: receipt.endLedger,
+					event: 'processed',
+					nextLedger: observedNextLedger,
+					sourceObjectCount: receipt.sourceObjectCount,
+					startLedger: receipt.startLedger,
+					typedShardCount: receipt.committedBatches.length
+				});
 			});
 		} catch (error) {
 			if (dependencies.signal.aborted) break;
@@ -215,6 +258,43 @@ export async function runContinuousFullHistoryLedgerCloseMetaLoop(
 			});
 			await dependencies.wait(
 				config.errorBackoffMilliseconds,
+				dependencies.signal
+			);
+		}
+	}
+}
+
+async function admitCycle(
+	config: ContinuousFullHistoryLedgerCloseMetaLoopConfig,
+	dependencies: ContinuousFullHistoryLedgerCloseMetaLoopDependencies
+): Promise<boolean> {
+	const decision = await dependencies.admitCycle();
+	if (decision.admitted) return true;
+	dependencies.emit({
+		at: isoTime(dependencies.now()),
+		event: 'admission-deferred',
+		reasons: decision.reasons,
+		retryInMilliseconds: config.admissionRetryMilliseconds,
+		snapshot: decision.snapshot
+	});
+	await dependencies.wait(
+		config.admissionRetryMilliseconds,
+		dependencies.signal
+	);
+	return false;
+}
+
+async function runAdmittedAttempt(
+	config: ContinuousFullHistoryLedgerCloseMetaLoopConfig,
+	dependencies: ContinuousFullHistoryLedgerCloseMetaLoopDependencies,
+	attempt: () => Promise<void>
+): Promise<void> {
+	try {
+		await attempt();
+	} finally {
+		if (!dependencies.signal.aborted && config.cycleCooldownMilliseconds > 0) {
+			await dependencies.wait(
+				config.cycleCooldownMilliseconds,
 				dependencies.signal
 			);
 		}

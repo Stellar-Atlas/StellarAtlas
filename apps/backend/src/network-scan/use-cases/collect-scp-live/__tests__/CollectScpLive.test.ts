@@ -22,8 +22,17 @@ import type { ScpStatementObservation as CrawlerScpStatementObservation } from '
 import { CollectScpLive } from '../CollectScpLive.js';
 
 describe('CollectScpLive', () => {
+	const originalScpProjectionEnabled =
+		process.env.SCP_MEILISEARCH_PROJECTION_ENABLED;
+
 	afterEach(() => {
 		jest.useRealTimers();
+		if (originalScpProjectionEnabled === undefined) {
+			delete process.env.SCP_MEILISEARCH_PROJECTION_ENABLED;
+		} else {
+			process.env.SCP_MEILISEARCH_PROJECTION_ENABLED =
+				originalScpProjectionEnabled;
+		}
 	});
 
 	it('projects a durable streamed observation only through the canonical tail', async () => {
@@ -106,6 +115,32 @@ describe('CollectScpLive', () => {
 
 		expect(result.isErr()).toBe(true);
 		expect(sut.liveStore.saveMany).not.toHaveBeenCalled();
+	});
+
+	it('can pause only Meilisearch projection while canonical collection continues', async () => {
+		process.env.SCP_MEILISEARCH_PROJECTION_ENABLED = 'false';
+		const sut = setupSUT();
+		const observation = createObservation('11');
+		sut.crawlerService.crawl.mockImplementation(async (...args) => {
+			await args[5]?.(observation);
+			return ok(createCrawlResult(11n, [11], 1));
+		});
+
+		const result = await sut.collectScpLive.execute();
+
+		expect(result.isOk()).toBe(true);
+		expect(sut.observationRepository.saveMany).toHaveBeenCalledWith(
+			[observation],
+			'scp_live_collector'
+		);
+		expect(
+			sut.observationRepository.findProjectionEventPage
+		).not.toHaveBeenCalled();
+		expect(sut.liveStore.saveMany).not.toHaveBeenCalled();
+		await expect(sut.collectScpLive.shutDown(1_000)).resolves.toEqual({
+			canonicalDrained: true,
+			projectionDrained: true
+		});
 	});
 
 	it('requests a persistent crawler observation', async () => {
@@ -219,7 +254,8 @@ describe('CollectScpLive', () => {
 		jest.useFakeTimers();
 		const sut = setupSUT();
 		const observation = createObservation('11');
-		sut.observationRepository.saveMany.mockReturnValue(new Promise(() => {}));
+		const postgres = deferred<CrawlerScpStatementObservation[]>();
+		sut.observationRepository.saveMany.mockReturnValue(postgres.promise);
 		sut.crawlerService.crawl.mockImplementation(async (...args) => {
 			void Promise.resolve(args[5]?.(observation)).catch(() => undefined);
 			return ok(createCrawlResult(11n, [11], 1));
@@ -232,17 +268,16 @@ describe('CollectScpLive', () => {
 		);
 		await flushMicrotasks();
 		const shutdown = sut.collectScpLive.shutDown(20_000);
-		jest.advanceTimersByTime(
-			scpStatementObservationPolicy.persistenceSaveTimeoutMs
-		);
+		jest.advanceTimersByTime(20_000);
 		await flushMicrotasks();
 
 		await expect(shutdown).resolves.toEqual({
 			canonicalDrained: false,
 			projectionDrained: false
 		});
+		postgres.resolve([observation]);
 		const executionResult = await execution;
-		expect(executionResult.isErr()).toBe(true);
+		expect(executionResult.isOk()).toBe(true);
 		expect(sut.liveStore.saveMany).not.toHaveBeenCalled();
 	});
 

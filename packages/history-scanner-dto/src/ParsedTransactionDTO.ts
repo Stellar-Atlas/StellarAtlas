@@ -1,6 +1,6 @@
 import { err, ok, Result } from 'neverthrow';
+import { parsedHistoryMaximumBatchRecords } from './ParsedHistoryBatchLimits.js';
 
-const maximumBatchSize = 1_000;
 const maximumLedgerSequence = 0xffff_ffff;
 const maximumTransactionIndex = 0x7fff_ffff;
 
@@ -137,7 +137,7 @@ function isValidBatch(
 		typeof json.observedAt === 'string' &&
 		isCanonicalTimestamp(json.observedAt) &&
 		Array.isArray(json.records) &&
-		json.records.length <= maximumBatchSize &&
+		json.records.length <= parsedHistoryMaximumBatchRecords &&
 		json.records.every(isValidRecord)
 	)) {
 		return false;

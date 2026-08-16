@@ -1,6 +1,7 @@
 import type { Repository } from 'typeorm';
 import type { HistoryArchiveObject } from '@history-scan-coordinator/domain/history-archive-object/HistoryArchiveObject.js';
 import type { HistoryArchiveObjectExecutionReconciliationResult } from '@history-scan-coordinator/domain/history-archive-object/HistoryArchiveObjectRepository.js';
+import { getHistoryArchiveBrokerMaximumPriority } from '@history-scan-coordinator/domain/history-archive-object/HistoryArchiveBrokerPriority.js';
 import {
 	calculateHistoryArchivePlanningPressure,
 	historyArchiveCanonicalReserveCount,
@@ -12,7 +13,7 @@ import {
 	historyArchiveThroughputWindowMinutes
 } from '@history-scan-coordinator/domain/history-archive-object/HistoryArchiveObjectPlanningPolicy.js';
 import {
-	admitCanonicalFrontierSql,
+	buildAdmitCanonicalFrontierSql,
 	canonicalRuntimeTargetCtes,
 	materializeCanonicalFrontierDependenciesSql
 } from './HistoryArchiveCanonicalFrontierSql.js';
@@ -23,7 +24,7 @@ import {
 	seedHistoryArchiveFrontierCursorsSql
 } from './HistoryArchiveObjectFrontierSql.js';
 import {
-	historyArchiveReadyPressureSql,
+	buildHistoryArchiveReadyPressureSql,
 	synchronizeHistoryArchiveReadyQueue
 } from './HistoryArchiveObjectReadyQueue.js';
 import { hasPostgresSqlState } from './PostgresError.js';
@@ -42,9 +43,10 @@ interface AdmissionRow {
 
 export async function reconcileHistoryArchiveObjectExecution(
 	repository: Repository<HistoryArchiveObject>,
-	options: { readonly admitLegacyObjects?: boolean } = {}
+	options: { readonly admitGenericObjects?: boolean } = {}
 ): Promise<HistoryArchiveObjectExecutionReconciliationResult> {
 	return await repository.manager.transaction(async (manager) => {
+		const maximumPriority = getHistoryArchiveBrokerMaximumPriority();
 		await manager.query(`set local lock_timeout = '500ms'`);
 		await manager.query(`set local statement_timeout = '30s'`);
 		await manager.query(`set local jit = off`);
@@ -57,9 +59,8 @@ export async function reconcileHistoryArchiveObjectExecution(
 		await backfillLegacyCheckpointContentDigests(manager);
 		await refreshOneStaleCanonicalCheckpointProof(manager);
 		await manager.query(materializeCanonicalFrontierDependenciesSql);
-		if (options.admitLegacyObjects === false) return emptyResult();
 		const [canonicalAdmission] = (await manager.query(
-			admitCanonicalFrontierSql,
+			buildAdmitCanonicalFrontierSql(maximumPriority),
 			[historyArchiveCanonicalReserveCount, historyArchivePerHostConcurrency]
 		)) as readonly { readonly count: number | string }[];
 		const canonicalAdmittedObjects = Number(canonicalAdmission?.count ?? 0);
@@ -67,10 +68,10 @@ export async function reconcileHistoryArchiveObjectExecution(
 			manager,
 			historyArchiveMaximumWatermark
 		);
-		const [counts] = (await manager.query(historyArchiveReadyPressureSql, [
-			historyArchiveThroughputSampleCap,
-			historyArchiveThroughputWindowMinutes
-		])) as readonly PressureRow[];
+		const [counts] = (await manager.query(
+			buildHistoryArchiveReadyPressureSql(maximumPriority),
+			[historyArchiveThroughputSampleCap, historyArchiveThroughputWindowMinutes]
+		)) as readonly PressureRow[];
 		const pressure = calculateHistoryArchivePlanningPressure({
 			outstandingObjects: Number(counts?.outstandingObjects ?? 0),
 			recentCompletions: Number(counts?.recentCompletions ?? 0)
@@ -86,22 +87,29 @@ export async function reconcileHistoryArchiveObjectExecution(
 			};
 		}
 
-		const proofAdmissionLimit = Math.min(
-			historyArchiveConsumerCount,
-			pressure.availableSlots
-		);
-		const [proofAdmission] = (await manager.query(
-			admitProofCompletionReserveSql,
-			[proofAdmissionLimit]
-		)) as readonly { readonly count: number | string }[];
-		const proofAdmittedObjects = Number(proofAdmission?.count ?? 0);
+		let proofAdmittedObjects = 0;
+		if (maximumPriority >= 1) {
+			const proofAdmissionLimit = Math.min(
+				historyArchiveConsumerCount,
+				pressure.availableSlots
+			);
+			const [proofAdmission] = (await manager.query(
+				admitProofCompletionReserveSql,
+				[proofAdmissionLimit]
+			)) as readonly { readonly count: number | string }[];
+			proofAdmittedObjects = Number(proofAdmission?.count ?? 0);
+		}
 		const frontierSlots = Math.max(
 			0,
 			pressure.availableSlots - proofAdmittedObjects
 		);
 
 		let admission: AdmissionRow | undefined;
-		if (frontierSlots > 0) {
+		if (
+			maximumPriority >= 2 &&
+			frontierSlots > 0 &&
+			options.admitGenericObjects !== false
+		) {
 			admission = await admitGenericHistoryArchiveFrontier(
 				manager,
 				frontierSlots
@@ -219,6 +227,12 @@ export const admitProofCompletionReserveSql = `
 		where candidate.id = reserved.id
 			and reserved.root_rank > 1
 			and reserved.status = 'pending'
+			and not exists (
+				select 1
+				from "history_archive_object_ready" ready
+				where ready."objectRemoteId" = candidate."remoteId"
+					and ready."dispatchToken" is not null
+			)
 		returning candidate.id
 	), proof_fact_candidates as materialized (
 		select newest."archiveUrlIdentity", newest."checkpointLedger",
@@ -295,6 +309,12 @@ export const admitProofCompletionReserveSql = `
 				'proof-completion-reserve'
 			and not exists (
 				select 1
+				from "history_archive_object_ready" ready
+				where ready."objectRemoteId" = candidate."remoteId"
+					and ready."dispatchToken" is not null
+			)
+			and not exists (
+				select 1
 				from "history_archive_object_queue" reserved
 				where reserved."archiveUrlIdentity" = candidate."archiveUrlIdentity"
 					and reserved."executionReason" = 'proof-completion-reserve'
@@ -344,6 +364,12 @@ export const admitProofCompletionReserveSql = `
 			)
 			and candidate."executionReason" is distinct from
 				'proof-completion-reserve'
+			and not exists (
+				select 1
+				from "history_archive_object_ready" ready
+				where ready."objectRemoteId" = candidate."remoteId"
+					and ready."dispatchToken" is not null
+			)
 			and not exists (
 				select 1
 				from "history_archive_object_queue" reserved

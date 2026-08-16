@@ -28,7 +28,8 @@ export const historyArchiveCheckpointProofTargetCtesSql = `
 		select $1::text as "archiveUrlIdentity", ledger as "checkpointLedger"
 		from (values
 			($2::integer),
-			(case when $2::integer <= 2147483583 then $2::integer + 64 end)
+			(case when $4::boolean and $2::integer <= 2147483583
+				then $2::integer + 64 end)
 		) requested(ledger)
 		where ledger is not null
 		union

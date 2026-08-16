@@ -29,7 +29,7 @@ const endpointGroups: EndpointGroup[] = [
 			'/v1/nodes',
 			'/v1/nodes/:publicKey',
 			'/v1/nodes/:publicKey/snapshots',
-			'/v1/known/nodes?scope=:scope&page=:page',
+			'/v1/known/nodes?scope=:scope&limit=:limit&offset=:offset',
 			'/v1/known/nodes/:publicKey',
 			'/v1/node-snapshots',
 			'/v1/nodes/:publicKey/statistics?from=:iso&to=:iso',
@@ -37,7 +37,7 @@ const endpointGroups: EndpointGroup[] = [
 			'/v1/organizations',
 			'/v1/organizations/:organizationId',
 			'/v1/organizations/:organizationId/snapshots',
-			'/v1/known/organizations?scope=:scope&page=:page',
+			'/v1/known/organizations?scope=:scope&limit=:limit&offset=:offset',
 			'/v1/known/organizations/:organizationId',
 			'/v1/organization-snapshots',
 			'/v1/organizations/:organizationId/statistics?from=:iso&to=:iso',
@@ -47,8 +47,10 @@ const endpointGroups: EndpointGroup[] = [
 	},
 	{
 		description:
-			'Current archive state, object checks, failures, and captured evidence for normalized history archive URLs.',
+			'Current archive state, validator-owned evidence, object failures, and generated repair plans for exact history archive roots.',
 		endpoints: [
+			'/v1/known/nodes/:publicKey/archive-evidence',
+			'/v1/known/organizations/:organizationId/archive-evidence',
 			'/v1/archive-scans/objects/status-summary',
 			'/v1/archive-scans/objects?status=:status&page=:page',
 			'/v1/archive-scans/objects/buckets/:bucketHash/coverage',
@@ -76,8 +78,13 @@ const endpointGroups: EndpointGroup[] = [
 	},
 	{
 		description:
-			'Faceted lookup across current network entities and indexed metadata.',
-		endpoints: ['/v1/search', '/v1/search/nodes', '/v1/search/organizations'],
+			'Faceted lookup with bounded offset pagination and explicit totalIsExact metadata. archiveStatus=issue includes confirmed remote archive errors and current unreachable roots; scanner-issue remains a separate infrastructure status.',
+		endpoints: [
+			'/v1/search',
+			'/v1/search/nodes?scope=current-validator&validator=true&archiveStatus=issue&limit=25&offset=0',
+			'/v1/search/nodes?scope=current-validator&validator=true&archiveStatus=error',
+			'/v1/search/organizations'
+		],
 		title: 'Search known network entities'
 	},
 	{

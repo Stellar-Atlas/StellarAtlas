@@ -146,6 +146,7 @@ function emptyArchiveSummary(): PublicHistoryArchiveStatusSummary {
 			categoryConsistentArchiveCheckpoints: 0,
 			completeArchiveCheckpoints: 0,
 			discoveryCompleteArchiveRoots: 0,
+			durableVerifiedArchiveCheckpoints: 0,
 			expectedArchiveCheckpoints: 0,
 			failedArchiveCheckpoints: 0,
 			latestCheckpointLedger: null,
@@ -161,6 +162,12 @@ function emptyArchiveSummary(): PublicHistoryArchiveStatusSummary {
 		sourceLimit: 256,
 		sources: [],
 		sourcesTruncated: false,
+		transitionReconciliation: {
+			oldestPendingAgeMs: null,
+			oldestPendingAt: null,
+			pendingTerminalEffects: 0,
+			status: 'caught-up'
+		},
 		unclassifiedFailures: 0
 	};
 }

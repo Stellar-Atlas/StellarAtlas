@@ -87,7 +87,7 @@ export const fetchHistoryArchiveObjectEvidenceForArchive = (
 
 export const fetchHistoryArchiveRepairPlanForArchive = (
 	historyUrl: string,
-	limit = 100,
+	limit = 50,
 	options?: FetchOptions
 ): Promise<PublicHistoryArchiveRepairPlan> =>
 	fetchJson<unknown>(

@@ -41,7 +41,8 @@ export async function refreshOneStaleCanonicalCheckpointProof(
 	await manager.query(historyArchiveCheckpointProofRefreshSql, [
 		target.archiveUrlIdentity,
 		target.checkpointLedger,
-		null
+		null,
+		false
 	]);
 	return true;
 }

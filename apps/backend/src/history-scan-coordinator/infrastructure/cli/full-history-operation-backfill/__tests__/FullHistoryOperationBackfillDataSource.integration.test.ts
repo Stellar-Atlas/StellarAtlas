@@ -60,11 +60,10 @@ describe('full-history operation backfill DataSource composition', () => {
 			await storeCanonicalBaseFacts(manager, input, networkHash);
 		});
 
-		await expect(
-			new TypeOrmFullHistoryOperationBackfillRepository(
-				dataSource
-			).storeOperations(input)
-		).resolves.toEqual({
+		const repository = new TypeOrmFullHistoryOperationBackfillRepository(
+			dataSource
+		);
+		await expect(repository.storeOperations(input)).resolves.toEqual({
 			accountReferenceCount: input.operationAccountReferences.length,
 			batchId: input.batchId,
 			operationCount: input.operations.length,
@@ -77,5 +76,18 @@ describe('full-history operation backfill DataSource composition', () => {
 			 from "full_history_operation_account_reference_batch_coverage"`
 		);
 		expect(coverage).toEqual([{ batchId: input.batchId }]);
+		const progress = await dataSource.query<readonly { readonly count: string }[]>(
+			`select count(*)::text as count
+			 from "full_history_operation_projection_progress"
+			 where "batch_id" = $1`,
+			[input.batchId]
+		);
+		expect(progress).toEqual([{ count: '0' }]);
+		await expect(repository.storeOperations(input)).resolves.toEqual({
+			accountReferenceCount: input.operationAccountReferences.length,
+			batchId: input.batchId,
+			operationCount: input.operations.length,
+			replayed: true
+		});
 	});
 });

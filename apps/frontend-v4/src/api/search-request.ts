@@ -1,5 +1,5 @@
 import type {
-	PublicSearchArchiveStatus,
+	PublicSearchArchiveStatusFilter,
 	PublicSearchEntityType,
 	PublicSearchFacetName,
 	PublicSearchQueryScope
@@ -7,7 +7,7 @@ import type {
 
 export interface SearchNetworkFilters {
 	active?: boolean;
-	archiveStatus?: PublicSearchArchiveStatus;
+	archiveStatus?: PublicSearchArchiveStatusFilter;
 	countryCode?: string;
 	entityType?: PublicSearchEntityType;
 	fullValidator?: boolean;

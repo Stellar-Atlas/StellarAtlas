@@ -1,4 +1,5 @@
 import { DataSource, type Logger } from 'typeorm';
+import { StrKey } from '@stellar/stellar-sdk';
 import {
 	startDisposablePostgres,
 	type DisposablePostgres
@@ -179,6 +180,64 @@ describe('full-history operation-result backfill compatibility', () => {
 		});
 	});
 
+	it('advances and clears durable progress across multiple reference chunks', async () => {
+		const input = await seedFullHistoryCheckpoint(dataSource, {
+			batchNumber: 2_503,
+			explicitOperationAccountReferences: Array.from(
+				{ length: 500 },
+				(_, index) => ({
+					accountId: fixtureAccountId(index + 1),
+					role: 'destination' as const
+				})
+			),
+			networkPassphrase: 'Multi-chunk operation-reference network'
+		});
+		const networkHash = hashNetworkPassphrase(input.networkPassphrase);
+		await dataSource.transaction(async (manager) => {
+			await insertBatch(manager, input, networkHash);
+			await storeCanonicalBaseFacts(manager, input, networkHash);
+		});
+
+		await expect(
+			new TypeOrmFullHistoryOperationBackfillRepository(
+				dataSource
+			).storeOperations(input)
+		).resolves.toMatchObject({
+			accountReferenceCount: 501,
+			batchId: input.batchId,
+			replayed: false
+		});
+
+		const rows = await dataSource.query<
+			Array<{
+				readonly coverageCount: number;
+				readonly progressCount: number;
+				readonly referenceCount: number;
+			}>
+		>(
+			`select
+				(select count(*)::integer
+				 from "full_history_operation_account_reference" reference
+				 join "full_history_operation" operation
+					on operation."network_passphrase_hash" =
+						reference."network_passphrase_hash"
+					and operation."transaction_hash" =
+						reference."transaction_hash"
+					and operation."operation_index" = reference."operation_index"
+				 where operation."batch_id" = $1) as "referenceCount",
+				(select count(*)::integer
+				 from "full_history_operation_account_reference_batch_coverage"
+				 where "batch_id" = $1) as "coverageCount",
+				(select count(*)::integer
+				 from "full_history_operation_projection_progress"
+				 where "batch_id" = $1) as "progressCount"`,
+			[input.batchId]
+		);
+		expect(rows).toEqual([
+			{ coverageCount: 1, progressCount: 0, referenceCount: 501 }
+		]);
+	});
+
 	async function coverageVersions(batchId: string) {
 		const rows = await dataSource.query<
 			Array<{
@@ -203,3 +262,9 @@ describe('full-history operation-result backfill compatibility', () => {
 		return rows[0];
 	}
 });
+
+function fixtureAccountId(index: number): string {
+	const raw = Buffer.alloc(32);
+	raw.writeUInt32BE(index, 28);
+	return StrKey.encodeEd25519PublicKey(raw);
+}

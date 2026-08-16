@@ -7,6 +7,7 @@ export type HistoryArchiveObjectRecheckBlockedReasonV1 =
 	| 'evidence-revision-changed'
 	| 'host-backoff'
 	| 'non-remote-evidence-failure'
+	| 'non-repair-candidate-failure'
 	| 'object-not-executable'
 	| 'object-not-failed'
 	| 'transition-effects-pending'

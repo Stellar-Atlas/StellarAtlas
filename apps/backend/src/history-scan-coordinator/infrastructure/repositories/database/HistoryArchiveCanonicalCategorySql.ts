@@ -129,6 +129,7 @@ export const canonicalCategoryAdmissionCteSql = `
 category_objects as materialized (
 	select network_root."archiveUrlIdentity",
 		network_root."lastClaimedAt", network_root.proof_progress,
+		network_root.proof_evaluated_at,
 		network_root.target_lane,
 		desired.object_type,
 		desired.checkpoint_ledger as object_checkpoint_ledger,

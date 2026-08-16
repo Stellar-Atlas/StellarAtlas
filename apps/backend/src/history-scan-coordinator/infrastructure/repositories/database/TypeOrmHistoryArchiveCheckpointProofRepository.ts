@@ -8,6 +8,7 @@ import type {
 } from '@history-scan-coordinator/domain/history-archive-checkpoint-proof/HistoryArchiveCheckpointProofRepository.js';
 import { historyArchiveCheckpointProofRefreshSql } from './HistoryArchiveCheckpointProofRefreshSql.js';
 import { toHistoryArchiveCheckpointProofRefreshParams } from './HistoryArchiveCheckpointProofSqlInputs.js';
+import { historyArchiveCheckpointProofPendingSourceEnrichmentSql } from './HistoryArchiveCheckpointProofPostRefreshSql.js';
 
 @injectable()
 export class TypeOrmHistoryArchiveCheckpointProofRepository implements HistoryArchiveCheckpointProofRepository {
@@ -35,6 +36,21 @@ export class TypeOrmHistoryArchiveCheckpointProofRepository implements HistoryAr
 	async refreshForArchiveCheckpoint(
 		target: HistoryArchiveCheckpointProofRefreshTarget
 	): Promise<void> {
+		await this.refresh(target);
+	}
+
+	async refreshForObject(object: HistoryArchiveObject): Promise<void> {
+		await this.refresh({
+			archiveUrlIdentity: object.archiveUrlIdentity,
+			bucketHash: object.bucketHash,
+			checkpointLedger: object.checkpointLedger,
+			includeSuccessor: object.objectType === 'ledger'
+		});
+	}
+
+	private async refresh(
+		target: HistoryArchiveCheckpointProofRefreshTarget
+	): Promise<void> {
 		if (target.checkpointLedger == null && target.bucketHash == null) {
 			return;
 		}
@@ -44,14 +60,15 @@ export class TypeOrmHistoryArchiveCheckpointProofRepository implements HistoryAr
 			await manager.query(historyArchiveCheckpointProofRefreshSql, [
 				...toHistoryArchiveCheckpointProofRefreshParams(target)
 			]);
-		});
-	}
-
-	async refreshForObject(object: HistoryArchiveObject): Promise<void> {
-		await this.refreshForArchiveCheckpoint({
-			archiveUrlIdentity: object.archiveUrlIdentity,
-			bucketHash: object.bucketHash,
-			checkpointLedger: object.checkpointLedger
+			if (target.checkpointLedger != null) {
+				// The monotonic upsert has already run. A current-version proof that
+				// remains pending therefore also had a pending derived result; enrich
+				// only its durable source links without changing proof evidence.
+				await manager.query(
+					historyArchiveCheckpointProofPendingSourceEnrichmentSql,
+					[target.archiveUrlIdentity, target.checkpointLedger]
+				);
+			}
 		});
 	}
 }

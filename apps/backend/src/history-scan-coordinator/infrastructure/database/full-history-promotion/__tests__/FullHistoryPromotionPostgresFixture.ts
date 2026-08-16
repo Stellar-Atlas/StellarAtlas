@@ -8,6 +8,7 @@ import { FullHistoryOperationFactsMigration1784960000000 } from '../../migration
 import { FullHistoryOperationBackfillMigration1784970000000 } from '../../migrations/1784970000000-FullHistoryOperationBackfillMigration.js';
 import { FullHistoryOperationResultMigration1785010000000 } from '../../migrations/1785010000000-FullHistoryOperationResultMigration.js';
 import { FullHistoryOperationAccountReferenceMigration1785040000000 } from '../../migrations/1785040000000-FullHistoryOperationAccountReferenceMigration.js';
+import { FullHistoryOperationProjectionProgressMigration1785410000000 } from '../../migrations/1785410000000-FullHistoryOperationProjectionProgressMigration.js';
 import { FullHistoryPromotionRuntimeMigration1784930000000 } from '../../migrations/1784930000000-FullHistoryPromotionRuntimeMigration.js';
 import { FullHistoryZeroTransactionProofPromotionMigration1785260000000 } from '../../migrations/1785260000000-FullHistoryZeroTransactionProofPromotionMigration.js';
 import { ParsedLedgerHeaderMigration1784000000000 } from '../../migrations/1784000000000-ParsedLedgerHeaderMigration.js';
@@ -64,6 +65,9 @@ export async function installPromotionSchema(
 		await new FullHistoryOperationBackfillMigration1784970000000().up(runner);
 		await new FullHistoryOperationResultMigration1785010000000().up(runner);
 		await new FullHistoryOperationAccountReferenceMigration1785040000000().up(
+			runner
+		);
+		await new FullHistoryOperationProjectionProgressMigration1785410000000().up(
 			runner
 		);
 		await runner.commitTransaction();

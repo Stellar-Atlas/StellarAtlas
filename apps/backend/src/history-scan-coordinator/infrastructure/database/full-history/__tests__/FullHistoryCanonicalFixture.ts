@@ -24,6 +24,7 @@ import { FullHistoryOperationFactsMigration1784960000000 } from '../../migration
 import { FullHistoryOperationBackfillMigration1784970000000 } from '../../migrations/1784970000000-FullHistoryOperationBackfillMigration.js';
 import { FullHistoryOperationResultMigration1785010000000 } from '../../migrations/1785010000000-FullHistoryOperationResultMigration.js';
 import { FullHistoryOperationAccountReferenceMigration1785040000000 } from '../../migrations/1785040000000-FullHistoryOperationAccountReferenceMigration.js';
+import { FullHistoryOperationProjectionProgressMigration1785410000000 } from '../../migrations/1785410000000-FullHistoryOperationProjectionProgressMigration.js';
 import { HistoryArchiveCheckpointProofMigration1784420000000 } from '../../migrations/1784420000000-HistoryArchiveCheckpointProofMigration.js';
 import { fullHistoryCanonicalEntities } from '../FullHistoryCanonicalEntityRegistry.js';
 
@@ -90,6 +91,9 @@ export async function installFullHistoryCanonicalSchema(
 			queryRunner
 		);
 		await new FullHistoryOperationAccountReferenceMigration1785040000000().up(
+			queryRunner
+		);
+		await new FullHistoryOperationProjectionProgressMigration1785410000000().up(
 			queryRunner
 		);
 		await queryRunner.commitTransaction();

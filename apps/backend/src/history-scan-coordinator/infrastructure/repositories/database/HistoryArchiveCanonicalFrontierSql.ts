@@ -9,26 +9,17 @@ import { canonicalCheckpointHasStrictEvidenceSql } from './HistoryArchiveCanonic
 import { canonicalFrontierReservationCtesSql } from './HistoryArchiveCanonicalReservationSql.js';
 import { canonicalLaneReservationCtesSql } from './HistoryArchiveCanonicalLaneSql.js';
 import { canonicalRuntimeTargetCtes } from './HistoryArchiveCanonicalRuntimeTargetSql.js';
-import { historyArchiveOutstandingReadyCountCtesSql } from './HistoryArchiveObjectReadyQueue.js';
+import { canonicalSourceMaterializationCtesSql } from './HistoryArchiveCanonicalSourceMaterializationSql.js';
+import { buildHistoryArchiveOutstandingReadyCountCtesSql } from './HistoryArchiveObjectReadyQueue.js';
+import {
+	getHistoryArchiveBrokerMaximumPriority,
+	type HistoryArchiveBrokerPriority
+} from '@history-scan-coordinator/domain/history-archive-object/HistoryArchiveBrokerPriority.js';
 import { historyArchiveMinimumWatermark } from '@history-scan-coordinator/domain/history-archive-object/HistoryArchiveObjectPlanningPolicy.js';
 export { canonicalRuntimeTargetCtes } from './HistoryArchiveCanonicalRuntimeTargetSql.js';
 
 export const materializeCanonicalFrontierDependenciesSql = `
-	with ${canonicalRuntimeTargetCtes}, runtime_archive_roots as materialized (
-		select root."archiveUrl", root."archiveUrlIdentity",
-			root."hostIdentity", target.checkpoint_ledger
-		from dependency_target target
-		join "history_archive_state_snapshot" state
-			on state.status = 'available'
-			and state."networkPassphrase" is not null
-			and sha256(convert_to(state."networkPassphrase", 'UTF8')) =
-				target."network_passphrase_hash"
-		join "history_archive_object_queue" root
-			on root."archiveUrlIdentity" = state."archiveUrlIdentity"
-			and root."objectType" = 'history-archive-state'
-			and root."objectKey" = 'root'
-			and root.status = 'verified'
-	), inserted_target_checkpoints as (
+	with ${canonicalRuntimeTargetCtes}, ${canonicalSourceMaterializationCtesSql}, inserted_target_checkpoints as (
 		insert into "history_archive_object_queue" (
 			"remoteId", "archiveUrl", "archiveUrlIdentity", "hostIdentity",
 			"objectType", "objectKey", "objectOrder", "objectUrl",
@@ -62,15 +53,10 @@ export const materializeCanonicalFrontierDependenciesSql = `
 			do nothing
 		returning id
 	), checkpoints as materialized (
-		select checkpoint.*, state."networkPassphrase"
-		from dependency_target target
-		join "history_archive_state_snapshot" state
-			on state.status = 'available'
-			and state."networkPassphrase" is not null
-			and sha256(convert_to(state."networkPassphrase", 'UTF8')) =
-				target."network_passphrase_hash"
+		select checkpoint.*
+		from runtime_archive_roots target
 		join "history_archive_object_queue" checkpoint
-			on checkpoint."archiveUrlIdentity" = state."archiveUrlIdentity"
+			on checkpoint."archiveUrlIdentity" = target."archiveUrlIdentity"
 			and checkpoint."objectType" = 'checkpoint-state'
 			and checkpoint."objectKey" = 'checkpoint-state:' ||
 				lpad(to_hex(target.checkpoint_ledger), 8, '0')
@@ -222,17 +208,35 @@ export const materializeCanonicalFrontierDependenciesSql = `
 			(select count(*)::integer from reopened_legacy_buckets) as activated
 `;
 
-export const admitCanonicalFrontierSql = `
+export function buildAdmitCanonicalFrontierSql(
+	maximumPriority: HistoryArchiveBrokerPriority = getHistoryArchiveBrokerMaximumPriority()
+): string {
+	return `
 	with ${canonicalRuntimeTargetCtes}, runtime_archive_roots as materialized (
 		select state."archiveUrlIdentity", target.checkpoint_ledger,
 			target.target_lane,
-			root."lastClaimedAt",
-			case when coalesce(proof."proofFactsComplete", false)
-				then 1::numeric else 0::numeric end + case
-				when coalesce(proof."expectedBucketCount", 0) > 0
-					then coalesce(proof."verifiedBucketCount", 0)::numeric /
-						proof."expectedBucketCount"::numeric
-				else 0::numeric
+			root."lastClaimedAt", proof."evaluatedAt" as proof_evaluated_at,
+			case
+				when proof.status = 'mismatch'
+					or proof."failureKind" in (
+						'checkpoint-ledger-mismatch',
+						'checkpoint-bucket-list-mismatch',
+						'transaction-hash-mismatch',
+						'result-hash-mismatch',
+						'previous-ledger-hash-mismatch'
+					)
+					then -2::numeric
+				when proof."failureKind" = 'object-failed'
+					or coalesce(proof."failedBucketCount", 0) > 0
+					then -1::numeric
+				else
+					case when coalesce(proof."proofFactsComplete", false)
+						then 1::numeric else 0::numeric end + case
+						when coalesce(proof."expectedBucketCount", 0) > 0
+							then coalesce(proof."verifiedBucketCount", 0)::numeric /
+								proof."expectedBucketCount"::numeric
+						else 0::numeric
+					end
 			end as proof_progress
 		from runtime_target target
 		join "history_archive_state_snapshot" state
@@ -256,6 +260,7 @@ export const admitCanonicalFrontierSql = `
 	), pending_target_checkpoint_objects as materialized (
 		select runtime_root."archiveUrlIdentity",
 			runtime_root."lastClaimedAt", runtime_root.proof_progress,
+			runtime_root.proof_evaluated_at,
 			runtime_root.target_lane,
 			'checkpoint-state'::text as object_type,
 			runtime_root.checkpoint_ledger as object_checkpoint_ledger,
@@ -294,6 +299,7 @@ export const admitCanonicalFrontierSql = `
 	), ${canonicalCategoryAdmissionCteSql}, bucket_objects as materialized (
 		select network_root."archiveUrlIdentity",
 			network_root."lastClaimedAt", network_root.proof_progress,
+			network_root.proof_evaluated_at,
 			network_root.target_lane,
 			'bucket'::text as object_type,
 			null::integer as object_checkpoint_ledger,
@@ -322,7 +328,7 @@ export const admitCanonicalFrontierSql = `
 			and reserved."executionReason" = 'canonical-frontier-reserve'
 	), protected_roots as materialized (
 		select "archiveUrlIdentity" from canonical_roots
-	), ${historyArchiveOutstandingReadyCountCtesSql}, outstanding as materialized (
+	), ${buildHistoryArchiveOutstandingReadyCountCtesSql(maximumPriority, true)}, outstanding as materialized (
 		select (active.count + ready.count)::integer as count
 		from active, ready
 	), candidates as materialized (
@@ -330,7 +336,8 @@ export const admitCanonicalFrontierSql = `
 			candidate.id, candidate."archiveUrlIdentity",
 			candidate."hostIdentity", candidate."objectKey",
 			candidate."checkpointLedger", desired.object_priority,
-			desired.proof_progress, desired.target_lane,
+			desired.proof_progress, desired.proof_evaluated_at,
+			desired.target_lane,
 			desired."lastClaimedAt"
 		from desired_objects desired
 		join "history_archive_object_queue" candidate
@@ -346,6 +353,12 @@ export const admitCanonicalFrontierSql = `
 		where protected."archiveUrlIdentity" is null
 			and candidate."executionReason" is distinct from
 				'canonical-frontier-reserve'
+			and not exists (
+				select 1
+				from "history_archive_object_ready" ready
+				where ready."objectRemoteId" = candidate."remoteId"
+					and ready."dispatchToken" is not null
+			)
 		order by candidate.id, desired.object_priority,
 			case desired.target_lane
 				when 'forward' then 0
@@ -364,6 +377,7 @@ export const admitCanonicalFrontierSql = `
 			row_number() over (
 				partition by "hostIdentity", target_lane
 				order by proof_progress desc,
+					proof_evaluated_at desc nulls last,
 					"lastClaimedAt" asc nulls first,
 					"archiveUrlIdentity", object_priority, id
 			) as lane_host_rank
@@ -377,6 +391,7 @@ export const admitCanonicalFrontierSql = `
 					"checkpointLedger" asc nulls last,
 					target_lane,
 					proof_progress desc,
+					proof_evaluated_at desc nulls last,
 					"lastClaimedAt" asc nulls first,
 					"archiveUrlIdentity", object_priority, id
 			) as host_rank
@@ -389,6 +404,7 @@ export const admitCanonicalFrontierSql = `
 			row_number() over (
 				partition by target_lane
 				order by proof_progress desc,
+					proof_evaluated_at desc nulls last,
 					"lastClaimedAt" asc nulls first,
 					"archiveUrlIdentity", object_priority, id
 			) as target_rank
@@ -409,6 +425,7 @@ export const admitCanonicalFrontierSql = `
 		order by candidate.target_rank, candidate.target_lane,
 			(candidate.selected_replaceable_id is null),
 			candidate.proof_progress desc,
+			candidate.proof_evaluated_at desc nulls last,
 			candidate."lastClaimedAt" asc nulls first,
 			candidate."archiveUrlIdentity", candidate.id
 		limit $1::integer
@@ -439,3 +456,6 @@ export const admitCanonicalFrontierSql = `
 	)
 	select count(*)::integer as count from admitted
 `;
+}
+
+export const admitCanonicalFrontierSql = buildAdmitCanonicalFrontierSql();

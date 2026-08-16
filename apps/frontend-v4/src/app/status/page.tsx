@@ -309,6 +309,7 @@ function buildUnavailableArchiveStatus(
 			categoryConsistentArchiveCheckpoints: 0,
 			completeArchiveCheckpoints: 0,
 			discoveryCompleteArchiveRoots: 0,
+			durableVerifiedArchiveCheckpoints: 0,
 			expectedArchiveCheckpoints: 0,
 			failedArchiveCheckpoints: 0,
 			latestCheckpointLedger: null,
@@ -324,6 +325,12 @@ function buildUnavailableArchiveStatus(
 		scannerIssueFailures: 0,
 		sources: [],
 		sourcesTruncated: false,
+		transitionReconciliation: {
+			oldestPendingAgeMs: null,
+			oldestPendingAt: null,
+			pendingTerminalEffects: 0,
+			status: 'stalled'
+		},
 		unclassifiedFailures: 0
 	};
 }

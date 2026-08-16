@@ -14,11 +14,13 @@ export function NodeArchiveEvidence({
 	readonly publicKey: string;
 }): React.JSX.Element {
 	return (
-		<KnownArchiveEvidence
-			evidence={evidence}
-			subject={{ id: publicKey, kind: 'node' }}
-			title="Archive health"
-		/>
+		<div id="archive-evidence">
+			<KnownArchiveEvidence
+				evidence={evidence}
+				subject={{ id: publicKey, kind: 'node' }}
+				title="Archive health"
+			/>
+		</div>
 	);
 }
 

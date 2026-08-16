@@ -3,7 +3,15 @@ import {
 	resultsFactsJsonSql,
 	transactionsFactsJsonSql
 } from './HistoryArchiveCheckpointProofSqlInputs.js';
-import { historyArchiveCheckpointProofUpsertSql } from './HistoryArchiveCheckpointProofUpsertSql.js';
+import {
+	historyArchiveCheckpointProofFinalizedCteSql,
+	historyArchiveCheckpointProofQueuedUpsertSql,
+	historyArchiveCheckpointProofUpsertSql
+} from './HistoryArchiveCheckpointProofUpsertSql.js';
+import {
+	historyArchiveCheckpointProofPreservedAttestationSql,
+	historyArchiveCheckpointProofReconciliationAcknowledgementCteSql
+} from './HistoryArchiveCheckpointProofPostRefreshSql.js';
 import { historyArchiveCheckpointProofFailureCtesSql } from './HistoryArchiveCheckpointProofFailureSql.js';
 import { historyArchiveCheckpointProofTargetCtesSql } from './HistoryArchiveCheckpointProofTargetSql.js';
 import {
@@ -27,7 +35,10 @@ const scpVerifiedSql = `(checkpoint_rollup.has_scp
 	and coalesce(checkpoint_rollup.scp_entry_count, 0) > 0
 	and coalesce(checkpoint_rollup.scp_source_matches, false))`;
 
-export const historyArchiveCheckpointProofRefreshSql = `
+function buildHistoryArchiveCheckpointProofRefreshSql(
+	upsertSql: string
+): string {
+	return `
 	with ${historyArchiveCheckpointProofTargetCtesSql}, checkpoint_rollup as (
 		select
 			target."archiveUrlIdentity",
@@ -447,34 +458,31 @@ export const historyArchiveCheckpointProofRefreshSql = `
 		left join failure_rollup failure
 			on failure."archiveUrlIdentity" = checkpoint_rollup."archiveUrlIdentity"
 			and failure."checkpointLedger" = checkpoint_rollup."checkpointLedger"
-	), finalized as (
-		select *, case
-			when has_failed then 'not-evaluable'
-			when not required_objects_complete or has_active then 'pending'
-			when predecessor_missing then 'pending'
-			when has_checkpoint_ledger_fact and not checkpoint_ledger_matches
-				then 'mismatch'
-			when not proof_facts_complete then 'not-evaluable'
-			when not (checkpoint_bucket_list_matches and transactions_match
-				and results_match and previous_ledgers_match) then 'mismatch'
-			when not buckets_verified then 'not-evaluable'
-			else 'verified'
-		end as status, case
-			when has_failed then 'object-failed'
-			when not required_objects_complete or has_active then 'object-incomplete'
-			when predecessor_missing then 'predecessor-missing'
-			when has_checkpoint_ledger_fact and not checkpoint_ledger_matches
-				then 'checkpoint-ledger-mismatch'
-			when not proof_facts_complete then 'proof-facts-incomplete'
-			when not checkpoint_bucket_list_matches
-				then 'checkpoint-bucket-list-mismatch'
-			when not transactions_match then 'transaction-hash-mismatch'
-			when not results_match then 'result-hash-mismatch'
-			when not previous_ledgers_match then 'previous-ledger-hash-mismatch'
-			when not buckets_verified then 'bucket-missing'
-			else null
-		end as failure_kind
-		from classified
+	), ${historyArchiveCheckpointProofFinalizedCteSql}, upserted as (
+		${upsertSql}
+		returning "archiveUrlIdentity", "checkpointLedger"
 	)
-	${historyArchiveCheckpointProofUpsertSql}
+	${historyArchiveCheckpointProofReconciliationAcknowledgementCteSql}
+	select
+		(select count(*)::integer from upserted) as "upsertedCount",
+		(select count(*)::integer from reconciliation_acknowledgement)
+			as "acknowledgedCount",
+		(select count(*)::integer
+		 from finalized derived
+		 join history_archive_checkpoint_proof proof
+			on proof."archiveUrlIdentity" = derived."archiveUrlIdentity"
+			and proof."checkpointLedger" = derived."checkpointLedger"
+		 where ${historyArchiveCheckpointProofPreservedAttestationSql})
+			as "preservedAttestationCount"
 `;
+}
+
+export const historyArchiveCheckpointProofRefreshSql =
+	buildHistoryArchiveCheckpointProofRefreshSql(
+		historyArchiveCheckpointProofUpsertSql
+	);
+
+export const historyArchiveCheckpointProofQueuedRefreshSql =
+	buildHistoryArchiveCheckpointProofRefreshSql(
+		historyArchiveCheckpointProofQueuedUpsertSql
+	);

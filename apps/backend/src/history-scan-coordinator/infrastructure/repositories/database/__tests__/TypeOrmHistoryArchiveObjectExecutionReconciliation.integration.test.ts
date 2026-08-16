@@ -9,6 +9,7 @@ import { publicNetworkPassphrase } from '../../../../domain/history-archive-obje
 import { HistoryArchiveObjectEventMigration1784370000000 } from '../../../database/migrations/1784370000000-HistoryArchiveObjectEventMigration.js';
 import { HistoryArchiveObjectHostThrottleMigration1784410000000 } from '../../../database/migrations/1784410000000-HistoryArchiveObjectHostThrottleMigration.js';
 import { HistoryArchiveObjectClaimCursorMigration1784780000000 } from '../../../database/migrations/1784780000000-HistoryArchiveObjectClaimCursorMigration.js';
+import { HistoryArchiveBrokerFrontierMigration1785440000000 } from '../../../database/migrations/1785440000000-HistoryArchiveBrokerFrontierMigration.js';
 import { TypeOrmHistoryArchiveCheckpointProofRepository } from '../TypeOrmHistoryArchiveCheckpointProofRepository.js';
 import { TypeOrmHistoryArchiveObjectRepository } from '../TypeOrmHistoryArchiveObjectRepository.js';
 import {
@@ -55,6 +56,9 @@ describe('history archive execution reconciliation in disposable PostgreSQL', ()
 			queryRunner
 		);
 		await createCanonicalFrontierTestSchema(dataSource);
+		await new HistoryArchiveBrokerFrontierMigration1785440000000().up(
+			queryRunner
+		);
 		await queryRunner.release();
 		repository = new TypeOrmHistoryArchiveObjectRepository(
 			dataSource.getRepository(HistoryArchiveObject)
@@ -460,6 +464,70 @@ describe('history archive execution reconciliation in disposable PostgreSQL', ()
 			failureKind: null,
 			proofVersion: CURRENT_HISTORY_ARCHIVE_CHECKPOINT_PROOF_VERSION,
 			status: 'verified'
+		});
+	});
+
+	it('admits runtime proof work while generic broker admission is disabled', async () => {
+		const runtimeRoot = createRoot(0);
+		const genericRoot = createRoot(1);
+		const genericCheckpoint = createCheckpoint(1, 900_031);
+		genericCheckpoint.dependencyReady = true;
+		await dataSource
+			.getRepository(HistoryArchiveObject)
+			.save([runtimeRoot, genericRoot, genericCheckpoint]);
+
+		const networkHash = createHash('sha256')
+			.update(publicNetworkPassphrase, 'utf8')
+			.digest();
+		const runtimeCheckpoint = 1_000_063;
+		await dataSource.query(
+			`insert into "history_archive_state_snapshot" (
+				"archiveUrlIdentity", status, "networkPassphrase"
+			 ) values ($1, 'available', $2)`,
+			[runtimeRoot.archiveUrlIdentity, publicNetworkPassphrase]
+		);
+		await dataSource.query(
+			`insert into "full_history_promotion_runtime" (
+				"network_passphrase_hash", state, "checkpoint_ledger"
+			 ) values ($1, 'waiting-for-proof', $2)`,
+			[networkHash, runtimeCheckpoint]
+		);
+
+		const result = await repository.reconcileExecutionDisposition({
+			admitGenericObjects: false
+		});
+		const rows = (await dataSource.query(
+			`select "archiveUrlIdentity", "checkpointLedger",
+				"executionDisposition", "executionReason"
+			 from "history_archive_object_queue"
+			 where "objectType" = 'checkpoint-state'
+				and "archiveUrlIdentity" = any($1::text[])
+			 order by "archiveUrlIdentity"`,
+			[[runtimeRoot.archiveUrlIdentity, genericRoot.archiveUrlIdentity]]
+		)) as readonly {
+			readonly archiveUrlIdentity: string;
+			readonly checkpointLedger: number;
+			readonly executionDisposition: string;
+			readonly executionReason: string;
+		}[];
+
+		expect(rows).toEqual([
+			{
+				archiveUrlIdentity: runtimeRoot.archiveUrlIdentity,
+				checkpointLedger: runtimeCheckpoint,
+				executionDisposition: 'executable',
+				executionReason: 'canonical-frontier-reserve'
+			},
+			{
+				archiveUrlIdentity: genericRoot.archiveUrlIdentity,
+				checkpointLedger: genericCheckpoint.checkpointLedger,
+				executionDisposition: 'deferred',
+				executionReason: 'legacy-planning-intent'
+			}
+		]);
+		expect(result).toMatchObject({
+			admittedObjects: 1,
+			cursorAdvances: 0
 		});
 	});
 });

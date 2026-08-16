@@ -55,6 +55,8 @@ import { historyArchiveRepairActionableObjectSql } from './HistoryArchiveRepairA
 import { findPrioritizedHistoryArchiveObjectTransitions } from './HistoryArchiveObjectTransitionQuery.js';
 import { requestHistoryArchiveObjectRecheck } from './HistoryArchiveObjectRecheckWrite.js';
 import { completeHistoryArchiveBrokerDelivery } from './HistoryArchiveObjectReadyQueue.js';
+import { drainHistoryArchiveCheckpointProofRefreshes } from './HistoryArchiveCheckpointProofRefreshQueue.js';
+import type { HistoryArchiveCheckpointProofRefreshPriority } from '@history-scan-coordinator/domain/history-archive-object/HistoryArchiveObjectRepository.js';
 
 const maxActiveObjectsPerArchive = historyArchivePerRootFrontier;
 const maxActiveObjectsPerHost = historyArchivePerHostConcurrency;
@@ -65,6 +67,17 @@ const transitionReconciliationLockName =
 @injectable()
 export class TypeOrmHistoryArchiveObjectRepository implements HistoryArchiveObjectRepository {
 	constructor(private readonly repository: Repository<HistoryArchiveObject>) {}
+
+	async drainCheckpointProofRefreshQueue(
+		limit: number,
+		maximumPriority: HistoryArchiveCheckpointProofRefreshPriority
+	) {
+		return await drainHistoryArchiveCheckpointProofRefreshes(
+			this.repository.manager.connection,
+			limit,
+			maximumPriority
+		);
+	}
 
 	async completeBrokerDelivery(
 		remoteId: string,
@@ -352,7 +365,7 @@ export class TypeOrmHistoryArchiveObjectRepository implements HistoryArchiveObje
 	}
 
 	async reconcileExecutionDisposition(options?: {
-		readonly admitLegacyObjects?: boolean;
+		readonly admitGenericObjects?: boolean;
 	}) {
 		return await reconcileHistoryArchiveObjectExecution(
 			this.repository,

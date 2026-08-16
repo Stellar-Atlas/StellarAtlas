@@ -20,7 +20,7 @@ import { networkSearchMaxOffset } from '../search/NetworkSearchQuery.js';
 import { getSharedScpStatementLiveHub } from './ScpStatementLiveHub.js';
 import { createScpStatementSseSubscriber } from './ScpStatementSseSubscriber.js';
 import type {
-	NetworkSearchArchiveStatus,
+	NetworkSearchArchiveStatusFilter,
 	NetworkSearchConfig,
 	NetworkSearchEntityType,
 	NetworkSearchQueryScope
@@ -59,8 +59,13 @@ const isSearchEntityType = (
 
 const isSearchArchiveStatus = (
 	value: string | undefined
-): value is NetworkSearchArchiveStatus =>
-	value === 'error' || value === 'ok' || value === 'unknown';
+): value is NetworkSearchArchiveStatusFilter =>
+	value === 'error' ||
+	value === 'issue' ||
+	value === 'ok' ||
+	value === 'scanner-issue' ||
+	value === 'unknown' ||
+	value === 'unreachable';
 
 const isSearchScope = (
 	value: string | undefined

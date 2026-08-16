@@ -1,21 +1,13 @@
 import { createHash } from 'node:crypto';
 import { constants } from 'node:fs';
 import { createWriteStream, type Stats } from 'node:fs';
-import {
-	mkdir,
-	mkdtemp,
-	open,
-	readFile,
-	rmdir,
-	unlink,
-	type FileHandle
-} from 'node:fs/promises';
-import { basename, dirname, join, resolve } from 'node:path';
+import { open, readFile, type FileHandle } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { basename, join, resolve } from 'node:path';
 import { Transform, type TransformCallback } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 import { createGunzip } from 'node:zlib';
 import { canonicalJsonContentDigest } from 'shared/lib/canonical-json-content-digest.js';
-import { resolveAppEnvPath } from 'shared/lib/env/resolve-app-env-path.js';
 import type {
 	HistoryArchiveRepairObjectArtifactInput,
 	HistoryArchiveRepairObjectArtifactRepository,
@@ -24,30 +16,35 @@ import type {
 	HistoryArchiveRepairObjectRepresentation,
 	OpenHistoryArchiveRepairObjectArtifactResult
 } from '../../../domain/history-archive-repair-artifact/HistoryArchiveRepairObjectArtifactRepository.js';
+import type { HistoryArchiveRepairArtifactWorkPermit } from '../../../domain/history-archive-repair-artifact/HistoryArchiveRepairArtifactWorkPermit.js';
 import {
 	createHistoryArchiveRepairSourceUrlPolicy,
 	type HistoryArchiveRepairHostResolver,
 	type HistoryArchiveRepairSourceUrlResolution
 } from '../database/HistoryArchiveRepairSourceUrlPolicy.js';
 import {
-	HistoryArchiveRepairObjectCacheError,
-	retainVerifiedBucket
-} from './RemoteHistoryArchiveRepairObjectCache.js';
-import {
 	RemoteHistoryArchiveResponseError,
 	requestPinnedRepairObject,
 	type RepairObjectHttpRequest
 } from './RemoteHistoryArchiveRepairObjectHttp.js';
+import {
+	cleanupRepairStage,
+	createRepairStageDirectory,
+	prepareRepairStagingDirectory,
+	StagingCapacityError,
+	type StagedRepairObject
+} from './RemoteHistoryArchiveRepairObjectStaging.js';
 
 const digestPattern = /^[0-9a-f]{64}$/;
 const defaultMaxCompressedBytes = 2 * 1024 ** 3;
 const defaultMaxConcurrentDownloads = 2;
-const defaultMaxJsonBytes = 32 * 1024 ** 2;
+const defaultMaxJsonBytes = 4 * 1024 ** 2;
 const defaultMaxUncompressedBytes = 8 * 1024 ** 3;
 const defaultTimeoutMs = 5 * 60_000;
+const maxCanonicalJsonDepth = 64;
+const maxCanonicalJsonNodes = 100_000;
 
 export interface RemoteHistoryArchiveRepairObjectArtifactRepositoryOptions {
-	readonly bucketCacheDirectory: string;
 	readonly hostResolver?: HistoryArchiveRepairHostResolver;
 	readonly maxCompressedBytes?: number;
 	readonly maxConcurrentDownloads?: number;
@@ -56,11 +53,11 @@ export interface RemoteHistoryArchiveRepairObjectArtifactRepositoryOptions {
 	readonly request?: RepairObjectHttpRequest;
 	readonly stagingDirectory: string;
 	readonly timeoutMs?: number;
+	readonly workPermit: HistoryArchiveRepairArtifactWorkPermit;
 }
 
 export class RemoteHistoryArchiveRepairObjectArtifactRepository implements HistoryArchiveRepairObjectArtifactRepository {
 	private activeDownloads = 0;
-	private readonly bucketCacheDirectory: string;
 	private readonly maxCompressedBytes: number;
 	private readonly maxConcurrentDownloads: number;
 	private readonly maxJsonBytes: number;
@@ -69,11 +66,11 @@ export class RemoteHistoryArchiveRepairObjectArtifactRepository implements Histo
 	private readonly sourceUrlPolicy;
 	private readonly stagingDirectory: string;
 	private readonly timeoutMs: number;
+	private readonly workPermit: HistoryArchiveRepairArtifactWorkPermit;
 
 	constructor(
 		options: RemoteHistoryArchiveRepairObjectArtifactRepositoryOptions
 	) {
-		this.bucketCacheDirectory = resolve(options.bucketCacheDirectory);
 		this.maxCompressedBytes = positiveInteger(
 			options.maxCompressedBytes,
 			defaultMaxCompressedBytes
@@ -96,6 +93,7 @@ export class RemoteHistoryArchiveRepairObjectArtifactRepository implements Histo
 		);
 		this.stagingDirectory = resolve(options.stagingDirectory);
 		this.timeoutMs = positiveInteger(options.timeoutMs, defaultTimeoutMs);
+		this.workPermit = options.workPermit;
 	}
 
 	async openVerifiedObject(
@@ -105,18 +103,31 @@ export class RemoteHistoryArchiveRepairObjectArtifactRepository implements Histo
 		if (normalized === null) {
 			return unavailable('invalid-object-identity');
 		}
-		const release = this.acquireDownload();
-		if (release === null) return unavailable('verification-busy');
+		const globalLease = await this.workPermit.tryAcquire();
+		if (globalLease === null) return unavailable('verification-busy');
+		const releaseProcessSlot = this.acquireDownload();
+		if (releaseProcessSlot === null) {
+			await globalLease.release();
+			return unavailable('verification-busy');
+		}
+		let released = false;
+		const release = async (): Promise<void> => {
+			if (released) return;
+			released = true;
+			releaseProcessSlot();
+			await globalLease.release();
+		};
 
-		let stage: StagedObject | null = null;
+		let stage: StagedRepairObject | null = null;
+		let opened: FileHandle | null = null;
 		try {
 			const resolution = await this.sourceUrlPolicy.resolveObjectUrl(
 				normalized.objectUrl,
 				normalized.archiveUrl,
 				normalized.archiveUrlIdentity
 			);
-			stage = await this.download(resolution);
-			const opened = await open(
+			stage = await this.download(resolution, normalized.contentRepresentation);
+			opened = await open(
 				stage.filePath,
 				constants.O_RDONLY | constants.O_NOFOLLOW
 			);
@@ -124,23 +135,16 @@ export class RemoteHistoryArchiveRepairObjectArtifactRepository implements Histo
 			const verified = await this.verify(opened, before, normalized);
 			if (verified !== null) {
 				await closeHandle(opened);
-				await cleanupStage(stage);
-				release();
+				await cleanupRepairStage(stage);
+				await release();
 				return unavailable(verified);
 			}
-			await retainVerifiedBucket({
-				bucketCacheDirectory: this.bucketCacheDirectory,
-				contentDigest: normalized.contentDigest,
-				contentRepresentation: normalized.contentRepresentation,
-				objectIdentity: normalized.objectIdentity,
-				stagedFilePath: stage.filePath
-			});
-
 			const stream = opened.createReadStream({
 				autoClose: false,
 				end: before.size - 1,
 				start: 0
 			});
+			const openedHandle = opened;
 			let closed = false;
 			return {
 				byteLength: before.size,
@@ -148,9 +152,9 @@ export class RemoteHistoryArchiveRepairObjectArtifactRepository implements Histo
 					if (closed) return;
 					closed = true;
 					stream.destroy();
-					await closeHandle(opened);
-					await cleanupStage(stage!);
-					release();
+					await closeHandle(openedHandle);
+					await cleanupRepairStage(stage!);
+					await release();
 				},
 				contentDigest: normalized.contentDigest,
 				contentRepresentation: normalized.contentRepresentation,
@@ -168,19 +172,25 @@ export class RemoteHistoryArchiveRepairObjectArtifactRepository implements Histo
 				stream
 			};
 		} catch (error) {
-			if (stage !== null) await cleanupStage(stage);
-			release();
+			if (opened !== null) await closeHandle(opened);
+			if (stage !== null) await cleanupRepairStage(stage);
+			await release();
 			return unavailable(reasonForError(error));
 		}
 	}
 
 	private async download(
-		resolution: HistoryArchiveRepairSourceUrlResolution
-	): Promise<StagedObject> {
-		await mkdir(this.stagingDirectory, { mode: 0o700, recursive: true });
-		const directory = await mkdtemp(join(this.stagingDirectory, 'object-'));
+		resolution: HistoryArchiveRepairSourceUrlResolution,
+		representation: HistoryArchiveRepairObjectRepresentation
+	): Promise<StagedRepairObject> {
+		await prepareRepairStagingDirectory(this.stagingDirectory);
+		const directory = await createRepairStageDirectory(this.stagingDirectory);
 		const filePath = join(directory, 'payload');
 		const timeoutSignal = AbortSignal.timeout(this.timeoutMs);
+		const transportLimit =
+			representation === 'canonical-json'
+				? Math.min(this.maxCompressedBytes, this.maxJsonBytes)
+				: this.maxCompressedBytes;
 		try {
 			const response = await this.request(resolution, timeoutSignal);
 			if (response.status !== 200) {
@@ -189,20 +199,20 @@ export class RemoteHistoryArchiveRepairObjectArtifactRepository implements Histo
 			}
 			if (
 				response.contentLength !== null &&
-				response.contentLength > this.maxCompressedBytes
+				response.contentLength > transportLimit
 			) {
 				response.body.destroy();
 				throw new PayloadTooLargeError();
 			}
 			await pipeline(
 				response.body,
-				new ByteLimitTransform(this.maxCompressedBytes),
+				new ByteLimitTransform(transportLimit),
 				createWriteStream(filePath, { flags: 'wx', mode: 0o600 }),
 				{ signal: timeoutSignal }
 			);
 			return { directory, filePath };
 		} catch (error) {
-			await cleanupStage({ directory, filePath });
+			await cleanupRepairStage({ directory, filePath });
 			throw error;
 		}
 	}
@@ -238,7 +248,10 @@ export class RemoteHistoryArchiveRepairObjectArtifactRepository implements Histo
 	): Promise<string> {
 		if (byteLength > this.maxJsonBytes) throw new PayloadTooLargeError();
 		const bytes = await readFile(handle);
-		const value: unknown = JSON.parse(bytes.toString('utf8'));
+		const value: unknown = JSON.parse(
+			new TextDecoder('utf-8', { fatal: true }).decode(bytes)
+		);
+		assertBoundedCanonicalJson(value);
 		return canonicalJsonContentDigest(value).digest;
 	}
 
@@ -272,11 +285,6 @@ export class RemoteHistoryArchiveRepairObjectArtifactRepository implements Histo
 			this.activeDownloads--;
 		};
 	}
-}
-
-interface StagedObject {
-	readonly directory: string;
-	readonly filePath: string;
 }
 
 class ByteLimitExceededError extends Error {}
@@ -339,11 +347,6 @@ function sameFileVersion(before: Stats, after: Stats): boolean {
 	);
 }
 
-async function cleanupStage(stage: StagedObject): Promise<void> {
-	await unlink(stage.filePath).catch(() => undefined);
-	await rmdir(stage.directory).catch(() => undefined);
-}
-
 async function closeHandle(handle: FileHandle): Promise<void> {
 	await handle.close().catch(() => undefined);
 }
@@ -357,17 +360,39 @@ function reasonForError(
 	) {
 		return 'remote-payload-too-large';
 	}
+	if (error instanceof StagingCapacityError) {
+		return 'staging-storage-unavailable';
+	}
 	if (
 		error instanceof RemoteResponseError ||
 		error instanceof RemoteHistoryArchiveResponseError
 	) {
 		return 'remote-response-invalid';
 	}
-	if (error instanceof HistoryArchiveRepairObjectCacheError) {
-		return 'staging-storage-unavailable';
-	}
 	if (isAbortError(error)) return 'verification-timeout';
 	return 'remote-fetch-failed';
+}
+
+function assertBoundedCanonicalJson(value: unknown): void {
+	const pending: { readonly depth: number; readonly value: unknown }[] = [
+		{ depth: 0, value }
+	];
+	let nodes = 0;
+	while (pending.length > 0) {
+		const current = pending.pop();
+		if (current === undefined) break;
+		nodes++;
+		if (
+			nodes > maxCanonicalJsonNodes ||
+			current.depth > maxCanonicalJsonDepth
+		) {
+			throw new PayloadTooLargeError();
+		}
+		if (typeof current.value !== 'object' || current.value === null) continue;
+		for (const child of Object.values(current.value)) {
+			pending.push({ depth: current.depth + 1, value: child });
+		}
+	}
 }
 
 function unavailable(
@@ -416,19 +441,13 @@ function positiveInteger(value: number | undefined, fallback: number): number {
 		: fallback;
 }
 
-export function createRemoteHistoryArchiveRepairObjectArtifactRepository(): RemoteHistoryArchiveRepairObjectArtifactRepository {
-	const bucketRoot =
-		process.env.HISTORY_BUCKET_CACHE_DIR ??
-		resolve(
-			dirname(resolveAppEnvPath(import.meta.url, 'backend')),
-			'..',
-			'..',
-			'history-bucket-cache'
-		);
+export function createRemoteHistoryArchiveRepairObjectArtifactRepository(
+	workPermit: HistoryArchiveRepairArtifactWorkPermit
+): RemoteHistoryArchiveRepairObjectArtifactRepository {
 	return new RemoteHistoryArchiveRepairObjectArtifactRepository({
-		bucketCacheDirectory: bucketRoot,
 		stagingDirectory:
 			process.env.HISTORY_ARCHIVE_REPAIR_STAGING_DIR ??
-			join(bucketRoot, '.repair-staging')
+			join(tmpdir(), 'stellaratlas-history-archive-repair'),
+		workPermit
 	});
 }

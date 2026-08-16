@@ -1,36 +1,79 @@
 import type { Logger } from 'logger';
 import type { ReconcileHistoryArchiveObjectTransitions } from './ReconcileHistoryArchiveObjectTransitions.js';
+import {
+	historyArchiveMaintenanceIntervalsFromEnv,
+	parseHistoryArchiveMaintenanceIntervalMs,
+	type HistoryArchiveMaintenanceIntervals
+} from './HistoryArchiveMaintenanceConfig.js';
 
-const maintenanceIntervalMs = 5_000;
+// Keep the production API writer's existing import and numeric third argument
+// compatible while its call site is upgraded independently.
+export { parseHistoryArchiveMaintenanceIntervalMs } from './HistoryArchiveMaintenanceConfig.js';
 
 export function startHistoryArchiveMaintenanceLoop(
 	reconciler: ReconcileHistoryArchiveObjectTransitions,
-	logger: Logger
+	logger: Logger,
+	configuredIntervals:
+		| HistoryArchiveMaintenanceIntervals
+		| number = historyArchiveMaintenanceIntervalsFromEnv()
 ): () => void {
-	let running = false;
 	let stopped = false;
+	const intervals = resolveMaintenanceIntervals(configuredIntervals);
 
-	const run = async (): Promise<void> => {
-		if (running || stopped) return;
-		running = true;
-		try {
-			await reconciler.executeIfDue();
-		} catch (error: unknown) {
-			logger.error('Failed to maintain archive object queue', {
-				app: 'history-scan-coordinator',
-				errorMessage: error instanceof Error ? error.message : String(error)
-			});
-		} finally {
-			running = false;
-		}
+	const createRunner = (
+		maintenanceWork: 'execution disposition' | 'transitions',
+		work: () => Promise<void>
+	): (() => Promise<void>) => {
+		let running = false;
+		return async (): Promise<void> => {
+			if (running || stopped) return;
+			running = true;
+			try {
+				await work();
+			} catch (error: unknown) {
+				logger.error('Failed to maintain archive object queue', {
+					app: 'history-scan-coordinator',
+					errorMessage: error instanceof Error ? error.message : String(error),
+					maintenanceWork
+				});
+			} finally {
+				running = false;
+			}
+		};
 	};
+	const runTransitions = createRunner('transitions', () =>
+		reconciler.executeTransitionReconciliationIfDue()
+	);
+	const runExecutionDisposition = createRunner('execution disposition', () =>
+		reconciler.executeExecutionDispositionReconciliationIfDue()
+	);
 
-	const timer = setInterval(() => void run(), maintenanceIntervalMs);
-	timer.unref();
-	void run();
+	const transitionTimer = setInterval(() => {
+		void runTransitions();
+	}, intervals.transitionReconciliationIntervalMs);
+	transitionTimer.unref();
+	const executionAdmissionTimer = setInterval(() => {
+		void runExecutionDisposition();
+	}, intervals.executionAdmissionIntervalMs);
+	executionAdmissionTimer.unref();
+	void runTransitions();
+	void runExecutionDisposition();
 
 	return () => {
 		stopped = true;
-		clearInterval(timer);
+		clearInterval(transitionTimer);
+		clearInterval(executionAdmissionTimer);
 	};
+}
+
+function resolveMaintenanceIntervals(
+	configuredIntervals: HistoryArchiveMaintenanceIntervals | number
+): HistoryArchiveMaintenanceIntervals {
+	if (typeof configuredIntervals !== 'number') return configuredIntervals;
+
+	return Object.freeze({
+		...historyArchiveMaintenanceIntervalsFromEnv(),
+		transitionReconciliationIntervalMs:
+			parseHistoryArchiveMaintenanceIntervalMs(String(configuredIntervals))
+	});
 }

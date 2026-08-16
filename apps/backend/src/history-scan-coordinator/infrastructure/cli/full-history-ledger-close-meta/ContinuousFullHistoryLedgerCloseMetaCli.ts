@@ -152,6 +152,10 @@ export async function runContinuousFullHistoryLedgerCloseMetaCli(
 			);
 			await dependencies.runLoop(
 				{
+					admissionRetryMilliseconds: config.admissionRetryMilliseconds,
+					cycleCooldownMilliseconds: config.admissionEnabled
+						? config.admissionCycleCooldownMilliseconds
+						: 0,
 					cycleLedgerCount: config.cycleLedgerCount,
 					errorBackoffMilliseconds: config.errorBackoffMilliseconds,
 					idlePollMilliseconds: config.idlePollMilliseconds,
@@ -159,6 +163,8 @@ export async function runContinuousFullHistoryLedgerCloseMetaCli(
 					typedShardLedgerCount: config.typedShardLedgerCount
 				},
 				{
+					admitCycle: () =>
+						activeComposition.admission.evaluate(abortController.signal),
 					emit: (event) => writeEvent(dependencies.stdout, event),
 					ensureStorageCapacity: () =>
 						activeComposition.storageBudget.assertCanAllocate(

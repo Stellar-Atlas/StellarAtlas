@@ -1,13 +1,20 @@
 import { availableParallelism } from 'node:os';
-import { calculateHistoryArchiveObjectCoordinatorProcesses } from 'history-scanner-dto';
+import { resolveHistoryArchiveObjectWorkerCapacity } from 'history-scanner-dto';
+
+const historyArchiveWorkerCapacity = resolveHistoryArchiveObjectWorkerCapacity(
+	process.env,
+	availableParallelism()
+);
 
 export const historyArchiveConsumerCount =
-	calculateHistoryArchiveObjectCoordinatorProcesses(availableParallelism());
+	historyArchiveWorkerCapacity.consumerCount;
 export const historyArchiveCanonicalReserveCount =
-	Math.floor(historyArchiveConsumerCount / 2);
+	historyArchiveWorkerCapacity.canonicalReserveCount;
 export const historyArchivePerHostConcurrency = 2;
-export const historyArchiveMinimumWatermark = historyArchiveConsumerCount * 2;
-export const historyArchiveMaximumWatermark = historyArchiveConsumerCount * 10;
+export const historyArchiveMinimumWatermark =
+	historyArchiveWorkerCapacity.minimumWatermark;
+export const historyArchiveMaximumWatermark =
+	historyArchiveWorkerCapacity.maximumWatermark;
 export const historyArchivePerRootFrontier = 1;
 export const historyArchiveThroughputWindowMinutes = 15;
 const targetBacklogMinutes = 10;

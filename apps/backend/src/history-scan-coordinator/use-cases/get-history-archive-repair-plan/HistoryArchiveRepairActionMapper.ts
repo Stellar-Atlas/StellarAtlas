@@ -1,9 +1,5 @@
 import type { HistoryArchiveCheckpointProof } from '../../domain/history-archive-checkpoint-proof/HistoryArchiveCheckpointProof.js';
 import type { HistoryArchiveObject } from '../../domain/history-archive-object/HistoryArchiveObject.js';
-import {
-	classifyHistoryArchiveObjectFailure,
-	getHistoryArchiveObjectEvidenceClass
-} from '../../domain/history-archive-object/HistoryArchiveObjectRetryPolicy.js';
 import type {
 	HistoryArchiveVerifiedBucketSource,
 	HistoryArchiveVerifiedCheckpointObjectSource
@@ -24,6 +20,19 @@ import type {
 } from 'shared';
 import { sanitizePublicInfrastructureText } from '../../infrastructure/mappers/PublicScanErrorMapper.js';
 import { createHistoryArchiveRepairManifest } from './HistoryArchiveRepairManifestMapper.js';
+import {
+	getRepairObjectEvidenceClass,
+	getRepairObjectFailureClass,
+	isProofGatedMissingObjectFailure,
+	isRepairCandidateObjectFailure,
+	isRepairableObjectFailure,
+	isStrictVerifiedRepairSource
+} from './HistoryArchiveRepairEligibility.js';
+
+export {
+	isArchiveObjectEvidence,
+	isRepairableObjectFailure
+} from './HistoryArchiveRepairEligibility.js';
 
 const maxKnownGoodSources = 5;
 
@@ -59,48 +68,14 @@ export function createRemoteReplacementCandidates(
 		objects.map((object) => {
 			const candidates =
 				object.bucketHash === null
-					? (checkpointSourcesByObject.get(object.remoteId) ?? []).map(
-							toCheckpointCandidate
-						)
+					? (checkpointSourcesByObject.get(object.remoteId) ?? [])
+							.filter((source) => isStrictVerifiedRepairSource(object, source))
+							.map(toCheckpointCandidate)
 					: (bucketSourcesByObject.get(object.remoteId) ?? [])
-							.filter(
-								(source) =>
-									source.archiveUrlIdentity !== object.archiveUrlIdentity &&
-									source.bucketHash === object.bucketHash?.toLowerCase()
-							)
+							.filter((source) => isStrictVerifiedRepairSource(object, source))
 							.map(toBucketCandidate);
 			return [object.remoteId, candidates.slice(0, maxKnownGoodSources)];
 		})
-	);
-}
-
-export function isRepairableObjectFailure(
-	object: HistoryArchiveObject
-): boolean {
-	const failureClass = getObjectFailureClass(object);
-	if (
-		failureClass === 'auth' ||
-		failureClass === 'http' ||
-		failureClass === 'not-found' ||
-		failureClass === 'rate-limit' ||
-		failureClass === 'timeout' ||
-		failureClass === 'transport' ||
-		failureClass === 'worker' ||
-		failureClass === 'coordinator'
-	) {
-		return false;
-	}
-
-	const errorType = (object.errorType ?? '').trim().toLowerCase();
-	const errorMessage = (object.errorMessage ?? '').trim().toLowerCase();
-	if (errorMessage.includes('abort')) return false;
-	return (
-		errorType.includes('hash') ||
-		errorType.includes('mismatch') ||
-		errorType === 'bucket_verification_failed' ||
-		errorType === 'category_content_invalid' ||
-		errorType === 'invalid_checkpoint_state' ||
-		errorType === 'invalid_history_archive_state'
 	);
 }
 
@@ -113,11 +88,13 @@ export function toObjectRepairAction(
 	>
 ): readonly HistoryArchiveRepairActionV1[] {
 	if (
-		!isRepairableObjectFailure(object) ||
-		getObjectEvidenceClass(object) !== 'archive-object'
+		!isRepairCandidateObjectFailure(object) ||
+		getRepairObjectEvidenceClass(object) !== 'archive-object'
 	) {
 		return [];
 	}
+	const proofGatedMissing = isProofGatedMissingObjectFailure(object);
+	if (proofGatedMissing && remoteCandidates.length === 0) return [];
 
 	const kind = getObjectActionKind(object);
 	const repairArtifact = getRepairArtifact(
@@ -125,13 +102,17 @@ export function toObjectRepairAction(
 		remoteCandidates[0],
 		repairArtifacts
 	);
-	const replacementReady =
-		remoteCandidates.length > 0 &&
-		(repairArtifact?.status === 'available' ||
-			repairArtifact?.status === 'verify-on-download');
-
 	const actionId = `${kind}:${object.remoteId}`;
 	const evidence = toObjectEvidence(object);
+	const repairManifest = createHistoryArchiveRepairManifest({
+		actionId,
+		artifact: repairArtifact,
+		evidence,
+		object,
+		source: remoteCandidates[0]
+	});
+	const replacementReady = repairManifest.status === 'ready';
+	if (proofGatedMissing && !replacementReady) return [];
 	return [
 		{
 			actionId,
@@ -141,13 +122,7 @@ export function toObjectRepairAction(
 			evidence: [evidence],
 			kind,
 			knownGoodSources: remoteCandidates,
-			repairManifest: createHistoryArchiveRepairManifest({
-				actionId,
-				artifact: repairArtifact,
-				evidence,
-				object,
-				source: remoteCandidates[0]
-			}),
+			repairManifest,
 			reason: getObjectRepairReason(object),
 			repairArtifact,
 			severity: replacementReady ? 'error' : 'blocked',
@@ -188,6 +163,10 @@ function getRepairArtifact(
 		proofId: candidate.proof.proofId,
 		proofVersion: candidate.proof.proofVersion,
 		provenAt: candidate.proof.evaluatedAt,
+		targetEvidenceUpdatedAt: requireDate(object.updatedAt).toISOString(),
+		targetFailureKind: isProofGatedMissingObjectFailure(object)
+			? 'missing'
+			: 'integrity',
 		targetRemoteId: object.remoteId
 	});
 }
@@ -229,17 +208,13 @@ export function toRepairInfrastructureBlock(
 	return {
 		archiveUrlIdentity: object.archiveUrlIdentity,
 		blockedUntil: object.nextAttemptAt?.toISOString() ?? null,
-		evidenceClass: getObjectEvidenceClass(object),
-		failureClass: getObjectFailureClass(object),
+		evidenceClass: getRepairObjectEvidenceClass(object),
+		failureClass: getRepairObjectFailureClass(object),
 		hostIdentity: object.hostIdentity,
 		httpStatus: object.httpStatus,
 		summary:
 			'Scanner infrastructure must clear before this object can be evaluated.'
 	};
-}
-
-export function isArchiveObjectEvidence(object: HistoryArchiveObject): boolean {
-	return getObjectEvidenceClass(object) === 'archive-object';
 }
 
 function toBucketCandidate(
@@ -354,7 +329,7 @@ function getObjectRepairReason(
 	if (object.errorType === 'checkpoint_state_ledger_mismatch') {
 		return 'checkpoint-ledger-mismatch';
 	}
-	const failureClass = getObjectFailureClass(object);
+	const failureClass = getRepairObjectFailureClass(object);
 	if (
 		object.objectType === 'history-archive-state' &&
 		failureClass === 'not-found'
@@ -422,13 +397,13 @@ function toObjectEvidence(
 		archiveUrlIdentity: object.archiveUrlIdentity,
 		bucketHash: object.bucketHash,
 		checkpointLedger: object.checkpointLedger,
-		evidenceClass: getObjectEvidenceClass(object),
+		evidenceClass: getRepairObjectEvidenceClass(object),
 		errorMessage:
 			object.errorMessage === null
 				? null
 				: sanitizePublicInfrastructureText(object.errorMessage),
 		errorType: object.errorType,
-		failureClass: getObjectFailureClass(object),
+		failureClass: getRepairObjectFailureClass(object),
 		httpStatus: object.httpStatus,
 		nextAttemptAt: object.nextAttemptAt?.toISOString() ?? null,
 		objectKey: object.objectKey,
@@ -465,24 +440,6 @@ function toCheckpointEvidence(
 		transactionsMatch: proof.transactionsMatch,
 		verifiedBucketCount: proof.verifiedBucketCount
 	};
-}
-
-function getObjectFailureClass(object: HistoryArchiveObject) {
-	return classifyHistoryArchiveObjectFailure({
-		errorType: object.errorType,
-		httpStatus: object.httpStatus
-	});
-}
-
-function getObjectEvidenceClass(object: HistoryArchiveObject) {
-	const failureClass = getObjectFailureClass(object);
-	return getHistoryArchiveObjectEvidenceClass(
-		failureClass,
-		object.failureChannel ??
-			(failureClass === 'worker' || failureClass === 'coordinator'
-				? 'scanner_issue'
-				: 'archive_evidence')
-	);
 }
 
 function getObjectTypeLabel(objectType: HistoryArchiveObject['objectType']) {

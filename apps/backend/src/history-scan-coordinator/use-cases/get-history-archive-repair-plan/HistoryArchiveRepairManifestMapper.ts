@@ -29,7 +29,13 @@ export function createHistoryArchiveRepairManifest(input: {
 		replacement,
 		schemaVersion: 1,
 		status: replacement === null ? 'awaiting-verified-replacement' : 'ready',
-		steps: replacement === null ? [] : repairSteps(replacement.artifact.contentHash),
+		steps:
+			replacement === null
+				? []
+				: repairSteps(
+						replacement.artifact.contentHash,
+						input.evidence.failureClass === 'not-found'
+					),
 		target: {
 			archiveUrl: input.object.archiveUrl,
 			archiveUrlIdentity: input.object.archiveUrlIdentity,
@@ -50,13 +56,15 @@ function toReplacement(
 	if (
 		source === undefined ||
 		artifact === null ||
-		(artifact.status !== 'available' && artifact.status !== 'verify-on-download')
+		(artifact.status !== 'available' &&
+			artifact.status !== 'verify-on-download')
 	) {
 		return null;
 	}
 	if (
 		artifact.contentHash.digest !== source.proof.contentHash.digest ||
-		artifact.contentHash.representation !== source.proof.contentHash.representation
+		artifact.contentHash.representation !==
+			source.proof.contentHash.representation
 	) {
 		return null;
 	}
@@ -68,10 +76,16 @@ function repairSteps(
 		? T extends { artifact: { contentHash: infer Hash } }
 			? Hash
 			: never
-		: never
+		: never,
+	targetWasMissing: boolean
 ): HistoryArchiveRepairManifestV1['steps'] {
 	return [
-		{ backupSuffix: '.stellaratlas-backup', kind: 'backup-current-file', order: 1, required: true },
+		{
+			backupSuffix: '.stellaratlas-backup',
+			kind: 'backup-current-file',
+			order: 1,
+			required: !targetWasMissing
+		},
 		{
 			input: 'replacement-download-url',
 			kind: 'stage-replacement',
@@ -86,16 +100,16 @@ function repairSteps(
 			required: true
 		},
 		{
-			kind: 'atomic-replace',
-			order: 4,
-			required: true,
-			requiresSameFilesystem: true
-		},
-		{
 			kind: 'preserve-metadata',
-			order: 5,
+			order: 4,
 			preserve: ['owner', 'mode', 'acl'],
 			required: true
+		},
+		{
+			kind: 'atomic-replace',
+			order: 5,
+			required: true,
+			requiresSameFilesystem: true
 		},
 		{
 			kind: 'request-recheck',

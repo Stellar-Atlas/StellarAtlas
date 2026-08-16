@@ -120,6 +120,46 @@ describe('MeilisearchScpStatementLiveStore', () => {
 		);
 	});
 
+	it('serializes document enqueue requests that overlap after a caller timeout', async () => {
+		const { addDocuments, getTask, store } = setupStore();
+		const documentEnqueue =
+			deferred<Awaited<ReturnType<typeof addDocuments>>>();
+		addDocuments.mockReturnValueOnce(documentEnqueue.promise);
+
+		const firstWrite = store.saveMany([createObservation('11')]);
+		await flushMicrotasks();
+		await expect(store.saveMany([createObservation('12')])).resolves.toEqual({
+			reason: 'document-enqueue-in-flight',
+			retryAfterMs: 5_000,
+			status: 'deferred'
+		});
+		expect(addDocuments).toHaveBeenCalledTimes(1);
+
+		documentEnqueue.resolve({
+			enqueuedAt: '2026-07-09T00:00:00.000Z',
+			indexUid: 'scp',
+			status: 'enqueued',
+			taskUid: 42,
+			type: 'documentAdditionOrUpdate'
+		});
+		await expect(firstWrite).resolves.toEqual({
+			status: 'accepted',
+			taskPending: true
+		});
+
+		Reflect.set(store, 'pendingDocumentTaskCheckedAtMs', 0);
+		getTask.mockResolvedValueOnce(meiliTask(42, 'succeeded'));
+		await store.reconcilePendingTask();
+		await expect(store.saveMany([createObservation('12')])).resolves.toEqual({
+			status: 'accepted',
+			taskPending: true
+		});
+		expect(addDocuments).toHaveBeenCalledTimes(2);
+		expect(addDocuments.mock.calls[1]?.[0]).toEqual([
+			expect.objectContaining({ slotIndex: '12' })
+		]);
+	});
+
 	it('blocks writes while accepted-task reconciliation reports processing', async () => {
 		jest.useFakeTimers().setSystemTime(1_000_000);
 		const { addDocuments, getTask, store } = setupStore();
@@ -165,6 +205,55 @@ describe('MeilisearchScpStatementLiveStore', () => {
 
 		expect(getTask).toHaveBeenCalledWith(42);
 		expect(addDocuments).toHaveBeenCalledTimes(2);
+	});
+
+	it('ignores a late reconciliation completion for a superseded document task', async () => {
+		jest.useFakeTimers().setSystemTime(1_000_000);
+		const { addDocuments, getTask, store } = setupStore();
+		const staleLookup = deferred<ReturnType<typeof meiliTask>>();
+		addDocuments
+			.mockResolvedValueOnce(enqueuedDocumentTask(42))
+			.mockResolvedValueOnce(enqueuedDocumentTask(44))
+			.mockResolvedValueOnce(enqueuedDocumentTask(45));
+		getTask
+			.mockReturnValueOnce(staleLookup.promise)
+			.mockResolvedValueOnce(meiliTask(42, 'succeeded'))
+			.mockResolvedValueOnce(meiliTask(44, 'succeeded'));
+
+		await store.saveMany([createObservation('11')]);
+		jest.advanceTimersByTime(5_000);
+		const staleReconciliation = store.reconcilePendingTask();
+		await flushMicrotasks();
+		jest.advanceTimersByTime(5_000);
+		await expect(store.reconcilePendingTask()).resolves.toEqual({
+			status: 'settled'
+		});
+		await expect(store.saveMany([createObservation('12')])).resolves.toEqual({
+			status: 'accepted',
+			taskPending: true
+		});
+
+		staleLookup.resolve(meiliTask(42, 'succeeded'));
+		await expect(staleReconciliation).resolves.toEqual({
+			retryAfterMs: 5_000,
+			status: 'pending'
+		});
+		await expect(store.saveMany([createObservation('13')])).resolves.toEqual({
+			reason: 'document-task-pending',
+			retryAfterMs: 5_000,
+			status: 'deferred'
+		});
+		expect(addDocuments).toHaveBeenCalledTimes(2);
+
+		jest.advanceTimersByTime(5_000);
+		await expect(store.reconcilePendingTask()).resolves.toEqual({
+			status: 'settled'
+		});
+		await expect(store.saveMany([createObservation('13')])).resolves.toEqual({
+			status: 'accepted',
+			taskPending: true
+		});
+		expect(addDocuments).toHaveBeenCalledTimes(3);
 	});
 
 	it('reports an unavailable index as deferred instead of success', async () => {
@@ -237,6 +326,121 @@ describe('MeilisearchScpStatementLiveStore', () => {
 		expect(deleteDocuments).toHaveBeenCalledTimes(1);
 	});
 
+	it('runs retention cleanup under uninterrupted document load', async () => {
+		jest.useFakeTimers().setSystemTime(1_000_000);
+		const { addDocuments, deleteDocuments, getTask, store } = setupStore();
+		getTask.mockImplementation(async (uid: number) =>
+			meiliTask(uid, 'succeeded')
+		);
+
+		await expect(store.saveMany([createObservation('11')])).resolves.toEqual({
+			status: 'accepted',
+			taskPending: true
+		});
+		for (let slot = 12; slot <= 18; slot += 1) {
+			jest.advanceTimersByTime(5_000);
+			let outcome = await store.saveMany([createObservation(String(slot))]);
+			if (
+				outcome.status === 'deferred' &&
+				outcome.reason === 'retention-cleanup-enqueue'
+			) {
+				await flushMicrotasks();
+				outcome = await store.saveMany([createObservation(String(slot))]);
+			}
+			expect(outcome).toEqual({ status: 'accepted', taskPending: true });
+		}
+
+		expect(deleteDocuments).toHaveBeenCalledTimes(1);
+		expect(addDocuments).toHaveBeenCalledTimes(8);
+		expect(deleteDocuments.mock.invocationCallOrder[0]).toBeLessThan(
+			addDocuments.mock.invocationCallOrder[7] as number
+		);
+	});
+
+	it('defers rather than losing or overtaking document work while cleanup is being queued', async () => {
+		jest.useFakeTimers().setSystemTime(1_000_000);
+		const { addDocuments, deleteDocuments, getTask, store } = setupStore();
+		const cleanupEnqueue =
+			deferred<Awaited<ReturnType<typeof deleteDocuments>>>();
+		getTask
+			.mockResolvedValueOnce(meiliTask(42, 'succeeded'))
+			.mockResolvedValueOnce(meiliTask(43, 'processing'));
+		deleteDocuments.mockReturnValueOnce(cleanupEnqueue.promise);
+
+		await store.saveMany([createObservation('11')]);
+		jest.advanceTimersByTime(5_000);
+		await store.reconcilePendingTask();
+		jest.advanceTimersByTime(30_000);
+		await flushMicrotasks();
+
+		await expect(store.saveMany([createObservation('12')])).resolves.toEqual({
+			reason: 'retention-cleanup-enqueue',
+			retryAfterMs: 5_000,
+			status: 'deferred'
+		});
+		expect(addDocuments).toHaveBeenCalledTimes(1);
+
+		cleanupEnqueue.resolve({
+			enqueuedAt: '2026-07-09T00:00:00.000Z',
+			indexUid: 'scp',
+			status: 'enqueued',
+			taskUid: 43,
+			type: 'documentDeletion'
+		});
+		await flushMicrotasks();
+
+		await expect(store.saveMany([createObservation('12')])).resolves.toEqual({
+			reason: 'retention-cleanup-task-pending',
+			retryAfterMs: 5_000,
+			status: 'deferred'
+		});
+		expect(addDocuments).toHaveBeenCalledTimes(1);
+
+		getTask.mockResolvedValue(meiliTask(43, 'succeeded'));
+		await expect(store.saveMany([createObservation('12')])).resolves.toEqual({
+			status: 'accepted',
+			taskPending: true
+		});
+		expect(addDocuments).toHaveBeenCalledTimes(2);
+		expect(deleteDocuments.mock.invocationCallOrder[0]).toBeLessThan(
+			addDocuments.mock.invocationCallOrder[1] as number
+		);
+	});
+
+	it('keeps document writes live and retries cleanup safely after an enqueue failure', async () => {
+		jest.useFakeTimers().setSystemTime(1_000_000);
+		const { addDocuments, deleteDocuments, getTask, logger, store } =
+			setupStore();
+		getTask.mockImplementation(async (uid: number) =>
+			meiliTask(uid, 'succeeded')
+		);
+		deleteDocuments.mockRejectedValueOnce(new Error('cleanup unavailable'));
+
+		await store.saveMany([createObservation('11')]);
+		jest.advanceTimersByTime(5_000);
+		await store.reconcilePendingTask();
+		jest.advanceTimersByTime(30_000);
+		await flushMicrotasks();
+
+		expect(deleteDocuments).toHaveBeenCalledTimes(1);
+		expect(logger.error).toHaveBeenCalledWith(
+			'Could not queue live SCP retention cleanup',
+			expect.objectContaining({ error: 'cleanup unavailable' })
+		);
+		await expect(store.saveMany([createObservation('12')])).resolves.toEqual({
+			status: 'accepted',
+			taskPending: true
+		});
+
+		jest.advanceTimersByTime(5_000);
+		await store.reconcilePendingTask();
+		jest.advanceTimersByTime(25_000);
+		await flushMicrotasks();
+
+		expect(deleteDocuments).toHaveBeenCalledTimes(2);
+		expect(addDocuments).toHaveBeenCalledTimes(2);
+	});
+
 	it('coalesces settled writes and bounds cleanup to one task per cadence', async () => {
 		jest.useFakeTimers().setSystemTime(1_000_000);
 		const { deleteDocuments, getTask, store } = setupStore();
@@ -257,7 +461,7 @@ describe('MeilisearchScpStatementLiveStore', () => {
 		await store.saveMany([createObservation('13')]);
 		jest.advanceTimersByTime(5_000);
 		await store.reconcilePendingTask();
-		jest.advanceTimersByTime(294_999);
+		jest.advanceTimersByTime(289_999);
 		await flushMicrotasks();
 		expect(deleteDocuments).toHaveBeenCalledTimes(1);
 
@@ -290,13 +494,7 @@ describe('MeilisearchScpStatementLiveStore', () => {
 
 function setupStore() {
 	const logger = mock<Logger>();
-	const addDocuments = jest.fn(async () => ({
-		enqueuedAt: '2026-07-09T00:00:00.000Z',
-		indexUid: 'scp',
-		status: 'enqueued',
-		taskUid: 42,
-		type: 'documentAdditionOrUpdate'
-	}));
+	const addDocuments = jest.fn(async () => enqueuedDocumentTask(42));
 	const getTask = jest.fn();
 	const deleteDocuments = jest.fn(async () => ({
 		enqueuedAt: '2026-07-09T00:00:00.000Z',
@@ -323,6 +521,16 @@ function setupStore() {
 	Reflect.set(store, 'indexReady', true);
 
 	return { addDocuments, deleteDocuments, getTask, logger, search, store };
+}
+
+function enqueuedDocumentTask(taskUid: number) {
+	return {
+		enqueuedAt: '2026-07-09T00:00:00.000Z',
+		indexUid: 'scp',
+		status: 'enqueued',
+		taskUid,
+		type: 'documentAdditionOrUpdate'
+	};
 }
 
 function createObservation(slotIndex: string): CrawlerScpStatementObservation {
@@ -373,4 +581,14 @@ function meiliTask(uid: number, status: 'processing' | 'succeeded') {
 		type: uid === 43 ? 'documentDeletion' : 'documentAdditionOrUpdate',
 		uid
 	};
+}
+
+function deferred<T>() {
+	let resolve!: (value: T | PromiseLike<T>) => void;
+	let reject!: (reason?: unknown) => void;
+	const promise = new Promise<T>((resolvePromise, rejectPromise) => {
+		resolve = resolvePromise;
+		reject = rejectPromise;
+	});
+	return { promise, reject, resolve };
 }

@@ -9,6 +9,7 @@ import {
 } from './HistoryArchiveObjectRowMapper.js';
 import { hasPostgresSqlState } from './PostgresError.js';
 import { enqueueHistoryArchiveReadyObjects } from './HistoryArchiveObjectReadyQueue.js';
+import { enqueueHistoryArchiveCheckpointProofRefreshes } from './HistoryArchiveCheckpointProofRefreshQueue.js';
 
 export async function markHistoryArchiveObjectVerified(
 	repository: Repository<HistoryArchiveObject>,
@@ -54,6 +55,7 @@ export async function markHistoryArchiveObjectVerified(
 		}
 		const result = await query.execute();
 		if ((result.affected ?? 0) === 0) return false;
+		await enqueueHistoryArchiveCheckpointProofRefreshes(manager, [remoteId]);
 		if (progress.scheduler === 'broker') return true;
 
 		await clearClaimSlot(
@@ -157,6 +159,7 @@ export async function markHistoryArchiveTransitionEffectsCompleted(
 			.andWhere('"transitionEffectsCompletedAt" is null')
 			.execute();
 		if ((result.affected ?? 0) === 0) return false;
+		await enqueueHistoryArchiveCheckpointProofRefreshes(manager, [remoteId]);
 		await enqueueHistoryArchiveReadyObjects(manager, [remoteId]);
 		return true;
 	});

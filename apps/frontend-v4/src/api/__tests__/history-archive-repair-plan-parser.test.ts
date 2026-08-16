@@ -21,26 +21,29 @@ describe('history archive repair plan parser', () => {
 		const plan = createRepairPlan();
 		const action = getFirstAction(plan);
 		const source = getFirstSource(action);
+		const artifact = {
+			artifactType: 'transactions' as const,
+			byteLength: null,
+			contentHash: source.proof.contentHash,
+			downloadUrl:
+				'/v1/archive-scans/repair-artifacts/objects/' +
+				'11111111-1111-4111-8111-111111111111/' +
+				`${Date.parse(action.evidence[0]?.updatedAt ?? '')}/missing/` +
+				`${source.proof.candidateObjectRemoteId}/${source.proof.proofId}/` +
+				`${source.proof.proofVersion}/${Date.parse(source.proof.evaluatedAt)}/` +
+				`${source.proof.contentHash.digest}`,
+			mediaType: 'application/gzip' as const,
+			objectIdentity: 'transactions:0000003f',
+			provenAt: source.proof.evaluatedAt,
+			status: 'verify-on-download' as const
+		};
 		const response: HistoryArchiveRepairPlanV1 = {
 			...plan,
 			actions: [
 				{
 					...action,
-					repairArtifact: {
-						artifactType: 'transactions',
-						byteLength: null,
-						contentHash: source.proof.contentHash,
-						downloadUrl:
-							'/v1/archive-scans/repair-artifacts/objects/' +
-							'11111111-1111-4111-8111-111111111111/' +
-							`${source.proof.candidateObjectRemoteId}/${source.proof.proofId}/` +
-							`${source.proof.proofVersion}/${Date.parse(source.proof.evaluatedAt)}/` +
-							`${source.proof.contentHash.digest}`,
-						mediaType: 'application/gzip',
-						objectIdentity: 'transactions:0000003f',
-						provenAt: source.proof.evaluatedAt,
-						status: 'verify-on-download'
-					},
+					repairArtifact: artifact,
+					repairManifest: createReadyManifest(action, artifact, source),
 					severity: 'error'
 				}
 			]
@@ -150,7 +153,28 @@ function createRepairPlan(): HistoryArchiveRepairPlanV1 {
 				bucketHash: null,
 				checkpointEvidence: [],
 				checkpointLedger: 63,
-				evidence: [],
+				evidence: [
+					{
+						archiveUrl: 'https://target.example/history',
+						archiveUrlIdentity: 'https://target.example/history',
+						bucketHash: null,
+						checkpointLedger: 63,
+						evidenceClass: 'archive-object',
+						errorMessage: 'Remote transaction file was not found',
+						errorType: 'archive_http_error',
+						failureClass: 'not-found',
+						httpStatus: 404,
+						nextAttemptAt: null,
+						objectKey: 'transactions:0000003f',
+						objectType: 'transactions',
+						objectUrl:
+							'https://target.example/history/transactions/00/00/00/transactions-0000003f.xdr.gz',
+						observedCheckpointLedger: null,
+						remoteId: '11111111-1111-4111-8111-111111111111',
+						status: 'failed',
+						updatedAt: '2026-07-19T00:00:00.000Z'
+					}
+				],
 				kind: 'replace-archive-file',
 				knownGoodSources: [
 					{
@@ -177,6 +201,7 @@ function createRepairPlan(): HistoryArchiveRepairPlanV1 {
 				],
 				reason: 'missing-object',
 				repairArtifact: null,
+				repairManifest: null,
 				severity: 'blocked',
 				summary: 'Replace the missing transaction archive file.'
 			}
@@ -192,6 +217,86 @@ function createRepairPlan(): HistoryArchiveRepairPlanV1 {
 			failedObjectChecks: 1,
 			pendingObjectChecks: 0,
 			verifiedObjectChecks: 0
+		}
+	};
+}
+
+function createReadyManifest(
+	action: HistoryArchiveRepairPlanV1['actions'][number],
+	artifact: Extract<
+		NonNullable<
+			HistoryArchiveRepairPlanV1['actions'][number]['repairArtifact']
+		>,
+		{ status: 'verify-on-download' }
+	>,
+	source: HistoryArchiveRepairPlanV1['actions'][number]['knownGoodSources'][number]
+): NonNullable<
+	HistoryArchiveRepairPlanV1['actions'][number]['repairManifest']
+> {
+	const evidence = action.evidence[0];
+	if (evidence === undefined)
+		throw new Error('Repair evidence fixture is missing');
+	return {
+		actionId: action.actionId,
+		evidence,
+		generatedAt: evidence.updatedAt,
+		recheck: {
+			endpoint: `/v1/archive-scans/objects/${evidence.remoteId}/recheck`,
+			minimumEvidenceUpdatedAt: evidence.updatedAt,
+			resolutionCondition: 'same-object-verified-after-original-evidence',
+			targetRemoteId: evidence.remoteId
+		},
+		replacement: { artifact, source },
+		schemaVersion: 1,
+		status: 'ready',
+		steps: [
+			{
+				backupSuffix: '.stellaratlas-backup',
+				kind: 'backup-current-file',
+				order: 1,
+				required: false
+			},
+			{
+				input: 'replacement-download-url',
+				kind: 'stage-replacement',
+				order: 2,
+				required: true,
+				stagingLocation: 'same-filesystem-temporary-file'
+			},
+			{
+				expectedContentHash: artifact.contentHash,
+				kind: 'verify-staged-content',
+				order: 3,
+				required: true
+			},
+			{
+				kind: 'preserve-metadata',
+				order: 4,
+				preserve: ['owner', 'mode', 'acl'],
+				required: true
+			},
+			{
+				kind: 'atomic-replace',
+				order: 5,
+				required: true,
+				requiresSameFilesystem: true
+			},
+			{
+				kind: 'request-recheck',
+				order: 6,
+				required: true,
+				resolutionCondition: 'same-object-verified-after-original-evidence'
+			}
+		],
+		target: {
+			archiveUrl: evidence.archiveUrl,
+			archiveUrlIdentity: evidence.archiveUrlIdentity,
+			bucketHash: evidence.bucketHash,
+			checkpointLedger: evidence.checkpointLedger,
+			objectKey: evidence.objectKey,
+			objectType: evidence.objectType,
+			objectUrl: evidence.objectUrl,
+			operatorTargetPathRequired: true
 		}
 	};
 }

@@ -61,6 +61,7 @@ export const networkSearchFacetAttributes: readonly NetworkSearchFacetName[] = [
 ];
 
 export const networkSearchHitAttributes = [
+	'archiveStatus',
 	'detail',
 	'entityId',
 	'entityType',
@@ -91,6 +92,7 @@ export const toSearchHit = (
 	source: NetworkSearchHit['source'],
 	freshness: NetworkSearchHit['freshness'] = 'fresh'
 ): NetworkSearchHit => ({
+	archiveStatus: document.archiveStatus,
 	detail: document.detail,
 	entityId: document.entityId,
 	entityType: document.entityType,
@@ -122,7 +124,10 @@ const matchesDocument = (
 	}
 	if (
 		request.archiveStatus &&
-		document.archiveStatus !== request.archiveStatus
+		(request.archiveStatus === 'issue'
+			? document.archiveStatus !== 'error' &&
+				document.archiveStatus !== 'unreachable'
+			: document.archiveStatus !== request.archiveStatus)
 	) {
 		return false;
 	}
@@ -326,7 +331,9 @@ export const buildMeilisearchFilter = (
 			request.scope === 'all-known' ? undefined : request.scope
 		),
 		filterCondition('entityType', request.entityType),
-		filterCondition('archiveStatus', request.archiveStatus),
+		request.archiveStatus === 'issue'
+			? '(archiveStatus = "error" OR archiveStatus = "unreachable")'
+			: filterCondition('archiveStatus', request.archiveStatus),
 		filterCondition('countryCode', request.countryCode),
 		filterCondition('organizationId', request.organizationId),
 		filterCondition('active', request.active),

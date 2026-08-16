@@ -22,6 +22,7 @@ import {
 	assertCanonicalBaseFacts,
 	storeCanonicalBaseFacts
 } from './FullHistoryCanonicalFactStore.js';
+import { lockFullHistoryCanonicalWriter } from './FullHistoryCanonicalWriteLock.js';
 
 export async function prependCanonicalCheckpoint(
 	dataSource: DataSource,
@@ -51,6 +52,7 @@ export async function prependCanonicalCheckpoint(
 			assertWritablePrependFrontier(frontier, input);
 			await assertPrependLedgerBoundary(manager, input, networkHash, frontier);
 			await assertNoCompetingBatch(manager, input, networkHash);
+			await lockFullHistoryCanonicalWriter(manager, networkHash);
 			await insertBatch(manager, input, networkHash);
 			await storeCanonicalBaseFacts(manager, input, networkHash);
 			const updated = await prependWatermark(

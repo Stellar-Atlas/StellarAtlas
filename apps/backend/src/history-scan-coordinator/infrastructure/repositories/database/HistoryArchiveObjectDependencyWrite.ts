@@ -7,6 +7,8 @@ export async function materializeHistoryArchiveCheckpointDependencies(
 	remoteId: string
 ): Promise<number> {
 	return await repository.manager.transaction(async (manager) => {
+		await manager.query(`set local lock_timeout = '2s'`);
+		await manager.query(`set local statement_timeout = '30s'`);
 		const inserted = (await manager.query(materializeDependenciesSql, [
 			remoteId
 		])) as readonly unknown[];
@@ -79,6 +81,10 @@ const materializeDependenciesSql = `
 		set "dependenciesMaterializedAt" = now()
 		where object."remoteId" = $1::uuid
 			and object.status = 'verified'
+			and (
+				object."dependenciesMaterializedAt" is null
+				or exists (select 1 from inserted)
+			)
 		returning object.id
 	)
 	select "bucketHash" from inserted

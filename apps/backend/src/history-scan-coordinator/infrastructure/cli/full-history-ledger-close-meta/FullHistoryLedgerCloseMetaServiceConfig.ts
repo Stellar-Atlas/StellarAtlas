@@ -6,9 +6,19 @@ const maximumProcessingConcurrency = 8;
 const minimumTypedShardLedgers = 64;
 const maximumTypedShardLedgers = 1_024;
 const maximumCycleLedgers = 65_536;
+const maximumAdmissionCycleLedgers = 1_024;
 const sharedMemoryRoot = '/dev/shm';
 
 export interface FullHistoryLedgerCloseMetaServiceConfig {
+	readonly admissionCycleCooldownMilliseconds: number;
+	readonly admissionEnabled: boolean;
+	readonly admissionMaximumDatabaseConnectionBasisPoints: number;
+	readonly admissionMaximumDatabaseProbeMilliseconds: number;
+	readonly admissionMaximumIoFullPressureBasisPoints: number;
+	readonly admissionMaximumIoSomePressureBasisPoints: number;
+	readonly admissionMaximumMd0InflightRequests: number;
+	readonly admissionRecoveryHealthySamplesRequired: number;
+	readonly admissionRetryMilliseconds: number;
 	readonly bulkRoot: string;
 	readonly cycleLedgerCount: number;
 	readonly errorBackoffMilliseconds: number;
@@ -77,15 +87,37 @@ export function parseFullHistoryLedgerCloseMetaServiceConfig(
 		maximumTypedShardLedgers,
 		'typed shard ledgers'
 	);
+	const admissionEnabled = booleanValue(
+		environment.FULL_HISTORY_LEDGER_CLOSE_META_ADMISSION_ENABLED,
+		true,
+		'admission enabled'
+	);
 	const cycleLedgerCount = integer(
 		environment.FULL_HISTORY_LEDGER_CLOSE_META_CYCLE_LEDGERS,
-		typedShardLedgerCount * 8,
+		admissionEnabled
+			? typedShardLedgerCount
+			: typedShardLedgerCount * maximumProcessingConcurrency,
 		typedShardLedgerCount,
-		maximumCycleLedgers,
+		admissionEnabled ? maximumAdmissionCycleLedgers : maximumCycleLedgers,
 		'cycle ledgers'
 	);
 	if (cycleLedgerCount % typedShardLedgerCount !== 0) {
 		throw new Error('cycle ledgers must contain whole typed shards');
+	}
+	if (admissionEnabled && cycleLedgerCount !== typedShardLedgerCount) {
+		throw new Error('an admitted cycle must contain exactly one typed shard');
+	}
+	const processingConcurrency = integer(
+		environment.FULL_HISTORY_LEDGER_CLOSE_META_PROCESSING_CONCURRENCY,
+		admissionEnabled ? 1 : maximumProcessingConcurrency,
+		1,
+		admissionEnabled ? 1 : maximumProcessingConcurrency,
+		'processing concurrency'
+	);
+	if (processingConcurrency > cycleLedgerCount / typedShardLedgerCount) {
+		throw new Error(
+			'processing concurrency cannot exceed the typed shards in one cycle'
+		);
 	}
 	const firstAvailableLedger = integer(
 		environment.FULL_HISTORY_LEDGER_CLOSE_META_FIRST_LEDGER,
@@ -102,13 +134,79 @@ export function parseFullHistoryLedgerCloseMetaServiceConfig(
 	);
 	if (
 		lastAvailableLedger !== null &&
-		(lastAvailableLedger - firstAvailableLedger + 1) %
-			typedShardLedgerCount !==
+		(lastAvailableLedger - firstAvailableLedger + 1) % typedShardLedgerCount !==
 			0
 	) {
 		throw new Error('bounded ledger range must contain whole typed shards');
 	}
+	const admissionMaximumIoFullPressureBasisPoints = integer(
+		environment.FULL_HISTORY_LEDGER_CLOSE_META_ADMISSION_MAX_IO_FULL_BASIS_POINTS,
+		500,
+		0,
+		10_000,
+		'admission maximum full I/O pressure basis points'
+	);
+	const admissionMaximumIoSomePressureBasisPoints = integer(
+		environment.FULL_HISTORY_LEDGER_CLOSE_META_ADMISSION_MAX_IO_SOME_BASIS_POINTS,
+		2_500,
+		0,
+		10_000,
+		'admission maximum some I/O pressure basis points'
+	);
+	if (
+		admissionMaximumIoFullPressureBasisPoints >
+		admissionMaximumIoSomePressureBasisPoints
+	) {
+		throw new Error(
+			'admission maximum full I/O pressure cannot exceed some I/O pressure'
+		);
+	}
 	return Object.freeze({
+		admissionCycleCooldownMilliseconds: integer(
+			environment.FULL_HISTORY_LEDGER_CLOSE_META_ADMISSION_CYCLE_COOLDOWN_MS,
+			30_000,
+			1_000,
+			3_600_000,
+			'admission cycle cooldown'
+		),
+		admissionEnabled,
+		admissionMaximumDatabaseConnectionBasisPoints: integer(
+			environment.FULL_HISTORY_LEDGER_CLOSE_META_ADMISSION_MAX_DATABASE_CONNECTION_BASIS_POINTS,
+			7_500,
+			1,
+			10_000,
+			'admission maximum database connection basis points'
+		),
+		admissionMaximumDatabaseProbeMilliseconds: integer(
+			environment.FULL_HISTORY_LEDGER_CLOSE_META_ADMISSION_MAX_DATABASE_PROBE_MS,
+			250,
+			1,
+			60_000,
+			'admission maximum database probe latency'
+		),
+		admissionMaximumIoFullPressureBasisPoints,
+		admissionMaximumIoSomePressureBasisPoints,
+		admissionMaximumMd0InflightRequests: integer(
+			environment.FULL_HISTORY_LEDGER_CLOSE_META_ADMISSION_MAX_MD0_INFLIGHT_REQUESTS,
+			64,
+			0,
+			1_000_000,
+			'admission maximum md0 in-flight requests'
+		),
+		admissionRecoveryHealthySamplesRequired: integer(
+			environment.FULL_HISTORY_LEDGER_CLOSE_META_ADMISSION_RECOVERY_HEALTHY_SAMPLES_REQUIRED,
+			3,
+			1,
+			60,
+			'admission recovery healthy samples required'
+		),
+		admissionRetryMilliseconds: integer(
+			environment.FULL_HISTORY_LEDGER_CLOSE_META_ADMISSION_RETRY_MS,
+			30_000,
+			1_000,
+			3_600_000,
+			'admission retry'
+		),
 		bulkRoot,
 		cycleLedgerCount,
 		errorBackoffMilliseconds: integer(
@@ -173,13 +271,7 @@ export function parseFullHistoryLedgerCloseMetaServiceConfig(
 			'network passphrase',
 			1_024
 		),
-		processingConcurrency: integer(
-			environment.FULL_HISTORY_LEDGER_CLOSE_META_PROCESSING_CONCURRENCY,
-			8,
-			1,
-			maximumProcessingConcurrency,
-			'processing concurrency'
-		),
+		processingConcurrency,
 		processTimeoutMilliseconds: integer(
 			environment.FULL_HISTORY_LEDGER_CLOSE_META_PROCESS_TIMEOUT_MS,
 			3_600_000,
@@ -217,6 +309,17 @@ export function parseFullHistoryLedgerCloseMetaServiceConfig(
 		typedOutputRoot,
 		typedShardLedgerCount
 	});
+}
+
+function booleanValue(
+	value: string | undefined,
+	fallback: boolean,
+	field: string
+): boolean {
+	if (value === undefined) return fallback;
+	if (value === 'true') return true;
+	if (value === 'false') return false;
+	throw new Error(`${field} must equal true or false`);
 }
 
 function optionalInteger(

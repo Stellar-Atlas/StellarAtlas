@@ -1,6 +1,41 @@
 import { CURRENT_HISTORY_ARCHIVE_CHECKPOINT_PROOF_VERSION } from '../../../domain/history-archive-checkpoint-proof/HistoryArchiveCheckpointProof.js';
 
-export const historyArchiveCheckpointProofUpsertSql = `
+export const historyArchiveCheckpointProofFinalizedCteSql = `
+	finalized as (
+		select *, case
+			when has_failed then 'not-evaluable'
+			when not required_objects_complete or has_active then 'pending'
+			when predecessor_missing then 'pending'
+			when has_checkpoint_ledger_fact and not checkpoint_ledger_matches
+				then 'mismatch'
+			when not proof_facts_complete then 'not-evaluable'
+			when not (checkpoint_bucket_list_matches and transactions_match
+				and results_match and previous_ledgers_match) then 'mismatch'
+			when not buckets_verified then 'not-evaluable'
+			else 'verified'
+		end as status, case
+			when has_failed then 'object-failed'
+			when not required_objects_complete or has_active then 'object-incomplete'
+			when predecessor_missing then 'predecessor-missing'
+			when has_checkpoint_ledger_fact and not checkpoint_ledger_matches
+				then 'checkpoint-ledger-mismatch'
+			when not proof_facts_complete then 'proof-facts-incomplete'
+			when not checkpoint_bucket_list_matches
+				then 'checkpoint-bucket-list-mismatch'
+			when not transactions_match then 'transaction-hash-mismatch'
+			when not results_match then 'result-hash-mismatch'
+			when not previous_ledgers_match then 'previous-ledger-hash-mismatch'
+			when not buckets_verified then 'bucket-missing'
+			else null
+		end as failure_kind
+		from classified
+	)
+`;
+
+function buildHistoryArchiveCheckpointProofUpsertSql(
+	additionalSameVersionTransitionSql: string
+): string {
+	return `
 	insert into "history_archive_checkpoint_proof" (
 		"archiveUrl",
 		"archiveUrlIdentity",
@@ -137,7 +172,16 @@ export const historyArchiveCheckpointProofUpsertSql = `
 					"history_archive_checkpoint_proof".status in (
 						'pending', 'not-evaluable'
 					)
-					and excluded.status <> 'pending'
+					and (
+						excluded.status <> 'pending'
+						or (
+							"history_archive_checkpoint_proof".status =
+								'not-evaluable'
+							and "history_archive_checkpoint_proof"."failureKind" =
+								'object-failed'
+							and excluded."failureKind" <> 'object-failed'
+						)
+					)
 				)
 				or (
 					"history_archive_checkpoint_proof".status = 'mismatch'
@@ -147,6 +191,7 @@ export const historyArchiveCheckpointProofUpsertSql = `
 					"history_archive_checkpoint_proof".status = 'verified'
 					and excluded.status in ('verified', 'mismatch')
 				)
+				${additionalSameVersionTransitionSql}
 			)
 			and row(
 				excluded."archiveUrl",
@@ -202,4 +247,152 @@ export const historyArchiveCheckpointProofUpsertSql = `
 				"history_archive_checkpoint_proof".details
 			)
 		)
+`;
+}
+
+const queuedPendingTransitionSql = `
+				or (
+					"history_archive_checkpoint_proof".status = 'pending'
+					and excluded.status = 'pending'
+					and "history_archive_checkpoint_proof"."proofVersion" =
+						${CURRENT_HISTORY_ARCHIVE_CHECKPOINT_PROOF_VERSION}
+					and (
+						"history_archive_checkpoint_proof".
+							"checkpointStateObjectRemoteId" is null
+						or "history_archive_checkpoint_proof".
+							"checkpointStateObjectRemoteId" =
+							excluded."checkpointStateObjectRemoteId"
+					)
+					and (
+						"history_archive_checkpoint_proof".
+							"ledgerObjectRemoteId" is null
+						or "history_archive_checkpoint_proof".
+							"ledgerObjectRemoteId" =
+							excluded."ledgerObjectRemoteId"
+					)
+					and (
+						"history_archive_checkpoint_proof".
+							"transactionsObjectRemoteId" is null
+						or "history_archive_checkpoint_proof".
+							"transactionsObjectRemoteId" =
+							excluded."transactionsObjectRemoteId"
+					)
+					and (
+						"history_archive_checkpoint_proof".
+							"resultsObjectRemoteId" is null
+						or "history_archive_checkpoint_proof".
+							"resultsObjectRemoteId" =
+							excluded."resultsObjectRemoteId"
+					)
+					and (
+						"history_archive_checkpoint_proof".
+							"scpObjectRemoteId" is null
+						or "history_archive_checkpoint_proof".
+							"scpObjectRemoteId" = excluded."scpObjectRemoteId"
+					)
+					and exists (
+						select 1
+						from history_archive_checkpoint_proof_refresh_queue queue
+						where queue."archiveUrlIdentity" =
+							"history_archive_checkpoint_proof"."archiveUrlIdentity"
+							and queue."checkpointLedger" =
+								"history_archive_checkpoint_proof"."checkpointLedger"
+							and queue."leaseToken" = $5::uuid
+							and queue.generation = $6::bigint
+							and queue."evidenceUpdatedAt" = $7::timestamptz
+							and queue."leaseUntil" > now()
+					)
+				)
+`;
+
+export const historyArchiveCheckpointProofUpsertSql =
+	buildHistoryArchiveCheckpointProofUpsertSql('');
+
+export const historyArchiveCheckpointProofQueuedUpsertSql =
+	buildHistoryArchiveCheckpointProofUpsertSql(queuedPendingTransitionSql);
+
+export const historyArchiveCheckpointProofDerivedMatchesCurrentSql = `
+	row(
+		derived."archiveUrl",
+		derived.status,
+		derived.required_objects_complete,
+		derived.proof_facts_complete,
+		derived.checkpoint_bucket_list_matches,
+		derived.transactions_match,
+		derived.results_match,
+		derived.previous_ledgers_match,
+		derived.buckets_verified,
+		derived.ledger_fact_count,
+		derived.transaction_fact_count,
+		derived.result_fact_count,
+		derived.expected_bucket_count,
+		derived.verified_bucket_count,
+		derived.failed_bucket_count,
+		derived.missing_bucket_count,
+		derived.checkpoint_bucket_list_hash,
+		derived.ledger_bucket_list_hash,
+		derived."checkpointStateObjectRemoteId",
+		derived."ledgerObjectRemoteId",
+		derived."transactionsObjectRemoteId",
+		derived."resultsObjectRemoteId",
+		derived."scpObjectRemoteId",
+		derived.failure_kind,
+		jsonb_build_object(
+			'expectedLedgerCount', derived.expected_ledger_count,
+			'ledgerRawFactCount', derived.ledger_raw_fact_count,
+			'ledgerHeaderHashesVerified',
+				derived.ledger_header_hashes_verified,
+			'transactionRawFactCount', derived.transaction_raw_fact_count,
+			'resultRawFactCount', derived.result_raw_fact_count,
+			'predecessorMissing', derived.predecessor_missing,
+			'predecessorBoundaryValid', derived.predecessor_boundary_valid,
+			'checkpointStateLedgerFactPresent',
+				derived.has_checkpoint_ledger_fact,
+			'checkpointStateLedgerMatches',
+				derived.checkpoint_ledger_matches,
+			'scpEntryCount', derived.scp_entry_count,
+			'scpExpectationKnown', derived.scp_expectation_known,
+			'scpExpected', derived.scp_expected,
+			'scpOptional', true,
+			'scpPresent', derived.scp_present,
+			'scpVerified', derived.scp_verified,
+			'hasActiveObject', derived.has_active,
+			'hasFailedObject', derived.has_failed,
+			'networkPassphrase', derived.network_passphrase,
+			'maxProtocolVersion', derived.max_protocol_version,
+			'failureErrorType', derived.failure_error_type,
+			'failureChannel', derived.failure_channel,
+			'failureChannels',
+				coalesce(to_jsonb(derived.failure_channels), '[]'::jsonb),
+			'failureHttpStatus', derived.failure_http_status,
+			'objectFailures',
+				coalesce(derived.object_failures, '[]'::jsonb)
+		)
+	) is not distinct from row(
+		proof."archiveUrl",
+		proof.status,
+		proof."requiredObjectsComplete",
+		proof."proofFactsComplete",
+		proof."checkpointBucketListMatches",
+		proof."transactionsMatch",
+		proof."resultsMatch",
+		proof."previousLedgersMatch",
+		proof."bucketsVerified",
+		proof."ledgerFactCount",
+		proof."transactionFactCount",
+		proof."resultFactCount",
+		proof."expectedBucketCount",
+		proof."verifiedBucketCount",
+		proof."failedBucketCount",
+		proof."missingBucketCount",
+		proof."checkpointBucketListHash",
+		proof."ledgerBucketListHash",
+		proof."checkpointStateObjectRemoteId",
+		proof."ledgerObjectRemoteId",
+		proof."transactionsObjectRemoteId",
+		proof."resultsObjectRemoteId",
+		proof."scpObjectRemoteId",
+		proof."failureKind",
+		proof.details
+	)
 `;

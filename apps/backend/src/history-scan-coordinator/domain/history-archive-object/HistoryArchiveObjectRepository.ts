@@ -130,6 +130,14 @@ export interface HistoryArchiveObjectExecutionReconciliationResult {
 	readonly watermark: number;
 }
 
+export interface HistoryArchiveCheckpointProofRefreshDrainResult {
+	readonly claimed: number;
+	readonly completed: number;
+	readonly failed: number;
+}
+
+export type HistoryArchiveCheckpointProofRefreshPriority = 0 | 1;
+
 interface HistoryArchiveObjectRecheckDecisionBase {
 	readonly blockedUntil: Date | null;
 	readonly eligibleAt: Date | null;
@@ -155,7 +163,14 @@ export type HistoryArchiveObjectRecheckDecision =
 	  });
 
 export interface HistoryArchiveObjectRepository {
-	completeBrokerDelivery(remoteId: string, executionId: string): Promise<boolean>;
+	drainCheckpointProofRefreshQueue(
+		limit: number,
+		maximumPriority: HistoryArchiveCheckpointProofRefreshPriority
+	): Promise<HistoryArchiveCheckpointProofRefreshDrainResult>;
+	completeBrokerDelivery(
+		remoteId: string,
+		executionId: string
+	): Promise<boolean>;
 	claimNextObject(
 		supportedTypes: readonly HistoryArchiveObjectType[]
 	): Promise<HistoryArchiveObject | null>;
@@ -233,7 +248,7 @@ export interface HistoryArchiveObjectRepository {
 	promotePlannedObjects(): Promise<HistoryArchiveObjectPlanPromotionResult>;
 	reconcileDependencyReadiness(limit: number): Promise<number>;
 	reconcileExecutionDisposition(options?: {
-		readonly admitLegacyObjects?: boolean;
+		readonly admitGenericObjects?: boolean;
 	}): Promise<HistoryArchiveObjectExecutionReconciliationResult>;
 	tryWithTransitionReconciliationLock(
 		work: () => Promise<void>

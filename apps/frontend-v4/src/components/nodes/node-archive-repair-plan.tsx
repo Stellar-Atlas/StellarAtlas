@@ -8,6 +8,11 @@ import {
 } from '@domain/history-archive';
 import { formatArchiveRoot } from '@domain/known-archive-evidence';
 import { formatDateTime, formatInteger } from '@format/formatters';
+import {
+	ArchivistWholeArchiveOption,
+	getValidatedArchiveRelativePath,
+	ProofBoundRepairWorkflow
+} from './node-archive-repair-workflow';
 
 interface NodeArchiveRepairPlanProps {
 	readonly repairPlan: PublicHistoryArchiveRepairPlan;
@@ -21,11 +26,14 @@ export function NodeArchiveRepairPlan({
 
 	if (!hasActions && !hasBlocks) {
 		return (
-			<p className="archive-good-state">
-				No confirmed repair actions yet. The scanner is still collecting
-				checkpoint proof and will list repairable archive files only after it
-				has concrete failure evidence.
-			</p>
+			<div className="archive-repair-plan">
+				<p className="archive-good-state">
+					No proof-bound file action is currently available. This can mean there
+					is no actionable failure or that exact replacement proof is
+					incomplete. Review the evidence before choosing broader remediation.
+				</p>
+				<ArchivistWholeArchiveOption />
+			</div>
 		);
 	}
 
@@ -33,6 +41,7 @@ export function NodeArchiveRepairPlan({
 		<div aria-label="Confirmed repair evidence" className="archive-repair-plan">
 			{hasActions ? <RepairActionTable repairPlan={repairPlan} /> : null}
 			{hasBlocks ? <InfrastructureBlockTable repairPlan={repairPlan} /> : null}
+			<ArchivistWholeArchiveOption />
 		</div>
 	);
 }
@@ -97,20 +106,26 @@ function RepairActionGuidance({
 	return (
 		<details className="archive-repair-guidance">
 			<summary>Repair instructions</summary>
-			{evidence ? (
+			{evidence && action.repairManifest?.status !== 'ready' ? (
 				<dl>
 					<dt>Target path</dt>
 					<dd>
-						<code>{getArchiveRelativePath(evidence)}</code>
+						<code>
+							{getValidatedArchiveRelativePath(
+								evidence.archiveUrl,
+								evidence.objectUrl
+							) ?? 'not safely derivable'}
+						</code>
 					</dd>
 					<dt>Placement</dt>
 					<dd>
 						Keep the existing object as a backup. Publish the verified bytes at
-						the same path using the archive backend&apos;s atomic promotion method,
-						preserving its access permissions and content headers.
+						the same path using the archive backend&apos;s atomic promotion
+						method, preserving its access permissions and content headers.
 					</dd>
 				</dl>
 			) : null}
+			<ProofBoundRepairWorkflow action={action} />
 			<p>{action.summary}</p>
 			{nextAttemptAt ? (
 				<small>
@@ -120,25 +135,6 @@ function RepairActionGuidance({
 			) : null}
 		</details>
 	);
-}
-
-function getArchiveRelativePath(
-	evidence: PublicHistoryArchiveRepairPlan['actions'][number]['evidence'][number]
-): string {
-	try {
-		const archive = new URL(evidence.archiveUrl);
-		const object = new URL(evidence.objectUrl);
-		const archivePath = archive.pathname.replace(/\/+$/, '');
-		if (
-			archive.origin === object.origin &&
-			object.pathname.startsWith(`${archivePath}/`)
-		) {
-			return object.pathname.slice(archivePath.length + 1);
-		}
-	} catch {
-		return evidence.objectKey;
-	}
-	return evidence.objectUrl;
 }
 
 function InfrastructureBlockTable({
@@ -249,7 +245,7 @@ function formatReplacementReadiness(
 		return (
 			<>
 				<a className="primary-button" href={artifact.downloadUrl}>
-					Download verified file
+					Operator-authenticated download
 				</a>
 				<small>
 					Local bytes reverified {formatDateTime(artifact.provenAt)}
@@ -262,7 +258,7 @@ function formatReplacementReadiness(
 		return (
 			<>
 				<a className="primary-button" href={artifact.downloadUrl}>
-					Verify and download
+					Operator-authenticated verify and download
 				</a>
 				<small>
 					The source proof is current as of {formatDateTime(artifact.provenAt)}.

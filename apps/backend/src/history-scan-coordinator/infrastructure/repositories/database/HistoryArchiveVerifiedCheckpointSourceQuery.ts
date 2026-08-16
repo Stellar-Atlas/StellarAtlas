@@ -1,47 +1,11 @@
 import type { EntityManager } from 'typeorm';
 import { CURRENT_HISTORY_ARCHIVE_CHECKPOINT_PROOF_VERSION } from '../../../domain/history-archive-checkpoint-proof/HistoryArchiveCheckpointProof.js';
 import type { HistoryArchiveVerifiedCheckpointObjectSource } from '../../../domain/history-archive-object/HistoryArchiveObjectRepository.js';
-import {
-	createHistoryArchiveRepairSourceUrlPolicy,
-	type HistoryArchiveRepairHostResolver,
-	type HistoryArchiveRepairSourceUrlPolicy
-} from './HistoryArchiveRepairSourceUrlPolicy.js';
+import { mapVerifiedCheckpointSourceRows } from './HistoryArchiveVerifiedCheckpointSourceMapper.js';
+import type { HistoryArchiveRepairHostResolver } from './HistoryArchiveRepairSourceUrlPolicy.js';
 
 const maxSourceObjects = 500;
-const maxSourcesPerObject = 5;
-const sha256Pattern = /^[0-9a-f]{64}$/;
-
-type VerifiedSourceRow = {
-	readonly anchorKind?: string;
-	readonly anchorkind?: string;
-	readonly archiveUrl?: string;
-	readonly archiveurl?: string;
-	readonly archiveUrlIdentity?: string;
-	readonly archiveurlidentity?: string;
-	readonly candidateRemoteId?: string;
-	readonly candidateremoteid?: string;
-	readonly checkpointLedger?: number | string;
-	readonly checkpointledger?: number | string;
-	readonly contentDigest?: string;
-	readonly contentdigest?: string;
-	readonly contentRepresentation?: string;
-	readonly contentrepresentation?: string;
-	readonly corroboratingSourceCount?: number | string;
-	readonly corroboratingsourcecount?: number | string;
-	readonly objectUrl?: string;
-	readonly objecturl?: string;
-	readonly proofEvaluatedAt?: Date | string;
-	readonly proofevaluatedat?: Date | string;
-	readonly proofId?: number | string;
-	readonly proofid?: number | string;
-	readonly proofVersion?: number | string;
-	readonly proofversion?: number | string;
-	readonly targetRemoteId?: string;
-	readonly targetremoteid?: string;
-	readonly verifiedAt?: Date | string;
-	readonly verifiedat?: Date | string;
-};
-
+const maxSourcesPerObject = 3;
 export async function findVerifiedCheckpointObjectSources(
 	manager: EntityManager,
 	targetRemoteIds: readonly string[],
@@ -59,151 +23,12 @@ export async function findVerifiedCheckpointObjectSources(
 		[requestedIds, normalizeLimit(limitPerObject)]
 	);
 
-	const policy = createHistoryArchiveRepairSourceUrlPolicy(hostResolver);
-	const candidates = await Promise.all(
-		requireRows(value).map((row) => mapRow(row, policy).catch(() => null))
-	);
-	return candidates.filter(isPresent);
+	return mapVerifiedCheckpointSourceRows(value, hostResolver);
 }
 
 function normalizeLimit(limit: number): number {
 	if (!Number.isSafeInteger(limit) || limit < 1) return 1;
 	return Math.min(limit, maxSourcesPerObject);
-}
-
-function requireRows(value: unknown): readonly VerifiedSourceRow[] {
-	if (!Array.isArray(value)) {
-		throw new Error('Verified checkpoint source query did not return rows');
-	}
-	const rows: VerifiedSourceRow[] = [];
-	for (const item of value as unknown[]) {
-		if (typeof item !== 'object' || item === null || Array.isArray(item)) {
-			throw new Error(
-				'Verified checkpoint source query returned an invalid row'
-			);
-		}
-		rows.push(item);
-	}
-	return rows;
-}
-
-async function mapRow(
-	row: VerifiedSourceRow,
-	urlPolicy: HistoryArchiveRepairSourceUrlPolicy
-): Promise<HistoryArchiveVerifiedCheckpointObjectSource> {
-	const archiveUrl = requireString(
-		row.archiveUrl ?? row.archiveurl,
-		'archiveUrl'
-	);
-	const archiveUrlIdentity = requireString(
-		row.archiveUrlIdentity ?? row.archiveurlidentity,
-		'archiveUrlIdentity'
-	);
-	return {
-		anchorKind: requireAnchorKind(row.anchorKind ?? row.anchorkind),
-		archiveUrl,
-		archiveUrlIdentity,
-		candidateRemoteId: requireUuid(
-			row.candidateRemoteId ?? row.candidateremoteid,
-			'candidateRemoteId'
-		),
-		checkpointLedger: requireLedger(
-			row.checkpointLedger ?? row.checkpointledger
-		),
-		contentDigest: requireDigest(row.contentDigest ?? row.contentdigest),
-		contentRepresentation: requireRepresentation(
-			row.contentRepresentation ?? row.contentrepresentation
-		),
-		corroboratingSourceCount: requirePositiveInteger(
-			row.corroboratingSourceCount ?? row.corroboratingsourcecount,
-			'corroboratingSourceCount'
-		),
-		objectUrl: await urlPolicy.requireObjectUrl(
-			row.objectUrl ?? row.objecturl,
-			archiveUrl,
-			archiveUrlIdentity
-		),
-		proofEvaluatedAt: requireDate(
-			row.proofEvaluatedAt ?? row.proofevaluatedat,
-			'proofEvaluatedAt'
-		),
-		proofId: requirePositiveInteger(row.proofId ?? row.proofid, 'proofId'),
-		proofVersion: requirePositiveInteger(
-			row.proofVersion ?? row.proofversion,
-			'proofVersion'
-		),
-		targetRemoteId: requireUuid(
-			row.targetRemoteId ?? row.targetremoteid,
-			'targetRemoteId'
-		),
-		verifiedAt: requireDate(row.verifiedAt ?? row.verifiedat, 'verifiedAt')
-	};
-}
-
-function isPresent<T>(value: T | null): value is T {
-	return value !== null;
-}
-
-function requireAnchorKind(
-	value: string | undefined
-): 'multi-source' | 'target-digest' {
-	if (value === 'multi-source' || value === 'target-digest') return value;
-	throw new Error('Verified checkpoint source row has invalid anchorKind');
-}
-
-function requireString(value: string | undefined, field: string): string {
-	if (typeof value === 'string' && value.length > 0) return value;
-	throw new Error(`Verified checkpoint source row is missing ${field}`);
-}
-
-function requireUuid(value: string | undefined, field: string): string {
-	const uuid = requireString(value, field);
-	if (
-		/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
-			uuid
-		)
-	) {
-		return uuid;
-	}
-	throw new Error(`Verified checkpoint source row has invalid ${field}`);
-}
-
-function requireLedger(value: number | string | undefined): number {
-	const ledger = typeof value === 'number' ? value : Number(value);
-	if (Number.isSafeInteger(ledger) && ledger >= 0) return ledger;
-	throw new Error(
-		'Verified checkpoint source row has invalid checkpointLedger'
-	);
-}
-
-function requireDigest(value: string | undefined): string {
-	const digest = requireString(value, 'contentDigest').toLowerCase();
-	if (sha256Pattern.test(digest)) return digest;
-	throw new Error('Verified checkpoint source row has invalid contentDigest');
-}
-
-function requireRepresentation(
-	value: string | undefined
-): 'canonical-json' | 'uncompressed-xdr' {
-	if (value === 'canonical-json' || value === 'uncompressed-xdr') return value;
-	throw new Error(
-		'Verified checkpoint source row has invalid contentRepresentation'
-	);
-}
-
-function requireDate(value: Date | string | undefined, field: string): Date {
-	const date = value instanceof Date ? value : new Date(value ?? '');
-	if (!Number.isNaN(date.getTime())) return date;
-	throw new Error(`Verified checkpoint source row has invalid ${field}`);
-}
-
-function requirePositiveInteger(
-	value: number | string | undefined,
-	field: string
-): number {
-	const number = typeof value === 'number' ? value : Number(value);
-	if (Number.isSafeInteger(number) && number > 0) return number;
-	throw new Error(`Verified checkpoint source row has invalid ${field}`);
 }
 
 export const historyArchiveVerifiedCheckpointSourceSql = `
@@ -267,11 +92,15 @@ export const historyArchiveVerifiedCheckpointSourceSql = `
 					'{content,algorithm}' = 'sha256'
 				and copy."verificationFacts" #>>
 					'{content,digest}' ~ '^[0-9a-fA-F]{64}$'
-				and copy."verificationFacts" #>>
-					'{content,representation}' in (
-						'canonical-json',
-						'uncompressed-xdr'
-					)
+				and (
+					(source."sourceObjectType" = 'checkpoint-state'
+						and copy."verificationFacts" #>>
+							'{content,representation}' = 'canonical-json')
+					or (source."sourceObjectType" in (
+						'ledger', 'transactions', 'results', 'scp'
+					) and copy."verificationFacts" #>>
+						'{content,representation}' = 'uncompressed-xdr')
+				)
 				and char_length(copy."objectUrl") between 1 and 2048
 				and copy."objectUrl" ~* '^https?://[^/?#[:space:]@]+'
 				and copy."objectUrl" !~ '[[:space:][:cntrl:]]'
@@ -319,8 +148,62 @@ export const historyArchiveVerifiedCheckpointSourceSql = `
 			and proof."failedBucketCount" = 0
 			and proof."missingBucketCount" = 0
 			and proof."verifiedBucketCount" = proof."expectedBucketCount"
-			and proof."evaluatedAt" >= candidate."verifiedAt"
-			and candidate."updatedAt" <= proof."evaluatedAt"
+			and case candidate."sourceObjectType"
+				when 'checkpoint-state' then
+					proof."checkpointStateObjectRemoteId" = candidate."remoteId"
+				when 'ledger' then
+					proof."ledgerObjectRemoteId" = candidate."remoteId"
+				when 'transactions' then
+					proof."transactionsObjectRemoteId" = candidate."remoteId"
+				when 'results' then
+					proof."resultsObjectRemoteId" = candidate."remoteId"
+				when 'scp' then
+					proof."scpObjectRemoteId" = candidate."remoteId"
+				else false
+			end
+		join history_archive_checkpoint_proof current_proof
+			on current_proof.id = proof.id
+			and current_proof."archiveUrlIdentity" =
+				proof."archiveUrlIdentity"
+			and current_proof."checkpointLedger" = proof."checkpointLedger"
+			and current_proof.status = 'verified'
+			and current_proof."proofVersion" = proof."proofVersion"
+			and current_proof."evaluatedAt" = proof."evaluatedAt"
+			and current_proof."updatedAt" = proof."updatedAt"
+			and current_proof."checkpointStateObjectRemoteId" =
+				proof."checkpointStateObjectRemoteId"
+			and current_proof."ledgerObjectRemoteId" =
+				proof."ledgerObjectRemoteId"
+			and current_proof."transactionsObjectRemoteId" =
+				proof."transactionsObjectRemoteId"
+			and current_proof."resultsObjectRemoteId" =
+				proof."resultsObjectRemoteId"
+			and current_proof."scpObjectRemoteId" is not distinct from
+				proof."scpObjectRemoteId"
+		join history_archive_object_queue proof_checkpoint
+			on proof_checkpoint."remoteId" =
+				proof."checkpointStateObjectRemoteId"
+			and proof_checkpoint."archiveUrlIdentity" =
+				proof."archiveUrlIdentity"
+			and proof_checkpoint."checkpointLedger" = proof."checkpointLedger"
+			and proof_checkpoint."objectType" = 'checkpoint-state'
+			and proof_checkpoint.status = 'verified'
+			and (
+				proof_checkpoint."transitionEffectsRequiredAt" is null
+				or proof_checkpoint."transitionEffectsCompletedAt" is not null
+			)
+		cross join lateral (
+			select greatest(
+				proof."evaluatedAt",
+				coalesce(
+					proof_checkpoint."proofReconciledAt",
+					'-infinity'::timestamptz
+				)
+			) as "effectiveEvaluatedAt"
+		) proof_freshness
+		where proof_freshness."effectiveEvaluatedAt" >= candidate."verifiedAt"
+			and candidate."updatedAt" <=
+				proof_freshness."effectiveEvaluatedAt"
 			and proof."expectedBucketCount" = (
 				select count(*)
 				from history_archive_checkpoint_bucket_dependency expected_dependency
@@ -328,7 +211,8 @@ export const historyArchiveVerifiedCheckpointSourceSql = `
 					proof."archiveUrlIdentity"
 					and expected_dependency."checkpointLedger" =
 						proof."checkpointLedger"
-					and expected_dependency."createdAt" <= proof."evaluatedAt"
+					and expected_dependency."createdAt" <=
+						proof_freshness."effectiveEvaluatedAt"
 			)
 			and (
 				select count(*)
@@ -342,11 +226,35 @@ export const historyArchiveVerifiedCheckpointSourceSql = `
 				)
 					and proof_input.status = 'verified'
 					and proof_input."verifiedAt" is not null
-					and proof_input."verifiedAt" <= proof."evaluatedAt"
-					and proof_input."updatedAt" <= proof."evaluatedAt"
+					and proof_input."verifiedAt" <=
+						proof_freshness."effectiveEvaluatedAt"
+					and proof_input."updatedAt" <=
+						proof_freshness."effectiveEvaluatedAt"
 			) = 4 + case
 				when proof."scpObjectRemoteId" is null then 0 else 1
 			end
+			and not exists (
+				select 1
+				from history_archive_object_queue proof_scope_input
+				where proof_scope_input."archiveUrlIdentity" =
+					proof."archiveUrlIdentity"
+					and proof_scope_input."checkpointLedger" =
+						proof."checkpointLedger"
+					and proof_scope_input."objectType" in (
+						'checkpoint-state',
+						'ledger',
+						'transactions',
+						'results',
+						'scp'
+					)
+					and greatest(
+						proof_scope_input."updatedAt",
+						coalesce(
+							proof_scope_input."verifiedAt",
+							'-infinity'::timestamptz
+						)
+					) > proof_freshness."effectiveEvaluatedAt"
+			)
 			and not exists (
 				select 1
 				from history_archive_checkpoint_bucket_dependency dependency
@@ -359,12 +267,15 @@ export const historyArchiveVerifiedCheckpointSourceSql = `
 					proof."archiveUrlIdentity"
 					and dependency."checkpointLedger" = proof."checkpointLedger"
 					and (
-						dependency."createdAt" > proof."evaluatedAt"
+						dependency."createdAt" >
+							proof_freshness."effectiveEvaluatedAt"
 						or bucket."remoteId" is null
 						or bucket.status <> 'verified'
 						or bucket."verifiedAt" is null
-						or bucket."verifiedAt" > proof."evaluatedAt"
-						or bucket."updatedAt" > proof."evaluatedAt"
+						or bucket."verifiedAt" >
+							proof_freshness."effectiveEvaluatedAt"
+						or bucket."updatedAt" >
+							proof_freshness."effectiveEvaluatedAt"
 					)
 			)
 			and (
@@ -379,23 +290,12 @@ export const historyArchiveVerifiedCheckpointSourceSql = `
 						and predecessor."objectType" = 'ledger'
 						and predecessor.status = 'verified'
 						and predecessor."verifiedAt" is not null
-						and predecessor."verifiedAt" <= proof."evaluatedAt"
-						and predecessor."updatedAt" <= proof."evaluatedAt"
+						and predecessor."verifiedAt" <=
+							proof_freshness."effectiveEvaluatedAt"
+						and predecessor."updatedAt" <=
+							proof_freshness."effectiveEvaluatedAt"
 				)
 			)
-			and case candidate."sourceObjectType"
-				when 'checkpoint-state' then
-					proof."checkpointStateObjectRemoteId" = candidate."remoteId"
-				when 'ledger' then
-					proof."ledgerObjectRemoteId" = candidate."remoteId"
-				when 'transactions' then
-					proof."transactionsObjectRemoteId" = candidate."remoteId"
-				when 'results' then
-					proof."resultsObjectRemoteId" = candidate."remoteId"
-				when 'scp' then
-					proof."scpObjectRemoteId" = candidate."remoteId"
-				else false
-			end
 	), digest_consensus as (
 		select
 			candidate."targetRemoteId",

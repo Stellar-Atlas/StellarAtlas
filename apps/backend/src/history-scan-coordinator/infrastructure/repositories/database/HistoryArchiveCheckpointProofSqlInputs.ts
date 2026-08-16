@@ -2,11 +2,12 @@ import type { HistoryArchiveCheckpointProofRefreshTarget } from '@history-scan-c
 
 export function toHistoryArchiveCheckpointProofRefreshParams(
 	target: HistoryArchiveCheckpointProofRefreshTarget
-): readonly [string, number | null, string | null] {
+): readonly [string, number | null, string | null, boolean] {
 	return [
 		target.archiveUrlIdentity,
 		target.checkpointLedger ?? null,
-		target.bucketHash ?? null
+		target.bucketHash ?? null,
+		target.includeSuccessor ?? false
 	];
 }
 

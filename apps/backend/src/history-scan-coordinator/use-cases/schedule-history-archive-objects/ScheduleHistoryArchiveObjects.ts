@@ -3,15 +3,9 @@ import { inject, injectable } from 'inversify';
 import { err, ok, Result } from 'neverthrow';
 import type { Logger } from 'logger';
 import { mapUnknownToError } from '@core/utilities/mapUnknownToError.js';
-import {
-	buildHistoryArchiveObjectsFromState,
-	buildRootHistoryArchiveObject
-} from '../../domain/history-archive-object/HistoryArchiveObjectBuilder.js';
+import { buildRootHistoryArchiveObject } from '../../domain/history-archive-object/HistoryArchiveObjectBuilder.js';
 import type { HistoryArchiveObjectRepository } from '../../domain/history-archive-object/HistoryArchiveObjectRepository.js';
-import type { HistoryArchiveStateRepository } from '../../domain/history-archive-state/HistoryArchiveStateRepository.js';
-import { usesHistoryArchiveBrokerScheduler } from '../../infrastructure/HistoryArchiveSchedulerMode.js';
 import { TYPES } from '../../infrastructure/di/di-types.js';
-import { ReconcileHistoryArchiveObjectTransitions } from '../reconcile-history-archive-object-transitions/ReconcileHistoryArchiveObjectTransitions.js';
 
 export interface ScheduleHistoryArchiveObjectsResult {
 	readonly discoveredArchiveUrlCount: number;
@@ -25,9 +19,6 @@ export class ScheduleHistoryArchiveObjects {
 	constructor(
 		@inject(TYPES.HistoryArchiveObjectRepository)
 		private readonly objectRepository: HistoryArchiveObjectRepository,
-		@inject(TYPES.HistoryArchiveStateRepository)
-		private readonly stateRepository: HistoryArchiveStateRepository,
-		private readonly transitionReconciler: ReconcileHistoryArchiveObjectTransitions,
 		@inject('Logger') private readonly logger: Logger
 	) {}
 
@@ -35,30 +26,19 @@ export class ScheduleHistoryArchiveObjects {
 		historyArchiveUrls: readonly string[]
 	): Promise<Result<ScheduleHistoryArchiveObjectsResult, Error>> {
 		try {
-			await this.transitionReconciler.executeIfDue();
-			const admittedLegacyObjects = usesHistoryArchiveBrokerScheduler()
-				? 0
-				: (
-						await this.objectRepository.reconcileExecutionDisposition()
-					).admittedObjects;
-			await this.objectRepository.reconcileDependencyReadiness(240);
 			const rootObjects = historyArchiveUrls
 				.map(buildRootHistoryArchiveObject)
 				.filter((object) => object !== null);
-			const states = await this.stateRepository.findAvailable(5000);
-			const stateObjects = states.flatMap((state) =>
-				buildHistoryArchiveObjectsFromState(state, { rootStatus: 'verified' })
-			);
-			const objects = [...rootObjects, ...stateObjects];
-			const scheduledCount = await this.objectRepository.planObjects(objects);
+			const scheduledCount =
+				await this.objectRepository.planObjects(rootObjects);
 			const promotion = await this.objectRepository.promotePlannedObjects();
 
 			this.logger.info('Scheduled history archive object checks', {
 				app: 'history-scan-coordinator',
-				admittedLegacyObjects,
 				discoveredArchiveUrlCount: historyArchiveUrls.length,
 				outstandingObjects: promotion.outstandingObjects,
 				promotedObjects: promotion.promotedObjects,
+				schedulingScope: 'discovered-roots',
 				watermark: promotion.watermark,
 				scheduledCount
 			});
@@ -67,7 +47,7 @@ export class ScheduleHistoryArchiveObjects {
 				discoveredArchiveUrlCount: historyArchiveUrls.length,
 				duplicateSuppressedArchiveScanJobCount: Math.max(
 					0,
-					objects.length - scheduledCount
+					rootObjects.length - scheduledCount
 				),
 				scheduledArchiveScanJobCount: scheduledCount,
 				schedulerErrorCount: 0

@@ -5,6 +5,7 @@ export interface HistoryArchiveCheckpointProofRefreshTarget {
 	readonly archiveUrlIdentity: string;
 	readonly bucketHash?: string | null;
 	readonly checkpointLedger?: number | null;
+	readonly includeSuccessor?: boolean;
 }
 
 export interface HistoryArchiveCheckpointProofRepository {

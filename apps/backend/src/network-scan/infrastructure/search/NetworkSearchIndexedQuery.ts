@@ -70,4 +70,5 @@ export const networkSearchGenerationMatches = (
 ): boolean =>
 	left.canonicalArchiveRevision === right.canonicalArchiveRevision &&
 	left.canonicalCursor === right.canonicalCursor &&
+	left.documentSchemaVersion === right.documentSchemaVersion &&
 	left.networkTime === right.networkTime;

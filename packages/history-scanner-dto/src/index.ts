@@ -15,6 +15,11 @@ export {
 	type ParsedTransactionResultDTO
 } from './ParsedTransactionDTO.js';
 export {
+	parsedHistoryBatchPayloadLimitBytes,
+	parsedHistoryMaximumBatchRecords,
+	parsedHistoryRequestBodyLimitBytes
+} from './ParsedHistoryBatchLimits.js';
+export {
 	isScanEvidenceDTO,
 	scanEvidenceKinds,
 	scanEvidenceStatuses,
@@ -53,5 +58,8 @@ export {
 	calculateHistoryArchiveObjectWorkerProcesses,
 	historyArchiveDownloadConcurrency,
 	historyArchiveWorkerTelemetryLimit,
-	historyArchiveWorkerSlotLimit
+	historyArchiveWorkerSlotLimit,
+	historyArchiveObjectWorkerProcessLimit,
+	resolveHistoryArchiveObjectWorkerCapacity,
+	type HistoryArchiveObjectWorkerCapacity
 } from './HistoryArchiveWorkerCapacity.js';

@@ -1,5 +1,9 @@
 import type { Repository } from 'typeorm';
 import type { HistoryArchiveObject } from '@history-scan-coordinator/domain/history-archive-object/HistoryArchiveObject.js';
+import {
+	getHistoryArchiveBrokerMaximumPriority,
+	type HistoryArchiveBrokerPriority
+} from '@history-scan-coordinator/domain/history-archive-object/HistoryArchiveBrokerPriority.js';
 import { canonicalRuntimeTargetCtes } from './HistoryArchiveCanonicalRuntimeTargetSql.js';
 import { normalizeLimit } from './HistoryArchiveObjectRowMapper.js';
 
@@ -9,7 +13,8 @@ interface TransitionTargetRow {
 
 export async function findPrioritizedHistoryArchiveObjectTransitions(
 	repository: Repository<HistoryArchiveObject>,
-	limit: number
+	limit: number,
+	maximumPriority: HistoryArchiveBrokerPriority = getHistoryArchiveBrokerMaximumPriority()
 ): Promise<readonly HistoryArchiveObject[]> {
 	const safeLimit = normalizeLimit(limit);
 	const runtimeRows = (await repository.manager.query(runtimeTransitionsSql, [
@@ -17,12 +22,12 @@ export async function findPrioritizedHistoryArchiveObjectTransitions(
 	])) as readonly TransitionTargetRow[];
 	const remaining = safeLimit - runtimeRows.length;
 	const genericRows =
-		remaining <= 0
+		remaining <= 0 || maximumPriority === 0
 			? []
-			: ((await repository.manager.query(genericTransitionsSql, [
-					remaining,
-					runtimeRows.map((row) => row.remoteId)
-				])) as readonly TransitionTargetRow[]);
+			: ((await repository.manager.query(
+					genericTransitionsSqlByMaximumPriority[maximumPriority],
+					[remaining, runtimeRows.map((row) => row.remoteId)]
+				)) as readonly TransitionTargetRow[]);
 	const rows = [...runtimeRows, ...genericRows];
 	if (rows.length === 0) return [];
 
@@ -78,11 +83,6 @@ const runtimeTransitionsSql = `
 		) desired(object_type, object_key)
 		where root.checkpoint_ledger >= 63
 		union all
-		select distinct state."archiveUrlIdentity", 'genesis'::text,
-			'checkpoint-state'::text, 'checkpoint-state:0000003f'::text
-		from "history_archive_state_snapshot" state
-		where state.status = 'available'
-		union all
 		select root."archiveUrlIdentity", root.target_lane,
 			'bucket'::text, 'bucket:' || dependency."bucketHash"
 		from runtime_roots root
@@ -93,9 +93,8 @@ const runtimeTransitionsSql = `
 		select object."remoteId", object.id,
 			min(
 				case target.target_lane
-					when 'genesis' then 0
-					when 'forward' then 1
-					else 2
+					when 'forward' then 0
+					else 1
 				end
 			)
 				as lane_priority,
@@ -135,3 +134,29 @@ const genericTransitionsSql = `
 		object.id
 	limit $1::integer
 `;
+
+// Priority zero is derived exclusively from the current runtime target CTEs.
+// A persisted canonical-frontier-reserve reason is historical scheduling state;
+// it must not make an unrelated terminal row current canonical work. Priority one
+// admits only proof-completion reserve effects. Priority two preserves the legacy
+// behavior and drains every remaining terminal effect.
+const proofCompletionTransitionsSql = `
+	select object."remoteId"
+	from "history_archive_object_queue" object
+	where ${terminalTransitionPredicateSql}
+		and case object."executionReason"
+			when 'canonical-frontier-reserve' then 0
+			when 'proof-completion-reserve' then 1
+			else 2
+		end = 1
+		and not (object."remoteId" = any($2::uuid[]))
+	order by object."transitionEffectsRequiredAt", object.id
+	limit $1::integer
+`;
+
+const genericTransitionsSqlByMaximumPriority: Readonly<
+	Record<Exclude<HistoryArchiveBrokerPriority, 0>, string>
+> = {
+	1: proofCompletionTransitionsSql,
+	2: genericTransitionsSql
+};

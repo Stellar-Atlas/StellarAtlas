@@ -2,7 +2,10 @@ import { mock, MockProxy } from 'jest-mock-extended';
 import { DataSource } from 'typeorm';
 import type { ParsedLedgerHeaderRepository } from '@history-scan-coordinator/domain/parsed-history/ParsedLedgerHeaderRepository.js';
 import type { FullHistoryCanonicalRepository } from '@history-scan-coordinator/domain/full-history/FullHistoryCanonicalRepository.js';
-import type { FullHistoryPromotionRuntimeRepository } from '@history-scan-coordinator/domain/full-history-promotion/FullHistoryPromotionRuntimeRepository.js';
+import type {
+	FullHistoryPromotionRuntimeRepository,
+	FullHistoryPromotionRuntimeView
+} from '@history-scan-coordinator/domain/full-history-promotion/FullHistoryPromotionRuntimeRepository.js';
 import type { Config } from '@core/config/Config.js';
 import {
 	fullHistoryLedgerSequence,
@@ -307,6 +310,106 @@ describe('GetFullHistoryStatus', () => {
 				results: sourceObject('33', '5'),
 				transactions: sourceObject('44', '4')
 			}
+		};
+	}
+
+	it('degrades canonical history when its latest ledger is stale', async () => {
+		canonicalHistoryMock.getCoverage.mockResolvedValue(
+			canonicalCoverageAt(new Date('2026-07-06T10:59:59.999Z'))
+		);
+		canonicalPromotionMock.find.mockResolvedValue(
+			canonicalPromotionRuntime('waiting-for-proof')
+		);
+
+		const result = await getFullHistoryStatus.executeFullHistory();
+
+		expect(result._unsafeUnwrap()).toMatchObject({
+			canonicalPromotion: { state: 'waiting-for-proof' },
+			status: 'degraded'
+		});
+	});
+
+	it.each(['failed', 'stopped'] as const)(
+		'degrades fresh canonical history when promotion is %s',
+		async (promotionState) => {
+			canonicalHistoryMock.getCoverage.mockResolvedValue(
+				canonicalCoverageAt(new Date('2026-07-06T11:59:30.000Z'))
+			);
+			canonicalPromotionMock.find.mockResolvedValue(
+				canonicalPromotionRuntime(promotionState)
+			);
+
+			const result = await getFullHistoryStatus.executeFullHistory();
+
+			expect(result._unsafeUnwrap()).toMatchObject({
+				canonicalPromotion: { state: promotionState },
+				status: 'degraded'
+			});
+		}
+	);
+
+	it('degrades fresh canonical history when the promotion heartbeat is stale', async () => {
+		canonicalHistoryMock.getCoverage.mockResolvedValue(
+			canonicalCoverageAt(new Date('2026-07-06T11:59:30.000Z'))
+		);
+		canonicalPromotionMock.find.mockResolvedValue({
+			...canonicalPromotionRuntime('running'),
+			heartbeatAt: new Date('2026-07-06T11:57:59.999Z')
+		});
+
+		const result = await getFullHistoryStatus.executeFullHistory();
+
+		expect(result._unsafeUnwrap()).toMatchObject({
+			canonicalPromotion: { state: 'stale' },
+			status: 'degraded'
+		});
+	});
+
+	it('degrades canonical history when no promoter runtime is present', async () => {
+		canonicalHistoryMock.getCoverage.mockResolvedValue(
+			canonicalCoverageAt(new Date('2026-07-06T11:59:30.000Z'))
+		);
+
+		const result = await getFullHistoryStatus.executeFullHistory();
+
+		expect(result._unsafeUnwrap()).toMatchObject({
+			canonicalPromotion: null,
+			status: 'degraded'
+		});
+	});
+
+	function canonicalCoverageAt(latestLedgerClosedAt: Date) {
+		return {
+			archiveSourceCount: 1,
+			batchCount: 2,
+			firstLedger: fullHistoryLedgerSequence(63386240n, 'firstLedger'),
+			lastLedger: fullHistoryLedgerSequence(63386367n, 'lastLedger'),
+			latestEvidence: canonicalLatestEvidence(),
+			latestLedgerClosedAt,
+			ledgerCount: 128,
+			nextLedger: fullHistoryUint64(63386368n, 'nextLedger'),
+			transactionCount: 52_000,
+			transactionResultCount: 52_000,
+			updatedAt: new Date('2026-07-06T11:59:30.000Z')
+		};
+	}
+
+	function canonicalPromotionRuntime(
+		state: FullHistoryPromotionRuntimeView['state']
+	): FullHistoryPromotionRuntimeView {
+		return {
+			checkpointLedger: 63386431,
+			heartbeatAt: new Date('2026-07-06T11:59:55.000Z'),
+			instanceId: '00000000-0000-4000-8000-000000000001',
+			lastAttemptAt: new Date('2026-07-06T11:59:54.000Z'),
+			lastErrorCode: state === 'failed' ? 'proof-query-failed' : null,
+			lastFailureAt:
+				state === 'failed' ? new Date('2026-07-06T11:59:54.000Z') : null,
+			lastOutcome: state === 'failed' ? null : 'proof-pending',
+			lastSuccessAt: new Date('2026-07-06T11:59:00.000Z'),
+			nextLedger: fullHistoryUint64(63386368n, 'nextLedger'),
+			startedAt: new Date('2026-07-06T11:50:00.000Z'),
+			state
 		};
 	}
 

@@ -54,6 +54,7 @@ import {
 } from './FullHistoryCanonicalOperationQuery.js';
 import { getCanonicalCoverage } from './FullHistoryCanonicalCoverageQuery.js';
 import { findCanonicalLedgerRange } from './FullHistoryCanonicalLedgerQuery.js';
+import { lockFullHistoryCanonicalWriter } from './FullHistoryCanonicalWriteLock.js';
 
 interface FullHistoryRecentTransactionRow {
 	readonly closedAt: Date | string;
@@ -135,6 +136,7 @@ export class TypeOrmFullHistoryCanonicalRepository implements FullHistoryCanonic
 
 				assertWritableWatermark(watermark, input);
 				await assertNoCompetingBatch(manager, input, networkHash);
+				await lockFullHistoryCanonicalWriter(manager, networkHash);
 				await insertBatch(manager, input, networkHash);
 				await storeCanonicalBaseFacts(manager, input, networkHash);
 				const nextLedger = await advanceWatermark(

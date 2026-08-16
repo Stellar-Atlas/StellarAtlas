@@ -103,6 +103,8 @@ export function toRemoteRepairArtifact(input: {
 	readonly proofVersion: number;
 	readonly provenAt: string;
 	readonly targetRemoteId: string;
+	readonly targetEvidenceUpdatedAt: string;
+	readonly targetFailureKind: 'integrity' | 'missing';
 }): HistoryArchiveRepairArtifactVerifyOnDownloadV1 {
 	return {
 		artifactType: input.artifactType,
@@ -111,6 +113,8 @@ export function toRemoteRepairArtifact(input: {
 		downloadUrl: [
 			repairObjectArtifactDownloadPath,
 			encodeURIComponent(input.targetRemoteId),
+			String(new Date(input.targetEvidenceUpdatedAt).getTime()),
+			input.targetFailureKind,
 			encodeURIComponent(input.candidateRemoteId),
 			encodeURIComponent(input.proofId),
 			String(input.proofVersion),

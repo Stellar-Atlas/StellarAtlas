@@ -149,7 +149,7 @@
 						"required": false,
 						"schema": {
 							"type": "string",
-							"enum": ["node", "organization"]
+							"enum": ["archive-root", "node", "organization"]
 						}
 					},
 					{
@@ -164,7 +164,9 @@
 								"listener",
 								"public-key-only",
 								"archived",
-								"all-known"
+								"all-known",
+								"archive-root",
+								"current-organization"
 							],
 							"default": "all-known"
 						}
@@ -179,11 +181,18 @@
 					{
 						"name": "archiveStatus",
 						"in": "query",
-						"description": "Optional node archive status filter",
+						"description": "Optional archive status filter. issue is the aggregate of error and unreachable; scanner-issue is infrastructure evidence, not archive evidence.",
 						"required": false,
 						"schema": {
 							"type": "string",
-							"enum": ["error", "ok", "unknown"]
+							"enum": [
+								"error",
+								"issue",
+								"ok",
+								"scanner-issue",
+								"unknown",
+								"unreachable"
+							]
 						}
 					},
 					{
@@ -298,11 +307,18 @@
 					{
 						"name": "archiveStatus",
 						"in": "query",
-						"description": "Optional node archive status filter",
+						"description": "Optional archive status filter. issue is the aggregate of error and unreachable; scanner-issue is infrastructure evidence, not archive evidence.",
 						"required": false,
 						"schema": {
 							"type": "string",
-							"enum": ["error", "ok", "unknown"]
+							"enum": [
+								"error",
+								"issue",
+								"ok",
+								"scanner-issue",
+								"unknown",
+								"unreachable"
+							]
 						}
 					},
 					{
@@ -4126,8 +4142,9 @@
 		"/v1/archive-scans/objects/{remoteId}/recheck": {
 			"post": {
 				"summary": "Queue one failed archive object for recheck",
-				"description": "Idempotently admits the exact failed archive-integrity object from a repair manifest into the bounded archive ready queue. The required evidence timestamp prevents a stale manifest from rechecking a different failure observation. Verified, active, deferred, dependency-blocked, transition-pending, availability-only, and scanner-infrastructure failures are never reset or queued.",
-				"tags": ["Archive verification"],
+				"description": "Operator-only, idempotent admission of the exact repair-candidate failure from a ready manifest into the bounded archive queue. Eligible candidates are recognized integrity failures or proof-gated missing 404/410 evidence; the evidence timestamp prevents a stale manifest from rechecking a different observation. Auth, rate-limit, timeout, transport, scanner, active, deferred, dependency-blocked, and transition-pending failures are never reset or queued.",
+				"tags": ["Archive scanner operators"],
+				"security": [{ "basicAuth": [] }],
 				"operationId": "requestHistoryArchiveObjectRecheck",
 				"parameters": [
 					{
@@ -4157,6 +4174,7 @@
 					}
 				},
 				"responses": {
+					"401": { "description": "Operator authentication required" },
 					"200": {
 						"description": "Current queue, eligibility, or block decision for the object",
 						"headers": {
@@ -4201,7 +4219,8 @@
 			"get": {
 				"summary": "Download a locally proven bucket repair artifact",
 				"description": "Streams a content-addressed gzip payload only after StellarAtlas proves the locally retained bytes against the requested bucket hash over uncompressed XDR. Remote archive candidates are never proxied by this route. Missing, mismatched, invalid, busy, or oversized local payloads return structured unavailable and retry evidence.",
-				"tags": ["Archive verification"],
+				"tags": ["Archive scanner operators"],
+				"security": [{ "basicAuth": [] }],
 				"operationId": "downloadHistoryArchiveBucketRepairArtifact",
 				"parameters": [
 					{
@@ -4216,6 +4235,7 @@
 					}
 				],
 				"responses": {
+					"401": { "description": "Operator authentication required" },
 					"200": {
 						"description": "locally retained and freshly proven bucket gzip payload",
 						"headers": {
@@ -4298,11 +4318,12 @@
 				}
 			}
 		},
-		"/v1/archive-scans/repair-artifacts/objects/{targetRemoteId}/{candidateRemoteId}/{proofId}/{proofVersion}/{proofEvaluatedAtMs}/{contentDigest}": {
+		"/v1/archive-scans/repair-artifacts/objects/{targetRemoteId}/{targetEvidenceUpdatedAtMs}/{targetFailureKind}/{candidateRemoteId}/{proofId}/{proofVersion}/{proofEvaluatedAtMs}/{contentDigest}": {
 			"get": {
 				"summary": "Verify and download a proof-bound archive object",
 				"description": "Revalidates the exact current source proof named in the path, downloads only that attributed remote object through a public-address-pinned request, independently checks canonical JSON or uncompressed XDR SHA-256, and streams bytes only on an exact digest match. Proof-bound object downloads are not cached by clients because repair proof can be revoked or reevaluated.",
-				"tags": ["Archive verification"],
+				"tags": ["Archive scanner operators"],
+				"security": [{ "basicAuth": [] }],
 				"operationId": "downloadHistoryArchiveObjectRepairArtifact",
 				"parameters": [
 					{
@@ -4310,6 +4331,20 @@
 						"in": "path",
 						"required": true,
 						"schema": { "type": "string", "format": "uuid" }
+					},
+					{
+						"name": "targetEvidenceUpdatedAtMs",
+						"in": "path",
+						"description": "Exact target evidence revision expressed as Unix epoch milliseconds.",
+						"required": true,
+						"schema": { "type": "integer", "minimum": 1 }
+					},
+					{
+						"name": "targetFailureKind",
+						"in": "path",
+						"description": "Exact target failure semantics bound into the capability.",
+						"required": true,
+						"schema": { "type": "string", "enum": ["integrity", "missing"] }
 					},
 					{
 						"name": "candidateRemoteId",
@@ -4347,10 +4382,12 @@
 					}
 				],
 				"responses": {
+					"401": { "description": "Operator authentication required" },
 					"200": {
 						"description": "replacement bytes whose canonical content matches the current proof digest",
 						"headers": {
-							"X-Stellar-Content-SHA256": {
+							"X-Stellar-Proof-Content-SHA256": {
+								"description": "Logical representation digest from the strict proof; this is not necessarily the SHA-256 of the transported gzip/JSON bytes.",
 								"schema": {
 									"type": "string",
 									"pattern": "^[0-9a-f]{64}$"
@@ -4811,8 +4848,8 @@
 						"schema": {
 							"type": "integer",
 							"minimum": 1,
-							"maximum": 500,
-							"default": 100
+							"maximum": 50,
+							"default": 25
 						}
 					}
 				],
@@ -11760,7 +11797,7 @@
 					},
 					"downloadUrl": {
 						"type": "string",
-						"pattern": "^/v1/archive-scans/repair-artifacts/(buckets/[0-9a-f]{64}|objects/[0-9a-f-]{36}/[0-9a-f-]{36}/[1-9][0-9]*/[1-9][0-9]*/[1-9][0-9]*/[0-9a-f]{64})$"
+						"pattern": "^/v1/archive-scans/repair-artifacts/(buckets/[0-9a-f]{64}|objects/[0-9a-f-]{36}/[1-9][0-9]*/(integrity|missing)/[0-9a-f-]{36}/[1-9][0-9]*/[1-9][0-9]*/[1-9][0-9]*/[0-9a-f]{64})$"
 					},
 					"mediaType": {
 						"type": "string",
@@ -11934,7 +11971,10 @@
 							"backupSuffix": { "type": "string" },
 							"kind": { "type": "string", "enum": ["backup-current-file"] },
 							"order": { "type": "integer", "enum": [1] },
-							"required": { "type": "boolean", "enum": [true] }
+							"required": {
+								"type": "boolean",
+								"description": "False only when the target was observed missing; an unexpected current file must stop repair."
+							}
 						}
 					},
 					{
@@ -11972,21 +12012,10 @@
 					{
 						"type": "object",
 						"additionalProperties": false,
-						"required": ["kind", "order", "required", "requiresSameFilesystem"],
-						"properties": {
-							"kind": { "type": "string", "enum": ["atomic-replace"] },
-							"order": { "type": "integer", "enum": [4] },
-							"required": { "type": "boolean", "enum": [true] },
-							"requiresSameFilesystem": { "type": "boolean", "enum": [true] }
-						}
-					},
-					{
-						"type": "object",
-						"additionalProperties": false,
 						"required": ["kind", "order", "preserve", "required"],
 						"properties": {
 							"kind": { "type": "string", "enum": ["preserve-metadata"] },
-							"order": { "type": "integer", "enum": [5] },
+							"order": { "type": "integer", "enum": [4] },
 							"preserve": {
 								"type": "array",
 								"minItems": 3,
@@ -11994,6 +12023,17 @@
 								"items": { "type": "string", "enum": ["owner", "mode", "acl"] }
 							},
 							"required": { "type": "boolean", "enum": [true] }
+						}
+					},
+					{
+						"type": "object",
+						"additionalProperties": false,
+						"required": ["kind", "order", "required", "requiresSameFilesystem"],
+						"properties": {
+							"kind": { "type": "string", "enum": ["atomic-replace"] },
+							"order": { "type": "integer", "enum": [5] },
+							"required": { "type": "boolean", "enum": [true] },
+							"requiresSameFilesystem": { "type": "boolean", "enum": [true] }
 						}
 					},
 					{
@@ -12012,7 +12052,7 @@
 			"HistoryArchiveRepairManifestV1": {
 				"type": "object",
 				"additionalProperties": false,
-				"description": "Deterministic operator repair manifest. It is emitted only for confirmed object-integrity evidence; HTTP and transport failures never produce one.",
+				"description": "Deterministic operator repair manifest emitted for recognized integrity evidence or an exact proof-gated missing 404/410 with a strict verified replacement. Ordinary HTTP, auth, rate-limit, timeout, transport, scanner, and coordinator failures never produce a ready manifest.",
 				"required": ["actionId", "evidence", "generatedAt", "recheck", "replacement", "schemaVersion", "status", "steps", "target"],
 				"properties": {
 					"actionId": { "type": "string" },
@@ -12117,7 +12157,7 @@
 					"knownGoodSources": {
 						"type": "array",
 						"description": "Bounded per-archive remote evidence; never a hosted download list.",
-						"maxItems": 5,
+						"maxItems": 3,
 						"items": {
 							"$ref": "#/components/schemas/HistoryArchiveRepairSourceCandidateV1"
 						}
@@ -12162,7 +12202,7 @@
 					"actionCount": { "type": "integer", "minimum": 0 },
 					"actions": {
 						"type": "array",
-						"maxItems": 500,
+						"maxItems": 50,
 						"items": {
 							"$ref": "#/components/schemas/HistoryArchiveRepairActionV1"
 						}
@@ -12174,7 +12214,7 @@
 						"type": "array",
 						"items": { "type": "object", "additionalProperties": true }
 					},
-					"limit": { "type": "integer", "minimum": 1, "maximum": 500 },
+					"limit": { "type": "integer", "minimum": 1, "maximum": 50 },
 					"summary": {
 						"type": "object",
 						"required": [
@@ -14340,11 +14380,21 @@
 					"source"
 				],
 				"properties": {
+					"archiveStatus": {
+						"type": "string",
+						"enum": [
+							"error",
+							"ok",
+							"scanner-issue",
+							"unknown",
+							"unreachable"
+						]
+					},
 					"detail": { "type": "string" },
 					"entityId": { "type": "string" },
 					"entityType": {
 						"type": "string",
-						"enum": ["node", "organization"]
+						"enum": ["archive-root", "node", "organization"]
 					},
 					"freshness": {
 						"type": "string",
@@ -14366,6 +14416,7 @@
 							"listener",
 							"public-key-only",
 							"archived",
+							"archive-root",
 							"current-organization"
 						]
 					},
@@ -14402,7 +14453,7 @@
 						"enum": ["fresh", "stale"]
 					},
 					"observedAt": { "type": "string", "format": "date-time" },
-					"schemaVersion": { "type": "string", "enum": ["v3"] },
+					"schemaVersion": { "type": "string", "enum": ["v4"] },
 					"source": {
 						"type": "string",
 						"enum": ["meilisearch", "postgres_canonical"]
@@ -14444,7 +14495,18 @@
 					"pagination": { "$ref": "#/components/schemas/SearchPagination" },
 					"query": { "type": "string" },
 					"readModel": { "$ref": "#/components/schemas/SearchReadModel" },
-					"scope": { "$ref": "#/components/schemas/KnownNodeScope" },
+					"scope": {
+						"type": "string",
+						"enum": [
+							"current-validator",
+							"listener",
+							"public-key-only",
+							"archived",
+							"all-known",
+							"archive-root",
+							"current-organization"
+						]
+					},
 					"source": {
 						"type": "string",
 						"enum": ["meilisearch", "postgres_canonical"]

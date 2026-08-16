@@ -12,6 +12,11 @@ interface ProjectionProgressRow {
 	readonly nextOffset: number;
 }
 
+interface ProjectionProgressAdvanceRow {
+	readonly nextOffset: number | null;
+	readonly updatedCount: number;
+}
+
 const accountReferenceProjection = 'operation-account-reference';
 
 export async function lockOperationAccountReferenceProgress(
@@ -69,16 +74,25 @@ export async function advanceOperationAccountReferenceProgress(
 	currentOffset: number,
 	nextOffset: number
 ): Promise<void> {
-	const rows = await manager.query<Array<{ readonly nextOffset: number }>>(
-		`update "full_history_operation_projection_progress"
-		set "next_offset" = $4, "updated_at" = now()
-		where "batch_id" = $1
-			and "projection" = $2
-			and "next_offset" = $3
-		returning "next_offset" as "nextOffset"`,
+	const rows = await manager.query<ProjectionProgressAdvanceRow[]>(
+		`with updated as (
+			update "full_history_operation_projection_progress"
+			set "next_offset" = $4, "updated_at" = now()
+			where "batch_id" = $1
+				and "projection" = $2
+				and "next_offset" = $3
+			returning "next_offset"
+		)
+		select count(*)::integer as "updatedCount",
+			max("next_offset")::integer as "nextOffset"
+		from updated`,
 		[batchId, accountReferenceProjection, currentOffset, nextOffset]
 	);
-	if (rows.length !== 1 || rows[0]?.nextOffset !== nextOffset) {
+	if (
+		rows.length !== 1 ||
+		rows[0]?.updatedCount !== 1 ||
+		rows[0]?.nextOffset !== nextOffset
+	) {
 		throw new FullHistoryCanonicalError(
 			'canonical-row-conflict',
 			'Operation account-reference progress changed concurrently'

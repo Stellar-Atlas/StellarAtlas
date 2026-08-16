@@ -67,6 +67,10 @@ import { FullHistoryOperationProjectionProgressMigration1785410000000 } from '@h
 import { HistoryArchiveCheckpointProofAttestationMigration1785420000000 } from '@history-scan-coordinator/infrastructure/database/migrations/1785420000000-HistoryArchiveCheckpointProofAttestationMigration.js';
 import { HistoryArchiveAvailabilityFailureChannelMigration1785430000000 } from '@history-scan-coordinator/infrastructure/database/migrations/1785430000000-HistoryArchiveAvailabilityFailureChannelMigration.js';
 import { HistoryArchiveBrokerFrontierMigration1785440000000 } from '@history-scan-coordinator/infrastructure/database/migrations/1785440000000-HistoryArchiveBrokerFrontierMigration.js';
+import { HistoryArchivePlanPriorityIndexMigration1785450000000 } from '@history-scan-coordinator/infrastructure/database/migrations/1785450000000-HistoryArchivePlanPriorityIndexMigration.js';
+import { HistoryArchiveReadyPriorityLaneMigration1785460000000 } from '@history-scan-coordinator/infrastructure/database/migrations/1785460000000-HistoryArchiveReadyPriorityLaneMigration.js';
+import { HistoryArchiveProofReconciliationAcknowledgementMigration1785470000000 } from '@history-scan-coordinator/infrastructure/database/migrations/1785470000000-HistoryArchiveProofReconciliationAcknowledgementMigration.js';
+import { HistoryArchiveCheckpointProofRefreshQueueMigration1785510000000 } from '@history-scan-coordinator/infrastructure/database/migrations/1785510000000-HistoryArchiveCheckpointProofRefreshQueueMigration.js';
 
 // The production database was imported with a partial legacy migration ledger.
 // Explicit registration prevents TypeORM from replaying pre-baseline migrations.
@@ -139,5 +143,9 @@ export const managedMigrations = [
 	FullHistoryOperationProjectionProgressMigration1785410000000,
 	HistoryArchiveCheckpointProofAttestationMigration1785420000000,
 	HistoryArchiveAvailabilityFailureChannelMigration1785430000000,
-	HistoryArchiveBrokerFrontierMigration1785440000000
+	HistoryArchiveBrokerFrontierMigration1785440000000,
+	HistoryArchivePlanPriorityIndexMigration1785450000000,
+	HistoryArchiveReadyPriorityLaneMigration1785460000000,
+	HistoryArchiveProofReconciliationAcknowledgementMigration1785470000000,
+	HistoryArchiveCheckpointProofRefreshQueueMigration1785510000000
 ] as const;

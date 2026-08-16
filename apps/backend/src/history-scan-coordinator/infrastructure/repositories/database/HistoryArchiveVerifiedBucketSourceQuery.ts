@@ -6,9 +6,10 @@ import {
 	type HistoryArchiveRepairHostResolver,
 	type HistoryArchiveRepairSourceUrlPolicy
 } from './HistoryArchiveRepairSourceUrlPolicy.js';
+import { mapRepairSourcesWithBoundedConcurrency } from './BoundedRepairSourceMapper.js';
 
 const maximumTargets = 500;
-const maximumSourcesPerTarget = 5;
+const maximumSourcesPerTarget = 3;
 const sha256Pattern = /^[0-9a-f]{64}$/;
 const uuidPattern =
 	/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -54,8 +55,9 @@ export async function findVerifiedBucketSources(
 		[requestedIds, normalizeLimit(limitPerObject)]
 	);
 	const policy = createHistoryArchiveRepairSourceUrlPolicy(hostResolver);
-	const candidates = await Promise.all(
-		requireRows(value).map((row) => mapRow(row, policy).catch(() => null))
+	const candidates = await mapRepairSourcesWithBoundedConcurrency(
+		requireRows(value),
+		(row) => mapRow(row, policy).catch(() => null)
 	);
 	return candidates.filter(isPresent);
 }
@@ -246,9 +248,32 @@ export const historyArchiveVerifiedBucketSourceSql = `
 			on proof."archiveUrlIdentity" = dependency."archiveUrlIdentity"
 			and proof."checkpointLedger" = dependency."checkpointLedger"
 			and ${strictProofPredicateSql}
-			and proof."evaluatedAt" >= candidate."verifiedAt"
-			and candidate."updatedAt" <= proof."evaluatedAt"
-			and dependency."createdAt" <= proof."evaluatedAt"
+		join history_archive_object_queue proof_checkpoint
+			on proof_checkpoint."remoteId" =
+				proof."checkpointStateObjectRemoteId"
+			and proof_checkpoint."archiveUrlIdentity" =
+				proof."archiveUrlIdentity"
+			and proof_checkpoint."checkpointLedger" = proof."checkpointLedger"
+			and proof_checkpoint."objectType" = 'checkpoint-state'
+			and proof_checkpoint.status = 'verified'
+			and (
+				proof_checkpoint."transitionEffectsRequiredAt" is null
+				or proof_checkpoint."transitionEffectsCompletedAt" is not null
+			)
+		cross join lateral (
+			select greatest(
+				proof."evaluatedAt",
+				coalesce(
+					proof_checkpoint."proofReconciledAt",
+					'-infinity'::timestamptz
+				)
+			) as "effectiveEvaluatedAt"
+		) proof_freshness
+		where proof_freshness."effectiveEvaluatedAt" >= candidate."verifiedAt"
+			and candidate."updatedAt" <=
+				proof_freshness."effectiveEvaluatedAt"
+			and dependency."createdAt" <=
+				proof_freshness."effectiveEvaluatedAt"
 			and proof."expectedBucketCount" = (
 				select count(*)
 				from history_archive_checkpoint_bucket_dependency expected_dependency
@@ -256,7 +281,8 @@ export const historyArchiveVerifiedBucketSourceSql = `
 					proof."archiveUrlIdentity"
 					and expected_dependency."checkpointLedger" =
 						proof."checkpointLedger"
-					and expected_dependency."createdAt" <= proof."evaluatedAt"
+					and expected_dependency."createdAt" <=
+						proof_freshness."effectiveEvaluatedAt"
 			)
 			and (
 				select count(*)
@@ -270,11 +296,35 @@ export const historyArchiveVerifiedBucketSourceSql = `
 				)
 					and proof_input.status = 'verified'
 					and proof_input."verifiedAt" is not null
-					and proof_input."verifiedAt" <= proof."evaluatedAt"
-					and proof_input."updatedAt" <= proof."evaluatedAt"
+					and proof_input."verifiedAt" <=
+						proof_freshness."effectiveEvaluatedAt"
+					and proof_input."updatedAt" <=
+						proof_freshness."effectiveEvaluatedAt"
 			) = 4 + case
 				when proof."scpObjectRemoteId" is null then 0 else 1
 			end
+			and not exists (
+				select 1
+				from history_archive_object_queue proof_scope_input
+				where proof_scope_input."archiveUrlIdentity" =
+					proof."archiveUrlIdentity"
+					and proof_scope_input."checkpointLedger" =
+						proof."checkpointLedger"
+					and proof_scope_input."objectType" in (
+						'checkpoint-state',
+						'ledger',
+						'transactions',
+						'results',
+						'scp'
+					)
+					and greatest(
+						proof_scope_input."updatedAt",
+						coalesce(
+							proof_scope_input."verifiedAt",
+							'-infinity'::timestamptz
+						)
+					) > proof_freshness."effectiveEvaluatedAt"
+			)
 			and not exists (
 				select 1
 				from history_archive_checkpoint_bucket_dependency proof_dependency
@@ -289,12 +339,15 @@ export const historyArchiveVerifiedBucketSourceSql = `
 					and proof_dependency."checkpointLedger" =
 						proof."checkpointLedger"
 					and (
-						proof_dependency."createdAt" > proof."evaluatedAt"
+						proof_dependency."createdAt" >
+							proof_freshness."effectiveEvaluatedAt"
 						or proof_bucket."remoteId" is null
 						or proof_bucket.status <> 'verified'
 						or proof_bucket."verifiedAt" is null
-						or proof_bucket."verifiedAt" > proof."evaluatedAt"
-						or proof_bucket."updatedAt" > proof."evaluatedAt"
+						or proof_bucket."verifiedAt" >
+							proof_freshness."effectiveEvaluatedAt"
+						or proof_bucket."updatedAt" >
+							proof_freshness."effectiveEvaluatedAt"
 					)
 			)
 			and (
@@ -309,11 +362,13 @@ export const historyArchiveVerifiedBucketSourceSql = `
 						and predecessor."objectType" = 'ledger'
 						and predecessor.status = 'verified'
 						and predecessor."verifiedAt" is not null
-						and predecessor."verifiedAt" <= proof."evaluatedAt"
-						and predecessor."updatedAt" <= proof."evaluatedAt"
+						and predecessor."verifiedAt" <=
+							proof_freshness."effectiveEvaluatedAt"
+						and predecessor."updatedAt" <=
+							proof_freshness."effectiveEvaluatedAt"
 				)
 			)
-		where char_length(candidate."objectUrl") between 1 and 2048
+			and char_length(candidate."objectUrl") between 1 and 2048
 			and candidate."objectUrl" ~* '^https?://[^/?#[:space:]@]+'
 			and candidate."objectUrl" !~ '[[:space:][:cntrl:]]'
 	), latest_per_source as (

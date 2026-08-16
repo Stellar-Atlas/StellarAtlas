@@ -1,7 +1,10 @@
 import { Suspense } from 'react';
 import { connection } from 'next/server';
 import { fetchKnownNodes, fetchPublicNetwork } from '../../api/client';
+import { fetchNetworkSearch } from '../../api/network-search-client';
+import type { PublicSearchArchiveStatusFilter } from '../../api/search-types';
 import { NodeTable } from '../../components/nodes/node-table';
+import { NodeArchiveStatusTable } from '../../components/nodes/node-archive-status-table';
 import { PageHeading } from '../../components/layout/page-heading';
 import { RouteLoadingPanel } from '../../components/layout/route-fallbacks';
 import { formatInteger } from '../../format/formatters';
@@ -20,13 +23,30 @@ async function NodesRouteContent({
 	const scope = parseNodeScope(params.scope);
 	const page = parsePage(params.page);
 	const query = singleValue(params.q)?.slice(0, 128) ?? '';
-	const limit = 50;
-	const [network, knownNodes] = await Promise.all([
+	const archiveStatus = parseArchiveStatus(params.archiveStatus);
+	const limit = archiveStatus ? 25 : 50;
+	const [network, knownNodes, archiveSearch] = await Promise.all([
 		fetchPublicNetwork({ revalidate }),
 		fetchKnownNodes(
-			{ limit, offset: (page - 1) * limit, query, scope },
+			archiveStatus
+				? { limit: 1, scope: 'current-validator' }
+				: { limit, offset: (page - 1) * limit, query, scope },
 			{ revalidate }
-		)
+		),
+		archiveStatus
+			? fetchNetworkSearch(
+					query,
+					{
+						archiveStatus,
+						entityType: 'node',
+						offset: (page - 1) * limit,
+						scope: 'current-validator',
+						validator: true
+					},
+					limit,
+					{ revalidate }
+				)
+			: Promise.resolve(null)
 	]);
 	const snapshottedNodes = knownNodes.nodes.flatMap((knownNode) =>
 		knownNode.node ? [knownNode.node] : []
@@ -37,7 +57,13 @@ async function NodesRouteContent({
 		organizations: network.organizations
 	};
 	return (
-		<main className="shell" data-inventory-scope={knownNodes.scope}>
+		<main
+			className="shell"
+			data-archive-status={archiveStatus}
+			data-inventory-scope={
+				archiveStatus ? 'current-validator' : knownNodes.scope
+			}
+		>
 			<PageHeading
 				description="Browse validators, listener nodes, reported software versions, geodata, availability, and current health signals."
 				eyebrow={network.name}
@@ -58,14 +84,23 @@ async function NodesRouteContent({
 					</div>
 				}
 			/>
-			<NodeTable
-				network={inventoryNetwork}
-				nodes={knownNodes.nodes}
-				page={knownNodes.page}
-				query={query}
-				scope={scope}
-				totalCount={knownNodes.scopeTotals['all-known']}
-			/>
+			{archiveStatus && archiveSearch ? (
+				<NodeArchiveStatusTable
+					archiveStatus={archiveStatus}
+					query={query}
+					response={archiveSearch}
+				/>
+			) : (
+				<NodeTable
+					archiveStatus={archiveStatus}
+					network={inventoryNetwork}
+					nodes={knownNodes.nodes}
+					page={knownNodes.page}
+					query={query}
+					scope={scope}
+					totalCount={knownNodes.scopeTotals['all-known']}
+				/>
+			)}
 		</main>
 	);
 }
@@ -95,4 +130,18 @@ function parseNodeScope(value: string | string[] | undefined) {
 		scope === 'all-known'
 		? scope
 		: 'current-validator';
+}
+
+function parseArchiveStatus(
+	value: string | string[] | undefined
+): PublicSearchArchiveStatusFilter | undefined {
+	const status = singleValue(value);
+	return status === 'error' ||
+		status === 'issue' ||
+		status === 'ok' ||
+		status === 'scanner-issue' ||
+		status === 'unknown' ||
+		status === 'unreachable'
+		? status
+		: undefined;
 }

@@ -2,6 +2,7 @@ import type {
 	NetworkSearchIndexStateDocument,
 	NetworkSearchSnapshot
 } from './NetworkSearchTypes.js';
+import { networkSearchIndexSchemaVersion } from '@core/config/SearchConfigDefaults.js';
 
 export const networkSearchStateDocumentId = 'network_search_state';
 export const networkSearchProjectionRefreshIntervalMs = 60_000;
@@ -14,6 +15,7 @@ export const createNetworkSearchIndexState = (
 ): NetworkSearchIndexStateDocument => ({
 	canonicalArchiveRevision: snapshot.canonicalArchiveRevision,
 	canonicalCursor: snapshot.canonicalCursor,
+	documentSchemaVersion: snapshot.documentSchemaVersion,
 	documentKind: 'state',
 	id: networkSearchStateDocumentId,
 	indexedAt,
@@ -25,6 +27,7 @@ export const isNetworkSearchIndexState = (
 ): boolean =>
 	state.documentKind === 'state' &&
 	state.id === networkSearchStateDocumentId &&
+	state.documentSchemaVersion === networkSearchIndexSchemaVersion &&
 	typeof state.canonicalArchiveRevision === 'string' &&
 	state.canonicalArchiveRevision.length > 0 &&
 	typeof state.canonicalCursor === 'string' &&
@@ -41,6 +44,7 @@ export const networkSearchStateMatchesSnapshot = (
 	isNetworkSearchIndexState(state) &&
 	state.canonicalArchiveRevision === snapshot.canonicalArchiveRevision &&
 	state.canonicalCursor === snapshot.canonicalCursor &&
+	state.documentSchemaVersion === snapshot.documentSchemaVersion &&
 	state.networkTime === snapshot.networkTime;
 
 export const networkSearchProjectionCanServe = (

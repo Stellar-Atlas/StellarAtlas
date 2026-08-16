@@ -9,6 +9,7 @@ describe('search response parser', () => {
 			facets: emptyFacets(),
 			hits: [
 				{
+					archiveStatus: 'unreachable',
 					detail: 'Indexed validator',
 					entityId: 'GA_STALE',
 					entityType: 'node',
@@ -44,7 +45,7 @@ describe('search response parser', () => {
 		});
 
 		expect(parsed).toMatchObject({
-			hits: [{ freshness: 'stale' }],
+			hits: [{ archiveStatus: 'unreachable', freshness: 'stale' }],
 			readModel: { freshness: 'stale' },
 			source: 'meilisearch'
 		});

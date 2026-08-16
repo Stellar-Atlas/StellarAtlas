@@ -28,6 +28,9 @@ export interface CollectScpLiveShutdownResult {
 	projectionDrained: boolean;
 }
 
+const isScpMeilisearchProjectionEnabled = (): boolean =>
+	process.env.SCP_MEILISEARCH_PROJECTION_ENABLED !== 'false';
+
 @injectable()
 export class CollectScpLive {
 	private activePersistence: ScpStatementPersistenceBuffer | null = null;
@@ -35,6 +38,7 @@ export class CollectScpLive {
 	private latestLedger: bigint | null = null;
 	private latestLedgerCloseTime: Date | null = null;
 	private lastRetentionCleanupAtMs = 0;
+	private readonly projectionEnabled: boolean;
 	private retentionCleanupInFlight: Promise<void> | null = null;
 	private readonly projector: ScpStatementReadModelProjector;
 
@@ -53,6 +57,7 @@ export class CollectScpLive {
 		@inject('Logger')
 		private logger: Logger
 	) {
+		this.projectionEnabled = isScpMeilisearchProjectionEnabled();
 		this.projector = new ScpStatementReadModelProjector(
 			this.scpStatementLiveStore,
 			this.scpStatementObservationRepository,
@@ -69,7 +74,7 @@ export class CollectScpLive {
 					processedLedgers: 0
 				});
 			}
-			this.projector.start();
+			if (this.projectionEnabled) this.projector.start();
 			this.requestRetentionCleanup(new Date());
 
 			const scanDataOrError = await this.scanRepository.findScanDataForUpdate();
@@ -89,7 +94,17 @@ export class CollectScpLive {
 			const previousScan = scanDataOrError.value;
 			if (this.shuttingDown) return ok(this.emptyResult());
 			const persistence = new ScpStatementPersistenceBuffer(
-				this.scpStatementObservationRepository
+				this.scpStatementObservationRepository,
+				{
+					onRetry: ({ attempt, batchSize, delayMs, error }) => {
+						this.logger.warn('Retrying canonical SCP persistence', {
+							attempt,
+							batchSize,
+							delayMs,
+							errorMessage: error.message
+						});
+					}
+				}
 			);
 			this.activePersistence = persistence;
 			let flushed = false;
@@ -174,6 +189,9 @@ export class CollectScpLive {
 				deadlineMs,
 				'SCP retention cleanup'
 			);
+		}
+		if (!this.projectionEnabled) {
+			return { canonicalDrained: true, projectionDrained: true };
 		}
 
 		const projectionDrained = await this.projector.drain(

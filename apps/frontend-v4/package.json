@@ -10,6 +10,7 @@
 		"build:staging": "pnpm run release:prepare-staging && node ../../scripts/refuse-live-next-build.mjs .next-staging && NEXT_DIST_DIR=.next-staging next build",
 		"release:prepare-staging": "node ../../scripts/refuse-root.mjs frontend-v4 release:prepare-staging && node ../../scripts/frontend-v4-release.mjs prepare-staging",
 		"release:promote-staging": "node ../../scripts/refuse-root.mjs frontend-v4 release:promote-staging && node ../../scripts/frontend-v4-release.mjs promote-staging",
+		"release:rollback-production": "node ../../scripts/refuse-root.mjs frontend-v4 release:rollback-production && node ../../scripts/frontend-v4-release.mjs rollback-production",
 		"start": "node ../../scripts/refuse-root.mjs frontend-v4 start && NEXT_DIST_DIR=${NEXT_DIST_DIR:-.next-production} next start --hostname ${FRONTEND_V4_HOST:-127.0.0.1} --port ${FRONTEND_V4_PORT:-3104}",
 		"start:staging": "node ../../scripts/refuse-root.mjs frontend-v4 start:staging && NEXT_DIST_DIR=${NEXT_DIST_DIR:-.next-staging} next start --hostname ${FRONTEND_V4_HOST:-127.0.0.1} --port ${FRONTEND_V4_PORT:-3114}",
 		"typecheck": "NEXT_DIST_DIR=.next-staging next typegen && tsc --noEmit"

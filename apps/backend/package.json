@@ -28,6 +28,7 @@
 		"run-continuous-full-history-ledger-close-meta": "node lib/history-scan-coordinator/infrastructure/cli/full-history-ledger-close-meta/run-continuous-full-history-ledger-close-meta.js",
 		"run-full-history-state-import": "node lib/history-scan-coordinator/infrastructure/cli/full-history-state-import/run-full-history-state-import.js",
 		"run-history-archive-broker-dispatcher": "node lib/history-scan-coordinator/infrastructure/cli/archive-broker/run-history-archive-broker-dispatcher.js",
+		"seed-history-archive-proof-refreshes": "node lib/history-scan-coordinator/infrastructure/cli/archive-proof-refresh-seed/seed-history-archive-checkpoint-proof-refreshes.js",
 		"retrieve-home-domain": "node lib/network-scan/infrastructure/cli/retrieve-home-domain.js"
 	},
 	"author": "pieterjan84@github",

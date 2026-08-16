@@ -99,7 +99,7 @@ export class NetworkSearchInventoryLoader {
 	}
 }
 
-function collectArchiveRoots(
+export function collectArchiveRoots(
 	nodes: NetworkSearchInventory['nodes'],
 	canonicalRoots: readonly NetworkSearchCanonicalArchiveRoot[]
 ) {
@@ -108,23 +108,34 @@ function collectArchiveRoots(
 		{ archiveUrl: string; archiveUrlIdentity: string; nodePublicKeys: string[] }
 	>();
 	for (const root of canonicalRoots) {
-		roots.set(root.archiveUrlIdentity, {
-			archiveUrl: root.archiveUrl,
-			archiveUrlIdentity: root.archiveUrlIdentity,
-			nodePublicKeys: []
-		});
+		const archiveUrl =
+			normalizeHistoryArchiveRootUrl(root.archiveUrl) ?? root.archiveUrl;
+		const archiveUrlIdentity =
+			normalizeHistoryArchiveRootUrl(root.archiveUrlIdentity) ??
+			root.archiveUrlIdentity.trim();
+		if (!roots.has(archiveUrlIdentity)) {
+			roots.set(archiveUrlIdentity, {
+				archiveUrl,
+				archiveUrlIdentity,
+				nodePublicKeys: []
+			});
+		}
 	}
+	const ownershipAliases = buildOwnershipAliases(roots);
 	for (const knownNode of nodes) {
 		const archiveUrl = knownNode.node?.historyUrl
 			? normalizeHistoryArchiveRootUrl(knownNode.node.historyUrl)
 			: null;
 		if (archiveUrl === null) continue;
-		const current = roots.get(archiveUrl);
+		const archiveUrlIdentity =
+			findOwnedArchiveIdentity(archiveUrl, roots, ownershipAliases) ??
+			archiveUrl;
+		const current = roots.get(archiveUrlIdentity);
 		if (current) current.nodePublicKeys.push(knownNode.publicKey);
 		else {
-			roots.set(archiveUrl, {
+			roots.set(archiveUrlIdentity, {
 				archiveUrl,
-				archiveUrlIdentity: archiveUrl,
+				archiveUrlIdentity,
 				nodePublicKeys: [knownNode.publicKey]
 			});
 		}
@@ -137,4 +148,43 @@ function collectArchiveRoots(
 		.toSorted((left, right) =>
 			left.archiveUrlIdentity.localeCompare(right.archiveUrlIdentity)
 		);
+}
+
+function buildOwnershipAliases(
+	roots: ReadonlyMap<
+		string,
+		{ readonly archiveUrl: string; readonly archiveUrlIdentity: string }
+	>
+): ReadonlyMap<string, ReadonlySet<string>> {
+	const aliases = new Map<string, Set<string>>();
+	for (const [identity, root] of roots) {
+		for (const value of [identity, root.archiveUrl]) {
+			const alias = legacyOwnershipAlias(value);
+			if (alias === null) continue;
+			const identities = aliases.get(alias) ?? new Set<string>();
+			identities.add(identity);
+			aliases.set(alias, identities);
+		}
+	}
+	return aliases;
+}
+
+function findOwnedArchiveIdentity(
+	archiveUrl: string,
+	roots: ReadonlyMap<string, unknown>,
+	aliases: ReadonlyMap<string, ReadonlySet<string>>
+): string | null {
+	if (roots.has(archiveUrl)) return archiveUrl;
+	const alias = legacyOwnershipAlias(archiveUrl);
+	if (alias === null) return null;
+	const candidates = aliases.get(alias);
+	return candidates?.size === 1 ? ([...candidates][0] ?? null) : null;
+}
+
+function legacyOwnershipAlias(value: string): string | null {
+	const normalized = normalizeHistoryArchiveRootUrl(value);
+	if (normalized === null) return null;
+	const url = new URL(normalized);
+	url.pathname = url.pathname.toLowerCase();
+	return url.toString().replace(/\/$/, '');
 }

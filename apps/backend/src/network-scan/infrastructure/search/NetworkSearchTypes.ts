@@ -7,7 +7,10 @@ import type {
 } from '../../use-cases/known-network-scope/KnownNetworkScope.js';
 
 export type NetworkSearchEntityType = 'archive-root' | 'node' | 'organization';
-export type NetworkSearchArchiveStatus = 'error' | 'ok' | 'unknown';
+export type NetworkSearchArchiveStatus =
+	'error' | 'ok' | 'scanner-issue' | 'unknown' | 'unreachable';
+export type NetworkSearchArchiveStatusFilter =
+	NetworkSearchArchiveStatus | 'issue';
 export type NetworkSearchDocumentScope =
 	KnownNodeRecordScope | 'archive-root' | 'current-organization';
 export type NetworkSearchQueryScope =
@@ -80,6 +83,7 @@ export interface NetworkSearchDocument {
 export interface NetworkSearchIndexStateDocument {
 	readonly canonicalArchiveRevision: string;
 	readonly canonicalCursor: string;
+	readonly documentSchemaVersion: string;
 	readonly documentKind: 'state';
 	readonly id: string;
 	readonly indexedAt: string;
@@ -92,6 +96,7 @@ export type NetworkSearchStoredDocument =
 export interface NetworkSearchSnapshot {
 	readonly canonicalArchiveRevision: string;
 	readonly canonicalCursor: string;
+	readonly documentSchemaVersion: string;
 	readonly documents: readonly NetworkSearchDocument[];
 	readonly generatedAt: string;
 	readonly networkTime: string;
@@ -99,7 +104,7 @@ export interface NetworkSearchSnapshot {
 
 export interface NetworkSearchRequest {
 	readonly active?: boolean;
-	readonly archiveStatus?: NetworkSearchArchiveStatus;
+	readonly archiveStatus?: NetworkSearchArchiveStatusFilter;
 	readonly canonicalCursor?: string;
 	readonly countryCode?: string;
 	readonly entityType?: NetworkSearchEntityType;
@@ -115,6 +120,7 @@ export interface NetworkSearchRequest {
 }
 
 export interface NetworkSearchHit {
+	readonly archiveStatus?: NetworkSearchArchiveStatus;
 	readonly detail: string;
 	readonly entityId: string;
 	readonly entityType: NetworkSearchEntityType;

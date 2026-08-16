@@ -78,7 +78,12 @@ const getFacetLabel = (name: PublicSearchFacetName, value: string): string => {
 			: value === 'archive-root'
 				? 'Archive roots'
 				: 'Organizations';
-	if (name === 'archiveStatus') return `Archive ${value}`;
+	if (name === 'archiveStatus') {
+		if (value === 'ok') return 'No current archive issue';
+		if (value === 'scanner-issue') return 'Scanner issue';
+		if (value === 'unreachable') return 'Archive unreachable';
+		return `Archive ${value}`;
+	}
 	if (name === 'countryCode') return value.toUpperCase();
 	if (name === 'scope' && isSearchScope(value))
 		return searchQueryScopeLabels[value];
@@ -102,7 +107,11 @@ const isEntityType = (
 const isArchiveStatus = (
 	value: string
 ): value is NonNullable<SearchNetworkFilters['archiveStatus']> =>
-	value === 'error' || value === 'ok' || value === 'unknown';
+	value === 'error' ||
+	value === 'ok' ||
+	value === 'scanner-issue' ||
+	value === 'unknown' ||
+	value === 'unreachable';
 
 const selectFacetOptions = (
 	response: PublicSearchResponse | null,

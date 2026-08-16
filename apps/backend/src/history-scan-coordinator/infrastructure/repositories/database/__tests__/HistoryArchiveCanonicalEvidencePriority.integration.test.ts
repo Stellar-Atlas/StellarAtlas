@@ -5,6 +5,7 @@ import { HistoryArchiveObject } from '../../../../domain/history-archive-object/
 import { HistoryArchiveObjectEventMigration1784370000000 } from '../../../database/migrations/1784370000000-HistoryArchiveObjectEventMigration.js';
 import { HistoryArchiveObjectHostThrottleMigration1784410000000 } from '../../../database/migrations/1784410000000-HistoryArchiveObjectHostThrottleMigration.js';
 import { HistoryArchiveObjectClaimCursorMigration1784780000000 } from '../../../database/migrations/1784780000000-HistoryArchiveObjectClaimCursorMigration.js';
+import { HistoryArchiveBrokerFrontierMigration1785440000000 } from '../../../database/migrations/1785440000000-HistoryArchiveBrokerFrontierMigration.js';
 import {
 	startDisposablePostgres,
 	type DisposablePostgres
@@ -50,8 +51,11 @@ describe('canonical archive evidence priority', () => {
 		await new HistoryArchiveObjectClaimCursorMigration1784780000000().up(
 			queryRunner
 		);
-		await queryRunner.release();
 		await createCanonicalFrontierTestSchema(dataSource);
+		await new HistoryArchiveBrokerFrontierMigration1785440000000().up(
+			queryRunner
+		);
+		await queryRunner.release();
 		repository = new TypeOrmHistoryArchiveObjectRepository(
 			dataSource.getRepository(HistoryArchiveObject)
 		);
@@ -131,6 +135,108 @@ describe('canonical archive evidence priority', () => {
 
 		expect(rows).toEqual([
 			{ archiveUrlIdentity: 'https://canonical-1.example/history' }
+		]);
+	});
+
+	it('keeps a tied reserve on the source that most recently made proof progress', async () => {
+		await seedArchive(0);
+		await seedArchive(1);
+		await seedRuntime();
+		const tiedSource = createBucketMissingProof(
+			'https://canonical-0.example/history',
+			targetCheckpoint
+		);
+		tiedSource.expectedBucketCount = 36;
+		tiedSource.verifiedBucketCount = 31;
+		tiedSource.missingBucketCount = 5;
+		tiedSource.evaluatedAt = new Date('2026-01-01T00:00:00.000Z');
+		const activeSource = createBucketMissingProof(
+			'https://canonical-1.example/history',
+			targetCheckpoint
+		);
+		activeSource.expectedBucketCount = 36;
+		activeSource.verifiedBucketCount = 32;
+		activeSource.missingBucketCount = 4;
+		activeSource.evaluatedAt = new Date('2026-01-02T00:00:00.000Z');
+		await dataSource
+			.getRepository(HistoryArchiveCheckpointProof)
+			.save([tiedSource, activeSource]);
+		await dataSource.query(materializeCanonicalFrontierDependenciesSql);
+
+		await dataSource.query(admitCanonicalFrontierSql, [1, 2]);
+		await dataSource.query(`
+			update "history_archive_object_queue"
+			set status = 'verified', "verifiedAt" = now()
+			where status = 'pending'
+				and "executionReason" = 'canonical-frontier-reserve'
+		`);
+		await dataSource.query(
+			`update "history_archive_checkpoint_proof"
+			 set "verifiedBucketCount" = 32, "missingBucketCount" = 4
+			 where "archiveUrlIdentity" = $1`,
+			[tiedSource.archiveUrlIdentity]
+		);
+
+		await dataSource.query(admitCanonicalFrontierSql, [1, 2]);
+		const rows = (await dataSource.query(`
+			select "archiveUrlIdentity"
+			from "history_archive_object_queue"
+			where status = 'pending'
+				and "executionReason" = 'canonical-frontier-reserve'
+		`)) as readonly { readonly archiveUrlIdentity: string }[];
+
+		expect(rows).toEqual([
+			{ archiveUrlIdentity: activeSource.archiveUrlIdentity }
+		]);
+	});
+
+	it('keeps forward and historical lanes represented within the bounded reserve', async () => {
+		await seedArchive(0);
+		const networkHash = createHash('sha256')
+			.update(networkPassphrase, 'utf8')
+			.digest();
+		const forwardCheckpoint = targetCheckpoint + 64;
+		await dataSource.query(
+			`insert into "full_history_promotion_runtime" (
+				"network_passphrase_hash", state, "checkpoint_ledger"
+			 ) values ($1, 'waiting-for-proof', $2)`,
+			[networkHash, forwardCheckpoint]
+		);
+		await dataSource.query(
+			`insert into "full_history_watermark" (
+				"network_passphrase_hash", "first_ledger"
+			 ) values ($1, $2)`,
+			[networkHash, targetCheckpoint + 1]
+		);
+		await dataSource.query(
+			`insert into "full_history_historical_backfill_job" (
+				id, "network_passphrase_hash", "first_checkpoint_ledger",
+				"last_checkpoint_ledger", state
+			 ) values ('00000000-0000-0000-0000-000000000001', $1, $2, $2,
+				'pending')`,
+			[networkHash, targetCheckpoint]
+		);
+		await dataSource.query(materializeCanonicalFrontierDependenciesSql);
+
+		const [admitted] = (await dataSource.query(
+			admitCanonicalFrontierSql,
+			[2, 2]
+		)) as readonly { readonly count: number }[];
+		const rows = (await dataSource.query(`
+			select "objectType", "checkpointLedger"
+			from "history_archive_object_queue"
+			where status = 'pending'
+				and "executionReason" = 'canonical-frontier-reserve'
+			order by "checkpointLedger", "objectType"
+		`)) as readonly {
+			readonly checkpointLedger: number;
+			readonly objectType: string;
+		}[];
+
+		expect(admitted?.count).toBe(2);
+		expect(rows).toEqual([
+			{ checkpointLedger: targetCheckpoint - 64, objectType: 'ledger' },
+			{ checkpointLedger: forwardCheckpoint, objectType: 'checkpoint-state' }
 		]);
 	});
 

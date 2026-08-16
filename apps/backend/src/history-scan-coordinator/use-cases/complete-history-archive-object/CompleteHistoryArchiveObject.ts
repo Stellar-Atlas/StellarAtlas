@@ -29,6 +29,10 @@ export interface CompleteHistoryArchiveObjectRequest extends HistoryArchiveObjec
 	readonly archiveMetadata?: ArchiveMetadataDTO | null;
 }
 
+export interface CompleteHistoryArchiveObjectReconciliationOptions {
+	readonly promotePlannedObjects?: boolean;
+}
+
 @injectable()
 export class CompleteHistoryArchiveObject {
 	constructor(
@@ -95,7 +99,8 @@ export class CompleteHistoryArchiveObject {
 
 	async reconcileClaimAttempt(
 		remoteId: string,
-		claimAttempt: number
+		claimAttempt: number,
+		options: CompleteHistoryArchiveObjectReconciliationOptions = {}
 	): Promise<void> {
 		await this.objectRepository.withTransitionEffectsLock(
 			remoteId,
@@ -109,12 +114,15 @@ export class CompleteHistoryArchiveObject {
 				) {
 					return;
 				}
-				await this.reconcilePersisted(persisted);
+				await this.reconcilePersisted(persisted, options);
 			}
 		);
 	}
 
-	async reconcilePersisted(object: HistoryArchiveObject): Promise<void> {
+	async reconcilePersisted(
+		object: HistoryArchiveObject,
+		options: CompleteHistoryArchiveObjectReconciliationOptions = {}
+	): Promise<void> {
 		if (object.status !== 'verified') return;
 		if (object.transitionEffectsCompletedAt !== null) return;
 
@@ -145,9 +153,8 @@ export class CompleteHistoryArchiveObject {
 		if (descendants.length > 0) {
 			await this.objectRepository.planObjects(descendants);
 		}
-		await this.objectRepository.promotePlannedObjects();
-		if (shouldRefreshCheckpointProof(object)) {
-			await this.checkpointProofRepository.refreshForObject(object);
+		if (options.promotePlannedObjects !== false) {
+			await this.objectRepository.promotePlannedObjects();
 		}
 		await this.eventRecorder.recordDurably(object, {
 			claimAttempt: object.attempts,
@@ -169,12 +176,24 @@ export class CompleteHistoryArchiveObject {
 		) {
 			return;
 		}
-		if (object.dependenciesMaterializedAt === null) {
+		const persisted = await this.objectRepository.findByRemoteId(
+			object.remoteId
+		);
+		if (
+			persisted === null ||
+			persisted.objectType !== 'checkpoint-state' ||
+			persisted.status !== 'verified' ||
+			(persisted.transitionEffectsRequiredAt !== null &&
+				persisted.transitionEffectsCompletedAt === null)
+		) {
+			return;
+		}
+		if (persisted.dependenciesMaterializedAt === null) {
 			await this.objectRepository.materializeCheckpointDependencies(
-				object.remoteId
+				persisted.remoteId
 			);
 		}
-		await this.checkpointProofRepository.refreshForObject(object);
+		await this.checkpointProofRepository.refreshForObject(persisted);
 	}
 
 	private async prepareCompletionProgress(
@@ -317,10 +336,6 @@ function enrichCheckpointFacts(
 
 function isRecord(value: unknown): value is Record<string, unknown> {
 	return typeof value === 'object' && value !== null && !Array.isArray(value);
-}
-
-function shouldRefreshCheckpointProof(object: HistoryArchiveObject): boolean {
-	return object.checkpointLedger !== null || object.bucketHash !== null;
 }
 
 function isAcceptedCompletionReplay(

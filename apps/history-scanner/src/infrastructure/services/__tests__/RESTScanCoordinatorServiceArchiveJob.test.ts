@@ -1,6 +1,6 @@
-import { Url, type HttpService } from 'http-helper';
+import { HttpError, Url, type HttpService } from 'http-helper';
 import { mock } from 'jest-mock-extended';
-import { ok } from 'neverthrow';
+import { err, ok } from 'neverthrow';
 import { RESTScanCoordinatorService } from '../RESTScanCoordinatorService.js';
 
 describe('RESTScanCoordinatorService archive object claims', () => {
@@ -40,7 +40,7 @@ describe('RESTScanCoordinatorService archive object claims', () => {
 		);
 	});
 
-	it('does not treat a missing terminal object update as committed', async () => {
+	it('treats missing terminal object updates as already committed', async () => {
 		const httpService = mock<HttpService>();
 		const service = new RESTScanCoordinatorService(
 			httpService,
@@ -53,14 +53,14 @@ describe('RESTScanCoordinatorService archive object claims', () => {
 		);
 		httpService.post.mockResolvedValue(
 			ok({
-				data: undefined,
+				data: { error: 'Archive object job not found' },
 				headers: {},
 				status: 404,
 				statusText: 'Not Found'
 			})
 		);
 
-		const result = await service.failHistoryArchiveObject('object-1', {
+		const failureResult = await service.failHistoryArchiveObject('object-1', {
 			claimAttempt: 2,
 			errorMessage: 'HTTP 503 Service Unavailable',
 			errorType: 'archive_http_error',
@@ -69,6 +69,154 @@ describe('RESTScanCoordinatorService archive object claims', () => {
 			httpStatus: 503,
 			scheduler: 'broker'
 		});
+		const completionResult = await service.completeHistoryArchiveObject(
+			'object-1',
+			{}
+		);
+		const releaseResult = await service.releaseHistoryArchiveObject(
+			'object-1',
+			2
+		);
+
+		expect(failureResult.isOk()).toBe(true);
+		expect(completionResult.isOk()).toBe(true);
+		expect(releaseResult.isOk()).toBe(true);
+	});
+
+	it('treats terminal-update HTTP 404 errors as already committed', async () => {
+		const httpService = mock<HttpService>();
+		const service = new RESTScanCoordinatorService(
+			httpService,
+			'http://coordinator.example',
+			{
+				password: 'secret',
+				type: 'internal',
+				username: 'scanner'
+			}
+		);
+		httpService.post.mockResolvedValue(
+			err(
+				new HttpError('Request failed with status code 404', undefined, {
+					data: { error: 'Archive object job not found' },
+					headers: {},
+					status: 404,
+					statusText: 'Not Found'
+				})
+			)
+		);
+
+		const failureResult = await service.failHistoryArchiveObject('object-1', {
+			errorMessage: 'not found',
+			errorType: 'archive_http_error',
+			failureChannel: 'archive_availability'
+		});
+		const completionResult = await service.completeHistoryArchiveObject(
+			'object-1',
+			{}
+		);
+		const releaseResult = await service.releaseHistoryArchiveObject(
+			'object-1',
+			2
+		);
+
+		expect(failureResult.isOk()).toBe(true);
+		expect(completionResult.isOk()).toBe(true);
+		expect(releaseResult.isOk()).toBe(true);
+	});
+
+	it('preserves unknown terminal-update 404 errors', async () => {
+		const httpService = mock<HttpService>();
+		const service = new RESTScanCoordinatorService(
+			httpService,
+			'http://coordinator.example',
+			{
+				password: 'secret',
+				type: 'internal',
+				username: 'scanner'
+			}
+		);
+		httpService.post.mockResolvedValue(
+			err(
+				new HttpError('Request failed with status code 404', undefined, {
+					data: { error: 'Cannot POST this route' },
+					headers: {},
+					status: 404,
+					statusText: 'Not Found'
+				})
+			)
+		);
+
+		const result = await service.completeHistoryArchiveObject('object-1', {});
+
+		expect(result.isErr()).toBe(true);
+
+		httpService.post.mockResolvedValue(
+			ok({
+				data: { error: 'Cannot POST this route' },
+				headers: {},
+				status: 404,
+				statusText: 'Not Found'
+			})
+		);
+
+		const rawResponseResult = await service.completeHistoryArchiveObject(
+			'object-1',
+			{}
+		);
+
+		expect(rawResponseResult.isErr()).toBe(true);
+	});
+
+	it('does not treat a missing heartbeat as committed', async () => {
+		const httpService = mock<HttpService>();
+		const service = new RESTScanCoordinatorService(
+			httpService,
+			'http://coordinator.example',
+			{
+				password: 'secret',
+				type: 'internal',
+				username: 'scanner'
+			}
+		);
+		httpService.post.mockResolvedValue(
+			err(
+				new HttpError('Request failed with status code 404', undefined, {
+					data: { error: 'Archive object job not found' },
+					headers: {},
+					status: 404,
+					statusText: 'Not Found'
+				})
+			)
+		);
+
+		const result = await service.touchHistoryArchiveObject('object-1');
+
+		expect(result.isErr()).toBe(true);
+	});
+
+	it('preserves non-404 terminal update errors', async () => {
+		const httpService = mock<HttpService>();
+		const service = new RESTScanCoordinatorService(
+			httpService,
+			'http://coordinator.example',
+			{
+				password: 'secret',
+				type: 'internal',
+				username: 'scanner'
+			}
+		);
+		httpService.post.mockResolvedValue(
+			err(
+				new HttpError('Request failed with status code 500', undefined, {
+					data: undefined,
+					headers: {},
+					status: 500,
+					statusText: 'Internal Server Error'
+				})
+			)
+		);
+
+		const result = await service.completeHistoryArchiveObject('object-1', {});
 
 		expect(result.isErr()).toBe(true);
 	});

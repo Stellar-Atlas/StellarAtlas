@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto';
 import type { NodeV1, OrganizationV1 } from 'shared';
+import { networkSearchIndexSchemaVersion } from '@core/config/SearchConfigDefaults.js';
 import type { KnownNodeListItemDTO } from '../../use-cases/get-known-nodes/GetKnownNodesDTO.js';
 import type { KnownOrganizationListItemDTO } from '../../use-cases/get-known-organizations/GetKnownOrganizationsDTO.js';
 import type {
@@ -35,36 +36,172 @@ const nodeArchiveStatus = (
 	return archiveStatusByNodePublicKey.get(node.publicKey) ?? 'unknown';
 };
 
+const archiveEvidenceFreshnessMs = 24 * 60 * 60 * 1_000;
+
+const isFreshArchiveEvidence = (
+	observedAt: string | null | undefined,
+	generatedAt: string
+): boolean => {
+	if (observedAt === null || observedAt === undefined) return false;
+	const observedAtMs = Date.parse(observedAt);
+	const generatedAtMs = Date.parse(generatedAt);
+	return (
+		Number.isFinite(observedAtMs) &&
+		Number.isFinite(generatedAtMs) &&
+		observedAtMs <= generatedAtMs + 5 * 60 * 1_000 &&
+		generatedAtMs - observedAtMs <= archiveEvidenceFreshnessMs
+	);
+};
+
 const currentArchiveEvidenceStatus = (
-	root: NetworkSearchInventory['archiveRoots'][number]
+	root: NetworkSearchInventory['archiveRoots'][number],
+	generatedAt: string
 ): NetworkSearchDocument['archiveStatus'] => {
+	const stateIsFresh = isFreshArchiveEvidence(
+		root.scannerOwnedState?.observedAt,
+		generatedAt
+	);
+	if (stateIsFresh && root.scannerOwnedState?.status === 'unreachable') {
+		return 'unreachable';
+	}
+	if (stateIsFresh && root.scannerOwnedState?.status === 'invalid') {
+		return 'error';
+	}
 	if (
 		root.checkpoints.mismatchedCheckpoints > 0 ||
 		root.objects.remoteFailureObjects > 0
 	)
 		return 'error';
-	if (root.checkpoints.verifiedCheckpoints > 0) return 'ok';
+	if (root.objects.workerIssueObjects > 0) return 'scanner-issue';
+	const objectEvidenceIsFresh = isFreshArchiveEvidence(
+		root.latestObjectAt,
+		generatedAt
+	);
+	if (
+		(stateIsFresh && root.scannerOwnedState?.status === 'available') ||
+		(objectEvidenceIsFresh && root.checkpoints.verifiedCheckpoints > 0)
+	) {
+		return 'ok';
+	}
 	return 'unknown';
 };
 
+const archiveStatusPriority = (
+	status: NetworkSearchDocument['archiveStatus']
+): number => {
+	if (status === 'error') return 5;
+	if (status === 'unreachable') return 4;
+	if (status === 'scanner-issue') return 3;
+	if (status === 'ok') return 2;
+	return 1;
+};
+
 const buildArchiveStatusByNodePublicKey = (
-	roots: NetworkSearchInventory['archiveRoots']
+	roots: NetworkSearchInventory['archiveRoots'],
+	generatedAt: string
 ): ReadonlyMap<string, NetworkSearchDocument['archiveStatus']> => {
 	const statuses = new Map<string, NetworkSearchDocument['archiveStatus']>();
 	for (const root of roots) {
-		const status = currentArchiveEvidenceStatus(root);
+		const status = currentArchiveEvidenceStatus(root, generatedAt);
 		for (const publicKey of root.nodePublicKeys) {
 			const existing = statuses.get(publicKey);
 			if (
 				existing === undefined ||
-				status === 'error' ||
-				(existing === 'unknown' && status === 'ok')
+				archiveStatusPriority(status) > archiveStatusPriority(existing)
 			) {
 				statuses.set(publicKey, status);
 			}
 		}
 	}
 	return statuses;
+};
+
+const normalizeHomeDomain = (
+	value: string | null | undefined
+): string | null => {
+	const normalized = value?.trim().toLowerCase().replace(/\.$/, '');
+	return normalized && normalized !== 'unknown' ? normalized : null;
+};
+
+const buildOrganizationIdByNodePublicKey = (
+	nodes: readonly KnownNodeListItemDTO[],
+	organizations: readonly KnownOrganizationListItemDTO[]
+): ReadonlyMap<string, string> => {
+	const organizationIds = new Set(
+		organizations.map(({ organization }) => organization.id)
+	);
+	const organizationByValidator = new Map<string, string | null>();
+	const organizationByHomeDomain = new Map<string, string | null>();
+	for (const { organization } of organizations) {
+		for (const publicKey of organization.validators) {
+			setUniqueOrganizationOwner(
+				organizationByValidator,
+				publicKey,
+				organization.id
+			);
+		}
+		const homeDomain = normalizeHomeDomain(organization.homeDomain);
+		if (homeDomain !== null) {
+			setUniqueOrganizationOwner(
+				organizationByHomeDomain,
+				homeDomain,
+				organization.id
+			);
+		}
+	}
+
+	const result = new Map<string, string>();
+	for (const knownNode of nodes) {
+		const explicitId = knownNode.node?.organizationId ?? null;
+		const validatorOrganizationId = organizationByValidator.get(
+			knownNode.publicKey
+		);
+		const inheritedId =
+			validatorOrganizationId !== undefined
+				? validatorOrganizationId
+				: organizationByHomeDomain.get(
+						normalizeHomeDomain(knownNode.node?.homeDomain) ?? ''
+					);
+		const organizationId =
+			explicitId !== null && organizationIds.has(explicitId)
+				? explicitId
+				: inheritedId;
+		if (organizationId !== undefined && organizationId !== null) {
+			result.set(knownNode.publicKey, organizationId);
+		}
+	}
+	return result;
+};
+
+const setUniqueOrganizationOwner = (
+	owners: Map<string, string | null>,
+	key: string,
+	organizationId: string
+): void => {
+	const existing = owners.get(key);
+	if (existing === undefined) owners.set(key, organizationId);
+	else if (existing !== organizationId) owners.set(key, null);
+};
+
+const buildArchiveStatusByOrganizationId = (
+	archiveStatusByNodePublicKey: ReadonlyMap<
+		string,
+		NetworkSearchDocument['archiveStatus']
+	>,
+	organizationIdByNodePublicKey: ReadonlyMap<string, string>
+): ReadonlyMap<string, NetworkSearchDocument['archiveStatus']> => {
+	const result = new Map<string, NetworkSearchDocument['archiveStatus']>();
+	for (const [publicKey, organizationId] of organizationIdByNodePublicKey) {
+		const status = archiveStatusByNodePublicKey.get(publicKey) ?? 'unknown';
+		const existing = result.get(organizationId);
+		if (
+			existing === undefined ||
+			archiveStatusPriority(status) > archiveStatusPriority(existing)
+		) {
+			result.set(organizationId, status);
+		}
+	}
+	return result;
 };
 
 const joinSearchText = (...parts: (string | undefined)[]): string =>
@@ -99,11 +236,13 @@ const nodeDocument = (
 		string,
 		NetworkSearchDocument['archiveStatus']
 	>,
+	organizationIdByNodePublicKey: ReadonlyMap<string, string>,
 	canonicalCursor: string
 ): NetworkSearchDocument => {
 	const node = knownNode.node;
-	const organization = node?.organizationId
-		? organizationsById.get(node.organizationId)
+	const organizationId = organizationIdByNodePublicKey.get(knownNode.publicKey);
+	const organization = organizationId
+		? organizationsById.get(organizationId)
 		: undefined;
 	const organizationName = organization
 		? organizationLabel(organization)
@@ -152,7 +291,7 @@ const nodeDocument = (
 			knownNode.lastSeen ??
 			knownNode.lastMeasurementAt ??
 			knownNode.dateDiscovered,
-		organizationId: node?.organizationId ?? undefined,
+		organizationId,
 		organizationName,
 		publicKey: knownNode.publicKey,
 		recordState: recordState(
@@ -170,6 +309,10 @@ const nodeDocument = (
 const organizationDocument = (
 	inventory: NetworkSearchInventory,
 	knownOrganization: KnownOrganizationListItemDTO,
+	archiveStatusByOrganizationId: ReadonlyMap<
+		string,
+		NetworkSearchDocument['archiveStatus']
+	>,
 	canonicalCursor: string
 ): NetworkSearchDocument => {
 	const organization = knownOrganization.organization;
@@ -178,7 +321,8 @@ const organizationDocument = (
 
 	return {
 		active: knownOrganization.current && organization.validators.length > 0,
-		archiveStatus: 'unknown',
+		archiveStatus:
+			archiveStatusByOrganizationId.get(organization.id) ?? 'unknown',
 		canonicalCursor,
 		content: joinSearchText(
 			label,
@@ -223,7 +367,7 @@ const archiveRootDocument = (
 	const host = new URL(root.archiveUrl).host;
 	return {
 		active: true,
-		archiveStatus: currentArchiveEvidenceStatus(root),
+		archiveStatus: currentArchiveEvidenceStatus(root, inventory.generatedAt),
 		canonicalCursor,
 		content: joinSearchText(host, root.archiveUrl, ...root.nodePublicKeys),
 		detail: root.archiveUrl,
@@ -255,7 +399,7 @@ export const buildNetworkSearchSnapshot = (
 		left.organization.id.localeCompare(right.organization.id)
 	);
 	const archiveRootSearchState = archiveRoots.map((root) => ({
-		archiveStatus: currentArchiveEvidenceStatus(root),
+		archiveStatus: currentArchiveEvidenceStatus(root, inventory.generatedAt),
 		archiveUrl: root.archiveUrl,
 		archiveUrlIdentity: root.archiveUrlIdentity,
 		nodePublicKeys: root.nodePublicKeys.toSorted()
@@ -265,6 +409,7 @@ export const buildNetworkSearchSnapshot = (
 			JSON.stringify({
 				archiveRoots: archiveRootSearchState,
 				canonicalArchiveRevision: inventory.canonicalArchiveRevision,
+				documentSchemaVersion: networkSearchIndexSchemaVersion,
 				latestLedger: inventory.network.latestLedger,
 				networkTime: inventory.network.time,
 				nodes,
@@ -277,18 +422,34 @@ export const buildNetworkSearchSnapshot = (
 		organizations.map(({ organization }) => [organization.id, organization])
 	);
 	const topTierPublicKeys = new Set(inventory.network.transitiveQuorumSet);
-	const archiveStatusByNodePublicKey =
-		buildArchiveStatusByNodePublicKey(archiveRoots);
+	const archiveStatusByNodePublicKey = buildArchiveStatusByNodePublicKey(
+		archiveRoots,
+		inventory.generatedAt
+	);
+	const organizationIdByNodePublicKey = buildOrganizationIdByNodePublicKey(
+		nodes,
+		organizations
+	);
+	const archiveStatusByOrganizationId = buildArchiveStatusByOrganizationId(
+		archiveStatusByNodePublicKey,
+		organizationIdByNodePublicKey
+	);
 
 	return {
 		canonicalArchiveRevision: inventory.canonicalArchiveRevision,
 		canonicalCursor,
+		documentSchemaVersion: networkSearchIndexSchemaVersion,
 		documents: [
 			...archiveRoots.map((root) =>
 				archiveRootDocument(inventory, root, canonicalCursor)
 			),
 			...organizations.map((organization) =>
-				organizationDocument(inventory, organization, canonicalCursor)
+				organizationDocument(
+					inventory,
+					organization,
+					archiveStatusByOrganizationId,
+					canonicalCursor
+				)
 			),
 			...nodes.map((node) =>
 				nodeDocument(
@@ -297,6 +458,7 @@ export const buildNetworkSearchSnapshot = (
 					organizationsById,
 					topTierPublicKeys,
 					archiveStatusByNodePublicKey,
+					organizationIdByNodePublicKey,
 					canonicalCursor
 				)
 			)

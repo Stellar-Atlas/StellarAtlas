@@ -6,7 +6,7 @@ import {
 	CollectScpLive,
 	type CollectScpLiveShutdownResult
 } from './CollectScpLive.js';
-import { ScpStatementPersistenceTimeoutError } from '../../domain/scp/ScpStatementPersistenceError.js';
+import { ScpStatementPersistenceFatalError } from '../../domain/scp/ScpStatementPersistenceError.js';
 
 export interface CollectScpLiveLoopedDTO {
 	loopIntervalMs: number;
@@ -43,7 +43,7 @@ export class CollectScpLiveLooped {
 				this.logger.error('Live SCP collector crawl failed', {
 					errorMessage: result.error.message
 				});
-				if (result.error instanceof ScpStatementPersistenceTimeoutError) {
+				if (result.error instanceof ScpStatementPersistenceFatalError) {
 					throw result.error;
 				}
 			}
