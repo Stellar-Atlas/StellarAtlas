@@ -142,7 +142,7 @@ export async function admitGenericHistoryArchiveFrontier(
 ): Promise<AdmissionRow | undefined> {
 	await manager.query(`savepoint ${genericFrontierSavepoint}`);
 	try {
-		await manager.query(`set local statement_timeout = '5s'`);
+		await manager.query(`set local statement_timeout = '30s'`);
 		await manager.query(seedHistoryArchiveFrontierCursorsSql);
 		const [admission] = (await manager.query(historyArchiveObjectFrontierSql, [
 			frontierSlots,
