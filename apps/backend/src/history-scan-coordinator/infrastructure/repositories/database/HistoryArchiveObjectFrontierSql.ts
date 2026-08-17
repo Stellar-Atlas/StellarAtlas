@@ -66,25 +66,6 @@ export const historyArchiveObjectFrontierSql = `
 							)
 						limit $2
 					)
-					union all
-					(
-						select 1
-						from "history_archive_object_queue" active
-						where active."archiveUrlIdentity" =
-							roots."archiveUrlIdentity"
-							and active.status = 'failed'
-							and active."executionDisposition" = 'executable'
-							and active."dependencyReady" = true
-							and (
-								active."transitionEffectsRequiredAt" is null
-								or active."transitionEffectsCompletedAt" is not null
-							)
-							and coalesce(
-								active."nextAttemptAt",
-								active."updatedAt" + interval '1 hour'
-							) <= now()
-						limit $2
-					)
 				) runnable_candidates
 				limit $2
 			) bounded_runnable
