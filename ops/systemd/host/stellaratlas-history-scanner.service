@@ -16,6 +16,7 @@ Environment=PATH=/home/admins/.nvm/versions/node/v26.5.1/bin:/usr/local/sbin:/us
 EnvironmentFile=-/etc/stellaratlas/stellaratlas.env
 EnvironmentFile=/etc/stellaratlas/nats.env
 Environment=HISTORY_ARCHIVE_OBJECT_JOB_SOURCE=nats
+Environment=HISTORY_ARCHIVE_CONTENT_REUSE_ENABLED=true
 Environment=NATS_SERVERS=nats://127.0.0.1:4222
 Environment=HISTORY_OBJECT_DOWNLOAD_CONCURRENCY=8
 Environment=HISTORY_SCAN_WORKERS=1
