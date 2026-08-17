@@ -16,6 +16,26 @@ export interface HistoryArchiveReadyQueueSyncResult {
 	readonly scheduledObjects: number;
 }
 
+export const historyArchiveCheckpointNotFoundCooldownMinutes = 15;
+
+export function historyArchiveCheckpointNotFoundCooldownSql(
+	objectAlias: string
+): string {
+	return `
+	not exists (
+		select 1
+		from "history_archive_object_event" recent_missing_checkpoint
+		where recent_missing_checkpoint."archiveUrlIdentity" =
+			${objectAlias}."archiveUrlIdentity"
+			and recent_missing_checkpoint."eventType" = 'failed'
+			and recent_missing_checkpoint."objectType" = 'checkpoint-state'
+			and recent_missing_checkpoint."httpStatus" in (404, 410)
+			and recent_missing_checkpoint."createdAt" >
+				now() - interval '${historyArchiveCheckpointNotFoundCooldownMinutes} minutes'
+	)
+	`;
+}
+
 export function historyArchiveSchedulableObjectSql(
 	objectAlias: string
 ): string {
@@ -76,6 +96,7 @@ const refillReadyObjectsSql = `
 					and active.status = 'scanning'
 				where active."archiveUrlIdentity" = root."archiveUrlIdentity"
 			)
+			and ${historyArchiveCheckpointNotFoundCooldownSql('root')}
 	), candidates as materialized (
 		select root.id as root_id, root."lastClaimedAt",
 			root."archiveUrlIdentity", candidate."remoteId",
@@ -305,6 +326,7 @@ const enqueueReadyObjectsSql = `
 			from "history_archive_object_queue" candidate
 			where candidate."archiveUrlIdentity" = root."archiveUrlIdentity"
 				and ${schedulableObjectSql}
+				and ${historyArchiveCheckpointNotFoundCooldownSql('candidate')}
 				and not exists (
 					select 1
 					from "history_archive_object_host_throttle" throttle
@@ -399,7 +421,8 @@ export function buildHistoryArchiveOutstandingReadyCountCtesSql(
 			or (
 				queued."availableAt" <= now()
 				and (
-					${historyArchiveSchedulableObjectSql('object')}
+					${historyArchiveCheckpointNotFoundCooldownSql('object')}
+					and ${historyArchiveSchedulableObjectSql('object')}
 					and ${historyArchiveEffectivePrioritySql('object')} <=
 						${maximumPriority}::smallint
 					and not exists (

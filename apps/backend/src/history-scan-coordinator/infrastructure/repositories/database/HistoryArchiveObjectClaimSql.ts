@@ -1,3 +1,5 @@
+import { historyArchiveCheckpointNotFoundCooldownSql } from './HistoryArchiveObjectReadyQueue.js';
+
 const claimGateKeySql =
 	"hashtextextended('history_archive_object_claim_gate', 104729)";
 
@@ -172,6 +174,7 @@ export const historyArchiveObjectClaimSql = `
 				where throttle."hostIdentity" = candidate."hostIdentity"
 					and throttle."blockedUntil" > now()
 			)
+			and ${historyArchiveCheckpointNotFoundCooldownSql('candidate')}
 		order by
 			case
 				when free_slot.slot % 2 = 0 and candidate.status = 'failed' then 0

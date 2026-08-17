@@ -5,6 +5,7 @@ import {
 } from '../../../domain/history-archive-object/HistoryArchiveBrokerPriority.js';
 import type { HistoryArchiveObjectType } from '../../../domain/history-archive-object/HistoryArchiveObject.js';
 import {
+	historyArchiveCheckpointNotFoundCooldownSql,
 	historyArchiveSchedulableObjectSql,
 	synchronizeHistoryArchiveReadyQueue
 } from './HistoryArchiveObjectReadyQueue.js';
@@ -101,6 +102,10 @@ const reserveBrokerJobsSql = `
 				from "history_archive_object_host_throttle" throttle
 				where throttle."hostIdentity" = object."hostIdentity"
 					and throttle."blockedUntil" > now()
+			)
+			and (
+				ready."dispatchToken" is not null
+				or ${historyArchiveCheckpointNotFoundCooldownSql('object')}
 			)
 	), deduplicated as materialized (
 		select candidate.*
