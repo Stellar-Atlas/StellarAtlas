@@ -11,6 +11,7 @@ import { FullHistoryOperationAccountReferenceMigration1785040000000 } from '../.
 import { FullHistoryOperationProjectionProgressMigration1785410000000 } from '../../migrations/1785410000000-FullHistoryOperationProjectionProgressMigration.js';
 import { FullHistoryPromotionRuntimeMigration1784930000000 } from '../../migrations/1784930000000-FullHistoryPromotionRuntimeMigration.js';
 import { FullHistoryZeroTransactionProofPromotionMigration1785260000000 } from '../../migrations/1785260000000-FullHistoryZeroTransactionProofPromotionMigration.js';
+import { HistoryArchiveContentReuseMigration1785520000000 } from '../../migrations/1785520000000-HistoryArchiveContentReuseMigration.js';
 import { ParsedLedgerHeaderMigration1784000000000 } from '../../migrations/1784000000000-ParsedLedgerHeaderMigration.js';
 import { HistoryArchiveCheckpointProofMigration1784420000000 } from '../../migrations/1784420000000-HistoryArchiveCheckpointProofMigration.js';
 import { ParsedTransactionIndexMigration1784600000000 } from '../../migrations/1784600000000-ParsedTransactionIndexMigration.js';
@@ -56,6 +57,9 @@ export async function installPromotionSchema(
 		await new ParsedLedgerClosedAtMigration1784840000000().up(runner);
 		await new ParsedHistoryObservationMigration1784850000000().up(runner);
 		await createSourceObjectTable(runner);
+		await new HistoryArchiveContentReuseMigration1785520000000().up(
+			runner
+		);
 		await new FullHistoryCanonicalSchemaMigration1784860000000().up(runner);
 		await new FullHistoryZeroTransactionProofPromotionMigration1785260000000().up(
 			runner
@@ -170,7 +174,9 @@ async function createSourceObjectTable(runner: QueryRunner): Promise<void> {
 			"remoteId" uuid not null,
 			"archiveUrlIdentity" text not null,
 			"objectType" text not null,
+			"objectKey" text not null default 'promotion-fixture',
 			"status" text not null,
+			"attempts" integer not null default 1,
 			"checkpointLedger" integer,
 			"verificationFacts" jsonb,
 			constraint "PK_history_archive_object_queue_promotion_fixture"

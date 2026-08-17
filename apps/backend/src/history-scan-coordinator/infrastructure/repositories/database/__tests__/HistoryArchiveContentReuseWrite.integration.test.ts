@@ -5,6 +5,7 @@ import {
 	type DisposablePostgres
 } from '@test-support/DisposablePostgres.js';
 import type { HistoryArchiveObjectProgressUpdate } from '../../../../domain/history-archive-object/HistoryArchiveObjectRepository.js';
+import { fullHistoryObservedLedgersSql } from '../../../database/full-history-promotion/FullHistoryCandidateSql.js';
 import { HistoryArchiveContentReuseMigration1785520000000 } from '../../../database/migrations/1785520000000-HistoryArchiveContentReuseMigration.js';
 import {
 	findReusableHistoryArchiveContent,
@@ -40,7 +41,7 @@ describe('history archive content reuse in PostgreSQL', () => {
 		if (postgres !== undefined) await postgres.stop();
 	});
 
-	it('records one artifact, binds an exact broker claim, and clones provenance', async () => {
+	it('records one artifact, binds an exact broker claim, and reuses thin provenance', async () => {
 		const sourceFacts = ledgerFacts(sourceUrl);
 		await insertObject(dataSource, {
 			attempts: 1,
@@ -49,6 +50,20 @@ describe('history archive content reuse in PostgreSQL', () => {
 			status: 'verified',
 			url: sourceUrl
 		});
+		await dataSource.query(
+			`insert into parsed_ledger_header (
+				id, "ledgerSequence", "ledgerHeaderHash",
+				"previousLedgerHeaderHash", "transactionSetHash",
+				"transactionResultHash", "bucketListHash", "protocolVersion"
+			 ) values (11, 63, $1, $2, $3, $4, $5, 23)`,
+			[
+				'c'.repeat(64),
+				'd'.repeat(64),
+				'f'.repeat(64),
+				'e'.repeat(64),
+				'b'.repeat(64)
+			]
+		);
 		await dataSource.query(
 			`insert into parsed_ledger_header_observation (
 				"parsedLedgerHeaderId", "sourceObjectRemoteId", "observedAt", "closedAt"
@@ -177,7 +192,20 @@ describe('history archive content reuse in PostgreSQL', () => {
 			 where "sourceObjectRemoteId" = $1`,
 			[targetRemoteId]
 		);
-		expect(targetProvenance).toEqual([{ parsedLedgerHeaderId: 11 }]);
+		expect(targetProvenance).toEqual([]);
+
+		const resolvedLedgers = (await dataSource.query(
+			fullHistoryObservedLedgersSql,
+			[targetRemoteId]
+		)) as readonly {
+			readonly ledgerHeaderHash: string;
+			readonly ledgerSequence: number;
+		}[];
+		expect(resolvedLedgers).toHaveLength(1);
+		expect(resolvedLedgers[0]).toMatchObject({
+			ledgerHeaderHash: 'c'.repeat(64),
+			ledgerSequence: 63
+		});
 
 		await expect(
 			dataSource.query(
@@ -253,6 +281,16 @@ async function createFixtureSchema(dataSourceValue: DataSource): Promise<void> {
 			attempts integer not null,
 			"verificationFacts" jsonb,
 			"objectUrl" text not null
+		);
+		create table parsed_ledger_header (
+			id integer primary key,
+			"ledgerSequence" integer not null,
+			"ledgerHeaderHash" text not null,
+			"previousLedgerHeaderHash" text not null,
+			"transactionSetHash" text not null,
+			"transactionResultHash" text not null,
+			"bucketListHash" text not null,
+			"protocolVersion" integer not null
 		);
 		create table history_archive_object_ready (
 			"objectRemoteId" uuid primary key references history_archive_object_queue("remoteId"),

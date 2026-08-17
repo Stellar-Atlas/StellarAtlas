@@ -40,6 +40,30 @@ export const fullHistorySourceObjectsSql = `
 	order by source."remoteId"
 `;
 
+function resolvedContentSourceSql(
+	parameter: number,
+	objectType: 'ledger' | 'transactions' | 'results'
+): string {
+	return `coalesce((
+		select artifact."sourceObjectRemoteId"::text
+		from "history_archive_content_observation" content_observation
+		join "history_archive_content_artifact" artifact
+			on artifact.id = content_observation."artifactId"
+		join "history_archive_object_queue" source_object
+			on source_object."remoteId" = content_observation."objectRemoteId"
+			and source_object.status = 'verified'
+			and source_object.attempts = content_observation."claimAttempt"
+		where content_observation."objectRemoteId" = $${parameter}::uuid
+			and source_object."objectType" = '${objectType}'
+			and artifact."objectType" = source_object."objectType"
+			and artifact."objectKey" = source_object."objectKey"
+			and artifact."checkpointLedger" is not distinct from
+				source_object."checkpointLedger"
+		order by content_observation."claimAttempt" desc
+		limit 1
+	), $${parameter}::text)`;
+}
+
 export const fullHistoryObservedLedgersSql = `
 	select
 		header."ledgerSequence",
@@ -53,7 +77,8 @@ export const fullHistoryObservedLedgersSql = `
 	from "parsed_ledger_header_observation" observation
 	join "parsed_ledger_header" header
 		on header.id = observation."parsedLedgerHeaderId"
-	where observation."sourceObjectRemoteId" = $1
+	where observation."sourceObjectRemoteId" =
+		${resolvedContentSourceSql(1, 'ledger')}
 	order by header."ledgerSequence", header."ledgerHeaderHash"
 	limit 66
 `;
@@ -67,7 +92,8 @@ export const fullHistoryObservedEnvelopesSql = `
 	from "parsed_transaction_envelope_observation" observation
 	join "parsed_transaction_envelope" envelope
 		on envelope.id = observation."parsedTransactionEnvelopeId"
-	where observation."sourceObjectRemoteId" = $1
+	where observation."sourceObjectRemoteId" =
+		${resolvedContentSourceSql(1, 'transactions')}
 	order by envelope."ledgerSequence", envelope."transactionIndex"
 limit $2
 `;
@@ -82,7 +108,8 @@ export const fullHistoryObservedResultsSql = `
 	from "parsed_transaction_result_observation" observation
 	join "parsed_transaction_result" result
 		on result.id = observation."parsedTransactionResultId"
-	where observation."sourceObjectRemoteId" = $1
+	where observation."sourceObjectRemoteId" =
+		${resolvedContentSourceSql(1, 'results')}
 	order by result."ledgerSequence", result."transactionIndex"
 limit $2
 `;
@@ -101,7 +128,8 @@ export const fullHistoryObservedTransactionBoundsSql = `
 		from "parsed_transaction_envelope_observation" observation
 		join "parsed_transaction_envelope" envelope
 			on envelope.id = observation."parsedTransactionEnvelopeId"
-		where observation."sourceObjectRemoteId" = $1
+		where observation."sourceObjectRemoteId" =
+			${resolvedContentSourceSql(1, 'transactions')}
 	) envelope
 	cross join (
 		select
@@ -111,6 +139,7 @@ export const fullHistoryObservedTransactionBoundsSql = `
 		from "parsed_transaction_result_observation" observation
 		join "parsed_transaction_result" result
 			on result.id = observation."parsedTransactionResultId"
-		where observation."sourceObjectRemoteId" = $2
+		where observation."sourceObjectRemoteId" =
+			${resolvedContentSourceSql(2, 'results')}
 	) result
 `;

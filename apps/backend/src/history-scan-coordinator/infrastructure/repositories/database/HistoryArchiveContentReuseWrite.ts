@@ -119,12 +119,6 @@ export async function recordHistoryArchiveContentEvidence(
 	prepared: PreparedContentCompletion
 ): Promise<void> {
 	if (prepared.reuse !== null) {
-		await cloneParsedHistoryObservations(
-			manager,
-			prepared.reuse.sourceObjectRemoteId,
-			remoteId,
-			prepared.progress.verificationFacts
-		);
 		await insertObservation(
 			manager,
 			remoteId,
@@ -218,33 +212,6 @@ async function insertObservation(
 	);
 }
 
-async function cloneParsedHistoryObservations(
-	manager: EntityManager,
-	sourceRemoteId: string,
-	targetRemoteId: string,
-	facts: HistoryArchiveObjectVerificationFacts | null | undefined
-): Promise<void> {
-	const objectType = categoryObjectType(facts);
-	if (objectType === 'scp') return;
-	const definition = parsedObservationDefinition(objectType);
-	if (definition === null) {
-		throw new Error('Reusable category facts do not identify one object type');
-	}
-	const closedAtSelect = objectType === 'ledger' ? ', source."closedAt"' : '';
-	const closedAtColumn = objectType === 'ledger' ? ', "closedAt"' : '';
-	await manager.query(
-		`insert into "${definition.table}" (
-			"${definition.rowIdColumn}", "sourceObjectRemoteId", "observedAt"${closedAtColumn}
-		 )
-		 select source."${definition.rowIdColumn}", $2, now()${closedAtSelect}
-		 from "${definition.table}" source
-		 where source."sourceObjectRemoteId" = $1
-		 on conflict ("${definition.rowIdColumn}", "sourceObjectRemoteId")
-		 do nothing`,
-		[sourceRemoteId, targetRemoteId]
-	);
-}
-
 function categoryObjectType(
 	facts: HistoryArchiveObjectVerificationFacts | null | undefined
 ): HistoryArchiveObjectType | null {
@@ -253,33 +220,6 @@ function categoryObjectType(
 	if (facts?.resultsCategory !== undefined) return 'results';
 	if (facts?.scpCategory !== undefined) return 'scp';
 	return null;
-}
-
-function parsedObservationDefinition(
-	objectType: HistoryArchiveObjectType | null
-): {
-	readonly rowIdColumn: string;
-	readonly table: string;
-} | null {
-	switch (objectType) {
-		case 'ledger':
-			return {
-				rowIdColumn: 'parsedLedgerHeaderId',
-				table: 'parsed_ledger_header_observation'
-			};
-		case 'transactions':
-			return {
-				rowIdColumn: 'parsedTransactionEnvelopeId',
-				table: 'parsed_transaction_envelope_observation'
-			};
-		case 'results':
-			return {
-				rowIdColumn: 'parsedTransactionResultId',
-				table: 'parsed_transaction_result_observation'
-			};
-		default:
-			return null;
-	}
 }
 
 function sourceNeutralFacts(
