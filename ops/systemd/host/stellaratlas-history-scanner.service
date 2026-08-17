@@ -18,7 +18,7 @@ EnvironmentFile=/etc/stellaratlas/nats.env
 Environment=HISTORY_ARCHIVE_OBJECT_JOB_SOURCE=nats
 Environment=HISTORY_ARCHIVE_CONTENT_REUSE_ENABLED=true
 Environment=NATS_SERVERS=nats://127.0.0.1:4222
-Environment=HISTORY_OBJECT_DOWNLOAD_CONCURRENCY=8
+Environment=HISTORY_OBJECT_DOWNLOAD_CONCURRENCY=24
 Environment=HISTORY_SCAN_WORKERS=1
 Environment=HISTORY_BUCKET_CACHE_DIR=/mnt/bulk/stellarbeat-data/Observer/history-bucket-cache
 ExecStartPre=/home/admins/.nvm/versions/node/v26.5.1/bin/node scripts/wait-for-url.mjs http://192.168.1.221:3000/v1/status 90

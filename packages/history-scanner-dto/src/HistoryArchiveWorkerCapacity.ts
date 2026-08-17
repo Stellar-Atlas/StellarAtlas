@@ -1,4 +1,4 @@
-export const historyArchiveDownloadConcurrency = 8;
+export const historyArchiveDownloadConcurrency = 24;
 export const historyArchiveWorkerTelemetryLimit = 128;
 export const historyArchiveWorkerSlotLimit = 32_768;
 export const historyArchiveObjectWorkerProcessLimit = 24;

@@ -50,7 +50,7 @@ describe('history scanner runtime scripts', () => {
 
 		expect(service).not.toContain('Environment=HISTORY_OBJECT_WORKER_PROCESSES=');
 		expect(service).toContain(
-			'Environment=HISTORY_OBJECT_DOWNLOAD_CONCURRENCY=8'
+			'Environment=HISTORY_OBJECT_DOWNLOAD_CONCURRENCY=24'
 		);
 		expect(service).not.toContain('Environment=HISTORY_HASHER_WORKERS=');
 		expect(service).toContain('Environment=HISTORY_SCAN_WORKERS=1');
