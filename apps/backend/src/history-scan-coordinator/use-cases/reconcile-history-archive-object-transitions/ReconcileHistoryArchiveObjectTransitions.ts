@@ -2,7 +2,6 @@ import 'reflect-metadata';
 import { inject, injectable } from 'inversify';
 import type { Logger } from 'logger';
 import type { HistoryArchiveObjectRepository } from '../../domain/history-archive-object/HistoryArchiveObjectRepository.js';
-import { usesHistoryArchiveBrokerScheduler } from '../../infrastructure/HistoryArchiveSchedulerMode.js';
 import { TYPES } from '../../infrastructure/di/di-types.js';
 import { CompleteHistoryArchiveObject } from '../complete-history-archive-object/CompleteHistoryArchiveObject.js';
 import { FailHistoryArchiveObject } from '../fail-history-archive-object/FailHistoryArchiveObject.js';
@@ -176,7 +175,7 @@ export class ReconcileHistoryArchiveObjectTransitions {
 			now + this.maintenanceIntervals.executionAdmissionIntervalMs;
 		try {
 			await this.objectRepository.reconcileExecutionDisposition({
-				admitGenericObjects: !usesHistoryArchiveBrokerScheduler()
+				admitGenericObjects: true
 			});
 		} catch (error) {
 			this.logger.error('Failed to reconcile archive execution frontier', {

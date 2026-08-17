@@ -279,7 +279,7 @@ describe('ReconcileHistoryArchiveObjectTransitions', () => {
 		expect(repository.findUnreconciledTransitions).toHaveBeenCalledWith(24);
 	});
 
-	it('suppresses only generic execution admission in broker mode', async () => {
+	it('keeps generic execution admission enabled in broker mode', async () => {
 		const previousMode = process.env.HISTORY_ARCHIVE_SCHEDULER_MODE;
 		process.env.HISTORY_ARCHIVE_SCHEDULER_MODE = 'broker';
 		try {
@@ -295,7 +295,7 @@ describe('ReconcileHistoryArchiveObjectTransitions', () => {
 			await reconciler.executeIfDue(10_000);
 
 			expect(repository.reconcileExecutionDisposition).toHaveBeenCalledWith({
-				admitGenericObjects: false
+				admitGenericObjects: true
 			});
 		} finally {
 			if (previousMode === undefined) {
