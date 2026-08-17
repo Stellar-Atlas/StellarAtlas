@@ -18,8 +18,6 @@ import { knownNetworkRouter } from '@network-scan/infrastructure/http/KnownNetwo
 import { attachNetworkLiveWebSocket } from '@network-scan/infrastructure/http/NetworkLiveWebSocket.js';
 import helmet from 'helmet';
 import { GetNetwork } from '@network-scan/use-cases/get-network/GetNetwork.js';
-import { GetLatestScan } from '@history-scan-coordinator/use-cases/get-latest-scan/GetLatestScan.js';
-import { GetScanLogs } from '@history-scan-coordinator/use-cases/get-scan-logs/GetScanLogs.js';
 import { GetLatestNodeSnapshots } from '@network-scan/use-cases/get-latest-node-snapshots/GetLatestNodeSnapshots.js';
 import { GetLatestOrganizationSnapshots } from '@network-scan/use-cases/get-latest-organization-snapshots/GetLatestOrganizationSnapshots.js';
 import { GetKnownNode } from '@network-scan/use-cases/get-known-node/GetKnownNode.js';
@@ -41,18 +39,15 @@ import { GetLatestObservedLedger } from '@network-scan/use-cases/get-latest-obse
 import { NETWORK_TYPES } from '@network-scan/infrastructure/di/di-types.js';
 import type { NetworkScanRepository } from '@network-scan/domain/network/scan/NetworkScanRepository.js';
 import { RequestUnsubscribeLink } from '@notifications/use-cases/request-unsubscribe-link/RequestUnsubscribeLink.js';
-import { RegisterScan } from '@history-scan-coordinator/use-cases/register-scan/RegisterScan.js';
-import { RegisterParsedLedgerHeaders } from '@history-scan-coordinator/use-cases/register-parsed-ledger-headers/RegisterParsedLedgerHeaders.js';
-import { RegisterParsedTransactionEnvelopes } from '@history-scan-coordinator/use-cases/register-parsed-transaction-envelopes/RegisterParsedTransactionEnvelopes.js';
-import { RegisterParsedTransactionResults } from '@history-scan-coordinator/use-cases/register-parsed-transaction-results/RegisterParsedTransactionResults.js';
-import { BackfillArchiveMetadata } from '@history-scan-coordinator/use-cases/backfill-archive-metadata/BackfillArchiveMetadata.js';
-import { historyScanRouter } from '@history-scan-coordinator/infrastructure/http/HistoryScanRouter.js';
 import { mountParsedHistoryRequestBodyParser } from '@history-scan-coordinator/infrastructure/http/ParsedHistoryRequestBodyParser.js';
+import { createHistoryScanRouter } from './HistoryScanRouteFactory.js';
 import { archiveScanRouter } from '@history-scan-coordinator/infrastructure/http/ArchiveScanRouter.js';
 import { archiveEvidenceRouter } from '@history-scan-coordinator/infrastructure/http/ArchiveEvidenceRouter.js';
 import { communityScannerRouter } from '@history-scan-coordinator/infrastructure/http/CommunityScannerRouter.js';
+import { GetLatestScan } from '@history-scan-coordinator/use-cases/get-latest-scan/GetLatestScan.js';
 import { GetScanJob } from '@history-scan-coordinator/use-cases/get-scan-job/GetScanJob.js';
-import { ReleaseScanJob } from '@history-scan-coordinator/use-cases/release-scan-job/ReleaseScanJob.js';
+import { GetScanLogs } from '@history-scan-coordinator/use-cases/get-scan-logs/GetScanLogs.js';
+import { RegisterScan } from '@history-scan-coordinator/use-cases/register-scan/RegisterScan.js';
 import { TouchScanJob } from '@history-scan-coordinator/use-cases/touch-scan-job/TouchScanJob.js';
 import { GetArchiveScans } from '@history-scan-coordinator/use-cases/get-archive-scans/GetArchiveScans.js';
 import { GetArchiveScanQueue } from '@history-scan-coordinator/use-cases/get-archive-scan-queue/GetArchiveScanQueue.js';
@@ -72,12 +67,6 @@ import { GetHistoryArchiveEvidence } from '@history-scan-coordinator/use-cases/g
 import { GetKnownNodeArchiveEvidence } from '@history-scan-coordinator/use-cases/get-known-node-archive-evidence/GetKnownNodeArchiveEvidence.js';
 import { GetKnownOrganizationArchiveEvidence } from '@history-scan-coordinator/use-cases/get-known-organization-archive-evidence/GetKnownOrganizationArchiveEvidence.js';
 import { GetKnownArchiveEvidence } from '@history-scan-coordinator/use-cases/get-known-archive-evidence/GetKnownArchiveEvidence.js';
-import { GetHistoryArchiveObjectJob } from '@history-scan-coordinator/use-cases/get-history-archive-object-job/GetHistoryArchiveObjectJob.js';
-import { TouchHistoryArchiveObject } from '@history-scan-coordinator/use-cases/touch-history-archive-object/TouchHistoryArchiveObject.js';
-import { CompleteHistoryArchiveObject } from '@history-scan-coordinator/use-cases/complete-history-archive-object/CompleteHistoryArchiveObject.js';
-import { FailHistoryArchiveObject } from '@history-scan-coordinator/use-cases/fail-history-archive-object/FailHistoryArchiveObject.js';
-import { ReleaseHistoryArchiveObject } from '@history-scan-coordinator/use-cases/release-history-archive-object/ReleaseHistoryArchiveObject.js';
-import { ReportHistoryArchiveWorkerStatus } from '@history-scan-coordinator/use-cases/report-history-archive-worker-status/ReportHistoryArchiveWorkerStatus.js';
 import { GetScannerMetrics } from '@history-scan-coordinator/use-cases/GetScannerMetrics.js';
 import { RegisterCommunityScanner } from '@history-scan-coordinator/use-cases/RegisterCommunityScanner.js';
 import { SendScannerHeartbeat } from '@history-scan-coordinator/use-cases/SendScannerHeartbeat.js';
@@ -309,47 +298,7 @@ const listen = async () => {
 		})
 	);
 
-	api.use(
-		'/v1/history-scan',
-		historyScanRouter({
-			getLatestScan: kernel.container.get(GetLatestScan),
-			getScanLogs: kernel.container.get(GetScanLogs),
-			registerParsedLedgerHeaders: kernel.container.get(
-				RegisterParsedLedgerHeaders
-			),
-			registerParsedTransactionEnvelopes: kernel.container.get(
-				RegisterParsedTransactionEnvelopes
-			),
-			registerParsedTransactionResults: kernel.container.get(
-				RegisterParsedTransactionResults
-			),
-			getHistoryArchiveObjectJob: kernel.container.get(
-				GetHistoryArchiveObjectJob
-			),
-			touchHistoryArchiveObject: kernel.container.get(
-				TouchHistoryArchiveObject
-			),
-			completeHistoryArchiveObject: kernel.container.get(
-				CompleteHistoryArchiveObject
-			),
-			failHistoryArchiveObject: kernel.container.get(FailHistoryArchiveObject),
-			releaseHistoryArchiveObject: kernel.container.get(
-				ReleaseHistoryArchiveObject
-			),
-			reportHistoryArchiveWorkerStatus: kernel.container.get(
-				ReportHistoryArchiveWorkerStatus
-			),
-			registerScan: kernel.container.get(RegisterScan),
-			userName: config.historyScanAPIUsername,
-			password: config.historyScanAPIPassword,
-			frontendBaseUrl: config.frontendBaseUrl,
-			frontendRevalidateToken: config.frontendRevalidateToken,
-			getScanJob: kernel.container.get(GetScanJob),
-			releaseScanJob: kernel.container.get(ReleaseScanJob),
-			touchScanJob: kernel.container.get(TouchScanJob),
-			backfillArchiveMetadata: kernel.container.get(BackfillArchiveMetadata)
-		})
-	);
+	api.use('/v1/history-scan', createHistoryScanRouter(kernel, config));
 
 	api.use(function (req, res, next) {
 		if (req.url.match(/^\/$/) || req.url.match('/v2/all')) {

@@ -3,6 +3,7 @@ import {
 	isArchiveMetadataDTO,
 	isHistoryArchiveObjectFailureChannelDTO
 } from 'history-scanner-dto';
+import { isHistoryArchiveContentReuseV1 } from 'shared';
 import type { CompleteHistoryArchiveObjectRequest } from '../../use-cases/complete-history-archive-object/CompleteHistoryArchiveObject.js';
 import type {
 	HistoryArchiveObjectFailure,
@@ -27,14 +28,19 @@ function parseSchedulerFields(
 		return null;
 	}
 	if (body.scheduler === 'broker') {
-		if (typeof body.executionId !== 'string' || !uuidPattern.test(body.executionId)) {
+		if (
+			typeof body.executionId !== 'string' ||
+			!uuidPattern.test(body.executionId)
+		) {
 			res.status(400).json({ error: 'broker executionId must be a UUID' });
 			return null;
 		}
 		return { executionId: body.executionId, scheduler: 'broker' };
 	}
 	if (body.executionId !== undefined) {
-		res.status(400).json({ error: 'legacy updates must not include executionId' });
+		res
+			.status(400)
+			.json({ error: 'legacy updates must not include executionId' });
 		return null;
 	}
 	return { scheduler: 'legacy' };
@@ -57,6 +63,7 @@ export function parseArchiveObjectProgress(
 	const progress: {
 		bytesDownloaded?: number | null;
 		claimAttempt: number;
+		contentReuse?: HistoryArchiveObjectProgressUpdate['contentReuse'];
 		verificationFacts?: object | null;
 		workerStage?: string | null;
 	} & SchedulerFields = { claimAttempt, ...schedulerFields };
@@ -81,6 +88,13 @@ export function parseArchiveObjectProgress(
 			return null;
 		}
 		progress.workerStage = body.workerStage;
+	}
+	if ('contentReuse' in body) {
+		if (!isHistoryArchiveContentReuseV1(body.contentReuse)) {
+			res.status(400).json({ error: 'contentReuse is invalid' });
+			return null;
+		}
+		progress.contentReuse = body.contentReuse;
 	}
 	if ('verificationFacts' in body) {
 		if (

@@ -28,6 +28,7 @@ import {
 	scannerIssueFailure
 } from './ArchiveObjectFailure.js';
 import { classifyCategoryVerificationFailure } from './ArchiveObjectCategoryFailureClassifier.js';
+import { ArchiveObjectContentReuseVerifier } from './ArchiveObjectContentReuseVerifier.js';
 import { readArchiveObjectContentLength } from './ArchiveObjectHttpContentLength.js';
 import { createArchiveObjectDownloadCounter } from './ArchiveObjectDownloadCounter.js';
 import { getCategoryWorkerStages } from './ArchiveObjectCategoryWorkerStages.js';
@@ -53,6 +54,8 @@ type ProgressFlusher = (
 ) => Promise<void>;
 
 export class ArchiveObjectCategoryVerifier {
+	private readonly contentReuseVerifier: ArchiveObjectContentReuseVerifier;
+
 	constructor(
 		private readonly httpService: HttpService,
 		private readonly scanCoordinator: ScanCoordinatorService,
@@ -61,8 +64,18 @@ export class ArchiveObjectCategoryVerifier {
 		private readonly hasherWorkerCount: number,
 		private readonly reportProgress: ProgressReporter,
 		private readonly flushProgress: ProgressFlusher,
-		private readonly downloadPermit: HistoryArchiveDownloadPermit
-	) {}
+		private readonly downloadPermit: HistoryArchiveDownloadPermit,
+		private readonly contentReuseEnabled = false
+	) {
+		this.contentReuseVerifier = new ArchiveObjectContentReuseVerifier(
+			this.httpService,
+			this.scanCoordinator,
+			this.exceptionLogger,
+			this.reportProgress,
+			this.flushProgress,
+			this.downloadPermit
+		);
+	}
 
 	async verifyCheckpointState(
 		job: HistoryArchiveObjectJobDTO,
@@ -71,7 +84,8 @@ export class ArchiveObjectCategoryVerifier {
 		Result<HistoryArchiveObjectProgressDTO, HistoryArchiveObjectFailureDTO>
 	> {
 		const urlResult = Url.create(job.objectUrl);
-		if (urlResult.isErr()) return err(mapArchiveObjectLocalError(urlResult.error));
+		if (urlResult.isErr())
+			return err(mapArchiveObjectLocalError(urlResult.error));
 
 		releaseDownloadPermit ??= await this.downloadPermit.acquire();
 		this.reportProgress(job.remoteId, 'fetching_checkpoint_state', null, null);
@@ -175,10 +189,22 @@ export class ArchiveObjectCategoryVerifier {
 
 	async verifyCategoryObject(
 		job: HistoryArchiveObjectJobDTO,
-		releaseDownloadPermit?: () => void
+		releaseDownloadPermit?: () => void,
+		executionId?: string
 	): Promise<
 		Result<HistoryArchiveObjectProgressDTO, HistoryArchiveObjectFailureDTO>
 	> {
+		if (this.contentReuseEnabled && executionId !== undefined) {
+			const reuseResult = await this.contentReuseVerifier.tryReuse(
+				job,
+				executionId,
+				releaseDownloadPermit
+			);
+			if (reuseResult.isErr()) return err(reuseResult.error);
+			if (reuseResult.value !== null) return ok(reuseResult.value);
+			releaseDownloadPermit = undefined;
+		}
+
 		const category = getCategory(job.objectType);
 		const workerStages = getCategoryWorkerStages(job.objectType);
 		if (category === null || workerStages === null) {
@@ -191,7 +217,8 @@ export class ArchiveObjectCategoryVerifier {
 		}
 
 		const urlResult = Url.create(job.objectUrl);
-		if (urlResult.isErr()) return err(mapArchiveObjectLocalError(urlResult.error));
+		if (urlResult.isErr())
+			return err(mapArchiveObjectLocalError(urlResult.error));
 
 		releaseDownloadPermit ??= await this.downloadPermit.acquire();
 		this.reportProgress(job.remoteId, workerStages.fetching, 0, null);
@@ -330,7 +357,6 @@ export class ArchiveObjectCategoryVerifier {
 		}
 		return verificationResult;
 	}
-
 }
 
 function getCategory(objectType: string): Category | null {
@@ -347,7 +373,6 @@ function getCategory(objectType: string): Category | null {
 			return null;
 	}
 }
-
 
 function shouldPersistParsedHistory(category: Category): boolean {
 	return (

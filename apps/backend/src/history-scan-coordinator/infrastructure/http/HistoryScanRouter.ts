@@ -1,6 +1,7 @@
 import express, { Router } from 'express';
 import { param, query, validationResult } from 'express-validator';
 import basicAuth from 'express-basic-auth';
+import { isHistoryArchiveContentReuseRequestV1 } from 'shared';
 import { GetLatestScan } from '../../use-cases/get-latest-scan/GetLatestScan.js';
 import { GetScanLogs } from '../../use-cases/get-scan-logs/GetScanLogs.js';
 import { RegisterScan } from '../../use-cases/register-scan/RegisterScan.js';
@@ -43,12 +44,14 @@ import {
 } from './ArchiveObjectJobRequestParsers.js';
 import { ReportHistoryArchiveWorkerStatus } from '../../use-cases/report-history-archive-worker-status/ReportHistoryArchiveWorkerStatus.js';
 import { parseHistoryArchiveWorkerStatusReport } from './HistoryArchiveWorkerStatusRequestParser.js';
+import { GetHistoryArchiveContentReuse } from '../../use-cases/get-history-archive-content-reuse/GetHistoryArchiveContentReuse.js';
 
 export interface HistoryScanRouterConfig
 	extends FrontendRevalidationConfig, ParsedHistoryRegistrationRouteConfig {
 	getLatestScan: GetLatestScan;
 	getScanLogs: GetScanLogs;
 	getScanJob: GetScanJob;
+	getHistoryArchiveContentReuse: GetHistoryArchiveContentReuse;
 	getHistoryArchiveObjectJob: GetHistoryArchiveObjectJob;
 	registerScan: RegisterScan;
 	releaseScanJob: ReleaseScanJob;
@@ -112,6 +115,30 @@ export const HistoryScanRouterWrapper = (
 				]);
 
 				return res.status(201).json({ message: 'Scan created successfully' });
+			}
+		);
+
+	if (config.userName && config.password)
+		historyScanRouter.post(
+			'/archive-content/reuse',
+			basicAuth({
+				users: { [config.userName]: config.password },
+				challenge: true
+			}),
+			async (req: express.Request, res: express.Response) => {
+				if (!isHistoryArchiveContentReuseRequestV1(req.body)) {
+					return res.status(400).json({
+						error: 'Invalid history archive content reuse request'
+					});
+				}
+				const result = await config.getHistoryArchiveContentReuse.execute(
+					req.body
+				);
+				if (result.isErr()) {
+					return res.status(500).json({ error: result.error.message });
+				}
+				if (result.value === null) return res.status(204).send();
+				return res.status(200).json(result.value);
 			}
 		);
 
@@ -197,10 +224,11 @@ export const HistoryScanRouterWrapper = (
 				const completion = parseArchiveObjectCompletion(req, res);
 				if (completion === null) return;
 
-				const result = await config.completeHistoryArchiveObject.executeAndReconcile(
-					req.params.remoteId,
-					completion
-				);
+				const result =
+					await config.completeHistoryArchiveObject.executeAndReconcile(
+						req.params.remoteId,
+						completion
+					);
 				if (result.isErr()) {
 					return res.status(500).json({ error: result.error.message });
 				}
@@ -236,10 +264,11 @@ export const HistoryScanRouterWrapper = (
 				const failure = parseArchiveObjectFailure(req, res);
 				if (failure === null) return;
 
-				const result = await config.failHistoryArchiveObject.executeAndReconcile(
-					req.params.remoteId,
-					failure
-				);
+				const result =
+					await config.failHistoryArchiveObject.executeAndReconcile(
+						req.params.remoteId,
+						failure
+					);
 				if (result.isErr()) {
 					return res.status(500).json({ error: result.error.message });
 				}

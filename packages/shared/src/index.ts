@@ -78,6 +78,15 @@ export type {
 	HistoryArchivePublicVerificationFactsV1
 } from './dto/history-archive-object-verification-facts-v1.js';
 export {
+	historyArchiveContentDerivationVersionV1,
+	isHistoryArchiveContentReuseRequestV1,
+	isHistoryArchiveContentReuseV1,
+	isHistoryArchiveReusableContentV1,
+	type HistoryArchiveContentReuseRequestV1,
+	type HistoryArchiveContentReuseV1,
+	type HistoryArchiveReusableContentV1
+} from './dto/history-archive-content-reuse-v1.js';
+export {
 	type HistoryArchiveBucketCoverageV1,
 	type HistoryArchiveCheckpointCoverageV1,
 	HistoryArchiveCheckpointCoverageV1Schema,

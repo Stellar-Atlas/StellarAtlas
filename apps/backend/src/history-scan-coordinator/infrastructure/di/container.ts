@@ -71,6 +71,7 @@ import { createRemoteHistoryArchiveRepairObjectArtifactRepository } from '../rep
 import { PostgresHistoryArchiveRepairArtifactWorkPermit } from '../repositories/database/PostgresHistoryArchiveRepairArtifactWorkPermit.js';
 import { ScheduleHistoryArchiveObjects } from '../../use-cases/schedule-history-archive-objects/ScheduleHistoryArchiveObjects.js';
 import { GetHistoryArchiveObjectJob } from '../../use-cases/get-history-archive-object-job/GetHistoryArchiveObjectJob.js';
+import { GetHistoryArchiveContentReuse } from '../../use-cases/get-history-archive-content-reuse/GetHistoryArchiveContentReuse.js';
 import { TouchHistoryArchiveObject } from '../../use-cases/touch-history-archive-object/TouchHistoryArchiveObject.js';
 import { CompleteHistoryArchiveObject } from '../../use-cases/complete-history-archive-object/CompleteHistoryArchiveObject.js';
 import { FailHistoryArchiveObject } from '../../use-cases/fail-history-archive-object/FailHistoryArchiveObject.js';
@@ -130,6 +131,7 @@ export function load(container: Container, config: Config) {
 	container.bind(GetKnownOrganizationArchiveEvidence).toSelf();
 	container.bind(GetHistoryArchiveEvidence).toSelf();
 	container.bind(GetHistoryArchiveObjectJob).toSelf().inSingletonScope();
+	container.bind(GetHistoryArchiveContentReuse).toSelf();
 	container.bind(GetScannerMetrics).toSelf();
 	container.bind(BackfillArchiveMetadata).toSelf();
 	container.bind(RegisterCommunityScanner).toSelf();

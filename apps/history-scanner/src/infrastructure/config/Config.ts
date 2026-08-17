@@ -33,6 +33,7 @@ export interface Config {
 	historyScanRangeSize: number;
 	historyBucketCacheDir: string;
 	historyBucketCacheMaxBytes: number;
+	historyArchiveContentReuseEnabled: boolean;
 	historyArchiveObjectJobSource: 'nats' | 'legacy-http';
 	natsArchiveJobConsumer: string;
 	natsArchiveJobStream: string;
@@ -67,6 +68,7 @@ const defaultConfig = {
 		'history-bucket-cache'
 	),
 	historyBucketCacheMaxBytes: 10 * 1024 * 1024 * 1024 * 1024,
+	historyArchiveContentReuseEnabled: false,
 	historyArchiveObjectJobSource: 'legacy-http' as const,
 	natsArchiveJobConsumer: 'stellaratlas-history-object-workers',
 	natsArchiveJobStream: 'STELLARATLAS_HISTORY_OBJECTS',
@@ -305,6 +307,17 @@ export function getConfigFromEnv(): Result<Config, Error> {
 	if (historyBucketCacheMaxBytesResult.isErr())
 		return err(historyBucketCacheMaxBytesResult.error);
 
+	const contentReuseValue = process.env.HISTORY_ARCHIVE_CONTENT_REUSE_ENABLED;
+	const historyArchiveContentReuseEnabled =
+		contentReuseValue === undefined
+			? defaultConfig.historyArchiveContentReuseEnabled
+			: parseBoolean(contentReuseValue);
+	if (historyArchiveContentReuseEnabled === undefined) {
+		return err(
+			new Error('HISTORY_ARCHIVE_CONTENT_REUSE_ENABLED must be true or false')
+		);
+	}
+
 	const historyArchiveObjectJobSource =
 		process.env.HISTORY_ARCHIVE_OBJECT_JOB_SOURCE ??
 		defaultConfig.historyArchiveObjectJobSource;
@@ -374,6 +387,7 @@ export function getConfigFromEnv(): Result<Config, Error> {
 		historyBucketCacheMaxBytes:
 			historyBucketCacheMaxBytesResult.value ??
 			defaultConfig.historyBucketCacheMaxBytes,
+		historyArchiveContentReuseEnabled,
 		historyArchiveObjectJobSource,
 		natsArchiveJobConsumer:
 			process.env.NATS_ARCHIVE_JOB_CONSUMER ??

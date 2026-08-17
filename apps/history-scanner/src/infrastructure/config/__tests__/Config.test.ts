@@ -71,10 +71,30 @@ describe('Config', () => {
 				historyHasherWorkers: expect.any(Number),
 				historyMaxRequests: 24,
 				historyScanRangeSize: 250000,
-				historyBucketCacheMaxBytes: 10 * 1024 * 1024 * 1024 * 1024
+				historyBucketCacheMaxBytes: 10 * 1024 * 1024 * 1024 * 1024,
+				historyArchiveContentReuseEnabled: false
 			});
 			expect(result.value.historyHasherWorkers).toBeGreaterThanOrEqual(1);
 			expect(result.value.historyHasherWorkers).toBeLessThanOrEqual(32_767);
+		});
+
+		test('gates content reuse off by default and validates explicit values', () => {
+			const defaultResult = getConfigFromEnv();
+			expect(defaultResult.isOk()).toBe(true);
+			if (!defaultResult.isOk()) throw defaultResult.error;
+			expect(defaultResult.value.historyArchiveContentReuseEnabled).toBe(false);
+			process.env.HISTORY_ARCHIVE_CONTENT_REUSE_ENABLED = 'true';
+			const enabledResult = getConfigFromEnv();
+			expect(enabledResult.isOk()).toBe(true);
+			if (!enabledResult.isOk()) throw enabledResult.error;
+			expect(enabledResult.value.historyArchiveContentReuseEnabled).toBe(true);
+			process.env.HISTORY_ARCHIVE_CONTENT_REUSE_ENABLED = 'invalid';
+			const invalidResult = getConfigFromEnv();
+			expect(invalidResult.isErr()).toBe(true);
+			if (!invalidResult.isErr()) throw new Error('Expected error');
+			expect(invalidResult.error.message).toContain(
+				'HISTORY_ARCHIVE_CONTENT_REUSE_ENABLED must be true or false'
+			);
 		});
 
 		test('should require SENTRY_DSN when ENABLE_SENTRY is true', () => {
@@ -190,8 +210,8 @@ describe('Config', () => {
 		});
 
 		test('should derive default hasher workers from scanner workers and CPU count', () => {
-			expect(calculateDefaultHistoryHasherWorkers(24, 64)).toBe(1);
-			expect(calculateDefaultHistoryHasherWorkers(1, 64)).toBe(24);
+			expect(calculateDefaultHistoryHasherWorkers(24, 64)).toBe(2);
+			expect(calculateDefaultHistoryHasherWorkers(1, 64)).toBe(63);
 			expect(calculateDefaultHistoryHasherWorkers(64, 64)).toBe(1);
 		});
 

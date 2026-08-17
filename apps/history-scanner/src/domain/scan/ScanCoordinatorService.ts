@@ -9,6 +9,11 @@ import {
 } from 'history-scanner-dto';
 import type { HistoryArchiveObjectTypeDTO } from 'history-scanner-dto';
 import type { HistoryArchiveObjectFailureChannelDTO } from 'history-scanner-dto';
+import type {
+	HistoryArchiveContentReuseRequestV1,
+	HistoryArchiveContentReuseV1,
+	HistoryArchiveReusableContentV1
+} from 'shared';
 
 export interface ScanJobProgressDTO {
 	readonly concurrency?: number;
@@ -35,6 +40,7 @@ export interface HistoryArchiveObjectJobDTO {
 export interface HistoryArchiveObjectProgressDTO {
 	readonly bytesDownloaded?: number | null;
 	readonly claimAttempt?: number;
+	readonly contentReuse?: HistoryArchiveContentReuseV1;
 	readonly executionId?: string;
 	readonly scheduler?: 'broker' | 'legacy';
 	readonly verificationFacts?: object | null;
@@ -77,6 +83,9 @@ export interface ScanCoordinatorService {
 	getHistoryArchiveObjectJob(): Promise<
 		Result<HistoryArchiveObjectJobDTO | null, Error>
 	>;
+	getHistoryArchiveContentReuse(
+		request: HistoryArchiveContentReuseRequestV1
+	): Promise<Result<HistoryArchiveReusableContentV1 | null, Error>>;
 	touchHistoryArchiveObject(
 		remoteId: string,
 		progress?: HistoryArchiveObjectProgressDTO

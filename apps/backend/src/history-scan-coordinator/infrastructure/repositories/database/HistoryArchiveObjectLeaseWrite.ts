@@ -10,6 +10,10 @@ import {
 import { hasPostgresSqlState } from './PostgresError.js';
 import { enqueueHistoryArchiveReadyObjects } from './HistoryArchiveObjectReadyQueue.js';
 import { enqueueHistoryArchiveCheckpointProofRefreshes } from './HistoryArchiveCheckpointProofRefreshQueue.js';
+import {
+	prepareHistoryArchiveContentCompletion,
+	recordHistoryArchiveContentEvidence
+} from './HistoryArchiveContentReuseWrite.js';
 
 export async function markHistoryArchiveObjectVerified(
 	repository: Repository<HistoryArchiveObject>,
@@ -19,8 +23,13 @@ export async function markHistoryArchiveObjectVerified(
 	if (progress.scheduler === 'broker' && progress.executionId === undefined)
 		return false;
 	return await repository.manager.transaction(async (manager) => {
+		const prepared = await prepareHistoryArchiveContentCompletion(
+			manager,
+			remoteId,
+			progress
+		);
 		const update = {
-			...createVerifiedUpdate(progress),
+			...createVerifiedUpdate(prepared.progress),
 			...(progress.scheduler === 'broker'
 				? { attempts: progress.claimAttempt }
 				: {})
@@ -55,6 +64,7 @@ export async function markHistoryArchiveObjectVerified(
 		}
 		const result = await query.execute();
 		if ((result.affected ?? 0) === 0) return false;
+		await recordHistoryArchiveContentEvidence(manager, remoteId, prepared);
 		await enqueueHistoryArchiveCheckpointProofRefreshes(manager, [remoteId]);
 		if (progress.scheduler === 'broker') return true;
 

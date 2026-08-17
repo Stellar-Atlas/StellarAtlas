@@ -1,12 +1,11 @@
 import { mock } from 'jest-mock-extended';
 import type { Logger } from 'logger';
-import type { HistoryArchiveCheckpointProofRepository } from '../../domain/history-archive-checkpoint-proof/HistoryArchiveCheckpointProofRepository.js';
 import { HistoryArchiveObject } from '../../domain/history-archive-object/HistoryArchiveObject.js';
 import type { HistoryArchiveObjectRepository } from '../../domain/history-archive-object/HistoryArchiveObjectRepository.js';
 import { GetHistoryArchiveObjectJob } from './GetHistoryArchiveObjectJob.js';
 
 describe('GetHistoryArchiveObjectJob', () => {
-	it('refreshes proofs for stale releases and claimed retries', async () => {
+	it('releases stale work before returning a claimed retry', async () => {
 		const stale = checkpointObject(127, 'pending');
 		stale.attempts = 1;
 		const claimed = checkpointObject(191, 'scanning');
@@ -14,10 +13,8 @@ describe('GetHistoryArchiveObjectJob', () => {
 		const objectRepository = mock<HistoryArchiveObjectRepository>();
 		objectRepository.releaseStaleObjects.mockResolvedValue([stale]);
 		objectRepository.claimNextObject.mockResolvedValue(claimed);
-		const proofRepository = mock<HistoryArchiveCheckpointProofRepository>();
 		const useCase = new GetHistoryArchiveObjectJob(
 			objectRepository,
-			proofRepository,
 			mock<Logger>()
 		);
 
@@ -25,8 +22,6 @@ describe('GetHistoryArchiveObjectJob', () => {
 			claimAttempt: 2,
 			remoteId: claimed.remoteId
 		});
-		expect(proofRepository.refreshForObject).toHaveBeenNthCalledWith(1, stale);
-		expect(proofRepository.refreshForObject).toHaveBeenCalledTimes(1);
 	});
 
 	it('runs stale release at most once during the maintenance interval', async () => {
@@ -35,7 +30,6 @@ describe('GetHistoryArchiveObjectJob', () => {
 		objectRepository.claimNextObject.mockResolvedValue(null);
 		const useCase = new GetHistoryArchiveObjectJob(
 			objectRepository,
-			mock<HistoryArchiveCheckpointProofRepository>(),
 			mock<Logger>()
 		);
 
@@ -51,17 +45,14 @@ describe('GetHistoryArchiveObjectJob', () => {
 		const objectRepository = mock<HistoryArchiveObjectRepository>();
 		objectRepository.releaseStaleObjects.mockResolvedValue([]);
 		objectRepository.claimNextObject.mockResolvedValue(claimed);
-		const proofRepository = mock<HistoryArchiveCheckpointProofRepository>();
 		const useCase = new GetHistoryArchiveObjectJob(
 			objectRepository,
-			proofRepository,
 			mock<Logger>()
 		);
 
 		await expect(useCase.execute()).resolves.toMatchObject({
 			value: expect.objectContaining({ remoteId: claimed.remoteId })
 		});
-		expect(proofRepository.refreshForObject).not.toHaveBeenCalled();
 	});
 });
 

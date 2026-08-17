@@ -48,6 +48,9 @@ export function load(container: Container, config: Config) {
 	container
 		.bind<number>(TYPES.HasherWorkerCount)
 		.toConstantValue(config.historyHasherWorkers);
+	container
+		.bind<boolean>(TYPES.HistoryArchiveContentReuseEnabled)
+		.toConstantValue(config.historyArchiveContentReuseEnabled);
 	container.bind(BucketCache).toDynamicValue(() => {
 		return new BucketCache(
 			config.historyBucketCacheDir,

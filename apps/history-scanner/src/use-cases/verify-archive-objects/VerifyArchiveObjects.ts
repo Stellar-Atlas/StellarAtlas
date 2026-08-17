@@ -21,6 +21,7 @@ import type {
 import { TYPES } from '../../infrastructure/di/di-types.js';
 import type { HistoryArchiveWorkerStatusReporter } from '../../domain/scan/HistoryArchiveWorkerStatusReporter.js';
 import { ArchiveObjectCategoryVerifier } from './ArchiveObjectCategoryVerifier.js';
+import { ArchiveObjectHistoryStateVerifier } from './ArchiveObjectHistoryStateVerifier.js';
 import {
 	ArchiveObjectWorkerTelemetry,
 	mapFailureToWorkerOutcome
@@ -31,7 +32,6 @@ import type {
 	HistoryArchiveObjectJobDelivery,
 	HistoryArchiveObjectJobSource
 } from './HistoryArchiveObjectJobDelivery.js';
-import { canonicalJsonContentDigest } from './ArchiveObjectContentDigest.js';
 import { readArchiveObjectContentLength } from './ArchiveObjectHttpContentLength.js';
 import { createArchiveObjectDownloadCounter } from './ArchiveObjectDownloadCounter.js';
 import { retryArchiveObjectTerminalUpdate } from './ArchiveObjectTerminalUpdate.js';
@@ -57,6 +57,7 @@ const maximumPendingWorkerReports = 24;
 @injectable()
 export class VerifyArchiveObjects {
 	private readonly categoryVerifier: ArchiveObjectCategoryVerifier;
+	private readonly historyStateVerifier: ArchiveObjectHistoryStateVerifier;
 	private readonly downloadPermit: HistoryArchiveDownloadPermit;
 	private readonly workerTelemetry: ArchiveObjectWorkerTelemetry;
 
@@ -80,7 +81,9 @@ export class VerifyArchiveObjects {
 		@inject(TYPES.HasherWorkerCount)
 		private readonly hasherWorkerCount: number,
 		@inject('Logger')
-		private readonly logger: Logger
+		private readonly logger: Logger,
+		@inject(TYPES.HistoryArchiveContentReuseEnabled)
+		private readonly contentReuseEnabled = false
 	) {
 		this.downloadPermit = new ProcessHistoryArchiveDownloadPermit();
 		const coalescingStatusReporter = new CoalescingHistoryArchiveWorkerReporter(
@@ -92,6 +95,17 @@ export class VerifyArchiveObjects {
 			coalescingStatusReporter,
 			this.exceptionLogger,
 			this.logger
+		);
+		this.historyStateVerifier = new ArchiveObjectHistoryStateVerifier(
+			this.httpService,
+			this.historyArchiveStateValidator,
+			(remoteId, workerStage, bytesDownloaded) =>
+				this.workerTelemetry.updateProgress(
+					remoteId,
+					workerStage,
+					bytesDownloaded,
+					null
+				)
 		);
 		this.categoryVerifier = new ArchiveObjectCategoryVerifier(
 			this.httpService,
@@ -113,7 +127,8 @@ export class VerifyArchiveObjects {
 					bytesDownloaded,
 					bytesTotal
 				),
-			this.downloadPermit
+			this.downloadPermit,
+			this.contentReuseEnabled
 		);
 	}
 
@@ -201,7 +216,8 @@ export class VerifyArchiveObjects {
 		try {
 			const result = await this.performObjectVerification(
 				job,
-				releaseDownloadPermit
+				releaseDownloadPermit,
+				delivery
 			);
 			if (result.isErr()) {
 				outcome = mapFailureToWorkerOutcome(result.error);
@@ -215,8 +231,7 @@ export class VerifyArchiveObjects {
 							...result.error,
 							claimAttempt: job.claimAttempt,
 							executionId: delivery.executionId,
-							scheduler:
-								delivery.source === 'broker' ? 'broker' : 'legacy'
+							scheduler: delivery.source === 'broker' ? 'broker' : 'legacy'
 						}),
 					(error) => this.exceptionLogger.captureException(error)
 				);
@@ -227,18 +242,14 @@ export class VerifyArchiveObjects {
 				);
 				return;
 			}
-			this.workerTelemetry.setStage(
-				job.remoteId,
-				'recording_archive_evidence'
-			);
+			this.workerTelemetry.setStage(job.remoteId, 'recording_archive_evidence');
 			await retryArchiveObjectTerminalUpdate(
 				() =>
 					this.scanCoordinator.completeHistoryArchiveObject(job.remoteId, {
 						...result.value,
 						claimAttempt: job.claimAttempt,
 						executionId: delivery.executionId,
-						scheduler:
-							delivery.source === 'broker' ? 'broker' : 'legacy'
+						scheduler: delivery.source === 'broker' ? 'broker' : 'legacy'
 					}),
 				(error) => this.exceptionLogger.captureException(error)
 			);
@@ -252,20 +263,28 @@ export class VerifyArchiveObjects {
 
 	private async performObjectVerification(
 		job: HistoryArchiveObjectJobDTO,
-		releaseDownloadPermit: () => void
+		releaseDownloadPermit: () => void,
+		delivery: HistoryArchiveObjectJobDelivery
 	): Promise<
 		Result<HistoryArchiveObjectCompletionDTO, HistoryArchiveObjectFailureDTO>
 	> {
 		switch (job.objectType) {
 			case 'history-archive-state':
-				return this.verifyHistoryArchiveState(job, releaseDownloadPermit);
+				return this.historyStateVerifier.verify(job, releaseDownloadPermit);
 			case 'checkpoint-state':
-				return this.categoryVerifier.verifyCheckpointState(job, releaseDownloadPermit);
+				return this.categoryVerifier.verifyCheckpointState(
+					job,
+					releaseDownloadPermit
+				);
 			case 'ledger':
 			case 'transactions':
 			case 'results':
 			case 'scp':
-				return this.categoryVerifier.verifyCategoryObject(job, releaseDownloadPermit);
+				return this.categoryVerifier.verifyCategoryObject(
+					job,
+					releaseDownloadPermit,
+					delivery.source === 'broker' ? delivery.executionId : undefined
+				);
 			case 'bucket':
 				return this.verifyBucket(job, releaseDownloadPermit);
 			default:
@@ -276,71 +295,6 @@ export class VerifyArchiveObjects {
 					httpStatus: null
 				});
 		}
-	}
-
-	private async verifyHistoryArchiveState(
-		job: HistoryArchiveObjectJobDTO,
-		releaseDownloadPermit: () => void
-	): Promise<
-		Result<HistoryArchiveObjectCompletionDTO, HistoryArchiveObjectFailureDTO>
-	> {
-		const urlResult = Url.create(job.objectUrl);
-		if (urlResult.isErr()) return err(mapArchiveObjectLocalError(urlResult.error));
-
-		this.workerTelemetry.updateProgress(
-			job.remoteId,
-			'fetching_history_archive_state',
-			null,
-			null
-		);
-		const response = await this.httpService
-			.get(urlResult.value, {
-				responseType: 'json',
-				connectionTimeoutMs: 5_000,
-				socketTimeoutMs: 10_000
-			})
-			.finally(releaseDownloadPermit);
-		if (response.isErr()) return err(mapArchiveObjectHttpError(response.error));
-
-		const state = response.value.data;
-		if (!this.isRecord(state)) {
-			return err({
-				errorMessage: 'History archive state response must be a JSON object',
-				errorType: 'invalid_history_archive_state',
-				failureChannel: 'archive_evidence',
-				httpStatus: response.value.status
-			});
-		}
-
-		const validation = this.historyArchiveStateValidator.validate(state);
-		if (validation.isErr()) {
-			return err({
-				errorMessage: validation.error.message,
-				errorType: 'invalid_history_archive_state',
-				failureChannel: 'archive_evidence',
-				httpStatus: response.value.status
-			});
-		}
-
-		const bytesDownloaded = Buffer.byteLength(JSON.stringify(state));
-		this.workerTelemetry.updateProgress(
-			job.remoteId,
-			'verified_history_archive_state',
-			bytesDownloaded,
-			null
-		);
-		return ok({
-			archiveMetadata: {
-				observedAt: new Date().toISOString(),
-				stellarHistory: validation.value,
-				stellarHistoryUrl: job.objectUrl
-			},
-			bytesDownloaded,
-			verificationFacts: {
-				content: canonicalJsonContentDigest(validation.value)
-			},
-			workerStage: 'verified'
-		});
 	}
 
 	private async verifyBucket(
@@ -359,7 +313,8 @@ export class VerifyArchiveObjects {
 		}
 
 		const urlResult = Url.create(job.objectUrl);
-		if (urlResult.isErr()) return err(mapArchiveObjectLocalError(urlResult.error));
+		if (urlResult.isErr())
+			return err(mapArchiveObjectLocalError(urlResult.error));
 
 		this.workerTelemetry.updateProgress(
 			job.remoteId,
@@ -373,7 +328,8 @@ export class VerifyArchiveObjects {
 				connectionTimeoutMs: 10_000,
 				socketTimeoutMs: 60_000
 			});
-			if (response.isErr()) return err(mapArchiveObjectHttpError(response.error));
+			if (response.isErr())
+				return err(mapArchiveObjectHttpError(response.error));
 			if (!isReadableArchiveObject(response.value.data)) {
 				return err({
 					errorMessage: 'Bucket response must be a readable stream',
@@ -419,8 +375,7 @@ export class VerifyArchiveObjects {
 			const verifyResult = await this.bucketCache.verifyAndStore(
 				job.bucketHash.toLowerCase(),
 				countedStream,
-				(streamToVerify) =>
-					verifyBucketHash(streamToVerify, job.bucketHash!)
+				(streamToVerify) => verifyBucketHash(streamToVerify, job.bucketHash!)
 			);
 			if (verifyResult.isErr()) {
 				if (verifyResult.error.kind === 'source-stream') {
@@ -490,9 +445,4 @@ export class VerifyArchiveObjects {
 		const jitterMs = Math.floor(Math.random() * 2_500);
 		await asyncSleep(10_000 + jitterMs);
 	}
-
-	private isRecord(value: unknown): value is Record<string, unknown> {
-		return typeof value === 'object' && value !== null && !Array.isArray(value);
-	}
-
 }

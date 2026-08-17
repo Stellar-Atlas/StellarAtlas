@@ -12,9 +12,7 @@ import {
 	ParsedLedgerHeaderBatchDTO,
 	ParsedTransactionEnvelopeBatchDTO,
 	ParsedTransactionResultBatchDTO,
-	ScanDTO,
 	ScanJobDTO,
-	type ScanErrorDTO,
 	type ScanJobJSONInput
 } from 'history-scanner-dto';
 import { ScanCoordinatorService } from '../../domain/scan/ScanCoordinatorService.js';
@@ -25,12 +23,17 @@ import type {
 	HistoryArchiveObjectProgressDTO,
 	ScanJobProgressDTO
 } from '../../domain/scan/ScanCoordinatorService.js';
-import { isObject } from 'shared';
-import { type ScanError, ScanErrorType } from '../../domain/scan/ScanError.js';
+import {
+	isObject,
+	type HistoryArchiveContentReuseRequestV1,
+	type HistoryArchiveReusableContentV1
+} from 'shared';
 import type { CoordinatorAuthConfig } from '../config/CoordinatorAuthConfig.js';
 import { CoordinatorServiceError } from './CoordinatorServiceError.js';
 import { parseHistoryArchiveObjectJobDTO } from './HistoryArchiveObjectJobResponseParser.js';
 import { mapParsedHistoryRegistrationResponse } from './ParsedHistoryRegistrationConflictError.js';
+import { requestReusableHistoryArchiveContent } from './HistoryArchiveContentReuseClient.js';
+import { mapScanToDTO } from './ScanDtoMapper.js';
 
 const coordinatorReadOptions: HttpOptions = {
 	connectionTimeoutMs: 30_000,
@@ -63,7 +66,7 @@ export class RESTScanCoordinatorService implements ScanCoordinatorService {
 			return err(new CoordinatorServiceError('Scan job remote ID is null'));
 		}
 
-		const scanDTO = this.convertScanToDTO(scan);
+		const scanDTO = mapScanToDTO(scan);
 
 		const response = await this.httpService.post(
 			urlResult.value,
@@ -115,46 +118,6 @@ export class RESTScanCoordinatorService implements ScanCoordinatorService {
 			batch,
 			'Failed to save parsed transaction results'
 		);
-	}
-
-	private convertScanToDTO(scan: Scan): ScanDTO {
-		const errors = scan.errors.map((error) => this.mapScanErrorToDTO(error));
-
-		return {
-			baseUrl: scan.baseUrl.value,
-			startDate: scan.startDate,
-			endDate: scan.endDate,
-			scanChainInitDate: scan.scanChainInitDate,
-			fromLedger: scan.fromLedger,
-			toLedger: scan.toLedger,
-			latestVerifiedLedger: scan.latestVerifiedLedger,
-			latestScannedLedger: scan.latestScannedLedger,
-			latestScannedLedgerHeaderHash: scan.latestScannedLedgerHeaderHash,
-			concurrency: scan.concurrency,
-			isSlowArchive: scan.isSlowArchive,
-			error: scan.error ? this.mapScanErrorToDTO(scan.error) : null,
-			scanJobRemoteId: scan.scanJobRemoteId!,
-			errors,
-			evidence: scan.evidence,
-			archiveMetadata: scan.archiveMetadata ?? undefined
-		};
-	}
-
-	private mapScanErrorToDTO(error: ScanError): ScanErrorDTO {
-		return {
-			message: error.message,
-			type: this.mapScanErrorTypeToDTO(error.type),
-			url: error.url
-		};
-	}
-
-	private mapScanErrorTypeToDTO(type: ScanErrorType): ScanErrorDTO['type'] {
-		switch (type) {
-			case ScanErrorType.TYPE_VERIFICATION:
-				return 'TYPE_VERIFICATION';
-			case ScanErrorType.TYPE_CONNECTION:
-				return 'TYPE_CONNECTION';
-		}
 	}
 
 	async getScanJob(): Promise<Result<ScanJobDTO | null, Error>> {
@@ -239,6 +202,17 @@ export class RESTScanCoordinatorService implements ScanCoordinatorService {
 		}
 
 		return parseHistoryArchiveObjectJobDTO(response.value.data);
+	}
+
+	async getHistoryArchiveContentReuse(
+		request: HistoryArchiveContentReuseRequestV1
+	): Promise<Result<HistoryArchiveReusableContentV1 | null, Error>> {
+		return requestReusableHistoryArchiveContent(
+			this.httpService,
+			this.coordinatorAPIBaseUrl,
+			this.coordinatorAuth,
+			request
+		);
 	}
 
 	async touchScanJob(

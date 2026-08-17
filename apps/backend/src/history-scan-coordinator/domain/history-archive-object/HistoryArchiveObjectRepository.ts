@@ -9,6 +9,7 @@ import type {
 	HistoryArchiveObjectRecheckBlockedReasonV1,
 	HistoryArchiveObjectHostThrottleV1,
 	HistoryArchiveObjectSummaryV1,
+	HistoryArchiveContentReuseV1,
 	HistoryArchiveStatusSummaryV1
 } from 'shared';
 import type {
@@ -82,6 +83,7 @@ export interface HistoryArchiveObjectProgressUpdate {
 	readonly archiveMetadata?: ArchiveMetadataDTO | null;
 	readonly bytesDownloaded?: number | null;
 	readonly claimAttempt: number;
+	readonly contentReuse?: HistoryArchiveContentReuseV1;
 	readonly verificationFacts?: HistoryArchiveObjectVerificationFacts | null;
 	readonly workerStage?: string | null;
 	readonly executionId?: string;

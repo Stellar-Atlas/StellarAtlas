@@ -2,6 +2,9 @@ import { HttpQueue } from 'http-helper';
 
 export const TYPES = {
 	CheckPointFrequency: Symbol('CheckPointFrequency'),
+	HistoryArchiveContentReuseEnabled: Symbol(
+		'HistoryArchiveContentReuseEnabled'
+	),
 	ScanScheduler: Symbol('ScanScheduler'),
 	ScanCoordinatorService: Symbol('ScanCoordinatorService'),
 	HistoryArchiveObjectJobSource: Symbol('HistoryArchiveObjectJobSource'),
