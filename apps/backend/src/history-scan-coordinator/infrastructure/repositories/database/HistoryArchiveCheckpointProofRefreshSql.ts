@@ -4,6 +4,7 @@ import {
 	transactionsFactsJsonSql
 } from './HistoryArchiveCheckpointProofSqlInputs.js';
 import {
+	historyArchiveCheckpointProofDerivedMatchesCurrentSql,
 	historyArchiveCheckpointProofFinalizedCteSql,
 	historyArchiveCheckpointProofQueuedUpsertSql,
 	historyArchiveCheckpointProofUpsertSql
@@ -474,6 +475,16 @@ function buildHistoryArchiveCheckpointProofRefreshSql(
 			and proof."checkpointLedger" = derived."checkpointLedger"
 		 where ${historyArchiveCheckpointProofPreservedAttestationSql})
 			as "preservedAttestationCount"
+                , (select count(*)::integer
+                   from finalized derived
+                   join history_archive_checkpoint_proof proof
+                        on proof."archiveUrlIdentity" =
+                                derived."archiveUrlIdentity"
+                        and proof."checkpointLedger" =
+                                derived."checkpointLedger"
+                   where
+                        ${historyArchiveCheckpointProofDerivedMatchesCurrentSql})
+                        as "matchedCurrentCount"
 `;
 }
 

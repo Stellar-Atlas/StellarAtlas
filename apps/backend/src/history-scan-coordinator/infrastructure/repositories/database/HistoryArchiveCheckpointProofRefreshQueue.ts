@@ -21,6 +21,8 @@ export interface ClaimedHistoryArchiveCheckpointProofRefresh {
 interface ProofRefreshWriteResult {
 	readonly acknowledgedCount?: number | string;
 	readonly acknowledgedcount?: number | string;
+	readonly matchedCurrentCount?: number | string;
+	readonly matchedcurrentcount?: number | string;
 	readonly preservedAttestationCount?: number | string;
 	readonly preservedattestationcount?: number | string;
 	readonly upsertedCount?: number | string;
@@ -186,11 +188,14 @@ export async function refreshClaimedHistoryArchiveCheckpointProof(
 		const preserved = Number(
 			write?.preservedAttestationCount ?? write?.preservedattestationcount ?? 0
 		);
-		if (upserted + acknowledged < 1) {
+		const matchedCurrent = Number(
+			write?.matchedCurrentCount ?? write?.matchedcurrentcount ?? 0
+		);
+		if (upserted + acknowledged + preserved + matchedCurrent < 1) {
 			throw new Error(
 				`Checkpoint proof refresh was neither persisted nor acknowledged ` +
 					`(upserted=${upserted}, acknowledged=${acknowledged}, ` +
-					`preserved=${preserved})`
+					`preserved=${preserved}, matchedCurrent=${matchedCurrent})`
 			);
 		}
 		await manager.query(
