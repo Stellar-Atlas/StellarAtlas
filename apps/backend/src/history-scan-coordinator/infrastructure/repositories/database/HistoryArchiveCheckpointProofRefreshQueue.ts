@@ -30,7 +30,8 @@ interface ProofRefreshWriteResult {
 }
 
 export const defaultTargetedProofRefreshBatchSize = 1;
-export const maximumTargetedProofRefreshBatchSize = 24;
+export const maximumTargetedProofRefreshBatchSize = 192;
+const maximumConcurrentTargetedProofRefreshes = 16;
 
 export interface HistoryArchiveCheckpointProofRefreshQueueStatus {
 	readonly depth: number;
@@ -74,24 +75,37 @@ export async function drainHistoryArchiveCheckpointProofRefreshes(
 	let completed = 0;
 	let failed = 0;
 
-	for (let index = 0; index < safeLimit; index += 1) {
-		const target = await claimNextHistoryArchiveCheckpointProofRefresh(
-			dataSource,
-			maximumPriority
-		);
-		if (target === undefined) break;
-		claimed += 1;
-		try {
-			if (
-				await refreshClaimedHistoryArchiveCheckpointProof(dataSource, target)
-			) {
-				completed += 1;
+	let nextIndex = 0;
+	const drainWorker = async (): Promise<void> => {
+		while (true) {
+			const index = nextIndex;
+			nextIndex += 1;
+			if (index >= safeLimit) return;
+
+			const target = await claimNextHistoryArchiveCheckpointProofRefresh(
+				dataSource,
+				maximumPriority
+			);
+			if (target === undefined) return;
+			claimed += 1;
+			try {
+				if (
+					await refreshClaimedHistoryArchiveCheckpointProof(dataSource, target)
+				) {
+					completed += 1;
+				}
+			} catch (error) {
+				failed += 1;
+				await recordProofRefreshFailure(dataSource, target, error);
 			}
-		} catch (error) {
-			failed += 1;
-			await recordProofRefreshFailure(dataSource, target, error);
 		}
-	}
+	};
+	await Promise.all(
+		Array.from(
+			{ length: Math.min(safeLimit, maximumConcurrentTargetedProofRefreshes) },
+			drainWorker
+		)
+	);
 
 	return { claimed, completed, failed };
 }

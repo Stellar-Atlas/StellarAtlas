@@ -15,7 +15,7 @@ import {
 const defaultReconciliationBatchSize = 24;
 const maximumReconciliationBatchSize = 192;
 const defaultTargetedProofRefreshBatchSize = 1;
-const maximumTargetedProofRefreshBatchSize = 24;
+const maximumTargetedProofRefreshBatchSize = 192;
 
 export function parseHistoryArchiveTransitionReconciliationBatchSize(
 	configuredBatchSize: string | undefined
