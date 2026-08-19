@@ -21,7 +21,7 @@ export function startHistoryArchiveMaintenanceLoop(
 	const intervals = resolveMaintenanceIntervals(configuredIntervals);
 
 	const createRunner = (
-		maintenanceWork: 'execution disposition' | 'transitions',
+		maintenanceWork: 'execution disposition' | 'proof refresh' | 'transitions',
 		work: () => Promise<void>
 	): (() => Promise<void>) => {
 		let running = false;
@@ -44,10 +44,17 @@ export function startHistoryArchiveMaintenanceLoop(
 	const runTransitions = createRunner('transitions', () =>
 		reconciler.executeTransitionReconciliationIfDue()
 	);
+	const runProofRefresh = createRunner('proof refresh', () =>
+		reconciler.executeTargetedProofRefreshIfDue()
+	);
 	const runExecutionDisposition = createRunner('execution disposition', () =>
 		reconciler.executeExecutionDispositionReconciliationIfDue()
 	);
 
+	const proofRefreshTimer = setInterval(() => {
+		void runProofRefresh();
+	}, intervals.transitionReconciliationIntervalMs);
+	proofRefreshTimer.unref();
 	const transitionTimer = setInterval(() => {
 		void runTransitions();
 	}, intervals.transitionReconciliationIntervalMs);
@@ -56,11 +63,13 @@ export function startHistoryArchiveMaintenanceLoop(
 		void runExecutionDisposition();
 	}, intervals.executionAdmissionIntervalMs);
 	executionAdmissionTimer.unref();
+	void runProofRefresh();
 	void runTransitions();
 	void runExecutionDisposition();
 
 	return () => {
 		stopped = true;
+		clearInterval(proofRefreshTimer);
 		clearInterval(transitionTimer);
 		clearInterval(executionAdmissionTimer);
 	};

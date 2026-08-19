@@ -30,7 +30,7 @@ describe('targeted checkpoint proof refresh concurrency', () => {
 				mock<Logger>()
 			);
 
-			await reconciler.executeTransitionReconciliationIfDue(10_000);
+			await reconciler.executeTargetedProofRefreshIfDue(10_000);
 
 			expect(repository.drainCheckpointProofRefreshQueue).toHaveBeenCalledWith(
 				4,

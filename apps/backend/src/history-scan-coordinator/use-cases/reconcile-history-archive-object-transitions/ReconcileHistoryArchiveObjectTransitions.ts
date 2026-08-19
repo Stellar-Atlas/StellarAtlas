@@ -60,6 +60,7 @@ export class ReconcileHistoryArchiveObjectTransitions {
 		);
 	private executionDispositionRunning = false;
 	private nextExecutionDispositionRunAt = 0;
+	private nextTargetedProofRefreshRunAt = 0;
 	private nextTransitionRunAt = 0;
 
 	constructor(
@@ -74,8 +75,29 @@ export class ReconcileHistoryArchiveObjectTransitions {
 		now = Date.now(),
 		options: ReconciliationOptions = {}
 	): Promise<void> {
+		await this.executeTargetedProofRefreshIfDue(now);
 		await this.executeTransitionReconciliationIfDue(now, options);
 		await this.executeExecutionDispositionReconciliationIfDue(now);
+	}
+
+	async executeTargetedProofRefreshIfDue(now = Date.now()): Promise<void> {
+		if (!this.maintenanceLanes.targetedProofRefreshEnabled) return;
+		if (now < this.nextTargetedProofRefreshRunAt) return;
+		this.nextTargetedProofRefreshRunAt =
+			now + this.maintenanceIntervals.transitionReconciliationIntervalMs;
+
+		const result = await this.objectRepository.drainCheckpointProofRefreshQueue(
+			this.targetedProofRefreshBatchSize,
+			this.maintenanceLanes.targetedProofRefreshMaximumPriority
+		);
+		if (result.failed > 0) {
+			this.logger.error('Failed targeted checkpoint proof refresh', {
+				app: 'history-scan-coordinator',
+				claimed: result.claimed,
+				completed: result.completed,
+				failed: result.failed
+			});
+		}
 	}
 
 	async executeTransitionReconciliationIfDue(
@@ -88,8 +110,7 @@ export class ReconcileHistoryArchiveObjectTransitions {
 		if (
 			!promotePlannedObjects &&
 			!this.maintenanceLanes.terminalTransitionReconciliationEnabled &&
-			!this.maintenanceLanes.checkpointDependencyReconciliationEnabled &&
-			!this.maintenanceLanes.targetedProofRefreshEnabled
+			!this.maintenanceLanes.checkpointDependencyReconciliationEnabled
 		) {
 			return;
 		}
@@ -97,21 +118,6 @@ export class ReconcileHistoryArchiveObjectTransitions {
 		this.nextTransitionRunAt =
 			now + this.maintenanceIntervals.transitionReconciliationIntervalMs;
 
-		if (this.maintenanceLanes.targetedProofRefreshEnabled) {
-			const result =
-				await this.objectRepository.drainCheckpointProofRefreshQueue(
-					this.targetedProofRefreshBatchSize,
-					this.maintenanceLanes.targetedProofRefreshMaximumPriority
-				);
-			if (result.failed > 0) {
-				this.logger.error('Failed targeted checkpoint proof refresh', {
-					app: 'history-scan-coordinator',
-					claimed: result.claimed,
-					completed: result.completed,
-					failed: result.failed
-				});
-			}
-		}
 		await this.objectRepository.tryWithTransitionReconciliationLock(
 			async () => {
 				if (promotePlannedObjects) {
