@@ -31,7 +31,7 @@ interface ProofRefreshWriteResult {
 
 export const defaultTargetedProofRefreshBatchSize = 1;
 export const maximumTargetedProofRefreshBatchSize = 192;
-const maximumConcurrentTargetedProofRefreshes = 8;
+const maximumConcurrentTargetedProofRefreshes = 10;
 
 export interface HistoryArchiveCheckpointProofRefreshQueueStatus {
 	readonly depth: number;
