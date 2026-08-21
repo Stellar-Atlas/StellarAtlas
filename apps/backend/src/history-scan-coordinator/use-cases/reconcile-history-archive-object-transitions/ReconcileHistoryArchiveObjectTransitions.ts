@@ -58,6 +58,8 @@ export class ReconcileHistoryArchiveObjectTransitions {
 		parseTargetedProofRefreshBatchSize(
 			process.env.HISTORY_ARCHIVE_TARGETED_PROOF_REFRESH_BATCH_SIZE
 		);
+	private readonly legacyFrontierEnabled =
+		process.env.HISTORY_ARCHIVE_LEGACY_FRONTIER_ENABLED === 'true';
 	private executionDispositionRunning = false;
 	private nextExecutionDispositionRunAt = 0;
 	private nextTargetedProofRefreshRunAt = 0;
@@ -123,6 +125,17 @@ export class ReconcileHistoryArchiveObjectTransitions {
 				if (promotePlannedObjects) {
 					await this.objectRepository.promotePlannedObjects();
 				}
+				const fanoutCheckpoints =
+					(await this.objectRepository.findVerifiedCheckpointsNeedingFanout(
+						this.reconciliationBatchSize
+					)) ?? [];
+				for (const checkpoint of fanoutCheckpoints) {
+					try {
+						await this.completeObject.reconcileCheckpointFanout(checkpoint);
+					} catch (error) {
+						this.logFailure(error, checkpoint, 'checkpoint fanout');
+					}
+				}
 				if (this.maintenanceLanes.terminalTransitionReconciliationEnabled) {
 					const objects =
 						await this.objectRepository.findUnreconciledTransitions(
@@ -181,7 +194,7 @@ export class ReconcileHistoryArchiveObjectTransitions {
 			now + this.maintenanceIntervals.executionAdmissionIntervalMs;
 		try {
 			await this.objectRepository.reconcileExecutionDisposition({
-				admitGenericObjects: true
+				admitGenericObjects: this.legacyFrontierEnabled
 			});
 		} catch (error) {
 			this.logger.error('Failed to reconcile archive execution frontier', {
@@ -210,7 +223,7 @@ export class ReconcileHistoryArchiveObjectTransitions {
 	private logFailure(
 		error: unknown,
 		object: { readonly remoteId: string; readonly status: string },
-		work: 'checkpoint dependencies' | 'transition'
+		work: 'checkpoint dependencies' | 'checkpoint fanout' | 'transition'
 	): void {
 		this.logger.error(`Failed to reconcile archive object ${work}`, {
 			app: 'history-scan-coordinator',

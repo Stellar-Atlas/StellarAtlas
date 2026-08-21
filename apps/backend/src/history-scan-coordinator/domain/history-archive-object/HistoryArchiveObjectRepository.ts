@@ -203,6 +203,10 @@ export interface HistoryArchiveObjectRepository {
 	findVerifiedCheckpointsNeedingReconciliation(
 		limit: number
 	): Promise<readonly HistoryArchiveObject[]>;
+	findVerifiedCheckpointsNeedingFanout(
+		limit: number
+	): Promise<readonly HistoryArchiveObject[]>;
+	markCheckpointDescendantsPlanned(remoteId: string): Promise<boolean>;
 	findOldestCheckpointLedgerByArchiveUrlIdentities(
 		archiveUrlIdentities: readonly string[]
 	): Promise<ReadonlyMap<string, number>>;

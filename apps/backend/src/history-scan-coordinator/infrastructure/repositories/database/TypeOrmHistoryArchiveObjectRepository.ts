@@ -48,6 +48,10 @@ import {
 } from './HistoryArchiveObjectDependencyWrite.js';
 import { reconcileHistoryArchiveObjectExecution } from './HistoryArchiveObjectExecutionReconciler.js';
 import { findVerifiedCheckpointsNeedingReconciliation } from './HistoryArchiveCheckpointReconciliationQuery.js';
+import {
+	findVerifiedCheckpointsNeedingFanout,
+	markCheckpointDescendantsPlanned
+} from './HistoryArchiveCompactPlanning.js';
 import { getHistoryArchiveRepairPlanSummary } from './HistoryArchiveRepairPlanQuery.js';
 import { findVerifiedCheckpointObjectSources } from './HistoryArchiveVerifiedCheckpointSourceQuery.js';
 import { findVerifiedBucketSources } from './HistoryArchiveVerifiedBucketSourceQuery.js';
@@ -204,6 +208,15 @@ export class TypeOrmHistoryArchiveObjectRepository implements HistoryArchiveObje
 			this.repository,
 			limit
 		);
+	}
+	async findVerifiedCheckpointsNeedingFanout(
+		limit: number
+	): Promise<readonly HistoryArchiveObject[]> {
+		return await findVerifiedCheckpointsNeedingFanout(this.repository, limit);
+	}
+
+	async markCheckpointDescendantsPlanned(remoteId: string): Promise<boolean> {
+		return await markCheckpointDescendantsPlanned(this.repository, remoteId);
 	}
 
 	async findVerifiedBucketObjectsByArchiveUrl(

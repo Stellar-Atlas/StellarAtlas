@@ -28,6 +28,7 @@ import {
 	synchronizeHistoryArchiveReadyQueue
 } from './HistoryArchiveObjectReadyQueue.js';
 import { hasPostgresSqlState } from './PostgresError.js';
+import { materializeCompactCheckpointPlans } from './HistoryArchiveCompactPlanning.js';
 
 const reconciliationLockName = 'history_archive_execution_reconciliation';
 
@@ -56,6 +57,7 @@ export async function reconcileHistoryArchiveObjectExecution(
 		)) as readonly { readonly locked?: boolean }[];
 		if (lock?.locked !== true) return emptyResult();
 
+		await materializeCompactCheckpointPlans(manager);
 		await backfillLegacyCheckpointContentDigests(manager);
 		await refreshOneStaleCanonicalCheckpointProof(manager);
 		await manager.query(materializeCanonicalFrontierDependenciesSql);

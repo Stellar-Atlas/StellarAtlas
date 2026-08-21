@@ -116,6 +116,9 @@ export class HistoryArchiveObject extends CoreEntity {
 	public dependenciesMaterializedAt!: Date | null;
 
 	@Column('timestamptz', { nullable: true })
+	public descendantsPlannedAt!: Date | null;
+
+	@Column('timestamptz', { nullable: true })
 	public proofReconciledAt!: Date | null;
 
 	@Column('jsonb', { nullable: true })
@@ -199,6 +202,7 @@ export class HistoryArchiveObject extends CoreEntity {
 		this.executionReason = null;
 		this.executionDispositionAt = null;
 		this.dependenciesMaterializedAt = null;
+		this.descendantsPlannedAt = null;
 		this.proofReconciledAt = null;
 		this.completionArchiveMetadata = null;
 		this.transitionEffectsCompletedAt = null;

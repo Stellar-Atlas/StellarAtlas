@@ -298,7 +298,17 @@ export const historyArchivePlanPromotionSql = `
 			now(), now()
 		from "history_archive_object_plan" plan
 		join selected on selected.id = plan.id
-		on conflict ("archiveUrlIdentity", "objectType", "objectKey") do nothing
+                on conflict ("archiveUrlIdentity", "objectType", "objectKey") do update
+                set "dependencyReady" =
+                                "history_archive_object_queue"."dependencyReady" is true
+                                or excluded."dependencyReady" is true,
+                        "executionDisposition" = 'executable',
+                        "executionReason" = excluded."executionReason",
+                        "executionDispositionAt" = now(),
+                        "updatedAt" = now()
+                where "history_archive_object_queue".status = 'pending'
+                        and "history_archive_object_queue"."executionDisposition"
+                                is distinct from 'executable'
 		returning id
 	), deleted as (
 		delete from "history_archive_object_plan" plan

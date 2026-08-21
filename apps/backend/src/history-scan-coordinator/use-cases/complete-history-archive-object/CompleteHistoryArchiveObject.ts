@@ -16,9 +16,7 @@ import type { HistoryArchiveObjectProgressUpdate } from '../../domain/history-ar
 import type { HistoryArchiveObjectRepository } from '../../domain/history-archive-object/HistoryArchiveObjectRepository.js';
 import type { HistoryArchiveStateRepository } from '../../domain/history-archive-state/HistoryArchiveStateRepository.js';
 import {
-	buildCheckpointStateDiscoveryObjects,
 	buildCheckpointSiblingObjectsFromState,
-	checkpointDiscoveryFrontierSize,
 	buildHistoryArchiveObjectsFromState
 } from '../../domain/history-archive-object/HistoryArchiveObjectBuilder.js';
 import { TYPES } from '../../infrastructure/di/di-types.js';
@@ -145,10 +143,6 @@ export class CompleteHistoryArchiveObject {
 			await this.objectRepository.materializeCheckpointDependencies(
 				object.remoteId
 			);
-			descendants = await this.buildObjectsFromCheckpointArchiveMetadata(
-				object,
-				object.verificationFacts
-			);
 		}
 		if (descendants.length > 0) {
 			await this.objectRepository.planObjects(descendants);
@@ -196,6 +190,25 @@ export class CompleteHistoryArchiveObject {
 		await this.checkpointProofRepository.refreshForObject(persisted);
 	}
 
+	async reconcileCheckpointFanout(object: HistoryArchiveObject): Promise<void> {
+		if (
+			object.objectType !== 'checkpoint-state' ||
+			object.status !== 'verified' ||
+			object.descendantsPlannedAt !== null
+		) {
+			return;
+		}
+		const descendants = await this.buildObjectsFromCheckpointArchiveMetadata(
+			object,
+			object.verificationFacts
+		);
+		if (descendants.length === 0) return;
+		await this.objectRepository.planObjects(descendants);
+		await this.objectRepository.markCheckpointDescendantsPlanned(
+			object.remoteId
+		);
+	}
+
 	private async prepareCompletionProgress(
 		object: HistoryArchiveObject,
 		request: CompleteHistoryArchiveObjectRequest
@@ -233,27 +246,9 @@ export class CompleteHistoryArchiveObject {
 			archiveMetadata,
 			'history-scanner'
 		);
-		const oldestCheckpointByArchive =
-			await this.objectRepository.findOldestCheckpointLedgerByArchiveUrlIdentities(
-				[archiveUrlIdentity]
-			);
-
-		const oldestScheduledCheckpointLedger =
-			oldestCheckpointByArchive.get(archiveUrlIdentity);
-		const olderCheckpointObjects =
-			oldestScheduledCheckpointLedger === undefined
-				? []
-				: buildCheckpointStateDiscoveryObjects(snapshot, {
-						maxObjects: checkpointDiscoveryFrontierSize,
-						oldestScheduledCheckpointLedger
-					});
-
-		return [
-			...buildHistoryArchiveObjectsFromState(snapshot, {
-				rootStatus: 'verified'
-			}),
-			...olderCheckpointObjects
-		];
+		return buildHistoryArchiveObjectsFromState(snapshot, {
+			rootStatus: 'verified'
+		});
 	}
 
 	private async buildObjectsFromCheckpointArchiveMetadata(
@@ -281,13 +276,7 @@ export class CompleteHistoryArchiveObject {
 		});
 		if (siblingObjects.length === 0) return [];
 
-		return [
-			...siblingObjects,
-			...buildCheckpointStateDiscoveryObjects(snapshot, {
-				maxObjects: checkpointDiscoveryFrontierSize,
-				oldestScheduledCheckpointLedger: object.checkpointLedger
-			})
-		];
+		return siblingObjects;
 	}
 
 	private async addRootNetworkPassphraseIfMissing(

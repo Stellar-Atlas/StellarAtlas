@@ -279,7 +279,7 @@ describe('ReconcileHistoryArchiveObjectTransitions', () => {
 		expect(repository.findUnreconciledTransitions).toHaveBeenCalledWith(24);
 	});
 
-	it('keeps generic execution admission enabled in broker mode', async () => {
+	it('disables legacy generic admission unless explicitly enabled', async () => {
 		const previousMode = process.env.HISTORY_ARCHIVE_SCHEDULER_MODE;
 		process.env.HISTORY_ARCHIVE_SCHEDULER_MODE = 'broker';
 		try {
@@ -295,7 +295,7 @@ describe('ReconcileHistoryArchiveObjectTransitions', () => {
 			await reconciler.executeIfDue(10_000);
 
 			expect(repository.reconcileExecutionDisposition).toHaveBeenCalledWith({
-				admitGenericObjects: true
+				admitGenericObjects: false
 			});
 		} finally {
 			if (previousMode === undefined) {
@@ -304,6 +304,34 @@ describe('ReconcileHistoryArchiveObjectTransitions', () => {
 				process.env.HISTORY_ARCHIVE_SCHEDULER_MODE = previousMode;
 			}
 		}
+	});
+
+	it('fans out bounded verified checkpoints under the transition lock', async () => {
+		const repository = mock<HistoryArchiveObjectRepository>();
+		const complete = mock<CompleteHistoryArchiveObject>();
+		const checkpoint = terminalCheckpoint();
+		repository.findVerifiedCheckpointsNeedingFanout.mockResolvedValue([
+			checkpoint
+		]);
+		repository.findUnreconciledTransitions.mockResolvedValue([]);
+		repository.findVerifiedCheckpointsNeedingReconciliation.mockResolvedValue(
+			[]
+		);
+		repository.tryWithTransitionReconciliationLock.mockImplementation(
+			async (work) => {
+				await work();
+				return true;
+			}
+		);
+
+		await new ReconcileHistoryArchiveObjectTransitions(
+			repository,
+			complete,
+			mock<FailHistoryArchiveObject>(),
+			mock<Logger>()
+		).executeIfDue(10_000);
+
+		expect(complete.reconcileCheckpointFanout).toHaveBeenCalledWith(checkpoint);
 	});
 });
 
