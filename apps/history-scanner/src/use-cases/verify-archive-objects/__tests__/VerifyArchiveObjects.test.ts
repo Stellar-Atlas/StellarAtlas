@@ -154,6 +154,12 @@ describe('VerifyArchiveObjects', () => {
 				failureChannel: 'scanner_issue'
 			})
 		);
+                const legacyFailure =
+                        scanCoordinator.failHistoryArchiveObject.mock.calls[0]?.[1];
+                expect(legacyFailure).toEqual(
+                        expect.objectContaining({ scheduler: 'legacy' })
+                );
+                expect(legacyFailure).not.toHaveProperty('executionId');
 		expect(statusReporter.report).toHaveBeenLastCalledWith(
 			expect.objectContaining({
 				currentObject: null,

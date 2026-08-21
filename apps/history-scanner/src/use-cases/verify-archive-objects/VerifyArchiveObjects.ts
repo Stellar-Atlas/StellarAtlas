@@ -213,6 +213,13 @@ export class VerifyArchiveObjects {
 		delivery: HistoryArchiveObjectJobDelivery
 	): Promise<void> {
 		let outcome: HistoryArchiveWorkerOutcomeDTO = 'worker_issue';
+                const schedulerFields =
+                        delivery.source === 'broker'
+                                ? {
+                                                executionId: delivery.executionId,
+                                                scheduler: 'broker' as const
+                                  }
+                                : { scheduler: 'legacy' as const };
 		try {
 			const result = await this.performObjectVerification(
 				job,
@@ -230,8 +237,7 @@ export class VerifyArchiveObjects {
 						this.scanCoordinator.failHistoryArchiveObject(job.remoteId, {
 							...result.error,
 							claimAttempt: job.claimAttempt,
-							executionId: delivery.executionId,
-							scheduler: delivery.source === 'broker' ? 'broker' : 'legacy'
+                                                        ...schedulerFields
 						}),
 					(error) => this.exceptionLogger.captureException(error)
 				);
@@ -248,8 +254,7 @@ export class VerifyArchiveObjects {
 					this.scanCoordinator.completeHistoryArchiveObject(job.remoteId, {
 						...result.value,
 						claimAttempt: job.claimAttempt,
-						executionId: delivery.executionId,
-						scheduler: delivery.source === 'broker' ? 'broker' : 'legacy'
+                                                ...schedulerFields
 					}),
 				(error) => this.exceptionLogger.captureException(error)
 			);
