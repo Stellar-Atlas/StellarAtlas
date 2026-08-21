@@ -74,6 +74,7 @@ import { HistoryArchiveCheckpointProofRefreshQueueMigration1785510000000 } from 
 import { HistoryArchiveContentReuseMigration1785520000000 } from '@history-scan-coordinator/infrastructure/database/migrations/1785520000000-HistoryArchiveContentReuseMigration.js';
 import { HistoryArchiveCompactPlanningMigration1785530000000 } from '@history-scan-coordinator/infrastructure/database/migrations/1785530000000-HistoryArchiveCompactPlanningMigration.js';
 import { HistoryArchiveSequentialProofChainMigration1785540000000 } from '@history-scan-coordinator/infrastructure/database/migrations/1785540000000-HistoryArchiveSequentialProofChainMigration.js';
+import { HistoryArchiveObjectReferenceIndexesMigration1785550000000 } from '@history-scan-coordinator/infrastructure/database/migrations/1785550000000-HistoryArchiveObjectReferenceIndexesMigration.js';
 
 // The production database was imported with a partial legacy migration ledger.
 // Explicit registration prevents TypeORM from replaying pre-baseline migrations.
@@ -153,5 +154,6 @@ export const managedMigrations = [
 	HistoryArchiveCheckpointProofRefreshQueueMigration1785510000000,
 	HistoryArchiveContentReuseMigration1785520000000,
 	HistoryArchiveCompactPlanningMigration1785530000000,
-	HistoryArchiveSequentialProofChainMigration1785540000000
+	HistoryArchiveSequentialProofChainMigration1785540000000,
+	HistoryArchiveObjectReferenceIndexesMigration1785550000000
 ] as const;

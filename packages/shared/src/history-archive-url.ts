@@ -4,6 +4,13 @@ const categoryObjectPathPattern =
 const bucketObjectPathPattern =
 	/\/bucket\/[0-9a-f]{2}\/[0-9a-f]{2}\/[0-9a-f]{2}\/bucket-[0-9a-f]+\.xdr\.gz$/i;
 
+const knownArchiveRootAliases = new Map<string, string>([
+	['http://history.bd-trust.org/galou', 'http://history.bd-trust.org/GALOU'],
+	['http://history.bd-trust.org/gayyw', 'http://history.bd-trust.org/GAYYW'],
+	['http://history.bd-trust.org/gc4te', 'http://history.bd-trust.org/GC4TE'],
+	['http://history.bd-trust.org/gd5jo', 'http://history.bd-trust.org/GD5JO']
+]);
+
 export function normalizeHistoryArchiveRootUrl(value: string): string | null {
 	const trimmed = value.trim();
 	if (trimmed === '') return null;
@@ -23,7 +30,10 @@ export function normalizeHistoryArchiveRootUrl(value: string): string | null {
 	const rootPath = stripRootStatePath(path);
 	if (isArchiveObjectPath(rootPath)) return null;
 
-	return `${url.origin}${rootPath === '/' ? '' : rootPath}${url.search}`;
+	const normalized = `${url.origin}${rootPath === '/' ? '' : rootPath}${url.search}`;
+	return url.search === ''
+		? (knownArchiveRootAliases.get(normalized) ?? normalized)
+		: normalized;
 }
 
 export function appendHistoryArchiveRootPath(

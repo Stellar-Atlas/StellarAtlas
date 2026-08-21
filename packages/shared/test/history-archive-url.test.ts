@@ -64,6 +64,21 @@ describe('normalizeHistoryArchiveRootUrl', () => {
 		);
 	});
 
+	it('canonicalizes the four proven case-sensitive BDTrust aliases', () => {
+		expect(
+			normalizeHistoryArchiveRootUrl('http://history.bd-trust.org/galou')
+		).toBe('http://history.bd-trust.org/GALOU');
+		expect(
+			normalizeHistoryArchiveRootUrl('http://history.bd-trust.org/gayyw/')
+		).toBe('http://history.bd-trust.org/GAYYW');
+		expect(
+			normalizeHistoryArchiveRootUrl('http://history.bd-trust.org/gc4te')
+		).toBe('http://history.bd-trust.org/GC4TE');
+		expect(
+			normalizeHistoryArchiveRootUrl('http://history.bd-trust.org/gd5jo')
+		).toBe('http://history.bd-trust.org/GD5JO');
+	});
+
 	it('rejects URLs with credentials, hashes, or unsupported protocols', () => {
 		expect(
 			normalizeHistoryArchiveRootUrl('ftp://history.example.com')
