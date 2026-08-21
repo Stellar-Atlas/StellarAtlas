@@ -1,3 +1,5 @@
+import { historyArchiveObjectOpenSequentialCohortSql } from './HistoryArchiveSequentialChainSql.js';
+
 export const seedHistoryArchiveFrontierCursorsSql = `
 	insert into "history_archive_object_frontier_cursor" (
 		"archiveUrlIdentity", "objectType"
@@ -20,6 +22,8 @@ export const seedHistoryArchiveFrontierCursorsSql = `
 `;
 
 const dependencyReadySql = dependencyEligibilitySql('candidate');
+const openSequentialCohortSql =
+	historyArchiveObjectOpenSequentialCohortSql('candidate');
 
 export const historyArchiveObjectFrontierSql = `
 	with roots as materialized (
@@ -111,6 +115,7 @@ export const historyArchiveObjectFrontierSql = `
 			where cursor."objectKey" is null
 				and candidate."archiveUrlIdentity" = cursor."archiveUrlIdentity"
 				and candidate."objectType" = cursor."objectType"
+                                and ${openSequentialCohortSql}
 				and candidate.status = 'pending'
 				and (
 					candidate."executionDisposition" is null
@@ -134,6 +139,7 @@ export const historyArchiveObjectFrontierSql = `
 			where cursor."objectKey" is not null
 				and candidate."archiveUrlIdentity" = cursor."archiveUrlIdentity"
 				and candidate."objectType" = cursor."objectType"
+                                and ${openSequentialCohortSql}
 				and candidate.status = 'pending'
 				and (
 					candidate."executionDisposition" is null
@@ -160,6 +166,7 @@ export const historyArchiveObjectFrontierSql = `
 				and continued_candidate.id is null
 				and candidate."archiveUrlIdentity" = cursor."archiveUrlIdentity"
 				and candidate."objectType" = cursor."objectType"
+                                and ${openSequentialCohortSql}
 				and candidate.status = 'pending'
 				and (
 					candidate."executionDisposition" is null

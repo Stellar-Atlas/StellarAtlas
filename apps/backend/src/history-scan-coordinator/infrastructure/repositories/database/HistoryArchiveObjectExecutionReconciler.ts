@@ -4,21 +4,13 @@ import type { HistoryArchiveObjectExecutionReconciliationResult } from '@history
 import { getHistoryArchiveBrokerMaximumPriority } from '@history-scan-coordinator/domain/history-archive-object/HistoryArchiveBrokerPriority.js';
 import {
 	calculateHistoryArchivePlanningPressure,
-	historyArchiveCanonicalReserveCount,
 	historyArchiveConsumerCount,
 	historyArchiveMaximumWatermark,
-	historyArchivePerHostConcurrency,
 	historyArchivePerRootFrontier,
 	historyArchiveThroughputSampleCap,
 	historyArchiveThroughputWindowMinutes
 } from '@history-scan-coordinator/domain/history-archive-object/HistoryArchiveObjectPlanningPolicy.js';
-import {
-	buildAdmitCanonicalFrontierSql,
-	canonicalRuntimeTargetCtes,
-	materializeCanonicalFrontierDependenciesSql
-} from './HistoryArchiveCanonicalFrontierSql.js';
-import { backfillLegacyCheckpointContentDigests } from './HistoryArchiveLegacyCheckpointDigestBackfill.js';
-import { refreshOneStaleCanonicalCheckpointProof } from './HistoryArchiveCheckpointProofVersionRefresh.js';
+import { canonicalRuntimeTargetCtes } from './HistoryArchiveCanonicalFrontierSql.js';
 import {
 	historyArchiveObjectFrontierSql,
 	seedHistoryArchiveFrontierCursorsSql
@@ -58,14 +50,7 @@ export async function reconcileHistoryArchiveObjectExecution(
 		if (lock?.locked !== true) return emptyResult();
 
 		await materializeCompactCheckpointPlans(manager);
-		await backfillLegacyCheckpointContentDigests(manager);
-		await refreshOneStaleCanonicalCheckpointProof(manager);
-		await manager.query(materializeCanonicalFrontierDependenciesSql);
-		const [canonicalAdmission] = (await manager.query(
-			buildAdmitCanonicalFrontierSql(maximumPriority),
-			[historyArchiveCanonicalReserveCount, historyArchivePerHostConcurrency]
-		)) as readonly { readonly count: number | string }[];
-		const canonicalAdmittedObjects = Number(canonicalAdmission?.count ?? 0);
+		const canonicalAdmittedObjects = 0;
 		const readyState = await synchronizeHistoryArchiveReadyQueue(
 			manager,
 			historyArchiveMaximumWatermark
@@ -248,6 +233,16 @@ export const admitProofCompletionReserveSql = `
 				and proof.status = 'not-evaluable'
 				and proof."failureKind" = 'proof-facts-incomplete'
 				and proof."requiredObjectsComplete" = true
+                                and (
+                                    proof."checkpointLedger" = 63
+                                    or exists (
+                                        select 1
+                                        from "history_archive_checkpoint_proof" predecessor
+                                        where predecessor."archiveUrlIdentity" = proof."archiveUrlIdentity"
+                                            and predecessor."checkpointLedger" = proof."checkpointLedger" - 64
+                                            and predecessor.status = 'verified'
+                                    )
+                                )
 				and coalesce(
 					proof.details->>'ledgerHeaderHashesVerified',
 					'false'
@@ -259,7 +254,7 @@ export const admitProofCompletionReserveSql = `
 						proof."archiveUrlIdentity"
 						and canonical.checkpoint_ledger = proof."checkpointLedger"
 				)
-			order by proof."checkpointLedger" desc
+			order by proof."checkpointLedger" asc
 			limit 1
 		) newest on true
 	), proof_candidates as materialized (
@@ -272,6 +267,16 @@ export const admitProofCompletionReserveSql = `
 				and proof.status = 'not-evaluable'
 				and proof."failureKind" = 'bucket-missing'
 				and proof."requiredObjectsComplete" = true
+                                and (
+                                    proof."checkpointLedger" = 63
+                                    or exists (
+                                        select 1
+                                        from "history_archive_checkpoint_proof" predecessor
+                                        where predecessor."archiveUrlIdentity" = proof."archiveUrlIdentity"
+                                            and predecessor."checkpointLedger" = proof."checkpointLedger" - 64
+                                            and predecessor.status = 'verified'
+                                    )
+                                )
 				and proof."proofFactsComplete" = true
 				and not exists (
 					select 1
@@ -280,7 +285,7 @@ export const admitProofCompletionReserveSql = `
 						proof."archiveUrlIdentity"
 						and canonical.checkpoint_ledger = proof."checkpointLedger"
 				)
-			order by proof."checkpointLedger" desc
+			order by proof."checkpointLedger" asc
 			limit 1
 		) newest on true
 	), proof_fact_eligible as materialized (

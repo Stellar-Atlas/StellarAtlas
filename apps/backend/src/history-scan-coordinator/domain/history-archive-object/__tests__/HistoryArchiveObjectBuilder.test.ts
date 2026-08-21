@@ -1,7 +1,6 @@
 import type { ArchiveMetadataDTO } from 'history-scanner-dto';
 import { HistoryArchiveStateSnapshot } from '../../history-archive-state/HistoryArchiveStateSnapshot.js';
 import {
-	buildCheckpointStateDiscoveryObjects,
 	buildCheckpointSiblingObjectsFromState,
 	buildHistoryArchiveObjectsFromState,
 	buildRootHistoryArchiveObject
@@ -53,14 +52,14 @@ describe('HistoryArchiveObjectBuilder', () => {
 		);
 	});
 
-	it('does not build checkpoint category or bucket descendants directly from root state', () => {
+	it('seeds only the genesis checkpoint from root state', () => {
 		const objects = buildHistoryArchiveObjectsFromState(
 			createSnapshot(createArchiveMetadata(255))
 		);
 
 		expect(objects.map((object) => object.objectKey)).toEqual([
 			'root',
-			'checkpoint-state:000000ff'
+			'checkpoint-state:0000003f'
 		]);
 		expect(objects.map((object) => object.objectType)).not.toContain('ledger');
 		expect(objects.map((object) => object.objectType)).not.toContain(
@@ -68,57 +67,6 @@ describe('HistoryArchiveObjectBuilder', () => {
 		);
 		expect(objects.map((object) => object.objectType)).not.toContain('results');
 		expect(objects.map((object) => object.objectType)).not.toContain('bucket');
-	});
-
-	it('discovers checkpoint state objects backwards from latest state', () => {
-		const objects = buildCheckpointStateDiscoveryObjects(
-			createSnapshot(createArchiveMetadata(255)),
-			{ maxObjects: 3 }
-		);
-
-		expect(objects.map((object) => object.objectKey)).toEqual([
-			'checkpoint-state:000000ff',
-			'checkpoint-state:000000bf',
-			'checkpoint-state:0000007f'
-		]);
-		expect(objects.map((object) => object.objectUrl)).toEqual([
-			'https://history.example.com/archive-b/history/00/00/00/history-000000ff.json',
-			'https://history.example.com/archive-b/history/00/00/00/history-000000bf.json',
-			'https://history.example.com/archive-b/history/00/00/00/history-0000007f.json'
-		]);
-	});
-
-	it('uses a cursor-sized discovery page by default', () => {
-		const objects = buildCheckpointStateDiscoveryObjects(
-			createSnapshot(createArchiveMetadata(20_000))
-		);
-
-		expect(objects).toHaveLength(1);
-		expect(objects[0]?.objectKey).toBe('checkpoint-state:00004dff');
-	});
-
-	it('caps explicitly requested checkpoint discovery pages', () => {
-		const objects = buildCheckpointStateDiscoveryObjects(
-			createSnapshot(createArchiveMetadata(400_000)),
-			{ maxObjects: 10_000 }
-		);
-
-		expect(objects).toHaveLength(256);
-	});
-
-	it('continues checkpoint discovery older than the oldest already scheduled checkpoint', () => {
-		const objects = buildCheckpointStateDiscoveryObjects(
-			createSnapshot(createArchiveMetadata(255)),
-			{
-				maxObjects: 3,
-				oldestScheduledCheckpointLedger: 191
-			}
-		);
-
-		expect(objects.map((object) => object.objectKey)).toEqual([
-			'checkpoint-state:0000007f',
-			'checkpoint-state:0000003f'
-		]);
 	});
 
 	it('builds checkpoint sibling objects without creating a root state object', () => {

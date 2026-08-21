@@ -16,6 +16,7 @@ import {
 	historyArchiveReadyRootActivityCtesSql,
 	synchronizeHistoryArchiveReadyQueue
 } from './HistoryArchiveObjectReadyQueue.js';
+import { historyArchiveObjectOpenSequentialCohortSql } from './HistoryArchiveSequentialChainSql.js';
 
 const planChunkSize = 200;
 const genesisCheckpointLedger = 63;
@@ -247,6 +248,7 @@ export const historyArchivePlanPromotionSql = `
 						as proof_priority
 				from "history_archive_object_plan" plan
 				where plan."archiveUrlIdentity" = root."archiveUrlIdentity"
+                                        and ${historyArchiveObjectOpenSequentialCohortSql('plan')}
 					and case when plan."checkpointLedger" = $3::integer
 						then 0 else 2 end <= $5::smallint
 				order by

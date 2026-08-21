@@ -12,9 +12,6 @@ import type {
 import { isHistoryArchiveScpObjectExpected } from './HistoryArchiveObjectScpPolicy.js';
 
 const checkpointFrequency = 64;
-const defaultCheckpointDiscoveryPageSize = 1;
-export const maxCheckpointDiscoveryPageSize = 256;
-export const checkpointDiscoveryFrontierSize = 1;
 const zeroHashPattern = /^0+$/;
 const bucketHashPattern = /^[0-9a-f]{64}$/i;
 
@@ -49,24 +46,16 @@ export function buildHistoryArchiveObjectsFromState(
 		})
 	];
 
-	const checkpointLedger = getCheckpointLedger(snapshot.rawState.currentLedger);
-	if (checkpointLedger !== null) {
-		for (const scheduledCheckpoint of new Set([
-			checkpointLedger,
-			checkpointFrequency - 1
-		])) {
-			const checkpointObject = createCheckpointObject(
-				snapshot,
-				archiveUrl,
-				scheduledCheckpoint,
-				'checkpoint-state',
-				options.rootStatus === 'verified'
-			);
-			if (scheduledCheckpoint === checkpointFrequency - 1) {
-				checkpointObject.executionReason = 'canonical-frontier-reserve';
-			}
-			objects.push(checkpointObject);
-		}
+	if (getCheckpointLedger(snapshot.rawState.currentLedger) !== null) {
+		const checkpointObject = createCheckpointObject(
+			snapshot,
+			archiveUrl,
+			checkpointFrequency - 1,
+			'checkpoint-state',
+			options.rootStatus === 'verified'
+		);
+		checkpointObject.executionReason = 'canonical-frontier-reserve';
+		objects.push(checkpointObject);
 	}
 
 	return dedupeObjects(objects);
@@ -131,61 +120,19 @@ export function buildCheckpointSiblingObjectsFromState(
 	}
 
 	for (const bucketHash of getBucketHashes(snapshot.rawState.currentBuckets)) {
-		objects.push(createBucketObject(snapshot, archiveUrl, checkpointLedger, bucketHash));
+		objects.push(
+			createBucketObject(snapshot, archiveUrl, checkpointLedger, bucketHash)
+		);
 	}
 	for (const bucketHash of getBucketHashes(
 		snapshot.rawState.hotArchiveBuckets ?? []
 	)) {
-		objects.push(createBucketObject(snapshot, archiveUrl, checkpointLedger, bucketHash));
-	}
-
-	return dedupeObjects(objects);
-}
-
-export function buildCheckpointStateDiscoveryObjects(
-	snapshot: HistoryArchiveStateSnapshot,
-	options: {
-		readonly maxObjects?: number;
-		readonly oldestScheduledCheckpointLedger?: number | null;
-	} = {}
-): readonly HistoryArchiveObject[] {
-	if (snapshot.status !== 'available' || snapshot.rawState === null) return [];
-	const archiveUrl = normalizeHistoryArchiveRootUrl(snapshot.archiveUrl);
-	if (archiveUrl === null) return [];
-
-	const latestCheckpointLedger = getCheckpointLedger(
-		snapshot.rawState.currentLedger
-	);
-	if (latestCheckpointLedger === null) return [];
-
-	const pageSize = normalizeDiscoveryPageSize(options.maxObjects);
-	const startLedger =
-		options.oldestScheduledCheckpointLedger === null ||
-		options.oldestScheduledCheckpointLedger === undefined
-			? latestCheckpointLedger
-			: Math.min(
-					latestCheckpointLedger,
-					options.oldestScheduledCheckpointLedger - checkpointFrequency
-				);
-
-	const objects: HistoryArchiveObject[] = [];
-	for (
-		let checkpointLedger = startLedger;
-		checkpointLedger >= checkpointFrequency - 1 && objects.length < pageSize;
-		checkpointLedger -= checkpointFrequency
-	) {
 		objects.push(
-			createCheckpointObject(
-				snapshot,
-				archiveUrl,
-				checkpointLedger,
-				'checkpoint-state',
-				true
-			)
+			createBucketObject(snapshot, archiveUrl, checkpointLedger, bucketHash)
 		);
 	}
 
-	return objects;
+	return dedupeObjects(objects);
 }
 
 export function buildRootHistoryArchiveObject(
@@ -296,12 +243,6 @@ function getBucketHashes(
 
 function toCheckpointHex(checkpointLedger: number): string {
 	return checkpointLedger.toString(16).padStart(8, '0');
-}
-
-function normalizeDiscoveryPageSize(value?: number): number {
-	if (value === undefined) return defaultCheckpointDiscoveryPageSize;
-	if (!Number.isSafeInteger(value) || value < 1) return 1;
-	return Math.min(value, maxCheckpointDiscoveryPageSize);
 }
 
 function dedupeObjects(

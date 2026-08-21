@@ -1,5 +1,6 @@
 import type { EntityManager, Repository } from 'typeorm';
 import type { HistoryArchiveObject } from '@history-scan-coordinator/domain/history-archive-object/HistoryArchiveObject.js';
+import { historyArchiveObjectOpenSequentialCohortSql } from './HistoryArchiveSequentialChainSql.js';
 
 const maximumPlanRows = 4_096;
 const maximumCheckpointCursorPlanRows = 512;
@@ -41,7 +42,9 @@ export async function findVerifiedCheckpointsNeedingFanout(
 		})
 		.andWhere('object.status = :status', { status: 'verified' })
 		.andWhere('object.descendantsPlannedAt is null')
-		.orderBy('object.verifiedAt', 'DESC', 'NULLS LAST')
+		.andWhere(historyArchiveObjectOpenSequentialCohortSql('object'))
+		.orderBy('object.checkpointLedger', 'ASC', 'NULLS LAST')
+		.addOrderBy('object.verifiedAt', 'ASC', 'NULLS LAST')
 		.addOrderBy('object.id', 'ASC')
 		.take(safeLimit)
 		.getMany();
@@ -95,9 +98,8 @@ const compactCheckpointPlanSql = `
 			"archiveUrlIdentity", "latestCheckpointLedger",
 			"lastForwardCheckpointLedger", "nextHistoricalCheckpointLedger"
 		)
-		select root."archiveUrlIdentity", root.latest_checkpoint,
-			null, case when root.latest_checkpoint > 63
-				then root.latest_checkpoint - 64 else null end
+                select root."archiveUrlIdentity", root.latest_checkpoint,
+                        null, 63
 		from available_roots root
                 on conflict ("archiveUrlIdentity") do nothing
 		returning "archiveUrlIdentity"
@@ -114,44 +116,33 @@ const compactCheckpointPlanSql = `
                         ) as "latestCheckpointLedger",
                         cursor."lastForwardCheckpointLedger",
                         cursor."nextHistoricalCheckpointLedger",
-                        case
-                                when cursor."lastForwardCheckpointLedger" is null
-                                        or cursor."lastForwardCheckpointLedger" <
-                                                greatest(
-                                                        cursor."latestCheckpointLedger",
-                                                        root.latest_checkpoint
-                                                )
-                                        then greatest(
-                                                cursor."latestCheckpointLedger",
-                                                root.latest_checkpoint
-                                        )
-                                else cursor."nextHistoricalCheckpointLedger"
-                        end as checkpoint_ledger
+                        cursor."nextHistoricalCheckpointLedger" as checkpoint_ledger
                 from "history_archive_checkpoint_scan_cursor" cursor
                 join available_roots root
                         on root."archiveUrlIdentity" = cursor."archiveUrlIdentity"
                 cross join plan_pressure pressure
-                where (
-                        cursor."lastForwardCheckpointLedger" is null
-                        or cursor."lastForwardCheckpointLedger" <
-                                greatest(
-                                        cursor."latestCheckpointLedger",
-                                        root.latest_checkpoint
-                                )
-                        or (
-                                pressure.count < $1
-                                and cursor."nextHistoricalCheckpointLedger"
-                                        is not null
+                where cursor."nextHistoricalCheckpointLedger" is not null
+                        and cursor."nextHistoricalCheckpointLedger" <= greatest(
+                                cursor."latestCheckpointLedger",
+                                root.latest_checkpoint
                         )
-                )
-                order by (
-                        cursor."lastForwardCheckpointLedger" is null
-                        or cursor."lastForwardCheckpointLedger" <
-                                        greatest(
-                                                cursor."latestCheckpointLedger",
-                                                root.latest_checkpoint
-                                        )
-                ) desc,
+                        and (
+                                pressure.count < $1
+                                or cursor."nextHistoricalCheckpointLedger" = 63
+                        )
+                        and (
+                                cursor."nextHistoricalCheckpointLedger" = 63
+                                or exists (
+                                        select 1
+                                        from "history_archive_checkpoint_proof" predecessor
+                                        where predecessor."archiveUrlIdentity" =
+                                                cursor."archiveUrlIdentity"
+                                                and predecessor."checkpointLedger" =
+                                                        cursor."nextHistoricalCheckpointLedger" - 64
+                                                and predecessor.status = 'verified'
+                                )
+                        )
+                order by cursor."nextHistoricalCheckpointLedger",
                         cursor."updatedAt",
                         cursor."archiveUrlIdentity"
                 limit $2
@@ -193,16 +184,8 @@ const compactCheckpointPlanSql = `
 					then candidate.checkpoint_ledger
 				else cursor."lastForwardCheckpointLedger"
 			end,
-			"nextHistoricalCheckpointLedger" = case
-				when candidate.checkpoint_ledger =
-					candidate."nextHistoricalCheckpointLedger"
-					and candidate.checkpoint_ledger > 63
-					then candidate.checkpoint_ledger - 64
-				when candidate.checkpoint_ledger =
-					candidate."nextHistoricalCheckpointLedger"
-					then null
-				else cursor."nextHistoricalCheckpointLedger"
-			end,
+                        "nextHistoricalCheckpointLedger" =
+                                candidate.checkpoint_ledger + 64,
 			"updatedAt" = now()
 		from cursor_candidates candidate
 		where cursor."archiveUrlIdentity" = candidate."archiveUrlIdentity"

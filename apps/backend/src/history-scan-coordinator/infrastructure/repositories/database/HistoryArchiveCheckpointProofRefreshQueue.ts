@@ -9,6 +9,7 @@ import { dueProofRefreshCanonicalRuntimeArchiveRootsCteSql } from './HistoryArch
 import { canonicalRuntimeExecutableProofMemberExistsSql } from './HistoryArchiveCanonicalRuntimeProofMembershipSql.js';
 import { historyArchiveCheckpointProofQueuedRefreshSql } from './HistoryArchiveCheckpointProofRefreshSql.js';
 import { historyArchiveCheckpointProofPendingSourceEnrichmentSql } from './HistoryArchiveCheckpointProofPostRefreshSql.js';
+import { historyArchiveCheckpointProofTerminalReadySql } from './HistoryArchiveCheckpointProofReadinessSql.js';
 
 export interface ClaimedHistoryArchiveCheckpointProofRefresh {
 	readonly archiveUrlIdentity: string;
@@ -286,19 +287,16 @@ export const enqueueProofRefreshesSql = `
 			on source."objectType" = 'bucket'
 			and dependency."archiveUrlIdentity" = source."archiveUrlIdentity"
 			and dependency."bucketHash" = source."bucketHash"
-	), targets as materialized (
-		select affected."archiveUrlIdentity", affected."checkpointLedger",
-			max(affected.evidence_updated_at) as evidence_updated_at
-		from affected
-		where exists (
-			select 1
-			from "history_archive_object_queue" checkpoint
-			where checkpoint."archiveUrlIdentity" = affected."archiveUrlIdentity"
-				and checkpoint."checkpointLedger" = affected."checkpointLedger"
-				and checkpoint."objectType" = 'checkpoint-state'
-		)
-		group by affected."archiveUrlIdentity", affected."checkpointLedger"
-	), enqueued as (
+        ), candidate_targets as materialized (
+                select affected."archiveUrlIdentity", affected."checkpointLedger",
+                        max(affected.evidence_updated_at) as evidence_updated_at
+                from affected
+                group by affected."archiveUrlIdentity", affected."checkpointLedger"
+        ), targets as materialized (
+                select candidate.*
+                from candidate_targets candidate
+                where ${historyArchiveCheckpointProofTerminalReadySql('candidate')}
+        ), enqueued as (
 		insert into history_archive_checkpoint_proof_refresh_queue (
 			"archiveUrlIdentity", "checkpointLedger", "evidenceUpdatedAt", generation,
 			"requestedAt", "nextAttemptAt", "updatedAt"
@@ -348,6 +346,7 @@ export const claimProofRefreshSql = `
 		where queue."nextAttemptAt" <= now()
 			and (queue."leaseUntil" is null or queue."leaseUntil" <= now())
 			and ($2::smallint >= 1 or runtime.priority is not null)
+                        and ${historyArchiveCheckpointProofTerminalReadySql('queue')}
 		order by runtime.priority nulls last, queue."nextAttemptAt",
 			queue."requestedAt", queue.attempts,
 			queue."archiveUrlIdentity", queue."checkpointLedger"

@@ -9,6 +9,7 @@ import {
 	historyArchiveEffectivePrioritySql
 } from './HistoryArchiveCanonicalRuntimePrioritySql.js';
 import { hasPostgresSqlState } from './PostgresError.js';
+import { historyArchiveObjectOpenSequentialCohortSql } from './HistoryArchiveSequentialChainSql.js';
 
 export interface HistoryArchiveReadyQueueSyncResult {
 	readonly readyObjects: number;
@@ -47,6 +48,7 @@ export function historyArchiveSchedulableObjectSql(
 		or ${objectAlias}."transitionEffectsCompletedAt" is not null
 	)
 	and ${objectAlias}.status = 'pending'
+        and ${historyArchiveObjectOpenSequentialCohortSql(objectAlias)}
 `;
 }
 
