@@ -1,6 +1,6 @@
-const defaultTransitionReconciliationIntervalMs = 5_000;
-const defaultExecutionAdmissionIntervalMs = 15_000;
-const minimumMaintenanceIntervalMs = 5_000;
+const defaultTransitionReconciliationIntervalMs = 1_000;
+const defaultExecutionAdmissionIntervalMs = 1_000;
+const minimumMaintenanceIntervalMs = 1_000;
 
 export interface HistoryArchiveMaintenanceIntervals {
 	readonly executionAdmissionIntervalMs: number;

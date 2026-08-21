@@ -143,6 +143,7 @@ export class CompleteHistoryArchiveObject {
 			await this.objectRepository.materializeCheckpointDependencies(
 				object.remoteId
 			);
+			await this.reconcileCheckpointFanout(object);
 		}
 		if (descendants.length > 0) {
 			await this.objectRepository.planObjects(descendants);

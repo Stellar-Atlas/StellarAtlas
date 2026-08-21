@@ -141,7 +141,6 @@ describe('CompleteHistoryArchiveObject', () => {
 
 		expect(result._unsafeUnwrap()).toBe(true);
 		await useCase.reconcilePersisted(archiveObject);
-		await useCase.reconcileCheckpointFanout(archiveObject);
 		expect(stateRepository.saveAvailable).not.toHaveBeenCalled();
 		expect(objectRepository.planObjects).toHaveBeenCalledTimes(1);
 		const savedObjects = objectRepository.planObjects.mock.calls[0]?.[0] ?? [];
@@ -183,7 +182,6 @@ describe('CompleteHistoryArchiveObject', () => {
 
 		expect(result._unsafeUnwrap()).toBe(true);
 		await useCase.reconcilePersisted(archiveObject);
-		await useCase.reconcileCheckpointFanout(archiveObject);
 		const savedObjects = objectRepository.planObjects.mock.calls[0]?.[0] ?? [];
 		const olderCheckpointObjects = savedObjects.filter(
 			(object) =>
@@ -304,7 +302,6 @@ describe('CompleteHistoryArchiveObject', () => {
 
 		expect(result._unsafeUnwrap()).toBe(true);
 		await useCase.reconcilePersisted(archiveObject);
-		await useCase.reconcileCheckpointFanout(archiveObject);
 		const savedObjects = objectRepository.planObjects.mock.calls[0]?.[0] ?? [];
 		expect(savedObjects.map((object) => object.objectKey)).toContain(
 			'scp:0012863f'
@@ -348,7 +345,6 @@ describe('CompleteHistoryArchiveObject', () => {
 
 		expect(result._unsafeUnwrap()).toBe(true);
 		await useCase.reconcilePersisted(archiveObject);
-		await useCase.reconcileCheckpointFanout(archiveObject);
 		expect(objectRepository.planObjects).toHaveBeenCalled();
 		const savedObjects = objectRepository.planObjects.mock.calls[0]?.[0] ?? [];
 		expect(savedObjects.map((object) => object.objectKey)).toContain(

@@ -245,7 +245,7 @@ describe('ReconcileHistoryArchiveObjectTransitions', () => {
 
 		await reconciler.executeIfDue(10_000);
 		await reconciler.executeIfDue(10_001);
-		await reconciler.executeIfDue(15_000);
+		await reconciler.executeIfDue(11_000);
 
 		expect(
 			repository.tryWithTransitionReconciliationLock
