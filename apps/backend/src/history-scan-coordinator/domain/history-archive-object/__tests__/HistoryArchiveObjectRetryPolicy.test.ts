@@ -102,7 +102,21 @@ describe('HistoryArchiveObjectRetryPolicy', () => {
 				failureClass: 'rate-limit',
 				objectType: 'bucket'
 			})
-		).toBe(7_200_000);
+		).toBe(60_000);
+	});
+	it.each([
+		[0, 1_000],
+		[1, 2_000],
+		[2, 4_000],
+		[3, 8_000]
+	])('uses 1, 2, 4, 8 second host rate-limit backoff', (retry, delayMs) => {
+		expect(
+			getHistoryArchiveObjectRetryDelayMs({
+				currentRetryCount: retry,
+				failureClass: 'rate-limit',
+				objectType: 'bucket'
+			})
+		).toBe(delayMs);
 	});
 
 	it('keeps worker and coordinator failures out of archive object evidence', () => {
@@ -152,11 +166,11 @@ describe('HistoryArchiveObjectRetryPolicy', () => {
 	});
 
 	it.each([
-		['auth', 403, true],
+		['auth', 403, false],
 		['rate-limit', 429, true],
-		['timeout', 504, true],
-		['transport', null, true],
-		['http', 503, true],
+		['timeout', 504, false],
+		['transport', null, false],
+		['http', 503, false],
 		['http', 418, false],
 		['not-found', 404, false],
 		['unknown', null, false],

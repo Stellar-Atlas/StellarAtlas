@@ -17,24 +17,10 @@ export interface HistoryArchiveReadyQueueSyncResult {
 	readonly scheduledObjects: number;
 }
 
-export const historyArchiveCheckpointNotFoundCooldownMinutes = 15;
-
 export function historyArchiveCheckpointNotFoundCooldownSql(
-	objectAlias: string
+	_objectAlias: string
 ): string {
-	return `
-	not exists (
-		select 1
-		from "history_archive_object_event" recent_missing_checkpoint
-		where recent_missing_checkpoint."archiveUrlIdentity" =
-			${objectAlias}."archiveUrlIdentity"
-			and recent_missing_checkpoint."eventType" = 'failed'
-			and recent_missing_checkpoint."objectType" = 'checkpoint-state'
-			and recent_missing_checkpoint."httpStatus" in (404, 410)
-			and recent_missing_checkpoint."createdAt" >
-				now() - interval '${historyArchiveCheckpointNotFoundCooldownMinutes} minutes'
-	)
-	`;
+	return 'true';
 }
 
 export function historyArchiveSchedulableObjectSql(

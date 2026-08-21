@@ -6,12 +6,21 @@ import {
 } from '../HistoryArchiveObjectClaimSql.js';
 import { admitCanonicalFrontierSql } from '../HistoryArchiveCanonicalFrontierSql.js';
 import { historyArchiveObjectFrontierSql } from '../HistoryArchiveObjectFrontierSql.js';
-import { historyArchiveReadyPressureSql } from '../HistoryArchiveObjectReadyQueue.js';
+import {
+	historyArchiveCheckpointNotFoundCooldownSql,
+	historyArchiveReadyPressureSql
+} from '../HistoryArchiveObjectReadyQueue.js';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
 
 describe('HistoryArchiveObjectClaimSql', () => {
+	it('never blocks a root because another checkpoint returned 404', () => {
+		expect(historyArchiveCheckpointNotFoundCooldownSql('candidate')).toBe(
+			'true'
+		);
+	});
+
 	it('claims from the compact ready queue under durable slot locks', () => {
 		expect(historyArchiveObjectClaimCleanupSql).toContain(
 			'update "history_archive_object_claim_slot" slot'

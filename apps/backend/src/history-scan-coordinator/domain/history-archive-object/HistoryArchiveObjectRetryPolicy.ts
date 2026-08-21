@@ -167,28 +167,7 @@ export function shouldThrottleHistoryArchiveObjectHost(input: {
 	readonly failureClass: HistoryArchiveObjectFailureClass;
 	readonly httpStatus?: number | null;
 }): boolean {
-	const normalizedErrorType = normalizeErrorType(input.errorType);
-	if (
-		includesAny(normalizedErrorType, ['WORKER', 'SCANNER']) ||
-		includesAny(normalizedErrorType, ['COORDINATOR', 'CLAIM', 'LEASE']) ||
-		includesAny(normalizedErrorType, ['HASH', 'CHECKSUM', 'MISMATCH'])
-	) {
-		return false;
-	}
-	if (
-		input.failureClass === 'auth' ||
-		input.failureClass === 'rate-limit' ||
-		input.failureClass === 'timeout' ||
-		input.failureClass === 'transport'
-	) {
-		return true;
-	}
-
-	return (
-		input.failureClass === 'http' &&
-		typeof input.httpStatus === 'number' &&
-		input.httpStatus >= 500
-	);
+	return input.failureClass === 'rate-limit';
 }
 
 export function getHistoryArchiveObjectRetryDelayMs(input: {
@@ -200,6 +179,9 @@ export function getHistoryArchiveObjectRetryDelayMs(input: {
 		normalizeRetryCount(input.currentRetryCount),
 		maxExponentialStep
 	);
+	if (input.failureClass === 'rate-limit') {
+		return Math.min(1_000 * 2 ** exponentialStep, 60_000);
+	}
 	const uncappedDelay =
 		objectBaseDelayMs[input.objectType] *
 		failureDelayMultiplier[input.failureClass] *

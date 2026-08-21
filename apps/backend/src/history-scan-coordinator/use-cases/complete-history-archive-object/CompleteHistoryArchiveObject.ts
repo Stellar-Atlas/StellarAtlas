@@ -160,6 +160,7 @@ export class CompleteHistoryArchiveObject {
 			object.attempts,
 			'verified'
 		);
+		await this.reconcileProofCompletionEvent(object);
 	}
 
 	async reconcileCheckpointDependencies(
@@ -208,6 +209,30 @@ export class CompleteHistoryArchiveObject {
 		await this.objectRepository.markCheckpointDescendantsPlanned(
 			object.remoteId
 		);
+	}
+
+	private async reconcileProofCompletionEvent(
+		object: HistoryArchiveObject
+	): Promise<void> {
+		if (
+			object.objectType !== 'ledger' &&
+			object.objectType !== 'transactions' &&
+			object.objectType !== 'results' &&
+			object.objectType !== 'scp' &&
+			object.objectType !== 'bucket'
+		) {
+			return;
+		}
+		try {
+			const refresh =
+				await this.objectRepository.drainCheckpointProofRefreshQueue(1, 1);
+			if (refresh.completed === 0) return;
+			await this.objectRepository.reconcileExecutionDisposition({
+				admitGenericObjects: false
+			});
+		} catch {
+			return;
+		}
 	}
 
 	private async prepareCompletionProgress(

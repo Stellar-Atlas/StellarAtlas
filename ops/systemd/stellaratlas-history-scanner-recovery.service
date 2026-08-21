@@ -14,13 +14,9 @@ WorkingDirectory=/home/observe/stellarbeat-data/Observer
 Environment=NODE_ENV=production
 Environment=HOME=/home/observe
 Environment=PATH=/home/observe/.nvm/versions/node/v26.4.0/bin:/usr/local/sbin:/usr/local/bin:/sbin:/bin
-# Sixty-four workers may claim and stream remote
-# archive data concurrently; category jobs share 64 hash threads.
-Environment=HISTORY_OBJECT_WORKER_PROCESSES=64
-Environment=HISTORY_OBJECT_DOWNLOAD_CONCURRENCY=64
-Environment=HISTORY_HASHER_WORKERS=64
 Environment=HISTORY_SCAN_WORKERS=1
 EnvironmentFile=-/etc/stellaratlas/stellaratlas.env
+EnvironmentFile=-/etc/stellaratlas/archive-verifier-steady.env
 ExecStartPre=/usr/bin/env node scripts/wait-for-url.mjs http://127.0.0.1:3000/v1/status/api 90
 ExecStart=/usr/bin/env pnpm start:scan-history
 Restart=always
