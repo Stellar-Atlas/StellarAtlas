@@ -109,13 +109,6 @@ export class ReconcileHistoryArchiveObjectTransitions {
 		const promotePlannedObjects =
 			this.maintenanceLanes.promotePlannedObjectsEnabled &&
 			options.promotePlannedObjects !== false;
-		if (
-			!promotePlannedObjects &&
-			!this.maintenanceLanes.terminalTransitionReconciliationEnabled &&
-			!this.maintenanceLanes.checkpointDependencyReconciliationEnabled
-		) {
-			return;
-		}
 		if (now < this.nextTransitionRunAt) return;
 		this.nextTransitionRunAt =
 			now + this.maintenanceIntervals.transitionReconciliationIntervalMs;

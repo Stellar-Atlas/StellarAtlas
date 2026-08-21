@@ -2,6 +2,7 @@ import type { EntityManager, Repository } from 'typeorm';
 import type { HistoryArchiveObject } from '@history-scan-coordinator/domain/history-archive-object/HistoryArchiveObject.js';
 
 const maximumPlanRows = 4_096;
+const maximumCheckpointCursorPlanRows = 2_048;
 const maximumCheckpointFanoutBatch = 3;
 const maximumCheckpointCursorBatch = 128;
 
@@ -68,7 +69,7 @@ export async function materializeCompactCheckpointPlans(
 	manager: EntityManager
 ): Promise<number> {
 	const [result] = (await manager.query(compactCheckpointPlanSql, [
-		maximumPlanRows,
+		maximumCheckpointCursorPlanRows,
 		maximumCheckpointCursorBatch
 	])) as readonly { readonly planned: number | string }[];
 	return Number(result?.planned ?? 0);
