@@ -5,5 +5,11 @@ describe('historyArchiveCheckpointProofQueuedRefreshSql', () => {
 		expect(historyArchiveCheckpointProofQueuedRefreshSql).toContain(
 			'as "matchedCurrentCount"'
 		);
+		expect(historyArchiveCheckpointProofQueuedRefreshSql).toContain(
+			"proof.status = 'not-evaluable'"
+		);
+		expect(historyArchiveCheckpointProofQueuedRefreshSql).toContain(
+			"derived.status = 'pending'"
+		);
 	});
 });

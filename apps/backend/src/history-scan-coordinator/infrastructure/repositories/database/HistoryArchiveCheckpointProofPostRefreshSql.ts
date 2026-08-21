@@ -65,8 +65,14 @@ export const historyArchiveCheckpointProofPendingSourceEnrichmentSql = `
 
 export const historyArchiveCheckpointProofPreservedAttestationSql = `
 	(
-		proof.status in ('verified', 'mismatch')
-		and derived.status in ('pending', 'not-evaluable')
+		(
+			proof.status in ('verified', 'mismatch')
+			and derived.status in ('pending', 'not-evaluable')
+		)
+		or (
+			proof.status = 'not-evaluable'
+			and derived.status = 'pending'
+		)
 	)
 `;
 
