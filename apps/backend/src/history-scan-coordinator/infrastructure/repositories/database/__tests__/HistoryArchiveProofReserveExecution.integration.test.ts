@@ -74,16 +74,18 @@ describe('history archive proof-reserve execution', () => {
 		if (postgres !== undefined) await postgres.stop();
 	});
 
-	it('prioritizes ledger revalidation needed to complete proof facts', async () => {
+	it('re-admits an interrupted pending ledger proof revalidation', async () => {
 		const root = createRoot(0);
-		const checkpointLedger = 1_000_063;
+                const checkpointLedger = 63;
 		const ledger = createObject(0, {
 			checkpointLedger,
-			objectKey: 'ledger:000f423f',
+                        objectKey: 'ledger:0000003f',
 			objectOrder: 1,
 			objectType: 'ledger',
-			status: 'verified'
+			status: 'pending'
 		});
+		ledger.executionDisposition = 'deferred';
+		ledger.executionReason = 'proof-completion-waiting';
 		ledger.verificationFacts = {
 			ledgerCategory: {
 				entryCount: 64,
@@ -99,9 +101,7 @@ describe('history archive proof-reserve execution', () => {
 		proof.bucketsVerified = true;
 		proof.missingBucketCount = 0;
 
-		await dataSource
-			.getRepository(HistoryArchiveObject)
-			.save([root, ledger]);
+		await dataSource.getRepository(HistoryArchiveObject).save([root, ledger]);
 		await dataSource.getRepository(HistoryArchiveCheckpointProof).save(proof);
 
 		await repository.reconcileExecutionDisposition();

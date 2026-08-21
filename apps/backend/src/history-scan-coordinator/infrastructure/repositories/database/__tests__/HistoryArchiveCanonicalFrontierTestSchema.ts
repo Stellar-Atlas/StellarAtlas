@@ -11,16 +11,30 @@ export async function createCanonicalFrontierTestSchema(
 			priority smallint not null check (priority between 0 and 2),
 			"availableAt" timestamptz not null default now(),
 			"createdAt" timestamptz not null default now(),
-			"updatedAt" timestamptz not null default now()
+                        "updatedAt" timestamptz not null default now(),
+                        "dispatchToken" uuid,
+                        "claimAttempt" integer,
+                        "publishedAt" timestamptz
 		)
 	`);
 	await dataSource.query(`
 		create table if not exists "history_archive_state_snapshot" (
 			"archiveUrlIdentity" text primary key,
 			status text not null,
-			"networkPassphrase" text
+                        "networkPassphrase" text,
+                        "currentLedger" integer
 		)
 	`);
+	await dataSource.query(`
+                create table if not exists "history_archive_checkpoint_scan_cursor" (
+                        "archiveUrlIdentity" text primary key,
+                        "latestCheckpointLedger" integer not null,
+                        "lastForwardCheckpointLedger" integer,
+                        "nextHistoricalCheckpointLedger" integer,
+                        "createdAt" timestamptz not null default now(),
+                        "updatedAt" timestamptz not null default now()
+                )
+        `);
 	await dataSource.query(`
 		create table if not exists "full_history_promotion_runtime" (
 			"network_passphrase_hash" bytea primary key,

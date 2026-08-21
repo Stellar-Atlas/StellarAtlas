@@ -296,7 +296,14 @@ export const admitProofCompletionReserveSql = `
 		join "history_archive_object_queue" candidate
 			on candidate."remoteId" = proof."ledgerObjectRemoteId"
 		where candidate."objectType" = 'ledger'
-			and candidate.status = 'verified'
+                        and (
+                                candidate.status = 'verified'
+                                or (
+                                        candidate.status = 'pending'
+                                        and candidate."executionDisposition" = 'deferred'
+                                        and candidate."executionReason" = 'proof-completion-waiting'
+                                )
+                        )
 			and coalesce(
 				candidate."verificationFacts"#>>
 					'{ledgerCategory,headerHashesVerified}',
