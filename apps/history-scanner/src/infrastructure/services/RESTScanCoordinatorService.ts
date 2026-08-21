@@ -445,7 +445,19 @@ export class RESTScanCoordinatorService implements ScanCoordinatorService {
 			) {
 				return ok(undefined);
 			}
-			return err(new CoordinatorServiceError(errorMessage, response.error));
+			const responseData = isHttpError(response.error)
+				? response.error.response?.data
+				: undefined;
+			const responseDetail =
+				isObject(responseData) && typeof responseData.error === 'string'
+					? ': ' + responseData.error
+					: '';
+			return err(
+				new CoordinatorServiceError(
+					errorMessage + responseDetail,
+					response.error
+				)
+			);
 		}
 
 		if (

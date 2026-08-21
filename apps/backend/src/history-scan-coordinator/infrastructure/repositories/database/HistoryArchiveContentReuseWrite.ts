@@ -242,9 +242,10 @@ function sourceNeutralFacts(
 	}
 	if (
 		objectType !== 'scp' &&
-		(!Array.isArray(category.ledgers) || category.ledgers.length === 0)
+		(!Array.isArray(category.ledgers) ||
+			category.ledgers.length !== Number(category.entryCount))
 	) {
-		throw new Error('Category ledger facts are missing');
+		throw new Error('Category ledger facts do not match entry count');
 	}
 	const { sourceUrl: _sourceUrl, ...sourceNeutralCategory } = category;
 	return {

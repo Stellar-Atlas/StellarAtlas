@@ -209,9 +209,10 @@ function isExactReusableContent(
 	) {
 		return false;
 	}
+	if (job.objectType === 'scp') return true;
 	return (
-		job.objectType === 'scp' ||
-		(Array.isArray(category.ledgers) && category.ledgers.length > 0)
+		Array.isArray(category.ledgers) &&
+		category.ledgers.length === category.entryCount
 	);
 }
 
