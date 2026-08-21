@@ -2,8 +2,8 @@ import type { EntityManager, Repository } from 'typeorm';
 import type { HistoryArchiveObject } from '@history-scan-coordinator/domain/history-archive-object/HistoryArchiveObject.js';
 
 const maximumPlanRows = 4_096;
-const maximumCheckpointCursorPlanRows = 2_048;
-const maximumCheckpointFanoutBatch = 3;
+const maximumCheckpointCursorPlanRows = 512;
+const maximumCheckpointFanoutBatch = 24;
 const maximumCheckpointCursorBatch = 128;
 
 export async function findVerifiedCheckpointsNeedingFanout(
