@@ -91,6 +91,7 @@ const compactCheckpointPlanSql = `
 			and root."objectType" = 'history-archive-state'
 			and root."objectKey" = 'root'
 			and root.status = 'verified'
+                        and state."archiveUrlIdentity" = regexp_replace(root."archiveUrl", '/+$', '')
 		where state.status = 'available'
 			and state."currentLedger" >= 63
 	), seeded as (
