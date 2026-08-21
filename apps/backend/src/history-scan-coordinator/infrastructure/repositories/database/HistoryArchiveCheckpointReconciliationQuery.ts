@@ -223,12 +223,26 @@ export async function findVerifiedCheckpointsNeedingReconciliation(
 	limit: number
 ): Promise<readonly HistoryArchiveObject[]> {
 	const safeLimit = normalizeLimit(limit);
-	const runtimeTargetLimit = Math.max(1, safeLimit - Math.ceil(safeLimit / 3));
-	const runtimeTargets = await findRuntimeTargets(
+	const sequentialTargets = await findOpenSequentialCohortTargets(
 		repository,
-		runtimeTargetLimit
+		safeLimit
 	);
-	if (runtimeTargets.length >= safeLimit) return runtimeTargets;
+	if (sequentialTargets.length >= safeLimit) return sequentialTargets;
+
+	const runtimeTargetLimit = Math.min(
+		safeLimit - sequentialTargets.length,
+		Math.max(1, safeLimit - Math.ceil(safeLimit / 3))
+	);
+	const sequentialRemoteIds = new Set(
+		sequentialTargets.map((object) => object.remoteId)
+	);
+	const runtimeTargets = (
+		await findRuntimeTargets(repository, runtimeTargetLimit)
+	).filter((object) => !sequentialRemoteIds.has(object.remoteId));
+	const priorityTargets = [...sequentialTargets, ...runtimeTargets];
+	if (priorityTargets.length >= safeLimit) {
+		return priorityTargets.slice(0, safeLimit);
+	}
 
 	const mismatches = await baseCheckpointQuery(repository)
 		.innerJoin(
@@ -255,22 +269,22 @@ export async function findVerifiedCheckpointsNeedingReconciliation(
 		)`
 		)
 		.orderBy('object.id', 'ASC')
-		.take(safeLimit - runtimeTargets.length)
+		.take(safeLimit - priorityTargets.length)
 		.getMany();
-	if (runtimeTargets.length + mismatches.length >= safeLimit) {
-		return [...runtimeTargets, ...mismatches];
+	if (priorityTargets.length + mismatches.length >= safeLimit) {
+		return [...priorityTargets, ...mismatches];
 	}
 
 	const satisfiedBucketProofs = await findSatisfiedBucketProofs(
 		repository,
-		safeLimit - runtimeTargets.length - mismatches.length,
-		[...runtimeTargets, ...mismatches]
+		safeLimit - priorityTargets.length - mismatches.length,
+		[...priorityTargets, ...mismatches]
 	);
 	if (
-		runtimeTargets.length + mismatches.length + satisfiedBucketProofs.length >=
+		priorityTargets.length + mismatches.length + satisfiedBucketProofs.length >=
 		safeLimit
 	) {
-		return [...runtimeTargets, ...mismatches, ...satisfiedBucketProofs];
+		return [...priorityTargets, ...mismatches, ...satisfiedBucketProofs];
 	}
 
 	const proofReadyQuery = withReconciliationPredicate(
@@ -290,7 +304,7 @@ export async function findVerifiedCheckpointsNeedingReconciliation(
 			.andWhere('candidateProof.proofFactsComplete = true')
 	);
 	excludeObjects(proofReadyQuery, [
-		...runtimeTargets,
+		...priorityTargets,
 		...mismatches,
 		...satisfiedBucketProofs
 	]);
@@ -298,20 +312,20 @@ export async function findVerifiedCheckpointsNeedingReconciliation(
 		.orderBy('object.id', 'ASC')
 		.take(
 			safeLimit -
-				runtimeTargets.length -
+				priorityTargets.length -
 				mismatches.length -
 				satisfiedBucketProofs.length
 		)
 		.getMany();
 	if (
-		runtimeTargets.length +
+		priorityTargets.length +
 			mismatches.length +
 			satisfiedBucketProofs.length +
 			proofReady.length >=
 		safeLimit
 	) {
 		return [
-			...runtimeTargets,
+			...priorityTargets,
 			...mismatches,
 			...satisfiedBucketProofs,
 			...proofReady
@@ -322,14 +336,14 @@ export async function findVerifiedCheckpointsNeedingReconciliation(
 		baseCheckpointQuery(repository)
 	);
 	excludeObjects(remaining, [
-		...runtimeTargets,
+		...priorityTargets,
 		...mismatches,
 		...satisfiedBucketProofs,
 		...proofReady
 	]);
 
 	return [
-		...runtimeTargets,
+		...priorityTargets,
 		...mismatches,
 		...satisfiedBucketProofs,
 		...proofReady,
@@ -337,13 +351,32 @@ export async function findVerifiedCheckpointsNeedingReconciliation(
 			.orderBy('object.id', 'ASC')
 			.take(
 				safeLimit -
-					runtimeTargets.length -
+					priorityTargets.length -
 					mismatches.length -
 					satisfiedBucketProofs.length -
 					proofReady.length
 			)
 			.getMany())
 	];
+}
+
+async function findOpenSequentialCohortTargets(
+	repository: Repository<HistoryArchiveObject>,
+	limit: number
+): Promise<readonly HistoryArchiveObject[]> {
+	return await withReconciliationPredicate(
+		baseCheckpointQuery(repository).innerJoin(
+			'history_archive_checkpoint_scan_cursor',
+			'chainCursor',
+			`"chainCursor"."archiveUrlIdentity" = "object"."archiveUrlIdentity"
+				and "object"."checkpointLedger" =
+					"chainCursor"."nextHistoricalCheckpointLedger" - 64`
+		)
+	)
+		.orderBy('object.checkpointLedger', 'ASC')
+		.addOrderBy('object.id', 'ASC')
+		.take(limit)
+		.getMany();
 }
 
 async function findSatisfiedBucketProofs(

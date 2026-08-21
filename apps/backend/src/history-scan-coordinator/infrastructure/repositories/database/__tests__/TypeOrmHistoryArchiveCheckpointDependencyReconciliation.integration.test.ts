@@ -53,8 +53,50 @@ describe('checkpoint dependency reconciliation in PostgreSQL', () => {
 
 	beforeEach(async () => {
 		await dataSource.query(
-			'truncate history_archive_checkpoint_proof, history_archive_object_queue, history_archive_checkpoint_bucket_dependency, history_archive_state_snapshot, full_history_historical_backfill_job, full_history_watermark, full_history_promotion_runtime restart identity cascade'
+			'truncate history_archive_checkpoint_proof, history_archive_object_queue, history_archive_checkpoint_bucket_dependency, history_archive_checkpoint_scan_cursor, history_archive_state_snapshot, full_history_historical_backfill_job, full_history_watermark, full_history_promotion_runtime restart identity cascade'
 		);
+	});
+
+	it('prioritizes the open bottom-up cohort before near-head runtime work', async () => {
+		const passphrase = 'Sequential reconciliation priority fixture';
+		const sequential = checkpointObject(
+			'https://sequential.example',
+			63,
+			'verified'
+		);
+		const active = checkpointObject('https://active.example', 127, 'verified');
+		await dataSource
+			.getRepository(HistoryArchiveObject)
+			.save([sequential, active]);
+		await dataSource.query(
+			`insert into history_archive_checkpoint_scan_cursor (
+				"archiveUrlIdentity", "latestCheckpointLedger",
+				"lastForwardCheckpointLedger", "nextHistoricalCheckpointLedger"
+			) values ($1, 127, null, 127)`,
+			[sequential.archiveUrlIdentity]
+		);
+		await dataSource.query(
+			`insert into history_archive_state_snapshot (
+				"archiveUrlIdentity", status, "networkPassphrase"
+			) values ($1, 'available', $2)`,
+			[active.archiveUrlIdentity, passphrase]
+		);
+		await dataSource.query(
+			`insert into full_history_promotion_runtime (
+				"network_passphrase_hash", state, "checkpoint_ledger"
+			) values ($1, 'waiting-for-proof', $2)`,
+			[
+				createHash('sha256').update(passphrase, 'utf8').digest(),
+				127
+			]
+		);
+
+		const result =
+			await repository.findVerifiedCheckpointsNeedingReconciliation(1);
+
+		expect(result.map((object) => object.remoteId)).toEqual([
+			sequential.remoteId
+		]);
 	});
 
 	it('prioritizes the active canonical runtime checkpoint', async () => {
@@ -170,11 +212,18 @@ async function saveCanonicalPendingProofFixture(
 	const bucketHash = 'a'.repeat(64);
 	const checkpoint = checkpointObject(archiveUrl, checkpointLedger, 'verified');
 	checkpoint.dependenciesMaterializedAt = new Date('2026-07-17T00:00:00.000Z');
+	const ledger = proofObject(archiveUrl, checkpointLedger, 'ledger');
+	const transactions = proofObject(
+		archiveUrl,
+		checkpointLedger,
+		'transactions'
+	);
+	const results = proofObject(archiveUrl, checkpointLedger, 'results');
 	const required = [
 		checkpoint,
-		proofObject(archiveUrl, checkpointLedger, 'ledger'),
-		proofObject(archiveUrl, checkpointLedger, 'transactions'),
-		proofObject(archiveUrl, checkpointLedger, 'results'),
+		ledger,
+		transactions,
+		results,
 		proofObject(archiveUrl, checkpointLedger - 64, 'ledger')
 	];
 	const bucket = new HistoryArchiveObject({
@@ -220,9 +269,13 @@ async function saveCanonicalPendingProofFixture(
 			new Date('2026-07-17T00:00:00.000Z')
 		]
 	);
+	const proof = pendingProof(checkpoint, proofEvaluatedAt);
+	proof.ledgerObjectRemoteId = ledger.remoteId;
+	proof.transactionsObjectRemoteId = transactions.remoteId;
+	proof.resultsObjectRemoteId = results.remoteId;
 	await dataSource
 		.getRepository(HistoryArchiveCheckpointProof)
-		.save(pendingProof(checkpoint, proofEvaluatedAt));
+		.save(proof);
 	await dataSource.query(
 		`insert into history_archive_state_snapshot (
 			"archiveUrlIdentity", status, "networkPassphrase"
