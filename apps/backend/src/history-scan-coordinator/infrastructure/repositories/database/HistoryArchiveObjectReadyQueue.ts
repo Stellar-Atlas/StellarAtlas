@@ -47,7 +47,7 @@ export function historyArchiveSchedulableObjectSql(
 		${objectAlias}."transitionEffectsRequiredAt" is null
 		or ${objectAlias}."transitionEffectsCompletedAt" is not null
 	)
-	and ${objectAlias}.status = 'pending'
+	and ${objectAlias}.status in ('pending', 'failed')
         and ${historyArchiveObjectOpenSequentialCohortSql(objectAlias)}
 `;
 }
