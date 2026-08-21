@@ -98,46 +98,51 @@ const compactCheckpointPlanSql = `
 			null, case when root.latest_checkpoint > 63
 				then root.latest_checkpoint - 64 else null end
 		from available_roots root
-		on conflict ("archiveUrlIdentity") do update
-		set "latestCheckpointLedger" = greatest(
-				"history_archive_checkpoint_scan_cursor"."latestCheckpointLedger",
-				excluded."latestCheckpointLedger"
-			),
-			"updatedAt" = case
-				when excluded."latestCheckpointLedger" >
-					"history_archive_checkpoint_scan_cursor"."latestCheckpointLedger"
-				then now()
-				else "history_archive_checkpoint_scan_cursor"."updatedAt"
-			end
+                on conflict ("archiveUrlIdentity") do nothing
 		returning "archiveUrlIdentity"
 	), plan_pressure as materialized (
 		select count(*)::integer as count
 		from (
 			select 1 from "history_archive_object_plan" limit $1
 		) bounded
-	), cursor_candidates as materialized (
-		select cursor."archiveUrlIdentity", cursor."latestCheckpointLedger",
-			cursor."lastForwardCheckpointLedger",
-			cursor."nextHistoricalCheckpointLedger",
-			case
-				when cursor."lastForwardCheckpointLedger" is null
-					or cursor."lastForwardCheckpointLedger" <
-						cursor."latestCheckpointLedger"
-					then cursor."latestCheckpointLedger"
-				else cursor."nextHistoricalCheckpointLedger"
-			end as checkpoint_ledger
-		from "history_archive_checkpoint_scan_cursor" cursor
-		cross join plan_pressure pressure
-		where pressure.count < $1
-			and (
-				cursor."lastForwardCheckpointLedger" is null
-				or cursor."lastForwardCheckpointLedger" <
-					cursor."latestCheckpointLedger"
-				or cursor."nextHistoricalCheckpointLedger" is not null
-			)
-		order by cursor."updatedAt", cursor."archiveUrlIdentity"
+        ), cursor_candidates as materialized (
+                select cursor."archiveUrlIdentity",
+                        greatest(
+                                cursor."latestCheckpointLedger",
+                                root.latest_checkpoint
+                        ) as "latestCheckpointLedger",
+                        cursor."lastForwardCheckpointLedger",
+                        cursor."nextHistoricalCheckpointLedger",
+                        case
+                                when cursor."lastForwardCheckpointLedger" is null
+                                        or cursor."lastForwardCheckpointLedger" <
+                                                greatest(
+                                                        cursor."latestCheckpointLedger",
+                                                        root.latest_checkpoint
+                                                )
+                                        then greatest(
+                                                cursor."latestCheckpointLedger",
+                                                root.latest_checkpoint
+                                        )
+                                else cursor."nextHistoricalCheckpointLedger"
+                        end as checkpoint_ledger
+                from "history_archive_checkpoint_scan_cursor" cursor
+                join available_roots root
+                        on root."archiveUrlIdentity" = cursor."archiveUrlIdentity"
+                cross join plan_pressure pressure
+                where pressure.count < $1
+                        and (
+                                cursor."lastForwardCheckpointLedger" is null
+                                or cursor."lastForwardCheckpointLedger" <
+                                        greatest(
+                                                cursor."latestCheckpointLedger",
+                                                root.latest_checkpoint
+                                        )
+                                or cursor."nextHistoricalCheckpointLedger" is not null
+                        )
+                order by cursor."updatedAt", cursor."archiveUrlIdentity"
                 limit (select least($2, greatest($1 - count, 0)) from plan_pressure)
-		for update of cursor skip locked
+                for update of cursor skip locked
 	), source as materialized (
 		select candidate.*, root."archiveUrl", root."hostIdentity",
 			lpad(to_hex(candidate.checkpoint_ledger), 8, '0') as checkpoint_hex
@@ -168,7 +173,8 @@ const compactCheckpointPlanSql = `
 		returning id
 	), advanced as (
 		update "history_archive_checkpoint_scan_cursor" cursor
-		set "lastForwardCheckpointLedger" = case
+                set "latestCheckpointLedger" = candidate."latestCheckpointLedger",
+                        "lastForwardCheckpointLedger" = case
 				when candidate.checkpoint_ledger =
 					candidate."latestCheckpointLedger"
 					then candidate.checkpoint_ledger
