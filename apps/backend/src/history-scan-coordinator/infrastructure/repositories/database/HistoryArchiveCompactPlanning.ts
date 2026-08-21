@@ -131,18 +131,30 @@ const compactCheckpointPlanSql = `
                 join available_roots root
                         on root."archiveUrlIdentity" = cursor."archiveUrlIdentity"
                 cross join plan_pressure pressure
-                where pressure.count < $1
-                        and (
-                                cursor."lastForwardCheckpointLedger" is null
-                                or cursor."lastForwardCheckpointLedger" <
+                where (
+                        cursor."lastForwardCheckpointLedger" is null
+                        or cursor."lastForwardCheckpointLedger" <
+                                greatest(
+                                        cursor."latestCheckpointLedger",
+                                        root.latest_checkpoint
+                                )
+                        or (
+                                pressure.count < $1
+                                and cursor."nextHistoricalCheckpointLedger"
+                                        is not null
+                        )
+                )
+                order by (
+                        cursor."lastForwardCheckpointLedger" is null
+                        or cursor."lastForwardCheckpointLedger" <
                                         greatest(
                                                 cursor."latestCheckpointLedger",
                                                 root.latest_checkpoint
                                         )
-                                or cursor."nextHistoricalCheckpointLedger" is not null
-                        )
-                order by cursor."updatedAt", cursor."archiveUrlIdentity"
-                limit (select least($2, greatest($1 - count, 0)) from plan_pressure)
+                ) desc,
+                        cursor."updatedAt",
+                        cursor."archiveUrlIdentity"
+                limit $2
                 for update of cursor skip locked
 	), source as materialized (
 		select candidate.*, root."archiveUrl", root."hostIdentity",
