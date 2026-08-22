@@ -218,11 +218,17 @@ describe('CompleteHistoryArchiveObject', () => {
 
 	it('refreshes checkpoint proof after bucket verification', async () => {
 		const archiveObject = createBucketObject();
-		objectRepository.drainCheckpointProofRefreshQueue.mockResolvedValue({
-			claimed: 1,
-			completed: 1,
-			failed: 0
-		});
+		objectRepository.drainCheckpointProofRefreshQueue
+			.mockResolvedValueOnce({
+				claimed: 10,
+				completed: 10,
+				failed: 0
+			})
+			.mockResolvedValue({
+				claimed: 0,
+				completed: 0,
+				failed: 0
+			});
 		objectRepository.findByRemoteId.mockResolvedValue(archiveObject);
 		const useCase = new CompleteHistoryArchiveObject(
 			objectRepository,
@@ -247,7 +253,10 @@ describe('CompleteHistoryArchiveObject', () => {
 		});
 		expect(
 			objectRepository.drainCheckpointProofRefreshQueue
-		).toHaveBeenCalledWith(64, 1);
+		).toHaveBeenCalledWith(10, 1);
+		expect(
+			objectRepository.drainCheckpointProofRefreshQueue
+		).toHaveBeenCalledTimes(2);
 		expect(objectRepository.reconcileExecutionDisposition).toHaveBeenCalledWith(
 			{
 				admitGenericObjects: false
