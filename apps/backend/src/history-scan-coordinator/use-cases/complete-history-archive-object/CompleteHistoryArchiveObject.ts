@@ -23,7 +23,7 @@ import { TYPES } from '../../infrastructure/di/di-types.js';
 import { mapUnknownToError } from '@core/utilities/mapUnknownToError.js';
 import { HistoryArchiveObjectEventRecorder } from '../record-history-archive-object-event/HistoryArchiveObjectEventRecorder.js';
 
-const immediateProofRefreshBatchSize = 64;
+const immediateProofRefreshBatchSize = 192;
 
 export interface CompleteHistoryArchiveObjectRequest extends HistoryArchiveObjectProgressUpdate {
 	readonly archiveMetadata?: ArchiveMetadataDTO | null;

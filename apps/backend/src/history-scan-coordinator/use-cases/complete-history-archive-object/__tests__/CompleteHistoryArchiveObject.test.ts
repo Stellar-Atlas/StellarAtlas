@@ -223,8 +223,8 @@ describe('CompleteHistoryArchiveObject', () => {
 		const archiveObject = createBucketObject();
 		objectRepository.drainCheckpointProofRefreshQueue
 			.mockResolvedValueOnce({
-				claimed: 64,
-				completed: 64,
+				claimed: 192,
+				completed: 192,
 				failed: 0
 			})
 			.mockResolvedValue({
@@ -257,7 +257,7 @@ describe('CompleteHistoryArchiveObject', () => {
 		});
 		expect(
 			objectRepository.drainCheckpointProofRefreshQueue
-		).toHaveBeenCalledWith(64, 1);
+		).toHaveBeenCalledWith(192, 1);
 		expect(
 			objectRepository.drainCheckpointProofRefreshQueue
 		).toHaveBeenCalledTimes(2);

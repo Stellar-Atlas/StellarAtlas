@@ -4,6 +4,7 @@ import {
 	transactionsFactsJsonSql
 } from './HistoryArchiveCheckpointProofSqlInputs.js';
 import {
+	historyArchiveCheckpointProofBatchQueuedUpsertSql,
 	historyArchiveCheckpointProofDerivedMatchesCurrentSql,
 	historyArchiveCheckpointProofFinalizedCteSql,
 	historyArchiveCheckpointProofQueuedUpsertSql,
@@ -14,7 +15,10 @@ import {
 	historyArchiveCheckpointProofReconciliationAcknowledgementCteSql
 } from './HistoryArchiveCheckpointProofPostRefreshSql.js';
 import { historyArchiveCheckpointProofFailureCtesSql } from './HistoryArchiveCheckpointProofFailureSql.js';
-import { historyArchiveCheckpointProofTargetCtesSql } from './HistoryArchiveCheckpointProofTargetSql.js';
+import {
+	historyArchiveCheckpointProofBatchTargetCtesSql,
+	historyArchiveCheckpointProofTargetCtesSql
+} from './HistoryArchiveCheckpointProofTargetSql.js';
 import {
 	emptyTransactionResultSetMatchesSql,
 	emptyTransactionSetMatchesSql
@@ -37,10 +41,11 @@ const scpVerifiedSql = `(checkpoint_rollup.has_scp
 	and coalesce(checkpoint_rollup.scp_source_matches, false))`;
 
 function buildHistoryArchiveCheckpointProofRefreshSql(
+	targetCtesSql: string,
 	upsertSql: string
 ): string {
 	return `
-	with ${historyArchiveCheckpointProofTargetCtesSql}, checkpoint_rollup as (
+	with ${targetCtesSql}, checkpoint_rollup as (
 		select
 			target."archiveUrlIdentity",
 			target."checkpointLedger",
@@ -464,7 +469,22 @@ function buildHistoryArchiveCheckpointProofRefreshSql(
 		returning "archiveUrlIdentity", "checkpointLedger"
 	)
 	${historyArchiveCheckpointProofReconciliationAcknowledgementCteSql}
+	, handled as materialized (
+		select "archiveUrlIdentity", "checkpointLedger"
+		from upserted
+		union
+		select derived."archiveUrlIdentity", derived."checkpointLedger"
+		from finalized derived
+		join history_archive_checkpoint_proof proof
+			on proof."archiveUrlIdentity" = derived."archiveUrlIdentity"
+			and proof."checkpointLedger" = derived."checkpointLedger"
+		where
+			${historyArchiveCheckpointProofDerivedMatchesCurrentSql}
+			or ${historyArchiveCheckpointProofPreservedAttestationSql}
+	)
 	select
+		(select count(*)::integer from target_checkpoints) as "targetCount",
+		(select count(*)::integer from handled) as "handledCount",
 		(select count(*)::integer from upserted) as "upsertedCount",
 		(select count(*)::integer from reconciliation_acknowledgement)
 			as "acknowledgedCount",
@@ -490,10 +510,18 @@ function buildHistoryArchiveCheckpointProofRefreshSql(
 
 export const historyArchiveCheckpointProofRefreshSql =
 	buildHistoryArchiveCheckpointProofRefreshSql(
+		historyArchiveCheckpointProofTargetCtesSql,
 		historyArchiveCheckpointProofUpsertSql
 	);
 
 export const historyArchiveCheckpointProofQueuedRefreshSql =
 	buildHistoryArchiveCheckpointProofRefreshSql(
+		historyArchiveCheckpointProofTargetCtesSql,
 		historyArchiveCheckpointProofQueuedUpsertSql
+	);
+
+export const historyArchiveCheckpointProofBatchQueuedRefreshSql =
+	buildHistoryArchiveCheckpointProofRefreshSql(
+		historyArchiveCheckpointProofBatchTargetCtesSql,
+		historyArchiveCheckpointProofBatchQueuedUpsertSql
 	);

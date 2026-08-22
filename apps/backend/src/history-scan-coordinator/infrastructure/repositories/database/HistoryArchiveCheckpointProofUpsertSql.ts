@@ -250,6 +250,26 @@ function buildHistoryArchiveCheckpointProofUpsertSql(
 `;
 }
 
+const scalarQueuedLeaseSql = `
+							and queue."leaseToken" = $5::uuid
+							and queue.generation = $6::bigint
+							and queue."evidenceUpdatedAt" = $7::timestamptz
+`;
+
+const batchQueuedLeaseSql = `
+							and exists (
+								select 1
+								from locked_targets target
+								where target."archiveUrlIdentity" =
+									queue."archiveUrlIdentity"
+									and target."checkpointLedger" =
+										queue."checkpointLedger"
+									and target."leaseToken" = queue."leaseToken"
+									and target.generation = queue.generation
+								and target."evidenceUpdatedAt" =
+									queue."evidenceUpdatedAt"
+							)
+`;
 const queuedPendingTransitionSql = `
 				or (
 					"history_archive_checkpoint_proof".status = 'pending'
@@ -297,14 +317,19 @@ const queuedPendingTransitionSql = `
 							"history_archive_checkpoint_proof"."archiveUrlIdentity"
 							and queue."checkpointLedger" =
 								"history_archive_checkpoint_proof"."checkpointLedger"
-							and queue."leaseToken" = $5::uuid
-							and queue.generation = $6::bigint
-							and queue."evidenceUpdatedAt" = $7::timestamptz
+							${scalarQueuedLeaseSql}
 							and queue."leaseUntil" > now()
 					)
 				)
 `;
 
+const batchQueuedPendingTransitionSql = queuedPendingTransitionSql.replace(
+	scalarQueuedLeaseSql,
+	batchQueuedLeaseSql
+);
+
+export const historyArchiveCheckpointProofBatchQueuedUpsertSql =
+	buildHistoryArchiveCheckpointProofUpsertSql(batchQueuedPendingTransitionSql);
 export const historyArchiveCheckpointProofUpsertSql =
 	buildHistoryArchiveCheckpointProofUpsertSql('');
 

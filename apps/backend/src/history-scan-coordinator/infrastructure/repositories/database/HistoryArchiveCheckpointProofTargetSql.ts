@@ -54,3 +54,54 @@ export const historyArchiveCheckpointProofTargetCtesSql = `
 		from target_checkpoints target
 	)
 `;
+export const historyArchiveCheckpointProofBatchTargetCtesSql = `
+	input_targets as materialized (
+		select target."archiveUrlIdentity",
+			target."checkpointLedger",
+			target."evidenceUpdatedAt",
+			target.generation,
+			target."leaseToken"
+		from jsonb_to_recordset($1::jsonb) as target(
+			"archiveUrlIdentity" text,
+			"checkpointLedger" integer,
+			"evidenceUpdatedAt" timestamptz,
+			generation bigint,
+			"leaseToken" uuid
+		)
+	), locked_targets as materialized (
+		select target.*
+		from input_targets target
+		join "history_archive_checkpoint_proof_refresh_queue" queue
+			on queue."archiveUrlIdentity" = target."archiveUrlIdentity"
+			and queue."checkpointLedger" = target."checkpointLedger"
+			and queue."leaseToken" = target."leaseToken"
+			and queue.generation = target.generation
+		where queue."leaseUntil" > now()
+		order by target."archiveUrlIdentity", target."checkpointLedger"
+		for update of queue
+	), requested_checkpoints as materialized (
+		select target."archiveUrlIdentity", target."checkpointLedger"
+		from locked_targets target
+	), target_checkpoints as materialized (
+		select requested.*
+		from requested_checkpoints requested
+		where exists (
+			select 1
+			from "history_archive_object_queue" object
+			where object."archiveUrlIdentity" =
+				requested."archiveUrlIdentity"
+				and object."checkpointLedger" =
+					requested."checkpointLedger"
+		)
+	), expected_checkpoint_ranges as materialized (
+		select
+			target.*,
+			(case when target."checkpointLedger" = 63
+				then 1 else target."checkpointLedger" - 63 end)::bigint
+				as first_expected_ledger,
+			target."checkpointLedger"::bigint as last_expected_ledger,
+			(case when target."checkpointLedger" = 63 then 63 else 64 end)::bigint
+				as expected_ledger_count
+		from target_checkpoints target
+	)
+`;

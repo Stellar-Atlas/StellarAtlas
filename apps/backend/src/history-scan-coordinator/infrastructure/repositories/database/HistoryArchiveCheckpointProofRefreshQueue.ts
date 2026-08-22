@@ -6,12 +6,24 @@ import type {
 import { canonicalRuntimeTargetCtes } from './HistoryArchiveCanonicalRuntimeTargetSql.js';
 import { historyArchiveExecutionReconciliationLockName } from './HistoryArchiveObjectExecutionReconciler.js';
 import { dueProofRefreshCanonicalRuntimeArchiveRootsCteSql } from './HistoryArchiveCanonicalRuntimePrioritySql.js';
-import { materializeNextCompactCheckpointPlan } from './HistoryArchiveCompactPlanning.js';
+import {
+	materializeCompactCheckpointPlans,
+	materializeNextCompactCheckpointPlan
+} from './HistoryArchiveCompactPlanning.js';
 import { canonicalRuntimeExecutableProofMemberExistsSql } from './HistoryArchiveCanonicalRuntimeProofMembershipSql.js';
-import { historyArchiveCheckpointProofQueuedRefreshSql } from './HistoryArchiveCheckpointProofRefreshSql.js';
-import { historyArchiveCheckpointProofPendingSourceEnrichmentSql } from './HistoryArchiveCheckpointProofPostRefreshSql.js';
+import {
+	historyArchiveCheckpointProofBatchQueuedRefreshSql,
+	historyArchiveCheckpointProofQueuedRefreshSql
+} from './HistoryArchiveCheckpointProofRefreshSql.js';
+import {
+	historyArchiveCheckpointProofPendingSourceBatchEnrichmentSql,
+	historyArchiveCheckpointProofPendingSourceEnrichmentSql
+} from './HistoryArchiveCheckpointProofPostRefreshSql.js';
 import { historyArchiveCheckpointProofTerminalReadySql } from './HistoryArchiveCheckpointProofReadinessSql.js';
-import { lockHistoryArchiveRootTransition } from './HistoryArchiveRootTransitionLock.js';
+import {
+	lockHistoryArchiveRootTransition,
+	lockHistoryArchiveRootTransitions
+} from './HistoryArchiveRootTransitionLock.js';
 
 export interface ClaimedHistoryArchiveCheckpointProofRefresh {
 	readonly archiveUrlIdentity: string;
@@ -22,6 +34,10 @@ export interface ClaimedHistoryArchiveCheckpointProofRefresh {
 }
 
 interface ProofRefreshWriteResult {
+	readonly handledCount?: number | string;
+	readonly handledcount?: number | string;
+	readonly targetCount?: number | string;
+	readonly targetcount?: number | string;
 	readonly acknowledgedCount?: number | string;
 	readonly acknowledgedcount?: number | string;
 	readonly matchedCurrentCount?: number | string;
@@ -34,7 +50,6 @@ interface ProofRefreshWriteResult {
 
 export const defaultTargetedProofRefreshBatchSize = 1;
 export const maximumTargetedProofRefreshBatchSize = 192;
-const maximumConcurrentTargetedProofRefreshes = 10;
 
 export interface HistoryArchiveCheckpointProofRefreshQueueStatus {
 	readonly depth: number;
@@ -142,46 +157,15 @@ export async function drainHistoryArchiveCheckpointProofRefreshes(
 		safeLimit,
 		maximumPriority
 	);
-	const claimed = targets.length;
-	let completed = 0;
-	let failed = 0;
-
-	let nextIndex = 0;
-	const drainWorker = async (): Promise<void> => {
-		while (true) {
-			const index = nextIndex;
-			nextIndex += 1;
-			const target = targets[index];
-			if (target === undefined) return;
-			try {
-				if (
-					await refreshClaimedHistoryArchiveCheckpointProof(dataSource, target)
-				) {
-					completed += 1;
-				}
-			} catch (error) {
-				failed += 1;
-				await recordProofRefreshFailure(dataSource, target, error);
-			}
-		}
+	const outcome = await refreshProofRefreshBatchWithIsolation(
+		dataSource,
+		targets
+	);
+	return {
+		claimed: targets.length,
+		completed: outcome.completed,
+		failed: outcome.failed
 	};
-	const outcomes = await Promise.allSettled(
-		Array.from(
-			{
-				length: Math.min(
-					targets.length,
-					maximumConcurrentTargetedProofRefreshes
-				)
-			},
-			drainWorker
-		)
-	);
-	const rejected = outcomes.find(
-		(outcome): outcome is PromiseRejectedResult => outcome.status === 'rejected'
-	);
-	if (rejected !== undefined) throw rejected.reason;
-
-	return { claimed, completed, failed };
 }
 
 export async function getHistoryArchiveCheckpointProofRefreshQueueStatus(
@@ -326,6 +310,95 @@ export async function refreshClaimedHistoryArchiveCheckpointProof(
 			deleted
 		);
 		return deletedRows.length > 0;
+	});
+}
+
+interface ProofRefreshBatchOutcome {
+	readonly completed: number;
+	readonly failed: number;
+}
+
+async function refreshProofRefreshBatchWithIsolation(
+	dataSource: DataSource,
+	targets: readonly ClaimedHistoryArchiveCheckpointProofRefresh[]
+): Promise<ProofRefreshBatchOutcome> {
+	if (targets.length === 0) return { completed: 0, failed: 0 };
+	try {
+		const completed = await refreshClaimedHistoryArchiveCheckpointProofs(
+			dataSource,
+			targets
+		);
+		return { completed, failed: targets.length - completed };
+	} catch (error) {
+		if (targets.length === 1) {
+			const target = targets[0];
+			if (target === undefined) return { completed: 0, failed: 0 };
+			await recordProofRefreshFailure(dataSource, target, error);
+			return { completed: 0, failed: 1 };
+		}
+		const midpoint = Math.ceil(targets.length / 2);
+		const first = await refreshProofRefreshBatchWithIsolation(
+			dataSource,
+			targets.slice(0, midpoint)
+		);
+		const second = await refreshProofRefreshBatchWithIsolation(
+			dataSource,
+			targets.slice(midpoint)
+		);
+		return {
+			completed: first.completed + second.completed,
+			failed: first.failed + second.failed
+		};
+	}
+}
+
+export async function refreshClaimedHistoryArchiveCheckpointProofs(
+	dataSource: DataSource,
+	targets: readonly ClaimedHistoryArchiveCheckpointProofRefresh[]
+): Promise<number> {
+	if (targets.length === 0) return 0;
+	const payload = JSON.stringify(targets);
+	return await dataSource.transaction(async (manager) => {
+		await manager.query(`set local lock_timeout = '10s'`);
+		await manager.query(`set local statement_timeout = '60s'`);
+		await manager.query('select pg_advisory_xact_lock_shared(hashtext($1))', [
+			historyArchiveExecutionReconciliationLockName
+		]);
+		await lockHistoryArchiveRootTransitions(
+			manager,
+			targets.map((target) => target.archiveUrlIdentity)
+		);
+		const [write] = (await manager.query(
+			historyArchiveCheckpointProofBatchQueuedRefreshSql,
+			[payload]
+		)) as readonly ProofRefreshWriteResult[];
+		const targetCount = Number(write?.targetCount ?? write?.targetcount ?? 0);
+		const handledCount = Number(
+			write?.handledCount ?? write?.handledcount ?? 0
+		);
+		if (targetCount !== targets.length || handledCount !== targets.length) {
+			throw new Error(
+				`Checkpoint proof batch handled ${handledCount}/${targetCount} valid targets ` +
+					`for ${targets.length} claims`
+			);
+		}
+		await manager.query(
+			historyArchiveCheckpointProofPendingSourceBatchEnrichmentSql,
+			[payload]
+		);
+		await materializeCompactCheckpointPlans(manager);
+		const deleted = (await manager.query(completeProofRefreshBatchSql, [
+			payload
+		])) as unknown;
+		const deletedRows = extractQueryRows<{ readonly checkpointLedger: number }>(
+			deleted
+		);
+		if (deletedRows.length !== targets.length) {
+			throw new Error(
+				`Checkpoint proof batch completed ${deletedRows.length}/${targets.length} claims`
+			);
+		}
+		return deletedRows.length;
 	});
 }
 
@@ -530,6 +603,28 @@ const completeProofRefreshSql = `
 		and "leaseToken" = $3::uuid
 		and generation = $4::bigint
 	returning "checkpointLedger"
+`;
+
+const completeProofRefreshBatchSql = `
+with targets as materialized (
+select target."archiveUrlIdentity",
+target."checkpointLedger",
+target.generation,
+target."leaseToken"
+from jsonb_to_recordset($1::jsonb) as target(
+"archiveUrlIdentity" text,
+"checkpointLedger" integer,
+generation bigint,
+"leaseToken" uuid
+)
+)
+delete from history_archive_checkpoint_proof_refresh_queue queue
+using targets
+where queue."archiveUrlIdentity" = targets."archiveUrlIdentity"
+and queue."checkpointLedger" = targets."checkpointLedger"
+and queue."leaseToken" = targets."leaseToken"
+and queue.generation = targets.generation
+returning queue."checkpointLedger"
 `;
 
 const failProofRefreshSql = `

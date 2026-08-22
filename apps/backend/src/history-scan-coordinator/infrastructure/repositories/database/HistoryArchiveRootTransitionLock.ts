@@ -16,6 +16,27 @@ export async function lockHistoryArchiveRootTransition(
 	]);
 }
 
+export const historyArchiveRootTransitionLocksSql = `
+	select pg_advisory_xact_lock(
+		1784950001,
+		hashtext(roots."archiveUrlIdentity")
+	)
+	from (
+		select distinct unnest($1::text[]) as "archiveUrlIdentity"
+	) roots
+	order by roots."archiveUrlIdentity"
+`;
+
+export async function lockHistoryArchiveRootTransitions(
+	manager: EntityManager,
+	archiveUrlIdentities: readonly string[]
+): Promise<void> {
+	if (archiveUrlIdentities.length === 0) return;
+	await manager.query(historyArchiveRootTransitionLocksSql, [
+		[...archiveUrlIdentities]
+	]);
+}
+
 export const historyArchiveObjectRootTransitionLockSql = `
     select pg_advisory_xact_lock(
         1784950001,
