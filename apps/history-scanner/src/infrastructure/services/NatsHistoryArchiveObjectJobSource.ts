@@ -1,9 +1,4 @@
-import {
-	connect,
-	type Consumer,
-	type JsMsg,
-	type NatsConnection
-} from 'nats';
+import { connect, type Consumer, type JsMsg, type NatsConnection } from 'nats';
 import type { HistoryArchiveObjectJobDTO } from '../../domain/scan/ScanCoordinatorService.js';
 import type {
 	HistoryArchiveObjectJobDelivery,
@@ -37,19 +32,13 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 	return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
-function requireNullableString(
-	value: unknown,
-	field: string
-): string | null {
+function requireNullableString(value: unknown, field: string): string | null {
 	if (value === null) return null;
 	if (typeof value === 'string') return value;
 	throw new Error(`Invalid archive broker field: ${field}`);
 }
 
-function requireNullableNumber(
-	value: unknown,
-	field: string
-): number | null {
+function requireNullableNumber(value: unknown, field: string): number | null {
 	if (value === null) return null;
 	if (typeof value === 'number' && Number.isSafeInteger(value) && value >= 0)
 		return value;
@@ -97,12 +86,11 @@ function parseEnvelope(message: JsMsg): BrokerJobEnvelope {
 	};
 }
 
-export class NatsHistoryArchiveObjectJobSource
-	implements HistoryArchiveObjectJobSource
-{
+export class NatsHistoryArchiveObjectJobSource implements HistoryArchiveObjectJobSource {
 	readonly kind = 'broker' as const;
 	private connection: NatsConnection | null = null;
 	private consumer: Consumer | null = null;
+	private consumerPromise: Promise<Consumer> | null = null;
 	private closed = false;
 
 	constructor(
@@ -153,20 +141,38 @@ export class NatsHistoryArchiveObjectJobSource
 
 	async close(): Promise<void> {
 		this.closed = true;
+		if (this.consumerPromise !== null) {
+			try {
+				await this.consumerPromise;
+			} catch {
+				// A failed connection has nothing to drain.
+			}
+		}
 		const connection = this.connection;
 		this.consumer = null;
+		this.consumerPromise = null;
 		this.connection = null;
 		if (connection !== null) await connection.drain();
 	}
 
 	private async getConsumer(): Promise<Consumer> {
 		if (this.consumer !== null) return this.consumer;
+		if (this.consumerPromise === null) {
+			this.consumerPromise = this.connectConsumer();
+		}
+		try {
+			return await this.consumerPromise;
+		} catch (error) {
+			this.consumerPromise = null;
+			throw error;
+		}
+	}
+
+	private async connectConsumer(): Promise<Consumer> {
 		const connection = await connect({
 			name: this.config.name,
 			servers: [...this.config.servers],
-			...(this.config.token === undefined
-				? {}
-				: { token: this.config.token })
+			...(this.config.token === undefined ? {} : { token: this.config.token })
 		});
 		try {
 			const jetStream = connection.jetstream();

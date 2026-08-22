@@ -11,7 +11,8 @@ describe('verify-archive-objects-cluster', () => {
 			maximumActiveDownloads: 40,
 			perProcessHasherWorkers: 1,
 			processCount: 40,
-			totalHasherWorkers: 40
+			totalHasherWorkers: 40,
+			workerSlotsPerProcess: 1
 		});
 	});
 	it('supports a bounded 192-consumer production plan', () => {
@@ -28,7 +29,49 @@ describe('verify-archive-objects-cluster', () => {
 			maximumActiveDownloads: 192,
 			perProcessHasherWorkers: 1,
 			processCount: 192,
-			totalHasherWorkers: 192
+			totalHasherWorkers: 192,
+			workerSlotsPerProcess: 1
+		});
+	});
+
+	it('shares 192 worker slots across a bounded process pool', () => {
+		const plan = createHistoryArchiveObjectClusterPlan(
+			{
+				HISTORY_HASHER_WORKERS: '192',
+				HISTORY_OBJECT_CLUSTER_PROCESSES: '32',
+				HISTORY_OBJECT_DOWNLOAD_CONCURRENCY: '192',
+				HISTORY_OBJECT_WORKER_PROCESSES: '192'
+			},
+			64
+		);
+
+		expect(plan).toEqual({
+			maximumActiveDownloads: 192,
+			perProcessHasherWorkers: 6,
+			processCount: 32,
+			totalHasherWorkers: 192,
+			workerSlotsPerProcess: 6
+		});
+
+		let nextWorkerId = 1;
+		const forks: NodeJS.ProcessEnv[] = [];
+		new HistoryArchiveObjectClusterSupervisor(plan, {}, (env) => {
+			forks.push(env);
+			return { id: nextWorkerId++ };
+		}).start();
+
+		expect(forks).toHaveLength(32);
+		expect(forks[0]).toMatchObject({
+			HISTORY_OBJECT_WORKER_INDEX: '0',
+			HISTORY_SCAN_WORKERS: '6'
+		});
+		expect(forks[1]).toMatchObject({
+			HISTORY_OBJECT_WORKER_INDEX: '6',
+			HISTORY_SCAN_WORKERS: '6'
+		});
+		expect(forks[31]).toMatchObject({
+			HISTORY_OBJECT_WORKER_INDEX: '186',
+			HISTORY_SCAN_WORKERS: '6'
 		});
 	});
 
@@ -45,7 +88,8 @@ describe('verify-archive-objects-cluster', () => {
 			maximumActiveDownloads: 12,
 			perProcessHasherWorkers: 2,
 			processCount: 12,
-			totalHasherWorkers: 24
+			totalHasherWorkers: 24,
+			workerSlotsPerProcess: 1
 		});
 	});
 

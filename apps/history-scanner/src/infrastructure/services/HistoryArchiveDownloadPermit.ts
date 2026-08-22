@@ -92,7 +92,7 @@ export class ProcessHistoryArchiveDownloadPermit implements HistoryArchiveDownlo
 }
 
 export class HistoryArchiveDownloadPermitCoordinator {
-	private readonly active = new Map<number, string>();
+	private readonly active = new Map<string, number>();
 	private readonly waiting: Array<{
 		readonly requestId: string;
 		readonly worker: Worker;
@@ -112,7 +112,9 @@ export class HistoryArchiveDownloadPermitCoordinator {
 	}
 
 	removeWorker(workerId: number): void {
-		this.active.delete(workerId);
+		for (const [requestId, activeWorkerId] of this.active) {
+			if (activeWorkerId === workerId) this.active.delete(requestId);
+		}
 		for (let index = this.waiting.length - 1; index >= 0; index--) {
 			if (this.waiting[index]?.worker.id === workerId)
 				this.waiting.splice(index, 1);
@@ -121,12 +123,9 @@ export class HistoryArchiveDownloadPermitCoordinator {
 	}
 
 	private request(worker: Worker, requestId: string): void {
-		if (this.active.has(worker.id)) return;
 		if (
-			this.waiting.some(
-				(entry) =>
-					entry.worker.id === worker.id || entry.requestId === requestId
-			)
+			this.active.has(requestId) ||
+			this.waiting.some((entry) => entry.requestId === requestId)
 		) {
 			return;
 		}
@@ -136,8 +135,8 @@ export class HistoryArchiveDownloadPermitCoordinator {
 	}
 
 	private release(workerId: number, requestId: string): void {
-		if (this.active.get(workerId) !== requestId) return;
-		this.active.delete(workerId);
+		if (this.active.get(requestId) !== workerId) return;
+		this.active.delete(requestId);
 		this.grantWaiting();
 	}
 
@@ -148,14 +147,14 @@ export class HistoryArchiveDownloadPermitCoordinator {
 		) {
 			const next = this.waiting.shift();
 			if (next === undefined || !next.worker.isConnected()) continue;
-			this.active.set(next.worker.id, next.requestId);
+			this.active.set(next.requestId, next.worker.id);
 			try {
 				next.worker.send({
 					requestId: next.requestId,
 					type: grantType
 				} satisfies PermitGrant);
 			} catch {
-				this.active.delete(next.worker.id);
+				this.active.delete(next.requestId);
 			}
 		}
 	}

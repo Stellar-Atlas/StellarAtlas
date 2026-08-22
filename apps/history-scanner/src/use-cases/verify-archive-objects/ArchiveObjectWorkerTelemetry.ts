@@ -291,7 +291,10 @@ export class ArchiveObjectWorkerTelemetry {
 			processId: this.identity.processId,
 			processStartedAt: this.identity.processStartedAt,
 			sequence,
-			slotIndex: this.identity.slotIndex ?? slot,
+			slotIndex:
+				this.identity.slotIndex === null
+					? slot
+					: this.identity.slotIndex + slot,
 			stage: progress?.workerStage ?? inactiveStage,
 			workerId: `${this.identity.workerIdPrefix}-${slot.toString()}`
 		};

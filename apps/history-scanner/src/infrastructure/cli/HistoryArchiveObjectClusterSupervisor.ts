@@ -7,12 +7,14 @@ import {
 } from 'history-scanner-dto';
 
 const maximumConfiguredHasherWorkers = historyArchiveWorkerSlotLimit - 1;
+const maximumWorkerSlotsPerProcess = 24;
 
 export interface HistoryArchiveObjectClusterPlan {
 	readonly maximumActiveDownloads: number;
 	readonly perProcessHasherWorkers: number;
 	readonly processCount: number;
 	readonly totalHasherWorkers: number;
+	readonly workerSlotsPerProcess: number;
 }
 
 interface ClusterWorkerIdentity {
@@ -53,9 +55,11 @@ export class HistoryArchiveObjectClusterSupervisor {
 			...this.env,
 			HISTORY_HASHER_WORKERS: String(this.plan.perProcessHasherWorkers),
 			HISTORY_OBJECT_WORKER_GENERATION: String(generation),
-			HISTORY_OBJECT_WORKER_INDEX: String(index),
+			HISTORY_OBJECT_WORKER_INDEX: String(
+				index * this.plan.workerSlotsPerProcess
+			),
 			HISTORY_OBJECT_WORKER_PROCESS_COUNT: String(this.plan.processCount),
-			HISTORY_SCAN_WORKERS: '1'
+			HISTORY_SCAN_WORKERS: String(this.plan.workerSlotsPerProcess)
 		});
 		this.slotsByWorkerId.set(worker.id, { generation, index });
 	}
@@ -65,10 +69,28 @@ export function createHistoryArchiveObjectClusterPlan(
 	env: NodeJS.ProcessEnv,
 	cpuCount = availableParallelism()
 ): HistoryArchiveObjectClusterPlan {
-	const processCount = resolveHistoryArchiveObjectWorkerCapacity(
+	const totalWorkerSlots = resolveHistoryArchiveObjectWorkerCapacity(
 		env,
 		cpuCount
 	).consumerCount;
+	const processCount = readBoundedPositiveInteger(
+		env,
+		'HISTORY_OBJECT_CLUSTER_PROCESSES',
+		totalWorkerSlots,
+		totalWorkerSlots
+	);
+	if (totalWorkerSlots % processCount !== 0) {
+		throw new Error(
+			'HISTORY_OBJECT_CLUSTER_PROCESSES must evenly divide ' +
+				'HISTORY_OBJECT_WORKER_PROCESSES'
+		);
+	}
+	const workerSlotsPerProcess = totalWorkerSlots / processCount;
+	if (workerSlotsPerProcess > maximumWorkerSlotsPerProcess) {
+		throw new Error(
+			`HISTORY_OBJECT_CLUSTER_PROCESSES must provide no more than ${maximumWorkerSlotsPerProcess} worker slots per process`
+		);
+	}
 	const configuredHasherWorkers = readBoundedPositiveInteger(
 		env,
 		'HISTORY_HASHER_WORKERS',
@@ -79,8 +101,8 @@ export function createHistoryArchiveObjectClusterPlan(
 	const maximumActiveDownloads = readBoundedPositiveInteger(
 		env,
 		'HISTORY_OBJECT_DOWNLOAD_CONCURRENCY',
-		Math.min(historyArchiveDownloadConcurrency, processCount),
-		Math.min(historyArchiveDownloadConcurrency, processCount)
+		Math.min(historyArchiveDownloadConcurrency, totalWorkerSlots),
+		Math.min(historyArchiveDownloadConcurrency, totalWorkerSlots)
 	);
 
 	return {
@@ -90,7 +112,8 @@ export function createHistoryArchiveObjectClusterPlan(
 			1
 		),
 		processCount,
-		totalHasherWorkers
+		totalHasherWorkers,
+		workerSlotsPerProcess
 	};
 }
 
