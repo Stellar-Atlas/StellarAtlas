@@ -17,13 +17,13 @@ import {
 } from './HistoryArchiveObjectFrontierSql.js';
 import {
 	buildHistoryArchiveReadyPressureSql,
+	historyArchiveExecutionReconciliationLockName,
 	synchronizeHistoryArchiveReadyQueue
 } from './HistoryArchiveObjectReadyQueue.js';
 import { hasPostgresSqlState } from './PostgresError.js';
 import { materializeCompactCheckpointPlans } from './HistoryArchiveCompactPlanning.js';
 
-export const historyArchiveExecutionReconciliationLockName =
-        'history_archive_execution_reconciliation';
+export { historyArchiveExecutionReconciliationLockName };
 
 interface PressureRow {
 	readonly outstandingObjects: number | string;

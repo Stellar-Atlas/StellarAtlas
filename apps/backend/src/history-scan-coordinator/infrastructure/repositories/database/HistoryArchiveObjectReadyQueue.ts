@@ -11,6 +11,9 @@ import {
 import { hasPostgresSqlState } from './PostgresError.js';
 import { historyArchiveObjectOpenSequentialCohortSql } from './HistoryArchiveSequentialChainSql.js';
 
+export const historyArchiveExecutionReconciliationLockName =
+	'history_archive_execution_reconciliation';
+
 export interface HistoryArchiveReadyQueueSyncResult {
 	readonly readyObjects: number;
 	readonly removedObjects: number;
@@ -273,6 +276,12 @@ async function enqueueReadyRoots(
 	remoteIds: readonly string[],
 	archiveUrlIdentities: readonly string[]
 ): Promise<number> {
+	const [lock] = (await manager.query(
+		'select pg_try_advisory_xact_lock_shared(hashtext($1)) as locked',
+		[historyArchiveExecutionReconciliationLockName]
+	)) as readonly { readonly locked?: boolean }[];
+	if (lock?.locked !== true) return 0;
+
 	const [row] = (await manager.query(enqueueReadyObjectsSql, [
 		remoteIds,
 		archiveUrlIdentities
