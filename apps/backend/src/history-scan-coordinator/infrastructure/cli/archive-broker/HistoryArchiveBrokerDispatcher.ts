@@ -120,11 +120,19 @@ export class HistoryArchiveBrokerDispatcher {
 					await wait(this.config.pollIntervalMs);
 					continue;
 				}
-				const jobs = await this.repository.reserveJobs(
+				let jobs = await this.repository.reserveJobs(
 					Math.min(capacity, this.config.batchSize),
 					this.config.maximumPerHost,
 					this.config.maximumPriority
 				);
+				if (jobs.length === 0) {
+					await this.repository.ensureFrontier();
+					jobs = await this.repository.reserveJobs(
+						Math.min(capacity, this.config.batchSize),
+						this.config.maximumPerHost,
+						this.config.maximumPriority
+					);
+				}
 				if (jobs.length === 0) {
 					await wait(this.config.pollIntervalMs);
 					continue;
