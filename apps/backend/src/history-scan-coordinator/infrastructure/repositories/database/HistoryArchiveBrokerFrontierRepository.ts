@@ -50,7 +50,7 @@ interface BrokerJobRow {
 	readonly selectedOrdinal: number | string;
 }
 
-const reserveBrokerJobsSql = `
+export const reserveBrokerJobsSql = `
 	with ${canonicalRuntimePriorityCtesSql}, active_hosts as materialized (
 		select object."hostIdentity", count(*)::integer as active_count
 		from "history_archive_object_ready" ready
@@ -80,25 +80,6 @@ const reserveBrokerJobsSql = `
 			)
 			and ${historyArchiveReservationPrioritySql('ready', 'object')} <=
 				$3::smallint
-			and (
-				ready."dispatchToken" is not null
-				or ready.priority =
-					${historyArchiveReservationPrioritySql('ready', 'object')}
-				or not exists (
-					select 1
-					from "history_archive_object_ready" frozen_lane
-					where frozen_lane."archiveUrlIdentity" =
-						ready."archiveUrlIdentity"
-						and frozen_lane.priority =
-							${historyArchiveReservationPrioritySql('ready', 'object')}
-						and frozen_lane."objectRemoteId" <>
-							ready."objectRemoteId"
-						and (
-							frozen_lane."dispatchToken" is not null
-							or frozen_lane."publishedAt" is not null
-						)
-				)
-			)
 			and not exists (
 				select 1
 				from "history_archive_object_host_throttle" throttle
@@ -109,38 +90,6 @@ const reserveBrokerJobsSql = `
 				ready."dispatchToken" is not null
 				or ${historyArchiveCheckpointNotFoundCooldownSql('object')}
 			)
-	), deduplicated as materialized (
-		select candidate.*
-		from eligible candidate
-		where candidate.stored_priority = candidate.priority
-			or (
-				not exists (
-					select 1
-					from eligible destination
-					where destination."archiveUrlIdentity" =
-						candidate."archiveUrlIdentity"
-						and destination."objectRemoteId" <>
-							candidate."objectRemoteId"
-						and destination.stored_priority = candidate.priority
-						and destination.priority = candidate.priority
-				)
-				and not exists (
-					select 1
-					from eligible preferred
-					where preferred."archiveUrlIdentity" =
-						candidate."archiveUrlIdentity"
-						and preferred.stored_priority <> preferred.priority
-						and (
-							preferred.priority,
-							preferred."updatedAt",
-							preferred."objectRemoteId"
-						) < (
-							candidate.priority,
-							candidate."updatedAt",
-							candidate."objectRemoteId"
-						)
-				)
-			)
 	), ranked as materialized (
 		select candidate."objectRemoteId", candidate.priority,
 			candidate.stored_priority, candidate."updatedAt",
@@ -150,7 +99,7 @@ const reserveBrokerJobsSql = `
 				order by candidate.priority, candidate."updatedAt",
 					candidate."objectRemoteId"
 			) as host_rank
-		from deduplicated candidate
+		from eligible candidate
 	), selected as materialized (
 		select ranked."objectRemoteId", ranked.priority,
 			ranked.stored_priority,
@@ -165,20 +114,6 @@ const reserveBrokerJobsSql = `
 			ranked."updatedAt",
 			ranked."objectRemoteId"
 		limit $1::integer
-	), displaced as (
-		delete from "history_archive_object_ready" conflict
-		using selected, "history_archive_object_ready" selected_ready
-		where selected.stored_priority <> selected.priority
-			and selected_ready."objectRemoteId" = selected."objectRemoteId"
-			and conflict."archiveUrlIdentity" =
-				selected_ready."archiveUrlIdentity"
-			and conflict.priority = selected.priority
-			and conflict."objectRemoteId" <> selected."objectRemoteId"
-			and conflict."dispatchToken" is null
-			and conflict."publishedAt" is null
-		returning conflict."objectRemoteId"
-	), displacement_fence as materialized (
-		select count(*)::integer as count from displaced
 	), reserved as (
 		update "history_archive_object_ready" ready
 		set "dispatchToken" = coalesce(ready."dispatchToken", gen_random_uuid()),
@@ -191,8 +126,7 @@ const reserveBrokerJobsSql = `
 				when ready."dispatchToken" is null then now()
 				else ready."updatedAt"
 			end
-		from "history_archive_object_queue" object, selected,
-			displacement_fence
+		from "history_archive_object_queue" object, selected
 		where ready."objectRemoteId" = object."remoteId"
 			and ready."objectRemoteId" = selected."objectRemoteId"
 		returning
