@@ -100,11 +100,9 @@ export async function replayPublishedHistoryArchiveBrokerJobs(
 }
 
 export class HistoryArchiveBrokerDispatcher {
-	private static readonly frontierRefreshIntervalMs = 30_000;
 	private connection: NatsConnection | null = null;
 	private jetStream: JetStreamClient | null = null;
 	private manager: JetStreamManager | null = null;
-	private nextFrontierRefreshAt = 0;
 	private stopping = false;
 
 	constructor(
@@ -122,7 +120,6 @@ export class HistoryArchiveBrokerDispatcher {
 					await wait(this.config.pollIntervalMs);
 					continue;
 				}
-				await this.refreshFrontierIfDue();
 				const jobs = await this.repository.reserveJobs(
 					Math.min(capacity, this.config.batchSize),
 					this.config.maximumPerHost,
@@ -172,9 +169,6 @@ export class HistoryArchiveBrokerDispatcher {
 				this.config.highWatermark,
 				this.config.maximumPriority
 			);
-			await this.repository.ensureFrontier();
-			this.nextFrontierRefreshAt =
-				Date.now() + HistoryArchiveBrokerDispatcher.frontierRefreshIntervalMs;
 		} catch (error) {
 			this.connection = null;
 			this.jetStream = null;
@@ -244,12 +238,6 @@ export class HistoryArchiveBrokerDispatcher {
 		return Math.max(0, this.config.highWatermark - occupied);
 	}
 
-	private async refreshFrontierIfDue(): Promise<void> {
-		if (Date.now() < this.nextFrontierRefreshAt) return;
-		this.nextFrontierRefreshAt =
-			Date.now() + HistoryArchiveBrokerDispatcher.frontierRefreshIntervalMs;
-		await this.repository.ensureFrontier();
-	}
 
 	private async publish(
 		jobs: readonly HistoryArchiveBrokerJob[]

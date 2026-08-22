@@ -13,6 +13,7 @@ import {
 	canonicalRuntimePriorityCtesSql,
 	historyArchiveReservationPrioritySql
 } from './HistoryArchiveCanonicalRuntimePrioritySql.js';
+import { historyArchiveExecutionReconciliationLockName } from './HistoryArchiveObjectExecutionReconciler.js';
 
 const maximumArchiveSourceFrontierRows = 4_096;
 
@@ -320,6 +321,7 @@ export class HistoryArchiveBrokerFrontierRepository {
 
 	async ensureFrontier(): Promise<number> {
 		return await this.dataSource.transaction(async (manager) => {
+                        await this.takeExecutionReconciliationLock(manager);
 			const result = await synchronizeHistoryArchiveReadyQueue(
 				manager,
 				maximumArchiveSourceFrontierRows
@@ -335,6 +337,7 @@ export class HistoryArchiveBrokerFrontierRepository {
 	): Promise<readonly HistoryArchiveBrokerJob[]> {
 		if (limit < 1) return [];
 		return await this.dataSource.transaction(async (manager) => {
+                        await this.takeExecutionReconciliationSharedLock(manager);
 			await this.takeDispatcherLock(manager);
 			const rows = (await manager.query(reserveBrokerJobsSql, [
 				Math.floor(limit),
@@ -357,17 +360,38 @@ export class HistoryArchiveBrokerFrontierRepository {
 		return mapAndOrderBrokerJobs(rows);
 	}
 
-	async markPublished(executionIds: readonly string[]): Promise<void> {
-		if (executionIds.length === 0) return;
-		await this.dataSource.query(
-			`update "history_archive_object_ready"
-			 set "publishedAt" = coalesce("publishedAt", now()),
-			     "updatedAt" = now()
-			 where "dispatchToken" = any($1::uuid[])
-			   and "publishedAt" is null`,
-			[executionIds]
-		);
-	}
+        async markPublished(executionIds: readonly string[]): Promise<void> {
+                if (executionIds.length === 0) return;
+                await this.dataSource.transaction(async (manager) => {
+                        await this.takeExecutionReconciliationSharedLock(manager);
+                        await manager.query(
+                                `update "history_archive_object_ready"
+                                 set "publishedAt" = coalesce("publishedAt", now()),
+                                     "updatedAt" = now()
+                                 where "dispatchToken" = any($1::uuid[])
+                                   and "publishedAt" is null`,
+                                [executionIds]
+                        );
+                });
+        }
+
+        private async takeExecutionReconciliationLock(
+                manager: EntityManager
+        ): Promise<void> {
+                await manager.query(
+                        `select pg_advisory_xact_lock(hashtext($1))`,
+                        [historyArchiveExecutionReconciliationLockName]
+                );
+        }
+
+        private async takeExecutionReconciliationSharedLock(
+                manager: EntityManager
+        ): Promise<void> {
+                await manager.query(
+                        `select pg_advisory_xact_lock_shared(hashtext($1))`,
+                        [historyArchiveExecutionReconciliationLockName]
+                );
+        }
 
 	private async takeDispatcherLock(manager: EntityManager): Promise<void> {
 		await manager.query(
