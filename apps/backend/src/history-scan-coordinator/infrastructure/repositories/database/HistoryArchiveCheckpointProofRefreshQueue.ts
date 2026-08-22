@@ -307,6 +307,11 @@ export const enqueueProofRefreshesSql = `
         ), targets as materialized (
                 select candidate.*
                 from candidate_targets candidate
+                join "history_archive_checkpoint_scan_cursor" chain_cursor
+                        on chain_cursor."archiveUrlIdentity" =
+                                candidate."archiveUrlIdentity"
+                        and candidate."checkpointLedger" =
+                                chain_cursor."nextHistoricalCheckpointLedger" - 64
                 where ${historyArchiveCheckpointProofTerminalReadySql('candidate')}
         ), enqueued as (
 		insert into history_archive_checkpoint_proof_refresh_queue (

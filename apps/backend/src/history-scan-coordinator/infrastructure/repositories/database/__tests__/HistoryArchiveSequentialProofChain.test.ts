@@ -25,6 +25,9 @@ describe('sequential history archive proof chain', () => {
 		expect(candidateReadiness).toContain("('transactions'::text)");
 		expect(candidateReadiness).toContain("('results'::text)");
 		expect(enqueueProofRefreshesSql).toContain(candidateReadiness);
+		expect(enqueueProofRefreshesSql).toMatch(
+			/candidate\."checkpointLedger"\s*=\s*chain_cursor\."nextHistoricalCheckpointLedger" - 64/
+		);
 		expect(claimProofRefreshSql).toContain(queueReadiness);
 		expect(claimSequentialProofRefreshSql).toContain(
 			'queue."checkpointLedger" =\n' +
