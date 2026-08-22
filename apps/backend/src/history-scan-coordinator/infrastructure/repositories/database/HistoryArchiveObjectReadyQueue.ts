@@ -49,16 +49,24 @@ const readyAtSql = `case
 end`;
 
 const cleanupReadyObjectsSql = `
-	with removed as (
-		delete from "history_archive_object_ready" ready
+	with candidates as materialized (
+		select ready.ctid
+		from "history_archive_object_ready" ready
 		where ready."dispatchToken" is null
 			and ready."publishedAt" is null
 			and not exists (
-			select 1
-			from "history_archive_object_queue" candidate
-			where candidate."remoteId" = ready."objectRemoteId"
-				and ${schedulableObjectSql}
-		)
+				select 1
+				from "history_archive_object_queue" candidate
+				where candidate."remoteId" = ready."objectRemoteId"
+					and ${schedulableObjectSql}
+			)
+		order by ready."archiveUrlIdentity", ready.priority, ready.ctid
+		for update of ready skip locked
+		limit 4096
+	), removed as (
+		delete from "history_archive_object_ready" ready
+		using candidates
+		where ready.ctid = candidates.ctid
 		returning ready."objectRemoteId"
 	)
 	select count(*)::integer as count from removed
@@ -248,7 +256,8 @@ export async function completeHistoryArchiveBrokerDelivery(
 		[remoteId, executionId]
 	)) as readonly unknown[];
 	if (removed.length === 0) return false;
-	await enqueueHistoryArchiveReadyObjects(manager, [remoteId]);
+	// The maintenance writer refills this root after the exact delivery row is
+	// committed, avoiding a delete/refill lock cycle with ready-queue cleanup.
 	return true;
 }
 

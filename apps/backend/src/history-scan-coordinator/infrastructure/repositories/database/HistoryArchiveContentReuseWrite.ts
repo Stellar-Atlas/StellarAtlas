@@ -155,7 +155,7 @@ export async function recordHistoryArchiveContentEvidence(
 	) {
 		throw new Error('Category content facts are not uncompressed SHA-256');
 	}
-	const [artifact] = (await manager.query(
+	let [artifact] = (await manager.query(
 		`with inserted as (
 			insert into "history_archive_content_artifact" (
 				"objectType", "objectKey", "checkpointLedger",
@@ -187,6 +187,24 @@ export async function recordHistoryArchiveContentEvidence(
 			toPositiveInteger(object.attempts, 'attempts')
 		]
 	)) as readonly { readonly id: string }[];
+	if (artifact === undefined) {
+		// A concurrent winner can commit after this statement snapshot was
+		// taken. A second statement gets a fresh READ COMMITTED snapshot.
+		[artifact] = (await manager.query(
+			`select id from "history_archive_content_artifact"
+			 where "objectType" = $1 and "objectKey" = $2
+				and "contentDigest" = $3
+				and "contentRepresentation" = 'uncompressed-xdr'
+				and "derivationVersion" = $4
+			 limit 1`,
+			[
+				object.objectType,
+				object.objectKey,
+				digest,
+				historyArchiveContentDerivationVersionV1
+			]
+		)) as readonly { readonly id: string }[];
+	}
 	if (artifact === undefined)
 		throw new Error('Content artifact was not recorded');
 	await insertObservation(
