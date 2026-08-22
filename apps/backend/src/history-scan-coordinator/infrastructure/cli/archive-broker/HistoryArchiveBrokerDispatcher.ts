@@ -42,7 +42,7 @@ function assertPublishableBrokerJob(job: HistoryArchiveBrokerJob): void {
 
 export async function publishHistoryArchiveBrokerJobs(
 	jetStream: Pick<JetStreamClient, 'publish'>,
-	repository: Pick<HistoryArchiveBrokerFrontierRepository, 'markPublishFailed'>,
+	repository: Pick<HistoryArchiveBrokerFrontierRepository, 'markPublished'>,
 	subject: string,
 	jobs: readonly HistoryArchiveBrokerJob[]
 ): Promise<void> {
@@ -71,10 +71,10 @@ export async function publishHistoryArchiveBrokerJobs(
 				return job.executionId;
 			})
 		);
-		const failedExecutionIds = results.flatMap((result, index) =>
-			result.status === 'rejected' ? [priorityClass[index]!.executionId] : []
+		const published = results.flatMap((result) =>
+			result.status === 'fulfilled' ? [result.value] : []
 		);
-		await repository.markPublishFailed(failedExecutionIds);
+		await repository.markPublished(published);
 		const failed = results.find((result) => result.status === 'rejected');
 		if (failed?.status === 'rejected') throw failed.reason;
 		classStart = classEnd;
@@ -85,7 +85,7 @@ export async function replayPublishedHistoryArchiveBrokerJobs(
 	jetStream: Pick<JetStreamClient, 'publish'>,
 	repository: Pick<
 		HistoryArchiveBrokerFrontierRepository,
-		'findPublishedJobs' | 'markPublishFailed'
+		'findPublishedJobs' | 'markPublished'
 	>,
 	subject: string,
 	highWatermark: number,
@@ -245,6 +245,7 @@ export class HistoryArchiveBrokerDispatcher {
 		const occupied = info.num_ack_pending + info.num_pending;
 		return Math.max(0, this.config.highWatermark - occupied);
 	}
+
 
 	private async publish(
 		jobs: readonly HistoryArchiveBrokerJob[]
