@@ -1,4 +1,3 @@
-import { randomUUID } from 'node:crypto';
 import type { DataSource, EntityManager } from 'typeorm';
 import type {
 	HistoryArchiveCheckpointProofRefreshDrainResult,
@@ -138,7 +137,12 @@ export async function drainHistoryArchiveCheckpointProofRefreshes(
 	maximumPriority: HistoryArchiveCheckpointProofRefreshPriority
 ): Promise<HistoryArchiveCheckpointProofRefreshDrainResult> {
 	const safeLimit = normalizeTargetedProofRefreshBatchSize(limit);
-	let claimed = 0;
+	const targets = await claimHistoryArchiveCheckpointProofRefreshes(
+		dataSource,
+		safeLimit,
+		maximumPriority
+	);
+	const claimed = targets.length;
 	let completed = 0;
 	let failed = 0;
 
@@ -147,14 +151,8 @@ export async function drainHistoryArchiveCheckpointProofRefreshes(
 		while (true) {
 			const index = nextIndex;
 			nextIndex += 1;
-			if (index >= safeLimit) return;
-
-			const target = await claimNextHistoryArchiveCheckpointProofRefresh(
-				dataSource,
-				maximumPriority
-			);
+			const target = targets[index];
 			if (target === undefined) return;
-			claimed += 1;
 			try {
 				if (
 					await refreshClaimedHistoryArchiveCheckpointProof(dataSource, target)
@@ -169,7 +167,12 @@ export async function drainHistoryArchiveCheckpointProofRefreshes(
 	};
 	const outcomes = await Promise.allSettled(
 		Array.from(
-			{ length: Math.min(safeLimit, maximumConcurrentTargetedProofRefreshes) },
+			{
+				length: Math.min(
+					targets.length,
+					maximumConcurrentTargetedProofRefreshes
+				)
+			},
 			drainWorker
 		)
 	);
@@ -218,28 +221,42 @@ export function normalizeTargetedProofRefreshBatchSize(value: number): number {
 	return Math.min(value, maximumTargetedProofRefreshBatchSize);
 }
 
-export async function claimNextHistoryArchiveCheckpointProofRefresh(
+export async function claimHistoryArchiveCheckpointProofRefreshes(
 	dataSource: DataSource,
+	limit: number,
 	maximumPriority: HistoryArchiveCheckpointProofRefreshPriority
-): Promise<ClaimedHistoryArchiveCheckpointProofRefresh | undefined> {
+): Promise<readonly ClaimedHistoryArchiveCheckpointProofRefresh[]> {
+	const safeLimit = normalizeTargetedProofRefreshBatchSize(limit);
 	return await dataSource.transaction(async (manager) => {
 		await manager.query(`set local lock_timeout = '250ms'`);
 		await manager.query(`set local statement_timeout = '2s'`);
-		const leaseToken = randomUUID();
 		const claimSql =
 			maximumPriority === 1
 				? claimSequentialProofRefreshSql
 				: claimProofRefreshSql;
 		const parameters =
-			maximumPriority === 1 ? [leaseToken] : [leaseToken, maximumPriority];
-		const [row] = (await manager.query(claimSql, parameters)) as readonly (Omit<
+			maximumPriority === 1 ? [safeLimit] : [maximumPriority, safeLimit];
+		const rows = (await manager.query(claimSql, parameters)) as readonly (Omit<
 			ClaimedHistoryArchiveCheckpointProofRefresh,
 			'generation'
 		> & { readonly generation: number | string })[];
-		return row === undefined
-			? undefined
-			: { ...row, generation: Number(row.generation) };
+		return rows.map((row) => ({
+			...row,
+			generation: Number(row.generation)
+		}));
 	});
+}
+
+export async function claimNextHistoryArchiveCheckpointProofRefresh(
+	dataSource: DataSource,
+	maximumPriority: HistoryArchiveCheckpointProofRefreshPriority
+): Promise<ClaimedHistoryArchiveCheckpointProofRefresh | undefined> {
+	const [target] = await claimHistoryArchiveCheckpointProofRefreshes(
+		dataSource,
+		1,
+		maximumPriority
+	);
+	return target;
 }
 
 export async function refreshClaimedHistoryArchiveCheckpointProof(
@@ -432,10 +449,10 @@ export const claimSequentialProofRefreshSql = `
 		order by queue."nextAttemptAt", queue."requestedAt", queue.attempts,
 			queue."archiveUrlIdentity", queue."checkpointLedger"
 		for update of queue skip locked
-		limit 1
+		limit $1::integer
 	), claimed as (
 		update history_archive_checkpoint_proof_refresh_queue queue
-		set "leaseToken" = $1::uuid,
+		set "leaseToken" = gen_random_uuid(),
 			"leaseUntil" = now() + interval '2 minutes',
 			"lastAttemptAt" = now(),
 			"updatedAt" = now()
@@ -472,16 +489,16 @@ export const claimProofRefreshSql = `
 		) runtime on true
 		where queue."nextAttemptAt" <= now()
 			and (queue."leaseUntil" is null or queue."leaseUntil" <= now())
-			and ($2::smallint >= 1 or runtime.priority is not null)
+			and ($1::smallint >= 1 or runtime.priority is not null)
                         and ${historyArchiveCheckpointProofTerminalReadySql('queue')}
 		order by runtime.priority nulls last, queue."nextAttemptAt",
 			queue."requestedAt", queue.attempts,
 			queue."archiveUrlIdentity", queue."checkpointLedger"
 		for update of queue skip locked
-		limit 1
+		limit $2::integer
 	), claimed as (
 		update history_archive_checkpoint_proof_refresh_queue queue
-		set "leaseToken" = $1::uuid,
+		set "leaseToken" = gen_random_uuid(),
 			"leaseUntil" = now() + interval '2 minutes',
 			"lastAttemptAt" = now(),
 			"updatedAt" = now()

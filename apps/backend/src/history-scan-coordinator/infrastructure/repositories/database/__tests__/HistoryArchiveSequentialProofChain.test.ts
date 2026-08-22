@@ -1,6 +1,7 @@
-import type { QueryRunner } from 'typeorm';
+import type { DataSource, EntityManager, QueryRunner } from 'typeorm';
 import { HistoryArchiveSequentialProofChainMigration1785540000000 } from '../../../database/migrations/1785540000000-HistoryArchiveSequentialProofChainMigration.js';
 import {
+	claimHistoryArchiveCheckpointProofRefreshes,
 	claimProofRefreshSql,
 	claimSequentialProofRefreshSql,
 	enqueueCurrentTerminalReadyCheckpointProofRefreshesSql,
@@ -43,6 +44,51 @@ describe('sequential history archive proof chain', () => {
 			'queue."checkpointLedger" =\n' +
 				'\t\t\t\tchain_cursor."nextHistoricalCheckpointLedger" - 64'
 		);
+	});
+
+	it('claims a proof batch in one transaction', async () => {
+		const targets = [
+			{
+				archiveUrlIdentity: 'https://one.example',
+				checkpointLedger: 63,
+				evidenceUpdatedAt: '2026-08-22T00:00:00.000Z',
+				generation: '2',
+				leaseToken: '10000000-0000-0000-0000-000000000001'
+			},
+			{
+				archiveUrlIdentity: 'https://two.example',
+				checkpointLedger: 127,
+				evidenceUpdatedAt: '2026-08-22T00:00:01.000Z',
+				generation: '3',
+				leaseToken: '10000000-0000-0000-0000-000000000002'
+			}
+		];
+		const query = jest
+			.fn()
+			.mockResolvedValueOnce(undefined)
+			.mockResolvedValueOnce(undefined)
+			.mockResolvedValueOnce(targets);
+		const manager = { query } as unknown as EntityManager;
+		const transaction = jest.fn(
+			async (callback: (manager: EntityManager) => Promise<unknown>) =>
+				await callback(manager)
+		);
+		const dataSource = { transaction } as unknown as DataSource;
+
+		const claimed = await claimHistoryArchiveCheckpointProofRefreshes(
+			dataSource,
+			192,
+			1
+		);
+
+		expect(transaction).toHaveBeenCalledTimes(1);
+		expect(query).toHaveBeenCalledTimes(3);
+		expect(query).toHaveBeenNthCalledWith(
+			3,
+			claimSequentialProofRefreshSql,
+			[192]
+		);
+		expect(claimed.map((target) => target.generation)).toEqual([2, 3]);
 	});
 
 	it('admits only the checkpoint currently opened by the chain cursor', () => {
