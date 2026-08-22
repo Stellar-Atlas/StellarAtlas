@@ -248,6 +248,7 @@ export class CompleteHistoryArchiveObject {
 					await this.objectRepository.reconcileExecutionDisposition({
 						admitGenericObjects: false
 					});
+					await this.objectRepository.promotePlannedObjects();
 				} catch {
 					continue;
 				}

@@ -241,6 +241,7 @@ describe('CompleteHistoryArchiveObject', () => {
 		expect(checkpointProofRepository.refreshForObject).not.toHaveBeenCalled();
 		await useCase.reconcilePersisted(archiveObject);
 		expect(checkpointProofRepository.refreshForObject).not.toHaveBeenCalled();
+		objectRepository.promotePlannedObjects.mockClear();
 		await new Promise<void>((resolve) => {
 			setImmediate(resolve);
 		});
@@ -252,6 +253,7 @@ describe('CompleteHistoryArchiveObject', () => {
 				admitGenericObjects: false
 			}
 		);
+		expect(objectRepository.promotePlannedObjects).toHaveBeenCalledTimes(1);
 	});
 
 	it('materializes and refreshes a legacy verified checkpoint once', async () => {
