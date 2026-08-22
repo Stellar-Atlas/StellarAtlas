@@ -8,7 +8,6 @@ import {
 	type RawObjectQueryResult
 } from './HistoryArchiveObjectRowMapper.js';
 import { hasPostgresSqlState } from './PostgresError.js';
-import { enqueueHistoryArchiveReadyObjects } from './HistoryArchiveObjectReadyQueue.js';
 import { enqueueHistoryArchiveCheckpointProofRefreshes } from './HistoryArchiveCheckpointProofRefreshQueue.js';
 import {
 	prepareHistoryArchiveContentCompletion,
@@ -73,7 +72,6 @@ export async function markHistoryArchiveObjectVerified(
 			remoteId,
 			progress.claimAttempt
 		);
-		await enqueueHistoryArchiveReadyObjects(manager, [remoteId]);
 		return true;
 	});
 }
@@ -116,7 +114,6 @@ export async function releaseHistoryArchiveObject(
 		if ((result.affected ?? 0) === 0) return false;
 
 		await clearClaimSlot(manager.query.bind(manager), remoteId, claimAttempt);
-		await enqueueHistoryArchiveReadyObjects(manager, [remoteId]);
 		return true;
 	});
 }
@@ -136,10 +133,6 @@ export async function releaseStaleHistoryArchiveObjects(
 				])) as RawObjectQueryResult
 			);
 			const objects = rows.map(createObjectFromRow);
-			await enqueueHistoryArchiveReadyObjects(
-				manager,
-				objects.map((object) => object.remoteId)
-			);
 			return objects;
 		});
 	} catch (error) {
@@ -170,7 +163,6 @@ export async function markHistoryArchiveTransitionEffectsCompleted(
 			.execute();
 		if ((result.affected ?? 0) === 0) return false;
 		await enqueueHistoryArchiveCheckpointProofRefreshes(manager, [remoteId]);
-		await enqueueHistoryArchiveReadyObjects(manager, [remoteId]);
 		return true;
 	});
 }

@@ -4,7 +4,7 @@ import { HistoryArchiveObjectHostThrottleMigration1784410000000 } from '../../..
 import { HistoryArchiveObjectClaimCursorMigration1784780000000 } from '../../../database/migrations/1784780000000-HistoryArchiveObjectClaimCursorMigration.js';
 import { HistoryArchiveReadyQueueMigration1785270000000 } from '../../../database/migrations/1785270000000-HistoryArchiveReadyQueueMigration.js';
 import { TypeOrmHistoryArchiveObjectRepository } from '../TypeOrmHistoryArchiveObjectRepository.js';
-import { enqueueHistoryArchiveReadyObjects } from '../HistoryArchiveObjectReadyQueue.js';
+import { synchronizeHistoryArchiveReadyQueue } from '../HistoryArchiveObjectReadyQueue.js';
 
 export async function createObjectRepositoryDataSource(url: string): Promise<{
 	readonly dataSource: DataSource;
@@ -48,9 +48,8 @@ export async function saveHistoryArchiveObjects(
 	...objects: HistoryArchiveObject[]
 ): Promise<void> {
 	await dataSource.getRepository(HistoryArchiveObject).save(objects);
-	await enqueueHistoryArchiveReadyObjects(
-		dataSource.manager,
-		objects.map((object) => object.remoteId)
+	await dataSource.transaction(
+		async (manager) => await synchronizeHistoryArchiveReadyQueue(manager, 4096)
 	);
 }
 

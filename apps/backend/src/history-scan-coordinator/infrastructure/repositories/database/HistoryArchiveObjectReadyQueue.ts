@@ -226,26 +226,6 @@ export async function synchronizeHistoryArchiveReadyQueue(
 	};
 }
 
-export async function enqueueHistoryArchiveReadyObjects(
-	manager: EntityManager,
-	remoteIds: readonly string[]
-): Promise<number> {
-	if (remoteIds.length === 0) return 0;
-	return await enqueueReadyRoots(manager, [...new Set(remoteIds)], []);
-}
-
-export async function enqueueHistoryArchiveReadyArchives(
-	manager: EntityManager,
-	archiveUrlIdentities: readonly string[]
-): Promise<number> {
-	if (archiveUrlIdentities.length === 0) return 0;
-	return await enqueueReadyRoots(
-		manager,
-		[],
-		[...new Set(archiveUrlIdentities)]
-	);
-}
-
 export async function bootstrapHistoryArchiveReadyQueueIfEmpty(
 	manager: EntityManager,
 	limit: number
@@ -278,93 +258,6 @@ export async function bootstrapHistoryArchiveReadyQueueIfEmpty(
 		throw error;
 	}
 }
-
-async function enqueueReadyRoots(
-	manager: EntityManager,
-	remoteIds: readonly string[],
-	archiveUrlIdentities: readonly string[]
-): Promise<number> {
-	const [row] = (await manager.query(enqueueReadyObjectsSql, [
-		remoteIds,
-		archiveUrlIdentities,
-		historyArchiveExecutionReconciliationLockName
-	])) as readonly CountRow[];
-	return toCount(row?.count);
-}
-
-const enqueueReadyObjectsSql = `
-        with writer_lock as materialized (
-                select pg_try_advisory_xact_lock(hashtext($3)) as locked
-        ), ${canonicalRuntimePriorityCtesSql}, roots as materialized (
-                select source."archiveUrlIdentity"
-                from "history_archive_object_queue" source
-                cross join writer_lock
-                where writer_lock.locked
-                        and source."remoteId" = any($1::uuid[])
-                union
-                select requested."archiveUrlIdentity"
-                from unnest($2::text[]) requested("archiveUrlIdentity")
-                cross join writer_lock
-                where writer_lock.locked
-        ), candidates as materialized (
-		select root."archiveUrlIdentity", candidate."remoteId",
-			${historyArchiveEffectivePrioritySql('candidate')} as priority,
-			${readyAtSql} as "availableAt"
-		from roots root
-		join lateral (
-			select candidate.*
-			from "history_archive_object_queue" candidate
-			where candidate."archiveUrlIdentity" = root."archiveUrlIdentity"
-				and ${schedulableObjectSql}
-				and ${historyArchiveCheckpointNotFoundCooldownSql('candidate')}
-				and not exists (
-					select 1
-					from "history_archive_object_host_throttle" throttle
-					where throttle."hostIdentity" = candidate."hostIdentity"
-						and throttle."blockedUntil" > now()
-				)
-			order by
-				(${readyAtSql}) > now(),
-				${historyArchiveEffectivePrioritySql('candidate')},
-				candidate."lastClaimedAt" asc nulls first,
-				candidate."objectOrder",
-				candidate."checkpointLedger" desc nulls last,
-				candidate."objectKey",
-				candidate.id
-			limit 8
-		) candidate on true
-	), inserted as (
-		insert into "history_archive_object_ready" as stored (
-			"objectRemoteId", "archiveUrlIdentity", priority, "availableAt",
-			"createdAt", "updatedAt"
-		)
-		select "remoteId", "archiveUrlIdentity", priority, "availableAt",
-			now(), now()
-		from candidates
-		on conflict do nothing
-		returning "objectRemoteId"
-	), updated as (
-                update "history_archive_object_ready" stored
-                set priority = candidates.priority,
-                        "availableAt" = candidates."availableAt",
-                        "updatedAt" = now()
-                from candidates
-                where stored."objectRemoteId" = candidates."remoteId"
-                        and stored."dispatchToken" is null
-                        and stored."publishedAt" is null
-                        and (
-                                stored.priority is distinct from candidates.priority
-                                or stored."availableAt" is distinct from
-                                        candidates."availableAt"
-                        )
-                returning stored."objectRemoteId"
-        ), changed as (
-		select "objectRemoteId" from inserted
-		union all
-		select "objectRemoteId" from updated
-	)
-	select count(*)::integer as count from changed
-`;
 
 export function buildHistoryArchiveOutstandingReadyCountCtesSql(
 	maximumPriority: HistoryArchiveBrokerPriority = getHistoryArchiveBrokerMaximumPriority(),

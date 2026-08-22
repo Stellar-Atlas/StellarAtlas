@@ -1,6 +1,5 @@
 import type { Repository } from 'typeorm';
 import type { HistoryArchiveObject } from '@history-scan-coordinator/domain/history-archive-object/HistoryArchiveObject.js';
-import { enqueueHistoryArchiveReadyObjects } from './HistoryArchiveObjectReadyQueue.js';
 
 export async function materializeHistoryArchiveCheckpointDependencies(
 	repository: Repository<HistoryArchiveObject>,
@@ -14,7 +13,6 @@ export async function materializeHistoryArchiveCheckpointDependencies(
 		])) as readonly unknown[];
 		await manager.query(activateCheckpointCategoryDependenciesSql, [remoteId]);
 		await manager.query(activateCheckpointBucketDependenciesSql, [remoteId]);
-		await enqueueHistoryArchiveReadyObjects(manager, [remoteId]);
 		return inserted.length;
 	});
 }

@@ -11,7 +11,6 @@ import {
 } from '@history-scan-coordinator/domain/history-archive-object/HistoryArchiveObjectPlanningPolicy.js';
 import { requeueStaleHistoryArchiveStateObjects } from './HistoryArchiveObjectStateRefreshQuery.js';
 import {
-	enqueueHistoryArchiveReadyArchives,
 	buildHistoryArchiveReadyPressureSql,
 	historyArchiveReadyRootActivityCtesSql,
 	synchronizeHistoryArchiveReadyQueue
@@ -59,10 +58,6 @@ export async function planHistoryArchiveObjects(
 		const rows = (await repository.manager.query(planObjectsSql, [
 			JSON.stringify(values)
 		])) as readonly unknown[];
-		await enqueueHistoryArchiveReadyArchives(
-			repository.manager,
-			chunk.map((object) => object.archiveUrlIdentity)
-		);
 		planned += rows.length;
 	}
 	return planned + refreshed;
