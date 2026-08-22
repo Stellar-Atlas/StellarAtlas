@@ -68,6 +68,69 @@ export async function enqueueHistoryArchiveCheckpointProofRefreshes(
 	])) as readonly { readonly count: number | string }[];
 	return Number(row?.count ?? 0);
 }
+export async function enqueueCurrentTerminalReadyCheckpointProofRefreshes(
+	manager: EntityManager,
+	limit: number
+): Promise<number> {
+	const [row] = (await manager.query(
+		enqueueCurrentTerminalReadyCheckpointProofRefreshesSql,
+		[Math.max(1, Math.min(Math.floor(limit), 4_096))]
+	)) as readonly { readonly count: number | string }[];
+	return Number(row?.count ?? 0);
+}
+
+export const enqueueCurrentTerminalReadyCheckpointProofRefreshesSql = `
+        with candidates as materialized (
+                select cursor."archiveUrlIdentity",
+                        cursor."nextHistoricalCheckpointLedger" - 64
+                                as "checkpointLedger"
+                from "history_archive_checkpoint_scan_cursor" cursor
+                where not exists (
+                        select 1
+                        from "history_archive_checkpoint_proof" proof
+                        where proof."archiveUrlIdentity" =
+                                cursor."archiveUrlIdentity"
+                        and proof."checkpointLedger" =
+                                cursor."nextHistoricalCheckpointLedger" - 64
+                )
+                and not exists (
+                        select 1
+                        from "history_archive_checkpoint_proof_refresh_queue" queued
+                        where queued."archiveUrlIdentity" =
+                                cursor."archiveUrlIdentity"
+                        and queued."checkpointLedger" =
+                                cursor."nextHistoricalCheckpointLedger" - 64
+                )
+                order by cursor."archiveUrlIdentity"
+                limit $1::integer
+        ), terminal as materialized (
+                select candidate.*
+                from candidates candidate
+                where ${historyArchiveCheckpointProofTerminalReadySql('candidate')}
+        ), enqueued as (
+                insert into "history_archive_checkpoint_proof_refresh_queue" (
+                        "archiveUrlIdentity",
+                        "checkpointLedger",
+                        "evidenceUpdatedAt",
+                        generation,
+                        "requestedAt",
+                        "nextAttemptAt",
+                        "updatedAt"
+                )
+                select "archiveUrlIdentity",
+                        "checkpointLedger",
+                        now(),
+                        1,
+                        now(),
+                        now(),
+                        now()
+                from terminal
+                on conflict ("archiveUrlIdentity", "checkpointLedger") do nothing
+                returning 1
+        )
+        select count(*)::integer as count
+        from enqueued
+`;
 
 export async function drainHistoryArchiveCheckpointProofRefreshes(
 	dataSource: DataSource,
@@ -341,6 +404,12 @@ export const enqueueProofRefreshesSql = `
 			"leaseToken" = null,
 			"leaseUntil" = null,
 			"updatedAt" = now()
+		-- Completion and refresh transactions hold the same root lock. A live
+		-- refresh sees all evidence committed before it obtains that lock, so
+		-- invalidating its lease here would only create duplicate root work.
+		where history_archive_checkpoint_proof_refresh_queue."leaseUntil" is null
+			or history_archive_checkpoint_proof_refresh_queue."leaseUntil" <=
+				now()
 		returning 1
 	)
 	select count(*)::integer as count from enqueued

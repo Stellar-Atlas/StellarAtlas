@@ -37,7 +37,6 @@ export type HistoryArchiveObjectVerificationFacts =
 @Entity({ name: 'history_archive_object_queue' })
 @Index('idx_history_archive_object_status', ['status', 'objectOrder'])
 @Index('idx_history_archive_object_archive', ['archiveUrlIdentity', 'status'])
-@Index('idx_history_archive_object_host', ['hostIdentity', 'status'])
 @Index('idx_history_archive_object_key', ['objectType', 'objectKey'])
 @Index(
 	'uq_history_archive_object_identity',

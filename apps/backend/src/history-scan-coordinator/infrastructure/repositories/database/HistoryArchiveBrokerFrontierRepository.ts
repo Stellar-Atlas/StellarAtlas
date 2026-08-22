@@ -14,6 +14,7 @@ import {
 	historyArchiveReservationPrioritySql
 } from './HistoryArchiveCanonicalRuntimePrioritySql.js';
 import { historyArchiveExecutionReconciliationLockName } from './HistoryArchiveObjectExecutionReconciler.js';
+import { enqueueCurrentTerminalReadyCheckpointProofRefreshes } from './HistoryArchiveCheckpointProofRefreshQueue.js';
 
 const maximumArchiveSourceFrontierRows = 4_096;
 
@@ -323,6 +324,10 @@ export class HistoryArchiveBrokerFrontierRepository {
 	async ensureFrontier(): Promise<number> {
 		return await this.dataSource.transaction(async (manager) => {
 			await this.takeExecutionReconciliationLock(manager);
+			await enqueueCurrentTerminalReadyCheckpointProofRefreshes(
+				manager,
+				maximumArchiveSourceFrontierRows
+			);
 			const result = await synchronizeHistoryArchiveReadyQueue(
 				manager,
 				maximumArchiveSourceFrontierRows

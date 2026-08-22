@@ -66,7 +66,6 @@ export async function markHistoryArchiveObjectVerified(
 		const result = await query.execute();
 		if ((result.affected ?? 0) === 0) return false;
 		await recordHistoryArchiveContentEvidence(manager, remoteId, prepared);
-		await enqueueHistoryArchiveCheckpointProofRefreshes(manager, [remoteId]);
 		if (progress.scheduler === 'broker') return true;
 
 		await clearClaimSlot(

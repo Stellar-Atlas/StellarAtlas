@@ -3,6 +3,7 @@ import { HistoryArchiveSequentialProofChainMigration1785540000000 } from '../../
 import {
 	claimProofRefreshSql,
 	claimSequentialProofRefreshSql,
+	enqueueCurrentTerminalReadyCheckpointProofRefreshesSql,
 	enqueueProofRefreshesSql
 } from '../HistoryArchiveCheckpointProofRefreshQueue.js';
 import { historyArchiveCheckpointProofTerminalReadySql } from '../HistoryArchiveCheckpointProofReadinessSql.js';
@@ -27,6 +28,15 @@ describe('sequential history archive proof chain', () => {
 		expect(enqueueProofRefreshesSql).toContain(candidateReadiness);
 		expect(enqueueProofRefreshesSql).toMatch(
 			/candidate\."checkpointLedger"\s*=\s*chain_cursor\."nextHistoricalCheckpointLedger" - 64/
+		);
+		expect(enqueueCurrentTerminalReadyCheckpointProofRefreshesSql).toContain(
+			candidateReadiness
+		);
+		expect(enqueueCurrentTerminalReadyCheckpointProofRefreshesSql).toMatch(
+			/cursor\."nextHistoricalCheckpointLedger"\s*-\s*64/
+		);
+		expect(enqueueProofRefreshesSql).toMatch(
+			/where history_archive_checkpoint_proof_refresh_queue\."leaseUntil" is null\s+or history_archive_checkpoint_proof_refresh_queue\."leaseUntil" <=\s+now\(\)/
 		);
 		expect(claimProofRefreshSql).toContain(queueReadiness);
 		expect(claimSequentialProofRefreshSql).toContain(

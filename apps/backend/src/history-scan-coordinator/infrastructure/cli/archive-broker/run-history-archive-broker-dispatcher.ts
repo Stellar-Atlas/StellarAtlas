@@ -15,7 +15,6 @@ const dataSource = new DataSource({
 	entities: [],
 	migrations: [],
 	migrationsRun: false,
-	poolSize: 2,
 	synchronize: false
 });
 await dataSource.initialize();
