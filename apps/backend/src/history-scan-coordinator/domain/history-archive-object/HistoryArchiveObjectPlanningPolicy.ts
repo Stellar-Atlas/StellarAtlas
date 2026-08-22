@@ -10,12 +10,12 @@ export const historyArchiveConsumerCount =
 	historyArchiveWorkerCapacity.consumerCount;
 export const historyArchiveCanonicalReserveCount =
 	historyArchiveWorkerCapacity.canonicalReserveCount;
-export const historyArchivePerHostConcurrency = 2;
+export const historyArchivePerHostConcurrency = 8;
 export const historyArchiveMinimumWatermark =
 	historyArchiveWorkerCapacity.minimumWatermark;
 export const historyArchiveMaximumWatermark =
 	historyArchiveWorkerCapacity.maximumWatermark;
-export const historyArchivePerRootFrontier = 1;
+export const historyArchivePerRootFrontier = 4;
 export const historyArchiveThroughputWindowMinutes = 15;
 const targetBacklogMinutes = 10;
 export const historyArchiveThroughputSampleCap = Math.ceil(
