@@ -8,6 +8,8 @@ PRIMARY_CONFIG_SOURCE="$REPO_ROOT/ops/postgresql/host"
 PRIMARY_CONFIG_TARGET=/etc/postgresql/16/stellaratlas
 HORIZON_CONFIG_TARGET=/etc/postgresql/16/stellaratlas-horizon
 STELLARATLAS_CONFIG_TARGET=/etc/stellaratlas
+ARCHIVE_VERIFIER_ENV_SOURCE="$REPO_ROOT/ops/systemd/archive-verifier-steady.env"
+ARCHIVE_VERIFIER_ENV_TARGET="$STELLARATLAS_CONFIG_TARGET/archive-verifier-steady.env"
 NATS_CONFIG_SOURCE="$REPO_ROOT/ops/nats/stellaratlas.conf"
 NATS_CONFIG_TARGET="$STELLARATLAS_CONFIG_TARGET/nats.conf"
 NATS_ENV_TARGET="$STELLARATLAS_CONFIG_TARGET/nats.env"
@@ -88,6 +90,7 @@ verify_prerequisites() {
 	require_file "$PRIMARY_CONFIG_SOURCE/horizon-pg_ident.conf"
 	require_file "$REPO_ROOT/ops/postgresql/stellaratlas-main.conf"
 	require_file "$NATS_CONFIG_SOURCE"
+        require_file "$ARCHIVE_VERIFIER_ENV_SOURCE"
 	require_file "$REPO_ROOT/ops/stellar-rpc/pubnet-host.toml"
 
 	systemd-analyze verify "${UNITS[@]/#/$UNIT_SOURCE/}"
@@ -110,6 +113,8 @@ install_runtime() {
 		die "host NATS token is missing or invalid"
 	install -o root -g admins -m 0640 \
 		"$NATS_CONFIG_SOURCE" "$NATS_CONFIG_TARGET"
+        install -o root -g root -m 0644 \
+                "$ARCHIVE_VERIFIER_ENV_SOURCE" "$ARCHIVE_VERIFIER_ENV_TARGET"
 	install -o root -g 111 -m 0640 \
 		"$PRIMARY_CONFIG_SOURCE/postgresql.conf" \
 		"$PRIMARY_CONFIG_TARGET/postgresql.conf"
@@ -164,6 +169,10 @@ verify_installed() {
 	verify_copy "$REPO_ROOT/ops/postgresql/stellaratlas-main.conf" \
 		"$PRIMARY_CONFIG_TARGET/conf.d/stellaratlas-main.conf" '0:111:640'
 	verify_copy "$NATS_CONFIG_SOURCE" "$NATS_CONFIG_TARGET" '0:1000:640'
+        install -o root -g root -m 0644 \
+                "$ARCHIVE_VERIFIER_ENV_SOURCE" "$ARCHIVE_VERIFIER_ENV_TARGET"
+        verify_copy "$ARCHIVE_VERIFIER_ENV_SOURCE" \
+                "$ARCHIVE_VERIFIER_ENV_TARGET" '0:0:644'
 	[[ "$(stat -c '%u:%g:%a' "$NATS_ENV_TARGET")" == '0:1000:640' ]] ||
 		die "installed ownership or mode is wrong: $NATS_ENV_TARGET"
 	grep -Eq '^NATS_TOKEN=[0-9a-f]{64}$' "$NATS_ENV_TARGET" ||
