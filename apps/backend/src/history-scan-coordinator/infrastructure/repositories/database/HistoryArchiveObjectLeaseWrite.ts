@@ -14,6 +14,7 @@ import {
 	recordHistoryArchiveContentEvidence
 } from './HistoryArchiveContentReuseWrite.js';
 import { lockHistoryArchiveObjectRootTransition } from './HistoryArchiveRootTransitionLock.js';
+import { removeCompletedHistoryArchiveBrokerReadyRow } from './HistoryArchiveObjectReadyQueue.js';
 
 export async function markHistoryArchiveObjectVerified(
 	repository: Repository<HistoryArchiveObject>,
@@ -66,7 +67,15 @@ export async function markHistoryArchiveObjectVerified(
 		const result = await query.execute();
 		if ((result.affected ?? 0) === 0) return false;
 		await recordHistoryArchiveContentEvidence(manager, remoteId, prepared);
-		if (progress.scheduler === 'broker') return true;
+		if (progress.scheduler === 'broker') {
+			await removeCompletedHistoryArchiveBrokerReadyRow(
+				manager,
+				remoteId,
+				progress.executionId!,
+				progress.claimAttempt
+			);
+			return true;
+		}
 
 		await clearClaimSlot(
 			manager.query.bind(manager),

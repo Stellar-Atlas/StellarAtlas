@@ -1,5 +1,8 @@
 import type { EntityManager } from 'typeorm';
-import { synchronizeHistoryArchiveReadyQueue } from '../HistoryArchiveObjectReadyQueue.js';
+import {
+	removeCompletedHistoryArchiveBrokerReadyRow,
+	synchronizeHistoryArchiveReadyQueue
+} from '../HistoryArchiveObjectReadyQueue.js';
 
 describe('HistoryArchiveObjectReadyQueue', () => {
 	it('skips a maintenance refill while another frontier writer owns the lock', async () => {
@@ -37,5 +40,24 @@ describe('HistoryArchiveObjectReadyQueue', () => {
 
 		expect(transaction).toHaveBeenCalledTimes(1);
 		expect(query).toHaveBeenCalledTimes(1);
+	});
+
+	it('removes only the completed broker execution row', async () => {
+		const query = jest.fn().mockResolvedValue([]);
+		const manager = { query } as unknown as EntityManager;
+		const remoteId = '00000000-0000-4000-8000-000000000001';
+		const executionId = '00000000-0000-4000-8000-000000000002';
+
+		await removeCompletedHistoryArchiveBrokerReadyRow(
+			manager,
+			remoteId,
+			executionId,
+			3
+		);
+
+		expect(query).toHaveBeenCalledWith(
+			expect.stringContaining('delete from "history_archive_object_ready"'),
+			[remoteId, executionId, 3]
+		);
 	});
 });

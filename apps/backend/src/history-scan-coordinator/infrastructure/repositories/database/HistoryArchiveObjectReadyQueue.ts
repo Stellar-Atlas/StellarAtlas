@@ -326,6 +326,21 @@ export const historyArchiveReadyRootActivityCtesSql = `
 	)
 `;
 
+export async function removeCompletedHistoryArchiveBrokerReadyRow(
+	manager: EntityManager,
+	remoteId: string,
+	executionId: string,
+	claimAttempt: number
+): Promise<void> {
+	await manager.query(
+		`delete from "history_archive_object_ready"
+		 where "objectRemoteId" = $1::uuid
+		   and "dispatchToken" = $2::uuid
+		   and "claimAttempt" = $3::integer`,
+		[remoteId, executionId, claimAttempt]
+	);
+}
+
 interface CountRow {
 	readonly count?: number | string;
 }

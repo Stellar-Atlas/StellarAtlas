@@ -11,6 +11,7 @@ import {
 } from './HistoryArchiveObjectHostThrottleSql.js';
 import { enqueueHistoryArchiveCheckpointProofRefreshes } from './HistoryArchiveCheckpointProofRefreshQueue.js';
 import { lockHistoryArchiveObjectRootTransition } from './HistoryArchiveRootTransitionLock.js';
+import { removeCompletedHistoryArchiveBrokerReadyRow } from './HistoryArchiveObjectReadyQueue.js';
 
 export async function markHistoryArchiveObjectFailed(
 	repository: Repository<HistoryArchiveObject>,
@@ -74,6 +75,14 @@ export async function markHistoryArchiveObjectFailed(
 			]);
 		}
 		await enqueueHistoryArchiveCheckpointProofRefreshes(manager, [remoteId]);
+		if (failure.scheduler === 'broker') {
+			await removeCompletedHistoryArchiveBrokerReadyRow(
+				manager,
+				remoteId,
+				failure.executionId!,
+				failure.claimAttempt
+			);
+		}
 
 		return true;
 	});
