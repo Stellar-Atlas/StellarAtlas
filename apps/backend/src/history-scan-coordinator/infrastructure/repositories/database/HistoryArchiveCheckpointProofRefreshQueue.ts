@@ -160,10 +160,13 @@ export async function claimNextHistoryArchiveCheckpointProofRefresh(
 		await manager.query(`set local lock_timeout = '250ms'`);
 		await manager.query(`set local statement_timeout = '2s'`);
 		const leaseToken = randomUUID();
-		const [row] = (await manager.query(claimProofRefreshSql, [
-			leaseToken,
-			maximumPriority
-		])) as readonly (Omit<
+		const claimSql =
+			maximumPriority === 1
+				? claimSequentialProofRefreshSql
+				: claimProofRefreshSql;
+		const parameters =
+			maximumPriority === 1 ? [leaseToken] : [leaseToken, maximumPriority];
+		const [row] = (await manager.query(claimSql, parameters)) as readonly (Omit<
 			ClaimedHistoryArchiveCheckpointProofRefresh,
 			'generation'
 		> & { readonly generation: number | string })[];
@@ -324,6 +327,40 @@ export const enqueueProofRefreshesSql = `
 		returning 1
 	)
 	select count(*)::integer as count from enqueued
+`;
+
+// Enqueue admission already proves terminal readiness. The sequential claimant
+// binds that durable intent to the one open checkpoint per root instead of
+// repeating the full object-and-bucket readiness graph for every queue claim.
+export const claimSequentialProofRefreshSql = `
+	with candidate as materialized (
+		select queue."archiveUrlIdentity", queue."checkpointLedger"
+		from history_archive_checkpoint_proof_refresh_queue queue
+		join "history_archive_checkpoint_scan_cursor" chain_cursor
+			on chain_cursor."archiveUrlIdentity" =
+				queue."archiveUrlIdentity"
+			and queue."checkpointLedger" =
+				chain_cursor."nextHistoricalCheckpointLedger" - 64
+		where queue."nextAttemptAt" <= now()
+			and (queue."leaseUntil" is null or queue."leaseUntil" <= now())
+		order by queue."nextAttemptAt", queue."requestedAt", queue.attempts,
+			queue."archiveUrlIdentity", queue."checkpointLedger"
+		for update of queue skip locked
+		limit 1
+	), claimed as (
+		update history_archive_checkpoint_proof_refresh_queue queue
+		set "leaseToken" = $1::uuid,
+			"leaseUntil" = now() + interval '2 minutes',
+			"lastAttemptAt" = now(),
+			"updatedAt" = now()
+		from candidate
+		where queue."archiveUrlIdentity" = candidate."archiveUrlIdentity"
+			and queue."checkpointLedger" = candidate."checkpointLedger"
+		returning queue.*
+	)
+	select "archiveUrlIdentity", "checkpointLedger",
+		"evidenceUpdatedAt"::text as "evidenceUpdatedAt", generation, "leaseToken"
+	from claimed
 `;
 
 export const claimProofRefreshSql = `

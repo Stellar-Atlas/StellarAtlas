@@ -2,6 +2,7 @@ import type { QueryRunner } from 'typeorm';
 import { HistoryArchiveSequentialProofChainMigration1785540000000 } from '../../../database/migrations/1785540000000-HistoryArchiveSequentialProofChainMigration.js';
 import {
 	claimProofRefreshSql,
+	claimSequentialProofRefreshSql,
 	enqueueProofRefreshesSql
 } from '../HistoryArchiveCheckpointProofRefreshQueue.js';
 import { historyArchiveCheckpointProofTerminalReadySql } from '../HistoryArchiveCheckpointProofReadinessSql.js';
@@ -25,6 +26,10 @@ describe('sequential history archive proof chain', () => {
 		expect(candidateReadiness).toContain("('results'::text)");
 		expect(enqueueProofRefreshesSql).toContain(candidateReadiness);
 		expect(claimProofRefreshSql).toContain(queueReadiness);
+		expect(claimSequentialProofRefreshSql).toContain(
+			'queue."checkpointLedger" =\n' +
+				'\t\t\t\tchain_cursor."nextHistoricalCheckpointLedger" - 64'
+		);
 	});
 
 	it('admits only the checkpoint currently opened by the chain cursor', () => {
