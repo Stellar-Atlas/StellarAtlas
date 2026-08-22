@@ -7,6 +7,7 @@ import type {
 import { canonicalRuntimeTargetCtes } from './HistoryArchiveCanonicalRuntimeTargetSql.js';
 import { historyArchiveExecutionReconciliationLockName } from './HistoryArchiveObjectExecutionReconciler.js';
 import { dueProofRefreshCanonicalRuntimeArchiveRootsCteSql } from './HistoryArchiveCanonicalRuntimePrioritySql.js';
+import { materializeNextCompactCheckpointPlan } from './HistoryArchiveCompactPlanning.js';
 import { canonicalRuntimeExecutableProofMemberExistsSql } from './HistoryArchiveCanonicalRuntimeProofMembershipSql.js';
 import { historyArchiveCheckpointProofQueuedRefreshSql } from './HistoryArchiveCheckpointProofRefreshSql.js';
 import { historyArchiveCheckpointProofPendingSourceEnrichmentSql } from './HistoryArchiveCheckpointProofPostRefreshSql.js';
@@ -228,6 +229,11 @@ export async function refreshClaimedHistoryArchiveCheckpointProof(
 		await manager.query(
 			historyArchiveCheckpointProofPendingSourceEnrichmentSql,
 			[target.archiveUrlIdentity, target.checkpointLedger]
+		);
+		await materializeNextCompactCheckpointPlan(
+			manager,
+			target.archiveUrlIdentity,
+			target.checkpointLedger
 		);
 		const deleted = (await manager.query(completeProofRefreshSql, [
 			target.archiveUrlIdentity,

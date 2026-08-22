@@ -8,7 +8,7 @@ import {
 	startDisposablePostgres,
 	type DisposablePostgres
 } from '@test-support/DisposablePostgres.js';
-import { materializeCompactCheckpointPlans } from '../HistoryArchiveCompactPlanning.js';
+import { materializeNextCompactCheckpointPlan } from '../HistoryArchiveCompactPlanning.js';
 import { createCanonicalFrontierTestSchema } from './HistoryArchiveCanonicalFrontierTestSchema.js';
 import {
 	createBucketMissingProof,
@@ -40,7 +40,7 @@ describe('compact history archive checkpoint planning', () => {
 		if (postgres !== undefined) await postgres.stop();
 	});
 
-	it('enqueues the next sequential checkpoint directly without a plan table', async () => {
+	it('enqueues the completed root next checkpoint inside the proof transaction', async () => {
 		const root = createRoot(0);
 		await dataSource.getRepository(HistoryArchiveObject).save(root);
 		await dataSource.query(
@@ -70,8 +70,16 @@ describe('compact history archive checkpoint planning', () => {
 		const [planTableBefore] = (await dataSource.query(
 			`select to_regclass('history_archive_object_plan') is null as absent`
 		)) as readonly { readonly absent: boolean }[];
-		const first = await materializeCompactCheckpointPlans(dataSource.manager);
-		const second = await materializeCompactCheckpointPlans(dataSource.manager);
+		const first = await materializeNextCompactCheckpointPlan(
+			dataSource.manager,
+			root.archiveUrlIdentity,
+			63
+		);
+		const second = await materializeNextCompactCheckpointPlan(
+			dataSource.manager,
+			root.archiveUrlIdentity,
+			63
+		);
 		const [checkpoint] = (await dataSource.query(
 			`select status, "dependencyReady", "executionDisposition",
 				"executionReason", "objectUrl"

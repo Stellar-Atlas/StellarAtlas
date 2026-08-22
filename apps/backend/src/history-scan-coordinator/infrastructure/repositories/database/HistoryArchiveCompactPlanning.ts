@@ -76,6 +76,110 @@ export async function materializeCompactCheckpointPlans(
 	return Number(result?.planned ?? 0);
 }
 
+export async function materializeNextCompactCheckpointPlan(
+	manager: EntityManager,
+	archiveUrlIdentity: string,
+	completedCheckpointLedger: number
+): Promise<number> {
+	if (
+		!Number.isSafeInteger(completedCheckpointLedger) ||
+		completedCheckpointLedger < 63
+	) {
+		return 0;
+	}
+	const [result] = (await manager.query(targetedCompactCheckpointPlanSql, [
+		archiveUrlIdentity,
+		completedCheckpointLedger
+	])) as readonly { readonly planned: number | string }[];
+	return Number(result?.planned ?? 0);
+}
+
+const targetedCompactCheckpointPlanSql = `
+	with candidate as materialized (
+		select cursor."archiveUrlIdentity",
+			greatest(
+				cursor."latestCheckpointLedger",
+				(
+					floor((state."currentLedger" + 1)::numeric / 64) * 64 - 1
+				)::integer
+			) as "latestCheckpointLedger",
+			cursor."lastForwardCheckpointLedger",
+			cursor."nextHistoricalCheckpointLedger" as checkpoint_ledger,
+			root."archiveUrl", root."hostIdentity"
+		from "history_archive_checkpoint_scan_cursor" cursor
+		join "history_archive_state_snapshot" state
+			on state."archiveUrlIdentity" = cursor."archiveUrlIdentity"
+			and state.status = 'available'
+			and state."currentLedger" >= 63
+		join "history_archive_object_queue" root
+			on root."archiveUrlIdentity" = cursor."archiveUrlIdentity"
+			and root."objectType" = 'history-archive-state'
+			and root."objectKey" = 'root'
+			and root.status = 'verified'
+			and state."archiveUrlIdentity" = regexp_replace(root."archiveUrl", '/+$', '')
+		join "history_archive_checkpoint_proof" proof
+			on proof."archiveUrlIdentity" = cursor."archiveUrlIdentity"
+			and proof."checkpointLedger" = $2::integer
+			and proof.status = 'verified'
+		where cursor."archiveUrlIdentity" = $1::text
+			and cursor."nextHistoricalCheckpointLedger" = $2::integer + 64
+			and cursor."nextHistoricalCheckpointLedger" <= greatest(
+				cursor."latestCheckpointLedger",
+				(
+					floor((state."currentLedger" + 1)::numeric / 64) * 64 - 1
+				)::integer
+			)
+		for update of cursor
+	), source as materialized (
+		select candidate.*,
+			lpad(to_hex(candidate.checkpoint_ledger), 8, '0') as checkpoint_hex
+		from candidate
+	), inserted as (
+		insert into "history_archive_object_queue" (
+			"remoteId", "archiveUrl", "archiveUrlIdentity", "hostIdentity",
+			"objectType", "objectKey", "objectOrder", "objectUrl", status,
+			"checkpointLedger", "dependencyReady",
+			"executionDisposition", "executionReason", "executionDispositionAt"
+		)
+		select gen_random_uuid(), source."archiveUrl",
+			source."archiveUrlIdentity", source."hostIdentity",
+			'checkpoint-state',
+			'checkpoint-state:' || source.checkpoint_hex,
+			10,
+			rtrim(source."archiveUrl", '/') || '/history/' ||
+				substring(source.checkpoint_hex from 1 for 2) || '/' ||
+				substring(source.checkpoint_hex from 3 for 2) || '/' ||
+				substring(source.checkpoint_hex from 5 for 2) || '/' ||
+				'history-' || source.checkpoint_hex || '.json',
+			'pending', source.checkpoint_ledger, true,
+			'executable', 'planned-frontier', now()
+		from source
+		on conflict ("archiveUrlIdentity", "objectType", "objectKey")
+			do update
+			set "dependencyReady" = true,
+				"executionDisposition" = 'executable',
+				"executionReason" = 'planned-frontier',
+				"executionDispositionAt" = now(),
+				"updatedAt" = now()
+			where "history_archive_object_queue".status = 'pending'
+		returning id
+	), advanced as (
+		update "history_archive_checkpoint_scan_cursor" cursor
+		set "latestCheckpointLedger" = source."latestCheckpointLedger",
+			"lastForwardCheckpointLedger" = case
+				when source.checkpoint_ledger = source."latestCheckpointLedger"
+					then source.checkpoint_ledger
+				else cursor."lastForwardCheckpointLedger"
+			end,
+			"nextHistoricalCheckpointLedger" = source.checkpoint_ledger + 64,
+			"updatedAt" = now()
+		from source
+		where cursor."archiveUrlIdentity" = source."archiveUrlIdentity"
+		returning cursor."archiveUrlIdentity"
+	)
+	select (select count(*) from inserted)::integer as planned
+`;
+
 const compactCheckpointPlanSql = `
 	with available_roots as materialized (
 		select state."archiveUrlIdentity", state."currentLedger",
