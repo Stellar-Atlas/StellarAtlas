@@ -1,8 +1,11 @@
 [Unit]
 Description=StellarAtlas API
 Documentation=https://github.com/Stellar-Atlas/StellarAtlas
+StartLimitIntervalSec=1h
+StartLimitBurst=12
 Wants=network-online.target stellaratlas-meilisearch-network.service
 After=network-online.target stellaratlas-meilisearch-network.service
+RequiresMountsFor=/home/observe/stellarbeat-data/Observer
 PartOf=stellaratlas.target
 Conflicts=stellaratlas.service
 
@@ -19,8 +22,10 @@ Environment=PATH=/home/observe/.nvm/versions/node/v26.4.0/bin:/usr/local/sbin:/u
 EnvironmentFile=-/etc/stellaratlas/stellaratlas.env
 EnvironmentFile=-/etc/stellaratlas/meilisearch-network.env
 ExecStart=/usr/bin/env pnpm start:api
-Restart=always
-RestartSec=5
+Restart=on-failure
+RestartSec=30s
+RestartSteps=6
+RestartMaxDelaySec=10min
 TimeoutStopSec=45
 KillSignal=SIGTERM
 NoNewPrivileges=true
