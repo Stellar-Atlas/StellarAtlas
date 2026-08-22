@@ -99,14 +99,6 @@ const refillReadyObjectsSql = `
 				where throttle."hostIdentity" = root."hostIdentity"
 					and throttle."blockedUntil" > now()
 			)
-			and not exists (
-				select 1
-				from "history_archive_object_claim_slot" slot
-				join "history_archive_object_queue" active
-					on active."remoteId" = slot."objectRemoteId"
-					and active.status = 'scanning'
-				where active."archiveUrlIdentity" = root."archiveUrlIdentity"
-			)
 			and ${historyArchiveCheckpointNotFoundCooldownSql('root')}
 	), candidates as materialized (
 		select root.id as root_id, root."lastClaimedAt",
