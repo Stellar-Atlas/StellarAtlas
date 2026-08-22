@@ -23,7 +23,7 @@ import { TYPES } from '../../infrastructure/di/di-types.js';
 import { mapUnknownToError } from '@core/utilities/mapUnknownToError.js';
 import { HistoryArchiveObjectEventRecorder } from '../record-history-archive-object-event/HistoryArchiveObjectEventRecorder.js';
 
-const immediateProofRefreshBatchSize = 10;
+const immediateProofRefreshBatchSize = 64;
 
 export interface CompleteHistoryArchiveObjectRequest extends HistoryArchiveObjectProgressUpdate {
 	readonly archiveMetadata?: ArchiveMetadataDTO | null;
@@ -240,11 +240,6 @@ export class CompleteHistoryArchiveObject {
 						);
 					proofQueueMayHaveMore =
 						refresh.claimed === immediateProofRefreshBatchSize;
-					if (refresh.completed === 0) continue;
-					await this.objectRepository.reconcileExecutionDisposition({
-						admitGenericObjects: false
-					});
-					await this.objectRepository.promotePlannedObjects();
 				} catch {
 					continue;
 				}

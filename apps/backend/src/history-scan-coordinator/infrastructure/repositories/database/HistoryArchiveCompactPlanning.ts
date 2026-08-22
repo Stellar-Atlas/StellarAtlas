@@ -162,7 +162,7 @@ const targetedCompactCheckpointPlanSql = `
 				"executionDispositionAt" = now(),
 				"updatedAt" = now()
 			where "history_archive_object_queue".status = 'pending'
-		returning id
+		returning "remoteId", "archiveUrlIdentity"
 	), advanced as (
 		update "history_archive_checkpoint_scan_cursor" cursor
 		set "latestCheckpointLedger" = source."latestCheckpointLedger",
@@ -176,8 +176,20 @@ const targetedCompactCheckpointPlanSql = `
 		from source
 		where cursor."archiveUrlIdentity" = source."archiveUrlIdentity"
 		returning cursor."archiveUrlIdentity"
+	), ready as (
+		insert into "history_archive_object_ready" (
+			"objectRemoteId", "archiveUrlIdentity", priority, "availableAt",
+			"createdAt", "updatedAt"
+		)
+		select inserted."remoteId", inserted."archiveUrlIdentity", 2, now(),
+			now(), now()
+		from inserted
+		join advanced using ("archiveUrlIdentity")
+		on conflict ("objectRemoteId") do nothing
+		returning "objectRemoteId"
 	)
-	select (select count(*) from inserted)::integer as planned
+	select (select count(*) from inserted)::integer as planned,
+		(select count(*) from ready)::integer as ready
 `;
 
 const compactCheckpointPlanSql = `

@@ -95,6 +95,16 @@ describe('compact history archive checkpoint planning', () => {
 			readonly objectUrl: string;
 			readonly status: string;
 		}[];
+		const [ready] = (await dataSource.query(
+			`select ready.priority
+			 from "history_archive_object_ready" ready
+			 join "history_archive_object_queue" object
+				on object."remoteId" = ready."objectRemoteId"
+			 where object."archiveUrlIdentity" = $1
+				and object."objectType" = 'checkpoint-state'
+				and object."checkpointLedger" = 127`,
+			[root.archiveUrlIdentity]
+		)) as readonly { readonly priority: number }[];
 		const [cursor] = (await dataSource.query(
 			`select "nextHistoricalCheckpointLedger"
 			 from "history_archive_checkpoint_scan_cursor"
@@ -111,6 +121,7 @@ describe('compact history archive checkpoint planning', () => {
 			objectUrl: `${root.archiveUrl}/history/00/00/00/history-0000007f.json`,
 			status: 'pending'
 		});
+		expect(ready).toEqual({ priority: 2 });
 		expect(cursor?.nextHistoricalCheckpointLedger).toBe(191);
 	});
 });
