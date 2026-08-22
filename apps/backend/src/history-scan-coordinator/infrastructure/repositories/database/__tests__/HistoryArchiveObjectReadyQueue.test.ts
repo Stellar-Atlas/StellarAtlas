@@ -1,9 +1,28 @@
 import type { EntityManager } from 'typeorm';
-import { enqueueHistoryArchiveReadyObjects } from '../HistoryArchiveObjectReadyQueue.js';
+import {
+	completeHistoryArchiveBrokerDelivery,
+	enqueueHistoryArchiveReadyObjects,
+	synchronizeHistoryArchiveReadyQueue
+} from '../HistoryArchiveObjectReadyQueue.js';
 
 describe('HistoryArchiveObjectReadyQueue', () => {
-	it('skips eager enqueue when the reconciliation writer owns the frontier', async () => {
+	it('skips a maintenance refill while another frontier writer owns the lock', async () => {
 		const query = jest.fn().mockResolvedValue([{ locked: false }]);
+		const manager = { query } as unknown as EntityManager;
+
+		await expect(
+			synchronizeHistoryArchiveReadyQueue(manager, 96)
+		).resolves.toEqual({
+			readyObjects: 0,
+			removedObjects: 0,
+			scheduledObjects: 0
+		});
+
+		expect(query).toHaveBeenCalledTimes(1);
+	});
+
+	it('skips eager enqueue when the reconciliation writer owns the frontier', async () => {
+		const query = jest.fn().mockResolvedValue([{ count: 0 }]);
 		const manager = { query } as unknown as EntityManager;
 
 		await expect(
@@ -13,16 +32,11 @@ describe('HistoryArchiveObjectReadyQueue', () => {
 		).resolves.toBe(0);
 
 		expect(query).toHaveBeenCalledTimes(1);
-		expect(query.mock.calls[0]?.[0]).toContain(
-			'pg_try_advisory_xact_lock_shared'
-		);
+		expect(query.mock.calls[0]?.[0]).toContain('pg_try_advisory_xact_lock');
 	});
 
-	it('enqueues immediately while holding the shared reconciliation gate', async () => {
-		const query = jest
-			.fn()
-			.mockResolvedValueOnce([{ locked: true }])
-			.mockResolvedValueOnce([{ count: 3 }]);
+	it('enqueues immediately while holding the exclusive reconciliation gate', async () => {
+		const query = jest.fn().mockResolvedValue([{ count: 3 }]);
 		const manager = { query } as unknown as EntityManager;
 
 		await expect(
@@ -31,10 +45,36 @@ describe('HistoryArchiveObjectReadyQueue', () => {
 			])
 		).resolves.toBe(3);
 
-		expect(query).toHaveBeenCalledTimes(2);
-		expect(query.mock.calls[1]?.[1]).toEqual([
+		expect(query).toHaveBeenCalledTimes(1);
+		expect(query.mock.calls[0]?.[1]).toEqual([
 			['00000000-0000-4000-8000-000000000001'],
-			[]
+			[],
+			expect.any(String)
+		]);
+	});
+
+	it('deletes a delivered row under the shared gate in one query', async () => {
+		const query = jest
+			.fn()
+			.mockResolvedValue([
+				{ objectRemoteId: '00000000-0000-4000-8000-000000000001' }
+			]);
+		const manager = { query } as unknown as EntityManager;
+
+		await expect(
+			completeHistoryArchiveBrokerDelivery(
+				manager,
+				'00000000-0000-4000-8000-000000000001',
+				'00000000-0000-4000-8000-000000000002'
+			)
+		).resolves.toBe(true);
+
+		expect(query).toHaveBeenCalledTimes(1);
+		expect(query.mock.calls[0]?.[0]).toContain('pg_advisory_xact_lock_shared');
+		expect(query.mock.calls[0]?.[1]).toEqual([
+			expect.any(String),
+			'00000000-0000-4000-8000-000000000001',
+			'00000000-0000-4000-8000-000000000002'
 		]);
 	});
 });

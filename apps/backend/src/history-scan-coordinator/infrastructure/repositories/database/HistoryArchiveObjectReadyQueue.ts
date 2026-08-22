@@ -179,10 +179,23 @@ const bootstrapLockSql = `
 	) as "hasFreeSlot"
 `;
 
+async function tryTakeHistoryArchiveReadyWriterLock(
+	manager: EntityManager
+): Promise<boolean> {
+	const [lock] = (await manager.query(
+		'select pg_try_advisory_xact_lock(hashtext($1)) as locked',
+		[historyArchiveExecutionReconciliationLockName]
+	)) as readonly { readonly locked?: boolean }[];
+	return lock?.locked === true;
+}
+
 export async function synchronizeHistoryArchiveReadyQueue(
 	manager: EntityManager,
 	limit: number
 ): Promise<HistoryArchiveReadyQueueSyncResult> {
+	if (!(await tryTakeHistoryArchiveReadyWriterLock(manager))) {
+		return { readyObjects: 0, removedObjects: 0, scheduledObjects: 0 };
+	}
 	const boundedLimit = normalizeLimit(limit);
 	const [removed] = (await manager.query(
 		cleanupReadyObjectsSql
@@ -227,11 +240,17 @@ export async function completeHistoryArchiveBrokerDelivery(
 	executionId: string
 ): Promise<boolean> {
 	const removed = (await manager.query(
-		`delete from "history_archive_object_ready"
-		 where "objectRemoteId" = $1::uuid
-		   and "dispatchToken" = $2::uuid
-		 returning "objectRemoteId"`,
-		[remoteId, executionId]
+		`with ready_lock as materialized (
+                        select pg_advisory_xact_lock_shared(hashtext($1)) as locked
+                ), removed as (
+                        delete from "history_archive_object_ready" ready
+                        using ready_lock
+                        where ready."objectRemoteId" = $2::uuid
+                                and ready."dispatchToken" = $3::uuid
+                        returning ready."objectRemoteId"
+                )
+                select "objectRemoteId" from removed`,
+		[historyArchiveExecutionReconciliationLockName, remoteId, executionId]
 	)) as readonly unknown[];
 	if (removed.length === 0) return false;
 	// The maintenance writer refills this root after the exact delivery row is
@@ -251,6 +270,7 @@ export async function bootstrapHistoryArchiveReadyQueueIfEmpty(
 				set local statement_timeout = '2s';
 				set local jit = off
 			`);
+			if (!(await tryTakeHistoryArchiveReadyWriterLock(transaction))) return 0;
 			const [guard] = (await transaction.query(bootstrapLockSql, [
 				boundedLimit
 			])) as readonly BootstrapGuardRow[];
@@ -276,28 +296,29 @@ async function enqueueReadyRoots(
 	remoteIds: readonly string[],
 	archiveUrlIdentities: readonly string[]
 ): Promise<number> {
-	const [lock] = (await manager.query(
-		'select pg_try_advisory_xact_lock_shared(hashtext($1)) as locked',
-		[historyArchiveExecutionReconciliationLockName]
-	)) as readonly { readonly locked?: boolean }[];
-	if (lock?.locked !== true) return 0;
-
 	const [row] = (await manager.query(enqueueReadyObjectsSql, [
 		remoteIds,
-		archiveUrlIdentities
+		archiveUrlIdentities,
+		historyArchiveExecutionReconciliationLockName
 	])) as readonly CountRow[];
 	return toCount(row?.count);
 }
 
 const enqueueReadyObjectsSql = `
-	with ${canonicalRuntimePriorityCtesSql}, roots as materialized (
-		select source."archiveUrlIdentity"
-		from "history_archive_object_queue" source
-		where source."remoteId" = any($1::uuid[])
-		union
-		select requested."archiveUrlIdentity"
-		from unnest($2::text[]) requested("archiveUrlIdentity")
-	), candidates as materialized (
+        with writer_lock as materialized (
+                select pg_try_advisory_xact_lock(hashtext($3)) as locked
+        ), ${canonicalRuntimePriorityCtesSql}, roots as materialized (
+                select source."archiveUrlIdentity"
+                from "history_archive_object_queue" source
+                cross join writer_lock
+                where writer_lock.locked
+                        and source."remoteId" = any($1::uuid[])
+                union
+                select requested."archiveUrlIdentity"
+                from unnest($2::text[]) requested("archiveUrlIdentity")
+                cross join writer_lock
+                where writer_lock.locked
+        ), candidates as materialized (
 		select root."archiveUrlIdentity", candidate."remoteId",
 			${historyArchiveEffectivePrioritySql('candidate')} as priority,
 			${readyAtSql} as "availableAt"
