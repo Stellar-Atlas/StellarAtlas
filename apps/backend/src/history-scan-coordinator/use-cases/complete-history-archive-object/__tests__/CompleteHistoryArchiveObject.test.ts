@@ -246,7 +246,7 @@ describe('CompleteHistoryArchiveObject', () => {
 		});
 		expect(
 			objectRepository.drainCheckpointProofRefreshQueue
-		).toHaveBeenCalledWith(1, 1);
+		).toHaveBeenCalledWith(64, 1);
 		expect(objectRepository.reconcileExecutionDisposition).toHaveBeenCalledWith(
 			{
 				admitGenericObjects: false
