@@ -144,6 +144,7 @@ export class VerifyArchiveObjects {
 	async releaseActiveObjectJobs(): Promise<void> {
 		await this.workerTelemetry.releaseActiveObjectJobs();
 		await this.jobSource.close();
+		await this.categoryVerifier.close();
 	}
 
 	private async runWorkerLoop(
@@ -213,13 +214,13 @@ export class VerifyArchiveObjects {
 		delivery: HistoryArchiveObjectJobDelivery
 	): Promise<void> {
 		let outcome: HistoryArchiveWorkerOutcomeDTO = 'worker_issue';
-                const schedulerFields =
-                        delivery.source === 'broker'
-                                ? {
-                                                executionId: delivery.executionId,
-                                                scheduler: 'broker' as const
-                                  }
-                                : { scheduler: 'legacy' as const };
+		const schedulerFields =
+			delivery.source === 'broker'
+				? {
+						executionId: delivery.executionId,
+						scheduler: 'broker' as const
+					}
+				: { scheduler: 'legacy' as const };
 		try {
 			const result = await this.performObjectVerification(
 				job,
@@ -237,7 +238,7 @@ export class VerifyArchiveObjects {
 						this.scanCoordinator.failHistoryArchiveObject(job.remoteId, {
 							...result.error,
 							claimAttempt: job.claimAttempt,
-                                                        ...schedulerFields
+							...schedulerFields
 						}),
 					(error) => this.exceptionLogger.captureException(error)
 				);
@@ -254,7 +255,7 @@ export class VerifyArchiveObjects {
 					this.scanCoordinator.completeHistoryArchiveObject(job.remoteId, {
 						...result.value,
 						claimAttempt: job.claimAttempt,
-                                                ...schedulerFields
+						...schedulerFields
 					}),
 				(error) => this.exceptionLogger.captureException(error)
 			);

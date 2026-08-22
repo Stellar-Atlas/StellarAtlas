@@ -9,6 +9,7 @@ import type { HistoryArchiveObjectJobDTO } from '../../../domain/scan/ScanCoordi
 import type { ScanCoordinatorService } from '../../../domain/scan/ScanCoordinatorService.js';
 import { HistoryArchiveStateValidator } from '../../../domain/history-archive/HistoryArchiveStateValidator.js';
 import { ArchiveXdrError } from '../../../domain/scanner/hash-worker.js';
+import type { HasherPool } from '../../../domain/scanner/HasherPool.js';
 import { ScannerIssueError } from '../../../domain/scanner/ScannerIssueError.js';
 import { ArchiveObjectCategoryVerifier } from '../ArchiveObjectCategoryVerifier.js';
 import { classifyCategoryVerificationFailure } from '../ArchiveObjectCategoryFailureClassifier.js';
@@ -224,6 +225,7 @@ describe('ArchiveObjectCategoryVerifier', () => {
 		);
 
 		const result = await verifier.verifyCategoryObject(createObjectJob());
+		await verifier.close();
 
 		expect(result._unsafeUnwrapErr()).toMatchObject({
 			errorType: 'archive_transport_error',
@@ -255,6 +257,7 @@ describe('ArchiveObjectCategoryVerifier', () => {
 		);
 
 		const result = await verifier.verifyCategoryObject(createObjectJob());
+		await verifier.close();
 
 		expect(result._unsafeUnwrapErr()).toMatchObject({
 			errorType: 'category_content_invalid',
@@ -267,6 +270,41 @@ describe('ArchiveObjectCategoryVerifier', () => {
 			0,
 			17
 		);
+	});
+
+	it('reuses one hasher pool and terminates it only during shutdown', async () => {
+		const terminate = jest.fn().mockResolvedValue(undefined);
+		const pool = {
+			terminated: false,
+			workerpool: { terminate }
+		} as unknown as HasherPool;
+		const createHasherPool = jest.fn(() => pool);
+		const verifier = new ArchiveObjectCategoryVerifier(
+			mock<HttpService>(),
+			mock<ScanCoordinatorService>(),
+			mock<HistoryArchiveStateValidator>(),
+			mock<ExceptionLogger>(),
+			1,
+			() => undefined,
+			flushProgress,
+			downloadPermit,
+			false,
+			createHasherPool
+		);
+		const testable = verifier as unknown as {
+			getHasherPool(): HasherPool;
+		};
+
+		expect(testable.getHasherPool()).toBe(pool);
+		expect(testable.getHasherPool()).toBe(pool);
+		expect(createHasherPool).toHaveBeenCalledTimes(1);
+		expect(terminate).not.toHaveBeenCalled();
+
+		await verifier.close();
+		await verifier.close();
+
+		expect(terminate).toHaveBeenCalledTimes(1);
+		expect(pool.terminated).toBe(true);
 	});
 });
 

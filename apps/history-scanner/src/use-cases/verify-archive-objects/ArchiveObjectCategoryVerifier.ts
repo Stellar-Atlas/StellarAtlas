@@ -53,8 +53,11 @@ type ProgressFlusher = (
 	bytesTotal: number | null
 ) => Promise<void>;
 
+type HasherPoolFactory = (workerCount: number) => HasherPool;
+
 export class ArchiveObjectCategoryVerifier {
 	private readonly contentReuseVerifier: ArchiveObjectContentReuseVerifier;
+	private hasherPool: HasherPool | null = null;
 
 	constructor(
 		private readonly httpService: HttpService,
@@ -65,7 +68,9 @@ export class ArchiveObjectCategoryVerifier {
 		private readonly reportProgress: ProgressReporter,
 		private readonly flushProgress: ProgressFlusher,
 		private readonly downloadPermit: HistoryArchiveDownloadPermit,
-		private readonly contentReuseEnabled = false
+		private readonly contentReuseEnabled = false,
+		private readonly createHasherPool: HasherPoolFactory = (workerCount) =>
+			new HasherPool(workerCount)
 	) {
 		this.contentReuseVerifier = new ArchiveObjectContentReuseVerifier(
 			this.httpService,
@@ -75,6 +80,18 @@ export class ArchiveObjectCategoryVerifier {
 			this.flushProgress,
 			this.downloadPermit
 		);
+	}
+
+	async close(): Promise<void> {
+		const pool = this.hasherPool;
+		this.hasherPool = null;
+		if (pool === null || pool.terminated) return;
+
+		try {
+			await pool.workerpool.terminate(true);
+		} finally {
+			pool.terminated = true;
+		}
 	}
 
 	async verifyCheckpointState(
@@ -268,7 +285,7 @@ export class ArchiveObjectCategoryVerifier {
 		);
 		let pool: HasherPool;
 		try {
-			pool = new HasherPool(Math.max(Math.floor(this.hasherWorkerCount), 1));
+			pool = this.getHasherPool();
 		} catch (error) {
 			releaseDownloadPermit();
 			return err(
@@ -343,19 +360,17 @@ export class ArchiveObjectCategoryVerifier {
 		} finally {
 			releaseDownloadPermit();
 		}
-		try {
-			await pool.workerpool.terminate(true);
-		} catch (error) {
-			return err(
-				scannerIssueFailure({
-					error,
-					errorType: 'worker_pool_termination_failure'
-				})
-			);
-		} finally {
-			pool.terminated = true;
-		}
 		return verificationResult;
+	}
+
+	private getHasherPool(): HasherPool {
+		if (this.hasherPool !== null && !this.hasherPool.terminated)
+			return this.hasherPool;
+
+		this.hasherPool = this.createHasherPool(
+			Math.max(Math.floor(this.hasherWorkerCount), 1)
+		);
+		return this.hasherPool;
 	}
 }
 
