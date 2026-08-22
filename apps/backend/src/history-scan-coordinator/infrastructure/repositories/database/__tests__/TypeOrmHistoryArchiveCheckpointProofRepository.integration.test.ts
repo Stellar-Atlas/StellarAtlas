@@ -81,6 +81,87 @@ describe('TypeOrmHistoryArchiveCheckpointProofRepository disposable PostgreSQL',
 		});
 	});
 
+	it('advances the compact cursor in the same transaction that verifies a proof', async () => {
+		await dataSource.query(
+			'truncate table history_archive_checkpoint_proof, history_archive_object_queue, history_archive_checkpoint_bucket_dependency restart identity cascade'
+		);
+		await saveFixture(dataSource, { checkpointLedger: 63 });
+		const root = new HistoryArchiveObject({
+			archiveUrl,
+			archiveUrlIdentity: archiveUrl,
+			dependencyReady: true,
+			executionDisposition: 'executable',
+			objectKey: 'root',
+			objectOrder: 0,
+			objectType: 'history-archive-state',
+			objectUrl: `${archiveUrl}/.well-known/stellar-history.json`,
+			status: 'verified'
+		});
+		await dataSource.getRepository(HistoryArchiveObject).save(root);
+		await dataSource.query(
+			`insert into history_archive_state_snapshot (
+"archiveUrlIdentity", status, "currentLedger"
+) values ($1, 'available', 1000)
+on conflict ("archiveUrlIdentity") do update
+set status = excluded.status,
+"currentLedger" = excluded."currentLedger"`,
+			[archiveUrl]
+		);
+		await dataSource.query(
+			`insert into history_archive_checkpoint_scan_cursor (
+"archiveUrlIdentity", "latestCheckpointLedger",
+"lastForwardCheckpointLedger", "nextHistoricalCheckpointLedger"
+) values ($1, 959, 63, 127)
+on conflict ("archiveUrlIdentity") do update
+set "latestCheckpointLedger" = excluded."latestCheckpointLedger",
+"lastForwardCheckpointLedger" = excluded."lastForwardCheckpointLedger",
+"nextHistoricalCheckpointLedger" = excluded."nextHistoricalCheckpointLedger"`,
+			[archiveUrl]
+		);
+
+		await repository.refreshForArchiveCheckpoint({
+			archiveUrlIdentity: archiveUrl,
+			checkpointLedger: 63
+		});
+
+		const [proof] = (await dataSource.query(
+			`select status
+ from history_archive_checkpoint_proof
+ where "archiveUrlIdentity" = $1 and "checkpointLedger" = 63`,
+			[archiveUrl]
+		)) as readonly { readonly status: string }[];
+		const [nextCheckpoint] = (await dataSource.query(
+			`select object.status, object."dependencyReady", ready.priority
+ from history_archive_object_queue object
+ join history_archive_object_ready ready
+on ready."objectRemoteId" = object."remoteId"
+ where object."archiveUrlIdentity" = $1
+and object."objectType" = 'checkpoint-state'
+and object."checkpointLedger" = 127`,
+			[archiveUrl]
+		)) as readonly {
+			readonly dependencyReady: boolean;
+			readonly priority: number;
+			readonly status: string;
+		}[];
+		const [cursor] = (await dataSource.query(
+			`select "nextHistoricalCheckpointLedger"
+ from history_archive_checkpoint_scan_cursor
+ where "archiveUrlIdentity" = $1`,
+			[archiveUrl]
+		)) as readonly {
+			readonly nextHistoricalCheckpointLedger: number;
+		}[];
+
+		expect(proof?.status).toBe('verified');
+		expect(nextCheckpoint).toEqual({
+			dependencyReady: true,
+			priority: 2,
+			status: 'pending'
+		});
+		expect(cursor?.nextHistoricalCheckpointLedger).toBe(191);
+	});
+
 	it('requires ledger hashes recomputed from the archived header XDR', async () => {
 		await dataSource.query(
 			`update history_archive_object_queue

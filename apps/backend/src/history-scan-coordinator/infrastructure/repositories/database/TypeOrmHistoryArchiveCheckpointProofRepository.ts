@@ -9,6 +9,7 @@ import type {
 import { historyArchiveCheckpointProofRefreshSql } from './HistoryArchiveCheckpointProofRefreshSql.js';
 import { toHistoryArchiveCheckpointProofRefreshParams } from './HistoryArchiveCheckpointProofSqlInputs.js';
 import { historyArchiveCheckpointProofPendingSourceEnrichmentSql } from './HistoryArchiveCheckpointProofPostRefreshSql.js';
+import { materializeNextCompactCheckpointPlan } from './HistoryArchiveCompactPlanning.js';
 
 @injectable()
 export class TypeOrmHistoryArchiveCheckpointProofRepository implements HistoryArchiveCheckpointProofRepository {
@@ -67,6 +68,11 @@ export class TypeOrmHistoryArchiveCheckpointProofRepository implements HistoryAr
 				await manager.query(
 					historyArchiveCheckpointProofPendingSourceEnrichmentSql,
 					[target.archiveUrlIdentity, target.checkpointLedger]
+				);
+				await materializeNextCompactCheckpointPlan(
+					manager,
+					target.archiveUrlIdentity,
+					target.checkpointLedger
 				);
 			}
 		});
