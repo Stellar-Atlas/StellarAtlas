@@ -257,7 +257,7 @@ export class HistoryArchiveBrokerFrontierRepository {
 
 	async ensureFrontier(): Promise<number> {
 		return await this.dataSource.transaction(async (manager) => {
-			await this.takeExecutionReconciliationLock(manager);
+			if (!(await this.tryTakeExecutionReconciliationLock(manager))) return 0;
 			await enqueueCurrentTerminalReadyCheckpointProofRefreshes(
 				manager,
 				maximumArchiveSourceFrontierRows
@@ -315,12 +315,14 @@ export class HistoryArchiveBrokerFrontierRepository {
 		});
 	}
 
-	private async takeExecutionReconciliationLock(
+	private async tryTakeExecutionReconciliationLock(
 		manager: EntityManager
-	): Promise<void> {
-		await manager.query(`select pg_advisory_xact_lock(hashtext($1))`, [
-			historyArchiveExecutionReconciliationLockName
-		]);
+	): Promise<boolean> {
+		const [lock] = (await manager.query(
+			`select pg_try_advisory_xact_lock(hashtext($1)) as locked`,
+			[historyArchiveExecutionReconciliationLockName]
+		)) as readonly { readonly locked?: boolean }[];
+		return lock?.locked === true;
 	}
 
 	private async takeExecutionReconciliationSharedLock(
