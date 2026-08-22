@@ -69,6 +69,7 @@ describe('CompleteHistoryArchiveObject', () => {
 		expect(
 			objectRepository.markTransitionEffectsCompleted
 		).toHaveBeenCalledWith(archiveObject.remoteId, 1, 'verified');
+		expect(objectRepository.promotePlannedObjects).not.toHaveBeenCalled();
 	});
 
 	it('schedules only root and checkpoint-state discovery objects from verified root state', async () => {
@@ -114,6 +115,7 @@ describe('CompleteHistoryArchiveObject', () => {
 			'bucket'
 		);
 		expect(checkpointProofRepository.refreshForObject).not.toHaveBeenCalled();
+		expect(objectRepository.promotePlannedObjects).toHaveBeenCalledTimes(1);
 		expect(
 			objectRepository.markObjectVerified.mock.invocationCallOrder[0]
 		).toBeLessThan(
@@ -143,6 +145,7 @@ describe('CompleteHistoryArchiveObject', () => {
 		await useCase.reconcilePersisted(archiveObject);
 		expect(stateRepository.saveAvailable).not.toHaveBeenCalled();
 		expect(objectRepository.planObjects).toHaveBeenCalledTimes(1);
+		expect(objectRepository.promotePlannedObjects).toHaveBeenCalledTimes(1);
 		const savedObjects = objectRepository.planObjects.mock.calls[0]?.[0] ?? [];
 		expect(savedObjects.map((object) => object.objectKey)).toEqual([
 			'ledger:0000007f',
@@ -261,9 +264,7 @@ describe('CompleteHistoryArchiveObject', () => {
 		expect(
 			objectRepository.reconcileExecutionDisposition
 		).not.toHaveBeenCalled();
-		expect(
-			objectRepository.promotePlannedObjects
-		).not.toHaveBeenCalled();
+		expect(objectRepository.promotePlannedObjects).not.toHaveBeenCalled();
 	});
 
 	it('materializes and refreshes a legacy verified checkpoint once', async () => {

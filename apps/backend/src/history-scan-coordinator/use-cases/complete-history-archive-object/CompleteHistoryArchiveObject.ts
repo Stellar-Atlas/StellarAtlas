@@ -136,16 +136,18 @@ export class CompleteHistoryArchiveObject {
 				object.completionArchiveMetadata
 			);
 		}
+		let createdPlans = false;
 		if (object.objectType === 'checkpoint-state') {
 			await this.objectRepository.materializeCheckpointDependencies(
 				object.remoteId
 			);
-			await this.reconcileCheckpointFanout(object);
+			createdPlans = await this.reconcileCheckpointFanout(object);
 		}
 		if (descendants.length > 0) {
 			await this.objectRepository.planObjects(descendants);
+			createdPlans = true;
 		}
-		if (options.promotePlannedObjects !== false) {
+		if (createdPlans && options.promotePlannedObjects !== false) {
 			await this.objectRepository.promotePlannedObjects();
 		}
 		await this.eventRecorder.recordDurably(object, {
@@ -189,23 +191,26 @@ export class CompleteHistoryArchiveObject {
 		await this.checkpointProofRepository.refreshForObject(persisted);
 	}
 
-	async reconcileCheckpointFanout(object: HistoryArchiveObject): Promise<void> {
+	async reconcileCheckpointFanout(
+		object: HistoryArchiveObject
+	): Promise<boolean> {
 		if (
 			object.objectType !== 'checkpoint-state' ||
 			object.status !== 'verified' ||
 			object.descendantsPlannedAt !== null
 		) {
-			return;
+			return false;
 		}
 		const descendants = await this.buildObjectsFromCheckpointArchiveMetadata(
 			object,
 			object.verificationFacts
 		);
-		if (descendants.length === 0) return;
+		if (descendants.length === 0) return false;
 		await this.objectRepository.planObjects(descendants);
 		await this.objectRepository.markCheckpointDescendantsPlanned(
 			object.remoteId
 		);
+		return true;
 	}
 
 	private requestProofCompletionEvent(object: HistoryArchiveObject): void {
