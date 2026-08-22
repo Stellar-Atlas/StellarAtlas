@@ -3,7 +3,6 @@ import type { HistoryArchiveObject } from '@history-scan-coordinator/domain/hist
 import { historyArchiveObjectOpenSequentialCohortSql } from './HistoryArchiveSequentialChainSql.js';
 
 const maximumPlanRows = 4_096;
-const maximumCheckpointCursorPlanRows = 512;
 const maximumCheckpointFanoutBatch = 24;
 const maximumCheckpointCursorBatch = 128;
 
@@ -72,7 +71,6 @@ export async function materializeCompactCheckpointPlans(
 	manager: EntityManager
 ): Promise<number> {
 	const [result] = (await manager.query(compactCheckpointPlanSql, [
-		maximumCheckpointCursorPlanRows,
 		maximumCheckpointCursorBatch
 	])) as readonly { readonly planned: number | string }[];
 	return Number(result?.planned ?? 0);
@@ -104,11 +102,6 @@ const compactCheckpointPlanSql = `
 		from available_roots root
                 on conflict ("archiveUrlIdentity") do nothing
 		returning "archiveUrlIdentity"
-	), plan_pressure as materialized (
-		select count(*)::integer as count
-		from (
-			select 1 from "history_archive_object_plan" limit $1
-		) bounded
         ), cursor_candidates as materialized (
                 select cursor."archiveUrlIdentity",
                         greatest(
@@ -121,15 +114,10 @@ const compactCheckpointPlanSql = `
                 from "history_archive_checkpoint_scan_cursor" cursor
                 join available_roots root
                         on root."archiveUrlIdentity" = cursor."archiveUrlIdentity"
-                cross join plan_pressure pressure
                 where cursor."nextHistoricalCheckpointLedger" is not null
                         and cursor."nextHistoricalCheckpointLedger" <= greatest(
                                 cursor."latestCheckpointLedger",
                                 root.latest_checkpoint
-                        )
-                        and (
-                                pressure.count < $1
-                                or cursor."nextHistoricalCheckpointLedger" = 63
                         )
                         and (
                                 cursor."nextHistoricalCheckpointLedger" = 63
@@ -146,7 +134,7 @@ const compactCheckpointPlanSql = `
                 order by cursor."nextHistoricalCheckpointLedger",
                         cursor."updatedAt",
                         cursor."archiveUrlIdentity"
-                limit $2
+                limit $1
                 for update of cursor skip locked
 	), source as materialized (
 		select candidate.*, root."archiveUrl", root."hostIdentity",
@@ -156,10 +144,12 @@ const compactCheckpointPlanSql = `
 			on root."archiveUrlIdentity" = candidate."archiveUrlIdentity"
 		where candidate.checkpoint_ledger >= 63
 	), inserted as (
-		insert into "history_archive_object_plan" (
+		insert into "history_archive_object_queue" (
 			"remoteId", "archiveUrl", "archiveUrlIdentity", "hostIdentity",
 			"objectType", "objectKey", "objectOrder", "objectUrl", status,
-			"checkpointLedger", "dependencyReady"
+			"checkpointLedger", "dependencyReady",
+			"executionDisposition", "executionReason",
+			"executionDispositionAt"
 		)
 		select gen_random_uuid(), source."archiveUrl",
 			source."archiveUrlIdentity", source."hostIdentity",
@@ -171,10 +161,17 @@ const compactCheckpointPlanSql = `
 				substring(source.checkpoint_hex from 3 for 2) || '/' ||
 				substring(source.checkpoint_hex from 5 for 2) || '/' ||
 				'history-' || source.checkpoint_hex || '.json',
-			'pending', source.checkpoint_ledger, true
+			'pending', source.checkpoint_ledger, true,
+			'executable', 'planned-frontier', now()
 		from source
 		on conflict ("archiveUrlIdentity", "objectType", "objectKey")
-			do nothing
+			do update
+			set "dependencyReady" = true,
+				"executionDisposition" = 'executable',
+				"executionReason" = 'planned-frontier',
+				"executionDispositionAt" = now(),
+				"updatedAt" = now()
+			where "history_archive_object_queue".status = 'pending'
 		returning id
 	), advanced as (
 		update "history_archive_checkpoint_scan_cursor" cursor
