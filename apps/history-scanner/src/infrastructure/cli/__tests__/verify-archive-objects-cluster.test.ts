@@ -38,7 +38,7 @@ describe('verify-archive-objects-cluster', () => {
 				{ HISTORY_OBJECT_WORKER_PROCESSES: '32768' },
 				48
 			)
-		).toThrow('HISTORY_OBJECT_WORKER_PROCESSES must be between 1 and 64');
+		).toThrow('HISTORY_OBJECT_WORKER_PROCESSES must be between 1 and 96');
 	});
 
 	it('rejects unbounded object hasher worker counts', () => {
