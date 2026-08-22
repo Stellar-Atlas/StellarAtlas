@@ -33,6 +33,9 @@ export interface CompleteHistoryArchiveObjectReconciliationOptions {
 
 @injectable()
 export class CompleteHistoryArchiveObject {
+	private proofCompletionEventRequested = false;
+	private proofCompletionEventRunning = false;
+
 	constructor(
 		@inject(TYPES.HistoryArchiveObjectRepository)
 		private readonly objectRepository: HistoryArchiveObjectRepository,
@@ -160,7 +163,7 @@ export class CompleteHistoryArchiveObject {
 			object.attempts,
 			'verified'
 		);
-		await this.reconcileProofCompletionEvent(object);
+		this.requestProofCompletionEvent(object);
 	}
 
 	async reconcileCheckpointDependencies(
@@ -211,9 +214,7 @@ export class CompleteHistoryArchiveObject {
 		);
 	}
 
-	private async reconcileProofCompletionEvent(
-		object: HistoryArchiveObject
-	): Promise<void> {
+	private requestProofCompletionEvent(object: HistoryArchiveObject): void {
 		if (
 			object.objectType !== 'ledger' &&
 			object.objectType !== 'transactions' &&
@@ -223,15 +224,40 @@ export class CompleteHistoryArchiveObject {
 		) {
 			return;
 		}
+		this.proofCompletionEventRequested = true;
+		if (this.proofCompletionEventRunning) return;
+		this.proofCompletionEventRunning = true;
+		setImmediate(() => {
+			void this.drainProofCompletionEvents();
+		});
+	}
+
+	private async drainProofCompletionEvents(): Promise<void> {
 		try {
-			const refresh =
-				await this.objectRepository.drainCheckpointProofRefreshQueue(1, 1);
-			if (refresh.completed === 0) return;
-			await this.objectRepository.reconcileExecutionDisposition({
-				admitGenericObjects: false
-			});
-		} catch {
-			return;
+			do {
+				this.proofCompletionEventRequested = false;
+				try {
+					const refresh =
+						await this.objectRepository.drainCheckpointProofRefreshQueue(
+							1,
+							1
+						);
+					if (refresh.completed === 0) continue;
+					await this.objectRepository.reconcileExecutionDisposition({
+						admitGenericObjects: false
+					});
+				} catch {
+					continue;
+				}
+			} while (this.proofCompletionEventRequested);
+		} finally {
+			this.proofCompletionEventRunning = false;
+			if (this.proofCompletionEventRequested) {
+				this.proofCompletionEventRunning = true;
+				setImmediate(() => {
+					void this.drainProofCompletionEvents();
+				});
+			}
 		}
 	}
 

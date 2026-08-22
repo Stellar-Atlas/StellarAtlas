@@ -241,6 +241,9 @@ describe('CompleteHistoryArchiveObject', () => {
 		expect(checkpointProofRepository.refreshForObject).not.toHaveBeenCalled();
 		await useCase.reconcilePersisted(archiveObject);
 		expect(checkpointProofRepository.refreshForObject).not.toHaveBeenCalled();
+		await new Promise<void>((resolve) => {
+			setImmediate(resolve);
+		});
 		expect(
 			objectRepository.drainCheckpointProofRefreshQueue
 		).toHaveBeenCalledWith(1, 1);
