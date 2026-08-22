@@ -94,6 +94,35 @@ describe('VerifyArchiveObjects', () => {
 		expect(scanCoordinator.failHistoryArchiveObject).not.toHaveBeenCalled();
 	});
 
+    it('reports idle after acquiring a download permit while waiting for broker work', async () => {
+        const downloadPermit = mock<HistoryArchiveDownloadPermit>();
+        const releasePermit = jest.fn();
+        downloadPermit.acquire.mockResolvedValue(releasePermit);
+        verifier.downloadPermit = downloadPermit;
+        Object.defineProperty(jobSource, 'kind', { value: 'broker' });
+        let resolveNext!: (delivery: null) => void;
+        jobSource.next.mockImplementation(
+            () =>
+                new Promise<null>((resolve) => {
+                    resolveNext = resolve;
+                })
+        );
+
+        const claim = verifier.claimAndVerifyObject(0);
+        await flushPromises();
+
+        expect(statusReporter.report).toHaveBeenLastCalledWith(
+            expect.objectContaining({
+                currentObject: null,
+                stage: 'idle'
+            })
+        );
+
+        resolveNext(null);
+        await claim;
+        expect(releasePermit).toHaveBeenCalledTimes(1);
+    });
+
 	it('reports a response-stream abort as transport evidence', async () => {
 		httpService.get.mockResolvedValue(
 			ok({

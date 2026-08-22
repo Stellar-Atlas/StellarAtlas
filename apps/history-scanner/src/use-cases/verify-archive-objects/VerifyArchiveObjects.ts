@@ -170,7 +170,7 @@ export class VerifyArchiveObjects {
 			this.workerTelemetry.reportIdle(slot);
 			throw error;
 		}
-		this.workerTelemetry.stopWaitingForDownloadSlot(slot);
+		this.workerTelemetry.reportIdle(slot);
 
 		let permitReleased = false;
 		const releasePermit = (): void => {
