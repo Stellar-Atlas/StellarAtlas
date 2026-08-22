@@ -58,7 +58,6 @@ import { findVerifiedBucketSources } from './HistoryArchiveVerifiedBucketSourceQ
 import { historyArchiveRepairActionableObjectSql } from './HistoryArchiveRepairActionableObjectSql.js';
 import { findPrioritizedHistoryArchiveObjectTransitions } from './HistoryArchiveObjectTransitionQuery.js';
 import { requestHistoryArchiveObjectRecheck } from './HistoryArchiveObjectRecheckWrite.js';
-import { completeHistoryArchiveBrokerDelivery } from './HistoryArchiveObjectReadyQueue.js';
 import { drainHistoryArchiveCheckpointProofRefreshes } from './HistoryArchiveCheckpointProofRefreshQueue.js';
 import type { HistoryArchiveCheckpointProofRefreshPriority } from '@history-scan-coordinator/domain/history-archive-object/HistoryArchiveObjectRepository.js';
 
@@ -80,15 +79,6 @@ export class TypeOrmHistoryArchiveObjectRepository implements HistoryArchiveObje
 			this.repository.manager.connection,
 			limit,
 			maximumPriority
-		);
-	}
-
-	async completeBrokerDelivery(
-		remoteId: string,
-		executionId: string
-	): Promise<boolean> {
-		return await this.repository.manager.transaction(async (manager) =>
-			completeHistoryArchiveBrokerDelivery(manager, remoteId, executionId)
 		);
 	}
 

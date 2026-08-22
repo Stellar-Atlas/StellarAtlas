@@ -234,30 +234,6 @@ export async function enqueueHistoryArchiveReadyArchives(
 	);
 }
 
-export async function completeHistoryArchiveBrokerDelivery(
-	manager: EntityManager,
-	remoteId: string,
-	executionId: string
-): Promise<boolean> {
-	const removed = (await manager.query(
-		`with ready_lock as materialized (
-                        select pg_advisory_xact_lock_shared(hashtext($1)) as locked
-                ), removed as (
-                        delete from "history_archive_object_ready" ready
-                        using ready_lock
-                        where ready."objectRemoteId" = $2::uuid
-                                and ready."dispatchToken" = $3::uuid
-                        returning ready."objectRemoteId"
-                )
-                select "objectRemoteId" from removed`,
-		[historyArchiveExecutionReconciliationLockName, remoteId, executionId]
-	)) as readonly unknown[];
-	if (removed.length === 0) return false;
-	// The maintenance writer refills this root after the exact delivery row is
-	// committed, avoiding a delete/refill lock cycle with ready-queue cleanup.
-	return true;
-}
-
 export async function bootstrapHistoryArchiveReadyQueueIfEmpty(
 	manager: EntityManager,
 	limit: number

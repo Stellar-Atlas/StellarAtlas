@@ -95,14 +95,6 @@ export class FailHistoryArchiveObject {
 
 		try {
 			await this.reconcileClaimAttempt(remoteId, failure.claimAttempt);
-			if (failure.scheduler === 'broker') {
-				if (failure.executionId === undefined)
-					throw new Error('Broker failure requires executionId');
-				await this.objectRepository.completeBrokerDelivery(
-					remoteId,
-					failure.executionId
-				);
-			}
 			return result;
 		} catch (error) {
 			return err(mapUnknownToError(error));

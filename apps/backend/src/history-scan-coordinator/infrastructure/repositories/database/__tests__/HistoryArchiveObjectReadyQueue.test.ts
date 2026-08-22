@@ -1,6 +1,5 @@
 import type { EntityManager } from 'typeorm';
 import {
-	completeHistoryArchiveBrokerDelivery,
 	enqueueHistoryArchiveReadyObjects,
 	synchronizeHistoryArchiveReadyQueue
 } from '../HistoryArchiveObjectReadyQueue.js';
@@ -50,31 +49,6 @@ describe('HistoryArchiveObjectReadyQueue', () => {
 			['00000000-0000-4000-8000-000000000001'],
 			[],
 			expect.any(String)
-		]);
-	});
-
-	it('deletes a delivered row under the shared gate in one query', async () => {
-		const query = jest
-			.fn()
-			.mockResolvedValue([
-				{ objectRemoteId: '00000000-0000-4000-8000-000000000001' }
-			]);
-		const manager = { query } as unknown as EntityManager;
-
-		await expect(
-			completeHistoryArchiveBrokerDelivery(
-				manager,
-				'00000000-0000-4000-8000-000000000001',
-				'00000000-0000-4000-8000-000000000002'
-			)
-		).resolves.toBe(true);
-
-		expect(query).toHaveBeenCalledTimes(1);
-		expect(query.mock.calls[0]?.[0]).toContain('pg_advisory_xact_lock_shared');
-		expect(query.mock.calls[0]?.[1]).toEqual([
-			expect.any(String),
-			'00000000-0000-4000-8000-000000000001',
-			'00000000-0000-4000-8000-000000000002'
 		]);
 	});
 });

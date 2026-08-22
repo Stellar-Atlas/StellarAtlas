@@ -169,10 +169,6 @@ export interface HistoryArchiveObjectRepository {
 		limit: number,
 		maximumPriority: HistoryArchiveCheckpointProofRefreshPriority
 	): Promise<HistoryArchiveCheckpointProofRefreshDrainResult>;
-	completeBrokerDelivery(
-		remoteId: string,
-		executionId: string
-	): Promise<boolean>;
 	claimNextObject(
 		supportedTypes: readonly HistoryArchiveObjectType[]
 	): Promise<HistoryArchiveObject | null>;

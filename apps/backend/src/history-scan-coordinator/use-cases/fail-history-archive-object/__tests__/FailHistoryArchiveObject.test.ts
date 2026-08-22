@@ -70,14 +70,12 @@ describe('FailHistoryArchiveObject', () => {
 			eventType: 'failed',
 			evidenceClass: 'archive-object'
 		});
-		expect(objectRepository.markTransitionEffectsCompleted).toHaveBeenCalledWith(
-			archiveObject.remoteId,
-			1,
-			'failed'
-		);
+		expect(
+			objectRepository.markTransitionEffectsCompleted
+		).toHaveBeenCalledWith(archiveObject.remoteId, 1, 'failed');
 	});
 
-	it('releases a broker delivery only after durable failure effects finish', async () => {
+	it('finishes broker failures after durable transition effects', async () => {
 		const archiveObject = createRootObject();
 		archiveObject.attempts = 1;
 		objectRepository.findByRemoteId.mockResolvedValue(archiveObject);
@@ -102,15 +100,9 @@ describe('FailHistoryArchiveObject', () => {
 		});
 
 		expect(result._unsafeUnwrap()).toBe(true);
-		expect(objectRepository.completeBrokerDelivery).toHaveBeenCalledWith(
-			archiveObject.remoteId,
-			'execution-1'
-		);
 		expect(
-			objectRepository.completeBrokerDelivery.mock.invocationCallOrder[0]
-		).toBeGreaterThan(
-			objectRepository.markTransitionEffectsCompleted.mock.invocationCallOrder[0]
-		);
+			objectRepository.markTransitionEffectsCompleted
+		).toHaveBeenCalledWith(archiveObject.remoteId, 1, 'failed');
 	});
 
 	it('stores retry timing from the object type and failure evidence', async () => {

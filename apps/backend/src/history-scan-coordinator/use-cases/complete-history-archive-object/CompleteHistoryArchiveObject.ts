@@ -86,14 +86,6 @@ export class CompleteHistoryArchiveObject {
 
 		try {
 			await this.reconcileClaimAttempt(remoteId, request.claimAttempt);
-			if (request.scheduler === 'broker') {
-				if (request.executionId === undefined)
-					throw new Error('Broker completion requires executionId');
-				await this.objectRepository.completeBrokerDelivery(
-					remoteId,
-					request.executionId
-				);
-			}
 			return result;
 		} catch (error) {
 			return err(mapUnknownToError(error));
