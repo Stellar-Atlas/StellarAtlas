@@ -12,6 +12,7 @@ import { canonicalRuntimeExecutableProofMemberExistsSql } from './HistoryArchive
 import { historyArchiveCheckpointProofQueuedRefreshSql } from './HistoryArchiveCheckpointProofRefreshSql.js';
 import { historyArchiveCheckpointProofPendingSourceEnrichmentSql } from './HistoryArchiveCheckpointProofPostRefreshSql.js';
 import { historyArchiveCheckpointProofTerminalReadySql } from './HistoryArchiveCheckpointProofReadinessSql.js';
+import { lockHistoryArchiveRootTransition } from './HistoryArchiveRootTransitionLock.js';
 
 export interface ClaimedHistoryArchiveCheckpointProofRefresh {
 	readonly archiveUrlIdentity: string;
@@ -185,10 +186,10 @@ export async function refreshClaimedHistoryArchiveCheckpointProof(
 	return await dataSource.transaction(async (manager) => {
 		await manager.query(`set local lock_timeout = '2s'`);
 		await manager.query(`set local statement_timeout = '30s'`);
-                await manager.query(
-                        'select pg_advisory_xact_lock_shared(hashtext($1))',
-                        [historyArchiveExecutionReconciliationLockName]
-                );
+		await manager.query('select pg_advisory_xact_lock_shared(hashtext($1))', [
+			historyArchiveExecutionReconciliationLockName
+		]);
+		await lockHistoryArchiveRootTransition(manager, target.archiveUrlIdentity);
 		const lease = (await manager.query(lockClaimedProofRefreshSql, [
 			target.archiveUrlIdentity,
 			target.checkpointLedger,

@@ -10,6 +10,7 @@ import {
 	toHistoryArchiveObjectHostFailureSqlParams
 } from './HistoryArchiveObjectHostThrottleSql.js';
 import { enqueueHistoryArchiveCheckpointProofRefreshes } from './HistoryArchiveCheckpointProofRefreshQueue.js';
+import { lockHistoryArchiveObjectRootTransition } from './HistoryArchiveRootTransitionLock.js';
 
 export async function markHistoryArchiveObjectFailed(
 	repository: Repository<HistoryArchiveObject>,
@@ -20,6 +21,7 @@ export async function markHistoryArchiveObjectFailed(
 	if (failure.scheduler === 'broker' && failure.executionId === undefined)
 		return false;
 	return await repository.manager.transaction(async (manager) => {
+		await lockHistoryArchiveObjectRootTransition(manager, remoteId);
 		const update = {
 			...createFailedUpdate(failure),
 			...(failure.scheduler === 'broker'

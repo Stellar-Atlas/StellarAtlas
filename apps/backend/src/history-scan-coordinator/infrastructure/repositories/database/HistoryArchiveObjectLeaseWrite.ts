@@ -13,6 +13,7 @@ import {
 	prepareHistoryArchiveContentCompletion,
 	recordHistoryArchiveContentEvidence
 } from './HistoryArchiveContentReuseWrite.js';
+import { lockHistoryArchiveObjectRootTransition } from './HistoryArchiveRootTransitionLock.js';
 
 export async function markHistoryArchiveObjectVerified(
 	repository: Repository<HistoryArchiveObject>,
@@ -33,6 +34,7 @@ export async function markHistoryArchiveObjectVerified(
 				? { attempts: progress.claimAttempt }
 				: {})
 		};
+		await lockHistoryArchiveObjectRootTransition(manager, remoteId);
 		const query = manager
 			.createQueryBuilder()
 			.update(HistoryArchiveObject)
@@ -96,6 +98,7 @@ export async function releaseHistoryArchiveObject(
 	claimAttempt: number
 ): Promise<boolean> {
 	return await repository.manager.transaction(async (manager) => {
+		await lockHistoryArchiveObjectRootTransition(manager, remoteId);
 		const result = await manager
 			.createQueryBuilder()
 			.update(HistoryArchiveObject)
@@ -148,6 +151,7 @@ export async function markHistoryArchiveTransitionEffectsCompleted(
 	status: 'failed' | 'verified'
 ): Promise<boolean> {
 	return await repository.manager.transaction(async (manager) => {
+		await lockHistoryArchiveObjectRootTransition(manager, remoteId);
 		const result = await manager
 			.createQueryBuilder()
 			.update(HistoryArchiveObject)
