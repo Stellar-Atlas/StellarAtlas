@@ -117,6 +117,7 @@ export const reserveBrokerJobsSql = `
 	), reserved as (
 		update "history_archive_object_ready" ready
 		set "dispatchToken" = coalesce(ready."dispatchToken", gen_random_uuid()),
+			"publishedAt" = coalesce(ready."publishedAt", now()),
 			priority = case
 				when ready."dispatchToken" is null then selected.priority
 				else ready.priority
@@ -300,16 +301,16 @@ export class HistoryArchiveBrokerFrontierRepository {
 		return mapAndOrderBrokerJobs(rows);
 	}
 
-	async markPublished(executionIds: readonly string[]): Promise<void> {
+	async markPublishFailed(executionIds: readonly string[]): Promise<void> {
 		if (executionIds.length === 0) return;
 		await this.dataSource.transaction(async (manager) => {
 			await this.takeExecutionReconciliationSharedLock(manager);
 			await manager.query(
 				`update "history_archive_object_ready"
-                                 set "publishedAt" = coalesce("publishedAt", now()),
+                                 set "publishedAt" = null,
                                      "updatedAt" = now()
                                  where "dispatchToken" = any($1::uuid[])
-                                   and "publishedAt" is null`,
+                                   and "publishedAt" is not null`,
 				[executionIds]
 			);
 		});

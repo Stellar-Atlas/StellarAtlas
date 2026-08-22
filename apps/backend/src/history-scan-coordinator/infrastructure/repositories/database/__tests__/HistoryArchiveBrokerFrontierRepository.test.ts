@@ -6,6 +6,9 @@ describe('HistoryArchiveBrokerFrontierRepository', () => {
 		expect(reserveBrokerJobsSql).toContain(
 			'ranked.active_count + ranked.host_rank <= $2::integer'
 		);
+		expect(reserveBrokerJobsSql).toContain(
+			'"publishedAt" = coalesce(ready."publishedAt", now())'
+		);
 		expect(reserveBrokerJobsSql).not.toContain('frozen_lane');
 		expect(reserveBrokerJobsSql).not.toContain('deduplicated as materialized');
 		expect(reserveBrokerJobsSql).not.toContain('displaced as');
