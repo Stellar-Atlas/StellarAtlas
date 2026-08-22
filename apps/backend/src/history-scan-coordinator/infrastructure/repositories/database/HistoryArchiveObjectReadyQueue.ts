@@ -140,7 +140,7 @@ const refillReadyObjectsSql = `
 		from candidates
 		order by priority, "lastClaimedAt" asc nulls first, root_id
 		limit $1::integer
-	), inserted as (
+	), upserted as (
 		insert into "history_archive_object_ready" as stored (
 			"objectRemoteId", "archiveUrlIdentity", priority, "availableAt",
 			"createdAt", "updatedAt"
@@ -148,29 +148,21 @@ const refillReadyObjectsSql = `
 		select "remoteId", "archiveUrlIdentity", priority, "availableAt",
 			now(), now()
 		from selected
-		on conflict do nothing
-		returning "objectRemoteId"
-	), updated as (
-                update "history_archive_object_ready" stored
-                set priority = selected.priority,
-                        "availableAt" = selected."availableAt",
-                        "updatedAt" = now()
-                from selected
-                where stored."objectRemoteId" = selected."remoteId"
-                        and stored."dispatchToken" is null
-                        and stored."publishedAt" is null
-                        and (
-                                stored.priority is distinct from selected.priority
-                                or stored."availableAt" is distinct from
-                                        selected."availableAt"
-                        )
-                returning stored."objectRemoteId"
-        ), changed as (
-		select "objectRemoteId" from inserted
-		union all
-		select "objectRemoteId" from updated
+		order by "remoteId"
+		on conflict ("objectRemoteId") do update
+		set priority = excluded.priority,
+			"availableAt" = excluded."availableAt",
+			"updatedAt" = now()
+		where stored."dispatchToken" is null
+			and stored."publishedAt" is null
+			and (
+				stored.priority is distinct from excluded.priority
+				or stored."availableAt" is distinct from
+					excluded."availableAt"
+			)
+		returning stored."objectRemoteId"
 	)
-	select count(*)::integer as count from changed
+	select count(*)::integer as count from upserted
 `;
 
 const readyObjectCountSql = `
@@ -205,6 +197,12 @@ export async function synchronizeHistoryArchiveReadyQueue(
 	manager: EntityManager,
 	limit: number
 ): Promise<HistoryArchiveReadyQueueSyncResult> {
+	if (manager.queryRunner?.isTransactionActive !== true) {
+		return await manager.transaction(
+			async (transaction) =>
+				await synchronizeHistoryArchiveReadyQueue(transaction, limit)
+		);
+	}
 	if (!(await tryTakeHistoryArchiveReadyWriterLock(manager))) {
 		return { readyObjects: 0, removedObjects: 0, scheduledObjects: 0 };
 	}
