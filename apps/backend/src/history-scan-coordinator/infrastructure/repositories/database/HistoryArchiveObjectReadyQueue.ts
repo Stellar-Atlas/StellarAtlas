@@ -118,7 +118,7 @@ const refillReadyObjectsSql = `
 				candidate."checkpointLedger" desc nulls last,
 				candidate."objectKey",
 				candidate.id
-			limit 1
+			limit 4
 		) candidate on true
 	), selected as materialized (
 		select "archiveUrlIdentity", "remoteId", priority, "availableAt"
@@ -136,46 +136,21 @@ const refillReadyObjectsSql = `
 		on conflict do nothing
 		returning "objectRemoteId"
 	), updated as (
-		update "history_archive_object_ready" stored
-		set "objectRemoteId" = selected."remoteId",
-			priority = selected.priority,
-			"availableAt" = selected."availableAt",
-			"updatedAt" = now()
-		from selected
-		where stored."archiveUrlIdentity" = selected."archiveUrlIdentity"
-			and stored."dispatchToken" is null
-			and stored."publishedAt" is null
-			and (
-				(
-					stored.priority = selected.priority
-					and (
-						stored."objectRemoteId" = selected."remoteId"
-						or not exists (
-							select 1
-							from "history_archive_object_ready" existing
-							where existing."objectRemoteId" = selected."remoteId"
-						)
-					)
-				)
-				or (
-					stored.priority is distinct from selected.priority
-					and stored."objectRemoteId" = selected."remoteId"
-					and not exists (
-						select 1
-						from "history_archive_object_ready" target_lane
-						where target_lane."archiveUrlIdentity" =
-							selected."archiveUrlIdentity"
-							and target_lane.priority = selected.priority
-					)
-				)
-			)
-			and (
-				stored."objectRemoteId" is distinct from selected."remoteId"
-				or stored.priority is distinct from selected.priority
-				or stored."availableAt" is distinct from selected."availableAt"
-			)
-		returning stored."objectRemoteId"
-	), changed as (
+                update "history_archive_object_ready" stored
+                set priority = selected.priority,
+                        "availableAt" = selected."availableAt",
+                        "updatedAt" = now()
+                from selected
+                where stored."objectRemoteId" = selected."remoteId"
+                        and stored."dispatchToken" is null
+                        and stored."publishedAt" is null
+                        and (
+                                stored.priority is distinct from selected.priority
+                                or stored."availableAt" is distinct from
+                                        selected."availableAt"
+                        )
+                returning stored."objectRemoteId"
+        ), changed as (
 		select "objectRemoteId" from inserted
 		union all
 		select "objectRemoteId" from updated
@@ -338,7 +313,7 @@ const enqueueReadyObjectsSql = `
 				candidate."checkpointLedger" desc nulls last,
 				candidate."objectKey",
 				candidate.id
-			limit 1
+			limit 4
 		) candidate on true
 	), inserted as (
 		insert into "history_archive_object_ready" as stored (
@@ -351,46 +326,21 @@ const enqueueReadyObjectsSql = `
 		on conflict do nothing
 		returning "objectRemoteId"
 	), updated as (
-		update "history_archive_object_ready" stored
-		set "objectRemoteId" = candidates."remoteId",
-			priority = candidates.priority,
-			"availableAt" = candidates."availableAt",
-			"updatedAt" = now()
-		from candidates
-		where stored."archiveUrlIdentity" = candidates."archiveUrlIdentity"
-			and stored."dispatchToken" is null
-			and stored."publishedAt" is null
-			and (
-				(
-					stored.priority = candidates.priority
-					and (
-						stored."objectRemoteId" = candidates."remoteId"
-						or not exists (
-							select 1
-							from "history_archive_object_ready" existing
-							where existing."objectRemoteId" = candidates."remoteId"
-						)
-					)
-				)
-				or (
-					stored.priority is distinct from candidates.priority
-					and stored."objectRemoteId" = candidates."remoteId"
-					and not exists (
-						select 1
-						from "history_archive_object_ready" target_lane
-						where target_lane."archiveUrlIdentity" =
-							candidates."archiveUrlIdentity"
-							and target_lane.priority = candidates.priority
-					)
-				)
-			)
-			and (
-				stored."objectRemoteId" is distinct from candidates."remoteId"
-				or stored.priority is distinct from candidates.priority
-				or stored."availableAt" is distinct from candidates."availableAt"
-			)
-		returning stored."objectRemoteId"
-	), changed as (
+                update "history_archive_object_ready" stored
+                set priority = candidates.priority,
+                        "availableAt" = candidates."availableAt",
+                        "updatedAt" = now()
+                from candidates
+                where stored."objectRemoteId" = candidates."remoteId"
+                        and stored."dispatchToken" is null
+                        and stored."publishedAt" is null
+                        and (
+                                stored.priority is distinct from candidates.priority
+                                or stored."availableAt" is distinct from
+                                        candidates."availableAt"
+                        )
+                returning stored."objectRemoteId"
+        ), changed as (
 		select "objectRemoteId" from inserted
 		union all
 		select "objectRemoteId" from updated
