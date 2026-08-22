@@ -52,27 +52,39 @@ const readyAtSql = `case
 end`;
 
 const cleanupReadyObjectsSql = `
-	with candidates as materialized (
-		select ready.ctid
-		from "history_archive_object_ready" ready
-		where ready."dispatchToken" is null
-			and ready."publishedAt" is null
-			and not exists (
-				select 1
-				from "history_archive_object_queue" candidate
-				where candidate."remoteId" = ready."objectRemoteId"
-					and ${schedulableObjectSql}
-			)
-		order by ready."archiveUrlIdentity", ready.priority, ready.ctid
-		for update of ready skip locked
-		limit 4096
-	), removed as (
-		delete from "history_archive_object_ready" ready
-		using candidates
-		where ready.ctid = candidates.ctid
-		returning ready."objectRemoteId"
-	)
-	select count(*)::integer as count from removed
+        with candidates as materialized (
+                select ready.ctid
+                from "history_archive_object_ready" ready
+                where (
+                        (
+                                ready."dispatchToken" is null
+                                and ready."publishedAt" is null
+                                and not exists (
+                                        select 1
+                                        from "history_archive_object_queue" candidate
+                                        where candidate."remoteId" = ready."objectRemoteId"
+                                                and ${schedulableObjectSql}
+                                )
+                        )
+                        or exists (
+                                select 1
+                                from "history_archive_object_queue" completed
+                                where completed."remoteId" = ready."objectRemoteId"
+                                        and ready."claimAttempt" is not null
+                                        and completed.attempts >= ready."claimAttempt"
+                                        and completed.status in ('verified', 'failed')
+                        )
+                )
+                order by ready."archiveUrlIdentity", ready.priority, ready.ctid
+                for update of ready skip locked
+                limit 4096
+        ), removed as (
+                delete from "history_archive_object_ready" ready
+                using candidates
+                where ready.ctid = candidates.ctid
+                returning ready."objectRemoteId"
+        )
+        select count(*)::integer as count from removed
 `;
 
 const refillReadyObjectsSql = `
