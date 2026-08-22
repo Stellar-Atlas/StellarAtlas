@@ -14,6 +14,23 @@ describe('verify-archive-objects-cluster', () => {
 			totalHasherWorkers: 40
 		});
 	});
+	it('supports a bounded 192-consumer production plan', () => {
+		const plan = createHistoryArchiveObjectClusterPlan(
+			{
+				HISTORY_HASHER_WORKERS: '192',
+				HISTORY_OBJECT_DOWNLOAD_CONCURRENCY: '192',
+				HISTORY_OBJECT_WORKER_PROCESSES: '192'
+			},
+			64
+		);
+
+		expect(plan).toEqual({
+			maximumActiveDownloads: 192,
+			perProcessHasherWorkers: 1,
+			processCount: 192,
+			totalHasherWorkers: 192
+		});
+	});
 
 	it('divides total hasher workers across object worker processes', () => {
 		const plan = createHistoryArchiveObjectClusterPlan(
@@ -38,7 +55,7 @@ describe('verify-archive-objects-cluster', () => {
 				{ HISTORY_OBJECT_WORKER_PROCESSES: '32768' },
 				48
 			)
-		).toThrow('HISTORY_OBJECT_WORKER_PROCESSES must be between 1 and 96');
+		).toThrow('HISTORY_OBJECT_WORKER_PROCESSES must be between 1 and 256');
 	});
 
 	it('rejects unbounded object hasher worker counts', () => {

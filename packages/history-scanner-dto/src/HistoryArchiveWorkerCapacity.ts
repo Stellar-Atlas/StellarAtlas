@@ -1,7 +1,7 @@
-export const historyArchiveDownloadConcurrency = 96;
-export const historyArchiveWorkerTelemetryLimit = 128;
+export const historyArchiveDownloadConcurrency = 256;
+export const historyArchiveWorkerTelemetryLimit = 256;
 export const historyArchiveWorkerSlotLimit = 32_768;
-export const historyArchiveObjectWorkerProcessLimit = 96;
+export const historyArchiveObjectWorkerProcessLimit = 256;
 
 const historyObjectWorkerProcessesEnvironmentVariable =
 	'HISTORY_OBJECT_WORKER_PROCESSES';
