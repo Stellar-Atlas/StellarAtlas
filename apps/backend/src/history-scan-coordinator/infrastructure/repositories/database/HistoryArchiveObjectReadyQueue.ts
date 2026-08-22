@@ -118,7 +118,7 @@ const refillReadyObjectsSql = `
 				candidate."checkpointLedger" desc nulls last,
 				candidate."objectKey",
 				candidate.id
-			limit 4
+			limit 8
 		) candidate on true
 	), selected as materialized (
 		select "archiveUrlIdentity", "remoteId", priority, "availableAt"
@@ -313,7 +313,7 @@ const enqueueReadyObjectsSql = `
 				candidate."checkpointLedger" desc nulls last,
 				candidate."objectKey",
 				candidate.id
-			limit 4
+			limit 8
 		) candidate on true
 	), inserted as (
 		insert into "history_archive_object_ready" as stored (

@@ -141,7 +141,7 @@ describe('history archive object claim concurrency', () => {
 		await expectActiveCaps(1);
 	});
 
-	it('fills four active claims per root across two data sources', async () => {
+	it('fills eight active claims per root across two data sources', async () => {
 		await save(
 			root(0),
 			...Array.from({ length: consumerCount }, (_, ordinal) =>
@@ -151,8 +151,8 @@ describe('history archive object claim concurrency', () => {
 
 		const claimed = claimsOnly(await claimBurst(consumerCount));
 
-		expect(claimed).toHaveLength(4);
-		await expectActiveCaps(4);
+		expect(claimed).toHaveLength(8);
+		await expectActiveCaps(8);
 	});
 
 	it('fills 24 slots without exceeding eight claims per host', async () => {
@@ -260,7 +260,7 @@ describe('history archive object claim concurrency', () => {
 		expect(rows).toHaveLength(expectedTotal);
 		expect(
 			maxCount(rows.map((row) => row.archiveUrlIdentity))
-		).toBeLessThanOrEqual(4);
+		).toBeLessThanOrEqual(8);
 		expect(maxCount(rows.map((row) => row.hostIdentity))).toBeLessThanOrEqual(
 			8
 		);
