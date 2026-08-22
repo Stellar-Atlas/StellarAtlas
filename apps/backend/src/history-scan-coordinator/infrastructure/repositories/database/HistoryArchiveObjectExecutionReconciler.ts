@@ -22,7 +22,8 @@ import {
 import { hasPostgresSqlState } from './PostgresError.js';
 import { materializeCompactCheckpointPlans } from './HistoryArchiveCompactPlanning.js';
 
-const reconciliationLockName = 'history_archive_execution_reconciliation';
+export const historyArchiveExecutionReconciliationLockName =
+        'history_archive_execution_reconciliation';
 
 interface PressureRow {
 	readonly outstandingObjects: number | string;
@@ -45,7 +46,7 @@ export async function reconcileHistoryArchiveObjectExecution(
 		await manager.query(`set local jit = off`);
 		const [lock] = (await manager.query(
 			'select pg_try_advisory_xact_lock(hashtext($1)) as locked',
-			[reconciliationLockName]
+			[historyArchiveExecutionReconciliationLockName]
 		)) as readonly { readonly locked?: boolean }[];
 		if (lock?.locked !== true) return emptyResult();
 

@@ -5,6 +5,7 @@ import type {
 	HistoryArchiveCheckpointProofRefreshPriority
 } from '@history-scan-coordinator/domain/history-archive-object/HistoryArchiveObjectRepository.js';
 import { canonicalRuntimeTargetCtes } from './HistoryArchiveCanonicalRuntimeTargetSql.js';
+import { historyArchiveExecutionReconciliationLockName } from './HistoryArchiveObjectExecutionReconciler.js';
 import { dueProofRefreshCanonicalRuntimeArchiveRootsCteSql } from './HistoryArchiveCanonicalRuntimePrioritySql.js';
 import { canonicalRuntimeExecutableProofMemberExistsSql } from './HistoryArchiveCanonicalRuntimeProofMembershipSql.js';
 import { historyArchiveCheckpointProofQueuedRefreshSql } from './HistoryArchiveCheckpointProofRefreshSql.js';
@@ -183,6 +184,10 @@ export async function refreshClaimedHistoryArchiveCheckpointProof(
 	return await dataSource.transaction(async (manager) => {
 		await manager.query(`set local lock_timeout = '2s'`);
 		await manager.query(`set local statement_timeout = '30s'`);
+                await manager.query(
+                        'select pg_advisory_xact_lock_shared(hashtext($1))',
+                        [historyArchiveExecutionReconciliationLockName]
+                );
 		const lease = (await manager.query(lockClaimedProofRefreshSql, [
 			target.archiveUrlIdentity,
 			target.checkpointLedger,
