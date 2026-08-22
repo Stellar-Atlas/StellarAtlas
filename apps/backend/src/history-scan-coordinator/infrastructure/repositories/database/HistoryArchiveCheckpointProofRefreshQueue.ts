@@ -101,12 +101,16 @@ export async function drainHistoryArchiveCheckpointProofRefreshes(
 			}
 		}
 	};
-	await Promise.all(
+	const outcomes = await Promise.allSettled(
 		Array.from(
 			{ length: Math.min(safeLimit, maximumConcurrentTargetedProofRefreshes) },
 			drainWorker
 		)
 	);
+	const rejected = outcomes.find(
+		(outcome): outcome is PromiseRejectedResult => outcome.status === 'rejected'
+	);
+	if (rejected !== undefined) throw rejected.reason;
 
 	return { claimed, completed, failed };
 }
