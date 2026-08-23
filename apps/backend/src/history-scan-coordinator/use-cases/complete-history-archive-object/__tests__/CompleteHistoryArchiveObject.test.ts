@@ -9,12 +9,15 @@ import type { HistoryArchiveObjectEventRecorder } from '../../record-history-arc
 import { CompleteHistoryArchiveObject } from '../CompleteHistoryArchiveObject.js';
 
 describe('CompleteHistoryArchiveObject', () => {
+	const configuredProofRefreshBatchSize =
+		process.env.HISTORY_ARCHIVE_TARGETED_PROOF_REFRESH_BATCH_SIZE;
 	let eventRecorder: MockProxy<HistoryArchiveObjectEventRecorder>;
 	let checkpointProofRepository: MockProxy<HistoryArchiveCheckpointProofRepository>;
 	let objectRepository: MockProxy<HistoryArchiveObjectRepository>;
 	let stateRepository: MockProxy<HistoryArchiveStateRepository>;
 
 	beforeEach(() => {
+		process.env.HISTORY_ARCHIVE_TARGETED_PROOF_REFRESH_BATCH_SIZE = '4';
 		eventRecorder = mock<HistoryArchiveObjectEventRecorder>();
 		checkpointProofRepository = mock<HistoryArchiveCheckpointProofRepository>();
 		objectRepository = mock<HistoryArchiveObjectRepository>();
@@ -35,6 +38,15 @@ describe('CompleteHistoryArchiveObject', () => {
 		objectRepository.findOldestCheckpointLedgerByArchiveUrlIdentities.mockResolvedValue(
 			new Map()
 		);
+	});
+
+	afterEach(() => {
+		if (configuredProofRefreshBatchSize === undefined) {
+			delete process.env.HISTORY_ARCHIVE_TARGETED_PROOF_REFRESH_BATCH_SIZE;
+		} else {
+			process.env.HISTORY_ARCHIVE_TARGETED_PROOF_REFRESH_BATCH_SIZE =
+				configuredProofRefreshBatchSize;
+		}
 	});
 
 	it('acknowledges completion only after durable transition effects finish', async () => {
@@ -223,8 +235,8 @@ describe('CompleteHistoryArchiveObject', () => {
 		const archiveObject = createBucketObject();
 		objectRepository.drainCheckpointProofRefreshQueue
 			.mockResolvedValueOnce({
-				claimed: 192,
-				completed: 192,
+				claimed: 4,
+				completed: 4,
 				failed: 0
 			})
 			.mockResolvedValue({
@@ -257,7 +269,7 @@ describe('CompleteHistoryArchiveObject', () => {
 		});
 		expect(
 			objectRepository.drainCheckpointProofRefreshQueue
-		).toHaveBeenCalledWith(192, 1);
+		).toHaveBeenCalledWith(4, 1);
 		expect(
 			objectRepository.drainCheckpointProofRefreshQueue
 		).toHaveBeenCalledTimes(2);
@@ -385,7 +397,7 @@ describe('CompleteHistoryArchiveObject', () => {
 		expect(eventRecorder.recordDurably).toHaveBeenCalled();
 	});
 
-	it('rejects a stale completion before descendant fan-out', async () => {
+	it('acknowledges a superseded completion without descendant fan-out', async () => {
 		const archiveObject = createCheckpointObject();
 		archiveObject.attempts = 2;
 		objectRepository.findByRemoteId.mockResolvedValue(archiveObject);
@@ -404,7 +416,7 @@ describe('CompleteHistoryArchiveObject', () => {
 			workerStage: 'verified'
 		});
 
-		expect(result._unsafeUnwrap()).toBe(false);
+		expect(result._unsafeUnwrap()).toBe(true);
 		expect(objectRepository.planObjects).not.toHaveBeenCalled();
 		expect(stateRepository.saveAvailable).not.toHaveBeenCalled();
 	});

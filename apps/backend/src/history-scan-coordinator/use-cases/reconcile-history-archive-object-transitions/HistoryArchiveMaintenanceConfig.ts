@@ -1,6 +1,10 @@
+import { historyArchiveConsumerCount } from '../../domain/history-archive-object/HistoryArchiveObjectPlanningPolicy.js';
 const defaultTransitionReconciliationIntervalMs = 1_000;
 const defaultExecutionAdmissionIntervalMs = 1_000;
 const minimumMaintenanceIntervalMs = 1_000;
+const maximumTargetedProofRefreshBatchSize = historyArchiveConsumerCount;
+const defaultTargetedProofRefreshBatchSize =
+	maximumTargetedProofRefreshBatchSize;
 
 export interface HistoryArchiveMaintenanceIntervals {
 	readonly executionAdmissionIntervalMs: number;
@@ -63,6 +67,19 @@ export function parseTargetedProofRefreshPriority(
 	throw new Error(
 		'HISTORY_ARCHIVE_TARGETED_PROOF_REFRESH_MAX_PRIORITY must be 0 or 1'
 	);
+}
+
+export function parseTargetedProofRefreshBatchSize(
+	configuredBatchSize: string | undefined
+): number {
+	if (configuredBatchSize === undefined) {
+		return defaultTargetedProofRefreshBatchSize;
+	}
+	const parsed = Number(configuredBatchSize);
+	if (!Number.isSafeInteger(parsed) || parsed < 1) {
+		return defaultTargetedProofRefreshBatchSize;
+	}
+	return Math.min(parsed, maximumTargetedProofRefreshBatchSize);
 }
 
 export function parseHistoryArchiveMaintenanceIntervalMs(

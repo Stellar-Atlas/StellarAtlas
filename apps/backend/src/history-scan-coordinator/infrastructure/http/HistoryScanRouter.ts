@@ -224,11 +224,10 @@ export const HistoryScanRouterWrapper = (
 				const completion = parseArchiveObjectCompletion(req, res);
 				if (completion === null) return;
 
-				const result =
-					await config.completeHistoryArchiveObject.executeAndReconcile(
-						req.params.remoteId,
-						completion
-					);
+				const result = await config.completeHistoryArchiveObject.execute(
+					req.params.remoteId,
+					completion
+				);
 				if (result.isErr()) {
 					return res.status(500).json({ error: result.error.message });
 				}

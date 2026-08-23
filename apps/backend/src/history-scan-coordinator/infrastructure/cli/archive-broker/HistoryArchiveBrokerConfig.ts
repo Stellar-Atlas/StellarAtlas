@@ -8,6 +8,7 @@ export { parseHistoryArchiveBrokerMaximumPriority };
 
 export interface HistoryArchiveBrokerConfig {
 	readonly batchSize: number;
+	readonly capacitySignalSubject: string;
 	readonly consumer: string;
 	readonly highWatermark: number;
 	readonly maximumPerHost: number;
@@ -37,23 +38,31 @@ export function getHistoryArchiveBrokerConfig(): HistoryArchiveBrokerConfig {
 		throw new Error('NATS_SERVERS must contain at least one server');
 	const token = process.env.NATS_TOKEN?.trim();
 	if (!token) throw new Error('NATS_TOKEN is required');
+	const subject =
+		process.env.NATS_ARCHIVE_JOB_SUBJECT ??
+		'stellaratlas.history.object.verify';
 
+	const workerCapacity = readPositiveInteger(
+		'HISTORY_OBJECT_WORKER_PROCESSES',
+		64
+	);
 	const highWatermark = readPositiveInteger(
 		'HISTORY_ARCHIVE_BROKER_HIGH_WATERMARK',
-		64
+		workerCapacity
 	);
 	return {
 		batchSize: Math.min(
-			readPositiveInteger('HISTORY_ARCHIVE_BROKER_BATCH_SIZE', 32),
+			readPositiveInteger('HISTORY_ARCHIVE_BROKER_BATCH_SIZE', highWatermark),
 			highWatermark
 		),
+		capacitySignalSubject: `${subject}.capacity`,
 		consumer:
 			process.env.NATS_ARCHIVE_JOB_CONSUMER ??
 			'stellaratlas-history-object-workers',
 		highWatermark,
 		maximumPerHost: readPositiveInteger(
 			'HISTORY_ARCHIVE_MAX_ACTIVE_PER_HOST',
-			2
+			highWatermark
 		),
 		maximumPriority: getHistoryArchiveBrokerMaximumPriority(),
 		pollIntervalMs: readPositiveInteger(
@@ -63,9 +72,7 @@ export function getHistoryArchiveBrokerConfig(): HistoryArchiveBrokerConfig {
 		servers,
 		stream:
 			process.env.NATS_ARCHIVE_JOB_STREAM ?? 'STELLARATLAS_HISTORY_OBJECTS',
-		subject:
-			process.env.NATS_ARCHIVE_JOB_SUBJECT ??
-			'stellaratlas.history.object.verify',
+		subject,
 		token
 	};
 }

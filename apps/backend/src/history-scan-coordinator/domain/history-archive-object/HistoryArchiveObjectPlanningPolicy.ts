@@ -8,14 +8,18 @@ const historyArchiveWorkerCapacity = resolveHistoryArchiveObjectWorkerCapacity(
 
 export const historyArchiveConsumerCount =
 	historyArchiveWorkerCapacity.consumerCount;
+export const historyArchiveSequentialPrefetchDepth = Math.max(
+	4,
+	Math.ceil(historyArchiveConsumerCount / 32)
+);
 export const historyArchiveCanonicalReserveCount =
 	historyArchiveWorkerCapacity.canonicalReserveCount;
-export const historyArchivePerHostConcurrency = 8;
+export const historyArchivePerHostConcurrency = historyArchiveConsumerCount;
 export const historyArchiveMinimumWatermark =
 	historyArchiveWorkerCapacity.minimumWatermark;
 export const historyArchiveMaximumWatermark =
 	historyArchiveWorkerCapacity.maximumWatermark;
-export const historyArchivePerRootFrontier = 8;
+export const historyArchivePerRootFrontier = historyArchiveConsumerCount;
 export const historyArchiveThroughputWindowMinutes = 15;
 const targetBacklogMinutes = 10;
 export const historyArchiveThroughputSampleCap = Math.ceil(

@@ -1,5 +1,5 @@
 import { injectable } from 'inversify';
-import { Repository } from 'typeorm';
+import { In, Repository } from 'typeorm';
 import { getHistoryArchiveUrlIdentity } from '@history-scan-coordinator/domain/ArchiveUrlIdentity.js';
 import { HistoryArchiveObject } from '@history-scan-coordinator/domain/history-archive-object/HistoryArchiveObject.js';
 import type { HistoryArchiveObjectType } from '@history-scan-coordinator/domain/history-archive-object/HistoryArchiveObject.js';
@@ -16,6 +16,7 @@ import type {
 	HistoryArchiveObjectQueueStats,
 	HistoryArchiveObjectRecheckDecision,
 	HistoryArchiveObjectRepository,
+	HistoryArchiveObjectVerificationUpdate,
 	HistoryArchiveObjectWorkerSnapshot
 } from '@history-scan-coordinator/domain/history-archive-object/HistoryArchiveObjectRepository.js';
 import { requireNumber } from './ScanJobRowMapper.js';
@@ -32,11 +33,13 @@ import { getHistoryArchiveObjectStats } from './HistoryArchiveObjectStatsQuery.j
 import { findLatestHistoryArchiveObjectActivityAt } from './HistoryArchiveObjectActivityQuery.js';
 import { markHistoryArchiveObjectFailed } from './HistoryArchiveObjectFailureWrite.js';
 import {
+	activateHistoryArchiveObjects,
 	planHistoryArchiveObjects,
 	promoteHistoryArchiveObjectPlans
 } from './HistoryArchiveObjectPlanStore.js';
 import {
 	markHistoryArchiveObjectVerified,
+	markHistoryArchiveObjectsVerified,
 	markHistoryArchiveTransitionEffectsCompleted,
 	releaseHistoryArchiveObject,
 	releaseStaleHistoryArchiveObjects,
@@ -44,13 +47,15 @@ import {
 } from './HistoryArchiveObjectLeaseWrite.js';
 import {
 	materializeHistoryArchiveCheckpointDependencies,
+	materializeHistoryArchiveCheckpointDependencyBatch,
 	reconcileHistoryArchiveDependencyReadiness
 } from './HistoryArchiveObjectDependencyWrite.js';
 import { reconcileHistoryArchiveObjectExecution } from './HistoryArchiveObjectExecutionReconciler.js';
 import { findVerifiedCheckpointsNeedingReconciliation } from './HistoryArchiveCheckpointReconciliationQuery.js';
 import {
 	findVerifiedCheckpointsNeedingFanout,
-	markCheckpointDescendantsPlanned
+	markCheckpointDescendantsPlanned,
+	markCheckpointDescendantsPlannedBatch
 } from './HistoryArchiveCompactPlanning.js';
 import { getHistoryArchiveRepairPlanSummary } from './HistoryArchiveRepairPlanQuery.js';
 import { findVerifiedCheckpointObjectSources } from './HistoryArchiveVerifiedCheckpointSourceQuery.js';
@@ -58,7 +63,10 @@ import { findVerifiedBucketSources } from './HistoryArchiveVerifiedBucketSourceQ
 import { historyArchiveRepairActionableObjectSql } from './HistoryArchiveRepairActionableObjectSql.js';
 import { findPrioritizedHistoryArchiveObjectTransitions } from './HistoryArchiveObjectTransitionQuery.js';
 import { requestHistoryArchiveObjectRecheck } from './HistoryArchiveObjectRecheckWrite.js';
-import { drainHistoryArchiveCheckpointProofRefreshes } from './HistoryArchiveCheckpointProofRefreshQueue.js';
+import {
+	drainHistoryArchiveCheckpointProofRefreshes,
+	enqueueHistoryArchiveCheckpointProofRefreshes
+} from './HistoryArchiveCheckpointProofRefreshQueue.js';
 import type { HistoryArchiveCheckpointProofRefreshPriority } from '@history-scan-coordinator/domain/history-archive-object/HistoryArchiveObjectRepository.js';
 
 const maxActiveObjectsPerArchive = historyArchivePerRootFrontier;
@@ -66,6 +74,7 @@ const maxActiveObjectsPerHost = historyArchivePerHostConcurrency;
 const maxActiveObjectsTotal = historyArchiveConsumerCount;
 const transitionReconciliationLockName =
 	'history_archive_object_transition_reconciliation';
+const transitionEffectsInFlight = new Map<string, Promise<void>>();
 
 @injectable()
 export class TypeOrmHistoryArchiveObjectRepository implements HistoryArchiveObjectRepository {
@@ -80,6 +89,17 @@ export class TypeOrmHistoryArchiveObjectRepository implements HistoryArchiveObje
 			limit,
 			maximumPriority
 		);
+	}
+
+	async enqueueCheckpointProofRefreshes(
+		remoteIds: readonly string[]
+	): Promise<number> {
+		return await this.repository.manager.transaction(async (manager) => {
+			return await enqueueHistoryArchiveCheckpointProofRefreshes(
+				manager,
+				remoteIds
+			);
+		});
 	}
 
 	async claimNextObject(
@@ -129,6 +149,12 @@ export class TypeOrmHistoryArchiveObjectRepository implements HistoryArchiveObje
 
 	findByRemoteId(remoteId: string): Promise<HistoryArchiveObject | null> {
 		return this.repository.findOneBy({ remoteId });
+	}
+	async findByRemoteIds(
+		remoteIds: readonly string[]
+	): Promise<readonly HistoryArchiveObject[]> {
+		if (remoteIds.length === 0) return [];
+		return await this.repository.findBy({ remoteId: In([...remoteIds]) });
 	}
 
 	async findBucketObjectsByHash(
@@ -207,6 +233,14 @@ export class TypeOrmHistoryArchiveObjectRepository implements HistoryArchiveObje
 
 	async markCheckpointDescendantsPlanned(remoteId: string): Promise<boolean> {
 		return await markCheckpointDescendantsPlanned(this.repository, remoteId);
+	}
+	async markCheckpointDescendantsPlannedBatch(
+		remoteIds: readonly string[]
+	): Promise<number> {
+		return await markCheckpointDescendantsPlannedBatch(
+			this.repository,
+			remoteIds
+		);
 	}
 
 	async findVerifiedBucketObjectsByArchiveUrl(
@@ -305,6 +339,12 @@ export class TypeOrmHistoryArchiveObjectRepository implements HistoryArchiveObje
 		);
 	}
 
+	async markObjectsVerified(
+		updates: readonly HistoryArchiveObjectVerificationUpdate[]
+	): Promise<ReadonlySet<string>> {
+		return await markHistoryArchiveObjectsVerified(this.repository, updates);
+	}
+
 	async markTransitionEffectsCompleted(
 		remoteId: string,
 		claimAttempt: number,
@@ -323,25 +363,21 @@ export class TypeOrmHistoryArchiveObjectRepository implements HistoryArchiveObje
 		claimAttempt: number,
 		work: () => Promise<void>
 	): Promise<void> {
-		const queryRunner = this.repository.manager.connection.createQueryRunner();
 		const lockIdentity = `${remoteId}:${claimAttempt}`;
+		const existing = transitionEffectsInFlight.get(lockIdentity);
+		if (existing !== undefined) {
+			await existing;
+			return;
+		}
 
+		const execution = Promise.resolve().then(work);
+		transitionEffectsInFlight.set(lockIdentity, execution);
 		try {
-			await queryRunner.connect();
-			await queryRunner.query(
-				'select pg_advisory_lock(hashtextextended($1::text, 8193))',
-				[lockIdentity]
-			);
-			try {
-				await work();
-			} finally {
-				await queryRunner.query(
-					'select pg_advisory_unlock(hashtextextended($1::text, 8193))',
-					[lockIdentity]
-				);
-			}
+			await execution;
 		} finally {
-			await queryRunner.release();
+			if (transitionEffectsInFlight.get(lockIdentity) === execution) {
+				transitionEffectsInFlight.delete(lockIdentity);
+			}
 		}
 	}
 
@@ -352,6 +388,19 @@ export class TypeOrmHistoryArchiveObjectRepository implements HistoryArchiveObje
 		);
 	}
 
+	async materializeCheckpointDependencyBatch(
+		remoteIds: readonly string[]
+	): Promise<number> {
+		return await materializeHistoryArchiveCheckpointDependencyBatch(
+			this.repository,
+			remoteIds
+		);
+	}
+	async activateObjects(
+		objects: readonly HistoryArchiveObject[]
+	): Promise<number> {
+		return await activateHistoryArchiveObjects(this.repository, objects);
+	}
 	async planObjects(objects: readonly HistoryArchiveObject[]): Promise<number> {
 		return await planHistoryArchiveObjects(this.repository, objects);
 	}

@@ -2,7 +2,7 @@ import type { EntityManager } from 'typeorm';
 
 export const historyArchiveRootTransitionLockSql = `
     select pg_advisory_xact_lock(
-        1784950001,
+        1784950002,
         hashtext($1::text)
     )
 `;
@@ -18,7 +18,7 @@ export async function lockHistoryArchiveRootTransition(
 
 export const historyArchiveRootTransitionLocksSql = `
 	select pg_advisory_xact_lock(
-		1784950001,
+                1784950002,
 		hashtext(roots."archiveUrlIdentity")
 	)
 	from (
@@ -39,11 +39,12 @@ export async function lockHistoryArchiveRootTransitions(
 
 export const historyArchiveObjectRootTransitionLockSql = `
     select pg_advisory_xact_lock(
-        1784950001,
+        1784950002,
         hashtext(object."archiveUrlIdentity")
     )
     from "history_archive_object_queue" object
     where object."remoteId" = $1::uuid
+        and object."objectType" = 'history-archive-state'
 `;
 
 export async function lockHistoryArchiveObjectRootTransition(

@@ -1,6 +1,7 @@
 import type { EntityManager, Repository } from 'typeorm';
 import type { HistoryArchiveObject } from '@history-scan-coordinator/domain/history-archive-object/HistoryArchiveObject.js';
 import { historyArchiveObjectOpenSequentialCohortSql } from './HistoryArchiveSequentialChainSql.js';
+import { notifyHistoryArchiveReadyWork } from './HistoryArchiveObjectReadyQueue.js';
 
 const maximumPlanRows = 4_096;
 const maximumCheckpointFanoutBatch = 24;
@@ -53,26 +54,74 @@ export async function markCheckpointDescendantsPlanned(
 	repository: Repository<HistoryArchiveObject>,
 	remoteId: string
 ): Promise<boolean> {
-	const result = await repository
-		.createQueryBuilder()
-		.update()
-		.set({ descendantsPlannedAt: () => 'now()' })
-		.where('"remoteId" = :remoteId', { remoteId })
-		.andWhere('"objectType" = :objectType', {
-			objectType: 'checkpoint-state'
-		})
-		.andWhere('status = :status', { status: 'verified' })
-		.andWhere('"descendantsPlannedAt" is null')
-		.execute();
-	return (result.affected ?? 0) === 1;
+	return (
+		(await markCheckpointDescendantsPlannedBatch(repository, [remoteId])) === 1
+	);
 }
+
+export async function markCheckpointDescendantsPlannedBatch(
+	repository: Repository<HistoryArchiveObject>,
+	remoteIds: readonly string[]
+): Promise<number> {
+	const uniqueRemoteIds = [...new Set(remoteIds)];
+	if (uniqueRemoteIds.length === 0) return 0;
+	const rows = (await repository.manager.query(
+		markCheckpointDescendantsPlannedSql,
+		[uniqueRemoteIds]
+	)) as readonly unknown[];
+	return rows.length;
+}
+
+const markCheckpointDescendantsPlannedSql = `
+        update "history_archive_object_queue"
+        set "descendantsPlannedAt" = now(),
+		"transitionEffectsCompletedAt" = now(),
+		"updatedAt" = now()
+        where "remoteId" = any($1::uuid[])
+                and "objectType" = 'checkpoint-state'
+                and status = 'verified'
+                and "descendantsPlannedAt" is null
+        returning id
+`;
 
 export async function materializeCompactCheckpointPlans(
 	manager: EntityManager
 ): Promise<number> {
 	const [result] = (await manager.query(compactCheckpointPlanSql, [
 		maximumCheckpointCursorBatch
-	])) as readonly { readonly planned: number | string }[];
+	])) as readonly {
+		readonly planned: number | string;
+		readonly ready?: number | string;
+	}[];
+	if (Number(result?.ready ?? 0) > 0)
+		await notifyHistoryArchiveReadyWork(manager);
+	return Number(result?.planned ?? 0);
+}
+
+export interface CompletedHistoryArchiveCheckpoint {
+	readonly archiveUrlIdentity: string;
+	readonly checkpointLedger: number;
+}
+
+export async function materializeNextCompactCheckpointPlans(
+	manager: EntityManager,
+	completedCheckpoints: readonly CompletedHistoryArchiveCheckpoint[]
+): Promise<number> {
+	const validCheckpoints = completedCheckpoints.filter(
+		(checkpoint) =>
+			checkpoint.archiveUrlIdentity.length > 0 &&
+			Number.isSafeInteger(checkpoint.checkpointLedger) &&
+			checkpoint.checkpointLedger >= 63
+	);
+	if (validCheckpoints.length === 0) return 0;
+	const [result] = (await manager.query(targetedCompactCheckpointPlanSql, [
+		JSON.stringify(validCheckpoints)
+	])) as readonly {
+		readonly planned: number | string;
+		readonly ready?: number | string;
+	}[];
+	if (Number(result?.ready ?? 0) > 0)
+		await notifyHistoryArchiveReadyWork(manager);
 	return Number(result?.planned ?? 0);
 }
 
@@ -87,15 +136,24 @@ export async function materializeNextCompactCheckpointPlan(
 	) {
 		return 0;
 	}
-	const [result] = (await manager.query(targetedCompactCheckpointPlanSql, [
-		archiveUrlIdentity,
-		completedCheckpointLedger
-	])) as readonly { readonly planned: number | string }[];
-	return Number(result?.planned ?? 0);
+	return await materializeNextCompactCheckpointPlans(manager, [
+		{
+			archiveUrlIdentity,
+			checkpointLedger: completedCheckpointLedger
+		}
+	]);
 }
 
 const targetedCompactCheckpointPlanSql = `
-	with candidate as materialized (
+	with completed as materialized (
+		select distinct input."archiveUrlIdentity", input."checkpointLedger"
+		from jsonb_to_recordset($1::jsonb) as input(
+			"archiveUrlIdentity" text,
+			"checkpointLedger" integer
+		)
+		where input."archiveUrlIdentity" <> ''
+			and input."checkpointLedger" >= 63
+	), candidate as materialized (
 		select cursor."archiveUrlIdentity",
 			greatest(
 				cursor."latestCheckpointLedger",
@@ -106,7 +164,10 @@ const targetedCompactCheckpointPlanSql = `
 			cursor."lastForwardCheckpointLedger",
 			cursor."nextHistoricalCheckpointLedger" as checkpoint_ledger,
 			root."archiveUrl", root."hostIdentity"
-		from "history_archive_checkpoint_scan_cursor" cursor
+		from completed
+		join "history_archive_checkpoint_scan_cursor" cursor
+			on cursor."archiveUrlIdentity" =
+				completed."archiveUrlIdentity"
 		join "history_archive_state_snapshot" state
 			on state."archiveUrlIdentity" = cursor."archiveUrlIdentity"
 			and state.status = 'available'
@@ -119,16 +180,17 @@ const targetedCompactCheckpointPlanSql = `
 			and state."archiveUrlIdentity" = regexp_replace(root."archiveUrl", '/+$', '')
 		join "history_archive_checkpoint_proof" proof
 			on proof."archiveUrlIdentity" = cursor."archiveUrlIdentity"
-			and proof."checkpointLedger" = $2::integer
+			and proof."checkpointLedger" = completed."checkpointLedger"
 			and proof.status = 'verified'
-		where cursor."archiveUrlIdentity" = $1::text
-			and cursor."nextHistoricalCheckpointLedger" = $2::integer + 64
+		where cursor."nextHistoricalCheckpointLedger" =
+				completed."checkpointLedger" + 64
 			and cursor."nextHistoricalCheckpointLedger" <= greatest(
 				cursor."latestCheckpointLedger",
 				(
 					floor((state."currentLedger" + 1)::numeric / 64) * 64 - 1
 				)::integer
 			)
+		order by cursor."archiveUrlIdentity"
 		for update of cursor
 	), source as materialized (
 		select candidate.*,

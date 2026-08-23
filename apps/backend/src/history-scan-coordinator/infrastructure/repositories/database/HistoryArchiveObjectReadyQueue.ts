@@ -13,6 +13,17 @@ import { historyArchiveObjectOpenSequentialCohortSql } from './HistoryArchiveSeq
 
 export const historyArchiveExecutionReconciliationLockName =
 	'history_archive_execution_reconciliation';
+export const historyArchiveReadyNotificationChannel =
+	'stellaratlas_history_archive_ready';
+
+export async function notifyHistoryArchiveReadyWork(
+	manager: EntityManager
+): Promise<void> {
+	await manager.query('select pg_notify($1::text, $2::text)', [
+		historyArchiveReadyNotificationChannel,
+		'ready'
+	]);
+}
 
 export interface HistoryArchiveReadyQueueSyncResult {
 	readonly readyObjects: number;
@@ -125,7 +136,7 @@ const refillReadyObjectsSql = `
 				candidate."checkpointLedger" desc nulls last,
 				candidate."objectKey",
 				candidate.id
-			limit 8
+			limit $1::integer
 		) candidate on true
 	), selected as materialized (
 		select "archiveUrlIdentity", "remoteId", priority, "availableAt"
@@ -209,11 +220,13 @@ export async function synchronizeHistoryArchiveReadyQueue(
 		readyObjectCountSql
 	)) as readonly CountRow[];
 
-	return {
+	const result = {
 		readyObjects: toCount(ready?.count),
 		removedObjects: toCount(removed?.count),
 		scheduledObjects: toCount(scheduled?.count)
 	};
+	if (result.scheduledObjects > 0) await notifyHistoryArchiveReadyWork(manager);
+	return result;
 }
 
 export async function bootstrapHistoryArchiveReadyQueueIfEmpty(
@@ -236,7 +249,9 @@ export async function bootstrapHistoryArchiveReadyQueueIfEmpty(
 			const [scheduled] = (await transaction.query(refillReadyObjectsSql, [
 				boundedLimit
 			])) as readonly CountRow[];
-			return toCount(scheduled?.count);
+			const scheduledCount = toCount(scheduled?.count);
+			if (scheduledCount > 0) await notifyHistoryArchiveReadyWork(transaction);
+			return scheduledCount;
 		});
 	} catch (error) {
 		if (
@@ -339,6 +354,28 @@ export async function removeCompletedHistoryArchiveBrokerReadyRow(
 		   and "claimAttempt" = $3::integer`,
 		[remoteId, executionId, claimAttempt]
 	);
+}
+
+export async function requeueFailedHistoryArchiveBrokerReadyRow(
+	manager: EntityManager,
+	remoteId: string,
+	executionId: string,
+	claimAttempt: number,
+	availableAt: Date | null
+): Promise<void> {
+	await manager.query(
+		`update "history_archive_object_ready"
+                 set "dispatchToken" = null,
+                     "claimAttempt" = null,
+                     "publishedAt" = null,
+                     "availableAt" = coalesce($4::timestamptz, now()),
+                     "updatedAt" = now()
+                 where "objectRemoteId" = $1::uuid
+                   and "dispatchToken" = $2::uuid
+                   and "claimAttempt" = $3::integer`,
+		[remoteId, executionId, claimAttempt, availableAt]
+	);
+	await notifyHistoryArchiveReadyWork(manager);
 }
 
 interface CountRow {

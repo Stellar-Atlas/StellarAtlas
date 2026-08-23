@@ -10,26 +10,31 @@ import {
 } from './ReconcileHistoryArchiveObjectTransitions.js';
 
 describe('archive transition reconciliation batch configuration', () => {
-	it('keeps the conservative default and caps operator increases', () => {
+	it('derives the default and cap from worker capacity', () => {
 		expect(
 			parseHistoryArchiveTransitionReconciliationBatchSize(undefined)
-		).toBe(24);
+		).toBe(240);
 		expect(parseHistoryArchiveTransitionReconciliationBatchSize('48')).toBe(48);
 		expect(parseHistoryArchiveTransitionReconciliationBatchSize('192')).toBe(
 			192
 		);
 		expect(parseHistoryArchiveTransitionReconciliationBatchSize('500')).toBe(
-			192
+			240
 		);
 		expect(
 			parseHistoryArchiveTransitionReconciliationBatchSize('invalid')
-		).toBe(24);
+		).toBe(240);
 	});
 });
 
 describe('ReconcileHistoryArchiveObjectTransitions', () => {
 	it('reconciles verified and failed transitions under the distributed lock', async () => {
 		const repository = mock<HistoryArchiveObjectRepository>();
+		repository.drainCheckpointProofRefreshQueue.mockResolvedValue({
+			claimed: 0,
+			completed: 0,
+			failed: 0
+		});
 		const complete = mock<CompleteHistoryArchiveObject>();
 		const fail = mock<FailHistoryArchiveObject>();
 		let transitionLockHeld = false;
@@ -86,14 +91,19 @@ describe('ReconcileHistoryArchiveObjectTransitions', () => {
 			failed.remoteId,
 			failed.attempts
 		);
-		expect(repository.findUnreconciledTransitions).toHaveBeenCalledWith(24);
+		expect(repository.findUnreconciledTransitions).toHaveBeenCalledWith(240);
 		expect(
 			repository.findVerifiedCheckpointsNeedingReconciliation
-		).toHaveBeenCalledWith(24);
+		).toHaveBeenCalledWith(240);
 	});
 
 	it('continues the batch when one transition effect fails', async () => {
 		const repository = mock<HistoryArchiveObjectRepository>();
+		repository.drainCheckpointProofRefreshQueue.mockResolvedValue({
+			claimed: 0,
+			completed: 0,
+			failed: 0
+		});
 		const complete = mock<CompleteHistoryArchiveObject>();
 		const fail = mock<FailHistoryArchiveObject>();
 		const logger = mock<Logger>();
@@ -135,6 +145,11 @@ describe('ReconcileHistoryArchiveObjectTransitions', () => {
 
 	it('materializes legacy checkpoint dependencies under the reconciliation lock', async () => {
 		const repository = mock<HistoryArchiveObjectRepository>();
+		repository.drainCheckpointProofRefreshQueue.mockResolvedValue({
+			claimed: 0,
+			completed: 0,
+			failed: 0
+		});
 		const complete = mock<CompleteHistoryArchiveObject>();
 		const checkpoint = terminalCheckpoint();
 		repository.findVerifiedCheckpointsNeedingReconciliation.mockResolvedValue([
@@ -163,6 +178,11 @@ describe('ReconcileHistoryArchiveObjectTransitions', () => {
 
 	it('reconciles terminal transitions before legacy dirty checkpoints', async () => {
 		const repository = mock<HistoryArchiveObjectRepository>();
+		repository.drainCheckpointProofRefreshQueue.mockResolvedValue({
+			claimed: 0,
+			completed: 0,
+			failed: 0
+		});
 		const complete = mock<CompleteHistoryArchiveObject>();
 		const verified = terminalObject('verified', 'verified.example');
 		const checkpoint = terminalCheckpoint();
@@ -195,6 +215,11 @@ describe('ReconcileHistoryArchiveObjectTransitions', () => {
 
 	it('keeps terminal proof effects when later execution admission fails', async () => {
 		const repository = mock<HistoryArchiveObjectRepository>();
+		repository.drainCheckpointProofRefreshQueue.mockResolvedValue({
+			claimed: 0,
+			completed: 0,
+			failed: 0
+		});
 		const complete = mock<CompleteHistoryArchiveObject>();
 		const logger = mock<Logger>();
 		const verified = terminalObject('verified', 'verified.example');
@@ -232,6 +257,11 @@ describe('ReconcileHistoryArchiveObjectTransitions', () => {
 
 	it('throttles repeated claim-path reconciliation in one API process', async () => {
 		const repository = mock<HistoryArchiveObjectRepository>();
+		repository.drainCheckpointProofRefreshQueue.mockResolvedValue({
+			claimed: 0,
+			completed: 0,
+			failed: 0
+		});
 		repository.findVerifiedCheckpointsNeedingReconciliation.mockResolvedValue(
 			[]
 		);
@@ -254,6 +284,11 @@ describe('ReconcileHistoryArchiveObjectTransitions', () => {
 
 	it('can reconcile transitions without duplicating a caller-owned promotion', async () => {
 		const repository = mock<HistoryArchiveObjectRepository>();
+		repository.drainCheckpointProofRefreshQueue.mockResolvedValue({
+			claimed: 0,
+			completed: 0,
+			failed: 0
+		});
 		repository.findUnreconciledTransitions.mockResolvedValue([]);
 		repository.findVerifiedCheckpointsNeedingReconciliation.mockResolvedValue(
 			[]
@@ -276,7 +311,7 @@ describe('ReconcileHistoryArchiveObjectTransitions', () => {
 		});
 
 		expect(repository.promotePlannedObjects).not.toHaveBeenCalled();
-		expect(repository.findUnreconciledTransitions).toHaveBeenCalledWith(24);
+		expect(repository.findUnreconciledTransitions).toHaveBeenCalledWith(240);
 	});
 
 	it('disables legacy generic admission unless explicitly enabled', async () => {
@@ -284,6 +319,11 @@ describe('ReconcileHistoryArchiveObjectTransitions', () => {
 		process.env.HISTORY_ARCHIVE_SCHEDULER_MODE = 'broker';
 		try {
 			const repository = mock<HistoryArchiveObjectRepository>();
+			repository.drainCheckpointProofRefreshQueue.mockResolvedValue({
+				claimed: 0,
+				completed: 0,
+				failed: 0
+			});
 			repository.tryWithTransitionReconciliationLock.mockResolvedValue(false);
 			const reconciler = new ReconcileHistoryArchiveObjectTransitions(
 				repository,
@@ -308,6 +348,11 @@ describe('ReconcileHistoryArchiveObjectTransitions', () => {
 
 	it('fans out bounded verified checkpoints under the transition lock', async () => {
 		const repository = mock<HistoryArchiveObjectRepository>();
+		repository.drainCheckpointProofRefreshQueue.mockResolvedValue({
+			claimed: 0,
+			completed: 0,
+			failed: 0
+		});
 		const complete = mock<CompleteHistoryArchiveObject>();
 		const checkpoint = terminalCheckpoint();
 		repository.findVerifiedCheckpointsNeedingFanout.mockResolvedValue([

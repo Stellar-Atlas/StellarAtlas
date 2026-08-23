@@ -137,7 +137,7 @@ export function load(container: Container, config: Config) {
 	container.bind(RegisterCommunityScanner).toSelf();
 	container.bind(SendScannerHeartbeat).toSelf();
 	container.bind(TouchHistoryArchiveObject).toSelf();
-	container.bind(CompleteHistoryArchiveObject).toSelf();
+	container.bind(CompleteHistoryArchiveObject).toSelf().inSingletonScope();
 	container.bind(FailHistoryArchiveObject).toSelf();
 	container.bind(ReleaseHistoryArchiveObject).toSelf();
 	container.bind(HistoryArchiveObjectEventRecorder).toSelf();

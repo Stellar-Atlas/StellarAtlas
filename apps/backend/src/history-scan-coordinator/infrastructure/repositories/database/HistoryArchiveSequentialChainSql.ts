@@ -1,3 +1,8 @@
+import { historyArchiveSequentialPrefetchDepth } from '@history-scan-coordinator/domain/history-archive-object/HistoryArchiveObjectPlanningPolicy.js';
+
+const sequentialPrefetchLedgerSpan =
+	(historyArchiveSequentialPrefetchDepth - 1) * 64;
+
 export function historyArchiveObjectOpenSequentialCohortSql(
 	objectAlias: string
 ): string {
@@ -11,8 +16,10 @@ export function historyArchiveObjectOpenSequentialCohortSql(
                 and (
                     (
                         ${objectAlias}."objectType" <> 'bucket'
-                        and ${objectAlias}."checkpointLedger" =
+                        and ${objectAlias}."checkpointLedger" between
                             chain_cursor."nextHistoricalCheckpointLedger" - 64
+                            and chain_cursor."nextHistoricalCheckpointLedger" -
+                                64 + ${sequentialPrefetchLedgerSpan}
                     )
                     or (
                         ${objectAlias}."objectType" = 'bucket'
@@ -23,8 +30,10 @@ export function historyArchiveObjectOpenSequentialCohortSql(
                                     ${objectAlias}."archiveUrlIdentity"
                                 and dependency."bucketHash" =
                                     ${objectAlias}."bucketHash"
-                                and dependency."checkpointLedger" =
+                                and dependency."checkpointLedger" between
                                     chain_cursor."nextHistoricalCheckpointLedger" - 64
+                                    and chain_cursor."nextHistoricalCheckpointLedger" -
+                                        64 + ${sequentialPrefetchLedgerSpan}
                         )
                     )
                 )

@@ -1,14 +1,14 @@
+import { historyArchiveConsumerCount } from '@history-scan-coordinator/domain/history-archive-object/HistoryArchiveObjectPlanningPolicy.js';
 import type { DataSource, EntityManager } from 'typeorm';
 import type {
 	HistoryArchiveCheckpointProofRefreshDrainResult,
 	HistoryArchiveCheckpointProofRefreshPriority
 } from '@history-scan-coordinator/domain/history-archive-object/HistoryArchiveObjectRepository.js';
 import { canonicalRuntimeTargetCtes } from './HistoryArchiveCanonicalRuntimeTargetSql.js';
-import { historyArchiveExecutionReconciliationLockName } from './HistoryArchiveObjectExecutionReconciler.js';
 import { dueProofRefreshCanonicalRuntimeArchiveRootsCteSql } from './HistoryArchiveCanonicalRuntimePrioritySql.js';
 import {
-	materializeCompactCheckpointPlans,
-	materializeNextCompactCheckpointPlan
+	materializeNextCompactCheckpointPlan,
+	materializeNextCompactCheckpointPlans
 } from './HistoryArchiveCompactPlanning.js';
 import { canonicalRuntimeExecutableProofMemberExistsSql } from './HistoryArchiveCanonicalRuntimeProofMembershipSql.js';
 import {
@@ -48,8 +48,8 @@ interface ProofRefreshWriteResult {
 	readonly upsertedcount?: number | string;
 }
 
-export const defaultTargetedProofRefreshBatchSize = 1;
-export const maximumTargetedProofRefreshBatchSize = 192;
+export const defaultTargetedProofRefreshBatchSize = historyArchiveConsumerCount;
+export const maximumTargetedProofRefreshBatchSize = historyArchiveConsumerCount;
 
 export interface HistoryArchiveCheckpointProofRefreshQueueStatus {
 	readonly depth: number;
@@ -88,7 +88,22 @@ export async function enqueueCurrentTerminalReadyCheckpointProofRefreshes(
 ): Promise<number> {
 	const [row] = (await manager.query(
 		enqueueCurrentTerminalReadyCheckpointProofRefreshesSql,
-		[Math.max(1, Math.min(Math.floor(limit), 4_096))]
+		[null, Math.max(1, Math.min(Math.floor(limit), 4_096))]
+	)) as readonly { readonly count: number | string }[];
+	return Number(row?.count ?? 0);
+}
+
+export async function enqueueTargetedTerminalReadyCheckpointProofRefreshes(
+	manager: EntityManager,
+	archiveUrlIdentities: readonly string[]
+): Promise<number> {
+	const uniqueIdentities = [...new Set(archiveUrlIdentities)].filter(
+		(identity) => identity.length > 0
+	);
+	if (uniqueIdentities.length === 0) return 0;
+	const [row] = (await manager.query(
+		enqueueCurrentTerminalReadyCheckpointProofRefreshesSql,
+		[uniqueIdentities, uniqueIdentities.length]
 	)) as readonly { readonly count: number | string }[];
 	return Number(row?.count ?? 0);
 }
@@ -99,13 +114,15 @@ export const enqueueCurrentTerminalReadyCheckpointProofRefreshesSql = `
                         cursor."nextHistoricalCheckpointLedger" - 64
                                 as "checkpointLedger"
                 from "history_archive_checkpoint_scan_cursor" cursor
-                where not exists (
+                where ($1::text[] is null or cursor."archiveUrlIdentity" = any($1::text[]))
+                and not exists (
                         select 1
                         from "history_archive_checkpoint_proof" proof
                         where proof."archiveUrlIdentity" =
                                 cursor."archiveUrlIdentity"
                         and proof."checkpointLedger" =
                                 cursor."nextHistoricalCheckpointLedger" - 64
+                        and proof.status = 'verified'
                 )
                 and not exists (
                         select 1
@@ -116,7 +133,7 @@ export const enqueueCurrentTerminalReadyCheckpointProofRefreshesSql = `
                                 cursor."nextHistoricalCheckpointLedger" - 64
                 )
                 order by cursor."archiveUrlIdentity"
-                limit $1::integer
+                limit $2::integer
         ), terminal as materialized (
                 select candidate.*
                 from candidates candidate
@@ -139,6 +156,7 @@ export const enqueueCurrentTerminalReadyCheckpointProofRefreshesSql = `
                         now(),
                         now()
                 from terminal
+                order by "archiveUrlIdentity", "checkpointLedger"
                 on conflict ("archiveUrlIdentity", "checkpointLedger") do nothing
                 returning 1
         )
@@ -250,9 +268,6 @@ export async function refreshClaimedHistoryArchiveCheckpointProof(
 	return await dataSource.transaction(async (manager) => {
 		await manager.query(`set local lock_timeout = '2s'`);
 		await manager.query(`set local statement_timeout = '30s'`);
-		await manager.query('select pg_advisory_xact_lock_shared(hashtext($1))', [
-			historyArchiveExecutionReconciliationLockName
-		]);
 		await lockHistoryArchiveRootTransition(manager, target.archiveUrlIdentity);
 		const lease = (await manager.query(lockClaimedProofRefreshSql, [
 			target.archiveUrlIdentity,
@@ -361,9 +376,6 @@ export async function refreshClaimedHistoryArchiveCheckpointProofs(
 	return await dataSource.transaction(async (manager) => {
 		await manager.query(`set local lock_timeout = '10s'`);
 		await manager.query(`set local statement_timeout = '60s'`);
-		await manager.query('select pg_advisory_xact_lock_shared(hashtext($1))', [
-			historyArchiveExecutionReconciliationLockName
-		]);
 		await lockHistoryArchiveRootTransitions(
 			manager,
 			targets.map((target) => target.archiveUrlIdentity)
@@ -386,7 +398,13 @@ export async function refreshClaimedHistoryArchiveCheckpointProofs(
 			historyArchiveCheckpointProofPendingSourceBatchEnrichmentSql,
 			[payload]
 		);
-		await materializeCompactCheckpointPlans(manager);
+		// Advance exactly the locked roots in one set operation. A global sweep
+		// crosses concurrent root locks; per-target statements waste round trips.
+		await materializeNextCompactCheckpointPlans(manager, targets);
+		await enqueueTargetedTerminalReadyCheckpointProofRefreshes(
+			manager,
+			targets.map((target) => target.archiveUrlIdentity)
+		);
 		const deleted = (await manager.query(completeProofRefreshBatchSql, [
 			payload
 		])) as unknown;
@@ -481,25 +499,26 @@ export const enqueueProofRefreshesSql = `
 		select "archiveUrlIdentity", "checkpointLedger", evidence_updated_at, 1,
 			now(), now(), now()
 		from targets
-		on conflict ("archiveUrlIdentity", "checkpointLedger") do update set
-			"evidenceUpdatedAt" = greatest(
-				history_archive_checkpoint_proof_refresh_queue."evidenceUpdatedAt",
-				excluded."evidenceUpdatedAt"
-			),
-			generation =
-				history_archive_checkpoint_proof_refresh_queue.generation + 1,
-			"nextAttemptAt" = now(),
-			attempts = 0,
-			"lastError" = null,
-			"leaseToken" = null,
-			"leaseUntil" = null,
-			"updatedAt" = now()
-		-- Completion and refresh transactions hold the same root lock. A live
-		-- refresh sees all evidence committed before it obtains that lock, so
-		-- invalidating its lease here would only create duplicate root work.
-		where history_archive_checkpoint_proof_refresh_queue."leaseUntil" is null
-			or history_archive_checkpoint_proof_refresh_queue."leaseUntil" <=
-				now()
+order by "archiveUrlIdentity", "checkpointLedger"
+                on conflict ("archiveUrlIdentity", "checkpointLedger") do update set
+                        "evidenceUpdatedAt" = greatest(
+                                history_archive_checkpoint_proof_refresh_queue."evidenceUpdatedAt",
+                                excluded."evidenceUpdatedAt"
+                        ),
+                        generation =
+                                history_archive_checkpoint_proof_refresh_queue.generation + 1,
+                        "nextAttemptAt" = now(),
+                        attempts = 0,
+                        "lastError" = null,
+                        "leaseToken" = null,
+                        "leaseUntil" = null,
+                        "updatedAt" = now()
+                -- Completion and refresh transactions hold the same root lock. A live
+                -- refresh sees all evidence committed before it obtains that lock, so
+                -- invalidating its lease here would only create duplicate root work.
+                where history_archive_checkpoint_proof_refresh_queue."leaseUntil" is null
+                        or history_archive_checkpoint_proof_refresh_queue."leaseUntil" <=
+                                now()
 		returning 1
 	)
 	select count(*)::integer as count from enqueued

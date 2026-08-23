@@ -9,9 +9,8 @@ import {
 	historyArchiveObjectHostFailureUpsertSql,
 	toHistoryArchiveObjectHostFailureSqlParams
 } from './HistoryArchiveObjectHostThrottleSql.js';
-import { enqueueHistoryArchiveCheckpointProofRefreshes } from './HistoryArchiveCheckpointProofRefreshQueue.js';
 import { lockHistoryArchiveObjectRootTransition } from './HistoryArchiveRootTransitionLock.js';
-import { removeCompletedHistoryArchiveBrokerReadyRow } from './HistoryArchiveObjectReadyQueue.js';
+import { requeueFailedHistoryArchiveBrokerReadyRow } from './HistoryArchiveObjectReadyQueue.js';
 
 export async function markHistoryArchiveObjectFailed(
 	repository: Repository<HistoryArchiveObject>,
@@ -74,13 +73,13 @@ export async function markHistoryArchiveObjectFailed(
 				...toHistoryArchiveObjectHostFailureSqlParams(hostFailure)
 			]);
 		}
-		await enqueueHistoryArchiveCheckpointProofRefreshes(manager, [remoteId]);
 		if (failure.scheduler === 'broker') {
-			await removeCompletedHistoryArchiveBrokerReadyRow(
+			await requeueFailedHistoryArchiveBrokerReadyRow(
 				manager,
 				remoteId,
 				failure.executionId!,
-				failure.claimAttempt
+				failure.claimAttempt,
+				failure.nextAttemptAt ?? null
 			);
 		}
 

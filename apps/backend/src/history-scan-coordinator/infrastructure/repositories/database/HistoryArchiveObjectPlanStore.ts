@@ -13,6 +13,7 @@ import { requeueStaleHistoryArchiveStateObjects } from './HistoryArchiveObjectSt
 import {
 	buildHistoryArchiveReadyPressureSql,
 	historyArchiveReadyRootActivityCtesSql,
+	notifyHistoryArchiveReadyWork,
 	synchronizeHistoryArchiveReadyQueue
 } from './HistoryArchiveObjectReadyQueue.js';
 import { historyArchiveObjectOpenSequentialCohortSql } from './HistoryArchiveSequentialChainSql.js';
@@ -55,12 +56,47 @@ export async function planHistoryArchiveObjects(
 			remoteId: object.remoteId,
 			status: object.status
 		}));
-		const rows = (await repository.manager.query(planObjectsSql, [
-			JSON.stringify(values)
+		const payload = JSON.stringify(values);
+		const plannedRows = (await repository.manager.query(planObjectsSql, [
+			payload
 		])) as readonly unknown[];
-		planned += rows.length;
+		planned += plannedRows.length;
 	}
 	return planned + refreshed;
+}
+
+export async function activateHistoryArchiveObjects(
+	repository: Repository<HistoryArchiveObject>,
+	objects: readonly HistoryArchiveObject[]
+): Promise<number> {
+	if (objects.length === 0) return 0;
+	const payload = JSON.stringify(
+		objects.map((object) => ({
+			archiveUrl: object.archiveUrl,
+			archiveUrlIdentity: object.archiveUrlIdentity,
+			bucketHash: object.bucketHash,
+			checkpointLedger: object.checkpointLedger,
+			dependencyReady: object.dependencyReady === true,
+			hostIdentity: object.hostIdentity,
+			objectKey: object.objectKey,
+			objectOrder: object.objectOrder,
+			objectType: object.objectType,
+			objectUrl: object.objectUrl,
+			remoteId: object.remoteId,
+			status: object.status
+		}))
+	);
+	return await repository.manager.transaction(async (manager) => {
+		const [result] = (await manager.query(activateObjectsSql, [
+			payload
+		])) as readonly {
+			readonly active: number | string;
+			readonly ready: number | string;
+		}[];
+		const ready = Number(result?.ready ?? 0);
+		if (ready > 0) await notifyHistoryArchiveReadyWork(manager);
+		return Number(result?.active ?? 0);
+	});
 }
 
 export async function promoteHistoryArchiveObjectPlans(
@@ -199,6 +235,101 @@ const planObjectsSql = `
 	returning id
 `;
 
+const activateObjectsSql = `
+        with input as materialized (
+                select *
+                from jsonb_to_recordset($1::jsonb) as object(
+                        "remoteId" uuid,
+                        "archiveUrl" text,
+                        "archiveUrlIdentity" text,
+                        "hostIdentity" text,
+                        "objectType" text,
+                        "objectKey" text,
+                        "objectOrder" integer,
+                        "objectUrl" text,
+                        status text,
+                        "checkpointLedger" integer,
+                        "bucketHash" text,
+                        "dependencyReady" boolean
+                )
+        ), upserted as (
+                insert into "history_archive_object_queue" (
+                        "remoteId", "archiveUrl", "archiveUrlIdentity", "hostIdentity",
+                        "objectType", "objectKey", "objectOrder", "objectUrl", status,
+                        "checkpointLedger", "bucketHash", "dependencyReady",
+                        "executionDisposition", "executionReason",
+                        "executionDispositionAt", "createdAt", "updatedAt"
+                )
+                select input."remoteId", input."archiveUrl",
+                        input."archiveUrlIdentity", input."hostIdentity",
+                        input."objectType", input."objectKey", input."objectOrder",
+                        input."objectUrl", input.status, input."checkpointLedger",
+                        input."bucketHash", input."dependencyReady",
+                        'executable', 'checkpoint-fanout', now(), now(), now()
+                from input
+                order by input."archiveUrlIdentity", input."objectType",
+                        input."objectKey"
+                on conflict ("archiveUrlIdentity", "objectType", "objectKey")
+                do update set
+                        "dependencyReady" =
+                                "history_archive_object_queue"."dependencyReady"
+                                is true or excluded."dependencyReady" is true,
+                        "executionDisposition" = 'executable',
+                        "executionReason" = 'checkpoint-fanout',
+                        "executionDispositionAt" = now(),
+                        "updatedAt" = now()
+                where "history_archive_object_queue".status = 'pending'
+                        and (
+                                "history_archive_object_queue"."dependencyReady"
+                                        is distinct from true
+                                or "history_archive_object_queue"."executionDisposition"
+                                        is distinct from 'executable'
+                        )
+                returning "remoteId", "archiveUrlIdentity"
+        ), targets as materialized (
+                select upserted."remoteId", upserted."archiveUrlIdentity"
+                from upserted
+                union
+
+                select queued."remoteId", queued."archiveUrlIdentity"
+                from input
+                join "history_archive_object_queue" queued
+                        on queued."archiveUrlIdentity" = input."archiveUrlIdentity"
+                        and queued."objectType" = input."objectType"
+                        and queued."objectKey" = input."objectKey"
+                where queued.status = 'pending'
+                        and queued."dependencyReady" is true
+                        and queued."executionDisposition" = 'executable'
+        ), ready as (
+                insert into "history_archive_object_ready" (
+                        "objectRemoteId", "archiveUrlIdentity", priority,
+                        "availableAt", "createdAt", "updatedAt"
+                )
+                select target."remoteId", target."archiveUrlIdentity", 1,
+                        now(), now(), now()
+                from targets target
+                order by target."archiveUrlIdentity", target."remoteId"
+                on conflict ("objectRemoteId") do update
+                set priority = least("history_archive_object_ready".priority, 1),
+                        "availableAt" = least(
+                                "history_archive_object_ready"."availableAt",
+                                excluded."availableAt"
+                        ),
+                        "updatedAt" = now()
+                where "history_archive_object_ready"."publishedAt" is null
+                returning "objectRemoteId"
+        ), deleted_plan as (
+                delete from "history_archive_object_plan" plan
+                using input
+                where plan."archiveUrlIdentity" = input."archiveUrlIdentity"
+                        and plan."objectType" = input."objectType"
+                        and plan."objectKey" = input."objectKey"
+                returning plan.id
+        )
+        select (select count(*) from targets)::integer as active,
+                (select count(*) from ready)::integer as ready
+`;
+
 export const historyArchivePlanPromotionSql = `
 	with recursive ${historyArchiveReadyRootActivityCtesSql}, plan_roots as (
 		(
@@ -295,6 +426,8 @@ export const historyArchivePlanPromotionSql = `
 			now(), now()
 		from "history_archive_object_plan" plan
 		join selected on selected.id = plan.id
+                order by plan."archiveUrlIdentity", plan."objectType",
+                        plan."objectKey", plan.id
                 on conflict ("archiveUrlIdentity", "objectType", "objectKey") do update
                 set "dependencyReady" =
                                 "history_archive_object_queue"."dependencyReady" is true

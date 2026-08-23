@@ -1,3 +1,4 @@
+import { createRequire } from 'node:module';
 import {
 	AckPolicy,
 	connect,
@@ -7,10 +8,10 @@ import {
 	ReplayPolicy,
 	RetentionPolicy,
 	StorageType,
-	type ConsumerInfo,
 	type JetStreamClient,
 	type JetStreamManager,
-	type NatsConnection
+	type NatsConnection,
+	type Subscription
 } from 'nats';
 import type { Logger } from 'logger';
 import type { HistoryArchiveBrokerConfig } from './HistoryArchiveBrokerConfig.js';
@@ -19,6 +20,28 @@ import {
 	HistoryArchiveBrokerFrontierRepository,
 	type HistoryArchiveBrokerJob
 } from '../../repositories/database/HistoryArchiveBrokerFrontierRepository.js';
+import { historyArchiveReadyNotificationChannel } from '../../repositories/database/HistoryArchiveObjectReadyQueue.js';
+
+interface PostgresNotification {
+	readonly channel: string;
+}
+
+interface PostgresNotificationClient {
+	connect(): Promise<void>;
+	end(): Promise<void>;
+	on(
+		event: 'notification',
+		listener: (notification: PostgresNotification) => void
+	): this;
+	on(event: 'error', listener: (error: Error) => void): this;
+	query(sql: string): Promise<unknown>;
+}
+
+const { Client: PostgresClient } = createRequire(import.meta.url)('pg') as {
+	Client: new (config: {
+		readonly connectionString: string;
+	}) => PostgresNotificationClient;
+};
 
 function isRecord(value: unknown): value is Record<string, unknown> {
 	return typeof value === 'object' && value !== null;
@@ -27,10 +50,6 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 function isNotFound(error: unknown): boolean {
 	if (!isRecord(error)) return false;
 	return error.code === '404' || error.status === 404;
-}
-
-function wait(delayMs: number): Promise<void> {
-	return new Promise((resolve) => setTimeout(resolve, delayMs));
 }
 
 function assertPublishableBrokerJob(job: HistoryArchiveBrokerJob): void {
@@ -101,8 +120,12 @@ export async function replayPublishedHistoryArchiveBrokerJobs(
 
 export class HistoryArchiveBrokerDispatcher {
 	private connection: NatsConnection | null = null;
+	private capacitySubscription: Subscription | null = null;
 	private jetStream: JetStreamClient | null = null;
 	private manager: JetStreamManager | null = null;
+	private readyListener: PostgresNotificationClient | null = null;
+	private wakeVersion = 0;
+	private readonly wakeWaiters = new Set<() => void>();
 	private stopping = false;
 
 	constructor(
@@ -113,28 +136,23 @@ export class HistoryArchiveBrokerDispatcher {
 
 	async run(): Promise<void> {
 		await this.initialize();
+		await this.initializeReadyListener();
 		while (!this.stopping) {
+			const observedWakeVersion = this.wakeVersion;
 			try {
+				await this.repository.ensureProofFrontier();
 				const capacity = await this.getAvailableCapacity();
 				if (capacity < 1) {
-					await wait(this.config.pollIntervalMs);
+					await this.waitForWork(observedWakeVersion);
 					continue;
 				}
-				let jobs = await this.repository.reserveJobs(
+				const jobs = await this.repository.reserveJobs(
 					Math.min(capacity, this.config.batchSize),
 					this.config.maximumPerHost,
 					this.config.maximumPriority
 				);
 				if (jobs.length === 0) {
-					await this.repository.ensureFrontier();
-					jobs = await this.repository.reserveJobs(
-						Math.min(capacity, this.config.batchSize),
-						this.config.maximumPerHost,
-						this.config.maximumPriority
-					);
-				}
-				if (jobs.length === 0) {
-					await wait(this.config.pollIntervalMs);
+					await this.waitForWork(observedWakeVersion);
 					continue;
 				}
 				await this.publish(jobs);
@@ -142,18 +160,71 @@ export class HistoryArchiveBrokerDispatcher {
 				this.logger.error('Archive broker dispatch iteration failed', {
 					errorMessage: error instanceof Error ? error.message : String(error)
 				});
-				await wait(this.config.pollIntervalMs);
+				await this.waitForWork(observedWakeVersion);
 			}
 		}
 	}
 
 	async close(): Promise<void> {
 		this.stopping = true;
+		this.signalWork();
+		const readyListener = this.readyListener;
+		this.readyListener = null;
+		if (readyListener !== null)
+			await readyListener.end().catch(() => undefined);
+		this.capacitySubscription?.unsubscribe();
+		this.capacitySubscription = null;
 		const connection = this.connection;
 		this.connection = null;
 		this.jetStream = null;
 		this.manager = null;
 		if (connection !== null) await connection.drain();
+	}
+
+	private async initializeReadyListener(): Promise<void> {
+		const connectionString = process.env.ACTIVE_DATABASE_URL;
+		if (!connectionString)
+			throw new Error('ACTIVE_DATABASE_URL is required for broker wake events');
+		const listener = new PostgresClient({ connectionString });
+		listener.on('notification', (notification: PostgresNotification) => {
+			if (notification.channel === historyArchiveReadyNotificationChannel)
+				this.signalWork();
+		});
+		listener.on('error', (error: Error) => {
+			this.logger.error('Archive broker ready listener failed', {
+				errorMessage: error.message
+			});
+			this.signalWork();
+		});
+		try {
+			await listener.connect();
+			await listener.query('listen ' + historyArchiveReadyNotificationChannel);
+			this.readyListener = listener;
+		} catch (error) {
+			await listener.end().catch(() => undefined);
+			throw error;
+		}
+	}
+
+	private signalWork(): void {
+		this.wakeVersion++;
+		const waiters = [...this.wakeWaiters];
+		for (const resolve of waiters) resolve();
+	}
+
+	private async waitForWork(observedWakeVersion: number): Promise<void> {
+		if (this.stopping || this.wakeVersion !== observedWakeVersion) return;
+		await new Promise<void>((resolve) => {
+			let timer: NodeJS.Timeout | undefined;
+			const finish = (): void => {
+				if (!this.wakeWaiters.delete(finish)) return;
+				if (timer !== undefined) clearTimeout(timer);
+				resolve();
+			};
+			this.wakeWaiters.add(finish);
+			timer = setTimeout(finish, this.config.pollIntervalMs);
+			if (this.stopping || this.wakeVersion !== observedWakeVersion) finish();
+		});
 	}
 
 	private async initialize(): Promise<void> {
@@ -170,6 +241,7 @@ export class HistoryArchiveBrokerDispatcher {
 			this.manager = manager;
 			await this.ensureStream(manager);
 			await this.ensureConsumer(manager);
+			this.listenForCapacity(connection);
 			await replayPublishedHistoryArchiveBrokerJobs(
 				jetStream,
 				this.repository,
@@ -184,6 +256,24 @@ export class HistoryArchiveBrokerDispatcher {
 			await connection.close();
 			throw error;
 		}
+	}
+
+	private listenForCapacity(connection: NatsConnection): void {
+		const subscription = connection.subscribe(
+			this.config.capacitySignalSubject
+		);
+		this.capacitySubscription = subscription;
+		void (async () => {
+			try {
+				for await (const _message of subscription) this.signalWork();
+			} catch (error) {
+				if (!this.stopping) {
+					this.logger.error('Archive broker capacity listener failed', {
+						errorMessage: error instanceof Error ? error.message : String(error)
+					});
+				}
+			}
+		})();
 	}
 
 	private async ensureStream(manager: JetStreamManager): Promise<boolean> {
@@ -238,14 +328,16 @@ export class HistoryArchiveBrokerDispatcher {
 
 	private async getAvailableCapacity(): Promise<number> {
 		const manager = this.requireManager();
-		const info: ConsumerInfo = await manager.consumers.info(
-			this.config.stream,
-			this.config.consumer
+		const [consumerInfo, streamInfo] = await Promise.all([
+			manager.consumers.info(this.config.stream, this.config.consumer),
+			manager.streams.info(this.config.stream)
+		]);
+		const occupied = Math.max(
+			consumerInfo.num_ack_pending + consumerInfo.num_pending,
+			streamInfo.state.messages
 		);
-		const occupied = info.num_ack_pending + info.num_pending;
 		return Math.max(0, this.config.highWatermark - occupied);
 	}
-
 
 	private async publish(
 		jobs: readonly HistoryArchiveBrokerJob[]

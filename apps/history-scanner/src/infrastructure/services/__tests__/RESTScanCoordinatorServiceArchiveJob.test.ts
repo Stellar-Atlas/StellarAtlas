@@ -40,7 +40,7 @@ describe('RESTScanCoordinatorService archive object claims', () => {
 		);
 	});
 
-	it('treats missing terminal object updates as already committed', async () => {
+	it('does not acknowledge missing terminal object updates', async () => {
 		const httpService = mock<HttpService>();
 		const service = new RESTScanCoordinatorService(
 			httpService,
@@ -78,12 +78,12 @@ describe('RESTScanCoordinatorService archive object claims', () => {
 			2
 		);
 
-		expect(failureResult.isOk()).toBe(true);
-		expect(completionResult.isOk()).toBe(true);
-		expect(releaseResult.isOk()).toBe(true);
+		expect(failureResult.isErr()).toBe(true);
+		expect(completionResult.isErr()).toBe(true);
+		expect(releaseResult.isErr()).toBe(true);
 	});
 
-	it('treats terminal-update HTTP 404 errors as already committed', async () => {
+	it('does not acknowledge terminal-update HTTP 404 errors', async () => {
 		const httpService = mock<HttpService>();
 		const service = new RESTScanCoordinatorService(
 			httpService,
@@ -119,9 +119,9 @@ describe('RESTScanCoordinatorService archive object claims', () => {
 			2
 		);
 
-		expect(failureResult.isOk()).toBe(true);
-		expect(completionResult.isOk()).toBe(true);
-		expect(releaseResult.isOk()).toBe(true);
+		expect(failureResult.isErr()).toBe(true);
+		expect(completionResult.isErr()).toBe(true);
+		expect(releaseResult.isErr()).toBe(true);
 	});
 
 	it('preserves unknown terminal-update 404 errors', async () => {

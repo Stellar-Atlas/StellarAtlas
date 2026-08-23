@@ -6,6 +6,7 @@ import type {
 } from '../../use-cases/verify-archive-objects/HistoryArchiveObjectJobDelivery.js';
 
 export interface NatsHistoryArchiveObjectJobSourceConfig {
+	readonly capacitySignalSubject: string;
 	readonly consumer: string;
 	readonly name: string;
 	readonly servers: readonly string[];
@@ -126,6 +127,7 @@ export class NatsHistoryArchiveObjectJobSource implements HistoryArchiveObjectJo
 				if (!acknowledged)
 					throw new Error('Archive broker acknowledgement timed out');
 				settled = true;
+				this.connection?.publish(this.config.capacitySignalSubject);
 			},
 			executionId: envelope.executionId,
 			heartbeat: async () => {

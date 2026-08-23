@@ -14,6 +14,10 @@ describe('HistoryArchiveRootTransitionLock', () => {
 		expect(historyArchiveObjectRootTransitionLockSql).toContain(
 			'hashtext(object."archiveUrlIdentity")'
 		);
+		expect(historyArchiveObjectRootTransitionLockSql).toContain(
+			'object."objectType" in'
+		);
+		expect(historyArchiveObjectRootTransitionLockSql).toContain("'checkpoint-state'");
 	});
 
 	it('locks a known root before a proof transition', async () => {

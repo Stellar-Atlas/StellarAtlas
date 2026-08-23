@@ -1,7 +1,6 @@
 import { availableParallelism } from 'node:os';
 import {
 	calculateHistoryArchiveObjectWorkerProcesses,
-	historyArchiveDownloadConcurrency,
 	historyArchiveWorkerSlotLimit,
 	resolveHistoryArchiveObjectWorkerCapacity
 } from 'history-scanner-dto';
@@ -101,8 +100,8 @@ export function createHistoryArchiveObjectClusterPlan(
 	const maximumActiveDownloads = readBoundedPositiveInteger(
 		env,
 		'HISTORY_OBJECT_DOWNLOAD_CONCURRENCY',
-		Math.min(historyArchiveDownloadConcurrency, totalWorkerSlots),
-		Math.min(historyArchiveDownloadConcurrency, totalWorkerSlots)
+		totalWorkerSlots,
+		totalWorkerSlots
 	);
 
 	return {

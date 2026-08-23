@@ -22,8 +22,7 @@ import {
 import { TYPES } from '../../infrastructure/di/di-types.js';
 import { mapUnknownToError } from '@core/utilities/mapUnknownToError.js';
 import { HistoryArchiveObjectEventRecorder } from '../record-history-archive-object-event/HistoryArchiveObjectEventRecorder.js';
-
-const immediateProofRefreshBatchSize = 192;
+import { parseTargetedProofRefreshBatchSize } from '../reconcile-history-archive-object-transitions/HistoryArchiveMaintenanceConfig.js';
 
 export interface CompleteHistoryArchiveObjectRequest extends HistoryArchiveObjectProgressUpdate {
 	readonly archiveMetadata?: ArchiveMetadataDTO | null;
@@ -32,11 +31,42 @@ export interface CompleteHistoryArchiveObjectRequest extends HistoryArchiveObjec
 export interface CompleteHistoryArchiveObjectReconciliationOptions {
 	readonly promotePlannedObjects?: boolean;
 }
+interface CheckpointFanoutWaiter {
+	readonly resolve: () => void;
+	readonly reject: (reason?: unknown) => void;
+}
+
+interface PendingCheckpointFanout {
+	readonly object: HistoryArchiveObject;
+	promotePlannedObjects: boolean;
+	readonly waiters: CheckpointFanoutWaiter[];
+}
+
+interface PendingObjectCompletion {
+	readonly remoteId: string;
+	readonly request: CompleteHistoryArchiveObjectRequest;
+	readonly resolve: (result: Result<boolean, Error>) => void;
+}
 
 @injectable()
 export class CompleteHistoryArchiveObject {
-	private proofCompletionEventRequested = false;
+	private readonly pendingCheckpointFanouts = new Map<
+		string,
+		PendingCheckpointFanout
+	>();
+	private checkpointFanoutEventRunning = false;
+	private readonly pendingObjectCompletions: PendingObjectCompletion[] = [];
+	private objectCompletionEventScheduled = false;
+	private objectCompletionEventsRunning = 0;
+	private readonly objectCompletionWriteConcurrency = 8;
+	private readonly objectCompletionWriteBatchSize = 64;
+	private readonly objectCompletionBatchDelayMs = 10;
+	private readonly pendingProofCompletionRemoteIds = new Set<string>();
 	private proofCompletionEventRunning = false;
+	private readonly immediateProofRefreshBatchSize =
+		parseTargetedProofRefreshBatchSize(
+			process.env.HISTORY_ARCHIVE_TARGETED_PROOF_REFRESH_BATCH_SIZE
+		);
 
 	constructor(
 		@inject(TYPES.HistoryArchiveObjectRepository)
@@ -52,29 +82,163 @@ export class CompleteHistoryArchiveObject {
 		remoteId: string,
 		request: CompleteHistoryArchiveObjectRequest
 	): Promise<Result<boolean, Error>> {
-		try {
-			const object = await this.objectRepository.findByRemoteId(remoteId);
-			if (object === null) return ok(false);
-			const progress = await this.prepareCompletionProgress(object, request);
-
-			const transitioned = await this.objectRepository.markObjectVerified(
+		return await new Promise((resolve) => {
+			this.pendingObjectCompletions.push({
 				remoteId,
-				progress
-			);
-			const verifiedObject =
-				await this.objectRepository.findByRemoteId(remoteId);
-			if (
-				verifiedObject === null ||
-				(!transitioned &&
-					!isAcceptedCompletionReplay(verifiedObject, request.claimAttempt))
-			) {
-				return ok(false);
-			}
+				request,
+				resolve
+			});
+			this.scheduleObjectCompletionEvent();
+		});
+	}
 
-			return ok(true);
-		} catch (e) {
-			return err(mapUnknownToError(e));
+	private scheduleObjectCompletionEvent(): void {
+		if (
+			this.objectCompletionEventScheduled ||
+			this.objectCompletionEventsRunning >=
+				this.objectCompletionWriteConcurrency
+		) {
+			return;
 		}
+		this.objectCompletionEventScheduled = true;
+		const delayMs =
+			this.pendingObjectCompletions.length >=
+			this.objectCompletionWriteBatchSize
+				? 0
+				: this.objectCompletionBatchDelayMs;
+		setTimeout(() => {
+			this.objectCompletionEventScheduled = false;
+			void this.drainObjectCompletionEvents();
+		}, delayMs);
+	}
+
+	private async drainObjectCompletionEvents(): Promise<void> {
+		if (
+			this.objectCompletionEventsRunning >=
+				this.objectCompletionWriteConcurrency ||
+			this.pendingObjectCompletions.length === 0
+		) {
+			return;
+		}
+		const batch = this.pendingObjectCompletions.splice(
+			0,
+			this.objectCompletionWriteBatchSize
+		);
+		this.objectCompletionEventsRunning++;
+		if (this.pendingObjectCompletions.length > 0) {
+			this.scheduleObjectCompletionEvent();
+		}
+		try {
+			let results: readonly Result<boolean, Error>[];
+			try {
+				results = await this.processObjectCompletionBatch(batch);
+			} catch (error) {
+				const failure = err<boolean, Error>(mapUnknownToError(error));
+				results = batch.map(() => failure);
+			}
+			for (let index = 0; index < batch.length; index++) {
+				batch[index]!.resolve(results[index] ?? ok(false));
+			}
+		} finally {
+			this.objectCompletionEventsRunning--;
+			if (this.pendingObjectCompletions.length > 0) {
+				this.scheduleObjectCompletionEvent();
+			}
+		}
+	}
+
+	private async processObjectCompletionBatch(
+		batch: readonly PendingObjectCompletion[]
+	): Promise<readonly Result<boolean, Error>[]> {
+		const remoteIds = [...new Set(batch.map((item) => item.remoteId))];
+		const objects = await this.objectRepository.findByRemoteIds(remoteIds);
+		const objectsByRemoteId = new Map(
+			objects.map((object) => [object.remoteId, object])
+		);
+		const results = batch.map((): Result<boolean, Error> => ok(false));
+		const prepared: {
+			readonly index: number;
+			readonly progress: HistoryArchiveObjectProgressUpdate;
+			readonly remoteId: string;
+		}[] = [];
+
+		for (let index = 0; index < batch.length; index++) {
+			const item = batch[index]!;
+			const object = objectsByRemoteId.get(item.remoteId);
+			if (object === undefined) continue;
+			try {
+				prepared.push({
+					index,
+					progress: await this.prepareCompletionProgress(object, item.request),
+					remoteId: item.remoteId
+				});
+			} catch (error) {
+				results[index] = err(mapUnknownToError(error));
+			}
+		}
+		if (prepared.length === 0) return results;
+
+		try {
+			const verified = await this.objectRepository.markObjectsVerified(
+				prepared.map(({ progress, remoteId }) => ({
+					progress,
+					remoteId
+				}))
+			);
+			const refreshRemoteIds = prepared
+				.filter((item) => {
+					const object = objectsByRemoteId.get(item.remoteId);
+					return (
+						!verified.has(item.remoteId) ||
+						object?.objectType === 'checkpoint-state'
+					);
+				})
+				.map((item) => item.remoteId);
+			const refreshed =
+				refreshRemoteIds.length === 0
+					? []
+					: await this.objectRepository.findByRemoteIds(refreshRemoteIds);
+			const refreshedByRemoteId = new Map(
+				refreshed.map((object) => [object.remoteId, object])
+			);
+			const checkpointFanouts: HistoryArchiveObject[] = [];
+			for (const item of prepared) {
+				const object =
+					refreshedByRemoteId.get(item.remoteId) ??
+					objectsByRemoteId.get(item.remoteId);
+				const claimAttempt = batch[item.index]!.request.claimAttempt;
+				const acceptedReplay =
+					object !== undefined &&
+					isAcceptedCompletionReplay(object, claimAttempt);
+				const superseded =
+					object !== undefined && object.attempts > claimAttempt;
+				const accepted =
+					verified.has(item.remoteId) || acceptedReplay || superseded;
+				results[item.index] = ok(accepted);
+				if (
+					(verified.has(item.remoteId) || acceptedReplay) &&
+					object !== undefined
+				) {
+					this.requestProofCompletionEvent(object);
+					if (object.objectType === 'checkpoint-state') {
+						checkpointFanouts.push(object);
+					}
+				}
+			}
+			if (checkpointFanouts.length > 0) {
+				await Promise.all(
+					checkpointFanouts.map((object) =>
+						this.requestCheckpointFanoutEvent(object, true)
+					)
+				);
+			}
+		} catch (error) {
+			const failure = err<boolean, Error>(mapUnknownToError(error));
+			for (const item of prepared) {
+				results[item.index] = failure;
+			}
+		}
+		return results;
 	}
 
 	async executeAndReconcile(
@@ -137,12 +301,6 @@ export class CompleteHistoryArchiveObject {
 			);
 		}
 		let createdPlans = false;
-		if (object.objectType === 'checkpoint-state') {
-			await this.objectRepository.materializeCheckpointDependencies(
-				object.remoteId
-			);
-			createdPlans = await this.reconcileCheckpointFanout(object);
-		}
 		if (descendants.length > 0) {
 			await this.objectRepository.planObjects(descendants);
 			createdPlans = true;
@@ -160,6 +318,12 @@ export class CompleteHistoryArchiveObject {
 			'verified'
 		);
 		this.requestProofCompletionEvent(object);
+		if (object.objectType === 'checkpoint-state') {
+			await this.requestCheckpointFanoutEvent(
+				object,
+				options.promotePlannedObjects !== false
+			);
+		}
 	}
 
 	async reconcileCheckpointDependencies(
@@ -190,6 +354,21 @@ export class CompleteHistoryArchiveObject {
 		}
 		await this.checkpointProofRepository.refreshForObject(persisted);
 	}
+	async reconcileCheckpointFanouts(
+		objects: readonly HistoryArchiveObject[]
+	): Promise<number> {
+		const eligible = objects.filter(
+			(object) =>
+				object.objectType === 'checkpoint-state' &&
+				object.status === 'verified' &&
+				object.descendantsPlannedAt === null
+		);
+		if (eligible.length === 0) return 0;
+		await Promise.all(
+			eligible.map((object) => this.requestCheckpointFanoutEvent(object, false))
+		);
+		return eligible.length;
+	}
 
 	async reconcileCheckpointFanout(
 		object: HistoryArchiveObject
@@ -213,6 +392,114 @@ export class CompleteHistoryArchiveObject {
 		return true;
 	}
 
+	private requestCheckpointFanoutEvent(
+		object: HistoryArchiveObject,
+		promotePlannedObjects: boolean
+	): Promise<void> {
+		if (
+			object.objectType !== 'checkpoint-state' ||
+			object.status !== 'verified' ||
+			object.descendantsPlannedAt !== null
+		) {
+			return Promise.resolve();
+		}
+
+		return new Promise<void>((resolve, reject) => {
+			const pending = this.pendingCheckpointFanouts.get(object.remoteId);
+			if (pending === undefined) {
+				this.pendingCheckpointFanouts.set(object.remoteId, {
+					object,
+					promotePlannedObjects,
+					waiters: [{ reject, resolve }]
+				});
+			} else {
+				pending.promotePlannedObjects ||= promotePlannedObjects;
+				pending.waiters.push({ reject, resolve });
+			}
+			this.scheduleCheckpointFanoutEvent();
+		});
+	}
+
+	private scheduleCheckpointFanoutEvent(): void {
+		if (this.checkpointFanoutEventRunning) return;
+		this.checkpointFanoutEventRunning = true;
+		setImmediate(() => {
+			void this.drainCheckpointFanoutEvents();
+		});
+	}
+
+	private async drainCheckpointFanoutEvents(): Promise<void> {
+		try {
+			while (this.pendingCheckpointFanouts.size > 0) {
+				const batch = [...this.pendingCheckpointFanouts.values()];
+				this.pendingCheckpointFanouts.clear();
+				try {
+					await this.processCheckpointFanoutBatch(batch);
+					for (const pending of batch) {
+						for (const waiter of pending.waiters) waiter.resolve();
+					}
+				} catch (error) {
+					for (const pending of batch) {
+						for (const waiter of pending.waiters) waiter.reject(error);
+					}
+				}
+			}
+		} finally {
+			this.checkpointFanoutEventRunning = false;
+			if (this.pendingCheckpointFanouts.size > 0) {
+				this.scheduleCheckpointFanoutEvent();
+			}
+		}
+	}
+
+	private async processCheckpointFanoutBatch(
+		batch: readonly PendingCheckpointFanout[]
+	): Promise<void> {
+		const remoteIds = batch.map((pending) => pending.object.remoteId);
+		if (remoteIds.length === 1) {
+			await this.objectRepository.materializeCheckpointDependencies(
+				remoteIds[0]
+			);
+		} else {
+			await this.objectRepository.materializeCheckpointDependencyBatch(
+				remoteIds
+			);
+		}
+
+		const built = await Promise.all(
+			batch.map(async (pending) => ({
+				descendants: await this.buildObjectsFromCheckpointArchiveMetadata(
+					pending.object,
+					pending.object.verificationFacts
+				),
+				pending
+			}))
+		);
+		const planned = built.filter((entry) => entry.descendants.length > 0);
+		if (planned.length === 0) return;
+
+		const descendants = planned.flatMap((entry) => entry.descendants);
+		const activateImmediately = planned.some(
+			(entry) => entry.pending.promotePlannedObjects
+		);
+		if (activateImmediately) {
+			await this.objectRepository.activateObjects(descendants);
+		} else {
+			await this.objectRepository.planObjects(descendants);
+		}
+		const plannedRemoteIds = planned.map(
+			(entry) => entry.pending.object.remoteId
+		);
+		if (plannedRemoteIds.length === 1) {
+			await this.objectRepository.markCheckpointDescendantsPlanned(
+				plannedRemoteIds[0]
+			);
+		} else {
+			await this.objectRepository.markCheckpointDescendantsPlannedBatch(
+				plannedRemoteIds
+			);
+		}
+	}
 	private requestProofCompletionEvent(object: HistoryArchiveObject): void {
 		if (
 			object.objectType !== 'ledger' &&
@@ -223,7 +510,7 @@ export class CompleteHistoryArchiveObject {
 		) {
 			return;
 		}
-		this.proofCompletionEventRequested = true;
+		this.pendingProofCompletionRemoteIds.add(object.remoteId);
 		if (this.proofCompletionEventRunning) return;
 		this.proofCompletionEventRunning = true;
 		setImmediate(() => {
@@ -235,23 +522,34 @@ export class CompleteHistoryArchiveObject {
 		try {
 			let proofQueueMayHaveMore = false;
 			do {
-				this.proofCompletionEventRequested = false;
+				const remoteIds = [...this.pendingProofCompletionRemoteIds];
+				this.pendingProofCompletionRemoteIds.clear();
 				proofQueueMayHaveMore = false;
 				try {
+					if (remoteIds.length > 0) {
+						await this.objectRepository.enqueueCheckpointProofRefreshes(
+							remoteIds
+						);
+					}
 					const refresh =
 						await this.objectRepository.drainCheckpointProofRefreshQueue(
-							immediateProofRefreshBatchSize,
+							this.immediateProofRefreshBatchSize,
 							1
 						);
 					proofQueueMayHaveMore =
-						refresh.claimed === immediateProofRefreshBatchSize;
+						refresh.claimed === this.immediateProofRefreshBatchSize;
 				} catch {
+					// Terminal object state is durable. The frontier reconciler
+					// recovers any enqueue missed by a process interruption.
 					continue;
 				}
-			} while (this.proofCompletionEventRequested || proofQueueMayHaveMore);
+			} while (
+				this.pendingProofCompletionRemoteIds.size > 0 ||
+				proofQueueMayHaveMore
+			);
 		} finally {
 			this.proofCompletionEventRunning = false;
-			if (this.proofCompletionEventRequested) {
+			if (this.pendingProofCompletionRemoteIds.size > 0) {
 				this.proofCompletionEventRunning = true;
 				setImmediate(() => {
 					void this.drainProofCompletionEvents();

@@ -77,6 +77,8 @@ import { HistoryArchiveSequentialProofChainMigration1785540000000 } from '@histo
 import { HistoryArchiveObjectReferenceIndexesMigration1785550000000 } from '@history-scan-coordinator/infrastructure/database/migrations/1785550000000-HistoryArchiveObjectReferenceIndexesMigration.js';
 import { HistoryArchiveReadyParallelismMigration1785560000000 } from '@history-scan-coordinator/infrastructure/database/migrations/1785560000000-HistoryArchiveReadyParallelismMigration.js';
 import { HistoryArchiveUnusedHostStatusIndexMigration1785570000000 } from '@history-scan-coordinator/infrastructure/database/migrations/1785570000000-HistoryArchiveUnusedHostStatusIndexMigration.js';
+import { HistoryArchiveCheckpointProofStatementRollupMigration1785580000000 } from '@history-scan-coordinator/infrastructure/database/migrations/1785580000000-HistoryArchiveCheckpointProofStatementRollupMigration.js';
+import { HistoryArchiveCheckpointProofStatementRollupCorrectionMigration1785590000000 } from '@history-scan-coordinator/infrastructure/database/migrations/1785590000000-HistoryArchiveCheckpointProofStatementRollupCorrectionMigration.js';
 
 // The production database was imported with a partial legacy migration ledger.
 // Explicit registration prevents TypeORM from replaying pre-baseline migrations.
@@ -159,5 +161,7 @@ export const managedMigrations = [
 	HistoryArchiveSequentialProofChainMigration1785540000000,
 	HistoryArchiveObjectReferenceIndexesMigration1785550000000,
 	HistoryArchiveReadyParallelismMigration1785560000000,
-	HistoryArchiveUnusedHostStatusIndexMigration1785570000000
+	HistoryArchiveUnusedHostStatusIndexMigration1785570000000,
+	HistoryArchiveCheckpointProofStatementRollupMigration1785580000000,
+	HistoryArchiveCheckpointProofStatementRollupCorrectionMigration1785590000000
 ] as const;

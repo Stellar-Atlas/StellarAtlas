@@ -156,6 +156,9 @@ export class FailHistoryArchiveObject {
 			object.attempts,
 			'failed'
 		);
+		await this.objectRepository.enqueueCheckpointProofRefreshes([
+			object.remoteId
+		]);
 	}
 }
 
@@ -199,6 +202,7 @@ function isAcceptedFailureReplay(
 	},
 	failure: HistoryArchiveObjectFailure
 ): boolean {
+	if (object.attempts > failure.claimAttempt) return true;
 	return (
 		object.status === 'failed' &&
 		object.attempts === failure.claimAttempt &&

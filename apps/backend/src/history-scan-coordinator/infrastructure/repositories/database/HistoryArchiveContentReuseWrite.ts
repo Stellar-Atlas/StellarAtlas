@@ -24,12 +24,23 @@ interface CompletionObjectRow {
 	readonly objectKey: string;
 	readonly objectType: HistoryArchiveObjectType;
 	readonly objectUrl: string;
+	readonly remoteId: string;
 	readonly verificationFacts: unknown;
 }
 
 export interface PreparedContentCompletion {
 	readonly progress: HistoryArchiveObjectProgressUpdate;
 	readonly reuse: HistoryArchiveContentReuseV1 | null;
+}
+
+export interface HistoryArchiveContentCompletionUpdate {
+	readonly remoteId: string;
+	readonly progress: HistoryArchiveObjectProgressUpdate;
+}
+
+export interface PreparedHistoryArchiveContentCompletion {
+	readonly remoteId: string;
+	readonly prepared: PreparedContentCompletion;
 }
 
 const digestPattern = /^[0-9a-f]{64}$/;
@@ -111,6 +122,138 @@ export async function prepareHistoryArchiveContentCompletion(
 		},
 		reuse
 	};
+}
+
+export async function prepareHistoryArchiveContentCompletions(
+	manager: EntityManager,
+	updates: readonly HistoryArchiveContentCompletionUpdate[]
+): Promise<readonly PreparedHistoryArchiveContentCompletion[]> {
+	const reuseUpdates = updates.filter(
+		(update) => update.progress.contentReuse !== undefined
+	);
+	for (const update of reuseUpdates) {
+		if (
+			update.progress.scheduler !== 'broker' ||
+			update.progress.executionId === undefined
+		) {
+			throw new Error('Content reuse requires an exact broker claim');
+		}
+	}
+	const rows =
+		reuseUpdates.length === 0
+			? []
+			: ((await manager.query(resolveReusableCompletionsSql, [
+					JSON.stringify(
+						reuseUpdates.map(({ progress, remoteId }) => ({
+							artifactId: progress.contentReuse!.artifactId,
+							claimAttempt: progress.claimAttempt,
+							contentDigest: progress.contentReuse!.contentDigest,
+							contentRepresentation:
+								progress.contentReuse!.contentRepresentation,
+							derivationVersion: progress.contentReuse!.derivationVersion,
+							executionId: progress.executionId!,
+							remoteId,
+							sourceObjectRemoteId: progress.contentReuse!.sourceObjectRemoteId
+						}))
+					)
+				])) as readonly (ArtifactRow & {
+					readonly objectType: HistoryArchiveObjectType;
+					readonly remoteId: string;
+				})[]);
+	const rowsByRemoteId = new Map(rows.map((row) => [row.remoteId, row]));
+
+	return updates.map(({ progress, remoteId }) => {
+		const reuse = progress.contentReuse;
+		if (reuse === undefined) {
+			return { prepared: { progress, reuse: null }, remoteId };
+		}
+		const row = rowsByRemoteId.get(remoteId);
+		if (row === undefined) {
+			throw new Error('Content reuse artifact does not match the active claim');
+		}
+		return {
+			prepared: {
+				progress: {
+					...progress,
+					verificationFacts: rehydrateSourceUrl(
+						row.objectType,
+						row.verificationFacts,
+						row.objectUrl
+					)
+				},
+				reuse
+			},
+			remoteId
+		};
+	});
+}
+
+export async function recordHistoryArchiveContentEvidenceBatch(
+	manager: EntityManager,
+	updates: readonly PreparedHistoryArchiveContentCompletion[]
+): Promise<void> {
+	const reuseUpdates = updates.filter(
+		(update) => update.prepared.reuse !== null
+	);
+	if (reuseUpdates.length > 0) {
+		await manager.query(insertReuseObservationsSql, [
+			JSON.stringify(
+				reuseUpdates.map(({ prepared, remoteId }) => ({
+					artifactId: prepared.reuse!.artifactId,
+					claimAttempt: prepared.progress.claimAttempt,
+					remoteId
+				}))
+			)
+		]);
+	}
+
+	const freshUpdates = updates.filter(
+		(update) =>
+			update.prepared.reuse === null &&
+			categoryObjectType(update.prepared.progress.verificationFacts) !== null
+	);
+	if (freshUpdates.length === 0) return;
+
+	const objects = (await manager.query(completionObjectsBatchSql, [
+		JSON.stringify(
+			freshUpdates.map(({ prepared, remoteId }) => ({
+				claimAttempt: prepared.progress.claimAttempt,
+				remoteId
+			}))
+		)
+	])) as readonly CompletionObjectRow[];
+	const freshArtifacts = objects.flatMap((object) => {
+		if (!reusableTypes.has(object.objectType)) return [];
+		const facts = sourceNeutralFacts(
+			object.objectType,
+			object.verificationFacts,
+			object.objectUrl
+		);
+		const content = requireRecord(facts.content, 'content');
+		const digest = requireDigest(content.digest);
+		if (
+			content.algorithm !== 'sha256' ||
+			content.representation !== 'uncompressed-xdr'
+		) {
+			throw new Error('Category content facts are not uncompressed SHA-256');
+		}
+		return [
+			{
+				checkpointLedger: toNullableInteger(object.checkpointLedger),
+				claimAttempt: toPositiveInteger(object.attempts, 'attempts'),
+				contentDigest: digest,
+				derivationVersion: historyArchiveContentDerivationVersionV1,
+				objectKey: object.objectKey,
+				objectType: object.objectType,
+				remoteId: object.remoteId,
+				verificationFacts: facts
+			}
+		];
+	});
+	if (freshArtifacts.length === 0) return;
+	await manager.query(recordFreshContentEvidenceBatchSql, [
+		JSON.stringify(freshArtifacts)
+	]);
 }
 
 export async function recordHistoryArchiveContentEvidence(
@@ -367,6 +510,182 @@ const findReusableContentSql = `
 	)
 	order by artifact."createdAt", artifact.id
 	limit 1
+`;
+
+const resolveReusableCompletionsSql = `
+        with input as materialized (
+                select *
+                from jsonb_to_recordset($1::jsonb) as input(
+                        "remoteId" uuid,
+                        "executionId" uuid,
+                        "claimAttempt" integer,
+                        "artifactId" uuid,
+                        "sourceObjectRemoteId" uuid,
+                        "contentDigest" text,
+                        "contentRepresentation" text,
+                        "derivationVersion" integer
+                )
+        )
+        select input."remoteId",
+                artifact.id as "artifactId",
+                artifact."sourceObjectRemoteId",
+                artifact."verificationFacts",
+                object."objectType",
+                object."objectUrl"
+        from input
+        join "history_archive_object_queue" object
+                on object."remoteId" = input."remoteId"
+        join "history_archive_object_ready" ready
+                on ready."objectRemoteId" = object."remoteId"
+                and ready."dispatchToken" = input."executionId"
+                and ready."claimAttempt" = input."claimAttempt"
+                and ready."publishedAt" is not null
+        join "history_archive_content_artifact" artifact
+                on artifact.id = input."artifactId"
+                and artifact."sourceObjectRemoteId" =
+                        input."sourceObjectRemoteId"
+                and artifact."objectType" = object."objectType"
+                and artifact."objectKey" = object."objectKey"
+                and artifact."checkpointLedger" is not distinct from
+                        object."checkpointLedger"
+                and artifact."contentDigest" = input."contentDigest"
+                and artifact."contentRepresentation" =
+                        input."contentRepresentation"
+                and artifact."derivationVersion" =
+                        input."derivationVersion"
+        where exists (
+                select 1
+                from "history_archive_content_observation" observation
+                where observation."artifactId" = artifact.id
+                        and observation."objectRemoteId" =
+                                artifact."sourceObjectRemoteId"
+                        and observation."claimAttempt" =
+                                artifact."sourceClaimAttempt"
+        )
+`;
+
+const completionObjectsBatchSql = `
+        with input as materialized (
+                select *
+                from jsonb_to_recordset($1::jsonb) as input(
+                        "remoteId" uuid,
+                        "claimAttempt" integer
+                )
+        )
+        select object."remoteId", object."objectType", object."objectKey",
+                object."checkpointLedger", object."objectUrl",
+                object.attempts, object."verificationFacts"
+        from input
+        join "history_archive_object_queue" object
+                on object."remoteId" = input."remoteId"
+                and object.status = 'verified'
+                and object.attempts = input."claimAttempt"
+`;
+
+const insertReuseObservationsSql = `
+        with input as materialized (
+                select *
+                from jsonb_to_recordset($1::jsonb) as input(
+                        "remoteId" uuid,
+                        "artifactId" uuid,
+                        "claimAttempt" integer
+                )
+        )
+        insert into "history_archive_content_observation" (
+                "objectRemoteId", "artifactId", "claimAttempt"
+        )
+        select input."remoteId", input."artifactId", input."claimAttempt"
+        from input
+        on conflict ("objectRemoteId", "claimAttempt") do nothing
+`;
+
+const recordFreshContentEvidenceBatchSql = `
+        with input as materialized (
+                select *
+                from jsonb_to_recordset($1::jsonb) as input(
+                        "remoteId" uuid,
+                        "objectType" text,
+                        "objectKey" text,
+                        "checkpointLedger" integer,
+                        "contentDigest" text,
+                        "derivationVersion" integer,
+                        "verificationFacts" jsonb,
+                        "claimAttempt" integer
+                )
+        ), artifact_inputs as materialized (
+                select distinct on (
+                        input."objectType", input."objectKey",
+                        input."contentDigest", input."derivationVersion"
+                )
+                        input.*
+                from input
+                order by input."objectType", input."objectKey",
+                        input."contentDigest", input."derivationVersion",
+                        input."remoteId"
+        ), inserted as materialized (
+                insert into "history_archive_content_artifact" (
+                        "objectType", "objectKey", "checkpointLedger",
+                        "contentDigest", "contentRepresentation",
+                        "derivationVersion", "verificationFacts",
+                        "sourceObjectRemoteId", "sourceClaimAttempt"
+                )
+                select artifact_input."objectType",
+                        artifact_input."objectKey",
+                        artifact_input."checkpointLedger",
+                        artifact_input."contentDigest",
+                        'uncompressed-xdr',
+                        artifact_input."derivationVersion",
+                        artifact_input."verificationFacts",
+                        artifact_input."remoteId",
+                        artifact_input."claimAttempt"
+                from artifact_inputs artifact_input
+                on conflict (
+                        "objectType", "objectKey", "contentDigest",
+                        "contentRepresentation", "derivationVersion"
+                ) do nothing
+                returning id, "objectType", "objectKey", "contentDigest",
+                        "derivationVersion"
+        ), resolved_artifacts as materialized (
+                select inserted.id, inserted."objectType", inserted."objectKey",
+                        inserted."contentDigest", inserted."derivationVersion"
+                from inserted
+                union all
+                select artifact.id, artifact."objectType", artifact."objectKey",
+                        artifact."contentDigest", artifact."derivationVersion"
+                from artifact_inputs artifact_input
+                join "history_archive_content_artifact" artifact
+                        on artifact."objectType" = artifact_input."objectType"
+                        and artifact."objectKey" = artifact_input."objectKey"
+                        and artifact."contentDigest" =
+                                artifact_input."contentDigest"
+                        and artifact."contentRepresentation" =
+                                'uncompressed-xdr'
+                        and artifact."derivationVersion" =
+                                artifact_input."derivationVersion"
+                where not exists (
+                        select 1
+                        from inserted
+                        where inserted."objectType" =
+                                        artifact_input."objectType"
+                                and inserted."objectKey" =
+                                        artifact_input."objectKey"
+                                and inserted."contentDigest" =
+                                        artifact_input."contentDigest"
+                                and inserted."derivationVersion" =
+                                        artifact_input."derivationVersion"
+                )
+        )
+        insert into "history_archive_content_observation" (
+                "objectRemoteId", "artifactId", "claimAttempt"
+        )
+        select input."remoteId", artifact.id, input."claimAttempt"
+        from input
+        join resolved_artifacts artifact
+                on artifact."objectType" = input."objectType"
+                and artifact."objectKey" = input."objectKey"
+                and artifact."contentDigest" = input."contentDigest"
+                and artifact."derivationVersion" = input."derivationVersion"
+        on conflict ("objectRemoteId", "claimAttempt") do nothing
 `;
 
 const resolveReusableCompletionSql = `

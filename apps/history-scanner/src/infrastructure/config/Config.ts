@@ -37,6 +37,7 @@ export interface Config {
 	historyArchiveObjectJobSource: 'nats' | 'legacy-http';
 	natsArchiveJobConsumer: string;
 	natsArchiveJobStream: string;
+	natsArchiveJobSubject: string;
 	natsServers: readonly string[];
 	natsToken: string | undefined;
 	historyArchiveIoPressureAdmission: HistoryArchiveIoPressureAdmissionConfig;
@@ -72,6 +73,7 @@ const defaultConfig = {
 	historyArchiveObjectJobSource: 'legacy-http' as const,
 	natsArchiveJobConsumer: 'stellaratlas-history-object-workers',
 	natsArchiveJobStream: 'STELLARATLAS_HISTORY_OBJECTS',
+	natsArchiveJobSubject: 'stellaratlas.history.object.verify',
 	natsServers: ['nats://127.0.0.1:4222'] as const,
 	historyArchiveIoPressureAdmission: {
 		enabled: false,
@@ -394,6 +396,9 @@ export function getConfigFromEnv(): Result<Config, Error> {
 			defaultConfig.natsArchiveJobConsumer,
 		natsArchiveJobStream:
 			process.env.NATS_ARCHIVE_JOB_STREAM ?? defaultConfig.natsArchiveJobStream,
+		natsArchiveJobSubject:
+			process.env.NATS_ARCHIVE_JOB_SUBJECT ??
+			defaultConfig.natsArchiveJobSubject,
 		natsServers,
 		natsToken,
 		historyArchiveIoPressureAdmission: ioPressureAdmissionResult.value

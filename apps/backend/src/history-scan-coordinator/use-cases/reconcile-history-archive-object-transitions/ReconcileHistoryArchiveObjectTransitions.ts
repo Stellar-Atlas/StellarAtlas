@@ -1,21 +1,23 @@
 import 'reflect-metadata';
 import { inject, injectable } from 'inversify';
 import type { Logger } from 'logger';
+import { historyArchiveConsumerCount } from '../../domain/history-archive-object/HistoryArchiveObjectPlanningPolicy.js';
 import type { HistoryArchiveObjectRepository } from '../../domain/history-archive-object/HistoryArchiveObjectRepository.js';
 import { TYPES } from '../../infrastructure/di/di-types.js';
 import { CompleteHistoryArchiveObject } from '../complete-history-archive-object/CompleteHistoryArchiveObject.js';
 import { FailHistoryArchiveObject } from '../fail-history-archive-object/FailHistoryArchiveObject.js';
 import {
 	historyArchiveMaintenanceIntervalsFromEnv,
-	historyArchiveMaintenanceLanesFromEnv
+	historyArchiveMaintenanceLanesFromEnv,
+	parseTargetedProofRefreshBatchSize
 } from './HistoryArchiveMaintenanceConfig.js';
+
+export { parseTargetedProofRefreshBatchSize };
 
 // Re-select priority frequently so completed proof-frontier objects do not wait
 // behind a long, stale transition batch.
-const defaultReconciliationBatchSize = 24;
-const maximumReconciliationBatchSize = 192;
-const defaultTargetedProofRefreshBatchSize = 1;
-const maximumTargetedProofRefreshBatchSize = 192;
+const defaultReconciliationBatchSize = historyArchiveConsumerCount;
+const maximumReconciliationBatchSize = historyArchiveConsumerCount;
 
 export function parseHistoryArchiveTransitionReconciliationBatchSize(
 	configuredBatchSize: string | undefined
@@ -26,19 +28,6 @@ export function parseHistoryArchiveTransitionReconciliationBatchSize(
 		return defaultReconciliationBatchSize;
 	}
 	return Math.min(parsedBatchSize, maximumReconciliationBatchSize);
-}
-
-export function parseTargetedProofRefreshBatchSize(
-	configuredBatchSize: string | undefined
-): number {
-	if (configuredBatchSize === undefined) {
-		return defaultTargetedProofRefreshBatchSize;
-	}
-	const parsed = Number(configuredBatchSize);
-	if (!Number.isSafeInteger(parsed) || parsed < 1) {
-		return defaultTargetedProofRefreshBatchSize;
-	}
-	return Math.min(parsed, maximumTargetedProofRefreshBatchSize);
 }
 
 interface ReconciliationOptions {
@@ -88,17 +77,22 @@ export class ReconcileHistoryArchiveObjectTransitions {
 		this.nextTargetedProofRefreshRunAt =
 			now + this.maintenanceIntervals.transitionReconciliationIntervalMs;
 
-		const result = await this.objectRepository.drainCheckpointProofRefreshQueue(
-			this.targetedProofRefreshBatchSize,
-			this.maintenanceLanes.targetedProofRefreshMaximumPriority
-		);
-		if (result.failed > 0) {
-			this.logger.error('Failed targeted checkpoint proof refresh', {
-				app: 'history-scan-coordinator',
-				claimed: result.claimed,
-				completed: result.completed,
-				failed: result.failed
-			});
+		for (;;) {
+			const result =
+				await this.objectRepository.drainCheckpointProofRefreshQueue(
+					this.targetedProofRefreshBatchSize,
+					this.maintenanceLanes.targetedProofRefreshMaximumPriority
+				);
+			if (result.failed > 0) {
+				this.logger.error('Failed targeted checkpoint proof refresh', {
+					app: 'history-scan-coordinator',
+					claimed: result.claimed,
+					completed: result.completed,
+					failed: result.failed
+				});
+			}
+			if (result.completed === 0) return;
+			await new Promise<void>((resolve) => setImmediate(resolve));
 		}
 	}
 
@@ -122,11 +116,21 @@ export class ReconcileHistoryArchiveObjectTransitions {
 					(await this.objectRepository.findVerifiedCheckpointsNeedingFanout(
 						this.reconciliationBatchSize
 					)) ?? [];
-				for (const checkpoint of fanoutCheckpoints) {
+				if (fanoutCheckpoints.length > 0) {
 					try {
-						await this.completeObject.reconcileCheckpointFanout(checkpoint);
+						if (fanoutCheckpoints.length === 1) {
+							await this.completeObject.reconcileCheckpointFanout(
+								fanoutCheckpoints[0]
+							);
+						} else {
+							await this.completeObject.reconcileCheckpointFanouts(
+								fanoutCheckpoints
+							);
+						}
 					} catch (error) {
-						this.logFailure(error, checkpoint, 'checkpoint fanout');
+						for (const checkpoint of fanoutCheckpoints) {
+							this.logFailure(error, checkpoint, 'checkpoint fanout');
+						}
 					}
 				}
 				if (this.maintenanceLanes.terminalTransitionReconciliationEnabled) {

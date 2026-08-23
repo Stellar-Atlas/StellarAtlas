@@ -1,88 +1,79 @@
 import type { Repository } from 'typeorm';
 import { HistoryArchiveObject } from '@history-scan-coordinator/domain/history-archive-object/HistoryArchiveObject.js';
-import type { HistoryArchiveObjectProgressUpdate } from '@history-scan-coordinator/domain/history-archive-object/HistoryArchiveObjectRepository.js';
-import { createVerifiedUpdate } from './HistoryArchiveObjectUpdateFactory.js';
+import type {
+	HistoryArchiveObjectProgressUpdate,
+	HistoryArchiveObjectVerificationUpdate
+} from '@history-scan-coordinator/domain/history-archive-object/HistoryArchiveObjectRepository.js';
 import {
 	createObjectFromRow,
 	extractRows,
 	type RawObjectQueryResult
 } from './HistoryArchiveObjectRowMapper.js';
 import { hasPostgresSqlState } from './PostgresError.js';
-import { enqueueHistoryArchiveCheckpointProofRefreshes } from './HistoryArchiveCheckpointProofRefreshQueue.js';
 import {
-	prepareHistoryArchiveContentCompletion,
-	recordHistoryArchiveContentEvidence
+	prepareHistoryArchiveContentCompletions,
+	type PreparedHistoryArchiveContentCompletion,
+	recordHistoryArchiveContentEvidenceBatch
 } from './HistoryArchiveContentReuseWrite.js';
 import { lockHistoryArchiveObjectRootTransition } from './HistoryArchiveRootTransitionLock.js';
-import { removeCompletedHistoryArchiveBrokerReadyRow } from './HistoryArchiveObjectReadyQueue.js';
 
 export async function markHistoryArchiveObjectVerified(
 	repository: Repository<HistoryArchiveObject>,
 	remoteId: string,
 	progress: HistoryArchiveObjectProgressUpdate
 ): Promise<boolean> {
-	if (progress.scheduler === 'broker' && progress.executionId === undefined)
-		return false;
-	return await repository.manager.transaction(async (manager) => {
-		const prepared = await prepareHistoryArchiveContentCompletion(
-			manager,
-			remoteId,
-			progress
-		);
-		const update = {
-			...createVerifiedUpdate(prepared.progress),
-			...(progress.scheduler === 'broker'
-				? { attempts: progress.claimAttempt }
-				: {})
-		};
-		await lockHistoryArchiveObjectRootTransition(manager, remoteId);
-		const query = manager
-			.createQueryBuilder()
-			.update(HistoryArchiveObject)
-			.set(update)
-			.where('"remoteId" = :remoteId', { remoteId });
-		if (progress.scheduler === 'broker') {
-			query.andWhere(
-				`exists (
-					select 1 from "history_archive_object_ready" ready
-					where ready."objectRemoteId" = :remoteId
-						and ready."dispatchToken" = :executionId
-						and ready."claimAttempt" = :claimAttempt
-				)
-				and (attempts < :claimAttempt
-				  or (attempts = :claimAttempt and status <> :verifiedStatus))`,
-				{
-					claimAttempt: progress.claimAttempt,
-					executionId: progress.executionId,
-					verifiedStatus: 'verified'
-				}
-			);
-		} else {
-			query
-				.andWhere('status = :status', { status: 'scanning' })
-				.andWhere('attempts = :claimAttempt', {
-					claimAttempt: progress.claimAttempt
-				});
-		}
-		const result = await query.execute();
-		if ((result.affected ?? 0) === 0) return false;
-		await recordHistoryArchiveContentEvidence(manager, remoteId, prepared);
-		if (progress.scheduler === 'broker') {
-			await removeCompletedHistoryArchiveBrokerReadyRow(
-				manager,
-				remoteId,
-				progress.executionId!,
-				progress.claimAttempt
-			);
-			return true;
-		}
+	return (
+		await markHistoryArchiveObjectsVerified(repository, [
+			{ progress, remoteId }
+		])
+	).has(remoteId);
+}
 
-		await clearClaimSlot(
-			manager.query.bind(manager),
-			remoteId,
-			progress.claimAttempt
+export async function markHistoryArchiveObjectsVerified(
+	repository: Repository<HistoryArchiveObject>,
+	updates: readonly HistoryArchiveObjectVerificationUpdate[]
+): Promise<ReadonlySet<string>> {
+	const unique = [
+		...new Map(updates.map((update) => [update.remoteId, update])).values()
+	].filter(
+		(update) =>
+			update.progress.scheduler !== 'broker' ||
+			update.progress.executionId !== undefined
+	);
+	if (unique.length === 0) return new Set();
+
+	return await repository.manager.transaction(async (manager) => {
+		const preparedUpdates: readonly PreparedHistoryArchiveContentCompletion[] =
+			await prepareHistoryArchiveContentCompletions(manager, unique);
+
+		const payload = JSON.stringify(
+			preparedUpdates.map(({ prepared, remoteId }) => {
+				const progress = prepared.progress;
+				return {
+					archiveMetadata: progress.archiveMetadata ?? null,
+					bytesDownloaded: progress.bytesDownloaded ?? null,
+					claimAttempt: progress.claimAttempt,
+					executionId: progress.executionId ?? null,
+					hasBytesDownloaded: progress.bytesDownloaded !== undefined,
+					hasVerificationFacts: progress.verificationFacts !== undefined,
+					remoteId,
+					scheduler: progress.scheduler ?? 'legacy',
+					verificationFacts: progress.verificationFacts ?? null,
+					workerStage: progress.workerStage ?? null
+				};
+			})
 		);
-		return true;
+		await manager.query(historyArchiveCompletionRootStateLocksSql, [payload]);
+		const rows = (await manager.query(historyArchiveObjectVerifiedBatchSql, [
+			payload
+		])) as readonly { readonly remoteId: string }[];
+		const verified = new Set(rows.map((row) => row.remoteId));
+
+		await recordHistoryArchiveContentEvidenceBatch(
+			manager,
+			preparedUpdates.filter((update) => verified.has(update.remoteId))
+		);
+		return verified;
 	});
 }
 
@@ -174,7 +165,6 @@ export async function markHistoryArchiveTransitionEffectsCompleted(
 			.andWhere('"transitionEffectsCompletedAt" is null')
 			.execute();
 		if ((result.affected ?? 0) === 0) return false;
-		await enqueueHistoryArchiveCheckpointProofRefreshes(manager, [remoteId]);
 		return true;
 	});
 }
@@ -197,6 +187,178 @@ function normalizeLimit(limit: number): number {
 	if (!Number.isSafeInteger(limit) || limit < 1) return 24;
 	return Math.min(limit, 240);
 }
+
+const historyArchiveCompletionInputSql = `
+        select *
+        from jsonb_to_recordset($1::jsonb) as input(
+                "remoteId" uuid,
+                "claimAttempt" integer,
+                "executionId" uuid,
+                scheduler text,
+                "bytesDownloaded" bigint,
+                "hasBytesDownloaded" boolean,
+                "hasVerificationFacts" boolean,
+                "verificationFacts" jsonb,
+                "workerStage" text,
+                "archiveMetadata" jsonb
+        )
+`;
+
+const historyArchiveCompletionRootStateLocksSql = `
+        with input as materialized (
+                ${historyArchiveCompletionInputSql}
+        ), roots as materialized (
+                select distinct object."archiveUrlIdentity"
+                from input
+                join "history_archive_object_queue" object
+                        on object."remoteId" = input."remoteId"
+                where object."objectType" = 'history-archive-state'
+        )
+        select pg_advisory_xact_lock(
+                1784950002,
+                hashtext(roots."archiveUrlIdentity")
+        )
+        from roots
+        order by roots."archiveUrlIdentity"
+`;
+
+const historyArchiveObjectVerifiedBatchSql = `
+        with input as materialized (
+                ${historyArchiveCompletionInputSql}
+        ), eligible as materialized (
+                select input.*
+                from input
+                join "history_archive_object_queue" object
+                        on object."remoteId" = input."remoteId"
+                where (
+                        input.scheduler = 'broker'
+                        and input."executionId" is not null
+                        and exists (
+                                select 1
+                                from "history_archive_object_ready" ready
+                                where ready."objectRemoteId" = input."remoteId"
+                                        and ready."dispatchToken" =
+                                                input."executionId"
+                                        and ready."claimAttempt" =
+                                                input."claimAttempt"
+                        )
+                        and (
+                                object.attempts < input."claimAttempt"
+                                or (
+                                        object.attempts = input."claimAttempt"
+                                        and object.status <> 'verified'
+                                )
+                        )
+                ) or (
+                        input.scheduler <> 'broker'
+                        and object.status = 'scanning'
+                        and object.attempts = input."claimAttempt"
+                )
+        ), updated as (
+                update "history_archive_object_queue" object
+                set "bytesDownloaded" = case
+                                when eligible."hasBytesDownloaded"
+                                        then eligible."bytesDownloaded"
+                                else object."bytesDownloaded"
+                        end,
+                        "verificationFacts" = case
+                                when eligible."hasVerificationFacts"
+                                        then eligible."verificationFacts"
+                                else object."verificationFacts"
+                        end,
+                        "workerStage" =
+                                coalesce(eligible."workerStage", 'verified'),
+                        "claimedAt" = null,
+                        "claimedByCommunityScannerId" = null,
+                        "completionArchiveMetadata" =
+                                eligible."archiveMetadata",
+                        "errorMessage" = null,
+                        "errorType" = null,
+                        "failureChannel" = null,
+                        "httpStatus" = null,
+                        "nextAttemptAt" = null,
+                        "refreshAfter" = case
+                                when object."objectType" =
+                                                'history-archive-state'
+                                        and object."objectKey" = 'root'
+                                then now() + interval '5 minutes'
+                                else object."refreshAfter"
+                        end,
+                        status = 'verified',
+                        attempts = case
+                                when eligible.scheduler = 'broker'
+                                        then eligible."claimAttempt"
+                                else object.attempts
+                        end,
+                        "transitionEffectsCompletedAt" = case
+                                when object."objectType" in (
+                                        'ledger', 'transactions', 'results', 'scp', 'bucket'
+                                ) then now()
+                                else null
+                        end,
+                        "transitionEffectsRequiredAt" = now(),
+                        "updatedAt" = now(),
+                        "verifiedAt" = now()
+                from eligible
+                where object."remoteId" = eligible."remoteId"
+                returning object."remoteId",
+                        eligible."claimAttempt",
+                        eligible."executionId",
+                        eligible.scheduler
+        ), verified_events as (
+                insert into "history_archive_object_event" (
+                        "objectRemoteId",
+                        "archiveUrl", "archiveUrlIdentity",
+                        "objectType", "objectKey", "objectUrl",
+                        "eventType", "workerStage",
+                        "checkpointLedger", "bucketHash", "bytesDownloaded",
+                        "claimAttempt", "verificationFacts"
+                )
+                select object."remoteId",
+                        object."archiveUrl", object."archiveUrlIdentity",
+                        object."objectType", object."objectKey", object."objectUrl",
+                        'verified', object."workerStage",
+                        object."checkpointLedger", object."bucketHash",
+                        object."bytesDownloaded", updated."claimAttempt",
+                        object."verificationFacts"
+                from updated
+                join "history_archive_object_queue" object
+                        on object."remoteId" = updated."remoteId"
+                where object."objectType" in (
+                        'ledger', 'transactions', 'results', 'scp', 'bucket'
+                )
+                        and not exists (
+                                select 1
+                                from "history_archive_object_event" event
+                                where event."objectRemoteId" = object."remoteId"
+                                        and event."eventType" = 'verified'
+                                        and event."claimAttempt" =
+                                                updated."claimAttempt"
+                        )
+                returning "objectRemoteId"
+        ), ready_deleted as (
+                delete from "history_archive_object_ready" ready
+                using updated
+                where updated.scheduler = 'broker'
+                        and ready."objectRemoteId" = updated."remoteId"
+                        and ready."dispatchToken" = updated."executionId"
+                        and ready."claimAttempt" = updated."claimAttempt"
+                returning ready."objectRemoteId"
+        ), claim_slots_cleared as (
+                update "history_archive_object_claim_slot" slot
+                set "objectRemoteId" = null,
+                        "claimAttempt" = null,
+                        "claimedAt" = null,
+                        "updatedAt" = now()
+                from updated
+                where updated.scheduler <> 'broker'
+                        and slot."objectRemoteId" = updated."remoteId"
+                        and slot."claimAttempt" = updated."claimAttempt"
+                returning slot.slot
+        )
+        select updated."remoteId"
+        from updated
+`;
 
 const staleReleaseSettingsSql = `
 	set local lock_timeout = '250ms';

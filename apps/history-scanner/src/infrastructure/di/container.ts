@@ -121,6 +121,7 @@ export function load(container: Container, config: Config) {
 		.toDynamicValue(() => {
 			if (config.historyArchiveObjectJobSource === 'nats') {
 				const source = new NatsHistoryArchiveObjectJobSource({
+					capacitySignalSubject: `${config.natsArchiveJobSubject}.capacity`,
 					consumer: config.natsArchiveJobConsumer,
 					name: `stellaratlas-history-scanner-${process.pid.toString()}`,
 					servers: config.natsServers,

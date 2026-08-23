@@ -96,10 +96,10 @@ describe('verify-archive-objects-cluster', () => {
 	it('rejects unbounded object worker process counts', () => {
 		expect(() =>
 			createHistoryArchiveObjectClusterPlan(
-				{ HISTORY_OBJECT_WORKER_PROCESSES: '32768' },
+				{ HISTORY_OBJECT_WORKER_PROCESSES: '32769' },
 				48
 			)
-		).toThrow('HISTORY_OBJECT_WORKER_PROCESSES must be between 1 and 256');
+		).toThrow('HISTORY_OBJECT_WORKER_PROCESSES must be between 1 and 32768');
 	});
 
 	it('rejects unbounded object hasher worker counts', () => {

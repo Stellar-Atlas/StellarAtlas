@@ -22,6 +22,7 @@ import {
 } from './HistoryArchiveObjectReadyQueue.js';
 import { hasPostgresSqlState } from './PostgresError.js';
 import { materializeCompactCheckpointPlans } from './HistoryArchiveCompactPlanning.js';
+import { materializeOrderedCheckpointPrefetch } from './HistoryArchiveCheckpointPrefetch.js';
 
 export { historyArchiveExecutionReconciliationLockName };
 
@@ -51,6 +52,7 @@ export async function reconcileHistoryArchiveObjectExecution(
 		if (lock?.locked !== true) return emptyResult();
 
 		await materializeCompactCheckpointPlans(manager);
+		await materializeOrderedCheckpointPrefetch(manager);
 		const canonicalAdmittedObjects = 0;
 		const readyState = await synchronizeHistoryArchiveReadyQueue(
 			manager,

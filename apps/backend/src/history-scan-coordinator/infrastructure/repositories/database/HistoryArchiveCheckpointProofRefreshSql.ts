@@ -99,7 +99,7 @@ function buildHistoryArchiveCheckpointProofRefreshSql(
 			on object."archiveUrlIdentity" = target."archiveUrlIdentity"
 			and object."checkpointLedger" = target."checkpointLedger"
 		group by target."archiveUrlIdentity", target."checkpointLedger"
-	), checkpoint_state_facts as (
+	), checkpoint_state_facts as materialized (
 		select
 			object."archiveUrlIdentity",
 			object."checkpointLedger",
@@ -216,7 +216,7 @@ function buildHistoryArchiveCheckpointProofRefreshSql(
 		where source."objectType" in ('transactions', 'results')
 		group by source."archiveUrlIdentity", source."checkpointLedger",
 			source."objectType", (fact->>'ledger')::bigint
-	), previous_boundary as (
+	), previous_boundary as materialized (
 		select
 			range."archiveUrlIdentity", range."checkpointLedger",
 			count(fact.value)::integer as boundary_fact_count,

@@ -13,10 +13,12 @@ import {
 	canonicalRuntimePriorityCtesSql,
 	historyArchiveReservationPrioritySql
 } from './HistoryArchiveCanonicalRuntimePrioritySql.js';
-import { historyArchiveExecutionReconciliationLockName } from './HistoryArchiveObjectExecutionReconciler.js';
 import { enqueueCurrentTerminalReadyCheckpointProofRefreshes } from './HistoryArchiveCheckpointProofRefreshQueue.js';
+import { materializeOrderedCheckpointPrefetch } from './HistoryArchiveCheckpointPrefetch.js';
+import { historyArchiveExecutionReconciliationLockName } from './HistoryArchiveObjectExecutionReconciler.js';
 
 const maximumArchiveSourceFrontierRows = 4_096;
+const terminalProofRecoveryIntervalMs = 1_000;
 
 export type { HistoryArchiveBrokerPriority } from '../../../domain/history-archive-object/HistoryArchiveBrokerPriority.js';
 
@@ -253,21 +255,39 @@ function mapAndOrderBrokerJobs(
 }
 
 export class HistoryArchiveBrokerFrontierRepository {
+	private nextTerminalProofRecoveryAt = 0;
+
 	constructor(private readonly dataSource: DataSource) {}
 
 	async ensureFrontier(): Promise<number> {
-		return await this.dataSource.transaction(async (manager) => {
+		const readyObjects = await this.dataSource.transaction(async (manager) => {
 			if (!(await this.tryTakeExecutionReconciliationLock(manager))) return 0;
-			await enqueueCurrentTerminalReadyCheckpointProofRefreshes(
-				manager,
-				maximumArchiveSourceFrontierRows
-			);
+			await materializeOrderedCheckpointPrefetch(manager);
 			const result = await synchronizeHistoryArchiveReadyQueue(
 				manager,
 				maximumArchiveSourceFrontierRows
 			);
 			return result.readyObjects;
 		});
+		await this.ensureProofFrontier();
+		return readyObjects;
+	}
+
+	async ensureProofFrontier(): Promise<void> {
+		const now = Date.now();
+		if (now < this.nextTerminalProofRecoveryAt) return;
+		this.nextTerminalProofRecoveryAt = now + terminalProofRecoveryIntervalMs;
+		try {
+			await this.dataSource.transaction(async (manager) => {
+				await enqueueCurrentTerminalReadyCheckpointProofRefreshes(
+					manager,
+					maximumArchiveSourceFrontierRows
+				);
+			});
+		} catch (error) {
+			this.nextTerminalProofRecoveryAt = 0;
+			throw error;
+		}
 	}
 
 	async reserveJobs(
@@ -277,7 +297,6 @@ export class HistoryArchiveBrokerFrontierRepository {
 	): Promise<readonly HistoryArchiveBrokerJob[]> {
 		if (limit < 1) return [];
 		return await this.dataSource.transaction(async (manager) => {
-			await this.takeExecutionReconciliationSharedLock(manager);
 			await this.takeDispatcherLock(manager);
 			const rows = (await manager.query(reserveBrokerJobsSql, [
 				Math.floor(limit),
@@ -303,7 +322,6 @@ export class HistoryArchiveBrokerFrontierRepository {
 	async markPublished(executionIds: readonly string[]): Promise<void> {
 		if (executionIds.length === 0) return;
 		await this.dataSource.transaction(async (manager) => {
-			await this.takeExecutionReconciliationSharedLock(manager);
 			await manager.query(
 				`update "history_archive_object_ready"
                                  set "publishedAt" = coalesce("publishedAt", now()),
@@ -323,14 +341,6 @@ export class HistoryArchiveBrokerFrontierRepository {
 			[historyArchiveExecutionReconciliationLockName]
 		)) as readonly { readonly locked?: boolean }[];
 		return lock?.locked === true;
-	}
-
-	private async takeExecutionReconciliationSharedLock(
-		manager: EntityManager
-	): Promise<void> {
-		await manager.query(`select pg_advisory_xact_lock_shared(hashtext($1))`, [
-			historyArchiveExecutionReconciliationLockName
-		]);
 	}
 
 	private async takeDispatcherLock(manager: EntityManager): Promise<void> {

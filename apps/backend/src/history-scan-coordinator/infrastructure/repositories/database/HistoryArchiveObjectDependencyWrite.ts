@@ -5,14 +5,31 @@ export async function materializeHistoryArchiveCheckpointDependencies(
 	repository: Repository<HistoryArchiveObject>,
 	remoteId: string
 ): Promise<number> {
+	return await materializeHistoryArchiveCheckpointDependencyBatch(repository, [
+		remoteId
+	]);
+}
+
+export async function materializeHistoryArchiveCheckpointDependencyBatch(
+	repository: Repository<HistoryArchiveObject>,
+	remoteIds: readonly string[]
+): Promise<number> {
+	const uniqueRemoteIds = [...new Set(remoteIds)].filter(
+		(remoteId) => remoteId.length > 0
+	);
+	if (uniqueRemoteIds.length === 0) return 0;
 	return await repository.manager.transaction(async (manager) => {
 		await manager.query(`set local lock_timeout = '2s'`);
 		await manager.query(`set local statement_timeout = '30s'`);
 		const inserted = (await manager.query(materializeDependenciesSql, [
-			remoteId
+			uniqueRemoteIds
 		])) as readonly unknown[];
-		await manager.query(activateCheckpointCategoryDependenciesSql, [remoteId]);
-		await manager.query(activateCheckpointBucketDependenciesSql, [remoteId]);
+		await manager.query(activateCheckpointCategoryDependenciesSql, [
+			uniqueRemoteIds
+		]);
+		await manager.query(activateCheckpointBucketDependenciesSql, [
+			uniqueRemoteIds
+		]);
 		return inserted.length;
 	});
 }
@@ -36,11 +53,14 @@ const materializeDependenciesSql = `
 	with checkpoint as (
 		select *
 		from "history_archive_object_queue"
-		where "remoteId" = $1::uuid
+                where "remoteId" = any($1::uuid[])
 			and "objectType" = 'checkpoint-state'
 			and status = 'verified'
 	), hashes as (
-		select distinct lower(hash.value) as "bucketHash"
+                select distinct checkpoint."remoteId",
+                        checkpoint."archiveUrlIdentity",
+                        checkpoint."checkpointLedger",
+                        lower(hash.value) as "bucketHash"
 		from checkpoint
 		cross join lateral jsonb_array_elements(
 			coalesce(
@@ -69,15 +89,15 @@ const materializeDependenciesSql = `
 		insert into "history_archive_checkpoint_bucket_dependency" (
 			"archiveUrlIdentity", "checkpointLedger", "bucketHash"
 		)
-		select checkpoint."archiveUrlIdentity", checkpoint."checkpointLedger",
+                select hashes."archiveUrlIdentity", hashes."checkpointLedger",
 			hashes."bucketHash"
-		from checkpoint cross join hashes
+                from hashes
 		on conflict do nothing
 		returning "bucketHash"
 	), marked as (
 		update "history_archive_object_queue" object
 		set "dependenciesMaterializedAt" = now()
-		where object."remoteId" = $1::uuid
+                where object."remoteId" = any($1::uuid[])
 			and object.status = 'verified'
 			and (
 				object."dependenciesMaterializedAt" is null
@@ -91,7 +111,7 @@ const materializeDependenciesSql = `
 const checkpointIdentitySql = `
 	select "archiveUrlIdentity", "checkpointLedger"
 	from "history_archive_object_queue"
-	where "remoteId" = $1::uuid
+        where "remoteId" = any($1::uuid[])
 		and "objectType" = 'checkpoint-state'
 		and status = 'verified'
 `;

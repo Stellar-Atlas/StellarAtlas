@@ -90,6 +90,11 @@ export interface HistoryArchiveObjectProgressUpdate {
 	readonly scheduler?: 'broker' | 'legacy';
 }
 
+export interface HistoryArchiveObjectVerificationUpdate {
+	readonly remoteId: string;
+	readonly progress: HistoryArchiveObjectProgressUpdate;
+}
+
 export interface HistoryArchiveObjectFailure {
 	readonly claimAttempt: number;
 	readonly errorMessage: string;
@@ -169,6 +174,9 @@ export interface HistoryArchiveObjectRepository {
 		limit: number,
 		maximumPriority: HistoryArchiveCheckpointProofRefreshPriority
 	): Promise<HistoryArchiveCheckpointProofRefreshDrainResult>;
+	enqueueCheckpointProofRefreshes(
+		remoteIds: readonly string[]
+	): Promise<number>;
 	claimNextObject(
 		supportedTypes: readonly HistoryArchiveObjectType[]
 	): Promise<HistoryArchiveObject | null>;
@@ -193,6 +201,9 @@ export interface HistoryArchiveObjectRepository {
 	): Promise<readonly HistoryArchiveVerifiedCheckpointObjectSource[]>;
 	findByRemoteId(remoteId: string): Promise<HistoryArchiveObject | null>;
 	findLatestActivityAt(): Promise<Date | null>;
+	findByRemoteIds(
+		remoteIds: readonly string[]
+	): Promise<readonly HistoryArchiveObject[]>;
 	findUnreconciledTransitions(
 		limit: number
 	): Promise<readonly HistoryArchiveObject[]>;
@@ -203,6 +214,9 @@ export interface HistoryArchiveObjectRepository {
 		limit: number
 	): Promise<readonly HistoryArchiveObject[]>;
 	markCheckpointDescendantsPlanned(remoteId: string): Promise<boolean>;
+	markCheckpointDescendantsPlannedBatch(
+		remoteIds: readonly string[]
+	): Promise<number>;
 	findOldestCheckpointLedgerByArchiveUrlIdentities(
 		archiveUrlIdentities: readonly string[]
 	): Promise<ReadonlyMap<string, number>>;
@@ -235,6 +249,9 @@ export interface HistoryArchiveObjectRepository {
 		remoteId: string,
 		progress?: HistoryArchiveObjectProgressUpdate
 	): Promise<boolean>;
+	markObjectsVerified(
+		updates: readonly HistoryArchiveObjectVerificationUpdate[]
+	): Promise<ReadonlySet<string>>;
 	markTransitionEffectsCompleted(
 		remoteId: string,
 		claimAttempt: number,
@@ -246,6 +263,10 @@ export interface HistoryArchiveObjectRepository {
 		work: () => Promise<void>
 	): Promise<void>;
 	materializeCheckpointDependencies(remoteId: string): Promise<number>;
+	materializeCheckpointDependencyBatch(
+		remoteIds: readonly string[]
+	): Promise<number>;
+	activateObjects(objects: readonly HistoryArchiveObject[]): Promise<number>;
 	planObjects(objects: readonly HistoryArchiveObject[]): Promise<number>;
 	promotePlannedObjects(): Promise<HistoryArchiveObjectPlanPromotionResult>;
 	reconcileDependencyReadiness(limit: number): Promise<number>;
