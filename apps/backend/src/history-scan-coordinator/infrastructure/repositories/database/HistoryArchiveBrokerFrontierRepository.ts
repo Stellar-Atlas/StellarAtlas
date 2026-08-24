@@ -261,7 +261,7 @@ export class HistoryArchiveBrokerFrontierRepository {
 
 	async ensureFrontier(): Promise<number> {
 		const readyObjects = await this.dataSource.transaction(async (manager) => {
-			if (!(await this.tryTakeExecutionReconciliationLock(manager))) return 0;
+			if (!(await this.tryTakeExecutionReconciliationLock(manager))) return null;
 			await materializeOrderedCheckpointPrefetch(manager);
 			const result = await synchronizeHistoryArchiveReadyQueue(
 				manager,
@@ -269,6 +269,7 @@ export class HistoryArchiveBrokerFrontierRepository {
 			);
 			return result.readyObjects;
 		});
+		if (readyObjects === null) return 0;
 		await this.ensureProofFrontier();
 		return readyObjects;
 	}
