@@ -28,6 +28,30 @@ export interface KnownArchiveCheckpointCountsV1 {
 	readonly verifiedCheckpoints: number;
 }
 
+export type KnownArchiveSequentialCoverageStatusV1 =
+	| 'advancing'
+	| 'blocked'
+	| 'caught-up'
+	| 'unavailable';
+
+export interface KnownArchiveSequentialCoverageBlockerV1 {
+	readonly checkpointLedger: number;
+	readonly errorType: string | null;
+	readonly httpStatus: number | null;
+	readonly objectType: HistoryArchiveObjectTypeV1;
+	readonly objectUrl: string;
+	readonly observedAt: string;
+}
+
+export interface KnownArchiveSequentialCoverageV1 {
+	readonly advertisedLatestCheckpointLedger: number | null;
+	readonly blockedCheckpointLedger: number | null;
+	readonly blocker: KnownArchiveSequentialCoverageBlockerV1 | null;
+	readonly lastContinuouslyVerifiedCheckpointLedger: number | null;
+	readonly nextCheckpointLedger: number | null;
+	readonly status: KnownArchiveSequentialCoverageStatusV1;
+}
+
 export interface KnownArchiveRootEvidenceV1 {
 	readonly archiveUrl: string;
 	readonly archiveUrlIdentity: string;
@@ -36,6 +60,7 @@ export interface KnownArchiveRootEvidenceV1 {
 	readonly nodePublicKeys: readonly string[];
 	readonly objects: KnownArchiveObjectCountsV1;
 	readonly scannerOwnedState: HistoryArchiveStateSnapshotV1 | null;
+	readonly sequentialCoverage: KnownArchiveSequentialCoverageV1;
 }
 
 export interface KnownArchiveVerifiedCopyV1 {

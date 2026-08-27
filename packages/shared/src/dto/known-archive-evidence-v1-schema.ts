@@ -15,6 +15,8 @@ import type {
 	KnownArchiveRemoteFailurePageV1,
 	KnownArchiveRemoteFailureV1,
 	KnownArchiveRootEvidenceV1,
+	KnownArchiveSequentialCoverageBlockerV1,
+	KnownArchiveSequentialCoverageV1,
 	KnownArchiveVerifiedCopySetV1,
 	KnownArchiveVerifiedCopyV1,
 	KnownArchiveWorkerIssuePageV1,
@@ -69,6 +71,62 @@ const KnownArchiveCheckpointCountsV1Schema: JSONSchemaType<KnownArchiveCheckpoin
 		additionalProperties: false
 	};
 
+const KnownArchiveSequentialCoverageBlockerV1Schema: JSONSchemaType<KnownArchiveSequentialCoverageBlockerV1> = {
+	type: 'object',
+	properties: {
+		checkpointLedger: { type: 'number' },
+		errorType: nullable({ type: 'string' }),
+		httpStatus: nullable({ type: 'number' }),
+		objectType: {
+			type: 'string',
+			enum: [
+				'history-archive-state',
+				'checkpoint-state',
+				'ledger',
+				'transactions',
+				'results',
+				'scp',
+				'bucket'
+			]
+		},
+		objectUrl: { type: 'string', format: 'uri' },
+		observedAt: { type: 'string', format: 'date-time' }
+	},
+	required: [
+		'checkpointLedger',
+		'errorType',
+		'httpStatus',
+		'objectType',
+		'objectUrl',
+		'observedAt'
+	],
+	additionalProperties: false
+};
+
+const KnownArchiveSequentialCoverageV1Schema: JSONSchemaType<KnownArchiveSequentialCoverageV1> = {
+	type: 'object',
+	properties: {
+		advertisedLatestCheckpointLedger: nullable({ type: 'number' }),
+		blockedCheckpointLedger: nullable({ type: 'number' }),
+		blocker: nullable(KnownArchiveSequentialCoverageBlockerV1Schema),
+		lastContinuouslyVerifiedCheckpointLedger: nullable({ type: 'number' }),
+		nextCheckpointLedger: nullable({ type: 'number' }),
+		status: {
+			type: 'string',
+			enum: ['advancing', 'blocked', 'caught-up', 'unavailable']
+		}
+	},
+	required: [
+		'advertisedLatestCheckpointLedger',
+		'blockedCheckpointLedger',
+		'blocker',
+		'lastContinuouslyVerifiedCheckpointLedger',
+		'nextCheckpointLedger',
+		'status'
+	],
+	additionalProperties: false
+};
+
 export const KnownArchiveRootEvidenceV1Schema: JSONSchemaType<KnownArchiveRootEvidenceV1> =
 	{
 		type: 'object',
@@ -79,7 +137,8 @@ export const KnownArchiveRootEvidenceV1Schema: JSONSchemaType<KnownArchiveRootEv
 			latestObjectAt: nullable({ type: 'string', format: 'date-time' }),
 			nodePublicKeys: { type: 'array', items: { type: 'string' } },
 			objects: KnownArchiveObjectCountsV1Schema,
-			scannerOwnedState: nullable(HistoryArchiveStateSnapshotV1Schema)
+			scannerOwnedState: nullable(HistoryArchiveStateSnapshotV1Schema),
+			sequentialCoverage: KnownArchiveSequentialCoverageV1Schema
 		},
 		required: [
 			'archiveUrl',
@@ -88,7 +147,8 @@ export const KnownArchiveRootEvidenceV1Schema: JSONSchemaType<KnownArchiveRootEv
 			'latestObjectAt',
 			'nodePublicKeys',
 			'objects',
-			'scannerOwnedState'
+			'scannerOwnedState',
+			'sequentialCoverage'
 		],
 		additionalProperties: false
 	};

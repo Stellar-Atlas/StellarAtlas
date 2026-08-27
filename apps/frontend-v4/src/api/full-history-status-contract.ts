@@ -39,6 +39,10 @@ const validateLedgerCloseMetaOutput = matches({
 
 const validateLedgerCloseMetaCoverage = matches({
 	batchCount: nonNegativeInteger,
+	contiguousFirstLedger: nullable(unsignedIntegerString),
+	contiguousLastLedger: nullable(unsignedIntegerString),
+	contiguousLedgerCount: unsignedIntegerString,
+	supplementalLedgerCount: unsignedIntegerString,
 	firstAvailableLedger: unsignedIntegerString,
 	firstLedger: nullable(unsignedIntegerString),
 	lastLedger: nullable(unsignedIntegerString),

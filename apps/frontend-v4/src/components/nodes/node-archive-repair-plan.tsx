@@ -117,11 +117,25 @@ function RepairActionGuidance({
 							) ?? 'not safely derivable'}
 						</code>
 					</dd>
-					<dt>Placement</dt>
+					<dt>
+						{action.reason === 'access-denied' ? 'Access repair' : 'Placement'}
+					</dt>
 					<dd>
-						Keep the existing object as a backup. Publish the verified bytes at
-						the same path using the archive backend&apos;s atomic promotion
-						method, preserving its access permissions and content headers.
+						{action.reason === 'access-denied' ? (
+							<>
+								Restore anonymous HTTP GET and HEAD access to this exact
+								case-sensitive path. If the storage provider masks absent keys
+								as HTTP 403, inspect the object inventory first; publish the
+								proof-bound replacement only when the key is actually absent.
+							</>
+						) : (
+							<>
+								Keep the existing object as a backup. Publish the verified bytes
+								at the same path using the archive backend&apos;s atomic
+								promotion method, preserving its access permissions and content
+								headers.
+							</>
+						)}
 					</dd>
 				</dl>
 			) : null}

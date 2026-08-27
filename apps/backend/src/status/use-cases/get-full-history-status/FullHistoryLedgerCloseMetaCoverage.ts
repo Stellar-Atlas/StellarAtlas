@@ -7,6 +7,10 @@ import {
 
 export interface FullHistoryLedgerCloseMetaCoverageDTO {
 	readonly batchCount: number;
+	readonly contiguousFirstLedger: string | null;
+	readonly contiguousLastLedger: string | null;
+	readonly contiguousLedgerCount: string;
+	readonly supplementalLedgerCount: string;
 	readonly firstAvailableLedger: string;
 	readonly firstLedger: string | null;
 	readonly lastLedger: string | null;
@@ -57,8 +61,21 @@ export async function readFullHistoryLedgerCloseMetaCoverage(
 	]);
 	const coverage = coverageRows[0];
 	if (coverage === undefined) return null;
+	const firstAvailableLedger = BigInt(coverage.firstAvailableLedger);
+	const nextLedger = BigInt(coverage.nextLedger);
+	const ledgerCount = BigInt(coverage.ledgerCount);
+	const contiguousLedgerCount = nextLedger - firstAvailableLedger;
+	const supplementalLedgerCount = ledgerCount - contiguousLedgerCount;
+	if (contiguousLedgerCount < 0n || supplementalLedgerCount < 0n)
+		throw invalidCoverage();
 	return {
 		batchCount: numberValue(coverage.batchCount),
+		contiguousFirstLedger:
+			contiguousLedgerCount === 0n ? null : firstAvailableLedger.toString(),
+		contiguousLastLedger:
+			contiguousLedgerCount === 0n ? null : (nextLedger - 1n).toString(),
+		contiguousLedgerCount: contiguousLedgerCount.toString(),
+		supplementalLedgerCount: supplementalLedgerCount.toString(),
 		firstAvailableLedger: coverage.firstAvailableLedger.toString(),
 		firstLedger: nullableString(coverage.firstLedger),
 		lastLedger: nullableString(coverage.lastLedger),
@@ -105,10 +122,17 @@ function dateValue(value: Date | string): Date {
 	return date;
 }
 
+function invalidCoverage(): Error {
+	return new Error('LedgerCloseMeta coverage counters are inconsistent');
+}
+
 const coverageSql = `
 	select watermark."first_available_ledger"::text as "firstAvailableLedger",
 		watermark."next_ledger"::text as "nextLedger",
-		watermark."updated_at" as "updatedAt",
+		greatest(
+			watermark."updated_at",
+			coalesce(max(batch."processed_at"), watermark."updated_at")
+		) as "updatedAt",
 		count(batch.id)::integer as "batchCount",
 		count(distinct batch."source_id")::integer as "sourceCount",
 		coalesce(sum(batch."ledger_count"), 0)::text as "ledgerCount",

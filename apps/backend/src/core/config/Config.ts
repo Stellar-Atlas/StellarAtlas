@@ -47,6 +47,7 @@ export interface Config {
 	sentryDSN: string | undefined;
 	ipStackAccessKey: string;
 	horizonUrl: Url;
+	horizonPublicUrl?: Url;
 	explorerTransactionFreshnessWindowMs: number;
 	rpcUrl?: Url;
 	failoverFrontendBaseUrl?: Url;
@@ -104,6 +105,7 @@ export class DefaultConfig implements Config {
 	userServicePassword?: string;
 	frontendBaseUrl?: string;
 	frontendRevalidateToken?: string;
+	horizonPublicUrl?: Url;
 	rpcUrl?: Url;
 	failoverFrontendBaseUrl?: Url;
 	failoverApiBaseUrl?: Url;
@@ -228,7 +230,8 @@ export function getConfigFromEnv(): Result<Config, Error> {
 	const explorerFreshnessWindow = parseExplorerTransactionFreshnessWindowMs(
 		process.env.EXPLORER_TRANSACTION_FRESHNESS_WINDOW_MS
 	);
-	if (explorerFreshnessWindow.isErr()) return err(explorerFreshnessWindow.error);
+	if (explorerFreshnessWindow.isErr())
+		return err(explorerFreshnessWindow.error);
 	config.explorerTransactionFreshnessWindowMs = explorerFreshnessWindow.value;
 
 	const env = process.env.NODE_ENV;
@@ -359,6 +362,12 @@ export function getConfigFromEnv(): Result<Config, Error> {
 	const rpcUrlResult = parseOptionalUrl(process.env.STELLAR_RPC_URL);
 	if (rpcUrlResult.isErr()) return err(rpcUrlResult.error);
 	config.rpcUrl = rpcUrlResult.value;
+
+	const horizonPublicUrlResult = parseOptionalUrl(
+		process.env.HORIZON_PUBLIC_URL
+	);
+	if (horizonPublicUrlResult.isErr()) return err(horizonPublicUrlResult.error);
+	config.horizonPublicUrl = horizonPublicUrlResult.value;
 
 	const failoverFrontendUrlResult = parseOptionalUrl(
 		process.env.FAILOVER_FRONTEND_BASE_URL

@@ -12,11 +12,13 @@ import {
 import { requeueStaleHistoryArchiveStateObjects } from './HistoryArchiveObjectStateRefreshQuery.js';
 import {
 	buildHistoryArchiveReadyPressureSql,
+	historyArchiveExecutionReconciliationLockName,
 	historyArchiveReadyRootActivityCtesSql,
 	notifyHistoryArchiveReadyWork,
 	synchronizeHistoryArchiveReadyQueue
 } from './HistoryArchiveObjectReadyQueue.js';
 import { historyArchiveObjectOpenSequentialCohortSql } from './HistoryArchiveSequentialChainSql.js';
+import { lockHistoryArchiveRootTransitions } from './HistoryArchiveRootTransitionLock.js';
 
 const planChunkSize = 200;
 const genesisCheckpointLedger = 63;
@@ -87,6 +89,13 @@ export async function activateHistoryArchiveObjects(
 		}))
 	);
 	return await repository.manager.transaction(async (manager) => {
+		await lockHistoryArchiveRootTransitions(
+			manager,
+			objects.map((object) => object.archiveUrlIdentity)
+		);
+		await manager.query('select pg_advisory_xact_lock(hashtext($1))', [
+			historyArchiveExecutionReconciliationLockName
+		]);
 		const [result] = (await manager.query(activateObjectsSql, [
 			payload
 		])) as readonly {

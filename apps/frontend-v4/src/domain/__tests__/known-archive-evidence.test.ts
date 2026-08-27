@@ -124,7 +124,15 @@ describe('known archive evidence', () => {
 			latestObjectAt: source.generatedAt,
 			nodePublicKeys: ['GNODE', 'GNODE'],
 			objects: source.totals.objects,
-			scannerOwnedState: null
+			scannerOwnedState: null,
+		sequentialCoverage: {
+			advertisedLatestCheckpointLedger: 127,
+			blockedCheckpointLedger: null,
+			blocker: null,
+			lastContinuouslyVerifiedCheckpointLedger: 63,
+			nextCheckpointLedger: 127,
+			status: 'advancing' as const
+		}
 		};
 		const archiveEvidence: PublicHistoryArchiveEvidence = {
 			archiveUrl: root.archiveUrl,

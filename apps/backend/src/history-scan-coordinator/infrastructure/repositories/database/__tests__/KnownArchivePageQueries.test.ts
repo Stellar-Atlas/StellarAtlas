@@ -37,16 +37,26 @@ describe('known archive page queries', () => {
 	it('preserves every requested root even when a root has no scanner rows', async () => {
 		const emptyCounts = {
 			activeObjects: '0',
+			advertisedLatestCheckpointLedger: null,
+			blockedCheckpointLedger: null,
+			blockerErrorType: null,
+			blockerHttpStatus: null,
+			blockerObjectType: null,
+			blockerObjectUrl: null,
+			blockerObservedAt: null,
 			bucketObjects: '0',
 			mismatchedCheckpoints: '0',
 			notEvaluableCheckpoints: '0',
+			nextCheckpointLedger: null,
 			pendingCheckpoints: '0',
 			pendingObjects: '0',
 			remoteFailureObjects: '0',
+			sequentialCoverageStatus: 'unavailable',
 			totalCheckpoints: '0',
 			totalObjects: '0',
 			verifiedBucketObjects: '0',
 			verifiedCheckpoints: '0',
+			lastContinuouslyVerifiedCheckpointLedger: null,
 			verifiedObjects: '0',
 			workerIssueObjects: '0'
 		};

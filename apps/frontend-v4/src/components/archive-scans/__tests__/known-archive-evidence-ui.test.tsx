@@ -381,7 +381,15 @@ function createEvidence(): PublicKnownNodeArchiveEvidence {
 					verifiedObjects: 0,
 					workerIssueObjects: 0
 				},
-				scannerOwnedState: null
+				scannerOwnedState: null,
+		sequentialCoverage: {
+			advertisedLatestCheckpointLedger: 127,
+			blockedCheckpointLedger: null,
+			blocker: null,
+			lastContinuouslyVerifiedCheckpointLedger: 63,
+			nextCheckpointLedger: 127,
+			status: 'advancing' as const
+		}
 			}
 		],
 		totals: {

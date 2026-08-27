@@ -405,6 +405,10 @@ export interface PublicFullHistoryCanonicalStateLinkageLifecycle {
 
 export interface PublicFullHistoryLedgerCloseMetaCoverage {
 	readonly batchCount: number;
+	readonly contiguousFirstLedger: string | null;
+	readonly contiguousLastLedger: string | null;
+	readonly contiguousLedgerCount: string;
+	readonly supplementalLedgerCount: string;
 	readonly firstAvailableLedger: string;
 	readonly firstLedger: string | null;
 	readonly lastLedger: string | null;

@@ -22,6 +22,17 @@ export async function markHistoryArchiveObjectFailed(
 		return false;
 	return await repository.manager.transaction(async (manager) => {
 		await lockHistoryArchiveObjectRootTransition(manager, remoteId);
+		if (failure.scheduler === 'broker') {
+			await manager.query(
+				`select ready."objectRemoteId"
+				 from "history_archive_object_ready" ready
+				 where ready."objectRemoteId" = $1::uuid
+				   and ready."dispatchToken" = $2::uuid
+				   and ready."claimAttempt" = $3::integer
+				 for update of ready`,
+				[remoteId, failure.executionId, failure.claimAttempt]
+			);
+		}
 		const update = {
 			...createFailedUpdate(failure),
 			...(failure.scheduler === 'broker'

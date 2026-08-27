@@ -1,6 +1,9 @@
 import { mock } from 'jest-mock-extended';
 import type { ExceptionLogger } from '@core/services/ExceptionLogger.js';
-import { HistoryArchiveCheckpointProof } from '../../../domain/history-archive-checkpoint-proof/HistoryArchiveCheckpointProof.js';
+import {
+	CURRENT_HISTORY_ARCHIVE_CHECKPOINT_PROOF_VERSION,
+	HistoryArchiveCheckpointProof
+} from '../../../domain/history-archive-checkpoint-proof/HistoryArchiveCheckpointProof.js';
 import type { HistoryArchiveCheckpointProofRepository } from '../../../domain/history-archive-checkpoint-proof/HistoryArchiveCheckpointProofRepository.js';
 import { HistoryArchiveObject } from '../../../domain/history-archive-object/HistoryArchiveObject.js';
 import type {
@@ -59,7 +62,7 @@ describe('GetHistoryArchiveRepairPlan', () => {
 							archiveUrl: 'https://other-history.example.com',
 							proof: expect.objectContaining({
 								kind: 'strict-checkpoint',
-								proofVersion: 7
+								proofVersion: CURRENT_HISTORY_ARCHIVE_CHECKPOINT_PROOF_VERSION
 							}),
 							objectUrl: expect.stringMatching(
 								/^https:\/\/other-history\.example\.com\//
@@ -91,7 +94,7 @@ describe('GetHistoryArchiveRepairPlan', () => {
 		]);
 		expect(
 			objectRepository.findVerifiedBucketSourcesByRemoteIds
-		).toHaveBeenCalledWith([bucketFailure.remoteId], 5);
+		).toHaveBeenCalledWith([bucketFailure.remoteId], 3);
 		expect(repairArtifacts.execute).toHaveBeenCalledWith([
 			{
 				bucketHash,
@@ -174,7 +177,7 @@ describe('GetHistoryArchiveRepairPlan', () => {
 								digest: '7'.repeat(64)
 							}),
 							kind: 'strict-checkpoint',
-							proofVersion: 7
+							proofVersion: CURRENT_HISTORY_ARCHIVE_CHECKPOINT_PROOF_VERSION
 						})
 					})
 				],
@@ -183,7 +186,8 @@ describe('GetHistoryArchiveRepairPlan', () => {
 					contentHash: expect.objectContaining({ digest: '7'.repeat(64) }),
 					downloadUrl:
 						'/v1/archive-scans/repair-artifacts/objects/' +
-						`${failure.remoteId}/${source.candidateRemoteId}/42/7/` +
+						`${failure.remoteId}/${Date.parse('2026-07-07T18:00:00.000Z')}/integrity/` +
+						`${source.candidateRemoteId}/42/${CURRENT_HISTORY_ARCHIVE_CHECKPOINT_PROOF_VERSION}/` +
 						`${Date.parse('2026-07-07T18:01:00.000Z')}/${'7'.repeat(64)}`,
 					status: 'verify-on-download'
 				}),
@@ -195,7 +199,7 @@ describe('GetHistoryArchiveRepairPlan', () => {
 		]);
 		expect(
 			objectRepository.findVerifiedCheckpointObjectSources
-		).toHaveBeenCalledWith([failure.remoteId], 5);
+		).toHaveBeenCalledWith([failure.remoteId], 3);
 	});
 
 	it('does not turn incomplete checkpoint proofs into repair actions', async () => {
@@ -381,7 +385,8 @@ function createCorruptTransactionsFailure(): HistoryArchiveObject {
 	);
 	object.checkpointLedger = 63355999;
 	object.errorType = 'transaction_hash_mismatch';
-	object.errorMessage = 'Transaction category content did not match checkpoint proof';
+	object.errorMessage =
+		'Transaction category content did not match checkpoint proof';
 	object.httpStatus = null;
 	return object;
 }
@@ -405,7 +410,7 @@ function createVerifiedBucketCopy(
 			'.xdr.gz',
 		proofEvaluatedAt: new Date('2026-07-07T18:01:00.000Z'),
 		proofId: 41,
-		proofVersion: 7,
+		proofVersion: CURRENT_HISTORY_ARCHIVE_CHECKPOINT_PROOF_VERSION,
 		targetRemoteId,
 		verifiedAt: new Date('2026-07-07T18:00:00.000Z')
 	};
@@ -427,7 +432,7 @@ function createVerifiedCheckpointSource(
 			'https://other-history.example.com/transactions/03/c1/dc/transactions-03c1dcbf.xdr.gz',
 		proofEvaluatedAt: new Date('2026-07-07T18:01:00.000Z'),
 		proofId: 42,
-		proofVersion: 7,
+		proofVersion: CURRENT_HISTORY_ARCHIVE_CHECKPOINT_PROOF_VERSION,
 		targetRemoteId,
 		verifiedAt: new Date('2026-07-07T18:00:00.000Z')
 	};

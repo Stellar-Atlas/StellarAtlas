@@ -20,7 +20,11 @@ export function isRepairCandidateObjectFailure(
 ): boolean {
 	return (
 		isRepairableObjectFailure(object) ||
-		isProofGatedMissingObjectFailure(object)
+		isProofGatedMissingObjectFailure(object) ||
+		(getRepairObjectEvidenceClass(object) === 'archive-object' &&
+			getRepairObjectFailureClass(object) === 'auth' &&
+			object.checkpointLedger !== null &&
+			object.objectType !== 'scp')
 	);
 }
 

@@ -22,7 +22,10 @@ import {
 import { TYPES } from '../../infrastructure/di/di-types.js';
 import { mapUnknownToError } from '@core/utilities/mapUnknownToError.js';
 import { HistoryArchiveObjectEventRecorder } from '../record-history-archive-object-event/HistoryArchiveObjectEventRecorder.js';
-import { parseTargetedProofRefreshBatchSize } from '../reconcile-history-archive-object-transitions/HistoryArchiveMaintenanceConfig.js';
+import {
+	historyArchiveCompletionWriteConfigFromEnv,
+	parseTargetedProofRefreshBatchSize
+} from '../reconcile-history-archive-object-transitions/HistoryArchiveMaintenanceConfig.js';
 
 export interface CompleteHistoryArchiveObjectRequest extends HistoryArchiveObjectProgressUpdate {
 	readonly archiveMetadata?: ArchiveMetadataDTO | null;
@@ -58,9 +61,8 @@ export class CompleteHistoryArchiveObject {
 	private readonly pendingObjectCompletions: PendingObjectCompletion[] = [];
 	private objectCompletionEventScheduled = false;
 	private objectCompletionEventsRunning = 0;
-	private readonly objectCompletionWriteConcurrency = 8;
-	private readonly objectCompletionWriteBatchSize = 64;
-	private readonly objectCompletionBatchDelayMs = 10;
+	private readonly objectCompletionWriteConfig =
+		historyArchiveCompletionWriteConfigFromEnv();
 	private readonly pendingProofCompletionRemoteIds = new Set<string>();
 	private proofCompletionEventRunning = false;
 	private readonly immediateProofRefreshBatchSize =
@@ -96,16 +98,16 @@ export class CompleteHistoryArchiveObject {
 		if (
 			this.objectCompletionEventScheduled ||
 			this.objectCompletionEventsRunning >=
-				this.objectCompletionWriteConcurrency
+				this.objectCompletionWriteConfig.concurrency
 		) {
 			return;
 		}
 		this.objectCompletionEventScheduled = true;
 		const delayMs =
 			this.pendingObjectCompletions.length >=
-			this.objectCompletionWriteBatchSize
+			this.objectCompletionWriteConfig.batchSize
 				? 0
-				: this.objectCompletionBatchDelayMs;
+				: this.objectCompletionWriteConfig.batchDelayMs;
 		setTimeout(() => {
 			this.objectCompletionEventScheduled = false;
 			void this.drainObjectCompletionEvents();
@@ -115,14 +117,14 @@ export class CompleteHistoryArchiveObject {
 	private async drainObjectCompletionEvents(): Promise<void> {
 		if (
 			this.objectCompletionEventsRunning >=
-				this.objectCompletionWriteConcurrency ||
+				this.objectCompletionWriteConfig.concurrency ||
 			this.pendingObjectCompletions.length === 0
 		) {
 			return;
 		}
 		const batch = this.pendingObjectCompletions.splice(
 			0,
-			this.objectCompletionWriteBatchSize
+			this.objectCompletionWriteConfig.batchSize
 		);
 		this.objectCompletionEventsRunning++;
 		if (this.pendingObjectCompletions.length > 0) {
@@ -354,6 +356,47 @@ export class CompleteHistoryArchiveObject {
 		}
 		await this.checkpointProofRepository.refreshForObject(persisted);
 	}
+	async reconcileCheckpointDependencyBatch(
+		objects: readonly HistoryArchiveObject[]
+	): Promise<number> {
+		const remoteIds = [
+			...new Set(
+				objects
+					.filter(
+						(object) =>
+							object.objectType === 'checkpoint-state' &&
+							object.status === 'verified'
+					)
+					.map((object) => object.remoteId)
+			)
+		];
+		if (remoteIds.length === 0) return 0;
+
+		const persisted = (
+			await this.objectRepository.findByRemoteIds(remoteIds)
+		).filter(
+			(object) =>
+				object.objectType === 'checkpoint-state' &&
+				object.status === 'verified' &&
+				(object.transitionEffectsRequiredAt === null ||
+					object.transitionEffectsCompletedAt !== null)
+		);
+		if (persisted.length === 0) return 0;
+
+		const dependenciesPending = persisted
+			.filter((object) => object.dependenciesMaterializedAt === null)
+			.map((object) => object.remoteId);
+		if (dependenciesPending.length > 0) {
+			await this.objectRepository.materializeCheckpointDependencyBatch(
+				dependenciesPending
+			);
+		}
+		await this.objectRepository.enqueueCheckpointProofRefreshes(
+			persisted.map((object) => object.remoteId)
+		);
+		return persisted.length;
+	}
+
 	async reconcileCheckpointFanouts(
 		objects: readonly HistoryArchiveObject[]
 	): Promise<number> {

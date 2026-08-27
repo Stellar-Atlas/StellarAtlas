@@ -35,7 +35,36 @@ export const knownArchiveEvidenceRootSql = `
 			as "mismatchedCheckpoints",
 		coalesce(proof."pendingCheckpointProofs", 0) as "pendingCheckpoints",
 		coalesce(proof."notEvaluableCheckpointProofs", 0)
-			as "notEvaluableCheckpoints"
+			as "notEvaluableCheckpoints",
+		advertised."latestCheckpointLedger" as "advertisedLatestCheckpointLedger",
+		case
+			when frontier.status in ('mismatch', 'not-evaluable')
+				and frontier."checkpointLedger" <= advertised."latestCheckpointLedger"
+				then frontier."checkpointLedger"
+			else null
+		end as "blockedCheckpointLedger",
+		coverage."lastContinuouslyVerifiedCheckpointLedger",
+		case
+			when frontier.status in ('mismatch', 'not-evaluable')
+				and frontier."checkpointLedger" <= advertised."latestCheckpointLedger"
+				then frontier."checkpointLedger"
+			else cursor."nextHistoricalCheckpointLedger"
+		end as "nextCheckpointLedger",
+		case
+			when state.status is distinct from 'available'
+				or advertised."latestCheckpointLedger" is null then 'unavailable'
+			when coverage."lastContinuouslyVerifiedCheckpointLedger" >=
+				advertised."latestCheckpointLedger" then 'caught-up'
+			when frontier.status in ('mismatch', 'not-evaluable')
+				and frontier."checkpointLedger" <= advertised."latestCheckpointLedger"
+				then 'blocked'
+			else 'advancing'
+		end as "sequentialCoverageStatus",
+		blocker."objectType" as "blockerObjectType",
+		blocker."objectUrl" as "blockerObjectUrl",
+		blocker."httpStatus" as "blockerHttpStatus",
+		blocker."errorType" as "blockerErrorType",
+		blocker."updatedAt" as "blockerObservedAt"
 	from requested_roots root
 	cross join summary_progress
 	left join history_archive_evidence_root_summary summary
@@ -44,6 +73,49 @@ export const knownArchiveEvidenceRootSql = `
 		on proof."archiveUrlIdentity" = root."archiveUrlIdentity"
 	left join history_archive_checkpoint_proof_attestation_rollup durable_proof
 		on durable_proof."archiveUrlIdentity" = root."archiveUrlIdentity"
+	left join history_archive_state_snapshot state
+		on state."archiveUrlIdentity" = root."archiveUrlIdentity"
+	left join history_archive_checkpoint_scan_cursor cursor
+		on cursor."archiveUrlIdentity" = root."archiveUrlIdentity"
+	left join history_archive_checkpoint_proof frontier
+		on frontier."archiveUrlIdentity" = root."archiveUrlIdentity"
+		and frontier."checkpointLedger" = cursor."nextHistoricalCheckpointLedger" - 64
+	left join lateral (
+		select case
+			when state.status <> 'available' or state."currentLedger" < 63 then null
+			else (floor((state."currentLedger" + 1)::numeric / 64) * 64 - 1)::integer
+		end as "latestCheckpointLedger"
+	) advertised on true
+	left join lateral (
+		select case
+			when cursor."nextHistoricalCheckpointLedger" is null
+				or cursor."nextHistoricalCheckpointLedger" = 63 then null
+			when frontier.status = 'verified'
+				then cursor."nextHistoricalCheckpointLedger" - 64
+			when cursor."nextHistoricalCheckpointLedger" <= 127 then null
+			else cursor."nextHistoricalCheckpointLedger" - 128
+		end as "lastContinuouslyVerifiedCheckpointLedger"
+	) coverage on true
+	left join lateral (
+		select candidate."objectType", candidate."objectUrl",
+			candidate."httpStatus", candidate."errorType", candidate."updatedAt"
+		from history_archive_object_queue candidate
+		where candidate."archiveUrlIdentity" = root."archiveUrlIdentity"
+			and candidate."checkpointLedger" = frontier."checkpointLedger"
+			and candidate."checkpointLedger" <= advertised."latestCheckpointLedger"
+			and candidate.status = 'failed'
+			and candidate."objectType" in (
+				'checkpoint-state', 'ledger', 'transactions', 'results', 'bucket'
+			)
+		order by case candidate."objectType"
+			when 'checkpoint-state' then 0
+			when 'ledger' then 1
+			when 'transactions' then 2
+			when 'results' then 3
+			else 4
+		end, candidate."updatedAt" desc, candidate.id desc
+		limit 1
+	) blocker on true
 	order by root."archiveUrlIdentity" asc
 `;
 

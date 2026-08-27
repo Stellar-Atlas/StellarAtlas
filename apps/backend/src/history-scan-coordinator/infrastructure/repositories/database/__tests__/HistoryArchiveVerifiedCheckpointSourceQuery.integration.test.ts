@@ -57,10 +57,15 @@ describe('verified checkpoint replacement source query', () => {
 			)
 		`);
 		const queryRunner = dataSource.createQueryRunner();
+		await queryRunner.startTransaction();
 		try {
 			await new HistoryArchiveCheckpointProofAttestationMigration1785420000000().up(
 				queryRunner
 			);
+			await queryRunner.commitTransaction();
+		} catch (error) {
+			await queryRunner.rollbackTransaction();
+			throw error;
 		} finally {
 			await queryRunner.release();
 		}
@@ -117,9 +122,6 @@ describe('verified checkpoint replacement source query', () => {
 			}),
 			proof(crossNetworkRoot, crossNetworkInputs)
 		]);
-		await dataSource.query(
-			`update history_archive_checkpoint_proof set status = 'pending'`
-		);
 
 		const result = await findVerifiedCheckpointObjectSources(
 			dataSource.manager,

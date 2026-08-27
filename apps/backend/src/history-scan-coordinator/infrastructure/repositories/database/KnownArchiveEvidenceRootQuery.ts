@@ -2,7 +2,10 @@ import type { EntityManager } from 'typeorm';
 import { ArchiveEvidenceReadModelUnavailableError } from '../../../domain/known-archive-evidence/ArchiveEvidenceReadModelUnavailableError.js';
 import type {
 	KnownArchiveCheckpointCountsV1,
-	KnownArchiveObjectCountsV1
+	HistoryArchiveObjectTypeV1,
+	KnownArchiveObjectCountsV1,
+	KnownArchiveSequentialCoverageStatusV1,
+	KnownArchiveSequentialCoverageV1
 } from 'shared';
 import type {
 	KnownArchiveRootReadModel,
@@ -29,14 +32,32 @@ type RootRow = {
 	readonly archiveUrlIdentity?: string;
 	readonly archiveurlidentity?: string;
 	readonly activeObjects?: NumericValue;
+	readonly advertisedLatestCheckpointLedger?: NumericValue;
+	readonly advertisedlatestcheckpointledger?: NumericValue;
 	readonly activeobjects?: NumericValue;
 	readonly bucketObjects?: NumericValue;
+	readonly blockedCheckpointLedger?: NumericValue;
+	readonly blockedcheckpointledger?: NumericValue;
+	readonly blockerErrorType?: string | null;
+	readonly blockererrortype?: string | null;
+	readonly blockerHttpStatus?: NumericValue;
+	readonly blockerhttpstatus?: NumericValue;
+	readonly blockerObjectType?: string | null;
+	readonly blockerobjecttype?: string | null;
+	readonly blockerObjectUrl?: string | null;
+	readonly blockerobjecturl?: string | null;
+	readonly blockerObservedAt?: Date | string | null;
+	readonly blockerobservedat?: Date | string | null;
 	readonly bucketobjects?: NumericValue;
 	readonly latestObjectAt?: Date | string | null;
+	readonly lastContinuouslyVerifiedCheckpointLedger?: NumericValue;
+	readonly lastcontinuouslyverifiedcheckpointledger?: NumericValue;
 	readonly latestobjectat?: Date | string | null;
 	readonly mismatchedCheckpoints?: NumericValue;
 	readonly mismatchedcheckpoints?: NumericValue;
 	readonly notEvaluableCheckpoints?: NumericValue;
+	readonly nextCheckpointLedger?: NumericValue;
+	readonly nextcheckpointledger?: NumericValue;
 	readonly notevaluablecheckpoints?: NumericValue;
 	readonly pendingCheckpoints?: NumericValue;
 	readonly pendingcheckpoints?: NumericValue;
@@ -45,6 +66,8 @@ type RootRow = {
 	readonly remoteFailureObjects?: NumericValue;
 	readonly remotefailureobjects?: NumericValue;
 	readonly rollupComplete?: boolean;
+	readonly sequentialCoverageStatus?: string;
+	readonly sequentialcoveragestatus?: string;
 	readonly rollupcomplete?: boolean;
 	readonly totalCheckpoints?: NumericValue;
 	readonly totalcheckpoints?: NumericValue;
@@ -149,7 +172,64 @@ function mapRootRow(
 		latestObjectAt: nullableDate(
 			latestObject?.latestObjectAt ?? latestObject?.latestobjectat
 		),
-		objects: mapObjectCounts(row, futureObjects)
+		objects: mapObjectCounts(row, futureObjects),
+		sequentialCoverage: mapSequentialCoverage(row)
+	};
+}
+
+function mapSequentialCoverage(row: RootRow): KnownArchiveSequentialCoverageV1 {
+	const blockedCheckpointLedger = nullableNumber(
+		row.blockedCheckpointLedger ?? row.blockedcheckpointledger,
+		'blockedCheckpointLedger'
+	);
+	const blockerObjectType = nullableObjectType(
+		row.blockerObjectType ?? row.blockerobjecttype
+	);
+	const blockerObjectUrl = nullableString(
+		row.blockerObjectUrl ?? row.blockerobjecturl,
+		'blockerObjectUrl'
+	);
+	const blockerObservedAt = nullableDate(
+		row.blockerObservedAt ?? row.blockerobservedat
+	);
+	return {
+		advertisedLatestCheckpointLedger: nullableNumber(
+			row.advertisedLatestCheckpointLedger ?? row.advertisedlatestcheckpointledger,
+			'advertisedLatestCheckpointLedger'
+		),
+		blockedCheckpointLedger,
+		blocker:
+			blockedCheckpointLedger === null ||
+			blockerObjectType === null ||
+			blockerObjectUrl === null ||
+			blockerObservedAt === null
+				? null
+				: {
+					checkpointLedger: blockedCheckpointLedger,
+					errorType: nullableString(
+						row.blockerErrorType ?? row.blockererrortype,
+						'blockerErrorType'
+					),
+					httpStatus: nullableNumber(
+						row.blockerHttpStatus ?? row.blockerhttpstatus,
+						'blockerHttpStatus'
+					),
+					objectType: blockerObjectType,
+					objectUrl: blockerObjectUrl,
+					observedAt: blockerObservedAt.toISOString()
+				},
+		lastContinuouslyVerifiedCheckpointLedger: nullableNumber(
+			row.lastContinuouslyVerifiedCheckpointLedger ??
+				row.lastcontinuouslyverifiedcheckpointledger,
+			'lastContinuouslyVerifiedCheckpointLedger'
+		),
+		nextCheckpointLedger: nullableNumber(
+			row.nextCheckpointLedger ?? row.nextcheckpointledger,
+			'nextCheckpointLedger'
+		),
+		status: requireCoverageStatus(
+			row.sequentialCoverageStatus ?? row.sequentialcoveragestatus
+		)
 	};
 }
 
@@ -267,4 +347,34 @@ function nullableDate(value: Date | string | null | undefined): Date | null {
 		);
 	}
 	return date;
+}
+function nullableNumber(value: NumericValue | undefined, field: string): number | null {
+	if (value === null || value === undefined) return null;
+	return requireNumber(value, field);
+}
+
+function nullableString(value: string | null | undefined, field: string): string | null {
+	if (value === null || value === undefined) return null;
+	return requireString(value, field);
+}
+
+function nullableObjectType(value: string | null | undefined): HistoryArchiveObjectTypeV1 | null {
+	if (value === null || value === undefined) return null;
+	if (
+		value === 'history-archive-state' ||
+		value === 'checkpoint-state' ||
+		value === 'ledger' ||
+		value === 'transactions' ||
+		value === 'results' ||
+		value === 'scp' ||
+		value === 'bucket'
+	) return value;
+	throw new Error('Known archive evidence root row has invalid blockerObjectType');
+}
+
+function requireCoverageStatus(value: string | undefined): KnownArchiveSequentialCoverageStatusV1 {
+	if (value === 'advancing' || value === 'blocked' || value === 'caught-up' || value === 'unavailable') {
+		return value;
+	}
+	throw new Error('Known archive evidence root row has invalid sequentialCoverageStatus');
 }

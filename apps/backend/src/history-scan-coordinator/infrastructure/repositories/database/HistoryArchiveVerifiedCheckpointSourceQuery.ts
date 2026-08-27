@@ -131,9 +131,32 @@ export const historyArchiveVerifiedCheckpointSourceSql = `
 				proof.id as "proofId",
 				proof."proofVersion"
 		from candidate_objects candidate
-		join history_archive_verified_checkpoint_proof_attestation proof
-			on proof."archiveUrlIdentity" =
-				candidate."archiveUrlIdentity"
+		join lateral (
+			select proof_snapshot.*
+			from (
+				select attestation."proofSnapshot"
+				from history_archive_checkpoint_proof_attestation attestation
+				where attestation."archiveUrlIdentity" =
+						candidate."archiveUrlIdentity"
+					and attestation."checkpointLedger" =
+						candidate."checkpointLedger"
+					and attestation.status = 'verified'
+					and attestation."proofVersion" =
+						${CURRENT_HISTORY_ARCHIVE_CHECKPOINT_PROOF_VERSION}
+					and not exists (
+						select 1
+						from history_archive_checkpoint_proof_attestation_invalidation invalidation
+						where invalidation."attestationId" = attestation.id
+					)
+				order by attestation."evaluatedAt" desc, attestation.id desc
+				limit 1
+			) latest_attestation
+			cross join lateral jsonb_populate_record(
+				null::history_archive_checkpoint_proof,
+				latest_attestation."proofSnapshot"
+			) proof_snapshot
+		) proof on
+			proof."archiveUrlIdentity" = candidate."archiveUrlIdentity"
 			and proof."checkpointLedger" = candidate."checkpointLedger"
 			and proof.status = 'verified'
 			and proof."proofVersion" =

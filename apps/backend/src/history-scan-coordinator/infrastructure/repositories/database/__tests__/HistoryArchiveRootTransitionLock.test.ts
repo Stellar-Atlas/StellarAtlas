@@ -8,16 +8,15 @@ import {
 
 describe('HistoryArchiveRootTransitionLock', () => {
 	it('uses the same per-root advisory-lock namespace as archive summaries', () => {
-		expect(historyArchiveRootTransitionLockSql).toContain('1784950001');
+                expect(historyArchiveRootTransitionLockSql).toContain('1784950002');
 		expect(historyArchiveRootTransitionLockSql).toContain('hashtext($1::text)');
-		expect(historyArchiveObjectRootTransitionLockSql).toContain('1784950001');
+                expect(historyArchiveObjectRootTransitionLockSql).toContain('1784950002');
 		expect(historyArchiveObjectRootTransitionLockSql).toContain(
 			'hashtext(object."archiveUrlIdentity")'
 		);
-		expect(historyArchiveObjectRootTransitionLockSql).toContain(
-			'object."objectType" in'
+		expect(historyArchiveObjectRootTransitionLockSql).not.toContain(
+			'object."objectType"'
 		);
-		expect(historyArchiveObjectRootTransitionLockSql).toContain("'checkpoint-state'");
 	});
 
 	it('locks a known root before a proof transition', async () => {

@@ -122,7 +122,40 @@ export class TypeOrmHistoryArchiveObjectRepository implements HistoryArchiveObje
 				archiveUrlIdentity
 			})
 			.andWhere('archiveObject.status = :status', { status: 'failed' })
-			.andWhere(historyArchiveRepairActionableObjectSql('archiveObject'))
+			.andWhere('archiveObject.objectType <> :optionalObjectType', {
+				optionalObjectType: 'scp'
+			})
+			.andWhere(
+				`(
+				"archiveObject"."checkpointLedger" is null
+				or "archiveObject"."checkpointLedger" <= coalesce((
+					select (
+						floor((state."currentLedger" + 1)::numeric / 64) * 64 - 1
+					)::integer
+					from history_archive_state_snapshot state
+					where state."archiveUrlIdentity" = :archiveUrlIdentity
+						and state.status = 'available'
+				), -1)
+			)`
+			)
+			.andWhere(
+				`(
+				(${historyArchiveRepairActionableObjectSql('archiveObject')})
+				or (
+					coalesce("archiveObject"."failureChannel", 'archive_evidence')
+						in ('archive_evidence', 'archive_availability')
+					and "archiveObject"."httpStatus" in (401, 403)
+					and "archiveObject"."objectType" in (
+						'checkpoint-state', 'ledger', 'transactions', 'results', 'bucket'
+					)
+					and "archiveObject"."checkpointLedger" = (
+						select cursor."nextHistoricalCheckpointLedger" - 64
+						from history_archive_checkpoint_scan_cursor cursor
+						where cursor."archiveUrlIdentity" = :archiveUrlIdentity
+					)
+				)
+			)`
+			)
 			.orderBy('archiveObject.updatedAt', 'DESC')
 			.addOrderBy('archiveObject.objectOrder', 'ASC')
 			.addOrderBy('archiveObject.objectKey', 'ASC')

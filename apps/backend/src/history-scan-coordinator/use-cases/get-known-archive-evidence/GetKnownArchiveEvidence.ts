@@ -101,7 +101,19 @@ export class GetKnownArchiveEvidence {
 						? null
 						: mapPublicArchiveState(
 								mapHistoryArchiveStateSnapshot(root.scannerOwnedState)
-							)
+							),
+				sequentialCoverage: {
+					...root.sequentialCoverage,
+					blocker:
+						root.sequentialCoverage.blocker === null
+							? null
+							: {
+								...root.sequentialCoverage.blocker,
+								objectUrl: requirePublicObjectUrl(
+									root.sequentialCoverage.blocker.objectUrl
+								)
+							}
+				}
 			}));
 			const objectRows = readModel.objectPage.objects.slice(
 				0,

@@ -7,7 +7,7 @@
 	"scripts": {
 		"prebuild": "pnpm --filter shared build && pnpm --filter history-scanner-dto build",
 		"build": "tsc --build tsconfig.json && pnpm -w rewrite:aliases apps/backend && pnpm post-build",
-                "build:force": "tsc --build tsconfig.json --force && pnpm -w rewrite:aliases apps/backend && pnpm post-build",
+		"build:force": "tsc --build tsconfig.json --force && pnpm -w rewrite:aliases apps/backend && pnpm post-build",
 		"post-build": "cp -R src/notifications/infrastructure/templates lib/notifications/infrastructure/templates",
 		"heroku-postbuild": "pnpm run build",
 		"build-and-scan-network": "pnpm run build; node lib/network-scan/infrastructure/cli/scan-network.js",
@@ -97,7 +97,8 @@
 		"@types/validator": "^13.15.10",
 		"@types/workerpool": "^6.4.7",
 		"@types/ws": "^8.18.1",
-		"reflect-metadata": "^0.2.2"
+		"reflect-metadata": "^0.2.2",
+		"supertest": "7.2.2"
 	},
 	"packageManager": "pnpm@10.12.1",
 	"engines": {

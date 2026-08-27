@@ -1,5 +1,6 @@
 import type { Repository } from 'typeorm';
 import type { HistoryArchiveObject } from '@history-scan-coordinator/domain/history-archive-object/HistoryArchiveObject.js';
+import { lockHistoryArchiveObjectRootTransitions } from './HistoryArchiveRootTransitionLock.js';
 
 export async function materializeHistoryArchiveCheckpointDependencies(
 	repository: Repository<HistoryArchiveObject>,
@@ -19,6 +20,7 @@ export async function materializeHistoryArchiveCheckpointDependencyBatch(
 	);
 	if (uniqueRemoteIds.length === 0) return 0;
 	return await repository.manager.transaction(async (manager) => {
+		await lockHistoryArchiveObjectRootTransitions(manager, uniqueRemoteIds);
 		await manager.query(`set local lock_timeout = '2s'`);
 		await manager.query(`set local statement_timeout = '30s'`);
 		const inserted = (await manager.query(materializeDependenciesSql, [

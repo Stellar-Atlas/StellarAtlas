@@ -171,9 +171,9 @@ describe('ReconcileHistoryArchiveObjectTransitions', () => {
 
 		await reconciler.executeIfDue(10_000);
 
-		expect(complete.reconcileCheckpointDependencies).toHaveBeenCalledWith(
+		expect(complete.reconcileCheckpointDependencyBatch).toHaveBeenCalledWith([
 			checkpoint
-		);
+		]);
 	});
 
 	it('reconciles terminal transitions before legacy dirty checkpoints', async () => {

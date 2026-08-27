@@ -94,7 +94,7 @@ export function toObjectRepairAction(
 		return [];
 	}
 	const proofGatedMissing = isProofGatedMissingObjectFailure(object);
-	if (proofGatedMissing && remoteCandidates.length === 0) return [];
+	if (proofGatedMissing && object.checkpointLedger === null) return [];
 
 	const kind = getObjectActionKind(object);
 	const repairArtifact = getRepairArtifact(
@@ -112,7 +112,6 @@ export function toObjectRepairAction(
 		source: remoteCandidates[0]
 	});
 	const replacementReady = repairManifest.status === 'ready';
-	if (proofGatedMissing && !replacementReady) return [];
 	return [
 		{
 			actionId,
@@ -293,6 +292,10 @@ function getBlockedObjectActionSummary(
 	object: HistoryArchiveObject,
 	remoteCandidates: readonly HistoryArchiveRemoteReplacementCandidate[] = []
 ): string {
+	if (getRepairObjectFailureClass(object) === 'auth') {
+		return getObjectActionSummary(object, getObjectActionKind(object));
+	}
+
 	if (remoteCandidates.length > 0) {
 		return 'A proof-bound source exists, but replacement bytes have not been locally reverified, so download remains blocked.';
 	}
@@ -377,6 +380,12 @@ function getObjectActionSummary(
 	object: HistoryArchiveObject,
 	kind: HistoryArchiveRepairActionKindV1
 ): string {
+	if (getRepairObjectFailureClass(object) === 'auth') {
+		return `Restore anonymous HTTP GET and HEAD access to the exact case-sensitive ${getObjectTypeLabel(
+			object.objectType
+		)} path for checkpoint ${object.checkpointLedger ?? 'unknown'}. If this storage backend masks absent keys as HTTP 403, publish the proof-bound replacement at that exact path after preserving the existing object as a backup.`;
+	}
+
 	if (object.errorType === 'checkpoint_state_ledger_mismatch') {
 		return `Checkpoint state file does not declare checkpoint ${object.checkpointLedger ?? 'unknown'}.`;
 	}

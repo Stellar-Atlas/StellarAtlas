@@ -79,6 +79,13 @@ async function mapRow(
 		row.archiveUrlIdentity ?? row.archiveurlidentity,
 		'archiveUrlIdentity'
 	);
+	const objectUrl = (
+		await urlPolicy.resolveObjectUrl(
+			row.objectUrl ?? row.objecturl,
+			archiveUrl,
+			archiveUrlIdentity
+		)
+	).url;
 	return {
 		anchorKind: requireAnchorKind(row.anchorKind ?? row.anchorkind),
 		archiveUrl,
@@ -98,11 +105,7 @@ async function mapRow(
 			row.corroboratingSourceCount ?? row.corroboratingsourcecount,
 			'corroboratingSourceCount'
 		),
-		objectUrl: await urlPolicy.requireObjectUrl(
-			row.objectUrl ?? row.objecturl,
-			archiveUrl,
-			archiveUrlIdentity
-		),
+		objectUrl,
 		proofEvaluatedAt: requireDate(
 			row.proofEvaluatedAt ?? row.proofevaluatedat,
 			'proofEvaluatedAt'

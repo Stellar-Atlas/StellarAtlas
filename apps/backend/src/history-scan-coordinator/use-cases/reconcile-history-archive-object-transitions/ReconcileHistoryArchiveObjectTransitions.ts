@@ -162,13 +162,15 @@ export class ReconcileHistoryArchiveObjectTransitions {
 						await this.objectRepository.findVerifiedCheckpointsNeedingReconciliation(
 							this.reconciliationBatchSize
 						);
-					for (const checkpoint of checkpoints) {
+					if (checkpoints.length > 0) {
 						try {
-							await this.completeObject.reconcileCheckpointDependencies(
-								checkpoint
+							await this.completeObject.reconcileCheckpointDependencyBatch(
+								checkpoints
 							);
 						} catch (error) {
-							this.logFailure(error, checkpoint, 'checkpoint dependencies');
+							for (const checkpoint of checkpoints) {
+								this.logFailure(error, checkpoint, 'checkpoint dependencies');
+							}
 						}
 					}
 				}

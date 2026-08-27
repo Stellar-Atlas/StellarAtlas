@@ -5,6 +5,12 @@ const minimumMaintenanceIntervalMs = 1_000;
 const maximumTargetedProofRefreshBatchSize = historyArchiveConsumerCount;
 const defaultTargetedProofRefreshBatchSize =
 	maximumTargetedProofRefreshBatchSize;
+const defaultCompletionWriteConcurrency = 1;
+const maximumCompletionWriteConcurrency = 32;
+const defaultCompletionWriteBatchSize = 64;
+const maximumCompletionWriteBatchSize = 512;
+const defaultCompletionWriteBatchDelayMs = 10;
+const maximumCompletionWriteBatchDelayMs = 1_000;
 
 export interface HistoryArchiveMaintenanceIntervals {
 	readonly executionAdmissionIntervalMs: number;
@@ -18,6 +24,34 @@ export interface HistoryArchiveMaintenanceLanes {
 	readonly terminalTransitionReconciliationEnabled: boolean;
 	readonly targetedProofRefreshEnabled: boolean;
 	readonly targetedProofRefreshMaximumPriority: 0 | 1;
+}
+
+export interface HistoryArchiveCompletionWriteConfig {
+	readonly batchDelayMs: number;
+	readonly batchSize: number;
+	readonly concurrency: number;
+}
+
+export function historyArchiveCompletionWriteConfigFromEnv(
+	env: NodeJS.ProcessEnv = process.env
+): HistoryArchiveCompletionWriteConfig {
+	return Object.freeze({
+		batchDelayMs: parseBoundedPositiveInteger(
+			env.HISTORY_ARCHIVE_COMPLETION_WRITE_BATCH_DELAY_MS,
+			defaultCompletionWriteBatchDelayMs,
+			maximumCompletionWriteBatchDelayMs
+		),
+		batchSize: parseBoundedPositiveInteger(
+			env.HISTORY_ARCHIVE_COMPLETION_WRITE_BATCH_SIZE,
+			defaultCompletionWriteBatchSize,
+			maximumCompletionWriteBatchSize
+		),
+		concurrency: parseBoundedPositiveInteger(
+			env.HISTORY_ARCHIVE_COMPLETION_WRITE_CONCURRENCY,
+			defaultCompletionWriteConcurrency,
+			maximumCompletionWriteConcurrency
+		)
+	});
 }
 
 export function historyArchiveMaintenanceIntervalsFromEnv(
@@ -89,6 +123,17 @@ export function parseHistoryArchiveMaintenanceIntervalMs(
 		configuredIntervalMs,
 		defaultTransitionReconciliationIntervalMs
 	);
+}
+
+function parseBoundedPositiveInteger(
+	configuredValue: string | undefined,
+	defaultValue: number,
+	maximumValue: number
+): number {
+	if (configuredValue === undefined) return defaultValue;
+	const parsed = Number(configuredValue);
+	if (!Number.isSafeInteger(parsed) || parsed < 1) return defaultValue;
+	return Math.min(parsed, maximumValue);
 }
 
 function parseMaintenanceIntervalMs(

@@ -131,6 +131,10 @@ function sanitizeLedgerCloseMetaCoverage(
 	return {
 		...pick(source, [
 			'batchCount',
+			'contiguousFirstLedger',
+			'contiguousLastLedger',
+			'contiguousLedgerCount',
+			'supplementalLedgerCount',
 			'firstAvailableLedger',
 			'firstLedger',
 			'lastLedger',

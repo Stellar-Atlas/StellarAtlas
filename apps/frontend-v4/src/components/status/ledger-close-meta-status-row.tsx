@@ -13,21 +13,30 @@ export function LedgerCloseMetaStatusRow({
 		(sum, output) => sum + BigInt(output.recordCount),
 		0n
 	);
-	const range =
-		coverage.firstLedger === null || coverage.lastLedger === null
-			? 'No decoded range'
-			: `${formatInteger(Number(coverage.firstLedger))} - ${formatInteger(Number(coverage.lastLedger))}`;
+	const continuousRange =
+		coverage.contiguousFirstLedger === null ||
+		coverage.contiguousLastLedger === null
+			? 'No continuous decoded range'
+			: `${formatInteger(Number(coverage.contiguousFirstLedger))} - ${formatInteger(Number(coverage.contiguousLastLedger))}`;
+	const supplementalDetail =
+		BigInt(coverage.supplementalLedgerCount) === 0n
+			? ''
+			: `; ${formatUnsigned(coverage.supplementalLedgerCount)} supplemental near-head ledgers are also decoded through ${formatNullableLedger(coverage.lastLedger)}`;
 	return (
 		<StatusRow
-			detail={`${formatUnsigned(coverage.ledgerCount)} ledgers in ${formatInteger(coverage.batchCount)} immutable batches; ${formatUnsigned(recordCount.toString())} decoded dataset rows across ${formatInteger(coverage.outputs.length)} typed datasets; updated ${formatDateTime(coverage.updatedAt)}`}
+			detail={`${formatUnsigned(coverage.contiguousLedgerCount)} continuous ledgers in ${formatInteger(coverage.batchCount)} immutable batches${supplementalDetail}; ${formatUnsigned(recordCount.toString())} decoded dataset rows across ${formatInteger(coverage.outputs.length)} typed datasets; updated ${formatDateTime(coverage.updatedAt)}`}
 			label="Decoded history ingestion"
 			pillText="Persisted"
 			status="ok"
-			value={range}
+			value={continuousRange}
 		/>
 	);
 }
 
 function formatUnsigned(value: string): string {
 	return BigInt(value).toLocaleString('en-US');
+}
+
+function formatNullableLedger(value: string | null): string {
+	return value === null ? 'an unknown ledger' : formatInteger(Number(value));
 }

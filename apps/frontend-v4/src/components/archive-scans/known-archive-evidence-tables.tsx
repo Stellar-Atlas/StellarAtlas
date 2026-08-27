@@ -246,6 +246,7 @@ export function ArchiveRootSummaryTable({
 							<th>Files</th>
 							<th>Remote failures</th>
 							<th>Worker issues</th>
+							<th>Continuous history</th>
 							<th>Checkpoint file consistency</th>
 						</tr>
 					</thead>
@@ -280,6 +281,9 @@ export function ArchiveRootSummaryTable({
 								<td data-label="Worker issues">
 									{formatInteger(root.objects.workerIssueObjects)}
 								</td>
+								<td data-label="Continuous history">
+									<SequentialCoverageSummary root={root} />
+								</td>
 								<td data-label="Checkpoint file consistency">
 									<strong>
 										{formatInteger(root.checkpoints.verifiedCheckpoints)} /{' '}
@@ -303,6 +307,69 @@ export function ArchiveRootSummaryTable({
 			</div>
 		</>
 	);
+}
+
+function SequentialCoverageSummary({
+	root
+}: {
+	readonly root: PublicKnownArchiveRootEvidence;
+}): React.JSX.Element {
+	const coverage = root.sequentialCoverage;
+	if (coverage === undefined || coverage === null) {
+		return <small>Sequential coverage is loading.</small>;
+	}
+	if (coverage.status === 'unavailable') {
+		return <strong className="known-evidence-error">Archive root unavailable</strong>;
+	}
+	if (coverage.status === 'caught-up') {
+		return (
+			<>
+				<strong>Caught up</strong>
+				<small>
+					Verified continuously through checkpoint{' '}
+					{formatNullableCheckpoint(coverage.lastContinuouslyVerifiedCheckpointLedger)}.
+				</small>
+			</>
+		);
+	}
+	if (coverage.status === 'blocked') {
+		const blocker = coverage.blocker;
+		return (
+			<>
+				<strong className="known-evidence-error">
+					Blocked at checkpoint{' '}
+					{formatNullableCheckpoint(coverage.blockedCheckpointLedger)}
+				</strong>
+				<small>
+					Continuous through{' '}
+					{formatNullableCheckpoint(coverage.lastContinuouslyVerifiedCheckpointLedger)}.
+				</small>
+				{blocker === null ? null : (
+					<small>
+						{formatArchiveObjectType(blocker.objectType)} returned{' '}
+						{blocker.httpStatus === null ? blocker.errorType ?? 'an error' : `HTTP ${blocker.httpStatus}`}.{' '}
+						<ArchiveSourceLink archiveUrl={blocker.objectUrl}>Open failed file</ArchiveSourceLink>
+					</small>
+				)}
+			</>
+		);
+	}
+	return (
+		<>
+			<strong>
+				Continuous through{' '}
+				{formatNullableCheckpoint(coverage.lastContinuouslyVerifiedCheckpointLedger)}
+			</strong>
+			<small>
+				Next {formatNullableCheckpoint(coverage.nextCheckpointLedger)}; advertised latest{' '}
+				{formatNullableCheckpoint(coverage.advertisedLatestCheckpointLedger)}.
+			</small>
+		</>
+	);
+}
+
+function formatNullableCheckpoint(value: number | null): string {
+	return value === null ? 'none yet' : formatInteger(value);
 }
 
 function formatCheckpointWork(root: PublicKnownArchiveRootEvidence): string {

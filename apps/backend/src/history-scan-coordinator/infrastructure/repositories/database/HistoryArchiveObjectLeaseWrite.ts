@@ -212,7 +212,10 @@ const historyArchiveCompletionRootStateLocksSql = `
                 from input
                 join "history_archive_object_queue" object
                         on object."remoteId" = input."remoteId"
-                where object."objectType" = 'history-archive-state'
+                where object."objectType" in (
+                        'history-archive-state',
+                        'checkpoint-state'
+                )
         )
         select pg_advisory_xact_lock(
                 1784950002,
@@ -336,14 +339,6 @@ const historyArchiveObjectVerifiedBatchSql = `
                                                 updated."claimAttempt"
                         )
                 returning "objectRemoteId"
-        ), ready_deleted as (
-                delete from "history_archive_object_ready" ready
-                using updated
-                where updated.scheduler = 'broker'
-                        and ready."objectRemoteId" = updated."remoteId"
-                        and ready."dispatchToken" = updated."executionId"
-                        and ready."claimAttempt" = updated."claimAttempt"
-                returning ready."objectRemoteId"
         ), claim_slots_cleared as (
                 update "history_archive_object_claim_slot" slot
                 set "objectRemoteId" = null,

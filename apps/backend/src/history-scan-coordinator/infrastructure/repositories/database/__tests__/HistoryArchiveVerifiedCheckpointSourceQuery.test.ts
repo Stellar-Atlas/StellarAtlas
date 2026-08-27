@@ -41,7 +41,7 @@ describe('HistoryArchiveVerifiedCheckpointSourceQuery', () => {
 		]);
 		expect(query).toHaveBeenCalledWith(
 			historyArchiveVerifiedCheckpointSourceSql,
-			[[targetRemoteId], 5]
+			[[targetRemoteId], 3]
 		);
 		expect(historyArchiveVerifiedCheckpointSourceSql).toContain(
 			'copy."objectKey" = source."sourceObjectKey"'
@@ -56,7 +56,7 @@ describe('HistoryArchiveVerifiedCheckpointSourceQuery', () => {
 			'proof."proofVersion" ='
 		);
 		expect(historyArchiveVerifiedCheckpointSourceSql).toContain(
-			'proof."evaluatedAt" >= candidate."verifiedAt"'
+			'proof_freshness."effectiveEvaluatedAt" >= candidate."verifiedAt"'
 		);
 		expect(historyArchiveVerifiedCheckpointSourceSql).toContain(
 			'consensus.source_count >= 2'
@@ -74,7 +74,7 @@ describe('HistoryArchiveVerifiedCheckpointSourceQuery', () => {
 			'proof."scpObjectRemoteId" = candidate."remoteId"'
 		);
 		expect(historyArchiveVerifiedCheckpointSourceSql).toContain(
-			'proof_input."updatedAt" <= proof."evaluatedAt"'
+			'proof_input."updatedAt" <=\n\t\t\t\t\t\tproof_freshness."effectiveEvaluatedAt"'
 		);
 		expect(historyArchiveVerifiedCheckpointSourceSql).toContain(
 			'where candidate_rank <= $2::integer'

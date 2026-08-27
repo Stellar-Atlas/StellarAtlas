@@ -86,7 +86,7 @@ const cleanupReadyObjectsSql = `
                                         and completed.status in ('verified', 'failed')
                         )
                 )
-                order by ready."archiveUrlIdentity", ready.priority, ready.ctid
+                order by ready."objectRemoteId"
                 for update of ready skip locked
                 limit 4096
         ), removed as (
@@ -143,15 +143,25 @@ const refillReadyObjectsSql = `
 		from candidates
 		order by priority, "lastClaimedAt" asc nulls first, root_id
 		limit $1::integer
+	), locked_existing as materialized (
+		select stored."objectRemoteId"
+		from selected
+		join "history_archive_object_ready" stored
+			on stored."objectRemoteId" = selected."remoteId"
+		order by stored."objectRemoteId"
+		for update of stored
 	), upserted as (
 		insert into "history_archive_object_ready" as stored (
 			"objectRemoteId", "archiveUrlIdentity", priority, "availableAt",
 			"createdAt", "updatedAt"
 		)
-		select "remoteId", "archiveUrlIdentity", priority, "availableAt",
+		select selected."remoteId", selected."archiveUrlIdentity",
+			selected.priority, selected."availableAt",
 			now(), now()
 		from selected
-		order by "remoteId"
+		left join locked_existing
+			on locked_existing."objectRemoteId" = selected."remoteId"
+		order by selected."remoteId"
 		on conflict ("objectRemoteId") do update
 		set priority = excluded.priority,
 			"availableAt" = excluded."availableAt",

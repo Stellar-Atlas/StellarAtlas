@@ -1,6 +1,7 @@
 import express from 'express';
 import Kernel from '../Kernel.js';
 import { DataSource } from 'typeorm';
+import { resolve } from 'node:path';
 import { Config, getConfigFromEnv } from '../../config/Config.js';
 import type { ExceptionLogger } from 'exception-logger';
 import type { Logger } from 'logger';
@@ -112,6 +113,8 @@ import { GetTopTierHistory } from '@fbas/use-cases/get-top-tier-history/GetTopTi
 import { frontendV4ProxyMiddleware } from './FrontendV4Proxy.js';
 import { mountExplorerRoutes } from './ExplorerRoutes.js';
 import { mountOpenApiDocumentation } from './OpenApiDocumentation.js';
+import { readOnlyUpstreamRouter } from './ReadOnlyUpstreamRouter.js';
+import { historyDataRouter } from '@status/infrastructure/http/HistoryDataRouter.js';
 import { corsMiddleware } from './CorsMiddleware.js';
 
 let server: Server;
@@ -157,6 +160,37 @@ const listen = async () => {
 					)
 				)
 			: () => undefined;
+
+	api.use(
+		'/horizon',
+		readOnlyUpstreamRouter({
+			forwardPublicHost: true,
+			publicPrefix: '/horizon',
+			rewriteJsonLinks: true,
+			serviceName: 'Horizon',
+			targetBaseUrl: config.horizonUrl.value
+		})
+	);
+	api.use(
+		'/galexie',
+		readOnlyUpstreamRouter({
+			publicPrefix: '/galexie',
+			serviceName: 'Galexie',
+			targetBaseUrl:
+				process.env.GALEXIE_URL ??
+				'https://aws-public-blockchain.s3.us-east-2.amazonaws.com/v1.1/stellar/ledgers/pubnet/'
+		})
+	);
+	api.use(
+		'/v1/history-data',
+		historyDataRouter({
+			dataSource: kernel.container.get(DataSource),
+			networkPassphrase: config.networkConfig.networkPassphrase,
+			storageRoot:
+				process.env.FULL_HISTORY_DATA_ROOT ??
+				resolve(process.cwd(), '../full-history/typed')
+		})
+	);
 
 	mountOpenApiDocumentation(api, {
 		document: swaggerDocument,

@@ -37,6 +37,10 @@ describe('readFullHistoryLedgerCloseMetaCoverage', () => {
 			readFullHistoryLedgerCloseMetaCoverage(dataSource, 'Public network')
 		).resolves.toEqual({
 			batchCount: 2,
+			contiguousFirstLedger: '3',
+			contiguousLastLedger: '130',
+			contiguousLedgerCount: '128',
+			supplementalLedgerCount: '0',
 			firstAvailableLedger: '3',
 			firstLedger: '3',
 			lastLedger: '130',

@@ -44,7 +44,6 @@ export const historyArchiveObjectRootTransitionLockSql = `
     )
     from "history_archive_object_queue" object
     where object."remoteId" = $1::uuid
-        and object."objectType" = 'history-archive-state'
 `;
 
 export async function lockHistoryArchiveObjectRootTransition(
@@ -52,4 +51,27 @@ export async function lockHistoryArchiveObjectRootTransition(
 	remoteId: string
 ): Promise<void> {
 	await manager.query(historyArchiveObjectRootTransitionLockSql, [remoteId]);
+}
+
+export const historyArchiveObjectRootTransitionLocksSql = `
+        select pg_advisory_xact_lock(
+                1784950002,
+                hashtext(roots."archiveUrlIdentity")
+        )
+        from (
+                select distinct object."archiveUrlIdentity"
+                from "history_archive_object_queue" object
+                where object."remoteId" = any($1::uuid[])
+        ) roots
+        order by roots."archiveUrlIdentity"
+`;
+
+export async function lockHistoryArchiveObjectRootTransitions(
+	manager: EntityManager,
+	remoteIds: readonly string[]
+): Promise<void> {
+	if (remoteIds.length === 0) return;
+	await manager.query(historyArchiveObjectRootTransitionLocksSql, [
+		[...remoteIds]
+	]);
 }

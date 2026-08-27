@@ -13,8 +13,7 @@ describe('HistoryArchiveRepairActionMapper', () => {
 			objectKey: 'root',
 			objectOrder: 1,
 			objectType: 'history-archive-state',
-			objectUrl:
-				'https://history.example.com/.well-known/stellar-history.json',
+			objectUrl: 'https://history.example.com/.well-known/stellar-history.json',
 			remoteId: crypto.randomUUID(),
 			status: 'failed'
 		});
@@ -31,6 +30,80 @@ describe('HistoryArchiveRepairActionMapper', () => {
 		expect(actions).toEqual([]);
 	});
 
+	it('reports a proof-gated missing checkpoint even before a verified replacement exists', () => {
+		const object = new HistoryArchiveObject({
+			archiveUrl: 'https://history.example.com',
+			archiveUrlIdentity: 'https://history.example.com',
+			checkpointLedger: 63,
+			objectKey: 'checkpoint-state:0000003f',
+			objectOrder: 1,
+			objectType: 'checkpoint-state',
+			objectUrl:
+				'https://history.example.com/history/00/00/00/history-0000003f.json',
+			remoteId: crypto.randomUUID(),
+			status: 'failed'
+		});
+		object.errorType = 'archive_http_error';
+		object.errorMessage = 'Remote history archive returned HTTP 404';
+		object.httpStatus = 404;
+		(object as HistoryArchiveObject & { updatedAt: Date }).updatedAt = new Date(
+			'2026-08-27T12:00:00.000Z'
+		);
+
+		const actions = toObjectRepairAction(object, [], new Map());
+
+		expect(actions).toEqual([
+			expect.objectContaining({
+				checkpointLedger: 63,
+				kind: 'replace-archive-file',
+				reason: 'missing-object',
+				repairManifest: expect.objectContaining({
+					replacement: null,
+					status: 'awaiting-verified-replacement',
+					steps: []
+				}),
+				severity: 'blocked'
+			})
+		]);
+	});
+
+	it('reports a sequential checkpoint access denial with operator guidance', () => {
+		const object = new HistoryArchiveObject({
+			archiveUrl: 'https://history.example.com',
+			archiveUrlIdentity: 'https://history.example.com',
+			checkpointLedger: 63,
+			objectKey: 'checkpoint-state:0000003f',
+			objectOrder: 1,
+			objectType: 'checkpoint-state',
+			objectUrl:
+				'https://history.example.com/history/00/00/00/history-0000003f.json',
+			remoteId: crypto.randomUUID(),
+			status: 'failed'
+		});
+		object.errorType = 'archive_http_error';
+		object.errorMessage = 'Remote history archive returned HTTP 403';
+		object.httpStatus = 403;
+		(object as HistoryArchiveObject & { updatedAt: Date }).updatedAt = new Date(
+			'2026-08-27T12:00:00.000Z'
+		);
+
+		const [action] = toObjectRepairAction(object, [], new Map());
+
+		expect(action).toMatchObject({
+			checkpointLedger: 63,
+			kind: 'replace-archive-file',
+			reason: 'access-denied',
+			repairManifest: expect.objectContaining({
+				status: 'awaiting-verified-replacement',
+				steps: []
+			}),
+			severity: 'blocked',
+			summary: expect.stringContaining(
+				'Restore anonymous HTTP GET and HEAD access'
+			)
+		});
+	});
+
 	it('creates a proof-bound, operator-safe repair manifest for a confirmed bucket mismatch', () => {
 		const object = failedBucket('a');
 		const source = verifiedSource(object.remoteId);
@@ -38,7 +111,9 @@ describe('HistoryArchiveRepairActionMapper', () => {
 			artifactType: 'bucket',
 			byteLength: 42,
 			contentHash: source.proof.contentHash,
-			downloadUrl: 'https://stellaratlas.io/v1/archive-scans/repair-artifacts/buckets/' + 'b'.repeat(64),
+			downloadUrl:
+				'https://stellaratlas.io/v1/archive-scans/repair-artifacts/buckets/' +
+				'b'.repeat(64),
 			mediaType: 'application/gzip',
 			objectIdentity: object.objectKey,
 			provenAt: source.proof.evaluatedAt,
@@ -53,7 +128,9 @@ describe('HistoryArchiveRepairActionMapper', () => {
 		expect(action.repairManifest?.evidence.errorMessage).toContain(
 			'[history bucket cache path]'
 		);
-		expect(action.repairManifest?.evidence.errorMessage).not.toContain('/home/observe');
+		expect(action.repairManifest?.evidence.errorMessage).not.toContain(
+			'/home/observe'
+		);
 
 		expect(action.repairManifest).toEqual({
 			actionId: action.actionId,
@@ -69,12 +146,43 @@ describe('HistoryArchiveRepairActionMapper', () => {
 			schemaVersion: 1,
 			status: 'ready',
 			steps: [
-				{ backupSuffix: '.stellaratlas-backup', kind: 'backup-current-file', order: 1, required: true },
-				{ input: 'replacement-download-url', kind: 'stage-replacement', order: 2, required: true, stagingLocation: 'same-filesystem-temporary-file' },
-				{ expectedContentHash: artifact.contentHash, kind: 'verify-staged-content', order: 3, required: true },
-				{ kind: 'atomic-replace', order: 4, required: true, requiresSameFilesystem: true },
-				{ kind: 'preserve-metadata', order: 5, preserve: ['owner', 'mode', 'acl'], required: true },
-				{ kind: 'request-recheck', order: 6, required: true, resolutionCondition: 'same-object-verified-after-original-evidence' }
+				{
+					backupSuffix: '.stellaratlas-backup',
+					kind: 'backup-current-file',
+					order: 1,
+					required: true
+				},
+				{
+					input: 'replacement-download-url',
+					kind: 'stage-replacement',
+					order: 2,
+					required: true,
+					stagingLocation: 'same-filesystem-temporary-file'
+				},
+				{
+					expectedContentHash: artifact.contentHash,
+					kind: 'verify-staged-content',
+					order: 3,
+					required: true
+				},
+				{
+					kind: 'preserve-metadata',
+					order: 4,
+					preserve: ['owner', 'mode', 'acl'],
+					required: true
+				},
+				{
+					kind: 'atomic-replace',
+					order: 5,
+					required: true,
+					requiresSameFilesystem: true
+				},
+				{
+					kind: 'request-recheck',
+					order: 6,
+					required: true,
+					resolutionCondition: 'same-object-verified-after-original-evidence'
+				}
 			],
 			target: {
 				archiveUrl: object.archiveUrl,
@@ -150,7 +258,8 @@ function verifiedSource(
 	return {
 		archiveUrl: 'https://verified.example.com',
 		archiveUrlIdentity: 'https://verified.example.com',
-		objectUrl: 'https://verified.example.com/bucket/' + 'b'.repeat(64) + '.xdr.gz',
+		objectUrl:
+			'https://verified.example.com/bucket/' + 'b'.repeat(64) + '.xdr.gz',
 		proof: {
 			anchor: { kind: 'content-addressed-bucket', sourceCount: 2 },
 			candidateObjectRemoteId: crypto.randomUUID(),

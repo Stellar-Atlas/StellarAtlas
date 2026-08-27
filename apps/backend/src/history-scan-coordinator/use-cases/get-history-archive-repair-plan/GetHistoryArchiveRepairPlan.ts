@@ -18,7 +18,10 @@ import {
 	toObjectRepairAction,
 	toRepairInfrastructureBlock
 } from './HistoryArchiveRepairActionMapper.js';
-import { isRepairCandidateObjectFailure } from './HistoryArchiveRepairEligibility.js';
+import {
+	getRepairObjectFailureClass,
+	isRepairCandidateObjectFailure
+} from './HistoryArchiveRepairEligibility.js';
 
 const defaultRepairLimit = 25;
 export const maxRepairPlanLimit = 50;
@@ -61,11 +64,14 @@ export class GetHistoryArchiveRepairPlan {
 			const repairableObjectFailures = objectFailures.filter(
 				isRepairCandidateObjectFailure
 			);
-			const bucketObjectIds = repairableObjectFailures.flatMap((object) =>
-				object.bucketHash === null ? [] : [object.remoteId]
+			const replacementEligibleObjectFailures = repairableObjectFailures.filter(
+				(object) => getRepairObjectFailureClass(object) !== 'auth'
 			);
-			const checkpointObjectIds = repairableObjectFailures.flatMap((object) =>
-				object.bucketHash === null ? [object.remoteId] : []
+			const bucketObjectIds = replacementEligibleObjectFailures.flatMap(
+				(object) => (object.bucketHash === null ? [] : [object.remoteId])
+			);
+			const checkpointObjectIds = replacementEligibleObjectFailures.flatMap(
+				(object) => (object.bucketHash === null ? [object.remoteId] : [])
 			);
 			const [bucketSources, checkpointSources] = await Promise.all([
 				bucketObjectIds.length === 0

@@ -260,16 +260,20 @@ export class HistoryArchiveBrokerFrontierRepository {
 	constructor(private readonly dataSource: DataSource) {}
 
 	async ensureFrontier(): Promise<number> {
-		const readyObjects = await this.dataSource.transaction(async (manager) => {
-			if (!(await this.tryTakeExecutionReconciliationLock(manager))) return null;
+		const materialized = await this.dataSource.transaction(async (manager) => {
+			if (!(await this.tryTakeExecutionReconciliationLock(manager)))
+				return false;
 			await materializeOrderedCheckpointPrefetch(manager);
+			return true;
+		});
+		if (!materialized) return 0;
+		const readyObjects = await this.dataSource.transaction(async (manager) => {
 			const result = await synchronizeHistoryArchiveReadyQueue(
 				manager,
 				maximumArchiveSourceFrontierRows
 			);
 			return result.readyObjects;
 		});
-		if (readyObjects === null) return 0;
 		await this.ensureProofFrontier();
 		return readyObjects;
 	}

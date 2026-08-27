@@ -55,12 +55,16 @@ export class GetHorizonStatus {
 
 	execute(): Result<ConfiguredServiceStatusDTO, Error> {
 		const horizonUrl = this.config.horizonUrl.value;
-		if (isPublicHorizonFallback(horizonUrl)) {
+		const publicUrl = this.config.horizonPublicUrl?.value ?? horizonUrl;
+		if (
+			isPublicHorizonFallback(horizonUrl) &&
+			this.config.horizonPublicUrl === undefined
+		) {
 			return ok(mapExternalFallbackStatus('horizon', horizonUrl));
 		}
 
 		return ok(
-			mapConfiguredServiceStatus('horizon', horizonUrl, {
+			mapConfiguredServiceStatus('horizon', publicUrl, {
 				reportConfiguredAsOk: true,
 				requiredForProduction: false
 			})

@@ -7,7 +7,8 @@ import type {
 	HistoryArchiveObjectPageFiltersV1,
 	KnownArchiveCheckpointCountsV1,
 	KnownArchiveFailureFiltersV1,
-	KnownArchiveObjectCountsV1
+	KnownArchiveObjectCountsV1,
+	KnownArchiveSequentialCoverageV1
 } from 'shared';
 
 export interface KnownArchiveRootScope {
@@ -44,6 +45,7 @@ export interface KnownArchiveRootReadModel extends KnownArchiveRootScope {
 	readonly latestObjectAt: Date | null;
 	readonly objects: KnownArchiveObjectCountsV1;
 	readonly scannerOwnedState: HistoryArchiveStateSnapshot | null;
+	readonly sequentialCoverage: KnownArchiveSequentialCoverageV1;
 }
 
 export interface KnownArchiveFailureReadModel {
