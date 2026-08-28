@@ -108,13 +108,13 @@ export async function activateHistoryArchiveObjects(
 		}))
 	);
 	return await repository.manager.transaction(async (manager) => {
+		await manager.query('select pg_advisory_xact_lock(hashtext($1))', [
+			historyArchiveExecutionReconciliationLockName
+		]);
 		await lockHistoryArchiveRootTransitions(
 			manager,
 			uniqueObjects.map((object) => object.archiveUrlIdentity)
 		);
-		await manager.query('select pg_advisory_xact_lock(hashtext($1))', [
-			historyArchiveExecutionReconciliationLockName
-		]);
 		const [result] = (await manager.query(activateObjectsSql, [
 			payload
 		])) as readonly {
