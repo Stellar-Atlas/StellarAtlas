@@ -138,20 +138,28 @@ export class ReconcileHistoryArchiveObjectTransitions {
 						await this.objectRepository.findUnreconciledTransitions(
 							this.reconciliationBatchSize
 						);
-					for (const object of objects) {
+					const verifiedObjects = objects.filter(
+						(object) => object.status === 'verified'
+					);
+					if (verifiedObjects.length > 0) {
 						try {
-							if (object.status === 'verified') {
-								await this.reconcileVerifiedClaimAttempt(
-									object.remoteId,
-									object.attempts,
-									promotePlannedObjects
-								);
-							} else if (object.status === 'failed') {
-								await this.failObject.reconcileClaimAttempt(
-									object.remoteId,
-									object.attempts
-								);
+							await this.completeObject.reconcileVerifiedTransitionBatch(
+								verifiedObjects,
+								promotePlannedObjects ? {} : { promotePlannedObjects: false }
+							);
+						} catch (error) {
+							for (const object of verifiedObjects) {
+								this.logFailure(error, object, 'transition');
 							}
+						}
+					}
+					for (const object of objects) {
+						if (object.status !== 'failed') continue;
+						try {
+							await this.failObject.reconcileClaimAttempt(
+								object.remoteId,
+								object.attempts
+							);
 						} catch (error) {
 							this.logFailure(error, object, 'transition');
 						}
@@ -203,20 +211,6 @@ export class ReconcileHistoryArchiveObjectTransitions {
 		} finally {
 			this.executionDispositionRunning = false;
 		}
-	}
-
-	private async reconcileVerifiedClaimAttempt(
-		remoteId: string,
-		claimAttempt: number,
-		promotePlannedObjects: boolean
-	): Promise<void> {
-		if (promotePlannedObjects) {
-			await this.completeObject.reconcileClaimAttempt(remoteId, claimAttempt);
-			return;
-		}
-		await this.completeObject.reconcileClaimAttempt(remoteId, claimAttempt, {
-			promotePlannedObjects: false
-		});
 	}
 
 	private logFailure(

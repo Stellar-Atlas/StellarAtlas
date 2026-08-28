@@ -17,6 +17,7 @@ import type {
 	HistoryArchiveObjectRecheckDecision,
 	HistoryArchiveObjectRepository,
 	HistoryArchiveObjectVerificationUpdate,
+	HistoryArchiveObjectTransitionCompletion,
 	HistoryArchiveObjectWorkerSnapshot
 } from '@history-scan-coordinator/domain/history-archive-object/HistoryArchiveObjectRepository.js';
 import { requireNumber } from './ScanJobRowMapper.js';
@@ -41,6 +42,7 @@ import {
 	markHistoryArchiveObjectVerified,
 	markHistoryArchiveObjectsVerified,
 	markHistoryArchiveTransitionEffectsCompleted,
+	markHistoryArchiveTransitionEffectsCompletedBatch,
 	releaseHistoryArchiveObject,
 	releaseStaleHistoryArchiveObjects,
 	touchHistoryArchiveObjectClaim
@@ -388,6 +390,15 @@ export class TypeOrmHistoryArchiveObjectRepository implements HistoryArchiveObje
 			remoteId,
 			claimAttempt,
 			status
+		);
+	}
+
+	async markTransitionEffectsCompletedBatch(
+		updates: readonly HistoryArchiveObjectTransitionCompletion[]
+	): Promise<ReadonlySet<string>> {
+		return await markHistoryArchiveTransitionEffectsCompletedBatch(
+			this.repository,
+			updates
 		);
 	}
 

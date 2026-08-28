@@ -2,6 +2,7 @@ import { DataSource } from 'typeorm';
 import { HistoryArchiveObject } from '../../../../domain/history-archive-object/HistoryArchiveObject.js';
 import { HistoryArchiveObjectEvent } from '../../../../domain/history-archive-object/HistoryArchiveObjectEvent.js';
 import { TypeOrmHistoryArchiveObjectEventRepository } from '../TypeOrmHistoryArchiveObjectEventRepository.js';
+import { TypeOrmHistoryArchiveObjectRepository } from '../TypeOrmHistoryArchiveObjectRepository.js';
 import {
 	startDisposablePostgres,
 	type DisposablePostgres
@@ -74,6 +75,67 @@ describe('terminal history archive object events in disposable PostgreSQL', () =
 				objectRemoteId: object.remoteId
 			});
 		expect(count).toBe(1);
+	});
+
+	it('persists events and transition completion with set-based writes', async () => {
+		const eventRepository = new TypeOrmHistoryArchiveObjectEventRepository(
+			dataSource.getRepository(HistoryArchiveObjectEvent)
+		);
+		const objectRepository = new TypeOrmHistoryArchiveObjectRepository(
+			dataSource.getRepository(HistoryArchiveObject)
+		);
+		const objects = [127, 191].map((checkpointLedger, index) => {
+			const object = new HistoryArchiveObject({
+				archiveUrl: 'https://batch-events.example/archive',
+				archiveUrlIdentity: 'https://batch-events.example/archive',
+				checkpointLedger,
+				objectKey: `ledger:${checkpointLedger.toString(16).padStart(8, '0')}`,
+				objectOrder: 20,
+				objectType: 'ledger',
+				objectUrl: `https://batch-events.example/archive/ledger-${checkpointLedger}.xdr.gz`,
+				status: 'verified'
+			});
+			object.attempts = index + 1;
+			object.transitionEffectsRequiredAt = new Date();
+			return object;
+		});
+		await dataSource.getRepository(HistoryArchiveObject).save(objects);
+
+		await eventRepository.appendFromObjectsIdempotently(
+			objects.map((object) => ({
+				object,
+				options: {
+					claimAttempt: object.attempts,
+					eventType: 'verified'
+				}
+			}))
+		);
+		const completed =
+			await objectRepository.markTransitionEffectsCompletedBatch(
+				objects.map((object) => ({
+					claimAttempt: object.attempts,
+					remoteId: object.remoteId,
+					status: 'verified'
+				}))
+			);
+
+		expect([...completed].sort()).toEqual(
+			objects.map((object) => object.remoteId).sort()
+		);
+		expect(
+			await dataSource.getRepository(HistoryArchiveObjectEvent).countBy({
+				archiveUrlIdentity: 'https://batch-events.example/archive',
+				eventType: 'verified'
+			})
+		).toBe(2);
+		const persisted = await objectRepository.findByRemoteIds(
+			objects.map((object) => object.remoteId)
+		);
+		expect(
+			persisted.every(
+				(object) => object.transitionEffectsCompletedAt instanceof Date
+			)
+		).toBe(true);
 	});
 
 	it('reads recent events with a maintained summary count', async () => {

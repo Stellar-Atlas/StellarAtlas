@@ -35,6 +35,38 @@ describe('CompleteHistoryArchiveObject', () => {
 				return true;
 			}
 		);
+		objectRepository.markObjectsVerified.mockImplementation(async (updates) => {
+			const verified = new Set<string>();
+			for (const update of updates) {
+				if (
+					await objectRepository.markObjectVerified(
+						update.remoteId,
+						update.progress
+					)
+				) {
+					verified.add(update.remoteId);
+				}
+			}
+			return verified;
+		});
+		objectRepository.findByRemoteIds.mockImplementation(async (remoteIds) => {
+			const objects = await Promise.all(
+				remoteIds.map(
+					async (remoteId) => await objectRepository.findByRemoteId(remoteId)
+				)
+			);
+			return objects.filter(
+				(object): object is HistoryArchiveObject => object !== null
+			);
+		});
+		objectRepository.markCheckpointDescendantsPlanned.mockImplementation(
+			async (remoteId) => {
+				const object = await objectRepository.findByRemoteId(remoteId);
+				if (object === null) return false;
+				object.descendantsPlannedAt = new Date();
+				return true;
+			}
+		);
 		objectRepository.findOldestCheckpointLedgerByArchiveUrlIdentities.mockResolvedValue(
 			new Map()
 		);
@@ -82,6 +114,61 @@ describe('CompleteHistoryArchiveObject', () => {
 			objectRepository.markTransitionEffectsCompleted
 		).toHaveBeenCalledWith(archiveObject.remoteId, 1, 'verified');
 		expect(objectRepository.promotePlannedObjects).not.toHaveBeenCalled();
+	});
+
+	it('reconciles ordinary verified transitions with set-based writes', async () => {
+		const bucket = createBucketObject();
+		bucket.status = 'verified';
+		bucket.attempts = 1;
+		const ledger = new HistoryArchiveObject({
+			archiveUrl: bucket.archiveUrl,
+			archiveUrlIdentity: bucket.archiveUrlIdentity,
+			objectKey: 'ledger:0000007f',
+			objectOrder: 20,
+			objectType: 'ledger',
+			objectUrl: `${bucket.archiveUrl}/ledger-0000007f.xdr.gz`,
+			remoteId: '22222222-2222-4222-8222-222222222222',
+			status: 'verified'
+		});
+		ledger.attempts = 2;
+		objectRepository.markTransitionEffectsCompletedBatch.mockResolvedValue(
+			new Set([bucket.remoteId, ledger.remoteId])
+		);
+		objectRepository.drainCheckpointProofRefreshQueue.mockResolvedValue({
+			claimed: 0,
+			completed: 0,
+			failed: 0
+		});
+		const useCase = new CompleteHistoryArchiveObject(
+			objectRepository,
+			stateRepository,
+			eventRecorder,
+			checkpointProofRepository
+		);
+
+		await useCase.reconcileVerifiedTransitionBatch([bucket, ledger]);
+		await new Promise<void>((resolve) => setImmediate(resolve));
+
+		expect(eventRecorder.recordDurablyBatch).toHaveBeenCalledTimes(1);
+		expect(eventRecorder.recordDurablyBatch).toHaveBeenCalledWith([
+			{
+				object: bucket,
+				options: { claimAttempt: 1, eventType: 'verified' }
+			},
+			{
+				object: ledger,
+				options: { claimAttempt: 2, eventType: 'verified' }
+			}
+		]);
+		expect(
+			objectRepository.markTransitionEffectsCompletedBatch
+		).toHaveBeenCalledTimes(1);
+		expect(
+			objectRepository.markTransitionEffectsCompleted
+		).not.toHaveBeenCalled();
+		expect(
+			objectRepository.enqueueCheckpointProofRefreshes
+		).toHaveBeenCalledWith([bucket.remoteId, ledger.remoteId]);
 	});
 
 	it('schedules only root and checkpoint-state discovery objects from verified root state', async () => {
@@ -156,9 +243,10 @@ describe('CompleteHistoryArchiveObject', () => {
 		expect(result._unsafeUnwrap()).toBe(true);
 		await useCase.reconcilePersisted(archiveObject);
 		expect(stateRepository.saveAvailable).not.toHaveBeenCalled();
-		expect(objectRepository.planObjects).toHaveBeenCalledTimes(1);
-		expect(objectRepository.promotePlannedObjects).toHaveBeenCalledTimes(1);
-		const savedObjects = objectRepository.planObjects.mock.calls[0]?.[0] ?? [];
+		expect(objectRepository.activateObjects).toHaveBeenCalledTimes(1);
+		expect(objectRepository.promotePlannedObjects).not.toHaveBeenCalled();
+		const savedObjects =
+			objectRepository.activateObjects.mock.calls[0]?.[0] ?? [];
 		expect(savedObjects.map((object) => object.objectKey)).toEqual([
 			'ledger:0000007f',
 			'transactions:0000007f',
@@ -197,7 +285,8 @@ describe('CompleteHistoryArchiveObject', () => {
 
 		expect(result._unsafeUnwrap()).toBe(true);
 		await useCase.reconcilePersisted(archiveObject);
-		const savedObjects = objectRepository.planObjects.mock.calls[0]?.[0] ?? [];
+		const savedObjects =
+			objectRepository.activateObjects.mock.calls[0]?.[0] ?? [];
 		const olderCheckpointObjects = savedObjects.filter(
 			(object) =>
 				object.objectType === 'checkpoint-state' &&
@@ -343,7 +432,8 @@ describe('CompleteHistoryArchiveObject', () => {
 
 		expect(result._unsafeUnwrap()).toBe(true);
 		await useCase.reconcilePersisted(archiveObject);
-		const savedObjects = objectRepository.planObjects.mock.calls[0]?.[0] ?? [];
+		const savedObjects =
+			objectRepository.activateObjects.mock.calls[0]?.[0] ?? [];
 		expect(savedObjects.map((object) => object.objectKey)).toContain(
 			'scp:0012863f'
 		);
@@ -386,8 +476,9 @@ describe('CompleteHistoryArchiveObject', () => {
 
 		expect(result._unsafeUnwrap()).toBe(true);
 		await useCase.reconcilePersisted(archiveObject);
-		expect(objectRepository.planObjects).toHaveBeenCalled();
-		const savedObjects = objectRepository.planObjects.mock.calls[0]?.[0] ?? [];
+		expect(objectRepository.activateObjects).toHaveBeenCalled();
+		const savedObjects =
+			objectRepository.activateObjects.mock.calls[0]?.[0] ?? [];
 		expect(savedObjects.map((object) => object.objectKey)).toContain(
 			'ledger:0000007f'
 		);

@@ -94,6 +94,11 @@ export interface HistoryArchiveObjectVerificationUpdate {
 	readonly remoteId: string;
 	readonly progress: HistoryArchiveObjectProgressUpdate;
 }
+export interface HistoryArchiveObjectTransitionCompletion {
+	readonly claimAttempt: number;
+	readonly remoteId: string;
+	readonly status: 'failed' | 'verified';
+}
 
 export interface HistoryArchiveObjectFailure {
 	readonly claimAttempt: number;
@@ -257,6 +262,9 @@ export interface HistoryArchiveObjectRepository {
 		claimAttempt: number,
 		status: 'failed' | 'verified'
 	): Promise<boolean>;
+	markTransitionEffectsCompletedBatch(
+		updates: readonly HistoryArchiveObjectTransitionCompletion[]
+	): Promise<ReadonlySet<string>>;
 	withTransitionEffectsLock(
 		remoteId: string,
 		claimAttempt: number,

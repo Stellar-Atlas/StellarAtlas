@@ -2,7 +2,10 @@ import 'reflect-metadata';
 import { inject, injectable } from 'inversify';
 import type { Logger } from 'logger';
 import type { HistoryArchiveObject } from '../../domain/history-archive-object/HistoryArchiveObject.js';
-import type { HistoryArchiveObjectEventOptions } from '../../domain/history-archive-object/HistoryArchiveObjectEventRepository.js';
+import type {
+	HistoryArchiveObjectEventAppend,
+	HistoryArchiveObjectEventOptions
+} from '../../domain/history-archive-object/HistoryArchiveObjectEventRepository.js';
 import type { HistoryArchiveObjectEventRepository } from '../../domain/history-archive-object/HistoryArchiveObjectEventRepository.js';
 import { TYPES } from '../../infrastructure/di/di-types.js';
 import { mapUnknownToError } from '@core/utilities/mapUnknownToError.js';
@@ -37,5 +40,11 @@ export class HistoryArchiveObjectEventRecorder {
 		options: HistoryArchiveObjectEventOptions
 	): Promise<void> {
 		await this.eventRepository.appendFromObjectIdempotently(object, options);
+	}
+
+	async recordDurablyBatch(
+		events: readonly HistoryArchiveObjectEventAppend[]
+	): Promise<void> {
+		await this.eventRepository.appendFromObjectsIdempotently(events);
 	}
 }

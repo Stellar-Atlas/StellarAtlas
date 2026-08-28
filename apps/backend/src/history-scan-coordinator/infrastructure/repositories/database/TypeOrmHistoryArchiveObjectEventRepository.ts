@@ -4,6 +4,7 @@ import { createHash } from 'node:crypto';
 import type { HistoryArchiveObject } from '@history-scan-coordinator/domain/history-archive-object/HistoryArchiveObject.js';
 import { HistoryArchiveObjectEvent } from '@history-scan-coordinator/domain/history-archive-object/HistoryArchiveObjectEvent.js';
 import type {
+	HistoryArchiveObjectEventAppend,
 	HistoryArchiveObjectEventOptions,
 	HistoryArchiveObjectEventPage,
 	HistoryArchiveObjectEventRepository
@@ -29,20 +30,29 @@ export class TypeOrmHistoryArchiveObjectEventRepository implements HistoryArchiv
 		object: HistoryArchiveObject,
 		options: HistoryArchiveObjectEventOptions
 	): Promise<void> {
-		const claimAttempt = options.claimAttempt ?? object.attempts;
-		const event = createEvent(
-			object,
-			{ ...options, claimAttempt },
-			createIdempotentEventRemoteId(
-				object.remoteId,
-				options.eventType,
-				claimAttempt
-			)
-		);
+		await this.appendFromObjectsIdempotently([{ object, options }]);
+	}
+
+	async appendFromObjectsIdempotently(
+		events: readonly HistoryArchiveObjectEventAppend[]
+	): Promise<void> {
+		const values = events.map(({ object, options }) => {
+			const claimAttempt = options.claimAttempt ?? object.attempts;
+			return createEvent(
+				object,
+				{ ...options, claimAttempt },
+				createIdempotentEventRemoteId(
+					object.remoteId,
+					options.eventType,
+					claimAttempt
+				)
+			);
+		});
+		if (values.length === 0) return;
 		await this.repository
 			.createQueryBuilder()
 			.insert()
-			.values(event)
+			.values(values)
 			.orIgnore()
 			.execute();
 	}

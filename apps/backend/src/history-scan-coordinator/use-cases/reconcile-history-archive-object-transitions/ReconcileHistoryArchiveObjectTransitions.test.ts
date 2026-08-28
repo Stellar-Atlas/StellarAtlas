@@ -77,15 +77,15 @@ describe('ReconcileHistoryArchiveObjectTransitions', () => {
 		await reconciler.executeIfDue(10_000);
 		expect(repository.reconcileExecutionDisposition).toHaveBeenCalledTimes(1);
 		expect(
-			complete.reconcileClaimAttempt.mock.invocationCallOrder[0]
+			complete.reconcileVerifiedTransitionBatch.mock.invocationCallOrder[0]
 		).toBeLessThan(
 			repository.reconcileExecutionDisposition.mock.invocationCallOrder[0] ??
 				Infinity
 		);
 
-		expect(complete.reconcileClaimAttempt).toHaveBeenCalledWith(
-			verified.remoteId,
-			verified.attempts
+		expect(complete.reconcileVerifiedTransitionBatch).toHaveBeenCalledWith(
+			[verified],
+			{}
 		);
 		expect(fail.reconcileClaimAttempt).toHaveBeenCalledWith(
 			failed.remoteId,
@@ -121,7 +121,7 @@ describe('ReconcileHistoryArchiveObjectTransitions', () => {
 				return true;
 			}
 		);
-		complete.reconcileClaimAttempt.mockRejectedValue(
+		complete.reconcileVerifiedTransitionBatch.mockRejectedValue(
 			new Error('proof unavailable')
 		);
 		const reconciler = new ReconcileHistoryArchiveObjectTransitions(
@@ -206,7 +206,7 @@ describe('ReconcileHistoryArchiveObjectTransitions', () => {
 		await reconciler.executeIfDue(10_000);
 
 		expect(
-			complete.reconcileClaimAttempt.mock.invocationCallOrder[0]
+			complete.reconcileVerifiedTransitionBatch.mock.invocationCallOrder[0]
 		).toBeLessThan(
 			complete.reconcileCheckpointDependencies.mock.invocationCallOrder[0] ??
 				Infinity
@@ -245,9 +245,9 @@ describe('ReconcileHistoryArchiveObjectTransitions', () => {
 
 		await reconciler.executeIfDue(10_000);
 
-		expect(complete.reconcileClaimAttempt).toHaveBeenCalledWith(
-			verified.remoteId,
-			verified.attempts
+		expect(complete.reconcileVerifiedTransitionBatch).toHaveBeenCalledWith(
+			[verified],
+			{}
 		);
 		expect(logger.error).toHaveBeenCalledWith(
 			'Failed to reconcile archive execution frontier',

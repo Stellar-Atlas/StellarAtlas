@@ -2,6 +2,7 @@ import type { Repository } from 'typeorm';
 import { HistoryArchiveObject } from '@history-scan-coordinator/domain/history-archive-object/HistoryArchiveObject.js';
 import type {
 	HistoryArchiveObjectProgressUpdate,
+	HistoryArchiveObjectTransitionCompletion,
 	HistoryArchiveObjectVerificationUpdate
 } from '@history-scan-coordinator/domain/history-archive-object/HistoryArchiveObjectRepository.js';
 import {
@@ -15,7 +16,10 @@ import {
 	type PreparedHistoryArchiveContentCompletion,
 	recordHistoryArchiveContentEvidenceBatch
 } from './HistoryArchiveContentReuseWrite.js';
-import { lockHistoryArchiveObjectRootTransition } from './HistoryArchiveRootTransitionLock.js';
+import {
+	lockHistoryArchiveObjectRootTransition,
+	lockHistoryArchiveObjectRootTransitions
+} from './HistoryArchiveRootTransitionLock.js';
 
 export async function markHistoryArchiveObjectVerified(
 	repository: Repository<HistoryArchiveObject>,
@@ -166,6 +170,54 @@ export async function markHistoryArchiveTransitionEffectsCompleted(
 			.execute();
 		if ((result.affected ?? 0) === 0) return false;
 		return true;
+	});
+}
+
+export async function markHistoryArchiveTransitionEffectsCompletedBatch(
+	repository: Repository<HistoryArchiveObject>,
+	updates: readonly HistoryArchiveObjectTransitionCompletion[]
+): Promise<ReadonlySet<string>> {
+	const unique = [
+		...new Map(
+			updates.map((update) => [
+				`${update.remoteId}:${update.claimAttempt}:${update.status}`,
+				update
+			])
+		).values()
+	];
+	if (unique.length === 0) return new Set();
+
+	return await repository.manager.transaction(async (manager) => {
+		await lockHistoryArchiveObjectRootTransitions(
+			manager,
+			unique.map((update) => update.remoteId)
+		);
+		const rows = extractRows(
+			(await manager.query(
+				`
+					with input as (
+						select *
+						from jsonb_to_recordset($1::jsonb) as item(
+							"remoteId" uuid,
+							"claimAttempt" integer,
+							status text
+						)
+					)
+					update "history_archive_object_queue" object
+					set "transitionEffectsCompletedAt" = now(),
+						"updatedAt" = now()
+					from input
+					where object."remoteId" = input."remoteId"
+					  and object.status = input.status
+					  and object.attempts = input."claimAttempt"
+					  and object."transitionEffectsRequiredAt" is not null
+					  and object."transitionEffectsCompletedAt" is null
+					returning object."remoteId" as "remoteId"
+				`,
+				[JSON.stringify(unique)]
+			)) as RawObjectQueryResult
+		) as readonly { readonly remoteId: string }[];
+		return new Set(rows.map((row) => row.remoteId));
 	});
 }
 

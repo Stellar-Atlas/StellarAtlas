@@ -11,6 +11,11 @@ export interface HistoryArchiveObjectEventOptions {
 	readonly evidenceClass?: HistoryArchiveObjectEvidenceClass | null;
 }
 
+export interface HistoryArchiveObjectEventAppend {
+	readonly object: HistoryArchiveObject;
+	readonly options: HistoryArchiveObjectEventOptions;
+}
+
 export interface HistoryArchiveObjectEventPage {
 	readonly count: number;
 	readonly events: readonly HistoryArchiveObjectEvent[];
@@ -25,6 +30,9 @@ export interface HistoryArchiveObjectEventRepository {
 	appendFromObjectIdempotently(
 		object: HistoryArchiveObject,
 		options: HistoryArchiveObjectEventOptions
+	): Promise<void>;
+	appendFromObjectsIdempotently(
+		events: readonly HistoryArchiveObjectEventAppend[]
 	): Promise<void>;
 	findRecent(options: {
 		readonly archiveUrlIdentity?: string;

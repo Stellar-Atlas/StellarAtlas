@@ -328,6 +328,66 @@ export class CompleteHistoryArchiveObject {
 		}
 	}
 
+	async reconcileVerifiedTransitionBatch(
+		objects: readonly HistoryArchiveObject[],
+		options: CompleteHistoryArchiveObjectReconciliationOptions = {}
+	): Promise<void> {
+		const unique = [
+			...new Map(
+				objects
+					.filter(
+						(object) =>
+							object.status === 'verified' &&
+							object.transitionEffectsCompletedAt === null
+					)
+					.map((object) => [`${object.remoteId}:${object.attempts}`, object])
+			).values()
+		];
+		const batched = unique.filter(
+			(object) =>
+				object.objectType !== 'history-archive-state' &&
+				object.objectType !== 'checkpoint-state'
+		);
+		if (batched.length > 0) {
+			await this.eventRecorder.recordDurablyBatch(
+				batched.map((object) => ({
+					object,
+					options: {
+						claimAttempt: object.attempts,
+						eventType: 'verified'
+					}
+				}))
+			);
+			const completed =
+				await this.objectRepository.markTransitionEffectsCompletedBatch(
+					batched.map((object) => ({
+						claimAttempt: object.attempts,
+						remoteId: object.remoteId,
+						status: 'verified'
+					}))
+				);
+			for (const object of batched) {
+				if (completed.has(object.remoteId)) {
+					this.requestProofCompletionEvent(object);
+				}
+			}
+		}
+
+		for (const object of unique) {
+			if (
+				object.objectType !== 'history-archive-state' &&
+				object.objectType !== 'checkpoint-state'
+			) {
+				continue;
+			}
+			await this.reconcileClaimAttempt(
+				object.remoteId,
+				object.attempts,
+				options
+			);
+		}
+	}
+
 	async reconcileCheckpointDependencies(
 		object: HistoryArchiveObject
 	): Promise<void> {
