@@ -1,5 +1,6 @@
 import { injectable } from 'inversify';
 import { Repository } from 'typeorm';
+import { createHash } from 'node:crypto';
 import type { HistoryArchiveObject } from '@history-scan-coordinator/domain/history-archive-object/HistoryArchiveObject.js';
 import { HistoryArchiveObjectEvent } from '@history-scan-coordinator/domain/history-archive-object/HistoryArchiveObjectEvent.js';
 import type {
@@ -29,25 +30,21 @@ export class TypeOrmHistoryArchiveObjectEventRepository implements HistoryArchiv
 		options: HistoryArchiveObjectEventOptions
 	): Promise<void> {
 		const claimAttempt = options.claimAttempt ?? object.attempts;
-		await this.repository.manager.transaction(async (manager) => {
-			await manager.query(
-				`select pg_advisory_xact_lock(hashtextextended($1::text, 8191))`,
-				[`${object.remoteId}:${options.eventType}:${claimAttempt}`]
-			);
-			const [existing] = (await manager.query(
-				`select 1 from "history_archive_object_event"
-				 where "objectRemoteId" = $1::uuid
-				 and "eventType" = $2::text
-				 and "claimAttempt" = $3::integer
-				 limit 1`,
-				[object.remoteId, options.eventType, claimAttempt]
-			)) as readonly unknown[];
-			if (existing !== undefined) return;
-			await manager.insert(
-				HistoryArchiveObjectEvent,
-				createEvent(object, { ...options, claimAttempt })
-			);
-		});
+		const event = createEvent(
+			object,
+			{ ...options, claimAttempt },
+			createIdempotentEventRemoteId(
+				object.remoteId,
+				options.eventType,
+				claimAttempt
+			)
+		);
+		await this.repository
+			.createQueryBuilder()
+			.insert()
+			.values(event)
+			.orIgnore()
+			.execute();
 	}
 
 	async findRecent(options: {
@@ -98,7 +95,8 @@ export class TypeOrmHistoryArchiveObjectEventRepository implements HistoryArchiv
 
 function createEvent(
 	object: HistoryArchiveObject,
-	options: HistoryArchiveObjectEventOptions
+	options: HistoryArchiveObjectEventOptions,
+	remoteId?: string
 ): HistoryArchiveObjectEvent {
 	return new HistoryArchiveObjectEvent({
 		archiveUrl: object.archiveUrl,
@@ -118,9 +116,27 @@ function createEvent(
 		objectRemoteId: object.remoteId,
 		objectType: object.objectType,
 		objectUrl: object.objectUrl,
+		remoteId,
 		verificationFacts: object.verificationFacts,
 		workerStage: object.workerStage
 	});
+}
+
+function createIdempotentEventRemoteId(
+	objectRemoteId: string,
+	eventType: HistoryArchiveObjectEventOptions['eventType'],
+	claimAttempt: number
+): string {
+	const digest = createHash('sha256')
+		.update('history-archive-object-event-v1\0')
+		.update(objectRemoteId)
+		.update('\0')
+		.update(eventType)
+		.update('\0')
+		.update(claimAttempt.toString())
+		.digest('hex');
+	const variant = ((Number.parseInt(digest[16]!, 16) & 0x3) | 0x8).toString(16);
+	return `${digest.slice(0, 8)}-${digest.slice(8, 12)}-5${digest.slice(13, 16)}-${variant}${digest.slice(17, 20)}-${digest.slice(20, 32)}`;
 }
 
 function normalizeLimit(limit: number): number {
