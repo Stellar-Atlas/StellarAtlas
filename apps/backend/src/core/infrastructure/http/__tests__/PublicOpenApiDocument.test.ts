@@ -10,12 +10,18 @@ describe('public OpenAPI document', () => {
 
 	it('keeps public data routes and removes operator or cross-check routes', () => {
 		expect(paths['/v1/explorer/operations']).toBeDefined();
+		expect(paths['/horizon/']).toBeDefined();
+		expect(paths['/galexie/.config.json']).toBeDefined();
+		expect(paths['/v1/history-data/catalog']).toBeDefined();
+		expect(paths['/v1/history-data/batches']).toBeDefined();
+		expect(paths['/v1/history-data/batches/{batchId}/{dataset}']).toBeDefined();
+
 		expect(paths['/v1/known/nodes']).toBeDefined();
 		expect(paths['/v1/nodes']).toBeDefined();
 		expect(paths['/v1/archive-scans/objects/status-summary']).toBeDefined();
 		expect(
 			paths['/v1/archive-scans/repair-artifacts/buckets/{bucketHash}']
-		).toBeDefined();
+		).toBeUndefined();
 		expect(
 			paths['/v2/archive-scans/{encodedUrl}/object-evidence']
 		).toBeDefined();

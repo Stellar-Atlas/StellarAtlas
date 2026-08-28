@@ -20,7 +20,7 @@ describe('HistoryDataRouter.integration', () => {
 			'/v1/history-data',
 			historyDataRouter({
 				dataSource,
-				networkPassphrase: 'Public network',
+				networkPassphrase: 'Public Global Stellar Network ; September 2015',
 				storageRoot
 			})
 		);
@@ -67,6 +67,23 @@ describe('HistoryDataRouter.integration', () => {
 					contiguousLastLedger: '130',
 					contiguousLedgerCount: '128',
 					supplementalLedgerCount: '64'
+				});
+				expect(response.body.historyOrigin).toEqual({
+					explanation: expect.stringContaining(
+						'Ledger 2 is the first LedgerCloseMeta'
+					),
+					firstLedgerCloseMeta: {
+						hash: 'fe0f6bea5f341344fdb5bc6fc4ad719dd63071d9203e9a1e7f17c68ea1ecebde',
+						previousLedgerHash:
+							'39c2a3cd4141b2853e70d84601faa44744660334b48f3228e0309342e3f4eb48',
+						sequence: '2',
+						transactionCount: 0
+					},
+					genesis: {
+						hash: '39c2a3cd4141b2853e70d84601faa44744660334b48f3228e0309342e3f4eb48',
+						ledgerCloseMetaAvailable: false,
+						sequence: '1'
+					}
 				});
 			});
 	});

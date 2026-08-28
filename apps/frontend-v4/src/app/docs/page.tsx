@@ -78,6 +78,19 @@ const endpointGroups: EndpointGroup[] = [
 	},
 	{
 		description:
+			'Read-only access to the owned Horizon API, the official SEP-54 Galexie object store, and StellarAtlas immutable decoded-history batches. The decoded LedgerCloseMeta stream begins at ledger 2: ledger 1 is the synthetic genesis header with no close transition, and ledger 2 is an empty-transaction close linked to that genesis hash. The decoded batch format is not SEP-54 object geometry.',
+		endpoints: [
+			'/horizon/',
+			'/galexie/.config.json',
+			'/galexie/:sep54ObjectPath',
+			'/v1/history-data/catalog',
+			'/v1/history-data/batches?dataset=:dataset&limit=:limit&beforeLedger=:ledger',
+			'/v1/history-data/batches/:batchId/:dataset'
+		],
+		title: 'Access historical data'
+	},
+	{
+		description:
 			'Faceted lookup with bounded offset pagination and explicit totalIsExact metadata. archiveStatus=issue includes confirmed remote archive errors and current unreachable roots; scanner-issue remains a separate infrastructure status.',
 		endpoints: [
 			'/v1/search',

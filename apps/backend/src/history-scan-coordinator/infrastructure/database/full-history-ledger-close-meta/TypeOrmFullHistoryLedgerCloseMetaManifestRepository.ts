@@ -113,9 +113,15 @@ export class TypeOrmFullHistoryLedgerCloseMetaManifestRepository implements Full
 				[networkHash, registration.firstAvailableLedger]
 			);
 			const watermark = await loadWatermark(manager, networkHash);
+			const watermarkOrigin = databaseInteger(
+				watermark.firstAvailableLedger,
+				'firstAvailableLedger'
+			);
 			if (
-				Number(watermark.firstAvailableLedger) !==
-				registration.firstAvailableLedger
+				!isCompatibleNetworkOrigin(
+					watermarkOrigin,
+					registration.firstAvailableLedger
+				)
 			) {
 				throw new Error('LedgerCloseMeta source does not match network origin');
 			}
@@ -168,6 +174,66 @@ export class TypeOrmFullHistoryLedgerCloseMetaManifestRepository implements Full
 			);
 			const advanced = await advanceWatermark(manager, networkHash, watermark);
 			return receipt(batchId, advanced, false);
+		});
+	}
+
+	async commitLedgerTwoBootstrap(
+		batch: FullHistoryLedgerCloseMetaProcessedBatchCommit
+	): Promise<FullHistoryLedgerCloseMetaBatchCommitReceipt> {
+		validateProcessedBatch(batch);
+		const range = batch.processing.range;
+		if (
+			range.startSequence !== 2 ||
+			range.endSequence !== 2 ||
+			range.ledgerCount !== 1
+		) {
+			throw new Error('Ledger-two bootstrap must contain exactly ledger 2');
+		}
+		return this.dataSource.transaction(async (manager) => {
+			await setTransactionBounds(manager);
+			const networkHash = digestBuffer(batch.source.networkPassphraseHash);
+			await lockNetwork(manager, batch.source.networkPassphraseHash);
+			const existingId = await findAndVerifyFullHistoryLedgerCloseMetaBatch(
+				manager,
+				batch,
+				networkHash
+			);
+			const watermark = await lockWatermark(manager, networkHash);
+			if (existingId !== null) {
+				if (Number(watermark.firstAvailableLedger) !== 2) {
+					throw new Error(
+						'Ledger two exists without the durable network origin'
+					);
+				}
+				return receipt(existingId, watermark, true);
+			}
+			if (Number(watermark.firstAvailableLedger) !== 3) {
+				throw new Error(
+					'Ledger-two bootstrap requires the existing ledger-3 origin'
+				);
+			}
+			const batchId = randomUUID();
+			await insertFullHistoryLedgerCloseMetaBatch(
+				manager,
+				batchId,
+				batch,
+				networkHash
+			);
+			await manager.query(
+				`update "full_history_ledger_close_meta_watermark"
+				 set "first_available_ledger" = 2,
+					"version" = "version" + 1, "updated_at" = now()
+				 where "network_passphrase_hash" = $1 and "version" = $2`,
+				[networkHash, watermark.version]
+			);
+			const updated = await loadWatermark(manager, networkHash);
+			if (
+				Number(updated.firstAvailableLedger) !== 2 ||
+				updated.nextLedger !== watermark.nextLedger
+			) {
+				throw new Error('Ledger-two network origin was not persisted');
+			}
+			return receipt(batchId, updated, false);
 		});
 	}
 
@@ -238,6 +304,17 @@ async function lockWatermark(manager: EntityManager, networkHash: Buffer) {
 			[networkHash]
 		),
 		'locked watermark'
+	);
+}
+
+function isCompatibleNetworkOrigin(
+	watermarkOrigin: number,
+	sourceOrigin: number
+): boolean {
+	return (
+		watermarkOrigin === sourceOrigin ||
+		(watermarkOrigin === 2 && sourceOrigin === 3) ||
+		(watermarkOrigin === 3 && sourceOrigin === 2)
 	);
 }
 

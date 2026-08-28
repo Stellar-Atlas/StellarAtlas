@@ -4,6 +4,7 @@ import {
 	type OpenApiOperationContext,
 	type OpenApiRecord
 } from './OpenApiDocumentProjection.js';
+import { withDataAccessOpenApiPaths } from './DataAccessOpenApiDocument.js';
 import { isPublicOpenApiOperation } from './OpenApiOperationClassification.js';
 
 const publicServer = {
@@ -43,6 +44,11 @@ const publicTagDefinitions = [
 		name: 'Full-history ingestion'
 	},
 	{
+		description:
+			'Read-only Horizon compatibility, SEP-54 Galexie objects, and immutable decoded-history artifacts.',
+		name: 'Data access'
+	},
+	{
 		description: 'Federated Byzantine Agreement System quorum evidence.',
 		name: 'FBAS'
 	},
@@ -61,7 +67,7 @@ const publicTagDefinitions = [
 ] as const;
 
 export function createPublicOpenApiDocument(document: unknown): OpenApiRecord {
-	return projectOpenApiDocument(document, {
+	return projectOpenApiDocument(withDataAccessOpenApiPaths(document), {
 		includeOperation: isPublicOpenApiOperation,
 		info: {
 			description:
@@ -108,6 +114,13 @@ function canonicalPublicTag(path: string, value: unknown): string {
 		return 'Organizations';
 	}
 	if (path.startsWith('/v1/status')) return 'Status';
+	if (
+		path.startsWith('/horizon') ||
+		path.startsWith('/galexie') ||
+		path.startsWith('/v1/history-data')
+	) {
+		return 'Data access';
+	}
 	if (
 		path.startsWith('/v1/indexing') ||
 		/^\/v1\/ledgers\/[^/]+\/ingestion-status$/.test(path)

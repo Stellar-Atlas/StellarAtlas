@@ -60,6 +60,12 @@ const batchIdPattern =
 	/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const defaultLimit = 25;
 const maximumLimit = 100;
+const publicNetworkPassphrase =
+	'Public Global Stellar Network ; September 2015';
+const publicNetworkGenesisLedgerHash =
+	'39c2a3cd4141b2853e70d84601faa44744660334b48f3228e0309342e3f4eb48';
+const publicNetworkLedgerTwoHash =
+	'fe0f6bea5f341344fdb5bc6fc4ad719dd63071d9203e9a1e7f17c68ea1ecebde';
 
 export const HistoryDataRouterWrapper = (
 	config: HistoryDataRouterConfig
@@ -83,6 +89,7 @@ export const HistoryDataRouterWrapper = (
 					batchListPath: '/v1/history-data/batches',
 					coverage,
 					format: 'stellar-atlas-decoded-history-v1',
+					historyOrigin: historyOrigin(config.networkPassphrase),
 					galexie: {
 						compatible: false,
 						endpoint: '/galexie/.config.json',
@@ -261,6 +268,24 @@ function parseOptionalLedger(value: unknown): string | null | undefined {
 	}
 	const ledger = BigInt(value);
 	return ledger <= 4_294_967_295n ? ledger.toString() : undefined;
+}
+function historyOrigin(networkPassphrase: string) {
+	if (networkPassphrase !== publicNetworkPassphrase) return null;
+	return Object.freeze({
+		explanation:
+			'Pubnet ledger 1 is the synthetic genesis ledger header and has no LedgerCloseMeta transition. Ledger 2 is the first LedgerCloseMeta; it contains zero transactions and links to genesis through previousLedgerHash.',
+		firstLedgerCloseMeta: Object.freeze({
+			hash: publicNetworkLedgerTwoHash,
+			previousLedgerHash: publicNetworkGenesisLedgerHash,
+			sequence: '2',
+			transactionCount: 0
+		}),
+		genesis: Object.freeze({
+			hash: publicNetworkGenesisLedgerHash,
+			ledgerCloseMetaAvailable: false,
+			sequence: '1'
+		})
+	});
 }
 
 function resolveArtifactPath(root: string, storageKey: string): string | null {
