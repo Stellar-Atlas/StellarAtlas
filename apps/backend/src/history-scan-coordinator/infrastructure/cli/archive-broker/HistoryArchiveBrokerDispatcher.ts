@@ -140,17 +140,25 @@ export class HistoryArchiveBrokerDispatcher {
 		while (!this.stopping) {
 			const observedWakeVersion = this.wakeVersion;
 			try {
-				await this.repository.ensureFrontier();
 				const capacity = await this.getAvailableCapacity();
 				if (capacity < 1) {
 					await this.waitForWork(observedWakeVersion);
 					continue;
 				}
-				const jobs = await this.repository.reserveJobs(
-					Math.min(capacity, this.config.batchSize),
+				const limit = Math.min(capacity, this.config.batchSize);
+				let jobs = await this.repository.reserveJobs(
+					limit,
 					this.config.maximumPerHost,
 					this.config.maximumPriority
 				);
+				if (jobs.length === 0) {
+					await this.repository.ensureFrontier();
+					jobs = await this.repository.reserveJobs(
+						limit,
+						this.config.maximumPerHost,
+						this.config.maximumPriority
+					);
+				}
 				if (jobs.length === 0) {
 					await this.waitForWork(observedWakeVersion);
 					continue;

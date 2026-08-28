@@ -9,10 +9,6 @@ import {
 	historyArchiveSchedulableObjectSql,
 	synchronizeHistoryArchiveReadyQueue
 } from './HistoryArchiveObjectReadyQueue.js';
-import {
-	canonicalRuntimePriorityCtesSql,
-	historyArchiveReservationPrioritySql
-} from './HistoryArchiveCanonicalRuntimePrioritySql.js';
 import { enqueueCurrentTerminalReadyCheckpointProofRefreshes } from './HistoryArchiveCheckpointProofRefreshQueue.js';
 import { materializeOrderedCheckpointPrefetch } from './HistoryArchiveCheckpointPrefetch.js';
 import { historyArchiveExecutionReconciliationLockName } from './HistoryArchiveObjectExecutionReconciler.js';
@@ -53,7 +49,7 @@ interface BrokerJobRow {
 }
 
 export const reserveBrokerJobsSql = `
-	with ${canonicalRuntimePriorityCtesSql}, active_hosts as materialized (
+	with active_hosts as materialized (
 		select object."hostIdentity", count(*)::integer as active_count
 		from "history_archive_object_ready" ready
 		join "history_archive_object_queue" object
@@ -64,7 +60,7 @@ export const reserveBrokerJobsSql = `
 		select ready."objectRemoteId",
 			ready."archiveUrlIdentity",
 			ready.priority as stored_priority,
-			${historyArchiveReservationPrioritySql('ready', 'object')} as priority,
+			ready.priority as priority,
 			ready."dispatchToken",
 			ready."updatedAt",
 			object."hostIdentity",
@@ -80,8 +76,7 @@ export const reserveBrokerJobsSql = `
 				ready."dispatchToken" is not null
 				or (${historyArchiveSchedulableObjectSql('object')})
 			)
-			and ${historyArchiveReservationPrioritySql('ready', 'object')} <=
-				$3::smallint
+			and ready.priority <= $3::smallint
 			and not exists (
 				select 1
 				from "history_archive_object_host_throttle" throttle
