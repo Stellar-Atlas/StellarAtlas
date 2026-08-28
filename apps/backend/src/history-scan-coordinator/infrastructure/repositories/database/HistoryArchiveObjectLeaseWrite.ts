@@ -16,10 +16,7 @@ import {
 	type PreparedHistoryArchiveContentCompletion,
 	recordHistoryArchiveContentEvidenceBatch
 } from './HistoryArchiveContentReuseWrite.js';
-import {
-	lockHistoryArchiveObjectRootTransition,
-	lockHistoryArchiveObjectRootTransitions
-} from './HistoryArchiveRootTransitionLock.js';
+import { lockHistoryArchiveObjectRootTransition } from './HistoryArchiveRootTransitionLock.js';
 
 export async function markHistoryArchiveObjectVerified(
 	repository: Repository<HistoryArchiveObject>,
@@ -188,10 +185,6 @@ export async function markHistoryArchiveTransitionEffectsCompletedBatch(
 	if (unique.length === 0) return new Set();
 
 	return await repository.manager.transaction(async (manager) => {
-		await lockHistoryArchiveObjectRootTransitions(
-			manager,
-			unique.map((update) => update.remoteId)
-		);
 		const rows = extractRows(
 			(await manager.query(
 				`
