@@ -428,7 +428,7 @@ export class CompleteHistoryArchiveObject {
 			object.verificationFacts
 		);
 		if (descendants.length === 0) return false;
-		await this.objectRepository.planObjects(descendants);
+		await this.objectRepository.activateObjects(descendants);
 		await this.objectRepository.markCheckpointDescendantsPlanned(
 			object.remoteId
 		);

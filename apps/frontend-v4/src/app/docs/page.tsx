@@ -1,3 +1,4 @@
+import { redirect } from 'next/navigation';
 import { PageHeading } from '../../components/layout/page-heading';
 
 interface EndpointGroup {
@@ -146,6 +147,7 @@ const endpointGroups: EndpointGroup[] = [
 ];
 
 export default function DocsPage(): React.JSX.Element {
+	redirect('/api-docs?view=swagger');
 	return (
 		<main className="shell">
 			<PageHeading

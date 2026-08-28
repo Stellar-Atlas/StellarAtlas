@@ -27,6 +27,23 @@ const promotionRootIndexName = 'idx_history_archive_object_plan_root_created';
 const promotionPriorityIndexName =
 	'idx_history_archive_object_plan_root_priority_created';
 
+export function deduplicateHistoryArchiveObjects(
+	objects: readonly HistoryArchiveObject[]
+): readonly HistoryArchiveObject[] {
+	const unique = new Map<string, HistoryArchiveObject>();
+	for (const object of objects) {
+		const identity = `${object.archiveUrlIdentity}\u001f${object.objectType}\u001f${object.objectKey}`;
+		const existing = unique.get(identity);
+		if (
+			existing === undefined ||
+			(existing.dependencyReady !== true && object.dependencyReady === true)
+		) {
+			unique.set(identity, object);
+		}
+	}
+	return [...unique.values()];
+}
+
 export function isHistoryArchivePlanPromotionEnabled(
 	env: NodeJS.ProcessEnv = process.env
 ): boolean {
@@ -37,13 +54,14 @@ export async function planHistoryArchiveObjects(
 	repository: Repository<HistoryArchiveObject>,
 	objects: readonly HistoryArchiveObject[]
 ): Promise<number> {
+	const uniqueObjects = deduplicateHistoryArchiveObjects(objects);
 	const refreshed = await requeueStaleHistoryArchiveStateObjects(
 		repository.manager,
-		objects
+		uniqueObjects
 	);
 	let planned = 0;
-	for (let offset = 0; offset < objects.length; offset += planChunkSize) {
-		const chunk = objects.slice(offset, offset + planChunkSize);
+	for (let offset = 0; offset < uniqueObjects.length; offset += planChunkSize) {
+		const chunk = uniqueObjects.slice(offset, offset + planChunkSize);
 		const values = chunk.map((object) => ({
 			archiveUrl: object.archiveUrl,
 			archiveUrlIdentity: object.archiveUrlIdentity,
@@ -72,8 +90,9 @@ export async function activateHistoryArchiveObjects(
 	objects: readonly HistoryArchiveObject[]
 ): Promise<number> {
 	if (objects.length === 0) return 0;
+	const uniqueObjects = deduplicateHistoryArchiveObjects(objects);
 	const payload = JSON.stringify(
-		objects.map((object) => ({
+		uniqueObjects.map((object) => ({
 			archiveUrl: object.archiveUrl,
 			archiveUrlIdentity: object.archiveUrlIdentity,
 			bucketHash: object.bucketHash,
@@ -91,7 +110,7 @@ export async function activateHistoryArchiveObjects(
 	return await repository.manager.transaction(async (manager) => {
 		await lockHistoryArchiveRootTransitions(
 			manager,
-			objects.map((object) => object.archiveUrlIdentity)
+			uniqueObjects.map((object) => object.archiveUrlIdentity)
 		);
 		await manager.query('select pg_advisory_xact_lock(hashtext($1))', [
 			historyArchiveExecutionReconciliationLockName

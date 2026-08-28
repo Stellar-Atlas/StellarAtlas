@@ -32,7 +32,7 @@ export async function findVerifiedCheckpointsNeedingFanout(
 	const availableCheckpoints = Math.floor(
 		Math.max(0, maximumPlanRows - planRows) / 64
 	);
-	const safeLimit = Math.min(requestedLimit, availableCheckpoints);
+	const safeLimit = Math.min(requestedLimit, Math.max(1, availableCheckpoints));
 	if (safeLimit === 0) return [];
 
 	return await repository
