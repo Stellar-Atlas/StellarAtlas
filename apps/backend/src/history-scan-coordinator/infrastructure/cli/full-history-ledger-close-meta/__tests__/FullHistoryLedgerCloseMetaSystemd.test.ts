@@ -10,6 +10,9 @@ describe('LedgerCloseMeta systemd service', () => {
 		const service = readRepoFile(
 			'ops/systemd/stellaratlas-full-history-ledger-close-meta.service'
 		);
+		const hostService = readRepoFile(
+			'ops/systemd/host/stellaratlas-full-history-ledger-close-meta.service'
+		);
 		const target = readRepoFile('ops/systemd/stellaratlas.target');
 		const installer = readRepoFile('setup-systemd.sh');
 
@@ -29,6 +32,12 @@ describe('LedgerCloseMeta systemd service', () => {
 		expect(service).toContain('CPUQuota=800%');
 		expect(service).toContain('MemoryMax=64G');
 		expect(service).toContain('WantedBy=stellaratlas.target');
+		expect(hostService).toContain(
+			'RequiresMountsFor=/mnt/bulk/stellarbeat-data /mnt/stellaratlas-archive-spool'
+		);
+		expect(hostService).toContain(
+			'FULL_HISTORY_LEDGER_CLOSE_META_PUBLICATION_STAGING_ROOT=/mnt/stellaratlas-archive-spool/full-history-etl'
+		);
 		expect(target).toContain(
 			'stellaratlas-full-history-ledger-close-meta.service'
 		);

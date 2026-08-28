@@ -32,19 +32,20 @@ type Source struct {
 }
 
 type Config struct {
-	Sources               []Source
-	TypedOutputRoot       string
-	OutputPath            string
-	NetworkName           string
-	NetworkPassphrase     string
-	StartLedger           uint32
-	EndLedger             uint32
-	MaxCompressedBytes    int64
-	MaxUncompressedBytes  int64
-	MaxDecodedMemoryBytes int64
-	MaxOutputBytes        int64
-	MaxLedgers            uint64
-	MaxRows               uint64
+	Sources                []Source
+	TypedOutputRoot        string
+	OutputPath             string
+	PublicationStagingRoot string
+	NetworkName            string
+	NetworkPassphrase      string
+	StartLedger            uint32
+	EndLedger              uint32
+	MaxCompressedBytes     int64
+	MaxUncompressedBytes   int64
+	MaxDecodedMemoryBytes  int64
+	MaxOutputBytes         int64
+	MaxLedgers             uint64
+	MaxRows                uint64
 }
 
 type repeatedStrings []string
@@ -68,6 +69,7 @@ func ParseConfig(args []string, stderr io.Writer) (Config, error) {
 	flags.Var(&objectKeys, "input-object-key", "ordered SEP-54 source object key; repeat once per input")
 	flags.StringVar(&config.TypedOutputRoot, "typed-output-root", "", "root used to resolve published storage keys")
 	flags.StringVar(&config.OutputPath, "output", "", "new output directory to publish atomically")
+	flags.StringVar(&config.PublicationStagingRoot, "publication-staging-root", "", "optional fast local root used to stage output before serialized atomic publication")
 	flags.StringVar(&config.NetworkName, "network", "", "stable network label")
 	flags.StringVar(&config.NetworkPassphrase, "network-passphrase", "", "Stellar network passphrase")
 	flags.Uint64Var(&start, "start-ledger", 0, "expected inclusive start ledger")
@@ -132,6 +134,9 @@ func (c Config) Validate() error {
 		return fmt.Errorf("output must name a new leaf directory")
 	}
 	if _, _, err := resolveOutputPaths(c.TypedOutputRoot, c.OutputPath); err != nil {
+		return err
+	}
+	if err := validatePublicationStagingRoot(c.TypedOutputRoot, c.PublicationStagingRoot); err != nil {
 		return err
 	}
 	if c.StartLedger == 0 || c.EndLedger < c.StartLedger {

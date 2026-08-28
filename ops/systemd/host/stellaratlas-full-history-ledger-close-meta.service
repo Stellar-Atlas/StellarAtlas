@@ -3,7 +3,7 @@ Description=StellarAtlas LedgerCloseMeta ingestion on host-native storage
 After=network-online.target stellaratlas-postgresql.service
 Wants=network-online.target
 Requires=stellaratlas-postgresql.service
-RequiresMountsFor=/mnt/bulk/stellarbeat-data
+RequiresMountsFor=/mnt/bulk/stellarbeat-data /mnt/stellaratlas-archive-spool
 ConditionFileIsExecutable=/mnt/bulk/stellarbeat-data/Observer/apps/full-history-etl/bin/stellaratlas-full-history-etl
 
 [Service]
@@ -20,6 +20,7 @@ Environment="FULL_HISTORY_NETWORK_PASSPHRASE=Public Global Stellar Network ; Sep
 Environment=FULL_HISTORY_BULK_ROOT=/mnt/bulk/stellarbeat-data
 Environment=FULL_HISTORY_LEDGER_CLOSE_META_TYPED_ROOT=/mnt/bulk/stellarbeat-data/full-history/typed
 Environment=FULL_HISTORY_LEDGER_CLOSE_META_TEMP_ROOT=/dev/shm/stellaratlas-full-history-etl
+Environment=FULL_HISTORY_LEDGER_CLOSE_META_PUBLICATION_STAGING_ROOT=/mnt/stellaratlas-archive-spool/full-history-etl
 Environment=FULL_HISTORY_LEDGER_CLOSE_META_EXECUTABLE=/mnt/bulk/stellarbeat-data/Observer/apps/full-history-etl/bin/stellaratlas-full-history-etl
 Environment=FULL_HISTORY_LEDGER_CLOSE_META_FIRST_LEDGER=3
 Environment=FULL_HISTORY_LEDGER_CLOSE_META_FETCH_CONCURRENCY=24

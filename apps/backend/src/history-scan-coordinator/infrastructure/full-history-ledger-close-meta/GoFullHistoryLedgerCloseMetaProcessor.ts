@@ -26,6 +26,7 @@ export interface GoFullHistoryLedgerCloseMetaProcessorOptions {
 	readonly networkName: string;
 	readonly publicationRecorder?: FullHistoryPublishedOutputRecorder;
 	readonly processTimeoutMilliseconds: number;
+	readonly publicationStagingRoot?: string | null;
 	readonly temporaryInputRoot: string;
 	readonly typedOutputRoot: string;
 }
@@ -47,6 +48,7 @@ export class GoFullHistoryLedgerCloseMetaProcessor implements FullHistoryLedgerC
 	readonly #pool: BoundedAsyncTaskPool;
 	readonly #publicationRecorder: FullHistoryPublishedOutputRecorder | null;
 	readonly #processTimeoutMilliseconds: number;
+	readonly #publicationStagingRoot: string | null;
 	readonly #temporaryInputRoot: string;
 	readonly #typedOutputRoot: string;
 
@@ -62,6 +64,11 @@ export class GoFullHistoryLedgerCloseMetaProcessor implements FullHistoryLedgerC
 		);
 		this.#publicationRecorder = options.publicationRecorder ?? null;
 		this.#processTimeoutMilliseconds = options.processTimeoutMilliseconds;
+		this.#publicationStagingRoot =
+			options.publicationStagingRoot === undefined ||
+			options.publicationStagingRoot === null
+				? null
+				: resolve(options.publicationStagingRoot);
 		this.#temporaryInputRoot = resolve(options.temporaryInputRoot);
 		this.#typedOutputRoot = resolve(options.typedOutputRoot);
 	}
@@ -149,6 +156,9 @@ export class GoFullHistoryLedgerCloseMetaProcessor implements FullHistoryLedgerC
 		const limits = this.#limits;
 		return [
 			...sourceArguments,
+			...(this.#publicationStagingRoot === null
+				? []
+				: ['--publication-staging-root', this.#publicationStagingRoot]),
 			'--typed-output-root',
 			this.#typedOutputRoot,
 			'--output',
@@ -281,6 +291,11 @@ function assertOptions(
 	}
 	const temporary = resolve(options.temporaryInputRoot);
 	const typed = resolve(options.typedOutputRoot);
+	const publication =
+		options.publicationStagingRoot === undefined ||
+		options.publicationStagingRoot === null
+			? null
+			: resolve(options.publicationStagingRoot);
 	if (
 		!isChild(sharedMemoryRoot, temporary) ||
 		temporary === typed ||
@@ -290,6 +305,18 @@ function assertOptions(
 		isChild(typed, temporary)
 	) {
 		throw new Error('Transient input and typed output roots must be distinct');
+	}
+	if (
+		publication !== null &&
+		(publication === dirname(publication) ||
+			publication === temporary ||
+			publication === typed ||
+			isChild(publication, temporary) ||
+			isChild(temporary, publication) ||
+			isChild(publication, typed) ||
+			isChild(typed, publication))
+	) {
+		throw new Error('Publication staging root must be distinct');
 	}
 }
 

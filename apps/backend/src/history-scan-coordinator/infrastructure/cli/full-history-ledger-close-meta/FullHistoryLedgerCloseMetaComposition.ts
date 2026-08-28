@@ -86,6 +86,7 @@ export function composeFullHistoryLedgerCloseMetaService(
 		minimumLedgers: FULL_HISTORY_LEDGER_CLOSE_META_TYPED_SHARD_LEDGER_MINIMUM,
 		networkName: config.networkName,
 		processTimeoutMilliseconds: config.processTimeoutMilliseconds,
+		publicationStagingRoot: config.publicationStagingRoot,
 		publicationRecorder: outputInventory,
 		temporaryInputRoot: config.temporaryInputRoot,
 		typedOutputRoot: config.typedOutputRoot

@@ -61,6 +61,8 @@ verify_prerequisites() {
 		die "/mnt/bulk/stellarbeat-data is not mounted"
 	mountpoint --quiet /mnt/stellaratlas-pgwal ||
 		die "/mnt/stellaratlas-pgwal is not mounted"
+	mountpoint --quiet /mnt/stellaratlas-archive-spool ||
+		die "/mnt/stellaratlas-archive-spool is not mounted"
 	getent passwd admins >/dev/null || die "host user admins is missing"
 	getent group admins >/dev/null || die "host group admins is missing"
 	require_executable /usr/lib/postgresql/16/bin/postgres
@@ -98,6 +100,7 @@ install_runtime() {
 		"$HORIZON_CONFIG_TARGET" \
 		"$STELLARATLAS_CONFIG_TARGET"
 	install -d -o admins -g admins -m 0750 "$NATS_STATE_DIR"
+	install -d -o admins -g admins -m 0750 /mnt/stellaratlas-archive-spool/full-history-etl
 	if [[ ! -s "$NATS_ENV_TARGET" ]]; then
 		printf 'NATS_TOKEN=%s\n' "$(openssl rand -hex 32)" >"$NATS_ENV_TARGET"
 	fi

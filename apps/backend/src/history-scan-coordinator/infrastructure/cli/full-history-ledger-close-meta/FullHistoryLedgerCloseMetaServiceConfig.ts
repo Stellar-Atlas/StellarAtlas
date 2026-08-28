@@ -35,6 +35,7 @@ export interface FullHistoryLedgerCloseMetaServiceConfig {
 	readonly networkName: string;
 	readonly networkPassphrase: string;
 	readonly processingConcurrency: number;
+	readonly publicationStagingRoot: string | null;
 	readonly processTimeoutMilliseconds: number;
 	readonly requestTimeoutMilliseconds: number;
 	readonly s3Bucket: string;
@@ -73,6 +74,27 @@ export function parseFullHistoryLedgerCloseMetaServiceConfig(
 		throw new Error('temporary input root must be a strict child of /dev/shm');
 	}
 	assertDistinctRoots(temporaryInputRoot, typedOutputRoot);
+	const publicationStagingRoot =
+		environment.FULL_HISTORY_LEDGER_CLOSE_META_PUBLICATION_STAGING_ROOT ===
+		undefined
+			? null
+			: absolutePath(
+					environment.FULL_HISTORY_LEDGER_CLOSE_META_PUBLICATION_STAGING_ROOT,
+					'publication staging root'
+				);
+	if (
+		publicationStagingRoot !== null &&
+		(publicationStagingRoot === temporaryInputRoot ||
+			publicationStagingRoot === typedOutputRoot ||
+			isChild(publicationStagingRoot, temporaryInputRoot) ||
+			isChild(temporaryInputRoot, publicationStagingRoot) ||
+			isChild(publicationStagingRoot, typedOutputRoot) ||
+			isChild(typedOutputRoot, publicationStagingRoot))
+	) {
+		throw new Error(
+			'publication staging root must be disjoint from input and typed output roots'
+		);
+	}
 	const ingressBytesPerSecond = integer(
 		environment.FULL_HISTORY_LEDGER_CLOSE_META_INGRESS_BYTES_PER_SECOND,
 		maximumIngressBytesPerSecond,
@@ -272,6 +294,7 @@ export function parseFullHistoryLedgerCloseMetaServiceConfig(
 			1_024
 		),
 		processingConcurrency,
+		publicationStagingRoot,
 		processTimeoutMilliseconds: integer(
 			environment.FULL_HISTORY_LEDGER_CLOSE_META_PROCESS_TIMEOUT_MS,
 			3_600_000,

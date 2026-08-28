@@ -16,7 +16,8 @@ const sharedMemoryRoot = '/dev/shm';
 const tmpfsMagic = 0x0102_1994n;
 const transientDirectoryPattern = /^ledger-close-meta-[A-Za-z0-9]+$/;
 const networkDirectoryPattern = /^[a-f0-9]{64}$/;
-const stagingDirectoryPattern = /^\.[1-9][0-9]*-[1-9][0-9]*\.tmp-[A-Za-z0-9]+$/;
+const stagingDirectoryPattern =
+	/^\.[1-9][0-9]*-[1-9][0-9]*\.(?:tmp|publish)-[A-Za-z0-9]+$/;
 export const FULL_HISTORY_LEDGER_CLOSE_META_CLEANUP_INTERVAL_MILLISECONDS = 60_000;
 
 export async function ensureFullHistoryLedgerCloseMetaRuntime(
@@ -42,6 +43,21 @@ export async function ensureFullHistoryLedgerCloseMetaRuntime(
 		throw new Error(
 			'LedgerCloseMeta transient input root must be a private tmpfs directory under /dev/shm'
 		);
+	}
+	if (config.publicationStagingRoot !== null) {
+		await mkdir(config.publicationStagingRoot, {
+			mode: 0o750,
+			recursive: true
+		});
+		const publicationStagingInfo = await lstat(config.publicationStagingRoot);
+		if (
+			!publicationStagingInfo.isDirectory() ||
+			publicationStagingInfo.isSymbolicLink()
+		) {
+			throw new Error(
+				'LedgerCloseMeta publication staging root must be a regular directory'
+			);
+		}
 	}
 }
 
@@ -82,6 +98,13 @@ async function removeOwnedDirectories(
 		transientDirectoryPattern,
 		shouldRemove
 	);
+	if (config.publicationStagingRoot !== null) {
+		await removeMatchingDirectories(
+			config.publicationStagingRoot,
+			stagingDirectoryPattern,
+			shouldRemove
+		);
+	}
 	for (const network of await safeDirectories(config.typedOutputRoot)) {
 		if (!networkDirectoryPattern.test(network.name)) continue;
 		const publicationRoot = join(

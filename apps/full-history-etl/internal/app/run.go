@@ -46,7 +46,14 @@ func Run(ctx context.Context, config Config) (ProcessingReceipt, error) {
 	} else if !errors.Is(err, os.ErrNotExist) {
 		return ProcessingReceipt{}, fmt.Errorf("stat output path: %w", err)
 	}
-	stage, err := os.MkdirTemp(parent, "."+filepath.Base(publishPath)+".tmp-")
+	stageParent := parent
+	if config.PublicationStagingRoot != "" {
+		stageParent, err = preparePublicationStagingRoot(config.PublicationStagingRoot)
+		if err != nil {
+			return ProcessingReceipt{}, err
+		}
+	}
+	stage, err := os.MkdirTemp(stageParent, "."+filepath.Base(publishPath)+".tmp-")
 	if err != nil {
 		return ProcessingReceipt{}, fmt.Errorf("create output staging directory: %w", err)
 	}
@@ -97,7 +104,22 @@ func Run(ctx context.Context, config Config) (ProcessingReceipt, error) {
 	if err := ctx.Err(); err != nil {
 		return ProcessingReceipt{}, err
 	}
-	if err := unix.Renameat2(unix.AT_FDCWD, stage, unix.AT_FDCWD, publishPath, unix.RENAME_NOREPLACE); err != nil {
+	stageToPublish := stage
+	copiedStage := ""
+	if config.PublicationStagingRoot != "" {
+		lock, lockErr := acquirePublicationLock(ctx, stageParent)
+		if lockErr != nil {
+			return ProcessingReceipt{}, lockErr
+		}
+		defer releasePublicationLock(lock)
+		copiedStage, err = copyPublicationStage(ctx, stage, parent, filepath.Base(publishPath))
+		if err != nil {
+			return ProcessingReceipt{}, err
+		}
+		defer os.RemoveAll(copiedStage)
+		stageToPublish = copiedStage
+	}
+	if err := unix.Renameat2(unix.AT_FDCWD, stageToPublish, unix.AT_FDCWD, publishPath, unix.RENAME_NOREPLACE); err != nil {
 		if errors.Is(err, unix.EEXIST) {
 			receipt, recoveryErr := recoverExistingOutput(config, evidence, rootPath, outputPath, publishPath)
 			if recoveryErr != nil {
@@ -110,6 +132,11 @@ func Run(ctx context.Context, config Config) (ProcessingReceipt, error) {
 	renamed = true
 	if err := syncDirectory(parent); err != nil {
 		return ProcessingReceipt{}, fmt.Errorf("sync output parent after publication: %w", err)
+	}
+	if stageToPublish != stage {
+		if err := os.RemoveAll(stage); err != nil {
+			return ProcessingReceipt{}, fmt.Errorf("remove publication staging directory: %w", err)
+		}
 	}
 	published = true
 	return receipt, nil
