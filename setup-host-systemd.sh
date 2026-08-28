@@ -28,7 +28,6 @@ UNITS=(
 	stellaratlas-horizon-postgres.service
 	stellaratlas-horizon.service
 	stellaratlas-stellar-rpc.service
-	stellaratlas-meilisearch-network.service
 )
 
 die() {
@@ -67,16 +66,11 @@ verify_prerequisites() {
 	require_executable /usr/lib/postgresql/16/bin/postgres
 	require_executable /home/admins/.nvm/versions/node/v26.5.1/bin/node
 	require_executable /home/admins/.nvm/versions/node/v26.5.1/bin/pnpm
-	require_executable /home/admins/.local/bin/meilisearch
 	require_executable /usr/sbin/nats-server
 	require_executable /usr/bin/openssl
 	require_executable /mnt/bulk/stellarbeat-data/horizon/bin/horizon
 	require_executable /mnt/bulk/stellarbeat-data/stellar-rpc/bin/stellar-rpc
 	require_executable /mnt/bulk/stellarbeat-data/stellar-core/bin/stellar-core
-	require_file "$STELLARATLAS_CONFIG_TARGET/meilisearch-network.env"
-	grep -Eq '^MEILI_MASTER_KEY=.{16,}$' \
-		"$STELLARATLAS_CONFIG_TARGET/meilisearch-network.env" ||
-		die "host Meilisearch master key is missing"
 
 	for unit in "${UNITS[@]}"; do
 		require_file "$UNIT_SOURCE/$unit"

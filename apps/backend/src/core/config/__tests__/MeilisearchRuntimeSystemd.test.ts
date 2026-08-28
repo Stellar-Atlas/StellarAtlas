@@ -41,11 +41,11 @@ describe('network Meilisearch systemd contract', () => {
 
 		expect(installer).toContain('stellaratlas-meilisearch-network.service');
 		expect(polkit).toContain('stellaratlas-meilisearch-network.service');
-		expect(target).toContain('stellaratlas-meilisearch-network.service');
-		expect(apiService).toContain(
+		expect(target).not.toContain('stellaratlas-meilisearch-network.service');
+		expect(apiService).not.toContain(
 			'After=network-online.target stellaratlas-meilisearch-network.service'
 		);
-		expect(apiService).toContain(
+		expect(apiService).not.toContain(
 			'EnvironmentFile=-/etc/stellaratlas/meilisearch-network.env'
 		);
 		expect(apiService).not.toContain('MEILISEARCH_NETWORK_API_KEY=');

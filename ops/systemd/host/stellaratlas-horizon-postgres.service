@@ -1,7 +1,7 @@
 [Unit]
 Description=StellarAtlas Horizon PostgreSQL on host-native storage
 After=local-fs.target
-RequiresMountsFor=/mnt/bulk/stellarbeat-data/horizon/postgres/27
+RequiresMountsFor=/mnt/bulk/stellarbeat-data/horizon/postgres/27 /mnt/stellaratlas-pgwal
 StartLimitIntervalSec=60
 StartLimitBurst=6
 
@@ -13,7 +13,7 @@ ExecStartPre=/home/admins/.nvm/versions/node/v26.5.1/bin/node /mnt/bulk/stellarb
 ExecStart=/usr/lib/postgresql/16/bin/postgres -D /mnt/bulk/stellarbeat-data/horizon/postgres/27 -c config_file=/etc/postgresql/16/stellaratlas-horizon/postgresql.conf
 Restart=on-failure
 RestartSec=5
-TimeoutStopSec=120
+TimeoutStopSec=900
 KillSignal=SIGINT
 LimitNOFILE=65536
 MemoryMax=32G
