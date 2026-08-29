@@ -243,6 +243,16 @@ function createStatusSummary(): HistoryArchiveStatusSummaryV1 {
 	return {
 		activeObjectChecks: 1,
 		archiveEvidenceFailures: 0,
+		canonicalProofProgress: {
+			archiveUrl: 'https://history.example.com',
+			archiveUrlIdentity: 'https://history.example.com',
+			latestVerifiedCheckpointLedger: 191,
+			nextCheckpointLedger: 255,
+			remainingCheckpoints: 1,
+			targetCheckpointLedger: 255,
+			totalCheckpoints: 4,
+			verifiedCheckpoints: 3
+		},
 		checkpointCoverage: {
 			activeArchiveCheckpoints: 0,
 			archiveRootsWithState: 1,

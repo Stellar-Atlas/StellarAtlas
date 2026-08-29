@@ -285,16 +285,44 @@ function CheckpointProofDetail({
 	readonly summary: PublicHistoryArchiveStatusSummary;
 }): React.JSX.Element {
 	const checkpoints = summary.checkpointCoverage;
+	const canonical = summary.canonicalProofProgress;
 	return (
 		<details className="metadata-document">
 			<summary>
 				<span>Checkpoint proof detail</span>
 				<span className="muted-inline">
 					{formatInteger(checkpoints.categoryConsistentArchiveCheckpoints)} of{' '}
-					{formatInteger(checkpoints.totalArchiveCheckpoints)} tracked checkpoints
-					verified under the current proof
+					{formatInteger(checkpoints.totalArchiveCheckpoints)} tracked
+					checkpoints verified under the current proof
 				</span>
 			</summary>
+			<div className="canonical-proof-progress">
+				<div>
+					<strong>Canonical proof frontier</strong>
+					<span className="muted-inline">
+						{formatInteger(canonical.verifiedCheckpoints)} of{' '}
+						{formatInteger(canonical.totalCheckpoints)} unique checkpoint
+						positions proven
+					</span>
+				</div>
+				<progress
+					aria-label="Canonical checkpoint proof progress"
+					max={Math.max(1, canonical.totalCheckpoints)}
+					value={canonical.verifiedCheckpoints}
+				/>
+				<p className="muted-copy">
+					Each checkpoint is counted once, independent of archive-root
+					attestations. Latest contiguous proof ledger:{' '}
+					{canonical.latestVerifiedCheckpointLedger === null
+						? 'none'
+						: formatInteger(canonical.latestVerifiedCheckpointLedger)}
+					; next checkpoint:{' '}
+					{canonical.nextCheckpointLedger === null
+						? 'caught up'
+						: formatInteger(canonical.nextCheckpointLedger)}
+					; remaining: {formatInteger(canonical.remainingCheckpoints)}.
+				</p>
+			</div>
 			<div className="responsive-table">
 				<table className="archive-checkpoint-proof-table">
 					<thead>

@@ -22,10 +22,7 @@ export interface HistoryArchiveStatusSourceV1 {
 	readonly rootObjectStatus:
 		'pending' | 'scanning' | 'verified' | 'failed' | null;
 	readonly rootFailureChannel:
-		| 'archive_evidence'
-		| 'archive_availability'
-		| 'scanner_issue'
-		| null;
+		'archive_evidence' | 'archive_availability' | 'scanner_issue' | null;
 	readonly scannerIssueFailures: number;
 	readonly source: 'backfill' | 'history-scanner' | 'network-scan';
 	readonly stateStatus: 'available' | 'invalid' | 'unreachable';
@@ -42,9 +39,21 @@ export interface HistoryArchiveTransitionReconciliationV1 {
 	readonly status: 'caught-up' | 'reconciling' | 'stalled';
 }
 
+export interface HistoryArchiveCanonicalProofProgressV1 {
+	readonly archiveUrl: string | null;
+	readonly archiveUrlIdentity: string | null;
+	readonly latestVerifiedCheckpointLedger: number | null;
+	readonly nextCheckpointLedger: number | null;
+	readonly remainingCheckpoints: number;
+	readonly targetCheckpointLedger: number | null;
+	readonly totalCheckpoints: number;
+	readonly verifiedCheckpoints: number;
+}
+
 export interface HistoryArchiveStatusSummaryV1 {
 	readonly activeObjectChecks: number;
 	readonly archiveEvidenceFailures: number;
+	readonly canonicalProofProgress: HistoryArchiveCanonicalProofProgressV1;
 	readonly checkpointCoverage: HistoryArchiveCheckpointCoverageV1;
 	readonly generatedAt: string;
 	readonly sourceCount: number;
@@ -158,6 +167,35 @@ const HistoryArchiveTransitionReconciliationV1Schema: JSONSchemaType<HistoryArch
 		additionalProperties: false
 	};
 
+const HistoryArchiveCanonicalProofProgressV1Schema: JSONSchemaType<HistoryArchiveCanonicalProofProgressV1> =
+	{
+		type: 'object',
+		properties: {
+			archiveUrl: nullable({ type: 'string' }),
+			archiveUrlIdentity: nullable({ type: 'string' }),
+			latestVerifiedCheckpointLedger: nullable({
+				type: 'number',
+				minimum: 0
+			}),
+			nextCheckpointLedger: nullable({ type: 'number', minimum: 0 }),
+			remainingCheckpoints: { type: 'number', minimum: 0 },
+			targetCheckpointLedger: nullable({ type: 'number', minimum: 0 }),
+			totalCheckpoints: { type: 'number', minimum: 0 },
+			verifiedCheckpoints: { type: 'number', minimum: 0 }
+		},
+		required: [
+			'archiveUrl',
+			'archiveUrlIdentity',
+			'latestVerifiedCheckpointLedger',
+			'nextCheckpointLedger',
+			'remainingCheckpoints',
+			'targetCheckpointLedger',
+			'totalCheckpoints',
+			'verifiedCheckpoints'
+		],
+		additionalProperties: false
+	};
+
 export const HistoryArchiveStatusSummaryV1Schema: JSONSchemaType<HistoryArchiveStatusSummaryV1> =
 	{
 		$id: 'history-archive-status-summary-v1.json',
@@ -166,6 +204,7 @@ export const HistoryArchiveStatusSummaryV1Schema: JSONSchemaType<HistoryArchiveS
 		properties: {
 			activeObjectChecks: { type: 'number' },
 			archiveEvidenceFailures: { type: 'number' },
+			canonicalProofProgress: HistoryArchiveCanonicalProofProgressV1Schema,
 			checkpointCoverage: HistoryArchiveCheckpointCoverageV1Schema,
 			generatedAt: { type: 'string', format: 'date-time' },
 			sourceCount: { type: 'number' },
@@ -177,13 +216,13 @@ export const HistoryArchiveStatusSummaryV1Schema: JSONSchemaType<HistoryArchiveS
 				items: HistoryArchiveStatusSourceV1Schema
 			},
 			sourcesTruncated: { type: 'boolean' },
-			transitionReconciliation:
-				HistoryArchiveTransitionReconciliationV1Schema,
+			transitionReconciliation: HistoryArchiveTransitionReconciliationV1Schema,
 			unclassifiedFailures: { type: 'number' }
 		},
 		required: [
 			'activeObjectChecks',
 			'archiveEvidenceFailures',
+			'canonicalProofProgress',
 			'checkpointCoverage',
 			'generatedAt',
 			'sourceCount',

@@ -348,6 +348,16 @@ function createStatusSummary(overrides: {
 	return {
 		activeObjectChecks: overrides.activeObjectChecks ?? 0,
 		archiveEvidenceFailures: overrides.archiveEvidenceFailures ?? 0,
+		canonicalProofProgress: {
+			archiveUrl: null,
+			archiveUrlIdentity: null,
+			latestVerifiedCheckpointLedger: null,
+			nextCheckpointLedger: null,
+			remainingCheckpoints: 0,
+			targetCheckpointLedger: null,
+			totalCheckpoints: 0,
+			verifiedCheckpoints: 0
+		},
 		checkpointCoverage,
 		generatedAt: '2026-07-10T00:00:00.000Z',
 		sourceCount: 0,

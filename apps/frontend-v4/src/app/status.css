@@ -206,6 +206,30 @@
 	margin: 0;
 }
 
+.status-dashboard .canonical-proof-progress {
+	border-block-end: 1px solid var(--border);
+	display: grid;
+	gap: 10px;
+	padding: 16px 18px;
+}
+
+.status-dashboard .canonical-proof-progress > div {
+	align-items: baseline;
+	display: flex;
+	flex-wrap: wrap;
+	gap: 8px 14px;
+	justify-content: space-between;
+}
+
+.status-dashboard .canonical-proof-progress progress {
+	block-size: 14px;
+	inline-size: 100%;
+}
+
+.status-dashboard .canonical-proof-progress p {
+	margin: 0;
+}
+
 .status-dashboard .archive-checkpoint-proof-table {
 	min-inline-size: 1040px;
 }

@@ -300,6 +300,16 @@ function buildUnavailableArchiveStatus(
 	return {
 		activeObjectChecks: 0,
 		archiveEvidenceFailures: 0,
+		canonicalProofProgress: {
+			archiveUrl: null,
+			archiveUrlIdentity: null,
+			latestVerifiedCheckpointLedger: null,
+			nextCheckpointLedger: null,
+			remainingCheckpoints: 0,
+			targetCheckpointLedger: null,
+			totalCheckpoints: 0,
+			verifiedCheckpoints: 0
+		},
 		checkpointCoverage: {
 			activeArchiveCheckpoints: 0,
 			archiveRootsWithState: 0,

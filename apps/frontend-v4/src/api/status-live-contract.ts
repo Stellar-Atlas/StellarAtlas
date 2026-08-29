@@ -156,6 +156,7 @@ function validateArchiveSummary(value: unknown): boolean {
 		!matches({
 			activeObjectChecks: nonNegativeInteger,
 			archiveEvidenceFailures: nonNegativeInteger,
+			canonicalProofProgress: validateCanonicalProofProgress,
 			checkpointCoverage: validateCoverage,
 			generatedAt: dateTime,
 			sourceCount: nonNegativeInteger,
@@ -174,6 +175,29 @@ function validateArchiveSummary(value: unknown): boolean {
 		value.sources.length <= Number(value.sourceLimit) &&
 		Number(value.sourceCount) >= value.sources.length &&
 		value.sourcesTruncated === Number(value.sourceCount) > value.sources.length
+	);
+}
+
+function validateCanonicalProofProgress(value: unknown): boolean {
+	if (
+		!matches({
+			archiveUrl: nullable(nonEmptyString),
+			archiveUrlIdentity: nullable(nonEmptyString),
+			latestVerifiedCheckpointLedger: nullable(nonNegativeInteger),
+			nextCheckpointLedger: nullable(nonNegativeInteger),
+			remainingCheckpoints: nonNegativeInteger,
+			targetCheckpointLedger: nullable(nonNegativeInteger),
+			totalCheckpoints: nonNegativeInteger,
+			verifiedCheckpoints: nonNegativeInteger
+		})(value) ||
+		!isRecord(value)
+	) {
+		return false;
+	}
+	return (
+		Number(value.verifiedCheckpoints) <= Number(value.totalCheckpoints) &&
+		Number(value.remainingCheckpoints) ===
+			Number(value.totalCheckpoints) - Number(value.verifiedCheckpoints)
 	);
 }
 

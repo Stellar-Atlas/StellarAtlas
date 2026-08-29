@@ -168,6 +168,16 @@ function sanitizeArchiveSummary(value: unknown): Record<string, unknown> {
 			'sourcesTruncated',
 			'unclassifiedFailures'
 		]),
+		canonicalProofProgress: pick(source.canonicalProofProgress, [
+			'archiveUrl',
+			'archiveUrlIdentity',
+			'latestVerifiedCheckpointLedger',
+			'nextCheckpointLedger',
+			'remainingCheckpoints',
+			'targetCheckpointLedger',
+			'totalCheckpoints',
+			'verifiedCheckpoints'
+		]),
 		checkpointCoverage: pick(source.checkpointCoverage, [
 			'activeArchiveCheckpoints',
 			'archiveRootsWithState',

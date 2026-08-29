@@ -99,6 +99,7 @@ export {
 	type HistoryArchiveObjectTypeSummaryV1
 } from './dto/history-archive-object-summary-v1.js';
 export {
+	type HistoryArchiveCanonicalProofProgressV1,
 	type HistoryArchiveStatusSourceV1,
 	type HistoryArchiveStatusSummaryV1,
 	type HistoryArchiveTransitionReconciliationV1,

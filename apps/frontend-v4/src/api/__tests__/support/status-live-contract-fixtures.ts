@@ -239,6 +239,16 @@ function createArchiveSummary() {
 	return {
 		activeObjectChecks: 20,
 		archiveEvidenceFailures: 1,
+		canonicalProofProgress: {
+			archiveUrl: 'https://archive.example',
+			archiveUrlIdentity: 'https://archive.example',
+			latestVerifiedCheckpointLedger: 575,
+			nextCheckpointLedger: 639,
+			remainingCheckpoints: 1,
+			targetCheckpointLedger: 639,
+			totalCheckpoints: 10,
+			verifiedCheckpoints: 9
+		},
 		checkpointCoverage: {
 			activeArchiveCheckpoints: 0,
 			archiveRootsWithState: 1,

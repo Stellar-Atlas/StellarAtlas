@@ -1,7 +1,9 @@
 import type { EntityManager } from 'typeorm';
-import type {
-	HistoryArchiveStatusSourceV1,
-	HistoryArchiveStatusSummaryV1
+import {
+	normalizeHistoryArchiveRootUrl,
+	type HistoryArchiveCanonicalProofProgressV1,
+	type HistoryArchiveStatusSourceV1,
+	type HistoryArchiveStatusSummaryV1
 } from 'shared';
 import { CURRENT_HISTORY_ARCHIVE_CHECKPOINT_PROOF_VERSION } from '../../../domain/history-archive-checkpoint-proof/HistoryArchiveCheckpointProof.js';
 import { requireNumber, type NumericValue } from './ScanJobRowMapper.js';
@@ -71,6 +73,19 @@ type SourceCountRow = {
 	readonly sourcecount?: NumericValue;
 };
 
+export type CanonicalProofProgressRow = {
+	readonly archiveUrl?: string | null;
+	readonly archiveurl?: string | null;
+	readonly archiveUrlIdentity?: string;
+	readonly archiveurlidentity?: string;
+	readonly currentLedger?: NumericValue | null;
+	readonly currentledger?: NumericValue | null;
+	readonly frontierStatus?: string | null;
+	readonly frontierstatus?: string | null;
+	readonly nextHistoricalCheckpointLedger?: NumericValue | null;
+	readonly nexthistoricalcheckpointledger?: NumericValue | null;
+};
+
 export const historyArchiveStatusSourceLimit = 256;
 
 export async function getHistoryArchiveObjectStatusSummary(
@@ -79,22 +94,24 @@ export async function getHistoryArchiveObjectStatusSummary(
 ): Promise<HistoryArchiveStatusSummaryV1> {
 	const [
 		checkpointCoverage,
+		canonicalProofProgress,
 		sources,
 		evidenceHealth,
 		sourceCount,
 		transitionReconciliation
-	] =
-		await Promise.all([
-			getCheckpointCoverage(manager, null),
-			getStatusSourceSummaries(manager),
-			getEvidenceHealth(manager),
-			getSourceCount(manager),
-			getHistoryArchiveTransitionReconciliation(manager, generatedAt)
-		]);
+	] = await Promise.all([
+		getCheckpointCoverage(manager, null),
+		getCanonicalProofProgress(manager),
+		getStatusSourceSummaries(manager),
+		getEvidenceHealth(manager),
+		getSourceCount(manager),
+		getHistoryArchiveTransitionReconciliation(manager, generatedAt)
+	]);
 
 	return {
 		activeObjectChecks: evidenceHealth.activeObjectChecks,
 		archiveEvidenceFailures: evidenceHealth.archiveEvidenceFailures,
+		canonicalProofProgress,
 		checkpointCoverage,
 		generatedAt: generatedAt.toISOString(),
 		sourceCount,
@@ -104,6 +121,87 @@ export async function getHistoryArchiveObjectStatusSummary(
 		sourcesTruncated: sourceCount > sources.length,
 		transitionReconciliation,
 		unclassifiedFailures: evidenceHealth.unclassifiedFailures
+	};
+}
+
+async function getCanonicalProofProgress(
+	manager: EntityManager
+): Promise<HistoryArchiveCanonicalProofProgressV1> {
+	const archiveUrlIdentity = normalizeHistoryArchiveRootUrl(
+		process.env.HISTORY_ARCHIVE_CANONICAL_FIRST_ROOT ?? ''
+	);
+	if (archiveUrlIdentity === null) {
+		return emptyCanonicalProofProgress(null);
+	}
+	const [row] = (await manager.query(canonicalProofProgressSql, [
+		archiveUrlIdentity
+	])) as readonly CanonicalProofProgressRow[];
+	if (row === undefined) {
+		return emptyCanonicalProofProgress(archiveUrlIdentity);
+	}
+	return mapCanonicalProofProgress(row, archiveUrlIdentity);
+}
+
+function emptyCanonicalProofProgress(
+	archiveUrlIdentity: string | null
+): HistoryArchiveCanonicalProofProgressV1 {
+	return {
+		archiveUrl: archiveUrlIdentity,
+		archiveUrlIdentity,
+		latestVerifiedCheckpointLedger: null,
+		nextCheckpointLedger: archiveUrlIdentity === null ? null : 63,
+		remainingCheckpoints: 0,
+		targetCheckpointLedger: null,
+		totalCheckpoints: 0,
+		verifiedCheckpoints: 0
+	};
+}
+
+export function mapCanonicalProofProgress(
+	row: CanonicalProofProgressRow,
+	fallbackArchiveUrlIdentity: string
+): HistoryArchiveCanonicalProofProgressV1 {
+	const archiveUrlIdentity =
+		row.archiveUrlIdentity ??
+		row.archiveurlidentity ??
+		fallbackArchiveUrlIdentity;
+	const currentLedger = nullableNumber(row.currentLedger ?? row.currentledger);
+	const cursor = nullableNumber(
+		row.nextHistoricalCheckpointLedger ?? row.nexthistoricalcheckpointledger
+	);
+	const frontierStatus = row.frontierStatus ?? row.frontierstatus ?? null;
+	const latestVerifiedCheckpointLedger =
+		cursor === null || cursor <= 63
+			? null
+			: frontierStatus === 'verified'
+				? cursor - 64
+				: cursor <= 127
+					? null
+					: cursor - 128;
+	const targetCheckpointLedger =
+		currentLedger === null || currentLedger < 63
+			? null
+			: Math.floor((currentLedger + 1) / 64) * 64 - 1;
+	const verifiedCheckpoints =
+		latestVerifiedCheckpointLedger === null
+			? 0
+			: (latestVerifiedCheckpointLedger + 1) / 64;
+	const totalCheckpoints =
+		targetCheckpointLedger === null ? 0 : (targetCheckpointLedger + 1) / 64;
+	return {
+		archiveUrl: row.archiveUrl ?? row.archiveurl ?? archiveUrlIdentity,
+		archiveUrlIdentity,
+		latestVerifiedCheckpointLedger,
+		nextCheckpointLedger:
+			totalCheckpoints <= verifiedCheckpoints
+				? null
+				: latestVerifiedCheckpointLedger === null
+					? 63
+					: latestVerifiedCheckpointLedger + 64,
+		remainingCheckpoints: Math.max(0, totalCheckpoints - verifiedCheckpoints),
+		targetCheckpointLedger,
+		totalCheckpoints,
+		verifiedCheckpoints
 	};
 }
 
@@ -293,6 +391,24 @@ function stateStatus(
 function lowercase(field: keyof SourceRow): keyof SourceRow {
 	return field.toLowerCase() as keyof SourceRow;
 }
+
+export const canonicalProofProgressSql = `
+	select
+		state."archiveUrl",
+		cursor."archiveUrlIdentity",
+		state."currentLedger",
+		cursor."nextHistoricalCheckpointLedger",
+		frontier.status as "frontierStatus"
+	from history_archive_checkpoint_scan_cursor cursor
+	left join history_archive_state_snapshot state
+		on state."archiveUrlIdentity" = cursor."archiveUrlIdentity"
+	left join history_archive_checkpoint_proof frontier
+		on frontier."archiveUrlIdentity" = cursor."archiveUrlIdentity"
+		and frontier."checkpointLedger" =
+			cursor."nextHistoricalCheckpointLedger" - 64
+	where cursor."archiveUrlIdentity" = $1
+	limit 1
+`;
 
 export const sourceCountSql = `
 	select count(distinct "archiveUrl")::int as "sourceCount"

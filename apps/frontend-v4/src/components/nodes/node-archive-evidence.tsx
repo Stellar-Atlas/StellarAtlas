@@ -17,6 +17,7 @@ export function NodeArchiveEvidence({
 		<div id="archive-evidence">
 			<KnownArchiveEvidence
 				evidence={evidence}
+				key={publicKey}
 				subject={{ id: publicKey, kind: 'node' }}
 				title="Archive health"
 			/>
