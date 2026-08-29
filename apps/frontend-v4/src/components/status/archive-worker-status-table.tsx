@@ -12,6 +12,12 @@ import { getArchiveDownloadActivity } from './archive-download-activity';
 import { StatusPill } from './status-ui';
 
 const MAX_ARCHIVE_WORKER_SLOTS = historyArchiveWorkerTelemetryLimit;
+const MAX_RENDERED_ARCHIVE_WORKER_ROWS = 48;
+
+type ArchiveWorkerSlot = {
+	readonly slotIndex: number;
+	readonly worker: ArchiveWorkerStatusRowDTO | null;
+};
 
 export function ArchiveWorkerStatusTable({
 	workers
@@ -20,10 +26,12 @@ export function ArchiveWorkerStatusTable({
 }): React.JSX.Element {
 	const archive = workers.archiveWorkers;
 	const aggregateOnly = archive.telemetryMode === 'aggregate-only';
-	const workerSlots = createWorkerSlots(
+	const allWorkerSlots = createWorkerSlots(
 		archive.workers,
 		archive.configuredWorkerProcesses
 	);
+	const workerSlots = selectWorkerSlots(allWorkerSlots);
+	const hiddenWorkerSlotCount = allWorkerSlots.length - workerSlots.length;
 	const downloadActivity = getArchiveDownloadActivity(archive.workers);
 	return (
 		<section className="panel detail-panel status-worker-panel">
@@ -35,6 +43,13 @@ export function ArchiveWorkerStatusTable({
 							? `${formatInteger(archive.activeWorkers)} / ${formatInteger(archive.configuredWorkerProcesses)} active (aggregate telemetry)`
 							: `${formatInteger(archive.freshWorkers)} / ${formatInteger(archive.configuredWorkerProcesses)} fresh; ${formatInteger(downloadActivity.activeDownloads)} downloading; ${formatInteger(downloadActivity.waitingForDownloadSlots)} waiting for a slot${archive.startupGraceActive ? ' during startup' : ''}`}
 					</span>
+					{!aggregateOnly && hiddenWorkerSlotCount > 0 ? (
+						<span className="muted-inline">
+							Showing {formatInteger(workerSlots.length)} of{' '}
+							{formatInteger(allWorkerSlots.length)} worker slots; active and
+							unhealthy slots first.
+						</span>
+					) : null}
 				</div>
 				<StatusPill status={archive.status} />
 			</div>
@@ -81,10 +96,7 @@ export function ArchiveWorkerStatusTable({
 function createWorkerSlots(
 	workers: readonly ArchiveWorkerStatusRowDTO[],
 	configuredWorkerProcesses: number
-): readonly {
-	readonly slotIndex: number;
-	readonly worker: ArchiveWorkerStatusRowDTO | null;
-}[] {
+): readonly ArchiveWorkerSlot[] {
 	const configuredSlots = Math.min(
 		MAX_ARCHIVE_WORKER_SLOTS,
 		Math.max(0, configuredWorkerProcesses)
@@ -104,6 +116,35 @@ function createWorkerSlots(
 	}));
 }
 
+function selectWorkerSlots(
+	workerSlots: readonly ArchiveWorkerSlot[]
+): readonly ArchiveWorkerSlot[] {
+	if (workerSlots.length <= MAX_RENDERED_ARCHIVE_WORKER_ROWS) {
+		return workerSlots;
+	}
+	return [...workerSlots]
+		.sort(
+			(left, right) =>
+				workerSlotPriority(left) - workerSlotPriority(right) ||
+				left.slotIndex - right.slotIndex
+		)
+		.slice(0, MAX_RENDERED_ARCHIVE_WORKER_ROWS)
+		.sort((left, right) => left.slotIndex - right.slotIndex);
+}
+
+function workerSlotPriority(slot: ArchiveWorkerSlot): number {
+	const worker = slot.worker;
+	if (worker === null) return 2;
+	if (
+		worker.status === 'stale' ||
+		worker.lastOutcome === 'archive_error' ||
+		worker.lastOutcome === 'worker_issue'
+	) {
+		return 0;
+	}
+	if (worker.status === 'active' || worker.currentObject !== null) return 1;
+	return 3;
+}
 function MissingArchiveWorkerRow({
 	slotIndex
 }: {

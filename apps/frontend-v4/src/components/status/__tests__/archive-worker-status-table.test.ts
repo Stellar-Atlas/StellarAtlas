@@ -102,6 +102,43 @@ describe('ArchiveWorkerStatusTable', () => {
 		expect(markup).not.toContain('Archive worker pages');
 		expect(markup).not.toContain('1-8 of');
 	});
+	it('bounds live rows while keeping active and unhealthy slots visible', () => {
+		const status = createStatus();
+		const worker = status.archiveWorkers.workers[0];
+		if (worker === undefined) throw new Error('Expected worker fixture');
+		const workers = Array.from({ length: 80 }, (_, slotIndex) => ({
+			...worker,
+			currentObject: slotIndex === 70 ? worker.currentObject : null,
+			lastOutcome:
+				slotIndex === 71 ? ('archive_error' as const) : ('verified' as const),
+			slotIndex,
+			stage: slotIndex === 70 ? worker.stage : ('idle' as const),
+			status:
+				slotIndex === 70
+					? ('active' as const)
+					: slotIndex === 71
+						? ('stale' as const)
+						: ('idle' as const),
+			workerId: `object-host-${slotIndex.toString()}-0`
+		}));
+		const markup = renderToStaticMarkup(
+			createElement(ArchiveWorkerStatusTable, {
+				workers: {
+					...status,
+					archiveWorkers: {
+						...status.archiveWorkers,
+						configuredWorkerProcesses: 80,
+						workers
+					}
+				}
+			})
+		);
+
+		expect(markup).toContain('Showing 48 of 80 worker slots');
+		expect(markup).toContain('object-host-70-0');
+		expect(markup).toContain('object-host-71-0');
+		expect(markup).not.toContain('object-host-79-0');
+	});
 
 	it('renders unknown transfer sizes as indeterminate progress', () => {
 		const status = createStatus();
