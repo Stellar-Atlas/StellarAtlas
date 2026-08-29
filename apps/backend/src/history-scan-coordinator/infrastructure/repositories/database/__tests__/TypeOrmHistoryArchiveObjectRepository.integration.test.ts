@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { DataSource } from 'typeorm';
 import { historyArchiveConsumerCount } from '@history-scan-coordinator/domain/history-archive-object/HistoryArchiveObjectPlanningPolicy.js';
 import { mock } from 'jest-mock-extended';
@@ -116,6 +117,41 @@ describe('TypeOrmHistoryArchiveObjectRepository disposable PostgreSQL', () => {
 
 		expect(second?.remoteId).toBeDefined();
 		expect(second?.remoteId).not.toBe(first.remoteId);
+	});
+
+	it('removes completed broker rows in the verified batch transaction', async () => {
+		const archiveUrl = 'https://broker-completion.example/archive';
+		const object = checkpointObject(archiveUrl, 127);
+		const executionId = randomUUID();
+		await dataSource.getRepository(HistoryArchiveObject).save(object);
+		await dataSource.query(
+			`insert into history_archive_object_ready (
+				"objectRemoteId", "archiveUrlIdentity", priority,
+				"availableAt", "dispatchToken", "claimAttempt",
+				"publishedAt", "createdAt", "updatedAt"
+			 ) values ($1::uuid, $2, 2, now(), $3::uuid, 1, now(), now(), now())`,
+			[object.remoteId, archiveUrl, executionId]
+		);
+
+		await expect(
+			repository.markObjectsVerified([
+				{
+					progress: {
+						claimAttempt: 1,
+						executionId,
+						scheduler: 'broker'
+					},
+					remoteId: object.remoteId
+				}
+			])
+		).resolves.toEqual(new Set([object.remoteId]));
+		await expect(
+			dataSource.query(
+				`select "objectRemoteId" from history_archive_object_ready
+				 where "objectRemoteId" = $1::uuid`,
+				[object.remoteId]
+			)
+		).resolves.toEqual([]);
 	});
 
 	it('enforces the per-archive active cap', async () => {

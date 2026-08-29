@@ -395,6 +395,14 @@ const historyArchiveObjectVerifiedBatchSql = `
                         and slot."objectRemoteId" = updated."remoteId"
                         and slot."claimAttempt" = updated."claimAttempt"
                 returning slot.slot
+        ), broker_ready_removed as (
+                delete from "history_archive_object_ready" ready
+                using updated
+                where updated.scheduler = 'broker'
+                        and ready."objectRemoteId" = updated."remoteId"
+                        and ready."dispatchToken" = updated."executionId"
+                        and ready."claimAttempt" = updated."claimAttempt"
+                returning ready."objectRemoteId"
         )
         select updated."remoteId"
         from updated

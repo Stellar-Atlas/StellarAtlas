@@ -1,8 +1,11 @@
 import { DataSource } from 'typeorm';
 import { HistoryArchiveObject } from '../../../../domain/history-archive-object/HistoryArchiveObject.js';
+import { HistoryArchiveObjectEventMigration1784370000000 } from '../../../database/migrations/1784370000000-HistoryArchiveObjectEventMigration.js';
 import { HistoryArchiveObjectHostThrottleMigration1784410000000 } from '../../../database/migrations/1784410000000-HistoryArchiveObjectHostThrottleMigration.js';
 import { HistoryArchiveObjectClaimCursorMigration1784780000000 } from '../../../database/migrations/1784780000000-HistoryArchiveObjectClaimCursorMigration.js';
 import { HistoryArchiveReadyQueueMigration1785270000000 } from '../../../database/migrations/1785270000000-HistoryArchiveReadyQueueMigration.js';
+import { HistoryArchiveClaimLeaseMigration1785340000000 } from '../../../database/migrations/1785340000000-HistoryArchiveClaimLeaseMigration.js';
+import { HistoryArchiveBrokerFrontierMigration1785440000000 } from '../../../database/migrations/1785440000000-HistoryArchiveBrokerFrontierMigration.js';
 import { TypeOrmHistoryArchiveObjectRepository } from '../TypeOrmHistoryArchiveObjectRepository.js';
 import { synchronizeHistoryArchiveReadyQueue } from '../HistoryArchiveObjectReadyQueue.js';
 
@@ -20,6 +23,7 @@ export async function createObjectRepositoryDataSource(url: string): Promise<{
 	});
 	await dataSource.initialize();
 	const queryRunner = dataSource.createQueryRunner();
+	await new HistoryArchiveObjectEventMigration1784370000000().up(queryRunner);
 	await new HistoryArchiveObjectHostThrottleMigration1784410000000().up(
 		queryRunner
 	);
@@ -29,6 +33,10 @@ export async function createObjectRepositoryDataSource(url: string): Promise<{
 	await queryRunner.startTransaction();
 	try {
 		await new HistoryArchiveReadyQueueMigration1785270000000().up(queryRunner);
+		await new HistoryArchiveClaimLeaseMigration1785340000000().up(queryRunner);
+		await new HistoryArchiveBrokerFrontierMigration1785440000000().up(
+			queryRunner
+		);
 		await queryRunner.commitTransaction();
 	} catch (error) {
 		await queryRunner.rollbackTransaction();
