@@ -85,7 +85,10 @@ export async function publishHistoryArchiveBrokerJobs(
 					Buffer.from(
 						JSON.stringify({ executionId: job.executionId, job: job.job })
 					),
-					{ msgID: job.executionId, timeout: 5_000 }
+					// The database execution ID fences terminal writes. Reusing it as
+					// JetStream's deduplication ID suppresses required recovery
+					// deliveries after a database or dispatcher restart.
+					{ timeout: 5_000 }
 				);
 				return job.executionId;
 			})
