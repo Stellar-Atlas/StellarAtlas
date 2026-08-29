@@ -3,10 +3,12 @@ import { historyArchiveSequentialPrefetchDepth } from '@history-scan-coordinator
 import { notifyHistoryArchiveReadyWork } from './HistoryArchiveObjectReadyQueue.js';
 
 export async function materializeOrderedCheckpointPrefetch(
-	manager: EntityManager
+	manager: EntityManager,
+	archiveUrlIdentity: string | null = null
 ): Promise<number> {
 	const [result] = (await manager.query(orderedCheckpointPrefetchSql, [
-		historyArchiveSequentialPrefetchDepth
+		historyArchiveSequentialPrefetchDepth,
+		archiveUrlIdentity
 	])) as readonly {
 		readonly planned: number | string;
 		readonly ready: number | string;
@@ -34,6 +36,8 @@ const orderedCheckpointPrefetchSql = `
                                 regexp_replace(root."archiveUrl", '/+$', '')
                 where state.status = 'available'
                         and state."currentLedger" >= 63
+                        and ($2::text is null or
+                                state."archiveUrlIdentity" = $2::text)
         ), candidates as materialized (
                 select cursor."archiveUrlIdentity", root."archiveUrl",
                         root."hostIdentity", checkpoint.checkpoint_ledger

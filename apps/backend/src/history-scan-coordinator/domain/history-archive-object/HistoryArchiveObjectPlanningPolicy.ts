@@ -8,9 +8,12 @@ const historyArchiveWorkerCapacity = resolveHistoryArchiveObjectWorkerCapacity(
 
 export const historyArchiveConsumerCount =
 	historyArchiveWorkerCapacity.consumerCount;
+// A checkpoint normally fans out to about four immediately downloadable core
+// objects. Keep a natural 64-checkpoint (4,096-ledger) window so the configured
+// worker pool can remain fed without admitting a second archive root.
 export const historyArchiveSequentialPrefetchDepth = Math.max(
-	4,
-	Math.ceil(historyArchiveConsumerCount / 32)
+	64,
+	Math.ceil(historyArchiveConsumerCount / 4)
 );
 export const historyArchiveCanonicalReserveCount =
 	historyArchiveWorkerCapacity.canonicalReserveCount;

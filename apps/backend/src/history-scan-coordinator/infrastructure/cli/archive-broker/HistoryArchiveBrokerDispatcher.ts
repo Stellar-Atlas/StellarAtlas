@@ -108,13 +108,18 @@ export async function replayPublishedHistoryArchiveBrokerJobs(
 	>,
 	subject: string,
 	highWatermark: number,
-	maximumPriority: HistoryArchiveBrokerJob['priority']
+	maximumPriority: HistoryArchiveBrokerJob['priority'],
+	canonicalFirstRoot: string | null = null
 ): Promise<void> {
 	await publishHistoryArchiveBrokerJobs(
 		jetStream,
 		repository,
 		subject,
-		await repository.findPublishedJobs(highWatermark, maximumPriority)
+		await repository.findPublishedJobs(
+			highWatermark,
+			maximumPriority,
+			canonicalFirstRoot
+		)
 	);
 }
 
@@ -149,14 +154,26 @@ export class HistoryArchiveBrokerDispatcher {
 				let jobs = await this.repository.reserveJobs(
 					limit,
 					this.config.maximumPerHost,
-					this.config.maximumPriority
+					this.config.maximumPriority,
+					this.config.canonicalFirstRoot
 				);
+				if (jobs.length < limit) {
+					await this.repository.ensurePrefetch(this.config.canonicalFirstRoot);
+					const additionalJobs = await this.repository.reserveJobs(
+						limit - jobs.length,
+						this.config.maximumPerHost,
+						this.config.maximumPriority,
+						this.config.canonicalFirstRoot
+					);
+					if (additionalJobs.length > 0) jobs = [...jobs, ...additionalJobs];
+				}
 				if (jobs.length === 0) {
-					await this.repository.ensureFrontier();
+					await this.repository.ensureFrontier(this.config.canonicalFirstRoot);
 					jobs = await this.repository.reserveJobs(
 						limit,
 						this.config.maximumPerHost,
-						this.config.maximumPriority
+						this.config.maximumPriority,
+						this.config.canonicalFirstRoot
 					);
 				}
 				if (jobs.length === 0) {
@@ -255,7 +272,8 @@ export class HistoryArchiveBrokerDispatcher {
 				this.repository,
 				this.config.subject,
 				this.config.highWatermark,
-				this.config.maximumPriority
+				this.config.maximumPriority,
+				this.config.canonicalFirstRoot
 			);
 		} catch (error) {
 			this.connection = null;

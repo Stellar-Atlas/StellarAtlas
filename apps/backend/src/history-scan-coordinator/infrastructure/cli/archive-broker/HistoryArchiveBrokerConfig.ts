@@ -8,6 +8,7 @@ export { parseHistoryArchiveBrokerMaximumPriority };
 
 export interface HistoryArchiveBrokerConfig {
 	readonly batchSize: number;
+	readonly canonicalFirstRoot: string | null;
 	readonly capacitySignalSubject: string;
 	readonly consumer: string;
 	readonly highWatermark: number;
@@ -27,6 +28,13 @@ function readPositiveInteger(name: string, fallback: number): number {
 	if (!Number.isSafeInteger(value) || value < 1)
 		throw new Error(`${name} must be a positive integer`);
 	return value;
+}
+
+function readCanonicalFirstRoot(): string | null {
+	const raw = process.env.HISTORY_ARCHIVE_CANONICAL_FIRST_ROOT;
+	if (raw === undefined) return null;
+	const normalized = raw.trim().replace(/\/+$/, '');
+	return normalized.length === 0 ? null : normalized;
 }
 
 export function getHistoryArchiveBrokerConfig(): HistoryArchiveBrokerConfig {
@@ -55,6 +63,7 @@ export function getHistoryArchiveBrokerConfig(): HistoryArchiveBrokerConfig {
 			readPositiveInteger('HISTORY_ARCHIVE_BROKER_BATCH_SIZE', highWatermark),
 			highWatermark
 		),
+		canonicalFirstRoot: readCanonicalFirstRoot(),
 		capacitySignalSubject: `${subject}.capacity`,
 		consumer:
 			process.env.NATS_ARCHIVE_JOB_CONSUMER ??

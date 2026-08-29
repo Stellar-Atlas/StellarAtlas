@@ -77,6 +77,8 @@ export const reserveBrokerJobsSql = `
 				or (${historyArchiveSchedulableObjectSql('object')})
 			)
 			and ready.priority <= $3::smallint
+			and ($4::text is null or
+				ready."archiveUrlIdentity" = $4::text)
 			and not exists (
 				select 1
 				from "history_archive_object_host_throttle" throttle
@@ -173,6 +175,8 @@ const findPublishedBrokerJobsSql = `
 			and ready."dispatchToken" is not null
 			and ready."claimAttempt" is not null
                         and ready."claimAttempt" = object.attempts + 1
+			and ($3::text is null or
+				ready."archiveUrlIdentity" = $3::text)
 	) published
 	where published.priority <= $2::smallint
 	order by published.priority, published."updatedAt",
@@ -254,11 +258,25 @@ export class HistoryArchiveBrokerFrontierRepository {
 
 	constructor(private readonly dataSource: DataSource) {}
 
-	async ensureFrontier(): Promise<number> {
+	async ensurePrefetch(
+		archiveUrlIdentity: string | null = null
+	): Promise<number> {
+		return await this.dataSource.transaction(async (manager) => {
+			if (!(await this.tryTakeExecutionReconciliationLock(manager))) return 0;
+			return await materializeOrderedCheckpointPrefetch(
+				manager,
+				archiveUrlIdentity
+			);
+		});
+	}
+
+	async ensureFrontier(
+		archiveUrlIdentity: string | null = null
+	): Promise<number> {
 		const materialized = await this.dataSource.transaction(async (manager) => {
 			if (!(await this.tryTakeExecutionReconciliationLock(manager)))
 				return false;
-			await materializeOrderedCheckpointPrefetch(manager);
+			await materializeOrderedCheckpointPrefetch(manager, archiveUrlIdentity);
 			return true;
 		});
 		if (!materialized) return 0;
@@ -293,7 +311,8 @@ export class HistoryArchiveBrokerFrontierRepository {
 	async reserveJobs(
 		limit: number,
 		maximumPerHost: number,
-		maximumPriority: HistoryArchiveBrokerPriority = defaultHistoryArchiveBrokerMaximumPriority
+		maximumPriority: HistoryArchiveBrokerPriority = defaultHistoryArchiveBrokerMaximumPriority,
+		canonicalFirstRoot: string | null = null
 	): Promise<readonly HistoryArchiveBrokerJob[]> {
 		if (limit < 1) return [];
 		return await this.dataSource.transaction(async (manager) => {
@@ -301,7 +320,8 @@ export class HistoryArchiveBrokerFrontierRepository {
 			const rows = (await manager.query(reserveBrokerJobsSql, [
 				Math.floor(limit),
 				Math.max(1, Math.floor(maximumPerHost)),
-				requirePriority(maximumPriority)
+				requirePriority(maximumPriority),
+				canonicalFirstRoot
 			])) as readonly BrokerJobRow[];
 			return mapAndOrderBrokerJobs(rows);
 		});
@@ -309,12 +329,14 @@ export class HistoryArchiveBrokerFrontierRepository {
 
 	async findPublishedJobs(
 		limit: number,
-		maximumPriority: HistoryArchiveBrokerPriority = defaultHistoryArchiveBrokerMaximumPriority
+		maximumPriority: HistoryArchiveBrokerPriority = defaultHistoryArchiveBrokerMaximumPriority,
+		canonicalFirstRoot: string | null = null
 	): Promise<readonly HistoryArchiveBrokerJob[]> {
 		if (limit < 1) return [];
 		const rows = (await this.dataSource.query(findPublishedBrokerJobsSql, [
 			Math.floor(limit),
-			requirePriority(maximumPriority)
+			requirePriority(maximumPriority),
+			canonicalFirstRoot
 		])) as readonly BrokerJobRow[];
 		return mapAndOrderBrokerJobs(rows);
 	}
