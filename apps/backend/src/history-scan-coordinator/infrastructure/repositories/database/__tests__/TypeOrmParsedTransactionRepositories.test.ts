@@ -9,7 +9,7 @@ import { TypeOrmParsedTransactionEnvelopeRepository } from '../TypeOrmParsedTran
 import { TypeOrmParsedTransactionResultRepository } from '../TypeOrmParsedTransactionResultRepository.js';
 
 describe('TypeOrmParsedTransactionEnvelopeRepository', () => {
-	it('should atomically persist an immutable envelope and its object observation', async () => {
+	it('should atomically persist an immutable envelope without per-object row amplification', async () => {
 		const harness = createTransactionHarness([
 			{
 				envelopeXdr: 'AAAA-envelope',
@@ -48,11 +48,6 @@ describe('TypeOrmParsedTransactionEnvelopeRepository', () => {
 			2,
 			expect.stringContaining('join "parsed_transaction_envelope" stored'),
 			expect.arrayContaining(['AAAA-envelope', 'transaction-set-hash'])
-		);
-		expect(harness.query).toHaveBeenNthCalledWith(
-			3,
-			expect.stringContaining('parsed_transaction_envelope_observation'),
-			expect.arrayContaining([12, 'job-a'])
 		);
 		expect(harness.transaction).toHaveBeenCalledTimes(1);
 	});
@@ -182,14 +177,14 @@ describe('TypeOrmParsedTransactionEnvelopeRepository', () => {
 			}
 		]);
 		expect(repository.query).toHaveBeenCalledWith(
-			expect.stringContaining('parsed_transaction_envelope_observation'),
+			expect.stringContaining('history_archive_content_observation'),
 			['object-uuid']
 		);
 	});
 });
 
 describe('TypeOrmParsedTransactionResultRepository', () => {
-	it('should atomically persist an immutable result and its object observation', async () => {
+	it('should atomically persist an immutable result without per-object row amplification', async () => {
 		const harness = createTransactionHarness([
 			{
 				id: 19,
@@ -230,11 +225,6 @@ describe('TypeOrmParsedTransactionResultRepository', () => {
 			2,
 			expect.stringContaining('join "parsed_transaction_result" stored'),
 			expect.arrayContaining(['AAAA-result', 'transaction-hash'])
-		);
-		expect(harness.query).toHaveBeenNthCalledWith(
-			3,
-			expect.stringContaining('parsed_transaction_result_observation'),
-			expect.arrayContaining([19, 'job-a'])
 		);
 	});
 
@@ -333,7 +323,7 @@ describe('TypeOrmParsedTransactionResultRepository', () => {
 			}
 		]);
 		expect(repository.query).toHaveBeenCalledWith(
-			expect.stringContaining('parsed_transaction_result_observation'),
+			expect.stringContaining('history_archive_content_observation'),
 			['object-uuid']
 		);
 	});

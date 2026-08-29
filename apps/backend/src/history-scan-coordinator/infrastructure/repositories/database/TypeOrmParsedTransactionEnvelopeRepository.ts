@@ -1,3 +1,4 @@
+import { resolvedContentSourceSql } from '../../database/HistoryArchiveResolvedContentSourceSql.js';
 import type { Repository } from 'typeorm';
 import type { ParsedTransactionEnvelopeBatchDTO } from 'history-scanner-dto';
 import type {
@@ -79,10 +80,15 @@ export class TypeOrmParsedTransactionEnvelopeRepository implements ParsedTransac
 		const rows = (await this.repository.query(
 			`
 				select envelope.*
-				from parsed_transaction_envelope_observation observation
+				from history_archive_object_queue source_object
 				join parsed_transaction_envelope envelope
-					on envelope.id = observation."parsedTransactionEnvelopeId"
-				where observation."sourceObjectRemoteId" = $1
+					on envelope."ledgerSequence" between
+						greatest(0, source_object."checkpointLedger" - 63)
+						and source_object."checkpointLedger"
+				where source_object."remoteId" = $1::uuid
+					and source_object."objectType" = 'transactions'
+					and envelope."lastScanJobRemoteId" =
+						${resolvedContentSourceSql(1, 'transactions')}
 				order by envelope."ledgerSequence", envelope."transactionIndex"
 			`,
 			[sourceObjectRemoteId]

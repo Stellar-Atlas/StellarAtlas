@@ -1,3 +1,4 @@
+import { resolvedContentSourceSql } from '../../database/HistoryArchiveResolvedContentSourceSql.js';
 import type { Repository } from 'typeorm';
 import type { ParsedTransactionResultBatchDTO } from 'history-scanner-dto';
 import type {
@@ -98,10 +99,15 @@ export class TypeOrmParsedTransactionResultRepository implements ParsedTransacti
 		const rows = (await this.repository.query(
 			`
 				select result.*
-				from parsed_transaction_result_observation observation
+				from history_archive_object_queue source_object
 				join parsed_transaction_result result
-					on result.id = observation."parsedTransactionResultId"
-				where observation."sourceObjectRemoteId" = $1
+					on result."ledgerSequence" between
+						greatest(0, source_object."checkpointLedger" - 63)
+						and source_object."checkpointLedger"
+				where source_object."remoteId" = $1::uuid
+					and source_object."objectType" = 'results'
+					and result."lastScanJobRemoteId" =
+						${resolvedContentSourceSql(1, 'results')}
 				order by result."ledgerSequence", result."transactionIndex"
 			`,
 			[sourceObjectRemoteId]

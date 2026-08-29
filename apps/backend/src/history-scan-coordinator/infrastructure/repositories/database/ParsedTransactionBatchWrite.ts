@@ -9,8 +9,6 @@ import {
 	ParsedTransactionConflictError,
 	type ParsedTransactionIdentity
 } from '../../../domain/parsed-history/ParsedTransactionConflictError.js';
-import { recordTransactionObservations } from './ParsedHistoryObservationWrite.js';
-import { lockParsedHistoryCategoryWrites } from './ParsedHistoryCategoryWriteLock.js';
 
 const maximumBatchSize = 1_000;
 const maximumLedgerSequence = 0xffff_ffff;
@@ -44,7 +42,6 @@ export async function saveParsedTransactionEnvelopeBatch(
 	const selection = buildEnvelopeSelection(records);
 
 	await manager.transaction(async (transaction) => {
-		await lockParsedHistoryCategoryWrites(transaction, identities);
 		await transaction.query(
 			`
 					insert into "parsed_transaction_envelope" (
@@ -64,14 +61,6 @@ export async function saveParsedTransactionEnvelopeBatch(
 		);
 		assertReturnedIdentities(identities, returned.map(toEnvelopeIdentity));
 		assertEnvelopeValues(records, returned);
-		await recordTransactionObservations(
-			transaction,
-			batch.scanJobRemoteId,
-			batch.observedAt,
-			'parsed_transaction_envelope_observation',
-			'parsedTransactionEnvelopeId',
-			returned.map((row) => toRowId(row.id))
-		);
 	});
 }
 
@@ -87,7 +76,6 @@ export async function saveParsedTransactionResultBatch(
 	const selection = buildResultSelection(records);
 
 	await manager.transaction(async (transaction) => {
-		await lockParsedHistoryCategoryWrites(transaction, identities);
 		await transaction.query(
 			`
 					insert into "parsed_transaction_result" (
@@ -108,14 +96,6 @@ export async function saveParsedTransactionResultBatch(
 		);
 		assertReturnedIdentities(identities, returned.map(toResultIdentity));
 		assertResultValues(records, returned);
-		await recordTransactionObservations(
-			transaction,
-			batch.scanJobRemoteId,
-			batch.observedAt,
-			'parsed_transaction_result_observation',
-			'parsedTransactionResultId',
-			returned.map((row) => toRowId(row.id))
-		);
 	});
 }
 
