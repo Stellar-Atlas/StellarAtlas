@@ -354,11 +354,20 @@ export class HistoryArchiveBrokerFrontierRepository {
 		if (executionIds.length === 0) return;
 		await this.dataSource.transaction(async (manager) => {
 			await manager.query(
-				`update "history_archive_object_ready"
-                                 set "publishedAt" = coalesce("publishedAt", now()),
-                                     "updatedAt" = now()
-                                 where "dispatchToken" = any($1::uuid[])
-                                   and "publishedAt" is null`,
+				`with publishable as materialized (
+                                        select ready."objectRemoteId"
+                                        from "history_archive_object_ready" ready
+                                        where ready."dispatchToken" = any($1::uuid[])
+                                                and ready."publishedAt" is null
+                                        order by ready."archiveUrlIdentity",
+                                                ready."objectRemoteId"
+                                        for update of ready
+                                )
+                                update "history_archive_object_ready" ready
+                                set "publishedAt" = coalesce(ready."publishedAt", now()),
+                                        "updatedAt" = now()
+                                from publishable
+                                where ready."objectRemoteId" = publishable."objectRemoteId"`,
 				[executionIds]
 			);
 		});

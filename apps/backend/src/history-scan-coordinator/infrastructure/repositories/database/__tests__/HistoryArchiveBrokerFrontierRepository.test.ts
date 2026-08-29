@@ -19,12 +19,30 @@ describe('HistoryArchiveBrokerFrontierRepository', () => {
 
 	it('skips ready rows already locked by a terminal completion', () => {
 		expect(reserveBrokerJobsSql).toContain('lockable as materialized');
-		expect(reserveBrokerJobsSql).toContain(
-			'for update of ready skip locked'
-		);
+		expect(reserveBrokerJobsSql).toContain('for update of ready skip locked');
 		expect(reserveBrokerJobsSql).toContain(
 			'and ready."objectRemoteId" = lockable."objectRemoteId"'
 		);
+	});
+
+	it('marks published rows in checkpoint fan-out lock order', async () => {
+		const query = jest.fn().mockResolvedValue([]);
+		const manager = { query } as unknown as EntityManager;
+		const transaction = jest.fn(
+			async (work: (manager: EntityManager) => Promise<void>) =>
+				await work(manager)
+		);
+		const repository = new HistoryArchiveBrokerFrontierRepository({
+			transaction
+		} as unknown as DataSource);
+
+		await repository.markPublished(['00000000-0000-0000-0000-000000000001']);
+		const sql = query.mock.calls[0]?.[0] as string;
+		expect(sql).toContain('publishable as materialized');
+		expect(sql.replace(/\s+/g, ' ')).toContain(
+			'order by ready."archiveUrlIdentity", ready."objectRemoteId"'
+		);
+		expect(sql).toContain('for update of ready');
 	});
 
 	it('skips frontier reconciliation instead of queueing an exclusive lock', async () => {
