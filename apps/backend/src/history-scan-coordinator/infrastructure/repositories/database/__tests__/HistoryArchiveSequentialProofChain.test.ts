@@ -1,5 +1,6 @@
 import type { DataSource, EntityManager, QueryRunner } from 'typeorm';
 import { HistoryArchiveSequentialProofChainMigration1785540000000 } from '../../../database/migrations/1785540000000-HistoryArchiveSequentialProofChainMigration.js';
+import { calculateHistoryArchiveSequentialPrefetchDepth } from '../../../../domain/history-archive-object/HistoryArchiveObjectPlanningPolicy.js';
 import {
 	claimHistoryArchiveCheckpointProofRefreshes,
 	claimLockedSequentialProofRefreshSql,
@@ -50,6 +51,10 @@ describe('sequential history archive proof chain', () => {
 	});
 
 	it('bounds consecutive proof work while keeping the same root and cursor gate', () => {
+		expect(calculateHistoryArchiveSequentialPrefetchDepth(0)).toBe(64);
+		expect(calculateHistoryArchiveSequentialPrefetchDepth(60)).toBe(64);
+		expect(calculateHistoryArchiveSequentialPrefetchDepth(240)).toBe(240);
+		expect(calculateHistoryArchiveSequentialPrefetchDepth(1_000)).toBe(1_000);
 		expect(normalizeConsecutiveProofRefreshTransactionSize(Number.NaN)).toBe(
 			16
 		);

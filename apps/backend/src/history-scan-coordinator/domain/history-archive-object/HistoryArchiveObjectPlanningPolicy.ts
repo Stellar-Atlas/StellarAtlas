@@ -8,12 +8,21 @@ const historyArchiveWorkerCapacity = resolveHistoryArchiveObjectWorkerCapacity(
 
 export const historyArchiveConsumerCount =
 	historyArchiveWorkerCapacity.consumerCount;
-// A checkpoint normally fans out to about four immediately downloadable core
-// objects. Keep a natural 64-checkpoint (4,096-ledger) window so the configured
-// worker pool can remain fed without admitting a second archive root.
-export const historyArchiveSequentialPrefetchDepth = Math.max(
-	64,
-	Math.ceil(historyArchiveConsumerCount / 4)
+
+// Checkpoint-state discovery is its own network wave before the downloadable
+// ledger, transaction, result, SCP, and bucket objects can fan out. Admit at
+// least one checkpoint-state per consumer so that first wave can fill the
+// configured worker pool while retaining the 64-checkpoint minimum.
+export function calculateHistoryArchiveSequentialPrefetchDepth(
+	consumerCount: number
+): number {
+	if (!Number.isSafeInteger(consumerCount) || consumerCount < 1) return 64;
+	return Math.max(64, consumerCount);
+}
+
+export const historyArchiveSequentialPrefetchDepth =
+	calculateHistoryArchiveSequentialPrefetchDepth(
+		historyArchiveConsumerCount
 );
 export const historyArchiveCanonicalReserveCount =
 	historyArchiveWorkerCapacity.canonicalReserveCount;
