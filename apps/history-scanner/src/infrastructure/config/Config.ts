@@ -34,6 +34,7 @@ export interface Config {
 	historyBucketCacheDir: string;
 	historyBucketCacheMaxBytes: number;
 	historyArchiveContentReuseEnabled: boolean;
+	historyArchiveParsedHistoryEnabled: boolean;
 	historyArchiveObjectJobSource: 'nats' | 'legacy-http';
 	natsArchiveJobConsumer: string;
 	natsArchiveJobStream: string;
@@ -69,7 +70,8 @@ const defaultConfig = {
 		'history-bucket-cache'
 	),
 	historyBucketCacheMaxBytes: 10 * 1024 * 1024 * 1024 * 1024,
-	historyArchiveContentReuseEnabled: false,
+	historyArchiveContentReuseEnabled: true,
+	historyArchiveParsedHistoryEnabled: false,
 	historyArchiveObjectJobSource: 'legacy-http' as const,
 	natsArchiveJobConsumer: 'stellaratlas-history-object-workers',
 	natsArchiveJobStream: 'STELLARATLAS_HISTORY_OBJECTS',
@@ -320,6 +322,17 @@ export function getConfigFromEnv(): Result<Config, Error> {
 		);
 	}
 
+	const parsedHistoryValue = process.env.HISTORY_ARCHIVE_PARSED_HISTORY_ENABLED;
+	const historyArchiveParsedHistoryEnabled =
+		parsedHistoryValue === undefined
+			? defaultConfig.historyArchiveParsedHistoryEnabled
+			: parseBoolean(parsedHistoryValue);
+	if (historyArchiveParsedHistoryEnabled === undefined) {
+		return err(
+			new Error('HISTORY_ARCHIVE_PARSED_HISTORY_ENABLED must be true or false')
+		);
+	}
+
 	const historyArchiveObjectJobSource =
 		process.env.HISTORY_ARCHIVE_OBJECT_JOB_SOURCE ??
 		defaultConfig.historyArchiveObjectJobSource;
@@ -390,6 +403,7 @@ export function getConfigFromEnv(): Result<Config, Error> {
 			historyBucketCacheMaxBytesResult.value ??
 			defaultConfig.historyBucketCacheMaxBytes,
 		historyArchiveContentReuseEnabled,
+		historyArchiveParsedHistoryEnabled,
 		historyArchiveObjectJobSource,
 		natsArchiveJobConsumer:
 			process.env.NATS_ARCHIVE_JOB_CONSUMER ??

@@ -51,6 +51,9 @@ export function load(container: Container, config: Config) {
 	container
 		.bind<boolean>(TYPES.HistoryArchiveContentReuseEnabled)
 		.toConstantValue(config.historyArchiveContentReuseEnabled);
+	container
+		.bind<boolean>(TYPES.HistoryArchiveParsedHistoryEnabled)
+		.toConstantValue(config.historyArchiveParsedHistoryEnabled);
 	container.bind(BucketCache).toDynamicValue(() => {
 		return new BucketCache(
 			config.historyBucketCacheDir,

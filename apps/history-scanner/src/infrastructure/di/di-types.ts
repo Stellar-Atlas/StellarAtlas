@@ -5,6 +5,9 @@ export const TYPES = {
 	HistoryArchiveContentReuseEnabled: Symbol(
 		'HistoryArchiveContentReuseEnabled'
 	),
+	HistoryArchiveParsedHistoryEnabled: Symbol(
+		'HistoryArchiveParsedHistoryEnabled'
+	),
 	ScanScheduler: Symbol('ScanScheduler'),
 	ScanCoordinatorService: Symbol('ScanCoordinatorService'),
 	HistoryArchiveObjectJobSource: Symbol('HistoryArchiveObjectJobSource'),

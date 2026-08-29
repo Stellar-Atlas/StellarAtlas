@@ -72,28 +72,52 @@ describe('Config', () => {
 				historyMaxRequests: 24,
 				historyScanRangeSize: 250000,
 				historyBucketCacheMaxBytes: 10 * 1024 * 1024 * 1024 * 1024,
-				historyArchiveContentReuseEnabled: false
+				historyArchiveContentReuseEnabled: true,
+				historyArchiveParsedHistoryEnabled: false
 			});
 			expect(result.value.historyHasherWorkers).toBeGreaterThanOrEqual(1);
 			expect(result.value.historyHasherWorkers).toBeLessThanOrEqual(32_767);
 		});
 
-		test('gates content reuse off by default and validates explicit values', () => {
+		test('enables content reuse by default and validates explicit values', () => {
 			const defaultResult = getConfigFromEnv();
 			expect(defaultResult.isOk()).toBe(true);
 			if (!defaultResult.isOk()) throw defaultResult.error;
-			expect(defaultResult.value.historyArchiveContentReuseEnabled).toBe(false);
-			process.env.HISTORY_ARCHIVE_CONTENT_REUSE_ENABLED = 'true';
-			const enabledResult = getConfigFromEnv();
-			expect(enabledResult.isOk()).toBe(true);
-			if (!enabledResult.isOk()) throw enabledResult.error;
-			expect(enabledResult.value.historyArchiveContentReuseEnabled).toBe(true);
+			expect(defaultResult.value.historyArchiveContentReuseEnabled).toBe(true);
+			process.env.HISTORY_ARCHIVE_CONTENT_REUSE_ENABLED = 'false';
+			const disabledResult = getConfigFromEnv();
+			expect(disabledResult.isOk()).toBe(true);
+			if (!disabledResult.isOk()) throw disabledResult.error;
+			expect(disabledResult.value.historyArchiveContentReuseEnabled).toBe(
+				false
+			);
 			process.env.HISTORY_ARCHIVE_CONTENT_REUSE_ENABLED = 'invalid';
 			const invalidResult = getConfigFromEnv();
 			expect(invalidResult.isErr()).toBe(true);
 			if (!invalidResult.isErr()) throw new Error('Expected error');
 			expect(invalidResult.error.message).toContain(
 				'HISTORY_ARCHIVE_CONTENT_REUSE_ENABLED must be true or false'
+			);
+		});
+
+		test('gates redundant parsed-history persistence off by default', () => {
+			const defaultResult = getConfigFromEnv();
+			expect(defaultResult.isOk()).toBe(true);
+			if (!defaultResult.isOk()) throw defaultResult.error;
+			expect(defaultResult.value.historyArchiveParsedHistoryEnabled).toBe(
+				false
+			);
+			process.env.HISTORY_ARCHIVE_PARSED_HISTORY_ENABLED = 'true';
+			const enabledResult = getConfigFromEnv();
+			expect(enabledResult.isOk()).toBe(true);
+			if (!enabledResult.isOk()) throw enabledResult.error;
+			expect(enabledResult.value.historyArchiveParsedHistoryEnabled).toBe(true);
+			process.env.HISTORY_ARCHIVE_PARSED_HISTORY_ENABLED = 'invalid';
+			const invalidResult = getConfigFromEnv();
+			expect(invalidResult.isErr()).toBe(true);
+			if (!invalidResult.isErr()) throw new Error('Expected error');
+			expect(invalidResult.error.message).toContain(
+				'HISTORY_ARCHIVE_PARSED_HISTORY_ENABLED must be true or false'
 			);
 		});
 

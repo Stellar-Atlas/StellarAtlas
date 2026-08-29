@@ -17,6 +17,7 @@ export class ConfigMock implements Config {
 	historyBucketCacheDir = '/tmp/stellaratlas-history-scanner-test-cache';
 	historyBucketCacheMaxBytes = 1024 * 1024 * 1024;
 	historyArchiveContentReuseEnabled = false;
+	historyArchiveParsedHistoryEnabled = false;
 	coordinatorAPIBaseUrl = 'http://127.0.0.1:3000';
 	coordinatorAuth: CoordinatorAuthConfig = {
 		type: 'internal',

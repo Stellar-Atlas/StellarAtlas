@@ -83,7 +83,9 @@ export class VerifyArchiveObjects {
 		@inject('Logger')
 		private readonly logger: Logger,
 		@inject(TYPES.HistoryArchiveContentReuseEnabled)
-		private readonly contentReuseEnabled = false
+		private readonly contentReuseEnabled = false,
+		@inject(TYPES.HistoryArchiveParsedHistoryEnabled)
+		private readonly parsedHistoryEnabled = false
 	) {
 		this.downloadPermit = new ProcessHistoryArchiveDownloadPermit();
 		const coalescingStatusReporter = new CoalescingHistoryArchiveWorkerReporter(
@@ -128,7 +130,9 @@ export class VerifyArchiveObjects {
 					bytesTotal
 				),
 			this.downloadPermit,
-			this.contentReuseEnabled
+			this.contentReuseEnabled,
+			undefined,
+			this.parsedHistoryEnabled
 		);
 	}
 

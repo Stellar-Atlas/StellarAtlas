@@ -70,7 +70,8 @@ export class ArchiveObjectCategoryVerifier {
 		private readonly downloadPermit: HistoryArchiveDownloadPermit,
 		private readonly contentReuseEnabled = false,
 		private readonly createHasherPool: HasherPoolFactory = (workerCount) =>
-			new HasherPool(workerCount)
+			new HasherPool(workerCount),
+		private readonly parsedHistoryEnabled = false
 	) {
 		this.contentReuseVerifier = new ArchiveObjectContentReuseVerifier(
 			this.httpService,
@@ -292,14 +293,15 @@ export class ArchiveObjectCategoryVerifier {
 				scannerIssueFailure({ error, errorType: 'worker_pool_setup_failure' })
 			);
 		}
-		const parsedHistorySink = shouldPersistParsedHistory(category)
-			? new CoordinatorParsedHistorySink(
-					this.scanCoordinator,
-					job.archiveUrl,
-					job.remoteId,
-					this.exceptionLogger
-				)
-			: undefined;
+		const parsedHistorySink =
+			this.parsedHistoryEnabled && shouldPersistParsedHistory(category)
+				? new CoordinatorParsedHistorySink(
+						this.scanCoordinator,
+						job.archiveUrl,
+						job.remoteId,
+						this.exceptionLogger
+					)
+				: undefined;
 
 		const categoryVerificationData = createCategoryVerificationData();
 		const contentDigest = new XdrContentDigestTransform();
