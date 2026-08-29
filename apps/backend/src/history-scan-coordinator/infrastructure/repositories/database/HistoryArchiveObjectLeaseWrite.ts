@@ -302,6 +302,17 @@ const historyArchiveObjectVerifiedBatchSql = `
                         and object.status = 'scanning'
                         and object.attempts = input."claimAttempt"
                 )
+        ), lockable as materialized (
+                -- Checkpoint fan-out upserts existing queue rows in this unique-key
+                -- order. Pre-lock completion rows in the same order to prevent a
+                -- fan-out/completion cycle when their batches overlap.
+                select object."remoteId"
+                from eligible
+                join "history_archive_object_queue" object
+                        on object."remoteId" = eligible."remoteId"
+                order by object."archiveUrlIdentity", object."objectType",
+                        object."objectKey"
+                for update of object
         ), updated as (
                 update "history_archive_object_queue" object
                 set "bytesDownloaded" = case
@@ -348,6 +359,8 @@ const historyArchiveObjectVerifiedBatchSql = `
                         "updatedAt" = now(),
                         "verifiedAt" = now()
                 from eligible
+                join lockable
+                        on lockable."remoteId" = eligible."remoteId"
                 where object."remoteId" = eligible."remoteId"
                 returning object."remoteId",
                         eligible."claimAttempt",
