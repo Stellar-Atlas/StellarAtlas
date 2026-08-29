@@ -92,8 +92,9 @@ export async function materializeCompactCheckpointPlans(
 	])) as readonly {
 		readonly planned: number | string;
 		readonly ready?: number | string;
+		readonly advanced?: number | string;
 	}[];
-	if (Number(result?.ready ?? 0) > 0)
+	if (Number(result?.ready ?? 0) > 0 || Number(result?.advanced ?? 0) > 0)
 		await notifyHistoryArchiveReadyWork(manager);
 	return Number(result?.planned ?? 0);
 }
@@ -119,8 +120,9 @@ export async function materializeNextCompactCheckpointPlans(
 	])) as readonly {
 		readonly planned: number | string;
 		readonly ready?: number | string;
+		readonly advanced?: number | string;
 	}[];
-	if (Number(result?.ready ?? 0) > 0)
+	if (Number(result?.ready ?? 0) > 0 || Number(result?.advanced ?? 0) > 0)
 		await notifyHistoryArchiveReadyWork(manager);
 	return Number(result?.planned ?? 0);
 }
@@ -251,7 +253,8 @@ const targetedCompactCheckpointPlanSql = `
 		returning "objectRemoteId"
 	)
 	select (select count(*) from inserted)::integer as planned,
-		(select count(*) from ready)::integer as ready
+		(select count(*) from ready)::integer as ready,
+		(select count(*) from advanced)::integer as advanced
 `;
 
 const compactCheckpointPlanSql = `
@@ -367,5 +370,6 @@ const compactCheckpointPlanSql = `
 		where cursor."archiveUrlIdentity" = candidate."archiveUrlIdentity"
 		returning cursor."archiveUrlIdentity"
 	)
-	select (select count(*) from inserted)::integer as planned
+	select (select count(*) from inserted)::integer as planned,
+		(select count(*) from advanced)::integer as advanced
 `;
