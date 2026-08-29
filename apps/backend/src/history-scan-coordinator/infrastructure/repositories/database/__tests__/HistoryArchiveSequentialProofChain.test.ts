@@ -2,10 +2,13 @@ import type { DataSource, EntityManager, QueryRunner } from 'typeorm';
 import { HistoryArchiveSequentialProofChainMigration1785540000000 } from '../../../database/migrations/1785540000000-HistoryArchiveSequentialProofChainMigration.js';
 import {
 	claimHistoryArchiveCheckpointProofRefreshes,
+	claimLockedSequentialProofRefreshSql,
 	claimProofRefreshSql,
 	claimSequentialProofRefreshSql,
 	enqueueCurrentTerminalReadyCheckpointProofRefreshesSql,
-	enqueueProofRefreshesSql
+	enqueueProofRefreshesSql,
+	normalizeConsecutiveProofRefreshTransactionSize,
+	normalizeTargetedProofRefreshBatchSize
 } from '../HistoryArchiveCheckpointProofRefreshQueue.js';
 import { historyArchiveCheckpointProofTerminalReadySql } from '../HistoryArchiveCheckpointProofReadinessSql.js';
 import { historyArchiveObjectOpenSequentialCohortSql } from '../HistoryArchiveSequentialChainSql.js';
@@ -46,6 +49,24 @@ describe('sequential history archive proof chain', () => {
 		);
 	});
 
+	it('bounds consecutive proof work while keeping the same root and cursor gate', () => {
+		expect(normalizeConsecutiveProofRefreshTransactionSize(Number.NaN)).toBe(
+			16
+		);
+		expect(normalizeConsecutiveProofRefreshTransactionSize(0)).toBe(16);
+		expect(normalizeConsecutiveProofRefreshTransactionSize(32)).toBe(32);
+		expect(normalizeConsecutiveProofRefreshTransactionSize(1_000)).toBe(64);
+		expect(claimLockedSequentialProofRefreshSql).toContain(
+			'queue."archiveUrlIdentity" = any($1::text[])'
+		);
+		expect(claimLockedSequentialProofRefreshSql).toContain(
+			'chain_cursor."nextHistoricalCheckpointLedger" - 64'
+		);
+		expect(claimLockedSequentialProofRefreshSql).toContain(
+			'for update of queue skip locked'
+		);
+	});
+
 	it('claims a proof batch in one transaction', async () => {
 		const targets = [
 			{
@@ -83,24 +104,22 @@ describe('sequential history archive proof chain', () => {
 
 		expect(transaction).toHaveBeenCalledTimes(1);
 		expect(query).toHaveBeenCalledTimes(3);
-		expect(query).toHaveBeenNthCalledWith(
-			3,
-			claimSequentialProofRefreshSql,
-			[192]
-		);
+		expect(query).toHaveBeenNthCalledWith(3, claimSequentialProofRefreshSql, [
+			normalizeTargetedProofRefreshBatchSize(192)
+		]);
 		expect(claimed.map((target) => target.generation)).toEqual([2, 3]);
 	});
 
-	it('admits only the checkpoint currently opened by the chain cursor', () => {
+	it('admits only the bounded ordered checkpoint cohort', () => {
 		const gate = historyArchiveObjectOpenSequentialCohortSql('candidate');
 
+		expect(gate).toContain('candidate."checkpointLedger" between');
 		expect(gate).toContain(
-			'candidate."checkpointLedger" =\n                            chain_cursor."nextHistoricalCheckpointLedger" - 64'
+			'chain_cursor."nextHistoricalCheckpointLedger" - 64'
 		);
+		expect(gate).toContain('64 + 4032');
 		expect(gate).toContain('candidate."objectType" = \'bucket\'');
-		expect(gate).toContain(
-			'dependency."checkpointLedger" =\n                                    chain_cursor."nextHistoricalCheckpointLedger" - 64'
-		);
+		expect(gate).toContain('dependency."checkpointLedger" between');
 	});
 
 	it('resets cursors to genesis without deleting sparse evidence', async () => {

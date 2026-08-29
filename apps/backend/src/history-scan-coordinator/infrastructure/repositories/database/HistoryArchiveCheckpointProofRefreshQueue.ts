@@ -51,6 +51,27 @@ interface ProofRefreshWriteResult {
 export const defaultTargetedProofRefreshBatchSize = historyArchiveConsumerCount;
 export const maximumTargetedProofRefreshBatchSize = historyArchiveConsumerCount;
 
+const defaultConsecutiveProofRefreshTransactionSize = 16;
+const maximumConsecutiveProofRefreshTransactionSize = 64;
+
+export function normalizeConsecutiveProofRefreshTransactionSize(
+	value: number
+): number {
+	if (!Number.isSafeInteger(value) || value < 1) {
+		return defaultConsecutiveProofRefreshTransactionSize;
+	}
+	return Math.min(value, maximumConsecutiveProofRefreshTransactionSize);
+}
+
+function consecutiveProofRefreshTransactionSize(): number {
+	return normalizeConsecutiveProofRefreshTransactionSize(
+		Number.parseInt(
+			process.env.HISTORY_ARCHIVE_CONSECUTIVE_PROOF_BATCH_SIZE ?? '',
+			10
+		)
+	);
+}
+
 export interface HistoryArchiveCheckpointProofRefreshQueueStatus {
 	readonly depth: number;
 	readonly leased: number;
@@ -367,56 +388,111 @@ async function refreshProofRefreshBatchWithIsolation(
 	}
 }
 
+async function refreshClaimedHistoryArchiveCheckpointProofWave(
+	manager: EntityManager,
+	targets: readonly ClaimedHistoryArchiveCheckpointProofRefresh[]
+): Promise<number> {
+	const payload = JSON.stringify(targets);
+	const [write] = (await manager.query(
+		historyArchiveCheckpointProofBatchQueuedRefreshSql,
+		[payload]
+	)) as readonly ProofRefreshWriteResult[];
+	const targetCount = Number(write?.targetCount ?? write?.targetcount ?? 0);
+	const handledCount = Number(write?.handledCount ?? write?.handledcount ?? 0);
+	if (targetCount !== targets.length || handledCount !== targets.length) {
+		throw new Error(
+			'Checkpoint proof batch handled ' +
+				handledCount +
+				'/' +
+				targetCount +
+				' valid targets for ' +
+				targets.length +
+				' claims'
+		);
+	}
+	await manager.query(
+		historyArchiveCheckpointProofPendingSourceBatchEnrichmentSql,
+		[payload]
+	);
+	await materializeNextCompactCheckpointPlans(manager, targets);
+	await enqueueTargetedTerminalReadyCheckpointProofRefreshes(
+		manager,
+		targets.map((target) => target.archiveUrlIdentity)
+	);
+	const deleted = (await manager.query(completeProofRefreshBatchSql, [
+		payload
+	])) as unknown;
+	const deletedRows = extractQueryRows<{ readonly checkpointLedger: number }>(
+		deleted
+	);
+	if (deletedRows.length !== targets.length) {
+		throw new Error(
+			'Checkpoint proof batch completed ' +
+				deletedRows.length +
+				'/' +
+				targets.length +
+				' claims'
+		);
+	}
+	return deletedRows.length;
+}
+
+async function claimLockedSequentialProofRefreshes(
+	manager: EntityManager,
+	archiveUrlIdentities: readonly string[]
+): Promise<readonly ClaimedHistoryArchiveCheckpointProofRefresh[]> {
+	const rows = (await manager.query(claimLockedSequentialProofRefreshSql, [
+		[...archiveUrlIdentities]
+	])) as readonly (Omit<
+		ClaimedHistoryArchiveCheckpointProofRefresh,
+		'generation'
+	> & { readonly generation: number | string })[];
+	return rows.map((row) => ({
+		...row,
+		generation: Number(row.generation)
+	}));
+}
+
 export async function refreshClaimedHistoryArchiveCheckpointProofs(
 	dataSource: DataSource,
 	targets: readonly ClaimedHistoryArchiveCheckpointProofRefresh[]
 ): Promise<number> {
 	if (targets.length === 0) return 0;
-	const payload = JSON.stringify(targets);
+	const archiveUrlIdentities = [
+		...new Set(targets.map((target) => target.archiveUrlIdentity))
+	];
 	return await dataSource.transaction(async (manager) => {
 		await manager.query(`set local lock_timeout = '10s'`);
 		await manager.query(`set local statement_timeout = '60s'`);
-		await lockHistoryArchiveRootTransitions(
-			manager,
-			targets.map((target) => target.archiveUrlIdentity)
-		);
-		const [write] = (await manager.query(
-			historyArchiveCheckpointProofBatchQueuedRefreshSql,
-			[payload]
-		)) as readonly ProofRefreshWriteResult[];
-		const targetCount = Number(write?.targetCount ?? write?.targetcount ?? 0);
-		const handledCount = Number(
-			write?.handledCount ?? write?.handledcount ?? 0
-		);
-		if (targetCount !== targets.length || handledCount !== targets.length) {
-			throw new Error(
-				`Checkpoint proof batch handled ${handledCount}/${targetCount} valid targets ` +
-					`for ${targets.length} claims`
-			);
+		await lockHistoryArchiveRootTransitions(manager, archiveUrlIdentities);
+
+		const initialCompleted =
+			await refreshClaimedHistoryArchiveCheckpointProofWave(manager, targets);
+		const transactionSize = consecutiveProofRefreshTransactionSize();
+		for (let index = 1; index < transactionSize; index += 1) {
+			const savepoint = 'history_archive_proof_chain_' + index;
+			await manager.query('savepoint ' + savepoint);
+			try {
+				const nextTargets = await claimLockedSequentialProofRefreshes(
+					manager,
+					archiveUrlIdentities
+				);
+				if (nextTargets.length === 0) {
+					await manager.query('release savepoint ' + savepoint);
+					break;
+				}
+				await refreshClaimedHistoryArchiveCheckpointProofWave(
+					manager,
+					nextTargets
+				);
+				await manager.query('release savepoint ' + savepoint);
+			} catch {
+				await manager.query('rollback to savepoint ' + savepoint);
+				await manager.query('release savepoint ' + savepoint);
+				break;
+			}
 		}
-		await manager.query(
-			historyArchiveCheckpointProofPendingSourceBatchEnrichmentSql,
-			[payload]
-		);
-		// Advance exactly the locked roots in one set operation. A global sweep
-		// crosses concurrent root locks; per-target statements waste round trips.
-		await materializeNextCompactCheckpointPlans(manager, targets);
-		await enqueueTargetedTerminalReadyCheckpointProofRefreshes(
-			manager,
-			targets.map((target) => target.archiveUrlIdentity)
-		);
-		const deleted = (await manager.query(completeProofRefreshBatchSql, [
-			payload
-		])) as unknown;
-		const deletedRows = extractQueryRows<{ readonly checkpointLedger: number }>(
-			deleted
-		);
-		if (deletedRows.length !== targets.length) {
-			throw new Error(
-				`Checkpoint proof batch completed ${deletedRows.length}/${targets.length} claims`
-			);
-		}
-		return deletedRows.length;
+		return initialCompleted;
 	});
 }
 
@@ -527,6 +603,37 @@ order by "archiveUrlIdentity", "checkpointLedger"
 // Enqueue admission already proves terminal readiness. The sequential claimant
 // binds that durable intent to the one open checkpoint per root instead of
 // repeating the full object-and-bucket readiness graph for every queue claim.
+export const claimLockedSequentialProofRefreshSql = `
+	with candidate as materialized (
+		select queue."archiveUrlIdentity", queue."checkpointLedger"
+		from history_archive_checkpoint_proof_refresh_queue queue
+		join "history_archive_checkpoint_scan_cursor" chain_cursor
+			on chain_cursor."archiveUrlIdentity" =
+				queue."archiveUrlIdentity"
+			and queue."checkpointLedger" =
+				chain_cursor."nextHistoricalCheckpointLedger" - 64
+		where queue."archiveUrlIdentity" = any($1::text[])
+			and queue."nextAttemptAt" <= now()
+			and (queue."leaseUntil" is null or queue."leaseUntil" <= now())
+		order by queue."nextAttemptAt", queue."requestedAt", queue.attempts,
+			queue."archiveUrlIdentity", queue."checkpointLedger"
+		for update of queue skip locked
+	), claimed as (
+		update history_archive_checkpoint_proof_refresh_queue queue
+		set "leaseToken" = gen_random_uuid(),
+			"leaseUntil" = now() + interval '2 minutes',
+			"lastAttemptAt" = now(),
+			"updatedAt" = now()
+		from candidate
+		where queue."archiveUrlIdentity" = candidate."archiveUrlIdentity"
+			and queue."checkpointLedger" = candidate."checkpointLedger"
+		returning queue.*
+	)
+	select "archiveUrlIdentity", "checkpointLedger",
+		"evidenceUpdatedAt"::text as "evidenceUpdatedAt", generation, "leaseToken"
+	from claimed
+`;
+
 export const claimSequentialProofRefreshSql = `
 	with candidate as materialized (
 		select queue."archiveUrlIdentity", queue."checkpointLedger"
