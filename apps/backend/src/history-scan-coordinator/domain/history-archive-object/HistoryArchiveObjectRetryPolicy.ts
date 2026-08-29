@@ -179,7 +179,11 @@ export function getHistoryArchiveObjectRetryDelayMs(input: {
 		normalizeRetryCount(input.currentRetryCount),
 		maxExponentialStep
 	);
-	if (input.failureClass === 'rate-limit') {
+	if (
+		input.failureClass === 'rate-limit' ||
+		input.failureClass === 'timeout' ||
+		input.failureClass === 'transport'
+	) {
 		return Math.min(1_000 * 2 ** exponentialStep, 60_000);
 	}
 	const uncappedDelay =

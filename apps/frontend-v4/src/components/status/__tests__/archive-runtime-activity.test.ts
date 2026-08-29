@@ -8,13 +8,13 @@ describe('resolveArchiveRuntimeActivity', () => {
 			resolveArchiveRuntimeActivity(
 				{ freshActiveObjects: 22, staleActiveObjects: 2 },
 				{
+					activeWorkers: 14,
 					lastHeartbeatAt: '2026-07-16T11:47:30.000Z',
-					queueActiveWorkers: 2,
 					registeredWorkers: 24,
-					queueStaleWorkers: 0
+					staleWorkers: 1
 				}
 			)
-		).toEqual({ activeChecks: 2, staleChecks: 0 });
+		).toEqual({ activeChecks: 14, staleChecks: 1 });
 	});
 
 	it('uses the queue sample before worker telemetry is available', () => {
@@ -22,10 +22,10 @@ describe('resolveArchiveRuntimeActivity', () => {
 			resolveArchiveRuntimeActivity(
 				{ freshActiveObjects: 3, staleActiveObjects: 1 },
 				{
+					activeWorkers: 0,
 					lastHeartbeatAt: null,
-					queueActiveWorkers: 0,
 					registeredWorkers: 0,
-					queueStaleWorkers: 0
+					staleWorkers: 0
 				}
 			)
 		).toEqual({ activeChecks: 3, staleChecks: 1 });

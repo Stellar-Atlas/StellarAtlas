@@ -86,11 +86,11 @@ describe('HistoryArchiveObjectRetryPolicy', () => {
 		});
 
 		expect(result).toEqual({
-			delayMs: 960_000,
+			delayMs: 8_000,
 			evidenceClass: 'archive-object',
 			failureClass: 'timeout',
 			isArchiveObjectEvidence: true,
-			nextAttemptAt: new Date('2026-07-06T14:16:00.000Z'),
+			nextAttemptAt: new Date('2026-07-06T14:00:08.000Z'),
 			retryCount: 4
 		});
 	});
@@ -105,19 +105,30 @@ describe('HistoryArchiveObjectRetryPolicy', () => {
 		).toBe(60_000);
 	});
 	it.each([
-		[0, 1_000],
-		[1, 2_000],
-		[2, 4_000],
-		[3, 8_000]
-	])('uses 1, 2, 4, 8 second host rate-limit backoff', (retry, delayMs) => {
-		expect(
-			getHistoryArchiveObjectRetryDelayMs({
-				currentRetryCount: retry,
-				failureClass: 'rate-limit',
-				objectType: 'bucket'
-			})
-		).toBe(delayMs);
-	});
+		['rate-limit', 0, 1_000],
+		['rate-limit', 1, 2_000],
+		['rate-limit', 2, 4_000],
+		['rate-limit', 3, 8_000],
+		['timeout', 0, 1_000],
+		['timeout', 3, 8_000],
+		['transport', 0, 1_000],
+		['transport', 3, 8_000]
+	] satisfies readonly (readonly [
+		HistoryArchiveObjectFailureClass,
+		number,
+		number
+	])[])(
+		'uses short exponential backoff for %s retry %s',
+		(failureClass, retry, delayMs) => {
+			expect(
+				getHistoryArchiveObjectRetryDelayMs({
+					currentRetryCount: retry,
+					failureClass,
+					objectType: 'bucket'
+				})
+			).toBe(delayMs);
+		}
+	);
 
 	it('keeps worker and coordinator failures out of archive object evidence', () => {
 		const now = new Date('2026-07-06T15:00:00.000Z');
@@ -232,23 +243,23 @@ describe('HistoryArchiveObjectRetryPolicy', () => {
 	});
 
 	it.each([
-		['history-archive-state', 60_000],
-		['checkpoint-state', 90_000],
-		['ledger', 120_000],
-		['transactions', 120_000],
-		['results', 120_000],
-		['scp', 120_000],
-		['bucket', 240_000]
-	] satisfies readonly (readonly [HistoryArchiveObjectType, number])[])(
-		'uses the %s object base delay',
-		(objectType, delayMs) => {
+		'history-archive-state',
+		'checkpoint-state',
+		'ledger',
+		'transactions',
+		'results',
+		'scp',
+		'bucket'
+	] satisfies readonly HistoryArchiveObjectType[])(
+		'does not make the first %s transport retry wait for object size',
+		(objectType) => {
 			expect(
 				getHistoryArchiveObjectRetryDelayMs({
 					currentRetryCount: 0,
 					failureClass: 'transport',
 					objectType
 				})
-			).toBe(delayMs);
+			).toBe(1_000);
 		}
 	);
 });
