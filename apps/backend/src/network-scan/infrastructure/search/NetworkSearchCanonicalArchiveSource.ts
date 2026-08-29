@@ -24,24 +24,13 @@ interface CanonicalArchiveRow {
 }
 
 export const networkSearchCanonicalArchiveSql = `
-	with identities as (
-		select "archiveUrlIdentity"
-		from history_archive_evidence_root_summary
-		union
-		select "archiveUrlIdentity"
-		from history_archive_checkpoint_proof_rollup
-		union
-		select "archiveUrlIdentity"
-		from history_archive_state_snapshot
-	)
 	select
-		identities."archiveUrlIdentity",
-		coalesce(state."archiveUrl", identities."archiveUrlIdentity")
-			as "archiveUrl"
-	from identities
-	left join history_archive_state_snapshot state
-		on state."archiveUrlIdentity" = identities."archiveUrlIdentity"
-	order by identities."archiveUrlIdentity"
+		state."archiveUrlIdentity",
+		state."archiveUrl"
+	from history_archive_state_snapshot state
+	where state."archiveUrlIdentity" =
+		regexp_replace(state."archiveUrl", '/+$', '')
+	order by state."archiveUrlIdentity"
 `;
 
 export class PostgresNetworkSearchCanonicalArchiveSource implements NetworkSearchCanonicalArchiveSource {

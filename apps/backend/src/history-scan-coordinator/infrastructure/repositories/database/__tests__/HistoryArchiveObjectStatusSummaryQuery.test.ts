@@ -1,5 +1,6 @@
 import {
 	evidenceHealthSql,
+	sourceCountSql,
 	sourceStatusSummarySql
 } from '../HistoryArchiveObjectStatusSummaryQuery.js';
 import { checkpointCoverageSql } from '../HistoryArchiveObjectCheckpointCoverageQuery.js';
@@ -34,6 +35,15 @@ describe('HistoryArchiveObjectStatusSummaryQuery', () => {
 			'left join history_archive_evidence_root_summary summary'
 		);
 		expect(sourceStatusSummarySql).not.toContain('failure_counts_by_identity');
+		for (const sql of [
+			sourceCountSql,
+			evidenceHealthSql,
+			sourceStatusSummarySql
+		]) {
+			expect(normalize(sql)).toContain(
+				'"archiveUrlIdentity" = regexp_replace('
+			);
+		}
 		expect(sourceStatusSummarySql).not.toMatch(
 			/from\s+"?history_archive_checkpoint_proof"?\s/i
 		);

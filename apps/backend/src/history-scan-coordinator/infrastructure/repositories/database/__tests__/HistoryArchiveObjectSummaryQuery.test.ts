@@ -50,6 +50,9 @@ describe('HistoryArchiveObjectSummaryQuery SQL', () => {
 		expect(sourceSummarySql).toContain(
 			'"totalObjects" - "pendingObjects" - "scanningObjects"'
 		);
+		expect(sourceSummarySql).toContain(
+			"regexp_replace(state.\"archiveUrl\", '/+$', '')"
+		);
 	});
 
 	it('isolates exact bucket distinctness on compact reference summaries', () => {

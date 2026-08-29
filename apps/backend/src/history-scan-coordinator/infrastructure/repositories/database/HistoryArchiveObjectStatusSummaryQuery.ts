@@ -413,10 +413,16 @@ export const canonicalProofProgressSql = `
 export const sourceCountSql = `
 	select count(distinct "archiveUrl")::int as "sourceCount"
 	from history_archive_state_snapshot
+	where "archiveUrlIdentity" = regexp_replace("archiveUrl", '/+$', '')
 `;
 
 export const evidenceHealthSql = `
-	with rollup_readiness as materialized (
+	with canonical_sources as materialized (
+		select "archiveUrlIdentity"
+		from history_archive_state_snapshot
+		where "archiveUrlIdentity" =
+			regexp_replace("archiveUrl", '/+$', '')
+	), rollup_readiness as materialized (
 		select
 			coalesce((
 				select "complete" and "lastObjectId" = "cutoffObjectId"
@@ -449,6 +455,9 @@ export const evidenceHealthSql = `
 	from rollup_readiness
 	left join history_archive_evidence_root_summary summary
 		on rollup_readiness.ready
+		and summary."archiveUrlIdentity" in (
+			select "archiveUrlIdentity" from canonical_sources
+		)
 	group by rollup_readiness.ready
 `;
 
@@ -456,6 +465,8 @@ export const sourceStatusSummarySql = `
 	with source_aliases as materialized (
 		select "archiveUrl", "archiveUrlIdentity"
 		from history_archive_state_snapshot
+		where "archiveUrlIdentity" =
+			regexp_replace("archiveUrl", '/+$', '')
 	), current_state as (
 		select distinct on ("archiveUrl")
 			"archiveUrl",
@@ -466,6 +477,8 @@ export const sourceStatusSummarySql = `
 			source,
 			"currentLedger"
 		from history_archive_state_snapshot
+		where "archiveUrlIdentity" =
+			regexp_replace("archiveUrl", '/+$', '')
 		order by
 			"archiveUrl",
 			"observedAt" desc,

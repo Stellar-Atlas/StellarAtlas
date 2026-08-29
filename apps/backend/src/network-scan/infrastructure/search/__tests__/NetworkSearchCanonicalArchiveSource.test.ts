@@ -30,5 +30,8 @@ describe('PostgresNetworkSearchCanonicalArchiveSource', () => {
 		expect(networkSearchCanonicalArchiveSql).not.toContain(
 			'"verifiedCheckpointProofs"'
 		);
+		expect(networkSearchCanonicalArchiveSql).toContain(
+			"regexp_replace(state.\"archiveUrl\", '/+$', '')"
+		);
 	});
 });

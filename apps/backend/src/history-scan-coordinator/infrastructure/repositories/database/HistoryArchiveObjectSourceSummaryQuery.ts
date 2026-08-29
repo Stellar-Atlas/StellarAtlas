@@ -288,7 +288,10 @@ export const sourceSummarySql = `
 		on object_counts."archiveUrlIdentity" = state."archiveUrlIdentity"
 	left join checkpoint_bounds
 		on checkpoint_bounds."archiveUrlIdentity" = state."archiveUrlIdentity"
-	where ($1::text is null or state."archiveUrlIdentity" = $1::text)
+	where
+		state."archiveUrlIdentity" =
+			regexp_replace(state."archiveUrl", '/+$', '')
+		and ($1::text is null or state."archiveUrlIdentity" = $1::text)
 	order by
 		state.status asc,
 		coalesce(state."currentLedger", -1) desc,
