@@ -320,12 +320,12 @@ describe('CompleteHistoryArchiveObject', () => {
 		expect(objectRepository.markObjectVerified).toHaveBeenCalled();
 	});
 
-	it('refreshes checkpoint proof after bucket verification', async () => {
+	it('continues the sequential proof drain after any claimed work', async () => {
 		const archiveObject = createBucketObject();
 		objectRepository.drainCheckpointProofRefreshQueue
 			.mockResolvedValueOnce({
-				claimed: 4,
-				completed: 4,
+				claimed: 1,
+				completed: 1,
 				failed: 0
 			})
 			.mockResolvedValue({

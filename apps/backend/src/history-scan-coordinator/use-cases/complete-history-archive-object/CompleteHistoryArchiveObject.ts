@@ -639,8 +639,7 @@ export class CompleteHistoryArchiveObject {
 							this.immediateProofRefreshBatchSize,
 							1
 						);
-					proofQueueMayHaveMore =
-						refresh.claimed === this.immediateProofRefreshBatchSize;
+					proofQueueMayHaveMore = refresh.claimed > 0;
 				} catch {
 					// Terminal object state is durable. The frontier reconciler
 					// recovers any enqueue missed by a process interruption.
