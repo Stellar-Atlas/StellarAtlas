@@ -157,15 +157,14 @@ export class HistoryArchiveBrokerDispatcher {
 					this.config.maximumPriority,
 					this.config.canonicalFirstRoot
 				);
-				if (jobs.length < limit) {
+				if (jobs.length === 0) {
 					await this.repository.ensurePrefetch(this.config.canonicalFirstRoot);
-					const additionalJobs = await this.repository.reserveJobs(
-						limit - jobs.length,
+					jobs = await this.repository.reserveJobs(
+						limit,
 						this.config.maximumPerHost,
 						this.config.maximumPriority,
 						this.config.canonicalFirstRoot
 					);
-					if (additionalJobs.length > 0) jobs = [...jobs, ...additionalJobs];
 				}
 				if (jobs.length === 0) {
 					await this.repository.ensureFrontier(this.config.canonicalFirstRoot);
