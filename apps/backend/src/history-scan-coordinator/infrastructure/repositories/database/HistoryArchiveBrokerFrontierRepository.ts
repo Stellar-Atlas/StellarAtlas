@@ -113,6 +113,14 @@ export const reserveBrokerJobsSql = `
 			ranked."updatedAt",
 			ranked."objectRemoteId"
 		limit $1::integer
+	), lockable as materialized (
+		select ready."objectRemoteId"
+		from "history_archive_object_ready" ready
+		join selected
+			on selected."objectRemoteId" = ready."objectRemoteId"
+		order by selected.priority, selected."selectedOrdinal",
+			ready."objectRemoteId"
+		for update of ready skip locked
 	), reserved as (
 		update "history_archive_object_ready" ready
 		set "dispatchToken" = coalesce(ready."dispatchToken", gen_random_uuid()),
@@ -125,9 +133,10 @@ export const reserveBrokerJobsSql = `
 				when ready."dispatchToken" is null then now()
 				else ready."updatedAt"
 			end
-		from "history_archive_object_queue" object, selected
+		from "history_archive_object_queue" object, selected, lockable
 		where ready."objectRemoteId" = object."remoteId"
 			and ready."objectRemoteId" = selected."objectRemoteId"
+			and ready."objectRemoteId" = lockable."objectRemoteId"
 		returning
 			ready."objectRemoteId",
 			ready."dispatchToken",

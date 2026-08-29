@@ -17,6 +17,16 @@ describe('HistoryArchiveBrokerFrontierRepository', () => {
 		expect(reserveBrokerJobsSql).not.toContain('displacement_fence');
 	});
 
+	it('skips ready rows already locked by a terminal completion', () => {
+		expect(reserveBrokerJobsSql).toContain('lockable as materialized');
+		expect(reserveBrokerJobsSql).toContain(
+			'for update of ready skip locked'
+		);
+		expect(reserveBrokerJobsSql).toContain(
+			'and ready."objectRemoteId" = lockable."objectRemoteId"'
+		);
+	});
+
 	it('skips frontier reconciliation instead of queueing an exclusive lock', async () => {
 		const query = jest.fn().mockResolvedValue([{ locked: false }]);
 		const manager = { query } as unknown as EntityManager;
