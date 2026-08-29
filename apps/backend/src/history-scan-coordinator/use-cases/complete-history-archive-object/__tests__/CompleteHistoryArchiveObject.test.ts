@@ -368,6 +368,41 @@ describe('CompleteHistoryArchiveObject', () => {
 		expect(objectRepository.promotePlannedObjects).not.toHaveBeenCalled();
 	});
 
+	it('lets non-maintenance API workers enqueue without competing for the proof root lock', async () => {
+		const configuredWriter = process.env.API_HISTORY_MAINTENANCE_WRITER;
+		process.env.API_HISTORY_MAINTENANCE_WRITER = 'false';
+		try {
+			const bucket = createBucketObject();
+			bucket.status = 'verified';
+			bucket.attempts = 1;
+			objectRepository.markTransitionEffectsCompletedBatch.mockResolvedValue(
+				new Set([bucket.remoteId])
+			);
+			const useCase = new CompleteHistoryArchiveObject(
+				objectRepository,
+				stateRepository,
+				eventRecorder,
+				checkpointProofRepository
+			);
+
+			await useCase.reconcileVerifiedTransitionBatch([bucket]);
+			await new Promise<void>((resolve) => setImmediate(resolve));
+
+			expect(
+				objectRepository.enqueueCheckpointProofRefreshes
+			).toHaveBeenCalledWith([bucket.remoteId]);
+			expect(
+				objectRepository.drainCheckpointProofRefreshQueue
+			).not.toHaveBeenCalled();
+		} finally {
+			if (configuredWriter === undefined) {
+				delete process.env.API_HISTORY_MAINTENANCE_WRITER;
+			} else {
+				process.env.API_HISTORY_MAINTENANCE_WRITER = configuredWriter;
+			}
+		}
+	});
+
 	it('materializes and refreshes a legacy verified checkpoint once', async () => {
 		const archiveObject = createCheckpointObject();
 		archiveObject.status = 'verified';

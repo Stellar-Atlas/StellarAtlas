@@ -65,6 +65,8 @@ export class CompleteHistoryArchiveObject {
 		historyArchiveCompletionWriteConfigFromEnv();
 	private readonly pendingProofCompletionRemoteIds = new Set<string>();
 	private proofCompletionEventRunning = false;
+	private readonly immediateProofRefreshDrainEnabled =
+		process.env.API_HISTORY_MAINTENANCE_WRITER !== 'false';
 	private readonly immediateProofRefreshBatchSize =
 		parseTargetedProofRefreshBatchSize(
 			process.env.HISTORY_ARCHIVE_TARGETED_PROOF_REFRESH_BATCH_SIZE
@@ -634,12 +636,14 @@ export class CompleteHistoryArchiveObject {
 							remoteIds
 						);
 					}
-					const refresh =
-						await this.objectRepository.drainCheckpointProofRefreshQueue(
-							this.immediateProofRefreshBatchSize,
-							1
-						);
-					proofQueueMayHaveMore = refresh.claimed > 0;
+					if (this.immediateProofRefreshDrainEnabled) {
+						const refresh =
+							await this.objectRepository.drainCheckpointProofRefreshQueue(
+								this.immediateProofRefreshBatchSize,
+								1
+							);
+						proofQueueMayHaveMore = refresh.claimed > 0;
+					}
 				} catch {
 					// Terminal object state is durable. The frontier reconciler
 					// recovers any enqueue missed by a process interruption.
