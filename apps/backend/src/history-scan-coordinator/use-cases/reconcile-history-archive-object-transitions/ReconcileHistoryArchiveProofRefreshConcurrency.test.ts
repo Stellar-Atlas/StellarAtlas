@@ -17,11 +17,17 @@ describe('targeted checkpoint proof refresh concurrency', () => {
 
 		try {
 			const repository = mock<HistoryArchiveObjectRepository>();
-			repository.drainCheckpointProofRefreshQueue.mockResolvedValue({
-				claimed: 4,
-				completed: 4,
-				failed: 0
-			});
+			repository.drainCheckpointProofRefreshQueue
+				.mockResolvedValueOnce({
+					claimed: 4,
+					completed: 4,
+					failed: 0
+				})
+				.mockResolvedValue({
+					claimed: 0,
+					completed: 0,
+					failed: 0
+				});
 			repository.tryWithTransitionReconciliationLock.mockResolvedValue(false);
 			const reconciler = new ReconcileHistoryArchiveObjectTransitions(
 				repository,
@@ -35,6 +41,9 @@ describe('targeted checkpoint proof refresh concurrency', () => {
 			expect(repository.drainCheckpointProofRefreshQueue).toHaveBeenCalledWith(
 				4,
 				1
+			);
+			expect(repository.drainCheckpointProofRefreshQueue).toHaveBeenCalledTimes(
+				2
 			);
 		} finally {
 			restoreEnv('HISTORY_ARCHIVE_TARGETED_PROOF_REFRESH_ENABLED', enabled);

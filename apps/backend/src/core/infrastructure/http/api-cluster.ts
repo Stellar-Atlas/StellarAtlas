@@ -8,6 +8,7 @@ import {
 	shouldRestartApiWorker
 } from './ApiClusterPolicy.js';
 import { isHistoryArchiveWorkerStatusIpcMessageDTO } from 'history-scanner-dto';
+import { isHistoryArchiveProofRefreshWakeMessage } from '@history-scan-coordinator/infrastructure/ipc/HistoryArchiveProofRefreshWake.js';
 
 const shutdownTimeoutMs = 30_000;
 type ShutdownSignal = 'SIGINT' | 'SIGTERM';
@@ -53,7 +54,11 @@ function runPrimary(): void {
 	};
 
 	cluster.on('message', (source, message: unknown) => {
-		if (!isHistoryArchiveWorkerStatusIpcMessageDTO(message)) return;
+		if (
+			!isHistoryArchiveWorkerStatusIpcMessageDTO(message) &&
+			!isHistoryArchiveProofRefreshWakeMessage(message)
+		)
+			return;
 		for (const worker of Object.values(cluster.workers ?? {})) {
 			if (worker === undefined || worker.id === source.id) continue;
 			try {

@@ -71,9 +71,12 @@ export class ReconcileHistoryArchiveObjectTransitions {
 		await this.executeExecutionDispositionReconciliationIfDue(now);
 	}
 
-	async executeTargetedProofRefreshIfDue(now = Date.now()): Promise<void> {
+	async executeTargetedProofRefreshIfDue(
+		now = Date.now(),
+		force = false
+	): Promise<void> {
 		if (!this.maintenanceLanes.targetedProofRefreshEnabled) return;
-		if (now < this.nextTargetedProofRefreshRunAt) return;
+		if (!force && now < this.nextTargetedProofRefreshRunAt) return;
 		this.nextTargetedProofRefreshRunAt =
 			now + this.maintenanceIntervals.transitionReconciliationIntervalMs;
 

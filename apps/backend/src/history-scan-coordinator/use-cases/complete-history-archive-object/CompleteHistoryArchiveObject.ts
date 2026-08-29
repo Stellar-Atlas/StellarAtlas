@@ -20,6 +20,7 @@ import {
 	buildHistoryArchiveObjectsFromState
 } from '../../domain/history-archive-object/HistoryArchiveObjectBuilder.js';
 import { TYPES } from '../../infrastructure/di/di-types.js';
+import { notifyHistoryArchiveProofRefreshReady } from '../../infrastructure/ipc/HistoryArchiveProofRefreshWake.js';
 import { mapUnknownToError } from '@core/utilities/mapUnknownToError.js';
 import { HistoryArchiveObjectEventRecorder } from '../record-history-archive-object-event/HistoryArchiveObjectEventRecorder.js';
 import {
@@ -632,9 +633,13 @@ export class CompleteHistoryArchiveObject {
 				proofQueueMayHaveMore = false;
 				try {
 					if (remoteIds.length > 0) {
-						await this.objectRepository.enqueueCheckpointProofRefreshes(
-							remoteIds
-						);
+						const enqueued =
+							await this.objectRepository.enqueueCheckpointProofRefreshes(
+								remoteIds
+							);
+						if (enqueued > 0 && !this.immediateProofRefreshDrainEnabled) {
+							notifyHistoryArchiveProofRefreshReady();
+						}
 					}
 					if (this.immediateProofRefreshDrainEnabled) {
 						const refresh =

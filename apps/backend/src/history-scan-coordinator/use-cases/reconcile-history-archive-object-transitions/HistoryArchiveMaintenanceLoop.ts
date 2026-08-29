@@ -1,4 +1,6 @@
+import process from 'node:process';
 import type { Logger } from 'logger';
+import { isHistoryArchiveProofRefreshWakeMessage } from '../../infrastructure/ipc/HistoryArchiveProofRefreshWake.js';
 import type { ReconcileHistoryArchiveObjectTransitions } from './ReconcileHistoryArchiveObjectTransitions.js';
 import {
 	historyArchiveMaintenanceIntervalsFromEnv,
@@ -24,12 +26,19 @@ export function startHistoryArchiveMaintenanceLoop(
 		maintenanceWork: 'execution disposition' | 'proof refresh' | 'transitions',
 		work: () => Promise<void>
 	): (() => Promise<void>) => {
+		let rerunRequested = false;
 		let running = false;
 		return async (): Promise<void> => {
-			if (running || stopped) return;
+			if (running) {
+				rerunRequested = true;
+				return;
+			}
 			running = true;
 			try {
-				await work();
+				do {
+					rerunRequested = false;
+					await work();
+				} while (rerunRequested && !stopped);
 			} catch (error: unknown) {
 				logger.error('Failed to maintain archive object queue', {
 					app: 'history-scan-coordinator',
@@ -41,15 +50,24 @@ export function startHistoryArchiveMaintenanceLoop(
 			}
 		};
 	};
+	let forceProofRefresh = false;
 	const runTransitions = createRunner('transitions', () =>
 		reconciler.executeTransitionReconciliationIfDue()
 	);
-	const runProofRefresh = createRunner('proof refresh', () =>
-		reconciler.executeTargetedProofRefreshIfDue()
-	);
+	const runProofRefresh = createRunner('proof refresh', async () => {
+		const force = forceProofRefresh;
+		forceProofRefresh = false;
+		await reconciler.executeTargetedProofRefreshIfDue(Date.now(), force);
+	});
 	const runExecutionDisposition = createRunner('execution disposition', () =>
 		reconciler.executeExecutionDispositionReconciliationIfDue()
 	);
+	const onProofRefreshWake = (message: unknown): void => {
+		if (!isHistoryArchiveProofRefreshWakeMessage(message)) return;
+		forceProofRefresh = true;
+		void runProofRefresh();
+	};
+	process.on('message', onProofRefreshWake);
 
 	const proofRefreshTimer = setInterval(() => {
 		void runProofRefresh();
@@ -72,9 +90,9 @@ export function startHistoryArchiveMaintenanceLoop(
 		clearInterval(proofRefreshTimer);
 		clearInterval(transitionTimer);
 		clearInterval(executionAdmissionTimer);
+		process.off('message', onProofRefreshWake);
 	};
 }
-
 function resolveMaintenanceIntervals(
 	configuredIntervals: HistoryArchiveMaintenanceIntervals | number
 ): HistoryArchiveMaintenanceIntervals {
