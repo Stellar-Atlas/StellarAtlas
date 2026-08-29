@@ -228,7 +228,9 @@ const validateArchiveSource = matches({
 	rootObjectStatus: nullable(
 		oneOf('pending', 'scanning', 'verified', 'failed')
 	),
-	rootFailureChannel: nullable(oneOf('archive_evidence', 'scanner_issue')),
+	rootFailureChannel: nullable(
+		oneOf('archive_evidence', 'archive_availability', 'scanner_issue')
+	),
 	scannerIssueFailures: nonNegativeInteger,
 	source: oneOf('backfill', 'history-scanner', 'network-scan'),
 	stateStatus: oneOf('available', 'invalid', 'unreachable'),

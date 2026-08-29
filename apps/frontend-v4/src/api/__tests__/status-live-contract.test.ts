@@ -68,6 +68,23 @@ describe('status WebSocket contract', () => {
 		).not.toHaveProperty('archiveUrl');
 	});
 
+	it('accepts an archive-availability failure channel', () => {
+		const payload = createStatusLivePayload();
+		const archiveSummary = asRecord(payload.archiveSummary);
+		const sources = archiveSummary.sources;
+		if (!Array.isArray(sources)) throw new Error('sources fixture missing');
+		const source = asRecord(sources[0]);
+		source.rootFailureChannel = 'archive_availability';
+
+		const message = parseStatusLiveMessage({ payload, type: 'status' });
+
+		expect(message?.type).toBe('status');
+		if (message?.type !== 'status') return;
+		expect(message.payload.archiveSummary.sources[0]?.rootFailureChannel).toBe(
+			'archive_availability'
+		);
+	});
+
 	it('accepts historical backfill status before the progress extension', () => {
 		const payload = createStatusLivePayload();
 		const fullHistory = asRecord(payload.fullHistory);
