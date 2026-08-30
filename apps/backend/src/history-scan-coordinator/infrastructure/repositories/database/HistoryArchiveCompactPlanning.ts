@@ -3,7 +3,7 @@ import type { HistoryArchiveObject } from '@history-scan-coordinator/domain/hist
 import { historyArchiveSequentialPrefetchDepth } from '@history-scan-coordinator/domain/history-archive-object/HistoryArchiveObjectPlanningPolicy.js';
 import { notifyHistoryArchiveReadyWork } from './HistoryArchiveObjectReadyQueue.js';
 
-const maximumCheckpointFanoutBatch = 24;
+const maximumCheckpointFanoutBatch = historyArchiveSequentialPrefetchDepth;
 const maximumCheckpointCursorBatch = 128;
 const checkpointFanoutLedgerSpan =
 	(historyArchiveSequentialPrefetchDepth - 1) * 64;
