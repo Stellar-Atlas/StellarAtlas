@@ -129,10 +129,8 @@ export const reserveBrokerJobsSql = `
 				else ready.priority
 			end,
 			"claimAttempt" = coalesce(ready."claimAttempt", object.attempts + 1),
-			"updatedAt" = case
-				when ready."dispatchToken" is null then now()
-				else ready."updatedAt"
-			end
+			"publishedAt" = now(),
+			"updatedAt" = now()
 		from "history_archive_object_queue" object, selected, lockable
 		where ready."objectRemoteId" = object."remoteId"
 			and ready."objectRemoteId" = selected."objectRemoteId"
@@ -350,24 +348,24 @@ export class HistoryArchiveBrokerFrontierRepository {
 		return mapAndOrderBrokerJobs(rows);
 	}
 
-	async markPublished(executionIds: readonly string[]): Promise<void> {
+	async resetPublished(executionIds: readonly string[]): Promise<void> {
 		if (executionIds.length === 0) return;
 		await this.dataSource.transaction(async (manager) => {
 			await manager.query(
-				`with publishable as materialized (
+				`with failed_publish as materialized (
                                         select ready."objectRemoteId"
                                         from "history_archive_object_ready" ready
                                         where ready."dispatchToken" = any($1::uuid[])
-                                                and ready."publishedAt" is null
+                                                and ready."publishedAt" is not null
                                         order by ready."archiveUrlIdentity",
                                                 ready."objectRemoteId"
                                         for update of ready
                                 )
                                 update "history_archive_object_ready" ready
-                                set "publishedAt" = coalesce(ready."publishedAt", now()),
+                                set "publishedAt" = null,
                                         "updatedAt" = now()
-                                from publishable
-                                where ready."objectRemoteId" = publishable."objectRemoteId"`,
+                                from failed_publish
+                                where ready."objectRemoteId" = failed_publish."objectRemoteId"`,
 				[executionIds]
 			);
 		});

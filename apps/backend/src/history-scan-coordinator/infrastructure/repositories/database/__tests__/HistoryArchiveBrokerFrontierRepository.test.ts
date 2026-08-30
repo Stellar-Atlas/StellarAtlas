@@ -25,7 +25,12 @@ describe('HistoryArchiveBrokerFrontierRepository', () => {
 		);
 	});
 
-	it('marks published rows in checkpoint fan-out lock order', async () => {
+	it('marks broker reservations published inside the reservation transaction', () => {
+		expect(reserveBrokerJobsSql).toContain('"publishedAt" = now()');
+		expect(reserveBrokerJobsSql).toContain('"updatedAt" = now()');
+	});
+
+	it('resets failed publishes in checkpoint fan-out lock order', async () => {
 		const query = jest.fn().mockResolvedValue([]);
 		const manager = { query } as unknown as EntityManager;
 		const transaction = jest.fn(
@@ -36,13 +41,14 @@ describe('HistoryArchiveBrokerFrontierRepository', () => {
 			transaction
 		} as unknown as DataSource);
 
-		await repository.markPublished(['00000000-0000-0000-0000-000000000001']);
+		await repository.resetPublished(['00000000-0000-0000-0000-000000000001']);
 		const sql = query.mock.calls[0]?.[0] as string;
-		expect(sql).toContain('publishable as materialized');
+		expect(sql).toContain('failed_publish as materialized');
 		expect(sql.replace(/\s+/g, ' ')).toContain(
 			'order by ready."archiveUrlIdentity", ready."objectRemoteId"'
 		);
 		expect(sql).toContain('for update of ready');
+		expect(sql).toContain('set "publishedAt" = null');
 	});
 
 	it('skips frontier reconciliation instead of queueing an exclusive lock', async () => {
