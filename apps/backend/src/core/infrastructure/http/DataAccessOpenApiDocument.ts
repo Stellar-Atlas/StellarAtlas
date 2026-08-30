@@ -148,6 +148,151 @@ const dataAccessPaths: Readonly<Record<string, OpenApiRecord>> = {
 			tags: tag
 		}
 	},
+	'/v1/analytics/assets/holders': {
+		get: {
+			description:
+				'Returns current account balances for one issued asset from the owned Horizon state. This is a current-state query, not historical ever-held coverage.',
+			operationId: 'listCurrentAssetHolders',
+			parameters: [
+				{
+					description:
+						'Issued asset identifier in CODE:ISSUER form. Native XLM enumeration requires the local account-state index.',
+					in: 'query',
+					name: 'asset',
+					required: true,
+					schema: { type: 'string' }
+				},
+				{
+					description: 'Opaque Horizon paging token from nextCursor.',
+					in: 'query',
+					name: 'cursor',
+					required: false,
+					schema: { maxLength: 256, minLength: 1, type: 'string' }
+				},
+				{
+					in: 'query',
+					name: 'limit',
+					required: false,
+					schema: {
+						default: 50,
+						maximum: 200,
+						minimum: 1,
+						type: 'integer'
+					}
+				},
+				{
+					in: 'query',
+					name: 'order',
+					required: false,
+					schema: {
+						default: 'asc',
+						enum: ['asc', 'desc'],
+						type: 'string'
+					}
+				}
+			],
+			responses: {
+				'200': {
+					content: {
+						'application/json': {
+							schema: {
+								additionalProperties: false,
+								properties: {
+									asset: {
+										additionalProperties: false,
+										properties: {
+											code: {
+												anyOf: [{ type: 'string' }, { type: 'null' }]
+											},
+											id: { type: 'string' },
+											issuer: {
+												anyOf: [{ type: 'string' }, { type: 'null' }]
+											},
+											type: {
+												enum: [
+													'credit_alphanum4',
+													'credit_alphanum12',
+													'native'
+												],
+												type: 'string'
+											}
+										},
+										required: ['code', 'id', 'issuer', 'type'],
+										type: 'object'
+									},
+									coverage: {
+										additionalProperties: false,
+										properties: {
+											historyLatestLedger: {
+												anyOf: [{ type: 'string' }, { type: 'null' }]
+											},
+											scope: {
+												enum: ['current_state'],
+												type: 'string'
+											},
+											source: {
+												enum: ['owned_horizon'],
+												type: 'string'
+											}
+										},
+										required: ['historyLatestLedger', 'scope', 'source'],
+										type: 'object'
+									},
+									generatedAt: {
+										format: 'date-time',
+										type: 'string'
+									},
+									limit: { type: 'integer' },
+									nextCursor: {
+										anyOf: [{ type: 'string' }, { type: 'null' }]
+									},
+									order: {
+										enum: ['asc', 'desc'],
+										type: 'string'
+									},
+									records: {
+										items: {
+											additionalProperties: true,
+											properties: {
+												accountId: { type: 'string' },
+												balance: { type: 'string' },
+												lastModifiedLedger: {
+													anyOf: [{ type: 'string' }, { type: 'null' }]
+												},
+												pagingToken: { type: 'string' }
+											},
+											required: ['accountId', 'balance', 'pagingToken'],
+											type: 'object'
+										},
+										type: 'array'
+									}
+								},
+								required: [
+									'asset',
+									'coverage',
+									'generatedAt',
+									'limit',
+									'nextCursor',
+									'order',
+									'records'
+								],
+								type: 'object'
+							}
+						}
+					},
+					description: 'Current account balances for the requested asset.'
+				},
+				'400': errorResponse('The asset or paging query is invalid.'),
+				'501': errorResponse(
+					'Native XLM holder enumeration is not available until the local account-state index is built.'
+				),
+				'502': errorResponse('The owned Horizon service is unavailable.')
+			},
+			security: publicAccess,
+			summary: 'List current holders of an asset',
+			tags: tag
+		}
+	},
 	'/v1/history-data/catalog': {
 		get: {
 			description:

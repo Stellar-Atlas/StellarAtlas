@@ -115,6 +115,7 @@ import { mountExplorerRoutes } from './ExplorerRoutes.js';
 import { mountOpenApiDocumentation } from './OpenApiDocumentation.js';
 import { readOnlyUpstreamRouter } from './ReadOnlyUpstreamRouter.js';
 import { historyDataRouter } from '@status/infrastructure/http/HistoryDataRouter.js';
+import { historyAnalyticsRouter } from '@status/infrastructure/http/HistoryAnalyticsRouter.js';
 import { corsMiddleware } from './CorsMiddleware.js';
 
 let server: Server;
@@ -189,6 +190,13 @@ const listen = async () => {
 			storageRoot:
 				process.env.FULL_HISTORY_DATA_ROOT ??
 				resolve(process.cwd(), '../full-history/typed')
+		})
+	);
+
+	api.use(
+		'/v1/analytics',
+		historyAnalyticsRouter({
+			horizonBaseUrl: config.horizonUrl.value
 		})
 	);
 

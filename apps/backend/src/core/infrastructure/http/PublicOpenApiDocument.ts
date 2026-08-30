@@ -117,7 +117,8 @@ function canonicalPublicTag(path: string, value: unknown): string {
 	if (
 		path.startsWith('/horizon') ||
 		path.startsWith('/galexie') ||
-		path.startsWith('/v1/history-data')
+		path.startsWith('/v1/history-data') ||
+		path.startsWith('/v1/analytics')
 	) {
 		return 'Data access';
 	}

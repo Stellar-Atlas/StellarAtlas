@@ -22,6 +22,9 @@ describe('data-access OpenAPI paths', () => {
 		expect(paths['/v1/history-data/catalog']?.get?.operationId).toBe(
 			'getHistoryDataCatalog'
 		);
+		expect(paths['/v1/analytics/assets/holders']?.get?.operationId).toBe(
+			'listCurrentAssetHolders'
+		);
 		expect(paths['/v1/history-data/batches']?.get?.operationId).toBe(
 			'listHistoryDataBatches'
 		);
