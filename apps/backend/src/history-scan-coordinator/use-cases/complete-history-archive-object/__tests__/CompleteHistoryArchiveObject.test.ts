@@ -171,6 +171,55 @@ describe('CompleteHistoryArchiveObject', () => {
 		).toHaveBeenCalledWith([bucket.remoteId, ledger.remoteId]);
 	});
 
+	it('reconciles checkpoint transitions with set-based writes and fanout', async () => {
+		const first = createCheckpointObject(
+			127,
+			'11111111-1111-4111-8111-111111111111'
+		);
+		const second = createCheckpointObject(
+			191,
+			'22222222-2222-4222-8222-222222222222'
+		);
+		for (const object of [first, second]) {
+			object.status = 'verified';
+			object.attempts = 1;
+			object.verificationFacts = {
+				checkpointHistoryArchiveState: createArchiveMetadata(
+					object.checkpointLedger!
+				)
+			};
+		}
+		objectRepository.markTransitionEffectsCompletedBatch.mockResolvedValue(
+			new Set([first.remoteId, second.remoteId])
+		);
+		const useCase = new CompleteHistoryArchiveObject(
+			objectRepository,
+			stateRepository,
+			eventRecorder,
+			checkpointProofRepository
+		);
+
+		await useCase.reconcileVerifiedTransitionBatch([first, second]);
+
+		expect(eventRecorder.recordDurablyBatch).toHaveBeenCalledTimes(1);
+		expect(
+			objectRepository.markTransitionEffectsCompletedBatch
+		).toHaveBeenCalledWith([
+			{ claimAttempt: 1, remoteId: first.remoteId, status: 'verified' },
+			{ claimAttempt: 1, remoteId: second.remoteId, status: 'verified' }
+		]);
+		expect(
+			objectRepository.markTransitionEffectsCompleted
+		).not.toHaveBeenCalled();
+		expect(
+			objectRepository.materializeCheckpointDependencyBatch
+		).toHaveBeenCalledWith([first.remoteId, second.remoteId]);
+		expect(objectRepository.activateObjects).toHaveBeenCalledTimes(1);
+		expect(
+			objectRepository.markCheckpointDescendantsPlannedBatch
+		).toHaveBeenCalledWith([first.remoteId, second.remoteId]);
+	});
+
 	it('schedules only root and checkpoint-state discovery objects from verified root state', async () => {
 		const archiveObject = createRootObject();
 		objectRepository.findByRemoteId.mockResolvedValue(archiveObject);

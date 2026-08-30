@@ -334,9 +334,7 @@ export class CompleteHistoryArchiveObject {
 			).values()
 		];
 		const batched = unique.filter(
-			(object) =>
-				object.objectType !== 'history-archive-state' &&
-				object.objectType !== 'checkpoint-state'
+			(object) => object.objectType !== 'history-archive-state'
 		);
 		if (batched.length > 0) {
 			await this.eventRecorder.recordDurablyBatch(
@@ -356,20 +354,29 @@ export class CompleteHistoryArchiveObject {
 						status: 'verified'
 					}))
 				);
-			for (const object of batched) {
-				if (completed.has(object.remoteId)) {
-					this.requestProofCompletionEvent(object);
-				}
+			const completedObjects = batched.filter((object) =>
+				completed.has(object.remoteId)
+			);
+			for (const object of completedObjects) {
+				this.requestProofCompletionEvent(object);
+			}
+			const completedCheckpoints = completedObjects.filter(
+				(object) => object.objectType === 'checkpoint-state'
+			);
+			if (completedCheckpoints.length > 0) {
+				await Promise.all(
+					completedCheckpoints.map((object) =>
+						this.requestCheckpointFanoutEvent(
+							object,
+							options.promotePlannedObjects !== false
+						)
+					)
+				);
 			}
 		}
 
 		for (const object of unique) {
-			if (
-				object.objectType !== 'history-archive-state' &&
-				object.objectType !== 'checkpoint-state'
-			) {
-				continue;
-			}
+			if (object.objectType !== 'history-archive-state') continue;
 			await this.reconcileClaimAttempt(
 				object.remoteId,
 				object.attempts,
