@@ -88,11 +88,13 @@ export interface ExplorerLocalOperationsDTO {
 	};
 	readonly filters: {
 		readonly accountId?: string;
+		readonly destinationAccount?: string;
 		readonly firstLedger?: string;
 		readonly from?: string;
 		readonly ledger?: string;
 		readonly lastLedger?: string;
 		readonly operationType?: string;
+		readonly sourceAccount?: string;
 		readonly to?: string;
 		readonly transactionHash?: string;
 	};
@@ -139,6 +141,9 @@ export function mapExplorerCanonicalOperations(
 			...(query.closedAtFrom === undefined
 				? {}
 				: { from: query.closedAtFrom.toISOString() }),
+			...(query.destinationAccountId === undefined
+				? {}
+				: { destinationAccount: query.destinationAccountId }),
 			...(query.firstLedger === undefined
 				? {}
 				: { firstLedger: query.firstLedger }),
@@ -152,6 +157,9 @@ export function mapExplorerCanonicalOperations(
 			...(query.operationType === undefined
 				? {}
 				: { operationType: query.operationType }),
+			...(query.sourceAccountId === undefined
+				? {}
+				: { sourceAccount: query.sourceAccountId }),
 			...(query.closedAtTo === undefined
 				? {}
 				: { to: query.closedAtTo.toISOString() }),

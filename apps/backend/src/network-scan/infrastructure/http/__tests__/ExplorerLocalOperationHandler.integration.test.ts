@@ -20,7 +20,7 @@ describe('ExplorerLocalOperationHandler', () => {
 
 		await request(app)
 			.get(
-				`/operations?operationType=payment&firstLedger=64&lastLedger=127&transactionHash=${transactionHash}&accountId=${sourceAccount}&from=2026-07-12T11%3A00%3A00.000Z&to=2026-07-12T12%3A00%3A00.000Z&limit=25`
+				`/operations?operationType=payment&firstLedger=64&lastLedger=127&transactionHash=${transactionHash}&accountId=${sourceAccount}&sourceAccount=${sourceAccount}&destinationAccount=${sourceAccount}&from=2026-07-12T11%3A00%3A00.000Z&to=2026-07-12T12%3A00%3A00.000Z&limit=25`
 			)
 			.expect(200)
 			.expect('Cache-Control', 'public, max-age=20')
@@ -64,7 +64,9 @@ describe('ExplorerLocalOperationHandler', () => {
 			lastLedger: '127',
 			limit: 25,
 			operationType: 'payment',
-			accountId: sourceAccount
+			accountId: sourceAccount,
+			destinationAccountId: sourceAccount,
+			sourceAccountId: sourceAccount
 		});
 		expect(query?.transactionHash?.toHex()).toBe(transactionHash);
 		expect(fetchSpy).not.toHaveBeenCalled();
@@ -75,6 +77,7 @@ describe('ExplorerLocalOperationHandler', () => {
 		'firstLedger=128&lastLedger=64',
 		'firstLedger=999999999999999999999',
 		'sourceAccount=not-an-account',
+		'destinationAccount=not-an-account',
 		'transactionHash=bad',
 		'from=not-a-date',
 		'from=2026-07-13T00%3A00%3A00.000Z&to=2026-07-12T00%3A00%3A00.000Z',
@@ -136,6 +139,8 @@ function operationPage(
 		},
 		filters: {
 			accountId: query.accountId,
+			destinationAccount: query.destinationAccountId,
+			sourceAccount: query.sourceAccountId,
 			firstLedger: query.firstLedger,
 			lastLedger: query.lastLedger,
 			operationType: query.operationType,

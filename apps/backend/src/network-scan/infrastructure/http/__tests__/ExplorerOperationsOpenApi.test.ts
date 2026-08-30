@@ -9,6 +9,12 @@ describe('explorer operation OpenAPI schema', () => {
 		const accountParameter = path.parameters.find(
 			(parameter) => parameter.name === 'accountId'
 		);
+		const sourceParameter = path.parameters.find(
+			(parameter) => parameter.name === 'sourceAccount'
+		);
+		const destinationParameter = path.parameters.find(
+			(parameter) => parameter.name === 'destinationAccount'
+		);
 
 		expect(accountParameter?.description).toContain(
 			'G matches the base key of G and M references'
@@ -16,6 +22,16 @@ describe('explorer operation OpenAPI schema', () => {
 		expect(accountParameter?.description).toContain(
 			'M matches the exact muxed identity'
 		);
+		expect(sourceParameter?.description).toContain(
+			'Effective operation source only'
+		);
+		expect(destinationParameter?.description).toContain(
+			'Explicit operation-body destination only'
+		);
+		expect(schemas.ExplorerOperationFilters.properties).toMatchObject({
+			destinationAccount: { type: 'string' },
+			sourceAccount: { type: 'string' }
+		});
 		expect(operation.accountReferences.items).toEqual({
 			$ref: '#/components/schemas/ExplorerOperationAccountReference'
 		});

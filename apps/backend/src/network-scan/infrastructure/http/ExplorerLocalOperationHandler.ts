@@ -43,10 +43,9 @@ function readOperationQuery(
 	const firstLedger = readAliasedString(req.query.firstLedger, exactLedger);
 	const lastLedger = readAliasedString(req.query.lastLedger, exactLedger);
 	const operationType = readOptionalString(req.query.operationType);
-	const accountId = readAliasedString(
-		req.query.accountId,
-		readOptionalString(req.query.sourceAccount)
-	);
+	const accountId = readOptionalString(req.query.accountId);
+	const sourceAccountId = readOptionalString(req.query.sourceAccount);
+	const destinationAccountId = readOptionalString(req.query.destinationAccount);
 	const transactionHash = readOptionalString(req.query.transactionHash);
 	const closedAtFrom = readDate(req.query.from);
 	const closedAtTo = readDate(req.query.to);
@@ -55,7 +54,6 @@ function readOperationQuery(
 		limit === null ||
 		firstLedger === false ||
 		lastLedger === false ||
-		accountId === false ||
 		closedAtFrom === false ||
 		closedAtTo === false ||
 		(closedAtFrom !== undefined &&
@@ -65,6 +63,10 @@ function readOperationQuery(
 			!isFullHistoryOperationType(operationType)) ||
 		(accountId !== undefined &&
 			!isFullHistoryOperationSourceAccount(accountId)) ||
+		(sourceAccountId !== undefined &&
+			!isFullHistoryOperationSourceAccount(sourceAccountId)) ||
+		(destinationAccountId !== undefined &&
+			!isFullHistoryOperationSourceAccount(destinationAccountId)) ||
 		(transactionHash !== undefined && !isTransactionHash(transactionHash))
 	) {
 		return null;
@@ -84,10 +86,12 @@ function readOperationQuery(
 		...(accountId === undefined ? {} : { accountId }),
 		...(closedAtFrom === undefined ? {} : { closedAtFrom }),
 		...(closedAtTo === undefined ? {} : { closedAtTo }),
+		...(destinationAccountId === undefined ? {} : { destinationAccountId }),
 		...(first === null ? {} : { firstLedger: first }),
 		...(last === null ? {} : { lastLedger: last }),
 		limit,
 		...(operationType === undefined ? {} : { operationType }),
+		...(sourceAccountId === undefined ? {} : { sourceAccountId }),
 		...(transactionHash === undefined
 			? {}
 			: { transactionHash: FullHistoryHash.fromHex(transactionHash) })

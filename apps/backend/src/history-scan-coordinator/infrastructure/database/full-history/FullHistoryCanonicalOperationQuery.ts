@@ -63,7 +63,12 @@ export async function findCanonicalOperations(
 ): Promise<FullHistoryOperationPage> {
 	validateQuery(query);
 	const coverage = await getCanonicalOperationCoverage(dataSource, networkHash);
-	if (query.accountId !== undefined && !coverage.accountReferencesComplete) {
+	if (
+		(query.accountId !== undefined ||
+			query.sourceAccountId !== undefined ||
+			query.destinationAccountId !== undefined) &&
+		!coverage.accountReferencesComplete
+	) {
 		throw new FullHistoryOperationAccountReferenceCoverageError();
 	}
 	const rows = await dataSource.query<FullHistoryOperationRow[]>(
@@ -163,12 +168,48 @@ export async function findCanonicalOperations(
 									and filter_reference."base_account_id" = $6)
 							)
 					))
-					and ($7::timestamptz is null or ledger."closed_at" >= $7)
-					and ($8::timestamptz is null or ledger."closed_at" <= $8)
+					and ($7::text is null or exists (
+						select 1
+						from "full_history_operation_account_reference"
+							source_reference
+						where source_reference."network_passphrase_hash" =
+							operation."network_passphrase_hash"
+							and source_reference."transaction_hash" =
+								operation."transaction_hash"
+							and source_reference."operation_index" =
+								operation."operation_index"
+							and source_reference."role" = 'effective_source'
+							and (
+								(left($7, 1) = 'M'
+									and source_reference."account_id" = $7)
+								or (left($7, 1) = 'G'
+									and source_reference."base_account_id" = $7)
+							)
+					))
+					and ($8::text is null or exists (
+						select 1
+						from "full_history_operation_account_reference"
+							destination_reference
+						where destination_reference."network_passphrase_hash" =
+							operation."network_passphrase_hash"
+							and destination_reference."transaction_hash" =
+								operation."transaction_hash"
+							and destination_reference."operation_index" =
+								operation."operation_index"
+							and destination_reference."role" = 'destination'
+							and (
+								(left($8, 1) = 'M'
+									and destination_reference."account_id" = $8)
+								or (left($8, 1) = 'G'
+									and destination_reference."base_account_id" = $8)
+							)
+					))
+					and ($9::timestamptz is null or ledger."closed_at" >= $9)
+					and ($10::timestamptz is null or ledger."closed_at" <= $10)
 			order by operation."ledger_sequence" desc,
 				operation."transaction_index" desc,
 				operation."operation_index"
-				limit $9
+				limit $11
 		`,
 		[
 			networkHash.toBuffer(),
@@ -177,6 +218,8 @@ export async function findCanonicalOperations(
 			query.lastLedger ?? null,
 			query.transactionHash?.toBuffer() ?? null,
 			query.accountId ?? null,
+			query.sourceAccountId ?? null,
+			query.destinationAccountId ?? null,
 			query.closedAtFrom ?? null,
 			query.closedAtTo ?? null,
 			query.limit + 1
@@ -210,6 +253,18 @@ function validateQuery(query: FullHistoryOperationQuery): void {
 		!isFullHistoryOperationSourceAccount(query.accountId)
 	) {
 		throw new Error('accountId must be a valid Stellar StrKey');
+	}
+	if (
+		query.sourceAccountId !== undefined &&
+		!isFullHistoryOperationSourceAccount(query.sourceAccountId)
+	) {
+		throw new Error('sourceAccountId must be a valid Stellar StrKey');
+	}
+	if (
+		query.destinationAccountId !== undefined &&
+		!isFullHistoryOperationSourceAccount(query.destinationAccountId)
+	) {
+		throw new Error('destinationAccountId must be a valid Stellar StrKey');
 	}
 	if (
 		query.transactionHash !== undefined &&

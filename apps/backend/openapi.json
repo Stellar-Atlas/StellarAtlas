@@ -1035,7 +1035,7 @@
 		"/v1/explorer/operations": {
 			"get": {
 				"summary": "Search operations",
-				"description": "Returns bounded proof-gated canonical operation-envelope facts filtered by ledger, account participant, operation type, transaction hash, or close-time range. G-address filters match the base key of G and muxed M references; M-address filters match the exact muxed identity. Participants come only from operation source/body XDR. State-derived accounts, effects, Soroban authorization, signers, and asset issuers are excluded. Execution outcomes are included when the canonical batch has matching transaction-result XDR coverage.",
+				"description": "Returns bounded proof-gated canonical operation-envelope facts filtered by ledger, any account participant, effective source, explicit destination, operation type, transaction hash, or close-time range. G-address filters match the base key of G and muxed M references; M-address filters match the exact muxed identity. Participants come only from operation source/body XDR. State-derived accounts, effects, Soroban authorization, signers, and asset issuers are excluded. Execution outcomes are included when the canonical batch has matching transaction-result XDR coverage.",
 				"tags": ["Explorer"],
 				"operationId": "getExplorerOperations",
 				"parameters": [
@@ -1044,6 +1044,20 @@
 						"in": "query",
 						"required": false,
 						"description": "Canonical envelope participant. G matches the base key of G and M references; M matches the exact muxed identity. Queries are unavailable until account-reference coverage is complete.",
+						"schema": { "type": "string" }
+					},
+					{
+						"name": "sourceAccount",
+						"in": "query",
+						"required": false,
+						"description": "Effective operation source only. G matches the base key of G and M references; M matches the exact muxed identity. May be combined with destinationAccount for strict A-to-B queries.",
+						"schema": { "type": "string" }
+					},
+					{
+						"name": "destinationAccount",
+						"in": "query",
+						"required": false,
+						"description": "Explicit operation-body destination only. G matches the base key of G and M references; M matches the exact muxed identity. May be combined with sourceAccount for strict A-to-B queries.",
 						"schema": { "type": "string" }
 					},
 					{
@@ -11160,11 +11174,13 @@
 				"type": "object",
 				"properties": {
 					"accountId": { "type": "string" },
+					"destinationAccount": { "type": "string" },
 					"firstLedger": { "type": "string" },
 					"from": { "type": "string", "format": "date-time" },
 					"ledger": { "type": "string" },
 					"lastLedger": { "type": "string" },
 					"operationType": { "type": "string" },
+					"sourceAccount": { "type": "string" },
 					"to": { "type": "string", "format": "date-time" },
 					"transactionHash": { "type": "string" }
 				}

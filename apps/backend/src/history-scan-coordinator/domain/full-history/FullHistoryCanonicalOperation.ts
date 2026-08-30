@@ -71,10 +71,12 @@ export interface FullHistoryOperationQuery {
 	readonly accountId?: string;
 	readonly closedAtFrom?: Date;
 	readonly closedAtTo?: Date;
+	readonly destinationAccountId?: string;
 	readonly firstLedger?: FullHistoryLedgerSequence;
 	readonly lastLedger?: FullHistoryLedgerSequence;
 	readonly limit: number;
 	readonly operationType?: FullHistoryOperationType;
+	readonly sourceAccountId?: string;
 	readonly transactionHash?: FullHistoryHash;
 }
 

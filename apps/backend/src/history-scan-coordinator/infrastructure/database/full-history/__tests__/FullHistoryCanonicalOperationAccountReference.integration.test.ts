@@ -17,6 +17,7 @@ import { insertBatch } from '../FullHistoryCanonicalBatchStore.js';
 import { storeCanonicalBaseFacts } from '../FullHistoryCanonicalFactStore.js';
 import { storeCanonicalOperations } from '../FullHistoryCanonicalOperationStore.js';
 import { storeCanonicalOperationResults } from '../FullHistoryCanonicalOperationResultStore.js';
+import { storeCanonicalOperationAccountReferences } from '../FullHistoryCanonicalOperationAccountReferenceStore.js';
 import { TypeOrmFullHistoryCanonicalRepository } from '../TypeOrmFullHistoryCanonicalRepository.js';
 import {
 	fullHistoryEntities,
@@ -67,6 +68,16 @@ describe('canonical operation account references', () => {
 		});
 		await expect(repository.writeCheckpoint(input)).resolves.toMatchObject({
 			replayed: true
+		});
+		const networkHash = hashNetworkPassphrase(networkPassphrase);
+		await dataSource.transaction(async (manager) => {
+			await storeCanonicalOperations(manager, input, networkHash);
+			await storeCanonicalOperationResults(manager, input, networkHash);
+			await storeCanonicalOperationAccountReferences(
+				manager,
+				input,
+				networkHash
+			);
 		});
 		const basePage = await repository.findOperations(networkPassphrase, {
 			accountId: destinationBase,
@@ -124,20 +135,49 @@ describe('canonical operation account references', () => {
 				}
 			]
 		});
+		await expect(
+			repository.findOperations(networkPassphrase, {
+				destinationAccountId: destinationBase,
+				limit: 10,
+				sourceAccountId: input.operations[0]!.sourceAccount
+			})
+		).resolves.toMatchObject({
+			records: [{ operationType: 'payment' }]
+		});
+		await expect(
+			repository.findOperations(networkPassphrase, {
+				destinationAccountId: differentMuxedIdentity,
+				limit: 10,
+				sourceAccountId: input.operations[0]!.sourceAccount
+			})
+		).resolves.toMatchObject({ records: [] });
+		await expect(
+			repository.findOperations(networkPassphrase, {
+				destinationAccountId: destinationBase,
+				limit: 10,
+				sourceAccountId: destinationBase
+			})
+		).resolves.toMatchObject({ records: [] });
 
 		const changedDestination = account(82);
 		await expect(
-			repository.writeCheckpoint({
-				...input,
-				operationAccountReferences: [
-					input.operationAccountReferences[0]!,
-					fullHistoryOperationAccountReference(
-						input.operations[0]!,
-						'destination',
-						changedDestination
-					)
-				]
-			})
+			dataSource.transaction(async (manager) =>
+				storeCanonicalOperationAccountReferences(
+					manager,
+					{
+						...input,
+						operationAccountReferences: [
+							input.operationAccountReferences[0]!,
+							fullHistoryOperationAccountReference(
+								input.operations[0]!,
+								'destination',
+								changedDestination
+							)
+						]
+					},
+					networkHash
+				)
+			)
 		).rejects.toMatchObject({ reason: 'canonical-row-conflict' });
 		await expect(repository.writeCheckpoint(input)).resolves.toMatchObject({
 			replayed: true
