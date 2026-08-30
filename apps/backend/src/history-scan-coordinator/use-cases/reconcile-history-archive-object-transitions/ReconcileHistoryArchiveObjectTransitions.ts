@@ -74,12 +74,13 @@ export class ReconcileHistoryArchiveObjectTransitions {
 	async executeTargetedProofRefreshIfDue(
 		now = Date.now(),
 		force = false
-	): Promise<void> {
-		if (!this.maintenanceLanes.targetedProofRefreshEnabled) return;
-		if (!force && now < this.nextTargetedProofRefreshRunAt) return;
+	): Promise<number> {
+		if (!this.maintenanceLanes.targetedProofRefreshEnabled) return 0;
+		if (!force && now < this.nextTargetedProofRefreshRunAt) return 0;
 		this.nextTargetedProofRefreshRunAt =
 			now + this.maintenanceIntervals.transitionReconciliationIntervalMs;
 
+		let completed = 0;
 		for (;;) {
 			const result =
 				await this.objectRepository.drainCheckpointProofRefreshQueue(
@@ -94,7 +95,8 @@ export class ReconcileHistoryArchiveObjectTransitions {
 					failed: result.failed
 				});
 			}
-			if (result.completed === 0) return;
+			completed += result.completed;
+			if (result.completed === 0) return completed;
 			await new Promise<void>((resolve) => setImmediate(resolve));
 		}
 	}

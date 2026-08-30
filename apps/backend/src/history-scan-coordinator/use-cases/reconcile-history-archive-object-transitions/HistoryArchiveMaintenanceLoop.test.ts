@@ -23,7 +23,7 @@ describe('history archive maintenance proof wake', () => {
 
 	it('forces the designated writer immediately when another API worker enqueues proof work', async () => {
 		const reconciler = mock<ReconcileHistoryArchiveObjectTransitions>();
-		reconciler.executeTargetedProofRefreshIfDue.mockResolvedValue(undefined);
+		reconciler.executeTargetedProofRefreshIfDue.mockResolvedValue(0);
 		reconciler.executeTransitionReconciliationIfDue.mockResolvedValue(
 			undefined
 		);
@@ -74,6 +74,42 @@ describe('history archive maintenance proof wake', () => {
 				reconciler.executeExecutionDispositionReconciliationIfDue.mock
 					.invocationCallOrder[0]!
 			);
+		} finally {
+			stop();
+		}
+	});
+
+	it('fans out the next cohort immediately after proofs advance the cursor', async () => {
+		const reconciler = mock<ReconcileHistoryArchiveObjectTransitions>();
+		reconciler.executeTransitionReconciliationIfDue.mockResolvedValue(
+			undefined
+		);
+		reconciler.executeTargetedProofRefreshIfDue
+			.mockResolvedValueOnce(24)
+			.mockResolvedValue(0);
+		reconciler.executeExecutionDispositionReconciliationIfDue.mockResolvedValue(
+			undefined
+		);
+		const stop = startHistoryArchiveMaintenanceLoop(
+			reconciler,
+			mock<Logger>(),
+			{
+				executionAdmissionIntervalMs: 60_000,
+				transitionReconciliationIntervalMs: 60_000
+			}
+		);
+		try {
+			await new Promise<void>((resolve) => setImmediate(resolve));
+
+			expect(
+				reconciler.executeTransitionReconciliationIfDue
+			).toHaveBeenCalledTimes(2);
+			expect(reconciler.executeTargetedProofRefreshIfDue).toHaveBeenCalledTimes(
+				2
+			);
+			expect(
+				reconciler.executeExecutionDispositionReconciliationIfDue
+			).toHaveBeenCalledTimes(2);
 		} finally {
 			stop();
 		}

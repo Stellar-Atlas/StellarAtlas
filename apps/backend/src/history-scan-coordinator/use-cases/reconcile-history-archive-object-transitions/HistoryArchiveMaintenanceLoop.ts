@@ -55,15 +55,27 @@ export function startHistoryArchiveMaintenanceLoop(
 				await runWork('transitions', () =>
 					reconciler.executeTransitionReconciliationIfDue(now, {}, force)
 				);
-				await runWork('proof refresh', () =>
-					reconciler.executeTargetedProofRefreshIfDue(Date.now(), force)
-				);
+				let completedProofs = 0;
+				try {
+					completedProofs =
+						(await reconciler.executeTargetedProofRefreshIfDue(
+							Date.now(),
+							force
+						)) ?? 0;
+				} catch (error: unknown) {
+					await runWork('proof refresh', async () => {
+						throw error;
+					});
+				}
 				await runWork('execution disposition', () =>
 					reconciler.executeExecutionDispositionReconciliationIfDue(
 						Date.now(),
 						force
 					)
 				);
+				if (completedProofs > 0) {
+					rerunRequested = true;
+				}
 			} while (rerunRequested && !stopped);
 		} finally {
 			running = false;

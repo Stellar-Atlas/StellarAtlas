@@ -36,7 +36,8 @@ describe('targeted checkpoint proof refresh concurrency', () => {
 				mock<Logger>()
 			);
 
-			await reconciler.executeTargetedProofRefreshIfDue(10_000);
+			const completed =
+				await reconciler.executeTargetedProofRefreshIfDue(10_000);
 
 			expect(repository.drainCheckpointProofRefreshQueue).toHaveBeenCalledWith(
 				4,
@@ -45,6 +46,7 @@ describe('targeted checkpoint proof refresh concurrency', () => {
 			expect(repository.drainCheckpointProofRefreshQueue).toHaveBeenCalledTimes(
 				2
 			);
+			expect(completed).toBe(4);
 		} finally {
 			restoreEnv('HISTORY_ARCHIVE_TARGETED_PROOF_REFRESH_ENABLED', enabled);
 			restoreEnv(
