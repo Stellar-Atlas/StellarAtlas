@@ -21,75 +21,81 @@ export function startHistoryArchiveMaintenanceLoop(
 ): () => void {
 	let stopped = false;
 	const intervals = resolveMaintenanceIntervals(configuredIntervals);
+	let forceRequested = false;
+	let rerunRequested = false;
+	let running = false;
 
-	const createRunner = (
+	const runWork = async (
 		maintenanceWork: 'execution disposition' | 'proof refresh' | 'transitions',
 		work: () => Promise<void>
-	): (() => Promise<void>) => {
-		let rerunRequested = false;
-		let running = false;
-		return async (): Promise<void> => {
-			if (running) {
-				rerunRequested = true;
-				return;
-			}
-			running = true;
-			try {
-				do {
-					rerunRequested = false;
-					await work();
-				} while (rerunRequested && !stopped);
-			} catch (error: unknown) {
-				logger.error('Failed to maintain archive object queue', {
-					app: 'history-scan-coordinator',
-					errorMessage: error instanceof Error ? error.message : String(error),
-					maintenanceWork
-				});
-			} finally {
-				running = false;
-			}
-		};
+	): Promise<void> => {
+		try {
+			await work();
+		} catch (error: unknown) {
+			logger.error('Failed to maintain archive object queue', {
+				app: 'history-scan-coordinator',
+				errorMessage: error instanceof Error ? error.message : String(error),
+				maintenanceWork
+			});
+		}
 	};
-	let forceProofRefresh = false;
-	const runTransitions = createRunner('transitions', () =>
-		reconciler.executeTransitionReconciliationIfDue()
-	);
-	const runProofRefresh = createRunner('proof refresh', async () => {
-		const force = forceProofRefresh;
-		forceProofRefresh = false;
-		await reconciler.executeTargetedProofRefreshIfDue(Date.now(), force);
-	});
-	const runExecutionDisposition = createRunner('execution disposition', () =>
-		reconciler.executeExecutionDispositionReconciliationIfDue()
-	);
+
+	const runMaintenance = async (): Promise<void> => {
+		if (running) {
+			rerunRequested = true;
+			return;
+		}
+		running = true;
+		try {
+			do {
+				rerunRequested = false;
+				const force = forceRequested;
+				forceRequested = false;
+				const now = Date.now();
+				await runWork('transitions', () =>
+					reconciler.executeTransitionReconciliationIfDue(now, {}, force)
+				);
+				await runWork('proof refresh', () =>
+					reconciler.executeTargetedProofRefreshIfDue(Date.now(), force)
+				);
+				await runWork('execution disposition', () =>
+					reconciler.executeExecutionDispositionReconciliationIfDue(
+						Date.now(),
+						force
+					)
+				);
+			} while (rerunRequested && !stopped);
+		} finally {
+			running = false;
+			if (rerunRequested && !stopped) void runMaintenance();
+		}
+	};
+
+	const requestMaintenance = (force = false): void => {
+		forceRequested ||= force;
+		rerunRequested = true;
+		void runMaintenance();
+	};
+
 	const onProofRefreshWake = (message: unknown): void => {
 		if (!isHistoryArchiveProofRefreshWakeMessage(message)) return;
-		forceProofRefresh = true;
-		void runProofRefresh();
+		requestMaintenance(true);
 	};
 	process.on('message', onProofRefreshWake);
 
-	const proofRefreshTimer = setInterval(() => {
-		void runProofRefresh();
-	}, intervals.transitionReconciliationIntervalMs);
-	proofRefreshTimer.unref();
-	const transitionTimer = setInterval(() => {
-		void runTransitions();
-	}, intervals.transitionReconciliationIntervalMs);
-	transitionTimer.unref();
-	const executionAdmissionTimer = setInterval(() => {
-		void runExecutionDisposition();
-	}, intervals.executionAdmissionIntervalMs);
-	executionAdmissionTimer.unref();
-	void runProofRefresh();
-	void runTransitions();
-	void runExecutionDisposition();
+	const maintenanceTimer = setInterval(
+		() => requestMaintenance(),
+		Math.min(
+			intervals.transitionReconciliationIntervalMs,
+			intervals.executionAdmissionIntervalMs
+		)
+	);
+	maintenanceTimer.unref();
+	requestMaintenance(true);
 
 	return () => {
 		stopped = true;
-		clearInterval(proofRefreshTimer);
-		clearInterval(transitionTimer);
-		clearInterval(executionAdmissionTimer);
+		clearInterval(maintenanceTimer);
 		process.off('message', onProofRefreshWake);
 	};
 }

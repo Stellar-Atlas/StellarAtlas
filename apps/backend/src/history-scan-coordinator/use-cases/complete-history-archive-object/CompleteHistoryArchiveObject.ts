@@ -23,10 +23,7 @@ import { TYPES } from '../../infrastructure/di/di-types.js';
 import { notifyHistoryArchiveProofRefreshReady } from '../../infrastructure/ipc/HistoryArchiveProofRefreshWake.js';
 import { mapUnknownToError } from '@core/utilities/mapUnknownToError.js';
 import { HistoryArchiveObjectEventRecorder } from '../record-history-archive-object-event/HistoryArchiveObjectEventRecorder.js';
-import {
-	historyArchiveCompletionWriteConfigFromEnv,
-	parseTargetedProofRefreshBatchSize
-} from '../reconcile-history-archive-object-transitions/HistoryArchiveMaintenanceConfig.js';
+import { historyArchiveCompletionWriteConfigFromEnv } from '../reconcile-history-archive-object-transitions/HistoryArchiveMaintenanceConfig.js';
 
 export interface CompleteHistoryArchiveObjectRequest extends HistoryArchiveObjectProgressUpdate {
 	readonly archiveMetadata?: ArchiveMetadataDTO | null;
@@ -66,12 +63,6 @@ export class CompleteHistoryArchiveObject {
 		historyArchiveCompletionWriteConfigFromEnv();
 	private readonly pendingProofCompletionRemoteIds = new Set<string>();
 	private proofCompletionEventRunning = false;
-	private readonly immediateProofRefreshDrainEnabled =
-		process.env.API_HISTORY_MAINTENANCE_WRITER !== 'false';
-	private readonly immediateProofRefreshBatchSize =
-		parseTargetedProofRefreshBatchSize(
-			process.env.HISTORY_ARCHIVE_TARGETED_PROOF_REFRESH_BATCH_SIZE
-		);
 
 	constructor(
 		@inject(TYPES.HistoryArchiveObjectRepository)
@@ -231,11 +222,7 @@ export class CompleteHistoryArchiveObject {
 				}
 			}
 			if (checkpointFanouts.length > 0) {
-				await Promise.all(
-					checkpointFanouts.map((object) =>
-						this.requestCheckpointFanoutEvent(object, true)
-					)
-				);
+				notifyHistoryArchiveProofRefreshReady();
 			}
 		} catch (error) {
 			const failure = err<boolean, Error>(mapUnknownToError(error));
@@ -626,38 +613,25 @@ export class CompleteHistoryArchiveObject {
 
 	private async drainProofCompletionEvents(): Promise<void> {
 		try {
-			let proofQueueMayHaveMore = false;
-			do {
+			while (this.pendingProofCompletionRemoteIds.size > 0) {
 				const remoteIds = [...this.pendingProofCompletionRemoteIds];
 				this.pendingProofCompletionRemoteIds.clear();
-				proofQueueMayHaveMore = false;
 				try {
 					if (remoteIds.length > 0) {
 						const enqueued =
 							await this.objectRepository.enqueueCheckpointProofRefreshes(
 								remoteIds
 							);
-						if (enqueued > 0 && !this.immediateProofRefreshDrainEnabled) {
+						if (enqueued > 0) {
 							notifyHistoryArchiveProofRefreshReady();
 						}
-					}
-					if (this.immediateProofRefreshDrainEnabled) {
-						const refresh =
-							await this.objectRepository.drainCheckpointProofRefreshQueue(
-								this.immediateProofRefreshBatchSize,
-								1
-							);
-						proofQueueMayHaveMore = refresh.claimed > 0;
 					}
 				} catch {
 					// Terminal object state is durable. The frontier reconciler
 					// recovers any enqueue missed by a process interruption.
 					continue;
 				}
-			} while (
-				this.pendingProofCompletionRemoteIds.size > 0 ||
-				proofQueueMayHaveMore
-			);
+			}
 		} finally {
 			this.proofCompletionEventRunning = false;
 			if (this.pendingProofCompletionRemoteIds.size > 0) {

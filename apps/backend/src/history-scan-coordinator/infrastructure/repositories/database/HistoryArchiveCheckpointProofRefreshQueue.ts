@@ -589,12 +589,8 @@ order by "archiveUrlIdentity", "checkpointLedger"
                         "leaseToken" = null,
                         "leaseUntil" = null,
                         "updatedAt" = now()
-                -- Completion and refresh transactions hold the same root lock. A live
-                -- refresh sees all evidence committed before it obtains that lock, so
-                -- invalidating its lease here would only create duplicate root work.
-                where history_archive_checkpoint_proof_refresh_queue."leaseUntil" is null
-                        or history_archive_checkpoint_proof_refresh_queue."leaseUntil" <=
-                                now()
+                -- The generation fence prevents an older leased refresh from
+                -- acknowledging or deleting this newly requested work.
 		returning 1
 	)
 	select count(*)::integer as count from enqueued

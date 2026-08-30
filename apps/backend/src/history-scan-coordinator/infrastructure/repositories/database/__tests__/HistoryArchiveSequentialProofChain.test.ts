@@ -41,7 +41,12 @@ describe('sequential history archive proof chain', () => {
 			/cursor\."nextHistoricalCheckpointLedger"\s*-\s*64/
 		);
 		expect(enqueueProofRefreshesSql).toMatch(
-			/where history_archive_checkpoint_proof_refresh_queue\."leaseUntil" is null\s+or history_archive_checkpoint_proof_refresh_queue\."leaseUntil" <=\s+now\(\)/
+			/generation\s*=\s*history_archive_checkpoint_proof_refresh_queue\.generation \+ 1/
+		);
+		expect(enqueueProofRefreshesSql).toContain('"leaseToken" = null');
+		expect(enqueueProofRefreshesSql).toContain('"leaseUntil" = null');
+		expect(enqueueProofRefreshesSql).not.toMatch(
+			/where history_archive_checkpoint_proof_refresh_queue\."leaseUntil"/
 		);
 		expect(claimProofRefreshSql).toContain(queueReadiness);
 		expect(claimSequentialProofRefreshSql).toContain(

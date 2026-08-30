@@ -320,19 +320,9 @@ describe('CompleteHistoryArchiveObject', () => {
 		expect(objectRepository.markObjectVerified).toHaveBeenCalled();
 	});
 
-	it('continues the sequential proof drain after any claimed work', async () => {
+	it('enqueues proof work without draining it in the completion request', async () => {
 		const archiveObject = createBucketObject();
-		objectRepository.drainCheckpointProofRefreshQueue
-			.mockResolvedValueOnce({
-				claimed: 1,
-				completed: 1,
-				failed: 0
-			})
-			.mockResolvedValue({
-				claimed: 0,
-				completed: 0,
-				failed: 0
-			});
+		objectRepository.enqueueCheckpointProofRefreshes.mockResolvedValue(1);
 		objectRepository.findByRemoteId.mockResolvedValue(archiveObject);
 		const useCase = new CompleteHistoryArchiveObject(
 			objectRepository,
@@ -351,21 +341,15 @@ describe('CompleteHistoryArchiveObject', () => {
 		expect(checkpointProofRepository.refreshForObject).not.toHaveBeenCalled();
 		await useCase.reconcilePersisted(archiveObject);
 		expect(checkpointProofRepository.refreshForObject).not.toHaveBeenCalled();
-		objectRepository.promotePlannedObjects.mockClear();
-		objectRepository.reconcileExecutionDisposition.mockClear();
 		await new Promise<void>((resolve) => {
 			setImmediate(resolve);
 		});
 		expect(
-			objectRepository.drainCheckpointProofRefreshQueue
-		).toHaveBeenCalledWith(4, 1);
+			objectRepository.enqueueCheckpointProofRefreshes
+		).toHaveBeenCalledWith([archiveObject.remoteId]);
 		expect(
 			objectRepository.drainCheckpointProofRefreshQueue
-		).toHaveBeenCalledTimes(2);
-		expect(
-			objectRepository.reconcileExecutionDisposition
 		).not.toHaveBeenCalled();
-		expect(objectRepository.promotePlannedObjects).not.toHaveBeenCalled();
 	});
 
 	it('lets non-maintenance API workers enqueue without competing for the proof root lock', async () => {

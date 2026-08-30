@@ -40,19 +40,39 @@ describe('history archive maintenance proof wake', () => {
 		);
 		try {
 			await new Promise<void>((resolve) => setImmediate(resolve));
+			reconciler.executeTransitionReconciliationIfDue.mockClear();
 			reconciler.executeTargetedProofRefreshIfDue.mockClear();
+			reconciler.executeExecutionDispositionReconciliationIfDue.mockClear();
 
 			process.emit('message', {
 				type: historyArchiveProofRefreshWakeType
 			});
 			await new Promise<void>((resolve) => setImmediate(resolve));
 
+			expect(
+				reconciler.executeTransitionReconciliationIfDue
+			).toHaveBeenCalledWith(expect.any(Number), {}, true);
 			expect(reconciler.executeTargetedProofRefreshIfDue).toHaveBeenCalledTimes(
 				1
 			);
 			expect(reconciler.executeTargetedProofRefreshIfDue).toHaveBeenCalledWith(
 				expect.any(Number),
 				true
+			);
+			expect(
+				reconciler.executeExecutionDispositionReconciliationIfDue
+			).toHaveBeenCalledWith(expect.any(Number), true);
+			expect(
+				reconciler.executeTransitionReconciliationIfDue.mock
+					.invocationCallOrder[0]
+			).toBeLessThan(
+				reconciler.executeTargetedProofRefreshIfDue.mock.invocationCallOrder[0]!
+			);
+			expect(
+				reconciler.executeTargetedProofRefreshIfDue.mock.invocationCallOrder[0]
+			).toBeLessThan(
+				reconciler.executeExecutionDispositionReconciliationIfDue.mock
+					.invocationCallOrder[0]!
 			);
 		} finally {
 			stop();

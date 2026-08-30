@@ -101,12 +101,13 @@ export class ReconcileHistoryArchiveObjectTransitions {
 
 	async executeTransitionReconciliationIfDue(
 		now = Date.now(),
-		options: ReconciliationOptions = {}
+		options: ReconciliationOptions = {},
+		force = false
 	): Promise<void> {
 		const promotePlannedObjects =
 			this.maintenanceLanes.promotePlannedObjectsEnabled &&
 			options.promotePlannedObjects !== false;
-		if (now < this.nextTransitionRunAt) return;
+		if (!force && now < this.nextTransitionRunAt) return;
 		this.nextTransitionRunAt =
 			now + this.maintenanceIntervals.transitionReconciliationIntervalMs;
 
@@ -190,12 +191,13 @@ export class ReconcileHistoryArchiveObjectTransitions {
 	}
 
 	async executeExecutionDispositionReconciliationIfDue(
-		now = Date.now()
+		now = Date.now(),
+		force = false
 	): Promise<void> {
 		if (!this.maintenanceLanes.executionAdmissionEnabled) return;
 		if (
 			this.executionDispositionRunning ||
-			now < this.nextExecutionDispositionRunAt
+			(!force && now < this.nextExecutionDispositionRunAt)
 		) {
 			return;
 		}

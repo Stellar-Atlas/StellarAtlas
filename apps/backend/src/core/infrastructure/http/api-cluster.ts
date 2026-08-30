@@ -54,11 +54,22 @@ function runPrimary(): void {
 	};
 
 	cluster.on('message', (source, message: unknown) => {
-		if (
-			!isHistoryArchiveWorkerStatusIpcMessageDTO(message) &&
-			!isHistoryArchiveProofRefreshWakeMessage(message)
-		)
+		if (isHistoryArchiveProofRefreshWakeMessage(message)) {
+			for (const worker of Object.values(cluster.workers ?? {})) {
+				if (
+					worker === undefined ||
+					projectionWriterByWorkerId.get(worker.id) !== true
+				)
+					continue;
+				try {
+					worker.send(message);
+				} catch {
+					// A concurrently exiting writer will be replaced by the supervisor.
+				}
+			}
 			return;
+		}
+		if (!isHistoryArchiveWorkerStatusIpcMessageDTO(message)) return;
 		for (const worker of Object.values(cluster.workers ?? {})) {
 			if (worker === undefined || worker.id === source.id) continue;
 			try {

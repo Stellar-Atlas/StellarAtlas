@@ -64,7 +64,6 @@ export async function markHistoryArchiveObjectsVerified(
 				};
 			})
 		);
-		await manager.query(historyArchiveCompletionRootStateLocksSql, [payload]);
 		const rows = (await manager.query(historyArchiveObjectVerifiedBatchSql, [
 			payload
 		])) as readonly { readonly remoteId: string }[];
@@ -247,27 +246,6 @@ const historyArchiveCompletionInputSql = `
                 "workerStage" text,
                 "archiveMetadata" jsonb
         )
-`;
-
-const historyArchiveCompletionRootStateLocksSql = `
-        with input as materialized (
-                ${historyArchiveCompletionInputSql}
-        ), roots as materialized (
-                select distinct object."archiveUrlIdentity"
-                from input
-                join "history_archive_object_queue" object
-                        on object."remoteId" = input."remoteId"
-                where object."objectType" in (
-                        'history-archive-state',
-                        'checkpoint-state'
-                )
-        )
-        select pg_advisory_xact_lock(
-                1784950002,
-                hashtext(roots."archiveUrlIdentity")
-        )
-        from roots
-        order by roots."archiveUrlIdentity"
 `;
 
 const historyArchiveObjectVerifiedBatchSql = `
