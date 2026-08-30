@@ -1,5 +1,8 @@
 import type { HistoryArchiveBrokerJob } from '../../../repositories/database/HistoryArchiveBrokerFrontierRepository.js';
-import { publishHistoryArchiveBrokerJobs } from '../HistoryArchiveBrokerDispatcher.js';
+import {
+	calculateHistoryArchiveBrokerAvailableCapacity,
+	publishHistoryArchiveBrokerJobs
+} from '../HistoryArchiveBrokerDispatcher.js';
 
 function createJob(executionId: string): HistoryArchiveBrokerJob {
 	return {
@@ -18,6 +21,14 @@ function createJob(executionId: string): HistoryArchiveBrokerJob {
 		selectedOrdinal: 1
 	};
 }
+
+describe('calculateHistoryArchiveBrokerAvailableCapacity', () => {
+	it('uses durable consumer occupancy instead of stale stream rows', () => {
+		expect(calculateHistoryArchiveBrokerAvailableCapacity(240, 76, 0)).toBe(
+			164
+		);
+	});
+});
 
 describe('publishHistoryArchiveBrokerJobs', () => {
 	it('keeps successful reservations published and resets only rejected messages', async () => {

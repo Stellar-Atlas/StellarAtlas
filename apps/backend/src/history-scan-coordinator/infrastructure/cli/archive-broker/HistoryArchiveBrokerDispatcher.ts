@@ -59,6 +59,15 @@ function assertPublishableBrokerJob(job: HistoryArchiveBrokerJob): void {
 		throw new Error('Invalid archive broker selected ordinal');
 }
 
+export function calculateHistoryArchiveBrokerAvailableCapacity(
+	highWatermark: number,
+	numAckPending: number,
+	numPending: number
+): number {
+	const occupied = Math.max(0, numAckPending) + Math.max(0, numPending);
+	return Math.max(0, highWatermark - occupied);
+}
+
 export async function publishHistoryArchiveBrokerJobs(
 	jetStream: Pick<JetStreamClient, 'publish'>,
 	repository: Pick<HistoryArchiveBrokerFrontierRepository, 'resetPublished'>,
@@ -356,15 +365,15 @@ export class HistoryArchiveBrokerDispatcher {
 
 	private async getAvailableCapacity(): Promise<number> {
 		const manager = this.requireManager();
-		const [consumerInfo, streamInfo] = await Promise.all([
-			manager.consumers.info(this.config.stream, this.config.consumer),
-			manager.streams.info(this.config.stream)
-		]);
-		const occupied = Math.max(
-			consumerInfo.num_ack_pending + consumerInfo.num_pending,
-			streamInfo.state.messages
+		const consumerInfo = await manager.consumers.info(
+			this.config.stream,
+			this.config.consumer
 		);
-		return Math.max(0, this.config.highWatermark - occupied);
+		return calculateHistoryArchiveBrokerAvailableCapacity(
+			this.config.highWatermark,
+			consumerInfo.num_ack_pending,
+			consumerInfo.num_pending
+		);
 	}
 
 	private async publish(
