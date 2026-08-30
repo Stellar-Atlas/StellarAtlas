@@ -25,7 +25,55 @@ export async function findVerifiedCheckpointsNeedingFanout(
 			objectType: 'checkpoint-state'
 		})
 		.andWhere('object.status = :status', { status: 'verified' })
-		.andWhere('object.descendantsPlannedAt is null')
+		.andWhere(
+			`(
+				object."descendantsPlannedAt" is null
+				or not exists (
+					select 1
+					from "history_archive_object_queue" sibling
+					where sibling."archiveUrlIdentity" =
+						object."archiveUrlIdentity"
+						and sibling."objectType" = 'ledger'
+						and sibling."objectKey" = 'ledger:' ||
+							lpad(to_hex(object."checkpointLedger"), 8, '0')
+				)
+				or not exists (
+					select 1
+					from "history_archive_object_queue" sibling
+					where sibling."archiveUrlIdentity" =
+						object."archiveUrlIdentity"
+						and sibling."objectType" = 'transactions'
+						and sibling."objectKey" = 'transactions:' ||
+							lpad(to_hex(object."checkpointLedger"), 8, '0')
+				)
+				or not exists (
+					select 1
+					from "history_archive_object_queue" sibling
+					where sibling."archiveUrlIdentity" =
+						object."archiveUrlIdentity"
+						and sibling."objectType" = 'results'
+						and sibling."objectKey" = 'results:' ||
+							lpad(to_hex(object."checkpointLedger"), 8, '0')
+				)
+				or exists (
+					select 1
+					from "history_archive_checkpoint_bucket_dependency" dependency
+					where dependency."archiveUrlIdentity" =
+						object."archiveUrlIdentity"
+						and dependency."checkpointLedger" =
+							object."checkpointLedger"
+						and not exists (
+							select 1
+							from "history_archive_object_queue" bucket
+							where bucket."archiveUrlIdentity" =
+								object."archiveUrlIdentity"
+								and bucket."objectType" = 'bucket'
+								and bucket."objectKey" =
+									'bucket:' || dependency."bucketHash"
+						)
+				)
+			)`
+		)
 		.andWhere(historyArchiveObjectOpenSequentialCohortSql('object'))
 		.orderBy('object.checkpointLedger', 'ASC', 'NULLS LAST')
 		.addOrderBy('object.verifiedAt', 'ASC', 'NULLS LAST')

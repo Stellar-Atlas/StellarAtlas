@@ -436,7 +436,7 @@ describe('CompleteHistoryArchiveObject', () => {
 		}
 	});
 
-	it('activates a prefetched checkpoint batch without plan-table writes', async () => {
+	it('repairs stale fanout markers without plan-table writes', async () => {
 		const first = createCheckpointObject(
 			127,
 			'11111111-1111-4111-8111-111111111111'
@@ -447,6 +447,7 @@ describe('CompleteHistoryArchiveObject', () => {
 		);
 		for (const object of [first, second]) {
 			object.status = 'verified';
+			object.descendantsPlannedAt = new Date('2026-08-21T00:00:00.000Z');
 			object.verificationFacts = {
 				checkpointHistoryArchiveState: createArchiveMetadata(
 					object.checkpointLedger!

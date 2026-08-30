@@ -459,13 +459,13 @@ export class CompleteHistoryArchiveObject {
 	): Promise<number> {
 		const eligible = objects.filter(
 			(object) =>
-				object.objectType === 'checkpoint-state' &&
-				object.status === 'verified' &&
-				object.descendantsPlannedAt === null
+				object.objectType === 'checkpoint-state' && object.status === 'verified'
 		);
 		if (eligible.length === 0) return 0;
 		await Promise.all(
-			eligible.map((object) => this.requestCheckpointFanoutEvent(object, true))
+			eligible.map((object) =>
+				this.requestCheckpointFanoutEvent(object, true, true)
+			)
 		);
 		return eligible.length;
 	}
@@ -475,8 +475,7 @@ export class CompleteHistoryArchiveObject {
 	): Promise<boolean> {
 		if (
 			object.objectType !== 'checkpoint-state' ||
-			object.status !== 'verified' ||
-			object.descendantsPlannedAt !== null
+			object.status !== 'verified'
 		) {
 			return false;
 		}
@@ -494,12 +493,13 @@ export class CompleteHistoryArchiveObject {
 
 	private requestCheckpointFanoutEvent(
 		object: HistoryArchiveObject,
-		promotePlannedObjects: boolean
+		promotePlannedObjects: boolean,
+		force = false
 	): Promise<void> {
 		if (
 			object.objectType !== 'checkpoint-state' ||
 			object.status !== 'verified' ||
-			object.descendantsPlannedAt !== null
+			(!force && object.descendantsPlannedAt !== null)
 		) {
 			return Promise.resolve();
 		}
