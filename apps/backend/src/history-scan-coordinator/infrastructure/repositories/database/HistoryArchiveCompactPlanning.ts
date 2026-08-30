@@ -72,7 +72,8 @@ export async function materializeCompactCheckpointPlans(
 	manager: EntityManager
 ): Promise<number> {
 	const [result] = (await manager.query(compactCheckpointPlanSql, [
-		maximumCheckpointCursorBatch
+		maximumCheckpointCursorBatch,
+		historyArchiveSequentialPrefetchDepth
 	])) as readonly {
 		readonly planned: number | string;
 		readonly ready?: number | string;
@@ -313,8 +314,7 @@ const compactCheckpointPlanSql = `
                                 root.latest_checkpoint
                         ) as "latestCheckpointLedger",
                         cursor."lastForwardCheckpointLedger",
-                        cursor."nextHistoricalCheckpointLedger",
-                        cursor."nextHistoricalCheckpointLedger" as checkpoint_ledger
+                        cursor."nextHistoricalCheckpointLedger"
                 from "history_archive_checkpoint_scan_cursor" cursor
                 join available_roots root
                         on root."archiveUrlIdentity" = cursor."archiveUrlIdentity"
@@ -340,13 +340,37 @@ const compactCheckpointPlanSql = `
                         cursor."archiveUrlIdentity"
                 limit $1
                 for update of cursor skip locked
+	), cursor_targets as materialized (
+		select candidate.*, target.checkpoint_ledger
+		from cursor_candidates candidate
+		cross join lateral (
+			select coalesce(
+				min(position.checkpoint_ledger) filter (
+					where proof.status is distinct from 'verified'
+				),
+				max(position.checkpoint_ledger) + 64
+			)::integer as checkpoint_ledger
+			from generate_series(
+				candidate."nextHistoricalCheckpointLedger",
+				least(
+					candidate."latestCheckpointLedger",
+					candidate."nextHistoricalCheckpointLedger" +
+						(($2::integer - 1) * 64)
+				),
+				64
+			) position(checkpoint_ledger)
+			left join "history_archive_checkpoint_proof" proof
+				on proof."archiveUrlIdentity" = candidate."archiveUrlIdentity"
+				and proof."checkpointLedger" = position.checkpoint_ledger
+		) target
 	), source as materialized (
 		select candidate.*, root."archiveUrl", root."hostIdentity",
 			lpad(to_hex(candidate.checkpoint_ledger), 8, '0') as checkpoint_hex
-		from cursor_candidates candidate
+		from cursor_targets candidate
 		join available_roots root
 			on root."archiveUrlIdentity" = candidate."archiveUrlIdentity"
-		where candidate.checkpoint_ledger >= 63
+		where candidate.checkpoint_ledger between 63
+			and candidate."latestCheckpointLedger"
 	), inserted as (
 		insert into "history_archive_object_queue" (
 			"remoteId", "archiveUrl", "archiveUrlIdentity", "hostIdentity",
@@ -381,15 +405,19 @@ const compactCheckpointPlanSql = `
 		update "history_archive_checkpoint_scan_cursor" cursor
                 set "latestCheckpointLedger" = candidate."latestCheckpointLedger",
                         "lastForwardCheckpointLedger" = case
-				when candidate.checkpoint_ledger =
+				when candidate.checkpoint_ledger >=
 					candidate."latestCheckpointLedger"
-					then candidate.checkpoint_ledger
+					then candidate."latestCheckpointLedger"
 				else cursor."lastForwardCheckpointLedger"
 			end,
-                        "nextHistoricalCheckpointLedger" =
-                                candidate.checkpoint_ledger + 64,
+                        "nextHistoricalCheckpointLedger" = case
+				when candidate.checkpoint_ledger >
+					candidate."latestCheckpointLedger"
+					then candidate.checkpoint_ledger
+				else candidate.checkpoint_ledger + 64
+			end,
 			"updatedAt" = now()
-		from cursor_candidates candidate
+		from cursor_targets candidate
 		where cursor."archiveUrlIdentity" = candidate."archiveUrlIdentity"
 		returning cursor."archiveUrlIdentity"
 	)

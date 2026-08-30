@@ -8,7 +8,10 @@ import {
 	startDisposablePostgres,
 	type DisposablePostgres
 } from '@test-support/DisposablePostgres.js';
-import { materializeNextCompactCheckpointPlan } from '../HistoryArchiveCompactPlanning.js';
+import {
+	materializeCompactCheckpointPlans,
+	materializeNextCompactCheckpointPlan
+} from '../HistoryArchiveCompactPlanning.js';
 import { createCanonicalFrontierTestSchema } from './HistoryArchiveCanonicalFrontierTestSchema.js';
 import {
 	createBucketMissingProof,
@@ -132,5 +135,65 @@ describe('compact history archive checkpoint planning', () => {
 		});
 		expect(ready).toEqual({ priority: 2 });
 		expect(cursor?.nextHistoricalCheckpointLedger).toBe(191);
+	});
+
+	it('skips a contiguous prefix of already-verified checkpoints at once', async () => {
+		const root = createRoot(1);
+		await dataSource.getRepository(HistoryArchiveObject).save(root);
+		await dataSource.query(
+			`insert into "history_archive_state_snapshot" (
+				"archiveUrlIdentity", status, "currentLedger"
+			) values ($1, 'available', 1000)`,
+			[root.archiveUrlIdentity]
+		);
+		await dataSource.query(
+			`insert into "history_archive_checkpoint_scan_cursor" (
+				"archiveUrlIdentity", "latestCheckpointLedger",
+				"lastForwardCheckpointLedger", "nextHistoricalCheckpointLedger"
+			) values ($1, 959, 63, 127)`,
+			[root.archiveUrlIdentity]
+		);
+		const proofs = [63, 127, 191].map((checkpointLedger) => {
+			const proof = createBucketMissingProof(
+				root.archiveUrlIdentity,
+				checkpointLedger
+			);
+			proof.status = 'verified';
+			proof.proofVersion = CURRENT_HISTORY_ARCHIVE_CHECKPOINT_PROOF_VERSION;
+			proof.bucketsVerified = true;
+			proof.verifiedBucketCount = proof.expectedBucketCount;
+			proof.missingBucketCount = 0;
+			proof.failureKind = null;
+			return proof;
+		});
+		await dataSource.getRepository(HistoryArchiveCheckpointProof).save(proofs);
+
+		const planned = await materializeCompactCheckpointPlans(dataSource.manager);
+		const [checkpoint] = (await dataSource.query(
+			`select status, "dependencyReady", "executionDisposition"
+			 from "history_archive_object_queue"
+			 where "archiveUrlIdentity" = $1
+				and "objectType" = 'checkpoint-state'
+				and "checkpointLedger" = 255`,
+			[root.archiveUrlIdentity]
+		)) as readonly {
+			readonly dependencyReady: boolean;
+			readonly executionDisposition: string;
+			readonly status: string;
+		}[];
+		const [cursor] = (await dataSource.query(
+			`select "nextHistoricalCheckpointLedger"
+			 from "history_archive_checkpoint_scan_cursor"
+			 where "archiveUrlIdentity" = $1`,
+			[root.archiveUrlIdentity]
+		)) as readonly { readonly nextHistoricalCheckpointLedger: number }[];
+
+		expect(planned).toBe(1);
+		expect(checkpoint).toEqual({
+			dependencyReady: true,
+			executionDisposition: 'executable',
+			status: 'pending'
+		});
+		expect(cursor?.nextHistoricalCheckpointLedger).toBe(319);
 	});
 });
