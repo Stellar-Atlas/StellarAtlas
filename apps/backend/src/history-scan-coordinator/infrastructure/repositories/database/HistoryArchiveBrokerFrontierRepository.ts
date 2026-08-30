@@ -184,6 +184,8 @@ const findPublishedBrokerJobsSql = `
                         and ready."claimAttempt" = object.attempts + 1
 			and ($3::text is null or
 				ready."archiveUrlIdentity" = $3::text)
+			and ($4::timestamptz is null
+				or ready."publishedAt" <= $4::timestamptz)
 	) published
 	where published.priority <= $2::smallint
 	order by published.priority, published."updatedAt",
@@ -337,13 +339,15 @@ export class HistoryArchiveBrokerFrontierRepository {
 	async findPublishedJobs(
 		limit: number,
 		maximumPriority: HistoryArchiveBrokerPriority = defaultHistoryArchiveBrokerMaximumPriority,
-		canonicalFirstRoot: string | null = null
+		canonicalFirstRoot: string | null = null,
+		publishedBefore: Date | null = null
 	): Promise<readonly HistoryArchiveBrokerJob[]> {
 		if (limit < 1) return [];
 		const rows = (await this.dataSource.query(findPublishedBrokerJobsSql, [
 			Math.floor(limit),
 			requirePriority(maximumPriority),
-			canonicalFirstRoot
+			canonicalFirstRoot,
+			publishedBefore
 		])) as readonly BrokerJobRow[];
 		return mapAndOrderBrokerJobs(rows);
 	}

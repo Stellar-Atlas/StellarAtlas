@@ -31,6 +31,32 @@ describe('HistoryArchiveBrokerFrontierRepository', () => {
 		expect(reserveBrokerJobsSql).toContain('"updatedAt" = now()');
 	});
 
+	it('limits background replay to stale published reservations', async () => {
+		const query = jest.fn().mockResolvedValue([]);
+		const repository = new HistoryArchiveBrokerFrontierRepository({
+			query
+		} as unknown as DataSource);
+		const publishedBefore = new Date('2026-08-30T13:00:00.000Z');
+
+		await repository.findPublishedJobs(
+			24,
+			2,
+			'https://history.example',
+			publishedBefore
+		);
+
+		expect(query).toHaveBeenCalledTimes(1);
+		expect(query.mock.calls[0]?.[0]).toContain(
+			'ready."publishedAt" <= $4::timestamptz'
+		);
+		expect(query.mock.calls[0]?.[1]).toEqual([
+			24,
+			2,
+			'https://history.example',
+			publishedBefore
+		]);
+	});
+
 	it('resets failed publishes in checkpoint fan-out lock order', async () => {
 		const query = jest.fn().mockResolvedValue([]);
 		const manager = { query } as unknown as EntityManager;

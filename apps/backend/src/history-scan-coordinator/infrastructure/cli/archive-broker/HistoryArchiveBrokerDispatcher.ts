@@ -43,6 +43,9 @@ const { Client: PostgresClient } = createRequire(import.meta.url)('pg') as {
 	}) => PostgresNotificationClient;
 };
 
+const orphanedPublishedReplayAgeMs = 30_000;
+const orphanedPublishedReplayIntervalMs = 15_000;
+
 function isRecord(value: unknown): value is Record<string, unknown> {
 	return typeof value === 'object' && value !== null;
 }
@@ -138,6 +141,7 @@ export class HistoryArchiveBrokerDispatcher {
 	private jetStream: JetStreamClient | null = null;
 	private manager: JetStreamManager | null = null;
 	private readyListener: PostgresNotificationClient | null = null;
+	private nextOrphanedPublishedReplayAt = 0;
 	private wakeVersion = 0;
 	private readonly wakeWaiters = new Set<() => void>();
 	private stopping = false;
@@ -159,6 +163,7 @@ export class HistoryArchiveBrokerDispatcher {
 					await this.waitForWork(observedWakeVersion);
 					continue;
 				}
+				if (await this.replayOrphanedPublishedJobs(capacity)) continue;
 				const limit = Math.min(capacity, this.config.batchSize);
 				let jobs = await this.repository.reserveJobs(
 					limit,
@@ -196,6 +201,29 @@ export class HistoryArchiveBrokerDispatcher {
 				await this.waitForWork(observedWakeVersion);
 			}
 		}
+	}
+
+	private async replayOrphanedPublishedJobs(
+		availableCapacity: number
+	): Promise<boolean> {
+		const now = Date.now();
+		if (
+			availableCapacity !== this.config.highWatermark ||
+			now < this.nextOrphanedPublishedReplayAt
+		) {
+			return false;
+		}
+		this.nextOrphanedPublishedReplayAt =
+			now + orphanedPublishedReplayIntervalMs;
+		const jobs = await this.repository.findPublishedJobs(
+			this.config.highWatermark,
+			this.config.maximumPriority,
+			this.config.canonicalFirstRoot,
+			new Date(now - orphanedPublishedReplayAgeMs)
+		);
+		if (jobs.length === 0) return false;
+		await this.publish(jobs);
+		return true;
 	}
 
 	async close(): Promise<void> {
