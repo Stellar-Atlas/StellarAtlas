@@ -65,6 +65,14 @@ export async function findVerifiedCheckpointsNeedingFanout(
 						and sibling."objectKey" = 'results:' ||
 							lpad(to_hex(object."checkpointLedger"), 8, '0')
 				)
+				or not exists (
+					select 1
+					from "history_archive_checkpoint_bucket_dependency" dependency
+					where dependency."archiveUrlIdentity" =
+						object."archiveUrlIdentity"
+						and dependency."checkpointLedger" =
+							object."checkpointLedger"
+				)
 				or exists (
 					select 1
 					from "history_archive_checkpoint_bucket_dependency" dependency
