@@ -1,6 +1,7 @@
 import type { Repository } from 'typeorm';
 import type { HistoryArchiveObject } from '@history-scan-coordinator/domain/history-archive-object/HistoryArchiveObject.js';
 import {
+	historyArchiveObjectVerifiedBatchSql,
 	historyArchiveObjectStaleReleaseSql,
 	touchHistoryArchiveObjectClaim
 } from '../HistoryArchiveObjectLeaseWrite.js';
@@ -15,6 +16,22 @@ describe('HistoryArchiveObjectLeaseWrite', () => {
 		);
 		expect(historyArchiveObjectStaleReleaseSql).toContain(
 			'where maintenance_guard.locked'
+		);
+	});
+
+	it('locks broker-ready completion rows in dispatcher order before deleting', () => {
+		const readyLock = historyArchiveObjectVerifiedBatchSql.indexOf(
+			'broker_ready_lockable as materialized'
+		);
+		const readyDelete =
+			historyArchiveObjectVerifiedBatchSql.indexOf(
+				'broker_ready_removed as'
+			);
+
+		expect(readyLock).toBeGreaterThan(-1);
+		expect(readyDelete).toBeGreaterThan(readyLock);
+		expect(historyArchiveObjectVerifiedBatchSql).toContain(
+			'order by ready."objectRemoteId"\n                for update of ready'
 		);
 	});
 

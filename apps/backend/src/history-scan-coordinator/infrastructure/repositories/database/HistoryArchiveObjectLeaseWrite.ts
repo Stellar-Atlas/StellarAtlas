@@ -248,7 +248,7 @@ const historyArchiveCompletionInputSql = `
         )
 `;
 
-const historyArchiveObjectVerifiedBatchSql = `
+export const historyArchiveObjectVerifiedBatchSql = `
         with input as materialized (
                 ${historyArchiveCompletionInputSql}
         ), eligible as materialized (
@@ -386,13 +386,23 @@ const historyArchiveObjectVerifiedBatchSql = `
                         and slot."objectRemoteId" = updated."remoteId"
                         and slot."claimAttempt" = updated."claimAttempt"
                 returning slot.slot
-        ), broker_ready_removed as (
-                delete from "history_archive_object_ready" ready
-                using updated
+        ), broker_ready_lockable as materialized (
+                -- Ready-queue refill also locks by objectRemoteId. Lock every
+                -- completion row in that same order before deleting any row so
+                -- overlapping batches cannot form a lock-order cycle.
+                select ready."objectRemoteId"
+                from updated
+                join "history_archive_object_ready" ready
+                        on ready."objectRemoteId" = updated."remoteId"
                 where updated.scheduler = 'broker'
-                        and ready."objectRemoteId" = updated."remoteId"
                         and ready."dispatchToken" = updated."executionId"
                         and ready."claimAttempt" = updated."claimAttempt"
+                order by ready."objectRemoteId"
+                for update of ready
+        ), broker_ready_removed as (
+                delete from "history_archive_object_ready" ready
+                using broker_ready_lockable lockable
+                where ready."objectRemoteId" = lockable."objectRemoteId"
                 returning ready."objectRemoteId"
         )
         select updated."remoteId"
