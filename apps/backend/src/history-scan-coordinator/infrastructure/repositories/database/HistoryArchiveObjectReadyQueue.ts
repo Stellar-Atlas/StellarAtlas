@@ -59,7 +59,7 @@ const readyAtSql = `case
 		candidate."nextAttemptAt",
 		candidate."updatedAt" + interval '1 hour'
 	)
-	else coalesce(candidate."nextAttemptAt", now())
+	else coalesce(candidate."nextAttemptAt", candidate."updatedAt")
 end`;
 
 const cleanupReadyObjectsSql = `
