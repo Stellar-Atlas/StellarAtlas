@@ -230,47 +230,83 @@ interface AccountReferenceDriver {
 	readonly fromClause: string;
 }
 
+interface AccountReferenceConstraint {
+	readonly account: string;
+	readonly parameter: '$6' | '$7' | '$8';
+	readonly role: 'destination' | 'effective_source' | null;
+}
+
 function buildAccountReferenceDriver(
 	query: FullHistoryOperationQuery
 ): AccountReferenceDriver {
-	let account: string | undefined;
-	let parameter: '$6' | '$7' | '$8' | undefined;
-	let rolePredicate = '';
+	const constraints: AccountReferenceConstraint[] = [];
+	if (query.accountId !== undefined) {
+		constraints.push({
+			account: query.accountId,
+			parameter: '$6',
+			role: null
+		});
+	}
 	if (query.sourceAccountId !== undefined) {
-		account = query.sourceAccountId;
-		parameter = '$7';
-		rolePredicate = 'and driver_reference."role" = \'effective_source\'';
-	} else if (query.destinationAccountId !== undefined) {
-		account = query.destinationAccountId;
-		parameter = '$8';
-		rolePredicate = 'and driver_reference."role" = \'destination\'';
-	} else if (query.accountId !== undefined) {
-		account = query.accountId;
-		parameter = '$6';
+		constraints.push({
+			account: query.sourceAccountId,
+			parameter: '$7',
+			role: 'effective_source'
+		});
+	}
+	if (query.destinationAccountId !== undefined) {
+		constraints.push({
+			account: query.destinationAccountId,
+			parameter: '$8',
+			role: 'destination'
+		});
 	}
 
-	if (account === undefined || parameter === undefined) {
+	if (constraints.length === 0) {
 		return {
 			commonTableExpression: '',
 			fromClause: 'from "full_history_operation" operation'
 		};
 	}
 
-	const accountColumn = account.startsWith('M')
-		? '"account_id"'
-		: '"base_account_id"';
+	const aliases = constraints.map((_, index) => `driver_reference_${index}`);
+	const primaryAlias = aliases[0]!;
+	const joins = aliases.slice(1).map((alias) =>
+		[
+			'\tjoin "full_history_operation_account_reference"',
+			`\t\t${alias}`,
+			`\t\ton ${alias}."network_passphrase_hash" =`,
+			`\t\t\t${primaryAlias}."network_passphrase_hash"`,
+			`\t\tand ${alias}."transaction_hash" =`,
+			`\t\t\t${primaryAlias}."transaction_hash"`,
+			`\t\tand ${alias}."operation_index" =`,
+			`\t\t\t${primaryAlias}."operation_index"`
+		].join('\n')
+	);
+	const predicates = constraints.flatMap((constraint, index) => {
+		const alias = aliases[index]!;
+		const accountColumn = constraint.account.startsWith('M')
+			? '"account_id"'
+			: '"base_account_id"';
+		return [
+			...(constraint.role === null
+				? []
+				: [`\t\tand ${alias}."role" = '${constraint.role}'`]),
+			`\t\tand ${alias}.${accountColumn} = ${constraint.parameter}`
+		];
+	});
 	return {
 		commonTableExpression: [
 			'with account_reference_driver as materialized (',
 			'\tselect distinct',
-			'\t\tdriver_reference."network_passphrase_hash",',
-			'\t\tdriver_reference."transaction_hash",',
-			'\t\tdriver_reference."operation_index"',
+			`\t\t${primaryAlias}."network_passphrase_hash",`,
+			`\t\t${primaryAlias}."transaction_hash",`,
+			`\t\t${primaryAlias}."operation_index"`,
 			'\tfrom "full_history_operation_account_reference"',
-			'\t\tdriver_reference',
-			'\twhere driver_reference."network_passphrase_hash" = $1',
-			`\t\t${rolePredicate}`,
-			`\t\tand driver_reference.${accountColumn} = ${parameter}`,
+			`\t\t${primaryAlias}`,
+			...joins,
+			`\twhere ${primaryAlias}."network_passphrase_hash" = $1`,
+			...predicates,
 			')'
 		].join('\n'),
 		fromClause: [
