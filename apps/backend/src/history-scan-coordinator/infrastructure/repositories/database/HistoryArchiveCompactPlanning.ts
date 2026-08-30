@@ -69,11 +69,20 @@ const markCheckpointDescendantsPlannedSql = `
 `;
 
 export async function materializeCompactCheckpointPlans(
-	manager: EntityManager
+	manager: EntityManager,
+	archiveUrlIdentities: readonly string[] | null = null
 ): Promise<number> {
+	const targetedIdentities =
+		archiveUrlIdentities === null
+			? null
+			: [...new Set(archiveUrlIdentities)].filter(
+					(identity) => identity.length > 0
+				);
+	if (targetedIdentities !== null && targetedIdentities.length === 0) return 0;
 	const [result] = (await manager.query(compactCheckpointPlanSql, [
 		maximumCheckpointCursorBatch,
-		historyArchiveSequentialPrefetchDepth
+		historyArchiveSequentialPrefetchDepth,
+		targetedIdentities
 	])) as readonly {
 		readonly planned: number | string;
 		readonly ready?: number | string;
@@ -319,6 +328,10 @@ const compactCheckpointPlanSql = `
                 join available_roots root
                         on root."archiveUrlIdentity" = cursor."archiveUrlIdentity"
                 where cursor."nextHistoricalCheckpointLedger" is not null
+				and (
+					$3::text[] is null
+					or cursor."archiveUrlIdentity" = any($3::text[])
+				)
                         and cursor."nextHistoricalCheckpointLedger" <= greatest(
                                 cursor."latestCheckpointLedger",
                                 root.latest_checkpoint

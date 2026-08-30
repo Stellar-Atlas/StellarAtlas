@@ -168,7 +168,10 @@ describe('compact history archive checkpoint planning', () => {
 		});
 		await dataSource.getRepository(HistoryArchiveCheckpointProof).save(proofs);
 
-		const planned = await materializeCompactCheckpointPlans(dataSource.manager);
+		const planned = await materializeCompactCheckpointPlans(
+			dataSource.manager,
+			[root.archiveUrlIdentity]
+		);
 		const [checkpoint] = (await dataSource.query(
 			`select status, "dependencyReady", "executionDisposition"
 			 from "history_archive_object_queue"

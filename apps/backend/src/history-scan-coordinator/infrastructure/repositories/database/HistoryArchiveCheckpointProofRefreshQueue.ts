@@ -7,6 +7,7 @@ import type {
 import { canonicalRuntimeTargetCtes } from './HistoryArchiveCanonicalRuntimeTargetSql.js';
 import { dueProofRefreshCanonicalRuntimeArchiveRootsCteSql } from './HistoryArchiveCanonicalRuntimePrioritySql.js';
 import {
+	materializeCompactCheckpointPlans,
 	materializeNextCompactCheckpointPlan,
 	materializeNextCompactCheckpointPlans
 } from './HistoryArchiveCompactPlanning.js';
@@ -420,6 +421,10 @@ async function refreshClaimedHistoryArchiveCheckpointProofWave(
 		[payload]
 	);
 	await materializeNextCompactCheckpointPlans(manager, targets);
+	await materializeCompactCheckpointPlans(
+		manager,
+		targets.map((target) => target.archiveUrlIdentity)
+	);
 	await enqueueTargetedTerminalReadyCheckpointProofRefreshes(
 		manager,
 		targets.map((target) => target.archiveUrlIdentity)
