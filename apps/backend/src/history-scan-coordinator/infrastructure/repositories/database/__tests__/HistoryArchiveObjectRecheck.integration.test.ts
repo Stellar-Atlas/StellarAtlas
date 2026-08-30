@@ -6,6 +6,7 @@ import {
 } from '@test-support/DisposablePostgres.js';
 import { TypeOrmHistoryArchiveObjectRepository } from '../TypeOrmHistoryArchiveObjectRepository.js';
 import {
+	checkpointObject,
 	createObjectRepositoryDataSource,
 	insertHistoryArchiveHostThrottle,
 	resetHistoryArchiveObjectQueue,
@@ -85,6 +86,52 @@ describe('history archive object recheck persistence', () => {
 		await expect(readyRemoteIds()).resolves.toEqual([object.remoteId]);
 	});
 
+	it('queues one explicit transport retry without changing its evidence', async () => {
+		const object = remoteFailure('https://transport.example/archive');
+		object.errorType = 'archive_transport_error';
+		object.errorMessage = 'aborted';
+		object.httpStatus = 200;
+		await save(object);
+
+		await expect(
+			repository.requestObjectRecheck(object.remoteId)
+		).resolves.toMatchObject({
+			reason: 'eligible-remote-failure',
+			remoteId: object.remoteId,
+			state: 'queued'
+		});
+
+		expect(await repository.findByRemoteId(object.remoteId)).toMatchObject({
+			errorMessage: 'aborted',
+			errorType: 'archive_transport_error',
+			failureChannel: 'archive_evidence',
+			httpStatus: 200,
+			status: 'failed'
+		});
+		await expect(readyRemoteIds()).resolves.toEqual([object.remoteId]);
+	});
+
+	it('queues explicit retries independently for the same archive root', async () => {
+		const archiveUrl = 'https://same-root.example/archive';
+		const first = remoteFailure(archiveUrl);
+		const second = checkpointObject(archiveUrl, 63, 'failed');
+		second.failureChannel = 'archive_evidence';
+		second.errorMessage = 'SB Connection time-out';
+		second.errorType = 'archive_transport_error';
+		second.nextAttemptAt = new Date(Date.now() - 60_000);
+		await save(first, second);
+
+		await expect(
+			repository.requestObjectRecheck(first.remoteId)
+		).resolves.toMatchObject({ state: 'queued' });
+		await expect(
+			repository.requestObjectRecheck(second.remoteId)
+		).resolves.toMatchObject({ state: 'queued' });
+		await expect(readyRemoteIds()).resolves.toEqual(
+			[first.remoteId, second.remoteId].sort()
+		);
+	});
+
 	it('returns not-yet-eligible without admitting a future retry', async () => {
 		const object = remoteFailure('https://future.example/archive');
 		object.nextAttemptAt = new Date(Date.now() + 60_000);
@@ -144,6 +191,8 @@ describe('history archive object recheck persistence', () => {
 	function remoteFailure(archiveUrl: string): HistoryArchiveObject {
 		const object = rootObject(archiveUrl, 'failed');
 		object.failureChannel = 'archive_evidence';
+		object.errorMessage = 'SB Connection time-out';
+		object.errorType = 'archive_transport_error';
 		object.nextAttemptAt = new Date(Date.now() - 60_000);
 		return object;
 	}

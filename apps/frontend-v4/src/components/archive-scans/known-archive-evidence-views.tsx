@@ -10,8 +10,7 @@ import {
 	ArchiveActivityTable,
 	ArchiveObjectPageTable,
 	ArchiveRootSummaryTable,
-	RemoteFailureTable,
-	WorkerIssueTable
+	RemoteFailureTable
 } from './known-archive-evidence-tables';
 import { ArchiveRepairPlanPanel } from './archive-repair-plan-panel';
 import type { KnownArchiveEvidenceViewState } from './use-known-archive-evidence';
@@ -29,9 +28,7 @@ export function KnownArchiveEvidenceTabContent({
 	tabId,
 	view
 }: KnownArchiveEvidenceTabContentProps): React.JSX.Element {
-	const findingCount =
-		evidence.totals.objects.remoteFailureObjects +
-		evidence.totals.objects.workerIssueObjects;
+	const findingCount = evidence.totals.objects.remoteFailureObjects;
 	return (
 		<div
 			aria-labelledby={tabId}
@@ -77,19 +74,18 @@ function FailuresView({
 	readonly view: KnownArchiveEvidenceViewState;
 }): React.JSX.Element {
 	const failures = view.failures;
-	const { remotePage, workerPage } = failures;
-	if (remotePage === null || workerPage === null) {
+	const { remotePage } = failures;
+	if (remotePage === null) {
 		return (
 			<RequestFeedback
 				error={failures.error}
 				isLoading={failures.isLoading}
-				loadingText="Loading remote failures and worker issues."
+				loadingText="Loading remote archive checks."
 				onRetry={failures.retry}
 			/>
 		);
 	}
 	const showRemote = remotePage.total > 0 || failures.errorTarget === 'remote';
-	const showWorker = workerPage.total > 0 || failures.errorTarget === 'worker';
 
 	return (
 		<>
@@ -98,20 +94,19 @@ function FailuresView({
 			) : failures.isLoading ? (
 				<RequestFeedback
 					isLoading
-					loadingText="Updating archive failure evidence."
+					loadingText="Updating remote-check evidence."
 				/>
 			) : null}
-			{!showRemote && !showWorker && failures.errorTarget === null ? (
+			{!showRemote && failures.errorTarget === null ? (
 				<p className="known-evidence-empty">
-					No remote archive failures or scanner infrastructure issues match
-					these filters.
+					No unresolved remote archive checks match these filters.
 				</p>
 			) : null}
 			{showRemote ? (
 				<section aria-busy={failures.isLoading}>
 					<EvidenceSectionHeading
 						count={remotePage.total}
-						title="Remote archive failures"
+						title="Unresolved remote archive checks"
 						tone="danger"
 					/>
 					{failures.errorTarget === 'remote' ? (
@@ -127,32 +122,6 @@ function FailuresView({
 						onNext={failures.nextRemote}
 						onPrevious={failures.previousRemote}
 						total={remotePage.total}
-					/>
-				</section>
-			) : null}
-			{showWorker ? (
-				<section
-					aria-busy={failures.isLoading}
-					className={showRemote ? 'known-evidence-worker-section' : undefined}
-				>
-					<EvidenceSectionHeading
-						count={workerPage.total}
-						title="StellarAtlas worker issues"
-						tone="warning"
-					/>
-					{failures.errorTarget === 'worker' ? (
-						<RequestFeedback error={failures.error} onRetry={failures.retry} />
-					) : null}
-					<WorkerIssueTable page={workerPage} />
-					<CursorPagination
-						count={workerPage.issues.length}
-						disabled={failures.isLoading}
-						hasMore={workerPage.hasMore}
-						index={failures.workerPageIndex}
-						limit={workerPage.limit}
-						onNext={failures.nextWorker}
-						onPrevious={failures.previousWorker}
-						total={workerPage.total}
 					/>
 				</section>
 			) : null}

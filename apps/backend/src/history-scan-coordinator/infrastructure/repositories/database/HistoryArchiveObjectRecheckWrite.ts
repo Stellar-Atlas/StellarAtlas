@@ -3,6 +3,7 @@ import type { HistoryArchiveObjectRecheckBlockedReasonV1 } from 'shared';
 import type { HistoryArchiveObject } from '../../../domain/history-archive-object/HistoryArchiveObject.js';
 import type { HistoryArchiveObjectRecheckDecision } from '../../../domain/history-archive-object/HistoryArchiveObjectRepository.js';
 import {
+	isHistoryArchiveManualRemoteRetryFailure,
 	isHistoryArchiveProofGatedMissingFailure,
 	isHistoryArchiveRepairableIntegrityFailure
 } from '../../../domain/history-archive-object/HistoryArchiveRepairCandidateFailure.js';
@@ -69,15 +70,15 @@ const selectHostBackoffSql = `
 const selectReadyObjectSql = `
 	select ready."objectRemoteId"
 	from "history_archive_object_ready" ready
-	where ready."archiveUrlIdentity" = $1
+	where ready."objectRemoteId" = $1
 	for update
 `;
 
 const insertReadyObjectSql = `
 	insert into "history_archive_object_ready" (
-		"objectRemoteId", "archiveUrlIdentity", priority, "availableAt",
+		"objectRemoteId", "archiveUrlIdentity", priority, "availableAt", "dispatchToken",
 		"createdAt", "updatedAt"
-	) values ($1, $2, $3, $4, $4, $4)
+	) values ($1, $2, $3, $4, gen_random_uuid(), $4, $4)
 	on conflict do nothing
 	returning "objectRemoteId"
 `;
@@ -130,7 +131,7 @@ export async function requestHistoryArchiveObjectRecheck(
 			return blocked(target.remoteId, 'host-backoff', eligibleAt, blockedUntil);
 		}
 
-		const ready = await findReadyObject(manager, target);
+		const ready = await findReadyObject(manager, target.remoteId);
 		if (ready?.objectRemoteId === target.remoteId) {
 			return alreadyQueued(target.remoteId, eligibleAt);
 		}
@@ -158,7 +159,7 @@ export async function requestHistoryArchiveObjectRecheck(
 			};
 		}
 
-		const winner = await findReadyObject(manager, target);
+		const winner = await findReadyObject(manager, target.remoteId);
 		if (winner?.objectRemoteId === target.remoteId) {
 			return alreadyQueued(target.remoteId, eligibleAt);
 		}
@@ -176,6 +177,9 @@ function getIneligibleReason(
 		((failureChannel === 'archive_availability' ||
 			failureChannel === 'archive_evidence') &&
 			isHistoryArchiveProofGatedMissingFailure(target)) ||
+		((failureChannel === 'archive_availability' ||
+			failureChannel === 'archive_evidence') &&
+			isHistoryArchiveManualRemoteRetryFailure(target)) ||
 		(failureChannel === 'archive_evidence' &&
 			isHistoryArchiveRepairableIntegrityFailure(target));
 	if (!repairCandidateLane) {
@@ -197,10 +201,10 @@ function getIneligibleReason(
 
 async function findReadyObject(
 	manager: EntityManager,
-	target: RecheckTargetRow
+	remoteId: string
 ): Promise<ReadyObjectRow | undefined> {
 	const rows = (await manager.query(selectReadyObjectSql, [
-		target.archiveUrlIdentity
+		remoteId
 	])) as readonly ReadyObjectRow[];
 	return rows[0];
 }

@@ -296,6 +296,48 @@
 	padding-block: 9px;
 }
 
+.archive-object-retry {
+	display: grid;
+	gap: 6px;
+	min-inline-size: 140px;
+}
+
+.archive-object-retry > button,
+.archive-object-retry form button {
+	background: var(--button-secondary);
+	border: 1px solid var(--border);
+	border-radius: 6px;
+	color: var(--ink);
+	font-weight: 800;
+	padding: 6px 10px;
+}
+
+.archive-object-retry form {
+	display: grid;
+	gap: 7px;
+}
+
+.archive-object-retry label {
+	display: grid;
+	gap: 3px;
+}
+
+.archive-object-retry label span {
+	color: var(--muted);
+	font-size: 0.68rem;
+	font-weight: 800;
+	text-transform: uppercase;
+}
+
+.archive-object-retry input {
+	background: var(--surface);
+	border: 1px solid var(--border);
+	border-radius: 6px;
+	color: var(--ink);
+	inline-size: 100%;
+	padding: 6px;
+}
+
 .known-evidence-request-state {
 	align-items: center;
 	display: flex;

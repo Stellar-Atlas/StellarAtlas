@@ -18,7 +18,7 @@ const initialEvidenceQuery = {
 	failureLimit: archiveEvidencePageLimit,
 	objectLimit: 0,
 	objectStatus: 'failed',
-	workerIssueLimit: archiveEvidencePageLimit
+	workerIssueLimit: 0
 } as const satisfies KnownArchiveEvidenceQuery;
 
 const liveEvidenceOptions = {

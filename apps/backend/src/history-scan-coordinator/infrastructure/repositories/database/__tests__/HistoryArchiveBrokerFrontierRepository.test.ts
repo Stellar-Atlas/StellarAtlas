@@ -31,6 +31,13 @@ describe('HistoryArchiveBrokerFrontierRepository', () => {
 		expect(reserveBrokerJobsSql).toContain('"updatedAt" = now()');
 	});
 
+	it('allows an explicit retry token to bypass canonical-root selection', () => {
+		const sql = reserveBrokerJobsSql.replace(/\s+/g, ' ');
+		expect(sql).toContain(
+			'ready."dispatchToken" is not null or $4::text is null or ready."archiveUrlIdentity" = $4::text'
+		);
+	});
+
 	it('limits background replay to stale published reservations', async () => {
 		const query = jest.fn().mockResolvedValue([]);
 		const repository = new HistoryArchiveBrokerFrontierRepository({

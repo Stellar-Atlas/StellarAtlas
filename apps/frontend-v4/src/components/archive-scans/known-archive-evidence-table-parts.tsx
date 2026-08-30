@@ -160,11 +160,22 @@ export function EmptyEvidenceRow({
 }
 
 export function formatObjectError(object: PublicHistoryArchiveObject): string {
-	if (object.error === null) return 'Remote verification failed';
-	const status = object.error.httpStatus
-		? `HTTP ${object.error.httpStatus}; `
-		: '';
-	return `${status}${sanitizeEvidenceMessage(object.error.message)}`;
+	if (object.error === null) return 'No remote error details were captured';
+	const type = formatMachineLabel(object.error.type);
+	const message = sanitizeEvidenceMessage(object.error.message);
+	if (object.error.httpStatus === null) return type + ': ' + message;
+	const responseLabel =
+		object.error.httpStatus >= 200 && object.error.httpStatus < 300
+			? 'response HTTP '
+			: 'remote response HTTP ';
+	return (
+		type +
+		'; ' +
+		responseLabel +
+		object.error.httpStatus.toString() +
+		': ' +
+		message
+	);
 }
 
 export function formatObjectStatus(object: PublicHistoryArchiveObject): string {

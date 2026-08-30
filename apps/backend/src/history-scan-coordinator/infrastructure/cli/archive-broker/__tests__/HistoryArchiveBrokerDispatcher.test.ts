@@ -23,10 +23,16 @@ function createJob(executionId: string): HistoryArchiveBrokerJob {
 }
 
 describe('calculateHistoryArchiveBrokerAvailableCapacity', () => {
-	it('uses durable consumer occupancy instead of stale stream rows', () => {
-		expect(calculateHistoryArchiveBrokerAvailableCapacity(240, 76, 0)).toBe(
+	it('uses consumer occupancy when it is the larger constraint', () => {
+		expect(calculateHistoryArchiveBrokerAvailableCapacity(240, 76, 0, 40)).toBe(
 			164
 		);
+	});
+
+	it('uses actual stream occupancy when acknowledged gaps retain messages', () => {
+		expect(
+			calculateHistoryArchiveBrokerAvailableCapacity(240, 112, 0, 189)
+		).toBe(51);
 	});
 });
 

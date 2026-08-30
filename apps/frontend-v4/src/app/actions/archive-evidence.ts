@@ -114,7 +114,7 @@ export async function loadKnownArchiveFailurePages(
 			failureObjectType: context.query.objectType ?? undefined,
 			objectLimit: 0,
 			workerIssueCursor: readCursor(request.workerIssueCursor),
-			workerIssueLimit: archiveEvidencePageLimit
+			workerIssueLimit: 0
 		}),
 		(evidence) => ({
 			remoteFailures: evidence.remoteFailures,

@@ -3,6 +3,30 @@ import type { HistoryArchiveObjectFailureDTO } from '../../domain/scan/ScanCoord
 import type { HttpError } from 'http-helper';
 export { ScannerIssueError } from '../../domain/scanner/ScannerIssueError.js';
 
+export function describeArchiveFailure(error: unknown): string {
+	const details: string[] = [];
+	const seen = new Set<unknown>();
+	let current = error;
+	for (let depth = 0; depth < 4; depth += 1) {
+		if (seen.has(current)) break;
+		seen.add(current);
+		const message = mapUnknownToError(current).message.trim();
+		if (message.length > 0) details.push(message);
+		if (typeof current !== 'object' || current === null) break;
+		const record = current as Record<string, unknown>;
+		const code = record.code;
+		if (typeof code === 'string' || typeof code === 'number') {
+			details.push('code=' + String(code));
+		}
+		if (record.cause === undefined || record.cause === null) break;
+		current = record.cause;
+	}
+	const unique = Array.from(new Set(details));
+	return (
+		unique.length === 0 ? 'Unknown error' : unique.join('; cause: ')
+	).slice(0, 4_096);
+}
+
 export function archiveEvidenceFailure(input: {
 	readonly error: unknown;
 	readonly errorType: string;
@@ -11,7 +35,7 @@ export function archiveEvidenceFailure(input: {
 	readonly verificationFacts?: object | null;
 }): HistoryArchiveObjectFailureDTO {
 	return {
-		errorMessage: mapUnknownToError(input.error).message,
+		errorMessage: describeArchiveFailure(input.error),
 		errorType: input.errorType,
 		failureChannel: 'archive_evidence',
 		httpStatus: input.httpStatus ?? null,
@@ -22,7 +46,6 @@ export function archiveEvidenceFailure(input: {
 	};
 }
 
-
 export function archiveAvailabilityFailure(input: {
 	readonly error: unknown;
 	readonly errorType: string;
@@ -30,7 +53,7 @@ export function archiveAvailabilityFailure(input: {
 	readonly retryAfterSeconds?: number | null;
 }): HistoryArchiveObjectFailureDTO {
 	return {
-		errorMessage: mapUnknownToError(input.error).message,
+		errorMessage: describeArchiveFailure(input.error),
 		errorType: input.errorType,
 		failureChannel: 'archive_availability',
 		httpStatus: input.httpStatus ?? null,
@@ -74,7 +97,7 @@ export function scannerIssueFailure(input: {
 	readonly httpStatus?: number | null;
 }): HistoryArchiveObjectFailureDTO {
 	return {
-		errorMessage: mapUnknownToError(input.error).message,
+		errorMessage: describeArchiveFailure(input.error),
 		errorType: input.errorType,
 		failureChannel: 'scanner_issue',
 		httpStatus: input.httpStatus ?? null

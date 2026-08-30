@@ -34,7 +34,7 @@ async function ArchiveSourceEvidenceRoute({
 			failureLimit: archiveEvidencePageLimit,
 			objectLimit: 0,
 			objectStatus: 'failed',
-			workerIssueLimit: archiveEvidencePageLimit
+			workerIssueLimit: 0
 		},
 		liveArchiveFetchOptions
 	);

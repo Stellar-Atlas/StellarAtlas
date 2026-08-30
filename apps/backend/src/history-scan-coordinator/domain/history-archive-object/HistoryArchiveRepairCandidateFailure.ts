@@ -20,6 +20,21 @@ export function isHistoryArchiveRepairCandidateFailure(
 	);
 }
 
+export function isHistoryArchiveManualRemoteRetryFailure(
+	evidence: HistoryArchiveRepairFailureEvidence
+): boolean {
+	if (!isArchiveObjectEvidence(evidence)) return false;
+	const failureClass = classify(evidence);
+	return (
+		failureClass === 'auth' ||
+		failureClass === 'http' ||
+		failureClass === 'not-found' ||
+		failureClass === 'rate-limit' ||
+		failureClass === 'timeout' ||
+		failureClass === 'transport'
+	);
+}
+
 export function isHistoryArchiveRepairableIntegrityFailure(
 	evidence: HistoryArchiveRepairFailureEvidence
 ): boolean {

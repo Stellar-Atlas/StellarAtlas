@@ -47,10 +47,11 @@ describe('known archive evidence UI', () => {
 			})
 		);
 
-		expect(markup).toContain('Failed file');
+		expect(markup).toContain('Archive file');
 		expect(markup).toContain('Source evidence');
-		expect(markup).toContain('Failed source');
+		expect(markup).toContain('Checked source');
 		expect(markup).toContain('2 verified alternate copies');
+		expect(markup).toContain('Retry once');
 		expect(markup).toContain('Same organization (1)');
 		expect(markup).toContain('Other network source (1)');
 		expect(markup).toContain(
@@ -382,14 +383,14 @@ function createEvidence(): PublicKnownNodeArchiveEvidence {
 					workerIssueObjects: 0
 				},
 				scannerOwnedState: null,
-		sequentialCoverage: {
-			advertisedLatestCheckpointLedger: 127,
-			blockedCheckpointLedger: null,
-			blocker: null,
-			lastContinuouslyVerifiedCheckpointLedger: 63,
-			nextCheckpointLedger: 127,
-			status: 'advancing' as const
-		}
+				sequentialCoverage: {
+					advertisedLatestCheckpointLedger: 127,
+					blockedCheckpointLedger: null,
+					blocker: null,
+					lastContinuouslyVerifiedCheckpointLedger: 63,
+					nextCheckpointLedger: 127,
+					status: 'advancing' as const
+				}
 			}
 		],
 		totals: {

@@ -6,6 +6,8 @@ import { HistoryArchiveObjectClaimCursorMigration1784780000000 } from '../../../
 import { HistoryArchiveReadyQueueMigration1785270000000 } from '../../../database/migrations/1785270000000-HistoryArchiveReadyQueueMigration.js';
 import { HistoryArchiveClaimLeaseMigration1785340000000 } from '../../../database/migrations/1785340000000-HistoryArchiveClaimLeaseMigration.js';
 import { HistoryArchiveBrokerFrontierMigration1785440000000 } from '../../../database/migrations/1785440000000-HistoryArchiveBrokerFrontierMigration.js';
+import { HistoryArchiveReadyPriorityLaneMigration1785460000000 } from '../../../database/migrations/1785460000000-HistoryArchiveReadyPriorityLaneMigration.js';
+import { HistoryArchiveReadyParallelismMigration1785560000000 } from '../../../database/migrations/1785560000000-HistoryArchiveReadyParallelismMigration.js';
 import { TypeOrmHistoryArchiveObjectRepository } from '../TypeOrmHistoryArchiveObjectRepository.js';
 import { synchronizeHistoryArchiveReadyQueue } from '../HistoryArchiveObjectReadyQueue.js';
 
@@ -42,6 +44,12 @@ export async function createObjectRepositoryDataSource(url: string): Promise<{
 		await queryRunner.rollbackTransaction();
 		throw error;
 	}
+	await new HistoryArchiveReadyPriorityLaneMigration1785460000000().up(
+		queryRunner
+	);
+	await new HistoryArchiveReadyParallelismMigration1785560000000().up(
+		queryRunner
+	);
 	await queryRunner.release();
 	return {
 		dataSource,

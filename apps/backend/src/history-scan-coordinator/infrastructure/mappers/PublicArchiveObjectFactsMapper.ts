@@ -7,6 +7,7 @@ import {
 	historyArchiveWorkerStages,
 	type HistoryArchiveObjectFailureChannelDTO
 } from 'history-scanner-dto';
+import { sanitizePublicInfrastructureText } from './PublicScanErrorMapper.js';
 
 const digestPattern = /^[0-9a-f]{64}$/;
 const publicWorkerStages = new Set<string>([
@@ -15,15 +16,7 @@ const publicWorkerStages = new Set<string>([
 	'failed',
 	'verified'
 ]);
-const publicArchiveErrorTypes = new Set([
-	'archive_http_error',
-	'bucket_verification_failed',
-	'category_content_invalid',
-	'invalid_checkpoint_state',
-	'invalid_history_archive_state',
-	'remote_content_invalid',
-	'remote_missing'
-]);
+const publicErrorTypePattern = /^[A-Za-z][A-Za-z0-9_-]{0,127}$/;
 
 export function mapPublicVerificationFacts(
 	value: object | null
@@ -60,26 +53,28 @@ export function mapPublicArchiveError(input: {
 	readonly type: string;
 } | null {
 	if (input.errorMessage === null && input.errorType === null) return null;
-	if (input.failureChannel === 'scanner_issue') {
-		return {
-			httpStatus: null,
-			message: 'Scanner infrastructure issue',
-			type: 'scanner_issue'
-		};
-	}
-	const httpStatus = isErrorHttpStatus(input.httpStatus)
-		? input.httpStatus
-		: null;
-	const type =
-		input.errorType !== null && publicArchiveErrorTypes.has(input.errorType)
-			? input.errorType
+	const fallbackType =
+		input.failureChannel === 'scanner_issue'
+			? 'scanner_issue'
 			: 'archive_verification_failed';
+	const type =
+		input.errorType !== null && publicErrorTypePattern.test(input.errorType)
+			? input.errorType
+			: fallbackType;
+	const httpStatus = isHttpStatus(input.httpStatus) ? input.httpStatus : null;
+	const sanitizedMessage =
+		input.errorMessage === null
+			? null
+			: sanitizePublicInfrastructureText(input.errorMessage).trim();
+	const message =
+		sanitizedMessage === null || sanitizedMessage.length === 0
+			? 'No error message was captured for ' + type
+			: sanitizedMessage === 'HttpError:'
+				? 'HTTP request failed before a response; no lower-level cause was captured'
+				: sanitizedMessage;
 	return {
 		httpStatus,
-		message:
-			httpStatus === null
-				? 'Remote archive verification failed'
-				: `Remote archive returned HTTP ${httpStatus.toString()}`,
+		message,
 		type
 	};
 }
@@ -267,10 +262,6 @@ function isHttpStatus(value: number | null): value is number {
 	return (
 		Number.isSafeInteger(value) && Number(value) >= 100 && Number(value) <= 599
 	);
-}
-
-function isErrorHttpStatus(value: number | null): value is number {
-	return isHttpStatus(value) && (Number(value) < 200 || Number(value) >= 300);
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

@@ -30,7 +30,16 @@ export function KnownArchiveEvidence({
 	const tabRefs = useRef<(HTMLButtonElement | null)[]>([]);
 	const activeTabId = `${id}-${view.tab}-tab`;
 	const panelId = `${id}-panel`;
-	const health = assessKnownArchiveEvidence(liveEvidence);
+	const health = assessKnownArchiveEvidence({
+		...liveEvidence,
+		totals: {
+			...liveEvidence.totals,
+			objects: {
+				...liveEvidence.totals.objects,
+				workerIssueObjects: 0
+			}
+		}
+	});
 
 	const moveTabFocus = (
 		event: React.KeyboardEvent<HTMLButtonElement>,
@@ -96,7 +105,7 @@ export function KnownArchiveEvidence({
 					>
 						{item.label}
 						{item.value === 'failures'
-							? ` ${formatInteger(getFindingCount(liveEvidence))}`
+							? ` ${formatFindingCounts(liveEvidence)}`
 							: ''}
 					</button>
 				))}
@@ -121,14 +130,9 @@ function EvidenceMetrics({
 	return (
 		<dl className="known-evidence-metrics">
 			<Metric
-				label="Remote failures"
+				label="Unresolved remote checks"
 				tone={objects.remoteFailureObjects > 0 ? 'danger' : 'neutral'}
 				value={objects.remoteFailureObjects}
-			/>
-			<Metric
-				label="Worker issues"
-				tone={objects.workerIssueObjects > 0 ? 'warning' : 'neutral'}
-				value={objects.workerIssueObjects}
 			/>
 			<Metric
 				label="Checking / waiting"
@@ -144,9 +148,8 @@ function EvidenceMetrics({
 	);
 }
 
-function getFindingCount(evidence: PublicKnownArchiveEvidence): number {
-	const objects = evidence.totals.objects;
-	return objects.remoteFailureObjects + objects.workerIssueObjects;
+function formatFindingCounts(evidence: PublicKnownArchiveEvidence): string {
+	return `${formatInteger(evidence.totals.objects.remoteFailureObjects)} remote retry`;
 }
 
 function formatEvidenceScope(evidence: PublicKnownArchiveEvidence): string {
@@ -160,10 +163,10 @@ function formatEvidenceStatus(
 ): string | undefined {
 	const objects = evidence.totals.objects;
 	if (objects.remoteFailureObjects > 0) {
-		return `${formatInteger(objects.remoteFailureObjects)} remote ${objects.remoteFailureObjects === 1 ? 'failure' : 'failures'}`;
-	}
-	if (objects.workerIssueObjects > 0) {
-		return `${formatInteger(objects.workerIssueObjects)} scanner ${objects.workerIssueObjects === 1 ? 'issue' : 'issues'}`;
+		return (
+			`${formatInteger(objects.remoteFailureObjects)} remote ${objects.remoteFailureObjects === 1 ? 'check' : 'checks'}` +
+			' unresolved'
+		);
 	}
 	return undefined;
 }

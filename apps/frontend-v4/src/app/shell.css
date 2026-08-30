@@ -332,3 +332,17 @@ small,
 		align-self: flex-start;
 	}
 }
+
+.nav-toggle {
+	align-items: center;
+	background: var(--button-secondary);
+	border: 1px solid var(--button-secondary-border);
+	border-radius: 6px;
+	color: var(--ink);
+	display: none;
+	font-weight: 800;
+	gap: 8px;
+	justify-content: center;
+	min-block-size: 38px;
+	padding: 0 12px;
+}

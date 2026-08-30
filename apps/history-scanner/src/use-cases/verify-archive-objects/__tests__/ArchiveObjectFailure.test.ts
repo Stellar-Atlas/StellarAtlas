@@ -1,5 +1,8 @@
 import { HttpError } from 'http-helper';
-import { getRetryAfterSecondsFromHttpError } from '../ArchiveObjectFailure.js';
+import {
+	describeArchiveFailure,
+	getRetryAfterSecondsFromHttpError
+} from '../ArchiveObjectFailure.js';
 
 describe('ArchiveObjectFailure Retry-After', () => {
 	it('reads delta seconds from response headers', () => {
@@ -27,5 +30,16 @@ describe('ArchiveObjectFailure Retry-After', () => {
 				new Date('2026-07-06T15:00:00.000Z')
 			)
 		).toBe(300);
+	});
+
+	it('preserves a nested transport cause and machine error code', () => {
+		const cause = Object.assign(new Error('socket closed'), {
+			code: 'ECONNRESET'
+		});
+		const error = Object.assign(new Error('request failed'), { cause });
+
+		expect(describeArchiveFailure(error)).toBe(
+			'request failed; cause: socket closed; cause: code=ECONNRESET'
+		);
 	});
 });

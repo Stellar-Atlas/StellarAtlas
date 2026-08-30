@@ -38,8 +38,9 @@ describe('public archive object mapping', () => {
 
 		expect(mapped.error).toEqual({
 			httpStatus: null,
-			message: 'Scanner infrastructure issue',
-			type: 'scanner_issue'
+			message:
+				'write [internal path] failed at [internal path] and [internal path]',
+			type: 'bucket_cache_failure'
 		});
 		expect(mapped.workerStage).toBeNull();
 		expect(mapped.verificationFacts).toEqual({
@@ -65,7 +66,7 @@ describe('public archive object mapping', () => {
 		);
 	});
 
-	it('never returns arbitrary remote error text or types', () => {
+	it('sanitizes remote error text and rejects unsafe error types', () => {
 		const object = createObject();
 		object.errorMessage = 'secret at /tmp/remote-body';
 		object.errorType = '/home/observe/custom-error';
@@ -74,7 +75,7 @@ describe('public archive object mapping', () => {
 
 		expect(mapHistoryArchiveObject(object).error).toEqual({
 			httpStatus: 503,
-			message: 'Remote archive returned HTTP 503',
+			message: 'secret at [internal path]',
 			type: 'archive_verification_failed'
 		});
 	});
@@ -87,8 +88,8 @@ describe('public archive object mapping', () => {
 		object.httpStatus = 200;
 
 		expect(mapHistoryArchiveObject(object).error).toEqual({
-			httpStatus: null,
-			message: 'Remote archive verification failed',
+			httpStatus: 200,
+			message: 'bucket hash mismatch',
 			type: 'bucket_verification_failed'
 		});
 	});
@@ -102,8 +103,21 @@ describe('public archive object mapping', () => {
 
 		expect(mapHistoryArchiveObject(object).error).toEqual({
 			httpStatus: 302,
-			message: 'Remote archive returned HTTP 302',
+			message: 'redirect was not accepted',
 			type: 'archive_http_error'
+		});
+	});
+	it('explains a legacy HTTP error that captured no lower-level cause', () => {
+		const object = createObject();
+		object.errorMessage = 'HttpError:';
+		object.errorType = 'archive_transport_error';
+		object.failureChannel = 'archive_evidence';
+
+		expect(mapHistoryArchiveObject(object).error).toEqual({
+			httpStatus: null,
+			message:
+				'HTTP request failed before a response; no lower-level cause was captured',
+			type: 'archive_transport_error'
 		});
 	});
 

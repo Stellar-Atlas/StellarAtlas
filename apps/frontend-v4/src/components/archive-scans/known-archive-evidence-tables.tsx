@@ -28,43 +28,52 @@ import {
 	sanitizeEvidenceMessage
 } from './known-archive-evidence-table-parts';
 import { HistoryArchiveStateDocument } from './history-archive-state-document';
+import { ArchiveObjectRetryButton } from './archive-object-retry-button';
 
 export function RemoteFailureTable({
 	page
 }: {
 	readonly page: PublicKnownArchiveRemoteFailurePage;
 }): React.JSX.Element {
-	if (page.failures.length === 0)
-		return <EmptyEvidenceRow text="No remote failures." />;
+	if (page.failures.length === 0) {
+		return <EmptyEvidenceRow text="No unresolved remote archive checks." />;
+	}
 	return (
-		<EvidenceTableRegion label="Remote archive failures">
+		<EvidenceTableRegion label="Unresolved remote archive checks">
 			<table className="known-evidence-table failure-table">
 				<thead>
 					<tr>
-						<th>Failed file</th>
-						<th>Failure</th>
+						<th>Archive file</th>
+						<th>Exact result</th>
 						<th>Source evidence</th>
 						<th>Observed</th>
+						<th>Action</th>
 					</tr>
 				</thead>
 				<tbody>
 					{page.failures.map((failure) => (
 						<tr key={failure.object.remoteId}>
-							<td data-label="Failed file">
+							<td data-label="Archive file">
 								<ObjectIdentity object={failure.object} />
 							</td>
-							<td className="known-evidence-error" data-label="Failure">
+							<td className="known-evidence-error" data-label="Exact result">
 								{formatObjectError(failure.object)}
 							</td>
 							<td data-label="Source evidence">
 								<div className="failed-archive-source">
-									<span>Failed source</span>
+									<span>Checked source</span>
 									<ObjectSource object={failure.object} />
 								</div>
 								<VerifiedAlternateCopies failure={failure} />
 							</td>
 							<td data-label="Observed">
 								{formatDateTime(failure.object.updatedAt)}
+							</td>
+							<td data-label="Action">
+								<ArchiveObjectRetryButton
+									evidenceUpdatedAt={failure.object.updatedAt}
+									remoteId={failure.object.remoteId}
+								/>
 							</td>
 						</tr>
 					))}
@@ -244,8 +253,7 @@ export function ArchiveRootSummaryTable({
 							<th>Nodes</th>
 							<th>State</th>
 							<th>Files</th>
-							<th>Remote failures</th>
-							<th>Worker issues</th>
+							<th>Unresolved remote checks</th>
 							<th>Continuous history</th>
 							<th>Checkpoint file consistency</th>
 						</tr>
@@ -269,7 +277,7 @@ export function ArchiveRootSummaryTable({
 									{formatInteger(root.objects.totalObjects)} verified
 								</td>
 								<td
-									data-label="Remote failures"
+									data-label="Unresolved remote checks"
 									className={
 										root.objects.remoteFailureObjects > 0
 											? 'known-evidence-error'
@@ -277,9 +285,6 @@ export function ArchiveRootSummaryTable({
 									}
 								>
 									{formatInteger(root.objects.remoteFailureObjects)}
-								</td>
-								<td data-label="Worker issues">
-									{formatInteger(root.objects.workerIssueObjects)}
 								</td>
 								<td data-label="Continuous history">
 									<SequentialCoverageSummary root={root} />
@@ -319,7 +324,9 @@ function SequentialCoverageSummary({
 		return <small>Sequential coverage is loading.</small>;
 	}
 	if (coverage.status === 'unavailable') {
-		return <strong className="known-evidence-error">Archive root unavailable</strong>;
+		return (
+			<strong className="known-evidence-error">Archive root unavailable</strong>
+		);
 	}
 	if (coverage.status === 'caught-up') {
 		return (
@@ -327,7 +334,10 @@ function SequentialCoverageSummary({
 				<strong>Caught up</strong>
 				<small>
 					Verified continuously through checkpoint{' '}
-					{formatNullableCheckpoint(coverage.lastContinuouslyVerifiedCheckpointLedger)}.
+					{formatNullableCheckpoint(
+						coverage.lastContinuouslyVerifiedCheckpointLedger
+					)}
+					.
 				</small>
 			</>
 		);
@@ -342,13 +352,21 @@ function SequentialCoverageSummary({
 				</strong>
 				<small>
 					Continuous through{' '}
-					{formatNullableCheckpoint(coverage.lastContinuouslyVerifiedCheckpointLedger)}.
+					{formatNullableCheckpoint(
+						coverage.lastContinuouslyVerifiedCheckpointLedger
+					)}
+					.
 				</small>
 				{blocker === null ? null : (
 					<small>
 						{formatArchiveObjectType(blocker.objectType)} returned{' '}
-						{blocker.httpStatus === null ? blocker.errorType ?? 'an error' : `HTTP ${blocker.httpStatus}`}.{' '}
-						<ArchiveSourceLink archiveUrl={blocker.objectUrl}>Open failed file</ArchiveSourceLink>
+						{blocker.httpStatus === null
+							? (blocker.errorType ?? 'an error')
+							: `HTTP ${blocker.httpStatus}`}
+						.{' '}
+						<ArchiveSourceLink archiveUrl={blocker.objectUrl}>
+							Open failed file
+						</ArchiveSourceLink>
 					</small>
 				)}
 			</>
@@ -358,10 +376,13 @@ function SequentialCoverageSummary({
 		<>
 			<strong>
 				Continuous through{' '}
-				{formatNullableCheckpoint(coverage.lastContinuouslyVerifiedCheckpointLedger)}
+				{formatNullableCheckpoint(
+					coverage.lastContinuouslyVerifiedCheckpointLedger
+				)}
 			</strong>
 			<small>
-				Next {formatNullableCheckpoint(coverage.nextCheckpointLedger)}; advertised latest{' '}
+				Next {formatNullableCheckpoint(coverage.nextCheckpointLedger)};
+				advertised latest{' '}
 				{formatNullableCheckpoint(coverage.advertisedLatestCheckpointLedger)}.
 			</small>
 		</>

@@ -99,3 +99,31 @@
 		justify-content: flex-start;
 	}
 }
+
+@media (max-width: 720px) {
+	.site-header-inner {
+		grid-template-columns: minmax(0, 1fr) auto;
+	}
+
+	.nav-toggle {
+		display: inline-flex;
+	}
+
+	.nav,
+	.header-tools {
+		display: none;
+		grid-column: 1 / -1;
+		inline-size: 100%;
+	}
+
+	.nav.is-open,
+	.header-tools.is-open {
+		display: flex;
+	}
+
+	.nav.is-open,
+	.header-tools.is-open {
+		align-items: stretch;
+		flex-direction: column;
+	}
+}

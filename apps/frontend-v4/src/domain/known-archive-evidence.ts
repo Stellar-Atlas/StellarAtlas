@@ -53,7 +53,7 @@ export const knownArchiveEvidenceTabs: readonly {
 	readonly label: string;
 	readonly value: KnownArchiveEvidenceTab;
 }[] = [
-	{ label: 'Failures', value: 'failures' },
+	{ label: 'Findings', value: 'failures' },
 	{ label: 'Current work', value: 'work' },
 	{ label: 'Verified files', value: 'verified' },
 	{ label: 'Repair / download', value: 'repair' },
@@ -67,8 +67,8 @@ export function assessKnownArchiveEvidence(
 	if (evidence === null) return 'unknown';
 	const { checkpoints, objects } = evidence.totals;
 	if (checkpoints.mismatchedCheckpoints > 0) return 'integrity_failure';
-	if (objects.workerIssueObjects > 0) return 'scanner_issue';
 	if (objects.remoteFailureObjects > 0) return 'remote_retry';
+	if (objects.workerIssueObjects > 0) return 'scanner_issue';
 	if (objects.activeObjects > 0) return 'checking';
 	if (objects.pendingObjects > 0 || checkpoints.pendingCheckpoints > 0) {
 		return 'waiting';

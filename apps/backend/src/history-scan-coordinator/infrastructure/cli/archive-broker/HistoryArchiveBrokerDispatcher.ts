@@ -65,9 +65,11 @@ function assertPublishableBrokerJob(job: HistoryArchiveBrokerJob): void {
 export function calculateHistoryArchiveBrokerAvailableCapacity(
 	highWatermark: number,
 	numAckPending: number,
-	numPending: number
+	numPending: number,
+	numStreamMessages: number
 ): number {
-	const occupied = Math.max(0, numAckPending) + Math.max(0, numPending);
+	const consumerOccupied = Math.max(0, numAckPending) + Math.max(0, numPending);
+	const occupied = Math.max(consumerOccupied, Math.max(0, numStreamMessages));
 	return Math.max(0, highWatermark - occupied);
 }
 
@@ -307,7 +309,7 @@ export class HistoryArchiveBrokerDispatcher {
 				jetStream,
 				this.repository,
 				this.config.subject,
-				this.config.highWatermark,
+				await this.getAvailableCapacity(),
 				this.config.maximumPriority,
 				this.config.canonicalFirstRoot
 			);
@@ -390,14 +392,15 @@ export class HistoryArchiveBrokerDispatcher {
 
 	private async getAvailableCapacity(): Promise<number> {
 		const manager = this.requireManager();
-		const consumerInfo = await manager.consumers.info(
-			this.config.stream,
-			this.config.consumer
-		);
+		const [consumerInfo, streamInfo] = await Promise.all([
+			manager.consumers.info(this.config.stream, this.config.consumer),
+			manager.streams.info(this.config.stream)
+		]);
 		return calculateHistoryArchiveBrokerAvailableCapacity(
 			this.config.highWatermark,
 			consumerInfo.num_ack_pending,
-			consumerInfo.num_pending
+			consumerInfo.num_pending,
+			streamInfo.state.messages
 		);
 	}
 

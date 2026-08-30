@@ -77,8 +77,11 @@ export const reserveBrokerJobsSql = `
 				or (${historyArchiveSchedulableObjectSql('object')})
 			)
 			and ready.priority <= $3::smallint
-			and ($4::text is null or
-				ready."archiveUrlIdentity" = $4::text)
+			and (
+				ready."dispatchToken" is not null
+				or $4::text is null
+				or ready."archiveUrlIdentity" = $4::text
+			)
 			and not exists (
 				select 1
 				from "history_archive_object_host_throttle" throttle

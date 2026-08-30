@@ -8,6 +8,10 @@ export interface PublicScanErrorDTO {
 
 const localHistoryCachePathPattern =
 	/(["'])?\/home\/observe\/stellarbeat-data\/Observer\/history-bucket-cache(?:\/[A-Za-z0-9._-]+)*\1?/g;
+const localFilesystemPathPattern =
+	/(?:file:\/\/)?\/(?:home|var|tmp|etc|opt|srv|mnt|root|usr)\/[^\s'"<>)]*/g;
+const windowsFilesystemPathPattern = /[A-Za-z]:\\[^\s'"<>)]*/g;
+const credentialedHttpUrlPattern = /(https?:\/\/)([^/@\s]+)@/g;
 
 export function mapScanErrorToPublicDTO(error: ScanError): PublicScanErrorDTO {
 	return {
@@ -18,10 +22,12 @@ export function mapScanErrorToPublicDTO(error: ScanError): PublicScanErrorDTO {
 }
 
 export function sanitizePublicInfrastructureText(value: string): string {
-	return value.replace(
-		localHistoryCachePathPattern,
-		'[history bucket cache path]'
-	);
+	const sanitized = value
+		.replace(localHistoryCachePathPattern, '[history bucket cache path]')
+		.replace(localFilesystemPathPattern, '[internal path]')
+		.replace(windowsFilesystemPathPattern, '[internal path]')
+		.replace(credentialedHttpUrlPattern, '$1[credentials]@');
+	return sanitized.slice(0, 4_096);
 }
 
 function sanitizeScanErrorMessage(error: ScanError): string {

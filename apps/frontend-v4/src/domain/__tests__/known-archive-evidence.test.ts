@@ -13,12 +13,12 @@ import {
 } from '../known-archive-evidence';
 
 describe('known archive evidence', () => {
-	it('keeps worker issues separate from simultaneous remote retries', () => {
+	it('prioritizes a remote archive failure over simultaneous worker issues', () => {
 		const evidence = createEvidence({
 			objects: { remoteFailureObjects: 1, workerIssueObjects: 2 }
 		});
 
-		expect(assessKnownArchiveEvidence(evidence)).toBe('scanner_issue');
+		expect(assessKnownArchiveEvidence(evidence)).toBe('remote_retry');
 	});
 
 	it('treats checkpoint mismatches as integrity evidence', () => {
@@ -125,14 +125,14 @@ describe('known archive evidence', () => {
 			nodePublicKeys: ['GNODE', 'GNODE'],
 			objects: source.totals.objects,
 			scannerOwnedState: null,
-		sequentialCoverage: {
-			advertisedLatestCheckpointLedger: 127,
-			blockedCheckpointLedger: null,
-			blocker: null,
-			lastContinuouslyVerifiedCheckpointLedger: 63,
-			nextCheckpointLedger: 127,
-			status: 'advancing' as const
-		}
+			sequentialCoverage: {
+				advertisedLatestCheckpointLedger: 127,
+				blockedCheckpointLedger: null,
+				blocker: null,
+				lastContinuouslyVerifiedCheckpointLedger: 63,
+				nextCheckpointLedger: 127,
+				status: 'advancing' as const
+			}
 		};
 		const archiveEvidence: PublicHistoryArchiveEvidence = {
 			archiveUrl: root.archiveUrl,
