@@ -13,7 +13,6 @@ import {
 } from '../../../domain/full-history/FullHistoryCanonicalOperation.js';
 import {
 	fullHistoryBaseAccountId,
-	FullHistoryOperationAccountReferenceCoverageError,
 	isFullHistoryOperationAccountReferenceRole,
 	type FullHistoryOperationAccountReferenceView
 } from '../../../domain/full-history/FullHistoryCanonicalOperationAccountReference.js';
@@ -63,14 +62,6 @@ export async function findCanonicalOperations(
 ): Promise<FullHistoryOperationPage> {
 	validateQuery(query);
 	const coverage = await getCanonicalOperationCoverage(dataSource, networkHash);
-	if (
-		(query.accountId !== undefined ||
-			query.sourceAccountId !== undefined ||
-			query.destinationAccountId !== undefined) &&
-		!coverage.accountReferencesComplete
-	) {
-		throw new FullHistoryOperationAccountReferenceCoverageError();
-	}
 	const rows = await dataSource.query<FullHistoryOperationRow[]>(
 		`
 			select

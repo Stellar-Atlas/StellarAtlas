@@ -1043,7 +1043,7 @@
 						"name": "accountId",
 						"in": "query",
 						"required": false,
-						"description": "Canonical envelope participant. G matches the base key of G and M references; M matches the exact muxed identity. Queries are unavailable until account-reference coverage is complete.",
+						"description": "Canonical envelope participant. G matches the base key of G and M references; M matches the exact muxed identity. Results are limited to indexed account-reference batches; inspect accountReferencesComplete and the first/last account-reference coverage ledgers in the response.",
 						"schema": { "type": "string" }
 					},
 					{

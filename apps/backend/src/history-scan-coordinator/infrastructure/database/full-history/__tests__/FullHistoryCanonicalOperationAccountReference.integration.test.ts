@@ -8,10 +8,7 @@ import {
 	startDisposablePostgres,
 	type DisposablePostgres
 } from '@test-support/DisposablePostgres.js';
-import {
-	fullHistoryOperationAccountReference,
-	FullHistoryOperationAccountReferenceCoverageError
-} from '../../../../domain/full-history/FullHistoryCanonicalOperationAccountReference.js';
+import { fullHistoryOperationAccountReference } from '../../../../domain/full-history/FullHistoryCanonicalOperationAccountReference.js';
 import { hashNetworkPassphrase } from '../../../../domain/full-history/FullHistoryCanonicalTypes.js';
 import { insertBatch } from '../FullHistoryCanonicalBatchStore.js';
 import { storeCanonicalBaseFacts } from '../FullHistoryCanonicalFactStore.js';
@@ -184,7 +181,7 @@ describe('canonical operation account references', () => {
 		});
 	});
 
-	it('refuses account queries until every canonical batch has reference coverage', async () => {
+	it('returns partial account queries with explicit incomplete coverage', async () => {
 		const input = await seedFullHistoryCheckpoint(dataSource, {
 			batchNumber: 6_002,
 			networkPassphrase: 'Incomplete operation reference coverage network'
@@ -202,7 +199,12 @@ describe('canonical operation account references', () => {
 				accountId: input.operations[0]!.sourceAccount,
 				limit: 10
 			})
-		).rejects.toBeInstanceOf(FullHistoryOperationAccountReferenceCoverageError);
+		).resolves.toMatchObject({
+			coverage: {
+				accountReferencesComplete: false
+			},
+			records: []
+		});
 		await expect(
 			repository.findOperations(input.networkPassphrase, { limit: 10 })
 		).resolves.toMatchObject({
