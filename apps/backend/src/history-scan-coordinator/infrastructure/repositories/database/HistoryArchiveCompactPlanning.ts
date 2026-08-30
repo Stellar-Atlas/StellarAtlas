@@ -1,5 +1,6 @@
 import type { EntityManager, Repository } from 'typeorm';
 import type { HistoryArchiveObject } from '@history-scan-coordinator/domain/history-archive-object/HistoryArchiveObject.js';
+import { historyArchiveSequentialPrefetchDepth } from '@history-scan-coordinator/domain/history-archive-object/HistoryArchiveObjectPlanningPolicy.js';
 import { historyArchiveObjectOpenSequentialCohortSql } from './HistoryArchiveSequentialChainSql.js';
 import { notifyHistoryArchiveReadyWork } from './HistoryArchiveObjectReadyQueue.js';
 
@@ -99,7 +100,8 @@ export async function materializeNextCompactCheckpointPlans(
 	);
 	if (validCheckpoints.length === 0) return 0;
 	const [result] = (await manager.query(targetedCompactCheckpointPlanSql, [
-		JSON.stringify(validCheckpoints)
+		JSON.stringify(validCheckpoints),
+		historyArchiveSequentialPrefetchDepth
 	])) as readonly {
 		readonly planned: number | string;
 		readonly ready?: number | string;
@@ -129,7 +131,7 @@ export async function materializeNextCompactCheckpointPlan(
 	]);
 }
 
-const targetedCompactCheckpointPlanSql = `
+export const targetedCompactCheckpointPlanSql = `
 	with completed as materialized (
 		select distinct input."archiveUrlIdentity", input."checkpointLedger"
 		from jsonb_to_recordset($1::jsonb) as input(
@@ -177,10 +179,25 @@ const targetedCompactCheckpointPlanSql = `
 			)
 		order by cursor."archiveUrlIdentity"
 		for update of cursor
-	), source as materialized (
-		select candidate.*,
-			lpad(to_hex(candidate.checkpoint_ledger), 8, '0') as checkpoint_hex
+	), object_candidate as materialized (
+		select candidate.*
 		from candidate
+		union
+		select candidate."archiveUrlIdentity",
+			candidate."latestCheckpointLedger",
+			candidate."lastForwardCheckpointLedger",
+			least(
+				candidate."latestCheckpointLedger",
+				candidate.checkpoint_ledger + (($2::integer - 1) * 64)
+			)::integer as checkpoint_ledger,
+			candidate."archiveUrl", candidate."hostIdentity"
+		from candidate
+		where candidate.checkpoint_ledger < candidate."latestCheckpointLedger"
+	), source as materialized (
+		select object_candidate.*,
+			lpad(to_hex(object_candidate.checkpoint_ledger), 8, '0')
+				as checkpoint_hex
+		from object_candidate
 	), inserted as (
 		insert into "history_archive_object_queue" (
 			"remoteId", "archiveUrl", "archiveUrlIdentity", "hostIdentity",
@@ -209,19 +226,20 @@ const targetedCompactCheckpointPlanSql = `
 				"executionDispositionAt" = now(),
 				"updatedAt" = now()
 			where "history_archive_object_queue".status = 'pending'
-		returning "remoteId", "archiveUrlIdentity"
+		returning "remoteId", "archiveUrlIdentity",
+			"checkpointLedger"
 	), advanced as (
 		update "history_archive_checkpoint_scan_cursor" cursor
-		set "latestCheckpointLedger" = source."latestCheckpointLedger",
+		set "latestCheckpointLedger" = candidate."latestCheckpointLedger",
 			"lastForwardCheckpointLedger" = case
-				when source.checkpoint_ledger = source."latestCheckpointLedger"
-					then source.checkpoint_ledger
+				when candidate.checkpoint_ledger = candidate."latestCheckpointLedger"
+					then candidate.checkpoint_ledger
 				else cursor."lastForwardCheckpointLedger"
 			end,
-			"nextHistoricalCheckpointLedger" = source.checkpoint_ledger + 64,
+			"nextHistoricalCheckpointLedger" = candidate.checkpoint_ledger + 64,
 			"updatedAt" = now()
-		from source
-		where cursor."archiveUrlIdentity" = source."archiveUrlIdentity"
+		from candidate
+		where cursor."archiveUrlIdentity" = candidate."archiveUrlIdentity"
 		returning cursor."archiveUrlIdentity"
 	), ready as (
 		insert into "history_archive_object_ready" (
@@ -231,7 +249,11 @@ const targetedCompactCheckpointPlanSql = `
 		select inserted."remoteId", inserted."archiveUrlIdentity", 2, now(),
 			now(), now()
 		from inserted
-		join advanced using ("archiveUrlIdentity")
+		join candidate
+			on candidate."archiveUrlIdentity" = inserted."archiveUrlIdentity"
+			and candidate.checkpoint_ledger = inserted."checkpointLedger"
+		join advanced
+			on advanced."archiveUrlIdentity" = inserted."archiveUrlIdentity"
 		on conflict ("objectRemoteId") do nothing
 		returning "objectRemoteId"
 	)

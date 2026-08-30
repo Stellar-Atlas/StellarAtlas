@@ -95,6 +95,14 @@ describe('compact history archive checkpoint planning', () => {
 			readonly objectUrl: string;
 			readonly status: string;
 		}[];
+		const [prefetched] = (await dataSource.query(
+			`select count(*)::integer as count
+			 from "history_archive_object_queue"
+			 where "archiveUrlIdentity" = $1
+				and "objectType" = 'checkpoint-state'
+				and "checkpointLedger" in (127, 959)`,
+			[root.archiveUrlIdentity]
+		)) as readonly { readonly count: number }[];
 		const [ready] = (await dataSource.query(
 			`select ready.priority
 			 from "history_archive_object_ready" ready
@@ -113,7 +121,8 @@ describe('compact history archive checkpoint planning', () => {
 		)) as readonly { readonly nextHistoricalCheckpointLedger: number }[];
 
 		expect(planTableBefore?.absent).toBe(true);
-		expect([first, second]).toEqual([1, 0]);
+		expect([first, second]).toEqual([2, 0]);
+		expect(prefetched?.count).toBe(2);
 		expect(checkpoint).toEqual({
 			dependencyReady: true,
 			executionDisposition: 'executable',
