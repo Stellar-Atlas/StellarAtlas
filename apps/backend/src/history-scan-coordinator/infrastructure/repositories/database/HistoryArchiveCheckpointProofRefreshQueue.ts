@@ -57,7 +57,8 @@ export const maximumTargetedProofRefreshBatchSize = historyArchiveConsumerCount;
 const defaultConsecutiveProofRefreshTransactionSize = 16;
 const maximumConsecutiveProofRefreshTransactionSize = 64;
 
-const maximumSetBasedConsecutiveProofRefreshWaveSize = 4;
+const maximumSetBasedConsecutiveProofRefreshWaveSize =
+	maximumConsecutiveProofRefreshTransactionSize;
 export function normalizeConsecutiveProofRefreshTransactionSize(
 	value: number
 ): number {

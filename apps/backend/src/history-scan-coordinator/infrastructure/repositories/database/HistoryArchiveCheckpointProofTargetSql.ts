@@ -76,6 +76,8 @@ export const historyArchiveCheckpointProofBatchTargetCtesSql = `
 			and queue."checkpointLedger" = target."checkpointLedger"
 			and queue."leaseToken" = target."leaseToken"
 			and queue.generation = target.generation
+			and queue."evidenceUpdatedAt" =
+				target."evidenceUpdatedAt"
 		where queue."leaseUntil" > now()
 		order by target."archiveUrlIdentity", target."checkpointLedger"
 		for update of queue

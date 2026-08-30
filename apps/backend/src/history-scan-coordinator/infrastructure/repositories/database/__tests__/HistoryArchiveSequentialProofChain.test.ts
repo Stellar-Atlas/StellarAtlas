@@ -17,6 +17,8 @@ import {
 	historyArchiveCheckpointProofTerminalReadySql
 } from '../HistoryArchiveCheckpointProofReadinessSql.js';
 import { targetedCompactCheckpointPlanSql } from '../HistoryArchiveCompactPlanning.js';
+import { historyArchiveCheckpointProofBatchTargetCtesSql } from '../HistoryArchiveCheckpointProofTargetSql.js';
+import { historyArchiveCheckpointProofBatchQueuedUpsertSql } from '../HistoryArchiveCheckpointProofUpsertSql.js';
 import { historyArchiveObjectOpenSequentialCohortSql } from '../HistoryArchiveSequentialChainSql.js';
 
 describe('sequential history archive proof chain', () => {
@@ -97,6 +99,18 @@ describe('sequential history archive proof chain', () => {
 		);
 		expect(targetedCompactCheckpointPlanSql).toContain(
 			'completed."checkpointLedger" + 64 as checkpoint_ledger'
+		);
+		expect(historyArchiveCheckpointProofBatchTargetCtesSql).toContain(
+			'queue."leaseToken" = target."leaseToken"'
+		);
+		expect(historyArchiveCheckpointProofBatchTargetCtesSql).toContain(
+			'queue.generation = target.generation'
+		);
+		expect(historyArchiveCheckpointProofBatchTargetCtesSql).toContain(
+			'target."evidenceUpdatedAt"'
+		);
+		expect(historyArchiveCheckpointProofBatchQueuedUpsertSql).not.toContain(
+			'from locked_targets target'
 		);
 	});
 

@@ -207,15 +207,20 @@ function buildHistoryArchiveCheckpointProofRefreshSql(
 		group by source."archiveUrlIdentity", source."checkpointLedger",
 			source.first_expected_ledger, source.last_expected_ledger,
 			(fact->>'ledger')::bigint
-	), hash_by_sequence as (
+	), hash_by_sequence as not materialized (
 		select source."archiveUrlIdentity", source."checkpointLedger",
-			source."objectType", (fact->>'ledger')::bigint as ledger,
-			min(fact->>'hash') as hash
+			(fact->>'ledger')::bigint as ledger,
+			min(fact->>'hash') filter (
+				where source."objectType" = 'transactions'
+			) as transaction_hash,
+			min(fact->>'hash') filter (
+				where source."objectType" = 'results'
+			) as result_hash
 		from target_category_sources source
 		cross join lateral jsonb_array_elements(source.facts) fact
 		where source."objectType" in ('transactions', 'results')
 		group by source."archiveUrlIdentity", source."checkpointLedger",
-			source."objectType", (fact->>'ledger')::bigint
+			(fact->>'ledger')::bigint
 	), previous_boundary as materialized (
 		select
 			range."archiveUrlIdentity", range."checkpointLedger",
@@ -239,7 +244,7 @@ function buildHistoryArchiveCheckpointProofRefreshSql(
 				order by ledger
 			) as previous_fact_hash
 		from ledger_by_sequence ledger
-	), chain_rollup as (
+	), chain_rollup as materialized (
 		select
 			ledger."archiveUrlIdentity", ledger."checkpointLedger",
 			max(state.bucket_list_hash) as checkpoint_bucket_list_hash,
@@ -258,14 +263,14 @@ function buildHistoryArchiveCheckpointProofRefreshSql(
 				as checkpoint_bucket_matches,
 			bool_or(state.bucket_list_hash is not null) as has_checkpoint_bucket_fact,
 			bool_and(case
-				when transactions.hash is not null then
-					ledger.transaction_set_hash = transactions.hash
+				when hashes.transaction_hash is not null then
+					ledger.transaction_set_hash = hashes.transaction_hash
 				else ${emptyTransactionSetMatchesSql('ledger')}
 					and ${emptyTransactionResultSetMatchesSql('ledger')}
 			end) as transactions_match,
 			bool_and(case
-				when results.hash is not null then
-					ledger.transaction_result_hash = results.hash
+				when hashes.result_hash is not null then
+					ledger.transaction_result_hash = hashes.result_hash
 				else ${emptyTransactionResultSetMatchesSql('ledger')}
 			end) as results_match,
 			bool_and(case
@@ -284,16 +289,10 @@ function buildHistoryArchiveCheckpointProofRefreshSql(
 				and previous.boundary_hash_count = 1
 			)) as predecessor_boundary_valid
 		from ledger_chain ledger
-		left join hash_by_sequence transactions
-			on transactions."archiveUrlIdentity" = ledger."archiveUrlIdentity"
-			and transactions."checkpointLedger" = ledger."checkpointLedger"
-			and transactions."objectType" = 'transactions'
-			and transactions.ledger = ledger.ledger
-		left join hash_by_sequence results
-			on results."archiveUrlIdentity" = ledger."archiveUrlIdentity"
-			and results."checkpointLedger" = ledger."checkpointLedger"
-			and results."objectType" = 'results'
-			and results.ledger = ledger.ledger
+		left join hash_by_sequence hashes
+			on hashes."archiveUrlIdentity" = ledger."archiveUrlIdentity"
+			and hashes."checkpointLedger" = ledger."checkpointLedger"
+			and hashes.ledger = ledger.ledger
 		left join checkpoint_state_facts state
 			on state."archiveUrlIdentity" = ledger."archiveUrlIdentity"
 			and state."checkpointLedger" = ledger."checkpointLedger"
@@ -301,7 +300,7 @@ function buildHistoryArchiveCheckpointProofRefreshSql(
 			on previous."archiveUrlIdentity" = ledger."archiveUrlIdentity"
 			and previous."checkpointLedger" = ledger."checkpointLedger"
 		group by ledger."archiveUrlIdentity", ledger."checkpointLedger"
-	), category_rollup as (
+	), category_rollup as materialized (
 		select
 			range."archiveUrlIdentity", range."checkpointLedger",
 			range.expected_ledger_count,
@@ -370,7 +369,7 @@ function buildHistoryArchiveCheckpointProofRefreshSql(
 			and bucket."objectType" = 'bucket'
 			and bucket."bucketHash" = expected."bucketHash"
 		group by expected."archiveUrlIdentity", expected."checkpointLedger"
-	), ${historyArchiveCheckpointProofFailureCtesSql}, proof_rollup as (
+	), ${historyArchiveCheckpointProofFailureCtesSql}, proof_rollup as materialized (
 		select category.*,
 			chain.checkpoint_bucket_list_hash, chain.network_passphrase,
 			chain.max_protocol_version, chain.ledger_bucket_list_hash,

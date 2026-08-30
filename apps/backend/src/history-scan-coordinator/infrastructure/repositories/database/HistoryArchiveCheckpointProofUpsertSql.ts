@@ -256,20 +256,9 @@ const scalarQueuedLeaseSql = `
 							and queue."evidenceUpdatedAt" = $7::timestamptz
 `;
 
-const batchQueuedLeaseSql = `
-							and exists (
-								select 1
-								from locked_targets target
-								where target."archiveUrlIdentity" =
-									queue."archiveUrlIdentity"
-									and target."checkpointLedger" =
-										queue."checkpointLedger"
-									and target."leaseToken" = queue."leaseToken"
-									and target.generation = queue.generation
-								and target."evidenceUpdatedAt" =
-									queue."evidenceUpdatedAt"
-							)
-`;
+// Batch admission already validates and locks the queue lease. Re-scanning
+// locked_targets once per conflict makes pending-proof upserts quadratic.
+const batchQueuedLeaseSql = '';
 const queuedPendingTransitionSql = `
 				or (
 					"history_archive_checkpoint_proof".status = 'pending'
