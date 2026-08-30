@@ -1,8 +1,8 @@
 [Unit]
 Description=StellarAtlas history scanner on host-native storage
 After=network-online.target stellaratlas-postgresql.service stellaratlas-nats.service stellaratlas-history-archive-dispatcher.service
-Wants=network-online.target
-Requires=stellaratlas-postgresql.service stellaratlas-nats.service stellaratlas-history-archive-dispatcher.service
+Wants=network-online.target stellaratlas-history-archive-dispatcher.service
+Requires=stellaratlas-postgresql.service stellaratlas-nats.service
 RequiresMountsFor=/mnt/bulk/stellarbeat-data/Observer/history-bucket-cache
 
 [Service]

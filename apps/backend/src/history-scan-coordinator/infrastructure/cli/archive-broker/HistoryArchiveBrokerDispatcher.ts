@@ -45,6 +45,7 @@ const { Client: PostgresClient } = createRequire(import.meta.url)('pg') as {
 
 const orphanedPublishedReplayAgeMs = 30_000;
 const orphanedPublishedReplayIntervalMs = 15_000;
+const brokerStreamRetentionHeadroomFactor = 2;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
 	return typeof value === 'object' && value !== null;
@@ -69,8 +70,19 @@ export function calculateHistoryArchiveBrokerAvailableCapacity(
 	numStreamMessages: number
 ): number {
 	const consumerOccupied = Math.max(0, numAckPending) + Math.max(0, numPending);
-	const occupied = Math.max(consumerOccupied, Math.max(0, numStreamMessages));
-	return Math.max(0, highWatermark - occupied);
+	const consumerCapacity = Math.max(0, highWatermark - consumerOccupied);
+	const streamCapacity = Math.max(
+		0,
+		calculateHistoryArchiveBrokerStreamMessageLimit(highWatermark) -
+			Math.max(0, numStreamMessages)
+	);
+	return Math.min(consumerCapacity, streamCapacity);
+}
+
+export function calculateHistoryArchiveBrokerStreamMessageLimit(
+	highWatermark: number
+): number {
+	return highWatermark * brokerStreamRetentionHeadroomFactor;
 }
 
 export function shouldReplayOrphanedPublishedJobs(
@@ -358,7 +370,9 @@ export class HistoryArchiveBrokerDispatcher {
 			max_age: 0,
 			max_bytes: 64 * 1024 * 1024,
 			max_msg_size: 64 * 1024,
-			max_msgs: this.config.highWatermark,
+			max_msgs: calculateHistoryArchiveBrokerStreamMessageLimit(
+				this.config.highWatermark
+			),
 			name: this.config.stream,
 			num_replicas: 1,
 			retention: RetentionPolicy.Workqueue,

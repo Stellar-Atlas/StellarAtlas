@@ -1,6 +1,7 @@
 import type { HistoryArchiveBrokerJob } from '../../../repositories/database/HistoryArchiveBrokerFrontierRepository.js';
 import {
 	calculateHistoryArchiveBrokerAvailableCapacity,
+	calculateHistoryArchiveBrokerStreamMessageLimit,
 	publishHistoryArchiveBrokerJobs,
 	shouldReplayOrphanedPublishedJobs
 } from '../HistoryArchiveBrokerDispatcher.js';
@@ -30,10 +31,20 @@ describe('calculateHistoryArchiveBrokerAvailableCapacity', () => {
 		);
 	});
 
-	it('uses actual stream occupancy when acknowledged gaps retain messages', () => {
+	it('allows acknowledged stream-retention headroom without starving consumers', () => {
 		expect(
 			calculateHistoryArchiveBrokerAvailableCapacity(240, 112, 0, 189)
-		).toBe(51);
+		).toBe(128);
+	});
+
+	it('preserves backpressure when stream-retention headroom is exhausted', () => {
+		expect(
+			calculateHistoryArchiveBrokerAvailableCapacity(240, 112, 0, 470)
+		).toBe(10);
+	});
+
+	it('derives stream-retention headroom from the worker high watermark', () => {
+		expect(calculateHistoryArchiveBrokerStreamMessageLimit(240)).toBe(480);
 	});
 });
 
