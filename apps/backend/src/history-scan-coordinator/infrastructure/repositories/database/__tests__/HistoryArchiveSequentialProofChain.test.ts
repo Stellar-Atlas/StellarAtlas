@@ -3,6 +3,7 @@ import { HistoryArchiveSequentialProofChainMigration1785540000000 } from '../../
 import { calculateHistoryArchiveSequentialPrefetchDepth } from '../../../../domain/history-archive-object/HistoryArchiveObjectPlanningPolicy.js';
 import {
 	claimHistoryArchiveCheckpointProofRefreshes,
+	claimLockedContiguousProofRefreshSql,
 	claimLockedSequentialProofRefreshSql,
 	claimProofRefreshSql,
 	claimSequentialProofRefreshSql,
@@ -11,7 +12,11 @@ import {
 	normalizeConsecutiveProofRefreshTransactionSize,
 	normalizeTargetedProofRefreshBatchSize
 } from '../HistoryArchiveCheckpointProofRefreshQueue.js';
-import { historyArchiveCheckpointProofTerminalReadySql } from '../HistoryArchiveCheckpointProofReadinessSql.js';
+import {
+	historyArchiveCheckpointProofEvidenceTerminalSql,
+	historyArchiveCheckpointProofTerminalReadySql
+} from '../HistoryArchiveCheckpointProofReadinessSql.js';
+import { targetedCompactCheckpointPlanSql } from '../HistoryArchiveCompactPlanning.js';
 import { historyArchiveObjectOpenSequentialCohortSql } from '../HistoryArchiveSequentialChainSql.js';
 
 describe('sequential history archive proof chain', () => {
@@ -20,6 +25,8 @@ describe('sequential history archive proof chain', () => {
 			historyArchiveCheckpointProofTerminalReadySql('candidate');
 		const queueReadiness =
 			historyArchiveCheckpointProofTerminalReadySql('queue');
+		const evidenceReadiness =
+			historyArchiveCheckpointProofEvidenceTerminalSql('candidate');
 
 		expect(candidateReadiness).toContain(
 			"predecessor_proof.status = 'verified'"
@@ -30,6 +37,8 @@ describe('sequential history archive proof chain', () => {
 		expect(candidateReadiness).toContain("('ledger'::text)");
 		expect(candidateReadiness).toContain("('transactions'::text)");
 		expect(candidateReadiness).toContain("('results'::text)");
+		expect(evidenceReadiness).not.toContain('predecessor_proof');
+		expect(evidenceReadiness).toContain('candidate."checkpointLedger"');
 		expect(enqueueProofRefreshesSql).toContain(candidateReadiness);
 		expect(enqueueProofRefreshesSql).toMatch(
 			/candidate\."checkpointLedger"\s*=\s*chain_cursor\."nextHistoricalCheckpointLedger" - 64/
@@ -74,6 +83,20 @@ describe('sequential history archive proof chain', () => {
 		);
 		expect(claimLockedSequentialProofRefreshSql).toContain(
 			'for update of queue skip locked'
+		);
+		expect(claimLockedContiguousProofRefreshSql).toContain('generate_series(');
+		expect(claimLockedContiguousProofRefreshSql).toContain(
+			'bool_and(terminal) over'
+		);
+		expect(claimLockedContiguousProofRefreshSql).toContain(
+			historyArchiveCheckpointProofEvidenceTerminalSql('candidate')
+		);
+		expect(targetedCompactCheckpointPlanSql).toContain('row_number() over');
+		expect(targetedCompactCheckpointPlanSql).toContain(
+			'completed."firstCheckpointLedger" + 64'
+		);
+		expect(targetedCompactCheckpointPlanSql).toContain(
+			'completed."checkpointLedger" + 64 as checkpoint_ledger'
 		);
 	});
 

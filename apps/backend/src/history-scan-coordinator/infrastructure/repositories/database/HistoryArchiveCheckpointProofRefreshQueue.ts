@@ -19,7 +19,10 @@ import {
 	historyArchiveCheckpointProofPendingSourceBatchEnrichmentSql,
 	historyArchiveCheckpointProofPendingSourceEnrichmentSql
 } from './HistoryArchiveCheckpointProofPostRefreshSql.js';
-import { historyArchiveCheckpointProofTerminalReadySql } from './HistoryArchiveCheckpointProofReadinessSql.js';
+import {
+	historyArchiveCheckpointProofEvidenceTerminalSql,
+	historyArchiveCheckpointProofTerminalReadySql
+} from './HistoryArchiveCheckpointProofReadinessSql.js';
 import {
 	lockHistoryArchiveRootTransition,
 	lockHistoryArchiveRootTransitions
@@ -54,6 +57,7 @@ export const maximumTargetedProofRefreshBatchSize = historyArchiveConsumerCount;
 const defaultConsecutiveProofRefreshTransactionSize = 16;
 const maximumConsecutiveProofRefreshTransactionSize = 64;
 
+const maximumSetBasedConsecutiveProofRefreshWaveSize = 4;
 export function normalizeConsecutiveProofRefreshTransactionSize(
 	value: number
 ): number {
@@ -437,6 +441,27 @@ async function refreshClaimedHistoryArchiveCheckpointProofWave(
 	return deletedRows.length;
 }
 
+async function claimLockedContiguousProofRefreshes(
+	manager: EntityManager,
+	initialTargets: readonly ClaimedHistoryArchiveCheckpointProofRefresh[],
+	limit: number
+): Promise<readonly ClaimedHistoryArchiveCheckpointProofRefresh[]> {
+	if (limit <= 1 || initialTargets.length === 0) {
+		return [];
+	}
+	const rows = (await manager.query(claimLockedContiguousProofRefreshSql, [
+		JSON.stringify(initialTargets),
+		limit
+	])) as readonly (Omit<
+		ClaimedHistoryArchiveCheckpointProofRefresh,
+		'generation'
+	> & { readonly generation: number | string })[];
+	return rows.map((row) => ({
+		...row,
+		generation: Number(row.generation)
+	}));
+}
+
 async function claimLockedSequentialProofRefreshes(
 	manager: EntityManager,
 	archiveUrlIdentities: readonly string[]
@@ -466,11 +491,47 @@ export async function refreshClaimedHistoryArchiveCheckpointProofs(
 		await manager.query(`set local statement_timeout = '60s'`);
 		await lockHistoryArchiveRootTransitions(manager, archiveUrlIdentities);
 
-		const initialCompleted =
-			await refreshClaimedHistoryArchiveCheckpointProofWave(manager, targets);
 		const transactionSize = consecutiveProofRefreshTransactionSize();
-		for (let index = 1; index < transactionSize; index += 1) {
-			const savepoint = 'history_archive_proof_chain_' + index;
+		if (targets.length !== 1) {
+			const initialCompleted =
+				await refreshClaimedHistoryArchiveCheckpointProofWave(manager, targets);
+			for (let index = 1; index < transactionSize; index += 1) {
+				const savepoint = 'history_archive_proof_chain_' + index;
+				await manager.query('savepoint ' + savepoint);
+				try {
+					const nextTargets = await claimLockedSequentialProofRefreshes(
+						manager,
+						archiveUrlIdentities
+					);
+					if (nextTargets.length === 0) {
+						await manager.query('release savepoint ' + savepoint);
+						break;
+					}
+					await refreshClaimedHistoryArchiveCheckpointProofWave(
+						manager,
+						nextTargets
+					);
+					await manager.query('release savepoint ' + savepoint);
+				} catch {
+					await manager.query('rollback to savepoint ' + savepoint);
+					await manager.query('release savepoint ' + savepoint);
+					break;
+				}
+			}
+			return initialCompleted;
+		}
+
+		const firstContiguousTargets = await claimLockedContiguousProofRefreshes(
+			manager,
+			targets,
+			Math.min(maximumSetBasedConsecutiveProofRefreshWaveSize, transactionSize)
+		);
+		const firstWave = [...targets, ...firstContiguousTargets];
+		await refreshClaimedHistoryArchiveCheckpointProofWave(manager, firstWave);
+		let processed = firstWave.length;
+		let wave = 1;
+		while (processed < transactionSize) {
+			const savepoint = 'history_archive_proof_vector_' + wave;
 			await manager.query('savepoint ' + savepoint);
 			try {
 				const nextTargets = await claimLockedSequentialProofRefreshes(
@@ -481,18 +542,27 @@ export async function refreshClaimedHistoryArchiveCheckpointProofs(
 					await manager.query('release savepoint ' + savepoint);
 					break;
 				}
-				await refreshClaimedHistoryArchiveCheckpointProofWave(
-					manager,
-					nextTargets
+				const vectorSize = Math.min(
+					maximumSetBasedConsecutiveProofRefreshWaveSize,
+					transactionSize - processed
 				);
+				const contiguousTargets = await claimLockedContiguousProofRefreshes(
+					manager,
+					nextTargets,
+					vectorSize
+				);
+				const vector = [...nextTargets, ...contiguousTargets];
+				await refreshClaimedHistoryArchiveCheckpointProofWave(manager, vector);
+				processed += vector.length;
 				await manager.query('release savepoint ' + savepoint);
 			} catch {
 				await manager.query('rollback to savepoint ' + savepoint);
 				await manager.query('release savepoint ' + savepoint);
 				break;
 			}
+			wave++;
 		}
-		return initialCompleted;
+		return targets.length;
 	});
 }
 
@@ -596,6 +666,91 @@ order by "archiveUrlIdentity", "checkpointLedger"
 	select count(*)::integer as count from enqueued
 `;
 
+export const claimLockedContiguousProofRefreshSql = `
+	with initial_targets as materialized (
+		select distinct target."archiveUrlIdentity", target."checkpointLedger"
+		from jsonb_to_recordset($1::jsonb) as target(
+			"archiveUrlIdentity" text,
+			"checkpointLedger" integer
+		)
+	), candidates as materialized (
+		select initial."archiveUrlIdentity",
+			initial."checkpointLedger" + (step.step_index * 64)::integer
+				as "checkpointLedger"
+		from initial_targets initial
+		join "history_archive_checkpoint_scan_cursor" chain_cursor
+			on chain_cursor."archiveUrlIdentity" =
+				initial."archiveUrlIdentity"
+			and initial."checkpointLedger" =
+				chain_cursor."nextHistoricalCheckpointLedger" - 64
+		cross join lateral generate_series(
+			1,
+			greatest($2::integer - 1, 0)
+		) step(step_index)
+		where initial."checkpointLedger" + (step.step_index * 64) <=
+			chain_cursor."latestCheckpointLedger"
+	), evaluated as materialized (
+		select candidate.*,
+			${historyArchiveCheckpointProofEvidenceTerminalSql('candidate')}
+				as terminal
+		from candidates candidate
+	), ordered as materialized (
+		select evaluated.*,
+			bool_and(terminal) over (
+				partition by "archiveUrlIdentity"
+				order by "checkpointLedger"
+				rows between unbounded preceding and current row
+			) as contiguous
+		from evaluated
+	), claimable as materialized (
+		select ordered."archiveUrlIdentity", ordered."checkpointLedger"
+		from ordered
+		where ordered.contiguous
+			and not exists (
+				select 1
+				from "history_archive_checkpoint_proof" proof
+				where proof."archiveUrlIdentity" =
+					ordered."archiveUrlIdentity"
+					and proof."checkpointLedger" =
+						ordered."checkpointLedger"
+					and proof.status = 'verified'
+			)
+		order by ordered."archiveUrlIdentity", ordered."checkpointLedger"
+	), claimed as (
+		insert into "history_archive_checkpoint_proof_refresh_queue" (
+			"archiveUrlIdentity",
+			"checkpointLedger",
+			"evidenceUpdatedAt",
+			generation,
+			"requestedAt",
+			"nextAttemptAt",
+			"updatedAt",
+			"leaseToken",
+			"leaseUntil",
+			"lastAttemptAt"
+		)
+		select claimable."archiveUrlIdentity", claimable."checkpointLedger",
+			now(), 1, now(), now(), now(), gen_random_uuid(),
+			now() + interval '2 minutes', now()
+		from claimable
+		on conflict ("archiveUrlIdentity", "checkpointLedger") do update
+		set "leaseToken" = gen_random_uuid(),
+			"leaseUntil" = now() + interval '2 minutes',
+			"lastAttemptAt" = now(),
+			"updatedAt" = now()
+		where
+			history_archive_checkpoint_proof_refresh_queue."nextAttemptAt" <= now()
+			and (
+				history_archive_checkpoint_proof_refresh_queue."leaseUntil" is null
+				or history_archive_checkpoint_proof_refresh_queue."leaseUntil" <= now()
+			)
+		returning *
+	)
+	select "archiveUrlIdentity", "checkpointLedger",
+		"evidenceUpdatedAt"::text as "evidenceUpdatedAt", generation, "leaseToken"
+	from claimed
+	order by "archiveUrlIdentity", "checkpointLedger"
+`;
 // Enqueue admission already proves terminal readiness. The sequential claimant
 // binds that durable intent to the one open checkpoint per root instead of
 // repeating the full object-and-bucket readiness graph for every queue claim.

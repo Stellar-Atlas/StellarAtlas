@@ -1,11 +1,11 @@
 export function historyArchiveCheckpointProofTerminalReadySql(
-	targetAlias: string
+	targetAlias: string,
+	requirePredecessorProof = true
 ): string {
 	const archiveUrlIdentity = `${targetAlias}."archiveUrlIdentity"`;
 	const checkpointLedger = `${targetAlias}."checkpointLedger"`;
 
-	return `(
-        (
+	const predecessorReadySql = `(
             ${checkpointLedger} = 63
             or exists (
                 select 1
@@ -14,7 +14,10 @@ export function historyArchiveCheckpointProofTerminalReadySql(
                     and predecessor_proof."checkpointLedger" = ${checkpointLedger} - 64
                     and predecessor_proof.status = 'verified'
             )
-        )
+        )`;
+
+	return `(
+        ${requirePredecessorProof ? predecessorReadySql : 'true'}
         and (
             exists (
                 select 1
@@ -86,4 +89,10 @@ export function historyArchiveCheckpointProofTerminalReadySql(
             )
         )
     )`;
+}
+
+export function historyArchiveCheckpointProofEvidenceTerminalSql(
+	targetAlias: string
+): string {
+	return historyArchiveCheckpointProofTerminalReadySql(targetAlias, false);
 }

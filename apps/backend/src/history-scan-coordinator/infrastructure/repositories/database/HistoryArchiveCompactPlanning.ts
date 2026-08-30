@@ -140,6 +140,28 @@ export const targetedCompactCheckpointPlanSql = `
 		)
 		where input."archiveUrlIdentity" <> ''
 			and input."checkpointLedger" >= 63
+	), verified_completed as materialized (
+		select completed.*,
+			min(completed."checkpointLedger") over (
+				partition by completed."archiveUrlIdentity"
+			) as "firstCheckpointLedger",
+			row_number() over (
+				partition by completed."archiveUrlIdentity"
+				order by completed."checkpointLedger"
+			) as sequence
+		from completed
+		join "history_archive_checkpoint_proof" proof
+			on proof."archiveUrlIdentity" = completed."archiveUrlIdentity"
+			and proof."checkpointLedger" = completed."checkpointLedger"
+			and proof.status = 'verified'
+	), contiguous_completed as materialized (
+		select "archiveUrlIdentity",
+			min("firstCheckpointLedger") as "firstCheckpointLedger",
+			max("checkpointLedger") as "checkpointLedger"
+		from verified_completed
+		where "checkpointLedger" =
+			"firstCheckpointLedger" + ((sequence - 1) * 64)
+		group by "archiveUrlIdentity"
 	), candidate as materialized (
 		select cursor."archiveUrlIdentity",
 			greatest(
@@ -149,9 +171,9 @@ export const targetedCompactCheckpointPlanSql = `
 				)::integer
 			) as "latestCheckpointLedger",
 			cursor."lastForwardCheckpointLedger",
-			cursor."nextHistoricalCheckpointLedger" as checkpoint_ledger,
+			completed."checkpointLedger" + 64 as checkpoint_ledger,
 			root."archiveUrl", root."hostIdentity"
-		from completed
+		from contiguous_completed completed
 		join "history_archive_checkpoint_scan_cursor" cursor
 			on cursor."archiveUrlIdentity" =
 				completed."archiveUrlIdentity"
@@ -165,13 +187,9 @@ export const targetedCompactCheckpointPlanSql = `
 			and root."objectKey" = 'root'
 			and root.status = 'verified'
 			and state."archiveUrlIdentity" = regexp_replace(root."archiveUrl", '/+$', '')
-		join "history_archive_checkpoint_proof" proof
-			on proof."archiveUrlIdentity" = cursor."archiveUrlIdentity"
-			and proof."checkpointLedger" = completed."checkpointLedger"
-			and proof.status = 'verified'
 		where cursor."nextHistoricalCheckpointLedger" =
-				completed."checkpointLedger" + 64
-			and cursor."nextHistoricalCheckpointLedger" <= greatest(
+				completed."firstCheckpointLedger" + 64
+			and completed."checkpointLedger" + 64 <= greatest(
 				cursor."latestCheckpointLedger",
 				(
 					floor((state."currentLedger" + 1)::numeric / 64) * 64 - 1
