@@ -62,8 +62,10 @@ export async function findCanonicalOperations(
 ): Promise<FullHistoryOperationPage> {
 	validateQuery(query);
 	const coverage = await getCanonicalOperationCoverage(dataSource, networkHash);
+	const accountReferenceDriver = buildAccountReferenceDriver(query);
 	const rows = await dataSource.query<FullHistoryOperationRow[]>(
 		`
+			${accountReferenceDriver.commonTableExpression}
 			select
 				account_reference."accountReferences",
 				reference_coverage."reference_decoder_version" as
@@ -91,7 +93,7 @@ export async function findCanonicalOperations(
 				operation."source_account_origin" as "sourceAccountOrigin",
 				operation."transaction_hash" as "transactionHash",
 				operation."transaction_index" as "transactionIndex"
-			from "full_history_operation" operation
+			${accountReferenceDriver.fromClause}
 			join "full_history_ingestion_batch" batch
 				on batch.id = operation."batch_id"
 				and batch."network_passphrase_hash" =
@@ -220,6 +222,65 @@ export async function findCanonicalOperations(
 		coverage,
 		records: rows.slice(0, query.limit).map(mapOperationRow),
 		truncated: rows.length > query.limit
+	};
+}
+
+interface AccountReferenceDriver {
+	readonly commonTableExpression: string;
+	readonly fromClause: string;
+}
+
+function buildAccountReferenceDriver(
+	query: FullHistoryOperationQuery
+): AccountReferenceDriver {
+	let account: string | undefined;
+	let parameter: '$6' | '$7' | '$8' | undefined;
+	let rolePredicate = '';
+	if (query.sourceAccountId !== undefined) {
+		account = query.sourceAccountId;
+		parameter = '$7';
+		rolePredicate = 'and driver_reference."role" = \'effective_source\'';
+	} else if (query.destinationAccountId !== undefined) {
+		account = query.destinationAccountId;
+		parameter = '$8';
+		rolePredicate = 'and driver_reference."role" = \'destination\'';
+	} else if (query.accountId !== undefined) {
+		account = query.accountId;
+		parameter = '$6';
+	}
+
+	if (account === undefined || parameter === undefined) {
+		return {
+			commonTableExpression: '',
+			fromClause: 'from "full_history_operation" operation'
+		};
+	}
+
+	const accountColumn = account.startsWith('M')
+		? '"account_id"'
+		: '"base_account_id"';
+	return {
+		commonTableExpression: [
+			'with account_reference_driver as materialized (',
+			'\tselect distinct',
+			'\t\tdriver_reference."network_passphrase_hash",',
+			'\t\tdriver_reference."transaction_hash",',
+			'\t\tdriver_reference."operation_index"',
+			'\tfrom "full_history_operation_account_reference"',
+			'\t\tdriver_reference',
+			'\twhere driver_reference."network_passphrase_hash" = $1',
+			`\t\t${rolePredicate}`,
+			`\t\tand driver_reference.${accountColumn} = ${parameter}`,
+			')'
+		].join('\n'),
+		fromClause: [
+			'from account_reference_driver driver',
+			'join "full_history_operation" operation',
+			'\ton operation."network_passphrase_hash" =',
+			'\t\tdriver."network_passphrase_hash"',
+			'\tand operation."transaction_hash" = driver."transaction_hash"',
+			'\tand operation."operation_index" = driver."operation_index"'
+		].join('\n')
 	};
 }
 
