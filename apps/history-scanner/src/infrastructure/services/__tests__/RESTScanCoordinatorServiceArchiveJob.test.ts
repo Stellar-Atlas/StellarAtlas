@@ -40,7 +40,7 @@ describe('RESTScanCoordinatorService archive object claims', () => {
 		);
 	});
 
-	it('does not acknowledge missing terminal object updates', async () => {
+	it('acknowledges a missing broker terminal update only', async () => {
 		const httpService = mock<HttpService>();
 		const service = new RESTScanCoordinatorService(
 			httpService,
@@ -78,12 +78,12 @@ describe('RESTScanCoordinatorService archive object claims', () => {
 			2
 		);
 
-		expect(failureResult.isErr()).toBe(true);
+		expect(failureResult.isOk()).toBe(true);
 		expect(completionResult.isErr()).toBe(true);
 		expect(releaseResult.isErr()).toBe(true);
 	});
 
-	it('does not acknowledge terminal-update HTTP 404 errors', async () => {
+	it('acknowledges broker terminal-update HTTP 404 errors only', async () => {
 		const httpService = mock<HttpService>();
 		const service = new RESTScanCoordinatorService(
 			httpService,
@@ -118,7 +118,16 @@ describe('RESTScanCoordinatorService archive object claims', () => {
 			'object-1',
 			2
 		);
+		const brokerCompletionResult = await service.completeHistoryArchiveObject(
+			'object-1',
+			{
+				claimAttempt: 2,
+				executionId: 'execution-1',
+				scheduler: 'broker'
+			}
+		);
 
+		expect(brokerCompletionResult.isOk()).toBe(true);
 		expect(failureResult.isErr()).toBe(true);
 		expect(completionResult.isErr()).toBe(true);
 		expect(releaseResult.isErr()).toBe(true);

@@ -44,6 +44,26 @@ const coordinatorWriteOptions: HttpOptions = {
 	socketTimeoutMs: 30_000
 };
 
+function isIdempotentMissingBrokerTerminalUpdate(
+	action: 'heartbeat' | 'complete' | 'fail' | 'release',
+	data: Record<string, unknown>,
+	status: number | undefined,
+	responseData: unknown
+): boolean {
+	return (
+		(action === 'complete' || action === 'fail') &&
+		data.scheduler === 'broker' &&
+		typeof data.executionId === 'string' &&
+		data.executionId.length > 0 &&
+		typeof data.claimAttempt === 'number' &&
+		Number.isSafeInteger(data.claimAttempt) &&
+		data.claimAttempt > 0 &&
+		status === 404 &&
+		isObject(responseData) &&
+		responseData.error === 'Archive object job not found'
+	);
+}
+
 @injectable()
 export class RESTScanCoordinatorService implements ScanCoordinatorService {
 	constructor(
@@ -434,6 +454,19 @@ export class RESTScanCoordinatorService implements ScanCoordinatorService {
 			const responseData = isHttpError(response.error)
 				? response.error.response?.data
 				: undefined;
+			const responseStatus = isHttpError(response.error)
+				? response.error.response?.status
+				: undefined;
+			if (
+				isIdempotentMissingBrokerTerminalUpdate(
+					action,
+					data,
+					responseStatus,
+					responseData
+				)
+			) {
+				return ok(undefined);
+			}
 			const responseDetail =
 				isObject(responseData) && typeof responseData.error === 'string'
 					? ': ' + responseData.error
@@ -447,6 +480,16 @@ export class RESTScanCoordinatorService implements ScanCoordinatorService {
 		}
 
 		if (response.value.status !== 204) {
+			if (
+				isIdempotentMissingBrokerTerminalUpdate(
+					action,
+					data,
+					response.value.status,
+					response.value.data
+				)
+			) {
+				return ok(undefined);
+			}
 			return err(new CoordinatorServiceError(errorMessage));
 		}
 

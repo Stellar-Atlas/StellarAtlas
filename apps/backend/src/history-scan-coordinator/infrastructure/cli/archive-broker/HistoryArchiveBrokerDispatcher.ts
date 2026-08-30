@@ -94,10 +94,9 @@ export async function publishHistoryArchiveBrokerJobs(
 					Buffer.from(
 						JSON.stringify({ executionId: job.executionId, job: job.job })
 					),
-					// The database execution ID fences terminal writes. Reusing it as
-					// JetStream's deduplication ID suppresses required recovery
-					// deliveries after a database or dispatcher restart.
-					{ timeout: 5_000 }
+					// The execution UUID is stable across crash replay. JetStream keeps
+					// one delivery while the database token fences stale completions.
+					{ msgID: job.executionId, timeout: 5_000 }
 				);
 				return job.executionId;
 			})
