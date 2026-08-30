@@ -3,6 +3,7 @@ import {
 	HistoryArchiveBrokerFrontierRepository,
 	reserveBrokerJobsSql
 } from '../HistoryArchiveBrokerFrontierRepository.js';
+import { materializeOrderedCheckpointPrefetch } from '../HistoryArchiveCheckpointPrefetch.js';
 import { historyArchiveExecutionReconciliationLockName } from '../HistoryArchiveObjectExecutionReconciler.js';
 
 describe('HistoryArchiveBrokerFrontierRepository', () => {
@@ -68,5 +69,30 @@ describe('HistoryArchiveBrokerFrontierRepository', () => {
 			expect.stringContaining('pg_try_advisory_xact_lock'),
 			[historyArchiveExecutionReconciliationLockName]
 		);
+	});
+
+	it('re-admits existing pending checkpoints inside the bounded prefetch window', async () => {
+		const query = jest.fn().mockResolvedValueOnce([{ planned: 2, ready: 0 }]);
+		const manager = { query } as unknown as EntityManager;
+
+		await materializeOrderedCheckpointPrefetch(
+			manager,
+			'http://history.stellar.org/prd/core-live/core_live_001'
+		);
+
+		const sql = (query.mock.calls[0]?.[0] as string).replace(/\s+/g, ' ');
+		expect(sql).toContain(
+			'on conflict ("archiveUrlIdentity", "objectType", "objectKey") do update'
+		);
+		expect(sql).toContain(
+			'"history_archive_object_queue"."executionDisposition" is distinct from \'executable\''
+		);
+		expect(sql).toContain(
+			'where "history_archive_object_queue".status = \'pending\''
+		);
+		expect(query.mock.calls[0]?.[1]).toEqual([
+			expect.any(Number),
+			'http://history.stellar.org/prd/core-live/core_live_001'
+		]);
 	});
 });
