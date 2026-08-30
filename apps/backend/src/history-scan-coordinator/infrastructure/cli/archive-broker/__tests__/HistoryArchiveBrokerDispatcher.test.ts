@@ -1,7 +1,8 @@
 import type { HistoryArchiveBrokerJob } from '../../../repositories/database/HistoryArchiveBrokerFrontierRepository.js';
 import {
 	calculateHistoryArchiveBrokerAvailableCapacity,
-	publishHistoryArchiveBrokerJobs
+	publishHistoryArchiveBrokerJobs,
+	shouldReplayOrphanedPublishedJobs
 } from '../HistoryArchiveBrokerDispatcher.js';
 
 function createJob(executionId: string): HistoryArchiveBrokerJob {
@@ -33,6 +34,20 @@ describe('calculateHistoryArchiveBrokerAvailableCapacity', () => {
 		expect(
 			calculateHistoryArchiveBrokerAvailableCapacity(240, 112, 0, 189)
 		).toBe(51);
+	});
+});
+
+describe('shouldReplayOrphanedPublishedJobs', () => {
+	it('replays stranded reservations while unrelated stream work remains', () => {
+		expect(shouldReplayOrphanedPublishedJobs(161, 30_000, 15_000)).toBe(true);
+	});
+
+	it('waits when no broker capacity is available', () => {
+		expect(shouldReplayOrphanedPublishedJobs(0, 30_000, 15_000)).toBe(false);
+	});
+
+	it('honors the replay interval', () => {
+		expect(shouldReplayOrphanedPublishedJobs(161, 14_999, 15_000)).toBe(false);
 	});
 });
 

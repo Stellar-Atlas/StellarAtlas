@@ -73,6 +73,14 @@ export function calculateHistoryArchiveBrokerAvailableCapacity(
 	return Math.max(0, highWatermark - occupied);
 }
 
+export function shouldReplayOrphanedPublishedJobs(
+	availableCapacity: number,
+	now: number,
+	nextReplayAt: number
+): boolean {
+	return availableCapacity > 0 && now >= nextReplayAt;
+}
+
 export async function publishHistoryArchiveBrokerJobs(
 	jetStream: Pick<JetStreamClient, 'publish'>,
 	repository: Pick<HistoryArchiveBrokerFrontierRepository, 'resetPublished'>,
@@ -210,8 +218,11 @@ export class HistoryArchiveBrokerDispatcher {
 	): Promise<boolean> {
 		const now = Date.now();
 		if (
-			availableCapacity !== this.config.highWatermark ||
-			now < this.nextOrphanedPublishedReplayAt
+			!shouldReplayOrphanedPublishedJobs(
+				availableCapacity,
+				now,
+				this.nextOrphanedPublishedReplayAt
+			)
 		) {
 			return false;
 		}
