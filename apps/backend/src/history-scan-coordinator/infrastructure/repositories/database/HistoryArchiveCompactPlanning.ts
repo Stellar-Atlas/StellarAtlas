@@ -1,11 +1,12 @@
 import type { EntityManager, Repository } from 'typeorm';
 import type { HistoryArchiveObject } from '@history-scan-coordinator/domain/history-archive-object/HistoryArchiveObject.js';
 import { historyArchiveSequentialPrefetchDepth } from '@history-scan-coordinator/domain/history-archive-object/HistoryArchiveObjectPlanningPolicy.js';
-import { historyArchiveObjectOpenSequentialCohortSql } from './HistoryArchiveSequentialChainSql.js';
 import { notifyHistoryArchiveReadyWork } from './HistoryArchiveObjectReadyQueue.js';
 
 const maximumCheckpointFanoutBatch = 24;
 const maximumCheckpointCursorBatch = 128;
+const checkpointFanoutLedgerSpan =
+	(historyArchiveSequentialPrefetchDepth - 1) * 64;
 
 export async function findVerifiedCheckpointsNeedingFanout(
 	repository: Repository<HistoryArchiveObject>,
@@ -21,6 +22,15 @@ export async function findVerifiedCheckpointsNeedingFanout(
 
 	return await repository
 		.createQueryBuilder('object')
+		.innerJoin(
+			'history_archive_checkpoint_scan_cursor',
+			'fanout_cursor',
+			`fanout_cursor."archiveUrlIdentity" = object."archiveUrlIdentity"
+				and object."checkpointLedger" between
+					fanout_cursor."nextHistoricalCheckpointLedger" - 64
+					and fanout_cursor."nextHistoricalCheckpointLedger" - 64 +
+						${checkpointFanoutLedgerSpan}`
+		)
 		.where('object.objectType = :objectType', {
 			objectType: 'checkpoint-state'
 		})
@@ -74,7 +84,6 @@ export async function findVerifiedCheckpointsNeedingFanout(
 				)
 			)`
 		)
-		.andWhere(historyArchiveObjectOpenSequentialCohortSql('object'))
 		.orderBy('object.checkpointLedger', 'ASC', 'NULLS LAST')
 		.addOrderBy('object.verifiedAt', 'ASC', 'NULLS LAST')
 		.addOrderBy('object.id', 'ASC')
