@@ -89,15 +89,13 @@ export async function publishHistoryArchiveBrokerJobs(
 		const priorityClass = ordered.slice(classStart, classEnd);
 		const results = await Promise.allSettled(
 			priorityClass.map(async (job) => {
-				await jetStream.publish(
-					subject,
-					Buffer.from(
-						JSON.stringify({ executionId: job.executionId, job: job.job })
-					),
-					// The execution UUID is stable across crash replay. JetStream keeps
-					// one delivery while the database token fences stale completions.
-					{ msgID: job.executionId, timeout: 5_000 }
+				const payload = Buffer.from(
+					JSON.stringify({ executionId: job.executionId, job: job.job })
 				);
+				// The database execution UUID fences crash-replay duplicates.
+				// Publish every reservation: message-ID deduplication can suppress a
+				// valid replay after its original delivery was already acknowledged.
+				await jetStream.publish(subject, payload, { timeout: 5_000 });
 				return job.executionId;
 			})
 		);

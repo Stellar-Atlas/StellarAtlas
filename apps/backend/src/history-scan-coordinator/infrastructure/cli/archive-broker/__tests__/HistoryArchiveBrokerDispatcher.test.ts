@@ -58,7 +58,7 @@ describe('publishHistoryArchiveBrokerJobs', () => {
 		expect(publish).toHaveBeenCalledWith(
 			'archive.jobs',
 			expect.any(Uint8Array),
-			{ msgID: acceptedId, timeout: 5_000 }
+			{ timeout: 5_000 }
 		);
 		expect(resetPublished).toHaveBeenCalledTimes(1);
 		expect(resetPublished).toHaveBeenCalledWith([rejectedId]);
