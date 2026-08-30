@@ -387,6 +387,43 @@ describe('CompleteHistoryArchiveObject', () => {
 		}
 	});
 
+	it('activates a prefetched checkpoint batch without plan-table writes', async () => {
+		const first = createCheckpointObject(
+			127,
+			'11111111-1111-4111-8111-111111111111'
+		);
+		const second = createCheckpointObject(
+			191,
+			'22222222-2222-4222-8222-222222222222'
+		);
+		for (const object of [first, second]) {
+			object.status = 'verified';
+			object.verificationFacts = {
+				checkpointHistoryArchiveState: createArchiveMetadata(
+					object.checkpointLedger!
+				)
+			};
+		}
+		const useCase = new CompleteHistoryArchiveObject(
+			objectRepository,
+			stateRepository,
+			eventRecorder,
+			checkpointProofRepository
+		);
+
+		await expect(
+			useCase.reconcileCheckpointFanouts([first, second])
+		).resolves.toBe(2);
+		expect(
+			objectRepository.materializeCheckpointDependencyBatch
+		).toHaveBeenCalledWith([first.remoteId, second.remoteId]);
+		expect(objectRepository.activateObjects).toHaveBeenCalledTimes(1);
+		expect(objectRepository.planObjects).not.toHaveBeenCalled();
+		expect(
+			objectRepository.markCheckpointDescendantsPlannedBatch
+		).toHaveBeenCalledWith([first.remoteId, second.remoteId]);
+	});
+
 	it('materializes and refreshes a legacy verified checkpoint once', async () => {
 		const archiveObject = createCheckpointObject();
 		archiveObject.status = 'verified';
@@ -575,7 +612,10 @@ function createRootObject(): HistoryArchiveObject {
 	});
 }
 
-function createCheckpointObject(checkpointLedger = 127): HistoryArchiveObject {
+function createCheckpointObject(
+	checkpointLedger = 127,
+	remoteId = '11111111-1111-4111-8111-111111111111'
+): HistoryArchiveObject {
 	const checkpointHex = checkpointLedger.toString(16).padStart(8, '0');
 
 	return new HistoryArchiveObject({
@@ -586,7 +626,7 @@ function createCheckpointObject(checkpointLedger = 127): HistoryArchiveObject {
 		objectOrder: 10,
 		objectType: 'checkpoint-state',
 		objectUrl: `https://history.example.com/archive/history/${checkpointHex.slice(0, 2)}/${checkpointHex.slice(2, 4)}/${checkpointHex.slice(4, 6)}/history-${checkpointHex}.json`,
-		remoteId: '11111111-1111-4111-8111-111111111111',
+		remoteId,
 		status: 'scanning'
 	});
 }

@@ -3,7 +3,6 @@ import type { HistoryArchiveObject } from '@history-scan-coordinator/domain/hist
 import { historyArchiveObjectOpenSequentialCohortSql } from './HistoryArchiveSequentialChainSql.js';
 import { notifyHistoryArchiveReadyWork } from './HistoryArchiveObjectReadyQueue.js';
 
-const maximumPlanRows = 4_096;
 const maximumCheckpointFanoutBatch = 24;
 const maximumCheckpointCursorBatch = 128;
 
@@ -17,23 +16,7 @@ export async function findVerifiedCheckpointsNeedingFanout(
 	);
 	if (requestedLimit === 0) return [];
 
-	const [pressure] = (await repository.manager.query(
-		`
-			select count(*)::integer as count
-			from (
-				select 1
-				from "history_archive_object_plan"
-				limit $1
-			) bounded
-		`,
-		[maximumPlanRows]
-	)) as readonly { readonly count: number | string }[];
-	const planRows = Number(pressure?.count ?? maximumPlanRows);
-	const availableCheckpoints = Math.floor(
-		Math.max(0, maximumPlanRows - planRows) / 64
-	);
-	const safeLimit = Math.min(requestedLimit, Math.max(1, availableCheckpoints));
-	if (safeLimit === 0) return [];
+	const safeLimit = requestedLimit;
 
 	return await repository
 		.createQueryBuilder('object')

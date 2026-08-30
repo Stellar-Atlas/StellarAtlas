@@ -458,7 +458,7 @@ export class CompleteHistoryArchiveObject {
 		);
 		if (eligible.length === 0) return 0;
 		await Promise.all(
-			eligible.map((object) => this.requestCheckpointFanoutEvent(object, false))
+			eligible.map((object) => this.requestCheckpointFanoutEvent(object, true))
 		);
 		return eligible.length;
 	}
