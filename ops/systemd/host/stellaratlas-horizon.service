@@ -14,7 +14,7 @@ WorkingDirectory=/mnt/bulk/stellarbeat-data/horizon
 Environment=NETWORK=pubnet
 Environment=PORT=18000
 Environment=ADMIN_PORT=18001
-Environment=INGEST=true
+Environment=INGEST=false
 Environment=APPLY_MIGRATIONS=true
 Environment=DISABLE_TX_SUB=true
 Environment=HISTORY_RETENTION_COUNT=0
