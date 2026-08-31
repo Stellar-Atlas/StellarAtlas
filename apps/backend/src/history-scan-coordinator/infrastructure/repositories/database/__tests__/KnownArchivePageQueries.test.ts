@@ -304,7 +304,7 @@ describe('known archive page queries', () => {
 			[[root], root, 'ledger', snapshotAt, cursor.at, cursor.remoteId, 11]
 		);
 		expect(knownArchiveFailureCountSql('remote')).toContain(
-			'"failureChannel" = \'archive_evidence\''
+			"\"failureChannel\" in ('archive_evidence', 'archive_availability')"
 		);
 		expect(knownArchiveFailureCountSql('infrastructure')).toContain(
 			'"failureChannel" = \'scanner_issue\''

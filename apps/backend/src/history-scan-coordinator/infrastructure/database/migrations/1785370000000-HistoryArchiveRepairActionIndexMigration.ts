@@ -2,11 +2,8 @@ import type { MigrationInterface, QueryRunner } from 'typeorm';
 
 const indexName = 'idx_history_archive_object_repair_action';
 
-export class HistoryArchiveRepairActionIndexMigration1785370000000
-	implements MigrationInterface
-{
-	readonly name =
-		'HistoryArchiveRepairActionIndexMigration1785370000000';
+export class HistoryArchiveRepairActionIndexMigration1785370000000 implements MigrationInterface {
+	readonly name = 'HistoryArchiveRepairActionIndexMigration1785370000000';
 	readonly transaction = false;
 
 	async up(queryRunner: QueryRunner): Promise<void> {
@@ -19,7 +16,7 @@ export class HistoryArchiveRepairActionIndexMigration1785370000000
 				"objectKey"
 			)
 			where status = 'failed'
-				and coalesce("failureChannel", 'archive_evidence') = 'archive_evidence'
+				and coalesce("failureChannel", 'archive_evidence') in ('archive_evidence', 'archive_availability')
 				and (
 					"httpStatus" in (404, 410)
 					or (
@@ -44,8 +41,6 @@ export class HistoryArchiveRepairActionIndexMigration1785370000000
 	}
 
 	async down(queryRunner: QueryRunner): Promise<void> {
-		await queryRunner.query(
-			`drop index concurrently if exists "${indexName}"`
-		);
+		await queryRunner.query(`drop index concurrently if exists "${indexName}"`);
 	}
 }

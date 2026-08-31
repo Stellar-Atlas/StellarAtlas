@@ -96,7 +96,7 @@ export function knownArchiveFailureCountSql(
 		kind === 'remote' ? '"remoteFailureObjects"' : '"scannerIssueObjects"';
 	const evidencePredicate =
 		kind === 'remote'
-			? `archive_object."failureChannel" = 'archive_evidence'`
+			? `archive_object."failureChannel" in ('archive_evidence', 'archive_availability')`
 			: `archive_object."failureChannel" = 'scanner_issue'`;
 
 	return `
@@ -194,7 +194,7 @@ function knownArchiveFailureCandidateFilterSql(
 ): string {
 	const evidencePredicate =
 		kind === 'remote'
-			? `archive_object."failureChannel" = 'archive_evidence'`
+			? `archive_object."failureChannel" in ('archive_evidence', 'archive_availability')`
 			: `archive_object."failureChannel" = 'scanner_issue'`;
 
 	return `archive_object."archiveUrlIdentity" =

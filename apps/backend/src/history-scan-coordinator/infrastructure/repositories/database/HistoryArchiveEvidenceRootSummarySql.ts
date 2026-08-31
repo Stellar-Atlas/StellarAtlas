@@ -49,7 +49,7 @@ export const archiveEvidenceSummaryBatchSql = `
 			count(*) filter (where status = 'verified') as verified,
 			count(*) filter (
 				where status = 'failed'
-					and "failureChannel" = 'archive_evidence'
+					and "failureChannel" in ('archive_evidence', 'archive_availability')
 			) as remote_failure,
 			count(*) filter (
 				where status = 'failed'
@@ -179,7 +179,7 @@ export const archiveEvidenceSummaryTriggerFunctionSql = `
 					- (old.status = 'verified')::integer,
 				"remoteFailureObjects" = "remoteFailureObjects" - coalesce((
 					old.status = 'failed'
-					and old."failureChannel" = 'archive_evidence'
+					and old."failureChannel" in ('archive_evidence', 'archive_availability')
 				), false)::integer,
 				"workerIssueObjects" = "workerIssueObjects" - coalesce((
 					old.status = 'failed'
@@ -210,7 +210,7 @@ export const archiveEvidenceSummaryTriggerFunctionSql = `
 				(new.status = 'scanning')::integer,
 				(new.status = 'verified')::integer,
 				coalesce((new.status = 'failed'
-					and new."failureChannel" = 'archive_evidence'), false)::integer,
+					and new."failureChannel" in ('archive_evidence', 'archive_availability')), false)::integer,
 				coalesce((new.status = 'failed'
 					and new."failureChannel" = 'scanner_issue'), false)::integer,
 				(new."objectType" = 'bucket')::integer,

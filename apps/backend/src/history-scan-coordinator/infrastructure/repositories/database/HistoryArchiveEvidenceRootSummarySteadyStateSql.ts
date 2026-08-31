@@ -58,9 +58,9 @@ export const archiveEvidenceRootSummarySteadyStateTriggerFunctionSql = `
 					- (old.status = 'verified')::integer,
 				"remoteFailureObjects" = "remoteFailureObjects"
 					+ coalesce((new.status = 'failed' and new."failureChannel"
-						= 'archive_evidence'), false)::integer
+						in ('archive_evidence', 'archive_availability')), false)::integer
 					- coalesce((old.status = 'failed' and old."failureChannel"
-						= 'archive_evidence'), false)::integer,
+						in ('archive_evidence', 'archive_availability')), false)::integer,
 				"workerIssueObjects" = "workerIssueObjects"
 					+ coalesce((new.status = 'failed' and new."failureChannel"
 						= 'scanner_issue'), false)::integer
@@ -93,7 +93,7 @@ export const archiveEvidenceRootSummarySteadyStateTriggerFunctionSql = `
 					- (old.status = 'verified')::integer,
 				"remoteFailureObjects" = "remoteFailureObjects" - coalesce((
 					old.status = 'failed'
-					and old."failureChannel" = 'archive_evidence'
+					and old."failureChannel" in ('archive_evidence', 'archive_availability')
 				), false)::integer,
 				"workerIssueObjects" = "workerIssueObjects" - coalesce((
 					old.status = 'failed'
@@ -127,7 +127,7 @@ export const archiveEvidenceRootSummarySteadyStateTriggerFunctionSql = `
 				(new.status = 'scanning')::integer,
 				(new.status = 'verified')::integer,
 				coalesce((new.status = 'failed' and new."failureChannel"
-					= 'archive_evidence'), false)::integer,
+					in ('archive_evidence', 'archive_availability')), false)::integer,
 				coalesce((new.status = 'failed' and new."failureChannel"
 					= 'scanner_issue'), false)::integer,
 				(new."objectType" = 'bucket')::integer,

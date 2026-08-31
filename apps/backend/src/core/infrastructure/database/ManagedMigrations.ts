@@ -82,6 +82,7 @@ import { HistoryArchiveCheckpointProofStatementRollupCorrectionMigration17855900
 import { FullHistoryLedgerTwoBootstrapMigration1785600000000 } from '@history-scan-coordinator/infrastructure/database/migrations/1785600000000-FullHistoryLedgerTwoBootstrapMigration.js';
 import { ParsedTransactionMaintenanceMigration1785610000000 } from '@history-scan-coordinator/infrastructure/database/migrations/1785610000000-ParsedTransactionMaintenanceMigration.js';
 import { HistoryArchiveCheckpointSubstitutionMigration1788139000000 } from '@history-scan-coordinator/infrastructure/database/migrations/1788139000000-HistoryArchiveCheckpointSubstitutionMigration.js';
+import { HistoryArchiveAvailabilityEvidenceMigration1788140000000 } from '@history-scan-coordinator/infrastructure/database/migrations/1788140000000-HistoryArchiveAvailabilityEvidenceMigration.js';
 
 // The production database was imported with a partial legacy migration ledger.
 // Explicit registration prevents TypeORM from replaying pre-baseline migrations.
@@ -169,5 +170,6 @@ export const managedMigrations = [
 	HistoryArchiveCheckpointProofStatementRollupCorrectionMigration1785590000000,
 	FullHistoryLedgerTwoBootstrapMigration1785600000000,
 	ParsedTransactionMaintenanceMigration1785610000000,
-	HistoryArchiveCheckpointSubstitutionMigration1788139000000
+	HistoryArchiveCheckpointSubstitutionMigration1788139000000,
+	HistoryArchiveAvailabilityEvidenceMigration1788140000000
 ] as const;

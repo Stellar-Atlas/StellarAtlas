@@ -131,7 +131,7 @@ export const knownArchiveEvidenceFutureObjectSql = `
 			as "verifiedObjects",
 		count(*) filter (
 			where archive_object.status = 'failed'
-				and archive_object."failureChannel" = 'archive_evidence'
+				and archive_object."failureChannel" in ('archive_evidence', 'archive_availability')
 		) as "remoteFailureObjects",
 		count(*) filter (
 			where archive_object.status = 'failed'
