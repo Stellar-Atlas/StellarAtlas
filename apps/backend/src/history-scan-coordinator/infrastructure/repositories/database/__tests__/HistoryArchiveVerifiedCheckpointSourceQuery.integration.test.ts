@@ -133,7 +133,7 @@ describe('verified checkpoint replacement source query', () => {
 		expect(result).toEqual(
 			expect.arrayContaining([
 				expect.objectContaining({
-					anchorKind: 'multi-source',
+					anchorKind: 'canonical-proof',
 					archiveUrlIdentity: validRoot,
 					candidateRemoteId: valid.remoteId,
 					checkpointLedger,
@@ -279,6 +279,7 @@ describe('verified checkpoint replacement source query', () => {
 		'revokes candidates when the bound %s input changes after proof',
 		async (key) => {
 			const fixture = await saveConsensusFixture(dataSource);
+			await invalidateProofAttestations(dataSource, [corroboratingRoot]);
 			await expect(
 				findVerifiedCheckpointObjectSources(
 					dataSource.manager,
@@ -308,6 +309,7 @@ describe('verified checkpoint replacement source query', () => {
 
 	it('requires a new proof when bucket dependencies appear after evaluation', async () => {
 		const fixture = await saveConsensusFixture(dataSource);
+		await invalidateProofAttestations(dataSource, [corroboratingRoot]);
 		const bucketHash = 'b'.repeat(64);
 		await expect(
 			findVerifiedCheckpointObjectSources(
@@ -364,6 +366,20 @@ describe('verified checkpoint replacement source query', () => {
 		).resolves.toHaveLength(2);
 	});
 });
+
+async function invalidateProofAttestations(
+	dataSource: DataSource,
+	archiveUrlIdentities: readonly string[]
+): Promise<void> {
+	await dataSource.query(
+		`insert into history_archive_checkpoint_proof_attestation_invalidation
+			("attestationId", reason, evidence)
+		 select id, 'invalidated-test-proof', '{}'::jsonb
+		 from history_archive_checkpoint_proof_attestation
+		 where "archiveUrlIdentity" = any($1::text[])`,
+		[archiveUrlIdentities]
+	);
+}
 
 async function saveConsensusFixture(dataSource: DataSource): Promise<{
 	readonly source: HistoryArchiveObject;

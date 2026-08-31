@@ -63,7 +63,7 @@ describe('archive repair OpenAPI contract', () => {
 				'repairManifest'
 			])
 		);
-		expect(action?.properties?.knownGoodSources?.maxItems).toBe(5);
+		expect(action?.properties?.knownGoodSources?.maxItems).toBe(3);
 		expect(action?.properties?.repairArtifact?.allOf?.[0]?.$ref).toBe(
 			'#/components/schemas/HistoryArchiveRepairArtifactAvailabilityV1'
 		);
@@ -71,9 +71,7 @@ describe('archive repair OpenAPI contract', () => {
 			'#/components/schemas/HistoryArchiveRepairManifestV1'
 		);
 		const manifest = document.components.schemas.HistoryArchiveRepairManifestV1;
-		expect(manifest?.description).toContain(
-			'HTTP and transport failures never produce one'
-		);
+		expect(manifest?.description).toContain('never produce a ready manifest');
 		expect(manifest?.required).toEqual(
 			expect.arrayContaining(['evidence', 'replacement', 'recheck', 'steps'])
 		);
@@ -145,6 +143,7 @@ describe('archive repair OpenAPI contract', () => {
 		expect(anchor?.required).toEqual(['kind', 'sourceCount']);
 		expect(anchor?.properties?.kind?.enum).toEqual([
 			'content-addressed-bucket',
+			'canonical-proof',
 			'multi-source',
 			'target-digest'
 		]);
@@ -168,7 +167,7 @@ describe('archive repair OpenAPI contract', () => {
 		expect(
 			document.components.schemas.HistoryArchiveRepairPlanV1?.properties
 				?.actions?.maxItems
-		).toBe(500);
+		).toBe(50);
 		expect(
 			document.components.schemas.HistoryArchiveRepairArtifactAvailableV1
 				?.required
@@ -208,7 +207,7 @@ describe('archive repair OpenAPI contract', () => {
 
 		const operation =
 			document.paths[
-				'/v1/archive-scans/repair-artifacts/objects/{targetRemoteId}/{candidateRemoteId}/{proofId}/{proofVersion}/{proofEvaluatedAtMs}/{contentDigest}'
+				'/v1/archive-scans/repair-artifacts/objects/{targetRemoteId}/{targetEvidenceUpdatedAtMs}/{targetFailureKind}/{candidateRemoteId}/{proofId}/{proofVersion}/{proofEvaluatedAtMs}/{contentDigest}'
 			]?.get;
 		expect(operation?.description).toContain(
 			'independently checks canonical JSON or uncompressed XDR SHA-256'
@@ -226,7 +225,7 @@ describe('archive repair OpenAPI contract', () => {
 	it('documents the object-addressed bounded recheck decision', () => {
 		const operation =
 			document.paths['/v1/archive-scans/objects/{remoteId}/recheck']?.post;
-		expect(operation?.description).toContain('exact failed archive-integrity');
+		expect(operation?.description).toContain('exact repair-candidate failure');
 		expect(operation?.description).toContain('never reset or queued');
 		expect(operation?.requestBody?.required).toBe(true);
 		expect(

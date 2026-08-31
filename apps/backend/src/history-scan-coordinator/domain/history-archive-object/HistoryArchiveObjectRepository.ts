@@ -56,7 +56,7 @@ export interface HistoryArchiveVerifiedBucketSource {
 }
 
 export interface HistoryArchiveVerifiedCheckpointObjectSource {
-	readonly anchorKind: 'multi-source' | 'target-digest';
+	readonly anchorKind: 'canonical-proof' | 'multi-source' | 'target-digest';
 	readonly archiveUrl: string;
 	readonly archiveUrlIdentity: string;
 	readonly candidateRemoteId: string;

@@ -285,6 +285,9 @@ function getRemoteCandidateExplanation(
 ): string {
 	const source = remoteCandidate.archiveUrlIdentity;
 	const proof = remoteCandidate.proof;
+	if (proof.anchor.kind === 'canonical-proof') {
+		return `The candidate from ${source} has ${proof.contentHash.representation} SHA-256 ${proof.contentHash.digest}, which matches strict checkpoint proof v${proof.proofVersion} at checkpoint ${proof.checkpointLedger}. StellarAtlas rehashes the downloaded bytes before returning the replacement.`;
+	}
 	return `The candidate from ${source} is bound to strict checkpoint proof v${proof.proofVersion} at checkpoint ${proof.checkpointLedger}; its ${proof.contentHash.representation} SHA-256 is ${proof.contentHash.digest}. The candidate URL is only a retrieval location.`;
 }
 

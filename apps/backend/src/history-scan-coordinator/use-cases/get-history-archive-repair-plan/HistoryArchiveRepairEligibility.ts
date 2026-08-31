@@ -57,7 +57,8 @@ export function isStrictVerifiedRepairSource(
 		source.proofId < 1 ||
 		!isValidProofDate(source.verifiedAt) ||
 		!isValidProofDate(source.proofEvaluatedAt) ||
-		source.proofEvaluatedAt < source.verifiedAt
+		(source.anchorKind !== 'canonical-proof' &&
+			source.proofEvaluatedAt < source.verifiedAt)
 	) {
 		return false;
 	}
@@ -78,7 +79,8 @@ export function isStrictVerifiedRepairSource(
 			object.objectType,
 			source.contentRepresentation
 		) &&
-		(source.anchorKind === 'target-digest' ||
+		(source.anchorKind === 'canonical-proof' ||
+			source.anchorKind === 'target-digest' ||
 			(source.anchorKind === 'multi-source' &&
 				source.corroboratingSourceCount >= 2))
 	);

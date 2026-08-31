@@ -11896,6 +11896,7 @@
 								"type": "string",
 								"enum": [
 									"content-addressed-bucket",
+									"canonical-proof",
 									"multi-source",
 									"target-digest"
 								]

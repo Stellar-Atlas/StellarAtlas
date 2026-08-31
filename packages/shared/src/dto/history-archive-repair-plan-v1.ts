@@ -68,7 +68,10 @@ export interface HistoryArchiveRepairSourceCandidateV1 {
 export interface HistoryArchiveRepairSourceProofV1 {
 	readonly anchor: {
 		readonly kind:
-			'content-addressed-bucket' | 'multi-source' | 'target-digest';
+			| 'canonical-proof'
+			| 'content-addressed-bucket'
+			| 'multi-source'
+			| 'target-digest';
 		readonly sourceCount: number;
 	};
 	readonly candidateObjectRemoteId: string;

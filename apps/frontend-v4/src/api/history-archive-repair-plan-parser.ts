@@ -30,6 +30,7 @@ const sourceSchema: JSONSchemaType<RepairSource> = {
 						kind: {
 							type: 'string',
 							enum: [
+								'canonical-proof',
 								'content-addressed-bucket',
 								'multi-source',
 								'target-digest'

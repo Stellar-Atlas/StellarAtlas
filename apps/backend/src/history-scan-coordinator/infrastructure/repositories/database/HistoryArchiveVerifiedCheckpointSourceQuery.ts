@@ -319,6 +319,85 @@ export const historyArchiveVerifiedCheckpointSourceSql = `
 							proof_freshness."effectiveEvaluatedAt"
 				)
 			)
+	), proof_digest_variants as (
+		select distinct
+			candidate."targetRemoteId",
+			candidate."contentDigest",
+			candidate."contentRepresentation"
+		from strict_candidates candidate
+	), unique_proof_digests as (
+		select
+			variant."targetRemoteId",
+			min(variant."contentDigest") as "contentDigest",
+			min(variant."contentRepresentation") as "contentRepresentation"
+		from proof_digest_variants variant
+		group by variant."targetRemoteId"
+		having count(*) = 1
+	), selected_proof_anchors as (
+		select
+			candidate.*,
+			row_number() over (
+				partition by candidate."targetRemoteId"
+				order by candidate."proofEvaluatedAt" desc,
+					candidate."verifiedAt" desc,
+					candidate."archiveUrlIdentity" asc
+			) as anchor_rank
+		from strict_candidates candidate
+		join unique_proof_digests digest
+			on digest."targetRemoteId" = candidate."targetRemoteId"
+			and digest."contentDigest" = candidate."contentDigest"
+			and digest."contentRepresentation" =
+				candidate."contentRepresentation"
+	), canonical_digest_support as (
+		select
+			candidate."targetRemoteId",
+			count(distinct candidate."hostIdentity")::integer as source_count
+		from candidate_objects candidate
+		join unique_proof_digests digest
+			on digest."targetRemoteId" = candidate."targetRemoteId"
+			and digest."contentDigest" = lower(
+				candidate."verificationFacts" #>> '{content,digest}'
+			)
+			and digest."contentRepresentation" =
+				candidate."verificationFacts" #>> '{content,representation}'
+		group by candidate."targetRemoteId"
+	), canonical_candidates as (
+		select
+			candidate."targetRemoteId",
+			candidate."sourceProofFacts",
+			candidate."archiveUrl",
+			candidate."archiveUrlIdentity",
+			candidate."hostIdentity",
+			candidate."remoteId" as "candidateRemoteId",
+			candidate."checkpointLedger",
+			candidate."objectUrl",
+			candidate."verifiedAt",
+			digest."contentDigest",
+			digest."contentRepresentation",
+			anchor."proofEvaluatedAt",
+			anchor."proofId",
+			anchor."proofVersion",
+			case when candidate."sourceProofFacts" #>>
+				'{content,algorithm}' = 'sha256'
+				and lower(candidate."sourceProofFacts" #>>
+					'{content,digest}') = digest."contentDigest"
+				and candidate."sourceProofFacts" #>>
+					'{content,representation}' = digest."contentRepresentation"
+			then 'target-digest' else 'canonical-proof' end as "anchorKind",
+			support.source_count as "corroboratingSourceCount"
+		from candidate_objects candidate
+		join unique_proof_digests digest
+			on digest."targetRemoteId" = candidate."targetRemoteId"
+			and digest."contentDigest" = lower(
+				candidate."verificationFacts" #>> '{content,digest}'
+			)
+			and digest."contentRepresentation" =
+				candidate."verificationFacts" #>> '{content,representation}'
+		join selected_proof_anchors anchor
+			on anchor."targetRemoteId" = candidate."targetRemoteId"
+			and anchor.anchor_rank = 1
+		join canonical_digest_support support
+			on support."targetRemoteId" = candidate."targetRemoteId"
 	), digest_consensus as (
 		select
 			candidate."targetRemoteId",
@@ -335,7 +414,7 @@ export const historyArchiveVerifiedCheckpointSourceSql = `
 					as qualifying_group_count
 			from digest_consensus consensus
 			group by consensus."targetRemoteId"
-		), anchored_candidates as (
+		), legacy_anchored_candidates as (
 		select candidate.*,
 			case when lower(candidate."sourceProofFacts" #>>
 				'{content,digest}') = candidate."contentDigest"
@@ -363,6 +442,16 @@ export const historyArchiveVerifiedCheckpointSourceSql = `
 				consensus.source_count >= 2
 				and qualifying.qualifying_group_count = 1
 			)
+	), anchored_candidates as (
+		select candidate.*
+		from canonical_candidates candidate
+		union all
+		select candidate.*
+		from legacy_anchored_candidates candidate
+		where not exists (
+			select 1 from unique_proof_digests digest
+			where digest."targetRemoteId" = candidate."targetRemoteId"
+		)
 	),
 	ranked_candidates as (
 		select

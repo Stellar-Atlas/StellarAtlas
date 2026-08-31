@@ -129,8 +129,13 @@ function isPresent<T>(value: T | null): value is T {
 
 function requireAnchorKind(
 	value: string | undefined
-): 'multi-source' | 'target-digest' {
-	if (value === 'multi-source' || value === 'target-digest') return value;
+): 'canonical-proof' | 'multi-source' | 'target-digest' {
+	if (
+		value === 'canonical-proof' ||
+		value === 'multi-source' ||
+		value === 'target-digest'
+	)
+		return value;
 	throw new Error('Verified checkpoint source row has invalid anchorKind');
 }
 
