@@ -54,14 +54,9 @@ describe('HistoryArchiveBrokerFrontierRepository', () => {
 
 		expect(query).toHaveBeenCalledTimes(1);
 		expect(query.mock.calls[0]?.[0]).toContain(
-			'ready."publishedAt" <= $4::timestamptz'
+			'ready."publishedAt" <= $3::timestamptz'
 		);
-		expect(query.mock.calls[0]?.[1]).toEqual([
-			24,
-			2,
-			'https://history.example',
-			publishedBefore
-		]);
+		expect(query.mock.calls[0]?.[1]).toEqual([24, 2, publishedBefore]);
 	});
 
 	it('resets failed publishes in checkpoint fan-out lock order', async () => {
