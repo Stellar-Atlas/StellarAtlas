@@ -119,10 +119,9 @@
 	inline-size: 11%;
 }
 
-.archive-root-inventory-table td,
 .archive-root-inventory-table td > small {
-	display: grid;
-	gap: 6px;
+	display: block;
+	margin-block-start: 6px;
 }
 
 .archive-root-inventory-table td > small {
