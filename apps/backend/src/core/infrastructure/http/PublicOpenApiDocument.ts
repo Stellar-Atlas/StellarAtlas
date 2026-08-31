@@ -116,6 +116,7 @@ function canonicalPublicTag(path: string, value: unknown): string {
 	if (path.startsWith('/v1/status')) return 'Status';
 	if (
 		path.startsWith('/horizon') ||
+		path === '/rpc' ||
 		path.startsWith('/galexie') ||
 		path.startsWith('/v1/history-data') ||
 		path.startsWith('/v1/analytics')

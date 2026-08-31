@@ -16,6 +16,7 @@ describe('data-access OpenAPI paths', () => {
 
 	it('documents every mounted public data-access route', () => {
 		expect(paths['/horizon/']?.get?.operationId).toBe('getHorizonRoot');
+		expect(paths['/rpc']?.post?.operationId).toBe('callStellarRpc');
 		expect(paths['/galexie/.config.json']?.get?.operationId).toBe(
 			'getGalexieConfiguration'
 		);

@@ -50,6 +50,7 @@ export interface Config {
 	horizonPublicUrl?: Url;
 	explorerTransactionFreshnessWindowMs: number;
 	rpcUrl?: Url;
+	rpcPublicUrl?: Url;
 	failoverFrontendBaseUrl?: Url;
 	failoverApiBaseUrl?: Url;
 	deadManSwitchUrl: Url | undefined;
@@ -107,6 +108,7 @@ export class DefaultConfig implements Config {
 	frontendRevalidateToken?: string;
 	horizonPublicUrl?: Url;
 	rpcUrl?: Url;
+	rpcPublicUrl?: Url;
 	failoverFrontendBaseUrl?: Url;
 	failoverApiBaseUrl?: Url;
 	historyMaxFileMs?: number;
@@ -362,6 +364,12 @@ export function getConfigFromEnv(): Result<Config, Error> {
 	const rpcUrlResult = parseOptionalUrl(process.env.STELLAR_RPC_URL);
 	if (rpcUrlResult.isErr()) return err(rpcUrlResult.error);
 	config.rpcUrl = rpcUrlResult.value;
+
+	const rpcPublicUrlResult = parseOptionalUrl(
+		process.env.STELLAR_RPC_PUBLIC_URL
+	);
+	if (rpcPublicUrlResult.isErr()) return err(rpcPublicUrlResult.error);
+	config.rpcPublicUrl = rpcPublicUrlResult.value;
 
 	const horizonPublicUrlResult = parseOptionalUrl(
 		process.env.HORIZON_PUBLIC_URL

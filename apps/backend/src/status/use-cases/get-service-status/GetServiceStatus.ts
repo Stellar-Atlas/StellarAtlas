@@ -78,10 +78,14 @@ export class GetRpcStatus {
 
 	execute(): Result<ConfiguredServiceStatusDTO, Error> {
 		return ok(
-			mapConfiguredServiceStatus('rpc', this.config.rpcUrl?.value, {
-				reportConfiguredAsOk: true,
-				requiredForProduction: false
-			})
+			mapConfiguredServiceStatus(
+				'rpc',
+				this.config.rpcPublicUrl?.value ?? this.config.rpcUrl?.value,
+				{
+					reportConfiguredAsOk: true,
+					requiredForProduction: false
+				}
+			)
 		);
 	}
 }

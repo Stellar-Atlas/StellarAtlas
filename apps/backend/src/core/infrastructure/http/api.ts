@@ -117,6 +117,10 @@ import { readOnlyUpstreamRouter } from './ReadOnlyUpstreamRouter.js';
 import { historyDataRouter } from '@status/infrastructure/http/HistoryDataRouter.js';
 import { historyAnalyticsRouter } from '@status/infrastructure/http/HistoryAnalyticsRouter.js';
 import { corsMiddleware } from './CorsMiddleware.js';
+import {
+	stellarRpcRouter,
+	unavailableStellarRpcRouter
+} from './StellarRpcRouter.js';
 
 let server: Server;
 const serverSockets = new Set<Socket>();
@@ -125,6 +129,7 @@ const api = express();
 api.use(corsMiddleware);
 mountParsedHistoryRequestBodyParser(api);
 api.use('/v1/history-scan', bodyParser.json({ limit: '2mb' }));
+api.use('/rpc', bodyParser.json({ limit: '2mb' }));
 api.use(bodyParser.json());
 api.use(frontendV4ProxyMiddleware);
 api.use(helmet());
@@ -171,6 +176,12 @@ const listen = async () => {
 			serviceName: 'Horizon',
 			targetBaseUrl: config.horizonUrl.value
 		})
+	);
+	api.use(
+		'/rpc',
+		config.rpcUrl === undefined
+			? unavailableStellarRpcRouter()
+			: stellarRpcRouter({ targetUrl: config.rpcUrl.value })
 	);
 	api.use(
 		'/galexie',

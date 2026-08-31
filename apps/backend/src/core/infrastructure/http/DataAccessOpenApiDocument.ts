@@ -107,6 +107,64 @@ const dataAccessPaths: Readonly<Record<string, OpenApiRecord>> = {
 			tags: tag
 		}
 	},
+	'/rpc': {
+		post: {
+			description:
+				'Fixed-upstream proxy to the Stellar RPC JSON-RPC service. The request destination cannot be selected by the client. While the owned service is catching up, methods such as getHealth can return a standard JSON-RPC health error.',
+			externalDocs: {
+				description: 'Official Stellar RPC API reference',
+				url: 'https://developers.stellar.org/docs/data/apis/rpc/api-reference'
+			},
+			operationId: 'callStellarRpc',
+			requestBody: {
+				content: {
+					'application/json': {
+						schema: {
+							additionalProperties: true,
+							properties: {
+								id: {},
+								jsonrpc: { enum: ['2.0'], type: 'string' },
+								method: { minLength: 1, type: 'string' },
+								params: {}
+							},
+							required: ['jsonrpc', 'method'],
+							type: 'object'
+						}
+					}
+				},
+				required: true
+			},
+			responses: {
+				'200': {
+					content: {
+						'application/json': {
+							schema: {
+								additionalProperties: true,
+								properties: {
+									error: { type: 'object' },
+									id: {},
+									jsonrpc: { enum: ['2.0'], type: 'string' },
+									result: {}
+								},
+								type: 'object'
+							}
+						}
+					},
+					description: 'Stellar RPC JSON-RPC response.'
+				},
+				'400': errorResponse('The JSON-RPC request is invalid.'),
+				'405': errorResponse('Only HTTP POST is accepted.'),
+				'413': errorResponse('The JSON-RPC request exceeds 2 MiB.'),
+				'502': errorResponse(
+					'The configured Stellar RPC upstream is unavailable.'
+				),
+				'503': errorResponse('Stellar RPC is not configured.')
+			},
+			security: publicAccess,
+			summary: 'Call Stellar RPC',
+			tags: tag
+		}
+	},
 	'/galexie/.config.json': {
 		get: {
 			description:
