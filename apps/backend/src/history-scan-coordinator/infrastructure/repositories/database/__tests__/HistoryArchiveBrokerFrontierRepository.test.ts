@@ -34,7 +34,7 @@ describe('HistoryArchiveBrokerFrontierRepository', () => {
 	it('allows an explicit retry token to bypass canonical-root selection', () => {
 		const sql = reserveBrokerJobsSql.replace(/\s+/g, ' ');
 		expect(sql).toContain(
-			'ready."dispatchToken" is not null or $4::text is null or ready."archiveUrlIdentity" = $4::text'
+			'ready."dispatchToken" is not null or $4::text is null or not (select incomplete from canonical_scope) or ready."archiveUrlIdentity" = $4::text'
 		);
 	});
 

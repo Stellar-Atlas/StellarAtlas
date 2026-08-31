@@ -227,13 +227,46 @@ function buildHistoryArchiveCheckpointProofRefreshSql(
 			count(fact.value)::integer as boundary_fact_count,
 			count(distinct fact.value->>'ledgerHeaderHash')::integer
 				as boundary_hash_count,
-			max(fact.value->>'ledgerHeaderHash') as boundary_hash
+			max(fact.value->>'ledgerHeaderHash') as boundary_hash,
+			max(object."archiveUrlIdentity")
+				as boundary_source_archive_url_identity,
+			bool_or(object."archiveUrlIdentity" is not null
+				and object."archiveUrlIdentity" <> range."archiveUrlIdentity")
+				as boundary_substituted
 		from expected_checkpoint_ranges range
-		left join "history_archive_object_queue" object
-			on object."archiveUrlIdentity" = range."archiveUrlIdentity"
-			and object."checkpointLedger" = range."checkpointLedger" - 64
-			and object."objectType" = 'ledger'
-			and object.status = 'verified'
+		left join lateral (
+			select predecessor.*
+			from "history_archive_object_queue" predecessor
+			where predecessor."objectType" = 'ledger'
+				and predecessor.status = 'verified'
+				and (
+					(
+						predecessor."archiveUrlIdentity" =
+							range."archiveUrlIdentity"
+						and predecessor."checkpointLedger" =
+							range."checkpointLedger" - 64
+					) or exists (
+						select 1
+						from "history_archive_checkpoint_substitution" substitution
+						join "history_archive_checkpoint_proof" source_proof
+							on source_proof.id =
+								substitution."sourceCheckpointProofId"
+							and source_proof.status = 'verified'
+						where substitution."archiveUrlIdentity" =
+								range."archiveUrlIdentity"
+							and substitution."checkpointLedger" =
+								range."checkpointLedger" - 64
+							and source_proof."ledgerObjectRemoteId" =
+								predecessor."remoteId"
+					)
+				)
+			order by case
+				when predecessor."archiveUrlIdentity" = range."archiveUrlIdentity"
+					then 0
+				else 1
+			end, predecessor."remoteId"
+			limit 1
+		) object on true
 		left join lateral jsonb_array_elements(${ledgerFactsJsonSql}) fact
 			on (fact.value->>'ledger')::bigint = range.first_expected_ledger - 1
 		group by range."archiveUrlIdentity", range."checkpointLedger"
@@ -287,7 +320,11 @@ function buildHistoryArchiveCheckpointProofRefreshSql(
 			bool_and(ledger."checkpointLedger" = 63 or (
 				previous.boundary_fact_count = 1
 				and previous.boundary_hash_count = 1
-			)) as predecessor_boundary_valid
+			)) as predecessor_boundary_valid,
+			max(previous.boundary_source_archive_url_identity)
+				as predecessor_source_archive_url_identity,
+			bool_or(coalesce(previous.boundary_substituted, false))
+				as predecessor_substituted
 		from ledger_chain ledger
 		left join hash_by_sequence hashes
 			on hashes."archiveUrlIdentity" = ledger."archiveUrlIdentity"
@@ -387,7 +424,10 @@ function buildHistoryArchiveCheckpointProofRefreshSql(
 			coalesce(chain.predecessor_missing, category."checkpointLedger" > 63)
 				as predecessor_missing,
 			coalesce(chain.predecessor_boundary_valid, false)
-				as predecessor_boundary_valid
+				as predecessor_boundary_valid,
+			chain.predecessor_source_archive_url_identity,
+			coalesce(chain.predecessor_substituted, false)
+				as predecessor_substituted
 		from category_rollup category
 		left join chain_rollup chain
 			on chain."archiveUrlIdentity" = category."archiveUrlIdentity"
@@ -426,6 +466,8 @@ function buildHistoryArchiveCheckpointProofRefreshSql(
 			proof_rollup.ledger_bucket_list_hash,
 			proof_rollup.predecessor_missing,
 			proof_rollup.predecessor_boundary_valid,
+			proof_rollup.predecessor_source_archive_url_identity,
+			proof_rollup.predecessor_substituted,
 			(failure.object_failures is null
 				and checkpoint_rollup.has_checkpoint_state
 				and checkpoint_rollup.has_ledger

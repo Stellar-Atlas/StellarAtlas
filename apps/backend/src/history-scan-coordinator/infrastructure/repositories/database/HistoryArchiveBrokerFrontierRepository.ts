@@ -49,7 +49,35 @@ interface BrokerJobRow {
 }
 
 export const reserveBrokerJobsSql = `
-	with active_hosts as materialized (
+	with canonical_scope as materialized (
+		select exists (
+			select 1
+			from "history_archive_checkpoint_scan_cursor" canonical_cursor
+			join "history_archive_state_snapshot" canonical_state
+				on canonical_state."archiveUrlIdentity" =
+					canonical_cursor."archiveUrlIdentity"
+			where $4::text is not null
+				and canonical_cursor."archiveUrlIdentity" = $4::text
+				and (
+					canonical_cursor."nextHistoricalCheckpointLedger" <=
+						(
+							floor((canonical_state."currentLedger" + 1)::numeric / 64)
+							* 64 - 1
+						)::integer
+					or not exists (
+						select 1
+						from "history_archive_checkpoint_proof" canonical_proof
+						where canonical_proof."archiveUrlIdentity" = $4::text
+							and canonical_proof."checkpointLedger" =
+								(
+									floor((canonical_state."currentLedger" + 1)::numeric / 64)
+									* 64 - 1
+								)::integer
+							and canonical_proof.status = 'verified'
+					)
+				)
+		) as incomplete
+	), active_hosts as materialized (
 		select object."hostIdentity", count(*)::integer as active_count
 		from "history_archive_object_ready" ready
 		join "history_archive_object_queue" object
@@ -80,6 +108,7 @@ export const reserveBrokerJobsSql = `
 			and (
 				ready."dispatchToken" is not null
 				or $4::text is null
+				or not (select incomplete from canonical_scope)
 				or ready."archiveUrlIdentity" = $4::text
 			)
 			and not exists (
@@ -185,8 +214,6 @@ const findPublishedBrokerJobsSql = `
 			and ready."dispatchToken" is not null
 			and ready."claimAttempt" is not null
                         and ready."claimAttempt" = object.attempts + 1
-			and ($3::text is null or
-				ready."archiveUrlIdentity" = $3::text)
 			and ($4::timestamptz is null
 				or ready."publishedAt" <= $4::timestamptz)
 	) published

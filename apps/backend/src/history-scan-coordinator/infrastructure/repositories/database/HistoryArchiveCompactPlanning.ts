@@ -8,6 +8,13 @@ const maximumCheckpointCursorBatch = 128;
 const checkpointFanoutLedgerSpan =
 	(historyArchiveSequentialPrefetchDepth - 1) * 64;
 
+function configuredCanonicalArchiveIdentity(): string | null {
+	const raw = process.env.HISTORY_ARCHIVE_CANONICAL_FIRST_ROOT;
+	if (raw === undefined) return null;
+	const normalized = raw.trim().replace(/\/+$/, '');
+	return normalized.length === 0 ? null : normalized;
+}
+
 export async function findVerifiedCheckpointsNeedingFanout(
 	repository: Repository<HistoryArchiveObject>,
 	limit: number
@@ -147,7 +154,8 @@ export async function materializeCompactCheckpointPlans(
 	const [result] = (await manager.query(compactCheckpointPlanSql, [
 		maximumCheckpointCursorBatch,
 		historyArchiveSequentialPrefetchDepth,
-		targetedIdentities
+		targetedIdentities,
+		configuredCanonicalArchiveIdentity()
 	])) as readonly {
 		readonly planned: number | string;
 		readonly ready?: number | string;
@@ -225,10 +233,20 @@ export const targetedCompactCheckpointPlanSql = `
 				order by completed."checkpointLedger"
 			) as sequence
 		from completed
-		join "history_archive_checkpoint_proof" proof
-			on proof."archiveUrlIdentity" = completed."archiveUrlIdentity"
-			and proof."checkpointLedger" = completed."checkpointLedger"
-			and proof.status = 'verified'
+		where exists (
+			select 1
+			from "history_archive_checkpoint_proof" proof
+			where proof."archiveUrlIdentity" = completed."archiveUrlIdentity"
+				and proof."checkpointLedger" = completed."checkpointLedger"
+				and proof.status = 'verified'
+		) or exists (
+			select 1
+			from "history_archive_checkpoint_substitution" substitution
+			where substitution."archiveUrlIdentity" =
+					completed."archiveUrlIdentity"
+				and substitution."checkpointLedger" =
+					completed."checkpointLedger"
+		)
 	), contiguous_completed as materialized (
 		select "archiveUrlIdentity",
 			min("firstCheckpointLedger") as "firstCheckpointLedger",
@@ -371,6 +389,57 @@ const compactCheckpointPlanSql = `
                         and state."archiveUrlIdentity" = regexp_replace(root."archiveUrl", '/+$', '')
 		where state.status = 'available'
 			and state."currentLedger" >= 63
+	), substitution_candidates as materialized (
+		select cursor."archiveUrlIdentity",
+			failed."checkpointLedger", failed.id as failed_proof_id,
+			source."archiveUrlIdentity" as source_archive_identity,
+			source.id as source_proof_id
+		from "history_archive_checkpoint_scan_cursor" cursor
+		join "history_archive_checkpoint_proof" failed
+			on failed."archiveUrlIdentity" = cursor."archiveUrlIdentity"
+			and failed."checkpointLedger" =
+				cursor."nextHistoricalCheckpointLedger" - 64
+		join "history_archive_state_snapshot" target_state
+			on target_state."archiveUrlIdentity" = cursor."archiveUrlIdentity"
+			and target_state."networkPassphrase" is not null
+		join lateral (
+			select source_proof.id, source_proof."archiveUrlIdentity"
+			from "history_archive_checkpoint_proof" source_proof
+			join "history_archive_state_snapshot" source_state
+				on source_state."archiveUrlIdentity" =
+					source_proof."archiveUrlIdentity"
+				and source_state.status = 'available'
+				and source_state."networkPassphrase" =
+					target_state."networkPassphrase"
+			where source_proof."checkpointLedger" = failed."checkpointLedger"
+				and source_proof."archiveUrlIdentity" <>
+					failed."archiveUrlIdentity"
+				and source_proof.status = 'verified'
+				and source_proof."requiredObjectsComplete" = true
+				and source_proof."proofFactsComplete" = true
+				and source_proof."failureKind" is null
+			order by case
+				when source_proof."archiveUrlIdentity" = $4::text then 0
+				else 1
+			end, source_proof."evaluatedAt", source_proof.id
+			limit 1
+		) source on true
+		where cursor."nextHistoricalCheckpointLedger" > 63
+			and failed.status = 'not-evaluable'
+			and failed."failureKind" = 'object-failed'
+			and failed.details->>'failureHttpStatus' in ('403', '404', '410')
+	), substitutions as (
+		insert into "history_archive_checkpoint_substitution" (
+			"archiveUrlIdentity", "checkpointLedger",
+			"failedCheckpointProofId", "sourceArchiveUrlIdentity",
+			"sourceCheckpointProofId", reason
+		)
+		select candidate."archiveUrlIdentity", candidate."checkpointLedger",
+			candidate.failed_proof_id, candidate.source_archive_identity,
+			candidate.source_proof_id, 'remote-http-missing'
+		from substitution_candidates candidate
+		on conflict ("archiveUrlIdentity", "checkpointLedger") do nothing
+		returning "archiveUrlIdentity", "checkpointLedger"
 	), seeded as (
 		insert into "history_archive_checkpoint_scan_cursor" (
 			"archiveUrlIdentity", "latestCheckpointLedger",
@@ -411,6 +480,13 @@ const compactCheckpointPlanSql = `
                                                 and predecessor."checkpointLedger" =
                                                         cursor."nextHistoricalCheckpointLedger" - 64
                                                 and predecessor.status = 'verified'
+                                ) or exists (
+                                        select 1
+                                        from "history_archive_checkpoint_substitution" substitution
+                                        where substitution."archiveUrlIdentity" =
+                                                cursor."archiveUrlIdentity"
+                                                and substitution."checkpointLedger" =
+                                                        cursor."nextHistoricalCheckpointLedger" - 64
                                 )
                         )
                 order by cursor."nextHistoricalCheckpointLedger",

@@ -36,6 +36,22 @@ export async function createCanonicalFrontierTestSchema(
                 )
         `);
 	await dataSource.query(`
+		create table if not exists "history_archive_checkpoint_substitution" (
+			"archiveUrlIdentity" text not null,
+			"checkpointLedger" integer not null,
+			"failedCheckpointProofId" integer not null references
+				"history_archive_checkpoint_proof" (id),
+			"sourceArchiveUrlIdentity" text not null,
+			"sourceCheckpointProofId" integer not null references
+				"history_archive_checkpoint_proof" (id),
+			reason text not null,
+			"createdAt" timestamptz not null default now(),
+			primary key ("archiveUrlIdentity", "checkpointLedger"),
+			check ("archiveUrlIdentity" <> "sourceArchiveUrlIdentity"),
+			check (reason = 'remote-http-missing')
+		)
+	`);
+	await dataSource.query(`
 		create table if not exists "full_history_promotion_runtime" (
 			"network_passphrase_hash" bytea primary key,
 			state text not null,

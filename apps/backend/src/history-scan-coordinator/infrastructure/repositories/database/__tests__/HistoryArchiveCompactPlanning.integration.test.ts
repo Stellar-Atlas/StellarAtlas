@@ -199,4 +199,66 @@ describe('compact history archive checkpoint planning', () => {
 		});
 		expect(cursor?.nextHistoricalCheckpointLedger).toBe(319);
 	});
+
+	it('continues after a failed checkpoint using recorded canonical provenance', async () => {
+		const targetRoot = createRoot(2);
+		const sourceRoot = createRoot(3);
+		await dataSource
+			.getRepository(HistoryArchiveObject)
+			.save([targetRoot, sourceRoot]);
+		await dataSource.query(
+			`insert into "history_archive_state_snapshot" (
+				"archiveUrlIdentity", status, "currentLedger", "networkPassphrase"
+			) values ($1, 'available', 1000, 'network'),
+				($2, 'available', 1000, 'network')`,
+			[targetRoot.archiveUrlIdentity, sourceRoot.archiveUrlIdentity]
+		);
+		await dataSource.query(
+			`insert into "history_archive_checkpoint_scan_cursor" (
+				"archiveUrlIdentity", "latestCheckpointLedger",
+				"lastForwardCheckpointLedger", "nextHistoricalCheckpointLedger"
+			) values ($1, 959, null, 127)`,
+			[targetRoot.archiveUrlIdentity]
+		);
+
+		const failed = createBucketMissingProof(targetRoot.archiveUrlIdentity, 63);
+		failed.status = 'not-evaluable';
+		failed.failureKind = 'object-failed';
+		failed.details = { failureHttpStatus: 403 };
+		const source = createBucketMissingProof(sourceRoot.archiveUrlIdentity, 63);
+		source.status = 'verified';
+		source.requiredObjectsComplete = true;
+		source.proofFactsComplete = true;
+		source.bucketsVerified = true;
+		source.verifiedBucketCount = source.expectedBucketCount;
+		source.missingBucketCount = 0;
+		source.failureKind = null;
+		await dataSource
+			.getRepository(HistoryArchiveCheckpointProof)
+			.save([failed, source]);
+
+		const firstPass = await materializeCompactCheckpointPlans(
+			dataSource.manager,
+			[targetRoot.archiveUrlIdentity]
+		);
+		const planned = await materializeCompactCheckpointPlans(
+			dataSource.manager,
+			[targetRoot.archiveUrlIdentity]
+		);
+		const [cursor] = (await dataSource.query(
+			`select "nextHistoricalCheckpointLedger"
+			 from "history_archive_checkpoint_scan_cursor"
+			 where "archiveUrlIdentity" = $1`,
+			[targetRoot.archiveUrlIdentity]
+		)) as readonly { readonly nextHistoricalCheckpointLedger: number }[];
+		const storedFailure = await dataSource
+			.getRepository(HistoryArchiveCheckpointProof)
+			.findOneByOrFail({ id: failed.id });
+
+		expect(firstPass).toBe(0);
+		expect(planned).toBe(1);
+		expect(cursor?.nextHistoricalCheckpointLedger).toBe(191);
+		expect(storedFailure.status).toBe('not-evaluable');
+		expect(storedFailure.failureKind).toBe('object-failed');
+	});
 });
