@@ -1,5 +1,9 @@
 import type { EntityManager } from 'typeorm';
 import { historyArchiveSequentialPrefetchDepth } from '@history-scan-coordinator/domain/history-archive-object/HistoryArchiveObjectPlanningPolicy.js';
+import {
+	historyArchiveCanonicalFirstAdmissionSql,
+	historyArchiveCanonicalFirstScopeCteSql
+} from './HistoryArchiveCanonicalFirst.js';
 import { notifyHistoryArchiveReadyWork } from './HistoryArchiveObjectReadyQueue.js';
 
 export async function materializeOrderedCheckpointPrefetch(
@@ -20,35 +24,7 @@ export async function materializeOrderedCheckpointPrefetch(
 }
 
 const orderedCheckpointPrefetchSql = `
-        with canonical_scope as materialized (
-		select exists (
-			select 1
-			from "history_archive_checkpoint_scan_cursor" canonical_cursor
-			join "history_archive_state_snapshot" canonical_state
-				on canonical_state."archiveUrlIdentity" =
-					canonical_cursor."archiveUrlIdentity"
-			where $2::text is not null
-				and canonical_cursor."archiveUrlIdentity" = $2::text
-				and (
-					canonical_cursor."nextHistoricalCheckpointLedger" <=
-						(
-							floor((canonical_state."currentLedger" + 1)::numeric / 64)
-							* 64 - 1
-						)::integer
-					or not exists (
-						select 1
-						from "history_archive_checkpoint_proof" canonical_proof
-						where canonical_proof."archiveUrlIdentity" = $2::text
-							and canonical_proof."checkpointLedger" =
-								(
-									floor((canonical_state."currentLedger" + 1)::numeric / 64)
-									* 64 - 1
-								)::integer
-							and canonical_proof.status = 'verified'
-					)
-				)
-		) as incomplete
-	), available_roots as materialized (
+	with ${historyArchiveCanonicalFirstScopeCteSql('$2::text')}, available_roots as materialized (
                 select state."archiveUrlIdentity", root."archiveUrl",
                         root."hostIdentity",
                         (
@@ -64,11 +40,7 @@ const orderedCheckpointPrefetchSql = `
                                 regexp_replace(root."archiveUrl", '/+$', '')
                 where state.status = 'available'
                         and state."currentLedger" >= 63
-			and (
-				$2::text is null
-				or not (select incomplete from canonical_scope)
-				or state."archiveUrlIdentity" = $2::text
-			)
+			and ${historyArchiveCanonicalFirstAdmissionSql('state."archiveUrlIdentity"', '$2::text')}
         ), candidates as materialized (
                 select cursor."archiveUrlIdentity", root."archiveUrl",
                         root."hostIdentity", checkpoint.checkpoint_ledger

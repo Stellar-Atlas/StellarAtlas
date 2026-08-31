@@ -9,7 +9,15 @@ import {
 	historyArchiveSchedulableObjectSql,
 	synchronizeHistoryArchiveReadyQueue
 } from './HistoryArchiveObjectReadyQueue.js';
-import { enqueueCurrentTerminalReadyCheckpointProofRefreshes } from './HistoryArchiveCheckpointProofRefreshQueue.js';
+import {
+	historyArchiveCanonicalFirstAdmissionSql,
+	historyArchiveCanonicalFirstScopeCteSql
+} from './HistoryArchiveCanonicalFirst.js';
+import {
+	enqueueCurrentTerminalReadyCheckpointProofRefreshes,
+	enqueueTargetedTerminalReadyCheckpointProofRefreshes
+} from './HistoryArchiveCheckpointProofRefreshQueue.js';
+import { materializeCompactCheckpointPlans } from './HistoryArchiveCompactPlanning.js';
 import { materializeOrderedCheckpointPrefetch } from './HistoryArchiveCheckpointPrefetch.js';
 import { historyArchiveExecutionReconciliationLockName } from './HistoryArchiveObjectExecutionReconciler.js';
 
@@ -49,35 +57,7 @@ interface BrokerJobRow {
 }
 
 export const reserveBrokerJobsSql = `
-	with canonical_scope as materialized (
-		select exists (
-			select 1
-			from "history_archive_checkpoint_scan_cursor" canonical_cursor
-			join "history_archive_state_snapshot" canonical_state
-				on canonical_state."archiveUrlIdentity" =
-					canonical_cursor."archiveUrlIdentity"
-			where $4::text is not null
-				and canonical_cursor."archiveUrlIdentity" = $4::text
-				and (
-					canonical_cursor."nextHistoricalCheckpointLedger" <=
-						(
-							floor((canonical_state."currentLedger" + 1)::numeric / 64)
-							* 64 - 1
-						)::integer
-					or not exists (
-						select 1
-						from "history_archive_checkpoint_proof" canonical_proof
-						where canonical_proof."archiveUrlIdentity" = $4::text
-							and canonical_proof."checkpointLedger" =
-								(
-									floor((canonical_state."currentLedger" + 1)::numeric / 64)
-									* 64 - 1
-								)::integer
-							and canonical_proof.status = 'verified'
-					)
-				)
-		) as incomplete
-	), active_hosts as materialized (
+	with ${historyArchiveCanonicalFirstScopeCteSql('$4::text')}, active_hosts as materialized (
 		select object."hostIdentity", count(*)::integer as active_count
 		from "history_archive_object_ready" ready
 		join "history_archive_object_queue" object
@@ -107,9 +87,7 @@ export const reserveBrokerJobsSql = `
 			and ready.priority <= $3::smallint
 			and (
 				ready."dispatchToken" is not null
-				or $4::text is null
-				or not (select incomplete from canonical_scope)
-				or ready."archiveUrlIdentity" = $4::text
+				or ${historyArchiveCanonicalFirstAdmissionSql('ready."archiveUrlIdentity"', '$4::text')}
 			)
 			and not exists (
 				select 1
@@ -326,20 +304,32 @@ export class HistoryArchiveBrokerFrontierRepository {
 			);
 			return result.readyObjects;
 		});
-		await this.ensureProofFrontier();
+		await this.ensureProofFrontier(archiveUrlIdentity);
 		return readyObjects;
 	}
 
-	async ensureProofFrontier(): Promise<void> {
+	async ensureProofFrontier(
+		archiveUrlIdentity: string | null = null
+	): Promise<void> {
 		const now = Date.now();
 		if (now < this.nextTerminalProofRecoveryAt) return;
 		this.nextTerminalProofRecoveryAt = now + terminalProofRecoveryIntervalMs;
 		try {
 			await this.dataSource.transaction(async (manager) => {
-				await enqueueCurrentTerminalReadyCheckpointProofRefreshes(
-					manager,
-					maximumArchiveSourceFrontierRows
-				);
+				const targetIdentities =
+					archiveUrlIdentity === null ? null : [archiveUrlIdentity];
+				await materializeCompactCheckpointPlans(manager, targetIdentities);
+				if (targetIdentities === null) {
+					await enqueueCurrentTerminalReadyCheckpointProofRefreshes(
+						manager,
+						maximumArchiveSourceFrontierRows
+					);
+				} else {
+					await enqueueTargetedTerminalReadyCheckpointProofRefreshes(
+						manager,
+						targetIdentities
+					);
+				}
 			});
 		} catch (error) {
 			this.nextTerminalProofRecoveryAt = 0;

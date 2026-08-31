@@ -1,19 +1,13 @@
 import type { EntityManager, Repository } from 'typeorm';
 import type { HistoryArchiveObject } from '@history-scan-coordinator/domain/history-archive-object/HistoryArchiveObject.js';
 import { historyArchiveSequentialPrefetchDepth } from '@history-scan-coordinator/domain/history-archive-object/HistoryArchiveObjectPlanningPolicy.js';
+import { getHistoryArchiveCanonicalFirstRoot } from './HistoryArchiveCanonicalFirst.js';
 import { notifyHistoryArchiveReadyWork } from './HistoryArchiveObjectReadyQueue.js';
 
 const maximumCheckpointFanoutBatch = historyArchiveSequentialPrefetchDepth;
 const maximumCheckpointCursorBatch = 128;
 const checkpointFanoutLedgerSpan =
 	(historyArchiveSequentialPrefetchDepth - 1) * 64;
-
-function configuredCanonicalArchiveIdentity(): string | null {
-	const raw = process.env.HISTORY_ARCHIVE_CANONICAL_FIRST_ROOT;
-	if (raw === undefined) return null;
-	const normalized = raw.trim().replace(/\/+$/, '');
-	return normalized.length === 0 ? null : normalized;
-}
 
 export async function findVerifiedCheckpointsNeedingFanout(
 	repository: Repository<HistoryArchiveObject>,
@@ -155,7 +149,7 @@ export async function materializeCompactCheckpointPlans(
 		maximumCheckpointCursorBatch,
 		historyArchiveSequentialPrefetchDepth,
 		targetedIdentities,
-		configuredCanonicalArchiveIdentity()
+		getHistoryArchiveCanonicalFirstRoot()
 	])) as readonly {
 		readonly planned: number | string;
 		readonly ready?: number | string;

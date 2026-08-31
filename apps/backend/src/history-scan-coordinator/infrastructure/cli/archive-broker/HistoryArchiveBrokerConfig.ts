@@ -3,6 +3,7 @@ import {
 	parseHistoryArchiveBrokerMaximumPriority,
 	type HistoryArchiveBrokerPriority
 } from '@history-scan-coordinator/domain/history-archive-object/HistoryArchiveBrokerPriority.js';
+import { getHistoryArchiveCanonicalFirstRoot } from '../../repositories/database/HistoryArchiveCanonicalFirst.js';
 
 export { parseHistoryArchiveBrokerMaximumPriority };
 
@@ -28,13 +29,6 @@ function readPositiveInteger(name: string, fallback: number): number {
 	if (!Number.isSafeInteger(value) || value < 1)
 		throw new Error(`${name} must be a positive integer`);
 	return value;
-}
-
-function readCanonicalFirstRoot(): string | null {
-	const raw = process.env.HISTORY_ARCHIVE_CANONICAL_FIRST_ROOT;
-	if (raw === undefined) return null;
-	const normalized = raw.trim().replace(/\/+$/, '');
-	return normalized.length === 0 ? null : normalized;
 }
 
 export function getHistoryArchiveBrokerConfig(): HistoryArchiveBrokerConfig {
@@ -63,7 +57,7 @@ export function getHistoryArchiveBrokerConfig(): HistoryArchiveBrokerConfig {
 			readPositiveInteger('HISTORY_ARCHIVE_BROKER_BATCH_SIZE', highWatermark),
 			highWatermark
 		),
-		canonicalFirstRoot: readCanonicalFirstRoot(),
+		canonicalFirstRoot: getHistoryArchiveCanonicalFirstRoot(),
 		capacitySignalSubject: `${subject}.capacity`,
 		consumer:
 			process.env.NATS_ARCHIVE_JOB_CONSUMER ??

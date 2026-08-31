@@ -17,7 +17,13 @@ import {
 	historyArchiveCheckpointProofEvidenceTerminalSql,
 	historyArchiveCheckpointProofTerminalReadySql
 } from '../HistoryArchiveCheckpointProofReadinessSql.js';
+import {
+	getHistoryArchiveCanonicalFirstRoot,
+	historyArchiveCanonicalFirstAdmissionSql,
+	historyArchiveCanonicalFirstScopeCteSql
+} from '../HistoryArchiveCanonicalFirst.js';
 import { targetedCompactCheckpointPlanSql } from '../HistoryArchiveCompactPlanning.js';
+import { historyArchiveCheckpointProofBatchQueuedRefreshSql } from '../HistoryArchiveCheckpointProofRefreshSql.js';
 import { historyArchiveCheckpointProofBatchTargetCtesSql } from '../HistoryArchiveCheckpointProofTargetSql.js';
 import { historyArchiveCheckpointProofBatchQueuedUpsertSql } from '../HistoryArchiveCheckpointProofUpsertSql.js';
 import { historyArchiveObjectOpenSequentialCohortSql } from '../HistoryArchiveSequentialChainSql.js';
@@ -65,6 +71,41 @@ describe('sequential history archive proof chain', () => {
 			'queue."checkpointLedger" =\n' +
 				'\t\t\t\tchain_cursor."nextHistoricalCheckpointLedger" - 64'
 		);
+		expect(claimSequentialProofRefreshSql).toContain(
+			historyArchiveCanonicalFirstScopeCteSql('$1::text')
+		);
+		expect(claimSequentialProofRefreshSql).toContain(
+			historyArchiveCanonicalFirstAdmissionSql(
+				'queue."archiveUrlIdentity"',
+				'$1::text'
+			)
+		);
+	});
+
+	it('normalizes the one canonical-first root used by every admission path', () => {
+		expect(
+			getHistoryArchiveCanonicalFirstRoot({
+				HISTORY_ARCHIVE_CANONICAL_FIRST_ROOT:
+					'http://history.stellar.org/prd/core-live/core_live_001///'
+			})
+		).toBe('http://history.stellar.org/prd/core-live/core_live_001');
+		expect(getHistoryArchiveCanonicalFirstRoot({})).toBeNull();
+	});
+
+	it('uses indexable direct and substitution predecessor lookups', () => {
+		const start = historyArchiveCheckpointProofBatchQueuedRefreshSql.indexOf(
+			'previous_boundary as materialized'
+		);
+		const end = historyArchiveCheckpointProofBatchQueuedRefreshSql.indexOf(
+			'ledger_chain as',
+			start
+		);
+		const predecessorSql =
+			historyArchiveCheckpointProofBatchQueuedRefreshSql.slice(start, end);
+		expect(predecessorSql).toContain('union all');
+		expect(predecessorSql).toContain('source_priority');
+		expect(predecessorSql).toContain('source_proof."ledgerObjectRemoteId"');
+		expect(predecessorSql).not.toContain('or exists');
 	});
 
 	it('bounds consecutive proof work while keeping the same root and cursor gate', () => {
@@ -149,16 +190,31 @@ describe('sequential history archive proof chain', () => {
 				await callback(manager)
 		);
 		const dataSource = { transaction } as unknown as DataSource;
+		const previousCanonicalRoot =
+			process.env.HISTORY_ARCHIVE_CANONICAL_FIRST_ROOT;
+		process.env.HISTORY_ARCHIVE_CANONICAL_FIRST_ROOT =
+			'https://canonical.example/';
 
-		const claimed = await claimHistoryArchiveCheckpointProofRefreshes(
-			dataSource,
-			192,
-			1
-		);
+		const claimed = await (async () => {
+			try {
+				return await claimHistoryArchiveCheckpointProofRefreshes(
+					dataSource,
+					192,
+					1
+				);
+			} finally {
+				if (previousCanonicalRoot === undefined)
+					delete process.env.HISTORY_ARCHIVE_CANONICAL_FIRST_ROOT;
+				else
+					process.env.HISTORY_ARCHIVE_CANONICAL_FIRST_ROOT =
+						previousCanonicalRoot;
+			}
+		})();
 
 		expect(transaction).toHaveBeenCalledTimes(1);
 		expect(query).toHaveBeenCalledTimes(3);
 		expect(query).toHaveBeenNthCalledWith(3, claimSequentialProofRefreshSql, [
+			'https://canonical.example',
 			normalizeTargetedProofRefreshBatchSize(192)
 		]);
 		expect(claimed.map((target) => target.generation)).toEqual([2, 3]);

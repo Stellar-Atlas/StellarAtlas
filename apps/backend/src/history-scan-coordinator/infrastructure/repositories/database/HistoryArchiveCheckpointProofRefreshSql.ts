@@ -235,36 +235,42 @@ function buildHistoryArchiveCheckpointProofRefreshSql(
 				as boundary_substituted
 		from expected_checkpoint_ranges range
 		left join lateral (
-			select predecessor.*
-			from "history_archive_object_queue" predecessor
-			where predecessor."objectType" = 'ledger'
-				and predecessor.status = 'verified'
-				and (
-					(
-						predecessor."archiveUrlIdentity" =
+			select candidate.*
+			from (
+				(
+					select predecessor.*, 0 as source_priority
+					from "history_archive_object_queue" predecessor
+					where predecessor."objectType" = 'ledger'
+						and predecessor.status = 'verified'
+						and predecessor."archiveUrlIdentity" =
 							range."archiveUrlIdentity"
 						and predecessor."checkpointLedger" =
 							range."checkpointLedger" - 64
-					) or exists (
-						select 1
-						from "history_archive_checkpoint_substitution" substitution
-						join "history_archive_checkpoint_proof" source_proof
-							on source_proof.id =
-								substitution."sourceCheckpointProofId"
-							and source_proof.status = 'verified'
-						where substitution."archiveUrlIdentity" =
-								range."archiveUrlIdentity"
-							and substitution."checkpointLedger" =
-								range."checkpointLedger" - 64
-							and source_proof."ledgerObjectRemoteId" =
-								predecessor."remoteId"
-					)
+					order by predecessor."remoteId"
+					limit 1
 				)
-			order by case
-				when predecessor."archiveUrlIdentity" = range."archiveUrlIdentity"
-					then 0
-				else 1
-			end, predecessor."remoteId"
+				union all
+				(
+					select predecessor.*, 1 as source_priority
+					from "history_archive_checkpoint_substitution" substitution
+					join "history_archive_checkpoint_proof" source_proof
+						on source_proof.id =
+							substitution."sourceCheckpointProofId"
+						and source_proof.status = 'verified'
+					join "history_archive_object_queue" predecessor
+						on predecessor."remoteId" =
+							source_proof."ledgerObjectRemoteId"
+						and predecessor."objectType" = 'ledger'
+						and predecessor.status = 'verified'
+					where substitution."archiveUrlIdentity" =
+							range."archiveUrlIdentity"
+						and substitution."checkpointLedger" =
+							range."checkpointLedger" - 64
+					order by predecessor."remoteId"
+					limit 1
+				)
+			) candidate
+			order by candidate.source_priority, candidate."remoteId"
 			limit 1
 		) object on true
 		left join lateral jsonb_array_elements(${ledgerFactsJsonSql}) fact

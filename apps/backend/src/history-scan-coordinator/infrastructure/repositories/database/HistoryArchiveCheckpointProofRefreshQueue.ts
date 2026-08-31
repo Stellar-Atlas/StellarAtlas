@@ -4,6 +4,11 @@ import type {
 	HistoryArchiveCheckpointProofRefreshDrainResult,
 	HistoryArchiveCheckpointProofRefreshPriority
 } from '@history-scan-coordinator/domain/history-archive-object/HistoryArchiveObjectRepository.js';
+import {
+	getHistoryArchiveCanonicalFirstRoot,
+	historyArchiveCanonicalFirstAdmissionSql,
+	historyArchiveCanonicalFirstScopeCteSql
+} from './HistoryArchiveCanonicalFirst.js';
 import { canonicalRuntimeTargetCtes } from './HistoryArchiveCanonicalRuntimeTargetSql.js';
 import { dueProofRefreshCanonicalRuntimeArchiveRootsCteSql } from './HistoryArchiveCanonicalRuntimePrioritySql.js';
 import {
@@ -272,12 +277,15 @@ export async function claimHistoryArchiveCheckpointProofRefreshes(
 	return await dataSource.transaction(async (manager) => {
 		await manager.query(`set local lock_timeout = '250ms'`);
 		await manager.query(`set local statement_timeout = '2s'`);
+		const canonicalFirstRoot = getHistoryArchiveCanonicalFirstRoot();
 		const claimSql =
 			maximumPriority === 1
 				? claimSequentialProofRefreshSql
 				: claimProofRefreshSql;
 		const parameters =
-			maximumPriority === 1 ? [safeLimit] : [maximumPriority, safeLimit];
+			maximumPriority === 1
+				? [canonicalFirstRoot, safeLimit]
+				: [maximumPriority, safeLimit];
 		const rows = (await manager.query(claimSql, parameters)) as readonly (Omit<
 			ClaimedHistoryArchiveCheckpointProofRefresh,
 			'generation'
@@ -811,7 +819,7 @@ export const claimLockedSequentialProofRefreshSql = `
 `;
 
 export const claimSequentialProofRefreshSql = `
-	with candidate as materialized (
+	with ${historyArchiveCanonicalFirstScopeCteSql('$1::text')}, candidate as materialized (
 		select queue."archiveUrlIdentity", queue."checkpointLedger"
 		from history_archive_checkpoint_proof_refresh_queue queue
 		join "history_archive_checkpoint_scan_cursor" chain_cursor
@@ -821,10 +829,11 @@ export const claimSequentialProofRefreshSql = `
 				chain_cursor."nextHistoricalCheckpointLedger" - 64
 		where queue."nextAttemptAt" <= now()
 			and (queue."leaseUntil" is null or queue."leaseUntil" <= now())
+			and ${historyArchiveCanonicalFirstAdmissionSql('queue."archiveUrlIdentity"', '$1::text')}
 		order by queue."nextAttemptAt", queue."requestedAt", queue.attempts,
 			queue."archiveUrlIdentity", queue."checkpointLedger"
 		for update of queue skip locked
-		limit $1::integer
+		limit $2::integer
 	), claimed as (
 		update history_archive_checkpoint_proof_refresh_queue queue
 		set "leaseToken" = gen_random_uuid(),
