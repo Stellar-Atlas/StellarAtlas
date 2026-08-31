@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import Link from 'next/link';
 import type {
 	PublicHistoryArchiveObjectEvents,
 	PublicHistoryArchiveStatusSummary
@@ -213,6 +214,9 @@ function ArchiveSourcesDetail({
 					retries
 				</span>
 			</summary>
+			<Link className="archive-inventory-link" href="/archives">
+				Open the complete archive-root inventory
+			</Link>
 			<div className="responsive-table">
 				<table className="archive-summary-table">
 					<thead>

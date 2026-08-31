@@ -1,0 +1,250 @@
+.archive-inventory-route {
+	display: grid;
+	gap: 18px;
+}
+
+.archive-inventory-explainer,
+.archive-inventory-overview {
+	background: var(--panel);
+	border: 1px solid var(--border);
+	border-radius: 10px;
+}
+
+.archive-inventory-explainer {
+	display: grid;
+	gap: 6px;
+	padding: 16px 18px;
+}
+
+.archive-inventory-explainer p,
+.archive-canonical-progress p,
+.generated-api-heading p {
+	color: var(--muted);
+	line-height: 1.5;
+	margin: 0;
+}
+
+.archive-inventory-overview {
+	display: grid;
+	gap: 18px;
+	padding: 18px;
+}
+
+.archive-inventory-metrics {
+	display: grid;
+	gap: 10px;
+	grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+}
+
+.archive-inventory-metrics > div {
+	background: var(--surface-subtle);
+	border: 1px solid var(--border);
+	border-radius: 8px;
+	display: grid;
+	gap: 4px;
+	padding: 12px;
+}
+
+.archive-inventory-metrics strong {
+	font-size: 1.25rem;
+}
+
+.archive-inventory-metrics span {
+	color: var(--muted);
+	font-size: 0.8rem;
+	font-weight: 800;
+}
+
+.archive-canonical-progress {
+	display: grid;
+	gap: 10px;
+}
+
+.archive-canonical-progress > div {
+	align-items: baseline;
+	display: flex;
+	flex-wrap: wrap;
+	gap: 8px 18px;
+	justify-content: space-between;
+}
+
+.archive-canonical-progress > div span {
+	color: var(--muted);
+	font-weight: 800;
+}
+
+.archive-canonical-progress progress,
+.archive-root-inventory-table progress {
+	accent-color: var(--blue);
+	block-size: 12px;
+	inline-size: 100%;
+}
+
+.archive-root-inventory-panel {
+	min-inline-size: 0;
+}
+
+.archive-root-inventory-table-wrap {
+	max-block-size: 70vh;
+	overflow: auto;
+}
+
+.archive-root-inventory-table {
+	min-inline-size: 1560px;
+	table-layout: fixed;
+}
+
+.archive-root-inventory-table th,
+.archive-root-inventory-table td {
+	overflow-wrap: anywhere;
+	padding: 12px;
+	vertical-align: top;
+}
+
+.archive-root-inventory-table th:nth-child(1) {
+	inline-size: 21%;
+}
+
+.archive-root-inventory-table th:nth-child(2) {
+	inline-size: 20%;
+}
+
+.archive-root-inventory-table th:nth-child(3),
+.archive-root-inventory-table th:nth-child(4),
+.archive-root-inventory-table th:nth-child(5) {
+	inline-size: 16%;
+}
+
+.archive-root-inventory-table th:nth-child(6) {
+	inline-size: 11%;
+}
+
+.archive-root-inventory-table td,
+.archive-root-inventory-table td > small {
+	display: grid;
+	gap: 6px;
+}
+
+.archive-root-inventory-table td > small {
+	color: var(--muted);
+	font-weight: 700;
+}
+
+.archive-root-url {
+	font-weight: 900;
+}
+
+.archive-advertiser-list {
+	display: grid;
+	gap: 8px;
+	list-style: none;
+	margin: 8px 0 0;
+	max-block-size: 180px;
+	overflow-y: auto;
+	padding: 0;
+}
+
+.archive-advertiser-list li {
+	border-block-start: 1px solid var(--border);
+	display: grid;
+	gap: 2px;
+	padding-block-start: 7px;
+}
+
+.archive-advertiser-list small {
+	color: var(--muted);
+	font-size: 0.72rem;
+}
+
+.archive-root-inventory-table .primary-button {
+	display: inline-flex;
+	font-size: 0.78rem;
+	justify-content: center;
+	white-space: normal;
+}
+
+.archive-inventory-link {
+	display: inline-flex;
+	font-weight: 900;
+	padding: 12px 18px 0;
+}
+
+.generated-api-reference {
+	border-block-start: 2px solid var(--border);
+	margin-block-start: 28px;
+	padding-block-start: 24px;
+}
+
+.generated-api-heading {
+	align-items: start;
+	display: flex;
+	flex-wrap: wrap;
+	gap: 12px 24px;
+	justify-content: space-between;
+	padding-block-end: 14px;
+}
+
+.generated-api-heading h2 {
+	margin: 0 0 6px;
+}
+
+.generated-api-heading > strong {
+	background: var(--surface-subtle);
+	border: 1px solid var(--border);
+	border-radius: 8px;
+	padding: 10px 12px;
+}
+
+.generated-endpoint {
+	align-items: start;
+	display: grid;
+	gap: 10px;
+	grid-template-columns: 64px minmax(0, 1fr);
+}
+
+.generated-endpoint > div {
+	display: grid;
+	gap: 4px;
+	min-inline-size: 0;
+}
+
+.generated-endpoint code {
+	overflow-wrap: anywhere;
+}
+
+.generated-endpoint small {
+	color: var(--muted);
+	line-height: 1.35;
+}
+
+.endpoint-method {
+	border: 1px solid var(--border);
+	border-radius: 6px;
+	color: var(--text);
+	font-size: 0.72rem;
+	font-weight: 900;
+	padding: 7px 5px;
+	text-align: center;
+}
+
+.endpoint-method-get {
+	background: color-mix(in srgb, var(--state-success) 18%, transparent);
+}
+
+.endpoint-method-post {
+	background: color-mix(in srgb, var(--blue) 18%, transparent);
+}
+
+.endpoint-method-delete {
+	background: color-mix(in srgb, var(--state-danger) 18%, transparent);
+}
+
+@media (max-width: 720px) {
+	.archive-root-inventory-table-wrap {
+		max-block-size: none;
+	}
+
+	.generated-api-heading {
+		display: grid;
+	}
+}

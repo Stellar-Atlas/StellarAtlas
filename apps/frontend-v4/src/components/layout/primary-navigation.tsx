@@ -13,6 +13,7 @@ const navigationItems = [
 	{ href: '/nodes', label: 'Nodes' },
 	{ href: '/organizations', label: 'Organizations' },
 	{ href: '/status', label: 'Status' },
+	{ href: '/archives', label: 'Archives' },
 	{ href: '/docs', label: 'API' }
 ] as const;
 
