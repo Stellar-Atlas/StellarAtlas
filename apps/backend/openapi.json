@@ -41,6 +41,10 @@
 			"description": "Public history archive scan views and queue health"
 		},
 		{
+			"name": "Analytics",
+			"description": "Hubble-compatible historical analytics queries served from StellarAtlas-owned data"
+		},
+		{
 			"name": "Community scanner operators",
 			"description": "Operator-facing community scanner registration and heartbeat routes"
 		},
@@ -74,6 +78,98 @@
 		}
 	],
 	"paths": {
+		"/v1/analytics/assets/{assetId}/holders/{address}": {
+			"get": {
+				"summary": "Get an address's balance for an asset",
+				"description": "Returns the latest imported native-account or trustline state for one asset and one address. Coverage fields identify the currently imported historical range; this route does not claim complete Hubble coverage while the warehouse build is in progress.",
+				"tags": ["Analytics"],
+				"operationId": "getAnalyticsAssetHolder",
+				"parameters": [
+					{
+						"name": "assetId",
+						"in": "path",
+						"required": true,
+						"description": "native, CODE:ISSUER, or CODE-ISSUER",
+						"schema": { "type": "string" }
+					},
+					{
+						"name": "address",
+						"in": "path",
+						"required": true,
+						"description": "Stellar account address",
+						"schema": { "type": "string" }
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "Latest imported holder state and explicit coverage",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object",
+									"required": ["data", "coverage"],
+									"properties": {
+										"data": { "type": "object", "nullable": true },
+										"coverage": { "type": "object" }
+									}
+								}
+							}
+						}
+					},
+					"400": { "description": "Invalid asset or address" },
+					"503": { "description": "Analytics projection unavailable" }
+				}
+			}
+		},
+		"/graphql": {
+			"post": {
+				"summary": "Query StellarAtlas historical analytics with GraphQL",
+				"description": "Standard GraphQL endpoint backed by the same query service as the REST analytics API. The hubbleStatus query reports the currently implemented Hubble-compatible surface and warehouse state.",
+				"tags": ["Analytics"],
+				"operationId": "postAnalyticsGraphql",
+				"requestBody": {
+					"required": true,
+					"content": {
+						"application/json": {
+							"schema": {
+								"type": "object",
+								"required": ["query"],
+								"properties": {
+									"query": { "type": "string" },
+									"variables": {
+										"type": "object",
+										"additionalProperties": true
+									},
+									"operationName": {
+										"type": "string",
+										"nullable": true
+									}
+								}
+							}
+						}
+					}
+				},
+				"responses": {
+					"200": {
+						"description": "GraphQL execution result",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object",
+									"properties": {
+										"data": { "type": "object", "nullable": true },
+										"errors": {
+											"type": "array",
+											"items": { "type": "object" }
+										}
+									}
+								}
+							}
+						}
+					}
+				}
+			}
+		},
 		"/v1": {
 			"get": {
 				"summary": "Get network information",

@@ -116,6 +116,7 @@ import { mountOpenApiDocumentation } from './OpenApiDocumentation.js';
 import { readOnlyUpstreamRouter } from './ReadOnlyUpstreamRouter.js';
 import { historyDataRouter } from '@status/infrastructure/http/HistoryDataRouter.js';
 import { historyAnalyticsRouter } from '@status/infrastructure/http/HistoryAnalyticsRouter.js';
+import { historyAnalyticsGraphqlHandler } from '@status/infrastructure/http/HistoryAnalyticsGraphql.js';
 import { corsMiddleware } from './CorsMiddleware.js';
 import {
 	stellarRpcRouter,
@@ -207,7 +208,16 @@ const listen = async () => {
 	api.use(
 		'/v1/analytics',
 		historyAnalyticsRouter({
-			horizonBaseUrl: config.horizonUrl.value
+			dataSource: kernel.container.get(DataSource),
+			networkPassphrase: config.networkConfig.networkPassphrase
+		})
+	);
+
+	api.all(
+		'/graphql',
+		historyAnalyticsGraphqlHandler({
+			dataSource: kernel.container.get(DataSource),
+			networkPassphrase: config.networkConfig.networkPassphrase
 		})
 	);
 

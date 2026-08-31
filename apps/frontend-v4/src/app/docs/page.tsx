@@ -79,13 +79,14 @@ const endpointGroups: EndpointGroup[] = [
 	},
 	{
 		description:
-			'Read-only access to the owned Horizon API, the official SEP-54 Galexie object store, and StellarAtlas immutable decoded-history batches. The decoded LedgerCloseMeta stream begins at ledger 2: ledger 1 is the synthetic genesis header with no close transition, and ledger 2 is an empty-transaction close linked to that genesis hash. The decoded batch format is not SEP-54 object geometry.',
+			'Read-only access to the owned Horizon API, Stellar RPC, the raw SEP-54 Galexie object store, immutable decoded-history batches, and the self-hosted Hubble-compatible query surface. GraphQL reports current warehouse coverage instead of implying the backfill is complete. The decoded LedgerCloseMeta stream begins at ledger 2: ledger 1 is the synthetic genesis header with no close transition, and ledger 2 is an empty-transaction close linked to that genesis hash. The decoded batch format is not SEP-54 object geometry.',
 		endpoints: [
 			'/horizon/',
 			'POST /rpc',
 			'/galexie/.config.json',
 			'/galexie/:sep54ObjectPath',
-			'/v1/analytics/assets/holders?assetCode=:code&assetIssuer=:issuer',
+			'/v1/analytics/assets/:assetId/holders/:address',
+			'POST /graphql',
 			'/v1/history-data/catalog',
 			'/v1/history-data/batches?dataset=:dataset&limit=:limit&beforeLedger=:ledger',
 			'/v1/history-data/batches/:batchId/:dataset'

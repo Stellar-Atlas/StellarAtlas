@@ -49,6 +49,11 @@ const publicTagDefinitions = [
 		name: 'Data access'
 	},
 	{
+		description:
+			'Hubble-compatible historical analytics queries served by StellarAtlas.',
+		name: 'Analytics'
+	},
+	{
 		description: 'Federated Byzantine Agreement System quorum evidence.',
 		name: 'FBAS'
 	},
@@ -114,12 +119,12 @@ function canonicalPublicTag(path: string, value: unknown): string {
 		return 'Organizations';
 	}
 	if (path.startsWith('/v1/status')) return 'Status';
+	if (path.startsWith('/v1/analytics') || path === '/graphql') return 'Analytics';
 	if (
 		path.startsWith('/horizon') ||
 		path === '/rpc' ||
 		path.startsWith('/galexie') ||
-		path.startsWith('/v1/history-data') ||
-		path.startsWith('/v1/analytics')
+		path.startsWith('/v1/history-data')
 	) {
 		return 'Data access';
 	}
