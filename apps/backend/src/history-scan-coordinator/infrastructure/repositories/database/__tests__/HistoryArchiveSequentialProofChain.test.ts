@@ -8,6 +8,7 @@ import {
 	claimProofRefreshSql,
 	claimSequentialProofRefreshSql,
 	enqueueCurrentTerminalReadyCheckpointProofRefreshesSql,
+	proofRefreshBatchHandledEveryValidTarget,
 	enqueueProofRefreshesSql,
 	normalizeConsecutiveProofRefreshTransactionSize,
 	normalizeTargetedProofRefreshBatchSize
@@ -112,6 +113,12 @@ describe('sequential history archive proof chain', () => {
 		expect(historyArchiveCheckpointProofBatchQueuedUpsertSql).not.toContain(
 			'from locked_targets target'
 		);
+	});
+	it('drops stale claims without rolling back valid proof targets', () => {
+		expect(proofRefreshBatchHandledEveryValidTarget(8, 7, 7)).toBe(true);
+		expect(proofRefreshBatchHandledEveryValidTarget(8, 8, 8)).toBe(true);
+		expect(proofRefreshBatchHandledEveryValidTarget(8, 7, 6)).toBe(false);
+		expect(proofRefreshBatchHandledEveryValidTarget(8, 9, 9)).toBe(false);
 	});
 
 	it('claims a proof batch in one transaction', async () => {

@@ -60,6 +60,19 @@ const maximumConsecutiveProofRefreshTransactionSize = 64;
 
 const maximumSetBasedConsecutiveProofRefreshWaveSize =
 	maximumConsecutiveProofRefreshTransactionSize;
+export function proofRefreshBatchHandledEveryValidTarget(
+	claimCount: number,
+	targetCount: number,
+	handledCount: number
+): boolean {
+	return (
+		Number.isSafeInteger(targetCount) &&
+		targetCount >= 0 &&
+		targetCount <= claimCount &&
+		handledCount === targetCount
+	);
+}
+
 export function normalizeConsecutiveProofRefreshTransactionSize(
 	value: number
 ): number {
@@ -405,7 +418,13 @@ async function refreshClaimedHistoryArchiveCheckpointProofWave(
 	)) as readonly ProofRefreshWriteResult[];
 	const targetCount = Number(write?.targetCount ?? write?.targetcount ?? 0);
 	const handledCount = Number(write?.handledCount ?? write?.handledcount ?? 0);
-	if (targetCount !== targets.length || handledCount !== targets.length) {
+	if (
+		!proofRefreshBatchHandledEveryValidTarget(
+			targets.length,
+			targetCount,
+			handledCount
+		)
+	) {
 		throw new Error(
 			'Checkpoint proof batch handled ' +
 				handledCount +
