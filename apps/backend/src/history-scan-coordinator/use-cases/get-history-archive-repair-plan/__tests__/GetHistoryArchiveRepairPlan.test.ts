@@ -202,6 +202,54 @@ describe('GetHistoryArchiveRepairPlan', () => {
 		).toHaveBeenCalledWith([failure.remoteId], 3);
 	});
 
+	it('offers a strict checkpoint replacement for a missing SCP object', async () => {
+		const objectRepository = mock<HistoryArchiveObjectRepository>();
+		const proofRepository = mock<HistoryArchiveCheckpointProofRepository>();
+		const useCase = new GetHistoryArchiveRepairPlan(
+			objectRepository,
+			proofRepository,
+			createArtifactResolver(),
+			mock<ExceptionLogger>()
+		);
+		const failure = createMissingScpFailure();
+		const source = createVerifiedScpSource(failure.remoteId);
+		objectRepository.getRepairPlanSummary.mockResolvedValue(createSummary());
+		objectRepository.findActionableByArchiveUrl.mockResolvedValue([failure]);
+		objectRepository.findVerifiedCheckpointObjectSources.mockResolvedValue([
+			source
+		]);
+		proofRepository.findActionableByArchiveUrlIdentity.mockResolvedValue([]);
+
+		const result = await useCase.execute({ limit: 25, url: archiveUrl });
+
+		expect(result._unsafeUnwrap().actions).toEqual([
+			expect.objectContaining({
+				kind: 'replace-archive-file',
+				knownGoodSources: [
+					expect.objectContaining({
+						objectUrl: expect.stringContaining('/scp/'),
+						proof: expect.objectContaining({
+							contentHash: expect.objectContaining({
+								digest: '7'.repeat(64),
+								representation: 'uncompressed-xdr'
+							}),
+							kind: 'strict-checkpoint'
+						})
+					})
+				],
+				reason: 'missing-object',
+				repairArtifact: expect.objectContaining({
+					artifactType: 'scp',
+					status: 'verify-on-download'
+				}),
+				severity: 'error'
+			})
+		]);
+		expect(
+			objectRepository.findVerifiedCheckpointObjectSources
+		).toHaveBeenCalledWith([failure.remoteId], 3);
+	});
+
 	it('does not turn incomplete checkpoint proofs into repair actions', async () => {
 		const objectRepository = mock<HistoryArchiveObjectRepository>();
 		const proofRepository = mock<HistoryArchiveCheckpointProofRepository>();
@@ -391,6 +439,16 @@ function createCorruptTransactionsFailure(): HistoryArchiveObject {
 	return object;
 }
 
+function createMissingScpFailure(): HistoryArchiveObject {
+	const object = createObject('scp', 'scp:009e8dff', 'failed');
+	object.checkpointLedger = 10391039;
+	object.errorType = 'archive_http_error';
+	object.errorMessage = 'Remote archive returned HTTP 404';
+	object.failureChannel = 'archive_evidence';
+	object.httpStatus = 404;
+	return object;
+}
+
 function createVerifiedBucketCopy(
 	targetRemoteId: string
 ): HistoryArchiveVerifiedBucketSource {
@@ -435,6 +493,17 @@ function createVerifiedCheckpointSource(
 		proofVersion: CURRENT_HISTORY_ARCHIVE_CHECKPOINT_PROOF_VERSION,
 		targetRemoteId,
 		verifiedAt: new Date('2026-07-07T18:00:00.000Z')
+	};
+}
+
+function createVerifiedScpSource(
+	targetRemoteId: string
+): HistoryArchiveVerifiedCheckpointObjectSource {
+	return {
+		...createVerifiedCheckpointSource(targetRemoteId),
+		checkpointLedger: 10391039,
+		objectUrl:
+			'https://other-history.example.com/scp/00/9e/8d/scp-009e8dff.xdr.gz'
 	};
 }
 

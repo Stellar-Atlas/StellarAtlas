@@ -124,9 +124,6 @@ export class TypeOrmHistoryArchiveObjectRepository implements HistoryArchiveObje
 				archiveUrlIdentity
 			})
 			.andWhere('archiveObject.status = :status', { status: 'failed' })
-			.andWhere('archiveObject.objectType <> :optionalObjectType', {
-				optionalObjectType: 'scp'
-			})
 			.andWhere(
 				`(
 				"archiveObject"."checkpointLedger" is null
