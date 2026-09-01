@@ -120,6 +120,7 @@ interface QueryParameter {
 }
 
 const identifierPattern = /^[a-z][a-z0-9_]*$/;
+const columnIdentifierPattern = /^[a-z_][a-z0-9_]*$/;
 const officialSchemaSource =
 	'github.com/stellar/stellar-etl/v2/internal/transform@v2.8.23';
 const catalogCacheMilliseconds = 15_000;
@@ -320,7 +321,7 @@ FORMAT JSON`,
 		for (const row of columnResponse.data ?? []) {
 			if (
 				!identifierPattern.test(row.table) ||
-				!identifierPattern.test(row.name)
+				!columnIdentifierPattern.test(row.name)
 			) {
 				throw new HubbleWarehouseUnavailableError(
 					'ClickHouse returned an invalid Hubble schema identifier'

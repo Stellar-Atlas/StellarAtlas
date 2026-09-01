@@ -85,6 +85,12 @@ function mockFetch(requests: URL[]): typeof fetch {
 						position: 2,
 						table: 'history_transactions',
 						type: 'UInt32'
+					},
+					{
+						name: '_batch_id',
+						position: 3,
+						table: 'history_transactions',
+						type: 'UUID'
 					}
 				]
 			});
