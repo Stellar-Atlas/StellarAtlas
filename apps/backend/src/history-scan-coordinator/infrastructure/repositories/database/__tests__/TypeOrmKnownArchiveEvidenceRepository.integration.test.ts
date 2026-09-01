@@ -414,7 +414,7 @@ describe('TypeOrmKnownArchiveEvidenceRepository', () => {
 		});
 	});
 
-	it('uses verified canonical identity for a missing non-bucket file', async () => {
+	it('uses verified canonical identity for missing category and SCP files', async () => {
 		const objectKey = 'transactions:0000003f';
 		const missing = createObject(rootA, objectKey, 'transactions', 'failed');
 		missing.failureChannel = 'archive_evidence';
@@ -483,7 +483,16 @@ describe('TypeOrmKnownArchiveEvidenceRepository', () => {
 		});
 		expect(scpFailure).toMatchObject({
 			networkVerifiedCopies: { copies: [], count: 0 },
-			sameOrganizationVerifiedCopies: { copies: [], count: 0 }
+			object: { remoteId: scpMissing.remoteId },
+			sameOrganizationVerifiedCopies: {
+				copies: [
+					{
+						archiveUrlIdentity: rootB,
+						objectUrl: scpVerified.objectUrl
+					}
+				],
+				count: 1
+			}
 		});
 	});
 });

@@ -304,7 +304,8 @@ export const knownArchiveCopyCoverageSql = `
 								'checkpoint-state',
 								'ledger',
 								'transactions',
-								'results'
+								'results',
+								'scp'
 							)
 							and copy."sourceCheckpointLedger" is not null
 							and copy."checkpointLedger" =

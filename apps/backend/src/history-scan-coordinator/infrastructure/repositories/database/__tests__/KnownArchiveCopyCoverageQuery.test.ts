@@ -96,6 +96,9 @@ describe('KnownArchiveCopyCoverageQuery', () => {
 		expect(knownArchiveCopyCoverageSql).toContain(
 			'copy."sourceObjectType" in ('
 		);
+		expect(knownArchiveCopyCoverageSql).toMatch(
+			/copy\."sourceObjectType" in \([\s\S]*?'scp'/
+		);
 		expect(knownArchiveCopyCoverageSql).toContain('copy."checkpointLedger" =');
 		expect(knownArchiveCopyCoverageSql).not.toContain(
 			"source.\"objectType\" in ('history-archive-state', 'scp')"
