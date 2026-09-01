@@ -1,5 +1,5 @@
 <clickhouse>
-    <path replace="replace">/mnt/fast/clickhouse/data/</path>
+    <path replace="replace">/mnt/bulk/clickhouse/data/</path>
     <tmp_path replace="replace">/mnt/fast/clickhouse/tmp/</tmp_path>
     <user_files_path replace="replace">/mnt/fast/clickhouse/user_files/</user_files_path>
     <format_schema_path replace="replace">/mnt/fast/clickhouse/format_schemas/</format_schema_path>
