@@ -117,10 +117,12 @@ export async function publishHistoryArchiveBrokerJobs(
 				const payload = Buffer.from(
 					JSON.stringify({ executionId: job.executionId, job: job.job })
 				);
-				// The database execution UUID fences crash-replay duplicates.
-				// Publish every reservation: message-ID deduplication can suppress a
-				// valid replay after its original delivery was already acknowledged.
-				await jetStream.publish(subject, payload, { timeout: 5_000 });
+				// The database execution UUID is also the JetStream de-duplication ID.
+				// Replaying one reservation must never create concurrent downloads.
+				await jetStream.publish(subject, payload, {
+					msgID: job.executionId,
+					timeout: 5_000
+				});
 				return job.executionId;
 			})
 		);

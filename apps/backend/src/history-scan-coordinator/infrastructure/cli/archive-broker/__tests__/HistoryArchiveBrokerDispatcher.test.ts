@@ -66,7 +66,12 @@ describe('publishHistoryArchiveBrokerJobs', () => {
 	it('keeps successful reservations published and resets only rejected messages', async () => {
 		const acceptedId = '00000000-0000-0000-0000-000000000001';
 		const rejectedId = '00000000-0000-0000-0000-000000000002';
-		const publish = jest.fn(async (_subject: string, payload: Uint8Array) => {
+		const publish = jest.fn(
+			async (
+				_subject: string,
+				payload: Uint8Array,
+				_options?: { msgID?: string }
+			) => {
 			const envelope = JSON.parse(Buffer.from(payload).toString()) as {
 				executionId: string;
 			};
@@ -90,8 +95,15 @@ describe('publishHistoryArchiveBrokerJobs', () => {
 		expect(publish).toHaveBeenCalledWith(
 			'archive.jobs',
 			expect.any(Uint8Array),
-			{ timeout: 5_000 }
+			expect.objectContaining({
+				msgID: expect.any(String),
+				timeout: 5_000
+			})
 		);
+		expect(publish.mock.calls.map((call) => call[2]?.msgID)).toEqual([
+			acceptedId,
+			rejectedId
+		]);
 		expect(resetPublished).toHaveBeenCalledTimes(1);
 		expect(resetPublished).toHaveBeenCalledWith([rejectedId]);
 	});
