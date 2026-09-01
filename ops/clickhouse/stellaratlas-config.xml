@@ -1,0 +1,18 @@
+<clickhouse>
+    <path replace="replace">/mnt/fast/clickhouse/data/</path>
+    <tmp_path replace="replace">/mnt/fast/clickhouse/tmp/</tmp_path>
+    <user_files_path replace="replace">/mnt/fast/clickhouse/user_files/</user_files_path>
+    <format_schema_path replace="replace">/mnt/fast/clickhouse/format_schemas/</format_schema_path>
+
+    <listen_host replace="replace">127.0.0.1</listen_host>
+    <listen_host>192.168.122.1</listen_host>
+    <max_connections>4096</max_connections>
+    <max_concurrent_queries>256</max_concurrent_queries>
+    <max_server_memory_usage_to_ram_ratio>0.50</max_server_memory_usage_to_ram_ratio>
+
+    <logger>
+        <level>information</level>
+        <size>1000M</size>
+        <count>5</count>
+    </logger>
+</clickhouse>

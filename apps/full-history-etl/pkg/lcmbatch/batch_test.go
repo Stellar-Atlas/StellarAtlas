@@ -1,4 +1,4 @@
-package input
+package lcmbatch
 
 import (
 	"bytes"
@@ -100,7 +100,7 @@ func TestDecodeFileRejectsTrailingXDR(t *testing.T) {
 }
 
 func fixturePath() string {
-	return filepath.Join("..", "testdata", fixtureName)
+	return filepath.Join("..", "..", "internal", "testdata", fixtureName)
 }
 
 func testLimits() Limits {

@@ -1,0 +1,42 @@
+[Unit]
+Description=StellarAtlas Hubble warehouse ETL
+After=clickhouse-server.service network-online.target stellaratlas-postgresql.service
+Requires=clickhouse-server.service
+Wants=network-online.target
+RequiresMountsFor=/mnt/bulk /mnt/fast
+
+[Service]
+Type=simple
+User=admins
+Group=admins
+WorkingDirectory=/mnt/bulk/stellarbeat-data/Observer/apps/hubble-etl
+EnvironmentFile=/mnt/bulk/stellarbeat-data/Observer/apps/backend/.env
+EnvironmentFile=/etc/stellaratlas/hubble-etl.env
+Environment=FULL_HISTORY_DATA_ROOT=/mnt/bulk/stellarbeat-data/full-history/typed
+Environment=HUBBLE_ETL_MAX_BATCHES=0
+Environment=HUBBLE_ETL_ONCE=false
+Environment=HUBBLE_ETL_WORKERS=8
+ExecStart=/mnt/fast/stellaratlas/bin/stellaratlas-hubble-etl-current run
+Restart=on-failure
+RestartSec=5s
+TimeoutStopSec=120s
+KillSignal=SIGTERM
+Nice=10
+CPUWeight=25
+IOWeight=25
+MemoryHigh=137438953472
+MemoryMax=206158430208
+LimitNOFILE=1048576
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+LockPersonality=true
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+
+[Install]
+WantedBy=multi-user.target

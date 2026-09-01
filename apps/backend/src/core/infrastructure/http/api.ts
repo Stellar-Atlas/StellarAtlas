@@ -116,7 +116,9 @@ import { mountOpenApiDocumentation } from './OpenApiDocumentation.js';
 import { readOnlyUpstreamRouter } from './ReadOnlyUpstreamRouter.js';
 import { historyDataRouter } from '@status/infrastructure/http/HistoryDataRouter.js';
 import { historyAnalyticsRouter } from '@status/infrastructure/http/HistoryAnalyticsRouter.js';
-import { historyAnalyticsGraphqlHandler } from '@status/infrastructure/http/HistoryAnalyticsGraphql.js';
+import { hubbleWarehouseRouter } from '@status/infrastructure/http/HubbleWarehouseRouter.js';
+import { hubbleWarehouseGraphqlHandler } from '@status/infrastructure/http/HubbleWarehouseGraphql.js';
+import { hubbleWarehouseFromEnvironment } from '@status/infrastructure/http/HubbleWarehouseClient.js';
 import { corsMiddleware } from './CorsMiddleware.js';
 import {
 	stellarRpcRouter,
@@ -156,6 +158,7 @@ const listen = async () => {
 	const { config, kernel } = await setup();
 	const exceptionLogger =
 		kernel.container.get<ExceptionLogger>('ExceptionLogger');
+	const hubbleWarehouse = hubbleWarehouseFromEnvironment();
 	const stopHistoryArchiveMaintenance =
 		process.env.API_HISTORY_MAINTENANCE_WRITER === 'true' &&
 		process.env.API_HISTORY_MAINTENANCE_ENABLED !== 'false'
@@ -207,19 +210,18 @@ const listen = async () => {
 
 	api.use(
 		'/v1/analytics',
+		hubbleWarehouseRouter({ warehouse: hubbleWarehouse })
+	);
+
+	api.use(
+		'/v1/analytics',
 		historyAnalyticsRouter({
 			dataSource: kernel.container.get(DataSource),
 			networkPassphrase: config.networkConfig.networkPassphrase
 		})
 	);
 
-	api.all(
-		'/graphql',
-		historyAnalyticsGraphqlHandler({
-			dataSource: kernel.container.get(DataSource),
-			networkPassphrase: config.networkConfig.networkPassphrase
-		})
-	);
+	api.all('/graphql', hubbleWarehouseGraphqlHandler(hubbleWarehouse));
 
 	mountOpenApiDocumentation(api, {
 		document: swaggerDocument,

@@ -5,6 +5,7 @@ import {
 	type OpenApiRecord
 } from './OpenApiDocumentProjection.js';
 import { withDataAccessOpenApiPaths } from './DataAccessOpenApiDocument.js';
+import { withHubbleOpenApiPaths } from './HubbleOpenApiDocument.js';
 import { isPublicOpenApiOperation } from './OpenApiOperationClassification.js';
 
 const publicServer = {
@@ -72,17 +73,20 @@ const publicTagDefinitions = [
 ] as const;
 
 export function createPublicOpenApiDocument(document: unknown): OpenApiRecord {
-	return projectOpenApiDocument(withDataAccessOpenApiPaths(document), {
-		includeOperation: isPublicOpenApiOperation,
-		info: {
-			description:
-				'Canonical public read and notification endpoints provided by StellarAtlas.',
-			title: 'StellarAtlas Public API'
-		},
-		servers: [publicServer],
-		tags: publicTagDefinitions,
-		transformOperation: canonicalizePublicOperation
-	});
+	return projectOpenApiDocument(
+		withHubbleOpenApiPaths(withDataAccessOpenApiPaths(document)),
+		{
+			includeOperation: isPublicOpenApiOperation,
+			info: {
+				description:
+					'Canonical public read and notification endpoints provided by StellarAtlas.',
+				title: 'StellarAtlas Public API'
+			},
+			servers: [publicServer],
+			tags: publicTagDefinitions,
+			transformOperation: canonicalizePublicOperation
+		}
+	);
 }
 
 function canonicalizePublicOperation(
@@ -119,7 +123,8 @@ function canonicalPublicTag(path: string, value: unknown): string {
 		return 'Organizations';
 	}
 	if (path.startsWith('/v1/status')) return 'Status';
-	if (path.startsWith('/v1/analytics') || path === '/graphql') return 'Analytics';
+	if (path.startsWith('/v1/analytics') || path === '/graphql')
+		return 'Analytics';
 	if (
 		path.startsWith('/horizon') ||
 		path === '/rpc' ||

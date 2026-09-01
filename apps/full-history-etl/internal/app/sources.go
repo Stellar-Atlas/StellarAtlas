@@ -5,8 +5,8 @@ import (
 	"encoding/hex"
 	"fmt"
 
-	batchinput "github.com/Stellar-Atlas/StellarAtlas/apps/full-history-etl/internal/input"
 	"github.com/Stellar-Atlas/StellarAtlas/apps/full-history-etl/internal/transform"
+	batchinput "github.com/Stellar-Atlas/StellarAtlas/apps/full-history-etl/pkg/lcmbatch"
 	"github.com/stellar/go-stellar-sdk/xdr"
 )
 

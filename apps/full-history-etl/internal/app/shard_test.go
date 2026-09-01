@@ -10,7 +10,7 @@ import (
 	"strings"
 	"testing"
 
-	batchinput "github.com/Stellar-Atlas/StellarAtlas/apps/full-history-etl/internal/input"
+	batchinput "github.com/Stellar-Atlas/StellarAtlas/apps/full-history-etl/pkg/lcmbatch"
 	"github.com/klauspost/compress/zstd"
 	"github.com/stellar/go-stellar-sdk/xdr"
 )

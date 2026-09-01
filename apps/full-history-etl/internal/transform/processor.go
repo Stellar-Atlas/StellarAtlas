@@ -4,8 +4,8 @@ import (
 	"context"
 	"fmt"
 
-	batchinput "github.com/Stellar-Atlas/StellarAtlas/apps/full-history-etl/internal/input"
 	"github.com/Stellar-Atlas/StellarAtlas/apps/full-history-etl/internal/output"
+	batchinput "github.com/Stellar-Atlas/StellarAtlas/apps/full-history-etl/pkg/lcmbatch"
 	"github.com/stellar/go-stellar-sdk/xdr"
 )
 
