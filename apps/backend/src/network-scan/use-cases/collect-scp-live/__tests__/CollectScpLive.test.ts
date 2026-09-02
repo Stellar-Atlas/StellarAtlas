@@ -36,6 +36,7 @@ describe('CollectScpLive', () => {
 	});
 
 	it('projects a durable streamed observation only through the canonical tail', async () => {
+		process.env.SCP_MEILISEARCH_PROJECTION_ENABLED = 'true';
 		jest.useFakeTimers().setSystemTime(new Date('2026-07-10T12:00:00.000Z'));
 		const sut = setupSUT();
 		const observation = createObservation('11');

@@ -70,7 +70,7 @@ describe('parseMeilisearchRuntimeConfig', () => {
 
 		expect(config.network).toMatchObject({
 			host: 'http://127.0.0.1:7701',
-			writable: true
+			writable: false
 		});
 		expect(config.network.apiKey).toBeUndefined();
 		expect(config.scp).toMatchObject({

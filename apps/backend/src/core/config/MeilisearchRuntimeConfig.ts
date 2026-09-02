@@ -43,7 +43,7 @@ export const parseMeilisearchRuntimeConfig = (
 				defaultMeilisearchNetworkIndex,
 			writable:
 				networkHost !== undefined &&
-				environment.API_SEARCH_PROJECTION_WRITER !== 'false'
+				environment.API_SEARCH_PROJECTION_WRITER === 'true'
 		},
 		scp: {
 			apiKey:

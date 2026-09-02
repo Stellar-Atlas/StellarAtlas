@@ -29,7 +29,7 @@ export interface CollectScpLiveShutdownResult {
 }
 
 const isScpMeilisearchProjectionEnabled = (): boolean =>
-	process.env.SCP_MEILISEARCH_PROJECTION_ENABLED !== 'false';
+	process.env.SCP_MEILISEARCH_PROJECTION_ENABLED === 'true';
 
 @injectable()
 export class CollectScpLive {
