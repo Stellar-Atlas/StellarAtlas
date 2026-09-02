@@ -4,6 +4,7 @@ import { fetchKnownOrganizations, fetchPublicNetwork } from '../../api/client';
 import { PageHeading } from '../../components/layout/page-heading';
 import { RouteLoadingPanel } from '../../components/layout/route-fallbacks';
 import { OrganizationTable } from '../../components/organizations/organization-table';
+import { defaultOrganizationInventoryFilter } from '../../domain/known-network-scopes';
 import { getTopOrganizations } from '../../domain/network';
 import { formatInteger } from '../../format/formatters';
 
@@ -87,5 +88,7 @@ function parsePage(value: string | string[] | undefined): number {
 
 function parseOrganizationScope(value: string | string[] | undefined) {
 	const scope = singleValue(value);
-	return scope === 'archived' || scope === 'all-known' ? scope : 'current';
+	return scope === 'current' || scope === 'archived' || scope === 'all-known'
+		? scope
+		: defaultOrganizationInventoryFilter;
 }

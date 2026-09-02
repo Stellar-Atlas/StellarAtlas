@@ -14,7 +14,7 @@ export const currentValidatingNetworkScopeLabel = 'Current validating network';
 export const defaultNodeInventoryFilter: NodeInventoryFilter =
 	'current-validator';
 export const defaultOrganizationInventoryFilter: PublicKnownOrganizationScope =
-	'current';
+	'all-known';
 
 export const nodeInventoryFilterOrder: readonly NodeInventoryFilter[] = [
 	'current-validator',
@@ -25,7 +25,7 @@ export const nodeInventoryFilterOrder: readonly NodeInventoryFilter[] = [
 ];
 
 export const organizationInventoryFilterOrder: readonly PublicKnownOrganizationScope[] =
-	['current', 'archived', 'all-known'];
+	['all-known', 'current', 'archived'];
 
 export const nodeInventoryFilterLabels: Record<NodeInventoryFilter, string> = {
 	'all-known': 'All known',

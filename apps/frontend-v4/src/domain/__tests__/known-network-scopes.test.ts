@@ -16,9 +16,9 @@ import {
 } from '../known-network-scopes';
 
 describe('known network scopes', () => {
-	it('defaults to current validators and current organizations', () => {
+	it('defaults to current validators and all known organizations', () => {
 		expect(defaultNodeInventoryFilter).toBe('current-validator');
-		expect(defaultOrganizationInventoryFilter).toBe('current');
+		expect(defaultOrganizationInventoryFilter).toBe('all-known');
 		expect(nodeInventoryFilterLabels['public-key-only']).toBe(
 			'Public-key only'
 		);
