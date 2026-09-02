@@ -295,9 +295,10 @@ function CheckpointProofDetail({
 			<summary>
 				<span>Checkpoint proof detail</span>
 				<span className="muted-inline">
-					{formatInteger(checkpoints.categoryConsistentArchiveCheckpoints)} of{' '}
-					{formatInteger(checkpoints.totalArchiveCheckpoints)} tracked
-					checkpoints verified under the current proof
+					{formatInteger(checkpoints.categoryConsistentArchiveCheckpoints)}{' '}
+					verified root-checkpoint attestations across{' '}
+					{formatInteger(checkpoints.totalArchiveCheckpoints)} materialized
+					root-checkpoint observations
 				</span>
 			</summary>
 			<div className="canonical-proof-progress">
@@ -327,16 +328,20 @@ function CheckpointProofDetail({
 					; remaining: {formatInteger(canonical.remainingCheckpoints)}.
 				</p>
 			</div>
+			<p className="muted-copy">
+				The table below counts each archive root separately. It measures remote
+				availability and agreement, not the number of unique canonical proofs.
+			</p>
 			<div className="responsive-table">
 				<table className="archive-checkpoint-proof-table">
 					<thead>
 						<tr>
-							<th>Confirmed mismatch</th>
-							<th>Waiting for required files</th>
-							<th>Needs current proof</th>
-							<th>File set complete</th>
-							<th>Current proof verified</th>
-							<th>Tracked checkpoints</th>
+							<th>Root observations with mismatch</th>
+							<th>Root observations waiting for files</th>
+							<th>Root observations not evaluated</th>
+							<th>Root observations file-complete</th>
+							<th>Root attestations verified</th>
+							<th>Materialized root-checkpoint observations</th>
 						</tr>
 					</thead>
 					<tbody>

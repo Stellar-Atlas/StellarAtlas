@@ -48,7 +48,11 @@ export function HistoryArchiveObjectCoverage({
 							? 'degraded'
 							: 'ok'
 					}
-					text={proofComplete ? coverageText : formatCheckpointProofHeadline(summary)}
+					text={
+						proofComplete
+							? coverageText
+							: formatCheckpointProofHeadline(summary)
+					}
 				/>
 			</div>
 			<CoverageSummary summary={summary} />
@@ -129,8 +133,11 @@ function CheckpointProofSummary({
 			</summary>
 			<p className="muted-copy">
 				Archive-source file checks verify one object at one archive source.
-				Checkpoint proof verifies that the history, ledger, transaction,
-				result, and bucket-list facts agree for the same checkpoint.
+				Checkpoint proof verifies that the history, ledger, transaction, result,
+				and bucket-list facts agree for the same checkpoint. The matrix below
+				counts each archive root separately, so one checkpoint served by 76
+				roots can contribute 76 observations. It is not the unique canonical
+				proof total.
 			</p>
 			<div className="responsive-table">
 				<table className="archive-checkpoint-proof-table">
@@ -141,8 +148,8 @@ function CheckpointProofSummary({
 							<th>Failed</th>
 							<th>Waiting</th>
 							<th>Not checked yet</th>
-							<th>Expected</th>
-							<th>Missing</th>
+							<th>Theoretical root-by-checkpoint observations</th>
+							<th>Not materialized</th>
 							<th>Sources fully discovered</th>
 						</tr>
 					</thead>

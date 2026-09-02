@@ -112,8 +112,10 @@ describe('status drilldown availability', () => {
 			/>
 		);
 
-		expect(html).toContain('verified under the current proof');
-		expect(html).toContain('Confirmed mismatch');
+		expect(html).toContain('verified root-checkpoint attestations across');
+		expect(html).toContain('Root observations with mismatch');
+		expect(html).toContain('Materialized root-checkpoint observations');
+		expect(html).toContain('unique checkpoint positions proven');
 		expect(html).not.toContain('75,314,129');
 	});
 });
