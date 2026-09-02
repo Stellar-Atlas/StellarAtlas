@@ -44,7 +44,7 @@ describe('targeted checkpoint proof refresh concurrency', () => {
 				1
 			);
 			expect(repository.drainCheckpointProofRefreshQueue).toHaveBeenCalledTimes(
-				2
+				1
 			);
 			expect(completed).toBe(4);
 		} finally {

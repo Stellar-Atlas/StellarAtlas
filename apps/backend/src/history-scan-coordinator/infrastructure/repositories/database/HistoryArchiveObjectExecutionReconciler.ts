@@ -10,6 +10,7 @@ import {
 	historyArchiveThroughputSampleCap,
 	historyArchiveThroughputWindowMinutes
 } from '@history-scan-coordinator/domain/history-archive-object/HistoryArchiveObjectPlanningPolicy.js';
+import { getHistoryArchiveCanonicalFirstRoot } from './HistoryArchiveCanonicalFirst.js';
 import { canonicalRuntimeTargetCtes } from './HistoryArchiveCanonicalFrontierSql.js';
 import {
 	historyArchiveObjectFrontierSql,
@@ -22,6 +23,7 @@ import {
 } from './HistoryArchiveObjectReadyQueue.js';
 import { hasPostgresSqlState } from './PostgresError.js';
 import { materializeCompactCheckpointPlans } from './HistoryArchiveCompactPlanning.js';
+import { activateCurrentCheckpointDependencies } from './HistoryArchiveCheckpointPrefetch.js';
 
 export { historyArchiveExecutionReconciliationLockName };
 
@@ -41,24 +43,29 @@ export async function reconcileHistoryArchiveObjectExecution(
 ): Promise<HistoryArchiveObjectExecutionReconciliationResult> {
 	return await repository.manager.transaction(async (manager) => {
 		const maximumPriority = getHistoryArchiveBrokerMaximumPriority();
-		await manager.query(`set local lock_timeout = '500ms'`);
+		await manager.query(`set local lock_timeout = '5s'`);
 		await manager.query(`set local statement_timeout = '30s'`);
 		await manager.query(`set local jit = off`);
-		const [lock] = (await manager.query(
-			'select pg_try_advisory_xact_lock(hashtext($1)) as locked',
-			[historyArchiveExecutionReconciliationLockName]
-		)) as readonly { readonly locked?: boolean }[];
-		if (lock?.locked !== true) return emptyResult();
+		await manager.query('select pg_advisory_xact_lock(hashtext($1))', [
+			historyArchiveExecutionReconciliationLockName
+		]);
+		await manager.query("set local lock_timeout = '500ms'");
 
 		await materializeCompactCheckpointPlans(manager);
+		const canonicalFirstRoot = getHistoryArchiveCanonicalFirstRoot();
+		await activateCurrentCheckpointDependencies(manager, canonicalFirstRoot);
 		const canonicalAdmittedObjects = 0;
 		const readyState = await synchronizeHistoryArchiveReadyQueue(
 			manager,
 			historyArchiveMaximumWatermark
 		);
 		const [counts] = (await manager.query(
-			buildHistoryArchiveReadyPressureSql(maximumPriority),
-			[historyArchiveThroughputSampleCap, historyArchiveThroughputWindowMinutes]
+			buildHistoryArchiveReadyPressureSql(maximumPriority, '$3::text'),
+			[
+				historyArchiveThroughputSampleCap,
+				historyArchiveThroughputWindowMinutes,
+				canonicalFirstRoot
+			]
 		)) as readonly PressureRow[];
 		const pressure = calculateHistoryArchivePlanningPressure({
 			outstandingObjects: Number(counts?.outstandingObjects ?? 0),

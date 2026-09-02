@@ -7,6 +7,7 @@ import {
 import { admitCanonicalFrontierSql } from '../HistoryArchiveCanonicalFrontierSql.js';
 import { historyArchiveObjectFrontierSql } from '../HistoryArchiveObjectFrontierSql.js';
 import {
+	buildHistoryArchiveReadyPressureSql,
 	historyArchiveCheckpointNotFoundCooldownSql,
 	historyArchiveReadyPressureSql
 } from '../HistoryArchiveObjectReadyQueue.js';
@@ -119,6 +120,13 @@ describe('HistoryArchiveObjectClaimSql', () => {
 		expect(historyArchiveObjectFrontierSql).toContain(
 			'when candidate.id is null then false'
 		);
+	});
+
+	it('counts only the canonical root while canonical-first mode is incomplete', () => {
+		const sql = buildHistoryArchiveReadyPressureSql(2, '$3::text');
+		expect(sql).toContain('canonical_scope as materialized');
+		expect(sql).toContain('object."archiveUrlIdentity" = $3::text');
+		expect(sql).toContain('not (select incomplete from canonical_scope)');
 	});
 
 	it('allows failed retries only on the twelve even slots', () => {

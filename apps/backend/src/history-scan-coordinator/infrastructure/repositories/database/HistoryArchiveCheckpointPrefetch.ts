@@ -17,10 +17,31 @@ export async function materializeOrderedCheckpointPrefetch(
 		readonly planned: number | string;
 		readonly ready: number | string;
 	}[];
-	if (Number(result?.ready ?? 0) > 0) {
+	const activation = await activateCurrentCheckpointDependencies(
+		manager,
+		archiveUrlIdentity
+	);
+	if (Number(result?.ready ?? 0) + activation.ready > 0) {
 		await notifyHistoryArchiveReadyWork(manager);
 	}
-	return Number(result?.planned ?? 0);
+	return Number(result?.planned ?? 0) + activation.activated;
+}
+
+export async function activateCurrentCheckpointDependencies(
+	manager: EntityManager,
+	archiveUrlIdentity: string | null = null
+): Promise<{ readonly activated: number; readonly ready: number }> {
+	const [result] = (await manager.query(
+		activateCurrentCheckpointDependenciesSql,
+		[archiveUrlIdentity, historyArchiveSequentialPrefetchDepth]
+	)) as readonly {
+		readonly activated: number | string;
+		readonly ready: number | string;
+	}[];
+	return {
+		activated: Number(result?.activated ?? 0),
+		ready: Number(result?.ready ?? 0)
+	};
 }
 
 const orderedCheckpointPrefetchSql = `
@@ -120,4 +141,62 @@ const orderedCheckpointPrefetchSql = `
         )
         select (select count(*) from inserted)::integer as planned,
                 (select count(*) from ready)::integer as ready
+`;
+
+export const activateCurrentCheckpointDependenciesSql = `
+	with ${historyArchiveCanonicalFirstScopeCteSql('$1::text')}, current_checkpoints as materialized (
+		select cursor."archiveUrlIdentity",
+			cursor."nextHistoricalCheckpointLedger" - 64 as "checkpointLedger"
+		from "history_archive_checkpoint_scan_cursor" cursor
+		where cursor."nextHistoricalCheckpointLedger" is not null
+			and cursor."nextHistoricalCheckpointLedger" - 64 >= 63
+			and ${historyArchiveCanonicalFirstAdmissionSql('cursor."archiveUrlIdentity"', '$1::text')}
+	), candidates as materialized (
+		select object.id, object."remoteId", object."archiveUrlIdentity"
+		from current_checkpoints current
+		join "history_archive_object_queue" object
+			on object."archiveUrlIdentity" = current."archiveUrlIdentity"
+		where object.status = 'pending'
+			and object."dependencyReady" = true
+			and (object."executionDisposition" is null
+				or object."executionDisposition" = 'deferred')
+			and object."executionReason" is distinct from 'proof-completion-waiting'
+			and object."executionReason" is distinct from 'canonical-frontier-waiting'
+			and (object."transitionEffectsRequiredAt" is null
+				or object."transitionEffectsCompletedAt" is not null)
+			and ((object."objectType" <> 'bucket'
+				and object."checkpointLedger" = current."checkpointLedger")
+				or (object."objectType" = 'bucket' and exists (
+					select 1
+					from "history_archive_checkpoint_bucket_dependency" dependency
+					where dependency."archiveUrlIdentity" = current."archiveUrlIdentity"
+						and dependency."checkpointLedger" = current."checkpointLedger"
+						and dependency."bucketHash" = object."bucketHash"
+				)))
+		order by current."archiveUrlIdentity", object."objectOrder",
+			object."objectKey", object.id
+		limit $2::integer
+		for update of object skip locked
+	), activated as (
+		update "history_archive_object_queue" object
+		set "executionDisposition" = 'executable',
+			"executionReason" = 'ordered-current-checkpoint',
+			"executionDispositionAt" = now(),
+			"updatedAt" = now()
+		from candidates candidate
+		where object.id = candidate.id
+		returning object."remoteId", object."archiveUrlIdentity"
+	), ready as (
+		insert into "history_archive_object_ready" (
+			"objectRemoteId", "archiveUrlIdentity", priority,
+			"availableAt", "createdAt", "updatedAt"
+		)
+		select activated."remoteId", activated."archiveUrlIdentity", 1,
+			now(), now(), now()
+		from activated
+		on conflict ("objectRemoteId") do nothing
+		returning "objectRemoteId"
+	)
+	select (select count(*) from activated)::integer as activated,
+		(select count(*) from ready)::integer as ready
 `;

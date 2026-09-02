@@ -1,5 +1,9 @@
 import type { EntityManager } from 'typeorm';
 import {
+	historyArchiveCanonicalFirstAdmissionSql,
+	historyArchiveCanonicalFirstScopeCteSql
+} from './HistoryArchiveCanonicalFirst.js';
+import {
 	getHistoryArchiveBrokerMaximumPriority,
 	type HistoryArchiveBrokerPriority
 } from '../../../domain/history-archive-object/HistoryArchiveBrokerPriority.js';
@@ -276,10 +280,22 @@ export async function bootstrapHistoryArchiveReadyQueueIfEmpty(
 
 export function buildHistoryArchiveOutstandingReadyCountCtesSql(
 	maximumPriority: HistoryArchiveBrokerPriority = getHistoryArchiveBrokerMaximumPriority(),
-	runtimeTargetCtesAvailable = false
+	runtimeTargetCtesAvailable = false,
+	canonicalFirstRootSql?: string
 ): string {
+	const canonicalScopeCte =
+		canonicalFirstRootSql === undefined
+			? ''
+			: `, ${historyArchiveCanonicalFirstScopeCteSql(canonicalFirstRootSql)}`;
+	const canonicalAdmission =
+		canonicalFirstRootSql === undefined
+			? ''
+			: `and ${historyArchiveCanonicalFirstAdmissionSql(
+					'object."archiveUrlIdentity"',
+					canonicalFirstRootSql
+				)}`;
 	return `
-	${runtimeTargetCtesAvailable ? canonicalRuntimeArchiveRootsCteSql : canonicalRuntimePriorityCtesSql},
+	${runtimeTargetCtesAvailable ? canonicalRuntimeArchiveRootsCteSql : canonicalRuntimePriorityCtesSql}${canonicalScopeCte},
 	active as (
 		select count(*)::integer as count
 		from "history_archive_object_claim_slot" slot
@@ -289,7 +305,8 @@ export function buildHistoryArchiveOutstandingReadyCountCtesSql(
 		from "history_archive_object_ready" queued
 		join "history_archive_object_queue" object
 			on object."remoteId" = queued."objectRemoteId"
-		where queued."publishedAt" is not null
+		where (
+			queued."publishedAt" is not null
 			or queued."dispatchToken" is not null
 			or (
 				queued."availableAt" <= now()
@@ -306,6 +323,8 @@ export function buildHistoryArchiveOutstandingReadyCountCtesSql(
 					)
 				)
 			)
+		)
+		${canonicalAdmission}
 	)
 `;
 }
@@ -314,10 +333,15 @@ export const historyArchiveOutstandingReadyCountCtesSql =
 	buildHistoryArchiveOutstandingReadyCountCtesSql();
 
 export function buildHistoryArchiveReadyPressureSql(
-	maximumPriority: HistoryArchiveBrokerPriority = getHistoryArchiveBrokerMaximumPriority()
+	maximumPriority: HistoryArchiveBrokerPriority = getHistoryArchiveBrokerMaximumPriority(),
+	canonicalFirstRootSql?: string
 ): string {
 	return `
-	with ${buildHistoryArchiveOutstandingReadyCountCtesSql(maximumPriority)}, recent_events as (
+	with ${buildHistoryArchiveOutstandingReadyCountCtesSql(
+		maximumPriority,
+		false,
+		canonicalFirstRootSql
+	)}, recent_events as (
 		select 1
 		from "history_archive_object_event"
 		where "eventType" = 'verified'

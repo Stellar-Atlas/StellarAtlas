@@ -80,25 +80,19 @@ export class ReconcileHistoryArchiveObjectTransitions {
 		this.nextTargetedProofRefreshRunAt =
 			now + this.maintenanceIntervals.transitionReconciliationIntervalMs;
 
-		let completed = 0;
-		for (;;) {
-			const result =
-				await this.objectRepository.drainCheckpointProofRefreshQueue(
-					this.targetedProofRefreshBatchSize,
-					this.maintenanceLanes.targetedProofRefreshMaximumPriority
-				);
-			if (result.failed > 0) {
-				this.logger.error('Failed targeted checkpoint proof refresh', {
-					app: 'history-scan-coordinator',
-					claimed: result.claimed,
-					completed: result.completed,
-					failed: result.failed
-				});
-			}
-			completed += result.completed;
-			if (result.completed === 0) return completed;
-			await new Promise<void>((resolve) => setImmediate(resolve));
+		const result = await this.objectRepository.drainCheckpointProofRefreshQueue(
+			this.targetedProofRefreshBatchSize,
+			this.maintenanceLanes.targetedProofRefreshMaximumPriority
+		);
+		if (result.failed > 0) {
+			this.logger.error('Failed targeted checkpoint proof refresh', {
+				app: 'history-scan-coordinator',
+				claimed: result.claimed,
+				completed: result.completed,
+				failed: result.failed
+			});
 		}
+		return result.completed;
 	}
 
 	async executeTransitionReconciliationIfDue(

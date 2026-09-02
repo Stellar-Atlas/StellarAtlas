@@ -152,10 +152,13 @@ describe('HistoryArchiveBrokerFrontierRepository', () => {
 	});
 
 	it('re-admits existing pending checkpoints inside the bounded prefetch window', async () => {
-		const query = jest.fn().mockResolvedValueOnce([{ planned: 2, ready: 0 }]);
+		const query = jest
+			.fn()
+			.mockResolvedValueOnce([{ planned: 2, ready: 0 }])
+			.mockResolvedValueOnce([{ activated: 4, ready: 0 }]);
 		const manager = { query } as unknown as EntityManager;
 
-		await materializeOrderedCheckpointPrefetch(
+		const planned = await materializeOrderedCheckpointPrefetch(
 			manager,
 			'http://history.stellar.org/prd/core-live/core_live_001'
 		);
@@ -170,9 +173,25 @@ describe('HistoryArchiveBrokerFrontierRepository', () => {
 		expect(sql).toContain(
 			'where "history_archive_object_queue".status = \'pending\''
 		);
+		const activationSql = (query.mock.calls[1]?.[0] as string).replace(
+			/\s+/g,
+			' '
+		);
+		expect(activationSql).toContain(
+			'cursor."nextHistoricalCheckpointLedger" - 64 as "checkpointLedger"'
+		);
+		expect(activationSql).toContain(
+			'from "history_archive_checkpoint_bucket_dependency" dependency'
+		);
+		expect(activationSql).toContain("'ordered-current-checkpoint'");
 		expect(query.mock.calls[0]?.[1]).toEqual([
 			expect.any(Number),
 			'http://history.stellar.org/prd/core-live/core_live_001'
 		]);
+		expect(query.mock.calls[1]?.[1]).toEqual([
+			'http://history.stellar.org/prd/core-live/core_live_001',
+			expect.any(Number)
+		]);
+		expect(planned).toBe(6);
 	});
 });
