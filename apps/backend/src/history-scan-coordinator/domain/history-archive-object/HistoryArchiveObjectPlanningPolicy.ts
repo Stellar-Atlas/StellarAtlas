@@ -21,9 +21,17 @@ export function calculateHistoryArchiveSequentialPrefetchDepth(
 }
 
 export const historyArchiveSequentialPrefetchDepth =
-	calculateHistoryArchiveSequentialPrefetchDepth(
-		historyArchiveConsumerCount
-);
+	calculateHistoryArchiveSequentialPrefetchDepth(historyArchiveConsumerCount);
+
+export function calculateHistoryArchiveCheckpointFanoutBatchSize(
+	consumerCount: number
+): number {
+	if (!Number.isSafeInteger(consumerCount) || consumerCount < 1) return 16;
+	return Math.max(16, Math.min(64, Math.ceil(consumerCount / 4)));
+}
+
+export const historyArchiveCheckpointFanoutBatchSize =
+	calculateHistoryArchiveCheckpointFanoutBatchSize(historyArchiveConsumerCount);
 export const historyArchiveCanonicalReserveCount =
 	historyArchiveWorkerCapacity.canonicalReserveCount;
 export const historyArchivePerHostConcurrency = historyArchiveConsumerCount;

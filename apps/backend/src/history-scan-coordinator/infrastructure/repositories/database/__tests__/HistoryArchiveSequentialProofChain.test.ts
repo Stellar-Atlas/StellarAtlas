@@ -1,6 +1,9 @@
 import type { DataSource, EntityManager, QueryRunner } from 'typeorm';
 import { HistoryArchiveSequentialProofChainMigration1785540000000 } from '../../../database/migrations/1785540000000-HistoryArchiveSequentialProofChainMigration.js';
-import { calculateHistoryArchiveSequentialPrefetchDepth } from '../../../../domain/history-archive-object/HistoryArchiveObjectPlanningPolicy.js';
+import {
+	calculateHistoryArchiveCheckpointFanoutBatchSize,
+	calculateHistoryArchiveSequentialPrefetchDepth
+} from '../../../../domain/history-archive-object/HistoryArchiveObjectPlanningPolicy.js';
 import {
 	claimHistoryArchiveCheckpointProofRefreshes,
 	claimLockedContiguousProofRefreshSql,
@@ -23,6 +26,7 @@ import {
 	historyArchiveCanonicalFirstScopeCteSql
 } from '../HistoryArchiveCanonicalFirst.js';
 import { targetedCompactCheckpointPlanSql } from '../HistoryArchiveCompactPlanning.js';
+import { activateCurrentCheckpointDependenciesSql } from '../HistoryArchiveCheckpointPrefetch.js';
 import { historyArchiveCheckpointProofBatchQueuedRefreshSql } from '../HistoryArchiveCheckpointProofRefreshSql.js';
 import { historyArchiveCheckpointProofBatchTargetCtesSql } from '../HistoryArchiveCheckpointProofTargetSql.js';
 import { historyArchiveCheckpointProofBatchQueuedUpsertSql } from '../HistoryArchiveCheckpointProofUpsertSql.js';
@@ -108,11 +112,48 @@ describe('sequential history archive proof chain', () => {
 		expect(predecessorSql).not.toContain('or exists');
 	});
 
+	it('prefetches upcoming canonical objects while proof claims stay sequential', () => {
+		expect(activateCurrentCheckpointDependenciesSql).toContain(
+			'cross join lateral generate_series('
+		);
+		expect(activateCurrentCheckpointDependenciesSql).toContain(
+			'(($2::integer - 1) * 64)'
+		);
+		expect(activateCurrentCheckpointDependenciesSql).toContain(
+			'object."checkpointLedger" = current."checkpointLedger"'
+		);
+		expect(activateCurrentCheckpointDependenciesSql).toContain(
+			'join "history_archive_checkpoint_bucket_dependency" dependency'
+		);
+		expect(activateCurrentCheckpointDependenciesSql).toContain(
+			'candidate_ids as materialized'
+		);
+		expect(activateCurrentCheckpointDependenciesSql).toContain(
+			`proof."failureKind" = 'proof-facts-incomplete'`
+		);
+		expect(activateCurrentCheckpointDependenciesSql).toContain(
+			'{ledgerCategory,headerHashesVerified}'
+		);
+		expect(activateCurrentCheckpointDependenciesSql).toContain(
+			'candidate."needsReverification"'
+		);
+		expect(activateCurrentCheckpointDependenciesSql).not.toContain(
+			`object."executionReason" is distinct from 'canonical-frontier-waiting'`
+		);
+		expect(activateCurrentCheckpointDependenciesSql).not.toContain(
+			'proof-completion-waiting'
+		);
+	});
+
 	it('bounds consecutive proof work while keeping the same root and cursor gate', () => {
 		expect(calculateHistoryArchiveSequentialPrefetchDepth(0)).toBe(64);
 		expect(calculateHistoryArchiveSequentialPrefetchDepth(60)).toBe(64);
 		expect(calculateHistoryArchiveSequentialPrefetchDepth(240)).toBe(240);
 		expect(calculateHistoryArchiveSequentialPrefetchDepth(1_000)).toBe(1_000);
+		expect(calculateHistoryArchiveCheckpointFanoutBatchSize(0)).toBe(16);
+		expect(calculateHistoryArchiveCheckpointFanoutBatchSize(60)).toBe(16);
+		expect(calculateHistoryArchiveCheckpointFanoutBatchSize(240)).toBe(60);
+		expect(calculateHistoryArchiveCheckpointFanoutBatchSize(1_000)).toBe(64);
 		expect(normalizeConsecutiveProofRefreshTransactionSize(Number.NaN)).toBe(
 			16
 		);

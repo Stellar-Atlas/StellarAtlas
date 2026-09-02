@@ -3,6 +3,7 @@ import type { ArchiveMetadataDTO } from 'history-scanner-dto';
 import type { HistoryArchiveCheckpointProofRepository } from '../../../domain/history-archive-checkpoint-proof/HistoryArchiveCheckpointProofRepository.js';
 import { HistoryArchiveObject } from '../../../domain/history-archive-object/HistoryArchiveObject.js';
 import type { HistoryArchiveObjectRepository } from '../../../domain/history-archive-object/HistoryArchiveObjectRepository.js';
+import { historyArchiveCheckpointFanoutBatchSize } from '../../../domain/history-archive-object/HistoryArchiveObjectPlanningPolicy.js';
 import type { HistoryArchiveStateRepository } from '../../../domain/history-archive-state/HistoryArchiveStateRepository.js';
 import { HistoryArchiveStateSnapshot } from '../../../domain/history-archive-state/HistoryArchiveStateSnapshot.js';
 import type { HistoryArchiveObjectEventRecorder } from '../../record-history-archive-object-event/HistoryArchiveObjectEventRecorder.js';
@@ -472,6 +473,42 @@ describe('CompleteHistoryArchiveObject', () => {
 		expect(
 			objectRepository.markCheckpointDescendantsPlannedBatch
 		).toHaveBeenCalledWith([first.remoteId, second.remoteId]);
+	});
+	it('bounds each fanout write while draining every pending checkpoint', async () => {
+		const checkpoints = Array.from(
+			{ length: historyArchiveCheckpointFanoutBatchSize + 1 },
+			(_, index) => {
+				const checkpoint = createCheckpointObject(
+					127 + index * 64,
+					`00000000-0000-4000-8000-${String(index + 1).padStart(12, '0')}`
+				);
+				checkpoint.status = 'verified';
+				checkpoint.verificationFacts = {
+					checkpointHistoryArchiveState: createArchiveMetadata(
+						checkpoint.checkpointLedger!
+					)
+				};
+				return checkpoint;
+			}
+		);
+		objectRepository.markCheckpointDescendantsPlanned.mockResolvedValue(true);
+		const useCase = new CompleteHistoryArchiveObject(
+			objectRepository,
+			stateRepository,
+			eventRecorder,
+			checkpointProofRepository
+		);
+
+		await expect(useCase.reconcileCheckpointFanouts(checkpoints)).resolves.toBe(
+			checkpoints.length
+		);
+		expect(objectRepository.activateObjects).toHaveBeenCalledTimes(2);
+		expect(
+			objectRepository.materializeCheckpointDependencyBatch
+		).toHaveBeenCalledTimes(1);
+		expect(
+			objectRepository.materializeCheckpointDependencies
+		).toHaveBeenCalledTimes(1);
 	});
 
 	it('materializes and refreshes a legacy verified checkpoint once', async () => {

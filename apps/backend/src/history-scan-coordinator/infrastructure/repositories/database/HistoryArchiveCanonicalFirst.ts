@@ -11,39 +11,45 @@ export function getHistoryArchiveCanonicalFirstRoot(
 	return normalized.length === 0 ? null : normalized;
 }
 
+export function historyArchiveCanonicalFirstScopeSelectSql(
+	canonicalRootSql: string
+): string {
+	return `select exists (
+		select 1
+		from "history_archive_checkpoint_scan_cursor" canonical_cursor
+		join "history_archive_state_snapshot" canonical_state
+			on canonical_state."archiveUrlIdentity" =
+				canonical_cursor."archiveUrlIdentity"
+		where ${canonicalRootSql} is not null
+			and canonical_cursor."archiveUrlIdentity" = ${canonicalRootSql}
+			and (
+				canonical_cursor."nextHistoricalCheckpointLedger" <=
+					(
+						floor((canonical_state."currentLedger" + 1)::numeric / 64)
+						* 64 - 1
+					)::integer
+				or not exists (
+					select 1
+					from "history_archive_checkpoint_proof" canonical_proof
+					where canonical_proof."archiveUrlIdentity" =
+							${canonicalRootSql}
+						and canonical_proof."checkpointLedger" =
+							(
+								floor(
+									(canonical_state."currentLedger" + 1)::numeric / 64
+								) * 64 - 1
+							)::integer
+						and canonical_proof.status = 'verified'
+				)
+			)
+	) as incomplete`;
+}
+
 export function historyArchiveCanonicalFirstScopeCteSql(
 	canonicalRootSql: string
 ): string {
 	return `canonical_scope as materialized (
-		select exists (
-			select 1
-			from "history_archive_checkpoint_scan_cursor" canonical_cursor
-			join "history_archive_state_snapshot" canonical_state
-				on canonical_state."archiveUrlIdentity" =
-					canonical_cursor."archiveUrlIdentity"
-			where ${canonicalRootSql} is not null
-				and canonical_cursor."archiveUrlIdentity" = ${canonicalRootSql}
-				and (
-					canonical_cursor."nextHistoricalCheckpointLedger" <=
-						(
-							floor((canonical_state."currentLedger" + 1)::numeric / 64)
-							* 64 - 1
-						)::integer
-					or not exists (
-						select 1
-						from "history_archive_checkpoint_proof" canonical_proof
-						where canonical_proof."archiveUrlIdentity" =
-								${canonicalRootSql}
-							and canonical_proof."checkpointLedger" =
-								(
-									floor(
-										(canonical_state."currentLedger" + 1)::numeric / 64
-									) * 64 - 1
-								)::integer
-							and canonical_proof.status = 'verified'
-					)
-				)
-		) as incomplete
+		${historyArchiveCanonicalFirstScopeSelectSql(canonicalRootSql)}
 	)`;
 }
 

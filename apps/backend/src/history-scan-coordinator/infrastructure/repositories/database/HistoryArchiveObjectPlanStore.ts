@@ -12,7 +12,6 @@ import {
 import { requeueStaleHistoryArchiveStateObjects } from './HistoryArchiveObjectStateRefreshQuery.js';
 import {
 	buildHistoryArchiveReadyPressureSql,
-	historyArchiveExecutionReconciliationLockName,
 	historyArchiveReadyRootActivityCtesSql,
 	notifyHistoryArchiveReadyWork,
 	synchronizeHistoryArchiveReadyQueue
@@ -108,9 +107,6 @@ export async function activateHistoryArchiveObjects(
 		}))
 	);
 	return await repository.manager.transaction(async (manager) => {
-		await manager.query('select pg_advisory_xact_lock(hashtext($1))', [
-			historyArchiveExecutionReconciliationLockName
-		]);
 		await lockHistoryArchiveRootTransitions(
 			manager,
 			uniqueObjects.map((object) => object.archiveUrlIdentity)
@@ -264,98 +260,126 @@ const planObjectsSql = `
 `;
 
 const activateObjectsSql = `
-        with input as materialized (
-                select *
-                from jsonb_to_recordset($1::jsonb) as object(
-                        "remoteId" uuid,
-                        "archiveUrl" text,
-                        "archiveUrlIdentity" text,
-                        "hostIdentity" text,
-                        "objectType" text,
-                        "objectKey" text,
-                        "objectOrder" integer,
-                        "objectUrl" text,
-                        status text,
-                        "checkpointLedger" integer,
-                        "bucketHash" text,
-                        "dependencyReady" boolean
-                )
-        ), upserted as (
-                insert into "history_archive_object_queue" (
-                        "remoteId", "archiveUrl", "archiveUrlIdentity", "hostIdentity",
-                        "objectType", "objectKey", "objectOrder", "objectUrl", status,
-                        "checkpointLedger", "bucketHash", "dependencyReady",
-                        "executionDisposition", "executionReason",
-                        "executionDispositionAt", "createdAt", "updatedAt"
-                )
-                select input."remoteId", input."archiveUrl",
-                        input."archiveUrlIdentity", input."hostIdentity",
-                        input."objectType", input."objectKey", input."objectOrder",
-                        input."objectUrl", input.status, input."checkpointLedger",
-                        input."bucketHash", input."dependencyReady",
-                        'executable', 'checkpoint-fanout', now(), now(), now()
-                from input
-                order by input."archiveUrlIdentity", input."objectType",
-                        input."objectKey"
-                on conflict ("archiveUrlIdentity", "objectType", "objectKey")
-                do update set
-                        "dependencyReady" =
-                                "history_archive_object_queue"."dependencyReady"
-                                is true or excluded."dependencyReady" is true,
-                        "executionDisposition" = 'executable',
-                        "executionReason" = 'checkpoint-fanout',
-                        "executionDispositionAt" = now(),
-                        "updatedAt" = now()
-                where "history_archive_object_queue".status = 'pending'
-                        and (
-                                "history_archive_object_queue"."dependencyReady"
-                                        is distinct from true
-                                or "history_archive_object_queue"."executionDisposition"
-                                        is distinct from 'executable'
-                        )
-                returning "remoteId", "archiveUrlIdentity"
-        ), targets as materialized (
-                select upserted."remoteId", upserted."archiveUrlIdentity"
-                from upserted
-                union
+	with input as materialized (
+		select *
+		from jsonb_to_recordset($1::jsonb) as object(
+			"remoteId" uuid,
+			"archiveUrl" text,
+			"archiveUrlIdentity" text,
+			"hostIdentity" text,
+			"objectType" text,
+			"objectKey" text,
+			"objectOrder" integer,
+			"objectUrl" text,
+			status text,
+			"checkpointLedger" integer,
+			"bucketHash" text,
+			"dependencyReady" boolean
+		)
+	), existing as materialized (
+		select input."remoteId" as "inputRemoteId",
+			input."dependencyReady" as "requestedDependencyReady",
+			queued.id, queued."remoteId", queued."archiveUrlIdentity",
+			queued.status, queued."dependencyReady",
+			queued."executionDisposition"
+		from input
+		join "history_archive_object_queue" queued
+			on input."objectType" = 'bucket'
+			and queued."objectType" = 'bucket'
+			and queued."archiveUrlIdentity" = input."archiveUrlIdentity"
+			and queued."bucketHash" = input."bucketHash"
 
-                select queued."remoteId", queued."archiveUrlIdentity"
-                from input
-                join "history_archive_object_queue" queued
-                        on queued."archiveUrlIdentity" = input."archiveUrlIdentity"
-                        and queued."objectType" = input."objectType"
-                        and queued."objectKey" = input."objectKey"
-                where queued.status = 'pending'
-                        and queued."dependencyReady" is true
-                        and queued."executionDisposition" = 'executable'
-        ), ready as (
-                insert into "history_archive_object_ready" (
-                        "objectRemoteId", "archiveUrlIdentity", priority,
-                        "availableAt", "createdAt", "updatedAt"
-                )
-                select target."remoteId", target."archiveUrlIdentity", 1,
-                        now(), now(), now()
-                from targets target
-                order by target."archiveUrlIdentity", target."remoteId"
-                on conflict ("objectRemoteId") do update
-                set priority = least("history_archive_object_ready".priority, 1),
-                        "availableAt" = least(
-                                "history_archive_object_ready"."availableAt",
-                                excluded."availableAt"
-                        ),
-                        "updatedAt" = now()
-                where "history_archive_object_ready"."publishedAt" is null
-                returning "objectRemoteId"
-        ), deleted_plan as (
-                delete from "history_archive_object_plan" plan
-                using input
-                where plan."archiveUrlIdentity" = input."archiveUrlIdentity"
-                        and plan."objectType" = input."objectType"
-                        and plan."objectKey" = input."objectKey"
-                returning plan.id
-        )
-        select (select count(*) from targets)::integer as active,
-                (select count(*) from ready)::integer as ready
+		union all
+
+		select input."remoteId" as "inputRemoteId",
+			input."dependencyReady" as "requestedDependencyReady",
+			queued.id, queued."remoteId", queued."archiveUrlIdentity",
+			queued.status, queued."dependencyReady",
+			queued."executionDisposition"
+		from input
+		join "history_archive_object_queue" queued
+			on input."objectType" <> 'bucket'
+			and queued."archiveUrlIdentity" = input."archiveUrlIdentity"
+			and queued."objectType" = input."objectType"
+			and queued."objectKey" = input."objectKey"
+	), inserted as (
+		insert into "history_archive_object_queue" (
+			"remoteId", "archiveUrl", "archiveUrlIdentity", "hostIdentity",
+			"objectType", "objectKey", "objectOrder", "objectUrl", status,
+			"checkpointLedger", "bucketHash", "dependencyReady",
+			"executionDisposition", "executionReason",
+			"executionDispositionAt", "createdAt", "updatedAt"
+		)
+		select input."remoteId", input."archiveUrl",
+			input."archiveUrlIdentity", input."hostIdentity",
+			input."objectType", input."objectKey", input."objectOrder",
+			input."objectUrl", input.status, input."checkpointLedger",
+			input."bucketHash", input."dependencyReady",
+			'executable', 'checkpoint-fanout', now(), now(), now()
+		from input
+		where not exists (
+			select 1 from existing
+			where existing."inputRemoteId" = input."remoteId"
+		)
+		order by input."archiveUrlIdentity", input."objectType",
+			input."objectKey"
+		on conflict ("archiveUrlIdentity", "objectType", "objectKey")
+		do nothing
+		returning "remoteId", "archiveUrlIdentity"
+	), reactivated as (
+		update "history_archive_object_queue" queued
+		set "dependencyReady" = queued."dependencyReady" is true
+				or existing."requestedDependencyReady" is true,
+			"executionDisposition" = 'executable',
+			"executionReason" = 'checkpoint-fanout',
+			"executionDispositionAt" = now(),
+			"updatedAt" = now()
+		from existing
+		where queued.id = existing.id
+			and queued.status = 'pending'
+			and (
+				(existing."dependencyReady" is distinct from true
+					and existing."requestedDependencyReady" is true)
+				or existing."executionDisposition" is distinct from 'executable'
+			)
+		returning queued."remoteId", queued."archiveUrlIdentity"
+	), targets as materialized (
+		select inserted."remoteId", inserted."archiveUrlIdentity"
+		from inserted
+
+		union
+
+		select reactivated."remoteId", reactivated."archiveUrlIdentity"
+		from reactivated
+
+		union
+
+		select existing."remoteId", existing."archiveUrlIdentity"
+		from existing
+		where existing.status = 'pending'
+			and existing."dependencyReady" is true
+			and existing."executionDisposition" = 'executable'
+	), ready as (
+		insert into "history_archive_object_ready" (
+			"objectRemoteId", "archiveUrlIdentity", priority,
+			"availableAt", "createdAt", "updatedAt"
+		)
+		select target."remoteId", target."archiveUrlIdentity", 1,
+			now(), now(), now()
+		from targets target
+		order by target."archiveUrlIdentity", target."remoteId"
+		on conflict ("objectRemoteId") do nothing
+		returning "objectRemoteId"
+	), deleted_plan as (
+		delete from "history_archive_object_plan" plan
+		using input
+		where plan."archiveUrlIdentity" = input."archiveUrlIdentity"
+			and plan."objectType" = input."objectType"
+			and plan."objectKey" = input."objectKey"
+		returning plan.id
+	)
+	select (select count(*) from targets)::integer as active,
+		(select count(*) from ready)::integer as ready
 `;
 
 export const historyArchivePlanPromotionSql = `

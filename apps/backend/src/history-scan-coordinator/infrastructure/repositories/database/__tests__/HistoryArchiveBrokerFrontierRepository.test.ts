@@ -13,6 +13,10 @@ describe('HistoryArchiveBrokerFrontierRepository', () => {
 			'ranked.active_count + ranked.host_rank <= $2::integer'
 		);
 		expect(reserveBrokerJobsSql).not.toContain('frozen_lane');
+		expect(reserveBrokerJobsSql).toContain(
+			'ranked."checkpointLedger" asc nulls first'
+		);
+		expect(reserveBrokerJobsSql).toContain('ranked."objectOrder"');
 		expect(reserveBrokerJobsSql).not.toContain('deduplicated as materialized');
 		expect(reserveBrokerJobsSql).not.toContain('displaced as');
 		expect(reserveBrokerJobsSql).not.toContain('displacement_fence');
@@ -178,17 +182,13 @@ describe('HistoryArchiveBrokerFrontierRepository', () => {
 			' '
 		);
 		expect(activationSql).toContain(
-			'cursor."nextHistoricalCheckpointLedger" - 64 as "checkpointLedger"'
+			'cursor."nextHistoricalCheckpointLedger" - 64'
 		);
 		expect(activationSql).toContain(
-			'from "history_archive_checkpoint_bucket_dependency" dependency'
+			'join "history_archive_checkpoint_bucket_dependency" dependency'
 		);
-		expect(activationSql).toContain(
-			'checkpoint_state.status = \'verified\''
-		);
-		expect(activationSql).toContain(
-			'set "dependencyReady" = true'
-		);
+		expect(activationSql).toContain("checkpoint_state.status = 'verified'");
+		expect(activationSql).toContain('"dependencyReady" = true');
 		expect(activationSql).toContain("'ordered-current-checkpoint'");
 		expect(query.mock.calls[0]?.[1]).toEqual([
 			expect.any(Number),

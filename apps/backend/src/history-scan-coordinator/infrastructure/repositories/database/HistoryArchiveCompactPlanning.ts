@@ -1,10 +1,17 @@
 import type { EntityManager, Repository } from 'typeorm';
 import type { HistoryArchiveObject } from '@history-scan-coordinator/domain/history-archive-object/HistoryArchiveObject.js';
-import { historyArchiveSequentialPrefetchDepth } from '@history-scan-coordinator/domain/history-archive-object/HistoryArchiveObjectPlanningPolicy.js';
-import { getHistoryArchiveCanonicalFirstRoot } from './HistoryArchiveCanonicalFirst.js';
+import {
+	historyArchiveCheckpointFanoutBatchSize,
+	historyArchiveSequentialPrefetchDepth
+} from '@history-scan-coordinator/domain/history-archive-object/HistoryArchiveObjectPlanningPolicy.js';
+import {
+	getHistoryArchiveCanonicalFirstRoot,
+	historyArchiveCanonicalFirstAdmissionSql,
+	historyArchiveCanonicalFirstScopeSelectSql
+} from './HistoryArchiveCanonicalFirst.js';
 import { notifyHistoryArchiveReadyWork } from './HistoryArchiveObjectReadyQueue.js';
 
-const maximumCheckpointFanoutBatch = historyArchiveSequentialPrefetchDepth;
+const maximumCheckpointFanoutBatch = historyArchiveCheckpointFanoutBatchSize;
 const maximumCheckpointCursorBatch = 128;
 const checkpointFanoutLedgerSpan =
 	(historyArchiveSequentialPrefetchDepth - 1) * 64;
@@ -21,8 +28,15 @@ export async function findVerifiedCheckpointsNeedingFanout(
 
 	const safeLimit = requestedLimit;
 
-	return await repository
+	const query = repository
 		.createQueryBuilder('object')
+		.addCommonTableExpression(
+			historyArchiveCanonicalFirstScopeSelectSql(
+				'cast(:canonicalRoot as text)'
+			),
+			'canonical_scope',
+			{ materialized: true }
+		)
 		.innerJoin(
 			'history_archive_checkpoint_scan_cursor',
 			'fanout_cursor',
@@ -36,6 +50,13 @@ export async function findVerifiedCheckpointsNeedingFanout(
 			objectType: 'checkpoint-state'
 		})
 		.andWhere('object.status = :status', { status: 'verified' })
+		.andWhere(
+			historyArchiveCanonicalFirstAdmissionSql(
+				'object."archiveUrlIdentity"',
+				'cast(:canonicalRoot as text)'
+			),
+			{ canonicalRoot: getHistoryArchiveCanonicalFirstRoot() }
+		)
 		.andWhere(
 			`(
 				object."descendantsPlannedAt" is null
@@ -96,8 +117,9 @@ export async function findVerifiedCheckpointsNeedingFanout(
 		.orderBy('object.checkpointLedger', 'ASC', 'NULLS LAST')
 		.addOrderBy('object.verifiedAt', 'ASC', 'NULLS LAST')
 		.addOrderBy('object.id', 'ASC')
-		.take(safeLimit)
-		.getMany();
+		.take(safeLimit);
+
+	return await query.getMany();
 }
 
 export async function markCheckpointDescendantsPlanned(

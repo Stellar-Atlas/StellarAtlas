@@ -73,6 +73,7 @@ export const reserveBrokerJobsSql = `
 			ready."dispatchToken",
 			ready."updatedAt",
 			object."hostIdentity",
+			object."checkpointLedger", object."objectOrder",
 			coalesce(active.active_count, 0) as active_count
 		from "history_archive_object_ready" ready
 		join "history_archive_object_queue" object
@@ -104,32 +105,41 @@ export const reserveBrokerJobsSql = `
 		select candidate."objectRemoteId", candidate.priority,
 			candidate.stored_priority, candidate."updatedAt",
 			candidate."hostIdentity", candidate.active_count,
+			candidate."checkpointLedger", candidate."objectOrder",
 			row_number() over (
 				partition by candidate."hostIdentity"
-				order by candidate.priority, candidate."updatedAt",
+				order by candidate.priority,
+					candidate."checkpointLedger" asc nulls first,
+					candidate."objectOrder", candidate."updatedAt",
 					candidate."objectRemoteId"
 			) as host_rank
 		from eligible candidate
 	), selected as materialized (
 		select ranked."objectRemoteId", ranked.priority,
 			ranked.stored_priority,
+			ranked."checkpointLedger", ranked."objectOrder",
 			(row_number() over (
-				order by ranked.priority, ranked.active_count,
+				order by ranked.priority,
+					ranked."checkpointLedger" asc nulls first,
+					ranked."objectOrder", ranked.active_count,
 					ranked.host_rank, ranked."updatedAt",
 					ranked."objectRemoteId"
 			))::integer as "selectedOrdinal"
 		from ranked
 		where ranked.active_count + ranked.host_rank <= $2::integer
-		order by ranked.priority, ranked.active_count, ranked.host_rank,
-			ranked."updatedAt",
-			ranked."objectRemoteId"
+		order by ranked.priority,
+			ranked."checkpointLedger" asc nulls first,
+			ranked."objectOrder", ranked.active_count, ranked.host_rank,
+			ranked."updatedAt", ranked."objectRemoteId"
 		limit $1::integer
 	), lockable as materialized (
 		select ready."objectRemoteId"
 		from "history_archive_object_ready" ready
 		join selected
 			on selected."objectRemoteId" = ready."objectRemoteId"
-		order by selected.priority, selected."selectedOrdinal",
+		order by selected.priority,
+			selected."checkpointLedger" asc nulls first,
+			selected."objectOrder", selected."selectedOrdinal",
 			ready."objectRemoteId"
 		for update of ready skip locked
 	), reserved as (
@@ -166,7 +176,9 @@ export const reserveBrokerJobsSql = `
 	from reserved
 	join selected
 		on selected."objectRemoteId" = reserved."objectRemoteId"
-	order by selected.priority, selected."selectedOrdinal"
+	order by selected.priority,
+		selected."checkpointLedger" asc nulls first,
+		selected."objectOrder", selected."selectedOrdinal"
 `;
 
 const findPublishedBrokerJobsSql = `

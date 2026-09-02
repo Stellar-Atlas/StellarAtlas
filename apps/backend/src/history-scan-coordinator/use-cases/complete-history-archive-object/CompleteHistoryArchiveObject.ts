@@ -14,6 +14,7 @@ import type {
 } from '../../domain/history-archive-object/HistoryArchiveObject.js';
 import type { HistoryArchiveObjectProgressUpdate } from '../../domain/history-archive-object/HistoryArchiveObjectRepository.js';
 import type { HistoryArchiveObjectRepository } from '../../domain/history-archive-object/HistoryArchiveObjectRepository.js';
+import { historyArchiveCheckpointFanoutBatchSize } from '../../domain/history-archive-object/HistoryArchiveObjectPlanningPolicy.js';
 import type { HistoryArchiveStateRepository } from '../../domain/history-archive-state/HistoryArchiveStateRepository.js';
 import {
 	buildCheckpointSiblingObjectsFromState,
@@ -542,8 +543,13 @@ export class CompleteHistoryArchiveObject {
 	private async drainCheckpointFanoutEvents(): Promise<void> {
 		try {
 			while (this.pendingCheckpointFanouts.size > 0) {
-				const batch = [...this.pendingCheckpointFanouts.values()];
-				this.pendingCheckpointFanouts.clear();
+				const batch = [...this.pendingCheckpointFanouts.values()].slice(
+					0,
+					historyArchiveCheckpointFanoutBatchSize
+				);
+				for (const pending of batch) {
+					this.pendingCheckpointFanouts.delete(pending.object.remoteId);
+				}
 				try {
 					await this.processCheckpointFanoutBatch(batch);
 					for (const pending of batch) {
