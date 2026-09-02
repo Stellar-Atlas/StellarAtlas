@@ -51,6 +51,7 @@ describe('GetKnownOrganization', () => {
 		const organizationDTOService = mock<OrganizationDTOService>();
 		const exceptionLogger = mock<ExceptionLogger>();
 		organizationRepository.findByOrganizationId.mockResolvedValue(null);
+		organizationRepository.findAllKnown.mockResolvedValue([]);
 
 		const result = await new GetKnownOrganization(
 			organizationRepository,
@@ -63,6 +64,46 @@ describe('GetKnownOrganization', () => {
 		expect(result.value).toBeNull();
 		expect(organizationDTOService.getOrganizationDTOs).not.toHaveBeenCalled();
 	});
+
+	it.each(['Known Organization', 'known-organization', 'KNOWN.EXAMPLE'])(
+		'resolves an organization by exact name, name slug, or home domain: %s',
+		async (reference) => {
+			const start = new Date('2020-01-01T00:00:00.000Z');
+			const organization = Organization.create(
+				createDummyOrganizationId('known.example'),
+				'known.example',
+				start
+			);
+			organization.updateName('Known Organization', start);
+			organization.addMeasurement(
+				new OrganizationMeasurement(start, organization)
+			);
+			const organizationDto = createDummyOrganizationV1();
+			organizationDto.id = organization.organizationId.value;
+			organizationDto.name = 'Known Organization';
+			organizationDto.homeDomain = 'known.example';
+			const organizationRepository = mock<OrganizationRepository>();
+			const organizationDTOService = mock<OrganizationDTOService>();
+			const exceptionLogger = mock<ExceptionLogger>();
+			organizationRepository.findByOrganizationId.mockResolvedValue(null);
+			organizationRepository.findAllKnown.mockResolvedValue([organization]);
+			organizationDTOService.getOrganizationDTOs.mockResolvedValue(
+				ok([organizationDto])
+			);
+
+			const result = await new GetKnownOrganization(
+				organizationRepository,
+				organizationDTOService,
+				exceptionLogger
+			).execute(reference);
+
+			expect(result.isOk()).toBe(true);
+			if (result.isErr()) return;
+			expect(result.value?.organization.id).toBe(
+				organization.organizationId.value
+			);
+		}
+	);
 
 	it('returns errors from the DTO service', async () => {
 		const start = new Date('2020-01-01T00:00:00.000Z');

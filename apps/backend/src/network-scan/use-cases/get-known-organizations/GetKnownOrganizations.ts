@@ -129,10 +129,14 @@ function filterKnownOrganizations(
 		[
 			organization.id,
 			organization.name,
+			organization.dba,
 			organization.homeDomain,
 			organization.url,
+			organization.physicalAddress,
+			organization.officialEmail,
 			organization.twitter,
-			organization.github
+			organization.github,
+			...organization.validators
 		].some((value) => value?.toLowerCase().includes(needle))
 	);
 }

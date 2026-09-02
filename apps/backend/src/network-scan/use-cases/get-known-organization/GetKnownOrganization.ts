@@ -2,6 +2,7 @@ import { inject, injectable } from 'inversify';
 import { err, ok, Result } from 'neverthrow';
 import type { ExceptionLogger } from '@core/services/ExceptionLogger.js';
 import { mapUnknownToError } from '@core/utilities/mapUnknownToError.js';
+import type Organization from '@network-scan/domain/organization/Organization.js';
 import { OrganizationId } from '@network-scan/domain/organization/OrganizationId.js';
 import type { OrganizationRepository } from '@network-scan/domain/organization/OrganizationRepository.js';
 import { NETWORK_TYPES } from '@network-scan/infrastructure/di/di-types.js';
@@ -21,19 +22,29 @@ export class GetKnownOrganization {
 	) {}
 
 	async execute(
-		organizationIdValue: string
+		organizationReference: string
 	): Promise<Result<KnownOrganizationDTO | null, Error>> {
-		const organizationIdOrError = OrganizationId.create(
-			'',
-			organizationIdValue
-		);
-		if (organizationIdOrError.isErr()) return ok(null);
-
 		try {
-			const organization =
-				await this.organizationRepository.findByOrganizationId(
-					organizationIdOrError.value
+			const organizationIdOrError = OrganizationId.create(
+				'',
+				organizationReference
+			);
+			let organization = organizationIdOrError.isOk()
+				? await this.organizationRepository.findByOrganizationId(
+						organizationIdOrError.value
+					)
+				: null;
+
+			if (organization === null) {
+				const reference = normalizeOrganizationReference(organizationReference);
+				const matchingOrganizations = (
+					await this.organizationRepository.findAllKnown()
+				).filter((candidate) =>
+					organizationMatchesReference(candidate, reference)
 				);
+				if (matchingOrganizations.length !== 1) return ok(null);
+				organization = matchingOrganizations[0] ?? null;
+			}
 			if (organization === null) return ok(null);
 
 			const organizationsOrError =
@@ -60,4 +71,42 @@ export class GetKnownOrganization {
 			return err(mappedError);
 		}
 	}
+}
+
+function organizationMatchesReference(
+	organization: Organization,
+	reference: string
+): boolean {
+	const contact = organization.contactInformation;
+	const candidates = [
+		organization.organizationId.value,
+		organization.homeDomain,
+		organization.name,
+		organization.url,
+		contact.dba,
+		contact.officialEmail,
+		contact.physicalAddress,
+		...organization.validators.value.map((validator) => validator.value)
+	];
+
+	return candidates.some((candidate) => {
+		if (candidate === null) return false;
+		const normalizedCandidate = normalizeOrganizationReference(candidate);
+		return (
+			normalizedCandidate === reference ||
+			organizationNameSlug(normalizedCandidate) === reference
+		);
+	});
+}
+
+function normalizeOrganizationReference(value: string): string {
+	return value
+		.trim()
+		.toLowerCase()
+		.replace(/^https?:\/\//, '')
+		.replace(/\/+$/, '');
+}
+
+function organizationNameSlug(value: string): string {
+	return value.replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
 }

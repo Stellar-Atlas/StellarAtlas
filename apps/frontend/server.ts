@@ -13,7 +13,7 @@ const apiPathPattern = /^\/v1(?:\/|$)/;
 const assetPathPattern = /^\/(assets|css|js|img|fonts)\/.+/;
 const legacyPathPattern = /^\/legacy(?:\/|$)/;
 const modernCompatibilityPathPattern = /^\/new-ui(?:\/|$)/;
-const modernFrontendPathPattern = /^\/(?:_next|archive-scans)(?:\/|$)/;
+const modernFrontendPathPattern = /^\/(?:_next|archive-scans|organizations)(?:\/|$)/;
 const workerPathPattern = /^\/.*\.worker\.js$/;
 const hopByHopHeaders = new Set([
   "connection",
