@@ -182,9 +182,6 @@ export class HistoryArchiveBrokerDispatcher {
 		while (!this.stopping) {
 			const observedWakeVersion = this.wakeVersion;
 			try {
-				await this.repository.ensureProofFrontier(
-					this.config.canonicalFirstRoot
-				);
 				const capacity = await this.getAvailableCapacity();
 				if (capacity < 1) {
 					await this.waitForWork(observedWakeVersion);

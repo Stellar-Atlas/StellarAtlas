@@ -406,7 +406,12 @@ export class CompleteHistoryArchiveObject {
 		) {
 			return;
 		}
-		if (persisted.dependenciesMaterializedAt === null) {
+		if (
+			persisted.dependenciesMaterializedAt === null ||
+			(persisted.transitionEffectsRequiredAt !== null &&
+				persisted.dependenciesMaterializedAt <
+					persisted.transitionEffectsRequiredAt)
+		) {
 			await this.objectRepository.materializeCheckpointDependencies(
 				persisted.remoteId
 			);
@@ -441,7 +446,13 @@ export class CompleteHistoryArchiveObject {
 		if (persisted.length === 0) return 0;
 
 		const dependenciesPending = persisted
-			.filter((object) => object.dependenciesMaterializedAt === null)
+			.filter(
+				(object) =>
+					object.dependenciesMaterializedAt === null ||
+					(object.transitionEffectsRequiredAt !== null &&
+						object.dependenciesMaterializedAt <
+							object.transitionEffectsRequiredAt)
+			)
 			.map((object) => object.remoteId);
 		if (dependenciesPending.length > 0) {
 			await this.objectRepository.materializeCheckpointDependencyBatch(
