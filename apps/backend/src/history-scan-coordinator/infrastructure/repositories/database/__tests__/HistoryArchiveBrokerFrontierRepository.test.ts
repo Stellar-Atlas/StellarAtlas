@@ -183,6 +183,12 @@ describe('HistoryArchiveBrokerFrontierRepository', () => {
 		expect(activationSql).toContain(
 			'from "history_archive_checkpoint_bucket_dependency" dependency'
 		);
+		expect(activationSql).toContain(
+			'checkpoint_state.status = \'verified\''
+		);
+		expect(activationSql).toContain(
+			'set "dependencyReady" = true'
+		);
 		expect(activationSql).toContain("'ordered-current-checkpoint'");
 		expect(query.mock.calls[0]?.[1]).toEqual([
 			expect.any(Number),

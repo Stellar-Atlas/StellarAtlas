@@ -157,7 +157,19 @@ export const activateCurrentCheckpointDependenciesSql = `
 		join "history_archive_object_queue" object
 			on object."archiveUrlIdentity" = current."archiveUrlIdentity"
 		where object.status = 'pending'
-			and object."dependencyReady" = true
+			and (object."dependencyReady" = true
+				or object."objectType" = 'bucket'
+				or (object."objectType" <> 'checkpoint-state' and exists (
+					select 1
+					from "history_archive_object_queue" checkpoint_state
+					where checkpoint_state."archiveUrlIdentity" =
+						current."archiveUrlIdentity"
+						and checkpoint_state."checkpointLedger" =
+							current."checkpointLedger"
+						and checkpoint_state."objectType" =
+							'checkpoint-state'
+						and checkpoint_state.status = 'verified'
+				)))
 			and (object."executionDisposition" is null
 				or object."executionDisposition" = 'deferred')
 			and object."executionReason" is distinct from 'proof-completion-waiting'
@@ -179,7 +191,8 @@ export const activateCurrentCheckpointDependenciesSql = `
 		for update of object skip locked
 	), activated as (
 		update "history_archive_object_queue" object
-		set "executionDisposition" = 'executable',
+		set "dependencyReady" = true,
+			"executionDisposition" = 'executable',
 			"executionReason" = 'ordered-current-checkpoint',
 			"executionDispositionAt" = now(),
 			"updatedAt" = now()
