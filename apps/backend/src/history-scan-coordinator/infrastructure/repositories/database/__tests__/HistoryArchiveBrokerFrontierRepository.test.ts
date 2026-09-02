@@ -60,6 +60,34 @@ describe('HistoryArchiveBrokerFrontierRepository', () => {
 		expect(query.mock.calls[0]?.[1]).toEqual([24, 2, publishedBefore]);
 	});
 
+	it('requeues old database reservations when the broker is empty', async () => {
+		const query = jest
+			.fn()
+			.mockResolvedValueOnce(undefined)
+			.mockResolvedValueOnce([{ count: 1 }])
+			.mockResolvedValueOnce(undefined);
+		const manager = { query } as unknown as EntityManager;
+		const transaction = jest.fn(
+			async (work: (manager: EntityManager) => Promise<number>) =>
+				await work(manager)
+		);
+		const repository = new HistoryArchiveBrokerFrontierRepository({
+			transaction
+		} as unknown as DataSource);
+		const publishedBefore = new Date('2026-09-02T01:00:00.000Z');
+
+		await expect(
+			repository.requeueOrphanedPublishedJobs(publishedBefore, 240)
+		).resolves.toBe(1);
+
+		const sql = query.mock.calls[1]?.[0] as string;
+		expect(sql).toContain("object.status in ('pending', 'failed')");
+		expect(sql).toContain('"dispatchToken" = null');
+		expect(sql).toContain('"claimAttempt" = null');
+		expect(query.mock.calls[1]?.[1]).toEqual([publishedBefore, 240]);
+		expect(query.mock.calls[2]?.[0]).toContain('pg_notify');
+	});
+
 	it('resets failed publishes in checkpoint fan-out lock order', async () => {
 		const query = jest.fn().mockResolvedValue([]);
 		const manager = { query } as unknown as EntityManager;

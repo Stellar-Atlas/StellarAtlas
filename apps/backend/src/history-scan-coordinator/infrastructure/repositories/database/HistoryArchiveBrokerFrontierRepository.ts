@@ -7,6 +7,7 @@ import type { HistoryArchiveObjectType } from '../../../domain/history-archive-o
 import {
 	historyArchiveCheckpointNotFoundCooldownSql,
 	historyArchiveSchedulableObjectSql,
+	notifyHistoryArchiveReadyWork,
 	synchronizeHistoryArchiveReadyQueue
 } from './HistoryArchiveObjectReadyQueue.js';
 import {
@@ -201,6 +202,34 @@ const findPublishedBrokerJobsSql = `
 	limit $1::integer
 `;
 
+const requeueOrphanedPublishedBrokerJobsSql = `
+	with orphaned as materialized (
+		select ready."objectRemoteId"
+		from "history_archive_object_ready" ready
+		join "history_archive_object_queue" object
+			on object."remoteId" = ready."objectRemoteId"
+		where ready."publishedAt" <= $1::timestamptz
+			and ready."dispatchToken" is not null
+			and ready."claimAttempt" is not null
+			and ready."claimAttempt" = object.attempts + 1
+			and object.status in ('pending', 'failed')
+		order by ready."archiveUrlIdentity", ready."objectRemoteId"
+		limit $2::integer
+		for update of ready skip locked
+	), requeued as (
+		update "history_archive_object_ready" ready
+		set "publishedAt" = null,
+			"dispatchToken" = null,
+			"claimAttempt" = null,
+			"updatedAt" = now()
+		from orphaned
+		where ready."objectRemoteId" = orphaned."objectRemoteId"
+		returning ready."objectRemoteId"
+	)
+	select count(*)::integer as count
+	from requeued
+`;
+
 function requirePositiveInteger(value: number | string, field: string): number {
 	const parsed = typeof value === 'number' ? value : Number(value);
 	if (!Number.isSafeInteger(parsed) || parsed < 1)
@@ -369,6 +398,26 @@ export class HistoryArchiveBrokerFrontierRepository {
 			publishedBefore
 		])) as readonly BrokerJobRow[];
 		return mapAndOrderBrokerJobs(rows);
+	}
+
+	async requeueOrphanedPublishedJobs(
+		publishedBefore: Date,
+		limit: number
+	): Promise<number> {
+		if (limit < 1) return 0;
+		return await this.dataSource.transaction(async (manager) => {
+			await this.takeDispatcherLock(manager);
+			const [requeued] = (await manager.query(
+				requeueOrphanedPublishedBrokerJobsSql,
+				[publishedBefore, Math.floor(limit)]
+			)) as readonly { readonly count?: number | string }[];
+			const count = Number(requeued?.count ?? 0);
+			if (!Number.isSafeInteger(count) || count < 0) {
+				throw new Error('Invalid orphaned archive broker job count');
+			}
+			if (count > 0) await notifyHistoryArchiveReadyWork(manager);
+			return count;
+		});
 	}
 
 	async resetPublished(executionIds: readonly string[]): Promise<void> {

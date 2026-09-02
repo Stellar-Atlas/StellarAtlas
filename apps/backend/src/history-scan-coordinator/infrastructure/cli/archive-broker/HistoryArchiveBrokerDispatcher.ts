@@ -245,6 +245,13 @@ export class HistoryArchiveBrokerDispatcher {
 		}
 		this.nextOrphanedPublishedReplayAt =
 			now + orphanedPublishedReplayIntervalMs;
+		if (availableCapacity === this.config.highWatermark) {
+			const requeued = await this.repository.requeueOrphanedPublishedJobs(
+				new Date(now - orphanedPublishedReplayAgeMs),
+				this.config.highWatermark
+			);
+			if (requeued > 0) return true;
+		}
 		const jobs = await this.repository.findPublishedJobs(
 			this.config.highWatermark,
 			this.config.maximumPriority,
