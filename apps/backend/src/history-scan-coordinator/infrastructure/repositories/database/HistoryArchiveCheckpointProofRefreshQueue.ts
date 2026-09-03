@@ -195,6 +195,9 @@ export const enqueueCurrentTerminalReadyCheckpointProofRefreshesSql = `
                                 as "checkpointLedger"
                 from "history_archive_checkpoint_scan_cursor" cursor
                 where ($1::text[] is null or cursor."archiveUrlIdentity" = any($1::text[]))
+                -- Existing proofs are reconciled from the durable
+                -- proofReconciledAt watermark when their evidence changes.
+                -- Recovery seeding only repairs a missing proof row.
                 and not exists (
                         select 1
                         from "history_archive_checkpoint_proof" proof
@@ -202,7 +205,6 @@ export const enqueueCurrentTerminalReadyCheckpointProofRefreshesSql = `
                                 cursor."archiveUrlIdentity"
                         and proof."checkpointLedger" =
                                 cursor."nextHistoricalCheckpointLedger" - 64
-                        and proof.status = 'verified'
                 )
                 and not exists (
                         select 1
@@ -750,13 +752,24 @@ export const enqueueProofRefreshesSql = `
                         and not exists (
                                 select 1
                                 from "history_archive_checkpoint_proof" proof
+                                left join "history_archive_object_queue" checkpoint
+                                        on checkpoint."archiveUrlIdentity" =
+                                                proof."archiveUrlIdentity"
+                                        and checkpoint."checkpointLedger" =
+                                                proof."checkpointLedger"
+                                        and checkpoint."objectType" =
+                                                'checkpoint-state'
                                 where proof."archiveUrlIdentity" =
                                         candidate."archiveUrlIdentity"
                                         and proof."checkpointLedger" =
                                                 candidate."checkpointLedger"
-                                        and proof.status = 'verified'
-                                        and proof."evaluatedAt" >=
-                                                candidate.evidence_updated_at
+                                        and greatest(
+                                                proof."evaluatedAt",
+                                                coalesce(
+                                                        checkpoint."proofReconciledAt",
+                                                        '-infinity'::timestamptz
+                                                )
+                                        ) >= candidate.evidence_updated_at
                         )
         ), enqueued as (
 		insert into history_archive_checkpoint_proof_refresh_queue (

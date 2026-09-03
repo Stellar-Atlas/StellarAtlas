@@ -66,7 +66,13 @@ describe('sequential history archive proof chain', () => {
 			/candidate\."checkpointLedger"\s*=\s*chain_cursor\."nextHistoricalCheckpointLedger" - 64/
 		);
 		expect(enqueueProofRefreshesSql).toContain(
-			'proof."evaluatedAt" >=\n                                                candidate.evidence_updated_at'
+			'checkpoint."proofReconciledAt"'
+		);
+		expect(enqueueProofRefreshesSql).toContain(
+			') >= candidate.evidence_updated_at'
+		);
+		expect(enqueueCurrentTerminalReadyCheckpointProofRefreshesSql).toContain(
+			'Recovery seeding only repairs a missing proof row'
 		);
 		expect(enqueueProofRefreshesSql).toContain(
 			"when object.status = 'verified' then greatest"
