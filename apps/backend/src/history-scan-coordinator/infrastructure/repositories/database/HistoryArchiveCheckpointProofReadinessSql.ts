@@ -14,6 +14,12 @@ export function historyArchiveCheckpointProofTerminalReadySql(
                     and predecessor_proof."checkpointLedger" = ${checkpointLedger} - 64
                     and predecessor_proof.status = 'verified'
             )
+            or exists (
+                select 1
+                from "history_archive_checkpoint_substitution" predecessor_substitution
+                where predecessor_substitution."archiveUrlIdentity" = ${archiveUrlIdentity}
+                    and predecessor_substitution."checkpointLedger" = ${checkpointLedger} - 64
+            )
         )`;
 
 	return `(

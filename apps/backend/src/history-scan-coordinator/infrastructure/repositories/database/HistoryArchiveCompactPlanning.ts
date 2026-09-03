@@ -443,7 +443,43 @@ const compactCheckpointPlanSql = `
 		where cursor."nextHistoricalCheckpointLedger" > 63
 			and failed.status = 'not-evaluable'
 			and failed."failureKind" = 'object-failed'
-			and failed.details->>'failureHttpStatus' in ('403', '404', '410')
+			and (
+				failed.details->>'failureHttpStatus' in ('403', '404', '410')
+				or exists (
+					select 1
+					from "history_archive_object_queue" failed_object
+					where failed_object."archiveUrlIdentity" =
+						failed."archiveUrlIdentity"
+						and failed_object."checkpointLedger" =
+							failed."checkpointLedger"
+						and failed_object."objectType" in (
+							'checkpoint-state', 'ledger', 'transactions', 'results'
+						)
+						and failed_object.status = 'failed'
+						and failed_object."httpStatus" in (403, 404, 410)
+						and coalesce(
+							failed_object."failureChannel", 'archive_evidence'
+						) in ('archive_evidence', 'archive_availability')
+				)
+				or exists (
+					select 1
+					from "history_archive_checkpoint_bucket_dependency" dependency
+					join "history_archive_object_queue" failed_bucket
+						on failed_bucket."archiveUrlIdentity" =
+							dependency."archiveUrlIdentity"
+						and failed_bucket."objectType" = 'bucket'
+						and failed_bucket."bucketHash" = dependency."bucketHash"
+						and failed_bucket.status = 'failed'
+						and failed_bucket."httpStatus" in (403, 404, 410)
+						and coalesce(
+							failed_bucket."failureChannel", 'archive_evidence'
+						) in ('archive_evidence', 'archive_availability')
+					where dependency."archiveUrlIdentity" =
+						failed."archiveUrlIdentity"
+						and dependency."checkpointLedger" =
+							failed."checkpointLedger"
+				)
+			)
 	), substitutions as (
 		insert into "history_archive_checkpoint_substitution" (
 			"archiveUrlIdentity", "checkpointLedger",

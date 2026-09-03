@@ -47,6 +47,9 @@ describe('sequential history archive proof chain', () => {
 		expect(candidateReadiness).toContain(
 			'predecessor_proof."checkpointLedger" = candidate."checkpointLedger" - 64'
 		);
+		expect(candidateReadiness).toContain(
+			'predecessor_substitution."checkpointLedger" = candidate."checkpointLedger" - 64'
+		);
 		expect(candidateReadiness).toContain("('ledger'::text)");
 		expect(candidateReadiness).toContain("('transactions'::text)");
 		expect(candidateReadiness).toContain("('results'::text)");

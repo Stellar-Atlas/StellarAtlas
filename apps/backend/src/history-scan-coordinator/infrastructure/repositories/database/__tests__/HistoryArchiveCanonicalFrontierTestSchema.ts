@@ -52,6 +52,14 @@ export async function createCanonicalFrontierTestSchema(
 		)
 	`);
 	await dataSource.query(`
+		create table if not exists "history_archive_checkpoint_bucket_dependency" (
+			"archiveUrlIdentity" text not null,
+			"checkpointLedger" integer not null,
+			"bucketHash" text not null,
+			primary key ("archiveUrlIdentity", "checkpointLedger", "bucketHash")
+		)
+	`);
+	await dataSource.query(`
 		create table if not exists "full_history_promotion_runtime" (
 			"network_passphrase_hash" bytea primary key,
 			state text not null,

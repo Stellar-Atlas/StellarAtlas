@@ -224,7 +224,23 @@ describe('compact history archive checkpoint planning', () => {
 		const failed = createBucketMissingProof(targetRoot.archiveUrlIdentity, 63);
 		failed.status = 'not-evaluable';
 		failed.failureKind = 'object-failed';
-		failed.details = { failureHttpStatus: 403 };
+		failed.details = {};
+		const failedObject = new HistoryArchiveObject({
+			archiveUrl: targetRoot.archiveUrl,
+			archiveUrlIdentity: targetRoot.archiveUrlIdentity,
+			checkpointLedger: 63,
+			hostIdentity: targetRoot.hostIdentity,
+			objectKey: 'ledger:0000003f',
+			objectOrder: 63,
+			objectType: 'ledger',
+			objectUrl: `${targetRoot.archiveUrl}/ledger/00/00/00/ledger-0000003f.xdr.gz`,
+			status: 'failed'
+		});
+		failedObject.errorType = 'http_error';
+		failedObject.errorMessage = 'Remote archive returned HTTP 403';
+		failedObject.failureChannel = 'archive_availability';
+		failedObject.httpStatus = 403;
+		await dataSource.getRepository(HistoryArchiveObject).save(failedObject);
 		const source = createBucketMissingProof(sourceRoot.archiveUrlIdentity, 63);
 		source.status = 'verified';
 		source.requiredObjectsComplete = true;

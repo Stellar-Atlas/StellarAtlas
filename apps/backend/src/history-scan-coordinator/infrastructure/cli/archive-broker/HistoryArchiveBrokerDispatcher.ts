@@ -45,6 +45,7 @@ const { Client: PostgresClient } = createRequire(import.meta.url)('pg') as {
 
 const orphanedPublishedReplayAgeMs = 30_000;
 const orphanedPublishedReplayIntervalMs = 15_000;
+const proofFrontierRecoveryIntervalMs = 30_000;
 const brokerStreamRetentionHeadroomFactor = 2;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -166,6 +167,7 @@ export class HistoryArchiveBrokerDispatcher {
 	private manager: JetStreamManager | null = null;
 	private readyListener: PostgresNotificationClient | null = null;
 	private nextOrphanedPublishedReplayAt = 0;
+	private nextProofFrontierRecoveryAt = 0;
 	private wakeVersion = 0;
 	private readonly wakeWaiters = new Set<() => void>();
 	private stopping = false;
@@ -183,6 +185,7 @@ export class HistoryArchiveBrokerDispatcher {
 			const observedWakeVersion = this.wakeVersion;
 			try {
 				const capacity = await this.getAvailableCapacity();
+				await this.recoverProofFrontierIfDue();
 				if (capacity < 1) {
 					await this.waitForWork(observedWakeVersion);
 					continue;
@@ -225,6 +228,12 @@ export class HistoryArchiveBrokerDispatcher {
 				await this.waitForWork(observedWakeVersion);
 			}
 		}
+	}
+
+	private async recoverProofFrontierIfDue(now = Date.now()): Promise<void> {
+		if (now < this.nextProofFrontierRecoveryAt) return;
+		this.nextProofFrontierRecoveryAt = now + proofFrontierRecoveryIntervalMs;
+		await this.repository.recoverTerminalProofFrontier();
 	}
 
 	private async replayOrphanedPublishedJobs(

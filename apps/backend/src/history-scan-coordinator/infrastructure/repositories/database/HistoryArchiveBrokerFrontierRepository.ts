@@ -349,6 +349,16 @@ export class HistoryArchiveBrokerFrontierRepository {
 		return readyObjects;
 	}
 
+	async recoverTerminalProofFrontier(): Promise<number> {
+		return await this.dataSource.transaction(
+			async (manager) =>
+				await enqueueCurrentTerminalReadyCheckpointProofRefreshes(
+					manager,
+					maximumArchiveSourceFrontierRows
+				)
+		);
+	}
+
 	async ensureProofFrontier(
 		archiveUrlIdentity: string | null = null
 	): Promise<void> {
