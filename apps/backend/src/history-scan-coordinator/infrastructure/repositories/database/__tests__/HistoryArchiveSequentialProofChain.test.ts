@@ -28,7 +28,10 @@ import {
 	historyArchiveCanonicalFirstScopeCteSql
 } from '../HistoryArchiveCanonicalFirst.js';
 import { targetedCompactCheckpointPlanSql } from '../HistoryArchiveCompactPlanning.js';
-import { activateCurrentCheckpointDependenciesSql } from '../HistoryArchiveCheckpointPrefetch.js';
+import {
+	activateCurrentCheckpointDependenciesSql,
+	orderedCheckpointPrefetchSql
+} from '../HistoryArchiveCheckpointPrefetch.js';
 import { historyArchiveCheckpointProofBatchQueuedRefreshSql } from '../HistoryArchiveCheckpointProofRefreshSql.js';
 import { historyArchiveCheckpointProofBatchTargetCtesSql } from '../HistoryArchiveCheckpointProofTargetSql.js';
 import { historyArchiveCheckpointProofBatchQueuedUpsertSql } from '../HistoryArchiveCheckpointProofUpsertSql.js';
@@ -118,6 +121,13 @@ describe('sequential history archive proof chain', () => {
 	});
 
 	it('prefetches upcoming canonical objects while proof claims stay sequential', () => {
+		expect(orderedCheckpointPrefetchSql).toContain(
+			'on conflict ("archiveUrlIdentity", "objectType", "objectKey") do nothing'
+		);
+		expect(orderedCheckpointPrefetchSql).not.toContain('do update');
+		expect(activateCurrentCheckpointDependenciesSql).toContain(
+			`object."objectType" = 'checkpoint-state'`
+		);
 		expect(activateCurrentCheckpointDependenciesSql).toContain(
 			'cross join lateral generate_series('
 		);

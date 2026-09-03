@@ -44,7 +44,7 @@ export async function activateCurrentCheckpointDependencies(
 	};
 }
 
-const orderedCheckpointPrefetchSql = `
+export const orderedCheckpointPrefetchSql = `
 	with ${historyArchiveCanonicalFirstScopeCteSql('$2::text')}, available_roots as materialized (
                 select state."archiveUrlIdentity", root."archiveUrl",
                         root."hostIdentity",
@@ -110,23 +110,7 @@ const orderedCheckpointPrefetchSql = `
                 from source
                 order by source."archiveUrlIdentity",
                         source.checkpoint_ledger
-                on conflict ("archiveUrlIdentity", "objectType", "objectKey")
-                        do update
-                        set "archiveUrl" = excluded."archiveUrl",
-                                "hostIdentity" = excluded."hostIdentity",
-                                "objectUrl" = excluded."objectUrl",
-                                "dependencyReady" = true,
-                                "executionDisposition" = 'executable',
-                                "executionReason" = 'ordered-prefetch',
-                                "executionDispositionAt" = now(),
-                                "updatedAt" = now()
-                        where "history_archive_object_queue".status = 'pending'
-                                and (
-                                        "history_archive_object_queue"."dependencyReady"
-                                                is distinct from true
-                                        or "history_archive_object_queue"."executionDisposition"
-                                                is distinct from 'executable'
-                                )
+                on conflict ("archiveUrlIdentity", "objectType", "objectKey") do nothing
                 returning "remoteId", "archiveUrlIdentity"
         ), ready as (
                 insert into "history_archive_object_ready" (
@@ -190,7 +174,9 @@ export const activateCurrentCheckpointDependenciesSql = `
 				)
 			)
 		)
-			and (object."dependencyReady" = true
+			and (
+				object."objectType" = 'checkpoint-state'
+				or object."dependencyReady" = true
 				or (object."objectType" <> 'checkpoint-state' and exists (
 					select 1
 					from "history_archive_object_queue" checkpoint_state

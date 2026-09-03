@@ -187,19 +187,32 @@ export async function markHistoryArchiveTransitionEffectsCompletedBatch(
 		const rows = extractRows(
 			(await manager.query(
 				`
-					with input as (
+					with input as materialized (
 						select *
 						from jsonb_to_recordset($1::jsonb) as item(
 							"remoteId" uuid,
 							"claimAttempt" integer,
 							status text
 						)
+					), lockable as materialized (
+						select object."remoteId"
+						from input
+						join "history_archive_object_queue" object
+							on object."remoteId" = input."remoteId"
+						where object.status = input.status
+						  and object.attempts = input."claimAttempt"
+						  and object."transitionEffectsRequiredAt" is not null
+						  and object."transitionEffectsCompletedAt" is null
+						order by object."archiveUrlIdentity", object."objectType",
+							object."objectKey", object."remoteId"
+						for update of object skip locked
 					)
 					update "history_archive_object_queue" object
 					set "transitionEffectsCompletedAt" = now(),
 						"updatedAt" = now()
-					from input
+					from input, lockable
 					where object."remoteId" = input."remoteId"
+					  and object."remoteId" = lockable."remoteId"
 					  and object.status = input.status
 					  and object.attempts = input."claimAttempt"
 					  and object."transitionEffectsRequiredAt" is not null
