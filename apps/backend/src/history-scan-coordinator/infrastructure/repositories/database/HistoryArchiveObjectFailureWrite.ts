@@ -9,8 +9,7 @@ import {
 	historyArchiveObjectHostFailureUpsertSql,
 	toHistoryArchiveObjectHostFailureSqlParams
 } from './HistoryArchiveObjectHostThrottleSql.js';
-import { lockHistoryArchiveObjectRootTransition } from './HistoryArchiveRootTransitionLock.js';
-import { requeueFailedHistoryArchiveBrokerReadyRow } from './HistoryArchiveObjectReadyQueue.js';
+import { removeCompletedHistoryArchiveBrokerReadyRow } from './HistoryArchiveObjectReadyQueue.js';
 
 export async function markHistoryArchiveObjectFailed(
 	repository: Repository<HistoryArchiveObject>,
@@ -21,7 +20,6 @@ export async function markHistoryArchiveObjectFailed(
 	if (failure.scheduler === 'broker' && failure.executionId === undefined)
 		return false;
 	return await repository.manager.transaction(async (manager) => {
-		await lockHistoryArchiveObjectRootTransition(manager, remoteId);
 		if (failure.scheduler === 'broker') {
 			await manager.query(
 				`select ready."objectRemoteId"
@@ -85,12 +83,11 @@ export async function markHistoryArchiveObjectFailed(
 			]);
 		}
 		if (failure.scheduler === 'broker') {
-			await requeueFailedHistoryArchiveBrokerReadyRow(
+			await removeCompletedHistoryArchiveBrokerReadyRow(
 				manager,
 				remoteId,
 				failure.executionId!,
-				failure.claimAttempt,
-				failure.nextAttemptAt ?? null
+				failure.claimAttempt
 			);
 		}
 

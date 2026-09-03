@@ -263,11 +263,10 @@ export const HistoryScanRouterWrapper = (
 				const failure = parseArchiveObjectFailure(req, res);
 				if (failure === null) return;
 
-				const result =
-					await config.failHistoryArchiveObject.executeAndReconcile(
-						req.params.remoteId,
-						failure
-					);
+				const result = await config.failHistoryArchiveObject.execute(
+					req.params.remoteId,
+					failure
+				);
 				if (result.isErr()) {
 					return res.status(500).json({ error: result.error.message });
 				}

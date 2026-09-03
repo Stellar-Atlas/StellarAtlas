@@ -1,10 +1,17 @@
 import type { EntityManager } from 'typeorm';
 import {
+	historyArchiveSchedulableObjectSql,
 	removeCompletedHistoryArchiveBrokerReadyRow,
 	synchronizeHistoryArchiveReadyQueue
 } from '../HistoryArchiveObjectReadyQueue.js';
 
 describe('HistoryArchiveObjectReadyQueue', () => {
+	it('admits pending work while leaving failed work for explicit recheck', () => {
+		const sql = historyArchiveSchedulableObjectSql('candidate');
+		expect(sql).toContain(`candidate.status = 'pending'`);
+		expect(sql).not.toContain(`candidate.status in ('pending', 'failed')`);
+	});
+
 	it('skips a maintenance refill while another frontier writer owns the lock', async () => {
 		const query = jest.fn().mockResolvedValue([{ locked: false }]);
 		const manager = {
