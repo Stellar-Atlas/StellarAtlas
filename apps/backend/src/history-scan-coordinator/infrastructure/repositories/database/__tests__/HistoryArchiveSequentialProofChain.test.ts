@@ -68,6 +68,12 @@ describe('sequential history archive proof chain', () => {
 		expect(enqueueProofRefreshesSql).toContain(
 			'proof."evaluatedAt" >=\n                                                candidate.evidence_updated_at'
 		);
+		expect(enqueueProofRefreshesSql).toContain(
+			"when object.status = 'verified' then greatest"
+		);
+		expect(enqueueProofRefreshesSql).toContain(
+			'coalesce(object."verifiedAt", object."updatedAt")'
+		);
 		expect(enqueueCurrentTerminalReadyCheckpointProofRefreshesSql).toContain(
 			candidateReadiness
 		);

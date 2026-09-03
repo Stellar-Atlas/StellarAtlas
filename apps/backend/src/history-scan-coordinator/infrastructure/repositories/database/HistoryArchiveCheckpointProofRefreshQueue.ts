@@ -687,14 +687,16 @@ function extractQueryRows<T>(result: unknown): readonly T[] {
 export const enqueueProofRefreshesSql = `
 	with source_objects as materialized (
 		select object.*,
-			greatest(
-				object."updatedAt",
-				coalesce(object."verifiedAt", '-infinity'::timestamptz),
-				coalesce(
-					object."transitionEffectsRequiredAt",
-					'-infinity'::timestamptz
+			case
+				when object.status = 'verified' then greatest(
+					coalesce(object."verifiedAt", object."updatedAt"),
+					coalesce(
+						object."transitionEffectsRequiredAt",
+						'-infinity'::timestamptz
+					)
 				)
-			) as evidence_updated_at
+				else object."updatedAt"
+			end as evidence_updated_at
 		from "history_archive_object_queue" object
 		where object."remoteId" = any($1::uuid[])
 			and object.status in ('failed', 'verified')
