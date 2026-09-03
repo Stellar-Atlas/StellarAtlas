@@ -62,7 +62,7 @@ const maximumConsecutiveProofRefreshTransactionSize = 64;
 const maximumSetBasedConsecutiveProofRefreshWaveSize =
 	maximumConsecutiveProofRefreshTransactionSize;
 const defaultProofRefreshRootConcurrency = 8;
-const maximumProofRefreshRootConcurrency = 16;
+const maximumProofRefreshRootConcurrency = historyArchiveConsumerCount;
 
 export function proofRefreshBatchHandledEveryValidTarget(
 	claimCount: number,

@@ -3,6 +3,7 @@ import { HistoryArchiveSequentialProofChainMigration1785540000000 } from '../../
 import {
 	calculateHistoryArchiveCheckpointFanoutBatchSize,
 	calculateHistoryArchiveSequentialPrefetchDepth,
+	historyArchiveConsumerCount,
 	resolveHistoryArchiveSequentialPrefetchDepth
 } from '../../../../domain/history-archive-object/HistoryArchiveObjectPlanningPolicy.js';
 import {
@@ -286,7 +287,12 @@ describe('sequential history archive proof chain', () => {
 		expect(normalizeProofRefreshRootConcurrency(Number.NaN)).toBe(8);
 		expect(normalizeProofRefreshRootConcurrency(0)).toBe(8);
 		expect(normalizeProofRefreshRootConcurrency(12)).toBe(12);
-		expect(normalizeProofRefreshRootConcurrency(100)).toBe(16);
+		expect(normalizeProofRefreshRootConcurrency(100)).toBe(
+			Math.min(100, historyArchiveConsumerCount)
+		);
+		expect(normalizeProofRefreshRootConcurrency(500)).toBe(
+			historyArchiveConsumerCount
+		);
 	});
 
 	it('drops stale claims without rolling back valid proof targets', () => {
