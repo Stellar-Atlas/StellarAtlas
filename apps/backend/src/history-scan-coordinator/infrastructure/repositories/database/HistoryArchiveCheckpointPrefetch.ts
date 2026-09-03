@@ -1,5 +1,8 @@
 import type { EntityManager } from 'typeorm';
-import { historyArchiveSequentialPrefetchDepth } from '@history-scan-coordinator/domain/history-archive-object/HistoryArchiveObjectPlanningPolicy.js';
+import {
+	historyArchiveConsumerCount,
+	historyArchiveSequentialPrefetchDepth
+} from '@history-scan-coordinator/domain/history-archive-object/HistoryArchiveObjectPlanningPolicy.js';
 import {
 	historyArchiveCanonicalFirstAdmissionSql,
 	historyArchiveCanonicalFirstScopeCteSql
@@ -33,7 +36,11 @@ export async function activateCurrentCheckpointDependencies(
 ): Promise<{ readonly activated: number; readonly ready: number }> {
 	const [result] = (await manager.query(
 		activateCurrentCheckpointDependenciesSql,
-		[archiveUrlIdentity, historyArchiveSequentialPrefetchDepth]
+		[
+			archiveUrlIdentity,
+			historyArchiveSequentialPrefetchDepth,
+			historyArchiveConsumerCount
+		]
 	)) as readonly {
 		readonly activated: number | string;
 		readonly ready: number | string;
@@ -220,15 +227,35 @@ export const activateCurrentCheckpointDependenciesSql = `
 			bool_or(candidate."needsReverification") as "needsReverification"
 		from candidate_keys candidate
 		group by candidate.id
-	), candidates as materialized (
+	), ranked_candidates as materialized (
 		select object.id, object."remoteId", object."archiveUrlIdentity",
-			candidate."needsReverification"
+			candidate."needsReverification", candidate."checkpointLedger",
+			object."objectOrder", object."objectKey",
+			row_number() over (
+				partition by object."archiveUrlIdentity"
+				order by candidate."checkpointLedger", object."objectOrder",
+					object."objectKey", object.id
+			) as root_rank
 		from candidate_ids candidate
 		join "history_archive_object_queue" object
 			on object.id = candidate.id
-		order by object."archiveUrlIdentity", candidate."checkpointLedger",
+	), selected_candidates as materialized (
+		select id, "remoteId", "archiveUrlIdentity",
+			"needsReverification", "checkpointLedger",
+			"objectOrder", "objectKey", root_rank
+		from ranked_candidates
+		order by root_rank, "archiveUrlIdentity", "checkpointLedger",
+			"objectOrder", "objectKey", id
+		limit $3::integer
+	), candidates as materialized (
+		select object.id, object."remoteId", object."archiveUrlIdentity",
+			selected."needsReverification"
+		from selected_candidates selected
+		join "history_archive_object_queue" object
+			on object.id = selected.id
+		order by selected.root_rank, object."archiveUrlIdentity",
+			selected."checkpointLedger",
 			object."objectOrder", object."objectKey", object.id
-		limit $2::integer
 		for update of object skip locked
 	), activated as (
 		update "history_archive_object_queue" object

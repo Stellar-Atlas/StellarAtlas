@@ -2,7 +2,8 @@ import type { DataSource, EntityManager, QueryRunner } from 'typeorm';
 import { HistoryArchiveSequentialProofChainMigration1785540000000 } from '../../../database/migrations/1785540000000-HistoryArchiveSequentialProofChainMigration.js';
 import {
 	calculateHistoryArchiveCheckpointFanoutBatchSize,
-	calculateHistoryArchiveSequentialPrefetchDepth
+	calculateHistoryArchiveSequentialPrefetchDepth,
+	resolveHistoryArchiveSequentialPrefetchDepth
 } from '../../../../domain/history-archive-object/HistoryArchiveObjectPlanningPolicy.js';
 import {
 	claimHistoryArchiveCheckpointProofRefreshes,
@@ -144,6 +145,15 @@ describe('sequential history archive proof chain', () => {
 			'candidate_ids as materialized'
 		);
 		expect(activateCurrentCheckpointDependenciesSql).toContain(
+			'partition by object."archiveUrlIdentity"'
+		);
+		expect(activateCurrentCheckpointDependenciesSql).toContain(
+			'order by root_rank, "archiveUrlIdentity"'
+		);
+		expect(activateCurrentCheckpointDependenciesSql).toContain(
+			'limit $3::integer'
+		);
+		expect(activateCurrentCheckpointDependenciesSql).toContain(
 			`proof."failureKind" = 'proof-facts-incomplete'`
 		);
 		expect(activateCurrentCheckpointDependenciesSql).toContain(
@@ -166,6 +176,14 @@ describe('sequential history archive proof chain', () => {
 		expect(calculateHistoryArchiveSequentialPrefetchDepth(240)).toBe(240);
 		expect(calculateHistoryArchiveSequentialPrefetchDepth(1_000)).toBe(1_000);
 		expect(calculateHistoryArchiveCheckpointFanoutBatchSize(0)).toBe(16);
+		expect(resolveHistoryArchiveSequentialPrefetchDepth(undefined, 120)).toBe(
+			120
+		);
+		expect(resolveHistoryArchiveSequentialPrefetchDepth('2', 120)).toBe(2);
+		expect(resolveHistoryArchiveSequentialPrefetchDepth('0', 120)).toBe(120);
+		expect(resolveHistoryArchiveSequentialPrefetchDepth('invalid', 120)).toBe(
+			120
+		);
 		expect(calculateHistoryArchiveCheckpointFanoutBatchSize(60)).toBe(16);
 		expect(calculateHistoryArchiveCheckpointFanoutBatchSize(240)).toBe(60);
 		expect(calculateHistoryArchiveCheckpointFanoutBatchSize(1_000)).toBe(64);

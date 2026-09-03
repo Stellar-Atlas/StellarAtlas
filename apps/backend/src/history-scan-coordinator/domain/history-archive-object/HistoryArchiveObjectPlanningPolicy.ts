@@ -12,7 +12,7 @@ export const historyArchiveConsumerCount =
 // Checkpoint-state discovery is its own network wave before the downloadable
 // ledger, transaction, result, SCP, and bucket objects can fan out. Admit at
 // least one checkpoint-state per consumer so that first wave can fill the
-// configured worker pool while retaining the 64-checkpoint minimum.
+// configured worker pool when no explicit lookahead is configured.
 export function calculateHistoryArchiveSequentialPrefetchDepth(
 	consumerCount: number
 ): number {
@@ -20,8 +20,23 @@ export function calculateHistoryArchiveSequentialPrefetchDepth(
 	return Math.max(64, consumerCount);
 }
 
+export function resolveHistoryArchiveSequentialPrefetchDepth(
+	configuredDepth: string | undefined,
+	consumerCount: number
+): number {
+	const fallback =
+		calculateHistoryArchiveSequentialPrefetchDepth(consumerCount);
+	if (configuredDepth === undefined) return fallback;
+	const parsedDepth = Number(configuredDepth);
+	if (!Number.isSafeInteger(parsedDepth) || parsedDepth < 1) return fallback;
+	return Math.min(parsedDepth, Math.max(1, consumerCount));
+}
+
 export const historyArchiveSequentialPrefetchDepth =
-	calculateHistoryArchiveSequentialPrefetchDepth(historyArchiveConsumerCount);
+	resolveHistoryArchiveSequentialPrefetchDepth(
+		process.env.HISTORY_ARCHIVE_SEQUENTIAL_PREFETCH_DEPTH,
+		historyArchiveConsumerCount
+	);
 
 export function calculateHistoryArchiveCheckpointFanoutBatchSize(
 	consumerCount: number

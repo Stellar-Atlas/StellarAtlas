@@ -169,13 +169,7 @@ describe('HistoryArchiveBrokerFrontierRepository', () => {
 
 		const sql = (query.mock.calls[0]?.[0] as string).replace(/\s+/g, ' ');
 		expect(sql).toContain(
-			'on conflict ("archiveUrlIdentity", "objectType", "objectKey") do update'
-		);
-		expect(sql).toContain(
-			'"history_archive_object_queue"."executionDisposition" is distinct from \'executable\''
-		);
-		expect(sql).toContain(
-			'where "history_archive_object_queue".status = \'pending\''
+			'on conflict ("archiveUrlIdentity", "objectType", "objectKey") do nothing'
 		);
 		const activationSql = (query.mock.calls[1]?.[0] as string).replace(
 			/\s+/g,
@@ -196,6 +190,7 @@ describe('HistoryArchiveBrokerFrontierRepository', () => {
 		]);
 		expect(query.mock.calls[1]?.[1]).toEqual([
 			'http://history.stellar.org/prd/core-live/core_live_001',
+			expect.any(Number),
 			expect.any(Number)
 		]);
 		expect(planned).toBe(6);
