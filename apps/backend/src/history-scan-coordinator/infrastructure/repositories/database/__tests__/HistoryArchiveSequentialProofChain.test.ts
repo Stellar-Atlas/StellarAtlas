@@ -14,6 +14,8 @@ import {
 	proofRefreshBatchHandledEveryValidTarget,
 	enqueueProofRefreshesSql,
 	normalizeConsecutiveProofRefreshTransactionSize,
+	normalizeProofRefreshRootConcurrency,
+	partitionProofRefreshTargetsByRoot,
 	normalizeTargetedProofRefreshBatchSize
 } from '../HistoryArchiveCheckpointProofRefreshQueue.js';
 import {
@@ -199,6 +201,45 @@ describe('sequential history archive proof chain', () => {
 			'from locked_targets target'
 		);
 	});
+
+	it('keeps each root ordered while allowing independent root transactions', () => {
+		const target = (archiveUrlIdentity: string, checkpointLedger: number) => ({
+			archiveUrlIdentity,
+			checkpointLedger,
+			evidenceUpdatedAt: '2026-09-03T00:00:00.000Z',
+			generation: 1,
+			leaseToken: '10000000-0000-0000-0000-000000000001'
+		});
+		const groups = partitionProofRefreshTargetsByRoot([
+			target('https://one.example', 127),
+			target('https://two.example', 63),
+			target('https://one.example', 63)
+		]);
+
+		expect(groups).toEqual([
+			[
+				expect.objectContaining({
+					archiveUrlIdentity: 'https://one.example',
+					checkpointLedger: 63
+				}),
+				expect.objectContaining({
+					archiveUrlIdentity: 'https://one.example',
+					checkpointLedger: 127
+				})
+			],
+			[
+				expect.objectContaining({
+					archiveUrlIdentity: 'https://two.example',
+					checkpointLedger: 63
+				})
+			]
+		]);
+		expect(normalizeProofRefreshRootConcurrency(Number.NaN)).toBe(8);
+		expect(normalizeProofRefreshRootConcurrency(0)).toBe(8);
+		expect(normalizeProofRefreshRootConcurrency(12)).toBe(12);
+		expect(normalizeProofRefreshRootConcurrency(100)).toBe(16);
+	});
+
 	it('drops stale claims without rolling back valid proof targets', () => {
 		expect(proofRefreshBatchHandledEveryValidTarget(8, 7, 7)).toBe(true);
 		expect(proofRefreshBatchHandledEveryValidTarget(8, 8, 8)).toBe(true);

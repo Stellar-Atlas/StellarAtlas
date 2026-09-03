@@ -65,6 +65,9 @@ const maximumConsecutiveProofRefreshTransactionSize = 64;
 
 const maximumSetBasedConsecutiveProofRefreshWaveSize =
 	maximumConsecutiveProofRefreshTransactionSize;
+const defaultProofRefreshRootConcurrency = 8;
+const maximumProofRefreshRootConcurrency = 16;
+
 export function proofRefreshBatchHandledEveryValidTarget(
 	claimCount: number,
 	targetCount: number,
@@ -93,6 +96,42 @@ function consecutiveProofRefreshTransactionSize(): number {
 			process.env.HISTORY_ARCHIVE_CONSECUTIVE_PROOF_BATCH_SIZE ?? '',
 			10
 		)
+	);
+}
+
+export function normalizeProofRefreshRootConcurrency(value: number): number {
+	if (!Number.isSafeInteger(value) || value < 1) {
+		return defaultProofRefreshRootConcurrency;
+	}
+	return Math.min(value, maximumProofRefreshRootConcurrency);
+}
+
+function proofRefreshRootConcurrency(): number {
+	return normalizeProofRefreshRootConcurrency(
+		Number.parseInt(
+			process.env.HISTORY_ARCHIVE_TARGETED_PROOF_REFRESH_CONCURRENCY ?? '',
+			10
+		)
+	);
+}
+
+export function partitionProofRefreshTargetsByRoot(
+	targets: readonly ClaimedHistoryArchiveCheckpointProofRefresh[]
+): readonly (readonly ClaimedHistoryArchiveCheckpointProofRefresh[])[] {
+	const byRoot = new Map<
+		string,
+		ClaimedHistoryArchiveCheckpointProofRefresh[]
+	>();
+	for (const target of targets) {
+		const existing = byRoot.get(target.archiveUrlIdentity);
+		if (existing === undefined) {
+			byRoot.set(target.archiveUrlIdentity, [target]);
+		} else {
+			existing.push(target);
+		}
+	}
+	return [...byRoot.values()].map((group) =>
+		group.sort((left, right) => left.checkpointLedger - right.checkpointLedger)
 	);
 }
 
@@ -220,9 +259,9 @@ export async function drainHistoryArchiveCheckpointProofRefreshes(
 		safeLimit,
 		maximumPriority
 	);
-	const outcome = await refreshProofRefreshBatchWithIsolation(
+	const outcome = await refreshProofRefreshRootsWithConcurrency(
 		dataSource,
-		targets
+		partitionProofRefreshTargetsByRoot(targets)
 	);
 	return {
 		claimed: targets.length,
@@ -379,6 +418,39 @@ export async function refreshClaimedHistoryArchiveCheckpointProof(
 interface ProofRefreshBatchOutcome {
 	readonly completed: number;
 	readonly failed: number;
+}
+
+async function refreshProofRefreshRootsWithConcurrency(
+	dataSource: DataSource,
+	rootTargets: readonly (readonly ClaimedHistoryArchiveCheckpointProofRefresh[])[]
+): Promise<ProofRefreshBatchOutcome> {
+	if (rootTargets.length === 0) return { completed: 0, failed: 0 };
+	const outcomes: ProofRefreshBatchOutcome[] = [];
+	let nextRoot = 0;
+	const concurrency = Math.min(
+		proofRefreshRootConcurrency(),
+		rootTargets.length
+	);
+	await Promise.all(
+		Array.from({ length: concurrency }, async () => {
+			while (true) {
+				const index = nextRoot++;
+				const targets = rootTargets[index];
+				if (targets === undefined) return;
+				outcomes[index] = await refreshProofRefreshBatchWithIsolation(
+					dataSource,
+					targets
+				);
+			}
+		})
+	);
+	return outcomes.reduce(
+		(total, outcome) => ({
+			completed: total.completed + outcome.completed,
+			failed: total.failed + outcome.failed
+		}),
+		{ completed: 0, failed: 0 }
+	);
 }
 
 async function refreshProofRefreshBatchWithIsolation(
