@@ -15,7 +15,14 @@ export function ArchiveRootInventory({
 	summary
 }: ArchiveRootInventoryProps): React.JSX.Element {
 	const advertisers = groupAdvertisers(nodes);
-	const sources = summary.sources.toSorted(compareSources);
+	const canonical = summary.canonicalProofProgress;
+	const sources = summary.sources.toSorted((left, right) =>
+		compareSources(left, right, canonical.archiveUrlIdentity)
+	);
+	const canonicalPercent = calculateCoveragePercent(
+		canonical.verifiedCheckpoints,
+		canonical.totalCheckpoints
+	);
 	const advertisedSourceCount = sources.filter(
 		(source) =>
 			(advertisers.get(normalizeRoot(source.archiveUrl))?.length ?? 0) > 0
@@ -26,7 +33,6 @@ export function ArchiveRootInventory({
 	const listenerCount = nodes.filter(
 		(node) => node.historyUrl !== null && !node.isValidator
 	).length;
-	const canonical = summary.canonicalProofProgress;
 
 	return (
 		<>
@@ -52,6 +58,7 @@ export function ArchiveRootInventory({
 					<div>
 						<strong>Canonical checkpoint proof chain</strong>
 						<span>
+							{formatCoveragePercent(canonicalPercent)} complete;{' '}
 							{formatInteger(canonical.verifiedCheckpoints)} of{' '}
 							{formatInteger(canonical.totalCheckpoints)} unique checkpoint
 							positions
@@ -95,7 +102,7 @@ export function ArchiveRootInventory({
 								<th>Archive root</th>
 								<th>Current advertisers</th>
 								<th>Remote archive evidence</th>
-								<th>Proof coverage</th>
+								<th>Durable checkpoint coverage</th>
 								<th>Current work</th>
 								<th>Inspect / repair</th>
 							</tr>
@@ -106,6 +113,7 @@ export function ArchiveRootInventory({
 									advertisers={
 										advertisers.get(normalizeRoot(source.archiveUrl)) ?? []
 									}
+									canonicalArchiveUrlIdentity={canonical.archiveUrlIdentity}
 									key={source.archiveUrlIdentity}
 									source={source}
 								/>
@@ -135,24 +143,37 @@ function Metric({
 
 function ArchiveRootRow({
 	advertisers,
+	canonicalArchiveUrlIdentity,
 	source
 }: {
 	readonly advertisers: readonly PublicNode[];
+	readonly canonicalArchiveUrlIdentity: string | null;
 	readonly source: ArchiveSource;
 }): React.JSX.Element {
 	const validators = advertisers.filter((node) => node.isValidator);
 	const listeners = advertisers.filter((node) => !node.isValidator);
-	const proofPercent =
-		source.totalCheckpointProofs === 0
-			? 0
-			: (source.verifiedCheckpointProofs / source.totalCheckpointProofs) * 100;
+	const expectedCheckpointProofs = getExpectedArchiveCheckpointCount(source);
+	const proofPercent = calculateCoveragePercent(
+		source.durableVerifiedCheckpointProofs,
+		expectedCheckpointProofs
+	);
+	const isCanonical =
+		canonicalArchiveUrlIdentity !== null &&
+		source.archiveUrlIdentity === canonicalArchiveUrlIdentity;
 
 	return (
 		<tr>
 			<td>
-				<a className="archive-root-url" href={source.stateUrl}>
-					{source.archiveUrl}
-				</a>
+				<div className="archive-root-heading">
+					<a className="archive-root-url" href={source.stateUrl}>
+						{source.archiveUrl}
+					</a>
+					{isCanonical ? (
+						<span className="archive-canonical-label">
+							Canonical proof source
+						</span>
+					) : null}
+				</div>
 				<small>
 					{source.stateStatus}; root object{' '}
 					{source.rootObjectStatus ?? 'not recorded'}
@@ -202,17 +223,25 @@ function ArchiveRootRow({
 			</td>
 			<td>
 				<strong>
-					{formatInteger(source.verifiedCheckpointProofs)} /{' '}
-					{formatInteger(source.totalCheckpointProofs)} verified
+					{formatCoveragePercent(proofPercent)} archive checkpoint coverage
 				</strong>
 				<progress
-					aria-label={'Proof coverage for ' + source.archiveUrl}
+					aria-label={'Durable checkpoint coverage for ' + source.archiveUrl}
 					max={100}
 					value={proofPercent}
 				/>
 				<small>
-					{formatInteger(source.durableVerifiedCheckpointProofs)} durable;
-					latest verified checkpoint{' '}
+					{formatInteger(source.durableVerifiedCheckpointProofs)} of{' '}
+					{formatInteger(expectedCheckpointProofs)} expected checkpoint
+					positions have durable source attestations
+				</small>
+				<small>
+					{formatInteger(source.verifiedCheckpointProofs)} current proof-version
+					attestations; {formatInteger(source.totalCheckpointProofs)}{' '}
+					materialized proof rows
+				</small>
+				<small>
+					Highest attested checkpoint{' '}
 					{formatNullableInteger(source.latestCheckpointLedger)}
 				</small>
 			</td>
@@ -283,7 +312,51 @@ function formatNullableInteger(value: number | null): string {
 	return value === null ? 'none' : formatInteger(value);
 }
 
-function compareSources(left: ArchiveSource, right: ArchiveSource): number {
+export function getExpectedArchiveCheckpointCount(
+	source: Pick<
+		ArchiveSource,
+		| 'currentLedger'
+		| 'latestCheckpointLedger'
+		| 'latestDiscoveredCheckpointLedger'
+	>
+): number {
+	const knownLedgers = [
+		source.currentLedger,
+		source.latestCheckpointLedger,
+		source.latestDiscoveredCheckpointLedger
+	].filter((value): value is number => value !== null);
+	if (knownLedgers.length === 0) return 0;
+	const latestKnownLedger = Math.max(...knownLedgers);
+	return latestKnownLedger < 63 ? 0 : Math.floor((latestKnownLedger + 1) / 64);
+}
+
+export function calculateCoveragePercent(
+	verified: number,
+	total: number
+): number {
+	if (total <= 0) return 0;
+	return Math.min(100, Math.max(0, (verified / total) * 100));
+}
+
+export function formatCoveragePercent(value: number): string {
+	if (value >= 100) return '100%';
+	if (value > 0 && value < 0.01) return '<0.01%';
+	if (value >= 99.9) return value.toFixed(3) + '%';
+	return value.toFixed(2) + '%';
+}
+
+function compareSources(
+	left: ArchiveSource,
+	right: ArchiveSource,
+	canonicalArchiveUrlIdentity: string | null
+): number {
+	const leftIsCanonical =
+		canonicalArchiveUrlIdentity !== null &&
+		left.archiveUrlIdentity === canonicalArchiveUrlIdentity;
+	const rightIsCanonical =
+		canonicalArchiveUrlIdentity !== null &&
+		right.archiveUrlIdentity === canonicalArchiveUrlIdentity;
+	if (leftIsCanonical !== rightIsCanonical) return leftIsCanonical ? -1 : 1;
 	const remoteOrder =
 		right.archiveEvidenceFailures - left.archiveEvidenceFailures;
 	if (remoteOrder !== 0) return remoteOrder;
@@ -291,7 +364,8 @@ function compareSources(left: ArchiveSource, right: ArchiveSource): number {
 		right.mismatchCheckpointProofs - left.mismatchCheckpointProofs;
 	if (mismatchOrder !== 0) return mismatchOrder;
 	const proofOrder =
-		right.verifiedCheckpointProofs - left.verifiedCheckpointProofs;
+		right.durableVerifiedCheckpointProofs -
+		left.durableVerifiedCheckpointProofs;
 	return proofOrder !== 0
 		? proofOrder
 		: left.archiveUrl.localeCompare(right.archiveUrl);

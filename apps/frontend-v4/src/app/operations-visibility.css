@@ -129,8 +129,29 @@
 	font-weight: 700;
 }
 
+.archive-root-heading {
+	align-items: flex-start;
+	display: flex;
+	flex-wrap: wrap;
+	gap: 6px 10px;
+}
+
 .archive-root-url {
+	flex: 1 1 240px;
 	font-weight: 900;
+}
+
+.archive-canonical-label {
+	background: color-mix(in srgb, var(--state-success) 18%, transparent);
+	border: 1px solid color-mix(in srgb, var(--state-success) 55%, var(--border));
+	border-radius: 999px;
+	color: var(--state-success);
+	font-size: 0.68rem;
+	font-weight: 900;
+	letter-spacing: 0.04em;
+	padding: 4px 7px;
+	text-transform: uppercase;
+	white-space: nowrap;
 }
 
 .archive-advertiser-list {

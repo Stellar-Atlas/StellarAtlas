@@ -42,9 +42,12 @@ export default async function ArchiveInventoryPage(): Promise<React.JSX.Element>
 				<p>
 					A canonical checkpoint position is proven once. Each archive root then
 					contributes source-specific evidence that it served matching bytes.
-					Remote archive failures belong to that root and its advertising nodes;
-					scanner infrastructure issues are displayed separately and never
-					reported as validator failures.
+					Coverage is durable source attestations divided by the checkpoint
+					positions implied by that root&apos;s newest ledger. Current
+					proof-version and materialized-row counts are diagnostics, not the
+					completion denominator. Remote archive failures belong to that root
+					and its advertising nodes; scanner infrastructure issues are displayed
+					separately and never reported as validator failures.
 				</p>
 			</section>
 			<ArchiveRootInventory nodes={nodes} summary={summary} />
