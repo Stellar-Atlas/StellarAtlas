@@ -132,29 +132,6 @@ describe('HistoryArchiveBrokerFrontierRepository', () => {
 		);
 	});
 
-	it('advances and enqueues a targeted proof frontier during recovery', async () => {
-		const root = 'https://canonical.example';
-		const query = jest
-			.fn()
-			.mockResolvedValueOnce([{ planned: 1, ready: 0, advanced: 1 }])
-			.mockResolvedValueOnce(undefined)
-			.mockResolvedValueOnce([{ count: 1 }]);
-		const manager = { query } as unknown as EntityManager;
-		const transaction = jest.fn(
-			async (work: (manager: EntityManager) => Promise<void>) =>
-				await work(manager)
-		);
-		const repository = new HistoryArchiveBrokerFrontierRepository({
-			transaction
-		} as unknown as DataSource);
-
-		await repository.ensureProofFrontier(root);
-
-		expect(query).toHaveBeenCalledTimes(3);
-		expect(query.mock.calls[0]?.[1]?.[2]).toEqual([root]);
-		expect(query.mock.calls[2]?.[1]).toEqual([[root], 1]);
-	});
-
 	it('re-admits existing pending checkpoints inside the bounded prefetch window', async () => {
 		const query = jest
 			.fn()

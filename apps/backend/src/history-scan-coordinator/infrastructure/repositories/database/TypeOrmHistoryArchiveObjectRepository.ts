@@ -57,7 +57,8 @@ import { findVerifiedCheckpointsNeedingReconciliation } from './HistoryArchiveCh
 import {
 	findVerifiedCheckpointsNeedingFanout,
 	markCheckpointDescendantsPlanned,
-	markCheckpointDescendantsPlannedBatch
+	markCheckpointDescendantsPlannedBatch,
+	materializeCompactCheckpointPlans
 } from './HistoryArchiveCompactPlanning.js';
 import { getHistoryArchiveRepairPlanSummary } from './HistoryArchiveRepairPlanQuery.js';
 import { findVerifiedCheckpointObjectSources } from './HistoryArchiveVerifiedCheckpointSourceQuery.js';
@@ -67,6 +68,7 @@ import { findPrioritizedHistoryArchiveObjectTransitions } from './HistoryArchive
 import { requestHistoryArchiveObjectRecheck } from './HistoryArchiveObjectRecheckWrite.js';
 import {
 	drainHistoryArchiveCheckpointProofRefreshes,
+	enqueueCurrentTerminalReadyCheckpointProofRefreshes,
 	enqueueHistoryArchiveCheckpointProofRefreshes
 } from './HistoryArchiveCheckpointProofRefreshQueue.js';
 import type { HistoryArchiveCheckpointProofRefreshPriority } from '@history-scan-coordinator/domain/history-archive-object/HistoryArchiveObjectRepository.js';
@@ -91,6 +93,16 @@ export class TypeOrmHistoryArchiveObjectRepository implements HistoryArchiveObje
 			limit,
 			maximumPriority
 		);
+	}
+
+	async recoverCheckpointProofRefreshes(limit: number): Promise<number> {
+		return await this.repository.manager.transaction(async (manager) => {
+			await materializeCompactCheckpointPlans(manager);
+			return await enqueueCurrentTerminalReadyCheckpointProofRefreshes(
+				manager,
+				limit
+			);
+		});
 	}
 
 	async enqueueCheckpointProofRefreshes(

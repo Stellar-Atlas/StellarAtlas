@@ -14,16 +14,10 @@ import {
 	historyArchiveCanonicalFirstAdmissionSql,
 	historyArchiveCanonicalFirstScopeCteSql
 } from './HistoryArchiveCanonicalFirst.js';
-import {
-	enqueueCurrentTerminalReadyCheckpointProofRefreshes,
-	enqueueTargetedTerminalReadyCheckpointProofRefreshes
-} from './HistoryArchiveCheckpointProofRefreshQueue.js';
-import { materializeCompactCheckpointPlans } from './HistoryArchiveCompactPlanning.js';
 import { materializeOrderedCheckpointPrefetch } from './HistoryArchiveCheckpointPrefetch.js';
 import { historyArchiveExecutionReconciliationLockName } from './HistoryArchiveObjectExecutionReconciler.js';
 
 const maximumArchiveSourceFrontierRows = 4_096;
-const terminalProofRecoveryIntervalMs = 1_000;
 
 export type { HistoryArchiveBrokerPriority } from '../../../domain/history-archive-object/HistoryArchiveBrokerPriority.js';
 
@@ -312,8 +306,6 @@ function mapAndOrderBrokerJobs(
 }
 
 export class HistoryArchiveBrokerFrontierRepository {
-	private nextTerminalProofRecoveryAt = 0;
-
 	constructor(private readonly dataSource: DataSource) {}
 
 	async ensurePrefetch(
@@ -345,47 +337,7 @@ export class HistoryArchiveBrokerFrontierRepository {
 			);
 			return result.readyObjects;
 		});
-		await this.ensureProofFrontier(archiveUrlIdentity);
 		return readyObjects;
-	}
-
-	async recoverTerminalProofFrontier(): Promise<number> {
-		return await this.dataSource.transaction(
-			async (manager) =>
-				await enqueueCurrentTerminalReadyCheckpointProofRefreshes(
-					manager,
-					maximumArchiveSourceFrontierRows
-				)
-		);
-	}
-
-	async ensureProofFrontier(
-		archiveUrlIdentity: string | null = null
-	): Promise<void> {
-		const now = Date.now();
-		if (now < this.nextTerminalProofRecoveryAt) return;
-		this.nextTerminalProofRecoveryAt = now + terminalProofRecoveryIntervalMs;
-		try {
-			await this.dataSource.transaction(async (manager) => {
-				const targetIdentities =
-					archiveUrlIdentity === null ? null : [archiveUrlIdentity];
-				await materializeCompactCheckpointPlans(manager, targetIdentities);
-				if (targetIdentities === null) {
-					await enqueueCurrentTerminalReadyCheckpointProofRefreshes(
-						manager,
-						maximumArchiveSourceFrontierRows
-					);
-				} else {
-					await enqueueTargetedTerminalReadyCheckpointProofRefreshes(
-						manager,
-						targetIdentities
-					);
-				}
-			});
-		} catch (error) {
-			this.nextTerminalProofRecoveryAt = 0;
-			throw error;
-		}
 	}
 
 	async reserveJobs(

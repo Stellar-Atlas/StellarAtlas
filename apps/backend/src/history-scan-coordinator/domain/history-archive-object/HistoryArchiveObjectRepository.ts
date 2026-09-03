@@ -179,6 +179,7 @@ export interface HistoryArchiveObjectRepository {
 		limit: number,
 		maximumPriority: HistoryArchiveCheckpointProofRefreshPriority
 	): Promise<HistoryArchiveCheckpointProofRefreshDrainResult>;
+	recoverCheckpointProofRefreshes?(limit: number): Promise<number>;
 	enqueueCheckpointProofRefreshes(
 		remoteIds: readonly string[]
 	): Promise<number>;

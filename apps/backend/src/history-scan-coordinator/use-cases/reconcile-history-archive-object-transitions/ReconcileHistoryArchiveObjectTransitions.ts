@@ -80,6 +80,9 @@ export class ReconcileHistoryArchiveObjectTransitions {
 		this.nextTargetedProofRefreshRunAt =
 			now + this.maintenanceIntervals.transitionReconciliationIntervalMs;
 
+		await this.objectRepository.recoverCheckpointProofRefreshes?.(
+			this.targetedProofRefreshBatchSize
+		);
 		const result = await this.objectRepository.drainCheckpointProofRefreshQueue(
 			this.targetedProofRefreshBatchSize,
 			this.maintenanceLanes.targetedProofRefreshMaximumPriority

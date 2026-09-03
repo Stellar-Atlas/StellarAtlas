@@ -17,6 +17,9 @@ describe('targeted checkpoint proof refresh concurrency', () => {
 
 		try {
 			const repository = mock<HistoryArchiveObjectRepository>();
+			const recoverCheckpointProofRefreshes = jest.fn().mockResolvedValue(4);
+			repository.recoverCheckpointProofRefreshes =
+				recoverCheckpointProofRefreshes;
 			repository.drainCheckpointProofRefreshQueue
 				.mockResolvedValueOnce({
 					claimed: 4,
@@ -38,6 +41,8 @@ describe('targeted checkpoint proof refresh concurrency', () => {
 
 			const completed =
 				await reconciler.executeTargetedProofRefreshIfDue(10_000);
+
+			expect(recoverCheckpointProofRefreshes).toHaveBeenCalledWith(4);
 
 			expect(repository.drainCheckpointProofRefreshQueue).toHaveBeenCalledWith(
 				4,
