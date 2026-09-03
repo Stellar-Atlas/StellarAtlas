@@ -11,10 +11,6 @@ import {
 } from './HistoryArchiveCanonicalFirst.js';
 import { canonicalRuntimeTargetCtes } from './HistoryArchiveCanonicalRuntimeTargetSql.js';
 import { dueProofRefreshCanonicalRuntimeArchiveRootsCteSql } from './HistoryArchiveCanonicalRuntimePrioritySql.js';
-import {
-	materializeNextCompactCheckpointPlan,
-	materializeNextCompactCheckpointPlans
-} from './HistoryArchiveCompactPlanning.js';
 import { canonicalRuntimeExecutableProofMemberExistsSql } from './HistoryArchiveCanonicalRuntimeProofMembershipSql.js';
 import {
 	historyArchiveCheckpointProofBatchQueuedRefreshSql,
@@ -396,11 +392,8 @@ export async function refreshClaimedHistoryArchiveCheckpointProof(
 			historyArchiveCheckpointProofPendingSourceEnrichmentSql,
 			[target.archiveUrlIdentity, target.checkpointLedger]
 		);
-		await materializeNextCompactCheckpointPlan(
-			manager,
-			target.archiveUrlIdentity,
-			target.checkpointLedger
-		);
+		// Commit proof evidence before the execution reconciler admits the next
+		// checkpoint. Scheduler locks must never hold a computed proof open.
 		const deleted = (await manager.query(completeProofRefreshSql, [
 			target.archiveUrlIdentity,
 			target.checkpointLedger,
@@ -518,11 +511,8 @@ async function refreshClaimedHistoryArchiveCheckpointProofWave(
 		historyArchiveCheckpointProofPendingSourceBatchEnrichmentSql,
 		[payload]
 	);
-	await materializeNextCompactCheckpointPlans(manager, targets);
-	await enqueueTargetedTerminalReadyCheckpointProofRefreshes(
-		manager,
-		targets.map((target) => target.archiveUrlIdentity)
-	);
+	// Next-checkpoint admission and terminal recovery run from durable proof
+	// state after this transaction commits.
 	const deleted = (await manager.query(completeProofRefreshBatchSql, [
 		payload
 	])) as unknown;
