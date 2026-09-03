@@ -10,10 +10,12 @@ const defaultPort = 3000;
 const assetCacheTimeMs = 86_400_000 * 7;
 const apiDocsPathPattern = /^\/api-docs(?:\/|$)/;
 const apiPathPattern = /^\/v1(?:\/|$)/;
+const graphqlPathPattern = /^\/graphql(?:\/|$)/;
 const assetPathPattern = /^\/(assets|css|js|img|fonts)\/.+/;
 const legacyPathPattern = /^\/legacy(?:\/|$)/;
 const modernCompatibilityPathPattern = /^\/new-ui(?:\/|$)/;
-const modernFrontendPathPattern = /^\/(?:_next|archive-scans|organizations)(?:\/|$)/;
+const modernFrontendPathPattern =
+  /^\/(?:_next|archive-scans|organizations)(?:\/|$)/;
 const workerPathPattern = /^\/.*\.worker\.js$/;
 const hopByHopHeaders = new Set([
   "connection",
@@ -153,7 +155,12 @@ function rewriteApiDocsBody(
 
 function shouldProxyFrontendV4(path: string): boolean {
   if (!frontendV4Enabled()) return false;
-  if (apiPathPattern.test(path) || apiDocsPathPattern.test(path)) return false;
+  if (
+    apiPathPattern.test(path) ||
+    apiDocsPathPattern.test(path) ||
+    graphqlPathPattern.test(path)
+  )
+    return false;
   if (legacyPathPattern.test(path)) return false;
   if (path === "/robots.txt" || path.startsWith("/schemas/")) return false;
   if (assetPathPattern.test(path) || workerPathPattern.test(path)) return false;
@@ -196,7 +203,11 @@ app.use((req: Request, res: Response, next: NextFunction) => {
 });
 
 app.use((req: Request, res: Response, next: NextFunction) => {
-  if (!apiPathPattern.test(req.path) && !apiDocsPathPattern.test(req.path)) {
+  if (
+    !apiPathPattern.test(req.path) &&
+    !apiDocsPathPattern.test(req.path) &&
+    !graphqlPathPattern.test(req.path)
+  ) {
     next();
     return;
   }

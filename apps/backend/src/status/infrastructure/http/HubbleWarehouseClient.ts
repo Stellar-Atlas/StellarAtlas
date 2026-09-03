@@ -576,7 +576,7 @@ function requireColumn(
 	columns: ReadonlyMap<string, HubbleColumn>,
 	field: string
 ): HubbleColumn {
-	if (!identifierPattern.test(field)) {
+	if (!columnIdentifierPattern.test(field)) {
 		throw new HubbleWarehouseInputError('Invalid Hubble column: ' + field);
 	}
 	const column = columns.get(field);
@@ -587,7 +587,7 @@ function requireColumn(
 }
 
 function quote(identifier: string): string {
-	if (!identifierPattern.test(identifier)) {
+	if (!columnIdentifierPattern.test(identifier)) {
 		throw new HubbleWarehouseInputError(
 			'Invalid Hubble SQL identifier: ' + identifier
 		);

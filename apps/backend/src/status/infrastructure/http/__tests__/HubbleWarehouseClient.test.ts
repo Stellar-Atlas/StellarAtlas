@@ -59,6 +59,22 @@ describe('ClickHouseHubbleWarehouse', () => {
 		).rejects.toBeInstanceOf(HubbleWarehouseInputError);
 		expect(requests).toHaveLength(3);
 	});
+
+	it('queries official metadata columns whose names begin with an underscore', async () => {
+		const requests: URL[] = [];
+		const warehouse = new ClickHouseHubbleWarehouse({
+			endpoint: 'http://127.0.0.1:18123',
+			fetch: mockFetch(requests)
+		});
+
+		await expect(
+			warehouse.query({
+				dataset: 'history_transactions',
+				limit: 1
+			})
+		).resolves.toMatchObject({ dataset: 'history_transactions' });
+		expect(requests.at(-1)?.searchParams.get('query')).toContain('`_batch_id`');
+	});
 });
 
 function mockFetch(requests: URL[]): typeof fetch {
