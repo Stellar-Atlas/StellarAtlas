@@ -156,17 +156,24 @@ const markCheckpointDescendantsPlannedSql = `
         returning id
 `;
 
-export async function materializeCompactCheckpointPlans(
+export interface HistoryArchiveCompactCheckpointPlanResult {
+	readonly advanced: number;
+	readonly planned: number;
+	readonly ready: number;
+}
+
+export async function materializeCompactCheckpointPlanResult(
 	manager: EntityManager,
 	archiveUrlIdentities: readonly string[] | null = null
-): Promise<number> {
+): Promise<HistoryArchiveCompactCheckpointPlanResult> {
 	const targetedIdentities =
 		archiveUrlIdentities === null
 			? null
 			: [...new Set(archiveUrlIdentities)].filter(
 					(identity) => identity.length > 0
 				);
-	if (targetedIdentities !== null && targetedIdentities.length === 0) return 0;
+	if (targetedIdentities !== null && targetedIdentities.length === 0)
+		return { advanced: 0, planned: 0, ready: 0 };
 	const [result] = (await manager.query(compactCheckpointPlanSql, [
 		maximumCheckpointCursorBatch,
 		historyArchiveSequentialPrefetchDepth,
@@ -177,9 +184,23 @@ export async function materializeCompactCheckpointPlans(
 		readonly ready?: number | string;
 		readonly advanced?: number | string;
 	}[];
-	if (Number(result?.ready ?? 0) > 0 || Number(result?.advanced ?? 0) > 0)
+	const plan = {
+		advanced: Number(result?.advanced ?? 0),
+		planned: Number(result?.planned ?? 0),
+		ready: Number(result?.ready ?? 0)
+	};
+	if (plan.ready > 0 || plan.advanced > 0)
 		await notifyHistoryArchiveReadyWork(manager);
-	return Number(result?.planned ?? 0);
+	return plan;
+}
+
+export async function materializeCompactCheckpointPlans(
+	manager: EntityManager,
+	archiveUrlIdentities: readonly string[] | null = null
+): Promise<number> {
+	return (
+		await materializeCompactCheckpointPlanResult(manager, archiveUrlIdentities)
+	).planned;
 }
 
 export interface CompletedHistoryArchiveCheckpoint {

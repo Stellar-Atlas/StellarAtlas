@@ -31,7 +31,7 @@ describe('history archive maintenance proof wake', () => {
 			undefined
 		);
 		reconciler.executeExecutionDispositionReconciliationIfDue.mockResolvedValue(
-			undefined
+			0
 		);
 		const stop = startHistoryArchiveMaintenanceLoop(
 			reconciler,
@@ -95,7 +95,7 @@ describe('history archive maintenance proof wake', () => {
 			.mockResolvedValueOnce(24)
 			.mockResolvedValue(0);
 		reconciler.executeExecutionDispositionReconciliationIfDue.mockResolvedValue(
-			undefined
+			0
 		);
 		const stop = startHistoryArchiveMaintenanceLoop(
 			reconciler,
@@ -120,6 +120,40 @@ describe('history archive maintenance proof wake', () => {
 			expect(
 				reconciler.executeExecutionDispositionReconciliationIfDue
 			).toHaveBeenCalledTimes(2);
+		} finally {
+			stop();
+		}
+	});
+
+	it('continues immediately when compact planning advances a cursor', async () => {
+		const reconciler = mock<ReconcileHistoryArchiveObjectTransitions>();
+		reconciler.executeTransitionReconciliationIfDue.mockResolvedValue(
+			undefined
+		);
+		reconciler.executeTargetedProofRefreshIfDue.mockResolvedValue(0);
+		reconciler.executeExecutionDispositionReconciliationIfDue
+			.mockResolvedValueOnce(1)
+			.mockResolvedValue(0);
+		const stop = startHistoryArchiveMaintenanceLoop(
+			reconciler,
+			mock<Logger>(),
+			{
+				executionAdmissionIntervalMs: 60_000,
+				transitionReconciliationIntervalMs: 60_000
+			}
+		);
+		try {
+			await new Promise<void>((resolve) => setImmediate(resolve));
+
+			expect(
+				reconciler.executeExecutionDispositionReconciliationIfDue
+			).toHaveBeenCalledTimes(2);
+			expect(
+				reconciler.executeExecutionDispositionReconciliationIfDue
+			).toHaveBeenNthCalledWith(2, expect.any(Number), true);
+			expect(reconciler.executeTargetedProofRefreshIfDue).toHaveBeenCalledTimes(
+				2
+			);
 		} finally {
 			stop();
 		}

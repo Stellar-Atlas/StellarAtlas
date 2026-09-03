@@ -22,7 +22,7 @@ import {
 	synchronizeHistoryArchiveReadyQueue
 } from './HistoryArchiveObjectReadyQueue.js';
 import { hasPostgresSqlState } from './PostgresError.js';
-import { materializeCompactCheckpointPlans } from './HistoryArchiveCompactPlanning.js';
+import { materializeCompactCheckpointPlanResult } from './HistoryArchiveCompactPlanning.js';
 import { activateCurrentCheckpointDependencies } from './HistoryArchiveCheckpointPrefetch.js';
 
 export { historyArchiveExecutionReconciliationLockName };
@@ -51,7 +51,7 @@ export async function reconcileHistoryArchiveObjectExecution(
 		]);
 		await manager.query("set local lock_timeout = '500ms'");
 
-		await materializeCompactCheckpointPlans(manager);
+		const compactPlan = await materializeCompactCheckpointPlanResult(manager);
 		const canonicalFirstRoot = getHistoryArchiveCanonicalFirstRoot();
 		await activateCurrentCheckpointDependencies(manager, canonicalFirstRoot);
 		const canonicalAdmittedObjects = 0;
@@ -77,7 +77,7 @@ export async function reconcileHistoryArchiveObjectExecution(
 			return {
 				...pressure,
 				admittedObjects: canonicalAdmittedObjects,
-				cursorAdvances: 0,
+				cursorAdvances: compactPlan.advanced,
 				preservedObjects: readyState.readyObjects
 			};
 		}
@@ -123,7 +123,8 @@ export async function reconcileHistoryArchiveObjectExecution(
 		return {
 			...pressure,
 			admittedObjects,
-			cursorAdvances: Number(admission?.cursorAdvances ?? 0),
+			cursorAdvances:
+				compactPlan.advanced + Number(admission?.cursorAdvances ?? 0),
 			preservedObjects: readyState.readyObjects
 		};
 	});

@@ -192,26 +192,28 @@ export class ReconcileHistoryArchiveObjectTransitions {
 	async executeExecutionDispositionReconciliationIfDue(
 		now = Date.now(),
 		force = false
-	): Promise<void> {
-		if (!this.maintenanceLanes.executionAdmissionEnabled) return;
+	): Promise<number> {
+		if (!this.maintenanceLanes.executionAdmissionEnabled) return 0;
 		if (
 			this.executionDispositionRunning ||
 			(!force && now < this.nextExecutionDispositionRunAt)
 		) {
-			return;
+			return 0;
 		}
 		this.executionDispositionRunning = true;
 		this.nextExecutionDispositionRunAt =
 			now + this.maintenanceIntervals.executionAdmissionIntervalMs;
 		try {
-			await this.objectRepository.reconcileExecutionDisposition({
+			const result = await this.objectRepository.reconcileExecutionDisposition({
 				admitGenericObjects: this.legacyFrontierEnabled
 			});
+			return result.cursorAdvances;
 		} catch (error) {
 			this.logger.error('Failed to reconcile archive execution frontier', {
 				app: 'history-scan-coordinator',
 				errorMessage: error instanceof Error ? error.message : String(error)
 			});
+			return 0;
 		} finally {
 			this.executionDispositionRunning = false;
 		}

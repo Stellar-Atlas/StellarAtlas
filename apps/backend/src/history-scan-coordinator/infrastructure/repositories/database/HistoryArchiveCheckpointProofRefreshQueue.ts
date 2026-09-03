@@ -745,6 +745,17 @@ export const enqueueProofRefreshesSql = `
                         and candidate."checkpointLedger" =
                                 chain_cursor."nextHistoricalCheckpointLedger" - 64
                 where ${historyArchiveCheckpointProofTerminalReadySql('candidate')}
+                        and not exists (
+                                select 1
+                                from "history_archive_checkpoint_proof" proof
+                                where proof."archiveUrlIdentity" =
+                                        candidate."archiveUrlIdentity"
+                                        and proof."checkpointLedger" =
+                                                candidate."checkpointLedger"
+                                        and proof.status = 'verified'
+                                        and proof."evaluatedAt" >=
+                                                candidate.evidence_updated_at
+                        )
         ), enqueued as (
 		insert into history_archive_checkpoint_proof_refresh_queue (
 			"archiveUrlIdentity", "checkpointLedger", "evidenceUpdatedAt", generation,

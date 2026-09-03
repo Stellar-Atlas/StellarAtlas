@@ -65,6 +65,9 @@ describe('sequential history archive proof chain', () => {
 		expect(enqueueProofRefreshesSql).toMatch(
 			/candidate\."checkpointLedger"\s*=\s*chain_cursor\."nextHistoricalCheckpointLedger" - 64/
 		);
+		expect(enqueueProofRefreshesSql).toContain(
+			'proof."evaluatedAt" >=\n                                                candidate.evidence_updated_at'
+		);
 		expect(enqueueCurrentTerminalReadyCheckpointProofRefreshesSql).toContain(
 			candidateReadiness
 		);

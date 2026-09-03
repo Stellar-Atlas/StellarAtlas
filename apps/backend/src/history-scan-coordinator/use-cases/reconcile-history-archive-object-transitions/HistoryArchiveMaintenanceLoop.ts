@@ -70,13 +70,15 @@ export function startHistoryArchiveMaintenanceLoop(
 				await runWork('transitions', () =>
 					reconciler.executeTransitionReconciliationIfDue(now, {}, force)
 				);
-				await runWork('execution disposition', () =>
-					reconciler.executeExecutionDispositionReconciliationIfDue(
-						Date.now(),
-						force
-					)
-				);
-				if (completedProofs > 0) {
+				let cursorAdvances = 0;
+				await runWork('execution disposition', async () => {
+					cursorAdvances =
+						(await reconciler.executeExecutionDispositionReconciliationIfDue(
+							Date.now(),
+							force
+						)) ?? 0;
+				});
+				if (completedProofs > 0 || cursorAdvances > 0) {
 					forceRequested = true;
 					proofRefreshRequested = true;
 					rerunRequested = true;
