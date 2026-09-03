@@ -19,14 +19,16 @@ export function isHistoryArchiveProofRefreshWakeMessage(
 }
 
 export function notifyHistoryArchiveProofRefreshReady(): void {
+	const message: HistoryArchiveProofRefreshWakeMessage = {
+		type: historyArchiveProofRefreshWakeType
+	};
+	if (process.env.API_HISTORY_MAINTENANCE_WRITER === 'true') {
+		process.emit('message', message);
+		return;
+	}
 	if (process.send === undefined || !process.connected) return;
 	try {
-		process.send(
-			{ type: historyArchiveProofRefreshWakeType },
-			undefined,
-			undefined,
-			() => undefined
-		);
+		process.send(message, undefined, undefined, () => undefined);
 	} catch {
 		// The durable queue remains authoritative if an API worker is exiting.
 	}

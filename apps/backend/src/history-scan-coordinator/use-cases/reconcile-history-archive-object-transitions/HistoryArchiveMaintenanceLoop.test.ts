@@ -3,7 +3,8 @@ import { mock } from 'jest-mock-extended';
 import type { Logger } from 'logger';
 import {
 	historyArchiveProofRefreshWakeType,
-	isHistoryArchiveProofRefreshWakeMessage
+	isHistoryArchiveProofRefreshWakeMessage,
+	notifyHistoryArchiveProofRefreshReady
 } from '../../infrastructure/ipc/HistoryArchiveProofRefreshWake.js';
 import type { ReconcileHistoryArchiveObjectTransitions } from './ReconcileHistoryArchiveObjectTransitions.js';
 import { startHistoryArchiveMaintenanceLoop } from './HistoryArchiveMaintenanceLoop.js';
@@ -22,6 +23,8 @@ describe('history archive maintenance proof wake', () => {
 	});
 
 	it('forces proof refresh, transitions, and admission when archive work completes', async () => {
+		const configuredWriter = process.env.API_HISTORY_MAINTENANCE_WRITER;
+		process.env.API_HISTORY_MAINTENANCE_WRITER = 'true';
 		const reconciler = mock<ReconcileHistoryArchiveObjectTransitions>();
 		reconciler.executeTargetedProofRefreshIfDue.mockResolvedValue(0);
 		reconciler.executeTransitionReconciliationIfDue.mockResolvedValue(
@@ -44,9 +47,7 @@ describe('history archive maintenance proof wake', () => {
 			reconciler.executeTargetedProofRefreshIfDue.mockClear();
 			reconciler.executeExecutionDispositionReconciliationIfDue.mockClear();
 
-			process.emit('message', {
-				type: historyArchiveProofRefreshWakeType
-			});
+			notifyHistoryArchiveProofRefreshReady();
 			await new Promise<void>((resolve) => setImmediate(resolve));
 
 			expect(
@@ -77,6 +78,11 @@ describe('history archive maintenance proof wake', () => {
 			);
 		} finally {
 			stop();
+			if (configuredWriter === undefined) {
+				delete process.env.API_HISTORY_MAINTENANCE_WRITER;
+			} else {
+				process.env.API_HISTORY_MAINTENANCE_WRITER = configuredWriter;
+			}
 		}
 	});
 
