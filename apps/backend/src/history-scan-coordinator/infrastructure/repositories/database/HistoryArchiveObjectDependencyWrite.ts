@@ -96,6 +96,8 @@ const materializeDependenciesSql = `
                 select hashes."archiveUrlIdentity", hashes."checkpointLedger",
 			hashes."bucketHash"
                 from hashes
+		order by hashes."archiveUrlIdentity", hashes."bucketHash",
+			hashes."checkpointLedger"
 		on conflict do nothing
 		returning "bucketHash"
 	), marked as (
