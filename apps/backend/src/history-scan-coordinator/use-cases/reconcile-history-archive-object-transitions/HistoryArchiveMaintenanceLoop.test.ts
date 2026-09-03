@@ -105,6 +105,9 @@ describe('history archive maintenance proof wake', () => {
 			expect(
 				reconciler.executeTransitionReconciliationIfDue
 			).toHaveBeenCalledTimes(2);
+			expect(
+				reconciler.executeTransitionReconciliationIfDue
+			).toHaveBeenNthCalledWith(2, expect.any(Number), {}, true);
 			expect(reconciler.executeTargetedProofRefreshIfDue).toHaveBeenCalledTimes(
 				2
 			);

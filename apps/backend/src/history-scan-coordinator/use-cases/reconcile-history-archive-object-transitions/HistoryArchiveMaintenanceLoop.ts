@@ -77,6 +77,7 @@ export function startHistoryArchiveMaintenanceLoop(
 					)
 				);
 				if (completedProofs > 0) {
+					forceRequested = true;
 					proofRefreshRequested = true;
 					rerunRequested = true;
 				}
